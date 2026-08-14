@@ -13,6 +13,7 @@ import (
 	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -21,6 +22,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -1014,7 +1016,7 @@ func (b *BeaconState) Copy() state.BeaconState {
 		rebuildTrie:      make(map[types.FieldIndex]bool, fieldCount),
 		stateFieldLeaves: make(map[types.FieldIndex]*fieldtrie.FieldTrie, len(fieldMap)),
 
-		// Share the reference to validator index map.
+		// Shared and mutated in place, lookups are bounded by each state's validator count.
 		valMapHandler: b.valMapHandler,
 
 		builderIdxMap: maps.Clone(b.builderIdxMap),
@@ -1053,9 +1055,6 @@ func (b *BeaconState) Copy() state.BeaconState {
 		dst.sharedFieldReferences[field] = ref
 	}
 
-	// Increment ref for validator map
-	b.valMapHandler.AddRef()
-
 	for i := range b.dirtyFields {
 		dst.dirtyFields[i] = true
 	}
@@ -1084,6 +1083,7 @@ func (b *BeaconState) Copy() state.BeaconState {
 			}
 		}
 	}
+	dst.progressiveMerkleTree = b.progressiveMerkleTree.Copy()
 
 	state.Count.Inc()
 	// Finalizer runs when dst is being destroyed in garbage collection.
@@ -1099,6 +1099,12 @@ func (b *BeaconState) HashTreeRoot(ctx context.Context) ([32]byte, error) {
 
 	b.lock.Lock()
 	defer b.lock.Unlock()
+
+	if features.ProgressiveSSZEnabled(b.version) {
+		return b.progressiveHashTreeRoot(ctx)
+	}
+	b.progressiveMerkleTree = nil
+
 	if err := b.initializeMerkleLayers(ctx); err != nil {
 		return [32]byte{}, err
 	}
@@ -1106,6 +1112,84 @@ func (b *BeaconState) HashTreeRoot(ctx context.Context) ([32]byte, error) {
 		return [32]byte{}, err
 	}
 	return bytesutil.ToBytes32(b.merkleLayers[len(b.merkleLayers)-1][0]), nil
+}
+
+func (b *BeaconState) progressiveHashTreeRoot(ctx context.Context) ([32]byte, error) {
+	if b.version < version.Gloas {
+		return [32]byte{}, fmt.Errorf("progressive SSZ is not supported for version: %s", version.String(b.version))
+	}
+
+	if err := b.initializeProgressiveMerkleTree(ctx); err != nil {
+		return [32]byte{}, err
+	}
+	if err := b.recomputeProgressiveDirtyFields(ctx); err != nil {
+		return [32]byte{}, err
+	}
+
+	var activeFields []bool
+	switch b.version {
+	case version.Gloas:
+		activeFields = make([]bool, params.BeaconConfig().BeaconStateGloasFieldCount)
+		for i := range activeFields {
+			activeFields[i] = true
+		}
+	default:
+		return [32]byte{}, fmt.Errorf("unsupported version: %s", version.String(b.version))
+	}
+
+	root, err := ssz.MixInActiveFields(b.progressiveMerkleTree.Root(), activeFields)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("could not mix in progressive container active fields: %w", err)
+	}
+	b.merkleLayers = nil
+	return root, nil
+}
+
+// initializeProgressiveMerkleTree computes all field roots once and caches the
+// progressive container tree. Subsequent roots update only dirty fields.
+//
+// WARNING: Caller must acquire the mutex before using.
+func (b *BeaconState) initializeProgressiveMerkleTree(ctx context.Context) error {
+	if b.progressiveMerkleTree != nil {
+		return nil
+	}
+
+	var fieldRoots [][]byte
+	switch b.version {
+	case version.Gloas:
+		fieldRoots = make([][]byte, params.BeaconConfig().BeaconStateGloasFieldCount)
+		for _, field := range gloasFields {
+			root, err := b.rootSelector(ctx, field)
+			if err != nil {
+				return fmt.Errorf("could not compute progressive field %s: %w", field.String(), err)
+			}
+			fieldRoots[field.RealPosition()] = bytesutil.SafeCopyBytes(root[:])
+		}
+	default:
+		return fmt.Errorf("unsupported version: %s", version.String(b.version))
+	}
+
+	b.progressiveMerkleTree = stateutil.MerkleizeProgressive(fieldRoots)
+	clear(b.dirtyFields)
+	return nil
+}
+
+// recomputeProgressiveDirtyFields updates dirty field roots in the cached
+// progressive container tree.
+//
+// WARNING: Caller must acquire the mutex before using.
+func (b *BeaconState) recomputeProgressiveDirtyFields(ctx context.Context) error {
+	for field := range b.dirtyFields {
+		root, err := b.rootSelector(ctx, field)
+		if err != nil {
+			return err
+		}
+		if err := b.progressiveMerkleTree.RecomputeRoot(field.RealPosition(), root); err != nil {
+			return fmt.Errorf("could not recompute progressive field %s: %w", field.String(), err)
+		}
+		delete(b.dirtyFields, field)
+	}
+	return nil
 }
 
 // Initializes the Merkle layers for the beacon state if they are empty.
@@ -1307,6 +1391,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	_, span := trace.StartSpan(ctx, "beaconState.rootSelector")
 	defer span.End()
 	span.SetAttributes(trace.StringAttribute("field", field.String()))
+	progressiveSSZ := features.ProgressiveSSZEnabled(b.version)
 
 	switch field {
 	case types.GenesisTime:
@@ -1318,7 +1403,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.Eth1DepositIndex:
 		return ssz.Uint64Root(b.eth1DepositIndex), nil
 	case types.Fork:
-		return ssz.ForkRoot(b.fork)
+		return wrappers.ForkRoot(b.fork)
 	case types.LatestBlockHeader:
 		return stateutil.BlockHeaderRoot(b.latestBlockHeader)
 	case types.BlockRoots:
@@ -1348,9 +1433,9 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 		}
 		return b.recomputeFieldTrie(field, b.eth1DataVotes)
 	case types.Validators:
-		return b.validatorsRootSelector(field)
+		return b.validatorsRootSelector(field, progressiveSSZ)
 	case types.Balances:
-		return b.balancesRootSelector(field)
+		return b.balancesRootSelector(field, progressiveSSZ)
 	case types.RandaoMixes:
 		return b.randaoMixesRootSelector(field)
 	case types.Slashings:
@@ -1384,19 +1469,19 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 		}
 		return b.recomputeFieldTrie(field, b.currentEpochAttestations)
 	case types.PreviousEpochParticipationBits:
-		return stateutil.ParticipationBitsRoot(b.previousEpochParticipation)
+		return stateutil.ParticipationBitsRoot(b.version, b.previousEpochParticipation)
 	case types.CurrentEpochParticipationBits:
-		return stateutil.ParticipationBitsRoot(b.currentEpochParticipation)
+		return stateutil.ParticipationBitsRoot(b.version, b.currentEpochParticipation)
 	case types.JustificationBits:
 		return bytesutil.ToBytes32(b.justificationBits), nil
 	case types.PreviousJustifiedCheckpoint:
-		return ssz.CheckpointRoot(b.previousJustifiedCheckpoint)
+		return wrappers.CheckpointRoot(b.previousJustifiedCheckpoint)
 	case types.CurrentJustifiedCheckpoint:
-		return ssz.CheckpointRoot(b.currentJustifiedCheckpoint)
+		return wrappers.CheckpointRoot(b.currentJustifiedCheckpoint)
 	case types.FinalizedCheckpoint:
-		return ssz.CheckpointRoot(b.finalizedCheckpoint)
+		return wrappers.CheckpointRoot(b.finalizedCheckpoint)
 	case types.InactivityScores:
-		return stateutil.Uint64ListRootWithRegistryLimit(b.inactivityScoresMultiValue.Value(b))
+		return stateutil.Uint64ListRoot(b.version, b.inactivityScoresVal())
 	case types.CurrentSyncCommittee:
 		return stateutil.SyncCommitteeRoot(b.currentSyncCommittee)
 	case types.NextSyncCommittee:
@@ -1426,17 +1511,17 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.EarliestConsolidationEpoch:
 		return ssz.Uint64Root(uint64(b.earliestConsolidationEpoch)), nil
 	case types.PendingDeposits:
-		return stateutil.PendingDepositsRoot(b.pendingDeposits)
+		return stateutil.PendingDepositsRoot(b.version, b.pendingDeposits)
 	case types.PendingPartialWithdrawals:
-		return stateutil.PendingPartialWithdrawalsRoot(b.pendingPartialWithdrawals)
+		return stateutil.PendingPartialWithdrawalsRoot(b.version, b.pendingPartialWithdrawals)
 	case types.PendingConsolidations:
-		return stateutil.PendingConsolidationsRoot(b.pendingConsolidations)
+		return stateutil.PendingConsolidationsRoot(b.version, b.pendingConsolidations)
 	case types.ProposerLookahead:
 		return stateutil.ProposerLookaheadRoot(b.proposerLookahead)
 	case types.LatestExecutionPayloadBid:
 		return b.latestExecutionPayloadBid.HashTreeRoot()
 	case types.Builders:
-		return stateutil.BuildersRoot(b.builders)
+		return stateutil.BuildersRoot(b.version, b.builders)
 	case types.NextWithdrawalBuilderIndex:
 		return ssz.Uint64Root(uint64(b.nextWithdrawalBuilderIndex)), nil
 	case types.ExecutionPayloadAvailability:
@@ -1445,11 +1530,11 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.BuilderPendingPayments:
 		return stateutil.BuilderPendingPaymentsRoot(b.builderPendingPayments)
 	case types.BuilderPendingWithdrawals:
-		return stateutil.BuilderPendingWithdrawalsRoot(b.builderPendingWithdrawals)
+		return stateutil.BuilderPendingWithdrawalsRoot(b.version, b.builderPendingWithdrawals)
 	case types.LatestBlockHash:
 		return bytesutil.ToBytes32(b.latestBlockHash), nil
 	case types.PayloadExpectedWithdrawals:
-		return ssz.WithdrawalSliceRoot(b.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
+		return stateutil.PayloadExpectedWithdrawalsRoot(b.version, b.payloadExpectedWithdrawals)
 	case types.PTCWindow:
 		return stateutil.PTCWindowRoot(b.ptcWindow)
 	}
@@ -1467,7 +1552,23 @@ func (b *BeaconState) recomputeFieldTrie(index types.FieldIndex, elements any) (
 }
 
 func (b *BeaconState) resetFieldTrie(index types.FieldIndex, elements any, length uint64) error {
-	fTrie, err := fieldtrie.NewFieldTrie(index, fieldMap[index], elements, length, promotionThresholdByField[index])
+	return b.resetFieldTrieWithMode(index, elements, length, fieldtrie.MerkleModeLegacy)
+}
+
+func (b *BeaconState) resetFieldTrieWithMode(
+	index types.FieldIndex,
+	elements any,
+	length uint64,
+	merkleMode fieldtrie.MerkleMode,
+) error {
+	fTrie, err := fieldtrie.NewFieldTrieWithMode(
+		index,
+		fieldMap[index],
+		merkleMode,
+		elements,
+		length,
+		promotionThresholdByField[index],
+	)
 	if err != nil {
 		return err
 	}
@@ -1558,12 +1659,16 @@ func (b *BeaconState) stateRootsRootSelector(field types.FieldIndex) ([32]byte, 
 	})
 }
 
-func (b *BeaconState) validatorsRootSelector(field types.FieldIndex) ([32]byte, error) {
-	if b.rebuildTrie[field] {
-		err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[stateutil.CompactValidator]{
+func (b *BeaconState) validatorsRootSelector(field types.FieldIndex, progressive bool) ([32]byte, error) {
+	merkleMode := fieldtrie.MerkleModeLegacy
+	if progressive {
+		merkleMode = fieldtrie.MerkleModeProgressive
+	}
+	if b.rebuildTrie[field] || b.stateFieldLeaves[field].MerkleMode() != merkleMode {
+		err := b.resetFieldTrieWithMode(field, mvslice.MultiValueSliceComposite[stateutil.CompactValidator]{
 			Identifiable:    b,
 			MultiValueSlice: b.validatorsMultiValue,
-		}, fieldparams.ValidatorRegistryLimit)
+		}, fieldparams.ValidatorRegistryLimit, merkleMode)
 		if err != nil {
 			return [32]byte{}, err
 		}
@@ -1577,12 +1682,16 @@ func (b *BeaconState) validatorsRootSelector(field types.FieldIndex) ([32]byte, 
 	})
 }
 
-func (b *BeaconState) balancesRootSelector(field types.FieldIndex) ([32]byte, error) {
-	if b.rebuildTrie[field] {
-		err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[uint64]{
+func (b *BeaconState) balancesRootSelector(field types.FieldIndex, progressive bool) ([32]byte, error) {
+	merkleMode := fieldtrie.MerkleModeLegacy
+	if progressive {
+		merkleMode = fieldtrie.MerkleModeProgressive
+	}
+	if b.rebuildTrie[field] || b.stateFieldLeaves[field].MerkleMode() != merkleMode {
+		err := b.resetFieldTrieWithMode(field, mvslice.MultiValueSliceComposite[uint64]{
 			Identifiable:    b,
 			MultiValueSlice: b.balancesMultiValue,
-		}, stateutil.ValidatorLimitForBalancesChunks())
+		}, stateutil.ValidatorLimitForBalancesChunks(), merkleMode)
 		if err != nil {
 			return [32]byte{}, err
 		}

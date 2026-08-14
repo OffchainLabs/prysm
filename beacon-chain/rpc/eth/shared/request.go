@@ -146,29 +146,3 @@ func IsSyncing(
 	httputil.WriteError(w, errJson)
 	return true
 }
-
-// IsOptimistic checks whether the beacon node is currently optimistic and writes it to the response.
-func IsOptimistic(
-	ctx context.Context,
-	w http.ResponseWriter,
-	optimisticModeFetcher blockchain.OptimisticModeFetcher,
-) (bool, error) {
-	isOptimistic, err := optimisticModeFetcher.IsOptimistic(ctx)
-	if err != nil {
-		errJson := &httputil.DefaultJsonError{
-			Message: "Could not check optimistic status: " + err.Error(),
-			Code:    http.StatusInternalServerError,
-		}
-		httputil.WriteError(w, errJson)
-		return true, err
-	}
-	if !isOptimistic {
-		return false, nil
-	}
-	errJson := &httputil.DefaultJsonError{
-		Code:    http.StatusServiceUnavailable,
-		Message: "Beacon node is currently optimistic and not serving validators",
-	}
-	httputil.WriteError(w, errJson)
-	return true, nil
-}

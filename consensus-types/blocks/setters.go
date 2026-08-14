@@ -68,17 +68,17 @@ func (b *SignedBeaconBlock) SetProposerSlashings(p []*eth.ProposerSlashing) {
 // SetAttesterSlashings sets the attester slashings in the block.
 // This function is not thread safe, it is only used during block creation.
 func (b *SignedBeaconBlock) SetAttesterSlashings(slashings []eth.AttSlashing) error {
-	if b.version < version.Electra {
-		blockSlashings := make([]*eth.AttesterSlashing, 0, len(slashings))
+	if b.version >= version.Gloas {
+		blockSlashings := make([]*eth.AttesterSlashingGloas, 0, len(slashings))
 		for _, slashing := range slashings {
-			s, ok := slashing.(*eth.AttesterSlashing)
+			s, ok := eth.AttesterSlashingGloasFromAttSlashing(slashing)
 			if !ok {
-				return fmt.Errorf("slashing of type %T is not *eth.AttesterSlashing", slashing)
+				return fmt.Errorf("slashing of type %T is not *eth.AttesterSlashingGloas or *eth.AttesterSlashingElectra", slashing)
 			}
 			blockSlashings = append(blockSlashings, s)
 		}
-		b.block.body.attesterSlashings = blockSlashings
-	} else {
+		b.block.body.attesterSlashingsGloas = blockSlashings
+	} else if b.version >= version.Electra {
 		blockSlashings := make([]*eth.AttesterSlashingElectra, 0, len(slashings))
 		for _, slashing := range slashings {
 			s, ok := slashing.(*eth.AttesterSlashingElectra)
@@ -88,6 +88,16 @@ func (b *SignedBeaconBlock) SetAttesterSlashings(slashings []eth.AttSlashing) er
 			blockSlashings = append(blockSlashings, s)
 		}
 		b.block.body.attesterSlashingsElectra = blockSlashings
+	} else {
+		blockSlashings := make([]*eth.AttesterSlashing, 0, len(slashings))
+		for _, slashing := range slashings {
+			s, ok := slashing.(*eth.AttesterSlashing)
+			if !ok {
+				return fmt.Errorf("slashing of type %T is not *eth.AttesterSlashing", slashing)
+			}
+			blockSlashings = append(blockSlashings, s)
+		}
+		b.block.body.attesterSlashings = blockSlashings
 	}
 	return nil
 }
@@ -95,17 +105,17 @@ func (b *SignedBeaconBlock) SetAttesterSlashings(slashings []eth.AttSlashing) er
 // SetAttestations sets the attestations in the block.
 // This function is not thread safe, it is only used during block creation.
 func (b *SignedBeaconBlock) SetAttestations(atts []eth.Att) error {
-	if b.version < version.Electra {
-		blockAtts := make([]*eth.Attestation, 0, len(atts))
+	if b.version >= version.Gloas {
+		blockAtts := make([]*eth.AttestationGloas, 0, len(atts))
 		for _, att := range atts {
-			a, ok := att.(*eth.Attestation)
+			a, ok := eth.AttestationGloasFromAtt(att)
 			if !ok {
-				return fmt.Errorf("attestation of type %T is not *eth.Attestation", att)
+				return fmt.Errorf("attestation of type %T is not *eth.AttestationGloas or *eth.AttestationElectra", att)
 			}
 			blockAtts = append(blockAtts, a)
 		}
-		b.block.body.attestations = blockAtts
-	} else {
+		b.block.body.attestationsGloas = blockAtts
+	} else if b.version >= version.Electra {
 		blockAtts := make([]*eth.AttestationElectra, 0, len(atts))
 		for _, att := range atts {
 			a, ok := att.(*eth.AttestationElectra)
@@ -115,6 +125,16 @@ func (b *SignedBeaconBlock) SetAttestations(atts []eth.Att) error {
 			blockAtts = append(blockAtts, a)
 		}
 		b.block.body.attestationsElectra = blockAtts
+	} else {
+		blockAtts := make([]*eth.Attestation, 0, len(atts))
+		for _, att := range atts {
+			a, ok := att.(*eth.Attestation)
+			if !ok {
+				return fmt.Errorf("attestation of type %T is not *eth.Attestation", att)
+			}
+			blockAtts = append(blockAtts, a)
+		}
+		b.block.body.attestations = blockAtts
 	}
 	return nil
 }
@@ -193,7 +213,7 @@ func (b *SignedBeaconBlock) SetPayloadAttestations(pa []*eth.PayloadAttestation)
 }
 
 // SetParentExecutionRequests sets the parent execution requests in the block.
-func (b *SignedBeaconBlock) SetParentExecutionRequests(r *enginev1.ExecutionRequests) error {
+func (b *SignedBeaconBlock) SetParentExecutionRequests(r *enginev1.ExecutionRequestsGloas) error {
 	if b.version < version.Gloas {
 		return consensus_types.ErrNotSupported("SetParentExecutionRequests", b.version)
 	}

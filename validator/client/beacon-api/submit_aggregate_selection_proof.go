@@ -35,8 +35,11 @@ func (c *beaconApiValidatorClient) submitAggregateSelectionProof(
 	if err := json.Unmarshal(aggregateAttestationResponse.Data, &attData); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal aggregate attestation data")
 	}
+	if attData == nil {
+		return nil, errors.New("aggregate attestation is nil")
+	}
 
-	aggregatedAttestation, err := convertAttestationToProto(attData)
+	aggregatedAttestation, err := attData.ToConsensus()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to convert aggregate attestation json to proto")
 	}
@@ -70,8 +73,11 @@ func (c *beaconApiValidatorClient) submitAggregateSelectionProofElectra(
 	if err := json.Unmarshal(aggregateAttestationResponse.Data, &attData); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal aggregate attestation electra data")
 	}
+	if attData == nil {
+		return nil, errors.New("aggregate attestation is nil")
+	}
 
-	aggregatedAttestation, err := convertAttestationElectraToProto(attData)
+	aggregatedAttestation, err := attData.ToConsensus()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to convert aggregate attestation json to proto")
 	}

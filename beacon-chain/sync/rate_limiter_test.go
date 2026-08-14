@@ -85,7 +85,7 @@ func TestRateLimiter_ExceedRawCapacity(t *testing.T) {
 	stream, err := p1.BHost.NewStream(t.Context(), p2.PeerID(), protocol.ID(topic))
 	require.NoError(t, err, "could not create stream")
 
-	for range 2 * defaultBurstLimit {
+	for range 4 * defaultBurstLimit {
 		err = rlimiter.validateRawRpcRequest(stream, 1)
 		rlimiter.addRawStream(stream)
 		require.NoError(t, err, "could not validate incoming request")
@@ -109,4 +109,17 @@ func Test_limiter_retrieveCollector_requiresLock(t *testing.T) {
 	l := limiter{}
 	_, err := l.retrieveCollector("")
 	require.ErrorContains(t, "caller must hold read/write lock", err)
+}
+
+func TestRateLimiter_RemovePeer(t *testing.T) {
+	p1 := mockp2p.NewTestP2P(t)
+	rlimiter := newRateLimiter(p1)
+	pid := p1.PeerID()
+
+	c := rlimiter.limiterMap[rpcLimiterTopic]
+	c.Add(pid.String(), 1)
+	require.Equal(t, int64(1), c.Count(pid.String()))
+
+	rlimiter.removePeer(pid)
+	require.Equal(t, int64(0), c.Count(pid.String()))
 }

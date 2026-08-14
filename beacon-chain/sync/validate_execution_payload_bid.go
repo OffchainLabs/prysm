@@ -3,6 +3,9 @@ package sync
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -14,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -28,7 +32,7 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 		return pubsub.ValidationIgnore, nil
 	}
 
-	ctx, span := trace.StartSpan(ctx, "sync.validateExecutionPayloadBidGossip")
+	_, span := trace.StartSpan(ctx, "sync.validateExecutionPayloadBidGossip")
 	defer span.End()
 
 	if msg.Topic == nil {
@@ -54,10 +58,10 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 		return pubsub.ValidationIgnore, err
 	}
 
-	// [IGNORE] this is the first signed bid seen with a valid signature from the given builder for this slot.
+	// [IGNORE] this is the first signed bid seen with a valid signature from the given builder for the tuple (bid.slot, bid.parent_block_hash, bid.parent_block_root).
 	// Cache is populated only after VerifySignature below; a hit here implies a valid-sig bid was already seen.
-	builderKey := executionPayloadBidBuilderKey(bid.Slot(), bid.BuilderIndex())
-	if s.hasSeenExecutionPayloadBidBuilder(builderKey) {
+	tupleKey := executionPayloadBidTupleKey(bid)
+	if s.hasSeenExecutionPayloadBid(tupleKey) {
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -65,15 +69,14 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifyCurrentOrNextSlot(); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
-	if err != nil {
-		return pubsub.ValidationIgnore, err
+	parentBlockRoot := bid.ParentBlockRoot()
+	st := transition.NextSlotStateReadOnly(parentBlockRoot[:], bid.Slot())
+	if st == nil || st.Slot() != bid.Slot() {
+		return pubsub.ValidationIgnore, nil
 	}
 	// [IGNORE] matching SignedProposerPreferences seen, keyed on the proposer
 	// dep root anchored to bid.parent_block_root.
-	parentBlockRoot := bid.ParentBlockRoot()
-	priorEpoch, _ := slots.ToEpoch(bid.Slot()).SafeSub(1)
-	dependentRoot, err := s.cfg.chain.DependentRootForEpoch(parentBlockRoot, priorEpoch)
+	dependentRoot, err := s.proposerDependentRoot(parentBlockRoot, bid.Slot())
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
@@ -85,18 +88,31 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifyBuilderActive(st); err != nil {
 		return pubsub.ValidationReject, err
 	}
+	// [REJECT] the builder version is PAYLOAD_BUILDER_VERSION.
+	if err := v.VerifyBuilderVersion(st); err != nil {
+		return pubsub.ValidationReject, err
+	}
 	// [REJECT] bid.execution_payment is zero.
 	if err := v.VerifyExecutionPaymentZero(); err != nil {
 		return pubsub.ValidationReject, err
 	}
-	// [REJECT] bid.fee_recipient matches the fee_recipient from the proposer's SignedProposerPreferences associated with bid.slot.
+	// [IGNORE] bid.fee_recipient matches the fee_recipient from the proposer's SignedProposerPreferences associated with bid.slot.
+	// Preferences are not checked for equivocations, so a mismatch is not provably the builder's fault.
 	if err := v.VerifyFeeRecipientMatches(pref.FeeRecipient[:]); err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	// [REJECT] len(bid.blob_kzg_commitments) <= get_blob_parameters(compute_epoch_at_slot(bid.slot)).max_blobs_per_block.
+	if err := v.VerifyBlobKzgCommitmentsLimit(); err != nil {
+		return pubsub.ValidationReject, err
+	}
+	// [REJECT] bid.prev_randao == get_randao_mix(parent_state, get_current_epoch(parent_state)).
+	if err := v.VerifyPrevRandao(st); err != nil {
 		return pubsub.ValidationReject, err
 	}
 	if err := v.VerifySignature(st); err != nil {
 		return pubsub.ValidationReject, err
 	}
-	s.setSeenExecutionPayloadBidBuilder(bid.Slot(), builderKey)
+	s.setSeenExecutionPayloadBid(bid.Slot(), tupleKey)
 	// [IGNORE] this bid is the highest value bid seen for the tuple (bid.slot, bid.parent_block_hash, bid.parent_block_root).
 	if !s.isHighestExecutionPayloadBid(bid) {
 		return pubsub.ValidationIgnore, nil
@@ -107,7 +123,7 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	}
 	// [IGNORE] bid.parent_block_hash is the block hash of a known execution payload in fork choice
 	// and bid.gas_limit is compatible with parent_gas_limit and the proposer's target.
-	if err := v.VerifyParentBlockHash(s.cfg.chain.BlockHash); err != nil {
+	if err := v.VerifyParentBlockHash(s.cfg.chain.HasPayloadBlockHash); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
 	parentGasLimit, err := s.cfg.chain.GasLimit(parentBlockRoot)
@@ -117,9 +133,17 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifyGasLimitTargetCompatible(parentGasLimit, pref.TargetGasLimit); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-	// [IGNORE] bid.parent_block_root is the hash tree root of a known beacon block in fork choice.
-	if err := v.VerifyParentBlockRootSeen(s.cfg.chain.InForkchoice); err != nil {
+	// [IGNORE] the bid is compatible with the current head branch, i.e. is_bid_compatible_with_head(store, bid) returns True.
+	if err := v.VerifyBidCompatibleWithHead(s.cfg.chain.IsBidCompatibleWithHead); err != nil {
 		return pubsub.ValidationIgnore, err
+	}
+	// [REJECT] bid.slot is greater than the slot of the block with root bid.parent_block_root.
+	parentSlot, err := s.cfg.chain.RecentBlockSlot(parentBlockRoot)
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	if err := v.VerifyBidSlotHigherThanParent(parentSlot); err != nil {
+		return pubsub.ValidationReject, err
 	}
 	msg.ValidatorData = signedBid
 	return pubsub.ValidationAccept, nil
@@ -134,21 +158,43 @@ func (s *Service) executionPayloadBidSubscriber(_ context.Context, msg proto.Mes
 		return errNilMessage
 	}
 	s.setHighestExecutionPayloadBid(signedBid)
+	s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
+		Type: opfeed.ExecutionPayloadBidReceived,
+		Data: &opfeed.ExecutionPayloadBidReceivedData{Bid: signedBid},
+	})
 	return nil
 }
 
-func executionPayloadBidBuilderKey(slot primitives.Slot, builderIndex primitives.BuilderIndex) string {
-	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(builderIndex))...)
-	return string(b)
+func executionPayloadBidTupleKey(bid interfaces.ROExecutionPayloadBid) string {
+	parentHash := bid.ParentBlockHash()
+	parentRoot := bid.ParentBlockRoot()
+	b := append(bytesutil.Bytes32(uint64(bid.Slot())), bytesutil.Bytes32(uint64(bid.BuilderIndex()))...)
+	b = append(b, parentHash[:]...)
+	return string(append(b, parentRoot[:]...))
 }
 
-func (s *Service) hasSeenExecutionPayloadBidBuilder(key string) bool {
+func (s *Service) hasSeenExecutionPayloadBid(key string) bool {
 	_, seen := s.seenExecutionPayloadBidCache.Get(key)
 	return seen
 }
 
-func (s *Service) setSeenExecutionPayloadBidBuilder(slot primitives.Slot, key string) {
+func (s *Service) setSeenExecutionPayloadBid(slot primitives.Slot, key string) {
 	s.seenExecutionPayloadBidCache.Add(slot, key, true)
+}
+
+// proposerDependentRoot returns the post-Fulu spec's proposer dep root for
+// epoch(slot), anchored to parentBlockRoot's chain. DependentRootForEpoch maps
+// the genesis-era underflow (epoch < 2) to the origin block root.
+func (s *Service) proposerDependentRoot(parentBlockRoot [32]byte, slot primitives.Slot) ([32]byte, error) {
+	previousEpoch := slots.ToEpoch(slot)
+	if previousEpoch > 0 {
+		previousEpoch = previousEpoch.Sub(1)
+	}
+	depRoot, err := s.cfg.chain.DependentRootForEpoch(parentBlockRoot, previousEpoch)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "dependent root for epoch")
+	}
+	return depRoot, nil
 }
 
 func (s *Service) isHighestExecutionPayloadBid(bid interfaces.ROExecutionPayloadBid) bool {

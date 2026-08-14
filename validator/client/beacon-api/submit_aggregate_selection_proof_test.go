@@ -94,7 +94,7 @@ func TestSubmitAggregateSelectionProof(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := t.Context()
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 
 			// Call node syncing endpoint to check if head is optimistic.
 			handler.EXPECT().Get(
@@ -263,7 +263,7 @@ func TestSubmitAggregateSelectionProofElectra(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := t.Context()
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 
 			// Call node syncing endpoint to check if head is optimistic.
 			handler.EXPECT().Get(

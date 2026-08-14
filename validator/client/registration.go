@@ -2,9 +2,7 @@ package client
 
 import (
 	"context"
-	"strings"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -17,6 +15,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // SubmitValidatorRegistrations signs validator registration objects and submits it to the beacon node by batch of validatorRegsBatchSize size maximum.
@@ -45,7 +45,7 @@ func SubmitValidatorRegistrations(
 		if _, err := validatorClient.SubmitValidatorRegistrations(ctx, &innerSignerRegs); err != nil {
 			lastErr = errors.Wrap(err, "could not submit signed registrations to beacon node")
 
-			if strings.Contains(err.Error(), builder.ErrNoBuilder.Error()) {
+			if statusErr, ok := status.FromError(err); ok && statusErr.Code() == codes.FailedPrecondition {
 				log.Warnln("Beacon node does not utilize a custom builder via the --http-mev-relay flag. Validator registration skipped.")
 
 				// We stop early the loop here, since if the builder endpoint is not configured for this chunk, it is useless to check the following chunks
@@ -64,7 +64,7 @@ func SubmitValidatorRegistrations(
 }
 
 // Sings validator registration obj with the proposer domain and private key.
-func signValidatorRegistration(ctx context.Context, signer iface.SigningFunc, reg *ethpb.ValidatorRegistrationV1) ([]byte, error) {
+func signValidatorRegistration(ctx context.Context, signer signingFunc, reg *ethpb.ValidatorRegistrationV1) ([]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.signValidatorRegistration")
 	defer span.End()
 
@@ -133,7 +133,7 @@ func (v *validator) signProposerPreferences(
 }
 
 // SignValidatorRegistrationRequest compares and returns either the cached validator registration request or signs a new one.
-func (v *validator) SignValidatorRegistrationRequest(ctx context.Context, signer iface.SigningFunc, newValidatorRegistration *ethpb.ValidatorRegistrationV1) (*ethpb.SignedValidatorRegistrationV1, bool /* isCached */, error) {
+func (v *validator) SignValidatorRegistrationRequest(ctx context.Context, signer signingFunc, newValidatorRegistration *ethpb.ValidatorRegistrationV1) (*ethpb.SignedValidatorRegistrationV1, bool /* isCached */, error) {
 	signedReg, ok := v.signedValidatorRegistrations[bytesutil.ToBytes48(newValidatorRegistration.Pubkey)]
 	if ok && isValidatorRegistrationSame(signedReg.Message, newValidatorRegistration) {
 		return signedReg, true, nil

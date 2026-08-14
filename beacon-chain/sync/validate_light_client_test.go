@@ -134,8 +134,7 @@ func TestValidateLightClientOptimisticUpdate(t *testing.T) {
 				require.NoError(t, err)
 
 				topic := p2p.LightClientOptimisticUpdateTopicFormat
-				digest, err := s.currentForkDigest()
-				require.NoError(t, err)
+				digest := s.currentForkDigest()
 				topic = s.addDigestToTopic(topic, digest)
 
 				r, err := s.validateLightClientOptimisticUpdate(ctx, "", &pubsub.Message{
@@ -265,8 +264,7 @@ func TestValidateLightClientFinalityUpdate(t *testing.T) {
 				require.NoError(t, err)
 
 				topic := p2p.LightClientFinalityUpdateTopicFormat
-				digest, err := s.currentForkDigest()
-				require.NoError(t, err)
+				digest := s.currentForkDigest()
 				topic = s.addDigestToTopic(topic, digest)
 
 				r, err := s.validateLightClientFinalityUpdate(ctx, "", &pubsub.Message{

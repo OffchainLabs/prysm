@@ -74,6 +74,11 @@ func (b *BeaconState) AppendBuilderPendingWithdrawals(withdrawals []*ethpb.Build
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
+	b.appendBuilderPendingWithdrawalsLockFree(withdrawals)
+	return nil
+}
+
+func (b *BeaconState) appendBuilderPendingWithdrawalsLockFree(withdrawals []*ethpb.BuilderPendingWithdrawal) {
 	pendingWithdrawals := b.builderPendingWithdrawals
 	if b.sharedFieldReferences[types.BuilderPendingWithdrawals].Refs() > 1 {
 		pendingWithdrawals = make([]*ethpb.BuilderPendingWithdrawal, 0, len(b.builderPendingWithdrawals)+len(withdrawals))
@@ -84,7 +89,6 @@ func (b *BeaconState) AppendBuilderPendingWithdrawals(withdrawals []*ethpb.Build
 
 	b.builderPendingWithdrawals = append(pendingWithdrawals, withdrawals...)
 	b.markFieldAsDirty(types.BuilderPendingWithdrawals)
-	return nil
 }
 
 // SetExecutionPayloadBid sets the latest execution payload bid in the state.
@@ -145,6 +149,10 @@ func (b *BeaconState) QueueBuilderPaymentForSlot(parentSlot primitives.Slot) err
 	if b.version < version.Gloas {
 		return errNotSupported("QueueBuilderPaymentForSlot", b.version)
 	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
 	currentEpoch := slots.ToEpoch(b.slot)
 	parentEpoch := slots.ToEpoch(parentSlot)
@@ -159,25 +167,23 @@ func (b *BeaconState) QueueBuilderPaymentForSlot(parentSlot primitives.Slot) err
 	if bid == nil || bid.Value == 0 {
 		return nil
 	}
-	return b.AppendBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal{{
+	b.appendBuilderPendingWithdrawalsLockFree([]*ethpb.BuilderPendingWithdrawal{{
 		FeeRecipient: bytesutil.SafeCopyBytes(bid.FeeRecipient),
 		Amount:       bid.Value,
 		BuilderIndex: bid.BuilderIndex,
 	}})
+	return nil
 }
 
+// queueBuilderPaymentAtIndex requires the caller to hold the state lock.
 func (b *BeaconState) queueBuilderPaymentAtIndex(paymentIndex primitives.Slot) error {
-	b.lock.Lock()
-	defer b.lock.Unlock()
-
 	if uint64(paymentIndex) >= uint64(len(b.builderPendingPayments)) {
 		return fmt.Errorf("builder pending payments index %d out of range (len=%d)", paymentIndex, len(b.builderPendingPayments))
 	}
 
 	payment := b.builderPendingPayments[paymentIndex]
 	if payment != nil && payment.Withdrawal != nil && payment.Withdrawal.Amount > 0 {
-		b.builderPendingWithdrawals = append(b.builderPendingWithdrawals, ethpb.CopyBuilderPendingWithdrawal(payment.Withdrawal))
-		b.markFieldAsDirty(types.BuilderPendingWithdrawals)
+		b.appendBuilderPendingWithdrawalsLockFree([]*ethpb.BuilderPendingWithdrawal{ethpb.CopyBuilderPendingWithdrawal(payment.Withdrawal)})
 	}
 
 	b.builderPendingPayments[paymentIndex] = emptyBuilderPendingPayment
@@ -362,10 +368,11 @@ func (b *BeaconState) AddBuilderFromDeposit(pubkey [fieldparams.BLSPubkeyLength]
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	return b.addBuilderFromDepositAtEpoch(pubkey, withdrawalCredentials, amount, slots.ToEpoch(b.slot))
+	// process_builder_deposit_request sets version to withdrawal_credentials[0].
+	return b.addBuilderFromDepositAtEpoch(pubkey, withdrawalCredentials[0], withdrawalCredentials, amount, slots.ToEpoch(b.slot))
 }
 
-func (b *BeaconState) addBuilderFromDepositAtEpoch(pubkey [fieldparams.BLSPubkeyLength]byte, withdrawalCredentials [fieldparams.RootLength]byte, amount uint64, depositEpoch primitives.Epoch) error {
+func (b *BeaconState) addBuilderFromDepositAtEpoch(pubkey [fieldparams.BLSPubkeyLength]byte, builderVersion byte, withdrawalCredentials [fieldparams.RootLength]byte, amount uint64, depositEpoch primitives.Epoch) error {
 	if b.version < version.Gloas {
 		return errNotSupported("AddBuilderFromDeposit", b.version)
 	}
@@ -375,7 +382,7 @@ func (b *BeaconState) addBuilderFromDepositAtEpoch(pubkey [fieldparams.BLSPubkey
 
 	builder := &ethpb.Builder{
 		Pubkey:            bytesutil.SafeCopyBytes(pubkey[:]),
-		Version:           []byte{withdrawalCredentials[0]},
+		Version:           []byte{builderVersion},
 		ExecutionAddress:  bytesutil.SafeCopyBytes(withdrawalCredentials[12:]),
 		Balance:           primitives.Gwei(amount),
 		DepositEpoch:      depositEpoch,
@@ -409,7 +416,8 @@ func (b *BeaconState) addBuilderFromDepositAtEpoch(pubkey [fieldparams.BLSPubkey
 
 func (b *BeaconState) builderInsertionIndex(currentEpoch primitives.Epoch) primitives.BuilderIndex {
 	for i, builder := range b.builders {
-		if builder.WithdrawableEpoch <= currentEpoch && builder.Balance == 0 {
+		// A nil entry behaves like a zero-value builder, which is reusable.
+		if builder == nil || (builder.WithdrawableEpoch <= currentEpoch && builder.Balance == 0) {
 			return primitives.BuilderIndex(i)
 		}
 	}
@@ -596,9 +604,18 @@ func (b *BeaconState) DecreaseWithdrawalBalances(withdrawals []*enginev1.Withdra
 	defer b.lock.Unlock()
 
 	var (
-		balanceIndices []uint64
-		builderIndices []uint64
+		balanceIndices  []uint64
+		buildersChanged bool
 	)
+	defer func() {
+		if len(balanceIndices) > 0 {
+			b.markFieldAsDirty(types.Balances)
+			b.addDirtyIndices(types.Balances, balanceIndices)
+		}
+		if buildersChanged {
+			b.markFieldAsDirty(types.Builders)
+		}
+	}()
 
 	for _, withdrawal := range withdrawals {
 		if withdrawal == nil {
@@ -613,7 +630,7 @@ func (b *BeaconState) DecreaseWithdrawalBalances(withdrawals []*enginev1.Withdra
 			if err := b.decreaseBuilderBalanceLockFree(builderIndex, withdrawal.Amount); err != nil {
 				return err
 			}
-			builderIndices = append(builderIndices, uint64(builderIndex))
+			buildersChanged = true
 			continue
 		}
 
@@ -626,15 +643,6 @@ func (b *BeaconState) DecreaseWithdrawalBalances(withdrawals []*enginev1.Withdra
 			return pkgerrors.Wrap(err, "could not update balances")
 		}
 		balanceIndices = append(balanceIndices, uint64(withdrawal.ValidatorIndex))
-	}
-
-	if len(balanceIndices) > 0 {
-		b.markFieldAsDirty(types.Balances)
-		b.addDirtyIndices(types.Balances, balanceIndices)
-	}
-	if len(builderIndices) > 0 {
-		b.markFieldAsDirty(types.Builders)
-		b.addDirtyIndices(types.Builders, builderIndices)
 	}
 
 	return nil
@@ -672,7 +680,7 @@ func decreaseBalanceWithVal(currBalance, delta primitives.Gwei) primitives.Gwei 
 // OnboardBuildersFromPendingDeposits applies any pending builder deposits at the fork.
 // It mutates the state and prunes pending deposits accordingly.
 //
-//	<spec fn="onboard_builders_from_pending_deposits" fork="gloas" hash="6bb266a4">
+//	<spec fn="onboard_builders_from_pending_deposits" fork="gloas" hash="2f9926a6">
 //	def onboard_builders_from_pending_deposits(state: BeaconState) -> None:
 //	    """
 //	    Applies any pending deposit for builders, effectively
@@ -687,9 +695,9 @@ func decreaseBalanceWithVal(currBalance, delta primitives.Gwei) primitives.Gwei 
 //	            pending_deposits.append(deposit)
 //	            continue
 //
-//	        # Note that the function apply_deposit_for_builder can mutate the
-//	        # state and may add a builder to the registry. For this reason, the
-//	        # list of builder pubkeys must be recomputed each iteration.
+//	        # Note that applying a deposit below can mutate the state and
+//	        # may add a builder to the registry. For this reason, the list
+//	        # of builder pubkeys must be recomputed each iteration.
 //	        builder_pubkeys = [b.pubkey for b in state.builders]
 //
 //	        # Deposits for non-builders stay in the pending queue. If there is a
@@ -702,15 +710,25 @@ func decreaseBalanceWithVal(currBalance, delta primitives.Gwei) primitives.Gwei 
 //	            if is_pending_validator(pending_deposits, deposit.pubkey):
 //	                pending_deposits.append(deposit)
 //	                continue
+//	            if not is_valid_deposit_signature(
+//	                deposit.pubkey,
+//	                deposit.withdrawal_credentials,
+//	                deposit.amount,
+//	                deposit.signature,
+//	            ):
+//	                continue
 //
-//	        apply_deposit_for_builder(
-//	            state,
-//	            deposit.pubkey,
-//	            deposit.withdrawal_credentials,
-//	            deposit.amount,
-//	            deposit.signature,
-//	            deposit.slot,
-//	        )
+//	            add_builder_to_registry(
+//	                state,
+//	                deposit.pubkey,
+//	                PAYLOAD_BUILDER_VERSION,
+//	                ExecutionAddress(deposit.withdrawal_credentials[12:]),
+//	                deposit.amount,
+//	                deposit.slot,
+//	            )
+//	        else:
+//	            builder_index = BuilderIndex(builder_pubkeys.index(deposit.pubkey))
+//	            state.builders[builder_index].balance += deposit.amount
 //
 //	    state.pending_deposits = pending_deposits
 //	</spec>
@@ -766,29 +784,7 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 	return nil
 }
 
-// <spec fn="apply_deposit_for_builder" fork="gloas" hash="e4bc98c7">
-// def apply_deposit_for_builder(
-//
-//	state: BeaconState,
-//	pubkey: BLSPubkey,
-//	withdrawal_credentials: Bytes32,
-//	amount: uint64,
-//	signature: BLSSignature,
-//	slot: Slot,
-//
-// ) -> None:
-//
-//	builder_pubkeys = [b.pubkey for b in state.builders]
-//	if pubkey not in builder_pubkeys:
-//	    # Verify the deposit signature (proof of possession) which is not checked by the deposit contract
-//	    if is_valid_deposit_signature(pubkey, withdrawal_credentials, amount, signature):
-//	        add_builder_to_registry(state, pubkey, withdrawal_credentials, amount, slot)
-//	else:
-//	    # Increase balance by deposit amount
-//	    builder_index = builder_pubkeys.index(pubkey)
-//	    state.builders[builder_index].balance += amount
-//
-// </spec>
+// applyDepositForNewBuilder onboards a single pending deposit as a new builder, used by onboard_builders_from_pending_deposits.
 func (b *BeaconState) applyDepositForNewBuilder(deposit *ethpb.PendingDeposit) error {
 	valid, err := helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
 		PublicKey:             deposit.PublicKey,
@@ -797,17 +793,18 @@ func (b *BeaconState) applyDepositForNewBuilder(deposit *ethpb.PendingDeposit) e
 		Signature:             deposit.Signature,
 	})
 	if err != nil {
-		log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Could not verify builder deposit signature")
+		log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Skipping builder deposit: could not verify signature")
 		return nil
 	}
 	if !valid {
-		log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).Debug("Invalid signature for builder deposit")
+		log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).Debug("Skipping builder deposit with invalid signature")
 		return nil
 	}
 	pubkey := bytesutil.ToBytes48(deposit.PublicKey)
 	depositEpoch := slots.ToEpoch(deposit.Slot)
-	if err := b.addBuilderFromDepositAtEpoch(pubkey, bytesutil.ToBytes32(deposit.WithdrawalCredentials), deposit.Amount, depositEpoch); err != nil {
-		log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Failed to apply builder deposit")
+	if err := b.addBuilderFromDepositAtEpoch(pubkey, params.BeaconConfig().PayloadBuilderVersion, bytesutil.ToBytes32(deposit.WithdrawalCredentials), deposit.Amount, depositEpoch); err != nil {
+		log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Skipping builder deposit: could not add builder")
+		return nil
 	}
 	return nil
 }

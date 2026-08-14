@@ -1,12 +1,15 @@
 package event
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
@@ -36,6 +39,12 @@ func TestNewEventStream(t *testing.T) {
 	}
 }
 
+func TestNewEventStream_InvalidHostErrorIsRedacted(t *testing.T) {
+	_, err := NewEventStream(t.Context(), &http.Client{}, "http://user:hunter2@local host:8080", []string{"topic1"})
+	require.NotNil(t, err)
+	require.Equal(t, false, strings.Contains(err.Error(), "hunter2"), "error exposes the host userinfo")
+}
+
 func TestEventStream(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/eth/v1/events", func(w http.ResponseWriter, _ *http.Request) {
@@ -56,7 +65,10 @@ func TestEventStream(t *testing.T) {
 	eventsChannel := make(chan *Event, 1)
 	stream, err := NewEventStream(t.Context(), http.DefaultClient, server.URL, topics)
 	require.NoError(t, err)
-	go stream.Subscribe(eventsChannel)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- stream.Subscribe(eventsChannel)
+	}()
 
 	// Collect events
 	var events []*Event
@@ -76,6 +88,35 @@ func TestEventStream(t *testing.T) {
 			t.Errorf("Expected event data %q, got %q", expectedData[i], string(event.Data))
 		}
 	}
+	require.NoError(t, <-errCh)
+}
+
+func TestEventStream_InvalidTopic(t *testing.T) {
+	const invalidTopic = "bogus"
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/eth/v1/events", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, err := w.Write([]byte(`{"message":"invalid topic name: ` + invalidTopic + `","code":400}`))
+		require.NoError(t, err)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	eventsChannel := make(chan *Event, 1)
+	stream, err := NewEventStream(t.Context(), http.DefaultClient, server.URL, []string{invalidTopic})
+	require.NoError(t, err)
+
+	err = stream.Subscribe(eventsChannel)
+	var subErr *httputil.DefaultJsonError
+	require.Equal(t, true, errors.As(err, &subErr))
+	require.Equal(t, http.StatusBadRequest, subErr.Code)
+	require.StringContains(t, "invalid topic name: "+invalidTopic, subErr.Message)
+	select {
+	case event := <-eventsChannel:
+		t.Fatalf("unexpected event for subscription error: %#v", event)
+	default:
+	}
 }
 
 func TestEventStreamRequestError(t *testing.T) {
@@ -88,11 +129,12 @@ func TestEventStreamRequestError(t *testing.T) {
 	require.NoError(t, err)
 
 	// error will happen when request is made, should be received over events channel
-	go stream.Subscribe(eventsChannel)
+	err = stream.Subscribe(eventsChannel)
+	require.NotNil(t, err)
 
 	event := <-eventsChannel
-	if event.EventType != EventConnectionError {
-		t.Errorf("Expected event type %q, got %q", EventConnectionError, event.EventType)
+	if event.Type != EventConnectionError {
+		t.Errorf("Expected event type %q, got %q", EventConnectionError, event.Type)
 	}
 
 }

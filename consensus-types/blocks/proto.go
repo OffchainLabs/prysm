@@ -703,8 +703,8 @@ func (b *BeaconBlockBody) Proto() (proto.Message, error) {
 			Eth1Data:                  b.eth1Data,
 			Graffiti:                  b.graffiti[:],
 			ProposerSlashings:         b.proposerSlashings,
-			AttesterSlashings:         b.attesterSlashingsElectra,
-			Attestations:              b.attestationsElectra,
+			AttesterSlashings:         b.attesterSlashingsGloas,
+			Attestations:              b.attestationsGloas,
 			Deposits:                  b.deposits,
 			VoluntaryExits:            b.voluntaryExits,
 			SyncAggregate:             b.syncAggregate,
@@ -1571,7 +1571,7 @@ func initBlockBodyFromProtoGloas(pb *eth.BeaconBlockBodyGloas) (*BeaconBlockBody
 
 	per := pb.ParentExecutionRequests
 	if per == nil {
-		per = &enginev1.ExecutionRequests{}
+		per = &enginev1.ExecutionRequestsGloas{}
 	}
 	b := &BeaconBlockBody{
 		version:                   version.Gloas,
@@ -1579,8 +1579,8 @@ func initBlockBodyFromProtoGloas(pb *eth.BeaconBlockBodyGloas) (*BeaconBlockBody
 		eth1Data:                  pb.Eth1Data,
 		graffiti:                  bytesutil.ToBytes32(pb.Graffiti),
 		proposerSlashings:         pb.ProposerSlashings,
-		attesterSlashingsElectra:  pb.AttesterSlashings,
-		attestationsElectra:       pb.Attestations,
+		attesterSlashingsGloas:    pb.AttesterSlashings,
+		attestationsGloas:         pb.Attestations,
 		deposits:                  pb.Deposits,
 		voluntaryExits:            pb.VoluntaryExits,
 		syncAggregate:             pb.SyncAggregate,

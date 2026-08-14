@@ -171,13 +171,13 @@ func (s *Service) custodyGroupCount(context.Context) (uint64, error) {
 }
 
 // validatorsCustodyRequirements computes the custody requirements based on the
-// finalized state and the tracked validators.
+// finalized state and the validators attached to this beacon node (per
+// beacon_committee_subscriptions).
 func (s *Service) validatorsCustodyRequirement() (uint64, error) {
-	if s.trackedValidatorsCache == nil {
+	if s.subscribedValidatorsCache == nil {
 		return 0, nil
 	}
-	// Get the indices of the tracked validators.
-	indices := s.trackedValidatorsCache.Indices()
+	indices := s.subscribedValidatorsCache.Indices()
 
 	// Return early if no validators are tracked.
 	if len(indices) == 0 {

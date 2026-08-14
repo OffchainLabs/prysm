@@ -102,6 +102,37 @@ func TestAttestToBlockHead_SubmitAttestation_RequestFailure(t *testing.T) {
 	}
 }
 
+func TestAttestationDueComponent(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+
+	const gloasForkEpoch = primitives.Epoch(10)
+	cfg.GloasForkEpoch = gloasForkEpoch
+	cfg.AttestationDueBPS = 3333
+	cfg.AttestationDueBPSGloas = 5000
+	params.OverrideBeaconConfig(cfg)
+
+	slotsPerEpoch := cfg.SlotsPerEpoch
+	gloasFirstSlot := slotsPerEpoch.Mul(uint64(gloasForkEpoch))
+
+	tests := []struct {
+		name string
+		slot primitives.Slot
+		want primitives.BP
+	}{
+		{name: "genesis is pre-Gloas", slot: 0, want: cfg.AttestationDueBPS},
+		{name: "last pre-Gloas slot", slot: gloasFirstSlot - 1, want: cfg.AttestationDueBPS},
+		{name: "first Gloas slot", slot: gloasFirstSlot, want: cfg.AttestationDueBPSGloas},
+		{name: "well past the Gloas fork", slot: gloasFirstSlot + slotsPerEpoch.Mul(5), want: cfg.AttestationDueBPSGloas},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, attestationDueComponent(tt.slot))
+		})
+	}
+}
+
 func TestSubmitAttestation_ElectraCommitteeIndex(t *testing.T) {
 	tests := []struct {
 		name                   string

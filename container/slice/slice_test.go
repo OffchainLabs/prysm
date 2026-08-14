@@ -7,7 +7,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/container/slice"
-	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestSubsetUint64(t *testing.T) {
@@ -71,24 +70,6 @@ func TestIntersectionUint64(t *testing.T) {
 		}
 		if !reflect.DeepEqual(setC, tt.setC) {
 			t.Errorf("slice modified, got %v, want %v", setC, tt.setC)
-		}
-	}
-}
-
-func TestIsSortedUint64(t *testing.T) {
-	testCases := []struct {
-		setA []uint64
-		out  bool
-	}{
-		{[]uint64{1, 2, 3}, true},
-		{[]uint64{3, 1, 3}, false},
-		{[]uint64{1}, true},
-		{[]uint64{}, true},
-	}
-	for _, tt := range testCases {
-		result := slice.IsUint64Sorted(tt.setA)
-		if result != tt.out {
-			t.Errorf("got %v, want %v", result, tt.out)
 		}
 	}
 }
@@ -262,46 +243,6 @@ func TestNotInt64(t *testing.T) {
 		result := slice.NotInt64(tt.setA, tt.setB)
 		if !reflect.DeepEqual(result, tt.out) {
 			t.Errorf("got %d, want %d", result, tt.out)
-		}
-	}
-}
-
-func TestIsInUint64(t *testing.T) {
-	testCases := []struct {
-		a      uint64
-		b      []uint64
-		result bool
-	}{
-		{0, []uint64{}, false},
-		{0, []uint64{0}, true},
-		{4, []uint64{2, 3, 5, 4, 6}, true},
-		{100, []uint64{2, 3, 5, 4, 6}, false},
-	}
-	for _, tt := range testCases {
-		result := slice.IsInUint64(tt.a, tt.b)
-		if result != tt.result {
-			t.Errorf("IsIn(%d, %v)=%v, wanted: %v",
-				tt.a, tt.b, result, tt.result)
-		}
-	}
-}
-
-func TestIsInInt64(t *testing.T) {
-	testCases := []struct {
-		a      int64
-		b      []int64
-		result bool
-	}{
-		{0, []int64{}, false},
-		{0, []int64{0}, true},
-		{4, []int64{2, 3, 5, 4, 6}, true},
-		{100, []int64{2, 3, 5, 4, 6}, false},
-	}
-	for _, tt := range testCases {
-		result := slice.IsInInt64(tt.a, tt.b)
-		if result != tt.result {
-			t.Errorf("IsIn(%d, %v)=%v, wanted: %v",
-				tt.a, tt.b, result, tt.result)
 		}
 	}
 }
@@ -560,53 +501,5 @@ func TestNotSlot(t *testing.T) {
 		if !reflect.DeepEqual(result, tt.out) {
 			t.Errorf("got %d, want %d", result, tt.out)
 		}
-	}
-}
-
-func TestIsInSlots(t *testing.T) {
-	testCases := []struct {
-		a      primitives.Slot
-		b      []primitives.Slot
-		result bool
-	}{
-		{0, []primitives.Slot{}, false},
-		{0, []primitives.Slot{0}, true},
-		{4, []primitives.Slot{2, 3, 5, 4, 6}, true},
-		{100, []primitives.Slot{2, 3, 5, 4, 6}, false},
-	}
-	for _, tt := range testCases {
-		result := slice.IsInSlots(tt.a, tt.b)
-		if result != tt.result {
-			t.Errorf("IsIn(%d, %v)=%v, wanted: %v",
-				tt.a, tt.b, result, tt.result)
-		}
-	}
-}
-
-func TestUnique(t *testing.T) {
-	t.Run("string", func(t *testing.T) {
-		result := slice.Unique[string]([]string{"a", "b", "a"})
-		require.DeepEqual(t, []string{"a", "b"}, result)
-	})
-	t.Run("uint64", func(t *testing.T) {
-		result := slice.Unique[uint64]([]uint64{1, 2, 1})
-		require.DeepEqual(t, []uint64{1, 2}, result)
-	})
-}
-
-func TestReverse(t *testing.T) {
-	tests := []struct {
-		value [][32]byte
-		want  [][32]byte
-	}{
-		{[][32]byte{}, [][32]byte{}},
-		{[][32]byte{{'A'}, {'B'}, {'C'}, {'D'}},
-			[][32]byte{{'D'}, {'C'}, {'B'}, {'A'}}},
-		{[][32]byte{{1}, {2}, {3}, {4}},
-			[][32]byte{{4}, {3}, {2}, {1}}},
-	}
-	for _, tt := range tests {
-		b := slice.Reverse(tt.value)
-		require.DeepEqual(t, tt.want, b)
 	}
 }

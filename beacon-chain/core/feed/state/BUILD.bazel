@@ -8,10 +8,12 @@ go_library(
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state",
     visibility = [
+        "//api/server/structs:__subpackages__",
         "//beacon-chain:__subpackages__",
         "//testing/slasher/simulator:__subpackages__",
     ],
     deps = [
+        "//api:go_default_library",
         "//async/event:go_default_library",
         "//consensus-types/interfaces:go_default_library",
         "//consensus-types/primitives:go_default_library",

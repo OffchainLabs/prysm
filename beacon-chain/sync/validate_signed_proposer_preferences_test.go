@@ -206,18 +206,6 @@ func TestValidateSignedProposerPreferencesGossip_HappyPath(t *testing.T) {
 	require.DeepEqual(t, signedPreferences, validatorData)
 }
 
-func TestSignedProposerPreferencesSubscriber_WrongMessage(t *testing.T) {
-	s := &Service{}
-	err := s.signedProposerPreferencesSubscriber(context.Background(), &ethpb.BeaconBlock{})
-	require.ErrorIs(t, errWrongMessage, err)
-}
-
-func TestSignedProposerPreferencesSubscriber_HappyPath(t *testing.T) {
-	s := &Service{}
-	err := s.signedProposerPreferencesSubscriber(context.Background(), &ethpb.SignedProposerPreferences{})
-	require.NoError(t, err)
-}
-
 type mockSignedProposerPreferencesVerifier struct {
 	errCurrentOrNextEpoch error
 	errDependentRootSeen  error
@@ -328,8 +316,7 @@ func signedProposerPreferencesToPubsub(t *testing.T, s *Service, p p2p.P2P, pref
 	buf := new(bytes.Buffer)
 	_, err := p.Encoding().EncodeGossip(buf, preferences)
 	require.NoError(t, err)
-	digest, err := s.currentForkDigest()
-	require.NoError(t, err)
+	digest := s.currentForkDigest()
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedProposerPreferences]()]
 	topic = s.addDigestToTopic(topic, digest)
 	return &pubsub.Message{

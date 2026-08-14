@@ -6,6 +6,7 @@ package state
 import (
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
@@ -25,6 +26,8 @@ const (
 	FinalizedCheckpoint
 	// NewHead of the chain event.
 	NewHead
+	// NewHeadV2 of the chain event, carrying the versioned, Gloas-aware head_v2 payload.
+	NewHeadV2
 	// MissedSlot is sent when we need to notify users that a slot was missed.
 	MissedSlot
 	// LightClientFinalityUpdate event
@@ -33,8 +36,10 @@ const (
 	LightClientOptimisticUpdate
 	// PayloadAttributes events are fired upon a missed slot or new head.
 	PayloadAttributes
-	// PayloadProcessed is sent after a payload envelope has been processed.
-	PayloadProcessed
+	// ExecutionPayloadAvailable is sent when a new execution payload is available (without EL validation results).
+	ExecutionPayloadAvailable
+	// ExecutionPayloadProcessed is sent after a payload envelope has been processed.
+	ExecutionPayloadProcessed
 )
 
 // BlockProcessedData is the data sent with BlockProcessed events.
@@ -75,8 +80,67 @@ type InitializedData struct {
 	GenesisValidatorsRoot []byte
 }
 
-// PayloadProcessedData is the data sent with PayloadProcessed events.
-type PayloadProcessedData struct {
+// ExecutionPayloadAvailableData is the data sent with ExecutionPayloadAvailable events.
+type ExecutionPayloadAvailableData struct {
 	Slot      primitives.Slot
 	BlockRoot [32]byte
+}
+
+// ExecutionPayloadProcessedData is the data sent with ExecutionPayloadProcessed events.
+type ExecutionPayloadProcessedData struct {
+	Slot         primitives.Slot
+	BuilderIndex primitives.BuilderIndex
+	BlockHash    [32]byte
+	BlockRoot    [32]byte
+	// Optimistic is true if the imported payload has not been fully validated by the execution layer.
+	Optimistic bool
+}
+
+const (
+	PayloadStatusEmpty = api.PayloadStatusEmpty
+	PayloadStatusFull  = api.PayloadStatusFull
+)
+
+// HeadData is the data sent with NewHead events.
+type HeadData struct {
+	Slot                      primitives.Slot
+	Block                     [32]byte
+	State                     [32]byte
+	EpochTransition           bool
+	PreviousDutyDependentRoot [32]byte
+	CurrentDutyDependentRoot  [32]byte
+	ExecutionOptimistic       bool
+}
+
+// FinalizedCheckpointData is the data sent with FinalizedCheckpoint events.
+type FinalizedCheckpointData struct {
+	Block               [32]byte
+	State               [32]byte
+	Epoch               primitives.Epoch
+	ExecutionOptimistic bool
+}
+
+// ChainReorgData is the data sent with Reorg events.
+type ChainReorgData struct {
+	Slot                primitives.Slot
+	Depth               uint64
+	OldHeadBlock        [32]byte
+	NewHeadBlock        [32]byte
+	OldHeadState        [32]byte
+	NewHeadState        [32]byte
+	Epoch               primitives.Epoch
+	ExecutionOptimistic bool
+}
+
+// HeadV2Data is the data sent with NewHeadV2 events.
+type HeadV2Data struct {
+	Slot                      primitives.Slot
+	Block                     [32]byte
+	State                     [32]byte
+	EpochTransition           bool
+	ExecutionOptimistic       bool
+	CurrentEpochDependentRoot [32]byte
+	NextEpochDependentRoot    [32]byte
+	PayloadStatus             api.PayloadStatus
+	Version                   int
 }

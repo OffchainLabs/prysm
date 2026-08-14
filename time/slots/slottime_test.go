@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -53,46 +54,6 @@ func TestAbsoluteValueSlotDifference(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := AbsoluteValueSlotDifference(tt.args.x, tt.args.y); got != tt.want {
 				t.Errorf("AbsoluteValueSlotDifference() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestMultiplySlotBy(t *testing.T) {
-	type args struct {
-		times int64
-	}
-	tests := []struct {
-		name string
-		args args
-		want time.Duration
-	}{
-		{
-			name: "multiply by 1",
-			args: args{
-				times: 1,
-			},
-			want: time.Duration(12) * time.Second,
-		},
-		{
-			name: "multiply by 2",
-			args: args{
-				times: 2,
-			},
-			want: time.Duration(24) * time.Second,
-		},
-		{
-			name: "multiply by 10",
-			args: args{
-				times: 10,
-			},
-			want: time.Duration(120) * time.Second,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := MultiplySlotBy(tt.args.times); got != tt.want {
-				t.Errorf("MultiplySlotBy() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -610,6 +571,19 @@ func testCurrentSlot(t testing.TB, slot primitives.Slot) {
 }
 
 func TestToForkVersion(t *testing.T) {
+	t.Run("Gloas fork version", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		config := params.BeaconConfig()
+		config.GloasForkEpoch = 100
+		params.OverrideBeaconConfig(config)
+
+		slot, err := EpochStart(params.BeaconConfig().GloasForkEpoch)
+		require.NoError(t, err)
+
+		result := ToForkVersion(slot)
+		require.Equal(t, version.Gloas, result)
+	})
+
 	t.Run("Fulu fork version", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		config := params.BeaconConfig()
@@ -678,27 +652,37 @@ func TestToForkVersion(t *testing.T) {
 }
 
 func TestSlotTickerReplayBehaviour(t *testing.T) {
-	secondsPerslot := uint64(1)
-	st := NewSlotTicker(time.Unix(time.Now().Unix(), 0), secondsPerslot) // 1-second period
-	const ticks = 5
+	synctest.Test(t, func(t *testing.T) {
+		slotDuration := time.Second
+		st := NewSlotTicker(time.Unix(time.Now().Unix(), 0), slotDuration) // 1-second period
+		const ticks = 5
 
-	ctx, cancel := context.WithTimeout(t.Context(), 6*time.Second) // make the timeout very close
-	defer cancel()
-	time.Sleep(time.Duration(ticks) * time.Second) // simulate slow consumer by delaying tick consumption
-	counter := 0
-	prevTime := time.Now()
-	for counter < ticks {
-		select {
-		case <-st.C(): // simulate ticks faster than supposed iteration due to replaying old ticks
-			assert.Equal(t, true, time.Now().Sub(prevTime) < time.Duration(secondsPerslot)*time.Second)
-			counter++
-			prevTime = time.Now()
-		case <-ctx.Done(): // timed out before enough ticks arrived
-			t.Fatalf("expected %d ticks, got %d", ticks, counter)
+		ctx, cancel := context.WithTimeout(t.Context(), 6*time.Second) // make the timeout very close
+		defer cancel()
+		time.Sleep(time.Duration(ticks) * time.Second) // simulate slow consumer by delaying tick consumption
+		counter := 0
+		prevTime := time.Now()
+		for counter < ticks {
+			select {
+			case <-st.C(): // simulate ticks faster than supposed iteration due to replaying old ticks
+				assert.Equal(t, true, time.Now().Sub(prevTime) < slotDuration)
+				counter++
+				prevTime = time.Now()
+			case <-ctx.Done(): // timed out before enough ticks arrived
+				t.Fatalf("expected %d ticks, got %d", ticks, counter)
+			}
 		}
-	}
 
-	require.Equal(t, ticks, counter)
+		require.Equal(t, ticks, counter)
+
+		synctest.Wait()
+		select {
+		case <-st.C():
+		default:
+		}
+		st.Done()
+		synctest.Wait()
+	})
 }
 
 func TestSafeEpochStartOrMax(t *testing.T) {

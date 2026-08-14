@@ -1,0 +1,257 @@
+package rest
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus/hooks/test"
+)
+
+// genesisResponse is a small stand-in JSON payload for exercising the handler's
+// request/response plumbing.
+type genesisResponse struct {
+	Data *genesisData `json:"data"`
+}
+
+type genesisData struct {
+	GenesisTime           string `json:"genesis_time"`
+	GenesisValidatorsRoot string `json:"genesis_validators_root"`
+	GenesisForkVersion    string `json:"genesis_fork_version"`
+}
+
+func testGenesis() *genesisResponse {
+	return &genesisResponse{
+		Data: &genesisData{
+			GenesisTime:           "123",
+			GenesisValidatorsRoot: "0x456",
+			GenesisForkVersion:    "0x789",
+		},
+	}
+}
+
+func TestGet(t *testing.T) {
+	ctx := t.Context()
+	const endpoint = "/example/rest/api/endpoint"
+	genesisJson := testGenesis()
+	mux := http.NewServeMux()
+	mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
+		marshalledJson, err := json.Marshal(genesisJson)
+		require.NoError(t, err)
+		assert.Equal(t, version.BuildData(), r.Header.Get("User-Agent"))
+		w.Header().Set("Content-Type", api.JsonMediaType)
+		_, err = w.Write(marshalledJson)
+		require.NoError(t, err)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	handler := newHandler(http.Client{Timeout: time.Second * 5}, server.URL)
+	resp := &genesisResponse{}
+	require.NoError(t, handler.Get(ctx, endpoint+"?arg1=abc&arg2=def", resp))
+	assert.DeepEqual(t, genesisJson, resp)
+}
+
+func TestGetSSZ(t *testing.T) {
+	ctx := context.Background()
+	const endpoint = "/example/rest/api/ssz"
+	genesisJson := testGenesis()
+
+	t.Run("Successful SSZ response", func(t *testing.T) {
+		expectedBody := []byte{10, 20, 30, 40}
+
+		mux := http.NewServeMux()
+		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
+			assert.StringContains(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+			assert.Equal(t, version.BuildData(), r.Header.Get("User-Agent"))
+			w.Header().Set("Content-Type", api.OctetStreamMediaType)
+			_, err := w.Write(expectedBody)
+			require.NoError(t, err)
+		})
+		server := httptest.NewServer(mux)
+		defer server.Close()
+
+		handler := newHandler(http.Client{Timeout: time.Second * 5}, server.URL)
+
+		body, header, err := handler.GetSSZ(ctx, endpoint)
+		require.NoError(t, err)
+		assert.DeepEqual(t, expectedBody, body)
+		require.StringContains(t, api.OctetStreamMediaType, header.Get("Content-Type"))
+	})
+
+	t.Run("Json Content-Type response", func(t *testing.T) {
+		logrus.SetLevel(logrus.DebugLevel)
+		defer logrus.SetLevel(logrus.InfoLevel) // reset it afterwards
+		logHook := test.NewGlobal()
+		mux := http.NewServeMux()
+		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
+			assert.StringContains(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+			w.Header().Set("Content-Type", api.JsonMediaType)
+
+			marshalledJson, err := json.Marshal(genesisJson)
+			require.NoError(t, err)
+
+			_, err = w.Write(marshalledJson)
+			require.NoError(t, err)
+		})
+		server := httptest.NewServer(mux)
+		defer server.Close()
+
+		handler := newHandler(http.Client{Timeout: time.Second * 5}, server.URL)
+
+		body, header, err := handler.GetSSZ(ctx, endpoint)
+		require.NoError(t, err)
+		assert.LogsContain(t, logHook, "Server responded with non primary accept type")
+		require.Equal(t, api.JsonMediaType, header.Get("Content-Type"))
+		resp := &genesisResponse{}
+		require.NoError(t, json.Unmarshal(body, resp))
+		require.Equal(t, "123", resp.Data.GenesisTime)
+	})
+
+	t.Run("Wrong Content-Type response, doesn't error out and instead handled downstream", func(t *testing.T) {
+		logrus.SetLevel(logrus.DebugLevel)
+		defer logrus.SetLevel(logrus.InfoLevel) // reset it afterwards
+		logHook := test.NewGlobal()
+		mux := http.NewServeMux()
+		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
+			assert.StringContains(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+			w.Header().Set("Content-Type", "text/plain") // Invalid content type
+			_, err := w.Write([]byte("some text"))
+			require.NoError(t, err)
+		})
+		server := httptest.NewServer(mux)
+		defer server.Close()
+
+		handler := newHandler(http.Client{Timeout: time.Second * 5}, server.URL)
+
+		_, _, err := handler.GetSSZ(ctx, endpoint)
+		require.NoError(t, err)
+		assert.LogsContain(t, logHook, "Server responded with non primary accept type")
+	})
+}
+
+func TestAcceptOverrideSSZ(t *testing.T) {
+	name := "TestAcceptOverride"
+	orig := os.Getenv(params.EnvNameOverrideAccept)
+	defer func() {
+		require.NoError(t, os.Setenv(params.EnvNameOverrideAccept, orig))
+	}()
+	require.NoError(t, os.Setenv(params.EnvNameOverrideAccept, name))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, name, r.Header.Get("Accept"))
+		w.WriteHeader(200)
+		_, err := w.Write([]byte("ok"))
+		require.NoError(t, err)
+	}))
+	defer srv.Close()
+	c := newHandler(http.Client{Timeout: time.Second * 5}, srv.URL)
+	_, _, err := c.GetSSZ(t.Context(), "/test")
+	require.NoError(t, err)
+}
+
+func TestPost(t *testing.T) {
+	ctx := t.Context()
+	const endpoint = "/example/rest/api/endpoint"
+	dataBytes := []byte{1, 2, 3, 4, 5}
+	headers := map[string]string{"foo": "bar"}
+
+	genesisJson := testGenesis()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
+		// Make sure the request headers have been set
+		assert.Equal(t, "bar", r.Header.Get("foo"))
+		assert.Equal(t, version.BuildData(), r.Header.Get("User-Agent"))
+		assert.Equal(t, api.JsonMediaType, r.Header.Get("Content-Type"))
+
+		// Make sure the data matches
+		receivedBytes := make([]byte, len(dataBytes))
+		numBytes, err := r.Body.Read(receivedBytes)
+		assert.Equal(t, io.EOF, err)
+		assert.Equal(t, len(dataBytes), numBytes)
+		assert.DeepEqual(t, dataBytes, receivedBytes)
+
+		marshalledJson, err := json.Marshal(genesisJson)
+		require.NoError(t, err)
+
+		w.Header().Set("Content-Type", api.JsonMediaType)
+		_, err = w.Write(marshalledJson)
+		require.NoError(t, err)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	handler := newHandler(http.Client{Timeout: time.Second * 5}, server.URL)
+	resp := &genesisResponse{}
+	require.NoError(t, handler.Post(ctx, endpoint, headers, bytes.NewBuffer(dataBytes), resp))
+	assert.DeepEqual(t, genesisJson, resp)
+}
+
+func TestGetStatusCode(t *testing.T) {
+	ctx := t.Context()
+	const endpoint = "/eth/v1/node/health"
+
+	testCases := []struct {
+		name               string
+		serverStatusCode   int
+		expectedStatusCode int
+	}{
+		{
+			name:               "returns 200 OK",
+			serverStatusCode:   http.StatusOK,
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name:               "returns 206 Partial Content",
+			serverStatusCode:   http.StatusPartialContent,
+			expectedStatusCode: http.StatusPartialContent,
+		},
+		{
+			name:               "returns 503 Service Unavailable",
+			serverStatusCode:   http.StatusServiceUnavailable,
+			expectedStatusCode: http.StatusServiceUnavailable,
+		},
+		{
+			name:               "returns 500 Internal Server Error",
+			serverStatusCode:   http.StatusInternalServerError,
+			expectedStatusCode: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, version.BuildData(), r.Header.Get("User-Agent"))
+				w.WriteHeader(tc.serverStatusCode)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			handler := newHandler(http.Client{Timeout: time.Second * 5}, server.URL)
+
+			statusCode, err := handler.GetStatusCode(ctx, endpoint)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedStatusCode, statusCode)
+		})
+	}
+
+	t.Run("returns error on connection failure", func(t *testing.T) {
+		handler := newHandler(http.Client{Timeout: time.Millisecond * 100}, "http://localhost:99999")
+
+		_, err := handler.GetStatusCode(ctx, endpoint)
+		require.ErrorContains(t, "failed to perform request", err)
+	})
+}

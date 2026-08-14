@@ -476,9 +476,11 @@ func (s *Service) GetAttestationData(
 		return nil, &RpcError{Reason: BadRequest, Err: errors.Errorf("invalid request: %v", err)}
 	}
 
+	currentHeadRoot, currentHeadFull := s.HeadFetcher.HeadRootAndFull()
+
 	s.AttestationCache.RLock()
 	res := s.AttestationCache.Get()
-	if res != nil && res.Slot == req.Slot {
+	if res.IsFreshFor(req.Slot, currentHeadRoot, currentHeadFull) {
 		s.AttestationCache.RUnlock()
 		return &ethpb.AttestationData{
 			Slot:            res.Slot,
@@ -503,7 +505,7 @@ func (s *Service) GetAttestationData(
 	// the same attestation data, the cache might have been filled while we were waiting
 	// to acquire the lock.
 	res = s.AttestationCache.Get()
-	if res != nil && res.Slot == req.Slot {
+	if res.IsFreshFor(req.Slot, currentHeadRoot, currentHeadFull) {
 		return &ethpb.AttestationData{
 			Slot:            res.Slot,
 			CommitteeIndex:  attestationDataIndex(req, res.IsPayloadFull),
@@ -563,6 +565,7 @@ func (s *Service) GetAttestationData(
 	if err = s.AttestationCache.Put(&cache.AttestationConsensusData{
 		Slot:          req.Slot,
 		HeadRoot:      headRoot,
+		HeadFull:      currentHeadFull,
 		IsPayloadFull: isPayloadFull,
 		Target: forkchoicetypes.Checkpoint{
 			Epoch: targetEpoch,
@@ -746,8 +749,7 @@ func registerSyncSubnetInternal(
 	if err != nil {
 		epochsToWatch = 0
 	}
-	epochDuration := time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
-	totalDuration := epochDuration * time.Duration(epochsToWatch) * time.Second
+	totalDuration := params.EpochsDuration(1, params.BeaconConfig()) * time.Duration(epochsToWatch)
 	cache.SyncSubnetIDs.AddSyncCommitteeSubnets(pubkey, startEpoch, subs, totalDuration)
 }
 
@@ -896,7 +898,7 @@ func (s *Service) ValidatorActiveSetChanges(
 			activatedKeys = append(activatedKeys, publicKey[:])
 		}
 
-		maxWithdrawableEpoch := primitives.MaxEpoch(validator.WithdrawableEpoch(), requestedEpoch+slashingsVector)
+		maxWithdrawableEpoch := max(validator.WithdrawableEpoch(), requestedEpoch+slashingsVector)
 
 		if validator.Slashed() && validator.WithdrawableEpoch() == maxWithdrawableEpoch {
 			publicKey := validator.PublicKey()
@@ -939,7 +941,7 @@ func (s *Service) PayloadAttestationData(
 	ctx context.Context,
 	slot primitives.Slot,
 ) (*ethpb.PayloadAttestationData, *RpcError) {
-	_, span := trace.StartSpan(ctx, "coreService.PayloadAttestationData")
+	ctx, span := trace.StartSpan(ctx, "coreService.PayloadAttestationData")
 	defer span.End()
 
 	if slots.ToEpoch(slot) < params.BeaconConfig().GloasForkEpoch {
@@ -956,9 +958,6 @@ func (s *Service) PayloadAttestationData(
 	}
 	cfg := params.BeaconConfig()
 	deadline := slotStart.Add(cfg.SlotComponentDuration(cfg.PayloadAttestationDueBPS))
-	if prysmTime.Now().Before(deadline) {
-		return nil, &RpcError{Reason: Unavailable, Err: fmt.Errorf("PTC deadline not yet reached for slot %d", slot)}
-	}
 
 	if cached := s.payloadAttestationData.Load(); cached != nil && cached.Slot == slot {
 		return cached, nil
@@ -968,9 +967,15 @@ func (s *Service) PayloadAttestationData(
 		if cached := s.payloadAttestationData.Load(); cached != nil && cached.Slot == slot {
 			return cached, nil
 		}
-		data, rpcErr := s.buildPayloadAttestationData(slot)
+		data, rpcErr := s.buildPayloadAttestationData(ctx, slot)
 		if rpcErr != nil {
 			return rpcErr, nil
+		}
+		// Before the deadline only the final result is safe to return: the payload
+		// arrived timely and the data is available. Otherwise both flags may still
+		// flip, so wait for the deadline.
+		if prysmTime.Now().Before(deadline) && !(data.PayloadPresent && data.BlobDataAvailable) {
+			return &RpcError{Reason: Unavailable, Err: fmt.Errorf("payload attestation data not yet final for slot %d", slot)}, nil
 		}
 		s.payloadAttestationData.Store(data)
 		return data, nil
@@ -988,20 +993,48 @@ func (s *Service) PayloadAttestationData(
 	}
 }
 
-func (s *Service) buildPayloadAttestationData(slot primitives.Slot) (*ethpb.PayloadAttestationData, *RpcError) {
+// hasCanonicalShuffling returns whether the current root at the given slot is in the same shuffling as head.
+func (s *Service) hasCanonicalShuffling(root [32]byte, slot primitives.Slot) bool {
+	epoch := slots.ToEpoch(slot)
+	if epoch > 0 {
+		epoch--
+	}
+	hdr, err := s.ForkchoiceFetcher.DependentRoot(epoch)
+	if err != nil {
+		log.WithError(err).Error("Could not get head dependent root to check canonical shuffle")
+		return false
+	}
+	rdr, err := s.HeadFetcher.DependentRootForEpoch(root, epoch)
+	if err != nil {
+		log.WithError(err).Error("Could not get head dependent root to check canonical shuffle")
+		return false
+	}
+	return hdr == rdr
+}
+
+// buildPayloadAttestationData builds a payload attestation message for the validator to sign. It attempts first
+// to build from the highest received slot but only if it is compatible with the head view.
+func (s *Service) buildPayloadAttestationData(ctx context.Context, slot primitives.Slot) (*ethpb.PayloadAttestationData, *RpcError) {
 	highestReceivedSlot := s.ForkchoiceFetcher.HighestReceivedBlockSlot()
 	if highestReceivedSlot != slot {
-		return nil, &RpcError{Reason: Unavailable, Err: fmt.Errorf("no valid block root for slot %d, highest received block slot is %d", slot, highestReceivedSlot)}
+		return nil, &RpcError{Reason: NoContent, Err: fmt.Errorf("no block found at slot=%d", slot)}
 	}
 	root := s.ForkchoiceFetcher.HighestReceivedBlockRoot()
 	if root == [32]byte{} {
 		return nil, &RpcError{Reason: Internal, Err: fmt.Errorf("could not retrieve highest received block root for slot %d", slot)}
 	}
-	payloadEarly, _ := s.ForkchoiceFetcher.PayloadEarly(root)
+	if !s.hasCanonicalShuffling(root, slot) {
+		return nil, &RpcError{Reason: Unavailable, Err: fmt.Errorf("no canonical shuffling block for slot %d", slot)}
+	}
+	available, err := s.ChainInfoFetcher.DataAvailable(ctx, root, slot)
+	if err != nil {
+		return nil, &RpcError{Reason: Internal, Err: fmt.Errorf("could not check data availability for block root %#x: %w", root, err)}
+	}
+	payloadEarly, _ := s.ChainInfoFetcher.PayloadEarly(root)
 	return &ethpb.PayloadAttestationData{
 		BeaconBlockRoot:   root[:],
 		Slot:              slot,
 		PayloadPresent:    payloadEarly,
-		BlobDataAvailable: s.ForkchoiceFetcher.HasFullNode(root),
+		BlobDataAvailable: available,
 	}, nil
 }

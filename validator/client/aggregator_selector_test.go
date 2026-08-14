@@ -95,12 +95,10 @@ func TestLocalSelector_AttestationSelectionProof_ConcurrentDedup(t *testing.T) {
 	results := make([][]byte, goroutines)
 	errs := make([]error, goroutines)
 
-	wg.Add(goroutines)
-	for i := range goroutines {
-		go func(idx int) {
-			defer wg.Done()
+	for idx := range goroutines {
+		wg.Go(func() {
 			results[idx], errs[idx] = s.AttestationSelectionProof(t.Context(), slot, pubKey)
-		}(i)
+		})
 	}
 	wg.Wait()
 
@@ -110,15 +108,24 @@ func TestLocalSelector_AttestationSelectionProof_ConcurrentDedup(t *testing.T) {
 	}
 }
 
-func TestLocalSelector_RefreshSelectionProofs_ClearsCache(t *testing.T) {
-	s, err := newLocalSelector(&validator{})
+func TestLocalSelector_RefreshSelectionProofs_PrunesPastEpochs(t *testing.T) {
+	spe := params.BeaconConfig().SlotsPerEpoch
+	genesis := time.Now().Add(-time.Duration(uint64(spe)*2*params.BeaconConfig().SecondsPerSlot) * time.Second)
+	s, err := newLocalSelector(&validator{genesisTime: genesis})
 	require.NoError(t, err)
 
-	key := attSelectionKey{slot: 1, index: 0}
-	s.proofCache[key] = []byte("cached")
+	epochStart := 2 * spe
+	past := attSelectionKey{slot: epochStart - 1, index: 0}
+	current := attSelectionKey{slot: epochStart + 1, index: 0}
+	next := attSelectionKey{slot: epochStart + spe, index: 0}
+	s.proofCache[past] = []byte("past")
+	s.proofCache[current] = []byte("current")
+	s.proofCache[next] = []byte("next")
 
 	require.NoError(t, s.RefreshSelectionProofs(t.Context()))
-	assert.Equal(t, 0, len(s.proofCache), "proof cache should be cleared")
+	_, ok := s.proofCache[past]
+	assert.Equal(t, false, ok, "past-epoch proof should be pruned")
+	assert.Equal(t, 2, len(s.proofCache), "current and future proofs should be kept")
 }
 
 func TestDistributedSelector_ClaimAggregateSlot_AlwaysTrue(t *testing.T) {
@@ -170,14 +177,18 @@ func TestDistributedSelector_EpochGuard(t *testing.T) {
 	ds := v.aggSelector.(*distributedSelector)
 
 	slot := primitives.Slot(2) * params.BeaconConfig().SlotsPerEpoch
-	ds.v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-		CurrentEpochDuties: []*ethpb.ValidatorDuty{{
-			AttesterSlot:   slot,
-			ValidatorIndex: 200,
-			PublicKey:      keys.pub[:],
-			Status:         ethpb.ValidatorStatus_ACTIVE,
-		}},
-	})
+	{
+		var data dutyStoreData
+		data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{{
+				AttesterSlot:   slot,
+				ValidatorIndex: 200,
+				PublicKey:      keys.pub[:],
+				Status:         ethpb.ValidatorStatus_ACTIVE,
+			}},
+		})
+		ds.v.duties.write(data)
+	}
 
 	sigDomain := make([]byte, 32)
 	client.EXPECT().DomainData(gomock.Any(), gomock.Any()).
@@ -199,14 +210,18 @@ func TestDistributedSelector_ReadyCh_BlocksUntilRefresh(t *testing.T) {
 	ds := v.aggSelector.(*distributedSelector)
 
 	slot := primitives.Slot(3) * params.BeaconConfig().SlotsPerEpoch
-	ds.v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-		CurrentEpochDuties: []*ethpb.ValidatorDuty{{
-			AttesterSlot:   slot,
-			ValidatorIndex: 200,
-			PublicKey:      keys.pub[:],
-			Status:         ethpb.ValidatorStatus_ACTIVE,
-		}},
-	})
+	{
+		var data dutyStoreData
+		data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{{
+				AttesterSlot:   slot,
+				ValidatorIndex: 200,
+				PublicKey:      keys.pub[:],
+				Status:         ethpb.ValidatorStatus_ACTIVE,
+			}},
+		})
+		ds.v.duties.write(data)
+	}
 
 	proof := make([]byte, 96)
 	proof[0] = 0xAB
@@ -256,14 +271,18 @@ func TestDistributedSelector_ErrorIsStickyWithinEpoch(t *testing.T) {
 	ds := v.aggSelector.(*distributedSelector)
 
 	slot := primitives.Slot(4) * params.BeaconConfig().SlotsPerEpoch
-	ds.v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-		CurrentEpochDuties: []*ethpb.ValidatorDuty{{
-			AttesterSlot:   slot,
-			ValidatorIndex: 200,
-			PublicKey:      keys.pub[:],
-			Status:         ethpb.ValidatorStatus_ACTIVE,
-		}},
-	})
+	{
+		var data dutyStoreData
+		data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{{
+				AttesterSlot:   slot,
+				ValidatorIndex: 200,
+				PublicKey:      keys.pub[:],
+				Status:         ethpb.ValidatorStatus_ACTIVE,
+			}},
+		})
+		ds.v.duties.write(data)
+	}
 
 	sigDomain := make([]byte, 32)
 	client.EXPECT().DomainData(gomock.Any(), gomock.Any()).

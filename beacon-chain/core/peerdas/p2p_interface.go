@@ -64,82 +64,41 @@ func VerifyDataColumnSidecar(sidecar blocks.RODataColumn) error {
 	return nil
 }
 
-// VerifyDataColumnsSidecarKZGProofs verifies if the KZG proofs are correct.
+// VerifyDataColumnsCellsKZGProofs verifies that the given cell/proof bundles are correct.
 // Note: We are slightly deviating from the specification here:
 // The specification verifies the KZG proofs for each sidecar separately,
-// while we are verifying all the KZG proofs from multiple sidecars in a batch.
+// while we verify all the KZG proofs in a single batch.
 // This is done to improve performance since the internal KZG library is way more
 // efficient when verifying in batch.
+//
 // https://github.com/ethereum/consensus-specs/blob/master/specs/gloas/p2p-interface.md#modified-verify_data_column_sidecar_kzg_proofs
-func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn) error {
-	commitmentsBySidecar := make([][][]byte, len(sidecars))
-	for i := range sidecars {
-		c, err := sidecars[i].KzgCommitments()
-		if err != nil {
-			return errors.Wrapf(err, "sidecar %d kzg commitments", i)
-		}
-		commitmentsBySidecar[i] = c
-	}
-	return verifyDataColumnsSidecarKZGProofs(sidecars, commitmentsBySidecar)
-}
+func VerifyDataColumnsCellsKZGProofs(cellProofs []blocks.CellProofBundle) error {
+	commitments := make([]kzg.Bytes48, 0, len(cellProofs))
+	indices := make([]uint64, 0, len(cellProofs))
+	cells := make([]kzg.Cell, 0, len(cellProofs))
+	proofs := make([]kzg.Bytes48, 0, len(cellProofs))
 
-// VerifyDataColumnsSidecarKZGProofsWithCommitments verifies KZG proofs using
-// explicitly provided commitments instead of the sidecar's own. This is used
-// by Gloas, which validates against bid.blob_kzg_commitments.
-func VerifyDataColumnsSidecarKZGProofsWithCommitments(sidecars []blocks.RODataColumn, commitmentsBySidecar [][][]byte) error {
-	return verifyDataColumnsSidecarKZGProofs(sidecars, commitmentsBySidecar)
-}
+	for _, bundle := range cellProofs {
+		var (
+			commitment kzg.Bytes48
+			cell       kzg.Cell
+			proof      kzg.Bytes48
+		)
 
-func verifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn, commitmentsBySidecar [][][]byte) error {
-	if len(sidecars) != len(commitmentsBySidecar) {
-		return ErrMismatchLength
-	}
-
-	// Compute the total count.
-	count := 0
-	for i, sidecar := range sidecars {
-		column := sidecar.Column()
-		if len(column) != len(commitmentsBySidecar[i]) {
+		if len(bundle.Commitment) != len(commitment) ||
+			len(bundle.Cell) != len(cell) ||
+			len(bundle.Proof) != len(proof) {
 			return ErrMismatchLength
 		}
-		count += len(column)
-	}
 
-	commitments := make([]kzg.Bytes48, 0, count)
-	indices := make([]uint64, 0, count)
-	cells := make([]kzg.Cell, 0, count)
-	proofs := make([]kzg.Bytes48, 0, count)
+		copy(commitment[:], bundle.Commitment)
+		copy(cell[:], bundle.Cell)
+		copy(proof[:], bundle.Proof)
 
-	for sidecarIndex, sidecar := range sidecars {
-		column := sidecar.Column()
-		kzgProofs := sidecar.KzgProofs()
-		index := sidecar.Index()
-		for i := range column {
-			var (
-				commitment kzg.Bytes48
-				cell       kzg.Cell
-				proof      kzg.Bytes48
-			)
-
-			commitmentBytes := commitmentsBySidecar[sidecarIndex][i]
-			cellBytes := column[i]
-			proofBytes := kzgProofs[i]
-
-			if len(commitmentBytes) != len(commitment) ||
-				len(cellBytes) != len(cell) ||
-				len(proofBytes) != len(proof) {
-				return ErrMismatchLength
-			}
-
-			copy(commitment[:], commitmentBytes)
-			copy(cell[:], cellBytes)
-			copy(proof[:], proofBytes)
-
-			commitments = append(commitments, commitment)
-			indices = append(indices, index)
-			cells = append(cells, cell)
-			proofs = append(proofs, proof)
-		}
+		commitments = append(commitments, commitment)
+		indices = append(indices, bundle.ColumnIndex)
+		cells = append(cells, cell)
+		proofs = append(proofs, proof)
 	}
 
 	// Batch verify that the cells match the corresponding commitments and proofs.

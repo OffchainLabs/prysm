@@ -6,40 +6,41 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
-// RootToPayloadIDMap is a map with keys the head root and values the
-// corresponding PayloadID
-type RootToPayloadIDMap map[[32]byte]primitives.PayloadID
+type payloadIDKey struct {
+	root [32]byte
+	full bool
+}
 
 // PayloadIDCache is a cache that keeps track of the prepared payload ID for the
-// given slot and with the given head root.
+// given slot, head root and parent payload status.
 type PayloadIDCache struct {
-	slotToPayloadID map[primitives.Slot]RootToPayloadIDMap
+	slotToPayloadID map[primitives.Slot]map[payloadIDKey]primitives.PayloadID
 	sync.Mutex
 }
 
 // NewPayloadIDCache returns a new payload ID cache
 func NewPayloadIDCache() *PayloadIDCache {
-	return &PayloadIDCache{slotToPayloadID: make(map[primitives.Slot]RootToPayloadIDMap)}
+	return &PayloadIDCache{slotToPayloadID: make(map[primitives.Slot]map[payloadIDKey]primitives.PayloadID)}
 }
 
-// PayloadID returns the payload ID for the given slot and parent block root
-func (p *PayloadIDCache) PayloadID(slot primitives.Slot, root [32]byte) (primitives.PayloadID, bool) {
+// PayloadID returns the payload ID for the given slot, parent block root and parent payload status
+func (p *PayloadIDCache) PayloadID(slot primitives.Slot, root [32]byte, full bool) (primitives.PayloadID, bool) {
 	p.Lock()
 	defer p.Unlock()
 	inner, ok := p.slotToPayloadID[slot]
 	if !ok {
 		return primitives.PayloadID{}, false
 	}
-	pid, ok := inner[root]
+	pid, ok := inner[payloadIDKey{root: root, full: full}]
 	if !ok {
 		return primitives.PayloadID{}, false
 	}
 	return pid, true
 }
 
-// SetPayloadID updates the payload ID for the given slot and head root
+// SetPayloadID updates the payload ID for the given slot, head root and parent payload status
 // it also prunes older entries in the cache
-func (p *PayloadIDCache) Set(slot primitives.Slot, root [32]byte, pid primitives.PayloadID) {
+func (p *PayloadIDCache) Set(slot primitives.Slot, root [32]byte, full bool, pid primitives.PayloadID) {
 	p.Lock()
 	defer p.Unlock()
 	if slot > 1 {
@@ -47,10 +48,10 @@ func (p *PayloadIDCache) Set(slot primitives.Slot, root [32]byte, pid primitives
 	}
 	inner, ok := p.slotToPayloadID[slot]
 	if !ok {
-		inner = make(RootToPayloadIDMap)
+		inner = make(map[payloadIDKey]primitives.PayloadID)
 		p.slotToPayloadID[slot] = inner
 	}
-	inner[root] = pid
+	inner[payloadIDKey{root: root, full: full}] = pid
 }
 
 // Prune prunes old payload IDs. Requires a Lock in the cache

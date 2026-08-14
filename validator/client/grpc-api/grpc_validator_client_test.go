@@ -11,10 +11,14 @@ import (
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	mock2 "github.com/OffchainLabs/prysm/v7/testing/mock"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/validator/client/cache"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	validatorTesting "github.com/OffchainLabs/prysm/v7/validator/testing"
 	logTest "github.com/sirupsen/logrus/hooks/test"
@@ -144,7 +148,6 @@ func TestWaitForChainStart_StreamSetupFails(t *testing.T) {
 				return beaconNodeValidatorClient
 			},
 		),
-		isEventStreamRunning: true,
 	}
 	_, err := validatorClient.WaitForChainStart(t.Context(), &emptypb.Empty{})
 	want := "could not setup beacon chain ChainStart streaming client"
@@ -165,7 +168,6 @@ func TestStartEventStream(t *testing.T) {
 				return beaconNodeValidatorClient
 			},
 		),
-		isEventStreamRunning: true,
 	}
 	tests := []struct {
 		name    string
@@ -187,7 +189,7 @@ func TestStartEventStream(t *testing.T) {
 				).AnyTimes()
 			},
 			verify: func(t *testing.T, event *eventClient.Event) {
-				require.Equal(t, event.EventType, eventClient.EventHead)
+				require.Equal(t, event.Type, eventClient.EventHead)
 				head := structs.HeadEvent{}
 				require.NoError(t, json.Unmarshal(event.Data, &head))
 				require.Equal(t, head.Slot, "123")
@@ -207,7 +209,7 @@ func TestStartEventStream(t *testing.T) {
 				).AnyTimes()
 			},
 			verify: func(t *testing.T, event *eventClient.Event) {
-				require.Equal(t, event.EventType, eventClient.EventConnectionError)
+				require.Equal(t, event.Type, eventClient.EventConnectionError)
 			},
 		},
 		{
@@ -224,7 +226,7 @@ func TestStartEventStream(t *testing.T) {
 				).AnyTimes()
 			},
 			verify: func(t *testing.T, event *eventClient.Event) {
-				require.Equal(t, event.EventType, eventClient.EventHead)
+				require.Equal(t, event.Type, eventClient.EventHead)
 				head := structs.HeadEvent{}
 				require.NoError(t, json.Unmarshal(event.Data, &head))
 				require.Equal(t, head.Slot, "123")
@@ -236,7 +238,7 @@ func TestStartEventStream(t *testing.T) {
 			topics:  []string{},
 			prepare: func() {},
 			verify: func(t *testing.T, event *eventClient.Event) {
-				require.Equal(t, event.EventType, eventClient.EventError)
+				require.Equal(t, event.Type, eventClient.EventError)
 			},
 		},
 	}
@@ -345,4 +347,214 @@ func TestEnsureReady(t *testing.T) {
 			assert.Equal(t, tt.expectedIndex, mockProvider.CurrentIndex)
 		})
 	}
+}
+
+func newTestGrpcValidatorClient(t *testing.T, client eth.BeaconNodeValidatorClient, stateless bool) *grpcValidatorClient {
+	t.Helper()
+	return &grpcValidatorClient{
+		grpcClientManager: newGrpcClientManager(
+			validatorTesting.MockNodeConnection(),
+			func(_ grpc.ClientConnInterface) eth.BeaconNodeValidatorClient { return client },
+		),
+		stateless:     stateless,
+		envelopeCache: cache.NewExecutionPayloadEnvelopeCache(),
+	}
+}
+
+func TestBeaconBlock(t *testing.T) {
+	slot := primitives.Slot(7)
+	blockRoot := bytesutil.ToBytes32([]byte("beacon-block-root"))
+	gloasBlock := util.NewBeaconBlockGloas().Block
+
+	gloasContentsResp := &eth.GenericBeaconBlock{
+		Block: &eth.GenericBeaconBlock_GloasContents{
+			GloasContents: &eth.BeaconBlockContentsGloas{
+				Block: gloasBlock,
+				ExecutionPayloadEnvelope: &eth.ExecutionPayloadEnvelope{
+					Payload:         &enginev1.ExecutionPayloadGloas{SlotNumber: slot},
+					BeaconBlockRoot: blockRoot[:],
+				},
+				Blobs:     [][]byte{[]byte("blob")},
+				KzgProofs: [][]byte{[]byte("proof")},
+			},
+		},
+	}
+	blockOnlyResp := &eth.GenericBeaconBlock{Block: &eth.GenericBeaconBlock_Gloas{Gloas: gloasBlock}}
+
+	tests := []struct {
+		name      string
+		stateless bool
+		resp      *eth.GenericBeaconBlock
+		verify    func(t *testing.T, vc *grpcValidatorClient, got *eth.GenericBeaconBlock, err error)
+	}{
+		{
+			name:      "stateless gloas contents are cached and unwrapped to a block-only response",
+			stateless: true,
+			resp:      gloasContentsResp,
+			verify: func(t *testing.T, vc *grpcValidatorClient, got *eth.GenericBeaconBlock, err error) {
+				require.NoError(t, err)
+				// The proposer receives the block alone, matching the non-stateless response shape.
+				gloas, ok := got.GetBlock().(*eth.GenericBeaconBlock_Gloas)
+				require.Equal(t, true, ok)
+				require.Equal(t, gloasBlock, gloas.Gloas)
+				// The publisher's envelope + blobs were cached under the request slot.
+				cachedEnv, blobs, proofs := vc.envelopeCache.Peek(slot)
+				require.NotNil(t, cachedEnv)
+				require.Equal(t, slot, cachedEnv.Payload.SlotNumber)
+				require.Equal(t, 1, len(blobs))
+				require.Equal(t, 1, len(proofs))
+			},
+		},
+		{
+			name:      "a non-contents response is returned unchanged and nothing is cached",
+			stateless: false,
+			resp:      blockOnlyResp,
+			verify: func(t *testing.T, vc *grpcValidatorClient, got *eth.GenericBeaconBlock, err error) {
+				require.NoError(t, err)
+				require.Equal(t, blockOnlyResp, got)
+				_, _, proofs := vc.envelopeCache.Peek(slot)
+				require.IsNil(t, proofs)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			client := mock2.NewMockBeaconNodeValidatorClient(ctrl)
+			client.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, in *eth.BlockRequest, _ ...grpc.CallOption) (*eth.GenericBeaconBlock, error) {
+					// EagerPayloadStateRoot is set on the request iff the client is stateless.
+					require.Equal(t, tt.stateless, in.EagerPayloadStateRoot)
+					return tt.resp, nil
+				})
+
+			vc := newTestGrpcValidatorClient(t, client, tt.stateless)
+			got, err := vc.BeaconBlock(t.Context(), &eth.BlockRequest{Slot: slot})
+			tt.verify(t, vc, got, err)
+		})
+	}
+}
+
+func TestGetExecutionPayloadEnvelope(t *testing.T) {
+	slot := primitives.Slot(9)
+	matchingRoot := bytesutil.ToBytes32([]byte("matching-root"))
+	requestedRoot := bytesutil.ToBytes32([]byte("requested-root"))
+	cachedEnvelope := &eth.ExecutionPayloadEnvelope{
+		Payload:         &enginev1.ExecutionPayloadGloas{SlotNumber: slot},
+		BeaconBlockRoot: matchingRoot[:],
+	}
+
+	tests := []struct {
+		name    string
+		root    [32]byte
+		prepare func(vc *grpcValidatorClient, client *mock2.MockBeaconNodeValidatorClient)
+		wantErr string
+	}{
+		{
+			name: "cache hit returns full envelope",
+			root: matchingRoot,
+			// No gRPC EXPECT: a cache hit must short-circuit before any network call.
+			prepare: func(vc *grpcValidatorClient, _ *mock2.MockBeaconNodeValidatorClient) {
+				vc.envelopeCache.Add(slot, cachedEnvelope, nil, nil)
+			},
+		},
+		{
+			name: "cache hit with mismatched root errors",
+			root: requestedRoot,
+			prepare: func(vc *grpcValidatorClient, _ *mock2.MockBeaconNodeValidatorClient) {
+				vc.envelopeCache.Add(slot, cachedEnvelope, nil, nil)
+			},
+			wantErr: "cached execution payload envelope beacon_block_root does not match",
+		},
+		{
+			name: "cache miss fetches envelope from the beacon node",
+			root: matchingRoot,
+			prepare: func(_ *grpcValidatorClient, client *mock2.MockBeaconNodeValidatorClient) {
+				client.EXPECT().GetExecutionPayloadEnvelope(gomock.Any(), &eth.ExecutionPayloadEnvelopeRequest{Slot: slot}).Return(
+					&eth.ExecutionPayloadEnvelopeResponse{Envelope: cachedEnvelope}, nil)
+			},
+		},
+		{
+			name: "cache miss with mismatched root errors",
+			root: requestedRoot,
+			prepare: func(_ *grpcValidatorClient, client *mock2.MockBeaconNodeValidatorClient) {
+				client.EXPECT().GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).Return(
+					&eth.ExecutionPayloadEnvelopeResponse{Envelope: cachedEnvelope}, nil)
+			},
+			wantErr: "execution payload envelope beacon_block_root does not match",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			client := mock2.NewMockBeaconNodeValidatorClient(ctrl)
+			vc := newTestGrpcValidatorClient(t, client, true)
+			tt.prepare(vc, client)
+
+			envelope, err := vc.GetExecutionPayloadEnvelope(t.Context(), slot, tt.root)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, tt.wantErr, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, cachedEnvelope, envelope)
+		})
+	}
+}
+
+// PublishExecutionPayloadEnvelope must pick the generic arm from the local cache state:
+// contents when blobs/proofs were cached, bare signed_envelope otherwise.
+func TestPublishExecutionPayloadEnvelope_ArmSelection(t *testing.T) {
+	slot := primitives.Slot(9)
+	signed := &eth.SignedExecutionPayloadEnvelope{
+		Message: &eth.ExecutionPayloadEnvelope{
+			Payload: &enginev1.ExecutionPayloadGloas{SlotNumber: slot},
+		},
+	}
+
+	t.Run("cache hit publishes contents", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		client := mock2.NewMockBeaconNodeValidatorClient(ctrl)
+		client.EXPECT().PublishExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, in *eth.GenericSignedExecutionPayloadEnvelope, _ ...grpc.CallOption) (*emptypb.Empty, error) {
+				require.NotNil(t, in.GetContents())
+				require.Equal(t, 1, len(in.GetContents().Blobs))
+				return &emptypb.Empty{}, nil
+			})
+		vc := newTestGrpcValidatorClient(t, client, true)
+		vc.envelopeCache.Add(slot, signed.Message, [][]byte{{1}}, [][]byte{{2}})
+		_, err := vc.PublishExecutionPayloadEnvelope(t.Context(), signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("cache miss publishes bare signed envelope", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		client := mock2.NewMockBeaconNodeValidatorClient(ctrl)
+		client.EXPECT().PublishExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, in *eth.GenericSignedExecutionPayloadEnvelope, _ ...grpc.CallOption) (*emptypb.Empty, error) {
+				require.IsNil(t, in.GetContents())
+				require.NotNil(t, in.GetSignedEnvelope())
+				return &emptypb.Empty{}, nil
+			})
+		vc := newTestGrpcValidatorClient(t, client, false)
+		_, err := vc.PublishExecutionPayloadEnvelope(t.Context(), signed)
+		require.NoError(t, err)
+	})
+}
+
+func TestGrpcValidatorClient_ConnectionGeneration(t *testing.T) {
+	conn, err := validatorHelpers.NewNodeConnection(
+		validatorHelpers.WithGRPCProvider(&grpcutil.MockGrpcProvider{MockHosts: []string{"mock:4000"}, ConnCounter: 7}),
+	)
+	require.NoError(t, err)
+	c := &grpcValidatorClient{
+		grpcClientManager: newGrpcClientManager(conn, func(_ grpc.ClientConnInterface) eth.BeaconNodeValidatorClient { return nil }),
+	}
+	require.Equal(t, uint64(7), c.ConnectionGeneration())
 }

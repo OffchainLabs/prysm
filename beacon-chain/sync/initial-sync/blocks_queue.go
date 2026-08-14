@@ -97,10 +97,11 @@ type blocksQueue struct {
 
 // blocksQueueFetchedData is a data container that is returned from a queue on each step.
 type blocksQueueFetchedData struct {
-	blocksFrom peer.ID
-	blobsFrom  peer.ID
-	bwb        []blocks.BlockWithROSidecars
-	envelopes  []interfaces.ROSignedExecutionPayloadEnvelope
+	blocksFrom    peer.ID
+	blobsFrom     peer.ID
+	bwb           []blocks.BlockWithROSidecars
+	envelopes     []interfaces.ROSignedExecutionPayloadEnvelope
+	columnsToSave []blocks.VerifiedRODataColumn
 }
 
 // newBlocksQueue creates initialized priority queue.
@@ -443,7 +444,7 @@ func (q *blocksQueue) onProcessSkippedEvent(ctx context.Context) eventHandlerFn 
 
 		// All machines are skipped, FSMs need reset.
 		startSlot := q.chain.HeadSlot() + 1
-		if q.mode == modeNonConstrained && startSlot > bestFinalizedSlot {
+		if q.mode == modeStopOnFinalizedEpoch || startSlot > bestFinalizedSlot {
 			q.staleEpochs[slots.ToEpoch(startSlot)]++
 			// If FSMs have been reset enough times, try to explore alternative forks.
 			if q.staleEpochs[slots.ToEpoch(startSlot)] >= maxResetAttempts {

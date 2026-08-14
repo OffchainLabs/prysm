@@ -750,6 +750,15 @@ func TestGetBlockAttestationsV2(t *testing.T) {
 	esb, err := blocks.NewSignedBeaconBlock(eb)
 	require.NoError(t, err)
 
+	gloasAtts := make([]*eth.AttestationGloas, len(electraAtts))
+	for i, att := range electraAtts {
+		gloasAtts[i] = eth.AttestationElectraToGloas(att)
+	}
+	gb := util.NewBeaconBlockGloas()
+	gb.Block.Body.Attestations = gloasAtts
+	gsb, err := blocks.NewSignedBeaconBlock(gb)
+	require.NoError(t, err)
+
 	t.Run("ok-pre-electra", func(t *testing.T) {
 		mockChainService := &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{},
@@ -820,6 +829,34 @@ func TestGetBlockAttestationsV2(t *testing.T) {
 
 		assert.DeepEqual(t, eb.Block.Body.Attestations, atts)
 		assert.Equal(t, "electra", resp.Version)
+	})
+	t.Run("ok-gloas", func(t *testing.T) {
+		mockChainService := &chainMock.ChainService{
+			FinalizedRoots: map[[32]byte]bool{},
+		}
+		s := &Server{
+			OptimisticModeFetcher: mockChainService,
+			FinalizationFetcher:   mockChainService,
+			Blocker:               &testutil.MockBlocker{BlockToReturn: gsb},
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}/attestations", nil)
+		request.SetPathValue("block_id", "head")
+		writer := httptest.NewRecorder()
+
+		s.GetBlockAttestationsV2(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+
+		resp := &structs.GetBlockAttestationsV2Response{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.Equal(t, version.String(version.Gloas), resp.Version)
+
+		var attStructs []structs.AttestationElectra
+		require.NoError(t, json.Unmarshal(resp.Data, &attStructs))
+		require.Equal(t, len(gloasAtts), len(attStructs))
+		for i := range attStructs {
+			assert.DeepEqual(t, structs.AttGloasFromConsensus(gloasAtts[i]), &attStructs[i])
+		}
 	})
 	t.Run("execution-optimistic", func(t *testing.T) {
 		r, err := bsb.Block().HashTreeRoot()
@@ -1359,6 +1396,19 @@ func TestGetBlindedBlockSSZ(t *testing.T) {
 }
 
 func TestVersionHeaderFromRequest(t *testing.T) {
+	t.Run("Gloas block returns gloas header", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 8
+		params.OverrideBeaconConfig(cfg)
+
+		slot := uint64(params.BeaconConfig().SlotsPerEpoch) * uint64(params.BeaconConfig().GloasForkEpoch)
+		block := []byte(fmt.Sprintf(`{"message":{"slot":"%d"}}`, slot))
+		versionHead, err := versionHeaderFromRequest(block)
+		require.NoError(t, err)
+		require.Equal(t, version.String(version.Gloas), versionHead)
+	})
+
 	t.Run("Fulu block contents returns fulu header", func(t *testing.T) {
 		cfg := params.BeaconConfig().Copy()
 		cfg.FuluForkEpoch = 7
@@ -2526,6 +2576,65 @@ func TestValidateConsensus(t *testing.T) {
 			Phase0: block,
 		},
 	}))
+}
+
+func TestValidateGossip(t *testing.T) {
+	ctx := t.Context()
+
+	parentState, privs := util.DeterministicGenesisState(t, params.MinimalSpecConfig().MinGenesisActiveValidatorCount)
+	parentBlock, err := util.GenerateFullBlock(parentState, privs, util.DefaultBlockGenConfig(), parentState.Slot())
+	require.NoError(t, err)
+	parentSbb, err := blocks.NewSignedBeaconBlock(parentBlock)
+	require.NoError(t, err)
+	st, err := transition.ExecuteStateTransition(ctx, parentState, parentSbb)
+	require.NoError(t, err)
+	block, err := util.GenerateFullBlock(st, privs, util.DefaultBlockGenConfig(), st.Slot())
+	require.NoError(t, err)
+	parentRoot, err := parentSbb.Block().HashTreeRoot()
+	require.NoError(t, err)
+	// ProcessSlots advances the head state in place, so each run needs a fresh copy.
+	newServer := func() *Server {
+		return &Server{
+			Blocker:     &testutil.MockBlocker{RootBlockMap: map[[32]byte]interfaces.ReadOnlySignedBeaconBlock{parentRoot: parentSbb}},
+			Stater:      &testutil.MockStater{StatesByRoot: map[[32]byte]state.BeaconState{bytesutil.ToBytes32(parentBlock.Block.StateRoot): parentState}},
+			HeadFetcher: &chainMock.ChainService{State: parentState.Copy(), Root: parentRoot[:]},
+		}
+	}
+	genericBlock := &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Phase0{
+			Phase0: block,
+		},
+	}
+
+	t.Run("valid signature", func(t *testing.T) {
+		require.NoError(t, newServer().validateGossip(ctx, genericBlock))
+	})
+	t.Run("routed via broadcast_validation=gossip", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "http://foo.example?broadcast_validation=gossip", nil)
+		require.NoError(t, newServer().validateBroadcast(ctx, r, genericBlock))
+	})
+	t.Run("invalid signature", func(t *testing.T) {
+		bad := &eth.SignedBeaconBlock{Block: block.Block, Signature: bytesutil.PadTo([]byte("bad"), 96)}
+		err := newServer().validateGossip(ctx, &eth.GenericSignedBeaconBlock{
+			Block: &eth.GenericSignedBeaconBlock_Phase0{Phase0: bad},
+		})
+		require.ErrorContains(t, "could not verify block signature", err)
+	})
+	t.Run("invalid signature routed via broadcast_validation=gossip", func(t *testing.T) {
+		bad := &eth.SignedBeaconBlock{Block: block.Block, Signature: bytesutil.PadTo([]byte("bad"), 96)}
+		r := httptest.NewRequest(http.MethodPost, "http://foo.example?broadcast_validation=gossip", nil)
+		err := newServer().validateBroadcast(ctx, r, &eth.GenericSignedBeaconBlock{
+			Block: &eth.GenericSignedBeaconBlock_Phase0{Phase0: bad},
+		})
+		require.ErrorContains(t, "gossip validation failed", err)
+	})
+	t.Run("no validation by default", func(t *testing.T) {
+		bad := &eth.SignedBeaconBlock{Block: block.Block, Signature: bytesutil.PadTo([]byte("bad"), 96)}
+		r := httptest.NewRequest(http.MethodPost, "http://foo.example", nil)
+		require.NoError(t, (&Server{}).validateBroadcast(ctx, r, &eth.GenericSignedBeaconBlock{
+			Block: &eth.GenericSignedBeaconBlock_Phase0{Phase0: bad},
+		}))
+	})
 }
 
 func TestValidateEquivocation(t *testing.T) {

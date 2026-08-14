@@ -71,10 +71,8 @@ func (c *AttCaches) aggregateParallel(atts map[attestation.Id][]ethpb.Att, leftO
 
 	n := runtime.GOMAXPROCS(0) // defaults to the value of runtime.NumCPU
 	ch := make(chan []ethpb.Att, n)
-	wg.Add(n)
 	for range n {
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for as := range ch {
 				aggregated, err := attaggregation.AggregateDisjointOneBitAtts(as)
 				if err != nil {
@@ -101,7 +99,7 @@ func (c *AttCaches) aggregateParallel(atts map[attestation.Id][]ethpb.Att, leftO
 					leftoverLock.Unlock()
 				}
 			}
-		}()
+		})
 	}
 
 	for _, as := range atts {
@@ -235,8 +233,7 @@ func (c *AttCaches) AggregatedAttestationsBySlotIndexElectra(
 	for _, as := range c.aggregatedAtt {
 		if as[0].Version() >= version.Electra && slot == as[0].GetData().Slot && as[0].CommitteeBitsVal().BitAt(uint64(committeeIndex)) {
 			for _, a := range as {
-				att, ok := a.(*ethpb.AttestationElectra)
-				// This will never fail in practice because we asserted the version
+				att, ok := ethpb.AttestationElectraFromAtt(a)
 				if ok {
 					atts = append(atts, att)
 				}

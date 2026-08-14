@@ -122,6 +122,7 @@ func Test_pruneAttsFromPool_Electra(t *testing.T) {
 	rob, err := consensusblocks.NewSignedBeaconBlock(bl)
 	require.NoError(t, err)
 	st, _ := util.DeterministicGenesisStateElectra(t, 1024)
+	require.NoError(t, helpers.UpdateCommitteeCache(ctx, st, 0))
 	committees, err := helpers.BeaconCommittees(ctx, st, 0)
 	require.NoError(t, err)
 	// Sanity check to make sure the on-chain att will be decomposed
@@ -3006,6 +3007,97 @@ func TestIsDataAvailable(t *testing.T) {
 	})
 }
 
+// Reproduces the checkpoint sync stall, during initial sync a block with missing columns must fail fast instead of waiting for gossip that never comes.
+func TestIsDataAvailable_InitSync(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.AltairForkEpoch, cfg.BellatrixForkEpoch, cfg.CapellaForkEpoch, cfg.DenebForkEpoch, cfg.ElectraForkEpoch, cfg.FuluForkEpoch = 0, 0, 0, 0, 0, 0
+	params.OverrideBeaconConfig(cfg)
+
+	t.Run("missing columns fail instead of blocking", func(t *testing.T) {
+		testParams := testIsAvailableParams{
+			options:                 []Option{WithSyncChecker(&mock.MockSyncChecker{})},
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, cancel, service, root, signed := testIsAvailableSetup(t, testParams)
+		defer cancel()
+
+		roBlock, err := consensusblocks.NewROBlockWithRoot(signed, root)
+		require.NoError(t, err)
+
+		done := make(chan error, 1)
+		go func() {
+			done <- service.isDataAvailable(ctx, roBlock)
+		}()
+
+		bound := time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second + 2*time.Second
+		select {
+		case err := <-done:
+			require.NotNil(t, err)
+		case <-time.After(bound):
+			t.Fatal("isDataAvailable did not return for a block with missing data columns, the init-sync consumer stalls forever on this path")
+		}
+	})
+
+	t.Run("stored columns pass", func(t *testing.T) {
+		testParams := testIsAvailableParams{
+			options:                 []Option{WithSyncChecker(&mock.MockSyncChecker{})},
+			columnsToSave:           []uint64{1, 17, 19, 42, 75, 87, 102, 117},
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, cancel, service, root, signed := testIsAvailableSetup(t, testParams)
+		defer cancel()
+
+		roBlock, err := consensusblocks.NewROBlockWithRoot(signed, root)
+		require.NoError(t, err)
+		require.NoError(t, service.isDataAvailable(ctx, roBlock))
+	})
+}
+
+func TestDataColumnsAvailableNow(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.AltairForkEpoch, cfg.BellatrixForkEpoch, cfg.CapellaForkEpoch, cfg.DenebForkEpoch, cfg.ElectraForkEpoch, cfg.FuluForkEpoch = 0, 0, 0, 0, 0, 0
+	params.OverrideBeaconConfig(cfg)
+
+	t.Run("all custody columns present", func(t *testing.T) {
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testIsAvailableParams{
+			columnsToSave:           []uint64{1, 17, 19, 42, 75, 87, 102, 117, 119},
+			blobKzgCommitmentsCount: 3,
+		})
+		available, err := service.dataColumnsAvailableNow(ctx, root, signed.Block().Slot())
+		require.NoError(t, err)
+		require.Equal(t, true, available)
+	})
+
+	t.Run("enough columns to reconstruct", func(t *testing.T) {
+		minimum := peerdas.MinimumColumnCountToReconstruct()
+		indices := make([]uint64, 0, minimum)
+		for i := range minimum {
+			indices = append(indices, i)
+		}
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testIsAvailableParams{
+			columnsToSave:           indices,
+			blobKzgCommitmentsCount: 3,
+		})
+		available, err := service.dataColumnsAvailableNow(ctx, root, signed.Block().Slot())
+		require.NoError(t, err)
+		require.Equal(t, true, available)
+	})
+
+	t.Run("missing columns returns false", func(t *testing.T) {
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testIsAvailableParams{
+			columnsToSave:           []uint64{1},
+			blobKzgCommitmentsCount: 3,
+		})
+		available, err := service.dataColumnsAvailableNow(ctx, root, signed.Block().Slot())
+		require.NoError(t, err)
+		require.Equal(t, false, available)
+	})
+}
+
 // Test_postBlockProcess_EventSending tests that block processed events are only sent
 // when block processing succeeds according to the decision tree:
 //
@@ -3636,6 +3728,74 @@ func TestHandleBlockPayloadAttestations(t *testing.T) {
 		wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
 		require.NoError(t, err)
 		require.NoError(t, s.handleBlockPayloadAttestations(ctx, wsb.Block(), headState))
+	})
+}
+
+func TestHandleBlockAttestations_GloasSameSlotPayloadVote(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+	ctx := t.Context()
+
+	// Insert an empty node at slot 1 into forkchoice.
+	blockRoot := bytesutil.ToBytes32([]byte("root1"))
+	parentRoot := params.BeaconConfig().ZeroHash
+	blockHash := bytesutil.ToBytes32([]byte("hash1"))
+	base, insertBlk := testGloasState(t, 1, parentRoot, blockHash)
+	insertGloasBlock(t, s, base, insertBlk, blockRoot)
+	require.Equal(t, true, s.cfg.ForkChoiceStore.HasNode(blockRoot))
+
+	headState := gloasStateWithValidators(t, 1, 2048)
+
+	// blockWithPayloadVote returns a slot-2 block carrying a committee-index-1
+	// (payload-present) attestation for blockRoot, dated attSlot.
+	blockWithPayloadVote := func(attSlot primitives.Slot) interfaces.ReadOnlyBeaconBlock {
+		committee, err := helpers.BeaconCommitteeFromState(ctx, headState, attSlot, 0)
+		require.NoError(t, err)
+		require.NotEqual(t, 0, len(committee))
+		aggBits := bitfield.NewBitlist(uint64(len(committee)))
+		aggBits.SetBitAt(0, true)
+		cb := primitives.NewAttestationCommitteeBits()
+		cb.SetBitAt(0, true)
+		blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+			Block: &ethpb.BeaconBlockGloas{
+				Slot: 2,
+				Body: &ethpb.BeaconBlockBodyGloas{
+					Attestations: []*ethpb.AttestationGloas{
+						{
+							AggregationBits: aggBits,
+							CommitteeBits:   cb,
+							Data: &ethpb.AttestationData{
+								Slot:            attSlot,
+								CommitteeIndex:  1,
+								BeaconBlockRoot: blockRoot[:],
+								Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+								Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+							},
+							Signature: make([]byte, 96),
+						},
+					},
+				},
+			},
+		})
+		wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		return wsb.Block()
+	}
+
+	t.Run("same-slot payload vote is skipped", func(t *testing.T) {
+		logHook := logTest.NewGlobal()
+		require.NoError(t, s.handleBlockAttestations(ctx, blockWithPayloadVote(1), headState))
+		require.LogsContain(t, logHook, "Skipping same-slot payload-present attestation")
+	})
+
+	t.Run("prior-slot payload vote is processed", func(t *testing.T) {
+		logHook := logTest.NewGlobal()
+		require.NoError(t, s.handleBlockAttestations(ctx, blockWithPayloadVote(2), headState))
+		require.LogsDoNotContain(t, logHook, "Skipping same-slot payload-present attestation")
 	})
 }
 

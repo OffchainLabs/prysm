@@ -6,14 +6,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/client"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	prysmTrace "github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
@@ -25,7 +25,7 @@ var backOffPeriod = 10 * time.Second
 
 // runner encapsulates the main validator routine.
 type runner struct {
-	validator     iface.Validator
+	validator     *validator
 	healthMonitor *healthMonitor
 }
 
@@ -35,7 +35,7 @@ type runner struct {
 // Order of operations:
 // 1 - Initialize validator data
 // 2 - Wait for validator activation
-func newRunner(ctx context.Context, v iface.Validator, monitor *healthMonitor) (*runner, error) {
+func newRunner(ctx context.Context, v *validator, monitor *healthMonitor) (*runner, error) {
 	// Initialize validator and get head slot
 	err := initialize(ctx, v)
 	if err != nil {
@@ -93,9 +93,12 @@ func (r *runner) run(ctx context.Context) {
 			return // Exit if context is canceled.
 		case slot := <-v.NextSlot():
 			if !r.healthMonitor.IsHealthy() {
-				log.WithField("url", r.validator.Host()).Warn("Beacon node unhealthy, stopping runner")
+				log.WithField("url", api.RedactEndpointList(r.validator.Host())).Warning("Beacon node unhealthy, stopping runner")
 				return
 			}
+
+			// Restart the event stream if it died, or rebind it after a fallback
+			v.EnsureEventStream(ctx, eventClient.DefaultEventTopics)
 
 			deadline := v.SlotDeadline(slot)
 			slotCtx, cancel := context.WithDeadline(ctx, deadline) //nolint:govet
@@ -107,8 +110,7 @@ func (r *runner) run(ctx context.Context) {
 			log := log.WithField("slot", slot)
 			log.WithField("deadline", deadline).Debug("Set deadline for proposals and attestations")
 
-			// Keep trying to update assignments if they are nil or if we are past an
-			// epoch transition in the beacon node's state.
+			// Refresh assignments at the epoch boundary.
 			if slots.IsEpochStart(slot) {
 				deadline = v.SlotDeadline(slot + params.BeaconConfig().SlotsPerEpoch - 1)
 				dutiesCtx, dutiesCancel := context.WithDeadline(ctx, deadline)
@@ -120,6 +122,12 @@ func (r *runner) run(ctx context.Context) {
 					continue
 				}
 				dutiesCancel()
+			}
+
+			// Fetch the deferred next-epoch duties in the background. Pre-Gloas this
+			// no-ops: only the split path records the indices needsNextFetch requires.
+			if shouldFetchNextDuties(slot) {
+				v.MaybeFetchNextDuties(ctx, slot)
 			}
 
 			// call push proposer settings often to account for the following edge cases:
@@ -155,7 +163,11 @@ func (r *runner) run(ctx context.Context) {
 	}
 }
 
-func onAccountsChanged(ctx context.Context, v iface.Validator, current [][48]byte) {
+func shouldFetchNextDuties(slot primitives.Slot) bool {
+	return slots.SinceEpochStarts(slot) >= nextDutiesFetchSlot()
+}
+
+func onAccountsChanged(ctx context.Context, v *validator, current [][48]byte) {
 	ctx, span := prysmTrace.StartSpan(ctx, "validator.accountsChanged")
 	defer span.End()
 
@@ -175,7 +187,7 @@ func onAccountsChanged(ctx context.Context, v iface.Validator, current [][48]byt
 	}
 }
 
-func initialize(ctx context.Context, v iface.Validator) error {
+func initialize(ctx context.Context, v *validator) error {
 	ctx, span := prysmTrace.StartSpan(ctx, "validator.initialize")
 	defer span.End()
 
@@ -235,31 +247,29 @@ func initialize(ctx context.Context, v iface.Validator) error {
 	return nil
 }
 
-func performRoles(slotCtx context.Context, allRoles map[[48]byte][]iface.ValidatorRole, v iface.Validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {
+func performRoles(slotCtx context.Context, allRoles map[[48]byte][]validatorRole, v *validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {
 	for pubKey, roles := range allRoles {
-		wg.Add(len(roles))
 		for _, role := range roles {
-			go func(role iface.ValidatorRole, pubKey [fieldparams.BLSPubkeyLength]byte) {
-				defer wg.Done()
+			wg.Go(func() {
 				switch role {
-				case iface.RoleAttester:
+				case roleAttester:
 					v.SubmitAttestation(slotCtx, slot, pubKey)
-				case iface.RoleProposer:
+				case roleProposer:
 					v.ProposeBlock(slotCtx, slot, pubKey)
-				case iface.RoleAggregator:
+				case roleAggregator:
 					v.SubmitAggregateAndProof(slotCtx, slot, pubKey)
-				case iface.RoleSyncCommittee:
+				case roleSyncCommittee:
 					v.SubmitSyncCommitteeMessage(slotCtx, slot, pubKey)
-				case iface.RoleSyncCommitteeAggregator:
+				case roleSyncCommitteeAggregator:
 					v.SubmitSignedContributionAndProof(slotCtx, slot, pubKey)
-				case iface.RolePTCMember:
+				case rolePTCMember:
 					v.SubmitPayloadAttestation(slotCtx, slot, pubKey)
-				case iface.RoleUnknown:
+				case roleUnknown:
 					log.WithField("pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:]))).Trace("No active roles, doing nothing")
 				default:
 					log.Warnf("Unhandled role %v", role)
 				}
-			}(role, pubKey)
+			})
 		}
 	}
 
@@ -274,9 +284,10 @@ func performRoles(slotCtx context.Context, allRoles map[[48]byte][]iface.Validat
 						" should never happen! Please file a report at github.com/prysmaticlabs/prysm/issues/new")
 			}
 		}()
+		// Log submissions from the current slot
+		v.LogSubmissions(slot)
+
 		// Log performance in the previous slot
-		v.LogSubmittedAtts(slot)
-		v.LogSubmittedSyncCommitteeMessages()
 		if err := v.LogValidatorGainsAndLosses(slotCtx, slot); err != nil {
 			log.WithError(err).Error("Could not report validator's rewards/penalties")
 		}

@@ -2,6 +2,7 @@ package blockchain
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -11,8 +12,10 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -21,6 +24,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -183,7 +187,7 @@ func testSignedEnvelope(t *testing.T, blockRoot [32]byte, slot primitives.Slot, 
 				Transactions:  [][]byte{},
 				Withdrawals:   []*enginev1.Withdrawal{},
 			},
-			ExecutionRequests:     &enginev1.ExecutionRequests{},
+			ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 			BuilderIndex:          0,
 			BeaconBlockRoot:       blockRoot[:],
 			ParentBeaconBlockRoot: make([]byte, 32),
@@ -269,7 +273,7 @@ func TestNotifyNewEnvelope_Valid(t *testing.T) {
 		BeaconBlockRoot:       blockRoot[:],
 		ParentBeaconBlockRoot: make([]byte, 32),
 		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:]},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 	}
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
@@ -297,7 +301,7 @@ func TestNotifyNewEnvelope_Syncing(t *testing.T) {
 		BeaconBlockRoot:       blockRoot[:],
 		ParentBeaconBlockRoot: make([]byte, 32),
 		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:]},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 	}
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
@@ -325,7 +329,7 @@ func TestNotifyNewEnvelope_Invalid(t *testing.T) {
 		BeaconBlockRoot:       blockRoot[:],
 		ParentBeaconBlockRoot: make([]byte, 32),
 		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:]},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 	}
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
@@ -378,6 +382,77 @@ func TestNotifyForkchoiceUpdateGloas_NilAttributes(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestNotifyForkchoiceUpdateGloas_UndefinedError(t *testing.T) {
+	s, _ := setupGloasService(t, &mockExecution.EngineClient{
+		ErrForkchoiceUpdated: errors.New("engine timeout"),
+	})
+	ctx := t.Context()
+
+	blockHash := bytesutil.ToBytes32([]byte("hash1"))
+	_, err := s.notifyForkchoiceUpdateGloas(ctx, blockHash, nil)
+	require.ErrorIs(t, err, ErrUndefinedExecutionEngineError)
+}
+
+func TestFcuFromReorgData_CachesPayloadID(t *testing.T) {
+	logHook := logTest.NewGlobal()
+	pid := &enginev1.PayloadIDBytes{1, 2, 3, 4, 5, 6, 7, 8}
+	s, _ := setupGloasService(t, &mockExecution.EngineClient{PayloadIDBytes: pid})
+
+	headRoot := bytesutil.ToBytes32([]byte("headroot"))
+	headHash := bytesutil.ToBytes32([]byte("headhash"))
+	proposingSlot := primitives.Slot(2)
+	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV4{
+		Timestamp:             1,
+		PrevRandao:            make([]byte, 32),
+		SuggestedFeeRecipient: make([]byte, 20),
+		Withdrawals:           []*enginev1.Withdrawal{},
+		ParentBeaconBlockRoot: make([]byte, 32),
+	})
+	require.NoError(t, err)
+	require.Equal(t, false, attr.IsEmpty())
+
+	s.fcuFromReorgData(nil, headRoot, headHash, false, attr, proposingSlot)
+
+	require.LogsDoNotContain(t, logHook, "Could not update forkchoice with engine")
+	cachedPid, has := s.cfg.PayloadIDCache.PayloadID(proposingSlot, headRoot, false)
+	require.Equal(t, true, has)
+	require.Equal(t, primitives.PayloadID(pid[:]), cachedPid)
+}
+
+func TestFcuFromReorgData_NilPayloadID_NoCache(t *testing.T) {
+	// Engine returns no payload ID (nil), so nothing should be cached.
+	s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+
+	headRoot := bytesutil.ToBytes32([]byte("headroot"))
+	headHash := bytesutil.ToBytes32([]byte("headhash"))
+	proposingSlot := primitives.Slot(2)
+	attr := payloadattribute.EmptyWithVersion(version.Gloas)
+
+	s.fcuFromReorgData(nil, headRoot, headHash, false, attr, proposingSlot)
+
+	_, has := s.cfg.PayloadIDCache.PayloadID(proposingSlot, headRoot, false)
+	require.Equal(t, false, has)
+}
+
+func TestFcuFromReorgData_EngineError(t *testing.T) {
+	logHook := logTest.NewGlobal()
+	// An invalid-payload status surfaces as an error from notifyForkchoiceUpdateGloas.
+	s, _ := setupGloasService(t, &mockExecution.EngineClient{
+		ErrForkchoiceUpdated: execution.ErrInvalidPayloadStatus,
+	})
+
+	headRoot := bytesutil.ToBytes32([]byte("headroot"))
+	headHash := bytesutil.ToBytes32([]byte("headhash"))
+	proposingSlot := primitives.Slot(2)
+	attr := payloadattribute.EmptyWithVersion(version.Gloas)
+
+	s.fcuFromReorgData(nil, headRoot, headHash, false, attr, proposingSlot)
+
+	require.LogsContain(t, logHook, "Could not update forkchoice with engine")
+	_, has := s.cfg.PayloadIDCache.PayloadID(proposingSlot, headRoot, false)
+	require.Equal(t, false, has)
+}
+
 func TestSavePostPayload(t *testing.T) {
 	s, _ := setupGloasService(t, &mockExecution.EngineClient{})
 	ctx := t.Context()
@@ -411,7 +486,7 @@ func TestValidateExecutionOnEnvelope_Valid(t *testing.T) {
 		BeaconBlockRoot:       blockRoot[:],
 		ParentBeaconBlockRoot: make([]byte, 32),
 		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:], ParentHash: make([]byte, 32)},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 	}
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
@@ -441,7 +516,8 @@ func TestPostPayloadTasks_NotHead(t *testing.T) {
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
 
-	require.NoError(t, s.postPayloadTasks(ctx, envelope, st, root, headRoot))
+	s.head = &head{root: headRoot}
+	require.NoError(t, s.postPayloadTasks(ctx, envelope, st))
 }
 
 func TestPostPayloadTasks_DoesNotMutateHead(t *testing.T) {
@@ -470,13 +546,264 @@ func TestPostPayloadTasks_DoesNotMutateHead(t *testing.T) {
 	}
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
+	insertGloasBlock(t, s, base, blk, root)
+	require.NoError(t, s.InsertPayload(envelope))
 
-	require.NoError(t, s.postPayloadTasks(ctx, envelope, st, root, root))
+	require.NoError(t, s.postPayloadTasks(ctx, envelope, st))
 
 	s.headLock.RLock()
 	require.Equal(t, root, s.head.root)
 	require.Equal(t, primitives.Slot(0), s.head.state.Slot())
 	s.headLock.RUnlock()
+}
+
+func recordTestPayloadArrival(t *testing.T, service *Service, root [32]byte, slot primitives.Slot, early bool) {
+	t.Helper()
+	slotStart, err := slots.StartTime(service.genesisTime, slot)
+	require.NoError(t, err)
+	due := slotStart.Add(params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().PayloadDueBPS))
+	if early {
+		service.recordPayloadArrival(root, slot, due.Add(-time.Millisecond))
+		return
+	}
+	service.recordPayloadArrival(root, slot, due.Add(time.Millisecond))
+}
+
+func setTestPTCVotes(service *Service, root [32]byte, payloadPresent, blobDataAvailable bool) {
+	majority := fieldparams.PTCSize/2 + 1
+	for i := range majority {
+		service.cfg.ForkChoiceStore.SetPTCVote(root, uint64(i), payloadPresent, blobDataAvailable)
+	}
+}
+
+func TestShouldBuildOnFull(t *testing.T) {
+	resetCfg := features.InitWithReset(&features.Flags{ReorgLatePayloads: true})
+	defer resetCfg()
+
+	setup := func(t *testing.T, name string) (*Service, [32]byte, primitives.Slot) {
+		t.Helper()
+		service, _ := setupGloasService(t, &mockExecution.EngineClient{})
+		root := bytesutil.ToBytes32([]byte(name))
+		blockHash := bytesutil.ToBytes32([]byte("block-hash-" + name))
+		blockSlot := primitives.Slot(1)
+		base, blk := testGloasState(t, blockSlot, params.BeaconConfig().ZeroHash, blockHash)
+		insertGloasBlock(t, service, base, blk, root)
+		return service, root, blockSlot
+	}
+
+	assertBuild := func(t *testing.T, service *Service, root [32]byte, slot primitives.Slot, proposing, wantBuild bool, wantReason string) {
+		t.Helper()
+		buildFull, reason := service.shouldBuildOnFullLocked(root, slot, proposing)
+		require.Equal(t, wantBuild, buildFull)
+		require.Equal(t, wantReason, reason)
+	}
+
+	t.Run("only the previous slot is reorgable", func(t *testing.T) {
+		service, root, blockSlot := setup(t, "wrong-slot")
+		env := &ethpb.ExecutionPayloadEnvelope{
+			BeaconBlockRoot:       root[:],
+			ParentBeaconBlockRoot: make([]byte, 32),
+			Payload:               &enginev1.ExecutionPayloadGloas{},
+		}
+		envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
+		require.NoError(t, err)
+		require.NoError(t, service.InsertPayload(envelope))
+		recordTestPayloadArrival(t, service, root, blockSlot, false)
+		assertBuild(t, service, root, blockSlot+2, true, true, "")
+	})
+
+	t.Run("settled slot follows forkchoice weight", func(t *testing.T) {
+		service, root, blockSlot := setup(t, "settled-empty")
+		recordTestPayloadArrival(t, service, root, blockSlot, false)
+		assertBuild(t, service, root, blockSlot+2, true, false, "forkchoice prefers empty")
+	})
+
+	t.Run("unknown root is not reorgable", func(t *testing.T) {
+		service, _, blockSlot := setup(t, "known")
+		assertBuild(t, service, bytesutil.ToBytes32([]byte("unknown")), blockSlot+1, true, true, "")
+	})
+
+	t.Run("ptc late verdict reorgs even an early payload", func(t *testing.T) {
+		service, root, blockSlot := setup(t, "ptc-late")
+		recordTestPayloadArrival(t, service, root, blockSlot, true)
+		setTestPTCVotes(service, root, false, false)
+		assertBuild(t, service, root, blockSlot+1, true, false, "ptc voted payload missing")
+		assertBuild(t, service, root, blockSlot+1, false, false, "ptc voted payload missing")
+	})
+
+	t.Run("ptc certification keeps even a late payload", func(t *testing.T) {
+		service, root, blockSlot := setup(t, "ptc-certified")
+		recordTestPayloadArrival(t, service, root, blockSlot, false)
+		setTestPTCVotes(service, root, true, true)
+		assertBuild(t, service, root, blockSlot+1, true, true, "")
+	})
+
+	t.Run("no verdict early payload stays", func(t *testing.T) {
+		service, root, blockSlot := setup(t, "early")
+		recordTestPayloadArrival(t, service, root, blockSlot, true)
+		assertBuild(t, service, root, blockSlot+1, true, true, "")
+	})
+
+	t.Run("no verdict late payload is bet against", func(t *testing.T) {
+		service, root, blockSlot := setup(t, "late")
+		recordTestPayloadArrival(t, service, root, blockSlot, false)
+		assertBuild(t, service, root, blockSlot+1, true, false, "arrived late, betting on empty")
+		assertBuild(t, service, root, blockSlot+1, false, true, "")
+	})
+
+	t.Run("no verdict late payload stays with flag off", func(t *testing.T) {
+		service, root, blockSlot := setup(t, "late-flag-off")
+		recordTestPayloadArrival(t, service, root, blockSlot, false)
+		reset := features.InitWithReset(&features.Flags{})
+		defer reset()
+		assertBuild(t, service, root, blockSlot+1, true, true, "")
+	})
+
+	t.Run("no verdict unknown arrival stays", func(t *testing.T) {
+		service, root, blockSlot := setup(t, "unknown-arrival")
+		assertBuild(t, service, root, blockSlot+1, true, true, "")
+	})
+
+	t.Run("late without data availability is still bet against", func(t *testing.T) {
+		service, root, blockSlot := setup(t, "late-unavailable")
+		recordTestPayloadArrival(t, service, root, blockSlot, false)
+		setTestPTCVotes(service, root, true, false)
+		assertBuild(t, service, root, blockSlot+1, true, false, "arrived late, betting on empty")
+	})
+}
+
+func testROBid(t *testing.T, slot primitives.Slot, parentRoot, parentHash [32]byte) interfaces.ROExecutionPayloadBid {
+	t.Helper()
+	signed := util.HydrateSignedExecutionPayloadBid(&ethpb.SignedExecutionPayloadBid{
+		Message: &ethpb.ExecutionPayloadBid{
+			Slot:            slot,
+			ParentBlockRoot: parentRoot[:],
+			ParentBlockHash: parentHash[:],
+		},
+	})
+	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)
+	require.NoError(t, err)
+	bid, err := wrapped.Bid()
+	require.NoError(t, err)
+	return bid
+}
+
+func TestIsBidCompatibleWithHead(t *testing.T) {
+	headParentRoot := bytesutil.ToBytes32([]byte("head-parent-root"))
+	headRoot := bytesutil.ToBytes32([]byte("compat-head-root"))
+	headBlockHash := bytesutil.ToBytes32([]byte("compat-head-hash"))
+	headParentHash := bytesutil.ToBytes32([]byte("compat-parent-hash"))
+	headSlot := primitives.Slot(1)
+
+	setup := func(t *testing.T) *Service {
+		service, _ := setupGloasService(t, &mockExecution.EngineClient{})
+		base, blk := testGloasState(t, headSlot, headParentRoot, headBlockHash)
+		blk.Block.Body.SignedExecutionPayloadBid.Message.ParentBlockHash = headParentHash[:]
+		insertGloasBlock(t, service, base, blk, headRoot)
+		st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+		require.NoError(t, err)
+		signed, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		service.head = &head{root: headRoot, block: signed, state: st, slot: headSlot}
+		return service
+	}
+
+	t.Run("no head", func(t *testing.T) {
+		service, _ := setupGloasService(t, &mockExecution.EngineClient{})
+		require.Equal(t, false, service.IsBidCompatibleWithHead(testROBid(t, headSlot+1, headRoot, headBlockHash)))
+	})
+
+	t.Run("builds on head parent block and payload", func(t *testing.T) {
+		service := setup(t)
+		require.Equal(t, true, service.IsBidCompatibleWithHead(testROBid(t, headSlot+1, headParentRoot, headParentHash)))
+	})
+
+	t.Run("builds on head parent block with wrong payload", func(t *testing.T) {
+		service := setup(t)
+		other := bytesutil.ToBytes32([]byte("other-hash"))
+		require.Equal(t, false, service.IsBidCompatibleWithHead(testROBid(t, headSlot+1, headParentRoot, other)))
+	})
+
+	t.Run("unknown parent root", func(t *testing.T) {
+		service := setup(t)
+		other := bytesutil.ToBytes32([]byte("other-root"))
+		require.Equal(t, false, service.IsBidCompatibleWithHead(testROBid(t, headSlot+1, other, headParentHash)))
+	})
+
+	t.Run("builds on head full payload when full expected", func(t *testing.T) {
+		service := setup(t)
+		require.Equal(t, true, service.IsBidCompatibleWithHead(testROBid(t, headSlot+1, headRoot, headBlockHash)))
+		require.Equal(t, false, service.IsBidCompatibleWithHead(testROBid(t, headSlot+1, headRoot, headParentHash)))
+	})
+
+	t.Run("builds on head empty variant when forkchoice prefers empty", func(t *testing.T) {
+		service := setup(t)
+		require.Equal(t, true, service.IsBidCompatibleWithHead(testROBid(t, headSlot+2, headRoot, headParentHash)))
+		require.Equal(t, false, service.IsBidCompatibleWithHead(testROBid(t, headSlot+2, headRoot, headBlockHash)))
+	})
+
+}
+
+func TestSetHeadFull(t *testing.T) {
+	service, _ := setupGloasService(t, &mockExecution.EngineClient{})
+	root := bytesutil.ToBytes32([]byte("head"))
+	_, blk := testGloasState(t, 1, params.BeaconConfig().ZeroHash, bytesutil.ToBytes32([]byte("hash")))
+	signed, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	headBlock := service.setHeadFull(root)
+	require.IsNil(t, headBlock)
+
+	service.head = &head{root: bytesutil.ToBytes32([]byte("other")), block: signed}
+	headBlock = service.setHeadFull(root)
+	require.IsNil(t, headBlock)
+
+	service.head = &head{root: root, block: signed}
+	headBlock = service.setHeadFull(root)
+	require.NotNil(t, headBlock)
+	require.Equal(t, true, service.head.full)
+
+	headBlock = service.setHeadFull(root)
+	require.NotNil(t, headBlock)
+	require.Equal(t, true, service.head.full)
+}
+
+func TestPostPayloadTasks_BetsAgainstLatePayload(t *testing.T) {
+	logHook := logTest.NewGlobal()
+	service, _ := setupGloasService(t, &mockExecution.EngineClient{})
+	resetCfg := features.InitWithReset(&features.Flags{ReorgLatePayloads: true, PrepareAllPayloads: true})
+	defer resetCfg()
+
+	root := bytesutil.ToBytes32([]byte("late-head"))
+	blockHash := bytesutil.ToBytes32([]byte("hash1"))
+	service.SetGenesisTime(time.Now().Add(-time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second))
+	blockSlot := service.CurrentSlot()
+
+	base, blk := testGloasState(t, blockSlot, params.BeaconConfig().ZeroHash, blockHash)
+	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	require.NoError(t, err)
+	signed, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	insertGloasBlock(t, service, base, blk, root)
+
+	env := &ethpb.ExecutionPayloadEnvelope{
+		BeaconBlockRoot:       root[:],
+		ParentBeaconBlockRoot: make([]byte, 32),
+		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:], ParentHash: make([]byte, 32)},
+	}
+	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
+	require.NoError(t, err)
+	require.NoError(t, service.InsertPayload(envelope))
+
+	service.head = &head{root: root, block: signed, state: st, slot: blockSlot}
+	recordTestPayloadArrival(t, service, root, blockSlot, false)
+
+	require.NoError(t, service.postPayloadTasks(t.Context(), envelope, st))
+
+	require.LogsContain(t, logHook, "Not building on payload")
+	service.headLock.RLock()
+	require.Equal(t, false, service.head.full)
+	service.headLock.RUnlock()
 }
 
 func TestLatePayloadTasks_ReturnsEarlyWhenBlockLate(t *testing.T) {
@@ -501,7 +828,7 @@ func TestLatePayloadTasks_ReturnsEarlyWhenBlockLate(t *testing.T) {
 	service.latePayloadTasks(tr.ctx)
 	require.LogsDoNotContain(t, logHook, "Could not notify forkchoice update")
 	// No payload ID should have been cached.
-	_, has := service.cfg.PayloadIDCache.PayloadID(service.CurrentSlot()+1, headRoot)
+	_, has := service.cfg.PayloadIDCache.PayloadID(service.CurrentSlot()+1, headRoot, false)
 	require.Equal(t, false, has)
 }
 
@@ -540,7 +867,46 @@ func TestLatePayloadTasks_SendsFCU(t *testing.T) {
 	require.LogsDoNotContain(t, logHook, "Could not notify forkchoice update")
 	require.LogsDoNotContain(t, logHook, "Could not get")
 	// Payload ID should have been cached.
-	cachedPid, has := service.cfg.PayloadIDCache.PayloadID(service.CurrentSlot()+1, headRoot)
+	cachedPid, has := service.cfg.PayloadIDCache.PayloadID(service.CurrentSlot()+1, headRoot, false)
+	require.Equal(t, true, has)
+	require.Equal(t, primitives.PayloadID(pid[:]), cachedPid)
+}
+
+func TestLatePayloadTasks_SendsFCUWhilePayloadSyncing(t *testing.T) {
+	resetCfg := features.InitWithReset(&features.Flags{
+		PrepareAllPayloads: true,
+	})
+	defer resetCfg()
+
+	pid := &enginev1.PayloadIDBytes{1, 2, 3, 4, 5, 6, 7, 8}
+	service, tr := setupGloasService(t, &mockExecution.EngineClient{PayloadIDBytes: pid})
+
+	blockHash := bytesutil.ToBytes32([]byte("hash1"))
+	base, blk := testGloasState(t, 1, params.BeaconConfig().ZeroHash, blockHash)
+	base.LatestBlockHash = blockHash[:]
+	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	require.NoError(t, err)
+
+	signed, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	headRoot := bytesutil.ToBytes32([]byte("headroot"))
+	insertGloasBlock(t, service, base, blk, headRoot)
+	service.head = &head{
+		root:  headRoot,
+		block: signed,
+		state: st,
+		slot:  1,
+	}
+	service.SetGenesisTime(time.Now().Add(-3 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second / 2))
+	service.SetForkChoiceGenesisTime(service.genesisTime)
+
+	// The envelope validating past the 9s mark must not starve the proposer of the empty build.
+	require.NoError(t, service.payloadBeingSynced.set(headRoot))
+	defer service.payloadBeingSynced.unset(headRoot)
+
+	service.latePayloadTasks(tr.ctx)
+	cachedPid, has := service.cfg.PayloadIDCache.PayloadID(service.CurrentSlot()+1, headRoot, false)
 	require.Equal(t, true, has)
 	require.Equal(t, primitives.PayloadID(pid[:]), cachedPid)
 }
@@ -577,7 +943,7 @@ func TestLateBlockTasks_GloasFCU(t *testing.T) {
 	require.LogsDoNotContain(t, logHook, "could not perform late block tasks")
 
 	// Payload ID should have been cached by the Gloas FCU path.
-	cachedPid, has := service.cfg.PayloadIDCache.PayloadID(service.CurrentSlot()+1, headRoot)
+	cachedPid, has := service.cfg.PayloadIDCache.PayloadID(service.CurrentSlot()+1, headRoot, false)
 	require.Equal(t, true, has)
 	require.Equal(t, primitives.PayloadID(pid[:]), cachedPid)
 }

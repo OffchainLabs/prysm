@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
@@ -49,8 +48,9 @@ func (s *Server) ListKeystores(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if s.wallet.KeymanagerKind() != keymanager.Derived && s.wallet.KeymanagerKind() != keymanager.Local {
-		log.Debugf("List keystores keymanager api expected wallet type %s but got %s", s.wallet.KeymanagerKind().String(), keymanager.Local.String())
+	kind, _ := s.keymanagerKind()
+	if kind != keymanager.Derived && kind != keymanager.Local {
+		log.Debugf("List keystores keymanager api expected wallet type %s or %s but got %s", keymanager.Derived.String(), keymanager.Local.String(), kind.String())
 		response := &ListKeystoresResponse{
 			Data: make([]*Keystore, 0),
 		}
@@ -67,7 +67,7 @@ func (s *Server) ListKeystores(w http.ResponseWriter, r *http.Request) {
 		keystoreResponse[i] = &Keystore{
 			ValidatingPubkey: hexutil.Encode(pubKeys[i][:]),
 		}
-		if s.wallet.KeymanagerKind() == keymanager.Derived {
+		if kind == keymanager.Derived {
 			keystoreResponse[i].DerivationPath = fmt.Sprintf(derived.ValidatingKeyDerivationPathTemplate, i)
 		}
 	}
@@ -405,8 +405,9 @@ func (s *Server) ListRemoteKeys(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if s.wallet.KeymanagerKind() != keymanager.Web3Signer {
-		log.Debugf("List remote keys keymanager api expected wallet type %s but got %s", s.wallet.KeymanagerKind().String(), keymanager.Web3Signer.String())
+	kind, _ := s.keymanagerKind()
+	if kind != keymanager.Web3Signer {
+		log.Debugf("List remote keys keymanager api expected keymanager type %s but got %s", keymanager.Web3Signer.String(), kind.String())
 		response := &ListKeystoresResponse{
 			Data: make([]*Keystore, 0),
 		}
@@ -451,8 +452,8 @@ func (s *Server) ImportRemoteKeys(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if s.wallet.KeymanagerKind() != keymanager.Web3Signer {
-		httputil.HandleError(w, "Prysm Wallet is not of type Web3Signer. Please execute validator client with web3signer flags.", http.StatusInternalServerError)
+	if kind, _ := s.keymanagerKind(); kind != keymanager.Web3Signer {
+		httputil.HandleError(w, "Validator client is not configured for Web3Signer. Please execute validator client with web3signer flags.", http.StatusInternalServerError)
 		return
 	}
 
@@ -518,8 +519,8 @@ func (s *Server) DeleteRemoteKeys(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if s.wallet.KeymanagerKind() != keymanager.Web3Signer {
-		httputil.HandleError(w, "Prysm Wallet is not of type Web3Signer. Please execute validator client with web3signer flags.", http.StatusInternalServerError)
+	if kind, _ := s.keymanagerKind(); kind != keymanager.Web3Signer {
+		httputil.HandleError(w, "Validator client is not configured for Web3Signer. Please execute validator client with web3signer flags.", http.StatusInternalServerError)
 		return
 	}
 
@@ -712,7 +713,7 @@ func (s *Server) DeleteFeeRecipientByPubkey(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetGasLimit returns the gas limit measured in gwei defined for the custom mev builder by public key
+// GetGasLimit returns the gas limit in gwei.
 func (s *Server) GetGasLimit(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.GetGasLimit")
 	defer span.End()
@@ -721,33 +722,21 @@ func (s *Server) GetGasLimit(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Validator service not ready", http.StatusServiceUnavailable)
 		return
 	}
-
 	rawPubkey, pubkey, ok := shared.HexFromRoute(w, r, "pubkey", fieldparams.BLSPubkeyLength)
 	if !ok {
 		return
 	}
 
-	resp := &GetGasLimitResponse{
+	settings := s.validatorService.ProposerSettings()
+	httputil.WriteJson(w, &GetGasLimitResponse{
 		Data: &GasLimitMetaData{
 			Pubkey:   rawPubkey,
-			GasLimit: fmt.Sprintf("%d", params.BeaconConfig().DefaultBuilderGasLimit),
+			GasLimit: fmt.Sprintf("%d", settings.GasLimit(bytesutil.ToBytes48(pubkey))),
 		},
-	}
-	settings := s.validatorService.ProposerSettings()
-	if settings != nil {
-		proposerOption, found := settings.ProposeConfig[bytesutil.ToBytes48(pubkey)]
-		if found {
-			if proposerOption.BuilderConfig != nil {
-				resp.Data.GasLimit = fmt.Sprintf("%d", proposerOption.BuilderConfig.GasLimit)
-			}
-		} else if settings.DefaultConfig != nil && settings.DefaultConfig.BuilderConfig != nil {
-			resp.Data.GasLimit = fmt.Sprintf("%d", s.validatorService.ProposerSettings().DefaultConfig.BuilderConfig.GasLimit)
-		}
-	}
-	httputil.WriteJson(w, resp)
+	})
 }
 
-// SetGasLimit updates the gas limit by public key
+// SetGasLimit updates the gas limit.
 func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.SetGasLimit")
 	defer span.End()
@@ -778,38 +767,11 @@ func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	settings := s.validatorService.ProposerSettings()
-	if settings == nil {
-		httputil.HandleError(w, "No proposer settings were found to update", http.StatusInternalServerError)
+	if err := settings.SetGasLimit(bytesutil.ToBytes48(pubkey), validator.Uint64(gasLimit)); err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
-	} else if settings.ProposeConfig == nil {
-		if settings.DefaultConfig == nil || settings.DefaultConfig.BuilderConfig == nil || !settings.DefaultConfig.BuilderConfig.Enabled {
-			httputil.HandleError(w, "Gas limit changes only apply when builder is enabled", http.StatusInternalServerError)
-			return
-		}
-		settings.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
-		option := settings.DefaultConfig.Clone()
-		option.BuilderConfig.GasLimit = validator.Uint64(gasLimit)
-		settings.ProposeConfig[bytesutil.ToBytes48(pubkey)] = option
-	} else {
-		proposerOption, found := settings.ProposeConfig[bytesutil.ToBytes48(pubkey)]
-		if found {
-			if proposerOption.BuilderConfig == nil || !proposerOption.BuilderConfig.Enabled {
-				httputil.HandleError(w, "Gas limit changes only apply when builder is enabled", http.StatusInternalServerError)
-				return
-			} else {
-				proposerOption.BuilderConfig.GasLimit = validator.Uint64(gasLimit)
-			}
-		} else {
-			if settings.DefaultConfig == nil {
-				httputil.HandleError(w, "Gas limit changes only apply when builder is enabled", http.StatusInternalServerError)
-				return
-			}
-			option := settings.DefaultConfig.Clone()
-			option.BuilderConfig.GasLimit = validator.Uint64(gasLimit)
-			settings.ProposeConfig[bytesutil.ToBytes48(pubkey)] = option
-		}
 	}
-	// save the settings
+
 	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
 		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -817,7 +779,7 @@ func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-// DeleteGasLimit deletes the gas limit by public key
+// DeleteGasLimit resets the gas limit to the chain default.
 func (s *Server) DeleteGasLimit(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.DeleteGasLimit")
 	defer span.End()
@@ -831,31 +793,16 @@ func (s *Server) DeleteGasLimit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	proposerSettings := s.validatorService.ProposerSettings()
-	if proposerSettings != nil && proposerSettings.ProposeConfig != nil {
-		proposerOption, found := proposerSettings.ProposeConfig[bytesutil.ToBytes48(pubkey)]
-		if found && proposerOption.BuilderConfig != nil {
-			// If proposerSettings has default value, use it.
-			if proposerSettings.DefaultConfig != nil && proposerSettings.DefaultConfig.BuilderConfig != nil {
-				proposerOption.BuilderConfig.GasLimit = proposerSettings.DefaultConfig.BuilderConfig.GasLimit
-			} else {
-				// Fallback to using global default.
-				proposerOption.BuilderConfig.GasLimit = validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
-			}
-			// save the settings
-			if err := s.validatorService.SetProposerSettings(ctx, proposerSettings); err != nil {
-				httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusBadRequest)
-				return
-			}
-			// Successfully deleted gas limit (reset to proposer config default or global default).
-			// Return with success http code "204".
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
+	settings := s.validatorService.ProposerSettings()
+	if !settings.ResetGasLimit(bytesutil.ToBytes48(pubkey)) {
+		httputil.HandleError(w, fmt.Sprintf("No gas limit found for pubkey %q", rawPubkey), http.StatusNotFound)
+		return
 	}
-	// Otherwise, either no proposerOption is found for the pubkey or proposerOption.BuilderConfig is not enabled at all,
-	// we respond "not found".
-	httputil.HandleError(w, fmt.Sprintf("No gas limit found for pubkey %q", rawPubkey), http.StatusNotFound)
+	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
+		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) GetGraffiti(w http.ResponseWriter, r *http.Request) {

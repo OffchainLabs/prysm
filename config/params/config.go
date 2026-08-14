@@ -21,6 +21,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// BUILDER_PROPOSAL_DELAY_TOLERANCE
+// https://github.com/ethereum/builder-specs/blob/main/specs/bellatrix/validator.md#constants
+const BuilderProposalDelayTolerance = 1 * time.Second
+
 // BeaconChainConfig contains constant configs for node to participate in beacon chain.
 type BeaconChainConfig struct {
 	// Constants (non-configurable)
@@ -60,13 +64,14 @@ type BeaconChainConfig struct {
 	ETH1AddressWithdrawalPrefixByte byte                    `yaml:"ETH1_ADDRESS_WITHDRAWAL_PREFIX" spec:"true"` // ETH1AddressWithdrawalPrefixByte is used for withdrawals and it's the first byte.
 	CompoundingWithdrawalPrefixByte byte                    `yaml:"COMPOUNDING_WITHDRAWAL_PREFIX" spec:"true"`  // CompoundingWithdrawalPrefixByteByte is used for compounding withdrawals and it's the first byte.
 	BuilderWithdrawalPrefixByte     byte                    `yaml:"BUILDER_WITHDRAWAL_PREFIX" spec:"true"`      // BuilderWithdrawalPrefixByte is used for builder withdrawals and it's the first byte.
+	PayloadBuilderVersion           byte                    `yaml:"PAYLOAD_BUILDER_VERSION" spec:"true"`        // PayloadBuilderVersion is the builder version required to submit execution payload bids (EIP-7732).
 	BuilderIndexSelfBuild           primitives.BuilderIndex `yaml:"BUILDER_INDEX_SELF_BUILD" spec:"true"`       // BuilderIndexSelfBuild indicates proposer self-built payloads.
 	ZeroHash                        [32]byte                // ZeroHash is used to represent a zeroed out 32 byte array.
 
 	// Time parameters constants.
 	GenesisDelay                     uint64           `yaml:"GENESIS_DELAY" spec:"true"`                   // GenesisDelay is the minimum number of seconds to delay starting the Ethereum Beacon Chain genesis. Must be at least 1 second.
 	MinAttestationInclusionDelay     primitives.Slot  `yaml:"MIN_ATTESTATION_INCLUSION_DELAY" spec:"true"` // MinAttestationInclusionDelay defines how many slots validator has to wait to include attestation for beacon block.
-	SecondsPerSlot                   uint64           `yaml:"SECONDS_PER_SLOT" spec:"true"`                // SecondsPerSlot is how many seconds are in a single slot.
+	SecondsPerSlot                   uint64           `yaml:"SECONDS_PER_SLOT" spec:"true"`                // Deprecated: use SlotDuration() or SlotDurationMillis() instead.
 	SlotDurationMilliseconds         uint64           `yaml:"SLOT_DURATION_MS" spec:"true"`                // SlotDurationMilliseconds is the slot time expressed in milliseconds.
 	SlotsPerEpoch                    primitives.Slot  `yaml:"SLOTS_PER_EPOCH" spec:"true"`                 // SlotsPerEpoch is the number of slots in an epoch.
 	SqrRootSlotsPerEpoch             primitives.Slot  // SqrRootSlotsPerEpoch is a hard coded value where we take the square root of `SlotsPerEpoch` and round down.
@@ -155,6 +160,8 @@ type BeaconChainConfig struct {
 	DomainBeaconBuilder               [4]byte `yaml:"DOMAIN_BEACON_BUILDER" spec:"true"`                 // DomainBeaconBuilder defines the BLS signature domain for beacon block builder.
 	DomainPTCAttester                 [4]byte `yaml:"DOMAIN_PTC_ATTESTER" spec:"true"`                   // DomainPTCAttester defines the BLS signature domain for payload transaction committee attester.
 	DomainProposerPreferences         [4]byte `yaml:"DOMAIN_PROPOSER_PREFERENCES" spec:"true"`           // DomainProposerPreferences defines the BLS signature domain for proposer preferences.
+	DomainRequestAuth                 [4]byte `yaml:"DOMAIN_REQUEST_AUTH" spec:"true"`                   // DomainRequestAuth defines the BLS signature domain for builder bid request authentication.
+	DomainBuilderDeposit              [4]byte `yaml:"DOMAIN_BUILDER_DEPOSIT" spec:"true"`                // DomainBuilderDeposit defines the BLS signature domain for builder deposit requests (EIP-8282).
 
 	// Prysm constants.
 	GenesisValidatorsRoot          [32]byte        // GenesisValidatorsRoot is the root hash of the genesis validators.
@@ -264,6 +271,7 @@ type BeaconChainConfig struct {
 	LocalBlockValueBoost             uint64          // LocalBlockValueBoost is the value boost for local block construction. This is used to prioritize local block construction over relay/builder block construction.
 	MinBuilderBid                    uint64          // MinBuilderBid is the minimum value that the builder's block can have to be considered by this node.
 	MinBuilderDiff                   uint64          // MinBuilderDiff is the minimum value above the local block value that the builder has to bid to be considered by this node
+	BuilderHeaderTimeout             time.Duration   // BuilderHeaderTimeout is how long to wait for a builder relay `getHeader` response before falling back to local block building. Known as `BUILDER_PROPOSAL_DELAY_TOLERANCE` in the builder spec.
 	// Execution engine timeout value
 	ExecutionEngineTimeoutValue uint64 // ExecutionEngineTimeoutValue defines the seconds to wait before timing out engine endpoints with execution payload execution semantics (newPayload, forkchoiceUpdated).
 
@@ -315,6 +323,8 @@ type BeaconChainConfig struct {
 	ChurnLimitQuotientGloas              uint64 `yaml:"CHURN_LIMIT_QUOTIENT_GLOAS" spec:"true"`                 // ChurnLimitQuotientGloas is the divisor used to compute per-epoch churn from total active balance in Gloas (EIP-8061).
 	ConsolidationChurnLimitQuotient      uint64 `yaml:"CONSOLIDATION_CHURN_LIMIT_QUOTIENT" spec:"true"`         // ConsolidationChurnLimitQuotient is the divisor used to compute the per-epoch consolidation churn limit in Gloas (EIP-8061).
 	MaxPerEpochActivationChurnLimitGloas uint64 `yaml:"MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT_GLOAS" spec:"true"` // MaxPerEpochActivationChurnLimitGloas is the per-epoch cap on activation churn in Gloas (EIP-8061).
+	MaxBuilderDepositRequestsPerPayload  uint64 `yaml:"MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD" spec:"true"`   // MaxBuilderDepositRequestsPerPayload is the maximum number of builder deposit requests in each payload (EIP-8282).
+	MaxBuilderExitRequestsPerPayload     uint64 `yaml:"MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD" spec:"true"`      // MaxBuilderExitRequestsPerPayload is the maximum number of builder exit requests in each payload (EIP-8282).
 
 	// Networking Specific Parameters
 	MaxPayloadSize                  uint64          `yaml:"MAX_PAYLOAD_SIZE" spec:"true"`                   // MAX_PAYLOAD_SIZE is the maximum allowed size of uncompressed payload in gossip messages and rpc chunks.
@@ -333,8 +343,14 @@ type BeaconChainConfig struct {
 	SubnetsPerNode                  uint64          `yaml:"SUBNETS_PER_NODE" spec:"true"`                   // SubnetsPerNode is the number of long-lived subnets a beacon node should be subscribed to.
 	NodeIdBits                      uint64          `yaml:"NODE_ID_BITS"`                                   // NodeIdBits defines the bit length of a node id.
 
+	// Fast Confirmation Rule
+	ConfirmationByzantineThreshold uint64 `yaml:"CONFIRMATION_BYZANTINE_THRESHOLD" spec:"true"` // ConfirmationByzantineThreshold is the assumed percentage of byzantine stake used by the fast confirmation rule.
+
 	// Blobs Values
 	BlobSchedule []BlobScheduleEntry `yaml:"BLOB_SCHEDULE" spec:"true"`
+
+	// Gas Limit Values (EIP-8261)
+	GasLimitSchedule []GasLimitScheduleEntry `yaml:"GAS_LIMIT_SCHEDULE" spec:"true"`
 
 	// Deprecated_MaxBlobsPerBlock defines the max blobs that could exist in a block.
 	// Deprecated: This field is no longer supported. Avoid using it.
@@ -367,9 +383,11 @@ func (b *BeaconChainConfig) VersionToForkEpochMap() map[int]primitives.Epoch {
 
 func (b *BeaconChainConfig) ExecutionRequestLimits() enginev1.ExecutionRequestLimits {
 	return enginev1.ExecutionRequestLimits{
-		Deposits:       b.MaxDepositRequestsPerPayload,
-		Withdrawals:    b.MaxWithdrawalsPerPayload,
-		Consolidations: b.MaxConsolidationsRequestsPerPayload,
+		Deposits:        b.MaxDepositRequestsPerPayload,
+		Withdrawals:     b.MaxWithdrawalRequestsPerPayload,
+		Consolidations:  b.MaxConsolidationsRequestsPerPayload,
+		BuilderDeposits: b.MaxBuilderDepositRequestsPerPayload,
+		BuilderExits:    b.MaxBuilderExitRequestsPerPayload,
 	}
 }
 
@@ -407,6 +425,24 @@ func (e NetworkScheduleEntry) LogFields() logrus.Fields {
 
 type BlobScheduleEntry NetworkScheduleEntry
 
+type GasLimitScheduleEntry struct {
+	GasLimit uint64           `yaml:"GAS_LIMIT" json:"GAS_LIMIT"`
+	Epoch    primitives.Epoch `yaml:"EPOCH" json:"EPOCH"`
+}
+
+// ScheduledGasLimit returns the EIP-8261 recommended gas limit active at epoch, false pre-gloas or when no entry is active.
+func (b *BeaconChainConfig) ScheduledGasLimit(epoch primitives.Epoch) (uint64, bool) {
+	if epoch < b.GloasForkEpoch {
+		return 0, false
+	}
+	for i := len(b.GasLimitSchedule) - 1; i >= 0; i-- {
+		if b.GasLimitSchedule[i].Epoch <= epoch {
+			return b.GasLimitSchedule[i].GasLimit, true
+		}
+	}
+	return 0, false
+}
+
 func (b *BeaconChainConfig) ApplyOptions(opts ...Option) {
 	for _, opt := range opts {
 		opt(b)
@@ -423,6 +459,9 @@ func (b *BeaconChainConfig) InitializeForkSchedule() {
 	b.ForkVersionNames = configForkNames(b)
 	b.forkSchedule = initForkSchedule(b)
 	b.bpoSchedule = initBPOSchedule(b)
+	sort.Slice(b.GasLimitSchedule, func(i, j int) bool {
+		return b.GasLimitSchedule[i].Epoch < b.GasLimitSchedule[j].Epoch
+	})
 	combined := b.forkSchedule.merge(b.bpoSchedule)
 	if err := combined.prepare(b); err != nil {
 		log.WithError(err).Error("Failed to prepare network schedule")

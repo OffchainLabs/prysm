@@ -1,64 +1,62 @@
 package rest
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
-	"sync/atomic"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/client"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-// RestConnectionProvider manages HTTP client configuration for REST API with failover support.
-// It allows switching between different beacon node REST endpoints when the current one becomes unavailable.
+// RestConnectionProvider manages HTTP client configuration for the REST API.
 type RestConnectionProvider interface {
 	// HttpClient returns the configured HTTP client with headers, timeout, and optional tracing.
 	HttpClient() *http.Client
 	// Handler returns the REST handler for making API requests.
 	Handler() Handler
-	// CurrentHost returns the current REST API endpoint URL.
-	CurrentHost() string
 	// Hosts returns all configured REST API endpoint URLs.
 	Hosts() []string
-	// SwitchHost switches to the endpoint at the given index.
-	SwitchHost(index int) error
 }
 
 // RestConnectionProviderOption is a functional option for configuring the REST connection provider.
-type RestConnectionProviderOption func(*restConnectionProvider)
+type RestConnectionProviderOption func(*restConnectionProviderConfig)
 
 // WithHttpTimeout sets the HTTP client timeout.
 func WithHttpTimeout(timeout time.Duration) RestConnectionProviderOption {
-	return func(p *restConnectionProvider) {
-		p.timeout = timeout
+	return func(c *restConnectionProviderConfig) {
+		c.timeout = timeout
 	}
 }
 
 // WithHttpHeaders sets custom HTTP headers to include in all requests.
 func WithHttpHeaders(headers map[string][]string) RestConnectionProviderOption {
-	return func(p *restConnectionProvider) {
-		p.headers = headers
+	return func(c *restConnectionProviderConfig) {
+		c.headers = headers
 	}
 }
 
 // WithTracing enables OpenTelemetry tracing for HTTP requests.
 func WithTracing() RestConnectionProviderOption {
-	return func(p *restConnectionProvider) {
-		p.enableTracing = true
+	return func(c *restConnectionProviderConfig) {
+		c.enableTracing = true
 	}
 }
 
-type restConnectionProvider struct {
-	endpoints     []string
-	httpClient    *http.Client
-	restHandler   *handler
-	currentIndex  atomic.Uint64
+type restConnectionProviderConfig struct {
 	timeout       time.Duration
 	headers       map[string][]string
 	enableTracing bool
+}
+
+type restConnectionProvider struct {
+	endpoints   []string
+	httpClient  *http.Client
+	restHandler Handler
 }
 
 // NewRestConnectionProvider creates a new REST connection provider that manages HTTP client configuration.
@@ -69,37 +67,47 @@ func NewRestConnectionProvider(endpoint string, opts ...RestConnectionProviderOp
 		return nil, errors.New("no REST API endpoints provided")
 	}
 
-	p := &restConnectionProvider{
-		endpoints: endpoints,
-	}
-
+	cfg := restConnectionProviderConfig{}
 	for _, opt := range opts {
-		opt(p)
+		opt(&cfg)
 	}
 
 	// Build the HTTP transport chain
 	var transport http.RoundTripper = http.DefaultTransport
 
 	// Add custom headers if configured
-	if len(p.headers) > 0 {
-		transport = client.NewCustomHeadersTransport(transport, p.headers)
+	if len(cfg.headers) > 0 {
+		transport = client.NewCustomHeadersTransport(transport, cfg.headers)
 	}
-
 	// Add tracing if enabled
-	if p.enableTracing {
+	if cfg.enableTracing {
 		transport = otelhttp.NewTransport(transport)
 	}
 
-	p.httpClient = &http.Client{
-		Timeout:   p.timeout,
+	httpClient := &http.Client{
+		Timeout:   cfg.timeout,
 		Transport: transport,
 	}
 
-	// Create the REST handler with the HTTP client and initial host
-	p.restHandler = newHandler(*p.httpClient, endpoints[0])
+	// Build one handler per endpoint and fan out reads/writes across all of them.
+	handlers := make([]*handler, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		handlers = append(handlers, newHandler(*httpClient, endpoint))
+	}
+
+	restHandler, err := newMultiHandler(handlers)
+	if err != nil {
+		return nil, fmt.Errorf("new multi handler: %w", err)
+	}
+
+	p := &restConnectionProvider{
+		endpoints:   endpoints,
+		httpClient:  httpClient,
+		restHandler: restHandler,
+	}
 
 	log.WithFields(logrus.Fields{
-		"endpoints": endpoints,
+		"endpoints": api.RedactEndpoints(endpoints),
 		"count":     len(endpoints),
 	}).Info("Initialized REST connection provider")
 
@@ -128,31 +136,9 @@ func (p *restConnectionProvider) Handler() Handler {
 	return p.restHandler
 }
 
-func (p *restConnectionProvider) CurrentHost() string {
-	return p.endpoints[p.currentIndex.Load()]
-}
-
 func (p *restConnectionProvider) Hosts() []string {
 	// Return a copy to maintain immutability
 	hosts := make([]string, len(p.endpoints))
 	copy(hosts, p.endpoints)
 	return hosts
-}
-
-func (p *restConnectionProvider) SwitchHost(index int) error {
-	if index < 0 || index >= len(p.endpoints) {
-		return errors.Errorf("invalid host index %d, must be between 0 and %d", index, len(p.endpoints)-1)
-	}
-
-	oldIdx := p.currentIndex.Load()
-	p.currentIndex.Store(uint64(index))
-
-	// Update the rest handler's host
-	p.restHandler.SwitchHost(p.endpoints[index])
-
-	log.WithFields(logrus.Fields{
-		"previousHost": p.endpoints[oldIdx],
-		"newHost":      p.endpoints[index],
-	}).Debug("Switched REST endpoint")
-	return nil
 }

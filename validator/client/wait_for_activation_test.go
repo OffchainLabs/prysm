@@ -12,7 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
 	walletMock "github.com/OffchainLabs/prysm/v7/validator/accounts/testing"
-	"github.com/OffchainLabs/prysm/v7/validator/client/testutil"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/derived"
 	constant "github.com/OffchainLabs/prysm/v7/validator/testing"
 	"github.com/pkg/errors"
@@ -27,17 +26,15 @@ func TestWaitActivation_Exiting_OK(t *testing.T) {
 	defer ctrl.Finish()
 	validatorClient := validatormock.NewMockValidatorClient(ctrl)
 	chainClient := validatormock.NewMockChainClient(ctrl)
-	prysmChainClient := validatormock.NewMockPrysmChainClient(ctrl)
 	kp := randKeypair(t)
 	v := validator{
 		validatorClient:        validatorClient,
 		km:                     newMockKeymanager(t, kp),
 		chainClient:            chainClient,
-		prysmChainClient:       prysmChainClient,
 		accountsChangedChannel: make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
 	}
 	ctx := t.Context()
-	resp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{kp.pub[:]})
+	resp := generateMultipleValidatorStatusResponse([][]byte{kp.pub[:]})
 	resp.Statuses[0].Status = ethpb.ValidatorStatus_EXITING
 	validatorClient.EXPECT().MultipleValidatorStatus(
 		gomock.Any(),
@@ -61,19 +58,17 @@ func TestWaitForActivation_RefetchKeys(t *testing.T) {
 	defer ctrl.Finish()
 	validatorClient := validatormock.NewMockValidatorClient(ctrl)
 	chainClient := validatormock.NewMockChainClient(ctrl)
-	prysmChainClient := validatormock.NewMockPrysmChainClient(ctrl)
 
 	kp := randKeypair(t)
 	km := newMockKeymanager(t)
 
 	v := validator{
-		validatorClient:  validatorClient,
-		km:               km,
-		chainClient:      chainClient,
-		prysmChainClient: prysmChainClient,
-		pubkeyToStatus:   make(map[[48]byte]*validatorStatus),
+		validatorClient: validatorClient,
+		km:              km,
+		chainClient:     chainClient,
+		pubkeyToStatus:  make(map[[48]byte]*validatorStatus),
 	}
-	resp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{kp.pub[:]})
+	resp := generateMultipleValidatorStatusResponse([][]byte{kp.pub[:]})
 	resp.Statuses[0].Status = ethpb.ValidatorStatus_ACTIVE
 
 	validatorClient.EXPECT().MultipleValidatorStatus(
@@ -112,13 +107,11 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 		km := newMockKeymanager(t, inactive)
 		validatorClient := validatormock.NewMockValidatorClient(ctrl)
 		chainClient := validatormock.NewMockChainClient(ctrl)
-		prysmChainClient := validatormock.NewMockPrysmChainClient(ctrl)
 		ch := make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
 		v := validator{
 			validatorClient:        validatorClient,
 			km:                     km,
 			chainClient:            chainClient,
-			prysmChainClient:       prysmChainClient,
 			pubkeyToStatus:         make(map[[48]byte]*validatorStatus),
 			accountsChangedChannel: ch,
 			accountChangedSub:      km.SubscribeAccountChanges(ch),
@@ -128,10 +121,10 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 			v.accountChangedSub.Unsubscribe()
 		}()
 
-		inactiveResp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{inactive.pub[:]})
+		inactiveResp := generateMultipleValidatorStatusResponse([][]byte{inactive.pub[:]})
 		inactiveResp.Statuses[0].Status = ethpb.ValidatorStatus_UNKNOWN_STATUS
 
-		activeResp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{inactive.pub[:], active.pub[:]})
+		activeResp := generateMultipleValidatorStatusResponse([][]byte{inactive.pub[:], active.pub[:]})
 		activeResp.Statuses[0].Status = ethpb.ValidatorStatus_UNKNOWN_STATUS
 		activeResp.Statuses[1].Status = ethpb.ValidatorStatus_ACTIVE
 		gomock.InOrder(
@@ -190,20 +183,18 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 		require.NoError(t, err)
 		validatorClient := validatormock.NewMockValidatorClient(ctrl)
 		chainClient := validatormock.NewMockChainClient(ctrl)
-		prysmChainClient := validatormock.NewMockPrysmChainClient(ctrl)
 		v := validator{
-			validatorClient:  validatorClient,
-			km:               km,
-			genesisTime:      time.Unix(1, 0),
-			chainClient:      chainClient,
-			prysmChainClient: prysmChainClient,
-			pubkeyToStatus:   make(map[[48]byte]*validatorStatus),
+			validatorClient: validatorClient,
+			km:              km,
+			genesisTime:     time.Unix(1, 0),
+			chainClient:     chainClient,
+			pubkeyToStatus:  make(map[[48]byte]*validatorStatus),
 		}
 
-		inactiveResp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{inactivePubKey[:]})
+		inactiveResp := generateMultipleValidatorStatusResponse([][]byte{inactivePubKey[:]})
 		inactiveResp.Statuses[0].Status = ethpb.ValidatorStatus_UNKNOWN_STATUS
 
-		activeResp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{inactivePubKey[:], activePubKey[:]})
+		activeResp := generateMultipleValidatorStatusResponse([][]byte{inactivePubKey[:], activePubKey[:]})
 		activeResp.Statuses[0].Status = ethpb.ValidatorStatus_UNKNOWN_STATUS
 		activeResp.Statuses[1].Status = ethpb.ValidatorStatus_ACTIVE
 		channel := make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
@@ -253,18 +244,16 @@ func TestWaitForActivation_AttemptsReconnectionOnFailure(t *testing.T) {
 	defer ctrl.Finish()
 	validatorClient := validatormock.NewMockValidatorClient(ctrl)
 	chainClient := validatormock.NewMockChainClient(ctrl)
-	prysmChainClient := validatormock.NewMockPrysmChainClient(ctrl)
 	kp := randKeypair(t)
 	v := validator{
 		validatorClient:        validatorClient,
 		km:                     newMockKeymanager(t, kp),
 		chainClient:            chainClient,
-		prysmChainClient:       prysmChainClient,
 		pubkeyToStatus:         make(map[[48]byte]*validatorStatus),
 		accountsChangedChannel: make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
 	}
 	active := randKeypair(t)
-	activeResp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{active.pub[:]})
+	activeResp := generateMultipleValidatorStatusResponse([][]byte{active.pub[:]})
 	activeResp.Statuses[0].Status = ethpb.ValidatorStatus_ACTIVE
 	gomock.InOrder(
 		validatorClient.EXPECT().MultipleValidatorStatus(

@@ -11,7 +11,3 @@ func CommitteeCache() *cache.CommitteeCache {
 func SyncCommitteeCache() *cache.SyncCommitteeCache {
 	return syncCommitteeCache
 }
-
-func ProposerIndicesCache() *cache.ProposerIndicesCache {
-	return proposerIndicesCache
-}

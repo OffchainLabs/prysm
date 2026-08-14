@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
@@ -24,6 +25,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 )
@@ -61,8 +63,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 	invalidRoot := [32]byte{'A', 'B', 'C', 'D'}
 	s.setBadBlock(ctx, invalidRoot)
 
-	digest, err := s.currentForkDigest()
-	require.NoError(t, err)
+	digest := s.currentForkDigest()
 
 	blk := util.NewBeaconBlock()
 	blk.Block.Slot = 1
@@ -103,7 +104,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 					Source: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 				},
 			},
-			topic:                     fmt.Sprintf("/eth2/%x/beacon_attestation_1", digest),
+			topic:                     fmt.Sprintf("/eth2/%x/beacon_attestation_1", digest) + p.Encoding().ProtocolSuffix(),
 			validAttestationSignature: true,
 			want:                      true,
 		},
@@ -141,7 +142,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 					Source: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 				},
 			},
-			topic:                     fmt.Sprintf("/eth2/%x/beacon_attestation_1", digest),
+			topic:                     fmt.Sprintf("/eth2/%x/beacon_attestation_1", digest) + p.Encoding().ProtocolSuffix(),
 			validAttestationSignature: true,
 			want:                      false,
 		},
@@ -157,7 +158,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 					Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 				},
 			},
-			topic:                     fmt.Sprintf("/eth2/%x/beacon_attestation_1", digest),
+			topic:                     fmt.Sprintf("/eth2/%x/beacon_attestation_1", digest) + p.Encoding().ProtocolSuffix(),
 			validAttestationSignature: true,
 			want:                      false,
 		},
@@ -173,7 +174,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 					Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 				},
 			},
-			topic:                     fmt.Sprintf("/eth2/%x/beacon_attestation_1", digest),
+			topic:                     fmt.Sprintf("/eth2/%x/beacon_attestation_1", digest) + p.Encoding().ProtocolSuffix(),
 			validAttestationSignature: true,
 			want:                      false,
 		},
@@ -189,7 +190,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 					Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 				},
 			},
-			topic:                     fmt.Sprintf("/eth2/%x/beacon_attestation_2", digest),
+			topic:                     fmt.Sprintf("/eth2/%x/beacon_attestation_2", digest) + p.Encoding().ProtocolSuffix(),
 			validAttestationSignature: true,
 			want:                      false,
 		},
@@ -205,7 +206,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 					Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 				},
 			},
-			topic:                     fmt.Sprintf("/eth2/%x/beacon_attestation_2", digest),
+			topic:                     fmt.Sprintf("/eth2/%x/beacon_attestation_2", digest) + p.Encoding().ProtocolSuffix(),
 			validAttestationSignature: true,
 			want:                      false,
 		},
@@ -221,7 +222,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 					Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 				},
 			},
-			topic:                     fmt.Sprintf("/eth2/%x/beacon_attestation_1", digest),
+			topic:                     fmt.Sprintf("/eth2/%x/beacon_attestation_1", digest) + p.Encoding().ProtocolSuffix(),
 			validAttestationSignature: true,
 			want:                      false,
 		},
@@ -237,7 +238,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 					Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 				},
 			},
-			topic:                     fmt.Sprintf("/eth2/%x/beacon_attestation_1", digest),
+			topic:                     fmt.Sprintf("/eth2/%x/beacon_attestation_1", digest) + p.Encoding().ProtocolSuffix(),
 			validAttestationSignature: true,
 			want:                      false,
 		},
@@ -253,7 +254,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 					Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 				},
 			},
-			topic:                     fmt.Sprintf("/eth2/%x/beacon_attestation_1", digest),
+			topic:                     fmt.Sprintf("/eth2/%x/beacon_attestation_1", digest) + p.Encoding().ProtocolSuffix(),
 			validAttestationSignature: false,
 			want:                      false,
 		},
@@ -342,8 +343,7 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 	s.initCaches()
 	go s.verifierRoutine()
 
-	digest, err := s.currentForkDigest()
-	require.NoError(t, err)
+	digest := s.currentForkDigest()
 
 	blk := util.NewBeaconBlock()
 	blk.Block.Slot = s.cfg.clock.CurrentSlot()
@@ -435,7 +435,7 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 			buf := new(bytes.Buffer)
 			_, err = p.Encoding().EncodeGossip(buf, tt.msg)
 			require.NoError(t, err)
-			topic := fmt.Sprintf("/eth2/%x/beacon_attestation_1", digest)
+			topic := fmt.Sprintf("/eth2/%x/beacon_attestation_1", digest) + p.Encoding().ProtocolSuffix()
 			m := &pubsub.Message{
 				Message: &pubsubpb.Message{
 					Data:  buf.Bytes(),
@@ -762,9 +762,11 @@ func Test_validateGloasCommitteeIndex(t *testing.T) {
 				mc.ForkchoiceRoots = map[[32]byte]bool{blockRoot32: true}
 			}
 			s := &Service{
+				ctx: t.Context(),
 				cfg: &config{
-					chain: mc,
-					p2p:   p2ptest.NewTestP2P(t),
+					chain:    mc,
+					p2p:      p2ptest.NewTestP2P(t),
+					beaconDB: dbtest.SetupDB(t),
 				},
 				badPayloadCache: lruwrpr.New(10),
 			}
@@ -784,6 +786,53 @@ func Test_validateGloasCommitteeIndex(t *testing.T) {
 			if tt.wantErr != "" {
 				require.ErrorContains(t, tt.wantErr, err)
 			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestService_validateUnaggregatedAttTopic_SubnetMatch(t *testing.T) {
+	ctx := t.Context()
+	p := p2ptest.NewTestP2P(t)
+	s := &Service{cfg: &config{p2p: p}}
+
+	st, _ := util.DeterministicGenesisState(t, 64)
+	require.NoError(t, st.SetSlot(1))
+
+	att := &ethpb.Attestation{
+		AggregationBits: bitfield.Bitlist{0b101},
+		Data: &ethpb.AttestationData{
+			Slot:           1,
+			CommitteeIndex: 0,
+			Target:         &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+			Source:         &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+		},
+	}
+
+	epoch := slots.ToEpoch(att.Data.Slot)
+	valCount, err := helpers.ActiveValidatorCount(ctx, st, epoch)
+	require.NoError(t, err)
+	subnet := helpers.ComputeSubnetForAttestation(valCount, att)
+	digest := params.ForkDigest(epoch)
+	base := fmt.Sprintf(p2p.AttestationSubnetTopicFormat, digest, subnet)
+	suffix := p.Encoding().ProtocolSuffix()
+
+	tests := []struct {
+		name  string
+		topic string
+		want  pubsub.ValidationResult
+	}{
+		{"correct subnet", base + suffix, pubsub.ValidationAccept},
+		// base ends in the subnet digits; appending another digit must not still match.
+		{"subnet that shares a prefix", base + "0" + suffix, pubsub.ValidationReject},
+		{"different subnet", fmt.Sprintf(p2p.AttestationSubnetTopicFormat, digest, subnet+1) + suffix, pubsub.ValidationReject},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := s.validateUnaggregatedAttTopic(ctx, att, st, tt.topic)
+			require.Equal(t, tt.want, res)
+			if tt.want == pubsub.ValidationAccept {
 				require.NoError(t, err)
 			}
 		})

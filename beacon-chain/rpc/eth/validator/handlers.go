@@ -17,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	rpchelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
@@ -28,15 +27,19 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	validator2 "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	mvslice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpbalpha "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation/aggregation/attestations"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // GetAggregateAttestationV2 aggregates all attestations matching the given attestation data root and slot, returning the aggregated result.
@@ -66,7 +69,18 @@ func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Reques
 	if httputil.RespondWithSsz(r) {
 		var data []byte
 		var err error
-		if v >= version.Electra {
+		if v >= version.Gloas {
+			typedAgg, ok := ethpbalpha.AttestationGloasFromAtt(agg)
+			if !ok {
+				httputil.HandleError(w, fmt.Sprintf("Attestation cannot be converted to type %T", &ethpbalpha.AttestationGloas{}), http.StatusInternalServerError)
+				return
+			}
+			data, err = typedAgg.MarshalSSZ()
+			if err != nil {
+				httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		} else if v >= version.Electra {
 			typedAgg, ok := agg.(*ethpbalpha.AttestationElectra)
 			if !ok {
 				httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.AttestationElectra{}), http.StatusInternalServerError)
@@ -98,7 +112,19 @@ func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Reques
 	resp := &structs.AggregateAttestationResponse{
 		Version: version.String(v),
 	}
-	if v >= version.Electra {
+	if v >= version.Gloas {
+		typedAgg, ok := ethpbalpha.AttestationGloasFromAtt(agg)
+		if !ok {
+			httputil.HandleError(w, fmt.Sprintf("Attestation cannot be converted to type %T", &ethpbalpha.AttestationGloas{}), http.StatusInternalServerError)
+			return
+		}
+		data, err := json.Marshal(structs.AttGloasFromConsensus(typedAgg))
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		resp.Data = data
+	} else if v >= version.Electra {
 		typedAgg, ok := agg.(*ethpbalpha.AttestationElectra)
 		if !ok {
 			httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.AttestationElectra{}), http.StatusInternalServerError)
@@ -213,6 +239,120 @@ func matchingAtts(atts []ethpbalpha.Att, slot primitives.Slot, attDataRoot []byt
 	return result, nil
 }
 
+// SubmitSignedProposerPreferences broadcasts signed proposer preferences and
+// caches them for subsequent bid validation. Delegates to the gRPC server so
+// validation and broadcast logic remain in one place.
+func (s *Server) SubmitSignedProposerPreferences(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "validator.SubmitSignedProposerPreferences")
+	defer span.End()
+
+	versionHeader := r.Header.Get(api.VersionHeader)
+	if versionHeader == "" {
+		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
+		return
+	}
+	v, err := version.FromString(versionHeader)
+	if err != nil {
+		httputil.HandleError(w, "Invalid version: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if v < version.Gloas {
+		httputil.HandleError(w, "Signed proposer preferences are only supported from the gloas fork", http.StatusBadRequest)
+		return
+	}
+
+	var (
+		prefs     []*ethpbalpha.SignedProposerPreferences
+		failures  []*server.IndexedError
+		decodeErr error
+	)
+	if httputil.IsRequestSsz(r) {
+		prefs, failures, decodeErr = decodeSignedProposerPreferencesSSZ(r.Body)
+	} else {
+		prefs, failures, decodeErr = decodeSignedProposerPreferencesJSON(r.Body)
+	}
+	if decodeErr != nil {
+		if errors.Is(decodeErr, io.EOF) {
+			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		} else {
+			httputil.HandleError(w, "Could not decode request body: "+decodeErr.Error(), http.StatusBadRequest)
+		}
+		return
+	}
+	if len(failures) > 0 {
+		httputil.WriteError(w, &server.IndexedErrorContainer{
+			Code:     http.StatusBadRequest,
+			Message:  server.ErrIndexedValidationFail,
+			Failures: failures,
+		})
+		return
+	}
+	if len(prefs) == 0 {
+		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		return
+	}
+
+	req := &ethpbalpha.SubmitSignedProposerPreferencesRequest{SignedProposerPreferences: prefs}
+	if _, err := s.V1Alpha1Server.SubmitSignedProposerPreferences(ctx, req); err != nil {
+		if st, ok := status.FromError(err); ok {
+			switch st.Code() {
+			case codes.InvalidArgument:
+				httputil.HandleError(w, st.Message(), http.StatusBadRequest)
+			case codes.Unavailable:
+				httputil.HandleError(w, st.Message(), http.StatusServiceUnavailable)
+			default:
+				httputil.HandleError(w, st.Message(), http.StatusInternalServerError)
+			}
+			return
+		}
+		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+// decodeSignedProposerPreferencesJSON decodes a JSON array of SignedProposerPreferences.
+func decodeSignedProposerPreferencesJSON(r io.Reader) ([]*ethpbalpha.SignedProposerPreferences, []*server.IndexedError, error) {
+	var data []*structs.SignedProposerPreferences
+	if err := json.NewDecoder(r).Decode(&data); err != nil {
+		return nil, nil, err
+	}
+	prefs := make([]*ethpbalpha.SignedProposerPreferences, len(data))
+	var failures []*server.IndexedError
+	for i, item := range data {
+		consensusItem, err := item.ToConsensus()
+		if err != nil {
+			failures = append(failures, &server.IndexedError{Index: i, Message: err.Error()})
+			continue
+		}
+		prefs[i] = consensusItem
+	}
+	return prefs, failures, nil
+}
+
+// decodeSignedProposerPreferencesSSZ decodes the SSZ encoding
+func decodeSignedProposerPreferencesSSZ(r io.Reader) ([]*ethpbalpha.SignedProposerPreferences, []*server.IndexedError, error) {
+	body, err := io.ReadAll(r)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "could not read request body")
+	}
+	sszSize := (&ethpbalpha.SignedProposerPreferences{}).SizeSSZ()
+	if len(body) == 0 || len(body)%sszSize != 0 {
+		return nil, nil, errors.New("invalid SSZ signed proposer preferences list size")
+	}
+	n := len(body) / sszSize
+	prefs := make([]*ethpbalpha.SignedProposerPreferences, n)
+	var failures []*server.IndexedError
+	for i := range n {
+		m := &ethpbalpha.SignedProposerPreferences{}
+		if err := m.UnmarshalSSZ(body[i*sszSize : (i+1)*sszSize]); err != nil {
+			failures = append(failures, &server.IndexedError{Index: i, Message: "Could not decode SSZ message: " + err.Error()})
+			continue
+		}
+		prefs[i] = m
+	}
+	return prefs, failures, nil
+}
+
 // SubmitContributionAndProofs publishes multiple signed sync committee contribution and proofs.
 func (s *Server) SubmitContributionAndProofs(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.SubmitContributionAndProofs")
@@ -294,20 +434,6 @@ func (s *Server) SubmitAggregateAndProofsV2(w http.ResponseWriter, r *http.Reque
 	ctx, span := trace.StartSpan(r.Context(), "validator.SubmitAggregateAndProofsV2")
 	defer span.End()
 
-	var reqData []json.RawMessage
-	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
-		if errors.Is(err, io.EOF) {
-			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		} else {
-			httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
-		}
-		return
-	}
-	if len(reqData) == 0 {
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		return
-	}
-
 	versionHeader := r.Header.Get(api.VersionHeader)
 	if versionHeader == "" {
 		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
@@ -319,51 +445,27 @@ func (s *Server) SubmitAggregateAndProofsV2(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var failures []*server.IndexedError
+	aggregates, failures, err := decodeSignedAggregates(r, v)
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		} else {
+			httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		}
+		return
+	}
+	if len(aggregates) == 0 {
+		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		return
+	}
+
 	var failedBroadcasts []*server.IndexedError
 
-	var rpcError *core.RpcError
-	for i, raw := range reqData {
-		if v >= version.Electra {
-			var signedAggregate structs.SignedAggregateAttestationAndProofElectra
-			err = json.Unmarshal(raw, &signedAggregate)
-			if err != nil {
-				failures = append(failures, &server.IndexedError{
-					Index:   i,
-					Message: "Could not parse message: " + err.Error(),
-				})
-				continue
-			}
-			consensusItem, err := signedAggregate.ToConsensus()
-			if err != nil {
-				failures = append(failures, &server.IndexedError{
-					Index:   i,
-					Message: "Could not convert request aggregate to consensus aggregate: " + err.Error(),
-				})
-				continue
-			}
-			rpcError = s.CoreService.SubmitSignedAggregateSelectionProof(ctx, consensusItem)
-		} else {
-			var signedAggregate structs.SignedAggregateAttestationAndProof
-			err = json.Unmarshal(raw, &signedAggregate)
-			if err != nil {
-				failures = append(failures, &server.IndexedError{
-					Index:   i,
-					Message: "Could not parse message: " + err.Error(),
-				})
-				continue
-			}
-			consensusItem, err := signedAggregate.ToConsensus()
-			if err != nil {
-				failures = append(failures, &server.IndexedError{
-					Index:   i,
-					Message: "Could not convert request aggregate to consensus aggregate: " + err.Error(),
-				})
-				continue
-			}
-			rpcError = s.CoreService.SubmitSignedAggregateSelectionProof(ctx, consensusItem)
+	for i, aggregate := range aggregates {
+		if aggregate == nil {
+			continue
 		}
-
+		rpcError := s.CoreService.SubmitSignedAggregateSelectionProof(ctx, aggregate)
 		if rpcError != nil {
 			var broadcastFailedErr *server.BroadcastFailedError
 			if errors.As(rpcError.Err, &broadcastFailedErr) {
@@ -397,6 +499,104 @@ func (s *Server) SubmitAggregateAndProofsV2(w http.ResponseWriter, r *http.Reque
 		httputil.WriteError(w, failuresErr)
 		return
 	}
+}
+
+// decodeSignedAggregates decodes the request body into fork-versioned signed aggregate and proofs.
+func decodeSignedAggregates(r *http.Request, v int) ([]ethpbalpha.SignedAggregateAttAndProof, []*server.IndexedError, error) {
+	if httputil.IsRequestSsz(r) {
+		return decodeSignedAggregatesSSZ(r.Body, v)
+	}
+	return decodeSignedAggregatesJSON(r.Body, v)
+}
+
+// decodeSignedAggregatesJSON decodes a JSON array of signed aggregate and proofs.
+func decodeSignedAggregatesJSON(body io.Reader, v int) ([]ethpbalpha.SignedAggregateAttAndProof, []*server.IndexedError, error) {
+	var raw []json.RawMessage
+	if err := json.NewDecoder(body).Decode(&raw); err != nil {
+		return nil, nil, err
+	}
+	aggregates := make([]ethpbalpha.SignedAggregateAttAndProof, len(raw))
+	var failures []*server.IndexedError
+	for i, item := range raw {
+		aggregate, err := unmarshalSignedAggregateJSON(item, v)
+		if err != nil {
+			failures = append(failures, &server.IndexedError{Index: i, Message: err.Error()})
+			continue
+		}
+		aggregates[i] = aggregate
+	}
+	return aggregates, failures, nil
+}
+
+// decodeSignedAggregatesSSZ decodes the SSZ List[SignedAggregateAndProof].
+func decodeSignedAggregatesSSZ(body io.Reader, v int) ([]ethpbalpha.SignedAggregateAttAndProof, []*server.IndexedError, error) {
+	b, err := io.ReadAll(body)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read request body: %w", err)
+	}
+
+	if len(b) == 0 {
+		return nil, nil, io.EOF
+	}
+
+	cfg := params.BeaconConfig()
+	raw, err := ssz.SplitVariableList(b, int(cfg.MaxCommitteesPerSlot*cfg.TargetAggregatorsPerCommittee))
+	if err != nil {
+		return nil, nil, fmt.Errorf("split SSZ list: %w", err)
+	}
+
+	var (
+		aggregates = make([]ethpbalpha.SignedAggregateAttAndProof, len(raw))
+		failures   []*server.IndexedError
+	)
+
+	for i, elem := range raw {
+		aggregate, err := unmarshalSignedAggregateSSZ(elem, v)
+		if err != nil {
+			failures = append(failures, &server.IndexedError{Index: i, Message: err.Error()})
+			continue
+		}
+		aggregates[i] = aggregate
+	}
+	return aggregates, failures, nil
+}
+
+func unmarshalSignedAggregateJSON(raw []byte, v int) (ethpbalpha.SignedAggregateAttAndProof, error) {
+	if v >= version.Electra {
+		var signedAggregate structs.SignedAggregateAttestationAndProofElectra
+		if err := json.Unmarshal(raw, &signedAggregate); err != nil {
+			return nil, fmt.Errorf("unmarshal JSON message: %w", err)
+		}
+		consensusItem, err := signedAggregate.ToConsensus()
+		if err != nil {
+			return nil, fmt.Errorf("convert request aggregate to consensus aggregate: %w", err)
+		}
+		return consensusItem, nil
+	}
+
+	var signedAggregate structs.SignedAggregateAttestationAndProof
+	if err := json.Unmarshal(raw, &signedAggregate); err != nil {
+		return nil, fmt.Errorf("unmarshal JSON message: %w", err)
+	}
+	consensusItem, err := signedAggregate.ToConsensus()
+	if err != nil {
+		return nil, fmt.Errorf("convert request aggregate to consensus aggregate: %w", err)
+	}
+	return consensusItem, nil
+}
+
+func unmarshalSignedAggregateSSZ(raw []byte, v int) (ethpbalpha.SignedAggregateAttAndProof, error) {
+	var consensusItem ethpbalpha.SignedAggregateAttAndProof
+	if v >= version.Electra {
+		consensusItem = &ethpbalpha.SignedAggregateAttestationAndProofElectra{}
+	} else {
+		consensusItem = &ethpbalpha.SignedAggregateAttestationAndProof{}
+	}
+
+	if err := consensusItem.UnmarshalSSZ(raw); err != nil {
+		return nil, fmt.Errorf("unmarshal SSZ message: %w", err)
+	}
+	return consensusItem, nil
 }
 
 // SubmitSyncCommitteeSubscription subscribe to a number of sync committee subnets.
@@ -505,8 +705,7 @@ func (s *Server) SubmitSyncCommitteeSubscription(w http.ResponseWriter, r *http.
 		if err != nil {
 			epochsToWatch = 0
 		}
-		epochDuration := time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second
-		totalDuration := epochDuration * time.Duration(epochsToWatch)
+		totalDuration := params.EpochsDuration(1, params.BeaconConfig()) * time.Duration(epochsToWatch)
 
 		subcommitteeSize := params.BeaconConfig().SyncCommitteeSize / params.BeaconConfig().SyncCommitteeSubnetCount
 		seen := make(map[uint64]bool)
@@ -554,18 +753,17 @@ func (s *Server) SubmitBeaconCommitteeSubscription(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Verify validators at the beginning to return early if request is invalid.
-	validators := make([]state.ReadOnlyValidator, len(req.Data))
-	subscriptions := make([]*validator2.BeaconCommitteeSubscription, len(req.Data))
+	// Convert and validate each subscription up front so an invalid item fails
+	// the request before any subnets are computed.
+	subs := make([]core.SubnetSubscription, len(req.Data))
+	indices := make([]primitives.ValidatorIndex, len(req.Data))
 	for i, item := range req.Data {
 		consensusItem, err := item.ToConsensus()
 		if err != nil {
 			httputil.HandleError(w, "Could not convert request subscription to consensus subscription: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		subscriptions[i] = consensusItem
-		val, err := st.ValidatorAtIndexReadOnly(consensusItem.ValidatorIndex)
-		if err != nil {
+		if _, err := st.ValidatorAtIndexReadOnly(consensusItem.ValidatorIndex); err != nil {
 			if errors.Is(err, mvslice.ErrOutOfBounds) {
 				httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusBadRequest)
 				return
@@ -573,40 +771,20 @@ func (s *Server) SubmitBeaconCommitteeSubscription(w http.ResponseWriter, r *htt
 			httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		validators[i] = val
-	}
-
-	fetchValsLen := func(slot primitives.Slot) (uint64, error) {
-		wantedEpoch := slots.ToEpoch(slot)
-		vals, err := s.HeadFetcher.HeadValidatorsIndices(ctx, wantedEpoch)
-		if err != nil {
-			return 0, err
+		indices[i] = consensusItem.ValidatorIndex
+		subs[i] = core.SubnetSubscription{
+			Slot:             consensusItem.Slot,
+			CommitteeIndex:   consensusItem.CommitteeIndex,
+			IsAggregator:     consensusItem.IsAggregator,
+			CommitteesAtSlot: consensusItem.CommitteesAtSlot,
 		}
-		return uint64(len(vals)), nil
 	}
-
-	// Request the head validator indices of epoch represented by the first requested slot.
-	currValsLen, err := fetchValsLen(subscriptions[0].Slot)
-	if err != nil {
+	if err := core.ComputeAndCacheCommitteeSubnets(ctx, s.HeadFetcher, subs); err != nil {
 		httputil.HandleError(w, "Could not retrieve head validator length: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	currEpoch := slots.ToEpoch(subscriptions[0].Slot)
-	for _, sub := range subscriptions {
-		// If epoch has changed, re-request active validators length
-		if currEpoch != slots.ToEpoch(sub.Slot) {
-			currValsLen, err = fetchValsLen(sub.Slot)
-			if err != nil {
-				httputil.HandleError(w, "Could not retrieve head validator length: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
-			currEpoch = slots.ToEpoch(sub.Slot)
-		}
-		subnet := helpers.ComputeSubnetFromCommitteeAndSlot(currValsLen, sub.CommitteeIndex, sub.Slot)
-		cache.SubnetIDs.AddAttesterSubnetID(sub.Slot, subnet)
-		if sub.IsAggregator {
-			cache.SubnetIDs.AddAggregatorSubnetID(sub.Slot, subnet)
-		}
+	for _, idx := range indices {
+		s.SubscribedValidatorsCache.Add(idx)
 	}
 }
 
@@ -757,6 +935,11 @@ func (s *Server) RegisterValidator(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.RegisterValidators")
 	defer span.End()
 
+	if slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch {
+		log.Warn("/eth/v1/validator/register_validator is deprecated post-Gloas; validator clients should use SignedProposerPreferences instead. Request accepted as a no-op.")
+		return
+	}
+
 	if s.BlockBuilder == nil || !s.BlockBuilder.Configured() {
 		httputil.HandleError(w, fmt.Sprintf("Could not register block builder: %v", builder.ErrNoBuilder), http.StatusBadRequest)
 		return
@@ -793,8 +976,13 @@ func (s *Server) RegisterValidator(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// PrepareBeaconProposer endpoint saves the fee recipient given a validator index, this is used when proposing a block.
+// PrepareBeaconProposer saves the per-validator fee recipient default. Post-Gloas
+// SignedProposerPreferences replaces this endpoint; requests are accepted as a no-op.
 func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
+	if slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch {
+		log.Warn("/eth/v1/validator/prepare_beacon_proposer is deprecated post-Gloas; use SignedProposerPreferences. Request accepted as a no-op.")
+		return
+	}
 	var jsonFeeRecipients []*structs.FeeRecipient
 	err := json.NewDecoder(r.Body).Decode(&jsonFeeRecipients)
 	switch {
@@ -805,8 +993,6 @@ func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	var validatorIndices []primitives.ValidatorIndex
-	// filter for found fee recipients
 	for _, r := range jsonFeeRecipients {
 		validatorIndex, valid := shared.ValidateUint(w, "validator_index", r.ValidatorIndex)
 		if !valid {
@@ -816,33 +1002,17 @@ func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
 		if !valid {
 			return
 		}
-		// Use default address if the burn address is return
-		feeRecipient := primitives.ExecutionAddress(feeRecipientBytes)
-		if feeRecipient == primitives.ExecutionAddress([20]byte{}) {
-			feeRecipient = primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
-			if feeRecipient == primitives.ExecutionAddress([20]byte{}) {
-				log.WithField("validatorIndex", validatorIndex).Warn("Fee recipient is the burn address")
-			}
+		feeRecipient := feeRecipientBytes
+		if common.BytesToAddress(feeRecipient) == (common.Address{}) {
+			feeRecipient = params.BeaconConfig().DefaultFeeRecipient.Bytes()
 		}
-		val := cache.TrackedValidator{
-			Active:       true, // TODO: either check or add the field in the request
-			Index:        primitives.ValidatorIndex(validatorIndex),
-			FeeRecipient: feeRecipient,
-		}
-		s.TrackedValidatorsCache.Set(val)
-		validatorIndices = append(validatorIndices, primitives.ValidatorIndex(validatorIndex))
+		s.ProposerPreferencesCache.SetDefault(cache.ProposerPreference{
+			ValidatorIndex: primitives.ValidatorIndex(validatorIndex),
+			FeeRecipient:   bytesutil.ToBytes20(feeRecipient),
+		})
+		s.SubscribedValidatorsCache.Add(primitives.ValidatorIndex(validatorIndex))
 	}
-
-	if len(validatorIndices) == 0 {
-		return
-	}
-
-	log := log.WithField("validatorCount", len(validatorIndices))
-	if logrus.GetLevel() >= logrus.TraceLevel {
-		log = log.WithField("validatorIndices", validatorIndices)
-	}
-
-	log.Debug("Updated fee recipient addresses")
+	log.WithField("validatorCount", len(jsonFeeRecipients)).Debug("Updated fee recipient addresses")
 }
 
 // GetAttesterDuties requests the beacon node to provide a set of attestation duties,
@@ -1568,13 +1738,19 @@ func (s *Server) GetPayloadAttestationData(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	_, slot, ok := shared.UintFromRoute(w, r, "slot")
+	_, slot, ok := shared.UintFromQuery(w, r, "slot", true)
 	if !ok {
 		return
 	}
 
 	data, rpcErr := s.CoreService.PayloadAttestationData(ctx, primitives.Slot(slot))
 	if rpcErr != nil {
+		// No block seen for the slot: return 204 to signal the validator not to
+		// cast a payload attestation, per the beacon-APIs spec.
+		if rpcErr.Reason == core.NoContent {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		httputil.HandleError(w, rpcErr.Err.Error(), core.ErrorReasonToHTTP(rpcErr.Reason))
 		return
 	}

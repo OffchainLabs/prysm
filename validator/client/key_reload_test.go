@@ -9,7 +9,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
-	"github.com/OffchainLabs/prysm/v7/validator/client/testutil"
 	"github.com/pkg/errors"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
@@ -27,17 +26,15 @@ func TestValidator_HandleKeyReload(t *testing.T) {
 
 		client := validatormock.NewMockValidatorClient(ctrl)
 		chainClient := validatormock.NewMockChainClient(ctrl)
-		prysmChainClient := validatormock.NewMockPrysmChainClient(ctrl)
 		v := validator{
-			validatorClient:  client,
-			km:               newMockKeymanager(t, inactive),
-			genesisTime:      time.Unix(1, 0),
-			chainClient:      chainClient,
-			prysmChainClient: prysmChainClient,
-			pubkeyToStatus:   make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
+			validatorClient: client,
+			km:              newMockKeymanager(t, inactive),
+			genesisTime:     time.Unix(1, 0),
+			chainClient:     chainClient,
+			pubkeyToStatus:  make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 		}
 
-		resp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{inactive.pub[:], active.pub[:]})
+		resp := generateMultipleValidatorStatusResponse([][]byte{inactive.pub[:], active.pub[:]})
 		resp.Statuses[0].Status = ethpb.ValidatorStatus_UNKNOWN_STATUS
 		resp.Statuses[1].Status = ethpb.ValidatorStatus_ACTIVE
 		client.EXPECT().MultipleValidatorStatus(
@@ -59,18 +56,16 @@ func TestValidator_HandleKeyReload(t *testing.T) {
 
 		client := validatormock.NewMockValidatorClient(ctrl)
 		chainClient := validatormock.NewMockChainClient(ctrl)
-		prysmChainClient := validatormock.NewMockPrysmChainClient(ctrl)
 		kp := randKeypair(t)
 		v := validator{
-			validatorClient:  client,
-			km:               newMockKeymanager(t, kp),
-			genesisTime:      time.Unix(1, 0),
-			chainClient:      chainClient,
-			prysmChainClient: prysmChainClient,
-			pubkeyToStatus:   make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
+			validatorClient: client,
+			km:              newMockKeymanager(t, kp),
+			genesisTime:     time.Unix(1, 0),
+			chainClient:     chainClient,
+			pubkeyToStatus:  make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 		}
 
-		resp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{kp.pub[:]})
+		resp := generateMultipleValidatorStatusResponse([][]byte{kp.pub[:]})
 		resp.Statuses[0].Status = ethpb.ValidatorStatus_UNKNOWN_STATUS
 		client.EXPECT().MultipleValidatorStatus(
 			gomock.Any(),

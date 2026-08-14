@@ -32,7 +32,7 @@ func (s *Service) isNewHead(r [32]byte, full bool) bool {
 	return r != currentHeadRoot || full != currentFull || r == [32]byte{}
 }
 
-func (s *Service) getStateAndBlock(ctx context.Context, r, h [32]byte) (state.BeaconState, interfaces.ReadOnlySignedBeaconBlock, error) {
+func (s *Service) getStateAndBlock(ctx context.Context, r [32]byte) (state.BeaconState, interfaces.ReadOnlySignedBeaconBlock, error) {
 	if !s.hasBlockInInitSyncOrDB(ctx, r) {
 		return nil, nil, errors.New("block does not exist")
 	}
@@ -40,7 +40,7 @@ func (s *Service) getStateAndBlock(ctx context.Context, r, h [32]byte) (state.Be
 	if err != nil {
 		return nil, nil, err
 	}
-	headState, err := s.cfg.StateGen.StateByRoot(ctx, h)
+	headState, err := s.cfg.StateGen.StateByRoot(ctx, r)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -122,8 +122,8 @@ func (s *Service) shouldOverrideFCU(newHeadRoot [32]byte, proposingSlot primitiv
 		log.WithFields(logrus.Fields{
 			"root":   fmt.Sprintf("%#x", newHeadRoot),
 			"weight": headWeight,
-		}).Infof("Attempted late block reorg aborted due to attestations at %d seconds",
-			params.BeaconConfig().SecondsPerSlot)
+		}).Infof("Attempted late block reorg aborted due to attestations at %s into the slot",
+			params.BeaconConfig().SlotDuration())
 		lateBlockFailedAttemptSecondThreshold.Inc()
 	} else {
 		if s.cfg.ForkChoiceStore.ShouldOverrideFCU() {

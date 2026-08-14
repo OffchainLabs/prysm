@@ -49,13 +49,6 @@ func DivideSlotBy(timesPerSlot int64) time.Duration {
 	return params.BeaconConfig().SlotDuration() / time.Duration(timesPerSlot)
 }
 
-// MultiplySlotBy multiplies the SECONDS_PER_SLOT configuration
-// parameter by a specified number. It returns a value of time.Duration
-// in millisecond-based durations.
-func MultiplySlotBy(times int64) time.Duration {
-	return params.BeaconConfig().SlotDuration() * time.Duration(times)
-}
-
 // AbsoluteValueSlotDifference between two slots.
 func AbsoluteValueSlotDifference(x, y primitives.Slot) uint64 {
 	if x > y {
@@ -81,6 +74,8 @@ func ToEpoch(slot primitives.Slot) primitives.Epoch {
 func ToForkVersion(slot primitives.Slot) int {
 	epoch := ToEpoch(slot)
 	switch {
+	case epoch >= params.BeaconConfig().GloasForkEpoch:
+		return version.Gloas
 	case epoch >= params.BeaconConfig().FuluForkEpoch:
 		return version.Fulu
 	case epoch >= params.BeaconConfig().ElectraForkEpoch:

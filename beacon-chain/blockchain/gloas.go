@@ -3,6 +3,7 @@ package blockchain
 import (
 	"context"
 	"math"
+	stdtime "time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	coregloas "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
@@ -10,20 +11,55 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
-func (s *Service) waitUntilEpoch(target primitives.Epoch, secondsPerSlot uint64) error {
+func (s *Service) IsBidCompatibleWithHead(bid interfaces.ROExecutionPayloadBid) bool {
+	s.headLock.RLock()
+	if s.head == nil || s.head.block == nil || s.head.block.Block() == nil || s.head.state == nil {
+		s.headLock.RUnlock()
+		return false
+	}
+	headRoot := s.head.root
+	headBlock := s.head.block.Block()
+	headState := s.head.state
+	s.headLock.RUnlock()
+
+	headBid, err := headBlock.Body().SignedExecutionPayloadBid()
+	if err != nil || headBid.Message == nil {
+		log.WithError(err).Debug("Could not get head bid to check bid compatibility")
+		return false
+	}
+
+	buildsOnParentBlock := bid.ParentBlockRoot() == headBlock.ParentRoot()
+	buildsOnParentPayload := bid.ParentBlockHash() == bytesutil.ToBytes32(headBid.Message.ParentBlockHash)
+	if buildsOnParentBlock && buildsOnParentPayload {
+		return true
+	}
+	if bid.ParentBlockRoot() != headRoot {
+		return false
+	}
+	buildsOnHeadPayload := bid.ParentBlockHash() == bytesutil.ToBytes32(headBid.Message.BlockHash)
+	if buildFull, _ := s.shouldBuildOnFull(headState, headRoot, bid.Slot()); buildFull {
+		return buildsOnHeadPayload
+	}
+	return buildsOnParentPayload
+}
+
+func (s *Service) waitUntilEpoch(target primitives.Epoch, slotDuration stdtime.Duration) error {
 	if slots.ToEpoch(s.CurrentSlot()) >= target {
 		return nil
 	}
-	ticker := slots.NewSlotTicker(s.genesisTime, secondsPerSlot)
+	ticker := slots.NewSlotTicker(s.genesisTime, slotDuration)
 	defer ticker.Done()
 	for {
 		select {
@@ -46,11 +82,11 @@ func (s *Service) runLatePayloadTasks() {
 	if cfg.GloasForkEpoch == math.MaxUint64 {
 		return
 	}
-	if err := s.waitUntilEpoch(cfg.GloasForkEpoch, cfg.SecondsPerSlot); err != nil {
+	if err := s.waitUntilEpoch(cfg.GloasForkEpoch, cfg.SlotDuration()); err != nil {
 		return
 	}
-	offset := cfg.SlotComponentDuration(cfg.PayloadAttestationDueBPS)
-	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, offset, cfg.SecondsPerSlot)
+	offset := cfg.SlotComponentDuration(cfg.PayloadDueBPS)
+	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, offset, cfg.SlotDuration())
 	defer ticker.Done()
 	for {
 		select {
@@ -63,14 +99,21 @@ func (s *Service) runLatePayloadTasks() {
 	}
 }
 
-func (s *Service) checkIfProposing(st state.ReadOnlyBeaconState, slot primitives.Slot) (cache.TrackedValidator, bool) {
+// checkIfProposing does not advance st and only resolves the proposer correctly when st is
+// already advanced to at least slot's epoch. Callers satisfy this by passing a head or block
+// state for the following slot.
+//
+// WARNING: if called with a head lagging further behind (e.g. several empty epochs), the epoch
+// checks below fall through and it returns (nil, nil) — reported as "not proposing" — even when
+// we actually are. Advance st before calling if that can happen.
+func (s *Service) checkIfProposing(st state.ReadOnlyBeaconState, slot primitives.Slot) (*cache.ProposerPreference, error) {
 	e := slots.ToEpoch(slot)
 	stateEpoch := slots.ToEpoch(st.Slot())
 	fuluAndNextEpoch := st.Version() >= version.Fulu && e == stateEpoch+1
 	if e == stateEpoch || fuluAndNextEpoch {
 		return s.trackedProposer(st, slot)
 	}
-	return cache.TrackedValidator{}, false
+	return nil, nil
 }
 
 // computePayloadWithdrawals returns the withdrawals for the next payload.
@@ -107,12 +150,15 @@ func (s *Service) computePayloadWithdrawals(ctx context.Context, st state.Beacon
 // It is guaranteed to be called for the current slot + 1 and the head state to have been advanced to at least the current epoch.
 func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnlyBeaconState, slot primitives.Slot, headRoot []byte) payloadattribute.Attributer {
 	emptyAttri := payloadattribute.EmptyWithVersion(st.Version())
-	val, proposing := s.checkIfProposing(st, slot)
-	if !proposing {
+	val, err := s.checkIfProposing(st, slot)
+	if err != nil {
+		log.WithError(err).Error("Could not resolve tracked proposer")
+		return emptyAttri
+	}
+	if val == nil {
 		return emptyAttri
 	}
 
-	var err error
 	st, err = transition.ProcessSlotsIfNeeded(ctx, st, headRoot, slot)
 	if err != nil {
 		log.WithError(err).Error("Could not process slots to get payload attribute")
@@ -137,14 +183,17 @@ func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnly
 		return emptyAttri
 	}
 
+	feeRecipient := val.FeeRecipientOrDefault()
+	parentGasLimit := helpers.ParentTargetGasLimit(st)
+
 	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV4{
 		Timestamp:             uint64(t.Unix()),
 		PrevRandao:            prevRando,
-		SuggestedFeeRecipient: val.FeeRecipient[:],
+		SuggestedFeeRecipient: feeRecipient[:],
 		Withdrawals:           withdrawals,
 		ParentBeaconBlockRoot: headRoot,
 		SlotNumber:            uint64(slot),
-		TargetGasLimit:        val.GasLimit,
+		TargetGasLimit:        val.GasLimitOr(parentGasLimit),
 	})
 	if err != nil {
 		log.WithError(err).Error("Could not get payload attribute")
@@ -167,9 +216,6 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 		return
 	}
 	hr := [32]byte(r)
-	if s.payloadBeingSynced.isSyncing(hr) {
-		return
-	}
 	if s.HasFullNode(hr) {
 		return
 	}
@@ -202,5 +248,106 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 	}
 	var pId [8]byte
 	copy(pId[:], pid[:])
-	s.cfg.PayloadIDCache.Set(currentSlot+1, hr, pId)
+	s.cfg.PayloadIDCache.Set(currentSlot+1, hr, false, pId)
+	s.firePayloadAttributesEventForHead(hr, currentSlot+1, attr, bh[:])
+}
+
+func (s *Service) fcuFromReorgData(headBlock interfaces.ReadOnlySignedBeaconBlock, hr [32]byte, hash [32]byte, full bool, attr payloadattribute.Attributer, proposingSlot primitives.Slot) {
+	pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, hash, attr)
+	if err != nil {
+		log.WithError(err).Error("Could not update forkchoice with engine")
+	}
+	if pid == nil {
+		if !attr.IsEmpty() {
+			log.Warn("Engine did not return a payload ID for the fork choice update with attributes")
+		}
+		return
+	}
+	var pId [8]byte
+	copy(pId[:], pid[:])
+	s.cfg.PayloadIDCache.Set(proposingSlot, hr, full, pId)
+
+	if !attr.IsEmpty() {
+		s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, hr, proposingSlot, attr, hash[:])
+	}
+}
+
+func (s *Service) firePayloadAttributesEventForHead(headRoot [32]byte, proposingSlot primitives.Slot, attr payloadattribute.Attributer, parentBlockHash []byte) {
+	s.headLock.RLock()
+	var headBlock interfaces.ReadOnlySignedBeaconBlock
+	if s.head != nil && s.head.root == headRoot {
+		headBlock = s.head.block
+	}
+	s.headLock.RUnlock()
+	if headBlock == nil {
+		return
+	}
+	s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, headRoot, proposingSlot, attr, parentBlockHash)
+}
+
+// This saves head and prunes atts from the pool only if the head is new and if we are either
+// 1. Not proposing next slot or, if we are,
+// 2. The incoming head block is not late.
+// If we are going to attempt to reorg the block we do not save head in the blockchain package
+// and continue treating the previous head as the tip of the chain.
+func (s *Service) saveHeadIfNeeded(ctx context.Context, cfg *postBlockProcessConfig) {
+	full := false
+	if !s.isNewHead(cfg.headRoot, full) {
+		return
+	}
+	proposingSlot := s.CurrentSlot() + 1
+	if s.shouldOverrideFCU(cfg.headRoot, proposingSlot) {
+		attr := s.getPayloadAttribute(ctx, cfg.postState, proposingSlot, cfg.headRoot[:], full)
+		if !attr.IsEmpty() {
+			return
+		}
+	}
+	if err := s.saveHead(ctx, cfg.headRoot, cfg.roblock, cfg.postState, full); err != nil {
+		log.WithError(err).Error("Could not save head")
+	}
+	s.pruneAttsFromPool(ctx, cfg.postState, cfg.roblock)
+}
+
+func (s *Service) shouldBuildOnFull(st state.ReadOnlyBeaconState, root [32]byte, proposingSlot primitives.Slot) (bool, string) {
+	proposing := s.proposingAt(st, proposingSlot)
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.shouldBuildOnFullLocked(root, proposingSlot, proposing)
+}
+
+func (s *Service) shouldBuildOnFullLocked(root [32]byte, proposingSlot primitives.Slot, proposing bool) (bool, string) {
+	hs, err := s.cfg.ForkChoiceStore.Slot(root)
+	if err != nil {
+		log.WithError(err).Error("Could not get slot for head root")
+		return true, ""
+	}
+
+	if hs+1 != proposingSlot {
+		if !s.cfg.ForkChoiceStore.FullBeatsEmpty(root) {
+			return false, "forkchoice prefers empty"
+		}
+		return true, ""
+	}
+	if s.cfg.ForkChoiceStore.PTCVotedLate(root) {
+		return false, "ptc voted payload missing"
+	}
+	if s.cfg.ForkChoiceStore.PTCVotedEarlyAndAvailable(root) {
+		return true, ""
+	}
+	if !proposing || !features.Get().ReorgLatePayloads {
+		return true, ""
+	}
+	early, known := s.PayloadEarly(root)
+	if known && !early {
+		return false, "arrived late, betting on empty"
+	}
+	return true, ""
+}
+
+func (s *Service) proposingAt(st state.ReadOnlyBeaconState, slot primitives.Slot) bool {
+	p, err := s.checkIfProposing(st, slot)
+	if err != nil {
+		log.WithError(err).Error("Could not resolve tracked proposer")
+	}
+	return p != nil
 }

@@ -3,6 +3,7 @@ package verification
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -119,10 +120,20 @@ func (v *ROGloasDataColumnVerifier) VerifyDataColumnSidecarKzgProofsGloas() (err
 	if err != nil {
 		return err
 	}
-	return peerdas.VerifyDataColumnsSidecarKZGProofsWithCommitments(
-		[]blocks.RODataColumn{v.sidecar},
-		[][][]byte{kzgCommitments},
-	)
+	v.sidecar.SetBidCommitments(kzgCommitments)
+
+	startTime := time.Now()
+
+	bundles, err := blocks.RODataColumnsToCellProofBundles([]blocks.RODataColumn{v.sidecar})
+	if err != nil {
+		return err
+	}
+	if err := peerdas.VerifyDataColumnsCellsKZGProofs(bundles); err != nil {
+		return err
+	}
+
+	DataColumnBatchKZGVerificationHistogram.WithLabelValues("direct").Observe(float64(time.Since(startTime).Milliseconds()))
+	return nil
 }
 
 func (v *ROGloasDataColumnVerifier) blobKzgCommitments() ([][]byte, error) {

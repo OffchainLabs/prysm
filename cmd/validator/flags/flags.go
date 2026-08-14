@@ -33,7 +33,8 @@ var (
 	}
 	// BeaconRPCProviderFlag defines a beacon node RPC endpoint.
 	BeaconRPCProviderFlag = &cli.StringFlag{
-		Name: "beacon-rpc-provider",
+		Name:    "beacon-rpc-provider",
+		Aliases: []string{"beacon-grpc"},
 		Usage: `WARNING: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API..
 		Beacon node RPC provider endpoint.`,
 		Value: "127.0.0.1:4000",
@@ -41,9 +42,10 @@ var (
 
 	// BeaconRESTApiProviderFlag defines a beacon node REST API endpoint.
 	BeaconRESTApiProviderFlag = &cli.StringFlag{
-		Name:  "beacon-rest-api-provider",
-		Usage: "Beacon node REST API provider endpoint.",
-		Value: "http://127.0.0.1:3500",
+		Name:    "beacon-rest-api-provider",
+		Aliases: []string{"beacon-rest"},
+		Usage:   "Beacon node REST API provider endpoint. Setting this implicitly enables the beacon REST API (no need for --enable-beacon-rest-api). Use a comma-separated list to connect to several beacon nodes: the validator client listens to the event stream of every node and queries all of them, keeping the best suited response.",
+		Value:   "http://127.0.0.1:3500",
 	}
 	// BeaconRESTApiHeaders defines a list of headers to send with all HTTP requests to the beacon node.
 	BeaconRESTApiHeaders = &cli.StringFlag{
@@ -74,17 +76,6 @@ var (
 		Name:  "rpc-port",
 		Usage: "RPC port exposed by a validator client.",
 		Value: 7000,
-	}
-	// SlasherRPCProviderFlag defines a slasher node RPC endpoint.
-	SlasherRPCProviderFlag = &cli.StringFlag{
-		Name:  "slasher-rpc-provider",
-		Usage: "Slasher node RPC provider endpoint.",
-		Value: "127.0.0.1:4002",
-	}
-	// SlasherCertFlag defines a flag for the slasher node's TLS certificate.
-	SlasherCertFlag = &cli.StringFlag{
-		Name:  "slasher-tls-cert",
-		Usage: "Certificate for secure slasher gRPC. Pass this and the tls-key flag in order to use gRPC securely.",
 	}
 	// DisablePenaltyRewardLogFlag defines the ability to not log reward/penalty information during deployment
 	DisablePenaltyRewardLogFlag = &cli.BoolFlag{
@@ -401,7 +392,7 @@ var (
 	// block and execution payload envelope in a single v4 call instead of fetching them in two separate calls.
 	EnableStatelessFlag = &cli.BoolFlag{
 		Name:  "stateless",
-		Usage: fmt.Sprintf("Enables stateless block production for Gloas. The validator requests block and execution payload envelope in a single /eth/v4/validator/blocks call. Only works with `--%s`", BeaconRESTApiProviderFlag.Name),
+		Usage: "Enables stateless block production for Gloas: the validator requests the block and execution payload envelope together and republishes the envelope itself. Works over both the gRPC and REST validator clients.",
 		Value: false,
 	}
 	// DisableDutiesPolling disables the polling of duties on dependent root changes.
@@ -414,7 +405,7 @@ var (
 	// MaxHealthChecksFlag sets a maximum amount of times to check for beacon node health before validator client times out and shuts down
 	MaxHealthChecksFlag = &cli.IntFlag{
 		Name:  "max-health-checks",
-		Usage: "Maximum number of health checks to perform before exiting if not healthy. Set to 0 or a negative number for indefinite checks.",
+		Usage: "Maximum number of consecutive failed health checks before exiting. A health check fails when no connected beacon node is ready. Set to 0 or a negative number for indefinite checks.",
 		Value: DefaultMaxHealthChecks,
 	}
 	// DisableEphemeralLogFile disables the 24 hour debug log file.

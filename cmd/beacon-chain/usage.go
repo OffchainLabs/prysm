@@ -65,7 +65,6 @@ var appHelpFlagGroups = []flagGroup{
 			flags.CertFlag,
 			flags.ChainID,
 			flags.DisableDebugRPCEndpoints,
-			flags.HTTPModules,
 			flags.HTTPServerCorsDomain,
 			flags.HTTPServerHost,
 			flags.HTTPServerPort,
@@ -75,6 +74,8 @@ var appHelpFlagGroups = []flagGroup{
 			flags.RPCPort,
 			flags.BatchVerifierLimit,
 			flags.StateDiffExponents,
+			flags.PostponeShutdownForProposals,
+			flags.DisableGraffitiClientAppend,
 		},
 	},
 	{
@@ -103,6 +104,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.BlobBatchLimitBurstFactor,
 			flags.DataColumnBatchLimit,
 			flags.DataColumnBatchLimitBurstFactor,
+			flags.PartialDataColumns,
 			flags.BlockBatchLimit,
 			flags.BlockBatchLimitBurstFactor,
 			flags.MaxConcurrentDials,
@@ -143,8 +145,9 @@ var appHelpFlagGroups = []flagGroup{
 			flags.MevRelayEndpoint,
 			flags.MinBuilderBid,
 			flags.MinBuilderDiff,
+			flags.BuilderHeaderTimeout,
 			flags.SuggestedFeeRecipient,
-			flags.EnableBuilderSSZ,
+			flags.DisableBuilderSSZ,
 		},
 	},
 	{ // Flags relevant to syncing the beacon chain.
@@ -169,7 +172,6 @@ var appHelpFlagGroups = []flagGroup{
 			flags.ExecutionEngineHeaders,
 			flags.ExecutionJWTSecretFlag,
 			flags.JwtId,
-			flags.InteropMockEth1DataVotesFlag,
 		},
 	},
 	{ // Flags relevant to configuring beacon chain monitoring.
