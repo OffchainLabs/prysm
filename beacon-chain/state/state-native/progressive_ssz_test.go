@@ -110,7 +110,7 @@ func TestHashTreeRoot(t *testing.T) {
 		require.ErrorContains(t, "unsupported version: fulu", err)
 
 		_, err = st.progressiveHashTreeRoot(t.Context())
-		require.ErrorContains(t, "progressive SSZ is not supported for version: fulu", err)
+		require.ErrorContains(t, "unsupported version: fulu", err)
 	})
 
 	t.Run("ProgressiveSSZGate", func(t *testing.T) {
