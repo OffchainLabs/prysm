@@ -1,6 +1,8 @@
 package kv
 
 import (
+	"bytes"
+	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -170,6 +172,58 @@ func TestStateDiff_DeleteBeforeSlot(t *testing.T) {
 
 			return nil
 		}))
+	})
+
+	t.Run("does not re-anchor the tree on a cancelled context", func(t *testing.T) {
+		db := setupPrunableStateDiffTree(t, 384)
+
+		// A scan that stops early has not proven there is nothing left to delete, so it must not
+		// pass for a finished one and let the tree be re-anchored on a slot it never cleaned up to.
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+
+		_, err := db.DeleteStateDiffBeforeSlot(ctx, 320, 512)
+		require.ErrorIs(t, err, context.Canceled)
+
+		// The tree is left untouched, and the entries below the would-be new anchor are still there.
+		require.Equal(t, uint64(0), db.getOffset())
+		st, err := db.stateByDiff(t.Context(), 128)
+		require.NoError(t, err)
+		require.Equal(t, primitives.Slot(128), st.Slot())
+	})
+
+	t.Run("never ends a batch in the middle of an entry", func(t *testing.T) {
+		db := setupPrunableStateDiffTree(t, 384)
+
+		// The budget is spent on entries rather than on keys, so a batch holds every key of the
+		// entries it touches, and none of the next one.
+		kept := map[uint64]bool{256: true, 320: true}
+		for _, maxEntries := range []int{1, 2, 3} {
+			keys, err := db.stateDiffKeysBefore(t.Context(), 320, kept, makeKeyForStateDiffTree(0, 0), maxEntries)
+			require.NoError(t, err)
+			require.Equal(t, true, len(keys) > 0)
+
+			batch := make(map[string]int)
+			for _, key := range keys {
+				batch[string(key[:stateDiffTreeKeyLength])]++
+			}
+			require.Equal(t, true, len(batch) <= maxEntries)
+
+			require.NoError(t, db.db.View(func(tx *bolt.Tx) error {
+				bucket := tx.Bucket(stateDiffBucket)
+				for prefix, batched := range batch {
+					stored := 0
+					cursor := bucket.Cursor()
+					for key, _ := cursor.Seek([]byte(prefix)); bytes.HasPrefix(key, []byte(prefix)); key, _ = cursor.Next() {
+						stored++
+					}
+
+					require.Equal(t, stored, batched)
+				}
+
+				return nil
+			}))
+		}
 	})
 
 	t.Run("is idempotent", func(t *testing.T) {

@@ -222,6 +222,10 @@ func (p *Service) pruneStateDiff(pruneUpto primitives.Slot) (int, error) {
 		default:
 			batch, err := p.db.DeleteStateDiffBeforeSlot(ctx, pruneUpto, defaultPrunableStateDiffEntries)
 			if err != nil {
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					return deleted, nil
+				}
+
 				return deleted, err
 			}
 
