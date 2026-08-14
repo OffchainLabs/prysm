@@ -126,12 +126,12 @@ func TestGloasPayloadValue(t *testing.T) {
 		got := vs.gloasPayloadValue(newBlockWithBid(0, 0), nil, true)
 		require.Equal(t, "0", primitives.WeiToBigInt(got).String())
 	})
-	t.Run("external bid sums value and payment in wei", func(t *testing.T) {
+	t.Run("external bid uses bid value in wei", func(t *testing.T) {
 		got := vs.gloasPayloadValue(newBlockWithBid(3, 2), &consensusblocks.GetPayloadResponse{}, false)
-		require.Equal(t, "5000000000", primitives.WeiToBigInt(got).String())
+		require.Equal(t, "3000000000", primitives.WeiToBigInt(got).String())
 	})
-	t.Run("external bid sum does not overflow", func(t *testing.T) {
-		got := vs.gloasPayloadValue(newBlockWithBid(primitives.Gwei(math.MaxUint64), primitives.Gwei(math.MaxUint64)), nil, false)
-		require.Equal(t, "36893488147419103230000000000", primitives.WeiToBigInt(got).String())
+	t.Run("external bid value does not overflow", func(t *testing.T) {
+		got := vs.gloasPayloadValue(newBlockWithBid(primitives.Gwei(math.MaxUint64), 0), nil, false)
+		require.Equal(t, "18446744073709551615000000000", primitives.WeiToBigInt(got).String())
 	})
 }

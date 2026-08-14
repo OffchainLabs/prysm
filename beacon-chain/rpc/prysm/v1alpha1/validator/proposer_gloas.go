@@ -122,8 +122,8 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 	return blk, nil
 }
 
-// gloasPayloadValue is the local payload value when self-building, or the total
-// bid value (value + execution payment) when committing to an external bid.
+// gloasPayloadValue is the local payload value when self-building, or the bid
+// value when committing to an external bid.
 func (vs *Server) gloasPayloadValue(sBlk interfaces.SignedBeaconBlock, local *consensusblocks.GetPayloadResponse, selfBuilt bool) primitives.Wei {
 	if selfBuilt {
 		if local == nil || local.Bid == nil {
@@ -135,6 +135,6 @@ func (vs *Server) gloasPayloadValue(sBlk interfaces.SignedBeaconBlock, local *co
 	if err != nil || bid == nil || bid.Message == nil {
 		return primitives.ZeroWei()
 	}
-	sum := new(big.Int).Add(new(big.Int).SetUint64(uint64(bid.Message.Value)), new(big.Int).SetUint64(uint64(bid.Message.ExecutionPayment)))
-	return sum.Mul(sum, big.NewInt(1e9))
+	value := new(big.Int).SetUint64(uint64(bid.Message.Value))
+	return value.Mul(value, big.NewInt(1e9))
 }
