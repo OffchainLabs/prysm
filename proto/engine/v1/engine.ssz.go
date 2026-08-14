@@ -4276,6 +4276,97 @@ func (b *BuilderExitRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
+// MarshalSSZ ssz marshals the SetSweepThresholdRequest object
+func (s *SetSweepThresholdRequest) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(s)
+}
+
+// MarshalSSZTo ssz marshals the SetSweepThresholdRequest object to a target array
+func (s *SetSweepThresholdRequest) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'SourceAddress'
+	if size := len(s.SourceAddress); size != 20 {
+		err = ssz.ErrBytesLengthFn("--.SourceAddress", size, 20)
+		return
+	}
+	dst = append(dst, s.SourceAddress...)
+
+	// Field (1) 'ValidatorPubkey'
+	if size := len(s.ValidatorPubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.ValidatorPubkey", size, 48)
+		return
+	}
+	dst = append(dst, s.ValidatorPubkey...)
+
+	// Field (2) 'Threshold'
+	dst = ssz.MarshalUint(dst, s.Threshold)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the SetSweepThresholdRequest object
+func (s *SetSweepThresholdRequest) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 76 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'SourceAddress'
+	if cap(s.SourceAddress) == 0 {
+		s.SourceAddress = make([]byte, 0, len(buf[0:20]))
+	}
+	s.SourceAddress = append(s.SourceAddress, buf[0:20]...)
+
+	// Field (1) 'ValidatorPubkey'
+	if cap(s.ValidatorPubkey) == 0 {
+		s.ValidatorPubkey = make([]byte, 0, len(buf[20:68]))
+	}
+	s.ValidatorPubkey = append(s.ValidatorPubkey, buf[20:68]...)
+
+	// Field (2) 'Threshold'
+	s.Threshold = ssz.UnmarshallUint[uint64](buf[68:76])
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the SetSweepThresholdRequest object
+func (s *SetSweepThresholdRequest) SizeSSZ() (size int) {
+	size = 76
+	return
+}
+
+// HashTreeRoot ssz hashes the SetSweepThresholdRequest object
+func (s *SetSweepThresholdRequest) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(s)
+}
+
+// HashTreeRootWith ssz hashes the SetSweepThresholdRequest object with a hasher
+func (s *SetSweepThresholdRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'SourceAddress'
+	if size := len(s.SourceAddress); size != 20 {
+		err = ssz.ErrBytesLengthFn("--.SourceAddress", size, 20)
+		return
+	}
+	hh.PutBytes(s.SourceAddress)
+
+	// Field (1) 'ValidatorPubkey'
+	if size := len(s.ValidatorPubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.ValidatorPubkey", size, 48)
+		return
+	}
+	hh.PutBytes(s.ValidatorPubkey)
+
+	// Field (2) 'Threshold'
+	ssz.PutUint(hh, s.Threshold)
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the ExecutionRequestsGloas object
 func (e *ExecutionRequestsGloas) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(e)
@@ -4284,7 +4375,7 @@ func (e *ExecutionRequestsGloas) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the ExecutionRequestsGloas object to a target array
 func (e *ExecutionRequestsGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(20)
+	offset := int(24)
 
 	// Offset (0) 'Deposits'
 	dst = ssz.WriteOffset(dst, offset)
@@ -4305,6 +4396,10 @@ func (e *ExecutionRequestsGloas) MarshalSSZTo(buf []byte) (dst []byte, err error
 	// Offset (4) 'BuilderExits'
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(e.BuilderExits) * 68
+
+	// Offset (5) 'SweepThresholds'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(e.SweepThresholds) * 76
 
 	// Field (0) 'Deposits'
 	if size := len(e.Deposits); size > 8192 {
@@ -4361,6 +4456,17 @@ func (e *ExecutionRequestsGloas) MarshalSSZTo(buf []byte) (dst []byte, err error
 		}
 	}
 
+	// Field (5) 'SweepThresholds'
+	if size := len(e.SweepThresholds); size > 16 {
+		err = ssz.ErrListTooBigFn("--.SweepThresholds", size, 16)
+		return
+	}
+	for ii := 0; ii < len(e.SweepThresholds); ii++ {
+		if dst, err = e.SweepThresholds[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
 	return
 }
 
@@ -4368,19 +4474,19 @@ func (e *ExecutionRequestsGloas) MarshalSSZTo(buf []byte) (dst []byte, err error
 func (e *ExecutionRequestsGloas) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 20 {
+	if size < 24 {
 		return ssz.ErrSize
 	}
 
 	tail := buf
-	var o0, o1, o2, o3, o4 uint64
+	var o0, o1, o2, o3, o4, o5 uint64
 
 	// Offset (0) 'Deposits'
 	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
 		return ssz.ErrOffset
 	}
 
-	if o0 != 20 {
+	if o0 != 24 {
 		return ssz.ErrInvalidVariableOffset
 	}
 
@@ -4401,6 +4507,11 @@ func (e *ExecutionRequestsGloas) UnmarshalSSZ(buf []byte) error {
 
 	// Offset (4) 'BuilderExits'
 	if o4 = ssz.ReadOffset(buf[16:20]); o4 > size || o3 > o4 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (5) 'SweepThresholds'
+	if o5 = ssz.ReadOffset(buf[20:24]); o5 > size || o4 > o5 {
 		return ssz.ErrOffset
 	}
 
@@ -4478,7 +4589,7 @@ func (e *ExecutionRequestsGloas) UnmarshalSSZ(buf []byte) error {
 
 	// Field (4) 'BuilderExits'
 	{
-		buf = tail[o4:]
+		buf = tail[o4:o5]
 		num, err := ssz.DivideInt2(len(buf), 68, 16)
 		if err != nil {
 			return err
@@ -4493,12 +4604,30 @@ func (e *ExecutionRequestsGloas) UnmarshalSSZ(buf []byte) error {
 			}
 		}
 	}
+
+	// Field (5) 'SweepThresholds'
+	{
+		buf = tail[o5:]
+		num, err := ssz.DivideInt2(len(buf), 76, 16)
+		if err != nil {
+			return err
+		}
+		e.SweepThresholds = make([]*SetSweepThresholdRequest, num)
+		for ii := 0; ii < num; ii++ {
+			if e.SweepThresholds[ii] == nil {
+				e.SweepThresholds[ii] = new(SetSweepThresholdRequest)
+			}
+			if err = e.SweepThresholds[ii].UnmarshalSSZ(buf[ii*76 : (ii+1)*76]); err != nil {
+				return err
+			}
+		}
+	}
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the ExecutionRequestsGloas object
 func (e *ExecutionRequestsGloas) SizeSSZ() (size int) {
-	size = 20
+	size = 24
 
 	// Field (0) 'Deposits'
 	size += len(e.Deposits) * 192
@@ -4514,6 +4643,9 @@ func (e *ExecutionRequestsGloas) SizeSSZ() (size int) {
 
 	// Field (4) 'BuilderExits'
 	size += len(e.BuilderExits) * 68
+
+	// Field (5) 'SweepThresholds'
+	size += len(e.SweepThresholds) * 76
 
 	return
 }
@@ -4600,6 +4732,22 @@ func (e *ExecutionRequestsGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 			return
 		}
 		for _, elem := range e.BuilderExits {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16)
+	}
+
+	// Field (5) 'SweepThresholds'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(e.SweepThresholds))
+		if num > 16 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range e.SweepThresholds {
 			if err = elem.HashTreeRootWith(hh); err != nil {
 				return
 			}

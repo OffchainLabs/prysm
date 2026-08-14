@@ -79,6 +79,7 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/debug/fork_choice":                            {http.MethodGet},
 		"/eth/v2/debug/fork_choice":                            {http.MethodGet},
 		"/eth/v1/debug/beacon/data_column_sidecars/{block_id}": {http.MethodGet},
+		"/prysm/v1/debug/beacon/sweep_threshold_requests":      {http.MethodGet, http.MethodPost, http.MethodDelete},
 	}
 
 	eventsRoutes := map[string][]string{

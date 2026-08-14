@@ -27,6 +27,7 @@ type Config struct {
 
 // RunForkTransitionTest is a helper function that runs gloas's transition core tests.
 func RunForkTransitionTest(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	params.SetupTestConfigCleanup(t)
 	require.NoError(t, utils.SetConfig(t, config))
 

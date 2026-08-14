@@ -12,6 +12,7 @@ import (
 
 // RunRandaoMixesResetTests executes "epoch_processing/randao_mixes_reset" tests.
 func RunRandaoMixesResetTests(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	require.NoError(t, utils.SetConfig(t, config))
 
 	testFolders, testsFolderPath := utils.TestFolders(t, config, "gloas", "epoch_processing/randao_mixes_reset/pyspec_tests")

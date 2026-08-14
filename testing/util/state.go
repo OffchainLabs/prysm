@@ -582,6 +582,7 @@ func NewBeaconStateGloas(options ...func(state *ethpb.BeaconStateGloas) error) (
 		LatestBlockHash:              make([]byte, 32),
 		PayloadExpectedWithdrawals:   make([]*enginev1.Withdrawal, 0),
 		PtcWindow:                    ptcWindow,
+		ValidatorSweepThresholds:     make([]uint64, 0),
 	}
 
 	for _, opt := range options {

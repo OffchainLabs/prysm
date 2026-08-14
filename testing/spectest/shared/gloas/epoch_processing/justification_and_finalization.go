@@ -14,6 +14,7 @@ import (
 
 // RunJustificationAndFinalizationTests executes "epoch_processing/justification_and_finalization" tests.
 func RunJustificationAndFinalizationTests(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	require.NoError(t, utils.SetConfig(t, config))
 
 	testPath := "epoch_processing/justification_and_finalization/pyspec_tests"

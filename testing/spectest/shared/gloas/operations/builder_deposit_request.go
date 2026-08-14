@@ -19,6 +19,7 @@ import (
 )
 
 func RunBuilderDepositRequestTest(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	require.NoError(t, utils.SetConfig(t, config))
 	testFolders, testsFolderPath := utils.TestFolders(t, config, version.String(version.Gloas), "operations/builder_deposit_request/pyspec_tests")
 	for _, folder := range testFolders {

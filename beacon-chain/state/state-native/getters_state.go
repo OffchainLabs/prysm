@@ -306,6 +306,7 @@ func (b *BeaconState) ToProtoUnsafe() any {
 			LatestBlockHash:               b.latestBlockHash,
 			PayloadExpectedWithdrawals:    b.payloadExpectedWithdrawals,
 			PtcWindow:                     b.ptcWindow,
+			ValidatorSweepThresholds:      b.validatorSweepThresholdsVal(),
 		}
 	default:
 		return nil
@@ -604,6 +605,7 @@ func (b *BeaconState) ToProto() any {
 			LatestBlockHash:               b.latestBlockHashVal(),
 			PayloadExpectedWithdrawals:    b.payloadExpectedWithdrawalsVal(),
 			PtcWindow:                     b.ptcWindowVal(),
+			ValidatorSweepThresholds:      b.validatorSweepThresholdsVal(),
 		}
 	default:
 		return nil

@@ -3,6 +3,8 @@ package operations
 import (
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
+
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -26,5 +28,6 @@ func blockWithWithdrawalRequest(ssz []byte) (interfaces.SignedBeaconBlock, error
 }
 
 func RunWithdrawalRequestTest(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	common.RunWithdrawalRequestTest(t, config, version.String(version.Gloas), blockWithWithdrawalRequest, sszToState)
 }

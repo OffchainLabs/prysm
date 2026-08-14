@@ -1103,6 +1103,8 @@ func (s *Service) debugEndpoints(stater lookup.Stater, blocker lookup.Blocker) [
 		ChainInfoFetcher:      s.cfg.ChainInfoFetcher,
 		GenesisTimeFetcher:    s.cfg.GenesisTimeFetcher,
 		Blocker:               blocker,
+		// DEVNET ONLY, see the sweepthreshold package.
+		MockSweepThresholdPool: s.cfg.MockSweepThresholdPool,
 	}
 
 	const namespace = "debug"
@@ -1156,6 +1158,27 @@ func (s *Service) debugEndpoints(stater lookup.Stater, blocker lookup.Blocker) [
 			},
 			handler: server.DataColumnSidecars,
 			methods: []string{http.MethodGet},
+		},
+		{
+			// DEVNET ONLY. Stands in for an execution client that can emit EIP-8148
+			// (set sweep threshold) requests, which none can today.
+			template: "/prysm/v1/debug/beacon/sweep_threshold_requests",
+			name:     namespace + ".SweepThresholdRequests",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				switch r.Method {
+				case http.MethodPost:
+					server.PostSweepThresholdRequests(w, r)
+				case http.MethodDelete:
+					server.DeleteSweepThresholdRequests(w, r)
+				default:
+					server.GetSweepThresholdRequests(w, r)
+				}
+			},
+			methods: []string{http.MethodGet, http.MethodPost, http.MethodDelete},
 		},
 	}
 }

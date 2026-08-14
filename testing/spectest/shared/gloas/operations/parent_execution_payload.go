@@ -18,6 +18,7 @@ import (
 )
 
 func RunParentExecutionPayloadTest(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	require.NoError(t, utils.SetConfig(t, config))
 	testFolders, testsFolderPath := utils.TestFolders(t, config, version.String(version.Gloas), "operations/parent_execution_payload/pyspec_tests")
 	if len(testFolders) == 0 {

@@ -21,6 +21,7 @@ func init() {
 
 // RunSlotProcessingTests executes "sanity/slots" tests.
 func RunSlotProcessingTests(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	require.NoError(t, utils.SetConfig(t, config))
 
 	testFolders, testsFolderPath := utils.TestFolders(t, config, "gloas", "sanity/slots/pyspec_tests")

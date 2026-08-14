@@ -110,6 +110,12 @@ func diffGloasFields(diff *stateDiff, source, target state.ReadOnlyBeaconState) 
 		return errors.Wrap(err, "failed to get ptc window")
 	}
 
+	// validatorSweepThresholds (override). EIP-8148.
+	diff.validatorSweepThresholds, err = target.ValidatorSweepThresholds()
+	if err != nil {
+		return errors.Wrap(err, "failed to get validator sweep thresholds")
+	}
+
 	return nil
 }
 
@@ -242,6 +248,12 @@ func serializeGloasFields(ret []byte, s *stateDiff) []byte {
 			return nil
 		}
 		ret = append(ret, sszBytes...)
+	}
+
+	// validatorSweepThresholds (length-prefixed uint64 list). EIP-8148.
+	ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.validatorSweepThresholds)))
+	for _, t := range s.validatorSweepThresholds {
+		ret = binary.LittleEndian.AppendUint64(ret, t)
 	}
 
 	return ret
@@ -391,6 +403,28 @@ func (ret *stateDiff) readGloasFields(data *[]byte) error {
 		*data = (*data)[ptcSize:]
 	}
 
+	// validatorSweepThresholds (length-prefixed uint64 list). EIP-8148.
+	if len(*data) < 8 {
+		return errors.Wrap(errDataSmall, "validatorSweepThresholds length")
+	}
+
+	thresholdCount := int(binary.LittleEndian.Uint64((*data)[:8])) // lint:ignore uintcast
+	if thresholdCount < 0 {
+		return errors.Wrap(errDataSmall, "validatorSweepThresholds: negative count")
+	}
+
+	*data = (*data)[8:]
+	if len(*data) < thresholdCount*8 {
+		return errors.Wrap(errDataSmall, "validatorSweepThresholds data")
+	}
+
+	ret.validatorSweepThresholds = make([]uint64, thresholdCount)
+	for i := range thresholdCount {
+		ret.validatorSweepThresholds[i] = binary.LittleEndian.Uint64((*data)[i*8 : (i+1)*8])
+	}
+
+	*data = (*data)[thresholdCount*8:]
+
 	return nil
 }
 
@@ -456,6 +490,11 @@ func applyGloasFields(source state.BeaconState, diff *stateDiff) error {
 	// ptcWindow.
 	if err := source.SetPTCWindow(diff.ptcWindow); err != nil {
 		return errors.Wrap(err, "failed to set ptc window")
+	}
+
+	// validatorSweepThresholds. EIP-8148.
+	if err := source.SetValidatorSweepThresholds(diff.validatorSweepThresholds); err != nil {
+		return errors.Wrap(err, "failed to set validator sweep thresholds")
 	}
 
 	return nil

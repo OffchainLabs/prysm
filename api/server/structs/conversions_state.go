@@ -1147,6 +1147,15 @@ func BeaconStateGloasFromConsensus(st beaconState.BeaconState) (*BeaconStateGloa
 	if err != nil {
 		return nil, err
 	}
+	sweepThresholds, err := st.ValidatorSweepThresholds()
+	if err != nil {
+		return nil, fmt.Errorf("validator sweep thresholds: %w", err)
+	}
+
+	sweepThresholdsStr := make([]string, 0, len(sweepThresholds))
+	for _, threshold := range sweepThresholds {
+		sweepThresholdsStr = append(sweepThresholdsStr, fmt.Sprintf("%d", threshold))
+	}
 
 	return &BeaconStateGloas{
 		GenesisTime:                   fmt.Sprintf("%d", st.GenesisTime().Unix()),
@@ -1195,5 +1204,6 @@ func BeaconStateGloasFromConsensus(st beaconState.BeaconState) (*BeaconStateGloa
 		LatestBlockHash:               hexutil.Encode(lbh[:]),
 		PayloadExpectedWithdrawals:    WithdrawalsFromConsensus(pew),
 		PtcWindow:                     PTCWindowFromConsensus(ptcWindow),
+		ValidatorSweepThresholds:      sweepThresholdsStr,
 	}, nil
 }

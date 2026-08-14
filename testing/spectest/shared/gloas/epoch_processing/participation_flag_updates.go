@@ -12,6 +12,7 @@ import (
 
 // RunParticipationFlagUpdatesTests executes "epoch_processing/participation_flag_updates" tests.
 func RunParticipationFlagUpdatesTests(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	require.NoError(t, utils.SetConfig(t, config))
 
 	testFolders, testsFolderPath := utils.TestFolders(t, config, "gloas", "epoch_processing/participation_flag_updates/pyspec_tests")

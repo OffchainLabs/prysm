@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
+
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	// enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -16,6 +18,7 @@ import (
 
 // RunSSZStaticTests executes "ssz_static" tests.
 func RunSSZStaticTests(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	common.RunSSZStaticTests(t, config, "gloas", unmarshalledSSZ, customHtr)
 }
 

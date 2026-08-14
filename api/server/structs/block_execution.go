@@ -159,11 +159,12 @@ type ConsolidationRequest struct {
 // ExecutionRequestsGloas extends ExecutionRequests with builder deposit and exit
 // requests, new in Gloas (EIP-8282).
 type ExecutionRequestsGloas struct {
-	Deposits        []*DepositRequest        `json:"deposits"`
-	Withdrawals     []*WithdrawalRequest     `json:"withdrawals"`
-	Consolidations  []*ConsolidationRequest  `json:"consolidations"`
-	BuilderDeposits []*BuilderDepositRequest `json:"builder_deposits"`
-	BuilderExits    []*BuilderExitRequest    `json:"builder_exits"`
+	Deposits        []*DepositRequest           `json:"deposits"`
+	Withdrawals     []*WithdrawalRequest        `json:"withdrawals"`
+	Consolidations  []*ConsolidationRequest     `json:"consolidations"`
+	BuilderDeposits []*BuilderDepositRequest    `json:"builder_deposits"`
+	BuilderExits    []*BuilderExitRequest       `json:"builder_exits"`
+	SweepThresholds []*SetSweepThresholdRequest `json:"sweep_thresholds"`
 }
 
 type BuilderDepositRequest struct {
@@ -176,6 +177,12 @@ type BuilderDepositRequest struct {
 type BuilderExitRequest struct {
 	SourceAddress string `json:"source_address"`
 	Pubkey        string `json:"pubkey"`
+}
+
+type SetSweepThresholdRequest struct {
+	SourceAddress   string `json:"source_address"`
+	ValidatorPubkey string `json:"validator_pubkey"`
+	Threshold       string `json:"threshold"`
 }
 
 type ExecutionPayloadGloas struct {

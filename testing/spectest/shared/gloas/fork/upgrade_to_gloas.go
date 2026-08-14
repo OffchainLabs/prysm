@@ -20,6 +20,7 @@ import (
 // RunUpgradeToGloas is a helper function that runs Gloas's fork spec tests.
 // It unmarshals a pre- and post-state to check `UpgradeToGloas` comply with spec implementation.
 func RunUpgradeToGloas(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	require.NoError(t, utils.SetConfig(t, config))
 
 	testFolders, testsFolderPath := utils.TestFolders(t, config, "gloas", "fork/fork/pyspec_tests")

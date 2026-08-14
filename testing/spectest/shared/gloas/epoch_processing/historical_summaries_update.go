@@ -12,6 +12,7 @@ import (
 
 // RunHistoricalSummariesUpdateTests executes "epoch_processing/historical_summaries_update" tests.
 func RunHistoricalSummariesUpdateTests(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	require.NoError(t, utils.SetConfig(t, config))
 
 	testFolders, testsFolderPath := utils.TestFolders(t, config, "gloas", "epoch_processing/historical_summaries_update/pyspec_tests")

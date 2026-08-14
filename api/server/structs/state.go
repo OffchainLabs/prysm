@@ -269,4 +269,5 @@ type BeaconStateGloas struct {
 	LatestBlockHash               string                      `json:"latest_block_hash"`
 	PayloadExpectedWithdrawals    []*Withdrawal               `json:"payload_expected_withdrawals"`
 	PtcWindow                     []*PTCs                     `json:"ptc_window"`
+	ValidatorSweepThresholds      []string                    `json:"validator_sweep_thresholds"`
 }

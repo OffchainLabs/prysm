@@ -3,6 +3,8 @@ package operations
 import (
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -22,5 +24,6 @@ func blockWithAttestation(attestationSSZ []byte) (interfaces.SignedBeaconBlock, 
 }
 
 func RunAttestationTest(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	common.RunAttestationTest(t, config, version.String(version.Gloas), blockWithAttestation, altair.ProcessAttestationsNoVerifySignature, sszToState)
 }

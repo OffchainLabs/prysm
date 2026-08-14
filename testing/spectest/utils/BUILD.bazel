@@ -5,6 +5,7 @@ go_library(
     testonly = True,
     srcs = [
         "config.go",
+        "eip8148.go",
         "utils.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/testing/spectest/utils",

@@ -30,8 +30,19 @@ message BuilderExitRequest {
   bytes pubkey = 2 [ (ethereum.eth.ext.ssz_size) = "48" ];
 }
 
+// SetSweepThresholdRequest is the message from the execution layer to set a
+// custom withdrawal sweep threshold for a validator, new in EIP-8148.
+message SetSweepThresholdRequest {
+  // The execution address that originated the request.
+  bytes source_address = 1 [ (ethereum.eth.ext.ssz_size) = "20" ];
+  // 48 byte BLS public key of the validator.
+  bytes validator_pubkey = 2 [ (ethereum.eth.ext.ssz_size) = "48" ];
+  // The requested sweep threshold, in Gwei.
+  uint64 threshold = 3;
+}
+
 // ExecutionRequestsGloas extends ExecutionRequests with builder deposit and exit
-// requests, new in Gloas (EIP-8282).
+// requests, new in Gloas (EIP-8282), and set sweep threshold requests (EIP-8148).
 message ExecutionRequestsGloas {
   repeated DepositRequest deposits = 1
       [ (ethereum.eth.ext.ssz_max) = "max_deposit_requests_per_payload.size" ];
@@ -47,4 +58,7 @@ message ExecutionRequestsGloas {
   repeated BuilderExitRequest builder_exits = 5
       [ (ethereum.eth.ext.ssz_max) =
             "max_builder_exit_requests_per_payload.size" ];
+  repeated SetSweepThresholdRequest sweep_thresholds = 6
+      [ (ethereum.eth.ext.ssz_max) =
+            "max_set_sweep_threshold_requests_per_payload.size" ];
 }

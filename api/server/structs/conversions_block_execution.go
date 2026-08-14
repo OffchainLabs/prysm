@@ -1234,6 +1234,53 @@ func (b *BuilderExitRequest) ToConsensus() (*enginev1.BuilderExitRequest, error)
 	}, nil
 }
 
+// SetSweepThresholdRequestsFromConsensus converts a slice of enginev1.SetSweepThresholdRequest to a slice of SetSweepThresholdRequest.
+func SetSweepThresholdRequestsFromConsensus(consensusRequests []*enginev1.SetSweepThresholdRequest) []*SetSweepThresholdRequest {
+	requests := make([]*SetSweepThresholdRequest, 0, len(consensusRequests))
+
+	for _, consensusRequest := range consensusRequests {
+		request := &SetSweepThresholdRequest{
+			SourceAddress:   hexutil.Encode(consensusRequest.SourceAddress),
+			ValidatorPubkey: hexutil.Encode(consensusRequest.ValidatorPubkey),
+			Threshold:       fmt.Sprintf("%d", consensusRequest.Threshold),
+		}
+
+		requests = append(requests, request)
+	}
+
+	return requests
+}
+
+// ToConsensus converts a SetSweepThresholdRequest to an enginev1.SetSweepThresholdRequest.
+func (s *SetSweepThresholdRequest) ToConsensus() (*enginev1.SetSweepThresholdRequest, error) {
+	if s == nil {
+		return nil, server.NewDecodeError(errNilValue, "SetSweepThresholdRequest")
+	}
+
+	srcAddress, err := bytesutil.DecodeHexWithLength(s.SourceAddress, common.AddressLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "SourceAddress")
+	}
+
+	pubkey, err := bytesutil.DecodeHexWithLength(s.ValidatorPubkey, fieldparams.BLSPubkeyLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "ValidatorPubkey")
+	}
+
+	threshold, err := strconv.ParseUint(s.Threshold, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Threshold")
+	}
+
+	request := &enginev1.SetSweepThresholdRequest{
+		SourceAddress:   srcAddress,
+		ValidatorPubkey: pubkey,
+		Threshold:       threshold,
+	}
+
+	return request, nil
+}
+
 func ExecutionRequestsGloasFromConsensus(er *enginev1.ExecutionRequestsGloas) *ExecutionRequestsGloas {
 	return &ExecutionRequestsGloas{
 		Deposits:        DepositRequestsFromConsensus(er.Deposits),
@@ -1241,6 +1288,7 @@ func ExecutionRequestsGloasFromConsensus(er *enginev1.ExecutionRequestsGloas) *E
 		Consolidations:  ConsolidationRequestsFromConsensus(er.Consolidations),
 		BuilderDeposits: BuilderDepositRequestsFromConsensus(er.BuilderDeposits),
 		BuilderExits:    BuilderExitRequestsFromConsensus(er.BuilderExits),
+		SweepThresholds: SetSweepThresholdRequestsFromConsensus(er.SweepThresholds),
 	}
 }
 
@@ -1304,11 +1352,26 @@ func (e *ExecutionRequestsGloas) ToConsensus() (*enginev1.ExecutionRequestsGloas
 		}
 	}
 
+	if err = slice.VerifyMaxLength(e.SweepThresholds, params.BeaconConfig().MaxSetSweepThresholdRequestsPerPayload); err != nil {
+		return nil, server.NewDecodeError(err, "ExecutionRequests.SweepThresholds")
+	}
+
+	sweepThresholds := make([]*enginev1.SetSweepThresholdRequest, 0, len(e.SweepThresholds))
+	for i, threshold := range e.SweepThresholds {
+		converted, err := threshold.ToConsensus()
+		if err != nil {
+			return nil, server.NewDecodeError(err, fmt.Sprintf("ExecutionRequests.SweepThresholds[%d]", i))
+		}
+
+		sweepThresholds = append(sweepThresholds, converted)
+	}
+
 	return &enginev1.ExecutionRequestsGloas{
 		Deposits:        depositRequests,
 		Withdrawals:     withdrawalRequests,
 		Consolidations:  consolidationRequests,
 		BuilderDeposits: builderDeposits,
 		BuilderExits:    builderExits,
+		SweepThresholds: sweepThresholds,
 	}, nil
 }

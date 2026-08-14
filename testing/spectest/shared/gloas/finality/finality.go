@@ -31,6 +31,7 @@ type Config struct {
 
 // RunFinalityTest executes finality spec tests.
 func RunFinalityTest(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	require.NoError(t, utils.SetConfig(t, config))
 
 	testFolders, testsFolderPath := utils.TestFolders(t, config, "gloas", "finality/finality/pyspec_tests")

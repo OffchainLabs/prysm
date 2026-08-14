@@ -2,6 +2,7 @@ package electra
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -469,6 +470,14 @@ func ApplyPendingDeposit(ctx context.Context, st state.BeaconState, deposit *eth
 //	set_or_append_list(state.previous_epoch_participation, index, ParticipationFlags(0b0000_0000))
 //	set_or_append_list(state.current_epoch_participation, index, ParticipationFlags(0b0000_0000))
 //	set_or_append_list(state.inactivity_scores, index, uint64(0))
+//	# [New in EIP8148]
+//	set_or_append_list(
+//	    state.validator_sweep_thresholds,
+//	    index,
+//	    MAX_EFFECTIVE_BALANCE_ELECTRA
+//	    if has_compounding_withdrawal_credential(validator)
+//	    else Gwei(0),
+//	)
 func AddValidatorToRegistry(beaconState state.BeaconState, pubKey []byte, withdrawalCredentials []byte, amount uint64) error {
 	val, err := GetValidatorFromDeposit(pubKey, withdrawalCredentials, amount)
 	if err != nil {
@@ -493,6 +502,21 @@ func AddValidatorToRegistry(beaconState state.BeaconState, pubKey []byte, withdr
 			return err
 		}
 	}
+
+	// [New in EIP-8148] Compounding validators start out at the default 2048 ETH sweep
+	// threshold; everyone else gets 0, which falls back to get_max_effective_balance.
+	config := params.BeaconConfig()
+	if beaconState.Version() >= version.Gloas {
+		threshold := uint64(0)
+		if len(val.WithdrawalCredentials) > 0 && val.WithdrawalCredentials[0] == config.CompoundingWithdrawalPrefixByte {
+			threshold = config.MaxEffectiveBalanceElectra
+		}
+
+		if err := beaconState.AppendValidatorSweepThreshold(threshold); err != nil {
+			return fmt.Errorf("append validator sweep threshold: %w", err)
+		}
+	}
+
 	return nil
 }
 

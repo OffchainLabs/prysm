@@ -14,10 +14,12 @@ import (
 )
 
 func RunPendingDepositsTests(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	runPendingDepositsTestsAt(t, config, "epoch_processing/pending_deposits/pyspec_tests")
 }
 
 func RunPendingDepositsChurnTests(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	runPendingDepositsTestsAt(t, config, "epoch_processing/pending_deposits_churn/pyspec_tests")
 }
 

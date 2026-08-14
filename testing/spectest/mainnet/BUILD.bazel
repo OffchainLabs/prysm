@@ -333,5 +333,6 @@ go_test(
         "//testing/spectest/shared/phase0/sanity:go_default_library",
         "//testing/spectest/shared/phase0/shuffling/core/shuffle:go_default_library",
         "//testing/spectest/shared/phase0/ssz_static:go_default_library",
+        "//testing/spectest/utils:go_default_library",
     ],
 )

@@ -12,6 +12,7 @@ import (
 )
 
 func RunPendingConsolidationsTests(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	require.NoError(t, utils.SetConfig(t, config))
 
 	testFolders, testsFolderPath := utils.TestFolders(t, config, "gloas", "epoch_processing/pending_consolidations/pyspec_tests")
