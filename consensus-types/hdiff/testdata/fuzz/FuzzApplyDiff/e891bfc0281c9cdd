@@ -1,0 +1,4 @@
+go test fuzz v1
+[]byte("\xa1ވ\xfa\f\f\f\f")
+[]byte(" ")
+[]byte("\xa1")
