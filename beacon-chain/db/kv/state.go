@@ -193,6 +193,15 @@ type withValidators interface {
 	GetValidators() []*ethpb.Validator
 }
 
+func toProtoUnsafe(ctx context.Context, st state.ReadOnlyBeaconState) any {
+	_, span := trace.StartSpan(ctx, "BeaconDB.toProtoUnsafe")
+	defer span.End()
+
+	span.SetAttributes(trace.Int64Attribute("validatorCount", int64(st.NumValidators())))
+
+	return st.ToProtoUnsafe()
+}
+
 // SaveStatesEfficient stores multiple states to the db (new schema) using the provided corresponding roots.
 func (s *Store) SaveStatesEfficient(ctx context.Context, states []state.ReadOnlyBeaconState, blockRoots [][32]byte) error {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveStatesEfficient")
@@ -200,50 +209,88 @@ func (s *Store) SaveStatesEfficient(ctx context.Context, states []state.ReadOnly
 	if states == nil {
 		return errors.New("nil state")
 	}
-	validatorKeys, validatorsEntries, err := getValidators(states)
+	validatorKeys, validatorsEntries, err := getValidators(ctx, states)
 	if err != nil {
 		return err
 	}
 
-	if err := s.db.Update(func(tx *bolt.Tx) error {
-		return s.saveStatesEfficientInternal(ctx, tx, blockRoots, states, validatorKeys, validatorsEntries)
-	}); err != nil {
+	if err := s.saveStatesEfficientTx(ctx, blockRoots, states, validatorKeys, validatorsEntries); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func getValidators(states []state.ReadOnlyBeaconState) ([][]byte, map[string]*ethpb.Validator, error) {
+func (s *Store) saveStatesEfficientTx(ctx context.Context, blockRoots [][32]byte, states []state.ReadOnlyBeaconState, validatorKeys [][]byte, validatorsEntries map[string]*ethpb.Validator) error {
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.saveStatesEfficientTx")
+	defer span.End()
+
+	return s.db.Update(func(tx *bolt.Tx) error {
+		return s.saveStatesEfficientInternal(ctx, tx, blockRoots, states, validatorKeys, validatorsEntries)
+	})
+}
+
+func getValidators(ctx context.Context, states []state.ReadOnlyBeaconState) ([][]byte, map[string]*ethpb.Validator, error) {
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.getValidators")
+	defer span.End()
+
 	validatorsEntries := make(map[string]*ethpb.Validator) // It's a map to make sure that you store only new validator entries.
 	validatorKeys := make([][]byte, len(states))           // For every state, this stores a compressed list of validator keys.
 	for i, st := range states {
-		pb, ok := st.ToProtoUnsafe().(withValidators)
+		pb, ok := toProtoUnsafe(ctx, st).(withValidators)
 		if !ok {
 			return nil, nil, errors.New("could not cast state to interface with GetValidators()")
 		}
 		validators := pb.GetValidators()
 
 		// yank out the validators and store them in separate table to save space.
-		var hashes []byte
-		for _, val := range validators {
-			// create the unique hash for that validator entry.
-			hash, hashErr := val.HashTreeRoot()
-			if hashErr != nil {
-				return nil, nil, hashErr
-			}
-			hashes = append(hashes, hash[:]...)
-
-			// note down the hash and the encoded validator entry
-			hashStr := string(hash[:])
-			validatorsEntries[hashStr] = val
+		hashes, err := hashValidators(ctx, validators, validatorsEntries)
+		if err != nil {
+			return nil, nil, fmt.Errorf("hash validators: %w", err)
 		}
-		validatorKeys[i] = snappy.Encode(nil, hashes)
+
+		validatorKeys[i] = snappyEncodeValidatorHashes(ctx, hashes)
 	}
 	return validatorKeys, validatorsEntries, nil
 }
 
+// hashValidators returns the concatenated hash tree roots of the given validators, and
+// records each validator into validatorsEntries, keyed by its own hash.
+func hashValidators(ctx context.Context, validators []*ethpb.Validator, validatorsEntries map[string]*ethpb.Validator) ([]byte, error) {
+	_, span := trace.StartSpan(ctx, "BeaconDB.hashValidators")
+	defer span.End()
+
+	span.SetAttributes(trace.Int64Attribute("validatorCount", int64(len(validators))))
+
+	var hashes []byte
+	for _, val := range validators {
+		// create the unique hash for that validator entry.
+		hash, err := val.HashTreeRoot()
+		if err != nil {
+			return nil, fmt.Errorf("hash tree root: %w", err)
+		}
+
+		hashes = append(hashes, hash[:]...)
+
+		// note down the hash and the encoded validator entry
+		hashStr := string(hash[:])
+		validatorsEntries[hashStr] = val
+	}
+	return hashes, nil
+}
+
+// snappyEncodeValidatorHashes compresses the concatenated validator hashes of a state.
+func snappyEncodeValidatorHashes(ctx context.Context, hashes []byte) []byte {
+	_, span := trace.StartSpan(ctx, "BeaconDB.snappyEncodeValidatorHashes")
+	defer span.End()
+
+	return snappy.Encode(nil, hashes)
+}
+
 func (s *Store) saveStatesEfficientInternal(ctx context.Context, tx *bolt.Tx, blockRoots [][32]byte, states []state.ReadOnlyBeaconState, validatorKeys [][]byte, validatorsEntries map[string]*ethpb.Validator) error {
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.saveStatesEfficientInternal")
+	defer span.End()
+
 	bucket := tx.Bucket(stateBucket)
 	valIdxBkt := tx.Bucket(blockRootValidatorHashesBucket)
 	for i, rt := range blockRoots {
@@ -257,7 +304,7 @@ func (s *Store) saveStatesEfficientInternal(ctx context.Context, tx *bolt.Tx, bl
 		// validator entries.To bring the gap closer, we empty the validators
 		// just before Put() and repopulate that state with original validators.
 		// look at issue https://github.com/prysmaticlabs/prysm/issues/9262.
-		switch rawType := states[i].ToProtoUnsafe().(type) {
+		switch rawType := toProtoUnsafe(ctx, states[i]).(type) {
 		case *ethpb.BeaconState:
 			if err := s.processPhase0(ctx, rawType, rt[:], bucket, valIdxBkt, validatorKeys[i]); err != nil {
 				return err
@@ -295,6 +342,9 @@ func (s *Store) saveStatesEfficientInternal(ctx context.Context, tx *bolt.Tx, bl
 }
 
 func (s *Store) processPhase0(ctx context.Context, pbState *ethpb.BeaconState, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
+	_, span := trace.StartSpan(ctx, "BeaconDB.processPhase0")
+	defer span.End()
+
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
 	encodedState, err := encode(ctx, pbState)
@@ -312,6 +362,9 @@ func (s *Store) processPhase0(ctx context.Context, pbState *ethpb.BeaconState, r
 }
 
 func (s *Store) processAltair(ctx context.Context, pbState *ethpb.BeaconStateAltair, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
+	_, span := trace.StartSpan(ctx, "BeaconDB.processAltair")
+	defer span.End()
+
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
 	rawObj, err := pbState.MarshalSSZ()
@@ -330,6 +383,9 @@ func (s *Store) processAltair(ctx context.Context, pbState *ethpb.BeaconStateAlt
 }
 
 func (s *Store) processBellatrix(ctx context.Context, pbState *ethpb.BeaconStateBellatrix, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
+	_, span := trace.StartSpan(ctx, "BeaconDB.processBellatrix")
+	defer span.End()
+
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
 	rawObj, err := pbState.MarshalSSZ()
@@ -348,6 +404,9 @@ func (s *Store) processBellatrix(ctx context.Context, pbState *ethpb.BeaconState
 }
 
 func (s *Store) processCapella(ctx context.Context, pbState *ethpb.BeaconStateCapella, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
+	_, span := trace.StartSpan(ctx, "BeaconDB.processCapella")
+	defer span.End()
+
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
 	rawObj, err := pbState.MarshalSSZ()
@@ -366,6 +425,9 @@ func (s *Store) processCapella(ctx context.Context, pbState *ethpb.BeaconStateCa
 }
 
 func (s *Store) processDeneb(ctx context.Context, pbState *ethpb.BeaconStateDeneb, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
+	_, span := trace.StartSpan(ctx, "BeaconDB.processDeneb")
+	defer span.End()
+
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
 	rawObj, err := pbState.MarshalSSZ()
@@ -384,6 +446,9 @@ func (s *Store) processDeneb(ctx context.Context, pbState *ethpb.BeaconStateDene
 }
 
 func (s *Store) processElectra(ctx context.Context, pbState *ethpb.BeaconStateElectra, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
+	_, span := trace.StartSpan(ctx, "BeaconDB.processElectra")
+	defer span.End()
+
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
 	rawObj, err := pbState.MarshalSSZ()
@@ -402,6 +467,9 @@ func (s *Store) processElectra(ctx context.Context, pbState *ethpb.BeaconStateEl
 }
 
 func (s *Store) processFulu(ctx context.Context, pbState *ethpb.BeaconStateFulu, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
+	_, span := trace.StartSpan(ctx, "BeaconDB.processFulu")
+	defer span.End()
+
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
 	rawObj, err := pbState.MarshalSSZ()
@@ -420,6 +488,11 @@ func (s *Store) processFulu(ctx context.Context, pbState *ethpb.BeaconStateFulu,
 }
 
 func (s *Store) storeValidatorEntriesSeparately(ctx context.Context, tx *bolt.Tx, validatorsEntries map[string]*ethpb.Validator) error {
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.storeValidatorEntriesSeparately")
+	defer span.End()
+
+	span.SetAttributes(trace.Int64Attribute("validatorCount", int64(len(validatorsEntries))))
+
 	valBkt := tx.Bucket(stateValidatorsBucket)
 	for hashStr, validatorEntry := range validatorsEntries {
 		key := []byte(hashStr)
@@ -694,15 +767,18 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 
 // marshal versioned state from struct type down to bytes.
 func marshalState(ctx context.Context, st state.ReadOnlyBeaconState) ([]byte, error) {
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.marshalState")
+	defer span.End()
+
 	switch st.Version() {
 	case version.Phase0:
-		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconState)
+		rState, ok := toProtoUnsafe(ctx, st).(*ethpb.BeaconState)
 		if !ok {
 			return nil, errors.New("non valid inner state")
 		}
 		return encode(ctx, rState)
 	case version.Altair:
-		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateAltair)
+		rState, ok := toProtoUnsafe(ctx, st).(*ethpb.BeaconStateAltair)
 		if !ok {
 			return nil, errors.New("non valid inner state")
 		}
@@ -715,7 +791,7 @@ func marshalState(ctx context.Context, st state.ReadOnlyBeaconState) ([]byte, er
 		}
 		return snappy.Encode(nil, append(altairKey, rawObj...)), nil
 	case version.Bellatrix:
-		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateBellatrix)
+		rState, ok := toProtoUnsafe(ctx, st).(*ethpb.BeaconStateBellatrix)
 		if !ok {
 			return nil, errors.New("non valid inner state")
 		}
@@ -728,7 +804,7 @@ func marshalState(ctx context.Context, st state.ReadOnlyBeaconState) ([]byte, er
 		}
 		return snappy.Encode(nil, append(bellatrixKey, rawObj...)), nil
 	case version.Capella:
-		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateCapella)
+		rState, ok := toProtoUnsafe(ctx, st).(*ethpb.BeaconStateCapella)
 		if !ok {
 			return nil, errors.New("non valid inner state")
 		}
@@ -741,7 +817,7 @@ func marshalState(ctx context.Context, st state.ReadOnlyBeaconState) ([]byte, er
 		}
 		return snappy.Encode(nil, append(capellaKey, rawObj...)), nil
 	case version.Deneb:
-		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateDeneb)
+		rState, ok := toProtoUnsafe(ctx, st).(*ethpb.BeaconStateDeneb)
 		if !ok {
 			return nil, errors.New("non valid inner state")
 		}
@@ -754,7 +830,7 @@ func marshalState(ctx context.Context, st state.ReadOnlyBeaconState) ([]byte, er
 		}
 		return snappy.Encode(nil, append(denebKey, rawObj...)), nil
 	case version.Electra:
-		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateElectra)
+		rState, ok := toProtoUnsafe(ctx, st).(*ethpb.BeaconStateElectra)
 		if !ok {
 			return nil, errors.New("non valid inner state")
 		}
@@ -767,7 +843,7 @@ func marshalState(ctx context.Context, st state.ReadOnlyBeaconState) ([]byte, er
 		}
 		return snappy.Encode(nil, append(ElectraKey, rawObj...)), nil
 	case version.Fulu:
-		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateFulu)
+		rState, ok := toProtoUnsafe(ctx, st).(*ethpb.BeaconStateFulu)
 		if !ok {
 			return nil, errors.New("non valid inner state")
 		}
@@ -780,7 +856,7 @@ func marshalState(ctx context.Context, st state.ReadOnlyBeaconState) ([]byte, er
 		}
 		return snappy.Encode(nil, append(fuluKey, rawObj...)), nil
 	case version.Gloas:
-		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateGloas)
+		rState, ok := toProtoUnsafe(ctx, st).(*ethpb.BeaconStateGloas)
 		if !ok {
 			return nil, errors.New("non valid inner state")
 		}
