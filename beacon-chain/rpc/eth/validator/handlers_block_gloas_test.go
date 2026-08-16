@@ -11,6 +11,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	blockchainTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	rewardtesting "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/rewards/testing"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -318,67 +320,77 @@ func TestProduceBlockV4_SSZ_IncludePayloadTrue(t *testing.T) {
 	assert.Equal(t, true, writer.Body.Len() > 0)
 }
 
-// GET returns the full envelope SSZ that must roundtrip with a matching HTR.
-func TestExecutionPayloadEnvelope_SSZ(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.GloasForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
+func TestExecutionPayloadEnvelope(t *testing.T) {
+	t.Run("SSZ", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
 
-	ctrl := gomock.NewController(t)
-	envelope := testEnvelope()
-	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).Return(
-		&eth.ExecutionPayloadEnvelopeResponse{Envelope: envelope}, nil,
-	)
+		envelope := testEnvelope()
+		envelopeCache := cache.NewExecutionPayloadEnvelopeCache()
+		envelopeCache.Set(&cache.ExecutionPayloadContents{Envelope: envelope})
+		server := &Server{CoreService: &core.Service{ExecutionPayloadEnvelopeCache: envelopeCache}}
+		bbrHex := hexutil.Encode(envelope.BeaconBlockRoot)
+		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/validator/execution_payload_envelope/1/"+bbrHex, nil)
+		request.SetPathValue("slot", "1")
+		request.SetPathValue("beacon_block_root", bbrHex)
+		request.Header.Set("Accept", "application/octet-stream")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		server.ExecutionPayloadEnvelope(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+		assert.Equal(t, "application/octet-stream", writer.Header().Get("Content-Type"))
+		assert.Equal(t, version.String(version.Gloas), writer.Header().Get("Eth-Consensus-Version"))
 
-	server := &Server{V1Alpha1Server: v1alpha1Server}
-	bbrHex := hexutil.Encode(envelope.BeaconBlockRoot)
-	request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/validator/execution_payload_envelope/1/"+bbrHex, nil)
-	request.SetPathValue("slot", "1")
-	request.SetPathValue("beacon_block_root", bbrHex)
-	request.Header.Set("Accept", "application/octet-stream")
-	writer := httptest.NewRecorder()
-	writer.Body = &bytes.Buffer{}
-	server.ExecutionPayloadEnvelope(writer, request)
-	assert.Equal(t, http.StatusOK, writer.Code)
-	assert.Equal(t, "application/octet-stream", writer.Header().Get("Content-Type"))
-	assert.Equal(t, version.String(version.Gloas), writer.Header().Get("Eth-Consensus-Version"))
+		decoded := &eth.ExecutionPayloadEnvelope{}
+		require.NoError(t, decoded.UnmarshalSSZ(writer.Body.Bytes()))
+		wantHTR, err := envelope.HashTreeRoot()
+		require.NoError(t, err)
+		gotHTR, err := decoded.HashTreeRoot()
+		require.NoError(t, err)
+		assert.Equal(t, wantHTR, gotHTR)
+	})
 
-	decoded := &eth.ExecutionPayloadEnvelope{}
-	require.NoError(t, decoded.UnmarshalSSZ(writer.Body.Bytes()))
-	wantHTR, err := envelope.HashTreeRoot()
-	require.NoError(t, err)
-	gotHTR, err := decoded.HashTreeRoot()
-	require.NoError(t, err)
-	assert.Equal(t, wantHTR, gotHTR)
-}
+	t.Run("beacon block root mismatch", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
 
-func TestExecutionPayloadEnvelope_BeaconBlockRootMismatch(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.GloasForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
+		envelope := testEnvelope()
+		envelopeCache := cache.NewExecutionPayloadEnvelopeCache()
+		envelopeCache.Set(&cache.ExecutionPayloadContents{Envelope: envelope})
+		server := &Server{CoreService: &core.Service{ExecutionPayloadEnvelopeCache: envelopeCache}}
+		requested := make([]byte, 32)
+		requested[0] = 1 // differs from the cached envelope's zero root
+		bbrHex := hexutil.Encode(requested)
+		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/validator/execution_payload_envelope/1/"+bbrHex, nil)
+		request.SetPathValue("slot", "1")
+		request.SetPathValue("beacon_block_root", bbrHex)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		server.ExecutionPayloadEnvelope(writer, request)
+		assert.Equal(t, http.StatusNotFound, writer.Code)
+		assert.StringContains(t, "does not match", writer.Body.String())
+	})
 
-	ctrl := gomock.NewController(t)
-	envelope := testEnvelope()
-	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).Return(
-		&eth.ExecutionPayloadEnvelopeResponse{Envelope: envelope}, nil,
-	)
+	t.Run("not found", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
 
-	server := &Server{V1Alpha1Server: v1alpha1Server}
-	requested := make([]byte, 32)
-	requested[0] = 1 // differs from the cached envelope's zero root
-	bbrHex := hexutil.Encode(requested)
-	request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/validator/execution_payload_envelope/1/"+bbrHex, nil)
-	request.SetPathValue("slot", "1")
-	request.SetPathValue("beacon_block_root", bbrHex)
-	writer := httptest.NewRecorder()
-	writer.Body = &bytes.Buffer{}
-	server.ExecutionPayloadEnvelope(writer, request)
-	assert.Equal(t, http.StatusNotFound, writer.Code)
-	assert.StringContains(t, "does not match", writer.Body.String())
+		server := &Server{CoreService: &core.Service{ExecutionPayloadEnvelopeCache: cache.NewExecutionPayloadEnvelopeCache()}}
+		bbrHex := hexutil.Encode(make([]byte, 32))
+		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/validator/execution_payload_envelope/1/"+bbrHex, nil)
+		request.SetPathValue("slot", "1")
+		request.SetPathValue("beacon_block_root", bbrHex)
+		writer := httptest.NewRecorder()
+		server.ExecutionPayloadEnvelope(writer, request)
+		assert.Equal(t, http.StatusNotFound, writer.Code)
+		assert.StringContains(t, "not found for slot 1", writer.Body.String())
+	})
 }
 
 func TestProduceBlockV4_SSZ_IncludePayloadFalse(t *testing.T) {

@@ -2,6 +2,7 @@ package beacon
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,15 +12,23 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	dbutil "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	p2pmock "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
-	mock2 "github.com/OffchainLabs/prysm/v7/testing/mock"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"go.uber.org/mock/gomock"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/emptypb"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 )
 
 func testJSONSignedBid() *structs.SignedExecutionPayloadBid {
@@ -35,7 +44,7 @@ func testJSONSignedBid() *structs.SignedExecutionPayloadBid {
 			FeeRecipient:          hex20,
 			GasLimit:              "30000000",
 			BuilderIndex:          "1",
-			Slot:                  "100",
+			Slot:                  "1",
 			Value:                 "0",
 			ExecutionPayment:      "0",
 			BlobKzgCommitments:    []string{},
@@ -95,18 +104,12 @@ func TestPublishSignedExecutionPayloadBid_Syncing(t *testing.T) {
 }
 
 func TestPublishSignedExecutionPayloadBid_JSON(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().SubmitSignedExecutionPayloadBid(
-		gomock.Any(), gomock.Any(),
-	).Return(&emptypb.Empty{}, nil)
-
 	s := &Server{
-		SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		HeadFetcher:             &chainMock.ChainService{},
-		TimeFetcher:             &chainMock.ChainService{},
-		OptimisticModeFetcher:   &chainMock.ChainService{},
-		V1Alpha1ValidatorServer: v1alpha1Server,
+		SyncChecker:           &mockSync.Sync{},
+		HeadFetcher:           &chainMock.ChainService{},
+		TimeFetcher:           &chainMock.ChainService{},
+		OptimisticModeFetcher: &chainMock.ChainService{},
+		CoreService:           executionPayloadBidCoreService(t),
 	}
 
 	bid := testJSONSignedBid()
@@ -160,18 +163,12 @@ func TestPublishSignedExecutionPayloadBid_InvalidSSZ(t *testing.T) {
 }
 
 func TestPublishSignedExecutionPayloadBid_SSZ(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().SubmitSignedExecutionPayloadBid(
-		gomock.Any(), gomock.Any(),
-	).Return(&emptypb.Empty{}, nil)
-
 	s := &Server{
-		SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		HeadFetcher:             &chainMock.ChainService{},
-		TimeFetcher:             &chainMock.ChainService{},
-		OptimisticModeFetcher:   &chainMock.ChainService{},
-		V1Alpha1ValidatorServer: v1alpha1Server,
+		SyncChecker:           &mockSync.Sync{},
+		HeadFetcher:           &chainMock.ChainService{},
+		TimeFetcher:           &chainMock.ChainService{},
+		OptimisticModeFetcher: &chainMock.ChainService{},
+		CoreService:           executionPayloadBidCoreService(t),
 	}
 
 	bid := &ethpb.SignedExecutionPayloadBid{
@@ -183,7 +180,7 @@ func TestPublishSignedExecutionPayloadBid_SSZ(t *testing.T) {
 			FeeRecipient:          make([]byte, 20),
 			GasLimit:              30000000,
 			BuilderIndex:          1,
-			Slot:                  100,
+			Slot:                  1,
 			Value:                 0,
 			ExecutionPayment:      0,
 			ExecutionRequestsRoot: make([]byte, 32),
@@ -204,18 +201,14 @@ func TestPublishSignedExecutionPayloadBid_SSZ(t *testing.T) {
 }
 
 func TestPublishSignedExecutionPayloadBid_ValidationFailure(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().SubmitSignedExecutionPayloadBid(
-		gomock.Any(), gomock.Any(),
-	).Return(nil, status.Error(codes.FailedPrecondition, "no proposer preferences seen for bid slot"))
-
+	coreService := executionPayloadBidCoreService(t)
+	coreService.ProposerPreferencesCache = cache.NewProposerPreferencesCache()
 	s := &Server{
-		SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		HeadFetcher:             &chainMock.ChainService{},
-		TimeFetcher:             &chainMock.ChainService{},
-		OptimisticModeFetcher:   &chainMock.ChainService{},
-		V1Alpha1ValidatorServer: v1alpha1Server,
+		SyncChecker:           &mockSync.Sync{},
+		HeadFetcher:           &chainMock.ChainService{},
+		TimeFetcher:           &chainMock.ChainService{},
+		OptimisticModeFetcher: &chainMock.ChainService{},
+		CoreService:           coreService,
 	}
 
 	body, err := json.Marshal(testJSONSignedBid())
@@ -232,18 +225,14 @@ func TestPublishSignedExecutionPayloadBid_ValidationFailure(t *testing.T) {
 }
 
 func TestPublishSignedExecutionPayloadBid_InternalError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().SubmitSignedExecutionPayloadBid(
-		gomock.Any(), gomock.Any(),
-	).Return(nil, status.Error(codes.Internal, "could not broadcast signed execution payload bid"))
-
+	coreService := executionPayloadBidCoreService(t)
+	coreService.P2P = &failingBidBroadcaster{MockBroadcaster: &p2pmock.MockBroadcaster{}}
 	s := &Server{
-		SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		HeadFetcher:             &chainMock.ChainService{},
-		TimeFetcher:             &chainMock.ChainService{},
-		OptimisticModeFetcher:   &chainMock.ChainService{},
-		V1Alpha1ValidatorServer: v1alpha1Server,
+		SyncChecker:           &mockSync.Sync{},
+		HeadFetcher:           &chainMock.ChainService{},
+		TimeFetcher:           &chainMock.ChainService{},
+		OptimisticModeFetcher: &chainMock.ChainService{},
+		CoreService:           coreService,
 	}
 
 	body, err := json.Marshal(testJSONSignedBid())
@@ -257,4 +246,74 @@ func TestPublishSignedExecutionPayloadBid_InternalError(t *testing.T) {
 	s.PublishSignedExecutionPayloadBid(w, req)
 	require.Equal(t, http.StatusInternalServerError, w.Code)
 	assert.Equal(t, true, bytes.Contains(w.Body.Bytes(), []byte("could not broadcast")))
+}
+
+func executionPayloadBidCoreService(t *testing.T) *core.Service {
+	t.Helper()
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+	ctx := t.Context()
+	st, _ := util.DeterministicGenesisStateGloas(t, 64)
+	parentRoot := [32]byte{}
+	require.NoError(t, transition.UpdateNextSlotCache(ctx, parentRoot[:], st))
+	database := dbutil.SetupDB(t)
+	genesisRoot := [32]byte{'g'}
+	require.NoError(t, database.SaveGenesisBlockRoot(ctx, genesisRoot))
+	preferencesCache := cache.NewProposerPreferencesCache()
+	preferencesCache.Add(cache.ProposerPreference{DependentRoot: genesisRoot}, 1)
+	return &core.Service{
+		SyncChecker:              &mockSync.Sync{},
+		P2P:                      &p2pmock.MockBroadcaster{},
+		BeaconDB:                 database,
+		ProposerPreferencesCache: preferencesCache,
+		HighestBidCache:          cache.NewHighestExecutionPayloadBidCache(),
+		OperationNotifier:        &chainMock.MockOperationNotifier{},
+		ForkchoiceFetcher: &chainMock.ChainService{
+			ForkchoiceGasLimits: map[[32]byte]uint64{parentRoot: 30_000_000},
+		},
+		NewExecutionPayloadBidVerifier: func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
+			return &acceptingBidVerifier{}
+		},
+	}
+}
+
+type acceptingBidVerifier struct{}
+
+func (*acceptingBidVerifier) VerifyCurrentOrNextSlot() error             { return nil }
+func (*acceptingBidVerifier) VerifyBidSlotMatches(primitives.Slot) error { return nil }
+func (*acceptingBidVerifier) VerifyBuilderActive(state.ReadOnlyBeaconState) error {
+	return nil
+}
+func (*acceptingBidVerifier) VerifyBuilderVersion(state.ReadOnlyBeaconState) error {
+	return nil
+}
+func (*acceptingBidVerifier) VerifyExecutionPaymentZero() error      { return nil }
+func (*acceptingBidVerifier) VerifyFeeRecipientMatches([]byte) error { return nil }
+func (*acceptingBidVerifier) VerifyBlobKzgCommitmentsLimit() error   { return nil }
+func (*acceptingBidVerifier) VerifyPrevRandao(state.ReadOnlyBeaconState) error {
+	return nil
+}
+func (*acceptingBidVerifier) VerifyParentBlockRootSeen(func([32]byte) bool) error { return nil }
+func (*acceptingBidVerifier) VerifyBidCompatibleWithHead(func(interfaces.ROExecutionPayloadBid) bool) error {
+	return nil
+}
+func (*acceptingBidVerifier) VerifyBidSlotHigherThanParent(primitives.Slot) error { return nil }
+func (*acceptingBidVerifier) VerifyParentBlockHash(func([32]byte, [32]byte) bool) error {
+	return nil
+}
+func (*acceptingBidVerifier) VerifyGasLimitTargetCompatible(uint64, uint64) error { return nil }
+func (*acceptingBidVerifier) VerifyBuilderCanCoverBid(state.ReadOnlyBeaconState) error {
+	return nil
+}
+func (*acceptingBidVerifier) VerifySignature(state.ReadOnlyBeaconState) error { return nil }
+func (*acceptingBidVerifier) SatisfyRequirement(verification.Requirement)     {}
+
+type failingBidBroadcaster struct {
+	*p2pmock.MockBroadcaster
+}
+
+func (*failingBidBroadcaster) Broadcast(context.Context, proto.Message) error {
+	return errors.New("broadcast failed")
 }
