@@ -161,6 +161,7 @@ func TestSpecificFiles(t *testing.T) {
 		writeRepo(t, map[string]string{
 			"proto/prysm/v1alpha1/beacon.go":  "package eth\n",
 			"validator/client/iface/iface.go": "package iface\n",
+			"validator/rpc/server.go":         "package rpc\n",
 		})
 
 		got, err := specificFiles(kindMocks)

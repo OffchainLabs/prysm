@@ -319,6 +319,10 @@ func configureBeacon(cliCtx *cli.Context) error {
 		return errors.Wrap(err, "could not configure builder circuit breaker")
 	}
 
+	if err := configureBuilderHeaderTimeout(cliCtx); err != nil {
+		return errors.Wrap(err, "could not configure builder header timeout")
+	}
+
 	if err := configureSlotsPerArchivedPoint(cliCtx); err != nil {
 		return errors.Wrap(err, "could not configure slots per archived point")
 	}
@@ -765,7 +769,6 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithChainStartFetcher(web3Service),
 		blockchain.WithExecutionEngineCaller(web3Service),
 		blockchain.WithAttestationCache(b.attestationCache),
-		blockchain.WithAttestationDataCache(b.attestationDataCache),
 		blockchain.WithAttestationPool(b.attestationPool),
 		blockchain.WithExitPool(b.exitPool),
 		blockchain.WithSlashingPool(b.slashingsPool),
@@ -811,7 +814,8 @@ func (b *BeaconNode) registerPOWChainService() error {
 	}
 
 	// Create GraffitiInfo for client version tracking in block graffiti
-	graffitiInfo := execution.NewGraffitiInfo()
+	appendClientVersion := !b.cliCtx.Bool(flags.DisableGraffitiClientAppend.Name)
+	graffitiInfo := execution.NewGraffitiInfo(appendClientVersion)
 
 	// skipcq: CRT-D0001
 	opts := append(

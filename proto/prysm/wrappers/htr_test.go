@@ -1,0 +1,384 @@
+package wrappers_test
+
+import (
+	"reflect"
+	"testing"
+
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+)
+
+func TestTransactionsRoot(t *testing.T) {
+	tests := []struct {
+		name    string
+		txs     [][]byte
+		want    [32]byte
+		wantErr bool
+	}{
+		{
+			name: "nil",
+			txs:  nil,
+			want: [32]byte{127, 254, 36, 30, 166, 1, 135, 253, 176, 24, 123, 250, 34, 222, 53, 209, 249, 190, 215, 171, 6, 29, 148, 1, 253, 71, 227, 74, 84, 251, 237, 225},
+		},
+		{
+			name: "empty",
+			txs:  [][]byte{},
+			want: [32]byte{127, 254, 36, 30, 166, 1, 135, 253, 176, 24, 123, 250, 34, 222, 53, 209, 249, 190, 215, 171, 6, 29, 148, 1, 253, 71, 227, 74, 84, 251, 237, 225},
+		},
+		{
+			name: "one tx",
+			txs:  [][]byte{{1, 2, 3}},
+			want: [32]byte{102, 209, 140, 87, 217, 28, 68, 12, 133, 42, 77, 136, 191, 18, 234, 105, 166, 228, 216, 235, 230, 95, 200, 73, 85, 33, 134, 254, 219, 97, 82, 209},
+		},
+		{
+			name: "max txs",
+			txs: func() [][]byte {
+				var txs [][]byte
+				for range fieldparams.MaxTxsPerPayloadLength {
+					txs = append(txs, []byte{})
+				}
+				return txs
+			}(),
+			want: [32]byte{13, 66, 254, 206, 203, 58, 48, 133, 78, 218, 48, 231, 120, 90, 38, 72, 73, 137, 86, 9, 31, 213, 185, 101, 103, 144, 0, 236, 225, 57, 47, 244},
+		},
+		{
+			name: "exceed max txs",
+			txs: func() [][]byte {
+				var txs [][]byte
+				for range fieldparams.MaxTxsPerPayloadLength + 1 {
+					txs = append(txs, []byte{})
+				}
+				return txs
+			}(),
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := wrappers.TransactionsRoot(tt.txs)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("TransactionsRoot() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("TransactionsRoot() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTransactionsRootProgressive(t *testing.T) {
+	tests := []struct {
+		name string
+		txs  [][]byte
+	}{
+		{
+			name: "nil",
+			txs:  nil,
+		},
+		{
+			name: "empty",
+			txs:  [][]byte{},
+		},
+		{
+			name: "one empty transaction",
+			txs:  [][]byte{{}},
+		},
+		{
+			name: "one transaction",
+			txs:  [][]byte{{0x01, 0x02, 0x03}},
+		},
+		{
+			name: "multiple transactions",
+			txs: [][]byte{
+				{0x01},
+				{},
+				make([]byte, fieldparams.RootLength+1),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := wrappers.TransactionsRootProgressive(tt.txs)
+			require.NoError(t, err)
+
+			transactions := make([]wrappers.ProgressiveTransaction, len(tt.txs))
+			for i, tx := range tt.txs {
+				transactions[i] = wrappers.ProgressiveTransaction(tx)
+			}
+			want, err := ssz.SliceRootProgressive(transactions)
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, want, got)
+
+			legacy, err := wrappers.TransactionsRoot(tt.txs)
+			require.NoError(t, err)
+			require.DeepNotSSZEqual(t, legacy, got)
+		})
+	}
+}
+
+func TestForkRoot(t *testing.T) {
+	tests := []struct {
+		name     string
+		fork     *ethpb.Fork
+		expected [32]byte
+	}{
+		{
+			name:     "nil",
+			fork:     nil,
+			expected: [32]byte{219, 86, 17, 78, 0, 253, 212, 193, 248, 92, 137, 43, 243, 90, 201, 168, 146, 137, 170, 236, 177, 235, 208, 169, 108, 222, 96, 106, 116, 139, 93, 113},
+		},
+		{
+			name: "valid fork",
+			fork: &ethpb.Fork{
+				PreviousVersion: []byte{123, 0, 0, 0},
+				CurrentVersion:  []byte{124, 0, 0, 0},
+				Epoch:           1234567890,
+			},
+			expected: [32]byte{19, 46, 77, 103, 92, 175, 247, 33, 100, 64, 17, 111, 199, 145, 69, 38, 217, 112, 6, 16, 149, 201, 225, 144, 192, 228, 197, 172, 157, 78, 114, 140},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := wrappers.ForkRoot(tt.fork)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestCheckPointRoot(t *testing.T) {
+	tests := []struct {
+		name       string
+		checkpoint *ethpb.Checkpoint
+		expected   [32]byte
+	}{
+		{
+			name:       "nil",
+			checkpoint: nil,
+			expected:   [32]byte{245, 165, 253, 66, 209, 106, 32, 48, 39, 152, 239, 110, 211, 9, 151, 155, 67, 0, 61, 35, 32, 217, 240, 232, 234, 152, 49, 169, 39, 89, 251, 75},
+		},
+		{
+			name: "valid checkpoint",
+			checkpoint: &ethpb.Checkpoint{
+				Epoch: 1234567890,
+				Root:  []byte{222, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+			},
+			expected: [32]byte{228, 65, 39, 109, 183, 249, 167, 232, 125, 239, 25, 155, 207, 4, 84, 174, 176, 229, 175, 224, 62, 33, 215, 254, 170, 220, 132, 65, 246, 128, 68, 194},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := wrappers.CheckpointRoot(tt.checkpoint)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestWithdrawalRoot(t *testing.T) {
+	tests := []struct {
+		name  string
+		input *enginev1.Withdrawal
+		want  [32]byte
+	}{
+		{
+			name:  "nil",
+			input: nil,
+			want:  [32]byte{0xdb, 0x56, 0x11, 0x4e, 0x0, 0xfd, 0xd4, 0xc1, 0xf8, 0x5c, 0x89, 0x2b, 0xf3, 0x5a, 0xc9, 0xa8, 0x92, 0x89, 0xaa, 0xec, 0xb1, 0xeb, 0xd0, 0xa9, 0x6c, 0xde, 0x60, 0x6a, 0x74, 0x8b, 0x5d, 0x71},
+		},
+		{
+			name: "empty",
+			input: &enginev1.Withdrawal{
+				Address: make([]byte, 20),
+			},
+			want: [32]byte{0xdb, 0x56, 0x11, 0x4e, 0x0, 0xfd, 0xd4, 0xc1, 0xf8, 0x5c, 0x89, 0x2b, 0xf3, 0x5a, 0xc9, 0xa8, 0x92, 0x89, 0xaa, 0xec, 0xb1, 0xeb, 0xd0, 0xa9, 0x6c, 0xde, 0x60, 0x6a, 0x74, 0x8b, 0x5d, 0x71},
+		},
+		{
+			name: "non-empty",
+			input: &enginev1.Withdrawal{
+				Index:          123,
+				ValidatorIndex: 123123,
+				Address:        []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0},
+				Amount:         50,
+			},
+			want: [32]byte{0x4f, 0xca, 0x3a, 0x43, 0x6e, 0xcc, 0x34, 0xad, 0x33, 0xde, 0x3c, 0x22, 0xa3, 0x32, 0x27, 0xa, 0x8c, 0x4e, 0x75, 0xd8, 0x39, 0xc1, 0xd7, 0x55, 0x78, 0x77, 0xd7, 0x14, 0x6b, 0x34, 0x6a, 0xb6},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := wrappers.WithdrawalRoot(tt.input)
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, tt.want, got)
+		})
+	}
+}
+
+func TestWithrawalSliceRoot(t *testing.T) {
+	tests := []struct {
+		name  string
+		input []*enginev1.Withdrawal
+		want  [32]byte
+	}{
+		{
+			name:  "empty",
+			input: make([]*enginev1.Withdrawal, 0),
+			want:  [32]byte{0x79, 0x29, 0x30, 0xbb, 0xd5, 0xba, 0xac, 0x43, 0xbc, 0xc7, 0x98, 0xee, 0x49, 0xaa, 0x81, 0x85, 0xef, 0x76, 0xbb, 0x3b, 0x44, 0xba, 0x62, 0xb9, 0x1d, 0x86, 0xae, 0x56, 0x9e, 0x4b, 0xb5, 0x35},
+		},
+		{
+			name: "non-empty",
+			input: []*enginev1.Withdrawal{{
+				Index:          123,
+				ValidatorIndex: 123123,
+				Address:        []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0},
+				Amount:         50,
+			},
+			},
+			want: [32]byte{0x10, 0x34, 0x29, 0xd1, 0x34, 0x30, 0xa0, 0x1c, 0x4, 0xdd, 0x3, 0xed, 0xe6, 0xa6, 0x33, 0xb2, 0xc9, 0x24, 0x23, 0x5c, 0x43, 0xca, 0xb2, 0x32, 0xaa, 0xed, 0xfe, 0xd5, 0x9, 0x78, 0xd1, 0x6f},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := wrappers.WithdrawalSliceRoot(tt.input, 16)
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, tt.want, got)
+		})
+	}
+}
+
+func TestWithdrawalSliceRootProgressive(t *testing.T) {
+	emptyWithdrawal := &enginev1.Withdrawal{
+		Address: make([]byte, fieldparams.FeeRecipientLength),
+	}
+	withdrawal := &enginev1.Withdrawal{
+		Index:          123,
+		ValidatorIndex: 123123,
+		Address:        []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0},
+		Amount:         50,
+	}
+	anotherWithdrawal := &enginev1.Withdrawal{
+		Index:          124,
+		ValidatorIndex: 123124,
+		Address:        []byte{2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1},
+		Amount:         51,
+	}
+	tests := []struct {
+		name        string
+		withdrawals []*enginev1.Withdrawal
+	}{
+		{
+			name:        "nil",
+			withdrawals: nil,
+		},
+		{
+			name:        "empty",
+			withdrawals: []*enginev1.Withdrawal{},
+		},
+		{
+			name:        "one empty withdrawal",
+			withdrawals: []*enginev1.Withdrawal{emptyWithdrawal},
+		},
+		{
+			name:        "one withdrawal",
+			withdrawals: []*enginev1.Withdrawal{withdrawal},
+		},
+		{
+			name:        "multiple withdrawals",
+			withdrawals: []*enginev1.Withdrawal{withdrawal, emptyWithdrawal, anotherWithdrawal},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := wrappers.WithdrawalSliceRootProgressive(tt.withdrawals)
+			require.NoError(t, err)
+			want, err := ssz.SliceRootProgressive(tt.withdrawals)
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, want, got)
+
+			legacy, err := wrappers.WithdrawalSliceRoot(tt.withdrawals, 16)
+			require.NoError(t, err)
+			require.DeepNotSSZEqual(t, legacy, got)
+		})
+	}
+
+	_, err := wrappers.WithdrawalSliceRoot([]*enginev1.Withdrawal{withdrawal}, 0)
+	require.ErrorContains(t, "slice exceeds max length", err)
+}
+
+func TestDepositRequestsSliceRoot(t *testing.T) {
+	tests := []struct {
+		name  string
+		input []*enginev1.DepositRequest
+		limit uint64
+		want  [32]byte
+	}{
+		{
+			name:  "empty",
+			input: make([]*enginev1.DepositRequest, 0),
+			want:  [32]byte{0xf5, 0xa5, 0xfd, 0x42, 0xd1, 0x6a, 0x20, 0x30, 0x27, 0x98, 0xef, 0x6e, 0xd3, 0x9, 0x97, 0x9b, 0x43, 0x0, 0x3d, 0x23, 0x20, 0xd9, 0xf0, 0xe8, 0xea, 0x98, 0x31, 0xa9, 0x27, 0x59, 0xfb, 0x4b},
+		},
+		{
+			name: "non-empty",
+			input: []*enginev1.DepositRequest{
+				{
+					Pubkey:                bytesutil.PadTo([]byte{0x01, 0x02}, 48),
+					WithdrawalCredentials: bytesutil.PadTo([]byte{0x03, 0x04}, 32),
+					Amount:                5,
+					Signature:             bytesutil.PadTo([]byte{0x06, 0x07}, 96),
+					Index:                 8,
+				},
+			},
+			limit: 16,
+			want:  [32]byte{0x34, 0xe3, 0x76, 0x5, 0xe5, 0x12, 0xe4, 0x75, 0x14, 0xf6, 0x72, 0x1c, 0x56, 0x5a, 0xa7, 0xf8, 0x8d, 0xaf, 0x84, 0xb7, 0xd7, 0x3e, 0xe6, 0x5f, 0x3f, 0xb1, 0x9f, 0x41, 0xf0, 0x10, 0x2b, 0xe6},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := wrappers.DepositRequestsSliceRoot(tt.input, tt.limit)
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, tt.want, got)
+		})
+	}
+}
+
+func TestWithdrawalRequestSliceRoot(t *testing.T) {
+	tests := []struct {
+		name  string
+		input []*enginev1.WithdrawalRequest
+		limit uint64
+		want  [32]byte
+	}{
+		{
+			name:  "empty",
+			input: make([]*enginev1.WithdrawalRequest, 0),
+			want:  [32]byte{0xf5, 0xa5, 0xfd, 0x42, 0xd1, 0x6a, 0x20, 0x30, 0x27, 0x98, 0xef, 0x6e, 0xd3, 0x9, 0x97, 0x9b, 0x43, 0x0, 0x3d, 0x23, 0x20, 0xd9, 0xf0, 0xe8, 0xea, 0x98, 0x31, 0xa9, 0x27, 0x59, 0xfb, 0x4b},
+		},
+		{
+			name: "non-empty",
+			input: []*enginev1.WithdrawalRequest{
+				{
+					SourceAddress:   bytesutil.PadTo([]byte{0x01, 0x02}, 20),
+					ValidatorPubkey: bytesutil.PadTo([]byte{0x03, 0x04}, 48),
+					Amount:          5,
+				},
+			},
+			limit: 16,
+			want:  [32]byte{0xa8, 0xab, 0xb2, 0x20, 0xe6, 0xd6, 0x5a, 0x7e, 0x56, 0x60, 0xe4, 0x9d, 0xae, 0x36, 0x17, 0x3d, 0x8b, 0xd, 0xde, 0x28, 0x96, 0x5, 0x82, 0x72, 0x18, 0xda, 0xc7, 0x5a, 0x53, 0xe0, 0x35, 0xf7},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := wrappers.WithdrawalRequestsSliceRoot(tt.input, tt.limit)
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, tt.want, got)
+		})
+	}
+}

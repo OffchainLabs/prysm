@@ -109,7 +109,7 @@ func (c *beaconApiNodeClient) Peers(ctx context.Context, in *empty.Empty) (*ethp
 func (c *beaconApiNodeClient) IsReady(ctx context.Context) bool {
 	statusCode, err := c.handler.GetStatusCode(ctx, "/eth/v1/node/health")
 	if err != nil {
-		log.WithError(err).WithField("url", api.RedactEndpoint(c.handler.Host())).Error("failed to get health of node")
+		log.WithError(err).WithField("url", api.RedactEndpointList(c.handler.Host())).Error("failed to get health of node")
 		return false
 	}
 	// Only 200 OK means the node is fully synced and ready.

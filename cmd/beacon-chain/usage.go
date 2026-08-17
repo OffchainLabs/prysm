@@ -75,6 +75,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.BatchVerifierLimit,
 			flags.StateDiffExponents,
 			flags.PostponeShutdownForProposals,
+			flags.DisableGraffitiClientAppend,
 		},
 	},
 	{
@@ -144,6 +145,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.MevRelayEndpoint,
 			flags.MinBuilderBid,
 			flags.MinBuilderDiff,
+			flags.BuilderHeaderTimeout,
 			flags.SuggestedFeeRecipient,
 			flags.DisableBuilderSSZ,
 		},

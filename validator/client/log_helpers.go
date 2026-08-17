@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -90,6 +91,7 @@ func (v *validator) saveSubmittedAtt(att ethpb.Att, pubkey []byte, isAggregate b
 		submittedAtts = v.submittedAggregates
 	} else {
 		submittedAtts = v.submittedAtts
+		v.setAttestedSlot(bytesutil.ToBytes48(pubkey), data.Slot)
 	}
 
 	if submittedAtts[key] == nil {
@@ -106,6 +108,34 @@ func (v *validator) saveSubmittedAtt(att ethpb.Att, pubkey []byte, isAggregate b
 	}
 
 	return nil
+}
+
+func (v *validator) setAttestedSlot(pubkey [fieldparams.BLSPubkeyLength]byte, slot primitives.Slot) {
+	epoch := slots.ToEpoch(slot)
+
+	v.attestedSlotsLock.Lock()
+	defer v.attestedSlotsLock.Unlock()
+
+	for attestedEpoch := range v.attestedSlotsByKeyByEpoch {
+		if attestedEpoch+1 < epoch {
+			delete(v.attestedSlotsByKeyByEpoch, attestedEpoch)
+		}
+	}
+
+	if v.attestedSlotsByKeyByEpoch[epoch] == nil {
+		v.attestedSlotsByKeyByEpoch[epoch] = make(map[[fieldparams.BLSPubkeyLength]byte]primitives.Slot)
+	}
+
+	v.attestedSlotsByKeyByEpoch[epoch][pubkey] = slot
+}
+
+func (v *validator) attestedSlot(epoch primitives.Epoch, pubkey [fieldparams.BLSPubkeyLength]byte) (primitives.Slot, bool) {
+	v.attestedSlotsLock.RLock()
+	defer v.attestedSlotsLock.RUnlock()
+
+	// Safe even if epoch is not in the map.
+	slot, ok := v.attestedSlotsByKeyByEpoch[epoch][pubkey]
+	return slot, ok
 }
 
 // saveSubmittedSyncMessage saves the submitted sync committee message along with the signer's
@@ -180,6 +210,11 @@ func (v *validator) LogSubmissions(slot primitives.Slot) {
 
 // logSubmittedAtts logs info about submitted attestations.
 func (v *validator) logSubmittedAtts(slot primitives.Slot) {
+	sinceSlotStartTime, err := v.sinceSlotStartTime(slot)
+	if err != nil {
+		log.WithError(err).WithField("slot", slot).Error("Failed to compute time since slot start")
+	}
+
 	for _, attLog := range v.submittedAtts {
 		pubkeys := make([]string, len(attLog.pubkeys))
 		for i, p := range attLog.pubkeys {
@@ -190,14 +225,15 @@ func (v *validator) logSubmittedAtts(slot primitives.Slot) {
 			committees[i] = strconv.FormatUint(uint64(c), 10)
 		}
 		log.WithFields(logrus.Fields{
-			"slot":             slot,
-			"committeeIndices": committees,
-			"pubkeys":          pubkeys,
-			"blockRoot":        fmt.Sprintf("%#x", bytesutil.Trunc(attLog.data.beaconBlockRoot)),
-			"sourceEpoch":      attLog.data.source.Epoch,
-			"sourceRoot":       fmt.Sprintf("%#x", bytesutil.Trunc(attLog.data.source.Root)),
-			"targetEpoch":      attLog.data.target.Epoch,
-			"targetRoot":       fmt.Sprintf("%#x", bytesutil.Trunc(attLog.data.target.Root)),
+			"slot":               slot,
+			"sinceSlotStartTime": sinceSlotStartTime,
+			"committeeIndices":   committees,
+			"pubkeys":            pubkeys,
+			"blockRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(attLog.data.beaconBlockRoot)),
+			"sourceEpoch":        attLog.data.source.Epoch,
+			"sourceRoot":         fmt.Sprintf("%#x", bytesutil.Trunc(attLog.data.source.Root)),
+			"targetEpoch":        attLog.data.target.Epoch,
+			"targetRoot":         fmt.Sprintf("%#x", bytesutil.Trunc(attLog.data.target.Root)),
 		}).Info("Submitted new attestations")
 	}
 	for _, attLog := range v.submittedAggregates {

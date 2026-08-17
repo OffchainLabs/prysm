@@ -21,7 +21,7 @@ func (s *Service) runLatePayloadRequest() {
 		return
 	}
 	offset := cfg.SlotComponentDuration(cfg.PayloadDueBPS)
-	ticker := slots.NewSlotTickerWithOffset(clock.GenesisTime(), offset, cfg.SecondsPerSlot)
+	ticker := slots.NewSlotTickerWithOffset(clock.GenesisTime(), offset, cfg.SlotDuration())
 	defer ticker.Done()
 	for {
 		select {

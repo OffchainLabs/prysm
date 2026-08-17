@@ -469,7 +469,7 @@ func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.Availability
 			return nil
 		}
 		// Bound the wait so unavailable columns error and retry instead of stalling import.
-		daCtx, cancel := context.WithTimeout(ctx, time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second)
+		daCtx, cancel := context.WithTimeout(ctx, params.BeaconConfig().SlotDuration())
 		defer cancel()
 		if err := s.areDataColumnsAvailable(daCtx, roBlock.Root(), slot); err != nil {
 			return errors.Wrapf(err, "are data columns available for block %#x with slot %d", roBlock.Root(), slot)
@@ -823,7 +823,7 @@ func (s *Service) runLateBlockTasks() {
 		attDueBPS = cfg.AttestationDueBPSGloas
 	}
 	attThreshold := cfg.SlotComponentDuration(attDueBPS)
-	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SecondsPerSlot)
+	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SlotDuration())
 	for {
 		select {
 		case slot := <-ticker.C():
@@ -831,7 +831,7 @@ func (s *Service) runLateBlockTasks() {
 				ticker.Done()
 				attDueBPS = cfg.AttestationDueBPSGloas
 				attThreshold = cfg.SlotComponentDuration(attDueBPS)
-				ticker = slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SecondsPerSlot)
+				ticker = slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SlotDuration())
 			}
 			s.goroutineCounter.sample(slot)
 			s.lateBlockTasks(s.ctx)

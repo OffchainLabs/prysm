@@ -303,6 +303,8 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	// Mevboost circuit breaker
 	MaxBuilderConsecutiveMissedSlots: 3,
 	MaxBuilderEpochMissedSlots:       5,
+	// Builder `getHeader` timeout.
+	BuilderHeaderTimeout: BuilderProposalDelayTolerance,
 
 	// Gloas builder circuit breaker
 	BuilderAllowedFailures:         0,
@@ -386,6 +388,9 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	AttestationSubnetPrefixBits:     6,
 	SubnetsPerNode:                  2,
 	NodeIdBits:                      256,
+
+	// Values related to the fast confirmation rule.
+	ConfirmationByzantineThreshold: 25,
 
 	BlobSchedule: []BlobScheduleEntry{
 		{

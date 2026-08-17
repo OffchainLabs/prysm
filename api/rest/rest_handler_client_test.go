@@ -1,4 +1,4 @@
-package beacon_api
+package rest
 
 import (
 	"bytes"
@@ -12,8 +12,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api"
-	"github.com/OffchainLabs/prysm/v7/api/rest"
-	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -22,16 +20,32 @@ import (
 	"github.com/sirupsen/logrus/hooks/test"
 )
 
-func TestGet(t *testing.T) {
-	ctx := t.Context()
-	const endpoint = "/example/rest/api/endpoint"
-	genesisJson := &structs.GetGenesisResponse{
-		Data: &structs.Genesis{
+// genesisResponse is a small stand-in JSON payload for exercising the handler's
+// request/response plumbing.
+type genesisResponse struct {
+	Data *genesisData `json:"data"`
+}
+
+type genesisData struct {
+	GenesisTime           string `json:"genesis_time"`
+	GenesisValidatorsRoot string `json:"genesis_validators_root"`
+	GenesisForkVersion    string `json:"genesis_fork_version"`
+}
+
+func testGenesis() *genesisResponse {
+	return &genesisResponse{
+		Data: &genesisData{
 			GenesisTime:           "123",
 			GenesisValidatorsRoot: "0x456",
 			GenesisForkVersion:    "0x789",
 		},
 	}
+}
+
+func TestGet(t *testing.T) {
+	ctx := t.Context()
+	const endpoint = "/example/rest/api/endpoint"
+	genesisJson := testGenesis()
 	mux := http.NewServeMux()
 	mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
 		marshalledJson, err := json.Marshal(genesisJson)
@@ -44,8 +58,8 @@ func TestGet(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	handler := rest.NewHandler(http.Client{Timeout: time.Second * 5}, server.URL)
-	resp := &structs.GetGenesisResponse{}
+	handler := newHandler(http.Client{Timeout: time.Second * 5}, server.URL)
+	resp := &genesisResponse{}
 	require.NoError(t, handler.Get(ctx, endpoint+"?arg1=abc&arg2=def", resp))
 	assert.DeepEqual(t, genesisJson, resp)
 }
@@ -53,13 +67,7 @@ func TestGet(t *testing.T) {
 func TestGetSSZ(t *testing.T) {
 	ctx := context.Background()
 	const endpoint = "/example/rest/api/ssz"
-	genesisJson := &structs.GetGenesisResponse{
-		Data: &structs.Genesis{
-			GenesisTime:           "123",
-			GenesisValidatorsRoot: "0x456",
-			GenesisForkVersion:    "0x789",
-		},
-	}
+	genesisJson := testGenesis()
 
 	t.Run("Successful SSZ response", func(t *testing.T) {
 		expectedBody := []byte{10, 20, 30, 40}
@@ -75,7 +83,7 @@ func TestGetSSZ(t *testing.T) {
 		server := httptest.NewServer(mux)
 		defer server.Close()
 
-		handler := rest.NewHandler(http.Client{Timeout: time.Second * 5}, server.URL)
+		handler := newHandler(http.Client{Timeout: time.Second * 5}, server.URL)
 
 		body, header, err := handler.GetSSZ(ctx, endpoint)
 		require.NoError(t, err)
@@ -101,13 +109,13 @@ func TestGetSSZ(t *testing.T) {
 		server := httptest.NewServer(mux)
 		defer server.Close()
 
-		handler := rest.NewHandler(http.Client{Timeout: time.Second * 5}, server.URL)
+		handler := newHandler(http.Client{Timeout: time.Second * 5}, server.URL)
 
 		body, header, err := handler.GetSSZ(ctx, endpoint)
 		require.NoError(t, err)
 		assert.LogsContain(t, logHook, "Server responded with non primary accept type")
 		require.Equal(t, api.JsonMediaType, header.Get("Content-Type"))
-		resp := &structs.GetGenesisResponse{}
+		resp := &genesisResponse{}
 		require.NoError(t, json.Unmarshal(body, resp))
 		require.Equal(t, "123", resp.Data.GenesisTime)
 	})
@@ -126,7 +134,7 @@ func TestGetSSZ(t *testing.T) {
 		server := httptest.NewServer(mux)
 		defer server.Close()
 
-		handler := rest.NewHandler(http.Client{Timeout: time.Second * 5}, server.URL)
+		handler := newHandler(http.Client{Timeout: time.Second * 5}, server.URL)
 
 		_, _, err := handler.GetSSZ(ctx, endpoint)
 		require.NoError(t, err)
@@ -148,7 +156,7 @@ func TestAcceptOverrideSSZ(t *testing.T) {
 		require.NoError(t, err)
 	}))
 	defer srv.Close()
-	c := rest.NewHandler(http.Client{Timeout: time.Second * 5}, srv.URL)
+	c := newHandler(http.Client{Timeout: time.Second * 5}, srv.URL)
 	_, _, err := c.GetSSZ(t.Context(), "/test")
 	require.NoError(t, err)
 }
@@ -159,13 +167,7 @@ func TestPost(t *testing.T) {
 	dataBytes := []byte{1, 2, 3, 4, 5}
 	headers := map[string]string{"foo": "bar"}
 
-	genesisJson := &structs.GetGenesisResponse{
-		Data: &structs.Genesis{
-			GenesisTime:           "123",
-			GenesisValidatorsRoot: "0x456",
-			GenesisForkVersion:    "0x789",
-		},
-	}
+	genesisJson := testGenesis()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
@@ -191,8 +193,8 @@ func TestPost(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	handler := rest.NewHandler(http.Client{Timeout: time.Second * 5}, server.URL)
-	resp := &structs.GetGenesisResponse{}
+	handler := newHandler(http.Client{Timeout: time.Second * 5}, server.URL)
+	resp := &genesisResponse{}
 	require.NoError(t, handler.Post(ctx, endpoint, headers, bytes.NewBuffer(dataBytes), resp))
 	assert.DeepEqual(t, genesisJson, resp)
 }
@@ -238,7 +240,7 @@ func TestGetStatusCode(t *testing.T) {
 			server := httptest.NewServer(mux)
 			defer server.Close()
 
-			handler := rest.NewHandler(http.Client{Timeout: time.Second * 5}, server.URL)
+			handler := newHandler(http.Client{Timeout: time.Second * 5}, server.URL)
 
 			statusCode, err := handler.GetStatusCode(ctx, endpoint)
 			require.NoError(t, err)
@@ -247,7 +249,7 @@ func TestGetStatusCode(t *testing.T) {
 	}
 
 	t.Run("returns error on connection failure", func(t *testing.T) {
-		handler := rest.NewHandler(http.Client{Timeout: time.Millisecond * 100}, "http://localhost:99999")
+		handler := newHandler(http.Client{Timeout: time.Millisecond * 100}, "http://localhost:99999")
 
 		_, err := handler.GetStatusCode(ctx, endpoint)
 		require.ErrorContains(t, "failed to perform request", err)

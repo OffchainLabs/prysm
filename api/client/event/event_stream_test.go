@@ -133,8 +133,8 @@ func TestEventStreamRequestError(t *testing.T) {
 	require.NotNil(t, err)
 
 	event := <-eventsChannel
-	if event.EventType != EventConnectionError {
-		t.Errorf("Expected event type %q, got %q", EventConnectionError, event.EventType)
+	if event.Type != EventConnectionError {
+		t.Errorf("Expected event type %q, got %q", EventConnectionError, event.Type)
 	}
 
 }
