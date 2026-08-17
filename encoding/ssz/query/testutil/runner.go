@@ -4,9 +4,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz/query"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 func RunStructTest(t *testing.T, spec TestSpec) {
