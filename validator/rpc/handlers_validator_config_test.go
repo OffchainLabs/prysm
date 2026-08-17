@@ -162,6 +162,25 @@ func TestServer_SetBuilders(t *testing.T) {
 		require.Equal(t, 0, len(cfg.Builders))
 	})
 
+	t.Run("empty object is override-free", func(t *testing.T) {
+		srv, keys := setupConfigServer(t, 1)
+		pk := hexutil.Encode(keys[0][:])
+		recipient := common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")
+		require.NoError(t, srv.validatorService.SetProposerSettings(t.Context(), &proposer.Settings{
+			Version: proposer.SchemaV1,
+			DefaultConfig: &proposer.Option{
+				FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: recipient},
+				BuilderConfig:      &proposer.BuilderConfig{Enabled: true},
+			},
+		}))
+		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk, `{}`).Code)
+
+		// Nothing is stored for the key and the enabled default still applies.
+		require.IsNil(t, srv.validatorService.ProposerSettings().ProposeConfig[keys[0]].BuilderConfig)
+		_, _, enabled := srv.validatorService.ProposerSettings().RegistrationFor(keys[0])
+		require.Equal(t, true, enabled)
+	})
+
 	t.Run("gloas-only preferences keep the key's pre-fork registration", func(t *testing.T) {
 		srv, keys := setupConfigServer(t, 1)
 		pk := hexutil.Encode(keys[0][:])

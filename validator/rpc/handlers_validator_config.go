@@ -81,6 +81,11 @@ func (s *Server) SetBuilders(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	// Per spec an override-free body ({}) configures nothing: store no per-key
+	// builder config, so the key keeps following the client defaults.
+	if bc.Builders == nil && bc.MinBid == nil && bc.BuilderBoostFactor == nil {
+		bc = nil
+	}
 
 	err = s.validatorService.UpdateProposerSettings(ctx, func(settings *proposer.Settings) (*proposer.Settings, error) {
 		if settings == nil {
