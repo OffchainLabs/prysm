@@ -291,6 +291,26 @@ func ProcessPendingDeposits(ctx context.Context, st state.BeaconState, activeBal
 	if err != nil {
 		return err
 	}
+	// Defensive cleanup for malformed states that may contain nil entries.
+	// Avoid allocating unless nil entries are actually present.
+	for i, pendingDeposit := range pendingDeposits {
+		if pendingDeposit != nil {
+			continue
+		}
+		log.Warn("Skipping nil pending deposit in ProcessPendingDeposits; state may be malformed")
+		sanitizedPendingDeposits := make([]*ethpb.PendingDeposit, 0, len(pendingDeposits)-1)
+		sanitizedPendingDeposits = append(sanitizedPendingDeposits, pendingDeposits[:i]...)
+		for _, d := range pendingDeposits[i+1:] {
+			if d == nil {
+				log.Warn("Skipping nil pending deposit in ProcessPendingDeposits; state may be malformed")
+				continue
+			}
+			sanitizedPendingDeposits = append(sanitizedPendingDeposits, d)
+		}
+		pendingDeposits = sanitizedPendingDeposits
+		break
+	}
+
 	for _, pendingDeposit := range pendingDeposits {
 		// Do not process pendingDeposit requests if Eth1 bridge deposits are not yet applied.
 		if pendingDeposit.Slot > params.BeaconConfig().GenesisSlot && st.Eth1DepositIndex() < startIndex {
