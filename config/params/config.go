@@ -272,6 +272,16 @@ type BeaconChainConfig struct {
 	MinBuilderBid                    uint64          // MinBuilderBid is the minimum value that the builder's block can have to be considered by this node.
 	MinBuilderDiff                   uint64          // MinBuilderDiff is the minimum value above the local block value that the builder has to bid to be considered by this node
 	BuilderHeaderTimeout             time.Duration   // BuilderHeaderTimeout is how long to wait for a builder relay `getHeader` response before falling back to local block building. Known as `BUILDER_PROPOSAL_DELAY_TOLERANCE` in the builder spec.
+
+	// Gloas builder circuit breaker. These are local policy, not spec values.
+	BuilderAllowedFailures         uint64           // BuilderAllowedFailures is how many payload delivery failures a builder is allowed before being blacklisted.
+	BuilderCriticalFailures        uint64           // BuilderCriticalFailures is the failure count at which a builder is blacklisted for BuilderCriticalBlacklistPeriod.
+	BuilderBlacklistPeriod         primitives.Epoch // BuilderBlacklistPeriod is how many epochs a builder stays blacklisted on its first offense.
+	BuilderCriticalBlacklistPeriod primitives.Epoch // BuilderCriticalBlacklistPeriod is how many epochs a builder stays blacklisted once it reaches BuilderCriticalFailures.
+	BuilderFailureBackOffPeriod    primitives.Epoch // BuilderFailureBackOffPeriod is how many epochs without a failure reset a builder's failure counter.
+	BuilderCriticalFailedBuilders  uint64           // BuilderCriticalFailedBuilders is how many concurrently blacklisted builders force a fallback to self-building.
+	BuilderFailureWeightThreshold  uint64           // BuilderFailureWeightThreshold is the percentage of committee weight a block needs before its missing payload is charged to the builder.
+
 	// Execution engine timeout value
 	ExecutionEngineTimeoutValue uint64 // ExecutionEngineTimeoutValue defines the seconds to wait before timing out engine endpoints with execution payload execution semantics (newPayload, forkchoiceUpdated).
 

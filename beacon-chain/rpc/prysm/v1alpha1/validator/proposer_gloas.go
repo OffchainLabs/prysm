@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -44,7 +45,10 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 			return nil, status.Errorf(codes.Internal, "Could not get local payload and no P2P bid fallback: %v", fbErr)
 		}
 	} else {
-		selfBuildOnly := local.OverrideBuilder || skipBuilder
+		// The circuit breaker gate is applied here rather than at bid selection so the builder-API
+		// round trip is skipped too.
+		epoch := slots.ToEpoch(sBlk.Block().Slot())
+		selfBuildOnly := local.OverrideBuilder || skipBuilder || vs.BuilderCircuitBreaker.SelfBuildOnly(epoch)
 		var builderBid *ethpb.SignedExecutionPayloadBid
 		var builderURL string
 		var maxExecutionPayment uint64

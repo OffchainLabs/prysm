@@ -104,6 +104,9 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 		log.WithError(err).Warn("Could not update head")
 	}
 	newBlockHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
+	// Weights are fresh here: the block's attestations were just fed to forkchoice and Head
+	// recomputed them. A block that lost the head race is still valid evidence about its parent.
+	s.checkBuilderPayloadFailure(cfg.roblock.Block(), cfg.postState)
 	if cfg.headRoot != cfg.roblock.Root() {
 		s.logNonCanonicalBlockReceived(cfg.roblock.Root(), cfg.headRoot)
 		return nil

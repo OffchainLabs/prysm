@@ -21,6 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/io/logs"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -172,8 +173,13 @@ func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.
 		bestValue primitives.Gwei
 	)
 	bidLog := make([]string, 0, len(bids))
+	epoch := slots.ToEpoch(q.slot)
 	for _, pb := range bids {
 		if pb.Bid == nil {
+			continue
+		}
+		if vs.BuilderCircuitBreaker.Blacklisted(pb.Bid.Message.BuilderIndex, epoch) {
+			bidLog = append(bidLog, fmt.Sprintf("%s(builder=%d discarded: blacklisted)", logs.MaskCredentialsLogging(pb.BuilderURL), pb.Bid.Message.BuilderIndex))
 			continue
 		}
 		if err := vs.validateBuilderBid(head, pb.Bid, q); err != nil {
@@ -298,6 +304,8 @@ func (vs *Server) submitBlockToBuilder(block interfaces.ReadOnlySignedBeaconBloc
 }
 
 // setP2PBidFallback uses a cached P2P bid when the local EL self-build is unavailable.
+// The circuit breaker is deliberately not consulted here: with no local payload at all, a block
+// carrying a possibly-undelivered bid still beats missing the slot outright.
 func (vs *Server) setP2PBidFallback(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, parentFull bool) error {
 	if vs.HighestBidCache == nil {
 		return errors.New("highest bid cache is nil")
@@ -326,6 +334,10 @@ func (vs *Server) cachedP2PBid(sBlk interfaces.SignedBeaconBlock, local *consens
 	copy(parentHash[:], local.ExecutionData.ParentHash())
 	cached, ok := vs.HighestBidCache.Get(sBlk.Block().Slot(), parentHash, sBlk.Block().ParentRoot())
 	if !ok {
+		return nil
+	}
+	// The bid may have been cached before the builder was blacklisted.
+	if vs.BuilderCircuitBreaker.Blacklisted(cached.Message.BuilderIndex, slots.ToEpoch(sBlk.Block().Slot())) {
 		return nil
 	}
 	return cached

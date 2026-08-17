@@ -58,6 +58,11 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 		return pubsub.ValidationIgnore, err
 	}
 
+	// [IGNORE] local policy: this builder is blacklisted by the circuit breaker.
+	if s.builderCircuitBreaker.Blacklisted(bid.BuilderIndex(), slots.ToEpoch(bid.Slot())) {
+		return pubsub.ValidationIgnore, nil
+	}
+
 	// [IGNORE] this is the first signed bid seen with a valid signature from the given builder for the tuple (bid.slot, bid.parent_block_hash, bid.parent_block_root).
 	// Cache is populated only after VerifySignature below; a hit here implies a valid-sig bid was already seen.
 	tupleKey := executionPayloadBidTupleKey(bid)

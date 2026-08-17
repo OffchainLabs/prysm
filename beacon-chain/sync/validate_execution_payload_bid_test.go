@@ -290,6 +290,45 @@ func TestValidateExecutionPayloadBidGossip_HappyPath(t *testing.T) {
 	require.DeepEqual(t, signedBid, got)
 }
 
+// A blacklisted builder must be ignored before any verification runs, and must not be cached.
+func TestValidateExecutionPayloadBidGossip_BlacklistedBuilderIgnored(t *testing.T) {
+	ctx := context.Background()
+	s, msg, signedBid := setupExecutionPayloadBidService(t)
+	s.builderCircuitBreaker = cache.NewBuilderCircuitBreaker()
+	// The bid is at slot 1, so the failure has to be charged in epoch 0.
+	require.Equal(t, true, s.builderCircuitBreaker.RecordFailure(signedBid.Message.BuilderIndex, [32]byte{0xff}, 0))
+	// Every verifier method would reject if reached.
+	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{
+		errCurrentOrNextSlot: errors.New("slot"),
+		errBuilderActive:     errors.New("builder"),
+		errSignature:         errors.New("sig"),
+	})
+
+	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+
+	require.Equal(t, false, s.hasSeenExecutionPayloadBid(executionPayloadBidTupleKey(mustBid(t, signedBid))))
+	_, cached := s.highestExecutionPayloadBidCache.Get(
+		signedBid.Message.Slot,
+		bytesutil.ToBytes32(signedBid.Message.ParentBlockHash),
+		bytesutil.ToBytes32(signedBid.Message.ParentBlockRoot))
+	require.Equal(t, false, cached)
+}
+
+// A bid from a builder that is not blacklisted is unaffected by the circuit breaker.
+func TestValidateExecutionPayloadBidGossip_OtherBuilderNotBlacklisted(t *testing.T) {
+	ctx := context.Background()
+	s, msg, signedBid := setupExecutionPayloadBidService(t)
+	s.builderCircuitBreaker = cache.NewBuilderCircuitBreaker()
+	require.Equal(t, true, s.builderCircuitBreaker.RecordFailure(signedBid.Message.BuilderIndex+1, [32]byte{0xff}, 0))
+	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
+
+	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, result)
+}
+
 func TestValidateExecutionPayloadBidGossip_NextSlotStateMissIgnored(t *testing.T) {
 	ctx := context.Background()
 	s, msg, _ := setupExecutionPayloadBidService(t)

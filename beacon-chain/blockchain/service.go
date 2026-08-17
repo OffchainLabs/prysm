@@ -81,6 +81,7 @@ type config struct {
 	PayloadIDCache            *cache.PayloadIDCache
 	ProposerPreferencesCache  *cache.ProposerPreferencesCache
 	SubscribedValidatorsCache *cache.SubscribedValidatorsCache
+	BuilderCircuitBreaker     *cache.BuilderCircuitBreaker
 	AttestationCache          *cache.AttestationCache
 	AttPool                   attestations.Pool
 	ExitPool                  voluntaryexits.PoolManager
