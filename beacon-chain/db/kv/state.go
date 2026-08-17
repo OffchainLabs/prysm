@@ -770,6 +770,11 @@ func marshalState(ctx context.Context, st state.ReadOnlyBeaconState) ([]byte, er
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.marshalState")
 	defer span.End()
 
+	startTime := time.Now()
+	defer func() {
+		log.WithField("duration", time.Since(startTime)).Debug("Marshaled state")
+	}()
+
 	switch st.Version() {
 	case version.Phase0:
 		rState, ok := toProtoUnsafe(ctx, st).(*ethpb.BeaconState)
