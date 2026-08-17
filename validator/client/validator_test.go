@@ -22,7 +22,6 @@ import (
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/async/event"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
@@ -115,6 +114,8 @@ type mockKeymanager struct {
 var errMockKeyExists = errors.New("key already in mockKeymanager map")
 
 func (m *mockKeymanager) add(pairs ...keypair) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 	for _, kp := range pairs {
 		if _, exists := m.keysMap[kp.pub]; exists {
 			return errMockKeyExists
@@ -594,10 +595,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		flgs := features.Get()
-		flgs.EnableDoppelGanger = true
-		reset := features.InitWithReset(flgs)
-		defer reset()
+		enableDoppelGanger(t)
 		tests := []struct {
 			name            string
 			validatorSetter func(t *testing.T) *validator
@@ -794,7 +792,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(fmt.Sprintf("%s/isSlashingProtectionMinimal:%v", tt.name, isSlashingProtectionMinimal), func(t *testing.T) {
 				v := tt.validatorSetter(t)
-				if err := v.CheckDoppelGanger(t.Context()); tt.err != "" {
+				if err := v.CheckDoppelGangerAtStartup(t.Context()); tt.err != "" {
 					assert.ErrorContains(t, tt.err, err)
 				}
 			})
