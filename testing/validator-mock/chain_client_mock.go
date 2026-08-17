@@ -14,7 +14,6 @@ import (
 	reflect "reflect"
 
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	empty "github.com/golang/protobuf/ptypes/empty"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -42,36 +41,6 @@ func (m *MockChainClient) EXPECT() *MockChainClientMockRecorder {
 	return m.recorder
 }
 
-// ChainHead mocks base method.
-func (m *MockChainClient) ChainHead(ctx context.Context, in *empty.Empty) (*eth.ChainHead, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ChainHead", ctx, in)
-	ret0, _ := ret[0].(*eth.ChainHead)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ChainHead indicates an expected call of ChainHead.
-func (mr *MockChainClientMockRecorder) ChainHead(ctx, in any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChainHead", reflect.TypeOf((*MockChainClient)(nil).ChainHead), ctx, in)
-}
-
-// ValidatorBalances mocks base method.
-func (m *MockChainClient) ValidatorBalances(ctx context.Context, in *eth.ListValidatorBalancesRequest) (*eth.ValidatorBalances, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidatorBalances", ctx, in)
-	ret0, _ := ret[0].(*eth.ValidatorBalances)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ValidatorBalances indicates an expected call of ValidatorBalances.
-func (mr *MockChainClientMockRecorder) ValidatorBalances(ctx, in any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidatorBalances", reflect.TypeOf((*MockChainClient)(nil).ValidatorBalances), ctx, in)
-}
-
 // ValidatorPerformance mocks base method.
 func (m *MockChainClient) ValidatorPerformance(arg0 context.Context, arg1 *eth.ValidatorPerformanceRequest) (*eth.ValidatorPerformanceResponse, error) {
 	m.ctrl.T.Helper()
@@ -85,19 +54,4 @@ func (m *MockChainClient) ValidatorPerformance(arg0 context.Context, arg1 *eth.V
 func (mr *MockChainClientMockRecorder) ValidatorPerformance(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidatorPerformance", reflect.TypeOf((*MockChainClient)(nil).ValidatorPerformance), arg0, arg1)
-}
-
-// Validators mocks base method.
-func (m *MockChainClient) Validators(ctx context.Context, in *eth.ListValidatorsRequest) (*eth.Validators, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Validators", ctx, in)
-	ret0, _ := ret[0].(*eth.Validators)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Validators indicates an expected call of Validators.
-func (mr *MockChainClientMockRecorder) Validators(ctx, in any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validators", reflect.TypeOf((*MockChainClient)(nil).Validators), ctx, in)
 }

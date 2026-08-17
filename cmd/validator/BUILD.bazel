@@ -14,11 +14,11 @@ go_library(
     deps = [
         "//cmd:go_default_library",
         "//cmd/validator/accounts:go_default_library",
+        "//cmd/validator/authtoken:go_default_library",
         "//cmd/validator/db:go_default_library",
         "//cmd/validator/flags:go_default_library",
         "//cmd/validator/slashing-protection:go_default_library",
         "//cmd/validator/wallet:go_default_library",
-        "//cmd/validator/web:go_default_library",
         "//config/features:go_default_library",
         "//io/file:go_default_library",
         "//io/logs:go_default_library",

@@ -3,7 +3,6 @@ package rpc
 import (
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
 	"github.com/OffchainLabs/prysm/v7/api/rest"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/client"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -48,11 +47,6 @@ func (s *Server) registerBeaconClient() error {
 	if s.beaconNodeCert != "" && s.beaconNodeEndpoint != "" {
 		log.Info("Established secure gRPC connection")
 	}
-	if grpcConn := conn.GetGrpcClientConn(); grpcConn != nil {
-		s.healthClient = ethpb.NewHealthClient(grpcConn)
-	}
-
-	s.chainClient = client.NewChainClient(conn)
 	s.nodeClient = client.NewNodeClient(conn)
 	s.beaconNodeValidatorClient = client.NewValidatorClient(conn)
 	return nil

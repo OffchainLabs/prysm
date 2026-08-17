@@ -4,7 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/hex"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,11 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/golang-jwt/jwt/v4"
 	logTest "github.com/sirupsen/logrus/hooks/test"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 )
 
 func setupWalletDir(t testing.TB) string {
@@ -38,20 +35,9 @@ func TestServer_AuthenticateUsingExistingToken(t *testing.T) {
 
 	err := srv.initializeAuthToken()
 	require.NoError(t, err)
+	token := srv.authToken
 
-	unaryInfo := &grpc.UnaryServerInfo{
-		FullMethod: "Proto.CreateWallet",
-	}
-	unaryHandler := func(ctx context.Context, req any) (any, error) {
-		return nil, nil
-	}
-	ctxMD := map[string][]string{
-		"authorization": {"Bearer " + srv.authToken},
-	}
-	ctx := t.Context()
-	ctx = metadata.NewIncomingContext(ctx, ctxMD)
-	_, err = srv.AuthTokenInterceptor()(ctx, "xyz", unaryInfo, unaryHandler)
-	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, keymanagerRequestStatus(srv, token))
 
 	// Next up, we make the same request but reinitialize the server and we should still
 	// pass with the same auth token.
@@ -60,8 +46,20 @@ func TestServer_AuthenticateUsingExistingToken(t *testing.T) {
 	}
 	err = srv.initializeAuthToken()
 	require.NoError(t, err)
-	_, err = srv.AuthTokenInterceptor()(ctx, "xyz", unaryInfo, unaryHandler)
-	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, keymanagerRequestStatus(srv, token))
+}
+
+// keymanagerRequestStatus sends an authenticated keymanager API request through the
+// auth middleware and returns the resulting status code.
+func keymanagerRequestStatus(srv *Server, token string) int {
+	handler := srv.AuthTokenHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest(http.MethodGet, api.KeymanagerApiPrefix+"/keystores", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	return w.Code
 }
 
 func TestServer_RefreshAuthTokenOnFileChange(t *testing.T) {
@@ -85,7 +83,7 @@ func TestServer_RefreshAuthTokenOnFileChange(t *testing.T) {
 	time.Sleep(time.Millisecond * 250)
 
 	// Update the auth token file with a new secret.
-	require.NoError(t, CreateAuthToken(srv.authTokenPath, "localhost:7500"))
+	require.NoError(t, CreateAuthToken(srv.authTokenPath))
 
 	// The service should have picked up the file change and set the jwt secret to the new one.
 	time.Sleep(time.Millisecond * 500)
@@ -125,7 +123,6 @@ func TestServer_LegacyTokensStillWork(t *testing.T) {
 	err = srv.initializeAuthToken()
 	require.NoError(t, err)
 
-	require.Equal(t, hexutil.Encode(srv.jwtSecret), "0xb5bbbaf533b625a93741978857f13d7adeca58445a1fb00ecf3373420b92776c")
 	require.Equal(t, srv.authToken, "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.MxwOozSH-TLbW_XKepjyYDHm2IT8Ki0tD3AHuajfNMg")
 
 	f, err := os.Open(filepath.Clean(srv.authTokenPath))
@@ -154,7 +151,8 @@ func TestServer_LegacyTokensStillWork(t *testing.T) {
 }
 
 // TODO: remove this test when legacy files are removed
-func TestServer_LegacyTokensBadSecret(t *testing.T) {
+// The first line of a legacy file is an unused jwt key, so its contents are ignored.
+func TestServer_LegacyTokensIgnoreFirstLine(t *testing.T) {
 	// Initializing for the first time, there is no auth token file in
 	// the wallet directory, so we generate a jwt token and secret from scratch.
 	walletDir := setupWalletDir(t)
@@ -180,7 +178,8 @@ func TestServer_LegacyTokensBadSecret(t *testing.T) {
 	}
 
 	err = srv.initializeAuthToken()
-	require.ErrorContains(t, "could not decode JWT secret", err)
+	require.NoError(t, err)
+	require.Equal(t, srv.authToken, "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.MxwOozSH-TLbW_XKepjyYDHm2IT8Ki0tD3AHuajfNMg")
 }
 
 func Test_initializeAuthToken(t *testing.T) {
@@ -213,21 +212,4 @@ func Test_initializeAuthToken(t *testing.T) {
 	err = srv3.initializeAuthToken()
 	require.NoError(t, err)
 	require.NotEqual(t, srv.authToken, srv3.authToken)
-}
-
-// "createTokenString" now uses jwt.RegisteredClaims instead of jwt.StandardClaims (deprecated),
-// make sure empty jwt.RegisteredClaims and empty jwt.StandardClaims generates the same token.
-func Test_UseRegisteredClaimInsteadOfStandClaims(t *testing.T) {
-	jwtsecret, err := hex.DecodeString("12345678900123456789abcdeffedcba")
-	require.NoError(t, err)
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.StandardClaims{}) // jwt.StandardClaims is deprecated
-	wantedTokenString, err := token.SignedString(jwtsecret)
-	require.NoError(t, err)
-
-	gotTokenString, err := createTokenString(jwtsecret)
-	require.NoError(t, err)
-
-	if wantedTokenString != gotTokenString {
-		t.Errorf("%s != %s", wantedTokenString, gotTokenString)
-	}
 }

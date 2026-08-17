@@ -10,7 +10,5 @@ import (
 type NodeClient interface {
 	SyncStatus(ctx context.Context, in *empty.Empty) (*ethpb.SyncStatus, error)
 	Genesis(ctx context.Context, in *empty.Empty) (*ethpb.Genesis, error)
-	Version(ctx context.Context, in *empty.Empty) (*ethpb.Version, error)
-	Peers(ctx context.Context, in *empty.Empty) (*ethpb.Peers, error)
 	IsReady(ctx context.Context) bool
 }

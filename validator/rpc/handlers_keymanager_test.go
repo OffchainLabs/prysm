@@ -7,15 +7,18 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -36,10 +39,34 @@ import (
 	mocks "github.com/OffchainLabs/prysm/v7/validator/testing"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/google/uuid"
+	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+const strongPass = "29384283xasjasd32%%&*@*#*"
+
+var defaultWalletPath = filepath.Join(flags.DefaultValidatorDir(), flags.WalletDefaultDirName)
+
+func createRandomKeystore(t testing.TB, password string) *keymanager.Keystore {
+	encryptor := keystorev4.New()
+	id, err := uuid.NewRandom()
+	require.NoError(t, err)
+	validatingKey, err := bls.RandKey()
+	require.NoError(t, err)
+	pubKey := validatingKey.PublicKey().Marshal()
+	cryptoFields, err := encryptor.Encrypt(validatingKey.Marshal(), password)
+	require.NoError(t, err)
+	return &keymanager.Keystore{
+		Crypto:      cryptoFields,
+		Pubkey:      fmt.Sprintf("%x", pubKey),
+		ID:          id.String(),
+		Version:     encryptor.Version(),
+		Description: encryptor.Name(),
+	}
+}
 
 func TestServer_ListKeystores(t *testing.T) {
 	ctx := t.Context()
@@ -54,7 +81,7 @@ func TestServer_ListKeystores(t *testing.T) {
 		w.Body = &bytes.Buffer{}
 		s.ListKeystores(w, req)
 		require.NotEqual(t, http.StatusOK, w.Code)
-		require.StringContains(t, "Prysm Wallet not initialized. Please create a new wallet.", w.Body.String())
+		require.StringContains(t, "Prysm Wallet not initialized.", w.Body.String())
 	})
 
 	localWalletDir := setupWalletDir(t)
@@ -418,20 +445,10 @@ func TestServer_DeleteKeystores(t *testing.T) {
 		mockJSON, err := mocks.MockSlashingProtectionJSON(publicKeys, attestingHistory, proposalHistory)
 		require.NoError(t, err)
 
-		// JSON encode the protection JSON and save it.
+		// JSON encode the protection JSON and import it into the validator DB.
 		encoded, err := json.Marshal(mockJSON)
 		require.NoError(t, err)
-		request := &ImportSlashingProtectionRequest{
-			SlashingProtectionJson: string(encoded),
-		}
-		var buf bytes.Buffer
-		err = json.NewEncoder(&buf).Encode(request)
-		require.NoError(t, err)
-
-		req := httptest.NewRequest(http.MethodPost, "/v2/validator/slashing-protection/import", &buf)
-		wr := httptest.NewRecorder()
-		srv.ImportSlashingProtection(wr, req)
-		require.Equal(t, http.StatusOK, wr.Code)
+		require.NoError(t, srv.db.ImportStandardProtectionJSON(ctx, bytes.NewBuffer(encoded)))
 		t.Run(fmt.Sprintf("no slashing protection response if no keys in request even if we have a history in DB/mininalSlaghinProtection:%v", isSlashingProtectionMinimal), func(t *testing.T) {
 			request := &DeleteKeystoresRequest{
 				Pubkeys: nil,
@@ -723,8 +740,8 @@ func TestServer_SetVoluntaryExit(t *testing.T) {
 		validatorService:          vs,
 		beaconNodeValidatorClient: beaconClient,
 		wallet:                    w,
-		nodeClient:                mockNodeClient,
 		walletInitialized:         w != nil,
+		nodeClient:                mockNodeClient,
 	}
 
 	type want struct {

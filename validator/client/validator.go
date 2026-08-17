@@ -69,10 +69,10 @@ var (
 
 type validator struct {
 	distributed                  bool
-	enableAPI                    bool
 	disableDutiesPolling         bool
 	emitAccountMetrics           bool
 	logValidatorPerformance      bool
+	nextFetchInFlight            atomic.Bool
 	submissionLogsLock           sync.Mutex
 	highestValidSlotLock         sync.Mutex
 	blacklistedPubkeysLock       sync.RWMutex
@@ -84,8 +84,6 @@ type validator struct {
 	domainDataLock               sync.RWMutex
 	cachedAttestationData        *ethpb.AttestationData
 	graffitiOrderedIndex         uint64
-	walletInitializedFeed        *event.Feed
-	walletInitializedChan        chan *wallet.Wallet
 	wallet                       *wallet.Wallet
 	accountsChangedChannel       chan [][fieldparams.BLSPubkeyLength]byte
 	blacklistedPubkeys           map[[fieldparams.BLSPubkeyLength]byte]bool
@@ -103,7 +101,6 @@ type validator struct {
 	submittedPayloadAtts         map[submittedPayloadAttKey][]uint64
 	validatorsRegBatchSize       int
 	duties                       *dutyStore
-	nextFetchInFlight            atomic.Bool
 	domainDataCache              *ristretto.Cache[string, proto.Message]
 	slotFeed                     *event.Feed
 	graffitiStruct               *graffiti.Graffiti
@@ -201,12 +198,6 @@ func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 			return errors.Wrap(err, "could not initialize key manager")
 		}
 		v.km = keyManager
-	case v.enableAPI:
-		km, err := waitForWebWalletInitialization(ctx, v.walletInitializedFeed, v.walletInitializedChan)
-		if err != nil {
-			return err
-		}
-		v.km = km
 	default:
 		return wallet.ErrNoWalletFound
 	}
@@ -217,35 +208,6 @@ func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 	recheckKeys(ctx, v.db, v.km)
 	v.accountChangedSub = v.km.SubscribeAccountChanges(v.accountsChangedChannel)
 	return nil
-}
-
-// subscribe to channel for when the wallet is initialized
-func waitForWebWalletInitialization(
-	ctx context.Context,
-	walletInitializedEvent *event.Feed,
-	walletChan chan *wallet.Wallet,
-) (keymanager.IKeymanager, error) {
-	ctx, span := trace.StartSpan(ctx, "validator.waitForWebWalletInitialization")
-	defer span.End()
-
-	log.Info("Waiting for keymanager to initialize validator client with web UI or /v2/validator/wallet/create REST api")
-	sub := walletInitializedEvent.Subscribe(walletChan)
-	defer sub.Unsubscribe()
-	for {
-		select {
-		case w := <-walletChan:
-			keyManager, err := w.InitializeKeymanager(ctx, accountsiface.InitKeymanagerConfig{ListenForChanges: true})
-			if err != nil {
-				return nil, errors.Wrap(err, "could not read keymanager")
-			}
-			return keyManager, nil
-		case <-ctx.Done():
-			return nil, errors.New("context canceled")
-		case <-sub.Err():
-			log.Error("Subscriber closed, exiting goroutine")
-			return nil, nil
-		}
-	}
 }
 
 // recheckKeys checks if the validator has any keys that need to be rechecked.

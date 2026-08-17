@@ -15,30 +15,12 @@ func TestServer_InitializeRoutes(t *testing.T) {
 	require.NoError(t, err)
 
 	wantRouteList := map[string][]string{
-		"/eth/v1/keystores":                          {http.MethodGet, http.MethodPost, http.MethodDelete},
-		"/eth/v1/remotekeys":                         {http.MethodGet, http.MethodPost, http.MethodDelete},
-		"/eth/v1/validator/{pubkey}/gas_limit":       {http.MethodGet, http.MethodPost, http.MethodDelete},
-		"/eth/v1/validator/{pubkey}/feerecipient":    {http.MethodGet, http.MethodPost, http.MethodDelete},
-		"/eth/v1/validator/{pubkey}/voluntary_exit":  {http.MethodPost},
-		"/eth/v1/validator/{pubkey}/graffiti":        {http.MethodGet, http.MethodPost, http.MethodDelete},
-		"/v2/validator/health/version":               {http.MethodGet},
-		"/v2/validator/health/logs/validator/stream": {http.MethodGet},
-		"/v2/validator/health/logs/beacon/stream":    {http.MethodGet},
-		"/v2/validator/wallet":                       {http.MethodGet},
-		"/v2/validator/wallet/create":                {http.MethodPost},
-		"/v2/validator/wallet/keystores/validate":    {http.MethodPost},
-		"/v2/validator/wallet/recover":               {http.MethodPost},
-		"/v2/validator/slashing-protection/export":   {http.MethodGet},
-		"/v2/validator/slashing-protection/import":   {http.MethodPost},
-		"/v2/validator/accounts":                     {http.MethodGet},
-		"/v2/validator/accounts/backup":              {http.MethodPost},
-		"/v2/validator/accounts/voluntary-exit":      {http.MethodPost},
-		"/v2/validator/beacon/balances":              {http.MethodGet},
-		"/v2/validator/beacon/peers":                 {http.MethodGet},
-		"/v2/validator/beacon/status":                {http.MethodGet},
-		"/v2/validator/beacon/summary":               {http.MethodGet},
-		"/v2/validator/beacon/validators":            {http.MethodGet},
-		"/v2/validator/initialize":                   {http.MethodGet},
+		"/eth/v1/keystores":                         {http.MethodGet, http.MethodPost, http.MethodDelete},
+		"/eth/v1/remotekeys":                        {http.MethodGet, http.MethodPost, http.MethodDelete},
+		"/eth/v1/validator/{pubkey}/gas_limit":      {http.MethodGet, http.MethodPost, http.MethodDelete},
+		"/eth/v1/validator/{pubkey}/feerecipient":   {http.MethodGet, http.MethodPost, http.MethodDelete},
+		"/eth/v1/validator/{pubkey}/voluntary_exit": {http.MethodPost},
+		"/eth/v1/validator/{pubkey}/graffiti":       {http.MethodGet, http.MethodPost, http.MethodDelete},
 	}
 	for route, methods := range wantRouteList {
 		for _, method := range methods {

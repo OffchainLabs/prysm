@@ -13,11 +13,11 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	accountcommands "github.com/OffchainLabs/prysm/v7/cmd/validator/accounts"
+	authtokencommands "github.com/OffchainLabs/prysm/v7/cmd/validator/authtoken"
 	dbcommands "github.com/OffchainLabs/prysm/v7/cmd/validator/db"
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	slashingprotectioncommands "github.com/OffchainLabs/prysm/v7/cmd/validator/slashing-protection"
 	walletcommands "github.com/OffchainLabs/prysm/v7/cmd/validator/wallet"
-	"github.com/OffchainLabs/prysm/v7/cmd/validator/web"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/io/logs"
@@ -136,7 +136,7 @@ func main() {
 			accountcommands.Commands,
 			slashingprotectioncommands.Commands,
 			dbcommands.Commands,
-			web.Commands,
+			authtokencommands.Commands,
 			cmd.CompletionCommand("validator"),
 		},
 		Flags:                appFlags,
