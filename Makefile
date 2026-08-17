@@ -5,7 +5,7 @@ GO   ?= go
 DIST ?= dist
 
 BINARIES := $(notdir $(patsubst %/,%,$(dir $(wildcard cmd/*/main.go))))
-GEN_KINDS := proto ssz mocks
+GEN_KINDS := proto ssz mocks logs
 TEST_KINDS := mainnet mainnet-spectest minimal minimal-spectest
 
 E2E_SCENARIOS := minimal builder web3signer slasher slashing scenario scenario-multiclient postmerge statediff mainnet multiclient

@@ -96,6 +96,7 @@ go_test(
         "propose_exit_test.go",
         "proposer_preferences_test.go",
         "registration_test.go",
+        "ssz_fallback_mock_test.go",
         "state_validators_test.go",
         "status_test.go",
         "submit_aggregate_selection_proof_test.go",

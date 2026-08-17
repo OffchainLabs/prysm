@@ -2,9 +2,11 @@ package validator
 
 import (
 	"context"
+	"math/big"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -98,7 +100,7 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 		}
 	}
 
-	blk, err := vs.constructGenericBeaconBlock(sBlk, nil, primitives.ZeroWei())
+	blk, err := vs.constructGenericBeaconBlock(sBlk, nil, vs.gloasPayloadValue(sBlk, local, selfBuilt))
 	if err != nil {
 		return nil, err
 	}
@@ -118,4 +120,21 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 		}}
 	}
 	return blk, nil
+}
+
+// gloasPayloadValue is the local payload value when self-building, or the bid
+// value when committing to an external bid.
+func (vs *Server) gloasPayloadValue(sBlk interfaces.SignedBeaconBlock, local *consensusblocks.GetPayloadResponse, selfBuilt bool) primitives.Wei {
+	if selfBuilt {
+		if local == nil || local.Bid == nil {
+			return primitives.ZeroWei()
+		}
+		return local.Bid
+	}
+	bid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
+	if err != nil || bid == nil || bid.Message == nil {
+		return primitives.ZeroWei()
+	}
+	value := new(big.Int).SetUint64(uint64(bid.Message.Value))
+	return value.Mul(value, big.NewInt(1e9))
 }

@@ -343,6 +343,9 @@ type BeaconChainConfig struct {
 	SubnetsPerNode                  uint64          `yaml:"SUBNETS_PER_NODE" spec:"true"`                   // SubnetsPerNode is the number of long-lived subnets a beacon node should be subscribed to.
 	NodeIdBits                      uint64          `yaml:"NODE_ID_BITS"`                                   // NodeIdBits defines the bit length of a node id.
 
+	// Fast Confirmation Rule
+	ConfirmationByzantineThreshold uint64 `yaml:"CONFIRMATION_BYZANTINE_THRESHOLD" spec:"true"` // ConfirmationByzantineThreshold is the assumed percentage of byzantine stake used by the fast confirmation rule.
+
 	// Blobs Values
 	BlobSchedule []BlobScheduleEntry `yaml:"BLOB_SCHEDULE" spec:"true"`
 

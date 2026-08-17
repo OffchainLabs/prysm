@@ -38,6 +38,7 @@ func TestSubmitSignedProposerPreferences_Valid(t *testing.T) {
 	require.NoError(t, err)
 
 	handler := mock.NewMockHandler(ctrl)
+	expectPostSSZWithFallback(handler)
 	handler.EXPECT().PostSSZ(
 		gomock.Any(),
 		proposerPreferencesEndpoint,
@@ -58,6 +59,7 @@ func TestSubmitSignedProposerPreferences_FallsBackToJSONOn415(t *testing.T) {
 	require.NoError(t, err)
 
 	handler := mock.NewMockHandler(ctrl)
+	expectPostSSZWithFallback(handler)
 	handler.EXPECT().PostSSZ(
 		gomock.Any(),
 		proposerPreferencesEndpoint,
@@ -81,6 +83,7 @@ func TestSubmitSignedProposerPreferences_NonMediaTypeErrorNoFallback(t *testing.
 	defer ctrl.Finish()
 
 	handler := mock.NewMockHandler(ctrl)
+	expectPostSSZWithFallback(handler)
 	handler.EXPECT().PostSSZ(
 		gomock.Any(),
 		proposerPreferencesEndpoint,

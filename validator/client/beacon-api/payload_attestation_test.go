@@ -124,6 +124,7 @@ func TestSubmitPayloadAttestation(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		handler := mock.NewMockHandler(ctrl)
+		expectPostSSZWithFallback(handler)
 		handler.EXPECT().PostSSZ(
 			gomock.Any(),
 			payloadAttestationsEndpoint,
@@ -139,6 +140,7 @@ func TestSubmitPayloadAttestation(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		handler := mock.NewMockHandler(ctrl)
+		expectPostSSZWithFallback(handler)
 		handler.EXPECT().PostSSZ(gomock.Any(), payloadAttestationsEndpoint, gomock.Any(), gomock.Any()).
 			Return(&httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType, Message: "unsupported media type"}).Times(1)
 		handler.EXPECT().Post(
@@ -157,6 +159,7 @@ func TestSubmitPayloadAttestation(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		handler := mock.NewMockHandler(ctrl)
+		expectPostSSZWithFallback(handler)
 		handler.EXPECT().PostSSZ(gomock.Any(), payloadAttestationsEndpoint, gomock.Any(), gomock.Any()).
 			Return(errors.New("bad request")).Times(1)
 
