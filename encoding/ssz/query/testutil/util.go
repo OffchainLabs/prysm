@@ -1,13 +1,21 @@
 package testutil
 
 import (
+	"encoding/binary"
 	"fmt"
 	"reflect"
 	"strings"
 
 	"github.com/OffchainLabs/go-bitfield"
-	ssz "github.com/prysmaticlabs/fastssz"
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 )
+
+func marshalBool(dst []byte, b bool) []byte {
+	if b {
+		return append(dst, 1)
+	}
+	return append(dst, 0)
+}
 
 // marshalAny marshals any value into SSZ format.
 func marshalAny(value any) ([]byte, error) {
@@ -43,11 +51,11 @@ func marshalAny(value any) ([]byte, error) {
 
 		switch valueType.Kind() {
 		case reflect.Uint64:
-			return ssz.MarshalUint64(make([]byte, 0), reflect.ValueOf(value).Uint()), nil
+			return binary.LittleEndian.AppendUint64(nil, reflect.ValueOf(value).Uint()), nil
 		case reflect.Uint32:
-			return ssz.MarshalUint32(make([]byte, 0), uint32(reflect.ValueOf(value).Uint())), nil
+			return binary.LittleEndian.AppendUint32(nil, uint32(reflect.ValueOf(value).Uint())), nil
 		case reflect.Bool:
-			return ssz.MarshalBool(make([]byte, 0), reflect.ValueOf(value).Bool()), nil
+			return marshalBool(nil, reflect.ValueOf(value).Bool()), nil
 		}
 	}
 
@@ -57,15 +65,15 @@ func marshalAny(value any) ([]byte, error) {
 	case []uint64:
 		buf := make([]byte, 0, len(v)*8)
 		for _, val := range v {
-			buf = ssz.MarshalUint64(buf, val)
+			buf = binary.LittleEndian.AppendUint64(buf, val)
 		}
 		return buf, nil
 	case uint64:
-		return ssz.MarshalUint64(make([]byte, 0), v), nil
+		return binary.LittleEndian.AppendUint64(nil, v), nil
 	case uint32:
-		return ssz.MarshalUint32(make([]byte, 0), v), nil
+		return binary.LittleEndian.AppendUint32(nil, v), nil
 	case bool:
-		return ssz.MarshalBool(make([]byte, 0), v), nil
+		return marshalBool(nil, v), nil
 
 	default:
 		return nil, fmt.Errorf("unsupported type for SSZ marshalling: %T", value)
