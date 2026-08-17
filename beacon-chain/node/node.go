@@ -321,6 +321,10 @@ func configureBeacon(cliCtx *cli.Context) error {
 		return errors.Wrap(err, "could not configure slots per archived point")
 	}
 
+	if err := configurePrunerRetentionEpochs(cliCtx); err != nil {
+		return errors.Wrap(err, "could not configure pruner retention epochs")
+	}
+
 	if err := configureEth1Config(cliCtx); err != nil {
 		return errors.Wrap(err, "could not configure eth1 config")
 	}

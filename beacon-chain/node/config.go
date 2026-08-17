@@ -103,6 +103,45 @@ func configureSlotsPerArchivedPoint(cliCtx *cli.Context) error {
 	return nil
 }
 
+// configurePrunerRetentionEpochs lowers MIN_EPOCHS_FOR_BLOCK_REQUESTS when the user asks the
+// pruner to retain less than the spec minimum.
+//
+// The pruner retention period, the earliest available slot guard of the p2p service and the one
+// of the database all derive their floor from MIN_EPOCHS_FOR_BLOCK_REQUESTS. Lowering only the
+// pruner retention period would make the pruner delete data and then fail to advertise the new
+// earliest available slot, so the whole floor has to be lowered at once.
+//
+// The pruner retains MIN_EPOCHS_FOR_BLOCK_REQUESTS + 1 epochs, hence the -1 below, so that the
+// retention period ends up being exactly what the user asked for.
+//
+// A node started this way does not serve the block range mandated by the specification any more,
+// and is only useful for testing.
+func configurePrunerRetentionEpochs(cliCtx *cli.Context) error {
+	if !cliCtx.IsSet(flags.PrunerRetentionEpochs.Name) {
+		return nil
+	}
+
+	retentionEpochs := cliCtx.Uint64(flags.PrunerRetentionEpochs.Name)
+	if retentionEpochs == 0 {
+		return fmt.Errorf("--%s must be at least 1", flags.PrunerRetentionEpochs.Name)
+	}
+
+	specMinEpochs := params.BeaconConfig().MinEpochsForBlockRequests
+	if retentionEpochs >= specMinEpochs {
+		return nil
+	}
+
+	log.Warningf(
+		"Retaining only %d epochs of chain data, while the specification mandates %d. This node will not be able to serve historical block requests. Only use this for testing.",
+		retentionEpochs, specMinEpochs,
+	)
+
+	c := params.BeaconConfig().Copy()
+	c.MinEpochsForBlockRequests = retentionEpochs - 1
+
+	return params.SetActive(c)
+}
+
 func configureEth1Config(cliCtx *cli.Context) error {
 	c := params.BeaconConfig().Copy()
 	if cliCtx.IsSet(flags.ChainID.Name) {

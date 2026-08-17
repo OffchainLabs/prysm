@@ -332,7 +332,9 @@ var (
 	PrunerRetentionEpochs = &cli.Uint64Flag{
 		Name: "pruner-retention-epochs",
 		Usage: "Specifies the retention period for the pruner service in terms of epochs. " +
-			"If this value is less than MIN_EPOCHS_FOR_BLOCK_REQUESTS, it will be ignored.",
+			"If this value is less than MIN_EPOCHS_FOR_BLOCK_REQUESTS, the node lowers " +
+			"MIN_EPOCHS_FOR_BLOCK_REQUESTS accordingly and stops serving the block range mandated " +
+			"by the specification. Only use such a short retention period for testing.",
 	}
 	// Supernode custodies all data.
 	Supernode = &cli.BoolFlag{
