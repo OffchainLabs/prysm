@@ -187,12 +187,17 @@ func (p *Service) prune(slot primitives.Slot) error {
 	}).Debug("Pruning chain data")
 
 	tt := time.Now()
-	numBatches, err := p.pruneBatches(pruneUpto)
+
+	// Every state at or after pruneUpto is rebuilt by replaying blocks from the state-diff entry
+	// stored at pruneUpto, and reaching that entry needs its block root to stay resolvable.
+	// So the block and the state summary stored at pruneUpto are kept, and only what is strictly
+	// older is deleted.
+	numBatches, err := p.pruneBatches(pruneUpto - 1)
 	if err != nil {
 		return errors.Wrap(err, "failed to prune batches")
 	}
 
-	earliestAvailableSlot := pruneUpto + 1
+	earliestAvailableSlot := pruneUpto
 
 	// Update pruning checkpoint.
 	p.prunedUpto = pruneUpto

@@ -140,7 +140,10 @@ func TestPruner_PruneSuccess(t *testing.T) {
 		root, err := blks[slot-1].Block.HashTreeRoot()
 		require.NoError(t, err)
 		present := beaconDB.HasBlock(ctx, root)
-		if slot <= 16 { // These should be pruned
+		// pruneUpto is 80 - 2*32 = 16. The block at pruneUpto is kept, since the states at or
+		// after it are replayed from the state stored there, so only the blocks strictly before
+		// it are pruned.
+		if slot < 16 { // These should be pruned
 			require.NoError(t, err)
 			require.Equal(t, false, present, "Expected present at slot %d to be pruned", slot)
 		} else { // These should remain
@@ -226,10 +229,9 @@ func TestPruner_UpdatesEarliestAvailableSlot(t *testing.T) {
 	// Check that UpdateEarliestAvailableSlot was called
 	assert.Equal(t, true, mockCustody.updateCallCount > 0, "UpdateEarliestAvailableSlot should have been called")
 
-	// The earliest available slot should be pruneUpto + 1
-	// pruneUpto = currentSlot - retentionEpochs*slotsPerEpoch = 80 - 2*32 = 16
-	// So earliest available slot should be 16 + 1 = 17
-	expectedEarliestSlot := primitives.Slot(17)
+	// The earliest available slot is pruneUpto, whose block and state are kept as the replay
+	// anchor: pruneUpto = currentSlot - retentionEpochs*slotsPerEpoch = 80 - 2*32 = 16.
+	expectedEarliestSlot := primitives.Slot(16)
 	require.Equal(t, expectedEarliestSlot, mockCustody.earliestAvailableSlot, "Earliest available slot should be updated correctly")
 	require.Equal(t, uint64(4), mockCustody.custodyGroupCount, "Custody group count should be preserved")
 
