@@ -143,7 +143,7 @@ type NoHeadAccessDatabase interface {
 
 	// Custody operations.
 	UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error)
-	UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailableSlot primitives.Slot) error
+	UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailableSlot, currentSlot primitives.Slot) error
 	UpdateSubscribedToAllDataSubnets(ctx context.Context, subscribed bool) (bool, error)
 
 	// P2P Metadata operations.

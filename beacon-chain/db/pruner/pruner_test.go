@@ -17,11 +17,21 @@ import (
 	"github.com/sirupsen/logrus"
 
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
+
+// testClockWaiter returns a clock waiter whose clock is already set, so that a started pruner
+// never blocks waiting for it.
+func testClockWaiter(t *testing.T) startup.ClockWaiter {
+	clockSynchronizer := startup.NewClockSynchronizer()
+	require.NoError(t, clockSynchronizer.SetClock(startup.NewClock(time.Now(), [32]byte{})))
+
+	return clockSynchronizer
+}
 
 func TestPruner_PruningConditions(t *testing.T) {
 	tests := []struct {
@@ -68,7 +78,7 @@ func TestPruner_PruningConditions(t *testing.T) {
 			}
 
 			mockCustody := &mockCustodyUpdater{}
-			p, err := New(ctx, beaconDB, time.Now(), initSyncWaiter, backfillWaiter, mockCustody, WithSlotTicker(slotTicker))
+			p, err := New(ctx, beaconDB, testClockWaiter(t), initSyncWaiter, backfillWaiter, mockCustody, WithSlotTicker(slotTicker))
 			require.NoError(t, err)
 
 			go p.Start()
@@ -107,7 +117,7 @@ func TestPruner_PruneSuccess(t *testing.T) {
 	p, err := New(
 		ctx,
 		beaconDB,
-		time.Now(),
+		testClockWaiter(t),
 		nil,
 		nil,
 		mockCustody,
@@ -159,6 +169,9 @@ func TestPruner_UpdatesEarliestAvailableSlot(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	config := params.BeaconConfig()
 	config.FuluForkEpoch = 0 // Enable Fulu from epoch 0
+	// The pruner is triggered at epoch 2 below, and the database refuses to advertise an earliest
+	// available slot inside the MIN_EPOCHS_FOR_BLOCK_REQUESTS window, so it has to be small here.
+	config.MinEpochsForBlockRequests = 1
 	params.OverrideBeaconConfig(config)
 
 	logrus.SetLevel(logrus.DebugLevel)
@@ -181,7 +194,7 @@ func TestPruner_UpdatesEarliestAvailableSlot(t *testing.T) {
 	p, err := New(
 		ctx,
 		beaconDB,
-		time.Now(),
+		testClockWaiter(t),
 		nil,
 		nil,
 		mockCustody,
@@ -291,7 +304,7 @@ func TestWithRetentionPeriod_EnforcesMinimum(t *testing.T) {
 			p, err := New(
 				ctx,
 				beaconDB,
-				time.Now(),
+				testClockWaiter(t),
 				nil,
 				nil,
 				mockCustody,
@@ -370,7 +383,7 @@ func TestPruner_UpdateEarliestSlotError(t *testing.T) {
 	p, err := New(
 		ctx,
 		beaconDB,
-		time.Now(),
+		testClockWaiter(t),
 		nil,
 		nil,
 		mockCustody,

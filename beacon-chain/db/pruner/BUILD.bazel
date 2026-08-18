@@ -13,6 +13,7 @@ go_library(
     deps = [
         "//beacon-chain/db:go_default_library",
         "//beacon-chain/db/iface:go_default_library",
+        "//beacon-chain/startup:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//time/slots:go_default_library",
@@ -27,6 +28,7 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//beacon-chain/db/testing:go_default_library",
+        "//beacon-chain/startup:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/primitives:go_default_library",

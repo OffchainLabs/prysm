@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -62,13 +63,14 @@ type Service struct {
 	ps             func(current primitives.Slot) primitives.Slot
 	prunedUpto     primitives.Slot
 	done           chan struct{}
+	clockWaiter    startup.ClockWaiter
 	slotTicker     slots.Ticker
 	backfillWaiter func() error
 	initSyncWaiter func() error
 	custody        custodyUpdater
 }
 
-func New(ctx context.Context, db iface.Database, genesisTime time.Time, initSyncWaiter, backfillWaiter func() error, custody custodyUpdater, opts ...ServiceOption) (*Service, error) {
+func New(ctx context.Context, db iface.Database, clockWaiter startup.ClockWaiter, initSyncWaiter, backfillWaiter func() error, custody custodyUpdater, opts ...ServiceOption) (*Service, error) {
 	if custody == nil {
 		return nil, errors.New("custody updater is required for pruner but was not provided")
 	}
@@ -78,7 +80,7 @@ func New(ctx context.Context, db iface.Database, genesisTime time.Time, initSync
 		db:             db,
 		ps:             pruneStartSlotFunc(primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests) + 1), // Default retention epochs is MIN_EPOCHS_FOR_BLOCK_REQUESTS + 1 from the current slot.
 		done:           make(chan struct{}),
-		slotTicker:     slots.NewSlotTicker(slots.UnsafeStartTime(genesisTime, 0), params.BeaconConfig().SecondsPerSlot),
+		clockWaiter:    clockWaiter,
 		initSyncWaiter: initSyncWaiter,
 		backfillWaiter: backfillWaiter,
 		custody:        custody,
@@ -107,6 +109,16 @@ func (p *Service) Status() error {
 }
 
 func (p *Service) run() {
+	if p.slotTicker == nil {
+		clock, err := p.clockWaiter.WaitForClock(p.ctx)
+		if err != nil {
+			log.WithError(err).Error("Failed to start database pruner, error waiting for the clock")
+			return
+		}
+
+		p.slotTicker = slots.NewSlotTicker(clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
+	}
+
 	if p.initSyncWaiter != nil {
 		log.Info("Waiting for initial sync service to complete before starting pruner")
 		if err := p.initSyncWaiter(); err != nil {
@@ -186,7 +198,7 @@ func (p *Service) prune(slot primitives.Slot) error {
 	p.prunedUpto = pruneUpto
 
 	// Update the earliest available slot after pruning
-	if err := p.updateEarliestAvailableSlot(earliestAvailableSlot); err != nil {
+	if err := p.updateEarliestAvailableSlot(earliestAvailableSlot, slot); err != nil {
 		return errors.Wrap(err, "update earliest available slot")
 	}
 
@@ -241,7 +253,7 @@ func (p *Service) pruneStateDiff(pruneUpto primitives.Slot) (int, error) {
 
 // updateEarliestAvailableSlot updates the earliest available slot via the injected custody updater
 // and also persists it to the database.
-func (p *Service) updateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
+func (p *Service) updateEarliestAvailableSlot(earliestAvailableSlot, currentSlot primitives.Slot) error {
 	if !params.FuluEnabled() {
 		return nil
 	}
@@ -252,7 +264,7 @@ func (p *Service) updateEarliestAvailableSlot(earliestAvailableSlot primitives.S
 	}
 
 	// Persist to database to ensure it survives restarts
-	if err := p.db.UpdateEarliestAvailableSlot(p.ctx, earliestAvailableSlot); err != nil {
+	if err := p.db.UpdateEarliestAvailableSlot(p.ctx, earliestAvailableSlot, currentSlot); err != nil {
 		return errors.Wrapf(err, "update earliest available slot in database for slot %d", earliestAvailableSlot)
 	}
 
