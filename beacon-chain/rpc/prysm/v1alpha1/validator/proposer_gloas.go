@@ -49,9 +49,7 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 		// round trip is skipped too.
 		epoch := slots.ToEpoch(sBlk.Block().Slot())
 		selfBuildOnly := local.OverrideBuilder || skipBuilder || vs.BuilderCircuitBreaker.SelfBuildOnly(epoch)
-		var builderBid *ethpb.SignedExecutionPayloadBid
-		var builderURL string
-		var maxExecutionPayment uint64
+		var builderWin *winningBuilderBid
 		if !selfBuildOnly && len(builderConfig.GetBuilders()) > 0 {
 			val, valErr := head.ValidatorAtIndexReadOnly(sBlk.Block().ProposerIndex())
 			parentGasLimit, glErr := vs.ForkchoiceFetcher.GasLimit(sBlk.Block().ParentRoot())
@@ -61,18 +59,13 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 			case glErr != nil:
 				log.WithError(glErr).Error("Could not get parent gas limit for builder bid request")
 			default:
-				pubkey := val.PublicKey()
-				if v, ok := vs.maxExecutionPayments.Load(pubkey); ok {
-					maxExecutionPayment, _ = v.(uint64)
-				}
 				pref := vs.proposerPreferenceForProposal(ctx, head, sBlk.Block().Slot(), sBlk.Block().ProposerIndex())
 				feeRecipient := pref.FeeRecipientOrDefault()
-				builderBid, builderURL = vs.getBuilderExecutionPayloadBid(ctx, head, &builderBidQuery{
+				builderWin = vs.getBuilderExecutionPayloadBid(ctx, head, &builderBidQuery{
 					slot:           sBlk.Block().Slot(),
 					parentRoot:     sBlk.Block().ParentRoot(),
 					parentHash:     bytesutil.ToBytes32(local.ExecutionData.ParentHash()),
-					pubkey:         pubkey,
-					maxPayment:     maxExecutionPayment,
+					pubkey:         val.PublicKey(),
 					feeRecipient:   feeRecipient[:],
 					parentGasLimit: parentGasLimit,
 					targetGasLimit: pref.GasLimitOr(parentGasLimit),
@@ -80,9 +73,13 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 				})
 			}
 		}
-		src, bidErr := vs.setExecutionPayloadBid(ctx, sBlk, local, builderBid, maxExecutionPayment, selfBuildOnly)
+		src, bidErr := vs.setExecutionPayloadBid(ctx, sBlk, head, local, builderWin, builderConfig, selfBuildOnly)
 		if bidErr != nil {
 			return nil, status.Errorf(codes.Internal, "Could not set execution payload bid: %v", bidErr)
+		}
+		var builderURL string
+		if src == bidSourceBuilderAPI && builderWin != nil {
+			builderURL = builderWin.entry.GetUrl()
 		}
 		vs.recordBidSource(sBlk.Block().Slot(), src, builderURL)
 		selfBuilt = src == bidSourceSelfBuild

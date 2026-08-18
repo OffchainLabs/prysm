@@ -35,16 +35,13 @@ func (vs *Server) SubmitBuilderPreferences(ctx context.Context, req *ethpb.Submi
 		wg.Add(1)
 		go func(e *ethpb.BuilderPreferencesEntry) {
 			defer wg.Done()
-			pubkey := bytesutil.ToBytes48(e.ProposerPubkey)
 			breq := &ethpb.BuilderPreferencesRequest{
 				Preferences: &ethpb.BuilderPreferences{MaxExecutionPayment: e.MaxExecutionPayment},
 				Auth:        e.Auth,
 			}
-			if err := vs.BlockBuilder.SubmitBuilderPreferences(ctx, pubkey, e.Url, breq); err != nil {
+			if err := vs.BlockBuilder.SubmitBuilderPreferences(ctx, bytesutil.ToBytes48(e.ProposerPubkey), e.Url, breq); err != nil {
 				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(e.Url)).Warn("Could not submit builder preferences")
-				return
 			}
-			vs.maxExecutionPayments.Store(pubkey, uint64(e.MaxExecutionPayment))
 		}(e)
 	}
 	wg.Wait()
