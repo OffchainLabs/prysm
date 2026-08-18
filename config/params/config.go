@@ -854,3 +854,11 @@ func (b *BeaconChainConfig) SlotComponentDuration(bp primitives.BP) time.Duratio
 	ms := uint64(bp) * b.SlotDurationMillis() / uint64(BasisPoints)
 	return time.Duration(ms) * time.Millisecond
 }
+
+// AttestationDueBPSAtSlot returns the attestation due time in basis points of the slot.
+func (b *BeaconChainConfig) AttestationDueBPSAtSlot(slot primitives.Slot) primitives.BP {
+	if primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch)) >= b.GloasForkEpoch {
+		return b.AttestationDueBPSGloas
+	}
+	return b.AttestationDueBPS
+}
