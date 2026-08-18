@@ -95,6 +95,8 @@ type FastGetter interface {
 	UnrealizedJustifiedPayloadBlockHash() [32]byte
 	Weight(root [32]byte) (uint64, error)
 	ConsensusNodeWeight(root [32]byte) (uint64, error)
+	CouldBuilderWithhold(root [32]byte) bool
+	BuilderIndex(root [32]byte) (primitives.BuilderIndex, error)
 	PayloadWeights(root [32]byte) (emptyWeight, fullWeight uint64, err error)
 	HasPayloadBlockHash(root, blockHash [32]byte) bool
 	PTCVotedEarlyAndAvailable(root [32]byte) bool

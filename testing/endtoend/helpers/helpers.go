@@ -350,10 +350,9 @@ func ComponentsStarted(ctx context.Context, comps []e2etypes.ComponentRunner) er
 
 // EpochTickerStartTime calculates the best time to start epoch ticker for a given genesis time.
 func EpochTickerStartTime(genesisTime time.Time) time.Time {
-	epochSeconds := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
-	epochSecondsHalf := time.Duration(int64(epochSeconds*1000)/2) * time.Millisecond
+	halfEpoch := params.EpochsDuration(1, params.BeaconConfig()) / 2
 	// Adding a half slot here to ensure the requests are in the middle of an epoch.
-	middleOfEpoch := epochSecondsHalf + slots.DivideSlotBy(2 /* half a slot */)
+	middleOfEpoch := halfEpoch + slots.DivideSlotBy(2 /* half a slot */)
 	// Offsetting the ticker from genesis so it ticks in the middle of an epoch, in order to keep results consistent.
 	return genesisTime.Add(middleOfEpoch)
 }

@@ -39,7 +39,7 @@ func (n *Node) leadsToViableHead(justifiedEpoch, currentEpoch primitives.Epoch) 
 // slot will have secs = 3 below.
 func (n *PayloadNode) arrivedEarly(genesis time.Time) (bool, error) {
 	sss, err := slots.SinceSlotStart(n.node.slot, genesis, n.timestamp.Truncate(time.Second)) // Truncate such that 3.9999 seconds will have a value of 3.
-	votingWindow := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().AttestationDueBPS)
+	votingWindow := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().AttestationDueBPSAtSlot(n.node.slot))
 	return sss < votingWindow, err
 }
 

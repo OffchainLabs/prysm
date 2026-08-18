@@ -348,7 +348,7 @@ func (s *Service) prunePendingGloasColumns() {
 		log.WithError(err).Error("Failed to receive clock for pending Gloas columns pruning routine")
 		return
 	}
-	slotTicker := slots.NewSlotTicker(clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
+	slotTicker := slots.NewSlotTicker(clock.GenesisTime(), params.BeaconConfig().SlotDuration())
 	defer slotTicker.Done()
 	for {
 		select {

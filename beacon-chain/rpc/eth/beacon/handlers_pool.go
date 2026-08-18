@@ -66,18 +66,18 @@ func (s *Server) ListAttestationsV2(w http.ResponseWriter, r *http.Request) {
 
 	filteredAtts := make([]any, 0, len(attestations))
 	for _, att := range attestations {
-		var includeAttestation bool
 		if v >= version.Electra && att.Version() >= version.Electra {
-			attElectra, ok := att.(*eth.AttestationElectra)
-			if !ok {
+			if !shouldIncludeAttestation(att, rawSlot, slot, rawCommitteeIndex, committeeIndex) {
+				continue
+			}
+			switch a := att.(type) {
+			case *eth.AttestationGloas:
+				filteredAtts = append(filteredAtts, structs.AttGloasFromConsensus(a))
+			case *eth.AttestationElectra:
+				filteredAtts = append(filteredAtts, structs.AttElectraFromConsensus(a))
+			default:
 				httputil.HandleError(w, fmt.Sprintf("Unable to convert attestation of type %T", att), http.StatusInternalServerError)
 				return
-			}
-
-			includeAttestation = shouldIncludeAttestation(attElectra, rawSlot, slot, rawCommitteeIndex, committeeIndex)
-			if includeAttestation {
-				attStruct := structs.AttElectraFromConsensus(attElectra)
-				filteredAtts = append(filteredAtts, attStruct)
 			}
 		} else if v < version.Electra && att.Version() < version.Electra {
 			attPhase0, ok := att.(*eth.Attestation)
@@ -86,8 +86,7 @@ func (s *Server) ListAttestationsV2(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			includeAttestation = shouldIncludeAttestation(attPhase0, rawSlot, slot, rawCommitteeIndex, committeeIndex)
-			if includeAttestation {
+			if shouldIncludeAttestation(attPhase0, rawSlot, slot, rawCommitteeIndex, committeeIndex) {
 				attStruct := structs.AttFromConsensus(attPhase0)
 				filteredAtts = append(filteredAtts, attStruct)
 			}

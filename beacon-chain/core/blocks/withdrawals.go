@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
@@ -232,9 +233,9 @@ func ProcessWithdrawals(st state.BeaconState, executionData interfaces.Execution
 
 func withdrawalSliceRoot(withdrawals []*enginev1.Withdrawal, stateVersion int) ([32]byte, error) {
 	if features.ProgressiveSSZEnabled(stateVersion) {
-		return ssz.WithdrawalSliceRootProgressive(withdrawals)
+		return wrappers.WithdrawalSliceRootProgressive(withdrawals)
 	}
-	return ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
+	return wrappers.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 }
 
 // BLSChangesSignatureBatch extracts the relevant signatures from the provided execution change

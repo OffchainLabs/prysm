@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
-	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	rpctesting "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared/testing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -135,13 +134,14 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockValid(t *testing.T) {
 	ctx := t.Context()
 
 	handler := mock.NewMockHandler(ctrl)
+	expectPostSSZWithFallback(handler)
 	handler.EXPECT().PostSSZ(
 		gomock.Any(),
 		"/eth/v2/beacon/blocks",
 		gomock.Any(),
 		gomock.Any(),
 	).Return(
-		nil, nil, nil,
+		nil,
 	).Times(1)
 
 	validatorClient := beaconApiValidatorClient{handler: handler}
@@ -162,14 +162,15 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockError_ThenPass(t *testing.T)
 	ctx := t.Context()
 
 	handler := mock.NewMockHandler(ctrl)
+	expectPostSSZWithFallback(handler)
 	handler.EXPECT().PostSSZ(
 		gomock.Any(),
 		"/eth/v2/beacon/blocks",
 		gomock.Any(),
 		gomock.Any(),
 	).Return(
-		nil, nil, &httputil.DefaultJsonError{
-			Code:    http.StatusNotAcceptable,
+		&httputil.DefaultJsonError{
+			Code:    http.StatusUnsupportedMediaType,
 			Message: "SSZ not supported",
 		},
 	).Times(1)
@@ -304,6 +305,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockAllTypes(t *testing.T) {
 
 			ctx := t.Context()
 			handler := mock.NewMockHandler(ctrl)
+			expectPostSSZWithFallback(handler)
 
 			if !tt.wantErr {
 				handler.EXPECT().PostSSZ(
@@ -311,7 +313,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockAllTypes(t *testing.T) {
 					tt.expectedPath,
 					gomock.Any(),
 					gomock.Any(),
-				).Return(nil, nil, nil).Times(1)
+				).Return(nil).Times(1)
 			}
 
 			validatorClient := beaconApiValidatorClient{handler: handler}
@@ -341,8 +343,8 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockHTTPErrors(t *testing.T) {
 				Code:    http.StatusAccepted,
 				Message: "block broadcast but failed validation",
 			},
-			expectJSON:   false, // No fallback for non-406 errors
-			errorMessage: "failed to submit block ssz",
+			expectJSON:   false, // No fallback for non-415 errors
+			errorMessage: "post SSZ",
 		},
 		{
 			name: "Other HTTP error",
@@ -350,8 +352,8 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockHTTPErrors(t *testing.T) {
 				Code:    http.StatusBadRequest,
 				Message: "bad request",
 			},
-			expectJSON:   false, // No fallback for non-406 errors
-			errorMessage: "failed to submit block ssz",
+			expectJSON:   false, // No fallback for non-415 errors
+			errorMessage: "post SSZ",
 		},
 	}
 
@@ -362,13 +364,14 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockHTTPErrors(t *testing.T) {
 
 			ctx := t.Context()
 			handler := mock.NewMockHandler(ctrl)
+			expectPostSSZWithFallback(handler)
 
 			handler.EXPECT().PostSSZ(
 				gomock.Any(),
 				"/eth/v2/beacon/blocks",
 				gomock.Any(),
 				gomock.Any(),
-			).Return(nil, nil, tt.sszError).Times(1)
+			).Return(tt.sszError).Times(1)
 
 			if tt.expectJSON {
 				// When SSZ fails, it falls back to JSON
@@ -503,15 +506,16 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockJSONFallback(t *testing.T) {
 
 			ctx := t.Context()
 			handler := mock.NewMockHandler(ctrl)
+			expectPostSSZWithFallback(handler)
 
-			// SSZ call fails with 406 to trigger JSON fallback
+			// SSZ call fails with 415 to trigger JSON fallback
 			handler.EXPECT().PostSSZ(
 				gomock.Any(),
 				tt.expectedPath,
 				gomock.Any(),
 				gomock.Any(),
-			).Return(nil, nil, &httputil.DefaultJsonError{
-				Code:    http.StatusNotAcceptable,
+			).Return(&httputil.DefaultJsonError{
+				Code:    http.StatusUnsupportedMediaType,
 				Message: "SSZ not supported",
 			}).Times(1)
 
@@ -662,7 +666,7 @@ func TestBeaconApiValidatorClient_StartEventStream_FallsBackToHead(t *testing.T)
 
 	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Host().Return(server.URL).AnyTimes()
-	c := &beaconApiValidatorClient{handler: handler}
+	c := &beaconApiValidatorClient{handler: handler, eventStreamHosts: []string{server.URL}}
 
 	ch := make(chan *eventClient.Event, 8)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -677,11 +681,9 @@ func TestBeaconApiValidatorClient_StartEventStream_FallsBackToHead(t *testing.T)
 	require.StringContains(t, eventClient.EventHead, secondTopics)
 
 	e := <-ch
-	require.Equal(t, eventClient.EventHead, e.EventType)
+	require.Equal(t, eventClient.EventHead, e.Type)
 }
 
 func TestBeaconApiValidatorClient_ConnectionGeneration(t *testing.T) {
-	c := &beaconApiValidatorClient{restProvider: &rest.MockRestProvider{ConnCounter: 4}}
-	assert.Equal(t, uint64(4), c.ConnectionGeneration())
 	assert.Equal(t, uint64(0), (&beaconApiValidatorClient{}).ConnectionGeneration())
 }

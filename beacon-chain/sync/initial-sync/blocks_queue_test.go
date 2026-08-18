@@ -1153,6 +1153,9 @@ func TestBlocksQueue_stuckInUnfavourableFork(t *testing.T) {
 		// Add peer that will advertise high non-finalized slot, but will not be able to support
 		// its claims with actual blocks.
 		forkedPeer := connectPeerHavingBlocks(t, p2p, chain2, finalizedSlot, p2p.Peers())
+		defer func() {
+			p2p.Peers().SetConnectionState(forkedPeer, peers.Disconnected)
+		}()
 		startSlot := mc.HeadSlot() + 1
 		blocksPerRequest := queue.blocksFetcher.blocksPerPeriod
 		machineSlots := make([]primitives.Slot, 0)
@@ -1226,6 +1229,100 @@ func TestBlocksQueue_stuckInUnfavourableFork(t *testing.T) {
 			assert.Equal(t, stateSkipped, fsm.state)
 		}
 	})
+
+	t.Run("unfavourable fork below network finalized slot", func(t *testing.T) {
+		defer hook.Reset()
+
+		// The peer's finalized slot is above our head, so the wedged branch sits below network finality.
+		peerFinalizedSlot := primitives.Slot(288)
+		forkedPeer := connectPeerHavingBlocks(t, p2p, chain2, peerFinalizedSlot, p2p.Peers())
+		defer func() {
+			p2p.Peers().SetConnectionState(forkedPeer, peers.Disconnected)
+		}()
+
+		finalizedQueue := newBlocksQueue(ctx, &blocksQueueConfig{
+			blocksFetcher:       fetcher,
+			chain:               mc,
+			highestExpectedSlot: primitives.Slot(len(chain2) - 1),
+			mode:                modeStopOnFinalizedEpoch,
+		})
+
+		startSlot := mc.HeadSlot() + 1
+		blocksPerRequest := finalizedQueue.blocksFetcher.blocksPerPeriod
+		machineSlots := make([]primitives.Slot, 0)
+		for i := startSlot; i < startSlot.Add(blocksPerRequest*lookaheadSteps); i += primitives.Slot(blocksPerRequest) {
+			finalizedQueue.smm.addStateMachine(i).setState(stateSkipped)
+			machineSlots = append(machineSlots, i)
+		}
+
+		// Update counter, and trigger backtracking.
+		finalizedQueue.staleEpochs[slots.ToEpoch(machineSlots[0])] = maxResetAttempts
+		handlerFn := finalizedQueue.onProcessSkippedEvent(ctx)
+		updatedState, err := handlerFn(finalizedQueue.smm.machines[machineSlots[len(machineSlots)-1]], nil)
+		require.NoError(t, err)
+		assert.Equal(t, stateSkipped, updatedState)
+		assert.LogsContain(t, hook, "Searching for alternative blocks")
+		assert.LogsDoNotContain(t, hook, "No alternative blocks found for peer")
+
+		// Alternative fork data must be loaded into the first machine.
+		firstFSM, ok := finalizedQueue.smm.findStateMachine(forkedSlot)
+		require.Equal(t, true, ok)
+		require.Equal(t, stateDataParsed, firstFSM.state)
+		require.Equal(t, forkedPeer, firstFSM.fetched.blocksFrom)
+		require.Equal(t, forkedSlot, firstFSM.fetched.bwb[0].Block.Block().Slot())
+	})
+}
+
+func TestBlocksQueue_resetFromForkCarriesEnvelopes(t *testing.T) {
+	beaconDB := dbtest.SetupDB(t)
+	p2p := p2pt.NewTestP2P(t)
+	chain := extendBlockSequence(t, []*eth.SignedBeaconBlock{}, 2)
+
+	st, err := util.NewBeaconState()
+	require.NoError(t, err)
+	genesisRoot, err := chain[0].Block.HashTreeRoot()
+	require.NoError(t, err)
+	mc := &mock.ChainService{
+		State:               st,
+		Root:                genesisRoot[:],
+		DB:                  beaconDB,
+		FinalizedCheckPoint: &eth.Checkpoint{},
+		Genesis:             time.Now(),
+		ValidatorsRoot:      [32]byte{},
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
+		chain: mc,
+		p2p:   p2p,
+		db:    beaconDB,
+		clock: startup.NewClock(mc.Genesis, mc.ValidatorsRoot),
+	})
+	queue := newBlocksQueue(ctx, &blocksQueueConfig{
+		blocksFetcher:       fetcher,
+		chain:               mc,
+		highestExpectedSlot: 100,
+		mode:                modeNonConstrained,
+	})
+
+	wsb, err := blocks.NewSignedBeaconBlock(chain[1])
+	require.NoError(t, err)
+	ro, err := blocks.NewROBlock(wsb)
+	require.NoError(t, err)
+	env := makeEnvelope(t, ro.Block().Slot(), [32]byte{1}, [32]byte{2})
+
+	fork := &forkData{
+		blocksFrom: "peerA",
+		bwb:        []blocks.BlockWithROSidecars{{Block: ro}},
+		envelopes:  []interfaces.ROSignedExecutionPayloadEnvelope{env},
+	}
+	require.NoError(t, queue.resetFromFork(fork))
+	fsm, ok := queue.smm.findStateMachine(ro.Block().Slot())
+	require.Equal(t, true, ok)
+	require.Equal(t, stateDataParsed, fsm.state)
+	require.Equal(t, 1, len(fsm.fetched.envelopes))
+	require.Equal(t, fork.blocksFrom, fsm.fetched.blocksFrom)
 }
 
 func TestBlocksQueue_stuckWhenHeadIsSetToOrphanedBlock(t *testing.T) {

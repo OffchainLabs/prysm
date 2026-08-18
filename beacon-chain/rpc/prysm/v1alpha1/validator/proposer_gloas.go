@@ -2,13 +2,16 @@ package validator
 
 import (
 	"context"
+	"math/big"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -42,7 +45,10 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 			return nil, status.Errorf(codes.Internal, "Could not get local payload and no P2P bid fallback: %v", fbErr)
 		}
 	} else {
-		selfBuildOnly := local.OverrideBuilder || skipBuilder
+		// The circuit breaker gate is applied here rather than at bid selection so the builder-API
+		// round trip is skipped too.
+		epoch := slots.ToEpoch(sBlk.Block().Slot())
+		selfBuildOnly := local.OverrideBuilder || skipBuilder || vs.BuilderCircuitBreaker.SelfBuildOnly(epoch)
 		var builderBid *ethpb.SignedExecutionPayloadBid
 		var builderURL string
 		var maxExecutionPayment uint64
@@ -98,7 +104,7 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 		}
 	}
 
-	blk, err := vs.constructGenericBeaconBlock(sBlk, nil, primitives.ZeroWei())
+	blk, err := vs.constructGenericBeaconBlock(sBlk, nil, vs.gloasPayloadValue(sBlk, local, selfBuilt))
 	if err != nil {
 		return nil, err
 	}
@@ -118,4 +124,21 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 		}}
 	}
 	return blk, nil
+}
+
+// gloasPayloadValue is the local payload value when self-building, or the bid
+// value when committing to an external bid.
+func (vs *Server) gloasPayloadValue(sBlk interfaces.SignedBeaconBlock, local *consensusblocks.GetPayloadResponse, selfBuilt bool) primitives.Wei {
+	if selfBuilt {
+		if local == nil || local.Bid == nil {
+			return primitives.ZeroWei()
+		}
+		return local.Bid
+	}
+	bid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
+	if err != nil || bid == nil || bid.Message == nil {
+		return primitives.ZeroWei()
+	}
+	value := new(big.Int).SetUint64(uint64(bid.Message.Value))
+	return value.Mul(value, big.NewInt(1e9))
 }

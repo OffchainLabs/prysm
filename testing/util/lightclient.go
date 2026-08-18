@@ -12,9 +12,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	lightclienttypes "github.com/OffchainLabs/prysm/v7/consensus-types/light-client"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	v11 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -1155,7 +1155,7 @@ func (l *TestLightClient) CheckAttestedHeader(header interfaces.LightClientHeade
 		if errors.Is(err, consensus_types.ErrUnsupportedField) {
 			transactions, err := payloadInterface.Transactions()
 			require.NoError(l.T, err)
-			transactionsRootArray, err := ssz.TransactionsRoot(transactions)
+			transactionsRootArray, err := wrappers.TransactionsRoot(transactions)
 			require.NoError(l.T, err)
 			transactionsRoot = transactionsRootArray[:]
 		} else {
@@ -1165,7 +1165,7 @@ func (l *TestLightClient) CheckAttestedHeader(header interfaces.LightClientHeade
 		if errors.Is(err, consensus_types.ErrUnsupportedField) {
 			withdrawals, err := payloadInterface.Withdrawals()
 			require.NoError(l.T, err)
-			withdrawalsRootArray, err := ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
+			withdrawalsRootArray, err := wrappers.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 			require.NoError(l.T, err)
 			withdrawalsRoot = withdrawalsRootArray[:]
 		} else {
@@ -1209,7 +1209,7 @@ func (l *TestLightClient) CheckAttestedHeader(header interfaces.LightClientHeade
 		if errors.Is(err, consensus_types.ErrUnsupportedField) {
 			transactions, err := payloadInterface.Transactions()
 			require.NoError(l.T, err)
-			transactionsRootArray, err := ssz.TransactionsRoot(transactions)
+			transactionsRootArray, err := wrappers.TransactionsRoot(transactions)
 			require.NoError(l.T, err)
 			transactionsRoot = transactionsRootArray[:]
 		} else {
@@ -1219,7 +1219,7 @@ func (l *TestLightClient) CheckAttestedHeader(header interfaces.LightClientHeade
 		if errors.Is(err, consensus_types.ErrUnsupportedField) {
 			withdrawals, err := payloadInterface.Withdrawals()
 			require.NoError(l.T, err)
-			withdrawalsRootArray, err := ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
+			withdrawalsRootArray, err := wrappers.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 			require.NoError(l.T, err)
 			withdrawalsRoot = withdrawalsRootArray[:]
 		} else {

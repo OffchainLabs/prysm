@@ -14,16 +14,30 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/middleware"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/io/logs"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
-	"github.com/OffchainLabs/prysm/v7/validator/client"
 	iface "github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/db"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
+	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
 	"github.com/OffchainLabs/prysm/v7/validator/web"
 	"github.com/pkg/errors"
 )
+
+// ValidatorService is what the keymanager and wallet handlers need from the running validator client.
+type ValidatorService interface {
+	Keymanager() (keymanager.IKeymanager, error)
+	RemoteSignerConfig() *remoteweb3signer.SetupConfig
+	ProposerSettings() *proposer.Settings
+	SetProposerSettings(ctx context.Context, settings *proposer.Settings) error
+	UpdateProposerSettings(ctx context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error
+	Graffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error)
+	SetGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, graffiti []byte) error
+	DeleteGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) error
+}
 
 // Config options for the HTTP server.
 type Config struct {
@@ -42,7 +56,7 @@ type Config struct {
 	Wallet                 *wallet.Wallet
 	WalletDir              string
 	WalletInitializedFeed  *event.Feed
-	ValidatorService       *client.ValidatorService
+	ValidatorService       ValidatorService
 	AuthTokenPath          string
 	Middlewares            []middleware.Middleware
 	Router                 *http.ServeMux
@@ -56,7 +70,7 @@ type Server struct {
 	walletInitializedFeed     *event.Feed
 	beaconApiTimeout          time.Duration
 	wallet                    *wallet.Wallet
-	validatorService          *client.ValidatorService
+	validatorService          ValidatorService
 	httpPort                  int
 	cancel                    context.CancelFunc
 	grpcRetries               uint
@@ -208,6 +222,9 @@ func (s *Server) InitializeRoutes() error {
 	s.router.HandleFunc("GET /eth/v1/validator/{pubkey}/graffiti", s.GetGraffiti)
 	s.router.HandleFunc("POST /eth/v1/validator/{pubkey}/graffiti", s.SetGraffiti)
 	s.router.HandleFunc("DELETE /eth/v1/validator/{pubkey}/graffiti", s.DeleteGraffiti)
+	s.router.HandleFunc("GET /eth/v1/validator/{pubkey}/builders", s.GetBuilders)
+	s.router.HandleFunc("POST /eth/v1/validator/{pubkey}/builders", s.SetBuilders)
+	s.router.HandleFunc("DELETE /eth/v1/validator/{pubkey}/builders", s.DeleteBuilders)
 
 	// auth endpoint
 	s.router.HandleFunc("GET "+api.WebUrlPrefix+"initialize", s.Initialize)

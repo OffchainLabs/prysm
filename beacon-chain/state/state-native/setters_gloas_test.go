@@ -281,6 +281,34 @@ func TestUpdatePendingPaymentWeight(t *testing.T) {
 			require.Equal(t, tt.wantWeight, payment.Weight)
 		})
 	}
+
+	t.Run("target equivocation credits once", func(t *testing.T) {
+		paymentIdx := int(slotsPerEpoch + (slot % slotsPerEpoch))
+		state := buildGloasStateForPaymentWeightTest(t, stateSlot, paymentIdx, 1, 0, map[primitives.Slot][]byte{
+			slot: rootA,
+		})
+
+		att := &ethpb.Attestation{
+			Data: &ethpb.AttestationData{
+				Slot:            slot,
+				CommitteeIndex:  0,
+				BeaconBlockRoot: rootA,
+				Source:          &ethpb.Checkpoint{},
+				Target: &ethpb.Checkpoint{
+					Epoch: stateEpoch,
+				},
+			},
+		}
+		indices := []uint64{0}
+
+		require.NoError(t, state.UpdatePendingPaymentWeight(att, indices, map[uint8]bool{cfg.TimelySourceFlagIndex: true}))
+		state.currentEpochParticipation[0] |= 1 << cfg.TimelySourceFlagIndex
+		require.NoError(t, state.UpdatePendingPaymentWeight(att, indices, map[uint8]bool{cfg.TimelyTargetFlagIndex: true}))
+
+		payment, err := state.BuilderPendingPayment(uint64(paymentIdx))
+		require.NoError(t, err)
+		require.Equal(t, primitives.Gwei(cfg.MinActivationBalance), payment.Weight)
+	})
 }
 
 func TestRotateBuilderPendingPayments(t *testing.T) {

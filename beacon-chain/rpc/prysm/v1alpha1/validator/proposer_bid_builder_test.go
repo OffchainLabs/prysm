@@ -48,6 +48,9 @@ func (v *fakeBidVerifier) VerifyParentBlockRootSeen(fn func([32]byte) bool) erro
 	v.rootSeenFn = fn
 	return v.rootSeenErr
 }
+func (v *fakeBidVerifier) VerifyBidCompatibleWithHead(func(interfaces.ROExecutionPayloadBid) bool) error {
+	return nil
+}
 func (v *fakeBidVerifier) VerifyBidSlotHigherThanParent(primitives.Slot) error { return nil }
 func (v *fakeBidVerifier) VerifyParentBlockHash(fn func([32]byte, [32]byte) bool) error {
 	v.hasPayloadFn = fn
@@ -311,6 +314,28 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 		got, _ := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(auths))
 		require.NotNil(t, got)
 		require.Equal(t, primitives.BuilderIndex(1), got.Message.BuilderIndex)
+	})
+
+	t.Run("discards blacklisted builders", func(t *testing.T) {
+		vs := &Server{
+			BlockBuilder:                   &builderTest.MockBuilderService{PayloadBids: []beaconbuilder.PayloadBid{bid(1, 500), bid(2, 1500)}},
+			NewExecutionPayloadBidVerifier: passAll,
+			BuilderCircuitBreaker:          blacklistedBreaker(t, 2, slot),
+		}
+		got, _ := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(auths))
+		require.NotNil(t, got)
+		require.Equal(t, primitives.BuilderIndex(1), got.Message.BuilderIndex)
+	})
+
+	t.Run("nil when all blacklisted", func(t *testing.T) {
+		vs := &Server{
+			BlockBuilder:                   &builderTest.MockBuilderService{PayloadBids: []beaconbuilder.PayloadBid{bid(1, 500)}},
+			NewExecutionPayloadBidVerifier: passAll,
+			BuilderCircuitBreaker:          blacklistedBreaker(t, 1, slot),
+		}
+		got, url := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(auths))
+		require.IsNil(t, got)
+		require.Equal(t, "", url)
 	})
 
 	t.Run("nil when all invalid", func(t *testing.T) {

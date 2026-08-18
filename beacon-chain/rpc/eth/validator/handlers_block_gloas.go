@@ -123,7 +123,13 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		consensusBlockValue = "0"
 	}
 
+	executionPayloadValue := v1alpha1resp.PayloadValue
+	if executionPayloadValue == "" {
+		executionPayloadValue = "0"
+	}
+
 	w.Header().Set(api.VersionHeader, version.String(version.Gloas))
+	w.Header().Set(api.ExecutionPayloadValueHeader, executionPayloadValue)
 	w.Header().Set(api.ConsensusBlockValueHeader, consensusBlockValue)
 	w.Header().Set(api.ExecutionPayloadIncludedHeader, fmt.Sprintf("%v", includePayload))
 
@@ -152,6 +158,7 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		}
 		httputil.WriteJson(w, &structs.ProduceBlockV4Response{
 			Version:                  version.String(version.Gloas),
+			ExecutionPayloadValue:    executionPayloadValue,
 			ConsensusBlockValue:      consensusBlockValue,
 			ExecutionPayloadIncluded: true,
 			Data:                     jsonBytes,
@@ -182,6 +189,7 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 	}
 	httputil.WriteJson(w, &structs.ProduceBlockV4Response{
 		Version:                  version.String(version.Gloas),
+		ExecutionPayloadValue:    executionPayloadValue,
 		ConsensusBlockValue:      consensusBlockValue,
 		ExecutionPayloadIncluded: false,
 		Data:                     jsonBytes,

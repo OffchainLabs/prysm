@@ -153,6 +153,56 @@ message AttestationElectra {
   ];
 }
 
+// AttestationGloas has the same wire shape as AttestationElectra, but is a
+// distinct type so codegen can generate Gloas progressive merkleization.
+message AttestationGloas {
+  // A bitfield representation of validator indices that have voted exactly
+  // the same vote and have been aggregated into this attestation.
+  bytes aggregation_bits = 1 [
+    (ethereum.eth.ext.ssz_max) = "max_attesting_indices.size",
+    (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
+  ];
+
+  AttestationData data = 2;
+
+  // 96 byte BLS aggregate signature.
+  bytes signature = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
+
+  // Represents the committee which aggregated attestation belong.
+  bytes committee_bits = 4 [
+    (ethereum.eth.ext.ssz_size) = "committee_bits.size",
+    (ethereum.eth.ext.cast_type) = "committee_bits.type"
+  ];
+}
+
+// SignedAggregateAttestationAndProofGloas mirrors the Electra type but wraps
+// the Gloas aggregate-and-proof so the nested attestation is hashed using the
+// Gloas rules.
+message SignedAggregateAttestationAndProofGloas {
+  // The aggregated attestation and selection proof itself.
+  AggregateAttestationAndProofGloas message = 1;
+
+  // 96 byte BLS aggregate signature signed by the aggregator over the message.
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// AggregateAttestationAndProofGloas has the same wire shape as the Electra
+// type, but its aggregate is an AttestationGloas.
+message AggregateAttestationAndProofGloas {
+  // The aggregator index that submitted this aggregated attestation and proof.
+  uint64 aggregator_index = 1
+      [ (ethereum.eth.ext.cast_type) =
+            "github.com/OffchainLabs/prysm/v7/consensus-types/"
+            "primitives.ValidatorIndex" ];
+
+  // The aggregated attestation that was submitted.
+  AttestationGloas aggregate = 2;
+
+  // 96 byte selection proof signed by the aggregator, which is the signature of
+  // the slot to aggregate.
+  bytes selection_proof = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
 message SingleAttestation {
   uint64 committee_id = 1 [ (ethereum.eth.ext.cast_type) =
                                 "github.com/OffchainLabs/prysm/v7/"

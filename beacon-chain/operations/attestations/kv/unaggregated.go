@@ -117,8 +117,7 @@ func (c *AttCaches) UnaggregatedAttestationsBySlotIndexElectra(
 	unAggregatedAtts := c.unAggregatedAtt
 	for _, a := range unAggregatedAtts {
 		if a.Version() >= version.Electra && slot == a.GetData().Slot && a.CommitteeBitsVal().BitAt(uint64(committeeIndex)) {
-			att, ok := a.(*ethpb.AttestationElectra)
-			// This will never fail in practice because we asserted the version
+			att, ok := ethpb.AttestationElectraFromAtt(a)
 			if ok {
 				atts = append(atts, att)
 			}

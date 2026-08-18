@@ -107,6 +107,7 @@ type BeaconNode struct {
 	depositCache              cache.DepositCache
 	proposerPreferencesCache  *cache.ProposerPreferencesCache
 	subscribedValidatorsCache *cache.SubscribedValidatorsCache
+	builderCircuitBreaker     *cache.BuilderCircuitBreaker
 	payloadIDCache            *cache.PayloadIDCache
 	executionPayloadCache     *cache.ExecutionPayloadEnvelopeCache
 	stateFeed                 *event.Feed
@@ -180,6 +181,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		blsToExecPool:             blstoexec.NewPool(),
 		proposerPreferencesCache:  cache.NewProposerPreferencesCache(),
 		subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
+		builderCircuitBreaker:     cache.NewBuilderCircuitBreaker(),
 		payloadIDCache:            cache.NewPayloadIDCache(),
 		executionPayloadCache:     cache.NewExecutionPayloadEnvelopeCache(),
 		slasherBlockHeadersFeed:   new(event.Feed),
@@ -322,6 +324,10 @@ func configureBeacon(cliCtx *cli.Context) error {
 
 	if err := configureBuilderCircuitBreaker(cliCtx); err != nil {
 		return errors.Wrap(err, "could not configure builder circuit breaker")
+	}
+
+	if err := configureBuilderHeaderTimeout(cliCtx); err != nil {
+		return errors.Wrap(err, "could not configure builder header timeout")
 	}
 
 	if err := configureSlotsPerArchivedPoint(cliCtx); err != nil {
@@ -795,7 +801,6 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithChainStartFetcher(web3Service),
 		blockchain.WithExecutionEngineCaller(web3Service),
 		blockchain.WithAttestationCache(b.attestationCache),
-		blockchain.WithAttestationDataCache(b.attestationDataCache),
 		blockchain.WithAttestationPool(b.attestationPool),
 		blockchain.WithExitPool(b.exitPool),
 		blockchain.WithSlashingPool(b.slashingsPool),
@@ -812,6 +817,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithDataColumnStorage(b.DataColumnStorage),
 		blockchain.WithProposerPreferencesCache(b.proposerPreferencesCache),
 		blockchain.WithSubscribedValidatorsCache(b.subscribedValidatorsCache),
+		blockchain.WithBuilderCircuitBreaker(b.builderCircuitBreaker),
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
 		blockchain.WithSyncChecker(b.syncChecker),
 		blockchain.WithSlasherEnabled(b.slasherEnabled),
@@ -840,7 +846,8 @@ func (b *BeaconNode) registerPOWChainService() error {
 	}
 
 	// Create GraffitiInfo for client version tracking in block graffiti
-	graffitiInfo := execution.NewGraffitiInfo()
+	appendClientVersion := !b.cliCtx.Bool(flags.DisableGraffitiClientAppend.Name)
+	graffitiInfo := execution.NewGraffitiInfo(appendClientVersion)
 
 	// skipcq: CRT-D0001
 	opts := append(
@@ -912,6 +919,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithAvailableBlocker(bFillStore),
 		regularsync.WithProposerPreferencesCache(b.proposerPreferencesCache),
 		regularsync.WithSubscribedValidatorsCache(b.subscribedValidatorsCache),
+		regularsync.WithBuilderCircuitBreaker(b.builderCircuitBreaker),
 		regularsync.WithSlasherEnabled(b.slasherEnabled),
 		regularsync.WithLightClientStore(b.lcStore),
 		regularsync.WithBatchVerifierLimit(b.cliCtx.Int(flags.BatchVerifierLimit.Name)),
@@ -1074,6 +1082,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		DataColumnStorage:                b.DataColumnStorage,
 		ProposerPreferencesCache:         b.proposerPreferencesCache,
 		SubscribedValidatorsCache:        b.subscribedValidatorsCache,
+		BuilderCircuitBreaker:            b.builderCircuitBreaker,
 		HighestBidCache:                  regularSyncService.HighestExecutionPayloadBidCache(),
 		PayloadIDCache:                   b.payloadIDCache,
 		ExecutionPayloadEnvelopeCache:    b.executionPayloadCache,

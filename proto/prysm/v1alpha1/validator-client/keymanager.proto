@@ -129,16 +129,53 @@ message ProposerOptionPayload {
 
 // BuilderConfig is a property of ProposerOptionPayload
 message BuilderConfig {
+  // enabled is legacy v1 (mev-boost) content; v2 settings ignore it.
   bool enabled = 1;
   uint64 gas_limit = 2 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
   ];
-  repeated string relays = 3;
+  reserved 3;
+  reserved "relays";
   // max_execution_payment is the maximum execution layer payment (in Gwei) the
-  // proposer will accept from a builder for the Gloas builder API. 0 means
-  // trustless-only; 2^64-1 means accept any amount.
-  uint64 max_execution_payment = 4 [
+  // proposer will accept from a builder for the Gloas builder API. Explicit 0
+  // means trustless-only; unset inherits; 2^64-1 means accept any amount.
+  optional uint64 max_execution_payment = 4 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
+  ];
+  // builders is the per-key builder list from the keymanager validator config
+  // endpoint. Each entry may override the builder-level fallbacks below.
+  repeated BuilderEntry builders = 5;
+  // builders_set preserves an explicitly configured empty builders list
+  // ("use no builders"), which proto3 cannot distinguish from absent.
+  bool builders_set = 6;
+  optional uint64 min_bid = 7 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
+  ];
+  optional uint64 builder_boost_factor = 8 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
+  ];
+}
+
+// BuilderEntry is a single builder in a proposer's per-key builder list. Fields
+// left unset inherit from the enclosing BuilderConfig, then default_config.
+message BuilderEntry {
+  string url = 1;
+  // pubkeys filters accepted bids to these builder keys; empty accepts any.
+  repeated bytes pubkeys = 2;
+  optional bytes auth_data = 3;
+  optional uint64 min_bid = 4 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
+  ];
+  optional uint64 max_execution_payment = 5 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
+  ];
+  optional uint64 builder_boost_factor = 6 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
   ];

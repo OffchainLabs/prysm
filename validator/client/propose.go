@@ -51,7 +51,7 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 	ctx, span := trace.StartSpan(ctx, "validator.ProposeBlock")
 	defer span.End()
 
-	lock := async.NewMultilock(fmt.Sprint(iface.RoleProposer), string(pubKey[:]))
+	lock := async.NewMultilock(fmt.Sprint(roleProposer), string(pubKey[:]))
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -76,6 +76,16 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		// validator to miss block reward. When failed, validator should continue
 		// to produce the block.
 		log.WithError(err).Warn("Could not get graffiti")
+	}
+
+	ctx, err = v.withHeadHint(ctx, slot, attestationDueComponent(slot))
+	if err != nil {
+		log.WithField("slot", slot).WithError(err).Error("Could not attach freshness hint")
+		if v.emitAccountMetrics {
+			ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
+		}
+
+		return
 	}
 
 	// Request block from beacon node
@@ -328,7 +338,7 @@ func buildGenericSignedBlockFuluWithBlobs(pb proto.Message, b *ethpb.GenericBeac
 func ProposeExit(
 	ctx context.Context,
 	validatorClient iface.ValidatorClient,
-	signer iface.SigningFunc,
+	signer signingFunc,
 	pubKey []byte,
 	epoch primitives.Epoch,
 ) error {
@@ -359,7 +369,7 @@ func CurrentEpoch(genesisTime *timestamp.Timestamp) (primitives.Epoch, error) {
 func CreateSignedVoluntaryExit(
 	ctx context.Context,
 	validatorClient iface.ValidatorClient,
-	signer iface.SigningFunc,
+	signer signingFunc,
 	pubKey []byte,
 	epoch primitives.Epoch,
 ) (*ethpb.SignedVoluntaryExit, error) {
@@ -454,7 +464,7 @@ func (v *validator) signBlock(ctx context.Context, pubKey [fieldparams.BLSPubkey
 func signVoluntaryExit(
 	ctx context.Context,
 	validatorClient iface.ValidatorClient,
-	signer iface.SigningFunc,
+	signer signingFunc,
 	pubKey []byte,
 	exit *ethpb.VoluntaryExit,
 	slot primitives.Slot,
@@ -567,41 +577,31 @@ func (v *validator) SetGraffiti(ctx context.Context, pubkey [fieldparams.BLSPubk
 	if graffiti == nil {
 		return nil
 	}
-	settings := &proposer.Settings{}
-	if v.proposerSettings != nil {
-		settings = v.proposerSettings.Clone()
-	}
-	if settings.ProposeConfig == nil {
-		settings.ProposeConfig = map[[48]byte]*proposer.Option{pubkey: {GraffitiConfig: &proposer.GraffitiConfig{Graffiti: string(graffiti)}}}
-		return v.SetProposerSettings(ctx, settings)
-	}
-	option, ok := settings.ProposeConfig[pubkey]
-	if !ok || option == nil {
-		settings.ProposeConfig[pubkey] = &proposer.Option{GraffitiConfig: &proposer.GraffitiConfig{
-			Graffiti: string(graffiti),
-		}}
-	} else {
-		option.GraffitiConfig = &proposer.GraffitiConfig{
-			Graffiti: string(graffiti),
+	return v.UpdateProposerSettings(ctx, func(settings *proposer.Settings) (*proposer.Settings, error) {
+		if settings == nil {
+			// API-created settings carry no v1 content: v2 once gloas is scheduled.
+			settings = &proposer.Settings{Version: proposer.FreshSettingsVersion()}
 		}
-	}
-	return v.SetProposerSettings(ctx, settings) // save the proposer settings
+		settings.UpsertProposeOption(pubkey).GraffitiConfig = &proposer.GraffitiConfig{Graffiti: string(graffiti)}
+		return settings, nil
+	})
 }
 
 func (v *validator) DeleteGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) error {
 	ctx, span := trace.StartSpan(ctx, "validator.DeleteGraffiti")
 	defer span.End()
 
-	if v.proposerSettings == nil || v.proposerSettings.ProposeConfig == nil {
-		return errors.New("attempted to delete graffiti without proposer settings, graffiti will default to flag options")
-	}
-	ps := v.proposerSettings.Clone()
-	option, ok := ps.ProposeConfig[pubKey]
-	if !ok || option == nil {
-		return fmt.Errorf("graffiti not found in proposer settings for pubkey:%s", hexutil.Encode(pubKey[:]))
-	}
-	option.GraffitiConfig = nil
-	return v.SetProposerSettings(ctx, ps) // save the proposer settings
+	return v.UpdateProposerSettings(ctx, func(ps *proposer.Settings) (*proposer.Settings, error) {
+		if ps == nil || ps.ProposeConfig == nil {
+			return nil, errors.New("attempted to delete graffiti without proposer settings, graffiti will default to flag options")
+		}
+		option, ok := ps.ProposeConfig[pubKey]
+		if !ok || option == nil {
+			return nil, fmt.Errorf("graffiti not found in proposer settings for pubkey:%s", hexutil.Encode(pubKey[:]))
+		}
+		option.GraffitiConfig = nil
+		return ps, nil
+	})
 }
 
 func blockLogFields(pubKey [fieldparams.BLSPubkeyLength]byte, blk interfaces.ReadOnlyBeaconBlock, sig []byte) logrus.Fields {

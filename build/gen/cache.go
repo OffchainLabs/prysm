@@ -1,8 +1,8 @@
 package main
 
 // This file implements a content-based cache that lets `make gen` skip a kind
-// (proto / ssz / mocks) when none of the files that can affect its output have
-// changed since the last successful run on this checkout.
+// (proto / ssz / mocks / logs) when none of the files that can affect its output
+// have changed since the last successful run on this checkout.
 //
 // For each kind we build a manifest: a sorted (repo-relative-path, sha256) list
 // over that kind's input AND output files, then a single SHA256 over the list.
@@ -127,6 +127,8 @@ func specificFiles(k kind) ([]string, error) {
 		return sszFiles()
 	case kindMocks:
 		return mockFiles()
+	case kindLogs:
+		return logsFiles()
 	default:
 		return nil, fmt.Errorf("unknown kind %q", k)
 	}

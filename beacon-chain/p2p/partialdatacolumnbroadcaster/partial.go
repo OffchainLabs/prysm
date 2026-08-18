@@ -408,7 +408,7 @@ var (
 )
 
 func (p *PartialColumnBroadcaster) loop() {
-	cleanup := time.NewTicker(time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot))
+	cleanup := time.NewTicker(params.BeaconConfig().SlotDuration())
 	for {
 		select {
 		case req := <-p.incomingReq:

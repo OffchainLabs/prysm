@@ -172,14 +172,23 @@ func aggregateAttestations(atts []ethpb.Att, keys []int, coverage *bitfield.Bitl
 		}
 	}
 	// Put aggregated attestation at a position of the first selected attestation.
-	if atts[0].Version() == version.Phase0 {
+	switch {
+	case atts[0].Version() == version.Phase0:
 		atts[targetIdx] = &ethpb.Attestation{
 			// Append size byte, which will be unnecessary on switch to Bitlist64.
 			AggregationBits: coverage.ToBitlist(),
 			Data:            data,
 			Signature:       aggregateSignatures(signs).Marshal(),
 		}
-	} else {
+	case atts[0].Version() >= version.Gloas:
+		atts[targetIdx] = &ethpb.AttestationGloas{
+			// Append size byte, which will be unnecessary on switch to Bitlist64.
+			AggregationBits: coverage.ToBitlist(),
+			CommitteeBits:   atts[0].CommitteeBitsVal().Bytes(),
+			Data:            data,
+			Signature:       aggregateSignatures(signs).Marshal(),
+		}
+	default:
 		atts[targetIdx] = &ethpb.AttestationElectra{
 			// Append size byte, which will be unnecessary on switch to Bitlist64.
 			AggregationBits: coverage.ToBitlist(),

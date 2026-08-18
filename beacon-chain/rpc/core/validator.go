@@ -476,9 +476,11 @@ func (s *Service) GetAttestationData(
 		return nil, &RpcError{Reason: BadRequest, Err: errors.Errorf("invalid request: %v", err)}
 	}
 
+	currentHeadRoot, currentHeadFull := s.HeadFetcher.HeadRootAndFull()
+
 	s.AttestationCache.RLock()
 	res := s.AttestationCache.Get()
-	if res != nil && res.Slot == req.Slot {
+	if res.IsFreshFor(req.Slot, currentHeadRoot, currentHeadFull) {
 		s.AttestationCache.RUnlock()
 		return &ethpb.AttestationData{
 			Slot:            res.Slot,
@@ -503,7 +505,7 @@ func (s *Service) GetAttestationData(
 	// the same attestation data, the cache might have been filled while we were waiting
 	// to acquire the lock.
 	res = s.AttestationCache.Get()
-	if res != nil && res.Slot == req.Slot {
+	if res.IsFreshFor(req.Slot, currentHeadRoot, currentHeadFull) {
 		return &ethpb.AttestationData{
 			Slot:            res.Slot,
 			CommitteeIndex:  attestationDataIndex(req, res.IsPayloadFull),
@@ -563,6 +565,7 @@ func (s *Service) GetAttestationData(
 	if err = s.AttestationCache.Put(&cache.AttestationConsensusData{
 		Slot:          req.Slot,
 		HeadRoot:      headRoot,
+		HeadFull:      currentHeadFull,
 		IsPayloadFull: isPayloadFull,
 		Target: forkchoicetypes.Checkpoint{
 			Epoch: targetEpoch,
@@ -746,8 +749,7 @@ func registerSyncSubnetInternal(
 	if err != nil {
 		epochsToWatch = 0
 	}
-	epochDuration := time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
-	totalDuration := epochDuration * time.Duration(epochsToWatch) * time.Second
+	totalDuration := params.EpochsDuration(1, params.BeaconConfig()) * time.Duration(epochsToWatch)
 	cache.SyncSubnetIDs.AddSyncCommitteeSubnets(pubkey, startEpoch, subs, totalDuration)
 }
 
