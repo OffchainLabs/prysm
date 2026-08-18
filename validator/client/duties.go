@@ -151,6 +151,7 @@ func (v *validator) updateDutiesCombined(ctx context.Context, epoch primitives.E
 
 	var data dutyStoreData
 	data.setFromContainer(resp)
+	data.epoch = epoch
 	data.missingNext = missingNextPtc
 	v.duties.write(data)
 
@@ -485,6 +486,217 @@ func (v *validator) MaybeFetchNextDuties(ctx context.Context, slot primitives.Sl
 		v.waitUntilSlotComponent(fetchCtx, slot, nextDutiesFetchBPS)
 		if err := v.ensureNextEpochDuties(fetchCtx); err != nil {
 			log.WithError(err).Debug("Could not fetch next-epoch duties")
+		}
+	}()
+}
+
+// missingDutyFetch records the outcome of the last mid-epoch missing-key fetch,
+// so keys the beacon node returned no duties for are not refetched every slot.
+type missingDutyFetch struct {
+	epoch primitives.Epoch
+	keys  []pubkey // sorted
+	ok    bool
+}
+
+// MaybeFetchMissingDuties fetches duties in the background for eligible keys
+// absent from the duty store, e.g. reloaded or doppelganger-cleared mid-epoch.
+func (v *validator) MaybeFetchMissingDuties(ctx context.Context, slot primitives.Slot) {
+	if !v.duties.isInitialized() || !v.missingFetchInFlight.CompareAndSwap(false, true) {
+		return
+	}
+	fetchCtx, cancel := context.WithDeadline(ctx, v.SlotDeadline(slot))
+	go func() {
+		defer func() {
+			cancel()
+			v.missingFetchInFlight.Store(false)
+		}()
+		if err := v.fetchMissingDuties(fetchCtx); err != nil {
+			log.WithError(err).Debug("Could not fetch duties for newly eligible keys")
+		}
+	}()
+}
+
+// fetchMissingDuties requests duties for just the eligible wallet keys absent
+// from the duty store, merging them in and pruning wallet-removed keys.
+func (v *validator) fetchMissingDuties(ctx context.Context) error {
+	snap := v.duties.snapshot()
+	if !snap.isInitialized() {
+		return nil
+	}
+	// Same epoch derivation as UpdateDuties; a mismatch means a boundary fetch
+	// is imminent or has failed, and the boundary path owns recovery there.
+	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
+	if epoch != snap.epoch() {
+		return nil
+	}
+	keys, err := v.nonBlacklistedKeys(ctx)
+	if err != nil {
+		return errors.Wrap(err, "could not filter blacklisted keys")
+	}
+	wallet := make(map[pubkey]bool, len(keys))
+	for _, pk := range keys {
+		wallet[pk] = true
+	}
+	prune := false
+	stored := make(map[pubkey]bool, snap.currentDutyCount()+snap.nextDutyCount())
+	markStored := func(pk pubkey) {
+		stored[pk] = true
+		if !wallet[pk] {
+			prune = true
+		}
+	}
+	for pk := range snap.currentDuties() {
+		markStored(pk)
+	}
+	for pk := range snap.nextDuties() {
+		markStored(pk)
+	}
+
+	eligibleKeys, eligibleIndices := v.filteredKeysAndIndices(keys, epoch)
+	statuses := v.statusCache()
+	var missingKeys []pubkey
+	var missingIndices []primitives.ValidatorIndex
+	for _, pk := range eligibleKeys {
+		st, ok := statuses[pk]
+		if stored[pk] || !ok {
+			continue
+		}
+		missingKeys = append(missingKeys, pk)
+		missingIndices = append(missingIndices, st.index)
+	}
+	if len(missingKeys) == 0 && !prune {
+		return nil
+	}
+	slices.SortFunc(missingKeys, func(a, b pubkey) int { return bytes.Compare(a[:], b[:]) })
+	slices.Sort(missingIndices)
+	if !prune && v.missingFetchDone(epoch, missingKeys) {
+		return nil
+	}
+
+	var (
+		current, next []*ethpb.ValidatorDuty
+		indices       []primitives.ValidatorIndex
+	)
+	missing := snap.missingNext()
+	if len(missingKeys) > 0 {
+		if epoch >= params.BeaconConfig().GloasForkEpoch {
+			current, next, missing, err = v.fetchMissingSplit(ctx, snap, epoch, missingIndices)
+			indices = eligibleIndices
+		} else {
+			current, next, err = v.fetchMissingCombined(ctx, snap, epoch, missingKeys)
+		}
+		if err != nil {
+			v.recordMissingFetch(epoch, missingKeys, false)
+			return err
+		}
+	} else if len(snap.indices()) > 0 {
+		// Prune-only pass on the split path: refresh indices so promotion at the
+		// next boundary compares against the surviving set.
+		indices = eligibleIndices
+	}
+
+	if !v.duties.mergeDuties(snap.revision, current, next, indices, missing, func(pk pubkey) bool { return wallet[pk] }) {
+		// The store advanced under us (boundary or head-event update); retry next slot.
+		v.recordMissingFetch(epoch, missingKeys, false)
+		return nil
+	}
+	v.recordMissingFetch(epoch, missingKeys, true)
+	if len(current)+len(next) > 0 {
+		log.WithFields(logrus.Fields{
+			"epoch":    epoch,
+			"keyCount": len(missingKeys),
+		}).Info("Fetched mid-epoch duties for newly eligible keys")
+		v.subscribeMergedDuties(current, next)
+	}
+	return nil
+}
+
+// missingFetchDone reports whether this exact missing-key set already fetched
+// successfully this epoch. Only the single-flight goroutine touches the record.
+func (v *validator) missingFetchDone(epoch primitives.Epoch, keys []pubkey) bool {
+	last := v.lastMissingFetch
+	return last != nil && last.ok && last.epoch == epoch && slices.Equal(last.keys, keys)
+}
+
+func (v *validator) recordMissingFetch(epoch primitives.Epoch, keys []pubkey, ok bool) {
+	v.lastMissingFetch = &missingDutyFetch{epoch: epoch, keys: keys, ok: ok}
+}
+
+// rootsCompatible treats dependent roots as matching when either is unknown.
+func rootsCompatible(stored, fetched []byte) bool {
+	return len(stored) == 0 || len(fetched) == 0 || bytes.Equal(stored, fetched)
+}
+
+// fetchMissingSplit fetches split-endpoint duties for just the given indices,
+// returning rows to merge and the updated missing-next mask.
+func (v *validator) fetchMissingSplit(ctx context.Context, snap roDutySnapshot, epoch primitives.Epoch, indices []primitives.ValidatorIndex) (current, next []*ethpb.ValidatorDuty, missing missingNextDuties, err error) {
+	missing = snap.missingNext()
+	r := v.fetchDutyResponses(ctx, epoch, indices, missingNextAll)
+	if r.attErr != nil {
+		return nil, nil, missing, errors.Wrap(r.attErr, "attester duties")
+	}
+	if r.propErr != nil {
+		return nil, nil, missing, errors.Wrap(r.propErr, "proposer duties")
+	}
+	if r.syncErr != nil {
+		log.WithError(r.syncErr).Warn("Error getting sync committee duties")
+	}
+	if r.ptcErr != nil {
+		log.WithError(r.ptcErr).Warn("Error getting PTC duties")
+	}
+	if r.att != nil && !rootsCompatible(snap.prevDependentRoot(), r.att.DependentRoot) {
+		// A reorg landed since the boundary fetch; the head-event path refetches
+		// the whole set, so skip the merge and retry after it settles.
+		return nil, nil, missing, errors.New("current-epoch dependent root changed since last duty update")
+	}
+	current = v.assembleDuties(r.att, r.prop, r.sync, r.ptc)
+
+	// Extend the cached next-epoch duties only while their attester spine is
+	// intact; otherwise the pending full rebuild covers the new keys.
+	if missing&missingNextAttester == 0 {
+		rn := v.fetchNextEpochDuties(ctx, epoch+1, indices, missingNextAll, snap.currDependentRoot())
+		switch {
+		case rn.att == nil || !rootsCompatible(snap.currDependentRoot(), rn.att.DependentRoot):
+			missing |= missingNextAttester
+		case len(rn.att.Duties) > 0:
+			next = v.assembleDuties(rn.att, rn.prop, rn.sync, rn.ptc)
+			missing |= missingNextMask(epoch+1, rn.att, rn.prop, rn.sync, rn.ptc)
+		}
+		// An empty response just means these keys have no next-epoch duties yet.
+	}
+	return current, next, missing, nil
+}
+
+// fetchMissingCombined fetches combined-endpoint duties (pre-Gloas) for just
+// the given keys.
+func (v *validator) fetchMissingCombined(ctx context.Context, snap roDutySnapshot, epoch primitives.Epoch, keys []pubkey) (current, next []*ethpb.ValidatorDuty, err error) {
+	req := &ethpb.DutiesRequest{
+		Epoch:      epoch,
+		PublicKeys: bytesutil.FromBytes48Array(keys),
+	}
+	resp, err := v.validatorClient.Duties(ctx, req)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "could not get validator duties")
+	}
+	if resp == nil {
+		return nil, nil, errors.New("nil duties response from beacon node")
+	}
+	if !rootsCompatible(snap.prevDependentRoot(), resp.PrevDependentRoot) {
+		return nil, nil, errors.New("current-epoch dependent root changed since last duty update")
+	}
+	return resp.CurrentEpochDuties, resp.NextEpochDuties, nil
+}
+
+// subscribeMergedDuties subscribes subnets for just the merged rows, leaving
+// already-subscribed keys untouched.
+func (v *validator) subscribeMergedDuties(current, next []*ethpb.ValidatorDuty) {
+	container := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: current,
+		NextEpochDuties:    next,
+	}
+	go func() {
+		if err := v.subscribeToSubnets(context.Background(), container); err != nil {
+			log.WithError(err).Error("Failed to subscribe to subnets")
 		}
 	}()
 }

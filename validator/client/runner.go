@@ -133,6 +133,10 @@ func (r *runner) run(ctx context.Context) {
 			// Background doppelganger check for keys quarantined by a key reload.
 			v.CheckDoppelGangerMidEpoch(ctx, slot)
 
+			// Pick up duties for keys that became eligible mid-epoch (key reload or
+			// doppelganger clearance) without refetching the whole set.
+			v.MaybeFetchMissingDuties(ctx, slot)
+
 			// call push proposer settings often to account for the following edge cases:
 			// proposer is activated at the start of epoch and tries to propose immediately
 			// account has changed in the middle of an epoch
