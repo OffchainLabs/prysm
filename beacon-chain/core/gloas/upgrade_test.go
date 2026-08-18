@@ -40,6 +40,10 @@ func TestUpgradeToGloas_Basic(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, st.SetLatestExecutionPayloadHeader(wrappedHeader))
 
+	latestBlockHeader := st.LatestBlockHeader()
+	latestBlockHeader.Slot = 3
+	require.NoError(t, st.SetLatestBlockHeader(latestBlockHeader))
+
 	preForkState := st.Copy()
 	mSt, err := gloas.UpgradeToGloas(st)
 	require.NoError(t, err)
@@ -59,6 +63,7 @@ func TestUpgradeToGloas_Basic(t *testing.T) {
 	wantBlockHash := [32]byte{}
 	copy(wantBlockHash[:], blockHash)
 	require.DeepSSZEqual(t, wantBlockHash, bid.BlockHash())
+	require.Equal(t, primitives.Slot(3), bid.Slot())
 	require.DeepSSZEqual(t, [20]byte{}, bid.FeeRecipient())
 	require.DeepSSZEqual(t, [32]byte{}, bid.ParentBlockHash())
 	require.DeepSSZEqual(t, [32]byte{}, bid.ParentBlockRoot())

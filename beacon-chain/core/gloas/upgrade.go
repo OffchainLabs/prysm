@@ -294,6 +294,7 @@ func upgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 		CurrentSyncCommittee:        currentSyncCommittee,
 		NextSyncCommittee:           nextSyncCommittee,
 		LatestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
+			Slot:                  beaconState.LatestBlockHeader().Slot,
 			BlockHash:             payloadHeader.BlockHash(),
 			GasLimit:              payloadHeader.GasLimit(),
 			FeeRecipient:          make([]byte, fieldparams.FeeRecipientLength),
