@@ -29,9 +29,9 @@ type BlockBuilder interface {
 	SubmitBlindedBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error)
 	SubmitBlindedBlockPostFulu(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) error
 	GetHeader(ctx context.Context, slot primitives.Slot, parentHash [32]byte, pubKey [48]byte) (builder.SignedBid, error)
-	GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash, parentRoot [32]byte, proposerPubkey [48]byte, auths []*ethpb.SignedRequestAuthV1) ([]PayloadBid, error)
+	GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash, parentRoot [32]byte, proposerPubkey [48]byte, auths []*ethpb.SignedRequestAuth) ([]PayloadBid, error)
 	SubmitSignedBeaconBlock(ctx context.Context, builderURL string, block interfaces.ReadOnlySignedBeaconBlock) error
-	SubmitBuilderPreferences(ctx context.Context, validatorPubkey [48]byte, req *ethpb.BuilderPreferencesRequestV1) error
+	SubmitBuilderPreferences(ctx context.Context, proposerPubkey [48]byte, req *ethpb.BuilderPreferencesRequest) error
 	RegisterValidator(ctx context.Context, reg []*ethpb.SignedValidatorRegistrationV1) error
 	RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error)
 	Configured() bool
@@ -163,11 +163,11 @@ func (s *Service) SubmitBlindedBlockPostFulu(ctx context.Context, b interfaces.R
 }
 
 // Builders are queried concurrently, a failing builder drops only its own bid.
-func (s *Service) GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash, parentRoot [32]byte, proposerPubkey [48]byte, auths []*ethpb.SignedRequestAuthV1) ([]PayloadBid, error) {
+func (s *Service) GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash, parentRoot [32]byte, proposerPubkey [48]byte, auths []*ethpb.SignedRequestAuth) ([]PayloadBid, error) {
 	ctx, span := trace.StartSpan(ctx, "builder.GetExecutionPayloadBid")
 	defer span.End()
 
-	byURL := make(map[string]*ethpb.SignedRequestAuthV1, len(auths))
+	byURL := make(map[string]*ethpb.SignedRequestAuth, len(auths))
 	urls := make([]string, 0, len(auths))
 	for _, a := range auths {
 		url := string(a.GetMessage().GetData())
@@ -231,7 +231,7 @@ func (s *Service) SubmitSignedBeaconBlock(ctx context.Context, builderURL string
 }
 
 // Routed to the builder named in the signed request auth.
-func (s *Service) SubmitBuilderPreferences(ctx context.Context, validatorPubkey [48]byte, req *ethpb.BuilderPreferencesRequestV1) error {
+func (s *Service) SubmitBuilderPreferences(ctx context.Context, proposerPubkey [48]byte, req *ethpb.BuilderPreferencesRequest) error {
 	ctx, span := trace.StartSpan(ctx, "builder.SubmitBuilderPreferences")
 	defer span.End()
 	url := string(req.GetAuth().GetMessage().GetData())
@@ -243,7 +243,7 @@ func (s *Service) SubmitBuilderPreferences(ctx context.Context, validatorPubkey 
 		tracing.AnnotateError(span, err)
 		return err
 	}
-	return c.SubmitBuilderPreferences(ctx, validatorPubkey, req)
+	return c.SubmitBuilderPreferences(ctx, proposerPubkey, req)
 }
 
 // GetHeader retrieves the header for a given slot and parent hash from the builder relay network.

@@ -23,7 +23,7 @@ func (vs *Server) SubmitBuilderPreferences(ctx context.Context, req *ethpb.Submi
 	if vs.BlockBuilder == nil {
 		return nil, status.Error(codes.FailedPrecondition, "builder is not configured")
 	}
-	pubkey := bytesutil.ToBytes48(req.ValidatorPubkey)
+	pubkey := bytesutil.ToBytes48(req.ProposerPubkey)
 	if err := vs.BlockBuilder.SubmitBuilderPreferences(ctx, pubkey, req.Request); err != nil {
 		return nil, status.Errorf(codes.Internal, "could not submit builder preferences: %v", err)
 	}

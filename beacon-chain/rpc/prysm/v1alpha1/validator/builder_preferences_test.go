@@ -15,9 +15,9 @@ import (
 func TestServer_SubmitBuilderPreferences(t *testing.T) {
 	pubkey := bytesutil.ToBytes48([]byte{1, 2, 3})
 	req := &ethpb.SubmitBuilderPreferencesRequest{
-		ValidatorPubkey: pubkey[:],
-		Request: &ethpb.BuilderPreferencesRequestV1{
-			Preferences: &ethpb.BuilderPreferencesV1{MaxExecutionPayment: 1000},
+		ProposerPubkey: pubkey[:],
+		Request: &ethpb.BuilderPreferencesRequest{
+			Preferences: &ethpb.BuilderPreferences{MaxExecutionPayment: 1000},
 		},
 	}
 
@@ -32,7 +32,7 @@ func TestServer_SubmitBuilderPreferences(t *testing.T) {
 
 	t.Run("nil request errors", func(t *testing.T) {
 		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true}}
-		_, err := vs.SubmitBuilderPreferences(t.Context(), &ethpb.SubmitBuilderPreferencesRequest{ValidatorPubkey: pubkey[:]})
+		_, err := vs.SubmitBuilderPreferences(t.Context(), &ethpb.SubmitBuilderPreferencesRequest{ProposerPubkey: pubkey[:]})
 		require.ErrorContains(t, "request is empty", err)
 	})
 

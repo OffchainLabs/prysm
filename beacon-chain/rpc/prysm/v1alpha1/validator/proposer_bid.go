@@ -151,7 +151,7 @@ type builderBidQuery struct {
 	feeRecipient   []byte
 	parentGasLimit uint64
 	targetGasLimit uint64
-	auths          []*ethpb.SignedRequestAuthV1
+	auths          []*ethpb.SignedRequestAuth
 }
 
 func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.BeaconState, q *builderBidQuery) (*ethpb.SignedExecutionPayloadBid, string) {

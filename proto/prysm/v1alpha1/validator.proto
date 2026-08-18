@@ -981,7 +981,7 @@ message BlockRequest {
 
   // Signed builder request auths for this slot, one per configured builder.
   // The beacon node forwards the auth matching its builder when requesting a bid.
-  repeated SignedRequestAuthV1 builder_request_auths = 7;
+  repeated SignedRequestAuth builder_request_auths = 7;
 }
 
 message ProposeResponse {

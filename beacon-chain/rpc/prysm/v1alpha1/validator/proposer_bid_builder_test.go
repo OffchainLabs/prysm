@@ -240,7 +240,7 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 	parentRoot := [32]byte{1, 2, 3}
 	parentHash := [32]byte{9, 9, 9}
 	pubkey := [48]byte{4, 5, 6}
-	auths := []*ethpb.SignedRequestAuthV1{{}}
+	auths := []*ethpb.SignedRequestAuth{{}}
 	head, err := util.NewBeaconStateGloas()
 	require.NoError(t, err)
 
@@ -265,7 +265,7 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 	passAll := func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
 		return &fakeBidVerifier{}
 	}
-	query := func(auths []*ethpb.SignedRequestAuthV1) *builderBidQuery {
+	query := func(auths []*ethpb.SignedRequestAuth) *builderBidQuery {
 		return &builderBidQuery{
 			slot:       slot,
 			parentRoot: parentRoot,

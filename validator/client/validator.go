@@ -115,7 +115,7 @@ type validator struct {
 	pubkeyToStatus               map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus
 	pubkeyToStatusLock           sync.RWMutex // guards pubkeyToStatus; all readers go through statusCache
 	signedValidatorRegistrations map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
-	signedRequestAuths           map[requestAuthKey]*ethpb.SignedRequestAuthV1
+	signedRequestAuths           map[requestAuthKey]*ethpb.SignedRequestAuth
 	aggSelector                  aggregatorSelector
 	validatorClient              iface.ValidatorClient
 	chainClient                  iface.ChainClient
@@ -1485,9 +1485,9 @@ func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km key
 				// TODO(gloas): per-entry max_execution_payment, authData, minBid, boost
 				// and pubkeys need the beacon-APIs #630 inline wire's builder identity.
 				reqs = append(reqs, &ethpb.SubmitBuilderPreferencesRequest{
-					ValidatorPubkey: pk[:],
-					Request: &ethpb.BuilderPreferencesRequestV1{
-						Preferences: &ethpb.BuilderPreferencesV1{MaxExecutionPayment: primitives.Gwei(minPayment)},
+					ProposerPubkey: pk[:],
+					Request: &ethpb.BuilderPreferencesRequest{
+						Preferences: &ethpb.BuilderPreferences{MaxExecutionPayment: primitives.Gwei(minPayment)},
 						Auth:        signed,
 					},
 				})

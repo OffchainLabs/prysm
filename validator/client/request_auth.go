@@ -20,10 +20,10 @@ type requestAuthKey struct {
 	relay string
 }
 
-func (v *validator) builderRequestAuthsForSlot(pk pubkey, slot primitives.Slot) []*ethpb.SignedRequestAuthV1 {
+func (v *validator) builderRequestAuthsForSlot(pk pubkey, slot primitives.Slot) []*ethpb.SignedRequestAuth {
 	v.signedRequestAuthsLock.Lock()
 	defer v.signedRequestAuthsLock.Unlock()
-	var auths []*ethpb.SignedRequestAuthV1
+	var auths []*ethpb.SignedRequestAuth
 	for k, signed := range v.signedRequestAuths {
 		if k.pk == pk && k.slot == slot {
 			auths = append(auths, signed)
@@ -42,7 +42,7 @@ func (v *validator) pruneSignedRequestAuths(slot primitives.Slot) {
 	}
 }
 
-func (v *validator) signRequestAuthCached(ctx context.Context, km keymanager.IKeymanager, pk pubkey, relay string, slot primitives.Slot) (*ethpb.SignedRequestAuthV1, error) {
+func (v *validator) signRequestAuthCached(ctx context.Context, km keymanager.IKeymanager, pk pubkey, relay string, slot primitives.Slot) (*ethpb.SignedRequestAuth, error) {
 	key := requestAuthKey{pk: pk, slot: slot, relay: relay}
 	v.signedRequestAuthsLock.Lock()
 	signed, ok := v.signedRequestAuths[key]
@@ -50,13 +50,13 @@ func (v *validator) signRequestAuthCached(ctx context.Context, km keymanager.IKe
 	if ok {
 		return signed, nil
 	}
-	signed, err := v.signRequestAuth(ctx, km, pk, &ethpb.RequestAuthV1{Data: []byte(relay), Slot: slot})
+	signed, err := v.signRequestAuth(ctx, km, pk, &ethpb.RequestAuth{Data: []byte(relay), Slot: slot})
 	if err != nil {
 		return nil, err
 	}
 	v.signedRequestAuthsLock.Lock()
 	if v.signedRequestAuths == nil {
-		v.signedRequestAuths = make(map[requestAuthKey]*ethpb.SignedRequestAuthV1)
+		v.signedRequestAuths = make(map[requestAuthKey]*ethpb.SignedRequestAuth)
 	}
 	v.signedRequestAuths[key] = signed
 	v.signedRequestAuthsLock.Unlock()
@@ -68,8 +68,8 @@ func (v *validator) signRequestAuth(
 	ctx context.Context,
 	km keymanager.IKeymanager,
 	pubkey [fieldparams.BLSPubkeyLength]byte,
-	auth *ethpb.RequestAuthV1,
-) (*ethpb.SignedRequestAuthV1, error) {
+	auth *ethpb.RequestAuth,
+) (*ethpb.SignedRequestAuth, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.signRequestAuth")
 	defer span.End()
 
@@ -93,7 +93,7 @@ func (v *validator) signRequestAuth(
 		return nil, errors.Wrap(err, "could not sign request auth")
 	}
 
-	return &ethpb.SignedRequestAuthV1{
+	return &ethpb.SignedRequestAuth{
 		Message:   auth,
 		Signature: sig.Marshal(),
 	}, nil
