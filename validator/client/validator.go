@@ -101,6 +101,7 @@ type validator struct {
 	submittedPayloadAtts         map[submittedPayloadAttKey][]uint64
 	validatorsRegBatchSize       int
 	duties                       *dutyStore
+	healthMonitor                *healthMonitor
 	nextFetchInFlight            atomic.Bool
 	doppelGanger                 doppelGangerTracker
 	domainDataCache              *ristretto.Cache[string, proto.Message]
@@ -1015,10 +1016,6 @@ func trim(s string) string {
 
 func (v *validator) Host() string {
 	return v.validatorClient.Host()
-}
-
-func (v *validator) EnsureReady(ctx context.Context) bool {
-	return v.validatorClient.EnsureReady(ctx)
 }
 
 func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte, slot primitives.Slot) ([][fieldparams.BLSPubkeyLength]byte, error) {

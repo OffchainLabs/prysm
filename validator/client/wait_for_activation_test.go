@@ -105,6 +105,7 @@ func quarantineTestValidator(t *testing.T, ctrl *gomock.Controller, km *mockKeym
 		validatorClient: client,
 		km:              km,
 		pubkeyToStatus:  make(map[[48]byte]*validatorStatus),
+		healthMonitor:   &healthMonitor{isHealthy: true},
 	}
 	accountChan := make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
 	sub := km.SubscribeAccountChanges(accountChan)
@@ -159,7 +160,7 @@ func TestWaitForActivation_DoppelGangerQuarantine(t *testing.T) {
 		assert.Equal(t, true, v.isDoppelGangerPending(kp.pub))
 	})
 
-	t.Run("a key imported during the connection-retry backoff is quarantined", func(t *testing.T) {
+	t.Run("a key imported during the connection-retry wait is quarantined", func(t *testing.T) {
 		enableDoppelGanger(t)
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -168,9 +169,9 @@ func TestWaitForActivation_DoppelGangerQuarantine(t *testing.T) {
 		km := newMockKeymanager(t)
 		v, client := quarantineTestValidator(t, ctrl, km)
 
-		// A status failure sends the accounts-changed entry into its backoff
-		// sleep; the retry's fetch is the first to ever see the late key, so it
-		// must inherit the entry's accounts-changed origin to quarantine it.
+		// A status failure sends the accounts-changed entry into its retry wait;
+		// the retry's fetch is the first to ever see the late key, so it must
+		// inherit the entry's accounts-changed origin to quarantine it.
 		gomock.InOrder(
 			client.EXPECT().MultipleValidatorStatus(gomock.Any(), gomock.Any()).Return(nil, errors.New("connection refused")),
 			client.EXPECT().MultipleValidatorStatus(gomock.Any(), gomock.Any()).DoAndReturn(allActiveStatuses),
@@ -333,36 +334,62 @@ func TestWaitForActivation_AttemptsReconnectionOnFailure(t *testing.T) {
 	cfg.ConfigName = "test"
 	cfg.SlotDurationMilliseconds = 1000
 	params.OverrideBeaconConfig(cfg)
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	validatorClient := validatormock.NewMockValidatorClient(ctrl)
-	chainClient := validatormock.NewMockChainClient(ctrl)
-	kp := randKeypair(t)
-	v := validator{
-		validatorClient:        validatorClient,
-		km:                     newMockKeymanager(t, kp),
-		chainClient:            chainClient,
-		pubkeyToStatus:         make(map[[48]byte]*validatorStatus),
-		accountsChangedChannel: make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
+
+	// reconnectionTestValidator wires a validator whose first status call fails
+	// and whose second reports an active key.
+	reconnectionTestValidator := func(t *testing.T) *validator {
+		ctrl := gomock.NewController(t)
+		validatorClient := validatormock.NewMockValidatorClient(ctrl)
+		chainClient := validatormock.NewMockChainClient(ctrl)
+		kp := randKeypair(t)
+		v := &validator{
+			validatorClient:        validatorClient,
+			km:                     newMockKeymanager(t, kp),
+			chainClient:            chainClient,
+			pubkeyToStatus:         make(map[[48]byte]*validatorStatus),
+			accountsChangedChannel: make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
+			healthMonitor:          &healthMonitor{isHealthy: true},
+		}
+		active := randKeypair(t)
+		activeResp := generateMultipleValidatorStatusResponse([][]byte{active.pub[:]})
+		activeResp.Statuses[0].Status = ethpb.ValidatorStatus_ACTIVE
+		gomock.InOrder(
+			validatorClient.EXPECT().MultipleValidatorStatus(
+				gomock.Any(),
+				gomock.Any(),
+			).Return(nil, errors.New("some random connection error")),
+			validatorClient.EXPECT().MultipleValidatorStatus(
+				gomock.Any(),
+				gomock.Any(),
+			).Return(activeResp, nil))
+		chainClient.EXPECT().ChainHead(
+			gomock.Any(),
+			gomock.Any(),
+		).Return(
+			&ethpb.ChainHead{HeadEpoch: 0},
+			nil,
+		).AnyTimes()
+		return v
 	}
-	active := randKeypair(t)
-	activeResp := generateMultipleValidatorStatusResponse([][]byte{active.pub[:]})
-	activeResp.Statuses[0].Status = ethpb.ValidatorStatus_ACTIVE
-	gomock.InOrder(
-		validatorClient.EXPECT().MultipleValidatorStatus(
-			gomock.Any(),
-			gomock.Any(),
-		).Return(nil, errors.New("some random connection error")),
-		validatorClient.EXPECT().MultipleValidatorStatus(
-			gomock.Any(),
-			gomock.Any(),
-		).Return(activeResp, nil))
-	chainClient.EXPECT().ChainHead(
-		gomock.Any(),
-		gomock.Any(),
-	).Return(
-		&ethpb.ChainHead{HeadEpoch: 0},
-		nil,
-	).AnyTimes()
-	assert.NoError(t, v.WaitForActivation(t.Context()))
+
+	t.Run("retries after pacing when the beacon node is healthy", func(t *testing.T) {
+		v := reconnectionTestValidator(t)
+		assert.NoError(t, v.WaitForActivation(t.Context()))
+	})
+
+	t.Run("retry waits for the health monitor to report healthy", func(t *testing.T) {
+		v := reconnectionTestValidator(t)
+		v.healthMonitor = &healthMonitor{}
+		flipped := make(chan time.Time, 1)
+		// Flip to healthy after the one-slot pacing so the retry must block on it.
+		go func() {
+			time.Sleep(1500 * time.Millisecond)
+			v.healthMonitor.Lock()
+			v.healthMonitor.isHealthy = true
+			v.healthMonitor.Unlock()
+			flipped <- time.Now()
+		}()
+		assert.NoError(t, v.WaitForActivation(t.Context()))
+		assert.Equal(t, false, time.Now().Before(<-flipped), "retry completed before the monitor became healthy")
+	})
 }

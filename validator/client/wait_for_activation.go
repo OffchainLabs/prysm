@@ -64,7 +64,7 @@ func (v *validator) waitForActivation(ctx context.Context, accountsChanged bool)
 			if err := v.waitForNextEpoch(ctx, v.genesisTime); err != nil {
 				return v.retryWaitForActivation(ctx, span, err, "Failed to wait for next epoch. Reconnecting...", accountsChanged)
 			}
-			return v.waitForActivation(incrementRetries(ctx), accountsChanged)
+			return v.waitForActivation(ctx, accountsChanged)
 		}
 	}
 	return nil
@@ -72,12 +72,11 @@ func (v *validator) waitForActivation(ctx context.Context, accountsChanged bool)
 
 func (v *validator) retryWaitForActivation(ctx context.Context, span octrace.Span, err error, message string, accountsChanged bool) error {
 	tracing.AnnotateError(span, err)
-	attempts := activationAttempts(ctx)
-	log.WithError(err).WithField("attempts", attempts).Error(message)
-	// Reconnection attempt backoff, up to 60s.
-	time.Sleep(time.Second * time.Duration(min(uint64(attempts), 60)))
-	// TODO: refactor this to use the health tracker instead for reattempt
-	return v.waitForActivation(incrementRetries(ctx), accountsChanged)
+	log.WithError(err).Error(message)
+	if err := v.healthMonitor.WaitForHealthy(ctx); err != nil {
+		return err
+	}
+	return v.waitForActivation(ctx, accountsChanged)
 }
 
 func (v *validator) waitForAccountsChange(ctx context.Context) error {
@@ -110,22 +109,4 @@ func (v *validator) waitForNextEpoch(ctx context.Context, genesis time.Time) err
 		// The ticker has ticked, indicating we've reached the next epoch
 		return nil
 	}
-}
-
-// Preferred way to use context keys is with a non built-in type. See: RVV-B0003
-type waitForActivationContextKey string
-
-const waitForActivationAttemptsContextKey = waitForActivationContextKey("WaitForActivation-attempts")
-
-func activationAttempts(ctx context.Context) int {
-	attempts, ok := ctx.Value(waitForActivationAttemptsContextKey).(int)
-	if !ok {
-		return 1
-	}
-	return attempts
-}
-
-func incrementRetries(ctx context.Context) context.Context {
-	attempts := activationAttempts(ctx)
-	return context.WithValue(ctx, waitForActivationAttemptsContextKey, attempts+1)
 }

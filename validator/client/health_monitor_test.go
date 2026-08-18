@@ -17,14 +17,14 @@ import (
 
 // TestHealthMonitor_IsHealthy_Concurrency tests thread-safety of IsHealthy.
 func TestHealthMonitor_IsHealthy_Concurrency(t *testing.T) {
-	v, vc := healthTestValidator(t)
+	vc := healthTestClient(t)
 	parentCtx, parentCancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	t.Cleanup(parentCancel)
 
 	// Expectation for newHealthMonitor's EnsureReady call
 	vc.EXPECT().EnsureReady(gomock.Any()).Return(true).Times(1)
 
-	monitor := newHealthMonitor(parentCtx, parentCancel, 3, v)
+	monitor := newHealthMonitor(parentCtx, parentCancel, 3, vc)
 	require.NotNil(t, monitor)
 	monitor.Start()
 	time.Sleep(100 * time.Millisecond)
@@ -142,11 +142,11 @@ func TestHealthMonitor_PerformHealthCheck(t *testing.T) {
 				monitorCancelFunc() // Propagate to monitorCtx if needed for other parts
 			}
 
-			v, vc := healthTestValidator(t)
+			vc := healthTestClient(t)
 			monitor := &healthMonitor{
 				ctx:             monitorCtx,         // Context for the monitor's operations
 				cancel:          testCancelCallback, // This is m.cancel()
-				v:               v,
+				client:          vc,
 				maxFails:        tt.maxFails,
 				healthyCh:       make(chan bool, 1),
 				fails:           tt.initialFails,
@@ -191,7 +191,7 @@ func TestHealthMonitor_PerformHealthCheck(t *testing.T) {
 
 // TestHealthMonitor_HealthyChan_ReceivesUpdates tests channel behavior.
 func TestHealthMonitor_HealthyChan_ReceivesUpdates(t *testing.T) {
-	v, vc := healthTestValidator(t)
+	vc := healthTestClient(t)
 	monitorCtx, monitorCancelFunc := context.WithCancel(context.Background())
 
 	originalSlotDurationMs := params.BeaconConfig().SlotDurationMilliseconds
@@ -201,7 +201,7 @@ func TestHealthMonitor_HealthyChan_ReceivesUpdates(t *testing.T) {
 		monitorCancelFunc() // Ensure monitor context is cleaned up
 	}()
 
-	monitor := newHealthMonitor(monitorCtx, monitorCancelFunc, 3, v)
+	monitor := newHealthMonitor(monitorCtx, monitorCancelFunc, 3, vc)
 	require.NotNil(t, monitor)
 
 	ch := monitor.HealthyChan()
@@ -239,8 +239,45 @@ func TestHealthMonitor_HealthyChan_ReceivesUpdates(t *testing.T) {
 	monitor.Stop() // This calls monitorCancelFunc
 }
 
-func healthTestValidator(t *testing.T) (*validator, *validatormock.MockValidatorClient) {
+func TestHealthMonitor_WaitForHealthy(t *testing.T) {
+	originalSlotDurationMs := params.BeaconConfig().SlotDurationMilliseconds
+	params.BeaconConfig().SlotDurationMilliseconds = 50
+	defer func() { params.BeaconConfig().SlotDurationMilliseconds = originalSlotDurationMs }()
+
+	t.Run("returns after one probe interval when healthy", func(t *testing.T) {
+		monitor := &healthMonitor{isHealthy: true}
+		start := time.Now()
+		require.NoError(t, monitor.WaitForHealthy(context.Background()))
+		assert.False(t, time.Since(start) < healthProbeInterval(), "returned before a fresh verdict was possible")
+	})
+
+	t.Run("blocks until the monitor reports healthy", func(t *testing.T) {
+		monitor := &healthMonitor{}
+		flipped := make(chan time.Time, 1)
+		go func() {
+			time.Sleep(200 * time.Millisecond)
+			monitor.Lock()
+			monitor.isHealthy = true
+			monitor.Unlock()
+			flipped <- time.Now()
+		}()
+		require.NoError(t, monitor.WaitForHealthy(context.Background()))
+		assert.False(t, time.Now().Before(<-flipped), "returned before the monitor became healthy")
+	})
+
+	t.Run("returns the context error when canceled", func(t *testing.T) {
+		monitor := &healthMonitor{}
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			cancel()
+		}()
+		require.ErrorIs(t, monitor.WaitForHealthy(ctx), context.Canceled)
+	})
+}
+
+func healthTestClient(t *testing.T) *validatormock.MockValidatorClient {
 	vc := validatormock.NewMockValidatorClient(gomock.NewController(t))
 	vc.EXPECT().Host().Return("http://localhost:3500").AnyTimes()
-	return &validator{validatorClient: vc}, vc
+	return vc
 }
