@@ -6,39 +6,42 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	fssz "github.com/prysmaticlabs/fastssz"
 )
 
-// variableList builds the SSZ List encoding of variable-size elements: a vector of 4-byte offsets
-// followed by the elements.
-func variableList(elements ...[]byte) []byte {
-	var offsets, data []byte
-	offset := 4 * len(elements)
-	for _, e := range elements {
-		offsets = fssz.WriteOffset(offsets, offset)
-		offset += len(e)
-		data = append(data, e...)
-	}
-	return append(offsets, data...)
+func TestMarshalVariableList(t *testing.T) {
+	t.Run("single element", func(t *testing.T) {
+		// One 4-byte offset, so the element starts at 4.
+		expected := append([]byte{4, 0, 0, 0}, []byte("only")...)
+		assert.DeepEqual(t, expected, ssz.MarshalVariableList([]byte("only")))
+	})
+	t.Run("several elements", func(t *testing.T) {
+		// Three 4-byte offsets, so the elements start at 12, 13 and 15.
+		expected := []byte{12, 0, 0, 0, 13, 0, 0, 0, 15, 0, 0, 0}
+		expected = append(expected, []byte("abbccc")...)
+		assert.DeepEqual(t, expected, ssz.MarshalVariableList([]byte("a"), []byte("bb"), []byte("ccc")))
+	})
+	t.Run("no elements", func(t *testing.T) {
+		assert.Equal(t, 0, len(ssz.MarshalVariableList()))
+	})
 }
 
 func TestSplitVariableList(t *testing.T) {
 	t.Run("splits every element", func(t *testing.T) {
-		b := variableList([]byte("a"), []byte("bb"), []byte("ccc"))
+		b := ssz.MarshalVariableList([]byte("a"), []byte("bb"), []byte("ccc"))
 
 		elements, err := ssz.SplitVariableList(b, 10)
 		require.NoError(t, err)
 		assert.DeepEqual(t, [][]byte{[]byte("a"), []byte("bb"), []byte("ccc")}, elements)
 	})
 	t.Run("single element", func(t *testing.T) {
-		b := variableList([]byte("only"))
+		b := ssz.MarshalVariableList([]byte("only"))
 
 		elements, err := ssz.SplitVariableList(b, 10)
 		require.NoError(t, err)
 		assert.DeepEqual(t, [][]byte{[]byte("only")}, elements)
 	})
 	t.Run("zero-length elements", func(t *testing.T) {
-		b := variableList([]byte{}, []byte{})
+		b := ssz.MarshalVariableList([]byte{}, []byte{})
 
 		elements, err := ssz.SplitVariableList(b, 10)
 		require.NoError(t, err)
@@ -52,7 +55,7 @@ func TestSplitVariableList(t *testing.T) {
 		assert.Equal(t, 0, len(elements))
 	})
 	t.Run("element count over maxLength", func(t *testing.T) {
-		b := variableList([]byte("a"), []byte("b"), []byte("c"))
+		b := ssz.MarshalVariableList([]byte("a"), []byte("b"), []byte("c"))
 
 		_, err := ssz.SplitVariableList(b, 2)
 		assert.NotNil(t, err)

@@ -184,7 +184,7 @@ func verifyDepositDataSigningRoot(obj *ethpb.Deposit_Data, domain []byte) error 
 
 // ProcessPendingDeposits implements the spec definition below. This method mutates the state.
 // Iterating over `pending_deposits` queue this function runs the following checks before applying pending deposit:
-// 1. All Eth1 bridge deposits are processed before the first deposit request gets processed.
+// 1. All Eth1 bridge deposits are processed before the first deposit request gets processed (pre-Fulu only).
 // 2. Deposit position in the queue is finalized.
 // 3. Deposit does not exceed the `MAX_PENDING_DEPOSITS_PER_EPOCH` limit.
 // 4. Deposit does not exceed the activation churn limit.
@@ -282,9 +282,16 @@ func ProcessPendingDeposits(ctx context.Context, st state.BeaconState, activeBal
 		return errors.Wrap(err, "could not get finalized slot")
 	}
 
-	startIndex, err := st.DepositRequestsStartIndex()
-	if err != nil {
-		return errors.Wrap(err, "could not get starting pendingDeposit index")
+	// The former deposit mechanism is removed, so the Eth1 bridge gate in the
+	// loop below, and the start index it reads, only exist before Fulu.
+	var startIndex uint64
+	bridgeGateApplies := st.Version() < version.Fulu
+
+	if bridgeGateApplies {
+		startIndex, err = st.DepositRequestsStartIndex()
+		if err != nil {
+			return errors.Wrap(err, "could not get starting pendingDeposit index")
+		}
 	}
 
 	pendingDeposits, err := st.PendingDeposits()
@@ -293,7 +300,7 @@ func ProcessPendingDeposits(ctx context.Context, st state.BeaconState, activeBal
 	}
 	for _, pendingDeposit := range pendingDeposits {
 		// Do not process pendingDeposit requests if Eth1 bridge deposits are not yet applied.
-		if pendingDeposit.Slot > params.BeaconConfig().GenesisSlot && st.Eth1DepositIndex() < startIndex {
+		if bridgeGateApplies && pendingDeposit.Slot > params.BeaconConfig().GenesisSlot && st.Eth1DepositIndex() < startIndex {
 			break
 		}
 

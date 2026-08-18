@@ -98,7 +98,7 @@ type Server struct {
 	lastBidSlot                      primitives.Slot
 	lastBidSource                    bidSource // Guarded by lastBidLock, set during Gloas block build, read when proposing.
 	lastBidBuilderURL                string    // Guarded by lastBidLock, winning Builder-API URL for lastBidSlot.
-	maxExecutionPayments             sync.Map  // validator pubkey [48]byte -> max execution payment (Gwei uint64).
+	maxExecutionPayments             sync.Map  // pubkey [48]byte -> Gwei uint64, min-collapsed per-entry caps; TODO(gloas): re-key per builder identity with beacon-APIs #630.
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.

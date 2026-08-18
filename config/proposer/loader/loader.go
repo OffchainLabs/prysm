@@ -1,7 +1,6 @@
 package loader
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -135,13 +134,9 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 			return nil, err
 		}
 		dbSettings = dbps.ToConsensus()
-		log.Debugf("DB loaded proposer settings: %s", func() string {
-			b, err := json.Marshal(dbSettings)
-			if err != nil {
-				return err.Error()
-			}
-			return string(b)
-		}())
+		log.WithField("version", dbSettings.Version).
+			WithField("proposerConfigCount", len(dbSettings.ProposerConfig)).
+			Debug("Loaded proposer settings from DB")
 	}
 
 	// start to process based on load method
@@ -189,18 +184,6 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 	return ps, nil
 }
 
-func hasBuilderShape(p *validatorpb.ProposerSettingsPayload) bool {
-	if p.DefaultConfig != nil && p.DefaultConfig.Builder != nil {
-		return true
-	}
-	for _, o := range p.ProposerConfig {
-		if o != nil && o.Builder != nil {
-			return true
-		}
-	}
-	return false
-}
-
 func (psl *SettingsLoader) applyOverrides() {
 	if psl.options.builderConfig != nil && psl.options.gasLimit != nil {
 		psl.options.builderConfig.GasLimit = *psl.options.gasLimit
@@ -234,6 +217,8 @@ func (psl *SettingsLoader) loadFromFile(cliCtx *cli.Context, dbSettings *validat
 	if settingFromFile == nil {
 		return nil, errors.Errorf("proposer settings is empty after unmarshalling from file specified by %s flag", flags.ProposerSettingsFlag.Name)
 	}
+	markExplicitEmptyBuilders(settingFromFile)
+	inferSchemaVersion(settingFromFile)
 	log.WithField(flags.ProposerSettingsFlag.Name, cliCtx.String(flags.ProposerSettingsFlag.Name)).Info("Proposer settings loaded from file")
 	return psl.processProposerSettings(settingFromFile, dbSettings), nil
 }
@@ -246,6 +231,8 @@ func (psl *SettingsLoader) loadFromURL(cliCtx *cli.Context, dbSettings *validato
 	if settingFromURL == nil {
 		return nil, errors.Errorf("proposer settings is empty after unmarshalling from url specified by %s flag", flags.ProposerSettingsURLFlag.Name)
 	}
+	markExplicitEmptyBuilders(settingFromURL)
+	inferSchemaVersion(settingFromURL)
 	log.WithField(flags.ProposerSettingsURLFlag.Name, cliCtx.String(flags.ProposerSettingsURLFlag.Name)).Infof("Proposer settings loaded from URL")
 	return psl.processProposerSettings(settingFromURL, dbSettings), nil
 }
@@ -274,8 +261,7 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 	if db != nil {
 		merged.Version = db.Version
 	}
-	// v1-shaped source content must not inherit DB's v2, else the runtime upgrade is skipped.
-	if loaded != nil && (loaded.Version != 0 || hasBuilderShape(loaded)) {
+	if loaded != nil && loaded.Version > merged.Version {
 		merged.Version = loaded.Version
 	}
 
@@ -289,9 +275,66 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 	}
 
 	if merged.Version == proposer.SchemaV2 {
-		return mergeProposerSettingsV2(merged, loaded, db, gasLimitOnly)
+		return mergeProposerSettingsV2(merged, loaded, db, builderConfig, gasLimitOnly)
 	}
 	return mergeProposerSettingsV1(merged, loaded, db, builderConfig, gasLimitOnly)
+}
+
+// markExplicitEmptyBuilders stamps the persistence marker for a user source's
+// explicit "builders": [] (opt-out), which yaml keeps distinct from absent.
+func markExplicitEmptyBuilders(p *validatorpb.ProposerSettingsPayload) {
+	mark := func(opt *validatorpb.ProposerOptionPayload) {
+		if opt == nil || opt.Builder == nil {
+			return
+		}
+		if opt.Builder.Builders != nil {
+			opt.Builder.BuildersSet = true
+		}
+	}
+	mark(p.DefaultConfig)
+	for _, opt := range p.ProposerConfig {
+		mark(opt)
+	}
+}
+
+// inferSchemaVersion stamps version 2 on an unversioned source carrying v2-only
+// builder fields, so a forgotten "version" cannot get gloas content dropped as v1.
+func inferSchemaVersion(p *validatorpb.ProposerSettingsPayload) {
+	if p.Version != proposer.SchemaV1Unset {
+		return
+	}
+	hasV2 := func(opt *validatorpb.ProposerOptionPayload) bool {
+		if opt == nil || opt.Builder == nil {
+			return false
+		}
+		b := opt.Builder
+		return len(b.Builders) > 0 || b.BuildersSet || b.MinBid != nil ||
+			b.BuilderBoostFactor != nil || b.MaxExecutionPayment != nil
+	}
+	found := hasV2(p.DefaultConfig)
+	for _, opt := range p.ProposerConfig {
+		if found {
+			break
+		}
+		found = hasV2(opt)
+	}
+	if !found {
+		return
+	}
+	p.Version = proposer.SchemaV2
+	log.Info("Proposer settings contain v2 builder fields but no version; treating the source as version 2")
+}
+
+// selectProposerConfig keeps the pre-v2 source precedence: a loaded per-key
+// section replaces the DB's entirely, so restarting with a file resets the DB.
+func selectProposerConfig(db, loaded *validatorpb.ProposerSettingsPayload) map[string]*validatorpb.ProposerOptionPayload {
+	if loaded != nil && len(loaded.ProposerConfig) > 0 {
+		return loaded.ProposerConfig
+	}
+	if db != nil && len(db.ProposerConfig) > 0 {
+		return db.ProposerConfig
+	}
+	return nil
 }
 
 func mergeProposerSettingsV1(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64) *validatorpb.ProposerSettingsPayload {
@@ -307,17 +350,12 @@ func mergeProposerSettingsV1(merged, loaded, db *validatorpb.ProposerSettingsPay
 		merged.DefaultConfig = loaded.DefaultConfig
 	}
 
-	if db != nil && len(db.ProposerConfig) > 0 {
-		merged.ProposerConfig = db.ProposerConfig
-		if stripDBBuilder {
-			for _, option := range db.ProposerConfig {
-				option.Builder = nil
-			}
+	if db != nil && stripDBBuilder {
+		for _, option := range db.ProposerConfig {
+			option.Builder = nil
 		}
 	}
-	if loaded != nil && len(loaded.ProposerConfig) > 0 {
-		merged.ProposerConfig = loaded.ProposerConfig
-	}
+	merged.ProposerConfig = selectProposerConfig(db, loaded)
 
 	if merged.DefaultConfig != nil {
 		merged.DefaultConfig.Builder = processBuilderConfig(merged.DefaultConfig.Builder, builderConfig, gasLimitOnly)
@@ -334,39 +372,46 @@ func mergeProposerSettingsV1(merged, loaded, db *validatorpb.ProposerSettingsPay
 			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{Builder: builderConfig}
 		case gasLimitOnly != nil:
 			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{
-				Builder: &validatorpb.BuilderConfig{Enabled: false, GasLimit: *gasLimitOnly},
+				Builder: &validatorpb.BuilderConfig{GasLimit: *gasLimitOnly},
 			}
 		}
 	}
 	return merged
 }
 
-func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPayload, gasLimitOnly *validator.Uint64) *validatorpb.ProposerSettingsPayload {
+func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64) *validatorpb.ProposerSettingsPayload {
 	if db != nil && db.DefaultConfig != nil {
 		merged.DefaultConfig = db.DefaultConfig
 	}
 	if loaded != nil && loaded.DefaultConfig != nil {
 		merged.DefaultConfig = loaded.DefaultConfig
 	}
-	if db != nil && len(db.ProposerConfig) > 0 {
-		merged.ProposerConfig = db.ProposerConfig
-	}
-	if loaded != nil && len(loaded.ProposerConfig) > 0 {
-		merged.ProposerConfig = loaded.ProposerConfig
+	merged.ProposerConfig = selectProposerConfig(db, loaded)
+
+	// --enable-builder is legacy content: it still forces the default mev-boost
+	// toggle on for pre-gloas registrations, and is inert from the fork onward.
+	if builderConfig != nil {
+		if merged.DefaultConfig == nil {
+			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{}
+		}
+		if merged.DefaultConfig.Builder == nil {
+			merged.DefaultConfig.Builder = &validatorpb.BuilderConfig{}
+		}
+		merged.DefaultConfig.Builder.Enabled = true
+		log.Warnf("--%s is legacy (pre-gloas) mev-boost content and has no effect after the gloas fork; configure builders via the settings source or keymanager API", flags.EnableBuilderFlag.Name)
 	}
 
-	if gasLimitOnly == nil {
-		return merged
-	}
-	if merged.DefaultConfig == nil {
-		merged.DefaultConfig = &validatorpb.ProposerOptionPayload{GasLimit: *gasLimitOnly}
-	} else {
-		merged.DefaultConfig.GasLimit = *gasLimitOnly
-	}
-	for _, option := range merged.ProposerConfig {
-		if option != nil {
-			option.GasLimit = *gasLimitOnly
+	// --suggested-gas-limit is likewise legacy content: it applies to the
+	// pre-gloas builder gas limit and never overrides v2 or schedule values.
+	if gasLimitOnly != nil {
+		if merged.DefaultConfig == nil {
+			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{}
 		}
+		if merged.DefaultConfig.Builder == nil {
+			merged.DefaultConfig.Builder = &validatorpb.BuilderConfig{}
+		}
+		merged.DefaultConfig.Builder.GasLimit = *gasLimitOnly
+		log.Warnf("--%s is legacy (pre-gloas) content and has no effect after the gloas fork; set gas limits in v2 proposer settings or via the keymanager API", flags.BuilderGasLimitFlag.Name)
 	}
 	return merged
 }
@@ -386,7 +431,7 @@ func processBuilderConfig(current *validatorpb.BuilderConfig, override *validato
 		return override
 	}
 	if gasLimitOnly != nil {
-		return &validatorpb.BuilderConfig{Enabled: false, GasLimit: *gasLimitOnly}
+		return &validatorpb.BuilderConfig{GasLimit: *gasLimitOnly}
 	}
 	return nil
 }

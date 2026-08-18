@@ -532,6 +532,22 @@ func TestProcessBlock_IncorrectDeposits(t *testing.T) {
 	assert.ErrorContains(t, want, err)
 }
 
+func TestProcessBlock_NoEth1BridgeDepositsFromFulu(t *testing.T) {
+	s, _ := util.DeterministicGenesisStateFulu(t, 1)
+	// The start index is never set from Fulu onward, so the Electra limit would have asked for
+	// one deposit here.
+	require.NoError(t, s.SetEth1DepositIndex(0))
+	require.NoError(t, s.SetDepositRequestsStartIndex(params.BeaconConfig().UnsetDepositRequestsStartIndex))
+
+	b := util.NewBeaconBlockFulu()
+	b.Block.Body.Deposits = []*ethpb.Deposit{{}}
+	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+
+	_, err = transition.VerifyOperationLengths(t.Context(), s, wsb.Block())
+	assert.ErrorContains(t, "eth1 bridge deposits are not allowed from Fulu", err)
+}
+
 func TestProcessSlots_SameSlotAsParentState(t *testing.T) {
 	slot := primitives.Slot(2)
 	parentState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: slot})

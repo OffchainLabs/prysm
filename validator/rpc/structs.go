@@ -2,16 +2,20 @@ package rpc
 
 import (
 	"fmt"
+	"net/url"
 	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/api/server"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/pkg/errors"
 )
 
 // local keymanager api
@@ -107,6 +111,173 @@ type GetGraffitiResponse struct {
 type GraffitiData struct {
 	Pubkey   string `json:"pubkey"`
 	Graffiti string `json:"graffiti"`
+}
+
+type GetBuildersResponse struct {
+	Data *BuilderConfig `json:"data"`
+}
+
+// BuilderConfig is the keymanager-APIs #88 wire form: integers are decimal
+// strings, bytes 0x-hex. Builders nil = inherit, [] = use none (kept by no omitempty).
+type BuilderConfig struct {
+	MinBid             *string         `json:"min_bid,omitempty"`
+	BuilderBoostFactor *string         `json:"builder_boost_factor,omitempty"`
+	Builders           []*BuilderEntry `json:"builders"`
+}
+
+type BuilderEntry struct {
+	Url                 string   `json:"url"`
+	AuthData            *string  `json:"auth_data,omitempty"`
+	BuilderPubkeys      []string `json:"builder_pubkeys"`
+	MaxExecutionPayment *string  `json:"max_execution_payment,omitempty"`
+	MinBid              *string  `json:"min_bid,omitempty"`
+	BuilderBoostFactor  *string  `json:"builder_boost_factor,omitempty"`
+}
+
+const (
+	maxBuilderEntries = 64   // MAX_BUILDER_ENTRIES
+	maxBuilderURLSize = 2048 // MAX_BUILDER_URL_SIZE
+	maxAuthDataSize   = 4096 // MAX_DATA_SIZE
+	maxBuilderPubkeys = 64   // MAX_BUILDER_PUBKEYS
+)
+
+func builderConfigFromConsensus(bc *proposer.BuilderConfig) *BuilderConfig {
+	out := &BuilderConfig{
+		MinBid:             new(strconv.FormatUint(uint64(bc.EffectiveMinBid()), 10)),
+		BuilderBoostFactor: new(strconv.FormatUint(uint64(bc.EffectiveBuilderBoostFactor()), 10)),
+	}
+	if bc.Builders != nil {
+		out.Builders = make([]*BuilderEntry, 0, len(bc.Builders))
+		for _, b := range bc.Builders {
+			out.Builders = append(out.Builders, builderEntryFromConsensus(b, bc))
+		}
+	}
+	return out
+}
+
+func builderEntryFromConsensus(be *proposer.BuilderEntry, bc *proposer.BuilderConfig) *BuilderEntry {
+	out := &BuilderEntry{
+		// Omitted builder_pubkeys resolves to the empty list (accept any builder).
+		BuilderPubkeys:      make([]string, 0, len(be.Pubkeys)),
+		MaxExecutionPayment: new(strconv.FormatUint(uint64(be.EffectiveMaxExecutionPayment(bc)), 10)),
+		MinBid:              new(strconv.FormatUint(uint64(be.EffectiveMinBid(bc)), 10)),
+		BuilderBoostFactor:  new(strconv.FormatUint(uint64(be.EffectiveBuilderBoostFactor(bc)), 10)),
+	}
+	if be.URL != "" {
+		out.Url = be.URL
+		out.AuthData = new(hexutil.Encode(be.EffectiveAuthData()))
+	}
+	for _, pk := range be.Pubkeys {
+		out.BuilderPubkeys = append(out.BuilderPubkeys, hexutil.Encode(pk))
+	}
+	return out
+}
+
+func (in *BuilderConfig) ToConsensus() (*proposer.BuilderConfig, error) {
+	bc := &proposer.BuilderConfig{}
+	if in.MinBid != nil {
+		v, err := parseUint(*in.MinBid, "min_bid")
+		if err != nil {
+			return nil, err
+		}
+		bc.MinBid = &v
+	}
+	if in.BuilderBoostFactor != nil {
+		v, err := parseUint(*in.BuilderBoostFactor, "builder_boost_factor")
+		if err != nil {
+			return nil, err
+		}
+		bc.BuilderBoostFactor = &v
+	}
+	if in.Builders == nil {
+		return bc, nil
+	}
+	if len(in.Builders) > maxBuilderEntries {
+		return nil, errors.Errorf("builders exceeds %d entries", maxBuilderEntries)
+	}
+	// Non-nil (possibly empty) list means "use exactly these builders", not "inherit".
+	// Omitted auth_data compares as its derived value, so it collides with the explicit form.
+	bc.Builders = make([]*proposer.BuilderEntry, 0, len(in.Builders))
+	seen := make(map[proposer.EntryIdentity]bool, len(in.Builders))
+	for i, entry := range in.Builders {
+		if entry == nil {
+			return nil, errors.Errorf("builders[%d] is null", i)
+		}
+		be, err := entry.ToConsensus(i)
+		if err != nil {
+			return nil, err
+		}
+		if seen[be.Identity()] {
+			return nil, errors.Errorf("builders[%d]: two entries share the same url and auth_data", i)
+		}
+		seen[be.Identity()] = true
+		bc.Builders = append(bc.Builders, be)
+	}
+	return bc, nil
+}
+
+func (in *BuilderEntry) ToConsensus(i int) (*proposer.BuilderEntry, error) {
+	be := &proposer.BuilderEntry{}
+	if in.Url == "" {
+		return nil, errors.Errorf("builders[%d].url is required", i)
+	}
+	if len(in.Url) > maxBuilderURLSize {
+		return nil, errors.Errorf("builders[%d].url exceeds %d bytes", i, maxBuilderURLSize)
+	}
+	if u, err := url.Parse(in.Url); err != nil || u.Scheme == "" || u.Host == "" {
+		return nil, errors.Errorf("builders[%d].url is not a valid URL", i)
+	}
+	be.URL = in.Url
+	if len(in.BuilderPubkeys) > maxBuilderPubkeys {
+		return nil, errors.Errorf("builders[%d].builder_pubkeys exceeds %d keys", i, maxBuilderPubkeys)
+	}
+	for _, raw := range in.BuilderPubkeys {
+		pk, err := hexutil.Decode(raw)
+		if err != nil || len(pk) != fieldparams.BLSPubkeyLength {
+			return nil, errors.Errorf("builders[%d].builder_pubkeys contains an invalid BLS public key", i)
+		}
+		be.Pubkeys = append(be.Pubkeys, pk)
+	}
+	if in.AuthData != nil {
+		ad, err := hexutil.Decode(*in.AuthData)
+		if err != nil {
+			return nil, errors.Errorf("builders[%d].auth_data is not valid hex", i)
+		}
+		if len(ad) == 0 || len(ad) > maxAuthDataSize {
+			return nil, errors.Errorf("builders[%d].auth_data must be 1 to %d bytes", i, maxAuthDataSize)
+		}
+		be.AuthData = ad
+	}
+	if in.MaxExecutionPayment != nil {
+		v, err := parseUint(*in.MaxExecutionPayment, fmt.Sprintf("builders[%d].max_execution_payment", i))
+		if err != nil {
+			return nil, err
+		}
+		be.MaxExecutionPayment = &v
+	}
+	if in.MinBid != nil {
+		v, err := parseUint(*in.MinBid, fmt.Sprintf("builders[%d].min_bid", i))
+		if err != nil {
+			return nil, err
+		}
+		be.MinBid = &v
+	}
+	if in.BuilderBoostFactor != nil {
+		v, err := parseUint(*in.BuilderBoostFactor, fmt.Sprintf("builders[%d].builder_boost_factor", i))
+		if err != nil {
+			return nil, err
+		}
+		be.BuilderBoostFactor = &v
+	}
+	return be, nil
+}
+
+func parseUint(s, field string) (validator.Uint64, error) {
+	v, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return 0, errors.Errorf("%s is not a valid uint64", field)
+	}
+	return validator.Uint64(v), nil
 }
 
 type BeaconStatusResponse struct {
