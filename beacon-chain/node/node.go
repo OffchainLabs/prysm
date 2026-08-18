@@ -133,9 +133,12 @@ type BeaconNode struct {
 	syncChecker               *initialsync.SyncChecker
 	slasherEnabled            bool
 	archiveRegenPending       bool
-	lcStore                   *lightclient.Store
-	ConfigOptions             []params.Option
-	SyncNeedsWaiter           func() (das.SyncNeeds, error)
+	// archiveOriginState carries the validated archive origin from initArchiveOrigin to
+	// finalizeArchiveOrigin, which clears it. Nil outside that window.
+	archiveOriginState state.BeaconState
+	lcStore            *lightclient.Store
+	ConfigOptions      []params.Option
+	SyncNeedsWaiter    func() (das.SyncNeeds, error)
 	// ArchiveOriginSlot is the slot of the archive origin state, set only in archive mode. It is the
 	// state-diff tree offset and the slot backfill stops at.
 	ArchiveOriginSlot *primitives.Slot
@@ -340,8 +343,9 @@ func configureBeacon(cliCtx *cli.Context) error {
 
 func startBaseServices(cliCtx *cli.Context, beacon *BeaconNode, depositAddress string, clearer *dbClearer) (*backfill.Store, error) {
 	ctx := cliCtx.Context
-	// Must precede startDB: whichever caller sets the state-diff tree offset first wins, and in archive mode
-	// that has to be the archive origin rather than genesis or the checkpoint block.
+	// Loads and validates the archive origin without touching the database, so that a bad origin fails
+	// before checkpoint sync downloads anything. Must precede startDB for that reason only; the offset
+	// itself is anchored by finalizeArchiveOrigin below.
 	if err := beacon.initArchiveOrigin(cliCtx); err != nil {
 		return nil, errors.Wrap(err, "could not initialize archive origin")
 	}
@@ -350,8 +354,10 @@ func startBaseServices(cliCtx *cli.Context, beacon *BeaconNode, depositAddress s
 	if err := beacon.startDB(cliCtx, depositAddress); err != nil {
 		return nil, errors.Wrap(err, "could not start DB")
 	}
-	if err := beacon.checkArchiveOriginBelowOrigin(ctx); err != nil {
-		return nil, err
+	// Must follow startDB: the archive origin is validated against the sync origin, which only exists once
+	// genesis or checkpoint data has been written.
+	if err := beacon.finalizeArchiveOrigin(ctx); err != nil {
+		return nil, errors.Wrap(err, "could not anchor the archive origin")
 	}
 
 	beacon.BlobStorage.WarmCache()

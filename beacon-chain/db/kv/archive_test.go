@@ -73,8 +73,7 @@ func TestArchiveStatus_KeyDoesNotCollideWithTree(t *testing.T) {
 
 	db := setupDB(t)
 	ctx := t.Context()
-	st, _ := createState(t, 0, version.Phase0)
-	require.NoError(t, db.initializeStateDiff(0, st))
+	require.NoError(t, db.InitializeArchiveOrigin(ctx, createBeaconState(t, 0, version.Phase0)))
 	require.NoError(t, db.SaveArchiveStatus(ctx, &ArchiveStatus{OriginSlot: 0}))
 
 	// The offset and exponents metadata must survive an archive status write, and vice versa.
@@ -154,19 +153,31 @@ func TestInitializeArchiveOrigin_RejectsChangedOrigin(t *testing.T) {
 	require.ErrorContains(t, "archive origin state changed", err)
 }
 
-// initializeStateDiff must not move an offset that the archive origin already owns; everything below the
-// offset becomes unrepresentable, which would discard the tree built so far.
-func TestInitializeStateDiff_ArchiveKeepsOffset(t *testing.T) {
+// In archive mode only InitializeArchiveOrigin may anchor the tree. That holds before an origin exists,
+// which is what lets the node defer anchoring until it has checked the origin against the sync origin, and
+// after one exists, since everything below the offset becomes unrepresentable.
+func TestInitializeStateDiff_ArchiveNeverAnchors(t *testing.T) {
 	setDefaultStateDiffExponents()
 	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true, EnableArchive: true})
 	defer resetCfg()
 
 	db := setupDB(t)
 	ctx := t.Context()
+
+	// Before the archive origin is known: this is what SaveGenesisData and SaveOrigin do, and neither may
+	// take the offset, or the archive could never be anchored below it.
+	genesisState, _ := createState(t, 0, version.Phase0)
+	require.NoError(t, db.initializeStateDiff(0, genesisState))
+	_, err := db.loadOffset()
+	require.ErrorContains(t, "state diff offset not found", err)
+	hasOffset, err := db.hasStateDiffOffset()
+	require.NoError(t, err)
+	require.Equal(t, false, hasOffset)
+
 	origin := primitives.Slot(math.PowerOf2(11))
 	require.NoError(t, db.InitializeArchiveOrigin(ctx, createBeaconState(t, origin, version.Phase0)))
 
-	// This is what SaveGenesisData and SaveOrigin do; both must be ignored.
+	// And after: a later caller must not move it.
 	later, _ := createState(t, primitives.Slot(math.PowerOf2(12)), version.Phase0)
 	require.NoError(t, db.initializeStateDiff(later.Slot(), later))
 
@@ -292,4 +303,36 @@ func TestStateDiff_AnchorMemo(t *testing.T) {
 
 	db.stateDiffCache.clearAnchors()
 	require.IsNil(t, db.stateDiffCache.getAnchor(0))
+}
+
+// The memo trades memory for deserializations, so it must stay bounded: anchors are held compressed
+// precisely so that a seven-level tree does not pin six full states. Least recently used is evicted.
+func TestStateDiff_AnchorMemoIsBounded(t *testing.T) {
+	setDefaultStateDiffExponents()
+	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
+	defer resetCfg()
+
+	db := setupDB(t)
+	require.NoError(t, setOffsetInDB(db, 0))
+	cache := db.stateDiffCache
+	require.Equal(t, true, len(cache.anchors) > anchorMemoSize)
+
+	for lvl := range anchorMemoSize + 1 {
+		st, _ := createState(t, primitives.Slot(math.PowerOf2(18)*uint64(lvl+1)), version.Phase0)
+		require.NoError(t, cache.setAnchor(lvl, st))
+	}
+
+	// Touch every level once; each is a miss, so the oldest is evicted as we go.
+	seen := make([]state.ReadOnlyBeaconState, anchorMemoSize+1)
+	for lvl := range anchorMemoSize + 1 {
+		seen[lvl] = cache.getAnchor(lvl)
+		require.NotNil(t, seen[lvl])
+	}
+
+	// The most recent anchorMemoSize levels are still memoized.
+	for lvl := 1; lvl < anchorMemoSize+1; lvl++ {
+		require.Equal(t, true, seen[lvl] == cache.getAnchor(lvl), "level %d should be memoized", lvl)
+	}
+	// Level 0 fell out and is deserialized afresh.
+	require.Equal(t, false, seen[0] == cache.getAnchor(0))
 }

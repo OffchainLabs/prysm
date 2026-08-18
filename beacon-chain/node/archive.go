@@ -29,12 +29,15 @@ type archiveOriginInitializer interface {
 	ArchiveStatus(ctx context.Context) (*kv.ArchiveStatus, error)
 }
 
-// initArchiveOrigin anchors the state-diff tree at the archive origin state. It must run before genesis or
-// checkpoint data is written to the database, because whichever caller sets the tree offset first wins and
-// everything below that offset is unrepresentable.
+// initArchiveOrigin loads and validates the archive origin state, but deliberately writes nothing. The
+// anchor is only committed by finalizeArchiveOrigin, once the sync origin exists and the origin has been
+// checked against it: the tree offset cannot be moved once written, so a rejected origin would otherwise
+// leave a database that can only be recovered by deleting it.
 //
-// It has to run after genesis.Initialize and the fork schedule are set up, hence its position at the top of
-// startBaseServices rather than right after the database is opened.
+// It runs before startDB so that a bad flag fails before checkpoint sync downloads anything, and after
+// genesis.Initialize and the fork schedule are set up, hence its position at the top of startBaseServices
+// rather than right after the database is opened. Nothing can steal the offset in the meantime:
+// initializeStateDiff refuses to set it in archive mode.
 func (b *BeaconNode) initArchiveOrigin(cliCtx *cli.Context) error {
 	if !features.Get().EnableArchive {
 		return nil
@@ -49,8 +52,7 @@ func (b *BeaconNode) initArchiveOrigin(cliCtx *cli.Context) error {
 		return fmt.Errorf("--enable-archive cannot be combined with --%s: pruning deletes the history the "+
 			"archive is built from", flags.BeaconDBPruning.Name)
 	}
-	initializer, ok := b.db.(archiveOriginInitializer)
-	if !ok {
+	if _, ok := b.db.(archiveOriginInitializer); !ok {
 		return errors.New("database does not support archive mode")
 	}
 
@@ -61,6 +63,32 @@ func (b *BeaconNode) initArchiveOrigin(cliCtx *cli.Context) error {
 	if err := validateArchiveOrigin(st); err != nil {
 		return err
 	}
+	// Held until finalizeArchiveOrigin rather than re-read, which would mean unmarshalling the state twice.
+	b.archiveOriginState = st
+	slot := st.Slot()
+	b.ArchiveOriginSlot = &slot
+	return nil
+}
+
+// finalizeArchiveOrigin anchors the state-diff tree at the archive origin. It runs after startDB, because
+// the sync origin it validates against only exists once genesis or checkpoint data has been written, and
+// because anchoring is irreversible: every check that can fail must run first.
+func (b *BeaconNode) finalizeArchiveOrigin(ctx context.Context) error {
+	st := b.archiveOriginState
+	if st == nil {
+		return nil
+	}
+	// Release the reference either way; a mainnet state is not something to keep alive for the whole run.
+	b.archiveOriginState = nil
+
+	if err := b.checkArchiveOriginBelowSyncOrigin(ctx); err != nil {
+		return err
+	}
+
+	initializer, ok := b.db.(archiveOriginInitializer)
+	if !ok {
+		return errors.New("database does not support archive mode")
+	}
 	if err := initializer.InitializeArchiveOrigin(b.ctx, st); err != nil {
 		return err
 	}
@@ -68,21 +96,19 @@ func (b *BeaconNode) initArchiveOrigin(cliCtx *cli.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "could not read the archive status just written")
 	}
-	slot := st.Slot()
-	b.ArchiveOriginSlot = &slot
 	b.archiveRegenPending = !as.Complete
 	log.WithFields(logrus.Fields{
-		"originSlot":             slot,
-		"originEpoch":            slots.ToEpoch(slot),
+		"originSlot":             st.Slot(),
+		"originEpoch":            slots.ToEpoch(st.Slot()),
 		"regeneratedThroughSlot": as.RegeneratedThroughSlot,
 		"regenerationComplete":   as.Complete,
 	}).Info("Archive mode enabled; state-diff tree anchored at the archive origin")
 	return nil
 }
 
-// checkArchiveOriginBelowOrigin verifies the archive origin sits below the sync origin. It runs after startDB
-// because the sync origin only exists once checkpoint data has been written.
-func (b *BeaconNode) checkArchiveOriginBelowOrigin(ctx context.Context) error {
+// checkArchiveOriginBelowSyncOrigin verifies the archive origin sits at or below the sync origin, so that
+// backfill can reach it.
+func (b *BeaconNode) checkArchiveOriginBelowSyncOrigin(ctx context.Context) error {
 	if b.ArchiveOriginSlot == nil {
 		return nil
 	}

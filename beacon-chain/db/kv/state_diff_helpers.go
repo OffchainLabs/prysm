@@ -281,6 +281,26 @@ func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.Rea
 		return nil
 	}
 
+	// In archive mode the archive origin owns the offset and nothing else may set it: everything below the
+	// offset is unrepresentable, so anchoring at genesis or at the checkpoint block would discard the
+	// archive. InitializeArchiveOrigin calls anchorStateDiff directly, and it is the only caller that may.
+	// This also lets the node defer anchoring until the sync origin is known, so an archive origin above it
+	// is rejected before anything has been written.
+	if features.Get().EnableArchive {
+		log.WithFields(logrus.Fields{
+			"requestedSlot":  slot,
+			"archiveEnabled": true,
+		}).Debug("Leaving the state-diff offset to the archive origin")
+		return nil
+	}
+
+	return s.anchorStateDiff(slot, initialState)
+}
+
+// anchorStateDiff writes the state-diff metadata, builds the cache and stores the initial full snapshot,
+// anchoring the tree at the given slot. The offset can never be moved afterwards, so callers own the
+// decision of which slot the tree belongs to.
+func (s *Store) anchorStateDiff(slot primitives.Slot, initialState state.ReadOnlyBeaconState) error {
 	if slot%32 != 0 {
 		return errors.New("cannot initialize state diff with a non epoch boundary offset")
 	}
@@ -293,27 +313,6 @@ func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.Rea
 		}
 	}
 
-	// In archive mode the offset belongs to the archive origin, which is set up before genesis or
-	// checkpoint data is written. Later callers must not move it: everything below the offset becomes
-	// unrepresentable, which would discard the tree built so far.
-	if features.Get().EnableArchive {
-		hasOffset, err := s.hasStateDiffOffset()
-		if err != nil {
-			return err
-		}
-		if hasOffset {
-			offset, err := s.loadOffset()
-			if err != nil {
-				return err
-			}
-			log.WithFields(logrus.Fields{
-				"offset":         offset,
-				"requestedSlot":  slot,
-				"archiveEnabled": true,
-			}).Debug("Keeping archive origin as the state-diff offset")
-			return nil
-		}
-	}
 	exponentsBytes, err := encodeStateDiffExponents(flags.Get().StateDiffExponents)
 	if err != nil {
 		return pkgerrors.Wrap(err, "failed to encode state diff exponents")
