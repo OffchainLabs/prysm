@@ -169,18 +169,10 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
 			aRoot = cached.root
 			aState = cached.state
 		} else {
-			// we check for slot+1 because we don't want to treat this slot as a missed block when it's not in cache.
-			// this specifically happens when the state is evicted from the caches in long non finalization.
-			_, roots, err := s.beaconDB.HighestRootsBelowSlot(ctx, slot+1)
+			aRoot, err = s.canonicalRootAtOrBelow(ctx, slot, oldFSlot)
 			if err != nil {
 				return err
 			}
-			// Given the block has been finalized, the db should not have more than one block in a given slot.
-			// We should error out when this happens.
-			if len(roots) != 1 {
-				return errUnknownBlock
-			}
-			aRoot = roots[0]
 			// Different than the legacy MigrateToCold, we need to always get the state even if
 			// the state exists in DB as part of the hot state db, because we need to process slots
 			// to the state diff tree slots.
@@ -220,6 +212,40 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
 		s.SaveFinalizedState(fSlot, fRoot, fInfo.state)
 	}
 	return nil
+}
+
+// canonicalRootAtOrBelow returns the root of the highest canonical block at or below the given slot,
+// skipping slots that hold only blocks which lost fork choice. Those are never deleted from the slot index.
+// Canonicality comes from the finalized index, which is decisive below the finalized checkpoint slot.
+// floor is a slot already known to be canonical; resolving past it is an error rather than a walk to genesis.
+func (s *State) canonicalRootAtOrBelow(ctx context.Context, slot, floor primitives.Slot) ([32]byte, error) {
+	// HighestRootsBelowSlot reports a strictly lower slot, so next decreases every round.
+	for next := slot + 1; ; {
+		high, roots, err := s.beaconDB.HighestRootsBelowSlot(ctx, next)
+		if err != nil {
+			return [32]byte{}, err
+		}
+		if high < floor {
+			return [32]byte{}, errUnknownBlock
+		}
+		canonical := make([][32]byte, 0, 1)
+		for _, r := range roots {
+			if s.beaconDB.IsFinalizedBlock(ctx, r) {
+				canonical = append(canonical, r)
+			}
+		}
+		switch len(canonical) {
+		case 1:
+			return canonical[0], nil
+		case 0:
+			if high == 0 {
+				return [32]byte{}, errUnknownBlock
+			}
+			next = high
+		default:
+			return [32]byte{}, errUnknownBlock
+		}
+	}
 }
 
 func (s *State) migrateHotToCold(aRoot [32]byte) {
