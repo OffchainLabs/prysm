@@ -818,10 +818,7 @@ func (s *Service) runLateBlockTasks() {
 	}
 
 	cfg := params.BeaconConfig()
-	attDueBPS := cfg.AttestationDueBPS
-	if slots.ToEpoch(s.CurrentSlot()) >= cfg.GloasForkEpoch {
-		attDueBPS = cfg.AttestationDueBPSGloas
-	}
+	attDueBPS := cfg.AttestationDueBPSAtSlot(s.CurrentSlot())
 	attThreshold := cfg.SlotComponentDuration(attDueBPS)
 	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SlotDuration())
 	for {
