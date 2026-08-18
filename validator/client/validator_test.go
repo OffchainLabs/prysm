@@ -4136,10 +4136,10 @@ func TestWarmBuilderRequestAuthsForDuties_CollapsesSameURL(t *testing.T) {
 	require.Equal(t, 2, len(reqs))
 	for _, r := range reqs {
 		require.Equal(t, "https://a.example", r.Url)
-		require.Equal(t, primitives.Gwei(100), r.Request.Preferences.MaxExecutionPayment)
+		require.Equal(t, primitives.Gwei(100), r.MaxExecutionPayment)
 	}
-	require.DeepEqual(t, []byte{1}, reqs[0].Request.Auth.Message.Data)
-	require.DeepEqual(t, []byte{2}, reqs[1].Request.Auth.Message.Data)
+	require.DeepEqual(t, []byte{1}, reqs[0].Auth.Message.Data)
+	require.DeepEqual(t, []byte{2}, reqs[1].Auth.Message.Data)
 
 	t.Run("distinct urls all submit the lowest max_execution_payment", func(t *testing.T) {
 		// The beacon node holds one max_execution_payment per validator, so every
@@ -4158,7 +4158,7 @@ func TestWarmBuilderRequestAuthsForDuties_CollapsesSameURL(t *testing.T) {
 		reqs := v.warmBuilderRequestAuthsForDuties(t.Context(), km, 5, duties)
 		require.Equal(t, 2, len(reqs))
 		for _, r := range reqs {
-			require.Equal(t, primitives.Gwei(0), r.Request.Preferences.MaxExecutionPayment)
+			require.Equal(t, primitives.Gwei(0), r.MaxExecutionPayment)
 		}
 	})
 }

@@ -178,6 +178,7 @@ func (s *Service) GetExecutionPayloadBid(ctx context.Context, slot primitives.Sl
 		}
 		id := entryIdentity{url: e.GetUrl(), data: string(e.GetAuth().GetMessage().GetData())}
 		if seen[id] {
+			log.WithField("builder", logs.MaskCredentialsLogging(e.GetUrl())).Debug("Dropping duplicate builder entry, first one wins")
 			continue
 		}
 		seen[id] = true

@@ -40,13 +40,21 @@ message BuilderPreferencesRequest {
   SignedRequestAuth auth = 2;
 }
 
-// SubmitBuilderPreferencesRequest is the validator-client gRPC request to forward
-// a proposer's builder preferences to the configured builder.
-message SubmitBuilderPreferencesRequest {
+// BuilderPreferencesEntry is one per-builder preference submission, per beacon-APIs #630.
+message BuilderPreferencesEntry {
   bytes proposer_pubkey = 1;
-  BuilderPreferencesRequest request = 2;
-  // url is the HTTP dial target, the auth data inside request is opaque and may not be a URL.
-  string url = 3;
+  // url is the HTTP dial target, the auth data inside auth is opaque and may not be a URL.
+  string url = 2;
+  SignedRequestAuth auth = 3;
+  uint64 max_execution_payment = 4 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
+  ];
+}
+
+// SubmitBuilderPreferencesRequest batches entries across the validator client's proposers.
+message SubmitBuilderPreferencesRequest {
+  repeated BuilderPreferencesEntry entries = 1;
 }
 
 message BuilderEntry {
