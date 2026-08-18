@@ -240,7 +240,7 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 	parentRoot := [32]byte{1, 2, 3}
 	parentHash := [32]byte{9, 9, 9}
 	pubkey := [48]byte{4, 5, 6}
-	auths := []*ethpb.SignedRequestAuth{{}}
+	entries := []*ethpb.BuilderEntry{{Url: "http://builder"}}
 	head, err := util.NewBeaconStateGloas()
 	require.NoError(t, err)
 
@@ -265,24 +265,24 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 	passAll := func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
 		return &fakeBidVerifier{}
 	}
-	query := func(auths []*ethpb.SignedRequestAuth) *builderBidQuery {
+	query := func(entries []*ethpb.BuilderEntry) *builderBidQuery {
 		return &builderBidQuery{
 			slot:       slot,
 			parentRoot: parentRoot,
 			parentHash: parentHash,
 			pubkey:     pubkey,
-			auths:      auths,
+			entries:    entries,
 		}
 	}
 
 	t.Run("no builder configured", func(t *testing.T) {
 		vs := &Server{}
-		got, url := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(auths))
+		got, url := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
 		require.IsNil(t, got)
 		require.Equal(t, "", url)
 	})
 
-	t.Run("no auths", func(t *testing.T) {
+	t.Run("no entries", func(t *testing.T) {
 		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{}}
 		got, _ := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(nil))
 		require.IsNil(t, got)
@@ -293,7 +293,7 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 			BlockBuilder:                   &builderTest.MockBuilderService{PayloadBids: []beaconbuilder.PayloadBid{bid(1, 500), bid(2, 1500), bid(3, 900)}},
 			NewExecutionPayloadBidVerifier: passAll,
 		}
-		got, url := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(auths))
+		got, url := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
 		require.NotNil(t, got)
 		require.Equal(t, primitives.BuilderIndex(2), got.Message.BuilderIndex)
 		require.Equal(t, "http://builder", url)
@@ -311,7 +311,7 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 				return &fakeBidVerifier{}
 			},
 		}
-		got, _ := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(auths))
+		got, _ := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
 		require.NotNil(t, got)
 		require.Equal(t, primitives.BuilderIndex(1), got.Message.BuilderIndex)
 	})
@@ -322,7 +322,7 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 			NewExecutionPayloadBidVerifier: passAll,
 			BuilderCircuitBreaker:          blacklistedBreaker(t, 2, slot),
 		}
-		got, _ := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(auths))
+		got, _ := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
 		require.NotNil(t, got)
 		require.Equal(t, primitives.BuilderIndex(1), got.Message.BuilderIndex)
 	})
@@ -333,7 +333,7 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 			NewExecutionPayloadBidVerifier: passAll,
 			BuilderCircuitBreaker:          blacklistedBreaker(t, 1, slot),
 		}
-		got, url := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(auths))
+		got, url := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
 		require.IsNil(t, got)
 		require.Equal(t, "", url)
 	})
@@ -345,7 +345,7 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 				return &fakeBidVerifier{activeErr: errors.New("not active")}
 			},
 		}
-		got, url := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(auths))
+		got, url := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
 		require.IsNil(t, got)
 		require.Equal(t, "", url)
 	})
@@ -355,7 +355,7 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 			BlockBuilder:                   &builderTest.MockBuilderService{ErrGetExecutionPayloadBid: errors.New("boom")},
 			NewExecutionPayloadBidVerifier: passAll,
 		}
-		got, _ := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(auths))
+		got, _ := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
 		require.IsNil(t, got)
 	})
 }

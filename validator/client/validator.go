@@ -1390,15 +1390,8 @@ type builderTarget struct {
 	boostFactor *uint64
 }
 
-// builderTargetsForKey resolves the configured builder list for pk; entries override
-// config-level fallbacks. TODO(gloas): per-entry max_execution_payment, minBid,
-// boost and pubkeys ride the beacon-APIs #630 wire.
-func (v *validator) builderTargetsForKey(pk pubkey) []builderTarget {
-	ps := v.ProposerSettings()
-	if ps == nil {
-		return nil
-	}
-	bc := ps.EffectiveBuilderConfig(pk)
+// builderTargets resolves bc's builder list, entries override config-level fallbacks.
+func builderTargets(bc *proposer.BuilderConfig) []builderTarget {
 	if bc == nil {
 		return nil
 	}
@@ -1456,40 +1449,41 @@ func (v *validator) warmBuilderRequestAuths(ctx context.Context, km keymanager.I
 }
 
 func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, duties iter.Seq2[pubkey, *ethpb.ValidatorDuty]) []*ethpb.SubmitBuilderPreferencesRequest {
+	ps := v.ProposerSettings()
+	if ps == nil {
+		return nil
+	}
 	var reqs []*ethpb.SubmitBuilderPreferencesRequest
 	for pk, duty := range duties {
-		targets := v.builderTargetsForKey(pk)
+		targets := builderTargets(ps.EffectiveBuilderConfig(pk))
 		if len(targets) == 0 {
 			continue
 		}
-		// The v1 wire holds one max_execution_payment per validator (no builder
-		// identity), so the lowest configured value is submitted for every builder.
+		// The beacon caches one max_execution_payment per validator as its bid
+		// backstop, so the lowest configured value is submitted for every builder.
 		minPayment := targets[0].maxPayment
-		urls := make(map[string]bool, len(targets))
 		for _, t := range targets {
 			if t.maxPayment < minPayment {
 				minPayment = t.maxPayment
 			}
-			urls[t.url] = true
 		}
 		for _, proposalSlot := range duty.ProposerSlots {
 			if proposalSlot <= slot {
 				continue
 			}
-			for url := range urls {
-				signed, err := v.signRequestAuthCached(ctx, km, pk, url, proposalSlot)
+			for _, t := range targets {
+				signed, err := v.signRequestAuthCached(ctx, km, pk, t.authData, proposalSlot)
 				if err != nil {
 					log.WithError(err).Warn("Failed to sign builder request auth")
 					continue
 				}
-				// TODO(gloas): per-entry max_execution_payment, authData, minBid, boost
-				// and pubkeys need the beacon-APIs #630 inline wire's builder identity.
 				reqs = append(reqs, &ethpb.SubmitBuilderPreferencesRequest{
 					ProposerPubkey: pk[:],
 					Request: &ethpb.BuilderPreferencesRequest{
 						Preferences: &ethpb.BuilderPreferences{MaxExecutionPayment: primitives.Gwei(minPayment)},
 						Auth:        signed,
 					},
+					Url: t.url,
 				})
 			}
 		}

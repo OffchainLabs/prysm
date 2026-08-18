@@ -19,12 +19,15 @@ func (vs *Server) SubmitBuilderPreferences(ctx context.Context, req *ethpb.Submi
 	if req == nil || req.Request == nil {
 		return nil, status.Error(codes.InvalidArgument, "builder preferences request is empty")
 	}
-	// Not gated on Configured(), gloas builders are dialed per URL from the request auth rather than the endpoint flag.
+	// Not gated on Configured(), gloas builders are dialed per URL from the request rather than the endpoint flag.
 	if vs.BlockBuilder == nil {
 		return nil, status.Error(codes.FailedPrecondition, "builder is not configured")
 	}
+	if req.Url == "" {
+		return nil, status.Error(codes.InvalidArgument, "builder preferences request is missing the builder url")
+	}
 	pubkey := bytesutil.ToBytes48(req.ProposerPubkey)
-	if err := vs.BlockBuilder.SubmitBuilderPreferences(ctx, pubkey, req.Request); err != nil {
+	if err := vs.BlockBuilder.SubmitBuilderPreferences(ctx, pubkey, req.Url, req.Request); err != nil {
 		return nil, status.Errorf(codes.Internal, "could not submit builder preferences: %v", err)
 	}
 	vs.maxExecutionPayments.Store(pubkey, uint64(req.Request.Preferences.GetMaxExecutionPayment()))

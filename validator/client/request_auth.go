@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -15,21 +16,58 @@ import (
 )
 
 type requestAuthKey struct {
-	pk    pubkey
-	slot  primitives.Slot
-	relay string
+	pk   pubkey
+	slot primitives.Slot
+	data string
 }
 
-func (v *validator) builderRequestAuthsForSlot(pk pubkey, slot primitives.Slot) []*ethpb.SignedRequestAuth {
-	v.signedRequestAuthsLock.Lock()
-	defer v.signedRequestAuthsLock.Unlock()
-	var auths []*ethpb.SignedRequestAuth
-	for k, signed := range v.signedRequestAuths {
-		if k.pk == pk && k.slot == slot {
-			auths = append(auths, signed)
-		}
+// builderConfigForSlot resolves the builder config for pk's proposal at slot from one
+// settings snapshot, signing any request auth not already cached by the warm push.
+func (v *validator) builderConfigForSlot(ctx context.Context, pk pubkey, slot primitives.Slot) *ethpb.BuilderConfig {
+	ps := v.ProposerSettings()
+	if ps == nil {
+		return nil
 	}
-	return auths
+	bc := ps.EffectiveBuilderConfig(pk)
+	if bc == nil {
+		return nil
+	}
+	cfg := &ethpb.BuilderConfig{
+		MinBid:             primitives.Gwei(uint64OrDefault(uint64Ptr(bc.MinBid), 0)),
+		BuilderBoostFactor: uint64OrDefault(uint64Ptr(bc.BuilderBoostFactor), uint64(proposer.NeutralBuilderBoostFactor)),
+	}
+	targets := builderTargets(bc)
+	if len(targets) == 0 {
+		return cfg
+	}
+	km, err := v.Keymanager()
+	if err != nil {
+		log.WithError(err).Warn("Could not get keymanager for builder request auths")
+		return cfg
+	}
+	for _, t := range targets {
+		signed, err := v.signRequestAuthCached(ctx, km, pk, t.authData, slot)
+		if err != nil {
+			log.WithError(err).Warn("Failed to sign builder request auth")
+			continue
+		}
+		cfg.Builders = append(cfg.Builders, &ethpb.BuilderEntry{
+			Url:                 t.url,
+			Auth:                signed,
+			BuilderPubkeys:      t.pubkeys,
+			MaxExecutionPayment: primitives.Gwei(t.maxPayment),
+			MinBid:              primitives.Gwei(uint64OrDefault(t.minBid, 0)),
+			BuilderBoostFactor:  uint64OrDefault(t.boostFactor, uint64(proposer.NeutralBuilderBoostFactor)),
+		})
+	}
+	return cfg
+}
+
+func uint64OrDefault(v *uint64, def uint64) uint64 {
+	if v == nil {
+		return def
+	}
+	return *v
 }
 
 func (v *validator) pruneSignedRequestAuths(slot primitives.Slot) {
@@ -42,15 +80,15 @@ func (v *validator) pruneSignedRequestAuths(slot primitives.Slot) {
 	}
 }
 
-func (v *validator) signRequestAuthCached(ctx context.Context, km keymanager.IKeymanager, pk pubkey, relay string, slot primitives.Slot) (*ethpb.SignedRequestAuth, error) {
-	key := requestAuthKey{pk: pk, slot: slot, relay: relay}
+func (v *validator) signRequestAuthCached(ctx context.Context, km keymanager.IKeymanager, pk pubkey, authData []byte, slot primitives.Slot) (*ethpb.SignedRequestAuth, error) {
+	key := requestAuthKey{pk: pk, slot: slot, data: string(authData)}
 	v.signedRequestAuthsLock.Lock()
 	signed, ok := v.signedRequestAuths[key]
 	v.signedRequestAuthsLock.Unlock()
 	if ok {
 		return signed, nil
 	}
-	signed, err := v.signRequestAuth(ctx, km, pk, &ethpb.RequestAuth{Data: []byte(relay), Slot: slot})
+	signed, err := v.signRequestAuth(ctx, km, pk, &ethpb.RequestAuth{Data: authData, Slot: slot})
 	if err != nil {
 		return nil, err
 	}

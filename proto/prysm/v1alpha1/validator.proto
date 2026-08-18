@@ -979,9 +979,8 @@ message BlockRequest {
   // populated state root.
   bool eager_payload_state_root = 6;
 
-  // Signed builder request auths for this slot, one per configured builder.
-  // The beacon node forwards the auth matching its builder when requesting a bid.
-  repeated SignedRequestAuth builder_request_auths = 7;
+  // Resolved builder entries for this proposal slot, one bid request per entry.
+  BuilderConfig builder_config = 7;
 }
 
 message ProposeResponse {

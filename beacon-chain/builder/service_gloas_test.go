@@ -19,12 +19,14 @@ type fakeBuilderClient struct {
 	url       string
 	bid       *eth.SignedExecutionPayloadBid
 	getErr    error
+	getCount  int
 	prefCount int
 }
 
 func (f *fakeBuilderClient) NodeURL() string { return f.url }
 
 func (f *fakeBuilderClient) GetExecutionPayloadBid(context.Context, primitives.Slot, [32]byte, [32]byte, [48]byte, *eth.SignedRequestAuth) (*eth.SignedExecutionPayloadBid, error) {
+	f.getCount++
 	return f.bid, f.getErr
 }
 
@@ -33,8 +35,15 @@ func (f *fakeBuilderClient) SubmitBuilderPreferences(context.Context, [48]byte, 
 	return nil
 }
 
-func authFor(url string) *eth.SignedRequestAuth {
-	return &eth.SignedRequestAuth{Message: &eth.RequestAuth{Data: []byte(url)}}
+func entryFor(url string) *eth.BuilderEntry {
+	return entryWithAuthData(url, url)
+}
+
+func entryWithAuthData(url, data string) *eth.BuilderEntry {
+	return &eth.BuilderEntry{
+		Url:  url,
+		Auth: &eth.SignedRequestAuth{Message: &eth.RequestAuth{Data: []byte(data)}},
+	}
 }
 
 func bidWithValue(v primitives.Gwei) *eth.SignedExecutionPayloadBid {
@@ -61,10 +70,11 @@ func TestGetExecutionPayloadBid_FanOutAndDedup(t *testing.T) {
 	}
 	s := newMultiplexService(t, clients)
 
-	auths := []*eth.SignedRequestAuth{authFor("http://a"), authFor("http://b"), authFor("http://a")}
-	bids, err := s.GetExecutionPayloadBid(t.Context(), 1, [32]byte{}, [32]byte{}, [48]byte{}, auths)
+	entries := []*eth.BuilderEntry{entryFor("http://a"), entryFor("http://b"), entryFor("http://a")}
+	bids, err := s.GetExecutionPayloadBid(t.Context(), 1, [32]byte{}, [32]byte{}, [48]byte{}, entries)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(bids))
+	require.Equal(t, 1, clients["http://a"].getCount)
 
 	got := map[string]primitives.Gwei{}
 	for _, pb := range bids {
@@ -72,6 +82,21 @@ func TestGetExecutionPayloadBid_FanOutAndDedup(t *testing.T) {
 	}
 	require.Equal(t, primitives.Gwei(100), got["http://a"])
 	require.Equal(t, primitives.Gwei(200), got["http://b"])
+}
+
+func TestGetExecutionPayloadBid_SharedURLDistinctAuthData(t *testing.T) {
+	proxy := &fakeBuilderClient{url: "http://proxy", bid: bidWithValue(10)}
+	s := newMultiplexService(t, map[string]*fakeBuilderClient{"http://proxy": proxy})
+
+	entries := []*eth.BuilderEntry{
+		entryWithAuthData("http://proxy", "builder-1"),
+		entryWithAuthData("http://proxy", "builder-2"),
+		entryWithAuthData("http://proxy", "builder-1"),
+	}
+	bids, err := s.GetExecutionPayloadBid(t.Context(), 1, [32]byte{}, [32]byte{}, [48]byte{}, entries)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(bids))
+	require.Equal(t, 2, proxy.getCount)
 }
 
 func TestGetExecutionPayloadBid_SkipsErrorsAndNil(t *testing.T) {
@@ -83,14 +108,14 @@ func TestGetExecutionPayloadBid_SkipsErrorsAndNil(t *testing.T) {
 	s := newMultiplexService(t, clients)
 
 	// http://nodial has no client; dialing it fails and is skipped.
-	auths := []*eth.SignedRequestAuth{authFor("http://ok"), authFor("http://err"), authFor("http://none"), authFor("http://nodial")}
-	bids, err := s.GetExecutionPayloadBid(t.Context(), 1, [32]byte{}, [32]byte{}, [48]byte{}, auths)
+	entries := []*eth.BuilderEntry{entryFor("http://ok"), entryFor("http://err"), entryFor("http://none"), entryFor("http://nodial")}
+	bids, err := s.GetExecutionPayloadBid(t.Context(), 1, [32]byte{}, [32]byte{}, [48]byte{}, entries)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(bids))
 	require.Equal(t, "http://ok", bids[0].BuilderURL)
 }
 
-func TestGetExecutionPayloadBid_NoAuths(t *testing.T) {
+func TestGetExecutionPayloadBid_NoEntries(t *testing.T) {
 	s := newMultiplexService(t, nil)
 	bids, err := s.GetExecutionPayloadBid(t.Context(), 1, [32]byte{}, [32]byte{}, [48]byte{}, nil)
 	require.NoError(t, err)
@@ -128,11 +153,11 @@ func TestSubmitBuilderPreferences_DialsPerURL(t *testing.T) {
 
 	req := &eth.BuilderPreferencesRequest{
 		Preferences: &eth.BuilderPreferences{},
-		Auth:        authFor("http://b"),
+		Auth:        &eth.SignedRequestAuth{Message: &eth.RequestAuth{Data: []byte("opaque-auth-data")}},
 	}
-	require.NoError(t, s.SubmitBuilderPreferences(t.Context(), [48]byte{}, req))
+	require.NoError(t, s.SubmitBuilderPreferences(t.Context(), [48]byte{}, "http://b", req))
 	require.Equal(t, 1, fc.prefCount)
 
-	err := s.SubmitBuilderPreferences(t.Context(), [48]byte{}, &eth.BuilderPreferencesRequest{Auth: authFor("")})
+	err := s.SubmitBuilderPreferences(t.Context(), [48]byte{}, "", req)
 	require.ErrorContains(t, "missing builder url", err)
 }

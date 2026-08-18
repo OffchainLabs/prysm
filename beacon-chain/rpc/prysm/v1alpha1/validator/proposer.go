@@ -111,7 +111,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 		builderBoostFactor = primitives.Gwei(req.BuilderBoostFactor.Value)
 	}
 
-	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor, full, req.EagerPayloadStateRoot, req.BuilderRequestAuths)
+	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor, full, req.EagerPayloadStateRoot, req.BuilderConfig)
 	l := log.WithFields(logrus.Fields{
 		"sinceSlotStartTime": time.Since(t),
 		"validator":          sBlk.Block().ProposerIndex(),
@@ -199,9 +199,9 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 	return head, parentRoot, vs.parentFull(parentRoot), err
 }
 
-func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, parentFull, eagerPayloadStateRoot bool, builderRequestAuths []*ethpb.SignedRequestAuth) (*ethpb.GenericBeaconBlock, error) {
+func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, parentFull, eagerPayloadStateRoot bool, builderConfig *ethpb.BuilderConfig) (*ethpb.GenericBeaconBlock, error) {
 	if sBlk.Version() >= version.Gloas {
-		return vs.buildBlockGloas(ctx, sBlk, head, skipMevBoost, parentFull, eagerPayloadStateRoot, builderRequestAuths)
+		return vs.buildBlockGloas(ctx, sBlk, head, skipMevBoost, parentFull, eagerPayloadStateRoot, builderConfig)
 	}
 	return vs.buildBlockFulu(ctx, sBlk, head, skipMevBoost, builderBoostFactor, parentFull)
 }

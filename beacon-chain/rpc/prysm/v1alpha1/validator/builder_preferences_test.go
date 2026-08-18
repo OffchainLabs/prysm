@@ -19,6 +19,7 @@ func TestServer_SubmitBuilderPreferences(t *testing.T) {
 		Request: &ethpb.BuilderPreferencesRequest{
 			Preferences: &ethpb.BuilderPreferences{MaxExecutionPayment: 1000},
 		},
+		Url: "http://builder",
 	}
 
 	t.Run("stores max execution payment on success", func(t *testing.T) {
@@ -34,6 +35,15 @@ func TestServer_SubmitBuilderPreferences(t *testing.T) {
 		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true}}
 		_, err := vs.SubmitBuilderPreferences(t.Context(), &ethpb.SubmitBuilderPreferencesRequest{ProposerPubkey: pubkey[:]})
 		require.ErrorContains(t, "request is empty", err)
+	})
+
+	t.Run("missing url errors", func(t *testing.T) {
+		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true}}
+		_, err := vs.SubmitBuilderPreferences(t.Context(), &ethpb.SubmitBuilderPreferencesRequest{
+			ProposerPubkey: pubkey[:],
+			Request:        req.Request,
+		})
+		require.ErrorContains(t, "missing the builder url", err)
 	})
 
 	t.Run("succeeds without the builder endpoint flag", func(t *testing.T) {

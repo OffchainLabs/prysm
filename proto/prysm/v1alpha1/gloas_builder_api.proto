@@ -45,4 +45,30 @@ message BuilderPreferencesRequest {
 message SubmitBuilderPreferencesRequest {
   bytes proposer_pubkey = 1;
   BuilderPreferencesRequest request = 2;
+  // url is the HTTP dial target, the auth data inside request is opaque and may not be a URL.
+  string url = 3;
+}
+
+message BuilderEntry {
+  string url = 1;
+  SignedRequestAuth auth = 2;
+  repeated bytes builder_pubkeys = 3;
+  uint64 max_execution_payment = 4 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
+  ];
+  uint64 min_bid = 5 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
+  ];
+  uint64 builder_boost_factor = 6;
+}
+
+message BuilderConfig {
+  uint64 min_bid = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
+  ];
+  uint64 builder_boost_factor = 2;
+  repeated BuilderEntry builders = 3;
 }
