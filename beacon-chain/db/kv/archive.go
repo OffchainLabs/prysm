@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/pkg/errors"
@@ -116,9 +117,12 @@ func (s *Store) archivePending() (primitives.Slot, bool) {
 }
 
 // InitializeArchiveOrigin anchors the state-diff tree at the given archive origin state and records the
-// resulting ArchiveStatus. It must run before any other caller can set the offset, and refuses to move the
-// offset of a tree that already has one.
+// resulting ArchiveStatus. It is the only caller allowed to set the offset in archive mode, and refuses to
+// move the offset of a tree that already has one.
 func (s *Store) InitializeArchiveOrigin(ctx context.Context, st state.BeaconState) error {
+	if !features.Get().EnableStateDiff {
+		return errors.New("archive mode requires the state-diff database layout")
+	}
 	existing, err := s.ArchiveStatus(ctx)
 	if err != nil && !errors.Is(err, ErrNotFound) {
 		return err
@@ -153,7 +157,7 @@ func (s *Store) InitializeArchiveOrigin(ctx context.Context, st state.BeaconStat
 		}
 	}
 
-	if err := s.initializeStateDiff(st.Slot(), st); err != nil {
+	if err := s.anchorStateDiff(st.Slot(), st); err != nil {
 		return errors.Wrap(err, "could not anchor state-diff tree at the archive origin")
 	}
 	return s.SaveArchiveStatus(ctx, &ArchiveStatus{

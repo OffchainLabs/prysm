@@ -15,23 +15,70 @@ import (
 	"go.etcd.io/bbolt"
 )
 
+// anchorMemoSize is how many deserialized anchors are kept alongside the compressed ones. Anchors are stored
+// compressed precisely to bound memory, so memoizing every level would defeat that: with the default
+// exponents it would pin six full states.
+//
+// Two is enough to capture the reuse that matters. Writes advance in slot order, so the deepest level's
+// anchor serves every boundary inside its span (15 of every 16 with the default exponents), and the one
+// request that interrupts the run is the deepest level's own write asking for the level above it. Holding
+// those two means no misses in steady state; anything shallower is requested rarely enough that
+// re-deserializing it is cheaper than keeping it resident.
+const anchorMemoSize = 2
+
+// anchorMemoEntry is a deserialized anchor. A nil state marks an unused slot.
+type anchorMemoEntry struct {
+	level int
+	state state.ReadOnlyBeaconState
+}
+
 type stateDiffCache struct {
 	sync.RWMutex
 	anchors          [][]byte
 	levelsWithData   []bool
 	offset           uint64
 	anchorGeneration uint64
-	// memo holds the anchor of each level already deserialized. Anchors are kept as compressed ssz to bound
-	// memory, but getAnchor is called once per diff written and an anchor is reused for every slot in its
-	// span, so without a memo a long forward walk pays a full state deserialization per boundary.
-	// Entries are invalidated whenever the underlying bytes change.
-	memo []state.ReadOnlyBeaconState
+	// memo is an LRU of already deserialized anchors. getAnchor is called once per diff written and an
+	// anchor is reused for every slot in its span, so without it a long forward walk pays a full state
+	// deserialization per boundary. Entries are dropped whenever the underlying bytes change.
+	memo [anchorMemoSize]anchorMemoEntry
+}
+
+// memoGet returns the memoized anchor for the level, promoting it to most recently used. Callers must hold
+// the write lock.
+func (c *stateDiffCache) memoGet(level int) state.ReadOnlyBeaconState {
+	for i, e := range c.memo {
+		if e.state == nil || e.level != level {
+			continue
+		}
+		if i > 0 {
+			copy(c.memo[1:i+1], c.memo[:i])
+			c.memo[0] = e
+		}
+		return e.state
+	}
+	return nil
+}
+
+// memoPut inserts an anchor as most recently used, evicting the least recently used entry. Callers must hold
+// the write lock.
+func (c *stateDiffCache) memoPut(level int, st state.ReadOnlyBeaconState) {
+	copy(c.memo[1:], c.memo[:len(c.memo)-1])
+	c.memo[0] = anchorMemoEntry{level: level, state: st}
+}
+
+// memoDrop invalidates the memoized anchor for the level. Callers must hold the write lock.
+func (c *stateDiffCache) memoDrop(level int) {
+	for i, e := range c.memo {
+		if e.state != nil && e.level == level {
+			c.memo[i] = anchorMemoEntry{}
+		}
+	}
 }
 
 func populateStateDiffCacheFromDB(s *Store, offset uint64) (*stateDiffCache, error) {
 	cache := &stateDiffCache{
 		anchors:        make([][]byte, len(flags.Get().StateDiffExponents)-1),
-		memo:           make([]state.ReadOnlyBeaconState, len(flags.Get().StateDiffExponents)-1),
 		levelsWithData: make([]bool, len(flags.Get().StateDiffExponents)),
 		offset:         offset,
 	}
@@ -203,7 +250,6 @@ func newStateDiffCache(s *Store) (*stateDiffCache, error) {
 
 	return &stateDiffCache{
 		anchors:        make([][]byte, len(flags.Get().StateDiffExponents)-1), // -1 because last level doesn't need to be cached
-		memo:           make([]state.ReadOnlyBeaconState, len(flags.Get().StateDiffExponents)-1),
 		levelsWithData: make([]bool, len(flags.Get().StateDiffExponents)),
 		offset:         offset,
 	}, nil
@@ -213,19 +259,20 @@ func newStateDiffCache(s *Store) (*stateDiffCache, error) {
 // shared with every caller until the anchor is replaced. It is only ever consumed by hdiff.Diff, which does
 // not mutate its inputs.
 func (c *stateDiffCache) getAnchor(level int) state.ReadOnlyBeaconState {
-	c.RLock()
+	// memoGet promotes the entry it finds, so the lookup needs the write lock. Only the lookup runs under
+	// it: the deserialization below is far too expensive to hold any lock across.
+	c.Lock()
 	if level < 0 || level >= len(c.anchors) {
-		c.RUnlock()
+		c.Unlock()
 		return nil
 	}
-	if level < len(c.memo) && c.memo[level] != nil {
-		memoized := c.memo[level]
-		c.RUnlock()
-		return memoized
+	if st := c.memoGet(level); st != nil {
+		c.Unlock()
+		return st
 	}
 	compressed := c.anchors[level]
 	generation := c.anchorGeneration
-	c.RUnlock()
+	c.Unlock()
 
 	if len(compressed) == 0 {
 		return nil
@@ -243,9 +290,9 @@ func (c *stateDiffCache) getAnchor(level int) state.ReadOnlyBeaconState {
 
 	c.Lock()
 	defer c.Unlock()
-	// The anchors may have been replaced while we decoded; memoizing then would cache a stale state.
-	if generation == c.anchorGeneration && level < len(c.memo) {
-		c.memo[level] = st
+	// The anchors may have been replaced while we deserialized; memoizing then would cache a stale state.
+	if generation == c.anchorGeneration {
+		c.memoPut(level, st)
 	}
 	return st
 }
@@ -282,9 +329,7 @@ func (c *stateDiffCache) setAnchor(level int, anchor state.ReadOnlyBeaconState) 
 		return nil
 	}
 	c.anchors[level] = compressed
-	if level < len(c.memo) {
-		c.memo[level] = nil
-	}
+	c.memoDrop(level)
 	stateDiffAnchorCacheBytes.WithLabelValues(strconv.Itoa(level)).Set(float64(len(compressed)))
 	return nil
 }
@@ -341,7 +386,7 @@ func (c *stateDiffCache) clearAnchors() {
 func (c *stateDiffCache) clearAnchorsLocked() {
 	c.anchorGeneration++
 	c.anchors = make([][]byte, len(flags.Get().StateDiffExponents)-1) // -1 because last level doesn't need to be cached
-	c.memo = make([]state.ReadOnlyBeaconState, len(c.anchors))
+	c.memo = [anchorMemoSize]anchorMemoEntry{}
 	for level := range len(c.anchors) {
 		stateDiffAnchorCacheBytes.WithLabelValues(strconv.Itoa(level)).Set(0)
 	}

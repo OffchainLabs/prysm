@@ -450,8 +450,13 @@ the tree requires of its offset.
 *o* have no representation at all. A checkpoint-synced node normally sets *o* to the checkpoint slot, so it can
 never represent anything older. Archive mode instead anchors the tree at the archive origin, which means:
 
-- `initArchiveOrigin` (in `beacon-chain/node/archive.go`) runs before `startDB`, so it sets the offset before
-  `SaveGenesisData` or `SaveOrigin` can. Those two are then no-ops for the offset in archive mode.
+- In archive mode `initializeStateDiff` never sets the offset, so `SaveGenesisData` and `SaveOrigin` cannot
+  anchor the tree; only `InitializeArchiveOrigin` can. Anchoring is irreversible — the offset cannot be moved
+  once written — so the node splits it in two (both in `beacon-chain/node/archive.go`): `initArchiveOrigin`
+  runs before `startDB` and only loads and validates the origin state, so a bad flag fails before checkpoint
+  sync downloads anything; `finalizeArchiveOrigin` runs after `startDB`, checks the origin against the now
+  known sync origin, and only then commits the anchor. A rejected origin therefore leaves a database that
+  still accepts a corrected one.
 - The checkpoint origin state's slot is generally not a boundary of the re-anchored tree, so `SaveOrigin`
   persists it as a hot state snapshot instead. `State`/`HasState` consult that bucket first, which is what lets
   stategen and backfill find it.
