@@ -264,6 +264,8 @@ func upgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 		return nil, errors.Wrap(err, "could not compute empty execution requests root")
 	}
 
+	latestBlockHeader := beaconState.LatestBlockHeader()
+
 	s := &ethpb.BeaconStateGloas{
 		GenesisTime:           uint64(beaconState.GenesisTime().Unix()),
 		GenesisValidatorsRoot: beaconState.GenesisValidatorsRoot(),
@@ -273,7 +275,7 @@ func upgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 			CurrentVersion:  params.BeaconConfig().GloasForkVersion,
 			Epoch:           time.CurrentEpoch(beaconState),
 		},
-		LatestBlockHeader:           beaconState.LatestBlockHeader(),
+		LatestBlockHeader:           latestBlockHeader,
 		BlockRoots:                  beaconState.BlockRoots(),
 		StateRoots:                  beaconState.StateRoots(),
 		HistoricalRoots:             beaconState.HistoricalRoots(),
@@ -294,12 +296,14 @@ func upgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 		CurrentSyncCommittee:        currentSyncCommittee,
 		NextSyncCommittee:           nextSyncCommittee,
 		LatestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
+			ParentBlockHash:       payloadHeader.ParentHash(),
+			ParentBlockRoot:       latestBlockHeader.ParentRoot,
 			BlockHash:             payloadHeader.BlockHash(),
-			GasLimit:              payloadHeader.GasLimit(),
+			PrevRandao:            payloadHeader.PrevRandao(),
 			FeeRecipient:          make([]byte, fieldparams.FeeRecipientLength),
-			ParentBlockHash:       make([]byte, fieldparams.RootLength),
-			ParentBlockRoot:       make([]byte, fieldparams.RootLength),
-			PrevRandao:            make([]byte, fieldparams.RootLength),
+			GasLimit:              payloadHeader.GasLimit(),
+			BuilderIndex:          params.BeaconConfig().BuilderIndexSelfBuild,
+			Slot:                  latestBlockHeader.Slot,
 			ExecutionRequestsRoot: emptyExecutionRequestsRoot[:],
 		},
 		NextWithdrawalIndex:           wi,
