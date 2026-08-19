@@ -187,12 +187,12 @@ func (p *Service) prune(slot primitives.Slot) error {
 	}).Debug("Pruning chain data")
 
 	tt := time.Now()
-	numBatches, err := p.pruneBatches(pruneUpto)
+	numBatches, err := p.pruneBatches(pruneUpto - 1)
 	if err != nil {
 		return errors.Wrap(err, "failed to prune batches")
 	}
 
-	earliestAvailableSlot := pruneUpto + 1
+	earliestAvailableSlot := pruneUpto
 
 	// Update pruning checkpoint.
 	p.prunedUpto = pruneUpto
