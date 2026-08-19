@@ -351,22 +351,6 @@ func (vs *Server) proposerPreferenceForProposal(ctx context.Context, st state.Be
 	return pref
 }
 
-func (vs *Server) recordBidSource(slot primitives.Slot, src bidSource, builderURL string) {
-	vs.lastBidLock.Lock()
-	defer vs.lastBidLock.Unlock()
-	vs.lastBidSlot, vs.lastBidSource, vs.lastBidBuilderURL = slot, src, builderURL
-}
-
-// Falls back to self-build when the record is for another slot.
-func (vs *Server) bidSourceForSlot(slot primitives.Slot) (bidSource, string) {
-	vs.lastBidLock.Lock()
-	defer vs.lastBidLock.Unlock()
-	if vs.lastBidSlot != slot {
-		return bidSourceSelfBuild, ""
-	}
-	return vs.lastBidSource, vs.lastBidBuilderURL
-}
-
 // Best-effort and detached from the propose RPC, the builder also learns of the block via P2P.
 func (vs *Server) submitBlockToBuilder(block interfaces.ReadOnlySignedBeaconBlock, builderURL string) {
 	if vs.BlockBuilder == nil || builderURL == "" {

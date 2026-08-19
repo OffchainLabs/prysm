@@ -38,6 +38,7 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 
 	// local is our self-build candidate and the baseline for comparing incoming bids.
 	var selfBuilt bool
+	var builderURL string
 	local, err := vs.getLocalPayload(ctx, sBlk.Block(), head, parentFull)
 	if err != nil {
 		log.WithError(err).Warn("Could not get local payload, falling back to P2P bid")
@@ -77,11 +78,9 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 		if bidErr != nil {
 			return nil, status.Errorf(codes.Internal, "Could not set execution payload bid: %v", bidErr)
 		}
-		var builderURL string
 		if src == bidSourceBuilderAPI && builderWin != nil {
 			builderURL = builderWin.entry.GetUrl()
 		}
-		vs.recordBidSource(sBlk.Block().Slot(), src, builderURL)
 		selfBuilt = src == bidSourceSelfBuild
 	}
 
@@ -105,6 +104,7 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 	if err != nil {
 		return nil, err
 	}
+	blk.BuilderUrl = builderURL
 
 	// Eager (stateless) self-build: bundle envelope + blobs inline; stateful publishes from the cache.
 	if eagerPayloadStateRoot && envelope != nil {
