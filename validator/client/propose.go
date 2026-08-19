@@ -168,6 +168,10 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 			}
 		default:
 			log.Errorf("Unsupported block version %s", version.String(blk.Version()))
+			if v.emitAccountMetrics {
+				ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
+			}
+			return
 		}
 	} else {
 		genericSignedBlock, err = blk.PbGenericBlock()
