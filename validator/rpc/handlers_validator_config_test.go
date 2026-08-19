@@ -66,24 +66,24 @@ func setupConfigServer(t *testing.T, numKeys int) (*Server, [][48]byte) {
 	return srv, keys
 }
 
-func postBuilders(t *testing.T, s *Server, pubkey, body string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(http.MethodPost, "/eth/v1/validator/"+pubkey+"/builders", bytes.NewBufferString(body))
+func postBuilderConfig(t *testing.T, s *Server, pubkey, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "/eth/v1/validator/"+pubkey+"/builder_config", bytes.NewBufferString(body))
 	req.SetPathValue("pubkey", pubkey)
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
-	s.SetBuilders(w, req)
+	s.SetBuilderConfig(w, req)
 	return w
 }
 
-func getBuilders(t *testing.T, s *Server, pubkey string) (*httptest.ResponseRecorder, *BuilderConfig) {
-	req := httptest.NewRequest(http.MethodGet, "/eth/v1/validator/"+pubkey+"/builders", nil)
+func getBuilderConfig(t *testing.T, s *Server, pubkey string) (*httptest.ResponseRecorder, *BuilderConfig) {
+	req := httptest.NewRequest(http.MethodGet, "/eth/v1/validator/"+pubkey+"/builder_config", nil)
 	req.SetPathValue("pubkey", pubkey)
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
-	s.GetBuilders(w, req)
+	s.GetBuilderConfig(w, req)
 	cfg := &BuilderConfig{}
 	if w.Code == http.StatusOK {
-		resp := &GetBuildersResponse{}
+		resp := &GetBuilderConfigResponse{}
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), resp))
 		require.NotNil(t, resp.Data)
 		cfg = resp.Data
@@ -91,26 +91,26 @@ func getBuilders(t *testing.T, s *Server, pubkey string) (*httptest.ResponseReco
 	return w, cfg
 }
 
-func deleteBuilders(t *testing.T, s *Server, pubkey string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(http.MethodDelete, "/eth/v1/validator/"+pubkey+"/builders", nil)
+func deleteBuilderConfig(t *testing.T, s *Server, pubkey string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodDelete, "/eth/v1/validator/"+pubkey+"/builder_config", nil)
 	req.SetPathValue("pubkey", pubkey)
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
-	s.DeleteBuilders(w, req)
+	s.DeleteBuilderConfig(w, req)
 	return w
 }
 
-func TestServer_SetBuilders(t *testing.T) {
+func TestServer_SetBuilderConfig(t *testing.T) {
 	t.Run("round trip via GET", func(t *testing.T) {
 		srv, keys := setupConfigServer(t, 1)
 		pk := hexutil.Encode(keys[0][:])
 		body := `{"min_bid":"5","builder_boost_factor":"120",` +
 			`"builders":[{"url":"https://b.example","auth_data":"0x0102","max_execution_payment":"1000"}]}`
 
-		w := postBuilders(t, srv, pk, body)
+		w := postBuilderConfig(t, srv, pk, body)
 		require.Equal(t, http.StatusAccepted, w.Code)
 
-		_, cfg := getBuilders(t, srv, pk)
+		_, cfg := getBuilderConfig(t, srv, pk)
 		require.Equal(t, "5", *cfg.MinBid)
 		require.Equal(t, "120", *cfg.BuilderBoostFactor)
 		require.Equal(t, 1, len(cfg.Builders))
@@ -125,12 +125,12 @@ func TestServer_SetBuilders(t *testing.T) {
 		srv, keys := setupConfigServer(t, 1)
 		pk := hexutil.Encode(keys[0][:])
 
-		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk,
+		require.Equal(t, http.StatusAccepted, postBuilderConfig(t, srv, pk,
 			`{"builders":[{"url":"https://a.example"},{"url":"https://b.example"}]}`).Code)
-		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk,
+		require.Equal(t, http.StatusAccepted, postBuilderConfig(t, srv, pk,
 			`{"builders":[{"url":"https://c.example"}]}`).Code)
 
-		_, cfg := getBuilders(t, srv, pk)
+		_, cfg := getBuilderConfig(t, srv, pk)
 		require.Equal(t, 1, len(cfg.Builders))
 		require.Equal(t, "https://c.example", cfg.Builders[0].Url)
 	})
@@ -138,9 +138,9 @@ func TestServer_SetBuilders(t *testing.T) {
 	t.Run("empty array is use-none", func(t *testing.T) {
 		srv, keys := setupConfigServer(t, 1)
 		pk := hexutil.Encode(keys[0][:])
-		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk, `{"builders":[]}`).Code)
+		require.Equal(t, http.StatusAccepted, postBuilderConfig(t, srv, pk, `{"builders":[]}`).Code)
 
-		_, cfg := getBuilders(t, srv, pk)
+		_, cfg := getBuilderConfig(t, srv, pk)
 		require.NotNil(t, cfg.Builders)
 		require.Equal(t, 0, len(cfg.Builders))
 	})
@@ -155,10 +155,10 @@ func TestServer_SetBuilders(t *testing.T) {
 				BuilderConfig: &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{{URL: "https://default.example"}}},
 			},
 		}))
-		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pkA, `{"builders":[]}`).Code)
-		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pkB, `{"builders":[{"url":"https://b.example"}]}`).Code)
+		require.Equal(t, http.StatusAccepted, postBuilderConfig(t, srv, pkA, `{"builders":[]}`).Code)
+		require.Equal(t, http.StatusAccepted, postBuilderConfig(t, srv, pkB, `{"builders":[{"url":"https://b.example"}]}`).Code)
 
-		_, cfg := getBuilders(t, srv, pkA)
+		_, cfg := getBuilderConfig(t, srv, pkA)
 		require.Equal(t, 0, len(cfg.Builders))
 	})
 
@@ -173,7 +173,7 @@ func TestServer_SetBuilders(t *testing.T) {
 				BuilderConfig:      &proposer.BuilderConfig{Enabled: true},
 			},
 		}))
-		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk, `{}`).Code)
+		require.Equal(t, http.StatusAccepted, postBuilderConfig(t, srv, pk, `{}`).Code)
 
 		// Nothing is stored for the key and the enabled default still applies.
 		require.IsNil(t, srv.validatorService.ProposerSettings().ProposeConfig[keys[0]].BuilderConfig)
@@ -192,14 +192,14 @@ func TestServer_SetBuilders(t *testing.T) {
 				BuilderConfig:      &proposer.BuilderConfig{Enabled: true},
 			},
 		}))
-		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk, `{"min_bid":"5"}`).Code)
+		require.Equal(t, http.StatusAccepted, postBuilderConfig(t, srv, pk, `{"min_bid":"5"}`).Code)
 
 		// The POST expressed no registration choice, so the enabled default still applies.
 		_, _, enabled := srv.validatorService.ProposerSettings().RegistrationFor(keys[0])
 		require.Equal(t, true, enabled)
 
 		// An explicit empty list is a registration choice: it opts the key out.
-		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk, `{"builders":[]}`).Code)
+		require.Equal(t, http.StatusAccepted, postBuilderConfig(t, srv, pk, `{"builders":[]}`).Code)
 		_, _, enabled = srv.validatorService.ProposerSettings().RegistrationFor(keys[0])
 		require.Equal(t, false, enabled)
 	})
@@ -213,7 +213,7 @@ func TestServer_SetBuilders(t *testing.T) {
 				keys[0]: {BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 999}},
 			},
 		}))
-		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk, `{"builders":[{"url":"https://a.example"}]}`).Code)
+		require.Equal(t, http.StatusAccepted, postBuilderConfig(t, srv, pk, `{"builders":[{"url":"https://a.example"}]}`).Code)
 
 		got := srv.validatorService.ProposerSettings()
 		// Builder lists are v2 content: POST migrates the schema in place.
@@ -231,8 +231,8 @@ func TestServer_SetBuilders(t *testing.T) {
 		bpk2 := "0x" + strings.Repeat("cd", 48)
 		body := `{"builders":[{"url":"https://a.example","builder_pubkeys":["` + bpk + `","` + bpk2 + `"]},{"url":"https://b.example"}]}`
 
-		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk, body).Code)
-		_, cfg := getBuilders(t, srv, pk)
+		require.Equal(t, http.StatusAccepted, postBuilderConfig(t, srv, pk, body).Code)
+		_, cfg := getBuilderConfig(t, srv, pk)
 		require.Equal(t, 2, len(cfg.Builders))
 		require.Equal(t, "https://a.example", cfg.Builders[0].Url)
 		require.DeepEqual(t, []string{bpk, bpk2}, cfg.Builders[0].BuilderPubkeys)
@@ -267,7 +267,7 @@ func TestServer_SetBuilders(t *testing.T) {
 		}
 		for name, tc := range cases {
 			t.Run(name, func(t *testing.T) {
-				w := postBuilders(t, srv, pk, tc.body)
+				w := postBuilderConfig(t, srv, pk, tc.body)
 				require.Equal(t, http.StatusBadRequest, w.Code)
 				require.Equal(t, true, strings.Contains(w.Body.String(), tc.contains), "body: %s", w.Body.String())
 			})
@@ -278,8 +278,8 @@ func TestServer_SetBuilders(t *testing.T) {
 		srv, keys := setupConfigServer(t, 1)
 		pk := hexutil.Encode(keys[0][:])
 		body := `{"builders":[{"url":"https://a","auth_data":"0x01"},{"url":"https://a","auth_data":"0x02"}]}`
-		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk, body).Code)
-		_, cfg := getBuilders(t, srv, pk)
+		require.Equal(t, http.StatusAccepted, postBuilderConfig(t, srv, pk, body).Code)
+		_, cfg := getBuilderConfig(t, srv, pk)
 		require.Equal(t, 2, len(cfg.Builders))
 	})
 
@@ -291,7 +291,7 @@ func TestServer_SetBuilders(t *testing.T) {
 			entries = append(entries, `{"url":"https://b`+strconv.Itoa(i)+`.example"}`)
 		}
 		body := `{"builders":[` + strings.Join(entries, ",") + `]}`
-		w := postBuilders(t, srv, pk, body)
+		w := postBuilderConfig(t, srv, pk, body)
 		require.Equal(t, http.StatusBadRequest, w.Code)
 		require.Equal(t, true, strings.Contains(w.Body.String(), "exceeds 64 entries"))
 	})
@@ -299,12 +299,12 @@ func TestServer_SetBuilders(t *testing.T) {
 	t.Run("validator service nil", func(t *testing.T) {
 		srv, keys := setupConfigServer(t, 1)
 		srv.validatorService = nil
-		w := postBuilders(t, srv, hexutil.Encode(keys[0][:]), `{"builders":[]}`)
+		w := postBuilderConfig(t, srv, hexutil.Encode(keys[0][:]), `{"builders":[]}`)
 		require.Equal(t, http.StatusServiceUnavailable, w.Code)
 	})
 }
 
-func TestServer_GetBuilders(t *testing.T) {
+func TestServer_GetBuilderConfig(t *testing.T) {
 	// GET is fully resolved: omitted auth_data becomes the url's UTF-8 bytes, and
 	// unset values become the runtime fallbacks (no floor, neutral boost, trustless-only).
 	t.Run("nil proposer settings resolve to runtime defaults", func(t *testing.T) {
@@ -312,7 +312,7 @@ func TestServer_GetBuilders(t *testing.T) {
 		pk := hexutil.Encode(keys[0][:])
 		// No settings were ever created: the nil-receiver chain must still
 		// produce a fully resolved response rather than panic or error.
-		w, cfg := getBuilders(t, srv, pk)
+		w, cfg := getBuilderConfig(t, srv, pk)
 		require.Equal(t, http.StatusOK, w.Code)
 		require.Equal(t, "0", *cfg.MinBid)
 		require.Equal(t, "100", *cfg.BuilderBoostFactor)
@@ -323,9 +323,9 @@ func TestServer_GetBuilders(t *testing.T) {
 	t.Run("resolves omitted values", func(t *testing.T) {
 		srv, keys := setupConfigServer(t, 1)
 		pk := hexutil.Encode(keys[0][:])
-		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk,
+		require.Equal(t, http.StatusAccepted, postBuilderConfig(t, srv, pk,
 			`{"builders":[{"url":"https://a.example"}]}`).Code)
-		_, cfg := getBuilders(t, srv, pk)
+		_, cfg := getBuilderConfig(t, srv, pk)
 		require.Equal(t, "0", *cfg.MinBid)
 		require.Equal(t, "100", *cfg.BuilderBoostFactor)
 		require.Equal(t, 1, len(cfg.Builders))
@@ -345,46 +345,46 @@ func TestServer_GetBuilders(t *testing.T) {
 			},
 		}))
 
-		_, cfg := getBuilders(t, srv, pk)
+		_, cfg := getBuilderConfig(t, srv, pk)
 		require.Equal(t, 1, len(cfg.Builders))
 		require.Equal(t, "https://default.example", cfg.Builders[0].Url)
 	})
 }
 
-func TestServer_Builders_RequireGloasScheduled(t *testing.T) {
+func TestServer_BuilderConfig_RequireGloasScheduled(t *testing.T) {
 	// The default test config has no gloas fork epoch: all three endpoints refuse.
 	srv := &Server{}
 	pk := "0x" + strings.Repeat("ab", 48)
 	for name, w := range map[string]*httptest.ResponseRecorder{
-		"get":    getBuildersRecorder(srv, pk),
-		"post":   postBuilders(t, srv, pk, `{"builders":[]}`),
-		"delete": deleteBuilders(t, srv, pk),
+		"get":    getBuilderConfigRecorder(srv, pk),
+		"post":   postBuilderConfig(t, srv, pk, `{"builders":[]}`),
+		"delete": deleteBuilderConfig(t, srv, pk),
 	} {
 		require.Equal(t, http.StatusNotImplemented, w.Code, "endpoint: %s", name)
 		require.Equal(t, true, strings.Contains(w.Body.String(), "gloas fork scheduled"), "endpoint: %s", name)
 	}
 }
 
-func getBuildersRecorder(s *Server, pubkey string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(http.MethodGet, "/eth/v1/validator/"+pubkey+"/builders", nil)
+func getBuilderConfigRecorder(s *Server, pubkey string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, "/eth/v1/validator/"+pubkey+"/builder_config", nil)
 	req.SetPathValue("pubkey", pubkey)
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
-	s.GetBuilders(w, req)
+	s.GetBuilderConfig(w, req)
 	return w
 }
 
-func TestServer_DeleteBuilders(t *testing.T) {
+func TestServer_DeleteBuilderConfig(t *testing.T) {
 	srv, keys := setupConfigServer(t, 1)
 	pk := hexutil.Encode(keys[0][:])
 
 	// Removing an absent configuration succeeds.
-	require.Equal(t, http.StatusNoContent, deleteBuilders(t, srv, pk).Code)
+	require.Equal(t, http.StatusNoContent, deleteBuilderConfig(t, srv, pk).Code)
 
-	require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk, `{"builders":[{"url":"https://a"}]}`).Code)
-	require.Equal(t, http.StatusNoContent, deleteBuilders(t, srv, pk).Code)
+	require.Equal(t, http.StatusAccepted, postBuilderConfig(t, srv, pk, `{"builders":[{"url":"https://a"}]}`).Code)
+	require.Equal(t, http.StatusNoContent, deleteBuilderConfig(t, srv, pk).Code)
 
 	// After delete the key follows defaults (no per-key builders).
-	_, cfg := getBuilders(t, srv, pk)
+	_, cfg := getBuilderConfig(t, srv, pk)
 	require.Equal(t, 0, len(cfg.Builders))
 }
