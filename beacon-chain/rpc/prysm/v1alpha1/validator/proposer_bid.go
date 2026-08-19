@@ -165,14 +165,12 @@ func effectiveBidValue(bid *ethpb.SignedExecutionPayloadBid, maxExecutionPayment
 }
 
 func boostedBidValue(v primitives.Gwei, factor uint64) primitives.Gwei {
-	if factor == proposer.NeutralBuilderBoostFactor {
-		return v
-	}
-	hi, lo := bits.Mul64(uint64(v)/100, factor)
-	if hi != 0 {
+	hi, lo := bits.Mul64(uint64(v), factor)
+	if hi >= 100 {
 		return primitives.Gwei(math.MaxUint64)
 	}
-	return primitives.Gwei(lo)
+	q, _ := bits.Div64(hi, lo, 100)
+	return primitives.Gwei(q)
 }
 
 func p2pExecutionPaymentCap(head state.BeaconState, builderConfig *ethpb.BuilderConfig, bid *ethpb.SignedExecutionPayloadBid) uint64 {

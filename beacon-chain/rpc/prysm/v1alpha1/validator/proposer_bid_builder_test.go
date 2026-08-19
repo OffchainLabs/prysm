@@ -171,14 +171,25 @@ func TestBestBid(t *testing.T) {
 		require.Equal(t, bidSourceBuilderAPI, src)
 	})
 
-	t.Run("boost divides before multiplying", func(t *testing.T) {
+	t.Run("boost keeps full precision below 100 gwei granularity", func(t *testing.T) {
+		// 199 * 50 / 100 = 99, beats local 75, no truncation before the multiply.
 		win := &winningBuilderBid{
 			bid:   newBid(199, 0, builderIdx),
 			entry: &ethpb.BuilderEntry{MaxExecutionPayment: 0, BuilderBoostFactor: 50},
 		}
 		got, src, _ := bestBid(nil, localWithGwei(75), nil, win, nil)
-		require.IsNil(t, got)
-		require.Equal(t, bidSourceSelfBuild, src)
+		require.NotNil(t, got)
+		require.Equal(t, bidSourceBuilderAPI, src)
+	})
+
+	t.Run("max boost prefers a sub-100-gwei bid over local", func(t *testing.T) {
+		win := &winningBuilderBid{
+			bid:   newBid(99, 0, builderIdx),
+			entry: &ethpb.BuilderEntry{MaxExecutionPayment: 0, BuilderBoostFactor: math.MaxUint64},
+		}
+		got, src, _ := bestBid(nil, localWithGwei(1), nil, win, nil)
+		require.NotNil(t, got)
+		require.Equal(t, bidSourceBuilderAPI, src)
 	})
 
 	t.Run("saturating boost does not overflow", func(t *testing.T) {
