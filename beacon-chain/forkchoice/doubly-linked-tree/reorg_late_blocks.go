@@ -46,6 +46,12 @@ func (f *ForkChoice) ShouldOverrideFCU() (override bool) {
 		return
 	}
 
+	// is_shuffling_stable, removed in Fulu by EIP-7917
+	proposalSlot := consensusHead.slot + 1
+	if slots.ToEpoch(proposalSlot) < params.BeaconConfig().FuluForkEpoch && slots.IsEpochStart(proposalSlot) {
+		return
+	}
+
 	head := f.store.choosePayloadContent(consensusHead)
 	// Only reorg blocks that arrive late
 	early, err := head.arrivedEarly(f.store.genesisTime)
@@ -110,6 +116,10 @@ func (f *ForkChoice) GetProposerHead() [32]byte {
 	// Only reorg blocks from the previous slot.
 	currentSlot := slots.CurrentSlot(f.store.genesisTime)
 	if consensusHead.slot+1 != currentSlot {
+		return consensusHead.root
+	}
+	// is_shuffling_stable, removed in Fulu by EIP-7917
+	if slots.ToEpoch(currentSlot) < params.BeaconConfig().FuluForkEpoch && slots.IsEpochStart(currentSlot) {
 		return consensusHead.root
 	}
 	// Only reorg blocks that arrive late
