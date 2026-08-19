@@ -832,6 +832,12 @@ func (b *BeaconNode) registerPOWChainService() error {
 	if b.cliCtx.Bool(flags.PartialDataColumns.Name) {
 		opts = append(opts, execution.WithPartialColumnsSupported())
 	}
+	if b.cliCtx.Bool(flags.SparseBlobpool.Name) {
+		opts = append(opts, execution.WithSparseBlobpoolEnabled())
+		if !b.cliCtx.Bool(flags.PartialDataColumns.Name) {
+			log.Warnf("--%s is enabled without --%s: incomplete data columns fetched from the execution layer cannot be disseminated as partial columns", flags.SparseBlobpool.Name, flags.PartialDataColumns.Name)
+		}
+	}
 	web3Service, err := execution.NewService(b.ctx, opts...)
 	if err != nil {
 		return errors.Wrap(err, "could not register proof-of-work chain web3Service")

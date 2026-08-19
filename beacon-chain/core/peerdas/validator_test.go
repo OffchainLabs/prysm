@@ -416,15 +416,19 @@ func TestPartialColumns_Gloas(t *testing.T) {
 	cfg.GloasForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 
-	buildCellsAndProofs := func(numBlobs int) ([][]kzg.Cell, [][]kzg.Proof) {
-		cellsPerBlob := make([][]kzg.Cell, numBlobs)
-		proofsPerBlob := make([][]kzg.Proof, numBlobs)
+	buildCellsAndProofs := func(numBlobs int) ([][]*kzg.Cell, [][]*kzg.Proof) {
+		cellsPerBlob := make([][]*kzg.Cell, numBlobs)
+		proofsPerBlob := make([][]*kzg.Proof, numBlobs)
 		for b := range numBlobs {
-			cellsPerBlob[b] = make([]kzg.Cell, numberOfColumns)
-			proofsPerBlob[b] = make([]kzg.Proof, numberOfColumns)
+			cellsPerBlob[b] = make([]*kzg.Cell, numberOfColumns)
+			proofsPerBlob[b] = make([]*kzg.Proof, numberOfColumns)
 			for i := range numberOfColumns {
-				cellsPerBlob[b][i][0] = byte(i + b*128)
-				proofsPerBlob[b][i][0] = byte(i + b*128)
+				cell := kzg.Cell{}
+				cell[0] = byte(i + b*128)
+				proof := kzg.Proof{}
+				proof[0] = byte(i + b*128)
+				cellsPerBlob[b][i] = &cell
+				proofsPerBlob[b][i] = &proof
 			}
 		}
 		return cellsPerBlob, proofsPerBlob
@@ -448,7 +452,7 @@ func TestPartialColumns_Gloas(t *testing.T) {
 			numBlobs:       1,
 			numCommitments: 2,
 			includedBits:   []uint64{0, 1},
-			wantErr:        "insufficient cells or proofs for column",
+			wantErr:        "do not match cells/proofs rows",
 		},
 	}
 

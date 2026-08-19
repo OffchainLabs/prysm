@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -17,7 +19,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -110,6 +114,8 @@ const (
 	GetBlobsV3 = "engine_getBlobsV3"
 	// HasBlobs request string for JSON-RPC.
 	HasBlobs = "engine_hasBlobs"
+	// GetBlobsV4 request string for JSON-RPC (EIP-8070 sparse blobpool).
+	GetBlobsV4 = "engine_getBlobsV4"
 	// GetClientVersionV1 is the JSON-RPC method that identifies the execution client.
 	GetClientVersionV1 = "engine_getClientVersionV1"
 	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
@@ -199,8 +205,11 @@ type ForkchoiceUpdatedResponse struct {
 }
 
 // ForkchoiceUpdated calls the engine_forkchoiceUpdatedV1 method via JSON-RPC.
+// custodyColumns is only sent on engine_forkchoiceUpdatedV4 (EIP-8070), and only when the sparse
+// blobpool is enabled and the execution client supports it; a nil/empty set omits the parameter,
+// which the execution client treats as "keep the current custody set".
 func (s *Service) ForkchoiceUpdated(
-	ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer,
+	ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer, custodyColumns map[uint64]bool,
 ) (*pb.PayloadIDBytes, []byte, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ForkchoiceUpdated")
 	defer span.End()
@@ -250,7 +259,18 @@ func (s *Service) ForkchoiceUpdated(
 		if err != nil {
 			return nil, nil, err
 		}
-		err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethodV4, state, a)
+		// An all-zero mask would contract the EL's custody set to nothing, and a non-EIP-8070 EL
+		// rejects the extra parameter, so it is omitted unless there is a set to send.
+		if s.sendCustodyColumns() && len(custodyColumns) > 0 {
+			mask := custodyColumnsBitmask(custodyColumns)
+			log.WithFields(logrus.Fields{
+				"columns": mask.Count(),
+				"eager":   mask.Count() >= fieldparams.CellsPerBlob,
+			}).Debug("Sent custody columns on forkchoiceUpdatedV4")
+			err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethodV4, state, a, hexutil.Bytes(mask))
+		} else {
+			err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethodV4, state, a)
+		}
 		if err != nil {
 			return nil, nil, handleRPCError(err)
 		}
@@ -344,7 +364,7 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 		capacity += len(gloasEngineEndpoints)
 	}
 
-	endpoints := make([]string, 0, capacity)
+	endpoints := make([]string, 0, capacity+1)
 	endpoints = append(endpoints, supportedEngineEndpoints...)
 	if params.ElectraEnabled() {
 		endpoints = append(endpoints, electraEngineEndpoints...)
@@ -354,6 +374,11 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	}
 	if params.GloasEnabled() {
 		endpoints = append(endpoints, gloasEngineEndpoints...)
+	}
+	// Advertising engine_getBlobsV4 switches an EIP-8070 EL's blobpool into cell mode, so it is
+	// only advertised when the sparse blobpool is explicitly enabled.
+	if s.advertiseGetBlobsV4() {
+		endpoints = append(endpoints, GetBlobsV4)
 	}
 
 	elSupportedEndpointsSlice := make([]string, 0, len(endpoints))
@@ -482,4 +507,51 @@ func (s *Service) HasBlobs(ctx context.Context, versionedHashes []common.Hash) (
 	}
 	hasBlobsLatency.Observe(float64(time.Since(start).Seconds()))
 	return result, nil
+}
+
+// GetBlobsV4 calls the engine_getBlobsV4 method via JSON-RPC (EIP-8070).
+// It fetches the blob cells and KZG proofs at the given cell indices for the given versioned
+// hashes. The response is dense: each blob's cells/proofs arrays are parallel to the ascending
+// set bits of indicesBitarray, with null entries for cells the EL does not have.
+func (s *Service) GetBlobsV4(ctx context.Context, versionedHashes []common.Hash, indicesBitarray []byte) ([]*pb.BlobCellsAndProofsV1, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsV4")
+	defer span.End()
+	start := time.Now()
+
+	if !s.capabilityCache.has(GetBlobsV4) {
+		return nil, errors.Errorf("%s is not supported", GetBlobsV4)
+	}
+
+	getBlobsV4RequestsTotal.Inc()
+	var result []*pb.BlobCellsAndProofsV1
+	if err := s.rpcClient.CallContext(ctx, &result, GetBlobsV4, versionedHashes, hexutil.Bytes(indicesBitarray)); err != nil {
+		return nil, handleRPCError(err)
+	}
+	getBlobsV4Latency.Observe(float64(time.Since(start).Seconds()))
+	return result, nil
+}
+
+// advertiseGetBlobsV4 reports whether engine_getBlobsV4 is advertised to the execution client in
+// engine_exchangeCapabilities. Advertising it flips an EIP-8070 EL's blobpool into cell mode.
+func (s *Service) advertiseGetBlobsV4() bool {
+	return s.sparseBlobpoolEnabled && params.GloasEnabled()
+}
+
+// sendCustodyColumns reports whether the custody columns parameter is attached to
+// engine_forkchoiceUpdatedV4 calls. The EL advertising engine_getBlobsV4 is used as the signal
+// that it implements EIP-8070; a non-EIP-8070 EL would reject the extra parameter.
+func (s *Service) sendCustodyColumns() bool {
+	return s.sparseBlobpoolEnabled && s.capabilityCache.has(GetBlobsV4)
+}
+
+// custodyColumnsBitmask encodes the custody column set as the 16-byte bitarray expected by
+// engine_forkchoiceUpdatedV4 and engine_getBlobsV4.
+func custodyColumnsBitmask(custodyColumns map[uint64]bool) bitfield.Bitvector128 {
+	mask := bitfield.NewBitvector128()
+	for col, ok := range custodyColumns {
+		if ok {
+			mask.SetBitAt(col, true)
+		}
+	}
+	return mask
 }

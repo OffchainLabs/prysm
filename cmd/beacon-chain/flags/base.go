@@ -381,6 +381,11 @@ var (
 		Name:  "partial-data-columns",
 		Usage: "Enable cell-level dissemination for PeerDAS data columns",
 	}
+	// SparseBlobpool enables the EIP-8070 sparse blobpool engine APIs.
+	SparseBlobpool = &cli.BoolFlag{
+		Name:  "sparse-blobpool",
+		Usage: "Enable the EIP-8070 sparse blobpool engine APIs (engine_getBlobsV4 and custody columns on engine_forkchoiceUpdatedV4). Requires an EIP-8070 capable execution client.",
+	}
 	// DisableGraffitiClientAppend disables appending consensus and execution client version info to the block graffiti.
 	DisableGraffitiClientAppend = &cli.BoolFlag{
 		Name:  "disable-graffiti-client-append",

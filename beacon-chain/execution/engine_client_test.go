@@ -136,7 +136,7 @@ func TestClient_IPC(t *testing.T) {
 		require.Equal(t, true, ok)
 		p, err := payloadattribute.New(&pb.PayloadAttributes{})
 		require.NoError(t, err)
-		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, &pb.ForkchoiceState{}, p)
+		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, &pb.ForkchoiceState{}, p, nil)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.Status.LatestValidHash, validHash)
 		require.DeepEqual(t, want.PayloadId, payloadID)
@@ -146,7 +146,7 @@ func TestClient_IPC(t *testing.T) {
 		require.Equal(t, true, ok)
 		p, err := payloadattribute.New(&pb.PayloadAttributesV2{})
 		require.NoError(t, err)
-		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, &pb.ForkchoiceState{}, p)
+		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, &pb.ForkchoiceState{}, p, nil)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.Status.LatestValidHash, validHash)
 		require.DeepEqual(t, want.PayloadId, payloadID)
@@ -502,7 +502,7 @@ func TestClient_HTTP(t *testing.T) {
 		srv := forkchoiceUpdateSetup(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p, nil)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.Status.LatestValidHash, validHash)
 		require.DeepEqual(t, want.PayloadId, payloadID)
@@ -526,7 +526,7 @@ func TestClient_HTTP(t *testing.T) {
 		srv := forkchoiceUpdateSetupV2(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p, nil)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.Status.LatestValidHash, validHash)
 		require.DeepEqual(t, want.PayloadId, payloadID)
@@ -549,7 +549,7 @@ func TestClient_HTTP(t *testing.T) {
 		client := forkchoiceUpdateSetup(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p, nil)
 		require.ErrorIs(t, err, ErrAcceptedSyncingPayloadStatus)
 		require.DeepEqual(t, (*pb.PayloadIDBytes)(nil), payloadID)
 		require.DeepEqual(t, []byte(nil), validHash)
@@ -573,7 +573,7 @@ func TestClient_HTTP(t *testing.T) {
 		srv := forkchoiceUpdateSetupV2(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p, nil)
 		require.ErrorIs(t, err, ErrAcceptedSyncingPayloadStatus)
 		require.DeepEqual(t, (*pb.PayloadIDBytes)(nil), payloadID)
 		require.DeepEqual(t, []byte(nil), validHash)
@@ -596,7 +596,7 @@ func TestClient_HTTP(t *testing.T) {
 		client := forkchoiceUpdateSetup(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p, nil)
 		require.ErrorIs(t, err, ErrInvalidPayloadStatus)
 		require.DeepEqual(t, (*pb.PayloadIDBytes)(nil), payloadID)
 		require.DeepEqual(t, want.Status.LatestValidHash, validHash)
@@ -619,7 +619,7 @@ func TestClient_HTTP(t *testing.T) {
 		client := forkchoiceUpdateSetup(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p, nil)
 		require.ErrorIs(t, err, ErrUnknownPayloadStatus)
 		require.DeepEqual(t, (*pb.PayloadIDBytes)(nil), payloadID)
 		require.DeepEqual(t, []byte(nil), validHash)
@@ -2523,7 +2523,7 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("GetBlobsV2 is not supported", func(t *testing.T) {
-		_, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+		_, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock), nil)
 		require.ErrorContains(t, "engine_getBlobsV2 is not supported", err)
 	})
 
@@ -2534,7 +2534,7 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+		dataColumns, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock), nil)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(dataColumns))
 	})
@@ -2547,7 +2547,7 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+		dataColumns, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock), nil)
 		require.NoError(t, err)
 		require.Equal(t, 128, len(dataColumns))
 	})
@@ -2560,7 +2560,7 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 	// 	rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 	// 	defer rpcClient.Close()
 
-	// 	_, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+	// 	_, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock), nil)
 	// 	require.ErrorContains(t, "fetch cells and proofs from execution client", err)
 	// })
 }
@@ -2747,7 +2747,7 @@ func TestConstructDataColumnSidecars_PartialColumns(t *testing.T) {
 			completeBefore := counterValue(t, getBlobsV3CompleteResponsesTotal)
 			partialBefore := counterValue(t, getBlobsV3PartialResponsesTotal)
 
-			sidecars, partials, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+			sidecars, partials, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock), nil)
 			require.NoError(t, err)
 			require.Equal(t, tt.wantSidecars, len(sidecars))
 
@@ -2785,7 +2785,7 @@ func TestConstructDataColumnSidecars_PartialColumns(t *testing.T) {
 		completeBefore := counterValue(t, getBlobsV3CompleteResponsesTotal)
 		partialBefore := counterValue(t, getBlobsV3PartialResponsesTotal)
 
-		_, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+		_, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock), nil)
 		require.ErrorContains(t, "fetch cells and proofs from execution client", err)
 
 		// The request is counted, but latency and the complete/partial response metrics are not.
@@ -3008,4 +3008,524 @@ func TestExecutionBlock_MarshalUnmarshalJSON_BlockAccessList(t *testing.T) {
 	decoded := &pb.ExecutionBlock{}
 	require.NoError(t, decoded.UnmarshalJSON(enc))
 	require.DeepEqual(t, []byte(bal), []byte(decoded.BlockAccessList))
+}
+
+// createCellAndProof returns a cell and proof both filled with the given byte pattern, as
+// engine_getBlobsV4 would serve them on the wire.
+func createCellAndProof(pattern byte) (*hexutil.Bytes, *hexutil.Bytes) {
+	cell := hexutil.Bytes(make([]byte, kzg.BytesPerCell))
+	proof := hexutil.Bytes(make([]byte, kzg.BytesPerProof))
+	for i := range cell {
+		cell[i] = pattern
+	}
+	for i := range proof {
+		proof[i] = pattern
+	}
+	return &cell, &proof
+}
+
+// mockV4Result builds an engine_getBlobsV4 response from a matrix of cell fill patterns. getBlobsV4
+// returns already-computed cells grouped by blob, so cellPatterns[i][j] is the pattern used to fill
+// blob i's cell at column requested[j] (createCellAndProof expands the single byte into a full
+// cell). A 0 pattern is a missing cell (EL doesn't have that (blob, column)), and a nil
+// cellPatterns[i] is an absent blob.
+func mockV4Result(cellPatterns [][]byte) []*pb.BlobCellsAndProofsV1 {
+	result := make([]*pb.BlobCellsAndProofsV1, len(cellPatterns))
+	for i, blobPatterns := range cellPatterns {
+		if blobPatterns == nil {
+			continue
+		}
+		cells := make([]*hexutil.Bytes, len(blobPatterns))
+		proofs := make([]*hexutil.Bytes, len(blobPatterns))
+		for j, pattern := range blobPatterns {
+			if pattern == 0 {
+				continue
+			}
+			cells[j], proofs[j] = createCellAndProof(pattern)
+		}
+		result[i] = &pb.BlobCellsAndProofsV1{BlobCells: cells, Proofs: proofs}
+	}
+	return result
+}
+
+// newV4Client wires a Service to a mock engine that answers engine_getBlobsV4 with result.
+func newV4Client(t *testing.T, result []*pb.BlobCellsAndProofsV1, partialColumnsSupported bool) (*Service, *mockEngine) {
+	cli, engine := newMockEngine(t)
+	t.Cleanup(cli.Close)
+	engine.register(GetBlobsV4, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
+		mockWriteResult(t, w, msg, result)
+	})
+	return &Service{
+		rpcClient:               cli,
+		capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV4: nil}},
+		sparseBlobpoolEnabled:   true,
+		partialColumnsSupported: partialColumnsSupported,
+	}, engine
+}
+
+// TestFetchCellsAndProofsFromExecutionV4 tests the engine_getBlobsV4 path of
+// fetchCellsAndProofsFromExecution.
+func TestFetchCellsAndProofsFromExecutionV4(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 5
+	params.OverrideBeaconConfig(cfg)
+
+	custodyColumns := map[uint64]bool{3: true, 7: true, 50: true}
+	requested := []uint64{3, 7, 50}
+
+	tests := []struct {
+		name         string
+		cellPatterns [][]byte // cellPatterns[i][j] fills blob i's cell at requested[j]; 0 = missing cell, nil row = absent blob
+		wantIncluded uint64
+	}{
+		{
+			name:         "complete response",
+			cellPatterns: [][]byte{{0x03, 0x07, 0x50}},
+			wantIncluded: 1,
+		},
+		{
+			name:         "single cell is missing",
+			cellPatterns: [][]byte{{0x03, 0x07, 0x00}},
+			wantIncluded: 1,
+		},
+		{
+			name:         "two cells are missing, in different columns",
+			cellPatterns: [][]byte{{0x13, 0x17, 0x00}, {0x23, 0x00, 0x50}},
+			wantIncluded: 2,
+		},
+		{
+			name:         "absent blob is excluded",
+			cellPatterns: [][]byte{nil},
+			wantIncluded: 0,
+		},
+		{
+			name:         "blob with no usable cells is excluded",
+			cellPatterns: [][]byte{{0x00, 0x00, 0x00}},
+			wantIncluded: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, _ := newV4Client(t, mockV4Result(tt.cellPatterns), false)
+
+			result, err := client.fetchCellsAndProofsFromExecution(
+				t.Context(), createRandomKzgCommitments(t, len(tt.cellPatterns)), custodyColumns)
+			require.NoError(t, err)
+
+			require.Equal(t, tt.wantIncluded, result.Included.Count())
+			require.Equal(t, int(tt.wantIncluded), len(result.CellsPerBlob))
+
+			// Walk the compacted result alongside the input matrix: every present blob must carry
+			// its cells at the absolute custody column, and be nil everywhere else.
+			compact := 0
+			for _, blobPatterns := range tt.cellPatterns {
+				if blobPatterns == nil {
+					continue
+				}
+				want := make(map[int]byte)
+				for j, col := range requested {
+					if blobPatterns[j] != 0 {
+						want[int(col)] = blobPatterns[j]
+					}
+				}
+				if len(want) == 0 {
+					continue // treated as an absent blob
+				}
+				cells, proofs := result.CellsPerBlob[compact], result.ProofsPerBlob[compact]
+				compact++
+				require.Equal(t, fieldparams.NumberOfColumns, len(cells))
+				require.Equal(t, fieldparams.NumberOfColumns, len(proofs))
+
+				for col := range fieldparams.NumberOfColumns {
+					if pattern, ok := want[col]; ok {
+						require.NotNil(t, cells[col])
+						require.NotNil(t, proofs[col])
+						require.Equal(t, pattern, cells[col][0])
+						require.Equal(t, pattern, proofs[col][0])
+					} else {
+						require.IsNil(t, cells[col])
+						require.IsNil(t, proofs[col])
+					}
+				}
+			}
+		})
+	}
+
+	t.Run("more blobs than commitments errors", func(t *testing.T) {
+		client, _ := newV4Client(t, mockV4Result([][]byte{{0x03, 0x07, 0x50}, {0x13, 0x17, 0x25}}), false)
+		_, err := client.fetchCellsAndProofsFromExecution(t.Context(), createRandomKzgCommitments(t, 1), custodyColumns)
+		require.ErrorContains(t, "exceeds commitment count", err)
+	})
+}
+
+// TestFetchCellsAndProofsFromExecutionV4Fallback asserts that the engine_getBlobsV4 path is only
+// taken when the sparse blobpool is enabled and a custody set was provided, falling back to
+// engine_getBlobsV3 otherwise.
+func TestFetchCellsAndProofsFromExecutionV4Fallback(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 5
+	params.OverrideBeaconConfig(cfg)
+
+	custodyColumns := map[uint64]bool{3: true}
+
+	newClient := func(t *testing.T, sparseEnabled bool) (*Service, *mockEngine) {
+		cli, engine := newMockEngine(t)
+		t.Cleanup(cli.Close)
+		engine.register(GetBlobsV3, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
+			mockWriteResult(t, w, msg, []*pb.BlobAndProofV2{nil})
+		})
+		return &Service{
+			rpcClient:               cli,
+			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV4: nil, GetBlobsV3: nil}},
+			sparseBlobpoolEnabled:   sparseEnabled,
+			partialColumnsSupported: true,
+		}, engine
+	}
+
+	t.Run("sparse blobpool disabled falls back to V3", func(t *testing.T) {
+		client, engine := newClient(t, false)
+		_, err := client.fetchCellsAndProofsFromExecution(t.Context(), createRandomKzgCommitments(t, 1), custodyColumns)
+		require.NoError(t, err)
+		require.Equal(t, 0, engine.callCount(GetBlobsV4))
+		require.Equal(t, 1, engine.callCount(GetBlobsV3))
+	})
+
+	t.Run("nil custody set falls back to V3", func(t *testing.T) {
+		client, engine := newClient(t, true)
+		_, err := client.fetchCellsAndProofsFromExecution(t.Context(), createRandomKzgCommitments(t, 1), nil)
+		require.NoError(t, err)
+		require.Equal(t, 0, engine.callCount(GetBlobsV4))
+		require.Equal(t, 1, engine.callCount(GetBlobsV3))
+	})
+
+	t.Run("sparse blobpool enabled with custody set uses V4", func(t *testing.T) {
+		client, engine := newClient(t, true)
+		engine.register(GetBlobsV4, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
+			mockWriteResult(t, w, msg, mockV4Result([][]byte{{0x03}}))
+		})
+		_, err := client.fetchCellsAndProofsFromExecution(t.Context(), createRandomKzgCommitments(t, 1), custodyColumns)
+		require.NoError(t, err)
+		require.Equal(t, 1, engine.callCount(GetBlobsV4))
+		require.Equal(t, 0, engine.callCount(GetBlobsV3))
+	})
+}
+
+// TestGetBlobsV4Metrics asserts the requests counter and latency histogram follow the house
+// pattern: requests counted before the call, latency observed only on success.
+func TestGetBlobsV4Metrics(t *testing.T) {
+	hashes := []common.Hash{{0x01}}
+	mask := custodyColumnsBitmask(map[uint64]bool{3: true})
+
+	t.Run("success observes requests and latency", func(t *testing.T) {
+		client, _ := newV4Client(t, mockV4Result([][]byte{{0x03}}), false)
+		requestsBefore := counterValue(t, getBlobsV4RequestsTotal)
+		latencyBefore := histogramSampleCount(t, getBlobsV4Latency)
+
+		_, err := client.GetBlobsV4(t.Context(), hashes, mask)
+		require.NoError(t, err)
+		require.Equal(t, float64(1), counterValue(t, getBlobsV4RequestsTotal)-requestsBefore)
+		require.Equal(t, uint64(1), histogramSampleCount(t, getBlobsV4Latency)-latencyBefore)
+	})
+
+	t.Run("error counts the request but not latency", func(t *testing.T) {
+		cli, engine := newMockEngine(t)
+		t.Cleanup(cli.Close)
+		engine.register(GetBlobsV4, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
+			msg.Error = &jsonError{Code: -32603, Message: "boom"}
+			require.NoError(t, json.NewEncoder(w).Encode(msg))
+		})
+		client := &Service{
+			rpcClient:       cli,
+			capabilityCache: &capabilityCache{capabilities: map[string]any{GetBlobsV4: nil}},
+		}
+		requestsBefore := counterValue(t, getBlobsV4RequestsTotal)
+		latencyBefore := histogramSampleCount(t, getBlobsV4Latency)
+
+		_, err := client.GetBlobsV4(t.Context(), hashes, mask)
+		require.NotNil(t, err)
+		require.Equal(t, float64(1), counterValue(t, getBlobsV4RequestsTotal)-requestsBefore)
+		require.Equal(t, uint64(0), histogramSampleCount(t, getBlobsV4Latency)-latencyBefore)
+	})
+
+	t.Run("unsupported capability errors without a request", func(t *testing.T) {
+		client := &Service{capabilityCache: &capabilityCache{}}
+		requestsBefore := counterValue(t, getBlobsV4RequestsTotal)
+		_, err := client.GetBlobsV4(t.Context(), hashes, mask)
+		require.ErrorContains(t, "engine_getBlobsV4 is not supported", err)
+		require.Equal(t, float64(0), counterValue(t, getBlobsV4RequestsTotal)-requestsBefore)
+	})
+}
+
+// TestConstructDataColumnSidecarsV4 runs ConstructDataColumnSidecars over an
+// engine_getBlobsV4 response where every blob is present but different blobs miss different columns:
+//
+//	        col3  col7  col50
+//	blob A    ok    ok   NULL
+//	blob B    ok   NULL   ok
+//
+// Column 3 is complete (promoted to a full sidecar); columns 7 and 50 are each present for only one
+// blob and, when partial columns are enabled, must come back as partials carrying only the real
+// cell - never a zero-filled one - for the blob that has it.
+func TestConstructDataColumnSidecarsV4(t *testing.T) {
+	require.NoError(t, kzg.Start())
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.CapellaForkEpoch = 1
+	cfg.DenebForkEpoch = 2
+	cfg.ElectraForkEpoch = 3
+	cfg.FuluForkEpoch = 4
+	cfg.GloasForkEpoch = 5
+	params.OverrideBeaconConfig(cfg)
+
+	custodyColumns := map[uint64]bool{3: true, 7: true, 50: true}
+	// blob A misses column 50, blob B misses column 7.
+	result := mockV4Result([][]byte{{0x13, 0x17, 0x00}, {0x23, 0x00, 0x50}})
+	cell7A := result[0].BlobCells[1]
+	cell50B := result[1].BlobCells[2]
+
+	commitments := createRandomKzgCommitments(t, 2)
+
+	fuluBlock := func(t *testing.T) peerdas.ConstructionPopulator {
+		b := util.NewBeaconBlockFulu()
+		b.Block.Slot = 4 * params.BeaconConfig().SlotsPerEpoch
+		b.Block.Body.BlobKzgCommitments = commitments
+		r, err := b.Block.HashTreeRoot()
+		require.NoError(t, err)
+		sb, err := blocks.NewSignedBeaconBlock(b)
+		require.NoError(t, err)
+		roBlock, err := blocks.NewROBlockWithRoot(sb, r)
+		require.NoError(t, err)
+		return peerdas.PopulateFromBlock(roBlock)
+	}
+	gloasBlock := func(t *testing.T) peerdas.ConstructionPopulator {
+		b := util.NewBeaconBlockGloas()
+		b.Block.Slot = 5 * params.BeaconConfig().SlotsPerEpoch
+		b.Block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments = commitments
+		sb, err := blocks.NewSignedBeaconBlock(b)
+		require.NoError(t, err)
+		roBlock, err := blocks.NewROBlock(sb)
+		require.NoError(t, err)
+		return peerdas.PopulateFromBid(roBlock)
+	}
+
+	tests := []struct {
+		name                    string
+		populator               func(t *testing.T) peerdas.ConstructionPopulator
+		isGloas                 bool
+		partialColumnsSupported bool
+		wantSidecars            int // only complete columns are promoted; column 3 is the only one
+		wantPartials            int // a partial per column when enabled, none when disabled
+	}{
+		{
+			name:                    "fulu partial columns enabled emits incomplete columns as real-cell-only partials",
+			populator:               fuluBlock,
+			partialColumnsSupported: true,
+			wantSidecars:            1,
+			wantPartials:            fieldparams.NumberOfColumns,
+		},
+		{
+			name:                    "fulu partial columns disabled emits only complete columns",
+			populator:               fuluBlock,
+			partialColumnsSupported: false,
+			wantSidecars:            1,
+			wantPartials:            0,
+		},
+		{
+			name:                    "gloas partial columns enabled emits gloas containers",
+			populator:               gloasBlock,
+			isGloas:                 true,
+			partialColumnsSupported: true,
+			wantSidecars:            1,
+			wantPartials:            fieldparams.NumberOfColumns,
+		},
+		{
+			name:                    "gloas partial columns disabled emits only complete columns",
+			populator:               gloasBlock,
+			isGloas:                 true,
+			partialColumnsSupported: false,
+			wantSidecars:            1,
+			wantPartials:            0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, _ := newV4Client(t, result, tt.partialColumnsSupported)
+
+			sidecars, partials, err := client.ConstructDataColumnSidecars(context.Background(), tt.populator(t), custodyColumns)
+			require.NoError(t, err)
+			require.Equal(t, tt.wantSidecars, len(sidecars))
+			require.Equal(t, tt.wantPartials, len(partials))
+
+			// The promoted sidecar is the complete column 3, in the right fork's container.
+			require.Equal(t, uint64(3), sidecars[0].Index())
+			require.Equal(t, tt.isGloas, sidecars[0].IsGloas())
+
+			if !tt.partialColumnsSupported {
+				return
+			}
+
+			for i := range partials {
+				require.Equal(t, tt.isGloas, partials[i].IsGloas())
+			}
+			// Gloas partials must carry the bid commitments so they can be verified and promoted.
+			if tt.isGloas {
+				got, err := partials[3].KzgCommitments()
+				require.NoError(t, err)
+				require.DeepEqual(t, commitments, got)
+			}
+
+			// When partials are emitted, each incomplete column must carry only the real cell for
+			// the blob that has it - never a zero-filled one for the blob that doesn't.
+			require.Equal(t, true, partials[3].IsComplete())
+			require.Equal(t, uint64(2), partials[3].Included.Count())
+
+			// Column 7: only blob A (index 0) has it; blob B is left unset.
+			require.Equal(t, false, partials[7].IsComplete())
+			require.Equal(t, true, partials[7].Included.BitAt(0))
+			require.Equal(t, false, partials[7].Included.BitAt(1))
+			require.DeepEqual(t, []byte(*cell7A), partials[7].Column()[0])
+			require.Equal(t, 0, len(partials[7].Column()[1]))
+
+			// Column 50: only blob B (index 1) has it; blob A is left unset.
+			require.Equal(t, false, partials[50].IsComplete())
+			require.Equal(t, false, partials[50].Included.BitAt(0))
+			require.Equal(t, true, partials[50].Included.BitAt(1))
+			require.Equal(t, 0, len(partials[50].Column()[0]))
+			require.DeepEqual(t, []byte(*cell50B), partials[50].Column()[1])
+		})
+	}
+}
+
+// TestForkchoiceUpdatedV4CustodyParam asserts the wire shape of engine_forkchoiceUpdatedV4: the
+// custody columns parameter is attached only when the sparse blobpool is enabled, the EL supports
+// EIP-8070 (advertises engine_getBlobsV4), and there is a non-empty set to send; otherwise the
+// parameter is omitted entirely (equivalent to null) so custody is never contracted by accident.
+func TestForkchoiceUpdatedV4CustodyParam(t *testing.T) {
+	newClient := func(t *testing.T, sparseEnabled, elSupportsV4 bool) (*Service, *mockEngine) {
+		cli, engine := newMockEngine(t)
+		t.Cleanup(cli.Close)
+		engine.register(ForkchoiceUpdatedMethodV4, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
+			mockWriteResult(t, w, msg, &ForkchoiceUpdatedResponse{
+				Status:    &pb.PayloadStatus{Status: pb.PayloadStatus_VALID, LatestValidHash: bytesutil.PadTo([]byte("head"), 32)},
+				PayloadId: &pb.PayloadIDBytes{0x01},
+			})
+		})
+		capabilities := map[string]any{}
+		if elSupportsV4 {
+			capabilities[GetBlobsV4] = nil
+		}
+		return &Service{
+			rpcClient:             cli,
+			capabilityCache:       &capabilityCache{capabilities: capabilities},
+			sparseBlobpoolEnabled: sparseEnabled,
+		}, engine
+	}
+
+	custody := map[uint64]bool{0: true, 7: true, 127: true}
+	wantMask := make([]byte, 16)
+	wantMask[0] = 0x81
+	wantMask[15] = 0x80
+
+	tests := []struct {
+		name         string
+		sparse       bool
+		elSupportsV4 bool
+		custody      map[uint64]bool
+		wantParams   int
+	}{
+		{name: "custody sent when enabled and supported", sparse: true, elSupportsV4: true, custody: custody, wantParams: 3},
+		{name: "nil custody omits the parameter", sparse: true, elSupportsV4: true, custody: nil, wantParams: 2},
+		{name: "empty custody omits the parameter", sparse: true, elSupportsV4: true, custody: map[uint64]bool{}, wantParams: 2},
+		{name: "sparse blobpool disabled omits the parameter", sparse: false, elSupportsV4: true, custody: custody, wantParams: 2},
+		{name: "EL without EIP-8070 support omits the parameter", sparse: true, elSupportsV4: false, custody: custody, wantParams: 2},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, engine := newClient(t, tt.sparse, tt.elSupportsV4)
+
+			attrs := payloadattribute.EmptyWithVersion(version.Gloas)
+			_, _, err := client.ForkchoiceUpdated(t.Context(), &pb.ForkchoiceState{}, attrs, tt.custody)
+			require.NoError(t, err)
+
+			calls := engine.calls[ForkchoiceUpdatedMethodV4]
+			require.Equal(t, 1, len(calls))
+			var rawParams []json.RawMessage
+			require.NoError(t, json.Unmarshal(calls[0].Params, &rawParams))
+			require.Equal(t, tt.wantParams, len(rawParams))
+
+			if tt.wantParams == 3 {
+				var mask hexutil.Bytes
+				require.NoError(t, json.Unmarshal(rawParams[2], &mask))
+				require.DeepEqual(t, wantMask, []byte(mask))
+			}
+		})
+	}
+}
+
+// TestExchangeCapabilitiesGetBlobsV4Gating asserts engine_getBlobsV4 is only advertised to the EL
+// when the sparse blobpool is enabled and Gloas is scheduled: advertising it switches an EIP-8070
+// EL's blobpool into cell mode, so it must be strictly opt-in.
+func TestExchangeCapabilitiesGetBlobsV4Gating(t *testing.T) {
+	tests := []struct {
+		name          string
+		gloasEpoch    primitives.Epoch
+		sparseEnabled bool
+		want          bool
+	}{
+		{name: "advertised when enabled and gloas scheduled", sparseEnabled: true, gloasEpoch: 5, want: true},
+		{name: "not advertised when disabled", sparseEnabled: false, gloasEpoch: 5, want: false},
+		{name: "not advertised when gloas is not scheduled", sparseEnabled: true, gloasEpoch: params.BeaconConfig().FarFutureEpoch, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			cfg := params.BeaconConfig().Copy()
+			cfg.GloasForkEpoch = tt.gloasEpoch
+			params.OverrideBeaconConfig(cfg)
+
+			cli, engine := newMockEngine(t)
+			t.Cleanup(cli.Close)
+			engine.register(ExchangeCapabilities, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
+				mockWriteResult(t, w, msg, []string{})
+			})
+			client := &Service{rpcClient: cli, sparseBlobpoolEnabled: tt.sparseEnabled}
+
+			_, err := client.ExchangeCapabilities(t.Context())
+			require.NoError(t, err)
+
+			calls := engine.calls[ExchangeCapabilities]
+			require.Equal(t, 1, len(calls))
+			var rawParams []json.RawMessage
+			require.NoError(t, json.Unmarshal(calls[0].Params, &rawParams))
+			require.Equal(t, 1, len(rawParams))
+			var requested []string
+			require.NoError(t, json.Unmarshal(rawParams[0], &requested))
+
+			found := false
+			for _, method := range requested {
+				if method == GetBlobsV4 {
+					found = true
+				}
+			}
+			require.Equal(t, tt.want, found)
+		})
+	}
+}
+
+func TestCustodyColumnsBitmask(t *testing.T) {
+	mask := custodyColumnsBitmask(map[uint64]bool{0: true, 7: true, 8: true, 127: true})
+	require.Equal(t, 16, len(mask))
+	require.Equal(t, byte(0x81), mask[0])  // col 0, 7
+	require.Equal(t, byte(0x01), mask[1])  // col 8
+	require.Equal(t, byte(0x80), mask[15]) // col 127
+
+	// out-of-range columns and false values are ignored
+	require.DeepEqual(t, make([]byte, 16), []byte(custodyColumnsBitmask(map[uint64]bool{128: true, 200: true, 3: false})))
 }

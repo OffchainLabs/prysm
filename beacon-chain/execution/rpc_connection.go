@@ -92,6 +92,14 @@ func (s *Service) pollConnectionStatus(ctx context.Context) {
 				log.WithField("method", HasBlobs).Info("Execution client supports blob availability checks, missing blobs will be requested via partial columns")
 			}
 
+			if s.sparseBlobpoolEnabled {
+				if s.capabilityCache.has(GetBlobsV4) {
+					log.WithField("method", GetBlobsV4).Info("Execution client supports the EIP-8070 sparse blobpool, blob cells will be fetched via getBlobsV4")
+				} else {
+					log.Warn("Execution client does not support engine_getBlobsV4, but the sparse blobpool is enabled")
+				}
+			}
+
 			return
 		case <-s.ctx.Done():
 			log.Debug("Received cancelled context,closing existing powchain service")
