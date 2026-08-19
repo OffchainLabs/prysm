@@ -13,7 +13,7 @@ import (
 
 // ProcessBuilderPendingPayments processes the builder pending payments from the previous epoch.
 //
-//	<spec fn="process_builder_pending_payments" fork="gloas" hash="10da48dd">
+//	<spec fn="process_builder_pending_payments" fork="gloas" hash="dc889dd0">
 //	def process_builder_pending_payments(state: BeaconState) -> None:
 //	    """
 //	    Processes the builder pending payments from the previous epoch.
@@ -25,7 +25,7 @@ import (
 //
 //	    old_payments = state.builder_pending_payments[SLOTS_PER_EPOCH:]
 //	    new_payments = [BuilderPendingPayment() for _ in range(SLOTS_PER_EPOCH)]
-//	    state.builder_pending_payments = old_payments + new_payments
+//	    state.builder_pending_payments = BuilderPendingPayments(old_payments + new_payments)
 //	</spec>
 func ProcessBuilderPendingPayments(ctx context.Context, state state.BeaconState) error {
 	quorum, err := builderQuorumThreshold(ctx, state)
