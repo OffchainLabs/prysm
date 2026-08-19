@@ -1,4 +1,4 @@
-version: v1.7.0-alpha.13
+version: v1.7.0-alpha.14
 style: full
 
 specrefs:
@@ -81,10 +81,11 @@ exceptions:
     - HEZE_FORK_EPOCH#heze
     - HEZE_FORK_VERSION#heze
     - INCLUSION_LIST_DUE_BPS#heze
-    - MAX_BYTES_PER_INCLUSION_LIST#heze
+    - MAX_TRANSACTIONS_BYTES_PER_INCLUSION_LIST#heze
     - MAX_REQUEST_INCLUSION_LIST#heze
     - MIN_SLOTS_FOR_INCLUSION_LISTS_REQUESTS#heze
 
+    - GAS_LIMIT_SCHEDULE#gloas
   ssz_objects:
     # phase0
     - Eth1Block#phase0
@@ -134,6 +135,128 @@ exceptions:
     - BuilderDepositRequest#gloas
     - BuilderExitRequest#gloas
     - ExecutionRequests#gloas
+    - AggregationBits#electra
+    - AggregationBits#gloas
+    - AggregationBits#phase0
+    - Attestations#electra
+    - Attestations#gloas
+    - Attestations#phase0
+    - AttesterSlashings#electra
+    - AttesterSlashings#gloas
+    - AttesterSlashings#phase0
+    - AttestingIndices#electra
+    - AttestingIndices#gloas
+    - AttestingIndices#phase0
+    - Attnets#phase0
+    - BLSToExecutionChanges#capella
+    - BLSToExecutionChanges#gloas
+    - Balances#gloas
+    - Balances#phase0
+    - BeaconBlockRoots#deneb
+    - BeaconBlockRoots#phase0
+    - Blob#deneb
+    - BlobKZGCommitments#deneb
+    - BlobKZGCommitments#gloas
+    - Blobs#deneb
+    - BlockAccessList#gloas
+    - BlockRoots#phase0
+    - BuilderDepositRequests#gloas
+    - BuilderExitRequests#gloas
+    - BuilderPendingPayments#gloas
+    - BuilderPendingWithdrawals#gloas
+    - Builders#gloas
+    - Cell#fulu
+    - CellKZGProofs#fulu
+    - Cells#fulu
+    - CellsBitList#fulu
+    - CellsBitList#gloas
+    - CommitteeBits#electra
+    - ConsolidationRequests#electra
+    - ConsolidationRequests#gloas
+    - CurrentSyncCommitteeBranch#altair
+    - CurrentSyncCommitteeBranch#electra
+    - CurrentSyncCommitteeBranch#gloas
+    - CustodyColumnBits#gloas
+    - DataColumn#fulu
+    - DataColumn#gloas
+    - DataColumnIndices#fulu
+    - DataColumnsByRootIdentifiers#fulu
+    - DepositDataList#phase0
+    - DepositProof#phase0
+    - DepositRequests#electra
+    - DepositRequests#gloas
+    - Deposits#gloas
+    - Deposits#phase0
+    - EpochParticipation#altair
+    - EpochParticipation#gloas
+    - ErrorMessage#phase0
+    - Eth1DataVotes#phase0
+    - ExecutionBranch#capella
+    - ExecutionBranch#gloas
+    - ExecutionPayloadAvailability#gloas
+    - ExecutionPayloadEnvelopeRoots#gloas
+    - ExtraData#bellatrix
+    - FinalityBranch#altair
+    - FinalityBranch#electra
+    - FinalityBranch#gloas
+    - HistoricalRoots#phase0
+    - HistoricalSummaries#capella
+    - InactivityScores#altair
+    - InactivityScores#gloas
+    - InclusionListBits#heze
+    - InclusionListCommittee#heze
+    - JustificationBits#phase0
+    - KZGCommitmentInclusionProof#deneb
+    - KZGCommitmentsInclusionProof#fulu
+    - KZGProofs#deneb
+    - KZGProofs#gloas
+    - LightClientUpdates#altair
+    - LogsBloom#bellatrix
+    - NextSyncCommitteeBranch#altair
+    - NextSyncCommitteeBranch#electra
+    - NextSyncCommitteeBranch#gloas
+    - OptionalPartialDataColumnHeader#fulu
+    - PTC#gloas
+    - PTCAttestingIndices#gloas
+    - PTCBits#gloas
+    - PTCWindow#gloas
+    - PartialDataColumnPartsMetadata#gloas
+    - PayloadAttestations#gloas
+    - PendingAttestations#phase0
+    - PendingConsolidations#electra
+    - PendingConsolidations#gloas
+    - PendingDeposits#electra
+    - PendingDeposits#gloas
+    - PendingPartialWithdrawals#electra
+    - PendingPartialWithdrawals#gloas
+    - Proofs#fulu
+    - ProposerIndices#fulu
+    - ProposerLookahead#fulu
+    - ProposerSlashings#gloas
+    - ProposerSlashings#phase0
+    - RandaoMixes#phase0
+    - SignedBeaconBlocks#deneb
+    - SignedBeaconBlocks#phase0
+    - SignedExecutionPayloadEnvelopes#gloas
+    - SignedInclusionLists#heze
+    - Slashings#phase0
+    - StateRoots#phase0
+    - SyncCommitteeBits#altair
+    - SyncCommitteePubkeys#altair
+    - SyncSubcommitteeBits#altair
+    - Syncnets#altair
+    - Transaction#bellatrix
+    - Transaction#gloas
+    - Transactions#bellatrix
+    - Transactions#gloas
+    - Validators#gloas
+    - Validators#phase0
+    - VoluntaryExits#gloas
+    - VoluntaryExits#phase0
+    - WithdrawalRequests#electra
+    - WithdrawalRequests#gloas
+    - Withdrawals#capella
+    - Withdrawals#gloas
   dataclasses:
     # phase0
     - FastConfirmationStore#phase0
@@ -171,6 +294,7 @@ exceptions:
     - PayloadAttributes#heze
     - Store#heze
 
+    - InclusionListEntry#heze
   functions:
     # phase0
     - adjust_committee_weight_estimate_to_ensure_safety#phase0
@@ -214,7 +338,6 @@ exceptions:
     - compute_attestation_subnet_prefix_bits#phase0
     - compute_min_epochs_for_block_requests#phase0
     - compute_time_at_slot_ms#phase0
-    - is_not_from_future_slot#phase0
     - is_within_slot_range#phase0
     - update_proposer_boost_root#phase0
     - is_proposer_equivocation#phase0
@@ -486,7 +609,6 @@ exceptions:
     - is_head_late#gloas
     - is_head_weak#gloas
     - is_parent_strong#gloas
-    - is_valid_proposal_slot#gloas
     - onboard_builders_from_pending_deposits#gloas
     - process_deposit_request#gloas
     - record_block_timeliness#gloas
@@ -544,7 +666,28 @@ exceptions:
     - process_builder_deposit_request#gloas
     - process_builder_exit_request#gloas
     # phase0
-    - is_not_epoch_boundary#phase0
+    - compute_shuffling_dependent_slot#phase0
+    - get_custody_column_bits#gloas
+    - get_proposer_head#fulu
+    - get_scheduled_gas_limit#gloas
+    - get_set_bit_count#phase0
+    - get_signed_inclusion_list#heze
+    - is_current_or_next_slot#gloas
+    - is_future_slot#phase0
+    - is_past_slot#gloas
+    - is_shuffling_stable#phase0
+    - validate_beacon_aggregate_and_proof_gossip#gloas
+    - validate_beacon_attestation_gossip#gloas
+    - validate_beacon_block_gossip#gloas
+    - validate_data_column_sidecar_gossip#gloas
+    - validate_execution_payload_bid_gossip#gloas
+    - validate_execution_payload_envelope_gossip#gloas
+    - validate_partial_data_column_sidecar_gossip#gloas
+    - validate_payload_attestation_message_gossip#gloas
+    - validate_proposer_preferences_gossip#gloas
+    - verify_attestation_payload_status#gloas
+    - verify_block_body_operation_limits#gloas
+    - verify_execution_requests_limits#gloas
   presets:
     # gloas
     - MAX_ATTESTER_SLASHING_SIZE#gloas

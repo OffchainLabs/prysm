@@ -13,11 +13,11 @@
       search: ^message BlobsBundle\s*\{
       regex: true
   spec: |
-    <spec dataclass="BlobsBundle" fork="deneb" hash="8baecab6">
+    <spec dataclass="BlobsBundle" fork="deneb" hash="a2e08deb">
     class BlobsBundle:
-        commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
-        proofs: List[KZGProof, MAX_BLOB_COMMITMENTS_PER_BLOCK]
-        blobs: List[Blob, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        commitments: BlobKZGCommitments
+        proofs: KZGProofs
+        blobs: Blobs
     </spec>
 
 - name: BlobsBundle#fulu
@@ -26,12 +26,12 @@
       search: ^message BlobsBundleV2
       regex: true
   spec: |
-    <spec dataclass="BlobsBundle" fork="fulu" hash="322088f0">
+    <spec dataclass="BlobsBundle" fork="fulu" hash="badea909">
     class BlobsBundle:
-        commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        commitments: BlobKZGCommitments
         # [Modified in Fulu:EIP7594]
-        proofs: List[KZGProof, FIELD_ELEMENTS_PER_EXT_BLOB * MAX_BLOB_COMMITMENTS_PER_BLOCK]
-        blobs: List[Blob, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        proofs: CellKZGProofs
+        blobs: Blobs
     </spec>
 
 - name: ExpectedWithdrawals#capella
@@ -182,18 +182,23 @@
         execution_requests: Sequence[bytes]
     </spec>
 
+- name: InclusionListEntry#heze
+  sources: []
+  spec: |
+    <spec dataclass="InclusionListEntry" fork="heze" hash="c2557214">
+    @dataclass(eq=True, frozen=True)
+    class InclusionListEntry:
+        signed_inclusion_list: SignedInclusionList
+        timely: Boolean
+    </spec>
+
 - name: InclusionListStore#heze
   sources: []
   spec: |
-    <spec dataclass="InclusionListStore" fork="heze" hash="342cd889">
+    <spec dataclass="InclusionListStore" fork="heze" hash="325155c8">
     class InclusionListStore:
-        inclusion_lists: DefaultDict[Root, Dict[Root, SignedInclusionList]] = field(
-            default_factory=lambda: defaultdict(dict)
-        )
-        inclusion_list_timeliness: Dict[Root, Boolean] = field(default_factory=dict)
-        equivocators: DefaultDict[Root, Set[ValidatorIndex]] = field(
-            default_factory=lambda: defaultdict(set)
-        )
+        inclusion_lists: DefaultDict[Tuple[Slot, Root], Dict[ValidatorIndex, InclusionListEntry]]
+        equivocators: DefaultDict[Tuple[Slot, Root], Set[ValidatorIndex]]
     </spec>
 
 - name: LatestMessage#phase0
@@ -292,12 +297,12 @@
 - name: OptimisticStore#bellatrix
   sources: []
   spec: |
-    <spec dataclass="OptimisticStore" fork="bellatrix" hash="a2b2182c">
-    class OptimisticStore(object):
+    <spec dataclass="OptimisticStore" fork="bellatrix" hash="f2e97822">
+    class OptimisticStore:
         optimistic_roots: Set[Root]
         head_block_root: Root
-        blocks: Dict[Root, BeaconBlock] = field(default_factory=dict)
-        block_states: Dict[Root, BeaconState] = field(default_factory=dict)
+        blocks: Dict[Root, BeaconBlock]
+        block_states: Dict[Root, BeaconState]
     </spec>
 
 - name: PayloadAttributes#bellatrix
@@ -379,31 +384,31 @@
 - name: Seen#phase0
   sources: []
   spec: |
-    <spec dataclass="Seen" fork="phase0" hash="1e430a37">
+    <spec dataclass="Seen" fork="phase0" hash="e0a9df94">
     class Seen:
-        proposer_slots: Set[Tuple[ValidatorIndex, Slot]]
-        aggregator_epochs: Set[Tuple[ValidatorIndex, Epoch]]
+        proposer_slots: Set[Tuple[Slot, ValidatorIndex]]
+        aggregator_epochs: Set[Tuple[Epoch, ValidatorIndex]]
         aggregate_data_roots: Dict[Root, Set[Tuple[Boolean, ...]]]
         voluntary_exit_indices: Set[ValidatorIndex]
         proposer_slashing_indices: Set[ValidatorIndex]
         attester_slashing_indices: Set[ValidatorIndex]
-        attestation_validator_epochs: Set[Tuple[ValidatorIndex, Epoch]]
+        attestation_validator_epochs: Set[Tuple[Epoch, ValidatorIndex]]
     </spec>
 
 - name: Seen#altair
   sources: []
   spec: |
-    <spec dataclass="Seen" fork="altair" hash="e87cf7f7">
+    <spec dataclass="Seen" fork="altair" hash="c53317b3">
     class Seen:
-        proposer_slots: Set[Tuple[ValidatorIndex, Slot]]
-        aggregator_epochs: Set[Tuple[ValidatorIndex, Epoch]]
+        proposer_slots: Set[Tuple[Slot, ValidatorIndex]]
+        aggregator_epochs: Set[Tuple[Epoch, ValidatorIndex]]
         aggregate_data_roots: Dict[Root, Set[Tuple[Boolean, ...]]]
         voluntary_exit_indices: Set[ValidatorIndex]
         proposer_slashing_indices: Set[ValidatorIndex]
         attester_slashing_indices: Set[ValidatorIndex]
-        attestation_validator_epochs: Set[Tuple[ValidatorIndex, Epoch]]
+        attestation_validator_epochs: Set[Tuple[Epoch, ValidatorIndex]]
         # [New in Altair]
-        sync_contribution_aggregator_slots: Set[Tuple[ValidatorIndex, Slot, Uint64]]
+        sync_contribution_aggregator_slots: Set[Tuple[Slot, ValidatorIndex, Uint64]]
         # [New in Altair]
         sync_contribution_data: Dict[Tuple[Slot, Root, Uint64], Set[Tuple[Boolean, ...]]]
         # [New in Altair]
@@ -413,16 +418,16 @@
 - name: Seen#capella
   sources: []
   spec: |
-    <spec dataclass="Seen" fork="capella" hash="20ad1ead">
+    <spec dataclass="Seen" fork="capella" hash="1a759ee4">
     class Seen:
-        proposer_slots: Set[Tuple[ValidatorIndex, Slot]]
-        aggregator_epochs: Set[Tuple[ValidatorIndex, Epoch]]
+        proposer_slots: Set[Tuple[Slot, ValidatorIndex]]
+        aggregator_epochs: Set[Tuple[Epoch, ValidatorIndex]]
         aggregate_data_roots: Dict[Root, Set[Tuple[Boolean, ...]]]
         voluntary_exit_indices: Set[ValidatorIndex]
         proposer_slashing_indices: Set[ValidatorIndex]
         attester_slashing_indices: Set[ValidatorIndex]
-        attestation_validator_epochs: Set[Tuple[ValidatorIndex, Epoch]]
-        sync_contribution_aggregator_slots: Set[Tuple[ValidatorIndex, Slot, Uint64]]
+        attestation_validator_epochs: Set[Tuple[Epoch, ValidatorIndex]]
+        sync_contribution_aggregator_slots: Set[Tuple[Slot, ValidatorIndex, Uint64]]
         sync_contribution_data: Dict[Tuple[Slot, Root, Uint64], Set[Tuple[Boolean, ...]]]
         sync_message_validator_slots: Set[Tuple[Slot, ValidatorIndex, Uint64]]
         # [New in Capella]
@@ -432,16 +437,16 @@
 - name: Seen#deneb
   sources: []
   spec: |
-    <spec dataclass="Seen" fork="deneb" hash="23e6b8c9">
+    <spec dataclass="Seen" fork="deneb" hash="d064fb97">
     class Seen:
-        proposer_slots: Set[Tuple[ValidatorIndex, Slot]]
-        aggregator_epochs: Set[Tuple[ValidatorIndex, Epoch]]
+        proposer_slots: Set[Tuple[Slot, ValidatorIndex]]
+        aggregator_epochs: Set[Tuple[Epoch, ValidatorIndex]]
         aggregate_data_roots: Dict[Root, Set[Tuple[Boolean, ...]]]
         voluntary_exit_indices: Set[ValidatorIndex]
         proposer_slashing_indices: Set[ValidatorIndex]
         attester_slashing_indices: Set[ValidatorIndex]
-        attestation_validator_epochs: Set[Tuple[ValidatorIndex, Epoch]]
-        sync_contribution_aggregator_slots: Set[Tuple[ValidatorIndex, Slot, Uint64]]
+        attestation_validator_epochs: Set[Tuple[Epoch, ValidatorIndex]]
+        sync_contribution_aggregator_slots: Set[Tuple[Slot, ValidatorIndex, Uint64]]
         sync_contribution_data: Dict[Tuple[Slot, Root, Uint64], Set[Tuple[Boolean, ...]]]
         sync_message_validator_slots: Set[Tuple[Slot, ValidatorIndex, Uint64]]
         bls_to_execution_change_indices: Set[ValidatorIndex]
@@ -452,17 +457,17 @@
 - name: Seen#electra
   sources: []
   spec: |
-    <spec dataclass="Seen" fork="electra" hash="d07ba019">
+    <spec dataclass="Seen" fork="electra" hash="0a2a6112">
     class Seen:
-        proposer_slots: Set[Tuple[ValidatorIndex, Slot]]
-        aggregator_epochs: Set[Tuple[ValidatorIndex, Epoch]]
+        proposer_slots: Set[Tuple[Slot, ValidatorIndex]]
+        aggregator_epochs: Set[Tuple[Epoch, ValidatorIndex]]
         # [Modified in Electra:EIP7549]
         aggregate_data_roots: Dict[Tuple[Root, CommitteeIndex], Set[Tuple[Boolean, ...]]]
         voluntary_exit_indices: Set[ValidatorIndex]
         proposer_slashing_indices: Set[ValidatorIndex]
         attester_slashing_indices: Set[ValidatorIndex]
-        attestation_validator_epochs: Set[Tuple[ValidatorIndex, Epoch]]
-        sync_contribution_aggregator_slots: Set[Tuple[ValidatorIndex, Slot, Uint64]]
+        attestation_validator_epochs: Set[Tuple[Epoch, ValidatorIndex]]
+        sync_contribution_aggregator_slots: Set[Tuple[Slot, ValidatorIndex, Uint64]]
         sync_contribution_data: Dict[Tuple[Slot, Root, Uint64], Set[Tuple[Boolean, ...]]]
         sync_message_validator_slots: Set[Tuple[Slot, ValidatorIndex, Uint64]]
         bls_to_execution_change_indices: Set[ValidatorIndex]
@@ -472,16 +477,16 @@
 - name: Seen#fulu
   sources: []
   spec: |
-    <spec dataclass="Seen" fork="fulu" hash="0c9400e0">
+    <spec dataclass="Seen" fork="fulu" hash="e258b6b8">
     class Seen:
-        proposer_slots: Set[Tuple[ValidatorIndex, Slot]]
-        aggregator_epochs: Set[Tuple[ValidatorIndex, Epoch]]
+        proposer_slots: Set[Tuple[Slot, ValidatorIndex]]
+        aggregator_epochs: Set[Tuple[Epoch, ValidatorIndex]]
         aggregate_data_roots: Dict[Tuple[Root, CommitteeIndex], Set[Tuple[Boolean, ...]]]
         voluntary_exit_indices: Set[ValidatorIndex]
         proposer_slashing_indices: Set[ValidatorIndex]
         attester_slashing_indices: Set[ValidatorIndex]
-        attestation_validator_epochs: Set[Tuple[ValidatorIndex, Epoch]]
-        sync_contribution_aggregator_slots: Set[Tuple[ValidatorIndex, Slot, Uint64]]
+        attestation_validator_epochs: Set[Tuple[Epoch, ValidatorIndex]]
+        sync_contribution_aggregator_slots: Set[Tuple[Slot, ValidatorIndex, Uint64]]
         sync_contribution_data: Dict[Tuple[Slot, Root, Uint64], Set[Tuple[Boolean, ...]]]
         sync_message_validator_slots: Set[Tuple[Slot, ValidatorIndex, Uint64]]
         bls_to_execution_change_indices: Set[ValidatorIndex]
@@ -496,26 +501,41 @@
 - name: Seen#gloas
   sources: []
   spec: |
-    <spec dataclass="Seen" fork="gloas" hash="e2e5bf67">
+    <spec dataclass="Seen" fork="gloas" hash="7f193af0">
     class Seen:
-        proposer_slots: Set[Tuple[ValidatorIndex, Slot]]
-        aggregator_epochs: Set[Tuple[ValidatorIndex, Epoch]]
+        proposer_slots: Set[Tuple[Slot, ValidatorIndex]]
+        aggregator_epochs: Set[Tuple[Epoch, ValidatorIndex]]
         aggregate_data_roots: Dict[Tuple[Root, CommitteeIndex], Set[Tuple[Boolean, ...]]]
         voluntary_exit_indices: Set[ValidatorIndex]
         proposer_slashing_indices: Set[ValidatorIndex]
         attester_slashing_indices: Set[ValidatorIndex]
-        attestation_validator_epochs: Set[Tuple[ValidatorIndex, Epoch]]
-        sync_contribution_aggregator_slots: Set[Tuple[ValidatorIndex, Slot, Uint64]]
+        attestation_validator_epochs: Set[Tuple[Epoch, ValidatorIndex]]
+        sync_contribution_aggregator_slots: Set[Tuple[Slot, ValidatorIndex, Uint64]]
         sync_contribution_data: Dict[Tuple[Slot, Root, Uint64], Set[Tuple[Boolean, ...]]]
         sync_message_validator_slots: Set[Tuple[Slot, ValidatorIndex, Uint64]]
         bls_to_execution_change_indices: Set[ValidatorIndex]
-        data_column_sidecar_tuples: Set[Tuple[Slot, ValidatorIndex, ColumnIndex]]
+        # [Modified in Gloas:EIP7732]
+        data_column_sidecar_tuples: Set[Tuple[Root, ColumnIndex]]
+        # [Modified in Gloas:EIP7732]
+        # Removed `partial_data_column_headers`
+        # [New in Gloas:EIP7732]
+        execution_payloads: Dict[Hash32, ExecutionPayload]
+        # [New in Gloas:EIP7732]
+        execution_payload_envelopes: Set[Tuple[Root, BuilderIndex]]
+        # [New in Gloas:EIP7732]
+        payload_attestation_validators: Set[Tuple[Slot, ValidatorIndex]]
+        # [New in Gloas:EIP7732]
+        execution_payload_bids: Set[Tuple[Slot, Hash32, Root, BuilderIndex]]
+        # [New in Gloas:EIP7732]
+        best_execution_payload_bid: Dict[Tuple[Slot, Hash32, Root], Gwei]
+        # [New in Gloas:EIP7732]
+        proposer_preferences: Dict[Tuple[Root, Slot], ProposerPreferences]
     </spec>
 
 - name: Store#phase0
   sources: []
   spec: |
-    <spec dataclass="Store" fork="phase0" hash="7fed6bfc">
+    <spec dataclass="Store" fork="phase0" hash="cb9919a9">
     class Store:
         time: Uint64
         genesis_time: Uint64
@@ -525,18 +545,18 @@
         unrealized_finalized_checkpoint: Checkpoint
         proposer_boost_root: Root
         equivocating_indices: Set[ValidatorIndex]
-        blocks: Dict[Root, BeaconBlock] = field(default_factory=dict)
-        block_states: Dict[Root, BeaconState] = field(default_factory=dict)
-        block_timeliness: Dict[Root, Boolean] = field(default_factory=dict)
-        checkpoint_states: Dict[Checkpoint, BeaconState] = field(default_factory=dict)
-        latest_messages: Dict[ValidatorIndex, LatestMessage] = field(default_factory=dict)
-        unrealized_justifications: Dict[Root, Checkpoint] = field(default_factory=dict)
+        blocks: Dict[Root, BeaconBlock]
+        block_states: Dict[Root, BeaconState]
+        block_timeliness: Dict[Root, Boolean]
+        checkpoint_states: Dict[Checkpoint, BeaconState]
+        latest_messages: Dict[ValidatorIndex, LatestMessage]
+        unrealized_justifications: Dict[Root, Checkpoint]
     </spec>
 
 - name: Store#gloas
   sources: []
   spec: |
-    <spec dataclass="Store" fork="gloas" hash="7e0cbbb8">
+    <spec dataclass="Store" fork="gloas" hash="402837a7">
     class Store:
         time: Uint64
         genesis_time: Uint64
@@ -546,27 +566,25 @@
         unrealized_finalized_checkpoint: Checkpoint
         proposer_boost_root: Root
         equivocating_indices: Set[ValidatorIndex]
-        blocks: Dict[Root, BeaconBlock] = field(default_factory=dict)
-        block_states: Dict[Root, BeaconState] = field(default_factory=dict)
+        blocks: Dict[Root, BeaconBlock]
+        block_states: Dict[Root, BeaconState]
         # [Modified in Gloas:EIP7732]
-        block_timeliness: Dict[Root, list[Boolean]] = field(default_factory=dict)
-        checkpoint_states: Dict[Checkpoint, BeaconState] = field(default_factory=dict)
-        latest_messages: Dict[ValidatorIndex, LatestMessage] = field(default_factory=dict)
-        unrealized_justifications: Dict[Root, Checkpoint] = field(default_factory=dict)
+        block_timeliness: Dict[Root, list[Boolean]]
+        checkpoint_states: Dict[Checkpoint, BeaconState]
+        latest_messages: Dict[ValidatorIndex, LatestMessage]
+        unrealized_justifications: Dict[Root, Checkpoint]
         # [New in Gloas:EIP7732]
-        payloads: Dict[Root, ExecutionPayloadEnvelope] = field(default_factory=dict)
+        payloads: Dict[Root, ExecutionPayloadEnvelope]
         # [New in Gloas:EIP7732]
-        payload_timeliness_vote: Dict[Root, list[Optional[Boolean]]] = field(default_factory=dict)
+        payload_timeliness_vote: Dict[Root, list[Optional[Boolean]]]
         # [New in Gloas:EIP7732]
-        payload_data_availability_vote: Dict[Root, list[Optional[Boolean]]] = field(
-            default_factory=dict
-        )
+        payload_data_availability_vote: Dict[Root, list[Optional[Boolean]]]
     </spec>
 
 - name: Store#heze
   sources: []
   spec: |
-    <spec dataclass="Store" fork="heze" hash="e95945a4">
+    <spec dataclass="Store" fork="heze" hash="e590dc15">
     class Store:
         time: Uint64
         genesis_time: Uint64
@@ -576,17 +594,15 @@
         unrealized_finalized_checkpoint: Checkpoint
         proposer_boost_root: Root
         equivocating_indices: Set[ValidatorIndex]
-        blocks: Dict[Root, BeaconBlock] = field(default_factory=dict)
-        block_states: Dict[Root, BeaconState] = field(default_factory=dict)
-        block_timeliness: Dict[Root, list[Boolean]] = field(default_factory=dict)
-        checkpoint_states: Dict[Checkpoint, BeaconState] = field(default_factory=dict)
-        latest_messages: Dict[ValidatorIndex, LatestMessage] = field(default_factory=dict)
-        unrealized_justifications: Dict[Root, Checkpoint] = field(default_factory=dict)
-        payloads: Dict[Root, ExecutionPayloadEnvelope] = field(default_factory=dict)
-        payload_timeliness_vote: Dict[Root, list[Optional[Boolean]]] = field(default_factory=dict)
-        payload_data_availability_vote: Dict[Root, list[Optional[Boolean]]] = field(
-            default_factory=dict
-        )
+        blocks: Dict[Root, BeaconBlock]
+        block_states: Dict[Root, BeaconState]
+        block_timeliness: Dict[Root, list[Boolean]]
+        checkpoint_states: Dict[Checkpoint, BeaconState]
+        latest_messages: Dict[ValidatorIndex, LatestMessage]
+        unrealized_justifications: Dict[Root, Checkpoint]
+        payloads: Dict[Root, ExecutionPayloadEnvelope]
+        payload_timeliness_vote: Dict[Root, list[Optional[Boolean]]]
+        payload_data_availability_vote: Dict[Root, list[Optional[Boolean]]]
         # [New in Heze:EIP7805]
-        payload_inclusion_list_satisfaction: Dict[Root, Boolean] = field(default_factory=dict)
+        payload_inclusion_list_satisfaction: Dict[Root, Boolean]
     </spec>
