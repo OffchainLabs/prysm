@@ -38,6 +38,8 @@ var placeholderFields = []string{
 	"EIP7928_FORK_VERSION",
 	"EIP8025_FORK_EPOCH",
 	"EIP8025_FORK_VERSION",
+	"EIP8321_FORK_EPOCH",
+	"EIP8321_FORK_VERSION",
 	"EPOCHS_PER_SHUFFLING_PHASE",
 	"FIELD_ELEMENTS_PER_CELL",     // Configured as a constant in config/fieldparams/mainnet.go
 	"FIELD_ELEMENTS_PER_EXT_BLOB", // Configured in proto/ssz_proto_library.bzl
@@ -47,8 +49,8 @@ var placeholderFields = []string{
 	"INCLUSION_LIST_DUE_BPS",
 	"INCLUSION_LIST_SUBMISSION_DEADLINE",
 	"KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH", // Configured in proto/ssz_proto_library.bzl
-	"MAX_BYTES_PER_INCLUSION_LIST",
 	"MAX_REQUEST_INCLUSION_LIST",
+	"MAX_TRANSACTIONS_BYTES_PER_INCLUSION_LIST",
 	"MIN_SLOTS_FOR_INCLUSION_LISTS_REQUESTS",
 	"NUMBER_OF_COLUMNS", // Configured as a constant in config/fieldparams/mainnet.go
 	"TARGET_NUMBER_OF_PEERS",
@@ -429,7 +431,10 @@ func assertYamlFieldsMatch(t *testing.T, name string, fields []string, c1, c2 *p
 				v1 := reflect.ValueOf(*c1).Field(i).Interface()
 				v2 := reflect.ValueOf(*c2).Field(i).Interface()
 				if reflect.ValueOf(v1).Kind() == reflect.Slice {
-					assert.DeepEqual(t, v1, v2, "%s: %s", name, field)
+					// A nil slice and an empty yaml list are equivalent configs.
+					if reflect.ValueOf(v1).Len() != 0 || reflect.ValueOf(v2).Len() != 0 {
+						assert.DeepEqual(t, v1, v2, "%s: %s", name, field)
+					}
 				} else {
 					assert.Equal(t, v1, v2, "%s: %s", name, field)
 				}
