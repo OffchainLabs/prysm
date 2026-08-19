@@ -2,6 +2,7 @@ package validator
 
 import (
 	"context"
+	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/io/logs"
@@ -25,21 +26,27 @@ func (vs *Server) SubmitBuilderPreferences(ctx context.Context, req *ethpb.Submi
 	if vs.BlockBuilder == nil {
 		return nil, status.Error(codes.FailedPrecondition, "builder is not configured")
 	}
+	var wg sync.WaitGroup
 	for _, e := range req.Entries {
 		if e.GetUrl() == "" {
 			log.Warn("Skipping builder preferences entry with no builder url")
 			continue
 		}
-		pubkey := bytesutil.ToBytes48(e.ProposerPubkey)
-		breq := &ethpb.BuilderPreferencesRequest{
-			Preferences: &ethpb.BuilderPreferences{MaxExecutionPayment: e.MaxExecutionPayment},
-			Auth:        e.Auth,
-		}
-		if err := vs.BlockBuilder.SubmitBuilderPreferences(ctx, pubkey, e.Url, breq); err != nil {
-			log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(e.Url)).Warn("Could not submit builder preferences")
-			continue
-		}
-		vs.maxExecutionPayments.Store(pubkey, uint64(e.MaxExecutionPayment))
+		wg.Add(1)
+		go func(e *ethpb.BuilderPreferencesEntry) {
+			defer wg.Done()
+			pubkey := bytesutil.ToBytes48(e.ProposerPubkey)
+			breq := &ethpb.BuilderPreferencesRequest{
+				Preferences: &ethpb.BuilderPreferences{MaxExecutionPayment: e.MaxExecutionPayment},
+				Auth:        e.Auth,
+			}
+			if err := vs.BlockBuilder.SubmitBuilderPreferences(ctx, pubkey, e.Url, breq); err != nil {
+				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(e.Url)).Warn("Could not submit builder preferences")
+				return
+			}
+			vs.maxExecutionPayments.Store(pubkey, uint64(e.MaxExecutionPayment))
+		}(e)
 	}
+	wg.Wait()
 	return &emptypb.Empty{}, nil
 }
