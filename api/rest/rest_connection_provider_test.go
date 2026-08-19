@@ -44,33 +44,8 @@ func TestRestConnectionProvider(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("initial state", func(t *testing.T) {
-		assert.Equal(t, 3, len(provider.Hosts()))
-		assert.Equal(t, "http://host1:3500", provider.CurrentHost())
-		assert.NotNil(t, provider.Handler())
-	})
-
-	t.Run("SwitchHost", func(t *testing.T) {
-		require.NoError(t, provider.SwitchHost(1))
-		assert.Equal(t, "http://host2:3500", provider.CurrentHost())
-		require.NoError(t, provider.SwitchHost(0))
-		assert.Equal(t, "http://host1:3500", provider.CurrentHost())
-		require.ErrorContains(t, "invalid host index", provider.SwitchHost(-1))
-		require.ErrorContains(t, "invalid host index", provider.SwitchHost(3))
-	})
-
-	t.Run("ConnectionCounter advances on real switches only", func(t *testing.T) {
-		p, err := NewRestConnectionProvider("http://host1:3500,http://host2:3500")
-		require.NoError(t, err)
-		require.Equal(t, uint64(0), p.ConnectionCounter())
-		// Switching to the current host is a no-op.
-		require.NoError(t, p.SwitchHost(0))
-		require.Equal(t, uint64(0), p.ConnectionCounter())
-		// A real switch advances the counter.
-		require.NoError(t, p.SwitchHost(1))
-		require.Equal(t, uint64(1), p.ConnectionCounter())
-		// A bounce back is still a distinct switch (host1 → host0).
-		require.NoError(t, p.SwitchHost(0))
-		require.Equal(t, uint64(2), p.ConnectionCounter())
+		assert.DeepEqual(t, []string{"http://host1:3500", "http://host2:3500", "http://host3:3500"}, provider.Hosts())
+		assert.NotNil(t, provider.HttpClient())
 	})
 
 	t.Run("Hosts returns copy", func(t *testing.T) {
@@ -78,6 +53,13 @@ func TestRestConnectionProvider(t *testing.T) {
 		original := hosts[0]
 		hosts[0] = "modified"
 		assert.Equal(t, original, provider.Hosts()[0])
+	})
+
+	t.Run("Handler returns the multi-handler", func(t *testing.T) {
+		h := provider.Handler()
+		require.NotNil(t, h)
+		_, ok := h.(*multiHandler)
+		assert.Equal(t, true, ok, "the provider fans out over a *multiHandler")
 	})
 }
 
@@ -90,6 +72,6 @@ func TestRestConnectionProvider_WithOptions(t *testing.T) {
 		WithTracing(),
 	)
 	require.NoError(t, err)
-	assert.NotNil(t, provider.Handler())
-	assert.Equal(t, "http://localhost:3500", provider.CurrentHost())
+	assert.NotNil(t, provider.HttpClient())
+	assert.DeepEqual(t, []string{"http://localhost:3500"}, provider.Hosts())
 }

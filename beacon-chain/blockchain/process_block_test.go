@@ -122,6 +122,7 @@ func Test_pruneAttsFromPool_Electra(t *testing.T) {
 	rob, err := consensusblocks.NewSignedBeaconBlock(bl)
 	require.NoError(t, err)
 	st, _ := util.DeterministicGenesisStateElectra(t, 1024)
+	require.NoError(t, helpers.UpdateCommitteeCache(ctx, st, 0))
 	committees, err := helpers.BeaconCommittees(ctx, st, 0)
 	require.NoError(t, err)
 	// Sanity check to make sure the on-chain att will be decomposed
@@ -3763,7 +3764,7 @@ func TestHandleBlockAttestations_GloasSameSlotPayloadVote(t *testing.T) {
 			Block: &ethpb.BeaconBlockGloas{
 				Slot: 2,
 				Body: &ethpb.BeaconBlockBodyGloas{
-					Attestations: []*ethpb.AttestationElectra{
+					Attestations: []*ethpb.AttestationGloas{
 						{
 							AggregationBits: aggBits,
 							CommitteeBits:   cb,

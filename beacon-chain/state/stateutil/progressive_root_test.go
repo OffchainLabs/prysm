@@ -14,7 +14,7 @@ import (
 )
 
 func TestValidatorRegistryRootProgressive(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset := features.InitWithReset(&features.Flags{})
 	defer reset()
 
 	pubkey := make([]byte, fieldparams.BLSPubkeyLength)
@@ -49,7 +49,7 @@ func TestValidatorRegistryRootProgressive(t *testing.T) {
 }
 
 func TestUint64ListRootProgressive(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset := features.InitWithReset(&features.Flags{})
 	defer reset()
 
 	vals := []uint64{1, 2, 3, 4, 5, 6, 7}
@@ -67,7 +67,7 @@ func TestUint64ListRootProgressive(t *testing.T) {
 }
 
 func TestParticipationBitsRootProgressive(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset := features.InitWithReset(&features.Flags{})
 	defer reset()
 
 	bits := []byte{0x01, 0x02, 0x03, 0x04}
@@ -80,8 +80,28 @@ func TestParticipationBitsRootProgressive(t *testing.T) {
 	require.Equal(t, expected, got)
 }
 
+func TestBuildersRootProgressive(t *testing.T) {
+	reset := features.InitWithReset(&features.Flags{})
+	defer reset()
+
+	builders := []*ethpb.Builder{{
+		Pubkey:           make([]byte, fieldparams.BLSPubkeyLength),
+		Version:          []byte{1},
+		ExecutionAddress: make([]byte, fieldparams.FeeRecipientLength),
+		Balance:          2,
+		DepositEpoch:     3,
+	}}
+
+	got, err := stateutil.BuildersRoot(version.Gloas, builders)
+	require.NoError(t, err)
+
+	expected, err := ssz.SliceRootProgressive(builders)
+	require.NoError(t, err)
+	require.Equal(t, expected, got)
+}
+
 func TestPendingRootsProgressive(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset := features.InitWithReset(&features.Flags{})
 	defer reset()
 
 	pendingDeposits := []*ethpb.PendingDeposit{{
@@ -108,4 +128,22 @@ func TestPendingRootsProgressive(t *testing.T) {
 	expectedPC, err := ssz.SliceRootProgressive(pendingConsolidations)
 	require.NoError(t, err)
 	require.Equal(t, expectedPC, pcRoot)
+}
+
+func TestBuilderPendingWithdrawalsRootProgressive(t *testing.T) {
+	reset := features.InitWithReset(&features.Flags{})
+	defer reset()
+
+	withdrawals := []*ethpb.BuilderPendingWithdrawal{{
+		FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
+		Amount:       1,
+		BuilderIndex: 2,
+	}}
+
+	got, err := stateutil.BuilderPendingWithdrawalsRoot(version.Gloas, withdrawals)
+	require.NoError(t, err)
+
+	expected, err := ssz.SliceRootProgressive(withdrawals)
+	require.NoError(t, err)
+	require.Equal(t, expected, got)
 }

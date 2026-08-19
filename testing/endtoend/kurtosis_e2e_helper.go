@@ -11,6 +11,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api/client/beacon"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/kurtosis"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
@@ -82,8 +83,7 @@ func (k *KurtosisTestSuites) Run(t *testing.T) {
 
 	// Set deadline for assertoor.
 	genesisTime := fetchGenesisTime(t, ctx, client)
-	secondsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
-	deadline := genesisTime.Add(time.Duration(k.epochsToRun*secondsPerEpoch) * time.Second)
+	deadline := genesisTime.Add(params.EpochsDuration(primitives.Epoch(k.epochsToRun), params.BeaconConfig()))
 
 	// Register Assertoor playbooks and wait for them to complete.
 	require.NoError(t, kw.RegisterPlaybooks(ctx), "Failed to register Assertoor playbooks")

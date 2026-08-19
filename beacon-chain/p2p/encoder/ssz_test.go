@@ -8,25 +8,26 @@ import (
 	"math"
 	"testing"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
+	gogo "github.com/gogo/protobuf/proto"
+	"github.com/google/go-cmp/cmp"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/testing/protocmp"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	gogo "github.com/gogo/protobuf/proto"
-	"github.com/google/go-cmp/cmp"
-	fastssz "github.com/prysmaticlabs/fastssz"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
-	"google.golang.org/protobuf/testing/protocmp"
 )
 
-// Define an interface that combines fastssz.Marshaler and proto.Message
+// Define an interface that combines ssz.Marshaler and proto.Message
 type MarshalerProtoMessage interface {
-	fastssz.Marshaler
+	ssz.Marshaler
 	proto.Message
-	fastssz.Unmarshaler
+	ssz.Unmarshaler
 }
 
 type MarshalerProtoCreator interface {
@@ -37,8 +38,10 @@ type AttestationCreator struct{}
 type AttestationElectraCreator struct{}
 type AggregateAttestationAndProofCreator struct{}
 type AggregateAttestationAndProofElectraCreator struct{}
+type AggregateAttestationAndProofGloasCreator struct{}
 type SignedAggregateAttestationAndProofCreator struct{}
 type SignedAggregateAttestationAndProofElectraCreator struct{}
+type SignedAggregateAttestationAndProofGloasCreator struct{}
 type AttestationDataCreator struct{}
 type CheckpointCreator struct{}
 type BeaconBlockCreator struct{}
@@ -136,11 +139,17 @@ func (AggregateAttestationAndProofCreator) Create() MarshalerProtoMessage {
 func (AggregateAttestationAndProofElectraCreator) Create() MarshalerProtoMessage {
 	return &ethpb.AggregateAttestationAndProofElectra{}
 }
+func (AggregateAttestationAndProofGloasCreator) Create() MarshalerProtoMessage {
+	return &ethpb.AggregateAttestationAndProofGloas{}
+}
 func (SignedAggregateAttestationAndProofCreator) Create() MarshalerProtoMessage {
 	return &ethpb.SignedAggregateAttestationAndProof{}
 }
 func (SignedAggregateAttestationAndProofElectraCreator) Create() MarshalerProtoMessage {
 	return &ethpb.SignedAggregateAttestationAndProofElectra{}
+}
+func (SignedAggregateAttestationAndProofGloasCreator) Create() MarshalerProtoMessage {
+	return &ethpb.SignedAggregateAttestationAndProofGloas{}
 }
 func (AttestationDataCreator) Create() MarshalerProtoMessage   { return &ethpb.AttestationData{} }
 func (CheckpointCreator) Create() MarshalerProtoMessage        { return &ethpb.Checkpoint{} }
@@ -324,8 +333,10 @@ var creators = []MarshalerProtoCreator{
 	AttestationElectraCreator{},
 	AggregateAttestationAndProofCreator{},
 	AggregateAttestationAndProofElectraCreator{},
+	AggregateAttestationAndProofGloasCreator{},
 	SignedAggregateAttestationAndProofCreator{},
 	SignedAggregateAttestationAndProofElectraCreator{},
+	SignedAggregateAttestationAndProofGloasCreator{},
 	AttestationDataCreator{},
 	CheckpointCreator{},
 	BeaconBlockCreator{},

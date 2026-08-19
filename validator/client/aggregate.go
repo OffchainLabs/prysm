@@ -59,7 +59,9 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 		return
 	}
 
-	postElectra := slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch
+	epoch := slots.ToEpoch(slot)
+	postElectra := epoch >= params.BeaconConfig().ElectraForkEpoch
+	postGloas := epoch >= params.BeaconConfig().GloasForkEpoch
 
 	aggSelectionRequest := &ethpb.AggregateSelectionRequest{
 		Slot:           slot,
@@ -75,7 +77,11 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 			v.handleSubmitAggSelectionProofError(err, slot, fmtKey)
 			return
 		}
-		agg = res.AggregateAndProof
+		if postGloas {
+			agg = ethpb.AggregateAttestationAndProofElectraToGloas(res.AggregateAndProof)
+		} else {
+			agg = res.AggregateAndProof
+		}
 	} else {
 		res, err := v.validatorClient.SubmitAggregateSelectionProof(ctx, aggSelectionRequest, duty.ValidatorIndex, duty.CommitteeLength)
 		if err != nil {
@@ -92,13 +98,27 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 	}
 
 	if postElectra {
-		msg, ok := agg.(*ethpb.AggregateAttestationAndProofElectra)
-		if !ok {
-			log.Errorf("Message is not %T", &ethpb.AggregateAttestationAndProofElectra{})
-			if v.emitAccountMetrics {
-				ValidatorAggFailVec.WithLabelValues(fmtKey).Inc()
+		var msg *ethpb.AggregateAttestationAndProofElectra
+		if postGloas {
+			gloasMsg, ok := agg.(*ethpb.AggregateAttestationAndProofGloas)
+			if !ok {
+				log.Errorf("Message is not %T", &ethpb.AggregateAttestationAndProofGloas{})
+				if v.emitAccountMetrics {
+					ValidatorAggFailVec.WithLabelValues(fmtKey).Inc()
+				}
+				return
 			}
-			return
+			msg = ethpb.AggregateAttestationAndProofGloasToElectra(gloasMsg)
+		} else {
+			electraMsg, ok := agg.(*ethpb.AggregateAttestationAndProofElectra)
+			if !ok {
+				log.Errorf("Message is not %T", &ethpb.AggregateAttestationAndProofElectra{})
+				if v.emitAccountMetrics {
+					ValidatorAggFailVec.WithLabelValues(fmtKey).Inc()
+				}
+				return
+			}
+			msg = electraMsg
 		}
 		_, err = v.validatorClient.SubmitSignedAggregateSelectionProofElectra(ctx, &ethpb.SignedAggregateSubmitElectraRequest{
 			SignedAggregateAndProof: &ethpb.SignedAggregateAttestationAndProofElectra{
@@ -214,13 +234,22 @@ func (v *validator) aggregateAndProofSig(ctx context.Context, pubKey [fieldparam
 		SignatureDomain: d.SignatureDomain,
 		SigningSlot:     slot,
 	}
-	if agg.Version() >= version.Electra {
+	switch {
+	case agg.Version() >= version.Gloas:
+		aggregate, ok := agg.(*ethpb.AggregateAttestationAndProofGloas)
+		if !ok {
+			return nil, fmt.Errorf("wrong aggregate type (expected %T, got %T)", &ethpb.AggregateAttestationAndProofGloas{}, agg)
+		}
+		signRequest.Object = &validatorpb.SignRequest_AggregateAttestationAndProofElectra{
+			AggregateAttestationAndProofElectra: ethpb.AggregateAttestationAndProofGloasToElectra(aggregate),
+		}
+	case agg.Version() >= version.Electra:
 		aggregate, ok := agg.(*ethpb.AggregateAttestationAndProofElectra)
 		if !ok {
 			return nil, fmt.Errorf("wrong aggregate type (expected %T, got %T)", &ethpb.AggregateAttestationAndProofElectra{}, agg)
 		}
 		signRequest.Object = &validatorpb.SignRequest_AggregateAttestationAndProofElectra{AggregateAttestationAndProofElectra: aggregate}
-	} else {
+	default:
 		aggregate, ok := agg.(*ethpb.AggregateAttestationAndProof)
 		if !ok {
 			return nil, fmt.Errorf("wrong aggregate type (expected %T, got %T)", &ethpb.AggregateAttestationAndProof{}, agg)

@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/genesis"
 	"github.com/OffchainLabs/prysm/v7/math"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -897,6 +898,83 @@ func TestStateDiff_AnchorCache(t *testing.T) {
 			for i := 1; i < len(exponents)-1; i++ {
 				require.IsNil(t, db.stateDiffCache.getAnchor(i))
 			}
+		})
+	}
+}
+
+func TestStateDiff_EnsureEmbeddedGenesisKeepsCheckpointSyncedTree(t *testing.T) {
+	testCases := []struct {
+		name             string
+		hasOriginBlkRoot bool
+	}{
+		{
+			name:             "origin checkpoint block root available",
+			hasOriginBlkRoot: true,
+		},
+		{
+			// Pruning ran long enough to delete the origin block, and with it the origin checkpoint
+			// block root. Only the anchor is left to tell that this database was not synced from genesis.
+			name:             "origin checkpoint block root pruned",
+			hasOriginBlkRoot: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
+			defer resetCfg()
+
+			setDefaultStateDiffExponents()
+
+			// The genesis state is globally available from the embedded or provider genesis, even for a node
+			// that was synced from a checkpoint and has no genesis data in its database.
+			genesisState, err := util.NewBeaconStateFulu()
+			require.NoError(t, err)
+			genesis.StoreStateDuringTest(t, genesisState)
+
+			db := setupDB(t)
+
+			// A checkpoint-synced node anchors the tree at the origin state's slot, but never stores a
+			// genesis block.
+			const offset = primitives.Slot(14689088)
+			originState, _ := createState(t, offset, version.Fulu)
+			require.NoError(t, db.initializeStateDiff(offset, originState))
+
+			if tc.hasOriginBlkRoot {
+				require.NoError(t, db.SaveOriginCheckpointBlockRoot(t.Context(), [32]byte{1}))
+			} else {
+				_, err := db.OriginCheckpointBlockRoot(t.Context())
+				require.ErrorIs(t, err, ErrNotFoundOriginBlockRoot)
+			}
+
+			// A few epochs worth of diffs accumulate on top of the anchor.
+			for slot := offset + 32; slot <= offset+128; slot += 32 {
+				st, _ := createState(t, slot, version.Fulu)
+				require.NoError(t, db.saveStateByDiff(t.Context(), st))
+			}
+
+			// This runs on every restart, and must leave a checkpoint-synced database alone.
+			require.NoError(t, db.EnsureEmbeddedGenesis(t.Context()))
+
+			gb, err := db.GenesisBlock(t.Context())
+			require.NoError(t, err)
+			require.IsNil(t, gb)
+
+			// The tree must still be anchored where the origin put it, and still be readable.
+			require.Equal(t, uint64(offset), db.getOffset())
+
+			st, err := db.stateByDiff(t.Context(), offset+128)
+			require.NoError(t, err)
+			require.Equal(t, offset+128, st.Slot())
+
+			// And the database must still open on the next restart.
+			storedOffset, err := db.loadOffset()
+			require.NoError(t, err)
+			require.Equal(t, uint64(offset), storedOffset)
+
+			cache, err := populateStateDiffCacheFromDB(db, storedOffset)
+			require.NoError(t, err)
+			require.NoError(t, validateStateDiffCache(t.Context(), db, cache))
 		})
 	}
 }

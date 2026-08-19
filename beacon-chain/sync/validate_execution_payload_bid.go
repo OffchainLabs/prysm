@@ -58,10 +58,10 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 		return pubsub.ValidationIgnore, err
 	}
 
-	// [IGNORE] this is the first signed bid seen with a valid signature from the given builder for this slot.
+	// [IGNORE] this is the first signed bid seen with a valid signature from the given builder for the tuple (bid.slot, bid.parent_block_hash, bid.parent_block_root).
 	// Cache is populated only after VerifySignature below; a hit here implies a valid-sig bid was already seen.
-	builderKey := executionPayloadBidBuilderKey(bid.Slot(), bid.BuilderIndex())
-	if s.hasSeenExecutionPayloadBidBuilder(builderKey) {
+	tupleKey := executionPayloadBidTupleKey(bid)
+	if s.hasSeenExecutionPayloadBid(tupleKey) {
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -112,7 +112,7 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifySignature(st); err != nil {
 		return pubsub.ValidationReject, err
 	}
-	s.setSeenExecutionPayloadBidBuilder(bid.Slot(), builderKey)
+	s.setSeenExecutionPayloadBid(bid.Slot(), tupleKey)
 	// [IGNORE] this bid is the highest value bid seen for the tuple (bid.slot, bid.parent_block_hash, bid.parent_block_root).
 	if !s.isHighestExecutionPayloadBid(bid) {
 		return pubsub.ValidationIgnore, nil
@@ -133,8 +133,8 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifyGasLimitTargetCompatible(parentGasLimit, pref.TargetGasLimit); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-	// [IGNORE] bid.parent_block_root is the hash tree root of a known beacon block in fork choice.
-	if err := v.VerifyParentBlockRootSeen(s.cfg.chain.InForkchoice); err != nil {
+	// [IGNORE] the bid is compatible with the current head branch, i.e. is_bid_compatible_with_head(store, bid) returns True.
+	if err := v.VerifyBidCompatibleWithHead(s.cfg.chain.IsBidCompatibleWithHead); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
 	// [REJECT] bid.slot is greater than the slot of the block with root bid.parent_block_root.
@@ -165,17 +165,20 @@ func (s *Service) executionPayloadBidSubscriber(_ context.Context, msg proto.Mes
 	return nil
 }
 
-func executionPayloadBidBuilderKey(slot primitives.Slot, builderIndex primitives.BuilderIndex) string {
-	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(builderIndex))...)
-	return string(b)
+func executionPayloadBidTupleKey(bid interfaces.ROExecutionPayloadBid) string {
+	parentHash := bid.ParentBlockHash()
+	parentRoot := bid.ParentBlockRoot()
+	b := append(bytesutil.Bytes32(uint64(bid.Slot())), bytesutil.Bytes32(uint64(bid.BuilderIndex()))...)
+	b = append(b, parentHash[:]...)
+	return string(append(b, parentRoot[:]...))
 }
 
-func (s *Service) hasSeenExecutionPayloadBidBuilder(key string) bool {
+func (s *Service) hasSeenExecutionPayloadBid(key string) bool {
 	_, seen := s.seenExecutionPayloadBidCache.Get(key)
 	return seen
 }
 
-func (s *Service) setSeenExecutionPayloadBidBuilder(slot primitives.Slot, key string) {
+func (s *Service) setSeenExecutionPayloadBid(slot primitives.Slot, key string) {
 	s.seenExecutionPayloadBidCache.Add(slot, key, true)
 }
 

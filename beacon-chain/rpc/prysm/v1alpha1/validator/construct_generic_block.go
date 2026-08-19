@@ -58,10 +58,10 @@ func (vs *Server) constructGenericBeaconBlock(
 		}
 		return vs.constructFuluBlock(blockProto, isBlinded, bidStr, bundle), nil
 	case version.Gloas:
-		// Gloas blocks do not carry a separate payload value — the bid is part of the block body.
-		// Stateless self-build bundling into GloasContents happens in BuildBlockParallel.
+		// Stateless self-build bundling into GloasContents happens in buildBlockGloas.
 		return &ethpb.GenericBeaconBlock{
-			Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: blockProto.(*ethpb.BeaconBlockGloas)},
+			Block:        &ethpb.GenericBeaconBlock_Gloas{Gloas: blockProto.(*ethpb.BeaconBlockGloas)},
+			PayloadValue: bidStr,
 		}, nil
 	default:
 		return nil, fmt.Errorf("unknown block version: %d", sBlk.Version())

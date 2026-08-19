@@ -6,6 +6,7 @@ package state
 import (
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
@@ -95,23 +96,10 @@ type ExecutionPayloadProcessedData struct {
 	Optimistic bool
 }
 
-type PayloadStatus int
-
 const (
-	PayloadStatusEmpty = iota + 1
-	PayloadStatusFull
+	PayloadStatusEmpty = api.PayloadStatusEmpty
+	PayloadStatusFull  = api.PayloadStatusFull
 )
-
-func (ps PayloadStatus) String() string {
-	switch ps {
-	case PayloadStatusEmpty:
-		return "empty"
-	case PayloadStatusFull:
-		return "full"
-	default:
-		return "unknown"
-	}
-}
 
 // HeadData is the data sent with NewHead events.
 type HeadData struct {
@@ -153,6 +141,6 @@ type HeadV2Data struct {
 	ExecutionOptimistic       bool
 	CurrentEpochDependentRoot [32]byte
 	NextEpochDependentRoot    [32]byte
-	PayloadStatus             PayloadStatus
+	PayloadStatus             api.PayloadStatus
 	Version                   int
 }

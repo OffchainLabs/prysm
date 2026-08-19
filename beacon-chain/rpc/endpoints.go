@@ -254,7 +254,7 @@ func (s *Service) validatorEndpoints(
 			template: "/eth/v2/validator/aggregate_and_proofs",
 			name:     namespace + ".SubmitAggregateAndProofsV2",
 			middleware: []middleware.Middleware{
-				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
@@ -728,7 +728,7 @@ func (s *Service) beaconEndpoints(
 			template: "/eth/v2/beacon/pool/attestations",
 			name:     namespace + ".SubmitAttestationsV2",
 			middleware: []middleware.Middleware{
-				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},

@@ -1,5 +1,17 @@
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 load("@rules_distroless//distroless:defs.bzl", "passwd")
 load("@rules_pkg//pkg:pkg.bzl", "pkg_tar")
+
+# Build-wide toggle for SSZ progressive merkleization. When set, every
+# ssz_methodical() codegen action passes --disable-progressive, so containers
+# merkleize as standard SSZ containers and progressive collections downgrade to
+# their bounded forms. Read by the ssz_methodical rule in //tools:methodical.bzl.
+# Usage: bazel build --//tools:disable_progressive_merkleization //...
+bool_flag(
+    name = "disable_progressive_merkleization",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
 
 passwd(
     name = "passwd",

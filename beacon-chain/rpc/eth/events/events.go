@@ -210,7 +210,7 @@ func (s *Server) StreamEvents(w http.ResponseWriter, r *http.Request) {
 
 	timeout := s.EventWriteTimeout
 	if timeout == 0 {
-		timeout = time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+		timeout = params.BeaconConfig().SlotDuration()
 	}
 	ka := s.KeepAliveInterval
 	if ka == 0 {
@@ -573,6 +573,11 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 				att := structs.AttElectraFromConsensus(att)
 				return jsonMarshalReader(eventName, att)
 			}, nil
+		case *eth.AttestationGloas:
+			return func() io.Reader {
+				att := structs.AttGloasFromConsensus(att)
+				return jsonMarshalReader(eventName, att)
+			}, nil
 		default:
 			return nil, errors.Wrapf(errUnhandledEventData, "Unexpected type %T for the .Attestation field of AggregatedAttReceivedData", v.Attestation)
 		}
@@ -586,6 +591,11 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		case *eth.AttestationElectra:
 			return func() io.Reader {
 				att := structs.AttElectraFromConsensus(att)
+				return jsonMarshalReader(eventName, att)
+			}, nil
+		case *eth.AttestationGloas:
+			return func() io.Reader {
+				att := structs.AttGloasFromConsensus(att)
 				return jsonMarshalReader(eventName, att)
 			}, nil
 		default:

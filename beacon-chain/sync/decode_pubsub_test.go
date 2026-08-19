@@ -118,6 +118,7 @@ func TestService_decodePubsubMessage(t *testing.T) {
 func TestExtractDataType(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().ElectraForkEpoch + 4096*2
+	params.BeaconConfig().GloasForkEpoch = params.BeaconConfig().FuluForkEpoch + 4096*2
 	params.BeaconConfig().InitializeForkSchedule()
 
 	type args struct {
@@ -262,6 +263,23 @@ func TestExtractDataType(t *testing.T) {
 			wantMd:          wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}),
 			wantAtt:         &ethpb.SingleAttestation{},
 			wantAggregate:   &ethpb.SignedAggregateAttestationAndProofElectra{},
+			wantAttSlashing: &ethpb.AttesterSlashingElectra{},
+			wantErr:         false,
+		},
+		{
+			name: "gloas fork version",
+			args: args{
+				digest: params.ForkDigest(params.BeaconConfig().GloasForkEpoch),
+				chain:  &mock.ChainService{ValidatorsRoot: [32]byte{}},
+			},
+			wantBlock: func() interfaces.ReadOnlySignedBeaconBlock {
+				wsb, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{Block: &ethpb.BeaconBlockGloas{Body: &ethpb.BeaconBlockBodyGloas{}}})
+				require.NoError(t, err)
+				return wsb
+			}(),
+			wantMd:          wrapper.WrappedMetadataV2(&ethpb.MetaDataV2{}),
+			wantAtt:         &ethpb.SingleAttestation{},
+			wantAggregate:   &ethpb.SignedAggregateAttestationAndProofGloas{},
 			wantAttSlashing: &ethpb.AttesterSlashingElectra{},
 			wantErr:         false,
 		},
