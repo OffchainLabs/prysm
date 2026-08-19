@@ -163,6 +163,18 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
 			cached = nil
 			exists = false
 		}
+		// The cache is populated for every epoch boundary block that gets processed and is only ever
+		// evicted by size or when a block turns out to be invalid, never when a block loses fork choice.
+		// Its slot index is also first-write-wins, so a reorged sibling processed ahead of the canonical
+		// block at the same slot keeps the slot key. Either way the cached root can be non-canonical, and
+		// the diff tree is keyed by slot, so it has to be checked before the state is committed to a boundary.
+		if exists && !s.beaconDB.IsFinalizedBlock(ctx, cached.root) {
+			log.WithFields(logrus.Fields{
+				"slot": slot,
+				"root": fmt.Sprintf("%#x", cached.root),
+			}).Debug("Ignoring non-canonical epoch boundary state while migrating to cold")
+			exists = false
+		}
 		var aRoot [32]byte
 		var aState state.BeaconState
 		if exists {

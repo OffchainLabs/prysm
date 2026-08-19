@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -118,6 +119,96 @@ func TestMigrateToColdHdiff_OrphanAtHighestPopulatedSlot(t *testing.T) {
 
 	if gotRoot == orphanRoot {
 		t.Fatalf("boundary state at slot 64 was built from the orphaned block at slot 63 "+
+			"(got %#x, canonical is %#x)", gotRoot, wantRoot)
+	}
+	require.Equal(t, wantRoot, gotRoot)
+}
+
+// The epoch boundary cache holds a state for every boundary block that was processed, and only ever drops
+// one on eviction or on invalidity, never when a block loses fork choice. Its slot index is also
+// first-write-wins, so a reorged sibling processed ahead of the canonical block at the same slot keeps the
+// slot key for as long as it is cached. A cache hit therefore does not establish canonicality either.
+func TestMigrateToColdHdiff_ReorgedSiblingInBoundaryCache(t *testing.T) {
+	ctx := t.Context()
+	setStateDiffExponents() // [6,5]: slot 64 is a level 0 boundary
+	beaconDB := testDB.SetupDB(t)
+	require.NoError(t, beaconDB.(*kv.Store).InitStateDiffCacheForTesting(t, 0))
+	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
+	defer resetCfg()
+	service := New(beaconDB, doublylinkedtree.New())
+
+	genesisState, pks := util.DeterministicGenesisState(t, 32)
+	genesisStateRoot, err := genesisState.HashTreeRoot(ctx)
+	require.NoError(t, err)
+	genesis := blocks.NewGenesisBlock(genesisStateRoot[:])
+	util.SaveBlock(t, ctx, beaconDB, genesis)
+	gRoot, err := genesis.Block.HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, gRoot))
+	require.NoError(t, beaconDB.SaveState(ctx, genesisState, gRoot))
+	require.NoError(t, beaconDB.SaveStateSummary(ctx, &ethpb.StateSummary{Slot: 0, Root: gRoot[:]}))
+
+	// Both blocks at slot 64 have to be properly built and signed, so they differ by their parent.
+	saveBlock := func(parent state.BeaconState, slot primitives.Slot) (state.BeaconState, [32]byte) {
+		t.Helper()
+		b, err := util.GenerateFullBlock(parent.Copy(), pks, util.DefaultBlockGenConfig(), slot)
+		require.NoError(t, err)
+		wsb, err := consensusblocks.NewSignedBeaconBlock(b)
+		require.NoError(t, err)
+		post, err := executeStateTransitionStateGen(ctx, parent.Copy(), wsb)
+		require.NoError(t, err)
+		root, err := b.Block.HashTreeRoot()
+		require.NoError(t, err)
+		util.SaveBlock(t, ctx, beaconDB, b)
+		require.NoError(t, beaconDB.SaveStateSummary(ctx, &ethpb.StateSummary{Slot: slot, Root: root[:]}))
+		return post, root
+	}
+
+	s32, r32 := saveBlock(genesisState, 32)
+	s48, _ := saveBlock(s32, 48)
+	// The canonical boundary block at slot 64 builds on 48.
+	s64, r64 := saveBlock(s48, 64)
+	// A valid sibling at slot 64 that lost the fork choice race, building on 32. Nothing ever deletes it.
+	sOrphan, rOrphan := saveBlock(s32, 64)
+	require.NotEqual(t, r64, rOrphan)
+
+	// Finalizing at slot 96 puts the contested slot below the current finalized epoch, where the index
+	// marks every block final regardless of canonicality.
+	_, r96 := saveBlock(s64, 96)
+	require.NoError(t, beaconDB.SaveFinalizedCheckpoint(ctx, &ethpb.Checkpoint{Epoch: 3, Root: r96[:]}))
+	require.Equal(t, true, beaconDB.IsFinalizedBlock(ctx, r64))
+	require.Equal(t, false, beaconDB.IsFinalizedBlock(ctx, rOrphan))
+
+	// The orphan was processed first, so it owns the slot 64 key: put is AddIfNotPresent on the slot index,
+	// and the canonical sibling's put leaves that mapping alone.
+	require.NoError(t, service.epochBoundaryStateCache.put(rOrphan, sOrphan))
+	require.NoError(t, service.epochBoundaryStateCache.put(r64, s64))
+	require.NoError(t, service.epochBoundaryStateCache.put(r32, s32))
+	cached, exists, err := service.epochBoundaryStateCache.getBySlot(64)
+	require.NoError(t, err)
+	require.Equal(t, true, exists)
+	require.Equal(t, rOrphan, cached.root, "the reorged sibling must own the slot key for this test to mean anything")
+
+	wantRoot, err := s64.HashTreeRoot(ctx)
+	require.NoError(t, err)
+	orphanRoot, err := sOrphan.HashTreeRoot(ctx)
+	require.NoError(t, err)
+	require.NotEqual(t, wantRoot, orphanRoot, "the two candidates must differ for this test to mean anything")
+
+	service.finalizedInfo = &finalizedInfo{slot: 32, root: r32, state: s32.Copy()}
+	require.NoError(t, service.MigrateToCold(ctx, r96))
+
+	// State() resolves by the summary's slot, so any root mapped to 64 reads the tree at 64.
+	probe := [32]byte{0xaa}
+	require.NoError(t, beaconDB.SaveStateSummary(ctx, &ethpb.StateSummary{Slot: 64, Root: probe[:]}))
+	got, err := beaconDB.State(ctx, probe)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	gotRoot, err := got.HashTreeRoot(ctx)
+	require.NoError(t, err)
+
+	if gotRoot == orphanRoot {
+		t.Fatalf("boundary state at slot 64 was built from the reorged sibling cached for that slot "+
 			"(got %#x, canonical is %#x)", gotRoot, wantRoot)
 	}
 	require.Equal(t, wantRoot, gotRoot)
