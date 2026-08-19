@@ -1257,6 +1257,44 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	}
 }
 
+// custodyColumnsForFCU builds the custody column set advertised to the execution client via
+// engine_forkchoiceUpdatedV4 (EIP-8070). It mirrors the sampling derivation used by sync so the
+// advertised set is always a superset of what is later requested via engine_getBlobsV4.
+// A nil result omits the custody parameter from the call, leaving the EL's custody set unchanged.
+func (s *Service) custodyColumnsForFCU(ctx context.Context) map[uint64]bool {
+	custodyGroupCount, err := s.cfg.P2P.CustodyGroupCount(ctx)
+	if err != nil {
+		log.WithError(err).Debug("Could not get custody group count for forkchoice update")
+		return nil
+	}
+	samplingSize := max(params.BeaconConfig().SamplesPerSlot, custodyGroupCount)
+	peerInfo, _, err := peerdas.Info(s.cfg.P2P.NodeID(), samplingSize)
+	if err != nil {
+		log.WithError(err).Error("Could not compute custody columns for forkchoice update")
+		return nil
+	}
+
+	cols := make(map[uint64]bool, len(peerInfo.CustodyColumns))
+	for col := range peerInfo.CustodyColumns {
+		cols[col] = true
+	}
+	s.addBuilderEagerColumns(cols)
+	return cols
+}
+
+// addBuilderEagerColumns widens the custody set with the first-half (data) columns whenever
+// validators are attached to this node. An EIP-8070 EL fetches full blob payloads once its custody
+// covers at least CellsPerBlob columns, guaranteeing pooled blob transactions are includable in
+// self-built blocks, as recommended by EIP-8070 for block builders.
+func (s *Service) addBuilderEagerColumns(cols map[uint64]bool) {
+	if s.cfg.SubscribedValidatorsCache == nil || !s.cfg.SubscribedValidatorsCache.Validating() {
+		return
+	}
+	for col := range uint64(fieldparams.CellsPerBlob) {
+		cols[col] = true
+	}
+}
+
 // waitForSync blocks until the node is synced to the head.
 func (s *Service) waitForSync() error {
 	select {

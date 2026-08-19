@@ -141,6 +141,7 @@ type config struct {
 // chain's validator registration process.
 type Service struct {
 	partialColumnsSupported bool
+	sparseBlobpoolEnabled   bool
 	connectedETH1           bool
 	isRunning               bool
 	depositRequestsStarted  bool

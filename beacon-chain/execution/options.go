@@ -29,6 +29,14 @@ func WithPartialColumnsSupported() Option {
 	}
 }
 
+// WithSparseBlobpoolEnabled enables the EIP-8070 sparse blobpool engine APIs.
+func WithSparseBlobpoolEnabled() Option {
+	return func(s *Service) error {
+		s.sparseBlobpoolEnabled = true
+		return nil
+	}
+}
+
 // WithHttpEndpointAndJWTSecret for authenticating the execution node JSON-RPC endpoint.
 func WithHttpEndpointAndJWTSecret(endpointString string, secret []byte) Option {
 	return func(s *Service) error {

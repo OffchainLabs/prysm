@@ -242,19 +242,24 @@ func DataColumnSidecarsGloas(
 
 // PartialColumns builds partial data columns from the cells and proofs of the included blobs,
 // where the included bitlist marks which blob commitments are present in the partial.
-func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofsPerBlob [][]kzg.Proof, src ConstructionPopulator) ([]blocks.PartialDataColumn, error) {
+// cellsPerBlob/proofsPerBlob hold one full-width row per included blob (see
+// StructuredCellsAndProofs); nil entries are skipped, so sparse rows are valid.
+func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]*kzg.Cell, proofsPerBlob [][]*kzg.Proof, src ConstructionPopulator) ([]blocks.PartialDataColumn, error) {
 	start := time.Now()
 	const numberOfColumns = uint64(fieldparams.NumberOfColumns)
-	cells, proofs, err := rotateRowsToCols(cellsPerBlob, proofsPerBlob, numberOfColumns)
-	if err != nil {
-		return nil, errors.Wrap(err, "rotate cells and proofs")
-	}
-	if included.Count() > 0 && (uint64(len(cells)) != numberOfColumns || uint64(len(proofs)) != numberOfColumns) {
-		return nil, errors.Errorf("included blobs present but rotated cells/proofs do not cover all columns: got cells=%d proofs=%d, want %d", len(cells), len(proofs), numberOfColumns)
+	if included.Count() > 0 {
+		if len(cellsPerBlob) != len(proofsPerBlob) || uint64(len(cellsPerBlob)) != included.Count() {
+			return nil, errors.Errorf("included blobs (%d) do not match cells/proofs rows (%d/%d)", included.Count(), len(cellsPerBlob), len(proofsPerBlob))
+		}
+		for k := range cellsPerBlob {
+			if uint64(len(cellsPerBlob[k])) != numberOfColumns || uint64(len(proofsPerBlob[k])) != numberOfColumns {
+				return nil, errors.Errorf("cells/proofs row %d does not cover all columns: got cells=%d proofs=%d, want %d", k, len(cellsPerBlob[k]), len(proofsPerBlob[k]), numberOfColumns)
+			}
+		}
 	}
 
 	if slots.ToEpoch(src.Slot()) >= params.BeaconConfig().GloasForkEpoch {
-		dataColumns, err := partialColumnsGloas(included, cells, proofs, src)
+		dataColumns, err := partialColumnsGloas(included, cellsPerBlob, proofsPerBlob, src)
 		if err != nil {
 			return nil, errors.Wrap(err, "partialColumnsGloas")
 		}
@@ -279,15 +284,7 @@ func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofs
 		if err != nil {
 			return nil, errors.Wrap(err, "new ro data column")
 		}
-
-		for i := range len(info.kzgCommitments) {
-			if !included.BitAt(uint64(i)) {
-				continue
-			}
-			dc.ExtendFromVerifiedCell(uint64(i), cells[idx][0], proofs[idx][0])
-			cells[idx] = cells[idx][1:]
-			proofs[idx] = proofs[idx][1:]
-		}
+		extendPartialColumnFromRows(&dc, idx, included, len(info.kzgCommitments), cellsPerBlob, proofsPerBlob)
 		dataColumns = append(dataColumns, dc)
 	}
 
@@ -295,7 +292,7 @@ func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofs
 	return dataColumns, nil
 }
 
-func partialColumnsGloas(included bitfield.Bitlist, cells, proofs [][][]byte, src ConstructionPopulator) ([]blocks.PartialDataColumn, error) {
+func partialColumnsGloas(included bitfield.Bitlist, cellsPerBlob [][]*kzg.Cell, proofsPerBlob [][]*kzg.Proof, src ConstructionPopulator) ([]blocks.PartialDataColumn, error) {
 	commitments, err := src.Commitments()
 	if err != nil {
 		return nil, errors.Wrap(err, "commitments")
@@ -313,21 +310,25 @@ func partialColumnsGloas(included bitfield.Bitlist, cells, proofs [][][]byte, sr
 		if err != nil {
 			return nil, errors.Wrap(err, "new gloas partial data column")
 		}
-
-		for i := range len(commitments) {
-			if !included.BitAt(uint64(i)) {
-				continue
-			}
-			if len(cells[idx]) == 0 || len(proofs[idx]) == 0 {
-				return nil, errors.Errorf("insufficient cells or proofs for column %d", idx)
-			}
-			dc.ExtendFromVerifiedCell(uint64(i), cells[idx][0], proofs[idx][0])
-			cells[idx] = cells[idx][1:]
-			proofs[idx] = proofs[idx][1:]
-		}
+		extendPartialColumnFromRows(&dc, idx, included, len(commitments), cellsPerBlob, proofsPerBlob)
 		dataColumns = append(dataColumns, dc)
 	}
 	return dataColumns, nil
+}
+
+// extendPartialColumnFromRows fills column idx of dc from the per-blob rows: row k holds the k-th
+// included blob, and nil entries mark cells the execution client does not have.
+func extendPartialColumnFromRows(dc *blocks.PartialDataColumn, idx uint64, included bitfield.Bitlist, commitmentCount int, cellsPerBlob [][]*kzg.Cell, proofsPerBlob [][]*kzg.Proof) {
+	k := 0
+	for i := range commitmentCount {
+		if !included.BitAt(uint64(i)) {
+			continue
+		}
+		if cell, proof := cellsPerBlob[k][idx], proofsPerBlob[k][idx]; cell != nil && proof != nil {
+			dc.ExtendFromVerifiedCell(uint64(i), cell[:], proof[:])
+		}
+		k++
+	}
 }
 
 // Slot returns the slot of the source

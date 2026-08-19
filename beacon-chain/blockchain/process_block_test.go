@@ -3854,3 +3854,48 @@ func TestRefreshCaches_CachedStateMatchesHeadRoot(t *testing.T) {
 	require.NotNil(t, cached)
 	require.Equal(t, primitives.Slot(1), cached.Slot())
 }
+
+func TestCustodyColumnsForFCU(t *testing.T) {
+	ctx := context.Background()
+
+	setup := func(t *testing.T, custodyGroupCount uint64) (*Service, *mockAccessor) {
+		accessor := &mockAccessor{}
+		_, _, err := accessor.UpdateCustodyInfo(0, custodyGroupCount)
+		require.NoError(t, err)
+		service, _ := minimalTestService(t, WithP2PBroadcaster(accessor))
+		return service, accessor
+	}
+
+	expectedColumns := func(t *testing.T, accessor *mockAccessor, samplingSize uint64) map[uint64]bool {
+		peerInfo, _, err := peerdas.Info(accessor.NodeID(), samplingSize)
+		require.NoError(t, err)
+		return peerInfo.CustodyColumns
+	}
+
+	t.Run("sampling size is floored at SamplesPerSlot", func(t *testing.T) {
+		service, accessor := setup(t, 0)
+		cols := service.custodyColumnsForFCU(ctx)
+		require.DeepEqual(t, expectedColumns(t, accessor, params.BeaconConfig().SamplesPerSlot), cols)
+	})
+
+	t.Run("custody group count above the floor is used", func(t *testing.T) {
+		samplingSize := params.BeaconConfig().SamplesPerSlot + 12
+		service, accessor := setup(t, samplingSize)
+		cols := service.custodyColumnsForFCU(ctx)
+		require.DeepEqual(t, expectedColumns(t, accessor, samplingSize), cols)
+	})
+
+	t.Run("attached validators add the first-half columns for builder eagerness", func(t *testing.T) {
+		service, accessor := setup(t, 0)
+		service.cfg.SubscribedValidatorsCache.Add(42)
+
+		cols := service.custodyColumnsForFCU(ctx)
+		for col := range uint64(fieldparams.CellsPerBlob) {
+			require.Equal(t, true, cols[col], "missing eager column %d", col)
+		}
+		// The custody-derived columns are still present alongside the eager expansion.
+		for col := range expectedColumns(t, accessor, params.BeaconConfig().SamplesPerSlot) {
+			require.Equal(t, true, cols[col], "missing custody column %d", col)
+		}
+	})
+}
