@@ -1,0 +1,3 @@
+go test fuzz v1
+byte('I')
+[]byte("\x8bӸ\x8d\xc5B=\x0f\f\xdf\x1b\xdb\x06\xca+7\xf8")
