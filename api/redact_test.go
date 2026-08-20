@@ -43,6 +43,11 @@ func TestRedactEndpoint(t *testing.T) {
 			want:     "[invalid endpoint]",
 		},
 		{
+			name:     "unparseable with credentials becomes placeholder",
+			endpoint: "http://user:fake-pass@local host:8080",
+			want:     "[invalid endpoint]",
+		},
+		{
 			name:     "username only still masked",
 			endpoint: "https://eth@bn-lodestar.example.io",
 			want:     "https://eth@bn-lodestar.example.io",

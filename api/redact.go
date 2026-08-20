@@ -16,7 +16,8 @@ func RedactEndpoint(endpoint string) string {
 	// Scheme-less forms like 127.0.0.1:4000 fail to parse (or parse as opaque);
 	// reparse as an authority so the host survives and credentials are still masked.
 	u, err = url.Parse("//" + endpoint)
-	if err != nil {
+	if err != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+		// Anything beyond a pure authority could smuggle credentials past Redacted.
 		return "[invalid endpoint]"
 	}
 	return strings.TrimPrefix(u.Redacted(), "//")
