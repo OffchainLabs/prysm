@@ -456,15 +456,12 @@ func Test_encodeDecodeAttestationRecord(t *testing.T) {
 			}
 			decoded, err := decodeAttestationRecord(got)
 			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("decodeAttestationRecord() error = %v, wantErr %v", err, tt.wantErr)
-				}
+				require.NotNil(t, err)
 				return
 			}
-			if !tt.wantErr {
-				require.DeepSSZEqual(t, tt.attWrapper.IndexedAttestation, decoded.IndexedAttestation)
-				require.Equal(t, tt.attWrapper.DataRoot, decoded.DataRoot)
-			}
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, tt.attWrapper.IndexedAttestation, decoded.IndexedAttestation)
+			require.Equal(t, tt.attWrapper.DataRoot, decoded.DataRoot)
 		})
 	}
 }
