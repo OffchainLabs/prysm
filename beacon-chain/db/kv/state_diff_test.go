@@ -746,7 +746,7 @@ func TestStateDiff_SaveAndReadDiffForkTransitionGloas(t *testing.T) {
 	require.NoError(t, err)
 
 	slot := primitives.Slot(math.PowerOf2(5))
-	gloasSt, err := gloas.UpgradeToGloas(st.Copy())
+	gloasSt, err := gloas.UpgradeToGloas(t.Context(), st.Copy())
 	require.NoError(t, err)
 	require.NoError(t, gloasSt.SetSlot(slot))
 

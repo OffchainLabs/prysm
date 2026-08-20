@@ -2,6 +2,7 @@ package gloas_test
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
@@ -19,6 +20,15 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
+
+func TestUpgradeToGloas_ContextCancellation(t *testing.T) {
+	st, _ := util.DeterministicGenesisStateFulu(t, params.BeaconConfig().MaxValidatorsPerCommittee)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err := gloas.UpgradeToGloas(ctx, st)
+	require.ErrorIs(t, err, context.Canceled)
+}
 
 func TestUpgradeToGloas_Basic(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateFulu(t, params.BeaconConfig().MaxValidatorsPerCommittee)
@@ -44,7 +54,7 @@ func TestUpgradeToGloas_Basic(t *testing.T) {
 	require.NoError(t, st.SetLatestExecutionPayloadHeader(wrappedHeader))
 
 	preForkState := st.Copy()
-	mSt, err := gloas.UpgradeToGloas(st)
+	mSt, err := gloas.UpgradeToGloas(t.Context(), st)
 	require.NoError(t, err)
 
 	require.Equal(t, preForkState.GenesisTime(), mSt.GenesisTime())
@@ -119,7 +129,7 @@ func TestUpgradeToGloas_OnboardsBuilderDeposit(t *testing.T) {
 
 	require.NoError(t, st.SetPendingDeposits([]*ethpb.PendingDeposit{deposit}))
 
-	mSt, err := gloas.UpgradeToGloas(st)
+	mSt, err := gloas.UpgradeToGloas(t.Context(), st)
 	require.NoError(t, err)
 
 	pbState, ok := mSt.ToProtoUnsafe().(*ethpb.BeaconStateGloas)

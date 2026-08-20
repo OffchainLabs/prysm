@@ -425,7 +425,7 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 	}
 
 	if time.CanUpgradeToGloas(slot) {
-		state, err = gloas.UpgradeToGloas(state)
+		state, err = gloas.UpgradeToGloas(ctx, state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
 			return nil, err

@@ -1,6 +1,8 @@
 package state
 
 import (
+	"context"
+
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -45,7 +47,7 @@ type writeOnlyGloasFields interface {
 	DecreaseWithdrawalBalances(withdrawals []*enginev1.Withdrawal) error
 	DequeueBuilderPendingWithdrawals(num uint64) error
 	SetNextWithdrawalBuilderIndex(idx primitives.BuilderIndex) error
-	OnboardBuildersFromPendingDeposits() error
+	OnboardBuildersFromPendingDeposits(context.Context) error
 }
 
 type readOnlyGloasFields interface {
