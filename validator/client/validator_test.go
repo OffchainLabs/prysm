@@ -4066,7 +4066,7 @@ func TestBuilderTargetsForKey(t *testing.T) {
 
 	t.Run("targets resolve regardless of the stored version stamp", func(t *testing.T) {
 		v := &validator{proposerSettings: &proposer.Settings{Version: proposer.SchemaV1, ProposeConfig: proposeConfig}}
-		require.Equal(t, 2, len(v.builderTargetsForKey(pk)))
+		require.Equal(t, 2, len(builderTargets(v.ProposerSettings().EffectiveBuilderConfig(pk))))
 	})
 
 	t.Run("explicit empty builders list produces no targets", func(t *testing.T) {
@@ -4074,16 +4074,38 @@ func TestBuilderTargetsForKey(t *testing.T) {
 			pk: {BuilderConfig: &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{}}},
 		}
 		v := &validator{proposerSettings: &proposer.Settings{Version: proposer.SchemaV2, ProposeConfig: optedOut}}
-		require.Equal(t, 0, len(v.builderTargetsForKey(pk)))
+		require.Equal(t, 0, len(builderTargets(v.ProposerSettings().EffectiveBuilderConfig(pk))))
 	})
 
 	t.Run("entries resolve with config-level fallbacks", func(t *testing.T) {
 		v := &validator{proposerSettings: &proposer.Settings{Version: proposer.SchemaV2, ProposeConfig: proposeConfig}}
-		targets := v.builderTargetsForKey(pk)
+		targets := builderTargets(v.ProposerSettings().EffectiveBuilderConfig(pk))
 		require.Equal(t, 2, len(targets))
 		require.Equal(t, uint64(100), targets[0].maxPayment)
 		require.Equal(t, uint64(500), targets[1].maxPayment)
 	})
+}
+
+func TestBuilderConfigForSlot_TopLevelWithoutEntries(t *testing.T) {
+	v, _, validatorKey, finish := setup(t, false)
+	defer finish()
+	var pk [fieldparams.BLSPubkeyLength]byte
+	copy(pk[:], validatorKey.PublicKey().Marshal())
+	u64 := func(val uint64) *validatorType.Uint64 { u := validatorType.Uint64(val); return &u }
+
+	require.IsNil(t, v.builderConfigForSlot(t.Context(), pk, 10))
+
+	v.proposerSettings = &proposer.Settings{
+		Version: proposer.SchemaV2,
+		ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+			pk: {BuilderConfig: &proposer.BuilderConfig{MinBid: u64(5), BuilderBoostFactor: u64(0)}},
+		},
+	}
+	cfg := v.builderConfigForSlot(t.Context(), pk, 10)
+	require.NotNil(t, cfg)
+	require.Equal(t, primitives.Gwei(5), cfg.MinBid)
+	require.Equal(t, uint64(0), cfg.BuilderBoostFactor)
+	require.Equal(t, 0, len(cfg.Builders))
 }
 
 func TestWarmBuilderRequestAuthsForDuties_CollapsesSameURL(t *testing.T) {
@@ -4110,13 +4132,18 @@ func TestWarmBuilderRequestAuthsForDuties_CollapsesSameURL(t *testing.T) {
 		yield(pk, &ethpb.ValidatorDuty{PublicKey: pk[:], ProposerSlots: []primitives.Slot{10}})
 	}
 	reqs := v.warmBuilderRequestAuthsForDuties(t.Context(), km, 5, duties)
-	// Same-url entries collapse to one request carrying the safest (lowest) ceiling.
-	require.Equal(t, 1, len(reqs))
-	require.Equal(t, primitives.Gwei(100), reqs[0].Request.Preferences.MaxExecutionPayment)
+	// Same-url entries with distinct auth data each submit their own request.
+	require.Equal(t, 2, len(reqs))
+	for _, r := range reqs {
+		require.Equal(t, "https://a.example", r.Url)
+		require.Equal(t, primitives.Gwei(100), r.MaxExecutionPayment)
+	}
+	require.DeepEqual(t, []byte{1}, reqs[0].Auth.Message.Data)
+	require.DeepEqual(t, []byte{2}, reqs[1].Auth.Message.Data)
 
 	t.Run("distinct urls all submit the lowest max_execution_payment", func(t *testing.T) {
 		// The beacon node holds one max_execution_payment per validator, so every
-		// url's submission carries the lowest entry until #630 adds builder identity.
+		// url's submission carries the lowest entry until per-builder enforcement lands.
 		v.proposerSettings = &proposer.Settings{
 			Version: proposer.SchemaV2,
 			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
@@ -4131,7 +4158,7 @@ func TestWarmBuilderRequestAuthsForDuties_CollapsesSameURL(t *testing.T) {
 		reqs := v.warmBuilderRequestAuthsForDuties(t.Context(), km, 5, duties)
 		require.Equal(t, 2, len(reqs))
 		for _, r := range reqs {
-			require.Equal(t, primitives.Gwei(0), r.Request.Preferences.MaxExecutionPayment)
+			require.Equal(t, primitives.Gwei(0), r.MaxExecutionPayment)
 		}
 	})
 }

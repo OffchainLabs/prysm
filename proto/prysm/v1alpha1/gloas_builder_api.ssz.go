@@ -6,13 +6,13 @@ import (
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
-// MarshalSSZ ssz marshals the RequestAuthV1 object
-func (r *RequestAuthV1) MarshalSSZ() ([]byte, error) {
+// MarshalSSZ ssz marshals the RequestAuth object
+func (r *RequestAuth) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(r)
 }
 
-// MarshalSSZTo ssz marshals the RequestAuthV1 object to a target array
-func (r *RequestAuthV1) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+// MarshalSSZTo ssz marshals the RequestAuth object to a target array
+func (r *RequestAuth) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 	offset := int(12)
 
@@ -33,8 +33,8 @@ func (r *RequestAuthV1) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	return
 }
 
-// UnmarshalSSZ ssz unmarshals the RequestAuthV1 object
-func (r *RequestAuthV1) UnmarshalSSZ(buf []byte) error {
+// UnmarshalSSZ ssz unmarshals the RequestAuth object
+func (r *RequestAuth) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
 	if size < 12 {
@@ -70,8 +70,8 @@ func (r *RequestAuthV1) UnmarshalSSZ(buf []byte) error {
 	return err
 }
 
-// SizeSSZ returns the ssz encoded size in bytes for the RequestAuthV1 object
-func (r *RequestAuthV1) SizeSSZ() (size int) {
+// SizeSSZ returns the ssz encoded size in bytes for the RequestAuth object
+func (r *RequestAuth) SizeSSZ() (size int) {
 	size = 12
 
 	// Field (0) 'Data'
@@ -80,13 +80,13 @@ func (r *RequestAuthV1) SizeSSZ() (size int) {
 	return
 }
 
-// HashTreeRoot ssz hashes the RequestAuthV1 object
-func (r *RequestAuthV1) HashTreeRoot() ([32]byte, error) {
+// HashTreeRoot ssz hashes the RequestAuth object
+func (r *RequestAuth) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(r)
 }
 
-// HashTreeRootWith ssz hashes the RequestAuthV1 object with a hasher
-func (r *RequestAuthV1) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+// HashTreeRootWith ssz hashes the RequestAuth object with a hasher
+func (r *RequestAuth) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'Data'
@@ -108,20 +108,20 @@ func (r *RequestAuthV1) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
-// MarshalSSZ ssz marshals the SignedRequestAuthV1 object
-func (s *SignedRequestAuthV1) MarshalSSZ() ([]byte, error) {
+// MarshalSSZ ssz marshals the SignedRequestAuth object
+func (s *SignedRequestAuth) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(s)
 }
 
-// MarshalSSZTo ssz marshals the SignedRequestAuthV1 object to a target array
-func (s *SignedRequestAuthV1) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+// MarshalSSZTo ssz marshals the SignedRequestAuth object to a target array
+func (s *SignedRequestAuth) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 	offset := int(100)
 
 	// Offset (0) 'Message'
 	dst = ssz.WriteOffset(dst, offset)
 	if s.Message == nil {
-		s.Message = new(RequestAuthV1)
+		s.Message = new(RequestAuth)
 	}
 	offset += s.Message.SizeSSZ()
 
@@ -140,8 +140,8 @@ func (s *SignedRequestAuthV1) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	return
 }
 
-// UnmarshalSSZ ssz unmarshals the SignedRequestAuthV1 object
-func (s *SignedRequestAuthV1) UnmarshalSSZ(buf []byte) error {
+// UnmarshalSSZ ssz unmarshals the SignedRequestAuth object
+func (s *SignedRequestAuth) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
 	if size < 100 {
@@ -170,7 +170,7 @@ func (s *SignedRequestAuthV1) UnmarshalSSZ(buf []byte) error {
 	{
 		buf = tail[o0:]
 		if s.Message == nil {
-			s.Message = new(RequestAuthV1)
+			s.Message = new(RequestAuth)
 		}
 		if err = s.Message.UnmarshalSSZ(buf); err != nil {
 			return err
@@ -179,26 +179,26 @@ func (s *SignedRequestAuthV1) UnmarshalSSZ(buf []byte) error {
 	return err
 }
 
-// SizeSSZ returns the ssz encoded size in bytes for the SignedRequestAuthV1 object
-func (s *SignedRequestAuthV1) SizeSSZ() (size int) {
+// SizeSSZ returns the ssz encoded size in bytes for the SignedRequestAuth object
+func (s *SignedRequestAuth) SizeSSZ() (size int) {
 	size = 100
 
 	// Field (0) 'Message'
 	if s.Message == nil {
-		s.Message = new(RequestAuthV1)
+		s.Message = new(RequestAuth)
 	}
 	size += s.Message.SizeSSZ()
 
 	return
 }
 
-// HashTreeRoot ssz hashes the SignedRequestAuthV1 object
-func (s *SignedRequestAuthV1) HashTreeRoot() ([32]byte, error) {
+// HashTreeRoot ssz hashes the SignedRequestAuth object
+func (s *SignedRequestAuth) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(s)
 }
 
-// HashTreeRootWith ssz hashes the SignedRequestAuthV1 object with a hasher
-func (s *SignedRequestAuthV1) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+// HashTreeRootWith ssz hashes the SignedRequestAuth object with a hasher
+func (s *SignedRequestAuth) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'Message'
@@ -217,13 +217,13 @@ func (s *SignedRequestAuthV1) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
-// MarshalSSZ ssz marshals the BuilderPreferencesV1 object
-func (b *BuilderPreferencesV1) MarshalSSZ() ([]byte, error) {
+// MarshalSSZ ssz marshals the BuilderPreferences object
+func (b *BuilderPreferences) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(b)
 }
 
-// MarshalSSZTo ssz marshals the BuilderPreferencesV1 object to a target array
-func (b *BuilderPreferencesV1) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+// MarshalSSZTo ssz marshals the BuilderPreferences object to a target array
+func (b *BuilderPreferences) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 
 	// Field (0) 'MaxExecutionPayment'
@@ -232,8 +232,8 @@ func (b *BuilderPreferencesV1) MarshalSSZTo(buf []byte) (dst []byte, err error) 
 	return
 }
 
-// UnmarshalSSZ ssz unmarshals the BuilderPreferencesV1 object
-func (b *BuilderPreferencesV1) UnmarshalSSZ(buf []byte) error {
+// UnmarshalSSZ ssz unmarshals the BuilderPreferences object
+func (b *BuilderPreferences) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
 	if size != 8 {
@@ -246,19 +246,19 @@ func (b *BuilderPreferencesV1) UnmarshalSSZ(buf []byte) error {
 	return err
 }
 
-// SizeSSZ returns the ssz encoded size in bytes for the BuilderPreferencesV1 object
-func (b *BuilderPreferencesV1) SizeSSZ() (size int) {
+// SizeSSZ returns the ssz encoded size in bytes for the BuilderPreferences object
+func (b *BuilderPreferences) SizeSSZ() (size int) {
 	size = 8
 	return
 }
 
-// HashTreeRoot ssz hashes the BuilderPreferencesV1 object
-func (b *BuilderPreferencesV1) HashTreeRoot() ([32]byte, error) {
+// HashTreeRoot ssz hashes the BuilderPreferences object
+func (b *BuilderPreferences) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(b)
 }
 
-// HashTreeRootWith ssz hashes the BuilderPreferencesV1 object with a hasher
-func (b *BuilderPreferencesV1) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+// HashTreeRootWith ssz hashes the BuilderPreferences object with a hasher
+func (b *BuilderPreferences) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'MaxExecutionPayment'
@@ -268,19 +268,19 @@ func (b *BuilderPreferencesV1) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
-// MarshalSSZ ssz marshals the BuilderPreferencesRequestV1 object
-func (b *BuilderPreferencesRequestV1) MarshalSSZ() ([]byte, error) {
+// MarshalSSZ ssz marshals the BuilderPreferencesRequest object
+func (b *BuilderPreferencesRequest) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(b)
 }
 
-// MarshalSSZTo ssz marshals the BuilderPreferencesRequestV1 object to a target array
-func (b *BuilderPreferencesRequestV1) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+// MarshalSSZTo ssz marshals the BuilderPreferencesRequest object to a target array
+func (b *BuilderPreferencesRequest) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 	offset := int(12)
 
 	// Field (0) 'Preferences'
 	if b.Preferences == nil {
-		b.Preferences = new(BuilderPreferencesV1)
+		b.Preferences = new(BuilderPreferences)
 	}
 	if dst, err = b.Preferences.MarshalSSZTo(dst); err != nil {
 		return
@@ -289,7 +289,7 @@ func (b *BuilderPreferencesRequestV1) MarshalSSZTo(buf []byte) (dst []byte, err 
 	// Offset (1) 'Auth'
 	dst = ssz.WriteOffset(dst, offset)
 	if b.Auth == nil {
-		b.Auth = new(SignedRequestAuthV1)
+		b.Auth = new(SignedRequestAuth)
 	}
 	offset += b.Auth.SizeSSZ()
 
@@ -301,8 +301,8 @@ func (b *BuilderPreferencesRequestV1) MarshalSSZTo(buf []byte) (dst []byte, err 
 	return
 }
 
-// UnmarshalSSZ ssz unmarshals the BuilderPreferencesRequestV1 object
-func (b *BuilderPreferencesRequestV1) UnmarshalSSZ(buf []byte) error {
+// UnmarshalSSZ ssz unmarshals the BuilderPreferencesRequest object
+func (b *BuilderPreferencesRequest) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
 	if size < 12 {
@@ -314,7 +314,7 @@ func (b *BuilderPreferencesRequestV1) UnmarshalSSZ(buf []byte) error {
 
 	// Field (0) 'Preferences'
 	if b.Preferences == nil {
-		b.Preferences = new(BuilderPreferencesV1)
+		b.Preferences = new(BuilderPreferences)
 	}
 	if err = b.Preferences.UnmarshalSSZ(buf[0:8]); err != nil {
 		return err
@@ -333,7 +333,7 @@ func (b *BuilderPreferencesRequestV1) UnmarshalSSZ(buf []byte) error {
 	{
 		buf = tail[o1:]
 		if b.Auth == nil {
-			b.Auth = new(SignedRequestAuthV1)
+			b.Auth = new(SignedRequestAuth)
 		}
 		if err = b.Auth.UnmarshalSSZ(buf); err != nil {
 			return err
@@ -342,26 +342,26 @@ func (b *BuilderPreferencesRequestV1) UnmarshalSSZ(buf []byte) error {
 	return err
 }
 
-// SizeSSZ returns the ssz encoded size in bytes for the BuilderPreferencesRequestV1 object
-func (b *BuilderPreferencesRequestV1) SizeSSZ() (size int) {
+// SizeSSZ returns the ssz encoded size in bytes for the BuilderPreferencesRequest object
+func (b *BuilderPreferencesRequest) SizeSSZ() (size int) {
 	size = 12
 
 	// Field (1) 'Auth'
 	if b.Auth == nil {
-		b.Auth = new(SignedRequestAuthV1)
+		b.Auth = new(SignedRequestAuth)
 	}
 	size += b.Auth.SizeSSZ()
 
 	return
 }
 
-// HashTreeRoot ssz hashes the BuilderPreferencesRequestV1 object
-func (b *BuilderPreferencesRequestV1) HashTreeRoot() ([32]byte, error) {
+// HashTreeRoot ssz hashes the BuilderPreferencesRequest object
+func (b *BuilderPreferencesRequest) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(b)
 }
 
-// HashTreeRootWith ssz hashes the BuilderPreferencesRequestV1 object with a hasher
-func (b *BuilderPreferencesRequestV1) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+// HashTreeRootWith ssz hashes the BuilderPreferencesRequest object with a hasher
+func (b *BuilderPreferencesRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'Preferences'
