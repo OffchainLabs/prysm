@@ -116,19 +116,19 @@ import (
 //
 //	    return post
 //	</spec>
-func UpgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
+func UpgradeToGloas(ctx context.Context, beaconState state.BeaconState) (state.BeaconState, error) {
 	s, err := upgradeToGloas(beaconState)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not convert to gloas")
 	}
-	ptcWindow, err := initializePTCWindow(context.Background(), s)
+	ptcWindow, err := initializePTCWindow(ctx, s)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to initialize ptc window")
 	}
 	if err := s.SetPTCWindow(ptcWindow); err != nil {
 		return nil, errors.Wrap(err, "failed to set ptc window")
 	}
-	if err := s.OnboardBuildersFromPendingDeposits(); err != nil {
+	if err := s.OnboardBuildersFromPendingDeposits(ctx); err != nil {
 		return nil, errors.Wrap(err, "failed to onboard builders from pending deposits")
 	}
 	return s, nil

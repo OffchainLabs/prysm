@@ -2,6 +2,7 @@ package state_native
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -1004,7 +1005,7 @@ func TestAddBuilderFromDeposit_CopyOnWrite(t *testing.T) {
 func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
 	t.Run("returns error before gloas", func(t *testing.T) {
 		st := &BeaconState{version: version.Fulu}
-		err := st.OnboardBuildersFromPendingDeposits()
+		err := st.OnboardBuildersFromPendingDeposits(t.Context())
 		require.ErrorContains(t, "OnboardBuildersFromPendingDeposits", err)
 	})
 
@@ -1023,7 +1024,7 @@ func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
 		}
 
 		st := newGloasState(t, []*ethpb.Validator{validator}, nil, []*ethpb.PendingDeposit{deposit}, 0)
-		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits(t.Context()))
 		require.Equal(t, 1, len(st.pendingDeposits))
 		require.Equal(t, 0, len(st.builders))
 	})
@@ -1037,7 +1038,7 @@ func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
 		deposit := newPendingDeposit(t, sk, builderCreds, amount, depSlot, true)
 
 		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{deposit}, 0)
-		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits(t.Context()))
 		require.Equal(t, 0, len(st.pendingDeposits))
 		require.Equal(t, 1, len(st.builders))
 
@@ -1061,7 +1062,7 @@ func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
 		deposit := newPendingDeposit(t, sk, nonBuilderCreds, 5, 0, false)
 
 		st := newGloasState(t, nil, []*ethpb.Builder{builder}, []*ethpb.PendingDeposit{deposit}, 0)
-		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits(t.Context()))
 		require.Equal(t, 0, len(st.pendingDeposits))
 		require.Equal(t, 1, len(st.builders))
 		require.Equal(t, primitives.Gwei(15), st.builders[0].Balance)
@@ -1074,7 +1075,7 @@ func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
 		deposit := newPendingDeposit(t, sk, builderCreds, 10, 0, false)
 
 		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{deposit}, 0)
-		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits(t.Context()))
 		require.Equal(t, 0, len(st.pendingDeposits))
 		require.Equal(t, 0, len(st.builders))
 	})
@@ -1089,9 +1090,25 @@ func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
 		depositBuilder := newPendingDeposit(t, sk, builderCreds, 7, 0, true)
 
 		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{depositValidator, depositBuilder}, 0)
-		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits(t.Context()))
 		require.Equal(t, 2, len(st.pendingDeposits))
 		require.Equal(t, 0, len(st.builders))
+	})
+
+	t.Run("builder deposit before validator deposit creates builder", func(t *testing.T) {
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		builderCreds := builderWithdrawalCredentials(0xEF)
+		validatorCreds := nonBuilderWithdrawalCredentials()
+
+		depositBuilder := newPendingDeposit(t, sk, builderCreds, 7, 0, true)
+		depositValidator := newPendingDeposit(t, sk, validatorCreds, 5, 0, true)
+
+		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{depositBuilder, depositValidator}, 0)
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits(t.Context()))
+		require.Equal(t, 0, len(st.pendingDeposits))
+		require.Equal(t, 1, len(st.builders))
+		require.Equal(t, primitives.Gwei(12), st.builders[0].Balance)
 	})
 
 	t.Run("keeps invalid non-builder deposit in pending queue", func(t *testing.T) {
@@ -1101,7 +1118,7 @@ func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
 		deposit := newPendingDeposit(t, sk, validatorCreds, 5, 0, false)
 
 		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{deposit}, 0)
-		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits(t.Context()))
 		require.Equal(t, 1, len(st.pendingDeposits))
 		require.Equal(t, 0, len(st.builders))
 	})
@@ -1115,7 +1132,7 @@ func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
 		depositTopUp := newPendingDeposit(t, sk, builderCreds, 5, depSlot, true)
 
 		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{depositCreate, depositTopUp}, 0)
-		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits(t.Context()))
 		require.Equal(t, 0, len(st.pendingDeposits))
 		require.Equal(t, 1, len(st.builders))
 		require.Equal(t, primitives.Gwei(15), st.builders[0].Balance)
@@ -1131,12 +1148,160 @@ func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
 		depositBuilder := newPendingDeposit(t, sk, builderCreds, 7, 0, true)
 
 		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{depositInvalidValidator, depositBuilder}, 0)
-		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits(t.Context()))
 		require.Equal(t, 1, len(st.pendingDeposits))
 		require.DeepEqual(t, depositInvalidValidator, st.pendingDeposits[0])
 		require.Equal(t, 1, len(st.builders))
 		require.Equal(t, primitives.Gwei(7), st.builders[0].Balance)
 	})
+}
+
+func TestOnboardBuildersFromPendingDeposits_VerificationWorkIsLinear(t *testing.T) {
+	t.Run("invalid pending deposits are checked once", func(t *testing.T) {
+		const (
+			pendingCount = 100
+			builderCount = 50
+		)
+		pubkey := bytes.Repeat([]byte{0x42}, fieldparams.BLSPubkeyLength)
+		pendingDeposits := make([]*ethpb.PendingDeposit, 0, pendingCount+builderCount)
+		for i := range pendingCount {
+			pendingDeposits = append(pendingDeposits, &ethpb.PendingDeposit{
+				PublicKey:             pubkey,
+				WithdrawalCredentials: nonBuilderWithdrawalCredentials(),
+				Amount:                uint64(i + 1),
+				Signature:             make([]byte, fieldparams.BLSSignatureLength),
+			})
+		}
+		for i := range builderCount {
+			pendingDeposits = append(pendingDeposits, &ethpb.PendingDeposit{
+				PublicKey:             pubkey,
+				WithdrawalCredentials: builderWithdrawalCredentials(byte(i)),
+				Amount:                uint64(pendingCount + i + 1),
+				Signature:             make([]byte, fieldparams.BLSSignatureLength),
+			})
+		}
+
+		st := newGloasState(t, nil, nil, pendingDeposits, 0)
+		verificationCount := 0
+		err := st.onboardBuildersFromPendingDeposits(t.Context(), func(*ethpb.Deposit_Data) (bool, error) {
+			verificationCount++
+			return false, nil
+		})
+		require.NoError(t, err)
+
+		// Each retained pending deposit and each builder candidate is verified at most once.
+		// The previous implementation performed pendingCount*builderCount+builderCount checks.
+		require.Equal(t, pendingCount+builderCount, verificationCount)
+		require.Equal(t, pendingCount, len(st.pendingDeposits))
+		require.Equal(t, 0, len(st.builders))
+	})
+
+	t.Run("valid pending validator result is reused", func(t *testing.T) {
+		const builderCount = 50
+		pubkey := bytes.Repeat([]byte{0x43}, fieldparams.BLSPubkeyLength)
+		pendingDeposits := []*ethpb.PendingDeposit{
+			{
+				PublicKey:             pubkey,
+				WithdrawalCredentials: nonBuilderWithdrawalCredentials(),
+				Amount:                1,
+			},
+			{
+				PublicKey:             pubkey,
+				WithdrawalCredentials: nonBuilderWithdrawalCredentials(),
+				Amount:                2,
+			},
+		}
+		for i := range builderCount {
+			pendingDeposits = append(pendingDeposits, &ethpb.PendingDeposit{
+				PublicKey:             pubkey,
+				WithdrawalCredentials: builderWithdrawalCredentials(byte(i)),
+				Amount:                uint64(i + 3),
+			})
+		}
+
+		st := newGloasState(t, nil, nil, pendingDeposits, 0)
+		verificationCount := 0
+		err := st.onboardBuildersFromPendingDeposits(t.Context(), func(data *ethpb.Deposit_Data) (bool, error) {
+			verificationCount++
+			return data.Amount == 2, nil
+		})
+		require.NoError(t, err)
+
+		require.Equal(t, 2, verificationCount)
+		require.Equal(t, len(pendingDeposits), len(st.pendingDeposits))
+		require.Equal(t, 0, len(st.builders))
+	})
+
+	t.Run("only newly appended pending deposits are checked", func(t *testing.T) {
+		pubkey := bytes.Repeat([]byte{0x45}, fieldparams.BLSPubkeyLength)
+		pendingDeposits := []*ethpb.PendingDeposit{
+			{
+				PublicKey:             pubkey,
+				WithdrawalCredentials: nonBuilderWithdrawalCredentials(),
+				Amount:                1,
+			},
+			{
+				PublicKey:             pubkey,
+				WithdrawalCredentials: builderWithdrawalCredentials(0xA1),
+				Amount:                2,
+			},
+			{
+				PublicKey:             pubkey,
+				WithdrawalCredentials: nonBuilderWithdrawalCredentials(),
+				Amount:                3,
+			},
+			{
+				PublicKey:             pubkey,
+				WithdrawalCredentials: builderWithdrawalCredentials(0xA2),
+				Amount:                4,
+			},
+			{
+				PublicKey:             pubkey,
+				WithdrawalCredentials: builderWithdrawalCredentials(0xA3),
+				Amount:                5,
+			},
+		}
+
+		st := newGloasState(t, nil, nil, pendingDeposits, 0)
+		verifiedAmounts := make([]uint64, 0, len(pendingDeposits))
+		err := st.onboardBuildersFromPendingDeposits(t.Context(), func(data *ethpb.Deposit_Data) (bool, error) {
+			verifiedAmounts = append(verifiedAmounts, data.Amount)
+			return false, nil
+		})
+		require.NoError(t, err)
+
+		require.DeepEqual(t, []uint64{1, 2, 3, 4, 5}, verifiedAmounts)
+		require.Equal(t, 2, len(st.pendingDeposits))
+		require.Equal(t, 0, len(st.builders))
+	})
+}
+
+func TestOnboardBuildersFromPendingDeposits_ContextCancellation(t *testing.T) {
+	pubkey := bytes.Repeat([]byte{0x44}, fieldparams.BLSPubkeyLength)
+	pendingDeposits := []*ethpb.PendingDeposit{
+		{
+			PublicKey:             pubkey,
+			WithdrawalCredentials: nonBuilderWithdrawalCredentials(),
+			Amount:                1,
+		},
+		{
+			PublicKey:             pubkey,
+			WithdrawalCredentials: builderWithdrawalCredentials(0xAA),
+			Amount:                2,
+		},
+	}
+	st := newGloasState(t, nil, nil, pendingDeposits, 0)
+	ctx, cancel := context.WithCancel(t.Context())
+	verificationCount := 0
+	err := st.onboardBuildersFromPendingDeposits(ctx, func(*ethpb.Deposit_Data) (bool, error) {
+		verificationCount++
+		cancel()
+		return false, nil
+	})
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, 1, verificationCount)
+	require.Equal(t, len(pendingDeposits), len(st.pendingDeposits))
+	require.Equal(t, 0, len(st.builders))
 }
 
 func newGloasState(

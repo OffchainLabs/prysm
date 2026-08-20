@@ -2334,7 +2334,7 @@ func updateToVersion(ctx context.Context, source state.BeaconState, target int) 
 	case version.Electra:
 		ret, err = fulu.ConvertToFulu(source)
 	case version.Fulu:
-		ret, err = gloas.UpgradeToGloas(source)
+		ret, err = gloas.UpgradeToGloas(ctx, source)
 	default:
 		return nil, errors.Errorf("unsupported version %s", version.String(source.Version()))
 	}
