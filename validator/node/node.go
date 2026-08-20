@@ -398,7 +398,7 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		return err
 	}
 
-	stateless := cliCtx.Bool(flags.EnableStatelessFlag.Name)
+	stateless := statelessMode(cliCtx)
 
 	validatorService, err := client.NewValidatorService(cliCtx.Context, &client.Config{
 		DB:                      c.db,
@@ -431,6 +431,43 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 	}
 
 	return c.services.RegisterService(validatorService)
+}
+
+// statelessMode resolves the Gloas stateless setting. Only the beacon node that built a block can
+// serve and reveal its execution payload, so with several beacon nodes stateless is forced on.
+func statelessMode(cliCtx *cli.Context) bool {
+	stateless := cliCtx.Bool(flags.EnableStatelessFlag.Name)
+	if stateless {
+		return true
+	}
+	if params.BeaconConfig().GloasForkEpoch == params.BeaconConfig().FarFutureEpoch {
+		return false
+	}
+
+	// Setting the REST provider flag implicitly enables the REST API, mirroring ConfigureValidator.
+	endpointFlag := flags.BeaconRPCProviderFlag.Name
+	if features.Get().EnableBeaconRESTApi || cliCtx.IsSet(flags.BeaconRESTApiProviderFlag.Name) {
+		endpointFlag = flags.BeaconRESTApiProviderFlag.Name
+	}
+	hosts := 0
+	for h := range strings.SplitSeq(cliCtx.String(endpointFlag), ",") {
+		if strings.TrimSpace(h) != "" {
+			hosts++
+		}
+	}
+	if hosts < 2 {
+		return false
+	}
+
+	if cliCtx.IsSet(flags.EnableStatelessFlag.Name) {
+		log.Errorf("Gloas block production with --%s=false and multiple beacon nodes can fail: "+
+			"only the node that built a block can reveal its execution payload", flags.EnableStatelessFlag.Name)
+		return false
+	}
+
+	log.Warnf("Multiple beacon nodes configured: enabling --%s so Gloas block production works on every node. "+
+		"Pass --%s=false to keep it off.", flags.EnableStatelessFlag.Name, flags.EnableStatelessFlag.Name)
+	return true
 }
 
 // Web3SignerConfig returns a SetupConfig for the remote web3signer key manager
