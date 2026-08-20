@@ -3,6 +3,7 @@ package ssz_static
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/OffchainLabs/methodical-ssz/ssz"
@@ -164,7 +165,7 @@ func UnmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 	if o, ok := obj.(ssz.Unmarshaler); ok {
 		err = o.UnmarshalSSZ(serializedBytes)
 	} else {
-		err = errors.New("could not unmarshal object, not a fastssz compatible object")
+		err = fmt.Errorf("selected type %T for folder %s does not implement ssz.Unmarshaler", obj, folderName)
 	}
 	return obj, err
 }

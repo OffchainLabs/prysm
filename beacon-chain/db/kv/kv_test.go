@@ -152,9 +152,7 @@ func Test_setupBlockStorageType(t *testing.T) {
 		require.NoError(t, store.SaveHeadBlockRoot(ctx, root))
 		retrievedBlk, err := store.Block(ctx, root)
 		require.NoError(t, err)
-		if retrievedBlk == nil {
-			t.Fatal("retrieved block is nil")
-		}
+		require.NotNil(t, retrievedBlk)
 		rRoot, err := retrievedBlk.Block().HashTreeRoot()
 		require.NoError(t, err)
 		require.Equal(t, root, rRoot)

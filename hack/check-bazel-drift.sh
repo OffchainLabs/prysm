@@ -55,7 +55,7 @@ gofmt -s -w "${copied[@]}"
 
 # --- ssz.go files --------------------------------------------------------
 
-bazel query 'kind(ssz_gen_marshal, //proto/...)' | xargs bazel build $@
+bazel query 'kind(ssz_methodical, //proto/...)' | xargs bazel build $@
 
 # Get locations of proto ssz.go files.
 file_list=()
