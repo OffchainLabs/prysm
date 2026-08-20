@@ -344,14 +344,14 @@ func TestStatelessMode(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		restApi       bool
-		gloasEpoch    primitives.Epoch
 		restEndpoints string
 		grpcEndpoints string
 		setStateless  string
-		want          bool
 		wantLogSubstr string
+		gloasEpoch    primitives.Epoch
 		wantLogLevel  logrus.Level
+		restApi       bool
+		want          bool
 	}{
 		{
 			name:          "single rest host stays off",
