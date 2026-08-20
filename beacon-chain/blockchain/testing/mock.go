@@ -38,6 +38,7 @@ var ErrNilState = errors.New("nil state")
 // ChainService defines the mock interface for testing
 type ChainService struct {
 	NotFinalized                bool
+	BuiltOnFullParentVal        bool
 	Full                        bool
 	ValidAttestation            bool
 	Optimistic                  bool
@@ -56,7 +57,6 @@ type ChainService struct {
 	MockDataAvailable           map[[32]byte]bool
 	MockDataAvailableErr        error
 	ParentPayloadReadyVal       *bool
-	BuiltOnFullParentVal        bool
 	BlockSlot                   primitives.Slot
 	OptimisticRoots             map[[32]byte]bool
 	FinalizedRoots              map[[32]byte]bool
