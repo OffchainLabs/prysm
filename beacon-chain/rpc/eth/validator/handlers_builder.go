@@ -5,16 +5,38 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// requireGloasVersionHeader validates the consensus version request header, writing
+// the error response and returning false when it is absent, invalid, or pre-gloas.
+func requireGloasVersionHeader(w http.ResponseWriter, r *http.Request, preGloasMsg string) bool {
+	versionHeader := r.Header.Get(api.VersionHeader)
+	if versionHeader == "" {
+		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
+		return false
+	}
+	v, err := version.FromString(versionHeader)
+	if err != nil {
+		httputil.HandleError(w, "Invalid version: "+err.Error(), http.StatusBadRequest)
+		return false
+	}
+	if v < version.Gloas {
+		httputil.HandleError(w, preGloasMsg, http.StatusBadRequest)
+		return false
+	}
+	return true
+}
 
 // SubmitBuilderPreferences forwards per-builder preference entries to their builders
 // ahead of block production. Endpoint: POST /eth/v1/validator/builder_preferences

@@ -24,7 +24,6 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // ProduceBlockV4 requests a beacon node to produce a valid Gloas block.
@@ -53,15 +52,6 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 
 	rawRandaoReveal := r.URL.Query().Get("randao_reveal")
 	rawGraffiti := r.URL.Query().Get("graffiti")
-
-	var bbFactor *wrapperspb.UInt64Value
-	rawBbFactor, bbValue, ok := shared.UintFromQuery(w, r, "builder_boost_factor", false)
-	if !ok {
-		return
-	}
-	if rawBbFactor != "" {
-		bbFactor = &wrapperspb.UInt64Value{Value: bbValue}
-	}
 
 	includePayload := true
 	if raw := r.URL.Query().Get("include_payload"); raw == "false" {
@@ -98,12 +88,12 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		builderConfig = cfg
 	}
 
+	// Gloas has no MEV-boost path: p2p-bid and per-builder boosts arrive inside BuilderConfig,
+	// so the legacy skip_mev_boost/builder_boost_factor request fields are not used here.
 	v1alpha1resp, err := s.V1Alpha1Server.GetBeaconBlock(ctx, &eth.BlockRequest{
 		Slot:                  primitives.Slot(slot),
 		RandaoReveal:          randaoReveal,
 		Graffiti:              graffiti,
-		SkipMevBoost:          false,
-		BuilderBoostFactor:    bbFactor,
 		EagerPayloadStateRoot: includePayload,
 		BuilderConfig:         builderConfig,
 	})
