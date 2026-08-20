@@ -788,7 +788,7 @@ func (v *validator) checkDependentRoots(ctx context.Context, prevRoot, currRoot 
 			return errors.Wrap(err, "failed to update duties")
 		}
 		log.Info("Updated duties due to previous dependent root change")
-		v.submitProposerPreferences(ctx)
+		v.resubmitPreferences(ctx)
 		return nil
 	}
 
@@ -812,6 +812,6 @@ func (v *validator) checkDependentRoots(ctx context.Context, prevRoot, currRoot 
 		return errors.Wrap(err, "failed to update duties")
 	}
 	log.Info("Updated duties due to current dependent root change")
-	v.submitProposerPreferences(ctx)
+	v.resubmitPreferences(ctx)
 	return nil
 }
