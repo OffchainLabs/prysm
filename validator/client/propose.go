@@ -189,9 +189,12 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		return
 	}
 
+	// The block was already accepted: a failed reveal must not skip the proposal logging and metrics.
 	if err := v.proposeSelfBuildEnvelope(ctx, slot, pubKey, blk); err != nil {
-		log.WithError(err).Error("Failed to propose self-build envelope")
-		return
+		log.WithField("slot", slot).WithError(err).Error("Failed to propose self-build envelope")
+		if v.emitAccountMetrics {
+			ValidatorProposeEnvelopeFailVec.WithLabelValues(fmtKey).Inc()
+		}
 	}
 
 	span.SetAttributes(
