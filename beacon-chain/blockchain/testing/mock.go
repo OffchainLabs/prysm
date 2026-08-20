@@ -56,6 +56,7 @@ type ChainService struct {
 	MockDataAvailable           map[[32]byte]bool
 	MockDataAvailableErr        error
 	ParentPayloadReadyVal       *bool
+	BuiltOnFullParentVal        bool
 	BlockSlot                   primitives.Slot
 	OptimisticRoots             map[[32]byte]bool
 	FinalizedRoots              map[[32]byte]bool
@@ -970,6 +971,11 @@ func (c *ChainService) PtcLookupState(_ context.Context, _ [32]byte, _ primitive
 // ReceiveExecutionPayloadEnvelope implements the same method in the chain service.
 func (c *ChainService) ReceiveExecutionPayloadEnvelope(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) error {
 	return c.ReceivePayloadEnvelopeErr
+}
+
+// BuiltOnFullParent mocks the same method in the chain service.
+func (s *ChainService) BuiltOnFullParent(_ interfaces.ReadOnlyBeaconBlock) bool {
+	return s.BuiltOnFullParentVal
 }
 
 // ParentPayloadReady mocks the same method in the chain service.
