@@ -4442,6 +4442,51 @@ func TestValidator_warmBuilderRequestAuths(t *testing.T) {
 	})
 }
 
+func TestShouldPushGloasPreferences(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 5
+	params.OverrideBeaconConfig(cfg)
+
+	require.Equal(t, false, shouldPushGloasPreferences(3))
+	require.Equal(t, true, shouldPushGloasPreferences(4), "the window opens one epoch before the fork")
+	require.Equal(t, true, shouldPushGloasPreferences(5))
+	require.Equal(t, true, shouldPushGloasPreferences(6))
+}
+
+func TestPrefEpochBounds(t *testing.T) {
+	spe := params.BeaconConfig().SlotsPerEpoch
+	epochStart, midEpoch, err := prefEpochBounds(2)
+	require.NoError(t, err)
+	require.Equal(t, 2*spe, epochStart)
+	require.Equal(t, 2*spe+spe/2, midEpoch)
+}
+
+func TestSubmitAfterDelay(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		called := make(chan struct{})
+		var hasDeadline bool
+		submitAfterDelay(func(ctx context.Context) {
+			_, hasDeadline = ctx.Deadline()
+			close(called)
+		})
+
+		halfSlot := params.BeaconConfig().SlotDuration() / 2
+		time.Sleep(halfSlot - time.Millisecond)
+		synctest.Wait()
+		select {
+		case <-called:
+			t.Fatal("submit fired before half a slot elapsed")
+		default:
+		}
+
+		time.Sleep(time.Millisecond)
+		synctest.Wait()
+		<-called
+		require.Equal(t, true, hasDeadline, "submit context must be bounded, not the caller's")
+	})
+}
+
 func headValidator() *validator {
 	return &validator{
 		head:                 newHeadTracker(),
