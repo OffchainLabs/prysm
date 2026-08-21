@@ -113,7 +113,7 @@ type GraffitiData struct {
 	Graffiti string `json:"graffiti"`
 }
 
-type GetBuildersResponse struct {
+type GetBuilderConfigResponse struct {
 	Data *BuilderConfig `json:"data"`
 }
 

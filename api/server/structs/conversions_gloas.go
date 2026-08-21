@@ -147,7 +147,7 @@ func SignedProposerPreferencesFromConsensus(s *ethpb.SignedProposerPreferences) 
 	}
 }
 
-func RequestAuthFromConsensus(m *ethpb.RequestAuthV1) *RequestAuth {
+func RequestAuthFromConsensus(m *ethpb.RequestAuth) *RequestAuth {
 	if m == nil {
 		return nil
 	}
@@ -157,7 +157,7 @@ func RequestAuthFromConsensus(m *ethpb.RequestAuthV1) *RequestAuth {
 	}
 }
 
-func SignedRequestAuthFromConsensus(s *ethpb.SignedRequestAuthV1) *SignedRequestAuth {
+func SignedRequestAuthFromConsensus(s *ethpb.SignedRequestAuth) *SignedRequestAuth {
 	if s == nil {
 		return nil
 	}
@@ -167,7 +167,7 @@ func SignedRequestAuthFromConsensus(s *ethpb.SignedRequestAuthV1) *SignedRequest
 	}
 }
 
-func BuilderPreferencesFromConsensus(p *ethpb.BuilderPreferencesV1) *BuilderPreferences {
+func BuilderPreferencesFromConsensus(p *ethpb.BuilderPreferences) *BuilderPreferences {
 	if p == nil {
 		return nil
 	}
@@ -176,7 +176,7 @@ func BuilderPreferencesFromConsensus(p *ethpb.BuilderPreferencesV1) *BuilderPref
 	}
 }
 
-func BuilderPreferencesRequestFromConsensus(r *ethpb.BuilderPreferencesRequestV1) *BuilderPreferencesRequest {
+func BuilderPreferencesRequestFromConsensus(r *ethpb.BuilderPreferencesRequest) *BuilderPreferencesRequest {
 	if r == nil {
 		return nil
 	}

@@ -145,15 +145,16 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	})
 	log.Debug("Publishing execution payload envelope")
 
-	// KZG verification stays synchronous, never gossip unverified sidecars.
+	// KZG verification stays synchronous, never gossip unverified sidecars. A cached-root match means
+	// the columns were built locally from the engine's own bundle, so verification is skipped.
 	var sidecars []consensusblocks.RODataColumn
-	if len(blobs) > 0 {
+	if cachedSidecars, ok := vs.cachedDataColumns(signed.Message); ok {
+		sidecars = cachedSidecars
+	} else if len(blobs) > 0 {
 		sidecars, err = vs.sidecarsFromContents(blobs, kzgProofs, envSlot, beaconBlockRoot)
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "invalid execution payload envelope contents: %v", err)
 		}
-	} else if cached, ok := vs.ExecutionPayloadEnvelopeCache.Contents(); ok && cached.Envelope.Payload.SlotNumber == envSlot {
-		sidecars = cached.DataColumns
 	}
 
 	roSigned, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(signed)
@@ -199,6 +200,27 @@ func (vs *Server) importPublishedEnvelope(log *logrus.Entry, sidecars []consensu
 	log.WithField("duration", time.Since(start)).Debug("Imported published execution payload envelope")
 }
 
+// cachedDataColumns returns the precomputed data columns when the published envelope is the cached
+// one, matched by envelope root so a same-slot candidate's columns are never reused.
+func (vs *Server) cachedDataColumns(envelope *ethpb.ExecutionPayloadEnvelope) ([]consensusblocks.RODataColumn, bool) {
+	cached, ok := vs.ExecutionPayloadEnvelopeCache.Contents()
+	if !ok || cached.Envelope == nil {
+		return nil, false
+	}
+	cachedRoot, err := cached.Envelope.HashTreeRoot()
+	if err != nil {
+		return nil, false
+	}
+	submittedRoot, err := envelope.HashTreeRoot()
+	if err != nil {
+		return nil, false
+	}
+	if cachedRoot != submittedRoot {
+		return nil, false
+	}
+	return cached.DataColumns, true
+}
+
 // resolveEnvelopeToPublish extracts the signed envelope plus any caller-supplied blobs. The stateful
 // signed_envelope arm must match the cached envelope so its precomputed data columns apply.
 func (vs *Server) resolveEnvelopeToPublish(req *ethpb.GenericSignedExecutionPayloadEnvelope) (*ethpb.SignedExecutionPayloadEnvelope, [][]byte, [][]byte, error) {
@@ -237,8 +259,7 @@ func (vs *Server) resolveEnvelopeToPublish(req *ethpb.GenericSignedExecutionPayl
 }
 
 // sidecarsFromContents verifies caller-supplied blobs+KZG proofs (stateless publish) and builds the
-// data column sidecars for the slot. Verification matters because broadcastAndReceiveDataColumns
-// upgrades the sidecars to "verified" without re-checking.
+// data column sidecars for the slot. The publish path upgrades them to "verified" without re-checking.
 func (vs *Server) sidecarsFromContents(blobs, kzgProofs [][]byte, slot primitives.Slot, blockRoot [32]byte) ([]consensusblocks.RODataColumn, error) {
 	if err := verifyCellProofs(blobs, kzgProofs); err != nil {
 		return nil, errors.Wrap(err, "kzg verification failed")

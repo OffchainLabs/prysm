@@ -226,10 +226,10 @@ ssz_gloas_objs = [
 ]
 
 ssz_gloas_builder_api_objs = [
-    "RequestAuthV1",
-    "SignedRequestAuthV1",
-    "BuilderPreferencesV1",
-    "BuilderPreferencesRequestV1",
+    "RequestAuth",
+    "SignedRequestAuth",
+    "BuilderPreferences",
+    "BuilderPreferencesRequest",
 ]
 
 ssz_gen_marshal(

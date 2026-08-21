@@ -115,7 +115,7 @@ type validator struct {
 	pubkeyToStatus               map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus
 	pubkeyToStatusLock           sync.RWMutex // guards pubkeyToStatus; all readers go through statusCache
 	signedValidatorRegistrations map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
-	signedRequestAuths           map[requestAuthKey]*ethpb.SignedRequestAuthV1
+	signedRequestAuths           map[requestAuthKey]*ethpb.SignedRequestAuth
 	aggSelector                  aggregatorSelector
 	validatorClient              iface.ValidatorClient
 	chainClient                  iface.ChainClient
@@ -847,13 +847,13 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		v.connTracker.confirm(proposerPrefsPush, connGen)
 	}
 
-	if reqs := v.warmBuilderRequestAuths(ctx, km, slot); len(reqs) > 0 {
+	if entries := v.warmBuilderRequestAuths(ctx, km, slot); len(entries) > 0 {
 		delay := params.BeaconConfig().SlotDuration() / 2
 		time.AfterFunc(delay, func() {
 			// Detached from the slot context, which may expire before the delay elapses.
 			subCtx, cancel := context.WithTimeout(context.Background(), delay)
 			defer cancel()
-			v.submitBuilderPreferenceRequests(subCtx, reqs)
+			v.submitBuilderPreferenceEntries(subCtx, entries)
 		})
 	}
 
@@ -1390,15 +1390,8 @@ type builderTarget struct {
 	boostFactor *uint64
 }
 
-// builderTargetsForKey resolves the configured builder list for pk; entries override
-// config-level fallbacks. TODO(gloas): per-entry max_execution_payment, minBid,
-// boost and pubkeys ride the beacon-APIs #630 wire.
-func (v *validator) builderTargetsForKey(pk pubkey) []builderTarget {
-	ps := v.ProposerSettings()
-	if ps == nil {
-		return nil
-	}
-	bc := ps.EffectiveBuilderConfig(pk)
+// builderTargets resolves bc's builder list, entries override config-level fallbacks.
+func builderTargets(bc *proposer.BuilderConfig) []builderTarget {
 	if bc == nil {
 		return nil
 	}
@@ -1442,7 +1435,7 @@ func uint64Ptr(v *validatortypes.Uint64) *uint64 {
 
 // warmBuilderRequestAuths pre-signs request auths for upcoming proposal slots and
 // returns the ahead-of-time preference submissions, rebuilt every push.
-func (v *validator) warmBuilderRequestAuths(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot) []*ethpb.SubmitBuilderPreferencesRequest {
+func (v *validator) warmBuilderRequestAuths(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot) []*ethpb.BuilderPreferencesEntry {
 	if slots.ToEpoch(slot)+1 < params.BeaconConfig().GloasForkEpoch {
 		return nil
 	}
@@ -1451,57 +1444,46 @@ func (v *validator) warmBuilderRequestAuths(ctx context.Context, km keymanager.I
 		return nil
 	}
 	v.pruneSignedRequestAuths(slot)
-	reqs := v.warmBuilderRequestAuthsForDuties(ctx, km, slot, snap.currentDuties())
-	return append(reqs, v.warmBuilderRequestAuthsForDuties(ctx, km, slot, snap.nextDuties())...)
+	entries := v.warmBuilderRequestAuthsForDuties(ctx, km, slot, snap.currentDuties())
+	return append(entries, v.warmBuilderRequestAuthsForDuties(ctx, km, slot, snap.nextDuties())...)
 }
 
-func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, duties iter.Seq2[pubkey, *ethpb.ValidatorDuty]) []*ethpb.SubmitBuilderPreferencesRequest {
-	var reqs []*ethpb.SubmitBuilderPreferencesRequest
+func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, duties iter.Seq2[pubkey, *ethpb.ValidatorDuty]) []*ethpb.BuilderPreferencesEntry {
+	ps := v.ProposerSettings()
+	if ps == nil {
+		return nil
+	}
+	var entries []*ethpb.BuilderPreferencesEntry
 	for pk, duty := range duties {
-		targets := v.builderTargetsForKey(pk)
+		targets := builderTargets(ps.EffectiveBuilderConfig(pk))
 		if len(targets) == 0 {
 			continue
-		}
-		// The v1 wire holds one max_execution_payment per validator (no builder
-		// identity), so the lowest configured value is submitted for every builder.
-		minPayment := targets[0].maxPayment
-		urls := make(map[string]bool, len(targets))
-		for _, t := range targets {
-			if t.maxPayment < minPayment {
-				minPayment = t.maxPayment
-			}
-			urls[t.url] = true
 		}
 		for _, proposalSlot := range duty.ProposerSlots {
 			if proposalSlot <= slot {
 				continue
 			}
-			for url := range urls {
-				signed, err := v.signRequestAuthCached(ctx, km, pk, url, proposalSlot)
+			for _, t := range targets {
+				signed, err := v.signRequestAuthCached(ctx, km, pk, t.authData, proposalSlot)
 				if err != nil {
 					log.WithError(err).Warn("Failed to sign builder request auth")
 					continue
 				}
-				// TODO(gloas): per-entry max_execution_payment, authData, minBid, boost
-				// and pubkeys need the beacon-APIs #630 inline wire's builder identity.
-				reqs = append(reqs, &ethpb.SubmitBuilderPreferencesRequest{
-					ValidatorPubkey: pk[:],
-					Request: &ethpb.BuilderPreferencesRequestV1{
-						Preferences: &ethpb.BuilderPreferencesV1{MaxExecutionPayment: primitives.Gwei(minPayment)},
-						Auth:        signed,
-					},
+				entries = append(entries, &ethpb.BuilderPreferencesEntry{
+					ProposerPubkey:      pk[:],
+					Url:                 t.url,
+					Auth:                signed,
+					MaxExecutionPayment: primitives.Gwei(t.maxPayment),
 				})
 			}
 		}
 	}
-	return reqs
+	return entries
 }
 
-func (v *validator) submitBuilderPreferenceRequests(ctx context.Context, reqs []*ethpb.SubmitBuilderPreferencesRequest) {
-	for _, req := range reqs {
-		if _, err := v.validatorClient.SubmitBuilderPreferences(ctx, req); err != nil {
-			log.WithError(err).Warn("Failed to submit builder preferences")
-		}
+func (v *validator) submitBuilderPreferenceEntries(ctx context.Context, entries []*ethpb.BuilderPreferencesEntry) {
+	if _, err := v.validatorClient.SubmitBuilderPreferences(ctx, &ethpb.SubmitBuilderPreferencesRequest{Entries: entries}); err != nil {
+		log.WithError(err).Warn("Failed to submit builder preferences")
 	}
 }
 
