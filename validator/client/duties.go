@@ -100,11 +100,12 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 
 	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
 
-	filteredKeys, filteredIndices := v.filteredKeysAndIndices(keys, epoch)
 	if epoch >= params.BeaconConfig().GloasForkEpoch {
+		_, filteredIndices := v.filteredKeysAndIndices(keys, epoch)
 		err = v.updateDutiesSplit(ctx, epoch, filteredIndices)
 	} else {
-		err = v.updateDutiesCombined(ctx, epoch, filteredKeys)
+		// Combined duties include sync assignments that remain valid after validator exit.
+		err = v.updateDutiesCombined(ctx, epoch, keys)
 	}
 	if err != nil {
 		return errors.Wrap(err, "could not fetch duties")
@@ -178,13 +179,13 @@ func dropIfDivergent[T interface{ GetDependentRoot() []byte }](resp T, attRoot [
 	return zero
 }
 
-// allCurrentDutiesExited reports whether there is at least one duty and all are EXITED.
+// allCurrentDutiesExited reports whether all duties are EXITED with no sync duty remaining.
 func allCurrentDutiesExited(duties []*ethpb.ValidatorDuty) bool {
 	if len(duties) == 0 {
 		return false
 	}
 	for _, d := range duties {
-		if d.Status != ethpb.ValidatorStatus_EXITED {
+		if d.Status != ethpb.ValidatorStatus_EXITED || d.IsSyncCommittee {
 			return false
 		}
 	}
