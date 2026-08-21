@@ -12,7 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/math"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -22,8 +21,6 @@ import (
 // Every check is a full hash_tree_root, so this is a periodic integrity probe rather than a per-block check.
 // The first block of every run is always checked, which is what verifies the operator-supplied origin state.
 const verifyEveryNBlocks = 8192
-
-var errAmbiguousCanonicalBlock = errors.New("more than one canonical block at slot")
 
 // walk regenerates every state-diff tree boundary in (frontier, target] and persists it. It carries the
 // working state in memory across boundaries, so the tree is only ever written, never read back.
@@ -45,9 +42,11 @@ func (s *Service) walk(ctx context.Context, target primitives.Slot) error {
 		if b > target {
 			return nil
 		}
-		highSlot, root, err := s.canonicalBlockAtOrBelow(ctx, b)
+		// The origin is the floor: backfill downloads every block at or above it, so a descent below it
+		// means the chain the tree needs is not in the database rather than that the slot was empty.
+		highSlot, root, err := stategen.CanonicalBlockAtOrBelow(ctx, s.db, b, as.OriginSlot)
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "could not resolve the canonical block at or below boundary %d", b)
 		}
 
 		if highSlot > st.Slot() {
@@ -142,37 +141,6 @@ func (s *Service) canonicalBlocks(
 	return blks, nil
 }
 
-// canonicalBlockAtOrBelow finds the highest canonical block at or below the given slot. Below the finalized
-// checkpoint slot there is exactly one canonical block per populated slot, so ambiguity means the finalized
-// index is not in the state this walk requires.
-func (s *Service) canonicalBlockAtOrBelow(ctx context.Context, slot primitives.Slot) (primitives.Slot, [32]byte, error) {
-	highSlot, roots, err := s.db.HighestRootsBelowSlot(ctx, slot+1)
-	if err != nil {
-		return 0, [32]byte{}, errors.Wrapf(err, "could not find a block at or below slot %d", slot)
-	}
-	switch len(roots) {
-	case 0:
-		return 0, [32]byte{}, errors.Errorf("no block at or below slot %d", slot)
-	case 1:
-		return highSlot, roots[0], nil
-	}
-	// The finalized checkpoint root is authoritative for its own slot; the db also retains orphans there.
-	cpRoot := s.finalizedRoot()
-	canonical := make([][32]byte, 0, 1)
-	for _, r := range roots {
-		if r == cpRoot {
-			return highSlot, r, nil
-		}
-		if s.db.IsFinalizedBlock(ctx, r) {
-			canonical = append(canonical, r)
-		}
-	}
-	if len(canonical) == 1 {
-		return highSlot, canonical[0], nil
-	}
-	return 0, [32]byte{}, errors.Wrapf(errAmbiguousCanonicalBlock, "slot %d has %d canonical candidates", highSlot, len(canonical))
-}
-
 // nextBoundary returns the lowest tree boundary slot strictly above from. The deepest level's span divides
 // every shallower level's span, so multiples of it are exactly the set of boundary slots.
 func nextBoundary(offset, from primitives.Slot) primitives.Slot {
@@ -206,12 +174,4 @@ func (s *Service) logProgress(as *kv.ArchiveStatus, target primitives.Slot) {
 		fields["completion"] = fmt.Sprintf("%.2f%%", done/total*100)
 	}
 	s.progressLogger.WithFields(fields).Info("Archive state regeneration in progress")
-}
-
-func (s *Service) finalizedRoot() [32]byte {
-	cp, err := s.db.FinalizedCheckpoint(s.ctx)
-	if err != nil {
-		return [32]byte{}
-	}
-	return bytesutil.ToBytes32(cp.Root)
 }

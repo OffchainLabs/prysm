@@ -18,6 +18,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 func TestNextBoundary(t *testing.T) {
@@ -109,6 +110,74 @@ func TestWalk_ResumesFromFrontier(t *testing.T) {
 	}
 }
 
+// The late-block reorg shape: the highest slot holding any block at or below a boundary holds only a block
+// that lost fork choice. Orphans are never removed from the slot index, so the boundary state has to be built
+// from the canonical block below it. Picking the orphan writes a state no chain ever had, and the walk then
+// dies on the next boundary because the canonical chain does not descend from it.
+func TestWalk_SkipsOrphanAtHighestPopulatedSlot(t *testing.T) {
+	setStateDiffExponents([]int{11, 9, 5})
+	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true, EnableArchive: true})
+	defer resetCfg()
+
+	ctx := t.Context()
+	store := testDB.SetupDB(t).(*kv.Store)
+
+	genesisState, keys := util.DeterministicGenesisState(t, 64)
+	require.NoError(t, store.InitializeArchiveOrigin(ctx, genesisState))
+	saveGenesisBlock(t, ctx, store, genesisState)
+
+	// Canonical chain up to slot 30.
+	working := genesisState.Copy()
+	for slot := primitives.Slot(1); slot <= 30; slot++ {
+		working, _ = applyBlock(t, ctx, store, working, keys, slot)
+	}
+	stateAt30 := working.Copy()
+
+	// A valid child of slot 30 that lost the fork choice race, at slot 31. Nothing ever deletes it, and it is
+	// the only block in (30, 32]: slots 31 and 32 are canonically empty.
+	orphan, err := util.GenerateFullBlock(stateAt30.Copy(), keys, util.DefaultBlockGenConfig(), 31)
+	require.NoError(t, err)
+	orphanRoot := saveBlock(t, ctx, store, orphan)
+
+	// The canonical branch resumes at 33, building on slot 30.
+	canonical := stateAt30.Copy()
+	var wantRoot64, tipRoot [32]byte
+	var tipSlot primitives.Slot
+	for slot := primitives.Slot(33); slot <= 70; slot++ {
+		canonical, tipRoot = applyBlock(t, ctx, store, canonical, keys, slot)
+		tipSlot = slot
+		if slot == 64 {
+			wantRoot64, err = canonical.HashTreeRoot(ctx)
+			require.NoError(t, err)
+		}
+	}
+	// Slot 31 has to sit below the finalized epoch: IsFinalizedBlock reports every block inside the finalized
+	// epoch as finalized whether or not it is canonical.
+	indexFinalized(t, ctx, store, tipSlot, tipRoot)
+	require.Equal(t, false, store.IsFinalizedBlock(ctx, orphanRoot))
+
+	// Boundary 32 is a canonically empty slot, so its state is slot 30's advanced to 32.
+	wantAt32, err := transition.ProcessSlots(ctx, stateAt30.Copy(), 32)
+	require.NoError(t, err)
+	wantRoot32, err := wantAt32.HashTreeRoot(ctx)
+	require.NoError(t, err)
+
+	// Both boundaries must regenerate, which they cannot do if the orphan is replayed.
+	require.NoError(t, newTestService(t, store).walk(ctx, 64))
+
+	got32, err := store.StateBySlotFromDiffTree(ctx, 32)
+	require.NoError(t, err)
+	gotRoot32, err := got32.HashTreeRoot(ctx)
+	require.NoError(t, err)
+	require.Equal(t, wantRoot32, gotRoot32, "boundary 32 was not built from the canonical block at slot 30")
+
+	got64, err := store.StateBySlotFromDiffTree(ctx, 64)
+	require.NoError(t, err)
+	gotRoot64, err := got64.HashTreeRoot(ctx)
+	require.NoError(t, err)
+	require.Equal(t, wantRoot64, gotRoot64, "boundary 64 differs from the canonical chain")
+}
+
 // A wrong origin state produces a state root that does not match what the first block commits to. This is the
 // only verification of the operator-supplied origin state, so it must fire.
 func TestWalk_RejectsWrongOriginState(t *testing.T) {
@@ -121,14 +190,16 @@ func TestWalk_RejectsWrongOriginState(t *testing.T) {
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
 
 	genesisState, keys := util.DeterministicGenesisState(t, 64)
-	buildChain(t, ctx, store, genesisState, keys, slotsPerEpoch, nil)
 
-	// Anchor the tree with a state that is not the real state at slot 0.
+	// Anchor the tree with a state that is not the real state at slot 0. Anchored before the chain is built
+	// because buildChain finalizes the tip, and marking a checkpoint finalized reads the tree.
 	tampered := genesisState.Copy()
 	balances := tampered.Balances()
 	balances[0] += 1
 	require.NoError(t, tampered.SetBalances(balances))
 	require.NoError(t, store.InitializeArchiveOrigin(ctx, tampered))
+
+	buildChain(t, ctx, store, genesisState, keys, slotsPerEpoch, nil)
 
 	// The replay cannot succeed: the block commits to a state root derived from the real origin, so either the
 	// header's parent-root check or the state-root check rejects it.
@@ -154,18 +225,14 @@ func buildChain(
 	target primitives.Slot,
 	skip map[primitives.Slot]bool,
 ) map[primitives.Slot][32]byte {
-	genesisRoot, err := st.HashTreeRoot(ctx)
-	require.NoError(t, err)
-	genesisBlk := coreblocks.NewGenesisBlock(genesisRoot[:])
-	util.SaveBlock(t, ctx, store, genesisBlk)
-	gRoot, err := genesisBlk.Block.HashTreeRoot()
-	require.NoError(t, err)
-	require.NoError(t, store.SaveGenesisBlockRoot(ctx, gRoot))
+	saveGenesisBlock(t, ctx, store, st)
 
 	roots := make(map[primitives.Slot][32]byte)
 	// working stays at the slot of the most recent block: GenerateFullBlock derives the parent state root
 	// from the state it is handed, so it must not be pre-advanced across a skipped slot.
 	working := st.Copy()
+	var tipRoot [32]byte
+	var tipSlot primitives.Slot
 	for slot := primitives.Slot(1); slot <= target; slot++ {
 		if skip[slot] {
 			advanced, err := transition.ProcessSlots(ctx, working.Copy(), slot)
@@ -175,21 +242,66 @@ func buildChain(
 			roots[slot] = stRoot
 			continue
 		}
-		blk, err := util.GenerateFullBlock(working, keys, util.DefaultBlockGenConfig(), slot)
-		require.NoError(t, err)
-		wsb, err := blocks.NewSignedBeaconBlock(blk)
-		require.NoError(t, err)
-		working, err = transition.ExecuteStateTransition(ctx, working, wsb)
-		require.NoError(t, err)
-		require.NoError(t, store.SaveBlock(ctx, wsb))
-		root, err := wsb.Block().HashTreeRoot()
-		require.NoError(t, err)
-		require.NoError(t, store.SaveStateSummary(ctx, &ethpb.StateSummary{Slot: slot, Root: root[:]}))
+		working, tipRoot = applyBlock(t, ctx, store, working, keys, slot)
+		tipSlot = slot
 		stRoot, err := working.HashTreeRoot(ctx)
 		require.NoError(t, err)
 		roots[slot] = stRoot
 	}
+	// The walk resolves canonical blocks through the finalized index, so it has to be populated. On a real
+	// node the live chain and BackfillFinalizedIndex do this.
+	indexFinalized(t, ctx, store, tipSlot, tipRoot)
 	return roots
+}
+
+func saveGenesisBlock(t *testing.T, ctx context.Context, store *kv.Store, st state.BeaconState) {
+	stRoot, err := st.HashTreeRoot(ctx)
+	require.NoError(t, err)
+	blk := coreblocks.NewGenesisBlock(stRoot[:])
+	util.SaveBlock(t, ctx, store, blk)
+	root, err := blk.Block.HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, store.SaveGenesisBlockRoot(ctx, root))
+}
+
+// applyBlock generates the block at the given slot on top of st, saves it, and returns the post state and the
+// block root. st is advanced in place, as ExecuteStateTransition does.
+func applyBlock(
+	t *testing.T,
+	ctx context.Context,
+	store *kv.Store,
+	st state.BeaconState,
+	keys []bls.SecretKey,
+	slot primitives.Slot,
+) (state.BeaconState, [32]byte) {
+	blk, err := util.GenerateFullBlock(st, keys, util.DefaultBlockGenConfig(), slot)
+	require.NoError(t, err)
+	root := saveBlock(t, ctx, store, blk)
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	post, err := transition.ExecuteStateTransition(ctx, st, wsb)
+	require.NoError(t, err)
+	return post, root
+}
+
+// saveBlock stores a block along with the state summary that makes its root addressable, and returns the root.
+func saveBlock(t *testing.T, ctx context.Context, store *kv.Store, blk *ethpb.SignedBeaconBlock) [32]byte {
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	require.NoError(t, store.SaveBlock(ctx, wsb))
+	root, err := wsb.Block().HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, store.SaveStateSummary(ctx, &ethpb.StateSummary{Slot: blk.Block.Slot, Root: root[:]}))
+	return root
+}
+
+// indexFinalized marks the chain ending at root as finalized, which is what puts its blocks in the
+// finalized index. Blocks in the checkpoint's own epoch are indexed wholesale, canonical or not.
+func indexFinalized(t *testing.T, ctx context.Context, store *kv.Store, slot primitives.Slot, root [32]byte) {
+	require.NoError(t, store.SaveFinalizedCheckpoint(ctx, &ethpb.Checkpoint{
+		Epoch: slots.ToEpoch(slot),
+		Root:  root[:],
+	}))
 }
 
 func setStateDiffExponents(exponents []int) {
