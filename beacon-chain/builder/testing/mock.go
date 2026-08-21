@@ -3,6 +3,7 @@ package testing
 import (
 	"context"
 	"math"
+	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/api/client/builder"
 	beaconbuilder "github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
@@ -48,6 +49,16 @@ type MockBuilderService struct {
 	ErrSubmitBuilderPreferences   error
 	ErrSubmitBuilderPrefsByURL    map[string]error
 	Cfg                           *Config
+
+	mu                   sync.Mutex
+	SubmittedPreferences []string
+}
+
+// SubmittedPreferenceUrls returns the urls preferences were submitted to.
+func (s *MockBuilderService) SubmittedPreferenceUrls() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string{}, s.SubmittedPreferences...)
 }
 
 // Configured for mocking.
@@ -130,6 +141,9 @@ func (s *MockBuilderService) SubmitBuilderPreferences(_ context.Context, _ [48]b
 	if err, ok := s.ErrSubmitBuilderPrefsByURL[url]; ok {
 		return err
 	}
+	s.mu.Lock()
+	s.SubmittedPreferences = append(s.SubmittedPreferences, url)
+	s.mu.Unlock()
 	return s.ErrSubmitBuilderPreferences
 }
 

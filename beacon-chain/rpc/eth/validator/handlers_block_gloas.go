@@ -54,8 +54,13 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 	rawGraffiti := r.URL.Query().Get("graffiti")
 
 	includePayload := true
-	if raw := r.URL.Query().Get("include_payload"); raw == "false" {
-		includePayload = false
+	if raw := r.URL.Query().Get("include_payload"); raw != "" {
+		v, err := strconv.ParseBool(raw)
+		if err != nil {
+			httputil.HandleError(w, "invalid include_payload: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		includePayload = v
 	}
 
 	var randaoReveal []byte

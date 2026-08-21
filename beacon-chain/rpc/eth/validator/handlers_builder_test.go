@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	builderTest "github.com/OffchainLabs/prysm/v7/beacon-chain/builder/testing"
 	validatorv1alpha1 "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/v1alpha1/validator"
+	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -44,12 +45,18 @@ func sszEncodeBuilderPreferencesEntries(t *testing.T, entries []*eth.BuilderPref
 }
 
 func TestSubmitBuilderPreferences(t *testing.T) {
-	newServer := func(builderErr error) *Server {
+	newServerWithBuilder := func(builderErr error) (*Server, *builderTest.MockBuilderService) {
+		builder := &builderTest.MockBuilderService{HasConfigured: true, ErrSubmitBuilderPreferences: builderErr}
 		return &Server{
 			V1Alpha1Server: &validatorv1alpha1.Server{
-				BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true, ErrSubmitBuilderPreferences: builderErr},
+				BlockBuilder: builder,
+				SyncChecker:  &mockSync.Sync{IsSyncing: false},
 			},
-		}
+		}, builder
+	}
+	newServer := func(builderErr error) *Server {
+		s, _ := newServerWithBuilder(builderErr)
+		return s
 	}
 	newRequest := func(body []byte) *http.Request {
 		req := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/validator/builder_preferences", bytes.NewReader(body))
@@ -117,16 +124,36 @@ func TestSubmitBuilderPreferences(t *testing.T) {
 		assert.StringContains(t, "No data submitted", w.Body.String())
 	})
 
-	t.Run("invalid entry reports indexed failure", func(t *testing.T) {
-		entry := structs.BuilderPreferencesEntryFromConsensus(testBuilderPreferencesEntry())
-		entry.ProposerPubkey = "0xff"
-		body, err := json.Marshal([]*structs.BuilderPreferencesEntry{entry})
+	t.Run("invalid entry reports indexed failure, valid entries still submit", func(t *testing.T) {
+		bad := structs.BuilderPreferencesEntryFromConsensus(testBuilderPreferencesEntry())
+		bad.ProposerPubkey = "0xff"
+		good := structs.BuilderPreferencesEntryFromConsensus(testBuilderPreferencesEntry())
+		body, err := json.Marshal([]*structs.BuilderPreferencesEntry{bad, good})
 		require.NoError(t, err)
 		w := httptest.NewRecorder()
 		w.Body = &bytes.Buffer{}
-		newServer(nil).SubmitBuilderPreferences(w, newRequest(body))
+		s, builder := newServerWithBuilder(nil)
+		s.SubmitBuilderPreferences(w, newRequest(body))
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.StringContains(t, "failures", w.Body.String())
+		require.DeepEqual(t, []string{"http://builder.example"}, builder.SubmittedPreferenceUrls())
+	})
+
+	t.Run("syncing maps to 503", func(t *testing.T) {
+		body, err := json.Marshal([]*structs.BuilderPreferencesEntry{
+			structs.BuilderPreferencesEntryFromConsensus(testBuilderPreferencesEntry()),
+		})
+		require.NoError(t, err)
+		s := &Server{
+			V1Alpha1Server: &validatorv1alpha1.Server{
+				BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true},
+				SyncChecker:  &mockSync.Sync{IsSyncing: true},
+			},
+		}
+		w := httptest.NewRecorder()
+		w.Body = &bytes.Buffer{}
+		s.SubmitBuilderPreferences(w, newRequest(body))
+		assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 	})
 
 	t.Run("malformed ssz offset table", func(t *testing.T) {

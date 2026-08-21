@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	builderTest "github.com/OffchainLabs/prysm/v7/beacon-chain/builder/testing"
+	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -22,44 +23,58 @@ func TestServer_SubmitBuilderPreferences(t *testing.T) {
 			MaxExecutionPayment: primitives.Gwei(payment),
 		}
 	}
+	newServer := func(builder *builderTest.MockBuilderService) *Server {
+		return &Server{BlockBuilder: builder, SyncChecker: &mockSync.Sync{IsSyncing: false}}
+	}
 	req := &ethpb.SubmitBuilderPreferencesRequest{
 		Entries: []*ethpb.BuilderPreferencesEntry{entry("http://builder", 1000)},
 	}
 
 	t.Run("forwards on success", func(t *testing.T) {
-		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true}}
+		vs := newServer(&builderTest.MockBuilderService{HasConfigured: true})
 		_, err := vs.SubmitBuilderPreferences(t.Context(), req)
 		require.NoError(t, err)
 	})
 
 	t.Run("empty request errors", func(t *testing.T) {
-		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true}}
+		vs := newServer(&builderTest.MockBuilderService{HasConfigured: true})
 		_, err := vs.SubmitBuilderPreferences(t.Context(), &ethpb.SubmitBuilderPreferencesRequest{})
 		require.ErrorContains(t, "request is empty", err)
 	})
 
+	t.Run("syncing node errors", func(t *testing.T) {
+		vs := &Server{
+			BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true},
+			SyncChecker:  &mockSync.Sync{IsSyncing: true},
+		}
+		_, err := vs.SubmitBuilderPreferences(t.Context(), req)
+		require.ErrorContains(t, "Syncing to latest head", err)
+	})
+
 	t.Run("entry without url fails, rest of the batch still submits", func(t *testing.T) {
-		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true}}
+		builder := &builderTest.MockBuilderService{HasConfigured: true}
+		vs := newServer(builder)
 		_, err := vs.SubmitBuilderPreferences(t.Context(), &ethpb.SubmitBuilderPreferencesRequest{
 			Entries: []*ethpb.BuilderPreferencesEntry{entry("", 5), entry("http://builder", 7)},
 		})
 		require.ErrorContains(t, "1 of 2 builder preference submissions failed", err)
+		require.DeepEqual(t, []string{"http://builder"}, builder.SubmittedPreferenceUrls())
 	})
 
 	t.Run("succeeds without the builder endpoint flag", func(t *testing.T) {
-		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: false}}
+		vs := newServer(&builderTest.MockBuilderService{HasConfigured: false})
 		_, err := vs.SubmitBuilderPreferences(t.Context(), req)
 		require.NoError(t, err)
 	})
 
 	t.Run("nil block builder errors", func(t *testing.T) {
-		vs := &Server{}
+		vs := &Server{SyncChecker: &mockSync.Sync{IsSyncing: false}}
 		_, err := vs.SubmitBuilderPreferences(t.Context(), req)
 		require.ErrorContains(t, "builder is not configured", err)
 	})
 
 	t.Run("builder submission failure is reported", func(t *testing.T) {
-		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true, ErrSubmitBuilderPreferences: errors.New("boom")}}
+		vs := newServer(&builderTest.MockBuilderService{HasConfigured: true, ErrSubmitBuilderPreferences: errors.New("boom")})
 		_, err := vs.SubmitBuilderPreferences(t.Context(), req)
 		require.ErrorContains(t, "1 of 1 builder preference submissions failed", err)
 	})

@@ -66,6 +66,11 @@ func (s *Server) SubmitBuilderPreferences(w http.ResponseWriter, r *http.Request
 		}
 		return
 	}
+	var submitErr error
+	if len(entries) > 0 {
+		_, submitErr = s.V1Alpha1Server.SubmitBuilderPreferences(ctx, &eth.SubmitBuilderPreferencesRequest{Entries: entries})
+	}
+	// Well-formed entries are still submitted above when others fail to decode, per the spec's 400.
 	if len(failures) > 0 {
 		httputil.WriteError(w, &server.IndexedErrorContainer{
 			Code:     http.StatusBadRequest,
@@ -78,10 +83,8 @@ func (s *Server) SubmitBuilderPreferences(w http.ResponseWriter, r *http.Request
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	}
-
-	req := &eth.SubmitBuilderPreferencesRequest{Entries: entries}
-	if _, err := s.V1Alpha1Server.SubmitBuilderPreferences(ctx, req); err != nil {
-		if st, ok := status.FromError(err); ok {
+	if submitErr != nil {
+		if st, ok := status.FromError(submitErr); ok {
 			switch st.Code() {
 			case codes.InvalidArgument:
 				httputil.HandleError(w, st.Message(), http.StatusBadRequest)
@@ -92,7 +95,7 @@ func (s *Server) SubmitBuilderPreferences(w http.ResponseWriter, r *http.Request
 			}
 			return
 		}
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, submitErr.Error(), http.StatusInternalServerError)
 		return
 	}
 }
@@ -106,7 +109,7 @@ func decodeBuilderPreferencesEntriesJSON(r io.Reader) ([]*eth.BuilderPreferences
 	if len(data) > structs.MaxBuilderPreferencesList {
 		return nil, nil, errors.Errorf("more than %d entries", structs.MaxBuilderPreferencesList)
 	}
-	entries := make([]*eth.BuilderPreferencesEntry, len(data))
+	entries := make([]*eth.BuilderPreferencesEntry, 0, len(data))
 	var failures []*server.IndexedError
 	for i, item := range data {
 		if item == nil {
@@ -118,7 +121,7 @@ func decodeBuilderPreferencesEntriesJSON(r io.Reader) ([]*eth.BuilderPreferences
 			failures = append(failures, &server.IndexedError{Index: i, Message: err.Error()})
 			continue
 		}
-		entries[i] = consensusItem
+		entries = append(entries, consensusItem)
 	}
 	return entries, failures, nil
 }
@@ -136,7 +139,7 @@ func decodeBuilderPreferencesEntriesSSZ(r io.Reader) ([]*eth.BuilderPreferencesE
 	if err != nil {
 		return nil, nil, err
 	}
-	entries := make([]*eth.BuilderPreferencesEntry, len(elements))
+	entries := make([]*eth.BuilderPreferencesEntry, 0, len(elements))
 	var failures []*server.IndexedError
 	for i, elem := range elements {
 		e := &eth.BuilderPreferencesEntry{}
@@ -144,7 +147,7 @@ func decodeBuilderPreferencesEntriesSSZ(r io.Reader) ([]*eth.BuilderPreferencesE
 			failures = append(failures, &server.IndexedError{Index: i, Message: "Could not decode SSZ message: " + err.Error()})
 			continue
 		}
-		entries[i] = e
+		entries = append(entries, e)
 	}
 	return entries, failures, nil
 }

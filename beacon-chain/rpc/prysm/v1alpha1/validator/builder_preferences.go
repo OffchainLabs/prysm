@@ -23,6 +23,9 @@ func (vs *Server) SubmitBuilderPreferences(ctx context.Context, req *ethpb.Submi
 	if req == nil || len(req.Entries) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "builder preferences request is empty")
 	}
+	if vs.SyncChecker.Syncing() {
+		return nil, status.Error(codes.Unavailable, "Syncing to latest head, not ready to respond")
+	}
 	// Not gated on Configured(), gloas builders are dialed per URL from the request rather than the endpoint flag.
 	if vs.BlockBuilder == nil {
 		return nil, status.Error(codes.FailedPrecondition, "builder is not configured")

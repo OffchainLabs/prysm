@@ -599,6 +599,21 @@ func TestProduceBlockV4_Post(t *testing.T) {
 		require.Equal(t, false, present)
 	})
 
+	t.Run("invalid include_payload", func(t *testing.T) {
+		var captured *eth.BlockRequest
+		server := newServer(t, &captured)
+		body, err := json.Marshal(structs.BuilderConfigFromConsensus(testBuilderConfig()))
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&include_payload=banana", testRandao), bytes.NewReader(body))
+		request.SetPathValue("slot", "1")
+		request.Header.Set(api.VersionHeader, version.String(version.Gloas))
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		server.ProduceBlockV4(writer, request)
+		require.Equal(t, http.StatusBadRequest, writer.Code)
+		assert.StringContains(t, "invalid include_payload", writer.Body.String())
+	})
+
 	t.Run("get without body still works", func(t *testing.T) {
 		var captured *eth.BlockRequest
 		server := newServer(t, &captured)
