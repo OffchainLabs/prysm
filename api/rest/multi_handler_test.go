@@ -208,7 +208,7 @@ func TestMultiHandlerPostSSZ(t *testing.T) {
 		srv := sszServer(t, "accepted")
 
 		mh := multi(t, srv.URL)
-		require.NoError(t, mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body)))
+		requirePostSSZOK(t, mh, body)
 	})
 
 	t.Run("succeeds when any node accepts", func(t *testing.T) {
@@ -216,7 +216,7 @@ func TestMultiHandlerPostSSZ(t *testing.T) {
 		good := sszServer(t, "accepted")
 
 		mh := multi(t, bad.URL, good.URL)
-		require.NoError(t, mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body)))
+		requirePostSSZOK(t, mh, body)
 	})
 
 	// In a mixed fleet where one node accepts SSZ and another rejects the body with 415,
@@ -230,7 +230,7 @@ func TestMultiHandlerPostSSZ(t *testing.T) {
 		t.Cleanup(rejects.Close)
 
 		mh := multi(t, accepts.URL, rejects.URL)
-		err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
+		_, _, err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
 		require.NotNil(t, err)
 		assert.Equal(t, true, errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}),
 			"a node's 415 must surface so the caller falls back to JSON")
@@ -241,7 +241,7 @@ func TestMultiHandlerPostSSZ(t *testing.T) {
 		bad2 := jsonServer(t, 0, http.StatusBadGateway, nil)
 
 		mh := multi(t, bad1.URL, bad2.URL)
-		err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
+		_, _, err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
 		require.NotNil(t, err)
 	})
 
@@ -257,7 +257,7 @@ func TestMultiHandlerPostSSZ(t *testing.T) {
 		cancel()
 
 		mh := multi(t, srv.URL, srv.URL)
-		err := mh.PostSSZ(ctx, "/publish", nil, bytes.NewBufferString(body))
+		_, _, err := mh.PostSSZ(ctx, "/publish", nil, bytes.NewBufferString(body))
 		assert.Equal(t, true, errors.Is(err, context.Canceled))
 	})
 }
@@ -287,13 +287,14 @@ func TestMultiHandlerPostSSZWithFallback(t *testing.T) {
 
 		mh := multi(t, accepts.URL, rejects.URL)
 		post := func(endpoint string) error {
-			return mh.PostSSZWithFallback(
+			_, _, err := mh.PostSSZWithFallback(
 				context.Background(),
 				endpoint,
 				nil,
 				func() ([]byte, error) { return []byte("ssz"), nil },
 				func() ([]byte, error) { return []byte(`{"json":true}`), nil },
 			)
+			return err
 		}
 
 		require.NoError(t, post("/publish"))
@@ -320,7 +321,7 @@ func TestMultiHandlerPostSSZWithFallback(t *testing.T) {
 
 		mh := multi(t, srv.URL)
 		for range 2 {
-			err := mh.PostSSZWithFallback(
+			_, _, err := mh.PostSSZWithFallback(
 				context.Background(),
 				"/publish",
 				nil,
@@ -356,7 +357,7 @@ func TestMultiHandlerPostSSZWithFallback(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		mh := multi(t, srv.URL, srv.URL)
-		err := mh.PostSSZWithFallback(
+		_, _, err := mh.PostSSZWithFallback(
 			ctx,
 			"/publish",
 			nil,
@@ -380,7 +381,7 @@ func TestMultiHandlerPostSSZWithFallback(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		mh := multi(t, srv.URL)
-		err := mh.PostSSZWithFallback(
+		_, _, err := mh.PostSSZWithFallback(
 			ctx,
 			"/publish",
 			nil,
@@ -411,7 +412,7 @@ func TestMultiHandlerPostSSZWithFallback(t *testing.T) {
 
 		mh := multi(t, srv.URL)
 		for range 2 {
-			require.NoError(t, mh.PostSSZWithFallback(
+			_, _, err := mh.PostSSZWithFallback(
 				context.Background(),
 				"/publish",
 				nil,
@@ -420,7 +421,8 @@ func TestMultiHandlerPostSSZWithFallback(t *testing.T) {
 					return []byte("ssz"), nil
 				},
 				func() ([]byte, error) { return []byte(`{"json":true}`), nil },
-			))
+			)
+			require.NoError(t, err)
 		}
 
 		assert.Equal(t, int32(1), atomic.LoadInt32(&sszHits))
@@ -440,13 +442,14 @@ func TestMultiHandlerPostSSZWithFallback(t *testing.T) {
 
 		mh := multi(t, srv.URL)
 		mh.sszUnsupported.Store(sszSupportKey{host: srv.URL, endpoint: "/publish"}, time.Now().Add(-sszUnsupportedTTL))
-		require.NoError(t, mh.PostSSZWithFallback(
+		_, _, err := mh.PostSSZWithFallback(
 			context.Background(),
 			"/publish",
 			nil,
 			func() ([]byte, error) { return []byte("ssz"), nil },
 			func() ([]byte, error) { return []byte(`{"json":true}`), nil },
-		))
+		)
+		require.NoError(t, err)
 
 		assert.Equal(t, int32(1), atomic.LoadInt32(&sszHits))
 	})
@@ -934,4 +937,57 @@ func sszServer(t *testing.T, body string) *httptest.Server {
 	}))
 	t.Cleanup(srv.Close)
 	return srv
+}
+
+// requirePostSSZOK posts and asserts acceptance, discarding the response.
+func requirePostSSZOK(t *testing.T, mh *multiHandler, body string) {
+	t.Helper()
+	_, _, err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
+	require.NoError(t, err)
+}
+
+func TestMultiHandlerPostSSZWithFallback_Response(t *testing.T) {
+	t.Run("returns accepting node body and headers", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("X-Test-Header", "yes")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("resp-body"))
+		}))
+		t.Cleanup(srv.Close)
+
+		mh := multi(t, srv.URL)
+		body, header, err := mh.PostSSZWithFallback(
+			context.Background(),
+			"/produce",
+			nil,
+			func() ([]byte, error) { return []byte("ssz"), nil },
+			func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "resp-body", string(body))
+		assert.Equal(t, "yes", header.Get("X-Test-Header"))
+	})
+
+	t.Run("json fallback response is returned on 415", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Content-Type") == api.OctetStreamMediaType {
+				http.Error(w, "unsupported", http.StatusUnsupportedMediaType)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("json-accepted"))
+		}))
+		t.Cleanup(srv.Close)
+
+		mh := multi(t, srv.URL)
+		body, _, err := mh.PostSSZWithFallback(
+			context.Background(),
+			"/produce",
+			nil,
+			func() ([]byte, error) { return []byte("ssz"), nil },
+			func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "json-accepted", string(body))
+	})
 }

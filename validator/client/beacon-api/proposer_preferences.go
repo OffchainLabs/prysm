@@ -29,13 +29,14 @@ func (c *beaconApiValidatorClient) submitSignedProposerPreferences(ctx context.C
 		return marshalSignedProposerPreferencesJSON(prefs)
 	}
 
-	return c.handler.PostSSZWithFallback(
+	_, _, err := c.handler.PostSSZWithFallback(
 		ctx,
 		proposerPreferencesEndpoint,
 		headers,
 		sszFn,
 		jsonFn,
 	)
+	return err
 }
 
 // marshalSignedProposerPreferencesSSZ encodes prefs as the SSZ List[SignedProposerPreferences],

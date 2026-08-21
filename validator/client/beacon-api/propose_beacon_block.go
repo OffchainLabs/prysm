@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -166,8 +167,12 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 	}
 
 	headers := map[string]string{"Eth-Consensus-Version": res.consensusVersion}
+	// Echo the winning builder from block production so the node forwards it the signed block.
+	if in.BuilderUrl != "" {
+		headers[api.BuilderUrlHeader] = in.BuilderUrl
+	}
 
-	if err := c.handler.PostSSZWithFallback(ctx, endpoint, headers, res.marshalSSZ, res.marshalJSON); err != nil {
+	if _, _, err := c.handler.PostSSZWithFallback(ctx, endpoint, headers, res.marshalSSZ, res.marshalJSON); err != nil {
 		return nil, fmt.Errorf("failed to submit block: %w", err)
 	}
 

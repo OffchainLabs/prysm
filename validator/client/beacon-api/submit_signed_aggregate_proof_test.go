@@ -40,7 +40,7 @@ func TestSubmitSignedAggregateSelectionProof_Valid(t *testing.T) {
 		headers,
 		bytes.NewBuffer(sszBody),
 	).Return(
-		nil,
+		nil, nil, nil,
 	).Times(1)
 
 	attestationDataRoot, err := signedAggregateAndProof.Message.Aggregate.Data.HashTreeRoot()
@@ -67,7 +67,7 @@ func TestSubmitSignedAggregateSelectionProof_JsonFallback(t *testing.T) {
 	handler := mock.NewMockHandler(ctrl)
 	expectPostSSZWithFallback(handler)
 	handler.EXPECT().PostSSZ(gomock.Any(), "/eth/v2/validator/aggregate_and_proofs", headers, gomock.Any()).Return(
-		&httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType, Message: "unsupported media type"},
+		nil, nil, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType, Message: "unsupported media type"},
 	).Times(1)
 	handler.EXPECT().Post(
 		gomock.Any(),
@@ -102,7 +102,7 @@ func TestSubmitSignedAggregateSelectionProof_BadRequest(t *testing.T) {
 		headers,
 		gomock.Any(),
 	).Return(
-		errors.New("bad request"),
+		nil, nil, errors.New("bad request"),
 	).Times(1)
 
 	validatorClient := &beaconApiValidatorClient{handler: handler}
@@ -136,7 +136,7 @@ func TestSubmitSignedAggregateSelectionProofElectra_Valid(t *testing.T) {
 		headers,
 		bytes.NewBuffer(sszBody),
 	).Return(
-		nil,
+		nil, nil, nil,
 	).Times(1)
 
 	attestationDataRoot, err := signedAggregateAndProofElectra.Message.Aggregate.Data.HashTreeRoot()
@@ -168,7 +168,7 @@ func TestSubmitSignedAggregateSelectionProofElectra_JsonFallback(t *testing.T) {
 	handler := mock.NewMockHandler(ctrl)
 	expectPostSSZWithFallback(handler)
 	handler.EXPECT().PostSSZ(gomock.Any(), "/eth/v2/validator/aggregate_and_proofs", headers, gomock.Any()).Return(
-		&httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType, Message: "unsupported media type"},
+		nil, nil, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType, Message: "unsupported media type"},
 	).Times(1)
 	handler.EXPECT().Post(
 		gomock.Any(),
@@ -208,7 +208,7 @@ func TestSubmitSignedAggregateSelectionProofElectra_BadRequest(t *testing.T) {
 		headers,
 		gomock.Any(),
 	).Return(
-		errors.New("bad request"),
+		nil, nil, errors.New("bad request"),
 	).Times(1)
 
 	validatorClient := &beaconApiValidatorClient{handler: handler}
@@ -242,7 +242,7 @@ func TestSubmitSignedAggregateSelectionProofElectra_FuluVersion(t *testing.T) {
 		headers,
 		bytes.NewBuffer(sszBody),
 	).Return(
-		nil,
+		nil, nil, nil,
 	).Times(1)
 
 	attestationDataRoot, err := signedAggregateAndProofElectra.Message.Aggregate.Data.HashTreeRoot()

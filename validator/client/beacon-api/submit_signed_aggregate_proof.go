@@ -27,7 +27,7 @@ func (c *beaconApiValidatorClient) submitSignedAggregateSelectionProof(ctx conte
 		return ssz.MarshalVariableList(elem), nil
 	}
 
-	if err := c.handler.PostSSZWithFallback(ctx, aggregateAndProofsEndpoint, headers, sszFn, jsonFn); err != nil {
+	if _, _, err := c.handler.PostSSZWithFallback(ctx, aggregateAndProofsEndpoint, headers, sszFn, jsonFn); err != nil {
 		return nil, err
 	}
 
@@ -54,7 +54,7 @@ func (c *beaconApiValidatorClient) submitSignedAggregateSelectionProofElectra(ct
 		return ssz.MarshalVariableList(elem), nil
 	}
 
-	if err := c.handler.PostSSZWithFallback(ctx, aggregateAndProofsEndpoint, headers, sszFn, jsonFn); err != nil {
+	if _, _, err := c.handler.PostSSZWithFallback(ctx, aggregateAndProofsEndpoint, headers, sszFn, jsonFn); err != nil {
 		return nil, err
 	}
 

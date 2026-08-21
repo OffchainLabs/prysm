@@ -28,14 +28,14 @@ type Handler interface {
 	GetStatusCode(ctx context.Context, endpoint string) (int, error)
 	GetSSZ(ctx context.Context, endpoint string, opts ...GetOption) ([]byte, http.Header, error)
 	Post(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer, resp any) error
-	PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) error
+	PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) ([]byte, http.Header, error)
 	PostSSZWithFallback(
 		ctx context.Context,
 		endpoint string,
 		headers map[string]string,
 		sszFn func() ([]byte, error),
 		jsonFn func() ([]byte, error),
-	) error
+	) ([]byte, http.Header, error)
 	Host() string
 }
 
@@ -188,6 +188,43 @@ func (c *handler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Hea
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to perform request for endpoint %s", api.RedactEndpoint(url))
 	}
+	return readRawResponse(req, httpResp)
+}
+
+// postWithContentType sends a POST with the given request content type and returns
+// the raw response body and headers, preferring an SSZ-encoded response.
+func (c *handler) postWithContentType(ctx context.Context, apiEndpoint string, headers map[string]string, contentType string, data *bytes.Buffer) ([]byte, http.Header, error) {
+	if data == nil {
+		return nil, nil, errors.New("data is nil")
+	}
+	url := c.Host() + apiEndpoint
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, data)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "failed to create request for endpoint %s", api.RedactEndpoint(url))
+	}
+
+	primaryAcceptType := fmt.Sprintf("%s;q=%s", api.OctetStreamMediaType, "0.95")
+	secondaryAcceptType := fmt.Sprintf("%s;q=%s", api.JsonMediaType, "0.9")
+	req.Header.Set("Accept", fmt.Sprintf("%s,%s", primaryAcceptType, secondaryAcceptType))
+	req.Header.Set("Content-Type", contentType)
+	for headerKey, headerValue := range headers {
+		req.Header.Set(headerKey, headerValue)
+	}
+
+	for _, o := range c.reqOverrides {
+		o(req)
+	}
+
+	req.Header.Set("User-Agent", version.BuildData())
+	httpResp, err := c.client.Do(req)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "failed to perform request for endpoint %s", api.RedactEndpoint(url))
+	}
+	return readRawResponse(req, httpResp)
+}
+
+// readRawResponse drains the response, surfacing non-2XX statuses as typed errors.
+func readRawResponse(req *http.Request, httpResp *http.Response) ([]byte, http.Header, error) {
 	defer func() {
 		if err := httpResp.Body.Close(); err != nil {
 			return
@@ -207,14 +244,17 @@ func (c *handler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Hea
 		}).Debug("Server responded with non primary accept type")
 	}
 
-	// non-2XX codes are a failure
+	// Non-2XX codes are a failure, surfaced as a typed error so the status code
+	// survives even when the error body is not decodable JSON.
 	if !strings.HasPrefix(httpResp.Status, "2") {
+		errorJson := &httputil.DefaultJsonError{Code: httpResp.StatusCode}
 		if !strings.Contains(contentType, api.JsonMediaType) {
-			return nil, nil, &httputil.DefaultJsonError{Code: httpResp.StatusCode, Message: string(body)}
+			errorJson.Message = string(body)
+			return nil, nil, errorJson
 		}
-		errorJson := &httputil.DefaultJsonError{}
-		if err = json.NewDecoder(bytes.NewBuffer(body)).Decode(errorJson); err != nil {
-			return nil, nil, errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL.Redacted())
+		decoded := &httputil.DefaultJsonError{}
+		if err = json.Unmarshal(body, decoded); err == nil && decoded.Message != "" {
+			errorJson.Message = decoded.Message
 		}
 		return nil, nil, errorJson
 	}
@@ -259,67 +299,15 @@ func (c *handler) Post(
 	return decodeResp(httpResp, resp)
 }
 
-// PostSSZ sends a POST request with an SSZ (application/octet-stream) request body.
+// PostSSZ sends a POST request with an SSZ (application/octet-stream) request body
+// and returns the raw response body and headers, preferring an SSZ-encoded response.
 func (c *handler) PostSSZ(
 	ctx context.Context,
 	apiEndpoint string,
 	headers map[string]string,
 	data *bytes.Buffer,
-) error {
-	if data == nil {
-		return errors.New("data is nil")
-	}
-	url := c.Host() + apiEndpoint
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, data)
-	if err != nil {
-		return errors.Wrapf(err, "failed to create request for endpoint %s", api.RedactEndpoint(url))
-	}
-
-	req.Header.Set("Accept", api.JsonMediaType)
-	req.Header.Set("Content-Type", api.OctetStreamMediaType)
-	req.Header.Set("User-Agent", version.BuildData())
-
-	for headerKey, headerValue := range headers {
-		req.Header.Set(headerKey, headerValue)
-	}
-
-	httpResp, err := c.client.Do(req)
-	if err != nil {
-		return errors.Wrapf(err, "failed to perform request for endpoint %s", api.RedactEndpoint(url))
-	}
-	defer func() {
-		if err := httpResp.Body.Close(); err != nil {
-			return
-		}
-	}()
-
-	// Success bodies are empty by spec, but drain any body so net/http can reuse the connection.
-	if httpResp.StatusCode/100 == 2 {
-		if _, err := io.Copy(io.Discard, httpResp.Body); err != nil {
-			return errors.Wrapf(err, "failed to drain response body for %s", httpResp.Request.URL.Redacted())
-		}
-
-		return nil
-	}
-
-	body, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return errors.Wrapf(err, "failed to read response body for %s", httpResp.Request.URL.Redacted())
-	}
-
-	// A non-JSON error body is still surfaced as a typed error so the status code survives.
-	errorJson := &httputil.DefaultJsonError{Code: httpResp.StatusCode}
-	if !strings.Contains(httpResp.Header.Get("Content-Type"), api.JsonMediaType) {
-		errorJson.Message = string(body)
-		return errorJson
-	}
-
-	decoded := &httputil.DefaultJsonError{}
-	if err = json.Unmarshal(body, decoded); err == nil && decoded.Message != "" {
-		errorJson.Message = decoded.Message
-	}
-
-	return errorJson
+) ([]byte, http.Header, error) {
+	return c.postWithContentType(ctx, apiEndpoint, headers, api.OctetStreamMediaType, data)
 }
 
 func decodeResp(httpResp *http.Response, resp any) error {

@@ -141,7 +141,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockValid(t *testing.T) {
 		gomock.Any(),
 		gomock.Any(),
 	).Return(
-		nil,
+		nil, nil, nil,
 	).Times(1)
 
 	validatorClient := beaconApiValidatorClient{handler: handler}
@@ -169,7 +169,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockError_ThenPass(t *testing.T)
 		gomock.Any(),
 		gomock.Any(),
 	).Return(
-		&httputil.DefaultJsonError{
+		nil, nil, &httputil.DefaultJsonError{
 			Code:    http.StatusUnsupportedMediaType,
 			Message: "SSZ not supported",
 		},
@@ -313,7 +313,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockAllTypes(t *testing.T) {
 					tt.expectedPath,
 					gomock.Any(),
 					gomock.Any(),
-				).Return(nil).Times(1)
+				).Return(nil, nil, nil).Times(1)
 			}
 
 			validatorClient := beaconApiValidatorClient{handler: handler}
@@ -371,7 +371,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockHTTPErrors(t *testing.T) {
 				"/eth/v2/beacon/blocks",
 				gomock.Any(),
 				gomock.Any(),
-			).Return(tt.sszError).Times(1)
+			).Return(nil, nil, tt.sszError).Times(1)
 
 			if tt.expectJSON {
 				// When SSZ fails, it falls back to JSON
@@ -514,7 +514,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockJSONFallback(t *testing.T) {
 				tt.expectedPath,
 				gomock.Any(),
 				gomock.Any(),
-			).Return(&httputil.DefaultJsonError{
+			).Return(nil, nil, &httputil.DefaultJsonError{
 				Code:    http.StatusUnsupportedMediaType,
 				Message: "SSZ not supported",
 			}).Times(1)

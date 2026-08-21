@@ -227,15 +227,17 @@ func (m *multiHandler) Post(ctx context.Context, endpoint string, headers map[st
 	return nil
 }
 
-// PostSSZ broadcasts a POST with an SSZ request body to all nodes.
+// PostSSZ broadcasts a POST with an SSZ request body to all nodes, returning the first
+// accepting node's response body and headers.
 // It surfaces 415 Unsupported Media Type errors from any node, otherwise succeeds as soon as one node accepts.
-func (m *multiHandler) PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) error {
+func (m *multiHandler) PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) ([]byte, http.Header, error) {
 	if len(m.handlers) == 1 {
-		if err := m.handlers[0].PostSSZ(ctx, endpoint, headers, data); err != nil {
-			return fmt.Errorf("post ssz: %w", err)
+		body, header, err := m.handlers[0].PostSSZ(ctx, endpoint, headers, data)
+		if err != nil {
+			return nil, nil, fmt.Errorf("post ssz: %w", err)
 		}
 
-		return nil
+		return body, header, nil
 	}
 
 	var raw []byte
@@ -243,56 +245,70 @@ func (m *multiHandler) PostSSZ(ctx context.Context, endpoint string, headers map
 		raw = data.Bytes()
 	}
 
+	var (
+		mu     sync.Mutex
+		body   []byte
+		header http.Header
+	)
 	post := func(ctx context.Context, h *handler) error {
-		if err := h.PostSSZ(ctx, endpoint, headers, cloneBuffer(data, raw)); err != nil {
+		b, hd, err := h.PostSSZ(ctx, endpoint, headers, cloneBuffer(data, raw))
+		if err != nil {
 			return fmt.Errorf("post ssz: %w", err)
 		}
 
+		mu.Lock()
+		if header == nil {
+			body, header = b, hd
+		}
+		mu.Unlock()
 		return nil
 	}
 
 	accepted, errs := broadcastWriteAll(ctx, m.handlers, post)
 	for _, err := range errs {
 		if errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}) {
-			return err
+			return nil, nil, err
 		}
 	}
 
 	if accepted > 0 {
-		return nil
+		mu.Lock()
+		defer mu.Unlock()
+		return body, header, nil
 	}
 
-	return errors.Join(errs...)
+	return nil, nil, errors.Join(errs...)
 }
 
 // PostSSZWithFallback broadcasts each request using the best known encoding for
-// that node and endpoint. A 415 response only downgrades and retries that node.
+// that node and endpoint, returning the first accepting node's response body and
+// headers. A 415 response only downgrades and retries that node.
 func (m *multiHandler) PostSSZWithFallback(
 	ctx context.Context,
 	endpoint string,
 	headers map[string]string,
 	sszFn func() ([]byte, error),
 	jsonFn func() ([]byte, error),
-) error {
+) ([]byte, http.Header, error) {
 	// Wrap marshalers to ensure they are only called once.
 	sszBody := sync.OnceValues(sszFn)
 	jsonBody := sync.OnceValues(jsonFn)
 
-	post := func(ctx context.Context, h *handler) error {
+	post := func(ctx context.Context, h *handler) (sszResult, error) {
 		key := sszSupportKey{host: h.Host(), endpoint: endpoint}
 		unsupportedAt, unsupported := m.sszUnsupported.Load(key)
 		if !unsupported || time.Since(unsupportedAt.(time.Time)) >= sszUnsupportedTTL {
 			body, err := sszBody()
 			if err != nil {
-				return fmt.Errorf("marshal SSZ body: %w", err)
+				return sszResult{}, fmt.Errorf("marshal SSZ body: %w", err)
 			}
 
-			err = h.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(body))
+			data, header, err := h.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(body))
 			if !errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}) {
 				if err != nil {
-					return fmt.Errorf("post SSZ: %w", err)
+					return sszResult{}, fmt.Errorf("post SSZ: %w", err)
 				}
-				return nil
+				return sszResult{body: data, header: header}, nil
 			}
 
 			if unsupported {
@@ -307,25 +323,47 @@ func (m *multiHandler) PostSSZWithFallback(
 
 		body, err := jsonBody()
 		if err != nil {
-			return fmt.Errorf("marshal JSON body: %w", err)
+			return sszResult{}, fmt.Errorf("marshal JSON body: %w", err)
 		}
 
-		if err := h.Post(ctx, endpoint, headers, bytes.NewBuffer(body), nil); err != nil {
-			return fmt.Errorf("post JSON: %w", err)
+		data, header, err := h.postWithContentType(ctx, endpoint, headers, api.JsonMediaType, bytes.NewBuffer(body))
+		if err != nil {
+			return sszResult{}, fmt.Errorf("post JSON: %w", err)
 		}
-		return nil
+		return sszResult{body: data, header: header}, nil
 	}
 
 	if len(m.handlers) == 1 {
-		return post(ctx, m.handlers[0])
+		res, err := post(ctx, m.handlers[0])
+		return res.body, res.header, err
 	}
 
-	accepted, errs := broadcastWriteAll(ctx, m.handlers, post)
-	if accepted > 0 {
+	var (
+		mu  sync.Mutex
+		got *sszResult
+	)
+	postAndCapture := func(ctx context.Context, h *handler) error {
+		res, err := post(ctx, h)
+		if err != nil {
+			return err
+		}
+
+		mu.Lock()
+		if got == nil {
+			got = &res
+		}
+		mu.Unlock()
 		return nil
 	}
 
-	return errors.Join(errs...)
+	accepted, errs := broadcastWriteAll(ctx, m.handlers, postAndCapture)
+	if accepted > 0 {
+		mu.Lock()
+		defer mu.Unlock()
+		return got.body, got.header, nil
+	}
+
+	return nil, nil, errors.Join(errs...)
 }
 
 // readUntil runs round against the handlers.
