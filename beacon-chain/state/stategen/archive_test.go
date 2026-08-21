@@ -1,6 +1,7 @@
 package stategen
 
 import (
+	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
@@ -13,6 +14,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/pkg/errors"
 )
 
 // While the archive walk owns the tree, the live chain must not migrate cold states into it: the anchors the
@@ -159,16 +161,90 @@ func TestCompleteArchiveRegeneration(t *testing.T) {
 	require.NoError(t, beaconDB.SaveState(ctx, st, fRoot))
 	require.NoError(t, beaconDB.SaveFinalizedCheckpoint(ctx, &ethpb.Checkpoint{Epoch: fEpoch, Root: fRoot[:]}))
 
-	// Not yet: the next unwritten boundary is still below the finalized slot.
-	done, err := service.CompleteArchiveRegeneration(ctx, fSlot-1)
+	marked := 0
+	markComplete := func(context.Context) error {
+		marked++
+		return nil
+	}
+
+	// Not yet: the next unwritten boundary is still below the finalized slot. Nothing is recorded either,
+	// since there was no handoff to record.
+	done, err := service.CompleteArchiveRegeneration(ctx, fSlot-1, markComplete)
 	require.NoError(t, err)
 	require.Equal(t, false, done)
 	require.Equal(t, true, service.ArchivePending())
+	require.Equal(t, 0, marked)
 
-	done, err = service.CompleteArchiveRegeneration(ctx, fSlot+1)
+	done, err = service.CompleteArchiveRegeneration(ctx, fSlot+1, markComplete)
 	require.NoError(t, err)
 	require.Equal(t, true, done)
 	require.Equal(t, false, service.ArchivePending())
+	require.Equal(t, 1, marked)
 	require.Equal(t, fSlot, service.finalizedInfo.slot)
 	require.Equal(t, fRoot, service.finalizedInfo.root)
+}
+
+// The database carries its own gate on tree writes, disarmed by recording the handoff. If that record cannot
+// be written, migration must stay suppressed: opening this side alone leaves migration running against a
+// guard that rejects it, which is silent data loss rather than a retry.
+func TestCompleteArchiveRegeneration_MarkCompleteFailureKeepsSuppression(t *testing.T) {
+	ctx := t.Context()
+	setStateDiffExponents()
+	beaconDB := testDB.SetupDB(t)
+	require.NoError(t, beaconDB.(*kv.Store).InitStateDiffCacheForTesting(t, 0))
+	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
+	defer resetCfg()
+
+	service := New(beaconDB, doublylinkedtree.New())
+	service.SetArchivePending(true)
+
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	fEpoch := primitives.Epoch(4)
+	fSlot := primitives.Slot(fEpoch) * slotsPerEpoch
+
+	st, _ := util.DeterministicGenesisState(t, 32)
+	genesisStateRoot, err := st.HashTreeRoot(ctx)
+	require.NoError(t, err)
+	genesisBlk := blocks.NewGenesisBlock(genesisStateRoot[:])
+	util.SaveBlock(t, ctx, beaconDB, genesisBlk)
+	gRoot, err := genesisBlk.Block.HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, gRoot))
+
+	require.NoError(t, st.SetSlot(fSlot))
+	stRoot, err := st.HashTreeRoot(ctx)
+	require.NoError(t, err)
+	blk := util.NewBeaconBlock()
+	blk.Block.Slot = fSlot
+	blk.Block.ParentRoot = gRoot[:]
+	blk.Block.StateRoot = stRoot[:]
+	util.SaveBlock(t, ctx, beaconDB, blk)
+	fRoot, err := blk.Block.HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, beaconDB.SaveStateSummary(ctx, &ethpb.StateSummary{Slot: fSlot, Root: fRoot[:]}))
+	require.NoError(t, beaconDB.SaveState(ctx, st, fRoot))
+	require.NoError(t, beaconDB.SaveFinalizedCheckpoint(ctx, &ethpb.Checkpoint{Epoch: fEpoch, Root: fRoot[:]}))
+
+	// A resume snapshot that must survive, since the next boot still needs it as a replay base.
+	resumeRoot := [32]byte{'r'}
+	require.NoError(t, beaconDB.(*kv.Store).SaveHotStateSnapshot(ctx, st, resumeRoot))
+	service.archive.lock.Lock()
+	service.archive.resumeSnapshotRoots = [][32]byte{resumeRoot}
+	service.archive.lock.Unlock()
+
+	writeErr := errors.New("status write failed")
+	done, err := service.CompleteArchiveRegeneration(ctx, fSlot+1, func(context.Context) error {
+		return writeErr
+	})
+	require.ErrorIs(t, err, writeErr)
+	require.Equal(t, false, done)
+	require.Equal(t, true, service.ArchivePending())
+	require.Equal(t, true, beaconDB.(*kv.Store).HasHotStateSnapshot(ctx, resumeRoot))
+
+	// A later retry with a working write completes normally.
+	done, err = service.CompleteArchiveRegeneration(ctx, fSlot+1, func(context.Context) error { return nil })
+	require.NoError(t, err)
+	require.Equal(t, true, done)
+	require.Equal(t, false, service.ArchivePending())
+	require.Equal(t, false, beaconDB.(*kv.Store).HasHotStateSnapshot(ctx, resumeRoot))
 }

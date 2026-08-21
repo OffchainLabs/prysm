@@ -312,15 +312,30 @@ type mockStateManager struct {
 	nextArg primitives.Slot
 	pending bool
 	handoff bool
+	// markErr, when set, is what markComplete returns, standing in for a failed status write.
+	markErr error
 }
 
 func (m *mockStateManager) ArchivePending() bool     { return m.pending }
 func (m *mockStateManager) SetArchivePending(p bool) { m.pending = p }
 
-func (m *mockStateManager) CompleteArchiveRegeneration(_ context.Context, next primitives.Slot) (bool, error) {
+// CompleteArchiveRegeneration mirrors the real ordering: markComplete runs first, and the gate only opens if
+// it succeeded.
+func (m *mockStateManager) CompleteArchiveRegeneration(
+	ctx context.Context,
+	next primitives.Slot,
+	markComplete func(context.Context) error,
+) (bool, error) {
 	m.nextArg = next
-	if m.handoff {
-		m.pending = false
+	if !m.handoff {
+		return false, nil
 	}
-	return m.handoff, nil
+	if m.markErr != nil {
+		return false, m.markErr
+	}
+	if err := markComplete(ctx); err != nil {
+		return false, err
+	}
+	m.pending = false
+	return true, nil
 }

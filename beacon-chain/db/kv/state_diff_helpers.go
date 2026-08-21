@@ -27,6 +27,8 @@ var (
 	exponentsKey                = []byte("exponents")
 	ErrSlotBeforeOffset         = errors.New("slot is before state-diff root offset")
 	errExponentsMetadataMissing = errors.New("state diff exponents metadata not found")
+	// ErrAboveArchiveFrontier rejects a tree write that the archive walk has not laid the anchors for yet.
+	ErrAboveArchiveFrontier = errors.New("state-diff write above the archive regeneration frontier")
 )
 
 func encodeStateDiffExponents(exponents []int) ([]byte, error) {

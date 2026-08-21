@@ -43,7 +43,11 @@ type Database interface {
 type StateManager interface {
 	ArchivePending() bool
 	SetArchivePending(pending bool)
-	CompleteArchiveRegeneration(ctx context.Context, nextUnwrittenBoundary primitives.Slot) (bool, error)
+	CompleteArchiveRegeneration(
+		ctx context.Context,
+		nextUnwrittenBoundary primitives.Slot,
+		markComplete func(context.Context) error,
+	) (bool, error)
 }
 
 // Service regenerates historical states into the state-diff tree.
@@ -145,7 +149,14 @@ func (s *Service) round(ctx context.Context) (bool, error) {
 	}
 
 	next := nextBoundary(as.OriginSlot, as.RegeneratedThroughSlot)
-	handedOff, err := s.sg.CompleteArchiveRegeneration(ctx, next)
+	// Persisting the completed status is what disarms the frontier guard in the database, so stategen runs it
+	// under the migration lock before it stops suppressing migration. If it fails nothing has opened, and this
+	// reports "not handed off" so the next round tries again.
+	complete := *as
+	complete.Complete = true
+	handedOff, err := s.sg.CompleteArchiveRegeneration(ctx, next, func(ctx context.Context) error {
+		return s.db.SaveArchiveStatus(ctx, &complete)
+	})
 	if err != nil {
 		return false, errors.Wrap(err, "could not complete archive regeneration")
 	}
@@ -154,14 +165,8 @@ func (s *Service) round(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
-	as.Complete = true
-	if err := s.db.SaveArchiveStatus(ctx, as); err != nil {
-		// The handoff already happened in memory, so failing to persist only costs a redundant walk on the
-		// next boot. Surface it rather than unwinding.
-		return true, errors.Wrap(err, "could not persist archive completion")
-	}
-	s.setStatus(as)
-	log.WithField("regeneratedThroughSlot", as.RegeneratedThroughSlot).
+	s.setStatus(&complete)
+	log.WithField("regeneratedThroughSlot", complete.RegeneratedThroughSlot).
 		Info("Archive state regeneration finished; all historical states are available")
 	return true, nil
 }

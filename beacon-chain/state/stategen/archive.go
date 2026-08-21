@@ -35,7 +35,16 @@ func (s *State) ArchivePending() bool {
 // once that is above the finalized checkpoint slot, meaning every anchor a live write below finalization
 // could resolve to already exists. It is deliberately not a comparison against the walk's frontier: boundary
 // spacing need not divide the epoch, so the frontier can never equal the checkpoint slot exactly.
-func (s *State) CompleteArchiveRegeneration(ctx context.Context, nextUnwrittenBoundary primitives.Slot) (bool, error) {
+//
+// markComplete records the handoff durably. It runs while the migration lock is held and before this node
+// stops suppressing migration, because the database carries a second gate of its own: the frontier guard in
+// saveStateByDiff. Opening this one first would leave a window where migration runs but the guard still
+// rejects its writes. A failure here is reported as "not handed off" so the caller simply tries again.
+func (s *State) CompleteArchiveRegeneration(
+	ctx context.Context,
+	nextUnwrittenBoundary primitives.Slot,
+	markComplete func(context.Context) error,
+) (bool, error) {
 	s.migrationLock.Lock()
 	defer s.migrationLock.Unlock()
 
@@ -57,6 +66,10 @@ func (s *State) CompleteArchiveRegeneration(ctx context.Context, nextUnwrittenBo
 		return false, errors.Wrapf(err, "could not load the finalized state at root %#x", fRoot)
 	}
 	s.SaveFinalizedState(fState.Slot(), fRoot, fState)
+
+	if err := markComplete(ctx); err != nil {
+		return false, errors.Wrap(err, "could not record archive regeneration as complete")
+	}
 
 	s.archive.lock.Lock()
 	s.archive.pending = false
