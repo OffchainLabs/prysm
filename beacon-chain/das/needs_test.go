@@ -2,6 +2,7 @@ package das
 
 import (
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -690,4 +691,74 @@ func TestCurrentNeedsIntegration(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSyncNeedsCurrentlyEnv tests the Env span used by envelope backfill.
+func TestSyncNeedsCurrentlyEnv(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	minBlockEpochs := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+
+	overrideGloas := func(t *testing.T, e primitives.Epoch) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = e
+		params.OverrideBeaconConfig(cfg)
+	}
+
+	t.Run("young network saturates at slot 1", func(t *testing.T) {
+		overrideGloas(t, 0)
+		current := primitives.Slot(10) // well inside the retention window
+		sn, err := NewSyncNeeds(func() primitives.Slot { return current }, nil, 0)
+		require.NoError(t, err)
+		cn := sn.Currently()
+		// Begin = max(gloasStart=0, syncEpochOffset floor) = max(0, 1) = 1.
+		require.Equal(t, primitives.Slot(1), cn.Env.Begin)
+		require.Equal(t, current, cn.Env.End)
+		require.Equal(t, false, cn.Env.At(0)) // genesis never expects an envelope
+		require.Equal(t, true, cn.Env.At(1))
+	})
+
+	t.Run("mid-epoch parity with syncEpochOffset", func(t *testing.T) {
+		overrideGloas(t, 0)
+		// A mid-epoch current slot: the floor must match block-retention arithmetic exactly.
+		current := slots.UnsafeEpochStart(minBlockEpochs+5) + 7
+		sn, err := NewSyncNeeds(func() primitives.Slot { return current }, nil, 0)
+		require.NoError(t, err)
+		cn := sn.Currently()
+		require.Equal(t, syncEpochOffset(current, minBlockEpochs), cn.Env.Begin)
+		require.Equal(t, current, cn.Env.End)
+	})
+
+	t.Run("gloas fork floor dominates when above retention floor", func(t *testing.T) {
+		gloasEpoch := primitives.Epoch(100)
+		overrideGloas(t, gloasEpoch)
+		current := slots.UnsafeEpochStart(gloasEpoch + 2)
+		sn, err := NewSyncNeeds(func() primitives.Slot { return current }, nil, 0)
+		require.NoError(t, err)
+		cn := sn.Currently()
+		require.Equal(t, slots.UnsafeEpochStart(gloasEpoch), cn.Env.Begin)
+		require.Equal(t, false, cn.Env.At(slots.UnsafeEpochStart(gloasEpoch)-1))
+		require.Equal(t, true, cn.Env.At(slots.UnsafeEpochStart(gloasEpoch)))
+	})
+
+	t.Run("env never inherits the backfill-oldest-slot flag", func(t *testing.T) {
+		overrideGloas(t, 0)
+		current := slots.UnsafeEpochStart(minBlockEpochs + 10)
+		oldest := primitives.Slot(1)
+		sn, err := NewSyncNeeds(func() primitives.Slot { return current }, &oldest, 0)
+		require.NoError(t, err)
+		cn := sn.Currently()
+		require.Equal(t, oldest, cn.Block.Begin) // block span honors the archival flag
+		require.Equal(t, syncEpochOffset(current, minBlockEpochs), cn.Env.Begin)
+		require.NotEqual(t, cn.Block.Begin, cn.Env.Begin)
+	})
+
+	t.Run("unscheduled gloas fork yields an empty window", func(t *testing.T) {
+		overrideGloas(t, primitives.Epoch(math.MaxUint64))
+		current := slots.UnsafeEpochStart(minBlockEpochs + 10)
+		sn, err := NewSyncNeeds(func() primitives.Slot { return current }, nil, 0)
+		require.NoError(t, err)
+		cn := sn.Currently()
+		require.Equal(t, false, cn.Env.At(current-1))
+		require.Equal(t, false, cn.Env.At(1))
+	})
 }

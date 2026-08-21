@@ -37,6 +37,8 @@ func (s batchState) String() string {
 		return "sync_blobs"
 	case batchSyncColumns:
 		return "sync_columns"
+	case batchSyncEnvelopes:
+		return "sync_envelopes"
 	case batchImportable:
 		return "importable"
 	case batchImportComplete:
@@ -58,6 +60,7 @@ const (
 	batchSequenced
 	batchSyncBlobs
 	batchSyncColumns
+	batchSyncEnvelopes
 	batchImportable
 	batchImportComplete
 	batchErrRetryable
@@ -85,6 +88,7 @@ type batch struct {
 	nextReqCols  []uint64
 	blobs        *blobSync
 	columns      *columnSync
+	envelopes    *envelopeSync
 }
 
 func (b batch) logFields() logrus.Fields {
@@ -105,6 +109,12 @@ func (b batch) logFields() logrus.Fields {
 	}
 	if b.columns != nil {
 		f["colPid"] = b.columns.peer
+	}
+	if b.envelopes != nil {
+		f["envPid"] = b.envelopes.peer
+	}
+	if b.state == batchSyncEnvelopes {
+		f["envPending"] = b.envelopes.unresolved()
 	}
 	if b.retries > 0 {
 		f["retryAfter"] = b.retryAfter.String()
@@ -169,6 +179,9 @@ func (b batch) transitionToNext() batch {
 	}
 	if b.blobs != nil && b.blobs.needed() > 0 {
 		return b.withState(batchSyncBlobs)
+	}
+	if b.envelopes.unresolved() > 0 {
+		return b.withState(batchSyncEnvelopes)
 	}
 	return b.withState(batchImportable)
 }

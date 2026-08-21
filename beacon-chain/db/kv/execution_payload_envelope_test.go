@@ -5,6 +5,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -157,7 +158,7 @@ func TestStore_DeleteExecutionPayloadEnvelope_CleansBlockHashIndex(t *testing.T)
 func TestBlindEnvelope_PreservesBlockHash(t *testing.T) {
 	env := testEnvelope(t)
 
-	blinded := blindEnvelope(env)
+	blinded := BlindEnvelope(env)
 
 	// Should contain the block hash from the payload, not a hash tree root.
 	assert.DeepEqual(t, env.Message.Payload.BlockHash, blinded.Message.BlockHash)
@@ -168,4 +169,51 @@ func TestBlindEnvelope_PreservesBlockHash(t *testing.T) {
 	assert.Equal(t, primitives.Slot(env.Message.Payload.SlotNumber), blinded.Message.Slot)
 	assert.DeepEqual(t, env.Message.BeaconBlockRoot, blinded.Message.BeaconBlockRoot)
 	assert.DeepEqual(t, env.Signature, blinded.Signature)
+}
+
+func TestStore_SaveBlindedExecutionPayloadEnvelope_Outcomes(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	env := testEnvelope(t)
+	blinded := BlindEnvelope(env)
+	blockRoot := bytesutil.ToBytes32(env.Message.BeaconBlockRoot)
+	blockHash := bytesutil.ToBytes32(env.Message.Payload.BlockHash)
+
+	// First save inserts and writes both the primary entry and the block hash index.
+	outcome, err := db.SaveBlindedExecutionPayloadEnvelope(ctx, blinded)
+	require.NoError(t, err)
+	require.Equal(t, iface.EnvelopeSaveInserted, outcome)
+	require.Equal(t, true, db.HasExecutionPayloadEnvelope(ctx, blockRoot))
+	byHash, err := db.ExecutionPayloadEnvelopeByBlockHash(ctx, blockHash)
+	require.NoError(t, err)
+	require.DeepEqual(t, blinded.Message.BlockHash, byHash.Message.BlockHash)
+
+	// Saving the identical envelope again is a no-op.
+	outcome, err = db.SaveBlindedExecutionPayloadEnvelope(ctx, blinded)
+	require.NoError(t, err)
+	require.Equal(t, iface.EnvelopeSaveByteIdentical, outcome)
+
+	// A differing envelope for the same block root reports a conflict and keeps the original.
+	conflicting := BlindEnvelope(testEnvelope(t))
+	conflicting.Message.BuilderIndex++
+	outcome, err = db.SaveBlindedExecutionPayloadEnvelope(ctx, conflicting)
+	require.NoError(t, err)
+	require.Equal(t, iface.EnvelopeSaveConflict, outcome)
+	stored, err := db.ExecutionPayloadEnvelope(ctx, blockRoot)
+	require.NoError(t, err)
+	require.Equal(t, blinded.Message.BuilderIndex, stored.Message.BuilderIndex)
+}
+
+func TestStore_SaveBlindedExecutionPayloadEnvelope_MatchesFullSavePath(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	env := testEnvelope(t)
+	blockRoot := bytesutil.ToBytes32(env.Message.BeaconBlockRoot)
+
+	// Blinding and saving must be byte-identical to the full-envelope save path.
+	require.NoError(t, db.SaveExecutionPayloadEnvelope(ctx, env))
+	outcome, err := db.SaveBlindedExecutionPayloadEnvelope(ctx, BlindEnvelope(env))
+	require.NoError(t, err)
+	require.Equal(t, iface.EnvelopeSaveByteIdentical, outcome)
+	require.Equal(t, true, db.HasExecutionPayloadEnvelope(ctx, blockRoot))
 }

@@ -6,12 +6,14 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/proto/dbval"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
 
@@ -75,7 +77,9 @@ func (s *Store) status() *dbval.BackfillStatus {
 // fillBack saves the slice of blocks and updates the BackfillStatus tracker to match the first block in the slice.
 // This method assumes that the block slice has been fully validated and sorted in slot order by the calling function.
 // It also performs the blob and/or data column availability check, which will persist blobs/DCs to disk once verified.
-func (s *Store) fillBack(ctx context.Context, current primitives.Slot, blocks []blocks.ROBlock, store das.AvailabilityChecker) (*dbval.BackfillStatus, error) {
+// Verified execution payload envelopes held by envs are persisted in blinded form before the block writes; envelope
+// outcomes never fail the batch, so the block import below always proceeds with its existing error behavior.
+func (s *Store) fillBack(ctx context.Context, current primitives.Slot, blocks []blocks.ROBlock, store das.AvailabilityChecker, envs *envelopeSync) (*dbval.BackfillStatus, error) {
 	status := s.status()
 	if len(blocks) == 0 {
 		return status, nil
@@ -88,6 +92,10 @@ func (s *Store) fillBack(ctx context.Context, current primitives.Slot, blocks []
 		return nil, errors.Wrapf(errBatchDisconnected, "prev parent_root=%#x, root=%#x, prev slot=%d, slot=%d",
 			status.LowParentRoot, highest.Root(), status.LowSlot, highest.Block().Slot())
 	}
+
+	// The check above guarantees the block behind status.LowRoot is the child of the batch tail,
+	// which finalize uses to classify the tail slot's payload fullness.
+	envs.finalize(ctx, s.store, bytesutil.ToBytes32(status.LowRoot))
 
 	if err := store.IsDataAvailable(ctx, current, blocks...); err != nil {
 		return nil, errors.Wrap(err, "IsDataAvailable")
@@ -168,6 +176,25 @@ func (s *Store) originState(ctx context.Context) (state.BeaconState, error) {
 	return s.store.StateOrError(ctx, bytesutil.ToBytes32(s.status().OriginRoot))
 }
 
+// hasEnvelope reports whether an execution payload envelope is already stored for the block root.
+func (s *Store) hasEnvelope(ctx context.Context, blockRoot [32]byte) bool {
+	return s.store.HasExecutionPayloadEnvelope(ctx, blockRoot)
+}
+
+// boundaryChild returns the already-imported child of the given batch-tail root, resolved via the
+// backfill status low root. It returns nil when the neighboring higher batch has not been imported
+// yet, i.e. the block behind LowRoot does not link to the tail.
+func (s *Store) boundaryChild(ctx context.Context, tailRoot [32]byte) (interfaces.ReadOnlyBeaconBlock, error) {
+	child, err := s.store.Block(ctx, bytesutil.ToBytes32(s.status().LowRoot))
+	if err != nil {
+		return nil, err
+	}
+	if child == nil || child.Block() == nil || child.Block().ParentRoot() != tailRoot {
+		return nil, nil
+	}
+	return child.Block(), nil
+}
+
 // BeaconDB describes the set of DB methods that the StatusUpdater type needs to function.
 type BeaconDB interface {
 	SaveBackfillStatus(context.Context, *dbval.BackfillStatus) error
@@ -177,4 +204,6 @@ type BeaconDB interface {
 	Block(context.Context, [32]byte) (interfaces.ReadOnlySignedBeaconBlock, error)
 	SaveROBlocks(ctx context.Context, blks []blocks.ROBlock, cache bool) error
 	StateOrError(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)
+	HasExecutionPayloadEnvelope(ctx context.Context, blockRoot [32]byte) bool
+	SaveBlindedExecutionPayloadEnvelope(ctx context.Context, envelope *ethpb.SignedBlindedExecutionPayloadEnvelope) (iface.EnvelopeSaveOutcome, error)
 }

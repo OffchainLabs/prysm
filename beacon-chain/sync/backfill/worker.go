@@ -12,6 +12,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 )
@@ -30,6 +32,36 @@ type workerCfg struct {
 	colStore     *filesystem.DataColumnStorage
 	downscore    peerDownscorer
 	currentNeeds func() das.CurrentNeeds
+	store        *Store
+	envVerifier  *envelopeVerifier
+	// envReconstructor enables the envelope backfill stage; when nil the stage is skipped.
+	envReconstructor EnvelopeReconstructor
+	// envFetcher, envMaxAttempts, envAttemptBudget, envPace and envLocalDelay allow tests to
+	// inject the fetch path and the attempt/budget values; zero values select the defaults.
+	envFetcher       envelopeFetcher
+	envMaxAttempts   int
+	envAttemptBudget time.Duration
+	envPace          time.Duration
+	envLocalDelay    time.Duration
+}
+
+// envelopeSyncCfg assembles the per-batch envelope sync configuration from the worker config.
+func (cfg *workerCfg) envelopeSyncCfg() *envelopeSyncCfg {
+	if cfg.envVerifier == nil || cfg.envReconstructor == nil || cfg.store == nil {
+		return nil
+	}
+	return &envelopeSyncCfg{
+		verifier:      cfg.envVerifier,
+		reconstructor: cfg.envReconstructor,
+		hasEnvelope:   cfg.store.hasEnvelope,
+		boundaryChild: cfg.store.boundaryChild,
+		currentNeeds:  cfg.currentNeeds,
+		downscore:     cfg.downscore,
+		maxAttempts:   cfg.envMaxAttempts,
+		attemptBudget: cfg.envAttemptBudget,
+		pace:          cfg.envPace,
+		localDelay:    cfg.envLocalDelay,
+	}
 }
 
 func initWorkerCfg(ctx context.Context, cfg *workerCfg, vw InitializerWaiter, store *Store) error {
@@ -54,7 +86,23 @@ func initWorkerCfg(ctx context.Context, cfg *workerCfg, vw InitializerWaiter, st
 	if err != nil {
 		return errors.Wrapf(err, "newBackfillVerifier failed")
 	}
+	// The builder registry snapshot only exists on Gloas+ origin states. A pre-Gloas origin
+	// implies every backfilled slot is pre-Gloas, so no envelope is ever expected and the
+	// envelope verifier's registry stays empty.
+	var builders []*eth.Builder
+	if cps.Version() >= version.Gloas {
+		builders, err = cps.Builders()
+		if err != nil {
+			return errors.Wrap(err, "unable to retrieve builder registry from the origin state")
+		}
+	}
+	ev, err := newEnvelopeVerifier(vr, keys, builders)
+	if err != nil {
+		return errors.Wrap(err, "newEnvelopeVerifier failed")
+	}
 	cfg.verifier = v
+	cfg.envVerifier = ev
+	cfg.store = store
 	cfg.ctxMap = cm
 	cfg.newVB = newBlobVerifierFromInitializer(vi)
 	cfg.newVC = newDataColumnVerifierFromInitializer(vi)
@@ -97,6 +145,8 @@ func (w *p2pWorker) run(ctx context.Context) {
 				b = w.handleBlobs(ctx, b)
 			case batchSyncColumns:
 				b = w.handleColumns(ctx, b)
+			case batchSyncEnvelopes:
+				b = w.handleEnvelopes(ctx, b)
 			case batchImportable:
 				// This state indicates the batch got all the way to be imported and failed,
 				// so we need clear out the blocks to go all the way back to the start of the process.
@@ -162,8 +212,31 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	if err != nil {
 		return b.withRetryableError(err)
 	}
+	es, err := newEnvelopeSync(ctx, verified, w.cfg.envelopeSyncCfg())
+	if err != nil {
+		return b.withRetryableError(err)
+	}
 	b.blobs = bs
 	b.columns = cs
+	b.envelopes = es
+	return b.transitionToNext()
+}
+
+// handleEnvelopes runs one fetch pass of the envelope sync stage against the assigned peer.
+// All failure modes end in an explicit skip or a bounded retry inside the envelope sync, so the
+// batch never errors here; it either stays in batchSyncEnvelopes (and is reassigned, preferring
+// a different peer) or proceeds toward import.
+func (w *p2pWorker) handleEnvelopes(ctx context.Context, b batch) batch {
+	if b.envelopes == nil {
+		return b.transitionToNext()
+	}
+	fetch := w.cfg.envFetcher
+	if fetch == nil {
+		fetch = func(ctx context.Context, pid peer.ID, req *eth.ExecutionPayloadEnvelopesByRangeRequest) ([]*eth.SignedExecutionPayloadEnvelope, error) {
+			return sync.SendExecutionPayloadEnvelopesByRangeRequest(ctx, w.cfg.clock, w.p2p, pid, w.cfg.ctxMap, req)
+		}
+	}
+	b.envelopes.fetchPass(ctx, b.assignedPeer, fetch)
 	return b.transitionToNext()
 }
 
