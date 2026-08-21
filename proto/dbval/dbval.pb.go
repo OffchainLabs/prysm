@@ -7,11 +7,10 @@
 package dbval
 
 import (
-	reflect "reflect"
-	sync "sync"
-
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	reflect "reflect"
+	sync "sync"
 )
 
 const (
@@ -21,13 +20,77 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type CoverageObstruction_Reason int32
+
+const (
+	CoverageObstruction_REASON_UNSPECIFIED CoverageObstruction_Reason = 0
+	// SIG_UNVERIFIABLE marks a historical envelope whose builder key cannot be
+	// resolved (missing or reused registry index), so its signature can never
+	// be verified statelessly.
+	CoverageObstruction_SIG_UNVERIFIABLE CoverageObstruction_Reason = 1
+)
+
+// Enum value maps for CoverageObstruction_Reason.
+var (
+	CoverageObstruction_Reason_name = map[int32]string{
+		0: "REASON_UNSPECIFIED",
+		1: "SIG_UNVERIFIABLE",
+	}
+	CoverageObstruction_Reason_value = map[string]int32{
+		"REASON_UNSPECIFIED": 0,
+		"SIG_UNVERIFIABLE":   1,
+	}
+)
+
+func (x CoverageObstruction_Reason) Enum() *CoverageObstruction_Reason {
+	p := new(CoverageObstruction_Reason)
+	*p = x
+	return p
+}
+
+func (x CoverageObstruction_Reason) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (CoverageObstruction_Reason) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_dbval_dbval_proto_enumTypes[0].Descriptor()
+}
+
+func (CoverageObstruction_Reason) Type() protoreflect.EnumType {
+	return &file_proto_dbval_dbval_proto_enumTypes[0]
+}
+
+func (x CoverageObstruction_Reason) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use CoverageObstruction_Reason.Descriptor instead.
+func (CoverageObstruction_Reason) EnumDescriptor() ([]byte, []int) {
+	return file_proto_dbval_dbval_proto_rawDescGZIP(), []int{2, 0}
+}
+
+// BackfillStatus is a value used to keep track of the progress of the process
+// of backfilling blocks leading up to the origin block used to checkpoint sync
+// a node. There is only one BackfillStatus value in the database.
 type BackfillStatus struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	LowSlot       uint64                 `protobuf:"varint,1,opt,name=low_slot,json=lowSlot,proto3" json:"low_slot,omitempty"`
-	LowRoot       []byte                 `protobuf:"bytes,2,opt,name=low_root,json=lowRoot,proto3" json:"low_root,omitempty"`
-	LowParentRoot []byte                 `protobuf:"bytes,3,opt,name=low_parent_root,json=lowParentRoot,proto3" json:"low_parent_root,omitempty"`
-	OriginSlot    uint64                 `protobuf:"varint,4,opt,name=origin_slot,json=originSlot,proto3" json:"origin_slot,omitempty"`
-	OriginRoot    []byte                 `protobuf:"bytes,6,opt,name=origin_root,json=originRoot,proto3" json:"origin_root,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// low_slot is the slot of the last block that backfill will attempt to
+	// download and import. This is determined by MIN_EPOCHS_FOR_BLOCK_REQUESTS,
+	// or by a user-specified override.
+	LowSlot uint64 `protobuf:"varint,1,opt,name=low_slot,json=lowSlot,proto3" json:"low_slot,omitempty"`
+	// low_root is the root of the last block that backfill will attempt to
+	// download and import.
+	LowRoot []byte `protobuf:"bytes,2,opt,name=low_root,json=lowRoot,proto3" json:"low_root,omitempty"`
+	// low_parent_root is the parent_root of the block at low_root. This enables
+	// the backfill service to check that a block is the direct ancestor of the
+	// block for low_root without an additional db lookup.
+	LowParentRoot []byte `protobuf:"bytes,3,opt,name=low_parent_root,json=lowParentRoot,proto3" json:"low_parent_root,omitempty"`
+	// origin_slot is the slot of the origin block, which is the block used to
+	// initiate a checkpoint sync. Backfill uses the origin block as the reference
+	// point to determine canonical ancestors.
+	OriginSlot uint64 `protobuf:"varint,4,opt,name=origin_slot,json=originSlot,proto3" json:"origin_slot,omitempty"`
+	// origin_root is the root of the origin block.
+	OriginRoot    []byte `protobuf:"bytes,6,opt,name=origin_root,json=originRoot,proto3" json:"origin_root,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -97,6 +160,163 @@ func (x *BackfillStatus) GetOriginRoot() []byte {
 	return nil
 }
 
+// EnvelopeCoverage tracks the single contiguous half-open slot interval
+// [low_slot, high_slot) over which this node can prove execution payload
+// envelope coverage: every canonical slot in the interval is classified by its
+// canonical child's bid, and every revealed slot has its verified blinded
+// envelope in the database. There is at most one EnvelopeCoverage value in the
+// database; a missing value means coverage is uninitialized and historical
+// envelope ranges must be refused. It is deliberately a dedicated record
+// rather than a BackfillStatus field so that an older binary rewriting block
+// status cannot strip it.
+type EnvelopeCoverage struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// format_version is exactly 1 for this layout.
+	FormatVersion uint32 `protobuf:"varint,1,opt,name=format_version,json=formatVersion,proto3" json:"format_version,omitempty"`
+	// low_slot is the inclusive retained lower bound of the covered interval.
+	LowSlot uint64 `protobuf:"varint,2,opt,name=low_slot,json=lowSlot,proto3" json:"low_slot,omitempty"`
+	// high_slot is the exclusive upper bound; it equals the beacon slot of
+	// high_anchor_root. low_slot == high_slot is a valid empty interval.
+	HighSlot uint64 `protobuf:"varint,3,opt,name=high_slot,json=highSlot,proto3" json:"high_slot,omitempty"`
+	// high_anchor_root is a canonical beacon block at exactly high_slot whose
+	// bid provides the child testimony classifying the last covered slot below
+	// the upper bound.
+	HighAnchorRoot []byte `protobuf:"bytes,4,opt,name=high_anchor_root,json=highAnchorRoot,proto3" json:"high_anchor_root,omitempty"`
+	// lower_obstruction optionally records why coverage cannot extend below
+	// low_slot. It is populated by historical backfill (signature-unverifiable
+	// builders) and is never required for an interval to be valid.
+	LowerObstruction *CoverageObstruction `protobuf:"bytes,5,opt,name=lower_obstruction,json=lowerObstruction,proto3" json:"lower_obstruction,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *EnvelopeCoverage) Reset() {
+	*x = EnvelopeCoverage{}
+	mi := &file_proto_dbval_dbval_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnvelopeCoverage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnvelopeCoverage) ProtoMessage() {}
+
+func (x *EnvelopeCoverage) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_dbval_dbval_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnvelopeCoverage.ProtoReflect.Descriptor instead.
+func (*EnvelopeCoverage) Descriptor() ([]byte, []int) {
+	return file_proto_dbval_dbval_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *EnvelopeCoverage) GetFormatVersion() uint32 {
+	if x != nil {
+		return x.FormatVersion
+	}
+	return 0
+}
+
+func (x *EnvelopeCoverage) GetLowSlot() uint64 {
+	if x != nil {
+		return x.LowSlot
+	}
+	return 0
+}
+
+func (x *EnvelopeCoverage) GetHighSlot() uint64 {
+	if x != nil {
+		return x.HighSlot
+	}
+	return 0
+}
+
+func (x *EnvelopeCoverage) GetHighAnchorRoot() []byte {
+	if x != nil {
+		return x.HighAnchorRoot
+	}
+	return nil
+}
+
+func (x *EnvelopeCoverage) GetLowerObstruction() *CoverageObstruction {
+	if x != nil {
+		return x.LowerObstruction
+	}
+	return nil
+}
+
+// CoverageObstruction records a durable reason envelope coverage stops at a
+// slot below the covered interval.
+type CoverageObstruction struct {
+	state           protoimpl.MessageState     `protogen:"open.v1"`
+	Reason          CoverageObstruction_Reason `protobuf:"varint,1,opt,name=reason,proto3,enum=ethereum.eth.dbval.CoverageObstruction_Reason" json:"reason,omitempty"`
+	Slot            uint64                     `protobuf:"varint,2,opt,name=slot,proto3" json:"slot,omitempty"`
+	BeaconBlockRoot []byte                     `protobuf:"bytes,3,opt,name=beacon_block_root,json=beaconBlockRoot,proto3" json:"beacon_block_root,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *CoverageObstruction) Reset() {
+	*x = CoverageObstruction{}
+	mi := &file_proto_dbval_dbval_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CoverageObstruction) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CoverageObstruction) ProtoMessage() {}
+
+func (x *CoverageObstruction) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_dbval_dbval_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CoverageObstruction.ProtoReflect.Descriptor instead.
+func (*CoverageObstruction) Descriptor() ([]byte, []int) {
+	return file_proto_dbval_dbval_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *CoverageObstruction) GetReason() CoverageObstruction_Reason {
+	if x != nil {
+		return x.Reason
+	}
+	return CoverageObstruction_REASON_UNSPECIFIED
+}
+
+func (x *CoverageObstruction) GetSlot() uint64 {
+	if x != nil {
+		return x.Slot
+	}
+	return 0
+}
+
+func (x *CoverageObstruction) GetBeaconBlockRoot() []byte {
+	if x != nil {
+		return x.BeaconBlockRoot
+	}
+	return nil
+}
+
 var File_proto_dbval_dbval_proto protoreflect.FileDescriptor
 
 var file_proto_dbval_dbval_proto_rawDesc = []byte{
@@ -114,10 +334,39 @@ var file_proto_dbval_dbval_proto_rawDesc = []byte{
 	0x01, 0x28, 0x04, 0x52, 0x0a, 0x6f, 0x72, 0x69, 0x67, 0x69, 0x6e, 0x53, 0x6c, 0x6f, 0x74, 0x12,
 	0x1f, 0x0a, 0x0b, 0x6f, 0x72, 0x69, 0x67, 0x69, 0x6e, 0x5f, 0x72, 0x6f, 0x6f, 0x74, 0x18, 0x06,
 	0x20, 0x01, 0x28, 0x0c, 0x52, 0x0a, 0x6f, 0x72, 0x69, 0x67, 0x69, 0x6e, 0x52, 0x6f, 0x6f, 0x74,
-	0x42, 0x34, 0x5a, 0x32, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f,
-	0x66, 0x66, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73,
-	0x6d, 0x2f, 0x76, 0x37, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x64, 0x62, 0x76, 0x61, 0x6c,
-	0x3b, 0x64, 0x62, 0x76, 0x61, 0x6c, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x22, 0xf1, 0x01, 0x0a, 0x10, 0x45, 0x6e, 0x76, 0x65, 0x6c, 0x6f, 0x70, 0x65, 0x43, 0x6f, 0x76,
+	0x65, 0x72, 0x61, 0x67, 0x65, 0x12, 0x25, 0x0a, 0x0e, 0x66, 0x6f, 0x72, 0x6d, 0x61, 0x74, 0x5f,
+	0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0d, 0x66,
+	0x6f, 0x72, 0x6d, 0x61, 0x74, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x12, 0x19, 0x0a, 0x08,
+	0x6c, 0x6f, 0x77, 0x5f, 0x73, 0x6c, 0x6f, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x04, 0x52, 0x07,
+	0x6c, 0x6f, 0x77, 0x53, 0x6c, 0x6f, 0x74, 0x12, 0x1b, 0x0a, 0x09, 0x68, 0x69, 0x67, 0x68, 0x5f,
+	0x73, 0x6c, 0x6f, 0x74, 0x18, 0x03, 0x20, 0x01, 0x28, 0x04, 0x52, 0x08, 0x68, 0x69, 0x67, 0x68,
+	0x53, 0x6c, 0x6f, 0x74, 0x12, 0x28, 0x0a, 0x10, 0x68, 0x69, 0x67, 0x68, 0x5f, 0x61, 0x6e, 0x63,
+	0x68, 0x6f, 0x72, 0x5f, 0x72, 0x6f, 0x6f, 0x74, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x0e,
+	0x68, 0x69, 0x67, 0x68, 0x41, 0x6e, 0x63, 0x68, 0x6f, 0x72, 0x52, 0x6f, 0x6f, 0x74, 0x12, 0x54,
+	0x0a, 0x11, 0x6c, 0x6f, 0x77, 0x65, 0x72, 0x5f, 0x6f, 0x62, 0x73, 0x74, 0x72, 0x75, 0x63, 0x74,
+	0x69, 0x6f, 0x6e, 0x18, 0x05, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x27, 0x2e, 0x65, 0x74, 0x68, 0x65,
+	0x72, 0x65, 0x75, 0x6d, 0x2e, 0x65, 0x74, 0x68, 0x2e, 0x64, 0x62, 0x76, 0x61, 0x6c, 0x2e, 0x43,
+	0x6f, 0x76, 0x65, 0x72, 0x61, 0x67, 0x65, 0x4f, 0x62, 0x73, 0x74, 0x72, 0x75, 0x63, 0x74, 0x69,
+	0x6f, 0x6e, 0x52, 0x10, 0x6c, 0x6f, 0x77, 0x65, 0x72, 0x4f, 0x62, 0x73, 0x74, 0x72, 0x75, 0x63,
+	0x74, 0x69, 0x6f, 0x6e, 0x22, 0xd5, 0x01, 0x0a, 0x13, 0x43, 0x6f, 0x76, 0x65, 0x72, 0x61, 0x67,
+	0x65, 0x4f, 0x62, 0x73, 0x74, 0x72, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x46, 0x0a, 0x06,
+	0x72, 0x65, 0x61, 0x73, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x2e, 0x2e, 0x65,
+	0x74, 0x68, 0x65, 0x72, 0x65, 0x75, 0x6d, 0x2e, 0x65, 0x74, 0x68, 0x2e, 0x64, 0x62, 0x76, 0x61,
+	0x6c, 0x2e, 0x43, 0x6f, 0x76, 0x65, 0x72, 0x61, 0x67, 0x65, 0x4f, 0x62, 0x73, 0x74, 0x72, 0x75,
+	0x63, 0x74, 0x69, 0x6f, 0x6e, 0x2e, 0x52, 0x65, 0x61, 0x73, 0x6f, 0x6e, 0x52, 0x06, 0x72, 0x65,
+	0x61, 0x73, 0x6f, 0x6e, 0x12, 0x12, 0x0a, 0x04, 0x73, 0x6c, 0x6f, 0x74, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x04, 0x52, 0x04, 0x73, 0x6c, 0x6f, 0x74, 0x12, 0x2a, 0x0a, 0x11, 0x62, 0x65, 0x61, 0x63,
+	0x6f, 0x6e, 0x5f, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x5f, 0x72, 0x6f, 0x6f, 0x74, 0x18, 0x03, 0x20,
+	0x01, 0x28, 0x0c, 0x52, 0x0f, 0x62, 0x65, 0x61, 0x63, 0x6f, 0x6e, 0x42, 0x6c, 0x6f, 0x63, 0x6b,
+	0x52, 0x6f, 0x6f, 0x74, 0x22, 0x36, 0x0a, 0x06, 0x52, 0x65, 0x61, 0x73, 0x6f, 0x6e, 0x12, 0x16,
+	0x0a, 0x12, 0x52, 0x45, 0x41, 0x53, 0x4f, 0x4e, 0x5f, 0x55, 0x4e, 0x53, 0x50, 0x45, 0x43, 0x49,
+	0x46, 0x49, 0x45, 0x44, 0x10, 0x00, 0x12, 0x14, 0x0a, 0x10, 0x53, 0x49, 0x47, 0x5f, 0x55, 0x4e,
+	0x56, 0x45, 0x52, 0x49, 0x46, 0x49, 0x41, 0x42, 0x4c, 0x45, 0x10, 0x01, 0x42, 0x34, 0x5a, 0x32,
+	0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66, 0x63, 0x68,
+	0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x37,
+	0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x64, 0x62, 0x76, 0x61, 0x6c, 0x3b, 0x64, 0x62, 0x76,
+	0x61, 0x6c, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -132,16 +381,22 @@ func file_proto_dbval_dbval_proto_rawDescGZIP() []byte {
 	return file_proto_dbval_dbval_proto_rawDescData
 }
 
-var file_proto_dbval_dbval_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_proto_dbval_dbval_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_proto_dbval_dbval_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_proto_dbval_dbval_proto_goTypes = []any{
-	(*BackfillStatus)(nil), // 0: ethereum.eth.dbval.BackfillStatus
+	(CoverageObstruction_Reason)(0), // 0: ethereum.eth.dbval.CoverageObstruction.Reason
+	(*BackfillStatus)(nil),          // 1: ethereum.eth.dbval.BackfillStatus
+	(*EnvelopeCoverage)(nil),        // 2: ethereum.eth.dbval.EnvelopeCoverage
+	(*CoverageObstruction)(nil),     // 3: ethereum.eth.dbval.CoverageObstruction
 }
 var file_proto_dbval_dbval_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	3, // 0: ethereum.eth.dbval.EnvelopeCoverage.lower_obstruction:type_name -> ethereum.eth.dbval.CoverageObstruction
+	0, // 1: ethereum.eth.dbval.CoverageObstruction.reason:type_name -> ethereum.eth.dbval.CoverageObstruction.Reason
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_proto_dbval_dbval_proto_init() }
@@ -154,13 +409,14 @@ func file_proto_dbval_dbval_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_proto_dbval_dbval_proto_rawDesc,
-			NumEnums:      0,
-			NumMessages:   1,
+			NumEnums:      1,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_proto_dbval_dbval_proto_goTypes,
 		DependencyIndexes: file_proto_dbval_dbval_proto_depIdxs,
+		EnumInfos:         file_proto_dbval_dbval_proto_enumTypes,
 		MessageInfos:      file_proto_dbval_dbval_proto_msgTypes,
 	}.Build()
 	File_proto_dbval_dbval_proto = out.File

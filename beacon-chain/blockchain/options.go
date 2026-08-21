@@ -170,6 +170,17 @@ func WithStateNotifier(n statefeed.Notifier) Option {
 	}
 }
 
+// WithEnvelopeCoverageNotifier wires the envelope coverage runtime's
+// never-closed coalescing notifier so batch sync can signal durable envelope
+// saves (the live path is covered by the ExecutionPayloadProcessed state feed
+// event).
+func WithEnvelopeCoverageNotifier(n EnvelopeCoverageNotifier) Option {
+	return func(s *Service) error {
+		s.cfg.EnvelopeCoverageNotifier = n
+		return nil
+	}
+}
+
 // WithForkChoiceStore to update an optimized fork-choice representation.
 func WithForkChoiceStore(f forkchoice.ForkChoicer) Option {
 	return func(s *Service) error {

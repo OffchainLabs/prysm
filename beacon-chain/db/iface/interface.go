@@ -71,6 +71,13 @@ type ReadOnlyDatabase interface {
 	ExecutionPayloadEnvelope(ctx context.Context, blockRoot [32]byte) (*ethpb.SignedBlindedExecutionPayloadEnvelope, error)
 	ExecutionPayloadEnvelopeByBlockHash(ctx context.Context, blockHash [32]byte) (*ethpb.SignedBlindedExecutionPayloadEnvelope, error)
 	HasExecutionPayloadEnvelope(ctx context.Context, blockRoot [32]byte) bool
+	ExecutionPayloadEnvelopeWithFingerprint(ctx context.Context, blockRoot [32]byte) (*ethpb.SignedBlindedExecutionPayloadEnvelope, [32]byte, error)
+
+	// Execution payload envelope coverage (Gloas+).
+	EnvelopeCoverage(ctx context.Context) (*dbval.EnvelopeCoverage, error)
+	RevealedEnvelopeRoots(ctx context.Context, start, end primitives.Slot, limit uint64) ([]RevealedEnvelopeSlotRoot, error)
+	BlockSlotIndexPageDescending(ctx context.Context, cursor SlotIndexCursor, floor primitives.Slot, maxCandidates, maxBytes int) (*SlotIndexPage, error)
+	BlockSlotIndexPageAscending(ctx context.Context, cursor SlotIndexCursor, ceil primitives.Slot, maxCandidates, maxBytes int) (*SlotIndexPage, error)
 
 	// P2P Metadata operations.
 	MetadataSeqNum(ctx context.Context) (uint64, error)
@@ -124,6 +131,14 @@ type NoHeadAccessDatabase interface {
 	// Execution payload envelope operations (Gloas+).
 	SaveExecutionPayloadEnvelope(ctx context.Context, envelope *ethpb.SignedExecutionPayloadEnvelope) error
 	DeleteExecutionPayloadEnvelope(ctx context.Context, blockRoot [32]byte) error
+
+	// Execution payload envelope coverage (Gloas+). The coverage record and the
+	// canonical-revealed slot index are owned by the coverage coordinator;
+	// CommitEnvelopeCoverage is the only accessor that mutates the index inside
+	// the published interval.
+	SaveEnvelopeCoverage(ctx context.Context, cov *dbval.EnvelopeCoverage) error
+	CommitEnvelopeCoverage(ctx context.Context, cov *dbval.EnvelopeCoverage, replacements []EnvelopeIndexReplacement) error
+	PruneRevealedEnvelopeIndexBelow(ctx context.Context, floor primitives.Slot, limit int) (int, error)
 
 	CleanUpDirtyStates(ctx context.Context, slotsPerArchivedPoint primitives.Slot) error
 	DeleteHistoricalDataBeforeSlot(ctx context.Context, slot primitives.Slot, batchSize int) (int, error)

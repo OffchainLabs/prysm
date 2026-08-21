@@ -118,5 +118,22 @@ func (s *Store) SaveOrigin(ctx context.Context, serState, serBlock []byte) error
 	if err = s.SaveFinalizedCheckpoint(ctx, chkpt); err != nil {
 		return errors.Wrap(err, "save finalized checkpoint")
 	}
+
+	// For a Gloas+ checkpoint, seed an empty envelope coverage interval
+	// anchored at the origin block only after every origin write above has
+	// succeeded. A pre-Gloas origin deliberately leaves the record absent
+	// (UNINITIALIZED) and the coverage coordinator anchors at the first
+	// canonical Gloas head instead.
+	if blk.Version() >= version.Gloas {
+		cov := &dbval.EnvelopeCoverage{
+			FormatVersion:  1,
+			LowSlot:        uint64(slot),
+			HighSlot:       uint64(slot),
+			HighAnchorRoot: blockRoot[:],
+		}
+		if err := s.SaveEnvelopeCoverage(ctx, cov); err != nil {
+			return errors.Wrap(err, "save envelope coverage origin seed")
+		}
+	}
 	return nil
 }

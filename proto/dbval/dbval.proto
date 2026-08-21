@@ -26,3 +26,45 @@ message BackfillStatus {
   // origin_root is the root of the origin block.
   bytes origin_root = 6;
 }
+
+// EnvelopeCoverage tracks the single contiguous half-open slot interval
+// [low_slot, high_slot) over which this node can prove execution payload
+// envelope coverage: every canonical slot in the interval is classified by its
+// canonical child's bid, and every revealed slot has its verified blinded
+// envelope in the database. There is at most one EnvelopeCoverage value in the
+// database; a missing value means coverage is uninitialized and historical
+// envelope ranges must be refused. It is deliberately a dedicated record
+// rather than a BackfillStatus field so that an older binary rewriting block
+// status cannot strip it.
+message EnvelopeCoverage {
+  // format_version is exactly 1 for this layout.
+  uint32 format_version = 1;
+  // low_slot is the inclusive retained lower bound of the covered interval.
+  uint64 low_slot = 2;
+  // high_slot is the exclusive upper bound; it equals the beacon slot of
+  // high_anchor_root. low_slot == high_slot is a valid empty interval.
+  uint64 high_slot = 3;
+  // high_anchor_root is a canonical beacon block at exactly high_slot whose
+  // bid provides the child testimony classifying the last covered slot below
+  // the upper bound.
+  bytes high_anchor_root = 4;
+  // lower_obstruction optionally records why coverage cannot extend below
+  // low_slot. It is populated by historical backfill (signature-unverifiable
+  // builders) and is never required for an interval to be valid.
+  CoverageObstruction lower_obstruction = 5;
+}
+
+// CoverageObstruction records a durable reason envelope coverage stops at a
+// slot below the covered interval.
+message CoverageObstruction {
+  enum Reason {
+    REASON_UNSPECIFIED = 0;
+    // SIG_UNVERIFIABLE marks a historical envelope whose builder key cannot be
+    // resolved (missing or reused registry index), so its signature can never
+    // be verified statelessly.
+    SIG_UNVERIFIABLE = 1;
+  }
+  Reason reason = 1;
+  uint64 slot = 2;
+  bytes beacon_block_root = 3;
+}

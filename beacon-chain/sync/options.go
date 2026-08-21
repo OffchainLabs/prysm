@@ -200,6 +200,15 @@ func WithAvailableBlocker(avb coverage.AvailableBlocker) Option {
 	}
 }
 
+// WithEnvelopeCoverage wires the execution payload envelope coverage runtime
+// into the envelopes-by-range serving gate.
+func WithEnvelopeCoverage(p EnvelopeCoverageProvider) Option {
+	return func(s *Service) error {
+		s.envelopeCoverage = p
+		return nil
+	}
+}
+
 func WithPayloadAttestationCache(c *cache.PayloadAttestationCache) Option {
 	return func(s *Service) error {
 		s.payloadAttestationCache = c

@@ -22,6 +22,12 @@ var ErrNotFoundFeeRecipient = errors.Wrap(ErrNotFound, "fee recipient")
 // ErrNotFoundMetadataSeqNum is a not found error specifically for the metadata sequence number getter
 var ErrNotFoundMetadataSeqNum = errors.Wrap(ErrNotFound, "metadata sequence number")
 
+// ErrEnvelopeCovered is returned when deleting an execution payload envelope
+// would remove the primary record behind a canonical-revealed serving index
+// entry. Coverage must first be moved/shrunk through the coverage coordinator
+// so the root is no longer indexed.
+var ErrEnvelopeCovered = errors.New("execution payload envelope is referenced by the coverage serving index")
+
 // ErrStateDiffIncompatible is returned when state-diff feature is enabled
 // but the database was created without state-diff support.
 var ErrStateDiffIncompatible = errors.New("state-diff feature enabled but database was created without state-diff support")

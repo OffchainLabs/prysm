@@ -20,6 +20,12 @@ var (
 	hotStateSnapshotsBucket                 = []byte("hot-state-snapshots")
 	executionPayloadEnvelopesBucket         = []byte("execution-payload-envelopes")
 	executionPayloadEnvelopeBlockHashBucket = []byte("execution-payload-envelope-block-hash-index")
+	// revealedEnvelopeSlotIndexBucket maps a slot to the single beacon block
+	// root whose execution payload envelope the canonical chain actually used
+	// at that slot. It is mutated only inside the coverage coordinator's
+	// serialized combined coverage+index commits; raw envelope saves and
+	// deletes never touch it.
+	revealedEnvelopeSlotIndexBucket = []byte("revealed-envelope-slot-index")
 
 	// Light Client Updates Bucket
 	lightClientUpdatesBucket       = []byte("light-client-updates")
@@ -70,6 +76,9 @@ var (
 	originCheckpointBlockRootKey = []byte("origin-checkpoint-block-root")
 	// tracking data about an ongoing backfill
 	backfillStatusKey = []byte("backfill-status")
+	// dedicated singleton key for the execution payload envelope coverage
+	// record; a missing key is the explicit UNINITIALIZED coverage state
+	envelopeCoverageKey = []byte("execution-payload-envelope-coverage")
 
 	// Deprecated: This index key was migrated in PR 6461. Do not use, except for migrations.
 	lastArchivedIndexKey = []byte("last-archived")

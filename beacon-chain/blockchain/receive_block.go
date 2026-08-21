@@ -440,6 +440,11 @@ func (s *Service) ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock
 			return errors.Wrap(err, "could not save execution payload envelope")
 		}
 	}
+	// Batch sync emits no per-envelope state feed events, so wake the
+	// envelope coverage coordinator directly after the durable saves above.
+	if len(envelopes) > 0 && s.cfg.EnvelopeCoverageNotifier != nil {
+		s.cfg.EnvelopeCoverageNotifier.Notify()
+	}
 	finalized := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
 	if finalized == nil {
 		return errNilFinalizedInStore

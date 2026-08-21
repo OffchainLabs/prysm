@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/container/slice"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -181,6 +182,41 @@ func (s *Service) streamDataColumnBatch(ctx context.Context, batch blockBatch, q
 	}
 
 	return quota, nil
+}
+
+// canonicalSuccessorBlock walks the block slot index upward from the given
+// slot and returns the lowest canonical block at or above it, or nil when no
+// canonical successor is indexed.
+func (s *Service) canonicalSuccessorBlock(ctx context.Context, slot primitives.Slot) (interfaces.ReadOnlySignedBeaconBlock, error) {
+	for {
+		fs, roots, err := s.cfg.beaconDB.LowestRootsAtOrAboveSlot(ctx, slot)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not find successor block")
+		}
+		if len(roots) == 0 {
+			return nil, nil
+		}
+		for _, r := range roots {
+			canonical, err := s.cfg.chain.IsCanonical(ctx, r)
+			if err != nil {
+				log.WithError(err).WithField("blockRoot", bytesutil.Trunc(r[:])).Debug("Could not check if block is canonical")
+				continue
+			}
+			if canonical {
+				successorBlock, err := s.cfg.beaconDB.Block(ctx, r)
+				if err != nil {
+					return nil, errors.Wrap(err, "could not load successor block")
+				}
+				return successorBlock, nil
+			}
+		}
+		// fs below the requested slot means the head root fallback fired, nothing is indexed above.
+		if fs < slot {
+			return nil, nil
+		}
+		// Only orphaned blocks at this slot, keep looking above it.
+		slot = fs + 1
+	}
 }
 
 // Columns of a block whose payload never became canonical (empty slot) are not chain data, mirroring the envelopes by range walk.

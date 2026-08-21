@@ -108,6 +108,7 @@ var blockedBuckets = [][]byte{
 	blockParentRootIndicesBucket,
 	blockSlotIndicesBucket,
 	finalizedBlockRootsIndexBucket,
+	revealedEnvelopeSlotIndexBucket,
 }
 
 // Store defines an implementation of the Prysm Database interface
@@ -156,6 +157,7 @@ var Buckets = [][]byte{
 	custodyBucket,
 	executionPayloadEnvelopesBucket,
 	executionPayloadEnvelopeBlockHashBucket,
+	revealedEnvelopeSlotIndexBucket,
 }
 
 // KVStoreOption is a functional option that modifies a kv.Store.

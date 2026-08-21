@@ -25,6 +25,8 @@ type CurrentNeeds struct {
 	Block NeedSpan
 	Blob  NeedSpan
 	Col   NeedSpan
+	// Env is the execution payload envelope retention span (Gloas+).
+	Env NeedSpan
 }
 
 // SyncNeeds holds configuration and state for determining what data is needed
@@ -90,6 +92,7 @@ func (n SyncNeeds) Currently() CurrentNeeds {
 		Block: n.blockSpan(current),
 		Blob:  NeedSpan{Begin: syncEpochOffset(current, n.blobRetention), End: n.fulu},
 		Col:   NeedSpan{Begin: syncEpochOffset(current, n.colRetention), End: current},
+		Env:   EnvSpan(current),
 	}
 	// Adjust the minimums forward to the slots where the sidecar types were introduced
 	c.Blob.Begin = max(c.Blob.Begin, n.deneb)
@@ -98,11 +101,19 @@ func (n SyncNeeds) Currently() CurrentNeeds {
 	return c
 }
 
+// blockSpan computes the block retention span. The default lower bound is the
+// epoch-floored retention offset so that it never sits above the start of the
+// oldest retained envelope epoch (the Env span below is epoch floored per the
+// spec serving window); the epochFlooredOffset floor at slot 1 keeps the
+// invalid genesis-signature slot excluded. A user flag lower than the exact
+// per-slot offset is combined with min() so a flag between the epoch floor
+// and the exact offset cannot strand the oldest envelope epoch.
 func (n SyncNeeds) blockSpan(current primitives.Slot) NeedSpan {
+	flooredDefault := epochFlooredOffset(current, n.blockRetention)
 	if n.validOldestSlotPtr != nil { // assumes validation done in initialize()
-		return NeedSpan{Begin: *n.validOldestSlotPtr, End: current}
+		return NeedSpan{Begin: min(*n.validOldestSlotPtr, flooredDefault), End: current}
 	}
-	return NeedSpan{Begin: syncEpochOffset(current, n.blockRetention), End: current}
+	return NeedSpan{Begin: flooredDefault, End: current}
 }
 
 func (n SyncNeeds) BlobRetentionChecker() RetentionChecker {
@@ -132,4 +143,33 @@ func syncEpochOffset(current primitives.Slot, subtract primitives.Epoch) primiti
 		return 1
 	}
 	return current - offset
+}
+
+// EnvSpan returns the execution payload envelope retention span for the given
+// current slot: Begin = max(1, gloasStart, EpochStart(currentEpoch -
+// MIN_EPOCHS_FOR_BLOCK_REQUESTS)) and End = current. It never inherits the
+// --backfill-oldest-slot flag: archival block batches must not vacuously
+// extend envelope coverage. When Gloas is not scheduled the span is empty
+// (Begin far above End), making envelope retention a no-op.
+func EnvSpan(current primitives.Slot) NeedSpan {
+	gloasBoundary := min(params.BeaconConfig().GloasForkEpoch, slots.MaxSafeEpoch())
+	gloas := slots.UnsafeEpochStart(gloasBoundary)
+	retention := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+	return NeedSpan{Begin: max(gloas, epochFlooredOffset(current, retention)), End: current}
+}
+
+// epochFlooredOffset returns the first slot of the epoch `subtract` epochs
+// before the current epoch, saturating and floored at slot 1. Slot 1 rather
+// than 0 because the genesis block never has a valid signature nor an
+// execution payload envelope: a Gloas-at-genesis block carries a real bid but
+// no envelope is ever gossiped or persisted for it, so a floor of 0 could
+// never be reached by envelope coverage.
+func epochFlooredOffset(current primitives.Slot, subtract primitives.Epoch) primitives.Slot {
+	currentEpoch := slots.ToEpoch(current)
+	sub := min(subtract, slots.MaxSafeEpoch())
+	if currentEpoch <= sub {
+		return 1
+	}
+	start := slots.UnsafeEpochStart(currentEpoch - sub)
+	return max(start, 1)
 }

@@ -3,6 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = [
+        "envelope_coverage.go",
         "errors.go",
         "interface.go",
     ],
@@ -20,5 +21,6 @@ go_library(
         "//proto/dbval:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "@com_github_ethereum_go_ethereum//common:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
     ],
 )

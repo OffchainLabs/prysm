@@ -99,12 +99,21 @@ type config struct {
 	FinalizedStateAtStartUp   state.BeaconState
 	ExecutionEngineCaller     execution.EngineCaller
 	SyncChecker               Checker
+	EnvelopeCoverageNotifier  EnvelopeCoverageNotifier
 }
 
 // Checker is an interface used to determine if a node is in initial sync
 // or regular sync.
 type Checker interface {
 	Synced() bool
+}
+
+// EnvelopeCoverageNotifier receives a non-blocking, coalescing wake-up after
+// durable execution payload envelope saves. It is satisfied by the coverage
+// runtime's never-closed notifier; the blockchain service never mutates
+// coverage state directly.
+type EnvelopeCoverageNotifier interface {
+	Notify()
 }
 
 var ErrMissingClockSetter = errors.New("blockchain Service initialized without a startup.ClockSetter")

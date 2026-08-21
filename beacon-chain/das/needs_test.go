@@ -290,11 +290,14 @@ func TestSyncNeedsBlockSpan(t *testing.T) {
 		expectedEnd    primitives.Slot
 	}{
 		{
+			// The flag is combined with min(): the epoch-floored default (saturated
+			// to 1 here because retention exceeds the current epoch) wins over a
+			// higher flag value so the oldest envelope epoch is never stranded.
 			name:           "with validOldestSlotPtr set",
 			validOldest:    func() *primitives.Slot { s := primitives.Slot(500); return &s }(),
 			blockRetention: primitives.Epoch(minBlockEpochs),
 			current:        10000,
-			expectedBegin:  500,
+			expectedBegin:  1,
 			expectedEnd:    10000,
 		},
 		{
@@ -376,7 +379,7 @@ func TestSyncNeedsCurrently(t *testing.T) {
 			colRetention:     10,
 			blockRetention:   5,
 			validOldest:      nil,
-			expectBlockBegin: syncEpochOffset(500, 5),
+			expectBlockBegin: epochFlooredOffset(500, 5),
 			expectBlockEnd:   500,
 			expectBlobBegin:  denebSlot, // adjusted to deneb
 			expectBlobEnd:    fuluSlot,
@@ -390,7 +393,7 @@ func TestSyncNeedsCurrently(t *testing.T) {
 			colRetention:     10,
 			blockRetention:   5,
 			validOldest:      nil,
-			expectBlockBegin: syncEpochOffset(1500, 5),
+			expectBlockBegin: epochFlooredOffset(1500, 5),
 			expectBlockEnd:   1500,
 			expectBlobBegin:  max(syncEpochOffset(1500, 10), denebSlot),
 			expectBlobEnd:    fuluSlot,
@@ -404,7 +407,7 @@ func TestSyncNeedsCurrently(t *testing.T) {
 			colRetention:     10,
 			blockRetention:   5,
 			validOldest:      nil,
-			expectBlockBegin: syncEpochOffset(3000, 5),
+			expectBlockBegin: epochFlooredOffset(3000, 5),
 			expectBlockEnd:   3000,
 			expectBlobBegin:  max(syncEpochOffset(3000, 10), denebSlot),
 			expectBlobEnd:    fuluSlot,
@@ -418,7 +421,7 @@ func TestSyncNeedsCurrently(t *testing.T) {
 			colRetention:     10,
 			blockRetention:   5,
 			validOldest:      nil,
-			expectBlockBegin: syncEpochOffset(denebSlot, 5),
+			expectBlockBegin: epochFlooredOffset(denebSlot, 5),
 			expectBlockEnd:   denebSlot,
 			expectBlobBegin:  denebSlot,
 			expectBlobEnd:    fuluSlot,
@@ -432,7 +435,7 @@ func TestSyncNeedsCurrently(t *testing.T) {
 			colRetention:     10,
 			blockRetention:   5,
 			validOldest:      nil,
-			expectBlockBegin: syncEpochOffset(fuluSlot, 5),
+			expectBlockBegin: epochFlooredOffset(fuluSlot, 5),
 			expectBlockEnd:   fuluSlot,
 			expectBlobBegin:  max(syncEpochOffset(fuluSlot, 10), denebSlot),
 			expectBlobEnd:    fuluSlot,
@@ -446,7 +449,7 @@ func TestSyncNeedsCurrently(t *testing.T) {
 			colRetention:     2,
 			blockRetention:   1,
 			validOldest:      nil,
-			expectBlockBegin: syncEpochOffset(5000, 1),
+			expectBlockBegin: epochFlooredOffset(5000, 1),
 			expectBlockEnd:   5000,
 			expectBlobBegin:  max(syncEpochOffset(5000, 1), denebSlot),
 			expectBlobEnd:    fuluSlot,
@@ -460,7 +463,7 @@ func TestSyncNeedsCurrently(t *testing.T) {
 			colRetention:     100,
 			blockRetention:   50,
 			validOldest:      nil,
-			expectBlockBegin: syncEpochOffset(10000, 50),
+			expectBlockBegin: epochFlooredOffset(10000, 50),
 			expectBlockEnd:   10000,
 			expectBlobBegin:  max(syncEpochOffset(10000, 100), denebSlot),
 			expectBlobEnd:    fuluSlot,
@@ -488,7 +491,7 @@ func TestSyncNeedsCurrently(t *testing.T) {
 			colRetention:     5,
 			blockRetention:   3,
 			validOldest:      nil,
-			expectBlockBegin: syncEpochOffset(primitives.Slot(2000+5*slotsPerEpoch), 3),
+			expectBlockBegin: epochFlooredOffset(primitives.Slot(2000+5*slotsPerEpoch), 3),
 			expectBlockEnd:   primitives.Slot(2000 + 5*slotsPerEpoch),
 			expectBlobBegin:  max(syncEpochOffset(primitives.Slot(2000+5*slotsPerEpoch), 5), denebSlot),
 			expectBlobEnd:    fuluSlot,
@@ -502,7 +505,7 @@ func TestSyncNeedsCurrently(t *testing.T) {
 			colRetention:     10,
 			blockRetention:   5,
 			validOldest:      nil,
-			expectBlockBegin: syncEpochOffset(denebSlot+10, 5),
+			expectBlockBegin: epochFlooredOffset(denebSlot+10, 5),
 			expectBlockEnd:   denebSlot + 10,
 			expectBlobBegin:  denebSlot,
 			expectBlobEnd:    fuluSlot,
@@ -516,7 +519,7 @@ func TestSyncNeedsCurrently(t *testing.T) {
 			colRetention:     10,
 			blockRetention:   5,
 			validOldest:      nil,
-			expectBlockBegin: syncEpochOffset(fuluSlot+10, 5),
+			expectBlockBegin: epochFlooredOffset(fuluSlot+10, 5),
 			expectBlockEnd:   fuluSlot + 10,
 			expectBlobBegin:  max(syncEpochOffset(fuluSlot+10, 10), denebSlot),
 			expectBlobEnd:    fuluSlot,
@@ -530,7 +533,7 @@ func TestSyncNeedsCurrently(t *testing.T) {
 			colRetention:     10,
 			blockRetention:   5,
 			validOldest:      nil,
-			expectBlockBegin: syncEpochOffset(denebSlot+primitives.Slot(5*slotsPerEpoch), 5),
+			expectBlockBegin: epochFlooredOffset(denebSlot+primitives.Slot(5*slotsPerEpoch), 5),
 			expectBlockEnd:   denebSlot + primitives.Slot(5*slotsPerEpoch),
 			expectBlobBegin:  denebSlot, // clamped to deneb
 			expectBlobEnd:    fuluSlot,
@@ -544,7 +547,7 @@ func TestSyncNeedsCurrently(t *testing.T) {
 			colRetention:     100, // very large retention
 			blockRetention:   5,
 			validOldest:      nil,
-			expectBlockBegin: syncEpochOffset(fuluSlot+primitives.Slot(5*slotsPerEpoch), 5),
+			expectBlockBegin: epochFlooredOffset(fuluSlot+primitives.Slot(5*slotsPerEpoch), 5),
 			expectBlockEnd:   fuluSlot + primitives.Slot(5*slotsPerEpoch),
 			expectBlobBegin:  max(syncEpochOffset(fuluSlot+primitives.Slot(5*slotsPerEpoch), 10), denebSlot),
 			expectBlobEnd:    fuluSlot,
@@ -690,4 +693,74 @@ func TestCurrentNeedsIntegration(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestEnvSpan tests the execution payload envelope retention span.
+func TestEnvSpan(t *testing.T) {
+	t.Run("young network clamps to max(1, gloasStart)", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 10
+		params.OverrideBeaconConfig(cfg)
+		gloasStart := primitives.Slot(10 * uint64(params.BeaconConfig().SlotsPerEpoch))
+
+		span := EnvSpan(gloasStart + 100)
+		require.Equal(t, gloasStart, span.Begin)
+		require.Equal(t, gloasStart+100, span.End)
+		require.Equal(t, true, span.At(gloasStart))
+		require.Equal(t, false, span.At(gloasStart-1))
+	})
+
+	t.Run("gloas at genesis floors at slot 1", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		span := EnvSpan(100)
+		// A Gloas genesis block carries a real bid but never has an envelope,
+		// so slot 0 is outside the envelope domain.
+		require.Equal(t, primitives.Slot(1), span.Begin)
+		require.Equal(t, false, span.At(0))
+		require.Equal(t, true, span.At(1))
+	})
+
+	t.Run("epoch-floored retention offset once aged", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+		retention := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+		slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
+
+		// Current is 7 epochs plus a mid-epoch offset past the retention
+		// window: Begin must be the epoch start, not the per-slot offset.
+		current := primitives.Slot((uint64(retention)+7)*slotsPerEpoch + 13)
+		span := EnvSpan(current)
+		require.Equal(t, primitives.Slot(7*slotsPerEpoch), span.Begin)
+		require.Equal(t, current, span.End)
+	})
+
+	t.Run("unscheduled gloas is a no-op span", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		params.OverrideBeaconConfig(params.MainnetConfig().Copy())
+
+		span := EnvSpan(1_000_000)
+		require.Equal(t, false, span.At(1_000_000))
+		require.Equal(t, false, span.At(1))
+	})
+
+	t.Run("block span default is never above the env floor", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+		retention := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+		slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
+		current := primitives.Slot((uint64(retention)+7)*slotsPerEpoch + 13)
+
+		sn := SyncNeeds{current: func() primitives.Slot { return current }, blockRetention: retention}
+		needs := sn.Currently()
+		require.Equal(t, needs.Env.Begin, needs.Block.Begin)
+	})
 }

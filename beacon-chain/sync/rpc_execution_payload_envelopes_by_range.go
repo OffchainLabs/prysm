@@ -1,14 +1,15 @@
 package sync
 
 import (
+	"bytes"
 	"context"
 	"math"
-	"slices"
 
+	envcoverage "github.com/OffchainLabs/prysm/v7/beacon-chain/coverage"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
@@ -20,8 +21,31 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// executionPayloadEnvelopesByRangeRPCHandler looks up the request execution payload envelopes from
-// the database for the given slot range, serving one envelope per canonical block slot.
+// EnvelopeCoverageProvider is the narrow coverage runtime dependency of the
+// envelopes-by-range serving gate: a generation-coherent snapshot/index read,
+// the in-process serve epoch for the pre-stream invalidation check, and a
+// reconciliation wake-up for serving anomalies.
+type EnvelopeCoverageProvider interface {
+	CoherentServeRead(ctx context.Context, begin, end primitives.Slot, quota uint64) (*envcoverage.ServeRead, error)
+	ServeEpoch() uint64
+	WakeReconcile()
+}
+
+// envelopeRangeItem is one fully validated response item awaiting payload
+// reconstruction.
+type envelopeRangeItem struct {
+	env       *pb.SignedBlindedExecutionPayloadEnvelope
+	blockHash [32]byte
+}
+
+// executionPayloadEnvelopesByRangeRPCHandler serves execution payload
+// envelopes for the requester's original slot range intersected with the
+// envelope domain [max(1, gloasStart), current], gated on proven envelope
+// coverage. It collects first from the proven region through the
+// canonical-revealed slot index (O(quota), never O(window)), applies the
+// live-frontier present-head rule at the coverage anchor, and refuses real
+// gaps with ResourceUnavailable before the first chunk: the complete response
+// is collected, validated, and reconstructed before streaming.
 func (s *Service) executionPayloadEnvelopesByRangeRPCHandler(ctx context.Context, msg any, stream libp2pcore.Stream) error {
 	ctx, span := trace.StartSpan(ctx, "sync.ExecutionPayloadEnvelopesByRangeHandler")
 	defer span.End()
@@ -47,237 +71,324 @@ func (s *Service) executionPayloadEnvelopesByRangeRPCHandler(ctx context.Context
 	}
 
 	remotePeer := stream.Conn().RemotePeer()
-
 	log.WithFields(logrus.Fields{
 		"startSlot": r.StartSlot,
 		"count":     r.Count,
 		"peer":      remotePeer,
 	}).Debug("Serving execution payload envelopes by range request")
 
-	rp, err := validateEnvelopesByRange(r, s.cfg.clock.CurrentSlot())
-	if err != nil {
+	invalidRequest := func(err error) error {
 		recordResult(executionPayloadEnvelopeRPCResultInvalid)
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		s.downscorePeer(remotePeer, "executionPayloadEnvelopesByRangeRPCHandlerValidationError")
 		tracing.AnnotateError(span, err)
 		return err
 	}
-	available := s.validateRangeAvailability(rp)
-	if !available {
-		recordResult(executionPayloadEnvelopeRPCResultResourceUnavailable)
-		currentSlot := s.cfg.clock.CurrentSlot()
-		unavailableErr := errors.Wrapf(
-			p2ptypes.ErrResourceUnavailable,
-			"execution payload envelope range unavailable start=%d end=%d current=%d",
-			rp.start,
-			rp.end,
-			currentSlot,
-		)
-		log.WithFields(logrus.Fields{
-			"startSlot": rp.start,
-			"endSlot":   rp.end,
-			"size":      rp.size,
-			"current":   currentSlot,
-		}).WithError(unavailableErr).Debug("Execution payload envelope range unavailable")
-		s.writeErrorResponseToStream(responseCodeResourceUnavailable, p2ptypes.ErrResourceUnavailable.Error(), stream)
-		tracing.AnnotateError(span, unavailableErr)
-		return nil
-	}
-
-	if err := s.streamCanonicalEnvelopes(ctx, rp, stream); err != nil {
-		recordResult(executionPayloadEnvelopeRPCResultError)
-		tracing.AnnotateError(span, err)
-		return err
-	}
-
-	recordResult(executionPayloadEnvelopeRPCResultServed)
-	closeStream(stream, log)
-	return nil
-}
-
-// streamCanonicalEnvelopes walks the canonical payload chain backwards from the successor of rp.end
-// to rp.start, collecting only envelopes whose payloads were actually included in the canonical chain.
-func (s *Service) streamCanonicalEnvelopes(ctx context.Context, rp rangeParams, stream libp2pcore.Stream) error {
-	_, span := trace.StartSpan(ctx, "sync.streamCanonicalEnvelopes")
-	defer span.End()
-	if s.cfg.executionReconstructor == nil {
-		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
-		return errors.New("execution reconstructor is nil")
-	}
-
-	type collectedEnvelope struct {
-		env       *pb.SignedBlindedExecutionPayloadEnvelope
-		blockHash [32]byte
-	}
-
-	successorBlock, err := s.canonicalSuccessorBlock(ctx, rp.end+1)
-	if err != nil {
-		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
-		return err
-	}
-	if successorBlock == nil {
-		return nil
-	}
-	bid, err := successorBlock.Block().Body().SignedExecutionPayloadBid()
-	if err != nil {
-		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
-		return errors.Wrap(err, "could not get bid from successor block")
-	}
-	parentBlockHash := bytesutil.ToBytes32(bid.Message.ParentBlockHash)
-
-	wQuota := params.BeaconConfig().MaxRequestPayloads
-	var collected []collectedEnvelope
-
-	for {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-
-		blindedEnv, err := s.cfg.beaconDB.ExecutionPayloadEnvelopeByBlockHash(ctx, parentBlockHash)
-		if err != nil {
-			log.WithError(err).WithField("blockHash", bytesutil.Trunc(parentBlockHash[:])).Debug("Could not load execution payload envelope")
-			break
-		}
-
-		if blindedEnv.Message.Slot < rp.start {
-			break
-		}
-
-		collected = append(collected, collectedEnvelope{
-			env:       blindedEnv,
-			blockHash: parentBlockHash,
-		})
-		if uint64(len(collected)) >= wQuota {
-			break
-		}
-
-		parentBlockHash = bytesutil.ToBytes32(blindedEnv.Message.ParentBlockHash)
-	}
-
-	if len(collected) == 0 {
-		return nil
-	}
-
-	slices.Reverse(collected)
-
-	batchHashes := make([][32]byte, 0, len(collected))
-	for _, c := range collected {
-		batchHashes = append(batchHashes, c.blockHash)
-	}
-
-	payloadByHash, err := s.cfg.executionReconstructor.ReconstructFullGloasExecutionPayloadsByHash(ctx, batchHashes)
-	if err != nil {
-		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
-		return errors.Wrap(err, "could not batch reconstruct full execution payload envelopes")
-	}
-
-	for _, c := range collected {
-		payload := payloadByHash[c.blockHash]
-		if payload == nil {
-			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
-			return errors.Errorf("missing reconstructed payload for block hash %#x", c.blockHash)
-		}
-		fullEnv := &pb.SignedExecutionPayloadEnvelope{
-			Message: &pb.ExecutionPayloadEnvelope{
-				Payload:               payload,
-				ExecutionRequests:     c.env.Message.ExecutionRequests,
-				BuilderIndex:          c.env.Message.BuilderIndex,
-				BeaconBlockRoot:       c.env.Message.BeaconBlockRoot,
-				ParentBeaconBlockRoot: c.env.Message.ParentBeaconBlockRoot,
-			},
-			Signature: c.env.Signature,
-		}
-
-		SetStreamWriteDeadline(stream, defaultWriteDuration)
-		if chunkErr := WriteExecutionPayloadEnvelopeChunk(stream, s.cfg.p2p.Encoding(), fullEnv); chunkErr != nil {
-			log.WithError(chunkErr).Debug("Could not send execution payload envelope chunk")
-			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
-			tracing.AnnotateError(span, chunkErr)
-			return chunkErr
-		}
-		s.rateLimiter.add(stream, 1)
-		wQuota -= 1
-		if wQuota == 0 {
-			break
-		}
-	}
-	return nil
-}
-
-// validateEnvelopesByRange validates the ExecutionPayloadEnvelopesByRange request and returns
-// normalized rangeParams. Mirrors validateBlobsByRange in structure.
-func validateEnvelopesByRange(r *pb.ExecutionPayloadEnvelopesByRangeRequest, current primitives.Slot) (rangeParams, error) {
 	if r.Count == 0 {
-		return rangeParams{}, errors.Wrap(p2ptypes.ErrInvalidRequest, "invalid request Count parameter")
+		return invalidRequest(errors.Wrap(p2ptypes.ErrInvalidRequest, "invalid request Count parameter"))
 	}
-	rp := rangeParams{
-		start: r.StartSlot,
-		size:  r.Count,
-	}
-	// Peers may overshoot the current slot when in initial sync — treat as noop rather than error.
-	if rp.start > current {
-		return rangeParams{start: current, end: current, size: 0}, nil
-	}
-
-	var err error
-	rp.end, err = rp.start.SafeAdd(rp.size - 1)
+	// The inclusive end is computed from the full count by checked addition:
+	// the item quota below caps returned items, never the searched window.
+	requestedEnd, err := r.StartSlot.SafeAdd(r.Count - 1)
 	if err != nil {
-		return rangeParams{}, errors.Wrap(p2ptypes.ErrInvalidRequest, "overflow start + count - 1")
+		return invalidRequest(errors.Wrap(p2ptypes.ErrInvalidRequest, "overflow start + count - 1"))
+	}
+	quota := min(r.Count, params.BeaconConfig().MaxRequestPayloads)
+
+	// Evaluate the original half-open request intersected with the envelope
+	// domain [max(1, gloasStart), current]. The requester's bounds are never
+	// rewritten and no slot outside them is ever streamed; an empty
+	// intersection returns zero chunks and clean EOF before any coverage
+	// state is consulted.
+	current := s.cfg.clock.CurrentSlot()
+	wBegin, wEnd, domainOK := envelopeServeWindow(r.StartSlot, requestedEnd, current)
+	if !domainOK {
+		recordResult(executionPayloadEnvelopeRPCResultEmptyDomain)
+		envelopeRPCEmptyDomainTotal.Inc()
+		closeStream(stream, log)
+		return nil
 	}
 
-	// Envelopes only exist from the Gloas fork onward — clamp start if needed.
-	if params.BeaconConfig().GloasForkEpoch != math.MaxUint64 {
-		gloasStart, err := slots.EpochStart(params.BeaconConfig().GloasForkEpoch)
+	unavailable := func(cause error, wake bool) error {
+		recordResult(executionPayloadEnvelopeRPCResultResourceUnavailable)
+		if wake && s.envelopeCoverage != nil {
+			s.envelopeCoverage.WakeReconcile()
+		}
+		log.WithError(cause).WithFields(logrus.Fields{
+			"startSlot": r.StartSlot,
+			"count":     r.Count,
+			"current":   current,
+		}).Debug("Execution payload envelope range unavailable")
+		s.writeErrorResponseToStream(responseCodeResourceUnavailable, p2ptypes.ErrResourceUnavailable.Error(), stream)
+		tracing.AnnotateError(span, cause)
+		return nil
+	}
+	internalErr := func(cause error) error {
+		recordResult(executionPayloadEnvelopeRPCResultError)
+		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+		tracing.AnnotateError(span, cause)
+		return cause
+	}
+
+	if s.envelopeCoverage == nil {
+		return unavailable(errors.New("envelope coverage runtime is not configured"), false)
+	}
+	if s.cfg.executionReconstructor == nil {
+		return internalErr(errors.New("execution reconstructor is nil"))
+	}
+
+	// One bounded retry when a destructive coverage commit invalidates the
+	// candidate response between the coherent read and streaming.
+	for attempt := 0; ; attempt++ {
+		read, err := s.envelopeCoverage.CoherentServeRead(ctx, wBegin, wEnd, quota)
 		if err != nil {
-			return rangeParams{}, errors.Wrap(p2ptypes.ErrInvalidRequest, "could not compute Gloas fork start slot")
+			return internalErr(errors.Wrap(err, "coherent envelope coverage read"))
 		}
-		if rp.start < gloasStart {
-			rp.start = gloasStart
-		}
-	}
-
-	if rp.end > current {
-		rp.end = current
-	}
-	if rp.end < rp.start {
-		rp.end = rp.start
-	}
-	maxRequest := params.BeaconConfig().MaxRequestPayloads
-	if rp.size > maxRequest {
-		rp.size = maxRequest
-	}
-
-	return rp, nil
-}
-
-func (s *Service) canonicalSuccessorBlock(ctx context.Context, slot primitives.Slot) (interfaces.ReadOnlySignedBeaconBlock, error) {
-	for {
-		fs, roots, err := s.cfg.beaconDB.LowestRootsAtOrAboveSlot(ctx, slot)
+		resp, flavor, refuseCause, err := s.collectEnvelopeRangeResponse(ctx, read, wBegin, wEnd, quota)
 		if err != nil {
-			return nil, errors.Wrap(err, "could not find successor block")
+			return internalErr(err)
 		}
-		if len(roots) == 0 {
-			return nil, nil
+		if refuseCause != nil {
+			return unavailable(refuseCause, true)
 		}
-		for _, r := range roots {
-			canonical, err := s.cfg.chain.IsCanonical(ctx, r)
-			if err != nil {
-				log.WithError(err).WithField("blockRoot", bytesutil.Trunc(r[:])).Debug("Could not check if block is canonical")
+		full, err := s.reconstructEnvelopeItems(ctx, resp)
+		if err != nil {
+			return unavailable(errors.Wrap(err, "reconstruct envelope payloads"), true)
+		}
+		// A destructive commit after the coherent read invalidates the
+		// candidate: discard and retry once, then refuse rather than mix
+		// generations. Pure extension outside the old interval does not bump
+		// the epoch, so progressive migration cannot starve serving.
+		if s.envelopeCoverage.ServeEpoch() != read.Epoch {
+			if attempt == 0 {
+				envelopeRPCServeEpochTotal.WithLabelValues("retry").Inc()
 				continue
 			}
-			if canonical {
-				successorBlock, err := s.cfg.beaconDB.Block(ctx, r)
-				if err != nil {
-					return nil, errors.Wrap(err, "could not load successor block")
-				}
-				return successorBlock, nil
+			envelopeRPCServeEpochTotal.WithLabelValues("refused").Inc()
+			return unavailable(errors.New("coverage changed while serving"), false)
+		}
+		for _, env := range full {
+			SetStreamWriteDeadline(stream, defaultWriteDuration)
+			if chunkErr := WriteExecutionPayloadEnvelopeChunk(stream, s.cfg.p2p.Encoding(), env); chunkErr != nil {
+				log.WithError(chunkErr).Debug("Could not send execution payload envelope chunk")
+				s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+				tracing.AnnotateError(span, chunkErr)
+				recordResult(executionPayloadEnvelopeRPCResultError)
+				return chunkErr
 			}
+			s.rateLimiter.add(stream, 1)
 		}
-		// fs below the requested slot means the head root fallback fired, nothing is indexed above.
-		if fs < slot {
-			return nil, nil
+		switch flavor {
+		case envelopeRangeFlavorQuotaTruncated:
+			envelopeRPCQuotaTruncatedTotal.Inc()
+		case envelopeRangeFlavorWithHead, envelopeRangeFlavorWithoutHead, envelopeRangeFlavorHeadOnly, envelopeRangeFlavorEmptyFrontier:
+			envelopeRPCLiveFrontierTotal.WithLabelValues(flavor).Inc()
 		}
-		// Only orphaned blocks at this slot, keep looking above it.
-		slot = fs + 1
+		recordResult(executionPayloadEnvelopeRPCResultServed)
+		closeStream(stream, log)
+		return nil
 	}
+}
+
+// Response-shape flavors recorded once per successfully streamed response.
+const (
+	envelopeRangeFlavorQuotaTruncated = "quota_truncated"
+	envelopeRangeFlavorWithHead       = "with_head"
+	envelopeRangeFlavorWithoutHead    = "without_head"
+	envelopeRangeFlavorHeadOnly       = "head_only"
+	envelopeRangeFlavorEmptyFrontier  = "empty"
+)
+
+// envelopeServeWindow intersects the original request [start, requestedEnd]
+// with the envelope domain [max(1, gloasStart), current]. ok is false when
+// the intersection is empty (Gloas unscheduled, wholly pre-Gloas, wholly at
+// slot 0, or wholly in the future).
+func envelopeServeWindow(start, requestedEnd, current primitives.Slot) (primitives.Slot, primitives.Slot, bool) {
+	if params.BeaconConfig().GloasForkEpoch == math.MaxUint64 {
+		return 0, 0, false
+	}
+	gloasStart, err := slots.EpochStart(params.BeaconConfig().GloasForkEpoch)
+	if err != nil {
+		return 0, 0, false
+	}
+	domainBegin := max(primitives.Slot(1), gloasStart)
+	wBegin := max(start, domainBegin)
+	wEnd := min(requestedEnd, current)
+	if wBegin > wEnd {
+		return 0, 0, false
+	}
+	return wBegin, wEnd, true
+}
+
+// collectEnvelopeRangeResponse assembles the complete candidate response for
+// one coherent read: the proven-coverage prefix selected through the
+// canonical-revealed slot index, then the live-frontier present-head item
+// when applicable. It returns a refusal cause (nil response) for coverage
+// gaps and invariant violations, and an error for internal failures.
+func (s *Service) collectEnvelopeRangeResponse(
+	ctx context.Context,
+	read *envcoverage.ServeRead,
+	wBegin, wEnd primitives.Slot,
+	quota uint64,
+) ([]envelopeRangeItem, string, error, error) {
+	snap := read.Coverage
+	refuse := func(cause error) ([]envelopeRangeItem, string, error, error) {
+		return nil, "", cause, nil
+	}
+	// Base readiness: initialized, supported format, request start inside
+	// proven coverage, and a still-canonical upper anchor.
+	if !snap.Initialized {
+		return refuse(errors.New("envelope coverage is uninitialized"))
+	}
+	if snap.FormatVersion != 1 {
+		return refuse(errors.Errorf("unsupported envelope coverage format_version %d", snap.FormatVersion))
+	}
+	if wBegin < snap.Low {
+		return refuse(errors.Errorf("request start %d below covered lower bound %d", wBegin, snap.Low))
+	}
+	canonical, err := s.cfg.chain.IsCanonical(ctx, snap.AnchorRoot)
+	if err != nil {
+		return nil, "", nil, errors.Wrap(err, "check anchor canonicality")
+	}
+	if !canonical {
+		return refuse(errors.New("coverage anchor is no longer canonical"))
+	}
+
+	// Collect first from the proven region: index entries only exist for
+	// revealed canonical slots, so skipped and withheld slots consume no
+	// quota and cost no per-slot work.
+	items := make([]envelopeRangeItem, 0, len(read.Roots))
+	var prevHash []byte
+	for _, sr := range read.Roots {
+		env, err := s.cfg.beaconDB.ExecutionPayloadEnvelope(ctx, sr.Root)
+		if err != nil {
+			if errors.Is(err, db.ErrNotFound) {
+				return refuse(errors.Errorf("dangling revealed index entry at slot %d", sr.Slot))
+			}
+			return nil, "", nil, errors.Wrap(err, "load indexed envelope")
+		}
+		blk, err := s.cfg.beaconDB.Block(ctx, sr.Root)
+		if err != nil || blk == nil || blk.IsNil() {
+			return refuse(errors.Errorf("canonical block missing for indexed slot %d", sr.Slot))
+		}
+		itemCanonical, err := s.cfg.chain.IsCanonical(ctx, sr.Root)
+		if err != nil {
+			return nil, "", nil, errors.Wrap(err, "check indexed root canonicality")
+		}
+		if !itemCanonical {
+			return refuse(errors.Errorf("indexed root at slot %d is not canonical", sr.Slot))
+		}
+		if env.Message == nil || env.Message.Slot != sr.Slot {
+			return refuse(errors.Errorf("indexed envelope slot mismatch at slot %d", sr.Slot))
+		}
+		if verr := envcoverage.ValidateEnvelopeAgainstBlock(env, blk, sr.Root); verr != nil {
+			return refuse(errors.Wrapf(verr, "indexed envelope failed validation at slot %d", sr.Slot))
+		}
+		// Payload-hash continuity across consecutive selected items: holds
+		// across withheld and skipped gaps by construction, so a break means
+		// a bracketed interior inconsistency.
+		if prevHash != nil && !bytes.Equal(env.Message.ParentBlockHash, prevHash) {
+			return refuse(errors.Errorf("payload hash continuity broken at slot %d", sr.Slot))
+		}
+		prevHash = env.Message.BlockHash
+		items = append(items, envelopeRangeItem{env: env, blockHash: bytesutil.ToBytes32(env.Message.BlockHash)})
+	}
+
+	// A quota filled inside the proven region is a legal limited response
+	// chosen entirely from proven coverage: clean EOF, and the internal-gap
+	// and live-head branches are never consulted. No head item ever follows
+	// a truncated prefix, keeping the requester's parent-hash chain intact.
+	if uint64(len(items)) == quota {
+		return items, envelopeRangeFlavorQuotaTruncated, nil, nil
+	}
+
+	// The proven region is exhausted under quota.
+	if wEnd < snap.High {
+		// The covered window is complete.
+		return items, "", nil, nil
+	}
+	if snap.AnchorRoot != read.HeadRoot {
+		// Coverage stopped at a known internal lag/gap below the canonical
+		// head: refuse atomically rather than silently clamping.
+		return refuse(errors.Errorf("coverage upper bound %d stopped below the canonical head", snap.High))
+	}
+	// Live frontier: the anchor is the canonical head. Serve a stored head
+	// envelope when the head slot lies inside the requested window; genuine
+	// absence yields the legal shorter response. Presence is verified
+	// (verify-then-store), but never advances durable coverage: only a child
+	// can classify absence or withholding at the head.
+	flavor := ""
+	if wBegin <= snap.High {
+		env, err := s.cfg.beaconDB.ExecutionPayloadEnvelope(ctx, snap.AnchorRoot)
+		switch {
+		case errors.Is(err, db.ErrNotFound):
+			if len(items) > 0 {
+				flavor = envelopeRangeFlavorWithoutHead
+			} else {
+				flavor = envelopeRangeFlavorEmptyFrontier
+			}
+		case err != nil:
+			return nil, "", nil, errors.Wrap(err, "load head envelope")
+		default:
+			blk, err := s.cfg.beaconDB.Block(ctx, snap.AnchorRoot)
+			if err != nil || blk == nil || blk.IsNil() {
+				return refuse(errors.New("canonical head block missing for stored head envelope"))
+			}
+			if env.Message == nil || env.Message.Slot != snap.High {
+				return refuse(errors.New("stored head envelope slot mismatch"))
+			}
+			if verr := envcoverage.ValidateEnvelopeAgainstBlock(env, blk, snap.AnchorRoot); verr != nil {
+				return refuse(errors.Wrap(verr, "stored head envelope failed validation"))
+			}
+			// Frontier continuity between the last prefix item and the head.
+			if prevHash != nil && !bytes.Equal(env.Message.ParentBlockHash, prevHash) {
+				return refuse(errors.New("payload hash continuity broken at the live frontier"))
+			}
+			if len(items) > 0 {
+				flavor = envelopeRangeFlavorWithHead
+			} else {
+				flavor = envelopeRangeFlavorHeadOnly
+			}
+			items = append(items, envelopeRangeItem{env: env, blockHash: bytesutil.ToBytes32(env.Message.BlockHash)})
+		}
+	} else {
+		// The head is outside the requested window (W.begin > high).
+		flavor = envelopeRangeFlavorEmptyFrontier
+	}
+	return items, flavor, nil, nil
+}
+
+// reconstructEnvelopeItems batch-reconstructs full payloads for every
+// candidate item before any chunk is written. Any missing payload fails the
+// whole response.
+func (s *Service) reconstructEnvelopeItems(ctx context.Context, items []envelopeRangeItem) ([]*pb.SignedExecutionPayloadEnvelope, error) {
+	if len(items) == 0 {
+		return nil, nil
+	}
+	hashes := make([][32]byte, 0, len(items))
+	for _, it := range items {
+		hashes = append(hashes, it.blockHash)
+	}
+	payloadByHash, err := s.cfg.executionReconstructor.ReconstructFullGloasExecutionPayloadsByHash(ctx, hashes)
+	if err != nil {
+		return nil, errors.Wrap(err, "batch reconstruct execution payloads")
+	}
+	full := make([]*pb.SignedExecutionPayloadEnvelope, 0, len(items))
+	for _, it := range items {
+		payload := payloadByHash[it.blockHash]
+		if payload == nil {
+			return nil, errors.Errorf("missing reconstructed payload for block hash %#x", it.blockHash)
+		}
+		full = append(full, &pb.SignedExecutionPayloadEnvelope{
+			Message: &pb.ExecutionPayloadEnvelope{
+				Payload:               payload,
+				ExecutionRequests:     it.env.Message.ExecutionRequests,
+				BuilderIndex:          it.env.Message.BuilderIndex,
+				BeaconBlockRoot:       it.env.Message.BeaconBlockRoot,
+				ParentBeaconBlockRoot: it.env.Message.ParentBeaconBlockRoot,
+			},
+			Signature: it.env.Signature,
+		})
+	}
+	return full, nil
 }

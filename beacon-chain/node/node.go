@@ -26,6 +26,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
+	envcoverage "github.com/OffchainLabs/prysm/v7/beacon-chain/coverage"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
@@ -132,6 +133,7 @@ type BeaconNode struct {
 	verifyInitWaiter          *verification.InitializerWaiter
 	lhsp                      *verification.LazyHeadStateProvider
 	syncChecker               *initialsync.SyncChecker
+	envelopeCoverage          *envcoverage.Service
 	slasherEnabled            bool
 	lcStore                   *lightclient.Store
 	ConfigOptions             []params.Option
@@ -377,6 +379,17 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 	log.Debugln("Registering P2P Service")
 	if err := beacon.registerP2P(cliCtx); err != nil {
 		return errors.Wrap(err, "could not register P2P service")
+	}
+
+	// The envelope coverage runtime shell (and its never-closed coalescing
+	// notifier) is constructed and registered before its producers — the
+	// blockchain, initial-sync, regular-sync and backfill services — so the
+	// reverse-order StopAll halts producers first and the runtime stops
+	// before the database closes. The chain view is late-bound in
+	// registerBlockchainService.
+	log.Debugln("Registering Envelope Coverage Service")
+	if err := beacon.registerEnvelopeCoverageService(); err != nil {
+		return errors.Wrap(err, "could not register envelope coverage service")
 	}
 
 	if features.Get().EnableLightClient {
@@ -790,6 +803,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithSyncChecker(b.syncChecker),
 		blockchain.WithSlasherEnabled(b.slasherEnabled),
 		blockchain.WithLightClientStore(b.lcStore),
+		blockchain.WithEnvelopeCoverageNotifier(b.envelopeCoverage.Notifier()),
 	)
 
 	blockchainService, err := blockchain.NewService(b.ctx, opts...)
@@ -797,7 +811,28 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		return errors.Wrap(err, "could not register blockchain service")
 	}
 	b.lhsp.HeadStateProvider = blockchainService
+	// Late-bind the narrow canonical/head view onto the coverage runtime
+	// shell now that the blockchain service exists.
+	b.envelopeCoverage.SetChainView(blockchainService)
 	return b.services.RegisterService(blockchainService)
+}
+
+// registerEnvelopeCoverageService constructs and registers the standalone
+// execution payload envelope coverage runtime. It must run before the
+// blockchain service registration so the coalescing notifier can be injected
+// at the blockchain service's single construction point.
+func (b *BeaconNode) registerEnvelopeCoverageService() error {
+	svc, err := envcoverage.New(
+		b.ctx,
+		envcoverage.WithDatabase(b.db),
+		envcoverage.WithClockWaiter(b.ClockWaiter),
+		envcoverage.WithStateNotifier(b),
+	)
+	if err != nil {
+		return err
+	}
+	b.envelopeCoverage = svc
+	return b.services.RegisterService(svc)
 }
 
 func (b *BeaconNode) registerPOWChainService() error {
@@ -885,6 +920,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithDataColumnStorage(b.DataColumnStorage),
 		regularsync.WithVerifierWaiter(b.verifyInitWaiter),
 		regularsync.WithAvailableBlocker(bFillStore),
+		regularsync.WithEnvelopeCoverage(b.envelopeCoverage),
 		regularsync.WithProposerPreferencesCache(b.proposerPreferencesCache),
 		regularsync.WithSubscribedValidatorsCache(b.subscribedValidatorsCache),
 		regularsync.WithBuilderCircuitBreaker(b.builderCircuitBreaker),

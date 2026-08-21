@@ -196,6 +196,7 @@ type Service struct {
 	reconstructionSingleFlight           singleflight.Group
 	payloadEnvelopeRequestSingleFlight   singleflight.Group
 	availableBlocker                     coverage.AvailableBlocker
+	envelopeCoverage                     EnvelopeCoverageProvider
 	reconstructionRandGen                *rand.Rand
 	ctxMap                               ContextByteVersions
 	slasherEnabled                       bool

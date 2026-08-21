@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math"
 	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -847,6 +849,151 @@ func (s *Store) LowestRootsAtOrAboveSlot(ctx context.Context, slot primitives.Sl
 		return nil
 	})
 	return fs, roots, err
+}
+
+// BlockSlotIndexPageDescending copies one page of block slot index candidates
+// in descending slot order, starting at the largest indexed slot at or below
+// cursor.Slot and stopping at floor (inclusive). The page is budgeted by a
+// hard candidate count and byte bound: an oversized packed value is sliced at
+// the remaining budget rather than expanded, and the returned mid-slot cursor
+// resumes at a validated byte offset in O(1). The cursor is ephemeral and
+// in-process only; a mismatch (for example after an interleaved delete
+// compacted the value) returns ErrSlotIndexCursorInvalidated and the caller
+// restarts the current slot from its beginning. No block bodies are decoded
+// under the transaction.
+func (s *Store) BlockSlotIndexPageDescending(ctx context.Context, cursor iface.SlotIndexCursor, floor primitives.Slot, maxCandidates, maxBytes int) (*iface.SlotIndexPage, error) {
+	_, span := trace.StartSpan(ctx, "BeaconDB.BlockSlotIndexPageDescending")
+	defer span.End()
+	return s.blockSlotIndexPage(cursor, floor, false /* ascending */, maxCandidates, maxBytes)
+}
+
+// BlockSlotIndexPageAscending is the ascending mirror of
+// BlockSlotIndexPageDescending: it starts at the smallest indexed slot at or
+// above cursor.Slot and stops at ceil (inclusive).
+func (s *Store) BlockSlotIndexPageAscending(ctx context.Context, cursor iface.SlotIndexCursor, ceil primitives.Slot, maxCandidates, maxBytes int) (*iface.SlotIndexPage, error) {
+	_, span := trace.StartSpan(ctx, "BeaconDB.BlockSlotIndexPageAscending")
+	defer span.End()
+	return s.blockSlotIndexPage(cursor, ceil, true /* ascending */, maxCandidates, maxBytes)
+}
+
+func (s *Store) blockSlotIndexPage(cursor iface.SlotIndexCursor, bound primitives.Slot, ascending bool, maxCandidates, maxBytes int) (*iface.SlotIndexPage, error) {
+	if maxCandidates <= 0 || maxBytes <= 0 {
+		return nil, errors.Errorf("invalid slot index page budget candidates=%d bytes=%d", maxCandidates, maxBytes)
+	}
+	page := &iface.SlotIndexPage{}
+	if (ascending && cursor.Slot > bound) || (!ascending && cursor.Slot < bound) {
+		return page, nil
+	}
+	candidates, bytesUsed := 0, 0
+	// remaining returns the number of candidates the budgets still allow.
+	remaining := func() int {
+		return min(maxCandidates-candidates, (maxBytes-bytesUsed)/hashLength)
+	}
+	// consume copies up to the remaining budget's worth of roots out of the
+	// packed value v at the given slot, starting at byte offset off, and
+	// returns the mid-slot cursor when the value was not fully consumed.
+	consume := func(slot primitives.Slot, v []byte, off uint64) (*iface.SlotIndexCursor, error) {
+		if len(v)%hashLength != 0 {
+			return nil, errors.Wrapf(errMisalignedRootList, "slot=%d len=%d", slot, len(v))
+		}
+		take := min(remaining(), (len(v)-int(off))/hashLength)
+		for i := 0; i < take; i++ {
+			s := int(off) + i*hashLength
+			page.Candidates = append(page.Candidates, iface.SlotIndexCandidate{
+				Slot: slot,
+				Root: bytesutil.ToBytes32(v[s : s+hashLength]),
+			})
+		}
+		candidates += take
+		bytesUsed += take * hashLength
+		end := int(off) + take*hashLength
+		if end < len(v) {
+			return &iface.SlotIndexCursor{
+				Slot:           slot,
+				NextByteOffset: uint64(end),
+				LastRoot:       bytesutil.ToBytes32(v[end-hashLength : end]),
+			}, nil
+		}
+		return nil, nil
+	}
+	err := s.db.View(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(blockSlotIndicesBucket)
+		start := cursor.Slot
+		// Resume mid-slot when the prior page ended inside a packed value.
+		if cursor.NextByteOffset > 0 {
+			v := bkt.Get(bytesutil.SlotToBytesBigEndian(cursor.Slot))
+			off := cursor.NextByteOffset
+			if v == nil || off%hashLength != 0 || off > uint64(len(v)) ||
+				!bytes.Equal(v[off-hashLength:off], cursor.LastRoot[:]) {
+				return errors.Wrapf(iface.ErrSlotIndexCursorInvalidated, "slot=%d offset=%d", cursor.Slot, off)
+			}
+			next, err := consume(cursor.Slot, v, off)
+			if err != nil {
+				return err
+			}
+			if next != nil {
+				page.Next = next
+				return nil
+			}
+			// The packed value is fully consumed; continue at the next slot.
+			if ascending {
+				if cursor.Slot == primitives.Slot(math.MaxUint64) || cursor.Slot+1 > bound {
+					return nil
+				}
+				start = cursor.Slot + 1
+			} else {
+				if cursor.Slot == 0 || cursor.Slot-1 < bound {
+					return nil
+				}
+				start = cursor.Slot - 1
+			}
+		}
+		c := bkt.Cursor()
+		boundKey := bytesutil.SlotToBytesBigEndian(bound)
+		k, v := c.Seek(bytesutil.SlotToBytesBigEndian(start))
+		if !ascending {
+			// Seek positions at the smallest key >= start; descending scans
+			// begin at the largest key <= start instead.
+			if k == nil {
+				k, v = c.Last()
+			} else if bytesutil.BytesToSlotBigEndian(k) > start {
+				k, v = c.Prev()
+			}
+		}
+		for ; k != nil; k, v = advance(c, ascending) {
+			if ascending && bytes.Compare(k, boundKey) > 0 {
+				return nil
+			}
+			if !ascending && bytes.Compare(k, boundKey) < 0 {
+				return nil
+			}
+			slot := bytesutil.BytesToSlotBigEndian(k)
+			if remaining() == 0 {
+				page.Next = &iface.SlotIndexCursor{Slot: slot}
+				return nil
+			}
+			next, err := consume(slot, v, 0)
+			if err != nil {
+				return err
+			}
+			if next != nil {
+				page.Next = next
+				return nil
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return page, nil
+}
+
+func advance(c *bolt.Cursor, ascending bool) ([]byte, []byte) {
+	if ascending {
+		return c.Next()
+	}
+	return c.Prev()
 }
 
 // FeeRecipientByValidatorID returns the fee recipient for a validator id.
