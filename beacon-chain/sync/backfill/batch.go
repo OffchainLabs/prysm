@@ -315,8 +315,27 @@ func (b batch) selectPeer(picker *sync.PeerPicker, busy map[peer.ID]bool) (peer.
 	if b.state == batchSyncColumns {
 		return picker.ForColumns(b.columns.columnsNeeded(), busy)
 	}
+	// Envelope retries prefer a peer other than the one that served the previous attempt, so a
+	// single withholding peer cannot consume the whole attempt budget. Distinctness is not
+	// required: if no other peer is available, fall back to the ordinary selection below.
+	if avoid := b.envelopeRetryExclusions(busy); avoid != nil {
+		if pid, err := picker.ForBlocks(avoid); err == nil {
+			return pid, nil, nil
+		}
+	}
 	peer, err := picker.ForBlocks(busy)
 	return peer, nil, err
+}
+
+// envelopeRetryExclusions returns the busy set extended with the peer that served the previous
+// envelope fetch pass, or nil when the batch has no envelope attempt to rotate away from.
+func (b batch) envelopeRetryExclusions(busy map[peer.ID]bool) map[peer.ID]bool {
+	if b.state != batchSyncEnvelopes || b.envelopes == nil || b.envelopes.peer == "" {
+		return nil
+	}
+	avoid := busyCopy(busy)
+	avoid[b.envelopes.peer] = true
+	return avoid
 }
 
 func sortBatchDesc(bb []batch) {

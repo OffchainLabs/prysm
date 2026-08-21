@@ -124,7 +124,11 @@ func (v *envelopeVerifier) expectation(b blocks.ROBlock) (*envelopeExpectation, 
 			return nil, envSkipSigUnverifiable, nil
 		}
 		bldr := v.builders[idx]
-		if bldr.DepositEpoch > slots.ToEpoch(b.Block().Slot()) {
+		// A builder can only be active in epochs strictly after its deposit epoch, so the
+		// snapshot occupant provably held the index at the envelope's epoch only when
+		// deposit_epoch < envelope_epoch; anything else could be a later occupant of a
+		// reused index.
+		if bldr.DepositEpoch >= slots.ToEpoch(b.Block().Slot()) {
 			return nil, envSkipSigUnverifiable, nil
 		}
 		key = bldr.Pubkey
@@ -470,6 +474,19 @@ func (es *envelopeSync) fetchPass(ctx context.Context, pid peer.ID, fetch envelo
 	es.expireExhaustedPages()
 }
 
+// expirePending applies window pruning and page expiry outside a worker dispatch and reports
+// whether any fetch work remains. Deadlines are anchored at each page's first attempt, so once
+// the elapsed budget lapses the batch has only local bookkeeping left; the pool uses this to
+// route such batches onward instead of holding them until a peer can be assigned.
+func (es *envelopeSync) expirePending() (done bool) {
+	if es == nil {
+		return true
+	}
+	es.pruneExpiredWindow()
+	es.expireExhaustedPages()
+	return es.unresolved() == 0
+}
+
 // expireExhaustedPages converts pages that are out of attempts or elapsed budget into terminal
 // outcomes: required slots become peer_exhausted skips, and the tail slot leaves the fetch set
 // with classification deferred to import.
@@ -551,11 +568,14 @@ func (es *envelopeSync) processResponse(ctx context.Context, pid peer.ID, envs [
 		hashes = append(hashes, bytesutil.ToBytes32(c.exp.bid.BlockHash))
 	}
 	payloads, err := es.reconstructWithRetries(ctx, hashes)
+	if err != nil {
+		// The batched engine call fails as a whole when any single body is unavailable, so a
+		// batch-level error must not discard every otherwise-reconstructable envelope in the
+		// page: isolate the failure by falling back to per-hash reconstruction.
+		payloads = es.reconstructIndividually(ctx, hashes)
+	}
 	for _, c := range cands {
-		var recon *enginev1.ExecutionPayloadGloas
-		if err == nil {
-			recon = payloads[bytesutil.ToBytes32(c.exp.bid.BlockHash)]
-		}
+		recon := payloads[bytesutil.ToBytes32(c.exp.bid.BlockHash)]
 		if recon == nil {
 			// EL reconstruction failure is never a peer offense. Required slots take the
 			// terminal skip; the unclassified tail is left for import-time classification.
@@ -590,6 +610,24 @@ func (es *envelopeSync) processResponse(ctx context.Context, pid peer.ID, envs [
 		es.held[c.slot] = &heldEnvelope{exp: c.exp, blinded: kv.BlindEnvelope(c.env)}
 		envelopeVerifiedCount.Inc()
 	}
+}
+
+// reconstructIndividually reconstructs each payload with its own engine call, so that hashes the
+// EL cannot serve resolve to missing entries instead of failing the entire set. It is only used
+// after the batched call (with its bounded retries) has failed, so each hash gets one attempt.
+func (es *envelopeSync) reconstructIndividually(ctx context.Context, hashes [][32]byte) map[[32]byte]*enginev1.ExecutionPayloadGloas {
+	out := make(map[[32]byte]*enginev1.ExecutionPayloadGloas, len(hashes))
+	for _, h := range hashes {
+		if ctx.Err() != nil {
+			return out
+		}
+		payloads, err := es.cfg.reconstructor.ReconstructFullGloasExecutionPayloadsByHash(ctx, [][32]byte{h})
+		if err != nil {
+			continue
+		}
+		out[h] = payloads[h]
+	}
+	return out
 }
 
 func (es *envelopeSync) reconstructWithRetries(ctx context.Context, hashes [][32]byte) (map[[32]byte]*enginev1.ExecutionPayloadGloas, error) {
