@@ -408,7 +408,7 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 		got := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
 		require.NotNil(t, got)
 		require.Equal(t, primitives.BuilderIndex(2), got.bid.Message.BuilderIndex)
-		require.Equal(t, "http://builder", got.entry.GetUrl())
+		require.Equal(t, "http://builder", string(got.entry.GetUrl()))
 	})
 
 	t.Run("discards invalid bids", func(t *testing.T) {
