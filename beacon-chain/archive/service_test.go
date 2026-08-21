@@ -11,6 +11,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/pkg/errors"
 )
 
 // A round walks to the finalized epoch start and then offers the handoff. The handoff is offered with the
@@ -47,8 +48,22 @@ func TestRound_WalksThenOffersHandoff(t *testing.T) {
 	require.Equal(t, fSlot, svc.status().RegeneratedThroughSlot)
 	require.Equal(t, fSlot+slotsPerEpoch, sg.nextArg)
 
-	// Handoff accepted: the status is marked complete and persisted.
+	// The handoff is conditional on recording it: if that fails, nothing opens and the round reports it is
+	// not done, so the service retries rather than exiting with the two gates disagreeing.
 	sg.handoff = true
+	sg.markErr = errors.New("status write failed")
+	done, err = svc.round(ctx)
+	require.NotNil(t, err)
+	require.Equal(t, false, done)
+	require.Equal(t, true, sg.ArchivePending())
+	unpersisted, err := store.ArchiveStatus(ctx)
+	require.NoError(t, err)
+	require.Equal(t, false, unpersisted.Complete)
+	_, stillPending := archivePendingForTesting(t, store)
+	require.Equal(t, true, stillPending)
+
+	// Handoff accepted: the status is marked complete and persisted.
+	sg.markErr = nil
 	done, err = svc.round(ctx)
 	require.NoError(t, err)
 	require.Equal(t, true, done)

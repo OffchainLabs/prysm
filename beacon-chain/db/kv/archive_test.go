@@ -236,9 +236,12 @@ func TestSaveStateByDiff_RejectsWritesAboveArchiveFrontier(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, true, has)
 
-	// A boundary above the frontier is silently skipped rather than written without an anchor.
+	// A boundary above the frontier is refused rather than written without an anchor. It has to be an error
+	// and not a skip: the caller advances its finalized info on success, so a silent skip would leave a hole
+	// nothing ever comes back for.
 	above, _ := createState(t, 512, version.Phase0)
-	require.NoError(t, db.saveStateByDiff(ctx, above))
+	err = db.saveStateByDiff(ctx, above)
+	require.ErrorIs(t, err, ErrAboveArchiveFrontier)
 	has, err = hasStateDiffAtSlot(db, 512)
 	require.NoError(t, err)
 	require.Equal(t, false, has)
