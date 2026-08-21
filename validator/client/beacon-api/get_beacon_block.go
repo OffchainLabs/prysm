@@ -12,6 +12,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/apiutil"
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -74,7 +75,12 @@ func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primi
 	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v4/validator/blocks/%d", slot), queryParams)
 
 	if builderConfig != nil {
-		return c.beaconBlockV4WithBuilders(ctx, slot, queryUrl, builderConfig)
+		block, err := c.beaconBlockV4WithBuilders(ctx, slot, queryUrl, builderConfig)
+		if err == nil {
+			return block, nil
+		}
+		// A failed builder request must never cost the slot: fall through to a locally built block.
+		log.WithError(err).Warn("Builder block request failed, falling back to local block production")
 	}
 
 	var (
@@ -120,14 +126,34 @@ func (c *beaconApiValidatorClient) beaconBlockV4WithBuilders(ctx context.Context
 	jsonFn := func() ([]byte, error) {
 		return json.Marshal(structs.BuilderConfigFromConsensus(builderConfig))
 	}
-	data, header, err := c.handler.PostSSZWithFallback(ctx, queryUrl, headers, builderConfig.MarshalSSZ, jsonFn)
+
+	var (
+		decodedData     []byte
+		decodedBlock    *ethpb.GenericBeaconBlock
+		decodedContents *ethpb.BeaconBlockContentsGloas
+	)
+	decode := func(data []byte, header http.Header) (*ethpb.GenericBeaconBlock, error) {
+		block, contents, err := decodeBlockV4Response(data, header, queryUrl)
+		if err == nil {
+			decodedData, decodedBlock, decodedContents = data, block, contents
+		}
+		return block, err
+	}
+
+	// Always race the nodes for the block, even though each node solicits builder
+	// bids: a bid only binds once its block is signed, so duplicates are harmless.
+	opts := append([]rest.GetOption{rest.WithRace()}, blockFreshnessOptions(ctx, decode)...)
+	data, header, err := c.handler.PostSSZWithFallback(ctx, queryUrl, headers, builderConfig.MarshalSSZ, jsonFn, opts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not post v4 block request")
 	}
 
-	block, contents, err := decodeBlockV4Response(data, header, queryUrl)
-	if err != nil {
-		return nil, err
+	block, contents := decodedBlock, decodedContents
+	if block == nil || !bytes.Equal(data, decodedData) {
+		block, contents, err = decodeBlockV4Response(data, header, queryUrl)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if c.stateless && contents != nil && contents.ExecutionPayloadEnvelope != nil {
 		c.envelopeCache.Add(slot, contents.ExecutionPayloadEnvelope, contents.Blobs, contents.KzgProofs)

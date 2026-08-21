@@ -468,7 +468,7 @@ func TestReadUntil(t *testing.T) {
 			return "matched", true, true, nil
 		}
 
-		val, matched, err := readUntil(context.Background(), nil, getConfig{}, accept, round, noopFn)
+		val, matched, err := queryUntilAccepted(context.Background(), nil, getConfig{}, accept, round, noopFn)
 		require.NoError(t, err)
 		assert.Equal(t, true, matched)
 		assert.Equal(t, "matched", val)
@@ -480,7 +480,7 @@ func TestReadUntil(t *testing.T) {
 			return "fallback", false, true, nil
 		}
 
-		val, matched, err := readUntil(context.Background(), nil, getConfig{}, accept, round, noopFn)
+		val, matched, err := queryUntilAccepted(context.Background(), nil, getConfig{}, accept, round, noopFn)
 		require.NoError(t, err)
 		assert.Equal(t, false, matched)
 		assert.Equal(t, "fallback", val)
@@ -492,7 +492,7 @@ func TestReadUntil(t *testing.T) {
 			return "", false, false, []error{sentinel}
 		}
 
-		_, matched, err := readUntil(context.Background(), nil, getConfig{}, accept, round, noopFn)
+		_, matched, err := queryUntilAccepted(context.Background(), nil, getConfig{}, accept, round, noopFn)
 		assert.Equal(t, false, matched)
 		require.NotNil(t, err)
 		assert.Equal(t, true, errors.Is(err, sentinel))
@@ -509,7 +509,7 @@ func TestReadUntil(t *testing.T) {
 		}
 
 		cfg := getConfig{pollInterval: time.Millisecond, deadline: time.Now().Add(2 * time.Second)}
-		val, matched, err := readUntil(context.Background(), nil, cfg, accept, round, noopFn)
+		val, matched, err := queryUntilAccepted(context.Background(), nil, cfg, accept, round, noopFn)
 		require.NoError(t, err)
 		assert.Equal(t, true, matched)
 		assert.Equal(t, "fresh", val)
@@ -524,7 +524,7 @@ func TestReadUntil(t *testing.T) {
 		}
 
 		cfg := getConfig{pollInterval: time.Millisecond, deadline: time.Now().Add(2 * time.Second), repollMode: UntilAny2xx}
-		val, matched, err := readUntil(context.Background(), nil, cfg, accept, round, noopFn)
+		val, matched, err := queryUntilAccepted(context.Background(), nil, cfg, accept, round, noopFn)
 		require.NoError(t, err)
 		assert.Equal(t, false, matched)
 		assert.Equal(t, "stale", val)
@@ -542,7 +542,7 @@ func TestReadUntil(t *testing.T) {
 		}
 
 		cfg := getConfig{pollInterval: time.Millisecond, deadline: time.Now().Add(2 * time.Second), repollMode: UntilAny2xx}
-		val, matched, err := readUntil(context.Background(), nil, cfg, accept, round, noopFn)
+		val, matched, err := queryUntilAccepted(context.Background(), nil, cfg, accept, round, noopFn)
 		require.NoError(t, err)
 		assert.Equal(t, false, matched)
 		assert.Equal(t, "stale", val)
@@ -562,7 +562,7 @@ func TestReadUntil(t *testing.T) {
 		}()
 
 		cfg := getConfig{pollInterval: time.Hour, deadline: time.Now().Add(time.Hour)}
-		val, matched, err := readUntil(ctx, nil, cfg, accept, round, noopFn)
+		val, matched, err := queryUntilAccepted(ctx, nil, cfg, accept, round, noopFn)
 		require.NoError(t, err)
 		assert.Equal(t, false, matched)
 		assert.Equal(t, "stale", val)
@@ -580,7 +580,7 @@ func TestReadUntil(t *testing.T) {
 		}()
 
 		cfg := getConfig{pollInterval: time.Hour, deadline: time.Now().Add(time.Hour)}
-		_, matched, err := readUntil(ctx, nil, cfg, accept, round, noopFn)
+		_, matched, err := queryUntilAccepted(ctx, nil, cfg, accept, round, noopFn)
 		assert.Equal(t, false, matched)
 		require.NotNil(t, err)
 		assert.Equal(t, true, errors.Is(err, context.Canceled))
@@ -989,5 +989,85 @@ func TestMultiHandlerPostSSZWithFallback_Response(t *testing.T) {
 		)
 		require.NoError(t, err)
 		assert.Equal(t, "json-accepted", string(body))
+	})
+}
+
+func TestMultiHandlerPostSSZWithFallback_Racing(t *testing.T) {
+	t.Run("options race nodes and do not wait for the slowest", func(t *testing.T) {
+		fast := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("fast"))
+		}))
+		t.Cleanup(fast.Close)
+		slowRelease := make(chan struct{})
+		slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			<-slowRelease
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("slow"))
+		}))
+		t.Cleanup(func() { close(slowRelease); slow.Close() })
+
+		mh := multi(t, slow.URL, fast.URL)
+		start := time.Now()
+		body, _, err := mh.PostSSZWithFallback(
+			context.Background(),
+			"/produce",
+			nil,
+			func() ([]byte, error) { return []byte("ssz"), nil },
+			func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+			WithRace(),
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "fast", string(body))
+		require.Equal(t, true, time.Since(start) < 2*time.Second, "must not wait for the slow node")
+	})
+
+	t.Run("memo key ignores query parameters", func(t *testing.T) {
+		var sszHits int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Content-Type") == api.OctetStreamMediaType {
+				atomic.AddInt32(&sszHits, 1)
+				http.Error(w, "unsupported", http.StatusUnsupportedMediaType)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(srv.Close)
+
+		mh := multi(t, srv.URL)
+		for _, endpoint := range []string{"/produce/1?randao=aa", "/produce/2?randao=bb", "/produce/3?randao=cc"} {
+			_, _, err := mh.PostSSZWithFallback(
+				context.Background(),
+				endpoint,
+				nil,
+				func() ([]byte, error) { return []byte("ssz"), nil },
+				func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+			)
+			require.NoError(t, err)
+		}
+		assert.Equal(t, int32(1), atomic.LoadInt32(&sszHits), "the same route with varying slot segments must probe SSZ once")
+
+		var sszHits2 int32
+		srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Content-Type") == api.OctetStreamMediaType {
+				atomic.AddInt32(&sszHits2, 1)
+				http.Error(w, "unsupported", http.StatusUnsupportedMediaType)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(srv2.Close)
+		mh2 := multi(t, srv2.URL)
+		for _, endpoint := range []string{"/produce?slot=1", "/produce?slot=2", "/produce?slot=3"} {
+			_, _, err := mh2.PostSSZWithFallback(
+				context.Background(),
+				endpoint,
+				nil,
+				func() ([]byte, error) { return []byte("ssz"), nil },
+				func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+			)
+			require.NoError(t, err)
+		}
+		assert.Equal(t, int32(1), atomic.LoadInt32(&sszHits2), "same path with different query params must probe SSZ once")
 	})
 }

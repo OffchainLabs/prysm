@@ -1677,7 +1677,8 @@ func TestBeaconBlockV4_PostWithBuilderConfig(t *testing.T) {
 			expectedHeaders,
 			gomock.Any(),
 			gomock.Any(),
-		).DoAndReturn(func(_ context.Context, _ string, _ map[string]string, sszFn, _ func() ([]byte, error)) ([]byte, http.Header, error) {
+			gomock.Any(),
+		).DoAndReturn(func(_ context.Context, _ string, _ map[string]string, sszFn, _ func() ([]byte, error), _ ...rest.GetOption) ([]byte, http.Header, error) {
 			body, err := sszFn()
 			require.NoError(t, err)
 			require.DeepEqual(t, expectedSSZBody, body)
@@ -1714,6 +1715,7 @@ func TestBeaconBlockV4_PostWithBuilderConfig(t *testing.T) {
 			expectedHeaders,
 			gomock.Any(),
 			gomock.Any(),
+			gomock.Any(),
 		).Return(sszBytes, http.Header{
 			"Content-Type":                     []string{api.OctetStreamMediaType},
 			api.VersionHeader:                  []string{"gloas"},
@@ -1728,17 +1730,44 @@ func TestBeaconBlockV4_PostWithBuilderConfig(t *testing.T) {
 		require.NotNil(t, cached)
 	})
 
-	t.Run("post error is surfaced", func(t *testing.T) {
+	t.Run("post error is surfaced by the builder path", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
 		handler := mock.NewMockHandler(ctrl)
 		handler.EXPECT().PostSSZWithFallback(
-			gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+			gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 		).Return(nil, nil, errors.New("boom")).Times(1)
 
 		validatorClient := &beaconApiValidatorClient{handler: handler, envelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
-		_, err := validatorClient.beaconBlockV4(t.Context(), slot, neturl.Values{}, builderConfig)
+		_, err := validatorClient.beaconBlockV4WithBuilders(t.Context(), slot, fmt.Sprintf("/eth/v4/validator/blocks/%d?include_payload=false", slot), builderConfig)
 		assert.ErrorContains(t, "could not post v4 block request", err)
+	})
+
+	t.Run("post failure falls back to local production", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		proto := testhelpers.GenerateProtoGloasBeaconBlock()
+		sszBytes, err := proto.MarshalSSZ()
+		require.NoError(t, err)
+
+		handler := mock.NewMockHandler(ctrl)
+		handler.EXPECT().PostSSZWithFallback(
+			gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+		).Return(nil, nil, errors.New("boom")).Times(1)
+		handler.EXPECT().GetSSZ(
+			gomock.Any(),
+			fmt.Sprintf("/eth/v4/validator/blocks/%d?include_payload=false", slot),
+		).Return(sszBytes, http.Header{
+			"Content-Type":                     []string{api.OctetStreamMediaType},
+			api.VersionHeader:                  []string{"gloas"},
+			api.ExecutionPayloadIncludedHeader: []string{"false"},
+		}, nil).Times(1)
+
+		validatorClient := &beaconApiValidatorClient{handler: handler, envelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
+		block, err := validatorClient.beaconBlockV4(t.Context(), slot, neturl.Values{}, builderConfig)
+		require.NoError(t, err)
+		assert.DeepEqual(t, proto, block.GetGloas())
 	})
 }

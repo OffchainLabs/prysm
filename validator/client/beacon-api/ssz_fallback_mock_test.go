@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/mock"
 	"github.com/pkg/errors"
@@ -22,6 +23,7 @@ func expectPostSSZWithFallback(handler *mock.MockHandler) {
 		headers map[string]string,
 		sszFn func() ([]byte, error),
 		jsonFn func() ([]byte, error),
+		_ ...rest.GetOption,
 	) ([]byte, http.Header, error) {
 		postJSON := func() ([]byte, http.Header, error) {
 			body, err := jsonFn()
