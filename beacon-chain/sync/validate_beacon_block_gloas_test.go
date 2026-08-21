@@ -147,11 +147,14 @@ func TestValidateExecutionPayloadBidParentValid_Accept(t *testing.T) {
 	require.Equal(t, pubsub.ValidationAccept, res)
 }
 
-func TestValidateExecutionPayloadBidParentValid_Reject(t *testing.T) {
+func TestValidateExecutionPayloadBidParentValid_RejectWhenBuildingOnInvalidPayload(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	ctx := context.Background()
 
-	s := &Service{badPayloadCache: lruwrpr.New(10)}
+	s := &Service{
+		badPayloadCache: lruwrpr.New(10),
+		cfg:             &config{chain: &mock.ChainService{BuiltOnFullParentVal: true}},
+	}
 
 	blk := util.NewBeaconBlockGloas()
 	wsb, err := blocks.NewSignedBeaconBlock(blk)
@@ -163,6 +166,27 @@ func TestValidateExecutionPayloadBidParentValid_Reject(t *testing.T) {
 	res, err := s.validateExecutionPayloadBidParentValid(ctx, wsb.Block())
 	require.Error(t, err)
 	require.Equal(t, pubsub.ValidationReject, res)
+}
+
+func TestValidateExecutionPayloadBidParentValid_AcceptWhenBuildingOnEmptyParent(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	ctx := context.Background()
+
+	s := &Service{
+		badPayloadCache: lruwrpr.New(10),
+		cfg:             &config{chain: &mock.ChainService{BuiltOnFullParentVal: false}},
+	}
+
+	blk := util.NewBeaconBlockGloas()
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	parentRoot := wsb.Block().ParentRoot()
+	s.badPayloadCache.Add(string(parentRoot[:]), true)
+
+	res, err := s.validateExecutionPayloadBidParentValid(ctx, wsb.Block())
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, res)
 }
 
 func TestRequestPayloadEnvelope_SkipsWhenAlreadyResolved(t *testing.T) {

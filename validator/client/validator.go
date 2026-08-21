@@ -1457,14 +1457,6 @@ func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km key
 		if len(targets) == 0 {
 			continue
 		}
-		// The beacon caches one max_execution_payment per validator as its bid
-		// backstop, so the lowest configured value is submitted for every builder.
-		minPayment := targets[0].maxPayment
-		for _, t := range targets {
-			if t.maxPayment < minPayment {
-				minPayment = t.maxPayment
-			}
-		}
 		for _, proposalSlot := range duty.ProposerSlots {
 			if proposalSlot <= slot {
 				continue
@@ -1483,7 +1475,7 @@ func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km key
 					ProposerPubkey:      pk[:],
 					Url:                 t.url,
 					Auth:                signed,
-					MaxExecutionPayment: primitives.Gwei(minPayment),
+					MaxExecutionPayment: primitives.Gwei(t.maxPayment),
 				})
 				added = true
 			}
