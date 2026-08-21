@@ -40,6 +40,11 @@ func (c *AttCaches) insertSeenBit(att ethpb.Att) error {
 	return nil
 }
 
+// DeleteExpiredSeenBits reclaims expired seen-bits entries.
+func (c *AttCaches) DeleteExpiredSeenBits() {
+	c.seenAtt.DeleteExpired()
+}
+
 func (c *AttCaches) hasSeenBit(att ethpb.Att) (bool, error) {
 	id, err := attestation.NewId(att, attestation.Data)
 	if err != nil {

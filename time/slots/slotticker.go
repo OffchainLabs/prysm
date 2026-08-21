@@ -2,6 +2,7 @@
 package slots
 
 import (
+	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -37,15 +38,17 @@ type IntervalTicker interface {
 // multiple of the slot duration.
 // In addition, the channel returns the new slot number.
 type SlotTicker struct {
-	c    chan primitives.Slot
-	done chan struct{}
+	c        chan primitives.Slot
+	done     chan struct{}
+	doneOnce sync.Once
 }
 
 // SlotIntervalTicker is similar to a slot ticker but it returns also
 // the index of the interval that triggered the event
 type SlotIntervalTicker struct {
-	c    chan SlotInterval
-	done chan struct{}
+	c        chan SlotInterval
+	done     chan struct{}
+	doneOnce sync.Once
 }
 
 // C returns the ticker channel. Call Cancel afterwards to ensure
@@ -60,18 +63,24 @@ func (s *SlotIntervalTicker) C() <-chan SlotInterval {
 	return s.c
 }
 
-// Done should be called to clean up the ticker.
+// Done should be called to clean up the ticker. It is safe to call more than once.
 func (s *SlotTicker) Done() {
-	go func() {
-		s.done <- struct{}{}
-	}()
+	s.doneOnce.Do(func() {
+		// A zero-value SlotTicker was never started and has no channel to close.
+		if s.done != nil {
+			close(s.done)
+		}
+	})
 }
 
-// Done should be called to clean up the ticker.
+// Done should be called to clean up the ticker. It is safe to call more than once.
 func (s *SlotIntervalTicker) Done() {
-	go func() {
-		s.done <- struct{}{}
-	}()
+	s.doneOnce.Do(func() {
+		// A zero-value SlotIntervalTicker was never started and has no channel to close.
+		if s.done != nil {
+			close(s.done)
+		}
+	})
 }
 
 // NewSlotTicker starts and returns a new SlotTicker instance.
@@ -140,7 +149,12 @@ func (s *SlotTicker) start(
 			waitTime := until(nextTickTime)
 			select {
 			case <-after(waitTime):
-				s.c <- slot
+				// Also select on done: nothing may be reading C() any more.
+				select {
+				case s.c <- slot:
+				case <-s.done:
+					return
+				}
 				slot++
 				nextTickTime = nextTickTime.Add(d)
 			case <-s.done:
@@ -168,7 +182,12 @@ func (s *SlotIntervalTicker) startWithIntervals(
 			waitTime := until(nextTickTime)
 			select {
 			case <-after(waitTime):
-				s.c <- SlotInterval{Slot: slot, Interval: interval}
+				// Also select on done: nothing may be reading C() any more.
+				select {
+				case s.c <- SlotInterval{Slot: slot, Interval: interval}:
+				case <-s.done:
+					return
+				}
 				interval++
 				if interval == len(intervals) {
 					interval = 0

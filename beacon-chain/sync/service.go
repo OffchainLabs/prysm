@@ -345,7 +345,6 @@ func (s *Service) Start() {
 	// Prune data column cache periodically on finalization.
 	async.RunEvery(s.ctx, 30*time.Second, s.pruneDataColumnCache)
 
-	go s.prunePendingGloasColumns()
 	go s.processPendingGloasColumnsRoutine()
 
 	if !params.FuluEnabled() {

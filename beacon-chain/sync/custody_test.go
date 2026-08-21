@@ -131,43 +131,49 @@ func TestUpdateCustodyInfoIfNeeded(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	t.Run("Skip update when actual custody count >= target", func(t *testing.T) {
-		setup := setupCustodyTest(t, false)
-
-		err := setup.service.updateCustodyInfoIfNeeded()
-		require.NoError(t, err)
-
-		setup.assertCustodyInfo(t, setup.initialSlot, setup.initialCount)
-	})
-
-	t.Run("not enough peers in some subnets", func(t *testing.T) {
-		const randomTopic = "aTotalRandomTopicName"
-		require.Equal(t, false, strings.Contains(randomTopic, p2p.GossipDataColumnSidecarMessage))
-
-		withSubscribeAllDataSubnets(t, func() {
+		p2ptest.SynctestTest(t, func(t *testing.T) {
 			setup := setupCustodyTest(t, false)
 
-			_, err := setup.service.cfg.p2p.SubscribeToTopic(p2p.GossipDataColumnSidecarMessage)
-			require.NoError(t, err)
-
-			_, err = setup.service.cfg.p2p.SubscribeToTopic(randomTopic)
-			require.NoError(t, err)
-
-			err = setup.service.updateCustodyInfoIfNeeded()
+			err := setup.service.updateCustodyInfoIfNeeded()
 			require.NoError(t, err)
 
 			setup.assertCustodyInfo(t, setup.initialSlot, setup.initialCount)
 		})
 	})
 
+	t.Run("not enough peers in some subnets", func(t *testing.T) {
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			const randomTopic = "aTotalRandomTopicName"
+			require.Equal(t, false, strings.Contains(randomTopic, p2p.GossipDataColumnSidecarMessage))
+
+			withSubscribeAllDataSubnets(t, func() {
+				setup := setupCustodyTest(t, false)
+
+				_, err := setup.service.cfg.p2p.SubscribeToTopic(p2p.GossipDataColumnSidecarMessage)
+				require.NoError(t, err)
+
+				_, err = setup.service.cfg.p2p.SubscribeToTopic(randomTopic)
+				require.NoError(t, err)
+
+				err = setup.service.updateCustodyInfoIfNeeded()
+				require.NoError(t, err)
+
+				setup.assertCustodyInfo(t, setup.initialSlot, setup.initialCount)
+			})
+		})
+	})
+
 	t.Run("should update", func(t *testing.T) {
-		withSubscribeAllDataSubnets(t, func() {
-			setup := setupCustodyTest(t, true)
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			withSubscribeAllDataSubnets(t, func() {
+				setup := setupCustodyTest(t, true)
 
-			err := setup.service.updateCustodyInfoIfNeeded()
-			require.NoError(t, err)
+				err := setup.service.updateCustodyInfoIfNeeded()
+				require.NoError(t, err)
 
-			const expectedSlot = primitives.Slot(100)
-			setup.assertCustodyInfo(t, expectedSlot, cfg.NumberOfCustodyGroups)
+				const expectedSlot = primitives.Slot(100)
+				setup.assertCustodyInfo(t, expectedSlot, cfg.NumberOfCustodyGroups)
+			})
 		})
 	})
 }

@@ -11,6 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"runtime"
+	"strings"
+	"testing/synctest"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
@@ -23,10 +27,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/metadata"
-	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/config"
 	core "github.com/libp2p/go-libp2p/core"
@@ -35,7 +37,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/sirupsen/logrus"
@@ -50,10 +51,26 @@ const (
 	metadataV3Topic = "/eth2/beacon_chain/req/metadata/3"
 )
 
+// SynctestTest runs f inside a testing/synctest bubble with fake time, making
+// sleeps instant and deterministic.
+//
+// Rules: construct all fixtures inside f (channels/timers are bubble-affine), no
+// real sockets, and every goroutine must stop before f returns.
+func SynctestTest(t *testing.T, f func(t *testing.T)) {
+	if raceEnabled {
+		// Work around a Go runtime bug.
+		// https://github.com/golang/go/issues/78156
+		prev := runtime.GOMAXPROCS(1)
+		t.Cleanup(func() { runtime.GOMAXPROCS(prev) })
+	}
+	synctest.Test(t, f)
+}
+
 // TestP2P represents a p2p implementation that can be used for testing.
 type TestP2P struct {
 	mu                    sync.Mutex
 	t                     *testing.T
+	sim                   *SimNet // non-nil when the host runs on a simulated network
 	BHost                 host.Host
 	EnodeID               enode.ID
 	pubsub                *pubsub.PubSub
@@ -78,20 +95,36 @@ func NewTestP2P(t *testing.T, userOptions ...config.Option) *TestP2P {
 
 // NewTestP2PWithPubsubOptions initializes a new p2p test service with custom pubsub options.
 func NewTestP2PWithPubsubOptions(t *testing.T, pubsubOpts []pubsub.Option, userOptions ...config.Option) *TestP2P {
-	ctx := context.Background()
-	options := []config.Option{
-		libp2p.ResourceManager(&network.NullResourceManager{}),
-		libp2p.Transport(tcp.NewTCPTransport),
-		libp2p.DefaultListenAddrs,
+	var simnet *SimNet
+	best := -1
+
+	// Find the longest-prefix matching test name in the map of testSims.
+	testSims.Range(func(k, v any) bool {
+		name := k.(string)
+		if (t.Name() == name || strings.HasPrefix(t.Name(), name+"/")) && len(name) > best {
+			best = len(name)
+			simnet = v.(*SimNet)
+		}
+		return true
+	})
+	// If no matching test name was found, create a new one.
+	if simnet == nil {
+		simnet = NewSimNet(t)
+
+		// Store this new SimNet in the map of testSims so that subtests can use it.
+		name := t.Name()
+		testSims.Store(name, simnet)
+		t.Cleanup(func() { testSims.Delete(name) })
 	}
 
-	// Favour user options if provided.
-	if len(userOptions) > 0 {
-		options = append(userOptions, options...)
-	}
+	host := simnet.newHost(t, userOptions...)
+	return newTestP2P(t, host, simnet, pubsubOpts)
+}
 
-	h, err := libp2p.New(options...)
-	require.NoError(t, err)
+// newTestP2P wires pubsub and peer status around an existing host.
+func newTestP2P(t *testing.T, h host.Host, sim *SimNet, pubsubOpts []pubsub.Option) *TestP2P {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 
 	defaultPubsubOpts := []pubsub.Option{
 		pubsub.WithMessageSigning(false),
@@ -104,7 +137,7 @@ func NewTestP2PWithPubsubOptions(t *testing.T, pubsubOpts []pubsub.Option, userO
 		t.Fatal(err)
 	}
 
-	peerStatuses := peers.NewStatus(context.Background(), &peers.StatusConfig{
+	peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
 		PeerLimit: 30,
 		ScorerParams: &scorers.Config{
 			BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
@@ -114,12 +147,18 @@ func NewTestP2PWithPubsubOptions(t *testing.T, pubsubOpts []pubsub.Option, userO
 	})
 	return &TestP2P{
 		t:            t,
+		sim:          sim,
 		BHost:        h,
 		pubsub:       ps,
 		joinedTopics: map[string]*pubsub.Topic{},
 		peers:        peerStatuses,
 		enr:          new(enr.Record),
 	}
+}
+
+// ephemeralHost creates an extra host, on the same simulated network.
+func (p *TestP2P) ephemeralHost() host.Host {
+	return p.sim.newHost(p.t)
 }
 
 // Connect two test peers together.
@@ -139,11 +178,7 @@ func connect(a, b host.Host) error {
 
 // ReceiveRPC simulates an incoming RPC.
 func (p *TestP2P) ReceiveRPC(topic string, msg proto.Message) {
-	h, err := libp2p.New(libp2p.ResourceManager(&network.NullResourceManager{}))
-	require.NoError(p.t, err)
-	p.t.Cleanup(func() {
-		require.NoError(p.t, h.Close())
-	})
+	h := p.ephemeralHost()
 	if err := connect(h, p.BHost); err != nil {
 		p.t.Fatalf("Failed to connect two peers for RPC: %v", err)
 	}
@@ -173,12 +208,10 @@ func (p *TestP2P) ReceiveRPC(topic string, msg proto.Message) {
 
 // ReceivePubSub simulates an incoming message over pubsub on a given topic.
 func (p *TestP2P) ReceivePubSub(topic string, msg proto.Message) {
-	h, err := libp2p.New(libp2p.ResourceManager(&network.NullResourceManager{}))
-	require.NoError(p.t, err)
-	p.t.Cleanup(func() {
-		require.NoError(p.t, h.Close())
-	})
-	ps, err := pubsub.NewFloodSub(context.Background(), h,
+	h := p.ephemeralHost()
+	ctx, cancel := context.WithCancel(context.Background())
+	p.t.Cleanup(cancel)
+	ps, err := pubsub.NewFloodSub(ctx, h,
 		pubsub.WithMessageSigning(false),
 		pubsub.WithStrictSignatureVerification(false),
 	)

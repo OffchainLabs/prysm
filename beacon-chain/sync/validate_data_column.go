@@ -331,10 +331,14 @@ type dataColumnLogEntry struct {
 
 func (s *Service) processDataColumnLogs() {
 	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
 	slotStats := make(map[[fieldparams.RootLength]byte][]dataColumnLogEntry)
 
 	for {
 		select {
+		case <-s.ctx.Done():
+			return
 		case col := <-s.dataColumnLogCh:
 			cols := slotStats[col.root]
 			cols = append(cols, col)

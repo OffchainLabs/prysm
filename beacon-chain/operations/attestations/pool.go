@@ -26,6 +26,7 @@ type Pool interface {
 	// Seen aggregated attestations.
 	DeleteSeenAggregatedAttestationsBefore(expirySlot primitives.Slot)
 	SeenAggregatedAttestationCount() int
+	DeleteExpiredSeenBits()
 	// For unaggregated attestations.
 	SaveUnaggregatedAttestation(att ethpb.Att) error
 	SaveUnaggregatedAttestations(atts []ethpb.Att) error

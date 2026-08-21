@@ -55,69 +55,79 @@ func validSigVerifier() verification.PayloadAttestationMsgVerifier {
 }
 
 func TestQueuePendingPayloadAttestation_Queues(t *testing.T) {
-	s := queueTestService(t)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		s := queueTestService(t)
 
-	att, pa := pendingPayloadAtt(t, []byte{'a'}, 1, 1)
-	res, err := s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att)
-	require.NoError(t, err)
-	require.Equal(t, pubsub.ValidationIgnore, res)
-	require.Equal(t, 1, len(s.pendingPayloadAttestations[pa.BeaconBlockRoot()]))
+		att, pa := pendingPayloadAtt(t, []byte{'a'}, 1, 1)
+		res, err := s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, res)
+		require.Equal(t, 1, len(s.pendingPayloadAttestations[pa.BeaconBlockRoot()]))
+	})
 }
 
 func TestQueuePendingPayloadAttestation_DeduplicatesByValidator(t *testing.T) {
-	s := queueTestService(t)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		s := queueTestService(t)
 
-	att, pa := pendingPayloadAtt(t, []byte{'a'}, 1, 1)
-	_, err := s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att)
-	require.NoError(t, err)
-	_, err = s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att)
-	require.NoError(t, err)
-	require.Equal(t, 1, len(s.pendingPayloadAttestations[pa.BeaconBlockRoot()]))
+		att, pa := pendingPayloadAtt(t, []byte{'a'}, 1, 1)
+		_, err := s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att)
+		require.NoError(t, err)
+		_, err = s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(s.pendingPayloadAttestations[pa.BeaconBlockRoot()]))
 
-	att2, pa2 := pendingPayloadAtt(t, []byte{'a'}, 2, 1)
-	_, err = s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att2)
-	require.NoError(t, err)
-	require.Equal(t, 2, len(s.pendingPayloadAttestations[pa2.BeaconBlockRoot()]))
+		att2, pa2 := pendingPayloadAtt(t, []byte{'a'}, 2, 1)
+		_, err = s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att2)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(s.pendingPayloadAttestations[pa2.BeaconBlockRoot()]))
+	})
 }
 
 func TestQueuePendingPayloadAttestation_RootCap(t *testing.T) {
-	s := queueTestService(t)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		s := queueTestService(t)
 
-	for i := range maxPendingPayloadAttestationRoots {
-		att, _ := pendingPayloadAtt(t, []byte{byte(i)}, 1, 1)
+		for i := range maxPendingPayloadAttestationRoots {
+			att, _ := pendingPayloadAtt(t, []byte{byte(i)}, 1, 1)
+			_, err := s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att)
+			require.NoError(t, err)
+		}
+		require.Equal(t, maxPendingPayloadAttestationRoots, len(s.pendingPayloadAttestations))
+
+		att, pa := pendingPayloadAtt(t, []byte("overflow"), 1, 1)
 		_, err := s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att)
 		require.NoError(t, err)
-	}
-	require.Equal(t, maxPendingPayloadAttestationRoots, len(s.pendingPayloadAttestations))
-
-	att, pa := pendingPayloadAtt(t, []byte("overflow"), 1, 1)
-	_, err := s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att)
-	require.NoError(t, err)
-	require.Equal(t, maxPendingPayloadAttestationRoots, len(s.pendingPayloadAttestations))
-	_, ok := s.pendingPayloadAttestations[pa.BeaconBlockRoot()]
-	require.Equal(t, false, ok)
+		require.Equal(t, maxPendingPayloadAttestationRoots, len(s.pendingPayloadAttestations))
+		_, ok := s.pendingPayloadAttestations[pa.BeaconBlockRoot()]
+		require.Equal(t, false, ok)
+	})
 }
 
 func TestQueuePendingPayloadAttestation_IgnoresBadSignature(t *testing.T) {
-	s := queueTestService(t)
-	v := &verification.MockPayloadAttestation{ErrInvalidMessageSignature: errors.New("bad signature")}
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		s := queueTestService(t)
+		v := &verification.MockPayloadAttestation{ErrInvalidMessageSignature: errors.New("bad signature")}
 
-	att, _ := pendingPayloadAtt(t, []byte{'a'}, 1, 1)
-	res, err := s.queuePendingPayloadAttestation(t.Context(), v, att)
-	require.ErrorContains(t, "bad signature", err)
-	require.Equal(t, pubsub.ValidationIgnore, res)
-	require.Equal(t, 0, len(s.pendingPayloadAttestations))
+		att, _ := pendingPayloadAtt(t, []byte{'a'}, 1, 1)
+		res, err := s.queuePendingPayloadAttestation(t.Context(), v, att)
+		require.ErrorContains(t, "bad signature", err)
+		require.Equal(t, pubsub.ValidationIgnore, res)
+		require.Equal(t, 0, len(s.pendingPayloadAttestations))
+	})
 }
 
 func TestQueuePendingPayloadAttestation_IgnoresNonCommittee(t *testing.T) {
-	s := queueTestService(t)
-	v := &verification.MockPayloadAttestation{ErrIncorrectPayloadAttValidator: errors.New("not in PTC")}
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		s := queueTestService(t)
+		v := &verification.MockPayloadAttestation{ErrIncorrectPayloadAttValidator: errors.New("not in PTC")}
 
-	att, _ := pendingPayloadAtt(t, []byte{'a'}, 1, 1)
-	res, err := s.queuePendingPayloadAttestation(t.Context(), v, att)
-	require.ErrorContains(t, "not in PTC", err)
-	require.Equal(t, pubsub.ValidationIgnore, res)
-	require.Equal(t, 0, len(s.pendingPayloadAttestations))
+		att, _ := pendingPayloadAtt(t, []byte{'a'}, 1, 1)
+		res, err := s.queuePendingPayloadAttestation(t.Context(), v, att)
+		require.ErrorContains(t, "not in PTC", err)
+		require.Equal(t, pubsub.ValidationIgnore, res)
+		require.Equal(t, 0, len(s.pendingPayloadAttestations))
+	})
 }
 
 func TestQueuePendingPayloadAttestation_DropsWhenNoState(t *testing.T) {
@@ -135,34 +145,36 @@ func TestQueuePendingPayloadAttestation_DropsWhenNoState(t *testing.T) {
 }
 
 func TestQueuePendingPayloadAttestation_DrainsWhenBlockInForkchoice(t *testing.T) {
-	st, _ := util.DeterministicGenesisStateGloas(t, 64)
-	ptc, err := st.PayloadCommitteeReadOnly(0)
-	require.NoError(t, err)
-	require.NotEmpty(t, ptc)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		st, _ := util.DeterministicGenesisStateGloas(t, 64)
+		ptc, err := st.PayloadCommitteeReadOnly(0)
+		require.NoError(t, err)
+		require.NotEmpty(t, ptc)
 
-	pool := payloadattestation.NewPool()
-	s := &Service{
-		payloadAttestationCache:    &cache.PayloadAttestationCache{},
-		pendingPayloadAttestations: make(map[[32]byte][]*ethpb.PayloadAttestationMessage),
-		seenPendingBlocks:          make(map[[32]byte]bool),
-		cfg: &config{
-			chain:                  &mock.ChainService{State: st}, // InForkchoice true: block already arrived.
-			p2p:                    p2ptest.NewTestP2P(t),
-			payloadAttestationPool: pool,
-			operationNotifier:      &mock.MockOperationNotifier{},
-		},
-	}
+		pool := payloadattestation.NewPool()
+		s := &Service{
+			payloadAttestationCache:    &cache.PayloadAttestationCache{},
+			pendingPayloadAttestations: make(map[[32]byte][]*ethpb.PayloadAttestationMessage),
+			seenPendingBlocks:          make(map[[32]byte]bool),
+			cfg: &config{
+				chain:                  &mock.ChainService{State: st}, // InForkchoice true: block already arrived.
+				p2p:                    p2ptest.NewTestP2P(t),
+				payloadAttestationPool: pool,
+				operationNotifier:      &mock.MockOperationNotifier{},
+			},
+		}
 
-	att, _ := pendingPayloadAtt(t, []byte{'a'}, ptc[0], 0)
-	res, err := s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att)
-	require.NoError(t, err)
-	require.Equal(t, pubsub.ValidationIgnore, res)
+		att, _ := pendingPayloadAtt(t, []byte{'a'}, ptc[0], 0)
+		res, err := s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, res)
 
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) && len(pool.PendingPayloadAttestations(0)) == 0 {
-		time.Sleep(10 * time.Millisecond)
-	}
-	require.Equal(t, 1, len(pool.PendingPayloadAttestations(0)))
+		deadline := time.Now().Add(2 * time.Second)
+		for time.Now().Before(deadline) && len(pool.PendingPayloadAttestations(0)) == 0 {
+			time.Sleep(10 * time.Millisecond)
+		}
+		require.Equal(t, 1, len(pool.PendingPayloadAttestations(0)))
+	})
 }
 
 func TestPrunePendingPayloadAttestations(t *testing.T) {
@@ -191,31 +203,33 @@ func TestPrunePendingPayloadAttestations(t *testing.T) {
 }
 
 func TestProcessPendingPayloadAttestation_DrainsAndProcesses(t *testing.T) {
-	st, _ := util.DeterministicGenesisStateGloas(t, 64)
-	ptc, err := st.PayloadCommitteeReadOnly(0)
-	require.NoError(t, err)
-	require.NotEmpty(t, ptc)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		st, _ := util.DeterministicGenesisStateGloas(t, 64)
+		ptc, err := st.PayloadCommitteeReadOnly(0)
+		require.NoError(t, err)
+		require.NotEmpty(t, ptc)
 
-	pool := payloadattestation.NewPool()
-	s := &Service{
-		payloadAttestationCache:    &cache.PayloadAttestationCache{},
-		pendingPayloadAttestations: make(map[[32]byte][]*ethpb.PayloadAttestationMessage),
-		cfg: &config{
-			chain:                  &mock.ChainService{State: st, Genesis: genesisForSlot(0)},
-			p2p:                    p2ptest.NewTestP2P(t),
-			clock:                  startup.NewClock(genesisForSlot(0), [32]byte{}),
-			payloadAttestationPool: pool,
-			operationNotifier:      &mock.MockOperationNotifier{},
-		},
-	}
+		pool := payloadattestation.NewPool()
+		s := &Service{
+			payloadAttestationCache:    &cache.PayloadAttestationCache{},
+			pendingPayloadAttestations: make(map[[32]byte][]*ethpb.PayloadAttestationMessage),
+			cfg: &config{
+				chain:                  &mock.ChainService{State: st, Genesis: genesisForSlot(0)},
+				p2p:                    p2ptest.NewTestP2P(t),
+				clock:                  startup.NewClock(genesisForSlot(0), [32]byte{}),
+				payloadAttestationPool: pool,
+				operationNotifier:      &mock.MockOperationNotifier{},
+			},
+		}
 
-	root := []byte{'a'}
-	att, pa := pendingPayloadAtt(t, root, ptc[0], 0)
-	s.pendingPayloadAttestations[pa.BeaconBlockRoot()] = []*ethpb.PayloadAttestationMessage{att}
+		root := []byte{'a'}
+		att, pa := pendingPayloadAtt(t, root, ptc[0], 0)
+		s.pendingPayloadAttestations[pa.BeaconBlockRoot()] = []*ethpb.PayloadAttestationMessage{att}
 
-	s.processPendingPayloadAttestation(t.Context(), pa.BeaconBlockRoot())
+		s.processPendingPayloadAttestation(t.Context(), pa.BeaconBlockRoot())
 
-	_, stillQueued := s.pendingPayloadAttestations[pa.BeaconBlockRoot()]
-	require.Equal(t, false, stillQueued)
-	require.Equal(t, 1, len(pool.PendingPayloadAttestations(0)))
+		_, stillQueued := s.pendingPayloadAttestations[pa.BeaconBlockRoot()]
+		require.Equal(t, false, stillQueued)
+		require.Equal(t, 1, len(pool.PendingPayloadAttestations(0)))
+	})
 }

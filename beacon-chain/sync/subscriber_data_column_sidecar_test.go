@@ -74,31 +74,33 @@ func TestAllDataColumnSubnets(t *testing.T) {
 // Gloas sidecars don't expose a proposer index, so reconstruction must not call ProposerIndex().
 // With no stored columns, reconstruction is unnecessary and the call returns nil instead of erroring.
 func TestProcessDataColumnSidecarsFromReconstruction_GloasSkipsProposerIndex(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.FuluForkEpoch = 0
-	cfg.GloasForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
+	mockp2p.SynctestTest(t, func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.FuluForkEpoch = 0
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
 
-	s := &Service{
-		ctx: t.Context(),
-		cfg: &config{
-			p2p:               mockp2p.NewTestP2P(t),
-			clock:             startup.NewClock(time.Now(), [32]byte{}),
-			dataColumnStorage: filesystem.NewEphemeralDataColumnStorage(t),
-		},
-		seenDataColumnCache: newSlotAwareCache(seenDataColumnSize),
-	}
+		s := &Service{
+			ctx: t.Context(),
+			cfg: &config{
+				p2p:               mockp2p.NewTestP2P(t),
+				clock:             startup.NewClock(time.Now(), [32]byte{}),
+				dataColumnStorage: filesystem.NewEphemeralDataColumnStorage(t),
+			},
+			seenDataColumnCache: newSlotAwareCache(seenDataColumnSize),
+		}
 
-	var root [fieldparams.RootLength]byte
-	root[0] = 0xEE
-	gdc, err := blocks.NewRODataColumnGloasWithRoot(&ethpb.DataColumnSidecarGloas{
-		Index:           0,
-		Slot:            1,
-		BeaconBlockRoot: root[:],
-	}, root)
-	require.NoError(t, err)
-	v := blocks.NewVerifiedRODataColumn(gdc)
+		var root [fieldparams.RootLength]byte
+		root[0] = 0xEE
+		gdc, err := blocks.NewRODataColumnGloasWithRoot(&ethpb.DataColumnSidecarGloas{
+			Index:           0,
+			Slot:            1,
+			BeaconBlockRoot: root[:],
+		}, root)
+		require.NoError(t, err)
+		v := blocks.NewVerifiedRODataColumn(gdc)
 
-	require.NoError(t, s.processDataColumnSidecarsFromReconstruction(t.Context(), v))
+		require.NoError(t, s.processDataColumnSidecarsFromReconstruction(t.Context(), v))
+	})
 }

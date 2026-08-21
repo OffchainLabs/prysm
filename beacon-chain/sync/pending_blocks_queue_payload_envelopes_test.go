@@ -69,46 +69,48 @@ func newEnvelopeFetchService(t *testing.T, p1 p2p.P2P) *Service {
 // block for that root exists in the queue. This locks in the PR's removal of the
 // per-block pendingBlockByRoot gate.
 func TestFetchAndQueuePayloadEnvelopesForRoots_QueuesWithoutPendingBlock(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig()
-	cfg.FuluForkEpoch = 0
-	cfg.GloasForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
-	params.BeaconConfig().InitializeForkSchedule()
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.FuluForkEpoch = 0
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+		params.BeaconConfig().InitializeForkSchedule()
 
-	p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
-	p1.Connect(p2)
+		p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+		p1.Connect(p2)
 
-	r := newEnvelopeFetchService(t, p1)
+		r := newEnvelopeFetchService(t, p1)
 
-	root := [32]byte{0xAA}
-	env := makeSignedEnvelope(root, 1)
+		root := [32]byte{0xAA}
+		env := makeSignedEnvelope(root, 1)
 
-	protocolID := fmt.Sprintf("%s/ssz_snappy", p2p.RPCExecutionPayloadEnvelopesByRootTopicV1)
-	var wg sync.WaitGroup
-	wg.Add(1)
-	p2.SetStreamHandler(protocolID, func(stream network.Stream) {
-		defer wg.Done()
-		req := new(p2ptypes.ExecutionPayloadEnvelopesByRootReq)
-		assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
-		require.Equal(t, 1, len(*req))
-		assert.Equal(t, root, (*req)[0])
-		assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2.Encoding(), env))
-		assert.NoError(t, stream.CloseWrite())
+		protocolID := fmt.Sprintf("%s/ssz_snappy", p2p.RPCExecutionPayloadEnvelopesByRootTopicV1)
+		var wg sync.WaitGroup
+		wg.Add(1)
+		p2.SetStreamHandler(protocolID, func(stream network.Stream) {
+			defer wg.Done()
+			req := new(p2ptypes.ExecutionPayloadEnvelopesByRootReq)
+			assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+			require.Equal(t, 1, len(*req))
+			assert.Equal(t, root, (*req)[0])
+			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2.Encoding(), env))
+			assert.NoError(t, stream.CloseWrite())
+		})
+
+		r.fetchAndQueuePayloadEnvelopesForRoots(t.Context(), p2.PeerID(), p2ptypes.BeaconBlockByRootsReq{root})
+
+		if util.WaitTimeout(&wg, time.Second) {
+			t.Fatal("Did not receive envelope-by-root request within 1 sec")
+		}
+
+		r.pendingEnvelopeLock.RLock()
+		defer r.pendingEnvelopeLock.RUnlock()
+		inner, ok := r.pendingPayloadEnvelopes[root]
+		require.Equal(t, true, ok)
+		require.Equal(t, 1, len(inner))
+		assert.NotNil(t, inner[0])
 	})
-
-	r.fetchAndQueuePayloadEnvelopesForRoots(t.Context(), p2.PeerID(), p2ptypes.BeaconBlockByRootsReq{root})
-
-	if util.WaitTimeout(&wg, time.Second) {
-		t.Fatal("Did not receive envelope-by-root request within 1 sec")
-	}
-
-	r.pendingEnvelopeLock.RLock()
-	defer r.pendingEnvelopeLock.RUnlock()
-	inner, ok := r.pendingPayloadEnvelopes[root]
-	require.Equal(t, true, ok)
-	require.Equal(t, 1, len(inner))
-	assert.NotNil(t, inner[0])
 }
 
 // A future slot must not defeat finalization based pruning by pinning memory.
@@ -159,53 +161,57 @@ func TestQueuePendingPayloadEnvelopeFromRootRequest_BuildersPerRootCap(t *testin
 // Pre-Gloas: the chain-level CurrentSlot() < gloasStartSlot gate short-circuits
 // before any request is sent.
 func TestFetchAndQueuePayloadEnvelopesForRoots_PreGloasNoRequest(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig()
-	cfg.FuluForkEpoch = 0
-	cfg.GloasForkEpoch = 1_000_000 // far enough ahead that CurrentSlot() is well before it
-	params.OverrideBeaconConfig(cfg)
-	params.BeaconConfig().InitializeForkSchedule()
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.FuluForkEpoch = 0
+		cfg.GloasForkEpoch = 1_000_000 // far enough ahead that CurrentSlot() is well before it
+		params.OverrideBeaconConfig(cfg)
+		params.BeaconConfig().InitializeForkSchedule()
 
-	p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
-	p1.Connect(p2)
+		p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+		p1.Connect(p2)
 
-	r := newEnvelopeFetchService(t, p1)
+		r := newEnvelopeFetchService(t, p1)
 
-	protocolID := fmt.Sprintf("%s/ssz_snappy", p2p.RPCExecutionPayloadEnvelopesByRootTopicV1)
-	p2.SetStreamHandler(protocolID, func(network.Stream) {
-		t.Error("envelope request should not be sent before Gloas")
+		protocolID := fmt.Sprintf("%s/ssz_snappy", p2p.RPCExecutionPayloadEnvelopesByRootTopicV1)
+		p2.SetStreamHandler(protocolID, func(network.Stream) {
+			t.Error("envelope request should not be sent before Gloas")
+		})
+
+		r.fetchAndQueuePayloadEnvelopesForRoots(t.Context(), p2.PeerID(), p2ptypes.BeaconBlockByRootsReq{{0xAA}})
+
+		assert.Equal(t, 0, len(r.pendingPayloadEnvelopes))
 	})
-
-	r.fetchAndQueuePayloadEnvelopesForRoots(t.Context(), p2.PeerID(), p2ptypes.BeaconBlockByRootsReq{{0xAA}})
-
-	assert.Equal(t, 0, len(r.pendingPayloadEnvelopes))
 }
 
 // Post-Gloas: a root whose envelope is already in the DB is filtered out, so no
 // request is sent for it.
 func TestFetchAndQueuePayloadEnvelopesForRoots_SkipsRootAlreadyInDB(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig()
-	cfg.FuluForkEpoch = 0
-	cfg.GloasForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
-	params.BeaconConfig().InitializeForkSchedule()
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.FuluForkEpoch = 0
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+		params.BeaconConfig().InitializeForkSchedule()
 
-	p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
-	p1.Connect(p2)
+		p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+		p1.Connect(p2)
 
-	r := newEnvelopeFetchService(t, p1)
+		r := newEnvelopeFetchService(t, p1)
 
-	root := bytesutil.ToBytes32([]byte{0xCC})
-	env := makeSignedEnvelope(root, 1)
-	require.NoError(t, r.cfg.beaconDB.SaveExecutionPayloadEnvelope(t.Context(), env))
+		root := bytesutil.ToBytes32([]byte{0xCC})
+		env := makeSignedEnvelope(root, 1)
+		require.NoError(t, r.cfg.beaconDB.SaveExecutionPayloadEnvelope(t.Context(), env))
 
-	protocolID := fmt.Sprintf("%s/ssz_snappy", p2p.RPCExecutionPayloadEnvelopesByRootTopicV1)
-	p2.SetStreamHandler(protocolID, func(network.Stream) {
-		t.Error("no request should be sent for a root already present in the DB")
+		protocolID := fmt.Sprintf("%s/ssz_snappy", p2p.RPCExecutionPayloadEnvelopesByRootTopicV1)
+		p2.SetStreamHandler(protocolID, func(network.Stream) {
+			t.Error("no request should be sent for a root already present in the DB")
+		})
+
+		r.fetchAndQueuePayloadEnvelopesForRoots(t.Context(), p2.PeerID(), p2ptypes.BeaconBlockByRootsReq{root})
+
+		assert.Equal(t, 0, len(r.pendingPayloadEnvelopes))
 	})
-
-	r.fetchAndQueuePayloadEnvelopesForRoots(t.Context(), p2.PeerID(), p2ptypes.BeaconBlockByRootsReq{root})
-
-	assert.Equal(t, 0, len(r.pendingPayloadEnvelopes))
 }

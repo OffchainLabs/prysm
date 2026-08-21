@@ -44,11 +44,43 @@ var (
 
 // CommitteeCache is a struct with 1 queue for looking up shuffled indices list by seed.
 type CommitteeCache struct {
-	Wg             sync.WaitGroup
 	Sf             singleflight.Group
 	CommitteeCache *lru.Cache
 	lock           sync.RWMutex
 	size           int
+
+	// Synchronization for in-flight fill tracking, using mutex and condition variable.
+	// Note: Not a sync.WaitGroup: one used inside a testing/synctest
+	// bubble crashes a later Wait from outside it.
+	fillsMu   sync.Mutex
+	fills     int
+	fillsDone sync.Cond
+}
+
+// GoFill runs f in a new goroutine and tracks it so Clear can wait for
+// in-flight cache fills.
+func (c *CommitteeCache) GoFill(f func()) {
+	c.fillsMu.Lock()
+	c.fills++
+	c.fillsMu.Unlock()
+	go func() {
+		defer func() {
+			c.fillsMu.Lock()
+			c.fills--
+			c.fillsDone.Broadcast()
+			c.fillsMu.Unlock()
+		}()
+		f()
+	}()
+}
+
+// waitFills blocks until no cache fill goroutines are in flight.
+func (c *CommitteeCache) waitFills() {
+	c.fillsMu.Lock()
+	for c.fills > 0 {
+		c.fillsDone.Wait()
+	}
+	c.fillsMu.Unlock()
 }
 
 // committeeKeyFn takes the seed as the key to retrieve shuffled indices of a committee in a given epoch.
@@ -63,13 +95,14 @@ func committeeKeyFn(obj any) (string, error) {
 // NewCommitteesCache creates a new committee cache for storing/accessing shuffled indices of a committee.
 func NewCommitteesCache() *CommitteeCache {
 	cc := &CommitteeCache{}
+	cc.fillsDone.L = &cc.fillsMu
 	cc.Clear()
 	return cc
 }
 
 // Clear resets the CommitteeCache to its initial state
 func (c *CommitteeCache) Clear() {
-	c.Wg.Wait()
+	c.waitFills()
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.CommitteeCache = lruwrpr.New(maxCommitteesCacheSize)

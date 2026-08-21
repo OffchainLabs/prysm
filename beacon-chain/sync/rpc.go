@@ -212,7 +212,10 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 		// https://github.com/quic-go/quic-go/issues/3291
 		defer func() {
 			if strings.Contains(stream.Conn().RemoteMultiaddr().String(), "quic-v1") {
-				time.Sleep(2 * time.Second)
+				select {
+				case <-time.After(2 * time.Second):
+				case <-s.ctx.Done():
+				}
 			}
 
 			_err := stream.Reset()

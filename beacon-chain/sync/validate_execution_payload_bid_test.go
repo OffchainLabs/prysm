@@ -34,25 +34,29 @@ import (
 )
 
 func TestValidateExecutionPayloadBidGossip_InvalidTopic(t *testing.T) {
-	ctx := context.Background()
-	p := p2ptest.NewTestP2P(t)
-	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}}}
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		p := p2ptest.NewTestP2P(t)
+		s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}}}
 
-	result, err := s.validateExecutionPayloadBidGossip(ctx, "", &pubsub.Message{Message: &pb.Message{}})
-	require.ErrorIs(t, p2p.ErrInvalidTopic, err)
-	require.Equal(t, pubsub.ValidationReject, result)
+		result, err := s.validateExecutionPayloadBidGossip(ctx, "", &pubsub.Message{Message: &pb.Message{}})
+		require.ErrorIs(t, p2p.ErrInvalidTopic, err)
+		require.Equal(t, pubsub.ValidationReject, result)
+	})
 }
 
 func TestValidateExecutionPayloadBidGossip_AlreadySeenTuple(t *testing.T) {
-	ctx := context.Background()
-	s, msg, signedBid := setupExecutionPayloadBidService(t)
-	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		s, msg, signedBid := setupExecutionPayloadBidService(t)
+		s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
 
-	key := executionPayloadBidTupleKey(mustBid(t, signedBid))
-	s.setSeenExecutionPayloadBid(signedBid.Message.Slot, key)
-	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
-	require.NoError(t, err)
-	require.Equal(t, pubsub.ValidationIgnore, result)
+		key := executionPayloadBidTupleKey(mustBid(t, signedBid))
+		s.setSeenExecutionPayloadBid(signedBid.Message.Slot, key)
+		result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+	})
 }
 
 func TestValidateExecutionPayloadBidGossip_SameBuilderDifferentParentAccepted(t *testing.T) {
@@ -74,48 +78,54 @@ func TestValidateExecutionPayloadBidGossip_SameBuilderDifferentParentAccepted(t 
 
 // Dedup must short-circuit before every later check; duplicates pay only the cache lookup.
 func TestValidateExecutionPayloadBidGossip_DedupShortCircuitsAllLaterChecks(t *testing.T) {
-	ctx := context.Background()
-	s, msg, signedBid := setupExecutionPayloadBidService(t)
-	key := executionPayloadBidTupleKey(mustBid(t, signedBid))
-	s.setSeenExecutionPayloadBid(signedBid.Message.Slot, key)
-	// Every subsequent verifier method would Reject/Ignore if it ran; the cache hit must skip them all.
-	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{
-		errCurrentOrNextSlot:    errors.New("slot"),
-		errBuilderActive:        errors.New("builder"),
-		errExecutionPayment:     errors.New("payment"),
-		errFeeRecipientMismatch: errors.New("fee"),
-		errSignature:            errors.New("sig"),
-	})
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		s, msg, signedBid := setupExecutionPayloadBidService(t)
+		key := executionPayloadBidTupleKey(mustBid(t, signedBid))
+		s.setSeenExecutionPayloadBid(signedBid.Message.Slot, key)
+		// Every subsequent verifier method would Reject/Ignore if it ran; the cache hit must skip them all.
+		s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{
+			errCurrentOrNextSlot:    errors.New("slot"),
+			errBuilderActive:        errors.New("builder"),
+			errExecutionPayment:     errors.New("payment"),
+			errFeeRecipientMismatch: errors.New("fee"),
+			errSignature:            errors.New("sig"),
+		})
 
-	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
-	require.NoError(t, err)
-	require.Equal(t, pubsub.ValidationIgnore, result)
+		result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+	})
 }
 
 func TestValidateExecutionPayloadBidGossip_ProposerPreferencesUnseen(t *testing.T) {
-	ctx := context.Background()
-	s, msg, _ := setupExecutionPayloadBidService(t)
-	s.proposerPreferencesCache.Clear()
-	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		s, msg, _ := setupExecutionPayloadBidService(t)
+		s.proposerPreferencesCache.Clear()
+		s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
 
-	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
-	require.NoError(t, err)
-	require.Equal(t, pubsub.ValidationIgnore, result)
+		result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+	})
 }
 
 func TestValidateExecutionPayloadBidGossip_InitialSync(t *testing.T) {
-	ctx := context.Background()
-	p := p2ptest.NewTestP2P(t)
-	s := &Service{
-		cfg: &config{
-			p2p:         p,
-			initialSync: &mockSync.Sync{IsSyncing: true},
-		},
-	}
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		p := p2ptest.NewTestP2P(t)
+		s := &Service{
+			cfg: &config{
+				p2p:         p,
+				initialSync: &mockSync.Sync{IsSyncing: true},
+			},
+		}
 
-	result, err := s.validateExecutionPayloadBidGossip(ctx, "", &pubsub.Message{})
-	require.NoError(t, err)
-	require.Equal(t, pubsub.ValidationIgnore, result)
+		result, err := s.validateExecutionPayloadBidGossip(ctx, "", &pubsub.Message{})
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+	})
 }
 
 func TestValidateExecutionPayloadBidGossip_ErrorPathsWithMock(t *testing.T) {
@@ -208,86 +218,96 @@ func TestValidateExecutionPayloadBidGossip_ErrorPathsWithMock(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			s, msg, _ := setupExecutionPayloadBidService(t)
-			s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(tc.verifier)
+			p2ptest.SynctestTest(t, func(t *testing.T) {
+				s, msg, _ := setupExecutionPayloadBidService(t)
+				s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(tc.verifier)
 
-			result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
-			if tc.wantError {
-				require.NotNil(t, err)
-			}
-			require.Equal(t, tc.result, result)
+				result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+				if tc.wantError {
+					require.NotNil(t, err)
+				}
+				require.Equal(t, tc.result, result)
+			})
 		})
 	}
 }
 
 func TestValidateExecutionPayloadBidGossip_LowerOrEqualBidIgnored(t *testing.T) {
-	ctx := context.Background()
-	s, msg, signedBid := setupExecutionPayloadBidService(t)
-	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		s, msg, signedBid := setupExecutionPayloadBidService(t)
+		s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
 
-	s.setHighestExecutionPayloadBid(signedBid)
+		s.setHighestExecutionPayloadBid(signedBid)
 
-	var err error
-	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
-	require.NoError(t, err)
-	require.Equal(t, pubsub.ValidationIgnore, result)
-	require.Equal(t, true, s.hasSeenExecutionPayloadBid(executionPayloadBidTupleKey(mustBid(t, signedBid))))
+		var err error
+		result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+		require.Equal(t, true, s.hasSeenExecutionPayloadBid(executionPayloadBidTupleKey(mustBid(t, signedBid))))
+	})
 }
 
 func TestValidateExecutionPayloadBidGossip_LowerBidIgnoredStillMarksTupleSeen(t *testing.T) {
-	ctx := context.Background()
-	s, msg, signedBid := setupExecutionPayloadBidService(t)
-	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		s, msg, signedBid := setupExecutionPayloadBidService(t)
+		s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
 
-	higherBid := proto.Clone(signedBid).(*ethpb.SignedExecutionPayloadBid)
-	higherBid.Message.Value = signedBid.Message.Value + 1
-	s.setHighestExecutionPayloadBid(higherBid)
+		higherBid := proto.Clone(signedBid).(*ethpb.SignedExecutionPayloadBid)
+		higherBid.Message.Value = signedBid.Message.Value + 1
+		s.setHighestExecutionPayloadBid(higherBid)
 
-	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
-	require.NoError(t, err)
-	require.Equal(t, pubsub.ValidationIgnore, result)
+		result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
 
-	// If the lower valid bid did not mark the tuple as seen, the same bid would
-	// be accepted once the highest-bid cache is cleared.
-	s.highestExecutionPayloadBidCache = cache.NewHighestExecutionPayloadBidCache()
-	msg = executionPayloadBidToPubsub(t, s, s.cfg.p2p, signedBid)
+		// If the lower valid bid did not mark the tuple as seen, the same bid would
+		// be accepted once the highest-bid cache is cleared.
+		s.highestExecutionPayloadBidCache = cache.NewHighestExecutionPayloadBidCache()
+		msg = executionPayloadBidToPubsub(t, s, s.cfg.p2p, signedBid)
 
-	result, err = s.validateExecutionPayloadBidGossip(ctx, "", msg)
-	require.NoError(t, err)
-	require.Equal(t, pubsub.ValidationIgnore, result)
+		result, err = s.validateExecutionPayloadBidGossip(ctx, "", msg)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+	})
 }
 
 func TestValidateExecutionPayloadBidGossip_HigherBidAccepted(t *testing.T) {
-	ctx := context.Background()
-	s, msg, signedBid := setupExecutionPayloadBidService(t)
-	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		s, msg, signedBid := setupExecutionPayloadBidService(t)
+		s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
 
-	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signedBid)
-	require.NoError(t, err)
-	bid, err := wrapped.Bid()
-	require.NoError(t, err)
-	lowerBid := proto.Clone(signedBid).(*ethpb.SignedExecutionPayloadBid)
-	lowerBid.Message.Value = bid.Value() - 1
-	s.setHighestExecutionPayloadBid(lowerBid)
+		wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signedBid)
+		require.NoError(t, err)
+		bid, err := wrapped.Bid()
+		require.NoError(t, err)
+		lowerBid := proto.Clone(signedBid).(*ethpb.SignedExecutionPayloadBid)
+		lowerBid.Message.Value = bid.Value() - 1
+		s.setHighestExecutionPayloadBid(lowerBid)
 
-	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
-	require.NoError(t, err)
-	require.Equal(t, pubsub.ValidationAccept, result)
+		result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationAccept, result)
+	})
 }
 
 func TestValidateExecutionPayloadBidGossip_HappyPath(t *testing.T) {
-	ctx := context.Background()
-	s, msg, signedBid := setupExecutionPayloadBidService(t)
-	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		s, msg, signedBid := setupExecutionPayloadBidService(t)
+		s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
 
-	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
-	require.NoError(t, err)
-	require.Equal(t, pubsub.ValidationAccept, result)
+		result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationAccept, result)
 
-	require.Equal(t, true, s.hasSeenExecutionPayloadBid(executionPayloadBidTupleKey(mustBid(t, signedBid))))
-	got, ok := msg.ValidatorData.(*ethpb.SignedExecutionPayloadBid)
-	require.Equal(t, true, ok)
-	require.DeepEqual(t, signedBid, got)
+		require.Equal(t, true, s.hasSeenExecutionPayloadBid(executionPayloadBidTupleKey(mustBid(t, signedBid))))
+		got, ok := msg.ValidatorData.(*ethpb.SignedExecutionPayloadBid)
+		require.Equal(t, true, ok)
+		require.DeepEqual(t, signedBid, got)
+	})
 }
 
 // A blacklisted builder must be ignored before any verification runs, and must not be cached.
@@ -330,47 +350,53 @@ func TestValidateExecutionPayloadBidGossip_OtherBuilderNotBlacklisted(t *testing
 }
 
 func TestValidateExecutionPayloadBidGossip_NextSlotStateMissIgnored(t *testing.T) {
-	ctx := context.Background()
-	s, msg, _ := setupExecutionPayloadBidService(t)
-	// errPrevRandao would reject if reached, but a next-slot-cache miss for the bid's parent must ignore first.
-	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{
-		errPrevRandao: errors.New("wrong prev randao"),
-	})
-	// Evict the bid's parent (0x02) from the next-slot cache.
-	other, err := util.NewBeaconStateGloas()
-	require.NoError(t, err)
-	require.NoError(t, transition.UpdateNextSlotCache(ctx, bytesutil.PadTo([]byte{0x07}, 32), other))
-	require.NoError(t, transition.UpdateNextSlotCache(ctx, bytesutil.PadTo([]byte{0x08}, 32), other))
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		s, msg, _ := setupExecutionPayloadBidService(t)
+		// errPrevRandao would reject if reached, but a next-slot-cache miss for the bid's parent must ignore first.
+		s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{
+			errPrevRandao: errors.New("wrong prev randao"),
+		})
+		// Evict the bid's parent (0x02) from the next-slot cache.
+		other, err := util.NewBeaconStateGloas()
+		require.NoError(t, err)
+		require.NoError(t, transition.UpdateNextSlotCache(ctx, bytesutil.PadTo([]byte{0x07}, 32), other))
+		require.NoError(t, transition.UpdateNextSlotCache(ctx, bytesutil.PadTo([]byte{0x08}, 32), other))
 
-	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
-	require.NoError(t, err)
-	require.Equal(t, pubsub.ValidationIgnore, result)
+		result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+	})
 }
 
 func TestValidateExecutionPayloadBidGossip_FeeRecipientMismatch(t *testing.T) {
-	ctx := context.Background()
-	s, msg, _ := setupExecutionPayloadBidService(t)
-	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(
-		mockExecutionPayloadBidVerifier{errFeeRecipientMismatch: verification.ErrBidFeeRecipientMismatch},
-	)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		s, msg, _ := setupExecutionPayloadBidService(t)
+		s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(
+			mockExecutionPayloadBidVerifier{errFeeRecipientMismatch: verification.ErrBidFeeRecipientMismatch},
+		)
 
-	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
-	require.NotNil(t, err)
-	require.Equal(t, pubsub.ValidationIgnore, result)
-	require.ErrorIs(t, err, verification.ErrBidFeeRecipientMismatch)
+		result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+		require.NotNil(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+		require.ErrorIs(t, err, verification.ErrBidFeeRecipientMismatch)
+	})
 }
 
 func TestValidateExecutionPayloadBidGossip_GasLimitIncompatible(t *testing.T) {
-	ctx := context.Background()
-	s, msg, _ := setupExecutionPayloadBidService(t)
-	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(
-		mockExecutionPayloadBidVerifier{errGasLimitIncompatible: verification.ErrBidGasLimitIncompatible},
-	)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		s, msg, _ := setupExecutionPayloadBidService(t)
+		s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(
+			mockExecutionPayloadBidVerifier{errGasLimitIncompatible: verification.ErrBidGasLimitIncompatible},
+		)
 
-	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
-	require.NotNil(t, err)
-	require.Equal(t, pubsub.ValidationIgnore, result)
-	require.ErrorIs(t, err, verification.ErrBidGasLimitIncompatible)
+		result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+		require.NotNil(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+		require.ErrorIs(t, err, verification.ErrBidGasLimitIncompatible)
+	})
 }
 
 func TestExecutionPayloadBidSubscriber_WrongMessage(t *testing.T) {
@@ -447,11 +473,13 @@ func TestProposerDependentRoot_UnderflowClampsToZero(t *testing.T) {
 }
 
 func TestExecutionPayloadBidSubscriber_NilMessage(t *testing.T) {
-	s := &Service{
-		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
-	}
-	err := s.executionPayloadBidSubscriber(context.Background(), &ethpb.SignedExecutionPayloadBid{})
-	require.ErrorIs(t, errNilMessage, err)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		s := &Service{
+			highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
+		}
+		err := s.executionPayloadBidSubscriber(context.Background(), &ethpb.SignedExecutionPayloadBid{})
+		require.ErrorIs(t, errNilMessage, err)
+	})
 }
 
 type mockExecutionPayloadBidVerifier struct {

@@ -89,6 +89,7 @@ func (s *Service) pruneExpiredAtts() {
 	}
 
 	s.cfg.Pool.DeleteSeenAggregatedAttestationsBefore(expirySlot)
+	s.cfg.Pool.DeleteExpiredSeenBits()
 }
 
 // Return true if the input slot has been expired.

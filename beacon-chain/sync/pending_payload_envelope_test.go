@@ -71,144 +71,150 @@ func TestProcessPendingPayloadEnvelope_AlreadySeen(t *testing.T) {
 }
 
 func TestProcessPendingPayloadEnvelope_HappyPath(t *testing.T) {
-	ctx := context.Background()
-	db := dbtest.SetupDB(t)
-	chainService := &mock.ChainService{
-		Genesis:             time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
-		FinalizedCheckPoint: &ethpb.Checkpoint{},
-		DB:                  db,
-	}
-	stateGen := stategen.New(db, doublylinkedtree.New())
-	broadcaster := p2ptesting.NewTestP2P(t)
-	s := &Service{
-		pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
-		seenPayloadEnvelopeCache: lruwrpr.New(10),
-		badBlockCache:            lruwrpr.New(10),
-		cfg: &config{
-			chain:    chainService,
-			beaconDB: db,
-			stateGen: stateGen,
-			clock:    startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
-			p2p:      broadcaster,
-		},
-	}
+	p2ptesting.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		db := dbtest.SetupDB(t)
+		chainService := &mock.ChainService{
+			Genesis:             time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
+			FinalizedCheckPoint: &ethpb.Checkpoint{},
+			DB:                  db,
+		}
+		stateGen := stategen.New(db, doublylinkedtree.New())
+		broadcaster := p2ptesting.NewTestP2P(t)
+		s := &Service{
+			pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
+			seenPayloadEnvelopeCache: lruwrpr.New(10),
+			badBlockCache:            lruwrpr.New(10),
+			cfg: &config{
+				chain:    chainService,
+				beaconDB: db,
+				stateGen: stateGen,
+				clock:    startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+				p2p:      broadcaster,
+			},
+		}
 
-	bid := util.GenerateTestSignedExecutionPayloadBid(1)
-	sb := util.NewBeaconBlockGloas()
-	sb.Block.Slot = 1
-	sb.Block.Body.SignedExecutionPayloadBid = bid
-	signedBlock, err := blocks.NewSignedBeaconBlock(sb)
-	require.NoError(t, err)
-	root, err := signedBlock.Block().HashTreeRoot()
-	require.NoError(t, err)
-	require.NoError(t, db.SaveBlock(ctx, signedBlock))
+		bid := util.GenerateTestSignedExecutionPayloadBid(1)
+		sb := util.NewBeaconBlockGloas()
+		sb.Block.Slot = 1
+		sb.Block.Body.SignedExecutionPayloadBid = bid
+		signedBlock, err := blocks.NewSignedBeaconBlock(sb)
+		require.NoError(t, err)
+		root, err := signedBlock.Block().HashTreeRoot()
+		require.NoError(t, err)
+		require.NoError(t, db.SaveBlock(ctx, signedBlock))
 
-	st, err := util.NewBeaconStateFulu()
-	require.NoError(t, err)
-	require.NoError(t, db.SaveState(ctx, st, root))
+		st, err := util.NewBeaconStateFulu()
+		require.NoError(t, err)
+		require.NoError(t, db.SaveState(ctx, st, root))
 
-	builderIdx := primitives.BuilderIndex(bid.Message.BuilderIndex)
-	blockHash := bytesutil.ToBytes32(bid.Message.BlockHash)
-	env := testSignedExecutionPayloadEnvelope(t, 1, builderIdx, root, blockHash)
-	s.pendingPayloadEnvelopes[root] = map[uint64]*ethpb.SignedExecutionPayloadEnvelope{uint64(builderIdx): env}
+		builderIdx := primitives.BuilderIndex(bid.Message.BuilderIndex)
+		blockHash := bytesutil.ToBytes32(bid.Message.BlockHash)
+		env := testSignedExecutionPayloadEnvelope(t, 1, builderIdx, root, blockHash)
+		s.pendingPayloadEnvelopes[root] = map[uint64]*ethpb.SignedExecutionPayloadEnvelope{uint64(builderIdx): env}
 
-	require.Equal(t, false, s.hasSeenPayloadEnvelope(root, builderIdx))
-	s.processPendingPayloadEnvelope(ctx, root)
-	require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
-	require.Equal(t, true, s.hasSeenPayloadEnvelope(root, builderIdx))
-	require.Equal(t, true, broadcaster.BroadcastCalled.Load())
+		require.Equal(t, false, s.hasSeenPayloadEnvelope(root, builderIdx))
+		s.processPendingPayloadEnvelope(ctx, root)
+		require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
+		require.Equal(t, true, s.hasSeenPayloadEnvelope(root, builderIdx))
+		require.Equal(t, true, broadcaster.BroadcastCalled.Load())
+	})
 }
 
 func TestProcessPendingPayloadEnvelope_DoesNotBroadcastOnReceiveError(t *testing.T) {
-	ctx := context.Background()
-	db := dbtest.SetupDB(t)
-	chainService := &mock.ChainService{
-		Genesis:                   time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
-		FinalizedCheckPoint:       &ethpb.Checkpoint{},
-		DB:                        db,
-		ReceivePayloadEnvelopeErr: errors.New("receive failed"),
-	}
-	stateGen := stategen.New(db, doublylinkedtree.New())
-	broadcaster := p2ptesting.NewTestP2P(t)
-	s := &Service{
-		pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
-		seenPayloadEnvelopeCache: lruwrpr.New(10),
-		badBlockCache:            lruwrpr.New(10),
-		cfg: &config{
-			chain:    chainService,
-			beaconDB: db,
-			stateGen: stateGen,
-			clock:    startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
-			p2p:      broadcaster,
-		},
-	}
+	p2ptesting.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		db := dbtest.SetupDB(t)
+		chainService := &mock.ChainService{
+			Genesis:                   time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
+			FinalizedCheckPoint:       &ethpb.Checkpoint{},
+			DB:                        db,
+			ReceivePayloadEnvelopeErr: errors.New("receive failed"),
+		}
+		stateGen := stategen.New(db, doublylinkedtree.New())
+		broadcaster := p2ptesting.NewTestP2P(t)
+		s := &Service{
+			pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
+			seenPayloadEnvelopeCache: lruwrpr.New(10),
+			badBlockCache:            lruwrpr.New(10),
+			cfg: &config{
+				chain:    chainService,
+				beaconDB: db,
+				stateGen: stateGen,
+				clock:    startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+				p2p:      broadcaster,
+			},
+		}
 
-	bid := util.GenerateTestSignedExecutionPayloadBid(1)
-	sb := util.NewBeaconBlockGloas()
-	sb.Block.Slot = 1
-	sb.Block.Body.SignedExecutionPayloadBid = bid
-	signedBlock, err := blocks.NewSignedBeaconBlock(sb)
-	require.NoError(t, err)
-	root, err := signedBlock.Block().HashTreeRoot()
-	require.NoError(t, err)
+		bid := util.GenerateTestSignedExecutionPayloadBid(1)
+		sb := util.NewBeaconBlockGloas()
+		sb.Block.Slot = 1
+		sb.Block.Body.SignedExecutionPayloadBid = bid
+		signedBlock, err := blocks.NewSignedBeaconBlock(sb)
+		require.NoError(t, err)
+		root, err := signedBlock.Block().HashTreeRoot()
+		require.NoError(t, err)
 
-	builderIdx := primitives.BuilderIndex(bid.Message.BuilderIndex)
-	blockHash := bytesutil.ToBytes32(bid.Message.BlockHash)
-	env := testSignedExecutionPayloadEnvelope(t, 1, builderIdx, root, blockHash)
-	s.pendingPayloadEnvelopes[root] = map[uint64]*ethpb.SignedExecutionPayloadEnvelope{uint64(builderIdx): env}
+		builderIdx := primitives.BuilderIndex(bid.Message.BuilderIndex)
+		blockHash := bytesutil.ToBytes32(bid.Message.BlockHash)
+		env := testSignedExecutionPayloadEnvelope(t, 1, builderIdx, root, blockHash)
+		s.pendingPayloadEnvelopes[root] = map[uint64]*ethpb.SignedExecutionPayloadEnvelope{uint64(builderIdx): env}
 
-	s.processPendingPayloadEnvelope(ctx, root)
-	require.Equal(t, false, broadcaster.BroadcastCalled.Load())
-	require.Equal(t, false, s.hasSeenPayloadEnvelope(root, builderIdx))
+		s.processPendingPayloadEnvelope(ctx, root)
+		require.Equal(t, false, broadcaster.BroadcastCalled.Load())
+		require.Equal(t, false, s.hasSeenPayloadEnvelope(root, builderIdx))
+	})
 }
 
 func TestProcessPendingPayloadEnvelopes_Sweep(t *testing.T) {
-	ctx := context.Background()
-	db := dbtest.SetupDB(t)
-	chainService := &mock.ChainService{
-		Genesis:             time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
-		FinalizedCheckPoint: &ethpb.Checkpoint{},
-		DB:                  db,
-	}
-	stateGen := stategen.New(db, doublylinkedtree.New())
-	s := &Service{
-		pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
-		seenPayloadEnvelopeCache: lruwrpr.New(10),
-		badBlockCache:            lruwrpr.New(10),
-		cfg: &config{
-			chain:    chainService,
-			beaconDB: db,
-			stateGen: stateGen,
-			clock:    startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
-			p2p:      p2ptesting.NewTestP2P(t),
-		},
-	}
+	p2ptesting.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		db := dbtest.SetupDB(t)
+		chainService := &mock.ChainService{
+			Genesis:             time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
+			FinalizedCheckPoint: &ethpb.Checkpoint{},
+			DB:                  db,
+		}
+		stateGen := stategen.New(db, doublylinkedtree.New())
+		s := &Service{
+			pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
+			seenPayloadEnvelopeCache: lruwrpr.New(10),
+			badBlockCache:            lruwrpr.New(10),
+			cfg: &config{
+				chain:    chainService,
+				beaconDB: db,
+				stateGen: stateGen,
+				clock:    startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+				p2p:      p2ptesting.NewTestP2P(t),
+			},
+		}
 
-	bid := util.GenerateTestSignedExecutionPayloadBid(1)
-	sb := util.NewBeaconBlockGloas()
-	sb.Block.Slot = 1
-	sb.Block.Body.SignedExecutionPayloadBid = bid
-	signedBlock, err := blocks.NewSignedBeaconBlock(sb)
-	require.NoError(t, err)
-	root, err := signedBlock.Block().HashTreeRoot()
-	require.NoError(t, err)
-	require.NoError(t, db.SaveBlock(ctx, signedBlock))
+		bid := util.GenerateTestSignedExecutionPayloadBid(1)
+		sb := util.NewBeaconBlockGloas()
+		sb.Block.Slot = 1
+		sb.Block.Body.SignedExecutionPayloadBid = bid
+		signedBlock, err := blocks.NewSignedBeaconBlock(sb)
+		require.NoError(t, err)
+		root, err := signedBlock.Block().HashTreeRoot()
+		require.NoError(t, err)
+		require.NoError(t, db.SaveBlock(ctx, signedBlock))
 
-	st, err := util.NewBeaconStateFulu()
-	require.NoError(t, err)
-	require.NoError(t, db.SaveState(ctx, st, root))
+		st, err := util.NewBeaconStateFulu()
+		require.NoError(t, err)
+		require.NoError(t, db.SaveState(ctx, st, root))
 
-	builderIdx := primitives.BuilderIndex(bid.Message.BuilderIndex)
-	blockHash := bytesutil.ToBytes32(bid.Message.BlockHash)
-	env := testSignedExecutionPayloadEnvelope(t, 1, builderIdx, root, blockHash)
-	s.pendingPayloadEnvelopes[root] = map[uint64]*ethpb.SignedExecutionPayloadEnvelope{uint64(builderIdx): env}
-	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{})
+		builderIdx := primitives.BuilderIndex(bid.Message.BuilderIndex)
+		blockHash := bytesutil.ToBytes32(bid.Message.BlockHash)
+		env := testSignedExecutionPayloadEnvelope(t, 1, builderIdx, root, blockHash)
+		s.pendingPayloadEnvelopes[root] = map[uint64]*ethpb.SignedExecutionPayloadEnvelope{uint64(builderIdx): env}
+		s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{})
 
-	require.Equal(t, false, s.hasSeenPayloadEnvelope(root, builderIdx))
+		require.Equal(t, false, s.hasSeenPayloadEnvelope(root, builderIdx))
 
-	s.processPendingPayloadEnvelopes(ctx)
-	require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
-	require.Equal(t, true, s.hasSeenPayloadEnvelope(root, builderIdx))
+		s.processPendingPayloadEnvelopes(ctx)
+		require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
+		require.Equal(t, true, s.hasSeenPayloadEnvelope(root, builderIdx))
+	})
 }
 
 func TestProcessPendingPayloadEnvelopes_SkipsUnknownRoot(t *testing.T) {

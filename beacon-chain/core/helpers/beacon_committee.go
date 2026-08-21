@@ -606,7 +606,7 @@ func fillCommitteeCacheAsync(seed [32]byte, indices []primitives.ValidatorIndex)
 	count := SlotCommitteeCount(uint64(len(indices)))
 	committeeCount := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(count))
 
-	committeeCache.Wg.Go(func() {
+	committeeCache.GoFill(func() {
 		if committeeCache.HasEntry(seedKey) {
 			return
 		}
