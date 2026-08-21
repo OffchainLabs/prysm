@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"iter"
 	"slices"
 
 	"github.com/OffchainLabs/go-bitfield"
@@ -1236,36 +1237,65 @@ func (h *hdiff) serialize() HdiffBytes {
 
 // diffToVals computes the difference between two BeaconStates and returns a slice of validatorDiffs.
 func diffToVals(source, target state.ReadOnlyBeaconState) ([]validatorDiff, error) {
-	sVals := source.ValidatorsReadOnly()
-	tVals := target.ValidatorsReadOnly()
-	if len(tVals) < len(sVals) {
-		return nil, errors.Errorf("target validators length %d is less than source %d", len(tVals), len(sVals))
+	sourceCount := source.NumValidators()
+	targetCount := target.NumValidators()
+	if targetCount < sourceCount {
+		return nil, errors.Errorf("target validators length %d is less than source %d", targetCount, sourceCount)
 	}
+
+	nextTarget, stopTarget := iter.Pull2(target.ValidatorsReadOnlySeq())
+	defer stopTarget()
+
 	diffs := make([]validatorDiff, 0)
-	for i, s := range sVals {
-		ti := tVals[i]
+	processed := 0
+	expectedIndex := primitives.ValidatorIndex(0)
+	for sourceIndex, s := range source.ValidatorsReadOnlySeq() {
+		if sourceIndex != expectedIndex {
+			return nil, errors.Errorf("source validators iterator returned index %d, expected %d", sourceIndex, expectedIndex)
+		}
+		targetIndex, ti, ok := nextTarget()
+		if !ok {
+			return nil, errors.Errorf("target validators iterator ended at index %d, expected length %d", processed, targetCount)
+		}
+		if targetIndex != expectedIndex {
+			return nil, errors.Errorf("target validators iterator returned index %d, expected %d", targetIndex, expectedIndex)
+		}
 		if validatorsEqual(s, ti) {
+			processed++
+			expectedIndex++
 			continue
 		}
 		d := validatorDiff{
 			Slashed:                    ti.Slashed(),
-			index:                      uint32(i),
+			index:                      uint32(processed),
 			EffectiveBalance:           ti.EffectiveBalance(),
 			ActivationEligibilityEpoch: ti.ActivationEligibilityEpoch(),
 			ActivationEpoch:            ti.ActivationEpoch(),
 			ExitEpoch:                  ti.ExitEpoch(),
 			WithdrawableEpoch:          ti.WithdrawableEpoch(),
 		}
-		if !bytes.Equal(s.GetWithdrawalCredentials(), tVals[i].GetWithdrawalCredentials()) {
-			d.WithdrawalCredentials = slices.Clone(tVals[i].GetWithdrawalCredentials())
+		if !bytes.Equal(s.GetWithdrawalCredentials(), ti.GetWithdrawalCredentials()) {
+			d.WithdrawalCredentials = slices.Clone(ti.GetWithdrawalCredentials())
 		}
 		diffs = append(diffs, d)
+		processed++
+		expectedIndex++
 	}
-	for i, ti := range tVals[len(sVals):] {
+	if processed != sourceCount {
+		return nil, errors.Errorf("source validators iterator ended at index %d, expected length %d", processed, sourceCount)
+	}
+	for i := sourceCount; i < targetCount; i++ {
+		targetIndex, ti, ok := nextTarget()
+		if !ok {
+			return nil, errors.Errorf("target validators iterator ended at index %d, expected length %d", i, targetCount)
+		}
+		if targetIndex != expectedIndex {
+			return nil, errors.Errorf("target validators iterator returned index %d, expected %d", targetIndex, expectedIndex)
+		}
 		pubkey := ti.PublicKey()
 		diffs = append(diffs, validatorDiff{
 			Slashed:                    ti.Slashed(),
-			index:                      uint32(i + len(sVals)),
+			index:                      uint32(i),
 			PublicKey:                  pubkey[:],
 			WithdrawalCredentials:      slices.Clone(ti.GetWithdrawalCredentials()),
 			EffectiveBalance:           ti.EffectiveBalance(),
@@ -1274,6 +1304,7 @@ func diffToVals(source, target state.ReadOnlyBeaconState) ([]validatorDiff, erro
 			ExitEpoch:                  ti.ExitEpoch(),
 			WithdrawableEpoch:          ti.WithdrawableEpoch(),
 		})
+		expectedIndex++
 	}
 	return diffs, nil
 }
