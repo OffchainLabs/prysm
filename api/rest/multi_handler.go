@@ -11,12 +11,21 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 )
 
+const sszUnsupportedTTL = 24 * time.Hour
+
 type (
 	multiHandler struct {
-		handlers []*handler
+		handlers       []*handler
+		sszUnsupported sync.Map // sszSupportKey -> time.Time
+	}
+
+	sszSupportKey struct {
+		host     string
+		endpoint string
 	}
 
 	sszResult struct {
@@ -249,6 +258,69 @@ func (m *multiHandler) PostSSZ(ctx context.Context, endpoint string, headers map
 		}
 	}
 
+	if accepted > 0 {
+		return nil
+	}
+
+	return errors.Join(errs...)
+}
+
+// PostSSZWithFallback broadcasts each request using the best known encoding for
+// that node and endpoint. A 415 response only downgrades and retries that node.
+func (m *multiHandler) PostSSZWithFallback(
+	ctx context.Context,
+	endpoint string,
+	headers map[string]string,
+	sszFn func() ([]byte, error),
+	jsonFn func() ([]byte, error),
+) error {
+	// Wrap marshalers to ensure they are only called once.
+	sszBody := sync.OnceValues(sszFn)
+	jsonBody := sync.OnceValues(jsonFn)
+
+	post := func(ctx context.Context, h *handler) error {
+		key := sszSupportKey{host: h.Host(), endpoint: endpoint}
+		unsupportedAt, unsupported := m.sszUnsupported.Load(key)
+		if !unsupported || time.Since(unsupportedAt.(time.Time)) >= sszUnsupportedTTL {
+			body, err := sszBody()
+			if err != nil {
+				return fmt.Errorf("marshal SSZ body: %w", err)
+			}
+
+			err = h.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(body))
+			if !errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}) {
+				if err != nil {
+					return fmt.Errorf("post SSZ: %w", err)
+				}
+				return nil
+			}
+
+			if unsupported {
+				m.sszUnsupported.Store(key, time.Now())
+			} else if _, loaded := m.sszUnsupported.LoadOrStore(key, time.Now()); !loaded {
+				log.WithError(err).
+					WithField("host", api.RedactEndpoint(key.host)).
+					WithField("endpoint", endpoint).
+					Warn("Beacon node does not accept SSZ request bodies, falling back to JSON")
+			}
+		}
+
+		body, err := jsonBody()
+		if err != nil {
+			return fmt.Errorf("marshal JSON body: %w", err)
+		}
+
+		if err := h.Post(ctx, endpoint, headers, bytes.NewBuffer(body), nil); err != nil {
+			return fmt.Errorf("post JSON: %w", err)
+		}
+		return nil
+	}
+
+	if len(m.handlers) == 1 {
+		return post(ctx, m.handlers[0])
+	}
+
+	accepted, errs := broadcastWriteAll(ctx, m.handlers, post)
 	if accepted > 0 {
 		return nil
 	}

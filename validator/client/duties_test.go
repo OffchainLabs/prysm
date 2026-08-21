@@ -31,10 +31,14 @@ func TestUpdateDuties_ReturnsError(t *testing.T) {
 	defer ctrl.Finish()
 	client := validatormock.NewMockValidatorClient(ctrl)
 
+	kp := randKeypair(t)
 	v := validator{
 		validatorClient: client,
-		km:              newMockKeymanager(t, randKeypair(t)),
+		km:              newMockKeymanager(t, kp),
 		duties:          testDutyStore(&ethpb.ValidatorDuty{CommitteeIndex: 1}),
+		pubkeyToStatus: map[pubkey]*validatorStatus{
+			kp.pub: {publicKey: kp.pub[:], status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}},
+		},
 	}
 
 	expected := errors.New("bad")
@@ -65,10 +69,14 @@ func TestUpdateDuties_OK(t *testing.T) {
 			},
 		},
 	}
+	kp := randKeypair(t)
 	v := validator{
-		km:              newMockKeymanager(t, randKeypair(t)),
+		km:              newMockKeymanager(t, kp),
 		validatorClient: client,
 		duties:          &dutyStore{},
+		pubkeyToStatus: map[pubkey]*validatorStatus{
+			kp.pub: {publicKey: kp.pub[:], status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}},
+		},
 	}
 	v.aggSelector = testLocalSelector(t, &v)
 	client.EXPECT().Duties(
@@ -123,27 +131,11 @@ func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
 	}
 	v.aggSelector = testLocalSelector(t, &v)
 
-	resp := &ethpb.ValidatorDutiesContainer{
-		CurrentEpochDuties: []*ethpb.ValidatorDuty{},
-	}
-	client.EXPECT().Duties(
-		gomock.Any(),
-		gomock.Any(),
-	).Return(resp, nil)
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	client.EXPECT().SubscribeCommitteeSubnets(
-		gomock.Any(),
-		gomock.Any(),
-	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest) (*emptypb.Empty, error) {
-		wg.Done()
-		return nil, nil
-	})
-
+	// Every key is blacklisted, so no duty request is made at all (the mock
+	// would fail the test on an unexpected call) and the store is known-empty.
 	require.NoError(t, v.UpdateDuties(t.Context()), "Could not update assignments")
-
-	util.WaitTimeout(&wg, 2*time.Second)
+	require.Equal(t, true, v.duties.isInitialized())
+	assert.Equal(t, 0, v.duties.snapshot().currentDutyCount())
 
 	for range blacklistedPublicKeys {
 		assert.LogsContain(t, hook, "Not including slashable public key")
@@ -177,10 +169,14 @@ func TestUpdateDuties_AllValidatorsExited(t *testing.T) {
 			},
 		},
 	}
+	kp := randKeypair(t)
 	v := validator{
-		km:              newMockKeymanager(t, randKeypair(t)),
+		km:              newMockKeymanager(t, kp),
 		validatorClient: client,
 		duties:          &dutyStore{},
+		pubkeyToStatus: map[pubkey]*validatorStatus{
+			kp.pub: {publicKey: kp.pub[:], status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}},
+		},
 	}
 	client.EXPECT().Duties(
 		gomock.Any(),
@@ -314,9 +310,11 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 		data.setFromContainer(dutiesContainer)
 		ds.write(data)
 	}
+	kp := randKeypair(t)
 	v := &validator{
-		km:              newMockKeymanager(t, randKeypair(t)),
+		km:              newMockKeymanager(t, kp),
 		validatorClient: client,
+		pubkeyToStatus:  activeStatusFor(kp),
 		duties:          ds,
 	}
 	v.aggSelector = testLocalSelector(t, v)
@@ -413,9 +411,11 @@ func TestProcessEvent_HeadV2(t *testing.T) {
 		data.setFromContainer(dutiesContainer)
 		ds.write(data)
 	}
+	kp := randKeypair(t)
 	v := &validator{
-		km:              newMockKeymanager(t, randKeypair(t)),
+		km:              newMockKeymanager(t, kp),
 		validatorClient: client,
+		pubkeyToStatus:  activeStatusFor(kp),
 		duties:          ds,
 		slotFeed:        &event.Feed{},
 	}
@@ -483,9 +483,11 @@ func TestValidator_CheckDependentRoots_UnknownCurrentRootSkips(t *testing.T) {
 	require.Equal(t, true, ds.isInitialized())
 	require.IsNil(t, ds.currDependentRoot())
 
+	kp := randKeypair(t)
 	v := &validator{
-		km:              newMockKeymanager(t, randKeypair(t)),
+		km:              newMockKeymanager(t, kp),
 		validatorClient: client,
+		pubkeyToStatus:  activeStatusFor(kp),
 		duties:          ds,
 		genesisTime:     time.Now(),
 	}
@@ -529,9 +531,11 @@ func TestValidator_CheckDependentRoots_NoEmptyWindowDuringRefetch(t *testing.T) 
 		data.setFromContainer(oldContainer)
 		ds.write(data)
 	}
+	kp := randKeypair(t)
 	v := &validator{
-		km:              newMockKeymanager(t, randKeypair(t)),
+		km:              newMockKeymanager(t, kp),
 		validatorClient: client,
+		pubkeyToStatus:  activeStatusFor(kp),
 		duties:          ds,
 	}
 	v.aggSelector = testLocalSelector(t, v)
@@ -753,7 +757,10 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		}
 
 		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, nil))
-		assert.Equal(t, false, v.duties.isInitialized())
+		// The store stays initialized (role lookups must not error) but holds an
+		// empty set: the prior duties are gone.
+		require.Equal(t, true, v.duties.isInitialized())
+		assert.Equal(t, 0, v.duties.snapshot().currentDutyCount())
 	})
 
 	t.Run("dirty missing mask forces a fetch instead of promote", func(t *testing.T) {
@@ -1445,4 +1452,35 @@ func TestFilteredKeysAndIndices(t *testing.T) {
 	keys, idx = v.filteredKeysAndIndices([][fieldparams.BLSPubkeyLength]byte{pkActive, pkPending, pkExited, pkUnknown, pkActive2}, 10)
 	require.DeepEqual(t, []primitives.ValidatorIndex{3, 50, 99}, idx)
 	require.Equal(t, 3, len(keys))
+}
+
+func TestUpdateDutiesSplit_NoEligibleKeysStoresEmptySet(t *testing.T) {
+	v := &validator{duties: &dutyStore{}, aggSelector: &distributedSelector{}}
+	require.NoError(t, v.updateDutiesSplit(t.Context(), 5, nil))
+	require.Equal(t, true, v.duties.isInitialized())
+
+	// Role lookups must return no roles rather than erroring every slot.
+	roles, err := v.RolesAt(t.Context(), primitives.Slot(5*uint64(params.BeaconConfig().SlotsPerEpoch)))
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(roles))
+}
+
+func TestUpdateDutiesCombined_NoEligibleKeysStoresEmptySet(t *testing.T) {
+	// No mock client: with zero keys the pre-Gloas path must not issue a Duties
+	// RPC (which on REST would fetch the entire validator set).
+	v := &validator{duties: &dutyStore{}, aggSelector: &distributedSelector{}}
+	require.NoError(t, v.updateDutiesCombined(t.Context(), 3, nil))
+	require.Equal(t, true, v.duties.isInitialized())
+
+	roles, err := v.RolesAt(t.Context(), primitives.Slot(3*uint64(params.BeaconConfig().SlotsPerEpoch)))
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(roles))
+}
+
+// activeStatusFor seeds a status map marking kp active, so duty filtering
+// keeps it eligible.
+func activeStatusFor(kp keypair) map[pubkey]*validatorStatus {
+	return map[pubkey]*validatorStatus{
+		kp.pub: {publicKey: kp.pub[:], status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}},
+	}
 }

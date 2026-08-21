@@ -566,6 +566,10 @@ func TestMigrateToColdHdiff_BoundaryCacheMiss_UseTargetSlotRoot(t *testing.T) {
 	require.NoError(t, service.epochBoundaryStateCache.put(r64, s64))
 	require.NoError(t, service.epochBoundaryStateCache.put(r128, s128))
 
+	// The cache-miss path resolves the boundary block through the finalized index, which the blockchain
+	// service populates before calling MigrateToCold.
+	require.NoError(t, beaconDB.SaveFinalizedCheckpoint(ctx, &ethpb.Checkpoint{Epoch: 4, Root: r128[:]}))
+
 	require.NoError(t, service.MigrateToCold(ctx, r128))
 
 	// State by the slot-96 root should remain reconstructible after migration.

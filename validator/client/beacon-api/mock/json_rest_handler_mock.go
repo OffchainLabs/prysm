@@ -139,3 +139,17 @@ func (mr *MockHandlerMockRecorder) PostSSZ(ctx, endpoint, headers, data any) *go
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PostSSZ", reflect.TypeOf((*MockHandler)(nil).PostSSZ), ctx, endpoint, headers, data)
 }
+
+// PostSSZWithFallback mocks base method.
+func (m *MockHandler) PostSSZWithFallback(ctx context.Context, endpoint string, headers map[string]string, sszFn, jsonFn func() ([]byte, error)) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PostSSZWithFallback", ctx, endpoint, headers, sszFn, jsonFn)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PostSSZWithFallback indicates an expected call of PostSSZWithFallback.
+func (mr *MockHandlerMockRecorder) PostSSZWithFallback(ctx, endpoint, headers, sszFn, jsonFn any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PostSSZWithFallback", reflect.TypeOf((*MockHandler)(nil).PostSSZWithFallback), ctx, endpoint, headers, sszFn, jsonFn)
+}

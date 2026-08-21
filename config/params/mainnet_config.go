@@ -305,6 +305,16 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	MaxBuilderEpochMissedSlots:       5,
 	// Builder `getHeader` timeout.
 	BuilderHeaderTimeout: BuilderProposalDelayTolerance,
+
+	// Gloas builder circuit breaker
+	BuilderAllowedFailures:         0,
+	BuilderCriticalFailures:        2,
+	BuilderBlacklistPeriod:         1,
+	BuilderCriticalBlacklistPeriod: 256,
+	BuilderFailureBackOffPeriod:    5,
+	BuilderCriticalFailedBuilders:  7,
+	BuilderFailureWeightThreshold:  60,
+
 	// Execution engine timeout value
 	ExecutionEngineTimeoutValue: 8, // 8 seconds default based on: https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md#core
 
@@ -378,6 +388,9 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	AttestationSubnetPrefixBits:     6,
 	SubnetsPerNode:                  2,
 	NodeIdBits:                      256,
+
+	// Values related to the fast confirmation rule.
+	ConfirmationByzantineThreshold: 25,
 
 	BlobSchedule: []BlobScheduleEntry{
 		{

@@ -12,6 +12,7 @@ import (
 func (v *validator) HandleKeyReload(ctx context.Context, currentKeys [][fieldparams.BLSPubkeyLength]byte) (bool, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.HandleKeyReload")
 	defer span.End()
+	v.trackReloadedKeysForDoppelGanger(currentKeys)
 	if err := v.updateValidatorStatusCache(ctx, currentKeys); err != nil {
 		return false, err
 	}

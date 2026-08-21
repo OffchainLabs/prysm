@@ -103,6 +103,7 @@ type ProduceBlockV3Response struct {
 // ProduceBlockV4Response is a wrapper json object for the returned block from the ProduceBlockV4 endpoint
 type ProduceBlockV4Response struct {
 	Version                  string          `json:"version"`
+	ExecutionPayloadValue    string          `json:"execution_payload_value"`
 	ConsensusBlockValue      string          `json:"consensus_block_value"`
 	ExecutionPayloadIncluded bool            `json:"execution_payload_included"`
 	Data                     json.RawMessage `json:"data"`

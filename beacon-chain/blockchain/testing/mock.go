@@ -38,6 +38,7 @@ var ErrNilState = errors.New("nil state")
 // ChainService defines the mock interface for testing
 type ChainService struct {
 	NotFinalized                bool
+	BuiltOnFullParentVal        bool
 	Full                        bool
 	ValidAttestation            bool
 	Optimistic                  bool
@@ -970,6 +971,11 @@ func (c *ChainService) PtcLookupState(_ context.Context, _ [32]byte, _ primitive
 // ReceiveExecutionPayloadEnvelope implements the same method in the chain service.
 func (c *ChainService) ReceiveExecutionPayloadEnvelope(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) error {
 	return c.ReceivePayloadEnvelopeErr
+}
+
+// BuiltOnFullParent mocks the same method in the chain service.
+func (s *ChainService) BuiltOnFullParent(_ interfaces.ReadOnlyBeaconBlock) bool {
+	return s.BuiltOnFullParentVal
 }
 
 // ParentPayloadReady mocks the same method in the chain service.

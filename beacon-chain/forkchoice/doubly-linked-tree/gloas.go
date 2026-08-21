@@ -41,31 +41,31 @@ func (f *ForkChoice) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool) 
 	return pn.node.root, pn.full
 }
 
-func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock, parent **PayloadNode, blockHash *[32]byte) error {
+func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock) (*PayloadNode, [32]byte, primitives.BuilderIndex, error) {
 	sb, err := block.Body().SignedExecutionPayloadBid()
 	if err != nil {
-		return err
+		return nil, [32]byte{}, 0, err
 	}
 	wb, err := blocks.WrappedROSignedExecutionPayloadBid(sb)
 	if err != nil {
-		return errors.Wrap(err, "failed to wrap signed bid")
+		return nil, [32]byte{}, 0, errors.Wrap(err, "failed to wrap signed bid")
 	}
 	bid, err := wb.Bid()
 	if err != nil {
-		return errors.Wrap(err, "failed to get bid from wrapped bid")
+		return nil, [32]byte{}, 0, errors.Wrap(err, "failed to get bid from wrapped bid")
 	}
-	*blockHash = bid.BlockHash()
-	parentRoot := block.ParentRoot()
-	*parent = s.emptyNodeByRoot[parentRoot]
-	if *parent == nil {
+	blockHash := bid.BlockHash()
+	builderIndex := bid.BuilderIndex()
+	parent := s.emptyNodeByRoot[block.ParentRoot()]
+	if parent == nil {
 		// This is the tree root node.
-		return nil
+		return nil, blockHash, builderIndex, nil
 	}
-	if bid.ParentBlockHash() == (*parent).node.blockHash {
+	if bid.ParentBlockHash() == parent.node.blockHash {
 		// block builds on full
-		*parent = s.fullNodeByRoot[(*parent).node.root]
+		parent = s.fullNodeByRoot[parent.node.root]
 	}
-	return nil
+	return parent, blockHash, builderIndex, nil
 }
 
 // applyWeightChangesConsensusNode recomputes the weight of the node passed as an argument and all of its descendants,
@@ -571,6 +571,19 @@ func (s *Store) resolveVoteNode(r [32]byte, slot primitives.Slot, payloadStatus 
 	return en, slot == en.node.slot
 }
 
+// CouldBuilderWithhold reports whether root drew too little committee support to blame its builder
+// for a missing payload. The node balance holds the same-slot votes and carries no proposer boost.
+func (f *ForkChoice) CouldBuilderWithhold(root [32]byte) bool {
+	en, ok := f.store.emptyNodeByRoot[root]
+	if !ok || en == nil || en.node == nil {
+		return true
+	}
+	if f.store.committeeWeight == 0 {
+		return true
+	}
+	return en.node.balance*100 <= f.store.committeeWeight*params.BeaconConfig().BuilderFailureWeightThreshold
+}
+
 // HasFullNode returns true if a full (payload) node exists for the given beacon block root.
 func (f *ForkChoice) HasFullNode(root [32]byte) bool {
 	_, ok := f.store.fullNodeByRoot[root]
@@ -626,6 +639,15 @@ func (f *ForkChoice) ParentHash(root [32]byte) [32]byte {
 		return [32]byte{}
 	}
 	return f.store.parentHash(en)
+}
+
+// BuilderIndex returns the builder index committed in the given block's bid.
+func (f *ForkChoice) BuilderIndex(root [32]byte) (primitives.BuilderIndex, error) {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return 0, errors.Wrap(ErrNilNode, "could not get builder index for root")
+	}
+	return en.node.builderIndex, nil
 }
 
 // BlockHash returns the hash committed in the given block

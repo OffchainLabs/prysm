@@ -24,11 +24,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/cmd"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	validatortypes "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -40,7 +40,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/db"
-	dbCommon "github.com/OffchainLabs/prysm/v7/validator/db/common"
 	"github.com/OffchainLabs/prysm/v7/validator/graffiti"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
@@ -93,7 +92,8 @@ type validator struct {
 	startBalances                map[[fieldparams.BLSPubkeyLength]byte]uint64
 	attestedSlotsByKeyByEpoch    map[primitives.Epoch]map[[fieldparams.BLSPubkeyLength]byte]primitives.Slot
 	web3SignerConfig             *remoteweb3signer.SetupConfig
-	proposerSettings             *proposer.Settings
+	proposerSettings             *proposer.Settings // clone-then-swap under proposerSettingsMu; reads are lock-free
+	proposerSettingsMu           sync.Mutex
 	submittedPrefSlots           map[primitives.Slot]bool
 	connTracker                  connTracker // per push kind, the conn generation last confirmed pushed
 	submittedAtts                map[submittedAttKey]*submittedAtt
@@ -104,6 +104,7 @@ type validator struct {
 	validatorsRegBatchSize       int
 	duties                       *dutyStore
 	nextFetchInFlight            atomic.Bool
+	doppelGanger                 doppelGangerTracker
 	domainDataCache              *ristretto.Cache[string, proto.Message]
 	slotFeed                     *event.Feed
 	graffitiStruct               *graffiti.Graffiti
@@ -114,7 +115,7 @@ type validator struct {
 	pubkeyToStatus               map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus
 	pubkeyToStatusLock           sync.RWMutex // guards pubkeyToStatus; all readers go through statusCache
 	signedValidatorRegistrations map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
-	signedRequestAuths           map[requestAuthKey]*ethpb.SignedRequestAuthV1
+	signedRequestAuths           map[requestAuthKey]*ethpb.SignedRequestAuth
 	aggSelector                  aggregatorSelector
 	validatorClient              iface.ValidatorClient
 	chainClient                  iface.ChainClient
@@ -215,6 +216,9 @@ func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 		return errors.New("key manager not set")
 	}
 	recheckKeys(ctx, v.db, v.km)
+	if err := v.snapshotBootKeysForDoppelGanger(ctx); err != nil {
+		return err
+	}
 	v.accountChangedSub = v.km.SubscribeAccountChanges(v.accountsChangedChannel)
 	return nil
 }
@@ -460,103 +464,6 @@ func (v *validator) SlotDeadline(slot primitives.Slot) time.Time {
 	return v.genesisTime.Add(params.SlotsDuration(slot+1, params.BeaconConfig()))
 }
 
-// CheckDoppelGanger checks if the current actively provided keys have
-// any duplicates active in the network.
-func (v *validator) CheckDoppelGanger(ctx context.Context) error {
-	ctx, span := trace.StartSpan(ctx, "validator.CheckDoppelganger")
-	defer span.End()
-
-	if !features.Get().EnableDoppelGanger {
-		return nil
-	}
-	pubkeys, err := v.km.FetchValidatingPublicKeys(ctx)
-	if err != nil {
-		return err
-	}
-	log.WithField("keyCount", len(pubkeys)).Info("Running doppelganger check")
-	// Exit early if no validating pub keys are found.
-	if len(pubkeys) == 0 {
-		return nil
-	}
-	req := &ethpb.DoppelGangerRequest{ValidatorRequests: []*ethpb.DoppelGangerRequest_ValidatorRequest{}}
-	for _, pkey := range pubkeys {
-		copiedKey := pkey
-		attRec, err := v.db.AttestationHistoryForPubKey(ctx, copiedKey)
-		if err != nil {
-			return err
-		}
-		if len(attRec) == 0 {
-			// If no history exists we simply send in a zero
-			// value for the request epoch and root.
-			req.ValidatorRequests = append(req.ValidatorRequests,
-				&ethpb.DoppelGangerRequest_ValidatorRequest{
-					PublicKey:  copiedKey[:],
-					Epoch:      0,
-					SignedRoot: make([]byte, fieldparams.RootLength),
-				})
-			continue
-		}
-		r := retrieveLatestRecord(attRec)
-		if copiedKey != r.PubKey {
-			return errors.New("attestation record mismatched public key")
-		}
-		req.ValidatorRequests = append(req.ValidatorRequests,
-			&ethpb.DoppelGangerRequest_ValidatorRequest{
-				PublicKey:  r.PubKey[:],
-				Epoch:      r.Target,
-				SignedRoot: r.SigningRoot,
-			})
-	}
-	resp, err := v.validatorClient.CheckDoppelGanger(ctx, req)
-	if err != nil {
-		return err
-	}
-	// If nothing is returned by the beacon node, we return an
-	// error as it is unsafe for us to proceed.
-	if resp == nil || resp.Responses == nil || len(resp.Responses) == 0 {
-		return errors.New("beacon node returned 0 responses for doppelganger check")
-	}
-	return buildDuplicateError(resp.Responses)
-}
-
-func buildDuplicateError(response []*ethpb.DoppelGangerResponse_ValidatorResponse) error {
-	duplicates := make([][]byte, 0)
-	for _, valRes := range response {
-		if valRes.DuplicateExists {
-			var copiedKey [fieldparams.BLSPubkeyLength]byte
-			copy(copiedKey[:], valRes.PublicKey)
-			duplicates = append(duplicates, copiedKey[:])
-		}
-	}
-	if len(duplicates) == 0 {
-		return nil
-	}
-	return errors.Errorf("Duplicate instances exists in the network for validator keys: %#x", duplicates)
-}
-
-// Ensures that the latest attestation history is retrieved.
-func retrieveLatestRecord(recs []*dbCommon.AttestationRecord) *dbCommon.AttestationRecord {
-	if len(recs) == 0 {
-		return nil
-	}
-	lastSource := recs[len(recs)-1].Source
-	chosenRec := recs[len(recs)-1]
-	for i := len(recs) - 1; i >= 0; i-- {
-		// Exit if we are now on a different source
-		// as it is assumed that all source records are
-		// byte sorted.
-		if recs[i].Source != lastSource {
-			break
-		}
-		// If we have a smaller target, we do
-		// change our chosen record.
-		if chosenRec.Target < recs[i].Target {
-			chosenRec = recs[i]
-		}
-	}
-	return chosenRec
-}
-
 // RolesAt slot returns the validator roles at the given slot. Returns nil if the
 // validator is known to not have a roles at the slot. Returns UNKNOWN if the
 // validator assignments are unknown. Otherwise, returns a valid ValidatorRole map.
@@ -578,6 +485,10 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		var roles []validatorRole
 
 		if duty == nil {
+			continue
+		}
+		// The store may predate a reload; quarantined keys get no roles at all.
+		if v.isDoppelGangerPending(pk) {
 			continue
 		}
 		if len(duty.ProposerSlots) > 0 {
@@ -809,6 +720,12 @@ func (v *validator) ProposerSettings() *proposer.Settings {
 
 // SetProposerSettings sets and saves the passed in proposer settings overriding the in memory one
 func (v *validator) SetProposerSettings(ctx context.Context, settings *proposer.Settings) error {
+	v.proposerSettingsMu.Lock()
+	defer v.proposerSettingsMu.Unlock()
+	return v.setProposerSettingsLocked(ctx, settings)
+}
+
+func (v *validator) setProposerSettingsLocked(ctx context.Context, settings *proposer.Settings) error {
 	ctx, span := trace.StartSpan(ctx, "validator.SetProposerSettings")
 	defer span.End()
 
@@ -820,6 +737,21 @@ func (v *validator) SetProposerSettings(ctx context.Context, settings *proposer.
 	}
 	v.proposerSettings = settings
 	return nil
+}
+
+// UpdateProposerSettings atomically mutates the proposer settings: mutate gets a
+// deep copy (nil when unset) and returns what to persist, or nil for a no-op.
+func (v *validator) UpdateProposerSettings(ctx context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
+	v.proposerSettingsMu.Lock()
+	defer v.proposerSettingsMu.Unlock()
+	next, err := mutate(v.proposerSettings.Clone())
+	if err != nil {
+		return err
+	}
+	if next == nil {
+		return nil
+	}
+	return v.setProposerSettingsLocked(ctx, next)
 }
 
 // PushProposerSettings calls the prepareBeaconProposer RPC to set the fee recipient and also the register validator API if using a custom builder.
@@ -878,6 +810,12 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		}); err != nil {
 			return err
 		}
+		// Gloas preferences start being prepared one epoch ahead; v1 builder
+		// settings do not apply to them, so warn while there is time to act.
+		if ps := v.ProposerSettings(); currentEpoch+1 >= params.BeaconConfig().GloasForkEpoch &&
+			ps.HasLegacyBuilderContent() && slots.IsEpochStart(slot) {
+			log.Warn("Proposer settings contain v1 builder fields, which do not apply to gloas; proposer preferences are prepared with defaults. Configure builders via v2 proposer settings.")
+		}
 	} else {
 		v.upgradeProposerSettingsToV2(ctx)
 	}
@@ -909,13 +847,13 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		v.connTracker.confirm(proposerPrefsPush, connGen)
 	}
 
-	if reqs := v.buildBuilderPreferenceRequests(ctx, km, slot); len(reqs) > 0 {
+	if entries := v.warmBuilderRequestAuths(ctx, km, slot); len(entries) > 0 {
 		delay := params.BeaconConfig().SlotDuration() / 2
 		time.AfterFunc(delay, func() {
 			// Detached from the slot context, which may expire before the delay elapses.
 			subCtx, cancel := context.WithTimeout(context.Background(), delay)
 			defer cancel()
-			v.submitBuilderPreferenceRequests(subCtx, reqs)
+			v.submitBuilderPreferenceEntries(subCtx, entries)
 		})
 	}
 
@@ -1217,15 +1155,16 @@ func (v *validator) buildProposerSettingsRequests(
 	return prepareProposerReqs
 }
 
-// upgradeProposerSettingsToV2 migrates v1 proposer settings to v2 and persists
-// them. Callers must gate this on gloas-active so the pre-gloas registration
-// path still sees BuilderConfig.
+// upgradeProposerSettingsToV2 is idempotent post-fork cleanup: it scrubs dead v1
+// builder content transactionally; callers gate on gloas-active.
 func (v *validator) upgradeProposerSettingsToV2(ctx context.Context) {
-	ps := v.ProposerSettings()
-	if !ps.UpgradeToV2() {
-		return
-	}
-	if err := v.SetProposerSettings(ctx, ps); err != nil {
+	err := v.UpdateProposerSettings(ctx, func(ps *proposer.Settings) (*proposer.Settings, error) {
+		if !ps.UpgradeToV2() {
+			return nil, nil
+		}
+		return ps, nil
+	})
+	if err != nil {
 		log.WithError(err).Warn("Failed to persist v1->v2 proposer settings upgrade")
 	}
 }
@@ -1440,28 +1379,63 @@ func (v *validator) submittedPrefSlotsCount() int {
 	return len(v.submittedPrefSlots)
 }
 
-func (v *validator) builderConfigForKey(pk pubkey) ([]string, uint64, bool) {
-	ps := v.ProposerSettings()
-	if ps == nil {
-		return nil, 0, false
-	}
-	var bc *proposer.BuilderConfig
-	if ps.DefaultConfig != nil {
-		bc = ps.DefaultConfig.BuilderConfig
-	}
-	if ps.ProposeConfig != nil {
-		if c, ok := ps.ProposeConfig[pk]; ok && c != nil && c.BuilderConfig != nil {
-			bc = c.BuilderConfig
-		}
-	}
-	if bc == nil {
-		return nil, 0, false
-	}
-	return bc.Relays, uint64(bc.MaxExecutionPayment), bc.Enabled
+// builderTarget is one resolved builder for a proposer: a URL plus the
+// preferences to submit for it, with per-entry overrides already applied.
+type builderTarget struct {
+	url         string
+	authData    []byte
+	pubkeys     [][]byte
+	maxPayment  uint64
+	minBid      *uint64
+	boostFactor *uint64
 }
 
-// Resubmitted every push to repopulate a restarted beacon node, using cached auths to avoid re-signing.
-func (v *validator) buildBuilderPreferenceRequests(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot) []*ethpb.SubmitBuilderPreferencesRequest {
+// builderTargets resolves bc's builder list, entries override config-level fallbacks.
+func builderTargets(bc *proposer.BuilderConfig) []builderTarget {
+	if bc == nil {
+		return nil
+	}
+	fbMax := uint64(bc.EffectiveMaxExecutionPayment())
+	fbMin := uint64Ptr(bc.MinBid)
+	fbBoost := uint64Ptr(bc.BuilderBoostFactor)
+
+	targets := make([]builderTarget, 0, len(bc.Builders))
+	seen := make(map[proposer.EntryIdentity]bool, len(bc.Builders))
+	for _, e := range bc.Builders {
+		if e == nil || e.URL == "" {
+			continue
+		}
+		// One request per entry: entries may share a url with different auth_data.
+		if seen[e.Identity()] {
+			continue
+		}
+		seen[e.Identity()] = true
+		t := builderTarget{url: e.URL, authData: e.EffectiveAuthData(), pubkeys: e.Pubkeys, maxPayment: fbMax, minBid: fbMin, boostFactor: fbBoost}
+		if e.MaxExecutionPayment != nil {
+			t.maxPayment = uint64(*e.MaxExecutionPayment)
+		}
+		if e.MinBid != nil {
+			t.minBid = uint64Ptr(e.MinBid)
+		}
+		if e.BuilderBoostFactor != nil {
+			t.boostFactor = uint64Ptr(e.BuilderBoostFactor)
+		}
+		targets = append(targets, t)
+	}
+	return targets
+}
+
+func uint64Ptr(v *validatortypes.Uint64) *uint64 {
+	if v == nil {
+		return nil
+	}
+	u := uint64(*v)
+	return &u
+}
+
+// warmBuilderRequestAuths pre-signs request auths for upcoming proposal slots and
+// returns the ahead-of-time preference submissions, rebuilt every push.
+func (v *validator) warmBuilderRequestAuths(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot) []*ethpb.BuilderPreferencesEntry {
 	if slots.ToEpoch(slot)+1 < params.BeaconConfig().GloasForkEpoch {
 		return nil
 	}
@@ -1470,46 +1444,46 @@ func (v *validator) buildBuilderPreferenceRequests(ctx context.Context, km keyma
 		return nil
 	}
 	v.pruneSignedRequestAuths(slot)
-
-	reqs := v.builderPreferenceRequestsForDuties(ctx, km, slot, snap.currentDuties())
-	return append(reqs, v.builderPreferenceRequestsForDuties(ctx, km, slot, snap.nextDuties())...)
+	entries := v.warmBuilderRequestAuthsForDuties(ctx, km, slot, snap.currentDuties())
+	return append(entries, v.warmBuilderRequestAuthsForDuties(ctx, km, slot, snap.nextDuties())...)
 }
 
-func (v *validator) builderPreferenceRequestsForDuties(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, duties iter.Seq2[pubkey, *ethpb.ValidatorDuty]) []*ethpb.SubmitBuilderPreferencesRequest {
-	var reqs []*ethpb.SubmitBuilderPreferencesRequest
+func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, duties iter.Seq2[pubkey, *ethpb.ValidatorDuty]) []*ethpb.BuilderPreferencesEntry {
+	ps := v.ProposerSettings()
+	if ps == nil {
+		return nil
+	}
+	var entries []*ethpb.BuilderPreferencesEntry
 	for pk, duty := range duties {
-		relays, maxPayment, enabled := v.builderConfigForKey(pk)
-		if !enabled || len(relays) == 0 {
+		targets := builderTargets(ps.EffectiveBuilderConfig(pk))
+		if len(targets) == 0 {
 			continue
 		}
 		for _, proposalSlot := range duty.ProposerSlots {
 			if proposalSlot <= slot {
 				continue
 			}
-			for _, relay := range relays {
-				signed, err := v.signRequestAuthCached(ctx, km, pk, relay, proposalSlot)
+			for _, t := range targets {
+				signed, err := v.signRequestAuthCached(ctx, km, pk, t.authData, proposalSlot)
 				if err != nil {
 					log.WithError(err).Warn("Failed to sign builder request auth")
 					continue
 				}
-				reqs = append(reqs, &ethpb.SubmitBuilderPreferencesRequest{
-					ValidatorPubkey: pk[:],
-					Request: &ethpb.BuilderPreferencesRequestV1{
-						Preferences: &ethpb.BuilderPreferencesV1{MaxExecutionPayment: primitives.Gwei(maxPayment)},
-						Auth:        signed,
-					},
+				entries = append(entries, &ethpb.BuilderPreferencesEntry{
+					ProposerPubkey:      pk[:],
+					Url:                 t.url,
+					Auth:                signed,
+					MaxExecutionPayment: primitives.Gwei(t.maxPayment),
 				})
 			}
 		}
 	}
-	return reqs
+	return entries
 }
 
-func (v *validator) submitBuilderPreferenceRequests(ctx context.Context, reqs []*ethpb.SubmitBuilderPreferencesRequest) {
-	for _, req := range reqs {
-		if _, err := v.validatorClient.SubmitBuilderPreferences(ctx, req); err != nil {
-			log.WithError(err).Warn("Failed to submit builder preferences")
-		}
+func (v *validator) submitBuilderPreferenceEntries(ctx context.Context, entries []*ethpb.BuilderPreferencesEntry) {
+	if _, err := v.validatorClient.SubmitBuilderPreferences(ctx, &ethpb.SubmitBuilderPreferencesRequest{Entries: entries}); err != nil {
+		log.WithError(err).Warn("Failed to submit builder preferences")
 	}
 }
 
@@ -1559,7 +1533,10 @@ func (v *validator) buildSignedRegReqs(
 	defer span.End()
 
 	var signedValRegRequests []*ethpb.SignedValidatorRegistrationV1
-	if v.ProposerSettings() == nil {
+	// One snapshot for the whole batch: concurrent keymanager writes swap the
+	// settings pointer, and mixing objects would tear version vs content.
+	ps := v.ProposerSettings()
+	if ps == nil {
 		return signedValRegRequests
 	}
 	// if the timestamp is pre-genesis, don't create registrations
@@ -1567,8 +1544,12 @@ func (v *validator) buildSignedRegReqs(
 		return signedValRegRequests
 	}
 
-	if v.ProposerSettings().DefaultConfig != nil && v.ProposerSettings().DefaultConfig.FeeRecipientConfig == nil && v.ProposerSettings().DefaultConfig.BuilderConfig != nil {
-		log.Warn("Builder is `enabled` in default config but will be ignored because no fee recipient was provided!")
+	if ps.DefaultConfig != nil && ps.DefaultConfig.FeeRecipientConfig == nil && ps.DefaultConfig.BuilderConfig != nil {
+		if ps.Version == proposer.SchemaV2 {
+			log.Warn("Default builder config has no default fee recipient; only keys with their own fee recipient can register")
+		} else {
+			log.Warn("Builder is `enabled` in default config but will be ignored because no fee recipient was provided!")
+		}
 	}
 
 	statuses := v.statusCache()
@@ -1579,44 +1560,14 @@ func (v *validator) buildSignedRegReqs(
 			continue
 		}
 
-		feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
-		gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
-		enabled := false
-
-		if v.ProposerSettings().DefaultConfig != nil && v.ProposerSettings().DefaultConfig.FeeRecipientConfig != nil {
-			defaultConfig := v.ProposerSettings().DefaultConfig
-			feeRecipient = defaultConfig.FeeRecipientConfig.FeeRecipient // Use cli defaultBuilderConfig for fee recipient.
-			defaultBuilderConfig := defaultConfig.BuilderConfig
-
-			if defaultBuilderConfig != nil && defaultBuilderConfig.Enabled {
-				gasLimit = uint64(defaultBuilderConfig.GasLimit) // Use cli config for gas limit.
-				enabled = true
-			}
-		}
-
-		if v.ProposerSettings().ProposeConfig != nil {
-			config, ok := v.ProposerSettings().ProposeConfig[k]
-			if ok && config != nil && config.FeeRecipientConfig != nil {
-				feeRecipient = config.FeeRecipientConfig.FeeRecipient // Use file config for fee recipient.
-				builderConfig := config.BuilderConfig
-				if builderConfig != nil {
-					if builderConfig.Enabled {
-						gasLimit = uint64(builderConfig.GasLimit) // Use file config for gas limit.
-						enabled = true
-					} else {
-						enabled = false // Custom config can disable validator from register.
-					}
-				}
-			}
-		}
-
+		feeRecipient, gasLimit, enabled := ps.RegistrationFor(k)
 		if !enabled {
 			continue
 		}
 
 		req := &ethpb.ValidatorRegistrationV1{
 			FeeRecipient: feeRecipient[:],
-			GasLimit:     gasLimit,
+			GasLimit:     uint64(gasLimit),
 			Timestamp:    uint64(time.Now().UTC().Unix()),
 			Pubkey:       activePubkeys[i][:],
 		}
