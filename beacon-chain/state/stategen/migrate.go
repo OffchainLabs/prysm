@@ -233,38 +233,11 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
 	return nil
 }
 
-// canonicalRootAtOrBelow returns the root of the highest canonical block at or below the given slot,
-// skipping slots that hold only blocks which lost fork choice. Those are never deleted from the slot index.
-// Canonicality comes from the finalized index, which is decisive below the finalized checkpoint slot.
-// floor is a slot already known to be canonical; resolving past it is an error rather than a walk to genesis.
+// canonicalRootAtOrBelow returns the root of the highest canonical block at or below the given slot.
+// floor is a slot already known to be canonical. See CanonicalBlockAtOrBelow, which the archive walk shares.
 func (s *State) canonicalRootAtOrBelow(ctx context.Context, slot, floor primitives.Slot) ([32]byte, error) {
-	// HighestRootsBelowSlot reports a strictly lower slot, so next decreases every round.
-	for next := slot + 1; ; {
-		high, roots, err := s.beaconDB.HighestRootsBelowSlot(ctx, next)
-		if err != nil {
-			return [32]byte{}, err
-		}
-		if high < floor {
-			return [32]byte{}, errUnknownBlock
-		}
-		canonical := make([][32]byte, 0, 1)
-		for _, r := range roots {
-			if s.beaconDB.IsFinalizedBlock(ctx, r) {
-				canonical = append(canonical, r)
-			}
-		}
-		switch len(canonical) {
-		case 1:
-			return canonical[0], nil
-		case 0:
-			if high == 0 {
-				return [32]byte{}, errUnknownBlock
-			}
-			next = high
-		default:
-			return [32]byte{}, errUnknownBlock
-		}
-	}
+	_, root, err := CanonicalBlockAtOrBelow(ctx, s.beaconDB, slot, floor)
+	return root, err
 }
 
 func (s *State) migrateHotToCold(aRoot [32]byte) {

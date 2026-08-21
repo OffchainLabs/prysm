@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "archive.go",
         "cacher.go",
+        "canonical_root.go",
         "epoch_boundary_state_cache.go",
         "errors.go",
         "getter.go",
