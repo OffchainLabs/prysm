@@ -14,6 +14,7 @@ type MockStater struct {
 	BeaconState       state.BeaconState
 	StateProviderFunc func(ctx context.Context, stateId []byte) (state.BeaconState, error)
 	BeaconStateRoot   []byte
+	BeaconBlockRoot   [32]byte
 	StatesBySlot      map[primitives.Slot]state.BeaconState
 	StatesByEpoch     map[primitives.Epoch]state.BeaconState
 	StatesByRoot      map[[32]byte]state.BeaconState
@@ -39,6 +40,14 @@ func (m *MockStater) State(ctx context.Context, id []byte) (state.BeaconState, e
 // StateRoot --
 func (m *MockStater) StateRoot(context.Context, []byte) ([]byte, error) {
 	return m.BeaconStateRoot, nil
+}
+
+// BlockRoot --
+func (m *MockStater) BlockRoot(context.Context, []byte) ([32]byte, error) {
+	if m.CustomError != nil {
+		return [32]byte{}, m.CustomError
+	}
+	return m.BeaconBlockRoot, nil
 }
 
 // StateBySlot --

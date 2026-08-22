@@ -49,7 +49,7 @@ func (s *Server) GetStateRoot(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not get state root: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	st, err := s.Stater.State(ctx, []byte(stateId))
+	blockRoot, err := s.Stater.BlockRoot(ctx, []byte(stateId))
 	if err != nil {
 		shared.WriteStateFetchError(w, err)
 		return
@@ -57,11 +57,6 @@ func (s *Server) GetStateRoot(w http.ResponseWriter, r *http.Request) {
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
 		helpers.HandleIsOptimisticError(w, err)
-		return
-	}
-	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
-	if err != nil {
-		httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
