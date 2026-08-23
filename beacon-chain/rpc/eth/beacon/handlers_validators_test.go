@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -254,7 +255,7 @@ func TestGetValidators(t *testing.T) {
 		assert.Equal(t, true, resp.ExecutionOptimistic)
 	})
 	t.Run("finalized", func(t *testing.T) {
-		headerRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		headerRoot, err := helpers.BlockRootFromState(t.Context(), st)
 		require.NoError(t, err)
 		chainService := &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{
@@ -807,7 +808,7 @@ func TestGetValidator(t *testing.T) {
 		assert.Equal(t, true, resp.ExecutionOptimistic)
 	})
 	t.Run("finalized", func(t *testing.T) {
-		headerRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		headerRoot, err := helpers.BlockRootFromState(t.Context(), st)
 		require.NoError(t, err)
 		chainService := &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{
@@ -1060,7 +1061,7 @@ func TestGetValidatorBalances(t *testing.T) {
 		assert.Equal(t, true, resp.ExecutionOptimistic)
 	})
 	t.Run("finalized", func(t *testing.T) {
-		headerRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		headerRoot, err := helpers.BlockRootFromState(t.Context(), st)
 		require.NoError(t, err)
 		chainService := &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{
@@ -1497,7 +1498,7 @@ func TestGetValidatorIdentities(t *testing.T) {
 			assert.Equal(t, true, resp.ExecutionOptimistic)
 		})
 		t.Run("finalized", func(t *testing.T) {
-			headerRoot, err := genesisState.LatestBlockHeader().HashTreeRoot()
+			headerRoot, err := helpers.BlockRootFromState(t.Context(), genesisState)
 			require.NoError(t, err)
 			chainService := &chainMock.ChainService{
 				FinalizedRoots: map[[32]byte]bool{
