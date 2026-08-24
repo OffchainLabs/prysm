@@ -37,10 +37,11 @@ type BlockBuilder interface {
 	Configured() bool
 }
 
-// PayloadBid carries the builder URL so the proposer can route the signed block back to the winning builder.
+// PayloadBid carries the entry that produced the bid so the proposer can apply
+// its limits and route the signed block back to the winning builder.
 type PayloadBid struct {
-	BuilderURL string
-	Bid        *ethpb.SignedExecutionPayloadBid
+	Entry *ethpb.BuilderEntry
+	Bid   *ethpb.SignedExecutionPayloadBid
 }
 
 // config defines a config struct for dependencies into the service.
@@ -212,7 +213,7 @@ func (s *Service) GetExecutionPayloadBid(ctx context.Context, slot primitives.Sl
 				return
 			}
 			mu.Lock()
-			bids = append(bids, PayloadBid{BuilderURL: url, Bid: bid})
+			bids = append(bids, PayloadBid{Entry: e, Bid: bid})
 			mu.Unlock()
 		}(e)
 	}

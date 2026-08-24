@@ -68,8 +68,8 @@ func (s *Service) validateExecutionPayloadBidParentValid(_ context.Context, blk 
 	if blk.Version() < version.Gloas {
 		return pubsub.ValidationAccept, nil
 	}
-	if s.hasBadPayload(blk.ParentRoot()) {
-		return pubsub.ValidationReject, errors.New("parent payload is invalid")
+	if s.hasBadPayload(blk.ParentRoot()) && s.cfg.chain.BuiltOnFullParent(blk) {
+		return pubsub.ValidationReject, errors.New("block builds on invalid parent payload")
 	}
 	return pubsub.ValidationAccept, nil
 }

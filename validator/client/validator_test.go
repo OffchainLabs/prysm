@@ -4132,18 +4132,17 @@ func TestWarmBuilderRequestAuthsForDuties_CollapsesSameURL(t *testing.T) {
 		yield(pk, &ethpb.ValidatorDuty{PublicKey: pk[:], ProposerSlots: []primitives.Slot{10}})
 	}
 	reqs := v.warmBuilderRequestAuthsForDuties(t.Context(), km, 5, duties)
-	// Same-url entries with distinct auth data each submit their own request.
+	// Same-url entries with distinct auth data each submit their own request and cap.
 	require.Equal(t, 2, len(reqs))
 	for _, r := range reqs {
 		require.Equal(t, "https://a.example", r.Url)
-		require.Equal(t, primitives.Gwei(100), r.MaxExecutionPayment)
 	}
 	require.DeepEqual(t, []byte{1}, reqs[0].Auth.Message.Data)
+	require.Equal(t, primitives.Gwei(200), reqs[0].MaxExecutionPayment)
 	require.DeepEqual(t, []byte{2}, reqs[1].Auth.Message.Data)
+	require.Equal(t, primitives.Gwei(100), reqs[1].MaxExecutionPayment)
 
-	t.Run("distinct urls all submit the lowest max_execution_payment", func(t *testing.T) {
-		// The beacon node holds one max_execution_payment per validator, so every
-		// url's submission carries the lowest entry until per-builder enforcement lands.
+	t.Run("distinct urls each submit their own max_execution_payment", func(t *testing.T) {
 		v.proposerSettings = &proposer.Settings{
 			Version: proposer.SchemaV2,
 			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
@@ -4157,9 +4156,12 @@ func TestWarmBuilderRequestAuthsForDuties_CollapsesSameURL(t *testing.T) {
 		}
 		reqs := v.warmBuilderRequestAuthsForDuties(t.Context(), km, 5, duties)
 		require.Equal(t, 2, len(reqs))
+		byURL := map[string]primitives.Gwei{}
 		for _, r := range reqs {
-			require.Equal(t, primitives.Gwei(0), r.MaxExecutionPayment)
+			byURL[r.Url] = r.MaxExecutionPayment
 		}
+		require.Equal(t, primitives.Gwei(0), byURL["https://a.example"])
+		require.Equal(t, primitives.Gwei(250), byURL["https://b.example"])
 	})
 }
 

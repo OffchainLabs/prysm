@@ -355,10 +355,8 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		}
 	}
 
-	if block.Version() >= version.Gloas {
-		if src, builderURL := vs.bidSourceForSlot(block.Block().Slot()); src == bidSourceBuilderAPI {
-			go vs.submitBlockToBuilder(block, builderURL)
-		}
+	if block.Version() >= version.Gloas && req.BuilderUrl != "" {
+		go vs.submitBlockToBuilder(block, req.BuilderUrl)
 	}
 
 	if err := <-errChan; err != nil {

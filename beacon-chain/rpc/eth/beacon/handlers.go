@@ -10,6 +10,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
@@ -31,10 +36,6 @@ import (
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -1725,7 +1726,7 @@ func (s *Server) GetProposerLookahead(w http.ResponseWriter, r *http.Request) {
 		sszLen := (*primitives.ValidatorIndex)(nil).SizeSSZ()
 		sszData := make([]byte, len(pl)*sszLen)
 		for i, idx := range pl {
-			copy(sszData[i*sszLen:(i+1)*sszLen], ssz.MarshalUint64([]byte{}, uint64(idx)))
+			copy(sszData[i*sszLen:(i+1)*sszLen], primitives.MarshalUint64([]byte{}, uint64(idx)))
 		}
 		httputil.WriteSsz(w, sszData)
 	} else {

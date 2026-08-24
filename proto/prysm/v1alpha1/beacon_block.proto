@@ -78,6 +78,7 @@ message GenericSignedBeaconBlock {
   }
   bool is_blinded = 100;
   reserved 101; // Deprecated fields
+  string builder_url = 102;
 }
 
 message GenericBeaconBlock {
@@ -128,6 +129,7 @@ message GenericBeaconBlock {
   }
   bool is_blinded = 100;
   string payload_value = 101;
+  string builder_url = 102;
 }
 
 // ----------------------------------------------------------------------------
