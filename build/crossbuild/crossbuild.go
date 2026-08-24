@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 )
 
@@ -212,12 +213,7 @@ func (b builder) compile(out, pkg, cgoCFlags, pgo string) error {
 }
 
 func (c Config) artifactCount() int {
-	hasBeacon := false
-	for _, b := range c.Binaries {
-		if b == beaconChain {
-			hasBeacon = true
-		}
-	}
+	hasBeacon := slices.Contains(c.Binaries, beaconChain)
 
 	m := 0
 	for _, t := range c.Targets {
