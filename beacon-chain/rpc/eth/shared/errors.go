@@ -11,20 +11,53 @@ import (
 	"github.com/pkg/errors"
 )
 
-// WriteStateFetchError writes an appropriate error based on the supplied argument.
-// The argument error should be a result of fetching state.
-func WriteStateFetchError(w http.ResponseWriter, err error) {
-	var stateNotFoundError *lookup.StateNotFoundError
-	if errors.As(err, &stateNotFoundError) || errors.Is(err, stategen.ErrNoDataForSlot) {
-		httputil.HandleError(w, "State not found", http.StatusNotFound)
-		return
+// writeStateIdError handles common state ID lookup errors.
+// Returns true if an error was handled and written to the response, false if no error.
+func writeStateIdError(w http.ResponseWriter, err error, fallbackMsg string) bool {
+	if err == nil {
+		return false
 	}
+
+	// The state root of a given state ID may be missing even though the state itself is known,
+	// so both "not found" flavors must map to 404.
+	var stateRootNotFoundErr *lookup.StateRootNotFoundError
+	if errors.As(err, &stateRootNotFoundErr) {
+		httputil.HandleError(w, "State root not found: "+stateRootNotFoundErr.Error(), http.StatusNotFound)
+		return true
+	}
+
+	var stateNotFoundError *lookup.StateNotFoundError
+	if errors.As(err, &stateNotFoundError) {
+		httputil.HandleError(w, "State not found: "+stateNotFoundError.Error(), http.StatusNotFound)
+		return true
+	}
+
+	if errors.Is(err, stategen.ErrNoDataForSlot) {
+		httputil.HandleError(w, "State not found: "+err.Error(), http.StatusNotFound)
+		return true
+	}
+
 	var parseErr *lookup.StateIdParseError
 	if errors.As(err, &parseErr) {
 		httputil.HandleError(w, "Invalid state ID: "+parseErr.Error(), http.StatusBadRequest)
-		return
+		return true
 	}
-	httputil.HandleError(w, "Could not get state: "+err.Error(), http.StatusInternalServerError)
+
+	httputil.HandleError(w, fallbackMsg+": "+err.Error(), http.StatusInternalServerError)
+	return true
+}
+
+// WriteStateFetchError writes an appropriate error based on the supplied argument.
+// The argument error should be a result of fetching state.
+func WriteStateFetchError(w http.ResponseWriter, err error) {
+	writeStateIdError(w, err, "Could not get state")
+}
+
+// WriteStateRootFetchError writes an appropriate error based on the supplied argument.
+// The argument error should be a result of fetching a state root.
+// Returns true if no error occurred, false otherwise.
+func WriteStateRootFetchError(w http.ResponseWriter, err error) bool {
+	return !writeStateIdError(w, err, "Could not get state root")
 }
 
 // writeBlockIdError handles common block ID lookup errors.

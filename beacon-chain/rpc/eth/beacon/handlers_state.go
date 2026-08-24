@@ -2,7 +2,6 @@ package beacon
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -11,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -40,13 +38,7 @@ func (s *Server) GetStateRoot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	stateRoot, err := s.Stater.StateRoot(ctx, []byte(stateId))
-	if err != nil {
-		var rootNotFoundErr *lookup.StateRootNotFoundError
-		if errors.As(err, &rootNotFoundErr) {
-			httputil.HandleError(w, "State root not found: "+rootNotFoundErr.Error(), http.StatusNotFound)
-			return
-		}
-		httputil.HandleError(w, "Could not get state root: "+err.Error(), http.StatusInternalServerError)
+	if !shared.WriteStateRootFetchError(w, err) {
 		return
 	}
 	st, err := s.Stater.State(ctx, []byte(stateId))
