@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"runtime"
 	"slices"
-	"sort"
 )
 
 const (
@@ -59,10 +58,8 @@ func run() error {
 
 func builderTag() (string, error) {
 	h := sha256.New()
-	inputs := slices.Clone(toolchainInputs)
-	sort.Strings(inputs)
 
-	for _, input := range inputs {
+	for _, input := range slices.Sorted(slices.Values(toolchainInputs)) {
 		b, err := os.ReadFile(input) // #nosec G304 -- `input` comes from the toolchainInputs literals above.
 		if err != nil {
 			return "", fmt.Errorf("hashing toolchain inputs: %w", err)
