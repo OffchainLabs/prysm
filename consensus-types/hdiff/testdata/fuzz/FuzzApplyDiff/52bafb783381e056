@@ -1,0 +1,4 @@
+go test fuzz v1
+[]byte("\xffŽ\xbd\t\t\t\t\t\xbd\xb6\xaf\xbd\xbd0")
+[]byte("\xff")
+[]byte("p")
