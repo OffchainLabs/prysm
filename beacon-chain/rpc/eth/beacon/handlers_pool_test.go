@@ -797,6 +797,23 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			require.Equal(t, 1, len(e.Failures))
 			assert.Equal(t, true, strings.Contains(e.Failures[0].Message, "Incorrect attestation signature"))
 		})
+		t.Run("null element keeps failure indices aligned", func(t *testing.T) {
+			body := "[null," + strings.TrimPrefix(invalidAtt, "[")
+			request := httptest.NewRequest(http.MethodPost, "http://example.com", strings.NewReader(body))
+			request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.SubmitAttestationsV2(writer, request)
+			assert.Equal(t, http.StatusBadRequest, writer.Code)
+			e := &server.IndexedErrorContainer{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+			require.Equal(t, 2, len(e.Failures))
+			assert.Equal(t, 0, e.Failures[0].Index)
+			assert.StringContains(t, "null element", e.Failures[0].Message)
+			assert.Equal(t, 1, e.Failures[1].Index)
+			assert.StringContains(t, "Incorrect attestation signature", e.Failures[1].Message)
+		})
 	})
 
 	t.Run("post-electra", func(t *testing.T) {
@@ -892,7 +909,25 @@ func TestSubmitAttestationsV2(t *testing.T) {
 
 			s.SubmitAttestationsV2(writer, request)
 			assert.Equal(t, http.StatusBadRequest, writer.Code)
-			assert.Equal(t, true, strings.Contains(writer.Body.String(), "invalid SSZ single attestation list size"))
+			assert.Equal(t, true, strings.Contains(writer.Body.String(), "invalid SSZ list size"))
+		})
+
+		t.Run("null element keeps failure indices aligned", func(t *testing.T) {
+			body := "[null," + strings.TrimPrefix(invalidAttElectra, "[")
+			request := httptest.NewRequest(http.MethodPost, "http://example.com", strings.NewReader(body))
+			request.Header.Set(api.VersionHeader, version.String(version.Electra))
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.SubmitAttestationsV2(writer, request)
+			assert.Equal(t, http.StatusBadRequest, writer.Code)
+			e := &server.IndexedErrorContainer{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+			require.Equal(t, 2, len(e.Failures))
+			assert.Equal(t, 0, e.Failures[0].Index)
+			assert.StringContains(t, "null element", e.Failures[0].Message)
+			assert.Equal(t, 1, e.Failures[1].Index)
+			assert.StringContains(t, "Incorrect attestation signature", e.Failures[1].Message)
 		})
 		t.Run("invalid signature not added to pool", func(t *testing.T) {
 			broadcaster := &p2pMock.MockBroadcaster{}
@@ -2941,7 +2976,7 @@ func TestSubmitPayloadAttestations(t *testing.T) {
 
 		s.SubmitPayloadAttestations(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, "Invalid SSZ", writer.Body.String())
+		assert.StringContains(t, "invalid SSZ list size", writer.Body.String())
 	})
 }
 

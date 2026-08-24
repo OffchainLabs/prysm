@@ -154,9 +154,13 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var atts []*eth.SingleAttestation
-		atts, decodeFailures, err = decodeSingleAttestations(r)
+		if httputil.IsRequestSsz(r) {
+			atts, decodeFailures, err = server.DecodeSSZList[eth.SingleAttestation](r.Body)
+		} else {
+			atts, decodeFailures, err = server.DecodeJSONList(r.Body, (*structs.SingleAttestation).ToConsensus)
+		}
 		if err != nil {
-			writeAttestationDecodeError(w, err)
+			writeDecodeError(w, err)
 			return
 		}
 		if len(atts) == 0 && len(decodeFailures) == 0 {
@@ -170,9 +174,9 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var atts []*eth.Attestation
-		atts, decodeFailures, err = decodeAttestationsJSON(r.Body)
+		atts, decodeFailures, err = server.DecodeJSONList(r.Body, (*structs.Attestation).ToConsensus)
 		if err != nil {
-			writeAttestationDecodeError(w, err)
+			writeDecodeError(w, err)
 			return
 		}
 		if len(atts) == 0 && len(decodeFailures) == 0 {
@@ -207,94 +211,16 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// writeAttestationDecodeError maps a request-body decode error to an HTTP response.
-func writeAttestationDecodeError(w http.ResponseWriter, err error) {
-	if errors.Is(err, io.EOF) {
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		return
-	}
-	httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
-}
-
-// decodeSingleAttestations decodes Electra+ attestations from a JSON or SSZ request body.
-func decodeSingleAttestations(r *http.Request) ([]*eth.SingleAttestation, []*server.IndexedError, error) {
-	if httputil.IsRequestSsz(r) {
-		return decodeSingleAttestationsSSZ(r.Body)
-	}
-	return decodeSingleAttestationsJSON(r.Body)
-}
-
-// decodeSingleAttestationsJSON decodes a JSON array of SingleAttestation.
-func decodeSingleAttestationsJSON(body io.Reader) ([]*eth.SingleAttestation, []*server.IndexedError, error) {
-	var src []*structs.SingleAttestation
-	if err := json.NewDecoder(body).Decode(&src); err != nil {
-		return nil, nil, err
-	}
-	atts := make([]*eth.SingleAttestation, 0, len(src))
-	var failures []*server.IndexedError
-	for i, item := range src {
-		att, err := item.ToConsensus()
-		if err != nil {
-			failures = append(failures, &server.IndexedError{Index: i, Message: "Could not convert request attestation to consensus attestation: " + err.Error()})
-			continue
-		}
-		atts = append(atts, att)
-	}
-	return atts, failures, nil
-}
-
-// decodeSingleAttestationsSSZ decodes an SSZ list of fixed-size SingleAttestation.
-func decodeSingleAttestationsSSZ(body io.Reader) ([]*eth.SingleAttestation, []*server.IndexedError, error) {
-	b, err := io.ReadAll(body)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "could not read request body")
-	}
-	if len(b) == 0 {
-		return nil, nil, io.EOF
-	}
-	sszSize := (&eth.SingleAttestation{}).SizeSSZ()
-	if len(b)%sszSize != 0 {
-		return nil, nil, errors.New("invalid SSZ single attestation list size")
-	}
-	n := len(b) / sszSize
-	atts := make([]*eth.SingleAttestation, 0, n)
-	var failures []*server.IndexedError
-	for i := range n {
-		att := &eth.SingleAttestation{}
-		if err := att.UnmarshalSSZ(b[i*sszSize : (i+1)*sszSize]); err != nil {
-			failures = append(failures, &server.IndexedError{Index: i, Message: "Could not decode SSZ message: " + err.Error()})
-			continue
-		}
-		atts = append(atts, att)
-	}
-	return atts, failures, nil
-}
-
-// decodeAttestationsJSON decodes a JSON array of pre-Electra Attestation.
-func decodeAttestationsJSON(body io.Reader) ([]*eth.Attestation, []*server.IndexedError, error) {
-	var src []*structs.Attestation
-	if err := json.NewDecoder(body).Decode(&src); err != nil {
-		return nil, nil, err
-	}
-	atts := make([]*eth.Attestation, 0, len(src))
-	var failures []*server.IndexedError
-	for i, item := range src {
-		att, err := item.ToConsensus()
-		if err != nil {
-			failures = append(failures, &server.IndexedError{Index: i, Message: "Could not convert request attestation to consensus attestation: " + err.Error()})
-			continue
-		}
-		atts = append(atts, att)
-	}
-	return atts, failures, nil
-}
-
 func (s *Server) handleAttestationsPostElectra(
 	ctx context.Context,
 	atts []*eth.SingleAttestation,
 ) (attFailures []*server.IndexedError, failedBroadcasts []*server.IndexedError, err error) {
-	var validAttestations []*eth.SingleAttestation
+	validAttestations := make([]*eth.SingleAttestation, len(atts))
+	validCount := 0
 	for i, att := range atts {
+		if att == nil {
+			continue
+		}
 		if _, err = bls.SignatureFromBytes(att.Signature); err != nil {
 			attFailures = append(attFailures, &server.IndexedError{
 				Index:   i,
@@ -337,7 +263,8 @@ func (s *Server) handleAttestationsPostElectra(
 				}
 			}
 		}
-		validAttestations = append(validAttestations, att)
+		validAttestations[i] = att
+		validCount++
 	}
 
 	// We store the error for the first failed broadcast and use it in the log message in case
@@ -348,6 +275,9 @@ func (s *Server) handleAttestationsPostElectra(
 	var broadcastErr error
 
 	for i, singleAtt := range validAttestations {
+		if singleAtt == nil {
+			continue
+		}
 		s.OperationNotifier.OperationFeed().Send(&feed.Event{
 			Type: operation.SingleAttReceived,
 			Data: &operation.SingleAttReceivedData{
@@ -379,6 +309,9 @@ func (s *Server) handleAttestationsPostElectra(
 	// Run in goroutine to avoid blocking the HTTP response
 	go func() {
 		for _, singleAtt := range validAttestations {
+			if singleAtt == nil {
+				continue
+			}
 			targetState, err := s.AttestationStateFetcher.AttestationTargetState(context.Background(), singleAtt.Data.Target)
 			if err != nil {
 				log.WithError(err).Error("Could not get target state for attestation")
@@ -416,7 +349,7 @@ func (s *Server) handleAttestationsPostElectra(
 	if len(failedBroadcasts) > 0 {
 		log.WithFields(logrus.Fields{
 			"failedCount": len(failedBroadcasts),
-			"totalCount":  len(validAttestations),
+			"totalCount":  validCount,
 		}).WithError(broadcastErr).Error("Some attestations failed to be broadcast")
 	}
 
@@ -427,8 +360,12 @@ func (s *Server) handleAttestations(
 	ctx context.Context,
 	atts []*eth.Attestation,
 ) (attFailures []*server.IndexedError, failedBroadcasts []*server.IndexedError, err error) {
-	var validAttestations []*eth.Attestation
+	validAttestations := make([]*eth.Attestation, len(atts))
+	validCount := 0
 	for i, att := range atts {
+		if att == nil {
+			continue
+		}
 		if _, err = bls.SignatureFromBytes(att.Signature); err != nil {
 			attFailures = append(attFailures, &server.IndexedError{
 				Index:   i,
@@ -436,7 +373,8 @@ func (s *Server) handleAttestations(
 			})
 			continue
 		}
-		validAttestations = append(validAttestations, att)
+		validAttestations[i] = att
+		validCount++
 	}
 
 	// We store the error for the first failed broadcast and use it in the log message in case
@@ -447,6 +385,9 @@ func (s *Server) handleAttestations(
 	var broadcastErr error
 
 	for i, att := range validAttestations {
+		if att == nil {
+			continue
+		}
 		// Broadcast the unaggregated attestation on a feed to notify other services in the beacon node
 		// of a received unaggregated attestation.
 		// Note we can't send for aggregated att because we don't have selection proof.
@@ -495,7 +436,7 @@ func (s *Server) handleAttestations(
 	if len(failedBroadcasts) > 0 {
 		log.WithFields(logrus.Fields{
 			"failedCount": len(failedBroadcasts),
-			"totalCount":  len(validAttestations),
+			"totalCount":  validCount,
 		}).WithError(broadcastErr).Error("Some attestations failed to be broadcast")
 	}
 
@@ -1027,12 +968,16 @@ func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Reques
 	var failures []*server.IndexedError
 	var decodeErr error
 	if httputil.IsRequestSsz(r) {
-		consensusMsgs, failures, decodeErr = decodePayloadAttestationMessagesSSZ(r.Body)
+		consensusMsgs, failures, decodeErr = server.DecodeSSZList[eth.PayloadAttestationMessage](r.Body)
 	} else {
-		consensusMsgs, failures, decodeErr = decodePayloadAttestationMessagesJSON(r.Body)
+		consensusMsgs, failures, decodeErr = server.DecodeJSONList(r.Body, (*structs.PayloadAttestationMessage).ToConsensus)
 	}
 	if decodeErr != nil {
-		httputil.HandleError(w, decodeErr.Error(), http.StatusBadRequest)
+		writeDecodeError(w, decodeErr)
+		return
+	}
+	if len(consensusMsgs) == 0 && len(failures) == 0 {
+		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	}
 
@@ -1162,61 +1107,6 @@ func (s *Server) ListPayloadAttestations(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-// decodePayloadAttestationMessagesSSZ decodes an SSZ-encoded
-// List[PayloadAttestationMessage, PTC_SIZE] from body. Returns one slot per
-// message in the input (nil for messages that failed to decode), plus the
-// per-index decode failures.
-func decodePayloadAttestationMessagesSSZ(r io.Reader) ([]*eth.PayloadAttestationMessage, []*server.IndexedError, error) {
-	body, err := io.ReadAll(r)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "could not read request body")
-	}
-	sszSize := (&eth.PayloadAttestationMessage{}).SizeSSZ()
-	if len(body) == 0 || len(body)%sszSize != 0 {
-		return nil, nil, errors.New("Invalid SSZ payload attestation message list size")
-	}
-	n := len(body) / sszSize
-	msgs := make([]*eth.PayloadAttestationMessage, n)
-	var failures []*server.IndexedError
-	for i := range n {
-		m := &eth.PayloadAttestationMessage{}
-		if err := m.UnmarshalSSZ(body[i*sszSize : (i+1)*sszSize]); err != nil {
-			failures = append(failures, &server.IndexedError{
-				Index:   i,
-				Message: "Could not decode SSZ message: " + err.Error(),
-			})
-			continue
-		}
-		msgs[i] = m
-	}
-	return msgs, failures, nil
-}
-
-// decodePayloadAttestationMessagesJSON decodes a JSON array of
-// PayloadAttestationMessage from body. Returns one slot per message in the
-// input (nil for messages that failed to convert), plus per-index conversion
-// failures.
-func decodePayloadAttestationMessagesJSON(r io.Reader) ([]*eth.PayloadAttestationMessage, []*server.IndexedError, error) {
-	var jsonMsgs []*structs.PayloadAttestationMessage
-	if err := json.NewDecoder(r).Decode(&jsonMsgs); err != nil {
-		return nil, nil, errors.Wrap(err, "could not decode request body")
-	}
-	msgs := make([]*eth.PayloadAttestationMessage, len(jsonMsgs))
-	var failures []*server.IndexedError
-	for i, msg := range jsonMsgs {
-		cm, err := msg.ToConsensus()
-		if err != nil {
-			failures = append(failures, &server.IndexedError{
-				Index:   i,
-				Message: "Could not convert message: " + err.Error(),
-			})
-			continue
-		}
-		msgs[i] = cm
-	}
-	return msgs, failures, nil
-}
-
 // marshalPayloadAttestationsSSZ serializes atts as the SSZ encoding of
 // List[PayloadAttestation, MAX_PAYLOAD_ATTESTATIONS].
 func marshalPayloadAttestationsSSZ(atts []*eth.PayloadAttestation) ([]byte, error) {
@@ -1230,4 +1120,13 @@ func marshalPayloadAttestationsSSZ(atts []*eth.PayloadAttestation) ([]byte, erro
 		copy(body[i*sszSize:(i+1)*sszSize], b)
 	}
 	return body, nil
+}
+
+// writeDecodeError maps a request-body decode error to an HTTP response.
+func writeDecodeError(w http.ResponseWriter, err error) {
+	if errors.Is(err, io.EOF) {
+		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		return
+	}
+	httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 }
