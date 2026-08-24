@@ -9,15 +9,15 @@ import (
 // slotReservations dedups submissions keyed by proposal slot so each slot is
 // pushed at most once. The zero value is ready to use.
 type slotReservations struct {
-	mu    sync.Mutex
+	sync.Mutex
 	slots map[primitives.Slot]bool
 }
 
 // prune resets the cache when force is set, otherwise drops reservations
 // from before epochStart.
 func (r *slotReservations) prune(force bool, epochStart primitives.Slot) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.Lock()
+	defer r.Unlock()
 	if force || r.slots == nil {
 		r.slots = make(map[primitives.Slot]bool)
 		return
@@ -31,8 +31,8 @@ func (r *slotReservations) prune(force bool, epochStart primitives.Slot) {
 
 // reserve marks slot as submitted, returning false if another pass already claimed it.
 func (r *slotReservations) reserve(slot primitives.Slot) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.Lock()
+	defer r.Unlock()
 	if r.slots[slot] {
 		return false
 	}
@@ -45,15 +45,15 @@ func (r *slotReservations) reserve(slot primitives.Slot) bool {
 
 // release un-reserves slots whose submission failed so a later pass retries them.
 func (r *slotReservations) release(slots ...primitives.Slot) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.Lock()
+	defer r.Unlock()
 	for _, s := range slots {
 		delete(r.slots, s)
 	}
 }
 
 func (r *slotReservations) count() int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.Lock()
+	defer r.Unlock()
 	return len(r.slots)
 }

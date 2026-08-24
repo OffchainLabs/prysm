@@ -4429,6 +4429,17 @@ func TestValidator_warmBuilderRequestAuths(t *testing.T) {
 		require.Equal(t, 0, len(v.warmBuilderRequestAuths(t.Context(), km, midEpoch+1, false)))
 	})
 
+	t.Run("epoch before the fork warms only fork-epoch slots", func(t *testing.T) {
+		setGloasEpoch(t, 1)
+		v := newWarmValidator(t)
+		// Pre-fork current-epoch slots never submit, even when forced.
+		require.Equal(t, 0, len(v.warmBuilderRequestAuths(t.Context(), km, 1, false)))
+		require.Equal(t, 0, len(v.warmBuilderRequestAuths(t.Context(), km, 1, true)))
+		entries := v.warmBuilderRequestAuths(t.Context(), km, midEpoch, false)
+		require.Equal(t, 1, len(entries))
+		require.Equal(t, nextEpochProposerSlot, entries[0].Auth.Message.Slot)
+	})
+
 	t.Run("force clears the dedup cache and resubmits", func(t *testing.T) {
 		setGloasEpoch(t, 0)
 		v := newWarmValidator(t)
