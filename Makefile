@@ -141,6 +141,10 @@ CROSS_TARGETS := \
 
 CROSS_PLATFORMS := $(foreach t,$(CROSS_TARGETS),$(word 1,$(subst /,$(space),$(t)))/$(word 2,$(subst /,$(space),$(t))))
 
+# Baseline C flags for the cgo deps (blst). `-O2` has to be spelled out: setting CGO_CFLAGS
+# replaces the toolchain default ("-O2 -g") rather than adding to it.
+CGO_CFLAGS_COMMON := -O2
+
 # linux/arm64 C optimization flags.
 CGO_CFLAGS_LINUX_ARM64 := -ftree-vectorize -funsafe-math-optimizations -fomit-frame-pointer
 
@@ -195,7 +199,8 @@ endif
 # (underscore) and applies it only to beacon-chain.
 DIST_LDFLAGS := $(LDFLAGS_STAMPED) -s -w
 BUILD_CROSS_ENV = GO="$(GO)" DIST="$(DIST)" GIT_TAG="$(GIT_TAG)" \
-	CGO_CFLAGS_LINUX_ARM64="$(CGO_CFLAGS_LINUX_ARM64)" BLST_PORTABLE="$(BLST_PORTABLE)" \
+	CGO_CFLAGS_COMMON="$(CGO_CFLAGS_COMMON)" CGO_CFLAGS_LINUX_ARM64="$(CGO_CFLAGS_LINUX_ARM64)" \
+	BLST_PORTABLE="$(BLST_PORTABLE)" \
 	LDFLAGS="$(DIST_LDFLAGS)" TAGFLAG="$(TAGFLAG)" PGO_beacon_chain="$(PGO_beacon-chain)" \
 	BUILD_MODE="release"
 

@@ -123,7 +123,8 @@ func crossBuild(tag string) error {
 
 	for _, k := range []string{
 		"GIT_TAG", "LDFLAGS", "TAGFLAG", "BUILD_MODE", "PGO_beacon_chain",
-		"CGO_CFLAGS_LINUX_ARM64", "BLST_PORTABLE", "CROSS_BINARIES", "CROSS_TARGETS",
+		"CGO_CFLAGS_COMMON", "CGO_CFLAGS_LINUX_ARM64", "BLST_PORTABLE",
+		"CROSS_BINARIES", "CROSS_TARGETS",
 	} {
 		args = append(args, "--build-arg", k+"="+os.Getenv(k))
 	}

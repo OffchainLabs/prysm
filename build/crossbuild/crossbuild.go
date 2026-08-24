@@ -16,6 +16,7 @@ type Config struct {
 	Tag          string   // GIT_TAG (falls back to `git describe`, then "Unknown")
 	Binaries     []string // CROSS_BINARIES
 	Targets      []Target // CROSS_TARGETS
+	CommonCFlags string   // CGO_CFLAGS_COMMON
 	Arm64CFlags  string   // CGO_CFLAGS_LINUX_ARM64
 	BLSTPortable string   // BLST_PORTABLE
 	Ldflags      string   // LDFLAGS
@@ -93,7 +94,7 @@ func (c Config) Build() error {
 
 			b := builder{cfg: c, t: t, cc: cc, cxx: cxx, pathPrefix: pathPrefix}
 			fmt.Printf("[%d/%d] → %s/%s  %s  (%s - portable)\n", n, total, t.OS, t.Arch, bin, c.Mode)
-			if err := b.compile(out, "./cmd/"+bin, c.BLSTPortable+" "+extra, pgo); err != nil {
+			if err := b.compile(out, "./cmd/"+bin, c.cgoCFlags(c.BLSTPortable, extra), pgo); err != nil {
 				return fmt.Errorf("compile: %w", err)
 			}
 
@@ -101,7 +102,7 @@ func (c Config) Build() error {
 				modern := filepath.Join(c.Dist, fmt.Sprintf("%s-%s-modern-%s-%s%s", beaconChain, c.Tag, t.OS, t.Arch, ext))
 				n++
 				fmt.Printf("[%d/%d] → %s/%s  %s  (%s - modern)\n", n, total, t.OS, t.Arch, beaconChain, c.Mode)
-				if err := b.compile(modern, "./cmd/"+beaconChain, extra, pgo); err != nil {
+				if err := b.compile(modern, "./cmd/"+beaconChain, c.cgoCFlags(extra), pgo); err != nil {
 					return err
 				}
 			}
@@ -112,6 +113,11 @@ func (c Config) Build() error {
 	return nil
 }
 
+// cgoCFlags assembles the CGO_CFLAGS value for one artifact.
+func (c Config) cgoCFlags(extra ...string) string {
+	return strings.Join(strings.Fields(c.CommonCFlags+" "+strings.Join(extra, " ")), " ")
+}
+
 // ConfigFromEnv builds a Config from the environment the Makefile exports.
 func ConfigFromEnv() Config {
 	cfg := Config{
@@ -119,6 +125,7 @@ func ConfigFromEnv() Config {
 		Dist:         env("DIST", "dist"),
 		Tag:          gitTag(),
 		Binaries:     strings.Fields(env("CROSS_BINARIES", beaconChain+" validator client-stats prysmctl")),
+		CommonCFlags: env("CGO_CFLAGS_COMMON", "-O2"),
 		Arm64CFlags:  os.Getenv("CGO_CFLAGS_LINUX_ARM64"),
 		BLSTPortable: env("BLST_PORTABLE", "-D__BLST_PORTABLE__"),
 		Ldflags:      os.Getenv("LDFLAGS"),
