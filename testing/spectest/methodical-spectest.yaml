@@ -202,7 +202,9 @@ defs:
       - name: AttesterSlashing
         type_name: AttesterSlashingGloas
       - name: BuilderDepositRequest
+        package: github.com/OffchainLabs/prysm/v7/proto/engine/v1
       - name: BuilderExitRequest
+        package: github.com/OffchainLabs/prysm/v7/proto/engine/v1
       - name: BeaconBlock
         type_name: BeaconBlockGloas
       - name: BeaconBlockBody
