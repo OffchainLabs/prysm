@@ -87,6 +87,17 @@ run:
 	eval "$$cmd"
 
 # ---------------------------------------------------------------------------
+# C flags (shared by `build` and `dist`)
+# ---------------------------------------------------------------------------
+# Baseline C flags for the cgo deps (blst). `-O2` has to be spelled out: setting CGO_CFLAGS
+# replaces the toolchain default ("-O2 -g") rather than adding to it.
+CGO_CFLAGS_COMMON := -O2
+
+# blst (Prysm's CGO dep) defaults to ADX/modern on amd64. Force the portable path. The
+# modern amd64 beacon-chain artifact omits it (ADX is x86-only).
+BLST_PORTABLE := -D__BLST_PORTABLE__
+
+# ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
 .PHONY: build
@@ -98,7 +109,7 @@ build:
 	[ -z "$$bad" ] || { echo "❌ build: not a binary: $$bad (available: $(BINARIES))" >&2; exit 1; }; \
 	mkdir -p $(DIST); \
 	for b in $$bins; do \
-	  cmd="$(strip $(GO) build $(TAGFLAG) $(flags) -o \"$(DIST)/$$b\" ./cmd/$$b)"; \
+	  cmd="$(strip CGO_CFLAGS=\"$(CGO_CFLAGS_COMMON) $(BLST_PORTABLE)\" $(GO) build $(TAGFLAG) $(flags) -o \"$(DIST)/$$b\" ./cmd/$$b)"; \
 	  echo "-> $$cmd"; \
 	  eval "$$cmd" || exit 1; \
 	done; \
@@ -141,16 +152,8 @@ CROSS_TARGETS := \
 
 CROSS_PLATFORMS := $(foreach t,$(CROSS_TARGETS),$(word 1,$(subst /,$(space),$(t)))/$(word 2,$(subst /,$(space),$(t))))
 
-# Baseline C flags for the cgo deps (blst). `-O2` has to be spelled out: setting CGO_CFLAGS
-# replaces the toolchain default ("-O2 -g") rather than adding to it.
-CGO_CFLAGS_COMMON := -O2
-
 # linux/arm64 C optimization flags.
 CGO_CFLAGS_LINUX_ARM64 := -ftree-vectorize -funsafe-math-optimizations -fomit-frame-pointer
-
-# blst (Prysm's CGO dep) defaults to ADX/modern on amd64. Force the portable path. The
-# modern amd64 beacon-chain artifact omits it (ADX is x86-only).
-BLST_PORTABLE := -D__BLST_PORTABLE__
 
 PGO_beacon-chain := -pgo=cmd/beacon-chain/pprof.beacon-chain.samples.cpu.pb.gz
 
