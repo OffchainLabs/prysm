@@ -433,14 +433,13 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 	return c.services.RegisterService(validatorService)
 }
 
-// statelessMode resolves the Gloas stateless setting. Only the beacon node that built a block can
-// serve and reveal its execution payload, so with several beacon nodes stateless is forced on.
+// statelessMode resolves the stateless setting for Gloas and later forks. Only the beacon node that
+// built a block can serve and reveal its execution payload, so with several beacon nodes stateless is forced on.
 func statelessMode(cliCtx *cli.Context) bool {
-	stateless := cliCtx.Bool(flags.EnableStatelessFlag.Name)
-	if stateless {
+	if cliCtx.Bool(flags.EnableStatelessFlag.Name) {
 		return true
 	}
-	if params.BeaconConfig().GloasForkEpoch == params.BeaconConfig().FarFutureEpoch {
+	if !params.GloasEnabled() {
 		return false
 	}
 
@@ -460,13 +459,12 @@ func statelessMode(cliCtx *cli.Context) bool {
 	}
 
 	if cliCtx.IsSet(flags.EnableStatelessFlag.Name) {
-		log.Errorf("Gloas block production with --%s=false and multiple beacon nodes can fail: "+
-			"only the node that built a block can reveal its execution payload", flags.EnableStatelessFlag.Name)
-		return false
+		log.Warnf("Ignoring --%s=false: only the beacon node that built a block can reveal its "+
+			"execution payload, so multiple beacon nodes require stateless block production", flags.EnableStatelessFlag.Name)
+	} else {
+		log.Infof("Multiple beacon nodes configured: enabling --%s so block production works on every node",
+			flags.EnableStatelessFlag.Name)
 	}
-
-	log.Warnf("Multiple beacon nodes configured: enabling --%s so Gloas block production works on every node. "+
-		"Pass --%s=false to keep it off.", flags.EnableStatelessFlag.Name, flags.EnableStatelessFlag.Name)
 	return true
 }
 

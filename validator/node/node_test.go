@@ -340,7 +340,7 @@ func TestStatelessMode(t *testing.T) {
 		grpcMulti  = "host1:4000,host2:4000"
 	)
 	enableLog := "Multiple beacon nodes configured"
-	overrideLog := "can fail"
+	overrideLog := "Ignoring"
 
 	tests := []struct {
 		name          string
@@ -367,7 +367,7 @@ func TestStatelessMode(t *testing.T) {
 			restEndpoints: restMulti,
 			want:          true,
 			wantLogSubstr: enableLog,
-			wantLogLevel:  logrus.WarnLevel,
+			wantLogLevel:  logrus.InfoLevel,
 		},
 		{
 			name:          "rest provider flag alone selects rest",
@@ -376,7 +376,7 @@ func TestStatelessMode(t *testing.T) {
 			restEndpoints: restMulti,
 			want:          true,
 			wantLogSubstr: enableLog,
-			wantLogLevel:  logrus.WarnLevel,
+			wantLogLevel:  logrus.InfoLevel,
 		},
 		{
 			name:          "rest selection ignores grpc hosts",
@@ -387,14 +387,14 @@ func TestStatelessMode(t *testing.T) {
 			want:          false,
 		},
 		{
-			name:          "explicit false is respected with an error log",
+			name:          "explicit false is overridden with a warning",
 			restApi:       true,
 			gloasEpoch:    100,
 			restEndpoints: restMulti,
 			setStateless:  "false",
-			want:          false,
+			want:          true,
 			wantLogSubstr: overrideLog,
-			wantLogLevel:  logrus.ErrorLevel,
+			wantLogLevel:  logrus.WarnLevel,
 		},
 		{
 			name:          "explicit true stays on",
@@ -426,7 +426,7 @@ func TestStatelessMode(t *testing.T) {
 			grpcEndpoints: grpcMulti,
 			want:          true,
 			wantLogSubstr: enableLog,
-			wantLogLevel:  logrus.WarnLevel,
+			wantLogLevel:  logrus.InfoLevel,
 		},
 		{
 			name:          "single grpc host stays off",
