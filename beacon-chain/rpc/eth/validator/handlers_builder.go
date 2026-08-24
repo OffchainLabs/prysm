@@ -66,6 +66,10 @@ func (s *Server) SubmitBuilderPreferences(w http.ResponseWriter, r *http.Request
 		}
 		return
 	}
+	if len(entries) == 0 && len(failures) == 0 {
+		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		return
+	}
 	var submitErr error
 	if len(entries) > 0 {
 		_, submitErr = s.V1Alpha1Server.SubmitBuilderPreferences(ctx, &eth.SubmitBuilderPreferencesRequest{Entries: entries})
@@ -77,10 +81,6 @@ func (s *Server) SubmitBuilderPreferences(w http.ResponseWriter, r *http.Request
 			Message:  server.ErrIndexedValidationFail,
 			Failures: failures,
 		})
-		return
-	}
-	if len(entries) == 0 {
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	}
 	if submitErr != nil {
