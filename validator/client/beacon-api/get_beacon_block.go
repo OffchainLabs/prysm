@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -70,58 +71,17 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 	return block, nil
 }
 
+// beaconBlockV4 posts the produce request with a BuilderConfig body naming the external
+// builders (possibly none) the beacon node should solicit bids from.
 func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primitives.Slot, queryParams neturl.Values, builderConfig *ethpb.BuilderConfig) (*ethpb.GenericBeaconBlock, error) {
 	queryParams.Set("include_payload", strconv.FormatBool(c.stateless))
 	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v4/validator/blocks/%d", slot), queryParams)
 
-	if builderConfig != nil {
-		block, err := c.beaconBlockV4WithBuilders(ctx, slot, queryUrl, builderConfig)
-		if err == nil {
-			return block, nil
-		}
-		// A failed builder request must never cost the slot: fall through to a locally built block.
-		log.WithError(err).Warn("Builder block request failed, falling back to local block production")
+	// The produce request always carries a BuilderConfig body; absent settings post as neutral.
+	if builderConfig == nil {
+		builderConfig = &ethpb.BuilderConfig{BuilderBoostFactor: uint64(proposer.NeutralBuilderBoostFactor)}
 	}
 
-	var (
-		decodedData     []byte
-		decodedBlock    *ethpb.GenericBeaconBlock
-		decodedContents *ethpb.BeaconBlockContentsGloas
-	)
-
-	decode := func(data []byte, header http.Header) (*ethpb.GenericBeaconBlock, error) {
-		block, contents, err := decodeBlockV4Response(data, header, queryUrl)
-		if err == nil {
-			decodedData, decodedBlock, decodedContents = data, block, contents
-		}
-		return block, err
-	}
-
-	opts := blockFreshnessOptions(ctx, decode)
-	data, header, err := c.handler.GetSSZ(ctx, queryUrl, opts...)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get v4 beacon block")
-	}
-
-	block, contents := decodedBlock, decodedContents
-	if block == nil || !bytes.Equal(data, decodedData) {
-		block, contents, err = decodeBlockV4Response(data, header, queryUrl)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// Cache the envelope only for the winning response.
-	if c.stateless && contents != nil && contents.ExecutionPayloadEnvelope != nil {
-		c.envelopeCache.Add(slot, contents.ExecutionPayloadEnvelope, contents.Blobs, contents.KzgProofs)
-	}
-
-	return block, nil
-}
-
-// beaconBlockV4WithBuilders requests a block with a BuilderConfig body so the
-// beacon node solicits external builder bids.
-func (c *beaconApiValidatorClient) beaconBlockV4WithBuilders(ctx context.Context, slot primitives.Slot, queryUrl string, builderConfig *ethpb.BuilderConfig) (*ethpb.GenericBeaconBlock, error) {
 	headers := map[string]string{api.VersionHeader: version.String(version.Gloas)}
 	jsonFn := func() ([]byte, error) {
 		return json.Marshal(structs.BuilderConfigFromConsensus(builderConfig))

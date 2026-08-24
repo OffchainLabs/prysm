@@ -1,6 +1,8 @@
 package proposer
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -745,6 +747,46 @@ func TestSettingFromConsensus(t *testing.T) {
 		require.DeepEqual(t, []byte("first"), builders[0].AuthData)
 		require.DeepEqual(t, []byte("second"), builders[1].AuthData)
 		require.Equal(t, "https://other.example", builders[2].URL)
+	})
+
+	// Entries violating the spec limits could not be encoded into a block production
+	// request, so every load path must drop them instead of costing a proposal.
+	t.Run("drops entries violating the spec limits", func(t *testing.T) {
+		payload := &validatorpb.ProposerSettingsPayload{
+			Version: SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{
+				Builder: &validatorpb.BuilderConfig{
+					Builders: []*validatorpb.BuilderEntry{
+						{Url: "https://good.example"},
+						{Url: "not a url"},
+						{Url: "https://" + strings.Repeat("a", MaxBuilderURLSize)},
+						{Url: "https://badkey.example", Pubkeys: [][]byte{make([]byte, 47)}},
+						{Url: "https://badauth.example", AuthData: make([]byte, MaxAuthDataSize+1)},
+					},
+				},
+			},
+		}
+		ps, err := SettingFromConsensus(payload)
+		require.NoError(t, err)
+		builders := ps.DefaultConfig.BuilderConfig.Builders
+		require.Equal(t, 1, len(builders))
+		require.Equal(t, "https://good.example", builders[0].URL)
+	})
+
+	t.Run("caps builders at the entry limit", func(t *testing.T) {
+		entries := make([]*validatorpb.BuilderEntry, 0, MaxBuilderEntries+2)
+		for i := 0; i <= MaxBuilderEntries+1; i++ {
+			entries = append(entries, &validatorpb.BuilderEntry{Url: fmt.Sprintf("https://b%d.example", i)})
+		}
+		payload := &validatorpb.ProposerSettingsPayload{
+			Version: SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{
+				Builder: &validatorpb.BuilderConfig{Builders: entries},
+			},
+		}
+		ps, err := SettingFromConsensus(payload)
+		require.NoError(t, err)
+		require.Equal(t, MaxBuilderEntries, len(ps.DefaultConfig.BuilderConfig.Builders))
 	})
 
 	t.Run("v1 explicit max_execution_payment survives ingest", func(t *testing.T) {

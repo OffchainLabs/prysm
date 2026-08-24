@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -55,12 +56,22 @@ func TestBeaconBlockV4_DecodeClosureCachesWinningResponse(t *testing.T) {
 		Deadline: time.Time{},
 	})
 
+	// A nil builder config posts as the explicit neutral one.
+	expectedBody, err := (&ethpb.BuilderConfig{BuilderBoostFactor: uint64(proposer.NeutralBuilderBoostFactor)}).MarshalSSZ()
+	require.NoError(t, err)
+
 	handler := mock.NewMockHandler(ctrl)
-	handler.EXPECT().GetSSZ(
+	handler.EXPECT().PostSSZWithFallback(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v4/validator/blocks/%d?include_payload=false", slot),
 		gomock.Any(),
-	).DoAndReturn(func(_ context.Context, _ string, opts ...rest.GetOption) ([]byte, http.Header, error) {
+		gomock.Any(),
+		gomock.Any(),
+		gomock.Any(),
+	).DoAndReturn(func(_ context.Context, _ string, _ map[string]string, sszFn, _ func() ([]byte, error), opts ...rest.GetOption) ([]byte, http.Header, error) {
+		body, err := sszFn()
+		require.NoError(t, err)
+		require.DeepEqual(t, expectedBody, body)
 		// Simulate the racing handler applying the acceptance check to a
 		// candidate response, which runs the decode closure under test.
 		cfg := rest.ResolveOptions(opts...)
@@ -1486,9 +1497,13 @@ func TestGetBeaconBlock_GloasValid_SSZ_WithPayload(t *testing.T) {
 	ctx := t.Context()
 
 	handler := mock.NewMockHandler(ctrl)
-	handler.EXPECT().GetSSZ(
+	handler.EXPECT().PostSSZWithFallback(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v4/validator/blocks/%d?graffiti=%s&include_payload=true&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
+		gomock.Any(),
+		gomock.Any(),
+		gomock.Any(),
+		gomock.Any(),
 	).Return(
 		sszBytes,
 		http.Header{
@@ -1535,9 +1550,13 @@ func TestGetBeaconBlock_GloasValid_SSZ_WithoutPayload(t *testing.T) {
 	ctx := t.Context()
 
 	handler := mock.NewMockHandler(ctrl)
-	handler.EXPECT().GetSSZ(
+	handler.EXPECT().PostSSZWithFallback(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v4/validator/blocks/%d?graffiti=%s&include_payload=false&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
+		gomock.Any(),
+		gomock.Any(),
+		gomock.Any(),
+		gomock.Any(),
 	).Return(
 		sszBytes,
 		http.Header{
@@ -1586,9 +1605,13 @@ func TestGetBeaconBlock_GloasValid_JSON_WithoutPayload(t *testing.T) {
 	})
 	require.NoError(t, err)
 	handler := mock.NewMockHandler(ctrl)
-	handler.EXPECT().GetSSZ(
+	handler.EXPECT().PostSSZWithFallback(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v4/validator/blocks/%d?graffiti=%s&include_payload=false&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
+		gomock.Any(),
+		gomock.Any(),
+		gomock.Any(),
+		gomock.Any(),
 	).Return(
 		b,
 		http.Header{"Content-Type": []string{"application/json"}},
@@ -1615,9 +1638,13 @@ func TestGetBeaconBlock_GloasRejectsJSONWithPayload(t *testing.T) {
 	graffiti := []byte{3}
 
 	handler := mock.NewMockHandler(ctrl)
-	handler.EXPECT().GetSSZ(
+	handler.EXPECT().PostSSZWithFallback(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v4/validator/blocks/%d?graffiti=%s&include_payload=true&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
+		gomock.Any(),
+		gomock.Any(),
+		gomock.Any(),
+		gomock.Any(),
 	).Return(
 		[]byte("{}"),
 		http.Header{
@@ -1730,7 +1757,7 @@ func TestBeaconBlockV4_PostWithBuilderConfig(t *testing.T) {
 		require.NotNil(t, cached)
 	})
 
-	t.Run("post error is surfaced by the builder path", func(t *testing.T) {
+	t.Run("post error is surfaced", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -1740,34 +1767,7 @@ func TestBeaconBlockV4_PostWithBuilderConfig(t *testing.T) {
 		).Return(nil, nil, errors.New("boom")).Times(1)
 
 		validatorClient := &beaconApiValidatorClient{handler: handler, envelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
-		_, err := validatorClient.beaconBlockV4WithBuilders(t.Context(), slot, fmt.Sprintf("/eth/v4/validator/blocks/%d?include_payload=false", slot), builderConfig)
+		_, err := validatorClient.beaconBlockV4(t.Context(), slot, neturl.Values{}, builderConfig)
 		assert.ErrorContains(t, "could not post v4 block request", err)
-	})
-
-	t.Run("post failure falls back to local production", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		proto := testhelpers.GenerateProtoGloasBeaconBlock()
-		sszBytes, err := proto.MarshalSSZ()
-		require.NoError(t, err)
-
-		handler := mock.NewMockHandler(ctrl)
-		handler.EXPECT().PostSSZWithFallback(
-			gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
-		).Return(nil, nil, errors.New("boom")).Times(1)
-		handler.EXPECT().GetSSZ(
-			gomock.Any(),
-			fmt.Sprintf("/eth/v4/validator/blocks/%d?include_payload=false", slot),
-		).Return(sszBytes, http.Header{
-			"Content-Type":                     []string{api.OctetStreamMediaType},
-			api.VersionHeader:                  []string{"gloas"},
-			api.ExecutionPayloadIncludedHeader: []string{"false"},
-		}, nil).Times(1)
-
-		validatorClient := &beaconApiValidatorClient{handler: handler, envelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
-		block, err := validatorClient.beaconBlockV4(t.Context(), slot, neturl.Values{}, builderConfig)
-		require.NoError(t, err)
-		assert.DeepEqual(t, proto, block.GetGloas())
 	})
 }

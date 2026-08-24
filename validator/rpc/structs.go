@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"fmt"
-	"net/url"
 	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/api/server"
@@ -134,13 +133,6 @@ type BuilderEntry struct {
 	BuilderBoostFactor  *string  `json:"builder_boost_factor,omitempty"`
 }
 
-const (
-	maxBuilderEntries      = 64   // MAX_BUILDER_ENTRIES
-	maxBuilderURLSize      = 2048 // MAX_BUILDER_URL_SIZE
-	maxBuilderAuthDataSize = 4096 // MAX_BUILDER_AUTH_DATA_SIZE
-	maxBuilderPubkeys      = 64   // MAX_BUILDER_PUBKEYS
-)
-
 func builderConfigFromConsensus(bc *proposer.BuilderConfig) *BuilderConfig {
 	out := &BuilderConfig{
 		MinBid:             new(strconv.FormatUint(uint64(bc.EffectiveMinBid()), 10)),
@@ -192,8 +184,8 @@ func (in *BuilderConfig) ToConsensus() (*proposer.BuilderConfig, error) {
 	if in.Builders == nil {
 		return bc, nil
 	}
-	if len(in.Builders) > maxBuilderEntries {
-		return nil, errors.Errorf("builders exceeds %d entries", maxBuilderEntries)
+	if len(in.Builders) > proposer.MaxBuilderEntries {
+		return nil, errors.Errorf("builders exceeds %d entries", proposer.MaxBuilderEntries)
 	}
 	// Non-nil (possibly empty) list means "use exactly these builders", not "inherit".
 	// Omitted auth_data compares as its derived value, so it collides with the explicit form.
@@ -217,23 +209,10 @@ func (in *BuilderConfig) ToConsensus() (*proposer.BuilderConfig, error) {
 }
 
 func (in *BuilderEntry) ToConsensus(i int) (*proposer.BuilderEntry, error) {
-	be := &proposer.BuilderEntry{}
-	if in.Url == "" {
-		return nil, errors.Errorf("builders[%d].url is required", i)
-	}
-	if len(in.Url) > maxBuilderURLSize {
-		return nil, errors.Errorf("builders[%d].url exceeds %d bytes", i, maxBuilderURLSize)
-	}
-	if u, err := url.Parse(in.Url); err != nil || u.Scheme == "" || u.Host == "" {
-		return nil, errors.Errorf("builders[%d].url is not a valid URL", i)
-	}
-	be.URL = in.Url
-	if len(in.BuilderPubkeys) > maxBuilderPubkeys {
-		return nil, errors.Errorf("builders[%d].builder_pubkeys exceeds %d keys", i, maxBuilderPubkeys)
-	}
+	be := &proposer.BuilderEntry{URL: in.Url}
 	for _, raw := range in.BuilderPubkeys {
 		pk, err := hexutil.Decode(raw)
-		if err != nil || len(pk) != fieldparams.BLSPubkeyLength {
+		if err != nil {
 			return nil, errors.Errorf("builders[%d].builder_pubkeys contains an invalid BLS public key", i)
 		}
 		be.Pubkeys = append(be.Pubkeys, pk)
@@ -243,10 +222,14 @@ func (in *BuilderEntry) ToConsensus(i int) (*proposer.BuilderEntry, error) {
 		if err != nil {
 			return nil, errors.Errorf("builders[%d].auth_data is not valid hex", i)
 		}
-		if len(ad) == 0 || len(ad) > maxBuilderAuthDataSize {
-			return nil, errors.Errorf("builders[%d].auth_data must be 1 to %d bytes", i, maxBuilderAuthDataSize)
+		// An explicit empty auth_data is rejected; omitting the field derives it from the URL.
+		if len(ad) == 0 {
+			return nil, errors.Errorf("builders[%d].auth_data must be 1 to %d bytes", i, proposer.MaxAuthDataSize)
 		}
 		be.AuthData = ad
+	}
+	if err := be.Validate(); err != nil {
+		return nil, errors.Wrapf(err, "builders[%d]", i)
 	}
 	if in.MaxExecutionPayment != nil {
 		v, err := parseUint(*in.MaxExecutionPayment, fmt.Sprintf("builders[%d].max_execution_payment", i))

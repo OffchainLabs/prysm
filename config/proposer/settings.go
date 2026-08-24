@@ -2,6 +2,8 @@ package proposer
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
 	"sync/atomic"
 
 	"github.com/OffchainLabs/prysm/v7/config"
@@ -65,34 +67,45 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 		d.GasLimit = ps.DefaultConfig.GasLimit
 		settings.DefaultConfig = d
 	}
-	settings.dedupBuilders()
+	settings.sanitizeBuilders()
 	return settings, nil
 }
 
-// Persisted configs may predate url-required and (url, auth_data) uniqueness;
-// url-less entries are dropped and the first entry wins, matching POST validation.
-func (ps *Settings) dedupBuilders() {
-	dedup := func(opt *Option) {
+// Every load path (file, URL, database) funnels through here: entries violating the spec
+// limits and (url, auth_data) duplicates are dropped so block production never trips on them.
+func (ps *Settings) sanitizeBuilders() {
+	sanitize := func(opt *Option) {
 		if opt == nil || opt.BuilderConfig == nil || len(opt.BuilderConfig.Builders) == 0 {
 			return
 		}
-		seen := make(map[EntryIdentity]bool, len(opt.BuilderConfig.Builders))
-		kept := opt.BuilderConfig.Builders[:0]
-		for _, e := range opt.BuilderConfig.Builders {
-			if e == nil || e.URL == "" || seen[e.Identity()] {
+		builders := opt.BuilderConfig.Builders
+		seen := make(map[EntryIdentity]bool, len(builders))
+		kept := builders[:0]
+		var reasons []string
+		for _, e := range builders {
+			if e == nil || seen[e.Identity()] {
 				continue
+			}
+			if err := e.Validate(); err != nil {
+				reasons = append(reasons, err.Error())
+				continue
+			}
+			if len(kept) == MaxBuilderEntries {
+				reasons = append(reasons, fmt.Sprintf("more than %d entries", MaxBuilderEntries))
+				break
 			}
 			seen[e.Identity()] = true
 			kept = append(kept, e)
 		}
-		if len(kept) != len(opt.BuilderConfig.Builders) {
-			log.Warn("Removed url-less or duplicate builder entries from proposer settings")
+		if len(kept) != len(builders) {
+			log.WithField("reasons", strings.Join(reasons, "; ")).
+				Warnf("Removed %d invalid or duplicate builder entries from proposer settings", len(builders)-len(kept))
 			opt.BuilderConfig.Builders = kept
 		}
 	}
-	dedup(ps.DefaultConfig)
+	sanitize(ps.DefaultConfig)
 	for _, opt := range ps.ProposeConfig {
-		dedup(opt)
+		sanitize(opt)
 	}
 }
 
@@ -137,6 +150,40 @@ func (be *BuilderEntry) EffectiveAuthData() []byte {
 		return be.AuthData
 	}
 	return []byte(be.URL)
+}
+
+// Spec limits for builder configuration payloads.
+const (
+	MaxBuilderEntries = 64   // MAX_BUILDER_ENTRIES
+	MaxBuilderURLSize = 2048 // MAX_BUILDER_URL_SIZE
+	MaxAuthDataSize   = 4096 // MAX_DATA_SIZE
+	MaxBuilderPubkeys = 64   // MAX_BUILDER_PUBKEYS
+)
+
+// Validate checks the entry against the spec size and format limits. Every config source
+// must enforce it: an entry violating the limits cannot be encoded into a block request.
+func (be *BuilderEntry) Validate() error {
+	if be.URL == "" {
+		return errors.New("url is required")
+	}
+	if len(be.URL) > MaxBuilderURLSize {
+		return errors.Errorf("url exceeds %d bytes", MaxBuilderURLSize)
+	}
+	if u, err := url.Parse(be.URL); err != nil || u.Scheme == "" || u.Host == "" {
+		return errors.New("url is not a valid URL")
+	}
+	if len(be.Pubkeys) > MaxBuilderPubkeys {
+		return errors.Errorf("builder_pubkeys exceeds %d keys", MaxBuilderPubkeys)
+	}
+	for _, pk := range be.Pubkeys {
+		if len(pk) != fieldparams.BLSPubkeyLength {
+			return errors.New("builder_pubkeys contains an invalid BLS public key")
+		}
+	}
+	if len(be.AuthData) > MaxAuthDataSize {
+		return errors.Errorf("auth_data must be 1 to %d bytes", MaxAuthDataSize)
+	}
+	return nil
 }
 
 // EffectiveBuilderConfig resolves pubkey's builder config against default_config;

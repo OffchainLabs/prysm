@@ -286,8 +286,8 @@ func TestServer_SetBuilderConfig(t *testing.T) {
 	t.Run("max entries", func(t *testing.T) {
 		srv, keys := setupConfigServer(t, 1)
 		pk := hexutil.Encode(keys[0][:])
-		entries := make([]string, 0, maxBuilderEntries+1)
-		for i := 0; i <= maxBuilderEntries; i++ {
+		entries := make([]string, 0, proposer.MaxBuilderEntries+1)
+		for i := 0; i <= proposer.MaxBuilderEntries; i++ {
 			entries = append(entries, `{"url":"https://b`+strconv.Itoa(i)+`.example"}`)
 		}
 		body := `{"builders":[` + strings.Join(entries, ",") + `]}`
