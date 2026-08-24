@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"flag"
 	"fmt"
+	"iter"
 	"math"
 	"os"
 	"testing"
@@ -422,6 +423,43 @@ func Test_diffToVals(t *testing.T) {
 		}
 		require.Equal(t, true, found)
 	})
+}
+
+type validatorIterationState struct {
+	state.ReadOnlyBeaconState
+	materializedCalls int
+	streamedCalls     int
+}
+
+func (s *validatorIterationState) ValidatorsReadOnly() []state.ReadOnlyValidator {
+	s.materializedCalls++
+	return s.ReadOnlyBeaconState.ValidatorsReadOnly()
+}
+
+func (s *validatorIterationState) ValidatorsReadOnlySeq() iter.Seq2[primitives.ValidatorIndex, state.ReadOnlyValidator] {
+	s.streamedCalls++
+	return s.ReadOnlyBeaconState.ValidatorsReadOnlySeq()
+}
+
+func TestDiffToValsStreamsValidators(t *testing.T) {
+	source, _ := util.DeterministicGenesisStateElectra(t, 32)
+	target := source.Copy()
+	appended, err := source.ValidatorAtIndexReadOnly(0)
+	require.NoError(t, err)
+	validator := appended.Copy()
+	validator.PublicKey[0]++
+	require.NoError(t, target.AppendValidator(validator))
+
+	streamingSource := &validatorIterationState{ReadOnlyBeaconState: source}
+	streamingTarget := &validatorIterationState{ReadOnlyBeaconState: target}
+	diffs, err := diffToVals(streamingSource, streamingTarget)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(diffs))
+	require.Equal(t, uint32(32), diffs[0].index)
+	require.Equal(t, 0, streamingSource.materializedCalls)
+	require.Equal(t, 0, streamingTarget.materializedCalls)
+	require.Equal(t, 1, streamingSource.streamedCalls)
+	require.Equal(t, 1, streamingTarget.streamedCalls)
 }
 
 // Test_newValidatorDiffs tests validator diff deserialization

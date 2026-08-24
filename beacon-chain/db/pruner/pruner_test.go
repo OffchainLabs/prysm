@@ -3,6 +3,7 @@ package pruner
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -11,15 +12,26 @@ import (
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	slottest "github.com/OffchainLabs/prysm/v7/time/slots/testing"
 	"github.com/sirupsen/logrus"
 
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
+
+// testClockWaiter returns a clock waiter whose clock is already set, so that a started pruner
+// never blocks waiting for it.
+func testClockWaiter(t *testing.T) startup.ClockWaiter {
+	clockSynchronizer := startup.NewClockSynchronizer()
+	require.NoError(t, clockSynchronizer.SetClock(startup.NewClock(time.Now(), [32]byte{})))
+
+	return clockSynchronizer
+}
 
 func TestPruner_PruningConditions(t *testing.T) {
 	tests := []struct {
@@ -66,7 +78,7 @@ func TestPruner_PruningConditions(t *testing.T) {
 			}
 
 			mockCustody := &mockCustodyUpdater{}
-			p, err := New(ctx, beaconDB, time.Now(), initSyncWaiter, backfillWaiter, mockCustody, WithSlotTicker(slotTicker))
+			p, err := New(ctx, beaconDB, testClockWaiter(t), initSyncWaiter, backfillWaiter, mockCustody, WithSlotTicker(slotTicker))
 			require.NoError(t, err)
 
 			go p.Start()
@@ -105,7 +117,7 @@ func TestPruner_PruneSuccess(t *testing.T) {
 	p, err := New(
 		ctx,
 		beaconDB,
-		time.Now(),
+		testClockWaiter(t),
 		nil,
 		nil,
 		mockCustody,
@@ -128,7 +140,10 @@ func TestPruner_PruneSuccess(t *testing.T) {
 		root, err := blks[slot-1].Block.HashTreeRoot()
 		require.NoError(t, err)
 		present := beaconDB.HasBlock(ctx, root)
-		if slot <= 16 { // These should be pruned
+		// pruneUpto is 80 - 2*32 = 16. The block at pruneUpto is kept, since the states at or
+		// after it are replayed from the state stored there, so only the blocks strictly before
+		// it are pruned.
+		if slot < 16 { // These should be pruned
 			require.NoError(t, err)
 			require.Equal(t, false, present, "Expected present at slot %d to be pruned", slot)
 		} else { // These should remain
@@ -157,6 +172,9 @@ func TestPruner_UpdatesEarliestAvailableSlot(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	config := params.BeaconConfig()
 	config.FuluForkEpoch = 0 // Enable Fulu from epoch 0
+	// The pruner is triggered at epoch 2 below, and the database refuses to advertise an earliest
+	// available slot inside the MIN_EPOCHS_FOR_BLOCK_REQUESTS window, so it has to be small here.
+	config.MinEpochsForBlockRequests = 1
 	params.OverrideBeaconConfig(config)
 
 	logrus.SetLevel(logrus.DebugLevel)
@@ -179,7 +197,7 @@ func TestPruner_UpdatesEarliestAvailableSlot(t *testing.T) {
 	p, err := New(
 		ctx,
 		beaconDB,
-		time.Now(),
+		testClockWaiter(t),
 		nil,
 		nil,
 		mockCustody,
@@ -211,10 +229,9 @@ func TestPruner_UpdatesEarliestAvailableSlot(t *testing.T) {
 	// Check that UpdateEarliestAvailableSlot was called
 	assert.Equal(t, true, mockCustody.updateCallCount > 0, "UpdateEarliestAvailableSlot should have been called")
 
-	// The earliest available slot should be pruneUpto + 1
-	// pruneUpto = currentSlot - retentionEpochs*slotsPerEpoch = 80 - 2*32 = 16
-	// So earliest available slot should be 16 + 1 = 17
-	expectedEarliestSlot := primitives.Slot(17)
+	// The earliest available slot is pruneUpto, whose block and state are kept as the replay
+	// anchor: pruneUpto = currentSlot - retentionEpochs*slotsPerEpoch = 80 - 2*32 = 16.
+	expectedEarliestSlot := primitives.Slot(16)
 	require.Equal(t, expectedEarliestSlot, mockCustody.earliestAvailableSlot, "Earliest available slot should be updated correctly")
 	require.Equal(t, uint64(4), mockCustody.custodyGroupCount, "Custody group count should be preserved")
 
@@ -289,7 +306,7 @@ func TestWithRetentionPeriod_EnforcesMinimum(t *testing.T) {
 			p, err := New(
 				ctx,
 				beaconDB,
-				time.Now(),
+				testClockWaiter(t),
 				nil,
 				nil,
 				mockCustody,
@@ -309,6 +326,40 @@ func TestWithRetentionPeriod_EnforcesMinimum(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPruneStartSlotFunc(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.OverrideBeaconConfig(params.MinimalSpecConfig())
+
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	retentionEpochs := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests + 1)
+	retentionSlots := primitives.Slot(retentionEpochs) * slotsPerEpoch
+
+	t.Run("clamps an overflowing retention period", func(t *testing.T) {
+		for _, epochs := range []primitives.Epoch{slots.MaxSafeEpoch(), slots.MaxSafeEpoch() + 1, math.MaxUint64} {
+			ps := pruneStartSlotFunc(epochs)
+			require.Equal(t, primitives.Slot(0), ps(1_000_000))
+		}
+	})
+
+	t.Run("aligns the cutoff on an epoch start", func(t *testing.T) {
+		ps := pruneStartSlotFunc(retentionEpochs)
+
+		epochStart := retentionSlots + 10*slotsPerEpoch
+		for offsetInEpoch := primitives.Slot(0); offsetInEpoch < slotsPerEpoch; offsetInEpoch++ {
+			require.Equal(t, epochStart-retentionSlots, ps(epochStart+offsetInEpoch))
+		}
+
+		require.Equal(t, epochStart-retentionSlots+slotsPerEpoch, ps(epochStart+slotsPerEpoch))
+	})
+
+	t.Run("prunes nothing before the retention period has elapsed", func(t *testing.T) {
+		ps := pruneStartSlotFunc(retentionEpochs)
+
+		require.Equal(t, primitives.Slot(0), ps(retentionSlots))
+		require.Equal(t, primitives.Slot(0), ps(retentionSlots-1))
+	})
 }
 
 func TestPruner_UpdateEarliestSlotError(t *testing.T) {
@@ -334,7 +385,7 @@ func TestPruner_UpdateEarliestSlotError(t *testing.T) {
 	p, err := New(
 		ctx,
 		beaconDB,
-		time.Now(),
+		testClockWaiter(t),
 		nil,
 		nil,
 		mockCustody,

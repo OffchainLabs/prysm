@@ -94,6 +94,14 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		h1 := meta.Nodes[0]
 		h2 := meta.Nodes[1]
 
+		// Connect hosts
+		err = h1.Connect(context.Background(), peer.AddrInfo{
+			ID:    h2.ID(),
+			Addrs: h2.Addrs(),
+		})
+		require.NoError(t, err)
+		time.Sleep(300 * time.Millisecond)
+
 		logger := logrus.New()
 		logger.SetLevel(logrus.DebugLevel)
 		bcastCtx1, cancelBcast1 := context.WithCancel(t.Context())
@@ -209,14 +217,6 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 				label:       label,
 			}
 		}
-
-		// Connect hosts
-		err = h1.Connect(context.Background(), peer.AddrInfo{
-			ID:    h2.ID(),
-			Addrs: h2.Addrs(),
-		})
-		require.NoError(t, err)
-		time.Sleep(300 * time.Millisecond)
 
 		// Subscribe to regular GossipSub (critical for partial message RPC exchange!)
 		sub1, err := topic1.Subscribe()
