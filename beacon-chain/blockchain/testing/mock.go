@@ -37,38 +37,39 @@ var ErrNilState = errors.New("nil state")
 
 // ChainService defines the mock interface for testing
 type ChainService struct {
-	NotFinalized                bool
-	BuiltOnFullParentVal        bool
-	Full                        bool
-	ValidAttestation            bool
-	Optimistic                  bool
-	BidCompatibleWithHead       bool
-	ValidatorsRoot              [32]byte
-	OptimisticCheckRootReceived [32]byte
-	SyncingRoot                 [32]byte
-	TargetRoot                  [32]byte
-	HeadDependentRoot           [32]byte
-	PublicKey                   [fieldparams.BLSPubkeyLength]byte
-	MockHeadSlot                *primitives.Slot
-	DependentRootCB             func([32]byte, primitives.Epoch) ([32]byte, error)
-	MockCanonicalRoots          map[primitives.Slot][32]byte
-	InitSyncBlockRoots          map[[32]byte]bool
-	MockPayloadEarly            map[[32]byte]bool
-	MockDataAvailable           map[[32]byte]bool
-	MockDataAvailableErr        error
-	ParentPayloadReadyVal       *bool
-	BlockSlot                   primitives.Slot
-	OptimisticRoots             map[[32]byte]bool
-	FinalizedRoots              map[[32]byte]bool
-	ForkchoiceRoots             map[[32]byte]bool
-	ForkchoiceBlockHashes       map[[32]byte][32]byte
-	ForkchoiceGasLimits         map[[32]byte]uint64
-	FinalizedCheckPoint         *ethpb.Checkpoint
-	CurrentJustifiedCheckPoint  *ethpb.Checkpoint
-	PreviousJustifiedCheckPoint *ethpb.Checkpoint
-	Slot                        *primitives.Slot // Pointer because 0 is a useful value, so checking against it can be incorrect.
-	Balance                     *precompute.Balance
-	CanonicalRoots              map[[32]byte]bool
+	NotFinalized                         bool
+	BuiltOnFullParentVal                 bool
+	ReceivePayloadEnvelopeCtxHadDeadline bool
+	Full                                 bool
+	ValidAttestation                     bool
+	Optimistic                           bool
+	BidCompatibleWithHead                bool
+	ValidatorsRoot                       [32]byte
+	OptimisticCheckRootReceived          [32]byte
+	SyncingRoot                          [32]byte
+	TargetRoot                           [32]byte
+	HeadDependentRoot                    [32]byte
+	PublicKey                            [fieldparams.BLSPubkeyLength]byte
+	MockHeadSlot                         *primitives.Slot
+	DependentRootCB                      func([32]byte, primitives.Epoch) ([32]byte, error)
+	MockCanonicalRoots                   map[primitives.Slot][32]byte
+	InitSyncBlockRoots                   map[[32]byte]bool
+	MockPayloadEarly                     map[[32]byte]bool
+	MockDataAvailable                    map[[32]byte]bool
+	MockDataAvailableErr                 error
+	ParentPayloadReadyVal                *bool
+	BlockSlot                            primitives.Slot
+	OptimisticRoots                      map[[32]byte]bool
+	FinalizedRoots                       map[[32]byte]bool
+	ForkchoiceRoots                      map[[32]byte]bool
+	ForkchoiceBlockHashes                map[[32]byte][32]byte
+	ForkchoiceGasLimits                  map[[32]byte]uint64
+	FinalizedCheckPoint                  *ethpb.Checkpoint
+	CurrentJustifiedCheckPoint           *ethpb.Checkpoint
+	PreviousJustifiedCheckPoint          *ethpb.Checkpoint
+	Slot                                 *primitives.Slot // Pointer because 0 is a useful value, so checking against it can be incorrect.
+	Balance                              *precompute.Balance
+	CanonicalRoots                       map[[32]byte]bool
 	// Ancestors lets a test stub the result of Ancestor(root, slot) without
 	// wiring a full forkchoice store. Keyed by the input root.
 	Ancestors                   map[[32]byte][32]byte
@@ -969,7 +970,8 @@ func (c *ChainService) PtcLookupState(_ context.Context, _ [32]byte, _ primitive
 }
 
 // ReceiveExecutionPayloadEnvelope implements the same method in the chain service.
-func (c *ChainService) ReceiveExecutionPayloadEnvelope(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) error {
+func (c *ChainService) ReceiveExecutionPayloadEnvelope(ctx context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) error {
+	_, c.ReceivePayloadEnvelopeCtxHadDeadline = ctx.Deadline()
 	return c.ReceivePayloadEnvelopeErr
 }
 
