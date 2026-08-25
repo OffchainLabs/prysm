@@ -1014,15 +1014,3 @@ func (f *ForkChoice) VoteSnapshot(buf []forkchoicetypes.VoteData) []forkchoicety
 func (f *ForkChoice) ConfirmedPayloadBlockHash(root [32]byte) [32]byte {
 	return f.store.checkpointPayloadHashForRoot(root)
 }
-
-// FixZeroUnrealizedJustifiedRoots backfills per-node zero unrealized justified roots left by genesis-stub state checkpoints.
-func (f *ForkChoice) FixZeroUnrealizedJustifiedRoots(root [32]byte, epoch primitives.Epoch) {
-	for _, en := range f.store.emptyNodeByRoot {
-		if en == nil || en.node == nil {
-			continue
-		}
-		if en.node.unrealizedJustifiedRoot == ([32]byte{}) && en.node.unrealizedJustifiedEpoch == epoch {
-			en.node.unrealizedJustifiedRoot = root
-		}
-	}
-}

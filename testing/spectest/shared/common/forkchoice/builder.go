@@ -45,19 +45,6 @@ func NewFCRBuilder(t testing.TB, initialState state.BeaconState, initialBlock in
 	b.service.InitFastConfirmation()
 	t.Cleanup(resetFeatures)
 
-	// The genesis state carries a zero justified root stub, backfill nodes with the anchor root.
-	headRoot := b.service.CachedHeadRoot()
-	fc := b.service.ForkChoicer()
-	type nodeRootFixer interface {
-		FixZeroUnrealizedJustifiedRoots(root [32]byte, epoch primitives.Epoch)
-	}
-	fc.Lock()
-	if fixer, ok := fc.(nodeRootFixer); ok {
-		jc := fc.JustifiedCheckpoint()
-		fixer.FixZeroUnrealizedJustifiedRoots(headRoot, jc.Epoch)
-	}
-	fc.Unlock()
-
 	return b
 }
 

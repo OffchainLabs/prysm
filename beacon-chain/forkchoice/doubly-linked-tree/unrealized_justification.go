@@ -62,9 +62,6 @@ func (f *ForkChoice) updateUnrealizedCheckpoints(ctx context.Context) error {
 
 func (s *Store) pullTips(state state.BeaconState, node *Node, jc, fc *ethpb.Checkpoint) (*ethpb.Checkpoint, *ethpb.Checkpoint) {
 	if node.parent == nil {
-		if jc != nil {
-			node.unrealizedJustifiedRoot = bytesutil.ToBytes32(jc.Root)
-		}
 		return jc, fc
 	}
 	pn := node.parent.node

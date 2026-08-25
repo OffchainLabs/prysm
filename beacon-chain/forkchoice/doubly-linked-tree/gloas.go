@@ -566,15 +566,7 @@ func (s *Store) resolveVoteNode(r [32]byte, slot primitives.Slot, payloadStatus 
 		return nil, true
 	}
 	if payloadStatus {
-		fn := s.fullNodeByRoot[r]
-		if fn != nil {
-			return fn, false
-		}
-		// Pre-Gloas blocks have no separate full node
-		if slots.ToEpoch(en.node.slot) < params.BeaconConfig().GloasForkEpoch {
-			return en, false
-		}
-		return nil, false
+		return s.fullNodeByRoot[r], false
 	}
 	return en, slot == en.node.slot
 }
