@@ -265,12 +265,13 @@ func recheckKeys(ctx context.Context, valDB db.Database, km keymanager.IKeymanag
 		log.WithError(err).Debug("Could not fetch validating keys")
 	}
 	if err := valDB.UpdatePublicKeysBuckets(validatingKeys); err != nil {
-		go recheckValidatingKeysBucket(ctx, valDB, km)
+		log.WithError(err).Debug("Could not update public keys buckets")
 	}
+	go recheckValidatingKeysBucket(ctx, valDB, km)
 }
 
-// to accounts changes in the keymanager, then updates those keys'
-// buckets in bolt DB if a bucket for a key does not exist.
+// recheckValidatingKeysBucket subscribes to account changes in the local keymanager,
+// then creates missing DB buckets for those keys.
 func recheckValidatingKeysBucket(ctx context.Context, valDB db.Database, km keymanager.IKeymanager) {
 	ctx, span := trace.StartSpan(ctx, "validator.recheckValidatingKeysBucket")
 	defer span.End()

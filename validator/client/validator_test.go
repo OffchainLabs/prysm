@@ -40,6 +40,7 @@ import (
 	dbTest "github.com/OffchainLabs/prysm/v7/validator/db/testing"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/ethereum/go-ethereum/common"
@@ -172,6 +173,43 @@ func (*mockKeymanager) ListKeymanagerAccounts(
 func (*mockKeymanager) DeleteKeystores(context.Context, [][]byte,
 ) ([]*keymanager.KeyStatus, error) {
 	return nil, nil
+}
+
+func TestRecheckKeys(t *testing.T) {
+	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
+		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			local.ResetCaches()
+			w := wallet.New(&wallet.Config{
+				WalletDir:      t.TempDir(),
+				KeymanagerKind: keymanager.Local,
+				WalletPassword: "TestWalletPassword123!",
+			})
+			require.NoError(t, w.SaveWallet())
+			km, err := local.NewKeymanager(ctx, &local.SetupConfig{Wallet: w})
+			require.NoError(t, err)
+			valDB := dbTest.SetupDB(t, t.TempDir(), nil, isSlashingProtectionMinimal)
+
+			recheckKeys(ctx, valDB, km)
+			keys, err := valDB.ProposedPublicKeys(ctx)
+			require.NoError(t, err)
+			require.Equal(t, 0, len(keys))
+
+			// Keep re-importing until the watcher goroutine has subscribed and reacted.
+			kp := randKeypair(t)
+			for range 50 {
+				require.NoError(t, km.ImportKeypairs(ctx, [][]byte{kp.pri.Marshal()}, [][]byte{kp.pub[:]}))
+				keys, err = valDB.ProposedPublicKeys(ctx)
+				require.NoError(t, err)
+				if len(keys) == 1 && keys[0] == kp.pub {
+					return
+				}
+				time.Sleep(20 * time.Millisecond)
+			}
+			t.Fatal("proposal history entry was never created for the new key")
+		})
+	}
 }
 
 func TestWaitForChainStart_SetsGenesisInfo(t *testing.T) {
