@@ -28,24 +28,19 @@ func newEpochSlotTable(ctx context.Context, committees CommitteeAccessor, epoch 
 		return nil, fmt.Errorf("failed to get epoch start: %w", err)
 	}
 
-	// Initialize slot offset tables filling with noAssignment sentinel.
 	offs := make([]uint8, sizeHint)
 	for i := range offs {
 		offs[i] = noAssignment
 	}
 
-	// Loop through the given epoch.
 	spe := primitives.Slot(params.BeaconConfig().SlotsPerEpoch)
 	for slot := start; slot < start+spe; slot++ {
-		// Fetch the committee information.
 		members, err := committees.Committee(ctx, slot)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get committee for slot %d: %w", slot, err)
 		}
 
-		// Iterate through the committee members and assign their slot offsets.
 		for _, v := range members {
-			// Grow the slice if the validator index exceeds the current length.
 			if uint64(v) >= uint64(len(offs)) {
 				grown := make([]uint8, v+1)
 				copy(grown, offs)
@@ -64,12 +59,10 @@ func newEpochSlotTable(ctx context.Context, committees CommitteeAccessor, epoch 
 // assignedSlot computes the attestation slot assigned to a validator in this epoch, if any.
 // Caller should check the boolean return value before using the slot.
 func (t *epochSlotTable) assignedSlot(v primitives.ValidatorIndex) (primitives.Slot, bool) {
-	// Validator index is out of range.
 	if uint64(v) >= uint64(len(t.slotOffset)) {
 		return 0, false
 	}
 
-	// Validator has no attestation duty in this epoch.
 	if t.slotOffset[v] == noAssignment {
 		return 0, false
 	}

@@ -45,7 +45,7 @@ func GetCurrentTargetScore(
 		return 0
 	}
 	score := uint64(0)
-	// Validators vote for few distinct roots, cache the checkpoint derivation per root instead of walking per vote.
+
 	cpByRoot := make(map[[32]byte][32]byte)
 	for i, vote := range votes {
 		if vote.Root == ([32]byte{}) {

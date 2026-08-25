@@ -570,7 +570,7 @@ func (s *Store) resolveVoteNode(r [32]byte, slot primitives.Slot, payloadStatus 
 		if fn != nil {
 			return fn, false
 		}
-		// Pre-Gloas blocks have no separate full node in every insertion path, the empty node stands in.
+		// Pre-Gloas blocks have no separate full node
 		if slots.ToEpoch(en.node.slot) < params.BeaconConfig().GloasForkEpoch {
 			return en, false
 		}

@@ -27,7 +27,7 @@ func (a *fcrCommitteeAccessor) Committee(ctx context.Context, slot primitives.Sl
 	if headState == nil || headState.IsNil() {
 		return nil, errors.New("head state not available")
 	}
-	// Shuffling past the next epoch is not final, computing it would silently use a stale randao mix.
+
 	if slots.ToEpoch(slot) > coreTime.CurrentEpoch(headState)+1 {
 		return nil, errors.Errorf("slot %d is beyond the head state's next epoch", slot)
 	}
@@ -57,8 +57,7 @@ func (a *fcrCommitteeAccessor) Seed(_ context.Context, epoch primitives.Epoch) (
 }
 
 type fcrBalanceAccessor struct {
-	s *Service
-	// Checkpoint states are immutable, cached entries never go stale.
+	s            *Service
 	byCheckpoint map[forkchoicetypes.Checkpoint]*confirmation.FFGStateInfo
 }
 
@@ -86,7 +85,6 @@ func (a *fcrBalanceAccessor) BalanceInfoByCheckpoint(ctx context.Context, cp for
 		return nil, 0, err
 	}
 	var st state.ReadOnlyBeaconState
-	// Attestation processing keeps these states in the checkpoint state cache, this is almost always a hit.
 	cached, err := a.s.checkpointStateCache.StateByCheckpoint(&ethpb.Checkpoint{Epoch: cp.Epoch, Root: cp.Root[:]})
 	if err == nil && cached != nil && !cached.IsNil() {
 		st = cached
@@ -98,7 +96,7 @@ func (a *fcrBalanceAccessor) BalanceInfoByCheckpoint(ctx context.Context, cp for
 		if base == nil || base.IsNil() {
 			return nil, 0, errors.New("nil state for checkpoint root")
 		}
-		// A skipped boundary slot leaves the root's state in the prior epoch, the spec's checkpoint state is advanced to the epoch start.
+		// Spec's checkpoint state is advanced to the epoch start
 		advanced, err := transition.ProcessSlotsIfPossible(ctx, base, epochStart)
 		if err != nil {
 			return nil, 0, errors.Wrap(err, "could not advance state to checkpoint epoch")
@@ -129,7 +127,6 @@ func (a *fcrBalanceAccessor) PulledUpHeadState(ctx context.Context, headRoot [32
 	}
 	a.s.headLock.RUnlock()
 
-	// The service head can move mid run, fall back to loading the snapshotted root.
 	if headState == nil || headState.IsNil() {
 		st, err := a.s.cfg.StateGen.StateByRoot(ctx, headRoot)
 		if err != nil {
@@ -150,7 +147,7 @@ func (a *fcrBalanceAccessor) PulledUpHeadState(ctx context.Context, headRoot [32
 		if err != nil {
 			return nil, err
 		}
-		// Prefer the nextSlotCache to avoid a state copy plus ProcessSlots.
+
 		cached := transition.NextSlotState(headRoot[:], epochStart)
 		if cached != nil && !cached.IsNil() {
 			if cached.Slot() < epochStart {
