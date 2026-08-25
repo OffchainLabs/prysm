@@ -111,7 +111,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 		builderBoostFactor = primitives.Gwei(req.BuilderBoostFactor.Value)
 	}
 
-	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor, full, req.EagerPayloadStateRoot, req.BuilderRequestAuths)
+	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor, full, req.EagerPayloadStateRoot, req.BuilderConfig)
 	l := log.WithFields(logrus.Fields{
 		"sinceSlotStartTime": time.Since(t),
 		"validator":          sBlk.Block().ProposerIndex(),
@@ -181,6 +181,14 @@ func (vs *Server) getParentStateFromReorgData(ctx context.Context, slot primitiv
 	return head, nil
 }
 
+func (vs *Server) parentFull(parentRoot [32]byte) bool {
+	root, full := vs.HeadFetcher.HeadRootAndFull()
+	if root == parentRoot {
+		return full
+	}
+	return vs.ForkchoiceFetcher.FullBeatsEmpty(parentRoot)
+}
+
 func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (state.BeaconState, [32]byte, bool, error) {
 	// process attestations and update head in forkchoice
 	oldHeadRoot := vs.ForkchoiceFetcher.CachedHeadRoot()
@@ -188,12 +196,12 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 	headRoot := vs.ForkchoiceFetcher.CachedHeadRoot()
 	parentRoot := vs.ForkchoiceFetcher.GetProposerHead()
 	head, err := vs.getParentStateFromReorgData(ctx, slot, oldHeadRoot, parentRoot, headRoot)
-	return head, parentRoot, vs.ForkchoiceFetcher.FullBeatsEmpty(parentRoot), err
+	return head, parentRoot, vs.parentFull(parentRoot), err
 }
 
-func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, parentFull, eagerPayloadStateRoot bool, builderRequestAuths []*ethpb.SignedRequestAuthV1) (*ethpb.GenericBeaconBlock, error) {
+func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, parentFull, eagerPayloadStateRoot bool, builderConfig *ethpb.BuilderConfig) (*ethpb.GenericBeaconBlock, error) {
 	if sBlk.Version() >= version.Gloas {
-		return vs.buildBlockGloas(ctx, sBlk, head, skipMevBoost, parentFull, eagerPayloadStateRoot, builderRequestAuths)
+		return vs.buildBlockGloas(ctx, sBlk, head, skipMevBoost, parentFull, eagerPayloadStateRoot, builderConfig)
 	}
 	return vs.buildBlockFulu(ctx, sBlk, head, skipMevBoost, builderBoostFactor, parentFull)
 }
@@ -347,10 +355,8 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		}
 	}
 
-	if block.Version() >= version.Gloas {
-		if src, builderURL := vs.bidSourceForSlot(block.Block().Slot()); src == bidSourceBuilderAPI {
-			go vs.submitBlockToBuilder(block, builderURL)
-		}
+	if block.Version() >= version.Gloas && req.BuilderUrl != "" {
+		go vs.submitBlockToBuilder(block, req.BuilderUrl)
 	}
 
 	if err := <-errChan; err != nil {

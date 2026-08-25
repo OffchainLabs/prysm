@@ -48,6 +48,11 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 			return fmt.Errorf("received unexpected block with root %x", blkRoot)
 		}
 
+		// Verify the signature before queueing, matching the gossip path, since a matched root does not cover it.
+		if _, err := s.verifyPendingBlockSignature(ctx, id, blk, blkRoot); err != nil {
+			return errors.Wrapf(err, "verify block signature for block with root %x", blkRoot)
+		}
+
 		s.pendingQueueLock.Lock()
 		defer s.pendingQueueLock.Unlock()
 
@@ -102,6 +107,23 @@ func (s *Service) requestAndSaveMissingDataColumnSidecars(blks []blocks.ROBlock)
 		s.processPendingGloasColumns(s.ctx, blk.Root(), blk)
 	}
 
+	preGloasBlocks := make([]blocks.ROBlock, 0, len(blks))
+	for _, blk := range blks {
+		if blk.Version() < version.Gloas {
+			preGloasBlocks = append(preGloasBlocks, blk)
+		}
+	}
+
+	return s.fetchAndSaveDataColumnSidecars(preGloasBlocks)
+}
+
+// fetchAndSaveDataColumnSidecars fetches the missing custody columns for the given blocks
+// and saves them to the storage, failing if any remain missing.
+func (s *Service) fetchAndSaveDataColumnSidecars(blks []blocks.ROBlock) error {
+	if len(blks) == 0 {
+		return nil
+	}
+
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
 	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount(s.ctx)
@@ -117,12 +139,13 @@ func (s *Service) requestAndSaveMissingDataColumnSidecars(blks []blocks.ROBlock)
 
 	// Fetch missing data column sidecars.
 	params := DataColumnSidecarsParams{
-		Ctx:         s.ctx,
-		Tor:         s.cfg.clock,
-		P2P:         s.cfg.p2p,
-		CtxMap:      s.ctxMap,
-		Storage:     s.cfg.dataColumnStorage,
-		NewVerifier: s.newColumnsVerifier,
+		Ctx:           s.ctx,
+		Tor:           s.cfg.clock,
+		P2P:           s.cfg.p2p,
+		CtxMap:        s.ctxMap,
+		Storage:       s.cfg.dataColumnStorage,
+		NewVerifier:   s.newColumnsVerifier,
+		RequestByRoot: true,
 	}
 
 	sidecarsByRoot, missingIndicesByRoot, err := FetchDataColumnSidecars(params, blks, info.CustodyColumns)

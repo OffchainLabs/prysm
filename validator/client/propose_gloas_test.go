@@ -72,7 +72,7 @@ func TestProposeSelfBuildEnvelope(t *testing.T) {
 
 	m.validatorClient.EXPECT().
 		GetExecutionPayloadEnvelope(gomock.Any(), slot, gomock.Any()).
-		Return(expectedEnvelope, nil, nil)
+		Return(expectedEnvelope, nil)
 
 	builderDomain := make([]byte, 32)
 	copy(builderDomain, params.BeaconConfig().DomainBeaconBuilder[:])
@@ -90,41 +90,6 @@ func TestProposeSelfBuildEnvelope(t *testing.T) {
 	copy(pubKey[:], validatorKey.PublicKey().Marshal())
 
 	err := validator.proposeSelfBuildEnvelope(t.Context(), slot, pubKey, signedBlock)
-	require.NoError(t, err)
-}
-
-// Stateful self-build: the client returns the blinded envelope (full is nil), so the VC signs the
-// blinded root and publishes it via PublishBlindedExecutionPayloadEnvelope.
-func TestProposeSelfBuildEnvelope_Blinded(t *testing.T) {
-	validator, m, validatorKey, finish := setup(t, false)
-	defer finish()
-
-	slot := primitives.Slot(100)
-	builderIndex := params.BeaconConfig().BuilderIndexSelfBuild
-
-	blinded, err := testExecutionPayloadEnvelope(slot, builderIndex).WireBlinded()
-	require.NoError(t, err)
-
-	m.validatorClient.EXPECT().
-		GetExecutionPayloadEnvelope(gomock.Any(), slot, gomock.Any()).
-		Return(nil, blinded, nil)
-
-	builderDomain := make([]byte, 32)
-	copy(builderDomain, params.BeaconConfig().DomainBeaconBuilder[:])
-	m.validatorClient.EXPECT().
-		DomainData(gomock.Any(), gomock.Any()).
-		Return(&ethpb.DomainResponse{SignatureDomain: builderDomain}, nil)
-
-	m.validatorClient.EXPECT().
-		PublishBlindedExecutionPayloadEnvelope(gomock.Any(), gomock.AssignableToTypeOf(&ethpb.SignedWireBlindedExecutionPayloadEnvelope{})).
-		Return(&emptypb.Empty{}, nil)
-
-	signedBlock := signedGloasBlock(t, slot, builderIndex)
-
-	var pubKey [fieldparams.BLSPubkeyLength]byte
-	copy(pubKey[:], validatorKey.PublicKey().Marshal())
-
-	err = validator.proposeSelfBuildEnvelope(t.Context(), slot, pubKey, signedBlock)
 	require.NoError(t, err)
 }
 
@@ -153,7 +118,7 @@ func TestProposeSelfBuildEnvelope_ClientError(t *testing.T) {
 
 	m.validatorClient.EXPECT().
 		GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(nil, nil, errors.New("connection refused"))
+		Return(nil, errors.New("connection refused"))
 
 	signedBlock := signedGloasBlock(t, 1, params.BeaconConfig().BuilderIndexSelfBuild)
 
@@ -273,74 +238,90 @@ func TestSignExecutionPayloadEnvelope_UsesDomainBeaconBuilder(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestProposeBlock_Gloas_EnvelopeAfterBlock verifies that the Gloas propose flow
-// submits the block first, then retrieves, signs, and publishes the envelope.
-// The envelope's state root is lazily computed by the beacon node from the
-// post-block state, so this ordering is critical.
-func TestProposeBlock_Gloas_EnvelopeAfterBlock(t *testing.T) {
-	hook := logTest.NewGlobal()
-	validator, m, validatorKey, finish := setup(t, false)
-	defer finish()
-
-	var pubKey [fieldparams.BLSPubkeyLength]byte
-	copy(pubKey[:], validatorKey.PublicKey().Marshal())
-
-	blk := util.NewBeaconBlockGloas()
+// TestProposeBlock_Gloas verifies the self-build propose flow: the block is submitted before the
+// envelope is retrieved, signed, and published, and a failed reveal does not suppress proposal logging.
+func TestProposeBlock_Gloas(t *testing.T) {
 	builderIndex := params.BeaconConfig().BuilderIndexSelfBuild
-	if blk.Block.Body == nil {
-		blk.Block.Body = &ethpb.BeaconBlockBodyGloas{}
-	}
-	if blk.Block.Body.SignedExecutionPayloadBid == nil {
-		blk.Block.Body.SignedExecutionPayloadBid = &ethpb.SignedExecutionPayloadBid{}
-	}
-	if blk.Block.Body.SignedExecutionPayloadBid.Message == nil {
-		blk.Block.Body.SignedExecutionPayloadBid.Message = &ethpb.ExecutionPayloadBid{}
-	}
-	blk.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex = builderIndex
 
-	gloasBlock := &ethpb.GenericBeaconBlock{
-		Block: &ethpb.GenericBeaconBlock_Gloas{
-			Gloas: blk.Block,
-		},
+	selfBuildBlock := func() *ethpb.GenericBeaconBlock {
+		blk := util.NewBeaconBlockGloas()
+		blk.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex = builderIndex
+		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: blk.Block}}
 	}
 
-	envelope := testExecutionPayloadEnvelope(1, builderIndex)
+	t.Run("envelope after block", func(t *testing.T) {
+		hook := logTest.NewGlobal()
+		validator, m, validatorKey, finish := setup(t, false)
+		defer finish()
 
-	// DomainData for randao signing.
-	m.validatorClient.EXPECT().
-		DomainData(gomock.Any(), gomock.Any()).
-		Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
+		var pubKey [fieldparams.BLSPubkeyLength]byte
+		copy(pubKey[:], validatorKey.PublicKey().Marshal())
 
-	// BeaconBlock returns a Gloas block.
-	m.validatorClient.EXPECT().
-		BeaconBlock(gomock.Any(), gomock.AssignableToTypeOf(&ethpb.BlockRequest{})).
-		Return(gloasBlock, nil)
+		// DomainData for randao signing.
+		m.validatorClient.EXPECT().
+			DomainData(gomock.Any(), gomock.Any()).
+			Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
 
-	// DomainData for block signing.
-	m.validatorClient.EXPECT().
-		DomainData(gomock.Any(), gomock.Any()).
-		Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
+		m.validatorClient.EXPECT().
+			BeaconBlock(gomock.Any(), gomock.AssignableToTypeOf(&ethpb.BlockRequest{})).
+			Return(selfBuildBlock(), nil)
 
-	// Critical ordering: ProposeBeaconBlock must be called BEFORE ExecutionPayloadEnvelope.
-	proposeCall := m.validatorClient.EXPECT().
-		ProposeBeaconBlock(gomock.Any(), gomock.AssignableToTypeOf(&ethpb.GenericSignedBeaconBlock{})).
-		Return(&ethpb.ProposeResponse{BlockRoot: make([]byte, 32)}, nil)
+		// DomainData for block signing.
+		m.validatorClient.EXPECT().
+			DomainData(gomock.Any(), gomock.Any()).
+			Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
 
-	getEnvelopeCall := m.validatorClient.EXPECT().
-		GetExecutionPayloadEnvelope(gomock.Any(), primitives.Slot(1), gomock.Any()).
-		Return(envelope, nil, nil).
-		After(proposeCall)
+		// Critical ordering: ProposeBeaconBlock must be called BEFORE ExecutionPayloadEnvelope.
+		proposeCall := m.validatorClient.EXPECT().
+			ProposeBeaconBlock(gomock.Any(), gomock.AssignableToTypeOf(&ethpb.GenericSignedBeaconBlock{})).
+			Return(&ethpb.ProposeResponse{BlockRoot: make([]byte, 32)}, nil)
 
-	// DomainData for envelope signing.
-	m.validatorClient.EXPECT().
-		DomainData(gomock.Any(), gomock.Any()).
-		Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).
-		After(getEnvelopeCall)
+		getEnvelopeCall := m.validatorClient.EXPECT().
+			GetExecutionPayloadEnvelope(gomock.Any(), primitives.Slot(1), gomock.Any()).
+			Return(testExecutionPayloadEnvelope(1, builderIndex), nil).
+			After(proposeCall)
 
-	m.validatorClient.EXPECT().
-		PublishExecutionPayloadEnvelope(gomock.Any(), gomock.AssignableToTypeOf(&ethpb.SignedExecutionPayloadEnvelope{})).
-		Return(&emptypb.Empty{}, nil)
+		// DomainData for envelope signing.
+		m.validatorClient.EXPECT().
+			DomainData(gomock.Any(), gomock.Any()).
+			Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).
+			After(getEnvelopeCall)
 
-	validator.ProposeBlock(t.Context(), 1, pubKey)
-	require.LogsContain(t, hook, "Submitted new block")
+		m.validatorClient.EXPECT().
+			PublishExecutionPayloadEnvelope(gomock.Any(), gomock.AssignableToTypeOf(&ethpb.SignedExecutionPayloadEnvelope{})).
+			Return(&emptypb.Empty{}, nil)
+
+		validator.ProposeBlock(t.Context(), 1, pubKey)
+		require.LogsContain(t, hook, "Submitted new block")
+	})
+
+	t.Run("envelope failure still logs proposal", func(t *testing.T) {
+		hook := logTest.NewGlobal()
+		validator, m, validatorKey, finish := setup(t, false)
+		defer finish()
+
+		var pubKey [fieldparams.BLSPubkeyLength]byte
+		copy(pubKey[:], validatorKey.PublicKey().Marshal())
+
+		// DomainData for randao and block signing.
+		m.validatorClient.EXPECT().
+			DomainData(gomock.Any(), gomock.Any()).
+			Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).
+			Times(2)
+
+		m.validatorClient.EXPECT().
+			BeaconBlock(gomock.Any(), gomock.AssignableToTypeOf(&ethpb.BlockRequest{})).
+			Return(selfBuildBlock(), nil)
+
+		m.validatorClient.EXPECT().
+			ProposeBeaconBlock(gomock.Any(), gomock.AssignableToTypeOf(&ethpb.GenericSignedBeaconBlock{})).
+			Return(&ethpb.ProposeResponse{BlockRoot: make([]byte, 32)}, nil)
+
+		m.validatorClient.EXPECT().
+			GetExecutionPayloadEnvelope(gomock.Any(), primitives.Slot(1), gomock.Any()).
+			Return(nil, errors.New("connection refused"))
+
+		validator.ProposeBlock(t.Context(), 1, pubKey)
+		require.LogsContain(t, hook, "Submitted new block")
+	})
 }

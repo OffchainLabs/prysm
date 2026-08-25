@@ -6,6 +6,7 @@ package state
 import (
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
@@ -104,22 +105,40 @@ type ExecutionPayloadProcessedData struct {
 	Optimistic bool
 }
 
-type PayloadStatus int
-
 const (
-	PayloadStatusEmpty = iota + 1
-	PayloadStatusFull
+	PayloadStatusEmpty = api.PayloadStatusEmpty
+	PayloadStatusFull  = api.PayloadStatusFull
 )
 
-func (ps PayloadStatus) String() string {
-	switch ps {
-	case PayloadStatusEmpty:
-		return "empty"
-	case PayloadStatusFull:
-		return "full"
-	default:
-		return "unknown"
-	}
+// HeadData is the data sent with NewHead events.
+type HeadData struct {
+	Slot                      primitives.Slot
+	Block                     [32]byte
+	State                     [32]byte
+	EpochTransition           bool
+	PreviousDutyDependentRoot [32]byte
+	CurrentDutyDependentRoot  [32]byte
+	ExecutionOptimistic       bool
+}
+
+// FinalizedCheckpointData is the data sent with FinalizedCheckpoint events.
+type FinalizedCheckpointData struct {
+	Block               [32]byte
+	State               [32]byte
+	Epoch               primitives.Epoch
+	ExecutionOptimistic bool
+}
+
+// ChainReorgData is the data sent with Reorg events.
+type ChainReorgData struct {
+	Slot                primitives.Slot
+	Depth               uint64
+	OldHeadBlock        [32]byte
+	NewHeadBlock        [32]byte
+	OldHeadState        [32]byte
+	NewHeadState        [32]byte
+	Epoch               primitives.Epoch
+	ExecutionOptimistic bool
 }
 
 // HeadV2Data is the data sent with NewHeadV2 events.
@@ -131,6 +150,6 @@ type HeadV2Data struct {
 	ExecutionOptimistic       bool
 	CurrentEpochDependentRoot [32]byte
 	NextEpochDependentRoot    [32]byte
-	PayloadStatus             PayloadStatus
+	PayloadStatus             api.PayloadStatus
 	Version                   int
 }

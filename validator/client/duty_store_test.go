@@ -132,15 +132,19 @@ func TestDutyStore_Write(t *testing.T) {
 	assert.Equal(t, true, ds.isNextSyncCommittee(20))
 }
 
-func TestDutyStore_Reset(t *testing.T) {
+func TestDutyStore_WriteEmpty(t *testing.T) {
 	ds := testDutyStore(&ethpb.ValidatorDuty{PublicKey: make([]byte, 48)})
 	ds.data.prevDependentRoot = []byte("prev")
 	ds.data.currDependentRoot = []byte("curr")
 	assert.Equal(t, true, ds.isInitialized())
 
-	ds.reset()
-	assert.Equal(t, false, ds.isInitialized())
+	ds.writeEmpty(7)
+	// Still initialized — the emptiness is a known result, not a missing fetch —
+	// and every prior entry is gone.
+	assert.Equal(t, true, ds.isInitialized())
 	assert.Equal(t, 0, ds.snapshot().currentDutyCount())
+	assert.Equal(t, primitives.Epoch(7), ds.snapshot().epoch())
+	assert.Equal(t, true, ds.snapshot().prevDependentRoot() == nil)
 }
 
 func TestDutyStoreData_Reset(t *testing.T) {
@@ -259,4 +263,74 @@ func TestDutyStoreData_CanPromote(t *testing.T) {
 		d := dutyStoreData{initialized: true, epoch: 9}
 		assert.Equal(t, true, d.canPromote(10, nil))
 	})
+}
+
+func TestDutyStore_needsNextFetch(t *testing.T) {
+	var nilStore *dutyStore
+	assert.Equal(t, false, nilStore.needsNextFetch())
+
+	ds := &dutyStore{}
+	assert.Equal(t, false, ds.needsNextFetch()) // uninitialized
+
+	pk := pubkey{0x1}
+	build := func(missing missingNextDuties, indices []primitives.ValidatorIndex) dutyStoreData {
+		var d dutyStoreData
+		d.setFromContainer(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{{PublicKey: pk[:], ValidatorIndex: 7}},
+		})
+		d.missingNext = missing
+		d.indices = indices
+		return d
+	}
+
+	ds.write(build(0, []primitives.ValidatorIndex{7}))
+	assert.Equal(t, false, ds.needsNextFetch()) // nothing missing
+
+	ds.write(build(missingNextPtc, nil))
+	assert.Equal(t, false, ds.needsNextFetch()) // missing but no indices (combined path)
+
+	ds.write(build(missingNextPtc, []primitives.ValidatorIndex{7}))
+	assert.Equal(t, true, ds.needsNextFetch()) // missing + indices
+
+	ds.write(build(missingNextAttester, []primitives.ValidatorIndex{7}))
+	assert.Equal(t, true, ds.needsNextFetch()) // attester is retried like any other missing type
+}
+
+func TestDutyStore_replaceNextDuties_revisionGuard(t *testing.T) {
+	pk := pubkey{0x2}
+	ds := &dutyStore{}
+
+	// Uninitialized store: nothing to replace.
+	assert.Equal(t, false, ds.replaceNextDuties(0, nil, 0, nil))
+
+	var d dutyStoreData
+	d.setFromContainer(&ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{{PublicKey: pk[:], ValidatorIndex: 7}},
+		NextEpochDuties:    []*ethpb.ValidatorDuty{{PublicKey: pk[:], ValidatorIndex: 7, AttesterSlot: 100}},
+	})
+	d.epoch = 5
+	d.indices = []primitives.ValidatorIndex{7}
+	d.missingNext = missingNextPtc
+	ds.write(d)
+
+	staleRev := ds.snapshot().revision
+	ds.write(d) // a concurrent write advances the revision under the stale reader
+	assert.Equal(t, staleRev+1, ds.snapshot().revision)
+
+	newNext := []*ethpb.ValidatorDuty{{PublicKey: pk[:], ValidatorIndex: 7, AttesterSlot: 200}}
+
+	// Stale revision -> dropped, store left unchanged, revision not bumped.
+	assert.Equal(t, false, ds.replaceNextDuties(staleRev, newNext, 0, nil))
+	assert.Equal(t, staleRev+1, ds.snapshot().revision)
+	for _, nd := range ds.snapshot().nextDuties() {
+		assert.Equal(t, primitives.Slot(100), nd.AttesterSlot)
+	}
+
+	// Current revision -> applied and revision bumped.
+	assert.Equal(t, true, ds.replaceNextDuties(ds.snapshot().revision, newNext, 0, nil))
+	assert.Equal(t, staleRev+2, ds.snapshot().revision)
+	for _, nd := range ds.snapshot().nextDuties() {
+		assert.Equal(t, primitives.Slot(200), nd.AttesterSlot)
+	}
+	assert.Equal(t, true, ds.snapshot().missingNext() == 0)
 }

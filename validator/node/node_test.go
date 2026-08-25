@@ -10,6 +10,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -85,25 +86,16 @@ func TestGetLegacyDatabaseLocation(t *testing.T) {
 	nonExistingWalletDir := t.TempDir()
 
 	testCases := []struct {
-		name                      string
-		isInteropNumValidatorsSet bool
-		isWeb3SignerURLFlagSet    bool
-		dataDir                   string
-		dataFile                  string
-		walletDir                 string
-		validatorClient           *ValidatorClient
-		wallet                    *wallet.Wallet
-		expectedDataDir           string
-		expectedDataFile          string
+		name                   string
+		isWeb3SignerURLFlagSet bool
+		dataDir                string
+		dataFile               string
+		walletDir              string
+		validatorClient        *ValidatorClient
+		wallet                 *wallet.Wallet
+		expectedDataDir        string
+		expectedDataFile       string
 	}{
-		{
-			name:                      "interop num validators set",
-			isInteropNumValidatorsSet: true,
-			dataDir:                   dataDir,
-			dataFile:                  dataFile,
-			expectedDataDir:           dataDir,
-			expectedDataFile:          dataFile,
-		},
 		{
 			name:             "dataDir differs from default",
 			dataDir:          dataDir,
@@ -153,12 +145,8 @@ func TestGetLegacyDatabaseLocation(t *testing.T) {
 			dataDir:                cmd.DefaultDataDir(),
 			dataFile:               nonExistingDataFile,
 			walletDir:              nonExistingWalletDir,
-			wallet: wallet.New(&wallet.Config{
-				WalletDir:      walletDir,
-				KeymanagerKind: keymanager.Derived,
-			}),
-			expectedDataDir:  cmd.DefaultDataDir(),
-			expectedDataFile: nonExistingDataFile,
+			expectedDataDir:        cmd.DefaultDataDir(),
+			expectedDataFile:       nonExistingDataFile,
 		},
 		{
 			name:                   "web3signer url is set and legacy data file does exist",
@@ -166,12 +154,8 @@ func TestGetLegacyDatabaseLocation(t *testing.T) {
 			dataDir:                cmd.DefaultDataDir(),
 			dataFile:               nonExistingDataFile,
 			walletDir:              walletDir,
-			wallet: wallet.New(&wallet.Config{
-				WalletDir:      walletDir,
-				KeymanagerKind: keymanager.Derived,
-			}),
-			expectedDataDir:  walletDir,
-			expectedDataFile: path.Join(walletDir, kv.ProtectionDbFileName),
+			expectedDataDir:        walletDir,
+			expectedDataFile:       path.Join(walletDir, kv.ProtectionDbFileName),
 		},
 	}
 
@@ -179,7 +163,6 @@ func TestGetLegacyDatabaseLocation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			validatorClient := &ValidatorClient{wallet: tt.wallet}
 			actualDataDir, actualDataFile, err := validatorClient.getLegacyDatabaseLocation(
-				tt.isInteropNumValidatorsSet,
 				tt.isWeb3SignerURLFlagSet,
 				tt.dataDir,
 				tt.dataFile,
@@ -210,6 +193,9 @@ func TestClearDB(t *testing.T) {
 
 // TestWeb3SignerConfig tests the web3 signer config returns the correct values.
 func TestWeb3SignerConfig(t *testing.T) {
+	existingKeyFile := filepath.Join(t.TempDir(), "keyfile.txt")
+	require.NoError(t, file.WriteFile(existingKeyFile, []byte("0x800077e04f8d7496099b3d30ac5430aea64873a45e5bcfe004d2095babcbf55e21138ff0d5691abc29da190aa32755c6\n")))
+
 	type args struct {
 		baseURL          string
 		publicKeysOrURLs []string
@@ -259,7 +245,7 @@ func TestWeb3SignerConfig(t *testing.T) {
 					"0xb89bebc699769726a318c8e9971bd3171297c61aea4a6578a7a4f94b547dcba5bac16a89108b6b6a1fe3695d1a874a0b"},
 			},
 			want:       nil,
-			wantErrMsg: "web3signer url 0xa99a76ed7796f7be22d5b7e85deeb7c5677e88, is invalid: parse \"0xa99a76ed7796f7be22d5b7e85deeb7c5677e88,\": invalid URI for request",
+			wantErrMsg: "web3signer url 0xa99a76ed7796f7be22d5b7e85deeb7c5677e88, is invalid: invalid URL: parse \"0xa99a76ed7796f7be22d5b7e85deeb7c5677e88,\": invalid URI for request",
 		},
 		{
 			name: "Base URL missing scheme or host",
@@ -268,18 +254,35 @@ func TestWeb3SignerConfig(t *testing.T) {
 				publicKeysOrURLs: []string{"localhost"},
 			},
 			want:       nil,
-			wantErrMsg: "web3signer url must be in the format of http(s)://host:port url used: localhost:8545",
+			wantErrMsg: "web3signer url localhost:8545 is invalid: missing scheme or host",
 		},
 		{
 			name: "happy path with persistentFile",
 			args: &args{
 				baseURL:        "http://localhost:8545",
-				persistentFile: "/remote/key/file.txt",
+				persistentFile: existingKeyFile,
 			},
 			want: &remoteweb3signer.SetupConfig{
 				BaseEndpoint: "http://localhost:8545",
-				KeyFilePath:  "/remote/key/file.txt",
+				KeyFilePath:  existingKeyFile,
 			},
+		},
+		{
+			name: "key file does not exist",
+			args: &args{
+				baseURL:        "http://localhost:8545",
+				persistentFile: "/remote/key/file.txt",
+			},
+			want:       nil,
+			wantErrMsg: "no file exists in remote signer key file path /remote/key/file.txt",
+		},
+		{
+			name: "no public keys or key file provided",
+			args: &args{
+				baseURL: "http://localhost:8545",
+			},
+			want:       nil,
+			wantErrMsg: "no web3signer public keys or key file path provided",
 		},
 	}
 	for _, tt := range tests {
@@ -323,4 +326,37 @@ func Test_parseBeaconApiHeaders(t *testing.T) {
 		assert.Equal(t, 1, len(h))
 		assert.DeepEqual(t, []string{"value1"}, h["key1"])
 	})
+}
+
+func TestRegisterValidatorService_DistributedFlag(t *testing.T) {
+	tests := []struct {
+		name                string
+		enableBeaconRESTApi bool
+		wantErrMsg          string
+	}{
+		{
+			name:                "fails when distributed is true but REST API is false",
+			enableBeaconRESTApi: false,
+			wantErrMsg:          "--distributed requires --enable-beacon-rest-api",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resetCfg := features.InitWithReset(&features.Flags{EnableBeaconRESTApi: tt.enableBeaconRESTApi})
+			defer resetCfg()
+
+			app := cli.App{}
+			set := flag.NewFlagSet("test", 0)
+			set.Bool(flags.EnableDistributed.Name, false, "")
+			require.NoError(t, set.Set(flags.EnableDistributed.Name, "true"))
+			cliCtx := cli.NewContext(&app, set, nil)
+
+			c := &ValidatorClient{}
+			err := c.registerValidatorService(cliCtx)
+
+			require.NotNil(t, err)
+			require.ErrorContains(t, tt.wantErrMsg, err)
+		})
+	}
 }

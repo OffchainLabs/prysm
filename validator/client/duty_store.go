@@ -180,12 +180,16 @@ func (d *dutyStoreData) setFromContainer(container *ethpb.ValidatorDutiesContain
 type dutyStore struct {
 	mu   sync.RWMutex
 	data dutyStoreData
+	// revision bumps on every mutation; snapshot captures it so a stale async
+	// retry can detect the store moved and drop its write.
+	revision uint64
 }
 
 // roDutySnapshot is a read-only view of dutyStore. Getters return copies; the
 // duty iterators yield aliases that callers must not mutate.
 type roDutySnapshot struct {
-	d dutyStoreData
+	d        dutyStoreData
+	revision uint64
 }
 
 func (s roDutySnapshot) isInitialized() bool { return s.d.isInitialized() }
@@ -258,6 +262,24 @@ func (s roDutySnapshot) nextDuties() iter.Seq2[pubkey, *ethpb.ValidatorDuty] {
 	}
 }
 
+func (s roDutySnapshot) missingNext() missingNextDuties {
+	if !s.d.initialized {
+		return 0
+	}
+	return s.d.missingNext
+}
+
+func (s roDutySnapshot) epoch() primitives.Epoch {
+	return s.d.epoch
+}
+
+func (s roDutySnapshot) indices() []primitives.ValidatorIndex {
+	if !s.d.initialized {
+		return nil
+	}
+	return slices.Clone(s.d.indices)
+}
+
 func (s roDutySnapshot) currentDutyCount() int {
 	if !s.d.initialized {
 		return 0
@@ -281,13 +303,27 @@ func (ds *dutyStore) snapshot() roDutySnapshot {
 	}
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
-	return roDutySnapshot{d: ds.data}
+	return roDutySnapshot{d: ds.data, revision: ds.revision}
 }
 
-func (ds *dutyStore) reset() {
-	ds.mu.Lock()
-	defer ds.mu.Unlock()
-	ds.data.reset()
+// needsNextFetch reports whether next-epoch duties still need fetching — a cheap
+// pre-check so callers don't spawn a fetch that would no-op.
+func (ds *dutyStore) needsNextFetch() bool {
+	if ds == nil {
+		return false
+	}
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	return ds.data.initialized && ds.data.missingNext != 0 && len(ds.data.indices) > 0
+}
+
+// writeEmpty records that epoch has no duties for this client. The store stays
+// initialized so role lookups return no roles instead of erroring.
+func (ds *dutyStore) writeEmpty(epoch primitives.Epoch) {
+	var data dutyStoreData
+	data.setFromContainer(&ethpb.ValidatorDutiesContainer{})
+	data.epoch = epoch
+	ds.write(data)
 }
 
 func (ds *dutyStore) isInitialized() bool {
@@ -385,4 +421,29 @@ func (ds *dutyStore) write(data dutyStoreData) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.data = data
+	ds.revision++
+}
+
+// replaceNextDuties swaps in next-epoch duties and the missing mask, keeping
+// current-epoch duties/epoch/indices. A non-nil currDepRoot refreshes the current
+// dependent root; nil keeps it. Applies (and reports true) only if the store is
+// still at wantRevision, so a stale async retry is dropped.
+func (ds *dutyStore) replaceNextDuties(wantRevision uint64, next []*ethpb.ValidatorDuty, missing missingNextDuties, currDepRoot []byte) bool {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	if !ds.data.initialized || ds.revision != wantRevision {
+		return false
+	}
+	container := ds.data.toContainer()
+	container.NextEpochDuties = next
+	if currDepRoot != nil {
+		container.CurrDependentRoot = currDepRoot
+	}
+	epoch, indices := ds.data.epoch, ds.data.indices
+	ds.data.setFromContainer(container)
+	ds.data.epoch = epoch
+	ds.data.indices = indices
+	ds.data.missingNext = missing
+	ds.revision++
+	return true
 }

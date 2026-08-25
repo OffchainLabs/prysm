@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/OffchainLabs/prysm/v7/build/bazel"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/runtime/interop"
@@ -18,7 +19,6 @@ import (
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
@@ -196,17 +196,17 @@ func (v *LighthouseValidatorNode) Start(ctx context.Context) error {
 
 	cmd := exec.CommandContext(ctx, binaryPath, args...) // #nosec G204 -- Safe
 
-	// Write stderr to log files.
-	stderr, err := os.Create(path.Join(e2e.TestParams.LogPath, fmt.Sprintf("lighthouse_validator_%d_stderr.log", index)))
+	logFile, err := os.Create(path.Join(e2e.TestParams.LogPath, fmt.Sprintf("lighthouse_validator_%d.log", index)))
 	if err != nil {
 		return err
 	}
 	defer func() {
-		if err := stderr.Close(); err != nil {
-			log.WithError(err).Error("Failed to close stderr file")
+		if err := logFile.Close(); err != nil {
+			log.WithError(err).Error("Failed to close lighthouse validator log file")
 		}
 	}()
-	cmd.Stderr = stderr
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
 
 	log.Infof("Starting lighthouse validator client %d with flags: %s %s", index, binaryPath, strings.Join(args, " "))
 	if err = cmd.Start(); err != nil {

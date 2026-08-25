@@ -3,6 +3,7 @@ package blockchain
 import (
 	"context"
 	"math"
+	stdtime "time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	coregloas "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
@@ -10,21 +11,55 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
-func (s *Service) waitUntilEpoch(target primitives.Epoch, secondsPerSlot uint64) error {
+func (s *Service) IsBidCompatibleWithHead(bid interfaces.ROExecutionPayloadBid) bool {
+	s.headLock.RLock()
+	if s.head == nil || s.head.block == nil || s.head.block.Block() == nil || s.head.state == nil {
+		s.headLock.RUnlock()
+		return false
+	}
+	headRoot := s.head.root
+	headBlock := s.head.block.Block()
+	headState := s.head.state
+	s.headLock.RUnlock()
+
+	headBid, err := headBlock.Body().SignedExecutionPayloadBid()
+	if err != nil || headBid.Message == nil {
+		log.WithError(err).Debug("Could not get head bid to check bid compatibility")
+		return false
+	}
+
+	buildsOnParentBlock := bid.ParentBlockRoot() == headBlock.ParentRoot()
+	buildsOnParentPayload := bid.ParentBlockHash() == bytesutil.ToBytes32(headBid.Message.ParentBlockHash)
+	if buildsOnParentBlock && buildsOnParentPayload {
+		return true
+	}
+	if bid.ParentBlockRoot() != headRoot {
+		return false
+	}
+	buildsOnHeadPayload := bid.ParentBlockHash() == bytesutil.ToBytes32(headBid.Message.BlockHash)
+	if buildFull, _ := s.shouldBuildOnFull(headState, headRoot, bid.Slot()); buildFull {
+		return buildsOnHeadPayload
+	}
+	return buildsOnParentPayload
+}
+
+func (s *Service) waitUntilEpoch(target primitives.Epoch, slotDuration stdtime.Duration) error {
 	if slots.ToEpoch(s.CurrentSlot()) >= target {
 		return nil
 	}
-	ticker := slots.NewSlotTicker(s.genesisTime, secondsPerSlot)
+	ticker := slots.NewSlotTicker(s.genesisTime, slotDuration)
 	defer ticker.Done()
 	for {
 		select {
@@ -47,11 +82,11 @@ func (s *Service) runLatePayloadTasks() {
 	if cfg.GloasForkEpoch == math.MaxUint64 {
 		return
 	}
-	if err := s.waitUntilEpoch(cfg.GloasForkEpoch, cfg.SecondsPerSlot); err != nil {
+	if err := s.waitUntilEpoch(cfg.GloasForkEpoch, cfg.SlotDuration()); err != nil {
 		return
 	}
-	offset := cfg.SlotComponentDuration(cfg.PayloadAttestationDueBPS)
-	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, offset, cfg.SecondsPerSlot)
+	offset := cfg.SlotComponentDuration(cfg.PayloadDueBPS)
+	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, offset, cfg.SlotDuration())
 	defer ticker.Done()
 	for {
 		select {
@@ -65,8 +100,8 @@ func (s *Service) runLatePayloadTasks() {
 }
 
 // checkIfProposing does not advance st and only resolves the proposer correctly when st is
-// already advanced to at least slot's epoch. Its sole caller, getLatePayloadAttribute, satisfies
-// this by passing the head state for current slot + 1.
+// already advanced to at least slot's epoch. Callers satisfy this by passing a head or block
+// state for the following slot.
 //
 // WARNING: if called with a head lagging further behind (e.g. several empty epochs), the epoch
 // checks below fall through and it returns (nil, nil) — reported as "not proposing" — even when
@@ -181,9 +216,6 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 		return
 	}
 	hr := [32]byte(r)
-	if s.payloadBeingSynced.isSyncing(hr) {
-		return
-	}
 	if s.HasFullNode(hr) {
 		return
 	}
@@ -274,4 +306,48 @@ func (s *Service) saveHeadIfNeeded(ctx context.Context, cfg *postBlockProcessCon
 		log.WithError(err).Error("Could not save head")
 	}
 	s.pruneAttsFromPool(ctx, cfg.postState, cfg.roblock)
+}
+
+func (s *Service) shouldBuildOnFull(st state.ReadOnlyBeaconState, root [32]byte, proposingSlot primitives.Slot) (bool, string) {
+	proposing := s.proposingAt(st, proposingSlot)
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.shouldBuildOnFullLocked(root, proposingSlot, proposing)
+}
+
+func (s *Service) shouldBuildOnFullLocked(root [32]byte, proposingSlot primitives.Slot, proposing bool) (bool, string) {
+	hs, err := s.cfg.ForkChoiceStore.Slot(root)
+	if err != nil {
+		log.WithError(err).Error("Could not get slot for head root")
+		return true, ""
+	}
+
+	if hs+1 != proposingSlot {
+		if !s.cfg.ForkChoiceStore.FullBeatsEmpty(root) {
+			return false, "forkchoice prefers empty"
+		}
+		return true, ""
+	}
+	if s.cfg.ForkChoiceStore.PTCVotedLate(root) {
+		return false, "ptc voted payload missing"
+	}
+	if s.cfg.ForkChoiceStore.PTCVotedEarlyAndAvailable(root) {
+		return true, ""
+	}
+	if !proposing || !features.Get().ReorgLatePayloads {
+		return true, ""
+	}
+	early, known := s.PayloadEarly(root)
+	if known && !early {
+		return false, "arrived late, betting on empty"
+	}
+	return true, ""
+}
+
+func (s *Service) proposingAt(st state.ReadOnlyBeaconState, slot primitives.Slot) bool {
+	p, err := s.checkIfProposing(st, slot)
+	if err != nil {
+		log.WithError(err).Error("Could not resolve tracked proposer")
+	}
+	return p != nil
 }

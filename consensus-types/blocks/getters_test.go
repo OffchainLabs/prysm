@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	bitfield "github.com/OffchainLabs/go-bitfield"
+	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
+
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -15,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 func Test_BeaconBlockIsNil(t *testing.T) {
@@ -390,6 +391,19 @@ func Test_BeaconBlockBody_ElectraAttestations(t *testing.T) {
 	a := bb.Block().Body().Attestations()
 	require.Equal(t, 1, len(a))
 	require.DeepEqual(t, a[0].GetSignature(), []byte("electra"))
+}
+
+func Test_BeaconBlockBody_GloasAttestations(t *testing.T) {
+	bb := &SignedBeaconBlock{
+		block: &BeaconBlock{body: &BeaconBlockBody{
+			version: version.Gloas,
+			attestationsGloas: []*eth.AttestationGloas{{
+				Signature: []byte("gloas"),
+			}},
+		}}}
+	a := bb.Block().Body().Attestations()
+	require.Equal(t, 1, len(a))
+	require.DeepEqual(t, a[0].GetSignature(), []byte("gloas"))
 }
 
 func Test_BeaconBlockBody_Deposits(t *testing.T) {

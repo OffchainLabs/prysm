@@ -75,6 +75,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.BatchVerifierLimit,
 			flags.StateDiffExponents,
 			flags.PostponeShutdownForProposals,
+			flags.DisableGraffitiClientAppend,
 		},
 	},
 	{
@@ -144,6 +145,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.MevRelayEndpoint,
 			flags.MinBuilderBid,
 			flags.MinBuilderDiff,
+			flags.BuilderHeaderTimeout,
 			flags.SuggestedFeeRecipient,
 			flags.DisableBuilderSSZ,
 		},
@@ -170,7 +172,6 @@ var appHelpFlagGroups = []flagGroup{
 			flags.ExecutionEngineHeaders,
 			flags.ExecutionJWTSecretFlag,
 			flags.JwtId,
-			flags.InteropMockEth1DataVotesFlag,
 		},
 	},
 	{ // Flags relevant to configuring beacon chain monitoring.

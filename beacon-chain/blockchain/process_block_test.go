@@ -122,6 +122,7 @@ func Test_pruneAttsFromPool_Electra(t *testing.T) {
 	rob, err := consensusblocks.NewSignedBeaconBlock(bl)
 	require.NoError(t, err)
 	st, _ := util.DeterministicGenesisStateElectra(t, 1024)
+	require.NoError(t, helpers.UpdateCommitteeCache(ctx, st, 0))
 	committees, err := helpers.BeaconCommittees(ctx, st, 0)
 	require.NoError(t, err)
 	// Sanity check to make sure the on-chain att will be decomposed
@@ -3006,6 +3007,55 @@ func TestIsDataAvailable(t *testing.T) {
 	})
 }
 
+// Reproduces the checkpoint sync stall, during initial sync a block with missing columns must fail fast instead of waiting for gossip that never comes.
+func TestIsDataAvailable_InitSync(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.AltairForkEpoch, cfg.BellatrixForkEpoch, cfg.CapellaForkEpoch, cfg.DenebForkEpoch, cfg.ElectraForkEpoch, cfg.FuluForkEpoch = 0, 0, 0, 0, 0, 0
+	params.OverrideBeaconConfig(cfg)
+
+	t.Run("missing columns fail instead of blocking", func(t *testing.T) {
+		testParams := testIsAvailableParams{
+			options:                 []Option{WithSyncChecker(&mock.MockSyncChecker{})},
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, cancel, service, root, signed := testIsAvailableSetup(t, testParams)
+		defer cancel()
+
+		roBlock, err := consensusblocks.NewROBlockWithRoot(signed, root)
+		require.NoError(t, err)
+
+		done := make(chan error, 1)
+		go func() {
+			done <- service.isDataAvailable(ctx, roBlock)
+		}()
+
+		bound := time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second + 2*time.Second
+		select {
+		case err := <-done:
+			require.NotNil(t, err)
+		case <-time.After(bound):
+			t.Fatal("isDataAvailable did not return for a block with missing data columns, the init-sync consumer stalls forever on this path")
+		}
+	})
+
+	t.Run("stored columns pass", func(t *testing.T) {
+		testParams := testIsAvailableParams{
+			options:                 []Option{WithSyncChecker(&mock.MockSyncChecker{})},
+			columnsToSave:           []uint64{1, 17, 19, 42, 75, 87, 102, 117},
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, cancel, service, root, signed := testIsAvailableSetup(t, testParams)
+		defer cancel()
+
+		roBlock, err := consensusblocks.NewROBlockWithRoot(signed, root)
+		require.NoError(t, err)
+		require.NoError(t, service.isDataAvailable(ctx, roBlock))
+	})
+}
+
 func TestDataColumnsAvailableNow(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()
@@ -3714,7 +3764,7 @@ func TestHandleBlockAttestations_GloasSameSlotPayloadVote(t *testing.T) {
 			Block: &ethpb.BeaconBlockGloas{
 				Slot: 2,
 				Body: &ethpb.BeaconBlockBodyGloas{
-					Attestations: []*ethpb.AttestationElectra{
+					Attestations: []*ethpb.AttestationGloas{
 						{
 							AggregationBits: aggBits,
 							CommitteeBits:   cb,

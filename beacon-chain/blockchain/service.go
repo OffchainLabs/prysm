@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
@@ -49,6 +50,9 @@ type Service struct {
 	genesisTime                    time.Time
 	head                           *head
 	headLock                       sync.RWMutex
+	headV2EventLock                sync.Mutex
+	lastHeadV2Root                 [32]byte
+	lastHeadV2Status               api.PayloadStatus
 	originBlockRoot                [32]byte // genesis root, or weak subjectivity checkpoint root, depending on how the node is initialized
 	boundaryRoots                  [][32]byte
 	checkpointStateCache           *cache.CheckpointStateCache
@@ -82,6 +86,7 @@ type config struct {
 	PayloadIDCache            *cache.PayloadIDCache
 	ProposerPreferencesCache  *cache.ProposerPreferencesCache
 	SubscribedValidatorsCache *cache.SubscribedValidatorsCache
+	BuilderCircuitBreaker     *cache.BuilderCircuitBreaker
 	AttestationCache          *cache.AttestationCache
 	AttPool                   attestations.Pool
 	ExitPool                  voluntaryexits.PoolManager

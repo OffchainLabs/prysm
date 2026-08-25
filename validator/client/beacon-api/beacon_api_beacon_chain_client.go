@@ -304,15 +304,6 @@ func (c beaconApiChainClient) Validators(ctx context.Context, in *ethpb.ListVali
 	}, nil
 }
 
-func (c beaconApiChainClient) ValidatorQueue(ctx context.Context, in *empty.Empty) (*ethpb.ValidatorQueue, error) {
-	if c.fallbackClient != nil {
-		return c.fallbackClient.ValidatorQueue(ctx, in)
-	}
-
-	// TODO: Implement me
-	return nil, errors.New("beaconApiChainClient.ValidatorQueue is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiChainClientWithFallback.")
-}
-
 func (c beaconApiChainClient) ValidatorPerformance(ctx context.Context, in *ethpb.ValidatorPerformanceRequest) (*ethpb.ValidatorPerformanceResponse, error) {
 	// Note: ValidatorPerformance is only supported on Prysm nodes,
 	// So we should check whether the node is Prysm by node version.
@@ -353,15 +344,6 @@ func (c beaconApiChainClient) ValidatorPerformance(ctx context.Context, in *ethp
 		PublicKeys:                    resp.PublicKeys,
 		InactivityScores:              resp.InactivityScores,
 	}, nil
-}
-
-func (c beaconApiChainClient) ValidatorParticipation(ctx context.Context, in *ethpb.GetValidatorParticipationRequest) (*ethpb.ValidatorParticipationResponse, error) {
-	if c.fallbackClient != nil {
-		return c.fallbackClient.ValidatorParticipation(ctx, in)
-	}
-
-	// TODO: Implement me
-	return nil, errors.New("beaconApiChainClient.ValidatorParticipation is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiChainClientWithFallback.")
 }
 
 func NewBeaconApiChainClientWithFallback(provider rest.RestConnectionProvider, fallbackClient iface.ChainClient) iface.ChainClient {

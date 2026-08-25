@@ -68,8 +68,8 @@ func (s *Service) validateExecutionPayloadBidParentValid(_ context.Context, blk 
 	if blk.Version() < version.Gloas {
 		return pubsub.ValidationAccept, nil
 	}
-	if s.hasBadPayload(blk.ParentRoot()) {
-		return pubsub.ValidationReject, errors.New("parent payload is invalid")
+	if s.hasBadPayload(blk.ParentRoot()) && s.cfg.chain.BuiltOnFullParent(blk) {
+		return pubsub.ValidationReject, errors.New("block builds on invalid parent payload")
 	}
 	return pubsub.ValidationAccept, nil
 }
@@ -104,7 +104,8 @@ func (s *Service) requestDataColumnsForEnvelope(root [32]byte) {
 		log.WithError(err).Debug("Could not wrap block for payload envelope data columns")
 		return
 	}
-	if err := s.requestAndSaveMissingDataColumnSidecars([]consensusblocks.ROBlock{roBlock}); err != nil {
+	s.processPendingGloasColumns(s.ctx, root, blk)
+	if err := s.fetchAndSaveDataColumnSidecars([]consensusblocks.ROBlock{roBlock}); err != nil {
 		log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Debug("Could not fetch data column sidecars for payload envelope")
 	}
 }
@@ -112,8 +113,8 @@ func (s *Service) requestDataColumnsForEnvelope(root [32]byte) {
 const maxPayloadEnvelopeFetchAttempts = 3
 
 func (s *Service) fetchPayloadEnvelope(root [32]byte) {
-	// Validating the envelope requires the block's data column sidecars; fetch any we are missing.
-	go s.requestDataColumnsForEnvelope(root)
+	// Fetch missing columns before the envelope so envelope processing does not wait on columns that were never requested.
+	s.requestDataColumnsForEnvelope(root)
 
 	bestPeers := s.getBestPeers()
 	if len(bestPeers) == 0 {
@@ -142,7 +143,10 @@ func (s *Service) fetchPayloadEnvelope(root [32]byte) {
 			log.WithError(err).Debug("Could not wrap requested payload envelope")
 			continue
 		}
-		if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(s.ctx, wrapped); err != nil {
+		ctx, cancel := context.WithTimeout(s.ctx, params.BeaconConfig().SlotDuration())
+		err = s.cfg.chain.ReceiveExecutionPayloadEnvelope(ctx, wrapped)
+		cancel()
+		if err != nil {
 			if blockchain.IsInvalidBlock(err) {
 				s.setBadPayload(s.ctx, root)
 				return

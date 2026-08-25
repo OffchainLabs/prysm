@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"iter"
 	"slices"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/capella"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/deneb"
@@ -25,7 +27,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
@@ -1236,36 +1237,65 @@ func (h *hdiff) serialize() HdiffBytes {
 
 // diffToVals computes the difference between two BeaconStates and returns a slice of validatorDiffs.
 func diffToVals(source, target state.ReadOnlyBeaconState) ([]validatorDiff, error) {
-	sVals := source.ValidatorsReadOnly()
-	tVals := target.ValidatorsReadOnly()
-	if len(tVals) < len(sVals) {
-		return nil, errors.Errorf("target validators length %d is less than source %d", len(tVals), len(sVals))
+	sourceCount := source.NumValidators()
+	targetCount := target.NumValidators()
+	if targetCount < sourceCount {
+		return nil, errors.Errorf("target validators length %d is less than source %d", targetCount, sourceCount)
 	}
+
+	nextTarget, stopTarget := iter.Pull2(target.ValidatorsReadOnlySeq())
+	defer stopTarget()
+
 	diffs := make([]validatorDiff, 0)
-	for i, s := range sVals {
-		ti := tVals[i]
+	processed := 0
+	expectedIndex := primitives.ValidatorIndex(0)
+	for sourceIndex, s := range source.ValidatorsReadOnlySeq() {
+		if sourceIndex != expectedIndex {
+			return nil, errors.Errorf("source validators iterator returned index %d, expected %d", sourceIndex, expectedIndex)
+		}
+		targetIndex, ti, ok := nextTarget()
+		if !ok {
+			return nil, errors.Errorf("target validators iterator ended at index %d, expected length %d", processed, targetCount)
+		}
+		if targetIndex != expectedIndex {
+			return nil, errors.Errorf("target validators iterator returned index %d, expected %d", targetIndex, expectedIndex)
+		}
 		if validatorsEqual(s, ti) {
+			processed++
+			expectedIndex++
 			continue
 		}
 		d := validatorDiff{
 			Slashed:                    ti.Slashed(),
-			index:                      uint32(i),
+			index:                      uint32(processed),
 			EffectiveBalance:           ti.EffectiveBalance(),
 			ActivationEligibilityEpoch: ti.ActivationEligibilityEpoch(),
 			ActivationEpoch:            ti.ActivationEpoch(),
 			ExitEpoch:                  ti.ExitEpoch(),
 			WithdrawableEpoch:          ti.WithdrawableEpoch(),
 		}
-		if !bytes.Equal(s.GetWithdrawalCredentials(), tVals[i].GetWithdrawalCredentials()) {
-			d.WithdrawalCredentials = slices.Clone(tVals[i].GetWithdrawalCredentials())
+		if !bytes.Equal(s.GetWithdrawalCredentials(), ti.GetWithdrawalCredentials()) {
+			d.WithdrawalCredentials = slices.Clone(ti.GetWithdrawalCredentials())
 		}
 		diffs = append(diffs, d)
+		processed++
+		expectedIndex++
 	}
-	for i, ti := range tVals[len(sVals):] {
+	if processed != sourceCount {
+		return nil, errors.Errorf("source validators iterator ended at index %d, expected length %d", processed, sourceCount)
+	}
+	for i := sourceCount; i < targetCount; i++ {
+		targetIndex, ti, ok := nextTarget()
+		if !ok {
+			return nil, errors.Errorf("target validators iterator ended at index %d, expected length %d", i, targetCount)
+		}
+		if targetIndex != expectedIndex {
+			return nil, errors.Errorf("target validators iterator returned index %d, expected %d", targetIndex, expectedIndex)
+		}
 		pubkey := ti.PublicKey()
 		diffs = append(diffs, validatorDiff{
 			Slashed:                    ti.Slashed(),
-			index:                      uint32(i + len(sVals)),
+			index:                      uint32(i),
 			PublicKey:                  pubkey[:],
 			WithdrawalCredentials:      slices.Clone(ti.GetWithdrawalCredentials()),
 			EffectiveBalance:           ti.EffectiveBalance(),
@@ -1274,6 +1304,7 @@ func diffToVals(source, target state.ReadOnlyBeaconState) ([]validatorDiff, erro
 			ExitEpoch:                  ti.ExitEpoch(),
 			WithdrawableEpoch:          ti.WithdrawableEpoch(),
 		})
+		expectedIndex++
 	}
 	return diffs, nil
 }
@@ -1824,6 +1855,14 @@ func applyBalancesDiff(source state.BeaconState, diff []int64) (state.BeaconStat
 // applyStateDiff applies the given diff to the source state in place.
 func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDiff) (state.BeaconState, error) {
 	var err error
+	// updateToVersion runs Gloas onboarding which drops builder deposits, so capture the pre-upgrade list the diff indexes.
+	var prevPendingDeposits []*ethpb.PendingDeposit
+	if source.Version() >= version.Electra {
+		prevPendingDeposits, err = source.PendingDeposits()
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get pending deposits")
+		}
+	}
 	if source, err = updateToVersion(ctx, source, diff.targetVersion); err != nil {
 		return nil, errors.Wrap(err, "failed to update state to target version")
 	}
@@ -1956,7 +1995,7 @@ func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDi
 	if err := source.SetEarliestConsolidationEpoch(diff.earliestConsolidationEpoch); err != nil {
 		return nil, errors.Wrap(err, "failed to set earliest consolidation epoch")
 	}
-	if err := applyPendingDepositsDiff(source, diff); err != nil {
+	if err := applyPendingDepositsDiff(source, diff, prevPendingDeposits); err != nil {
 		return nil, errors.Wrap(err, "failed to apply pending deposits diff")
 	}
 	if err := applyPendingPartialWithdrawalsDiff(source, diff); err != nil {
@@ -1980,13 +2019,12 @@ func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDi
 	return source, nil
 }
 
-// applyPendingDepositsDiff applies the pending deposits diff to the source state in place.
-func applyPendingDepositsDiff(source state.BeaconState, diff *stateDiff) error {
-	sPendingDeposits, err := source.PendingDeposits()
-	if err != nil {
-		return errors.Wrap(err, "failed to get pending deposits")
+// prevPendingDeposits is the anchor's pre-upgrade list the diff indexes, not source's post-upgrade list.
+func applyPendingDepositsDiff(source state.BeaconState, diff *stateDiff, prevPendingDeposits []*ethpb.PendingDeposit) error {
+	if int(diff.pendingDepositIndex) > len(prevPendingDeposits) {
+		return errors.Errorf("pending deposit index %d exceeds source length %d", diff.pendingDepositIndex, len(prevPendingDeposits))
 	}
-	sPendingDeposits = sPendingDeposits[int(diff.pendingDepositIndex):]
+	sPendingDeposits := prevPendingDeposits[int(diff.pendingDepositIndex):]
 	for _, t := range diff.pendingDepositDiff {
 		sPendingDeposits = append(sPendingDeposits, &ethpb.PendingDeposit{
 			PublicKey:             slices.Clone(t.PublicKey),

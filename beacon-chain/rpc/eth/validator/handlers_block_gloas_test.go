@@ -84,7 +84,9 @@ func TestProduceBlockV4_IncludePayloadTrue(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).Return(gloasGenericBlockContents(), nil)
+	contents := gloasGenericBlockContents()
+	contents.PayloadValue = "12345"
+	v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).Return(contents, nil)
 
 	server := &Server{
 		V1Alpha1Server:        v1alpha1Server,
@@ -103,6 +105,7 @@ func TestProduceBlockV4_IncludePayloadTrue(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	assert.Equal(t, "gloas", resp.Version)
 	assert.Equal(t, true, resp.ExecutionPayloadIncluded)
+	assert.Equal(t, "12345", resp.ExecutionPayloadValue)
 	assert.Equal(t, "10000000000", resp.ConsensusBlockValue)
 
 	var blockContents structs.BlockContentsGloas
@@ -111,6 +114,7 @@ func TestProduceBlockV4_IncludePayloadTrue(t *testing.T) {
 	assert.NotNil(t, blockContents.ExecutionPayloadEnvelope)
 
 	require.Equal(t, "gloas", writer.Header().Get(api.VersionHeader))
+	require.Equal(t, "12345", writer.Header().Get(api.ExecutionPayloadValueHeader))
 	require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
 	require.Equal(t, "true", writer.Header().Get(api.ExecutionPayloadIncludedHeader))
 }
@@ -197,6 +201,9 @@ func TestProduceBlockV4_IncludePayloadFalse(t *testing.T) {
 	assert.NotNil(t, block.Body)
 
 	require.Equal(t, "gloas", writer.Header().Get(api.VersionHeader))
+	// Producer set no payload value: the response must still carry a numeric value.
+	require.Equal(t, "0", resp.ExecutionPayloadValue)
+	require.Equal(t, "0", writer.Header().Get(api.ExecutionPayloadValueHeader))
 	require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadIncludedHeader))
 }
 
@@ -210,7 +217,9 @@ func TestProduceBlockV4_BuilderBidExcludesPayload(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 	// External builder bid: the producer returns the block alone (no inline contents), so the payload is excluded.
-	v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).Return(gloasGenericBlockWithBuilder(3), nil)
+	builderBlock := gloasGenericBlockWithBuilder(3)
+	builderBlock.PayloadValue = "2000000000000"
+	v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).Return(builderBlock, nil)
 
 	server := &Server{
 		V1Alpha1Server:        v1alpha1Server,
@@ -228,6 +237,8 @@ func TestProduceBlockV4_BuilderBidExcludesPayload(t *testing.T) {
 	var resp structs.ProduceBlockV4Response
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	assert.Equal(t, false, resp.ExecutionPayloadIncluded)
+	assert.Equal(t, "2000000000000", resp.ExecutionPayloadValue)
+	require.Equal(t, "2000000000000", writer.Header().Get(api.ExecutionPayloadValueHeader))
 	require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadIncludedHeader))
 
 	var block structs.BeaconBlockGloas
@@ -307,7 +318,7 @@ func TestProduceBlockV4_SSZ_IncludePayloadTrue(t *testing.T) {
 	assert.Equal(t, true, writer.Body.Len() > 0)
 }
 
-// GET returns blinded SSZ that must roundtrip with HTR matching the full envelope.
+// GET returns the full envelope SSZ that must roundtrip with a matching HTR.
 func TestExecutionPayloadEnvelope_SSZ(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -316,11 +327,9 @@ func TestExecutionPayloadEnvelope_SSZ(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	envelope := testEnvelope()
-	wireBlinded, err := envelope.WireBlinded()
-	require.NoError(t, err)
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 	v1alpha1Server.EXPECT().GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).Return(
-		&eth.ExecutionPayloadEnvelopeResponse{Blinded: wireBlinded}, nil,
+		&eth.ExecutionPayloadEnvelopeResponse{Envelope: envelope}, nil,
 	)
 
 	server := &Server{V1Alpha1Server: v1alpha1Server}
@@ -336,11 +345,11 @@ func TestExecutionPayloadEnvelope_SSZ(t *testing.T) {
 	assert.Equal(t, "application/octet-stream", writer.Header().Get("Content-Type"))
 	assert.Equal(t, version.String(version.Gloas), writer.Header().Get("Eth-Consensus-Version"))
 
-	blinded := &eth.WireBlindedExecutionPayloadEnvelope{}
-	require.NoError(t, blinded.UnmarshalSSZ(writer.Body.Bytes()))
+	decoded := &eth.ExecutionPayloadEnvelope{}
+	require.NoError(t, decoded.UnmarshalSSZ(writer.Body.Bytes()))
 	wantHTR, err := envelope.HashTreeRoot()
 	require.NoError(t, err)
-	gotHTR, err := blinded.HashTreeRoot()
+	gotHTR, err := decoded.HashTreeRoot()
 	require.NoError(t, err)
 	assert.Equal(t, wantHTR, gotHTR)
 }
@@ -353,11 +362,9 @@ func TestExecutionPayloadEnvelope_BeaconBlockRootMismatch(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	envelope := testEnvelope()
-	wireBlinded, err := envelope.WireBlinded()
-	require.NoError(t, err)
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 	v1alpha1Server.EXPECT().GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).Return(
-		&eth.ExecutionPayloadEnvelopeResponse{Blinded: wireBlinded}, nil,
+		&eth.ExecutionPayloadEnvelopeResponse{Envelope: envelope}, nil,
 	)
 
 	server := &Server{V1Alpha1Server: v1alpha1Server}

@@ -76,7 +76,13 @@ func (vs *Server) SubmitAggregateSelectionProofElectra(
 	var atts []*ethpb.AttestationElectra
 
 	if features.Get().EnableExperimentalAttestationPool {
-		atts = cache.GetBySlotAndCommitteeIndex[*ethpb.AttestationElectra](vs.AttestationCache, req.Slot, req.CommitteeIndex)
+		matches := cache.GetBySlotAndCommitteeIndex[ethpb.Att](vs.AttestationCache, req.Slot, req.CommitteeIndex)
+		atts = make([]*ethpb.AttestationElectra, 0, len(matches))
+		for _, att := range matches {
+			if converted, ok := ethpb.AttestationElectraFromAtt(att); ok {
+				atts = append(atts, converted)
+			}
+		}
 	} else {
 		atts = vs.AttPool.AggregatedAttestationsBySlotIndexElectra(ctx, req.Slot, req.CommitteeIndex)
 		if len(atts) == 0 {

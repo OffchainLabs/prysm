@@ -104,6 +104,9 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 		log.WithError(err).Warn("Could not update head")
 	}
 	newBlockHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
+	// Weights are fresh here: the block's attestations were just fed to forkchoice and Head
+	// recomputed them. A block that lost the head race is still valid evidence about its parent.
+	s.checkBuilderPayloadFailure(cfg.roblock.Block(), cfg.postState)
 	if cfg.headRoot != cfg.roblock.Root() {
 		s.logNonCanonicalBlockReceived(cfg.roblock.Root(), cfg.headRoot)
 		return nil
@@ -466,7 +469,7 @@ func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.Availability
 			return nil
 		}
 		// Bound the wait so unavailable columns error and retry instead of stalling import.
-		daCtx, cancel := context.WithTimeout(ctx, time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second)
+		daCtx, cancel := context.WithTimeout(ctx, params.BeaconConfig().SlotDuration())
 		defer cancel()
 		if err := s.areDataColumnsAvailable(daCtx, roBlock.Root(), slot); err != nil {
 			return errors.Wrapf(err, "are data columns available for block %#x with slot %d", roBlock.Root(), slot)
@@ -815,12 +818,9 @@ func (s *Service) runLateBlockTasks() {
 	}
 
 	cfg := params.BeaconConfig()
-	attDueBPS := cfg.AttestationDueBPS
-	if slots.ToEpoch(s.CurrentSlot()) >= cfg.GloasForkEpoch {
-		attDueBPS = cfg.AttestationDueBPSGloas
-	}
+	attDueBPS := cfg.AttestationDueBPSAtSlot(s.CurrentSlot())
 	attThreshold := cfg.SlotComponentDuration(attDueBPS)
-	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SecondsPerSlot)
+	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SlotDuration())
 	for {
 		select {
 		case slot := <-ticker.C():
@@ -828,7 +828,7 @@ func (s *Service) runLateBlockTasks() {
 				ticker.Done()
 				attDueBPS = cfg.AttestationDueBPSGloas
 				attThreshold = cfg.SlotComponentDuration(attDueBPS)
-				ticker = slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SecondsPerSlot)
+				ticker = slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SlotDuration())
 			}
 			s.goroutineCounter.sample(slot)
 			s.lateBlockTasks(s.ctx)
@@ -916,6 +916,17 @@ func (s *Service) isDataAvailable(
 			return errors.Wrap(err, "blob KZG commitments")
 		}
 		if len(kzgCommitments) == 0 {
+			return nil
+		}
+		// Initial sync fetches columns via range requests, so check availability synchronously rather than blocking on gossip; fail if missing.
+		if !s.inRegularSync() {
+			available, err := s.dataColumnsAvailableNow(ctx, root, block.Slot())
+			if err != nil {
+				return errors.Wrap(err, "data columns available now")
+			}
+			if !available {
+				return errors.Errorf("data columns unavailable for block slot %d root %#x", block.Slot(), root)
+			}
 			return nil
 		}
 		return s.areDataColumnsAvailable(ctx, root, block.Slot())
@@ -1186,12 +1197,12 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	s.refreshCaches(ctx, currentSlot, headRoot, headState)
 	// return early if we already started building a block for the current
 	// head root
-	_, has := s.cfg.PayloadIDCache.PayloadID(s.CurrentSlot()+1, headRoot, full)
+	_, has := s.cfg.PayloadIDCache.PayloadID(currentSlot+1, headRoot, full)
 	if has {
 		return
 	}
 
-	attribute := s.getPayloadAttribute(ctx, headState, s.CurrentSlot()+1, headRoot[:], full)
+	attribute := s.getPayloadAttribute(ctx, headState, currentSlot+1, headRoot[:], full)
 	// return early if we are not proposing next slot
 	if attribute.IsEmpty() {
 		return
@@ -1212,7 +1223,14 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 			log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
 		}
 		if id != nil {
-			s.cfg.PayloadIDCache.Set(s.CurrentSlot()+1, headRoot, full, [8]byte(*id))
+			s.cfg.PayloadIDCache.Set(currentSlot+1, headRoot, full, [8]byte(*id))
+			log.WithFields(logrus.Fields{
+				"blockRoot": fmt.Sprintf("%#x", bytesutil.Trunc(headRoot[:])),
+				"headSlot":  s.HeadSlot(),
+				"nextSlot":  currentSlot + 1,
+				"payloadID": fmt.Sprintf("%#x", bytesutil.Trunc(id[:])),
+			}).Info("Forkchoice updated with payload attributes for proposal")
+			s.firePayloadAttributesEventForHead(headRoot, currentSlot+1, attribute, bh[:])
 		}
 		return
 	}

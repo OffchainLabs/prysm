@@ -4,6 +4,172 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [v7.1.8](https://github.com/OffchainLabs/prysm/compare/v7.1.7...v7.1.8) - 2026-07-27
+
+This is a highly recommended patch release containing multiple bug fixes improving the handling of early attestations for better inclusion. Several other bugfixes and ux improvements are also included. Some highlights:
+ - libp2p bug fixed, improving network-wide propagation of early attestations. [[PR]](https://github.com/OffchainLabs/prysm/pull/17123)
+ - Bug fix enabling validator clients using grpc to make timely attestations (resolving notification stream connection issues).
+ - Builder client now automatically falls back to JSON when a remote builder rejects SSZ requests (415/406), so builders without SSZ support (e.g. Commit Boost) work without needing `--disable-builder-ssz`.
+ - Numerous UX / quality of life improvements (see Added and Changed sections below).
+ - Miscellanious small bugfixes (see the Fixed section below)
+ - And of course, changes related to the upcoming gloas fork, including support for partial data columns (more efficient blob networking) and progressive merkleization.
+
+### Added
+
+- Gate the `--distributed` validator client flag when used without the REST API being enabled. [[PR]](https://github.com/OffchainLabs/prysm/pull/17151)
+- Added shorter flag aliases: `--beacon-rest`, `--beacon-grpc`, and `--enable-rest`. [[PR]](https://github.com/OffchainLabs/prysm/pull/17159)
+- Add `GET /prysm/v1/node/custody` endpoint exposing the node's data column custody state: custody group count, custody groups and columns, earliest available slot, supernode/semi-supernode status, and backfill progress. [[PR]](https://github.com/OffchainLabs/prysm/pull/17144)
+- Builder client now automatically falls back to JSON when a remote builder rejects SSZ requests (415/406), so builders without SSZ support (e.g. Commit Boost) work without needing `--disable-builder-ssz`. Covers `GetHeader`, `RegisterValidator`, `SubmitBlindedBlock`, `SubmitBlindedBlockPostFulu`, and the Gloas `GetExecutionPayloadBid` and `SubmitBuilderPreferences` endpoints. Once a builder rejects SSZ, the client uses JSON for the remainder of its lifetime. [[PR]](https://github.com/OffchainLabs/prysm/pull/17137)
+- Reorg late payloads in Gloas behind the `--reorg-late-payloads` flag when the PTC did not reach timeliness consensus. [[PR]](https://github.com/OffchainLabs/prysm/pull/16933)
+- progressive merklization functions in the ssz package. [[PR]](https://github.com/OffchainLabs/prysm/pull/16847)
+- progressive SSZ merkleization for Gloas beacon state. [[PR]](https://github.com/OffchainLabs/prysm/pull/16860)
+- hidden, experimental beacon node flag `--enable-progressive-ssz` to. [[PR]](https://github.com/OffchainLabs/prysm/pull/16860)
+
+### Changed
+
+- GET /eth/v1/validator/payload_attestation_data/{slot} now returns 204 instead of 503 when no block has been seen for the requested slot, per ethereum/beacon-APIs#612. [[PR]](https://github.com/OffchainLabs/prysm/pull/16851)
+- Setting `--beacon-rest-api-provider` now implicitly enables the beacon REST API, so `--enable-beacon-rest-api` is optional. [[PR]](https://github.com/OffchainLabs/prysm/pull/17159)
+- Changed the `producePayloadAttestationData` endpoint to take `slot` as a query parameter instead of a path parameter, per the latest beacon-APIs spec. [[PR]](https://github.com/OffchainLabs/prysm/pull/17155)
+- Verify the proposer signature of by-root blocks before adding them to the pending queue. [[PR]](https://github.com/OffchainLabs/prysm/pull/17172)
+- Removed the blinded execution payload envelope publish flow in favor of publishing the full signed envelope or envelope contents, per beacon-APIs #624. [[PR]](https://github.com/OffchainLabs/prysm/pull/17181)
+- Envelope publish endpoint now returns after broadcast, moving local import off the RPC path. [[PR]](https://github.com/OffchainLabs/prysm/pull/17198)
+- Updated geth to v1.17.4. [[PR]](https://github.com/OffchainLabs/prysm/pull/17019)
+- Updated `go-libp2p-pubsub` to `v0.17.0`, which allows republishing a previously seen but never delivered message (e.g. an attestation ignored because its block had not arrived yet). [[PR]](https://github.com/OffchainLabs/prysm/pull/17123)
+- Reduce the Gloas Engine API get-payload timeout to 300 milliseconds. [[PR]](https://github.com/OffchainLabs/prysm/pull/17212)
+- `--max-builder-consecutive-missed-slots` and `--max-builder-epoch-missed-slots` help text: Reports the mainnet config value as the default instead of a hardcoded, false and unused values. [[PR]](https://github.com/OffchainLabs/prysm/pull/17211)
+- Validator client now retries only the failed next-epoch duties independently instead of re-pulling every duty, making duty updates resilient to transient beacon node errors. [[PR]](https://github.com/OffchainLabs/prysm/pull/17036)
+- Upgrading to go 1.26.5 with security and bugfixes: [see golang changelog](https://go.dev/doc/devel/release#go1.26.5). [[PR]](https://github.com/OffchainLabs/prysm/pull/17230)
+
+### Deprecated
+
+- `--interop-num-validators`, `--interop-start-index`, `--interop-eth1data-votes` and `--interop-write-ssz-state-transitions` are now hidden no-ops. Use [ethereum-package](https://github.com/ethpandaops/ethereum-package) for interop/devnet testing. [[PR]](https://github.com/OffchainLabs/prysm/pull/17164)
+
+### Removed
+
+- Removed the interop keymanager, mocked eth1 data votes, the SSZ state-transition dump helpers (`tools/extractor`), and the `interop` chain-config preset. [[PR]](https://github.com/OffchainLabs/prysm/pull/17164)
+- Unused `data_column_obtained_via_el_count` metric that was never recorded. [[PR]](https://github.com/OffchainLabs/prysm/pull/17216)
+
+### Fixed
+
+- Fixed flaky pending attestation bucket tests by asserting on specific log messages instead of exact global log counts. [[PR]](https://github.com/OffchainLabs/prysm/pull/17154)
+- Reset the self-build envelope signature failure budget every slot instead of tying it to a prune path that rarely runs. [[PR]](https://github.com/OffchainLabs/prysm/pull/17104)
+- Set the bid gas limit on full forkchoice nodes restored via `MarkFullNode`, so bid validation no longer sees a zero parent gas limit after a restart. [[PR]](https://github.com/OffchainLabs/prysm/pull/17093)
+- Fail the block data column availability check during initial sync instead of waiting indefinitely, so checkpoint sync no longer stalls when a block's custody columns are missing. [[PR]](https://github.com/OffchainLabs/prysm/pull/17152)
+- Ignore Gloas data column sidecars from a future slot before queueing, preventing pending entries that are never pruned. [[PR]](https://github.com/OffchainLabs/prysm/pull/17157)
+- Wait for the clock before starting the pending Gloas columns pruning routine to avoid a nil clock panic on startup. [[PR]](https://github.com/OffchainLabs/prysm/pull/17168)
+- Apply the Gloas cross-fork state-diff pending_deposits against the anchor's pre-upgrade list, fixing a panic and state corruption when builder deposits are onboarded at the Fulu to Gloas fork with `--enable-state-diff`. [[PR]](https://github.com/OffchainLabs/prysm/pull/17158)
+- Re-verify builder deposit signatures when an in-batch index reuse evicts a pubkey. [[PR]](https://github.com/OffchainLabs/prysm/pull/17111)
+- Stop downscoring peers when pending Gloas data columns are pruned for a block root this node has not imported. [[PR]](https://github.com/OffchainLabs/prysm/pull/17170)
+- Validator client now restarts its beacon event stream after a fallback host switch or after the stream dies. Previously the stream stayed bound to the old beacon node until a full restart, silently stopping head and payload-availability events — and with them reorg-triggered proposer-preference resubmission — even though the rest of the client kept working against the new node. [[PR]](https://github.com/OffchainLabs/prysm/pull/17120)
+- A replaced event stream is now stopped and drained before its successor starts, so two streams can never feed the validator client's event loop concurrently, and a stream shutdown can no longer close the shared events channel out from under its replacement. [[PR]](https://github.com/OffchainLabs/prysm/pull/17120)
+- Fail payload reconstruction in Gloas if correctness cannot be guaranteed. [[PR]](https://github.com/OffchainLabs/prysm/pull/17174)
+- Validator client with the beacon REST API now fetches proposer duties from the v2 endpoint post-Gloas, so its dependent root is fork-aware and consistent with attester duties. [[PR]](https://github.com/OffchainLabs/prysm/pull/17171)
+- Guard against a nil block dereference in Gloas execution payload envelope and data column gossip validation. [[PR]](https://github.com/OffchainLabs/prysm/pull/17184)
+- Do not queue blocks that arrive earlier than the max clock disparity. Also move HTR computation after the timestamp check. [[PR]](https://github.com/OffchainLabs/prysm/pull/17167)
+- Reject future-slot execution payload envelopes fetched by root and enforce pending caps, preventing an unbounded pending-envelope memory exhaustion. [[PR]](https://github.com/OffchainLabs/prysm/pull/17176)
+- Remote web3signer keymanager: `NewKeymanager` now waits for the key-file watcher to initialize before returning and fails startup immediately if the watcher cannot be initialized, key-update notifications are sent without holding the keymanager lock, and keys are reloaded from the key file when the watcher recovers from a failure. This prevents a startup race, a potential lock-ordering deadlock, and a stale flag-only key set after watcher recovery. [[PR]](https://github.com/OffchainLabs/prysm/pull/17188)
+- Clarified `validator accounts exit` prompts and final log message when `--exit-json-output-dir` is set: signed exits are only written to files and are not broadcast, so the messaging no longer implies validators were exited. [[PR]](https://github.com/OffchainLabs/prysm/pull/17177)
+- Fix a panic in `GET /eth/v1/beacon/blobs/{block_id}` when a `versioned_hashes` filter matches a commitment that appears more than once in the block. [[PR]](https://github.com/OffchainLabs/prysm/pull/17199)
+- Clear the attestation data cache when the head is updated. [[PR]](https://github.com/OffchainLabs/prysm/pull/17143)
+- Validator now skips payload attestation with an info log instead of an error when no block exists for the slot. [[PR]](https://github.com/OffchainLabs/prysm/pull/17202)
+- Use saturating arithmetic when computing the effective bid value during Gloas bid selection. [[PR]](https://github.com/OffchainLabs/prysm/pull/17207)
+- A next-epoch duty fetch failure no longer disrupts the validator's current-epoch duties. [[PR]](https://github.com/OffchainLabs/prysm/pull/17036)
+- Mark pending payload envelopes as seen only after successful import so transient failures can be retried. [[PR]](https://github.com/OffchainLabs/prysm/pull/17206)
+- Skip unusable static peer ENRs without discarding other valid peer addresses. [[PR]](https://github.com/OffchainLabs/prysm/pull/17192)
+- Count each PTC vote once in `forkchoice_ptc_vote_count` instead of on every re-application. [[PR]](https://github.com/OffchainLabs/prysm/pull/17214)
+- Increment `new_payload_*_node_count` metrics on the Gloas payload envelope path. [[PR]](https://github.com/OffchainLabs/prysm/pull/17213)
+- Accept execution payload bids building on the parent's empty branch, fixing valid bid rejections after a missed payload reveal. [[PR]](https://github.com/OffchainLabs/prysm/pull/17217)
+- PTC payload attestation now reports blob data availability from the data column store instead of forkchoice payload insertion. [[PR]](https://github.com/OffchainLabs/prysm/pull/17222)
+- `beacon_execution_payload_envelope_invalid_total` no longer counts internal processing failures, only invalid envelopes. [[PR]](https://github.com/OffchainLabs/prysm/pull/17215)
+
+## [v7.1.7](https://github.com/prysmaticlabs/prysm/compare/v7.1.6...v7.1.7) - 2026-07-13
+
+This patch release focuses on Beacon API interoperability, validator-client resilience, and a broad round of Gloas (ePBS) correctness and stability improvements.
+
+Release highlights:
+
+- **Gloas and builder APIs**: Added external builder bid selection and per-builder maximum execution payments, improved payload bid and attestation validation, and strengthened missing-payload and data-column recovery paths.
+- **Partial data columns**: Drop messages for unsubscribed topics before SSZ decoding, preventing large partial messages for non-custodied subnets from blocking the shared gossip loop. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17074)
+- **Beacon API and validator client**: Added SSZ support for proposer preferences, payload attestations, and validator balances; switched REST validator clients to `head_v2` with automatic legacy fallback; and added replacement hints for removed routes.
+- **Resilience and failover**: Re-push proposer preferences after beacon-node failover, retry failed submissions, accelerate unknown-parent recovery, and prevent startup, REST-handler, builder-registry, and peer-address edge-case failures.
+- **Database startup recovery**: Prevent a startup panic when the database returns a nil head block without an error; Prysm now logs the invalid head and starts fork choice from the finalized checkpoint instead. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17087)
+- **Operator experience**: Reduced noisy beacon-node and validator-client logs, added clearer Gloas bid-selection and envelope-publication diagnostics, documented ordered REST endpoint failover, and improved error reporting for invalid P2P IP configuration.
+
+### Added
+
+- Accept SSZ (`application/octet-stream`) request bodies on `POST /eth/v1/validator/proposer_preferences`, matching beacon-APIs #608. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17054)
+- Add `max_execution_payment` to the proposer builder config, the maximum execution-layer payment a proposer will accept from a Gloas builder. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17061)
+- Submit per-builder proposer preferences and signed request auths from the validator client ahead of Gloas proposals, and forward the matching request auth in the block request. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17063)
+- Queue payload attestations received before their beacon block and process them once the block arrives. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16909)
+- Pull execution payload bids from external builders during Gloas block production, select the best of self-build, P2P, and Builder-API bids, and submit the signed block back to the winning builder. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17067)
+- Added SSZ (`application/octet-stream`) response support to GET and POST `/eth/v1/beacon/states/{state_id}/validator_balances` (beacon-APIs #622). [[PR]](https://github.com/prysmaticlabs/prysm/pull/17077)
+- Add a proactive request for the payload if we haven't seen it by the payload time. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16904)
+- `make build [<bin>...] [flags=...]`: Build Prysm binaries without Bazel. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17007)
+- `make run <bin> [flags=...] [-- <args>]`: Build and run a Prysm binary without Bazel. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17007)
+- Add `ConnectionCounter` to the REST connection provider and `ConnectionGeneration` to the validator client interface, exposing a monotonic counter that advances on each beacon-node fallback switch (the gRPC provider already had `ConnectionCounter`). [[PR]](https://github.com/prysmaticlabs/prysm/pull/17066)
+- Respond with `410 Gone` and a message naming the replacement route when a Beacon API route that was removed from the spec (e.g. `GET /eth/v1/beacon/blocks/{block_id}`, `POST /eth/v1/beacon/pool/attestations`, `GET /eth/v2/validator/blocks/{slot}`) is requested, instead of a bare `404 Not Found`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17133)
+
+### Changed
+
+- Validator client submits proposer preferences as SSZ by default, falling back to JSON if the beacon node returns 415. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17054)
+- Validator client submits payload attestations as SSZ by default, falling back to JSON if the beacon node returns 415. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17064)
+- Validator client requests `payload_attestation_data` as SSZ, decoding either an SSZ or JSON response. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17064)
+- Retain `BuilderConfig` (relays, enabled, max execution payment) when upgrading proposer settings from v1 to v2 instead of dropping it. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17061)
+- Request a block's unknown parent by root immediately on gossip arrival instead of waiting for the pending-blocks queue tick. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17057)
+- REST Validator client now subscribes to the `head_v2` beacon API event by default instead of the deprecated `head` event. If the beacon node does not support `head_v2` (it rejects the subscription with HTTP 400), the validator client automatically falls back to the legacy `head` event, so it keeps working against older beacon nodes with no behavior change. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16980)
+- The payload_attributes event no longer includes parent_block_number from the gloas fork onwards. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17037)
+- Document that `--beacon-rest-api-provider` accepts comma-separated endpoints for ordered failover. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17084)
+- Cleaned up Gloas proposer flow logs: consistent verbs, `self-build` builder index rendering, single bid selection line with source and gwei value, and publish duration on envelope reveal. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17082)
+- Consolidated validator client submission logs: sync committee messages, sync contributions, and payload attestations are now summarized as one info line per distinct submission content per slot (with range-compressed validator indices), and the previous per-validator success logs were downgraded to debug level. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17083)
+- Run `isAggregator` check concurrently in `validator.subscribeToSubnets` method body. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17085)
+- `make gen`: Cache generation inputs to skip re-generating files that are already up to date. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17007)
+- Ignore instead of reject execution payload bids whose fee recipient does not match proposer preferences. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17128)
+- Update C-KZG to `v2.1.8`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17150)
+
+### Removed
+
+- Remove the unused top-level `max_execution_payment` proposer-option field in favor of the per-builder `BuilderConfig.max_execution_payment`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17061)
+- Removed proposer index cache. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16582)
+
+### Fixed
+
+- Accept SSZ (`application/octet-stream`) request bodies on `POST /eth/v1/beacon/pool/payload_attestations`. The handler already decoded SSZ, but the route only registered JSON so SSZ submissions were rejected with 415. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17064)
+- Allow SSZ responses on `GET /eth/v1/beacon/pool/payload_attestations`. The handler already supported SSZ, but the route's Accept negotiation only allowed JSON, making the SSZ response unreachable. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17064)
+- Request the data column sidecars needed to validate a payload envelope when we do not already have them. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17070)
+- Ignore execution payload bids that cannot be verified against the current head state instead of rejecting them. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17044)
+- Return `execution_optimistic` correctly for reward APIs (block, attestation, sync committee). [[PR]](https://github.com/prysmaticlabs/prysm/pull/16526)
+- Emit the correct `parent_block_hash` in the Gloas `payload_attributes` SSE event by carrying the exact hash sent to the engine, so it matches for a full head instead of reporting the parent's hash. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17071)
+- avoid panic when event stream request creation fails [#16234](https://github.com/OffchainLabs/prysm/pull/16234). [[PR]](https://github.com/prysmaticlabs/prysm/pull/16234)
+- Stop logging skipped `payload_attributes` events for past proposal slots as an `ERROR` ("received an event it was unable to handle") in the beacon node event stream. The `errPayloadAttributeExpired` skip is now excused like `errNotRequested`, removing high-volume noise under ePBS. The `event_type` log field now prints the event type (`%T`) instead of dumping the full event struct. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17069)
+- Fixed the attestation rewards API `ideal_rewards` response for Electra compounding validators with effective balances above 32 ETH. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17076)
+- Submit the signed block to the winning builder even when local block processing fails after broadcast. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17079)
+- Drop partial data column messages for unsubscribed topics before the SSZ decode so the shared gossip loop is not head-of-line-blocked. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17074)
+- Recover from nil headblock in db at startup. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17087)
+- Accept builder preference submissions without the `--http-mev-relay` flag, gloas builders are dialed per URL from the request auth. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17078)
+- Drain pending Gloas data column sidecars on block processing so columns gossiped back for our own proposed block are imported and the payload is marked available. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17059)
+- Fix race condition for reading `host` in REST `handler`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17092)
+- Correctly populate attestation data (`FromAttData`) when logging in VC. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17081)
+- Notify the execution engine of the head per imported batch during Gloas initial sync. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17109)
+- Treat nil builder registry entries as reusable slots in `builderInsertionIndex` instead of panicking. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17096)
+- Compute the validator client's mid-slot submission delay from `SLOT_DURATION_MS` instead of `SECONDS_PER_SLOT`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17098)
+- Ignore instead of reject queued payload envelopes and payload attestations whose signatures fail against a possibly divergent head state. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17103)
+- Surface undefined execution engine errors from gloas forkchoice updates instead of returning a nil payload ID that callers read as not proposing. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17094)
+- Return deep copies from the payload attestation pool so later aggregation cannot mutate attestations already handed to block building. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17099)
+- Apply fork choice PTC votes and enforce the current-slot check for payload attestations submitted via the REST pool endpoint. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17100)
+- Order the Gloas branch before Fulu in the gossip block topic mapping so the epoch cascade returns the right block type. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17114)
+- Hold the state lock in `QueueBuilderPaymentForSlot` and route builder pending withdrawal appends through one copy-on-write path. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17095)
+- Guard the startup head block with `blocks.BeaconBlockIsNil` before use: `BeaconDB.Block` returns a nil block with no error when the root is not found, so the previous inner-block nil check still segfaulted the node at startup. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17110)
+- Count PTC votes from duplicated validators (consensus-specs#5222): a validator sampled into the payload timeliness committee multiple times now has its vote recorded at every position it occupies, not only at `ptc.index(validator_index)`. Un-skips the corresponding `on_payload_attestation_message` fork choice spec tests. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17028)
+- Verify submitted execution payload bids with the gossip rules and record them in the local highest-bid cache before broadcasting. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17101)
+- Fix `execution_optimistic` decision for attestation rewards API: use ancestor so that block root is guaranteed inside DB. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17112)
+- Treat an ENR port value of `0` as absent when building dial addresses, so peers advertising a zero port are no longer dialed at `/tcp/0`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17116)
+- Re-push proposer preferences when the validator client connects to a different beacon node. The submitted-slot dedup cache survives runner restarts and beacon-node fallback switches, so a freshly connected node previously received no preferences for slots already marked submitted. A new runner (initial connect / health recovery) now propagates `forceFullPush` to the proposer-preference build, and a beacon-node connection change forces a full re-push. The change is detected via a monotonic connection counter (`ValidatorClient.ConnectionGeneration`, implemented by each transport client from its own connection provider) rather than the host string, so a round-robin bounce (host0 → host1 → host0) that replaces the connection is still caught. The switch signal is only consumed once a push is confirmed, and proposer preferences and builder registrations are tracked independently, so a failed re-push to the new node is retried on later slots. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17066)
+- Retry failed proposer-preference submissions: a batch whose submission fails releases its dedup-cache reservations so the per-slot rebuild resubmits it, covering both the regular push and the reorg resubmission path. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17066)
+- Detach the proposer-preference submission from the slot context so it can no longer be cancelled before the mid-slot submit delay elapses (matching the builder-preference submission). [[PR]](https://github.com/prysmaticlabs/prysm/pull/17066)
+- Return an error for an invalid `--p2p-local-ip` or `--p2p-host-ip` instead of silently ignoring it. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17117)
+- Wrapped the `payload_attestation_message` SSE event in the `version`/`data` envelope to match the beacon-APIs spec. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17145)
+- Stopped serving data column sidecars of empty slots in the by range RPC handler, matching the canonical payload chain semantics of the execution payload envelopes by range handler. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17089)
+
 ## [v7.1.6](https://github.com/prysmaticlabs/prysm/compare/v7.1.5...v7.1.6) - 2026-07-01
 
 This patch release contains targeted gossip-validation, sync, and operator-facing improvements, alongside continued Gloas (ePBS), PeerDAS/data-column, builder API, and performance work from the release candidate.

@@ -41,31 +41,31 @@ func (f *ForkChoice) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool) 
 	return pn.node.root, pn.full
 }
 
-func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock, parent **PayloadNode, blockHash *[32]byte) error {
+func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock) (*PayloadNode, [32]byte, primitives.BuilderIndex, error) {
 	sb, err := block.Body().SignedExecutionPayloadBid()
 	if err != nil {
-		return err
+		return nil, [32]byte{}, 0, err
 	}
 	wb, err := blocks.WrappedROSignedExecutionPayloadBid(sb)
 	if err != nil {
-		return errors.Wrap(err, "failed to wrap signed bid")
+		return nil, [32]byte{}, 0, errors.Wrap(err, "failed to wrap signed bid")
 	}
 	bid, err := wb.Bid()
 	if err != nil {
-		return errors.Wrap(err, "failed to get bid from wrapped bid")
+		return nil, [32]byte{}, 0, errors.Wrap(err, "failed to get bid from wrapped bid")
 	}
-	*blockHash = bid.BlockHash()
-	parentRoot := block.ParentRoot()
-	*parent = s.emptyNodeByRoot[parentRoot]
-	if *parent == nil {
+	blockHash := bid.BlockHash()
+	builderIndex := bid.BuilderIndex()
+	parent := s.emptyNodeByRoot[block.ParentRoot()]
+	if parent == nil {
 		// This is the tree root node.
-		return nil
+		return nil, blockHash, builderIndex, nil
 	}
-	if bid.ParentBlockHash() == (*parent).node.blockHash {
+	if bid.ParentBlockHash() == parent.node.blockHash {
 		// block builds on full
-		*parent = s.fullNodeByRoot[(*parent).node.root]
+		parent = s.fullNodeByRoot[parent.node.root]
 	}
-	return nil
+	return parent, blockHash, builderIndex, nil
 }
 
 // applyWeightChangesConsensusNode recomputes the weight of the node passed as an argument and all of its descendants,
@@ -268,7 +268,7 @@ func (s *Store) shouldExtendPayload(fn *PayloadNode) bool {
 		return false
 	}
 	n := fn.node
-	if n.payloadAvailabilityVote.Count() > fieldparams.PTCSize/2 && n.payloadDataAvailabilityVote.Count() > fieldparams.PTCSize/2 {
+	if ptcVotedEarlyAndAvailable(n) {
 		return true
 	}
 	if s.proposerBoostRoot == [32]byte{} {
@@ -282,6 +282,24 @@ func (s *Store) shouldExtendPayload(fn *PayloadNode) bool {
 		return true
 	}
 	return pn.node.parent.full
+}
+
+func ptcVotedEarlyAndAvailable(n *Node) bool {
+	return n != nil &&
+		n.payloadAvailabilityVote.Count() > fieldparams.PTCSize/2 &&
+		n.payloadDataAvailabilityVote.Count() > fieldparams.PTCSize/2
+}
+
+func ptcVotedLate(n *Node) bool {
+	if n == nil {
+		return false
+	}
+	attesters := n.payloadAttesters.Count()
+	payloadPresent := n.payloadAvailabilityVote.Count()
+	if payloadPresent >= attesters {
+		return false
+	}
+	return attesters-payloadPresent > fieldparams.PTCSize/2
 }
 
 // choosePayloadContent chooses between empty or full for the passed consensus node.
@@ -453,11 +471,9 @@ func (s *Store) nodeTreeDumpV2(ctx context.Context, n *Node, nodes []*forkchoice
 	return nodes, nil
 }
 
-// MarkFullNode creates a full payload node for an existing empty node at the
-// given beacon block root. This is used during forkchoice tree reconstruction on
-// startup to mark blocks whose execution payload was delivered. The caller must
-// hold the forkchoice write lock.
-func (f *ForkChoice) MarkFullNode(root [32]byte) {
+// MarkFullNode creates a full payload node for an existing empty node during
+// tree reconstruction, the caller must hold the forkchoice write lock.
+func (f *ForkChoice) MarkFullNode(root [32]byte, gasLimit uint64) {
 	s := f.store
 	en := s.emptyNodeByRoot[root]
 	if en == nil {
@@ -471,6 +487,7 @@ func (f *ForkChoice) MarkFullNode(root [32]byte) {
 		optimistic: true,
 		timestamp:  time.Now(),
 		full:       true,
+		gasLimit:   gasLimit,
 		children:   make([]*Node, 0),
 	}
 }
@@ -524,7 +541,9 @@ func (f *ForkChoice) SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, bl
 	if n == nil {
 		return
 	}
-	ptcVoteCount.Inc()
+	if !n.node.payloadAttesters.BitAt(ptcIdx) {
+		ptcVoteCount.Inc()
+	}
 	n.node.payloadAttesters.SetBitAt(ptcIdx, true)
 	n.node.payloadAvailabilityVote.SetBitAt(ptcIdx, payloadPresent)
 	n.node.payloadDataAvailabilityVote.SetBitAt(ptcIdx, blobDataAvailable)
@@ -560,10 +579,36 @@ func (s *Store) resolveVoteNode(r [32]byte, slot primitives.Slot, payloadStatus 
 	return en, slot == en.node.slot
 }
 
+// CouldBuilderWithhold reports whether root drew too little committee support to blame its builder
+// for a missing payload. The node balance holds the same-slot votes and carries no proposer boost.
+func (f *ForkChoice) CouldBuilderWithhold(root [32]byte) bool {
+	en, ok := f.store.emptyNodeByRoot[root]
+	if !ok || en == nil || en.node == nil {
+		return true
+	}
+	if f.store.committeeWeight == 0 {
+		return true
+	}
+	return en.node.balance*100 <= f.store.committeeWeight*params.BeaconConfig().BuilderFailureWeightThreshold
+}
+
 // HasFullNode returns true if a full (payload) node exists for the given beacon block root.
 func (f *ForkChoice) HasFullNode(root [32]byte) bool {
 	_, ok := f.store.fullNodeByRoot[root]
 	return ok
+}
+
+// HasPayloadBlockHash reports whether blockHash is an available payload parent at root.
+func (f *ForkChoice) HasPayloadBlockHash(root, blockHash [32]byte) bool {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return false
+	}
+	if blockHash == en.node.blockHash {
+		_, ok := f.store.fullNodeByRoot[root]
+		return ok
+	}
+	return blockHash == f.store.parentHash(en)
 }
 
 // FullBeatsEmpty returns whether fork choice would select the full payload variant
@@ -575,6 +620,42 @@ func (f *ForkChoice) FullBeatsEmpty(root [32]byte) bool {
 	}
 	pn := f.store.choosePayloadContent(en.node)
 	return pn != nil && pn.full
+}
+
+// PTCVotedEarlyAndAvailable returns whether the PTC has majority-voted that the payload and blob data are available.
+func (f *ForkChoice) PTCVotedEarlyAndAvailable(root [32]byte) bool {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return false
+	}
+	return ptcVotedEarlyAndAvailable(en.node)
+}
+
+// PTCVotedLate returns whether the PTC has majority-voted that the payload is not present.
+func (f *ForkChoice) PTCVotedLate(root [32]byte) bool {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return false
+	}
+	return ptcVotedLate(en.node)
+}
+
+// ParentHash returns the payload hash of the latest full parent that the given block builds on.
+func (f *ForkChoice) ParentHash(root [32]byte) [32]byte {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return [32]byte{}
+	}
+	return f.store.parentHash(en)
+}
+
+// BuilderIndex returns the builder index committed in the given block's bid.
+func (f *ForkChoice) BuilderIndex(root [32]byte) (primitives.BuilderIndex, error) {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return 0, errors.Wrap(ErrNilNode, "could not get builder index for root")
+	}
+	return en.node.builderIndex, nil
 }
 
 // BlockHash returns the hash committed in the given block

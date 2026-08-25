@@ -100,9 +100,9 @@ type Config struct {
 	ExecutionChainInfoFetcher        execution.ChainInfoFetcher
 	GenesisTimeFetcher               blockchain.TimeFetcher
 	GenesisFetcher                   blockchain.GenesisFetcher
-	MockEth1Votes                    bool
 	EnableDebugRPCEndpoints          bool
 	AttestationCache                 *cache.AttestationCache
+	AttestationDataCache             *cache.AttestationDataCache
 	AttestationsPool                 attestations.Pool
 	PayloadAttestationPool           payloadattestation.PoolManager
 	ExitPool                         voluntaryexits.PoolManager
@@ -114,6 +114,7 @@ type Config struct {
 	PeersFetcher                     p2p.PeersProvider
 	PeerManager                      p2p.PeerManager
 	MetadataProvider                 p2p.MetadataProvider
+	CustodyManager                   p2p.CustodyManager
 	DepositFetcher                   cache.DepositFetcher
 	PendingDepositFetcher            depositsnapshot.PendingDepositsFetcher
 	StateNotifier                    statefeed.Notifier
@@ -131,6 +132,7 @@ type Config struct {
 	ProposerPreferencesCache         *cache.ProposerPreferencesCache
 	SubscribedValidatorsCache        *cache.SubscribedValidatorsCache
 	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
+	BuilderCircuitBreaker            *cache.BuilderCircuitBreaker
 	PayloadIDCache                   *cache.PayloadIDCache
 	ExecutionPayloadEnvelopeCache    *cache.ExecutionPayloadEnvelopeCache
 	LCStore                          *lightClient.Store
@@ -222,7 +224,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		Broadcaster:           s.cfg.Broadcaster,
 		SyncCommitteePool:     s.cfg.SyncCommitteeObjectPool,
 		OperationNotifier:     s.cfg.OperationNotifier,
-		AttestationCache:      cache.NewAttestationDataCache(),
+		AttestationCache:      s.cfg.AttestationDataCache,
 		StateGen:              s.cfg.StateGen,
 		P2P:                   s.cfg.Broadcaster,
 		FinalizedFetcher:      s.cfg.FinalizationFetcher,
@@ -256,7 +258,6 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		ExecutionPayloadEnvelopeReceiver: s.cfg.ExecutionPayloadEnvelopeReceiver,
 		BlobReceiver:                     s.cfg.BlobReceiver,
 		DataColumnReceiver:               s.cfg.DataColumnReceiver,
-		MockEth1Votes:                    s.cfg.MockEth1Votes,
 		Eth1BlockFetcher:                 s.cfg.ExecutionChainService,
 		PendingDepositsFetcher:           s.cfg.PendingDepositFetcher,
 		SlashingsPool:                    s.cfg.SlashingsPool,
@@ -272,6 +273,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		ProposerPreferencesCache:         s.cfg.ProposerPreferencesCache,
 		SubscribedValidatorsCache:        s.cfg.SubscribedValidatorsCache,
 		HighestBidCache:                  s.cfg.HighestBidCache,
+		BuilderCircuitBreaker:            s.cfg.BuilderCircuitBreaker,
 		PayloadIDCache:                   s.cfg.PayloadIDCache,
 		ExecutionPayloadEnvelopeCache:    s.cfg.ExecutionPayloadEnvelopeCache,
 		AttestationStateFetcher:          s.cfg.AttestationReceiver,

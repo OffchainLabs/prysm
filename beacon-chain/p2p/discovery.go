@@ -789,7 +789,8 @@ func PeersFromStringAddrs(addrs []string) ([]ma.Multiaddr, error) {
 		}
 		nodeAddrs, err := retrieveMultiAddrsFromNode(enodeAddr)
 		if err != nil {
-			return nil, errors.Wrapf(err, "Could not get multiaddr")
+			log.WithError(err).Errorf("Could not get multiaddr from peer %s", stringAddr)
+			continue
 		}
 		allAddrs = append(allAddrs, nodeAddrs...)
 	}
@@ -956,6 +957,11 @@ func getPort(node *enode.Node, protocol internetProtocol) (uint, bool, error) {
 
 	if err != nil {
 		return 0, false, errors.Wrap(err, "could not get port")
+	}
+
+	// A zero port is not a usable endpoint; treat it as absent so callers do not build /tcp/0 dial addresses.
+	if port == 0 {
+		return port, false, nil
 	}
 
 	return port, true, nil

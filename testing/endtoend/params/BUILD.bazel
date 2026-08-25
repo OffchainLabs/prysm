@@ -10,9 +10,9 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/testing/endtoend/params",
     visibility = ["//visibility:public"],
     deps = [
+        "//build/bazel:go_default_library",
         "//io/file:go_default_library",
         "@com_github_ethereum_go_ethereum//core/types:go_default_library",
-        "@io_bazel_rules_go//go/tools/bazel:go_default_library",
     ],
 )
 

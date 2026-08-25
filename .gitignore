@@ -1,6 +1,9 @@
 # Ignore bazel directories
 bazel-*
 
+# `make gen` content cache
+.gen-cache.json
+
 .DS_Store
 .swp
 
@@ -52,3 +55,8 @@ CLAUDE.md
 
 # Local CLAUDE instruction
 CLAUDE.local.md
+
+# Downloaded external test data (make testdata)
+third_party/testdata
+# methodical generated tests, which include large fixtures
+testing/spectest/methodical

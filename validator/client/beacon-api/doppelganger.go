@@ -132,6 +132,17 @@ func (c *beaconApiValidatorClient) checkDoppelGanger(ctx context.Context, in *et
 	}
 
 	validators := stateValidators.Data
+
+	// No not-recent key is onchain: the liveness endpoint rejects an empty index
+	// set, so omit them (as the per-key path below does) and return.
+	if len(validators) == 0 {
+		for _, spk := range notRecentStringPubKeys {
+			delete(stringPubKeyToDoppelGangerInfo, spk)
+		}
+		log.WithField("count", len(notRecentStringPubKeys)).Info("Doppelganger check skipped for validators not found on chain")
+		return buildResponse(stringPubKeys, stringPubKeyToDoppelGangerInfo), nil
+	}
+
 	stringPubKeyToIndex := make(map[string]string, len(validators))
 	indexes := make([]string, len(validators))
 
@@ -167,10 +178,15 @@ func (c *beaconApiValidatorClient) checkDoppelGanger(ctx context.Context, in *et
 	}
 
 	// Set `DuplicateExists` to `true` if needed.
+	var skipped int
 	for _, spk := range notRecentStringPubKeys {
 		index, ok := stringPubKeyToIndex[spk]
 		if !ok {
-			// if !ok, the validator corresponding to `stringPubKey` does not exist onchain.
+			// Not onchain, so liveness cannot be evaluated: omit the key from the
+			// response rather than report an unevaluated "no duplicate".
+			log.WithField("pubkey", spk).Debug("Skipping doppelganger check: validator not found on chain")
+			delete(stringPubKeyToDoppelGangerInfo, spk)
+			skipped++
 			continue
 		}
 
@@ -199,6 +215,10 @@ func (c *beaconApiValidatorClient) checkDoppelGanger(ctx context.Context, in *et
 		}
 	}
 
+	if skipped > 0 {
+		log.WithField("count", skipped).Info("Doppelganger check skipped for validators not found on chain")
+	}
+
 	return buildResponse(stringPubKeys, stringPubKeyToDoppelGangerInfo), nil
 }
 
@@ -206,10 +226,14 @@ func buildResponse(
 	stringPubKeys []string,
 	stringPubKeyToDoppelGangerHelper map[string]DoppelGangerInfo,
 ) *ethpb.DoppelGangerResponse {
-	responses := make([]*ethpb.DoppelGangerResponse_ValidatorResponse, len(stringPubKeys))
+	responses := make([]*ethpb.DoppelGangerResponse_ValidatorResponse, 0, len(stringPubKeys))
 
-	for i, spk := range stringPubKeys {
-		responses[i] = stringPubKeyToDoppelGangerHelper[spk].response
+	for _, spk := range stringPubKeys {
+		info, ok := stringPubKeyToDoppelGangerHelper[spk]
+		if !ok {
+			continue
+		}
+		responses = append(responses, info.response)
 	}
 
 	return &ethpb.DoppelGangerResponse{

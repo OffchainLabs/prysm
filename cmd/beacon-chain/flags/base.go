@@ -3,6 +3,7 @@
 package flags
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
@@ -44,14 +45,14 @@ var (
 	}
 
 	MaxBuilderConsecutiveMissedSlots = &cli.IntFlag{
-		Name:  "max-builder-consecutive-missed-slots",
-		Usage: "Number of consecutive skip slot to fallback from using relay/builder to local execution engine for block construction",
-		Value: 3,
+		Name:        "max-builder-consecutive-missed-slots",
+		Usage:       "Number of consecutive skip slot to fallback from using relay/builder to local execution engine for block construction",
+		DefaultText: fmt.Sprintf("%d", params.BeaconConfig().MaxBuilderConsecutiveMissedSlots),
 	}
 	MaxBuilderEpochMissedSlots = &cli.IntFlag{
-		Name: "max-builder-epoch-missed-slots",
-		Usage: "Number of total skip slot to fallback from using relay/builder to local execution engine for block construction in last epoch rolling window. " +
-			"The values are on the basis of the networks and the default value for mainnet is 5.",
+		Name:        "max-builder-epoch-missed-slots",
+		Usage:       "Number of total skip slot to fallback from using relay/builder to local execution engine for block construction in last epoch rolling window",
+		DefaultText: fmt.Sprintf("%d", params.BeaconConfig().MaxBuilderEpochMissedSlots),
 	}
 	// LocalBlockValueBoost sets a percentage boost for local block construction while using a custom builder.
 	LocalBlockValueBoost = &cli.Uint64Flag{
@@ -76,6 +77,13 @@ var (
 		Usage: "An absolute value in Gwei that the builder bid has to have in order for this beacon node to use the builder's block. Anything less than this value" +
 			" and the beacon will revert to local building.",
 		Value: 0,
+	}
+	// BuilderHeaderTimeout bounds how long the beacon node waits for a builder relay `getHeader` response
+	// before giving up and using the locally built block.
+	BuilderHeaderTimeout = &cli.DurationFlag{
+		Name:  "builder-header-timeout",
+		Usage: "Timeout to use when fetching a block header from the builder API, as a duration (e.g. 1s, 2s, 2500ms). Must be greater than 0. Only effective up to the Fulu fork.",
+		Value: params.BeaconConfig().BuilderHeaderTimeout,
 	}
 	// ExecutionEngineEndpoint provides an HTTP access endpoint to connect to an execution client on the execution layer
 	ExecutionEngineEndpoint = &cli.StringFlag{
@@ -372,5 +380,10 @@ var (
 	PartialDataColumns = &cli.BoolFlag{
 		Name:  "partial-data-columns",
 		Usage: "Enable cell-level dissemination for PeerDAS data columns",
+	}
+	// DisableGraffitiClientAppend disables appending consensus and execution client version info to the block graffiti.
+	DisableGraffitiClientAppend = &cli.BoolFlag{
+		Name:  "disable-graffiti-client-append",
+		Usage: "Disables appending consensus and execution client version information to the block graffiti",
 	}
 )

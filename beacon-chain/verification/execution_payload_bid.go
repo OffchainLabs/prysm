@@ -23,7 +23,7 @@ var ExecutionPayloadBidGossipRequirements = []Requirement{
 	RequireBidFeeRecipientMatches,
 	RequireBidBlobKzgCommitmentsLimit,
 	RequireBidPrevRandaoValid,
-	RequireBidParentBlockRootSeen,
+	RequireBidCompatibleWithHead,
 	RequireBidSlotHigherThanParent,
 	RequireBidParentBlockHashValid,
 	RequireBidGasLimitCompatible,
@@ -62,6 +62,7 @@ var (
 	ErrBidPrevRandaoMismatch        = errors.New("bid prev randao does not match state randao mix")
 	ErrBidGasLimitIncompatible      = errors.New("bid gas limit is incompatible with parent and target")
 	ErrBidParentBlockRootNotSeen    = errors.New("parent block root not seen")
+	ErrBidNotCompatibleWithHead     = errors.New("bid is not compatible with the head branch")
 	ErrBidSlotNotHigherThanParent   = errors.New("bid slot is not higher than parent block slot")
 	ErrBidParentBlockHashMismatch   = errors.New("parent block hash does not match forkchoice")
 	ErrBidBuilderCannotCover        = errors.New("builder cannot cover bid")
@@ -271,6 +272,19 @@ func (v *BidVerifier) VerifyParentBlockRootSeen(parentSeen func([32]byte) bool) 
 	return fmt.Errorf("%w: root=%#x", ErrBidParentBlockRootNotSeen, root)
 }
 
+func (v *BidVerifier) VerifyBidCompatibleWithHead(compatible func(interfaces.ROExecutionPayloadBid) bool) (err error) {
+	defer v.record(RequireBidCompatibleWithHead, &err)
+
+	bid, err := v.b.Bid()
+	if err != nil {
+		return errors.Wrap(err, "failed to get bid")
+	}
+	if compatible != nil && compatible(bid) {
+		return nil
+	}
+	return fmt.Errorf("%w: root=%#x hash=%#x", ErrBidNotCompatibleWithHead, bid.ParentBlockRoot(), bid.ParentBlockHash())
+}
+
 // VerifyBidSlotHigherThanParent verifies the bid slot is greater than the slot of its parent block.
 func (v *BidVerifier) VerifyBidSlotHigherThanParent(parentSlot primitives.Slot) (err error) {
 	defer v.record(RequireBidSlotHigherThanParent, &err)
@@ -285,23 +299,19 @@ func (v *BidVerifier) VerifyBidSlotHigherThanParent(parentSlot primitives.Slot) 
 	return nil
 }
 
-// VerifyParentBlockHash verifies the parent execution block hash matches forkchoice for the bid parent root.
-func (v *BidVerifier) VerifyParentBlockHash(resolveBlockHash func([32]byte) ([32]byte, error)) (err error) {
+// VerifyParentBlockHash verifies that the bid references an available parent payload.
+func (v *BidVerifier) VerifyParentBlockHash(hasPayloadBlockHash func([32]byte, [32]byte) bool) (err error) {
 	defer v.record(RequireBidParentBlockHashValid, &err)
 
 	bid, err := v.b.Bid()
 	if err != nil {
 		return errors.Wrap(err, "failed to get bid")
 	}
-	if resolveBlockHash == nil {
-		return fmt.Errorf("%w: no parent block hash resolver", ErrBidParentBlockHashMismatch)
+	if hasPayloadBlockHash == nil {
+		return fmt.Errorf("%w: no parent block hash lookup", ErrBidParentBlockHashMismatch)
 	}
-	parentHash, err := resolveBlockHash(bid.ParentBlockRoot())
-	if err != nil {
-		return errors.Wrap(err, "failed to resolve parent block hash")
-	}
-	if parentHash != bid.ParentBlockHash() {
-		return fmt.Errorf("%w: bid=%#x forkchoice=%#x", ErrBidParentBlockHashMismatch, bid.ParentBlockHash(), parentHash)
+	if !hasPayloadBlockHash(bid.ParentBlockRoot(), bid.ParentBlockHash()) {
+		return fmt.Errorf("%w: root=%#x hash=%#x", ErrBidParentBlockHashMismatch, bid.ParentBlockRoot(), bid.ParentBlockHash())
 	}
 	return nil
 }

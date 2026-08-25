@@ -30,7 +30,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -438,6 +437,69 @@ func TestStreamEvents_ProposerPreferencesWrappedWithVersion(t *testing.T) {
 	require.Equal(t, "7", got.Data.Message.ValidatorIndex)
 }
 
+func TestStreamEvents_GloasAttestation(t *testing.T) {
+	s := &Server{}
+	topics, err := newTopicRequest([]string{AttestationTopic})
+	require.NoError(t, err)
+	att := util.NewAttestationGloas()
+	ev := &feed.Event{
+		Type: operation.UnaggregatedAttReceived,
+		Data: &operation.UnAggregatedAttReceivedData{Attestation: att},
+	}
+
+	lr, err := s.lazyReaderForEvent(t.Context(), ev, topics)
+	require.NoError(t, err)
+	out, err := io.ReadAll(lr())
+	require.NoError(t, err)
+
+	_, payload, found := strings.Cut(string(out), "data: ")
+	require.Equal(t, true, found)
+	var got structs.AttestationElectra
+	require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(payload)), &got))
+	expected := structs.AttGloasFromConsensus(att)
+	require.Equal(t, expected.AggregationBits, got.AggregationBits)
+	require.Equal(t, expected.CommitteeBits, got.CommitteeBits)
+}
+
+func TestStreamEvents_PayloadAttestationMessageWrappedWithVersion(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	s := &Server{}
+	topics, err := newTopicRequest([]string{PayloadAttestationMessageTopic})
+	require.NoError(t, err)
+	ev := &feed.Event{
+		Type: operation.PayloadAttestationMessageReceived,
+		Data: &operation.PayloadAttestationMessageReceivedData{
+			Message: &eth.PayloadAttestationMessage{
+				ValidatorIndex: 3,
+				Data: &eth.PayloadAttestationData{
+					BeaconBlockRoot:   make([]byte, fieldparams.RootLength),
+					Slot:              0,
+					PayloadPresent:    true,
+					BlobDataAvailable: true,
+				},
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+		},
+	}
+	lr, err := s.lazyReaderForEvent(t.Context(), ev, topics)
+	require.NoError(t, err)
+	out, err := io.ReadAll(lr())
+	require.NoError(t, err)
+
+	_, payload, found := strings.Cut(string(out), "data: ")
+	require.Equal(t, true, found)
+	var got structs.PayloadAttestationMessageEvent
+	require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(payload)), &got))
+	require.Equal(t, "gloas", got.Version)
+	require.NotNil(t, got.Data)
+	require.Equal(t, "3", got.Data.ValidatorIndex)
+	require.Equal(t, true, got.Data.Data.PayloadPresent)
+}
+
 func TestStreamEvents_OperationsEvents(t *testing.T) {
 	t.Run("operations", func(t *testing.T) {
 		testSync := newStreamTestSync(t)
@@ -502,13 +564,13 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 			},
 			{
 				Type: statefeed.NewHead,
-				Data: &ethpb.EventHead{
+				Data: &statefeed.HeadData{
 					Slot:                      0,
-					Block:                     make([]byte, 32),
-					State:                     make([]byte, 32),
+					Block:                     [32]byte{0x01},
+					State:                     [32]byte{0x02},
 					EpochTransition:           true,
-					PreviousDutyDependentRoot: make([]byte, 32),
-					CurrentDutyDependentRoot:  make([]byte, 32),
+					PreviousDutyDependentRoot: [32]byte{0x03},
+					CurrentDutyDependentRoot:  [32]byte{0x04},
 					ExecutionOptimistic:       false,
 				},
 			},
@@ -528,22 +590,22 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 			},
 			{
 				Type: statefeed.Reorg,
-				Data: &ethpb.EventChainReorg{
+				Data: &statefeed.ChainReorgData{
 					Slot:                0,
 					Depth:               0,
-					OldHeadBlock:        make([]byte, 32),
-					NewHeadBlock:        make([]byte, 32),
-					OldHeadState:        make([]byte, 32),
-					NewHeadState:        make([]byte, 32),
+					OldHeadBlock:        [32]byte{},
+					NewHeadBlock:        [32]byte{},
+					OldHeadState:        [32]byte{},
+					NewHeadState:        [32]byte{},
 					Epoch:               0,
 					ExecutionOptimistic: false,
 				},
 			},
 			{
 				Type: statefeed.FinalizedCheckpoint,
-				Data: &ethpb.EventFinalizedCheckpoint{
-					Block:               make([]byte, 32),
-					State:               make([]byte, 32),
+				Data: &statefeed.FinalizedCheckpointData{
+					Block:               [32]byte{},
+					State:               [32]byte{},
 					Epoch:               0,
 					ExecutionOptimistic: false,
 				},
@@ -832,7 +894,7 @@ func TestPayloadAttributesReader_ParentBlockNumber(t *testing.T) {
 			_, present := fields["parent_block_number"]
 			require.Equal(t, tc.wantPresent, present, "parent_block_number presence mismatch")
 		})
-  }
+	}
 }
 
 // TestStreamEvents_PayloadAttributesExpiredSlotNotLoggedAsError verifies that a payload

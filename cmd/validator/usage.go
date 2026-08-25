@@ -146,13 +146,6 @@ var appHelpFlagGroups = []flagGroup{
 		Flags: features.ActiveFlags(features.ValidatorFlags),
 	},
 	{
-		Name: "interop",
-		Flags: []cli.Flag{
-			flags.InteropNumValidators,
-			flags.InteropStartIndex,
-		},
-	},
-	{
 		Name:  "deprecated",
 		Flags: []cli.Flag{},
 	},
