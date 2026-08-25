@@ -4,18 +4,18 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"sort"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // requireGloasVersionHeader validates the consensus version request header, writing
@@ -49,14 +49,14 @@ func (s *Server) SubmitBuilderPreferences(w http.ResponseWriter, r *http.Request
 	}
 
 	var (
-		entries   []*eth.BuilderPreferencesEntry
+		decoded   []indexedPreferenceEntry
 		failures  []*server.IndexedError
 		decodeErr error
 	)
 	if httputil.IsRequestSsz(r) {
-		entries, failures, decodeErr = decodeBuilderPreferencesEntriesSSZ(r.Body)
+		decoded, failures, decodeErr = decodeBuilderPreferencesEntriesSSZ(r.Body)
 	} else {
-		entries, failures, decodeErr = decodeBuilderPreferencesEntriesJSON(r.Body)
+		decoded, failures, decodeErr = decodeBuilderPreferencesEntriesJSON(r.Body)
 	}
 	if decodeErr != nil {
 		if errors.Is(decodeErr, io.EOF) {
@@ -66,16 +66,32 @@ func (s *Server) SubmitBuilderPreferences(w http.ResponseWriter, r *http.Request
 		}
 		return
 	}
-	if len(entries) == 0 && len(failures) == 0 {
+	if len(decoded) == 0 && len(failures) == 0 {
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	}
-	var submitErr error
-	if len(entries) > 0 {
-		_, submitErr = s.V1Alpha1Server.SubmitBuilderPreferences(ctx, &eth.SubmitBuilderPreferencesRequest{Entries: entries})
+	if len(decoded) > 0 {
+		// Preconditions mean nothing was submitted, so they outrank per-entry reporting.
+		if s.SyncChecker.Syncing() {
+			httputil.HandleError(w, "Syncing to latest head, not ready to respond", http.StatusServiceUnavailable)
+			return
+		}
+		// Not gated on Configured(), gloas builders are dialed per URL from the request rather than the endpoint flag.
+		if s.BlockBuilder == nil {
+			httputil.HandleError(w, "Builder is not configured", http.StatusInternalServerError)
+			return
+		}
+		entries := make([]*eth.BuilderPreferencesEntry, len(decoded))
+		for i, d := range decoded {
+			entries[i] = d.entry
+		}
+		for pos, msg := range builder.SubmitPreferenceEntries(ctx, s.BlockBuilder, entries) {
+			failures = append(failures, &server.IndexedError{Index: decoded[pos].index, Message: msg})
+		}
 	}
-	// Well-formed entries are still submitted above when others fail to decode, per the spec's 400.
+	// Well-formed entries were still submitted when others failed, per the spec's 400.
 	if len(failures) > 0 {
+		sort.Slice(failures, func(a, b int) bool { return failures[a].Index < failures[b].Index })
 		httputil.WriteError(w, &server.IndexedErrorContainer{
 			Code:     http.StatusBadRequest,
 			Message:  server.ErrIndexedValidationFail,
@@ -83,25 +99,16 @@ func (s *Server) SubmitBuilderPreferences(w http.ResponseWriter, r *http.Request
 		})
 		return
 	}
-	if submitErr != nil {
-		if st, ok := status.FromError(submitErr); ok {
-			switch st.Code() {
-			case codes.InvalidArgument:
-				httputil.HandleError(w, st.Message(), http.StatusBadRequest)
-			case codes.Unavailable:
-				httputil.HandleError(w, st.Message(), http.StatusServiceUnavailable)
-			default:
-				httputil.HandleError(w, st.Message(), http.StatusInternalServerError)
-			}
-			return
-		}
-		httputil.HandleError(w, submitErr.Error(), http.StatusInternalServerError)
-		return
-	}
+}
+
+// indexedPreferenceEntry pairs a decoded entry with its index in the request body.
+type indexedPreferenceEntry struct {
+	index int
+	entry *eth.BuilderPreferencesEntry
 }
 
 // decodeBuilderPreferencesEntriesJSON decodes a JSON array of BuilderPreferencesEntry.
-func decodeBuilderPreferencesEntriesJSON(r io.Reader) ([]*eth.BuilderPreferencesEntry, []*server.IndexedError, error) {
+func decodeBuilderPreferencesEntriesJSON(r io.Reader) ([]indexedPreferenceEntry, []*server.IndexedError, error) {
 	var data []*structs.BuilderPreferencesEntry
 	if err := json.NewDecoder(r).Decode(&data); err != nil {
 		return nil, nil, err
@@ -109,7 +116,7 @@ func decodeBuilderPreferencesEntriesJSON(r io.Reader) ([]*eth.BuilderPreferences
 	if len(data) > structs.MaxBuilderPreferencesList {
 		return nil, nil, errors.Errorf("more than %d entries", structs.MaxBuilderPreferencesList)
 	}
-	entries := make([]*eth.BuilderPreferencesEntry, 0, len(data))
+	entries := make([]indexedPreferenceEntry, 0, len(data))
 	var failures []*server.IndexedError
 	for i, item := range data {
 		if item == nil {
@@ -121,13 +128,13 @@ func decodeBuilderPreferencesEntriesJSON(r io.Reader) ([]*eth.BuilderPreferences
 			failures = append(failures, &server.IndexedError{Index: i, Message: err.Error()})
 			continue
 		}
-		entries = append(entries, consensusItem)
+		entries = append(entries, indexedPreferenceEntry{index: i, entry: consensusItem})
 	}
 	return entries, failures, nil
 }
 
 // decodeBuilderPreferencesEntriesSSZ decodes an SSZ List[BuilderPreferencesEntry].
-func decodeBuilderPreferencesEntriesSSZ(r io.Reader) ([]*eth.BuilderPreferencesEntry, []*server.IndexedError, error) {
+func decodeBuilderPreferencesEntriesSSZ(r io.Reader) ([]indexedPreferenceEntry, []*server.IndexedError, error) {
 	body, err := io.ReadAll(r)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not read request body")
@@ -139,7 +146,7 @@ func decodeBuilderPreferencesEntriesSSZ(r io.Reader) ([]*eth.BuilderPreferencesE
 	if err != nil {
 		return nil, nil, err
 	}
-	entries := make([]*eth.BuilderPreferencesEntry, 0, len(elements))
+	entries := make([]indexedPreferenceEntry, 0, len(elements))
 	var failures []*server.IndexedError
 	for i, elem := range elements {
 		e := &eth.BuilderPreferencesEntry{}
@@ -147,7 +154,7 @@ func decodeBuilderPreferencesEntriesSSZ(r io.Reader) ([]*eth.BuilderPreferencesE
 			failures = append(failures, &server.IndexedError{Index: i, Message: "Could not decode SSZ message: " + err.Error()})
 			continue
 		}
-		entries = append(entries, e)
+		entries = append(entries, indexedPreferenceEntry{index: i, entry: e})
 	}
 	return entries, failures, nil
 }

@@ -2,11 +2,8 @@ package validator
 
 import (
 	"context"
-	"sync"
-	"sync/atomic"
 
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v7/io/logs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"google.golang.org/grpc/codes"
@@ -30,32 +27,8 @@ func (vs *Server) SubmitBuilderPreferences(ctx context.Context, req *ethpb.Submi
 	if vs.BlockBuilder == nil {
 		return nil, status.Error(codes.FailedPrecondition, "builder is not configured")
 	}
-	var wg sync.WaitGroup
-	var failed atomic.Uint64
-	for _, e := range req.Entries {
-		if len(e.GetUrl()) == 0 {
-			log.Warn("Skipping builder preferences entry with no builder url")
-			failed.Add(1)
-			continue
-		}
-		attempted++
-		wg.Add(1)
-		go func(e *ethpb.BuilderPreferencesEntry) {
-			defer wg.Done()
-			breq := &ethpb.BuilderPreferencesRequest{
-				Preferences: &ethpb.BuilderPreferences{MaxExecutionPayment: e.MaxExecutionPayment},
-				Auth:        e.Auth,
-			}
-			url := string(e.Url)
-			if err := vs.BlockBuilder.SubmitBuilderPreferences(ctx, bytesutil.ToBytes48(e.ProposerPubkey), url, breq); err != nil {
-				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(url)).Warn("Could not submit builder preferences")
-				failed.Add(1)
-			}
-		}(e)
-	}
-	wg.Wait()
-	if n := failed.Load(); n > 0 {
-		return nil, status.Errorf(codes.InvalidArgument, "%d of %d builder preference submissions failed", n, len(req.Entries))
+	if failures := builder.SubmitPreferenceEntries(ctx, vs.BlockBuilder, req.Entries); len(failures) > 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "%d of %d builder preference submissions failed", len(failures), len(req.Entries))
 	}
 	return &emptypb.Empty{}, nil
 }

@@ -68,6 +68,15 @@ func WithSSZ() ClientOpt {
 	}
 }
 
+// WithoutRedirects makes the client return redirect responses as-is instead of following them.
+func WithoutRedirects() ClientOpt {
+	return func(c *Client) {
+		c.hc.CheckRedirect = func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+	}
+}
+
 type requestLogger struct{}
 
 func (*requestLogger) observe(r *http.Request) (e error) {

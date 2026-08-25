@@ -161,3 +161,28 @@ func TestSubmitBuilderPreferences_DialsPerURL(t *testing.T) {
 	err := s.SubmitBuilderPreferences(t.Context(), [48]byte{}, "", req)
 	require.ErrorContains(t, "missing builder url", err)
 }
+
+func TestSubmitPreferenceEntries(t *testing.T) {
+	prefEntry := func(url string) *eth.BuilderPreferencesEntry {
+		return &eth.BuilderPreferencesEntry{Url: []byte(url), MaxExecutionPayment: 5}
+	}
+
+	t.Run("failures are keyed by entry position", func(t *testing.T) {
+		fc := &fakeBuilderClient{url: "http://ok"}
+		s := newMultiplexService(t, map[string]*fakeBuilderClient{"http://ok": fc})
+		failures := SubmitPreferenceEntries(t.Context(), s, []*eth.BuilderPreferencesEntry{
+			prefEntry(""), prefEntry("http://ok"), prefEntry("http://nodial"),
+		})
+		require.Equal(t, 2, len(failures))
+		require.StringContains(t, "builder url is required", failures[0])
+		require.StringContains(t, "could not submit builder preferences", failures[2])
+		require.Equal(t, 1, fc.prefCount)
+	})
+
+	t.Run("no failures on success", func(t *testing.T) {
+		fc := &fakeBuilderClient{url: "http://ok"}
+		s := newMultiplexService(t, map[string]*fakeBuilderClient{"http://ok": fc})
+		failures := SubmitPreferenceEntries(t.Context(), s, []*eth.BuilderPreferencesEntry{prefEntry("http://ok")})
+		require.Equal(t, 0, len(failures))
+	})
+}

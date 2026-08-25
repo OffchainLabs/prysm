@@ -82,7 +82,9 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 	}
 	if s.dial == nil {
 		s.dial = func(url string) (builder.BuilderClient, error) {
-			return builder.NewClient(url, s.clientOpts...)
+			// Per-URL builder clients never follow redirects (beacon-APIs builder url requirement).
+			opts := append([]builder.ClientOpt{builder.WithoutRedirects()}, s.clientOpts...)
+			return builder.NewClient(url, opts...)
 		}
 	}
 	if s.cfg.builderClient != nil && !reflect.ValueOf(s.cfg.builderClient).IsNil() {
@@ -235,6 +237,43 @@ func (s *Service) SubmitSignedBeaconBlock(ctx context.Context, builderURL string
 		return err
 	}
 	return c.SubmitSignedBeaconBlock(ctx, b)
+}
+
+// SubmitPreferenceEntries forwards each preference entry to its builder concurrently,
+// returning failure messages keyed by entry position.
+func SubmitPreferenceEntries(ctx context.Context, b BlockBuilder, entries []*ethpb.BuilderPreferencesEntry) map[int]string {
+	var (
+		mu       sync.Mutex
+		wg       sync.WaitGroup
+		failures = make(map[int]string)
+	)
+	fail := func(i int, msg string) {
+		mu.Lock()
+		failures[i] = msg
+		mu.Unlock()
+	}
+	for i, e := range entries {
+		if len(e.GetUrl()) == 0 {
+			log.Warn("Skipping builder preferences entry with no builder url")
+			fail(i, "builder url is required")
+			continue
+		}
+		wg.Add(1)
+		go func(i int, e *ethpb.BuilderPreferencesEntry) {
+			defer wg.Done()
+			req := &ethpb.BuilderPreferencesRequest{
+				Preferences: &ethpb.BuilderPreferences{MaxExecutionPayment: e.MaxExecutionPayment},
+				Auth:        e.Auth,
+			}
+			url := string(e.Url)
+			if err := b.SubmitBuilderPreferences(ctx, bytesutil.ToBytes48(e.ProposerPubkey), url, req); err != nil {
+				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(url)).Warn("Could not submit builder preferences")
+				fail(i, "could not submit builder preferences: "+logs.MaskCredentialsLogging(err.Error()))
+			}
+		}(i, e)
+	}
+	wg.Wait()
+	return failures
 }
 
 // Routed to url, the auth data inside req is opaque and forwarded unchanged.

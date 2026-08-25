@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/server"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	builderTest "github.com/OffchainLabs/prysm/v7/beacon-chain/builder/testing"
-	validatorv1alpha1 "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/v1alpha1/validator"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -48,10 +48,8 @@ func TestSubmitBuilderPreferences(t *testing.T) {
 	newServerWithBuilder := func(builderErr error) (*Server, *builderTest.MockBuilderService) {
 		builder := &builderTest.MockBuilderService{HasConfigured: true, ErrSubmitBuilderPreferences: builderErr}
 		return &Server{
-			V1Alpha1Server: &validatorv1alpha1.Server{
-				BlockBuilder: builder,
-				SyncChecker:  &mockSync.Sync{IsSyncing: false},
-			},
+			BlockBuilder: builder,
+			SyncChecker:  &mockSync.Sync{IsSyncing: false},
 		}, builder
 	}
 	newServer := func(builderErr error) *Server {
@@ -145,10 +143,8 @@ func TestSubmitBuilderPreferences(t *testing.T) {
 		})
 		require.NoError(t, err)
 		s := &Server{
-			V1Alpha1Server: &validatorv1alpha1.Server{
-				BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true},
-				SyncChecker:  &mockSync.Sync{IsSyncing: true},
-			},
+			BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true},
+			SyncChecker:  &mockSync.Sync{IsSyncing: true},
 		}
 		w := httptest.NewRecorder()
 		w.Body = &bytes.Buffer{}
@@ -193,7 +189,7 @@ func TestSubmitBuilderPreferences(t *testing.T) {
 		assert.StringContains(t, "Could not decode request body", w.Body.String())
 	})
 
-	t.Run("builder submission failure maps to 400", func(t *testing.T) {
+	t.Run("builder submission failure reports indexed 400", func(t *testing.T) {
 		body, err := json.Marshal([]*structs.BuilderPreferencesEntry{
 			structs.BuilderPreferencesEntryFromConsensus(testBuilderPreferencesEntry()),
 		})
@@ -202,6 +198,46 @@ func TestSubmitBuilderPreferences(t *testing.T) {
 		w.Body = &bytes.Buffer{}
 		newServer(errors.New("boom")).SubmitBuilderPreferences(w, newRequest(body))
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.StringContains(t, "submissions failed", w.Body.String())
+		resp := &server.IndexedErrorContainer{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), resp))
+		require.Equal(t, 1, len(resp.Failures))
+		assert.Equal(t, 0, resp.Failures[0].Index)
+		assert.StringContains(t, "could not submit builder preferences", resp.Failures[0].Message)
+	})
+
+	t.Run("decode and submission failures merge with original indices", func(t *testing.T) {
+		bad := structs.BuilderPreferencesEntryFromConsensus(testBuilderPreferencesEntry())
+		bad.ProposerPubkey = "0xff"
+		good := structs.BuilderPreferencesEntryFromConsensus(testBuilderPreferencesEntry())
+		body, err := json.Marshal([]*structs.BuilderPreferencesEntry{good, bad, good})
+		require.NoError(t, err)
+		w := httptest.NewRecorder()
+		w.Body = &bytes.Buffer{}
+		newServer(errors.New("boom")).SubmitBuilderPreferences(w, newRequest(body))
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		resp := &server.IndexedErrorContainer{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), resp))
+		require.Equal(t, 3, len(resp.Failures))
+		for i, f := range resp.Failures {
+			assert.Equal(t, i, f.Index)
+		}
+		assert.StringContains(t, "could not submit builder preferences", resp.Failures[0].Message)
+		assert.StringContains(t, "could not submit builder preferences", resp.Failures[2].Message)
+	})
+
+	t.Run("syncing outranks decode failures", func(t *testing.T) {
+		bad := structs.BuilderPreferencesEntryFromConsensus(testBuilderPreferencesEntry())
+		bad.ProposerPubkey = "0xff"
+		good := structs.BuilderPreferencesEntryFromConsensus(testBuilderPreferencesEntry())
+		body, err := json.Marshal([]*structs.BuilderPreferencesEntry{bad, good})
+		require.NoError(t, err)
+		s := &Server{
+			BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true},
+			SyncChecker:  &mockSync.Sync{IsSyncing: true},
+		}
+		w := httptest.NewRecorder()
+		w.Body = &bytes.Buffer{}
+		s.SubmitBuilderPreferences(w, newRequest(body))
+		assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 	})
 }
