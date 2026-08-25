@@ -57,7 +57,6 @@ type StateManager interface {
 // State is a concrete implementation of StateManager.
 type State struct {
 	beaconDB                db.NoHeadAccessDatabase
-	slotsPerArchivedPoint   primitives.Slot
 	hotStateCache           *hotStateCache
 	finalizedInfo           *finalizedInfo
 	epochBoundaryStateCache *epochBoundaryState
@@ -103,7 +102,6 @@ func New(beaconDB db.NoHeadAccessDatabase, fc forkchoice.ForkChoicer, opts ...Op
 		beaconDB:                beaconDB,
 		hotStateCache:           newHotStateCache(),
 		finalizedInfo:           &finalizedInfo{slot: 0, root: params.BeaconConfig().ZeroHash},
-		slotsPerArchivedPoint:   params.BeaconConfig().SlotsPerArchivedPoint,
 		epochBoundaryStateCache: newBoundaryStateCache(),
 		saveHotStateDB: &saveHotStateDbConfig{
 			duration: defaultHotStateDBInterval,
@@ -153,7 +151,7 @@ func (s *State) Resume(ctx context.Context, fState state.BeaconState) (state.Bea
 	}
 
 	go func() {
-		if err := s.beaconDB.CleanUpDirtyStates(ctx, s.slotsPerArchivedPoint); err != nil {
+		if err := s.beaconDB.CleanUpDirtyStates(ctx); err != nil {
 			log.WithError(err).Error("Could not clean up dirty states")
 		}
 	}()

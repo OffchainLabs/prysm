@@ -125,7 +125,7 @@ type NoHeadAccessDatabase interface {
 	SaveExecutionPayloadEnvelope(ctx context.Context, envelope *ethpb.SignedExecutionPayloadEnvelope) error
 	DeleteExecutionPayloadEnvelope(ctx context.Context, blockRoot [32]byte) error
 
-	CleanUpDirtyStates(ctx context.Context, slotsPerArchivedPoint primitives.Slot) error
+	CleanUpDirtyStates(ctx context.Context) error
 	DeleteHistoricalDataBeforeSlot(ctx context.Context, slot primitives.Slot, batchSize int) (int, error)
 	DeleteStateDiffBeforeSlot(ctx context.Context, slot primitives.Slot, maxEntries int) (int, error)
 	LastStateDiffBoundary(slot primitives.Slot) (primitives.Slot, error)

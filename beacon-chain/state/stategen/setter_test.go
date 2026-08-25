@@ -20,7 +20,6 @@ func TestSaveState_HotStateCanBeSaved(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
 
 	service := New(beaconDB, doublylinkedtree.New())
-	service.slotsPerArchivedPoint = 1
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	// This goes to hot section, verify it can save on epoch boundary.
 	require.NoError(t, beaconState.SetSlot(params.BeaconConfig().SlotsPerEpoch))
@@ -41,7 +40,6 @@ func TestSaveState_HotStateCached(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
 
 	service := New(beaconDB, doublylinkedtree.New())
-	service.slotsPerArchivedPoint = 1
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	require.NoError(t, beaconState.SetSlot(params.BeaconConfig().SlotsPerEpoch))
 
