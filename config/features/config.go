@@ -39,7 +39,6 @@ const disabledFeatureFlag = "Disabled feature flag"
 // Flags is a struct to represent which features the client will perform on runtime.
 type Flags struct {
 	// Feature related flags.
-	EnablePeerScorer                    bool // EnablePeerScorer enables experimental peer scoring in p2p.
 	EnableLightClient                   bool // EnableLightClient enables light client APIs.
 	EnableQUIC                          bool // EnableQUIC specifies whether to enable QUIC transport for libp2p.
 	WriteWalletPasswordOnWebOnboarding  bool // WriteWalletPasswordOnWebOnboarding writes the password to disk after Prysm web signup.
@@ -206,11 +205,6 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		cfg.DisableGRPCConnectionLogs = true
 	}
 
-	cfg.EnablePeerScorer = true
-	if ctx.Bool(disablePeerScorer.Name) {
-		logDisabled(disablePeerScorer)
-		cfg.EnablePeerScorer = false
-	}
 	if ctx.Bool(disableBroadcastSlashingFlag.Name) {
 		logDisabled(disableBroadcastSlashingFlag)
 		cfg.DisableBroadcastSlashings = true

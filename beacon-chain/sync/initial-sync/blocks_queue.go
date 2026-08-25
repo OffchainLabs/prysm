@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	beaconsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
@@ -464,8 +465,8 @@ func (q *blocksQueue) onProcessSkippedEvent(ctx context.Context) eventHandlerFn 
 }
 
 func (q *blocksQueue) downscorePeer(peerID peer.ID, reason string) {
-	newScore := q.blocksFetcher.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
-	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
+	count := q.blocksFetcher.p2p.PeerScoring().RecordBadResponse(peerID, peerscoring.SourceSync, reason)
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "badResponses": count}).Debug("Downscore peer")
 }
 
 // onCheckStaleEvent is an event that allows to mark stale epochs,

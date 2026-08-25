@@ -1,6 +1,7 @@
 package peerscoring
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -16,12 +17,16 @@ func (gossipScorer) Score(_ peer.ID, si *scoringInfo) float64 {
 	return si.peerInfo.gossipScore * si.params.gossipWeight
 }
 
-// IsPeerGreylisted reports whether the mirrored gossip score fell below the greylist threshold.
-func (gossipScorer) IsPeerGreylisted(_ peer.ID, si *scoringInfo) bool {
-	return si.peerInfo.gossipScore < float64(si.params.gossipGreylistThreshold)
+// IsPeerGreyListed greylists the peer when its mirrored gossip score fell below the greylist threshold.
+func (gossipScorer) IsPeerGreyListed(_ peer.ID, si *scoringInfo) error {
+	if si.peerInfo.gossipScore < float64(si.params.gossipGreyListThreshold) {
+		return fmt.Errorf("%w: gossip score %g below threshold %d",
+			ErrPeerGreyListed, si.peerInfo.gossipScore, si.params.gossipGreyListThreshold)
+	}
+	return nil
 }
 
-// TimeToWhitelisting returns 0: gossip scores recover via libp2p's own decay, which we cannot predict locally.
-func (gossipScorer) TimeToWhitelisting(peer.ID, *scoringInfo) time.Duration {
+// TimeToWhiteListing returns 0: gossip scores recover via libp2p's own decay, which we cannot predict locally.
+func (gossipScorer) TimeToWhiteListing(peer.ID, *scoringInfo) time.Duration {
 	return 0
 }

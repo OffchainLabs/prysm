@@ -13,7 +13,7 @@ func TestGossipScorer(t *testing.T) {
 		name           string
 		gossipScore    float64
 		wantScore      float64
-		wantGreylisted bool
+		wantGreyListed bool
 	}{
 		{"no gossip data", 0, 0, false},
 		{"positive score", 8, 2, false}, // 8 * 0.25
@@ -25,8 +25,13 @@ func TestGossipScorer(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			si := testInfo(&PeerScoringInfo{gossipScore: tc.gossipScore}, 0, 0)
 			require.Equal(t, tc.wantScore, scorer.Score(testPid, si))
-			require.Equal(t, tc.wantGreylisted, scorer.IsPeerGreylisted(testPid, si))
-			require.Equal(t, time.Duration(0), scorer.TimeToWhitelisting(testPid, si)) // recovery is libp2p-driven
+			err := scorer.IsPeerGreyListed(testPid, si)
+			if tc.wantGreyListed {
+				require.ErrorIs(t, err, ErrPeerGreyListed)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, time.Duration(0), scorer.TimeToWhiteListing(testPid, si)) // recovery is libp2p-driven
 		})
 	}
 }

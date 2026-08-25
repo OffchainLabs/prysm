@@ -5,6 +5,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -65,7 +66,7 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg a
 	rangeParameters, err := validateDataColumnsByRange(request, s.cfg.clock.CurrentSlot())
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
-		s.downscorePeer(remotePeer, "dataColumnSidecarsByRangeRpcHandlerValidationError")
+		s.downscorePeer(remotePeer, peerscoring.SourceRPCRequest, "dataColumnSidecarsByRangeRpcHandlerValidationError")
 		tracing.AnnotateError(span, err)
 		return errors.Wrap(err, "validate data columns by range")
 	}

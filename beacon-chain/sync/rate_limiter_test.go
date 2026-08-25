@@ -97,7 +97,7 @@ func TestRateLimiter_ExceedRawCapacity(t *testing.T) {
 	for range defaultBurstLimit {
 		assert.ErrorContains(t, p2ptypes.ErrRateLimited.Error(), rlimiter.validateRawRpcRequest(stream, 1))
 	}
-	assert.NotNil(t, p1.Peers().IsBad(p2.PeerID()), "peer is not marked as a bad peer")
+	assert.NotNil(t, p1.IsPeerGreyListed(p2.PeerID()), "peer is not marked as a bad peer")
 	require.NoError(t, stream.Close(), "could not close stream")
 
 	if util.WaitTimeout(&wg, 1*time.Second) {

@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -400,8 +401,8 @@ func (s *Service) WaitForCompletion() error {
 }
 
 func (s *Service) downscorePeer(peerID peer.ID, reason string, err error) {
-	newScore := s.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
-	logArgs := log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore})
+	count := s.p2p.PeerScoring().RecordBadResponse(peerID, peerscoring.SourceBackfill, reason)
+	logArgs := log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "badResponses": count})
 	if err != nil {
 		logArgs = logArgs.WithError(err)
 	}

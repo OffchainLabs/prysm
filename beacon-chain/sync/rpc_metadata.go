@@ -5,6 +5,7 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/wrapper"
@@ -172,12 +173,12 @@ func (s *Service) sendMetaDataRequest(ctx context.Context, peerID peer.ID) (meta
 	// Read the METADATA response from the peer.
 	code, errMsg, err := ReadStatusCode(stream, s.cfg.p2p.Encoding())
 	if err != nil {
-		s.downscorePeer(peerID, "MetadataReadStatusCodeError")
+		s.downscorePeer(peerID, peerscoring.SourceRPCMetadata, "MetadataReadStatusCodeError")
 		return nil, errors.Wrap(err, "read status code")
 	}
 
 	if code != 0 {
-		s.downscorePeer(peerID, "NonNullMetadataReadStatusCode")
+		s.downscorePeer(peerID, peerscoring.SourceRPCMetadata, "NonNullMetadataReadStatusCode")
 		return nil, errors.New(errMsg)
 	}
 
@@ -206,7 +207,7 @@ func (s *Service) sendMetaDataRequest(ctx context.Context, peerID peer.ID) (meta
 
 	// Decode the metadata from the peer.
 	if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
-		s.downscorePeer(peerID, "MetadataDecodeError")
+		s.downscorePeer(peerID, peerscoring.SourceRPCMetadata, "MetadataDecodeError")
 		return nil, errors.Wrap(err, "decode with max length")
 	}
 

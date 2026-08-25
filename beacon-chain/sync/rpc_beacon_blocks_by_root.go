@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync/verify"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
@@ -228,7 +229,7 @@ func (s *Service) beaconBlocksRootRPCHandler(ctx context.Context, msg any, strea
 
 	currentEpoch := slots.ToEpoch(s.cfg.clock.CurrentSlot())
 	if uint64(len(blockRoots)) > params.MaxRequestBlock(currentEpoch) {
-		s.downscorePeer(remotePeer, "beaconBlocksRootRPCHandlerTooManyRoots")
+		s.downscorePeer(remotePeer, peerscoring.SourceRPCRequest, "beaconBlocksRootRPCHandlerTooManyRoots")
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, "requested more than the max block limit", stream)
 		return errors.New("requested more than the max block limit")
 	}

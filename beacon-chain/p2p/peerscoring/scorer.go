@@ -2,6 +2,7 @@ package peerscoring
 
 import (
 	"context"
+	"errors"
 	"math"
 	"sync"
 	"time"
@@ -11,12 +12,73 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
-// BadResponseSource identifies the subsystem that reported a bad response.
+var (
+	// ErrPeerUnknown is returned when the scorer holds no record for a peer.
+	ErrPeerUnknown = errors.New("peer unknown")
+	// ErrNoPeerStatus is returned when a known peer has not completed a status exchange yet.
+	ErrNoPeerStatus = errors.New("no chain status for peer")
+	// ErrPeerGreyListed reports that a peer is grey-listed and must be refused.
+	ErrPeerGreyListed = errors.New("peer is grey-listed")
+)
+
+// BadResponseSource identifies the call site that reported a bad response.
 type BadResponseSource int
 
 const (
 	Unknown BadResponseSource = iota
+	// SourceDial reports outbound dial failures.
+	SourceDial
+	// SourceRPCStatus reports faults in the status RPC exchange, inbound or outbound.
+	SourceRPCStatus
+	// SourceRPCPing reports faults in the ping RPC exchange.
+	SourceRPCPing
+	// SourceRPCMetadata reports faults in the metadata RPC exchange.
+	SourceRPCMetadata
+	// SourceRPCRequest reports malformed or excessive inbound RPC requests.
+	SourceRPCRequest
+	// SourceRPCResponse reports invalid or unreadable outbound RPC responses served to us.
+	SourceRPCResponse
+	// SourceRateLimit reports rate-limit violations.
+	SourceRateLimit
+	// SourceGossip reports invalid gossip messages attributed during processing.
+	SourceGossip
+	// SourceSync reports invalid data discovered by initial sync pipelines.
+	SourceSync
+	// SourceBackfill reports invalid data discovered by backfill.
+	SourceBackfill
+	// SourceDAS reports invalid data column sidecars pinpointed by DAS verification.
+	SourceDAS
 )
+
+// String returns the source's log-friendly name.
+func (s BadResponseSource) String() string {
+	switch s {
+	case SourceDial:
+		return "dial"
+	case SourceRPCStatus:
+		return "rpc-status"
+	case SourceRPCPing:
+		return "rpc-ping"
+	case SourceRPCMetadata:
+		return "rpc-metadata"
+	case SourceRPCRequest:
+		return "rpc-request"
+	case SourceRPCResponse:
+		return "rpc-response"
+	case SourceRateLimit:
+		return "rate-limit"
+	case SourceGossip:
+		return "gossip"
+	case SourceSync:
+		return "sync"
+	case SourceBackfill:
+		return "backfill"
+	case SourceDAS:
+		return "das"
+	default:
+		return "unknown"
+	}
+}
 
 // BadResponse is a single recorded misbehaviour, kept with its origin for observability.
 type BadResponse struct {
@@ -29,48 +91,56 @@ type BadResponse struct {
 type RpcStatus struct {
 	chainState      *pb.StatusV2
 	validationError error
+	lastUpdated     time.Time
 }
 
 // PeerScoringInfo holds all per-peer state the scorers judge a peer by.
 type PeerScoringInfo struct {
+	// badResponseCount is the standing strike count: incremented per strike, decremented by decay.
+	badResponseCount int
+	// badResponses is the most recent strike history, capped at badResponseHistorySize.
 	badResponses []BadResponse
-	nDecays      int
 
-	rpcStatus   *RpcStatus
-	gossipScore float64
+	rpcStatus *RpcStatus
+
+	gossipScore      float64
+	behaviourPenalty float64
+	topicScores      map[string]*pb.TopicScoreSnapshot
 }
 
 // Defaults mirror the production wiring of the legacy scorers service.
 const (
 	defaultDecayInterval                = time.Hour
-	defaultBadResponseGreylistThreshold = 5
-	// defaultGossipGreylistThreshold mirrors the PeerScoreThresholds.GraylistThreshold prysm hands
+	defaultBadResponseGreyListThreshold = 5
+	// defaultGossipGreyListThreshold mirrors the PeerScoreThresholds.GraylistThreshold prysm hands
 	// to gossipsub (gossip_scoring_params.go); pubsub exports no constant for it, so it is restated here.
-	defaultGossipGreylistThreshold = -16000
+	defaultGossipGreyListThreshold = -16000
 	defaultBadResponseWeight       = 0.3
 	defaultPeerStatusWeight        = 0.3
 	defaultGossipWeight            = 0.4
+	// defaultBadResponseHistorySize caps how many recent strikes are retained per peer.
+	defaultBadResponseHistorySize = 25
 
 	// scoreRoundingFactor keeps four decimal digits in scores.
 	scoreRoundingFactor = 10000
-	// greylistedPeerScore is the composite score reported for a greylisted peer.
-	greylistedPeerScore = -float64(math.MaxInt)
+	// greyListedPeerScore is the composite score reported for a greylisted peer.
+	greyListedPeerScore = -float64(math.MaxInt)
 )
 
 // Option configures a Scorer.
 type Option func(*Scorer)
 
-// WithGossipGreylistThreshold sets the gossip score below which a peer is greylisted.
-func WithGossipGreylistThreshold(threshold int) Option {
+// WithGossipGreyListThreshold sets the gossip score below which a peer is greylisted.
+func WithGossipGreyListThreshold(threshold int) Option {
 	return func(s *Scorer) {
-		s.params.gossipGreylistThreshold = threshold
+		s.params.gossipGreyListThreshold = threshold
 	}
 }
 
-// WithBadResponseGreylistThreshold sets how many bad responses greylist a peer.
-func WithBadResponseGreylistThreshold(threshold int) Option {
+// WithBadResponseGreyListThreshold sets how many bad responses greylist a peer.
+func WithBadResponseGreyListThreshold(threshold int) Option {
 	return func(s *Scorer) {
-		s.params.badResponseGreylistThreshold = threshold
+		s.params.badResponseGreyListThreshold = threshold
 	}
 }
 
@@ -78,6 +148,13 @@ func WithBadResponseGreylistThreshold(threshold int) Option {
 func WithDecayInterval(decayInterval time.Duration) Option {
 	return func(s *Scorer) {
 		s.params.decayInterval = decayInterval
+	}
+}
+
+// WithBadResponseHistorySize sets how many recent strikes are retained per peer.
+func WithBadResponseHistorySize(n int) Option {
+	return func(s *Scorer) {
+		s.params.badResponseHistorySize = n
 	}
 }
 
@@ -104,8 +181,9 @@ func WithGossipWeight(w float64) Option {
 
 type scoringParams struct {
 	decayInterval                time.Duration
-	badResponseGreylistThreshold int
-	gossipGreylistThreshold      int
+	badResponseGreyListThreshold int
+	badResponseHistorySize       int
+	gossipGreyListThreshold      int
 	badResponseWeight            float64
 	peerStatusWeight             float64
 	gossipWeight                 float64
@@ -132,8 +210,9 @@ func NewScorer(opts ...Option) *Scorer {
 	s := &Scorer{
 		params: &scoringParams{
 			decayInterval:                defaultDecayInterval,
-			badResponseGreylistThreshold: defaultBadResponseGreylistThreshold,
-			gossipGreylistThreshold:      defaultGossipGreylistThreshold,
+			badResponseGreyListThreshold: defaultBadResponseGreyListThreshold,
+			badResponseHistorySize:       defaultBadResponseHistorySize,
+			gossipGreyListThreshold:      defaultGossipGreyListThreshold,
 			badResponseWeight:            defaultBadResponseWeight,
 			peerStatusWeight:             defaultPeerStatusWeight,
 			gossipWeight:                 defaultGossipWeight,
@@ -147,16 +226,47 @@ func NewScorer(opts ...Option) *Scorer {
 	return s
 }
 
-// RecordBadResponse adds one strike against the peer, tagged with its source and reason.
-func (s *Scorer) RecordBadResponse(pid peer.ID, source BadResponseSource, reason string) {
+// RecordBadResponse adds one strike against the peer, tagged with its source and reason,
+// and returns the standing (un-decayed) strike count.
+func (s *Scorer) RecordBadResponse(pid peer.ID, source BadResponseSource, reason string) int {
 	if pid == "" {
-		return
+		return 0
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	pi := s.getPeerScoringInfo(pid)
+	pi.badResponseCount++
 	pi.badResponses = append(pi.badResponses, BadResponse{Source: source, Reason: reason, at: time.Now()})
+	if excess := len(pi.badResponses) - s.params.badResponseHistorySize; excess > 0 {
+		pi.badResponses = append(pi.badResponses[:0], pi.badResponses[excess:]...)
+	}
+	return pi.badResponseCount
+}
+
+// BadResponseCount returns the peer's standing (un-decayed) strike count.
+func (s *Scorer) BadResponseCount(pid peer.ID) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	pi, ok := s.info[pid]
+	if !ok {
+		return 0
+	}
+	return pi.badResponseCount
+}
+
+// RemovePeers drops all scoring state for the given peers. Grey-listed peers are retained:
+// the scorer is the node's only memory of who misbehaved.
+func (s *Scorer) RemovePeers(pids []peer.ID) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, pid := range pids {
+		if si, ok := s.snapshot(pid); ok && s.isGreyListed(pid, si) == nil {
+			delete(s.info, pid)
+		}
+	}
 }
 
 // SetPeerStatus stores the peer's latest status exchange and our validation verdict on it.
@@ -164,18 +274,72 @@ func (s *Scorer) SetPeerStatus(pid peer.ID, chainState *pb.StatusV2, validationE
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.getPeerScoringInfo(pid).rpcStatus = &RpcStatus{chainState: chainState, validationError: validationError}
+	s.getPeerScoringInfo(pid).rpcStatus = &RpcStatus{chainState: chainState, validationError: validationError, lastUpdated: time.Now()}
 	if validationError == nil && chainState != nil && chainState.HeadSlot > s.highestKnownHeadSlot {
 		s.highestKnownHeadSlot = chainState.HeadSlot
 	}
 }
 
-// SetGossipScore mirrors the peer's latest libp2p gossip score.
-func (s *Scorer) SetGossipScore(pid peer.ID, gScore float64, _ float64, _ map[string]*pb.TopicScoreSnapshot) {
+// PeerStatus returns the chain status the peer advertised in its last status exchange.
+func (s *Scorer) PeerStatus(pid peer.ID) (*pb.StatusV2, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	pi, ok := s.info[pid]
+	if !ok {
+		return nil, ErrPeerUnknown
+	}
+	if pi.rpcStatus == nil || pi.rpcStatus.chainState == nil {
+		return nil, ErrNoPeerStatus
+	}
+	return pi.rpcStatus.chainState, nil
+}
+
+// ChainStateLastUpdated returns when the peer's status was last stored; zero if never.
+func (s *Scorer) ChainStateLastUpdated(pid peer.ID) time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	pi, ok := s.info[pid]
+	if !ok || pi.rpcStatus == nil {
+		return time.Time{}
+	}
+	return pi.rpcStatus.lastUpdated
+}
+
+// ValidationError returns the validation verdict stored with the peer's last status, if any.
+func (s *Scorer) ValidationError(pid peer.ID) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	pi, ok := s.info[pid]
+	if !ok || pi.rpcStatus == nil {
+		return nil
+	}
+	return pi.rpcStatus.validationError
+}
+
+// SetGossipScore mirrors the peer's latest libp2p gossip score, behaviour penalty and topic snapshots.
+func (s *Scorer) SetGossipScore(pid peer.ID, gScore, bPenalty float64, topicScores map[string]*pb.TopicScoreSnapshot) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.getPeerScoringInfo(pid).gossipScore = gScore
+	pi := s.getPeerScoringInfo(pid)
+	pi.gossipScore = gScore
+	pi.behaviourPenalty = bPenalty
+	pi.topicScores = topicScores
+}
+
+// GossipData returns the mirrored gossip score, behaviour penalty and per-topic snapshots.
+func (s *Scorer) GossipData(pid peer.ID) (float64, float64, map[string]*pb.TopicScoreSnapshot) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	pi, ok := s.info[pid]
+	if !ok {
+		return 0, 0, nil
+	}
+	return pi.gossipScore, pi.behaviourPenalty, pi.topicScores
 }
 
 // SetHeadSlot updates our own head slot, the baseline for status scoring.
@@ -186,19 +350,34 @@ func (s *Scorer) SetHeadSlot(slot primitives.Slot) {
 	s.ourHeadSlot = slot
 }
 
-// IsPeerGreylisted reports whether any registered scorer greylists the peer.
-func (s *Scorer) IsPeerGreylisted(pid peer.ID) bool {
+// HighestHeadSlot returns the highest head slot any tracked peer has advertised.
+func (s *Scorer) HighestHeadSlot() primitives.Slot {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var highest primitives.Slot
+	for _, pi := range s.info {
+		if pi.rpcStatus != nil && pi.rpcStatus.chainState != nil && pi.rpcStatus.chainState.HeadSlot > highest {
+			highest = pi.rpcStatus.chainState.HeadSlot
+		}
+	}
+	return highest
+}
+
+// IsPeerGreyListed returns nil when no registered scorer greylists the peer, or an error
+// wrapping ErrPeerGreyListed describing which aspect greylists it and why.
+func (s *Scorer) IsPeerGreyListed(pid peer.ID) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	si, ok := s.snapshot(pid)
 	if !ok {
-		return false
+		return nil
 	}
-	return s.isGreylisted(pid, si)
+	return s.isGreyListed(pid, si)
 }
 
-// Score returns the composite peer score: greylisted peers score greylistedPeerScore, others
+// Score returns the composite peer score: greylisted peers score greyListedPeerScore, others
 // the weight-normalized sum of scorer contributions rounded to four decimals, unknown peers 0.
 func (s *Scorer) Score(pid peer.ID) float64 {
 	s.mu.RLock()
@@ -208,8 +387,8 @@ func (s *Scorer) Score(pid peer.ID) float64 {
 	if !ok {
 		return 0
 	}
-	if s.isGreylisted(pid, si) {
-		return greylistedPeerScore
+	if s.isGreyListed(pid, si) != nil {
+		return greyListedPeerScore
 	}
 	score := float64(0)
 	for _, scorer := range s.scorers {
@@ -221,14 +400,28 @@ func (s *Scorer) Score(pid peer.ID) float64 {
 	return math.Round(score*scoreRoundingFactor) / scoreRoundingFactor
 }
 
-// isGreylisted reports whether any scorer greylists the peer; callers must hold s.mu.
-func (s *Scorer) isGreylisted(pid peer.ID, si *scoringInfo) bool {
-	for _, scorer := range s.scorers {
-		if scorer.IsPeerGreylisted(pid, si) {
-			return true
+// GreyListedPeers returns every peer currently grey-listed by any scorer.
+func (s *Scorer) GreyListedPeers() []peer.ID {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	greyListed := make([]peer.ID, 0)
+	for pid := range s.info {
+		if si, ok := s.snapshot(pid); ok && s.isGreyListed(pid, si) != nil {
+			greyListed = append(greyListed, pid)
 		}
 	}
-	return false
+	return greyListed
+}
+
+// isGreyListed returns the first scorer's greylist verdict, nil if none; callers must hold s.mu.
+func (s *Scorer) isGreyListed(pid peer.ID, si *scoringInfo) error {
+	for _, scorer := range s.scorers {
+		if err := scorer.IsPeerGreyListed(pid, si); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // snapshot bundles a known peer's state for the scorers; callers must hold s.mu.
@@ -265,8 +458,8 @@ func (s *Scorer) Start(ctx context.Context) {
 		case <-ticker.C:
 			s.mu.Lock()
 			for _, pi := range s.info {
-				if effectiveBadResponses(pi) > 0 {
-					pi.nDecays++
+				if pi.badResponseCount > 0 {
+					pi.badResponseCount--
 				}
 			}
 			s.mu.Unlock()

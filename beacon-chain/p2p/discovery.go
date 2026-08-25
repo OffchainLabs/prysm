@@ -693,7 +693,7 @@ func (s *Service) filterPeer(node *enode.Node) bool {
 	}
 
 	// Ignore bad nodes.
-	if s.peers.IsBad(peerData.ID) != nil {
+	if s.IsPeerGreyListed(peerData.ID) != nil {
 		return false
 	}
 

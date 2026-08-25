@@ -20,9 +20,10 @@ type scoringInfo struct {
 type GreyListerAndScorer interface {
 	// Score returns this scorer's weighted contribution to the composite score of a non-greylisted peer.
 	Score(peer.ID, *scoringInfo) float64
-	// IsPeerGreylisted reports whether this scorer alone greylists the peer.
-	IsPeerGreylisted(peer.ID, *scoringInfo) bool
-	// TimeToWhitelisting estimates how long until this scorer whitelists the peer on
+	// IsPeerGreyListed returns nil when this scorer alone does not greylist the peer, or an
+	// error wrapping ErrPeerGreyListed describing why it does.
+	IsPeerGreyListed(peer.ID, *scoringInfo) error
+	// TimeToWhiteListing estimates how long until this scorer whitelists the peer on
 	// its own; 0 when the peer is not greylisted or recovery is not time based.
-	TimeToWhitelisting(peer.ID, *scoringInfo) time.Duration
+	TimeToWhiteListing(peer.ID, *scoringInfo) time.Duration
 }

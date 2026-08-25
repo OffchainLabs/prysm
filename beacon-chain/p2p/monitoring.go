@@ -220,7 +220,7 @@ func (s *Service) updateMetrics() {
 	p2pPeerCount.WithLabelValues("Disconnected").Set(float64(len(s.peers.Disconnected())))
 	p2pPeerCount.WithLabelValues("Connecting").Set(float64(len(s.peers.Connecting())))
 	p2pPeerCount.WithLabelValues("Disconnecting").Set(float64(len(s.peers.Disconnecting())))
-	p2pPeerCount.WithLabelValues("Bad").Set(float64(len(s.peers.Bad())))
+	p2pPeerCount.WithLabelValues("Bad").Set(float64(len(s.peerScorer.GreyListedPeers())))
 
 	upperTCP := strings.ToUpper(string(peers.TCP))
 	upperQUIC := strings.ToUpper(string(peers.QUIC))
@@ -243,7 +243,7 @@ func (s *Service) updateMetrics() {
 		connectedPeersCountByClient[foundName] += 1
 
 		// Get peer scoring data.
-		overallScore := s.peers.Scorers().Score(pid)
+		overallScore := s.peerScorer.Score(pid)
 		peerScoresByClient[foundName] = append(peerScoresByClient[foundName], overallScore)
 	}
 

@@ -14,8 +14,8 @@ func TestBadResponsesScorer(t *testing.T) {
 		strikes         int
 		decays          int
 		wantScore       float64
-		wantGreylisted  bool
-		wantWhitelistIn time.Duration
+		wantGreyListed  bool
+		wantWhiteListIn time.Duration
 	}{
 		{"no strikes", 0, 0, 0, false, 0},
 		{"below threshold", 2, 0, -2.5, false, 0},            // -(2/4*10) * 0.5
@@ -26,10 +26,15 @@ func TestBadResponsesScorer(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			si := testInfo(&PeerScoringInfo{badResponses: strikes(tc.strikes), nDecays: tc.decays}, 0, 0)
+			si := testInfo(&PeerScoringInfo{badResponseCount: tc.strikes - tc.decays, badResponses: strikes(tc.strikes)}, 0, 0)
 			require.Equal(t, tc.wantScore, scorer.Score(testPid, si))
-			require.Equal(t, tc.wantGreylisted, scorer.IsPeerGreylisted(testPid, si))
-			require.Equal(t, tc.wantWhitelistIn, scorer.TimeToWhitelisting(testPid, si))
+			err := scorer.IsPeerGreyListed(testPid, si)
+			if tc.wantGreyListed {
+				require.ErrorIs(t, err, ErrPeerGreyListed)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tc.wantWhiteListIn, scorer.TimeToWhiteListing(testPid, si))
 		})
 	}
 }

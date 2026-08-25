@@ -19,7 +19,7 @@ func TestRpcStatusScorer(t *testing.T) {
 		ourHead        primitives.Slot
 		highestHead    primitives.Slot
 		wantScore      float64
-		wantGreylisted bool
+		wantGreyListed bool
 	}{
 		{"no status", nil, 0, 100, 0, false},
 		{"no chain state", &RpcStatus{}, 0, 100, 0, false},
@@ -51,8 +51,13 @@ func TestRpcStatusScorer(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			si := testInfo(&PeerScoringInfo{rpcStatus: tc.status}, tc.ourHead, tc.highestHead)
 			require.Equal(t, tc.wantScore, scorer.Score(testPid, si))
-			require.Equal(t, tc.wantGreylisted, scorer.IsPeerGreylisted(testPid, si))
-			require.Equal(t, time.Duration(0), scorer.TimeToWhitelisting(testPid, si)) // never time based
+			err := scorer.IsPeerGreyListed(testPid, si)
+			if tc.wantGreyListed {
+				require.ErrorIs(t, err, ErrPeerGreyListed)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, time.Duration(0), scorer.TimeToWhiteListing(testPid, si)) // never time based
 		})
 	}
 }

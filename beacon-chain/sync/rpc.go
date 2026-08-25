@@ -14,6 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -227,7 +228,7 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 		log := log.WithFields(logrus.Fields{"peer": remotePeer.String(), "topic": string(stream.Protocol())})
 
 		// Check before hand that peer is valid.
-		if err := s.cfg.p2p.Peers().IsBad(remotePeer); err != nil {
+		if err := s.cfg.p2p.IsPeerGreyListed(remotePeer); err != nil {
 			if err := s.sendGoodByeAndDisconnect(ctx, p2ptypes.GoodbyeCodeBanned, remotePeer); err != nil {
 				log.WithError(err).Debug("Could not disconnect from peer")
 			}
@@ -290,7 +291,7 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 			if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
 				logStreamErrors(err, topic)
 				tracing.AnnotateError(span, err)
-				s.downscorePeer(remotePeer, "registerRpcError")
+				s.downscorePeer(remotePeer, peerscoring.SourceRPCRequest, "registerRpcError")
 				return
 			}
 			if err := handle(ctx, msg, stream); err != nil {
@@ -310,7 +311,7 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 			if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
 				logStreamErrors(err, topic)
 				tracing.AnnotateError(span, err)
-				s.downscorePeer(remotePeer, "registerRpcError")
+				s.downscorePeer(remotePeer, peerscoring.SourceRPCRequest, "registerRpcError")
 				return
 			}
 			if err := handle(ctx, nTyp.Elem().Interface(), stream); err != nil {

@@ -258,7 +258,7 @@ func (f *blocksFetcher) findForkWithPeer(ctx context.Context, pid peer.ID, slot 
 	// definitely have roots. So, spotting a fork will be easier. It is not a problem if unknown
 	// block of the current fork is found: we are searching for forks when FSMs are stuck, so
 	// being able to progress on any fork is good.
-	pidState, err := f.p2p.Peers().ChainState(pid)
+	pidState, err := f.p2p.PeerScoring().PeerStatus(pid)
 	if err != nil {
 		return nil, fmt.Errorf("cannot obtain peer's status: %w", err)
 	}
@@ -369,7 +369,7 @@ func (f *blocksFetcher) bestNonFinalizedSlot() primitives.Slot {
 	// not stop early after converting peer progress to an epoch boundary.
 	targetSlot := params.BeaconConfig().SlotsPerEpoch.Mul(uint64(targetEpoch))
 	for _, pid := range peers {
-		peerChainState, err := f.p2p.Peers().ChainState(pid)
+		peerChainState, err := f.p2p.PeerScoring().PeerStatus(pid)
 		if err != nil || peerChainState == nil {
 			continue
 		}

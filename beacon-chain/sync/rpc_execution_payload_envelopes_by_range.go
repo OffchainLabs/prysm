@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -58,7 +59,7 @@ func (s *Service) executionPayloadEnvelopesByRangeRPCHandler(ctx context.Context
 	if err != nil {
 		recordResult(executionPayloadEnvelopeRPCResultInvalid)
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
-		s.downscorePeer(remotePeer, "executionPayloadEnvelopesByRangeRPCHandlerValidationError")
+		s.downscorePeer(remotePeer, peerscoring.SourceRPCRequest, "executionPayloadEnvelopesByRangeRPCHandlerValidationError")
 		tracing.AnnotateError(span, err)
 		return err
 	}

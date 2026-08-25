@@ -982,7 +982,7 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 
 	require.NoError(t, cw.SetClock(startup.NewClock(chain.Genesis, chain.ValidatorsRoot)))
 
-	assert.NoError(t, p1.Peers().Scorers().IsBadPeer(p2.PeerID()), "Peer is marked as bad")
+	assert.NoError(t, p1.PeerScoring().IsPeerGreyListed(p2.PeerID()), "Peer is marked as grey-listed")
 	p1.Connect(p2)
 
 	if util.WaitTimeout(&wg, time.Second) {
@@ -994,7 +994,7 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 	require.NoError(t, err, "Could not obtain peer connection state")
 	assert.Equal(t, peers.Disconnected, connectionState, "Expected peer to be disconnected")
 
-	assert.NotNil(t, p1.Peers().Scorers().IsBadPeer(p2.PeerID()), "Peer is not marked as bad")
+	assert.NotNil(t, p1.PeerScoring().IsPeerGreyListed(p2.PeerID()), "Peer is not marked as grey-listed")
 }
 
 func TestStatusRPC_ValidGenesisMessage(t *testing.T) {

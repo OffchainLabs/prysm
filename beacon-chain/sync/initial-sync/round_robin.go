@@ -9,6 +9,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -310,7 +311,7 @@ func syncFields(b blocks.ROBlock) logrus.Fields {
 func (s *Service) highestFinalizedEpoch() primitives.Epoch {
 	highest := primitives.Epoch(0)
 	for _, pid := range s.cfg.P2P.Peers().Connected() {
-		peerChainState, err := s.cfg.P2P.Peers().ChainState(pid)
+		peerChainState, err := s.cfg.P2P.PeerScoring().PeerStatus(pid)
 
 		if err != nil || peerChainState == nil {
 			continue
@@ -611,6 +612,6 @@ func (s *Service) isProcessedPayload(ctx context.Context, e interfaces.ROSignedE
 }
 
 func (s *Service) downscorePeer(peerID peer.ID, reason string) {
-	newScore := s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Increment(peerID)
-	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
+	count := s.cfg.P2P.PeerScoring().RecordBadResponse(peerID, peerscoring.SourceSync, reason)
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "badResponses": count}).Debug("Downscore peer")
 }

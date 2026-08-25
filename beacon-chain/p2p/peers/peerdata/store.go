@@ -53,18 +53,10 @@ type PeerData struct {
 	Enr           *enr.Record
 	NextValidTime time.Time
 	// Chain related data.
-	MetaData                  metadata.Metadata
-	ChainState                *ethpb.StatusV2
-	ChainStateLastUpdated     time.Time
-	ChainStateValidationError error
+	MetaData metadata.Metadata
 	// Scorers internal data.
-	BadResponses         int
 	ProcessedBlocks      uint64
 	BlockProviderUpdated time.Time
-	// Gossip Scoring data.
-	TopicScores      map[string]*ethpb.TopicScoreSnapshot
-	GossipScore      float64
-	BehaviourPenalty float64
 }
 
 // NewStore creates new peer data store.

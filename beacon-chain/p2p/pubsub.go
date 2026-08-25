@@ -153,7 +153,7 @@ func (s *Service) peerInspector(peerMap map[peer.ID]*pubsub.PeerScoreSnapshot) {
 	// Iterate through all the connected peers and through any of their
 	// relevant topics.
 	for pid, snap := range peerMap {
-		s.peers.Scorers().GossipScorer().SetGossipData(pid, snap.Score,
+		s.peerScorer.SetGossipScore(pid, snap.Score,
 			snap.BehaviourPenalty, convertTopicScores(snap.Topics))
 	}
 }

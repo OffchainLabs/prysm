@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -25,11 +26,22 @@ import (
 
 // FakeP2P stack
 type FakeP2P struct {
+	peerScorer *peerscoring.Scorer
 }
 
 // NewFuzzTestP2P - Create a new fake p2p stack.
 func NewFuzzTestP2P() *FakeP2P {
-	return &FakeP2P{}
+	return &FakeP2P{peerScorer: peerscoring.NewScorer()}
+}
+
+// PeerScoring -- fake.
+func (p *FakeP2P) PeerScoring() *peerscoring.Scorer {
+	return p.peerScorer
+}
+
+// IsPeerGreyListed -- fake.
+func (*FakeP2P) IsPeerGreyListed(_ peer.ID) error {
+	return nil
 }
 
 // Encoding -- fake.

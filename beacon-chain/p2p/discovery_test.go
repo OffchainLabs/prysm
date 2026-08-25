@@ -22,7 +22,7 @@ import (
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	testp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -537,11 +537,11 @@ func TestHostIsResolved(t *testing.T) {
 func TestInboundPeerLimit(t *testing.T) {
 	fakePeer := testp2p.NewTestP2P(t)
 	s := &Service{
-		cfg:       &Config{MaxPeers: 30},
-		ipLimiter: leakybucket.NewCollector(ipLimit, ipBurst, 1*time.Second, false),
+		cfg:        &Config{MaxPeers: 30},
+		ipLimiter:  leakybucket.NewCollector(ipLimit, ipBurst, 1*time.Second, false),
+		peerScorer: peerscoring.NewScorer(),
 		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
-			PeerLimit:    30,
-			ScorerParams: &scorers.Config{},
+			PeerLimit: 30,
 		}),
 		host: fakePeer.BHost,
 	}
@@ -563,11 +563,11 @@ func TestInboundPeerLimit(t *testing.T) {
 func TestOutboundPeerThreshold(t *testing.T) {
 	fakePeer := testp2p.NewTestP2P(t)
 	s := &Service{
-		cfg:       &Config{MaxPeers: 30},
-		ipLimiter: leakybucket.NewCollector(ipLimit, ipBurst, 1*time.Second, false),
+		cfg:        &Config{MaxPeers: 30},
+		ipLimiter:  leakybucket.NewCollector(ipLimit, ipBurst, 1*time.Second, false),
+		peerScorer: peerscoring.NewScorer(),
 		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
-			PeerLimit:    30,
-			ScorerParams: &scorers.Config{},
+			PeerLimit: 30,
 		}),
 		host: fakePeer.BHost,
 	}
@@ -965,6 +965,7 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 					return nil
 				},
 				cfg:                   &Config{UDPPort: 0, DB: testDB.SetupDB(t)}, // Use 0 to let OS assign an available port
+				peerScorer:            peerscoring.NewScorer(),
 				peers:                 p2p.Peers(),
 				genesisTime:           time.Now().Add(-time.Duration(tc.epochSinceGenesis*secondsPerEpoch) * time.Second),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
@@ -1188,9 +1189,9 @@ func TestFindPeers_NodeDeduplication(t *testing.T) {
 					MaxPeers: 30,
 				},
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+				peerScorer:            peerscoring.NewScorer(),
 				peers: peers.NewStatus(ctx, &peers.StatusConfig{
-					PeerLimit:    30,
-					ScorerParams: &scorers.Config{},
+					PeerLimit: 30,
 				}),
 				host: fakePeer.BHost,
 			}
@@ -1271,9 +1272,9 @@ func TestFindPeers_received_bad_existing_node(t *testing.T) {
 			MaxPeers: 30,
 		},
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+		peerScorer:            peerscoring.NewScorer(),
 		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
-			PeerLimit:    30,
-			ScorerParams: &scorers.Config{},
+			PeerLimit: 30,
 		}),
 		host: fakePeer.BHost,
 	}
@@ -1288,9 +1289,9 @@ func TestFindPeers_received_bad_existing_node(t *testing.T) {
 				peerData, _, _ := convertToAddrInfo(node1_seq2)
 				if peerData != nil {
 					service.peers.Add(node1_seq2.Record(), peerData.ID, nil, network.DirUnknown)
-					// Mark as bad peer - need enough increments to exceed threshold (6)
+					// Mark as grey-listed peer - record enough strikes to exceed the threshold.
 					for range 10 {
-						service.peers.Scorers().BadResponsesScorer().Increment(peerData.ID)
+						service.peerScorer.RecordBadResponse(peerData.ID, peerscoring.Unknown, "test")
 					}
 				}
 			},

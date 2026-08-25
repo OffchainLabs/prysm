@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	p2pTypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	prysmsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
@@ -561,8 +562,8 @@ func dedupPeers(peers []peer.ID) []peer.ID {
 
 // downscorePeer increments the bad responses score for the peer and logs the event.
 func (f *blocksFetcher) downscorePeer(peerID peer.ID, reason error) {
-	newScore := f.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
-	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason.Error(), "newScore": newScore}).Debug("Downscore peer")
+	count := f.p2p.PeerScoring().RecordBadResponse(peerID, peerscoring.SourceSync, reason.Error())
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason.Error(), "badResponses": count}).Debug("Downscore peer")
 }
 
 // findFirstForkIndex returns the index of the first block with a version >= v.

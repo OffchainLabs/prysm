@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -253,17 +254,17 @@ func (s *Service) processPendingGloasColumns(ctx context.Context, root [fieldpar
 
 		if err := verifier.VerifyDataColumnSidecarSlotMatchesBlockGloas(); err != nil {
 			skipped++
-			s.downscorePeer(pe.peer, "pendingGloasColumnSlotMismatch", logrus.Fields{"error": err})
+			s.downscorePeer(pe.peer, peerscoring.SourceGossip, "pendingGloasColumnSlotMismatch", logrus.Fields{"error": err})
 			continue
 		}
 		if err := verifier.VerifyDataColumnSidecarGloas(); err != nil {
 			skipped++
-			s.downscorePeer(pe.peer, "pendingGloasColumnInvalidSidecar", logrus.Fields{"error": err})
+			s.downscorePeer(pe.peer, peerscoring.SourceGossip, "pendingGloasColumnInvalidSidecar", logrus.Fields{"error": err})
 			continue
 		}
 		if err := verifier.VerifyDataColumnSidecarKzgProofsGloas(); err != nil {
 			skipped++
-			s.downscorePeer(pe.peer, "pendingGloasColumnInvalidKzgProof", logrus.Fields{"error": err})
+			s.downscorePeer(pe.peer, peerscoring.SourceGossip, "pendingGloasColumnInvalidKzgProof", logrus.Fields{"error": err})
 			continue
 		}
 

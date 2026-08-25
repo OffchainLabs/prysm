@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -845,8 +846,8 @@ func downscorePeer(p2p p2p.P2P, peerID peer.ID, reason string, fields ...logrus.
 		log = log.WithFields(field)
 	}
 
-	newScore := p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
-	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
+	count := p2p.PeerScoring().RecordBadResponse(peerID, peerscoring.SourceRPCResponse, reason)
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "badResponses": count}).Debug("Downscore peer")
 }
 
 // ---------------------------------

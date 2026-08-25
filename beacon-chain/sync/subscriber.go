@@ -550,12 +550,13 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 			b = pubsub.ValidationIgnore
 		}
 		if b == pubsub.ValidationReject {
+			gossipScore, _, _ := s.cfg.p2p.PeerScoring().GossipData(pid)
 			fields := logrus.Fields{
 				"topic":        topic,
 				"multiaddress": multiAddr(pid, s.cfg.p2p.Peers()),
 				"peerID":       pid.String(),
 				"agent":        agentString(pid, s.cfg.p2p.Host()),
-				"gossipScore":  s.cfg.p2p.Peers().Scorers().GossipScorer().Score(pid),
+				"gossipScore":  gossipScore,
 			}
 			if features.Get().EnableFullSSZDataLogging {
 				fields["message"] = hexutil.Encode(msg.Data)
@@ -565,12 +566,13 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 		}
 		if b == pubsub.ValidationIgnore {
 			if err != nil && !errorIsIgnored(err) {
+				gossipScore, _, _ := s.cfg.p2p.PeerScoring().GossipData(pid)
 				log.WithError(err).WithFields(logrus.Fields{
 					"topic":        topic,
 					"multiaddress": multiAddr(pid, s.cfg.p2p.Peers()),
 					"peerID":       pid.String(),
 					"agent":        agentString(pid, s.cfg.p2p.Host()),
-					"gossipScore":  fmt.Sprintf("%.2f", s.cfg.p2p.Peers().Scorers().GossipScorer().Score(pid)),
+					"gossipScore":  fmt.Sprintf("%.2f", gossipScore),
 				}).Debug("Gossip message was ignored")
 			}
 			messageIgnoredValidationCounter.WithLabelValues(topic).Inc()

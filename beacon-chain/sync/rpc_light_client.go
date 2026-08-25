@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -91,7 +92,7 @@ func (s *Service) lightClientUpdatesByRangeRPCHandler(ctx context.Context, msg a
 
 	if r.Count == 0 {
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, "count is 0", stream)
-		s.downscorePeer(remotePeer, "lightClientUpdatesByRangeRPCHandlerCount0")
+		s.downscorePeer(remotePeer, peerscoring.SourceRPCRequest, "lightClientUpdatesByRangeRPCHandlerCount0")
 
 		logger.Error("Count is 0")
 		return nil
@@ -104,7 +105,7 @@ func (s *Service) lightClientUpdatesByRangeRPCHandler(ctx context.Context, msg a
 	endPeriod, err := math.Add64(r.StartPeriod, r.Count-1)
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
-		s.downscorePeer(remotePeer, "lightClientUpdatesByRangeRPCHandlerEndPeriodOverflow")
+		s.downscorePeer(remotePeer, peerscoring.SourceRPCRequest, "lightClientUpdatesByRangeRPCHandlerEndPeriodOverflow")
 		tracing.AnnotateError(span, err)
 		logger.WithError(err).Error("End period overflows")
 		return err

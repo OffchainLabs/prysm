@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -220,7 +221,7 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 	err = s.validateBeaconBlock(ctx, blk, blockRoot)
 	if err != nil {
 		if errors.Is(err, blocks.ErrInvalidSignature) {
-			s.downscorePeer(pid, "invalidBlockSignature")
+			s.downscorePeer(pid, peerscoring.SourceGossip, "invalidBlockSignature")
 			return pubsub.ValidationReject, err
 		}
 		if s.hasBadBlock(blockRoot) || errors.Is(err, blocks.ErrInvalidProposerIndex) || errors.Is(err, errBlockSlotNotAfterParent) {
@@ -488,7 +489,7 @@ func (s *Service) verifyPendingBlockSignature(ctx context.Context, pid peer.ID, 
 	}
 	if err := blocks.VerifyBlockSignatureUsingCurrentFork(roState, blk, blkRoot); err != nil {
 		if errors.Is(err, blocks.ErrInvalidSignature) {
-			s.downscorePeer(pid, "invalidBlockSignature")
+			s.downscorePeer(pid, peerscoring.SourceGossip, "invalidBlockSignature")
 		}
 		return pubsub.ValidationReject, err
 	}

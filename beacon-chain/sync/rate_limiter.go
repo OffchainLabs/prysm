@@ -12,6 +12,7 @@ import (
 	"github.com/trailofbits/go-mutexasserts"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
@@ -252,11 +253,11 @@ func (_ *limiter) topicLogger(topic string) *logrus.Entry {
 }
 
 func (l *limiter) downscorePeer(peerID peer.ID, topic, reason string) {
-	newScore := l.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	count := l.p2p.PeerScoring().RecordBadResponse(peerID, peerscoring.SourceRateLimit, reason)
 	log.WithFields(logrus.Fields{
-		"peerID":   peerID.String(),
-		"reason":   reason,
-		"newScore": newScore,
-		"topic":    topic,
+		"peerID":       peerID.String(),
+		"reason":       reason,
+		"badResponses": count,
+		"topic":        topic,
 	}).Debug("Downscore peer")
 }

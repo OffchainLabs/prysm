@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	prysmP2P "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -988,9 +989,9 @@ func verifyDataColumnSidecarsByPeer(
 		if err != nil {
 			// This peer has invalid sidecars.
 			log := log.WithError(err).WithField("peerID", peer)
-			newScore := p2p.Peers().Scorers().BadResponsesScorer().Increment(peer)
+			count := p2p.PeerScoring().RecordBadResponse(peer, peerscoring.SourceDAS, "invalidDataColumnSidecars")
 			log.Warning("Peer returned invalid data column sidecars")
-			log.WithFields(logrus.Fields{"reason": "invalidDataColumnSidecars", "newScore": newScore}).Debug("Downscore peer")
+			log.WithFields(logrus.Fields{"reason": "invalidDataColumnSidecars", "badResponses": count}).Debug("Downscore peer")
 		}
 
 		verifiedRoDataColumnSidecars = append(verifiedRoDataColumnSidecars, peerVerifiedRoDataColumnSidecars...)
@@ -1096,7 +1097,7 @@ func computeIndicesByRootByPeer(
 		}
 
 		// Compute the head slot for each peer
-		peerChainState, err := p2p.Peers().ChainState(peer)
+		peerChainState, err := p2p.PeerScoring().PeerStatus(peer)
 		if err != nil {
 			log.WithError(err).Debug("Failed to get peer chain state")
 			continue

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -141,8 +141,8 @@ func (s *Service) AddConnectionHandler(reqFunc, goodByeFunc func(ctx context.Con
 
 				s.peers.Add(nil /* ENR */, remotePeer, conn.RemoteMultiaddr(), conn.Stat().Direction)
 
-				// Defensive check in the event we still get a bad peer.
-				if err := s.peers.IsBad(remotePeer); err != nil {
+				// Defensive check in the event we still get a grey-listed peer.
+				if err := s.IsPeerGreyListed(remotePeer); err != nil {
 					s.disconnectFromPeerOnError(conn, goodByeFunc, err)
 					return
 				}
@@ -159,7 +159,7 @@ func (s *Service) AddConnectionHandler(reqFunc, goodByeFunc func(ctx context.Con
 				}
 
 				// The connection is inbound.
-				_, err = s.peers.ChainState(remotePeer)
+				_, err = s.peerScorer.PeerStatus(remotePeer)
 				peerExists := err == nil
 				currentTime := prysmTime.Now()
 
@@ -172,7 +172,7 @@ func (s *Service) AddConnectionHandler(reqFunc, goodByeFunc func(ctx context.Con
 				}
 
 				// If peer hasn't sent a status request, we disconnect with them
-				if _, err := s.peers.ChainState(remotePeer); errors.Is(err, peerdata.ErrPeerUnknown) || errors.Is(err, peerdata.ErrNoPeerStatus) {
+				if _, err := s.peerScorer.PeerStatus(remotePeer); errors.Is(err, peerscoring.ErrPeerUnknown) || errors.Is(err, peerscoring.ErrNoPeerStatus) {
 					statusMessageMissing.Inc()
 					s.disconnectFromPeerOnError(conn, goodByeFunc, errors.Wrap(err, "chain state"))
 					return
@@ -183,11 +183,7 @@ func (s *Service) AddConnectionHandler(reqFunc, goodByeFunc func(ctx context.Con
 					return
 				}
 
-				updated, err := s.peers.ChainStateLastUpdated(remotePeer)
-				if err != nil {
-					s.disconnectFromPeerOnError(conn, goodByeFunc, errors.Wrap(err, "chain state last updated"))
-					return
-				}
+				updated := s.peerScorer.ChainStateLastUpdated(remotePeer)
 
 				// Exit if we don't receive any current status messages from peer.
 				if updated.IsZero() {

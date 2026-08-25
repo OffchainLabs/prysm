@@ -1,6 +1,7 @@
 package peerscoring
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -17,29 +18,34 @@ type badResponsesScorer struct{}
 
 // Score returns the weighted bad-responses penalty, proportional to the standing strike count.
 func (badResponsesScorer) Score(_ peer.ID, si *scoringInfo) float64 {
-	strikes := effectiveBadResponses(si.peerInfo)
+	strikes := si.peerInfo.badResponseCount
 	if strikes == 0 {
 		return 0
 	}
-	score := -badResponsesPenaltyFactor * float64(strikes) / float64(si.params.badResponseGreylistThreshold)
+	score := -badResponsesPenaltyFactor * float64(strikes) / float64(si.params.badResponseGreyListThreshold)
 	return score * si.params.badResponseWeight
 }
 
-// IsPeerGreylisted reports whether the peer's un-decayed strikes reached the threshold.
-func (badResponsesScorer) IsPeerGreylisted(_ peer.ID, si *scoringInfo) bool {
-	return effectiveBadResponses(si.peerInfo) >= si.params.badResponseGreylistThreshold
+// IsPeerGreyListed greylists the peer once its un-decayed strikes reach the threshold.
+func (badResponsesScorer) IsPeerGreyListed(_ peer.ID, si *scoringInfo) error {
+	strikes := si.peerInfo.badResponseCount
+	if strikes < si.params.badResponseGreyListThreshold {
+		return nil
+	}
+	if history := si.peerInfo.badResponses; len(history) > 0 {
+		last := history[len(history)-1]
+		return fmt.Errorf("%w: %d standing bad responses (threshold %d), last: %s/%s",
+			ErrPeerGreyListed, strikes, si.params.badResponseGreyListThreshold, last.Source, last.Reason)
+	}
+	return fmt.Errorf("%w: %d standing bad responses (threshold %d)",
+		ErrPeerGreyListed, strikes, si.params.badResponseGreyListThreshold)
 }
 
-// TimeToWhitelisting returns how long the decay loop needs to drop the peer back under the threshold.
-func (b badResponsesScorer) TimeToWhitelisting(pid peer.ID, si *scoringInfo) time.Duration {
-	if !b.IsPeerGreylisted(pid, si) {
+// TimeToWhiteListing returns how long the decay loop needs to drop the peer back under the threshold.
+func (b badResponsesScorer) TimeToWhiteListing(pid peer.ID, si *scoringInfo) time.Duration {
+	if b.IsPeerGreyListed(pid, si) == nil {
 		return 0
 	}
-	decaysNeeded := effectiveBadResponses(si.peerInfo) - si.params.badResponseGreylistThreshold + 1
+	decaysNeeded := si.peerInfo.badResponseCount - si.params.badResponseGreyListThreshold + 1
 	return time.Duration(decaysNeeded) * si.params.decayInterval
-}
-
-// effectiveBadResponses is the strike count still standing after decay.
-func effectiveBadResponses(pi *PeerScoringInfo) int {
-	return len(pi.badResponses) - pi.nDecays
 }

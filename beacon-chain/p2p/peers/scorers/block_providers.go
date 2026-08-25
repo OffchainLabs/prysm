@@ -8,12 +8,13 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
-var _ Scorer = (*BlockProviderScorer)(nil)
+// ScoreRoundingFactor defines how many digits to keep in decimal part.
+// This parameter is used in math.Round(score*ScoreRoundingFactor) / ScoreRoundingFactor.
+const ScoreRoundingFactor = 10000
 
 const (
 	// DefaultBlockProviderProcessedBatchWeight is a default reward weight of a processed batch of blocks.
@@ -176,20 +177,6 @@ func (s *BlockProviderScorer) processedBlocksNoLock(pid peer.ID) uint64 {
 	return 0
 }
 
-// IsBadPeer states if the peer is to be considered bad.
-// Block provider scorer cannot guarantee that lower score of a peer is indeed a sign of a bad peer.
-// Therefore this scorer never marks peers as bad, and relies on scores to probabilistically sort
-// out low-scorers (see WeightSorted method).
-func (*BlockProviderScorer) IsBadPeer(_ peer.ID) error {
-	return nil
-}
-
-// BadPeers returns the peers that are considered bad.
-// No peers are considered bad by block providers scorer.
-func (*BlockProviderScorer) BadPeers() []peer.ID {
-	return []peer.ID{}
-}
-
 // Decay updates block provider counters by decaying them.
 // This urges peers to keep up the performance to continue getting a high score (and allows
 // new peers to contest previously high scoring ones).
@@ -293,9 +280,6 @@ func (s *BlockProviderScorer) mapScoresAndPeers(
 func (s *BlockProviderScorer) FormatScorePretty(pid peer.ID) string {
 	s.store.RLock()
 	defer s.store.RUnlock()
-	if !features.Get().EnablePeerScorer {
-		return "disabled"
-	}
 	score := s.scoreNoLock(pid)
 	return fmt.Sprintf("[%0.1f%%, raw: %0.2f,  blocks: %d/%d]",
 		(score/s.MaxScore())*100, score, s.processedBlocksNoLock(pid), s.config.ProcessedBlocksCap)

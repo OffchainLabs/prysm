@@ -2,6 +2,7 @@ package peerscoring
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"time"
 
@@ -35,21 +36,21 @@ func (rpcStatusScorer) Score(_ peer.ID, si *scoringInfo) float64 {
 	return score * si.params.peerStatusWeight
 }
 
-// IsPeerGreylisted reports whether the peer's last status failed validation with a terminal error.
-func (rpcStatusScorer) IsPeerGreylisted(_ peer.ID, si *scoringInfo) bool {
+// IsPeerGreyListed greylists the peer when its last status failed validation with a terminal error.
+func (rpcStatusScorer) IsPeerGreyListed(_ peer.ID, si *scoringInfo) error {
 	status := si.peerInfo.rpcStatus
 	if status == nil {
-		return false
+		return nil
 	}
 	for _, terminal := range terminalStatusErrors {
 		if errors.Is(status.validationError, terminal) {
-			return true
+			return fmt.Errorf("%w: status validation failed: %w", ErrPeerGreyListed, status.validationError)
 		}
 	}
-	return false
+	return nil
 }
 
-// TimeToWhitelisting returns 0: status greylisting only clears once a later status exchange validates.
-func (rpcStatusScorer) TimeToWhitelisting(peer.ID, *scoringInfo) time.Duration {
+// TimeToWhiteListing returns 0: status greylisting only clears once a later status exchange validates.
+func (rpcStatusScorer) TimeToWhiteListing(peer.ID, *scoringInfo) time.Duration {
 	return 0
 }
