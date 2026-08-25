@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -88,6 +89,12 @@ func (f *FastConfirmationRule) PreviousEpochGreatestUnrealizedCheckpoint() forkc
 // OnFastConfirmation must run once per slot at slot start after attestations are applied.
 // The spec allows get_latest_confirmed at any point in the slot, so only tree reads hold the forkchoice read lock.
 func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSlot primitives.Slot) {
+	// path defaults to "full"; the stale-head branch flips it to "fallback".
+	path := "full"
+	defer func(start time.Time) {
+		fastConfirmationDuration.WithLabelValues(path).Observe(float64(time.Since(start).Milliseconds()))
+	}(time.Now())
+
 	f.fc.RLock()
 	f.updateFastConfirmationVariables(currentSlot)
 	headSlot, headSlotErr := f.fc.Slot(f.currentSlotHead)
@@ -100,11 +107,46 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 
 	// A head this stale always reverts to finalized, and the head state cannot compute committees past its next epoch.
 	if headSlotErr != nil || slots.ToEpoch(headSlot)+1 < slots.ToEpoch(currentSlot) {
+		path = "fallback"
+		oldConfirmedRoot := f.ConfirmedRoot()
 		f.fc.RLock()
+
+		var (
+			finalizedSlot, oldSlot     primitives.Slot
+			finalizedSlotOk, oldSlotOk bool
+		)
+
 		fc := f.fc.FinalizedCheckpoint()
+
+		// Set finalized slot for metrics.
+		if fc != nil {
+			if s, err := f.fc.Slot(fc.Root); err == nil {
+				finalizedSlot, finalizedSlotOk = s, true
+			}
+		}
+		// Set old slot for fallback detection.
+		if s, err := f.fc.Slot(oldConfirmedRoot); err == nil {
+			oldSlot, oldSlotOk = s, true
+		}
+
 		f.fc.RUnlock()
+
 		if fc != nil {
 			f.setConfirmedRoot(fc.Root)
+
+		}
+
+		if finalizedSlotOk {
+			fastConfirmationSlot.Set(float64(finalizedSlot))
+			if currentSlot >= finalizedSlot {
+				fastConfirmationDistance.Set(float64(currentSlot - finalizedSlot))
+			}
+		}
+
+		// Fallback only when the confirmed root regresses to finality
+		// which means the confirmed slot moves backward.
+		if finalizedSlotOk && oldSlotOk && finalizedSlot < oldSlot {
+			fastConfirmationFallbacksTotal.Inc()
 		}
 		return
 	}
@@ -165,10 +207,49 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 		return s, ffg.TotalActiveBalance
 	}))
 
-	f.setConfirmedRoot(f.getLatestConfirmed(
+	// Back up the old confirmed root for fallback detection.
+	oldConfirmedRoot := f.ConfirmedRoot()
+
+	// Update new confirmed root.
+	newConfirmedRoot := f.getLatestConfirmed(
 		ctx, currentSlot, f.support, totalActiveBalance, currentTarget, honest,
 		prevSupport, prevTotalActiveBalance, equivScorer, prevEquivScorer,
-	))
+	)
+	f.setConfirmedRoot(newConfirmedRoot)
+
+	newSlot, err := f.fc.Slot(newConfirmedRoot)
+	if err != nil {
+		// This should never happen, but if it does, don't update the metrics.
+		return
+	}
+
+	fastConfirmationSlot.Set(float64(newSlot))
+	if currentSlot >= newSlot {
+		fastConfirmationDistance.Set(float64(currentSlot - newSlot))
+	}
+
+	// Check whether the confirmed root regressed to the finalized checkpoint, which is a fallback.
+	finalizedCkpt := f.fc.FinalizedCheckpoint()
+	if finalizedCkpt == nil {
+		// Cannot get the finalized checkpoint, don't update the metrics.
+		return
+	}
+
+	if newConfirmedRoot != finalizedCkpt.Root {
+		// Not a fallback, no need to check the old confirmed root.
+		return
+	}
+
+	oldSlot, err := f.fc.Slot(oldConfirmedRoot)
+	if err != nil {
+		// Cannot get the old confirmed slot, don't update the metrics.
+		return
+	}
+
+	if newSlot < oldSlot {
+		// The confirmed root has regressed to the finalized checkpoint.
+		fastConfirmationFallbacksTotal.Inc()
+	}
 }
 
 // rebuildTables refreshes the per-epoch assignment tables. The tables
@@ -275,6 +356,10 @@ func (f *FastConfirmationRule) getLatestConfirmed(
 		revert = true
 	} else {
 		isAnc, err := f.fc.IsAncestor(head, confirmedRoot)
+		if err == nil && !isAnc {
+			fastConfirmationReorgsTotal.Inc()
+		}
+
 		if err != nil || !isAnc {
 			revert = true
 		}
@@ -302,6 +387,7 @@ func (f *FastConfirmationRule) getLatestConfirmed(
 				confirmedSlot, err := f.fc.Slot(confirmedRoot)
 				if err == nil && confirmedSlot < ojcSlot {
 					confirmedRoot = ojc.Root
+					fastConfirmationRestartsTotal.Inc()
 				}
 			}
 		}
