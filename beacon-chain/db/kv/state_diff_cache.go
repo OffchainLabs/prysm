@@ -184,9 +184,8 @@ func newStateDiffCache(s *Store) (*stateDiffCache, error) {
 
 func (c *stateDiffCache) getAnchor(level int) state.ReadOnlyBeaconState {
 	c.RLock()
-	defer c.RUnlock()
-
 	compressed := c.anchors[level]
+	c.RUnlock()
 
 	if len(compressed) == 0 {
 		return nil
@@ -206,11 +205,6 @@ func (c *stateDiffCache) getAnchor(level int) state.ReadOnlyBeaconState {
 }
 
 func (c *stateDiffCache) setAnchor(level int, anchor state.ReadOnlyBeaconState) error {
-	c.Lock()
-	defer c.Unlock()
-	if level >= len(c.anchors) || level < 0 {
-		return errors.New("state diff cache: anchor level out of range")
-	}
 	if anchor == nil {
 		return errors.New("state diff cache: anchor cannot be nil")
 	}
@@ -227,6 +221,12 @@ func (c *stateDiffCache) setAnchor(level int, anchor state.ReadOnlyBeaconState) 
 	compressed := make([]byte, len(encoded))
 	copy(compressed, encoded)
 
+	c.Lock()
+	defer c.Unlock()
+
+	if level >= len(c.anchors) || level < 0 {
+		return errors.New("state diff cache: anchor level out of range")
+	}
 	c.anchors[level] = compressed
 	stateDiffAnchorCacheBytes.WithLabelValues(strconv.Itoa(level)).Set(float64(len(compressed)))
 	return nil
