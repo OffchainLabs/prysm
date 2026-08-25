@@ -76,7 +76,7 @@ func (c *AttestationGloas) UnmarshalSSZ(buf []byte) error {
 	sszSlice0 := buf[sszVarOffset0:] // c.AggregationBits
 
 	// Field 0: AggregationBits
-	if err = ssz.ValidateProgressiveBitlist(sszSlice0); err != nil {
+	if err = ssz.ValidateBitlist(sszSlice0, 8192); err != nil {
 		return fmt.Errorf("AggregationBits: %w", err)
 	}
 	c.AggregationBits = append([]byte{}, go_bitfield.Bitlist(sszSlice0)...)
@@ -721,6 +721,9 @@ func (c *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.ProposerSlashings length is %d, which is not a multiple of 416: %w", len(sszSlice3), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice3) / 416
+		if numElem > 16 {
+			return fmt.Errorf("ssz-max exceeded: c.ProposerSlashings has %d elements, ssz-max is 16: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.ProposerSlashings = make([]*ProposerSlashing, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *ProposerSlashing
@@ -746,6 +749,9 @@ func (c *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 				return fmt.Errorf("misaligned list bytes: when decoding c.AttesterSlashings, end-of-list offset is %d, which is not a multiple of 4 (offset size)", startOffset)
 			}
 			listLen := startOffset / 4
+			if listLen > 1 {
+				return fmt.Errorf("ssz-max exceeded: c.AttesterSlashings has %d elements, ssz-max is 1: %w", listLen, ssz.ErrListTooBig)
+			}
 			totalVarBytes := uint64(len(sszSlice4))
 			if totalVarBytes < startOffset {
 				return fmt.Errorf("list bytes too short to contain an offset when decoding c.AttesterSlashings")
@@ -793,6 +799,9 @@ func (c *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 				return fmt.Errorf("misaligned list bytes: when decoding c.Attestations, end-of-list offset is %d, which is not a multiple of 4 (offset size)", startOffset)
 			}
 			listLen := startOffset / 4
+			if listLen > 8 {
+				return fmt.Errorf("ssz-max exceeded: c.Attestations has %d elements, ssz-max is 8: %w", listLen, ssz.ErrListTooBig)
+			}
 			totalVarBytes := uint64(len(sszSlice5))
 			if totalVarBytes < startOffset {
 				return fmt.Errorf("list bytes too short to contain an offset when decoding c.Attestations")
@@ -833,6 +842,9 @@ func (c *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.Deposits length is %d, which is not a multiple of 1240: %w", len(sszSlice6), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice6) / 1240
+		if numElem > 16 {
+			return fmt.Errorf("ssz-max exceeded: c.Deposits has %d elements, ssz-max is 16: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.Deposits = make([]*Deposit, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *Deposit
@@ -851,6 +863,9 @@ func (c *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.VoluntaryExits length is %d, which is not a multiple of 112: %w", len(sszSlice7), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice7) / 112
+		if numElem > 16 {
+			return fmt.Errorf("ssz-max exceeded: c.VoluntaryExits has %d elements, ssz-max is 16: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.VoluntaryExits = make([]*SignedVoluntaryExit, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *SignedVoluntaryExit
@@ -875,6 +890,9 @@ func (c *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.BlsToExecutionChanges length is %d, which is not a multiple of 172: %w", len(sszSlice9), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice9) / 172
+		if numElem > 16 {
+			return fmt.Errorf("ssz-max exceeded: c.BlsToExecutionChanges has %d elements, ssz-max is 16: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.BlsToExecutionChanges = make([]*SignedBLSToExecutionChange, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *SignedBLSToExecutionChange
@@ -899,6 +917,9 @@ func (c *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.PayloadAttestations length is %d, which is not a multiple of 140: %w", len(sszSlice11), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice11) / 140
+		if numElem > 4 {
+			return fmt.Errorf("ssz-max exceeded: c.PayloadAttestations has %d elements, ssz-max is 4: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.PayloadAttestations = make([]*PayloadAttestation, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *PayloadAttestation
@@ -2033,6 +2054,9 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.Validators length is %d, which is not a multiple of 121: %w", len(sszSlice11), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice11) / 121
+		if numElem > 1099511627776 {
+			return fmt.Errorf("ssz-max exceeded: c.Validators has %d elements, ssz-max is 1099511627776: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.Validators = make([]*Validator, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *Validator
@@ -2051,6 +2075,9 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.Balances length is %d, which is not a multiple of 8: %w", len(sszSlice12), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice12) / 8
+		if numElem > 1099511627776 {
+			return fmt.Errorf("ssz-max exceeded: c.Balances has %d elements, ssz-max is 1099511627776: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.Balances = make([]uint64, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp uint64
@@ -2120,6 +2147,9 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.InactivityScores length is %d, which is not a multiple of 8: %w", len(sszSlice21), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice21) / 8
+		if numElem > 1099511627776 {
+			return fmt.Errorf("ssz-max exceeded: c.InactivityScores has %d elements, ssz-max is 1099511627776: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.InactivityScores = make([]uint64, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp uint64
@@ -2209,6 +2239,9 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.PendingDeposits length is %d, which is not a multiple of 192: %w", len(sszSlice34), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice34) / 192
+		if numElem > 134217728 {
+			return fmt.Errorf("ssz-max exceeded: c.PendingDeposits has %d elements, ssz-max is 134217728: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.PendingDeposits = make([]*PendingDeposit, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *PendingDeposit
@@ -2227,6 +2260,9 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.PendingPartialWithdrawals length is %d, which is not a multiple of 24: %w", len(sszSlice35), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice35) / 24
+		if numElem > 64 {
+			return fmt.Errorf("ssz-max exceeded: c.PendingPartialWithdrawals has %d elements, ssz-max is 64: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.PendingPartialWithdrawals = make([]*PendingPartialWithdrawal, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *PendingPartialWithdrawal
@@ -2245,6 +2281,9 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.PendingConsolidations length is %d, which is not a multiple of 16: %w", len(sszSlice36), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice36) / 16
+		if numElem > 64 {
+			return fmt.Errorf("ssz-max exceeded: c.PendingConsolidations has %d elements, ssz-max is 64: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.PendingConsolidations = make([]*PendingConsolidation, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *PendingConsolidation
@@ -2277,6 +2316,9 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.Builders length is %d, which is not a multiple of 93: %w", len(sszSlice38), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice38) / 93
+		if numElem > 1099511627776 {
+			return fmt.Errorf("ssz-max exceeded: c.Builders has %d elements, ssz-max is 1099511627776: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.Builders = make([]*Builder, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *Builder
@@ -2318,6 +2360,9 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.BuilderPendingWithdrawals length is %d, which is not a multiple of 36: %w", len(sszSlice42), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice42) / 36
+		if numElem > 1048576 {
+			return fmt.Errorf("ssz-max exceeded: c.BuilderPendingWithdrawals has %d elements, ssz-max is 1048576: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.BuilderPendingWithdrawals = make([]*BuilderPendingWithdrawal, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *BuilderPendingWithdrawal
@@ -2342,6 +2387,9 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.PayloadExpectedWithdrawals length is %d, which is not a multiple of 44: %w", len(sszSlice44), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice44) / 44
+		if numElem > 4 {
+			return fmt.Errorf("ssz-max exceeded: c.PayloadExpectedWithdrawals has %d elements, ssz-max is 4: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.PayloadExpectedWithdrawals = make([]*v1.Withdrawal, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *v1.Withdrawal
@@ -3461,6 +3509,9 @@ func (c *DataColumnSidecarGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.Column length is %d, which is not a multiple of 2048: %w", len(sszSlice1), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice1) / 2048
+		if numElem > 4096 {
+			return fmt.Errorf("ssz-max exceeded: c.Column has %d elements, ssz-max is 4096: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.Column = make([][]byte, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp []byte
@@ -3478,6 +3529,9 @@ func (c *DataColumnSidecarGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.KzgProofs length is %d, which is not a multiple of 48: %w", len(sszSlice2), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice2) / 48
+		if numElem > 4096 {
+			return fmt.Errorf("ssz-max exceeded: c.KzgProofs has %d elements, ssz-max is 4096: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.KzgProofs = make([][]byte, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp []byte
@@ -3715,6 +3769,9 @@ func (c *ExecutionPayloadBid) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.BlobKzgCommitments length is %d, which is not a multiple of 48: %w", len(sszSlice10), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice10) / 48
+		if numElem > 4096 {
+			return fmt.Errorf("ssz-max exceeded: c.BlobKzgCommitments has %d elements, ssz-max is 4096: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.BlobKzgCommitments = make([][]byte, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp []byte
@@ -4049,6 +4106,9 @@ func (c *IndexedAttestationGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.AttestingIndices length is %d, which is not a multiple of 8: %w", len(sszSlice0), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice0) / 8
+		if numElem > 8192 {
+			return fmt.Errorf("ssz-max exceeded: c.AttestingIndices has %d elements, ssz-max is 8192: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.AttestingIndices = make([]uint64, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp uint64
