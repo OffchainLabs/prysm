@@ -172,7 +172,7 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 		headers[api.BuilderUrlHeader] = in.BuilderUrl
 	}
 
-	if _, _, err := c.handler.PostSSZWithFallback(ctx, endpoint, headers, res.marshalSSZ, res.marshalJSON); err != nil {
+	if err := c.handler.PostSSZWithFallback(ctx, endpoint, headers, res.marshalSSZ, res.marshalJSON); err != nil {
 		return nil, fmt.Errorf("failed to submit block: %w", err)
 	}
 

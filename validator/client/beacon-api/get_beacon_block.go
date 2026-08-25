@@ -103,7 +103,7 @@ func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primi
 	// Always race the nodes for the block, even though each node solicits builder
 	// bids: a bid only binds once its block is signed, so duplicates are harmless.
 	opts := append([]rest.GetOption{rest.WithRace()}, blockFreshnessOptions(ctx, decode)...)
-	data, header, err := c.handler.PostSSZWithFallback(ctx, queryUrl, headers, builderConfig.MarshalSSZ, jsonFn, opts...)
+	data, header, err := c.handler.RequestSSZWithFallback(ctx, queryUrl, headers, builderConfig.MarshalSSZ, jsonFn, opts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not post v4 block request")
 	}

@@ -35,6 +35,13 @@ type Handler interface {
 		headers map[string]string,
 		sszFn func() ([]byte, error),
 		jsonFn func() ([]byte, error),
+	) error
+	RequestSSZWithFallback(
+		ctx context.Context,
+		endpoint string,
+		headers map[string]string,
+		sszFn func() ([]byte, error),
+		jsonFn func() ([]byte, error),
 		opts ...GetOption,
 	) ([]byte, http.Header, error)
 	Host() string

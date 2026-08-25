@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/mock"
 	"github.com/pkg/errors"
@@ -23,33 +22,27 @@ func expectPostSSZWithFallback(handler *mock.MockHandler) {
 		headers map[string]string,
 		sszFn func() ([]byte, error),
 		jsonFn func() ([]byte, error),
-		_ ...rest.GetOption,
-	) ([]byte, http.Header, error) {
-		postJSON := func() ([]byte, http.Header, error) {
-			body, err := jsonFn()
-			if err != nil {
-				return nil, nil, fmt.Errorf("marshal JSON body: %w", err)
-			}
-
-			if err := handler.Post(ctx, endpoint, headers, bytes.NewBuffer(body), nil); err != nil {
-				return nil, nil, fmt.Errorf("post JSON: %w", err)
-			}
-			return nil, nil, nil
-		}
-
+	) error {
 		body, err := sszFn()
 		if err != nil {
-			return nil, nil, fmt.Errorf("marshal SSZ body: %w", err)
+			return fmt.Errorf("marshal SSZ body: %w", err)
 		}
 
-		data, header, err := handler.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(body))
+		_, _, err = handler.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(body))
 		if err == nil {
-			return data, header, nil
+			return nil
 		}
 		if !errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}) {
-			return nil, nil, fmt.Errorf("post SSZ: %w", err)
+			return fmt.Errorf("post SSZ: %w", err)
 		}
 
-		return postJSON()
+		jsonBody, err := jsonFn()
+		if err != nil {
+			return fmt.Errorf("marshal JSON body: %w", err)
+		}
+		if err := handler.Post(ctx, endpoint, headers, bytes.NewBuffer(jsonBody), nil); err != nil {
+			return fmt.Errorf("post JSON: %w", err)
+		}
+		return nil
 	}).AnyTimes()
 }

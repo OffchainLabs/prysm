@@ -285,13 +285,35 @@ func (m *multiHandler) PostSSZ(ctx context.Context, endpoint string, headers map
 	return nil, nil, errors.Join(errs...)
 }
 
-// PostSSZWithFallback posts each request using the best known encoding for
-// that node and endpoint, returning the first accepting node's response body and
-// headers. A 415 response only downgrades and retries that node.
-// Without options the request broadcasts to every node, which suits publishes.
-// Options route it through the read-racing machinery instead (racing, acceptance
-// predicates, deadlines), which suits block production.
+// PostSSZWithFallback broadcasts a POST to every node using each node's best known
+// encoding, succeeding as soon as one node accepts. A 415 only downgrades that node to JSON.
 func (m *multiHandler) PostSSZWithFallback(
+	ctx context.Context,
+	endpoint string,
+	headers map[string]string,
+	sszFn func() ([]byte, error),
+	jsonFn func() ([]byte, error),
+) error {
+	post := m.postWithFallbackFn(endpoint, headers, sszFn, jsonFn)
+
+	if len(m.handlers) == 1 {
+		_, err := post(ctx, m.handlers[0])
+		return err
+	}
+
+	accepted, errs := broadcastWriteAll(ctx, m.handlers, func(ctx context.Context, h *handler) error {
+		_, err := post(ctx, h)
+		return err
+	})
+	if accepted > 0 {
+		return nil
+	}
+	return errors.Join(errs...)
+}
+
+// RequestSSZWithFallback posts through the read-query machinery (racing, acceptance
+// predicates and deadlines via opts) and returns the winning response body and headers.
+func (m *multiHandler) RequestSSZWithFallback(
 	ctx context.Context,
 	endpoint string,
 	headers map[string]string,
@@ -299,18 +321,18 @@ func (m *multiHandler) PostSSZWithFallback(
 	jsonFn func() ([]byte, error),
 	opts ...GetOption,
 ) ([]byte, http.Header, error) {
-	// Wrap marshalers to ensure they are only called once.
+	return m.querySSZ(ctx, newGetConfig(opts), m.postWithFallbackFn(endpoint, headers, sszFn, jsonFn))
+}
+
+// postWithFallbackFn returns the per-node post function using the node's best known
+// encoding, with the marshalers wrapped so each runs at most once across nodes.
+func (m *multiHandler) postWithFallbackFn(endpoint string, headers map[string]string, sszFn, jsonFn func() ([]byte, error)) queryFunc[sszResult] {
 	sszBody := sync.OnceValues(sszFn)
 	jsonBody := sync.OnceValues(jsonFn)
 
-	post := func(ctx context.Context, h *handler) (sszResult, error) {
+	return func(ctx context.Context, h *handler) (sszResult, error) {
 		return m.postWithBestEncoding(ctx, h, endpoint, headers, sszBody, jsonBody)
 	}
-
-	if len(opts) > 0 {
-		return m.querySSZ(ctx, newGetConfig(opts), post)
-	}
-	return m.broadcastPost(ctx, post)
 }
 
 // postWithBestEncoding posts to one node using its best known encoding for the
@@ -359,42 +381,6 @@ func (m *multiHandler) markSSZUnsupported(key sszSupportKey, err error) {
 			WithField("endpoint", key.endpoint).
 			Warn("Beacon node does not accept SSZ request bodies, falling back to JSON")
 	}
-}
-
-// broadcastPost sends the POST to every node, waits for all of them, and returns
-// the first accepting node's response.
-func (m *multiHandler) broadcastPost(ctx context.Context, post queryFunc[sszResult]) ([]byte, http.Header, error) {
-	if len(m.handlers) == 1 {
-		res, err := post(ctx, m.handlers[0])
-		return res.body, res.header, err
-	}
-
-	var (
-		mu  sync.Mutex
-		got *sszResult
-	)
-	postAndCapture := func(ctx context.Context, h *handler) error {
-		res, err := post(ctx, h)
-		if err != nil {
-			return err
-		}
-
-		mu.Lock()
-		if got == nil {
-			got = &res
-		}
-		mu.Unlock()
-		return nil
-	}
-
-	accepted, errs := broadcastWriteAll(ctx, m.handlers, postAndCapture)
-	if accepted > 0 {
-		mu.Lock()
-		defer mu.Unlock()
-		return got.body, got.header, nil
-	}
-
-	return nil, nil, errors.Join(errs...)
 }
 
 // memoEndpoint reduces an endpoint to a stable memo key: the query string and

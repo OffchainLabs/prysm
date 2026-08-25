@@ -61,7 +61,7 @@ func TestBeaconBlockV4_DecodeClosureCachesWinningResponse(t *testing.T) {
 	require.NoError(t, err)
 
 	handler := mock.NewMockHandler(ctrl)
-	handler.EXPECT().PostSSZWithFallback(
+	handler.EXPECT().RequestSSZWithFallback(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v4/validator/blocks/%d?include_payload=false", slot),
 		gomock.Any(),
@@ -1497,7 +1497,7 @@ func TestGetBeaconBlock_GloasValid_SSZ_WithPayload(t *testing.T) {
 	ctx := t.Context()
 
 	handler := mock.NewMockHandler(ctrl)
-	handler.EXPECT().PostSSZWithFallback(
+	handler.EXPECT().RequestSSZWithFallback(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v4/validator/blocks/%d?graffiti=%s&include_payload=true&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 		gomock.Any(),
@@ -1550,7 +1550,7 @@ func TestGetBeaconBlock_GloasValid_SSZ_WithoutPayload(t *testing.T) {
 	ctx := t.Context()
 
 	handler := mock.NewMockHandler(ctrl)
-	handler.EXPECT().PostSSZWithFallback(
+	handler.EXPECT().RequestSSZWithFallback(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v4/validator/blocks/%d?graffiti=%s&include_payload=false&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 		gomock.Any(),
@@ -1605,7 +1605,7 @@ func TestGetBeaconBlock_GloasValid_JSON_WithoutPayload(t *testing.T) {
 	})
 	require.NoError(t, err)
 	handler := mock.NewMockHandler(ctrl)
-	handler.EXPECT().PostSSZWithFallback(
+	handler.EXPECT().RequestSSZWithFallback(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v4/validator/blocks/%d?graffiti=%s&include_payload=false&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 		gomock.Any(),
@@ -1638,7 +1638,7 @@ func TestGetBeaconBlock_GloasRejectsJSONWithPayload(t *testing.T) {
 	graffiti := []byte{3}
 
 	handler := mock.NewMockHandler(ctrl)
-	handler.EXPECT().PostSSZWithFallback(
+	handler.EXPECT().RequestSSZWithFallback(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v4/validator/blocks/%d?graffiti=%s&include_payload=true&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 		gomock.Any(),
@@ -1698,7 +1698,7 @@ func TestBeaconBlockV4_PostWithBuilderConfig(t *testing.T) {
 		require.NoError(t, err)
 
 		handler := mock.NewMockHandler(ctrl)
-		handler.EXPECT().PostSSZWithFallback(
+		handler.EXPECT().RequestSSZWithFallback(
 			gomock.Any(),
 			fmt.Sprintf("/eth/v4/validator/blocks/%d?include_payload=false", slot),
 			expectedHeaders,
@@ -1736,7 +1736,7 @@ func TestBeaconBlockV4_PostWithBuilderConfig(t *testing.T) {
 		require.NoError(t, err)
 
 		handler := mock.NewMockHandler(ctrl)
-		handler.EXPECT().PostSSZWithFallback(
+		handler.EXPECT().RequestSSZWithFallback(
 			gomock.Any(),
 			fmt.Sprintf("/eth/v4/validator/blocks/%d?include_payload=true", slot),
 			expectedHeaders,
@@ -1762,7 +1762,7 @@ func TestBeaconBlockV4_PostWithBuilderConfig(t *testing.T) {
 		defer ctrl.Finish()
 
 		handler := mock.NewMockHandler(ctrl)
-		handler.EXPECT().PostSSZWithFallback(
+		handler.EXPECT().RequestSSZWithFallback(
 			gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 		).Return(nil, nil, errors.New("boom")).Times(1)
 

@@ -51,12 +51,11 @@ func (c *beaconApiValidatorClient) submitPayloadAttestation(ctx context.Context,
 		return json.Marshal([]*structs.PayloadAttestationMessage{structs.PayloadAttestationMessageFromConsensus(msg)})
 	}
 
-	_, _, err := c.handler.PostSSZWithFallback(
+	return c.handler.PostSSZWithFallback(
 		ctx,
 		payloadAttestationsEndpoint,
 		headers,
 		msg.MarshalSSZ,
 		jsonFn,
 	)
-	return err
 }

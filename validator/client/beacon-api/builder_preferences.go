@@ -30,14 +30,13 @@ func (c *beaconApiValidatorClient) submitBuilderPreferences(ctx context.Context,
 		return marshalBuilderPreferencesEntriesJSON(entries)
 	}
 
-	_, _, err := c.handler.PostSSZWithFallback(
+	return c.handler.PostSSZWithFallback(
 		ctx,
 		builderPreferencesEndpoint,
 		headers,
 		sszFn,
 		jsonFn,
 	)
-	return err
 }
 
 // marshalBuilderPreferencesEntriesSSZ encodes entries as the SSZ

@@ -287,7 +287,7 @@ func TestMultiHandlerPostSSZWithFallback(t *testing.T) {
 
 		mh := multi(t, accepts.URL, rejects.URL)
 		post := func(endpoint string) error {
-			_, _, err := mh.PostSSZWithFallback(
+			err := mh.PostSSZWithFallback(
 				context.Background(),
 				endpoint,
 				nil,
@@ -321,7 +321,7 @@ func TestMultiHandlerPostSSZWithFallback(t *testing.T) {
 
 		mh := multi(t, srv.URL)
 		for range 2 {
-			_, _, err := mh.PostSSZWithFallback(
+			err := mh.PostSSZWithFallback(
 				context.Background(),
 				"/publish",
 				nil,
@@ -357,7 +357,7 @@ func TestMultiHandlerPostSSZWithFallback(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		mh := multi(t, srv.URL, srv.URL)
-		_, _, err := mh.PostSSZWithFallback(
+		err := mh.PostSSZWithFallback(
 			ctx,
 			"/publish",
 			nil,
@@ -381,7 +381,7 @@ func TestMultiHandlerPostSSZWithFallback(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		mh := multi(t, srv.URL)
-		_, _, err := mh.PostSSZWithFallback(
+		err := mh.PostSSZWithFallback(
 			ctx,
 			"/publish",
 			nil,
@@ -412,7 +412,7 @@ func TestMultiHandlerPostSSZWithFallback(t *testing.T) {
 
 		mh := multi(t, srv.URL)
 		for range 2 {
-			_, _, err := mh.PostSSZWithFallback(
+			err := mh.PostSSZWithFallback(
 				context.Background(),
 				"/publish",
 				nil,
@@ -442,7 +442,7 @@ func TestMultiHandlerPostSSZWithFallback(t *testing.T) {
 
 		mh := multi(t, srv.URL)
 		mh.sszUnsupported.Store(sszSupportKey{host: srv.URL, endpoint: "/publish"}, time.Now().Add(-sszUnsupportedTTL))
-		_, _, err := mh.PostSSZWithFallback(
+		err := mh.PostSSZWithFallback(
 			context.Background(),
 			"/publish",
 			nil,
@@ -946,7 +946,7 @@ func requirePostSSZOK(t *testing.T, mh *multiHandler, body string) {
 	require.NoError(t, err)
 }
 
-func TestMultiHandlerPostSSZWithFallback_Response(t *testing.T) {
+func TestMultiHandlerRequestSSZWithFallback(t *testing.T) {
 	t.Run("returns accepting node body and headers", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("X-Test-Header", "yes")
@@ -956,7 +956,7 @@ func TestMultiHandlerPostSSZWithFallback_Response(t *testing.T) {
 		t.Cleanup(srv.Close)
 
 		mh := multi(t, srv.URL)
-		body, header, err := mh.PostSSZWithFallback(
+		body, header, err := mh.RequestSSZWithFallback(
 			context.Background(),
 			"/produce",
 			nil,
@@ -980,7 +980,7 @@ func TestMultiHandlerPostSSZWithFallback_Response(t *testing.T) {
 		t.Cleanup(srv.Close)
 
 		mh := multi(t, srv.URL)
-		body, _, err := mh.PostSSZWithFallback(
+		body, _, err := mh.RequestSSZWithFallback(
 			context.Background(),
 			"/produce",
 			nil,
@@ -990,9 +990,74 @@ func TestMultiHandlerPostSSZWithFallback_Response(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "json-accepted", string(body))
 	})
-}
 
-func TestMultiHandlerPostSSZWithFallback_Racing(t *testing.T) {
+	t.Run("no options try nodes in order and fail over", func(t *testing.T) {
+		bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "boom", http.StatusInternalServerError)
+		}))
+		t.Cleanup(bad.Close)
+		good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("good-body"))
+		}))
+		t.Cleanup(good.Close)
+
+		mh := multi(t, bad.URL, good.URL)
+		body, _, err := mh.RequestSSZWithFallback(
+			context.Background(),
+			"/produce",
+			nil,
+			func() ([]byte, error) { return []byte("ssz"), nil },
+			func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "good-body", string(body))
+	})
+
+	t.Run("no options stop at the first accepting node", func(t *testing.T) {
+		var firstHits, secondHits int32
+		first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			atomic.AddInt32(&firstHits, 1)
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(first.Close)
+		second := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			atomic.AddInt32(&secondHits, 1)
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(second.Close)
+
+		mh := multi(t, first.URL, second.URL)
+		_, _, err := mh.RequestSSZWithFallback(
+			context.Background(),
+			"/produce",
+			nil,
+			func() ([]byte, error) { return []byte("ssz"), nil },
+			func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+		)
+		require.NoError(t, err)
+		assert.Equal(t, int32(1), atomic.LoadInt32(&firstHits))
+		assert.Equal(t, int32(0), atomic.LoadInt32(&secondHits), "in-order read must not contact nodes past the first success")
+	})
+
+	t.Run("no options join errors when every node fails", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "boom", http.StatusInternalServerError)
+		}))
+		t.Cleanup(srv.Close)
+
+		mh := multi(t, srv.URL, srv.URL)
+		_, _, err := mh.RequestSSZWithFallback(
+			context.Background(),
+			"/produce",
+			nil,
+			func() ([]byte, error) { return []byte("ssz"), nil },
+			func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+		)
+		require.NotNil(t, err)
+		assert.StringContains(t, "boom", err.Error())
+	})
+
 	t.Run("options race nodes and do not wait for the slowest", func(t *testing.T) {
 		fast := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -1009,7 +1074,7 @@ func TestMultiHandlerPostSSZWithFallback_Racing(t *testing.T) {
 
 		mh := multi(t, slow.URL, fast.URL)
 		start := time.Now()
-		body, _, err := mh.PostSSZWithFallback(
+		body, _, err := mh.RequestSSZWithFallback(
 			context.Background(),
 			"/produce",
 			nil,
@@ -1036,7 +1101,7 @@ func TestMultiHandlerPostSSZWithFallback_Racing(t *testing.T) {
 
 		mh := multi(t, srv.URL)
 		for _, endpoint := range []string{"/produce/1?randao=aa", "/produce/2?randao=bb", "/produce/3?randao=cc"} {
-			_, _, err := mh.PostSSZWithFallback(
+			_, _, err := mh.RequestSSZWithFallback(
 				context.Background(),
 				endpoint,
 				nil,
@@ -1059,7 +1124,7 @@ func TestMultiHandlerPostSSZWithFallback_Racing(t *testing.T) {
 		t.Cleanup(srv2.Close)
 		mh2 := multi(t, srv2.URL)
 		for _, endpoint := range []string{"/produce?slot=1", "/produce?slot=2", "/produce?slot=3"} {
-			_, _, err := mh2.PostSSZWithFallback(
+			_, _, err := mh2.RequestSSZWithFallback(
 				context.Background(),
 				endpoint,
 				nil,

@@ -79,7 +79,7 @@ func (c *beaconApiValidatorClient) publishExecutionPayloadEnvelope(
 			}
 			return json.Marshal(j)
 		}
-		if _, _, err := c.handler.PostSSZWithFallback(ctx, endpoint, envelopeHeaders(false), envelope.MarshalSSZ, jsonFn); err != nil {
+		if err := c.handler.PostSSZWithFallback(ctx, endpoint, envelopeHeaders(false), envelope.MarshalSSZ, jsonFn); err != nil {
 			return nil, errors.Wrap(err, "could not publish execution payload envelope")
 		}
 		return &empty.Empty{}, nil
@@ -97,7 +97,7 @@ func (c *beaconApiValidatorClient) publishExecutionPayloadEnvelope(
 		}
 		return json.Marshal(j)
 	}
-	if _, _, err := c.handler.PostSSZWithFallback(ctx, endpoint, envelopeHeaders(true), contents.MarshalSSZ, jsonFn); err != nil {
+	if err := c.handler.PostSSZWithFallback(ctx, endpoint, envelopeHeaders(true), contents.MarshalSSZ, jsonFn); err != nil {
 		return nil, errors.Wrap(err, "could not publish execution payload envelope contents")
 	}
 	return &empty.Empty{}, nil
