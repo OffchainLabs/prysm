@@ -12,7 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
@@ -344,7 +343,7 @@ func newEnvelopeServiceForTest(t *testing.T, envelopeSlot, blockSlot primitives.
 		FinalizedCheckPoint: &ethpb.Checkpoint{},
 		DB:                  db,
 	}
-	stateGen := stategen.New(db, doublylinkedtree.New())
+	stateGen := stategen.New(db)
 	s := &Service{
 		seenPayloadEnvelopeCache: lruwrpr.New(10),
 		pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),

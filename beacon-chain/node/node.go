@@ -636,7 +636,10 @@ func (b *BeaconNode) startSlasherDB(cliCtx *cli.Context, clearer *dbClearer) err
 
 func (b *BeaconNode) startStateGen(ctx context.Context, bfs coverage.AvailableBlocker, fc forkchoice.ForkChoicer) error {
 	opts := []stategen.Option{stategen.WithAvailableBlocker(bfs)}
-	sg := stategen.New(b.db, fc, opts...)
+	sg := stategen.New(b.db, opts...)
+	fc.Lock()
+	fc.SetBalancesByRooter(sg.ActiveNonSlashedBalancesByRoot)
+	fc.Unlock()
 
 	cp, err := b.db.FinalizedCheckpoint(ctx)
 	if err != nil {

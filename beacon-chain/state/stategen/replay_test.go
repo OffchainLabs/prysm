@@ -10,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	stateTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/state/testing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -60,7 +59,7 @@ func TestReplayBlocks_AllSkipSlots(t *testing.T) {
 	require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(cp))
 	require.NoError(t, beaconState.AppendCurrentEpochAttestations(&ethpb.PendingAttestation{}))
 
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	targetSlot := params.BeaconConfig().SlotsPerEpoch - 1
 	newState, err := service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
 	require.NoError(t, err)
@@ -91,7 +90,7 @@ func TestReplayBlocks_SameSlot(t *testing.T) {
 	require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(cp))
 	require.NoError(t, beaconState.AppendCurrentEpochAttestations(&ethpb.PendingAttestation{}))
 
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	targetSlot := beaconState.Slot()
 	newState, err := service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
 	require.NoError(t, err)
@@ -121,7 +120,7 @@ func TestReplayBlocks_LowerSlotBlock(t *testing.T) {
 	require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(cp))
 	require.NoError(t, beaconState.AppendCurrentEpochAttestations(&ethpb.PendingAttestation{}))
 
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	targetSlot := beaconState.Slot()
 	b := util.NewBeaconBlock()
 	b.Block.Slot = beaconState.Slot() - 1
@@ -138,7 +137,7 @@ func TestReplayBlocks_SkipsExecutionPayloadEnvelopeLookup_PreGloas(t *testing.T)
 		envelopeErr:          stderrors.New("db unavailable"),
 	}
 
-	service := New(wrappedDB, doublylinkedtree.New())
+	service := New(wrappedDB)
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	b := util.NewBeaconBlock()
 	b.Block.Slot = 1
@@ -158,7 +157,7 @@ func TestReplayBlocks_IgnoresMissingExecutionPayloadEnvelope_Gloas(t *testing.T)
 		envelopeErr:          db.ErrNotFound,
 	}
 
-	service := New(wrappedDB, doublylinkedtree.New())
+	service := New(wrappedDB)
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	b := util.NewBeaconBlockGloas()
 	b.Block.Slot = 1
@@ -179,7 +178,7 @@ func TestReplayBlocks_NoEnvelopeLookupForLastBlock_Gloas(t *testing.T) {
 		envelopeErr:          stderrors.New("db unavailable"),
 	}
 
-	service := New(wrappedDB, doublylinkedtree.New())
+	service := New(wrappedDB)
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 
 	// With an empty block list, there is no envelope lookup at all.
@@ -207,7 +206,7 @@ func TestReplayBlocks_ThroughForkBoundary(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	service := New(testDB.SetupDB(t), doublylinkedtree.New())
+	service := New(testDB.SetupDB(t))
 	targetSlot := params.BeaconConfig().SlotsPerEpoch
 	newState, err := service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
 	require.NoError(t, err)
@@ -247,7 +246,7 @@ func TestReplayBlocks_ThroughFutureForkBoundaries(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	service := New(testDB.SetupDB(t), doublylinkedtree.New())
+	service := New(testDB.SetupDB(t))
 	targetSlot := params.BeaconConfig().SlotsPerEpoch * 2
 	newState, err := service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
 	require.NoError(t, err)
@@ -330,7 +329,7 @@ func TestReplayBlocks_ProcessEpoch_Electra(t *testing.T) {
 
 	assert.Equal(t, version.Electra, beaconState.Version())
 	require.Equal(t, params.BeaconConfig().MinActivationBalance, beaconState.Balances()[0])
-	service := New(testDB.SetupDB(t), doublylinkedtree.New())
+	service := New(testDB.SetupDB(t))
 	targetSlot := (params.BeaconConfig().SlotsPerEpoch * 2) - 1
 	newState, err := service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
 	require.NoError(t, err)

@@ -11,7 +11,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
@@ -54,7 +53,7 @@ func TestRegularSyncBeaconBlockSubscriber_ProcessPendingBlocks1(t *testing.T) {
 			beaconDB: db,
 			chain:    mockChain,
 			clock:    startup.NewClock(time.Unix(0, 0), [32]byte{}),
-			stateGen: stategen.New(db, doublylinkedtree.New()),
+			stateGen: stategen.New(db),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
 		seenPendingBlocks:   make(map[[32]byte]bool),
@@ -134,7 +133,7 @@ func TestRegularSyncBeaconBlockSubscriber_OptimisticStatus(t *testing.T) {
 			beaconDB: db,
 			chain:    mockChain,
 			clock:    startup.NewClock(time.Unix(0, 0), [32]byte{}),
-			stateGen: stategen.New(db, doublylinkedtree.New()),
+			stateGen: stategen.New(db),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
 		seenPendingBlocks:   make(map[[32]byte]bool),
@@ -202,7 +201,6 @@ func TestRegularSyncBeaconBlockSubscriber_ExecutionEngineTimesOut(t *testing.T) 
 	db := dbtest.SetupDB(t)
 
 	p1 := p2ptest.NewTestP2P(t)
-	fcs := doublylinkedtree.New()
 	mockChain := &mock.ChainService{
 		FinalizedCheckPoint: &ethpb.Checkpoint{
 			Epoch: 0,
@@ -215,7 +213,7 @@ func TestRegularSyncBeaconBlockSubscriber_ExecutionEngineTimesOut(t *testing.T) 
 			beaconDB: db,
 			chain:    mockChain,
 			clock:    startup.NewClock(time.Unix(0, 0), [32]byte{}),
-			stateGen: stategen.New(db, fcs),
+			stateGen: stategen.New(db),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
 		seenPendingBlocks:   make(map[[32]byte]bool),
@@ -349,7 +347,7 @@ func TestRegularSyncBeaconBlockSubscriber_DoNotReprocessBlock(t *testing.T) {
 				},
 			},
 			clock:    startup.NewClock(time.Unix(0, 0), [32]byte{}),
-			stateGen: stategen.New(db, doublylinkedtree.New()),
+			stateGen: stategen.New(db),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
 		seenPendingBlocks:   make(map[[32]byte]bool),
@@ -418,7 +416,7 @@ func TestRegularSyncBeaconBlockSubscriber_ProcessPendingBlocks_2Chains(t *testin
 				},
 			},
 			clock:    startup.NewClock(time.Unix(0, 0), [32]byte{}),
-			stateGen: stategen.New(db, doublylinkedtree.New()),
+			stateGen: stategen.New(db),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
 		seenPendingBlocks:   make(map[[32]byte]bool),
@@ -746,7 +744,6 @@ func TestService_ProcessPendingBlockOnCorrectSlot(t *testing.T) {
 	db := dbtest.SetupDB(t)
 
 	p1 := p2ptest.NewTestP2P(t)
-	fcs := doublylinkedtree.New()
 	mockChain := mock.ChainService{
 		Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
 		FinalizedCheckPoint: &ethpb.Checkpoint{
@@ -758,7 +755,7 @@ func TestService_ProcessPendingBlockOnCorrectSlot(t *testing.T) {
 			beaconDB: db,
 			chain:    &mockChain,
 			clock:    startup.NewClock(mockChain.Genesis, mockChain.ValidatorsRoot),
-			stateGen: stategen.New(db, fcs),
+			stateGen: stategen.New(db),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
 		seenPendingBlocks:   make(map[[32]byte]bool),
@@ -834,7 +831,7 @@ func TestService_ProcessBadPendingBlocks(t *testing.T) {
 			p2p:      p1,
 			beaconDB: db,
 			chain:    &mockChain,
-			stateGen: stategen.New(db, doublylinkedtree.New()),
+			stateGen: stategen.New(db),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
 		seenPendingBlocks:   make(map[[32]byte]bool),
@@ -897,7 +894,7 @@ func TestAlreadySyncingBlock(t *testing.T) {
 			beaconDB: db,
 			chain:    mockChain,
 			clock:    startup.NewClock(time.Unix(0, 0), [32]byte{}),
-			stateGen: stategen.New(db, doublylinkedtree.New()),
+			stateGen: stategen.New(db),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
 		seenPendingBlocks:   make(map[[32]byte]bool),
@@ -935,7 +932,7 @@ func TestExpirationCache_PruneOldBlocksCorrectly(t *testing.T) {
 	pendingBlockExpTime = 500 * time.Millisecond
 
 	r := NewService(ctx,
-		WithStateGen(stategen.New(db, doublylinkedtree.New())),
+		WithStateGen(stategen.New(db)),
 		WithDatabase(db),
 		WithChainService(mockChain),
 		WithP2P(p1),

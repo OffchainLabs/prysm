@@ -9,7 +9,6 @@ import (
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	mockstategen "github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen/mock"
@@ -41,7 +40,7 @@ func TestServer_ListBeaconCommittees_CurrentEpoch(t *testing.T) {
 	bs := &Server{
 		HeadFetcher:        m,
 		GenesisTimeFetcher: m,
-		StateGen:           stategen.New(db, doublylinkedtree.New()),
+		StateGen:           stategen.New(db),
 	}
 	b := util.NewBeaconBlock()
 	util.SaveBlock(t, ctx, db, b)
@@ -117,7 +116,7 @@ func TestServer_ListBeaconCommittees_PreviousEpoch(t *testing.T) {
 	bs := &Server{
 		HeadFetcher:        m,
 		GenesisTimeFetcher: m,
-		StateGen:           stategen.New(db, doublylinkedtree.New()),
+		StateGen:           stategen.New(db),
 	}
 	addDefaultReplayerBuilder(bs, db)
 

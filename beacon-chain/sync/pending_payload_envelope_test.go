@@ -8,7 +8,6 @@ import (
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	p2ptesting "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
@@ -78,7 +77,7 @@ func TestProcessPendingPayloadEnvelope_HappyPath(t *testing.T) {
 		FinalizedCheckPoint: &ethpb.Checkpoint{},
 		DB:                  db,
 	}
-	stateGen := stategen.New(db, doublylinkedtree.New())
+	stateGen := stategen.New(db)
 	broadcaster := p2ptesting.NewTestP2P(t)
 	s := &Service{
 		pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
@@ -129,7 +128,7 @@ func TestProcessPendingPayloadEnvelope_DoesNotBroadcastOnReceiveError(t *testing
 		DB:                        db,
 		ReceivePayloadEnvelopeErr: errors.New("receive failed"),
 	}
-	stateGen := stategen.New(db, doublylinkedtree.New())
+	stateGen := stategen.New(db)
 	broadcaster := p2ptesting.NewTestP2P(t)
 	s := &Service{
 		pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
@@ -171,7 +170,7 @@ func TestProcessPendingPayloadEnvelopes_Sweep(t *testing.T) {
 		FinalizedCheckPoint: &ethpb.Checkpoint{},
 		DB:                  db,
 	}
-	stateGen := stategen.New(db, doublylinkedtree.New())
+	stateGen := stategen.New(db)
 	s := &Service{
 		pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
 		seenPayloadEnvelopeCache: lruwrpr.New(10),

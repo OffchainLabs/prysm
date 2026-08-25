@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -16,7 +15,7 @@ func TestResume(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	b := util.NewBeaconBlock()
 	util.SaveBlock(t, ctx, service.beaconDB, b)
 	root, err := b.Block.HashTreeRoot()

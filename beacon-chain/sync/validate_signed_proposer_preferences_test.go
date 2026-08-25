@@ -10,7 +10,6 @@ import (
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
@@ -278,7 +277,7 @@ func setupSignedProposerPreferencesService(t *testing.T) (*Service, *pubsub.Mess
 		},
 	}
 
-	stateGen := stategen.New(db, doublylinkedtree.New())
+	stateGen := stategen.New(db)
 
 	s := &Service{
 		proposerPreferencesCache:             cache.NewProposerPreferencesCache(),

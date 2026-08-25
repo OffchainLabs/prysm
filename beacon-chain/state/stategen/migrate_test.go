@@ -6,7 +6,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -22,7 +21,7 @@ import (
 func TestMigrateToCold_CanSaveFinalizedInfo(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	b := util.NewBeaconBlock()
 	b.Block.Slot = 1
@@ -47,7 +46,7 @@ func TestMigrateToCold_HappyPath(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	service.slotsPerArchivedPoint = 1
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	stateSlot := primitives.Slot(1)
@@ -77,7 +76,7 @@ func TestMigrateToCold_RegeneratePath(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	service.slotsPerArchivedPoint = 1
 	beaconState, pks := util.DeterministicGenesisState(t, 32)
 	genesisStateRoot, err := beaconState.HashTreeRoot(ctx)
@@ -127,7 +126,7 @@ func TestMigrateToCold_StateExistsInDB(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	service.slotsPerArchivedPoint = 1
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	stateSlot := primitives.Slot(1)
@@ -151,7 +150,7 @@ func TestMigrateToCold_ParallelCalls(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	service.slotsPerArchivedPoint = 1
 	beaconState, pks := util.DeterministicGenesisState(t, 32)
 	genState := beaconState.Copy()
@@ -256,7 +255,7 @@ func TestMigrateToColdHdiff_CanUpdateFinalizedInfo(t *testing.T) {
 	// Now enable the feature flag.
 	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
 	defer resetCfg()
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	genesisStateRoot, err := beaconState.HashTreeRoot(ctx)
@@ -312,7 +311,7 @@ func TestMigrateToColdHdiff_SkipsSlotsNotInDiffTree(t *testing.T) {
 	// Now enable the feature flag.
 	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
 	defer resetCfg()
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 
 	beaconState, pks := util.DeterministicGenesisState(t, 32)
 	genesisStateRoot, err := beaconState.HashTreeRoot(ctx)
@@ -361,7 +360,7 @@ func TestMigrateToColdHdiff_MissedNonBoundarySlots(t *testing.T) {
 	require.NoError(t, beaconDB.(*kv.Store).InitStateDiffCacheForTesting(t, 0))
 	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
 	defer resetCfg()
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	genesisStateRoot, err := beaconState.HashTreeRoot(ctx)
@@ -433,7 +432,7 @@ func TestMigrateToColdHdiff_MissedNonBoundarySlots_BoundaryCacheMissed(t *testin
 	require.NoError(t, beaconDB.(*kv.Store).InitStateDiffCacheForTesting(t, 0))
 	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
 	defer resetCfg()
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	genesisStateRoot, err := beaconState.HashTreeRoot(ctx)
@@ -507,7 +506,7 @@ func TestMigrateToColdHdiff_BoundaryCacheMiss_UseTargetSlotRoot(t *testing.T) {
 	require.NoError(t, beaconDB.(*kv.Store).InitStateDiffCacheForTesting(t, 0))
 	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
 	defer resetCfg()
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 
 	genesisState, pks := util.DeterministicGenesisState(t, 32)
 	genesisStateRoot, err := genesisState.HashTreeRoot(ctx)
@@ -590,7 +589,7 @@ func TestMigrateToColdHdiff_NoOpWhenFinalizedSlotNotAdvanced(t *testing.T) {
 	// Now enable the feature flag.
 	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
 	defer resetCfg()
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	genesisStateRoot, err := beaconState.HashTreeRoot(ctx)

@@ -87,7 +87,8 @@ func setupBeaconChain(t *testing.T, beaconDB db.Database) *Service {
 	require.NoError(t, err)
 
 	fc := doublylinkedtree.New()
-	stateGen := stategen.New(beaconDB, fc)
+	stateGen := stategen.New(beaconDB)
+	fc.SetBalancesByRooter(stateGen.ActiveNonSlashedBalancesByRoot)
 	// Safe a state in stategen to purposes of testing a service stop / shutdown.
 	require.NoError(t, stateGen.SaveState(ctx, bytesutil.ToBytes32(bState.FinalizedCheckpoint().Root), bState))
 

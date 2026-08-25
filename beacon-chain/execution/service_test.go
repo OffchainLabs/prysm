@@ -14,7 +14,6 @@ import (
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
@@ -442,7 +441,7 @@ func TestInitDepositCacheWithFinalization_OK(t *testing.T) {
 	headBlock := util.NewBeaconBlock()
 	headRoot, err := headBlock.Block.HashTreeRoot()
 	require.NoError(t, err)
-	stateGen := stategen.New(beaconDB, doublylinkedtree.New())
+	stateGen := stategen.New(beaconDB)
 
 	emptyState, err := util.NewBeaconState()
 	require.NoError(t, err)
