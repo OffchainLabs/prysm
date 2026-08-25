@@ -119,6 +119,11 @@ func TestMigrateToCold_RegeneratePath(t *testing.T) {
 	assert.Equal(t, primitives.Slot(1), lastIndex, "Did not save last archived index")
 
 	require.LogsContain(t, hook, "Saved state in DB")
+
+	// Finalized state was never cached, but the migration cursor advances.
+	assert.Equal(t, b4.Block.Slot, service.migratedSlot)
+	assert.DeepEqual(t, genesisStateRoot, service.finalizedInfo.root)
+	assert.Equal(t, primitives.Slot(0), service.finalizedInfo.state.Slot())
 }
 
 func TestMigrateToCold_StateExistsInDB(t *testing.T) {
