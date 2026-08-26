@@ -182,7 +182,7 @@ func TestEIP3076SpecTests(t *testing.T) {
 							copy(signingRoot[:], signingRootBytes)
 						}
 
-						err = validator.db.SlashableAttestationCheck(t.Context(), ia, pk, signingRoot, false, nil)
+						err = validator.db.SlashableAttestationCheck(t.Context(), ia, pk, signingRoot)
 						if shouldSucceed {
 							require.NoError(t, err)
 						} else {

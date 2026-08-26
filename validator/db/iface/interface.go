@@ -55,10 +55,7 @@ type ValidatorDB interface {
 	LowestSignedSourceEpoch(ctx context.Context, publicKey [fieldparams.BLSPubkeyLength]byte) (primitives.Epoch, bool, error)
 	AttestedPublicKeys(ctx context.Context) ([][fieldparams.BLSPubkeyLength]byte, error)
 	SlashableAttestationCheck(
-		ctx context.Context, indexedAtt ethpb.IndexedAtt, pubKey [fieldparams.BLSPubkeyLength]byte,
-		signingRoot32 [32]byte,
-		emitAccountMetrics bool,
-		validatorAttestFailVec *prometheus.CounterVec,
+		ctx context.Context, indexedAtt ethpb.IndexedAtt, pubKey [fieldparams.BLSPubkeyLength]byte, signingRoot32 [32]byte,
 	) error
 	SaveAttestationForPubKey(
 		ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, signingRoot [fieldparams.RootLength]byte, att ethpb.IndexedAtt,
