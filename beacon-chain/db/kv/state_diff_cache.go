@@ -17,9 +17,10 @@ import (
 
 type stateDiffCache struct {
 	sync.RWMutex
-	anchors        [][]byte
-	levelsWithData []bool
-	offset         uint64
+	anchors          [][]byte
+	levelsWithData   []bool
+	offset           uint64
+	anchorGeneration uint64
 }
 
 func populateStateDiffCacheFromDB(s *Store, offset uint64) (*stateDiffCache, error) {
@@ -184,6 +185,10 @@ func newStateDiffCache(s *Store) (*stateDiffCache, error) {
 
 func (c *stateDiffCache) getAnchor(level int) state.ReadOnlyBeaconState {
 	c.RLock()
+	if level < 0 || level >= len(c.anchors) {
+		c.RUnlock()
+		return nil
+	}
 	compressed := c.anchors[level]
 	c.RUnlock()
 
@@ -205,6 +210,14 @@ func (c *stateDiffCache) getAnchor(level int) state.ReadOnlyBeaconState {
 }
 
 func (c *stateDiffCache) setAnchor(level int, anchor state.ReadOnlyBeaconState) error {
+	c.RLock()
+	if level < 0 || level >= len(c.anchors) {
+		c.RUnlock()
+		return errors.New("state diff cache: anchor level out of range")
+	}
+	generation := c.anchorGeneration
+	c.RUnlock()
+
 	if anchor == nil {
 		return errors.New("state diff cache: anchor cannot be nil")
 	}
@@ -224,8 +237,8 @@ func (c *stateDiffCache) setAnchor(level int, anchor state.ReadOnlyBeaconState) 
 	c.Lock()
 	defer c.Unlock()
 
-	if level >= len(c.anchors) || level < 0 {
-		return errors.New("state diff cache: anchor level out of range")
+	if generation != c.anchorGeneration {
+		return nil
 	}
 	c.anchors[level] = compressed
 	stateDiffAnchorCacheBytes.WithLabelValues(strconv.Itoa(level)).Set(float64(len(compressed)))
@@ -282,6 +295,7 @@ func (c *stateDiffCache) clearAnchors() {
 
 // clearAnchorsLocked is clearAnchors, for the callers that already hold the lock.
 func (c *stateDiffCache) clearAnchorsLocked() {
+	c.anchorGeneration++
 	c.anchors = make([][]byte, len(flags.Get().StateDiffExponents)-1) // -1 because last level doesn't need to be cached
 	for level := range len(c.anchors) {
 		stateDiffAnchorCacheBytes.WithLabelValues(strconv.Itoa(level)).Set(0)
