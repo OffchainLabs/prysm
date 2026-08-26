@@ -28,11 +28,11 @@ func (vs *Server) SubmitBuilderPreferences(ctx context.Context, req *ethpb.Submi
 		return nil, status.Error(codes.FailedPrecondition, "builder is not configured")
 	}
 	var wg sync.WaitGroup
-	var attempted int
-	var failed atomic.Int64
+	var failed atomic.Uint64
 	for _, e := range req.Entries {
-		if e.GetUrl() == "" {
+		if len(e.GetUrl()) == 0 {
 			log.Warn("Skipping builder preferences entry with no builder url")
+			failed.Add(1)
 			continue
 		}
 		attempted++
@@ -43,15 +43,16 @@ func (vs *Server) SubmitBuilderPreferences(ctx context.Context, req *ethpb.Submi
 				Preferences: &ethpb.BuilderPreferences{MaxExecutionPayment: e.MaxExecutionPayment},
 				Auth:        e.Auth,
 			}
-			if err := vs.BlockBuilder.SubmitBuilderPreferences(ctx, bytesutil.ToBytes48(e.ProposerPubkey), e.Url, breq); err != nil {
+			url := string(e.Url)
+			if err := vs.BlockBuilder.SubmitBuilderPreferences(ctx, bytesutil.ToBytes48(e.ProposerPubkey), url, breq); err != nil {
+				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(url)).Warn("Could not submit builder preferences")
 				failed.Add(1)
-				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(e.Url)).Warn("Could not submit builder preferences")
 			}
 		}(e)
 	}
 	wg.Wait()
-	if attempted > 0 && failed.Load() == int64(attempted) {
-		return nil, status.Error(codes.Unavailable, "could not submit builder preferences to any builder")
+	if n := failed.Load(); n > 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "%d of %d builder preference submissions failed", n, len(req.Entries))
 	}
 	return &emptypb.Empty{}, nil
 }

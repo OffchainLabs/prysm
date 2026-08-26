@@ -237,7 +237,7 @@ func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.
 		if pb.Bid == nil || pb.Entry == nil {
 			continue
 		}
-		url := pb.Entry.GetUrl()
+		url := string(pb.Entry.GetUrl())
 		if vs.BuilderCircuitBreaker.Blacklisted(pb.Bid.Message.BuilderIndex, epoch) {
 			bidLog = append(bidLog, fmt.Sprintf("%s(builder=%d discarded: blacklisted)", logs.MaskCredentialsLogging(url), pb.Bid.Message.BuilderIndex))
 			continue

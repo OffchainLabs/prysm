@@ -144,7 +144,7 @@ func (s *MockBuilderService) GetExecutionPayloadBid(_ context.Context, _ primiti
 		return s.PayloadBids, s.ErrGetExecutionPayloadBid
 	}
 	if s.PayloadBid != nil {
-		return []beaconbuilder.PayloadBid{{Entry: &ethpb.BuilderEntry{Url: "http://builder", MaxExecutionPayment: math.MaxUint64, BuilderBoostFactor: 100}, Bid: s.PayloadBid}}, s.ErrGetExecutionPayloadBid
+		return []beaconbuilder.PayloadBid{{Entry: &ethpb.BuilderEntry{Url: []byte("http://builder"), MaxExecutionPayment: math.MaxUint64, BuilderBoostFactor: 100}, Bid: s.PayloadBid}}, s.ErrGetExecutionPayloadBid
 	}
 	return nil, s.ErrGetExecutionPayloadBid
 }

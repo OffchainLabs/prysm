@@ -18,7 +18,7 @@ func TestServer_SubmitBuilderPreferences(t *testing.T) {
 	entry := func(url string, payment uint64) *ethpb.BuilderPreferencesEntry {
 		return &ethpb.BuilderPreferencesEntry{
 			ProposerPubkey:      pubkey[:],
-			Url:                 url,
+			Url:                 []byte(url),
 			MaxExecutionPayment: primitives.Gwei(payment),
 		}
 	}
@@ -38,12 +38,12 @@ func TestServer_SubmitBuilderPreferences(t *testing.T) {
 		require.ErrorContains(t, "request is empty", err)
 	})
 
-	t.Run("entry without url is skipped, rest of the batch submits", func(t *testing.T) {
+	t.Run("entry without url fails, rest of the batch still submits", func(t *testing.T) {
 		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true}}
 		_, err := vs.SubmitBuilderPreferences(t.Context(), &ethpb.SubmitBuilderPreferencesRequest{
 			Entries: []*ethpb.BuilderPreferencesEntry{entry("", 5), entry("http://builder", 7)},
 		})
-		require.NoError(t, err)
+		require.ErrorContains(t, "1 of 2 builder preference submissions failed", err)
 	})
 
 	t.Run("succeeds without the builder endpoint flag", func(t *testing.T) {
@@ -58,20 +58,9 @@ func TestServer_SubmitBuilderPreferences(t *testing.T) {
 		require.ErrorContains(t, "builder is not configured", err)
 	})
 
-	t.Run("partial builder failure does not fail the batch", func(t *testing.T) {
-		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{
-			HasConfigured:              true,
-			ErrSubmitBuilderPrefsByURL: map[string]error{"http://down": errors.New("boom")},
-		}}
-		_, err := vs.SubmitBuilderPreferences(t.Context(), &ethpb.SubmitBuilderPreferencesRequest{
-			Entries: []*ethpb.BuilderPreferencesEntry{entry("http://down", 5), entry("http://builder", 7)},
-		})
-		require.NoError(t, err)
-	})
-
-	t.Run("errors when every submission fails", func(t *testing.T) {
+	t.Run("builder submission failure is reported", func(t *testing.T) {
 		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true, ErrSubmitBuilderPreferences: errors.New("boom")}}
 		_, err := vs.SubmitBuilderPreferences(t.Context(), req)
-		require.ErrorContains(t, "could not submit builder preferences to any builder", err)
+		require.ErrorContains(t, "1 of 1 builder preference submissions failed", err)
 	})
 }

@@ -4286,7 +4286,7 @@ func TestWarmBuilderRequestAuthsForDuties_CollapsesSameURL(t *testing.T) {
 	// Same-url entries with distinct auth data each submit their own request and cap.
 	require.Equal(t, 2, len(reqs))
 	for _, r := range reqs {
-		require.Equal(t, "https://a.example", r.Url)
+		require.Equal(t, "https://a.example", string(r.Url))
 	}
 	require.DeepEqual(t, []byte{1}, reqs[0].Auth.Message.Data)
 	require.Equal(t, primitives.Gwei(200), reqs[0].MaxExecutionPayment)
@@ -4312,7 +4312,7 @@ func TestWarmBuilderRequestAuthsForDuties_CollapsesSameURL(t *testing.T) {
 		require.Equal(t, 2, len(reqs))
 		byURL := map[string]primitives.Gwei{}
 		for _, r := range reqs {
-			byURL[r.Url] = r.MaxExecutionPayment
+			byURL[string(r.Url)] = r.MaxExecutionPayment
 		}
 		require.Equal(t, primitives.Gwei(0), byURL["https://a.example"])
 		require.Equal(t, primitives.Gwei(250), byURL["https://b.example"])

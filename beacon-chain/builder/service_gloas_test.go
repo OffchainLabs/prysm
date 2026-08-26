@@ -41,7 +41,7 @@ func entryFor(url string) *eth.BuilderEntry {
 
 func entryWithAuthData(url, data string) *eth.BuilderEntry {
 	return &eth.BuilderEntry{
-		Url:  url,
+		Url:  []byte(url),
 		Auth: &eth.SignedRequestAuth{Message: &eth.RequestAuth{Data: []byte(data)}},
 	}
 }
@@ -78,7 +78,7 @@ func TestGetExecutionPayloadBid_FanOutAndDedup(t *testing.T) {
 
 	got := map[string]primitives.Gwei{}
 	for _, pb := range bids {
-		got[pb.Entry.GetUrl()] = pb.Bid.Message.Value
+		got[string(pb.Entry.GetUrl())] = pb.Bid.Message.Value
 	}
 	require.Equal(t, primitives.Gwei(100), got["http://a"])
 	require.Equal(t, primitives.Gwei(200), got["http://b"])
@@ -112,7 +112,7 @@ func TestGetExecutionPayloadBid_SkipsErrorsAndNil(t *testing.T) {
 	bids, err := s.GetExecutionPayloadBid(t.Context(), 1, [32]byte{}, [32]byte{}, [48]byte{}, entries)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(bids))
-	require.Equal(t, "http://ok", bids[0].Entry.GetUrl())
+	require.Equal(t, "http://ok", string(bids[0].Entry.GetUrl()))
 }
 
 func TestGetExecutionPayloadBid_NoEntries(t *testing.T) {

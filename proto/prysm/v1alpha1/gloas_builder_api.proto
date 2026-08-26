@@ -42,9 +42,9 @@ message BuilderPreferencesRequest {
 
 // BuilderPreferencesEntry is one per-builder preference submission, per beacon-APIs #630.
 message BuilderPreferencesEntry {
-  bytes proposer_pubkey = 1;
+  bytes proposer_pubkey = 1 [ (ethereum.eth.ext.ssz_size) = "48" ];
   // url is the HTTP dial target, the auth data inside auth is opaque and may not be a URL.
-  string url = 2;
+  bytes url = 2 [ (ethereum.eth.ext.ssz_max) = "2048" ];
   SignedRequestAuth auth = 3;
   uint64 max_execution_payment = 4 [
     (ethereum.eth.ext.cast_type) =
@@ -58,9 +58,12 @@ message SubmitBuilderPreferencesRequest {
 }
 
 message BuilderEntry {
-  string url = 1;
+  bytes url = 1 [ (ethereum.eth.ext.ssz_max) = "2048" ];
   SignedRequestAuth auth = 2;
-  repeated bytes builder_pubkeys = 3;
+  repeated bytes builder_pubkeys = 3 [
+    (ethereum.eth.ext.ssz_size) = "?,48",
+    (ethereum.eth.ext.ssz_max) = "64"
+  ];
   uint64 max_execution_payment = 4 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
@@ -78,5 +81,5 @@ message BuilderConfig {
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
   ];
   uint64 builder_boost_factor = 2;
-  repeated BuilderEntry builders = 3;
+  repeated BuilderEntry builders = 3 [ (ethereum.eth.ext.ssz_max) = "64" ];
 }

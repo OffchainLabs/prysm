@@ -636,6 +636,8 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	// The VC echoes the builder url from block production so the winning builder gets the signed block.
+	genericBlock.BuilderUrl = r.Header.Get(api.BuilderUrlHeader)
 
 	// Validate and optionally broadcast sidecars on equivocation.
 	if err := s.validateBroadcast(ctx, r, genericBlock); err != nil {
@@ -803,6 +805,8 @@ func (s *Server) publishBlock(ctx context.Context, w http.ResponseWriter, r *htt
 		httputil.HandleError(w, decodeErr.Error(), http.StatusBadRequest)
 		return
 	}
+	// The VC echoes the builder url from block production so the winning builder gets the signed block.
+	genericBlock.BuilderUrl = r.Header.Get(api.BuilderUrlHeader)
 
 	// Validate and optionally broadcast sidecars on equivocation.
 	if err := s.validateBroadcast(ctx, r, genericBlock); err != nil {

@@ -174,12 +174,12 @@ func (s *Service) GetExecutionPayloadBid(ctx context.Context, slot primitives.Sl
 	seen := make(map[entryIdentity]bool, len(entries))
 	unique := make([]*ethpb.BuilderEntry, 0, len(entries))
 	for _, e := range entries {
-		if e.GetUrl() == "" {
+		if len(e.GetUrl()) == 0 {
 			continue
 		}
-		id := entryIdentity{url: e.GetUrl(), data: string(e.GetAuth().GetMessage().GetData())}
+		id := entryIdentity{url: string(e.GetUrl()), data: string(e.GetAuth().GetMessage().GetData())}
 		if seen[id] {
-			log.WithField("builder", logs.MaskCredentialsLogging(e.GetUrl())).Debug("Dropping duplicate builder entry, first one wins")
+			log.WithField("builder", logs.MaskCredentialsLogging(string(e.GetUrl()))).Debug("Dropping duplicate builder entry, first one wins")
 			continue
 		}
 		seen[id] = true
@@ -198,7 +198,7 @@ func (s *Service) GetExecutionPayloadBid(ctx context.Context, slot primitives.Sl
 		wg.Add(1)
 		go func(e *ethpb.BuilderEntry) {
 			defer wg.Done()
-			url := e.GetUrl()
+			url := string(e.GetUrl())
 			c, err := s.clientFor(url)
 			if err != nil {
 				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(url)).Warn("Could not get builder client")

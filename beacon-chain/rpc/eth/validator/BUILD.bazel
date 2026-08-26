@@ -6,6 +6,7 @@ go_library(
         "handlers.go",
         "handlers_block.go",
         "handlers_block_gloas.go",
+        "handlers_builder.go",
         "log.go",
         "server.go",
     ],
@@ -62,6 +63,7 @@ go_test(
     srcs = [
         "handlers_block_gloas_test.go",
         "handlers_block_test.go",
+        "handlers_builder_test.go",
         "handlers_test.go",
     ],
     embed = [":go_default_library"],
