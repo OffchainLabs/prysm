@@ -430,7 +430,7 @@ func TestProduceBlockV4_SkipRandaoVerification(t *testing.T) {
 				OptimisticModeFetcher: &blockchainTesting.ChainService{},
 				BlockRewardFetcher:    &rewardtesting.MockBlockRewardFetcher{Rewards: &structs.BlockRewards{Total: "10"}},
 			}
-			request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?graffiti=%s&%s", testGraffiti, raw), nil)
+			request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?graffiti=%s&include_payload=true&%s", testGraffiti, raw), nil)
 			request.SetPathValue("slot", "1")
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
