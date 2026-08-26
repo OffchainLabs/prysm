@@ -232,17 +232,15 @@ func (m *multiHandler) Post(ctx context.Context, endpoint string, headers map[st
 	return nil
 }
 
-// PostSSZ broadcasts a POST with an SSZ request body to all nodes, returning the first
-// accepting node's response body and headers.
-// It surfaces 415 Unsupported Media Type errors from any node, otherwise succeeds as soon as one node accepts.
-func (m *multiHandler) PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) ([]byte, http.Header, error) {
+// PostSSZ broadcasts a POST with an SSZ request body to all nodes, succeeding as soon as
+// one accepts. A 415 from any node surfaces so the caller can re-broadcast via JSON.
+func (m *multiHandler) PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) error {
 	if len(m.handlers) == 1 {
-		body, header, err := m.handlers[0].PostSSZ(ctx, endpoint, headers, data)
-		if err != nil {
-			return nil, nil, fmt.Errorf("post ssz: %w", err)
+		if err := m.handlers[0].PostSSZ(ctx, endpoint, headers, data); err != nil {
+			return fmt.Errorf("post ssz: %w", err)
 		}
 
-		return body, header, nil
+		return nil
 	}
 
 	var raw []byte
@@ -250,39 +248,26 @@ func (m *multiHandler) PostSSZ(ctx context.Context, endpoint string, headers map
 		raw = data.Bytes()
 	}
 
-	var (
-		mu     sync.Mutex
-		body   []byte
-		header http.Header
-	)
 	post := func(ctx context.Context, h *handler) error {
-		b, hd, err := h.PostSSZ(ctx, endpoint, headers, cloneBuffer(data, raw))
-		if err != nil {
+		if err := h.PostSSZ(ctx, endpoint, headers, cloneBuffer(data, raw)); err != nil {
 			return fmt.Errorf("post ssz: %w", err)
 		}
 
-		mu.Lock()
-		if header == nil {
-			body, header = b, hd
-		}
-		mu.Unlock()
 		return nil
 	}
 
 	accepted, errs := broadcastWriteAll(ctx, m.handlers, post)
 	for _, err := range errs {
 		if errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}) {
-			return nil, nil, err
+			return err
 		}
 	}
 
 	if accepted > 0 {
-		mu.Lock()
-		defer mu.Unlock()
-		return body, header, nil
+		return nil
 	}
 
-	return nil, nil, errors.Join(errs...)
+	return errors.Join(errs...)
 }
 
 // PostSSZWithFallback broadcasts a POST to every node using each node's best known
@@ -345,7 +330,7 @@ func (m *multiHandler) postWithBestEncoding(ctx context.Context, h *handler, end
 			return sszResult{}, fmt.Errorf("marshal SSZ body: %w", err)
 		}
 
-		data, header, err := h.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(body))
+		data, header, err := h.postWithContentType(ctx, endpoint, headers, api.OctetStreamMediaType, bytes.NewBuffer(body))
 		if !errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}) {
 			if err != nil {
 				return sszResult{}, fmt.Errorf("post SSZ: %w", err)

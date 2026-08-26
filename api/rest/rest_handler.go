@@ -28,7 +28,7 @@ type Handler interface {
 	GetStatusCode(ctx context.Context, endpoint string) (int, error)
 	GetSSZ(ctx context.Context, endpoint string, opts ...GetOption) ([]byte, http.Header, error)
 	Post(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer, resp any) error
-	PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) ([]byte, http.Header, error)
+	PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) error
 	PostSSZWithFallback(
 		ctx context.Context,
 		endpoint string,
@@ -307,15 +307,16 @@ func (c *handler) Post(
 	return decodeResp(httpResp, resp)
 }
 
-// PostSSZ sends a POST request with an SSZ (application/octet-stream) request body
-// and returns the raw response body and headers, preferring an SSZ-encoded response.
+// PostSSZ sends a POST request with an SSZ (application/octet-stream) request body,
+// preferring an SSZ-encoded response.
 func (c *handler) PostSSZ(
 	ctx context.Context,
 	apiEndpoint string,
 	headers map[string]string,
 	data *bytes.Buffer,
-) ([]byte, http.Header, error) {
-	return c.postWithContentType(ctx, apiEndpoint, headers, api.OctetStreamMediaType, data)
+) error {
+	_, _, err := c.postWithContentType(ctx, apiEndpoint, headers, api.OctetStreamMediaType, data)
+	return err
 }
 
 func decodeResp(httpResp *http.Response, resp any) error {

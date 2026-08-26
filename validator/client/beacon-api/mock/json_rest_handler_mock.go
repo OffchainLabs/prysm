@@ -127,13 +127,11 @@ func (mr *MockHandlerMockRecorder) Post(ctx, endpoint, headers, data, resp any) 
 }
 
 // PostSSZ mocks base method.
-func (m *MockHandler) PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) ([]byte, http.Header, error) {
+func (m *MockHandler) PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PostSSZ", ctx, endpoint, headers, data)
-	ret0, _ := ret[0].([]byte)
-	ret1, _ := ret[1].(http.Header)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // PostSSZ indicates an expected call of PostSSZ.

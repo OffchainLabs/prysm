@@ -43,7 +43,7 @@ func TestPostSSZ_NonJSONErrorBodyIsTyped(t *testing.T) {
 	defer srv.Close()
 
 	c := newHandler(http.Client{}, srv.URL)
-	_, _, err := c.PostSSZ(context.Background(), "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01}))
+	err := c.PostSSZ(context.Background(), "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01}))
 	require.NotNil(t, err)
 	errJson := &httputil.DefaultJsonError{}
 	require.Equal(t, true, errors.As(err, &errJson), "expected DefaultJsonError, got %T", err)
@@ -75,7 +75,7 @@ func TestPostSSZ_JSONErrorBodyIsDecoded(t *testing.T) {
 	defer srv.Close()
 
 	c := newHandler(http.Client{}, srv.URL)
-	_, _, err := c.PostSSZ(context.Background(), "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01}))
+	err := c.PostSSZ(context.Background(), "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01}))
 	require.NotNil(t, err)
 	errJson := &httputil.DefaultJsonError{}
 	require.Equal(t, true, errors.As(err, &errJson), "expected DefaultJsonError, got %T", err)
@@ -92,7 +92,7 @@ func TestPostSSZ_MalformedJSONErrorBodyKeepsStatus(t *testing.T) {
 	defer srv.Close()
 
 	c := newHandler(http.Client{}, srv.URL)
-	_, _, err := c.PostSSZ(context.Background(), "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01}))
+	err := c.PostSSZ(context.Background(), "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01}))
 	require.Equal(t, true, errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}), "expected 415 to survive, got %v", err)
 }
 
@@ -110,10 +110,10 @@ func TestPostSSZ_ReturnsSuccessBodyAndReusesConnection(t *testing.T) {
 		},
 	})
 	c := newHandler(http.Client{}, srv.URL)
-	body, _, err := c.PostSSZ(ctx, "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01}))
+	body, _, err := c.postWithContentType(ctx, "/eth/v1/test", nil, api.OctetStreamMediaType, bytes.NewBuffer([]byte{0x01}))
 	require.NoError(t, err)
 	require.Equal(t, `{"message":"accepted"}`, string(body))
-	_, _, err = c.PostSSZ(ctx, "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01}))
+	_, _, err = c.postWithContentType(ctx, "/eth/v1/test", nil, api.OctetStreamMediaType, bytes.NewBuffer([]byte{0x01}))
 	require.NoError(t, err)
 	require.Equal(t, true, reused, "expected the second request to reuse the drained connection")
 }

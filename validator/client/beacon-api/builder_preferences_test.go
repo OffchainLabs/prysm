@@ -48,7 +48,7 @@ func TestSubmitBuilderPreferences(t *testing.T) {
 			builderPreferencesEndpoint,
 			gloasHeaders,
 			bytes.NewBuffer(sszBody),
-		).Return(nil, nil, nil).Times(1)
+		).Return(nil).Times(1)
 
 		client := &beaconApiValidatorClient{handler: handler}
 		require.NoError(t, client.submitBuilderPreferences(t.Context(), []*ethpb.BuilderPreferencesEntry{entry}))
@@ -68,7 +68,7 @@ func TestSubmitBuilderPreferences(t *testing.T) {
 			builderPreferencesEndpoint,
 			gomock.Any(),
 			gomock.Any(),
-		).Return(nil, nil, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType, Message: "unsupported media type"}).Times(1)
+		).Return(&httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType, Message: "unsupported media type"}).Times(1)
 		handler.EXPECT().Post(
 			gomock.Any(),
 			builderPreferencesEndpoint,
@@ -92,7 +92,7 @@ func TestSubmitBuilderPreferences(t *testing.T) {
 			builderPreferencesEndpoint,
 			gloasHeaders,
 			gomock.Any(),
-		).Return(nil, nil, errors.New("foo error")).Times(1)
+		).Return(errors.New("foo error")).Times(1)
 
 		client := &beaconApiValidatorClient{handler: handler}
 		err := client.submitBuilderPreferences(t.Context(), []*ethpb.BuilderPreferencesEntry{entry})

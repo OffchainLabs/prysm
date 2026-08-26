@@ -28,7 +28,7 @@ func expectPostSSZWithFallback(handler *mock.MockHandler) {
 			return fmt.Errorf("marshal SSZ body: %w", err)
 		}
 
-		_, _, err = handler.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(body))
+		err = handler.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(body))
 		if err == nil {
 			return nil
 		}

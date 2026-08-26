@@ -230,7 +230,7 @@ func TestMultiHandlerPostSSZ(t *testing.T) {
 		t.Cleanup(rejects.Close)
 
 		mh := multi(t, accepts.URL, rejects.URL)
-		_, _, err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
+		err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
 		require.NotNil(t, err)
 		assert.Equal(t, true, errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}),
 			"a node's 415 must surface so the caller falls back to JSON")
@@ -241,7 +241,7 @@ func TestMultiHandlerPostSSZ(t *testing.T) {
 		bad2 := jsonServer(t, 0, http.StatusBadGateway, nil)
 
 		mh := multi(t, bad1.URL, bad2.URL)
-		_, _, err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
+		err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
 		require.NotNil(t, err)
 	})
 
@@ -257,7 +257,7 @@ func TestMultiHandlerPostSSZ(t *testing.T) {
 		cancel()
 
 		mh := multi(t, srv.URL, srv.URL)
-		_, _, err := mh.PostSSZ(ctx, "/publish", nil, bytes.NewBufferString(body))
+		err := mh.PostSSZ(ctx, "/publish", nil, bytes.NewBufferString(body))
 		assert.Equal(t, true, errors.Is(err, context.Canceled))
 	})
 }
@@ -939,10 +939,10 @@ func sszServer(t *testing.T, body string) *httptest.Server {
 	return srv
 }
 
-// requirePostSSZOK posts and asserts acceptance, discarding the response.
+// requirePostSSZOK posts and asserts acceptance.
 func requirePostSSZOK(t *testing.T, mh *multiHandler, body string) {
 	t.Helper()
-	_, _, err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
+	err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
 	require.NoError(t, err)
 }
 

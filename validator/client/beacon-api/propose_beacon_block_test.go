@@ -118,7 +118,7 @@ func TestProposeBeaconBlock_SSZ_Error(t *testing.T) {
 					headers,
 					gomock.Any(),
 				).Return(
-					nil, nil, testSuite.returnedError,
+					testSuite.returnedError,
 				).Times(1)
 
 				// No JSON fallback expected for non-415 errors
@@ -181,7 +181,7 @@ func TestProposeBeaconBlock_SSZSuccess_NoFallback(t *testing.T) {
 				headers,
 				gomock.Any(),
 			).Return(
-				nil, nil, nil,
+				nil,
 			).Times(1)
 
 			// Post should NOT be called when PostSSZ succeeds
@@ -608,7 +608,7 @@ func TestProposeBeaconBlock_SSZFails_415_FallbackToJSON(t *testing.T) {
 				gomock.Any(),
 				gomock.Any(),
 			).Return(
-				nil, nil, &httputil.DefaultJsonError{
+				&httputil.DefaultJsonError{
 					Code:    http.StatusUnsupportedMediaType,
 					Message: "SSZ not supported",
 				},
@@ -645,7 +645,7 @@ func TestProposeBeaconBlock_SSZFails_415_JSONFallbackFails(t *testing.T) {
 		gomock.Any(),
 		gomock.Any(),
 	).Return(
-		nil, nil, &httputil.DefaultJsonError{
+		&httputil.DefaultJsonError{
 			Code:    http.StatusUnsupportedMediaType,
 			Message: "SSZ not supported",
 		},
@@ -704,7 +704,7 @@ func TestProposeBeaconBlock_SSZFails_Non415_NoFallback(t *testing.T) {
 				sszHeaders,
 				gomock.Any(),
 			).Return(
-				nil, nil, &httputil.DefaultJsonError{
+				&httputil.DefaultJsonError{
 					Code:    http.StatusInternalServerError,
 					Message: "Internal server error",
 				},
@@ -786,7 +786,7 @@ func TestProposeBeaconBlock_GloasBuilderUrlEcho(t *testing.T) {
 				api.BuilderUrlHeader:    "http://builder.example",
 			},
 			gomock.Any(),
-		).Return(nil, nil, nil).Times(1)
+		).Return(nil).Times(1)
 
 		validatorClient := &beaconApiValidatorClient{handler: handler}
 		_, err := validatorClient.proposeBeaconBlock(t.Context(), &ethpb.GenericSignedBeaconBlock{
@@ -804,7 +804,7 @@ func TestProposeBeaconBlock_GloasBuilderUrlEcho(t *testing.T) {
 			"/eth/v2/beacon/blocks",
 			map[string]string{"Eth-Consensus-Version": "gloas"},
 			gomock.Any(),
-		).Return(nil, nil, nil).Times(1)
+		).Return(nil).Times(1)
 
 		validatorClient := &beaconApiValidatorClient{handler: handler}
 		_, err := validatorClient.proposeBeaconBlock(t.Context(), &ethpb.GenericSignedBeaconBlock{Block: signedBlock})
