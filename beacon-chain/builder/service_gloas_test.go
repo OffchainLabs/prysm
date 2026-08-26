@@ -145,6 +145,78 @@ func TestClientFor_SeedsFlagClientAndCachesDials(t *testing.T) {
 	_, err = s.clientFor("http://new")
 	require.NoError(t, err)
 	require.Equal(t, 1, dialed)
+
+	// Invalid urls are rejected before dialing.
+	_, err = s.clientFor("ftp://elsewhere")
+	require.ErrorContains(t, "scheme must be http or https", err)
+	require.Equal(t, 1, dialed)
+}
+
+func TestValidBuilderURL(t *testing.T) {
+	cases := []struct {
+		name    string
+		url     string
+		wantErr string
+	}{
+		{name: "http", url: "http://builder.example:8080"},
+		{name: "https", url: "https://builder.example"},
+		{name: "host port", url: "10.0.0.1:8080"},
+		{name: "bad scheme", url: "ftp://builder.example", wantErr: "scheme must be http or https"},
+		{name: "opaque scheme", url: "javascript:alert(1)", wantErr: "malformed builder url"},
+		{name: "no host", url: "http://", wantErr: "malformed builder url"},
+		{name: "empty", url: "", wantErr: "malformed builder url"},
+		{name: "bare host", url: "builder.example", wantErr: "malformed builder url"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validBuilderURL(tc.url)
+			if tc.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, tc.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestSubmitClientFor(t *testing.T) {
+	newService := func(t *testing.T, cached map[string]*fakeBuilderClient) (*Service, *int) {
+		s := newMultiplexService(t, nil)
+		dialed := 0
+		s.dial = func(url string) (builderapi.BuilderClient, error) {
+			dialed++
+			return &fakeBuilderClient{url: url}, nil
+		}
+		for u, c := range cached {
+			s.clients[u] = c
+		}
+		return s, &dialed
+	}
+
+	t.Run("cached client is served without dialing", func(t *testing.T) {
+		s, dialed := newService(t, map[string]*fakeBuilderClient{"http://cached": {url: "http://cached"}})
+		c, err := s.submitClientFor("http://cached")
+		require.NoError(t, err)
+		require.Equal(t, "http://cached", c.NodeURL())
+		require.Equal(t, 0, *dialed)
+	})
+
+	t.Run("uncached url dials but is not cached", func(t *testing.T) {
+		s, dialed := newService(t, nil)
+		_, err := s.submitClientFor("http://transient")
+		require.NoError(t, err)
+		_, err = s.submitClientFor("http://transient")
+		require.NoError(t, err)
+		require.Equal(t, 2, *dialed)
+		require.Equal(t, 0, len(s.clients))
+	})
+
+	t.Run("invalid url is rejected before dialing", func(t *testing.T) {
+		s, dialed := newService(t, nil)
+		_, err := s.submitClientFor("gopher://elsewhere")
+		require.ErrorContains(t, "scheme must be http or https", err)
+		require.Equal(t, 0, *dialed)
+	})
 }
 
 func TestSubmitBuilderPreferences(t *testing.T) {

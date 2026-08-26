@@ -2,7 +2,10 @@ package builder
 
 import (
 	"context"
+	"net"
+	"net/url"
 	"reflect"
+	"strconv"
 	"sync"
 	"time"
 
@@ -103,6 +106,24 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 	return s, nil
 }
 
+// validBuilderURL accepts http(s) urls and bare host:port (which dials as http).
+func validBuilderURL(raw string) error {
+	if u, err := url.Parse(raw); err == nil && u.Host != "" {
+		if u.Scheme == "http" || u.Scheme == "https" {
+			return nil
+		}
+		return errors.Errorf("builder url scheme must be http or https, got %q", u.Scheme)
+	}
+	host, port, err := net.SplitHostPort(raw)
+	if err != nil || host == "" {
+		return errors.New("malformed builder url")
+	}
+	if _, err := strconv.ParseUint(port, 10, 16); err != nil {
+		return errors.New("malformed builder url")
+	}
+	return nil
+}
+
 func (s *Service) clientFor(url string) (builder.BuilderClient, error) {
 	s.clientsMu.RLock()
 	c, ok := s.clients[url]
@@ -115,11 +136,34 @@ func (s *Service) clientFor(url string) (builder.BuilderClient, error) {
 	if c, ok := s.clients[url]; ok {
 		return c, nil
 	}
+	c, err := s.dialValidated(url)
+	if err != nil {
+		return nil, err
+	}
+	s.clients[url] = c
+	return c, nil
+}
+
+// submitClientFor serves cached clients but dials without caching, so transient
+// publish-time urls do not accumulate in the client map.
+func (s *Service) submitClientFor(url string) (builder.BuilderClient, error) {
+	s.clientsMu.RLock()
+	c, ok := s.clients[url]
+	s.clientsMu.RUnlock()
+	if ok {
+		return c, nil
+	}
+	return s.dialValidated(url)
+}
+
+func (s *Service) dialValidated(url string) (builder.BuilderClient, error) {
+	if err := validBuilderURL(url); err != nil {
+		return nil, err
+	}
 	c, err := s.dial(url)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not create builder client for %s", logs.MaskCredentialsLogging(url))
 	}
-	s.clients[url] = c
 	return c, nil
 }
 
@@ -231,7 +275,7 @@ func (s *Service) SubmitSignedBeaconBlock(ctx context.Context, builderURL string
 		tracing.AnnotateError(span, ErrNoBuilder)
 		return ErrNoBuilder
 	}
-	c, err := s.clientFor(builderURL)
+	c, err := s.submitClientFor(builderURL)
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return err
