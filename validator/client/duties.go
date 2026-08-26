@@ -47,7 +47,7 @@ func (v *validator) nonBlacklistedKeys(ctx context.Context) ([][fieldparams.BLSP
 // isActiveForDuties reports whether a validator status entry indicates the
 // validator currently has duties to perform — i.e. it is in (or about to be
 // in) the beacon-state active set. Shared by filteredKeysAndIndices and
-// filterAndCacheActiveKeys so both call sites agree on the same predicate.
+// activeKeysFromCache so both call sites agree on the same predicate.
 func isActiveForDuties(s *ethpb.ValidatorStatusResponse, currEpoch primitives.Epoch) bool {
 	if s == nil {
 		return false

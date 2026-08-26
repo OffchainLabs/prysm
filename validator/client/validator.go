@@ -773,8 +773,8 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		log.Info("No imported public keys. Skipping prepare proposer routine")
 		return nil
 	}
-	filteredKeys, err := v.filterAndCacheActiveKeys(ctx, pubkeys, slot)
-	if err != nil {
+	// Both paths depend on the status cache: duties filter against it every epoch.
+	if err := v.refreshStatusCache(ctx, pubkeys, slot); err != nil {
 		return err
 	}
 
@@ -787,12 +787,13 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		v.pushPreferences(ctx, km, slot, connGen, forceFullPush)
 		return nil
 	}
-	return v.pushPreGloasSettings(ctx, km, filteredKeys, slot, connGen, forceFullPush)
+	return v.pushPreGloasSettings(ctx, km, slot, connGen, forceFullPush)
 }
 
 // pushPreGloasSettings pushes fee recipients (PrepareBeaconProposer) and v1
 // builder registrations, plus Gloas preferences once the fork is an epoch away.
-func (v *validator) pushPreGloasSettings(ctx context.Context, km keymanager.IKeymanager, filteredKeys [][fieldparams.BLSPubkeyLength]byte, slot primitives.Slot, connGen uint64, forceFullPush bool) error {
+func (v *validator) pushPreGloasSettings(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, connGen uint64, forceFullPush bool) error {
+	filteredKeys := v.activeKeysFromCache(slot)
 	proposerReqs := v.buildProposerSettingsRequests(filteredKeys)
 	if len(proposerReqs) == 0 {
 		log.Warnf("Could not locate valid validator indices. Skipping prepare proposer routine")
@@ -1054,22 +1055,26 @@ func (v *validator) EnsureReady(ctx context.Context) bool {
 	return v.validatorClient.EnsureReady(ctx)
 }
 
-func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte, slot primitives.Slot) ([][fieldparams.BLSPubkeyLength]byte, error) {
-	ctx, span := trace.StartSpan(ctx, "validator.filterAndCacheActiveKeys")
+// refreshStatusCache repopulates the validator status cache at epoch start or
+// when the cached key set has drifted from the keymanager's.
+func (v *validator) refreshStatusCache(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte, slot primitives.Slot) error {
+	ctx, span := trace.StartSpan(ctx, "validator.refreshStatusCache")
 	defer span.End()
-	isEpochStart := slots.IsEpochStart(slot)
-	filteredKeys := make([][fieldparams.BLSPubkeyLength]byte, 0)
 	if len(pubkeys) == 0 {
-		return filteredKeys, nil
+		return nil
 	}
-	var err error
-	// repopulate the statuses if epoch start or if a new key is added missing the cache
-	if isEpochStart || len(v.statusCache()) != len(pubkeys) /* cache not populated or updated correctly */ {
-		if err = v.updateValidatorStatusCache(ctx, pubkeys); err != nil {
-			return nil, errors.Wrap(err, "failed to update validator status cache")
+	if slots.IsEpochStart(slot) || len(v.statusCache()) != len(pubkeys) {
+		if err := v.updateValidatorStatusCache(ctx, pubkeys); err != nil {
+			return errors.Wrap(err, "failed to update validator status cache")
 		}
 	}
+	return nil
+}
+
+// activeKeysFromCache returns the cached keys active for duties at the slot's epoch.
+func (v *validator) activeKeysFromCache(slot primitives.Slot) [][fieldparams.BLSPubkeyLength]byte {
 	currEpoch := slots.ToEpoch(slot)
+	filteredKeys := make([][fieldparams.BLSPubkeyLength]byte, 0)
 	for k, s := range v.statusCache() {
 		if isActiveForDuties(s.status, currEpoch) {
 			filteredKeys = append(filteredKeys, k)
@@ -1080,8 +1085,7 @@ func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fie
 			}).Debugf("Skipping non-active status key.")
 		}
 	}
-
-	return filteredKeys, nil
+	return filteredKeys
 }
 
 // updateValidatorStatusCache updates the validator statuses cache, a map of keys currently used by the validator client

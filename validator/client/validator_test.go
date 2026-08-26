@@ -1743,16 +1743,15 @@ func TestValidator_buildProposerSettingsRequests_WithoutDefaultConfig(t *testing
 			FeeRecipient:   feeRecipient4[:],
 		},
 	}
-	filteredKeys, err := v.filterAndCacheActiveKeys(ctx, pubkeys, 0)
-	require.NoError(t, err)
-	actual := v.buildProposerSettingsRequests(filteredKeys)
+	require.NoError(t, v.refreshStatusCache(ctx, pubkeys, 0))
+	actual := v.buildProposerSettingsRequests(v.activeKeysFromCache(0))
 	sort.Slice(actual, func(i, j int) bool {
 		return actual[i].ValidatorIndex < actual[j].ValidatorIndex
 	})
 	assert.DeepEqual(t, expected, actual)
 }
 
-func TestValidator_filterAndCacheActiveKeys(t *testing.T) {
+func TestValidator_refreshStatusCache(t *testing.T) {
 	// Public keys
 	pubkey1 := pubkeyFromString(t, "0x111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111")
 	pubkey2 := pubkeyFromString(t, "0x222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222")
@@ -1778,10 +1777,9 @@ func TestValidator_filterAndCacheActiveKeys(t *testing.T) {
 			validatorClient: client,
 			pubkeyToStatus:  make(map[[48]byte]*validatorStatus),
 		}
-		keys, err := v.filterAndCacheActiveKeys(ctx, [][48]byte{pubkey1, pubkey2, pubkey3, pubkey4}, 0)
-		require.NoError(t, err)
+		require.NoError(t, v.refreshStatusCache(ctx, [][48]byte{pubkey1, pubkey2, pubkey3, pubkey4}, 0))
 		// one key is unknown status
-		require.Equal(t, 3, len(keys))
+		require.Equal(t, 3, len(v.activeKeysFromCache(0)))
 	})
 	t.Run("refetch all keys at start of epoch, even with cache", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
@@ -1823,10 +1821,9 @@ func TestValidator_filterAndCacheActiveKeys(t *testing.T) {
 				},
 			},
 		}
-		keys, err := v.filterAndCacheActiveKeys(ctx, [][48]byte{pubkey1, pubkey2, pubkey3, pubkey4}, 0)
-		require.NoError(t, err)
+		require.NoError(t, v.refreshStatusCache(ctx, [][48]byte{pubkey1, pubkey2, pubkey3, pubkey4}, 0))
 		// one key is unknown status
-		require.Equal(t, 3, len(keys))
+		require.Equal(t, 3, len(v.activeKeysFromCache(0)))
 	})
 	t.Run("cache used mid epoch, no new keys added", func(t *testing.T) {
 		ctx := t.Context()
@@ -1844,10 +1841,8 @@ func TestValidator_filterAndCacheActiveKeys(t *testing.T) {
 				},
 			},
 		}
-		keys, err := v.filterAndCacheActiveKeys(ctx, [][48]byte{pubkey1, pubkey4}, 5)
-		require.NoError(t, err)
-		// one key is unknown status
-		require.Equal(t, 2, len(keys))
+		require.NoError(t, v.refreshStatusCache(ctx, [][48]byte{pubkey1, pubkey4}, 5))
+		require.Equal(t, 2, len(v.activeKeysFromCache(5)))
 	})
 
 }
@@ -2044,9 +2039,8 @@ func TestValidator_buildProposerSettingsRequests_WithDefaultConfig(t *testing.T)
 			FeeRecipient:   feeRecipient8[:],
 		},
 	}
-	filteredKeys, err := v.filterAndCacheActiveKeys(ctx, pubkeys, 640)
-	require.NoError(t, err)
-	actual := v.buildProposerSettingsRequests(filteredKeys)
+	require.NoError(t, v.refreshStatusCache(ctx, pubkeys, 640))
+	actual := v.buildProposerSettingsRequests(v.activeKeysFromCache(640))
 	sort.Slice(actual, func(i, j int) bool {
 		return actual[i].ValidatorIndex < actual[j].ValidatorIndex
 	})
