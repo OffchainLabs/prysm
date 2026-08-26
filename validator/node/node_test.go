@@ -6,11 +6,14 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -19,6 +22,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/db/kv"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
+	"github.com/sirupsen/logrus"
 	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/urfave/cli/v2"
 )
@@ -326,6 +330,161 @@ func Test_parseBeaconApiHeaders(t *testing.T) {
 		assert.Equal(t, 1, len(h))
 		assert.DeepEqual(t, []string{"value1"}, h["key1"])
 	})
+}
+
+func TestStatelessMode(t *testing.T) {
+	const (
+		restSingle = "http://host1:3500"
+		restMulti  = "http://host1:3500,http://host2:3500"
+		grpcSingle = "host1:4000"
+		grpcMulti  = "host1:4000,host2:4000"
+	)
+	enableLog := "Multiple beacon nodes configured"
+	overrideLog := "Ignoring"
+
+	tests := []struct {
+		name          string
+		restEndpoints string
+		grpcEndpoints string
+		setStateless  string
+		wantLogSubstr string
+		gloasEpoch    primitives.Epoch
+		wantLogLevel  logrus.Level
+		restApi       bool
+		want          bool
+	}{
+		{
+			name:          "single rest host stays off",
+			restApi:       true,
+			gloasEpoch:    100,
+			restEndpoints: restSingle,
+			want:          false,
+		},
+		{
+			name:          "multiple rest hosts force stateless on",
+			restApi:       true,
+			gloasEpoch:    100,
+			restEndpoints: restMulti,
+			want:          true,
+			wantLogSubstr: enableLog,
+			wantLogLevel:  logrus.InfoLevel,
+		},
+		{
+			name:          "rest provider flag alone selects rest",
+			restApi:       false,
+			gloasEpoch:    100,
+			restEndpoints: restMulti,
+			want:          true,
+			wantLogSubstr: enableLog,
+			wantLogLevel:  logrus.InfoLevel,
+		},
+		{
+			name:          "rest selection ignores grpc hosts",
+			restApi:       true,
+			gloasEpoch:    100,
+			restEndpoints: restSingle,
+			grpcEndpoints: grpcMulti,
+			want:          false,
+		},
+		{
+			name:          "explicit false is overridden with a warning",
+			restApi:       true,
+			gloasEpoch:    100,
+			restEndpoints: restMulti,
+			setStateless:  "false",
+			want:          true,
+			wantLogSubstr: overrideLog,
+			wantLogLevel:  logrus.WarnLevel,
+		},
+		{
+			name:          "explicit true stays on",
+			restApi:       true,
+			gloasEpoch:    100,
+			restEndpoints: restSingle,
+			setStateless:  "true",
+			want:          true,
+		},
+		{
+			name:          "explicit true with multiple hosts stays on silently",
+			restApi:       true,
+			gloasEpoch:    100,
+			restEndpoints: restMulti,
+			setStateless:  "true",
+			want:          true,
+		},
+		{
+			name:          "gloas not scheduled stays off silently",
+			restApi:       true,
+			gloasEpoch:    params.BeaconConfig().FarFutureEpoch,
+			restEndpoints: restMulti,
+			want:          false,
+		},
+		{
+			name:          "multiple grpc hosts force stateless on",
+			restApi:       false,
+			gloasEpoch:    100,
+			grpcEndpoints: grpcMulti,
+			want:          true,
+			wantLogSubstr: enableLog,
+			wantLogLevel:  logrus.InfoLevel,
+		},
+		{
+			name:          "single grpc host stays off",
+			restApi:       false,
+			gloasEpoch:    100,
+			grpcEndpoints: grpcSingle,
+			want:          false,
+		},
+		{
+			name:          "trailing comma is not a second host",
+			restApi:       true,
+			gloasEpoch:    100,
+			restEndpoints: restSingle + ",",
+			want:          false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			cfg := params.BeaconConfig().Copy()
+			cfg.GloasForkEpoch = tt.gloasEpoch
+			params.OverrideBeaconConfig(cfg)
+
+			resetCfg := features.InitWithReset(&features.Flags{EnableBeaconRESTApi: tt.restApi})
+			defer resetCfg()
+
+			hook := logtest.NewGlobal()
+			app := cli.App{}
+			set := flag.NewFlagSet("test", 0)
+			set.String(flags.BeaconRESTApiProviderFlag.Name, "", "")
+			set.String(flags.BeaconRPCProviderFlag.Name, "", "")
+			set.Bool(flags.EnableStatelessFlag.Name, false, "")
+			if tt.restEndpoints != "" {
+				require.NoError(t, set.Set(flags.BeaconRESTApiProviderFlag.Name, tt.restEndpoints))
+			}
+			if tt.grpcEndpoints != "" {
+				require.NoError(t, set.Set(flags.BeaconRPCProviderFlag.Name, tt.grpcEndpoints))
+			}
+			if tt.setStateless != "" {
+				require.NoError(t, set.Set(flags.EnableStatelessFlag.Name, tt.setStateless))
+			}
+			cliCtx := cli.NewContext(&app, set, nil)
+
+			assert.Equal(t, tt.want, statelessMode(cliCtx))
+			if tt.wantLogSubstr == "" {
+				require.LogsDoNotContain(t, hook, enableLog)
+				require.LogsDoNotContain(t, hook, overrideLog)
+				return
+			}
+			require.LogsContain(t, hook, tt.wantLogSubstr)
+			for _, entry := range hook.AllEntries() {
+				if strings.Contains(entry.Message, tt.wantLogSubstr) {
+					assert.Equal(t, tt.wantLogLevel, entry.Level)
+				}
+			}
+		})
+	}
 }
 
 func TestRegisterValidatorService_DistributedFlag(t *testing.T) {

@@ -2,6 +2,7 @@ package validator
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -405,4 +407,35 @@ func TestProduceBlockV4_SSZ_IncludePayloadFalse(t *testing.T) {
 	server.ProduceBlockV4(writer, request)
 	assert.Equal(t, http.StatusOK, writer.Code)
 	assert.Equal(t, "application/octet-stream", writer.Header().Get("Content-Type"))
+}
+
+func TestProduceBlockV4_SkipRandaoVerification(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	for _, raw := range []string{"skip_randao_verification", "skip_randao_verification=", "skip_randao_verification=true"} {
+		t.Run(raw, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+			v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, req *eth.BlockRequest) (*eth.GenericBeaconBlock, error) {
+					require.DeepEqual(t, common.InfiniteSignature[:], req.RandaoReveal)
+					return gloasGenericBlockContents(), nil
+				})
+			server := &Server{
+				V1Alpha1Server:        v1alpha1Server,
+				SyncChecker:           &mockSync.Sync{IsSyncing: false},
+				OptimisticModeFetcher: &blockchainTesting.ChainService{},
+				BlockRewardFetcher:    &rewardtesting.MockBlockRewardFetcher{Rewards: &structs.BlockRewards{Total: "10"}},
+			}
+			request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?graffiti=%s&%s", testGraffiti, raw), nil)
+			request.SetPathValue("slot", "1")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+			server.ProduceBlockV4(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+		})
+	}
 }
