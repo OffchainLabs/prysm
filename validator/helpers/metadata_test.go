@@ -15,7 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/db/common"
 	"github.com/OffchainLabs/prysm/v7/validator/db/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/slashing-protection-history/format"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 type ValidatorDBMock struct {
@@ -76,8 +75,6 @@ func (db *ValidatorDBMock) SlashableProposalCheck(
 	pubKey [fieldparams.BLSPubkeyLength]byte,
 	signedBlock interfaces.ReadOnlySignedBeaconBlock,
 	signingRoot [fieldparams.RootLength]byte,
-	emitAccountMetrics bool,
-	validatorProposeFailVec *prometheus.CounterVec,
 ) error {
 	panic("not implemented")
 }

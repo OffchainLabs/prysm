@@ -12,7 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/backup"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/db/common"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 // ValidatorDB defines the necessary methods for a Prysm validator DB.
@@ -41,8 +40,6 @@ type ValidatorDB interface {
 		pubKey [fieldparams.BLSPubkeyLength]byte,
 		signedBlock interfaces.ReadOnlySignedBeaconBlock,
 		signingRoot [fieldparams.RootLength]byte,
-		emitAccountMetrics bool,
-		validatorProposeFailVec *prometheus.CounterVec,
 	) error
 
 	// Attester protection related methods.
