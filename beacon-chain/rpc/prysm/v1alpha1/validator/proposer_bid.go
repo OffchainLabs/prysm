@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/bits"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -354,7 +355,8 @@ func (vs *Server) submitBlockToBuilder(block interfaces.ReadOnlySignedBeaconBloc
 	ctx, cancel := context.WithTimeout(context.Background(), params.BeaconConfig().SlotDuration())
 	defer cancel()
 	if err := vs.BlockBuilder.SubmitSignedBeaconBlock(ctx, builderURL, block); err != nil {
-		log.WithError(err).Error("Could not submit signed beacon block to builder")
+		// Quoted: the url is caller-supplied and may fail validation for containing control bytes.
+		log.WithError(err).WithField("builder", strconv.Quote(logs.MaskCredentialsLogging(builderURL))).Error("Could not submit signed beacon block to builder")
 	}
 }
 

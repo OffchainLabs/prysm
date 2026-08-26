@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -106,8 +107,17 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 	return s, nil
 }
 
+// printableASCII reports whether s contains only printable non-space ASCII,
+// so it can travel verbatim as an HTTP header or gRPC metadata value.
+func printableASCII(s string) bool {
+	return !strings.ContainsFunc(s, func(r rune) bool { return r < '!' || r > '~' })
+}
+
 // validBuilderURL accepts http(s) urls and bare host:port (which dials as http).
 func validBuilderURL(raw string) error {
+	if !printableASCII(raw) {
+		return errors.New("malformed builder url")
+	}
 	if u, err := url.Parse(raw); err == nil && u.Host != "" {
 		if u.Scheme == "http" || u.Scheme == "https" {
 			return nil

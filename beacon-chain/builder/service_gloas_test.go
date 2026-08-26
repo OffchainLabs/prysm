@@ -166,6 +166,10 @@ func TestValidBuilderURL(t *testing.T) {
 		{name: "no host", url: "http://", wantErr: "malformed builder url"},
 		{name: "empty", url: "", wantErr: "malformed builder url"},
 		{name: "bare host", url: "builder.example", wantErr: "malformed builder url"},
+		{name: "non-ascii path", url: "http://builder.example/π", wantErr: "malformed builder url"},
+		{name: "embedded space", url: "http://builder.example/a b", wantErr: "malformed builder url"},
+		{name: "control char", url: "http://builder.example/a\r\nb", wantErr: "malformed builder url"},
+		{name: "percent-encoded", url: "http://builder.example/%0d%0a"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
