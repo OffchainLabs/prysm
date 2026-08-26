@@ -11,10 +11,12 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations/mock"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/blst"
@@ -594,27 +596,14 @@ func TestPackAttestations_ElectraOnChainAggregates(t *testing.T) {
 		TimeFetcher: &chainMock.ChainService{Slot: &slot},
 	}
 
+	// Ties in aggregate profitability are broken by map iteration order, so the number of
+	// packed attestations is not stable. Only assert what holds for any tie-break.
+	const rewardFromPool = 257776896
+
 	t.Run("ok", func(t *testing.T) {
 		atts, err := s.packAttestations(ctx, st, params.BeaconConfig().SlotsPerEpoch)
 		require.NoError(t, err)
-		require.Equal(t, 6, len(atts))
-
-		totalBalance, err := helpers.TotalActiveBalance(t.Context(), st)
-		require.NoError(t, err)
-
-		expected := []uint64{
-			193332672,
-			150369856,
-			150369856,
-			64444224,
-			42962816,
-			42962816,
-		}
-		for i, want := range expected {
-			got, err := electra.GetProposerRewardNumerator(ctx, st, atts[i], totalBalance)
-			require.NoError(t, err)
-			require.Equal(t, want, got)
-		}
+		assertNoWastedAttestations(t, st, atts, rewardFromPool)
 	})
 
 	t.Run("reward takes precedence", func(t *testing.T) {
@@ -626,15 +615,14 @@ func TestPackAttestations_ElectraOnChainAggregates(t *testing.T) {
 
 		atts, err := s.packAttestations(ctx, st, params.BeaconConfig().SlotsPerEpoch)
 		require.NoError(t, err)
-		require.Equal(t, 7, len(atts))
-
-		totalBalance, err := helpers.TotalActiveBalance(t.Context(), st)
-		require.NoError(t, err)
-
-		got, err := electra.GetProposerRewardNumerator(ctx, st, atts[6], totalBalance)
-		require.NoError(t, err)
-		require.Equal(t, uint64(21481408), got)
-		require.Equal(t, primitives.Slot(1), atts[6].GetData().Slot)
+		assertNoWastedAttestations(t, st, atts, rewardFromPool+21481408)
+		var packedRecent bool
+		for _, a := range atts {
+			if a.GetData().Slot == 1 {
+				packedRecent = true
+			}
+		}
+		require.Equal(t, true, packedRecent)
 	})
 
 	t.Run("use latest state", func(t *testing.T) {
@@ -654,25 +642,144 @@ func TestPackAttestations_ElectraOnChainAggregates(t *testing.T) {
 		}
 		atts, err := s.packAttestations(ctx, st, params.BeaconConfig().SlotsPerEpoch)
 		require.NoError(t, err)
-		require.Equal(t, 7, len(atts))
+		assertNoWastedAttestations(t, st, atts, rewardFromPool+21481408)
+	})
+}
 
-		totalBalance, err := helpers.TotalActiveBalance(t.Context(), st)
+func assertNoWastedAttestations(t *testing.T, st state.BeaconState, atts []ethpb.Att, wantTotal uint64) {
+	t.Helper()
+
+	ctx := t.Context()
+	totalBalance, err := helpers.TotalActiveBalance(ctx, st)
+	require.NoError(t, err)
+
+	var total uint64
+	running := st.Copy()
+	for i, a := range atts {
+		got, err := electra.GetProposerRewardNumerator(ctx, running, a, totalBalance)
 		require.NoError(t, err)
+		require.NotEqual(t, uint64(0), got, "attestation %d adds no proposer reward", i)
+		total += got
+		running, err = altair.ProcessAttestationNoVerifySignature(ctx, running, a, totalBalance)
+		require.NoError(t, err)
+	}
+	require.Equal(t, wantTotal, total)
+}
 
-		// The reward numerator should be the same as the previous test.
-		expected := []uint64{
-			193332672,
-			150369856,
-			150369856,
-			64444224,
-			42962816,
-			42962816,
+func TestSelectByMarginalReward(t *testing.T) {
+	ctx := t.Context()
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.ElectraForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	key, err := blst.RandKey()
+	require.NoError(t, err)
+	sig := key.Sign([]byte{'X'})
+
+	// 192 validators gives committees of 6, so an aggregate over the first two carries 12 bits.
+	st, _ := util.DeterministicGenesisStateElectra(t, 192)
+	require.NoError(t, st.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
+
+	allCommittees, err := helpers.BeaconCommittees(ctx, st, 0)
+	require.NoError(t, err)
+	committees := allCommittees[:2]
+	require.Equal(t, 6, len(committees[0]))
+	require.Equal(t, 6, len(committees[1]))
+
+	bothCommittees := primitives.NewAttestationCommitteeBits()
+	bothCommittees.SetBitAt(0, true)
+	bothCommittees.SetBitAt(1, true)
+
+	onChainAgg := func(root byte, positions ...uint64) *ethpb.AttestationElectra {
+		bits := bitfield.NewBitlist(12)
+		for _, p := range positions {
+			bits.SetBitAt(p, true)
 		}
-		for i, want := range expected {
-			got, err := electra.GetProposerRewardNumerator(ctx, st, atts[i], totalBalance)
-			require.NoError(t, err)
-			require.Equal(t, want, got)
+		return &ethpb.AttestationElectra{
+			AggregationBits: bits,
+			CommitteeBits:   bothCommittees,
+			Data: util.HydrateAttestationData(&ethpb.AttestationData{
+				BeaconBlockRoot: bytesutil.PadTo([]byte{root}, 32),
+			}),
+			Signature: sig.Marshal(),
 		}
+	}
+
+	all := []uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}
+	limit := params.BeaconConfig().MaxAttestationsElectra
+
+	t.Run("drops aggregates whose votes are already covered", func(t *testing.T) {
+		best := onChainAgg('a', all...)
+		redundant1 := onChainAgg('a', 0, 1, 2, 6, 7, 8)
+		redundant2 := onChainAgg('a', 3, 4, 5, 9, 10, 11)
+
+		selected, err := proposerAtts{redundant1, best, redundant2}.selectByMarginalReward(ctx, st, limit)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(selected))
+		require.DeepEqual(t, best, selected[0])
+	})
+
+	t.Run("keeps aggregates that add votes", func(t *testing.T) {
+		first := onChainAgg('a', 0, 1, 2, 3, 4, 6, 7, 8, 9, 10)
+		second := onChainAgg('a', 0, 5, 6, 11)
+
+		selected, err := proposerAtts{second, first}.selectByMarginalReward(ctx, st, limit)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(selected))
+		require.DeepEqual(t, first, selected[0])
+		require.DeepEqual(t, second, selected[1])
+	})
+
+	t.Run("skips attestations already counted in the state", func(t *testing.T) {
+		alreadyIncluded := onChainAgg('a', all...)
+
+		// The state is past the epoch boundary, so these attestations target the previous epoch.
+		covered := st.Copy()
+		participation, err := covered.PreviousEpochParticipation()
+		require.NoError(t, err)
+		for _, c := range committees {
+			for _, vi := range c {
+				participation[vi] = 0b111
+			}
+		}
+		require.NoError(t, covered.SetPreviousParticipationBits(participation))
+
+		selected, err := proposerAtts{alreadyIncluded}.selectByMarginalReward(ctx, covered, limit)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(selected))
+	})
+
+	t.Run("respects the limit", func(t *testing.T) {
+		var atts proposerAtts
+		for committee := range uint64(len(committees)) {
+			cb := primitives.NewAttestationCommitteeBits()
+			cb.SetBitAt(committee, true)
+			for position := range uint64(len(committees[committee])) {
+				bits := bitfield.NewBitlist(uint64(len(committees[committee])))
+				bits.SetBitAt(position, true)
+				atts = append(atts, &ethpb.AttestationElectra{
+					AggregationBits: bits,
+					CommitteeBits:   cb,
+					Data: util.HydrateAttestationData(&ethpb.AttestationData{
+						BeaconBlockRoot: bytesutil.PadTo([]byte{'a'}, 32),
+					}),
+					Signature: sig.Marshal(),
+				})
+			}
+		}
+		require.Equal(t, true, uint64(len(atts)) > limit)
+
+		selected, err := atts.selectByMarginalReward(ctx, st, limit)
+		require.NoError(t, err)
+		require.Equal(t, int(limit), len(selected))
+	})
+
+	t.Run("no attestations", func(t *testing.T) {
+		selected, err := proposerAtts{}.selectByMarginalReward(ctx, st, limit)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(selected))
 	})
 }
 
@@ -688,11 +795,13 @@ func Benchmark_packAttestations_Electra(b *testing.B) {
 	ctx := b.Context()
 
 	params.SetupTestConfigCleanup(b)
-	cfg := params.MainnetConfig()
+	// The mainnet config panics under the minimal build tag: its SlotsPerHistoricalRoot does
+	// not fit the compiled-in field parameters.
+	cfg := params.BeaconConfig().Copy()
 	cfg.ElectraForkEpoch = 1
 	params.OverrideBeaconConfig(cfg)
 
-	valCount := uint64(1048576)
+	valCount := uint64(65536)
 	committeeCount := helpers.SlotCommitteeCount(valCount)
 	valsPerCommittee := valCount / committeeCount / uint64(params.BeaconConfig().SlotsPerEpoch)
 

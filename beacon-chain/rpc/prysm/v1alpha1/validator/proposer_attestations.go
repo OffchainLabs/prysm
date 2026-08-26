@@ -2,16 +2,12 @@ package validator
 
 import (
 	"bytes"
-	"cmp"
 	"context"
 	"fmt"
-	"slices"
 	"sort"
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -112,20 +108,18 @@ func (vs *Server) packAttestations(ctx context.Context, latestState state.Beacon
 		return nil, err
 	}
 
-	var sorted proposerAtts
 	if postElectra {
-		sorted, err = deduped.sortOnChainAggregates(ctx, latestState)
+		atts, err = deduped.selectByMarginalReward(ctx, latestState, params.BeaconConfig().MaxAttestationsElectra)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		sorted, err = deduped.sort()
+		sorted, err := deduped.sort()
 		if err != nil {
 			return nil, err
 		}
+		atts = sorted.limitToMaxAttestations()
 	}
-
-	atts = sorted.limitToMaxAttestations()
 	return vs.filterAttestationBySignature(ctx, atts, latestState)
 }
 
@@ -146,8 +140,9 @@ func onChainAggregates(attsById map[attestation.Id][]ethpb.Att) (proposerAtts, e
 	// We construct the first on-chain aggregate by taking the first aggregate for each ID.
 	// We construct the second on-chain aggregate by taking the second aggregate for each ID.
 	// We continue doing this until we run out of aggregates.
+	maxLayers := int(params.BeaconConfig().MaxAttestationsElectra) // lint:ignore uintcast -- always small.
 	idx := 0
-	for {
+	for ; idx < maxLayers; idx++ {
 		topAggregates := make([]ethpb.Att, 0, len(attsById))
 		for _, as := range attsById {
 			// In case there are no more aggregates for an ID, we skip that ID.
@@ -166,8 +161,18 @@ func onChainAggregates(attsById map[attestation.Id][]ethpb.Att) (proposerAtts, e
 			return nil, err
 		}
 		result = append(result, onChainAggs...)
+	}
 
-		idx++
+	if idx == maxLayers {
+		var dropped int
+		for _, as := range attsById {
+			if len(as) > maxLayers {
+				dropped += len(as) - maxLayers
+			}
+		}
+		if dropped > 0 {
+			log.WithField("droppedAggregates", dropped).Debug("Ignoring aggregates beyond the maximum number of on-chain aggregate layers")
+		}
 	}
 
 	return result, nil
@@ -202,41 +207,6 @@ func (a proposerAtts) sort() (proposerAtts, error) {
 		return a, nil
 	}
 	return a.sortBySlotAndCommittee()
-}
-
-func (a proposerAtts) sortOnChainAggregates(ctx context.Context, st state.ReadOnlyBeaconState) (proposerAtts, error) {
-	if len(a) < 2 {
-		return a, nil
-	}
-
-	totalBalance, err := helpers.TotalActiveBalance(ctx, st)
-	if err != nil {
-		return nil, err
-	}
-
-	// Sort attestation by proposer reward numerator using a cache.
-	cache := make(map[ethpb.Att]uint64)
-
-	getCachedReward := func(att ethpb.Att) uint64 {
-		if val, ok := cache[att]; ok {
-			return val
-		}
-		r, err := electra.GetProposerRewardNumerator(ctx, st, att, totalBalance)
-		if err != nil {
-			log.WithError(err).Debug("Failed to get proposer reward numerator")
-			return 0
-		}
-		cache[att] = r
-		return r
-	}
-
-	slices.SortFunc(a, func(a, b ethpb.Att) int {
-		r1 := getCachedReward(a)
-		r2 := getCachedReward(b)
-		return cmp.Compare(r2, r1)
-	})
-
-	return a, nil
 }
 
 // Separate attestations by slot, as slot number takes higher precedence when sorting.
