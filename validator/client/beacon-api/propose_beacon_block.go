@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/metadata"
 )
 
 type blockProcessingResult struct {
@@ -167,9 +168,11 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 	}
 
 	headers := map[string]string{"Eth-Consensus-Version": res.consensusVersion}
-	// Echo the winning builder from block production so the node forwards it the signed block.
-	if in.BuilderUrl != "" {
-		headers[api.BuilderUrlHeader] = in.BuilderUrl
+	// The winning builder url travels as outgoing metadata; echo it so the node forwards the signed block.
+	if md, ok := metadata.FromOutgoingContext(ctx); ok {
+		if vals := md.Get(api.BuilderUrlHeader); len(vals) > 0 && vals[0] != "" {
+			headers[api.BuilderUrlHeader] = vals[0]
+		}
 	}
 
 	if err := c.handler.PostSSZWithFallback(ctx, endpoint, headers, res.marshalSSZ, res.marshalJSON); err != nil {
