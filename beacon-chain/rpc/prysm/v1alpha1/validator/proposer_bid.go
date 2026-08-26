@@ -276,9 +276,6 @@ func (vs *Server) validateBuilderBid(head state.BeaconState, signed *ethpb.Signe
 		return errors.New("nil builder bid")
 	}
 	bid := signed.Message
-	if bid.ExecutionPayment > entry.MaxExecutionPayment {
-		return errors.Errorf("bid execution payment %d exceeds max %d", bid.ExecutionPayment, entry.MaxExecutionPayment)
-	}
 	if len(entry.BuilderPubkeys) > 0 {
 		pk, err := head.BuilderPubkey(bid.BuilderIndex)
 		if err != nil {

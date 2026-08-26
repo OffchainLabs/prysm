@@ -276,10 +276,11 @@ func TestValidateBuilderBid(t *testing.T) {
 		require.ErrorContains(t, "nil builder bid", vs.validateBuilderBid(head, nil, query, entry(1000)))
 	})
 
-	t.Run("payment exceeds max", func(t *testing.T) {
-		vs := &Server{}
-		err := vs.validateBuilderBid(head, fullBid(), query, entry(50))
-		require.ErrorContains(t, "exceeds max", err)
+	t.Run("payment above cap is accepted", func(t *testing.T) {
+		vs := &Server{NewExecutionPayloadBidVerifier: func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
+			return &fakeBidVerifier{}
+		}}
+		require.NoError(t, vs.validateBuilderBid(head, fullBid(), query, entry(50)))
 	})
 
 	t.Run("entry builder pubkeys binding", func(t *testing.T) {
@@ -409,6 +410,35 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 		require.NotNil(t, got)
 		require.Equal(t, primitives.BuilderIndex(2), got.bid.Message.BuilderIndex)
 		require.Equal(t, "http://builder", string(got.entry.GetUrl()))
+	})
+
+	t.Run("payment above the entry cap counts only up to the cap", func(t *testing.T) {
+		capped := bid(1, 500)
+		capped.Entry = &ethpb.BuilderEntry{Url: []byte("http://builder"), MaxExecutionPayment: 100, BuilderBoostFactor: 100}
+		capped.Bid.Message.ExecutionPayment = 10_000
+		vs := &Server{
+			BlockBuilder:                   &builderTest.MockBuilderService{PayloadBids: []beaconbuilder.PayloadBid{capped, bid(2, 700)}},
+			NewExecutionPayloadBidVerifier: passAll,
+		}
+		// Raw total 10500 loses to 700 because only 100 of the payment counts.
+		got := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
+		require.NotNil(t, got)
+		require.Equal(t, primitives.BuilderIndex(2), got.bid.Message.BuilderIndex)
+	})
+
+	t.Run("over-cap bid wins at its capped value with payment unmodified", func(t *testing.T) {
+		capped := bid(1, 500)
+		capped.Entry = &ethpb.BuilderEntry{Url: []byte("http://builder"), MaxExecutionPayment: 100, BuilderBoostFactor: 100}
+		capped.Bid.Message.ExecutionPayment = 10_000
+		vs := &Server{
+			BlockBuilder:                   &builderTest.MockBuilderService{PayloadBids: []beaconbuilder.PayloadBid{capped, bid(2, 550)}},
+			NewExecutionPayloadBidVerifier: passAll,
+		}
+		// Capped effective 600 beats 550; the winning bid keeps its raw payment.
+		got := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
+		require.NotNil(t, got)
+		require.Equal(t, primitives.BuilderIndex(1), got.bid.Message.BuilderIndex)
+		require.Equal(t, primitives.Gwei(10_000), got.bid.Message.ExecutionPayment)
 	})
 
 	t.Run("discards invalid bids", func(t *testing.T) {
