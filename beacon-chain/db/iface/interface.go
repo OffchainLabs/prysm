@@ -127,6 +127,8 @@ type NoHeadAccessDatabase interface {
 
 	CleanUpDirtyStates(ctx context.Context, slotsPerArchivedPoint primitives.Slot) error
 	DeleteHistoricalDataBeforeSlot(ctx context.Context, slot primitives.Slot, batchSize int) (int, error)
+	DeleteStateDiffBeforeSlot(ctx context.Context, slot primitives.Slot, maxEntries int) (int, error)
+	LastStateDiffBoundary(slot primitives.Slot) (primitives.Slot, error)
 
 	// Genesis operations.
 	LoadGenesis(ctx context.Context, stateBytes []byte) error
@@ -141,7 +143,7 @@ type NoHeadAccessDatabase interface {
 
 	// Custody operations.
 	UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error)
-	UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailableSlot primitives.Slot) error
+	UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailableSlot, currentSlot primitives.Slot) error
 	UpdateSubscribedToAllDataSubnets(ctx context.Context, subscribed bool) (bool, error)
 
 	// P2P Metadata operations.

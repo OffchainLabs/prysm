@@ -188,6 +188,63 @@ func TestUpdateDuties_AllValidatorsExited(t *testing.T) {
 
 }
 
+func TestUpdateDuties_PreGloasRetainsExitedSyncCommitteeKey(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = cfg.FarFutureEpoch
+	params.OverrideBeaconConfig(cfg)
+
+	ctrl := gomock.NewController(t)
+	client := validatormock.NewMockValidatorClient(ctrl)
+	kp := randKeypair(t)
+	v := validator{
+		km:              newMockKeymanager(t, kp),
+		validatorClient: client,
+		duties:          &dutyStore{},
+		pubkeyToStatus: map[pubkey]*validatorStatus{
+			kp.pub: {
+				publicKey: kp.pub[:],
+				status:    &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_EXITED},
+				index:     42,
+			},
+		},
+		aggSelector: &stubAggregatorSelector{proofs: make(map[pubkey][]byte)},
+	}
+
+	resp := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{{
+			PublicKey:       kp.pub[:],
+			ValidatorIndex:  42,
+			Status:          ethpb.ValidatorStatus_EXITED,
+			IsSyncCommittee: true,
+		}},
+	}
+	client.EXPECT().Duties(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, req *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
+			require.DeepEqual(t, [][]byte{kp.pub[:]}, req.PublicKeys)
+			return resp, nil
+		},
+	)
+
+	var subscribed sync.WaitGroup
+	subscribed.Add(1)
+	client.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(context.Context, *ethpb.CommitteeSubnetsSubscribeRequest) (*emptypb.Empty, error) {
+			subscribed.Done()
+			return &emptypb.Empty{}, nil
+		},
+	)
+
+	require.NoError(t, v.UpdateDuties(t.Context()))
+	util.WaitTimeout(&subscribed, 2*time.Second)
+
+	roles, err := v.RolesAt(t.Context(), 1)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(roles[kp.pub]))
+	assert.Equal(t, roleSyncCommittee, roles[kp.pub][0])
+	assert.Equal(t, roleSyncCommitteeAggregator, roles[kp.pub][1])
+}
+
 func TestUpdateDuties_Distributed(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

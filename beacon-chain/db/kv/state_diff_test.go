@@ -843,6 +843,7 @@ func TestStateDiff_AnchorCache(t *testing.T) {
 			err = db.saveStateByDiff(context.Background(), st)
 			require.NoError(t, err)
 			localCache[0] = st
+			require.Equal(t, len(db.stateDiffCache.anchors[0]), cap(db.stateDiffCache.anchors[0]))
 
 			// level 0 should be the same
 			localSSZ, err := localCache[0].MarshalSSZ()
