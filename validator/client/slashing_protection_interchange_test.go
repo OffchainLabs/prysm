@@ -145,7 +145,7 @@ func TestEIP3076SpecTests(t *testing.T) {
 
 						wsb, err := blocks.NewSignedBeaconBlock(b)
 						require.NoError(t, err)
-						err = validator.db.SlashableProposalCheck(t.Context(), pk, wsb, signingRoot, validator.emitAccountMetrics, ValidatorProposeFailVec)
+						err = validator.db.SlashableProposalCheck(t.Context(), pk, wsb, signingRoot)
 						if shouldSucceed {
 							require.NoError(t, err)
 						} else {

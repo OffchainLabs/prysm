@@ -130,7 +130,7 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		return
 	}
 
-	if err := v.db.SlashableProposalCheck(ctx, pubKey, blk, signingRoot, v.emitAccountMetrics, ValidatorProposeFailVec); err != nil {
+	if err := v.db.SlashableProposalCheck(ctx, pubKey, blk, signingRoot); err != nil {
 		log.WithFields(
 			blockLogFields(pubKey, wb, nil),
 		).WithError(err).Error("Failed block slashing protection check")
