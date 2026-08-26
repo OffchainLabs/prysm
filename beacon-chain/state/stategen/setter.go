@@ -43,6 +43,16 @@ func (s *State) ForceCheckpoint(ctx context.Context, blockRoot []byte) error {
 		return err
 	}
 
+	// The tree cannot accept a write above the archive walk's frontier, and this runs on every graceful
+	// shutdown. Persist by root instead, which doubles as the resume point for the next boot.
+	if s.ArchivePending() {
+		saver, ok := s.beaconDB.(hotStateSnapshotSaver)
+		if !ok {
+			return nil
+		}
+		return saver.SaveHotStateSnapshot(ctx, fs, root32)
+	}
+
 	return s.beaconDB.SaveState(ctx, fs, root32)
 }
 
@@ -86,6 +96,14 @@ func (s *State) saveStateByRoot(ctx context.Context, blockRoot [32]byte, st stat
 		}
 	}
 	s.saveHotStateDB.lock.Unlock()
+
+	// Independent of saveHotStateDB: checkSaveHotStateDB flips that mode off on every block while finality
+	// is healthy, so an archive node cannot rely on it for its restart-resume snapshots.
+	if s.ArchivePending() {
+		if err := s.saveArchiveResumeSnapshot(ctx, blockRoot, st); err != nil {
+			return err
+		}
+	}
 
 	// If the hot state is already in cache, one can be sure the state was processed and in the DB.
 	if s.hotStateCache.has(blockRoot) {
@@ -174,6 +192,14 @@ func (s *State) DisableSaveHotStateToDB(ctx context.Context) error {
 	}
 
 	s.saveHotStateDB.enabled = false
+
+	// Clearing the bucket would also drop the checkpoint origin state and the archive resume snapshots,
+	// which backfill and the next boot depend on while regeneration is still running.
+	if s.ArchivePending() {
+		log.Warn("Exiting mode to save hot states in DB; keeping snapshots while archive regeneration runs")
+		s.saveHotStateDB.blockRootsOfSavedStates = nil
+		return nil
+	}
 
 	// Delete previous saved states in DB as we are turning this mode off.
 	if features.Get().EnableStateDiff {

@@ -50,6 +50,7 @@ type Flags struct {
 	DisableDutiesV2                     bool // DisableDutiesV2 sets validator client to use the get Duties endpoint
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
 	EnableStateDiff                     bool // EnableStateDiff enables the experimental state diff feature for the beacon node.
+	EnableArchive                       bool // EnableArchive backfills blocks to the archive origin and regenerates all historical states into the state-diff tree.
 	EnableProgressiveSSZ                bool // EnableProgressiveSSZ enables experimental progressive SSZ merkleization for converted consensus types.
 	ReorgLatePayloads                   bool // ReorgLatePayloads enables reorging late payloads in the beacon node.
 
@@ -296,7 +297,14 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(trackEquivocations)
 		cfg.TrackEquivocations = true
 	}
-	if ctx.IsSet(EnableStateDiff.Name) {
+	if ctx.Bool(EnableArchive.Name) {
+		logEnabled(EnableArchive)
+		cfg.EnableArchive = true
+	}
+	if ctx.IsSet(EnableStateDiff.Name) || cfg.EnableArchive {
+		if cfg.EnableArchive && !ctx.IsSet(EnableStateDiff.Name) {
+			log.Infof("--%s implies --%s", EnableArchive.Name, EnableStateDiff.Name)
+		}
 		logEnabled(EnableStateDiff)
 		cfg.EnableStateDiff = true
 

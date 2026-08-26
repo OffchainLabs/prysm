@@ -182,6 +182,12 @@ var (
 		Name:  "enable-state-diff",
 		Usage: "Enables the experimental state diff feature.",
 	}
+	EnableArchive = &cli.BoolFlag{
+		Name: "enable-archive",
+		Usage: "Turns the node into an archive node: backfills blocks down to the archive origin state " +
+			"(see --archive-origin-state, genesis by default) and then regenerates every historical state " +
+			"into the state-diff tree. Implies --enable-state-diff and --enable-backfill.",
+	}
 	EnableProgressiveSSZ = &cli.BoolFlag{
 		Name:   "enable-progressive-ssz",
 		Usage:  "Enables experimental progressive SSZ merkleization for converted consensus types.",
@@ -293,6 +299,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
 	EnableStateDiff,
+	EnableArchive,
 	EnableProgressiveSSZ,
 	reorgLatePayloads,
 	forceHeadFlag,

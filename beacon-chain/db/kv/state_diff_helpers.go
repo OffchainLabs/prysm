@@ -18,6 +18,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	pkgerrors "github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"go.etcd.io/bbolt"
 )
 
@@ -36,6 +37,8 @@ var (
 	exponentsKey                = []byte("exponents")
 	ErrSlotBeforeOffset         = errors.New("slot is before state-diff root offset")
 	errExponentsMetadataMissing = errors.New("state diff exponents metadata not found")
+	// ErrAboveArchiveFrontier rejects a tree write that the archive walk has not laid the anchors for yet.
+	ErrAboveArchiveFrontier = errors.New("state-diff write above the archive regeneration frontier")
 )
 
 func encodeStateDiffExponents(exponents []int) ([]byte, error) {
@@ -207,6 +210,16 @@ func (s *Store) getAnchorState(ctx context.Context, offset uint64, lvl int, slot
 	return anchor, nil
 }
 
+// deepestDiffSpan is the slot distance between adjacent boundaries of the deepest level, which is also the
+// spacing of the full set of boundary slots since every shallower span is a multiple of it.
+func deepestDiffSpan() uint64 {
+	exponents := flags.Get().StateDiffExponents
+	if len(exponents) == 0 {
+		return 0
+	}
+	return math.PowerOf2(uint64(exponents[len(exponents)-1]))
+}
+
 // computeLevel computes the level in the diff tree. Returns -1 in case slot should not be in tree.
 func computeLevel(offset uint64, slot primitives.Slot) int {
 	if uint64(slot) < offset {
@@ -322,6 +335,26 @@ func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.Rea
 		return nil
 	}
 
+	// In archive mode the archive origin owns the offset and nothing else may set it: everything below the
+	// offset is unrepresentable, so anchoring at genesis or at the checkpoint block would discard the
+	// archive. InitializeArchiveOrigin calls anchorStateDiff directly, and it is the only caller that may.
+	// This also lets the node defer anchoring until the sync origin is known, so an archive origin above it
+	// is rejected before anything has been written.
+	if features.Get().EnableArchive {
+		log.WithFields(logrus.Fields{
+			"requestedSlot":  slot,
+			"archiveEnabled": true,
+		}).Debug("Leaving the state-diff offset to the archive origin")
+		return nil
+	}
+
+	return s.anchorStateDiff(slot, initialState)
+}
+
+// anchorStateDiff writes the state-diff metadata, builds the cache and stores the initial full snapshot,
+// anchoring the tree at the given slot. The offset can never be moved afterwards, so callers own the
+// decision of which slot the tree belongs to.
+func (s *Store) anchorStateDiff(slot primitives.Slot, initialState state.ReadOnlyBeaconState) error {
 	if slot%32 != 0 {
 		return errors.New("cannot initialize state diff with a non epoch boundary offset")
 	}
@@ -333,6 +366,7 @@ func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.Rea
 			return nil
 		}
 	}
+
 	exponentsBytes, err := encodeStateDiffExponents(flags.Get().StateDiffExponents)
 	if err != nil {
 		return pkgerrors.Wrap(err, "failed to encode state diff exponents")

@@ -364,6 +364,12 @@ var (
 		Usage: "A comma-separated list of exponents (of 2) in decreasing order, defining the state diff hierarchy levels. The last exponent must be greater than or equal to 5.",
 		Value: cli.NewIntSlice(21, 18, 16, 13, 11, 9, 5),
 	}
+	// ArchiveOriginState points at an ssz-serialized beacon state to anchor the archive at.
+	ArchiveOriginState = &cli.PathFlag{
+		Name: "archive-origin-state",
+		Usage: "Path to an ssz-encoded beacon state at an epoch boundary slot, used as the oldest state an " +
+			"archive node will hold. Defaults to the genesis state. Requires --enable-archive.",
+	}
 	// DisableEphemeralLogFile disables the 24 hour debug log file.
 	DisableEphemeralLogFile = &cli.BoolFlag{
 		Name:  "disable-ephemeral-log-file",
