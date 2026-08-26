@@ -105,10 +105,7 @@ func (db *ValidatorDBMock) AttestedPublicKeys(ctx context.Context) ([][fieldpara
 }
 
 func (db *ValidatorDBMock) SlashableAttestationCheck(
-	ctx context.Context, indexedAtt ethpb.IndexedAtt, pubKey [fieldparams.BLSPubkeyLength]byte,
-	signingRoot32 [32]byte,
-	emitAccountMetrics bool,
-	validatorAttestFailVec *prometheus.CounterVec,
+	ctx context.Context, indexedAtt ethpb.IndexedAtt, pubKey [fieldparams.BLSPubkeyLength]byte, signingRoot32 [32]byte,
 ) error {
 	panic("not implemented")
 }
