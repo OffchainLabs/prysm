@@ -31,7 +31,7 @@ type BlockBuilder interface {
 	GetHeader(ctx context.Context, slot primitives.Slot, parentHash [32]byte, pubKey [48]byte) (builder.SignedBid, error)
 	GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash, parentRoot [32]byte, proposerPubkey [48]byte, entries []*ethpb.BuilderEntry) ([]PayloadBid, error)
 	SubmitSignedBeaconBlock(ctx context.Context, builderURL string, block interfaces.ReadOnlySignedBeaconBlock) error
-	SubmitBuilderPreferences(ctx context.Context, proposerPubkey [48]byte, url string, req *ethpb.BuilderPreferencesRequest) error
+	SubmitBuilderPreferences(ctx context.Context, entries []*ethpb.BuilderPreferencesEntry) map[int]string
 	RegisterValidator(ctx context.Context, reg []*ethpb.SignedValidatorRegistrationV1) error
 	RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error)
 	Configured() bool
@@ -239,9 +239,11 @@ func (s *Service) SubmitSignedBeaconBlock(ctx context.Context, builderURL string
 	return c.SubmitSignedBeaconBlock(ctx, b)
 }
 
-// SubmitPreferenceEntries forwards each preference entry to its builder concurrently,
-// returning failure messages keyed by entry position.
-func SubmitPreferenceEntries(ctx context.Context, b BlockBuilder, entries []*ethpb.BuilderPreferencesEntry) map[int]string {
+// SubmitBuilderPreferences forwards each entry to its own builder url concurrently, returning
+// failure messages keyed by entry position. Nil entries are skipped; auth is forwarded unchanged.
+func (s *Service) SubmitBuilderPreferences(ctx context.Context, entries []*ethpb.BuilderPreferencesEntry) map[int]string {
+	ctx, span := trace.StartSpan(ctx, "builder.SubmitBuilderPreferences")
+	defer span.End()
 	var (
 		mu       sync.Mutex
 		wg       sync.WaitGroup
@@ -253,6 +255,9 @@ func SubmitPreferenceEntries(ctx context.Context, b BlockBuilder, entries []*eth
 		mu.Unlock()
 	}
 	for i, e := range entries {
+		if e == nil {
+			continue
+		}
 		if len(e.GetUrl()) == 0 {
 			log.Warn("Skipping builder preferences entry with no builder url")
 			fail(i, "builder url is required")
@@ -261,12 +266,17 @@ func SubmitPreferenceEntries(ctx context.Context, b BlockBuilder, entries []*eth
 		wg.Add(1)
 		go func(i int, e *ethpb.BuilderPreferencesEntry) {
 			defer wg.Done()
-			req := &ethpb.BuilderPreferencesRequest{
-				Preferences: &ethpb.BuilderPreferences{MaxExecutionPayment: e.MaxExecutionPayment},
-				Auth:        e.Auth,
-			}
 			url := string(e.Url)
-			if err := b.SubmitBuilderPreferences(ctx, bytesutil.ToBytes48(e.ProposerPubkey), url, req); err != nil {
+			c, err := s.clientFor(url)
+			if err == nil {
+				req := &ethpb.BuilderPreferencesRequest{
+					Preferences: &ethpb.BuilderPreferences{MaxExecutionPayment: e.MaxExecutionPayment},
+					Auth:        e.Auth,
+				}
+				err = c.SubmitBuilderPreferences(ctx, bytesutil.ToBytes48(e.ProposerPubkey), req)
+			}
+			if err != nil {
+				tracing.AnnotateError(span, err)
 				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(url)).Warn("Could not submit builder preferences")
 				fail(i, "could not submit builder preferences: "+logs.MaskCredentialsLogging(err.Error()))
 			}
@@ -274,21 +284,6 @@ func SubmitPreferenceEntries(ctx context.Context, b BlockBuilder, entries []*eth
 	}
 	wg.Wait()
 	return failures
-}
-
-// Routed to url, the auth data inside req is opaque and forwarded unchanged.
-func (s *Service) SubmitBuilderPreferences(ctx context.Context, proposerPubkey [48]byte, url string, req *ethpb.BuilderPreferencesRequest) error {
-	ctx, span := trace.StartSpan(ctx, "builder.SubmitBuilderPreferences")
-	defer span.End()
-	if url == "" {
-		return errors.New("builder preferences missing builder url")
-	}
-	c, err := s.clientFor(url)
-	if err != nil {
-		tracing.AnnotateError(span, err)
-		return err
-	}
-	return c.SubmitBuilderPreferences(ctx, proposerPubkey, req)
 }
 
 // GetHeader retrieves the header for a given slot and parent hash from the builder relay network.

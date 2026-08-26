@@ -3,7 +3,6 @@ package validator
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"google.golang.org/grpc/codes"
@@ -27,8 +26,9 @@ func (vs *Server) SubmitBuilderPreferences(ctx context.Context, req *ethpb.Submi
 	if vs.BlockBuilder == nil {
 		return nil, status.Error(codes.FailedPrecondition, "builder is not configured")
 	}
-	if failures := builder.SubmitPreferenceEntries(ctx, vs.BlockBuilder, req.Entries); len(failures) > 0 {
-		return nil, status.Errorf(codes.InvalidArgument, "%d of %d builder preference submissions failed", len(failures), len(req.Entries))
+	failures := vs.BlockBuilder.SubmitBuilderPreferences(ctx, req.Entries)
+	if len(failures) == len(req.Entries) {
+		return nil, status.Error(codes.Unavailable, "could not submit builder preferences to any builder")
 	}
 	return &emptypb.Empty{}, nil
 }

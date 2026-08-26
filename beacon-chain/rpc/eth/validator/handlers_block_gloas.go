@@ -27,7 +27,7 @@ import (
 )
 
 // ProduceBlockV4 requests a beacon node to produce a valid Gloas block.
-// When include_payload=true (default), the response includes the execution payload
+// When include_payload=true, the response includes the execution payload
 // envelope alongside the beacon block.
 // POST carries a BuilderConfig body naming external builders to request bids from.
 // Endpoint: GET|POST /eth/v4/validator/blocks/{slot}
@@ -53,14 +53,15 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 	rawRandaoReveal := r.URL.Query().Get("randao_reveal")
 	rawGraffiti := r.URL.Query().Get("graffiti")
 
-	includePayload := true
-	if raw := r.URL.Query().Get("include_payload"); raw != "" {
-		v, err := strconv.ParseBool(raw)
-		if err != nil {
-			httputil.HandleError(w, "invalid include_payload: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		includePayload = v
+	rawIncludePayload := r.URL.Query().Get("include_payload")
+	if rawIncludePayload == "" {
+		httputil.HandleError(w, "include_payload is required in query params", http.StatusBadRequest)
+		return
+	}
+	includePayload, err := strconv.ParseBool(rawIncludePayload)
+	if err != nil {
+		httputil.HandleError(w, "invalid include_payload: "+err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	var randaoReveal []byte

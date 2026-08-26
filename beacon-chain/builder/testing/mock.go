@@ -137,14 +137,29 @@ func (s *MockBuilderService) RegisterValidator(context.Context, []*ethpb.SignedV
 }
 
 // SubmitBuilderPreferences for mocking.
-func (s *MockBuilderService) SubmitBuilderPreferences(_ context.Context, _ [48]byte, url string, _ *ethpb.BuilderPreferencesRequest) error {
-	if err, ok := s.ErrSubmitBuilderPrefsByURL[url]; ok {
-		return err
+func (s *MockBuilderService) SubmitBuilderPreferences(_ context.Context, entries []*ethpb.BuilderPreferencesEntry) map[int]string {
+	failures := make(map[int]string)
+	for i, e := range entries {
+		if e == nil {
+			continue
+		}
+		if len(e.GetUrl()) == 0 {
+			failures[i] = "builder url is required"
+			continue
+		}
+		err := s.ErrSubmitBuilderPreferences
+		if urlErr, ok := s.ErrSubmitBuilderPrefsByURL[string(e.Url)]; ok {
+			err = urlErr
+		}
+		if err != nil {
+			failures[i] = "could not submit builder preferences: " + err.Error()
+			continue
+		}
+		s.mu.Lock()
+		s.SubmittedPreferences = append(s.SubmittedPreferences, string(e.Url))
+		s.mu.Unlock()
 	}
-	s.mu.Lock()
-	s.SubmittedPreferences = append(s.SubmittedPreferences, url)
-	s.mu.Unlock()
-	return s.ErrSubmitBuilderPreferences
+	return failures
 }
 
 // SubmitBlindedBlockPostFulu for mocking.

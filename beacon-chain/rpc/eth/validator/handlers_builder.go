@@ -4,12 +4,10 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"sort"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
@@ -49,14 +47,14 @@ func (s *Server) SubmitBuilderPreferences(w http.ResponseWriter, r *http.Request
 	}
 
 	var (
-		decoded   []indexedPreferenceEntry
+		entries   []*eth.BuilderPreferencesEntry
 		failures  []*server.IndexedError
 		decodeErr error
 	)
 	if httputil.IsRequestSsz(r) {
-		decoded, failures, decodeErr = decodeBuilderPreferencesEntriesSSZ(r.Body)
+		entries, failures, decodeErr = decodeBuilderPreferencesEntriesSSZ(r.Body)
 	} else {
-		decoded, failures, decodeErr = decodeBuilderPreferencesEntriesJSON(r.Body)
+		entries, failures, decodeErr = decodeBuilderPreferencesEntriesJSON(r.Body)
 	}
 	if decodeErr != nil {
 		if errors.Is(decodeErr, io.EOF) {
@@ -66,11 +64,11 @@ func (s *Server) SubmitBuilderPreferences(w http.ResponseWriter, r *http.Request
 		}
 		return
 	}
-	if len(decoded) == 0 && len(failures) == 0 {
+	if len(entries) == 0 {
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	}
-	if len(decoded) > 0 {
+	if hasDecodedEntry(entries) {
 		// Preconditions mean nothing was submitted, so they outrank per-entry reporting.
 		if s.SyncChecker.Syncing() {
 			httputil.HandleError(w, "Syncing to latest head, not ready to respond", http.StatusServiceUnavailable)
@@ -81,34 +79,39 @@ func (s *Server) SubmitBuilderPreferences(w http.ResponseWriter, r *http.Request
 			httputil.HandleError(w, "Builder is not configured", http.StatusInternalServerError)
 			return
 		}
-		entries := make([]*eth.BuilderPreferencesEntry, len(decoded))
-		for i, d := range decoded {
-			entries[i] = d.entry
-		}
-		for pos, msg := range builder.SubmitPreferenceEntries(ctx, s.BlockBuilder, entries) {
-			failures = append(failures, &server.IndexedError{Index: decoded[pos].index, Message: msg})
+		for pos, msg := range s.BlockBuilder.SubmitBuilderPreferences(ctx, entries) {
+			failures[pos] = &server.IndexedError{Index: pos, Message: msg}
 		}
 	}
 	// Well-formed entries were still submitted when others failed, per the spec's 400.
-	if len(failures) > 0 {
-		sort.Slice(failures, func(a, b int) bool { return failures[a].Index < failures[b].Index })
+	indexed := make([]*server.IndexedError, 0, len(failures))
+	for _, f := range failures {
+		if f != nil {
+			indexed = append(indexed, f)
+		}
+	}
+	if len(indexed) > 0 {
 		httputil.WriteError(w, &server.IndexedErrorContainer{
 			Code:     http.StatusBadRequest,
 			Message:  server.ErrIndexedValidationFail,
-			Failures: failures,
+			Failures: indexed,
 		})
 		return
 	}
 }
 
-// indexedPreferenceEntry pairs a decoded entry with its index in the request body.
-type indexedPreferenceEntry struct {
-	index int
-	entry *eth.BuilderPreferencesEntry
+func hasDecodedEntry(entries []*eth.BuilderPreferencesEntry) bool {
+	for _, e := range entries {
+		if e != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // decodeBuilderPreferencesEntriesJSON decodes a JSON array of BuilderPreferencesEntry.
-func decodeBuilderPreferencesEntriesJSON(r io.Reader) ([]indexedPreferenceEntry, []*server.IndexedError, error) {
+// Both returned slices are indexed by body position; a nil entry has its failure set.
+func decodeBuilderPreferencesEntriesJSON(r io.Reader) ([]*eth.BuilderPreferencesEntry, []*server.IndexedError, error) {
 	var data []*structs.BuilderPreferencesEntry
 	if err := json.NewDecoder(r).Decode(&data); err != nil {
 		return nil, nil, err
@@ -116,25 +119,26 @@ func decodeBuilderPreferencesEntriesJSON(r io.Reader) ([]indexedPreferenceEntry,
 	if len(data) > structs.MaxBuilderPreferencesList {
 		return nil, nil, errors.Errorf("more than %d entries", structs.MaxBuilderPreferencesList)
 	}
-	entries := make([]indexedPreferenceEntry, 0, len(data))
-	var failures []*server.IndexedError
+	entries := make([]*eth.BuilderPreferencesEntry, len(data))
+	failures := make([]*server.IndexedError, len(data))
 	for i, item := range data {
 		if item == nil {
-			failures = append(failures, &server.IndexedError{Index: i, Message: "Entry is empty"})
+			failures[i] = &server.IndexedError{Index: i, Message: "Entry is empty"}
 			continue
 		}
 		consensusItem, err := item.ToConsensus()
 		if err != nil {
-			failures = append(failures, &server.IndexedError{Index: i, Message: err.Error()})
+			failures[i] = &server.IndexedError{Index: i, Message: err.Error()}
 			continue
 		}
-		entries = append(entries, indexedPreferenceEntry{index: i, entry: consensusItem})
+		entries[i] = consensusItem
 	}
 	return entries, failures, nil
 }
 
 // decodeBuilderPreferencesEntriesSSZ decodes an SSZ List[BuilderPreferencesEntry].
-func decodeBuilderPreferencesEntriesSSZ(r io.Reader) ([]indexedPreferenceEntry, []*server.IndexedError, error) {
+// Both returned slices are indexed by body position; a nil entry has its failure set.
+func decodeBuilderPreferencesEntriesSSZ(r io.Reader) ([]*eth.BuilderPreferencesEntry, []*server.IndexedError, error) {
 	body, err := io.ReadAll(r)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not read request body")
@@ -146,15 +150,15 @@ func decodeBuilderPreferencesEntriesSSZ(r io.Reader) ([]indexedPreferenceEntry, 
 	if err != nil {
 		return nil, nil, err
 	}
-	entries := make([]indexedPreferenceEntry, 0, len(elements))
-	var failures []*server.IndexedError
+	entries := make([]*eth.BuilderPreferencesEntry, len(elements))
+	failures := make([]*server.IndexedError, len(elements))
 	for i, elem := range elements {
 		e := &eth.BuilderPreferencesEntry{}
 		if err := e.UnmarshalSSZ(elem); err != nil {
-			failures = append(failures, &server.IndexedError{Index: i, Message: "Could not decode SSZ message: " + err.Error()})
+			failures[i] = &server.IndexedError{Index: i, Message: "Could not decode SSZ message: " + err.Error()}
 			continue
 		}
-		entries = append(entries, indexedPreferenceEntry{index: i, entry: e})
+		entries[i] = e
 	}
 	return entries, failures, nil
 }

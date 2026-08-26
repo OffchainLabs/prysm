@@ -188,10 +188,11 @@ func BuilderPreferencesRequestFromConsensus(r *ethpb.BuilderPreferencesRequest) 
 
 // Bounds from the beacon-APIs Gloas builder schemas.
 const (
-	maxBuilderEntries         = 64
-	maxBuilderUrlLength       = 2048
-	maxBuilderPubkeys         = 64
-	maxRequestAuthDataLength  = 4096
+	maxBuilderEntries        = 64
+	maxBuilderUrlLength      = 2048
+	maxBuilderPubkeys        = 64
+	maxRequestAuthDataLength = 4096
+	// MAX_BUILDER_ENTRIES * (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH = 64 * 2 * 32.
 	MaxBuilderPreferencesList = 4096
 )
 

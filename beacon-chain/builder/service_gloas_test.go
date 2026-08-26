@@ -147,30 +147,19 @@ func TestClientFor_SeedsFlagClientAndCachesDials(t *testing.T) {
 	require.Equal(t, 1, dialed)
 }
 
-func TestSubmitBuilderPreferences_DialsPerURL(t *testing.T) {
-	fc := &fakeBuilderClient{url: "http://b"}
-	s := newMultiplexService(t, map[string]*fakeBuilderClient{"http://b": fc})
-
-	req := &eth.BuilderPreferencesRequest{
-		Preferences: &eth.BuilderPreferences{},
-		Auth:        &eth.SignedRequestAuth{Message: &eth.RequestAuth{Data: []byte("opaque-auth-data")}},
-	}
-	require.NoError(t, s.SubmitBuilderPreferences(t.Context(), [48]byte{}, "http://b", req))
-	require.Equal(t, 1, fc.prefCount)
-
-	err := s.SubmitBuilderPreferences(t.Context(), [48]byte{}, "", req)
-	require.ErrorContains(t, "missing builder url", err)
-}
-
-func TestSubmitPreferenceEntries(t *testing.T) {
+func TestSubmitBuilderPreferences(t *testing.T) {
 	prefEntry := func(url string) *eth.BuilderPreferencesEntry {
-		return &eth.BuilderPreferencesEntry{Url: []byte(url), MaxExecutionPayment: 5}
+		return &eth.BuilderPreferencesEntry{
+			Url:                 []byte(url),
+			MaxExecutionPayment: 5,
+			Auth:                &eth.SignedRequestAuth{Message: &eth.RequestAuth{Data: []byte("opaque-auth-data")}},
+		}
 	}
 
 	t.Run("failures are keyed by entry position", func(t *testing.T) {
 		fc := &fakeBuilderClient{url: "http://ok"}
 		s := newMultiplexService(t, map[string]*fakeBuilderClient{"http://ok": fc})
-		failures := SubmitPreferenceEntries(t.Context(), s, []*eth.BuilderPreferencesEntry{
+		failures := s.SubmitBuilderPreferences(t.Context(), []*eth.BuilderPreferencesEntry{
 			prefEntry(""), prefEntry("http://ok"), prefEntry("http://nodial"),
 		})
 		require.Equal(t, 2, len(failures))
@@ -179,10 +168,18 @@ func TestSubmitPreferenceEntries(t *testing.T) {
 		require.Equal(t, 1, fc.prefCount)
 	})
 
+	t.Run("nil entries are skipped", func(t *testing.T) {
+		fc := &fakeBuilderClient{url: "http://ok"}
+		s := newMultiplexService(t, map[string]*fakeBuilderClient{"http://ok": fc})
+		failures := s.SubmitBuilderPreferences(t.Context(), []*eth.BuilderPreferencesEntry{nil, prefEntry("http://ok")})
+		require.Equal(t, 0, len(failures))
+		require.Equal(t, 1, fc.prefCount)
+	})
+
 	t.Run("no failures on success", func(t *testing.T) {
 		fc := &fakeBuilderClient{url: "http://ok"}
 		s := newMultiplexService(t, map[string]*fakeBuilderClient{"http://ok": fc})
-		failures := SubmitPreferenceEntries(t.Context(), s, []*eth.BuilderPreferencesEntry{prefEntry("http://ok")})
+		failures := s.SubmitBuilderPreferences(t.Context(), []*eth.BuilderPreferencesEntry{prefEntry("http://ok")})
 		require.Equal(t, 0, len(failures))
 	})
 }
