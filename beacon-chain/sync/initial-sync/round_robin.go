@@ -579,7 +579,7 @@ func (s *Service) updatePeerScorerStats(data *blocksQueueFetchedData, count uint
 		// If the error is punishable, exit here so that we don't give them credit for providing bad blocks.
 		return
 	}
-	s.cfg.P2P.Peers().Scorers().BlockProviderScorer().IncrementProcessedBlocks(data.blocksFrom, count)
+	s.cfg.P2P.BlockProviderSelector().IncrementProcessedBlocks(data.blocksFrom, count)
 }
 
 // isProcessedBlock checks DB and local cache for presence of a given block, to avoid duplicates.

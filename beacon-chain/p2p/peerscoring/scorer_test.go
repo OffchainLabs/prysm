@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,6 +24,7 @@ func testParams() *scoringParams {
 		decayInterval:                time.Hour,
 		badResponseGreyListThreshold: 4,
 		gossipGreyListThreshold:      -16000,
+		gossipPositiveScoreCap:       32,
 		badResponseWeight:            0.5,
 		peerStatusWeight:             0.25,
 		gossipWeight:                 0.25,
@@ -38,6 +40,7 @@ func testInfo(pi *PeerScoringInfo, ourHead, highestHead primitives.Slot) *scorin
 func newTestScorer() *Scorer {
 	return NewScorer(
 		WithBadResponseGreyListThreshold(4),
+		WithGossipPositiveScoreCap(32),
 		WithBadResponseWeight(0.5),
 		WithPeerStatusWeight(0.25),
 		WithGossipWeight(0.25),
@@ -73,6 +76,7 @@ func TestNewScorer(t *testing.T) {
 		badResponseGreyListThreshold: defaultBadResponseGreyListThreshold,
 		badResponseHistorySize:       defaultBadResponseHistorySize,
 		gossipGreyListThreshold:      defaultGossipGreyListThreshold,
+		gossipPositiveScoreCap:       defaultGossipPositiveScoreCap,
 		badResponseWeight:            defaultBadResponseWeight,
 		peerStatusWeight:             defaultPeerStatusWeight,
 		gossipWeight:                 defaultGossipWeight,
@@ -98,6 +102,7 @@ func TestNewScorerOptions(t *testing.T) {
 		mutate func(p *scoringParams)
 	}{
 		{"gossip greylist threshold", WithGossipGreyListThreshold(-42), func(p *scoringParams) { p.gossipGreyListThreshold = -42 }},
+		{"gossip positive score cap", WithGossipPositiveScoreCap(64), func(p *scoringParams) { p.gossipPositiveScoreCap = 64 }},
 		{"bad response greylist threshold", WithBadResponseGreyListThreshold(9), func(p *scoringParams) { p.badResponseGreyListThreshold = 9 }},
 		{"bad response history size", WithBadResponseHistorySize(7), func(p *scoringParams) { p.badResponseHistorySize = 7 }},
 		{"decay interval", WithDecayInterval(time.Minute), func(p *scoringParams) { p.decayInterval = time.Minute }},
@@ -307,6 +312,54 @@ func TestSetGossipScore(t *testing.T) {
 	require.Equal(t, 0, len(topics))
 }
 
+func TestReconcileGossipScores(t *testing.T) {
+	s := newTestScorer()
+	greyPid := peer.ID("grey-peer")
+	strikePid := peer.ID("strike-peer")
+	statusPid := peer.ID("status-peer")
+
+	snapshots := map[string]*pb.TopicScoreSnapshot{"/topic": {FirstMessageDeliveries: 2}}
+	s.ReconcileGossipScores(map[peer.ID]GossipScoreUpdate{
+		testPid:   {Score: -12.5, BehaviourPenalty: 1.5, TopicScores: snapshots},
+		greyPid:   {Score: -16000.5},
+		strikePid: {Score: -3},
+		statusPid: {Score: -4},
+	})
+
+	gScore, bPenalty, topics := s.GossipData(testPid)
+	require.Equal(t, -12.5, gScore)
+	require.Equal(t, 1.5, bPenalty)
+	require.Equal(t, float32(2), topics["/topic"].FirstMessageDeliveries)
+	require.ErrorIs(t, s.IsPeerGreyListed(greyPid), ErrPeerGreyListed)
+
+	s.RecordBadResponse(strikePid, SourceRateLimit, "spam")
+	s.SetPeerStatus(statusPid, &pb.StatusV2{HeadSlot: 7}, nil)
+
+	// The next report carries none of the four peers: libp2p purged them.
+	s.ReconcileGossipScores(map[peer.ID]GossipScoreUpdate{"other-peer": {Score: 1}})
+
+	// The gossip grey-listing lifts and gossip-only entries are dropped entirely.
+	require.NoError(t, s.IsPeerGreyListed(greyPid))
+	_, tracked := s.info[greyPid]
+	require.Equal(t, false, tracked)
+	_, tracked = s.info[testPid]
+	require.Equal(t, false, tracked)
+
+	// Strikes and statuses are app-layer state: retained, with only the gossip fields cleared.
+	require.Equal(t, 1, s.BadResponseCount(strikePid))
+	gScore, bPenalty, topics = s.GossipData(strikePid)
+	require.Equal(t, float64(0), gScore)
+	require.Equal(t, float64(0), bPenalty)
+	require.Equal(t, 0, len(topics))
+	_, err := s.PeerStatus(statusPid)
+	require.NoError(t, err)
+	gScore, _, _ = s.GossipData(statusPid)
+	require.Equal(t, float64(0), gScore)
+
+	gScore, _, _ = s.GossipData("other-peer")
+	require.Equal(t, float64(1), gScore)
+}
+
 func TestSetHeadSlot(t *testing.T) {
 	s := NewScorer()
 	s.SetHeadSlot(primitives.Slot(42))
@@ -323,18 +376,18 @@ func TestScorerScore(t *testing.T) {
 		{"known peer with no signals", func(s *Scorer) { s.SetGossipScore(testPid, 0, 0, nil) }, 0},
 		{
 			"strikes below threshold",
-			func(s *Scorer) { recordStrikes(s, 2) }, // -(2/4*10) * 0.5
-			-2.5,
+			func(s *Scorer) { recordStrikes(s, 2) }, // -(2/4) * 0.5
+			-0.25,
 		},
 		{
 			"all aspects blended",
 			func(s *Scorer) {
-				recordStrikes(s, 2)                                            // -5 * 0.5   = -2.5
+				recordStrikes(s, 2)                                            // -(2/4) * 0.5   = -0.25
 				s.SetPeerStatus("best-peer", &pb.StatusV2{HeadSlot: 100}, nil) // highest known head
-				s.SetPeerStatus(testPid, &pb.StatusV2{HeadSlot: 50}, nil)      // 0.5 * 0.25 = 0.125
-				s.SetGossipScore(testPid, 8, 0, nil)                           // 8 * 0.25   = 2
+				s.SetPeerStatus(testPid, &pb.StatusV2{HeadSlot: 50}, nil)      // 0.5 * 0.25     = 0.125
+				s.SetGossipScore(testPid, 8, 0, nil)                           // (8/32) * 0.25  = 0.0625
 			},
-			-0.375,
+			-0.0625,
 		},
 		{
 			"greylisted by strikes scores negative max",
@@ -362,6 +415,19 @@ func TestScorerScore(t *testing.T) {
 			require.Equal(t, tc.want, s.Score(testPid))
 		})
 	}
+}
+
+func TestScorerScoreBounds(t *testing.T) {
+	// Extreme non-grey-listed inputs stay within the weight-normalized [-1, 1] band.
+	s := newTestScorer()
+	recordStrikes(s, 3)                       // worst sub-threshold strikes: -(3/4) * 0.5 = -0.375
+	s.SetGossipScore(testPid, -16000, 0, nil) // worst non-grey-listed gossip: -1 * 0.25  = -0.25
+	require.Equal(t, -0.625, s.Score(testPid))
+
+	s = newTestScorer()
+	s.SetPeerStatus(testPid, &pb.StatusV2{HeadSlot: 100}, nil) // best status: 1 * 0.25          = 0.25
+	s.SetGossipScore(testPid, 1e9, 0, nil)                     // positive gossip clamps: 1*0.25 = 0.25
+	require.Equal(t, 0.5, s.Score(testPid))
 }
 
 func TestScorerIsPeerGreyListed(t *testing.T) {
@@ -429,6 +495,59 @@ func TestGreyListReasons(t *testing.T) {
 		require.ErrorIs(t, err, ErrPeerGreyListed)
 		require.ErrorContains(t, "gossip score -16000.5 below threshold -16000", err)
 	})
+}
+
+// TestScorerConcurrentAccess hammers every scorer method from concurrent goroutines with the
+// decay loop churning at high frequency. Run with -race.
+func TestScorerConcurrentAccess(t *testing.T) {
+	s := NewScorer(WithDecayInterval(time.Millisecond), WithBadResponseHistorySize(3))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go s.Start(ctx)
+
+	pids := make([]peer.ID, 10)
+	for i := range pids {
+		pids[i] = peer.ID(fmt.Sprintf("peer-%d", i))
+	}
+
+	var wg sync.WaitGroup
+	for g := 0; g < 8; g++ {
+		wg.Add(1)
+		go func(g int) {
+			defer wg.Done()
+			for i := 0; i < 200; i++ {
+				pid := pids[(g+i)%len(pids)]
+				switch i % 10 {
+				case 0:
+					s.RecordBadResponse(pid, SourceGossip, "concurrent")
+				case 1:
+					s.SetPeerStatus(pid, &pb.StatusV2{HeadSlot: primitives.Slot(i)}, nil)
+				case 2:
+					s.SetGossipScore(pid, float64(i), 0, nil)
+					s.ReconcileGossipScores(map[peer.ID]GossipScoreUpdate{pid: {Score: float64(i)}})
+				case 3:
+					_ = s.Score(pid)
+				case 4:
+					_ = s.IsPeerGreyListed(pid)
+				case 5:
+					_ = s.GreyListedPeers()
+				case 6:
+					_ = s.BadResponseCount(pid)
+					_, _, _ = s.GossipData(pid)
+				case 7:
+					_ = s.HighestHeadSlot()
+					s.SetHeadSlot(primitives.Slot(i))
+				case 8:
+					_, _ = s.PeerStatus(pid)
+					_ = s.ValidationError(pid)
+					_ = s.ChainStateLastUpdated(pid)
+				case 9:
+					s.RemovePeers([]peer.ID{pid})
+				}
+			}
+		}(g)
+	}
+	wg.Wait()
 }
 
 func TestDecayRestoresGreyListedPeer(t *testing.T) {

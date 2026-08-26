@@ -2,14 +2,10 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = [
-        "block_providers.go",
-        "service.go",
-    ],
-    importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers",
-    visibility = ["//beacon-chain:__subpackages__"],
+    srcs = ["selector.go"],
+    importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/blockprovider",
+    visibility = ["//visibility:public"],
     deps = [
-        "//beacon-chain/p2p/peers/peerdata:go_default_library",
         "//cmd/beacon-chain/flags:go_default_library",
         "//crypto/rand:go_default_library",
         "@com_github_libp2p_go_libp2p//core/peer:go_default_library",
@@ -19,16 +15,15 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
-        "block_providers_test.go",
-        "scorers_test.go",
+        "selector_internal_test.go",
+        "selector_test.go",
     ],
+    embed = [":go_default_library"],
     deps = [
-        ":go_default_library",
-        "//beacon-chain/p2p/peers:go_default_library",
         "//cmd/beacon-chain/flags:go_default_library",
-        "//config/features:go_default_library",
         "//crypto/rand:go_default_library",
         "//testing/assert:go_default_library",
+        "//testing/require:go_default_library",
         "//time:go_default_library",
         "@com_github_libp2p_go_libp2p//core/peer:go_default_library",
         "@com_github_sirupsen_logrus//:go_default_library",

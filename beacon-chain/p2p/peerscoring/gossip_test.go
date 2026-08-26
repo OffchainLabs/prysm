@@ -16,10 +16,11 @@ func TestGossipScorer(t *testing.T) {
 		wantGreyListed bool
 	}{
 		{"no gossip data", 0, 0, false},
-		{"positive score", 8, 2, false}, // 8 * 0.25
-		{"negative above threshold", -100, -25, false},
-		{"at threshold", -16000, -4000, false}, // greylisting is strictly below
-		{"below threshold", -16000.5, -4000.125, true},
+		{"positive score", 8, 0.0625, false},                  // (8/32) * 0.25
+		{"positive above cap", 64, 0.25, false},               // clamps to 1 * 0.25
+		{"negative above threshold", -100, -0.0015625, false}, // (-100/16000) * 0.25
+		{"at threshold", -16000, -0.25, false},                // -1 * 0.25; greylisting is strictly below
+		{"below threshold", -16000.5, -0.25, true},            // clamps to -1 * 0.25
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

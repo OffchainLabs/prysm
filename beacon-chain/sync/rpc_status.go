@@ -73,8 +73,13 @@ func (s *Service) maintainPeerStatuses() {
 		// Wait for all status checks to finish and then proceed onwards to
 		// pruning excess peers.
 		wg.Wait()
-		peerIds := s.cfg.p2p.Peers().PeersToPrune()
-		peerIds = s.filterNeededPeers(peerIds)
+		candidates, numToPrune := s.cfg.p2p.Peers().PruneCandidates()
+		// Drop candidates needed for subnet coverage, then disconnect the worst-scored
+		// numToPrune of the remainder.
+		peerIds := s.filterNeededPeers(candidates)
+		if uint64(len(peerIds)) > numToPrune {
+			peerIds = peerIds[:numToPrune]
+		}
 		for _, id := range peerIds {
 			if err := s.sendGoodByeAndDisconnect(s.ctx, p2ptypes.GoodbyeCodeTooManyPeers, id); err != nil {
 				log.WithField("peer", id).WithError(err).Debug("Could not disconnect with peer")

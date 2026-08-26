@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/blockprovider"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -86,7 +86,7 @@ func (f *blocksFetcher) filterPeers(ctx context.Context, peers []peer.ID, peersP
 	// scores).
 	// Scores produced are used as weights, so peers are ordered probabilistically i.e. peer with
 	// a higher score has higher chance to end up higher in the list.
-	scorer := f.p2p.Peers().Scorers().BlockProviderScorer()
+	scorer := f.p2p.BlockProviderSelector()
 	peers = scorer.WeightSorted(f.rand, peers, func(peerID peer.ID, blockProviderScore float64) float64 {
 		remaining, capacity := float64(f.rateLimiter.Remaining(peerID.String())), float64(f.rateLimiter.Capacity())
 		// When capacity is close to exhaustion, allow less performant peer to take a chance.
@@ -96,7 +96,7 @@ func (f *blocksFetcher) filterPeers(ctx context.Context, peers []peer.ID, peersP
 		}
 		capScore := remaining / capacity
 		overallScore := blockProviderScore*(1.0-f.capacityWeight) + capScore*f.capacityWeight
-		return math.Round(overallScore*scorers.ScoreRoundingFactor) / scorers.ScoreRoundingFactor
+		return math.Round(overallScore*blockprovider.ScoreRoundingFactor) / blockprovider.ScoreRoundingFactor
 	})
 
 	return trimPeers(peers, peersPercentage)

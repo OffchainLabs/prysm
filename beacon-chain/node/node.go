@@ -1006,6 +1006,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		Broadcaster:                      p2pService,
 		PeersFetcher:                     p2pService,
 		PeerScoringFetcher:               p2pService,
+		BlockProviderFetcher:             p2pService,
 		PeerManager:                      p2pService,
 		MetadataProvider:                 p2pService,
 		CustodyManager:                   p2pService,

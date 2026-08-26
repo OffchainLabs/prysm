@@ -2,6 +2,7 @@ package peerscoring
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -9,20 +10,18 @@ import (
 
 var _ GreyListerAndScorer = badResponsesScorer{}
 
-// badResponsesPenaltyFactor scales the per-strike penalty relative to the greylist threshold.
-const badResponsesPenaltyFactor = 10
-
 // badResponsesScorer penalizes recorded bad responses and greylists a peer once its
 // un-decayed strike count reaches the configured threshold.
 type badResponsesScorer struct{}
 
-// Score returns the weighted bad-responses penalty, proportional to the standing strike count.
+// Score returns the weighted bad-responses penalty: the standing strike count normalized
+// against the greylist threshold to [-1, 0].
 func (badResponsesScorer) Score(_ peer.ID, si *scoringInfo) float64 {
 	strikes := si.peerInfo.badResponseCount
 	if strikes == 0 {
 		return 0
 	}
-	score := -badResponsesPenaltyFactor * float64(strikes) / float64(si.params.badResponseGreyListThreshold)
+	score := -math.Min(1, float64(strikes)/float64(si.params.badResponseGreyListThreshold))
 	return score * si.params.badResponseWeight
 }
 

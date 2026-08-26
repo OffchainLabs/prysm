@@ -32,12 +32,10 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
-	pmath "github.com/OffchainLabs/prysm/v7/math"
 	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/metadata"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
@@ -90,12 +88,13 @@ type (
 	// Status is the structure holding the peer status information.
 	Status struct {
 		ctx                   context.Context
-		scorers               *scorers.Service
 		scoring               *peerscoring.Scorer
 		store                 *peerdata.Store
 		ipTracker             map[string]uint64
 		rand                  *rand.Rand
 		ipColocationWhitelist []*net.IPNet
+		onTrustedPeerAdded    func(peer.ID)
+		onTrustedPeerRemoved  func(peer.ID)
 	}
 
 	// StatusConfig represents peer status service params.
@@ -104,10 +103,12 @@ type (
 		PeerLimit int
 		// Scoring judges peers; a default scorer is created when nil.
 		Scoring *peerscoring.Scorer
-		// BlockProviderParams holds block provider scorer configuration params.
-		BlockProviderParams *scorers.BlockProviderScorerConfig
 		// IPColocationWhitelist contains CIDR ranges that are exempt from IP colocation limits.
 		IPColocationWhitelist []*net.IPNet
+		// OnTrustedPeerAdded, if set, is called for every peer added to the trusted set.
+		OnTrustedPeerAdded func(peer.ID)
+		// OnTrustedPeerRemoved, if set, is called for every peer removed from the trusted set.
+		OnTrustedPeerRemoved func(peer.ID)
 	}
 )
 
@@ -125,10 +126,11 @@ func NewStatus(ctx context.Context, config *StatusConfig) *Status {
 	return &Status{
 		ctx:                   ctx,
 		store:                 store,
-		scorers:               scorers.NewService(ctx, store, config.BlockProviderParams),
 		scoring:               scoring,
 		ipTracker:             map[string]uint64{},
 		ipColocationWhitelist: config.IPColocationWhitelist,
+		onTrustedPeerAdded:    config.OnTrustedPeerAdded,
+		onTrustedPeerRemoved:  config.OnTrustedPeerRemoved,
 		// Random generator used to calculate dial backoff period.
 		// It is ok to use deterministic generator, no need for true entropy.
 		rand: rand.NewDeterministicGenerator(),
@@ -142,11 +144,6 @@ func (p *Status) UpdateENR(record *enr.Record, pid peer.ID) {
 	if peerData, ok := p.store.PeerData(pid); ok {
 		peerData.Enr = record
 	}
-}
-
-// Scorers exposes peer scoring management service.
-func (p *Status) Scorers() *scorers.Service {
-	return p.scorers
 }
 
 // MaxPeerLimit returns the max peer limit stored in the current peer store.
@@ -563,14 +560,15 @@ func (p *Status) All() []peer.ID {
 	return pids
 }
 
-// Prune clears out and removes outdated and disconnected peers.
-func (p *Status) Prune() {
+// Prune clears out and removes outdated and disconnected peers,
+// returning the IDs of the pruned peers.
+func (p *Status) Prune() []peer.ID {
 	p.store.Lock()
 	defer p.store.Unlock()
 
 	// Exit early if there is nothing to prune.
 	if len(p.store.Peers()) <= p.store.Config().MaxPeers {
-		return
+		return nil
 	}
 	// Grey-listed peers are never pruned: the store is the node's only memory of who misbehaved.
 	notGreyListedPeer := func(pid peer.ID) bool {
@@ -615,6 +613,7 @@ func (p *Status) Prune() {
 	}
 	p.scoring.RemovePeers(prunedPIDs)
 	p.tallyIPTracker()
+	return prunedPIDs
 }
 
 // BestFinalized groups all peers by their last known finalized epoch
@@ -723,19 +722,30 @@ func (p *Status) BestNonFinalized(minPeers int, ourHeadEpoch primitives.Epoch) (
 	return targetEpoch, potentialPIDs
 }
 
-// PeersToPrune selects the most suitable inbound peers
-// to disconnect the host peer from, favouring peers with
-// the lowest peer score (grey-listed peers sort first).
-func (p *Status) PeersToPrune() []peer.ID {
+// PruneCandidates returns every connected, inbound, non-trusted peer ordered by ascending
+// peer score (grey-listed peers sort first), along with how many of them must be
+// disconnected to get back under the connection and inbound limits. Callers may drop
+// protected candidates (e.g. peers needed for subnet coverage) before disconnecting the
+// first numToPrune of the remainder.
+func (p *Status) PruneCandidates() ([]peer.ID, uint64) {
 	connLimit := p.ConnectedPeerLimit()
 	inBoundLimit := uint64(p.InboundLimit())
-	activePeers := p.Active()
+	numActivePeers := uint64(len(p.Active()))
 	numInboundPeers := uint64(len(p.InboundConnected()))
-	// Exit early if we are still below our max
-	// limit.
-	if uint64(len(activePeers)) <= connLimit {
-		return []peer.ID{}
+
+	// Prune the largest amount between excess active peers and excess inbound peers.
+	numToPrune := uint64(0)
+	if numActivePeers > connLimit {
+		numToPrune = numActivePeers - connLimit
 	}
+	if numInboundPeers > inBoundLimit && numInboundPeers-inBoundLimit > numToPrune {
+		numToPrune = numInboundPeers - inBoundLimit
+	}
+	// Exit early if we are within both limits.
+	if numToPrune == 0 {
+		return nil, 0
+	}
+
 	p.store.Lock()
 	defer p.store.Unlock()
 
@@ -743,12 +753,12 @@ func (p *Status) PeersToPrune() []peer.ID {
 		pid   peer.ID
 		score float64
 	}
-	peersToPrune := make([]*peerResp, 0)
-	// Select connected and inbound peers to prune.
+	candidates := make([]*peerResp, 0)
+	// Select connected and inbound peers as prune candidates.
 	for pid, peerData := range p.store.Peers() {
 		if peerData.ConnState == Connected &&
 			peerData.Direction == network.DirInbound && !p.store.IsTrustedPeer(pid) {
-			peersToPrune = append(peersToPrune, &peerResp{
+			candidates = append(candidates, &peerResp{
 				pid:   pid,
 				score: p.scoring.Score(pid),
 			})
@@ -757,37 +767,15 @@ func (p *Status) PeersToPrune() []peer.ID {
 
 	// Sort in ascending order to favour pruning peers with a
 	// lower score.
-	sort.Slice(peersToPrune, func(i, j int) bool {
-		return peersToPrune[i].score < peersToPrune[j].score
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].score < candidates[j].score
 	})
 
-	// Determine amount of peers to prune using our
-	// max connection limit.
-	amountToPrune, err := pmath.Sub64(uint64(len(activePeers)), connLimit)
-	if err != nil {
-		// This should never happen.
-		log.WithError(err).Error("Failed to determine amount of peers to prune")
-		return []peer.ID{}
-	}
-
-	// Also check for inbound peers above our limit.
-	excessInbound := uint64(0)
-	if numInboundPeers > inBoundLimit {
-		excessInbound = numInboundPeers - inBoundLimit
-	}
-	// Prune the largest amount between excess peers and
-	// excess inbound peers.
-	if excessInbound > amountToPrune {
-		amountToPrune = excessInbound
-	}
-	if amountToPrune < uint64(len(peersToPrune)) {
-		peersToPrune = peersToPrune[:amountToPrune]
-	}
-	ids := make([]peer.ID, 0, len(peersToPrune))
-	for _, pr := range peersToPrune {
+	ids := make([]peer.ID, 0, len(candidates))
+	for _, pr := range candidates {
 		ids = append(ids, pr.pid)
 	}
-	return ids
+	return ids, numToPrune
 }
 
 // ConnectedPeerLimit returns the peer limit of
@@ -804,8 +792,15 @@ func (p *Status) ConnectedPeerLimit() uint64 {
 // our peerstore.
 func (p *Status) SetTrustedPeers(peers []peer.ID) {
 	p.store.Lock()
-	defer p.store.Unlock()
 	p.store.SetTrustedPeers(peers)
+	p.store.Unlock()
+
+	// Notify outside the store lock: the callback may take other locks (e.g. the connmgr's).
+	if p.onTrustedPeerAdded != nil {
+		for _, pid := range peers {
+			p.onTrustedPeerAdded(pid)
+		}
+	}
 }
 
 // GetTrustedPeers returns a list of all trusted peers' ids
@@ -818,8 +813,15 @@ func (p *Status) GetTrustedPeers() []peer.ID {
 // DeleteTrustedPeers removes peers from trusted peer set
 func (p *Status) DeleteTrustedPeers(peers []peer.ID) {
 	p.store.Lock()
-	defer p.store.Unlock()
 	p.store.DeleteTrustedPeers(peers)
+	p.store.Unlock()
+
+	// Notify outside the store lock: the callback may take other locks (e.g. the connmgr's).
+	if p.onTrustedPeerRemoved != nil {
+		for _, pid := range peers {
+			p.onTrustedPeerRemoved(pid)
+		}
+	}
 }
 
 // IsTrustedPeers returns if given peer is a Trusted peer

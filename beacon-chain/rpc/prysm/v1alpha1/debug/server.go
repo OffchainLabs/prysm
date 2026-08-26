@@ -24,14 +24,15 @@ import (
 // providing RPC endpoints for runtime debugging of a node, this server is
 // gated behind the feature flag --enable-debug-rpc-endpoints.
 type Server struct {
-	BeaconDB           db.NoHeadAccessDatabase
-	GenesisTimeFetcher blockchain.TimeFetcher
-	StateGen           *stategen.State
-	HeadFetcher        blockchain.HeadFetcher
-	PeerManager        p2p.PeerManager
-	PeersFetcher       p2p.PeersProvider
-	PeerScoringFetcher p2p.PeerScoringProvider
-	ReplayerBuilder    stategen.ReplayerBuilder
+	BeaconDB             db.NoHeadAccessDatabase
+	GenesisTimeFetcher   blockchain.TimeFetcher
+	StateGen             *stategen.State
+	HeadFetcher          blockchain.HeadFetcher
+	PeerManager          p2p.PeerManager
+	PeersFetcher         p2p.PeersProvider
+	PeerScoringFetcher   p2p.PeerScoringProvider
+	BlockProviderFetcher p2p.BlockProviderSelectorProvider
+	ReplayerBuilder      stategen.ReplayerBuilder
 }
 
 // SetLoggingLevel of a beacon node according to a request type,

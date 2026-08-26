@@ -115,9 +115,13 @@ const (
 	// defaultGossipGreyListThreshold mirrors the PeerScoreThresholds.GraylistThreshold prysm hands
 	// to gossipsub (gossip_scoring_params.go); pubsub exports no constant for it, so it is restated here.
 	defaultGossipGreyListThreshold = -16000
-	defaultBadResponseWeight       = 0.3
-	defaultPeerStatusWeight        = 0.3
-	defaultGossipWeight            = 0.4
+	// defaultGossipPositiveScoreCap mirrors the PeerScoreParams.TopicScoreCap prysm hands to
+	// gossipsub (gossip_scoring_params.go) — the highest positive gossip score a peer can reach;
+	// pubsub exports no constant for it, so it is restated here.
+	defaultGossipPositiveScoreCap = 32.72
+	defaultBadResponseWeight      = 0.3
+	defaultPeerStatusWeight       = 0.3
+	defaultGossipWeight           = 0.4
 	// defaultBadResponseHistorySize caps how many recent strikes are retained per peer.
 	defaultBadResponseHistorySize = 25
 
@@ -134,6 +138,14 @@ type Option func(*Scorer)
 func WithGossipGreyListThreshold(threshold int) Option {
 	return func(s *Scorer) {
 		s.params.gossipGreyListThreshold = threshold
+	}
+}
+
+// WithGossipPositiveScoreCap sets the positive gossip score against which the gossip
+// contribution is normalized.
+func WithGossipPositiveScoreCap(scoreCap float64) Option {
+	return func(s *Scorer) {
+		s.params.gossipPositiveScoreCap = scoreCap
 	}
 }
 
@@ -184,6 +196,7 @@ type scoringParams struct {
 	badResponseGreyListThreshold int
 	badResponseHistorySize       int
 	gossipGreyListThreshold      int
+	gossipPositiveScoreCap       float64
 	badResponseWeight            float64
 	peerStatusWeight             float64
 	gossipWeight                 float64
@@ -213,6 +226,7 @@ func NewScorer(opts ...Option) *Scorer {
 			badResponseGreyListThreshold: defaultBadResponseGreyListThreshold,
 			badResponseHistorySize:       defaultBadResponseHistorySize,
 			gossipGreyListThreshold:      defaultGossipGreyListThreshold,
+			gossipPositiveScoreCap:       defaultGossipPositiveScoreCap,
 			badResponseWeight:            defaultBadResponseWeight,
 			peerStatusWeight:             defaultPeerStatusWeight,
 			gossipWeight:                 defaultGossipWeight,
@@ -328,6 +342,40 @@ func (s *Scorer) SetGossipScore(pid peer.ID, gScore, bPenalty float64, topicScor
 	pi.gossipScore = gScore
 	pi.behaviourPenalty = bPenalty
 	pi.topicScores = topicScores
+}
+
+// GossipScoreUpdate carries one peer's snapshot from the libp2p score inspector.
+type GossipScoreUpdate struct {
+	Score            float64
+	BehaviourPenalty float64
+	TopicScores      map[string]*pb.TopicScoreSnapshot
+}
+
+// ReconcileGossipScores makes the gossip mirror match a full inspector report: reported peers
+// are updated; peers absent from it were purged by libp2p (its retention expired), so their
+// gossip state is cleared — lifting any gossip grey-listing — and entries left with no other
+// scoring state are dropped.
+func (s *Scorer) ReconcileGossipScores(updates map[peer.ID]GossipScoreUpdate) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for pid, u := range updates {
+		pi := s.getPeerScoringInfo(pid)
+		pi.gossipScore = u.Score
+		pi.behaviourPenalty = u.BehaviourPenalty
+		pi.topicScores = u.TopicScores
+	}
+	for pid, pi := range s.info {
+		if _, ok := updates[pid]; ok {
+			continue
+		}
+		pi.gossipScore = 0
+		pi.behaviourPenalty = 0
+		pi.topicScores = nil
+		if pi.badResponseCount == 0 && len(pi.badResponses) == 0 && pi.rpcStatus == nil {
+			delete(s.info, pid)
+		}
+	}
 }
 
 // GossipData returns the mirrored gossip score, behaviour penalty and per-topic snapshots.

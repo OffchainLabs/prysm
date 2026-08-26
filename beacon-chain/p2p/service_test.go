@@ -57,6 +57,20 @@ func TestService_Stop_DontPanicIfDv5ListenerIsNotInited(t *testing.T) {
 	assert.NoError(t, s.Stop())
 }
 
+func TestService_TrustedPeersProtectedFromConnManager(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	s, err := NewService(t.Context(), &Config{StateNotifier: &mock.MockStateNotifier{}, DB: testDB.SetupDB(t)})
+	require.NoError(t, err)
+	defer func() { assert.NoError(t, s.Stop()) }()
+	pid := peer.ID("trusted-test-peer")
+
+	s.peers.SetTrustedPeers([]peer.ID{pid})
+	assert.Equal(t, true, s.host.ConnManager().IsProtected(pid, trustedPeerConnTag))
+
+	s.peers.DeleteTrustedPeers([]peer.ID{pid})
+	assert.Equal(t, false, s.host.ConnManager().IsProtected(pid, trustedPeerConnTag))
+}
+
 func TestService_Start_OnlyStartsOnce(t *testing.T) {
 	hook := logTest.NewGlobal()
 

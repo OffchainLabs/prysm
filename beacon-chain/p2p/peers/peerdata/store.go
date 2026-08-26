@@ -54,9 +54,6 @@ type PeerData struct {
 	NextValidTime time.Time
 	// Chain related data.
 	MetaData metadata.Metadata
-	// Scorers internal data.
-	ProcessedBlocks      uint64
-	BlockProviderUpdated time.Time
 }
 
 // NewStore creates new peer data store.

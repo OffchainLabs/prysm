@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/async"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/blockprovider"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
@@ -48,6 +49,9 @@ const (
 
 	// maxBadResponses is the maximum number of bad responses from a peer before we stop talking to it.
 	maxBadResponses = 5
+
+	// trustedPeerConnTag protects trusted peers' connections from connection-manager trimming.
+	trustedPeerConnTag = "trusted-peer"
 )
 
 var (
@@ -74,6 +78,8 @@ type Service struct {
 	cfg                      *Config
 	peers                    *peers.Status
 	peerScorer               *peerscoring.Scorer
+	blockProviderSelector    *blockprovider.Selector
+	gossipRejections         *peerscoring.GossipRejectionsStore
 	addrFilter               *multiaddr.Filters
 	ipLimiter                *leakybucket.Collector
 	privKey                  *ecdsa.PrivateKey
@@ -196,10 +202,27 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 	)
 	go s.peerScorer.Start(ctx)
 
+	s.blockProviderSelector = blockprovider.NewSelector(ctx, nil /* use default params */)
+
+	s.gossipRejections = peerscoring.NewGossipRejectionsStore()
+
 	s.peers = peers.NewStatus(ctx, &peers.StatusConfig{
 		PeerLimit:             int(s.cfg.MaxPeers),
 		IPColocationWhitelist: s.cfg.IPColocationWhitelist,
 		Scoring:               s.peerScorer,
+		// Protect trusted peers from the libp2p connection manager, whose watermark
+		// trimming (a backstop above our own limits) would otherwise close their
+		// connections indiscriminately.
+		OnTrustedPeerAdded: func(pid peer.ID) {
+			if s.host != nil {
+				s.host.ConnManager().Protect(pid, trustedPeerConnTag)
+			}
+		},
+		OnTrustedPeerRemoved: func(pid peer.ID) {
+			if s.host != nil {
+				s.host.ConnManager().Unprotect(pid, trustedPeerConnTag)
+			}
+		},
 	})
 
 	// Initialize Data maps.
@@ -271,7 +294,13 @@ func (s *Service) Start() {
 	async.RunEvery(s.ctx, params.BeaconConfig().TtfbTimeoutDuration(), func() {
 		ensurePeerConnections(s.ctx, s.host, s.peers, relayNodes...)
 	})
-	async.RunEvery(s.ctx, 30*time.Minute, s.Peers().Prune)
+	async.RunEvery(s.ctx, 30*time.Minute, func() {
+		// Peers pruned from the store are also dropped from the block provider selector
+		// and the gossip rejections store.
+		prunedPeers := s.peers.Prune()
+		s.blockProviderSelector.RemovePeers(prunedPeers)
+		s.gossipRejections.RemovePeers(prunedPeers)
+	})
 	async.RunEvery(s.ctx, time.Duration(params.BeaconConfig().RespTimeout)*time.Second, s.updateMetrics)
 	async.RunEvery(s.ctx, refreshRate, s.RefreshPersistentSubnets)
 	async.RunEvery(s.ctx, 1*time.Minute, func() {
@@ -398,6 +427,16 @@ func (s *Service) Peers() *peers.Status {
 // PeerScoring returns the peer scoring and grey-listing service.
 func (s *Service) PeerScoring() *peerscoring.Scorer {
 	return s.peerScorer
+}
+
+// BlockProviderSelector returns the block provider selector used for sync peer selection.
+func (s *Service) BlockProviderSelector() *blockprovider.Selector {
+	return s.blockProviderSelector
+}
+
+// GossipRejections returns the store of gossip messages our validators rejected.
+func (s *Service) GossipRejections() *peerscoring.GossipRejectionsStore {
+	return s.gossipRejections
 }
 
 // IsPeerGreyListed returns why the peer must be refused: grey-listed by peer scoring, or

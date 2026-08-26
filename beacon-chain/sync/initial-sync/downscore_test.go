@@ -90,7 +90,7 @@ func TestUpdatePeerScorerStats(t *testing.T) {
 					// blob should be downscored
 					require.Equal(t, 1, s.cfg.P2P.PeerScoring().BadResponseCount(data.blobsFrom))
 				}
-				assert.Equal(t, uint64(0), s.cfg.P2P.Peers().Scorers().BlockProviderScorer().ProcessedBlocks(data.blocksFrom))
+				assert.Equal(t, uint64(0), s.cfg.P2P.BlockProviderSelector().ProcessedBlocks(data.blocksFrom))
 				return
 			}
 			// block should not be downscored - also we expect a not found error since peer scoring did not interact with blocks
@@ -98,7 +98,7 @@ func TestUpdatePeerScorerStats(t *testing.T) {
 			// no downscore recorded for the blob peer
 			require.Equal(t, 0, s.cfg.P2P.PeerScoring().BadResponseCount(data.blobsFrom))
 
-			assert.Equal(t, c.processed, s.cfg.P2P.Peers().Scorers().BlockProviderScorer().ProcessedBlocks(data.blocksFrom))
+			assert.Equal(t, c.processed, s.cfg.P2P.BlockProviderSelector().ProcessedBlocks(data.blocksFrom))
 		})
 	}
 }
@@ -181,7 +181,7 @@ func TestOnDataReceivedDownscore(t *testing.T) {
 					blobCount := p2p.PeerScoring().BadResponseCount(data.blobsFrom)
 					require.Equal(t, 1, blobCount)
 				}
-				assert.Equal(t, uint64(0), p2p.Peers().Scorers().BlockProviderScorer().ProcessedBlocks(data.blocksFrom))
+				assert.Equal(t, uint64(0), p2p.BlockProviderSelector().ProcessedBlocks(data.blocksFrom))
 				return
 			}
 			// block should not be downscored - also we expect a not found error since peer scoring did not interact with blocks

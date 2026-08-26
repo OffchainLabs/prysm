@@ -137,8 +137,8 @@ func (ds *Server) getPeer(pid peer.ID) (*ethpb.DebugPeerResponse, error) {
 	gScore, bPenalty, topicMaps := scoring.GossipData(pid)
 	scoreInfo := &ethpb.ScoreInfo{
 		OverallScore:       float32(scoring.Score(pid)),
-		ProcessedBlocks:    peers.Scorers().BlockProviderScorer().ProcessedBlocks(pid),
-		BlockProviderScore: float32(peers.Scorers().BlockProviderScorer().Score(pid)),
+		ProcessedBlocks:    ds.BlockProviderFetcher.BlockProviderSelector().ProcessedBlocks(pid),
+		BlockProviderScore: float32(ds.BlockProviderFetcher.BlockProviderSelector().Score(pid)),
 		TopicScores:        topicMaps,
 		GossipScore:        float32(gScore),
 		BehaviourPenalty:   float32(bPenalty),

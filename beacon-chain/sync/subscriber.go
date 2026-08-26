@@ -550,12 +550,14 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 			b = pubsub.ValidationIgnore
 		}
 		if b == pubsub.ValidationReject {
+			agent := agentString(pid, s.cfg.p2p.Host())
+			s.cfg.p2p.GossipRejections().Record(pid, topic, agent, err)
 			gossipScore, _, _ := s.cfg.p2p.PeerScoring().GossipData(pid)
 			fields := logrus.Fields{
 				"topic":        topic,
 				"multiaddress": multiAddr(pid, s.cfg.p2p.Peers()),
 				"peerID":       pid.String(),
-				"agent":        agentString(pid, s.cfg.p2p.Host()),
+				"agent":        agent,
 				"gossipScore":  gossipScore,
 			}
 			if features.Get().EnableFullSSZDataLogging {
@@ -851,17 +853,20 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 		}
 	}
 
-	// Sort candidates by ascending subnet count so we try to prune peers
+	// Sort a copy by ascending subnet count so we try to prune peers
 	// covering fewer subnets first, preserving multi-subnet peers that are
-	// more valuable for maintaining minimums across subnets.
-	slices.SortFunc(pids, func(a, b peer.ID) int {
+	// more valuable for maintaining minimums across subnets. The stable sort
+	// keeps the caller's worst-score-first order as the tie-break within
+	// equal subnet counts.
+	candidates := slices.Clone(pids)
+	slices.SortStableFunc(candidates, func(a, b peer.ID) int {
 		return len(peerSubnets[a]) - len(peerSubnets[b])
 	})
 
 	// Greedily prune each candidate if doing so would not drop any of its
 	// subnets below the minimum peer threshold.
-	prunable := make([]peer.ID, 0, len(pids))
-	for _, pid := range pids {
+	pruneSet := make(map[peer.ID]bool, len(candidates))
+	for _, pid := range candidates {
 		subnets := peerSubnets[pid]
 		canPrune := true
 		for _, subnet := range subnets {
@@ -871,13 +876,20 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 			}
 		}
 		if canPrune {
-			prunable = append(prunable, pid)
+			pruneSet[pid] = true
 			for _, subnet := range subnets {
 				subnetPeerCount[subnet]--
 			}
 		}
 	}
 
+	// Return prunable peers in the caller's original (worst-score-first) order.
+	prunable := make([]peer.ID, 0, len(pruneSet))
+	for _, pid := range pids {
+		if pruneSet[pid] {
+			prunable = append(prunable, pid)
+		}
+	}
 	return prunable
 }
 

@@ -641,7 +641,7 @@ func TestService_blockProviderScoring(t *testing.T) {
 		chainStarted: chainStarted,
 		clock:        clock,
 	}
-	scorer := s.cfg.P2P.Peers().Scorers().BlockProviderScorer()
+	scorer := s.cfg.P2P.BlockProviderSelector()
 	expectedBlockSlots := makeSequence(1, 160)
 	currentSlot := primitives.Slot(160)
 

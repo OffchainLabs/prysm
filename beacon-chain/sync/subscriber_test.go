@@ -484,6 +484,48 @@ func Test_wrapAndReportValidation(t *testing.T) {
 	}
 }
 
+func Test_wrapAndReportValidation_RecordsRejection(t *testing.T) {
+	p2pService := p2ptest.NewTestP2P(t)
+	mChain := &mockChain.ChainService{
+		Genesis:        time.Now(),
+		ValidatorsRoot: [32]byte{0x01},
+	}
+	clock := startup.NewClock(mChain.Genesis, mChain.ValidatorsRoot)
+	topic := fmt.Sprintf(p2p.BlockSubnetTopicFormat, params.ForkDigest(clock.CurrentEpoch())) + encoder.SszNetworkEncoder{}.ProtocolSuffix()
+	chainStarted := &atomic.Bool{}
+	chainStarted.Store(true)
+	s := &Service{
+		chainStarted: chainStarted,
+		cfg: &config{
+			chain: mChain,
+			clock: clock,
+			p2p:   p2pService,
+		},
+		subHandler: newSubTopicHandler(),
+	}
+	_, v := s.wrapAndReportValidation(topic, func(_ context.Context, _ peer.ID, _ *pubsub.Message) (pubsub.ValidationResult, error) {
+		return pubsub.ValidationReject, fmt.Errorf("bad signature")
+	})
+	pid := peer.ID("rejected-peer")
+	require.NoError(t, p2pService.BHost.Peerstore().Put(pid, "AgentVersion", "lighthouse/v1.0"))
+	msg := &pubsub.Message{Message: &pubsubpb.Message{Topic: &topic}}
+
+	require.Equal(t, pubsub.ValidationReject, v(t.Context(), pid, msg))
+
+	got := p2pService.GossipRejections().Rejections(pid)
+	require.Equal(t, 1, len(got.ByTopic[topic]))
+	assert.Equal(t, "lighthouse/v1.0", got.ByTopic[topic][0].Agent)
+	assert.Equal(t, "bad signature", got.ByTopic[topic][0].Reason)
+	require.Equal(t, 1, len(got.ByAgent["lighthouse/v1.0"]))
+	assert.Equal(t, topic, got.ByAgent["lighthouse/v1.0"][0].Topic)
+
+	// Rejects converted to ignores by an expired context are not recorded.
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	require.Equal(t, pubsub.ValidationIgnore, v(ctx, pid, msg))
+	require.Equal(t, 1, len(p2pService.GossipRejections().Rejections(pid).ByTopic[topic]))
+}
+
 func Test_wrapAndReportValidation_NextEpochDigest(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -651,6 +693,15 @@ func TestFilterSubnetPeers(t *testing.T) {
 
 	recPeers = r.filterNeededPeers(wantedPeers)
 	assert.Equal(t, 1, len(recPeers), "expected at least 1 suitable peer to prune")
+
+	// Prunable peers come back in the caller's original (worst-score-first) order.
+	p4 := createPeer(t)
+	p5 := createPeer(t)
+	p.Connect(p4)
+	p.Connect(p5)
+	ordered := []peer.ID{p5.PeerID(), p3.PeerID(), p4.PeerID()}
+	recPeers = r.filterNeededPeers(ordered)
+	assert.DeepEqual(t, ordered, recPeers)
 }
 
 func TestSubscribeWithSyncSubnets_DynamicOK(t *testing.T) {

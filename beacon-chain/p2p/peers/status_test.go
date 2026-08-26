@@ -2,6 +2,7 @@ package peers_test
 
 import (
 	"crypto/rand"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -460,7 +461,11 @@ func TestPrune(t *testing.T) {
 	scoring.RecordBadResponse(secondPID, peerscoring.Unknown, "test")
 
 	// Prune peers
-	p.Prune()
+	prunedPIDs := p.Prune()
+
+	// Pruned peers are returned to the caller (used to prune other per-peer state).
+	assert.Equal(t, true, slices.Contains(prunedPIDs, secondPID), "Expected pruned peer to be returned")
+	assert.Equal(t, false, slices.Contains(prunedPIDs, firstPID), "Grey-listed peer must not be pruned")
 
 	// Grey-listed peer is expected to still be kept in handler.
 	_, err := p.ConnectionState(firstPID)
@@ -629,17 +634,19 @@ func TestPrunePeers(t *testing.T) {
 		createPeer(t, p, nil, network.DirOutbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}
 	// Assert there are no prunable peers.
-	peersToPrune := p.PeersToPrune()
-	assert.Equal(t, 0, len(peersToPrune))
+	candidates, numToPrune := p.PruneCandidates()
+	assert.Equal(t, 0, len(candidates))
+	assert.Equal(t, uint64(0), numToPrune)
 
 	for range 18 {
 		// Peer added to peer handler.
 		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}
 
-	// Assert there are the correct prunable peers.
-	peersToPrune = p.PeersToPrune()
-	assert.Equal(t, 3, len(peersToPrune))
+	// All inbound peers are candidates; only the excess over the limit is to be pruned.
+	candidates, numToPrune = p.PruneCandidates()
+	assert.Equal(t, 18, len(candidates))
+	assert.Equal(t, uint64(3), numToPrune)
 
 	// Add in more peers.
 	for range 13 {
@@ -656,19 +663,36 @@ func TestPrunePeers(t *testing.T) {
 			scoring.RecordBadResponse(pid, peerscoring.Unknown, "test")
 		}
 	}
-	// Assert all peers more than max are prunable.
-	peersToPrune = p.PeersToPrune()
-	assert.Equal(t, 16, len(peersToPrune))
-	for _, pid := range peersToPrune {
+	// Assert every inbound peer is a candidate and all peers more than max are to be pruned.
+	candidates, numToPrune = p.PruneCandidates()
+	assert.Equal(t, 31, len(candidates))
+	assert.Equal(t, uint64(16), numToPrune)
+	for _, pid := range candidates {
 		dir, err := p.Direction(pid)
 		require.NoError(t, err)
 		assert.Equal(t, network.DirInbound, dir)
 	}
 
 	// At threshold 1 any strike grey-lists a peer, and grey-listed peers sort first.
-	for _, pid := range peersToPrune {
+	for _, pid := range candidates[:numToPrune] {
 		assert.Equal(t, true, scoring.BadResponseCount(pid) > 0, "expected grey-listed peers to be pruned first")
 	}
+}
+
+func TestPruneCandidates_InboundOnlyExcess(t *testing.T) {
+	// PeerLimit 30 -> connected limit 30, inbound limit 24.
+	p := peers.NewStatus(t.Context(), &peers.StatusConfig{
+		PeerLimit: 30,
+		Scoring:   peerscoring.NewScorer(),
+	})
+	for range 26 {
+		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
+	}
+
+	// Active (26) is under the connected limit, but inbound exceeds the inbound limit by 2.
+	candidates, numToPrune := p.PruneCandidates()
+	assert.Equal(t, 26, len(candidates))
+	assert.Equal(t, uint64(2), numToPrune)
 }
 
 func TestPrunePeers_TrustedPeers(t *testing.T) {
@@ -683,17 +707,19 @@ func TestPrunePeers_TrustedPeers(t *testing.T) {
 		createPeer(t, p, nil, network.DirOutbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}
 	// Assert there are no prunable peers.
-	peersToPrune := p.PeersToPrune()
-	assert.Equal(t, 0, len(peersToPrune))
+	candidates, numToPrune := p.PruneCandidates()
+	assert.Equal(t, 0, len(candidates))
+	assert.Equal(t, uint64(0), numToPrune)
 
 	for range 18 {
 		// Peer added to peer handler.
 		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}
 
-	// Assert there are the correct prunable peers.
-	peersToPrune = p.PeersToPrune()
-	assert.Equal(t, 3, len(peersToPrune))
+	// All inbound peers are candidates; only the excess over the limit is to be pruned.
+	candidates, numToPrune = p.PruneCandidates()
+	assert.Equal(t, 18, len(candidates))
+	assert.Equal(t, uint64(3), numToPrune)
 
 	// Add in more peers.
 	for range 13 {
@@ -720,12 +746,13 @@ func TestPrunePeers_TrustedPeers(t *testing.T) {
 	trustedPeers = p.GetTrustedPeers()
 	assert.Equal(t, 6, len(trustedPeers))
 
-	// Assert all peers more than max are prunable.
-	peersToPrune = p.PeersToPrune()
-	assert.Equal(t, 16, len(peersToPrune))
+	// Assert trusted peers are not candidates and all peers more than max are to be pruned.
+	candidates, numToPrune = p.PruneCandidates()
+	assert.Equal(t, 25, len(candidates))
+	assert.Equal(t, uint64(16), numToPrune)
 
-	// Check that trusted peers are not pruned.
-	for _, pid := range peersToPrune {
+	// Check that trusted peers are not candidates for pruning.
+	for _, pid := range candidates {
 		for _, tPid := range trustedPeers {
 			assert.NotEqual(t, pid.String(), tPid.String())
 		}
@@ -740,13 +767,14 @@ func TestPrunePeers_TrustedPeers(t *testing.T) {
 	// Delete trusted peers.
 	p.DeleteTrustedPeers(trustedPeers)
 
-	peersToPrune = p.PeersToPrune()
-	assert.Equal(t, 25, len(peersToPrune))
+	candidates, numToPrune = p.PruneCandidates()
+	assert.Equal(t, 40, len(candidates))
+	assert.Equal(t, uint64(25), numToPrune)
 
-	// Check that trusted peers are pruned.
+	// Check that formerly trusted peers are candidates for pruning again.
 	for _, tPid := range trustedPeers {
 		pruned := false
-		for _, pid := range peersToPrune {
+		for _, pid := range candidates {
 			if pid.String() == tPid.String() {
 				pruned = true
 			}
@@ -758,19 +786,44 @@ func TestPrunePeers_TrustedPeers(t *testing.T) {
 	trustedPeers = p.GetTrustedPeers()
 	assert.Equal(t, 0, len(trustedPeers))
 
-	for _, pid := range peersToPrune {
+	for _, pid := range candidates {
 		dir, err := p.Direction(pid)
 		require.NoError(t, err)
 		assert.Equal(t, network.DirInbound, dir)
 	}
 
-	// Ensure it is in the descending order.
-	currScore := scoring.Score(peersToPrune[0])
-	for _, pid := range peersToPrune {
+	// Ensure candidates are in ascending score order.
+	currScore := scoring.Score(candidates[0])
+	for _, pid := range candidates {
 		score := scoring.Score(pid)
 		assert.Equal(t, true, currScore <= score)
 		currScore = score
 	}
+}
+
+func TestTrustedPeerCallbacks(t *testing.T) {
+	added := make(map[peer.ID]int)
+	removed := make(map[peer.ID]int)
+	p := peers.NewStatus(t.Context(), &peers.StatusConfig{
+		PeerLimit:            30,
+		OnTrustedPeerAdded:   func(pid peer.ID) { added[pid]++ },
+		OnTrustedPeerRemoved: func(pid peer.ID) { removed[pid]++ },
+	})
+
+	pids := []peer.ID{"trusted-a", "trusted-b"}
+	p.SetTrustedPeers(pids)
+	assert.Equal(t, 1, added["trusted-a"])
+	assert.Equal(t, 1, added["trusted-b"])
+	assert.Equal(t, 0, len(removed))
+
+	p.DeleteTrustedPeers(pids[:1])
+	assert.Equal(t, 1, removed["trusted-a"])
+	assert.Equal(t, 0, removed["trusted-b"])
+
+	// Nil callbacks are safe.
+	p = peers.NewStatus(t.Context(), &peers.StatusConfig{PeerLimit: 30})
+	p.SetTrustedPeers(pids)
+	p.DeleteTrustedPeers(pids)
 }
 
 func TestStatus_BestPeer(t *testing.T) {

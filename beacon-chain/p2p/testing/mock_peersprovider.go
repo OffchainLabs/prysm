@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/blockprovider"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -22,9 +23,20 @@ const (
 
 // MockPeersProvider implements PeersProvider for testing.
 type MockPeersProvider struct {
-	lock   sync.Mutex
-	peers  *peers.Status
-	scorer *peerscoring.Scorer
+	lock     sync.Mutex
+	peers    *peers.Status
+	scorer   *peerscoring.Scorer
+	selector *blockprovider.Selector
+}
+
+// BlockProviderSelector provides access to the mock's block provider selector.
+func (m *MockPeersProvider) BlockProviderSelector() *blockprovider.Selector {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	if m.selector == nil {
+		m.selector = blockprovider.NewSelector(context.Background(), nil)
+	}
+	return m.selector
 }
 
 // PeerScoring provides access to the mock's peer scorer.

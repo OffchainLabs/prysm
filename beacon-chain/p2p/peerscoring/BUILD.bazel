@@ -24,6 +24,7 @@ go_test(
     name = "go_default_test",
     srcs = [
         "bad_responses_test.go",
+        "gossip_rejection_store_test.go",
         "gossip_test.go",
         "rpc_status_test.go",
         "scorer_test.go",

@@ -15,13 +15,11 @@ go_library(
     deps = [
         "//beacon-chain/forkchoice/types:go_default_library",
         "//beacon-chain/p2p/peers/peerdata:go_default_library",
-        "//beacon-chain/p2p/peers/scorers:go_default_library",
         "//beacon-chain/p2p/peerscoring:go_default_library",
         "//cmd/beacon-chain/flags:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//crypto/rand:go_default_library",
-        "//math:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//proto/prysm/v1alpha1/metadata:go_default_library",
         "//time:go_default_library",

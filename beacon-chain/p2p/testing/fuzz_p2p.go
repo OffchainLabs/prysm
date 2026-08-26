@@ -3,6 +3,7 @@ package testing
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/blockprovider"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
@@ -26,17 +27,33 @@ import (
 
 // FakeP2P stack
 type FakeP2P struct {
-	peerScorer *peerscoring.Scorer
+	peerScorer            *peerscoring.Scorer
+	blockProviderSelector *blockprovider.Selector
+	gossipRejections      *peerscoring.GossipRejectionsStore
 }
 
 // NewFuzzTestP2P - Create a new fake p2p stack.
 func NewFuzzTestP2P() *FakeP2P {
-	return &FakeP2P{peerScorer: peerscoring.NewScorer()}
+	return &FakeP2P{
+		peerScorer:            peerscoring.NewScorer(),
+		blockProviderSelector: blockprovider.NewSelector(context.Background(), nil),
+		gossipRejections:      peerscoring.NewGossipRejectionsStore(),
+	}
 }
 
 // PeerScoring -- fake.
 func (p *FakeP2P) PeerScoring() *peerscoring.Scorer {
 	return p.peerScorer
+}
+
+// BlockProviderSelector -- fake.
+func (p *FakeP2P) BlockProviderSelector() *blockprovider.Selector {
+	return p.blockProviderSelector
+}
+
+// GossipRejections -- fake.
+func (p *FakeP2P) GossipRejections() *peerscoring.GossipRejectionsStore {
+	return p.gossipRejections
 }
 
 // IsPeerGreyListed -- fake.
