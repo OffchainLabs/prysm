@@ -5,7 +5,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	GoKZG "github.com/crate-crypto/go-kzg-4844"
-	ckzg4844 "github.com/ethereum/c-kzg-4844/v2/bindings/go"
 	"github.com/pkg/errors"
 )
 
@@ -68,26 +67,26 @@ func VerifyBlobKZGProofBatch(blobs [][]byte, commitments [][]byte, proofs [][]by
 	}
 
 	// Use batch verification for multiple blobs
-	ckzgBlobs := make([]ckzg4844.Blob, len(blobs))
-	ckzgCommitments := make([]ckzg4844.Bytes48, len(commitments))
-	ckzgProofs := make([]ckzg4844.Bytes48, len(proofs))
+	batchBlobs := make([]Blob, len(blobs))
+	batchCommitments := make([]Bytes48, len(commitments))
+	batchProofs := make([]Bytes48, len(proofs))
 
 	for i := range blobs {
-		if len(blobs[i]) != len(ckzg4844.Blob{}) {
-			return fmt.Errorf("blobs len (%d) differs from expected (%d)", len(blobs[i]), len(ckzg4844.Blob{}))
+		if len(blobs[i]) != len(Blob{}) {
+			return fmt.Errorf("blobs len (%d) differs from expected (%d)", len(blobs[i]), len(Blob{}))
 		}
-		if len(commitments[i]) != len(ckzg4844.Bytes48{}) {
-			return fmt.Errorf("commitments len (%d) differs from expected (%d)", len(commitments[i]), len(ckzg4844.Bytes48{}))
+		if len(commitments[i]) != len(Bytes48{}) {
+			return fmt.Errorf("commitments len (%d) differs from expected (%d)", len(commitments[i]), len(Bytes48{}))
 		}
-		if len(proofs[i]) != len(ckzg4844.Bytes48{}) {
-			return fmt.Errorf("proofs len (%d) differs from expected (%d)", len(proofs[i]), len(ckzg4844.Bytes48{}))
+		if len(proofs[i]) != len(Bytes48{}) {
+			return fmt.Errorf("proofs len (%d) differs from expected (%d)", len(proofs[i]), len(Bytes48{}))
 		}
-		ckzgBlobs[i] = ckzg4844.Blob(blobs[i])
-		ckzgCommitments[i] = ckzg4844.Bytes48(commitments[i])
-		ckzgProofs[i] = ckzg4844.Bytes48(proofs[i])
+		batchBlobs[i] = Blob(blobs[i])
+		batchCommitments[i] = Bytes48(commitments[i])
+		batchProofs[i] = Bytes48(proofs[i])
 	}
 
-	valid, err := ckzg4844.VerifyBlobKZGProofBatch(ckzgBlobs, ckzgCommitments, ckzgProofs)
+	valid, err := activeBackend.VerifyBlobKZGProofBatch(batchBlobs, batchCommitments, batchProofs)
 	if err != nil {
 		return errors.Wrap(err, "batch verification")
 	}
