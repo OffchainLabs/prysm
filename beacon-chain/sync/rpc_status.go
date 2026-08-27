@@ -74,8 +74,8 @@ func (s *Service) maintainPeerStatuses() {
 		// pruning excess peers.
 		wg.Wait()
 		candidates, numToPrune := s.cfg.p2p.Peers().PruneCandidates()
-		// Drop candidates needed for subnet coverage, then disconnect the worst-scored
-		// numToPrune of the remainder.
+		// Drop candidates needed for subnet coverage, then disconnect the first
+		// numToPrune of the remainder in eviction-priority order.
 		peerIds := s.filterNeededPeers(candidates)
 		if uint64(len(peerIds)) > numToPrune {
 			peerIds = peerIds[:numToPrune]
@@ -261,7 +261,8 @@ func (s *Service) statusRPCHandler(ctx context.Context, msg any, stream libp2pco
 			respCode = responseCodeServerError
 		case errors.Is(err, p2ptypes.ErrWrongForkDigestVersion):
 			// Respond with our status and disconnect with the peer.
-			s.cfg.p2p.PeerScoring().SetPeerStatus(remotePeer, m, nil)
+			// Store the failed verdict so the peer is grey-listed, matching the outbound path.
+			s.cfg.p2p.PeerScoring().SetPeerStatus(remotePeer, m, err)
 			if err := s.respondWithStatus(ctx, stream); err != nil {
 				return err
 			}

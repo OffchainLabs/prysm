@@ -1305,6 +1305,9 @@ func (s *Service) prysmNodeEndpoints() []endpoint {
 		OptimisticModeFetcher:     s.cfg.OptimisticModeFetcher,
 		GenesisTimeFetcher:        s.cfg.GenesisTimeFetcher,
 		PeersFetcher:              s.cfg.PeersFetcher,
+		PeerScoringFetcher:        s.cfg.PeerScoringFetcher,
+		PeerGreyLister:            s.cfg.PeerGreyLister,
+		GossipRejectionsFetcher:   s.cfg.GossipRejectionsFetcher,
 		PeerManager:               s.cfg.PeerManager,
 		MetadataProvider:          s.cfg.MetadataProvider,
 		CustodyManager:            s.cfg.CustodyManager,
@@ -1384,6 +1387,66 @@ func (s *Service) prysmNodeEndpoints() []endpoint {
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetCustody,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/prysm/v1/node/peers/scoring",
+			name:     namespace + ".ListPeersScoring",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.ListPeersScoring,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/prysm/v1/node/peers/{peer_id}/scoring",
+			name:     namespace + ".GetPeerScoring",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetPeerScoring,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/prysm/v1/node/peers/scoring/agents",
+			name:     namespace + ".ListScoringAgents",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.ListScoringAgents,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/prysm/v1/node/peers/scoring/config",
+			name:     namespace + ".GetPeerScoringConfig",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetPeerScoringConfig,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/prysm/v1/node/gossip/rejections",
+			name:     namespace + ".ListGossipRejections",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.ListGossipRejections,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/prysm/v1/node/gossip/rejections/summary",
+			name:     namespace + ".GetGossipRejectionsSummary",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetGossipRejectionsSummary,
 			methods: []string{http.MethodGet},
 		},
 	}

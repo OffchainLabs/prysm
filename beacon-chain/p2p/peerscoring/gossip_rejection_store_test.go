@@ -3,7 +3,6 @@ package peerscoring
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"testing"
 
@@ -60,12 +59,6 @@ func TestGossipRejectionsPerPeerFIFOCap(t *testing.T) {
 		require.Equal(t, 1, len(rejections))
 		require.Equal(t, fmt.Sprintf("reason-%d", i), rejections[0].Reason)
 	}
-}
-
-func TestGossipRejectionsReasonTruncated(t *testing.T) {
-	s := NewGossipRejectionsStore()
-	s.Record(testPid, "topic-a", "agent", errors.New(strings.Repeat("x", maxRejectionReasonLen+100)))
-	require.Equal(t, maxRejectionReasonLen, len(s.Rejections(testPid).ByTopic["topic-a"][0].Reason))
 }
 
 func TestGossipRejectionsRemovePeers(t *testing.T) {

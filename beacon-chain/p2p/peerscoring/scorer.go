@@ -3,7 +3,6 @@ package peerscoring
 import (
 	"context"
 	"errors"
-	"math"
 	"sync"
 	"time"
 
@@ -115,20 +114,8 @@ const (
 	// defaultGossipGreyListThreshold mirrors the PeerScoreThresholds.GraylistThreshold prysm hands
 	// to gossipsub (gossip_scoring_params.go); pubsub exports no constant for it, so it is restated here.
 	defaultGossipGreyListThreshold = -16000
-	// defaultGossipPositiveScoreCap mirrors the PeerScoreParams.TopicScoreCap prysm hands to
-	// gossipsub (gossip_scoring_params.go) — the highest positive gossip score a peer can reach;
-	// pubsub exports no constant for it, so it is restated here.
-	defaultGossipPositiveScoreCap = 32.72
-	defaultBadResponseWeight      = 0.3
-	defaultPeerStatusWeight       = 0.3
-	defaultGossipWeight           = 0.4
 	// defaultBadResponseHistorySize caps how many recent strikes are retained per peer.
 	defaultBadResponseHistorySize = 25
-
-	// scoreRoundingFactor keeps four decimal digits in scores.
-	scoreRoundingFactor = 10000
-	// greyListedPeerScore is the composite score reported for a greylisted peer.
-	greyListedPeerScore = -float64(math.MaxInt)
 )
 
 // Option configures a Scorer.
@@ -138,14 +125,6 @@ type Option func(*Scorer)
 func WithGossipGreyListThreshold(threshold int) Option {
 	return func(s *Scorer) {
 		s.params.gossipGreyListThreshold = threshold
-	}
-}
-
-// WithGossipPositiveScoreCap sets the positive gossip score against which the gossip
-// contribution is normalized.
-func WithGossipPositiveScoreCap(scoreCap float64) Option {
-	return func(s *Scorer) {
-		s.params.gossipPositiveScoreCap = scoreCap
 	}
 }
 
@@ -170,47 +149,17 @@ func WithBadResponseHistorySize(n int) Option {
 	}
 }
 
-// WithBadResponseWeight sets the bad-responses contribution to the composite score.
-func WithBadResponseWeight(w float64) Option {
-	return func(s *Scorer) {
-		s.params.badResponseWeight = w
-	}
-}
-
-// WithPeerStatusWeight sets the peer-status contribution to the composite score.
-func WithPeerStatusWeight(w float64) Option {
-	return func(s *Scorer) {
-		s.params.peerStatusWeight = w
-	}
-}
-
-// WithGossipWeight sets the gossip contribution to the composite score.
-func WithGossipWeight(w float64) Option {
-	return func(s *Scorer) {
-		s.params.gossipWeight = w
-	}
-}
-
 type scoringParams struct {
 	decayInterval                time.Duration
 	badResponseGreyListThreshold int
 	badResponseHistorySize       int
 	gossipGreyListThreshold      int
-	gossipPositiveScoreCap       float64
-	badResponseWeight            float64
-	peerStatusWeight             float64
-	gossipWeight                 float64
 }
 
-// totalWeight is the normalization denominator for the composite score.
-func (p *scoringParams) totalWeight() float64 {
-	return p.badResponseWeight + p.peerStatusWeight + p.gossipWeight
-}
-
-// Scorer aggregates per-aspect scorers into a composite peer score and greylist verdict.
+// Scorer aggregates per-aspect grey-listers into a composite greylist verdict.
 type Scorer struct {
-	params  *scoringParams
-	scorers []GreyListerAndScorer
+	params      *scoringParams
+	greyListers []GreyLister
 
 	mu                   sync.RWMutex
 	ourHeadSlot          primitives.Slot
@@ -226,13 +175,9 @@ func NewScorer(opts ...Option) *Scorer {
 			badResponseGreyListThreshold: defaultBadResponseGreyListThreshold,
 			badResponseHistorySize:       defaultBadResponseHistorySize,
 			gossipGreyListThreshold:      defaultGossipGreyListThreshold,
-			gossipPositiveScoreCap:       defaultGossipPositiveScoreCap,
-			badResponseWeight:            defaultBadResponseWeight,
-			peerStatusWeight:             defaultPeerStatusWeight,
-			gossipWeight:                 defaultGossipWeight,
 		},
-		scorers: []GreyListerAndScorer{badResponsesScorer{}, rpcStatusScorer{}, gossipScorer{}},
-		info:    make(map[peer.ID]*PeerScoringInfo),
+		greyListers: []GreyLister{badResponsesScorer{}, rpcStatusScorer{}, gossipScorer{}},
+		info:        make(map[peer.ID]*PeerScoringInfo),
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -398,14 +343,14 @@ func (s *Scorer) SetHeadSlot(slot primitives.Slot) {
 	s.ourHeadSlot = slot
 }
 
-// HighestHeadSlot returns the highest head slot any tracked peer has advertised.
+// HighestHeadSlot returns the highest head slot any tracked peer has advertised in a status that passed validation.
 func (s *Scorer) HighestHeadSlot() primitives.Slot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	var highest primitives.Slot
 	for _, pi := range s.info {
-		if pi.rpcStatus != nil && pi.rpcStatus.chainState != nil && pi.rpcStatus.chainState.HeadSlot > highest {
+		if pi.rpcStatus != nil && pi.rpcStatus.validationError == nil && pi.rpcStatus.chainState != nil && pi.rpcStatus.chainState.HeadSlot > highest {
 			highest = pi.rpcStatus.chainState.HeadSlot
 		}
 	}
@@ -425,9 +370,9 @@ func (s *Scorer) IsPeerGreyListed(pid peer.ID) error {
 	return s.isGreyListed(pid, si)
 }
 
-// Score returns the composite peer score: greylisted peers score greyListedPeerScore, others
-// the weight-normalized sum of scorer contributions rounded to four decimals, unknown peers 0.
-func (s *Scorer) Score(pid peer.ID) float64 {
+// TimeToWhiteListing estimates how long until the scoring aspects stop grey-listing the peer;
+// 0 when none does or when recovery is not time based.
+func (s *Scorer) TimeToWhiteListing(pid peer.ID) time.Duration {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -435,17 +380,13 @@ func (s *Scorer) Score(pid peer.ID) float64 {
 	if !ok {
 		return 0
 	}
-	if s.isGreyListed(pid, si) != nil {
-		return greyListedPeerScore
+	var longest time.Duration
+	for _, greyLister := range s.greyListers {
+		if d := greyLister.TimeToWhiteListing(pid, si); d > longest {
+			longest = d
+		}
 	}
-	score := float64(0)
-	for _, scorer := range s.scorers {
-		score += scorer.Score(pid, si)
-	}
-	if tw := s.params.totalWeight(); tw > 0 {
-		score /= tw
-	}
-	return math.Round(score*scoreRoundingFactor) / scoreRoundingFactor
+	return longest
 }
 
 // GreyListedPeers returns every peer currently grey-listed by any scorer.
@@ -462,28 +403,23 @@ func (s *Scorer) GreyListedPeers() []peer.ID {
 	return greyListed
 }
 
-// isGreyListed returns the first scorer's greylist verdict, nil if none; callers must hold s.mu.
+// isGreyListed returns the first grey-lister's verdict, nil if none; callers must hold s.mu.
 func (s *Scorer) isGreyListed(pid peer.ID, si *scoringInfo) error {
-	for _, scorer := range s.scorers {
-		if err := scorer.IsPeerGreyListed(pid, si); err != nil {
+	for _, greyLister := range s.greyListers {
+		if err := greyLister.IsPeerGreyListed(pid, si); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// snapshot bundles a known peer's state for the scorers; callers must hold s.mu.
+// snapshot bundles a known peer's state for the grey-listers; callers must hold s.mu.
 func (s *Scorer) snapshot(pid peer.ID) (*scoringInfo, bool) {
 	pi, ok := s.info[pid]
 	if !ok {
 		return nil, false
 	}
-	return &scoringInfo{
-		params:               s.params,
-		peerInfo:             pi,
-		ourHeadSlot:          s.ourHeadSlot,
-		highestKnownHeadSlot: s.highestKnownHeadSlot,
-	}, true
+	return &scoringInfo{params: s.params, peerInfo: pi}, true
 }
 
 // getPeerScoringInfo returns the peer's info, creating it if absent; callers must hold s.mu.

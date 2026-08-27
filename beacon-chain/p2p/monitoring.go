@@ -46,12 +46,6 @@ var (
 		Name: "p2p_minimum_peers_per_subnet",
 		Help: "The minimum number of peers to connect to per subnet",
 	})
-	avgScoreConnectedClients = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "connected_libp2p_peers_average_scores",
-		Help: "Tracks the overall p2p scores of connected libp2p peers by agent string",
-	},
-		[]string{"agent"},
-	)
 	repeatPeerConnections = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "p2p_repeat_attempts",
 		Help: "The number of repeat attempts the connection handler is triggered for a peer.",
@@ -231,7 +225,6 @@ func (s *Service) updateMetrics() {
 	p2pPeerCountDirectionType.WithLabelValues("outbound", upperQUIC).Set(float64(len(s.peers.OutboundConnectedWithProtocol(peers.QUIC))))
 
 	connectedPeersCountByClient := make(map[string]float64)
-	peerScoresByClient := make(map[string][]float64)
 	for _, p := range connectedPeers {
 		pid, err := peer.Decode(p.String())
 		if err != nil {
@@ -241,33 +234,12 @@ func (s *Service) updateMetrics() {
 
 		foundName := agentFromPid(pid, store)
 		connectedPeersCountByClient[foundName] += 1
-
-		// Get peer scoring data.
-		overallScore := s.peerScorer.Score(pid)
-		peerScoresByClient[foundName] = append(peerScoresByClient[foundName], overallScore)
 	}
 
 	connectedPeersCount.Reset() // Clear out previous results.
 	for agent, total := range connectedPeersCountByClient {
 		connectedPeersCount.WithLabelValues(agent).Set(total)
 	}
-
-	avgScoreConnectedClients.Reset() // Clear out previous results.
-	for agent, scoringData := range peerScoresByClient {
-		avgScore := average(scoringData)
-		avgScoreConnectedClients.WithLabelValues(agent).Set(avgScore)
-	}
-}
-
-func average(xs []float64) float64 {
-	if len(xs) == 0 {
-		return 0
-	}
-	total := 0.0
-	for _, v := range xs {
-		total += v
-	}
-	return total / float64(len(xs))
 }
 
 func agentFromPid(pid peer.ID, store peerstore.Peerstore) string {

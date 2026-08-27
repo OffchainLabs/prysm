@@ -10,8 +10,6 @@ import (
 const (
 	// defaultMaxRejectionsPerPeer caps how many rejections are retained per peer.
 	defaultMaxRejectionsPerPeer = 100
-	// maxRejectionReasonLen truncates oversized rejection reasons.
-	maxRejectionReasonLen = 512
 	// unspecifiedRejectionReason is recorded when a validator rejects without an error.
 	unspecifiedRejectionReason = "unspecified"
 )
@@ -70,9 +68,6 @@ func (s *GossipRejectionsStore) Record(pid peer.ID, topic, agent string, rejecti
 	reason := unspecifiedRejectionReason
 	if rejectionErr != nil {
 		reason = rejectionErr.Error()
-	}
-	if len(reason) > maxRejectionReasonLen {
-		reason = reason[:maxRejectionReasonLen]
 	}
 
 	s.mu.Lock()

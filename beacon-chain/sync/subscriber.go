@@ -3,7 +3,6 @@ package sync
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"runtime/debug"
 	"slices"
 	"strings"
@@ -23,7 +22,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/messagehandler"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -808,12 +806,20 @@ func (s *Service) persistentAndAggregatorSubnetIndices(currentSlot primitives.Sl
 	return mapFromSlice(persistentSubnetIndices, aggregatorSubnetIndices)
 }
 
-// filterNeededPeers filters out the set of peers required to maintain
-// at least minimumPeersPerSubnet in our attestation subnets. Peers that participate
-// in multiple subnets count toward all of them.
+// wantedSubnet identifies one subnet of a specific gossip topic family that peers may be
+// needed in to maintain coverage.
+type wantedSubnet struct {
+	topicFormat string
+	subnet      uint64
+}
+
+// filterNeededPeers filters out the set of peers required to maintain at least
+// minimumPeersPerSubnet in our attestation, sync-committee and data-column subnets.
+// Peers that participate in multiple subnets count toward all of them.
 func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
 	currentSlot := s.cfg.clock.CurrentSlot()
+	currentEpoch := slots.ToEpoch(currentSlot)
 
 	// Exit early if nothing to filter.
 	if len(pids) == 0 {
@@ -822,16 +828,20 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 
 	digest := s.currentForkDigest()
 
-	wantedSubnets := make(map[uint64]bool)
-	for subnet := range s.persistentAndAggregatorSubnetIndices(currentSlot) {
-		wantedSubnets[subnet] = true
+	wantedSubnets := make(map[wantedSubnet]bool)
+	addWanted := func(topicFormat string, subnets map[uint64]bool) {
+		for subnet := range subnets {
+			wantedSubnets[wantedSubnet{topicFormat: topicFormat, subnet: subnet}] = true
+		}
 	}
-
-	for subnet := range attesterSubnetIndices(currentSlot) {
-		wantedSubnets[subnet] = true
+	addWanted(p2p.AttestationSubnetTopicFormat, s.persistentAndAggregatorSubnetIndices(currentSlot))
+	addWanted(p2p.AttestationSubnetTopicFormat, attesterSubnetIndices(currentSlot))
+	if params.BeaconConfig().AltairForkEpoch <= currentEpoch {
+		addWanted(p2p.SyncCommitteeSubnetTopicFormat, s.activeSyncSubnetIndices(currentSlot))
 	}
-
-	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()]
+	if params.BeaconConfig().FuluForkEpoch <= currentEpoch {
+		addWanted(p2p.DataColumnSubnetTopicFormat, s.dataColumnSubnetIndices(currentSlot))
+	}
 
 	pidSet := make(map[peer.ID]bool, len(pids))
 	for _, pid := range pids {
@@ -840,15 +850,15 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 
 	// For each wanted subnet, get the current peer count and track which
 	// candidate peers participate in each subnet.
-	subnetPeerCount := make(map[uint64]int, len(wantedSubnets))
-	peerSubnets := make(map[peer.ID][]uint64)
-	for subnet := range wantedSubnets {
-		subnetTopic := fmt.Sprintf(topic, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
+	subnetPeerCount := make(map[wantedSubnet]int, len(wantedSubnets))
+	peerSubnets := make(map[peer.ID][]wantedSubnet)
+	for ws := range wantedSubnets {
+		subnetTopic := fmt.Sprintf(ws.topicFormat, digest, ws.subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
 		peers := s.cfg.p2p.PubSub().ListPeers(subnetTopic)
-		subnetPeerCount[subnet] = len(peers)
+		subnetPeerCount[ws] = len(peers)
 		for _, pid := range peers {
 			if pidSet[pid] {
-				peerSubnets[pid] = append(peerSubnets[pid], subnet)
+				peerSubnets[pid] = append(peerSubnets[pid], ws)
 			}
 		}
 	}
@@ -856,7 +866,7 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 	// Sort a copy by ascending subnet count so we try to prune peers
 	// covering fewer subnets first, preserving multi-subnet peers that are
 	// more valuable for maintaining minimums across subnets. The stable sort
-	// keeps the caller's worst-score-first order as the tie-break within
+	// keeps the caller's eviction-priority order as the tie-break within
 	// equal subnet counts.
 	candidates := slices.Clone(pids)
 	slices.SortStableFunc(candidates, func(a, b peer.ID) int {
@@ -883,7 +893,7 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 		}
 	}
 
-	// Return prunable peers in the caller's original (worst-score-first) order.
+	// Return prunable peers in the caller's original (eviction-priority) order.
 	prunable := make([]peer.ID, 0, len(pruneSet))
 	for _, pid := range pids {
 		if pruneSet[pid] {

@@ -113,6 +113,8 @@ type Config struct {
 	Broadcaster                      p2p.Broadcaster
 	PeersFetcher                     p2p.PeersProvider
 	PeerScoringFetcher               p2p.PeerScoringProvider
+	PeerGreyLister                   p2p.PeerGreyLister
+	GossipRejectionsFetcher          p2p.GossipRejectionsProvider
 	BlockProviderFetcher             p2p.BlockProviderSelectorProvider
 	PeerManager                      p2p.PeerManager
 	MetadataProvider                 p2p.MetadataProvider

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"sync"
 	"testing"
 	"time"
@@ -18,33 +17,23 @@ import (
 
 const testPid = peer.ID("peer-a")
 
-// testParams uses power-of-two weights and thresholds so expected scores stay exact floats.
+// testParams uses a small threshold so greylist boundaries are easy to hit.
 func testParams() *scoringParams {
 	return &scoringParams{
 		decayInterval:                time.Hour,
 		badResponseGreyListThreshold: 4,
 		gossipGreyListThreshold:      -16000,
-		gossipPositiveScoreCap:       32,
-		badResponseWeight:            0.5,
-		peerStatusWeight:             0.25,
-		gossipWeight:                 0.25,
 	}
 }
 
-// testInfo builds the snapshot handed to an individual aspect scorer.
-func testInfo(pi *PeerScoringInfo, ourHead, highestHead primitives.Slot) *scoringInfo {
-	return &scoringInfo{params: testParams(), peerInfo: pi, ourHeadSlot: ourHead, highestKnownHeadSlot: highestHead}
+// testInfo builds the snapshot handed to an individual aspect grey-lister.
+func testInfo(pi *PeerScoringInfo) *scoringInfo {
+	return &scoringInfo{params: testParams(), peerInfo: pi}
 }
 
 // newTestScorer mirrors testParams through the public options.
 func newTestScorer() *Scorer {
-	return NewScorer(
-		WithBadResponseGreyListThreshold(4),
-		WithGossipPositiveScoreCap(32),
-		WithBadResponseWeight(0.5),
-		WithPeerStatusWeight(0.25),
-		WithGossipWeight(0.25),
-	)
+	return NewScorer(WithBadResponseGreyListThreshold(4))
 }
 
 func strikes(n int) []BadResponse {
@@ -76,23 +65,19 @@ func TestNewScorer(t *testing.T) {
 		badResponseGreyListThreshold: defaultBadResponseGreyListThreshold,
 		badResponseHistorySize:       defaultBadResponseHistorySize,
 		gossipGreyListThreshold:      defaultGossipGreyListThreshold,
-		gossipPositiveScoreCap:       defaultGossipPositiveScoreCap,
-		badResponseWeight:            defaultBadResponseWeight,
-		peerStatusWeight:             defaultPeerStatusWeight,
-		gossipWeight:                 defaultGossipWeight,
 	}
 	require.Equal(t, want, *s.params)
 	require.NotNil(t, s.info)
 
-	// All three aspect scorers are wired.
-	require.Equal(t, 3, len(s.scorers))
-	scorerTypes := make(map[GreyListerAndScorer]bool)
-	for _, scorer := range s.scorers {
-		scorerTypes[scorer] = true
+	// All three aspect grey-listers are wired.
+	require.Equal(t, 3, len(s.greyListers))
+	greyListerTypes := make(map[GreyLister]bool)
+	for _, greyLister := range s.greyListers {
+		greyListerTypes[greyLister] = true
 	}
-	require.Equal(t, true, scorerTypes[badResponsesScorer{}])
-	require.Equal(t, true, scorerTypes[rpcStatusScorer{}])
-	require.Equal(t, true, scorerTypes[gossipScorer{}])
+	require.Equal(t, true, greyListerTypes[badResponsesScorer{}])
+	require.Equal(t, true, greyListerTypes[rpcStatusScorer{}])
+	require.Equal(t, true, greyListerTypes[gossipScorer{}])
 }
 
 func TestNewScorerOptions(t *testing.T) {
@@ -102,13 +87,9 @@ func TestNewScorerOptions(t *testing.T) {
 		mutate func(p *scoringParams)
 	}{
 		{"gossip greylist threshold", WithGossipGreyListThreshold(-42), func(p *scoringParams) { p.gossipGreyListThreshold = -42 }},
-		{"gossip positive score cap", WithGossipPositiveScoreCap(64), func(p *scoringParams) { p.gossipPositiveScoreCap = 64 }},
 		{"bad response greylist threshold", WithBadResponseGreyListThreshold(9), func(p *scoringParams) { p.badResponseGreyListThreshold = 9 }},
 		{"bad response history size", WithBadResponseHistorySize(7), func(p *scoringParams) { p.badResponseHistorySize = 7 }},
 		{"decay interval", WithDecayInterval(time.Minute), func(p *scoringParams) { p.decayInterval = time.Minute }},
-		{"bad response weight", WithBadResponseWeight(0.7), func(p *scoringParams) { p.badResponseWeight = 0.7 }},
-		{"peer status weight", WithPeerStatusWeight(0.2), func(p *scoringParams) { p.peerStatusWeight = 0.2 }},
-		{"gossip weight", WithGossipWeight(0.1), func(p *scoringParams) { p.gossipWeight = 0.1 }},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -172,7 +153,6 @@ func TestRemovePeers(t *testing.T) {
 	s.RemovePeers([]peer.ID{testPid, "status-peer", "gossip-peer", greyPid, "unknown-peer"})
 
 	require.Equal(t, 0, s.BadResponseCount(testPid))
-	require.Equal(t, float64(0), s.Score(testPid))
 	_, err := s.PeerStatus("status-peer")
 	require.ErrorIs(t, err, ErrPeerUnknown)
 	gScore, _, _ := s.GossipData("gossip-peer")
@@ -234,8 +214,12 @@ func TestHighestHeadSlot(t *testing.T) {
 	require.Equal(t, primitives.Slot(0), s.HighestHeadSlot())
 
 	s.SetPeerStatus("peer-1", &pb.StatusV2{HeadSlot: 10}, nil)
-	s.SetPeerStatus("peer-2", &pb.StatusV2{HeadSlot: 30}, errors.New("invalid")) // counted regardless of verdict
+	s.SetPeerStatus("peer-2", &pb.StatusV2{HeadSlot: 30}, errors.New("invalid")) // not counted: failed validation
 	s.SetPeerStatus("peer-3", &pb.StatusV2{HeadSlot: 20}, nil)
+	require.Equal(t, primitives.Slot(20), s.HighestHeadSlot())
+
+	// A later valid exchange from the same peer counts again.
+	s.SetPeerStatus("peer-2", &pb.StatusV2{HeadSlot: 30}, nil)
 	require.Equal(t, primitives.Slot(30), s.HighestHeadSlot())
 }
 
@@ -366,70 +350,6 @@ func TestSetHeadSlot(t *testing.T) {
 	require.Equal(t, primitives.Slot(42), s.ourHeadSlot)
 }
 
-func TestScorerScore(t *testing.T) {
-	tests := []struct {
-		name  string
-		setup func(s *Scorer)
-		want  float64
-	}{
-		{"unknown peer", func(*Scorer) {}, 0},
-		{"known peer with no signals", func(s *Scorer) { s.SetGossipScore(testPid, 0, 0, nil) }, 0},
-		{
-			"strikes below threshold",
-			func(s *Scorer) { recordStrikes(s, 2) }, // -(2/4) * 0.5
-			-0.25,
-		},
-		{
-			"all aspects blended",
-			func(s *Scorer) {
-				recordStrikes(s, 2)                                            // -(2/4) * 0.5   = -0.25
-				s.SetPeerStatus("best-peer", &pb.StatusV2{HeadSlot: 100}, nil) // highest known head
-				s.SetPeerStatus(testPid, &pb.StatusV2{HeadSlot: 50}, nil)      // 0.5 * 0.25     = 0.125
-				s.SetGossipScore(testPid, 8, 0, nil)                           // (8/32) * 0.25  = 0.0625
-			},
-			-0.0625,
-		},
-		{
-			"greylisted by strikes scores negative max",
-			func(s *Scorer) { recordStrikes(s, 4) },
-			-float64(math.MaxInt),
-		},
-		{
-			"greylisted by gossip scores negative max",
-			func(s *Scorer) { s.SetGossipScore(testPid, -16000.5, 0, nil) },
-			-float64(math.MaxInt),
-		},
-		{
-			"composite is rounded to four decimals",
-			func(s *Scorer) {
-				s.SetPeerStatus("best-peer", &pb.StatusV2{HeadSlot: 3}, nil)
-				s.SetPeerStatus(testPid, &pb.StatusV2{HeadSlot: 1}, nil) // round4(1/3) * 0.25
-			},
-			0.0833,
-		},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			s := newTestScorer()
-			tc.setup(s)
-			require.Equal(t, tc.want, s.Score(testPid))
-		})
-	}
-}
-
-func TestScorerScoreBounds(t *testing.T) {
-	// Extreme non-grey-listed inputs stay within the weight-normalized [-1, 1] band.
-	s := newTestScorer()
-	recordStrikes(s, 3)                       // worst sub-threshold strikes: -(3/4) * 0.5 = -0.375
-	s.SetGossipScore(testPid, -16000, 0, nil) // worst non-grey-listed gossip: -1 * 0.25  = -0.25
-	require.Equal(t, -0.625, s.Score(testPid))
-
-	s = newTestScorer()
-	s.SetPeerStatus(testPid, &pb.StatusV2{HeadSlot: 100}, nil) // best status: 1 * 0.25          = 0.25
-	s.SetGossipScore(testPid, 1e9, 0, nil)                     // positive gossip clamps: 1*0.25 = 0.25
-	require.Equal(t, 0.5, s.Score(testPid))
-}
-
 func TestScorerIsPeerGreyListed(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -526,7 +446,7 @@ func TestScorerConcurrentAccess(t *testing.T) {
 					s.SetGossipScore(pid, float64(i), 0, nil)
 					s.ReconcileGossipScores(map[peer.ID]GossipScoreUpdate{pid: {Score: float64(i)}})
 				case 3:
-					_ = s.Score(pid)
+					_ = s.TimeToWhiteListing(pid)
 				case 4:
 					_ = s.IsPeerGreyListed(pid)
 				case 5:

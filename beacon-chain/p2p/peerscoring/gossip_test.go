@@ -12,20 +12,16 @@ func TestGossipScorer(t *testing.T) {
 	tests := []struct {
 		name           string
 		gossipScore    float64
-		wantScore      float64
 		wantGreyListed bool
 	}{
-		{"no gossip data", 0, 0, false},
-		{"positive score", 8, 0.0625, false},                  // (8/32) * 0.25
-		{"positive above cap", 64, 0.25, false},               // clamps to 1 * 0.25
-		{"negative above threshold", -100, -0.0015625, false}, // (-100/16000) * 0.25
-		{"at threshold", -16000, -0.25, false},                // -1 * 0.25; greylisting is strictly below
-		{"below threshold", -16000.5, -0.25, true},            // clamps to -1 * 0.25
+		{"no gossip data", 0, false},
+		{"positive score", 8, false},
+		{"at threshold", -16000, false}, // greylisting is strictly below
+		{"below threshold", -16000.5, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			si := testInfo(&PeerScoringInfo{gossipScore: tc.gossipScore}, 0, 0)
-			require.Equal(t, tc.wantScore, scorer.Score(testPid, si))
+			si := testInfo(&PeerScoringInfo{gossipScore: tc.gossipScore})
 			err := scorer.IsPeerGreyListed(testPid, si)
 			if tc.wantGreyListed {
 				require.ErrorIs(t, err, ErrPeerGreyListed)

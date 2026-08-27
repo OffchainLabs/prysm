@@ -291,7 +291,7 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 			if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
 				logStreamErrors(err, topic)
 				tracing.AnnotateError(span, err)
-				s.downscorePeer(remotePeer, peerscoring.SourceRPCRequest, "registerRpcError")
+				s.downscorePeer(remotePeer, peerscoring.SourceRPCRequest, "requestDecodeError:"+topic)
 				return
 			}
 			if err := handle(ctx, msg, stream); err != nil {
@@ -311,7 +311,7 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 			if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
 				logStreamErrors(err, topic)
 				tracing.AnnotateError(span, err)
-				s.downscorePeer(remotePeer, peerscoring.SourceRPCRequest, "registerRpcError")
+				s.downscorePeer(remotePeer, peerscoring.SourceRPCRequest, "requestDecodeError:"+topic)
 				return
 			}
 			if err := handle(ctx, nTyp.Elem().Interface(), stream); err != nil {

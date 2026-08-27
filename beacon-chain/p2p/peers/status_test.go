@@ -2,8 +2,10 @@ package peers_test
 
 import (
 	"crypto/rand"
+	mrand "math/rand"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -483,7 +485,6 @@ func TestPrune(t *testing.T) {
 
 	// The scorer forgets pruned peers along with the store.
 	assert.Equal(t, 0, scoring.BadResponseCount(secondPID), "Expected scorer to forget pruned peer")
-	assert.Equal(t, float64(0), scoring.Score(secondPID), "Expected scorer to forget pruned peer")
 }
 
 func TestPeerIPTracker(t *testing.T) {
@@ -510,17 +511,18 @@ func TestPeerIPTracker(t *testing.T) {
 		assert.NotNil(t, p.IsFromBadIP(pr), "peer with bad ip is not bad")
 	}
 
-	// Add in bad peers, so that our records are trimmed out
-	// from the peer store.
+	// Fill the store past its cap so pruning kicks in.
 	for i := 0; i < p.MaxPeerLimit()+100; i++ {
-		// Peer added to peer handler.
 		pid := addPeer(t, p, peers.Disconnected)
 		scoring.RecordBadResponse(pid, peerscoring.Unknown, "test")
 	}
-	p.Prune()
+	pruned := p.Prune()
+	require.NotEqual(t, 0, len(pruned))
 
+	// Colocated-IP peers survive pruning: forgetting them would reset the IP's colocation budget.
 	for _, pr := range badPeers {
-		assert.NoError(t, p.IsFromBadIP(pr), "peer with good ip is regarded as bad")
+		assert.Equal(t, false, slices.Contains(pruned, pr), "colocated peer must not be pruned")
+		assert.NotNil(t, p.IsFromBadIP(pr), "colocated peer must still be refused after pruning")
 	}
 }
 
@@ -695,6 +697,193 @@ func TestPruneCandidates_InboundOnlyExcess(t *testing.T) {
 	assert.Equal(t, uint64(2), numToPrune)
 }
 
+func TestSetConnectionStateStampsConnectedAt(t *testing.T) {
+	p := peers.NewStatus(t.Context(), &peers.StatusConfig{PeerLimit: 30})
+	pid := createPeer(t, p, nil, network.DirInbound, peers.Connecting)
+
+	// Not yet connected: zero timestamp.
+	connectedAt, err := p.ConnectedAt(pid)
+	require.NoError(t, err)
+	assert.Equal(t, true, connectedAt.IsZero())
+
+	// The transition to Connected stamps the time.
+	p.SetConnectionState(pid, peers.Connected)
+	firstConnectedAt, err := p.ConnectedAt(pid)
+	require.NoError(t, err)
+	assert.Equal(t, false, firstConnectedAt.IsZero())
+
+	// A redundant Connected update does not reset tenure.
+	planted := firstConnectedAt.Add(-time.Hour)
+	p.SetConnectedAt(pid, planted)
+	p.SetConnectionState(pid, peers.Connected)
+	connectedAt, err = p.ConnectedAt(pid)
+	require.NoError(t, err)
+	assert.Equal(t, planted, connectedAt)
+
+	// Disconnecting keeps the stamp; reconnecting starts tenure afresh.
+	p.SetConnectionState(pid, peers.Disconnected)
+	connectedAt, err = p.ConnectedAt(pid)
+	require.NoError(t, err)
+	assert.Equal(t, planted, connectedAt)
+	p.SetConnectionState(pid, peers.Connected)
+	connectedAt, err = p.ConnectedAt(pid)
+	require.NoError(t, err)
+	assert.Equal(t, true, connectedAt.After(planted))
+
+	_, err = p.ConnectedAt("unknown-peer")
+	assert.ErrorContains(t, "peer unknown", err)
+}
+
+func TestPruneCandidatesGreylistedFirst(t *testing.T) {
+	scoring := peerscoring.NewScorer(peerscoring.WithBadResponseGreyListThreshold(1))
+	p := peers.NewStatus(t.Context(), &peers.StatusConfig{
+		PeerLimit: 30,
+		Scoring:   scoring,
+		Rand:      mrand.New(mrand.NewSource(42)),
+	})
+	for range 15 {
+		createPeer(t, p, nil, network.DirOutbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
+	}
+	for range 18 {
+		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
+	}
+
+	greyListed := make(map[peer.ID]bool)
+	for i, pid := range p.InboundConnected() {
+		if i < 5 {
+			scoring.RecordBadResponse(pid, peerscoring.Unknown, "test")
+			greyListed[pid] = true
+		}
+	}
+
+	firstOrderings := make(map[string]bool)
+	for range 100 {
+		candidates, numToPrune := p.PruneCandidates()
+		require.Equal(t, 18, len(candidates))
+		require.Equal(t, uint64(3), numToPrune)
+		// The grey-listed peers always occupy the front of the eviction order.
+		var firstOrdering strings.Builder
+		for i, pid := range candidates {
+			assert.Equal(t, i < 5, greyListed[pid], "grey-listed peers must sort first")
+			if i < 5 {
+				firstOrdering.WriteString(pid.String())
+			}
+		}
+		firstOrderings[firstOrdering.String()] = true
+	}
+	// The grey-listed front is shuffled, not in one fixed order.
+	assert.Equal(t, true, len(firstOrderings) > 1, "expected shuffled grey-listed orderings")
+}
+
+func TestPruneCandidatesTenurePartitionAndEpsilon(t *testing.T) {
+	p := peers.NewStatus(t.Context(), &peers.StatusConfig{
+		PeerLimit: 30,
+		Rand:      mrand.New(mrand.NewSource(42)),
+	})
+	for range 15 {
+		createPeer(t, p, nil, network.DirOutbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
+	}
+	for range 18 {
+		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
+	}
+
+	// inbound[0] is the oldest peer, inbound[17] the youngest.
+	inbound := p.InboundConnected()
+	base := time.Now().Add(-24 * time.Hour)
+	tenureIndex := make(map[peer.ID]int, len(inbound))
+	for i, pid := range inbound {
+		p.SetConnectedAt(pid, base.Add(time.Duration(i)*time.Minute))
+		tenureIndex[pid] = i
+	}
+
+	// The oldest quarter (18/4 = 4 peers) is the protected tail, youngest-first.
+	wantTail := []int{3, 2, 1, 0}
+	epsilonRounds, prefixOrderings := 0, make(map[string]bool)
+	for range 400 {
+		candidates, _ := p.PruneCandidates()
+		require.Equal(t, 18, len(candidates))
+		seen := make(map[peer.ID]bool, len(candidates))
+		for _, pid := range candidates {
+			seen[pid] = true
+		}
+		require.Equal(t, 18, len(seen), "candidates must be a permutation of all inbound peers")
+
+		tenureRound := true
+		for i, want := range wantTail {
+			if tenureIndex[candidates[14+i]] != want {
+				tenureRound = false
+				break
+			}
+		}
+		if !tenureRound {
+			epsilonRounds++
+			continue
+		}
+		var prefix strings.Builder
+		for _, pid := range candidates[:14] {
+			require.Equal(t, true, tenureIndex[pid] >= 4, "protected old peer found in the unprotected prefix")
+			prefix.WriteString(pid.String())
+		}
+		prefixOrderings[prefix.String()] = true
+	}
+	// Epsilon rounds ignore tenure ~5% of the time.
+	assert.Equal(t, true, epsilonRounds >= 1 && epsilonRounds <= 60, "epsilon round count out of range: %d", epsilonRounds)
+	// The unprotected prefix is shuffled between tenure rounds.
+	assert.Equal(t, true, len(prefixOrderings) > 1, "expected shuffled unprotected prefixes")
+}
+
+func TestPruneCandidatesSmallCandidateSets(t *testing.T) {
+	// PeerLimit 2 -> connected limit 2, inbound limit 1.
+	newStatus := func() *peers.Status {
+		return peers.NewStatus(t.Context(), &peers.StatusConfig{
+			PeerLimit: 2,
+			Rand:      mrand.New(mrand.NewSource(42)),
+		})
+	}
+
+	// A single inbound peer is within both limits: nothing to prune.
+	p := newStatus()
+	createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
+	candidates, numToPrune := p.PruneCandidates()
+	assert.Equal(t, 0, len(candidates))
+	assert.Equal(t, uint64(0), numToPrune)
+
+	// Two and three candidates: the whole set is returned, no tenure tail (len/4 = 0).
+	for _, n := range []int{2, 3} {
+		p = newStatus()
+		for range n {
+			createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
+		}
+		for range 20 {
+			candidates, numToPrune = p.PruneCandidates()
+			require.Equal(t, n, len(candidates))
+			require.Equal(t, uint64(n-1), numToPrune)
+		}
+	}
+
+	// Four candidates: exactly the single oldest peer forms the protected tail.
+	p = newStatus()
+	for range 4 {
+		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
+	}
+	inbound := p.InboundConnected()
+	base := time.Now().Add(-24 * time.Hour)
+	oldest := inbound[0]
+	for i, pid := range inbound {
+		p.SetConnectedAt(pid, base.Add(time.Duration(i)*time.Minute))
+	}
+	oldestLast := 0
+	for range 100 {
+		candidates, _ := p.PruneCandidates()
+		require.Equal(t, 4, len(candidates))
+		if candidates[3] == oldest {
+			oldestLast++
+		}
+	}
+	// Tenure rounds (95%) always put the oldest peer last; epsilon rounds may not.
+	assert.Equal(t, true, oldestLast >= 60, "oldest peer evicted too eagerly: last in only %d/100 rounds", oldestLast)
+}
+
 func TestPrunePeers_TrustedPeers(t *testing.T) {
 	scoring := peerscoring.NewScorer(peerscoring.WithBadResponseGreyListThreshold(1))
 	p := peers.NewStatus(t.Context(), &peers.StatusConfig{
@@ -792,12 +981,17 @@ func TestPrunePeers_TrustedPeers(t *testing.T) {
 		assert.Equal(t, network.DirInbound, dir)
 	}
 
-	// Ensure candidates are in ascending score order.
-	currScore := scoring.Score(candidates[0])
+	// Grey-listed candidates come first; once a clean candidate appears no
+	// grey-listed one may follow.
+	seenClean := false
 	for _, pid := range candidates {
-		score := scoring.Score(pid)
-		assert.Equal(t, true, currScore <= score)
-		currScore = score
+		greyListed := scoring.IsPeerGreyListed(pid) != nil
+		if !greyListed {
+			seenClean = true
+		}
+		if seenClean {
+			assert.Equal(t, false, greyListed, "grey-listed candidate found after a clean one")
+		}
 	}
 }
 

@@ -132,11 +132,17 @@ func Test_endpoints(t *testing.T) {
 	}
 
 	prysmNodeRoutes := map[string][]string{
-		"/prysm/node/trusted_peers":              {http.MethodGet, http.MethodPost},
-		"/prysm/v1/node/trusted_peers":           {http.MethodGet, http.MethodPost},
-		"/prysm/node/trusted_peers/{peer_id}":    {http.MethodDelete},
-		"/prysm/v1/node/trusted_peers/{peer_id}": {http.MethodDelete},
-		"/prysm/v1/node/custody":                 {http.MethodGet},
+		"/prysm/node/trusted_peers":                {http.MethodGet, http.MethodPost},
+		"/prysm/v1/node/trusted_peers":             {http.MethodGet, http.MethodPost},
+		"/prysm/node/trusted_peers/{peer_id}":      {http.MethodDelete},
+		"/prysm/v1/node/trusted_peers/{peer_id}":   {http.MethodDelete},
+		"/prysm/v1/node/custody":                   {http.MethodGet},
+		"/prysm/v1/node/peers/scoring":             {http.MethodGet},
+		"/prysm/v1/node/peers/{peer_id}/scoring":   {http.MethodGet},
+		"/prysm/v1/node/peers/scoring/agents":      {http.MethodGet},
+		"/prysm/v1/node/peers/scoring/config":      {http.MethodGet},
+		"/prysm/v1/node/gossip/rejections":         {http.MethodGet},
+		"/prysm/v1/node/gossip/rejections/summary": {http.MethodGet},
 	}
 
 	prysmValidatorRoutes := map[string][]string{

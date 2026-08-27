@@ -253,6 +253,8 @@ func (_ *limiter) topicLogger(topic string) *logrus.Entry {
 }
 
 func (l *limiter) downscorePeer(peerID peer.ID, topic, reason string) {
+	// Record the topic with the reason: which protocol was hammered is the detail that matters.
+	reason = reason + ":" + topic
 	count := l.p2p.PeerScoring().RecordBadResponse(peerID, peerscoring.SourceRateLimit, reason)
 	log.WithFields(logrus.Fields{
 		"peerID":       peerID.String(),

@@ -3,14 +3,13 @@ package peerscoring
 import (
 	"errors"
 	"fmt"
-	"math"
 	"time"
 
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
-var _ GreyListerAndScorer = rpcStatusScorer{}
+var _ GreyLister = rpcStatusScorer{}
 
 // terminalStatusErrors greylist a peer until a later status exchange clears them.
 var terminalStatusErrors = []error{
@@ -21,20 +20,6 @@ var terminalStatusErrors = []error{
 
 // rpcStatusScorer judges the chain view a peer advertised in its last status exchange.
 type rpcStatusScorer struct{}
-
-// Score returns the weighted status score: how close the peer's advertised head is to the highest known head.
-func (rpcStatusScorer) Score(_ peer.ID, si *scoringInfo) float64 {
-	status := si.peerInfo.rpcStatus
-	if status == nil || status.chainState == nil {
-		return 0
-	}
-	if status.chainState.HeadSlot < si.ourHeadSlot || si.highestKnownHeadSlot == 0 {
-		return 0
-	}
-	score := float64(status.chainState.HeadSlot) / float64(si.highestKnownHeadSlot)
-	score = math.Round(score*scoreRoundingFactor) / scoreRoundingFactor
-	return score * si.params.peerStatusWeight
-}
 
 // IsPeerGreyListed greylists the peer when its last status failed validation with a terminal error.
 func (rpcStatusScorer) IsPeerGreyListed(_ peer.ID, si *scoringInfo) error {
