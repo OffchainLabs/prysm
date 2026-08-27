@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -152,29 +153,51 @@ func TestWriteFileAtomically(t *testing.T) {
 		assert.Equal(t, 0, len(matches))
 	})
 
-	t.Run("refuses symlink", func(t *testing.T) {
+	t.Run("follows symlink and replaces its target", func(t *testing.T) {
 		dir := t.TempDir()
 		targetPath := filepath.Join(dir, "target.txt")
 		linkPath := filepath.Join(dir, "keys.txt")
 		require.NoError(t, file.WriteFile(targetPath, []byte("old")))
 		require.NoError(t, os.Symlink(targetPath, linkPath))
 
-		err := file.WriteFileAtomically(linkPath, []byte("new"))
-		require.ErrorContains(t, "refusing to atomically replace symlink", err)
+		require.NoError(t, file.WriteFileAtomically(linkPath, []byte("new")))
 		got, err := os.ReadFile(targetPath)
 		require.NoError(t, err)
-		assert.Equal(t, "old", string(got))
+		assert.Equal(t, "new", string(got))
+		info, err := os.Lstat(linkPath)
+		require.NoError(t, err)
+		assert.Equal(t, true, info.Mode()&os.ModeSymlink != 0)
 	})
 
-	t.Run("preserves original on validation error", func(t *testing.T) {
+	t.Run("refuses broken symlink", func(t *testing.T) {
+		dir := t.TempDir()
+		linkPath := filepath.Join(dir, "keys.txt")
+		require.NoError(t, os.Symlink(filepath.Join(dir, "missing.txt"), linkPath))
+
+		err := file.WriteFileAtomically(linkPath, []byte("new"))
+		require.ErrorContains(t, "refusing to replace broken symlink", err)
+	})
+
+	t.Run("refuses directory", func(t *testing.T) {
+		dir := t.TempDir()
+		err := file.WriteFileAtomically(dir, []byte("new"))
+		require.ErrorContains(t, "is not a regular file", err)
+	})
+
+	t.Run("normalizes permissions of existing file", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Windows does not report Unix permission bits")
+		}
 		filePath := filepath.Join(t.TempDir(), "keys.txt")
 		require.NoError(t, os.WriteFile(filePath, []byte("old"), 0644))
 
-		err := file.WriteFileAtomically(filePath, []byte("new"))
-		require.ErrorContains(t, "already exists without proper 0600 permissions", err)
+		require.NoError(t, file.WriteFileAtomically(filePath, []byte("new")))
 		got, err := os.ReadFile(filePath)
 		require.NoError(t, err)
-		assert.Equal(t, "old", string(got))
+		assert.Equal(t, "new", string(got))
+		info, err := os.Stat(filePath)
+		require.NoError(t, err)
+		assert.Equal(t, params.BeaconIoConfig().ReadWritePermissions, info.Mode().Perm())
 	})
 }
 

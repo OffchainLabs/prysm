@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/OffchainLabs/prysm/v7/async"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -47,10 +48,21 @@ func (km *Keymanager) listenForAccountChanges(ctx context.Context) {
 			log.WithError(err).Error("Could not close file watcher")
 		}
 	}()
-	watchDir := filepath.Clean(filepath.Dir(accountsFilePath))
 	accountsFilePath = filepath.Clean(accountsFilePath)
-	if err := watcher.Add(watchDir); err != nil {
-		log.WithError(err).Errorf("Could not add directory %s to file watcher", watchDir)
+	// Watch the symlink target so edits through a symlinked keystore keep emitting events.
+	if resolved, err := filepath.EvalSymlinks(accountsFilePath); err == nil {
+		accountsFilePath = filepath.Clean(resolved)
+	}
+	watchDir := filepath.Dir(accountsFilePath)
+	watchPath := watchDir
+	watchingFile := useDirectFileWatch()
+	if watchingFile {
+		// Kqueue opens one descriptor per directory entry. Watch the target directly and reattach
+		// after atomic replacements to avoid exhausting descriptors in large account directories.
+		watchPath = accountsFilePath
+	}
+	if err := watcher.Add(watchPath); err != nil {
+		log.WithError(err).Errorf("Could not add %s to file watcher", watchPath)
 		return
 	}
 	ctx, cancel := context.WithCancel(ctx)
@@ -70,7 +82,7 @@ func (km *Keymanager) listenForAccountChanges(ctx context.Context) {
 				return
 			}
 			eventPath := filepath.Clean(event.Name)
-			if eventPath == watchDir && (event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename)) {
+			if !watchingFile && eventPath == watchDir && (event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename)) {
 				log.Errorf("Accounts directory was removed: %s", watchDir)
 				return
 			}
@@ -79,6 +91,12 @@ func (km *Keymanager) listenForAccountChanges(ctx context.Context) {
 			}
 			if !event.Has(fsnotify.Write) && !event.Has(fsnotify.Create) && !event.Has(fsnotify.Rename) && !event.Has(fsnotify.Remove) {
 				continue
+			}
+			if watchingFile && (event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename)) {
+				if err := watcher.Add(accountsFilePath); err != nil {
+					log.WithError(err).Errorf("Could not reattach account file watcher after replacement: %s", accountsFilePath)
+					return
+				}
 			}
 			select {
 			case fileChangesChan <- struct{}{}:
@@ -92,6 +110,15 @@ func (km *Keymanager) listenForAccountChanges(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		}
+	}
+}
+
+func useDirectFileWatch() bool {
+	switch runtime.GOOS {
+	case "darwin", "dragonfly", "freebsd", "netbsd", "openbsd":
+		return true
+	default:
+		return false
 	}
 }
 

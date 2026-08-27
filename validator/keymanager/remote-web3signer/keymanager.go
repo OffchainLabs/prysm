@@ -3,12 +3,14 @@ package remote_web3signer
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -62,6 +64,11 @@ type SetupConfig struct {
 	// a static list of public keys to be passed by the user to determine what accounts should sign.
 	// This will provide a layer of safety against slashing if the web3signer is shared across validators.
 	ProvidedPublicKeys []string
+
+	// Test-only timing overrides; defaults apply when zero.
+	keyFileRemovalGrace   time.Duration
+	keyFileReadRetryDelay time.Duration
+	keyFileReconcileEvery time.Duration
 }
 
 // Keymanager defines the web3signer keymanager.
@@ -77,8 +84,11 @@ type Keymanager struct {
 	keyFileRemovalGrace   time.Duration
 	keyFileReadRetryDelay time.Duration
 	keyFileReconcileEvery time.Duration
+	keyFileFallbackActive bool // guarded by updateLock
+	keyFileAPIEmpty       bool // guarded by updateLock; an API write intentionally persisted zero keys
 	lock                  sync.RWMutex
 	updateLock            sync.Mutex
+	reconcileLock         sync.Mutex
 }
 
 // NewKeymanager instantiates a new web3signer key manager.
@@ -100,9 +110,9 @@ func NewKeymanager(ctx context.Context, cfg *SetupConfig) (*Keymanager, error) {
 		validator:             validator.New(),
 		retriesRemaining:      maxRetries,
 		keyFilePath:           cfg.KeyFilePath,
-		keyFileRemovalGrace:   defaultKeyFileRemovalGracePeriod,
-		keyFileReadRetryDelay: defaultKeyFileReadRetryDelay,
-		keyFileReconcileEvery: defaultKeyFileReconcileInterval,
+		keyFileRemovalGrace:   cmp.Or(cfg.keyFileRemovalGrace, defaultKeyFileRemovalGracePeriod),
+		keyFileReadRetryDelay: cmp.Or(cfg.keyFileReadRetryDelay, defaultKeyFileReadRetryDelay),
+		keyFileReconcileEvery: cmp.Or(cfg.keyFileReconcileEvery, defaultKeyFileReconcileInterval),
 	}
 
 	keyFileExists := false
@@ -214,7 +224,8 @@ func (km *Keymanager) refreshRemoteKeysFromFileChangesWithRetry(ctx context.Cont
 		if !initialized {
 			return err
 		}
-		km.updatePublicKeys(slices.Collect(maps.Values(km.flagLoadedKeysMap))) // update the keys to flag provided defaults
+		// Retain the current keys while the watcher recovers; a watcher failure says
+		// nothing about the key file contents.
 		km.retriesRemaining--
 		log.WithError(err).Debug("Error occurred on key refresh")
 		log.WithFields(logrus.Fields{"path": km.keyFilePath, "retriesRemaining": km.retriesRemaining, "retryDelay": retryDelay}).Warnf("Could not refresh keys. Retrying...")
@@ -275,9 +286,6 @@ func (km *Keymanager) readKeyFile() ([][48]byte, map[string][48]byte, error) {
 	if err := scanner.Err(); err != nil {
 		return nil, nil, errors.Wrap(err, "could not scan remote signer public key file")
 	}
-	if len(keys) == 0 {
-		log.Warn("Remote signer key file: no valid public keys found. Defaulting to flag provided keys if any exist.")
-	}
 	return keys, seenKeys, nil
 }
 
@@ -303,6 +311,8 @@ func (km *Keymanager) savePublicKeysToFileLocked(providedPublicKeys map[string][
 		return fmt.Errorf("replace remote signer key file: %w", err)
 	}
 
+	km.keyFileFallbackActive = false
+	km.keyFileAPIEmpty = len(pubkeys) == 0
 	km.updatePublicKeysLocked(pubkeys)
 	return nil
 }
@@ -317,25 +327,50 @@ func (km *Keymanager) refreshRemoteKeysFromFileChanges(ctx context.Context, mark
 			log.WithError(err).Error("Could not close file watcher")
 		}
 	}()
-	watchDir := filepath.Clean(filepath.Dir(km.keyFilePath))
 	keyFilePath := filepath.Clean(km.keyFilePath)
-	if err := watcher.Add(watchDir); err != nil {
-		return errors.Wrap(err, "could not add remote signer key file directory to file watcher")
+	// Watch the symlink target so edits through a symlinked key file keep emitting events.
+	if resolved, err := filepath.EvalSymlinks(keyFilePath); err == nil {
+		keyFilePath = filepath.Clean(resolved)
+	}
+	watchDir := filepath.Dir(keyFilePath)
+	watchPath := watchDir
+	watchingFile := useDirectFileWatch()
+	if watchingFile {
+		// Kqueue opens one descriptor per directory entry. Watching only the target avoids exhausting
+		// descriptors in large directories; Rename/Remove events below reattach after replacements.
+		watchPath = keyFilePath
+	}
+	if err := watcher.Add(watchPath); err != nil {
+		return errors.Wrapf(err, "could not add remote signer key file watcher for %s", watchPath)
 	}
 	log.WithField("path", km.keyFilePath).Info("Successfully initialized file watcher")
-	km.retriesRemaining = maxRetries // reset retries to default
-	// Reload after every watcher initialization to recover from fatal watcher errors.
-	if err := km.reloadPublicKeysFromFile(); err != nil {
-		return errors.Wrap(err, "could not reload remote signer key file")
-	}
-	markReady(nil)
-
 	debounceCtx, cancelDebounce := context.WithCancel(ctx)
 	defer cancelDebounce()
 	fileChanges := make(chan any, 1)
 	go async.Debounce(debounceCtx, features.Get().KeystoreImportDebounceInterval, fileChanges, func(any) {
 		km.reconcileRemoteKeysFile(debounceCtx)
 	})
+	periodicReconciles := make(chan any, 1)
+	go func() {
+		for {
+			select {
+			case <-periodicReconciles:
+				km.reconcileRemoteKeysFile(debounceCtx)
+			case <-debounceCtx.Done():
+				return
+			}
+		}
+	}()
+
+	// Reload after every watcher initialization to recover from fatal watcher errors. Any failure
+	// retains the current keys and enters the same grace/retry path used for regular file events.
+	if err := km.reloadPublicKeysFromFile(); err != nil {
+		log.WithError(err).WithField("path", km.keyFilePath).Warn("Could not reload remote signer key file; retaining the last valid keys")
+		signalFileChange(fileChanges)
+	}
+	markReady(nil)
+	km.retriesRemaining = maxRetries // reset retries once the watcher session is established
+
 	reconcileTicker := time.NewTicker(km.keyFileReconcileEvery)
 	defer reconcileTicker.Stop()
 
@@ -347,7 +382,7 @@ func (km *Keymanager) refreshRemoteKeysFromFileChanges(ctx context.Context, mark
 				return nil
 			}
 			eventPath := filepath.Clean(e.Name)
-			if eventPath == watchDir && (e.Has(fsnotify.Remove) || e.Has(fsnotify.Rename)) {
+			if !watchingFile && eventPath == watchDir && (e.Has(fsnotify.Remove) || e.Has(fsnotify.Rename)) {
 				return errors.New("remote signer key file directory was removed")
 			}
 			if eventPath != keyFilePath {
@@ -360,6 +395,14 @@ func (km *Keymanager) refreshRemoteKeysFromFileChanges(ctx context.Context, mark
 				"event": e.Name,
 				"op":    e.Op.String(),
 			}).Debug("Remote signer key file event triggered")
+			if watchingFile && (e.Has(fsnotify.Remove) || e.Has(fsnotify.Rename)) {
+				if err := watcher.Add(keyFilePath); err != nil {
+					// A true removal has no parent-directory watch to report its recreation. Reconcile the
+					// removal now, then let the outer retry loop establish a fresh watch.
+					km.reconcileRemoteKeysFile(debounceCtx)
+					return errors.Wrap(err, "could not reattach remote signer key file watcher after replacement")
+				}
+			}
 			signalFileChange(fileChanges)
 		case err, ok := <-watcher.Errors:
 			if !ok { // Channel was closed (i.e. Watcher.Close() was called).
@@ -368,11 +411,20 @@ func (km *Keymanager) refreshRemoteKeysFromFileChanges(ctx context.Context, mark
 			}
 			return errors.Wrap(err, "could not watch for file changes")
 		case <-reconcileTicker.C:
-			signalFileChange(fileChanges)
+			signalFileChange(periodicReconciles)
 		case <-ctx.Done():
 			log.Info("Closing file watcher")
 			return nil
 		}
+	}
+}
+
+func useDirectFileWatch() bool {
+	switch runtime.GOOS {
+	case "darwin", "dragonfly", "freebsd", "netbsd", "openbsd":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -383,52 +435,47 @@ func signalFileChange(fileChanges chan<- any) {
 	}
 }
 
+// reconcileRemoteKeysFile re-reads the key file until it reaches a definitive state: valid keys
+// applied, absence confirmed past the grace period, or the bounded retry budget exhausted.
 func (km *Keymanager) reconcileRemoteKeysFile(ctx context.Context) {
+	km.reconcileLock.Lock()
+	defer km.reconcileLock.Unlock()
+
 	err := km.reloadPublicKeysFromFile()
 	if err == nil {
 		return
 	}
-	if errors.Is(err, os.ErrNotExist) {
-		km.reconcileMissingRemoteKeysFile(ctx)
-		return
-	}
-	km.retryRemoteKeysFile(ctx, err)
-}
-
-func (km *Keymanager) reconcileMissingRemoteKeysFile(ctx context.Context) {
-	if !waitForRemoteKeysRetry(ctx, km.keyFileRemovalGrace) {
-		return
-	}
-	err := km.reloadPublicKeysFromFile()
-	if err == nil {
-		return
-	}
-	if errors.Is(err, os.ErrNotExist) {
-		log.WithField("path", km.keyFilePath).Warn("Remote signer key file remained absent after the removal grace period")
-		km.updatePublicKeys(slices.Collect(maps.Values(km.flagLoadedKeysMap)))
-		return
-	}
-	km.retryRemoteKeysFile(ctx, err)
-}
-
-func (km *Keymanager) retryRemoteKeysFile(ctx context.Context, initialErr error) {
-	err := initialErr
 	delay := km.keyFileReadRetryDelay
-	for attempt := 1; attempt < maxKeyFileReadAttempts; attempt++ {
-		if !waitForRemoteKeysRetry(ctx, delay) {
+	wasAbsent := false
+	for attempt := 1; ; attempt++ {
+		absent := isAbsentKeyFileErr(err)
+		if absent && km.flagFallbackActive() {
 			return
 		}
+		if absent && wasAbsent {
+			km.applyFlagKeyFallback()
+			return
+		}
+		if !absent && attempt >= maxKeyFileReadAttempts {
+			log.WithError(err).WithField("path", km.keyFilePath).Error("Could not load a valid remote signer key file; retaining the last valid keys")
+			return
+		}
+		wait := delay
+		if absent {
+			// An absent or empty file may be mid-replacement; give the writer a grace period.
+			wait = km.keyFileRemovalGrace
+		} else {
+			delay *= 2
+		}
+		if !waitForRemoteKeysRetry(ctx, wait) {
+			return
+		}
+		wasAbsent = absent
 		err = km.reloadPublicKeysFromFile()
 		if err == nil {
 			return
 		}
-		if errors.Is(err, os.ErrNotExist) {
-			km.reconcileMissingRemoteKeysFile(ctx)
-			return
-		}
-		delay *= 2
 	}
-	log.WithError(err).WithField("path", km.keyFilePath).Error("Could not load a valid remote signer key file; retaining the last valid keys")
 }
 
 func waitForRemoteKeysRetry(ctx context.Context, delay time.Duration) bool {
@@ -442,27 +489,53 @@ func waitForRemoteKeysRetry(ctx context.Context, delay time.Duration) bool {
 	}
 }
 
+var errNoValidFileKeys = errors.New("no valid public keys in remote signer key file")
+
+func isAbsentKeyFileErr(err error) bool {
+	return errors.Is(err, os.ErrNotExist) || errors.Is(err, errNoValidFileKeys)
+}
+
 func (km *Keymanager) reloadPublicKeysFromFile() error {
 	km.updateLock.Lock()
 	defer km.updateLock.Unlock()
 
 	fileKeys, _, err := km.readKeyFile()
 	if err != nil {
+		km.keyFileAPIEmpty = false
 		return err
 	}
 	if len(fileKeys) == 0 {
-		log.Warnln("Remote signer key file no longer has keys, defaulting to flag provided keys")
-		fileKeys = slices.Collect(maps.Values(km.flagLoadedKeysMap))
+		if km.keyFileAPIEmpty {
+			km.keyFileFallbackActive = false
+			km.updatePublicKeysLocked(nil)
+			return nil
+		}
+		return errNoValidFileKeys
 	}
+	km.keyFileAPIEmpty = false
+	km.keyFileFallbackActive = false
 	km.updatePublicKeysLocked(fileKeys)
 	return nil
 }
 
-func (km *Keymanager) updatePublicKeys(keys [][48]byte) {
+// applyFlagKeyFallback publishes the flag-provided keys after the key file is confirmed absent or
+// empty. The warning is emitted only on the transition into the fallback state.
+func (km *Keymanager) applyFlagKeyFallback() {
 	km.updateLock.Lock()
 	defer km.updateLock.Unlock()
 
-	km.updatePublicKeysLocked(keys)
+	if !km.keyFileFallbackActive {
+		km.keyFileFallbackActive = true
+		log.Warnln("Remote signer key file no longer has keys, defaulting to flag provided keys")
+	}
+	km.keyFileAPIEmpty = false
+	km.updatePublicKeysLocked(slices.Collect(maps.Values(km.flagLoadedKeysMap)))
+}
+
+func (km *Keymanager) flagFallbackActive() bool {
+	km.updateLock.Lock()
+	defer km.updateLock.Unlock()
+	return km.keyFileFallbackActive
 }
 
 func (km *Keymanager) updatePublicKeysLocked(keys [][48]byte) bool {

@@ -112,28 +112,19 @@ func WriteFile(file string, data []byte) error {
 }
 
 // WriteFileAtomically replaces a regular file without exposing partial contents.
+// Symlinks are resolved and their final target is replaced; the result always has 0600 permissions.
 func WriteFileAtomically(filePath string, data []byte) error {
 	expanded, err := ExpandPath(filePath)
 	if err != nil {
 		return err
 	}
-	info, err := os.Lstat(expanded)
-	if err == nil {
-		if info.Mode()&os.ModeSymlink != 0 {
-			return errors.Errorf("refusing to atomically replace symlink at path %s", expanded)
-		}
-		if !info.Mode().IsRegular() {
-			return errors.Errorf("path %s is not a regular file", expanded)
-		}
-		if info.Mode().Perm() != params.BeaconIoConfig().ReadWritePermissions {
-			return errors.New("file already exists without proper 0600 permissions")
-		}
-	} else if !os.IsNotExist(err) {
+	target, err := resolveAtomicWriteTarget(expanded)
+	if err != nil {
 		return err
 	}
 
-	dir := filepath.Dir(expanded)
-	pending, err := os.CreateTemp(dir, "."+filepath.Base(expanded)+".tmp-*")
+	dir := filepath.Dir(target)
+	pending, err := os.CreateTemp(dir, "."+filepath.Base(target)+".tmp-*")
 	if err != nil {
 		return err
 	}
@@ -158,7 +149,7 @@ func WriteFileAtomically(filePath string, data []byte) error {
 		return err
 	}
 	closed = true
-	if err := os.Rename(pendingPath, expanded); err != nil {
+	if err := os.Rename(pendingPath, target); err != nil {
 		return err
 	}
 
@@ -174,6 +165,36 @@ func WriteFileAtomically(filePath string, data []byte) error {
 		_ = d.Close()
 	}()
 	return d.Sync()
+}
+
+// resolveAtomicWriteTarget follows symlinks so the rename replaces the final target in place.
+func resolveAtomicWriteTarget(path string) (string, error) {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err == nil {
+		info, err := os.Stat(resolved)
+		if err != nil {
+			return "", err
+		}
+		if !info.Mode().IsRegular() {
+			return "", errors.Errorf("path %s is not a regular file", resolved)
+		}
+		if info.Mode().Perm() != params.BeaconIoConfig().ReadWritePermissions {
+			log.WithField("path", resolved).Warn("Normalizing file permissions to 0600 on atomic replace")
+		}
+		return resolved, nil
+	}
+	if !os.IsNotExist(err) {
+		return "", err
+	}
+	resolvedDir, err := filepath.EvalSymlinks(filepath.Dir(path))
+	if err != nil {
+		return "", errors.Wrapf(err, "could not resolve parent directory of %s", path)
+	}
+	candidate := filepath.Join(resolvedDir, filepath.Base(path))
+	if info, err := os.Lstat(candidate); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return "", errors.Errorf("refusing to replace broken symlink at %s", candidate)
+	}
+	return candidate, nil
 }
 
 // HomeDir for a user.
