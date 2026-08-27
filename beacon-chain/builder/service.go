@@ -298,23 +298,16 @@ func (s *Service) SubmitSignedBeaconBlock(ctx context.Context, builderURL string
 func (s *Service) SubmitBuilderPreferences(ctx context.Context, entries []*ethpb.BuilderPreferencesEntry) map[int]string {
 	ctx, span := trace.StartSpan(ctx, "builder.SubmitBuilderPreferences")
 	defer span.End()
-	var (
-		mu       sync.Mutex
-		wg       sync.WaitGroup
-		failures = make(map[int]string)
-	)
-	fail := func(i int, msg string) {
-		mu.Lock()
-		failures[i] = msg
-		mu.Unlock()
-	}
+	var wg sync.WaitGroup
+	// Each entry writes only its own index, so the goroutines need no locking.
+	msgs := make([]string, len(entries))
 	for i, e := range entries {
 		if e == nil {
 			continue
 		}
 		if len(e.GetUrl()) == 0 {
 			log.Warn("Skipping builder preferences entry with no builder url")
-			fail(i, "builder url is required")
+			msgs[i] = "builder url is required"
 			continue
 		}
 		wg.Add(1)
@@ -332,11 +325,17 @@ func (s *Service) SubmitBuilderPreferences(ctx context.Context, entries []*ethpb
 			if err != nil {
 				tracing.AnnotateError(span, err)
 				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(url)).Warn("Could not submit builder preferences")
-				fail(i, "could not submit builder preferences: "+logs.MaskCredentialsLogging(err.Error()))
+				msgs[i] = "could not submit builder preferences: " + logs.MaskCredentialsLogging(err.Error())
 			}
 		}(i, e)
 	}
 	wg.Wait()
+	failures := make(map[int]string)
+	for i, msg := range msgs {
+		if msg != "" {
+			failures[i] = msg
+		}
+	}
 	return failures
 }
 

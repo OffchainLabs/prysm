@@ -3,6 +3,7 @@ package builder
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 
 	builderapi "github.com/OffchainLabs/prysm/v7/api/client/builder"
@@ -19,19 +20,19 @@ type fakeBuilderClient struct {
 	url       string
 	bid       *eth.SignedExecutionPayloadBid
 	getErr    error
-	getCount  int
-	prefCount int
+	getCount  atomic.Int32
+	prefCount atomic.Int32
 }
 
 func (f *fakeBuilderClient) NodeURL() string { return f.url }
 
 func (f *fakeBuilderClient) GetExecutionPayloadBid(context.Context, primitives.Slot, [32]byte, [32]byte, [48]byte, *eth.SignedRequestAuth) (*eth.SignedExecutionPayloadBid, error) {
-	f.getCount++
+	f.getCount.Add(1)
 	return f.bid, f.getErr
 }
 
 func (f *fakeBuilderClient) SubmitBuilderPreferences(context.Context, [48]byte, *eth.BuilderPreferencesRequest) error {
-	f.prefCount++
+	f.prefCount.Add(1)
 	return nil
 }
 
@@ -74,7 +75,7 @@ func TestGetExecutionPayloadBid_FanOutAndDedup(t *testing.T) {
 	bids, err := s.GetExecutionPayloadBid(t.Context(), 1, [32]byte{}, [32]byte{}, [48]byte{}, entries)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(bids))
-	require.Equal(t, 1, clients["http://a"].getCount)
+	require.Equal(t, int32(1), clients["http://a"].getCount.Load())
 
 	got := map[string]primitives.Gwei{}
 	for _, pb := range bids {
@@ -96,7 +97,7 @@ func TestGetExecutionPayloadBid_SharedURLDistinctAuthData(t *testing.T) {
 	bids, err := s.GetExecutionPayloadBid(t.Context(), 1, [32]byte{}, [32]byte{}, [48]byte{}, entries)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(bids))
-	require.Equal(t, 2, proxy.getCount)
+	require.Equal(t, int32(2), proxy.getCount.Load())
 }
 
 func TestGetExecutionPayloadBid_SkipsErrorsAndNil(t *testing.T) {
@@ -241,7 +242,7 @@ func TestSubmitBuilderPreferences(t *testing.T) {
 		require.Equal(t, 2, len(failures))
 		require.StringContains(t, "builder url is required", failures[0])
 		require.StringContains(t, "could not submit builder preferences", failures[2])
-		require.Equal(t, 1, fc.prefCount)
+		require.Equal(t, int32(1), fc.prefCount.Load())
 	})
 
 	t.Run("nil entries are skipped", func(t *testing.T) {
@@ -249,7 +250,7 @@ func TestSubmitBuilderPreferences(t *testing.T) {
 		s := newMultiplexService(t, map[string]*fakeBuilderClient{"http://ok": fc})
 		failures := s.SubmitBuilderPreferences(t.Context(), []*eth.BuilderPreferencesEntry{nil, prefEntry("http://ok")})
 		require.Equal(t, 0, len(failures))
-		require.Equal(t, 1, fc.prefCount)
+		require.Equal(t, int32(1), fc.prefCount.Load())
 	})
 
 	t.Run("no failures on success", func(t *testing.T) {
