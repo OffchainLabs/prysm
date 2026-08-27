@@ -27,6 +27,19 @@ func ProcessAttestationsNoVerifySignature(
 	beaconState state.BeaconState,
 	b interfaces.ReadOnlyBeaconBlock,
 ) (state.BeaconState, error) {
+	parentSlot, err := gloas.ParentSlotFromBid(beaconState)
+	if err != nil {
+		return nil, err
+	}
+	return ProcessAttestationsNoVerifySignatureWithParentSlot(ctx, beaconState, b, parentSlot)
+}
+
+func ProcessAttestationsNoVerifySignatureWithParentSlot(
+	ctx context.Context,
+	beaconState state.BeaconState,
+	b interfaces.ReadOnlyBeaconBlock,
+	parentSlot primitives.Slot,
+) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "altair.ProcessAttestationsNoVerifySignature")
 	defer span.End()
 
@@ -42,7 +55,7 @@ func ProcessAttestationsNoVerifySignature(
 		return nil, err
 	}
 	for idx, att := range body.Attestations() {
-		beaconState, err = ProcessAttestationNoVerifySignature(ctx, beaconState, att, totalBalance)
+		beaconState, err = ProcessAttestationNoVerifySignature(ctx, beaconState, att, totalBalance, parentSlot)
 		if err != nil {
 			return nil, errors.Wrapf(err, "could not verify attestation at index %d in block", idx)
 		}
@@ -57,6 +70,7 @@ func ProcessAttestationNoVerifySignature(
 	beaconState state.BeaconState,
 	att ethpb.Att,
 	totalBalance uint64,
+	parentSlot primitives.Slot,
 ) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "altair.ProcessAttestationNoVerifySignature")
 	defer span.End()
@@ -69,7 +83,7 @@ func ProcessAttestationNoVerifySignature(
 	if err != nil {
 		return nil, fmt.Errorf("att slot %d can't be greater than state slot %d", att.GetData().Slot, beaconState.Slot())
 	}
-	participatedFlags, err := AttestationParticipationFlagIndices(beaconState, att.GetData(), delay)
+	participatedFlags, err := AttestationParticipationFlagIndices(beaconState, att.GetData(), delay, parentSlot)
 	if err != nil {
 		return nil, err
 	}
@@ -280,7 +294,7 @@ func RewardProposer(ctx context.Context, beaconState state.BeaconState, proposer
 //	    participation_flag_indices.append(TIMELY_HEAD_FLAG_INDEX)
 //
 //	return participation_flag_indices
-func AttestationParticipationFlagIndices(beaconState state.ReadOnlyBeaconState, data *ethpb.AttestationData, delay primitives.Slot) (map[uint8]bool, error) {
+func AttestationParticipationFlagIndices(beaconState state.ReadOnlyBeaconState, data *ethpb.AttestationData, delay primitives.Slot, parentSlot primitives.Slot) (map[uint8]bool, error) {
 	currEpoch := time.CurrentEpoch(beaconState)
 	var justifiedCheckpt *ethpb.Checkpoint
 	if data.Target.Epoch == currEpoch {
@@ -319,6 +333,7 @@ func AttestationParticipationFlagIndices(beaconState state.ReadOnlyBeaconState, 
 		beaconState,
 		beaconBlockRoot,
 		data.Slot,
+		parentSlot,
 		uint64(data.CommitteeIndex),
 	)
 	if err != nil {

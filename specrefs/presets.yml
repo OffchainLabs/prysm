@@ -4,8 +4,8 @@
       search: BaseRewardFactor\s+.*yaml:"BASE_REWARD_FACTOR"
       regex: true
   spec: |
-    <spec preset_var="BASE_REWARD_FACTOR" fork="phase0" hash="ba06d7ce">
-    BASE_REWARD_FACTOR: uint64 = 64
+    <spec preset_var="BASE_REWARD_FACTOR" fork="phase0" hash="645b9c83">
+    BASE_REWARD_FACTOR: Uint64 = 64
     </spec>
 
 - name: BYTES_PER_LOGS_BLOOM#bellatrix
@@ -14,8 +14,8 @@
       search: BytesPerLogsBloom\s+.*yaml:"BYTES_PER_LOGS_BLOOM"
       regex: true
   spec: |
-    <spec preset_var="BYTES_PER_LOGS_BLOOM" fork="bellatrix" hash="97101cb2">
-    BYTES_PER_LOGS_BLOOM: uint64 = 256
+    <spec preset_var="BYTES_PER_LOGS_BLOOM" fork="bellatrix" hash="c8d28fff">
+    BYTES_PER_LOGS_BLOOM: Uint64 = 256
     </spec>
 
 - name: CELLS_PER_EXT_BLOB#fulu
@@ -44,8 +44,8 @@
       search: EpochsPerEth1VotingPeriod\s+.*yaml:"EPOCHS_PER_ETH1_VOTING_PERIOD"
       regex: true
   spec: |
-    <spec preset_var="EPOCHS_PER_ETH1_VOTING_PERIOD" fork="phase0" hash="6b6a0053">
-    EPOCHS_PER_ETH1_VOTING_PERIOD: uint64 = 64
+    <spec preset_var="EPOCHS_PER_ETH1_VOTING_PERIOD" fork="phase0" hash="517f1025">
+    EPOCHS_PER_ETH1_VOTING_PERIOD: Epoch = 64
     </spec>
 
 - name: EPOCHS_PER_HISTORICAL_VECTOR#phase0
@@ -54,8 +54,8 @@
       search: RandaoMixesLength\s*=
       regex: true
   spec: |
-    <spec preset_var="EPOCHS_PER_HISTORICAL_VECTOR" fork="phase0" hash="6156dc33">
-    EPOCHS_PER_HISTORICAL_VECTOR: uint64 = 65536
+    <spec preset_var="EPOCHS_PER_HISTORICAL_VECTOR" fork="phase0" hash="f2819dc7">
+    EPOCHS_PER_HISTORICAL_VECTOR: Epoch = 65536
     </spec>
 
 - name: EPOCHS_PER_SLASHINGS_VECTOR#phase0
@@ -64,8 +64,8 @@
       search: SlashingsLength\s*=
       regex: true
   spec: |
-    <spec preset_var="EPOCHS_PER_SLASHINGS_VECTOR" fork="phase0" hash="c237469a">
-    EPOCHS_PER_SLASHINGS_VECTOR: uint64 = 8192
+    <spec preset_var="EPOCHS_PER_SLASHINGS_VECTOR" fork="phase0" hash="1adb9280">
+    EPOCHS_PER_SLASHINGS_VECTOR: Epoch = 8192
     </spec>
 
 - name: EPOCHS_PER_SYNC_COMMITTEE_PERIOD#altair
@@ -74,8 +74,8 @@
       search: EpochsPerSyncCommitteePeriod\s+.*yaml:"EPOCHS_PER_SYNC_COMMITTEE_PERIOD"
       regex: true
   spec: |
-    <spec preset_var="EPOCHS_PER_SYNC_COMMITTEE_PERIOD" fork="altair" hash="f02bdf72">
-    EPOCHS_PER_SYNC_COMMITTEE_PERIOD: uint64 = 256
+    <spec preset_var="EPOCHS_PER_SYNC_COMMITTEE_PERIOD" fork="altair" hash="a76512fd">
+    EPOCHS_PER_SYNC_COMMITTEE_PERIOD: Epoch = 256
     </spec>
 
 - name: FIELD_ELEMENTS_PER_BLOB#deneb
@@ -84,8 +84,8 @@
       search: FieldElementsPerBlob\s+.*yaml:"FIELD_ELEMENTS_PER_BLOB"
       regex: true
   spec: |
-    <spec preset_var="FIELD_ELEMENTS_PER_BLOB" fork="deneb" hash="a86948eb">
-    FIELD_ELEMENTS_PER_BLOB: uint64 = 4096
+    <spec preset_var="FIELD_ELEMENTS_PER_BLOB" fork="deneb" hash="20b047a6">
+    FIELD_ELEMENTS_PER_BLOB: Uint64 = 4096
     </spec>
 
 - name: FIELD_ELEMENTS_PER_CELL#fulu
@@ -94,8 +94,8 @@
       search: CellsPerBlob\s*=
       regex: true
   spec: |
-    <spec preset_var="FIELD_ELEMENTS_PER_CELL" fork="fulu" hash="6af85ab8">
-    FIELD_ELEMENTS_PER_CELL: uint64 = 64
+    <spec preset_var="FIELD_ELEMENTS_PER_CELL" fork="fulu" hash="99f9c55d">
+    FIELD_ELEMENTS_PER_CELL: Uint64 = 64
     </spec>
 
 - name: FIELD_ELEMENTS_PER_EXT_BLOB#fulu
@@ -114,8 +114,8 @@
       search: HistoricalRootsLength\s*=
       regex: true
   spec: |
-    <spec preset_var="HISTORICAL_ROOTS_LIMIT" fork="phase0" hash="498b6597">
-    HISTORICAL_ROOTS_LIMIT: uint64 = 16777216
+    <spec preset_var="HISTORICAL_ROOTS_LIMIT" fork="phase0" hash="f8803117">
+    HISTORICAL_ROOTS_LIMIT: Uint64 = 16777216
     </spec>
 
 - name: HYSTERESIS_DOWNWARD_MULTIPLIER#phase0
@@ -124,8 +124,8 @@
       search: HysteresisDownwardMultiplier\s+.*yaml:"HYSTERESIS_DOWNWARD_MULTIPLIER"
       regex: true
   spec: |
-    <spec preset_var="HYSTERESIS_DOWNWARD_MULTIPLIER" fork="phase0" hash="95d603c9">
-    HYSTERESIS_DOWNWARD_MULTIPLIER: uint64 = 1
+    <spec preset_var="HYSTERESIS_DOWNWARD_MULTIPLIER" fork="phase0" hash="17b794e0">
+    HYSTERESIS_DOWNWARD_MULTIPLIER: Uint64 = 1
     </spec>
 
 - name: HYSTERESIS_QUOTIENT#phase0
@@ -134,8 +134,8 @@
       search: HysteresisQuotient\s+.*yaml:"HYSTERESIS_QUOTIENT"
       regex: true
   spec: |
-    <spec preset_var="HYSTERESIS_QUOTIENT" fork="phase0" hash="c3849917">
-    HYSTERESIS_QUOTIENT: uint64 = 4
+    <spec preset_var="HYSTERESIS_QUOTIENT" fork="phase0" hash="1bfc462c">
+    HYSTERESIS_QUOTIENT: Uint64 = 4
     </spec>
 
 - name: HYSTERESIS_UPWARD_MULTIPLIER#phase0
@@ -144,8 +144,8 @@
       search: HysteresisUpwardMultiplier\s+.*yaml:"HYSTERESIS_UPWARD_MULTIPLIER"
       regex: true
   spec: |
-    <spec preset_var="HYSTERESIS_UPWARD_MULTIPLIER" fork="phase0" hash="34607474">
-    HYSTERESIS_UPWARD_MULTIPLIER: uint64 = 5
+    <spec preset_var="HYSTERESIS_UPWARD_MULTIPLIER" fork="phase0" hash="41a9e35c">
+    HYSTERESIS_UPWARD_MULTIPLIER: Uint64 = 5
     </spec>
 
 - name: INACTIVITY_PENALTY_QUOTIENT#phase0
@@ -154,8 +154,8 @@
       search: InactivityPenaltyQuotient\s+.*yaml:"INACTIVITY_PENALTY_QUOTIENT"
       regex: true
   spec: |
-    <spec preset_var="INACTIVITY_PENALTY_QUOTIENT" fork="phase0" hash="5d82db62">
-    INACTIVITY_PENALTY_QUOTIENT: uint64 = 67108864
+    <spec preset_var="INACTIVITY_PENALTY_QUOTIENT" fork="phase0" hash="70b32ea0">
+    INACTIVITY_PENALTY_QUOTIENT: Uint64 = 67108864
     </spec>
 
 - name: INACTIVITY_PENALTY_QUOTIENT_ALTAIR#altair
@@ -164,8 +164,8 @@
       search: InactivityPenaltyQuotientAltair\s+.*yaml:"INACTIVITY_PENALTY_QUOTIENT_ALTAIR"
       regex: true
   spec: |
-    <spec preset_var="INACTIVITY_PENALTY_QUOTIENT_ALTAIR" fork="altair" hash="d0d3c505">
-    INACTIVITY_PENALTY_QUOTIENT_ALTAIR: uint64 = 50331648
+    <spec preset_var="INACTIVITY_PENALTY_QUOTIENT_ALTAIR" fork="altair" hash="e164e59c">
+    INACTIVITY_PENALTY_QUOTIENT_ALTAIR: Uint64 = 50331648
     </spec>
 
 - name: INACTIVITY_PENALTY_QUOTIENT_BELLATRIX#bellatrix
@@ -174,15 +174,15 @@
       search: InactivityPenaltyQuotientBellatrix\s+.*yaml:"INACTIVITY_PENALTY_QUOTIENT_BELLATRIX"
       regex: true
   spec: |
-    <spec preset_var="INACTIVITY_PENALTY_QUOTIENT_BELLATRIX" fork="bellatrix" hash="33fd626d">
-    INACTIVITY_PENALTY_QUOTIENT_BELLATRIX: uint64 = 16777216
+    <spec preset_var="INACTIVITY_PENALTY_QUOTIENT_BELLATRIX" fork="bellatrix" hash="e7e75029">
+    INACTIVITY_PENALTY_QUOTIENT_BELLATRIX: Uint64 = 16777216
     </spec>
 
 - name: INCLUSION_LIST_COMMITTEE_SIZE#heze
   sources: []
   spec: |
-    <spec preset_var="INCLUSION_LIST_COMMITTEE_SIZE" fork="heze" hash="780fb63c">
-    INCLUSION_LIST_COMMITTEE_SIZE: uint64 = 16
+    <spec preset_var="INCLUSION_LIST_COMMITTEE_SIZE" fork="heze" hash="514829ec">
+    INCLUSION_LIST_COMMITTEE_SIZE: Uint64 = 16
     </spec>
 
 - name: KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH#fulu
@@ -191,8 +191,8 @@
       search: mainnet\s*=\s*\{[^}]*"kzg_commitments_inclusion_proof_depth\.size":.*[^}]*\}
       regex: true
   spec: |
-    <spec preset_var="KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH" fork="fulu" hash="22280638">
-    KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH: uint64 = 4
+    <spec preset_var="KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH" fork="fulu" hash="12f9ffd8">
+    KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH: Uint64 = 4
     </spec>
 
 - name: KZG_COMMITMENT_INCLUSION_PROOF_DEPTH#deneb
@@ -201,8 +201,8 @@
       search: KzgCommitmentInclusionProofDepth\s*=
       regex: true
   spec: |
-    <spec preset_var="KZG_COMMITMENT_INCLUSION_PROOF_DEPTH" fork="deneb" hash="79db011d">
-    KZG_COMMITMENT_INCLUSION_PROOF_DEPTH: uint64 = 17
+    <spec preset_var="KZG_COMMITMENT_INCLUSION_PROOF_DEPTH" fork="deneb" hash="f9f066ac">
+    KZG_COMMITMENT_INCLUSION_PROOF_DEPTH: Uint64 = 17
     </spec>
 
 - name: MAX_ATTESTATIONS#phase0
@@ -211,8 +211,8 @@
       search: MaxAttestations\s+.*yaml:"MAX_ATTESTATIONS"
       regex: true
   spec: |
-    <spec preset_var="MAX_ATTESTATIONS" fork="phase0" hash="8ee7f084">
-    MAX_ATTESTATIONS: uint64 = 128
+    <spec preset_var="MAX_ATTESTATIONS" fork="phase0" hash="2f56fca0">
+    MAX_ATTESTATIONS: Uint64 = 128
     </spec>
 
 - name: MAX_ATTESTATIONS_ELECTRA#electra
@@ -221,8 +221,8 @@
       search: MaxAttestationsElectra\s+.*yaml:"MAX_ATTESTATIONS_ELECTRA"
       regex: true
   spec: |
-    <spec preset_var="MAX_ATTESTATIONS_ELECTRA" fork="electra" hash="f5ced7c7">
-    MAX_ATTESTATIONS_ELECTRA: uint64 = 8
+    <spec preset_var="MAX_ATTESTATIONS_ELECTRA" fork="electra" hash="0eb0ffa5">
+    MAX_ATTESTATIONS_ELECTRA: Uint64 = 8
     </spec>
 
 - name: MAX_ATTESTER_SLASHINGS#phase0
@@ -231,8 +231,8 @@
       search: MaxAttesterSlashings\s+.*yaml:"MAX_ATTESTER_SLASHINGS"
       regex: true
   spec: |
-    <spec preset_var="MAX_ATTESTER_SLASHINGS" fork="phase0" hash="a026f81c">
-    MAX_ATTESTER_SLASHINGS: uint64 = 2
+    <spec preset_var="MAX_ATTESTER_SLASHINGS" fork="phase0" hash="a8262e02">
+    MAX_ATTESTER_SLASHINGS: Uint64 = 2
     </spec>
 
 - name: MAX_ATTESTER_SLASHINGS_ELECTRA#electra
@@ -241,15 +241,15 @@
       search: MaxAttesterSlashingsElectra\s+.*yaml:"MAX_ATTESTER_SLASHINGS_ELECTRA"
       regex: true
   spec: |
-    <spec preset_var="MAX_ATTESTER_SLASHINGS_ELECTRA" fork="electra" hash="cb7ff972">
-    MAX_ATTESTER_SLASHINGS_ELECTRA: uint64 = 1
+    <spec preset_var="MAX_ATTESTER_SLASHINGS_ELECTRA" fork="electra" hash="a6c8acd1">
+    MAX_ATTESTER_SLASHINGS_ELECTRA: Uint64 = 1
     </spec>
 
 - name: MAX_ATTESTER_SLASHING_SIZE#gloas
   sources: []
   spec: |
-    <spec preset_var="MAX_ATTESTER_SLASHING_SIZE" fork="gloas" hash="35df66c7">
-    MAX_ATTESTER_SLASHING_SIZE: uint64 = 2097616
+    <spec preset_var="MAX_ATTESTER_SLASHING_SIZE" fork="gloas" hash="76e0362f">
+    MAX_ATTESTER_SLASHING_SIZE: Uint64 = 2097616
     </spec>
 
 - name: MAX_BLOB_COMMITMENTS_PER_BLOCK#deneb
@@ -258,8 +258,8 @@
       search: MaxBlobCommitmentsPerBlock\s*=
       regex: true
   spec: |
-    <spec preset_var="MAX_BLOB_COMMITMENTS_PER_BLOCK" fork="deneb" hash="0ad15e8f">
-    MAX_BLOB_COMMITMENTS_PER_BLOCK: uint64 = 4096
+    <spec preset_var="MAX_BLOB_COMMITMENTS_PER_BLOCK" fork="deneb" hash="f1bbc4a0">
+    MAX_BLOB_COMMITMENTS_PER_BLOCK: Uint64 = 4096
     </spec>
 
 - name: MAX_BLS_TO_EXECUTION_CHANGES#capella
@@ -268,29 +268,29 @@
       search: MaxBlsToExecutionChanges\s+.*yaml:"MAX_BLS_TO_EXECUTION_CHANGES"
       regex: true
   spec: |
-    <spec preset_var="MAX_BLS_TO_EXECUTION_CHANGES" fork="capella" hash="a7430c88">
-    MAX_BLS_TO_EXECUTION_CHANGES: uint64 = 16
+    <spec preset_var="MAX_BLS_TO_EXECUTION_CHANGES" fork="capella" hash="2139bb1e">
+    MAX_BLS_TO_EXECUTION_CHANGES: Uint64 = 16
     </spec>
 
 - name: MAX_BUILDERS_PER_WITHDRAWALS_SWEEP#gloas
   sources: []
   spec: |
-    <spec preset_var="MAX_BUILDERS_PER_WITHDRAWALS_SWEEP" fork="gloas" hash="ab42a68a">
-    MAX_BUILDERS_PER_WITHDRAWALS_SWEEP: uint64 = 16384
+    <spec preset_var="MAX_BUILDERS_PER_WITHDRAWALS_SWEEP" fork="gloas" hash="fc60d90e">
+    MAX_BUILDERS_PER_WITHDRAWALS_SWEEP: Uint64 = 16384
     </spec>
 
 - name: MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD#gloas
   sources: []
   spec: |
-    <spec preset_var="MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD" fork="gloas" hash="fdb8276d">
-    MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD: uint64 = 64
+    <spec preset_var="MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD" fork="gloas" hash="1da1bc35">
+    MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD: Uint64 = 64
     </spec>
 
 - name: MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD#gloas
   sources: []
   spec: |
-    <spec preset_var="MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD" fork="gloas" hash="d461f12d">
-    MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD: uint64 = 16
+    <spec preset_var="MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD" fork="gloas" hash="d46cb337">
+    MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD: Uint64 = 16
     </spec>
 
 - name: MAX_BYTES_PER_TRANSACTION#bellatrix
@@ -299,8 +299,8 @@
       search: MaxBytesPerTransaction\s+.*yaml:"MAX_BYTES_PER_TRANSACTION"
       regex: true
   spec: |
-    <spec preset_var="MAX_BYTES_PER_TRANSACTION" fork="bellatrix" hash="3684e68f">
-    MAX_BYTES_PER_TRANSACTION: uint64 = 1073741824
+    <spec preset_var="MAX_BYTES_PER_TRANSACTION" fork="bellatrix" hash="7f83b3d2">
+    MAX_BYTES_PER_TRANSACTION: Uint64 = 1073741824
     </spec>
 
 - name: MAX_COMMITTEES_PER_SLOT#phase0
@@ -309,8 +309,8 @@
       search: MaxCommitteesPerSlot\s+.*yaml:"MAX_COMMITTEES_PER_SLOT"
       regex: true
   spec: |
-    <spec preset_var="MAX_COMMITTEES_PER_SLOT" fork="phase0" hash="0442c4b7">
-    MAX_COMMITTEES_PER_SLOT: uint64 = 64
+    <spec preset_var="MAX_COMMITTEES_PER_SLOT" fork="phase0" hash="3f755ce5">
+    MAX_COMMITTEES_PER_SLOT: Uint64 = 64
     </spec>
 
 - name: MAX_COMMITTEES_PER_SLOT#electra
@@ -319,8 +319,8 @@
       search: MaxCommitteesPerSlot\s+.*yaml:"MAX_COMMITTEES_PER_SLOT"
       regex: true
   spec: |
-    <spec preset_var="MAX_COMMITTEES_PER_SLOT" fork="electra" hash="0442c4b7">
-    MAX_COMMITTEES_PER_SLOT: uint64 = 64
+    <spec preset_var="MAX_COMMITTEES_PER_SLOT" fork="electra" hash="3f755ce5">
+    MAX_COMMITTEES_PER_SLOT: Uint64 = 64
     </spec>
 
 - name: MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD#electra
@@ -329,15 +329,15 @@
       search: MaxConsolidationsRequestsPerPayload\s+.*yaml:"MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD"
       regex: true
   spec: |
-    <spec preset_var="MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD" fork="electra" hash="59ec80e5">
-    MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD: uint64 = 2
+    <spec preset_var="MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD" fork="electra" hash="04089975">
+    MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD: Uint64 = 2
     </spec>
 
 - name: MAX_DATA_COLUMN_SIDECAR_SIZE#gloas
   sources: []
   spec: |
-    <spec preset_var="MAX_DATA_COLUMN_SIDECAR_SIZE" fork="gloas" hash="ecb9550a">
-    MAX_DATA_COLUMN_SIDECAR_SIZE: uint64 = 8585272
+    <spec preset_var="MAX_DATA_COLUMN_SIDECAR_SIZE" fork="gloas" hash="da34d637">
+    MAX_DATA_COLUMN_SIDECAR_SIZE: Uint64 = 8585272
     </spec>
 
 - name: MAX_DEPOSITS#phase0
@@ -346,8 +346,8 @@
       search: MaxDeposits\s+.*yaml:"MAX_DEPOSITS"
       regex: true
   spec: |
-    <spec preset_var="MAX_DEPOSITS" fork="phase0" hash="8c07fc09">
-    MAX_DEPOSITS: uint64 = 16
+    <spec preset_var="MAX_DEPOSITS" fork="phase0" hash="10422f62">
+    MAX_DEPOSITS: Uint64 = 16
     </spec>
 
 - name: MAX_DEPOSIT_REQUESTS_PER_PAYLOAD#electra
@@ -356,8 +356,8 @@
       search: MaxDepositRequestsPerPayload\s+.*yaml:"MAX_DEPOSIT_REQUESTS_PER_PAYLOAD"
       regex: true
   spec: |
-    <spec preset_var="MAX_DEPOSIT_REQUESTS_PER_PAYLOAD" fork="electra" hash="6c60ff83">
-    MAX_DEPOSIT_REQUESTS_PER_PAYLOAD: uint64 = 8192
+    <spec preset_var="MAX_DEPOSIT_REQUESTS_PER_PAYLOAD" fork="electra" hash="ea0610b5">
+    MAX_DEPOSIT_REQUESTS_PER_PAYLOAD: Uint64 = 8192
     </spec>
 
 - name: MAX_EFFECTIVE_BALANCE#phase0
@@ -386,22 +386,22 @@
       search: MaxExtraDataBytes\s+.*yaml:"MAX_EXTRA_DATA_BYTES"
       regex: true
   spec: |
-    <spec preset_var="MAX_EXTRA_DATA_BYTES" fork="bellatrix" hash="a37eed77">
-    MAX_EXTRA_DATA_BYTES: uint64 = 32
+    <spec preset_var="MAX_EXTRA_DATA_BYTES" fork="bellatrix" hash="03a5eec2">
+    MAX_EXTRA_DATA_BYTES: Uint64 = 32
     </spec>
 
 - name: MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE#gloas
   sources: []
   spec: |
-    <spec preset_var="MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE" fork="gloas" hash="c2570655">
-    MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE: uint64 = 8585741
+    <spec preset_var="MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE" fork="gloas" hash="abc4c79f">
+    MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE: Uint64 = 8585741
     </spec>
 
 - name: MAX_PAYLOAD_ATTESTATIONS#gloas
   sources: []
   spec: |
-    <spec preset_var="MAX_PAYLOAD_ATTESTATIONS" fork="gloas" hash="c91cfe07">
-    MAX_PAYLOAD_ATTESTATIONS: uint64 = 4
+    <spec preset_var="MAX_PAYLOAD_ATTESTATIONS" fork="gloas" hash="60a6ba31">
+    MAX_PAYLOAD_ATTESTATIONS: Uint64 = 4
     </spec>
 
 - name: MAX_PENDING_DEPOSITS_PER_EPOCH#electra
@@ -410,8 +410,8 @@
       search: MaxPendingDepositsPerEpoch\s+.*yaml:"MAX_PENDING_DEPOSITS_PER_EPOCH"
       regex: true
   spec: |
-    <spec preset_var="MAX_PENDING_DEPOSITS_PER_EPOCH" fork="electra" hash="f532a46f">
-    MAX_PENDING_DEPOSITS_PER_EPOCH: uint64 = 16
+    <spec preset_var="MAX_PENDING_DEPOSITS_PER_EPOCH" fork="electra" hash="7f4802cf">
+    MAX_PENDING_DEPOSITS_PER_EPOCH: Uint64 = 16
     </spec>
 
 - name: MAX_PENDING_PARTIALS_PER_WITHDRAWALS_SWEEP#electra
@@ -420,8 +420,8 @@
       search: MaxPendingPartialsPerWithdrawalsSweep\s+.*yaml:"MAX_PENDING_PARTIALS_PER_WITHDRAWALS_SWEEP"
       regex: true
   spec: |
-    <spec preset_var="MAX_PENDING_PARTIALS_PER_WITHDRAWALS_SWEEP" fork="electra" hash="e7b2f394">
-    MAX_PENDING_PARTIALS_PER_WITHDRAWALS_SWEEP: uint64 = 8
+    <spec preset_var="MAX_PENDING_PARTIALS_PER_WITHDRAWALS_SWEEP" fork="electra" hash="59b59180">
+    MAX_PENDING_PARTIALS_PER_WITHDRAWALS_SWEEP: Uint64 = 8
     </spec>
 
 - name: MAX_PROPOSER_SLASHINGS#phase0
@@ -430,8 +430,8 @@
       search: MaxProposerSlashings\s+.*yaml:"MAX_PROPOSER_SLASHINGS"
       regex: true
   spec: |
-    <spec preset_var="MAX_PROPOSER_SLASHINGS" fork="phase0" hash="26182947">
-    MAX_PROPOSER_SLASHINGS: uint64 = 16
+    <spec preset_var="MAX_PROPOSER_SLASHINGS" fork="phase0" hash="0398dfd4">
+    MAX_PROPOSER_SLASHINGS: Uint64 = 16
     </spec>
 
 - name: MAX_SEED_LOOKAHEAD#phase0
@@ -440,36 +440,36 @@
       search: MaxSeedLookahead\s+.*yaml:"MAX_SEED_LOOKAHEAD"
       regex: true
   spec: |
-    <spec preset_var="MAX_SEED_LOOKAHEAD" fork="phase0" hash="b7ae8929">
-    MAX_SEED_LOOKAHEAD: uint64 = 4
+    <spec preset_var="MAX_SEED_LOOKAHEAD" fork="phase0" hash="78b09fe1">
+    MAX_SEED_LOOKAHEAD: Epoch = 4
     </spec>
 
 - name: MAX_SIGNED_AGGREGATE_AND_PROOF_SIZE#gloas
   sources: []
   spec: |
-    <spec preset_var="MAX_SIGNED_AGGREGATE_AND_PROOF_SIZE" fork="gloas" hash="9dd832f2">
-    MAX_SIGNED_AGGREGATE_AND_PROOF_SIZE: uint64 = 16829
+    <spec preset_var="MAX_SIGNED_AGGREGATE_AND_PROOF_SIZE" fork="gloas" hash="935e9fff">
+    MAX_SIGNED_AGGREGATE_AND_PROOF_SIZE: Uint64 = 16829
     </spec>
 
 - name: MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE#gloas
   sources: []
   spec: |
-    <spec preset_var="MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE" fork="gloas" hash="d78deb32">
-    MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE: uint64 = 196932
+    <spec preset_var="MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE" fork="gloas" hash="f5051abf">
+    MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE: Uint64 = 196932
     </spec>
 
 - name: MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE_HEZE#heze
   sources: []
   spec: |
-    <spec preset_var="MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE_HEZE" fork="heze" hash="718df6de">
-    MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE_HEZE: uint64 = 196934
+    <spec preset_var="MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE_HEZE" fork="heze" hash="ebb32b2b">
+    MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE_HEZE: Uint64 = 196934
     </spec>
 
 - name: MAX_SIGNED_INCLUSION_LIST_SIZE#heze
   sources: []
   spec: |
-    <spec preset_var="MAX_SIGNED_INCLUSION_LIST_SIZE" fork="heze" hash="917f47cb">
-    MAX_SIGNED_INCLUSION_LIST_SIZE: uint64 = 8348
+    <spec preset_var="MAX_SIGNED_INCLUSION_LIST_SIZE" fork="heze" hash="805b7bca">
+    MAX_SIGNED_INCLUSION_LIST_SIZE: Uint64 = 8348
     </spec>
 
 - name: MAX_TRANSACTIONS_PER_PAYLOAD#bellatrix
@@ -478,8 +478,8 @@
       search: MaxTransactionsPerPayload\s+.*yaml:"MAX_TRANSACTIONS_PER_PAYLOAD"
       regex: true
   spec: |
-    <spec preset_var="MAX_TRANSACTIONS_PER_PAYLOAD" fork="bellatrix" hash="1088e3b2">
-    MAX_TRANSACTIONS_PER_PAYLOAD: uint64 = 1048576
+    <spec preset_var="MAX_TRANSACTIONS_PER_PAYLOAD" fork="bellatrix" hash="1017dbb7">
+    MAX_TRANSACTIONS_PER_PAYLOAD: Uint64 = 1048576
     </spec>
 
 - name: MAX_VALIDATORS_PER_COMMITTEE#phase0
@@ -488,8 +488,8 @@
       search: MaxValidatorsPerCommittee\s+.*yaml:"MAX_VALIDATORS_PER_COMMITTEE"
       regex: true
   spec: |
-    <spec preset_var="MAX_VALIDATORS_PER_COMMITTEE" fork="phase0" hash="900abcb2">
-    MAX_VALIDATORS_PER_COMMITTEE: uint64 = 2048
+    <spec preset_var="MAX_VALIDATORS_PER_COMMITTEE" fork="phase0" hash="b8578caa">
+    MAX_VALIDATORS_PER_COMMITTEE: Uint64 = 2048
     </spec>
 
 - name: MAX_VALIDATORS_PER_COMMITTEE#electra
@@ -498,8 +498,8 @@
       search: MaxValidatorsPerCommittee\s+.*yaml:"MAX_VALIDATORS_PER_COMMITTEE"
       regex: true
   spec: |
-    <spec preset_var="MAX_VALIDATORS_PER_COMMITTEE" fork="electra" hash="900abcb2">
-    MAX_VALIDATORS_PER_COMMITTEE: uint64 = 2048
+    <spec preset_var="MAX_VALIDATORS_PER_COMMITTEE" fork="electra" hash="b8578caa">
+    MAX_VALIDATORS_PER_COMMITTEE: Uint64 = 2048
     </spec>
 
 - name: MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP#capella
@@ -508,8 +508,8 @@
       search: MaxValidatorsPerWithdrawalsSweep\s+.*yaml:"MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP"
       regex: true
   spec: |
-    <spec preset_var="MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP" fork="capella" hash="1becfc15">
-    MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP: uint64 = 16384
+    <spec preset_var="MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP" fork="capella" hash="adeefd90">
+    MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP: Uint64 = 16384
     </spec>
 
 - name: MAX_VOLUNTARY_EXITS#phase0
@@ -518,8 +518,8 @@
       search: MaxVoluntaryExits\s+.*yaml:"MAX_VOLUNTARY_EXITS"
       regex: true
   spec: |
-    <spec preset_var="MAX_VOLUNTARY_EXITS" fork="phase0" hash="8fdacd5d">
-    MAX_VOLUNTARY_EXITS: uint64 = 16
+    <spec preset_var="MAX_VOLUNTARY_EXITS" fork="phase0" hash="f318373b">
+    MAX_VOLUNTARY_EXITS: Uint64 = 16
     </spec>
 
 - name: MAX_WITHDRAWALS_PER_PAYLOAD#capella
@@ -528,8 +528,8 @@
       search: MaxWithdrawalsPerPayload\s*=
       regex: true
   spec: |
-    <spec preset_var="MAX_WITHDRAWALS_PER_PAYLOAD" fork="capella" hash="c406effb">
-    MAX_WITHDRAWALS_PER_PAYLOAD: uint64 = 16
+    <spec preset_var="MAX_WITHDRAWALS_PER_PAYLOAD" fork="capella" hash="c743caf6">
+    MAX_WITHDRAWALS_PER_PAYLOAD: Uint64 = 16
     </spec>
 
 - name: MAX_WITHDRAWAL_REQUESTS_PER_PAYLOAD#electra
@@ -538,8 +538,8 @@
       search: MaxWithdrawalRequestsPerPayload\s+.*yaml:"MAX_WITHDRAWAL_REQUESTS_PER_PAYLOAD"
       regex: true
   spec: |
-    <spec preset_var="MAX_WITHDRAWAL_REQUESTS_PER_PAYLOAD" fork="electra" hash="9f04de0d">
-    MAX_WITHDRAWAL_REQUESTS_PER_PAYLOAD: uint64 = 16
+    <spec preset_var="MAX_WITHDRAWAL_REQUESTS_PER_PAYLOAD" fork="electra" hash="87a3320f">
+    MAX_WITHDRAWAL_REQUESTS_PER_PAYLOAD: Uint64 = 16
     </spec>
 
 - name: MIN_ACTIVATION_BALANCE#electra
@@ -558,8 +558,8 @@
       search: MinAttestationInclusionDelay\s+.*yaml:"MIN_ATTESTATION_INCLUSION_DELAY"
       regex: true
   spec: |
-    <spec preset_var="MIN_ATTESTATION_INCLUSION_DELAY" fork="phase0" hash="2e9435aa">
-    MIN_ATTESTATION_INCLUSION_DELAY: uint64 = 1
+    <spec preset_var="MIN_ATTESTATION_INCLUSION_DELAY" fork="phase0" hash="eeec80c7">
+    MIN_ATTESTATION_INCLUSION_DELAY: Slot = 1
     </spec>
 
 - name: MIN_DEPOSIT_AMOUNT#phase0
@@ -578,8 +578,8 @@
       search: MinEpochsToInactivityPenalty\s+.*yaml:"MIN_EPOCHS_TO_INACTIVITY_PENALTY"
       regex: true
   spec: |
-    <spec preset_var="MIN_EPOCHS_TO_INACTIVITY_PENALTY" fork="phase0" hash="339d14c4">
-    MIN_EPOCHS_TO_INACTIVITY_PENALTY: uint64 = 4
+    <spec preset_var="MIN_EPOCHS_TO_INACTIVITY_PENALTY" fork="phase0" hash="e94e8023">
+    MIN_EPOCHS_TO_INACTIVITY_PENALTY: Epoch = 4
     </spec>
 
 - name: MIN_SEED_LOOKAHEAD#phase0
@@ -588,8 +588,8 @@
       search: MinSeedLookahead\s+.*yaml:"MIN_SEED_LOOKAHEAD"
       regex: true
   spec: |
-    <spec preset_var="MIN_SEED_LOOKAHEAD" fork="phase0" hash="48a0462b">
-    MIN_SEED_LOOKAHEAD: uint64 = 1
+    <spec preset_var="MIN_SEED_LOOKAHEAD" fork="phase0" hash="fc1f1b5b">
+    MIN_SEED_LOOKAHEAD: Epoch = 1
     </spec>
 
 - name: MIN_SLASHING_PENALTY_QUOTIENT#phase0
@@ -598,8 +598,8 @@
       search: MinSlashingPenaltyQuotient\s+.*yaml:"MIN_SLASHING_PENALTY_QUOTIENT"
       regex: true
   spec: |
-    <spec preset_var="MIN_SLASHING_PENALTY_QUOTIENT" fork="phase0" hash="0204123d">
-    MIN_SLASHING_PENALTY_QUOTIENT: uint64 = 128
+    <spec preset_var="MIN_SLASHING_PENALTY_QUOTIENT" fork="phase0" hash="e5d6470c">
+    MIN_SLASHING_PENALTY_QUOTIENT: Uint64 = 128
     </spec>
 
 - name: MIN_SLASHING_PENALTY_QUOTIENT_ALTAIR#altair
@@ -608,8 +608,8 @@
       search: MinSlashingPenaltyQuotientAltair\s+.*yaml:"MIN_SLASHING_PENALTY_QUOTIENT_ALTAIR"
       regex: true
   spec: |
-    <spec preset_var="MIN_SLASHING_PENALTY_QUOTIENT_ALTAIR" fork="altair" hash="4845bc05">
-    MIN_SLASHING_PENALTY_QUOTIENT_ALTAIR: uint64 = 64
+    <spec preset_var="MIN_SLASHING_PENALTY_QUOTIENT_ALTAIR" fork="altair" hash="1927bfc7">
+    MIN_SLASHING_PENALTY_QUOTIENT_ALTAIR: Uint64 = 64
     </spec>
 
 - name: MIN_SLASHING_PENALTY_QUOTIENT_BELLATRIX#bellatrix
@@ -618,8 +618,8 @@
       search: MinSlashingPenaltyQuotientBellatrix\s+.*yaml:"MIN_SLASHING_PENALTY_QUOTIENT_BELLATRIX"
       regex: true
   spec: |
-    <spec preset_var="MIN_SLASHING_PENALTY_QUOTIENT_BELLATRIX" fork="bellatrix" hash="2a5af13c">
-    MIN_SLASHING_PENALTY_QUOTIENT_BELLATRIX: uint64 = 32
+    <spec preset_var="MIN_SLASHING_PENALTY_QUOTIENT_BELLATRIX" fork="bellatrix" hash="a51ca4d6">
+    MIN_SLASHING_PENALTY_QUOTIENT_BELLATRIX: Uint64 = 32
     </spec>
 
 - name: MIN_SLASHING_PENALTY_QUOTIENT_ELECTRA#electra
@@ -628,8 +628,8 @@
       search: MinSlashingPenaltyQuotientElectra\s+.*yaml:"MIN_SLASHING_PENALTY_QUOTIENT_ELECTRA"
       regex: true
   spec: |
-    <spec preset_var="MIN_SLASHING_PENALTY_QUOTIENT_ELECTRA" fork="electra" hash="03888289">
-    MIN_SLASHING_PENALTY_QUOTIENT_ELECTRA: uint64 = 4096
+    <spec preset_var="MIN_SLASHING_PENALTY_QUOTIENT_ELECTRA" fork="electra" hash="6fdc6bdf">
+    MIN_SLASHING_PENALTY_QUOTIENT_ELECTRA: Uint64 = 4096
     </spec>
 
 - name: MIN_SYNC_COMMITTEE_PARTICIPANTS#altair
@@ -638,8 +638,8 @@
       search: MinSyncCommitteeParticipants\s+.*yaml:"MIN_SYNC_COMMITTEE_PARTICIPANTS"
       regex: true
   spec: |
-    <spec preset_var="MIN_SYNC_COMMITTEE_PARTICIPANTS" fork="altair" hash="7ca6fd1f">
-    MIN_SYNC_COMMITTEE_PARTICIPANTS = 1
+    <spec preset_var="MIN_SYNC_COMMITTEE_PARTICIPANTS" fork="altair" hash="cecedeab">
+    MIN_SYNC_COMMITTEE_PARTICIPANTS: Uint64 = 1
     </spec>
 
 - name: NUMBER_OF_COLUMNS#fulu
@@ -648,8 +648,8 @@
       search: NumberOfColumns\s*=
       regex: true
   spec: |
-    <spec preset_var="NUMBER_OF_COLUMNS" fork="fulu" hash="8b6dad29">
-    NUMBER_OF_COLUMNS = 128
+    <spec preset_var="NUMBER_OF_COLUMNS" fork="fulu" hash="1a549032">
+    NUMBER_OF_COLUMNS: Uint64 = 128
     </spec>
 
 - name: PENDING_CONSOLIDATIONS_LIMIT#electra
@@ -658,8 +658,8 @@
       search: PendingConsolidationsLimit\s*=
       regex: true
   spec: |
-    <spec preset_var="PENDING_CONSOLIDATIONS_LIMIT" fork="electra" hash="f28398d0">
-    PENDING_CONSOLIDATIONS_LIMIT: uint64 = 262144
+    <spec preset_var="PENDING_CONSOLIDATIONS_LIMIT" fork="electra" hash="72b496bb">
+    PENDING_CONSOLIDATIONS_LIMIT: Uint64 = 262144
     </spec>
 
 - name: PENDING_DEPOSITS_LIMIT#electra
@@ -668,8 +668,8 @@
       search: PendingDepositsLimit\s*=
       regex: true
   spec: |
-    <spec preset_var="PENDING_DEPOSITS_LIMIT" fork="electra" hash="8f7ed296">
-    PENDING_DEPOSITS_LIMIT: uint64 = 134217728
+    <spec preset_var="PENDING_DEPOSITS_LIMIT" fork="electra" hash="89565720">
+    PENDING_DEPOSITS_LIMIT: Uint64 = 134217728
     </spec>
 
 - name: PENDING_PARTIAL_WITHDRAWALS_LIMIT#electra
@@ -678,8 +678,8 @@
       search: PendingPartialWithdrawalsLimit\s*=
       regex: true
   spec: |
-    <spec preset_var="PENDING_PARTIAL_WITHDRAWALS_LIMIT" fork="electra" hash="9ae3fe56">
-    PENDING_PARTIAL_WITHDRAWALS_LIMIT: uint64 = 134217728
+    <spec preset_var="PENDING_PARTIAL_WITHDRAWALS_LIMIT" fork="electra" hash="90dada04">
+    PENDING_PARTIAL_WITHDRAWALS_LIMIT: Uint64 = 134217728
     </spec>
 
 - name: PROPORTIONAL_SLASHING_MULTIPLIER#phase0
@@ -688,8 +688,8 @@
       search: ProportionalSlashingMultiplier\s+.*yaml:"PROPORTIONAL_SLASHING_MULTIPLIER"
       regex: true
   spec: |
-    <spec preset_var="PROPORTIONAL_SLASHING_MULTIPLIER" fork="phase0" hash="7675c5ad">
-    PROPORTIONAL_SLASHING_MULTIPLIER: uint64 = 1
+    <spec preset_var="PROPORTIONAL_SLASHING_MULTIPLIER" fork="phase0" hash="e2e3101c">
+    PROPORTIONAL_SLASHING_MULTIPLIER: Uint64 = 1
     </spec>
 
 - name: PROPORTIONAL_SLASHING_MULTIPLIER_ALTAIR#altair
@@ -698,8 +698,8 @@
       search: ProportionalSlashingMultiplierAltair\s+.*yaml:"PROPORTIONAL_SLASHING_MULTIPLIER_ALTAIR"
       regex: true
   spec: |
-    <spec preset_var="PROPORTIONAL_SLASHING_MULTIPLIER_ALTAIR" fork="altair" hash="5e6aedb9">
-    PROPORTIONAL_SLASHING_MULTIPLIER_ALTAIR: uint64 = 2
+    <spec preset_var="PROPORTIONAL_SLASHING_MULTIPLIER_ALTAIR" fork="altair" hash="89f426f4">
+    PROPORTIONAL_SLASHING_MULTIPLIER_ALTAIR: Uint64 = 2
     </spec>
 
 - name: PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX#bellatrix
@@ -708,8 +708,8 @@
       search: ProportionalSlashingMultiplierBellatrix\s+.*yaml:"PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX"
       regex: true
   spec: |
-    <spec preset_var="PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX" fork="bellatrix" hash="e36837df">
-    PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX: uint64 = 3
+    <spec preset_var="PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX" fork="bellatrix" hash="733e0a42">
+    PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX: Uint64 = 3
     </spec>
 
 - name: PROPOSER_REWARD_QUOTIENT#phase0
@@ -718,15 +718,15 @@
       search: ProposerRewardQuotient\s+.*yaml:"PROPOSER_REWARD_QUOTIENT"
       regex: true
   spec: |
-    <spec preset_var="PROPOSER_REWARD_QUOTIENT" fork="phase0" hash="a60dab3e">
-    PROPOSER_REWARD_QUOTIENT: uint64 = 8
+    <spec preset_var="PROPOSER_REWARD_QUOTIENT" fork="phase0" hash="500f9dec">
+    PROPOSER_REWARD_QUOTIENT: Uint64 = 8
     </spec>
 
 - name: PTC_SIZE#gloas
   sources: []
   spec: |
-    <spec preset_var="PTC_SIZE" fork="gloas" hash="d61c5930">
-    PTC_SIZE: uint64 = 512
+    <spec preset_var="PTC_SIZE" fork="gloas" hash="fab28199">
+    PTC_SIZE: Uint64 = 512
     </spec>
 
 - name: SHUFFLE_ROUND_COUNT#phase0
@@ -735,8 +735,8 @@
       search: ShuffleRoundCount\s+.*yaml:"SHUFFLE_ROUND_COUNT"
       regex: true
   spec: |
-    <spec preset_var="SHUFFLE_ROUND_COUNT" fork="phase0" hash="ed107076">
-    SHUFFLE_ROUND_COUNT: uint64 = 90
+    <spec preset_var="SHUFFLE_ROUND_COUNT" fork="phase0" hash="b83cce2d">
+    SHUFFLE_ROUND_COUNT: Uint64 = 90
     </spec>
 
 - name: SLOTS_PER_EPOCH#phase0
@@ -745,8 +745,8 @@
       search: SlotsPerEpoch\s*=
       regex: true
   spec: |
-    <spec preset_var="SLOTS_PER_EPOCH" fork="phase0" hash="cb41af43">
-    SLOTS_PER_EPOCH: uint64 = 32
+    <spec preset_var="SLOTS_PER_EPOCH" fork="phase0" hash="622edf20">
+    SLOTS_PER_EPOCH: Slot = 32
     </spec>
 
 - name: SLOTS_PER_HISTORICAL_ROOT#phase0
@@ -755,8 +755,8 @@
       search: BlockRootsLength\s*=
       regex: true
   spec: |
-    <spec preset_var="SLOTS_PER_HISTORICAL_ROOT" fork="phase0" hash="1d0bdd1d">
-    SLOTS_PER_HISTORICAL_ROOT: uint64 = 8192
+    <spec preset_var="SLOTS_PER_HISTORICAL_ROOT" fork="phase0" hash="b91377a4">
+    SLOTS_PER_HISTORICAL_ROOT: Slot = 8192
     </spec>
 
 - name: SYNC_COMMITTEE_SIZE#altair
@@ -765,8 +765,8 @@
       search: SyncCommitteeLength\s*=
       regex: true
   spec: |
-    <spec preset_var="SYNC_COMMITTEE_SIZE" fork="altair" hash="d31740c9">
-    SYNC_COMMITTEE_SIZE: uint64 = 512
+    <spec preset_var="SYNC_COMMITTEE_SIZE" fork="altair" hash="fd74420c">
+    SYNC_COMMITTEE_SIZE: Uint64 = 512
     </spec>
 
 - name: TARGET_COMMITTEE_SIZE#phase0
@@ -775,8 +775,8 @@
       search: TargetCommitteeSize\s+.*yaml:"TARGET_COMMITTEE_SIZE"
       regex: true
   spec: |
-    <spec preset_var="TARGET_COMMITTEE_SIZE" fork="phase0" hash="d56fdb68">
-    TARGET_COMMITTEE_SIZE: uint64 = 128
+    <spec preset_var="TARGET_COMMITTEE_SIZE" fork="phase0" hash="7ecde123">
+    TARGET_COMMITTEE_SIZE: Uint64 = 128
     </spec>
 
 - name: UPDATE_TIMEOUT#altair
@@ -785,8 +785,8 @@
       search: data\["UPDATE_TIMEOUT"\]
       regex: true
   spec: |
-    <spec preset_var="UPDATE_TIMEOUT" fork="altair" hash="e633d57e">
-    UPDATE_TIMEOUT = 8192
+    <spec preset_var="UPDATE_TIMEOUT" fork="altair" hash="b04876fe">
+    UPDATE_TIMEOUT: Slot = 8192
     </spec>
 
 - name: VALIDATOR_REGISTRY_LIMIT#phase0
@@ -795,8 +795,8 @@
       search: ValidatorRegistryLimit\s*=
       regex: true
   spec: |
-    <spec preset_var="VALIDATOR_REGISTRY_LIMIT" fork="phase0" hash="8fa5412c">
-    VALIDATOR_REGISTRY_LIMIT: uint64 = 1099511627776
+    <spec preset_var="VALIDATOR_REGISTRY_LIMIT" fork="phase0" hash="4457cfd6">
+    VALIDATOR_REGISTRY_LIMIT: Uint64 = 1099511627776
     </spec>
 
 - name: WHISTLEBLOWER_REWARD_QUOTIENT#phase0
@@ -805,8 +805,8 @@
       search: WhistleBlowerRewardQuotient\s+.*yaml:"WHISTLEBLOWER_REWARD_QUOTIENT"
       regex: true
   spec: |
-    <spec preset_var="WHISTLEBLOWER_REWARD_QUOTIENT" fork="phase0" hash="62962c52">
-    WHISTLEBLOWER_REWARD_QUOTIENT: uint64 = 512
+    <spec preset_var="WHISTLEBLOWER_REWARD_QUOTIENT" fork="phase0" hash="281e1017">
+    WHISTLEBLOWER_REWARD_QUOTIENT: Uint64 = 512
     </spec>
 
 - name: WHISTLEBLOWER_REWARD_QUOTIENT_ELECTRA#electra
@@ -815,6 +815,6 @@
       search: WhistleBlowerRewardQuotientElectra\s+.*yaml:"WHISTLEBLOWER_REWARD_QUOTIENT_ELECTRA"
       regex: true
   spec: |
-    <spec preset_var="WHISTLEBLOWER_REWARD_QUOTIENT_ELECTRA" fork="electra" hash="8021dedf">
-    WHISTLEBLOWER_REWARD_QUOTIENT_ELECTRA: uint64 = 4096
+    <spec preset_var="WHISTLEBLOWER_REWARD_QUOTIENT_ELECTRA" fork="electra" hash="160af83f">
+    WHISTLEBLOWER_REWARD_QUOTIENT_ELECTRA: Uint64 = 4096
     </spec>
