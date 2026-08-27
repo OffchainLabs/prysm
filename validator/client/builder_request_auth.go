@@ -21,8 +21,7 @@ type builderRequestAuthKey struct {
 	data string
 }
 
-// builderConfigForSlot resolves pk's builder config for slot from one settings snapshot
-// — never nil, absent settings are neutral — signing any request auth not warm-cached.
+// builderConfigForSlot never returns nil; absent settings yield a neutral config.
 func (v *validator) builderConfigForSlot(ctx context.Context, pk pubkey, slot primitives.Slot) *ethpb.BuilderConfig {
 	cfg := &ethpb.BuilderConfig{BuilderBoostFactor: uint64(proposer.NeutralBuilderBoostFactor)}
 	ps := v.ProposerSettings()

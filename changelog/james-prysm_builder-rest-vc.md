@@ -5,7 +5,6 @@
 ### Fixed
 
 - Builder entries loaded from proposer settings files, URLs, or the validator database are now checked against the spec size and format limits at startup; invalid entries are dropped with a warning instead of failing block production requests.
-- `POST /eth/v1/validator/builder_preferences` reports builder submission failures per entry index in the 400 response, per the spec's `IndexedErrorMessage`.
 
 ### Removed
 

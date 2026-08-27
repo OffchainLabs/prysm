@@ -181,7 +181,7 @@ func (be *BuilderEntry) Validate() error {
 		}
 	}
 	if len(be.AuthData) > MaxAuthDataSize {
-		return errors.Errorf("auth_data must be 1 to %d bytes", MaxAuthDataSize)
+		return errors.Errorf("auth_data exceeds %d bytes", MaxAuthDataSize)
 	}
 	return nil
 }

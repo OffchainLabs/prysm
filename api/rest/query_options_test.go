@@ -9,7 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
-func TestNewGetConfig(t *testing.T) {
+func TestNewQueryConfig(t *testing.T) {
 	t.Run("defaults accept any 2XX response", func(t *testing.T) {
 		cfg := newQueryConfig(nil)
 
