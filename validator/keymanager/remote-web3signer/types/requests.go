@@ -494,7 +494,7 @@ func GetBlockV2BlindedSignRequest(request *validatorpb.SignRequest, genesisValid
 	}, nil
 }
 
-// GetRequestAuthSignRequest maps the request for signing type REQUEST_AUTH (gloas builder API).
+// GetRequestAuthSignRequest maps the request for signing type BUILDER_REQUEST_AUTH (gloas builder API).
 func GetRequestAuthSignRequest(request *validatorpb.SignRequest) (*RequestAuthSignRequest, error) {
 	if request == nil {
 		return nil, errors.New("nil sign request provided")
@@ -507,7 +507,7 @@ func GetRequestAuthSignRequest(request *validatorpb.SignRequest) (*RequestAuthSi
 		return nil, errors.New("invalid sign request: RequestAuth is nil")
 	}
 	return &RequestAuthSignRequest{
-		Type:        "REQUEST_AUTH",
+		Type:        "BUILDER_REQUEST_AUTH",
 		SigningRoot: request.SigningRoot,
 		RequestAuth: &RequestAuth{
 			Data: authReq.RequestAuth.Data,
@@ -594,10 +594,11 @@ func GetProposerPreferencesSignRequest(request *validatorpb.SignRequest, genesis
 		ForkInfo:    fork,
 		SigningRoot: request.SigningRoot,
 		ProposerPreferences: &ProposerPreferences{
+			DependentRoot:  pp.ProposerPreference.DependentRoot,
 			ProposalSlot:   fmt.Sprint(pp.ProposerPreference.ProposalSlot),
 			ValidatorIndex: fmt.Sprint(pp.ProposerPreference.ValidatorIndex),
 			FeeRecipient:   pp.ProposerPreference.FeeRecipient,
-			GasLimit:       fmt.Sprint(pp.ProposerPreference.TargetGasLimit),
+			TargetGasLimit: fmt.Sprint(pp.ProposerPreference.TargetGasLimit),
 		},
 	}, nil
 }

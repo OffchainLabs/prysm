@@ -424,10 +424,11 @@ func MapExecutionPayloadEnvelope(envelope *ethpb.ExecutionPayloadEnvelope) (*Exe
 		return nil, errors.Wrap(err, "could not map execution requests")
 	}
 	return &ExecutionPayloadEnvelope{
-		Payload:           payload,
-		ExecutionRequests: requests,
-		BuilderIndex:      fmt.Sprint(envelope.BuilderIndex),
-		BeaconBlockRoot:   envelope.BeaconBlockRoot,
+		Payload:               payload,
+		ExecutionRequests:     requests,
+		BuilderIndex:          fmt.Sprint(envelope.BuilderIndex),
+		BeaconBlockRoot:       envelope.BeaconBlockRoot,
+		ParentBeaconBlockRoot: envelope.ParentBeaconBlockRoot,
 	}, nil
 }
 

@@ -121,12 +121,12 @@ type ValidatorRegistrationSignRequest struct {
 	ValidatorRegistration *ValidatorRegistration `json:"validator_registration" validate:"required"`
 }
 
-// RequestAuthSignRequest is a request object for web3signer sign api type REQUEST_AUTH (gloas builder API).
+// RequestAuthSignRequest is a request object for web3signer sign api type BUILDER_REQUEST_AUTH (gloas builder API).
 // Its domain is fork-independent (genesis fork version, zero genesis validators root), so no fork info.
 type RequestAuthSignRequest struct {
 	Type        string        `json:"type" validate:"required"`
 	SigningRoot hexutil.Bytes `json:"signingRoot"`
-	RequestAuth *RequestAuth  `json:"request_auth" validate:"required"`
+	RequestAuth *RequestAuth  `json:"builder_request_auth" validate:"required"`
 }
 
 // ExecutionPayloadEnvelopeSignRequest is a request object for web3signer sign api type EXECUTION_PAYLOAD_ENVELOPE (gloas).
@@ -408,10 +408,11 @@ type RequestAuth struct {
 
 // ExecutionPayloadEnvelope a sub property of ExecutionPayloadEnvelopeSignRequest (gloas).
 type ExecutionPayloadEnvelope struct {
-	Payload           *ExecutionPayloadGloas  `json:"payload"`
-	ExecutionRequests *ExecutionRequestsGloas `json:"execution_requests"`
-	BuilderIndex      string                  `json:"builder_index"` /* uint64 */
-	BeaconBlockRoot   hexutil.Bytes           `json:"beacon_block_root"`
+	Payload               *ExecutionPayloadGloas  `json:"payload"`
+	ExecutionRequests     *ExecutionRequestsGloas `json:"execution_requests"`
+	BuilderIndex          string                  `json:"builder_index"` /* uint64 */
+	BeaconBlockRoot       hexutil.Bytes           `json:"beacon_block_root"`
+	ParentBeaconBlockRoot hexutil.Bytes           `json:"parent_beacon_block_root"`
 }
 
 // ExecutionPayloadGloas is the gloas execution payload (deneb shape + block_access_list + slot_number).
@@ -501,10 +502,11 @@ type PayloadAttestationData struct {
 
 // ProposerPreferences a sub property of ProposerPreferencesSignRequest (gloas).
 type ProposerPreferences struct {
+	DependentRoot  hexutil.Bytes `json:"dependent_root"`
 	ProposalSlot   string        `json:"proposal_slot"`   /* uint64 */
 	ValidatorIndex string        `json:"validator_index"` /* uint64 */
 	FeeRecipient   hexutil.Bytes `json:"fee_recipient"`
-	GasLimit       string        `json:"gas_limit"` /* uint64 */
+	TargetGasLimit string        `json:"target_gas_limit"` /* uint64 */
 }
 
 ////////////////////////////////////////////////////////////////////////////////

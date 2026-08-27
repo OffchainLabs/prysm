@@ -475,7 +475,7 @@ func GetMockSignRequest(t string) *validatorpb.SignRequest {
 				BlockGloas: util.HydrateBeaconBlockGloas(&eth.BeaconBlockGloas{}),
 			},
 		}
-	case "REQUEST_AUTH":
+	case "BUILDER_REQUEST_AUTH":
 		return &validatorpb.SignRequest{
 			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),
 			SigningRoot:     make([]byte, fieldparams.RootLength),
@@ -781,7 +781,7 @@ func VoluntaryExitSignRequest() *types.VoluntaryExitSignRequest {
 // RequestAuthSignRequest is a mock implementation of the RequestAuthSignRequest.
 func RequestAuthSignRequest() *types.RequestAuthSignRequest {
 	return &types.RequestAuthSignRequest{
-		Type:        "REQUEST_AUTH",
+		Type:        "BUILDER_REQUEST_AUTH",
 		SigningRoot: make([]byte, fieldparams.RootLength),
 		RequestAuth: &types.RequestAuth{
 			Data: []byte("https://builder.example.com"),
@@ -821,8 +821,9 @@ func ExecutionPayloadEnvelopeProto() *eth.ExecutionPayloadEnvelope {
 			BuilderDeposits: []*enginev1.BuilderDepositRequest{},
 			BuilderExits:    []*enginev1.BuilderExitRequest{},
 		},
-		BuilderIndex:    0,
-		BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+		BuilderIndex:          0,
+		BeaconBlockRoot:       make([]byte, fieldparams.RootLength),
+		ParentBeaconBlockRoot: make([]byte, fieldparams.RootLength),
 	}
 }
 
@@ -861,8 +862,9 @@ func ExecutionPayloadEnvelopeSignRequest() *types.ExecutionPayloadEnvelopeSignRe
 				BuilderDeposits: []*types.BuilderDepositRequest{},
 				BuilderExits:    []*types.BuilderExitRequest{},
 			},
-			BuilderIndex:    "0",
-			BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+			BuilderIndex:          "0",
+			BeaconBlockRoot:       make([]byte, fieldparams.RootLength),
+			ParentBeaconBlockRoot: make([]byte, fieldparams.RootLength),
 		},
 	}
 }
@@ -889,10 +891,11 @@ func ProposerPreferencesSignRequest() *types.ProposerPreferencesSignRequest {
 		ForkInfo:    ForkInfo(),
 		SigningRoot: make([]byte, fieldparams.RootLength),
 		ProposerPreferences: &types.ProposerPreferences{
+			DependentRoot:  make([]byte, fieldparams.RootLength),
 			ProposalSlot:   "0",
 			ValidatorIndex: "0",
 			FeeRecipient:   make([]byte, fieldparams.FeeRecipientLength),
-			GasLimit:       "30000000",
+			TargetGasLimit: "30000000",
 		},
 	}
 }

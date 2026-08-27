@@ -539,9 +539,9 @@ func TestKeymanager_Sign(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "REQUEST_AUTH",
+			name: "BUILDER_REQUEST_AUTH",
 			args: args{
-				request: mock.GetMockSignRequest("REQUEST_AUTH"),
+				request: mock.GetMockSignRequest("BUILDER_REQUEST_AUTH"),
 			},
 			want:    desiredSig,
 			wantErr: false,

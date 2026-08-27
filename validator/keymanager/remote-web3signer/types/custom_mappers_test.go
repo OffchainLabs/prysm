@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/go-bitfield"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -954,10 +955,12 @@ func TestMapExecutionPayloadEnvelope(t *testing.T) {
 		envelope := mock.ExecutionPayloadEnvelopeProto()
 		envelope.BuilderIndex = 5
 		envelope.BeaconBlockRoot = make([]byte, fieldparams.RootLength)
+		envelope.ParentBeaconBlockRoot = bytesutil.PadTo([]byte{1}, fieldparams.RootLength)
 		got, err := types.MapExecutionPayloadEnvelope(envelope)
 		require.NoError(t, err)
 		require.Equal(t, "5", got.BuilderIndex)
 		require.NotNil(t, got.Payload)
 		require.NotNil(t, got.ExecutionRequests)
+		require.DeepEqual(t, hexutil.Bytes(envelope.ParentBeaconBlockRoot), got.ParentBeaconBlockRoot)
 	})
 }

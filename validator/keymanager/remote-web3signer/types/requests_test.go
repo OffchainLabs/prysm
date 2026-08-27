@@ -578,63 +578,66 @@ func TestGetBlockGloasSignRequest(t *testing.T) {
 }
 
 func TestGetExecutionPayloadEnvelopeSignRequest(t *testing.T) {
-	got, err := types.GetExecutionPayloadEnvelopeSignRequest(
-		mock.GetMockSignRequest("EXECUTION_PAYLOAD_ENVELOPE"),
-		make([]byte, fieldparams.RootLength),
-	)
-	require.NoError(t, err)
-	gotJSON, err := json.Marshal(got)
-	require.NoError(t, err)
-	wantJSON, err := json.Marshal(mock.ExecutionPayloadEnvelopeSignRequest())
-	require.NoError(t, err)
-	require.Equal(t, string(wantJSON), string(gotJSON))
-}
-
-func TestGetExecutionPayloadEnvelopeSignRequest_NilEnvelope(t *testing.T) {
-	req := &validatorpb.SignRequest{
-		Object: &validatorpb.SignRequest_ExecutionPayloadEnvelope{},
-	}
-	_, err := types.GetExecutionPayloadEnvelopeSignRequest(req, make([]byte, fieldparams.RootLength))
-	require.ErrorContains(t, "ExecutionPayloadEnvelope is nil", err)
+	t.Run("Happy Path Test", func(t *testing.T) {
+		got, err := types.GetExecutionPayloadEnvelopeSignRequest(
+			mock.GetMockSignRequest("EXECUTION_PAYLOAD_ENVELOPE"),
+			make([]byte, fieldparams.RootLength),
+		)
+		require.NoError(t, err)
+		gotJSON, err := json.Marshal(got)
+		require.NoError(t, err)
+		wantJSON, err := json.Marshal(mock.ExecutionPayloadEnvelopeSignRequest())
+		require.NoError(t, err)
+		require.Equal(t, string(wantJSON), string(gotJSON))
+	})
+	t.Run("Nil Envelope", func(t *testing.T) {
+		req := &validatorpb.SignRequest{
+			Object: &validatorpb.SignRequest_ExecutionPayloadEnvelope{},
+		}
+		_, err := types.GetExecutionPayloadEnvelopeSignRequest(req, make([]byte, fieldparams.RootLength))
+		require.ErrorContains(t, "ExecutionPayloadEnvelope is nil", err)
+	})
 }
 
 func TestGetPayloadAttestationMessageSignRequest(t *testing.T) {
-	got, err := types.GetPayloadAttestationMessageSignRequest(
-		mock.GetMockSignRequest("PAYLOAD_ATTESTATION_MESSAGE"),
-		make([]byte, fieldparams.RootLength),
-	)
-	require.NoError(t, err)
-	require.DeepEqual(t, mock.PayloadAttestationMessageSignRequest(), got)
-}
-
-func TestGetPayloadAttestationMessageSignRequest_NilData(t *testing.T) {
-	req := &validatorpb.SignRequest{
-		Object: &validatorpb.SignRequest_PayloadAttestationData{},
-	}
-	_, err := types.GetPayloadAttestationMessageSignRequest(req, make([]byte, fieldparams.RootLength))
-	require.ErrorContains(t, "PayloadAttestationData is nil", err)
+	t.Run("Happy Path Test", func(t *testing.T) {
+		got, err := types.GetPayloadAttestationMessageSignRequest(
+			mock.GetMockSignRequest("PAYLOAD_ATTESTATION_MESSAGE"),
+			make([]byte, fieldparams.RootLength),
+		)
+		require.NoError(t, err)
+		require.DeepEqual(t, mock.PayloadAttestationMessageSignRequest(), got)
+	})
+	t.Run("Nil Data", func(t *testing.T) {
+		req := &validatorpb.SignRequest{
+			Object: &validatorpb.SignRequest_PayloadAttestationData{},
+		}
+		_, err := types.GetPayloadAttestationMessageSignRequest(req, make([]byte, fieldparams.RootLength))
+		require.ErrorContains(t, "PayloadAttestationData is nil", err)
+	})
 }
 
 func TestGetProposerPreferencesSignRequest(t *testing.T) {
-	got, err := types.GetProposerPreferencesSignRequest(
-		mock.GetMockSignRequest("PROPOSER_PREFERENCES"),
-		make([]byte, fieldparams.RootLength),
-	)
-	require.NoError(t, err)
-	require.DeepEqual(t, mock.ProposerPreferencesSignRequest(), got)
-}
-
-func TestGetProposerPreferencesSignRequest_NilPref(t *testing.T) {
-	req := &validatorpb.SignRequest{
-		Object: &validatorpb.SignRequest_ProposerPreference{},
-	}
-	_, err := types.GetProposerPreferencesSignRequest(req, make([]byte, fieldparams.RootLength))
-	require.ErrorContains(t, "ProposerPreferences is nil", err)
+	t.Run("Happy Path Test", func(t *testing.T) {
+		got, err := types.GetProposerPreferencesSignRequest(
+			mock.GetMockSignRequest("PROPOSER_PREFERENCES"),
+			make([]byte, fieldparams.RootLength),
+		)
+		require.NoError(t, err)
+		require.DeepEqual(t, mock.ProposerPreferencesSignRequest(), got)
+	})
+	t.Run("Nil Preferences", func(t *testing.T) {
+		req := &validatorpb.SignRequest{
+			Object: &validatorpb.SignRequest_ProposerPreference{},
+		}
+		_, err := types.GetProposerPreferencesSignRequest(req, make([]byte, fieldparams.RootLength))
+		require.ErrorContains(t, "ProposerPreferences is nil", err)
+	})
 }
 
 func TestGetRequestAuthSignRequest(t *testing.T) {
 	t.Run("Happy Path Test", func(t *testing.T) {
-		got, err := types.GetRequestAuthSignRequest(mock.GetMockSignRequest("REQUEST_AUTH"))
+		got, err := types.GetRequestAuthSignRequest(mock.GetMockSignRequest("BUILDER_REQUEST_AUTH"))
 		require.NoError(t, err)
 		require.DeepEqual(t, mock.RequestAuthSignRequest(), got)
 	})
