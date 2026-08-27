@@ -117,7 +117,12 @@ func (s *Store) fillBack(ctx context.Context, current primitives.Slot, blocks []
 	status.LowSlot = uint64(lowest.Block().Slot())
 	status.LowRoot = lowest.RootSlice()
 	status.LowParentRoot = pr[:]
-	return status, s.saveStatus(ctx, status)
+	if err := s.saveStatus(ctx, status); err != nil {
+		return status, err
+	}
+	// The batch is durable from here, so the envelope skips it recorded are now real gaps.
+	envs.publishSkips()
+	return status, nil
 }
 
 // recoverLegacy will check to see if the db is from a legacy checkpoint sync, and either build a new BackfillStatus

@@ -27,8 +27,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// Terminal skip reasons for slots whose envelope could not be backfilled. Skipped slots
-// are counted in metrics and never retried after the batch completes.
+// Terminal skip reasons for slots whose envelope could not be backfilled. Skipped slots are
+// never retried after the batch completes, and are counted once the batch is durable.
 const (
 	envSkipSigUnverifiable = "sig_unverifiable"
 	envSkipELFailed        = "el_failed"
@@ -222,6 +222,9 @@ type envelopeSync struct {
 	pages     []*envelopePage
 	skips     map[string][]primitives.Slot
 	finalized bool
+	// published is set once the skip counters have been emitted, which happens only after the
+	// batch's status write succeeds.
+	published bool
 	now       func() time.Time
 }
 
@@ -392,15 +395,41 @@ func (es *envelopeSync) unresolved() int {
 	return len(es.pending)
 }
 
-// skip records a terminal skip for the slot: the envelope stays absent, counted in metrics and
-// never retried after the batch completes.
+// elFailed records an EL cross-check failure, which is never a peer offense. A required slot
+// takes the terminal skip immediately. The batch tail may still be unclassified, and a withheld
+// tail must stay silent, so its reason is deferred to import-time classification rather than
+// dropped — otherwise an expired tail is reported as a peer drought instead of an EL failure.
+func (es *envelopeSync) elFailed(exp *envelopeExpectation, slot primitives.Slot) {
+	if exp.required {
+		es.skip(slot, envSkipELFailed)
+		return
+	}
+	exp.skipReason = envSkipELFailed
+}
+
+// skip records a terminal skip for the slot: the envelope stays absent and is never retried
+// after the batch completes. The counter is emitted later, by publishSkips.
 func (es *envelopeSync) skip(slot primitives.Slot, reason string) {
 	delete(es.pending, slot)
 	if es.tail != nil && es.tail.block.Block().Slot() == slot {
 		es.tail = nil
 	}
 	es.skips[reason] = append(es.skips[reason], slot)
-	envelopeSlotsSkipped.WithLabelValues(reason).Inc()
+}
+
+// publishSkips emits the skip counters. A skip claims a permanent gap, so it is only published
+// once the batch's backfill status write has succeeded: a batch that is retried or expires
+// before import would otherwise leave phantom or double-counted gaps behind. Activity counters
+// (downloads, verifications) are deliberately not gated this way — they measure work done, not
+// final state.
+func (es *envelopeSync) publishSkips() {
+	if es == nil || es.published {
+		return
+	}
+	es.published = true
+	for reason, slots := range es.skips {
+		envelopeSlotsSkipped.WithLabelValues(reason).Add(float64(len(slots)))
+	}
 }
 
 // retireTailFetch removes the tail slot from the fetch set while keeping the expectation for
@@ -577,25 +606,17 @@ func (es *envelopeSync) processResponse(ctx context.Context, pid peer.ID, envs [
 	for _, c := range cands {
 		recon := payloads[bytesutil.ToBytes32(c.exp.bid.BlockHash)]
 		if recon == nil {
-			// EL reconstruction failure is never a peer offense. Required slots take the
-			// terminal skip; the unclassified tail is left for import-time classification.
-			if c.exp.required {
-				es.skip(c.slot, envSkipELFailed)
-			}
+			es.elFailed(c.exp, c.slot)
 			continue
 		}
 		fetchedRoot, htrErr := c.env.Message.Payload.HashTreeRoot()
 		if htrErr != nil {
-			if c.exp.required {
-				es.skip(c.slot, envSkipELFailed)
-			}
+			es.elFailed(c.exp, c.slot)
 			continue
 		}
 		reconRoot, htrErr := recon.HashTreeRoot()
 		if htrErr != nil {
-			if c.exp.required {
-				es.skip(c.slot, envSkipELFailed)
-			}
+			es.elFailed(c.exp, c.slot)
 			continue
 		}
 		if fetchedRoot != reconRoot {
@@ -607,6 +628,9 @@ func (es *envelopeSync) processResponse(ctx context.Context, pid peer.ID, envs [
 			continue
 		}
 		delete(es.pending, c.slot)
+		// A later attempt resolved the slot, so drop any EL failure deferred by an earlier one;
+		// finalize prefers a deferred reason over a held envelope.
+		c.exp.skipReason = ""
 		es.held[c.slot] = &heldEnvelope{exp: c.exp, blinded: kv.BlindEnvelope(c.env)}
 		envelopeVerifiedCount.Inc()
 	}

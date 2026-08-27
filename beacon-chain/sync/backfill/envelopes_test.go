@@ -797,3 +797,107 @@ func TestBatchTransitionEnvelopes(t *testing.T) {
 	nb = nb.transitionToNext()
 	require.Equal(t, batchImportable, nb.state)
 }
+
+// Regression tests for three review findings on this branch: a panic on the setup-error retry
+// path, EL failures on an unclassified tail being reported as peer droughts, and skip counters
+// being published before the batch was durable.
+
+func TestEnvelopeSetupErrorLeavesBatchRetryable(t *testing.T) {
+	c := makeEnvChain(t, envChainCfg{start: 10, n: 2})
+	// A batch whose stage state was never assigned must survive the retry path. handleBlocks
+	// assigns blocks and the stage state together so this state is unreachable, but
+	// transitionToNext runs on every retryable error and must not dereference a nil stage.
+	b := batch{blocks: c.blks}
+	b = b.transitionToNext()
+	require.Equal(t, batchImportable, b.state)
+	// resetToRetryColumns is the pool's first stop for a retryable batch.
+	b = batch{blocks: c.blks, state: batchErrRetryable}
+	b = resetToRetryColumns(b, das.CurrentNeeds{})
+	require.Equal(t, batchImportable, b.state)
+}
+
+func TestEnvelopeTailELFailureReportsELFailed(t *testing.T) {
+	ctx := t.Context()
+	// Blocks 0..2 are the batch, block 3 is the boundary child; the tail (index 2) is revealed,
+	// so it expects an envelope, but the EL cannot reconstruct its payload.
+	setup := func(t *testing.T, reconIdx ...int) (*envChain, *Store, *envelopeSync) {
+		c := makeEnvChain(t, envChainCfg{start: 10, n: 4})
+		bat, child := c.blks[:3], c.blks[3]
+		st := testFinalizeStore(t, &mockBackfillDB{}, bat[len(bat)-1], child)
+		recon := &mockReconstructor{payloads: c.reconPayloads(t, reconIdx...)}
+		es, err := newEnvelopeSync(ctx, bat, testEnvSyncCfg(t, c, recon, &downscoreRecorder{}))
+		require.NoError(t, err)
+		require.NotNil(t, es.tail)
+		return c, st, es
+	}
+	resp := func(c *envChain, t *testing.T) *scriptedFetcher {
+		return &scriptedFetcher{responses: [][]*ethpb.SignedExecutionPayloadEnvelope{{
+			c.envelope(t, 0, nil), c.envelope(t, 1, nil), c.envelope(t, 2, nil),
+		}}}
+	}
+
+	t.Run("unclassified tail records el_failed, not peer_exhausted", func(t *testing.T) {
+		c, st, es := setup(t, 0, 1) // tail's payload missing from the EL
+		f := resp(c, t)
+		es.fetchPass(ctx, "peer-a", f.fetch)
+		es.finalize(ctx, st.store, bytesutil.ToBytes32(st.status().LowRoot))
+		require.Equal(t, 1, len(es.skips[envSkipELFailed]))
+		require.Equal(t, primitives.Slot(12), es.skips[envSkipELFailed][0])
+		require.Equal(t, 0, len(es.skips[envSkipPeerExhausted]))
+	})
+
+	t.Run("a later successful attempt clears the deferred el_failed", func(t *testing.T) {
+		c, st, es := setup(t, 0, 1)
+		es.fetchPass(ctx, "peer-a", resp(c, t).fetch)
+		// The EL recovers before the next attempt.
+		es.cfg.reconstructor = &mockReconstructor{payloads: c.reconPayloads(t, 0, 1, 2)}
+		es.fetchPass(ctx, "peer-b", resp(c, t).fetch)
+		es.finalize(ctx, st.store, bytesutil.ToBytes32(st.status().LowRoot))
+		require.Equal(t, 0, len(es.skips[envSkipELFailed]))
+		require.NotNil(t, es.held[12])
+	})
+}
+
+func TestEnvelopeSkipsPublishedOnlyAfterImport(t *testing.T) {
+	ctx := t.Context()
+	setup := func(t *testing.T) (*envChain, *Store, *envelopeSync) {
+		c := makeEnvChain(t, envChainCfg{start: 10, n: 4})
+		bat, child := c.blks[:3], c.blks[3]
+		st := testFinalizeStore(t, &mockBackfillDB{}, bat[len(bat)-1], child)
+		// No payloads at all: every slot takes an el_failed skip.
+		recon := &mockReconstructor{payloads: c.reconPayloads(t)}
+		es, err := newEnvelopeSync(ctx, bat, testEnvSyncCfg(t, c, recon, &downscoreRecorder{}))
+		require.NoError(t, err)
+		f := &scriptedFetcher{responses: [][]*ethpb.SignedExecutionPayloadEnvelope{{
+			c.envelope(t, 0, nil), c.envelope(t, 1, nil), c.envelope(t, 2, nil),
+		}}}
+		es.fetchPass(ctx, "peer-a", f.fetch)
+		return c, st, es
+	}
+
+	t.Run("a batch that fails before the status write publishes nothing", func(t *testing.T) {
+		c, st, es := setup(t)
+		failing := &failingAvailabilityChecker{}
+		_, err := st.fillBack(ctx, 20, c.blks[:3], failing, es)
+		require.NotNil(t, err)
+		require.Equal(t, false, es.published)
+	})
+
+	t.Run("publishing happens once the status write succeeds, and only once", func(t *testing.T) {
+		c, st, es := setup(t)
+		_, err := st.fillBack(ctx, 20, c.blks[:3], &das.MockAvailabilityStore{}, es)
+		require.NoError(t, err)
+		require.Equal(t, true, es.published)
+		// All three slots, including the tail, are attributed to the EL rather than the peer.
+		require.Equal(t, 3, len(es.skips[envSkipELFailed]))
+		// Idempotent: a second call must not double-count the same gaps.
+		es.publishSkips()
+		require.Equal(t, true, es.published)
+	})
+}
+
+type failingAvailabilityChecker struct{}
+
+func (failingAvailabilityChecker) IsDataAvailable(_ context.Context, _ primitives.Slot, _ ...blocks.ROBlock) error {
+	return errors.New("availability check failed")
+}

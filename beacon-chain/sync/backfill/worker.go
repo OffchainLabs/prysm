@@ -201,7 +201,6 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	}
 	blockDownloadBytesApprox.Add(float64(bdl))
 	log.WithFields(b.logFields()).WithField("bytesDownloaded", bdl).Trace("Blocks downloaded")
-	b.blocks = verified
 
 	bscfg := &blobSyncConfig{currentNeeds: w.cfg.currentNeeds, nbv: w.cfg.newVB, store: w.cfg.blobStore}
 	bs, err := newBlobSync(current, verified, bscfg)
@@ -216,6 +215,10 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	if err != nil {
 		return b.withRetryableError(err)
 	}
+	// Assign the stage state as a unit. A setup error above must not leave b.blocks populated
+	// alongside a nil b.columns: the retryable-error path runs transitionToNext, which reads
+	// b.columns whenever b.blocks is non-empty.
+	b.blocks = verified
 	b.blobs = bs
 	b.columns = cs
 	b.envelopes = es
