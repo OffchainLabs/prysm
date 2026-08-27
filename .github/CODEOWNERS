@@ -4,5 +4,5 @@
 # Starlark code owners
 *.bzl @prestonvanloon @kasey
 
-# Anyone on prylabs team can approve dependency updates.
+# Anyone on Prysm can approve dependency updates.
 deps.bzl @OffchainLabs/prysm
