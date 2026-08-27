@@ -269,14 +269,6 @@ func TestMarshalItems_OK(t *testing.T) {
 	require.DeepEqual(t, depositRequestsSSZHex, hexutil.Encode(drbs))
 }
 
-func TestEmptyExecutionRequestsHashTreeRoot(t *testing.T) {
-	want, err := (&enginev1.ExecutionRequestsGloas{}).HashTreeRoot()
-	require.NoError(t, err)
-	got, err := enginev1.EmptyExecutionRequestsHashTreeRoot()
-	require.NoError(t, err)
-	require.Equal(t, want, got)
-}
-
 func TestEmptyExecutionRequestsGloasHashTreeRoot(t *testing.T) {
 	want, err := (&enginev1.ExecutionRequestsGloas{}).HashTreeRoot()
 	require.NoError(t, err)
