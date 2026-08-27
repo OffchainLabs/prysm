@@ -44,7 +44,7 @@ func (m *MockHandler) EXPECT() *MockHandlerMockRecorder {
 }
 
 // Get mocks base method.
-func (m *MockHandler) Get(ctx context.Context, endpoint string, resp any, opts ...rest.GetOption) error {
+func (m *MockHandler) Get(ctx context.Context, endpoint string, resp any, opts ...rest.QueryOption) error {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, endpoint, resp}
 	for _, a := range opts {
@@ -63,7 +63,7 @@ func (mr *MockHandlerMockRecorder) Get(ctx, endpoint, resp any, opts ...any) *go
 }
 
 // GetSSZ mocks base method.
-func (m *MockHandler) GetSSZ(ctx context.Context, endpoint string, opts ...rest.GetOption) ([]byte, http.Header, error) {
+func (m *MockHandler) GetSSZ(ctx context.Context, endpoint string, opts ...rest.QueryOption) ([]byte, http.Header, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, endpoint}
 	for _, a := range opts {
@@ -155,7 +155,7 @@ func (mr *MockHandlerMockRecorder) PostSSZWithFallback(ctx, endpoint, headers, s
 }
 
 // RequestSSZWithFallback mocks base method.
-func (m *MockHandler) RequestSSZWithFallback(ctx context.Context, endpoint string, headers map[string]string, sszFn, jsonFn func() ([]byte, error), opts ...rest.GetOption) ([]byte, http.Header, error) {
+func (m *MockHandler) RequestSSZWithFallback(ctx context.Context, endpoint string, headers map[string]string, sszFn, jsonFn func() ([]byte, error), opts ...rest.QueryOption) ([]byte, http.Header, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, endpoint, headers, sszFn, jsonFn}
 	for _, a := range opts {

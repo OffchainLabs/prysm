@@ -22,11 +22,26 @@ import (
 
 type reqOption func(*http.Request)
 
+// sszPreferredAccept prefers an SSZ response while still accepting JSON.
+func sszPreferredAccept() string {
+	primaryAcceptType := fmt.Sprintf("%s;q=%s", api.OctetStreamMediaType, "0.95")
+	secondaryAcceptType := fmt.Sprintf("%s;q=%s", api.JsonMediaType, "0.9")
+	return fmt.Sprintf("%s,%s", primaryAcceptType, secondaryAcceptType)
+}
+
+// withSSZResponse asks the server for an SSZ response body. Only endpoints known
+// to serve SSZ responses should use it; a strict preference can draw a 406.
+func withSSZResponse() reqOption {
+	return func(req *http.Request) {
+		req.Header.Set("Accept", sszPreferredAccept())
+	}
+}
+
 // Handler defines the interface for making REST API requests.
 type Handler interface {
-	Get(ctx context.Context, endpoint string, resp any, opts ...GetOption) error
+	Get(ctx context.Context, endpoint string, resp any, opts ...QueryOption) error
 	GetStatusCode(ctx context.Context, endpoint string) (int, error)
-	GetSSZ(ctx context.Context, endpoint string, opts ...GetOption) ([]byte, http.Header, error)
+	GetSSZ(ctx context.Context, endpoint string, opts ...QueryOption) ([]byte, http.Header, error)
 	Post(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer, resp any) error
 	PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) error
 	PostSSZWithFallback(
@@ -42,7 +57,7 @@ type Handler interface {
 		headers map[string]string,
 		sszFn func() ([]byte, error),
 		jsonFn func() ([]byte, error),
-		opts ...GetOption,
+		opts ...QueryOption,
 	) ([]byte, http.Header, error)
 	Host() string
 }
@@ -182,10 +197,7 @@ func (c *handler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Hea
 		return nil, nil, errors.Wrapf(err, "failed to create request for endpoint %s", api.RedactEndpoint(url))
 	}
 
-	primaryAcceptType := fmt.Sprintf("%s;q=%s", api.OctetStreamMediaType, "0.95")
-	secondaryAcceptType := fmt.Sprintf("%s;q=%s", api.JsonMediaType, "0.9")
-	acceptHeaderString := fmt.Sprintf("%s,%s", primaryAcceptType, secondaryAcceptType)
-	req.Header.Set("Accept", acceptHeaderString)
+	req.Header.Set("Accept", sszPreferredAccept())
 
 	for _, o := range c.reqOverrides {
 		o(req)
@@ -200,8 +212,8 @@ func (c *handler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Hea
 }
 
 // postWithContentType sends a POST with the given request content type and returns
-// the raw response body and headers, preferring an SSZ-encoded response.
-func (c *handler) postWithContentType(ctx context.Context, apiEndpoint string, headers map[string]string, contentType string, data *bytes.Buffer) ([]byte, http.Header, error) {
+// the raw response body and headers. Responses default to JSON; opts can override.
+func (c *handler) postWithContentType(ctx context.Context, apiEndpoint string, headers map[string]string, contentType string, data *bytes.Buffer, opts ...reqOption) ([]byte, http.Header, error) {
 	if data == nil {
 		return nil, nil, errors.New("data is nil")
 	}
@@ -211,12 +223,14 @@ func (c *handler) postWithContentType(ctx context.Context, apiEndpoint string, h
 		return nil, nil, errors.Wrapf(err, "failed to create request for endpoint %s", api.RedactEndpoint(url))
 	}
 
-	primaryAcceptType := fmt.Sprintf("%s;q=%s", api.OctetStreamMediaType, "0.95")
-	secondaryAcceptType := fmt.Sprintf("%s;q=%s", api.JsonMediaType, "0.9")
-	req.Header.Set("Accept", fmt.Sprintf("%s,%s", primaryAcceptType, secondaryAcceptType))
+	req.Header.Set("Accept", api.JsonMediaType)
 	req.Header.Set("Content-Type", contentType)
 	for headerKey, headerValue := range headers {
 		req.Header.Set(headerKey, headerValue)
+	}
+
+	for _, o := range opts {
+		o(req)
 	}
 
 	for _, o := range c.reqOverrides {
@@ -307,8 +321,7 @@ func (c *handler) Post(
 	return decodeResp(httpResp, resp)
 }
 
-// PostSSZ sends a POST request with an SSZ (application/octet-stream) request body,
-// preferring an SSZ-encoded response.
+// PostSSZ sends a POST request with an SSZ (application/octet-stream) request body.
 func (c *handler) PostSSZ(
 	ctx context.Context,
 	apiEndpoint string,

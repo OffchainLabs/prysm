@@ -16,8 +16,8 @@ const (
 	UntilAny2xx   RepollMode = iota // Re-polls only while no usable (2xx) response has been received at all.
 )
 
-// getConfig holds the per-call configuration.
-type getConfig struct {
+// queryConfig holds the per-call configuration.
+type queryConfig struct {
 	race             bool                                    // When true, query all nodes concurrently. When false, try nodes in order.
 	accept           func(json.RawMessage) bool              // Acceptance criterion for a JSON Get.
 	sszAccept        func(body []byte, hdr http.Header) bool // Acceptance criterion for a GetSSZ.
@@ -27,13 +27,13 @@ type getConfig struct {
 	fallbackDeadline time.Time                               // If non-zero, bounds the wait for the nodes that have not answered yet once a usable response is in hand.
 }
 
-// GetOption customizes a Handler.Get call.
-type GetOption func(*getConfig)
+// QueryOption customizes a read query (Get, GetSSZ, RequestSSZWithFallback).
+type QueryOption func(*queryConfig)
 
-// newGetConfig folds opts into a getConfig.
-func newGetConfig(opts []GetOption) getConfig {
+// newQueryConfig folds opts into a queryConfig.
+func newQueryConfig(opts []QueryOption) queryConfig {
 	// By default, accept any 2XX response.
-	cfg := getConfig{
+	cfg := queryConfig{
 		accept:    func(json.RawMessage) bool { return true },
 		sszAccept: func([]byte, http.Header) bool { return true },
 	}
@@ -47,16 +47,16 @@ func newGetConfig(opts []GetOption) getConfig {
 
 // WithRace makes the read query all beacon nodes concurrently.
 // Without it, it reads try nodes in order.
-func WithRace() GetOption {
-	return func(c *getConfig) {
+func WithRace() QueryOption {
+	return func(c *queryConfig) {
 		c.race = true
 	}
 }
 
 // WithAccept narrows Get's acceptance criterion from any 2XX response to a 2XX
 // response whose body also satisfies accept.
-func WithAccept(accept func(raw json.RawMessage) bool) GetOption {
-	return func(c *getConfig) {
+func WithAccept(accept func(raw json.RawMessage) bool) QueryOption {
+	return func(c *queryConfig) {
 		if accept != nil {
 			c.accept = accept
 		}
@@ -65,8 +65,8 @@ func WithAccept(accept func(raw json.RawMessage) bool) GetOption {
 
 // WithSSZAccept narrows GetSSZ's acceptance criterion from any 2XX response to
 // a 2XX response whose body also satisfies accept.
-func WithSSZAccept(accept func(body []byte, header http.Header) bool) GetOption {
-	return func(c *getConfig) {
+func WithSSZAccept(accept func(body []byte, header http.Header) bool) QueryOption {
+	return func(c *queryConfig) {
 		if accept != nil {
 			c.sszAccept = accept
 		}
@@ -74,8 +74,8 @@ func WithSSZAccept(accept func(body []byte, header http.Header) bool) GetOption 
 }
 
 // WithDeadline sets a deadline for the read.
-func WithDeadline(t time.Time) GetOption {
-	return func(c *getConfig) {
+func WithDeadline(t time.Time) QueryOption {
+	return func(c *queryConfig) {
 		c.deadline = t
 	}
 }
@@ -83,8 +83,8 @@ func WithDeadline(t time.Time) GetOption {
 // WithFallbackDeadline bounds how long a read waits for the nodes that have not
 // answered yet, once another node has already returned a usable (but not
 // accepted) response.
-func WithFallbackDeadline(t time.Time) GetOption {
-	return func(c *getConfig) {
+func WithFallbackDeadline(t time.Time) QueryOption {
+	return func(c *queryConfig) {
 		c.fallbackDeadline = t
 	}
 }
@@ -93,16 +93,16 @@ func WithFallbackDeadline(t time.Time) GetOption {
 // until the deadline fires. mode selects what stops the re-polling: an
 // accept-passing response (UntilAccepted) or any usable 2xx response
 // (UntilAny2xx). WithRepoll has no effect unless WithDeadline is also set.
-func WithRepoll(mode RepollMode) GetOption {
-	return func(c *getConfig) {
+func WithRepoll(mode RepollMode) QueryOption {
+	return func(c *queryConfig) {
 		c.pollInterval = defaultPollInterval
 		c.repollMode = mode
 	}
 }
 
-// ResolvedConfig is a read-only view of the configuration a set of GetOptions
+// ResolvedConfig is a read-only view of the configuration a set of QueryOptions
 // produces. It lets other packages unit-test the options they build without
-// exercising a full HTTP read (getConfig itself is unexported).
+// exercising a full HTTP read (queryConfig itself is unexported).
 type ResolvedConfig struct {
 	Race             bool
 	Accept           func(raw json.RawMessage) bool
@@ -114,8 +114,8 @@ type ResolvedConfig struct {
 }
 
 // ResolveOptions folds opts into a ResolvedConfig for inspection.
-func ResolveOptions(opts ...GetOption) ResolvedConfig {
-	cfg := newGetConfig(opts)
+func ResolveOptions(opts ...QueryOption) ResolvedConfig {
+	cfg := newQueryConfig(opts)
 
 	return ResolvedConfig{
 		Race:             cfg.race,

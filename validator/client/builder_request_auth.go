@@ -21,21 +21,20 @@ type builderRequestAuthKey struct {
 	data string
 }
 
-// builderConfigForSlot resolves the builder config for pk's proposal at slot from one
-// settings snapshot, signing any builder request auth not already cached by the warm push.
+// builderConfigForSlot resolves pk's builder config for slot from one settings snapshot
+// — never nil, absent settings are neutral — signing any request auth not warm-cached.
 func (v *validator) builderConfigForSlot(ctx context.Context, pk pubkey, slot primitives.Slot) *ethpb.BuilderConfig {
+	cfg := &ethpb.BuilderConfig{BuilderBoostFactor: uint64(proposer.NeutralBuilderBoostFactor)}
 	ps := v.ProposerSettings()
 	if ps == nil {
-		return nil
+		return cfg
 	}
 	bc := ps.EffectiveBuilderConfig(pk)
 	if bc == nil {
-		return nil
+		return cfg
 	}
-	cfg := &ethpb.BuilderConfig{
-		MinBid:             primitives.Gwei(uint64OrDefault(uint64Ptr(bc.MinBid), 0)),
-		BuilderBoostFactor: uint64OrDefault(uint64Ptr(bc.BuilderBoostFactor), uint64(proposer.NeutralBuilderBoostFactor)),
-	}
+	cfg.MinBid = primitives.Gwei(uint64OrDefault(uint64Ptr(bc.MinBid), 0))
+	cfg.BuilderBoostFactor = uint64OrDefault(uint64Ptr(bc.BuilderBoostFactor), uint64(proposer.NeutralBuilderBoostFactor))
 	targets := builderTargets(bc)
 	if len(targets) == 0 {
 		return cfg

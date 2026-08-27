@@ -67,7 +67,7 @@ func TestGetSSZ_NonJSONErrorBodyIsTyped(t *testing.T) {
 // A JSON error body is decoded into the typed error's fields.
 func TestPostSSZ_JSONErrorBodyIsDecoded(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "application/octet-stream;q=0.95,application/json;q=0.9", r.Header.Get("Accept"))
+		assert.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
 		w.Header().Set("Content-Type", api.JsonMediaType)
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"code":400,"message":"bad request"}`))

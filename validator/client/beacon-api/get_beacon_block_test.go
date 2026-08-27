@@ -56,8 +56,8 @@ func TestBeaconBlockV4_DecodeClosureCachesWinningResponse(t *testing.T) {
 		Deadline: time.Time{},
 	})
 
-	// A nil builder config posts as the explicit neutral one.
-	expectedBody, err := (&ethpb.BuilderConfig{BuilderBoostFactor: uint64(proposer.NeutralBuilderBoostFactor)}).MarshalSSZ()
+	builderConfig := &ethpb.BuilderConfig{BuilderBoostFactor: uint64(proposer.NeutralBuilderBoostFactor)}
+	expectedBody, err := builderConfig.MarshalSSZ()
 	require.NoError(t, err)
 
 	handler := mock.NewMockHandler(ctrl)
@@ -68,7 +68,7 @@ func TestBeaconBlockV4_DecodeClosureCachesWinningResponse(t *testing.T) {
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
-	).DoAndReturn(func(_ context.Context, _ string, _ map[string]string, sszFn, _ func() ([]byte, error), opts ...rest.GetOption) ([]byte, http.Header, error) {
+	).DoAndReturn(func(_ context.Context, _ string, _ map[string]string, sszFn, _ func() ([]byte, error), opts ...rest.QueryOption) ([]byte, http.Header, error) {
 		body, err := sszFn()
 		require.NoError(t, err)
 		require.DeepEqual(t, expectedBody, body)
@@ -80,7 +80,7 @@ func TestBeaconBlockV4_DecodeClosureCachesWinningResponse(t *testing.T) {
 	}).Times(1)
 
 	validatorClient := &beaconApiValidatorClient{handler: handler}
-	got, err := validatorClient.beaconBlockV4(ctx, slot, neturl.Values{}, nil)
+	got, err := validatorClient.beaconBlockV4(ctx, slot, neturl.Values{}, builderConfig)
 	require.NoError(t, err)
 
 	want := &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: block}}
@@ -126,7 +126,7 @@ func TestBeaconBlock_DecodeClosureCachesWinningResponse(t *testing.T) {
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 		gomock.Any(),
-	).DoAndReturn(func(_ context.Context, _ string, opts ...rest.GetOption) ([]byte, http.Header, error) {
+	).DoAndReturn(func(_ context.Context, _ string, opts ...rest.QueryOption) ([]byte, http.Header, error) {
 		// Simulate the racing handler applying the acceptance check, which runs
 		// the decode closure under test and records the decoded block. The block
 		// builds on the announced head, so the candidate must be accepted.
@@ -1519,7 +1519,7 @@ func TestGetBeaconBlock_GloasValid_SSZ_WithPayload(t *testing.T) {
 		stateless:     true,
 		envelopeCache: cache.NewExecutionPayloadEnvelopeCache(),
 	}
-	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti, nil)
+	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti, testClientBuilderConfig())
 	require.NoError(t, err)
 
 	expectedBeaconBlock := &ethpb.GenericBeaconBlock{
@@ -1571,7 +1571,7 @@ func TestGetBeaconBlock_GloasValid_SSZ_WithoutPayload(t *testing.T) {
 		handler:       handler,
 		envelopeCache: cache.NewExecutionPayloadEnvelopeCache(),
 	}
-	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti, nil)
+	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti, testClientBuilderConfig())
 	require.NoError(t, err)
 
 	expectedBeaconBlock := &ethpb.GenericBeaconBlock{
@@ -1622,7 +1622,7 @@ func TestGetBeaconBlock_GloasValid_JSON_WithoutPayload(t *testing.T) {
 		handler:       handler,
 		envelopeCache: cache.NewExecutionPayloadEnvelopeCache(),
 	}
-	beaconBlock, err := validatorClient.beaconBlock(t.Context(), slot, randaoReveal, graffiti, nil)
+	beaconBlock, err := validatorClient.beaconBlock(t.Context(), slot, randaoReveal, graffiti, testClientBuilderConfig())
 	require.NoError(t, err)
 
 	assert.DeepEqual(t, &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: proto}}, beaconBlock)
@@ -1659,7 +1659,7 @@ func TestGetBeaconBlock_GloasRejectsJSONWithPayload(t *testing.T) {
 		stateless:     true,
 		envelopeCache: cache.NewExecutionPayloadEnvelopeCache(),
 	}
-	_, err := validatorClient.beaconBlock(t.Context(), slot, randaoReveal, graffiti, nil)
+	_, err := validatorClient.beaconBlock(t.Context(), slot, randaoReveal, graffiti, testClientBuilderConfig())
 	assert.ErrorContains(t, "must be SSZ", err)
 }
 
@@ -1705,7 +1705,7 @@ func TestBeaconBlockV4_PostWithBuilderConfig(t *testing.T) {
 			gomock.Any(),
 			gomock.Any(),
 			gomock.Any(),
-		).DoAndReturn(func(_ context.Context, _ string, _ map[string]string, sszFn, _ func() ([]byte, error), _ ...rest.GetOption) ([]byte, http.Header, error) {
+		).DoAndReturn(func(_ context.Context, _ string, _ map[string]string, sszFn, _ func() ([]byte, error), _ ...rest.QueryOption) ([]byte, http.Header, error) {
 			body, err := sszFn()
 			require.NoError(t, err)
 			require.DeepEqual(t, expectedSSZBody, body)
@@ -1769,5 +1769,14 @@ func TestBeaconBlockV4_PostWithBuilderConfig(t *testing.T) {
 		validatorClient := &beaconApiValidatorClient{handler: handler, envelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
 		_, err := validatorClient.beaconBlockV4(t.Context(), slot, neturl.Values{}, builderConfig)
 		assert.ErrorContains(t, "could not post v4 block request", err)
+	})
+
+	t.Run("nil builder config is rejected", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		validatorClient := &beaconApiValidatorClient{handler: mock.NewMockHandler(ctrl)}
+		_, err := validatorClient.beaconBlockV4(t.Context(), slot, neturl.Values{}, nil)
+		assert.ErrorContains(t, "builder config is required", err)
 	})
 }

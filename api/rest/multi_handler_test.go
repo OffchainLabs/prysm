@@ -263,6 +263,27 @@ func TestMultiHandlerPostSSZ(t *testing.T) {
 }
 
 func TestMultiHandlerPostSSZWithFallback(t *testing.T) {
+	// A strict SSZ response preference can draw a 406 from servers that only
+	// serve JSON, so plain posts must accept only JSON responses.
+	t.Run("accepts only JSON responses", func(t *testing.T) {
+		var acceptHeader atomic.Value
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			acceptHeader.Store(r.Header.Get("Accept"))
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(srv.Close)
+
+		mh := multi(t, srv.URL)
+		require.NoError(t, mh.PostSSZWithFallback(
+			context.Background(),
+			"/publish",
+			nil,
+			func() ([]byte, error) { return []byte("ssz"), nil },
+			func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+		))
+		assert.Equal(t, api.JsonMediaType, acceptHeader.Load())
+	})
+
 	t.Run("tracks support per node and endpoint", func(t *testing.T) {
 		var acceptsSSZ, acceptsJSON, rejectsSSZ, rejectsJSON int32
 		accepts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -468,7 +489,7 @@ func TestReadUntil(t *testing.T) {
 			return "matched", true, true, nil
 		}
 
-		val, matched, err := queryUntilAccepted(context.Background(), nil, getConfig{}, accept, round, noopFn)
+		val, matched, err := queryUntilAccepted(context.Background(), nil, queryConfig{}, accept, round, noopFn)
 		require.NoError(t, err)
 		assert.Equal(t, true, matched)
 		assert.Equal(t, "matched", val)
@@ -480,7 +501,7 @@ func TestReadUntil(t *testing.T) {
 			return "fallback", false, true, nil
 		}
 
-		val, matched, err := queryUntilAccepted(context.Background(), nil, getConfig{}, accept, round, noopFn)
+		val, matched, err := queryUntilAccepted(context.Background(), nil, queryConfig{}, accept, round, noopFn)
 		require.NoError(t, err)
 		assert.Equal(t, false, matched)
 		assert.Equal(t, "fallback", val)
@@ -492,7 +513,7 @@ func TestReadUntil(t *testing.T) {
 			return "", false, false, []error{sentinel}
 		}
 
-		_, matched, err := queryUntilAccepted(context.Background(), nil, getConfig{}, accept, round, noopFn)
+		_, matched, err := queryUntilAccepted(context.Background(), nil, queryConfig{}, accept, round, noopFn)
 		assert.Equal(t, false, matched)
 		require.NotNil(t, err)
 		assert.Equal(t, true, errors.Is(err, sentinel))
@@ -508,7 +529,7 @@ func TestReadUntil(t *testing.T) {
 			return "stale", false, true, nil
 		}
 
-		cfg := getConfig{pollInterval: time.Millisecond, deadline: time.Now().Add(2 * time.Second)}
+		cfg := queryConfig{pollInterval: time.Millisecond, deadline: time.Now().Add(2 * time.Second)}
 		val, matched, err := queryUntilAccepted(context.Background(), nil, cfg, accept, round, noopFn)
 		require.NoError(t, err)
 		assert.Equal(t, true, matched)
@@ -523,7 +544,7 @@ func TestReadUntil(t *testing.T) {
 			return "stale", false, true, nil // usable 2xx response, but not a match
 		}
 
-		cfg := getConfig{pollInterval: time.Millisecond, deadline: time.Now().Add(2 * time.Second), repollMode: UntilAny2xx}
+		cfg := queryConfig{pollInterval: time.Millisecond, deadline: time.Now().Add(2 * time.Second), repollMode: UntilAny2xx}
 		val, matched, err := queryUntilAccepted(context.Background(), nil, cfg, accept, round, noopFn)
 		require.NoError(t, err)
 		assert.Equal(t, false, matched)
@@ -541,7 +562,7 @@ func TestReadUntil(t *testing.T) {
 			return "", false, false, nil // total failure: no usable response this round
 		}
 
-		cfg := getConfig{pollInterval: time.Millisecond, deadline: time.Now().Add(2 * time.Second), repollMode: UntilAny2xx}
+		cfg := queryConfig{pollInterval: time.Millisecond, deadline: time.Now().Add(2 * time.Second), repollMode: UntilAny2xx}
 		val, matched, err := queryUntilAccepted(context.Background(), nil, cfg, accept, round, noopFn)
 		require.NoError(t, err)
 		assert.Equal(t, false, matched)
@@ -561,7 +582,7 @@ func TestReadUntil(t *testing.T) {
 			cancel()
 		}()
 
-		cfg := getConfig{pollInterval: time.Hour, deadline: time.Now().Add(time.Hour)}
+		cfg := queryConfig{pollInterval: time.Hour, deadline: time.Now().Add(time.Hour)}
 		val, matched, err := queryUntilAccepted(ctx, nil, cfg, accept, round, noopFn)
 		require.NoError(t, err)
 		assert.Equal(t, false, matched)
@@ -579,7 +600,7 @@ func TestReadUntil(t *testing.T) {
 			cancel()
 		}()
 
-		cfg := getConfig{pollInterval: time.Hour, deadline: time.Now().Add(time.Hour)}
+		cfg := queryConfig{pollInterval: time.Hour, deadline: time.Now().Add(time.Hour)}
 		_, matched, err := queryUntilAccepted(ctx, nil, cfg, accept, round, noopFn)
 		assert.Equal(t, false, matched)
 		require.NotNil(t, err)
@@ -600,7 +621,7 @@ func TestRoundFor(t *testing.T) {
 			return "ok", nil
 		}
 
-		round := roundFor[string](getConfig{race: true})
+		round := roundFor[string](queryConfig{race: true})
 		handlers := []*handler{newTestHandler("http://a"), newTestHandler("http://b")}
 		val, matched, ok, _ := round(context.Background(), handlers, time.Time{}, accept, fn)
 		assert.Equal(t, true, matched)
@@ -616,7 +637,7 @@ func TestRoundFor(t *testing.T) {
 			return "ok", nil
 		}
 
-		round := roundFor[string](getConfig{race: false})
+		round := roundFor[string](queryConfig{race: false})
 		handlers := []*handler{newTestHandler("http://a"), newTestHandler("http://b")}
 		val, matched, ok, _ := round(context.Background(), handlers, time.Time{}, accept, fn)
 		assert.Equal(t, true, matched)
@@ -948,7 +969,9 @@ func requirePostSSZOK(t *testing.T, mh *multiHandler, body string) {
 
 func TestMultiHandlerRequestSSZWithFallback(t *testing.T) {
 	t.Run("returns accepting node body and headers", func(t *testing.T) {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		var acceptHeader atomic.Value
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			acceptHeader.Store(r.Header.Get("Accept"))
 			w.Header().Set("X-Test-Header", "yes")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("resp-body"))
@@ -966,6 +989,7 @@ func TestMultiHandlerRequestSSZWithFallback(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "resp-body", string(body))
 		assert.Equal(t, "yes", header.Get("X-Test-Header"))
+		assert.Equal(t, sszPreferredAccept(), acceptHeader.Load())
 	})
 
 	t.Run("json fallback response is returned on 415", func(t *testing.T) {

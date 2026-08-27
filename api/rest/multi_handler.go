@@ -63,8 +63,8 @@ func (m *multiHandler) Host() string {
 
 // Get reads a GET from the nodes.
 // When resp is nil the response body is discarded.
-func (m *multiHandler) Get(ctx context.Context, endpoint string, resp any, opts ...GetOption) error {
-	cfg := newGetConfig(opts)
+func (m *multiHandler) Get(ctx context.Context, endpoint string, resp any, opts ...QueryOption) error {
+	cfg := newQueryConfig(opts)
 
 	get := func(ctx context.Context, handler *handler) (json.RawMessage, error) {
 		// We don't care about the response body.
@@ -101,7 +101,7 @@ func (m *multiHandler) Get(ctx context.Context, endpoint string, resp any, opts 
 }
 
 // GetSSZ reads a GET from the nodes, requesting SSZ but accepting JSON.
-func (m *multiHandler) GetSSZ(ctx context.Context, endpoint string, opts ...GetOption) ([]byte, http.Header, error) {
+func (m *multiHandler) GetSSZ(ctx context.Context, endpoint string, opts ...QueryOption) ([]byte, http.Header, error) {
 	get := func(ctx context.Context, h *handler) (sszResult, error) {
 		body, header, err := h.GetSSZ(ctx, endpoint)
 		if err != nil {
@@ -111,13 +111,13 @@ func (m *multiHandler) GetSSZ(ctx context.Context, endpoint string, opts ...GetO
 		return sszResult{body: body, header: header}, nil
 	}
 
-	return m.querySSZ(ctx, newGetConfig(opts), get)
+	return m.querySSZ(ctx, newQueryConfig(opts), get)
 }
 
 // querySSZ runs a per-node request through the query engine — racing, acceptance
 // predicate, deadlines, and re-polling all come from cfg — and returns the winning
 // response's body and headers.
-func (m *multiHandler) querySSZ(ctx context.Context, cfg getConfig, fn queryFunc[sszResult]) ([]byte, http.Header, error) {
+func (m *multiHandler) querySSZ(ctx context.Context, cfg queryConfig, fn queryFunc[sszResult]) ([]byte, http.Header, error) {
 	// Adapt the config's (body, header) predicate to the sszResult the rounds produce.
 	accept := func(r sszResult) bool { return cfg.sszAccept(r.body, r.header) }
 
@@ -297,32 +297,32 @@ func (m *multiHandler) PostSSZWithFallback(
 }
 
 // RequestSSZWithFallback posts through the read-query machinery (racing, acceptance
-// predicates and deadlines via opts) and returns the winning response body and headers.
+// predicates and deadlines via opts), preferring an SSZ response, and returns the winner.
 func (m *multiHandler) RequestSSZWithFallback(
 	ctx context.Context,
 	endpoint string,
 	headers map[string]string,
 	sszFn func() ([]byte, error),
 	jsonFn func() ([]byte, error),
-	opts ...GetOption,
+	opts ...QueryOption,
 ) ([]byte, http.Header, error) {
-	return m.querySSZ(ctx, newGetConfig(opts), m.postWithFallbackFn(endpoint, headers, sszFn, jsonFn))
+	return m.querySSZ(ctx, newQueryConfig(opts), m.postWithFallbackFn(endpoint, headers, sszFn, jsonFn, withSSZResponse()))
 }
 
 // postWithFallbackFn returns the per-node post function using the node's best known
 // encoding, with the marshalers wrapped so each runs at most once across nodes.
-func (m *multiHandler) postWithFallbackFn(endpoint string, headers map[string]string, sszFn, jsonFn func() ([]byte, error)) queryFunc[sszResult] {
+func (m *multiHandler) postWithFallbackFn(endpoint string, headers map[string]string, sszFn, jsonFn func() ([]byte, error), respOpts ...reqOption) queryFunc[sszResult] {
 	sszBody := sync.OnceValues(sszFn)
 	jsonBody := sync.OnceValues(jsonFn)
 
 	return func(ctx context.Context, h *handler) (sszResult, error) {
-		return m.postWithBestEncoding(ctx, h, endpoint, headers, sszBody, jsonBody)
+		return m.postWithBestEncoding(ctx, h, endpoint, headers, sszBody, jsonBody, respOpts...)
 	}
 }
 
 // postWithBestEncoding posts to one node using its best known encoding for the
 // endpoint, downgrading to JSON after a 415.
-func (m *multiHandler) postWithBestEncoding(ctx context.Context, h *handler, endpoint string, headers map[string]string, sszBody, jsonBody func() ([]byte, error)) (sszResult, error) {
+func (m *multiHandler) postWithBestEncoding(ctx context.Context, h *handler, endpoint string, headers map[string]string, sszBody, jsonBody func() ([]byte, error), respOpts ...reqOption) (sszResult, error) {
 	key := sszSupportKey{host: h.Host(), endpoint: memoEndpoint(endpoint)}
 	if m.sszWorthTrying(key) {
 		body, err := sszBody()
@@ -330,7 +330,7 @@ func (m *multiHandler) postWithBestEncoding(ctx context.Context, h *handler, end
 			return sszResult{}, fmt.Errorf("marshal SSZ body: %w", err)
 		}
 
-		data, header, err := h.postWithContentType(ctx, endpoint, headers, api.OctetStreamMediaType, bytes.NewBuffer(body))
+		data, header, err := h.postWithContentType(ctx, endpoint, headers, api.OctetStreamMediaType, bytes.NewBuffer(body), respOpts...)
 		if !errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}) {
 			if err != nil {
 				return sszResult{}, fmt.Errorf("post SSZ: %w", err)
@@ -345,7 +345,7 @@ func (m *multiHandler) postWithBestEncoding(ctx context.Context, h *handler, end
 		return sszResult{}, fmt.Errorf("marshal JSON body: %w", err)
 	}
 
-	data, header, err := h.postWithContentType(ctx, endpoint, headers, api.JsonMediaType, bytes.NewBuffer(body))
+	data, header, err := h.postWithContentType(ctx, endpoint, headers, api.JsonMediaType, bytes.NewBuffer(body), respOpts...)
 	if err != nil {
 		return sszResult{}, fmt.Errorf("post JSON: %w", err)
 	}
@@ -388,7 +388,7 @@ func memoEndpoint(endpoint string) string {
 func queryUntilAccepted[T any](
 	ctx context.Context,
 	handlers []*handler,
-	cfg getConfig,
+	cfg queryConfig,
 	accept func(T) bool,
 	round queryRound[T],
 	fn queryFunc[T],
@@ -453,7 +453,7 @@ func queryUntilAccepted[T any](
 }
 
 // roundFor selects the query strategy.
-func roundFor[T any](cfg getConfig) queryRound[T] {
+func roundFor[T any](cfg queryConfig) queryRound[T] {
 	if cfg.race {
 		return raceRound[T]
 	}

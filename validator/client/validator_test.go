@@ -4244,7 +4244,11 @@ func TestBuilderConfigForSlot_TopLevelWithoutEntries(t *testing.T) {
 	copy(pk[:], validatorKey.PublicKey().Marshal())
 	u64 := func(val uint64) *validatorType.Uint64 { u := validatorType.Uint64(val); return &u }
 
-	require.IsNil(t, v.builderConfigForSlot(t.Context(), pk, 10))
+	neutral := v.builderConfigForSlot(t.Context(), pk, 10)
+	require.NotNil(t, neutral)
+	require.Equal(t, primitives.Gwei(0), neutral.MinBid)
+	require.Equal(t, uint64(proposer.NeutralBuilderBoostFactor), neutral.BuilderBoostFactor)
+	require.Equal(t, 0, len(neutral.Builders))
 
 	v.proposerSettings = &proposer.Settings{
 		Version: proposer.SchemaV2,

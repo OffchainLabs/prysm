@@ -15,7 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -74,13 +73,13 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 // beaconBlockV4 posts the produce request with a BuilderConfig body naming the external
 // builders (possibly none) the beacon node should solicit bids from.
 func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primitives.Slot, queryParams neturl.Values, builderConfig *ethpb.BuilderConfig) (*ethpb.GenericBeaconBlock, error) {
+	// The produce request always carries a BuilderConfig body; the caller resolves it fully.
+	if builderConfig == nil {
+		return nil, errors.New("builder config is required for the v4 block request")
+	}
+
 	queryParams.Set("include_payload", strconv.FormatBool(c.stateless))
 	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v4/validator/blocks/%d", slot), queryParams)
-
-	// The produce request always carries a BuilderConfig body; absent settings post as neutral.
-	if builderConfig == nil {
-		builderConfig = &ethpb.BuilderConfig{BuilderBoostFactor: uint64(proposer.NeutralBuilderBoostFactor)}
-	}
 
 	headers := map[string]string{api.VersionHeader: version.String(version.Gloas)}
 	jsonFn := func() ([]byte, error) {
@@ -102,7 +101,7 @@ func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primi
 
 	// Always race the nodes for the block, even though each node solicits builder
 	// bids: a bid only binds once its block is signed, so duplicates are harmless.
-	opts := append([]rest.GetOption{rest.WithRace()}, blockFreshnessOptions(ctx, decode)...)
+	opts := append([]rest.QueryOption{rest.WithRace()}, blockFreshnessOptions(ctx, decode)...)
 	data, header, err := c.handler.RequestSSZWithFallback(ctx, queryUrl, headers, builderConfig.MarshalSSZ, jsonFn, opts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not post v4 block request")
