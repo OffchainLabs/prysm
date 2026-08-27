@@ -232,6 +232,13 @@ var (
 		Name:  "track-equivocations",
 		Usage: "Records proposer equivocations observed on gossip and marks the slot in forkchoice if the equivocation arrives before the configured early deadline.",
 	}
+	// submitBlacklistedBuilderBids lets a builder broadcast its own bids even while this node's
+	// circuit breaker has it blacklisted. Testing only: peers still ignore the bid on gossip.
+	submitBlacklistedBuilderBids = &cli.BoolFlag{
+		Name:   "submit-blacklisted-builder-bids",
+		Usage:  "Skips the builder circuit breaker check when submitting a signed execution payload bid, so a blacklisted builder still broadcasts its bid. For testing only.",
+		Hidden: true,
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
@@ -298,6 +305,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	forceHeadFlag,
 	blacklistRoots,
 	enableHashtree,
+	submitBlacklistedBuilderBids,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {

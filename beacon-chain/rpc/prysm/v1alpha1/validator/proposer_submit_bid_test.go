@@ -12,6 +12,7 @@ import (
 	p2pmock "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -85,6 +86,76 @@ func TestSubmitSignedExecutionPayloadBid_OK(t *testing.T) {
 	cached, ok := bidCache.Get(1, [32]byte{}, parentRoot)
 	require.Equal(t, true, ok)
 	require.Equal(t, req, cached)
+}
+
+func TestSubmitSignedExecutionPayloadBid_Blacklisted(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	p2p := &p2pmock.MockBroadcaster{}
+	vs := &Server{
+		SyncChecker:           &mockSync.Sync{IsSyncing: false},
+		P2P:                   p2p,
+		BuilderCircuitBreaker: blacklistedBreaker(t, 1, 1),
+		NewExecutionPayloadBidVerifier: func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
+			return &fakeBidVerifier{}
+		},
+	}
+
+	req := testSignedBid(1, [32]byte{'p'})
+	_, err := vs.SubmitSignedExecutionPayloadBid(t.Context(), req)
+	require.ErrorContains(t, "blacklisted by the circuit breaker", err)
+	assert.Equal(t, false, p2p.BroadcastCalled.Load())
+}
+
+// A blacklisted builder can still broadcast its own bid with the feature flag on, so that the
+// gossip-side rejection by its peers can be observed.
+func TestSubmitSignedExecutionPayloadBid_BlacklistedWithFeatureFlag(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+	resetFeatures := features.InitWithReset(&features.Flags{SubmitBlacklistedBuilderBids: true})
+	defer resetFeatures()
+
+	ctx := t.Context()
+	st, _ := util.DeterministicGenesisStateGloas(t, 64)
+	parentRoot := [32]byte{'p'}
+	require.NoError(t, transition.UpdateNextSlotCache(ctx, parentRoot[:], st))
+
+	db := dbutil.SetupDB(t)
+	genesisRoot := [32]byte{'g'}
+	require.NoError(t, db.SaveGenesisBlockRoot(ctx, genesisRoot))
+
+	prefs := cache.NewProposerPreferencesCache()
+	prefs.Add(cache.ProposerPreference{DependentRoot: genesisRoot}, 1)
+
+	p2p := &p2pmock.MockBroadcaster{}
+	bidCache := cache.NewHighestExecutionPayloadBidCache()
+	vs := &Server{
+		SyncChecker:              &mockSync.Sync{IsSyncing: false},
+		P2P:                      p2p,
+		BeaconDB:                 db,
+		ProposerPreferencesCache: prefs,
+		HighestBidCache:          bidCache,
+		OperationNotifier:        &mockChain.MockOperationNotifier{},
+		BuilderCircuitBreaker:    blacklistedBreaker(t, 1, 1),
+		ForkchoiceFetcher: &mockChain.ChainService{
+			ForkchoiceGasLimits: map[[32]byte]uint64{parentRoot: 30_000_000},
+		},
+		NewExecutionPayloadBidVerifier: func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
+			return &fakeBidVerifier{}
+		},
+	}
+
+	req := testSignedBid(1, parentRoot)
+	resp, err := vs.SubmitSignedExecutionPayloadBid(ctx, req)
+	require.NoError(t, err)
+	require.DeepEqual(t, &emptypb.Empty{}, resp)
+	assert.Equal(t, true, p2p.BroadcastCalled.Load())
+	require.Equal(t, 1, len(p2p.BroadcastMessages))
 }
 
 func TestSubmitSignedExecutionPayloadBid_NoParentState(t *testing.T) {
