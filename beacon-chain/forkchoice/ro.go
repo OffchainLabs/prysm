@@ -262,10 +262,10 @@ func (ro *ROForkChoice) BlockHash(root [32]byte) ([32]byte, error) {
 }
 
 // GasLimit delegates to the underlying forkchoice call, under a lock.
-func (ro *ROForkChoice) GasLimit(root [32]byte) (uint64, error) {
+func (ro *ROForkChoice) GasLimit(root, blockHash [32]byte) (uint64, error) {
 	ro.l.RLock()
 	defer ro.l.RUnlock()
-	return ro.getter.GasLimit(root)
+	return ro.getter.GasLimit(root, blockHash)
 }
 
 // CanonicalNodeAtSlot delegates to the underlying forkchoice call, under a lock.

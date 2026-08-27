@@ -50,7 +50,7 @@ type ForkchoiceFetcher interface {
 	Ancestor(context.Context, []byte, primitives.Slot) ([]byte, error)
 	BlockHash(root [32]byte) ([32]byte, error)
 	HasPayloadBlockHash(root, blockHash [32]byte) bool
-	GasLimit(root [32]byte) (uint64, error)
+	GasLimit(root, blockHash [32]byte) (uint64, error)
 	CachedHeadRoot() [32]byte
 	GetProposerHead() [32]byte
 	SetForkChoiceGenesisTime(time.Time)
@@ -137,6 +137,7 @@ type FinalizationFetcher interface {
 	InForkchoice([32]byte) bool
 	IsFinalized(ctx context.Context, blockRoot [32]byte) bool
 	ParentPayloadReady(interfaces.ReadOnlyBeaconBlock) bool
+	BuiltOnFullParent(interfaces.ReadOnlyBeaconBlock) bool
 }
 
 // OptimisticModeFetcher retrieves information about optimistic status of the node.
@@ -452,6 +453,13 @@ func (s *Service) builtOnFullParentInForkchoice(blk interfaces.ReadOnlyBeaconBlo
 		return false
 	}
 	return [32]byte(bid.Message.ParentBlockHash) == blockHash
+}
+
+// BuiltOnFullParent returns true if the block's bid builds on its parent's committed payload.
+func (s *Service) BuiltOnFullParent(blk interfaces.ReadOnlyBeaconBlock) bool {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.builtOnFullParentInForkchoice(blk)
 }
 
 // ParentPayloadReady returns true if the block's parent payload is available in forkchoice.

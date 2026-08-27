@@ -22,8 +22,6 @@ import (
 
 // ProcessAttestationsNoVerifySignature applies processing operations to a block's inner attestation
 // records. The only difference would be that the attestation signature would not be verified.
-//
-// Callers inside Gloas block processing must use ProcessAttestationsNoVerifySignatureWithParentSlot instead.
 func ProcessAttestationsNoVerifySignature(
 	ctx context.Context,
 	beaconState state.BeaconState,
@@ -36,8 +34,6 @@ func ProcessAttestationsNoVerifySignature(
 	return ProcessAttestationsNoVerifySignatureWithParentSlot(ctx, beaconState, b, parentSlot)
 }
 
-// ProcessAttestationsNoVerifySignatureWithParentSlot takes the parent block's slot explicitly, for
-// Gloas block processing where the bid in state has already been replaced by the current block's.
 func ProcessAttestationsNoVerifySignatureWithParentSlot(
 	ctx context.Context,
 	beaconState state.BeaconState,

@@ -21,6 +21,16 @@ import (
 	"go.etcd.io/bbolt"
 )
 
+const (
+	// stateDiffTreeKeyLength is the length of a state-diff tree key, before any suffix.
+	stateDiffTreeKeyLength = 16
+
+	// stateDiffTreeKeySlotEnd is the end of the meaningful part of a state-diff tree key: a level
+	// byte followed by a little-endian slot. The bytes up to stateDiffTreeKeyLength are padding,
+	// and are always zero.
+	stateDiffTreeKeySlotEnd = 9
+)
+
 var (
 	offsetKey                   = []byte("offset")
 	exponentsKey                = []byte("exponents")
@@ -112,10 +122,36 @@ func (s *Store) loadStateDiffExponents() ([]int, error) {
 }
 
 func makeKeyForStateDiffTree(level int, slot uint64) []byte {
-	buf := make([]byte, 16)
+	buf := make([]byte, stateDiffTreeKeyLength)
 	buf[0] = byte(level)
-	binary.LittleEndian.PutUint64(buf[1:], slot)
+	binary.LittleEndian.PutUint64(buf[1:stateDiffTreeKeySlotEnd], slot)
 	return buf
+}
+
+// isStateDiffTreeKey reports whether the given key holds a tree entry, as opposed to one of the
+// metadata keys stored in the same bucket.
+func isStateDiffTreeKey(key []byte) bool {
+	if len(key) < stateDiffTreeKeyLength {
+		return false
+	}
+
+	if int(key[0]) >= len(flags.Get().StateDiffExponents) {
+		return false
+	}
+
+	for _, padding := range key[stateDiffTreeKeySlotEnd:stateDiffTreeKeyLength] {
+		if padding != 0 {
+			return false
+		}
+	}
+
+	return true
+}
+
+// stateDiffTreeKeySlot returns the slot a state-diff tree key is stored at.
+// It must only be called on a key that isStateDiffTreeKey accepts.
+func stateDiffTreeKeySlot(key []byte) uint64 {
+	return binary.LittleEndian.Uint64(key[1:stateDiffTreeKeySlotEnd])
 }
 
 func (s *Store) getAnchorState(ctx context.Context, offset uint64, lvl int, slot primitives.Slot) (anchor state.ReadOnlyBeaconState, err error) {
@@ -127,10 +163,8 @@ func (s *Store) getAnchorState(ctx context.Context, offset uint64, lvl int, slot
 		return nil, ErrSlotBeforeOffset
 	}
 	relSlot := uint64(slot) - offset
+	// The exponents are validated at node startup, so they always fit in a uint64 shift.
 	prevExp := flags.Get().StateDiffExponents[lvl-1]
-	if prevExp < flags.MinStateDiffExponent || prevExp >= 64 {
-		return nil, fmt.Errorf("state diff exponent %d out of range for uint64", prevExp)
-	}
 	span := math.PowerOf2(uint64(prevExp))
 	anchorSlot := primitives.Slot(uint64(slot) - relSlot%span)
 
@@ -179,10 +213,8 @@ func computeLevel(offset uint64, slot primitives.Slot) int {
 		return -1
 	}
 	rel := uint64(slot) - offset
+	// The exponents are validated at node startup, so they always fit in a uint64 shift.
 	for i, exp := range flags.Get().StateDiffExponents {
-		if exp < flags.MinStateDiffExponent || exp >= 64 {
-			return -1
-		}
 		span := math.PowerOf2(uint64(exp))
 		if rel%span == 0 {
 			return i

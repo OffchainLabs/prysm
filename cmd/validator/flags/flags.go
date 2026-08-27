@@ -388,11 +388,11 @@ var (
 		Usage: "To enable the use of prysm validator client in Distributed Validator Cluster",
 		Value: false,
 	}
-	// EnableStatelessFlag enables the stateless block production path for Gloas: the validator requests the
-	// block and execution payload envelope in a single v4 call instead of fetching them in two separate calls.
+	// EnableStatelessFlag enables the stateless block production path from Gloas onward: the validator requests
+	// the block and execution payload envelope in a single v4 call instead of fetching them in two separate calls.
 	EnableStatelessFlag = &cli.BoolFlag{
 		Name:  "stateless",
-		Usage: "Enables stateless block production for Gloas: the validator requests the block and execution payload envelope together and republishes the envelope itself. Works over both the gRPC and REST validator clients.",
+		Usage: "Enables stateless block production from Gloas onward: the validator requests the block and execution payload envelope together and republishes the envelope itself. Works over both the gRPC and REST validator clients. Forced on when several beacon nodes are configured, since only the node that built a block can reveal its payload.",
 		Value: false,
 	}
 	// DisableDutiesPolling disables the polling of duties on dependent root changes.

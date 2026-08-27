@@ -7,6 +7,8 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -26,6 +28,198 @@ func newGloasBlock(t *testing.T, body *ethpb.BeaconBlockBodyGloas) interfaces.Re
 
 func emptyGloasBody() *ethpb.BeaconBlockBodyGloas {
 	return util.HydrateBeaconBlockBodyGloas(nil)
+}
+
+// TestVerifyOperationLengths_Gloas exercises the operation length bounds asserted by the
+// gloas process_operations spec, all of which are enforced by VerifyOperationLengths.
+func TestVerifyOperationLengths_Gloas(t *testing.T) {
+	cfg := params.BeaconConfig()
+
+	proposerSlashings := func(n uint64) []*ethpb.ProposerSlashing {
+		header := func() *ethpb.SignedBeaconBlockHeader {
+			return &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					ParentRoot: make([]byte, 32),
+					StateRoot:  make([]byte, 32),
+					BodyRoot:   make([]byte, 32),
+				},
+				Signature: make([]byte, 96),
+			}
+		}
+		s := make([]*ethpb.ProposerSlashing, n)
+		for i := range s {
+			s[i] = &ethpb.ProposerSlashing{Header_1: header(), Header_2: header()}
+		}
+		return s
+	}
+	attesterSlashings := func(n uint64) []*ethpb.AttesterSlashingGloas {
+		indexed := func() *ethpb.IndexedAttestationGloas {
+			return &ethpb.IndexedAttestationGloas{
+				Data: &ethpb.AttestationData{
+					BeaconBlockRoot: make([]byte, 32),
+					Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+					Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+				},
+				Signature: make([]byte, 96),
+			}
+		}
+		s := make([]*ethpb.AttesterSlashingGloas, n)
+		for i := range s {
+			s[i] = &ethpb.AttesterSlashingGloas{Attestation_1: indexed(), Attestation_2: indexed()}
+		}
+		return s
+	}
+	attestations := func(n uint64) []*ethpb.AttestationGloas {
+		s := make([]*ethpb.AttestationGloas, n)
+		for i := range s {
+			s[i] = &ethpb.AttestationGloas{
+				AggregationBits: []byte{0b00000001},
+				Data: &ethpb.AttestationData{
+					BeaconBlockRoot: make([]byte, 32),
+					Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+					Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+				},
+				CommitteeBits: []byte{0b00000001},
+				Signature:     make([]byte, 96),
+			}
+		}
+		return s
+	}
+	deposits := func(n uint64) []*ethpb.Deposit {
+		s := make([]*ethpb.Deposit, n)
+		for i := range s {
+			s[i] = &ethpb.Deposit{
+				Proof: [][]byte{},
+				Data: &ethpb.Deposit_Data{
+					PublicKey:             make([]byte, 48),
+					WithdrawalCredentials: make([]byte, 32),
+					Signature:             make([]byte, 96),
+				},
+			}
+		}
+		return s
+	}
+	voluntaryExits := func(n uint64) []*ethpb.SignedVoluntaryExit {
+		s := make([]*ethpb.SignedVoluntaryExit, n)
+		for i := range s {
+			s[i] = &ethpb.SignedVoluntaryExit{
+				Exit:      &ethpb.VoluntaryExit{},
+				Signature: make([]byte, 96),
+			}
+		}
+		return s
+	}
+	blsChanges := func(n uint64) []*ethpb.SignedBLSToExecutionChange {
+		s := make([]*ethpb.SignedBLSToExecutionChange, n)
+		for i := range s {
+			s[i] = &ethpb.SignedBLSToExecutionChange{
+				Message: &ethpb.BLSToExecutionChange{
+					FromBlsPubkey:      make([]byte, 48),
+					ToExecutionAddress: make([]byte, 20),
+				},
+				Signature: make([]byte, 96),
+			}
+		}
+		return s
+	}
+	payloadAtts := func(n uint64) []*ethpb.PayloadAttestation {
+		s := make([]*ethpb.PayloadAttestation, n)
+		for i := range s {
+			s[i] = &ethpb.PayloadAttestation{
+				AggregationBits: bitfield.NewBitvector512(),
+				Data:            &ethpb.PayloadAttestationData{BeaconBlockRoot: make([]byte, 32)},
+				Signature:       make([]byte, 96),
+			}
+		}
+		return s
+	}
+
+	tests := []struct {
+		name    string
+		modify  func(*ethpb.BeaconBlockBodyGloas)
+		wantErr string // empty means the check should pass
+	}{
+		{
+			name:   "empty body passes",
+			modify: func(*ethpb.BeaconBlockBodyGloas) {},
+		},
+		{
+			name: "all operations at their limits pass",
+			modify: func(b *ethpb.BeaconBlockBodyGloas) {
+				b.ProposerSlashings = proposerSlashings(cfg.MaxProposerSlashings)
+				b.AttesterSlashings = attesterSlashings(cfg.MaxAttesterSlashingsElectra)
+				b.Attestations = attestations(cfg.MaxAttestationsElectra)
+				b.VoluntaryExits = voluntaryExits(cfg.MaxVoluntaryExits)
+				b.BlsToExecutionChanges = blsChanges(cfg.MaxBlsToExecutionChanges)
+				b.PayloadAttestations = payloadAtts(fieldparams.MaxPayloadAttestations)
+			},
+		},
+		{
+			name: "non-empty deposits",
+			modify: func(b *ethpb.BeaconBlockBodyGloas) {
+				b.Deposits = deposits(1)
+			},
+			wantErr: "eth1 bridge deposits are not allowed from Fulu",
+		},
+		{
+			name: "too many proposer slashings",
+			modify: func(b *ethpb.BeaconBlockBodyGloas) {
+				b.ProposerSlashings = proposerSlashings(cfg.MaxProposerSlashings + 1)
+			},
+			wantErr: "number of proposer slashings",
+		},
+		{
+			name: "too many attester slashings",
+			modify: func(b *ethpb.BeaconBlockBodyGloas) {
+				b.AttesterSlashings = attesterSlashings(cfg.MaxAttesterSlashingsElectra + 1)
+			},
+			wantErr: "number of attester slashings",
+		},
+		{
+			name: "too many attestations",
+			modify: func(b *ethpb.BeaconBlockBodyGloas) {
+				b.Attestations = attestations(cfg.MaxAttestationsElectra + 1)
+			},
+			wantErr: "number of attestations",
+		},
+		{
+			name: "too many voluntary exits",
+			modify: func(b *ethpb.BeaconBlockBodyGloas) {
+				b.VoluntaryExits = voluntaryExits(cfg.MaxVoluntaryExits + 1)
+			},
+			wantErr: "number of voluntary exits",
+		},
+		{
+			name: "too many BLS to execution changes",
+			modify: func(b *ethpb.BeaconBlockBodyGloas) {
+				b.BlsToExecutionChanges = blsChanges(cfg.MaxBlsToExecutionChanges + 1)
+			},
+			wantErr: "number of BLS to execution changes",
+		},
+		{
+			name: "too many payload attestations",
+			modify: func(b *ethpb.BeaconBlockBodyGloas) {
+				b.PayloadAttestations = payloadAtts(fieldparams.MaxPayloadAttestations + 1)
+			},
+			wantErr: "number of payload attestations",
+		},
+	}
+
+	st, _ := util.DeterministicGenesisStateGloas(t, 64)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			body := emptyGloasBody()
+			tc.modify(body)
+			blk := newGloasBlock(t, body)
+
+			_, err := transition.VerifyOperationLengths(context.Background(), st, blk)
+			if tc.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, tc.wantErr, err)
+			}
+		})
+	}
 }
 
 func TestGloasOperations_HappyPath(t *testing.T) {
@@ -127,25 +321,6 @@ func TestGloasOperations_ProcessingErrors(t *testing.T) {
 			},
 			errSentinel: transition.ErrProcessAttestationsFailed,
 			errSubstr:   "process attestations failed",
-		},
-
-		{
-			name: "ErrProcessDepositsFailed – empty merkle proof",
-			modifyBlk: func(b *ethpb.BeaconBlockBodyGloas) {
-				b.Deposits = []*ethpb.Deposit{
-					{
-						Proof: [][]byte{}, // invalid: proof must not be empty
-						Data: &ethpb.Deposit_Data{
-							PublicKey:             make([]byte, 48),
-							WithdrawalCredentials: make([]byte, 32),
-							Amount:                32_000_000_000,
-							Signature:             make([]byte, 96),
-						},
-					},
-				}
-			},
-			errSentinel: transition.ErrProcessDepositsFailed,
-			errSubstr:   "process deposits failed",
 		},
 
 		{

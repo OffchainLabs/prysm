@@ -461,7 +461,6 @@ func ProcessBlockForStateRoot(
 		if err := gloas.ProcessWithdrawals(state); err != nil {
 			return nil, errors.Wrap(ErrProcessWithdrawalsFailed, err.Error())
 		}
-		// Read before the bid is replaced by this block's, process_attestation needs the parent's slot.
 		parentSlot, err = gloas.ParentSlotFromBid(state)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get parent slot from bid")

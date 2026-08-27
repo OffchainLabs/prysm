@@ -48,7 +48,6 @@ func (rs *BlockRewardService) GetBlockRewardsData(ctx context.Context, blk inter
 		return nil, httpErr
 	}
 
-	// Sets the parent payload availability bit the head flag reads and may lower the proposer balance, so it runs before the baseline read.
 	if st.Version() >= version.Gloas {
 		if err := gloas.ProcessParentExecutionPayload(ctx, st, blk); err != nil {
 			return nil, &httputil.DefaultJsonError{

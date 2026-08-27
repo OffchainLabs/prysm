@@ -168,6 +168,10 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 			}
 		default:
 			log.Errorf("Unsupported block version %s", version.String(blk.Version()))
+			if v.emitAccountMetrics {
+				ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
+			}
+			return
 		}
 	} else {
 		genericSignedBlock, err = blk.PbGenericBlock()
@@ -180,6 +184,8 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		}
 	}
 
+	genericSignedBlock.BuilderUrl = b.BuilderUrl
+
 	blkResp, err := v.validatorClient.ProposeBeaconBlock(ctx, genericSignedBlock)
 	if err != nil {
 		log.WithField("slot", slot).WithError(err).Error("Failed to propose block")
@@ -189,9 +195,12 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		return
 	}
 
+	// The block was already accepted: a failed reveal must not skip the proposal logging and metrics.
 	if err := v.proposeSelfBuildEnvelope(ctx, slot, pubKey, blk); err != nil {
-		log.WithError(err).Error("Failed to propose self-build envelope")
-		return
+		log.WithField("slot", slot).WithError(err).Error("Failed to propose self-build envelope")
+		if v.emitAccountMetrics {
+			ValidatorProposeEnvelopeFailVec.WithLabelValues(fmtKey).Inc()
+		}
 	}
 
 	span.SetAttributes(

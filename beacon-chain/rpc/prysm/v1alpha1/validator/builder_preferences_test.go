@@ -26,13 +26,10 @@ func TestServer_SubmitBuilderPreferences(t *testing.T) {
 		Entries: []*ethpb.BuilderPreferencesEntry{entry("http://builder", 1000)},
 	}
 
-	t.Run("stores max execution payment on success", func(t *testing.T) {
+	t.Run("forwards on success", func(t *testing.T) {
 		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true}}
 		_, err := vs.SubmitBuilderPreferences(t.Context(), req)
 		require.NoError(t, err)
-		v, ok := vs.maxExecutionPayments.Load(pubkey)
-		require.Equal(t, true, ok)
-		require.Equal(t, uint64(1000), v.(uint64))
 	})
 
 	t.Run("empty request errors", func(t *testing.T) {
@@ -47,18 +44,12 @@ func TestServer_SubmitBuilderPreferences(t *testing.T) {
 			Entries: []*ethpb.BuilderPreferencesEntry{entry("", 5), entry("http://builder", 7)},
 		})
 		require.NoError(t, err)
-		v, ok := vs.maxExecutionPayments.Load(pubkey)
-		require.Equal(t, true, ok)
-		require.Equal(t, uint64(7), v.(uint64))
 	})
 
 	t.Run("succeeds without the builder endpoint flag", func(t *testing.T) {
 		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: false}}
 		_, err := vs.SubmitBuilderPreferences(t.Context(), req)
 		require.NoError(t, err)
-		v, ok := vs.maxExecutionPayments.Load(pubkey)
-		require.Equal(t, true, ok)
-		require.Equal(t, uint64(1000), v.(uint64))
 	})
 
 	t.Run("nil block builder errors", func(t *testing.T) {
@@ -67,11 +58,20 @@ func TestServer_SubmitBuilderPreferences(t *testing.T) {
 		require.ErrorContains(t, "builder is not configured", err)
 	})
 
-	t.Run("does not store when builder submission fails", func(t *testing.T) {
+	t.Run("partial builder failure does not fail the batch", func(t *testing.T) {
+		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{
+			HasConfigured:              true,
+			ErrSubmitBuilderPrefsByURL: map[string]error{"http://down": errors.New("boom")},
+		}}
+		_, err := vs.SubmitBuilderPreferences(t.Context(), &ethpb.SubmitBuilderPreferencesRequest{
+			Entries: []*ethpb.BuilderPreferencesEntry{entry("http://down", 5), entry("http://builder", 7)},
+		})
+		require.NoError(t, err)
+	})
+
+	t.Run("errors when every submission fails", func(t *testing.T) {
 		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true, ErrSubmitBuilderPreferences: errors.New("boom")}}
 		_, err := vs.SubmitBuilderPreferences(t.Context(), req)
-		require.NoError(t, err)
-		_, ok := vs.maxExecutionPayments.Load(pubkey)
-		require.Equal(t, false, ok)
+		require.ErrorContains(t, "could not submit builder preferences to any builder", err)
 	})
 }

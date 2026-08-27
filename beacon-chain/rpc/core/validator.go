@@ -999,14 +999,16 @@ func (s *Service) hasCanonicalShuffling(root [32]byte, slot primitives.Slot) boo
 	if epoch > 0 {
 		epoch--
 	}
-	hdr, err := s.ForkchoiceFetcher.DependentRoot(epoch)
+	// Both roots must be resolved the same way, or the genesis-era fallback to the origin block root only
+	// applies to one side of the comparison.
+	hdr, err := s.HeadFetcher.DependentRootForEpoch(s.ForkchoiceFetcher.CachedHeadRoot(), epoch)
 	if err != nil {
 		log.WithError(err).Error("Could not get head dependent root to check canonical shuffle")
 		return false
 	}
 	rdr, err := s.HeadFetcher.DependentRootForEpoch(root, epoch)
 	if err != nil {
-		log.WithError(err).Error("Could not get head dependent root to check canonical shuffle")
+		log.WithError(err).Error("Could not get block dependent root to check canonical shuffle")
 		return false
 	}
 	return hdr == rdr

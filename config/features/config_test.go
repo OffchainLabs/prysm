@@ -71,6 +71,7 @@ func TestConfigureBeaconConfig(t *testing.T) {
 }
 
 func TestConfigureBeaconConfig_DisableProgressiveSSZ(t *testing.T) {
+	defer Init(&Flags{})
 	app := cli.App{}
 	set := flag.NewFlagSet("test", 0)
 	ctx := cli.NewContext(&app, set, nil)

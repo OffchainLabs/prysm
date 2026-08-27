@@ -196,8 +196,10 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 		newHeadStateRoot := [32]byte{2}
 		newHeadRoot := [32]byte{3}
 		require.NoError(t, srv.notifyNewHeadEvent(t.Context(), 0, newHeadStateRoot, newHeadRoot))
+		require.Eventually(t, func() bool {
+			return len(notifier.ReceivedEvents()) == 1
+		}, 5*time.Second, 50*time.Millisecond, "Expected exactly 1 state notification")
 		events := notifier.ReceivedEvents()
-		require.Equal(t, 1, len(events))
 
 		eventHead, ok := events[0].Data.(*statefeed.HeadData)
 		require.Equal(t, true, ok)
@@ -897,7 +899,7 @@ func TestUpdateHead_noSavedChanges(t *testing.T) {
 
 	bellatrixState, _ := util.DeterministicGenesisStateBellatrix(t, 2)
 	require.NoError(t, beaconDB.SaveState(ctx, bellatrixState, bellatrixBlkRoot))
-	service.cfg.StateGen.SaveFinalizedState(0, bellatrixBlkRoot, bellatrixState)
+	service.cfg.StateGen.SaveFinalizedState(bellatrixBlkRoot, bellatrixState)
 
 	headRoot := service.headRoot()
 	require.Equal(t, [32]byte{}, headRoot)

@@ -122,6 +122,14 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return err
 	}
 
+	// Persist the envelope before announcing its availability so that consumers of the
+	// execution_payload_available event can immediately fetch it through the beacon API.
+	if err := s.savePostPayload(ctx, signed); err != nil {
+		cancelEL()
+		_ = elGroup.Wait()
+		return err
+	}
+
 	// execution_payload_available is emitted when an execution payload
 	// and all data are available for payload attestation
 	// without verifying the execution payload itself
@@ -135,12 +143,12 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 
 	// Join EL validation group after firing availability event.
 	if err := elGroup.Wait(); err != nil {
+		if dErr := s.cfg.BeaconDB.DeleteExecutionPayloadEnvelope(ctx, root); dErr != nil {
+			log.WithError(dErr).WithField("blockRoot", fmt.Sprintf("%#x", root)).Error("Could not delete execution payload envelope after failed execution validation")
+		}
 		return err
 	}
 
-	if err := s.savePostPayload(ctx, signed); err != nil {
-		return err
-	}
 	if err := s.InsertPayload(envelope); err != nil {
 		return errors.Wrap(err, "could not insert payload into forkchoice")
 	}
