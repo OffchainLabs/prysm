@@ -28,6 +28,7 @@ import (
 	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
 	rpctesting "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
@@ -2986,7 +2987,7 @@ func TestGetStateFork(t *testing.T) {
 		util.SaveBlock(t, ctx, db, blk)
 		require.NoError(t, db.SaveGenesisBlockRoot(ctx, root))
 
-		headerRoot, err := fakeState.LatestBlockHeader().HashTreeRoot()
+		headerRoot, err := helpers.BlockRootFromState(t.Context(), fakeState)
 		require.NoError(t, err)
 		chainService = &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{
@@ -3184,7 +3185,7 @@ func TestGetCommittees(t *testing.T) {
 		util.SaveBlock(t, ctx, db, blk)
 		require.NoError(t, db.SaveGenesisBlockRoot(ctx, root))
 
-		headerRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		headerRoot, err := helpers.BlockRootFromState(t.Context(), st)
 		require.NoError(t, err)
 		chainService = &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{
@@ -3720,7 +3721,7 @@ func TestGetFinalityCheckpoints(t *testing.T) {
 		assert.Equal(t, true, resp.ExecutionOptimistic)
 	})
 	t.Run("finalized", func(t *testing.T) {
-		headerRoot, err := fakeState.LatestBlockHeader().HashTreeRoot()
+		headerRoot, err := helpers.BlockRootFromState(t.Context(), fakeState)
 		require.NoError(t, err)
 		chainService := &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{
@@ -4277,7 +4278,7 @@ func TestGetPendingConsolidations(t *testing.T) {
 	})
 
 	t.Run("finalized node", func(t *testing.T) {
-		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		blockRoot, err := helpers.BlockRootFromState(t.Context(), st)
 		require.NoError(t, err)
 
 		finalizedChainService := &chainMock.ChainService{
@@ -4470,7 +4471,7 @@ func TestGetPendingDeposits(t *testing.T) {
 	})
 
 	t.Run("finalized node", func(t *testing.T) {
-		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		blockRoot, err := helpers.BlockRootFromState(t.Context(), st)
 		require.NoError(t, err)
 
 		finalizedChainService := &chainMock.ChainService{
@@ -4660,7 +4661,7 @@ func TestGetPendingPartialWithdrawals(t *testing.T) {
 	})
 
 	t.Run("finalized node", func(t *testing.T) {
-		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		blockRoot, err := helpers.BlockRootFromState(t.Context(), st)
 		require.NoError(t, err)
 
 		finalizedChainService := &chainMock.ChainService{
@@ -4847,7 +4848,7 @@ func TestGetProposerLookahead(t *testing.T) {
 	})
 
 	t.Run("finalized node", func(t *testing.T) {
-		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		blockRoot, err := helpers.BlockRootFromState(t.Context(), st)
 		require.NoError(t, err)
 
 		finalizedChainService := &chainMock.ChainService{

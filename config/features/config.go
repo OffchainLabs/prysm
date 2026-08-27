@@ -52,6 +52,7 @@ type Flags struct {
 	EnableStateDiff                     bool // EnableStateDiff enables the experimental state diff feature for the beacon node.
 	EnableProgressiveSSZ                bool // EnableProgressiveSSZ enables experimental progressive SSZ merkleization for converted consensus types.
 	ReorgLatePayloads                   bool // ReorgLatePayloads enables reorging late payloads in the beacon node.
+	SubmitBlacklistedBuilderBids        bool // SubmitBlacklistedBuilderBids skips the circuit breaker check when submitting a signed execution payload bid.
 
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
@@ -312,6 +313,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.Bool(reorgLatePayloads.Name) {
 		logEnabled(reorgLatePayloads)
 		cfg.ReorgLatePayloads = true
+	}
+	if ctx.Bool(submitBlacklistedBuilderBids.Name) {
+		logEnabled(submitBlacklistedBuilderBids)
+		cfg.SubmitBlacklistedBuilderBids = true
 	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}

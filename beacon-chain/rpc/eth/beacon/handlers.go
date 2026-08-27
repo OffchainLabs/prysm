@@ -1145,9 +1145,9 @@ func (s *Server) GetStateFork(w http.ResponseWriter, r *http.Request) {
 		helpers.HandleIsOptimisticError(w, err)
 		return
 	}
-	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+	blockRoot, err := helpers.BlockRootFromState(ctx, st)
 	if err != nil {
-		httputil.HandleError(w, errors.Wrap(err, "Could not calculate root of latest block header: ").Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, errors.Wrap(err, "Could not calculate block root").Error(), http.StatusInternalServerError)
 		return
 	}
 	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
@@ -1257,9 +1257,9 @@ func (s *Server) GetCommittees(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+	blockRoot, err := helpers.BlockRootFromState(ctx, st)
 	if err != nil {
-		httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, "Could not calculate block root: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
@@ -1436,9 +1436,9 @@ func (s *Server) GetFinalityCheckpoints(w http.ResponseWriter, r *http.Request) 
 		helpers.HandleIsOptimisticError(w, err)
 		return
 	}
-	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+	blockRoot, err := helpers.BlockRootFromState(ctx, st)
 	if err != nil {
-		httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, "Could not calculate block root: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
@@ -1570,9 +1570,9 @@ func (s *Server) GetPendingConsolidations(w http.ResponseWriter, r *http.Request
 			helpers.HandleIsOptimisticError(w, err)
 			return
 		}
-		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		blockRoot, err := helpers.BlockRootFromState(ctx, st)
 		if err != nil {
-			httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+			httputil.HandleError(w, "Could not calculate block root: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
@@ -1626,9 +1626,9 @@ func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
 			helpers.HandleIsOptimisticError(w, err)
 			return
 		}
-		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		blockRoot, err := helpers.BlockRootFromState(ctx, st)
 		if err != nil {
-			httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+			httputil.HandleError(w, "Could not calculate block root: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
@@ -1682,9 +1682,9 @@ func (s *Server) GetPendingPartialWithdrawals(w http.ResponseWriter, r *http.Req
 			helpers.HandleIsOptimisticError(w, err)
 			return
 		}
-		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		blockRoot, err := helpers.BlockRootFromState(ctx, st)
 		if err != nil {
-			httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+			httputil.HandleError(w, "Could not calculate block root: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
@@ -1735,9 +1735,9 @@ func (s *Server) GetProposerLookahead(w http.ResponseWriter, r *http.Request) {
 			helpers.HandleIsOptimisticError(w, err)
 			return
 		}
-		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		blockRoot, err := helpers.BlockRootFromState(ctx, st)
 		if err != nil {
-			httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+			httputil.HandleError(w, "Could not calculate block root: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)

@@ -3,6 +3,7 @@ package validator
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/io/logs"
@@ -13,8 +14,8 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// SubmitBuilderPreferences forwards a batch of per-builder preferences, each entry
-// routed to its own url. A failing entry drops only its own submission.
+// SubmitBuilderPreferences forwards a batch of per-builder preferences, each routed
+// to its own url. A failing entry drops only itself; errors only if all entries fail.
 func (vs *Server) SubmitBuilderPreferences(ctx context.Context, req *ethpb.SubmitBuilderPreferencesRequest) (*emptypb.Empty, error) {
 	ctx, span := trace.StartSpan(ctx, "ValidatorServer.SubmitBuilderPreferences")
 	defer span.End()
@@ -27,11 +28,14 @@ func (vs *Server) SubmitBuilderPreferences(ctx context.Context, req *ethpb.Submi
 		return nil, status.Error(codes.FailedPrecondition, "builder is not configured")
 	}
 	var wg sync.WaitGroup
+	var attempted int
+	var failed atomic.Int64
 	for _, e := range req.Entries {
 		if e.GetUrl() == "" {
 			log.Warn("Skipping builder preferences entry with no builder url")
 			continue
 		}
+		attempted++
 		wg.Add(1)
 		go func(e *ethpb.BuilderPreferencesEntry) {
 			defer wg.Done()
@@ -40,10 +44,14 @@ func (vs *Server) SubmitBuilderPreferences(ctx context.Context, req *ethpb.Submi
 				Auth:        e.Auth,
 			}
 			if err := vs.BlockBuilder.SubmitBuilderPreferences(ctx, bytesutil.ToBytes48(e.ProposerPubkey), e.Url, breq); err != nil {
+				failed.Add(1)
 				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(e.Url)).Warn("Could not submit builder preferences")
 			}
 		}(e)
 	}
 	wg.Wait()
+	if attempted > 0 && failed.Load() == int64(attempted) {
+		return nil, status.Error(codes.Unavailable, "could not submit builder preferences to any builder")
+	}
 	return &emptypb.Empty{}, nil
 }

@@ -78,7 +78,6 @@ type validator struct {
 	prevEpochBalancesLock        sync.RWMutex
 	attestedSlotsLock            sync.RWMutex
 	cachedAttestationDataLock    sync.RWMutex
-	submittedPrefSlotsLock       sync.RWMutex
 	signedRequestAuthsLock       sync.Mutex
 	domainDataLock               sync.RWMutex
 	cachedAttestationData        *ethpb.AttestationData
@@ -94,7 +93,8 @@ type validator struct {
 	web3SignerConfig             *remoteweb3signer.SetupConfig
 	proposerSettings             *proposer.Settings // clone-then-swap under proposerSettingsMu; reads are lock-free
 	proposerSettingsMu           sync.Mutex
-	submittedPrefSlots           map[primitives.Slot]bool
+	submittedPrefSlots           slotReservations
+	submittedBuilderPrefSlots    slotReservations
 	connTracker                  connTracker // per push kind, the conn generation last confirmed pushed
 	submittedAtts                map[submittedAttKey]*submittedAtt
 	submittedAggregates          map[submittedAttKey]*submittedAtt
@@ -754,7 +754,8 @@ func (v *validator) UpdateProposerSettings(ctx context.Context, mutate func(*pro
 	return v.setProposerSettingsLocked(ctx, next)
 }
 
-// PushProposerSettings calls the prepareBeaconProposer RPC to set the fee recipient and also the register validator API if using a custom builder.
+// PushProposerSettings pushes proposer and builder preferences plus, pre-Gloas,
+// the fee recipient (PrepareBeaconProposer) and v1 builder registrations.
 func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Slot, forceFullPush bool) error {
 	ctx, span := trace.StartSpan(ctx, "validator.PushProposerSettings")
 	defer span.End()
@@ -772,97 +773,55 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		log.Info("No imported public keys. Skipping prepare proposer routine")
 		return nil
 	}
-	filteredKeys, err := v.filterAndCacheActiveKeys(ctx, pubkeys, slot)
-	if err != nil {
+	// Both paths depend on the status cache: duties filter against it every epoch.
+	if err := v.refreshStatusCache(ctx, pubkeys, slot); err != nil {
 		return err
 	}
 
 	currentEpoch := slots.ToEpoch(slot)
-	isPreGloas := currentEpoch < params.BeaconConfig().GloasForkEpoch
-
-	// A fallback host switch never restarts the runner (the VC stays "healthy"),
-	// so force a re-push here; each push kind retries until its own succeeds.
-	// Registrations are only pushed pre-Gloas, so post-Gloas their kind is never
-	// confirmed and would otherwise report a change every slot.
 	connGen := v.connGeneration()
-	prefsChanged := v.connTracker.changed(proposerPrefsPush, connGen)
-	regsChanged := isPreGloas && v.connTracker.changed(registrationsPush, connGen)
-	if prefsChanged {
-		log.WithField("connGeneration", connGen).Debug("Forcing proposer preferences re-push after beacon connection change")
+
+	// Post-Gloas, preferences fully replace fee-recipient prep and v1 registrations.
+	if currentEpoch >= params.BeaconConfig().GloasForkEpoch {
+		v.upgradeProposerSettingsToV2(ctx)
+		v.pushPreferences(ctx, km, slot, connGen, forceFullPush)
+		return nil
 	}
+	return v.pushPreGloasSettings(ctx, km, slot, connGen, forceFullPush)
+}
+
+// pushPreGloasSettings pushes fee recipients (PrepareBeaconProposer) and v1
+// builder registrations, plus Gloas preferences once the fork is an epoch away.
+func (v *validator) pushPreGloasSettings(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, connGen uint64, forceFullPush bool) error {
+	filteredKeys := v.activeKeysFromCache(slot)
+	proposerReqs := v.buildProposerSettingsRequests(filteredKeys)
+	if len(proposerReqs) == 0 {
+		log.Warnf("Could not locate valid validator indices. Skipping prepare proposer routine")
+		return nil
+	}
+	if _, err := v.validatorClient.PrepareBeaconProposer(ctx, &ethpb.PrepareBeaconProposerRequest{
+		Recipients: proposerReqs,
+	}); err != nil {
+		return err
+	}
+
+	v.pushRegistrations(ctx, km, filteredKeys, slot, connGen, forceFullPush)
+
+	// The last pre-Gloas epoch already prepares the fork's preferences.
+	if shouldPushGloasPreferences(slots.ToEpoch(slot)) {
+		v.pushPreferences(ctx, km, slot, connGen, forceFullPush)
+	}
+	return nil
+}
+
+// pushRegistrations submits v1 builder registrations. A host switch or
+// forceFullPush re-pushes all; the kind retries until confirmed.
+func (v *validator) pushRegistrations(ctx context.Context, km keymanager.IKeymanager, filteredKeys [][fieldparams.BLSPubkeyLength]byte, slot primitives.Slot, connGen uint64, forceFullPush bool) {
+	regsChanged := v.connTracker.changed(registrationsPush, connGen)
 	if regsChanged {
 		log.WithField("connGeneration", connGen).Debug("Forcing validator registrations re-push after beacon connection change")
 	}
-	prefsForcePush := forceFullPush || prefsChanged
-	regsForcePush := forceFullPush || regsChanged
-
-	// Pre-Gloas, PrepareBeaconProposer carries the per-validator fee recipient.
-	// Post-Gloas, SignedProposerPreferences (submitted below) is canonical.
-	if isPreGloas {
-		proposerReqs := v.buildProposerSettingsRequests(filteredKeys)
-		if len(proposerReqs) == 0 {
-			log.Warnf("Could not locate valid validator indices. Skipping prepare proposer routine")
-			return nil
-		}
-
-		if _, err := v.validatorClient.PrepareBeaconProposer(ctx, &ethpb.PrepareBeaconProposerRequest{
-			Recipients: proposerReqs,
-		}); err != nil {
-			return err
-		}
-		// Gloas preferences start being prepared one epoch ahead; v1 builder
-		// settings do not apply to them, so warn while there is time to act.
-		if ps := v.ProposerSettings(); currentEpoch+1 >= params.BeaconConfig().GloasForkEpoch &&
-			ps.HasLegacyBuilderContent() && slots.IsEpochStart(slot) {
-			log.Warn("Proposer settings contain v1 builder fields, which do not apply to gloas; proposer preferences are prepared with defaults. Configure builders via v2 proposer settings.")
-		}
-	} else {
-		v.upgradeProposerSettingsToV2(ctx)
-	}
-
-	// prefsForcePush is set when a new runner starts (initial connect or after a
-	// beacon-node disconnect/reconnect), so re-push all proposer preferences to
-	// repopulate a beacon node that has no preference state.
-	prefs := v.buildProposerPreferences(ctx, km, slot, prefsForcePush)
-	if len(prefs) > 0 {
-		// Delay to mid-slot so the block for this slot is processed first.
-		delay := params.BeaconConfig().SlotDuration() / 2
-		time.AfterFunc(delay, func() {
-			// Detached from the slot context, which may expire before the delay elapses.
-			subCtx, cancel := context.WithTimeout(context.Background(), delay)
-			defer cancel()
-			if _, err := v.validatorClient.SubmitSignedProposerPreferences(subCtx, &ethpb.SubmitSignedProposerPreferencesRequest{
-				SignedProposerPreferences: prefs,
-			}); err != nil {
-				log.WithError(err).Warn("Failed to submit proposer preferences")
-				v.releasePrefSlots(prefs)
-				return
-			}
-			log.WithField("count", len(prefs)).Debug("Submitted proposer preferences")
-			v.connTracker.confirm(proposerPrefsPush, connGen)
-		})
-	} else {
-		// Nothing was reserved in the dedup cache, so there is no suppressed
-		// batch to retry; safe to consume the switch signal.
-		v.connTracker.confirm(proposerPrefsPush, connGen)
-	}
-
-	if entries := v.warmBuilderRequestAuths(ctx, km, slot); len(entries) > 0 {
-		delay := params.BeaconConfig().SlotDuration() / 2
-		time.AfterFunc(delay, func() {
-			// Detached from the slot context, which may expire before the delay elapses.
-			subCtx, cancel := context.WithTimeout(context.Background(), delay)
-			defer cancel()
-			v.submitBuilderPreferenceEntries(subCtx, entries)
-		})
-	}
-
-	// TODO: figure out what to do post gloas for builder apis
-	if !isPreGloas {
-		return nil
-	}
-
-	signedRegReqs := v.buildSignedRegReqs(ctx, filteredKeys, km.Sign, slot, regsForcePush)
+	signedRegReqs := v.buildSignedRegReqs(ctx, filteredKeys, km.Sign, slot, forceFullPush || regsChanged)
 	if len(signedRegReqs) > 0 {
 		go func() {
 			if err := SubmitValidatorRegistrations(ctx, v.validatorClient, signedRegReqs, v.validatorsRegBatchSize); err != nil {
@@ -876,8 +835,54 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		// means the new host is not missing any registration.
 		v.connTracker.confirm(registrationsPush, connGen)
 	}
+}
 
-	return nil
+// shouldPushGloasPreferences reports whether Gloas preferences are pushed at
+// epoch: from one epoch before the fork, so they are in place when it activates.
+func shouldPushGloasPreferences(epoch primitives.Epoch) bool {
+	return epoch+1 >= params.BeaconConfig().GloasForkEpoch
+}
+
+// pushPreferences submits not-yet-pushed proposer and builder preferences. A
+// host switch or forceFullPush re-pushes all; each kind retries until confirmed.
+func (v *validator) pushPreferences(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, connGen uint64, forceFullPush bool) {
+	// Legacy content only survives pre-fork (Gloas scrubs it), so this warns
+	// while there is still time to reconfigure.
+	if ps := v.ProposerSettings(); ps.HasLegacyBuilderContent() && slots.IsEpochStart(slot) {
+		log.Warn("Proposer settings contain v1 builder fields, which do not apply to gloas; proposer preferences are prepared with defaults. Configure builders via v2 proposer settings.")
+	}
+
+	prefsChanged := v.connTracker.changed(proposerPrefsPush, connGen)
+	builderPrefsChanged := v.connTracker.changed(builderPrefsPush, connGen)
+	if prefsChanged {
+		log.WithField("connGeneration", connGen).Debug("Forcing proposer preferences re-push after beacon connection change")
+	}
+	if builderPrefsChanged {
+		log.WithField("connGeneration", connGen).Debug("Forcing builder preferences re-push after beacon connection change")
+	}
+
+	if prefs := v.buildProposerPreferences(ctx, km, slot, forceFullPush || prefsChanged); len(prefs) > 0 {
+		submitAfterDelay(func(ctx context.Context) {
+			if v.submitProposerPreferenceBatch(ctx, prefs) {
+				v.connTracker.confirm(proposerPrefsPush, connGen)
+			}
+		})
+	} else {
+		// Nothing was reserved in the dedup cache, so there is no suppressed
+		// batch to retry; safe to consume the switch signal.
+		v.connTracker.confirm(proposerPrefsPush, connGen)
+	}
+
+	if entries := v.warmBuilderRequestAuths(ctx, km, slot, forceFullPush || builderPrefsChanged); len(entries) > 0 {
+		submitAfterDelay(func(ctx context.Context) {
+			if v.submitBuilderPreferenceBatch(ctx, entries) {
+				v.connTracker.confirm(builderPrefsPush, connGen)
+			}
+		})
+	} else {
+		// No suppressed batch to retry; safe to consume the switch signal.
+		v.connTracker.confirm(builderPrefsPush, connGen)
+	}
 }
 
 // EnsureEventStream reconciles the event stream with the current beacon host:
@@ -1050,22 +1055,26 @@ func (v *validator) EnsureReady(ctx context.Context) bool {
 	return v.validatorClient.EnsureReady(ctx)
 }
 
-func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte, slot primitives.Slot) ([][fieldparams.BLSPubkeyLength]byte, error) {
-	ctx, span := trace.StartSpan(ctx, "validator.filterAndCacheActiveKeys")
+// refreshStatusCache repopulates the validator status cache at epoch start or
+// when the cached key set has drifted from the keymanager's.
+func (v *validator) refreshStatusCache(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte, slot primitives.Slot) error {
+	ctx, span := trace.StartSpan(ctx, "validator.refreshStatusCache")
 	defer span.End()
-	isEpochStart := slots.IsEpochStart(slot)
-	filteredKeys := make([][fieldparams.BLSPubkeyLength]byte, 0)
 	if len(pubkeys) == 0 {
-		return filteredKeys, nil
+		return nil
 	}
-	var err error
-	// repopulate the statuses if epoch start or if a new key is added missing the cache
-	if isEpochStart || len(v.statusCache()) != len(pubkeys) /* cache not populated or updated correctly */ {
-		if err = v.updateValidatorStatusCache(ctx, pubkeys); err != nil {
-			return nil, errors.Wrap(err, "failed to update validator status cache")
+	if slots.IsEpochStart(slot) || len(v.statusCache()) != len(pubkeys) {
+		if err := v.updateValidatorStatusCache(ctx, pubkeys); err != nil {
+			return errors.Wrap(err, "failed to update validator status cache")
 		}
 	}
+	return nil
+}
+
+// activeKeysFromCache returns the cached keys active for duties at the slot's epoch.
+func (v *validator) activeKeysFromCache(slot primitives.Slot) [][fieldparams.BLSPubkeyLength]byte {
 	currEpoch := slots.ToEpoch(slot)
+	filteredKeys := make([][fieldparams.BLSPubkeyLength]byte, 0)
 	for k, s := range v.statusCache() {
 		if isActiveForDuties(s.status, currEpoch) {
 			filteredKeys = append(filteredKeys, k)
@@ -1076,8 +1085,7 @@ func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fie
 			}).Debugf("Skipping non-active status key.")
 		}
 	}
-
-	return filteredKeys, nil
+	return filteredKeys
 }
 
 // updateValidatorStatusCache updates the validator statuses cache, a map of keys currently used by the validator client
@@ -1169,19 +1177,29 @@ func (v *validator) upgradeProposerSettingsToV2(ctx context.Context) {
 	}
 }
 
-// buildProposerPreferences creates signed proposer preferences for validators
-// that have proposer slots in the current epoch (future slots) or next epoch. During normal operation it is
-// gated to run once at mid-epoch; pass force=true to clear the submitted-slot
-// dedup cache and bypass that gate (e.g. after a reorg triggers a duty change,
-// or when a new runner starts after a beacon-node disconnect/reconnect).
-//
-// Current-epoch preferences are submitted after the first slot of the epoch
-// (slot 0 is skipped to avoid stale state after epoch transition). If the
-// validator client starts mid-epoch, preferences are submitted for all
-// remaining future slots in the epoch.
-// Next-epoch preferences are submitted at or after mid-epoch to ensure beacon
-// nodes have processed the epoch transition.
-// Already-submitted slots are tracked to avoid duplicate signing and RPC calls.
+// submitAfterDelay runs submit half a slot from now, giving the beacon node
+// time to process the current slot's block, detached from the caller's context.
+func submitAfterDelay(submit func(ctx context.Context)) {
+	delay := params.BeaconConfig().SlotDuration() / 2
+	time.AfterFunc(delay, func() {
+		ctx, cancel := context.WithTimeout(context.Background(), delay)
+		defer cancel()
+		submit(ctx)
+	})
+}
+
+// prefEpochBounds returns epoch's first slot and the mid-epoch slot from which
+// both proposer and builder next-epoch preferences are submitted.
+func prefEpochBounds(epoch primitives.Epoch) (epochStart, midEpoch primitives.Slot, err error) {
+	epochStart, err = slots.EpochStart(epoch)
+	if err != nil {
+		return 0, 0, err
+	}
+	return epochStart, epochStart + params.BeaconConfig().SlotsPerEpoch/2, nil
+}
+
+// buildProposerPreferences signs preferences for upcoming proposal slots not yet
+// submitted; force clears the dedup cache (reorg duty change, runner restart).
 func (v *validator) buildProposerPreferences(
 	ctx context.Context,
 	km keymanager.IKeymanager,
@@ -1190,26 +1208,15 @@ func (v *validator) buildProposerPreferences(
 ) []*ethpb.SignedProposerPreferences {
 	currentEpoch := slots.ToEpoch(slot)
 	gloasEpoch := params.BeaconConfig().GloasForkEpoch
-	if currentEpoch+1 < gloasEpoch {
+	if !shouldPushGloasPreferences(currentEpoch) {
 		return nil
 	}
-	epochStart, err := slots.EpochStart(currentEpoch)
+	epochStart, midEpoch, err := prefEpochBounds(currentEpoch)
 	if err != nil {
 		return nil
 	}
-	midEpoch := epochStart + params.BeaconConfig().SlotsPerEpoch/2
 
-	v.submittedPrefSlotsLock.Lock()
-	if force {
-		v.submittedPrefSlots = make(map[primitives.Slot]bool)
-	} else {
-		for s := range v.submittedPrefSlots {
-			if s < epochStart {
-				delete(v.submittedPrefSlots, s)
-			}
-		}
-	}
-	v.submittedPrefSlotsLock.Unlock()
+	v.submittedPrefSlots.prune(force, epochStart)
 
 	snap := v.duties.snapshot()
 	if !snap.isInitialized() {
@@ -1255,7 +1262,7 @@ func (v *validator) buildProposerPreferences(
 		"currentProposerSlots": currentProposerCount,
 		"nextProposerSlots":    nextProposerCount,
 		"prefsBuilt":           len(signedPrefs),
-		"alreadySubmitted":     v.submittedPrefSlotsCount(),
+		"alreadySubmitted":     v.submittedPrefSlots.count(),
 	}).Debug("Build proposer preferences result")
 	return signedPrefs
 }
@@ -1293,7 +1300,7 @@ func (v *validator) processProposerDuties(
 			if !isNextEpoch && proposalSlot <= slot+1 {
 				continue
 			}
-			if !v.reservePrefSlot(proposalSlot) {
+			if !v.submittedPrefSlots.reserve(proposalSlot) {
 				continue
 			}
 
@@ -1312,7 +1319,7 @@ func (v *validator) processProposerDuties(
 					firstErr = err
 				}
 				sigFailCount++
-				v.releasePrefSlot(proposalSlot)
+				v.submittedPrefSlots.release(proposalSlot)
 				continue
 			}
 			signedPrefs = append(signedPrefs, signedPref)
@@ -1324,35 +1331,15 @@ func (v *validator) processProposerDuties(
 	return signedPrefs
 }
 
-// reservePrefSlot marks proposalSlot as submitted, returning false if another
-// pass already claimed it.
-func (v *validator) reservePrefSlot(proposalSlot primitives.Slot) bool {
-	v.submittedPrefSlotsLock.Lock()
-	defer v.submittedPrefSlotsLock.Unlock()
-	if v.submittedPrefSlots[proposalSlot] {
-		return false
-	}
-	v.submittedPrefSlots[proposalSlot] = true
-	return true
-}
-
-func (v *validator) releasePrefSlot(proposalSlot primitives.Slot) {
-	v.submittedPrefSlotsLock.Lock()
-	defer v.submittedPrefSlotsLock.Unlock()
-	delete(v.submittedPrefSlots, proposalSlot)
-}
-
 // releasePrefSlots un-reserves the slots of a batch whose submission failed so
 // a later build retries them.
 func (v *validator) releasePrefSlots(prefs []*ethpb.SignedProposerPreferences) {
-	slots := make([]primitives.Slot, len(prefs))
-	v.submittedPrefSlotsLock.Lock()
+	released := make([]primitives.Slot, len(prefs))
 	for i, p := range prefs {
-		delete(v.submittedPrefSlots, p.Message.ProposalSlot)
-		slots[i] = p.Message.ProposalSlot
+		released[i] = p.Message.ProposalSlot
 	}
-	v.submittedPrefSlotsLock.Unlock()
-	log.WithField("proposalSlots", slots).Debug("Released proposer preference reservations for retry")
+	v.submittedPrefSlots.release(released...)
+	log.WithField("proposalSlots", released).Debug("Released proposer preference reservations for retry")
 }
 
 func (v *validator) proposerConfigForKey(pk pubkey, epoch primitives.Epoch) (common.Address, uint64) {
@@ -1371,12 +1358,6 @@ func (v *validator) proposerConfigForKey(pk pubkey, epoch primitives.Epoch) (com
 		}
 	}
 	return feeRecipient, gasLimit
-}
-
-func (v *validator) submittedPrefSlotsCount() int {
-	v.submittedPrefSlotsLock.RLock()
-	defer v.submittedPrefSlotsLock.RUnlock()
-	return len(v.submittedPrefSlots)
 }
 
 // builderTarget is one resolved builder for a proposer: a URL plus the
@@ -1434,18 +1415,39 @@ func uint64Ptr(v *validatortypes.Uint64) *uint64 {
 }
 
 // warmBuilderRequestAuths pre-signs request auths for upcoming proposal slots and
-// returns the ahead-of-time preference submissions, rebuilt every push.
-func (v *validator) warmBuilderRequestAuths(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot) []*ethpb.BuilderPreferencesEntry {
-	if slots.ToEpoch(slot)+1 < params.BeaconConfig().GloasForkEpoch {
+// returns the not-yet-submitted preference entries; force clears the dedup cache.
+func (v *validator) warmBuilderRequestAuths(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, force bool) []*ethpb.BuilderPreferencesEntry {
+	currentEpoch := slots.ToEpoch(slot)
+	gloasEpoch := params.BeaconConfig().GloasForkEpoch
+	if !shouldPushGloasPreferences(currentEpoch) {
 		return nil
 	}
 	snap := v.duties.snapshot()
 	if !snap.isInitialized() {
 		return nil
 	}
+
+	epochStart, midEpoch, err := prefEpochBounds(currentEpoch)
+	if err != nil {
+		return nil
+	}
+
+	// The dedup cache mirrors per-connection server state, so force resets it;
+	// cached signatures survive reconnects and only expire as their slots pass.
+	v.submittedBuilderPrefSlots.prune(force, epochStart)
 	v.pruneSignedRequestAuths(slot)
-	entries := v.warmBuilderRequestAuthsForDuties(ctx, km, slot, snap.currentDuties())
-	return append(entries, v.warmBuilderRequestAuthsForDuties(ctx, km, slot, snap.nextDuties())...)
+
+	var entries []*ethpb.BuilderPreferencesEntry
+	// Current-epoch: submit after first slot of epoch to avoid stale state.
+	if currentEpoch >= gloasEpoch && (force || slot > epochStart) {
+		entries = v.warmBuilderRequestAuthsForDuties(ctx, km, slot, snap.currentDuties())
+	}
+	// Next-epoch gate is not bypassed by force; the beacon node may not have
+	// the next-epoch state ready.
+	if slot >= midEpoch {
+		entries = append(entries, v.warmBuilderRequestAuthsForDuties(ctx, km, slot, snap.nextDuties())...)
+	}
+	return entries
 }
 
 func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, duties iter.Seq2[pubkey, *ethpb.ValidatorDuty]) []*ethpb.BuilderPreferencesEntry {
@@ -1463,6 +1465,10 @@ func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km key
 			if proposalSlot <= slot {
 				continue
 			}
+			if !v.submittedBuilderPrefSlots.reserve(proposalSlot) {
+				continue
+			}
+			added := false
 			for _, t := range targets {
 				signed, err := v.signRequestAuthCached(ctx, km, pk, t.authData, proposalSlot)
 				if err != nil {
@@ -1475,51 +1481,80 @@ func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km key
 					Auth:                signed,
 					MaxExecutionPayment: primitives.Gwei(t.maxPayment),
 				})
+				added = true
+			}
+			if !added {
+				v.submittedBuilderPrefSlots.release(proposalSlot)
 			}
 		}
 	}
 	return entries
 }
 
-func (v *validator) submitBuilderPreferenceEntries(ctx context.Context, entries []*ethpb.BuilderPreferencesEntry) {
-	if _, err := v.validatorClient.SubmitBuilderPreferences(ctx, &ethpb.SubmitBuilderPreferencesRequest{Entries: entries}); err != nil {
-		log.WithError(err).Warn("Failed to submit builder preferences")
+// submitProposerPreferenceBatch submits a batch, un-reserving its slots on
+// failure so a later build retries them. Reports whether the RPC succeeded.
+func (v *validator) submitProposerPreferenceBatch(ctx context.Context, prefs []*ethpb.SignedProposerPreferences) bool {
+	if _, err := v.validatorClient.SubmitSignedProposerPreferences(ctx, &ethpb.SubmitSignedProposerPreferencesRequest{
+		SignedProposerPreferences: prefs,
+	}); err != nil {
+		log.WithError(err).Warn("Failed to submit proposer preferences")
+		v.releasePrefSlots(prefs)
+		return false
 	}
+	log.WithField("count", len(prefs)).Debug("Submitted proposer preferences")
+	return true
 }
 
-// submitProposerPreferences builds and submits proposer preferences for the
-// current slot, bypassing the mid-epoch gate. Called when duties change due to
-// a reorg so that the new proposer's preferences reach the network promptly.
-func (v *validator) submitProposerPreferences(ctx context.Context) {
+// submitBuilderPreferenceBatch submits a batch, un-reserving its slots on
+// failure so a later warm pass retries them. Reports whether the RPC succeeded.
+func (v *validator) submitBuilderPreferenceBatch(ctx context.Context, entries []*ethpb.BuilderPreferencesEntry) bool {
+	if _, err := v.validatorClient.SubmitBuilderPreferences(ctx, &ethpb.SubmitBuilderPreferencesRequest{Entries: entries}); err != nil {
+		log.WithError(err).Warn("Failed to submit builder preferences")
+		v.releaseBuilderPrefSlots(entries)
+		return false
+	}
+	log.WithField("count", len(entries)).Debug("Submitted builder preferences")
+	return true
+}
+
+func (v *validator) releaseBuilderPrefSlots(entries []*ethpb.BuilderPreferencesEntry) {
+	released := make([]primitives.Slot, len(entries))
+	for i, e := range entries {
+		released[i] = e.GetAuth().GetMessage().GetSlot()
+	}
+	v.submittedBuilderPrefSlots.release(released...)
+}
+
+// resubmitPreferences force re-pushes proposer and builder preferences on
+// reorg-driven duty changes so the new proposer's preferences go out promptly.
+func (v *validator) resubmitPreferences(ctx context.Context) {
 	slot := slots.CurrentSlot(v.genesisTime)
 	currentEpoch := slots.ToEpoch(slot)
-	if currentEpoch+1 < params.BeaconConfig().GloasForkEpoch {
+	if !shouldPushGloasPreferences(currentEpoch) {
 		return
 	}
 	km, err := v.Keymanager()
 	if err != nil {
-		log.WithError(err).Warn("Failed to get keymanager for proposer preference resubmission")
+		log.WithError(err).Warn("Failed to get keymanager for preference resubmission")
 		return
 	}
 	if currentEpoch >= params.BeaconConfig().GloasForkEpoch {
 		v.upgradeProposerSettingsToV2(ctx)
 	}
-	prefs := v.buildProposerPreferences(ctx, km, slot, true)
-	if len(prefs) == 0 {
-		return
+	entries := v.warmBuilderRequestAuths(ctx, km, slot, true)
+	if len(entries) > 0 {
+		submitAfterDelay(func(ctx context.Context) { v.submitBuilderPreferenceBatch(ctx, entries) })
 	}
-	delay := params.BeaconConfig().SlotDuration() / 2
-	go func() {
-		time.Sleep(delay)
-		if _, err := v.validatorClient.SubmitSignedProposerPreferences(ctx, &ethpb.SubmitSignedProposerPreferencesRequest{
-			SignedProposerPreferences: prefs,
-		}); err != nil {
-			log.WithError(err).Warn("Failed to resubmit proposer preferences after duty change")
-			v.releasePrefSlots(prefs)
-		} else {
-			log.WithField("count", len(prefs)).Info("Resubmitted proposer preferences after duty change")
-		}
-	}()
+	prefs := v.buildProposerPreferences(ctx, km, slot, true)
+	if len(prefs) > 0 {
+		submitAfterDelay(func(ctx context.Context) { v.submitProposerPreferenceBatch(ctx, prefs) })
+	}
+	if len(prefs) > 0 || len(entries) > 0 {
+		log.WithFields(logrus.Fields{
+			"proposerPrefs":      len(prefs),
+			"builderPrefEntries": len(entries),
+		}).Info("Resubmitting preferences after duty change")
+	}
 }
 
 func (v *validator) buildSignedRegReqs(
