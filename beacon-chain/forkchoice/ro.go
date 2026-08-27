@@ -170,6 +170,20 @@ func (ro *ROForkChoice) ConsensusNodeWeight(root [32]byte) (uint64, error) {
 	return ro.getter.ConsensusNodeWeight(root)
 }
 
+// CouldBuilderWithhold delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) CouldBuilderWithhold(root [32]byte) bool {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.CouldBuilderWithhold(root)
+}
+
+// BuilderIndex delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) BuilderIndex(root [32]byte) (primitives.BuilderIndex, error) {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.BuilderIndex(root)
+}
+
 // PayloadWeights delegates to the underlying forkchoice call, under a lock.
 func (ro *ROForkChoice) PayloadWeights(root [32]byte) (uint64, uint64, error) {
 	ro.l.RLock()
@@ -248,10 +262,10 @@ func (ro *ROForkChoice) BlockHash(root [32]byte) ([32]byte, error) {
 }
 
 // GasLimit delegates to the underlying forkchoice call, under a lock.
-func (ro *ROForkChoice) GasLimit(root [32]byte) (uint64, error) {
+func (ro *ROForkChoice) GasLimit(root, blockHash [32]byte) (uint64, error) {
 	ro.l.RLock()
 	defer ro.l.RUnlock()
-	return ro.getter.GasLimit(root)
+	return ro.getter.GasLimit(root, blockHash)
 }
 
 // CanonicalNodeAtSlot delegates to the underlying forkchoice call, under a lock.

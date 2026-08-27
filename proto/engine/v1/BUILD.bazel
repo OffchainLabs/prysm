@@ -10,7 +10,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
 load("@rules_proto//proto:defs.bzl", "proto_library")
 load("//proto:ssz_proto_library.bzl", "ssz_proto_files")
-load("//tools:ssz.bzl", "SSZ_DEPS", "ssz_gen_marshal")
+load("//tools:methodical.bzl", "ssz_methodical")
 
 proto_library(
     name = "proto",
@@ -27,33 +27,13 @@ proto_library(
 ##############################################################################
 # Go
 ##############################################################################
-ssz_gen_marshal(
-    name = "ssz_generated_files",
+
+ssz_methodical(
+    name = "methodical_engine",
+    deps = [":go_proto"],
+    config_file = "engine.yaml",
+    override_package_name = "enginev1",
     out = "engine.ssz.go",
-    go_proto = ":go_proto",
-    includes = [
-        "//consensus-types/primitives:go_default_library",
-    ],
-    objs = [
-        "ExecutionPayload",
-        "ExecutionPayloadCapella",
-        "ExecutionPayloadHeader",
-        "ExecutionPayloadHeaderCapella",
-        "ExecutionPayloadHeaderDeneb",
-        "ExecutionPayloadDeneb",
-        "ExecutionPayloadGloas",
-        "ExecutionPayloadDenebAndBlobsBundle",
-        "ExecutionPayloadDenebAndBlobsBundleV2",
-        "BlindedBlobsBundle",
-        "BlobsBundle",
-        "BlobsBundleV2",
-        "Withdrawal",
-        "WithdrawalRequest",
-        "DepositRequest",
-        "ConsolidationRequest",
-        "ExecutionRequests",
-        "ExecutionRequestsGloas",
-    ],
 )
 
 go_proto_library(
@@ -84,7 +64,7 @@ go_library(
         "fulu.go",
         "gloas.go",
         "json_marshal_unmarshal.go",
-        ":ssz_generated_files",  # keep
+        ":methodical_engine",  # keep
     ],
     embed = [
         ":go_proto",
@@ -102,7 +82,6 @@ go_library(
         "@com_github_ethereum_go_ethereum//core/types:go_default_library",
         "@com_github_golang_protobuf//proto:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
-        "@com_github_prysmaticlabs_fastssz//:go_default_library",
         "@com_github_sirupsen_logrus//:go_default_library",
         "@googleapis//google/api:annotations_go_proto",
         "@io_bazel_rules_go//proto/wkt:descriptor_go_proto",
@@ -110,6 +89,7 @@ go_library(
         "@org_golang_google_protobuf//encoding/protojson:go_default_library",
         "@org_golang_google_protobuf//reflect/protoreflect:go_default_library",
         "@org_golang_google_protobuf//runtime/protoimpl:go_default_library",
+        "@com_github_offchainlabs_methodical_ssz//ssz:go_default_library",
     ],  # keep
 )
 
@@ -119,7 +99,7 @@ ssz_proto_files(
         "electra.proto",
         "execution_engine.proto",
         "fulu.proto",
-        "gloas.proto",
+	"gloas.proto",
     ],
     config = select({
         "//conditions:default": "mainnet",

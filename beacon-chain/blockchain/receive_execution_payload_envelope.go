@@ -153,6 +153,9 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		s.cfg.ForkChoiceStore.Unlock()
 	}
 
+	// A revealed payload clears any recorded failure for this builder.
+	s.cfg.BuilderCircuitBreaker.RecordSuccess(envelope.BuilderIndex())
+
 	if err := s.postPayloadTasks(ctx, envelope, blockState); err != nil {
 		return err
 	}

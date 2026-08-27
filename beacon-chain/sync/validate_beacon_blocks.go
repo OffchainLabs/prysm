@@ -37,6 +37,7 @@ var (
 	ErrOptimisticParent         = errors.New("parent of the block is optimistic")
 	errRejectCommitmentLen      = errors.New("[REJECT] The length of KZG commitments is less than or equal to the limitation defined in Consensus Layer")
 	ErrSlashingSignatureFailure = errors.New("proposer slashing signature verification failed")
+	errBlockSlotNotAfterParent  = errors.New("block slot is not higher than its parent slot")
 )
 
 // validateBeaconBlockPubSub checks that the incoming block has a valid BLS signature.
@@ -222,7 +223,7 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 			s.downscorePeer(pid, "invalidBlockSignature")
 			return pubsub.ValidationReject, err
 		}
-		if s.hasBadBlock(blockRoot) || errors.Is(err, blocks.ErrInvalidProposerIndex) {
+		if s.hasBadBlock(blockRoot) || errors.Is(err, blocks.ErrInvalidProposerIndex) || errors.Is(err, errBlockSlotNotAfterParent) {
 			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not validate beacon block")
 			return pubsub.ValidationReject, err
 		}
@@ -312,6 +313,15 @@ func (s *Service) validatePhase0Block(ctx context.Context, blk interfaces.ReadOn
 	if !s.cfg.chain.InForkchoice(blk.Block().ParentRoot()) {
 		s.setBadBlock(ctx, blockRoot)
 		return nil, blockchain.ErrNotDescendantOfFinalized
+	}
+
+	// [REJECT] The block is from a higher slot than its parent.
+	parentSlot, err := s.cfg.chain.RecentBlockSlot(blk.Block().ParentRoot())
+	if err != nil {
+		return nil, err
+	}
+	if parentSlot >= blk.Block().Slot() {
+		return nil, errors.Wrapf(errBlockSlotNotAfterParent, "block slot %d, parent slot %d", blk.Block().Slot(), parentSlot)
 	}
 
 	verifyingState, err := s.blockVerifyingState(ctx, blk)

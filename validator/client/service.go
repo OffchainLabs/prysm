@@ -308,6 +308,12 @@ func (v *ValidatorService) ProposerSettings() *proposer.Settings {
 	return nil
 }
 
+// UpdateProposerSettings atomically mutates the proposer settings on the
+// underlying validator; see iface.Validator.UpdateProposerSettings.
+func (v *ValidatorService) UpdateProposerSettings(ctx context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
+	return v.validator.UpdateProposerSettings(ctx, mutate)
+}
+
 // SetProposerSettings sets the proposer settings on the validator service as well as the underlying validator
 func (v *ValidatorService) SetProposerSettings(ctx context.Context, settings *proposer.Settings) error {
 	// validator service proposer settings is only used for pass through from node -> validator service -> validator.

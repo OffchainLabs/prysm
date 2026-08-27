@@ -22,7 +22,6 @@ import (
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/async/event"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
@@ -115,6 +114,8 @@ type mockKeymanager struct {
 var errMockKeyExists = errors.New("key already in mockKeymanager map")
 
 func (m *mockKeymanager) add(pairs ...keypair) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 	for _, kp := range pairs {
 		if _, exists := m.keysMap[kp.pub]; exists {
 			return errMockKeyExists
@@ -594,10 +595,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		flgs := features.Get()
-		flgs.EnableDoppelGanger = true
-		reset := features.InitWithReset(flgs)
-		defer reset()
+		enableDoppelGanger(t)
 		tests := []struct {
 			name            string
 			validatorSetter func(t *testing.T) *validator
@@ -794,7 +792,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(fmt.Sprintf("%s/isSlashingProtectionMinimal:%v", tt.name, isSlashingProtectionMinimal), func(t *testing.T) {
 				v := tt.validatorSetter(t)
-				if err := v.CheckDoppelGanger(t.Context()); tt.err != "" {
+				if err := v.CheckDoppelGangerAtStartup(t.Context()); tt.err != "" {
 					assert.ErrorContains(t, tt.err, err)
 				}
 			})
@@ -2955,10 +2953,10 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 		name           string
 		gloasForkEpoch primitives.Epoch
 		settings       *proposer.Settings
-		needsDB        bool
 		wantGasLimit   uint64
-		// >0 asserts migration ran and persisted; 0 asserts shape preserved.
-		upgradedGasLimit validatorType.Uint64
+		needsDB        bool
+		// asserts the cutover ran and persisted v2 with builder content dropped.
+		wantMigrated bool
 	}{
 		{
 			name:           "v2 top-level GasLimit wins over legacy BuilderConfig.GasLimit",
@@ -2974,7 +2972,7 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 			wantGasLimit: 55555555,
 		},
 		{
-			name:           "gloas active: v1 settings upgraded; BuilderConfig.GasLimit promoted to Option.GasLimit",
+			name:           "gloas active: v1 settings cut over; builder gas limit dropped, chain default used",
 			gloasForkEpoch: 0,
 			settings: &proposer.Settings{
 				DefaultConfig: &proposer.Option{
@@ -2982,9 +2980,9 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 					BuilderConfig:      &proposer.BuilderConfig{Enabled: true, GasLimit: 42000000},
 				},
 			},
-			needsDB:          true,
-			wantGasLimit:     42000000,
-			upgradedGasLimit: validatorType.Uint64(42000000),
+			needsDB:      true,
+			wantGasLimit: chainDefault,
+			wantMigrated: true,
 		},
 		{
 			// Migration must not fire while pre-gloas registration path still
@@ -3069,7 +3067,7 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 			require.Equal(t, tt.wantGasLimit, prefs[0].Message.TargetGasLimit)
 
 			ps := v.ProposerSettings()
-			if tt.upgradedGasLimit == 0 {
+			if !tt.wantMigrated {
 				require.Equal(t, tt.settings.Version, ps.Version)
 				if tt.settings.DefaultConfig != nil && tt.settings.DefaultConfig.BuilderConfig != nil {
 					require.NotNil(t, ps.DefaultConfig.BuilderConfig)
@@ -3077,13 +3075,14 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 				return
 			}
 			require.Equal(t, proposer.SchemaV2, ps.Version)
-			require.Equal(t, tt.upgradedGasLimit, ps.DefaultConfig.GasLimit)
-			require.NotNil(t, ps.DefaultConfig.BuilderConfig)
+			// The cutover drops v1 builder content including its gas limit.
+			require.Equal(t, validatorType.Uint64(0), ps.DefaultConfig.GasLimit)
+			require.IsNil(t, ps.DefaultConfig.BuilderConfig)
 
 			dbps, err := v.db.ProposerSettings(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, proposer.SchemaV2, dbps.Version)
-			require.Equal(t, tt.upgradedGasLimit, dbps.DefaultConfig.GasLimit)
+			require.Equal(t, validatorType.Uint64(0), dbps.DefaultConfig.GasLimit)
 		})
 	}
 }
@@ -3337,7 +3336,7 @@ func TestValidator_buildSignedRegReqs_DefaultConfigDisabled(t *testing.T) {
 	client := validatormock.NewMockValidatorClient(ctrl)
 
 	signature := blsmock.NewMockSignature(ctrl)
-	signature.EXPECT().Marshal().Return([]byte{})
+	signature.EXPECT().Marshal().Return([]byte{}).AnyTimes()
 
 	v := validator{
 		signedValidatorRegistrations: map[[48]byte]*ethpb.SignedValidatorRegistrationV1{},
@@ -3405,11 +3404,61 @@ func TestValidator_buildSignedRegReqs_DefaultConfigDisabled(t *testing.T) {
 	}
 	actual := v.buildSignedRegReqs(ctx, pubkeys, signer, 0, false)
 
-	assert.Equal(t, 1, len(actual))
+	assert.Equal(t, 2, len(actual))
 	assert.DeepEqual(t, feeRecipient1[:], actual[0].Message.FeeRecipient)
 	assert.Equal(t, uint64(1111), actual[0].Message.GasLimit)
 	assert.DeepEqual(t, pubkey1[:], actual[0].Message.Pubkey)
+	// Fee recipient and participation resolve independently: an explicitly
+	// enabled key without its own fee recipient registers with the default's.
+	assert.DeepEqual(t, defaultFeeRecipient[:], actual[1].Message.FeeRecipient)
+	assert.Equal(t, uint64(3333), actual[1].Message.GasLimit)
+	assert.DeepEqual(t, pubkey3[:], actual[1].Message.Pubkey)
+}
 
+// Semantics are fork-keyed, not version-keyed: the same settings shape registers
+// identically whatever the stored schema version says.
+func TestValidator_buildSignedRegReqs_VersionGatesInheritance(t *testing.T) {
+	pubkey1 := pubkeyFromString(t, "0x111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111")
+	defaultFeeRecipient := feeRecipientFromString(t, "0xdddddddddddddddddddddddddddddddddddddddd")
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	ctx := t.Context()
+
+	signature := blsmock.NewMockSignature(ctrl)
+	signature.EXPECT().Marshal().Return([]byte{}).AnyTimes()
+	signer := func(_ context.Context, _ *validatorpb.SignRequest) (bls.Signature, error) {
+		return signature, nil
+	}
+
+	newSettings := func(version uint32) *proposer.Settings {
+		return &proposer.Settings{
+			Version: version,
+			DefaultConfig: &proposer.Option{
+				FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: defaultFeeRecipient},
+				BuilderConfig:      &proposer.BuilderConfig{Enabled: true, GasLimit: 9999},
+			},
+			ProposeConfig: map[[48]byte]*proposer.Option{
+				// Per-key disable without a per-key fee recipient.
+				pubkey1: {BuilderConfig: &proposer.BuilderConfig{Enabled: false}},
+			},
+		}
+	}
+	v := validator{
+		signedValidatorRegistrations: map[[48]byte]*ethpb.SignedValidatorRegistrationV1{},
+		pubkeyToStatus: map[[48]byte]*validatorStatus{
+			pubkey1: {publicKey: pubkey1[:], status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}},
+		},
+	}
+	pubkeys := [][fieldparams.BLSPubkeyLength]byte{pubkey1}
+
+	// The per-key disable is honored regardless of the stored version stamp.
+	v.proposerSettings = newSettings(0)
+	assert.Equal(t, 0, len(v.buildSignedRegReqs(ctx, pubkeys, signer, 0, false)))
+
+	v.proposerSettings = newSettings(proposer.SchemaV2)
+	v.signedValidatorRegistrations = map[[48]byte]*ethpb.SignedValidatorRegistrationV1{}
+	assert.Equal(t, 0, len(v.buildSignedRegReqs(ctx, pubkeys, signer, 0, false)))
 }
 
 func TestValidator_buildSignedRegReqs_DefaultConfigEnabled(t *testing.T) {
@@ -3511,7 +3560,8 @@ func TestValidator_buildSignedRegReqs_DefaultConfigEnabled(t *testing.T) {
 	assert.DeepEqual(t, pubkey1[:], actual[0].Message.Pubkey)
 
 	assert.DeepEqual(t, defaultFeeRecipient[:], actual[1].Message.FeeRecipient)
-	assert.Equal(t, uint64(9999), actual[1].Message.GasLimit)
+	// The per-key builder gas limit outranks the default's builder value.
+	assert.Equal(t, uint64(3333), actual[1].Message.GasLimit)
 	assert.DeepEqual(t, pubkey3[:], actual[1].Message.Pubkey)
 
 	t.Run("mid epoch only pushes newly added key", func(t *testing.T) {
@@ -3565,7 +3615,7 @@ func TestValidator_buildSignedRegReqs_V2Settings(t *testing.T) {
 					FeeRecipient: defaultFeeRecipient,
 				},
 				GasLimit:      8888,
-				BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 9999},
+				BuilderConfig: &proposer.BuilderConfig{GasLimit: 9999, Builders: []*proposer.BuilderEntry{{URL: "https://default.example"}}},
 			},
 			ProposeConfig: map[[48]byte]*proposer.Option{
 				pubkey1: {
@@ -3573,7 +3623,7 @@ func TestValidator_buildSignedRegReqs_V2Settings(t *testing.T) {
 						FeeRecipient: feeRecipient1,
 					},
 					GasLimit:      1111,
-					BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 7777},
+					BuilderConfig: &proposer.BuilderConfig{GasLimit: 7777, Builders: []*proposer.BuilderEntry{{URL: "https://b.example"}}},
 				},
 				pubkey2: {
 					FeeRecipientConfig: &proposer.FeeRecipientConfig{
@@ -3585,7 +3635,7 @@ func TestValidator_buildSignedRegReqs_V2Settings(t *testing.T) {
 					FeeRecipientConfig: &proposer.FeeRecipientConfig{
 						FeeRecipient: feeRecipient2,
 					},
-					BuilderConfig: &proposer.BuilderConfig{Enabled: false},
+					BuilderConfig: &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{}},
 				},
 			},
 		},
@@ -3609,11 +3659,12 @@ func TestValidator_buildSignedRegReqs_V2Settings(t *testing.T) {
 	assert.Equal(t, 2, len(actual))
 
 	assert.DeepEqual(t, feeRecipient1[:], actual[0].Message.FeeRecipient)
-	assert.Equal(t, uint64(7777), actual[0].Message.GasLimit, "per-key builder gas limit, not top-level")
+	// v2 gas limits live on the option, where UpgradeToV2 and the gas-limit API write them.
+	assert.Equal(t, uint64(1111), actual[0].Message.GasLimit, "per-key option gas limit wins")
 	assert.DeepEqual(t, pubkey1[:], actual[0].Message.Pubkey)
 
 	assert.DeepEqual(t, feeRecipient2[:], actual[1].Message.FeeRecipient)
-	assert.Equal(t, uint64(9999), actual[1].Message.GasLimit, "default builder gas limit, not top-level")
+	assert.Equal(t, uint64(2222), actual[1].Message.GasLimit, "per-key option gas limit wins over default builder")
 	assert.DeepEqual(t, pubkey2[:], actual[1].Message.Pubkey)
 }
 
@@ -3999,6 +4050,121 @@ func TestGetAttestationData_PostElectraConcurrentAccess(t *testing.T) {
 	}
 }
 
+func TestBuilderTargetsForKey(t *testing.T) {
+	pk := pubkeyFromString(t, "0x111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111")
+	u64 := func(v uint64) *validatorType.Uint64 { u := validatorType.Uint64(v); return &u }
+	proposeConfig := map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+		pk: {BuilderConfig: &proposer.BuilderConfig{
+			Enabled:             true,
+			MaxExecutionPayment: u64(500),
+			Builders: []*proposer.BuilderEntry{
+				{URL: "https://a.example", MaxExecutionPayment: u64(100)},
+				{URL: "https://b.example"},
+			},
+		}},
+	}
+
+	t.Run("targets resolve regardless of the stored version stamp", func(t *testing.T) {
+		v := &validator{proposerSettings: &proposer.Settings{Version: proposer.SchemaV1, ProposeConfig: proposeConfig}}
+		require.Equal(t, 2, len(builderTargets(v.ProposerSettings().EffectiveBuilderConfig(pk))))
+	})
+
+	t.Run("explicit empty builders list produces no targets", func(t *testing.T) {
+		optedOut := map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+			pk: {BuilderConfig: &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{}}},
+		}
+		v := &validator{proposerSettings: &proposer.Settings{Version: proposer.SchemaV2, ProposeConfig: optedOut}}
+		require.Equal(t, 0, len(builderTargets(v.ProposerSettings().EffectiveBuilderConfig(pk))))
+	})
+
+	t.Run("entries resolve with config-level fallbacks", func(t *testing.T) {
+		v := &validator{proposerSettings: &proposer.Settings{Version: proposer.SchemaV2, ProposeConfig: proposeConfig}}
+		targets := builderTargets(v.ProposerSettings().EffectiveBuilderConfig(pk))
+		require.Equal(t, 2, len(targets))
+		require.Equal(t, uint64(100), targets[0].maxPayment)
+		require.Equal(t, uint64(500), targets[1].maxPayment)
+	})
+}
+
+func TestBuilderConfigForSlot_TopLevelWithoutEntries(t *testing.T) {
+	v, _, validatorKey, finish := setup(t, false)
+	defer finish()
+	var pk [fieldparams.BLSPubkeyLength]byte
+	copy(pk[:], validatorKey.PublicKey().Marshal())
+	u64 := func(val uint64) *validatorType.Uint64 { u := validatorType.Uint64(val); return &u }
+
+	require.IsNil(t, v.builderConfigForSlot(t.Context(), pk, 10))
+
+	v.proposerSettings = &proposer.Settings{
+		Version: proposer.SchemaV2,
+		ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+			pk: {BuilderConfig: &proposer.BuilderConfig{MinBid: u64(5), BuilderBoostFactor: u64(0)}},
+		},
+	}
+	cfg := v.builderConfigForSlot(t.Context(), pk, 10)
+	require.NotNil(t, cfg)
+	require.Equal(t, primitives.Gwei(5), cfg.MinBid)
+	require.Equal(t, uint64(0), cfg.BuilderBoostFactor)
+	require.Equal(t, 0, len(cfg.Builders))
+}
+
+func TestWarmBuilderRequestAuthsForDuties_CollapsesSameURL(t *testing.T) {
+	v, _, validatorKey, finish := setup(t, false)
+	defer finish()
+	var pk [fieldparams.BLSPubkeyLength]byte
+	copy(pk[:], validatorKey.PublicKey().Marshal())
+	u64 := func(val uint64) *validatorType.Uint64 { u := validatorType.Uint64(val); return &u }
+	v.proposerSettings = &proposer.Settings{
+		Version: proposer.SchemaV2,
+		ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+			pk: {BuilderConfig: &proposer.BuilderConfig{
+				Enabled: true,
+				Builders: []*proposer.BuilderEntry{
+					{URL: "https://a.example", AuthData: []byte{1}, MaxExecutionPayment: u64(200)},
+					{URL: "https://a.example", AuthData: []byte{2}, MaxExecutionPayment: u64(100)},
+				},
+			}},
+		},
+	}
+	km, err := v.Keymanager()
+	require.NoError(t, err)
+	duties := func(yield func(pubkey, *ethpb.ValidatorDuty) bool) {
+		yield(pk, &ethpb.ValidatorDuty{PublicKey: pk[:], ProposerSlots: []primitives.Slot{10}})
+	}
+	reqs := v.warmBuilderRequestAuthsForDuties(t.Context(), km, 5, duties)
+	// Same-url entries with distinct auth data each submit their own request and cap.
+	require.Equal(t, 2, len(reqs))
+	for _, r := range reqs {
+		require.Equal(t, "https://a.example", r.Url)
+	}
+	require.DeepEqual(t, []byte{1}, reqs[0].Auth.Message.Data)
+	require.Equal(t, primitives.Gwei(200), reqs[0].MaxExecutionPayment)
+	require.DeepEqual(t, []byte{2}, reqs[1].Auth.Message.Data)
+	require.Equal(t, primitives.Gwei(100), reqs[1].MaxExecutionPayment)
+
+	t.Run("distinct urls each submit their own max_execution_payment", func(t *testing.T) {
+		v.proposerSettings = &proposer.Settings{
+			Version: proposer.SchemaV2,
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+				pk: {BuilderConfig: &proposer.BuilderConfig{
+					Builders: []*proposer.BuilderEntry{
+						{URL: "https://a.example", MaxExecutionPayment: u64(0)},
+						{URL: "https://b.example", MaxExecutionPayment: u64(250)},
+					},
+				}},
+			},
+		}
+		reqs := v.warmBuilderRequestAuthsForDuties(t.Context(), km, 5, duties)
+		require.Equal(t, 2, len(reqs))
+		byURL := map[string]primitives.Gwei{}
+		for _, r := range reqs {
+			byURL[r.Url] = r.MaxExecutionPayment
+		}
+		require.Equal(t, primitives.Gwei(0), byURL["https://a.example"])
+		require.Equal(t, primitives.Gwei(250), byURL["https://b.example"])
+	})
+}
+
 func headValidator() *validator {
 	return &validator{
 		head:                 newHeadTracker(),
@@ -4082,4 +4248,55 @@ func TestProcessEvent_HeadV2_PayloadStatus(t *testing.T) {
 			require.Equal(t, tt.want, got.PayloadStatus)
 		})
 	}
+}
+
+// The post-fork settings cleanup runs concurrently with keymanager writes; the
+// transactional update must serialize them so no write is ever lost.
+func TestValidator_UpdateProposerSettings_Concurrency(t *testing.T) {
+	ctx := t.Context()
+	db := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false)
+	v := &validator{
+		db: db,
+		proposerSettings: &proposer.Settings{
+			Version: proposer.SchemaV1,
+			DefaultConfig: &proposer.Option{
+				BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 30_000_000},
+			},
+		},
+	}
+
+	const writers = 16
+	errs := make(chan error, writers)
+	var wg sync.WaitGroup
+	for i := range writers {
+		key := [fieldparams.BLSPubkeyLength]byte{byte(i + 1)}
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			errs <- v.UpdateProposerSettings(ctx, func(ps *proposer.Settings) (*proposer.Settings, error) {
+				if ps == nil {
+					ps = &proposer.Settings{Version: proposer.SchemaV2}
+				}
+				ps.UpsertProposeOption(key).GasLimit = 1
+				return ps, nil
+			})
+		}()
+		go func() {
+			defer wg.Done()
+			v.upgradeProposerSettingsToV2(ctx)
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		require.NoError(t, err)
+	}
+
+	ps := v.ProposerSettings()
+	require.NotNil(t, ps)
+	// Every keymanager write survived the concurrent cleanup passes.
+	require.Equal(t, writers, len(ps.ProposeConfig))
+	require.Equal(t, proposer.SchemaV2, ps.Version)
+	// A final cleanup pass leaves nothing to scrub.
+	require.Equal(t, false, v.ProposerSettings().Clone().UpgradeToV2())
 }

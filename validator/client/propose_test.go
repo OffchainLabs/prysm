@@ -1206,6 +1206,11 @@ func Test_validator_DeleteGraffiti(t *testing.T) {
 }
 
 func Test_validator_SetGraffiti(t *testing.T) {
+	// Fresh settings are stamped v2 only once the network schedules gloas.
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 100
+	params.OverrideBeaconConfig(cfg)
 	pubKey := [fieldparams.BLSPubkeyLength]byte{'a'}
 	tests := []struct {
 		name                 string
@@ -1264,7 +1269,8 @@ func Test_validator_SetGraffiti(t *testing.T) {
 						Graffiti: "specific graffiti",
 					},
 				}
-				return &proposer.Settings{ProposeConfig: config}
+				// API-created settings carry no v1 content and start at v2.
+				return &proposer.Settings{Version: proposer.SchemaV2, ProposeConfig: config}
 			}(),
 		},
 	}

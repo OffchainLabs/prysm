@@ -142,3 +142,17 @@ func (mr *MockValidatorServiceMockRecorder) SetProposerSettings(ctx, settings an
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetProposerSettings", reflect.TypeOf((*MockValidatorService)(nil).SetProposerSettings), ctx, settings)
 }
+
+// UpdateProposerSettings mocks base method.
+func (m *MockValidatorService) UpdateProposerSettings(ctx context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateProposerSettings", ctx, mutate)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateProposerSettings indicates an expected call of UpdateProposerSettings.
+func (mr *MockValidatorServiceMockRecorder) UpdateProposerSettings(ctx, mutate any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateProposerSettings", reflect.TypeOf((*MockValidatorService)(nil).UpdateProposerSettings), ctx, mutate)
+}

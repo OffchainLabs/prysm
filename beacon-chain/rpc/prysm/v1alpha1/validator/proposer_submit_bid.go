@@ -40,6 +40,11 @@ func (vs *Server) SubmitSignedExecutionPayloadBid(
 			"execution payload bids are not supported before Gloas fork (slot %d)", req.Message.Slot)
 	}
 
+	// Do not broadcast a bid this node would itself ignore on gossip.
+	if vs.BuilderCircuitBreaker.Blacklisted(req.Message.BuilderIndex, slots.ToEpoch(req.Message.Slot)) {
+		return nil, status.Errorf(codes.FailedPrecondition, "builder %d is blacklisted by the circuit breaker", req.Message.BuilderIndex)
+	}
+
 	if err := vs.validateSubmittedBid(ctx, req); err != nil {
 		return nil, err
 	}
@@ -116,7 +121,7 @@ func (vs *Server) validateSubmittedBid(ctx context.Context, signed *ethpb.Signed
 	if err := v.VerifyParentBlockHash(vs.ForkchoiceFetcher.HasPayloadBlockHash); err != nil {
 		return status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	parentGasLimit, err := vs.ForkchoiceFetcher.GasLimit(parentRoot)
+	parentGasLimit, err := vs.ForkchoiceFetcher.GasLimit(parentRoot, bid.ParentBlockHash())
 	if err != nil {
 		return status.Errorf(codes.FailedPrecondition, "could not get parent gas limit: %v", err)
 	}

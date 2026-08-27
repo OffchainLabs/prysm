@@ -51,7 +51,6 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 
 	rawRandaoReveal := r.URL.Query().Get("randao_reveal")
 	rawGraffiti := r.URL.Query().Get("graffiti")
-	rawSkipRandaoVerification := r.URL.Query().Get("skip_randao_verification")
 
 	var bbFactor *wrapperspb.UInt64Value
 	rawBbFactor, bbValue, ok := shared.UintFromQuery(w, r, "builder_boost_factor", false)
@@ -68,7 +67,7 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var randaoReveal []byte
-	if rawSkipRandaoVerification == "true" {
+	if skipRandaoVerification(r) {
 		randaoReveal = common.InfiniteSignature[:]
 	} else {
 		rr, err := bytesutil.DecodeHexWithLength(rawRandaoReveal, fieldparams.BLSSignatureLength)
