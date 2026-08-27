@@ -433,8 +433,8 @@ func TestEnvelopeFetchAndVerify(t *testing.T) {
 		// Held envelopes are blinded: the payload is reduced to its block hash.
 		bid, err := c.blks[0].Block().Body().SignedExecutionPayloadBid()
 		require.NoError(t, err)
-		require.DeepEqual(t, bid.Message.BlockHash, es.held[10].blinded.Message.BlockHash)
-		require.Equal(t, primitives.Slot(10), es.held[10].blinded.Message.Slot)
+		require.DeepEqual(t, bid.Message.BlockHash, es.held[10].Message.BlockHash)
+		require.Equal(t, primitives.Slot(10), es.held[10].Message.Slot)
 	})
 	t.Run("self-build signed by a different validator key fails and rotates", func(t *testing.T) {
 		// The signer stands in for the snapshot state's latest proposer: verification must use

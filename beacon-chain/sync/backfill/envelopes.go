@@ -203,11 +203,6 @@ type envelopePage struct {
 	deadline time.Time // zero until the first attempt
 }
 
-type heldEnvelope struct {
-	exp     *envelopeExpectation
-	blinded *ethpb.SignedBlindedExecutionPayloadEnvelope
-}
-
 // envelopeSync tracks per-batch envelope expectations through fetch and verification. Verified
 // envelopes are held in blinded form until the batch is imported, at which point finalize
 // classifies the batch-tail slot via the boundary child and persists everything.
@@ -215,7 +210,7 @@ type envelopeSync struct {
 	cfg     *envelopeSyncCfg
 	peer    peer.ID
 	pending map[primitives.Slot]*envelopeExpectation
-	held    map[primitives.Slot]*heldEnvelope
+	held    map[primitives.Slot]*ethpb.SignedBlindedExecutionPayloadEnvelope
 	// tail is the batch-tail expectation while its fullness is unclassified. Its slot may leave
 	// pending (fetched or budget exhausted) while classification still needs to happen at import.
 	tail      *envelopeExpectation
@@ -270,7 +265,7 @@ func newEnvelopeSync(ctx context.Context, vbs verifiedROBlocks, cfg *envelopeSyn
 	es := &envelopeSync{
 		cfg:     cfg,
 		pending: make(map[primitives.Slot]*envelopeExpectation),
-		held:    make(map[primitives.Slot]*heldEnvelope),
+		held:    make(map[primitives.Slot]*ethpb.SignedBlindedExecutionPayloadEnvelope),
 		skips:   make(map[string][]primitives.Slot),
 		now:     time.Now,
 	}
@@ -631,7 +626,7 @@ func (es *envelopeSync) processResponse(ctx context.Context, pid peer.ID, envs [
 		// A later attempt resolved the slot, so drop any EL failure deferred by an earlier one;
 		// finalize prefers a deferred reason over a held envelope.
 		c.exp.skipReason = ""
-		es.held[c.slot] = &heldEnvelope{exp: c.exp, blinded: kv.BlindEnvelope(c.env)}
+		es.held[c.slot] = kv.BlindEnvelope(c.env)
 		envelopeVerifiedCount.Inc()
 	}
 }
@@ -712,7 +707,7 @@ func (es *envelopeSync) finalize(ctx context.Context, db BeaconDB, lowRoot [32]b
 
 	for _, slot := range es.heldSlots() {
 		h := es.held[slot]
-		outcome, err := es.saveWithRetries(ctx, db, h.blinded)
+		outcome, err := es.saveWithRetries(ctx, db, h)
 		if err != nil {
 			log.WithError(err).WithField("slot", slot).Debug("Could not persist backfilled execution payload envelope")
 			es.skip(slot, envSkipDBFailed)
@@ -720,9 +715,9 @@ func (es *envelopeSync) finalize(ctx context.Context, db BeaconDB, lowRoot [32]b
 		}
 		if outcome == iface.EnvelopeSaveConflict {
 			// A conflicting stored envelope came from an already verified save path; keep it.
+			// bindEnvelope proved this root equals the expected block's before the envelope was held.
 			envelopeConflictsKept.Inc()
-			root := h.exp.block.Root()
-			envelopeSkipLogger.WithField("slot", slot).WithField("blockRoot", bytesutil.Trunc(root[:])).
+			envelopeSkipLogger.WithField("slot", slot).WithField("blockRoot", bytesutil.Trunc(h.Message.BeaconBlockRoot)).
 				Warn("Backfilled envelope conflicts with stored envelope; kept existing")
 		}
 	}
