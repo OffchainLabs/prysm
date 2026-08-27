@@ -17,7 +17,7 @@ import (
 
 // UpgradeToGloas updates inputs a generic state to return the version Gloas state.
 //
-//	<spec fn="upgrade_to_gloas" fork="gloas" hash="571abe9a">
+//	<spec fn="upgrade_to_gloas" fork="gloas" hash="013b8366">
 //	def upgrade_to_gloas(pre: fulu.BeaconState) -> BeaconState:
 //	    epoch = fulu.get_current_epoch(pre)
 //
@@ -57,7 +57,7 @@ import (
 //	        current_justified_checkpoint=pre.current_justified_checkpoint,
 //	        finalized_checkpoint=pre.finalized_checkpoint,
 //	        # [Modified in Gloas:EIP7688]
-//	        inactivity_scores=ProgressiveList[uint64](list(pre.inactivity_scores)),
+//	        inactivity_scores=ProgressiveList[Uint64](list(pre.inactivity_scores)),
 //	        current_sync_committee=pre.current_sync_committee,
 //	        next_sync_committee=pre.next_sync_committee,
 //	        # [Modified in Gloas:EIP7732]

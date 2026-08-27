@@ -2,7 +2,8 @@
 . "$(dirname "$0")"/common.sh
 
 # Script to copy generated spectest packages from the bazel build folder back to
-# the source tree. Each ssz_gen_spectest target emits a tree-artifact
+# the source tree (the "generate-and-commit" workflow, mirroring
+# update-go-ssz.sh). Each ssz_gen_spectest target emits a tree-artifact
 # directory containing a methodical_test.go file and a testdata/ fixture tree;
 # this script builds those targets and copies each generated directory over the
 # matching location in the source tree.

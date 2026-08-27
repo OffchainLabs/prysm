@@ -4,15 +4,15 @@
       search: AggregateDueBPS\s+primitives.BP
       regex: true
   spec: |
-    <spec config_var="AGGREGATE_DUE_BPS" fork="phase0" hash="7eaa811a">
-    AGGREGATE_DUE_BPS: uint64 = 6667
+    <spec config_var="AGGREGATE_DUE_BPS" fork="phase0" hash="84cdd00d">
+    AGGREGATE_DUE_BPS: Uint64 = 6667
     </spec>
 
 - name: AGGREGATE_DUE_BPS_GLOAS#gloas
   sources: []
   spec: |
-    <spec config_var="AGGREGATE_DUE_BPS_GLOAS" fork="gloas" hash="34aa3164">
-    AGGREGATE_DUE_BPS_GLOAS: uint64 = 5000
+    <spec config_var="AGGREGATE_DUE_BPS_GLOAS" fork="gloas" hash="fd72ee55">
+    AGGREGATE_DUE_BPS_GLOAS: Uint64 = 5000
     </spec>
 
 - name: ALTAIR_FORK_EPOCH#altair
@@ -41,15 +41,15 @@
       search: ^\tAttestationDueBPS\s
       regex: true
   spec: |
-    <spec config_var="ATTESTATION_DUE_BPS" fork="phase0" hash="929dd1c9">
-    ATTESTATION_DUE_BPS: uint64 = 3333
+    <spec config_var="ATTESTATION_DUE_BPS" fork="phase0" hash="8d6a7c50">
+    ATTESTATION_DUE_BPS: Uint64 = 3333
     </spec>
 
 - name: ATTESTATION_DUE_BPS_GLOAS#gloas
   sources: []
   spec: |
-    <spec config_var="ATTESTATION_DUE_BPS_GLOAS" fork="gloas" hash="3863c1ef">
-    ATTESTATION_DUE_BPS_GLOAS: uint64 = 2500
+    <spec config_var="ATTESTATION_DUE_BPS_GLOAS" fork="gloas" hash="c1414076">
+    ATTESTATION_DUE_BPS_GLOAS: Uint64 = 2500
     </spec>
 
 - name: ATTESTATION_PROPAGATION_SLOT_RANGE#phase0
@@ -58,8 +58,8 @@
       search: AttestationPropagationSlotRange\s+primitives.Slot
       regex: true
   spec: |
-    <spec config_var="ATTESTATION_PROPAGATION_SLOT_RANGE" fork="phase0" hash="40bcdb02">
-    ATTESTATION_PROPAGATION_SLOT_RANGE = 32
+    <spec config_var="ATTESTATION_PROPAGATION_SLOT_RANGE" fork="phase0" hash="3b24805b">
+    ATTESTATION_PROPAGATION_SLOT_RANGE: Slot = 32
     </spec>
 
 - name: ATTESTATION_SUBNET_COUNT#phase0
@@ -68,8 +68,8 @@
       search: AttestationSubnetCount\s+uint64
       regex: true
   spec: |
-    <spec config_var="ATTESTATION_SUBNET_COUNT" fork="phase0" hash="1c8c0a1b">
-    ATTESTATION_SUBNET_COUNT = 64
+    <spec config_var="ATTESTATION_SUBNET_COUNT" fork="phase0" hash="0bf2c282">
+    ATTESTATION_SUBNET_COUNT: Uint64 = 64
     </spec>
 
 - name: ATTESTATION_SUBNET_EXTRA_BITS#phase0
@@ -78,8 +78,8 @@
       search: AttestationSubnetExtraBits\s+uint64
       regex: true
   spec: |
-    <spec config_var="ATTESTATION_SUBNET_EXTRA_BITS" fork="phase0" hash="e233b5ba">
-    ATTESTATION_SUBNET_EXTRA_BITS = 0
+    <spec config_var="ATTESTATION_SUBNET_EXTRA_BITS" fork="phase0" hash="c6453717">
+    ATTESTATION_SUBNET_EXTRA_BITS: Uint64 = 0
     </spec>
 
 - name: BALANCE_PER_ADDITIONAL_CUSTODY_GROUP#fulu
@@ -137,8 +137,8 @@
       search: BlobsidecarSubnetCount\s+uint64
       regex: true
   spec: |
-    <spec config_var="BLOB_SIDECAR_SUBNET_COUNT" fork="deneb" hash="03cc9976">
-    BLOB_SIDECAR_SUBNET_COUNT = 6
+    <spec config_var="BLOB_SIDECAR_SUBNET_COUNT" fork="deneb" hash="b0065991">
+    BLOB_SIDECAR_SUBNET_COUNT: Uint64 = 6
     </spec>
 
 - name: BLOB_SIDECAR_SUBNET_COUNT_ELECTRA#electra
@@ -147,8 +147,8 @@
       search: BlobsidecarSubnetCountElectra\s+uint64
       regex: true
   spec: |
-    <spec config_var="BLOB_SIDECAR_SUBNET_COUNT_ELECTRA" fork="electra" hash="37ca2860">
-    BLOB_SIDECAR_SUBNET_COUNT_ELECTRA = 9
+    <spec config_var="BLOB_SIDECAR_SUBNET_COUNT_ELECTRA" fork="electra" hash="28e0f7b4">
+    BLOB_SIDECAR_SUBNET_COUNT_ELECTRA: Uint64 = 9
     </spec>
 
 - name: CAPELLA_FORK_EPOCH#capella
@@ -177,29 +177,29 @@
       search: \bChurnLimitQuotient\s+uint64
       regex: true
   spec: |
-    <spec config_var="CHURN_LIMIT_QUOTIENT" fork="phase0" hash="a43a1d33">
-    CHURN_LIMIT_QUOTIENT: uint64 = 65536
+    <spec config_var="CHURN_LIMIT_QUOTIENT" fork="phase0" hash="72355a28">
+    CHURN_LIMIT_QUOTIENT: Uint64 = 65536
     </spec>
 
 - name: CHURN_LIMIT_QUOTIENT_GLOAS#gloas
   sources: []
   spec: |
-    <spec config_var="CHURN_LIMIT_QUOTIENT_GLOAS" fork="gloas" hash="fe8d5d9f">
-    CHURN_LIMIT_QUOTIENT_GLOAS: uint64 = 32768
+    <spec config_var="CHURN_LIMIT_QUOTIENT_GLOAS" fork="gloas" hash="8251a638">
+    CHURN_LIMIT_QUOTIENT_GLOAS: Uint64 = 32768
     </spec>
 
 - name: CONFIRMATION_BYZANTINE_THRESHOLD#phase0
   sources: []
   spec: |
-    <spec config_var="CONFIRMATION_BYZANTINE_THRESHOLD" fork="phase0" hash="60de2e33">
-    CONFIRMATION_BYZANTINE_THRESHOLD: uint64 = 25
+    <spec config_var="CONFIRMATION_BYZANTINE_THRESHOLD" fork="phase0" hash="340aaaea">
+    CONFIRMATION_BYZANTINE_THRESHOLD: Uint64 = 25
     </spec>
 
 - name: CONSOLIDATION_CHURN_LIMIT_QUOTIENT#gloas
   sources: []
   spec: |
-    <spec config_var="CONSOLIDATION_CHURN_LIMIT_QUOTIENT" fork="gloas" hash="03f92b84">
-    CONSOLIDATION_CHURN_LIMIT_QUOTIENT: uint64 = 65536
+    <spec config_var="CONSOLIDATION_CHURN_LIMIT_QUOTIENT" fork="gloas" hash="4e807e2c">
+    CONSOLIDATION_CHURN_LIMIT_QUOTIENT: Uint64 = 65536
     </spec>
 
 - name: CONTRIBUTION_DUE_BPS#altair
@@ -208,15 +208,15 @@
       search: ContributionDueBPS\s+primitives.BP
       regex: true
   spec: |
-    <spec config_var="CONTRIBUTION_DUE_BPS" fork="altair" hash="a3808203">
-    CONTRIBUTION_DUE_BPS: uint64 = 6667
+    <spec config_var="CONTRIBUTION_DUE_BPS" fork="altair" hash="cfa5c39f">
+    CONTRIBUTION_DUE_BPS: Uint64 = 6667
     </spec>
 
 - name: CONTRIBUTION_DUE_BPS_GLOAS#gloas
   sources: []
   spec: |
-    <spec config_var="CONTRIBUTION_DUE_BPS_GLOAS" fork="gloas" hash="0ead2ac1">
-    CONTRIBUTION_DUE_BPS_GLOAS: uint64 = 5000
+    <spec config_var="CONTRIBUTION_DUE_BPS_GLOAS" fork="gloas" hash="d21d5478">
+    CONTRIBUTION_DUE_BPS_GLOAS: Uint64 = 5000
     </spec>
 
 - name: CUSTODY_REQUIREMENT#fulu
@@ -225,8 +225,8 @@
       search: CustodyRequirement\s+uint64.*yaml:"CUSTODY_REQUIREMENT"
       regex: true
   spec: |
-    <spec config_var="CUSTODY_REQUIREMENT" fork="fulu" hash="3ed53d1d">
-    CUSTODY_REQUIREMENT: uint64 = 4
+    <spec config_var="CUSTODY_REQUIREMENT" fork="fulu" hash="380eb77b">
+    CUSTODY_REQUIREMENT: Uint64 = 4
     </spec>
 
 - name: DATA_COLUMN_SIDECAR_SUBNET_COUNT#fulu
@@ -235,8 +235,8 @@
       search: DataColumnSidecarSubnetCount\s+uint64
       regex: true
   spec: |
-    <spec config_var="DATA_COLUMN_SIDECAR_SUBNET_COUNT" fork="fulu" hash="4b4dd06b">
-    DATA_COLUMN_SIDECAR_SUBNET_COUNT: uint64 = 128
+    <spec config_var="DATA_COLUMN_SIDECAR_SUBNET_COUNT" fork="fulu" hash="1344504d">
+    DATA_COLUMN_SIDECAR_SUBNET_COUNT: Uint64 = 128
     </spec>
 
 - name: DENEB_FORK_EPOCH#deneb
@@ -257,6 +257,36 @@
   spec: |
     <spec config_var="DENEB_FORK_VERSION" fork="deneb" hash="da95e3b9">
     DENEB_FORK_VERSION: Version = '0x04000000'
+    </spec>
+
+- name: DEPOSIT_CHAIN_ID#phase0
+  sources:
+    - file: config/params/config.go
+      search: DepositChainID\s+uint64
+      regex: true
+  spec: |
+    <spec config_var="DEPOSIT_CHAIN_ID" fork="phase0" hash="59033cad">
+    DEPOSIT_CHAIN_ID: Uint64 = 1
+    </spec>
+
+- name: DEPOSIT_CONTRACT_ADDRESS#phase0
+  sources:
+    - file: config/params/config.go
+      search: DepositContractAddress\s+string
+      regex: true
+  spec: |
+    <spec config_var="DEPOSIT_CONTRACT_ADDRESS" fork="phase0" hash="552d8348">
+    DEPOSIT_CONTRACT_ADDRESS: ExecutionAddress = '0x00000000219ab540356cBB839Cbe05303d7705Fa'
+    </spec>
+
+- name: DEPOSIT_NETWORK_ID#phase0
+  sources:
+    - file: config/params/config.go
+      search: DepositNetworkID\s+uint64
+      regex: true
+  spec: |
+    <spec config_var="DEPOSIT_NETWORK_ID" fork="phase0" hash="02da2a1a">
+    DEPOSIT_NETWORK_ID: Uint64 = 1
     </spec>
 
 - name: EJECTION_BALANCE#phase0
@@ -295,8 +325,8 @@
       search: EpochsPerSubnetSubscription\s+uint64
       regex: true
   spec: |
-    <spec config_var="EPOCHS_PER_SUBNET_SUBSCRIPTION" fork="phase0" hash="1b832329">
-    EPOCHS_PER_SUBNET_SUBSCRIPTION = 256
+    <spec config_var="EPOCHS_PER_SUBNET_SUBSCRIPTION" fork="phase0" hash="6ab5401b">
+    EPOCHS_PER_SUBNET_SUBSCRIPTION: Epoch = 256
     </spec>
 
 - name: ETH1_FOLLOW_DISTANCE#phase0
@@ -305,8 +335,8 @@
       search: Eth1FollowDistance\s+uint64
       regex: true
   spec: |
-    <spec config_var="ETH1_FOLLOW_DISTANCE" fork="phase0" hash="2f5ba1a0">
-    ETH1_FOLLOW_DISTANCE: uint64 = 2048
+    <spec config_var="ETH1_FOLLOW_DISTANCE" fork="phase0" hash="e4685f37">
+    ETH1_FOLLOW_DISTANCE: Uint64 = 2048
     </spec>
 
 - name: FULU_FORK_EPOCH#fulu
@@ -335,8 +365,8 @@
       search: GenesisDelay\s+uint64
       regex: true
   spec: |
-    <spec config_var="GENESIS_DELAY" fork="phase0" hash="c50c75f1">
-    GENESIS_DELAY: uint64 = 604800
+    <spec config_var="GENESIS_DELAY" fork="phase0" hash="15d020f0">
+    GENESIS_DELAY: Uint64 = 604800
     </spec>
 
 - name: GENESIS_FORK_VERSION#phase0
@@ -383,8 +413,8 @@
       search: InactivityScoreBias\s+uint64
       regex: true
   spec: |
-    <spec config_var="INACTIVITY_SCORE_BIAS" fork="altair" hash="c84c24a9">
-    INACTIVITY_SCORE_BIAS: uint64 = 4
+    <spec config_var="INACTIVITY_SCORE_BIAS" fork="altair" hash="27a17e68">
+    INACTIVITY_SCORE_BIAS: Uint64 = 4
     </spec>
 
 - name: INACTIVITY_SCORE_RECOVERY_RATE#altair
@@ -393,15 +423,15 @@
       search: InactivityScoreRecoveryRate\s+uint64
       regex: true
   spec: |
-    <spec config_var="INACTIVITY_SCORE_RECOVERY_RATE" fork="altair" hash="d7876320">
-    INACTIVITY_SCORE_RECOVERY_RATE: uint64 = 16
+    <spec config_var="INACTIVITY_SCORE_RECOVERY_RATE" fork="altair" hash="e1b07db3">
+    INACTIVITY_SCORE_RECOVERY_RATE: Uint64 = 16
     </spec>
 
 - name: INCLUSION_LIST_DUE_BPS#heze
   sources: []
   spec: |
-    <spec config_var="INCLUSION_LIST_DUE_BPS" fork="heze" hash="dec96f13">
-    INCLUSION_LIST_DUE_BPS: uint64 = 6667
+    <spec config_var="INCLUSION_LIST_DUE_BPS" fork="heze" hash="2b6a4401">
+    INCLUSION_LIST_DUE_BPS: Uint64 = 6667
     </spec>
 
 - name: MAXIMUM_GOSSIP_CLOCK_DISPARITY#phase0
@@ -410,8 +440,8 @@
       search: MaximumGossipClockDisparity\s+uint64
       regex: true
   spec: |
-    <spec config_var="MAXIMUM_GOSSIP_CLOCK_DISPARITY" fork="phase0" hash="12990b53">
-    MAXIMUM_GOSSIP_CLOCK_DISPARITY = 500
+    <spec config_var="MAXIMUM_GOSSIP_CLOCK_DISPARITY" fork="phase0" hash="4455f907">
+    MAXIMUM_GOSSIP_CLOCK_DISPARITY: Uint64 = 500
     </spec>
 
 - name: MAX_BLOBS_PER_BLOCK#deneb
@@ -420,8 +450,8 @@
       search: DeprecatedMaxBlobsPerBlock\s+int
       regex: true
   spec: |
-    <spec config_var="MAX_BLOBS_PER_BLOCK" fork="deneb" hash="3e0b5383">
-    MAX_BLOBS_PER_BLOCK: uint64 = 6
+    <spec config_var="MAX_BLOBS_PER_BLOCK" fork="deneb" hash="da6a82cc">
+    MAX_BLOBS_PER_BLOCK: Uint64 = 6
     </spec>
 
 - name: MAX_BLOBS_PER_BLOCK_ELECTRA#electra
@@ -430,15 +460,15 @@
       search: DeprecatedMaxBlobsPerBlockElectra\s+int
       regex: true
   spec: |
-    <spec config_var="MAX_BLOBS_PER_BLOCK_ELECTRA" fork="electra" hash="0d8ea1c9">
-    MAX_BLOBS_PER_BLOCK_ELECTRA: uint64 = 9
+    <spec config_var="MAX_BLOBS_PER_BLOCK_ELECTRA" fork="electra" hash="a03f0ed9">
+    MAX_BLOBS_PER_BLOCK_ELECTRA: Uint64 = 9
     </spec>
 
 - name: MAX_BYTES_PER_INCLUSION_LIST#heze
   sources: []
   spec: |
-    <spec config_var="MAX_BYTES_PER_INCLUSION_LIST" fork="heze" hash="9202c516">
-    MAX_BYTES_PER_INCLUSION_LIST = 8192
+    <spec config_var="MAX_BYTES_PER_INCLUSION_LIST" fork="heze" hash="1d503ddc">
+    MAX_BYTES_PER_INCLUSION_LIST: Uint64 = 8192
     </spec>
 
 - name: MAX_PAYLOAD_SIZE#phase0
@@ -447,8 +477,8 @@
       search: MaxPayloadSize\s+uint64
       regex: true
   spec: |
-    <spec config_var="MAX_PAYLOAD_SIZE" fork="phase0" hash="7f1566fb">
-    MAX_PAYLOAD_SIZE = 10485760
+    <spec config_var="MAX_PAYLOAD_SIZE" fork="phase0" hash="51a340f4">
+    MAX_PAYLOAD_SIZE: Uint64 = 10485760
     </spec>
 
 - name: MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT#deneb
@@ -457,8 +487,8 @@
       search: MaxPerEpochActivationChurnLimit\s+uint64
       regex: true
   spec: |
-    <spec config_var="MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT" fork="deneb" hash="c4d9b0bb">
-    MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT: uint64 = 8
+    <spec config_var="MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT" fork="deneb" hash="3d7eeec7">
+    MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT: Uint64 = 8
     </spec>
 
 - name: MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT_GLOAS#gloas
@@ -484,8 +514,8 @@
       search: MaxRequestBlocks\s+uint64
       regex: true
   spec: |
-    <spec config_var="MAX_REQUEST_BLOCKS" fork="phase0" hash="a9ae6c77">
-    MAX_REQUEST_BLOCKS = 1024
+    <spec config_var="MAX_REQUEST_BLOCKS" fork="phase0" hash="300478e3">
+    MAX_REQUEST_BLOCKS: Uint64 = 1024
     </spec>
 
 - name: MAX_REQUEST_BLOCKS_DENEB#deneb
@@ -494,15 +524,15 @@
       search: MaxRequestBlocksDeneb\s+uint64
       regex: true
   spec: |
-    <spec config_var="MAX_REQUEST_BLOCKS_DENEB" fork="deneb" hash="8318964a">
-    MAX_REQUEST_BLOCKS_DENEB = 128
+    <spec config_var="MAX_REQUEST_BLOCKS_DENEB" fork="deneb" hash="0a5779c5">
+    MAX_REQUEST_BLOCKS_DENEB: Uint64 = 128
     </spec>
 
 - name: MAX_REQUEST_INCLUSION_LIST#heze
   sources: []
   spec: |
-    <spec config_var="MAX_REQUEST_INCLUSION_LIST" fork="heze" hash="0d52ccf4">
-    MAX_REQUEST_INCLUSION_LIST = 16
+    <spec config_var="MAX_REQUEST_INCLUSION_LIST" fork="heze" hash="b64ddfd1">
+    MAX_REQUEST_INCLUSION_LIST: Uint64 = 16
     </spec>
 
 - name: MAX_REQUEST_PAYLOADS#gloas
@@ -511,8 +541,8 @@
       search: MaxRequestPayloads\s+uint64
       regex: true
   spec: |
-    <spec config_var="MAX_REQUEST_PAYLOADS" fork="gloas" hash="23399ee5">
-    MAX_REQUEST_PAYLOADS = 128
+    <spec config_var="MAX_REQUEST_PAYLOADS" fork="gloas" hash="cb92d98e">
+    MAX_REQUEST_PAYLOADS: Uint64 = 128
     </spec>
 
 - name: MESSAGE_DOMAIN_INVALID_SNAPPY#phase0
@@ -540,8 +570,8 @@
     - file: config/params/mainnet_config.go
       search: MinBuilderWithdrawabilityDelay
   spec: |
-    <spec config_var="MIN_BUILDER_WITHDRAWABILITY_DELAY" fork="gloas" hash="be7f8473">
-    MIN_BUILDER_WITHDRAWABILITY_DELAY: uint64 = 64
+    <spec config_var="MIN_BUILDER_WITHDRAWABILITY_DELAY" fork="gloas" hash="1ad08a7c">
+    MIN_BUILDER_WITHDRAWABILITY_DELAY: Epoch = 64
     </spec>
 
 - name: MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS#deneb
@@ -550,8 +580,8 @@
       search: MinEpochsForBlobsSidecarsRequest\s+primitives.Epoch
       regex: true
   spec: |
-    <spec config_var="MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS" fork="deneb" hash="3df9114c">
-    MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS = 4096
+    <spec config_var="MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS" fork="deneb" hash="1832eb33">
+    MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS: Epoch = 4096
     </spec>
 
 - name: MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS#fulu
@@ -560,8 +590,8 @@
       search: MinEpochsForDataColumnSidecarsRequest\s+primitives.Epoch
       regex: true
   spec: |
-    <spec config_var="MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS" fork="fulu" hash="b717a22d">
-    MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS: uint64 = 4096
+    <spec config_var="MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS" fork="fulu" hash="1ca47aad">
+    MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS: Epoch = 4096
     </spec>
 
 - name: MIN_GENESIS_ACTIVE_VALIDATOR_COUNT#phase0
@@ -570,8 +600,8 @@
       search: MinGenesisActiveValidatorCount\s+uint64
       regex: true
   spec: |
-    <spec config_var="MIN_GENESIS_ACTIVE_VALIDATOR_COUNT" fork="phase0" hash="7715513b">
-    MIN_GENESIS_ACTIVE_VALIDATOR_COUNT: uint64 = 16384
+    <spec config_var="MIN_GENESIS_ACTIVE_VALIDATOR_COUNT" fork="phase0" hash="d86e0ccc">
+    MIN_GENESIS_ACTIVE_VALIDATOR_COUNT: Uint64 = 16384
     </spec>
 
 - name: MIN_GENESIS_TIME#phase0
@@ -580,8 +610,8 @@
       search: MinGenesisTime\s+uint64
       regex: true
   spec: |
-    <spec config_var="MIN_GENESIS_TIME" fork="phase0" hash="75c06876">
-    MIN_GENESIS_TIME: uint64 = 1606824000
+    <spec config_var="MIN_GENESIS_TIME" fork="phase0" hash="3abe635d">
+    MIN_GENESIS_TIME: Uint64 = 1606824000
     </spec>
 
 - name: MIN_PER_EPOCH_CHURN_LIMIT#phase0
@@ -590,8 +620,8 @@
       search: MinPerEpochChurnLimit\s+uint64
       regex: true
   spec: |
-    <spec config_var="MIN_PER_EPOCH_CHURN_LIMIT" fork="phase0" hash="ff24b223">
-    MIN_PER_EPOCH_CHURN_LIMIT: uint64 = 4
+    <spec config_var="MIN_PER_EPOCH_CHURN_LIMIT" fork="phase0" hash="33e3586b">
+    MIN_PER_EPOCH_CHURN_LIMIT: Uint64 = 4
     </spec>
 
 - name: MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA#electra
@@ -604,14 +634,21 @@
     MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA: Gwei = 128000000000
     </spec>
 
+- name: MIN_SLOTS_FOR_INCLUSION_LISTS_REQUESTS#heze
+  sources: []
+  spec: |
+    <spec config_var="MIN_SLOTS_FOR_INCLUSION_LISTS_REQUESTS" fork="heze" hash="4bab088f">
+    MIN_SLOTS_FOR_INCLUSION_LISTS_REQUESTS: Slot = 1
+    </spec>
+
 - name: MIN_VALIDATOR_WITHDRAWABILITY_DELAY#phase0
   sources:
     - file: config/params/config.go
       search: MinValidatorWithdrawabilityDelay\s+primitives.Epoch
       regex: true
   spec: |
-    <spec config_var="MIN_VALIDATOR_WITHDRAWABILITY_DELAY" fork="phase0" hash="5c4eeded">
-    MIN_VALIDATOR_WITHDRAWABILITY_DELAY: uint64 = 256
+    <spec config_var="MIN_VALIDATOR_WITHDRAWABILITY_DELAY" fork="phase0" hash="5c286670">
+    MIN_VALIDATOR_WITHDRAWABILITY_DELAY: Epoch = 256
     </spec>
 
 - name: NUMBER_OF_CUSTODY_GROUPS#fulu
@@ -620,8 +657,8 @@
       search: NumberOfCustodyGroups\s+uint64
       regex: true
   spec: |
-    <spec config_var="NUMBER_OF_CUSTODY_GROUPS" fork="fulu" hash="ef65e821">
-    NUMBER_OF_CUSTODY_GROUPS: uint64 = 128
+    <spec config_var="NUMBER_OF_CUSTODY_GROUPS" fork="fulu" hash="3b8dd1d5">
+    NUMBER_OF_CUSTODY_GROUPS: Uint64 = 128
     </spec>
 
 - name: PAYLOAD_ATTESTATION_DUE_BPS#gloas
@@ -630,8 +667,8 @@
       search: PayloadAttestationDueBPS\s+primitives.BP
       regex: true
   spec: |
-    <spec config_var="PAYLOAD_ATTESTATION_DUE_BPS" fork="gloas" hash="17307d0e">
-    PAYLOAD_ATTESTATION_DUE_BPS: uint64 = 7500
+    <spec config_var="PAYLOAD_ATTESTATION_DUE_BPS" fork="gloas" hash="d5ffbe84">
+    PAYLOAD_ATTESTATION_DUE_BPS: Uint64 = 7500
     </spec>
 
 - name: PAYLOAD_DUE_BPS#gloas
@@ -640,8 +677,8 @@
       search: PayloadDueBPS\s+primitives.BP
       regex: true
   spec: |
-    <spec config_var="PAYLOAD_DUE_BPS" fork="gloas" hash="07d2a783">
-    PAYLOAD_DUE_BPS: uint64 = 5000
+    <spec config_var="PAYLOAD_DUE_BPS" fork="gloas" hash="8f8ebf70">
+    PAYLOAD_DUE_BPS: Uint64 = 5000
     </spec>
 
 - name: PROPOSER_REORG_CUTOFF_BPS#phase0
@@ -650,8 +687,8 @@
       search: ProposerReorgCutoffBPS\s+primitives.BP
       regex: true
   spec: |
-    <spec config_var="PROPOSER_REORG_CUTOFF_BPS" fork="phase0" hash="a487cc43">
-    PROPOSER_REORG_CUTOFF_BPS: uint64 = 1667
+    <spec config_var="PROPOSER_REORG_CUTOFF_BPS" fork="phase0" hash="c554bd23">
+    PROPOSER_REORG_CUTOFF_BPS: Uint64 = 1667
     </spec>
 
 - name: PROPOSER_SCORE_BOOST#phase0
@@ -660,8 +697,8 @@
       search: ProposerScoreBoost\s+uint64
       regex: true
   spec: |
-    <spec config_var="PROPOSER_SCORE_BOOST" fork="phase0" hash="fbc878c6">
-    PROPOSER_SCORE_BOOST: uint64 = 40
+    <spec config_var="PROPOSER_SCORE_BOOST" fork="phase0" hash="5ac38798">
+    PROPOSER_SCORE_BOOST: Uint64 = 40
     </spec>
 
 - name: REORG_HEAD_WEIGHT_THRESHOLD#phase0
@@ -670,8 +707,8 @@
       search: ReorgHeadWeightThreshold\s+uint64
       regex: true
   spec: |
-    <spec config_var="REORG_HEAD_WEIGHT_THRESHOLD" fork="phase0" hash="d4ecaa84">
-    REORG_HEAD_WEIGHT_THRESHOLD: uint64 = 20
+    <spec config_var="REORG_HEAD_WEIGHT_THRESHOLD" fork="phase0" hash="402a5acb">
+    REORG_HEAD_WEIGHT_THRESHOLD: Uint64 = 20
     </spec>
 
 - name: REORG_MAX_EPOCHS_SINCE_FINALIZATION#phase0
@@ -690,8 +727,8 @@
       search: ReorgParentWeightThreshold\s+uint64
       regex: true
   spec: |
-    <spec config_var="REORG_PARENT_WEIGHT_THRESHOLD" fork="phase0" hash="cb81e3da">
-    REORG_PARENT_WEIGHT_THRESHOLD: uint64 = 160
+    <spec config_var="REORG_PARENT_WEIGHT_THRESHOLD" fork="phase0" hash="3f4de3d8">
+    REORG_PARENT_WEIGHT_THRESHOLD: Uint64 = 160
     </spec>
 
 - name: SAMPLES_PER_SLOT#fulu
@@ -700,8 +737,8 @@
       search: SamplesPerSlot\s+uint64
       regex: true
   spec: |
-    <spec config_var="SAMPLES_PER_SLOT" fork="fulu" hash="dfbcb295">
-    SAMPLES_PER_SLOT: uint64 = 8
+    <spec config_var="SAMPLES_PER_SLOT" fork="fulu" hash="ecb8eaf2">
+    SAMPLES_PER_SLOT: Uint64 = 8
     </spec>
 
 - name: SECONDS_PER_ETH1_BLOCK#phase0
@@ -710,8 +747,8 @@
       search: SecondsPerETH1Block\s+uint64
       regex: true
   spec: |
-    <spec config_var="SECONDS_PER_ETH1_BLOCK" fork="phase0" hash="90c9f3d1">
-    SECONDS_PER_ETH1_BLOCK: uint64 = 14
+    <spec config_var="SECONDS_PER_ETH1_BLOCK" fork="phase0" hash="0c643d31">
+    SECONDS_PER_ETH1_BLOCK: Uint64 = 14
     </spec>
 
 - name: SHARD_COMMITTEE_PERIOD#phase0
@@ -720,8 +757,8 @@
       search: ShardCommitteePeriod\s+primitives.Epoch
       regex: true
   spec: |
-    <spec config_var="SHARD_COMMITTEE_PERIOD" fork="phase0" hash="5d0e85a4">
-    SHARD_COMMITTEE_PERIOD: uint64 = 256
+    <spec config_var="SHARD_COMMITTEE_PERIOD" fork="phase0" hash="87d0ca70">
+    SHARD_COMMITTEE_PERIOD: Epoch = 256
     </spec>
 
 - name: SLOT_DURATION_MS#phase0
@@ -730,8 +767,8 @@
       search: SlotDurationMilliseconds\s+uint64
       regex: true
   spec: |
-    <spec config_var="SLOT_DURATION_MS" fork="phase0" hash="b6d4ba6d">
-    SLOT_DURATION_MS: uint64 = 12000
+    <spec config_var="SLOT_DURATION_MS" fork="phase0" hash="6c1935e7">
+    SLOT_DURATION_MS: Uint64 = 12000
     </spec>
 
 - name: SUBNETS_PER_NODE#phase0
@@ -740,8 +777,8 @@
       search: SubnetsPerNode\s+uint64
       regex: true
   spec: |
-    <spec config_var="SUBNETS_PER_NODE" fork="phase0" hash="4799f8f3">
-    SUBNETS_PER_NODE = 2
+    <spec config_var="SUBNETS_PER_NODE" fork="phase0" hash="d8a1cb61">
+    SUBNETS_PER_NODE: Uint64 = 2
     </spec>
 
 - name: SYNC_MESSAGE_DUE_BPS#altair
@@ -750,15 +787,15 @@
       search: SyncMessageDueBPS\s+primitives.BP
       regex: true
   spec: |
-    <spec config_var="SYNC_MESSAGE_DUE_BPS" fork="altair" hash="791b29d8">
-    SYNC_MESSAGE_DUE_BPS: uint64 = 3333
+    <spec config_var="SYNC_MESSAGE_DUE_BPS" fork="altair" hash="21b16e07">
+    SYNC_MESSAGE_DUE_BPS: Uint64 = 3333
     </spec>
 
 - name: SYNC_MESSAGE_DUE_BPS_GLOAS#gloas
   sources: []
   spec: |
-    <spec config_var="SYNC_MESSAGE_DUE_BPS_GLOAS" fork="gloas" hash="47f14d95">
-    SYNC_MESSAGE_DUE_BPS_GLOAS: uint64 = 2500
+    <spec config_var="SYNC_MESSAGE_DUE_BPS_GLOAS" fork="gloas" hash="b70fe65b">
+    SYNC_MESSAGE_DUE_BPS_GLOAS: Uint64 = 2500
     </spec>
 
 - name: TERMINAL_BLOCK_HASH#bellatrix
@@ -777,8 +814,8 @@
       search: TerminalBlockHashActivationEpoch\s+primitives.Epoch
       regex: true
   spec: |
-    <spec config_var="TERMINAL_BLOCK_HASH_ACTIVATION_EPOCH" fork="bellatrix" hash="81928369">
-    TERMINAL_BLOCK_HASH_ACTIVATION_EPOCH = 18446744073709551615
+    <spec config_var="TERMINAL_BLOCK_HASH_ACTIVATION_EPOCH" fork="bellatrix" hash="331e75a1">
+    TERMINAL_BLOCK_HASH_ACTIVATION_EPOCH: Epoch = 18446744073709551615
     </spec>
 
 - name: TERMINAL_TOTAL_DIFFICULTY#bellatrix
@@ -787,8 +824,8 @@
       search: TerminalTotalDifficulty\s+string
       regex: true
   spec: |
-    <spec config_var="TERMINAL_TOTAL_DIFFICULTY" fork="bellatrix" hash="e0f3a816">
-    TERMINAL_TOTAL_DIFFICULTY = 58750000000000000000000
+    <spec config_var="TERMINAL_TOTAL_DIFFICULTY" fork="bellatrix" hash="7fb79a4e">
+    TERMINAL_TOTAL_DIFFICULTY: Uint256 = 58750000000000000000000
     </spec>
 
 - name: VALIDATOR_CUSTODY_REQUIREMENT#fulu
@@ -797,6 +834,6 @@
       search: ValidatorCustodyRequirement\s+uint64
       regex: true
   spec: |
-    <spec config_var="VALIDATOR_CUSTODY_REQUIREMENT" fork="fulu" hash="4dfc4457">
-    VALIDATOR_CUSTODY_REQUIREMENT = 8
+    <spec config_var="VALIDATOR_CUSTODY_REQUIREMENT" fork="fulu" hash="87f04d3e">
+    VALIDATOR_CUSTODY_REQUIREMENT: Uint64 = 8
     </spec>

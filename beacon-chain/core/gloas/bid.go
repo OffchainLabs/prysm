@@ -18,10 +18,10 @@ import (
 
 // ProcessExecutionPayloadBid processes a signed execution payload bid in the Gloas fork.
 //
-//	<spec fn="process_execution_payload_bid" fork="gloas" hash="ba18a784">
+//	<spec fn="process_execution_payload_bid" fork="gloas" hash="ccd70022">
 //	def process_execution_payload_bid(
 //	    state: BeaconState, signed_bid: SignedExecutionPayloadBid
-//	) -> None:
+//	) -> Slot:
 //	    bid = signed_bid.message
 //	    builder_index = bid.builder_index
 //	    amount = bid.value
@@ -69,8 +69,13 @@ import (
 //	            pending_payment
 //	        )
 //
+//	    # Cache the parent block's slot before overwriting the bid
+//	    parent_slot = state.latest_execution_payload_bid.slot
+//
 //	    # Cache the signed execution payload bid
 //	    state.latest_execution_payload_bid = bid
+//
+//	    return parent_slot
 //	</spec>
 func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyBeaconBlock) error {
 	signedBid, err := block.Body().SignedExecutionPayloadBid()

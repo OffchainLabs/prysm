@@ -195,16 +195,6 @@ defs:
         type_name: SignedBeaconBlockFulu
   - fork: gloas
     types:
-      - name: AggregateAndProof
-        type_name: AggregateAttestationAndProofGloas
-      - name: Attestation
-        type_name: AttestationGloas
-      - name: AttesterSlashing
-        type_name: AttesterSlashingGloas
-      - name: BuilderDepositRequest
-        package: github.com/OffchainLabs/prysm/v7/proto/engine/v1
-      - name: BuilderExitRequest
-        package: github.com/OffchainLabs/prysm/v7/proto/engine/v1
       - name: BeaconBlock
         type_name: BeaconBlockGloas
       - name: BeaconBlockBody
@@ -217,21 +207,14 @@ defs:
       - name: DataColumnSidecar
         type_name: DataColumnSidecarGloas
       - name: ExecutionPayload
-        package: github.com/OffchainLabs/prysm/v7/proto/engine/v1
         type_name: ExecutionPayloadGloas
+        package: github.com/OffchainLabs/prysm/v7/proto/engine/v1
       - name: ExecutionPayloadBid
       - name: ExecutionPayloadEnvelope
-      - name: ExecutionRequests
-        package: github.com/OffchainLabs/prysm/v7/proto/engine/v1
-        type_name: ExecutionRequestsGloas
-      - name: IndexedAttestation
-        type_name: IndexedAttestationGloas
       - name: PayloadAttestation
       - name: PayloadAttestationData
       - name: PayloadAttestationMessage
       - name: ProposerPreferences
-      - name: SignedAggregateAndProof
-        type_name: SignedAggregateAttestationAndProofGloas
       - name: SignedBeaconBlock
         type_name: SignedBeaconBlockGloas
       - name: SignedExecutionPayloadBid
