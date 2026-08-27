@@ -9,6 +9,7 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"sort"
 	"strings"
@@ -108,6 +109,71 @@ func WriteFile(file string, data []byte) error {
 		}
 	}
 	return os.WriteFile(expanded, data, params.BeaconIoConfig().ReadWritePermissions)
+}
+
+// WriteFileAtomically replaces a regular file without exposing partial contents.
+func WriteFileAtomically(filePath string, data []byte) error {
+	expanded, err := ExpandPath(filePath)
+	if err != nil {
+		return err
+	}
+	info, err := os.Lstat(expanded)
+	if err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return errors.Errorf("refusing to atomically replace symlink at path %s", expanded)
+		}
+		if !info.Mode().IsRegular() {
+			return errors.Errorf("path %s is not a regular file", expanded)
+		}
+		if info.Mode().Perm() != params.BeaconIoConfig().ReadWritePermissions {
+			return errors.New("file already exists without proper 0600 permissions")
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	dir := filepath.Dir(expanded)
+	pending, err := os.CreateTemp(dir, "."+filepath.Base(expanded)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	pendingPath := pending.Name()
+	closed := false
+	defer func() {
+		if !closed {
+			_ = pending.Close()
+		}
+		_ = os.Remove(pendingPath)
+	}()
+	if err := pending.Chmod(params.BeaconIoConfig().ReadWritePermissions); err != nil {
+		return err
+	}
+	if _, err := pending.Write(data); err != nil {
+		return err
+	}
+	if err := pending.Sync(); err != nil {
+		return err
+	}
+	if err := pending.Close(); err != nil {
+		return err
+	}
+	closed = true
+	if err := os.Rename(pendingPath, expanded); err != nil {
+		return err
+	}
+
+	// Directory fsync is unsupported on Windows.
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = d.Close()
+	}()
+	return d.Sync()
 }
 
 // HomeDir for a user.

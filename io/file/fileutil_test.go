@@ -131,6 +131,53 @@ func TestWriteFile_OK(t *testing.T) {
 	assert.Equal(t, true, exists, "file does not exist")
 }
 
+func TestWriteFileAtomically(t *testing.T) {
+	t.Run("replaces existing file", func(t *testing.T) {
+		filePath := filepath.Join(t.TempDir(), "keys.txt")
+		require.NoError(t, file.WriteFile(filePath, []byte("old")))
+		before, err := os.Stat(filePath)
+		require.NoError(t, err)
+
+		require.NoError(t, file.WriteFileAtomically(filePath, []byte("new")))
+		got, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+		assert.Equal(t, "new", string(got))
+		after, err := os.Stat(filePath)
+		require.NoError(t, err)
+		assert.Equal(t, params.BeaconIoConfig().ReadWritePermissions, after.Mode().Perm())
+		assert.Equal(t, false, os.SameFile(before, after))
+
+		matches, err := filepath.Glob(filepath.Join(filepath.Dir(filePath), ".keys.txt*"))
+		require.NoError(t, err)
+		assert.Equal(t, 0, len(matches))
+	})
+
+	t.Run("refuses symlink", func(t *testing.T) {
+		dir := t.TempDir()
+		targetPath := filepath.Join(dir, "target.txt")
+		linkPath := filepath.Join(dir, "keys.txt")
+		require.NoError(t, file.WriteFile(targetPath, []byte("old")))
+		require.NoError(t, os.Symlink(targetPath, linkPath))
+
+		err := file.WriteFileAtomically(linkPath, []byte("new"))
+		require.ErrorContains(t, "refusing to atomically replace symlink", err)
+		got, err := os.ReadFile(targetPath)
+		require.NoError(t, err)
+		assert.Equal(t, "old", string(got))
+	})
+
+	t.Run("preserves original on validation error", func(t *testing.T) {
+		filePath := filepath.Join(t.TempDir(), "keys.txt")
+		require.NoError(t, os.WriteFile(filePath, []byte("old"), 0644))
+
+		err := file.WriteFileAtomically(filePath, []byte("new"))
+		require.ErrorContains(t, "already exists without proper 0600 permissions", err)
+		got, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+		assert.Equal(t, "old", string(got))
+	})
+}
+
 func TestCopyFile(t *testing.T) {
 	fName := t.TempDir() + "testfile"
 	err := os.WriteFile(fName, []byte{1, 2, 3}, params.BeaconIoConfig().ReadWritePermissions)

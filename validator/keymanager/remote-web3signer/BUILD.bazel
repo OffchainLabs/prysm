@@ -14,7 +14,9 @@ go_library(
         "//validator:__subpackages__",
     ],
     deps = [
+        "//async:go_default_library",
         "//async/event:go_default_library",
+        "//config/features:go_default_library",
         "//config/fieldparams:go_default_library",
         "//crypto/bls:go_default_library",
         "//encoding/bytesutil:go_default_library",
@@ -42,6 +44,8 @@ go_test(
     srcs = ["keymanager_test.go"],
     embed = [":go_default_library"],
     deps = [
+        "//async/event:go_default_library",
+        "//config/features:go_default_library",
         "//config/fieldparams:go_default_library",
         "//crypto/bls:go_default_library",
         "//encoding/bytesutil:go_default_library",

@@ -21,7 +21,6 @@ package keystore
 import (
 	"encoding/hex"
 	"encoding/json"
-	"os"
 	"path/filepath"
 
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
@@ -164,25 +163,5 @@ func writeKeyFile(fname string, content []byte) error {
 	if err := file.MkdirAll(filepath.Dir(fname)); err != nil {
 		return err
 	}
-	// Atomic write: create a temporary hidden file first
-	// then move it into place. TempFile assigns mode 0600.
-	f, err := os.CreateTemp(filepath.Dir(fname), "."+filepath.Base(fname)+".tmp")
-	if err != nil {
-		return err
-	}
-	if _, err := f.Write(content); err != nil {
-		newErr := f.Close()
-		if newErr != nil {
-			err = newErr
-		}
-		newErr = os.Remove(f.Name())
-		if newErr != nil {
-			err = newErr
-		}
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	return os.Rename(f.Name(), fname)
+	return file.WriteFileAtomically(fname, content)
 }
