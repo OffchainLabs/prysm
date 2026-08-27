@@ -104,7 +104,7 @@ type FastGetter interface {
 	ParentRoot(root [32]byte) ([32]byte, error)
 	ParentHash(root [32]byte) [32]byte
 	BlockHash(root [32]byte) ([32]byte, error)
-	GasLimit(root [32]byte) (uint64, error)
+	GasLimit(root, blockHash [32]byte) (uint64, error)
 	CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool)
 }
 

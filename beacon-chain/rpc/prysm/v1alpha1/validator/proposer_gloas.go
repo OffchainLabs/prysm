@@ -53,7 +53,7 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 		var builderWin *winningBuilderBid
 		if !selfBuildOnly && len(builderConfig.GetBuilders()) > 0 {
 			val, valErr := head.ValidatorAtIndexReadOnly(sBlk.Block().ProposerIndex())
-			parentGasLimit, glErr := vs.ForkchoiceFetcher.GasLimit(sBlk.Block().ParentRoot())
+			parentGasLimit, glErr := vs.ForkchoiceFetcher.GasLimit(sBlk.Block().ParentRoot(), bytesutil.ToBytes32(local.ExecutionData.ParentHash()))
 			switch {
 			case valErr != nil:
 				log.WithError(valErr).Error("Could not get proposer for builder bid request")

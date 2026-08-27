@@ -63,11 +63,12 @@ func (s *Service) HasPayloadBlockHash(root, blockHash [32]byte) bool {
 	return s.cfg.ForkChoiceStore.HasPayloadBlockHash(root, blockHash)
 }
 
-// GasLimit returns the gas limit of the latest full payload at or before the given beacon block root from forkchoice.
-func (s *Service) GasLimit(root [32]byte) (uint64, error) {
+// GasLimit returns the gas limit of the payload with the given block hash as seen from the given beacon block root:
+// the block's own payload or the parent payload it builds on.
+func (s *Service) GasLimit(root, blockHash [32]byte) (uint64, error) {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
-	return s.cfg.ForkChoiceStore.GasLimit(root)
+	return s.cfg.ForkChoiceStore.GasLimit(root, blockHash)
 }
 
 // HasNode returns the corresponding value from forkchoice
