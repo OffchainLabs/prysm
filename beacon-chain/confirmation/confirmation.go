@@ -347,7 +347,15 @@ func (f *FastConfirmationRule) getLatestConfirmed(
 	// --- Phase 1: Reversion ---
 	confirmedSlot, err := f.fc.Slot(confirmedRoot)
 	if err != nil {
-		return f.fc.FinalizedCheckpoint().Root
+		fcp := f.fc.FinalizedCheckpoint()
+		if fcp == nil {
+			return confirmedRoot
+		}
+		confirmedRoot = fcp.Root
+		confirmedSlot, err = f.fc.Slot(confirmedRoot)
+		if err != nil {
+			return confirmedRoot
+		}
 	}
 	confirmedEpoch := slots.ToEpoch(confirmedSlot)
 
