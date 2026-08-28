@@ -36,13 +36,6 @@ type workerCfg struct {
 	envVerifier  *envelopeVerifier
 	// envReconstructor enables the envelope backfill stage; when nil the stage is skipped.
 	envReconstructor EnvelopeReconstructor
-	// envFetcher, envMaxAttempts, envAttemptBudget, envPace and envLocalDelay allow tests to
-	// inject the fetch path and the attempt/budget values; zero values select the defaults.
-	envFetcher       envelopeFetcher
-	envMaxAttempts   int
-	envAttemptBudget time.Duration
-	envPace          time.Duration
-	envLocalDelay    time.Duration
 }
 
 // envelopeSyncCfg assembles the per-batch envelope sync configuration from the worker config.
@@ -57,10 +50,6 @@ func (cfg *workerCfg) envelopeSyncCfg() *envelopeSyncCfg {
 		boundaryChild: cfg.store.boundaryChild,
 		currentNeeds:  cfg.currentNeeds,
 		downscore:     cfg.downscore,
-		maxAttempts:   cfg.envMaxAttempts,
-		attemptBudget: cfg.envAttemptBudget,
-		pace:          cfg.envPace,
-		localDelay:    cfg.envLocalDelay,
 	}
 }
 
@@ -233,11 +222,8 @@ func (w *p2pWorker) handleEnvelopes(ctx context.Context, b batch) batch {
 	if b.envelopes == nil {
 		return b.transitionToNext()
 	}
-	fetch := w.cfg.envFetcher
-	if fetch == nil {
-		fetch = func(ctx context.Context, pid peer.ID, req *eth.ExecutionPayloadEnvelopesByRangeRequest) ([]*eth.SignedExecutionPayloadEnvelope, error) {
-			return sync.SendExecutionPayloadEnvelopesByRangeRequest(ctx, w.cfg.clock, w.p2p, pid, w.cfg.ctxMap, req)
-		}
+	fetch := func(ctx context.Context, pid peer.ID, req *eth.ExecutionPayloadEnvelopesByRangeRequest) ([]*eth.SignedExecutionPayloadEnvelope, error) {
+		return sync.SendExecutionPayloadEnvelopesByRangeRequest(ctx, w.cfg.clock, w.p2p, pid, w.cfg.ctxMap, req)
 	}
 	b.envelopes.fetchPass(ctx, b.assignedPeer, fetch)
 	return b.transitionToNext()

@@ -59,8 +59,8 @@ type EnvelopeReconstructor interface {
 	ReconstructFullGloasExecutionPayloadsByHash(ctx context.Context, blockHashes [][32]byte) (map[[32]byte]*enginev1.ExecutionPayloadGloas, error)
 }
 
-// envelopeFetcher requests execution payload envelopes by range from the given peer.
-// It is a var so tests can inject responses without a p2p stack.
+// envelopeFetcher requests execution payload envelopes by range from the given peer. fetchPass
+// takes one as a parameter so tests can supply responses without a p2p stack.
 type envelopeFetcher func(ctx context.Context, pid peer.ID, req *ethpb.ExecutionPayloadEnvelopesByRangeRequest) ([]*ethpb.SignedExecutionPayloadEnvelope, error)
 
 // envelopeVerifier verifies backfilled envelope signatures statelessly, using key material
