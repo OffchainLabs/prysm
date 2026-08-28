@@ -26,6 +26,10 @@ func TestValidateStateDiffExponents(t *testing.T) {
 		{exponents: []int{}, wantErr: true, errMsg: "between 1 and 15 values"},
 		{exponents: []int{30, 18, 16, 13, 11, 9, 5}, wantErr: false},
 		{exponents: []int{31, 18, 16, 13, 11, 9, 5}, wantErr: true, errMsg: "<= 30"},
+		// Rejecting these here is what lets the rest of the code shift by an exponent without
+		// checking that it fits in a uint64 first.
+		{exponents: []int{64, 18, 16, 13, 11, 9, 5}, wantErr: true, errMsg: "<= 30"},
+		{exponents: []int{64}, wantErr: true, errMsg: "<= 30"},
 	}
 
 	for i, tt := range tests {

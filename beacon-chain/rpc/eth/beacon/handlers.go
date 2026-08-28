@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -616,6 +617,17 @@ func (s *Server) PublishBlockV2(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// builderUrlContext forwards the echoed builder url to the proposal server as
+// request metadata, mirroring how a gRPC validator client sends it.
+func builderUrlContext(ctx context.Context, r *http.Request) context.Context {
+	burl := r.Header.Get(api.BuilderUrlHeader)
+	if burl == "" {
+		return ctx
+	}
+	md, _ := metadata.FromIncomingContext(ctx)
+	return metadata.NewIncomingContext(ctx, metadata.Join(md, metadata.Pairs(api.BuilderUrlHeader, burl)))
+}
+
 // publishBlockSSZ handles publishing an SSZ-encoded block to the beacon node.
 func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *http.Request, versionRequired bool) {
 	body, err := readRequestBody(r)
@@ -636,6 +648,8 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	// The VC echoes the builder url from block production so the winning builder gets the signed block.
+	ctx = builderUrlContext(ctx, r)
 
 	// Validate and optionally broadcast sidecars on equivocation.
 	if err := s.validateBroadcast(ctx, r, genericBlock); err != nil {
@@ -803,6 +817,8 @@ func (s *Server) publishBlock(ctx context.Context, w http.ResponseWriter, r *htt
 		httputil.HandleError(w, decodeErr.Error(), http.StatusBadRequest)
 		return
 	}
+	// The VC echoes the builder url from block production so the winning builder gets the signed block.
+	ctx = builderUrlContext(ctx, r)
 
 	// Validate and optionally broadcast sidecars on equivocation.
 	if err := s.validateBroadcast(ctx, r, genericBlock); err != nil {
@@ -1145,9 +1161,9 @@ func (s *Server) GetStateFork(w http.ResponseWriter, r *http.Request) {
 		helpers.HandleIsOptimisticError(w, err)
 		return
 	}
-	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+	blockRoot, err := helpers.BlockRootFromState(ctx, st)
 	if err != nil {
-		httputil.HandleError(w, errors.Wrap(err, "Could not calculate root of latest block header: ").Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, errors.Wrap(err, "Could not calculate block root").Error(), http.StatusInternalServerError)
 		return
 	}
 	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
@@ -1257,9 +1273,9 @@ func (s *Server) GetCommittees(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+	blockRoot, err := helpers.BlockRootFromState(ctx, st)
 	if err != nil {
-		httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, "Could not calculate block root: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
@@ -1436,9 +1452,9 @@ func (s *Server) GetFinalityCheckpoints(w http.ResponseWriter, r *http.Request) 
 		helpers.HandleIsOptimisticError(w, err)
 		return
 	}
-	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+	blockRoot, err := helpers.BlockRootFromState(ctx, st)
 	if err != nil {
-		httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, "Could not calculate block root: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
@@ -1570,9 +1586,9 @@ func (s *Server) GetPendingConsolidations(w http.ResponseWriter, r *http.Request
 			helpers.HandleIsOptimisticError(w, err)
 			return
 		}
-		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		blockRoot, err := helpers.BlockRootFromState(ctx, st)
 		if err != nil {
-			httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+			httputil.HandleError(w, "Could not calculate block root: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
@@ -1626,9 +1642,9 @@ func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
 			helpers.HandleIsOptimisticError(w, err)
 			return
 		}
-		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		blockRoot, err := helpers.BlockRootFromState(ctx, st)
 		if err != nil {
-			httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+			httputil.HandleError(w, "Could not calculate block root: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
@@ -1682,9 +1698,9 @@ func (s *Server) GetPendingPartialWithdrawals(w http.ResponseWriter, r *http.Req
 			helpers.HandleIsOptimisticError(w, err)
 			return
 		}
-		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		blockRoot, err := helpers.BlockRootFromState(ctx, st)
 		if err != nil {
-			httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+			httputil.HandleError(w, "Could not calculate block root: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
@@ -1735,9 +1751,9 @@ func (s *Server) GetProposerLookahead(w http.ResponseWriter, r *http.Request) {
 			helpers.HandleIsOptimisticError(w, err)
 			return
 		}
-		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		blockRoot, err := helpers.BlockRootFromState(ctx, st)
 		if err != nil {
-			httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+			httputil.HandleError(w, "Could not calculate block root: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)

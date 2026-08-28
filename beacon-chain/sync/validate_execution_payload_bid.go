@@ -131,7 +131,7 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifyParentBlockHash(s.cfg.chain.HasPayloadBlockHash); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-	parentGasLimit, err := s.cfg.chain.GasLimit(parentBlockRoot)
+	parentGasLimit, err := s.cfg.chain.GasLimit(parentBlockRoot, bid.ParentBlockHash())
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}

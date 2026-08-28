@@ -744,3 +744,24 @@ func TestKeymanager_DeletePublicKeys_WithFile(t *testing.T) {
 	require.Equal(t, len(keys), 1)
 	require.Equal(t, hexutil.Encode(keys[0][:]), publicKeys[1])
 }
+
+func TestKeymanager_DeletePublicKeys_NoKeysDoesNotLeakReadLock(t *testing.T) {
+	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
+	require.NoError(t, err)
+	km, err := NewKeymanager(t.Context(), &SetupConfig{
+		BaseEndpoint:          "http://example.com",
+		GenesisValidatorsRoot: root,
+	})
+	require.NoError(t, err)
+
+	publicKeys := []string{"0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"}
+	s, err := km.DeletePublicKeys(publicKeys)
+	require.NoError(t, err)
+	for _, status := range s {
+		require.Equal(t, keymanager.StatusNotFound, status.Status)
+	}
+
+	// The early return must not leave a read lock held, or every later writer blocks.
+	require.Equal(t, true, km.lock.TryLock(), "DeletePublicKeys returned holding a read lock")
+	km.lock.Unlock()
+}

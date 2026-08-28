@@ -52,7 +52,7 @@ func (v *validator) builderConfigForSlot(ctx context.Context, pk pubkey, slot pr
 			continue
 		}
 		cfg.Builders = append(cfg.Builders, &ethpb.BuilderEntry{
-			Url:                 t.url,
+			Url:                 []byte(t.url),
 			Auth:                signed,
 			BuilderPubkeys:      t.pubkeys,
 			MaxExecutionPayment: primitives.Gwei(t.maxPayment),

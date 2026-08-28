@@ -182,9 +182,9 @@ var (
 		Name:  "enable-state-diff",
 		Usage: "Enables the experimental state diff feature.",
 	}
-	EnableProgressiveSSZ = &cli.BoolFlag{
-		Name:   "enable-progressive-ssz",
-		Usage:  "Enables experimental progressive SSZ merkleization for converted consensus types.",
+	DisableProgressiveSSZ = &cli.BoolFlag{
+		Name:   "disable-progressive-ssz",
+		Usage:  "Disables progressive SSZ merkleization for Gloas consensus types. Gloas (EIP-7688) mandates it, so this is an escape hatch for debugging only.",
 		Hidden: true,
 	}
 	reorgLatePayloads = &cli.BoolFlag{
@@ -231,6 +231,13 @@ var (
 	trackEquivocations = &cli.BoolFlag{
 		Name:  "track-equivocations",
 		Usage: "Records proposer equivocations observed on gossip and marks the slot in forkchoice if the equivocation arrives before the configured early deadline.",
+	}
+	// submitBlacklistedBuilderBids lets a builder broadcast its own bids even while this node's
+	// circuit breaker has it blacklisted. Testing only: peers still ignore the bid on gossip.
+	submitBlacklistedBuilderBids = &cli.BoolFlag{
+		Name:   "submit-blacklisted-builder-bids",
+		Usage:  "Skips the builder circuit breaker check when submitting a signed execution payload bid, so a blacklisted builder still broadcasts its bid. For testing only.",
+		Hidden: true,
 	}
 )
 
@@ -293,11 +300,12 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
 	EnableStateDiff,
-	EnableProgressiveSSZ,
+	DisableProgressiveSSZ,
 	reorgLatePayloads,
 	forceHeadFlag,
 	blacklistRoots,
 	enableHashtree,
+	submitBlacklistedBuilderBids,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {
