@@ -444,6 +444,106 @@ func TestSettings_ResetGasLimit(t *testing.T) {
 	})
 }
 
+func TestSettings_WarnUnsetMaxExecutionPayment(t *testing.T) {
+	const warning = "no max_execution_payment"
+	gloasScheduled := func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 100
+		params.OverrideBeaconConfig(cfg)
+	}
+	key := bytesutil.ToBytes48([]byte("pubkey"))
+
+	t.Run("entry and config both unset warns and names the builder", func(t *testing.T) {
+		gloasScheduled(t)
+		hook := logtest.NewGlobal()
+		ps := &Settings{Version: SchemaV2, DefaultConfig: &Option{
+			BuilderConfig: &BuilderConfig{Builders: []*BuilderEntry{{URL: "https://b.example"}}},
+		}}
+		ps.WarnUnsetMaxExecutionPayment()
+		assert.LogsContain(t, hook, warning)
+		assert.LogsContain(t, hook, "https://b.example")
+	})
+	t.Run("credentials in the builder url are masked", func(t *testing.T) {
+		gloasScheduled(t)
+		hook := logtest.NewGlobal()
+		ps := &Settings{Version: SchemaV2, DefaultConfig: &Option{
+			BuilderConfig: &BuilderConfig{Builders: []*BuilderEntry{{URL: "https://user:password@b.example/secret-path"}}},
+		}}
+		ps.WarnUnsetMaxExecutionPayment()
+		assert.LogsContain(t, hook, "***")
+		assert.LogsDoNotContain(t, hook, "password")
+		assert.LogsDoNotContain(t, hook, "secret-path")
+	})
+	t.Run("entry cap set silent", func(t *testing.T) {
+		gloasScheduled(t)
+		hook := logtest.NewGlobal()
+		ps := &Settings{Version: SchemaV2, DefaultConfig: &Option{
+			BuilderConfig: &BuilderConfig{Builders: []*BuilderEntry{{URL: "https://b.example", MaxExecutionPayment: uint64ValPtr(1000000000)}}},
+		}}
+		ps.WarnUnsetMaxExecutionPayment()
+		assert.LogsDoNotContain(t, hook, warning)
+	})
+	t.Run("config cap set silent", func(t *testing.T) {
+		gloasScheduled(t)
+		hook := logtest.NewGlobal()
+		ps := &Settings{Version: SchemaV2, DefaultConfig: &Option{
+			BuilderConfig: &BuilderConfig{MaxExecutionPayment: uint64ValPtr(1000000000), Builders: []*BuilderEntry{{URL: "https://b.example"}}},
+		}}
+		ps.WarnUnsetMaxExecutionPayment()
+		assert.LogsDoNotContain(t, hook, warning)
+	})
+	t.Run("explicit zero is a deliberate choice and stays silent", func(t *testing.T) {
+		gloasScheduled(t)
+		hook := logtest.NewGlobal()
+		ps := &Settings{Version: SchemaV2, DefaultConfig: &Option{
+			BuilderConfig: &BuilderConfig{Builders: []*BuilderEntry{{URL: "https://b.example", MaxExecutionPayment: uint64ValPtr(0)}}},
+		}}
+		ps.WarnUnsetMaxExecutionPayment()
+		assert.LogsDoNotContain(t, hook, warning)
+	})
+	t.Run("per-key entry inheriting the default cap stays silent", func(t *testing.T) {
+		gloasScheduled(t)
+		hook := logtest.NewGlobal()
+		ps := &Settings{
+			Version:       SchemaV2,
+			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{MaxExecutionPayment: uint64ValPtr(1000000000)}},
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+				key: {BuilderConfig: &BuilderConfig{Builders: []*BuilderEntry{{URL: "https://perkey.example"}}}},
+			},
+		}
+		ps.WarnUnsetMaxExecutionPayment()
+		assert.LogsDoNotContain(t, hook, warning)
+	})
+	t.Run("per-key entry with no cap anywhere warns", func(t *testing.T) {
+		gloasScheduled(t)
+		hook := logtest.NewGlobal()
+		ps := &Settings{
+			Version: SchemaV2,
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+				key: {BuilderConfig: &BuilderConfig{Builders: []*BuilderEntry{{URL: "https://perkey.example"}}}},
+			},
+		}
+		ps.WarnUnsetMaxExecutionPayment()
+		assert.LogsContain(t, hook, "https://perkey.example")
+	})
+	t.Run("no builders silent", func(t *testing.T) {
+		gloasScheduled(t)
+		hook := logtest.NewGlobal()
+		ps := &Settings{Version: SchemaV2, DefaultConfig: &Option{GasLimit: 30000000}}
+		ps.WarnUnsetMaxExecutionPayment()
+		assert.LogsDoNotContain(t, hook, warning)
+	})
+	t.Run("without gloas scheduled silent", func(t *testing.T) {
+		hook := logtest.NewGlobal()
+		ps := &Settings{Version: SchemaV2, DefaultConfig: &Option{
+			BuilderConfig: &BuilderConfig{Builders: []*BuilderEntry{{URL: "https://b.example"}}},
+		}}
+		ps.WarnUnsetMaxExecutionPayment()
+		assert.LogsDoNotContain(t, hook, warning)
+	})
+}
+
 func TestSettings_WarnDeprecatedSchema(t *testing.T) {
 	v1Settings := &Settings{
 		Version: SchemaV1,

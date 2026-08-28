@@ -3,6 +3,7 @@ package proposer
 import (
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"sync/atomic"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/io/logs"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -660,6 +662,43 @@ func (ps *Settings) WarnDeprecatedSchema() {
 		return
 	}
 	log.Warn("Proposer settings contain deprecated v1 builder fields (enabled, builder-level gas limits); they stop applying at the gloas fork and are replaced with defaults (fee recipients and graffiti carry over). Configure gloas builders via v2 settings or the keymanager API.")
+}
+
+// WarnUnsetMaxExecutionPayment logs when a builder entry resolves to the zero
+// default cap, which silently drops that builder's execution layer payment.
+func (ps *Settings) WarnUnsetMaxExecutionPayment() {
+	if ps == nil || !params.GloasEnabled() {
+		return
+	}
+	seen := make(map[string]bool)
+	var maskedURLs []string
+	collect := func(bc *BuilderConfig) {
+		if bc == nil || bc.MaxExecutionPayment != nil {
+			return
+		}
+		for _, be := range bc.Builders {
+			if be == nil || be.MaxExecutionPayment != nil {
+				continue
+			}
+			masked := logs.MaskCredentialsLogging(be.URL)
+			if seen[masked] {
+				continue
+			}
+			seen[masked] = true
+			maskedURLs = append(maskedURLs, masked)
+		}
+	}
+	if ps.DefaultConfig != nil {
+		collect(ps.DefaultConfig.BuilderConfig)
+	}
+	for pubkey := range ps.ProposeConfig {
+		collect(ps.EffectiveBuilderConfig(pubkey))
+	}
+	if len(maskedURLs) == 0 {
+		return
+	}
+	slices.Sort(maskedURLs)
+	log.WithField("builders", strings.Join(maskedURLs, ", ")).Warn("Builder entries have no max_execution_payment: their execution layer payment is ignored and only collateral-backed bid value counts toward bid selection. Set max_execution_payment to count it, noting such payments rest on the builder's promise to pay.")
 }
 
 // HasLegacyBuilderContent reports whether any level carries v1 builder fields,
