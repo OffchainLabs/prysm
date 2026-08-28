@@ -6,6 +6,7 @@ go_library(
         "handlers.go",
         "handlers_block.go",
         "handlers_block_gloas.go",
+        "handlers_builder.go",
         "log.go",
         "server.go",
     ],
@@ -62,6 +63,7 @@ go_test(
     srcs = [
         "handlers_block_gloas_test.go",
         "handlers_block_test.go",
+        "handlers_builder_test.go",
         "handlers_test.go",
     ],
     embed = [":go_default_library"],
@@ -94,6 +96,7 @@ go_test(
         "//crypto/bls:go_default_library",
         "//crypto/bls/common:go_default_library",
         "//encoding/bytesutil:go_default_library",
+        "//encoding/ssz:go_default_library",
         "//network/httputil:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",

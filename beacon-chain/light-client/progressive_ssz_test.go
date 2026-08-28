@@ -29,7 +29,7 @@ func TestProgressiveExecutionPayloadSSZEnabled(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: tt.enabled})
+			reset := features.InitWithReset(&features.Flags{DisableProgressiveSSZ: !tt.enabled})
 			defer reset()
 
 			require.Equal(t, tt.want, progressiveExecutionPayloadSSZEnabled(tt.payload))

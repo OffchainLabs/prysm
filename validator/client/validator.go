@@ -1477,7 +1477,7 @@ func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km key
 				}
 				entries = append(entries, &ethpb.BuilderPreferencesEntry{
 					ProposerPubkey:      pk[:],
-					Url:                 t.url,
+					Url:                 []byte(t.url),
 					Auth:                signed,
 					MaxExecutionPayment: primitives.Gwei(t.maxPayment),
 				})
