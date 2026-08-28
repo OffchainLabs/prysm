@@ -414,11 +414,24 @@ func (s *Service) validatorEndpoints(
 			template: "/eth/v4/validator/blocks/{slot}",
 			name:     namespace + ".ProduceBlockV4",
 			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.ProduceBlockV4,
-			methods: []string{http.MethodGet},
+			// TODO: remove GET kept until the REST VC produces via POST.
+			methods: []string{http.MethodGet, http.MethodPost},
+		},
+		{
+			template: "/eth/v1/validator/builder_preferences",
+			name:     namespace + ".SubmitBuilderPreferences",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.SubmitBuilderPreferences,
+			methods: []string{http.MethodPost},
 		},
 		{
 			template: "/eth/v1/validator/beacon_committee_selections",

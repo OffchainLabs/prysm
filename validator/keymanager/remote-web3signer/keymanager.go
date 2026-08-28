@@ -880,6 +880,7 @@ func (km *Keymanager) DeletePublicKeys(publicKeys []string) ([]*keymanager.KeySt
 	km.lock.RLock()
 	originalKeysLen := len(km.providedPublicKeys)
 	if originalKeysLen == 0 {
+		km.lock.RUnlock()
 		for i := range deletedRemoteKeysStatuses {
 			deletedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
 				Status:  keymanager.StatusNotFound,

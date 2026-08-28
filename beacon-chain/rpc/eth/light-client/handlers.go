@@ -1,8 +1,12 @@
 package lightclient
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net/http"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/pkg/errors"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -14,9 +18,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 // GetLightClientBootstrap - implements https://github.com/ethereum/beacon-APIs/blob/263f4ed6c263c967f13279c7a9f5629b51c5fc55/apis/beacon/light_client/bootstrap.yaml
@@ -129,7 +130,7 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 			}
 
 			var chunkLength []byte
-			chunkLength = ssz.MarshalUint64(chunkLength, uint64(len(updateSSZ)+4))
+			chunkLength = binary.LittleEndian.AppendUint64(chunkLength, uint64(len(updateSSZ)+4))
 			if _, err := w.Write(chunkLength); err != nil {
 				httputil.HandleError(w, "Could not write chunk length: "+err.Error(), http.StatusInternalServerError)
 				return
