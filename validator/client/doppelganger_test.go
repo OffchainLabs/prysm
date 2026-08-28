@@ -481,18 +481,18 @@ func TestUpdateDutiesSplit_AllKeysQuarantinedYieldsNoRoles(t *testing.T) {
 	}
 	v.trackReloadedKeysForDoppelGanger([][fieldparams.BLSPubkeyLength]byte{keyA, keyB})
 
-	// Every key quarantined: the duty update stores an empty set and per-slot
-	// role lookups stay quiet for the whole quarantine window.
+	// Every key quarantined: the duty update stores an empty set and slot
+	// planning stays quiet for the whole quarantine window.
 	keys, indices := v.filteredKeysAndIndices([][fieldparams.BLSPubkeyLength]byte{keyA, keyB}, 4)
 	require.Equal(t, 0, len(keys))
 	require.NoError(t, v.updateDutiesSplit(t.Context(), 4, indices))
 
-	roles, err := v.RolesAt(t.Context(), primitives.Slot(4*uint64(params.BeaconConfig().SlotsPerEpoch)))
+	plan, err := v.planSlot(t.Context(), primitives.Slot(4*uint64(params.BeaconConfig().SlotsPerEpoch)))
 	require.NoError(t, err)
-	assert.Equal(t, 0, len(roles))
+	assert.Equal(t, 0, len(plan.proposals)+len(plan.attestations)+len(plan.syncCommittee)+len(plan.payloadAttestations))
 }
 
-func TestRolesAt_ExcludesDoppelGangerPending(t *testing.T) {
+func TestPlanSlot_ExcludesDoppelGangerPending(t *testing.T) {
 	enableDoppelGanger(t)
 	v := doppelTestValidator(4)
 	v.duties = &dutyStore{}
@@ -502,8 +502,8 @@ func TestRolesAt_ExcludesDoppelGangerPending(t *testing.T) {
 	var data dutyStoreData
 	data.setFromContainer(&ethpb.ValidatorDutiesContainer{
 		CurrentEpochDuties: []*ethpb.ValidatorDuty{
-			{PublicKey: keyA[:], ValidatorIndex: 1},
-			{PublicKey: keyB[:], ValidatorIndex: 2},
+			{PublicKey: keyA[:], ValidatorIndex: 1, ProposerSlots: []primitives.Slot{1}},
+			{PublicKey: keyB[:], ValidatorIndex: 2, ProposerSlots: []primitives.Slot{1}},
 		},
 	})
 	v.duties.write(data)
@@ -511,12 +511,10 @@ func TestRolesAt_ExcludesDoppelGangerPending(t *testing.T) {
 	v.markDoppelGangerChecked([][fieldparams.BLSPubkeyLength]byte{keyB})
 
 	// Duties fetched before the reload must not grant the quarantined key roles.
-	roles, err := v.RolesAt(t.Context(), 1)
+	plan, err := v.planSlot(t.Context(), 1)
 	require.NoError(t, err)
-	_, hasA := roles[keyA]
-	assert.Equal(t, false, hasA)
-	_, hasB := roles[keyB]
-	assert.Equal(t, true, hasB)
+	require.Equal(t, 1, len(plan.proposals))
+	assert.Equal(t, keyB, plan.proposals[0])
 }
 
 func TestDoppelGangerTracker(t *testing.T) {

@@ -36,6 +36,18 @@ func testDutyStore(current ...*ethpb.ValidatorDuty) *dutyStore {
 	return ds
 }
 
+func testDutyAssignment(v *validator, pk pubkey) dutyAssignment {
+	assignment := dutyAssignment{publicKey: pk}
+	if v == nil || v.duties == nil {
+		return assignment
+	}
+	duty, ok := v.duties.currentDuty(pk)
+	if !ok {
+		return assignment
+	}
+	return newDutyAssignment(pk, duty)
+}
+
 func TestDutyStore_Uninitialized(t *testing.T) {
 	ds := &dutyStore{}
 	assert.Equal(t, false, ds.isInitialized())

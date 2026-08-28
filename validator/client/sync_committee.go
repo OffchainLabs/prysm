@@ -33,9 +33,10 @@ func syncMessageDueComponent(slot primitives.Slot) primitives.BP {
 }
 
 // SubmitSyncCommitteeMessage submits the sync committee message to the beacon chain.
-func (v *validator) SubmitSyncCommitteeMessage(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte) {
+func (v *validator) SubmitSyncCommitteeMessage(ctx context.Context, slot primitives.Slot, duty dutyAssignment) {
 	ctx, span := trace.StartSpan(ctx, "validator.SubmitSyncCommitteeMessage")
 	defer span.End()
+	pubKey := duty.publicKey
 	span.SetAttributes(trace.StringAttribute("validator", fmt.Sprintf("%#x", pubKey)))
 
 	v.waitUntilAttestationDueOrValidBlock(ctx, slot)
@@ -51,12 +52,6 @@ func (v *validator) SubmitSyncCommitteeMessage(ctx context.Context, slot primiti
 	if err != nil {
 		log.WithError(err).Error("Could not request sync message block root to sign")
 		tracing.AnnotateError(span, err)
-		return
-	}
-
-	duty, err := v.duty(pubKey)
-	if err != nil {
-		log.WithError(err).Error("Could not fetch validator assignment")
 		return
 	}
 
@@ -89,7 +84,7 @@ func (v *validator) SubmitSyncCommitteeMessage(ctx context.Context, slot primiti
 	msg := &ethpb.SyncCommitteeMessage{
 		Slot:           slot,
 		BlockRoot:      res.Root,
-		ValidatorIndex: duty.ValidatorIndex,
+		ValidatorIndex: duty.validatorIndex,
 		Signature:      sig.Marshal(),
 	}
 	if _, err := v.validatorClient.SubmitSyncMessage(ctx, msg); err != nil {
@@ -113,16 +108,11 @@ func (v *validator) SubmitSyncCommitteeMessage(ctx context.Context, slot primiti
 }
 
 // SubmitSignedContributionAndProof submits the signed sync committee contribution and proof to the beacon chain.
-func (v *validator) SubmitSignedContributionAndProof(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte) {
+func (v *validator) SubmitSignedContributionAndProof(ctx context.Context, slot primitives.Slot, duty dutyAssignment) {
 	ctx, span := trace.StartSpan(ctx, "validator.SubmitSignedContributionAndProof")
 	defer span.End()
+	pubKey := duty.publicKey
 	span.SetAttributes(trace.StringAttribute("validator", fmt.Sprintf("%#x", pubKey)))
-
-	duty, err := v.duty(pubKey)
-	if err != nil {
-		log.WithError(err).Error("Could not fetch validator assignment")
-		return
-	}
 
 	indexRes, err := v.validatorClient.SyncSubcommitteeIndex(ctx, &ethpb.SyncSubcommitteeIndexRequest{
 		PublicKey: pubKey[:],
@@ -191,7 +181,7 @@ func (v *validator) SubmitSignedContributionAndProof(ctx context.Context, slot p
 		}
 
 		contributionAndProof := &ethpb.ContributionAndProof{
-			AggregatorIndex: duty.ValidatorIndex,
+			AggregatorIndex: duty.validatorIndex,
 			Contribution:    contribution,
 			SelectionProof:  selectionProofs[i],
 		}
