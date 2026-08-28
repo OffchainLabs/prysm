@@ -684,7 +684,7 @@ func decreaseBalanceWithVal(currBalance, delta primitives.Gwei) primitives.Gwei 
 // OnboardBuildersFromPendingDeposits applies any pending builder deposits at the fork.
 // It mutates the state and prunes pending deposits accordingly.
 //
-//	<spec fn="onboard_builders_from_pending_deposits" fork="gloas" hash="2f9926a6">
+//	<spec fn="onboard_builders_from_pending_deposits" fork="gloas" hash="49853afd">
 //	def onboard_builders_from_pending_deposits(state: BeaconState) -> None:
 //	    """
 //	    Applies any pending deposit for builders, effectively
@@ -692,7 +692,7 @@ func decreaseBalanceWithVal(currBalance, delta primitives.Gwei) primitives.Gwei 
 //	    """
 //	    validator_pubkeys = [v.pubkey for v in state.validators]
 //
-//	    pending_deposits = []
+//	    pending_deposits = PendingDeposits()
 //	    for deposit in state.pending_deposits:
 //	        # Deposits for existing validators stay in the pending queue
 //	        if deposit.pubkey in validator_pubkeys:

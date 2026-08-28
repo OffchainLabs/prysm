@@ -359,6 +359,14 @@
     FULU_FORK_VERSION: Version = '0x06000000'
     </spec>
 
+- name: GAS_LIMIT_SCHEDULE#gloas
+  sources: []
+  spec: |
+    <spec config_var="GAS_LIMIT_SCHEDULE" fork="gloas" hash="28e945d9">
+    GAS_LIMIT_SCHEDULE: tuple[frozendict[str, Any], ...] = (
+    )
+    </spec>
+
 - name: GENESIS_DELAY#phase0
   sources:
     - file: config/params/config.go
@@ -462,13 +470,6 @@
   spec: |
     <spec config_var="MAX_BLOBS_PER_BLOCK_ELECTRA" fork="electra" hash="a03f0ed9">
     MAX_BLOBS_PER_BLOCK_ELECTRA: Uint64 = 9
-    </spec>
-
-- name: MAX_BYTES_PER_INCLUSION_LIST#heze
-  sources: []
-  spec: |
-    <spec config_var="MAX_BYTES_PER_INCLUSION_LIST" fork="heze" hash="1d503ddc">
-    MAX_BYTES_PER_INCLUSION_LIST: Uint64 = 8192
     </spec>
 
 - name: MAX_PAYLOAD_SIZE#phase0

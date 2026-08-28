@@ -232,7 +232,7 @@ func (v *BidVerifier) VerifyGasLimitTargetCompatible(parentGasLimit, targetGasLi
 // isGasLimitTargetCompatible reports whether gasLimit is compatible with
 // targetGasLimit under the EIP-1559 transition rule from parentGasLimit.
 //
-//	<spec fn="is_gas_limit_target_compatible" fork="gloas" hash="6dffbd1d">
+//	<spec fn="is_gas_limit_target_compatible" fork="gloas" hash="c45c6892">
 //	def is_gas_limit_target_compatible(
 //	    parent_gas_limit: Uint64, gas_limit: Uint64, target_gas_limit: Uint64
 //	) -> bool:
@@ -244,11 +244,11 @@ func (v *BidVerifier) VerifyGasLimitTargetCompatible(parentGasLimit, targetGasLi
 //	    min_gas_limit = parent_gas_limit - max_gas_limit_difference
 //	    max_gas_limit = parent_gas_limit + max_gas_limit_difference
 //
-//	    if target_gas_limit >= min_gas_limit and target_gas_limit <= max_gas_limit:
-//	        return gas_limit == target_gas_limit
+//	    if target_gas_limit < min_gas_limit:
+//	        return gas_limit == min_gas_limit
 //	    if target_gas_limit > max_gas_limit:
 //	        return gas_limit == max_gas_limit
-//	    return gas_limit == min_gas_limit
+//	    return gas_limit == target_gas_limit
 //	</spec>
 func isGasLimitTargetCompatible(parentGasLimit, gasLimit, targetGasLimit uint64) bool {
 	maxDiff := max(parentGasLimit/1024, 1) - 1
