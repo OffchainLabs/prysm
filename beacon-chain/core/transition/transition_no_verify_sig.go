@@ -422,6 +422,8 @@ func ProcessBlockForStateRoot(
 	blk := signed.Block()
 	body := blk.Body()
 
+	parentSlot := state.LatestBlockHeader().Slot
+
 	if state.Version() >= version.Gloas {
 		if err := gloas.ProcessParentExecutionPayload(ctx, state, blk); err != nil {
 			return nil, errors.Wrap(err, "could not process parent execution payload")
@@ -439,7 +441,6 @@ func ProcessBlockForStateRoot(
 		return nil, errors.Wrap(err, "could not process block header")
 	}
 
-	var parentSlot primitives.Slot
 	if state.Version() >= version.Gloas {
 		// <spec fn="process_block" fork="gloas" hash="fda2f095">
 		// def process_block(state: BeaconState, block: BeaconBlock) -> None:
@@ -460,10 +461,6 @@ func ProcessBlockForStateRoot(
 		// </spec>
 		if err := gloas.ProcessWithdrawals(state); err != nil {
 			return nil, errors.Wrap(ErrProcessWithdrawalsFailed, err.Error())
-		}
-		parentSlot, err = gloas.ParentSlotFromBid(state)
-		if err != nil {
-			return nil, errors.Wrap(err, "could not get parent slot from bid")
 		}
 		if err := gloas.ProcessExecutionPayloadBid(state, blk); err != nil {
 			return nil, errors.Wrap(err, "could not process execution payload bid")

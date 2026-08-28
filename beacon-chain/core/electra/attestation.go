@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -34,12 +33,7 @@ func GetProposerRewardNumerator(
 		return 0, fmt.Errorf("attestation slot %d exceeds state slot %d", data.Slot, st.Slot())
 	}
 
-	parentSlot, err := gloas.ParentSlotFromBid(st)
-	if err != nil {
-		return 0, err
-	}
-
-	flags, err := altair.AttestationParticipationFlagIndices(st, data, delay, parentSlot)
+	flags, err := altair.AttestationParticipationFlagIndices(st, data, delay, st.LatestBlockHeader().Slot)
 	if err != nil {
 		return 0, err
 	}

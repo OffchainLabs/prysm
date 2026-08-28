@@ -135,33 +135,3 @@ func TestMatchingPayload(t *testing.T) {
 		require.Equal(t, true, ok)
 	})
 }
-
-func TestParentSlotFromBid(t *testing.T) {
-	t.Run("pre-gloas returns zero", func(t *testing.T) {
-		st, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
-		require.NoError(t, err)
-
-		parentSlot, err := ParentSlotFromBid(st)
-		require.NoError(t, err)
-		require.Equal(t, primitives.Slot(0), parentSlot)
-	})
-
-	t.Run("returns the cached bid slot", func(t *testing.T) {
-		st, err := state_native.InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
-			Slot: 6,
-			LatestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
-				Slot:            3,
-				ParentBlockHash: make([]byte, 32),
-				ParentBlockRoot: make([]byte, 32),
-				BlockHash:       make([]byte, 32),
-				PrevRandao:      make([]byte, 32),
-				FeeRecipient:    make([]byte, 20),
-			},
-		})
-		require.NoError(t, err)
-
-		parentSlot, err := ParentSlotFromBid(st)
-		require.NoError(t, err)
-		require.Equal(t, primitives.Slot(3), parentSlot)
-	})
-}
