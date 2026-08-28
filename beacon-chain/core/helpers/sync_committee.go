@@ -156,7 +156,7 @@ func CurrentPeriodSyncSubcommitteeIndices(
 
 // NextPeriodSyncSubcommitteeIndices returns the subcommittee indices of the next period sync committee for input validator.
 func NextPeriodSyncSubcommitteeIndices(
-	st state.BeaconState, valIdx primitives.ValidatorIndex,
+	st state.ReadOnlyBeaconState, valIdx primitives.ValidatorIndex,
 ) ([]primitives.CommitteeIndex, error) {
 	root, err := SyncPeriodBoundaryRoot(st)
 	if err != nil {
