@@ -53,8 +53,7 @@ type SetupConfig struct {
 	ProvidedPublicKeys []string
 
 	// PollInterval makes the keymanager re-fetch the URL (PublicKeysURL) on this interval to
-	// hot-reload the validating public key set. A failed or empty response keeps the current
-	// keys, and while polling the Keymanager API cannot add or delete remote keys.
+	// hot-reload the validating public key set. A failed or empty response keeps the current keys.
 	// Note: Zero or negative disables polling.
 	PollInterval time.Duration
 }
@@ -123,7 +122,7 @@ func NewKeymanager(ctx context.Context, cfg *SetupConfig) (*Keymanager, error) {
 				Warn("Could not get public keys from the remote signer URL, starting with no validating keys and retrying on the next poll")
 		default:
 			erroredResponsesTotal.Inc()
-			return nil, errors.Wrapf(err, "could not get public keys from remote server URL %v", cfg.PublicKeysURL)
+			return nil, errors.Wrapf(err, "could not get public keys from remote server URL %v", api.RedactEndpoint(cfg.PublicKeysURL))
 		}
 	} else if len(cfg.ProvidedPublicKeys) != 0 {
 		ppk = cfg.ProvidedPublicKeys
@@ -246,7 +245,6 @@ func (km *Keymanager) FetchValidatingPublicKeys(_ context.Context) ([][fieldpara
 func (km *Keymanager) Sign(ctx context.Context, request *validatorpb.SignRequest) (bls.Signature, error) {
 	signRequest, err := getSignRequestJson(ctx, km.validator, request, km.genesisValidatorsRoot)
 	if err != nil {
-		erroredResponsesTotal.Inc()
 		return nil, err
 	}
 	signature, err := km.client.Sign(ctx, hexutil.Encode(request.PublicKey), signRequest)

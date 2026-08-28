@@ -21,6 +21,11 @@ func (km *Keymanager) pollRemoteKeysFromURL(ctx context.Context, url string, int
 		return
 	}
 
+	log.
+		WithField("url", api.RedactEndpoint(url)).
+		WithField("interval", interval).
+		Info("Starting Web3Signer public key poller")
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
