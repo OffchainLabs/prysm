@@ -175,7 +175,7 @@ func TestFuzzProcessBlockForStateRoot_1000(t *testing.T) {
 	SkipSlotCache.Disable()
 	defer SkipSlotCache.Enable()
 	ctx := t.Context()
-	state, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
+	state, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{LatestBlockHeader: &ethpb.BeaconBlockHeader{}})
 	require.NoError(t, err)
 	sb := &ethpb.SignedBeaconBlock{}
 	fuzzer := fuzz.NewWithSeed(0)

@@ -469,6 +469,9 @@ func TestFuzzProcessAttestationsNoVerify_10000(t *testing.T) {
 		if b.Block == nil {
 			b.Block = &ethpb.BeaconBlockAltair{}
 		}
+		if st.LatestBlockHeader == nil {
+			st.LatestBlockHeader = &ethpb.BeaconBlockHeader{}
+		}
 		s, err := state_native.InitializeFromProtoUnsafeAltair(st)
 		require.NoError(t, err)
 		if b.Block == nil || b.Block.Body == nil {
