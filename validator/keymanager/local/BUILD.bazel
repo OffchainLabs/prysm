@@ -56,9 +56,11 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//async/event:go_default_library",
+        "//config/features:go_default_library",
         "//config/fieldparams:go_default_library",
         "//crypto/bls:go_default_library",
         "//encoding/bytesutil:go_default_library",
+        "//io/file:go_default_library",
         "//proto/prysm/v1alpha1/validator-client:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",

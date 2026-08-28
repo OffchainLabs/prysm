@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -45,6 +47,57 @@ func (mc *MockClient) Sign(_ context.Context, _ string, _ internal.SignRequestJs
 }
 func (mc *MockClient) GetPublicKeys(_ context.Context, _ string) ([]string, error) {
 	return mc.PublicKeys, nil
+}
+
+func newWatchedKeymanager(t *testing.T, contents string) (*Keymanager, string, chan [][fieldparams.BLSPubkeyLength]byte) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+
+	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+	require.NoError(t, file.WriteFile(keyFilePath, []byte(contents)))
+	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
+	require.NoError(t, err)
+	km, err := NewKeymanager(ctx, &SetupConfig{
+		BaseEndpoint:          "http://example.com",
+		GenesisValidatorsRoot: root,
+		KeyFilePath:           keyFilePath,
+		keyFileRemovalGrace:   500 * time.Millisecond,
+		keyFileReadRetryDelay: 10 * time.Millisecond,
+	})
+	require.NoError(t, err)
+
+	changes := make(chan [][fieldparams.BLSPubkeyLength]byte, 10)
+	sub := km.SubscribeAccountChanges(changes)
+	t.Cleanup(sub.Unsubscribe)
+	return km, keyFilePath, changes
+}
+
+func requireAccountChange(t *testing.T, changes <-chan [][fieldparams.BLSPubkeyLength]byte, want ...string) {
+	t.Helper()
+	select {
+	case keys := <-changes:
+		got := make([]string, len(keys))
+		for i, key := range keys {
+			got[i] = hexutil.Encode(key[:])
+		}
+		slices.Sort(got)
+		slices.Sort(want)
+		if !slices.Equal(want, got) {
+			t.Fatalf("unexpected account change: got %v, want %v", got, want)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for account change")
+	}
+}
+
+func requireNoAccountChange(t *testing.T, changes <-chan [][fieldparams.BLSPubkeyLength]byte, wait time.Duration) {
+	t.Helper()
+	select {
+	case keys := <-changes:
+		t.Fatalf("unexpected additional account change: %#x", keys)
+	case <-time.After(wait):
+	}
 }
 
 func TestNewKeymanager(t *testing.T) {
@@ -108,6 +161,16 @@ func TestNewKeymanager(t *testing.T) {
 				ProvidedPublicKeys:    []string{"0xa2b5aaad9c6efefe7bb9b1243a043404f3362937"},
 			},
 			wantErr: "has invalid length",
+		},
+		{
+			name: "key file with malformed line",
+			args: &SetupConfig{
+				BaseEndpoint:          "http://prysm.xyz/",
+				GenesisValidatorsRoot: root,
+				KeyFilePath:           filepath.Join(t.TempDir(), "bad_keyfile.txt"),
+			},
+			fileContents: []string{"8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055", "not-a-key"},
+			wantErr:      "invalid public key",
 		},
 		{
 			name: "happy path key file",
@@ -253,6 +316,374 @@ func TestNewKeyManager_ChangingFileCreated(t *testing.T) {
 	}
 }
 
+func TestKeymanager_FileChangeNotifications(t *testing.T) {
+	const (
+		debounce = 50 * time.Millisecond
+		keyA     = "0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"
+		keyB     = "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055"
+	)
+	resetFeatures := features.InitWithReset(&features.Flags{KeystoreImportDebounceInterval: debounce})
+	defer resetFeatures()
+
+	t.Run("same count with different keys", func(t *testing.T) {
+		_, keyFilePath, changes := newWatchedKeymanager(t, keyA+"\n")
+		require.NoError(t, file.WriteFile(keyFilePath, []byte(keyB+"\n")))
+
+		requireAccountChange(t, changes, keyB)
+		requireNoAccountChange(t, changes, 4*debounce)
+	})
+
+	t.Run("semantic no-op", func(t *testing.T) {
+		_, keyFilePath, changes := newWatchedKeymanager(t, keyA+"\n"+keyB+"\n")
+		contents := strings.TrimPrefix(keyB, "0x") + "\n\n" + keyA + "\n" + keyA + "\n"
+		require.NoError(t, file.WriteFile(keyFilePath, []byte(contents)))
+
+		requireNoAccountChange(t, changes, 4*debounce)
+	})
+
+	t.Run("editor write burst", func(t *testing.T) {
+		_, keyFilePath, changes := newWatchedKeymanager(t, keyA+"\n")
+		f, err := os.OpenFile(keyFilePath, os.O_WRONLY|os.O_TRUNC, 0600)
+		require.NoError(t, err)
+		midpoint := len(keyB) / 2
+		_, err = f.WriteString(keyB[:midpoint])
+		require.NoError(t, err)
+		require.NoError(t, f.Sync())
+		time.Sleep(debounce / 4)
+		_, err = f.WriteString(keyB[midpoint:] + "\n")
+		require.NoError(t, err)
+		require.NoError(t, f.Sync())
+		require.NoError(t, f.Close())
+
+		requireAccountChange(t, changes, keyB)
+		requireNoAccountChange(t, changes, 4*debounce)
+	})
+
+	t.Run("atomic replacement keeps watcher", func(t *testing.T) {
+		_, keyFilePath, changes := newWatchedKeymanager(t, keyA+"\n")
+		tmp, err := os.CreateTemp(filepath.Dir(keyFilePath), ".keyfile-swap-*")
+		require.NoError(t, err)
+		tmpPath := tmp.Name()
+		defer func() { _ = os.Remove(tmpPath) }()
+		_, err = tmp.WriteString(keyB + "\n")
+		require.NoError(t, err)
+		require.NoError(t, tmp.Sync())
+		require.NoError(t, tmp.Close())
+		require.NoError(t, os.Rename(tmpPath, keyFilePath))
+
+		requireAccountChange(t, changes, keyB)
+		require.NoError(t, file.WriteFile(keyFilePath, []byte(keyA+"\n")))
+		requireAccountChange(t, changes, keyA)
+		requireNoAccountChange(t, changes, 4*debounce)
+	})
+
+	t.Run("remove and recreate within grace emits only final state", func(t *testing.T) {
+		_, keyFilePath, changes := newWatchedKeymanager(t, keyA+"\n")
+		require.NoError(t, os.Remove(keyFilePath))
+		requireNoAccountChange(t, changes, 2*debounce)
+		require.NoError(t, file.WriteFile(keyFilePath, []byte(keyB+"\n")))
+		requireAccountChange(t, changes, keyB)
+		requireNoAccountChange(t, changes, 4*debounce)
+	})
+
+	t.Run("sustained removal applies fallback once", func(t *testing.T) {
+		_, keyFilePath, changes := newWatchedKeymanager(t, keyA+"\n")
+		require.NoError(t, os.Remove(keyFilePath))
+
+		requireAccountChange(t, changes)
+		requireNoAccountChange(t, changes, 4*debounce)
+	})
+
+	t.Run("truncate and rewrite within grace emits only final state", func(t *testing.T) {
+		_, keyFilePath, changes := newWatchedKeymanager(t, keyA+"\n")
+		require.NoError(t, os.Truncate(keyFilePath, 0))
+		requireNoAccountChange(t, changes, 2*debounce)
+		require.NoError(t, file.WriteFile(keyFilePath, []byte(keyB+"\n")))
+
+		requireAccountChange(t, changes, keyB)
+		requireNoAccountChange(t, changes, 4*debounce)
+	})
+
+	t.Run("sustained empty file falls back to flag keys once", func(t *testing.T) {
+		_, keyFilePath, changes := newWatchedKeymanager(t, keyA+"\n")
+		require.NoError(t, file.WriteFile(keyFilePath, []byte("\n")))
+
+		requireAccountChange(t, changes)
+		requireNoAccountChange(t, changes, 4*debounce)
+	})
+
+	t.Run("malformed replacement retains last valid keys", func(t *testing.T) {
+		_, keyFilePath, changes := newWatchedKeymanager(t, keyA+"\n")
+		require.NoError(t, file.WriteFile(keyFilePath, []byte(keyB+"\ninvalid\n")))
+		requireNoAccountChange(t, changes, 6*debounce)
+
+		require.NoError(t, file.WriteFile(keyFilePath, []byte(keyB+"\n")))
+		requireAccountChange(t, changes, keyB)
+		requireNoAccountChange(t, changes, 4*debounce)
+	})
+
+	t.Run("API write watcher echo is suppressed", func(t *testing.T) {
+		km, _, changes := newWatchedKeymanager(t, "")
+		statuses, err := km.AddPublicKeys([]string{keyA})
+		require.NoError(t, err)
+		require.Equal(t, keymanager.StatusImported, statuses[0].Status)
+		requireAccountChange(t, changes, keyA)
+		requireNoAccountChange(t, changes, 4*debounce)
+
+		statuses, err = km.DeletePublicKeys([]string{keyA})
+		require.NoError(t, err)
+		require.Equal(t, keymanager.StatusDeleted, statuses[0].Status)
+		requireAccountChange(t, changes)
+		requireNoAccountChange(t, changes, 4*debounce)
+	})
+
+	t.Run("concurrent API writes are serialized", func(t *testing.T) {
+		km, _, changes := newWatchedKeymanager(t, "")
+		results := make(chan error, 2)
+		var wg sync.WaitGroup
+		for _, key := range []string{keyA, keyB} {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				statuses, err := km.AddPublicKeys([]string{key})
+				if err == nil && statuses[0].Status != keymanager.StatusImported {
+					err = fmt.Errorf("unexpected import status: %s", statuses[0].Status)
+				}
+				results <- err
+			}()
+		}
+		wg.Wait()
+		close(results)
+		for err := range results {
+			require.NoError(t, err)
+		}
+
+		for _, wantCount := range []int{1, 2} {
+			select {
+			case keys := <-changes:
+				require.Equal(t, wantCount, len(keys))
+			case <-time.After(5 * time.Second):
+				t.Fatal("timed out waiting for serialized API account change")
+			}
+		}
+		keys, err := km.FetchValidatingPublicKeys(t.Context())
+		require.NoError(t, err)
+		require.Equal(t, 2, len(keys))
+		requireNoAccountChange(t, changes, 4*debounce)
+	})
+
+	t.Run("symlinked key file tracks target across API and external writes", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		dirA := t.TempDir()
+		dirB := t.TempDir()
+		target := filepath.Join(dirB, "real.txt")
+		link := filepath.Join(dirA, "keyfile.txt")
+		require.NoError(t, file.WriteFile(target, []byte(keyA+"\n")))
+		require.NoError(t, os.Symlink(target, link))
+
+		root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
+		require.NoError(t, err)
+		km, err := NewKeymanager(ctx, &SetupConfig{
+			BaseEndpoint:          "http://example.com",
+			GenesisValidatorsRoot: root,
+			KeyFilePath:           link,
+			keyFileRemovalGrace:   200 * time.Millisecond,
+			keyFileReadRetryDelay: 10 * time.Millisecond,
+		})
+		require.NoError(t, err)
+		changes := make(chan [][fieldparams.BLSPubkeyLength]byte, 10)
+		sub := km.SubscribeAccountChanges(changes)
+		t.Cleanup(sub.Unsubscribe)
+
+		// API save must write through the symlink and suppress its own watcher echo.
+		_, err = km.AddPublicKeys([]string{keyB})
+		require.NoError(t, err)
+		requireAccountChange(t, changes, keyA, keyB)
+		info, err := os.Lstat(link)
+		require.NoError(t, err)
+		require.Equal(t, true, info.Mode()&os.ModeSymlink != 0)
+		requireNoAccountChange(t, changes, 6*debounce)
+
+		require.NoError(t, file.WriteFile(target, []byte(keyB+"\n")))
+		requireAccountChange(t, changes, keyB)
+		requireNoAccountChange(t, changes, 4*debounce)
+
+		require.NoError(t, os.WriteFile(link, []byte(keyA+"\n"), 0o600))
+		requireAccountChange(t, changes, keyA)
+		requireNoAccountChange(t, changes, 4*debounce)
+
+		for _, d := range []string{dirA, dirB} {
+			m, err := filepath.Glob(filepath.Join(d, ".*tmp*"))
+			require.NoError(t, err)
+			require.Equal(t, 0, len(m))
+		}
+	})
+}
+
+func TestKeymanager_DeleteAllFileKeysDoesNotFallback(t *testing.T) {
+	const (
+		debounce = 20 * time.Millisecond
+		keyA     = "0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"
+	)
+	resetFeatures := features.InitWithReset(&features.Flags{KeystoreImportDebounceInterval: debounce})
+	defer resetFeatures()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+	require.NoError(t, file.WriteFile(keyFilePath, []byte(keyA+"\n")))
+	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
+	require.NoError(t, err)
+	km, err := NewKeymanager(ctx, &SetupConfig{
+		BaseEndpoint:          "http://example.com",
+		GenesisValidatorsRoot: root,
+		KeyFilePath:           keyFilePath,
+		ProvidedPublicKeys:    []string{keyA},
+		keyFileRemovalGrace:   100 * time.Millisecond,
+		keyFileReadRetryDelay: 10 * time.Millisecond,
+		keyFileReconcileEvery: time.Hour,
+	})
+	require.NoError(t, err)
+	changes := make(chan [][fieldparams.BLSPubkeyLength]byte, 10)
+	sub := km.SubscribeAccountChanges(changes)
+	defer sub.Unsubscribe()
+
+	statuses, err := km.DeletePublicKeys([]string{keyA})
+	require.NoError(t, err)
+	require.Equal(t, keymanager.StatusDeleted, statuses[0].Status)
+	requireAccountChange(t, changes)
+	requireNoAccountChange(t, changes, 250*time.Millisecond)
+
+	keys, err := km.FetchValidatingPublicKeys(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, 0, len(keys))
+}
+
+func TestKeymanager_WatcherInitializationEmptyFileUsesGrace(t *testing.T) {
+	const (
+		debounce = 20 * time.Millisecond
+		keyA     = "0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"
+		keyB     = "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055"
+	)
+	resetFeatures := features.InitWithReset(&features.Flags{KeystoreImportDebounceInterval: debounce})
+	defer resetFeatures()
+
+	keyABytes, err := hexutil.Decode(keyA)
+	require.NoError(t, err)
+	keyBBytes, err := hexutil.Decode(keyB)
+	require.NoError(t, err)
+	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+	require.NoError(t, file.WriteFile(keyFilePath, nil))
+	km := &Keymanager{
+		providedPublicKeys:    [][fieldparams.BLSPubkeyLength]byte{bytesutil.ToBytes48(keyABytes)},
+		flagLoadedKeysMap:     map[string][48]byte{keyB: bytesutil.ToBytes48(keyBBytes)},
+		accountsChangedFeed:   new(event.Feed),
+		retriesRemaining:      maxRetries,
+		keyFilePath:           keyFilePath,
+		keyFileRemovalGrace:   400 * time.Millisecond,
+		keyFileReadRetryDelay: 10 * time.Millisecond,
+		keyFileReconcileEvery: time.Hour,
+	}
+	changes := make(chan [][fieldparams.BLSPubkeyLength]byte, 10)
+	sub := km.SubscribeAccountChanges(changes)
+	defer sub.Unsubscribe()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	result := make(chan error, 1)
+	ready := make(chan error, 1)
+	go func() {
+		result <- km.refreshRemoteKeysFromFileChanges(ctx, func(err error) { ready <- err })
+	}()
+	select {
+	case err := <-ready:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for watcher initialization")
+	}
+
+	// Initialization must retain the last-valid key set. The empty file is applied only after grace.
+	requireNoAccountChange(t, changes, 75*time.Millisecond)
+	keys, err := km.FetchValidatingPublicKeys(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, keyA, hexutil.Encode(keys[0][:]))
+	requireAccountChange(t, changes, keyB)
+
+	cancel()
+	select {
+	case err := <-result:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out stopping watcher")
+	}
+}
+
+func TestKeymanager_PeriodicReconcileIsNotDebounced(t *testing.T) {
+	const (
+		keyA = "0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"
+		keyB = "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055"
+	)
+	resetFeatures := features.InitWithReset(&features.Flags{KeystoreImportDebounceInterval: time.Hour})
+	defer resetFeatures()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+	require.NoError(t, file.WriteFile(keyFilePath, []byte(keyA+"\n")))
+	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
+	require.NoError(t, err)
+	km, err := NewKeymanager(ctx, &SetupConfig{
+		BaseEndpoint:          "http://example.com",
+		GenesisValidatorsRoot: root,
+		KeyFilePath:           keyFilePath,
+		keyFileRemovalGrace:   100 * time.Millisecond,
+		keyFileReadRetryDelay: 10 * time.Millisecond,
+		keyFileReconcileEvery: 20 * time.Millisecond,
+	})
+	require.NoError(t, err)
+	changes := make(chan [][fieldparams.BLSPubkeyLength]byte, 10)
+	sub := km.SubscribeAccountChanges(changes)
+	defer sub.Unsubscribe()
+
+	require.NoError(t, file.WriteFile(keyFilePath, []byte(keyB+"\n")))
+	requireAccountChange(t, changes, keyB)
+}
+
+func TestKeymanager_ReconcileRetriesWithoutFileEvent(t *testing.T) {
+	const (
+		keyA = "0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"
+		keyB = "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055"
+	)
+	keyABytes, err := hexutil.Decode(keyA)
+	require.NoError(t, err)
+	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+	require.NoError(t, file.WriteFile(keyFilePath, []byte(keyB+"\ninvalid\n")))
+	km := &Keymanager{
+		providedPublicKeys:    [][fieldparams.BLSPubkeyLength]byte{bytesutil.ToBytes48(keyABytes)},
+		accountsChangedFeed:   new(event.Feed),
+		keyFilePath:           keyFilePath,
+		keyFileRemovalGrace:   100 * time.Millisecond,
+		keyFileReadRetryDelay: 20 * time.Millisecond,
+	}
+	changes := make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
+	sub := km.SubscribeAccountChanges(changes)
+	defer sub.Unsubscribe()
+
+	done := make(chan struct{})
+	go func() {
+		km.reconcileRemoteKeysFile(t.Context())
+		close(done)
+	}()
+	time.Sleep(25 * time.Millisecond)
+	require.NoError(t, file.WriteFile(keyFilePath, []byte(keyB+"\n")))
+	requireAccountChange(t, changes, keyB)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for remote key file retry")
+	}
+}
+
 func TestNewKeyManager_FileAndFlagsWithDifferentKeys(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -271,6 +702,7 @@ func TestNewKeyManager_FileAndFlagsWithDifferentKeys(t *testing.T) {
 		GenesisValidatorsRoot: root,
 		KeyFilePath:           keyFilePath,
 		ProvidedPublicKeys:    []string{"0x800077e04f8d7496099b3d30ac5430aea64873a45e5bcfe004d2095babcbf55e21138ff0d5691abc29da190aa32755c6"},
+		keyFileRemovalGrace:   100 * time.Millisecond,
 	})
 	require.NoError(t, err)
 	wantSlice := []string{"0x800077e04f8d7496099b3d30ac5430aea64873a45e5bcfe004d2095babcbf55e21138ff0d5691abc29da190aa32755c6",
@@ -307,12 +739,12 @@ func TestRefreshRemoteKeysFromFileChangesWithRetry_failsFastBeforeInitialized(t 
 		GenesisValidatorsRoot: root,
 	})
 	require.NoError(t, err)
-	km.keyFilePath = filepath.Join(t.TempDir(), "missing.txt")
+	km.keyFilePath = filepath.Join(t.TempDir(), "missing-dir", "missing.txt")
 
 	// The hour-long retry delay would hang the test if the first failure did not
 	// return immediately.
 	err = km.refreshRemoteKeysFromFileChangesWithRetry(ctx, time.Hour, func(error) {})
-	require.ErrorContains(t, "could not stat remote signer public key file", err)
+	require.ErrorContains(t, "could not add remote signer key file watcher", err)
 	require.Equal(t, maxRetries, km.retriesRemaining)
 }
 
@@ -336,7 +768,7 @@ func startFailingWatcher(t *testing.T, ctx context.Context, km *Keymanager, keyF
 	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for the watcher to initialize")
 	}
-	require.NoError(t, os.Remove(keyFilePath))
+	require.NoError(t, os.RemoveAll(filepath.Dir(keyFilePath)))
 	return result
 }
 
@@ -424,7 +856,6 @@ func TestKeymanager_Sign(t *testing.T) {
 	config := &SetupConfig{
 		BaseEndpoint:          "http://example.com",
 		GenesisValidatorsRoot: root,
-		PublicKeysURL:         "http://example2.com/api/v1/eth2/publicKeys",
 	}
 	km, err := NewKeymanager(ctx, config)
 	require.NoError(t, err)

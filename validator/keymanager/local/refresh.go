@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/OffchainLabs/prysm/v7/async"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -47,37 +48,82 @@ func (km *Keymanager) listenForAccountChanges(ctx context.Context) {
 			log.WithError(err).Error("Could not close file watcher")
 		}
 	}()
-	if err := watcher.Add(accountsFilePath); err != nil {
-		log.WithError(err).Errorf("Could not add file %s to file watcher", accountsFilePath)
+	accountsFilePath = filepath.Clean(accountsFilePath)
+	// Watch the symlink target so edits through a symlinked keystore keep emitting events.
+	if resolved, err := filepath.EvalSymlinks(accountsFilePath); err == nil {
+		accountsFilePath = filepath.Clean(resolved)
+	}
+	watchDir := filepath.Dir(accountsFilePath)
+	watchPath := watchDir
+	watchingFile := useDirectFileWatch()
+	if watchingFile {
+		// Kqueue opens one descriptor per directory entry. Watch the target directly and reattach
+		// after atomic replacements to avoid exhausting descriptors in large account directories.
+		watchPath = accountsFilePath
+	}
+	if err := watcher.Add(watchPath); err != nil {
+		log.WithError(err).Errorf("Could not add %s to file watcher", watchPath)
 		return
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	fileChangesChan := make(chan any, 100)
-	defer close(fileChangesChan)
+	fileChangesChan := make(chan any, 1)
 
 	// We debounce events sent over the file changes channel by an interval
 	// to ensure we are not overwhelmed by a ton of events fired over the channel in
 	// a short span of time.
-	go async.Debounce(ctx, debounceFileChangesInterval, fileChangesChan, func(event any) {
-		ev, ok := event.(fsnotify.Event)
-		if !ok {
-			log.Errorf("Type %T is not a valid file system event", event)
-			return
-		}
-		km.reloadAccountsFromKeystoreFile(ev.Name)
+	go async.Debounce(ctx, debounceFileChangesInterval, fileChangesChan, func(any) {
+		km.reloadAccountsFromKeystoreFile(accountsFilePath)
 	})
 	for {
 		select {
-		case event := <-watcher.Events:
-			// If a file was modified, we attempt to read that file
-			// and parse it into our accounts store.
-			fileChangesChan <- event
-		case err := <-watcher.Errors:
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+			eventPath := filepath.Clean(event.Name)
+			if !watchingFile && eventPath == watchDir && (event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename)) {
+				log.Errorf("Accounts directory was removed: %s", watchDir)
+				return
+			}
+			if eventPath != accountsFilePath {
+				continue
+			}
+			if !event.Has(fsnotify.Write) && !event.Has(fsnotify.Create) && !event.Has(fsnotify.Rename) && !event.Has(fsnotify.Remove) {
+				continue
+			}
+			if watchingFile && (event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename)) {
+				if err := watcher.Add(accountsFilePath); err != nil {
+					// The file is gone; degrade to watching its directory so recreation is still observed.
+					if dirErr := watcher.Add(watchDir); dirErr != nil {
+						log.WithError(dirErr).Errorf("Could not watch accounts directory after file removal: %s", watchDir)
+						return
+					}
+					watchingFile = false
+					log.Warnf("Accounts file was removed; watching %s until it is recreated", watchDir)
+				}
+			}
+			select {
+			case fileChangesChan <- struct{}{}:
+			default:
+			}
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return
+			}
 			log.WithError(err).Errorf("Could not watch for file changes for: %s", accountsFilePath)
 		case <-ctx.Done():
 			return
 		}
+	}
+}
+
+func useDirectFileWatch() bool {
+	switch runtime.GOOS {
+	case "darwin", "dragonfly", "freebsd", "netbsd", "openbsd":
+		return true
+	default:
+		return false
 	}
 }
 

@@ -366,7 +366,7 @@ func (w *Wallet) WriteFileAtPath(_ context.Context, filePath, fileName string, d
 	if err != nil {
 		return false, errors.Wrapf(err, "could not check if file exists: %s", fullPath)
 	}
-	if err := file.WriteFile(fullPath, data); err != nil {
+	if err := file.WriteFileAtomically(fullPath, data); err != nil {
 		return false, errors.Wrapf(err, "could not write %s", filePath)
 	}
 	log.WithFields(logrus.Fields{
