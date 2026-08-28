@@ -493,7 +493,7 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 	r.run(timedCtx)
 }
 
-func TestPerformPlanDispatch(t *testing.T) {
+func TestExecutePlanDispatch(t *testing.T) {
 	cfg := params.BeaconConfig()
 	cfg.ElectraForkEpoch = 1
 	cfg.GloasForkEpoch = 2
@@ -587,7 +587,7 @@ func TestPerformPlanDispatch(t *testing.T) {
 			}
 
 			duty := testDutyAssignment(v, pubKey)
-			<-performPlan(t.Context(), tt.plan(tt.slot, pubKey, duty), v, trace.SpanFromContext(t.Context()))
+			executePlan(t.Context(), tt.plan(tt.slot, pubKey, duty), v, trace.SpanFromContext(t.Context()))
 		})
 	}
 }

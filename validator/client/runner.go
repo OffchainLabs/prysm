@@ -151,9 +151,9 @@ func (r *runner) run(ctx context.Context) {
 				cancel()
 				continue
 			}
-			// performPlan ends the span after all work and reporting complete.
+			// executePlan ends the span after all work and reporting complete.
 			rolesCtx, _ := context.WithDeadline(ctx, deadline) //nolint:govet
-			performPlan(rolesCtx, plan, v, span)
+			go executePlan(rolesCtx, plan, v, span)
 		case e := <-v.EventsChan():
 			v.ProcessEvent(ctx, e)
 		case currentKeys := <-v.AccountsChangedChan(): // should be less of a priority than next slot
@@ -246,7 +246,7 @@ func initialize(ctx context.Context, v *validator) error {
 	return nil
 }
 
-func performPlan(slotCtx context.Context, plan slotPlan, v *validator, span trace.Span) <-chan struct{} {
+func executePlan(slotCtx context.Context, plan slotPlan, v *validator, span trace.Span) {
 	span.SetAttributes(prysmTrace.Int64Attribute("dutyRevision", int64(plan.dutyRevision))) // lint:ignore uintcast -- This conversion is OK for tracing.
 
 	var wg sync.WaitGroup
@@ -268,28 +268,23 @@ func performPlan(slotCtx context.Context, plan slotPlan, v *validator, span trac
 	for _, duty := range plan.payloadAttestations {
 		wg.Go(func() { v.SubmitPayloadAttestation(slotCtx, plan.slot, duty) })
 	}
-	done := make(chan struct{})
 	// Wait for all processes to complete, then report span complete.
-	go func() {
-		defer close(done)
-		wg.Wait()
-		defer span.End()
-		defer func() {
-			if err := recover(); err != nil { // catch any panic in logging
-				log.WithField("error", err).
-					Error("Panic occurred when logging validator report. This" +
-						" should never happen! Please file a report at github.com/prysmaticlabs/prysm/issues/new")
-			}
-		}()
-		// Log submissions from the current slot
-		v.LogSubmissions(plan.slot)
-
-		// Log performance in the previous slot
-		if err := v.LogValidatorGainsAndLosses(slotCtx, plan.slot); err != nil {
-			log.WithError(err).Error("Could not report validator's rewards/penalties")
+	wg.Wait()
+	defer span.End()
+	defer func() {
+		if err := recover(); err != nil { // catch any panic in logging
+			log.WithField("error", err).
+				Error("Panic occurred when logging validator report. This" +
+					" should never happen! Please file a report at github.com/prysmaticlabs/prysm/issues/new")
 		}
 	}()
-	return done
+	// Log submissions from the current slot
+	v.LogSubmissions(plan.slot)
+
+	// Log performance in the previous slot
+	if err := v.LogValidatorGainsAndLosses(slotCtx, plan.slot); err != nil {
+		log.WithError(err).Error("Could not report validator's rewards/penalties")
+	}
 }
 
 func isConnectionError(err error) bool {
