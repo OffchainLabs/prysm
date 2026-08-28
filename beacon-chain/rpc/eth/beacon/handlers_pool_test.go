@@ -2898,6 +2898,30 @@ func TestSubmitPayloadAttestations(t *testing.T) {
 		s.SubmitPayloadAttestations(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
 	})
+	t.Run("empty body", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(1)
+		chainService := &blockchainmock.ChainService{Slot: &slot}
+		s := &Server{
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			HeadFetcher:           chainService,
+			TimeFetcher:           chainService,
+			OptimisticModeFetcher: chainService,
+		}
+
+		request := httptest.NewRequest(http.MethodPost, "http://example.com", strings.NewReader(""))
+		request.Header.Set(api.VersionHeader, "gloas")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.SubmitPayloadAttestations(writer, request)
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		assert.StringContains(t, "No data submitted", writer.Body.String())
+	})
 	t.Run("ssz ok", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig().Copy()
