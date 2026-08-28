@@ -202,6 +202,11 @@ func TestStore_SaveBlindedExecutionPayloadEnvelope_Outcomes(t *testing.T) {
 	stored, err := db.ExecutionPayloadEnvelope(ctx, blockRoot)
 	require.NoError(t, err)
 	require.Equal(t, blinded.Message.BuilderIndex, stored.Message.BuilderIndex)
+
+	// A failed save never reports an outcome that reads as success.
+	outcome, err = db.SaveBlindedExecutionPayloadEnvelope(ctx, nil)
+	require.NotNil(t, err)
+	require.Equal(t, iface.EnvelopeSaveUnknown, outcome)
 }
 
 func TestStore_SaveBlindedExecutionPayloadEnvelope_MatchesFullSavePath(t *testing.T) {

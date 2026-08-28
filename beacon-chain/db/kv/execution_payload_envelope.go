@@ -54,17 +54,17 @@ func (s *Store) SaveBlindedExecutionPayloadEnvelope(ctx context.Context, env *et
 	defer span.End()
 
 	if env == nil || env.Message == nil {
-		return iface.EnvelopeSaveInserted, errors.New("cannot save nil blinded execution payload envelope")
+		return iface.EnvelopeSaveUnknown, errors.New("cannot save nil blinded execution payload envelope")
 	}
 
 	blockRoot := bytesutil.ToBytes32(env.Message.BeaconBlockRoot)
 	blockHash := bytesutil.ToBytes32(env.Message.BlockHash)
 	sszBytes, err := env.MarshalSSZ()
 	if err != nil {
-		return iface.EnvelopeSaveInserted, errors.Wrap(err, "could not marshal blinded envelope")
+		return iface.EnvelopeSaveUnknown, errors.Wrap(err, "could not marshal blinded envelope")
 	}
 
-	outcome := iface.EnvelopeSaveInserted
+	outcome := iface.EnvelopeSaveUnknown
 	err = s.db.Update(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(executionPayloadEnvelopesBucket)
 		if existing := bkt.Get(blockRoot[:]); existing != nil {
@@ -84,9 +84,17 @@ func (s *Store) SaveBlindedExecutionPayloadEnvelope(ctx context.Context, env *et
 		if err := bkt.Put(blockRoot[:], snappy.Encode(nil, sszBytes)); err != nil {
 			return err
 		}
-		return tx.Bucket(executionPayloadEnvelopeBlockHashBucket).Put(blockHash[:], blockRoot[:])
+		if err := tx.Bucket(executionPayloadEnvelopeBlockHashBucket).Put(blockHash[:], blockRoot[:]); err != nil {
+			return err
+		}
+		outcome = iface.EnvelopeSaveInserted
+		return nil
 	})
-	return outcome, err
+	if err != nil {
+		// A failed transaction is rolled back, so no outcome describes what was stored.
+		return iface.EnvelopeSaveUnknown, err
+	}
+	return outcome, nil
 }
 
 // ExecutionPayloadEnvelope retrieves the blinded signed execution payload envelope by beacon block root.

@@ -726,7 +726,7 @@ func TestFillBackEnvelopeOutcomes(t *testing.T) {
 		saves := 0
 		mdb.saveBlindedEnvelope = func(context.Context, *ethpb.SignedBlindedExecutionPayloadEnvelope) (iface.EnvelopeSaveOutcome, error) {
 			saves++
-			return iface.EnvelopeSaveInserted, errors.New("disk full")
+			return iface.EnvelopeSaveUnknown, errors.New("disk full")
 		}
 		bs, err := st.fillBack(ctx, 20, c.blks[:3], &das.MockAvailabilityStore{}, es)
 		require.NoError(t, err)

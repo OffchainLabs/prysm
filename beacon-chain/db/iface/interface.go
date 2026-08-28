@@ -24,8 +24,11 @@ import (
 type EnvelopeSaveOutcome int
 
 const (
+	// EnvelopeSaveUnknown is the zero value, returned whenever the save failed. It exists so a
+	// non-nil error can never be paired with an outcome that reads as success.
+	EnvelopeSaveUnknown EnvelopeSaveOutcome = iota
 	// EnvelopeSaveInserted indicates no envelope existed for the block root and the new one was written.
-	EnvelopeSaveInserted EnvelopeSaveOutcome = iota
+	EnvelopeSaveInserted
 	// EnvelopeSaveByteIdentical indicates a byte-identical envelope was already stored; the save was a no-op.
 	EnvelopeSaveByteIdentical
 	// EnvelopeSaveConflict indicates a different envelope was already stored; the existing entry was kept.
