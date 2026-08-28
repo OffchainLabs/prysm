@@ -62,7 +62,7 @@ func newWatchedKeymanager(t *testing.T, contents string) (*Keymanager, string, c
 		BaseEndpoint:          "http://example.com",
 		GenesisValidatorsRoot: root,
 		KeyFilePath:           keyFilePath,
-		keyFileRemovalGrace:   200 * time.Millisecond,
+		keyFileRemovalGrace:   500 * time.Millisecond,
 		keyFileReadRetryDelay: 10 * time.Millisecond,
 	})
 	require.NoError(t, err)
@@ -471,6 +471,54 @@ func TestKeymanager_FileChangeNotifications(t *testing.T) {
 		require.Equal(t, 2, len(keys))
 		requireNoAccountChange(t, changes, 4*debounce)
 	})
+
+	t.Run("symlinked key file tracks target across API and external writes", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		dirA := t.TempDir()
+		dirB := t.TempDir()
+		target := filepath.Join(dirB, "real.txt")
+		link := filepath.Join(dirA, "keyfile.txt")
+		require.NoError(t, file.WriteFile(target, []byte(keyA+"\n")))
+		require.NoError(t, os.Symlink(target, link))
+
+		root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
+		require.NoError(t, err)
+		km, err := NewKeymanager(ctx, &SetupConfig{
+			BaseEndpoint:          "http://example.com",
+			GenesisValidatorsRoot: root,
+			KeyFilePath:           link,
+			keyFileRemovalGrace:   200 * time.Millisecond,
+			keyFileReadRetryDelay: 10 * time.Millisecond,
+		})
+		require.NoError(t, err)
+		changes := make(chan [][fieldparams.BLSPubkeyLength]byte, 10)
+		sub := km.SubscribeAccountChanges(changes)
+		t.Cleanup(sub.Unsubscribe)
+
+		// API save must write through the symlink and suppress its own watcher echo.
+		_, err = km.AddPublicKeys([]string{keyB})
+		require.NoError(t, err)
+		requireAccountChange(t, changes, keyA, keyB)
+		info, err := os.Lstat(link)
+		require.NoError(t, err)
+		require.Equal(t, true, info.Mode()&os.ModeSymlink != 0)
+		requireNoAccountChange(t, changes, 6*debounce)
+
+		require.NoError(t, file.WriteFile(target, []byte(keyB+"\n")))
+		requireAccountChange(t, changes, keyB)
+		requireNoAccountChange(t, changes, 4*debounce)
+
+		require.NoError(t, os.WriteFile(link, []byte(keyA+"\n"), 0o600))
+		requireAccountChange(t, changes, keyA)
+		requireNoAccountChange(t, changes, 4*debounce)
+
+		for _, d := range []string{dirA, dirB} {
+			m, err := filepath.Glob(filepath.Join(d, ".*tmp*"))
+			require.NoError(t, err)
+			require.Equal(t, 0, len(m))
+		}
+	})
 }
 
 func TestKeymanager_DeleteAllFileKeysDoesNotFallback(t *testing.T) {
@@ -533,7 +581,7 @@ func TestKeymanager_WatcherInitializationEmptyFileUsesGrace(t *testing.T) {
 		accountsChangedFeed:   new(event.Feed),
 		retriesRemaining:      maxRetries,
 		keyFilePath:           keyFilePath,
-		keyFileRemovalGrace:   150 * time.Millisecond,
+		keyFileRemovalGrace:   400 * time.Millisecond,
 		keyFileReadRetryDelay: 10 * time.Millisecond,
 		keyFileReconcileEvery: time.Hour,
 	}

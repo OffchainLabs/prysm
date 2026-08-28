@@ -169,6 +169,57 @@ func TestWriteFileAtomically(t *testing.T) {
 		assert.Equal(t, true, info.Mode()&os.ModeSymlink != 0)
 	})
 
+	t.Run("resolves symlink chain to the final target", func(t *testing.T) {
+		dir := t.TempDir()
+		target := filepath.Join(dir, "real.txt")
+		link2 := filepath.Join(dir, "link2")
+		link1 := filepath.Join(dir, "link1")
+		require.NoError(t, file.WriteFile(target, []byte("old")))
+		require.NoError(t, os.Symlink(target, link2))
+		require.NoError(t, os.Symlink(link2, link1))
+
+		require.NoError(t, file.WriteFileAtomically(link1, []byte("new")))
+		got, err := os.ReadFile(link1)
+		require.NoError(t, err)
+		assert.Equal(t, "new", string(got))
+	})
+
+	t.Run("leaves no temp files across symlinked directories", func(t *testing.T) {
+		dirA := t.TempDir()
+		dirB := t.TempDir()
+		target := filepath.Join(dirB, "real.txt")
+		link := filepath.Join(dirA, "keys.txt")
+		require.NoError(t, file.WriteFile(target, []byte("old")))
+		require.NoError(t, os.Symlink(target, link))
+
+		require.NoError(t, file.WriteFileAtomically(link, []byte("new")))
+		got, err := os.ReadFile(link)
+		require.NoError(t, err)
+		assert.Equal(t, "new", string(got))
+		for _, d := range []string{dirA, dirB} {
+			m, err := filepath.Glob(filepath.Join(d, ".*tmp*"))
+			require.NoError(t, err)
+			assert.Equal(t, 0, len(m), "leftover temp in %s", d)
+		}
+	})
+
+	t.Run("creates missing file under symlinked parent directory", func(t *testing.T) {
+		base := t.TempDir()
+		realDir := filepath.Join(base, "real-dir")
+		require.NoError(t, os.MkdirAll(realDir, 0700))
+		linkDir := filepath.Join(base, "link-dir")
+		require.NoError(t, os.Symlink(realDir, linkDir))
+		origPath := filepath.Join(linkDir, "keys.txt")
+
+		require.NoError(t, file.WriteFileAtomically(origPath, []byte("new")))
+		got, err := os.ReadFile(origPath)
+		require.NoError(t, err)
+		assert.Equal(t, "new", string(got))
+		info, err := os.Stat(filepath.Join(realDir, "keys.txt"))
+		require.NoError(t, err)
+		assert.Equal(t, params.BeaconIoConfig().ReadWritePermissions, info.Mode().Perm())
+	})
+
 	t.Run("refuses broken symlink", func(t *testing.T) {
 		dir := t.TempDir()
 		linkPath := filepath.Join(dir, "keys.txt")
@@ -176,6 +227,27 @@ func TestWriteFileAtomically(t *testing.T) {
 
 		err := file.WriteFileAtomically(linkPath, []byte("new"))
 		require.ErrorContains(t, "refusing to replace broken symlink", err)
+	})
+
+	t.Run("errors on symlink loop without leaving temp files", func(t *testing.T) {
+		dir := t.TempDir()
+		link := filepath.Join(dir, "loop")
+		require.NoError(t, os.Symlink(link, link))
+
+		err := file.WriteFileAtomically(link, []byte("new"))
+		require.NotNil(t, err)
+		m, err := filepath.Glob(filepath.Join(dir, ".*tmp*"))
+		require.NoError(t, err)
+		assert.Equal(t, 0, len(m))
+	})
+
+	t.Run("errors when parent directory is a broken symlink", func(t *testing.T) {
+		dir := t.TempDir()
+		linkDir := filepath.Join(dir, "linkdir")
+		require.NoError(t, os.Symlink(filepath.Join(dir, "missing-dir"), linkDir))
+
+		err := file.WriteFileAtomically(filepath.Join(linkDir, "keys.txt"), []byte("new"))
+		require.NotNil(t, err)
 	})
 
 	t.Run("refuses directory", func(t *testing.T) {

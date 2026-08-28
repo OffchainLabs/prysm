@@ -397,10 +397,13 @@ func (km *Keymanager) refreshRemoteKeysFromFileChanges(ctx context.Context, mark
 			}).Debug("Remote signer key file event triggered")
 			if watchingFile && (e.Has(fsnotify.Remove) || e.Has(fsnotify.Rename)) {
 				if err := watcher.Add(keyFilePath); err != nil {
-					// A true removal has no parent-directory watch to report its recreation. Reconcile the
-					// removal now, then let the outer retry loop establish a fresh watch.
-					km.reconcileRemoteKeysFile(debounceCtx)
-					return errors.Wrap(err, "could not reattach remote signer key file watcher after replacement")
+					// The file is gone; degrade to watching its directory so recreation is still observed.
+					if dirErr := watcher.Add(watchDir); dirErr != nil {
+						km.reconcileRemoteKeysFile(debounceCtx)
+						return errors.Wrap(dirErr, "could not watch remote signer key file directory after removal")
+					}
+					watchingFile = false
+					log.WithField("path", km.keyFilePath).Warn("Remote signer key file was removed; watching its directory until it is recreated")
 				}
 			}
 			signalFileChange(fileChanges)
@@ -499,6 +502,10 @@ func (km *Keymanager) reloadPublicKeysFromFile() error {
 	km.updateLock.Lock()
 	defer km.updateLock.Unlock()
 
+	return km.reloadPublicKeysFromFileLocked()
+}
+
+func (km *Keymanager) reloadPublicKeysFromFileLocked() error {
 	fileKeys, _, err := km.readKeyFile()
 	if err != nil {
 		km.keyFileAPIEmpty = false
@@ -524,6 +531,10 @@ func (km *Keymanager) applyFlagKeyFallback() {
 	km.updateLock.Lock()
 	defer km.updateLock.Unlock()
 
+	// A concurrent API save may have just rewritten the file; confirm absence under the lock.
+	if err := km.reloadPublicKeysFromFileLocked(); err == nil || !isAbsentKeyFileErr(err) {
+		return
+	}
 	if !km.keyFileFallbackActive {
 		km.keyFileFallbackActive = true
 		log.Warnln("Remote signer key file no longer has keys, defaulting to flag provided keys")

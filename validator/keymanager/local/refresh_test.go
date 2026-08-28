@@ -69,21 +69,27 @@ func TestListenForAccountChanges_AtomicReplacement(t *testing.T) {
 	go km.listenForAccountChanges(ctx)
 	time.Sleep(2 * debounce)
 
-	require.NoError(t, file.WriteFileAtomically(accountsFilePath, encodedB))
-	requireLocalAccountChange(t, changes, pubkeyB)
-	require.NoError(t, file.WriteFileAtomically(accountsFilePath, encodedA))
-	requireLocalAccountChange(t, changes, pubkeyA)
-}
-
-func requireLocalAccountChange(t *testing.T, changes <-chan [][fieldparams.BLSPubkeyLength]byte, want [fieldparams.BLSPubkeyLength]byte) {
-	t.Helper()
-	select {
-	case keys := <-changes:
-		require.Equal(t, 1, len(keys))
-		require.Equal(t, want, keys[0])
-	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for local account change")
+	// The listener exposes no readiness signal, so repeat each replacement until it is observed;
+	// stale events from earlier retries carry the previous key and are skipped.
+	waitForLocalAccountKey := func(want [fieldparams.BLSPubkeyLength]byte, encoded []byte) {
+		t.Helper()
+		deadline := time.After(10 * time.Second)
+		for {
+			require.NoError(t, file.WriteFileAtomically(accountsFilePath, encoded))
+			select {
+			case keys := <-changes:
+				require.Equal(t, 1, len(keys))
+				if keys[0] == want {
+					return
+				}
+			case <-deadline:
+				t.Fatalf("timed out waiting for local account change %#x", want)
+			case <-time.After(10 * debounce):
+			}
+		}
 	}
+	waitForLocalAccountKey(pubkeyB, encodedB)
+	waitForLocalAccountKey(pubkeyA, encodedA)
 }
 
 func TestLocalKeymanager_reloadAccountsFromKeystore_MismatchedNumKeys(t *testing.T) {

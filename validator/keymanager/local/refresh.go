@@ -94,8 +94,13 @@ func (km *Keymanager) listenForAccountChanges(ctx context.Context) {
 			}
 			if watchingFile && (event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename)) {
 				if err := watcher.Add(accountsFilePath); err != nil {
-					log.WithError(err).Errorf("Could not reattach account file watcher after replacement: %s", accountsFilePath)
-					return
+					// The file is gone; degrade to watching its directory so recreation is still observed.
+					if dirErr := watcher.Add(watchDir); dirErr != nil {
+						log.WithError(dirErr).Errorf("Could not watch accounts directory after file removal: %s", watchDir)
+						return
+					}
+					watchingFile = false
+					log.Warnf("Accounts file was removed; watching %s until it is recreated", watchDir)
 				}
 			}
 			select {
