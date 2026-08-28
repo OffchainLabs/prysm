@@ -220,7 +220,7 @@ func TestMarkFullNode_SetsGasLimit(t *testing.T) {
 	require.NotNil(t, fn)
 	assert.Equal(t, uint64(30_000_000), fn.gasLimit)
 
-	gl, err := f.GasLimit(root)
+	gl, err := f.GasLimit(root, blockHash)
 	require.NoError(t, err)
 	assert.Equal(t, uint64(30_000_000), gl)
 }
@@ -261,7 +261,7 @@ func TestInsertChain_SetsFullNodeGasLimit(t *testing.T) {
 	require.NotNil(t, fn)
 	assert.Equal(t, uint64(36_000_000), fn.gasLimit)
 
-	gl, err := f.GasLimit(root)
+	gl, err := f.GasLimit(root, blockHash)
 	require.NoError(t, err)
 	assert.Equal(t, uint64(36_000_000), gl)
 }
@@ -358,6 +358,38 @@ func TestBlockHash_ReturnsBlockHash(t *testing.T) {
 	got, err := f.BlockHash(root)
 	require.NoError(t, err)
 	assert.Equal(t, blockHash, got)
+}
+
+func TestBuilderIndex(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+
+	root := indexToHash(1)
+	st, _, err := prepareGloasForkchoiceState(ctx, 1, root, params.BeaconConfig().ZeroHash, indexToHash(100), params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	// Rebuild the block with a non-default builder index.
+	blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+		Block: &ethpb.BeaconBlockGloas{
+			Slot: 1,
+			Body: &ethpb.BeaconBlockBodyGloas{
+				SignedExecutionPayloadBid: util.HydrateSignedExecutionPayloadBid(&ethpb.SignedExecutionPayloadBid{
+					Message: &ethpb.ExecutionPayloadBid{BuilderIndex: 42},
+				}),
+			},
+		},
+	})
+	signed, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	roblock, err := blocks.NewROBlockWithRoot(signed, root)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	got, err := f.BuilderIndex(root)
+	require.NoError(t, err)
+	assert.Equal(t, primitives.BuilderIndex(42), got)
+
+	_, err = f.BuilderIndex(indexToHash(999))
+	require.ErrorContains(t, ErrNilNode.Error(), err)
 }
 
 func TestBlockHash_UnknownRoot(t *testing.T) {
@@ -855,6 +887,50 @@ func TestGloasHeadComputation_FullPayloadWithPTCBeatsEmptyChildBoost(t *testing.
 	assert.Equal(t, uint64(0), fullA.weight)
 	assert.Equal(t, uint64(8), emptyA.node.weight)
 	assert.Equal(t, uint64(8), emptyB.node.weight)
+}
+
+func TestGloasCouldBuilderWithhold(t *testing.T) {
+	f := setupGloas(t, 1, 1)
+	cfg := params.BeaconConfig()
+	cfg.BuilderFailureWeightThreshold = 60
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := t.Context()
+	root := indexToHash(1)
+	st, blk, err := prepareGloasForkchoiceState(
+		ctx, 1, root, params.BeaconConfig().ZeroHash, indexToHash(100), params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+	en := f.store.emptyNodeByRoot[root]
+
+	t.Run("unknown root", func(t *testing.T) {
+		require.Equal(t, true, f.CouldBuilderWithhold(indexToHash(99)))
+	})
+
+	t.Run("zero committee weight", func(t *testing.T) {
+		en.node.balance = 100
+		require.Equal(t, true, f.CouldBuilderWithhold(root))
+	})
+
+	f.store.committeeWeight = 100
+
+	t.Run("at the threshold", func(t *testing.T) {
+		en.node.balance = 60
+		require.Equal(t, true, f.CouldBuilderWithhold(root))
+	})
+
+	t.Run("above the threshold", func(t *testing.T) {
+		en.node.balance = 61
+		require.Equal(t, false, f.CouldBuilderWithhold(root))
+	})
+
+	// Subtree weight is where proposer boost lands, so it must not lift a weak block over the bar.
+	t.Run("ignores subtree weight", func(t *testing.T) {
+		en.node.balance = 10
+		en.node.weight = 1000
+		en.weight = 1000
+		require.Equal(t, true, f.CouldBuilderWithhold(root))
+	})
 }
 
 // TestGloasProposerBoostWithParentWeight is similar to TestGloasHeadComputation
@@ -2144,7 +2220,7 @@ func TestStore_Prune_IncompatibleFullFinalizedChildren(t *testing.T) {
 
 func TestGasLimit_UnknownRootErrors(t *testing.T) {
 	f := setupGloas(t, 0, 0)
-	_, err := f.GasLimit(indexToHash(999))
+	_, err := f.GasLimit(indexToHash(999), [32]byte{})
 	require.ErrorContains(t, ErrNilNode.Error(), err)
 }
 
@@ -2179,14 +2255,73 @@ func TestGasLimit_GloasEmptyNodeWalksToFullAncestor(t *testing.T) {
 	_, hasFullB := f.store.fullNodeByRoot[rootB]
 	require.Equal(t, false, hasFullB)
 
-	got, err := f.GasLimit(rootB)
+	got, err := f.GasLimit(rootB, blockHashA)
 	require.NoError(t, err)
 	assert.Equal(t, gl, got)
 
 	// Direct full lookup on A also returns gl.
-	got, err = f.GasLimit(rootA)
+	got, err = f.GasLimit(rootA, blockHashA)
 	require.NoError(t, err)
 	assert.Equal(t, gl, got)
+}
+
+func TestGasLimit_GloasParentPayloadVsOwnPayload(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+
+	// A is full with gas limit glA.
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	st, roblock, err := prepareGloasForkchoiceState(ctx, 1, rootA, params.BeaconConfig().ZeroHash, blockHashA, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	const glA = uint64(42_000_000)
+	pe, err := blocks.WrappedROExecutionPayloadEnvelope(&ethpb.ExecutionPayloadEnvelope{
+		BeaconBlockRoot:       rootA[:],
+		ParentBeaconBlockRoot: make([]byte, 32),
+		Payload:               &enginev1.ExecutionPayloadGloas{GasLimit: glA},
+	})
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	// B builds on A's payload; its own payload is revealed with gas limit glB.
+	rootB := indexToHash(2)
+	blockHashB := indexToHash(200)
+	st, roblock, err = prepareGloasForkchoiceState(ctx, 2, rootB, rootA, blockHashB, blockHashA, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	// Before B's payload is imported, a bid on B's own payload cannot be checked,
+	// while a bid treating B as empty is checked against A's payload.
+	_, err = f.GasLimit(rootB, blockHashB)
+	require.ErrorContains(t, "payload for root has not been imported", err)
+	got, err := f.GasLimit(rootB, blockHashA)
+	require.NoError(t, err)
+	assert.Equal(t, glA, got)
+
+	const glB = uint64(43_000_000)
+	pe, err = blocks.WrappedROExecutionPayloadEnvelope(&ethpb.ExecutionPayloadEnvelope{
+		BeaconBlockRoot:       rootB[:],
+		ParentBeaconBlockRoot: rootA[:],
+		Payload:               &enginev1.ExecutionPayloadGloas{GasLimit: glB},
+	})
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	// A bid with parent_block_root B and parent_block_hash B's payload uses glB.
+	got, err = f.GasLimit(rootB, blockHashB)
+	require.NoError(t, err)
+	assert.Equal(t, glB, got)
+	// A bid with parent_block_root B and parent_block_hash A's payload (B treated as empty) still uses glA.
+	got, err = f.GasLimit(rootB, blockHashA)
+	require.NoError(t, err)
+	assert.Equal(t, glA, got)
+	// Any other hash is neither B's payload nor the payload B builds on.
+	_, err = f.GasLimit(rootB, indexToHash(300))
+	require.ErrorContains(t, "neither the root's payload nor its parent payload", err)
+	// Unknown root.
+	_, err = f.GasLimit(indexToHash(3), blockHashA)
+	require.ErrorContains(t, "could not get gas limit for root", err)
 }
 
 func TestProcessAttestation_SameSlotPayloadVote(t *testing.T) {

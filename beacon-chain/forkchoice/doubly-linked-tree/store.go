@@ -85,10 +85,13 @@ func (s *Store) insert(ctx context.Context,
 	block := roblock.Block()
 	slot := block.Slot()
 	var parent *PayloadNode
-	blockHash := &[32]byte{}
+	var blockHash [32]byte
 	var gasLimit uint64
+	var builderIndex primitives.BuilderIndex
 	if block.Version() >= version.Gloas {
-		if err := s.resolveParentPayloadStatus(block, &parent, blockHash); err != nil {
+		var err error
+		parent, blockHash, builderIndex, err = s.resolveParentPayloadStatus(block)
+		if err != nil {
 			return nil, err
 		}
 	} else {
@@ -112,13 +115,14 @@ func (s *Store) insert(ctx context.Context,
 	n := &Node{
 		slot:                        slot,
 		proposerIndex:               block.ProposerIndex(),
+		builderIndex:                builderIndex,
 		root:                        root,
 		parent:                      parent,
 		justifiedEpoch:              justifiedEpoch,
 		unrealizedJustifiedEpoch:    justifiedEpoch,
 		finalizedEpoch:              finalizedEpoch,
 		unrealizedFinalizedEpoch:    finalizedEpoch,
-		blockHash:                   *blockHash,
+		blockHash:                   blockHash,
 		payloadAvailabilityVote:     bitfield.NewBitvector512(),
 		payloadDataAvailabilityVote: bitfield.NewBitvector512(),
 		payloadAttesters:            bitfield.NewBitvector512(),

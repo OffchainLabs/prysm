@@ -2,6 +2,7 @@ package testing
 
 import (
 	"context"
+	"math"
 
 	"github.com/OffchainLabs/prysm/v7/api/client/builder"
 	beaconbuilder "github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
@@ -45,6 +46,7 @@ type MockBuilderService struct {
 	ErrGetExecutionPayloadBid     error
 	ErrSubmitSignedBeaconBlock    error
 	ErrSubmitBuilderPreferences   error
+	ErrSubmitBuilderPrefsByURL    map[string]error
 	Cfg                           *Config
 }
 
@@ -124,7 +126,10 @@ func (s *MockBuilderService) RegisterValidator(context.Context, []*ethpb.SignedV
 }
 
 // SubmitBuilderPreferences for mocking.
-func (s *MockBuilderService) SubmitBuilderPreferences(_ context.Context, _ [48]byte, _ *ethpb.BuilderPreferencesRequestV1) error {
+func (s *MockBuilderService) SubmitBuilderPreferences(_ context.Context, _ [48]byte, url string, _ *ethpb.BuilderPreferencesRequest) error {
+	if err, ok := s.ErrSubmitBuilderPrefsByURL[url]; ok {
+		return err
+	}
 	return s.ErrSubmitBuilderPreferences
 }
 
@@ -134,12 +139,12 @@ func (s *MockBuilderService) SubmitBlindedBlockPostFulu(_ context.Context, _ int
 }
 
 // GetExecutionPayloadBid for mocking.
-func (s *MockBuilderService) GetExecutionPayloadBid(_ context.Context, _ primitives.Slot, _, _ [32]byte, _ [48]byte, _ []*ethpb.SignedRequestAuthV1) ([]beaconbuilder.PayloadBid, error) {
+func (s *MockBuilderService) GetExecutionPayloadBid(_ context.Context, _ primitives.Slot, _, _ [32]byte, _ [48]byte, _ []*ethpb.BuilderEntry) ([]beaconbuilder.PayloadBid, error) {
 	if s.PayloadBids != nil {
 		return s.PayloadBids, s.ErrGetExecutionPayloadBid
 	}
 	if s.PayloadBid != nil {
-		return []beaconbuilder.PayloadBid{{Bid: s.PayloadBid}}, s.ErrGetExecutionPayloadBid
+		return []beaconbuilder.PayloadBid{{Entry: &ethpb.BuilderEntry{Url: "http://builder", MaxExecutionPayment: math.MaxUint64, BuilderBoostFactor: 100}, Bid: s.PayloadBid}}, s.ErrGetExecutionPayloadBid
 	}
 	return nil, s.ErrGetExecutionPayloadBid
 }

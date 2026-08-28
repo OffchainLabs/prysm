@@ -15,6 +15,7 @@ import (
 	rewardtesting "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/rewards/testing"
 	rpctesting "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared/testing"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -536,6 +537,47 @@ func TestProduceBlockV3(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV3(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
+	})
+	t.Run("skip_randao_verification", func(t *testing.T) {
+		for _, raw := range []string{"skip_randao_verification", "skip_randao_verification=", "skip_randao_verification=true"} {
+			t.Run(raw, func(t *testing.T) {
+				var block *structs.SignedBeaconBlock
+				err := json.Unmarshal([]byte(rpctesting.Phase0Block), &block)
+				require.NoError(t, err)
+				v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+				v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), &eth.BlockRequest{
+					Slot:         1,
+					RandaoReveal: common.InfiniteSignature[:],
+					Graffiti:     bGraffiti,
+					SkipMevBoost: false,
+				}).Return(
+					func() (*eth.GenericBeaconBlock, error) {
+						return block.Message.ToGeneric()
+					}())
+				server := &Server{
+					V1Alpha1Server: v1alpha1Server,
+					SyncChecker:    syncChecker,
+				}
+				request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v3/validator/blocks/1?graffiti=%s&%s", graffiti, raw), nil)
+				request.SetPathValue("slot", "1")
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+				server.ProduceBlockV3(writer, request)
+				assert.Equal(t, http.StatusOK, writer.Code)
+			})
+		}
+		t.Run("skip_randao_verification=false still requires randao_reveal", func(t *testing.T) {
+			server := &Server{
+				V1Alpha1Server: mock2.NewMockBeaconNodeValidatorServer(ctrl),
+				SyncChecker:    syncChecker,
+			}
+			request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v3/validator/blocks/1?skip_randao_verification=false", nil)
+			request.SetPathValue("slot", "1")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+			server.ProduceBlockV3(writer, request)
+			assert.Equal(t, http.StatusBadRequest, writer.Code)
+		})
 	})
 	t.Run("syncing", func(t *testing.T) {
 		server := &Server{

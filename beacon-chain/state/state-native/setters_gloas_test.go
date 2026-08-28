@@ -281,6 +281,34 @@ func TestUpdatePendingPaymentWeight(t *testing.T) {
 			require.Equal(t, tt.wantWeight, payment.Weight)
 		})
 	}
+
+	t.Run("target equivocation credits once", func(t *testing.T) {
+		paymentIdx := int(slotsPerEpoch + (slot % slotsPerEpoch))
+		state := buildGloasStateForPaymentWeightTest(t, stateSlot, paymentIdx, 1, 0, map[primitives.Slot][]byte{
+			slot: rootA,
+		})
+
+		att := &ethpb.Attestation{
+			Data: &ethpb.AttestationData{
+				Slot:            slot,
+				CommitteeIndex:  0,
+				BeaconBlockRoot: rootA,
+				Source:          &ethpb.Checkpoint{},
+				Target: &ethpb.Checkpoint{
+					Epoch: stateEpoch,
+				},
+			},
+		}
+		indices := []uint64{0}
+
+		require.NoError(t, state.UpdatePendingPaymentWeight(att, indices, map[uint8]bool{cfg.TimelySourceFlagIndex: true}))
+		state.currentEpochParticipation[0] |= 1 << cfg.TimelySourceFlagIndex
+		require.NoError(t, state.UpdatePendingPaymentWeight(att, indices, map[uint8]bool{cfg.TimelyTargetFlagIndex: true}))
+
+		payment, err := state.BuilderPendingPayment(uint64(paymentIdx))
+		require.NoError(t, err)
+		require.Equal(t, primitives.Gwei(cfg.MinActivationBalance), payment.Weight)
+	})
 }
 
 func TestRotateBuilderPendingPayments(t *testing.T) {
@@ -882,7 +910,7 @@ func TestAddBuilderFromDeposit(t *testing.T) {
 		copy(pubkey[:], bytes.Repeat([]byte{0xAA}, 48))
 		var wc [32]byte
 		copy(wc[:], bytes.Repeat([]byte{0xBB}, 32))
-		wc[0] = 0x42 // version byte
+		wc[0] = 0x42 // registered version must ignore the credential prefix
 
 		st := &BeaconState{
 			version:     version.Gloas,
@@ -905,7 +933,7 @@ func TestAddBuilderFromDeposit(t *testing.T) {
 		got := st.builders[0]
 		require.NotNil(t, got)
 		require.DeepEqual(t, pubkey[:], got.Pubkey)
-		require.DeepEqual(t, []byte{0x42}, got.Version)
+		require.DeepEqual(t, []byte{params.BeaconConfig().PayloadBuilderVersion}, got.Version)
 		require.DeepEqual(t, wc[12:], got.ExecutionAddress)
 		require.Equal(t, primitives.Gwei(123), got.Balance)
 		require.Equal(t, primitives.Epoch(0), got.DepositEpoch)

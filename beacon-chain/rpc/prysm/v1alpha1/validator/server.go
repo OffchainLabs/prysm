@@ -6,7 +6,6 @@ package validator
 import (
 	"bytes"
 	"context"
-	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
@@ -52,6 +51,7 @@ type Server struct {
 	ProposerPreferencesCache         *cache.ProposerPreferencesCache
 	SubscribedValidatorsCache        *cache.SubscribedValidatorsCache
 	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
+	BuilderCircuitBreaker            *cache.BuilderCircuitBreaker
 	ExecutionPayloadEnvelopeCache    *cache.ExecutionPayloadEnvelopeCache
 	HeadFetcher                      blockchain.HeadFetcher
 	ForkFetcher                      blockchain.ForkFetcher
@@ -93,11 +93,6 @@ type Server struct {
 	AttestationStateFetcher          blockchain.AttestationStateFetcher
 	NewExecutionPayloadBidVerifier   verification.NewExecutionPayloadBidVerifier
 	GraffitiInfo                     *execution.GraffitiInfo
-	lastBidLock                      sync.Mutex
-	lastBidSlot                      primitives.Slot
-	lastBidSource                    bidSource // Guarded by lastBidLock, set during Gloas block build, read when proposing.
-	lastBidBuilderURL                string    // Guarded by lastBidLock, winning Builder-API URL for lastBidSlot.
-	maxExecutionPayments             sync.Map  // validator pubkey [48]byte -> max execution payment (Gwei uint64).
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
@@ -121,7 +116,7 @@ func (vs *Server) WaitForActivation(req *ethpb.ValidatorActivationRequest, strea
 		return status.Errorf(codes.Internal, "Could not send response over stream: %v", err)
 	}
 
-	waitTime := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	waitTime := params.BeaconConfig().SlotDuration()
 	ticker := time.NewTicker(waitTime)
 	defer ticker.Stop()
 

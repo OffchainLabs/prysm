@@ -1514,6 +1514,83 @@ func TestValidateBeaconBlockPubSub_RejectBlocksFromBadParent(t *testing.T) {
 	}
 }
 
+func TestValidateBeaconBlockPubSub_RejectBlockSlotNotAfterParent(t *testing.T) {
+	tests := []struct {
+		name       string
+		parentSlot primitives.Slot
+		blockSlot  primitives.Slot
+	}{
+		{name: "block slot lower than parent slot", parentSlot: 5, blockSlot: 3},
+		{name: "block slot equal to parent slot", parentSlot: 5, blockSlot: 5},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := dbtest.SetupDB(t)
+			p := p2ptest.NewTestP2P(t)
+			ctx := t.Context()
+			beaconState, privKeys := util.DeterministicGenesisState(t, 100)
+
+			parentBlock := util.NewBeaconBlock()
+			parentBlock.Block.Slot = tt.parentSlot
+			util.SaveBlock(t, ctx, db, parentBlock)
+			bRoot, err := parentBlock.Block.HashTreeRoot()
+			require.NoError(t, err)
+			require.NoError(t, db.SaveState(ctx, beaconState, bRoot))
+			require.NoError(t, db.SaveStateSummary(ctx, &ethpb.StateSummary{Root: bRoot[:]}))
+
+			copied := beaconState.Copy()
+			require.NoError(t, copied.SetSlot(tt.blockSlot))
+			proposerIdx, err := helpers.BeaconProposerIndex(ctx, copied)
+			require.NoError(t, err)
+			msg := util.NewBeaconBlock()
+			msg.Block.ParentRoot = bRoot[:]
+			msg.Block.Slot = tt.blockSlot
+			msg.Block.ProposerIndex = proposerIdx
+			msg.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, msg.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[proposerIdx])
+			require.NoError(t, err)
+
+			chainService := &mock.ChainService{
+				Genesis:   time.Unix(time.Now().Unix()-8*int64(params.BeaconConfig().SecondsPerSlot), 0),
+				State:     beaconState,
+				Root:      bRoot[:],
+				BlockSlot: tt.parentSlot,
+				FinalizedCheckPoint: &ethpb.Checkpoint{
+					Epoch: 0,
+					Root:  make([]byte, 32),
+				},
+				DB: db,
+			}
+			r := &Service{
+				cfg: &config{
+					beaconDB:          db,
+					p2p:               p,
+					initialSync:       &mockSync.Sync{IsSyncing: false},
+					chain:             chainService,
+					clock:             startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+					blockNotifier:     chainService.BlockNotifier(),
+					operationNotifier: chainService.OperationNotifier(),
+					stateGen:          stategen.New(db, doublylinkedtree.New()),
+				},
+				seenBlockCache:      lruwrpr.New(10),
+				badBlockCache:       lruwrpr.New(10),
+				slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
+				seenPendingBlocks:   make(map[[32]byte]bool),
+			}
+
+			buf := new(bytes.Buffer)
+			_, err = p.Encoding().EncodeGossip(buf, msg)
+			require.NoError(t, err)
+			topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlock]()]
+			topic = r.addDigestToTopic(topic, r.currentForkDigest())
+			m := &pubsub.Message{Message: &pubsubpb.Message{Data: buf.Bytes(), Topic: &topic}}
+
+			res, err := r.validateBeaconBlockPubSub(ctx, "", m)
+			require.ErrorIs(t, err, errBlockSlotNotAfterParent)
+			require.Equal(t, pubsub.ValidationReject, res)
+		})
+	}
+}
+
 func TestService_setBadBlock_DoesntSetWithContextErr(t *testing.T) {
 	s := Service{}
 	s.initCaches()

@@ -257,6 +257,18 @@ var (
 		Name: "beacon_late_payload_task_triggered_total",
 		Help: "Count the number of times late payload tasks fired.",
 	})
+	builderPayloadFailuresTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "builder_payload_failures_total",
+		Help: "Count of builders blacklisted for failing to reveal a payload.",
+	})
+	builderBlacklistedCount = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "builder_blacklisted_count",
+		Help: "Number of builders currently blacklisted by the circuit breaker.",
+	})
+	builderSelfBuildOnly = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "builder_self_build_only",
+		Help: "1 when the builder circuit breaker forces self-building, 0 otherwise.",
+	})
 	goroutineCountGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "beacon_goroutine_count",
 		Help: "Goroutine count sampled once per slot.",

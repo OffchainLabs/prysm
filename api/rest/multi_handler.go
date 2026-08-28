@@ -11,12 +11,21 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 )
 
+const sszUnsupportedTTL = 24 * time.Hour
+
 type (
 	multiHandler struct {
-		handlers []*handler
+		handlers       []*handler
+		sszUnsupported sync.Map // sszSupportKey -> time.Time
+	}
+
+	sszSupportKey struct {
+		host     string
+		endpoint string
 	}
 
 	sszResult struct {
@@ -218,16 +227,15 @@ func (m *multiHandler) Post(ctx context.Context, endpoint string, headers map[st
 	return nil
 }
 
-// PostSSZ broadcasts an SSZ-preferred POST to all nodes and returns the first
-// successful response.
-func (m *multiHandler) PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) ([]byte, http.Header, error) {
+// PostSSZ broadcasts a POST with an SSZ request body to all nodes.
+// It surfaces 415 Unsupported Media Type errors from any node, otherwise succeeds as soon as one node accepts.
+func (m *multiHandler) PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) error {
 	if len(m.handlers) == 1 {
-		result, header, err := m.handlers[0].PostSSZ(ctx, endpoint, headers, data)
-		if err != nil {
-			return nil, nil, fmt.Errorf("post ssz: %w", err)
+		if err := m.handlers[0].PostSSZ(ctx, endpoint, headers, data); err != nil {
+			return fmt.Errorf("post ssz: %w", err)
 		}
 
-		return result, header, nil
+		return nil
 	}
 
 	var raw []byte
@@ -235,27 +243,89 @@ func (m *multiHandler) PostSSZ(ctx context.Context, endpoint string, headers map
 		raw = data.Bytes()
 	}
 
-	post := func(ctx context.Context, h *handler) (sszResult, error) {
-		body, hdr, err := h.PostSSZ(ctx, endpoint, headers, cloneBuffer(data, raw))
-		if err != nil {
-			return sszResult{}, fmt.Errorf("post ssz: %w", err)
+	post := func(ctx context.Context, h *handler) error {
+		if err := h.PostSSZ(ctx, endpoint, headers, cloneBuffer(data, raw)); err != nil {
+			return fmt.Errorf("post ssz: %w", err)
 		}
 
-		return sszResult{body: body, header: hdr}, nil
+		return nil
 	}
 
-	vals, errs := broadcastWriteAll(ctx, m.handlers, post)
+	accepted, errs := broadcastWriteAll(ctx, m.handlers, post)
 	for _, err := range errs {
-		if errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusNotAcceptable}) {
-			return nil, nil, err
+		if errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}) {
+			return err
 		}
 	}
 
-	if len(vals) > 0 {
-		return vals[0].body, vals[0].header, nil
+	if accepted > 0 {
+		return nil
 	}
 
-	return nil, nil, errors.Join(errs...)
+	return errors.Join(errs...)
+}
+
+// PostSSZWithFallback broadcasts each request using the best known encoding for
+// that node and endpoint. A 415 response only downgrades and retries that node.
+func (m *multiHandler) PostSSZWithFallback(
+	ctx context.Context,
+	endpoint string,
+	headers map[string]string,
+	sszFn func() ([]byte, error),
+	jsonFn func() ([]byte, error),
+) error {
+	// Wrap marshalers to ensure they are only called once.
+	sszBody := sync.OnceValues(sszFn)
+	jsonBody := sync.OnceValues(jsonFn)
+
+	post := func(ctx context.Context, h *handler) error {
+		key := sszSupportKey{host: h.Host(), endpoint: endpoint}
+		unsupportedAt, unsupported := m.sszUnsupported.Load(key)
+		if !unsupported || time.Since(unsupportedAt.(time.Time)) >= sszUnsupportedTTL {
+			body, err := sszBody()
+			if err != nil {
+				return fmt.Errorf("marshal SSZ body: %w", err)
+			}
+
+			err = h.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(body))
+			if !errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}) {
+				if err != nil {
+					return fmt.Errorf("post SSZ: %w", err)
+				}
+				return nil
+			}
+
+			if unsupported {
+				m.sszUnsupported.Store(key, time.Now())
+			} else if _, loaded := m.sszUnsupported.LoadOrStore(key, time.Now()); !loaded {
+				log.WithError(err).
+					WithField("host", api.RedactEndpoint(key.host)).
+					WithField("endpoint", endpoint).
+					Warn("Beacon node does not accept SSZ request bodies, falling back to JSON")
+			}
+		}
+
+		body, err := jsonBody()
+		if err != nil {
+			return fmt.Errorf("marshal JSON body: %w", err)
+		}
+
+		if err := h.Post(ctx, endpoint, headers, bytes.NewBuffer(body), nil); err != nil {
+			return fmt.Errorf("post JSON: %w", err)
+		}
+		return nil
+	}
+
+	if len(m.handlers) == 1 {
+		return post(ctx, m.handlers[0])
+	}
+
+	accepted, errs := broadcastWriteAll(ctx, m.handlers, post)
+	if accepted > 0 {
+		return nil
+	}
+
+	return errors.Join(errs...)
 }
 
 // readUntil runs round against the handlers.
@@ -556,8 +626,8 @@ func broadcastWrite[T any](ctx context.Context, handlers []*handler, fn func(con
 }
 
 // broadcastWriteAll runs fn against every handler concurrently and waits for all
-// of them, returning the successful values and the errors separately.
-func broadcastWriteAll[T any](ctx context.Context, handlers []*handler, fn func(context.Context, *handler) (T, error)) ([]T, []error) {
+// of them, returning the accepted count and the errors separately.
+func broadcastWriteAll(ctx context.Context, handlers []*handler, fn func(context.Context, *handler) error) (uint16, []error) {
 	// Detach from the caller's cancellation so writes still reach every node after we return.
 	bgCtx := context.WithoutCancel(ctx)
 
@@ -567,18 +637,12 @@ func broadcastWriteAll[T any](ctx context.Context, handlers []*handler, fn func(
 		bgCtx, cancel = context.WithDeadline(bgCtx, deadline)
 	}
 
-	type result struct {
-		val T
-		err error
-	}
-
 	// Call fn concurrently and asynchronously on every handler, sending the result to results.
 	var wg sync.WaitGroup
-	results := make(chan result, len(handlers))
+	results := make(chan error, len(handlers))
 	for _, handler := range handlers {
 		wg.Go(func() {
-			val, err := fn(bgCtx, handler)
-			results <- result{val: val, err: err}
+			results <- fn(bgCtx, handler)
 		})
 	}
 
@@ -589,43 +653,43 @@ func broadcastWriteAll[T any](ctx context.Context, handlers []*handler, fn func(
 	}()
 
 	var (
-		vals []T
-		errs []error
+		accepted uint16
+		errs     []error
 	)
 
-	collect := func(r result) {
-		if r.err != nil {
-			errs = append(errs, r.err)
+	collect := func(err error) {
+		if err != nil {
+			errs = append(errs, err)
 			return
 		}
 
-		vals = append(vals, r.val)
+		accepted++
 	}
 
 	// Collect results until every handler has returned.
 	for range handlers {
 		select {
-		case r := <-results:
-			collect(r)
+		case err := <-results:
+			collect(err)
 		case <-ctx.Done():
 			// Caller gave up waiting: drain results already in hand for successes
 			// before returning, otherwise report the context error.
 			for {
 				select {
-				case r := <-results:
-					collect(r)
+				case err := <-results:
+					collect(err)
 				default:
-					if len(vals) == 0 && len(errs) == 0 {
+					if accepted == 0 && len(errs) == 0 {
 						errs = append(errs, ctx.Err())
 					}
 
-					return vals, errs
+					return accepted, errs
 				}
 			}
 		}
 	}
 
-	return vals, errs
+	return accepted, errs
 }
 
 // cloneBuffer returns a fresh buffer over a copy of raw, or nil when the

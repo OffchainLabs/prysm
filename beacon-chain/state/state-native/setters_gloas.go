@@ -368,8 +368,7 @@ func (b *BeaconState) AddBuilderFromDeposit(pubkey [fieldparams.BLSPubkeyLength]
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	// process_builder_deposit_request sets version to withdrawal_credentials[0].
-	return b.addBuilderFromDepositAtEpoch(pubkey, withdrawalCredentials[0], withdrawalCredentials, amount, slots.ToEpoch(b.slot))
+	return b.addBuilderFromDepositAtEpoch(pubkey, params.BeaconConfig().PayloadBuilderVersion, withdrawalCredentials, amount, slots.ToEpoch(b.slot))
 }
 
 func (b *BeaconState) addBuilderFromDepositAtEpoch(pubkey [fieldparams.BLSPubkeyLength]byte, builderVersion byte, withdrawalCredentials [fieldparams.RootLength]byte, amount uint64, depositEpoch primitives.Epoch) error {
@@ -441,6 +440,7 @@ func (b *BeaconState) builderInsertionIndex(currentEpoch primitives.Epoch) primi
 //
 //	proposer_reward_numerator = 0
 //	for index in get_attesting_indices(state, attestation):
+//	    had_no_participation = epoch_participation[index] == ParticipationFlags(0b0000_0000)
 //	    will_set_new_flag = False
 //	    for flag_index, weight in enumerate(PARTICIPATION_FLAG_WEIGHTS):
 //	        if flag_index in participation_flag_indices and not has_flag(epoch_participation[index], flag_index):
@@ -450,6 +450,7 @@ func (b *BeaconState) builderInsertionIndex(currentEpoch primitives.Epoch) primi
 //	            will_set_new_flag = True
 //	    if (
 //	        will_set_new_flag
+//	        and had_no_participation
 //	        and is_attestation_same_slot(state, data)
 //	        and payment.withdrawal.amount > 0
 //	    ):
@@ -510,6 +511,9 @@ func (b *BeaconState) UpdatePendingPaymentWeight(att ethpb.Att, indices []uint64
 				return false, fmt.Errorf("index %d exceeds participation length %d", idx, len(epochParticipation))
 			}
 			participation := epochParticipation[idx]
+			if participation != 0 {
+				continue
+			}
 			for _, f := range flagIndices {
 				if !participatedFlags[f] {
 					continue

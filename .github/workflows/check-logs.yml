@@ -16,8 +16,5 @@ jobs:
         with:
           go-version: '1.25.1'
 
-      - name: Install ripgrep
-        run: sudo apt-get install -y ripgrep
-
       - name: Check log.go files
         run: ./hack/check-logs.sh

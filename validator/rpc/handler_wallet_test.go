@@ -16,16 +16,15 @@ import (
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
-	"github.com/OffchainLabs/prysm/v7/validator/client"
-	"github.com/OffchainLabs/prysm/v7/validator/client/testutil"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
-	validatorTesting "github.com/OffchainLabs/prysm/v7/validator/testing"
 	"github.com/google/uuid"
 	"github.com/tyler-smith/go-bip39"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
+	"go.uber.org/mock/gomock"
 )
 
 const strongPass = "29384283xasjasd32%%&*@*#*"
@@ -46,14 +45,9 @@ func TestServer_CreateWallet_Local(t *testing.T) {
 	require.NoError(t, err)
 	km, err := w.InitializeKeymanager(ctx, iface.InitKeymanagerConfig{ListenForChanges: false})
 	require.NoError(t, err)
-	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Conn:   validatorTesting.MockNodeConnection(),
-		Wallet: w,
-		Validator: &testutil.FakeValidator{
-			Km: km,
-		},
-	})
-	require.NoError(t, err)
+	vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+	vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
+	vs.EXPECT().Keymanager().Return(km, nil).AnyTimes()
 	s := &Server{
 		walletInitializedFeed: new(event.Feed),
 		walletDir:             defaultWalletPath,
@@ -444,14 +438,9 @@ func TestServer_WalletConfig(t *testing.T) {
 	km, err := w.InitializeKeymanager(ctx, iface.InitKeymanagerConfig{ListenForChanges: false})
 	require.NoError(t, err)
 	s.wallet = w
-	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Conn:   validatorTesting.MockNodeConnection(),
-		Wallet: w,
-		Validator: &testutil.FakeValidator{
-			Km: km,
-		},
-	})
-	require.NoError(t, err)
+	vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+	vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
+	vs.EXPECT().Keymanager().Return(km, nil).AnyTimes()
 	s.validatorService = vs
 	req := httptest.NewRequest(http.MethodGet, "/v2/validator/wallet/keystores/validate", nil)
 	wr := httptest.NewRecorder()

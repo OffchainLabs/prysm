@@ -122,8 +122,8 @@ func (s *Service) shouldOverrideFCU(newHeadRoot [32]byte, proposingSlot primitiv
 		log.WithFields(logrus.Fields{
 			"root":   fmt.Sprintf("%#x", newHeadRoot),
 			"weight": headWeight,
-		}).Infof("Attempted late block reorg aborted due to attestations at %d seconds",
-			params.BeaconConfig().SecondsPerSlot)
+		}).Infof("Attempted late block reorg aborted due to attestations at %s into the slot",
+			params.BeaconConfig().SlotDuration())
 		lateBlockFailedAttemptSecondThreshold.Inc()
 	} else {
 		if s.cfg.ForkChoiceStore.ShouldOverrideFCU() {

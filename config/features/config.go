@@ -50,8 +50,9 @@ type Flags struct {
 	DisableDutiesV2                     bool // DisableDutiesV2 sets validator client to use the get Duties endpoint
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
 	EnableStateDiff                     bool // EnableStateDiff enables the experimental state diff feature for the beacon node.
-	EnableProgressiveSSZ                bool // EnableProgressiveSSZ enables experimental progressive SSZ merkleization for converted consensus types.
+	DisableProgressiveSSZ               bool // DisableProgressiveSSZ turns off progressive SSZ merkleization for Gloas consensus types.
 	ReorgLatePayloads                   bool // ReorgLatePayloads enables reorging late payloads in the beacon node.
+	SubmitBlacklistedBuilderBids        bool // SubmitBlacklistedBuilderBids skips the circuit breaker check when submitting a signed execution payload bid.
 
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
@@ -113,7 +114,7 @@ func Get() *Flags {
 // ProgressiveSSZEnabled reports whether progressive SSZ is enabled for the
 // supplied state version.
 func ProgressiveSSZEnabled(stateVersion int) bool {
-	return stateVersion >= version.Gloas && Get().EnableProgressiveSSZ
+	return stateVersion >= version.Gloas && !Get().DisableProgressiveSSZ
 }
 
 // Init sets the global config equal to the config that is passed in.
@@ -305,13 +306,17 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 			cfg.EnableHistoricalSpaceRepresentation = false
 		}
 	}
-	if ctx.IsSet(EnableProgressiveSSZ.Name) {
-		logEnabled(EnableProgressiveSSZ)
-		cfg.EnableProgressiveSSZ = true
+	if ctx.IsSet(DisableProgressiveSSZ.Name) {
+		logDisabled(DisableProgressiveSSZ)
+		cfg.DisableProgressiveSSZ = true
 	}
 	if ctx.Bool(reorgLatePayloads.Name) {
 		logEnabled(reorgLatePayloads)
 		cfg.ReorgLatePayloads = true
+	}
+	if ctx.Bool(submitBlacklistedBuilderBids.Name) {
+		logEnabled(submitBlacklistedBuilderBids)
+		cfg.SubmitBlacklistedBuilderBids = true
 	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}

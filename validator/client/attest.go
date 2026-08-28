@@ -20,7 +20,6 @@ import (
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -39,7 +38,7 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 	v.waitUntilAttestationDueOrValidBlock(ctx, slot)
 
 	var b strings.Builder
-	if err := b.WriteByte(byte(iface.RoleAttester)); err != nil {
+	if err := b.WriteByte(byte(roleAttester)); err != nil {
 		log.WithError(err).Error("Could not write role byte for lock key")
 		tracing.AnnotateError(span, err)
 		return
@@ -257,12 +256,7 @@ func (v *validator) setHighestSlot(slot primitives.Slot) {
 // attestationDueComponent returns the slot-component basis points for the
 // attestation due time.
 func attestationDueComponent(slot primitives.Slot) primitives.BP {
-	cfg := params.BeaconConfig()
-	if slots.ToEpoch(slot) >= cfg.GloasForkEpoch {
-		return cfg.AttestationDueBPSGloas
-	}
-
-	return cfg.AttestationDueBPS
+	return params.BeaconConfig().AttestationDueBPSAtSlot(slot)
 }
 
 // waitUntilAttestationDueOrValidBlock waits until (a) or (b) whichever comes first:

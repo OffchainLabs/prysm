@@ -2,6 +2,7 @@ package validator
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -84,7 +86,9 @@ func TestProduceBlockV4_IncludePayloadTrue(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).Return(gloasGenericBlockContents(), nil)
+	contents := gloasGenericBlockContents()
+	contents.PayloadValue = "12345"
+	v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).Return(contents, nil)
 
 	server := &Server{
 		V1Alpha1Server:        v1alpha1Server,
@@ -103,6 +107,7 @@ func TestProduceBlockV4_IncludePayloadTrue(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	assert.Equal(t, "gloas", resp.Version)
 	assert.Equal(t, true, resp.ExecutionPayloadIncluded)
+	assert.Equal(t, "12345", resp.ExecutionPayloadValue)
 	assert.Equal(t, "10000000000", resp.ConsensusBlockValue)
 
 	var blockContents structs.BlockContentsGloas
@@ -111,6 +116,7 @@ func TestProduceBlockV4_IncludePayloadTrue(t *testing.T) {
 	assert.NotNil(t, blockContents.ExecutionPayloadEnvelope)
 
 	require.Equal(t, "gloas", writer.Header().Get(api.VersionHeader))
+	require.Equal(t, "12345", writer.Header().Get(api.ExecutionPayloadValueHeader))
 	require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
 	require.Equal(t, "true", writer.Header().Get(api.ExecutionPayloadIncludedHeader))
 }
@@ -197,6 +203,9 @@ func TestProduceBlockV4_IncludePayloadFalse(t *testing.T) {
 	assert.NotNil(t, block.Body)
 
 	require.Equal(t, "gloas", writer.Header().Get(api.VersionHeader))
+	// Producer set no payload value: the response must still carry a numeric value.
+	require.Equal(t, "0", resp.ExecutionPayloadValue)
+	require.Equal(t, "0", writer.Header().Get(api.ExecutionPayloadValueHeader))
 	require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadIncludedHeader))
 }
 
@@ -210,7 +219,9 @@ func TestProduceBlockV4_BuilderBidExcludesPayload(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 	// External builder bid: the producer returns the block alone (no inline contents), so the payload is excluded.
-	v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).Return(gloasGenericBlockWithBuilder(3), nil)
+	builderBlock := gloasGenericBlockWithBuilder(3)
+	builderBlock.PayloadValue = "2000000000000"
+	v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).Return(builderBlock, nil)
 
 	server := &Server{
 		V1Alpha1Server:        v1alpha1Server,
@@ -228,6 +239,8 @@ func TestProduceBlockV4_BuilderBidExcludesPayload(t *testing.T) {
 	var resp structs.ProduceBlockV4Response
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	assert.Equal(t, false, resp.ExecutionPayloadIncluded)
+	assert.Equal(t, "2000000000000", resp.ExecutionPayloadValue)
+	require.Equal(t, "2000000000000", writer.Header().Get(api.ExecutionPayloadValueHeader))
 	require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadIncludedHeader))
 
 	var block structs.BeaconBlockGloas
@@ -394,4 +407,35 @@ func TestProduceBlockV4_SSZ_IncludePayloadFalse(t *testing.T) {
 	server.ProduceBlockV4(writer, request)
 	assert.Equal(t, http.StatusOK, writer.Code)
 	assert.Equal(t, "application/octet-stream", writer.Header().Get("Content-Type"))
+}
+
+func TestProduceBlockV4_SkipRandaoVerification(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	for _, raw := range []string{"skip_randao_verification", "skip_randao_verification=", "skip_randao_verification=true"} {
+		t.Run(raw, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+			v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, req *eth.BlockRequest) (*eth.GenericBeaconBlock, error) {
+					require.DeepEqual(t, common.InfiniteSignature[:], req.RandaoReveal)
+					return gloasGenericBlockContents(), nil
+				})
+			server := &Server{
+				V1Alpha1Server:        v1alpha1Server,
+				SyncChecker:           &mockSync.Sync{IsSyncing: false},
+				OptimisticModeFetcher: &blockchainTesting.ChainService{},
+				BlockRewardFetcher:    &rewardtesting.MockBlockRewardFetcher{Rewards: &structs.BlockRewards{Total: "10"}},
+			}
+			request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?graffiti=%s&%s", testGraffiti, raw), nil)
+			request.SetPathValue("slot", "1")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+			server.ProduceBlockV4(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+		})
+	}
 }
