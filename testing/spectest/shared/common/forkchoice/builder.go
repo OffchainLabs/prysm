@@ -119,6 +119,20 @@ func (bb *Builder) ValidBlock(t testing.TB, b interfaces.ReadOnlySignedBeaconBlo
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 	require.NoError(t, bb.service.ReceiveBlock(ctx, b, r, nil))
+	bb.recordIfEarly(b, r)
+}
+
+func (bb *Builder) recordIfEarly(b interfaces.ReadOnlySignedBeaconBlock, root [32]byte) {
+	cfg := params.BeaconConfig()
+	slot := b.Block().Slot()
+	if uint64(bb.lastTick)/cfg.SecondsPerSlot != uint64(slot) {
+		return
+	}
+	slotStart := int64(uint64(slot) * cfg.SecondsPerSlot)
+	if time.Duration(bb.lastTick-slotStart)*time.Second >= cfg.SlotComponentDuration(cfg.EquivocationEarlyDueBPS) {
+		return
+	}
+	bb.service.RecordBlockForEquivocation(slot, b.Block().ProposerIndex(), root)
 }
 
 // ExecutionPayloadEnvelope receives an envelope and notifies the chain service.

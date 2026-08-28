@@ -23,6 +23,7 @@ func TestArchiveForPath(t *testing.T) {
 		{"consensus general", "tests/general/phase0/foo.ssz", externaldata.ConsensusSpecTestsGeneral, true},
 		{"consensus minimal", "tests/minimal/altair/bar.yaml", externaldata.ConsensusSpecTestsMinimal, true},
 		{"consensus mainnet", "tests/mainnet/capella/baz.yaml", externaldata.ConsensusSpecTestsMainnet, true},
+		{"cryptography kzg", "tests/kzg/compute_cells", externaldata.CryptographySpecTests, true},
 		{"consensus unknown category", "tests/devnet/foo.yaml", "", false},
 		{"consensus bare", "tests", "", false},
 		{"external repo", "external/my_repo/file.txt", "my_repo", true},

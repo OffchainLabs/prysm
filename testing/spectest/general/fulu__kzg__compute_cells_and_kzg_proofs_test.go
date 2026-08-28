@@ -23,9 +23,9 @@ func TestComputeCellsAndKzgProofs(t *testing.T) {
 		Output [][]string `json:"output"`
 	}
 	require.NoError(t, kzgPrysm.Start())
-	testFolders, testFolderPath := utils.TestFolders(t, "general", "fulu", "kzg/compute_cells_and_kzg_proofs/kzg-mainnet")
+	testFolders, testFolderPath := utils.TestFolders(t, "kzg", "compute_cells_and_kzg_proofs", "")
 	if len(testFolders) == 0 {
-		t.Fatalf("No test folders found for %s/%s/%s", "general", "fulu", "kzg/compute_cells_and_kzg_proofs/kzg-mainnet")
+		t.Fatalf("No test folders found for kzg/compute_cells_and_kzg_proofs")
 	}
 	for _, folder := range testFolders {
 		t.Run(folder.Name(), func(t *testing.T) {

@@ -459,16 +459,16 @@ func (b *BeaconState) ExpectedWithdrawalsGloas() (state.ExpectedWithdrawalsGloas
 // appendBuilderWithdrawals returns builder pending withdrawals, the updated withdrawal index,
 // and the processed count.
 //
-//	<spec fn="get_builder_withdrawals" fork="gloas" hash="d54dd146">
+//	<spec fn="get_builder_withdrawals" fork="gloas" hash="e816787f">
 //	def get_builder_withdrawals(
 //	    state: BeaconState,
 //	    withdrawal_index: WithdrawalIndex,
 //	    prior_withdrawals: Sequence[Withdrawal],
-//	) -> Tuple[Sequence[Withdrawal], WithdrawalIndex, uint64]:
+//	) -> Tuple[Sequence[Withdrawal], WithdrawalIndex, Uint64]:
 //	    withdrawals_limit = MAX_WITHDRAWALS_PER_PAYLOAD - 1
 //	    assert len(prior_withdrawals) <= withdrawals_limit
 //
-//	    processed_count: uint64 = 0
+//	    processed_count: Uint64 = 0
 //	    withdrawals: List[Withdrawal] = []
 //	    for withdrawal in state.builder_pending_withdrawals:
 //	        all_withdrawals = prior_withdrawals + withdrawals
@@ -521,18 +521,18 @@ func (b *BeaconState) appendBuilderWithdrawals(withdrawalIndex uint64, withdrawa
 // appendBuildersSweepWithdrawals returns builder sweep withdrawals, the updated withdrawal index,
 // and the processed count.
 //
-//	<spec fn="get_builders_sweep_withdrawals" fork="gloas" hash="04c1cb10">
+//	<spec fn="get_builders_sweep_withdrawals" fork="gloas" hash="67af411a">
 //	def get_builders_sweep_withdrawals(
 //	    state: BeaconState,
 //	    withdrawal_index: WithdrawalIndex,
 //	    prior_withdrawals: Sequence[Withdrawal],
-//	) -> Tuple[Sequence[Withdrawal], WithdrawalIndex, uint64]:
+//	) -> Tuple[Sequence[Withdrawal], WithdrawalIndex, Uint64]:
 //	    epoch = get_current_epoch(state)
 //	    builders_limit = min(len(state.builders), MAX_BUILDERS_PER_WITHDRAWALS_SWEEP)
 //	    withdrawals_limit = MAX_WITHDRAWALS_PER_PAYLOAD - 1
 //	    assert len(prior_withdrawals) <= withdrawals_limit
 //
-//	    processed_count: uint64 = 0
+//	    processed_count: Uint64 = 0
 //	    withdrawals: List[Withdrawal] = []
 //	    builder_index = state.next_withdrawal_builder_index
 //	    for _ in range(builders_limit):
