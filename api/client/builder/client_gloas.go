@@ -19,7 +19,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-const postBeaconBlockPath = "/eth/v1/builder/beacon_block"
+const postBeaconBlockPath = "/eth/v1/builder/beacon_blocks"
 
 func executionPayloadBidPath(slot primitives.Slot, parentHash, parentRoot [32]byte, proposerPubkey [48]byte) string {
 	return fmt.Sprintf("/eth/v1/builder/execution_payload_bid/%d/%#x/%#x/%#x", slot, parentHash, parentRoot, proposerPubkey)

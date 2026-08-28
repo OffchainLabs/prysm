@@ -3215,6 +3215,376 @@ func (c *BuilderPendingWithdrawal) HashTreeRootWith(hh *ssz.Hasher) (err error) 
 	return nil
 }
 
+func (c *BuilderConfig) SizeSSZ() int {
+	size := 20
+	for _, o := range c.Builders {
+		size += 4
+		size += o.SizeSSZ()
+	}
+	return size
+}
+
+func (c *BuilderConfig) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *BuilderConfig) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+	offset := 20
+
+	// Field 0: MinBid
+	if dst, err = c.MinBid.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("MinBid: %w", err)
+	}
+
+	// Field 1: BuilderBoostFactor
+	dst = binary.LittleEndian.AppendUint64(dst, c.BuilderBoostFactor)
+
+	// Field 2: Builders
+	dst = ssz.WriteOffset(dst, offset)
+	for _, o := range c.Builders {
+		offset += 4
+		offset += o.SizeSSZ()
+	}
+
+	// Field 2: Builders
+	if len(c.Builders) > 64 {
+		return nil, ssz.ErrListTooBig
+	}
+	{
+		offset = 4 * len(c.Builders)
+		for _, o := range c.Builders {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += o.SizeSSZ()
+		}
+	}
+	for _, o := range c.Builders {
+		if dst, err = o.MarshalSSZTo(dst); err != nil {
+			return nil, fmt.Errorf("Builders: %w", err)
+		}
+	}
+	return dst, err
+}
+
+func (c *BuilderConfig) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 20 {
+		return ssz.ErrSize
+	}
+
+	sszSlice0 := buf[0:8]  // c.MinBid
+	sszSlice1 := buf[8:16] // c.BuilderBoostFactor
+
+	sszVarOffset2 := ssz.ReadOffset(buf[16:20]) // c.Builders
+	if sszVarOffset2 != 20 {
+		return ssz.ErrInvalidVariableOffset
+	}
+	if sszVarOffset2 > size {
+		return ssz.ErrOffset
+	}
+	sszSlice2 := buf[sszVarOffset2:] // c.Builders
+
+	// Field 0: MinBid
+	if err = c.MinBid.UnmarshalSSZ(sszSlice0); err != nil {
+		return fmt.Errorf("MinBid: %w", err)
+	}
+
+	// Field 1: BuilderBoostFactor
+	c.BuilderBoostFactor = binary.LittleEndian.Uint64(sszSlice1)
+
+	// Field 2: Builders
+	{
+		// empty lists are zero length, so make sure there is room for an offset
+		// before attempting to unmarshal it
+		if len(sszSlice2) > 3 {
+			startOffset := ssz.ReadOffset(sszSlice2[0:4])
+			if startOffset == 0 {
+				return fmt.Errorf("encountered invalid offset of 0 when decoding c.Builders")
+			}
+			if startOffset%4 != 0 {
+				return fmt.Errorf("misaligned list bytes: when decoding c.Builders, end-of-list offset is %d, which is not a multiple of 4 (offset size)", startOffset)
+			}
+			listLen := startOffset / 4
+			if listLen > 64 {
+				return fmt.Errorf("ssz-max exceeded: c.Builders has %d elements, ssz-max is 64: %w", listLen, ssz.ErrListTooBig)
+			}
+			totalVarBytes := uint64(len(sszSlice2))
+			if totalVarBytes < startOffset {
+				return fmt.Errorf("list bytes too short to contain an offset when decoding c.Builders")
+			}
+			c.Builders = make([]*BuilderEntry, listLen)
+			var tmpSlice []byte
+			for i := uint64(0); i < listLen; i++ {
+				var tmp *BuilderEntry
+				tmp = new(BuilderEntry)
+				endOffset := totalVarBytes
+				if i+1 != listLen {
+					endOffset = ssz.ReadOffset(sszSlice2[(i+1)*4 : (i+2)*4])
+					if totalVarBytes < endOffset {
+						return fmt.Errorf("offset %d points past the end of buffer when decoding c.Builders", endOffset)
+					}
+				}
+				if endOffset < startOffset {
+					return fmt.Errorf("offset %d is not greater than start offset %d when decoding c.Builders", endOffset, startOffset)
+				}
+				tmpSlice = sszSlice2[startOffset:endOffset]
+				if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
+					return fmt.Errorf("Builders: %w", err)
+				}
+				c.Builders[i] = tmp
+				startOffset = endOffset
+			}
+		} else {
+			if len(sszSlice2) > 0 {
+				return fmt.Errorf("list bytes too short to contain an offset when decoding c.Builders")
+			}
+			c.Builders = make([]*BuilderEntry, 0)
+		}
+	}
+	return err
+}
+
+func (c *BuilderConfig) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *BuilderConfig) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: MinBid
+	if err := c.MinBid.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("MinBid: %w", err)
+	}
+	// Field 1: BuilderBoostFactor
+	hh.PutUint64(c.BuilderBoostFactor)
+	// Field 2: Builders
+	{
+		if len(c.Builders) > 64 {
+			return ssz.ErrListTooBig
+		}
+		subIndx := hh.Index()
+		for _, o := range c.Builders {
+			if err := o.HashTreeRootWith(hh); err != nil {
+				return fmt.Errorf("Builders: %w", err)
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, uint64(len(c.Builders)), 64)
+	}
+	hh.Merkleize(indx)
+	return nil
+}
+
+func (c *BuilderEntry) SizeSSZ() int {
+	size := 36
+	size += len(c.Url)
+	if c.Auth == nil {
+		c.Auth = new(SignedRequestAuth)
+	}
+	size += c.Auth.SizeSSZ()
+	size += len(c.BuilderPubkeys) * 48
+	return size
+}
+
+func (c *BuilderEntry) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *BuilderEntry) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+	offset := 36
+
+	// Field 0: Url
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(c.Url)
+
+	// Field 1: Auth
+	if c.Auth == nil {
+		c.Auth = new(SignedRequestAuth)
+	}
+	dst = ssz.WriteOffset(dst, offset)
+	offset += c.Auth.SizeSSZ()
+
+	// Field 2: BuilderPubkeys
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(c.BuilderPubkeys) * 48
+
+	// Field 3: MaxExecutionPayment
+	if dst, err = c.MaxExecutionPayment.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("MaxExecutionPayment: %w", err)
+	}
+
+	// Field 4: MinBid
+	if dst, err = c.MinBid.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("MinBid: %w", err)
+	}
+
+	// Field 5: BuilderBoostFactor
+	dst = binary.LittleEndian.AppendUint64(dst, c.BuilderBoostFactor)
+
+	// Field 0: Url
+	if len(c.Url) > 2048 {
+		return nil, ssz.ErrListTooBig
+	}
+	dst = append(dst, c.Url...)
+
+	// Field 1: Auth
+	if dst, err = c.Auth.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("Auth: %w", err)
+	}
+
+	// Field 2: BuilderPubkeys
+	if len(c.BuilderPubkeys) > 64 {
+		return nil, ssz.ErrListTooBig
+	}
+	for _, o := range c.BuilderPubkeys {
+		if len(o) != 48 {
+			return nil, ssz.ErrBytesLength
+		}
+		dst = append(dst, o...)
+	}
+	return dst, err
+}
+
+func (c *BuilderEntry) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 36 {
+		return ssz.ErrSize
+	}
+
+	sszSlice3 := buf[12:20] // c.MaxExecutionPayment
+	sszSlice4 := buf[20:28] // c.MinBid
+	sszSlice5 := buf[28:36] // c.BuilderBoostFactor
+
+	sszVarOffset0 := ssz.ReadOffset(buf[0:4]) // c.Url
+	if sszVarOffset0 != 36 {
+		return ssz.ErrInvalidVariableOffset
+	}
+	if sszVarOffset0 > size {
+		return ssz.ErrOffset
+	}
+	sszVarOffset1 := ssz.ReadOffset(buf[4:8]) // c.Auth
+	if sszVarOffset1 > size || sszVarOffset1 < sszVarOffset0 {
+		return ssz.ErrOffset
+	}
+	sszVarOffset2 := ssz.ReadOffset(buf[8:12]) // c.BuilderPubkeys
+	if sszVarOffset2 > size || sszVarOffset2 < sszVarOffset1 {
+		return ssz.ErrOffset
+	}
+	sszSlice0 := buf[sszVarOffset0:sszVarOffset1] // c.Url
+	sszSlice1 := buf[sszVarOffset1:sszVarOffset2] // c.Auth
+	sszSlice2 := buf[sszVarOffset2:]              // c.BuilderPubkeys
+
+	// Field 0: Url
+	c.Url = append([]byte{}, sszSlice0...)
+
+	// Field 1: Auth
+	c.Auth = new(SignedRequestAuth)
+	if err = c.Auth.UnmarshalSSZ(sszSlice1); err != nil {
+		return fmt.Errorf("Auth: %w", err)
+	}
+
+	// Field 2: BuilderPubkeys
+	{
+		if len(sszSlice2)%48 != 0 {
+			return fmt.Errorf("misaligned bytes: c.BuilderPubkeys length is %d, which is not a multiple of 48: %w", len(sszSlice2), ssz.ErrIncorrectListSize)
+		}
+		numElem := len(sszSlice2) / 48
+		if numElem > 64 {
+			return fmt.Errorf("ssz-max exceeded: c.BuilderPubkeys has %d elements, ssz-max is 64: %w", numElem, ssz.ErrListTooBig)
+		}
+		c.BuilderPubkeys = make([][]byte, numElem)
+		for i := 0; i < numElem; i++ {
+			var tmp []byte
+
+			tmpSlice := sszSlice2[i*48 : (1+i)*48]
+			tmp = make([]byte, 0, 48)
+			tmp = append(tmp, tmpSlice...)
+			c.BuilderPubkeys[i] = tmp
+		}
+	}
+
+	// Field 3: MaxExecutionPayment
+	if err = c.MaxExecutionPayment.UnmarshalSSZ(sszSlice3); err != nil {
+		return fmt.Errorf("MaxExecutionPayment: %w", err)
+	}
+
+	// Field 4: MinBid
+	if err = c.MinBid.UnmarshalSSZ(sszSlice4); err != nil {
+		return fmt.Errorf("MinBid: %w", err)
+	}
+
+	// Field 5: BuilderBoostFactor
+	c.BuilderBoostFactor = binary.LittleEndian.Uint64(sszSlice5)
+	return err
+}
+
+func (c *BuilderEntry) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *BuilderEntry) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: Url
+
+	{
+		if len(c.Url) > 2048 {
+			return ssz.ErrBytesLength
+		}
+		subIndx := hh.Index()
+		hh.AppendBytes32(c.Url)
+		numItems := uint64(len(c.Url))
+		hh.MerkleizeWithMixin(subIndx, numItems, (2048*1+31)/32)
+	}
+
+	// Field 1: Auth
+	if err := c.Auth.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("Auth: %w", err)
+	}
+	// Field 2: BuilderPubkeys
+	{
+		if len(c.BuilderPubkeys) > 64 {
+			return ssz.ErrListTooBig
+		}
+		subIndx := hh.Index()
+		for _, o := range c.BuilderPubkeys {
+			if len(o) != 48 {
+				return ssz.ErrBytesLength
+			}
+			hh.PutBytes(o)
+		}
+		hh.MerkleizeWithMixin(subIndx, uint64(len(c.BuilderPubkeys)), 64)
+	}
+	// Field 3: MaxExecutionPayment
+	if err := c.MaxExecutionPayment.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("MaxExecutionPayment: %w", err)
+	}
+	// Field 4: MinBid
+	if err := c.MinBid.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("MinBid: %w", err)
+	}
+	// Field 5: BuilderBoostFactor
+	hh.PutUint64(c.BuilderBoostFactor)
+	hh.Merkleize(indx)
+	return nil
+}
+
 func (c *BuilderPreferencesRequest) SizeSSZ() int {
 	size := 12
 	if c.Auth == nil {
@@ -3364,6 +3734,146 @@ func (c *BuilderPreferences) HashTreeRoot() ([32]byte, error) {
 func (c *BuilderPreferences) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 	// Field 0: MaxExecutionPayment
+	if err := c.MaxExecutionPayment.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("MaxExecutionPayment: %w", err)
+	}
+	hh.Merkleize(indx)
+	return nil
+}
+
+func (c *BuilderPreferencesEntry) SizeSSZ() int {
+	size := 64
+	size += len(c.Url)
+	if c.Auth == nil {
+		c.Auth = new(SignedRequestAuth)
+	}
+	size += c.Auth.SizeSSZ()
+	return size
+}
+
+func (c *BuilderPreferencesEntry) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *BuilderPreferencesEntry) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+	offset := 64
+
+	// Field 0: ProposerPubkey
+	if len(c.ProposerPubkey) != 48 {
+		return nil, ssz.ErrBytesLength
+	}
+	dst = append(dst, c.ProposerPubkey...)
+
+	// Field 1: Url
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(c.Url)
+
+	// Field 2: Auth
+	if c.Auth == nil {
+		c.Auth = new(SignedRequestAuth)
+	}
+	dst = ssz.WriteOffset(dst, offset)
+	offset += c.Auth.SizeSSZ()
+
+	// Field 3: MaxExecutionPayment
+	if dst, err = c.MaxExecutionPayment.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("MaxExecutionPayment: %w", err)
+	}
+
+	// Field 1: Url
+	if len(c.Url) > 2048 {
+		return nil, ssz.ErrListTooBig
+	}
+	dst = append(dst, c.Url...)
+
+	// Field 2: Auth
+	if dst, err = c.Auth.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("Auth: %w", err)
+	}
+	return dst, err
+}
+
+func (c *BuilderPreferencesEntry) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 64 {
+		return ssz.ErrSize
+	}
+
+	sszSlice0 := buf[0:48]  // c.ProposerPubkey
+	sszSlice3 := buf[56:64] // c.MaxExecutionPayment
+
+	sszVarOffset1 := ssz.ReadOffset(buf[48:52]) // c.Url
+	if sszVarOffset1 != 64 {
+		return ssz.ErrInvalidVariableOffset
+	}
+	if sszVarOffset1 > size {
+		return ssz.ErrOffset
+	}
+	sszVarOffset2 := ssz.ReadOffset(buf[52:56]) // c.Auth
+	if sszVarOffset2 > size || sszVarOffset2 < sszVarOffset1 {
+		return ssz.ErrOffset
+	}
+	sszSlice1 := buf[sszVarOffset1:sszVarOffset2] // c.Url
+	sszSlice2 := buf[sszVarOffset2:]              // c.Auth
+
+	// Field 0: ProposerPubkey
+	c.ProposerPubkey = make([]byte, 0, 48)
+	c.ProposerPubkey = append(c.ProposerPubkey, sszSlice0...)
+
+	// Field 1: Url
+	c.Url = append([]byte{}, sszSlice1...)
+
+	// Field 2: Auth
+	c.Auth = new(SignedRequestAuth)
+	if err = c.Auth.UnmarshalSSZ(sszSlice2); err != nil {
+		return fmt.Errorf("Auth: %w", err)
+	}
+
+	// Field 3: MaxExecutionPayment
+	if err = c.MaxExecutionPayment.UnmarshalSSZ(sszSlice3); err != nil {
+		return fmt.Errorf("MaxExecutionPayment: %w", err)
+	}
+	return err
+}
+
+func (c *BuilderPreferencesEntry) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *BuilderPreferencesEntry) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: ProposerPubkey
+	if len(c.ProposerPubkey) != 48 {
+		return ssz.ErrBytesLength
+	}
+	hh.PutBytes(c.ProposerPubkey)
+	// Field 1: Url
+
+	{
+		if len(c.Url) > 2048 {
+			return ssz.ErrBytesLength
+		}
+		subIndx := hh.Index()
+		hh.AppendBytes32(c.Url)
+		numItems := uint64(len(c.Url))
+		hh.MerkleizeWithMixin(subIndx, numItems, (2048*1+31)/32)
+	}
+
+	// Field 2: Auth
+	if err := c.Auth.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("Auth: %w", err)
+	}
+	// Field 3: MaxExecutionPayment
 	if err := c.MaxExecutionPayment.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("MaxExecutionPayment: %w", err)
 	}
