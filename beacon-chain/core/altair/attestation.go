@@ -27,11 +27,7 @@ func ProcessAttestationsNoVerifySignature(
 	beaconState state.BeaconState,
 	b interfaces.ReadOnlyBeaconBlock,
 ) (state.BeaconState, error) {
-	parentSlot, err := gloas.ParentSlotFromBid(beaconState)
-	if err != nil {
-		return nil, err
-	}
-	return ProcessAttestationsNoVerifySignatureWithParentSlot(ctx, beaconState, b, parentSlot)
+	return ProcessAttestationsNoVerifySignatureWithParentSlot(ctx, beaconState, b, beaconState.LatestBlockHeader().Slot)
 }
 
 func ProcessAttestationsNoVerifySignatureWithParentSlot(
