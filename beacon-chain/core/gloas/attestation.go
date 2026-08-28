@@ -51,18 +51,3 @@ func MatchingPayload(
 	}
 	return executionPayloadAvail == committeeIndex, nil
 }
-
-func ParentSlotFromBid(beaconState state.ReadOnlyBeaconState) (primitives.Slot, error) {
-	if beaconState.Version() < version.Gloas {
-		return 0, nil
-	}
-
-	bid, err := beaconState.LatestExecutionPayloadBid()
-	if err != nil {
-		return 0, errors.Wrap(err, "failed to get latest execution payload bid")
-	}
-	if bid == nil {
-		return 0, nil
-	}
-	return bid.Slot(), nil
-}
