@@ -98,6 +98,9 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 	f.fc.RLock()
 	f.updateFastConfirmationVariables(currentSlot)
 	headSlot, headSlotErr := f.fc.Slot(f.currentSlotHead)
+	confirmedRoot := f.ConfirmedRoot()
+	confirmedSlot, confirmedSlotErr := f.fc.Slot(confirmedRoot)
+	confirmedIsAnc, confirmedIsAncErr := f.fc.IsAncestor(f.currentSlotHead, confirmedRoot)
 	f.fc.RUnlock()
 
 	// The confirmation logic ranges over [.., currentSlot - 1], nothing to confirm at genesis.
@@ -166,10 +169,17 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 		}
 	}
 
-	// The pulled up head state can copy and advance a state, keep it off the forkchoice lock.
-	ffg, err := f.balances.PulledUpHeadState(ctx, f.currentSlotHead)
-	if err != nil {
-		ffg = &FFGStateInfo{TotalActiveBalance: totalActiveBalance}
+	// honest() needs the pulled up head state only on boundary, catch-up, or revert runs.
+	getFFG := sync.OnceValue(func() *FFGStateInfo {
+		ffg, err := f.balances.PulledUpHeadState(ctx, f.currentSlotHead)
+		if err != nil {
+			return &FFGStateInfo{TotalActiveBalance: totalActiveBalance}
+		}
+		return ffg
+	})
+	// The pulled up head state can copy and advance a state, precompute it off the forkchoice lock.
+	if confirmedSlotErr != nil || confirmedIsAncErr != nil || !confirmedIsAnc || slots.ToEpoch(confirmedSlot) < slots.ToEpoch(currentSlot) {
+		getFFG()
 	}
 
 	// Committee assignment tables read the head state, keep it off the forkchoice lock.
@@ -203,6 +213,7 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 
 	currentTarget := f.getCurrentTarget(ctx, slots.ToEpoch(currentSlot))
 	honest := HonestFFGSupport(sync.OnceValues(func() (uint64, uint64) {
+		ffg := getFFG()
 		s := ComputeHonestFFGSupport(ctx, f.fc, ffg, votes, equivocating, currentTarget, currentSlot, equivScorer)
 		return s, ffg.TotalActiveBalance
 	}))
