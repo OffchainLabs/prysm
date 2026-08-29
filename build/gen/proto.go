@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -481,12 +482,14 @@ func stageProtos(stage string, dict map[string]string) error {
 		keys = append(keys, k)
 	}
 
-	sort.Slice(keys, func(i, j int) bool {
-		if len(keys[i]) != len(keys[j]) {
-			return len(keys[i]) > len(keys[j])
+	slices.SortFunc(keys, func(a, b string) int {
+		if len(a) != len(b) {
+			if len(a) > len(b) {
+				return -1
+			}
+			return 1
 		}
-
-		return keys[i] < keys[j]
+		return strings.Compare(a, b)
 	})
 
 	return filepath.WalkDir("proto", func(path string, d os.DirEntry, err error) error {
