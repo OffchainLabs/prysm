@@ -862,6 +862,58 @@ func Benchmark_packAttestations_Electra(b *testing.B) {
 	}
 }
 
+func Benchmark_selectByMarginalReward(b *testing.B) {
+	ctx := b.Context()
+
+	params.SetupTestConfigCleanup(b)
+	cfg := params.BeaconConfig().Copy()
+	cfg.ElectraForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	key, err := blst.RandKey()
+	require.NoError(b, err)
+	sig := key.Sign([]byte{'X'})
+
+	st, _ := util.DeterministicGenesisStateElectra(b, 8192)
+	require.NoError(b, st.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
+
+	committees, err := helpers.BeaconCommittees(ctx, st, 0)
+	require.NoError(b, err)
+
+	allCommittees := primitives.NewAttestationCommitteeBits()
+	var totalBits uint64
+	for i := range committees {
+		allCommittees.SetBitAt(uint64(i), true)
+		totalBits += uint64(len(committees[i]))
+	}
+
+	r := rand.New(rand.NewSource(123))
+
+	const numCandidates = 64
+	atts := make(proposerAtts, 0, numCandidates)
+	for range numCandidates {
+		bits := bitfield.NewBitlist(totalBits)
+		for bit := range totalBits {
+			bits.SetBitAt(bit, r.Intn(100) < 45)
+		}
+		atts = append(atts, &ethpb.AttestationElectra{
+			AggregationBits: bits,
+			CommitteeBits:   allCommittees,
+			Data: util.HydrateAttestationData(&ethpb.AttestationData{
+				BeaconBlockRoot: bytesutil.PadTo([]byte("root"), 32),
+			}),
+			Signature: sig.Marshal(),
+		})
+	}
+
+	limit := params.BeaconConfig().MaxAttestationsElectra
+	for b.Loop() {
+		selected, err := atts.selectByMarginalReward(ctx, st, limit)
+		require.NoError(b, err)
+		require.NotEqual(b, 0, len(selected))
+	}
+}
+
 func Test_limitToMaxAttestations(t *testing.T) {
 	t.Run("Phase 0", func(t *testing.T) {
 		atts := make([]ethpb.Att, params.BeaconConfig().MaxAttestations+1)

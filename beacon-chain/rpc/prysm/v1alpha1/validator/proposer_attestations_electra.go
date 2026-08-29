@@ -114,9 +114,10 @@ type flagReward struct {
 type attCandidate struct {
 	att              ethpb.Att
 	attestingIndices []uint64
+	baseRewards      []uint64
+	participation    []byte
 	flags            []flagReward
 	flagMask         uint8
-	targetsCurrEpoch bool
 	score            uint64
 	scoredRound      int
 }
@@ -148,17 +149,8 @@ func (a proposerAtts) selectByMarginalReward(ctx context.Context, st state.ReadO
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get total active balance")
 	}
-	// Unlike the ReadOnly variants, these return copies that are safe to mutate.
-	currParticipation, err := st.CurrentEpochParticipation()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get current epoch participation")
-	}
-	prevParticipation, err := st.PreviousEpochParticipation()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get previous epoch participation")
-	}
 
-	candidates, err := newAttCandidates(ctx, st, a)
+	candidates, err := newAttCandidates(ctx, st, a, totalBalance)
 	if err != nil {
 		return nil, err
 	}
@@ -166,19 +158,9 @@ func (a proposerAtts) selectByMarginalReward(ctx context.Context, st state.ReadO
 		return proposerAtts{}, nil
 	}
 
-	participationFor := func(c *attCandidate) []byte {
-		if c.targetsCurrEpoch {
-			return currParticipation
-		}
-		return prevParticipation
-	}
-
 	h := candidateHeap(candidates)
 	for _, c := range h {
-		c.score, err = c.marginalReward(st, participationFor(c), totalBalance)
-		if err != nil {
-			return nil, err
-		}
+		c.score = c.marginalReward()
 		c.scoredRound = 1
 	}
 	heap.Init(&h)
@@ -189,10 +171,7 @@ func (a proposerAtts) selectByMarginalReward(ctx context.Context, st state.ReadO
 		for h.Len() > 0 {
 			c := heap.Pop(&h).(*attCandidate)
 			if c.scoredRound != round {
-				c.score, err = c.marginalReward(st, participationFor(c), totalBalance)
-				if err != nil {
-					return nil, err
-				}
+				c.score = c.marginalReward()
 				c.scoredRound = round
 			}
 			if c.score == 0 {
@@ -208,15 +187,13 @@ func (a proposerAtts) selectByMarginalReward(ctx context.Context, st state.ReadO
 			break
 		}
 		selected = append(selected, best.att)
-		if err := best.markCovered(participationFor(best)); err != nil {
-			return nil, err
-		}
+		best.markCovered()
 	}
 
 	return selected, nil
 }
 
-func newAttCandidates(ctx context.Context, st state.ReadOnlyBeaconState, atts proposerAtts) ([]*attCandidate, error) {
+func newAttCandidates(ctx context.Context, st state.ReadOnlyBeaconState, atts proposerAtts, totalBalance uint64) ([]*attCandidate, error) {
 	cfg := params.BeaconConfig()
 	weights := []flagReward{
 		{cfg.TimelySourceFlagIndex, cfg.TimelySourceWeight},
@@ -225,8 +202,19 @@ func newAttCandidates(ctx context.Context, st state.ReadOnlyBeaconState, atts pr
 	}
 	currentEpoch := coretime.CurrentEpoch(st)
 
+	// Unlike the ReadOnly variants, these return copies that are safe to mutate.
+	currParticipation, err := st.CurrentEpochParticipation()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get current epoch participation")
+	}
+	prevParticipation, err := st.PreviousEpochParticipation()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get previous epoch participation")
+	}
+
 	committeesBySlot := make(map[primitives.Slot][][]primitives.ValidatorIndex)
 	flagsByData := make(map[[32]byte][]flagReward)
+	baseRewards := make(map[uint64]uint64)
 
 	candidates := make([]*attCandidate, 0, len(atts))
 	for _, att := range atts {
@@ -240,7 +228,8 @@ func newAttCandidates(ctx context.Context, st state.ReadOnlyBeaconState, atts pr
 
 		dataRoot, err := data.HashTreeRoot()
 		if err != nil {
-			return nil, errors.Wrap(err, "could not hash attestation data")
+			log.WithFields(attestationFields(att)).WithError(err).Debug("Could not hash attestation data")
+			continue
 		}
 		flags, ok := flagsByData[dataRoot]
 		if !ok {
@@ -260,12 +249,22 @@ func newAttCandidates(ctx context.Context, st state.ReadOnlyBeaconState, atts pr
 		if len(flags) == 0 {
 			continue
 		}
+		var flagMask uint8
+		for _, f := range flags {
+			flagMask |= 1 << f.position
+		}
+
+		participation := prevParticipation
+		if data.Target.Epoch == currentEpoch {
+			participation = currParticipation
+		}
 
 		slotCommittees, ok := committeesBySlot[data.Slot]
 		if !ok {
 			slotCommittees, err = helpers.BeaconCommittees(ctx, st, data.Slot)
 			if err != nil {
-				return nil, errors.Wrap(err, "could not get beacon committees")
+				log.WithFields(attestationFields(att)).WithError(err).Debug("Could not get beacon committees")
+				continue
 			}
 			committeesBySlot[data.Slot] = slotCommittees
 		}
@@ -281,19 +280,58 @@ func newAttCandidates(ctx context.Context, st state.ReadOnlyBeaconState, atts pr
 			continue
 		}
 
-		c := &attCandidate{
+		indices, rewards, err := uncoveredRewards(st, indices, participation, flagMask, totalBalance, baseRewards)
+		if err != nil {
+			log.WithFields(attestationFields(att)).WithError(err).Debug("Could not resolve base rewards for attesting indices")
+			continue
+		}
+		if len(indices) == 0 {
+			continue
+		}
+
+		candidates = append(candidates, &attCandidate{
 			att:              att,
 			attestingIndices: indices,
+			baseRewards:      rewards,
+			participation:    participation,
 			flags:            flags,
-			targetsCurrEpoch: data.Target.Epoch == currentEpoch,
-		}
-		for _, f := range flags {
-			c.flagMask |= 1 << f.position
-		}
-		candidates = append(candidates, c)
+			flagMask:         flagMask,
+		})
 	}
 
 	return candidates, nil
+}
+
+func uncoveredRewards(
+	st state.ReadOnlyBeaconState,
+	indices []uint64,
+	participation []byte,
+	flagMask uint8,
+	totalBalance uint64,
+	cache map[uint64]uint64,
+) ([]uint64, []uint64, error) {
+	uncovered := make([]uint64, 0, len(indices))
+	rewards := make([]uint64, 0, len(indices))
+	for _, index := range indices {
+		if index >= uint64(len(participation)) {
+			return nil, nil, errors.Errorf("index %d exceeds participation length %d", index, len(participation))
+		}
+		if flagMask&^participation[index] == 0 {
+			continue
+		}
+		reward, ok := cache[index]
+		if !ok {
+			var err error
+			reward, err = altair.BaseRewardWithTotalBalance(st, primitives.ValidatorIndex(index), totalBalance)
+			if err != nil {
+				return nil, nil, errors.Wrap(err, "could not get base reward")
+			}
+			cache[index] = reward
+		}
+		uncovered = append(uncovered, index)
+		rewards = append(rewards, reward)
+	}
+	return uncovered, rewards, nil
 }
 
 func attCommittees(att ethpb.Att, slotCommittees [][]primitives.ValidatorIndex) ([][]primitives.ValidatorIndex, error) {
@@ -314,35 +352,24 @@ func attCommittees(att ethpb.Att, slotCommittees [][]primitives.ValidatorIndex) 
 
 // Mirrors electra.GetProposerRewardNumerator, but scored against participation as the block
 // being built would leave it rather than against the untouched pre-block state.
-func (c *attCandidate) marginalReward(st state.ReadOnlyBeaconState, participation []byte, totalBalance uint64) (uint64, error) {
+func (c *attCandidate) marginalReward() uint64 {
 	var numerator uint64
-	for _, index := range c.attestingIndices {
-		if index >= uint64(len(participation)) {
-			return 0, errors.Errorf("index %d exceeds participation length %d", index, len(participation))
-		}
-		missing := c.flagMask &^ participation[index]
+	for i, index := range c.attestingIndices {
+		missing := c.flagMask &^ c.participation[index]
 		if missing == 0 {
 			continue
 		}
-		baseReward, err := altair.BaseRewardWithTotalBalance(st, primitives.ValidatorIndex(index), totalBalance)
-		if err != nil {
-			return 0, errors.Wrap(err, "could not get base reward")
-		}
 		for _, f := range c.flags {
 			if missing&(1<<f.position) != 0 {
-				numerator += baseReward * f.weight
+				numerator += c.baseRewards[i] * f.weight
 			}
 		}
 	}
-	return numerator, nil
+	return numerator
 }
 
-func (c *attCandidate) markCovered(participation []byte) error {
+func (c *attCandidate) markCovered() {
 	for _, index := range c.attestingIndices {
-		if index >= uint64(len(participation)) {
-			return errors.Errorf("index %d exceeds participation length %d", index, len(participation))
-		}
-		participation[index] |= c.flagMask
+		c.participation[index] |= c.flagMask
 	}
-	return nil
 }
