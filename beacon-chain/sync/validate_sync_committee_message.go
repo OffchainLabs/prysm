@@ -128,8 +128,6 @@ func (s *Service) markSyncCommitteeMessagesSeen(committeeIndices []primitives.Co
 
 // Returns true if the node has received sync committee for the validator with index and slot.
 func (s *Service) hasSeenSyncMessageIndexSlot(ctx context.Context, m *ethpb.SyncCommitteeMessage, subCommitteeIndex uint64) bool {
-	s.seenSyncMessageLock.RLock()
-	defer s.seenSyncMessageLock.RUnlock()
 	rt, seen := s.seenSyncMessageCache.Get(seenSyncCommitteeKey(m.Slot, m.ValidatorIndex, subCommitteeIndex))
 	if !seen {
 		// return early if this is the first message
@@ -157,8 +155,6 @@ func (s *Service) hasSeenSyncMessageIndexSlot(ctx context.Context, m *ethpb.Sync
 
 // Set sync committee message validator index and slot as seen.
 func (s *Service) setSeenSyncMessageIndexSlot(m *ethpb.SyncCommitteeMessage, subCommitteeIndex uint64) {
-	s.seenSyncMessageLock.Lock()
-	defer s.seenSyncMessageLock.Unlock()
 	key := seenSyncCommitteeKey(m.Slot, m.ValidatorIndex, subCommitteeIndex)
 	s.seenSyncMessageCache.Add(key, [32]byte(m.BlockRoot))
 }

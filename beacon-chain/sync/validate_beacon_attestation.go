@@ -425,9 +425,6 @@ func generateUnaggregatedAttCacheKey(att eth.Att) (string, error) {
 
 // Returns true if the attestation was already seen for the participating validator for the slot.
 func (s *Service) hasSeenUnaggregatedAtt(key string) bool {
-	s.seenUnAggregatedAttestationLock.RLock()
-	defer s.seenUnAggregatedAttestationLock.RUnlock()
-
 	_, seen := s.seenUnAggregatedAttestationCache.Get(key)
 	return seen
 }
@@ -435,14 +432,8 @@ func (s *Service) hasSeenUnaggregatedAtt(key string) bool {
 // Set an incoming attestation as seen for the participating validator for the slot.
 // Returns false if the attestation was already seen.
 func (s *Service) setSeenUnaggregatedAtt(key string) bool {
-	s.seenUnAggregatedAttestationLock.Lock()
-	defer s.seenUnAggregatedAttestationLock.Unlock()
-	_, seen := s.seenUnAggregatedAttestationCache.Get(key)
-	if seen {
-		return false
-	}
-	s.seenUnAggregatedAttestationCache.Add(key, true)
-	return true
+	found, _ := s.seenUnAggregatedAttestationCache.ContainsOrAdd(key, true)
+	return !found
 }
 
 // hasBlockAndState returns true if the beacon node knows about a block and associated state in the
