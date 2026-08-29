@@ -110,10 +110,15 @@ func (a *fcrBalanceAccessor) BalanceInfoByCheckpoint(ctx context.Context, cp for
 	if a.byCheckpoint == nil {
 		a.byCheckpoint = make(map[forkchoicetypes.Checkpoint]*confirmation.FFGStateInfo)
 	} else if len(a.byCheckpoint) > 3 {
+		// Evict the oldest entry, only the current and previous observed justified checkpoints stay live.
+		var lowest forkchoicetypes.Checkpoint
+		first := true
 		for k := range a.byCheckpoint {
-			delete(a.byCheckpoint, k)
-			break
+			if first || k.Epoch < lowest.Epoch {
+				lowest, first = k, false
+			}
 		}
+		delete(a.byCheckpoint, lowest)
 	}
 	a.byCheckpoint[cp] = info
 	return info.Balances, info.TotalActiveBalance, nil
