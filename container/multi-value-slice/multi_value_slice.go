@@ -91,6 +91,7 @@ package mvslice
 
 import (
 	"fmt"
+	"iter"
 	"slices"
 	"sync"
 
@@ -245,6 +246,62 @@ func (s *Slice[V]) Value(obj Identifiable) []V {
 		s.fillOriginalItems(obj, &result)
 		return result
 	}
+}
+
+// rangeChunkSize bounds how long Range holds the lock so concurrent writers are never starved.
+const rangeChunkSize = 1 << 16
+
+// Range yields every (index, value) pair for the input object, the yield callback runs under the slice's read lock, taken once per chunk.
+func (s *Slice[V]) Range(obj Identifiable) iter.Seq2[uint64, V] {
+	return func(yield func(uint64, V) bool) {
+		for start := uint64(0); s.rangeChunk(obj, start, yield); start += rangeChunkSize {
+		}
+	}
+}
+
+// rangeChunk yields indices [start, start+rangeChunkSize) under one lock, reporting whether iteration should continue.
+func (s *Slice[V]) rangeChunk(obj Identifiable, start uint64, yield func(uint64, V) bool) bool {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	sharedLen := uint64(len(s.sharedItems))
+	for i := start; i < start+rangeChunkSize; i++ {
+		if i < sharedLen {
+			v := s.sharedItems[i]
+			if ind, ok := s.individualItems[i]; ok {
+				for _, iv := range ind.Values {
+					if _, found := containsId(iv.ids, obj.Id()); found {
+						v = iv.val
+						break
+					}
+				}
+			}
+			if !yield(i, v) {
+				return false
+			}
+			continue
+		}
+		ai := i - sharedLen
+		if ai >= uint64(len(s.appendedItems)) {
+			return false
+		}
+		found := false
+		var v V
+		for _, iv := range s.appendedItems[ai].Values {
+			if _, found = containsId(iv.ids, obj.Id()); found {
+				v = iv.val
+				break
+			}
+		}
+		if !found {
+			// Same optimization as Value, no appended item at index i means none at larger indices either.
+			return false
+		}
+		if !yield(i, v) {
+			return false
+		}
+	}
+	return true
 }
 
 // At returns the item at the requested index for the input object.

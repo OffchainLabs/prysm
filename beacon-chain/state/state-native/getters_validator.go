@@ -234,13 +234,7 @@ func (b *BeaconState) ValidatorsReadOnlySeq() iter.Seq2[primitives.ValidatorInde
 		}
 
 		rov := new(readOnlyValidator)
-		for i := range b.validatorsMultiValue.Len(b) {
-			v, err := b.validatorsMultiValue.At(b, uint64(i))
-			if err != nil {
-				log.WithError(err).WithField("index", i).Error("Failed to get validator, should never happen")
-				return
-			}
-
+		for i, v := range b.validatorsMultiValue.Range(b) {
 			rov.validator = v
 			if !yield(primitives.ValidatorIndex(i), rov) {
 				return
