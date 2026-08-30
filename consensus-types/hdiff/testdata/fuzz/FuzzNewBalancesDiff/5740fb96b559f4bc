@@ -1,0 +1,3 @@
+go test fuzz v1
+byte('4')
+[]byte("\xe4\xef%\x12`\xd7Jr\x90")
