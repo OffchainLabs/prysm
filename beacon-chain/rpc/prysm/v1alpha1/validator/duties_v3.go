@@ -29,11 +29,7 @@ func (vs *Server) GetAttesterDuties(ctx context.Context, req *ethpb.AttesterDuti
 		return nil, status.Errorf(codes.InvalidArgument, "Request epoch %d can not be greater than next epoch %d", req.Epoch, currentEpoch+1)
 	}
 
-	s, err := vs.HeadFetcher.HeadState(ctx)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
-	}
-	s, err = vs.stateForEpoch(ctx, s, req.Epoch)
+	s, err := vs.stateForEpoch(ctx, req.Epoch)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get state for epoch: %v", err)
 	}
@@ -87,11 +83,7 @@ func (vs *Server) GetProposerDutiesV2(ctx context.Context, req *ethpb.ProposerDu
 		return nil, status.Errorf(codes.InvalidArgument, "Request epoch %d can not be greater than next epoch %d", req.Epoch, currentEpoch+1)
 	}
 
-	s, err := vs.HeadFetcher.HeadState(ctx)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
-	}
-	s, err = vs.stateForEpoch(ctx, s, req.Epoch)
+	s, err := vs.stateForEpoch(ctx, req.Epoch)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get state for epoch: %v", err)
 	}
@@ -142,11 +134,7 @@ func (vs *Server) GetSyncCommitteeDuties(ctx context.Context, req *ethpb.SyncCom
 		return nil, status.Errorf(codes.InvalidArgument, "Request epoch %d can not be greater than last valid epoch %d for sync committee duties", req.Epoch, lastValidEpoch)
 	}
 
-	s, err := vs.HeadFetcher.HeadState(ctx)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
-	}
-	s, err = vs.stateForEpoch(ctx, s, req.Epoch)
+	s, err := vs.stateForEpoch(ctx, req.Epoch)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get state for epoch: %v", err)
 	}
@@ -195,11 +183,7 @@ func (vs *Server) GetPTCDuties(ctx context.Context, req *ethpb.PTCDutiesRequest)
 		return nil, status.Errorf(codes.InvalidArgument, "Request epoch %d can not be greater than next epoch %d", req.Epoch, nextEpoch)
 	}
 
-	s, err := vs.HeadFetcher.HeadState(ctx)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
-	}
-	s, err = vs.stateForEpoch(ctx, s, req.Epoch)
+	s, err := vs.stateForEpoch(ctx, req.Epoch)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get state for epoch: %v", err)
 	}
