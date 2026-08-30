@@ -237,7 +237,7 @@ func (vs *Server) GetPTCDuties(ctx context.Context, req *ethpb.PTCDutiesRequest)
 
 // attestationDependentRoot returns the dependent root for attestation-style duties.
 // For epochs <= 1 it returns the genesis block root; otherwise it computes the root from state.
-func (vs *Server) attestationDependentRoot(ctx context.Context, s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
+func (vs *Server) attestationDependentRoot(ctx context.Context, s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]byte, error) {
 	if epoch <= 1 {
 		r, err := vs.BeaconDB.GenesisBlockRoot(ctx)
 		if err != nil {
@@ -255,7 +255,7 @@ func (vs *Server) attestationDependentRoot(ctx context.Context, s state.BeaconSt
 // proposalDependentRoot returns the dependent root for proposer duties.
 // Epoch 0 always needs genesis root. Epoch 1 also needs it post-Fulu because
 // V2 uses AttestationDependentRoot which requires epoch > 1.
-func (vs *Server) proposalDependentRoot(ctx context.Context, s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
+func (vs *Server) proposalDependentRoot(ctx context.Context, s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]byte, error) {
 	if epoch == 0 || (epoch == 1 && s.Version() >= version.Fulu) {
 		r, err := vs.BeaconDB.GenesisBlockRoot(ctx)
 		if err != nil {

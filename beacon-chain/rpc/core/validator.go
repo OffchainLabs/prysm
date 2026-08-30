@@ -647,7 +647,7 @@ func (s *Service) SubmitSyncMessage(ctx context.Context, msg *ethpb.SyncCommitte
 }
 
 // RegisterSyncSubnetCurrentPeriod registers a persistent subnet for the current sync committee period.
-func RegisterSyncSubnetCurrentPeriod(s beaconState.BeaconState, epoch primitives.Epoch, pubKey []byte, status validator.Status) error {
+func RegisterSyncSubnetCurrentPeriod(s beaconState.ReadOnlyBeaconState, epoch primitives.Epoch, pubKey []byte, status validator.Status) error {
 	committee, err := s.CurrentSyncCommittee()
 	if err != nil {
 		return err
@@ -658,7 +658,7 @@ func RegisterSyncSubnetCurrentPeriod(s beaconState.BeaconState, epoch primitives
 }
 
 // RegisterSyncSubnetCurrentPeriodProto registers a persistent subnet for the current sync committee period.
-func RegisterSyncSubnetCurrentPeriodProto(s beaconState.BeaconState, epoch primitives.Epoch, pubKey []byte, status ethpb.ValidatorStatus) error {
+func RegisterSyncSubnetCurrentPeriodProto(s beaconState.ReadOnlyBeaconState, epoch primitives.Epoch, pubKey []byte, status ethpb.ValidatorStatus) error {
 	committee, err := s.CurrentSyncCommittee()
 	if err != nil {
 		return err
@@ -669,7 +669,7 @@ func RegisterSyncSubnetCurrentPeriodProto(s beaconState.BeaconState, epoch primi
 }
 
 // RegisterSyncSubnetNextPeriod registers a persistent subnet for the next sync committee period.
-func RegisterSyncSubnetNextPeriod(s beaconState.BeaconState, epoch primitives.Epoch, pubKey []byte, status validator.Status) error {
+func RegisterSyncSubnetNextPeriod(s beaconState.ReadOnlyBeaconState, epoch primitives.Epoch, pubKey []byte, status validator.Status) error {
 	committee, err := s.NextSyncCommittee()
 	if err != nil {
 		return err
@@ -680,7 +680,7 @@ func RegisterSyncSubnetNextPeriod(s beaconState.BeaconState, epoch primitives.Ep
 }
 
 // RegisterSyncSubnetNextPeriodProto registers a persistent subnet for the next sync committee period.
-func RegisterSyncSubnetNextPeriodProto(s beaconState.BeaconState, epoch primitives.Epoch, pubKey []byte, status ethpb.ValidatorStatus) error {
+func RegisterSyncSubnetNextPeriodProto(s beaconState.ReadOnlyBeaconState, epoch primitives.Epoch, pubKey []byte, status ethpb.ValidatorStatus) error {
 	committee, err := s.NextSyncCommittee()
 	if err != nil {
 		return err

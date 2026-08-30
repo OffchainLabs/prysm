@@ -57,7 +57,7 @@ func CurrentPeriodPositions(st state.BeaconState, indices []primitives.Validator
 // along with the sync committee root.
 // 1. Checks if the public key exists in the sync committee cache
 // 2. If 1 fails, checks if the public key exists in the input current sync committee object
-func IsCurrentPeriodSyncCommittee(st state.BeaconState, valIdx primitives.ValidatorIndex) (bool, error) {
+func IsCurrentPeriodSyncCommittee(st state.ReadOnlyBeaconState, valIdx primitives.ValidatorIndex) (bool, error) {
 	root, err := SyncPeriodBoundaryRoot(st)
 	if err != nil {
 		return false, err
@@ -93,7 +93,7 @@ func IsCurrentPeriodSyncCommittee(st state.BeaconState, valIdx primitives.Valida
 // 1. Checks if the public key exists in the sync committee cache
 // 2. If 1 fails, checks if the public key exists in the input next sync committee object
 func IsNextPeriodSyncCommittee(
-	st state.BeaconState, valIdx primitives.ValidatorIndex,
+	st state.ReadOnlyBeaconState, valIdx primitives.ValidatorIndex,
 ) (bool, error) {
 	root, err := SyncPeriodBoundaryRoot(st)
 	if err != nil {
