@@ -642,7 +642,9 @@ func TestKeymanager_DeletePublicKeys_URLOwnedKey(t *testing.T) {
 	defer srv.Close()
 
 	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
-	require.NoError(t, file.WriteFile(keyFilePath, nil))
+	// Older versions copied URL keys into the key file, so an upgraded deployment can
+	// legitimately have the same key in both sources.
+	require.NoError(t, file.WriteFile(keyFilePath, []byte(urlKey+"\n")))
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
 	require.NoError(t, err)
 	km, err := NewKeymanager(ctx, &SetupConfig{
@@ -653,15 +655,17 @@ func TestKeymanager_DeletePublicKeys_URLOwnedKey(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// The URL key is not written to the key file, and the API cannot take it away.
-	fileKeys, err := km.readKeyFile()
-	require.NoError(t, err)
-	require.Equal(t, 0, len(fileKeys))
-
+	// Deleting cannot stop a URL-owned key from validating, but it must clean up the
+	// stale file copy so the key does not become file-owned if the URL later drops it.
 	statuses, err := km.DeletePublicKeys([]string{urlKey})
 	require.NoError(t, err)
 	require.Equal(t, keymanager.StatusError, statuses[0].Status)
-	require.StringContains(t, "remote signer public keys URL", statuses[0].Message)
+	require.StringContains(t, "removed from the key file", statuses[0].Message)
+	require.StringContains(t, "continues validating", statuses[0].Message)
+
+	fileKeys, err := km.readKeyFile()
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fileKeys))
 
 	// Nor can it be re-imported as a file key.
 	statuses, err = km.AddPublicKeys([]string{urlKey})

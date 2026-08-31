@@ -657,8 +657,8 @@ func (km *Keymanager) AddPublicKeys(pubKeys []string) ([]*keymanager.KeyStatus, 
 }
 
 // DeletePublicKeys removes a list of public keys from the keymanager for web3signer use. Returns status with message.
-// Only keys owned by the key file can be deleted: keys derived from the flag or the URL
-// would come straight back on the next reload, so they report an error naming their owner.
+// Keys derived from the flag or URL remain validating, but any stale copy in the key file
+// is removed so it cannot take ownership if the derived source later drops the key.
 func (km *Keymanager) DeletePublicKeys(publicKeys []string) ([]*keymanager.KeyStatus, error) {
 	statuses := make([]*keymanager.KeyStatus, len(publicKeys))
 
@@ -674,16 +674,25 @@ func (km *Keymanager) DeletePublicKeys(publicKeys []string) ([]*keymanager.KeySt
 			statuses[i] = &keymanager.KeyStatus{Status: keymanager.StatusError, Message: err.Error()}
 			continue
 		}
+		_, inFile := fileKeys[key]
+		if inFile {
+			delete(fileKeys, key)
+			changed = true
+		}
 		if src, owned := km.keys.owner(key); owned && src != sourceFile {
+			message := fmt.Sprintf("Pubkey: %v is provided by %s and cannot be deleted through the keymanager API", pubkey, src)
+			if inFile {
+				message = fmt.Sprintf("Pubkey: %v was removed from the key file but is still provided by %s and continues validating", pubkey, src)
+			}
 			statuses[i] = &keymanager.KeyStatus{
 				Status:  keymanager.StatusError,
-				Message: fmt.Sprintf("Pubkey: %v is provided by %s and cannot be deleted through the keymanager API", pubkey, src),
+				Message: message,
 			}
 			continue
 		}
 		// Anything left is deletable only if the file still lists it, which also covers a
 		// key repeated within one request.
-		if _, inFile := fileKeys[key]; !inFile {
+		if !inFile {
 			statuses[i] = &keymanager.KeyStatus{
 				Status:  keymanager.StatusNotFound,
 				Message: fmt.Sprintf("Pubkey: %v not found", pubkey),
@@ -691,8 +700,6 @@ func (km *Keymanager) DeletePublicKeys(publicKeys []string) ([]*keymanager.KeySt
 			continue
 		}
 
-		delete(fileKeys, key)
-		changed = true
 		statuses[i] = &keymanager.KeyStatus{
 			Status:  keymanager.StatusDeleted,
 			Message: fmt.Sprintf("Successfully deleted pubkey: %v", pubkey),
