@@ -135,10 +135,10 @@ type BuilderEntry struct {
 }
 
 const (
-	maxBuilderEntries = 64   // MAX_BUILDER_ENTRIES
-	maxBuilderURLSize = 2048 // MAX_BUILDER_URL_SIZE
-	maxAuthDataSize   = 4096 // MAX_DATA_SIZE
-	maxBuilderPubkeys = 64   // MAX_BUILDER_PUBKEYS
+	maxBuilderEntries      = 64   // MAX_BUILDER_ENTRIES
+	maxBuilderURLSize      = 2048 // MAX_BUILDER_URL_SIZE
+	maxBuilderAuthDataSize = 4096 // MAX_BUILDER_AUTH_DATA_SIZE
+	maxBuilderPubkeys      = 64   // MAX_BUILDER_PUBKEYS
 )
 
 func builderConfigFromConsensus(bc *proposer.BuilderConfig) *BuilderConfig {
@@ -243,8 +243,8 @@ func (in *BuilderEntry) ToConsensus(i int) (*proposer.BuilderEntry, error) {
 		if err != nil {
 			return nil, errors.Errorf("builders[%d].auth_data is not valid hex", i)
 		}
-		if len(ad) == 0 || len(ad) > maxAuthDataSize {
-			return nil, errors.Errorf("builders[%d].auth_data must be 1 to %d bytes", i, maxAuthDataSize)
+		if len(ad) == 0 || len(ad) > maxBuilderAuthDataSize {
+			return nil, errors.Errorf("builders[%d].auth_data must be 1 to %d bytes", i, maxBuilderAuthDataSize)
 		}
 		be.AuthData = ad
 	}

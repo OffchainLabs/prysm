@@ -199,7 +199,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	DomainBeaconBuilder:               bytesutil.Uint32ToBytes4(0x0B000000),
 	DomainPTCAttester:                 bytesutil.Uint32ToBytes4(0x0C000000),
 	DomainProposerPreferences:         bytesutil.Uint32ToBytes4(0x0D000000),
-	DomainRequestAuth:                 bytesutil.Uint32ToBytes4(0x0B000001),
+	DomainBuilderRequestAuth:          bytesutil.Uint32ToBytes4(0x0B000001),
 	DomainBuilderDeposit:              bytesutil.Uint32ToBytes4(0x0E000000),
 
 	// Prysm constants.

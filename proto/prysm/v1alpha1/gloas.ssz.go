@@ -3386,7 +3386,7 @@ func (c *BuilderEntry) SizeSSZ() int {
 	size := 36
 	size += len(c.Url)
 	if c.Auth == nil {
-		c.Auth = new(SignedRequestAuth)
+		c.Auth = new(SignedBuilderRequestAuth)
 	}
 	size += c.Auth.SizeSSZ()
 	size += len(c.BuilderPubkeys) * 48
@@ -3408,7 +3408,7 @@ func (c *BuilderEntry) MarshalSSZTo(dst []byte) ([]byte, error) {
 
 	// Field 1: Auth
 	if c.Auth == nil {
-		c.Auth = new(SignedRequestAuth)
+		c.Auth = new(SignedBuilderRequestAuth)
 	}
 	dst = ssz.WriteOffset(dst, offset)
 	offset += c.Auth.SizeSSZ()
@@ -3488,7 +3488,7 @@ func (c *BuilderEntry) UnmarshalSSZ(buf []byte) error {
 	c.Url = append([]byte{}, sszSlice0...)
 
 	// Field 1: Auth
-	c.Auth = new(SignedRequestAuth)
+	c.Auth = new(SignedBuilderRequestAuth)
 	if err = c.Auth.UnmarshalSSZ(sszSlice1); err != nil {
 		return fmt.Errorf("Auth: %w", err)
 	}
@@ -3588,7 +3588,7 @@ func (c *BuilderEntry) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 func (c *BuilderPreferencesRequest) SizeSSZ() int {
 	size := 12
 	if c.Auth == nil {
-		c.Auth = new(SignedRequestAuth)
+		c.Auth = new(SignedBuilderRequestAuth)
 	}
 	size += c.Auth.SizeSSZ()
 	return size
@@ -3613,7 +3613,7 @@ func (c *BuilderPreferencesRequest) MarshalSSZTo(dst []byte) ([]byte, error) {
 
 	// Field 1: Auth
 	if c.Auth == nil {
-		c.Auth = new(SignedRequestAuth)
+		c.Auth = new(SignedBuilderRequestAuth)
 	}
 	dst = ssz.WriteOffset(dst, offset)
 	offset += c.Auth.SizeSSZ()
@@ -3650,7 +3650,7 @@ func (c *BuilderPreferencesRequest) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field 1: Auth
-	c.Auth = new(SignedRequestAuth)
+	c.Auth = new(SignedBuilderRequestAuth)
 	if err = c.Auth.UnmarshalSSZ(sszSlice1); err != nil {
 		return fmt.Errorf("Auth: %w", err)
 	}
@@ -3745,7 +3745,7 @@ func (c *BuilderPreferencesEntry) SizeSSZ() int {
 	size := 64
 	size += len(c.Url)
 	if c.Auth == nil {
-		c.Auth = new(SignedRequestAuth)
+		c.Auth = new(SignedBuilderRequestAuth)
 	}
 	size += c.Auth.SizeSSZ()
 	return size
@@ -3772,7 +3772,7 @@ func (c *BuilderPreferencesEntry) MarshalSSZTo(dst []byte) ([]byte, error) {
 
 	// Field 2: Auth
 	if c.Auth == nil {
-		c.Auth = new(SignedRequestAuth)
+		c.Auth = new(SignedBuilderRequestAuth)
 	}
 	dst = ssz.WriteOffset(dst, offset)
 	offset += c.Auth.SizeSSZ()
@@ -3827,7 +3827,7 @@ func (c *BuilderPreferencesEntry) UnmarshalSSZ(buf []byte) error {
 	c.Url = append([]byte{}, sszSlice1...)
 
 	// Field 2: Auth
-	c.Auth = new(SignedRequestAuth)
+	c.Auth = new(SignedBuilderRequestAuth)
 	if err = c.Auth.UnmarshalSSZ(sszSlice2); err != nil {
 		return fmt.Errorf("Auth: %w", err)
 	}
@@ -5135,18 +5135,18 @@ func (c *PTCs) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return nil
 }
 
-func (c *RequestAuth) SizeSSZ() int {
+func (c *BuilderRequestAuth) SizeSSZ() int {
 	size := 12
 	size += len(c.Data)
 	return size
 }
 
-func (c *RequestAuth) MarshalSSZ() ([]byte, error) {
+func (c *BuilderRequestAuth) MarshalSSZ() ([]byte, error) {
 	buf := make([]byte, c.SizeSSZ())
 	return c.MarshalSSZTo(buf[:0])
 }
 
-func (c *RequestAuth) MarshalSSZTo(dst []byte) ([]byte, error) {
+func (c *BuilderRequestAuth) MarshalSSZTo(dst []byte) ([]byte, error) {
 	var err error
 	offset := 12
 
@@ -5167,7 +5167,7 @@ func (c *RequestAuth) MarshalSSZTo(dst []byte) ([]byte, error) {
 	return dst, err
 }
 
-func (c *RequestAuth) UnmarshalSSZ(buf []byte) error {
+func (c *BuilderRequestAuth) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
 	if size < 12 {
@@ -5195,7 +5195,7 @@ func (c *RequestAuth) UnmarshalSSZ(buf []byte) error {
 	return err
 }
 
-func (c *RequestAuth) HashTreeRoot() ([32]byte, error) {
+func (c *BuilderRequestAuth) HashTreeRoot() ([32]byte, error) {
 	hh := ssz.DefaultHasherPool.Get()
 	if err := c.HashTreeRootWith(hh); err != nil {
 		ssz.DefaultHasherPool.Put(hh)
@@ -5206,7 +5206,7 @@ func (c *RequestAuth) HashTreeRoot() ([32]byte, error) {
 	return root, err
 }
 
-func (c *RequestAuth) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+func (c *BuilderRequestAuth) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 	// Field 0: Data
 
@@ -5870,27 +5870,27 @@ func (c *SignedProposerPreferences) HashTreeRootWith(hh *ssz.Hasher) (err error)
 	return nil
 }
 
-func (c *SignedRequestAuth) SizeSSZ() int {
+func (c *SignedBuilderRequestAuth) SizeSSZ() int {
 	size := 100
 	if c.Message == nil {
-		c.Message = new(RequestAuth)
+		c.Message = new(BuilderRequestAuth)
 	}
 	size += c.Message.SizeSSZ()
 	return size
 }
 
-func (c *SignedRequestAuth) MarshalSSZ() ([]byte, error) {
+func (c *SignedBuilderRequestAuth) MarshalSSZ() ([]byte, error) {
 	buf := make([]byte, c.SizeSSZ())
 	return c.MarshalSSZTo(buf[:0])
 }
 
-func (c *SignedRequestAuth) MarshalSSZTo(dst []byte) ([]byte, error) {
+func (c *SignedBuilderRequestAuth) MarshalSSZTo(dst []byte) ([]byte, error) {
 	var err error
 	offset := 100
 
 	// Field 0: Message
 	if c.Message == nil {
-		c.Message = new(RequestAuth)
+		c.Message = new(BuilderRequestAuth)
 	}
 	dst = ssz.WriteOffset(dst, offset)
 	offset += c.Message.SizeSSZ()
@@ -5908,7 +5908,7 @@ func (c *SignedRequestAuth) MarshalSSZTo(dst []byte) ([]byte, error) {
 	return dst, err
 }
 
-func (c *SignedRequestAuth) UnmarshalSSZ(buf []byte) error {
+func (c *SignedBuilderRequestAuth) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
 	if size < 100 {
@@ -5927,7 +5927,7 @@ func (c *SignedRequestAuth) UnmarshalSSZ(buf []byte) error {
 	sszSlice0 := buf[sszVarOffset0:] // c.Message
 
 	// Field 0: Message
-	c.Message = new(RequestAuth)
+	c.Message = new(BuilderRequestAuth)
 	if err = c.Message.UnmarshalSSZ(sszSlice0); err != nil {
 		return fmt.Errorf("Message: %w", err)
 	}
@@ -5938,7 +5938,7 @@ func (c *SignedRequestAuth) UnmarshalSSZ(buf []byte) error {
 	return err
 }
 
-func (c *SignedRequestAuth) HashTreeRoot() ([32]byte, error) {
+func (c *SignedBuilderRequestAuth) HashTreeRoot() ([32]byte, error) {
 	hh := ssz.DefaultHasherPool.Get()
 	if err := c.HashTreeRootWith(hh); err != nil {
 		ssz.DefaultHasherPool.Put(hh)
@@ -5949,7 +5949,7 @@ func (c *SignedRequestAuth) HashTreeRoot() ([32]byte, error) {
 	return root, err
 }
 
-func (c *SignedRequestAuth) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+func (c *SignedBuilderRequestAuth) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 	// Field 0: Message
 	if err := c.Message.HashTreeRootWith(hh); err != nil {

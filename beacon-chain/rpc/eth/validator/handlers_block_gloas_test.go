@@ -446,8 +446,8 @@ func testBuilderConfig() *eth.BuilderConfig {
 		BuilderBoostFactor: 100,
 		Builders: []*eth.BuilderEntry{{
 			Url: []byte("http://builder.example"),
-			Auth: &eth.SignedRequestAuth{
-				Message:   &eth.RequestAuth{Data: []byte{0xaa}, Slot: 1},
+			Auth: &eth.SignedBuilderRequestAuth{
+				Message:   &eth.BuilderRequestAuth{Data: []byte{0xaa}, Slot: 1},
 				Signature: make([]byte, 96),
 			},
 			BuilderPubkeys:      [][]byte{make([]byte, 48)},

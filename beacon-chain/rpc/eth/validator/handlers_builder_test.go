@@ -25,8 +25,8 @@ func testBuilderPreferencesEntry() *eth.BuilderPreferencesEntry {
 	return &eth.BuilderPreferencesEntry{
 		ProposerPubkey: make([]byte, 48),
 		Url:            []byte("http://builder.example"),
-		Auth: &eth.SignedRequestAuth{
-			Message:   &eth.RequestAuth{Data: []byte{0xaa}, Slot: 1},
+		Auth: &eth.SignedBuilderRequestAuth{
+			Message:   &eth.BuilderRequestAuth{Data: []byte{0xaa}, Slot: 1},
 			Signature: make([]byte, 96),
 		},
 		MaxExecutionPayment: 1000,
