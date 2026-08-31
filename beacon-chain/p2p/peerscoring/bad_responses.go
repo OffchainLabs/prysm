@@ -13,6 +13,9 @@ var _ GreyLister = badResponsesScorer{}
 // configured threshold.
 type badResponsesScorer struct{}
 
+// Aspect returns the grey-lister's aspect name.
+func (badResponsesScorer) Aspect() string { return AspectBadResponses }
+
 // IsPeerGreyListed greylists the peer once its un-decayed strikes reach the threshold.
 func (badResponsesScorer) IsPeerGreyListed(_ peer.ID, si *scoringInfo) error {
 	strikes := si.peerInfo.badResponseCount

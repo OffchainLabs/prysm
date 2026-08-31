@@ -222,6 +222,14 @@ func (s *Selector) Decay() {
 	}
 }
 
+// TrackedPeerCount returns how many peers the selector currently holds stats for.
+func (s *Selector) TrackedPeerCount() int {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	return len(s.peers)
+}
+
 // RemovePeers drops all block provider stats for the given peers.
 func (s *Selector) RemovePeers(pids []peer.ID) {
 	s.lock.Lock()

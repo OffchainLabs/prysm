@@ -20,6 +20,27 @@ var (
 	ErrPeerGreyListed = errors.New("peer is grey-listed")
 )
 
+// GreyListError is a grey-list verdict carrying the aspect that fired; it wraps the
+// aspect's descriptive error, which in turn wraps ErrPeerGreyListed.
+type GreyListError struct {
+	Aspect string
+	Err    error
+}
+
+func (e *GreyListError) Error() string { return e.Err.Error() }
+
+func (e *GreyListError) Unwrap() error { return e.Err }
+
+// AspectFromError returns the aspect recorded in a grey-list verdict, or "unknown" for
+// errors that do not carry one.
+func AspectFromError(err error) string {
+	var glErr *GreyListError
+	if errors.As(err, &glErr) {
+		return glErr.Aspect
+	}
+	return "unknown"
+}
+
 // BadResponseSource identifies the call site that reported a bad response.
 type BadResponseSource int
 
@@ -191,6 +212,7 @@ func (s *Scorer) RecordBadResponse(pid peer.ID, source BadResponseSource, reason
 	if pid == "" {
 		return 0
 	}
+	badResponsesTotal.WithLabelValues(source.String()).Inc()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -403,11 +425,57 @@ func (s *Scorer) GreyListedPeers() []peer.ID {
 	return greyListed
 }
 
-// isGreyListed returns the first grey-lister's verdict, nil if none; callers must hold s.mu.
+// Aspect names for per-aspect grey-list verdicts, shared by metrics and the debug API.
+// AspectBadIP is the IP-colocation refusal source, judged by the p2p service outside the scorer.
+const (
+	AspectBadResponses = "bad_responses"
+	AspectPeerStatus   = "peer_status"
+	AspectGossip       = "gossip"
+	AspectBadIP        = "bad_ip"
+)
+
+// GreyListedPeersByAspect returns the peers each scoring aspect currently grey-lists, keyed
+// by aspect name. A peer grey-listed by several aspects appears under each of them.
+func (s *Scorer) GreyListedPeersByAspect() map[string][]peer.ID {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	byAspect := make(map[string][]peer.ID)
+	for pid := range s.info {
+		si, ok := s.snapshot(pid)
+		if !ok {
+			continue
+		}
+		brVerdict := badResponsesScorer{}.IsPeerGreyListed(pid, si)
+		statusVerdict := rpcStatusScorer{}.IsPeerGreyListed(pid, si)
+		gossipVerdict := gossipScorer{}.IsPeerGreyListed(pid, si)
+		if brVerdict != nil {
+			byAspect[AspectBadResponses] = append(byAspect[AspectBadResponses], pid)
+		}
+		if statusVerdict != nil {
+			byAspect[AspectPeerStatus] = append(byAspect[AspectPeerStatus], pid)
+		}
+		if gossipVerdict != nil {
+			byAspect[AspectGossip] = append(byAspect[AspectGossip], pid)
+		}
+	}
+	return byAspect
+}
+
+// TrackedPeerCount returns how many peers the scorer currently holds scoring state for.
+func (s *Scorer) TrackedPeerCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return len(s.info)
+}
+
+// isGreyListed returns the first grey-lister's verdict tagged with its aspect, nil if
+// none; callers must hold s.mu.
 func (s *Scorer) isGreyListed(pid peer.ID, si *scoringInfo) error {
 	for _, greyLister := range s.greyListers {
 		if err := greyLister.IsPeerGreyListed(pid, si); err != nil {
-			return err
+			return &GreyListError{Aspect: greyLister.Aspect(), Err: err}
 		}
 	}
 	return nil

@@ -61,6 +61,21 @@ func TestGossipRejectionsPerPeerFIFOCap(t *testing.T) {
 	}
 }
 
+func TestGossipRejectionsRetainedCount(t *testing.T) {
+	s := NewGossipRejectionsStore(WithMaxRejectionsPerPeer(3))
+	require.Equal(t, 0, s.RetainedCount())
+
+	pidB := peer.ID("peer-b")
+	for i := 0; i < 5; i++ {
+		s.Record(testPid, "topic-a", "agent", errors.New("bad"))
+	}
+	s.Record(pidB, "topic-b", "agent", nil)
+	require.Equal(t, 4, s.RetainedCount()) // testPid capped at 3, plus one for peer-b
+
+	s.RemovePeers([]peer.ID{testPid})
+	require.Equal(t, 1, s.RetainedCount())
+}
+
 func TestGossipRejectionsRemovePeers(t *testing.T) {
 	s := NewGossipRejectionsStore()
 	pidB := peer.ID("peer-b")

@@ -15,6 +15,8 @@ type scoringInfo struct {
 // GreyLister judges one aspect of a peer's behaviour and decides whether
 // that aspect alone warrants greylisting the peer.
 type GreyLister interface {
+	// Aspect returns the grey-lister's aspect name, as used in metrics and the debug API.
+	Aspect() string
 	// IsPeerGreyListed returns nil when this grey-lister alone does not greylist the peer, or an
 	// error wrapping ErrPeerGreyListed describing why it does.
 	IsPeerGreyListed(peer.ID, *scoringInfo) error

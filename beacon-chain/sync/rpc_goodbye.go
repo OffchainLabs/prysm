@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/async"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -75,6 +76,7 @@ func (s *Service) goodbyeRPCHandler(_ context.Context, msg any, stream libp2pcor
 // disconnectGreyListedPeer disconnects a grey-listed peer with a goodbye code derived
 // from the peer's stored status validation error.
 func (s *Service) disconnectGreyListedPeer(ctx context.Context, id peer.ID, greyListErr error) {
+	p2p.GreyListRefusalCount.WithLabelValues(p2p.GreyListSiteDisconnect, peerscoring.AspectFromError(greyListErr)).Inc()
 	err := s.cfg.p2p.PeerScoring().ValidationError(id)
 	goodbyeCode := p2ptypes.ErrToGoodbyeCode(err)
 	if err == nil {

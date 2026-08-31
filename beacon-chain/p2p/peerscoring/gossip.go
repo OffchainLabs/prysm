@@ -12,6 +12,9 @@ var _ GreyLister = gossipScorer{}
 // gossipScorer mirrors libp2p's opinion of the peer and greylists it below the threshold.
 type gossipScorer struct{}
 
+// Aspect returns the grey-lister's aspect name.
+func (gossipScorer) Aspect() string { return AspectGossip }
+
 // IsPeerGreyListed greylists the peer when its mirrored gossip score fell below the greylist threshold.
 func (gossipScorer) IsPeerGreyListed(_ peer.ID, si *scoringInfo) error {
 	if si.peerInfo.gossipScore < float64(si.params.gossipGreyListThreshold) {

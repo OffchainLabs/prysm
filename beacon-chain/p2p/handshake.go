@@ -143,6 +143,7 @@ func (s *Service) AddConnectionHandler(reqFunc, goodByeFunc func(ctx context.Con
 
 				// Defensive check in the event we still get a grey-listed peer.
 				if err := s.IsPeerGreyListed(remotePeer); err != nil {
+					GreyListRefusalCount.WithLabelValues(greyListSiteHandshake, peerscoring.AspectFromError(err)).Inc()
 					s.disconnectFromPeerOnError(conn, goodByeFunc, err)
 					return
 				}

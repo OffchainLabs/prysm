@@ -813,20 +813,33 @@ type wantedSubnet struct {
 	subnet      uint64
 }
 
-// filterNeededPeers filters out the set of peers required to maintain at least
-// minimumPeersPerSubnet in our attestation, sync-committee and data-column subnets.
-// Peers that participate in multiple subnets count toward all of them.
-func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
-	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
-	currentSlot := s.cfg.clock.CurrentSlot()
-	currentEpoch := slots.ToEpoch(currentSlot)
+// Subnet type labels for subnet-coverage metrics.
+const (
+	subnetTypeAttestation   = "attestation"
+	subnetTypeSyncCommittee = "sync_committee"
+	subnetTypeDataColumn    = "data_column"
+	subnetTypeUnknown       = "unknown"
+)
 
-	// Exit early if nothing to filter.
-	if len(pids) == 0 {
-		return pids
+// subnetTypeLabel maps a subnet topic format to its metrics label.
+func subnetTypeLabel(topicFormat string) string {
+	switch topicFormat {
+	case p2p.AttestationSubnetTopicFormat:
+		return subnetTypeAttestation
+	case p2p.SyncCommitteeSubnetTopicFormat:
+		return subnetTypeSyncCommittee
+	case p2p.DataColumnSubnetTopicFormat:
+		return subnetTypeDataColumn
+	default:
+		return subnetTypeUnknown
 	}
+}
 
-	digest := s.currentForkDigest()
+// wantedSubnetsForSlot returns the subnets the node currently needs peers on: attestation
+// subnets for persistent/aggregator/attester duties, active sync-committee subnets
+// post-Altair, and data-column subnets post-Fulu.
+func (s *Service) wantedSubnetsForSlot(currentSlot primitives.Slot) map[wantedSubnet]bool {
+	currentEpoch := slots.ToEpoch(currentSlot)
 
 	wantedSubnets := make(map[wantedSubnet]bool)
 	addWanted := func(topicFormat string, subnets map[uint64]bool) {
@@ -842,6 +855,22 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 	if params.BeaconConfig().FuluForkEpoch <= currentEpoch {
 		addWanted(p2p.DataColumnSubnetTopicFormat, s.dataColumnSubnetIndices(currentSlot))
 	}
+	return wantedSubnets
+}
+
+// filterNeededPeers filters out the set of peers required to maintain at least
+// minimumPeersPerSubnet in our attestation, sync-committee and data-column subnets.
+// Peers that participate in multiple subnets count toward all of them.
+func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
+	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
+
+	// Exit early if nothing to filter.
+	if len(pids) == 0 {
+		return pids
+	}
+
+	digest := s.currentForkDigest()
+	wantedSubnets := s.wantedSubnetsForSlot(s.cfg.clock.CurrentSlot())
 
 	pidSet := make(map[peer.ID]bool, len(pids))
 	for _, pid := range pids {
@@ -882,6 +911,7 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 		for _, subnet := range subnets {
 			if subnetPeerCount[subnet] <= minimumPeersPerSubnet {
 				canPrune = false
+				pruneProtectedPeersCount.WithLabelValues(subnetTypeLabel(subnet.topicFormat)).Inc()
 				break
 			}
 		}

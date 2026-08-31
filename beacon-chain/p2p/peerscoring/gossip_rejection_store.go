@@ -101,6 +101,18 @@ func (s *GossipRejectionsStore) All() map[peer.ID]PeerGossipRejections {
 	return all
 }
 
+// RetainedCount returns how many rejections are currently retained across all peers.
+func (s *GossipRejectionsStore) RetainedCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	total := 0
+	for _, entries := range s.rejections {
+		total += len(entries)
+	}
+	return total
+}
+
 // RemovePeers drops all recorded rejections for the given peers.
 func (s *GossipRejectionsStore) RemovePeers(pids []peer.ID) {
 	s.mu.Lock()

@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -693,7 +694,8 @@ func (s *Service) filterPeer(node *enode.Node) bool {
 	}
 
 	// Ignore bad nodes.
-	if s.IsPeerGreyListed(peerData.ID) != nil {
+	if err := s.IsPeerGreyListed(peerData.ID); err != nil {
+		GreyListRefusalCount.WithLabelValues(greyListSiteDiscovery, peerscoring.AspectFromError(err)).Inc()
 		return false
 	}
 

@@ -21,6 +21,9 @@ var terminalStatusErrors = []error{
 // rpcStatusScorer judges the chain view a peer advertised in its last status exchange.
 type rpcStatusScorer struct{}
 
+// Aspect returns the grey-lister's aspect name.
+func (rpcStatusScorer) Aspect() string { return AspectPeerStatus }
+
 // IsPeerGreyListed greylists the peer when its last status failed validation with a terminal error.
 func (rpcStatusScorer) IsPeerGreyListed(_ peer.ID, si *scoringInfo) error {
 	status := si.peerInfo.rpcStatus

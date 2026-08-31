@@ -81,6 +81,9 @@ func (s *Service) maintainPeerStatuses() {
 			peerIds = peerIds[:numToPrune]
 		}
 		for _, id := range peerIds {
+			if connectedAt, err := s.cfg.p2p.Peers().ConnectedAt(id); err == nil && !connectedAt.IsZero() {
+				prunedPeerTenureSeconds.Observe(prysmTime.Since(connectedAt).Seconds())
+			}
 			if err := s.sendGoodByeAndDisconnect(s.ctx, p2ptypes.GoodbyeCodeTooManyPeers, id); err != nil {
 				log.WithField("peer", id).WithError(err).Debug("Could not disconnect with peer")
 			}

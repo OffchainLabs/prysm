@@ -446,7 +446,7 @@ func (s *Service) IsPeerGreyListed(pid peer.ID) error {
 		return nil
 	}
 	if err := s.peers.IsFromBadIP(pid); err != nil {
-		return errors.Wrap(err, "peer is from a bad IP")
+		return &peerscoring.GreyListError{Aspect: peerscoring.AspectBadIP, Err: errors.Wrap(err, "peer is from a bad IP")}
 	}
 	return s.peerScorer.IsPeerGreyListed(pid)
 }
@@ -586,6 +586,7 @@ func (s *Service) connectWithPeer(ctx context.Context, info peer.AddrInfo) error
 	}
 
 	if err := s.IsPeerGreyListed(info.ID); err != nil {
+		GreyListRefusalCount.WithLabelValues(greyListSiteConnect, peerscoring.AspectFromError(err)).Inc()
 		return errors.Wrap(err, "grey-listed peer")
 	}
 

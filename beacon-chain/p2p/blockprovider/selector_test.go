@@ -155,6 +155,18 @@ func TestSelector_GettersSetters(t *testing.T) {
 	assert.Equal(t, uint64(64), selector.ProcessedBlocks("peer1"))
 }
 
+func TestSelector_TrackedPeerCount(t *testing.T) {
+	selector := blockprovider.NewSelector(t.Context(), nil)
+	assert.Equal(t, 0, selector.TrackedPeerCount())
+
+	selector.IncrementProcessedBlocks("peer1", 64)
+	selector.Touch("peer2")
+	assert.Equal(t, 2, selector.TrackedPeerCount())
+
+	selector.RemovePeers([]peer.ID{"peer1", "peer2"})
+	assert.Equal(t, 0, selector.TrackedPeerCount())
+}
+
 func TestSelector_WeightSorted(t *testing.T) {
 	selector := blockprovider.NewSelector(t.Context(), &blockprovider.SelectorConfig{
 		ProcessedBatchWeight: 0.01,
