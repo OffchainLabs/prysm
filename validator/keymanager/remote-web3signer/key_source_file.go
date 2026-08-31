@@ -136,9 +136,13 @@ func (km *Keymanager) savePublicKeysToFile(keys []pubkey) error {
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)
 	}
+	for _, key := range keys {
+		if _, err := f.WriteString(hexutil.Encode(key[:]) + "\n"); err != nil {
+			return fmt.Errorf("error writing key %#x to file: %w", key, err)
+		}
+	}
 	// The keymanager API reports these keys as stored permanently, so flush and close before
 	// claiming so rather than discovering a write error after the response has gone out.
-	err = writePublicKeys(f, keys)
 	if syncErr := f.Sync(); err == nil {
 		err = syncErr
 	}
@@ -216,18 +220,4 @@ func (km *Keymanager) refreshRemoteKeysFromFileChanges(ctx context.Context, mark
 			return nil
 		}
 	}
-}
-
-func writePublicKeys(f *os.File, keys []pubkey) error {
-	written := make(map[pubkey]struct{}, len(keys))
-	for _, key := range keys {
-		if _, ok := written[key]; ok {
-			continue
-		}
-		written[key] = struct{}{}
-		if _, err := f.WriteString(hexutil.Encode(key[:]) + "\n"); err != nil {
-			return fmt.Errorf("error writing key %#x to file: %w", key, err)
-		}
-	}
-	return nil
 }
