@@ -20,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -431,11 +432,11 @@ func TestValidateDataColumnsByRange(t *testing.T) {
 			expectErr:   false,
 		},
 		{
-			name:        "range exceeds limits",
+			name:        "range is split at the block batch limit",
 			startSlot:   0,
 			count:       10_000,
 			currentSlot: 400,
-			expected:    &rangeParams{start: 320, end: 400, size: 81},
+			expected:    &rangeParams{start: 320, end: 400, size: uint64(flags.Get().BlockBatchLimit)},
 			expectErr:   false,
 		},
 	}
