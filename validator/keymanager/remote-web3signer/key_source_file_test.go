@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -50,7 +49,7 @@ func TestNewKeyManager_ChangingFileCreated(t *testing.T) {
 	for _, key := range all {
 		require.Equal(t, slices.Contains(wantSlice, hexutil.Encode(key[:])), true)
 	}
-	pubKeysChan := make(chan [][fieldparams.BLSPubkeyLength]byte)
+	pubKeysChan := make(chan []pubkey)
 	sub := km.SubscribeAccountChanges(pubKeysChan)
 	defer sub.Unsubscribe()
 

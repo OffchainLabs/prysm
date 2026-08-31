@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/io/file"
@@ -193,7 +192,7 @@ func (km *Keymanager) replaceKeysLocked(src keySource, keys []pubkey) {
 }
 
 // FetchValidatingPublicKeys fetches the validating public keys
-func (km *Keymanager) FetchValidatingPublicKeys(_ context.Context) ([][fieldparams.BLSPubkeyLength]byte, error) {
+func (km *Keymanager) FetchValidatingPublicKeys(_ context.Context) ([]pubkey, error) {
 	keys := km.keys.all()
 	log.WithField("count", len(keys)).Debug("Fetched validating public keys")
 	return keys, nil
@@ -545,7 +544,7 @@ func handleRegistration(ctx context.Context, validator *validator.Validate, requ
 }
 
 // SubscribeAccountChanges returns the event subscription for changes to public keys.
-func (km *Keymanager) SubscribeAccountChanges(pubKeysChan chan [][fieldparams.BLSPubkeyLength]byte) event.Subscription {
+func (km *Keymanager) SubscribeAccountChanges(pubKeysChan chan []pubkey) event.Subscription {
 	return km.accountsChangedFeed.Subscribe(pubKeysChan)
 }
 

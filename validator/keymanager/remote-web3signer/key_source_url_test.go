@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/async/event"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer/internal"
@@ -44,14 +43,14 @@ func (c *stubSignerClient) Sign(context.Context, string, internal.SignRequestJso
 	return nil, nil
 }
 
-func decodeKeysMust(t *testing.T, hexes ...string) [][fieldparams.BLSPubkeyLength]byte {
+func decodeKeysMust(t *testing.T, hexes ...string) []pubkey {
 	t.Helper()
 	keys, err := decodePublicKeys(hexes)
 	require.NoError(t, err)
 	return keys
 }
 
-func newPollTestKeymanager(client internal.HttpSignerClient, initial [][fieldparams.BLSPubkeyLength]byte) *Keymanager {
+func newPollTestKeymanager(client internal.HttpSignerClient, initial []pubkey) *Keymanager {
 	km := &Keymanager{
 		client:              client,
 		accountsChangedFeed: new(event.Feed),
@@ -85,7 +84,7 @@ func TestPollRemoteKeysFromURL(t *testing.T) {
 				stub.set(tc.resp, tc.respErr)
 				km := newPollTestKeymanager(stub, decodeKeysMust(t, tc.seed...))
 
-				ch := make(chan [][fieldparams.BLSPubkeyLength]byte, 8)
+				ch := make(chan []pubkey, 8)
 				sub := km.SubscribeAccountChanges(ch)
 				defer sub.Unsubscribe()
 
