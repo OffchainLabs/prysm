@@ -752,7 +752,7 @@ func (ps *Settings) UpgradeToV2() bool {
 	changed := scrubbed || ps.Version != SchemaV2
 	ps.Version = SchemaV2
 	if scrubbed {
-		log.Warn("v1 builder settings, including gas limits, do not apply to gloas and were replaced with defaults; provide v2 proposer settings to configure builders")
+		log.Warn("V1 builder settings, including gas limits, do not apply to gloas and were replaced with defaults; provide v2 proposer settings to configure builders")
 	}
 	return changed
 }
