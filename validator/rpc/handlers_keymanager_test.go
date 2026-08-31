@@ -1410,10 +1410,15 @@ func TestServer_ListRemoteKeys(t *testing.T) {
 	ctx := t.Context()
 	root := make([]byte, fieldparams.RootLength)
 	root[0] = 1
+	flagKey := "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"
+	fileKey := "0x800057e262bfe42413c2cfce948ff77f11efeea19721f590c8b5b2f32fecb0e164cafba987c80465878408d05b97c9be"
+	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+	require.NoError(t, file.WriteFile(keyFilePath, []byte(fileKey+"\n")))
 	config := &remoteweb3signer.SetupConfig{
 		BaseEndpoint:          "http://example.com",
 		GenesisValidatorsRoot: root,
-		ProvidedPublicKeys:    []string{"0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"},
+		ProvidedPublicKeys:    []string{flagKey},
+		KeyFilePath:           keyFilePath,
 	}
 	km, err := remoteweb3signer.NewKeymanager(ctx, config)
 	require.NoError(t, err)
@@ -1424,9 +1429,6 @@ func TestServer_ListRemoteKeys(t *testing.T) {
 		walletInitialized: true,
 		validatorService:  vs,
 	}
-	expectedKeys, err := km.FetchValidatingPublicKeys(ctx)
-	require.NoError(t, err)
-
 	t.Run("returns proper data with existing pub keystores", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/eth/v1/remotekeys", nil)
 		w := httptest.NewRecorder()
@@ -1435,8 +1437,12 @@ func TestServer_ListRemoteKeys(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		resp := &ListRemoteKeysResponse{}
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), resp))
-		for i := 0; i < len(resp.Data); i++ {
-			require.DeepEqual(t, hexutil.Encode(expectedKeys[i][:]), resp.Data[i].Pubkey)
+		wantReadonly := map[string]bool{flagKey: true, fileKey: false}
+		require.Equal(t, len(wantReadonly), len(resp.Data))
+		for _, key := range resp.Data {
+			readonly, ok := wantReadonly[key.Pubkey]
+			require.Equal(t, true, ok)
+			require.Equal(t, readonly, key.Readonly)
 		}
 	})
 	t.Run("calling list keystores while using a remote wallet returns empty", func(t *testing.T) {

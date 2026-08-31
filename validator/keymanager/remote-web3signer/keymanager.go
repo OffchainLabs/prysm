@@ -708,3 +708,9 @@ func (km *Keymanager) DeletePublicKeys(publicKeys []string) ([]*keymanager.KeySt
 
 	return statuses, nil
 }
+
+// IsReadOnly returns true if the key is not owned by the key file, meaning it is derived from the flag or the URL.
+func (km *Keymanager) IsReadOnly(key pubkey) bool {
+	src, _ := km.keys.owner(key)
+	return src != sourceFile
+}
