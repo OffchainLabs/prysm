@@ -21,8 +21,8 @@ func testClientBuilderPreferencesEntry() *ethpb.BuilderPreferencesEntry {
 	return &ethpb.BuilderPreferencesEntry{
 		ProposerPubkey: make([]byte, 48),
 		Url:            []byte("http://builder.example"),
-		Auth: &ethpb.SignedRequestAuth{
-			Message:   &ethpb.RequestAuth{Data: []byte{0xaa}, Slot: 1},
+		Auth: &ethpb.SignedBuilderRequestAuth{
+			Message:   &ethpb.BuilderRequestAuth{Data: []byte{0xaa}, Slot: 1},
 			Signature: make([]byte, 96),
 		},
 		MaxExecutionPayment: 1000,

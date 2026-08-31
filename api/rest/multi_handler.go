@@ -310,46 +310,40 @@ func (m *multiHandler) RequestSSZWithFallback(
 }
 
 // postWithFallbackFn returns the per-node post function using the node's best known
-// encoding, with the marshalers wrapped so each runs at most once across nodes.
+// encoding, downgrading to JSON after a 415; each marshaler runs at most once across nodes.
 func (m *multiHandler) postWithFallbackFn(endpoint string, headers map[string]string, sszFn, jsonFn func() ([]byte, error), respOpts ...reqOption) queryFunc[sszResult] {
 	sszBody := sync.OnceValues(sszFn)
 	jsonBody := sync.OnceValues(jsonFn)
 
 	return func(ctx context.Context, h *handler) (sszResult, error) {
-		return m.postWithBestEncoding(ctx, h, endpoint, headers, sszBody, jsonBody, respOpts...)
-	}
-}
-
-// postWithBestEncoding posts to one node using its best known encoding for the
-// endpoint, downgrading to JSON after a 415.
-func (m *multiHandler) postWithBestEncoding(ctx context.Context, h *handler, endpoint string, headers map[string]string, sszBody, jsonBody func() ([]byte, error), respOpts ...reqOption) (sszResult, error) {
-	key := sszSupportKey{host: h.Host(), endpoint: memoEndpoint(endpoint)}
-	if m.sszWorthTrying(key) {
-		body, err := sszBody()
-		if err != nil {
-			return sszResult{}, fmt.Errorf("marshal SSZ body: %w", err)
-		}
-
-		data, header, err := h.postWithContentType(ctx, endpoint, headers, api.OctetStreamMediaType, bytes.NewBuffer(body), respOpts...)
-		if !errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}) {
+		key := sszSupportKey{host: h.Host(), endpoint: memoEndpoint(endpoint)}
+		if m.sszWorthTrying(key) {
+			body, err := sszBody()
 			if err != nil {
-				return sszResult{}, fmt.Errorf("post SSZ: %w", err)
+				return sszResult{}, fmt.Errorf("marshal SSZ body: %w", err)
 			}
-			return sszResult{body: data, header: header}, nil
+
+			data, header, err := h.postWithContentType(ctx, endpoint, headers, api.OctetStreamMediaType, bytes.NewBuffer(body), respOpts...)
+			if !errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}) {
+				if err != nil {
+					return sszResult{}, fmt.Errorf("post SSZ: %w", err)
+				}
+				return sszResult{body: data, header: header}, nil
+			}
+			m.markSSZUnsupported(key, err)
 		}
-		m.markSSZUnsupported(key, err)
-	}
 
-	body, err := jsonBody()
-	if err != nil {
-		return sszResult{}, fmt.Errorf("marshal JSON body: %w", err)
-	}
+		body, err := jsonBody()
+		if err != nil {
+			return sszResult{}, fmt.Errorf("marshal JSON body: %w", err)
+		}
 
-	data, header, err := h.postWithContentType(ctx, endpoint, headers, api.JsonMediaType, bytes.NewBuffer(body), respOpts...)
-	if err != nil {
-		return sszResult{}, fmt.Errorf("post JSON: %w", err)
+		data, header, err := h.postWithContentType(ctx, endpoint, headers, api.JsonMediaType, bytes.NewBuffer(body), respOpts...)
+		if err != nil {
+			return sszResult{}, fmt.Errorf("post JSON: %w", err)
+		}
+		return sszResult{body: data, header: header}, nil
 	}
-	return sszResult{body: data, header: header}, nil
 }
 
 // sszWorthTrying reports whether SSZ should be attempted for the node and endpoint.

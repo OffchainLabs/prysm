@@ -114,6 +114,8 @@ func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primi
 			return nil, err
 		}
 	}
+
+	// Cache the envelope only for the winning response.
 	if c.stateless && contents != nil && contents.ExecutionPayloadEnvelope != nil {
 		c.envelopeCache.Add(slot, contents.ExecutionPayloadEnvelope, contents.Blobs, contents.KzgProofs)
 	}

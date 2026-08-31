@@ -1669,8 +1669,8 @@ func testClientBuilderConfig() *ethpb.BuilderConfig {
 		BuilderBoostFactor: 100,
 		Builders: []*ethpb.BuilderEntry{{
 			Url: []byte("http://builder.example"),
-			Auth: &ethpb.SignedRequestAuth{
-				Message:   &ethpb.RequestAuth{Data: []byte{0xaa}, Slot: 1},
+			Auth: &ethpb.SignedBuilderRequestAuth{
+				Message:   &ethpb.BuilderRequestAuth{Data: []byte{0xaa}, Slot: 1},
 				Signature: make([]byte, 96),
 			},
 			BuilderPubkeys:      [][]byte{make([]byte, 48)},
