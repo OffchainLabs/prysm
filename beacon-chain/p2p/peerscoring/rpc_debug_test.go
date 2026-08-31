@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -177,6 +178,13 @@ func TestTimeToWhiteListing(t *testing.T) {
 	require.NotNil(t, s.IsPeerGreyListed(gossiper))
 	require.Equal(t, time.Duration(0), s.TimeToWhiteListing(gossiper))
 
+	// Status grey-listing expires with its TTL.
+	wrongFork := peer.ID("wrong-fork")
+	s.SetPeerStatus(wrongFork, &pb.StatusV2{HeadSlot: 1}, p2ptypes.ErrWrongForkDigestVersion)
+	require.NotNil(t, s.IsPeerGreyListed(wrongFork))
+	ttw := s.TimeToWhiteListing(wrongFork)
+	require.Equal(t, true, ttw > 0 && ttw <= defaultStatusGreyListTTL)
+
 	require.Equal(t, time.Duration(0), s.TimeToWhiteListing(peer.ID("unknown")))
 }
 
@@ -227,6 +235,7 @@ func TestBuildScoringConfig(t *testing.T) {
 	require.Equal(t, defaultBadResponseHistorySize, c.BadResponseHistorySize)
 	require.Equal(t, "30m0s", c.DecayInterval)
 	require.Equal(t, defaultGossipGreyListThreshold, c.GossipGreyListThreshold)
+	require.Equal(t, "24h0m0s", c.StatusGreyListTTL)
 	require.Equal(t, 42, c.MaxGossipRejectionsPerPeer)
 	require.Equal(t, "100", c.OurHeadSlot)
 	require.Equal(t, "200", c.HighestKnownHeadSlot)

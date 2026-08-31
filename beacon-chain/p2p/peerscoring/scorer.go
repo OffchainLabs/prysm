@@ -138,6 +138,11 @@ const (
 	defaultGossipGreyListThreshold = -16000
 	// defaultBadResponseHistorySize caps how many recent strikes are retained per peer.
 	defaultBadResponseHistorySize = 25
+	// defaultStatusGreyListTTL bounds how long a terminal status verdict greylists a peer.
+	// A refused peer can never re-exchange status to clear the verdict, so without an expiry
+	// every wrong-network peer would be retained forever; it mirrors the
+	// GoodbyeCodeWrongNetwork dial backoff (sync/rpc_goodbye.go).
+	defaultStatusGreyListTTL = 24 * time.Hour
 )
 
 // Option configures a Scorer.
@@ -171,11 +176,19 @@ func WithBadResponseHistorySize(n int) Option {
 	}
 }
 
+// WithStatusGreyListTTL sets how long a terminal status verdict greylists a peer.
+func WithStatusGreyListTTL(ttl time.Duration) Option {
+	return func(s *Scorer) {
+		s.params.statusGreyListTTL = ttl
+	}
+}
+
 type scoringParams struct {
 	decayInterval                time.Duration
 	badResponseGreyListThreshold int
 	badResponseHistorySize       int
 	gossipGreyListThreshold      int
+	statusGreyListTTL            time.Duration
 }
 
 // Scorer aggregates per-aspect grey-listers into a composite greylist verdict.
@@ -197,6 +210,7 @@ func NewScorer(opts ...Option) *Scorer {
 			badResponseGreyListThreshold: defaultBadResponseGreyListThreshold,
 			badResponseHistorySize:       defaultBadResponseHistorySize,
 			gossipGreyListThreshold:      defaultGossipGreyListThreshold,
+			statusGreyListTTL:            defaultStatusGreyListTTL,
 		},
 		greyListers: []GreyLister{badResponsesScorer{}, rpcStatusScorer{}, gossipScorer{}},
 		info:        make(map[peer.ID]*PeerScoringInfo),

@@ -23,6 +23,7 @@ func testParams() *scoringParams {
 		decayInterval:                time.Hour,
 		badResponseGreyListThreshold: 4,
 		gossipGreyListThreshold:      -16000,
+		statusGreyListTTL:            time.Hour,
 	}
 }
 
@@ -65,6 +66,7 @@ func TestNewScorer(t *testing.T) {
 		badResponseGreyListThreshold: defaultBadResponseGreyListThreshold,
 		badResponseHistorySize:       defaultBadResponseHistorySize,
 		gossipGreyListThreshold:      defaultGossipGreyListThreshold,
+		statusGreyListTTL:            defaultStatusGreyListTTL,
 	}
 	require.Equal(t, want, *s.params)
 	require.NotNil(t, s.info)
@@ -161,6 +163,24 @@ func TestRemovePeers(t *testing.T) {
 	// Grey-listed peers are never forgotten.
 	require.ErrorIs(t, s.IsPeerGreyListed(greyPid), ErrPeerGreyListed)
 	require.Equal(t, 4, s.BadResponseCount(greyPid))
+}
+
+func TestStatusGreyListTTLExpiry(t *testing.T) {
+	s := NewScorer(WithStatusGreyListTTL(10 * time.Millisecond))
+	s.SetPeerStatus(testPid, &pb.StatusV2{HeadSlot: 1}, p2ptypes.ErrWrongForkDigestVersion)
+
+	err := s.IsPeerGreyListed(testPid)
+	require.ErrorIs(t, err, ErrPeerGreyListed)
+	require.Equal(t, AspectPeerStatus, AspectFromError(err))
+
+	// While grey-listed the entry survives removal: it is the memory of the misbehaviour.
+	s.RemovePeers([]peer.ID{testPid})
+	require.Equal(t, 1, s.TrackedPeerCount())
+
+	// Once the TTL lapses the verdict expires and the entry becomes removable.
+	waitFor(t, func() bool { return s.IsPeerGreyListed(testPid) == nil })
+	s.RemovePeers([]peer.ID{testPid})
+	require.Equal(t, 0, s.TrackedPeerCount())
 }
 
 func TestBadResponseSourceString(t *testing.T) {

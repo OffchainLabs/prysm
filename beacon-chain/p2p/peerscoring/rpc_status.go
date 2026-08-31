@@ -11,7 +11,8 @@ import (
 
 var _ GreyLister = rpcStatusScorer{}
 
-// terminalStatusErrors greylist a peer until a later status exchange clears them.
+// terminalStatusErrors greylist a peer until a later status exchange clears them or the
+// verdict expires after statusGreyListTTL.
 var terminalStatusErrors = []error{
 	p2ptypes.ErrWrongForkDigestVersion,
 	p2ptypes.ErrInvalidFinalizedRoot,
@@ -32,13 +33,22 @@ func (rpcStatusScorer) IsPeerGreyListed(_ peer.ID, si *scoringInfo) error {
 	}
 	for _, terminal := range terminalStatusErrors {
 		if errors.Is(status.validationError, terminal) {
+			// A refused peer can never clear the verdict itself, so it expires after the
+			// TTL; the peer then ages out through regular peer-store pruning.
+			if time.Since(status.lastUpdated) >= si.params.statusGreyListTTL {
+				return nil
+			}
 			return fmt.Errorf("%w: status validation failed: %w", ErrPeerGreyListed, status.validationError)
 		}
 	}
 	return nil
 }
 
-// TimeToWhiteListing returns 0: status greylisting only clears once a later status exchange validates.
-func (rpcStatusScorer) TimeToWhiteListing(peer.ID, *scoringInfo) time.Duration {
-	return 0
+// TimeToWhiteListing returns how long until the terminal verdict expires; 0 when this
+// aspect does not greylist the peer.
+func (r rpcStatusScorer) TimeToWhiteListing(pid peer.ID, si *scoringInfo) time.Duration {
+	if r.IsPeerGreyListed(pid, si) == nil {
+		return 0
+	}
+	return si.params.statusGreyListTTL - time.Since(si.peerInfo.rpcStatus.lastUpdated)
 }

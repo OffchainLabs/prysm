@@ -82,8 +82,8 @@ type PeerScoringDebug struct {
 	// GreyListExemption is set when a refusal source fires but the peer is exempt from it.
 	GreyListExemption string `json:"grey_list_exemption,omitempty"`
 	// TimeToWhiteListing is set when a scoring aspect grey-lists the peer; "0s" means
-	// recovery is not time based (status grey-listing clears on the next valid status
-	// exchange, gossip recovery is libp2p-driven).
+	// recovery is not time based (gossip recovery is libp2p-driven). Status grey-listing
+	// clears on the next valid status exchange or when the terminal verdict's TTL expires.
 	TimeToWhiteListing string            `json:"time_to_white_listing,omitempty"`
 	BadResponses       BadResponsesDebug `json:"bad_responses"`
 	// RpcStatus is nil when the peer never completed a status exchange.
@@ -188,6 +188,7 @@ type ScoringConfigDebug struct {
 	BadResponseHistorySize       int    `json:"bad_response_history_size"`
 	DecayInterval                string `json:"decay_interval"`
 	GossipGreyListThreshold      int    `json:"gossip_grey_list_threshold"`
+	StatusGreyListTTL            string `json:"status_grey_list_ttl"`
 	MaxGossipRejectionsPerPeer   int    `json:"max_gossip_rejections_per_peer"`
 	OurHeadSlot                  string `json:"our_head_slot"`
 	HighestKnownHeadSlot         string `json:"highest_known_head_slot"`
@@ -257,6 +258,7 @@ func BuildScoringConfig(scorer *Scorer, rejections *GossipRejectionsStore) *Scor
 		BadResponseHistorySize:       scorer.params.badResponseHistorySize,
 		DecayInterval:                scorer.params.decayInterval.String(),
 		GossipGreyListThreshold:      scorer.params.gossipGreyListThreshold,
+		StatusGreyListTTL:            scorer.params.statusGreyListTTL.String(),
 		OurHeadSlot:                  strconv.FormatUint(uint64(scorer.ourHeadSlot), 10),
 		HighestKnownHeadSlot:         strconv.FormatUint(uint64(scorer.highestKnownHeadSlot), 10),
 		TrackedPeerCount:             len(scorer.info),
