@@ -94,6 +94,47 @@ func TestNewKeyManager_ChangingFileCreated(t *testing.T) {
 	}
 }
 
+func TestKeyFileWatcherSurvivesAtomicReplacements(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	dir := t.TempDir()
+	keyFilePath := filepath.Join(dir, "keyfile.txt")
+	keys := []string{
+		"0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820",
+		"0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055",
+		"0x800057e262bfe42413c2cfce948ff77f11efeea19721f590c8b5b2f32fecb0e164cafba987c80465878408d05b97c9be",
+	}
+	require.NoError(t, file.WriteFile(keyFilePath, []byte(keys[0]+"\n")))
+	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
+	require.NoError(t, err)
+	km, err := NewKeymanager(ctx, &SetupConfig{
+		BaseEndpoint:          "http://example.com",
+		GenesisValidatorsRoot: root,
+		KeyFilePath:           keyFilePath,
+	})
+	require.NoError(t, err)
+
+	updates := make(chan []pubkey, 2)
+	sub := km.SubscribeAccountChanges(updates)
+	defer sub.Unsubscribe()
+	for _, key := range keys[1:] {
+		tmp, err := os.CreateTemp(dir, ".replacement-*")
+		require.NoError(t, err)
+		_, err = tmp.WriteString(key + "\n")
+		require.NoError(t, err)
+		require.NoError(t, tmp.Close())
+		require.NoError(t, os.Rename(tmp.Name(), keyFilePath))
+
+		select {
+		case updated := <-updates:
+			require.Equal(t, 1, len(updated))
+			require.Equal(t, key, hexutil.Encode(updated[0][:]))
+		case <-time.After(5 * time.Second):
+			t.Fatal("timed out waiting for atomic key file replacement")
+		}
+	}
+}
+
 func TestReadKeyFile_PathMissing(t *testing.T) {
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
 	require.NoError(t, err)
