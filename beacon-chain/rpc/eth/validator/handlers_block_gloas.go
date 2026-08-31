@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -23,13 +24,13 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // ProduceBlockV4 requests a beacon node to produce a valid Gloas block.
-// When include_payload=true (default), the response includes the execution payload
+// When include_payload=true, the response includes the execution payload
 // envelope alongside the beacon block.
-// Endpoint: GET /eth/v4/validator/blocks/{slot}
+// POST carries a BuilderConfig body naming external builders to request bids from.
+// Endpoint: GET|POST /eth/v4/validator/blocks/{slot}
 func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.ProduceBlockV4")
 	defer span.End()
@@ -52,18 +53,15 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 	rawRandaoReveal := r.URL.Query().Get("randao_reveal")
 	rawGraffiti := r.URL.Query().Get("graffiti")
 
-	var bbFactor *wrapperspb.UInt64Value
-	rawBbFactor, bbValue, ok := shared.UintFromQuery(w, r, "builder_boost_factor", false)
-	if !ok {
+	rawIncludePayload := r.URL.Query().Get("include_payload")
+	if rawIncludePayload == "" {
+		httputil.HandleError(w, "include_payload is required in query params", http.StatusBadRequest)
 		return
 	}
-	if rawBbFactor != "" {
-		bbFactor = &wrapperspb.UInt64Value{Value: bbValue}
-	}
-
-	includePayload := true
-	if raw := r.URL.Query().Get("include_payload"); raw == "false" {
-		includePayload = false
+	includePayload, err := strconv.ParseBool(rawIncludePayload)
+	if err != nil {
+		httputil.HandleError(w, "invalid include_payload: "+err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	var randaoReveal []byte
@@ -87,13 +85,23 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		graffiti = g
 	}
 
+	var builderConfig *eth.BuilderConfig
+	if r.Method == http.MethodPost {
+		cfg, ok := decodeBuilderConfig(w, r)
+		if !ok {
+			return
+		}
+		builderConfig = cfg
+	}
+
+	// Gloas has no MEV-boost path: p2p-bid and per-builder boosts arrive inside BuilderConfig,
+	// so the legacy skip_mev_boost/builder_boost_factor request fields are not used here.
 	v1alpha1resp, err := s.V1Alpha1Server.GetBeaconBlock(ctx, &eth.BlockRequest{
 		Slot:                  primitives.Slot(slot),
 		RandaoReveal:          randaoReveal,
 		Graffiti:              graffiti,
-		SkipMevBoost:          false,
-		BuilderBoostFactor:    bbFactor,
 		EagerPayloadStateRoot: includePayload,
+		BuilderConfig:         builderConfig,
 	})
 	if err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
@@ -131,6 +139,9 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set(api.ExecutionPayloadValueHeader, executionPayloadValue)
 	w.Header().Set(api.ConsensusBlockValueHeader, consensusBlockValue)
 	w.Header().Set(api.ExecutionPayloadIncludedHeader, fmt.Sprintf("%v", includePayload))
+	if v1alpha1resp.BuilderUrl != "" {
+		w.Header().Set(api.BuilderUrlHeader, v1alpha1resp.BuilderUrl)
+	}
 
 	isSSZ := httputil.RespondWithSsz(r)
 
@@ -193,6 +204,42 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		ExecutionPayloadIncluded: false,
 		Data:                     jsonBytes,
 	})
+}
+
+// decodeBuilderConfig reads a JSON- or SSZ-encoded BuilderConfig request body.
+// On failure it writes the error response and returns false.
+func decodeBuilderConfig(w http.ResponseWriter, r *http.Request) (*eth.BuilderConfig, bool) {
+	if !requireGloasVersionHeader(w, r, "Builder config is only supported from the gloas fork") {
+		return nil, false
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		httputil.HandleError(w, "Could not read request body: "+err.Error(), http.StatusInternalServerError)
+		return nil, false
+	}
+	if len(body) == 0 {
+		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		return nil, false
+	}
+	if httputil.IsRequestSsz(r) {
+		cfg := &eth.BuilderConfig{}
+		if err := cfg.UnmarshalSSZ(body); err != nil {
+			httputil.HandleError(w, "Could not decode SSZ builder config: "+err.Error(), http.StatusBadRequest)
+			return nil, false
+		}
+		return cfg, true
+	}
+	var cfg structs.BuilderConfig
+	if err := json.Unmarshal(body, &cfg); err != nil {
+		httputil.HandleError(w, "Could not decode builder config: "+err.Error(), http.StatusBadRequest)
+		return nil, false
+	}
+	consensusCfg, err := cfg.ToConsensus()
+	if err != nil {
+		httputil.HandleError(w, "Could not decode builder config: "+err.Error(), http.StatusBadRequest)
+		return nil, false
+	}
+	return consensusCfg, true
 }
 
 // ExecutionPayloadEnvelope returns the cached execution payload envelope for the VC to sign and

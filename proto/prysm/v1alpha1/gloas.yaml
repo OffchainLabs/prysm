@@ -37,8 +37,11 @@ types:
   - name: "Builder"
   - name: "BuilderPendingPayment"
   - name: "BuilderPendingWithdrawal"
+  - name: "BuilderConfig"
+  - name: "BuilderEntry"
   - name: "BuilderPreferencesRequest"
   - name: "BuilderPreferences"
+  - name: "BuilderPreferencesEntry"
   - name: "DataColumnSidecarGloas"
     fields:
       Column:    {type: "ProgressiveList"}

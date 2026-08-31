@@ -186,6 +186,202 @@ func BuilderPreferencesRequestFromConsensus(r *ethpb.BuilderPreferencesRequest) 
 	}
 }
 
+// Bounds from the beacon-APIs Gloas builder schemas.
+const (
+	maxBuilderEntries        = 64
+	maxBuilderUrlLength      = 2048
+	maxBuilderPubkeys        = 64
+	maxRequestAuthDataLength = 4096
+	// MAX_BUILDER_ENTRIES * (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH = 64 * 2 * 32.
+	MaxBuilderPreferencesList = 4096
+)
+
+func (a *RequestAuth) ToConsensus() (*ethpb.RequestAuth, error) {
+	data, err := bytesutil.DecodeHexWithMaxLength(a.Data, maxRequestAuthDataLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Data")
+	}
+	if len(data) == 0 {
+		return nil, server.NewDecodeError(fmt.Errorf("must not be empty"), "Data")
+	}
+	slot, err := strconv.ParseUint(a.Slot, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Slot")
+	}
+	return &ethpb.RequestAuth{Data: data, Slot: primitives.Slot(slot)}, nil
+}
+
+func (s *SignedRequestAuth) ToConsensus() (*ethpb.SignedRequestAuth, error) {
+	if s.Message == nil {
+		return nil, server.NewDecodeError(fmt.Errorf("must not be nil"), "Message")
+	}
+	msg, err := s.Message.ToConsensus()
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Message")
+	}
+	sig, err := bytesutil.DecodeHexWithLength(s.Signature, fieldparams.BLSSignatureLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Signature")
+	}
+	return &ethpb.SignedRequestAuth{Message: msg, Signature: sig}, nil
+}
+
+func (e *BuilderPreferencesEntry) ToConsensus() (*ethpb.BuilderPreferencesEntry, error) {
+	pubkey, err := bytesutil.DecodeHexWithLength(e.ProposerPubkey, fieldparams.BLSPubkeyLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "ProposerPubkey")
+	}
+	url, err := decodeBuilderUrl(e.Url)
+	if err != nil {
+		return nil, err
+	}
+	if e.Auth == nil {
+		return nil, server.NewDecodeError(fmt.Errorf("must not be nil"), "Auth")
+	}
+	auth, err := e.Auth.ToConsensus()
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Auth")
+	}
+	maxPayment, err := strconv.ParseUint(e.MaxExecutionPayment, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "MaxExecutionPayment")
+	}
+	return &ethpb.BuilderPreferencesEntry{
+		ProposerPubkey:      pubkey,
+		Url:                 url,
+		Auth:                auth,
+		MaxExecutionPayment: primitives.Gwei(maxPayment),
+	}, nil
+}
+
+func BuilderPreferencesEntryFromConsensus(e *ethpb.BuilderPreferencesEntry) *BuilderPreferencesEntry {
+	if e == nil {
+		return nil
+	}
+	return &BuilderPreferencesEntry{
+		ProposerPubkey:      hexutil.Encode(e.ProposerPubkey),
+		Url:                 string(e.Url),
+		Auth:                SignedRequestAuthFromConsensus(e.Auth),
+		MaxExecutionPayment: fmt.Sprintf("%d", e.MaxExecutionPayment),
+	}
+}
+
+func (e *BuilderEntry) ToConsensus() (*ethpb.BuilderEntry, error) {
+	url, err := decodeBuilderUrl(e.Url)
+	if err != nil {
+		return nil, err
+	}
+	if e.Auth == nil {
+		return nil, server.NewDecodeError(fmt.Errorf("must not be nil"), "Auth")
+	}
+	auth, err := e.Auth.ToConsensus()
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Auth")
+	}
+	if len(e.BuilderPubkeys) > maxBuilderPubkeys {
+		return nil, server.NewDecodeError(fmt.Errorf("more than %d items", maxBuilderPubkeys), "BuilderPubkeys")
+	}
+	pubkeys := make([][]byte, len(e.BuilderPubkeys))
+	for i, pk := range e.BuilderPubkeys {
+		pubkeys[i], err = bytesutil.DecodeHexWithLength(pk, fieldparams.BLSPubkeyLength)
+		if err != nil {
+			return nil, server.NewDecodeError(err, fmt.Sprintf("BuilderPubkeys[%d]", i))
+		}
+	}
+	maxPayment, err := strconv.ParseUint(e.MaxExecutionPayment, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "MaxExecutionPayment")
+	}
+	minBid, err := strconv.ParseUint(e.MinBid, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "MinBid")
+	}
+	boostFactor, err := strconv.ParseUint(e.BuilderBoostFactor, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "BuilderBoostFactor")
+	}
+	return &ethpb.BuilderEntry{
+		Url:                 url,
+		Auth:                auth,
+		BuilderPubkeys:      pubkeys,
+		MaxExecutionPayment: primitives.Gwei(maxPayment),
+		MinBid:              primitives.Gwei(minBid),
+		BuilderBoostFactor:  boostFactor,
+	}, nil
+}
+
+func BuilderEntryFromConsensus(e *ethpb.BuilderEntry) *BuilderEntry {
+	if e == nil {
+		return nil
+	}
+	pubkeys := make([]string, len(e.BuilderPubkeys))
+	for i, pk := range e.BuilderPubkeys {
+		pubkeys[i] = hexutil.Encode(pk)
+	}
+	return &BuilderEntry{
+		Url:                 string(e.Url),
+		Auth:                SignedRequestAuthFromConsensus(e.Auth),
+		BuilderPubkeys:      pubkeys,
+		MaxExecutionPayment: fmt.Sprintf("%d", e.MaxExecutionPayment),
+		MinBid:              fmt.Sprintf("%d", e.MinBid),
+		BuilderBoostFactor:  fmt.Sprintf("%d", e.BuilderBoostFactor),
+	}
+}
+
+func (c *BuilderConfig) ToConsensus() (*ethpb.BuilderConfig, error) {
+	minBid, err := strconv.ParseUint(c.MinBid, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "MinBid")
+	}
+	boostFactor, err := strconv.ParseUint(c.BuilderBoostFactor, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "BuilderBoostFactor")
+	}
+	if len(c.Builders) > maxBuilderEntries {
+		return nil, server.NewDecodeError(fmt.Errorf("more than %d items", maxBuilderEntries), "Builders")
+	}
+	builders := make([]*ethpb.BuilderEntry, len(c.Builders))
+	for i, b := range c.Builders {
+		if b == nil {
+			return nil, server.NewDecodeError(fmt.Errorf("must not be nil"), fmt.Sprintf("Builders[%d]", i))
+		}
+		builders[i], err = b.ToConsensus()
+		if err != nil {
+			return nil, server.NewDecodeError(err, fmt.Sprintf("Builders[%d]", i))
+		}
+	}
+	return &ethpb.BuilderConfig{
+		MinBid:             primitives.Gwei(minBid),
+		BuilderBoostFactor: boostFactor,
+		Builders:           builders,
+	}, nil
+}
+
+func BuilderConfigFromConsensus(c *ethpb.BuilderConfig) *BuilderConfig {
+	if c == nil {
+		return nil
+	}
+	builders := make([]*BuilderEntry, len(c.Builders))
+	for i, b := range c.Builders {
+		builders[i] = BuilderEntryFromConsensus(b)
+	}
+	return &BuilderConfig{
+		MinBid:             fmt.Sprintf("%d", c.MinBid),
+		BuilderBoostFactor: fmt.Sprintf("%d", c.BuilderBoostFactor),
+		Builders:           builders,
+	}
+}
+
+func decodeBuilderUrl(u string) ([]byte, error) {
+	if u == "" {
+		return nil, server.NewDecodeError(fmt.Errorf("must not be empty"), "Url")
+	}
+	if len(u) > maxBuilderUrlLength {
+		return nil, server.NewDecodeError(fmt.Errorf("longer than %d bytes", maxBuilderUrlLength), "Url")
+	}
+	return []byte(u), nil
+}
+
 func ProposerPreferencesFromConsensus(p *ethpb.ProposerPreferences) *ProposerPreferences {
 	if p == nil {
 		return nil
