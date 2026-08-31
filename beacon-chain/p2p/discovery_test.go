@@ -536,12 +536,14 @@ func TestHostIsResolved(t *testing.T) {
 
 func TestInboundPeerLimit(t *testing.T) {
 	fakePeer := testp2p.NewTestP2P(t)
+	scorer := peerscoring.NewScorer()
 	s := &Service{
 		cfg:        &Config{MaxPeers: 30},
 		ipLimiter:  leakybucket.NewCollector(ipLimit, ipBurst, 1*time.Second, false),
-		peerScorer: peerscoring.NewScorer(),
+		peerScorer: scorer,
 		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
 			PeerLimit: 30,
+			Scoring:   scorer,
 		}),
 		host: fakePeer.BHost,
 	}
@@ -562,12 +564,14 @@ func TestInboundPeerLimit(t *testing.T) {
 
 func TestOutboundPeerThreshold(t *testing.T) {
 	fakePeer := testp2p.NewTestP2P(t)
+	scorer := peerscoring.NewScorer()
 	s := &Service{
 		cfg:        &Config{MaxPeers: 30},
 		ipLimiter:  leakybucket.NewCollector(ipLimit, ipBurst, 1*time.Second, false),
-		peerScorer: peerscoring.NewScorer(),
+		peerScorer: scorer,
 		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
 			PeerLimit: 30,
+			Scoring:   scorer,
 		}),
 		host: fakePeer.BHost,
 	}
@@ -965,7 +969,7 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 					return nil
 				},
 				cfg:                   &Config{UDPPort: 0, DB: testDB.SetupDB(t)}, // Use 0 to let OS assign an available port
-				peerScorer:            peerscoring.NewScorer(),
+				peerScorer:            p2p.PeerScoring(),
 				peers:                 p2p.Peers(),
 				genesisTime:           time.Now().Add(-time.Duration(tc.epochSinceGenesis*secondsPerEpoch) * time.Second),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
@@ -1184,14 +1188,16 @@ func TestFindPeers_NodeDeduplication(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fakePeer := testp2p.NewTestP2P(t)
 
+			scorer := peerscoring.NewScorer()
 			s := &Service{
 				cfg: &Config{
 					MaxPeers: 30,
 				},
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-				peerScorer:            peerscoring.NewScorer(),
+				peerScorer:            scorer,
 				peers: peers.NewStatus(ctx, &peers.StatusConfig{
 					PeerLimit: 30,
+					Scoring:   scorer,
 				}),
 				host: fakePeer.BHost,
 			}
@@ -1267,14 +1273,16 @@ func TestFindPeers_received_bad_existing_node(t *testing.T) {
 
 	fakePeer := testp2p.NewTestP2P(t)
 
+	scorer := peerscoring.NewScorer()
 	service := &Service{
 		cfg: &Config{
 			MaxPeers: 30,
 		},
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-		peerScorer:            peerscoring.NewScorer(),
+		peerScorer:            scorer,
 		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
 			PeerLimit: 30,
+			Scoring:   scorer,
 		}),
 		host: fakePeer.BHost,
 	}

@@ -173,11 +173,11 @@ func (s *Service) sendRPCStatusRequest(ctx context.Context, peer peer.ID) error 
 
 	code, errMsg, err := ReadStatusCode(stream, s.cfg.p2p.Encoding())
 	if err != nil {
-		s.downscorePeer(peer, peerscoring.SourceRPCStatus, "statusRequestReadStatusCodeError")
+		s.cfg.p2p.PeerScoring().RecordBadResponse(peer, peerscoring.SourceRPCStatus, "statusRequestReadStatusCodeError")
 		return errors.Wrap(err, "read status code")
 	}
 	if code != 0 {
-		s.downscorePeer(peer, peerscoring.SourceRPCStatus, "statusRequestNonNullStatusCode")
+		s.cfg.p2p.PeerScoring().RecordBadResponse(peer, peerscoring.SourceRPCStatus, "statusRequestNonNullStatusCode")
 		return errors.New(errMsg)
 	}
 
@@ -200,7 +200,7 @@ func (s *Service) decodeStatus(stream network.Stream, epoch primitives.Epoch) (*
 	if epoch >= params.BeaconConfig().FuluForkEpoch {
 		msg := new(pb.StatusV2)
 		if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
-			s.downscorePeer(stream.Conn().RemotePeer(), peerscoring.SourceRPCStatus, "statusResponseDecodeError")
+			s.cfg.p2p.PeerScoring().RecordBadResponse(stream.Conn().RemotePeer(), peerscoring.SourceRPCStatus, "statusResponseDecodeError")
 			return nil, errors.Wrap(err, "decode with max length")
 		}
 
@@ -209,7 +209,7 @@ func (s *Service) decodeStatus(stream network.Stream, epoch primitives.Epoch) (*
 
 	msg := new(pb.Status)
 	if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
-		s.downscorePeer(stream.Conn().RemotePeer(), peerscoring.SourceRPCStatus, "statusResponseDecodeError")
+		s.cfg.p2p.PeerScoring().RecordBadResponse(stream.Conn().RemotePeer(), peerscoring.SourceRPCStatus, "statusResponseDecodeError")
 		return nil, errors.Wrap(err, "decode with max length")
 	}
 
@@ -277,7 +277,7 @@ func (s *Service) statusRPCHandler(ctx context.Context, msg any, stream libp2pco
 			return nil
 		default:
 			respCode = responseCodeInvalidRequest
-			s.downscorePeer(remotePeer, peerscoring.SourceRPCStatus, "statusRpcHandlerInvalidMessage")
+			s.cfg.p2p.PeerScoring().RecordBadResponse(remotePeer, peerscoring.SourceRPCStatus, "statusRpcHandlerInvalidMessage")
 		}
 
 		originalErr := err

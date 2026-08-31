@@ -83,7 +83,7 @@ func (s *Service) blobSidecarsByRangeRPCHandler(ctx context.Context, msg any, st
 	rp, err := validateBlobsByRange(r, s.cfg.clock.CurrentSlot())
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
-		s.downscorePeer(remotePeer, peerscoring.SourceRPCRequest, "blobSidecarsByRangeRpcHandlerValidationError")
+		s.cfg.p2p.PeerScoring().RecordBadResponse(remotePeer, peerscoring.SourceRPCRequest, "blobSidecarsByRangeRpcHandlerValidationError")
 		tracing.AnnotateError(span, err)
 		return err
 	}

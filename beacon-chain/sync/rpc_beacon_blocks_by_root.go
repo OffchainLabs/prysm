@@ -229,7 +229,7 @@ func (s *Service) beaconBlocksRootRPCHandler(ctx context.Context, msg any, strea
 
 	currentEpoch := slots.ToEpoch(s.cfg.clock.CurrentSlot())
 	if uint64(len(blockRoots)) > params.MaxRequestBlock(currentEpoch) {
-		s.downscorePeer(remotePeer, peerscoring.SourceRPCRequest, "beaconBlocksRootRPCHandlerTooManyRoots")
+		s.cfg.p2p.PeerScoring().RecordBadResponse(remotePeer, peerscoring.SourceRPCRequest, "beaconBlocksRootRPCHandlerTooManyRoots")
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, "requested more than the max block limit", stream)
 		return errors.New("requested more than the max block limit")
 	}

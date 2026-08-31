@@ -140,7 +140,8 @@ func (l *limiter) validateRequest(stream network.Stream, amt uint64) error {
 		amt = 1
 	}
 	if amt > uint64(remaining) {
-		l.downscorePeer(remotePeer, topic, "rateLimitExceeded")
+		// Record the topic with the reason: which protocol was hammered is the detail that matters.
+		l.p2p.PeerScoring().RecordBadResponse(remotePeer, peerscoring.SourceRateLimit, "rateLimitExceeded:"+topic)
 		writeErrorResponseToStream(responseCodeInvalidRequest, p2ptypes.ErrRateLimited.Error(), stream, l.p2p)
 		return p2ptypes.ErrRateLimited
 	}
@@ -161,7 +162,7 @@ func (l *limiter) validateRawRpcRequest(stream network.Stream, amt uint64) error
 	remaining := collector.Remaining(key)
 
 	if amt > uint64(remaining) {
-		l.downscorePeer(remotePeer, rpcLimiterTopic, "rawRateLimitExceeded")
+		l.p2p.PeerScoring().RecordBadResponse(remotePeer, peerscoring.SourceRateLimit, "rawRateLimitExceeded:"+rpcLimiterTopic)
 		writeErrorResponseToStream(responseCodeInvalidRequest, p2ptypes.ErrRateLimited.Error(), stream, l.p2p)
 		return p2ptypes.ErrRateLimited
 	}
@@ -250,16 +251,4 @@ func (l *limiter) retrieveCollector(topic string) (*leakybucket.Collector, error
 
 func (_ *limiter) topicLogger(topic string) *logrus.Entry {
 	return log.WithField("rateLimiter", topic)
-}
-
-func (l *limiter) downscorePeer(peerID peer.ID, topic, reason string) {
-	// Record the topic with the reason: which protocol was hammered is the detail that matters.
-	reason = reason + ":" + topic
-	count := l.p2p.PeerScoring().RecordBadResponse(peerID, peerscoring.SourceRateLimit, reason)
-	log.WithFields(logrus.Fields{
-		"peerID":       peerID.String(),
-		"reason":       reason,
-		"badResponses": count,
-		"topic":        topic,
-	}).Debug("Downscore peer")
 }

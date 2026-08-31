@@ -66,7 +66,7 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg a
 	rangeParameters, err := validateDataColumnsByRange(request, s.cfg.clock.CurrentSlot())
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
-		s.downscorePeer(remotePeer, peerscoring.SourceRPCRequest, "dataColumnSidecarsByRangeRpcHandlerValidationError")
+		s.cfg.p2p.PeerScoring().RecordBadResponse(remotePeer, peerscoring.SourceRPCRequest, "dataColumnSidecarsByRangeRpcHandlerValidationError")
 		tracing.AnnotateError(span, err)
 		return errors.Wrap(err, "validate data columns by range")
 	}

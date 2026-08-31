@@ -17,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/paulbellamy/ratecounter"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -571,9 +570,9 @@ func isPunishableError(err error) bool {
 func (s *Service) updatePeerScorerStats(data *blocksQueueFetchedData, count uint64, err error) {
 	if isPunishableError(err) {
 		if verification.IsBlobValidationFailure(err) {
-			s.downscorePeer(data.blobsFrom, "invalidBlobs")
+			s.cfg.P2P.PeerScoring().RecordBadResponse(data.blobsFrom, peerscoring.SourceSync, "invalidBlobs")
 		} else {
-			s.downscorePeer(data.blocksFrom, "invalidBlocks")
+			s.cfg.P2P.PeerScoring().RecordBadResponse(data.blocksFrom, peerscoring.SourceSync, "invalidBlocks")
 		}
 
 		// If the error is punishable, exit here so that we don't give them credit for providing bad blocks.
@@ -609,9 +608,4 @@ func (s *Service) isProcessedPayload(ctx context.Context, e interfaces.ROSignedE
 		return false
 	}
 	return s.cfg.DB.HasExecutionPayloadEnvelope(ctx, env.BeaconBlockRoot())
-}
-
-func (s *Service) downscorePeer(peerID peer.ID, reason string) {
-	count := s.cfg.P2P.PeerScoring().RecordBadResponse(peerID, peerscoring.SourceSync, reason)
-	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "badResponses": count}).Debug("Downscore peer")
 }

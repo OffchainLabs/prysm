@@ -278,7 +278,7 @@ func (s *Service) updateMetrics() {
 	}
 	byAspect[peerscoring.AspectBadIP] = badIPPeers
 
-	for _, aspect := range []string{peerscoring.AspectBadResponses, peerscoring.AspectPeerStatus, peerscoring.AspectGossip, peerscoring.AspectBadIP} {
+	for _, aspect := range append(s.peerScorer.Aspects(), peerscoring.AspectBadIP) {
 		connected, disconnected := 0, 0
 		for _, pid := range byAspect[aspect] {
 			if state, err := s.peers.ConnectionState(pid); err == nil && state == peers.Connected {

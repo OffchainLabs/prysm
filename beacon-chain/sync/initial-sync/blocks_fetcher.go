@@ -384,7 +384,7 @@ func (f *blocksFetcher) fetchBlocksFromPeer(
 				"step":      req.Step,
 			}).WithError(err).Debug("Could not request blocks by range from peer")
 			if errors.Is(err, prysmsync.ErrInvalidFetchedData) {
-				f.downscorePeer(p, err)
+				f.p2p.PeerScoring().RecordBadResponse(p, peerscoring.SourceSync, err.Error())
 			}
 			continue
 		}
@@ -558,12 +558,6 @@ func dedupPeers(peers []peer.ID) []peer.ID {
 		peerExists[peers[i]] = true
 	}
 	return newPeerList
-}
-
-// downscorePeer increments the bad responses score for the peer and logs the event.
-func (f *blocksFetcher) downscorePeer(peerID peer.ID, reason error) {
-	count := f.p2p.PeerScoring().RecordBadResponse(peerID, peerscoring.SourceSync, reason.Error())
-	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason.Error(), "badResponses": count}).Debug("Downscore peer")
 }
 
 // findFirstForkIndex returns the index of the first block with a version >= v.

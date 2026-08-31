@@ -744,6 +744,7 @@ func TestFindPeersWithSubnets_NodeDeduplication(t *testing.T) {
 
 			fakePeer := testp2p.NewTestP2P(t)
 
+			scorer := peerscoring.NewScorer()
 			s := &Service{
 				cfg: &Config{
 					MaxPeers: 30,
@@ -751,9 +752,10 @@ func TestFindPeersWithSubnets_NodeDeduplication(t *testing.T) {
 				},
 				genesisTime:           time.Now(),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-				peerScorer:            peerscoring.NewScorer(),
+				peerScorer:            scorer,
 				peers: peers.NewStatus(ctx, &peers.StatusConfig{
 					PeerLimit: 30,
+					Scoring:   scorer,
 				}),
 				host: fakePeer.BHost,
 			}
@@ -949,6 +951,7 @@ func TestFindPeersWithSubnets_FilterPeerRemoval(t *testing.T) {
 			fakePeer := testp2p.NewTestP2P(t)
 
 			// Create mock service
+			scorer := peerscoring.NewScorer()
 			s := &Service{
 				cfg: &Config{
 					MaxPeers: 30,
@@ -956,9 +959,10 @@ func TestFindPeersWithSubnets_FilterPeerRemoval(t *testing.T) {
 				},
 				genesisTime:           time.Now(),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-				peerScorer:            peerscoring.NewScorer(),
+				peerScorer:            scorer,
 				peers: peers.NewStatus(ctx, &peers.StatusConfig{
 					PeerLimit: 30,
+					Scoring:   scorer,
 				}),
 				host: fakePeer.BHost,
 			}
@@ -1069,6 +1073,7 @@ func TestFindPeersWithSubnets_received_bad_existing_node(t *testing.T) {
 
 	fakePeer := testp2p.NewTestP2P(t)
 
+	scorer := peerscoring.NewScorer()
 	service := &Service{
 		cfg: &Config{
 			MaxPeers: 30,
@@ -1076,9 +1081,10 @@ func TestFindPeersWithSubnets_received_bad_existing_node(t *testing.T) {
 		},
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-		peerScorer:            peerscoring.NewScorer(),
+		peerScorer:            scorer,
 		peers: peers.NewStatus(ctx, &peers.StatusConfig{
 			PeerLimit: 30,
+			Scoring:   scorer,
 		}),
 		host: fakePeer.BHost,
 	}

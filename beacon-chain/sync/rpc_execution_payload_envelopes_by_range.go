@@ -59,7 +59,7 @@ func (s *Service) executionPayloadEnvelopesByRangeRPCHandler(ctx context.Context
 	if err != nil {
 		recordResult(executionPayloadEnvelopeRPCResultInvalid)
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
-		s.downscorePeer(remotePeer, peerscoring.SourceRPCRequest, "executionPayloadEnvelopesByRangeRPCHandlerValidationError")
+		s.cfg.p2p.PeerScoring().RecordBadResponse(remotePeer, peerscoring.SourceRPCRequest, "executionPayloadEnvelopesByRangeRPCHandlerValidationError")
 		tracing.AnnotateError(span, err)
 		return err
 	}

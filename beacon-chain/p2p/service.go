@@ -442,13 +442,7 @@ func (s *Service) GossipRejections() *peerscoring.GossipRejectionsStore {
 // IsPeerGreyListed returns why the peer must be refused: grey-listed by peer scoring, or
 // from an IP exceeding the colocation limit. Trusted peers are never refused.
 func (s *Service) IsPeerGreyListed(pid peer.ID) error {
-	if s.peers.IsTrustedPeers(pid) {
-		return nil
-	}
-	if err := s.peers.IsFromBadIP(pid); err != nil {
-		return &peerscoring.GreyListError{Aspect: peerscoring.AspectBadIP, Err: errors.Wrap(err, "peer is from a bad IP")}
-	}
-	return s.peerScorer.IsPeerGreyListed(pid)
+	return s.peers.IsPeerGreyListed(pid)
 }
 
 // ENR returns the local node's current ENR.
@@ -594,7 +588,7 @@ func (s *Service) connectWithPeer(ctx context.Context, info peer.AddrInfo) error
 	defer cancel()
 
 	if err := s.host.Connect(ctx, info); err != nil {
-		s.downscorePeer(info.ID, peerscoring.SourceDial, "connectionError")
+		s.peerScorer.RecordBadResponse(info.ID, peerscoring.SourceDial, "connectionError")
 		return errors.Wrap(err, "peer connect")
 	}
 	return nil
@@ -625,9 +619,4 @@ func (s *Service) connectToBootnodes() error {
 // required for discovery and pubsub validation.
 func (s *Service) isInitialized() bool {
 	return !s.genesisTime.IsZero() && len(s.genesisValidatorsRoot) == 32
-}
-
-func (s *Service) downscorePeer(peerID peer.ID, source peerscoring.BadResponseSource, reason string) {
-	count := s.peerScorer.RecordBadResponse(peerID, source, reason)
-	log.WithFields(logrus.Fields{"peerID": peerID, "source": source, "reason": reason, "badResponses": count}).Debug("Downscore peer")
 }

@@ -381,6 +381,26 @@ func (p *Status) IsFromBadIP(pid peer.ID) error {
 	return p.isfromBadIP(pid)
 }
 
+// IsPeerGreyListed returns why the peer must be refused: from an IP exceeding the
+// colocation limit, or grey-listed by peer scoring. Trusted peers are never refused.
+func (p *Status) IsPeerGreyListed(pid peer.ID) error {
+	p.store.RLock()
+	defer p.store.RUnlock()
+
+	return p.isPeerGreyListed(pid)
+}
+
+// isPeerGreyListed is the lock-free version of IsPeerGreyListed.
+func (p *Status) isPeerGreyListed(pid peer.ID) error {
+	if p.isTrustedPeers(pid) {
+		return nil
+	}
+	if err := p.isfromBadIP(pid); err != nil {
+		return &peerscoring.GreyListError{Aspect: peerscoring.AspectBadIP, Err: errors.Wrap(err, "peer is from a bad IP")}
+	}
+	return p.scoring.IsPeerGreyListed(pid)
+}
+
 // NextValidTime gets the earliest possible time it is to contact/dial
 // a peer again. This is used to back-off from peers in the event
 // they are 'full' or have banned us.
@@ -613,9 +633,10 @@ func (p *Status) Prune() []peer.ID {
 	if len(p.store.Peers()) <= p.store.Config().MaxPeers {
 		return nil
 	}
-	// Grey-listed and colocated-IP peers are never pruned: the store is the node's only memory of who misbehaved.
+	// Grey-listed and colocated-IP peers are never pruned: the store is the node's only memory
+	// of who misbehaved. Trusted peers pass the composite verdict but are kept by the trusted check.
 	notBadPeer := func(pid peer.ID) bool {
-		return p.scoring.IsPeerGreyListed(pid) == nil && p.isfromBadIP(pid) == nil
+		return p.isPeerGreyListed(pid) == nil
 	}
 	notTrustedPeer := func(pid peer.ID) bool {
 		return !p.isTrustedPeers(pid)

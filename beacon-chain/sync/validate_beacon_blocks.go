@@ -221,7 +221,7 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 	err = s.validateBeaconBlock(ctx, blk, blockRoot)
 	if err != nil {
 		if errors.Is(err, blocks.ErrInvalidSignature) {
-			s.downscorePeer(pid, peerscoring.SourceGossip, "invalidBlockSignature")
+			s.cfg.p2p.PeerScoring().RecordBadResponse(pid, peerscoring.SourceGossip, "invalidBlockSignature")
 			return pubsub.ValidationReject, err
 		}
 		if s.hasBadBlock(blockRoot) || errors.Is(err, blocks.ErrInvalidProposerIndex) || errors.Is(err, errBlockSlotNotAfterParent) {
@@ -489,7 +489,7 @@ func (s *Service) verifyPendingBlockSignature(ctx context.Context, pid peer.ID, 
 	}
 	if err := blocks.VerifyBlockSignatureUsingCurrentFork(roState, blk, blkRoot); err != nil {
 		if errors.Is(err, blocks.ErrInvalidSignature) {
-			s.downscorePeer(pid, peerscoring.SourceGossip, "invalidBlockSignature")
+			s.cfg.p2p.PeerScoring().RecordBadResponse(pid, peerscoring.SourceGossip, "invalidBlockSignature")
 		}
 		return pubsub.ValidationReject, err
 	}

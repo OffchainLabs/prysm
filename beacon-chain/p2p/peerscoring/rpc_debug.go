@@ -298,19 +298,17 @@ func (s *Scorer) debugInfo(pid peer.ID, includeTopicScores bool) *PeerScoringDeb
 	si := &scoringInfo{params: s.params, peerInfo: pi}
 
 	// Per-aspect grey-list verdicts, kept individually so every firing aspect is visible.
-	brVerdict := badResponsesScorer{}.IsPeerGreyListed(pid, si)
-	statusVerdict := rpcStatusScorer{}.IsPeerGreyListed(pid, si)
-	gossipVerdict := gossipScorer{}.IsPeerGreyListed(pid, si)
-	if brVerdict != nil || statusVerdict != nil || gossipVerdict != nil {
+	if verdicts := s.verdictsByAspect(pid, si); len(verdicts) > 0 {
 		details := &GreyListDetailsDebug{}
-		if brVerdict != nil {
-			details.BadResponses = brVerdict.Error()
-		}
-		if statusVerdict != nil {
-			details.PeerStatus = statusVerdict.Error()
-		}
-		if gossipVerdict != nil {
-			details.Gossip = gossipVerdict.Error()
+		for aspect, verdict := range verdicts {
+			switch aspect {
+			case AspectBadResponses:
+				details.BadResponses = verdict.Error()
+			case AspectPeerStatus:
+				details.PeerStatus = verdict.Error()
+			case AspectGossip:
+				details.Gossip = verdict.Error()
+			}
 		}
 		d.GreyListDetails = details
 

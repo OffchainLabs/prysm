@@ -520,7 +520,7 @@ func SendDataColumnSidecarsByRangeRequest(
 	stream, err := p.P2P.Send(p.Ctx, request, topic, pid)
 	if err != nil {
 		if p.DownscorePeerOnRPCFault {
-			downscorePeer(p.P2P, pid, peerscoring.SourceDial, "cannotSendDataColumnSidecarsByRangeRequest")
+			p.P2P.PeerScoring().RecordBadResponse(pid, peerscoring.SourceDial, "cannotSendDataColumnSidecarsByRangeRequest")
 		}
 
 		return nil, errors.Wrap(err, "p2p send")
@@ -549,14 +549,14 @@ func SendDataColumnSidecarsByRangeRequest(
 		roDataColumn, err := readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap, vfs...)
 		if errors.Is(err, io.EOF) {
 			if p.DownscorePeerOnRPCFault && len(roDataColumns) == 0 {
-				downscorePeer(p.P2P, pid, peerscoring.SourceRPCResponse, "noReturnedSidecar")
+				p.P2P.PeerScoring().RecordBadResponse(pid, peerscoring.SourceRPCResponse, "noReturnedSidecar")
 			}
 
 			return roDataColumns, nil
 		}
 		if err != nil {
 			if p.DownscorePeerOnRPCFault {
-				downscorePeer(p.P2P, pid, peerscoring.SourceRPCResponse, "readChunkedDataColumnSidecarError")
+				p.P2P.PeerScoring().RecordBadResponse(pid, peerscoring.SourceRPCResponse, "readChunkedDataColumnSidecarError")
 			}
 
 			return nil, errors.Wrap(err, "read chunked data column sidecar")
@@ -572,7 +572,7 @@ func SendDataColumnSidecarsByRangeRequest(
 	// All requested sidecars were delivered by the peer. Expecting EOF.
 	if _, err := readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap); !errors.Is(err, io.EOF) {
 		if p.DownscorePeerOnRPCFault {
-			downscorePeer(p.P2P, pid, peerscoring.SourceRPCResponse, "tooManyResponseDataColumnSidecars")
+			p.P2P.PeerScoring().RecordBadResponse(pid, peerscoring.SourceRPCResponse, "tooManyResponseDataColumnSidecars")
 		}
 
 		return nil, errors.Wrapf(errMaxResponseDataColumnSidecarsExceeded, "requestedCount=%d", totalCount)
@@ -695,7 +695,7 @@ func SendDataColumnSidecarsByRootRequest(p DataColumnSidecarsParams, peer goPeer
 	stream, err := p.P2P.Send(p.Ctx, identifiers, topic, peer)
 	if err != nil {
 		if p.DownscorePeerOnRPCFault {
-			downscorePeer(p.P2P, peer, peerscoring.SourceDial, "cannotSendDataColumnSidecarsByRootRequest")
+			p.P2P.PeerScoring().RecordBadResponse(peer, peerscoring.SourceDial, "cannotSendDataColumnSidecarsByRootRequest")
 		}
 
 		return nil, errors.Wrap(err, "p2p api send")
@@ -710,14 +710,14 @@ func SendDataColumnSidecarsByRootRequest(p DataColumnSidecarsParams, peer goPeer
 		roDataColumn, err := readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap, isSidecarIndexRootRequested(identifiers), isSidecarSizeValid())
 		if errors.Is(err, io.EOF) {
 			if p.DownscorePeerOnRPCFault && len(roDataColumns) == 0 {
-				downscorePeer(p.P2P, peer, peerscoring.SourceRPCResponse, "noReturnedSidecar")
+				p.P2P.PeerScoring().RecordBadResponse(peer, peerscoring.SourceRPCResponse, "noReturnedSidecar")
 			}
 
 			return roDataColumns, nil
 		}
 		if err != nil {
 			if p.DownscorePeerOnRPCFault {
-				downscorePeer(p.P2P, peer, peerscoring.SourceRPCResponse, "readChunkedDataColumnSidecarError")
+				p.P2P.PeerScoring().RecordBadResponse(peer, peerscoring.SourceRPCResponse, "readChunkedDataColumnSidecarError")
 			}
 
 			return nil, errors.Wrap(err, "read chunked data column sidecar")
@@ -733,7 +733,7 @@ func SendDataColumnSidecarsByRootRequest(p DataColumnSidecarsParams, peer goPeer
 	// All requested sidecars were delivered by the peer. Expecting EOF.
 	if _, err := readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap); !errors.Is(err, io.EOF) {
 		if p.DownscorePeerOnRPCFault {
-			downscorePeer(p.P2P, peer, peerscoring.SourceRPCResponse, "tooManyResponseDataColumnSidecars")
+			p.P2P.PeerScoring().RecordBadResponse(peer, peerscoring.SourceRPCResponse, "tooManyResponseDataColumnSidecars")
 		}
 
 		return nil, errors.Wrapf(errMaxResponseDataColumnSidecarsExceeded, "requestedCount=%d", count)
@@ -838,16 +838,6 @@ func readChunkedDataColumnSidecar(
 	}
 
 	return &roDataColumn, nil
-}
-
-func downscorePeer(p2p p2p.P2P, peerID peer.ID, source peerscoring.BadResponseSource, reason string, fields ...logrus.Fields) {
-	log := log
-	for _, field := range fields {
-		log = log.WithFields(field)
-	}
-
-	count := p2p.PeerScoring().RecordBadResponse(peerID, source, reason)
-	log.WithFields(logrus.Fields{"peerID": peerID, "source": source, "reason": reason, "badResponses": count}).Debug("Downscore peer")
 }
 
 // ---------------------------------

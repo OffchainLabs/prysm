@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -207,22 +208,24 @@ func NewScorer(opts ...Option) *Scorer {
 }
 
 // RecordBadResponse adds one strike against the peer, tagged with its source and reason,
-// and returns the standing (un-decayed) strike count.
+// logs the downscore event, and returns the standing (un-decayed) strike count.
 func (s *Scorer) RecordBadResponse(pid peer.ID, source BadResponseSource, reason string) int {
 	if pid == "" {
 		return 0
 	}
 	badResponsesTotal.WithLabelValues(source.String()).Inc()
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	pi := s.getPeerScoringInfo(pid)
 	pi.badResponseCount++
 	pi.badResponses = append(pi.badResponses, BadResponse{Source: source, Reason: reason, at: time.Now()})
 	if excess := len(pi.badResponses) - s.params.badResponseHistorySize; excess > 0 {
 		pi.badResponses = append(pi.badResponses[:0], pi.badResponses[excess:]...)
 	}
-	return pi.badResponseCount
+	count := pi.badResponseCount
+	s.mu.Unlock()
+
+	log.WithFields(logrus.Fields{"peerID": pid, "source": source, "reason": reason, "badResponses": count}).Debug("Downscore peer")
+	return count
 }
 
 // BadResponseCount returns the peer's standing (un-decayed) strike count.
@@ -446,20 +449,20 @@ func (s *Scorer) GreyListedPeersByAspect() map[string][]peer.ID {
 		if !ok {
 			continue
 		}
-		brVerdict := badResponsesScorer{}.IsPeerGreyListed(pid, si)
-		statusVerdict := rpcStatusScorer{}.IsPeerGreyListed(pid, si)
-		gossipVerdict := gossipScorer{}.IsPeerGreyListed(pid, si)
-		if brVerdict != nil {
-			byAspect[AspectBadResponses] = append(byAspect[AspectBadResponses], pid)
-		}
-		if statusVerdict != nil {
-			byAspect[AspectPeerStatus] = append(byAspect[AspectPeerStatus], pid)
-		}
-		if gossipVerdict != nil {
-			byAspect[AspectGossip] = append(byAspect[AspectGossip], pid)
+		for aspect := range s.verdictsByAspect(pid, si) {
+			byAspect[aspect] = append(byAspect[aspect], pid)
 		}
 	}
 	return byAspect
+}
+
+// Aspects returns the aspect names of the registered scoring grey-listers, in evaluation order.
+func (s *Scorer) Aspects() []string {
+	aspects := make([]string, 0, len(s.greyListers))
+	for _, greyLister := range s.greyListers {
+		aspects = append(aspects, greyLister.Aspect())
+	}
+	return aspects
 }
 
 // TrackedPeerCount returns how many peers the scorer currently holds scoring state for.
@@ -479,6 +482,18 @@ func (s *Scorer) isGreyListed(pid peer.ID, si *scoringInfo) error {
 		}
 	}
 	return nil
+}
+
+// verdictsByAspect returns every firing grey-lister's verdict keyed by aspect, empty if
+// none; callers must hold s.mu.
+func (s *Scorer) verdictsByAspect(pid peer.ID, si *scoringInfo) map[string]error {
+	verdicts := make(map[string]error)
+	for _, greyLister := range s.greyListers {
+		if err := greyLister.IsPeerGreyListed(pid, si); err != nil {
+			verdicts[greyLister.Aspect()] = err
+		}
+	}
+	return verdicts
 }
 
 // snapshot bundles a known peer's state for the grey-listers; callers must hold s.mu.

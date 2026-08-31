@@ -254,17 +254,20 @@ func (s *Service) processPendingGloasColumns(ctx context.Context, root [fieldpar
 
 		if err := verifier.VerifyDataColumnSidecarSlotMatchesBlockGloas(); err != nil {
 			skipped++
-			s.downscorePeer(pe.peer, peerscoring.SourceGossip, "pendingGloasColumnSlotMismatch", logrus.Fields{"error": err})
+			log.WithError(err).WithField("peerID", pe.peer).Debug("Invalid pending Gloas column")
+			s.cfg.p2p.PeerScoring().RecordBadResponse(pe.peer, peerscoring.SourceGossip, "pendingGloasColumnSlotMismatch")
 			continue
 		}
 		if err := verifier.VerifyDataColumnSidecarGloas(); err != nil {
 			skipped++
-			s.downscorePeer(pe.peer, peerscoring.SourceGossip, "pendingGloasColumnInvalidSidecar", logrus.Fields{"error": err})
+			log.WithError(err).WithField("peerID", pe.peer).Debug("Invalid pending Gloas column")
+			s.cfg.p2p.PeerScoring().RecordBadResponse(pe.peer, peerscoring.SourceGossip, "pendingGloasColumnInvalidSidecar")
 			continue
 		}
 		if err := verifier.VerifyDataColumnSidecarKzgProofsGloas(); err != nil {
 			skipped++
-			s.downscorePeer(pe.peer, peerscoring.SourceGossip, "pendingGloasColumnInvalidKzgProof", logrus.Fields{"error": err})
+			log.WithError(err).WithField("peerID", pe.peer).Debug("Invalid pending Gloas column")
+			s.cfg.p2p.PeerScoring().RecordBadResponse(pe.peer, peerscoring.SourceGossip, "pendingGloasColumnInvalidKzgProof")
 			continue
 		}
 

@@ -484,13 +484,7 @@ func (p *TestP2P) GossipRejections() *peerscoring.GossipRejectionsStore {
 
 // IsPeerGreyListed mirrors the production grey-list verdict.
 func (p *TestP2P) IsPeerGreyListed(pid peer.ID) error {
-	if p.peers.IsTrustedPeers(pid) {
-		return nil
-	}
-	if err := p.peers.IsFromBadIP(pid); err != nil {
-		return err
-	}
-	return p.peerScorer.IsPeerGreyListed(pid)
+	return p.peers.IsPeerGreyListed(pid)
 }
 
 // FindAndDialPeersWithSubnets mocks the p2p func.

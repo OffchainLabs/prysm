@@ -347,11 +347,11 @@ func (q *blocksQueue) onDataReceivedEvent(ctx context.Context) eventHandlerFn {
 			}
 
 			if errors.Is(response.err, beaconsync.ErrInvalidFetchedData) {
-				q.downscorePeer(response.blocksFrom, "invalidBlocks")
+				q.blocksFetcher.p2p.PeerScoring().RecordBadResponse(response.blocksFrom, peerscoring.SourceSync, "invalidBlocks")
 			}
 
 			if errors.Is(response.err, verification.ErrBlobInvalid) {
-				q.downscorePeer(response.blobsFrom, "invalidBlobs")
+				q.blocksFetcher.p2p.PeerScoring().RecordBadResponse(response.blobsFrom, peerscoring.SourceSync, "invalidBlobs")
 			}
 
 			return m.state, response.err
@@ -462,11 +462,6 @@ func (q *blocksQueue) onProcessSkippedEvent(ctx context.Context) eventHandlerFn 
 		}
 		return stateSkipped, q.resetFromSlot(ctx, startSlot)
 	}
-}
-
-func (q *blocksQueue) downscorePeer(peerID peer.ID, reason string) {
-	count := q.blocksFetcher.p2p.PeerScoring().RecordBadResponse(peerID, peerscoring.SourceSync, reason)
-	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "badResponses": count}).Debug("Downscore peer")
 }
 
 // onCheckStaleEvent is an event that allows to mark stale epochs,
