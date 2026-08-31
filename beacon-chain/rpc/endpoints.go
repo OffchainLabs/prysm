@@ -419,8 +419,7 @@ func (s *Service) validatorEndpoints(
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.ProduceBlockV4,
-			// TODO: remove GET kept until the REST VC produces via POST.
-			methods: []string{http.MethodGet, http.MethodPost},
+			methods: []string{http.MethodPost},
 		},
 		{
 			template: "/eth/v1/validator/builder_preferences",

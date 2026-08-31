@@ -78,6 +78,12 @@ func (v readOnlyValidator) PublicKey() [fieldparams.BLSPubkeyLength]byte {
 }
 
 // WithdrawalCredentials returns the withdrawal credentials of the
+// read only validator without allocating.
+func (v readOnlyValidator) WithdrawalCredentials() [fieldparams.RootLength]byte {
+	return v.validator.WithdrawalCredentials
+}
+
+// GetWithdrawalCredentials returns a copy of the withdrawal credentials of the
 // read only validator.
 func (v readOnlyValidator) GetWithdrawalCredentials() []byte {
 	creds := make([]byte, 32)

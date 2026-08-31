@@ -2,6 +2,9 @@ package proposer
 
 import (
 	"fmt"
+	"net/url"
+	"slices"
+	"strings"
 	"sync/atomic"
 
 	"github.com/OffchainLabs/prysm/v7/config"
@@ -10,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/io/logs"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -65,34 +69,45 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 		d.GasLimit = ps.DefaultConfig.GasLimit
 		settings.DefaultConfig = d
 	}
-	settings.dedupBuilders()
+	settings.sanitizeBuilders()
 	return settings, nil
 }
 
-// Persisted configs may predate url-required and (url, auth_data) uniqueness;
-// url-less entries are dropped and the first entry wins, matching POST validation.
-func (ps *Settings) dedupBuilders() {
-	dedup := func(opt *Option) {
+// Every load path (file, URL, database) funnels through here: entries violating the spec
+// limits and (url, auth_data) duplicates are dropped so block production never trips on them.
+func (ps *Settings) sanitizeBuilders() {
+	sanitize := func(opt *Option) {
 		if opt == nil || opt.BuilderConfig == nil || len(opt.BuilderConfig.Builders) == 0 {
 			return
 		}
-		seen := make(map[EntryIdentity]bool, len(opt.BuilderConfig.Builders))
-		kept := opt.BuilderConfig.Builders[:0]
-		for _, e := range opt.BuilderConfig.Builders {
-			if e == nil || e.URL == "" || seen[e.Identity()] {
+		builders := opt.BuilderConfig.Builders
+		seen := make(map[EntryIdentity]bool, len(builders))
+		kept := builders[:0]
+		var reasons []string
+		for _, e := range builders {
+			if e == nil || seen[e.Identity()] {
 				continue
+			}
+			if err := e.Validate(); err != nil {
+				reasons = append(reasons, err.Error())
+				continue
+			}
+			if len(kept) == MaxBuilderEntries {
+				reasons = append(reasons, fmt.Sprintf("more than %d entries", MaxBuilderEntries))
+				break
 			}
 			seen[e.Identity()] = true
 			kept = append(kept, e)
 		}
-		if len(kept) != len(opt.BuilderConfig.Builders) {
-			log.Warn("Removed url-less or duplicate builder entries from proposer settings")
+		if len(kept) != len(builders) {
+			log.WithField("reasons", strings.Join(reasons, "; ")).
+				Warnf("Removed %d invalid or duplicate builder entries from proposer settings", len(builders)-len(kept))
 			opt.BuilderConfig.Builders = kept
 		}
 	}
-	dedup(ps.DefaultConfig)
+	sanitize(ps.DefaultConfig)
 	for _, opt := range ps.ProposeConfig {
-		dedup(opt)
+		sanitize(opt)
 	}
 }
 
@@ -137,6 +152,40 @@ func (be *BuilderEntry) EffectiveAuthData() []byte {
 		return be.AuthData
 	}
 	return []byte(be.URL)
+}
+
+// Spec limits for builder configuration payloads.
+const (
+	MaxBuilderEntries = 64   // MAX_BUILDER_ENTRIES
+	MaxBuilderURLSize = 2048 // MAX_BUILDER_URL_SIZE
+	MaxAuthDataSize   = 4096 // MAX_DATA_SIZE
+	MaxBuilderPubkeys = 64   // MAX_BUILDER_PUBKEYS
+)
+
+// Validate checks the entry against the spec size and format limits. Every config source
+// must enforce it: an entry violating the limits cannot be encoded into a block request.
+func (be *BuilderEntry) Validate() error {
+	if be.URL == "" {
+		return errors.New("url is required")
+	}
+	if len(be.URL) > MaxBuilderURLSize {
+		return errors.Errorf("url exceeds %d bytes", MaxBuilderURLSize)
+	}
+	if u, err := url.Parse(be.URL); err != nil || u.Scheme == "" || u.Host == "" {
+		return errors.New("url is not a valid URL")
+	}
+	if len(be.Pubkeys) > MaxBuilderPubkeys {
+		return errors.Errorf("builder_pubkeys exceeds %d keys", MaxBuilderPubkeys)
+	}
+	for _, pk := range be.Pubkeys {
+		if len(pk) != fieldparams.BLSPubkeyLength {
+			return errors.New("builder_pubkeys contains an invalid BLS public key")
+		}
+	}
+	if len(be.AuthData) > MaxAuthDataSize {
+		return errors.Errorf("auth_data exceeds %d bytes", MaxAuthDataSize)
+	}
+	return nil
 }
 
 // EffectiveBuilderConfig resolves pubkey's builder config against default_config;
@@ -615,6 +664,43 @@ func (ps *Settings) WarnDeprecatedSchema() {
 	log.Warn("Proposer settings contain deprecated v1 builder fields (enabled, builder-level gas limits); they stop applying at the gloas fork and are replaced with defaults (fee recipients and graffiti carry over). Configure gloas builders via v2 settings or the keymanager API.")
 }
 
+// WarnUnsetMaxExecutionPayment logs when a builder entry resolves to the zero
+// default cap, which silently drops that builder's execution layer payment.
+func (ps *Settings) WarnUnsetMaxExecutionPayment() {
+	if ps == nil || !params.GloasEnabled() {
+		return
+	}
+	seen := make(map[string]bool)
+	var maskedURLs []string
+	collect := func(bc *BuilderConfig) {
+		if bc == nil || bc.MaxExecutionPayment != nil {
+			return
+		}
+		for _, be := range bc.Builders {
+			if be == nil || be.MaxExecutionPayment != nil {
+				continue
+			}
+			masked := logs.MaskCredentialsLogging(be.URL)
+			if seen[masked] {
+				continue
+			}
+			seen[masked] = true
+			maskedURLs = append(maskedURLs, masked)
+		}
+	}
+	if ps.DefaultConfig != nil {
+		collect(ps.DefaultConfig.BuilderConfig)
+	}
+	for pubkey := range ps.ProposeConfig {
+		collect(ps.EffectiveBuilderConfig(pubkey))
+	}
+	if len(maskedURLs) == 0 {
+		return
+	}
+	slices.Sort(maskedURLs)
+	log.WithField("builders", strings.Join(maskedURLs, ", ")).Warn("Builder entries have no max_execution_payment: their execution layer payment is ignored and only collateral-backed bid value counts toward bid selection. Set max_execution_payment to count it, noting such payments rest on the builder's promise to pay.")
+}
+
 // HasLegacyBuilderContent reports whether any level carries v1 builder fields,
 // i.e. whether the gloas cutover has anything to drop.
 func (ps *Settings) HasLegacyBuilderContent() bool {
@@ -666,7 +752,7 @@ func (ps *Settings) UpgradeToV2() bool {
 	changed := scrubbed || ps.Version != SchemaV2
 	ps.Version = SchemaV2
 	if scrubbed {
-		log.Warn("v1 builder settings, including gas limits, do not apply to gloas and were replaced with defaults; provide v2 proposer settings to configure builders")
+		log.Warn("V1 builder settings, including gas limits, do not apply to gloas and were replaced with defaults; provide v2 proposer settings to configure builders")
 	}
 	return changed
 }

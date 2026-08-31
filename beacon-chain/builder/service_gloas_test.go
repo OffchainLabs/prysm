@@ -26,7 +26,7 @@ type fakeBuilderClient struct {
 
 func (f *fakeBuilderClient) NodeURL() string { return f.url }
 
-func (f *fakeBuilderClient) GetExecutionPayloadBid(context.Context, primitives.Slot, [32]byte, [32]byte, [48]byte, *eth.SignedRequestAuth) (*eth.SignedExecutionPayloadBid, error) {
+func (f *fakeBuilderClient) GetExecutionPayloadBid(context.Context, primitives.Slot, [32]byte, [32]byte, [48]byte, *eth.SignedBuilderRequestAuth) (*eth.SignedExecutionPayloadBid, error) {
 	f.getCount.Add(1)
 	return f.bid, f.getErr
 }
@@ -43,7 +43,7 @@ func entryFor(url string) *eth.BuilderEntry {
 func entryWithAuthData(url, data string) *eth.BuilderEntry {
 	return &eth.BuilderEntry{
 		Url:  []byte(url),
-		Auth: &eth.SignedRequestAuth{Message: &eth.RequestAuth{Data: []byte(data)}},
+		Auth: &eth.SignedBuilderRequestAuth{Message: &eth.BuilderRequestAuth{Data: []byte(data)}},
 	}
 }
 
@@ -229,7 +229,7 @@ func TestSubmitBuilderPreferences(t *testing.T) {
 		return &eth.BuilderPreferencesEntry{
 			Url:                 []byte(url),
 			MaxExecutionPayment: 5,
-			Auth:                &eth.SignedRequestAuth{Message: &eth.RequestAuth{Data: []byte("opaque-auth-data")}},
+			Auth:                &eth.SignedBuilderRequestAuth{Message: &eth.BuilderRequestAuth{Data: []byte("opaque-auth-data")}},
 		}
 	}
 

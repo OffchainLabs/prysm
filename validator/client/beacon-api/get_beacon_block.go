@@ -12,6 +12,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/apiutil"
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -22,7 +23,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primitives.Slot, randaoReveal, graffiti []byte) (*ethpb.GenericBeaconBlock, error) {
+func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primitives.Slot, randaoReveal, graffiti []byte, builderConfig *ethpb.BuilderConfig) (*ethpb.GenericBeaconBlock, error) {
 	queryParams := neturl.Values{}
 	queryParams.Add("randao_reveal", hexutil.Encode(randaoReveal))
 	if len(graffiti) > 0 {
@@ -30,7 +31,7 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 	}
 
 	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
-		return c.beaconBlockV4(ctx, slot, queryParams)
+		return c.beaconBlockV4(ctx, slot, queryParams, builderConfig)
 	}
 
 	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v3/validator/blocks/%d", slot), queryParams)
@@ -69,16 +70,27 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 	return block, nil
 }
 
-func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primitives.Slot, queryParams neturl.Values) (*ethpb.GenericBeaconBlock, error) {
+// beaconBlockV4 posts the produce request with a BuilderConfig body naming the external
+// builders (possibly none) the beacon node should solicit bids from.
+func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primitives.Slot, queryParams neturl.Values, builderConfig *ethpb.BuilderConfig) (*ethpb.GenericBeaconBlock, error) {
+	// The produce request always carries a BuilderConfig body; the caller resolves it fully.
+	if builderConfig == nil {
+		return nil, errors.New("builder config is required for the v4 block request")
+	}
+
 	queryParams.Set("include_payload", strconv.FormatBool(c.stateless))
 	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v4/validator/blocks/%d", slot), queryParams)
+
+	headers := map[string]string{api.VersionHeader: version.String(version.Gloas)}
+	jsonFn := func() ([]byte, error) {
+		return json.Marshal(structs.BuilderConfigFromConsensus(builderConfig))
+	}
 
 	var (
 		decodedData     []byte
 		decodedBlock    *ethpb.GenericBeaconBlock
 		decodedContents *ethpb.BeaconBlockContentsGloas
 	)
-
 	decode := func(data []byte, header http.Header) (*ethpb.GenericBeaconBlock, error) {
 		block, contents, err := decodeBlockV4Response(data, header, queryUrl)
 		if err == nil {
@@ -87,10 +99,12 @@ func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primi
 		return block, err
 	}
 
-	opts := blockFreshnessOptions(ctx, decode)
-	data, header, err := c.handler.GetSSZ(ctx, queryUrl, opts...)
+	// Always race the nodes for the block, even though each node solicits builder
+	// bids: a bid only binds once its block is signed, so duplicates are harmless.
+	opts := append([]rest.QueryOption{rest.WithRace()}, blockFreshnessOptions(ctx, decode)...)
+	data, header, err := c.handler.RequestSSZWithFallback(ctx, queryUrl, headers, builderConfig.MarshalSSZ, jsonFn, opts...)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not get v4 beacon block")
+		return nil, errors.Wrap(err, "could not post v4 block request")
 	}
 
 	block, contents := decodedBlock, decodedContents
@@ -152,6 +166,9 @@ func decodeBlockV4Response(data []byte, header http.Header, queryUrl string) (*e
 		return nil, nil, errors.Errorf("v4 payload-included response must be SSZ, got content-type %q", header.Get("Content-Type"))
 	}
 
+	// The VC echoes this back when publishing so the winning builder gets the signed block.
+	builderUrl := header.Get(api.BuilderUrlHeader)
+
 	if isSSZ {
 		if payloadIncluded {
 			contents := &ethpb.BeaconBlockContentsGloas{}
@@ -159,7 +176,7 @@ func decodeBlockV4Response(data []byte, header http.Header, queryUrl string) (*e
 				return nil, nil, fmt.Errorf("contents unmarshal SSZ: %w", err)
 			}
 
-			return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: contents.Block}}, contents, nil
+			return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: contents.Block}, BuilderUrl: builderUrl}, contents, nil
 		}
 
 		block := &ethpb.BeaconBlockGloas{}
@@ -167,7 +184,7 @@ func decodeBlockV4Response(data []byte, header http.Header, queryUrl string) (*e
 			return nil, nil, fmt.Errorf("block unmarshal SSZ: %w", err)
 		}
 
-		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: block}}, nil, nil
+		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: block}, BuilderUrl: builderUrl}, nil, nil
 	}
 
 	// JSON, payload not included: parse the bare block.
@@ -185,6 +202,7 @@ func decodeBlockV4Response(data []byte, header http.Header, queryUrl string) (*e
 	if err != nil {
 		return nil, nil, fmt.Errorf("to generic: %w", err)
 	}
+	blk.BuilderUrl = builderUrl
 
 	return blk, nil, nil
 }

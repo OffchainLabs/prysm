@@ -12,8 +12,8 @@ import (
 func consensusBuilderEntry() *ethpb.BuilderEntry {
 	return &ethpb.BuilderEntry{
 		Url: []byte("http://builder.example"),
-		Auth: &ethpb.SignedRequestAuth{
-			Message:   &ethpb.RequestAuth{Data: []byte{0xaa, 0xbb}, Slot: 7},
+		Auth: &ethpb.SignedBuilderRequestAuth{
+			Message:   &ethpb.BuilderRequestAuth{Data: []byte{0xaa, 0xbb}, Slot: 7},
 			Signature: make([]byte, 96),
 		},
 		BuilderPubkeys:      [][]byte{make([]byte, 48)},
@@ -92,7 +92,7 @@ func TestBuilderEntry_ToConsensus(t *testing.T) {
 
 	t.Run("auth data too long", func(t *testing.T) {
 		entry := BuilderEntryFromConsensus(consensusBuilderEntry())
-		entry.Auth.Message.Data = "0x" + strings.Repeat("ab", maxRequestAuthDataLength+1)
+		entry.Auth.Message.Data = "0x" + strings.Repeat("ab", maxBuilderRequestAuthDataLength+1)
 		_, err := entry.ToConsensus()
 		require.ErrorContains(t, "Data", err)
 	})
@@ -119,8 +119,8 @@ func TestBuilderPreferencesEntry_ToConsensus(t *testing.T) {
 	consensusEntry := &ethpb.BuilderPreferencesEntry{
 		ProposerPubkey: make([]byte, 48),
 		Url:            []byte("http://builder.example"),
-		Auth: &ethpb.SignedRequestAuth{
-			Message:   &ethpb.RequestAuth{Data: []byte{0xaa}, Slot: 3},
+		Auth: &ethpb.SignedBuilderRequestAuth{
+			Message:   &ethpb.BuilderRequestAuth{Data: []byte{0xaa}, Slot: 3},
 			Signature: make([]byte, 96),
 		},
 		MaxExecutionPayment: primitives.Gwei(500),

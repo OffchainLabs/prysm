@@ -147,22 +147,22 @@ func SignedProposerPreferencesFromConsensus(s *ethpb.SignedProposerPreferences) 
 	}
 }
 
-func RequestAuthFromConsensus(m *ethpb.RequestAuth) *RequestAuth {
+func BuilderRequestAuthFromConsensus(m *ethpb.BuilderRequestAuth) *BuilderRequestAuth {
 	if m == nil {
 		return nil
 	}
-	return &RequestAuth{
+	return &BuilderRequestAuth{
 		Data: hexutil.Encode(m.Data),
 		Slot: fmt.Sprintf("%d", m.Slot),
 	}
 }
 
-func SignedRequestAuthFromConsensus(s *ethpb.SignedRequestAuth) *SignedRequestAuth {
+func SignedBuilderRequestAuthFromConsensus(s *ethpb.SignedBuilderRequestAuth) *SignedBuilderRequestAuth {
 	if s == nil {
 		return nil
 	}
-	return &SignedRequestAuth{
-		Message:   RequestAuthFromConsensus(s.Message),
+	return &SignedBuilderRequestAuth{
+		Message:   BuilderRequestAuthFromConsensus(s.Message),
 		Signature: hexutil.Encode(s.Signature),
 	}
 }
@@ -182,22 +182,22 @@ func BuilderPreferencesRequestFromConsensus(r *ethpb.BuilderPreferencesRequest) 
 	}
 	return &BuilderPreferencesRequest{
 		Preferences: BuilderPreferencesFromConsensus(r.Preferences),
-		Auth:        SignedRequestAuthFromConsensus(r.Auth),
+		Auth:        SignedBuilderRequestAuthFromConsensus(r.Auth),
 	}
 }
 
 // Bounds from the beacon-APIs Gloas builder schemas.
 const (
-	maxBuilderEntries        = 64
-	maxBuilderUrlLength      = 2048
-	maxBuilderPubkeys        = 64
-	maxRequestAuthDataLength = 4096
+	maxBuilderEntries               = 64
+	maxBuilderUrlLength             = 2048
+	maxBuilderPubkeys               = 64
+	maxBuilderRequestAuthDataLength = 4096
 	// MAX_BUILDER_ENTRIES * (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH = 64 * 2 * 32.
 	MaxBuilderPreferencesList = 4096
 )
 
-func (a *RequestAuth) ToConsensus() (*ethpb.RequestAuth, error) {
-	data, err := bytesutil.DecodeHexWithMaxLength(a.Data, maxRequestAuthDataLength)
+func (a *BuilderRequestAuth) ToConsensus() (*ethpb.BuilderRequestAuth, error) {
+	data, err := bytesutil.DecodeHexWithMaxLength(a.Data, maxBuilderRequestAuthDataLength)
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Data")
 	}
@@ -208,10 +208,10 @@ func (a *RequestAuth) ToConsensus() (*ethpb.RequestAuth, error) {
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Slot")
 	}
-	return &ethpb.RequestAuth{Data: data, Slot: primitives.Slot(slot)}, nil
+	return &ethpb.BuilderRequestAuth{Data: data, Slot: primitives.Slot(slot)}, nil
 }
 
-func (s *SignedRequestAuth) ToConsensus() (*ethpb.SignedRequestAuth, error) {
+func (s *SignedBuilderRequestAuth) ToConsensus() (*ethpb.SignedBuilderRequestAuth, error) {
 	if s.Message == nil {
 		return nil, server.NewDecodeError(fmt.Errorf("must not be nil"), "Message")
 	}
@@ -223,7 +223,7 @@ func (s *SignedRequestAuth) ToConsensus() (*ethpb.SignedRequestAuth, error) {
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Signature")
 	}
-	return &ethpb.SignedRequestAuth{Message: msg, Signature: sig}, nil
+	return &ethpb.SignedBuilderRequestAuth{Message: msg, Signature: sig}, nil
 }
 
 func (e *BuilderPreferencesEntry) ToConsensus() (*ethpb.BuilderPreferencesEntry, error) {
@@ -261,7 +261,7 @@ func BuilderPreferencesEntryFromConsensus(e *ethpb.BuilderPreferencesEntry) *Bui
 	return &BuilderPreferencesEntry{
 		ProposerPubkey:      hexutil.Encode(e.ProposerPubkey),
 		Url:                 string(e.Url),
-		Auth:                SignedRequestAuthFromConsensus(e.Auth),
+		Auth:                SignedBuilderRequestAuthFromConsensus(e.Auth),
 		MaxExecutionPayment: fmt.Sprintf("%d", e.MaxExecutionPayment),
 	}
 }
@@ -320,7 +320,7 @@ func BuilderEntryFromConsensus(e *ethpb.BuilderEntry) *BuilderEntry {
 	}
 	return &BuilderEntry{
 		Url:                 string(e.Url),
-		Auth:                SignedRequestAuthFromConsensus(e.Auth),
+		Auth:                SignedBuilderRequestAuthFromConsensus(e.Auth),
 		BuilderPubkeys:      pubkeys,
 		MaxExecutionPayment: fmt.Sprintf("%d", e.MaxExecutionPayment),
 		MinBid:              fmt.Sprintf("%d", e.MinBid),

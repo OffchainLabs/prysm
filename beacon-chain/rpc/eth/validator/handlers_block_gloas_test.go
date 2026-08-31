@@ -34,6 +34,15 @@ var (
 	testGraffiti = "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
 )
 
+// produceV4Request builds the produce POST with a neutral BuilderConfig body.
+func produceV4Request(t *testing.T, target string) *http.Request {
+	cfgJSON, err := json.Marshal(structs.BuilderConfigFromConsensus(&eth.BuilderConfig{BuilderBoostFactor: 100}))
+	require.NoError(t, err)
+	request := httptest.NewRequest(http.MethodPost, target, bytes.NewReader(cfgJSON))
+	request.Header.Set(api.VersionHeader, version.String(version.Gloas))
+	return request
+}
+
 func testEnvelope() *eth.ExecutionPayloadEnvelope {
 	return &eth.ExecutionPayloadEnvelope{
 		Payload: &enginev1.ExecutionPayloadGloas{
@@ -96,7 +105,7 @@ func TestProduceBlockV4_IncludePayloadTrue(t *testing.T) {
 		OptimisticModeFetcher: &blockchainTesting.ChainService{},
 		BlockRewardFetcher:    &rewardtesting.MockBlockRewardFetcher{Rewards: &structs.BlockRewards{Total: "10"}},
 	}
-	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s&include_payload=true", testRandao, testGraffiti), nil)
+	request := produceV4Request(t, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s&include_payload=true", testRandao, testGraffiti))
 	request.SetPathValue("slot", "1")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
@@ -155,7 +164,7 @@ func TestProduceBlockV4_IncludePayloadTrue_WithBlobs(t *testing.T) {
 		BlockRewardFetcher:    &rewardtesting.MockBlockRewardFetcher{Rewards: &structs.BlockRewards{Total: "10"}},
 	}
 
-	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s&include_payload=true", testRandao, testGraffiti), nil)
+	request := produceV4Request(t, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s&include_payload=true", testRandao, testGraffiti))
 	request.SetPathValue("slot", "1")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
@@ -186,7 +195,7 @@ func TestProduceBlockV4_IncludePayloadFalse(t *testing.T) {
 		OptimisticModeFetcher: &blockchainTesting.ChainService{},
 		BlockRewardFetcher:    &rewardtesting.MockBlockRewardFetcher{Rewards: &structs.BlockRewards{Total: "10"}},
 	}
-	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s&include_payload=false", testRandao, testGraffiti), nil)
+	request := produceV4Request(t, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s&include_payload=false", testRandao, testGraffiti))
 	request.SetPathValue("slot", "1")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
@@ -229,7 +238,7 @@ func TestProduceBlockV4_BuilderBidExcludesPayload(t *testing.T) {
 		OptimisticModeFetcher: &blockchainTesting.ChainService{},
 		BlockRewardFetcher:    &rewardtesting.MockBlockRewardFetcher{Rewards: &structs.BlockRewards{Total: "10"}},
 	}
-	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s&include_payload=true", testRandao, testGraffiti), nil)
+	request := produceV4Request(t, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s&include_payload=true", testRandao, testGraffiti))
 	request.SetPathValue("slot", "1")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
@@ -261,7 +270,7 @@ func TestProduceBlockV4_PreGloasSlotRejected(t *testing.T) {
 		SyncChecker:           &mockSync.Sync{IsSyncing: false},
 		OptimisticModeFetcher: &blockchainTesting.ChainService{},
 	}
-	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s&include_payload=true", testRandao, testGraffiti), nil)
+	request := produceV4Request(t, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s&include_payload=true", testRandao, testGraffiti))
 	request.SetPathValue("slot", "1")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
@@ -286,7 +295,7 @@ func TestProduceBlockV4_Syncing(t *testing.T) {
 		TimeFetcher:           chainService,
 		OptimisticModeFetcher: chainService,
 	}
-	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s&include_payload=true", testRandao, testGraffiti), nil)
+	request := produceV4Request(t, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s&include_payload=true", testRandao, testGraffiti))
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 	server.ProduceBlockV4(writer, request)
@@ -309,7 +318,7 @@ func TestProduceBlockV4_SSZ_IncludePayloadTrue(t *testing.T) {
 		OptimisticModeFetcher: &blockchainTesting.ChainService{},
 		BlockRewardFetcher:    &rewardtesting.MockBlockRewardFetcher{Rewards: &structs.BlockRewards{Total: "10"}},
 	}
-	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s&include_payload=true", testRandao, testGraffiti), nil)
+	request := produceV4Request(t, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s&include_payload=true", testRandao, testGraffiti))
 	request.SetPathValue("slot", "1")
 	request.Header.Set("Accept", "application/octet-stream")
 	writer := httptest.NewRecorder()
@@ -399,7 +408,7 @@ func TestProduceBlockV4_SSZ_IncludePayloadFalse(t *testing.T) {
 		OptimisticModeFetcher: &blockchainTesting.ChainService{},
 		BlockRewardFetcher:    &rewardtesting.MockBlockRewardFetcher{Rewards: &structs.BlockRewards{Total: "10"}},
 	}
-	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s&include_payload=false", testRandao, testGraffiti), nil)
+	request := produceV4Request(t, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s&include_payload=false", testRandao, testGraffiti))
 	request.SetPathValue("slot", "1")
 	request.Header.Set("Accept", "application/octet-stream")
 	writer := httptest.NewRecorder()
@@ -430,7 +439,7 @@ func TestProduceBlockV4_SkipRandaoVerification(t *testing.T) {
 				OptimisticModeFetcher: &blockchainTesting.ChainService{},
 				BlockRewardFetcher:    &rewardtesting.MockBlockRewardFetcher{Rewards: &structs.BlockRewards{Total: "10"}},
 			}
-			request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?graffiti=%s&include_payload=true&%s", testGraffiti, raw), nil)
+			request := produceV4Request(t, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?graffiti=%s&include_payload=true&%s", testGraffiti, raw))
 			request.SetPathValue("slot", "1")
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
@@ -446,8 +455,8 @@ func testBuilderConfig() *eth.BuilderConfig {
 		BuilderBoostFactor: 100,
 		Builders: []*eth.BuilderEntry{{
 			Url: []byte("http://builder.example"),
-			Auth: &eth.SignedRequestAuth{
-				Message:   &eth.RequestAuth{Data: []byte{0xaa}, Slot: 1},
+			Auth: &eth.SignedBuilderRequestAuth{
+				Message:   &eth.BuilderRequestAuth{Data: []byte{0xaa}, Slot: 1},
 				Signature: make([]byte, 96),
 			},
 			BuilderPubkeys:      [][]byte{make([]byte, 48)},
@@ -630,15 +639,17 @@ func TestProduceBlockV4_Post(t *testing.T) {
 		assert.StringContains(t, "invalid include_payload", writer.Body.String())
 	})
 
-	t.Run("get without body still works", func(t *testing.T) {
+	t.Run("neutral config without builders", func(t *testing.T) {
 		var captured *eth.BlockRequest
 		server := newServer(t, &captured)
-		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s&include_payload=true", testRandao, testGraffiti), nil)
+		request := produceV4Request(t, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s&include_payload=true", testRandao, testGraffiti))
 		request.SetPathValue("slot", "1")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.ProduceBlockV4(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		require.IsNil(t, captured.BuilderConfig)
+		require.NotNil(t, captured.BuilderConfig)
+		require.Equal(t, 0, len(captured.BuilderConfig.Builders))
+		require.Equal(t, uint64(100), captured.BuilderConfig.BuilderBoostFactor)
 	})
 }

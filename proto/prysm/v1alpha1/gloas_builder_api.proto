@@ -13,8 +13,8 @@ option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
 // authenticate to, and submit preferences to an external builder.
 // Reference: https://github.com/ethereum/builder-specs/blob/master/specs/gloas/validator.md
 
-// RequestAuth authenticates a proposer's bid request to a specific builder.
-message RequestAuth {
+// BuilderRequestAuth authenticates a proposer's bid request to a specific builder.
+message BuilderRequestAuth {
   bytes data = 1 [ (ethereum.eth.ext.ssz_max) = "4096" ];
   uint64 slot = 2 [
     (ethereum.eth.ext.cast_type) =
@@ -22,8 +22,8 @@ message RequestAuth {
   ];
 }
 
-message SignedRequestAuth {
-  RequestAuth message = 1;
+message SignedBuilderRequestAuth {
+  BuilderRequestAuth message = 1;
   bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
 
@@ -37,7 +37,7 @@ message BuilderPreferences {
 
 message BuilderPreferencesRequest {
   BuilderPreferences preferences = 1;
-  SignedRequestAuth auth = 2;
+  SignedBuilderRequestAuth auth = 2;
 }
 
 // BuilderPreferencesEntry is one per-builder preference submission, per beacon-APIs #630.
@@ -45,7 +45,7 @@ message BuilderPreferencesEntry {
   bytes proposer_pubkey = 1 [ (ethereum.eth.ext.ssz_size) = "48" ];
   // url is the HTTP dial target, the auth data inside auth is opaque and may not be a URL.
   bytes url = 2 [ (ethereum.eth.ext.ssz_max) = "2048" ];
-  SignedRequestAuth auth = 3;
+  SignedBuilderRequestAuth auth = 3;
   uint64 max_execution_payment = 4 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
@@ -59,7 +59,7 @@ message SubmitBuilderPreferencesRequest {
 
 message BuilderEntry {
   bytes url = 1 [ (ethereum.eth.ext.ssz_max) = "2048" ];
-  SignedRequestAuth auth = 2;
+  SignedBuilderRequestAuth auth = 2;
   repeated bytes builder_pubkeys = 3 [
     (ethereum.eth.ext.ssz_size) = "?,48",
     (ethereum.eth.ext.ssz_max) = "64"
