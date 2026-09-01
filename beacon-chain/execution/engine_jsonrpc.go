@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -17,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
@@ -118,8 +120,47 @@ const (
 	gloasGetPayloadTimeout = 300 * time.Millisecond
 )
 
+// jsonTransport implements engineTransport over JSON-RPC.
+// Capability cache is filled when engine_exchangeCapabilities is called.
+type jsonTransport struct {
+	rpc  RPCClient
+	caps *capabilityCache
+}
+
+var _ engineTransport = (*jsonTransport)(nil)
+
+type capabilityCache struct {
+	capabilities     map[string]any
+	capabilitiesLock sync.RWMutex
+}
+
+func (c *capabilityCache) save(cs []string) {
+	c.capabilitiesLock.Lock()
+	defer c.capabilitiesLock.Unlock()
+
+	if c.capabilities == nil {
+		c.capabilities = make(map[string]any)
+	}
+
+	for _, capability := range cs {
+		c.capabilities[capability] = struct{}{}
+	}
+}
+
+func (c *capabilityCache) has(capability string) bool {
+	c.capabilitiesLock.RLock()
+	defer c.capabilitiesLock.RUnlock()
+
+	if c.capabilities == nil {
+		return false
+	}
+
+	_, ok := c.capabilities[capability]
+	return ok
+}
+
 // NewPayload request calls the engine_newPayloadVX method via JSON-RPC.
-func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests pb.ExecutionRequester) ([]byte, error) {
+func (j *jsonTransport) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests pb.ExecutionRequester) ([]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.NewPayload")
 	defer span.End()
 	defer func(start time.Time) {
@@ -133,18 +174,18 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 
 	switch payloadPb := payload.Proto().(type) {
 	case *pb.ExecutionPayload:
-		err := s.rpcClient.CallContext(ctx, result, NewPayloadMethod, payloadPb)
+		err := j.rpc.CallContext(ctx, result, NewPayloadMethod, payloadPb)
 		if err != nil {
 			return nil, handleRPCError(err)
 		}
 	case *pb.ExecutionPayloadCapella:
-		err := s.rpcClient.CallContext(ctx, result, NewPayloadMethodV2, payloadPb)
+		err := j.rpc.CallContext(ctx, result, NewPayloadMethodV2, payloadPb)
 		if err != nil {
 			return nil, handleRPCError(err)
 		}
 	case *pb.ExecutionPayloadDeneb:
 		if executionRequests == nil {
-			err := s.rpcClient.CallContext(ctx, result, NewPayloadMethodV3, payloadPb, versionedHashes, parentBlockRoot)
+			err := j.rpc.CallContext(ctx, result, NewPayloadMethodV3, payloadPb, versionedHashes, parentBlockRoot)
 			if err != nil {
 				return nil, handleRPCError(err)
 			}
@@ -153,7 +194,7 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to encode execution requests")
 			}
-			err = s.rpcClient.CallContext(ctx, result, NewPayloadMethodV4, payloadPb, versionedHashes, parentBlockRoot, flattenedRequests)
+			err = j.rpc.CallContext(ctx, result, NewPayloadMethodV4, payloadPb, versionedHashes, parentBlockRoot, flattenedRequests)
 			if err != nil {
 				return nil, handleRPCError(err)
 			}
@@ -163,7 +204,7 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to encode execution requests")
 		}
-		err = s.rpcClient.CallContext(ctx, result, NewPayloadMethodV5, payloadPb, versionedHashes, parentBlockRoot, flattenedRequests)
+		err = j.rpc.CallContext(ctx, result, NewPayloadMethodV5, payloadPb, versionedHashes, parentBlockRoot, flattenedRequests)
 		if err != nil {
 			return nil, handleRPCError(err)
 		}
@@ -199,7 +240,7 @@ type ForkchoiceUpdatedResponse struct {
 }
 
 // ForkchoiceUpdated calls the engine_forkchoiceUpdatedV1 method via JSON-RPC.
-func (s *Service) ForkchoiceUpdated(
+func (j *jsonTransport) ForkchoiceUpdated(
 	ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer,
 ) (*pb.PayloadIDBytes, []byte, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ForkchoiceUpdated")
@@ -223,7 +264,7 @@ func (s *Service) ForkchoiceUpdated(
 		if err != nil {
 			return nil, nil, err
 		}
-		err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethod, state, a)
+		err = j.rpc.CallContext(ctx, result, ForkchoiceUpdatedMethod, state, a)
 		if err != nil {
 			return nil, nil, handleRPCError(err)
 		}
@@ -232,7 +273,7 @@ func (s *Service) ForkchoiceUpdated(
 		if err != nil {
 			return nil, nil, err
 		}
-		err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethodV2, state, a)
+		err = j.rpc.CallContext(ctx, result, ForkchoiceUpdatedMethodV2, state, a)
 		if err != nil {
 			return nil, nil, handleRPCError(err)
 		}
@@ -241,7 +282,7 @@ func (s *Service) ForkchoiceUpdated(
 		if err != nil {
 			return nil, nil, err
 		}
-		err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethodV3, state, a)
+		err = j.rpc.CallContext(ctx, result, ForkchoiceUpdatedMethodV3, state, a)
 		if err != nil {
 			return nil, nil, handleRPCError(err)
 		}
@@ -250,7 +291,7 @@ func (s *Service) ForkchoiceUpdated(
 		if err != nil {
 			return nil, nil, err
 		}
-		err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethodV4, state, a)
+		err = j.rpc.CallContext(ctx, result, ForkchoiceUpdatedMethodV4, state, a)
 		if err != nil {
 			return nil, nil, handleRPCError(err)
 		}
@@ -306,7 +347,7 @@ func getPayloadTimeout(slot primitives.Slot) time.Duration {
 
 // GetPayload calls the engine_getPayloadVX method via JSON-RPC.
 // It returns the execution data as well as the blobs bundle.
-func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error) {
+func (j *jsonTransport) GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetPayload")
 	defer span.End()
 	start := time.Now()
@@ -318,7 +359,7 @@ func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte, slot primit
 	defer cancel()
 
 	method, result := getPayloadMethodAndMessage(slot)
-	err := s.rpcClient.CallContext(ctx, result, method, pb.PayloadIDBytes(payloadId))
+	err := j.rpc.CallContext(ctx, result, method, pb.PayloadIDBytes(payloadId))
 	if err != nil {
 		return nil, handleRPCError(err)
 	}
@@ -329,9 +370,12 @@ func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte, slot primit
 	return res, nil
 }
 
-func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
+func (j *jsonTransport) ExchangeCapabilities(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ExchangeCapabilities")
 	defer span.End()
+	if j.caps == nil {
+		j.caps = &capabilityCache{}
+	}
 
 	capacity := len(supportedEngineEndpoints)
 	if params.ElectraEnabled() {
@@ -357,8 +401,8 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	}
 
 	elSupportedEndpointsSlice := make([]string, 0, len(endpoints))
-	if err := s.rpcClient.CallContext(ctx, &elSupportedEndpointsSlice, ExchangeCapabilities, endpoints); err != nil {
-		return nil, handleRPCError(err)
+	if err := j.rpc.CallContext(ctx, &elSupportedEndpointsSlice, ExchangeCapabilities, endpoints); err != nil {
+		return handleRPCError(err)
 	}
 
 	elSupportedEndpoints := make(map[string]bool, len(elSupportedEndpointsSlice))
@@ -377,11 +421,44 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 		log.WithField("methods", unsupported).Warning("Connected execution client does not support some requested engine methods")
 	}
 
-	return elSupportedEndpointsSlice, nil
+	j.caps.save(elSupportedEndpointsSlice)
+	return nil
+}
+
+// GetPayloadBodiesByHash fetches bodies by hash, picking the JSON-RPC method by fork.
+func (j *jsonTransport) GetPayloadBodiesByHash(ctx context.Context, v int, hashes []common.Hash) ([]interfaces.ExecutionPayloadBody, error) {
+	if v >= version.Gloas {
+		result := make([]*pb.ExecutionPayloadBodyV2, 0)
+		if err := j.rpc.CallContext(ctx, &result, GetPayloadBodiesByHashV2, hashes); err != nil {
+			return nil, handleRPCError(err)
+		}
+		return wrapJSONBodiesV2(result)
+	}
+	result := make([]*pb.ExecutionPayloadBodyV1, 0)
+	if err := j.rpc.CallContext(ctx, &result, GetPayloadBodiesByHashV1, hashes); err != nil {
+		return nil, handleRPCError(err)
+	}
+	return wrapJSONBodiesV1(result)
+}
+
+// GetPayloadBodiesByRange fetches bodies by range, picking the JSON-RPC method by fork.
+func (j *jsonTransport) GetPayloadBodiesByRange(ctx context.Context, v int, from, count uint64) ([]interfaces.ExecutionPayloadBody, error) {
+	if v >= version.Gloas {
+		result := make([]*pb.ExecutionPayloadBodyV2, 0)
+		if err := j.rpc.CallContext(ctx, &result, GetPayloadBodiesByRangeV2, hexutil.EncodeUint64(from), hexutil.EncodeUint64(count)); err != nil {
+			return nil, handleRPCError(err)
+		}
+		return wrapJSONBodiesV2(result)
+	}
+	result := make([]*pb.ExecutionPayloadBodyV1, 0)
+	if err := j.rpc.CallContext(ctx, &result, GetPayloadBodiesByRangeV1, hexutil.EncodeUint64(from), hexutil.EncodeUint64(count)); err != nil {
+		return nil, handleRPCError(err)
+	}
+	return wrapJSONBodiesV1(result)
 }
 
 // GetClientVersion calls engine_getClientVersionV1 to retrieve EL client information.
-func (s *Service) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error) {
+func (j *jsonTransport) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetClientVersionV1")
 	defer span.End()
 
@@ -392,7 +469,7 @@ func (s *Service) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVers
 	}
 
 	var result []*structs.ClientVersionV1
-	err := s.rpcClient.CallContext(
+	err := j.rpc.CallContext(
 		ctx,
 		&result,
 		GetClientVersionV1,
@@ -415,27 +492,27 @@ func (s *Service) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVers
 }
 
 // GetBlobs returns the blob and proof from the execution engine for the given versioned hashes.
-func (s *Service) GetBlobs(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProof, error) {
+func (j *jsonTransport) GetBlobs(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProof, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobs")
 	defer span.End()
 
 	// If the execution engine does not support `GetBlobsV1`, return early to prevent encountering an error later.
-	if !s.capabilityCache.has(GetBlobsV1) {
+	if !j.Supports(GetBlobsV1) {
 		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV1))
 	}
 
 	result := make([]*pb.BlobAndProof, len(versionedHashes))
-	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV1, versionedHashes)
+	err := j.rpc.CallContext(ctx, &result, GetBlobsV1, versionedHashes)
 	return result, handleRPCError(err)
 }
 
-func (s *Service) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
+func (j *jsonTransport) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsV2")
 	defer span.End()
 
 	start := time.Now()
 
-	if !s.capabilityCache.has(GetBlobsV2) {
+	if !j.Supports(GetBlobsV2) {
 		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV2))
 	}
 
@@ -444,7 +521,7 @@ func (s *Service) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash)
 	}
 
 	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
-	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV2, versionedHashes)
+	err := j.rpc.CallContext(ctx, &result, GetBlobsV2, versionedHashes)
 
 	if len(result) != 0 {
 		getBlobsV2Latency.Observe(float64(time.Since(start).Milliseconds()))
@@ -453,14 +530,14 @@ func (s *Service) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash)
 	return result, handleRPCError(err)
 }
 
-func (s *Service) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
+func (j *jsonTransport) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsV3")
 	defer span.End()
 	start := time.Now()
 
 	getBlobsV3RequestsTotal.Inc()
 	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
-	if err := s.rpcClient.CallContext(ctx, &result, GetBlobsV3, versionedHashes); err != nil {
+	if err := j.rpc.CallContext(ctx, &result, GetBlobsV3, versionedHashes); err != nil {
 		return nil, handleRPCError(err)
 	}
 	getBlobsV3Latency.Observe(float64(time.Since(start).Seconds()))
@@ -470,16 +547,55 @@ func (s *Service) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash)
 // HasBlobs checks whether the given versioned hashes are available in the
 // execution client's blob pool without fetching the actual blob data.
 // It returns a boolean slice parallel to the input hashes.
-func (s *Service) HasBlobs(ctx context.Context, versionedHashes []common.Hash) ([]bool, error) {
+func (j *jsonTransport) HasBlobs(ctx context.Context, versionedHashes []common.Hash) ([]bool, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.HasBlobs")
 	defer span.End()
 	start := time.Now()
 
 	hasBlobsRequestsTotal.Inc()
 	var result []bool
-	if err := s.rpcClient.CallContext(ctx, &result, HasBlobs, versionedHashes); err != nil {
+	if err := j.rpc.CallContext(ctx, &result, HasBlobs, versionedHashes); err != nil {
 		return nil, handleRPCError(err)
 	}
 	hasBlobsLatency.Observe(float64(time.Since(start).Seconds()))
 	return result, nil
+}
+
+func (j *jsonTransport) Supports(method string) bool {
+	if j.caps == nil {
+		return false
+	}
+	return j.caps.has(method)
+}
+
+// wrapJSONBodiesV1 is a helper function to wrap ExecutionPayloadBodyV1 into the interfaces.ExecutionPayloadBody interface.
+func wrapJSONBodiesV1(in []*pb.ExecutionPayloadBodyV1) ([]interfaces.ExecutionPayloadBody, error) {
+	out := make([]interfaces.ExecutionPayloadBody, len(in))
+	for i := range in {
+		if in[i] == nil {
+			continue
+		}
+		b, err := blocks.WrappedExecutionPayloadBodyV1JSON(in[i])
+		if err != nil {
+			return nil, err
+		}
+		out[i] = b
+	}
+	return out, nil
+}
+
+// wrapJSONBodiesV2 is a helper function to wrap ExecutionPayloadBodyV2 into the interfaces.ExecutionPayloadBody interface.
+func wrapJSONBodiesV2(in []*pb.ExecutionPayloadBodyV2) ([]interfaces.ExecutionPayloadBody, error) {
+	out := make([]interfaces.ExecutionPayloadBody, len(in))
+	for i := range in {
+		if in[i] == nil {
+			continue
+		}
+		b, err := blocks.WrappedExecutionPayloadBodyV2JSON(in[i])
+		if err != nil {
+			return nil, err
+		}
+		out[i] = b
+	}
+	return out, nil
 }
