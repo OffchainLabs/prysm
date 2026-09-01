@@ -93,6 +93,15 @@ func WithExitEpoch(e primitives.Epoch) E2EConfigOpt {
 	}
 }
 
+// WithExtraEvaluators registers evaluators that the default setup would not add on its
+// own. addIfForkSet only registers fork-gated evaluators when the fork epoch is non-zero,
+// so a genesis fork (e.g. starting from Fulu) needs these added explicitly.
+func WithExtraEvaluators(evs ...Evaluator) E2EConfigOpt {
+	return func(cfg *E2EConfig) {
+		cfg.Evaluators = append(cfg.Evaluators, evs...)
+	}
+}
+
 // E2EConfig defines the struct for all configurations needed for E2E testing.
 type E2EConfig struct {
 	TestCheckpointSync      bool
