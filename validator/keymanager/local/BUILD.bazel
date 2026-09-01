@@ -62,6 +62,7 @@ go_test(
         "//proto/prysm/v1alpha1/validator-client:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
+        "//validator/accounts/iface:go_default_library",
         "//validator/accounts/testing:go_default_library",
         "//validator/keymanager:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
