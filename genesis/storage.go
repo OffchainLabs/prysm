@@ -147,7 +147,7 @@ func loadState() (state.BeaconState, error) {
 
 	s, err := stateFromFile(data.FilePath())
 	if err != nil {
-		return nil, errors.Wrapf(err, "InitializeFromProtoUnsafePhase0")
+		return nil, errors.Wrapf(err, "load genesis state from %s", data.FilePath())
 	}
 
 	data.State = s
