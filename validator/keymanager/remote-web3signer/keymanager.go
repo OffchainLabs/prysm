@@ -102,6 +102,14 @@ func NewKeymanager(ctx context.Context, cfg *SetupConfig) (*Keymanager, error) {
 		if !keyFileExists {
 			return nil, fmt.Errorf("no file exists in remote signer key file path %s", km.keyFilePath)
 		}
+
+		// NOTE: Warn users rather than fail as only keymanager API write path is dead.
+		if err := keyFileDirWritable(km.keyFilePath); err != nil {
+			log.
+				WithError(err).
+				WithField("dir", filepath.Dir(km.keyFilePath)).
+				Warn("Cannot create files in the remote signer key file directory, so keymanager API imports and deletions will fail. Keys already in the file still validate")
+		}
 	}
 
 	// Load the derived key sources:

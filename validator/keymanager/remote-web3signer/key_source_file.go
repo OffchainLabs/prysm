@@ -125,6 +125,19 @@ func (km *Keymanager) readKeyFile() ([]pubkey, error) {
 	return keys, nil
 }
 
+// keyFileDirWritable reports whether the key file's directory accepts the temporary file
+// that file saving function needs to replace the key file atomically.
+func keyFileDirWritable(keyFilePath string) error {
+	f, err := os.CreateTemp(filepath.Dir(keyFilePath), "."+filepath.Base(keyFilePath)+".probe-*")
+	if err != nil {
+		return fmt.Errorf("create temporary file in remote signer key file directory: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("close temporary file in remote signer key file directory: %w", err)
+	}
+	return os.Remove(f.Name())
+}
+
 // savePublicKeysToFile writes keys to the key file and makes them the file source's set.
 // The caller must hold updateLock.
 func (km *Keymanager) savePublicKeysToFile(keys []pubkey) error {

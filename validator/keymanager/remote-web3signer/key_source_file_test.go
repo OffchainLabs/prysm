@@ -94,6 +94,33 @@ func TestNewKeyManager_ChangingFileCreated(t *testing.T) {
 	}
 }
 
+func TestNewKeymanager_WarnsOnUnwritableKeyFileDir(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root bypasses directory permissions")
+	}
+	logHook := logTest.NewGlobal()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	dir := t.TempDir()
+	keyFilePath := filepath.Join(dir, "keyfile.txt")
+	require.NoError(t, file.WriteFile(keyFilePath, []byte("0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055\n")))
+	require.NoError(t, os.Chmod(dir, 0o555))
+	defer func() { require.NoError(t, os.Chmod(dir, 0o755)) }()
+
+	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
+	require.NoError(t, err)
+	km, err := NewKeymanager(ctx, &SetupConfig{
+		BaseEndpoint:          "http://example.com",
+		GenesisValidatorsRoot: root,
+		KeyFilePath:           keyFilePath,
+	})
+	// Startup succeeds and the key file's keys still validate; only API writes are lost.
+	require.NoError(t, err)
+	require.LogsContain(t, logHook, "keymanager API imports and deletions will fail")
+	require.Equal(t, 1, len(km.keys.all()))
+}
+
 func TestKeyFileWatcherSurvivesAtomicReplacements(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -281,6 +308,42 @@ func TestRefreshRemoteKeysFromFileChangesWithRetry_ctxCancelDuringRetryWait(t *t
 	case <-time.After(5 * time.Second):
 		t.Fatal("cancellation did not interrupt the retry wait")
 	}
+}
+
+func TestKeyFileDirWritable(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root bypasses directory permissions")
+	}
+
+	t.Run("writable directory", func(t *testing.T) {
+		keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+		require.NoError(t, file.WriteFile(keyFilePath, []byte("")))
+		require.NoError(t, keyFileDirWritable(keyFilePath))
+	})
+
+	t.Run("leaves no probe file behind", func(t *testing.T) {
+		dir := t.TempDir()
+		keyFilePath := filepath.Join(dir, "keyfile.txt")
+		require.NoError(t, file.WriteFile(keyFilePath, []byte("")))
+		require.NoError(t, keyFileDirWritable(keyFilePath))
+
+		entries, err := os.ReadDir(dir)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(entries))
+		require.Equal(t, "keyfile.txt", entries[0].Name())
+	})
+
+	t.Run("unwritable directory", func(t *testing.T) {
+		dir := t.TempDir()
+		keyFilePath := filepath.Join(dir, "keyfile.txt")
+		require.NoError(t, file.WriteFile(keyFilePath, []byte("")))
+		// Readable and traversable, but the key file cannot be replaced in place.
+		require.NoError(t, os.Chmod(dir, 0o555))
+		// t.TempDir cleanup needs the write bit back.
+		defer func() { require.NoError(t, os.Chmod(dir, 0o755)) }()
+
+		require.ErrorContains(t, "permission denied", keyFileDirWritable(keyFilePath))
+	})
 }
 
 func logsContain(hook *logTest.Hook, substr string) bool {
