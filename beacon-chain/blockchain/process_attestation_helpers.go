@@ -52,11 +52,10 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 		}
 		return st
 	}
-	// At this point we can only have c.Epoch > headEpoch.
-	if !s.cfg.ForkChoiceStore.IsCanonical([32]byte(c.Root)) {
+	// At this point we can only have c.Epoch > headEpoch, and LMD/FFG consistency was already verified, so the target root must be the head root.
+	if bytesutil.ToBytes32(c.Root) != bytesutil.ToBytes32(headRoot) {
 		return nil
 	}
-	// This point can only be reached if c.Root == headRoot and c.Epoch > headEpoch.
 	slot, err := slots.EpochStart(c.Epoch)
 	if err != nil {
 		return nil
@@ -66,7 +65,7 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 		return nil
 	}
 	// The next epoch's shuffling is already determined by the dependent root, so the head state can compute its committees without the boundary transition, unless the fork version changes at the boundary.
-	if c.Epoch == slots.ToEpoch(st.Slot())+1 && bytesutil.ToBytes32(c.Root) == bytesutil.ToBytes32(headRoot) && slots.ToForkVersion(slot) == slots.ToForkVersion(st.Slot()) {
+	if c.Epoch == slots.ToEpoch(st.Slot())+1 && slots.ToForkVersion(slot) == slots.ToForkVersion(st.Slot()) {
 		return st
 	}
 	// Try if we have already set the checkpoint cache. This will be tried again if we fail here but the check is cheap anyway.
