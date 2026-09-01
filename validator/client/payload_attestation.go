@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -22,9 +21,10 @@ import (
 )
 
 // SubmitPayloadAttestation submits a payload attestation message for a PTC member.
-func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte) {
+func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitives.Slot, duty dutyAssignment) {
 	ctx, span := trace.StartSpan(ctx, "validator.SubmitPayloadAttestation")
 	defer span.End()
+	pubKey := duty.publicKey
 	span.SetAttributes(trace.StringAttribute("validator", fmt.Sprintf("%#x", pubKey)))
 
 	if slots.ToEpoch(slot) < params.BeaconConfig().GloasForkEpoch {
@@ -93,15 +93,8 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 		return
 	}
 
-	duty, err := v.duty(pubKey)
-	if err != nil {
-		validatorPayloadAttestationSubmissionTotal.WithLabelValues("failed").Inc()
-		log.WithError(err).Error("Could not fetch validator assignment")
-		return
-	}
-
 	msg := &ethpb.PayloadAttestationMessage{
-		ValidatorIndex: duty.ValidatorIndex,
+		ValidatorIndex: duty.validatorIndex,
 		Data:           data,
 		Signature:      sig.Marshal(),
 	}
@@ -123,7 +116,7 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 		"blockRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(data.BeaconBlockRoot)),
 		"payloadPresent":     data.PayloadPresent,
 		"blobDataAvailable":  data.BlobDataAvailable,
-		"validatorIndex":     duty.ValidatorIndex,
+		"validatorIndex":     duty.validatorIndex,
 	}).Debug("Submitted new payload attestation")
-	v.saveSubmittedPayloadAtt(data, duty.ValidatorIndex)
+	v.saveSubmittedPayloadAtt(data, duty.validatorIndex)
 }

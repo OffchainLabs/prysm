@@ -37,7 +37,7 @@ func TestSubmitPayloadAttestation_PayloadAttestationDataFailure(t *testing.T) {
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.SubmitPayloadAttestation(t.Context(), 1, pubKey)
+			validator.SubmitPayloadAttestation(t.Context(), 1, testDutyAssignment(validator, pubKey))
 			require.LogsContain(t, hook, "Could not request payload attestation data")
 		})
 	}
@@ -65,47 +65,9 @@ func TestSubmitPayloadAttestation_NoHeadBlockForSlot(t *testing.T) {
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.SubmitPayloadAttestation(t.Context(), 1, pubKey)
+			validator.SubmitPayloadAttestation(t.Context(), 1, testDutyAssignment(validator, pubKey))
 			require.LogsContain(t, hook, "Skipping payload attestation: data unavailable")
 			require.LogsDoNotContain(t, hook, "Could not request payload attestation data")
-		})
-	}
-}
-
-func TestSubmitPayloadAttestation_ValidatorDutiesRequestFailure(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.GloasForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
-
-	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
-		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
-			hook := logTest.NewGlobal()
-			validator, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
-			validator.duties = &dutyStore{}
-			{
-				var data dutyStoreData
-				data.setFromContainer(&ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{}})
-				validator.duties.write(data)
-			}
-			defer finish()
-
-			m.validatorClient.EXPECT().
-				PayloadAttestationData(gomock.Any(), gomock.Any()).
-				Return(&ethpb.PayloadAttestationData{
-					BeaconBlockRoot: bytesutil.PadTo([]byte{'a'}, 32),
-					Slot:            1,
-					PayloadPresent:  true,
-				}, nil)
-
-			m.validatorClient.EXPECT().
-				DomainData(gomock.Any(), gomock.Any()).
-				Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
-
-			var pubKey [fieldparams.BLSPubkeyLength]byte
-			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.SubmitPayloadAttestation(t.Context(), 1, pubKey)
-			require.LogsContain(t, hook, "Could not fetch validator assignment")
 		})
 	}
 }
@@ -148,7 +110,7 @@ func TestSubmitPayloadAttestation_BadDomainData(t *testing.T) {
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.SubmitPayloadAttestation(t.Context(), 1, pubKey)
+			validator.SubmitPayloadAttestation(t.Context(), 1, testDutyAssignment(validator, pubKey))
 			require.LogsContain(t, hook, "Could not get PTC attester domain data")
 		})
 	}
@@ -196,7 +158,7 @@ func TestSubmitPayloadAttestation_CouldNotSubmit(t *testing.T) {
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.SubmitPayloadAttestation(t.Context(), 1, pubKey)
+			validator.SubmitPayloadAttestation(t.Context(), 1, testDutyAssignment(validator, pubKey))
 			require.LogsContain(t, hook, "Could not submit payload attestation")
 		})
 	}
@@ -249,7 +211,7 @@ func TestSubmitPayloadAttestation_OK(t *testing.T) {
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.SubmitPayloadAttestation(t.Context(), 1, pubKey)
+			validator.SubmitPayloadAttestation(t.Context(), 1, testDutyAssignment(validator, pubKey))
 
 			require.LogsDoNotContain(t, hook, "Could not")
 			require.LogsContain(t, hook, "Submitted new payload attestation")

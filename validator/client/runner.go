@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -11,7 +10,6 @@ import (
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	prysmTrace "github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
@@ -146,18 +144,16 @@ func (r *runner) run(ctx context.Context) {
 				go v.UpdateDomainDataCaches(domainCtx, slot+1)
 			}
 
-			var wg sync.WaitGroup
-
-			allRoles, err := v.RolesAt(slotCtx, slot)
+			plan, err := v.planSlot(slotCtx, slot)
 			if err != nil {
-				log.WithError(err).Error("Could not get validator roles")
+				log.WithError(err).Error("Could not plan validator duties")
 				span.End()
 				cancel()
 				continue
 			}
-			// performRoles calls span.End()
-			rolesCtx, _ := context.WithDeadline(ctx, deadline) //nolint:govet
-			performRoles(rolesCtx, allRoles, v, slot, &wg, span)
+			// executePlan ends the span after all work and reporting complete.
+			planCtx, _ := context.WithDeadline(ctx, deadline) //nolint:govet
+			go executePlan(planCtx, plan, v, span)
 		case e := <-v.EventsChan():
 			v.ProcessEvent(ctx, e)
 		case currentKeys := <-v.AccountsChangedChan(): // should be less of a priority than next slot
@@ -250,51 +246,45 @@ func initialize(ctx context.Context, v *validator) error {
 	return nil
 }
 
-func performRoles(slotCtx context.Context, allRoles map[[48]byte][]validatorRole, v *validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {
-	for pubKey, roles := range allRoles {
-		for _, role := range roles {
-			wg.Go(func() {
-				switch role {
-				case roleAttester:
-					v.SubmitAttestation(slotCtx, slot, pubKey)
-				case roleProposer:
-					v.ProposeBlock(slotCtx, slot, pubKey)
-				case roleAggregator:
-					v.SubmitAggregateAndProof(slotCtx, slot, pubKey)
-				case roleSyncCommittee:
-					v.SubmitSyncCommitteeMessage(slotCtx, slot, pubKey)
-				case roleSyncCommitteeAggregator:
-					v.SubmitSignedContributionAndProof(slotCtx, slot, pubKey)
-				case rolePTCMember:
-					v.SubmitPayloadAttestation(slotCtx, slot, pubKey)
-				case roleUnknown:
-					log.WithField("pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:]))).Trace("No active roles, doing nothing")
-				default:
-					log.Warnf("Unhandled role %v", role)
-				}
-			})
+func executePlan(slotCtx context.Context, plan slotPlan, v *validator, span trace.Span) {
+	span.SetAttributes(prysmTrace.Int64Attribute("dutyRevision", int64(plan.dutyRevision))) // lint:ignore uintcast -- This conversion is OK for tracing.
+
+	var wg sync.WaitGroup
+	for _, work := range plan.attestations {
+		wg.Go(func() { v.SubmitAttestation(slotCtx, plan.slot, work.duty) })
+		if work.aggregate {
+			wg.Go(func() { v.SubmitAggregateAndProof(slotCtx, plan.slot, work.duty) })
 		}
 	}
-
+	for _, pubKey := range plan.proposals {
+		wg.Go(func() { v.ProposeBlock(slotCtx, plan.slot, pubKey) })
+	}
+	for _, work := range plan.syncCommittee {
+		wg.Go(func() { v.SubmitSyncCommitteeMessage(slotCtx, plan.slot, work.duty) })
+		if work.aggregate {
+			wg.Go(func() { v.SubmitSignedContributionAndProof(slotCtx, plan.slot, work.duty) })
+		}
+	}
+	for _, duty := range plan.payloadAttestations {
+		wg.Go(func() { v.SubmitPayloadAttestation(slotCtx, plan.slot, duty) })
+	}
 	// Wait for all processes to complete, then report span complete.
-	go func() {
-		wg.Wait()
-		defer span.End()
-		defer func() {
-			if err := recover(); err != nil { // catch any panic in logging
-				log.WithField("error", err).
-					Error("Panic occurred when logging validator report. This" +
-						" should never happen! Please file a report at github.com/prysmaticlabs/prysm/issues/new")
-			}
-		}()
-		// Log submissions from the current slot
-		v.LogSubmissions(slot)
-
-		// Log performance in the previous slot
-		if err := v.LogValidatorGainsAndLosses(slotCtx, slot); err != nil {
-			log.WithError(err).Error("Could not report validator's rewards/penalties")
+	wg.Wait()
+	defer span.End()
+	defer func() {
+		if err := recover(); err != nil { // catch any panic in logging
+			log.WithField("error", err).
+				Error("Panic occurred when logging validator report. This" +
+					" should never happen! Please file a report at github.com/prysmaticlabs/prysm/issues/new")
 		}
 	}()
+	// Log submissions from the current slot
+	v.LogSubmissions(plan.slot)
+
+	// Log performance in the previous slot
+	if err := v.LogValidatorGainsAndLosses(slotCtx, plan.slot); err != nil {
+		log.WithError(err).Error("Could not report validator's rewards/penalties")
+	}
 }
 
 func isConnectionError(err error) bool {

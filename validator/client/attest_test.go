@@ -28,22 +28,6 @@ import (
 	"gopkg.in/d4l3k/messagediff.v1"
 )
 
-func TestRequestAttestation_ValidatorDutiesRequestFailure(t *testing.T) {
-	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
-		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
-			hook := logTest.NewGlobal()
-			validator, _, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
-			validator.duties = testDutyStore()
-			defer finish()
-
-			var pubKey [fieldparams.BLSPubkeyLength]byte
-			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.SubmitAttestation(t.Context(), 30, pubKey)
-			require.LogsContain(t, hook, "Could not fetch validator assignment")
-		})
-	}
-}
-
 func TestAttestToBlockHead_SubmitAttestation_EmptyCommittee(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
@@ -58,7 +42,7 @@ func TestAttestToBlockHead_SubmitAttestation_EmptyCommittee(t *testing.T) {
 				CommitteeIndex: 0,
 				ValidatorIndex: 0,
 			})
-			validator.SubmitAttestation(t.Context(), 0, pubKey)
+			validator.SubmitAttestation(t.Context(), 0, testDutyAssignment(validator, pubKey))
 			require.LogsContain(t, hook, "Empty committee")
 		})
 	}
@@ -96,7 +80,7 @@ func TestAttestToBlockHead_SubmitAttestation_RequestFailure(t *testing.T) {
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.SubmitAttestation(t.Context(), 30, pubKey)
+			validator.SubmitAttestation(t.Context(), 30, testDutyAssignment(validator, pubKey))
 			require.LogsContain(t, hook, "Could not submit attestation to beacon node")
 		})
 	}
@@ -211,7 +195,7 @@ func TestSubmitAttestation_ElectraCommitteeIndex(t *testing.T) {
 					).Return(&ethpb.AttestResponse{}, nil)
 				}
 
-				validator.SubmitAttestation(t.Context(), tt.attestationSlot, pubKey)
+				validator.SubmitAttestation(t.Context(), tt.attestationSlot, testDutyAssignment(validator, pubKey))
 
 				// Verify the committee index in the request
 				require.NotNil(t, capturedRequest, "AttestationDataRequest should have been called")
@@ -267,7 +251,7 @@ func TestAttestToBlockHead_AttestsCorrectly(t *testing.T) {
 				generatedAttestation = att
 			}).Return(&ethpb.AttestResponse{}, nil /* error */)
 
-			validator.SubmitAttestation(t.Context(), 30, pubKey)
+			validator.SubmitAttestation(t.Context(), 30, testDutyAssignment(validator, pubKey))
 
 			aggregationBitfield := bitfield.NewBitlist(uint64(len(committee)))
 			aggregationBitfield.SetBitAt(4, true)
@@ -345,7 +329,7 @@ func TestAttestToBlockHead_AttestsCorrectly(t *testing.T) {
 				generatedAttestation = att
 			}).Return(&ethpb.AttestResponse{}, nil /* error */)
 
-			validator.SubmitAttestation(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(electraForkEpoch), pubKey)
+			validator.SubmitAttestation(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(electraForkEpoch), testDutyAssignment(validator, pubKey))
 
 			aggregationBitfield := bitfield.NewBitlist(uint64(len(committee)))
 			aggregationBitfield.SetBitAt(4, true)
@@ -428,8 +412,8 @@ func TestAttestToBlockHead_BlocksDoubleAtt(t *testing.T) {
 				gomock.AssignableToTypeOf(&ethpb.Attestation{}),
 			).Return(&ethpb.AttestResponse{AttestationDataRoot: make([]byte, 32)}, nil /* error */)
 
-			validator.SubmitAttestation(t.Context(), 30, pubKey)
-			validator.SubmitAttestation(t.Context(), 30, pubKey)
+			validator.SubmitAttestation(t.Context(), 30, testDutyAssignment(validator, pubKey))
+			validator.SubmitAttestation(t.Context(), 30, testDutyAssignment(validator, pubKey))
 			require.LogsContain(t, hook, "Failed attestation slashing protection")
 		})
 	}
@@ -482,8 +466,8 @@ func TestAttestToBlockHead_BlocksSurroundAtt(t *testing.T) {
 				gomock.AssignableToTypeOf(&ethpb.Attestation{}),
 			).Return(&ethpb.AttestResponse{}, nil /* error */)
 
-			validator.SubmitAttestation(t.Context(), 30, pubKey)
-			validator.SubmitAttestation(t.Context(), 30, pubKey)
+			validator.SubmitAttestation(t.Context(), 30, testDutyAssignment(validator, pubKey))
+			validator.SubmitAttestation(t.Context(), 30, testDutyAssignment(validator, pubKey))
 			require.LogsContain(t, hook, "Failed attestation slashing protection")
 		})
 	}
@@ -528,7 +512,7 @@ func TestAttestToBlockHead_BlocksSurroundedAtt(t *testing.T) {
 				gomock.AssignableToTypeOf(&ethpb.Attestation{}),
 			).Return(&ethpb.AttestResponse{}, nil /* error */)
 
-			validator.SubmitAttestation(t.Context(), 30, pubKey)
+			validator.SubmitAttestation(t.Context(), 30, testDutyAssignment(validator, pubKey))
 			require.LogsDoNotContain(t, hook, failedAttLocalProtectionErr)
 
 			m.validatorClient.EXPECT().AttestationData(
@@ -540,7 +524,7 @@ func TestAttestToBlockHead_BlocksSurroundedAtt(t *testing.T) {
 				Source:          &ethpb.Checkpoint{Root: bytesutil.PadTo([]byte("C"), 32), Epoch: 1},
 			}, nil)
 
-			validator.SubmitAttestation(t.Context(), 30, pubKey)
+			validator.SubmitAttestation(t.Context(), 30, testDutyAssignment(validator, pubKey))
 			require.LogsContain(t, hook, "Failed attestation slashing protection")
 		})
 	}
@@ -571,7 +555,7 @@ func TestAttestToBlockHead_DoesNotAttestBeforeDelay(t *testing.T) {
 			).Return(&ethpb.AttestResponse{}, nil /* error */).Times(0)
 
 			timer := time.NewTimer(1 * time.Second)
-			go validator.SubmitAttestation(t.Context(), 0, pubKey)
+			go validator.SubmitAttestation(t.Context(), 0, testDutyAssignment(validator, pubKey))
 			<-timer.C
 		})
 	}
@@ -620,7 +604,7 @@ func TestAttestToBlockHead_DoesAttestAfterDelay(t *testing.T) {
 				gomock.Any(),
 			).Return(&ethpb.AttestResponse{}, nil).Times(1)
 
-			validator.SubmitAttestation(t.Context(), 0, pubKey)
+			validator.SubmitAttestation(t.Context(), 0, testDutyAssignment(validator, pubKey))
 		})
 	}
 }
@@ -662,7 +646,7 @@ func TestAttestToBlockHead_CorrectBitfieldLength(t *testing.T) {
 				generatedAttestation = att
 			}).Return(&ethpb.AttestResponse{}, nil /* error */)
 
-			validator.SubmitAttestation(t.Context(), 30, pubKey)
+			validator.SubmitAttestation(t.Context(), 30, testDutyAssignment(validator, pubKey))
 
 			assert.Equal(t, 2, len(generatedAttestation.AggregationBits))
 		})

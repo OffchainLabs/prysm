@@ -18,26 +18,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
-	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
 )
-
-func TestSubmitAggregateAndProof_GetDutiesRequestFailure(t *testing.T) {
-	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
-		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
-			hook := logTest.NewGlobal()
-			validator, _, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
-			validator.duties = testDutyStore()
-			defer finish()
-
-			var pubKey [fieldparams.BLSPubkeyLength]byte
-			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.SubmitAggregateAndProof(t.Context(), 0, pubKey)
-
-			require.LogsContain(t, hook, "Could not fetch validator assignment")
-		})
-	}
-}
 
 func TestSubmitAggregateAndProof_SignFails(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
@@ -75,7 +57,7 @@ func TestSubmitAggregateAndProof_SignFails(t *testing.T) {
 				gomock.Any(), // epoch
 			).Return(&ethpb.DomainResponse{SignatureDomain: nil}, errors.New("bad domain root"))
 
-			validator.SubmitAggregateAndProof(t.Context(), 0, pubKey)
+			validator.SubmitAggregateAndProof(t.Context(), 0, testDutyAssignment(validator, pubKey))
 		})
 	}
 }
@@ -121,7 +103,7 @@ func TestSubmitAggregateAndProof_Ok(t *testing.T) {
 				gomock.AssignableToTypeOf(&ethpb.SignedAggregateSubmitRequest{}),
 			).Return(&ethpb.SignedAggregateSubmitResponse{AttestationDataRoot: make([]byte, 32)}, nil)
 
-			validator.SubmitAggregateAndProof(t.Context(), 0, pubKey)
+			validator.SubmitAggregateAndProof(t.Context(), 0, testDutyAssignment(validator, pubKey))
 		})
 	}
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
@@ -170,7 +152,7 @@ func TestSubmitAggregateAndProof_Ok(t *testing.T) {
 				gomock.AssignableToTypeOf(&ethpb.SignedAggregateSubmitElectraRequest{}),
 			).Return(&ethpb.SignedAggregateSubmitResponse{AttestationDataRoot: make([]byte, 32)}, nil)
 
-			validator.SubmitAggregateAndProof(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(electraForkEpoch), pubKey)
+			validator.SubmitAggregateAndProof(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(electraForkEpoch), testDutyAssignment(validator, pubKey))
 		})
 	}
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
@@ -219,7 +201,7 @@ func TestSubmitAggregateAndProof_Ok(t *testing.T) {
 				return &ethpb.SignedAggregateSubmitResponse{AttestationDataRoot: make([]byte, 32)}, nil
 			})
 
-			validator.SubmitAggregateAndProof(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(gloasForkEpoch), pubKey)
+			validator.SubmitAggregateAndProof(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(gloasForkEpoch), testDutyAssignment(validator, pubKey))
 		})
 	}
 }
@@ -280,7 +262,7 @@ func TestSubmitAggregateAndProof_Distributed(t *testing.T) {
 				gomock.AssignableToTypeOf(&ethpb.SignedAggregateSubmitRequest{}),
 			).Return(&ethpb.SignedAggregateSubmitResponse{AttestationDataRoot: make([]byte, 32)}, nil)
 
-			validator.SubmitAggregateAndProof(ctx, slot, pubKey)
+			validator.SubmitAggregateAndProof(ctx, slot, testDutyAssignment(validator, pubKey))
 		})
 	}
 }

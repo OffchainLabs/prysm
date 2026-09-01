@@ -238,11 +238,11 @@ func TestUpdateDuties_PreGloasRetainsExitedSyncCommitteeKey(t *testing.T) {
 	require.NoError(t, v.UpdateDuties(t.Context()))
 	util.WaitTimeout(&subscribed, 2*time.Second)
 
-	roles, err := v.RolesAt(t.Context(), 1)
+	plan, err := v.planSlot(t.Context(), 1)
 	require.NoError(t, err)
-	require.Equal(t, 2, len(roles[kp.pub]))
-	assert.Equal(t, roleSyncCommittee, roles[kp.pub][0])
-	assert.Equal(t, roleSyncCommitteeAggregator, roles[kp.pub][1])
+	require.Equal(t, 1, len(plan.syncCommittee))
+	assert.Equal(t, kp.pub, plan.syncCommittee[0].duty.publicKey)
+	assert.Equal(t, true, plan.syncCommittee[0].aggregate)
 }
 
 func TestUpdateDuties_Distributed(t *testing.T) {
@@ -1516,10 +1516,10 @@ func TestUpdateDutiesSplit_NoEligibleKeysStoresEmptySet(t *testing.T) {
 	require.NoError(t, v.updateDutiesSplit(t.Context(), 5, nil))
 	require.Equal(t, true, v.duties.isInitialized())
 
-	// Role lookups must return no roles rather than erroring every slot.
-	roles, err := v.RolesAt(t.Context(), primitives.Slot(5*uint64(params.BeaconConfig().SlotsPerEpoch)))
+	// Slot planning must return no work rather than erroring every slot.
+	plan, err := v.planSlot(t.Context(), primitives.Slot(5*uint64(params.BeaconConfig().SlotsPerEpoch)))
 	require.NoError(t, err)
-	assert.Equal(t, 0, len(roles))
+	assert.Equal(t, 0, len(plan.proposals)+len(plan.attestations)+len(plan.syncCommittee)+len(plan.payloadAttestations))
 }
 
 func TestUpdateDutiesCombined_NoEligibleKeysStoresEmptySet(t *testing.T) {
@@ -1529,9 +1529,9 @@ func TestUpdateDutiesCombined_NoEligibleKeysStoresEmptySet(t *testing.T) {
 	require.NoError(t, v.updateDutiesCombined(t.Context(), 3, nil))
 	require.Equal(t, true, v.duties.isInitialized())
 
-	roles, err := v.RolesAt(t.Context(), primitives.Slot(3*uint64(params.BeaconConfig().SlotsPerEpoch)))
+	plan, err := v.planSlot(t.Context(), primitives.Slot(3*uint64(params.BeaconConfig().SlotsPerEpoch)))
 	require.NoError(t, err)
-	assert.Equal(t, 0, len(roles))
+	assert.Equal(t, 0, len(plan.proposals)+len(plan.attestations)+len(plan.syncCommittee)+len(plan.payloadAttestations))
 }
 
 // activeStatusFor seeds a status map marking kp active, so duty filtering

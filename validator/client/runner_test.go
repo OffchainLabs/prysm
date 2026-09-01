@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"runtime/debug"
 	"strconv"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -494,7 +493,7 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 	r.run(timedCtx)
 }
 
-func TestPerformRolesDispatch(t *testing.T) {
+func TestExecutePlanDispatch(t *testing.T) {
 	cfg := params.BeaconConfig()
 	cfg.ElectraForkEpoch = 1
 	cfg.GloasForkEpoch = 2
@@ -503,64 +502,73 @@ func TestPerformRolesDispatch(t *testing.T) {
 	stop := errors.New("stop after dispatch")
 	tests := []struct {
 		name   string
-		role   validatorRole
 		slot   primitives.Slot
+		plan   func(primitives.Slot, pubkey, dutyAssignment) slotPlan
 		expect func(*validator, *mocks, [fieldparams.BLSPubkeyLength]byte)
 	}{
 		{
 			name: "attester",
-			role: roleAttester,
 			slot: 1,
+			plan: func(slot primitives.Slot, _ pubkey, duty dutyAssignment) slotPlan {
+				return slotPlan{slot: slot, attestations: []attestationWork{{duty: duty}}}
+			},
 			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
 				m.validatorClient.EXPECT().AttestationData(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
 			},
 		},
 		{
 			name: "proposer",
-			role: roleProposer,
 			slot: 1,
+			plan: func(slot primitives.Slot, pk pubkey, _ dutyAssignment) slotPlan {
+				return slotPlan{slot: slot, proposals: []pubkey{pk}}
+			},
 			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
 				m.validatorClient.EXPECT().DomainData(gomock.Any(), gomock.Any()).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, fieldparams.RootLength)}, nil).Times(1)
 				m.validatorClient.EXPECT().BeaconBlock(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
 			},
 		},
 		{
-			name: "aggregator",
-			role: roleAggregator,
+			name: "attester and aggregator",
 			slot: 1,
+			plan: func(slot primitives.Slot, _ pubkey, duty dutyAssignment) slotPlan {
+				return slotPlan{slot: slot, attestations: []attestationWork{{duty: duty, aggregate: true}}}
+			},
 			expect: func(v *validator, m *mocks, pubKey [fieldparams.BLSPubkeyLength]byte) {
 				v.aggSelector = &stubAggregatorSelector{proofs: map[[fieldparams.BLSPubkeyLength]byte][]byte{pubKey: {1}}}
+				m.validatorClient.EXPECT().AttestationData(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
 				m.validatorClient.EXPECT().SubmitAggregateSelectionProof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
 			},
 		},
 		{
 			name: "sync committee",
-			role: roleSyncCommittee,
 			slot: 1,
+			plan: func(slot primitives.Slot, _ pubkey, duty dutyAssignment) slotPlan {
+				return slotPlan{slot: slot, syncCommittee: []syncCommitteeWork{{duty: duty}}}
+			},
 			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
 				m.validatorClient.EXPECT().SyncMessageBlockRoot(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
 			},
 		},
 		{
-			name: "sync committee aggregator",
-			role: roleSyncCommitteeAggregator,
+			name: "sync committee member and aggregator",
 			slot: 1,
+			plan: func(slot primitives.Slot, _ pubkey, duty dutyAssignment) slotPlan {
+				return slotPlan{slot: slot, syncCommittee: []syncCommitteeWork{{duty: duty, aggregate: true}}}
+			},
 			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
+				m.validatorClient.EXPECT().SyncMessageBlockRoot(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
 				m.validatorClient.EXPECT().SyncSubcommitteeIndex(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
 			},
 		},
 		{
 			name: "PTC member",
-			role: rolePTCMember,
 			slot: cfg.SlotsPerEpoch.Mul(uint64(cfg.GloasForkEpoch)),
+			plan: func(slot primitives.Slot, _ pubkey, duty dutyAssignment) slotPlan {
+				return slotPlan{slot: slot, payloadAttestations: []dutyAssignment{duty}}
+			},
 			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
 				m.validatorClient.EXPECT().PayloadAttestationData(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
 			},
-		},
-		{
-			name: "unknown",
-			role: roleUnknown,
-			slot: 1,
 		},
 	}
 
@@ -578,9 +586,8 @@ func TestPerformRolesDispatch(t *testing.T) {
 				tt.expect(v, m, pubKey)
 			}
 
-			var wg sync.WaitGroup
-			performRoles(t.Context(), map[[fieldparams.BLSPubkeyLength]byte][]validatorRole{pubKey: {tt.role}}, v, tt.slot, &wg, trace.SpanFromContext(t.Context()))
-			wg.Wait()
+			duty := testDutyAssignment(v, pubKey)
+			executePlan(t.Context(), tt.plan(tt.slot, pubKey, duty), v, trace.SpanFromContext(t.Context()))
 		})
 	}
 }

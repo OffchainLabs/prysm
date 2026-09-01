@@ -20,29 +20,6 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-func TestSubmitSyncCommitteeMessage_ValidatorDutiesRequestFailure(t *testing.T) {
-	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
-		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
-			hook := logTest.NewGlobal()
-			validator, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
-			validator.duties = testDutyStore()
-			defer finish()
-
-			m.validatorClient.EXPECT().SyncMessageBlockRoot(
-				gomock.Any(), // ctx
-				&emptypb.Empty{},
-			).Return(&ethpb.SyncMessageBlockRootResponse{
-				Root: bytesutil.PadTo([]byte{}, 32),
-			}, nil)
-
-			var pubKey [fieldparams.BLSPubkeyLength]byte
-			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.SubmitSyncCommitteeMessage(t.Context(), 1, pubKey)
-			require.LogsContain(t, hook, "Could not fetch validator assignment")
-		})
-	}
-}
-
 func TestSubmitSyncCommitteeMessage_BadDomainData(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
@@ -71,7 +48,7 @@ func TestSubmitSyncCommitteeMessage_BadDomainData(t *testing.T) {
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.SubmitSyncCommitteeMessage(t.Context(), 1, pubKey)
+			validator.SubmitSyncCommitteeMessage(t.Context(), 1, testDutyAssignment(validator, pubKey))
 			require.LogsContain(t, hook, "Could not get sync committee domain data")
 		})
 	}
@@ -113,7 +90,7 @@ func TestSubmitSyncCommitteeMessage_CouldNotSubmit(t *testing.T) {
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.SubmitSyncCommitteeMessage(t.Context(), 1, pubKey)
+			validator.SubmitSyncCommitteeMessage(t.Context(), 1, testDutyAssignment(validator, pubKey))
 
 			require.LogsContain(t, hook, "Could not submit sync committee message")
 		})
@@ -159,28 +136,12 @@ func TestSubmitSyncCommitteeMessage_OK(t *testing.T) {
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.SubmitSyncCommitteeMessage(t.Context(), 1, pubKey)
+			validator.SubmitSyncCommitteeMessage(t.Context(), 1, testDutyAssignment(validator, pubKey))
 
 			require.LogsDoNotContain(t, hook, "Could not")
 			require.Equal(t, primitives.Slot(1), generatedMsg.Slot)
 			require.Equal(t, validatorIndex, generatedMsg.ValidatorIndex)
 			require.DeepEqual(t, bytesutil.PadTo(r, 32), generatedMsg.BlockRoot)
-		})
-	}
-}
-
-func TestSubmitSignedContributionAndProof_ValidatorDutiesRequestFailure(t *testing.T) {
-	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
-		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
-			hook := logTest.NewGlobal()
-			validator, _, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
-			validator.duties = testDutyStore()
-			defer finish()
-
-			var pubKey [fieldparams.BLSPubkeyLength]byte
-			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.SubmitSignedContributionAndProof(t.Context(), 1, pubKey)
-			require.LogsContain(t, hook, "Could not fetch validator assignment")
 		})
 	}
 }
@@ -209,7 +170,7 @@ func TestSubmitSignedContributionAndProof_SyncSubcommitteeIndexFailure(t *testin
 				},
 			).Return(&ethpb.SyncSubcommitteeIndexResponse{}, errors.New("Bad index"))
 
-			validator.SubmitSignedContributionAndProof(t.Context(), 1, pubKey)
+			validator.SubmitSignedContributionAndProof(t.Context(), 1, testDutyAssignment(validator, pubKey))
 			require.LogsContain(t, hook, "Could not get sync subcommittee index")
 		})
 	}
@@ -239,7 +200,7 @@ func TestSubmitSignedContributionAndProof_NothingToDo(t *testing.T) {
 				},
 			).Return(&ethpb.SyncSubcommitteeIndexResponse{Indices: []primitives.CommitteeIndex{}}, nil)
 
-			validator.SubmitSignedContributionAndProof(t.Context(), 1, pubKey)
+			validator.SubmitSignedContributionAndProof(t.Context(), 1, testDutyAssignment(validator, pubKey))
 			require.LogsContain(t, hook, "Empty subcommittee index list, do nothing")
 		})
 	}
@@ -276,7 +237,7 @@ func TestSubmitSignedContributionAndProof_BadDomain(t *testing.T) {
 					SignatureDomain: make([]byte, 32),
 				}, errors.New("bad domain response"))
 
-			validator.SubmitSignedContributionAndProof(t.Context(), 1, pubKey)
+			validator.SubmitSignedContributionAndProof(t.Context(), 1, testDutyAssignment(validator, pubKey))
 			require.LogsContain(t, hook, "Could not get selection proofs")
 			require.LogsContain(t, hook, "bad domain response")
 		})
@@ -329,7 +290,7 @@ func TestSubmitSignedContributionAndProof_CouldNotGetContribution(t *testing.T) 
 				},
 			).Return(nil, errors.New("Bad contribution"))
 
-			validator.SubmitSignedContributionAndProof(t.Context(), 1, pubKey)
+			validator.SubmitSignedContributionAndProof(t.Context(), 1, testDutyAssignment(validator, pubKey))
 			require.LogsContain(t, hook, "Could not get sync committee contribution")
 		})
 	}
@@ -410,7 +371,7 @@ func TestSubmitSignedContributionAndProof_CouldNotSubmitContribution(t *testing.
 				}),
 			).Return(&emptypb.Empty{}, errors.New("Could not submit contribution"))
 
-			validator.SubmitSignedContributionAndProof(t.Context(), 1, pubKey)
+			validator.SubmitSignedContributionAndProof(t.Context(), 1, testDutyAssignment(validator, pubKey))
 			require.LogsContain(t, hook, "Could not submit signed contribution and proof")
 		})
 	}
@@ -490,7 +451,7 @@ func TestSubmitSignedContributionAndProof_Ok(t *testing.T) {
 				}),
 			).Return(&emptypb.Empty{}, nil)
 
-			validator.SubmitSignedContributionAndProof(t.Context(), 1, pubKey)
+			validator.SubmitSignedContributionAndProof(t.Context(), 1, testDutyAssignment(validator, pubKey))
 		})
 	}
 }
@@ -572,7 +533,7 @@ func TestSubmitSignedContributionAndProof_OncePerPubkeyAndSubcommittee(t *testin
 				}),
 			).Return(&emptypb.Empty{}, nil)
 
-			validator.SubmitSignedContributionAndProof(t.Context(), 1, pubKey)
+			validator.SubmitSignedContributionAndProof(t.Context(), 1, testDutyAssignment(validator, pubKey))
 		})
 	}
 }

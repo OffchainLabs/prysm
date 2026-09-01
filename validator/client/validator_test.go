@@ -369,7 +369,7 @@ func TestWaitSync_Syncing(t *testing.T) {
 	require.NoError(t, v.WaitForSync(t.Context()))
 }
 
-func TestRolesAt_OK(t *testing.T) {
+func TestPlanSlot_OK(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
 			v, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
@@ -404,14 +404,15 @@ func TestRolesAt_OK(t *testing.T) {
 				},
 			).Return(&ethpb.SyncSubcommitteeIndexResponse{}, nil /*err*/)
 
-			roleMap, err := v.RolesAt(t.Context(), 1)
+			plan, err := v.planSlot(t.Context(), 1)
 			require.NoError(t, err)
 
 			pk := bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())
-			assert.Equal(t, roleAttester, roleMap[pk][0])
-			assert.Equal(t, roleAggregator, roleMap[pk][1])
-			assert.Equal(t, roleSyncCommittee, roleMap[pk][2])
-			assert.Equal(t, rolePTCMember, roleMap[pk][3])
+			require.Equal(t, 1, len(plan.attestations))
+			assert.Equal(t, true, plan.attestations[0].aggregate)
+			require.Equal(t, 1, len(plan.syncCommittee))
+			require.Equal(t, 1, len(plan.payloadAttestations))
+			assert.Equal(t, pk, plan.attestations[0].duty.publicKey)
 
 			// Test sync committee role at epoch boundary.
 			v.duties = testDutyStore(&ethpb.ValidatorDuty{
@@ -436,14 +437,15 @@ func TestRolesAt_OK(t *testing.T) {
 				},
 			).Return(&ethpb.SyncSubcommitteeIndexResponse{}, nil /*err*/)
 
-			roleMap, err = v.RolesAt(t.Context(), params.BeaconConfig().SlotsPerEpoch-1)
+			plan, err = v.planSlot(t.Context(), params.BeaconConfig().SlotsPerEpoch-1)
 			require.NoError(t, err)
-			assert.Equal(t, roleSyncCommittee, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
+			require.Equal(t, 1, len(plan.syncCommittee))
+			assert.Equal(t, pk, plan.syncCommittee[0].duty.publicKey)
 		})
 	}
 }
 
-func TestRolesAt_DoesNotAssignProposer_Slot0(t *testing.T) {
+func TestPlanSlot_DoesNotAssignProposer_Slot0(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
 			v, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
@@ -461,12 +463,44 @@ func TestRolesAt_DoesNotAssignProposer_Slot0(t *testing.T) {
 				gomock.Any(), // epoch
 			).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil /*err*/)
 
-			roleMap, err := v.RolesAt(t.Context(), 0)
+			plan, err := v.planSlot(t.Context(), 0)
 			require.NoError(t, err)
 
-			assert.Equal(t, roleAttester, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
+			assert.Equal(t, 0, len(plan.proposals))
+			require.Equal(t, 1, len(plan.attestations))
+			assert.Equal(t, bytesutil.ToBytes48(validatorKey.PublicKey().Marshal()), plan.attestations[0].duty.publicKey)
 		})
 	}
+}
+
+func TestPlanSlot_CapturesDutyAssignment(t *testing.T) {
+	v, _, validatorKey, finish := setup(t, false)
+	defer finish()
+
+	pk := bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())
+	duty := &ethpb.ValidatorDuty{
+		PublicKey:      pk[:],
+		ValidatorIndex: 7,
+		CommitteeIndex: 3,
+		PtcSlots:       []primitives.Slot{1},
+	}
+	v.duties = testDutyStore(duty)
+
+	plan, err := v.planSlot(t.Context(), 1)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(plan.payloadAttestations))
+
+	// A later duty refresh must not change work that was already planned.
+	duty.ValidatorIndex = 99
+	duty.CommitteeIndex = 88
+	assert.Equal(t, primitives.ValidatorIndex(7), plan.payloadAttestations[0].validatorIndex)
+	assert.Equal(t, primitives.CommitteeIndex(3), plan.payloadAttestations[0].committeeIndex)
+}
+
+func TestPlanSlot_UninitializedDuties(t *testing.T) {
+	v := &validator{duties: &dutyStore{}}
+	_, err := v.planSlot(t.Context(), 1)
+	require.ErrorContains(t, "validator duties are not initialized", err)
 }
 
 func TestCheckAndLogValidatorStatus_OK(t *testing.T) {

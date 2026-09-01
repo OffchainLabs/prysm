@@ -25,23 +25,15 @@ import (
 // via gRPC. Beacon node will verify the slot signature and determine if the validator is also
 // an aggregator. If yes, then beacon node will broadcast aggregated signature and
 // proof on the validator's behalf.
-func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte) {
+func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives.Slot, duty dutyAssignment) {
 	ctx, span := trace.StartSpan(ctx, "validator.SubmitAggregateAndProof")
 	defer span.End()
 
+	pubKey := duty.publicKey
 	span.SetAttributes(trace.StringAttribute("validator", fmt.Sprintf("%#x", pubKey)))
 	fmtKey := fmt.Sprintf("%#x", pubKey[:])
 
-	duty, err := v.duty(pubKey)
-	if err != nil {
-		log.WithError(err).Error("Could not fetch validator assignment")
-		if v.emitAccountMetrics {
-			ValidatorAggFailVec.WithLabelValues(fmtKey).Inc()
-		}
-		return
-	}
-
-	if !v.aggSelector.ClaimAggregateSlot(slot, duty.CommitteeIndex) {
+	if !v.aggSelector.ClaimAggregateSlot(slot, duty.committeeIndex) {
 		return
 	}
 
@@ -65,14 +57,14 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 
 	aggSelectionRequest := &ethpb.AggregateSelectionRequest{
 		Slot:           slot,
-		CommitteeIndex: duty.CommitteeIndex,
+		CommitteeIndex: duty.committeeIndex,
 		PublicKey:      pubKey[:],
 		SlotSignature:  slotSig,
 	}
 	// TODO: look at renaming SubmitAggregateSelectionProof functions as they are GET beacon API
 	var agg ethpb.AggregateAttAndProof
 	if postElectra {
-		res, err := v.validatorClient.SubmitAggregateSelectionProofElectra(ctx, aggSelectionRequest, duty.ValidatorIndex, duty.CommitteeLength)
+		res, err := v.validatorClient.SubmitAggregateSelectionProofElectra(ctx, aggSelectionRequest, duty.validatorIndex, duty.committeeLength)
 		if err != nil {
 			v.handleSubmitAggSelectionProofError(err, slot, fmtKey)
 			return
@@ -83,7 +75,7 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 			agg = res.AggregateAndProof
 		}
 	} else {
-		res, err := v.validatorClient.SubmitAggregateSelectionProof(ctx, aggSelectionRequest, duty.ValidatorIndex, duty.CommitteeLength)
+		res, err := v.validatorClient.SubmitAggregateSelectionProof(ctx, aggSelectionRequest, duty.validatorIndex, duty.committeeLength)
 		if err != nil {
 			v.handleSubmitAggSelectionProofError(err, slot, fmtKey)
 			return

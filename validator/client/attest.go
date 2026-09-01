@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
@@ -20,7 +19,6 @@ import (
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -30,48 +28,28 @@ var failedAttLocalProtectionErr = "attempted to make slashable attestation, reje
 // It fetches the latest beacon block head along with the latest canonical beacon state
 // information in order to sign the block and include information about the validator's
 // participation in voting on the block.
-func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte) {
+func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot, duty dutyAssignment) {
 	ctx, span := trace.StartSpan(ctx, "validator.SubmitAttestation")
 	defer span.End()
+	pubKey := duty.publicKey
 	span.SetAttributes(trace.StringAttribute("validator", fmt.Sprintf("%#x", pubKey)))
 
 	v.waitUntilAttestationDueOrValidBlock(ctx, slot)
 
-	var b strings.Builder
-	if err := b.WriteByte(byte(roleAttester)); err != nil {
-		log.WithError(err).Error("Could not write role byte for lock key")
-		tracing.AnnotateError(span, err)
-		return
-	}
-	_, err := b.Write(pubKey[:])
-	if err != nil {
-		log.WithError(err).Error("Could not write pubkey bytes for lock key")
-		tracing.AnnotateError(span, err)
-		return
-	}
-	lock := async.NewMultilock(b.String())
+	lock := async.NewMultilock(string(append([]byte{byte(attestationSigningLock)}, pubKey[:]...)))
 	lock.Lock()
 	defer lock.Unlock()
 
 	fmtKey := fmt.Sprintf("%#x", pubKey[:])
 	log := log.WithField("pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:]))).WithField("slot", slot)
-	duty, err := v.duty(pubKey)
-	if err != nil {
-		log.WithError(err).Error("Could not fetch validator assignment")
-		if v.emitAccountMetrics {
-			ValidatorAttestFailVec.WithLabelValues(fmtKey).Inc()
-		}
-		tracing.AnnotateError(span, err)
-		return
-	}
-	if duty.CommitteeLength == 0 {
+	if duty.committeeLength == 0 {
 		log.Debug("Empty committee for validator duty, not attesting")
 		return
 	}
 
 	postElectra := slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch
 
-	data, err := v.getAttestationData(ctx, slot, duty.CommitteeIndex)
+	data, err := v.getAttestationData(ctx, slot, duty.committeeIndex)
 	if err != nil {
 		log.WithError(err).Error("Could not request attestation to sign at slot")
 		if v.emitAccountMetrics {
@@ -94,13 +72,13 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 	var indexedAtt ethpb.IndexedAtt
 	if postElectra {
 		indexedAtt = &ethpb.IndexedAttestationElectra{
-			AttestingIndices: []uint64{uint64(duty.ValidatorIndex)},
+			AttestingIndices: []uint64{uint64(duty.validatorIndex)},
 			Data:             data,
 			Signature:        sig,
 		}
 	} else {
 		indexedAtt = &ethpb.IndexedAttestation{
-			AttestingIndices: []uint64{uint64(duty.ValidatorIndex)},
+			AttestingIndices: []uint64{uint64(duty.validatorIndex)},
 			Data:             data,
 			Signature:        sig,
 		}
@@ -132,15 +110,15 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 	if postElectra {
 		sa := &ethpb.SingleAttestation{
 			Data:          data,
-			AttesterIndex: duty.ValidatorIndex,
-			CommitteeId:   duty.CommitteeIndex,
+			AttesterIndex: duty.validatorIndex,
+			CommitteeId:   duty.committeeIndex,
 			Signature:     sig,
 		}
 		attestation = sa
 		attResp, err = v.validatorClient.ProposeAttestationElectra(ctx, sa)
 	} else {
-		aggregationBitfield = bitfield.NewBitlist(duty.CommitteeLength)
-		aggregationBitfield.SetBitAt(duty.ValidatorCommitteeIndex, true)
+		aggregationBitfield = bitfield.NewBitlist(duty.committeeLength)
+		aggregationBitfield.SetBitAt(duty.validatorCommitteeIndex, true)
 		a := &ethpb.Attestation{
 			Data:            data,
 			AggregationBits: aggregationBitfield,
@@ -175,8 +153,8 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		trace.Int64Attribute("targetEpoch", int64(data.Target.Epoch)),
 	)
 	if postElectra {
-		span.SetAttributes(trace.Int64Attribute("attesterIndex", int64(duty.ValidatorIndex)))
-		span.SetAttributes(trace.Int64Attribute("committeeIndex", int64(duty.CommitteeIndex)))
+		span.SetAttributes(trace.Int64Attribute("attesterIndex", int64(duty.validatorIndex)))
+		span.SetAttributes(trace.Int64Attribute("committeeIndex", int64(duty.committeeIndex)))
 	} else {
 		span.SetAttributes(trace.StringAttribute("aggregationBitfield", fmt.Sprintf("%#x", aggregationBitfield)))
 		span.SetAttributes(trace.Int64Attribute("committeeIndex", int64(data.CommitteeIndex)))
@@ -186,19 +164,6 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		ValidatorAttestSuccessVec.WithLabelValues(fmtKey).Inc()
 		ValidatorAttestedSlotsGaugeVec.WithLabelValues(fmtKey).Set(float64(slot))
 	}
-}
-
-// Given the validator public key, this gets the validator assignment.
-func (v *validator) duty(pubKey [fieldparams.BLSPubkeyLength]byte) (*ethpb.ValidatorDuty, error) {
-	snap := v.duties.snapshot()
-	if !snap.isInitialized() {
-		return nil, errors.New("no duties for validators")
-	}
-	d, ok := snap.currentDuty(pubKey)
-	if !ok {
-		return nil, fmt.Errorf("pubkey %#x not in duties", bytesutil.Trunc(pubKey[:]))
-	}
-	return d, nil
 }
 
 // Given validator's public key, this function returns the signature of an attestation data and its signing root.
