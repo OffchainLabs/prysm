@@ -105,6 +105,7 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 					{PublicKey: pubKey5, DuplicateExists: false},
 					{PublicKey: pubKey6, DuplicateExists: false},
 				},
+				HeadEpoch: 3,
 			},
 			getSyncingOutput: &structs.SyncStatusResponse{
 				Data: &structs.SyncStatusResponseData{
@@ -116,6 +117,17 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 					PreviousVersion: "0x00000000",
 					CurrentVersion:  "0x00000000",
 					Epoch:           "42",
+				},
+			},
+			getHeadersOutput: &structs.GetBlockHeadersResponse{
+				Data: []*structs.SignedBeaconBlockHeaderContainer{
+					{
+						Header: &structs.SignedBeaconBlockHeader{
+							Message: &structs.BeaconBlockHeader{
+								Slot: "99",
+							},
+						},
+					},
 				},
 			},
 		},
@@ -140,6 +152,7 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 					{PublicKey: pubKey5, DuplicateExists: false},
 					{PublicKey: pubKey6, DuplicateExists: false},
 				},
+				HeadEpoch: 3,
 			},
 			getSyncingOutput: &structs.SyncStatusResponse{
 				Data: &structs.SyncStatusResponseData{
@@ -186,6 +199,7 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 					// pubKey5 omitted: non existing validator cannot be evaluated
 					{PublicKey: pubKey6, DuplicateExists: false}, // not recent - not duplicate
 				},
+				HeadEpoch: 100,
 			},
 			omittedPubKeys: [][]byte{pubKey5},
 			getSyncingOutput: &structs.SyncStatusResponse{
@@ -293,6 +307,7 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 			},
 			doppelGangerExpectedOutput: &ethpb.DoppelGangerResponse{
 				Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{},
+				HeadEpoch: 100,
 			},
 			omittedPubKeys: [][]byte{pubKey1, pubKey2},
 			getSyncingOutput: &structs.SyncStatusResponse{
@@ -539,28 +554,10 @@ func TestCheckDoppelGanger_Errors(t *testing.T) {
 			},
 		},
 		{
-			name:                   "fork on error",
-			expectedErrorMessage:   "failed to get fork",
-			inputValidatorRequests: standardInputValidatorRequests,
-			getSyncingOutput:       standardGetSyncingOutput,
-			getForkOutput:          &structs.GetStateForkResponse{},
-			getForkError:           errors.New("custom error"),
-		},
-		{
-			name:                   "cannot decode fork version",
-			expectedErrorMessage:   "failed to decode fork version",
-			inputValidatorRequests: standardInputValidatorRequests,
-			getSyncingOutput:       standardGetSyncingOutput,
-			getForkOutput: &structs.GetStateForkResponse{
-				Data: &structs.Fork{CurrentVersion: "not a version"},
-			},
-		},
-		{
 			name:                   "get headers on error",
 			expectedErrorMessage:   "failed to get headers",
 			inputValidatorRequests: standardInputValidatorRequests,
 			getSyncingOutput:       standardGetSyncingOutput,
-			getForkOutput:          standardGetForkOutput,
 			getHeadersOutput:       &structs.GetBlockHeadersResponse{},
 			getHeadersError:        errors.New("custom error"),
 		},
@@ -569,7 +566,6 @@ func TestCheckDoppelGanger_Errors(t *testing.T) {
 			expectedErrorMessage:   "failed to parse head slot",
 			inputValidatorRequests: standardInputValidatorRequests,
 			getSyncingOutput:       standardGetSyncingOutput,
-			getForkOutput:          standardGetForkOutput,
 			getHeadersOutput: &structs.GetBlockHeadersResponse{
 				Data: []*structs.SignedBeaconBlockHeaderContainer{
 					{
@@ -580,6 +576,25 @@ func TestCheckDoppelGanger_Errors(t *testing.T) {
 						},
 					},
 				},
+			},
+		},
+		{
+			name:                   "fork on error",
+			expectedErrorMessage:   "failed to get fork",
+			inputValidatorRequests: standardInputValidatorRequests,
+			getSyncingOutput:       standardGetSyncingOutput,
+			getHeadersOutput:       standardGetHeadersOutput,
+			getForkOutput:          &structs.GetStateForkResponse{},
+			getForkError:           errors.New("custom error"),
+		},
+		{
+			name:                   "cannot decode fork version",
+			expectedErrorMessage:   "failed to decode fork version",
+			inputValidatorRequests: standardInputValidatorRequests,
+			getSyncingOutput:       standardGetSyncingOutput,
+			getHeadersOutput:       standardGetHeadersOutput,
+			getForkOutput: &structs.GetStateForkResponse{
+				Data: &structs.Fork{CurrentVersion: "not a version"},
 			},
 		},
 		{

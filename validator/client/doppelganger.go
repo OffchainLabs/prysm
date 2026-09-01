@@ -515,15 +515,19 @@ func (v *validator) checkReloadedKeys(ctx context.Context, due []pubkey, epoch p
 	}
 	// Keys absent from the response stay quarantined for the next poll (fail-closed).
 	if len(clean) > 0 {
-		clearEpoch, err := v.clearingEpoch(ctx, epoch)
-		if err != nil {
-			// Leave the poll unconsumed so the next slot retries within this epoch.
-			if v.doppelGanger.shouldWarnFailure(epoch) {
-				log.WithError(err).Warn("Could not get chain head; doppelganger clearing deferred")
-			} else {
-				log.WithError(err).Debug("Could not get chain head; deferring doppelganger clearing")
+		clearEpoch := resp.GetHeadEpoch()
+		if clearEpoch == 0 {
+			// Fallback for older beacon nodes that do not populate head_epoch in DoppelGangerResponse.
+			var err error
+			clearEpoch, err = v.clearingEpoch(ctx, epoch)
+			if err != nil {
+				if v.doppelGanger.shouldWarnFailure(epoch) {
+					log.WithError(err).Warn("Could not get chain head; doppelganger clearing deferred")
+				} else {
+					log.WithError(err).Debug("Could not get chain head; deferring doppelganger clearing")
+				}
+				return
 			}
-			return
 		}
 		if cleared := v.doppelGanger.clearElapsed(clean, clearEpoch); len(cleared) > 0 {
 			log.WithField("keyCount", len(cleared)).Info(

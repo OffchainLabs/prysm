@@ -71,6 +71,21 @@ func (c *beaconApiValidatorClient) checkDoppelGanger(ctx context.Context, in *et
 		return nil, errors.New("beacon node not synced")
 	}
 
+	// Retrieve current epoch.
+	headers, err := c.headers(ctx)
+	if err != nil || headers == nil || headers.Data == nil || len(headers.Data) == 0 ||
+		headers.Data[0].Header == nil || headers.Data[0].Header.Message == nil {
+		return nil, errors.Wrapf(err, "failed to get headers")
+	}
+
+	headSlotUint64, err := strconv.ParseUint(headers.Data[0].Header.Message.Slot, 10, 64)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to parse head slot")
+	}
+
+	headSlot := primitives.Slot(headSlotUint64)
+	currentEpoch := slots.ToEpoch(headSlot)
+
 	// Retrieve fork version -- Return early if we are in phase0.
 	forkResponse, err := c.fork(ctx)
 	if err != nil || forkResponse == nil || forkResponse.Data == nil {
@@ -86,23 +101,8 @@ func (c *beaconApiValidatorClient) checkDoppelGanger(ctx context.Context, in *et
 
 	if forkVersion == version.Phase0 {
 		log.Info("Skipping doppelganger check for Phase 0")
-		return buildResponse(stringPubKeys, stringPubKeyToDoppelGangerInfo), nil
+		return buildResponse(stringPubKeys, stringPubKeyToDoppelGangerInfo, currentEpoch), nil
 	}
-
-	// Retrieve current epoch.
-	headers, err := c.headers(ctx)
-	if err != nil || headers == nil || headers.Data == nil || len(headers.Data) == 0 ||
-		headers.Data[0].Header == nil || headers.Data[0].Header.Message == nil {
-		return nil, errors.Wrapf(err, "failed to get headers")
-	}
-
-	headSlotUint64, err := strconv.ParseUint(headers.Data[0].Header.Message.Slot, 10, 64)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to parse head slot")
-	}
-
-	headSlot := primitives.Slot(headSlotUint64)
-	currentEpoch := slots.ToEpoch(headSlot)
 
 	// Extract input pubkeys we did not validate for the 2 last epochs.
 	// If we detect onchain liveness for these keys during the 2 last epochs, a doppelganger may exist somewhere.
@@ -122,7 +122,7 @@ func (c *beaconApiValidatorClient) checkDoppelGanger(ctx context.Context, in *et
 	// If all provided keys are recent (aka `notRecentPubKeys` is empty) we return early
 	// as we are unable to effectively determine if a doppelganger is active.
 	if len(notRecentStringPubKeys) == 0 {
-		return buildResponse(stringPubKeys, stringPubKeyToDoppelGangerInfo), nil
+		return buildResponse(stringPubKeys, stringPubKeyToDoppelGangerInfo, currentEpoch), nil
 	}
 
 	// Retrieve correspondence between validator pubkey and index.
@@ -140,7 +140,7 @@ func (c *beaconApiValidatorClient) checkDoppelGanger(ctx context.Context, in *et
 			delete(stringPubKeyToDoppelGangerInfo, spk)
 		}
 		log.WithField("count", len(notRecentStringPubKeys)).Info("Doppelganger check skipped for validators not found on chain")
-		return buildResponse(stringPubKeys, stringPubKeyToDoppelGangerInfo), nil
+		return buildResponse(stringPubKeys, stringPubKeyToDoppelGangerInfo, currentEpoch), nil
 	}
 
 	stringPubKeyToIndex := make(map[string]string, len(validators))
@@ -219,12 +219,13 @@ func (c *beaconApiValidatorClient) checkDoppelGanger(ctx context.Context, in *et
 		log.WithField("count", skipped).Info("Doppelganger check skipped for validators not found on chain")
 	}
 
-	return buildResponse(stringPubKeys, stringPubKeyToDoppelGangerInfo), nil
+	return buildResponse(stringPubKeys, stringPubKeyToDoppelGangerInfo, currentEpoch), nil
 }
 
 func buildResponse(
 	stringPubKeys []string,
 	stringPubKeyToDoppelGangerHelper map[string]DoppelGangerInfo,
+	headEpoch primitives.Epoch,
 ) *ethpb.DoppelGangerResponse {
 	responses := make([]*ethpb.DoppelGangerResponse_ValidatorResponse, 0, len(stringPubKeys))
 
@@ -238,6 +239,7 @@ func buildResponse(
 
 	return &ethpb.DoppelGangerResponse{
 		Responses: responses,
+		HeadEpoch: headEpoch,
 	}
 }
 

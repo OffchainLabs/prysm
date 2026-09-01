@@ -1211,6 +1211,11 @@ message DoppelGangerResponse {
     bool duplicate_exists = 2;
   }
   repeated ValidatorResponse responses = 1;
+  // The head epoch the beacon node used when evaluating liveness.
+  uint64 head_epoch = 2 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
+  ];
 }
 
 // Request to only return slots with blocks that where verified by the beacon
