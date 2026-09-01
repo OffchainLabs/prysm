@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
@@ -16,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	sszquerypb "github.com/OffchainLabs/prysm/v7/proto/ssz_query"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
-	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 // QueryBeaconState handles SSZ Query request for BeaconState.
@@ -236,7 +236,7 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 }
 
 // getSSZQueryProof retrieves Merkle proof for a given SSZInfo object and query path
-func getSSZQueryProof(info *query.SszInfo, path query.Path) (*ssz.Proof, error) {
+func getSSZQueryProof(info *query.SszInfo, path query.Path) (*query.Proof, error) {
 	gi, err := query.GetGeneralizedIndexFromPath(info, path)
 	if err != nil {
 		return nil, fmt.Errorf("get generalized index: %w", err)

@@ -45,7 +45,7 @@ func CalculateOffsetAndLength(sszInfo *SszInfo, path Path) (*SszInfo, uint64, ui
 func GetGeneralizedIndexFromPath(info *SszInfo, path Path) (uint64, error)
 
 // Prove generates a Merkle proof for a target generalized index
-func (s *SszInfo) Prove(gindex uint64) (*fastssz.Proof, error)
+func (s *SszInfo) Prove(gindex uint64) (*Proof, error)
 ```
 
 ## Type System
@@ -171,7 +171,7 @@ The `Prove` method generates Merkle proofs using a single-sweep merkleization al
    - Whenever the traversal computes a node whose gindex is in registered gindices, store that node’s hash for later proof construction.
 
 3. **Proof Assembly Phase** (`toProof`)
-> Goal: create the final `fastssz.Proof` object in the correct format and order.
+> Goal: create the final `Proof` object in the correct format and order.
 
 ```go
 // Proof represents a merkle proof against a general index.
