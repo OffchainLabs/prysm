@@ -719,6 +719,34 @@ func TestKeymanager_DeletePublicKeys_WithFile(t *testing.T) {
 	require.Equal(t, hexutil.Encode(keys[0][:]), publicKeys[1])
 }
 
+func TestKeymanager_IsReadOnly(t *testing.T) {
+	flagKey, urlKey, fileKey := pubkey{1}, pubkey{2}, pubkey{3}
+	sharedKey := pubkey{4}
+	unknownKey := pubkey{5}
+
+	km := &Keymanager{}
+	km.keys.replace(sourceFlag, []pubkey{flagKey, sharedKey})
+	km.keys.replace(sourceURL, []pubkey{urlKey})
+	km.keys.replace(sourceFile, []pubkey{fileKey, sharedKey})
+
+	tests := []struct {
+		name string
+		key  pubkey
+		want bool
+	}{
+		{name: "flag key is read-only", key: flagKey, want: true},
+		{name: "URL key is read-only", key: urlKey, want: true},
+		{name: "file key is writable", key: fileKey, want: false},
+		{name: "key in flag and file is read-only", key: sharedKey, want: true},
+		{name: "unknown key is read-only", key: unknownKey, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, km.IsReadOnly(tt.key))
+		})
+	}
+}
+
 func encodeKeys(keys []pubkey) []string {
 	encoded := make([]string, len(keys))
 	for i, key := range keys {
