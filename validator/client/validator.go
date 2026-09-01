@@ -258,37 +258,38 @@ func recheckKeys(ctx context.Context, valDB db.Database, km keymanager.IKeymanag
 	ctx, span := trace.StartSpan(ctx, "validator.recheckKeys")
 	defer span.End()
 
-	var validatingKeys [][fieldparams.BLSPubkeyLength]byte
-	var err error
-	validatingKeys, err = km.FetchValidatingPublicKeys(ctx)
+	// Subscribe before the initial fetch so account changes in between are not missed.
+	var sub event.Subscription
+	var pubKeysChan chan [][fieldparams.BLSPubkeyLength]byte
+	if localKM, ok := km.(*local.Keymanager); ok {
+		pubKeysChan = make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
+		sub = localKM.SubscribeAccountChanges(pubKeysChan)
+	}
+	validatingKeys, err := km.FetchValidatingPublicKeys(ctx)
 	if err != nil {
 		log.WithError(err).Debug("Could not fetch validating keys")
 	}
 	if err := valDB.UpdatePublicKeysBuckets(validatingKeys); err != nil {
 		log.WithError(err).Debug("Could not update public keys buckets")
 	}
-	go recheckValidatingKeysBucket(ctx, valDB, km)
+	if sub != nil {
+		go recheckValidatingKeysBucket(ctx, valDB, sub, pubKeysChan)
+	}
 }
 
-// recheckValidatingKeysBucket subscribes to account changes in the local keymanager,
-// then creates missing DB buckets for those keys.
-func recheckValidatingKeysBucket(ctx context.Context, valDB db.Database, km keymanager.IKeymanager) {
+// recheckValidatingKeysBucket creates missing DB buckets for keys pushed by the
+// local keymanager's account-change subscription.
+func recheckValidatingKeysBucket(ctx context.Context, valDB db.Database, sub event.Subscription, pubKeysChan chan [][fieldparams.BLSPubkeyLength]byte) {
 	ctx, span := trace.StartSpan(ctx, "validator.recheckValidatingKeysBucket")
 	defer span.End()
 
-	importedKeymanager, ok := km.(*local.Keymanager)
-	if !ok {
-		return
-	}
-	validatingPubKeysChan := make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
-	sub := importedKeymanager.SubscribeAccountChanges(validatingPubKeysChan)
 	defer func() {
 		sub.Unsubscribe()
-		close(validatingPubKeysChan)
+		close(pubKeysChan)
 	}()
 	for {
 		select {
-		case keys := <-validatingPubKeysChan:
+		case keys := <-pubKeysChan:
 			if err := valDB.UpdatePublicKeysBuckets(keys); err != nil {
 				log.WithError(err).Debug("Could not update public keys buckets")
 				continue

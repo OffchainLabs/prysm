@@ -175,39 +175,125 @@ func (*mockKeymanager) DeleteKeystores(context.Context, [][]byte,
 	return nil, nil
 }
 
+type proposedPublicKeysLister interface {
+	ProposedPublicKeys(context.Context) ([][fieldparams.BLSPubkeyLength]byte, error)
+}
+
+func waitForProposedKeys(t *testing.T, valDB proposedPublicKeysLister, want ...[fieldparams.BLSPubkeyLength]byte) {
+	t.Helper()
+	var got [][fieldparams.BLSPubkeyLength]byte
+	var err error
+	for range 50 {
+		got, err = valDB.ProposedPublicKeys(context.Background())
+		require.NoError(t, err)
+		if slices.Equal(sortedKeys(got), sortedKeys(want)) {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("proposal buckets never matched: want %d keys, got %d", len(want), len(got))
+}
+
+func sortedKeys(keys [][fieldparams.BLSPubkeyLength]byte) [][fieldparams.BLSPubkeyLength]byte {
+	s := slices.Clone(keys)
+	sort.Slice(s, func(i, j int) bool { return bytes.Compare(s[i][:], s[j][:]) < 0 })
+	return s
+}
+
+func newLocalKeymanager(t *testing.T, ctx context.Context) *local.Keymanager {
+	local.ResetCaches()
+	w := wallet.New(&wallet.Config{
+		WalletDir:      t.TempDir(),
+		KeymanagerKind: keymanager.Local,
+		WalletPassword: "TestWalletPassword123!",
+	})
+	require.NoError(t, w.SaveWallet())
+	km, err := local.NewKeymanager(ctx, &local.SetupConfig{Wallet: w})
+	require.NoError(t, err)
+	return km
+}
+
 func TestRecheckKeys(t *testing.T) {
+	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
+		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
+			t.Run("startup keys get buckets synchronously", func(t *testing.T) {
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				km := newLocalKeymanager(t, ctx)
+				kp := randKeypair(t)
+				require.NoError(t, km.ImportKeypairs(ctx, [][]byte{kp.pri.Marshal()}, [][]byte{kp.pub[:]}))
+				valDB := dbTest.SetupDB(t, t.TempDir(), nil, isSlashingProtectionMinimal)
+
+				recheckKeys(ctx, valDB, km)
+				keys, err := valDB.ProposedPublicKeys(ctx)
+				require.NoError(t, err)
+				require.DeepEqual(t, [][fieldparams.BLSPubkeyLength]byte{kp.pub}, keys)
+			})
+
+			t.Run("runtime imports get buckets", func(t *testing.T) {
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				km := newLocalKeymanager(t, ctx)
+				valDB := dbTest.SetupDB(t, t.TempDir(), nil, isSlashingProtectionMinimal)
+
+				recheckKeys(ctx, valDB, km)
+				keys, err := valDB.ProposedPublicKeys(ctx)
+				require.NoError(t, err)
+				require.Equal(t, 0, len(keys))
+
+				// The subscription is live once recheckKeys returns, so one import must be caught.
+				kp := randKeypair(t)
+				require.NoError(t, km.ImportKeypairs(ctx, [][]byte{kp.pri.Marshal()}, [][]byte{kp.pub[:]}))
+				waitForProposedKeys(t, valDB, kp.pub)
+			})
+
+			t.Run("non-local keymanager gets startup buckets", func(t *testing.T) {
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				km := genMockKeymanager(t, 2)
+				valDB := dbTest.SetupDB(t, t.TempDir(), nil, isSlashingProtectionMinimal)
+
+				recheckKeys(ctx, valDB, km)
+				keys, err := valDB.ProposedPublicKeys(ctx)
+				require.NoError(t, err)
+				require.DeepEqual(t, sortedKeys(km.keys), sortedKeys(keys))
+			})
+		})
+	}
+}
+
+func TestRecheckValidatingKeysBucket(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
-			local.ResetCaches()
-			w := wallet.New(&wallet.Config{
-				WalletDir:      t.TempDir(),
-				KeymanagerKind: keymanager.Local,
-				WalletPassword: "TestWalletPassword123!",
-			})
-			require.NoError(t, w.SaveWallet())
-			km, err := local.NewKeymanager(ctx, &local.SetupConfig{Wallet: w})
-			require.NoError(t, err)
 			valDB := dbTest.SetupDB(t, t.TempDir(), nil, isSlashingProtectionMinimal)
 
-			recheckKeys(ctx, valDB, km)
-			keys, err := valDB.ProposedPublicKeys(ctx)
-			require.NoError(t, err)
-			require.Equal(t, 0, len(keys))
+			feed := new(event.Feed)
+			pubKeysChan := make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
+			sub := feed.Subscribe(pubKeysChan)
+			done := make(chan struct{})
+			go func() {
+				recheckValidatingKeysBucket(ctx, valDB, sub, pubKeysChan)
+				close(done)
+			}()
 
-			// Keep re-importing until the watcher goroutine has subscribed and reacted.
-			kp := randKeypair(t)
-			for range 50 {
-				require.NoError(t, km.ImportKeypairs(ctx, [][]byte{kp.pri.Marshal()}, [][]byte{kp.pub[:]}))
-				keys, err = valDB.ProposedPublicKeys(ctx)
-				require.NoError(t, err)
-				if len(keys) == 1 && keys[0] == kp.pub {
-					return
-				}
-				time.Sleep(20 * time.Millisecond)
+			kpA, kpB := randKeypair(t), randKeypair(t)
+			require.Equal(t, 1, feed.Send([][fieldparams.BLSPubkeyLength]byte{kpA.pub}))
+			waitForProposedKeys(t, valDB, kpA.pub)
+			require.Equal(t, 1, feed.Send([][fieldparams.BLSPubkeyLength]byte{kpA.pub, kpB.pub}))
+			waitForProposedKeys(t, valDB, kpA.pub, kpB.pub)
+
+			cancel()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("goroutine did not exit on context cancellation")
 			}
-			t.Fatal("proposal history entry was never created for the new key")
+			// Cancellation must unsubscribe and close the channel.
+			require.Equal(t, 0, feed.Send([][fieldparams.BLSPubkeyLength]byte{randKeypair(t).pub}))
+			_, open := <-pubKeysChan
+			require.Equal(t, false, open)
 		})
 	}
 }
