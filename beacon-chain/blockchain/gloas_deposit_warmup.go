@@ -12,17 +12,16 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 )
 
 const (
+	// Lead time before the fork, and the per-slot wall-clock budget spent pre-verifying.
 	depositWarmupLeadEpochs = 2
 	depositWarmupBudget     = 2 * stdtime.Second
 )
@@ -67,6 +66,8 @@ func (s *Service) runGloasDepositWarmup() {
 	if err := s.waitUntilEpoch(cfg.GloasForkEpoch-depositWarmupLeadEpochs, cfg.SlotDuration()); err != nil {
 		return
 	}
+	// Starts after the aggregate deadline so the budget does not overlap an attestation or
+	// aggregate deadline.
 	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, cfg.SlotComponentDuration(cfg.AggregateDueBPS), cfg.SlotDuration())
 	defer ticker.Done()
 	for {
@@ -76,7 +77,7 @@ func (s *Service) runGloasDepositWarmup() {
 				cache.DepositSignature.Clear()
 				return
 			}
-			s.warmDepositSignatures(slot)
+			s.warmDepositSignatures()
 		case <-s.ctx.Done():
 			log.Debug("Context closed, exiting gloas deposit warmup routine")
 			return
@@ -84,7 +85,7 @@ func (s *Service) runGloasDepositWarmup() {
 	}
 }
 
-func (s *Service) warmDepositSignatures(slot primitives.Slot) {
+func (s *Service) warmDepositSignatures() {
 	ctx, cancel := context.WithTimeout(s.ctx, depositWarmupBudget)
 	defer cancel()
 
@@ -100,15 +101,19 @@ func (s *Service) warmDepositSignatures(slot primitives.Slot) {
 	}
 	gloasDepositWarmupCandidates.Set(float64(len(candidates)))
 
+	// Byte-identical deposits share a key, and so share one verification.
+	seen := make(map[[32]byte]bool, len(candidates))
 	cold := make([]*ethpb.Deposit_Data, 0, len(candidates))
 	for _, data := range candidates {
 		key, err := data.HashTreeRoot()
 		if err != nil {
 			continue
 		}
-		if !cache.DepositSignature.Has(key) {
-			cold = append(cold, data)
+		if cache.DepositSignature.Has(key) || seen[key] {
+			continue
 		}
+		seen[key] = true
+		cold = append(cold, data)
 	}
 	gloasDepositWarmupWarmed.Set(float64(len(candidates) - len(cold)))
 	gloasDepositWarmupRemaining.Set(float64(len(cold)))
@@ -118,29 +123,11 @@ func (s *Service) warmDepositSignatures(slot primitives.Slot) {
 
 	start := stdtime.Now()
 	verified := s.verifyDepositSignatures(ctx, cold)
-	elapsed := stdtime.Since(start)
 	if verified == 0 {
 		return
 	}
-	gloasDepositWarmupVerifySeconds.Observe(elapsed.Seconds() / float64(verified))
-
-	remaining := len(cold) - verified
-	gloasDepositWarmupRemaining.Set(float64(remaining))
-	if remaining == 0 {
-		return
-	}
-	forkSlot, err := slots.EpochStart(params.BeaconConfig().GloasForkEpoch)
-	if err != nil || forkSlot <= slot {
-		return
-	}
-	perSlot := float64(verified) * float64(depositWarmupBudget) / float64(elapsed)
-	if perSlot > 0 && float64(remaining) > perSlot*float64(forkSlot-slot) {
-		log.WithFields(logrus.Fields{
-			"remaining":  remaining,
-			"slotsUntil": uint64(forkSlot - slot),
-			"perSlot":    uint64(perSlot),
-		}).Warn("Gloas pending deposit signature pre-verification will not finish before the fork")
-	}
+	gloasDepositWarmupVerifySeconds.Observe(stdtime.Since(start).Seconds() / float64(verified))
+	gloasDepositWarmupRemaining.Set(float64(len(cold) - verified))
 }
 
 func (s *Service) verifyDepositSignatures(ctx context.Context, deposits []*ethpb.Deposit_Data) int {

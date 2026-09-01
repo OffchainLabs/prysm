@@ -171,3 +171,36 @@ func TestVerifyDepositSignaturesCancelledContext(t *testing.T) {
 func TestDepositWarmupWorkers(t *testing.T) {
 	require.Equal(t, true, depositWarmupWorkers() >= 1)
 }
+
+// Byte-identical pending deposits are legal and share a cache key, so they must collapse to a
+// single verification. Only PendingDeposit.Slot may differ, and it is not part of the signature.
+func TestWarmupDuplicateDepositsShareOneCacheEntry(t *testing.T) {
+	cache.DepositSignature.Clear()
+	builderCreds := warmupCreds(t, true)
+	sk, err := bls.RandKey()
+	require.NoError(t, err)
+
+	first := warmupDeposit(t, sk, builderCreds, 32, true)
+	second := warmupDeposit(t, sk, builderCreds, 32, true)
+	second.Slot = 99
+
+	st, err := util.NewBeaconStateGloas(func(s *ethpb.BeaconStateGloas) error {
+		s.PendingDeposits = []*ethpb.PendingDeposit{first, second}
+		return nil
+	})
+	require.NoError(t, err)
+
+	candidates, err := pendingBuilderDepositCandidates(st)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(candidates))
+
+	k0, err := candidates[0].HashTreeRoot()
+	require.NoError(t, err)
+	k1, err := candidates[1].HashTreeRoot()
+	require.NoError(t, err)
+	require.DeepEqual(t, k0, k1)
+
+	s := &Service{ctx: context.Background()}
+	require.Equal(t, 2, s.verifyDepositSignatures(context.Background(), candidates))
+	require.Equal(t, 1, cache.DepositSignature.Len())
+}
