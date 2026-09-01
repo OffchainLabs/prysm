@@ -1041,7 +1041,7 @@ func TestGasLimit_BellatrixInsertStoresGasLimit(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
-	got, err := f.GasLimit(root)
+	got, err := f.GasLimit(root, indexToHash(100))
 	require.NoError(t, err)
 	assert.Equal(t, gl, got)
 }

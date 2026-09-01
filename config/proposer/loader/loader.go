@@ -178,6 +178,7 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 		return nil, err
 	}
 	ps.WarnDeprecatedSchema()
+	ps.WarnUnsetMaxExecutionPayment()
 	if err := psl.db.SaveProposerSettings(cliCtx.Context, ps); err != nil {
 		return nil, err
 	}

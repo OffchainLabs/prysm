@@ -2,7 +2,11 @@ package builder
 
 import (
 	"context"
+	"net"
+	"net/url"
 	"reflect"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,7 +35,7 @@ type BlockBuilder interface {
 	GetHeader(ctx context.Context, slot primitives.Slot, parentHash [32]byte, pubKey [48]byte) (builder.SignedBid, error)
 	GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash, parentRoot [32]byte, proposerPubkey [48]byte, entries []*ethpb.BuilderEntry) ([]PayloadBid, error)
 	SubmitSignedBeaconBlock(ctx context.Context, builderURL string, block interfaces.ReadOnlySignedBeaconBlock) error
-	SubmitBuilderPreferences(ctx context.Context, proposerPubkey [48]byte, url string, req *ethpb.BuilderPreferencesRequest) error
+	SubmitBuilderPreferences(ctx context.Context, entries []*ethpb.BuilderPreferencesEntry) map[int]string
 	RegisterValidator(ctx context.Context, reg []*ethpb.SignedValidatorRegistrationV1) error
 	RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error)
 	Configured() bool
@@ -82,7 +86,9 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 	}
 	if s.dial == nil {
 		s.dial = func(url string) (builder.BuilderClient, error) {
-			return builder.NewClient(url, s.clientOpts...)
+			// Per-URL builder clients never follow redirects (beacon-APIs builder url requirement).
+			opts := append([]builder.ClientOpt{builder.WithoutRedirects()}, s.clientOpts...)
+			return builder.NewClient(url, opts...)
 		}
 	}
 	if s.cfg.builderClient != nil && !reflect.ValueOf(s.cfg.builderClient).IsNil() {
@@ -101,6 +107,33 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 	return s, nil
 }
 
+// printableASCII reports whether s contains only printable non-space ASCII,
+// so it can travel verbatim as an HTTP header or gRPC metadata value.
+func printableASCII(s string) bool {
+	return !strings.ContainsFunc(s, func(r rune) bool { return r < '!' || r > '~' })
+}
+
+// validBuilderURL accepts http(s) urls and bare host:port (which dials as http).
+func validBuilderURL(raw string) error {
+	if !printableASCII(raw) {
+		return errors.New("malformed builder url")
+	}
+	if u, err := url.Parse(raw); err == nil && u.Host != "" {
+		if u.Scheme == "http" || u.Scheme == "https" {
+			return nil
+		}
+		return errors.Errorf("builder url scheme must be http or https, got %q", u.Scheme)
+	}
+	host, port, err := net.SplitHostPort(raw)
+	if err != nil || host == "" {
+		return errors.New("malformed builder url")
+	}
+	if _, err := strconv.ParseUint(port, 10, 16); err != nil {
+		return errors.New("malformed builder url")
+	}
+	return nil
+}
+
 func (s *Service) clientFor(url string) (builder.BuilderClient, error) {
 	s.clientsMu.RLock()
 	c, ok := s.clients[url]
@@ -113,11 +146,34 @@ func (s *Service) clientFor(url string) (builder.BuilderClient, error) {
 	if c, ok := s.clients[url]; ok {
 		return c, nil
 	}
+	c, err := s.dialValidated(url)
+	if err != nil {
+		return nil, err
+	}
+	s.clients[url] = c
+	return c, nil
+}
+
+// submitClientFor serves cached clients but dials without caching, so transient
+// publish-time urls do not accumulate in the client map.
+func (s *Service) submitClientFor(url string) (builder.BuilderClient, error) {
+	s.clientsMu.RLock()
+	c, ok := s.clients[url]
+	s.clientsMu.RUnlock()
+	if ok {
+		return c, nil
+	}
+	return s.dialValidated(url)
+}
+
+func (s *Service) dialValidated(url string) (builder.BuilderClient, error) {
+	if err := validBuilderURL(url); err != nil {
+		return nil, err
+	}
 	c, err := s.dial(url)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not create builder client for %s", logs.MaskCredentialsLogging(url))
 	}
-	s.clients[url] = c
 	return c, nil
 }
 
@@ -174,12 +230,12 @@ func (s *Service) GetExecutionPayloadBid(ctx context.Context, slot primitives.Sl
 	seen := make(map[entryIdentity]bool, len(entries))
 	unique := make([]*ethpb.BuilderEntry, 0, len(entries))
 	for _, e := range entries {
-		if e.GetUrl() == "" {
+		if len(e.GetUrl()) == 0 {
 			continue
 		}
-		id := entryIdentity{url: e.GetUrl(), data: string(e.GetAuth().GetMessage().GetData())}
+		id := entryIdentity{url: string(e.GetUrl()), data: string(e.GetAuth().GetMessage().GetData())}
 		if seen[id] {
-			log.WithField("builder", logs.MaskCredentialsLogging(e.GetUrl())).Debug("Dropping duplicate builder entry, first one wins")
+			log.WithField("builder", logs.MaskCredentialsLogging(string(e.GetUrl()))).Debug("Dropping duplicate builder entry, first one wins")
 			continue
 		}
 		seen[id] = true
@@ -198,7 +254,7 @@ func (s *Service) GetExecutionPayloadBid(ctx context.Context, slot primitives.Sl
 		wg.Add(1)
 		go func(e *ethpb.BuilderEntry) {
 			defer wg.Done()
-			url := e.GetUrl()
+			url := string(e.GetUrl())
 			c, err := s.clientFor(url)
 			if err != nil {
 				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(url)).Warn("Could not get builder client")
@@ -229,7 +285,7 @@ func (s *Service) SubmitSignedBeaconBlock(ctx context.Context, builderURL string
 		tracing.AnnotateError(span, ErrNoBuilder)
 		return ErrNoBuilder
 	}
-	c, err := s.clientFor(builderURL)
+	c, err := s.submitClientFor(builderURL)
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return err
@@ -237,19 +293,50 @@ func (s *Service) SubmitSignedBeaconBlock(ctx context.Context, builderURL string
 	return c.SubmitSignedBeaconBlock(ctx, b)
 }
 
-// Routed to url, the auth data inside req is opaque and forwarded unchanged.
-func (s *Service) SubmitBuilderPreferences(ctx context.Context, proposerPubkey [48]byte, url string, req *ethpb.BuilderPreferencesRequest) error {
+// SubmitBuilderPreferences forwards each entry to its own builder url concurrently, returning
+// failure messages keyed by entry position. Nil entries are skipped; auth is forwarded unchanged.
+func (s *Service) SubmitBuilderPreferences(ctx context.Context, entries []*ethpb.BuilderPreferencesEntry) map[int]string {
 	ctx, span := trace.StartSpan(ctx, "builder.SubmitBuilderPreferences")
 	defer span.End()
-	if url == "" {
-		return errors.New("builder preferences missing builder url")
+	var wg sync.WaitGroup
+	// Each entry writes only its own index, so the goroutines need no locking.
+	msgs := make([]string, len(entries))
+	for i, e := range entries {
+		if e == nil {
+			continue
+		}
+		if len(e.GetUrl()) == 0 {
+			log.Warn("Skipping builder preferences entry with no builder url")
+			msgs[i] = "builder url is required"
+			continue
+		}
+		wg.Add(1)
+		go func(i int, e *ethpb.BuilderPreferencesEntry) {
+			defer wg.Done()
+			url := string(e.Url)
+			c, err := s.clientFor(url)
+			if err == nil {
+				req := &ethpb.BuilderPreferencesRequest{
+					Preferences: &ethpb.BuilderPreferences{MaxExecutionPayment: e.MaxExecutionPayment},
+					Auth:        e.Auth,
+				}
+				err = c.SubmitBuilderPreferences(ctx, bytesutil.ToBytes48(e.ProposerPubkey), req)
+			}
+			if err != nil {
+				tracing.AnnotateError(span, err)
+				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(url)).Warn("Could not submit builder preferences")
+				msgs[i] = "could not submit builder preferences: " + logs.MaskCredentialsLogging(err.Error())
+			}
+		}(i, e)
 	}
-	c, err := s.clientFor(url)
-	if err != nil {
-		tracing.AnnotateError(span, err)
-		return err
+	wg.Wait()
+	failures := make(map[int]string)
+	for i, msg := range msgs {
+		if msg != "" {
+			failures[i] = msg
+		}
 	}
-	return c.SubmitBuilderPreferences(ctx, proposerPubkey, req)
+	return failures
 }
 
 // GetHeader retrieves the header for a given slot and parent hash from the builder relay network.

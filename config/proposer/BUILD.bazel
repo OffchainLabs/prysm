@@ -15,6 +15,7 @@ go_library(
         "//consensus-types/primitives:go_default_library",
         "//consensus-types/validator:go_default_library",
         "//encoding/bytesutil:go_default_library",
+        "//io/logs:go_default_library",
         "//proto/prysm/v1alpha1/validator-client:go_default_library",
         "@com_github_ethereum_go_ethereum//common:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
