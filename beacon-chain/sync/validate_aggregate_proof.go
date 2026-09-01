@@ -29,6 +29,7 @@ import (
 
 // validateAggregateAndProof verifies the aggregated signature and the selection proof is valid before forwarding to the
 // network and downstream services.
+// It may briefly wait when the referenced block and state are the only missing dependencies.
 func (s *Service) validateAggregateAndProof(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
 	receivedTime := prysmTime.Now()
 	if pid == s.cfg.p2p.PeerID() {
@@ -126,13 +127,19 @@ func (s *Service) validateAggregateAndProof(ctx context.Context, pid peer.ID, ms
 		}
 	}
 
-	// Verify the block being voted on is in the beacon chain.
-	// If not, store this attestation in the map of pending attestations.
-	if !s.validateBlockInAttestation(ctx, m) {
+	validationRes, err := s.validateAggregatedAttPreBlock(ctx, m)
+	if validationRes != pubsub.ValidationAccept {
+		return validationRes, err
+	}
+
+	blockRoot := bytesutil.ToBytes32(data.BeaconBlockRoot)
+	// After non-block checks pass, wait briefly or preserve the pending plus ValidationIgnore fallback.
+	if !s.waitForAttestationBlock(ctx, pid, blockRoot) {
+		s.savePendingAggregate(m)
 		return pubsub.ValidationIgnore, nil
 	}
 
-	validationRes, err := s.validateAggregatedAtt(ctx, m)
+	validationRes, err = s.validateAggregatedAttPostBlock(ctx, m)
 	if validationRes != pubsub.ValidationAccept {
 		return validationRes, err
 	}
@@ -152,26 +159,21 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 	ctx, span := trace.StartSpan(ctx, "sync.validateAggregatedAtt")
 	defer span.End()
 
+	result, err := s.validateAggregatedAttPreBlock(ctx, signed)
+	if result != pubsub.ValidationAccept {
+		return result, err
+	}
+	return s.validateAggregatedAttPostBlock(ctx, signed)
+}
+
+func (s *Service) validateAggregatedAttPreBlock(ctx context.Context, signed ethpb.SignedAggregateAttAndProof) (pubsub.ValidationResult, error) {
+	ctx, span := trace.StartSpan(ctx, "sync.validateAggregatedAttPreBlock")
+	defer span.End()
+
 	aggregateAndProof := signed.AggregateAttestationAndProof()
 	aggregatorIndex := aggregateAndProof.GetAggregatorIndex()
 	aggregate := aggregateAndProof.AggregateVal()
 	data := aggregate.GetData()
-
-	// Verify attestation target root is consistent with the head root.
-	// This verification is not in the spec, however we guard against it as it opens us up
-	// to weird edge cases during verification. The attestation technically could be used to add value to a block,
-	// but it's invalid in the spirit of the protocol. Here we choose safety over profit.
-	if err := s.cfg.chain.VerifyLmdFfgConsistency(ctx, aggregate); err != nil {
-		tracing.AnnotateError(span, err)
-		attBadLmdConsistencyCount.Inc()
-		return pubsub.ValidationReject, err
-	}
-
-	// Verify current finalized checkpoint is an ancestor of the block defined by the attestation's beacon block root.
-	if !s.cfg.chain.InForkchoice(bytesutil.ToBytes32(data.BeaconBlockRoot)) {
-		tracing.AnnotateError(span, blockchain.ErrNotDescendantOfFinalized)
-		return pubsub.ValidationIgnore, blockchain.ErrNotDescendantOfFinalized
-	}
 
 	bs, err := s.cfg.chain.AttestationTargetState(ctx, data.Target)
 	if err != nil {
@@ -240,6 +242,27 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 	set.Join(selectionSigSet).Join(aggregatorSigSet).Join(attSigSet)
 
 	return s.validateWithBatchVerifier(ctx, "aggregate", set)
+}
+
+func (s *Service) validateAggregatedAttPostBlock(ctx context.Context, signed ethpb.SignedAggregateAttAndProof) (pubsub.ValidationResult, error) {
+	ctx, span := trace.StartSpan(ctx, "sync.validateAggregatedAttPostBlock")
+	defer span.End()
+
+	aggregate := signed.AggregateAttestationAndProof().AggregateVal()
+
+	// This is stricter than the gossip spec and guards against inconsistent LMD and FFG votes.
+	if err := s.cfg.chain.VerifyLmdFfgConsistency(ctx, aggregate); err != nil {
+		tracing.AnnotateError(span, err)
+		attBadLmdConsistencyCount.Inc()
+		return pubsub.ValidationReject, err
+	}
+
+	blockRoot := bytesutil.ToBytes32(aggregate.GetData().BeaconBlockRoot)
+	if !s.cfg.chain.InForkchoice(blockRoot) {
+		tracing.AnnotateError(span, blockchain.ErrNotDescendantOfFinalized)
+		return pubsub.ValidationIgnore, blockchain.ErrNotDescendantOfFinalized
+	}
+	return pubsub.ValidationAccept, nil
 }
 
 // validateBlocksInAttestation checks if the block being voted on is in the beaconDB.
