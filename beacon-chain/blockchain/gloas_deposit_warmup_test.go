@@ -6,8 +6,10 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -200,7 +202,91 @@ func TestWarmupDuplicateDepositsShareOneCacheEntry(t *testing.T) {
 	require.NoError(t, err)
 	require.DeepEqual(t, k0, k1)
 
+	// The duplicate must be dropped before verification, not merely overwrite the same entry.
+	cold := coldDepositCandidates(candidates)
+	require.Equal(t, 1, len(cold))
+
 	s := &Service{ctx: context.Background()}
-	require.Equal(t, 2, s.verifyDepositSignatures(context.Background(), candidates))
+	require.Equal(t, 1, s.verifyDepositSignatures(context.Background(), cold))
 	require.Equal(t, 1, cache.DepositSignature.Len())
+
+	// Already cached candidates are dropped too, so a second pass has nothing to do.
+	require.Equal(t, 0, len(coldDepositCandidates(candidates)))
+}
+
+func TestColdDepositCandidates(t *testing.T) {
+	builderCreds := warmupCreds(t, true)
+	data := func(t *testing.T, amount uint64) *ethpb.Deposit_Data {
+		t.Helper()
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		d := warmupDeposit(t, sk, builderCreds, amount, true)
+		return &ethpb.Deposit_Data{
+			PublicKey:             d.PublicKey,
+			WithdrawalCredentials: d.WithdrawalCredentials,
+			Amount:                d.Amount,
+			Signature:             d.Signature,
+		}
+	}
+
+	t.Run("nil and empty", func(t *testing.T) {
+		cache.DepositSignature.Clear()
+		require.Equal(t, 0, len(coldDepositCandidates(nil)))
+		require.Equal(t, 0, len(coldDepositCandidates([]*ethpb.Deposit_Data{})))
+	})
+
+	t.Run("distinct candidates all cold", func(t *testing.T) {
+		cache.DepositSignature.Clear()
+		candidates := []*ethpb.Deposit_Data{data(t, 1), data(t, 2), data(t, 3)}
+		require.Equal(t, 3, len(coldDepositCandidates(candidates)))
+	})
+
+	t.Run("repeated candidate collapses once", func(t *testing.T) {
+		cache.DepositSignature.Clear()
+		d := data(t, 4)
+		candidates := []*ethpb.Deposit_Data{d, d, d, d}
+		cold := coldDepositCandidates(candidates)
+		require.Equal(t, 1, len(cold))
+		require.DeepEqual(t, d, cold[0])
+	})
+
+	t.Run("cached candidates excluded, order preserved", func(t *testing.T) {
+		cache.DepositSignature.Clear()
+		first, second, third := data(t, 5), data(t, 6), data(t, 7)
+		key, err := second.HashTreeRoot()
+		require.NoError(t, err)
+		cache.DepositSignature.Put(key, true)
+
+		cold := coldDepositCandidates([]*ethpb.Deposit_Data{first, second, third})
+		require.Equal(t, 2, len(cold))
+		require.DeepEqual(t, first, cold[0])
+		require.DeepEqual(t, third, cold[1])
+	})
+}
+
+// The pre-fork cache must survive until the fork epoch can no longer be reverted, otherwise a
+// reorg back across the boundary re-runs the upgrade against a cold cache.
+func TestDepositWarmupCacheRetainedUntilForkFinalized(t *testing.T) {
+	service, _ := minimalTestService(t)
+	forkEpoch := primitives.Epoch(8)
+
+	reset := func() {
+		cache.DepositSignature.Clear()
+		cache.DepositSignature.Put([32]byte{0x01}, true)
+	}
+	retired := func(finalized primitives.Epoch) bool {
+		require.NoError(t, service.cfg.ForkChoiceStore.UpdateFinalizedCheckpoint(
+			&forkchoicetypes.Checkpoint{Epoch: finalized},
+		))
+		return service.FinalizedCheckpt().Epoch > forkEpoch
+	}
+
+	reset()
+	require.Equal(t, false, retired(forkEpoch-1))
+	require.Equal(t, 1, cache.DepositSignature.Len())
+
+	require.Equal(t, false, retired(forkEpoch))
+	require.Equal(t, 1, cache.DepositSignature.Len())
+
+	require.Equal(t, true, retired(forkEpoch+1))
 }

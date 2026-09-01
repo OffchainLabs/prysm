@@ -73,11 +73,17 @@ func (s *Service) runGloasDepositWarmup() {
 	for {
 		select {
 		case slot := <-ticker.C():
-			if slots.ToEpoch(slot) > cfg.GloasForkEpoch {
+			if slots.ToEpoch(slot) <= cfg.GloasForkEpoch {
+				s.warmDepositSignatures()
+				continue
+			}
+			// Warming is pointless once the fork epoch has passed, but a reorg across the
+			// boundary re-runs the upgrade, so the results are only safe to drop once the fork
+			// epoch can no longer be reverted.
+			if s.FinalizedCheckpt().Epoch > cfg.GloasForkEpoch {
 				cache.DepositSignature.Clear()
 				return
 			}
-			s.warmDepositSignatures()
 		case <-s.ctx.Done():
 			log.Debug("Context closed, exiting gloas deposit warmup routine")
 			return
@@ -101,20 +107,7 @@ func (s *Service) warmDepositSignatures() {
 	}
 	gloasDepositWarmupCandidates.Set(float64(len(candidates)))
 
-	// Byte-identical deposits share a key, and so share one verification.
-	seen := make(map[[32]byte]bool, len(candidates))
-	cold := make([]*ethpb.Deposit_Data, 0, len(candidates))
-	for _, data := range candidates {
-		key, err := data.HashTreeRoot()
-		if err != nil {
-			continue
-		}
-		if cache.DepositSignature.Has(key) || seen[key] {
-			continue
-		}
-		seen[key] = true
-		cold = append(cold, data)
-	}
+	cold := coldDepositCandidates(candidates)
 	gloasDepositWarmupWarmed.Set(float64(len(candidates) - len(cold)))
 	gloasDepositWarmupRemaining.Set(float64(len(cold)))
 	if len(cold) == 0 {
@@ -128,6 +121,25 @@ func (s *Service) warmDepositSignatures() {
 	}
 	gloasDepositWarmupVerifySeconds.Observe(stdtime.Since(start).Seconds() / float64(verified))
 	gloasDepositWarmupRemaining.Set(float64(len(cold) - verified))
+}
+
+// coldDepositCandidates drops candidates whose result is already cached. Byte-identical deposits
+// share a key, so they also collapse to a single verification.
+func coldDepositCandidates(candidates []*ethpb.Deposit_Data) []*ethpb.Deposit_Data {
+	seen := make(map[[32]byte]bool, len(candidates))
+	cold := make([]*ethpb.Deposit_Data, 0, len(candidates))
+	for _, data := range candidates {
+		key, err := data.HashTreeRoot()
+		if err != nil {
+			continue
+		}
+		if cache.DepositSignature.Has(key) || seen[key] {
+			continue
+		}
+		seen[key] = true
+		cold = append(cold, data)
+	}
+	return cold
 }
 
 func (s *Service) verifyDepositSignatures(ctx context.Context, deposits []*ethpb.Deposit_Data) int {
