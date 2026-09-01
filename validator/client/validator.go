@@ -219,6 +219,9 @@ func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 	if err := v.snapshotBootKeysForDoppelGanger(ctx); err != nil {
 		return err
 	}
+	if v.accountChangedSub != nil {
+		v.accountChangedSub.Unsubscribe()
+	}
 	v.accountChangedSub = v.km.SubscribeAccountChanges(v.accountsChangedChannel)
 	return nil
 }

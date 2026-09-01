@@ -198,6 +198,7 @@ func initialize(ctx context.Context, v *validator) error {
 	defer ticker.Stop()
 
 	firstTime := true
+	kmInitialized := false
 
 	for {
 		if !firstTime {
@@ -219,8 +220,12 @@ func initialize(ctx context.Context, v *validator) error {
 			return errors.Wrap(err, "could not determine if beacon chain started")
 		}
 
-		if err := v.WaitForKeymanagerInitialization(ctx); err != nil {
-			return errors.Wrap(err, "Wallet is not ready")
+		// Initialize the keymanager once per runner.
+		if !kmInitialized {
+			if err := v.WaitForKeymanagerInitialization(ctx); err != nil {
+				return errors.Wrap(err, "Wallet is not ready")
+			}
+			kmInitialized = true
 		}
 
 		if err := v.WaitForSync(ctx); err != nil {
