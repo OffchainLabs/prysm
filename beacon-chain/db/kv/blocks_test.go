@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -476,6 +477,29 @@ func TestStore_HistoricalDataBeforeSlot(t *testing.T) {
 				require.NoError(t, db.SaveState(ctx, st, r))
 				states[i] = st
 
+				// Save a Gloas execution payload envelope keyed by this block root, so the
+				// pruning loop has both primary-bucket and BlockHash-index entries to clean.
+				env := &ethpb.SignedExecutionPayloadEnvelope{
+					Message: &ethpb.ExecutionPayloadEnvelope{
+						Payload: &enginev1.ExecutionPayloadGloas{
+							ParentHash:    bytesutil.PadTo([]byte("parent"), 32),
+							FeeRecipient:  bytesutil.PadTo([]byte("fee"), 20),
+							StateRoot:     bytesutil.PadTo([]byte("stateroot"), 32),
+							ReceiptsRoot:  bytesutil.PadTo([]byte("receipts"), 32),
+							LogsBloom:     bytesutil.PadTo([]byte{}, 256),
+							PrevRandao:    bytesutil.PadTo([]byte("randao"), 32),
+							BaseFeePerGas: bytesutil.PadTo([]byte{1}, 32),
+							BlockHash:     bytesutil.PadTo(bytesutil.SlotToBytesBigEndian(slot), 32),
+							SlotNumber:    slot,
+						},
+						ExecutionRequests: &enginev1.ExecutionRequests{},
+						BeaconBlockRoot:   r[:],
+					},
+					Signature: bytesutil.PadTo([]byte("sig"), 96),
+				}
+				require.NoError(t, db.SaveExecutionPayloadEnvelope(ctx, env))
+				assert.Equal(t, true, db.HasExecutionPayloadEnvelope(ctx, r))
+
 				// Verify validator entries are saved to db
 				valsActual, err := db.validatorEntries(ctx, r)
 				require.NoError(t, err)
@@ -518,6 +542,8 @@ func TestStore_HistoricalDataBeforeSlot(t *testing.T) {
 			for i := startSlotDeleted; i < endSlotDeleted; i++ {
 				root, err := blks[i].Block().HashTreeRoot()
 				require.NoError(t, err)
+				slotForBlock := blks[i].Block().Slot()
+				envBlockHash := bytesutil.ToBytes32(bytesutil.PadTo(bytesutil.SlotToBytesBigEndian(slotForBlock), 32))
 
 				// Check block is deleted
 				retrievedBlocks, err := db.BlocksBySlot(ctx, primitives.Slot(i))
@@ -526,6 +552,16 @@ func TestStore_HistoricalDataBeforeSlot(t *testing.T) {
 
 				// Verify block does not exist
 				assert.Equal(t, false, db.HasBlock(ctx, root), fmt.Sprintf("Expected block index to not exist for slot %d", i))
+
+				// Verify execution payload envelope is deleted from primary bucket
+				assert.Equal(t, false, db.HasExecutionPayloadEnvelope(ctx, root), fmt.Sprintf("Expected envelope to be deleted for slot %d", i))
+
+				// Verify execution payload envelope BlockHash secondary index entry is also gone
+				err = db.db.View(func(tx *bolt.Tx) error {
+					assert.Equal(t, 0, len(tx.Bucket(executionPayloadEnvelopeBlockHashBucket).Get(envBlockHash[:])), fmt.Sprintf("Expected envelope block-hash index to be deleted for slot %d", i))
+					return nil
+				})
+				require.NoError(t, err)
 
 				// Verify block parent root does not exist
 				err = db.db.View(func(tx *bolt.Tx) error {
@@ -609,6 +645,16 @@ func TestStore_HistoricalDataBeforeSlot(t *testing.T) {
 				// Verify remaining validator hashes for block roots exists
 				err = db.db.View(func(tx *bolt.Tx) error {
 					assert.NotNil(t, tx.Bucket(blockRootValidatorHashesBucket).Get(root[:]))
+					return nil
+				})
+				require.NoError(t, err)
+
+				// Verify execution payload envelope still exists for retained blocks
+				assert.Equal(t, true, db.HasExecutionPayloadEnvelope(ctx, root), fmt.Sprintf("Expected envelope to exist for retained slot %d", i))
+				slotForBlock := blks[i].Block().Slot()
+				envBlockHash := bytesutil.ToBytes32(bytesutil.PadTo(bytesutil.SlotToBytesBigEndian(slotForBlock), 32))
+				err = db.db.View(func(tx *bolt.Tx) error {
+					assert.NotNil(t, tx.Bucket(executionPayloadEnvelopeBlockHashBucket).Get(envBlockHash[:]), fmt.Sprintf("Expected envelope block-hash index for retained slot %d", i))
 					return nil
 				})
 				require.NoError(t, err)
