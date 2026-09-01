@@ -1,0 +1,173 @@
+package blockchain
+
+import (
+	"context"
+	"testing"
+
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+)
+
+func warmupCreds(t *testing.T, builder bool) []byte {
+	t.Helper()
+	creds := make([]byte, fieldparams.RootLength)
+	if builder {
+		creds[0] = params.BeaconConfig().BuilderWithdrawalPrefixByte
+		for i := 12; i < len(creds); i++ {
+			creds[i] = 0x7a
+		}
+		return creds
+	}
+	creds[0] = params.BeaconConfig().BLSWithdrawalPrefixByte
+	return creds
+}
+
+func warmupDeposit(t *testing.T, sk bls.SecretKey, creds []byte, amount uint64, valid bool) *ethpb.PendingDeposit {
+	t.Helper()
+	sig := make([]byte, fieldparams.BLSSignatureLength)
+	if valid {
+		domain, err := signing.ComputeDomain(params.BeaconConfig().DomainDeposit, nil, nil)
+		require.NoError(t, err)
+		root, err := signing.ComputeSigningRoot(&ethpb.DepositMessage{
+			PublicKey:             sk.PublicKey().Marshal(),
+			WithdrawalCredentials: creds,
+			Amount:                amount,
+		}, domain)
+		require.NoError(t, err)
+		sig = sk.Sign(root[:]).Marshal()
+	}
+	return &ethpb.PendingDeposit{
+		PublicKey:             sk.PublicKey().Marshal(),
+		WithdrawalCredentials: creds,
+		Amount:                amount,
+		Signature:             sig,
+	}
+}
+
+func TestPendingBuilderDepositCandidates(t *testing.T) {
+	builderCreds := warmupCreds(t, true)
+	valCreds := warmupCreds(t, false)
+
+	keys := make([]bls.SecretKey, 4)
+	for i := range keys {
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		keys[i] = sk
+	}
+
+	// keys[0] builder+validator creds, keys[1] validator creds only, keys[2] builder creds but
+	// already a validator, keys[3] builder creds.
+	deposits := []*ethpb.PendingDeposit{
+		warmupDeposit(t, keys[0], valCreds, 1, false),
+		warmupDeposit(t, keys[1], valCreds, 2, true),
+		warmupDeposit(t, keys[0], builderCreds, 3, true),
+		warmupDeposit(t, keys[2], builderCreds, 4, true),
+		warmupDeposit(t, keys[1], valCreds, 5, true),
+		warmupDeposit(t, keys[3], builderCreds, 6, true),
+		warmupDeposit(t, keys[0], valCreds, 7, true),
+	}
+
+	st, err := util.NewBeaconStateGloas(func(s *ethpb.BeaconStateGloas) error {
+		s.PendingDeposits = deposits
+		return nil
+	})
+	require.NoError(t, err)
+	require.NoError(t, st.AppendValidator(&ethpb.Validator{
+		PublicKey:             keys[2].PublicKey().Marshal(),
+		WithdrawalCredentials: valCreds,
+		EffectiveBalance:      params.BeaconConfig().MinDepositAmount,
+		ExitEpoch:             params.BeaconConfig().FarFutureEpoch,
+		WithdrawableEpoch:     params.BeaconConfig().FarFutureEpoch,
+	}))
+	require.NoError(t, st.AppendBalance(params.BeaconConfig().MinDepositAmount))
+
+	candidates, err := pendingBuilderDepositCandidates(st)
+	require.NoError(t, err)
+
+	wantAmounts := []uint64{1, 3, 6, 7}
+	require.Equal(t, len(wantAmounts), len(candidates))
+	for i, amount := range wantAmounts {
+		require.Equal(t, amount, candidates[i].Amount)
+	}
+}
+
+func TestPendingBuilderDepositCandidatesNoBuilderCredentials(t *testing.T) {
+	valCreds := warmupCreds(t, false)
+	sk, err := bls.RandKey()
+	require.NoError(t, err)
+
+	st, err := util.NewBeaconStateGloas(func(s *ethpb.BeaconStateGloas) error {
+		s.PendingDeposits = []*ethpb.PendingDeposit{
+			warmupDeposit(t, sk, valCreds, 1, true),
+			warmupDeposit(t, sk, valCreds, 2, false),
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	candidates, err := pendingBuilderDepositCandidates(st)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(candidates))
+}
+
+func TestVerifyDepositSignaturesPopulatesCache(t *testing.T) {
+	cache.DepositSignature.Clear()
+	builderCreds := warmupCreds(t, true)
+
+	var data []*ethpb.Deposit_Data
+	for i := range 8 {
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		deposit := warmupDeposit(t, sk, builderCreds, uint64(i+1), i%2 == 0)
+		data = append(data, &ethpb.Deposit_Data{
+			PublicKey:             deposit.PublicKey,
+			WithdrawalCredentials: deposit.WithdrawalCredentials,
+			Amount:                deposit.Amount,
+			Signature:             deposit.Signature,
+		})
+	}
+
+	s := &Service{ctx: context.Background()}
+	verified := s.verifyDepositSignatures(context.Background(), data)
+	require.Equal(t, len(data), verified)
+	require.Equal(t, len(data), cache.DepositSignature.Len())
+
+	for i, d := range data {
+		key, err := d.HashTreeRoot()
+		require.NoError(t, err)
+		valid, ok := cache.DepositSignature.Get(key)
+		require.Equal(t, true, ok)
+		require.Equal(t, i%2 == 0, valid)
+	}
+}
+
+func TestVerifyDepositSignaturesCancelledContext(t *testing.T) {
+	cache.DepositSignature.Clear()
+	builderCreds := warmupCreds(t, true)
+	sk, err := bls.RandKey()
+	require.NoError(t, err)
+	deposit := warmupDeposit(t, sk, builderCreds, 32, true)
+	data := []*ethpb.Deposit_Data{{
+		PublicKey:             deposit.PublicKey,
+		WithdrawalCredentials: deposit.WithdrawalCredentials,
+		Amount:                deposit.Amount,
+		Signature:             deposit.Signature,
+	}}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	s := &Service{ctx: context.Background()}
+	require.Equal(t, 0, s.verifyDepositSignatures(ctx, data))
+	require.Equal(t, 0, cache.DepositSignature.Len())
+}
+
+func TestDepositWarmupWorkers(t *testing.T) {
+	require.Equal(t, true, depositWarmupWorkers() >= 1)
+}
