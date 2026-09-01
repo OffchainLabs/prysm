@@ -66,7 +66,7 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 		return nil
 	}
 	// The next epoch's shuffling is already determined by the dependent root, so the head state can compute its committees without the boundary transition, unless the fork version changes at the boundary.
-	if c.Epoch == slots.ToEpoch(st.Slot())+1 && slots.ToForkVersion(slot) == slots.ToForkVersion(st.Slot()) {
+	if c.Epoch == slots.ToEpoch(st.Slot())+1 && bytesutil.ToBytes32(c.Root) == bytesutil.ToBytes32(headRoot) && slots.ToForkVersion(slot) == slots.ToForkVersion(st.Slot()) {
 		return st
 	}
 	// Try if we have already set the checkpoint cache. This will be tried again if we fail here but the check is cheap anyway.
