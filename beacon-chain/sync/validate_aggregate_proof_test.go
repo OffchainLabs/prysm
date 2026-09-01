@@ -221,7 +221,7 @@ func TestValidateAggregateAndProof_NoBlock(t *testing.T) {
 			attPool:     attestations.NewPool(),
 			chain:       &mock.ChainService{},
 		},
-		blkRootToPendingAtts:           make(map[[32]byte][]any),
+		pendingAtts:                    newPendingAttsQueue(),
 		seenAggregatedAttestationCache: c,
 	}
 	r.initCaches()
@@ -374,7 +374,7 @@ func TestValidateAggregateAndProof_ExistedInPool(t *testing.T) {
 			attestationNotifier: (&mock.ChainService{}).OperationNotifier(),
 		},
 		seenAggregatedAttestationCache: lruwrpr.New(10),
-		blkRootToPendingAtts:           make(map[[32]byte][]any),
+		pendingAtts:                    newPendingAttsQueue(),
 	}
 	r.initCaches()
 

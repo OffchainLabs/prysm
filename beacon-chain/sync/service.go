@@ -146,9 +146,8 @@ type Service struct {
 	cancel                               context.CancelFunc
 	slotToPendingBlocks                  *gcache.Cache
 	seenPendingBlocks                    map[[32]byte]bool
-	blkRootToPendingAtts                 map[[32]byte][]any
+	pendingAtts                          *pendingAttsQueue
 	subHandler                           *subTopicHandler
-	pendingAttsLock                      sync.RWMutex
 	pendingQueueLock                     sync.RWMutex
 	chainStarted                         *atomic.Bool
 	validateBlockLock                    sync.RWMutex
@@ -226,7 +225,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		cfg:                        &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
 		slotToPendingBlocks:        gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
 		seenPendingBlocks:          make(map[[32]byte]bool),
-		blkRootToPendingAtts:       make(map[[32]byte][]any),
+		pendingAtts:                newPendingAttsQueue(),
 		pendingGloasColumns:        make(map[[32]byte]*pendingGloasEntry),
 		dataColumnLogCh:            make(chan dataColumnLogEntry, 1000),
 		reconstructionRandGen:      rand.NewGenerator(),
@@ -334,6 +333,7 @@ func (s *Service) Start() {
 	s.cfg.p2p.AddPingMethod(s.sendPingRequest)
 
 	s.processPendingBlocksQueue()
+	go s.processPendingAttsQueue()
 	s.processPendingPayloadEnvelopeQueue()
 	go s.runLatePayloadRequest()
 	s.maintainPeerStatuses()
