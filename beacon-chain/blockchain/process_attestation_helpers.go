@@ -75,11 +75,11 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 		return cachedState
 	}
 	// If we haven't advanced yet then process the slots from head state.
-	st, err := s.HeadState(ctx)
+	st, err := s.HeadStateReadOnly(ctx)
 	if err != nil {
 		return nil
 	}
-	st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, c.Root, slot)
+	st, err = transition.ProcessSlotsIfNeeded(ctx, st, c.Root, slot)
 	if err != nil {
 		return nil
 	}
@@ -115,8 +115,7 @@ func (s *Service) getAttPreState(ctx context.Context, c *ethpb.Checkpoint) (stat
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute epoch start")
 	}
-	cachedState = transition.NextSlotState(c.Root, slot)
-	if cachedState != nil && !cachedState.IsNil() {
+	if cachedState := transition.NextSlotState(c.Root, slot); cachedState != nil && !cachedState.IsNil() {
 		if cachedState.Slot() != slot {
 			cachedState, err = transition.ProcessSlots(ctx, cachedState, slot)
 			if err != nil {

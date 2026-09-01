@@ -77,7 +77,7 @@ type validator struct {
 	prevEpochBalancesLock        sync.RWMutex
 	attestedSlotsLock            sync.RWMutex
 	cachedAttestationDataLock    sync.RWMutex
-	signedRequestAuthsLock       sync.Mutex
+	builderRequestAuthsLock      sync.Mutex
 	domainDataLock               sync.RWMutex
 	cachedAttestationData        *ethpb.AttestationData
 	graffitiOrderedIndex         uint64
@@ -114,7 +114,7 @@ type validator struct {
 	pubkeyToStatus               map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus
 	pubkeyToStatusLock           sync.RWMutex // guards pubkeyToStatus; all readers go through statusCache
 	signedValidatorRegistrations map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
-	signedRequestAuths           map[requestAuthKey]*ethpb.SignedRequestAuth
+	builderRequestAuths          map[builderRequestAuthKey]*ethpb.SignedBuilderRequestAuth
 	aggSelector                  aggregatorSelector
 	validatorClient              iface.ValidatorClient
 	chainClient                  iface.ChainClient
@@ -1321,7 +1321,7 @@ func uint64Ptr(v *validatortypes.Uint64) *uint64 {
 	return &u
 }
 
-// warmBuilderRequestAuths pre-signs request auths for upcoming proposal slots and
+// warmBuilderRequestAuths pre-signs builder request auths for upcoming proposal slots and
 // returns the not-yet-submitted preference entries; force clears the dedup cache.
 func (v *validator) warmBuilderRequestAuths(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, force bool) []*ethpb.BuilderPreferencesEntry {
 	currentEpoch := slots.ToEpoch(slot)
@@ -1342,7 +1342,7 @@ func (v *validator) warmBuilderRequestAuths(ctx context.Context, km keymanager.I
 	// The dedup cache mirrors per-connection server state, so force resets it;
 	// cached signatures survive reconnects and only expire as their slots pass.
 	v.submittedBuilderPrefSlots.prune(force, epochStart)
-	v.pruneSignedRequestAuths(slot)
+	v.pruneSignedBuilderRequestAuths(slot)
 
 	var entries []*ethpb.BuilderPreferencesEntry
 	// Current-epoch: submit after first slot of epoch to avoid stale state.
@@ -1377,14 +1377,14 @@ func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km key
 			}
 			added := false
 			for _, t := range targets {
-				signed, err := v.signRequestAuthCached(ctx, km, pk, t.authData, proposalSlot)
+				signed, err := v.signBuilderRequestAuthCached(ctx, km, pk, t.authData, proposalSlot)
 				if err != nil {
 					log.WithError(err).Warn("Failed to sign builder request auth")
 					continue
 				}
 				entries = append(entries, &ethpb.BuilderPreferencesEntry{
 					ProposerPubkey:      pk[:],
-					Url:                 t.url,
+					Url:                 []byte(t.url),
 					Auth:                signed,
 					MaxExecutionPayment: primitives.Gwei(t.maxPayment),
 				})

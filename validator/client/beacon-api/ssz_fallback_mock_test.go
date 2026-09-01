@@ -23,30 +23,26 @@ func expectPostSSZWithFallback(handler *mock.MockHandler) {
 		sszFn func() ([]byte, error),
 		jsonFn func() ([]byte, error),
 	) error {
-		postJSON := func() error {
-			body, err := jsonFn()
-			if err != nil {
-				return fmt.Errorf("marshal JSON body: %w", err)
-			}
-
-			if err := handler.Post(ctx, endpoint, headers, bytes.NewBuffer(body), nil); err != nil {
-				return fmt.Errorf("post JSON: %w", err)
-			}
-			return nil
-		}
-
 		body, err := sszFn()
 		if err != nil {
 			return fmt.Errorf("marshal SSZ body: %w", err)
 		}
 
-		if err = handler.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(body)); err == nil {
+		err = handler.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(body))
+		if err == nil {
 			return nil
 		}
 		if !errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}) {
 			return fmt.Errorf("post SSZ: %w", err)
 		}
 
-		return postJSON()
+		jsonBody, err := jsonFn()
+		if err != nil {
+			return fmt.Errorf("marshal JSON body: %w", err)
+		}
+		if err := handler.Post(ctx, endpoint, headers, bytes.NewBuffer(jsonBody), nil); err != nil {
+			return fmt.Errorf("post JSON: %w", err)
+		}
+		return nil
 	}).AnyTimes()
 }

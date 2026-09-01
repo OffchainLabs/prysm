@@ -4278,7 +4278,11 @@ func TestBuilderConfigForSlot_TopLevelWithoutEntries(t *testing.T) {
 	copy(pk[:], validatorKey.PublicKey().Marshal())
 	u64 := func(val uint64) *validatorType.Uint64 { u := validatorType.Uint64(val); return &u }
 
-	require.IsNil(t, v.builderConfigForSlot(t.Context(), pk, 10))
+	neutral := v.builderConfigForSlot(t.Context(), pk, 10)
+	require.NotNil(t, neutral)
+	require.Equal(t, primitives.Gwei(0), neutral.MinBid)
+	require.Equal(t, uint64(proposer.NeutralBuilderBoostFactor), neutral.BuilderBoostFactor)
+	require.Equal(t, 0, len(neutral.Builders))
 
 	v.proposerSettings = &proposer.Settings{
 		Version: proposer.SchemaV2,
@@ -4320,7 +4324,7 @@ func TestWarmBuilderRequestAuthsForDuties_CollapsesSameURL(t *testing.T) {
 	// Same-url entries with distinct auth data each submit their own request and cap.
 	require.Equal(t, 2, len(reqs))
 	for _, r := range reqs {
-		require.Equal(t, "https://a.example", r.Url)
+		require.Equal(t, "https://a.example", string(r.Url))
 	}
 	require.DeepEqual(t, []byte{1}, reqs[0].Auth.Message.Data)
 	require.Equal(t, primitives.Gwei(200), reqs[0].MaxExecutionPayment)
@@ -4346,7 +4350,7 @@ func TestWarmBuilderRequestAuthsForDuties_CollapsesSameURL(t *testing.T) {
 		require.Equal(t, 2, len(reqs))
 		byURL := map[string]primitives.Gwei{}
 		for _, r := range reqs {
-			byURL[r.Url] = r.MaxExecutionPayment
+			byURL[string(r.Url)] = r.MaxExecutionPayment
 		}
 		require.Equal(t, primitives.Gwei(0), byURL["https://a.example"])
 		require.Equal(t, primitives.Gwei(250), byURL["https://b.example"])

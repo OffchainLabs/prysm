@@ -648,6 +648,11 @@ func (s *Service) inRegularSync() bool {
 	return s.cfg.SyncChecker.Synced()
 }
 
+// canWaitForGossipSidecars reports whether the sidecars for slot may still arrive over gossip.
+func (s *Service) canWaitForGossipSidecars(slot primitives.Slot) bool {
+	return s.inRegularSync() && slot+1 >= s.CurrentSlot()
+}
+
 // validating returns true if at least one validator is attached to this BN
 // via beacon_committee_subscriptions.
 func (s *Service) validating() bool {

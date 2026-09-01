@@ -539,12 +539,12 @@ func (s *Service) GetAttestationData(
 		return nil, &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get target root")}
 	}
 
-	headState, err := s.HeadFetcher.HeadState(ctx)
+	headState, err := s.HeadFetcher.HeadStateReadOnly(ctx)
 	if err != nil {
 		return nil, &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get head state")}
 	}
 	if coreTime.CurrentEpoch(headState) < slots.ToEpoch(req.Slot) { // Ensure justified checkpoint safety by processing head state across the boundary.
-		headState, err = transition.ProcessSlotsUsingNextSlotCache(ctx, headState, headRoot, req.Slot)
+		headState, err = transition.ProcessSlotsIfNeeded(ctx, headState, headRoot, req.Slot)
 		if err != nil {
 			return nil, &RpcError{Reason: Internal, Err: errors.Errorf("could not process slots up to %d: %v", req.Slot, err)}
 		}
@@ -647,7 +647,7 @@ func (s *Service) SubmitSyncMessage(ctx context.Context, msg *ethpb.SyncCommitte
 }
 
 // RegisterSyncSubnetCurrentPeriod registers a persistent subnet for the current sync committee period.
-func RegisterSyncSubnetCurrentPeriod(s beaconState.BeaconState, epoch primitives.Epoch, pubKey []byte, status validator.Status) error {
+func RegisterSyncSubnetCurrentPeriod(s beaconState.ReadOnlyBeaconState, epoch primitives.Epoch, pubKey []byte, status validator.Status) error {
 	committee, err := s.CurrentSyncCommittee()
 	if err != nil {
 		return err
@@ -658,7 +658,7 @@ func RegisterSyncSubnetCurrentPeriod(s beaconState.BeaconState, epoch primitives
 }
 
 // RegisterSyncSubnetCurrentPeriodProto registers a persistent subnet for the current sync committee period.
-func RegisterSyncSubnetCurrentPeriodProto(s beaconState.BeaconState, epoch primitives.Epoch, pubKey []byte, status ethpb.ValidatorStatus) error {
+func RegisterSyncSubnetCurrentPeriodProto(s beaconState.ReadOnlyBeaconState, epoch primitives.Epoch, pubKey []byte, status ethpb.ValidatorStatus) error {
 	committee, err := s.CurrentSyncCommittee()
 	if err != nil {
 		return err
@@ -669,7 +669,7 @@ func RegisterSyncSubnetCurrentPeriodProto(s beaconState.BeaconState, epoch primi
 }
 
 // RegisterSyncSubnetNextPeriod registers a persistent subnet for the next sync committee period.
-func RegisterSyncSubnetNextPeriod(s beaconState.BeaconState, epoch primitives.Epoch, pubKey []byte, status validator.Status) error {
+func RegisterSyncSubnetNextPeriod(s beaconState.ReadOnlyBeaconState, epoch primitives.Epoch, pubKey []byte, status validator.Status) error {
 	committee, err := s.NextSyncCommittee()
 	if err != nil {
 		return err
@@ -680,7 +680,7 @@ func RegisterSyncSubnetNextPeriod(s beaconState.BeaconState, epoch primitives.Ep
 }
 
 // RegisterSyncSubnetNextPeriodProto registers a persistent subnet for the next sync committee period.
-func RegisterSyncSubnetNextPeriodProto(s beaconState.BeaconState, epoch primitives.Epoch, pubKey []byte, status ethpb.ValidatorStatus) error {
+func RegisterSyncSubnetNextPeriodProto(s beaconState.ReadOnlyBeaconState, epoch primitives.Epoch, pubKey []byte, status ethpb.ValidatorStatus) error {
 	committee, err := s.NextSyncCommittee()
 	if err != nil {
 		return err

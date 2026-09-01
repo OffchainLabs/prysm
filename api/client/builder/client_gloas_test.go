@@ -40,9 +40,9 @@ func testExecutionPayloadBid() *eth.SignedExecutionPayloadBid {
 	}
 }
 
-func testRequestAuth() *eth.SignedRequestAuth {
-	return &eth.SignedRequestAuth{
-		Message:   &eth.RequestAuth{Data: []byte("http://builder.example"), Slot: 123},
+func testBuilderRequestAuth() *eth.SignedBuilderRequestAuth {
+	return &eth.SignedBuilderRequestAuth{
+		Message:   &eth.BuilderRequestAuth{Data: []byte("http://builder.example"), Slot: 123},
 		Signature: bytes.Repeat([]byte{9}, 96),
 	}
 }
@@ -82,7 +82,7 @@ func TestClient_GetExecutionPayloadBid(t *testing.T) {
 		}{Data: structs.SignedExecutionPayloadBidFromConsensus(want)})
 		require.NoError(t, err)
 		c := gloasBidClient(t, http.StatusOK, api.JsonMediaType, body)
-		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, testRequestAuth())
+		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, testBuilderRequestAuth())
 		require.NoError(t, err)
 		require.NotNil(t, got)
 		require.Equal(t, want.Message.Slot, got.Message.Slot)
@@ -94,7 +94,7 @@ func TestClient_GetExecutionPayloadBid(t *testing.T) {
 		body, err := want.MarshalSSZ()
 		require.NoError(t, err)
 		c := gloasBidClient(t, http.StatusOK, api.OctetStreamMediaType, body)
-		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, testRequestAuth())
+		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, testBuilderRequestAuth())
 		require.NoError(t, err)
 		require.NotNil(t, got)
 		require.Equal(t, want.Message.Value, got.Message.Value)
@@ -103,7 +103,7 @@ func TestClient_GetExecutionPayloadBid(t *testing.T) {
 
 	t.Run("no bid", func(t *testing.T) {
 		c := gloasBidClient(t, http.StatusNoContent, "", nil)
-		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, testRequestAuth())
+		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, testBuilderRequestAuth())
 		require.NoError(t, err)
 		require.IsNil(t, got)
 	})
@@ -111,7 +111,7 @@ func TestClient_GetExecutionPayloadBid(t *testing.T) {
 	t.Run("nil auth errors", func(t *testing.T) {
 		c := gloasBidClient(t, http.StatusOK, api.JsonMediaType, nil)
 		_, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, nil)
-		require.ErrorContains(t, "nil signed request auth", err)
+		require.ErrorContains(t, "nil signed builder request auth", err)
 	})
 
 	t.Run("advertises the shorter of client timeout and context deadline", func(t *testing.T) {
@@ -134,7 +134,7 @@ func TestClient_GetExecutionPayloadBid(t *testing.T) {
 		c := &Client{hc: hc, baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"}}
 		dctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
 		defer cancel()
-		_, err = c.GetExecutionPayloadBid(dctx, slot, parentHash, parentRoot, pubkey, testRequestAuth())
+		_, err = c.GetExecutionPayloadBid(dctx, slot, parentHash, parentRoot, pubkey, testBuilderRequestAuth())
 		require.NoError(t, err)
 	})
 
@@ -162,7 +162,7 @@ func TestClient_GetExecutionPayloadBid(t *testing.T) {
 		c := &Client{hc: hc, baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"}}
 		dctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
 		defer cancel()
-		got, err := c.GetExecutionPayloadBid(dctx, slot, parentHash, parentRoot, pubkey, testRequestAuth())
+		got, err := c.GetExecutionPayloadBid(dctx, slot, parentHash, parentRoot, pubkey, testBuilderRequestAuth())
 		require.NoError(t, err)
 		require.NotNil(t, got)
 	})
@@ -170,16 +170,16 @@ func TestClient_GetExecutionPayloadBid(t *testing.T) {
 	t.Run("unexpected content type errors with status and body", func(t *testing.T) {
 		html := []byte("<!doctype html><html><head><title>Buildoor</title></head></html>")
 		c := gloasBidClient(t, http.StatusOK, "text/html; charset=utf-8", html)
-		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, testRequestAuth())
+		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, testBuilderRequestAuth())
 		require.IsNil(t, got)
 		require.ErrorContains(t, "unexpected Content-Type", err)
 		require.ErrorContains(t, "text/html", err)
 		require.ErrorContains(t, "Buildoor", err)
 	})
 
-	t.Run("ssz request auth body", func(t *testing.T) {
-		auth := &eth.SignedRequestAuth{
-			Message:   &eth.RequestAuth{Data: []byte("http://builder.example"), Slot: 5},
+	t.Run("ssz builder request auth body", func(t *testing.T) {
+		auth := &eth.SignedBuilderRequestAuth{
+			Message:   &eth.BuilderRequestAuth{Data: []byte("http://builder.example"), Slot: 5},
 			Signature: bytes.Repeat([]byte{9}, 96),
 		}
 		wantBody, err := auth.MarshalSSZ()
@@ -230,7 +230,7 @@ func TestClient_GetExecutionPayloadBid(t *testing.T) {
 			}),
 		}
 		c := &Client{hc: hc, baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"}, sszEnabled: true}
-		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, testRequestAuth())
+		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, testBuilderRequestAuth())
 		require.NoError(t, err)
 		require.NotNil(t, got)
 		require.Equal(t, 2, reqCount)
@@ -268,8 +268,8 @@ func TestClient_SubmitBuilderPreferences_SSZFallback(t *testing.T) {
 	var pubkey [48]byte
 	req := &eth.BuilderPreferencesRequest{
 		Preferences: &eth.BuilderPreferences{MaxExecutionPayment: 1000},
-		Auth: &eth.SignedRequestAuth{
-			Message:   &eth.RequestAuth{Data: []byte("http://builder.example"), Slot: 5},
+		Auth: &eth.SignedBuilderRequestAuth{
+			Message:   &eth.BuilderRequestAuth{Data: []byte("http://builder.example"), Slot: 5},
 			Signature: bytes.Repeat([]byte{9}, 96),
 		},
 	}
