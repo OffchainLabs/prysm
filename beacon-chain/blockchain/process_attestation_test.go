@@ -236,6 +236,30 @@ func TestService_GetRecentPreState(t *testing.T) {
 	require.NotNil(t, service.getRecentPreState(ctx, &ethpb.Checkpoint{Epoch: 1, Root: ckRoot}))
 }
 
+func TestService_GetRecentPreState_NextEpochUsesHeadState(t *testing.T) {
+	service, _ := minimalTestService(t)
+	ctx := t.Context()
+
+	s, err := util.NewBeaconState()
+	require.NoError(t, err)
+	ckRoot := bytesutil.PadTo([]byte{'A'}, fieldparams.RootLength)
+	cp0 := &ethpb.Checkpoint{Epoch: 0, Root: ckRoot}
+	require.NoError(t, s.SetFinalizedCheckpoint(cp0))
+
+	st, blk, err := prepareForkchoiceState(ctx, 31, [32]byte(ckRoot), [32]byte{}, [32]byte{'R'}, cp0, cp0)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+	service.head = &head{
+		root:  [32]byte(ckRoot),
+		state: s,
+		block: blk,
+		slot:  31,
+	}
+	recent := service.getRecentPreState(ctx, &ethpb.Checkpoint{Epoch: 1, Root: ckRoot})
+	require.NotNil(t, recent)
+	require.Equal(t, s.Slot(), recent.Slot())
+}
+
 func TestService_GetRecentPreState_Epoch_0(t *testing.T) {
 	service, _ := minimalTestService(t)
 	ctx := t.Context()

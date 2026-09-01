@@ -56,11 +56,17 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 	if !s.cfg.ForkChoiceStore.IsCanonical([32]byte(c.Root)) {
 		return nil
 	}
-	// Advance the head state to the start of the target epoch.
 	// This point can only be reached if c.Root == headRoot and c.Epoch > headEpoch.
 	slot, err := slots.EpochStart(c.Epoch)
 	if err != nil {
 		return nil
+	}
+	if c.Epoch == headEpoch+1 && slots.ToForkVersion(slot) == slots.ToForkVersion(s.HeadSlot()) {
+		st, err := s.HeadStateReadOnly(ctx)
+		if err != nil {
+			return nil
+		}
+		return st
 	}
 	// Try if we have already set the checkpoint cache. This will be tried again if we fail here but the check is cheap anyway.
 	epochKey := strconv.FormatUint(uint64(c.Epoch), 10 /* base 10 */)
