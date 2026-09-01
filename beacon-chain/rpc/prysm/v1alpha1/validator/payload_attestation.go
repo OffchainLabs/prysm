@@ -8,6 +8,8 @@ import (
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -65,6 +67,14 @@ func (vs *Server) SubmitPayloadAttestation(
 			"payload attestation message slot must match current slot: got %d, current %d", msg.Data.Slot, currentSlot)
 	}
 
+	st, indices, err := vs.payloadAttestationStateAndCommitteeIndices(ctx, msg)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "Could not determine PTC committee index: %v", err)
+	}
+	if err := verification.VerifyPayloadAttestationMessageSignature(st, msg); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "Invalid payload attestation signature: %v", err)
+	}
+
 	if err := vs.P2P.Broadcast(ctx, msg); err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not broadcast payload attestation message: %v", err)
 	}
@@ -73,10 +83,6 @@ func (vs *Server) SubmitPayloadAttestation(
 		return nil, status.Errorf(codes.Internal, "Could not process payload attestation message: %v", err)
 	}
 
-	indices, err := vs.payloadAttestationCommitteeIndices(ctx, msg)
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "Could not determine PTC committee index: %v", err)
-	}
 	if err := vs.PayloadAttestationPool.InsertPayloadAttestation(msg, indices); err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not insert payload attestation into pool: %v", err)
 	}
@@ -96,14 +102,18 @@ func (vs *Server) SubmitPayloadAttestation(
 	return &emptypb.Empty{}, nil
 }
 
-func (vs *Server) payloadAttestationCommitteeIndices(ctx context.Context, msg *ethpb.PayloadAttestationMessage) ([]uint64, error) {
+func (vs *Server) payloadAttestationStateAndCommitteeIndices(ctx context.Context, msg *ethpb.PayloadAttestationMessage) (state.ReadOnlyBeaconState, []uint64, error) {
 	root := bytesutil.ToBytes32(msg.Data.BeaconBlockRoot)
 	st, err := vs.PayloadAttestationReceiver.PtcLookupState(ctx, root, msg.Data.Slot)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if st == nil {
-		return nil, status.Errorf(codes.Unavailable, "unable to find state for payload attestation")
+		return nil, nil, status.Errorf(codes.Unavailable, "unable to find state for payload attestation")
 	}
-	return gloas.PayloadCommitteeIndices(ctx, st, msg.Data.Slot, msg.ValidatorIndex)
+	indices, err := gloas.PayloadCommitteeIndices(ctx, st, msg.Data.Slot, msg.ValidatorIndex)
+	if err != nil {
+		return nil, nil, err
+	}
+	return st, indices, nil
 }
