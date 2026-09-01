@@ -44,6 +44,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/io/logs"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	ethpbv1alpha1 "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/jobs"
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	grpcopentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
@@ -138,6 +139,7 @@ type Config struct {
 	LCStore                          *lightClient.Store
 	GraffitiInfo                     *execution.GraffitiInfo
 	VerifierWaiter                   *verification.InitializerWaiter
+	JobsRegistry                     *jobs.Registry
 }
 
 // NewService instantiates a new RPC service instance that will
