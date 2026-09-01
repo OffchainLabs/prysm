@@ -2,7 +2,6 @@ package remote_web3signer
 
 import (
 	"maps"
-	"slices"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
@@ -65,7 +64,7 @@ func (k *keySets) replace(src keySource, keys []pubkey) (bool, []pubkey) {
 	}
 
 	k.union = union
-	return true, slices.Collect(maps.Keys(union))
+	return true, sortedKeys(union)
 }
 
 // get returns a copy of src's set. The copy is safe for the caller to mutate.
@@ -81,11 +80,12 @@ func (k *keySets) get(src keySource) map[pubkey]struct{} {
 }
 
 // all returns a copy of the union of every source's set.
+// Returned keys are sorted for deterministic output.
 func (k *keySets) all() []pubkey {
 	k.mu.RLock()
 	defer k.mu.RUnlock()
 
-	return slices.Collect(maps.Keys(k.union))
+	return sortedKeys(k.union)
 }
 
 // owner returns the source owning key. A key present in several sets is owned by the

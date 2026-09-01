@@ -141,3 +141,11 @@ func TestKeySets_ReadersGetCopies(t *testing.T) {
 		require.DeepEqual(t, []pubkey{keyA}, k.all())
 	})
 }
+
+func TestKeySets_AllReturnsSortedKeys(t *testing.T) {
+	var k keySets
+	_, _ = k.replace(sourceFile, []pubkey{keyB, keyA, keyC})
+
+	all := k.all()
+	require.DeepEqual(t, []pubkey{keyA, keyB, keyC}, all)
+}

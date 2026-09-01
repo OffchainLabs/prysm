@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"path/filepath"
-	"slices"
 	"sync"
 	"time"
 
@@ -648,7 +646,7 @@ func (km *Keymanager) AddPublicKeys(pubKeys []string) ([]*keymanager.KeyStatus, 
 	}
 
 	if changed {
-		if err := km.savePublicKeysToFile(slices.Collect(maps.Keys(fileKeys))); err != nil {
+		if err := km.savePublicKeysToFile(sortedKeys(fileKeys)); err != nil {
 			return nil, fmt.Errorf("save public keys to file: %w", err)
 		}
 	}
@@ -708,7 +706,7 @@ func (km *Keymanager) DeletePublicKeys(publicKeys []string) ([]*keymanager.KeySt
 	}
 
 	if changed {
-		if err := km.savePublicKeysToFile(slices.Collect(maps.Keys(fileKeys))); err != nil {
+		if err := km.savePublicKeysToFile(sortedKeys(fileKeys)); err != nil {
 			return nil, fmt.Errorf("save public keys to file: %w", err)
 		}
 	}

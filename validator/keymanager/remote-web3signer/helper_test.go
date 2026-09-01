@@ -6,6 +6,28 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
+func TestSortedKeys(t *testing.T) {
+	// Differs from keyA only in a later byte, so the tie is broken past the first one.
+	keyA2 := pubkey{1, 9}
+
+	t.Run("empty set", func(t *testing.T) {
+		require.Equal(t, 0, len(sortedKeys(nil)))
+	})
+
+	t.Run("ascending byte order", func(t *testing.T) {
+		set := map[pubkey]struct{}{keyC: {}, keyA2: {}, keyB: {}, keyA: {}}
+		require.DeepEqual(t, []pubkey{keyA, keyA2, keyB, keyC}, sortedKeys(set))
+	})
+
+	t.Run("stable across calls", func(t *testing.T) {
+		set := map[pubkey]struct{}{keyA: {}, keyB: {}, keyC: {}, keyA2: {}}
+		want := sortedKeys(set)
+		for range 20 {
+			require.DeepEqual(t, want, sortedKeys(set))
+		}
+	})
+}
+
 func TestDecodePublicKeys(t *testing.T) {
 	tests := []struct {
 		name    string

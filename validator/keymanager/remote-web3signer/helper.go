@@ -1,7 +1,10 @@
 package remote_web3signer
 
 import (
+	"bytes"
 	"fmt"
+	"maps"
+	"slices"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -9,6 +12,13 @@ import (
 
 // pubkey is a BLS public key in its raw form.
 type pubkey = [fieldparams.BLSPubkeyLength]byte
+
+// sortedKeys returns the keys of set in ascending byte order.
+func sortedKeys(set map[pubkey]struct{}) []pubkey {
+	return slices.SortedFunc(maps.Keys(set), func(a, b pubkey) int {
+		return bytes.Compare(a[:], b[:])
+	})
+}
 
 // decodePublicKeys decodes and dedups hex-encoded BLS public keys.
 func decodePublicKeys(raw []string) ([]pubkey, error) {
