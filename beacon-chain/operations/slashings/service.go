@@ -60,6 +60,9 @@ func (p *PoolService) run() {
 	}
 
 	p.waitForChainInitialization()
+	if p.clock == nil {
+		return
+	}
 
 	electraTime, err := slots.StartTime(p.clock.GenesisTime(), electraSlot)
 	if err != nil {
@@ -84,6 +87,7 @@ func (p *PoolService) waitForChainInitialization() {
 	clock, err := p.cw.WaitForClock(p.ctx)
 	if err != nil {
 		log.WithError(err).Error("Could not receive chain start notification")
+		return
 	}
 	p.clock = clock
 	log.WithField("genesisTime", clock.GenesisTime()).Info(
