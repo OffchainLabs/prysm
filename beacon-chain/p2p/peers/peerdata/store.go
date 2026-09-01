@@ -65,6 +65,14 @@ type PeerData struct {
 	TopicScores      map[string]*ethpb.TopicScoreSnapshot
 	GossipScore      float64
 	BehaviourPenalty float64
+	// Goodbye tracking: most recent goodbye code observed for this peer,
+	// whether we sent it (SentByUs=true) or received it from the peer
+	// (SentByUs=false), and the time it was observed. Zero-valued when no
+	// goodbye has been exchanged. Field order: large -> small to satisfy
+	// nogo's maligned-struct check.
+	LastGoodbyeCode     uint64
+	LastGoodbyeObserved time.Time
+	LastGoodbyeSentByUs bool
 }
 
 // NewStore creates new peer data store.

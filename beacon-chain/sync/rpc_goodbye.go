@@ -63,6 +63,7 @@ func (s *Service) goodbyeRPCHandler(_ context.Context, msg any, stream libp2pcor
 		"isRateLimited": isRateLimitedPeer,
 	}).Debug("Received a goodbye message")
 
+	s.cfg.p2p.Peers().SetLastGoodbye(peerID, uint64(*m), false)
 	s.cfg.p2p.Peers().SetNextValidTime(peerID, goodByeBackoff(*m))
 
 	if err := s.cfg.p2p.Disconnect(peerID); err != nil {
@@ -124,6 +125,7 @@ func (s *Service) sendGoodByeMessage(ctx context.Context, code p2ptypes.RPCGoodb
 	if err != nil {
 		return err
 	}
+	s.cfg.p2p.Peers().SetLastGoodbye(id, uint64(code), true)
 	stream, err := s.cfg.p2p.Send(ctx, &code, topic, id)
 	if err != nil {
 		return err
