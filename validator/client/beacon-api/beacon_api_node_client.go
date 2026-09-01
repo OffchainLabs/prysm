@@ -2,8 +2,10 @@ package beacon_api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/rest"
@@ -21,7 +23,6 @@ var (
 )
 
 type beaconApiNodeClient struct {
-	fallbackClient  iface.NodeClient
 	handler         rest.Handler
 	genesisProvider GenesisProvider
 }
@@ -95,13 +96,38 @@ func (c *beaconApiNodeClient) Version(ctx context.Context, _ *empty.Empty) (*eth
 	}, nil
 }
 
-func (c *beaconApiNodeClient) Peers(ctx context.Context, in *empty.Empty) (*ethpb.Peers, error) {
-	if c.fallbackClient != nil {
-		return c.fallbackClient.Peers(ctx, in)
+func (c *beaconApiNodeClient) Peers(ctx context.Context, _ *empty.Empty) (*ethpb.Peers, error) {
+	var peersResponse structs.GetPeersResponse
+	if err := c.handler.Get(ctx, "/eth/v1/node/peers", &peersResponse); err != nil {
+		return nil, err
 	}
 
-	// TODO: Implement me
-	return nil, errors.New("beaconApiNodeClient.Peers is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiNodeClientWithFallback.")
+	peers := make([]*ethpb.Peer, len(peersResponse.Data))
+	for i, p := range peersResponse.Data {
+		if p == nil {
+			return nil, fmt.Errorf("peer at index %d is nil", i)
+		}
+
+		// The beacon API spells the enums in lower case, the proto enums in upper case.
+		direction, ok := ethpb.PeerDirection_value[strings.ToUpper(p.Direction)]
+		if !ok {
+			return nil, fmt.Errorf("unknown peer direction `%s`", p.Direction)
+		}
+		state, ok := ethpb.ConnectionState_value[strings.ToUpper(p.State)]
+		if !ok {
+			return nil, fmt.Errorf("unknown connection state `%s`", p.State)
+		}
+
+		peers[i] = &ethpb.Peer{
+			Address:         p.LastSeenP2PAddress,
+			Direction:       ethpb.PeerDirection(direction),
+			ConnectionState: ethpb.ConnectionState(state),
+			PeerId:          p.PeerId,
+			Enr:             p.Enr,
+		}
+	}
+
+	return &ethpb.Peers{Peers: peers}, nil
 }
 
 // IsReady returns true only if the node is fully synced (200 OK).
@@ -117,12 +143,10 @@ func (c *beaconApiNodeClient) IsReady(ctx context.Context) bool {
 	return statusCode == http.StatusOK
 }
 
-func NewNodeClientWithFallback(provider rest.RestConnectionProvider, fallbackClient iface.NodeClient) iface.NodeClient {
+func NewNodeClient(provider rest.RestConnectionProvider) iface.NodeClient {
 	handler := provider.Handler()
-	b := &beaconApiNodeClient{
+	return &beaconApiNodeClient{
 		handler:         handler,
-		fallbackClient:  fallbackClient,
 		genesisProvider: &beaconApiGenesisProvider{handler: handler},
 	}
-	return b
 }
