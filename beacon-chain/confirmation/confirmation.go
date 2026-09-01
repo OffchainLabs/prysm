@@ -177,8 +177,10 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 		}
 		return ffg
 	})
+	// honest() is only reachable at an epoch start once the slot's own block is already head.
+	honestReachable := !slots.IsEpochStart(currentSlot) || headSlot >= currentSlot
 	// The pulled up head state can copy and advance a state, precompute it off the forkchoice lock.
-	if confirmedSlotErr != nil || confirmedIsAncErr != nil || !confirmedIsAnc || slots.ToEpoch(confirmedSlot) < slots.ToEpoch(currentSlot) {
+	if honestReachable && (confirmedSlotErr != nil || confirmedIsAncErr != nil || !confirmedIsAnc || slots.ToEpoch(confirmedSlot) < slots.ToEpoch(currentSlot)) {
 		getFFG()
 	}
 
