@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsignature"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/fieldtrie"
 	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
@@ -70,6 +71,7 @@ type BeaconState struct {
 	pendingPartialWithdrawals     []*ethpb.PendingPartialWithdrawal // pending_partial_withdrawals: List[PartialWithdrawal, PENDING_PARTIAL_WITHDRAWALS_LIMIT]
 	pendingConsolidations         []*ethpb.PendingConsolidation     // pending_consolidations: List[PendingConsolidation, PENDING_CONSOLIDATIONS_LIMIT]
 	proposerLookahead             []primitives.ValidatorIndex       // proposer_look_ahead: List[uint64, (MIN_LOOKAHEAD + 1)*SLOTS_PER_EPOCH]
+	builderDepositSignatureCache  *depositsignature.Cache
 
 	// Gloas fields
 	latestExecutionPayloadBid    *ethpb.ExecutionPayloadBid

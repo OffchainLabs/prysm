@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "beacon_state.go",
+        "builder_deposit_cache.go",
         "doc.go",
         "error.go",
         "getters_attestation.go",
@@ -57,6 +58,7 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native",
     visibility = ["//visibility:public"],
     deps = [
+        "//beacon-chain/cache/depositsignature:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/time:go_default_library",
         "//beacon-chain/state:go_default_library",

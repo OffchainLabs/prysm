@@ -1,0 +1,26 @@
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["cache.go"],
+    importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsignature",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//beacon-chain/core/helpers:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["cache_test.go"],
+    deps = [
+        ":go_default_library",
+        "//beacon-chain/core/signing:go_default_library",
+        "//config/fieldparams:go_default_library",
+        "//config/params:go_default_library",
+        "//crypto/bls:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
+        "//testing/require:go_default_library",
+    ],
+)

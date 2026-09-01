@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"slices"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsignature"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/fieldtrie"
 	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
@@ -759,6 +760,7 @@ func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateFulu) (state.BeaconState
 		pendingPartialWithdrawals:         st.PendingPartialWithdrawals,
 		pendingConsolidations:             st.PendingConsolidations,
 		proposerLookahead:                 proposerLookahead,
+		builderDepositSignatureCache:      depositsignature.New(),
 
 		dirtyFields:      make(map[types.FieldIndex]bool, fieldCount),
 		dirtyIndices:     make(map[types.FieldIndex][]uint64, fieldCount),
@@ -869,6 +871,7 @@ func InitializeFromProtoUnsafeGloas(st *ethpb.BeaconStateGloas) (state.BeaconSta
 		latestBlockHash:               st.LatestBlockHash,
 		payloadExpectedWithdrawals:    st.PayloadExpectedWithdrawals,
 		ptcWindow:                     st.PtcWindow,
+		builderDepositSignatureCache:  depositsignature.New(),
 		dirtyFields:                   make(map[types.FieldIndex]bool, fieldCount),
 		dirtyIndices:                  make(map[types.FieldIndex][]uint64, fieldCount),
 		stateFieldLeaves:              make(map[types.FieldIndex]*fieldtrie.FieldTrie, len(fieldMap)),
@@ -975,17 +978,18 @@ func (b *BeaconState) Copy() state.BeaconState {
 		ptcWindow:                 b.ptcWindow,
 
 		// Large arrays, increases over time.
-		balancesMultiValue:         b.balancesMultiValue,
-		historicalRoots:            b.historicalRoots,
-		historicalSummaries:        b.historicalSummaries,
-		validatorsMultiValue:       b.validatorsMultiValue,
-		previousEpochParticipation: b.previousEpochParticipation,
-		currentEpochParticipation:  b.currentEpochParticipation,
-		inactivityScoresMultiValue: b.inactivityScoresMultiValue,
-		pendingDeposits:            b.pendingDeposits,
-		pendingPartialWithdrawals:  b.pendingPartialWithdrawals,
-		pendingConsolidations:      b.pendingConsolidations,
-		builders:                   b.builders,
+		balancesMultiValue:           b.balancesMultiValue,
+		historicalRoots:              b.historicalRoots,
+		historicalSummaries:          b.historicalSummaries,
+		validatorsMultiValue:         b.validatorsMultiValue,
+		previousEpochParticipation:   b.previousEpochParticipation,
+		currentEpochParticipation:    b.currentEpochParticipation,
+		inactivityScoresMultiValue:   b.inactivityScoresMultiValue,
+		pendingDeposits:              b.pendingDeposits,
+		pendingPartialWithdrawals:    b.pendingPartialWithdrawals,
+		pendingConsolidations:        b.pendingConsolidations,
+		builders:                     b.builders,
+		builderDepositSignatureCache: b.builderDepositSignatureCache,
 
 		// Everything else, too small to be concerned about, constant size.
 		genesisValidatorsRoot:               b.genesisValidatorsRoot,

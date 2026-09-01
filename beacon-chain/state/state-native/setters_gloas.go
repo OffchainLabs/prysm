@@ -1,6 +1,7 @@
 package state_native
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 
@@ -766,7 +767,7 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 			newPendingDeposits = append(newPendingDeposits, deposit)
 			continue
 		}
-		isPending, err := helpers.IsPendingValidator(newPendingDeposits, deposit.PublicKey)
+		isPending, err := b.isPendingValidator(newPendingDeposits, deposit.PublicKey)
 		if err != nil {
 			return err
 		}
@@ -790,12 +791,7 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 
 // applyDepositForNewBuilder onboards a single pending deposit as a new builder, used by onboard_builders_from_pending_deposits.
 func (b *BeaconState) applyDepositForNewBuilder(deposit *ethpb.PendingDeposit) error {
-	valid, err := helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
-		PublicKey:             deposit.PublicKey,
-		WithdrawalCredentials: deposit.WithdrawalCredentials,
-		Amount:                deposit.Amount,
-		Signature:             deposit.Signature,
-	})
+	valid, err := b.verifyPendingDepositSignature(deposit)
 	if err != nil {
 		log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Skipping builder deposit: could not verify signature")
 		return nil
@@ -811,6 +807,35 @@ func (b *BeaconState) applyDepositForNewBuilder(deposit *ethpb.PendingDeposit) e
 		return nil
 	}
 	return nil
+}
+
+func (b *BeaconState) isPendingValidator(pendingDeposits []*ethpb.PendingDeposit, pubkey []byte) (bool, error) {
+	for _, deposit := range pendingDeposits {
+		if deposit == nil || !bytes.Equal(deposit.PublicKey, pubkey) {
+			continue
+		}
+		valid, err := b.verifyPendingDepositSignature(deposit)
+		if err != nil {
+			log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Warn("Could not verify pending deposit signature")
+			continue
+		}
+		if valid {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (b *BeaconState) verifyPendingDepositSignature(deposit *ethpb.PendingDeposit) (bool, error) {
+	if b.builderDepositSignatureCache != nil {
+		return b.builderDepositSignatureCache.Verify(deposit)
+	}
+	return helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
+		PublicKey:             deposit.PublicKey,
+		WithdrawalCredentials: deposit.WithdrawalCredentials,
+		Amount:                deposit.Amount,
+		Signature:             deposit.Signature,
+	})
 }
 
 // SetBuilders replaces the entire builders registry.

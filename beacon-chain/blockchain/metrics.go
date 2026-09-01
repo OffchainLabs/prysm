@@ -269,6 +269,31 @@ var (
 		Name: "builder_self_build_only",
 		Help: "1 when the builder circuit breaker forces self-building, 0 otherwise.",
 	})
+	builderDepositPreverifyDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "builder_deposit_preverify_duration_seconds",
+		Help:    "Duration of one pre-Gloas builder deposit signature cache-warming pass.",
+		Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 1.5, 2, 2.5, 3},
+	})
+	builderDepositPreverifyPending = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "builder_deposit_preverify_pending_deposits",
+		Help: "Pending deposits visible to the latest pre-Gloas cache-warming pass.",
+	})
+	builderDepositPreverifyCached = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "builder_deposit_preverify_cached_deposits",
+		Help: "Deposit signature results cached for the Gloas fork transition.",
+	})
+	builderDepositPreverifyScanned = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "builder_deposit_preverify_scanned_deposits",
+		Help: "Pending deposits scanned by the latest pre-Gloas cache-warming pass.",
+	})
+	builderDepositPreverifyBuilderPubkeys = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "builder_deposit_preverify_builder_pubkeys",
+		Help: "Builder pubkeys discovered during the pre-Gloas cache-warming window.",
+	})
+	builderDepositPreverifySignatures = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "builder_deposit_preverify_signatures_total",
+		Help: "Deposit signatures verified before Gloas by deposit type and result.",
+	}, []string{"type", "result"})
 	goroutineCountGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "beacon_goroutine_count",
 		Help: "Goroutine count sampled once per slot.",

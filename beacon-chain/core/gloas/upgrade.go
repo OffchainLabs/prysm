@@ -3,6 +3,7 @@ package gloas
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsignature"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
@@ -123,10 +124,27 @@ func UpgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 	if err := s.SetPTCWindow(ptcWindow); err != nil {
 		return nil, errors.Wrap(err, "failed to set ptc window")
 	}
+	copyBuilderDepositSignatureCache(beaconState, s)
 	if err := s.OnboardBuildersFromPendingDeposits(); err != nil {
 		return nil, errors.Wrap(err, "failed to onboard builders from pending deposits")
 	}
+	if cached, ok := s.(builderDepositSignatureCacheProvider); ok {
+		cached.BuilderDepositSignatureCache().Clear()
+	}
 	return s, nil
+}
+
+type builderDepositSignatureCacheProvider interface {
+	BuilderDepositSignatureCache() *depositsignature.Cache
+}
+
+func copyBuilderDepositSignatureCache(source, target state.BeaconState) {
+	sourceCache, sourceOK := source.(builderDepositSignatureCacheProvider)
+	targetCache, targetOK := target.(builderDepositSignatureCacheProvider)
+	if !sourceOK || !targetOK {
+		return
+	}
+	targetCache.BuilderDepositSignatureCache().CopyFrom(sourceCache.BuilderDepositSignatureCache())
 }
 
 // initializePTCWindow builds the initial PTC window for the Gloas fork upgrade.

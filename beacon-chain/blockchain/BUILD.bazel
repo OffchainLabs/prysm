@@ -23,6 +23,7 @@ go_library(
         "options.go",
         "payload_arrivals.go",
         "pow_block.go",
+        "preverify_builder_deposits.go",
         "process_attestation.go",
         "process_attestation_helpers.go",
         "process_block.go",
