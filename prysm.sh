@@ -107,14 +107,48 @@ mkdir -p "$wrapper_dir"
 
 function get_prysm_version() {
     if [[ -n ${USE_PRYSM_VERSION:-} ]]; then
-        readonly reason="specified in \$USE_PRYSM_VERSION"
-        readonly prysm_version="${USE_PRYSM_VERSION}"
+        reason="specified in \$USE_PRYSM_VERSION"
+        prysm_version="${USE_PRYSM_VERSION}"
     else
         # Find the latest Prysm version available for download.
-        readonly reason="automatically selected latest available version"
-        prysm_version=$(curl -f -s https://prysmaticlabs.com/releases/latest) || (color "31" "Starting prysm requires an internet connection. If you are being blocked by your antivirus, you can download the beacon chain and validator executables from our releases page on Github here https://github.com/OffchainLabs/prysm/releases/" && exit 1)
-        readonly prysm_version
+        prysm_version=$(curl -f -s https://prysmaticlabs.com/releases/latest 2>/dev/null)
+
+        if [[ -n "$prysm_version" ]]; then
+            reason="automatically selected latest available version"
+        else
+            # No internet connection, try to find existing binaries
+            color "33" "Unable to fetch latest version (no internet connection). Checking for existing binaries..."
+
+            # Look for existing binaries in the dist directory
+            local existing_binaries=()
+            if [[ -d "$wrapper_dir" ]]; then
+                # Find all beacon-chain binaries and extract versions
+                while IFS= read -r -d '' binary; do
+                    if [[ -x "$binary" ]]; then
+                        # Extract version from filename (e.g., beacon-chain-v4.0.0-linux-amd64)
+                        local basename=$(basename "$binary")
+                        if [[ $basename =~ beacon-chain-(.+)-${system}-${arch}$ ]]; then
+                            existing_binaries+=("${BASH_REMATCH[1]}")
+                        elif [[ $basename =~ beacon-chain-(.+)-modern-${system}-${arch}$ ]]; then
+                            existing_binaries+=("${BASH_REMATCH[1]}")
+                        fi
+                    fi
+                done < <(find "$wrapper_dir" -name "beacon-chain-*-${system}-${arch}" -print0 2>/dev/null)
+            fi
+
+            if [[ ${#existing_binaries[@]} -gt 0 ]]; then
+                # Use the most recent version (assuming semantic versioning)
+                prysm_version=$(printf '%s\n' "${existing_binaries[@]}" | sort -V | tail -n1)
+                reason="using existing local binary (offline mode)"
+                color "33" "Using existing binary version: $prysm_version"
+            else
+                color "31" "Starting prysm requires an internet connection. If you are being blocked by your antivirus, you can download the beacon chain and validator executables from our releases page on Github here https://github.com/OffchainLabs/prysm/releases/"
+                exit 1
+            fi
+        fi
     fi
+    readonly reason
+    readonly prysm_version
 }
 
 function verify() {
