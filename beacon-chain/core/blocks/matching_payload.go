@@ -1,4 +1,4 @@
-package gloas
+package blocks
 
 import (
 	"fmt"

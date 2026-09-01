@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
@@ -138,7 +137,7 @@ func processProposerSlashing(
 	var err error
 	// [New in Gloas:EIP7732]: remove the BuilderPendingPayment corresponding to the slashed proposer within 2 epoch window
 	if beaconState.Version() >= version.Gloas {
-		err = gloas.RemoveBuilderPendingPayment(beaconState, slashing.Header_1.Header)
+		err = RemoveBuilderPendingPayment(beaconState, slashing.Header_1.Header)
 		if err != nil {
 			return nil, err
 		}

@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -315,7 +314,7 @@ func AttestationParticipationFlagIndices(beaconState state.ReadOnlyBeaconState, 
 
 	var beaconBlockRoot [32]byte
 	copy(beaconBlockRoot[:], data.BeaconBlockRoot)
-	matchingPayload, err := gloas.MatchingPayload(
+	matchingPayload, err := blocks.MatchingPayload(
 		beaconState,
 		beaconBlockRoot,
 		data.Slot,

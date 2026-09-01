@@ -1,9 +1,10 @@
-package gloas
+package blocks_test
 
 import (
 	"bytes"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -22,7 +23,7 @@ func TestRemoveBuilderPendingPayment_CurrentEpoch(t *testing.T) {
 
 	setPendingPayment(t, st, paymentIndex, 123)
 
-	err := RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot})
+	err := blocks.RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot})
 	require.NoError(t, err)
 
 	got := getPendingPayment(t, st, paymentIndex)
@@ -41,7 +42,7 @@ func TestRemoveBuilderPendingPayment_PreviousEpoch(t *testing.T) {
 
 	setPendingPayment(t, st, paymentIndex, 456)
 
-	err := RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot})
+	err := blocks.RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot})
 	require.NoError(t, err)
 
 	got := getPendingPayment(t, st, paymentIndex)
@@ -60,7 +61,7 @@ func TestRemoveBuilderPendingPayment_OlderThanTwoEpoch(t *testing.T) {
 
 	original := getPendingPayment(t, st, paymentIndex)
 
-	err := RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot})
+	err := blocks.RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot})
 	require.NoError(t, err)
 
 	after := getPendingPayment(t, st, paymentIndex)
@@ -81,12 +82,12 @@ func TestRemoveBuilderPendingPayment_OnlyClearsMatchingProposer(t *testing.T) {
 	}))
 
 	// A slashing for a different proposer must not clear this payment.
-	require.NoError(t, RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot, ProposerIndex: 9}))
+	require.NoError(t, blocks.RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot, ProposerIndex: 9}))
 	got := getPendingPayment(t, st, paymentIndex)
 	require.Equal(t, uint64(123), uint64(got.Withdrawal.Amount))
 
 	// A slashing for the matching proposer clears the payment.
-	require.NoError(t, RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot, ProposerIndex: 5}))
+	require.NoError(t, blocks.RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot, ProposerIndex: 5}))
 	got = getPendingPayment(t, st, paymentIndex)
 	require.Equal(t, uint64(0), uint64(got.Withdrawal.Amount))
 }

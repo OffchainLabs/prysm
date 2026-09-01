@@ -1,11 +1,11 @@
-package gloas
+package blocks
 
 import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
@@ -29,7 +29,7 @@ import (
 //	    payment_index = slot % SLOTS_PER_EPOCH
 //	    payment = state.builder_pending_payments[payment_index]
 //	</spec>
-func RemoveBuilderPendingPayment(st state.BeaconState, header *eth.BeaconBlockHeader) error {
+func RemoveBuilderPendingPayment(st state.BeaconState, header *ethpb.BeaconBlockHeader) error {
 	proposalEpoch := slots.ToEpoch(header.Slot)
 	currentEpoch := time.CurrentEpoch(st)
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
