@@ -1,0 +1,3 @@
+### Fixed
+
+- fix getting latest block info when using --override-eth1data
