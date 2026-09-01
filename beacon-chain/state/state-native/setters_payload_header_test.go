@@ -112,3 +112,11 @@ func TestSetLatestExecutionPayloadHeader(t *testing.T) {
 	})
 
 }
+
+// gloas removed latest_execution_payload_header, so the getter must error rather than wrap a nil.
+func TestLatestExecutionPayloadHeader_GloasNotSupported(t *testing.T) {
+	s, err := util.NewBeaconStateGloas()
+	require.NoError(t, err)
+	_, err = s.LatestExecutionPayloadHeader()
+	require.ErrorContains(t, "not supported", err)
+}
