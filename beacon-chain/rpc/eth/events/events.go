@@ -93,6 +93,8 @@ const (
 	PayloadAttestationMessageTopic = "payload_attestation_message"
 	// ProposerPreferencesTopic represents a new signed proposer preferences event topic.
 	ProposerPreferencesTopic = "proposer_preferences"
+	// AttestationReadyTopic represents the event topic fired when it is safe to attest for the current slot.
+	AttestationReadyTopic = "attestation_ready"
 )
 
 var (
@@ -141,6 +143,7 @@ var stateFeedEventTopics = map[feed.EventType]string{
 	statefeed.LightClientOptimisticUpdate: LightClientOptimisticUpdateTopic,
 	statefeed.Reorg:                       ChainReorgTopic,
 	statefeed.BlockProcessed:              BlockTopic,
+	statefeed.AttestationReady:            AttestationReadyTopic,
 	statefeed.PayloadAttributes:           PayloadAttributesTopic,
 	statefeed.ExecutionPayloadAvailable:   ExecutionPayloadAvailableTopic,
 	statefeed.ExecutionPayloadProcessed:   ExecutionPayloadTopic,
@@ -494,6 +497,8 @@ func topicForEvent(event *feed.Event) string {
 		return ChainReorgTopic
 	case *statefeed.BlockProcessedData:
 		return BlockTopic
+	case *statefeed.AttestationReadyData:
+		return AttestationReadyTopic
 	case payloadattribute.EventData:
 		return PayloadAttributesTopic
 	case *operation.DataColumnReceivedData:
@@ -695,6 +700,14 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 				ExecutionOptimistic: v.Optimistic,
 			}
 			return jsonMarshalReader(eventName, blk)
+		}, nil
+	case *statefeed.AttestationReadyData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, &structs.AttestationReadyEvent{
+				Slot:                fmt.Sprintf("%d", v.Slot),
+				BeaconBlockRoot:     hexutil.Encode(v.BeaconBlockRoot[:]),
+				ExecutionOptimistic: v.ExecutionOptimistic,
+			})
 		}, nil
 	case *operation.PayloadAttestationMessageReceivedData:
 		return func() io.Reader {

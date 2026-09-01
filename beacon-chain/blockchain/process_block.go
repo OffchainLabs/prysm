@@ -109,6 +109,7 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	s.checkBuilderPayloadFailure(cfg.roblock.Block(), cfg.postState)
 	if cfg.headRoot != cfg.roblock.Root() {
 		s.logNonCanonicalBlockReceived(cfg.roblock.Root(), cfg.headRoot)
+		s.sendAttestationReadyOnBlock(cfg)
 		return nil
 	}
 	if cfg.roblock.Version() < version.Gloas {
@@ -116,6 +117,7 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	} else {
 		s.saveHeadIfNeeded(ctx, cfg)
 	}
+	s.sendAttestationReadyOnBlock(cfg)
 	// Pre-Fulu the caches are updated when computing the payload attributes
 	if cfg.postState.Version() >= version.Fulu {
 		go func() {

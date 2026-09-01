@@ -42,6 +42,12 @@ type BlockGossipEvent struct {
 	Block string `json:"block"`
 }
 
+type AttestationReadyEvent struct {
+	Slot                string `json:"slot"`
+	BeaconBlockRoot     string `json:"beacon_block_root"`
+	ExecutionOptimistic bool   `json:"execution_optimistic"`
+}
+
 type DataColumnGossipEvent struct {
 	Slot           string   `json:"slot"`
 	Index          string   `json:"index"`
