@@ -81,10 +81,8 @@ func (ds *Server) getPeer(pid peer.ID) (*ethpb.DebugPeerResponse, error) {
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "Requested peer does not exist: %v", err)
 	}
-	resp, err := peers.Scorers().BadResponsesScorer().Count(pid)
-	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "Requested peer does not exist: %v", err)
-	}
+	scoring := ds.PeerScoringFetcher.PeerScoring()
+	faultCount := scoring.BadResponseCount(pid)
 
 	rawPversion, err := peerStore.Get(pid, "ProtocolVersion")
 	pVersion, ok := rawPversion.(string)
@@ -98,7 +96,7 @@ func (ds *Server) getPeer(pid peer.ID) (*ethpb.DebugPeerResponse, error) {
 	}
 	peerInfo := &ethpb.DebugPeerResponse_PeerInfo{
 		Protocols:       protocol.ConvertToStrings(protocols),
-		FaultCount:      uint64(resp),
+		FaultCount:      uint64(faultCount),
 		ProtocolVersion: pVersion,
 		AgentVersion:    aVersion,
 		PeerLatency:     uint64(peerStore.LatencyEWMA(pid).Milliseconds()),
@@ -125,32 +123,26 @@ func (ds *Server) getPeer(pid peer.ID) (*ethpb.DebugPeerResponse, error) {
 		}
 		stringAddrs = append(stringAddrs, a.String())
 	}
-	pStatus, err := peers.ChainState(pid)
+	pStatus, err := scoring.PeerStatus(pid)
 	if err != nil {
 		// In the event chain state is non existent, we
 		// initialize with the zero value.
 		pStatus = new(ethpb.StatusV2)
 	}
-	lastUpdated, err := peers.ChainStateLastUpdated(pid)
-	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "Requested peer does not exist: %v", err)
-	}
+	lastUpdated := scoring.ChainStateLastUpdated(pid)
 	unixTime := uint64(0)
 	if !lastUpdated.IsZero() {
 		unixTime = uint64(lastUpdated.Unix())
 	}
-	gScore, bPenalty, topicMaps, err := peers.Scorers().GossipScorer().GossipData(pid)
-	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "Requested peer does not exist: %v", err)
-	}
+	gScore, bPenalty, topicMaps := scoring.GossipData(pid)
+	// The composite overall_score is gone; the proto field is retained but left unset.
 	scoreInfo := &ethpb.ScoreInfo{
-		OverallScore:       float32(peers.Scorers().Score(pid)),
-		ProcessedBlocks:    peers.Scorers().BlockProviderScorer().ProcessedBlocks(pid),
-		BlockProviderScore: float32(peers.Scorers().BlockProviderScorer().Score(pid)),
+		ProcessedBlocks:    ds.BlockProviderFetcher.BlockProviderSelector().ProcessedBlocks(pid),
+		BlockProviderScore: float32(ds.BlockProviderFetcher.BlockProviderSelector().Score(pid)),
 		TopicScores:        topicMaps,
 		GossipScore:        float32(gScore),
 		BehaviourPenalty:   float32(bPenalty),
-		ValidationError:    errorToString(peers.Scorers().ValidationError(pid)),
+		ValidationError:    errorToString(scoring.ValidationError(pid)),
 	}
 
 	// Convert statusV2 into status

@@ -62,6 +62,27 @@ var (
 			Help: "Count the number of times a node resyncs.",
 		},
 	)
+	prunedPeerTenureSeconds = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "p2p_pruned_peer_tenure_seconds",
+			Help:    "Connection age of excess inbound peers at the moment pruning evicts them.",
+			Buckets: []float64{30, 60, 120, 300, 600, 1200, 1800, 3600, 7200, 14400, 28800, 86400},
+		},
+	)
+	pruneProtectedPeersCount = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "p2p_peer_prune_protected_total",
+			Help: "Prune candidates spared, per pruning round, because evicting them would drop a subnet below the minimum peer count, by subnet type.",
+		},
+		[]string{"type"},
+	)
+	subnetsBelowMinPeers = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "p2p_subnets_below_min_peers",
+			Help: "Wanted subnets with fewer gossip peers than --minimum-peers-per-subnet, by subnet type.",
+		},
+		[]string{"type"},
+	)
 	duplicatesRemovedCounter = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "number_of_duplicates_removed",
@@ -363,6 +384,23 @@ func (s *Service) updateMetrics() {
 	subscribedTopicPeerCount.Reset()
 	for _, topic := range s.cfg.p2p.PubSub().GetTopics() {
 		subscribedTopicPeerCount.WithLabelValues(topic).Set(float64(len(s.cfg.p2p.PubSub().ListPeers(topic))))
+	}
+
+	s.updateSubnetCoverageMetrics(digest)
+}
+
+// updateSubnetCoverageMetrics counts wanted subnets short of --minimum-peers-per-subnet gossip peers.
+func (s *Service) updateSubnetCoverageMetrics(digest [4]byte) {
+	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
+	below := map[string]float64{subnetTypeAttestation: 0, subnetTypeSyncCommittee: 0, subnetTypeDataColumn: 0}
+	for ws := range s.wantedSubnetsForSlot(s.cfg.clock.CurrentSlot()) {
+		subnetTopic := fmt.Sprintf(ws.topicFormat, digest, ws.subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
+		if len(s.cfg.p2p.PubSub().ListPeers(subnetTopic)) < minimumPeersPerSubnet {
+			below[subnetTypeLabel(ws.topicFormat)]++
+		}
+	}
+	for subnetType, count := range below {
+		subnetsBelowMinPeers.WithLabelValues(subnetType).Set(count)
 	}
 }
 

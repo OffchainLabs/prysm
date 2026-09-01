@@ -47,24 +47,15 @@ type Store struct {
 // PeerData aggregates protocol and application level info about a single peer.
 type PeerData struct {
 	// Network related data.
-	Address       ma.Multiaddr
-	Direction     network.Direction
-	ConnState     ConnectionState
-	Enr           *enr.Record
+	Address   ma.Multiaddr
+	Direction network.Direction
+	ConnState ConnectionState
+	Enr       *enr.Record
+	// ConnectedAt is when the peer last transitioned to the Connected state; zero if never.
+	ConnectedAt   time.Time
 	NextValidTime time.Time
 	// Chain related data.
-	MetaData                  metadata.Metadata
-	ChainState                *ethpb.StatusV2
-	ChainStateLastUpdated     time.Time
-	ChainStateValidationError error
-	// Scorers internal data.
-	BadResponses         int
-	ProcessedBlocks      uint64
-	BlockProviderUpdated time.Time
-	// Gossip Scoring data.
-	TopicScores      map[string]*ethpb.TopicScoreSnapshot
-	GossipScore      float64
-	BehaviourPenalty float64
+	MetaData metadata.Metadata
 }
 
 // NewStore creates new peer data store.

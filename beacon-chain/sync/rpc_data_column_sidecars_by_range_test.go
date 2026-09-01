@@ -83,11 +83,11 @@ func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
 		msg := &pb.DataColumnSidecarsByRangeRequest{
 			Count: 0, // Invalid count
 		}
-		require.Equal(t, true, localP2P.Peers().Scorers().BadResponsesScorer().Score(remoteP2P.PeerID()) >= 0)
+		require.Equal(t, 0, localP2P.PeerScoring().BadResponseCount(remoteP2P.PeerID()))
 
 		err = service.dataColumnSidecarsByRangeRPCHandler(ctx, msg, stream)
 		require.NotNil(t, err)
-		require.Equal(t, true, localP2P.Peers().Scorers().BadResponsesScorer().Score(remoteP2P.PeerID()) < 0)
+		require.Equal(t, true, localP2P.PeerScoring().BadResponseCount(remoteP2P.PeerID()) > 0)
 
 		if util.WaitTimeout(&wg, 1*time.Second) {
 			t.Fatal("Did not receive stream within 1 sec")

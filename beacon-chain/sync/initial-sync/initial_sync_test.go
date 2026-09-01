@@ -55,9 +55,7 @@ func TestMain(m *testing.M) {
 	logrus.SetLevel(logrus.DebugLevel)
 	logrus.SetOutput(io.Discard)
 
-	resetCfg := features.InitWithReset(&features.Flags{
-		EnablePeerScorer: true,
-	})
+	resetCfg := features.InitWithReset(&features.Flags{})
 	defer resetCfg()
 
 	resetFlags := flags.Get()
@@ -232,7 +230,7 @@ func connectPeer(t *testing.T, host *p2pt.TestP2P, datum *peerData, peerStatus *
 
 	peerStatus.Add(new(enr.Record), p.PeerID(), nil, network.DirOutbound)
 	peerStatus.SetConnectionState(p.PeerID(), peers.Connected)
-	peerStatus.SetChainState(p.PeerID(), &ethpb.StatusV2{
+	setPeerStatus(host.PeerScoring(), p.PeerID(), &ethpb.StatusV2{
 		ForkDigest:     params.BeaconConfig().GenesisForkVersion,
 		FinalizedRoot:  fmt.Appendf(nil, "finalized_root %d", datum.finalizedEpoch),
 		FinalizedEpoch: datum.finalizedEpoch,
@@ -331,7 +329,7 @@ func connectPeerHavingBlocks(
 
 	peerStatus.Add(new(enr.Record), p.PeerID(), nil, network.DirOutbound)
 	peerStatus.SetConnectionState(p.PeerID(), peers.Connected)
-	peerStatus.SetChainState(p.PeerID(), &ethpb.StatusV2{
+	setPeerStatus(host.PeerScoring(), p.PeerID(), &ethpb.StatusV2{
 		ForkDigest:     params.BeaconConfig().GenesisForkVersion,
 		FinalizedRoot:  fmt.Appendf(nil, "finalized_root %d", finalizedEpoch),
 		FinalizedEpoch: finalizedEpoch,

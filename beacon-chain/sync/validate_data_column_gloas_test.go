@@ -679,11 +679,8 @@ func TestPendingGloasColumns(t *testing.T) {
 
 		require.Equal(t, false, s.hasPendingGloasColumns(unknownRoot))
 
-		scorer := p.Peers().Scorers().BadResponsesScorer()
-		_, err := scorer.Count("peerA")
-		require.NotNil(t, err)
-		_, err = scorer.Count("peerB")
-		require.NotNil(t, err)
+		require.Equal(t, 0, p.PeerScoring().BadResponseCount("peerA"))
+		require.Equal(t, 0, p.PeerScoring().BadResponseCount("peerB"))
 	})
 
 	t.Run("prune keeps current and next slot", func(t *testing.T) {

@@ -1,13 +1,26 @@
 package p2p
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+// Enforcement sites for GreyListRefusalCount.
+const (
+	greyListSiteDialGater = "dial_gater"
+	greyListSiteHandshake = "handshake"
+	greyListSiteDiscovery = "discovery"
+	greyListSiteConnect   = "connect"
+	// GreyListSiteDisconnect marks the sync maintenance loop disconnecting a connected grey-listed peer.
+	GreyListSiteDisconnect = "disconnect"
 )
 
 var (
@@ -46,12 +59,6 @@ var (
 		Name: "p2p_minimum_peers_per_subnet",
 		Help: "The minimum number of peers to connect to per subnet",
 	})
-	avgScoreConnectedClients = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "connected_libp2p_peers_average_scores",
-		Help: "Tracks the overall p2p scores of connected libp2p peers by agent string",
-	},
-		[]string{"agent"},
-	)
 	repeatPeerConnections = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "p2p_repeat_attempts",
 		Help: "The number of repeat attempts the connection handler is triggered for a peer.",
@@ -210,6 +217,38 @@ var (
 		Help: "The number of capable peers in mesh",
 	},
 		[]string{"topic", "supports_partial"})
+
+	// Peer scoring / grey-listing metrics.
+	greyListedPeersCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "p2p_greylisted_peers",
+		Help: "Peers grey-listed per aspect, split by connectedness. A peer grey-listed by " +
+			"several aspects is counted under each; trusted-peer exemptions are not applied.",
+	},
+		[]string{"aspect", "state"})
+	// GreyListRefusalCount counts refusals and disconnects of grey-listed peers by
+	// enforcement site and the grey-listing aspect that caused them.
+	GreyListRefusalCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "p2p_greylist_refusals_total",
+		Help: "Refusals and disconnects of grey-listed peers, by enforcement site and grey-listing reason.",
+	},
+		[]string{"site", "reason"})
+	inboundPeerTenureSeconds = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "p2p_inbound_peer_tenure_seconds",
+		Help: "Connection-age percentiles of inbound-connected peers.",
+	},
+		[]string{"pct"})
+	peerScoringTrackedPeers = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "p2p_peer_scoring_tracked_peers",
+		Help: "Peers the peer scorer currently holds scoring state for.",
+	})
+	gossipRejectionsRetained = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "p2p_gossip_rejections_retained",
+		Help: "Gossip rejections currently retained across all peers.",
+	})
+	blockProviderTrackedPeers = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "p2p_blockprovider_tracked_peers",
+		Help: "Peers the block provider selector currently holds stats for.",
+	})
 )
 
 func (s *Service) updateMetrics() {
@@ -220,7 +259,61 @@ func (s *Service) updateMetrics() {
 	p2pPeerCount.WithLabelValues("Disconnected").Set(float64(len(s.peers.Disconnected())))
 	p2pPeerCount.WithLabelValues("Connecting").Set(float64(len(s.peers.Connecting())))
 	p2pPeerCount.WithLabelValues("Disconnecting").Set(float64(len(s.peers.Disconnecting())))
-	p2pPeerCount.WithLabelValues("Bad").Set(float64(len(s.peers.Bad())))
+
+	// Grey-list verdicts per aspect; their union is the "Bad" count.
+	byAspect := s.peerScorer.GreyListedPeersByAspect()
+	uniqueGreyListed := make(map[peer.ID]bool)
+	for _, pids := range byAspect {
+		for _, pid := range pids {
+			uniqueGreyListed[pid] = true
+		}
+	}
+	p2pPeerCount.WithLabelValues("Bad").Set(float64(len(uniqueGreyListed)))
+
+	badIPPeers := make([]peer.ID, 0)
+	for _, pid := range s.peers.All() {
+		if s.peers.IsFromBadIP(pid) != nil {
+			badIPPeers = append(badIPPeers, pid)
+		}
+	}
+	byAspect[peerscoring.AspectBadIP] = badIPPeers
+
+	for _, aspect := range append(s.peerScorer.Aspects(), peerscoring.AspectBadIP) {
+		connected, disconnected := 0, 0
+		for _, pid := range byAspect[aspect] {
+			if state, err := s.peers.ConnectionState(pid); err == nil && state == peers.Connected {
+				connected++
+			} else {
+				disconnected++
+			}
+		}
+		greyListedPeersCount.WithLabelValues(aspect, "connected").Set(float64(connected))
+		greyListedPeersCount.WithLabelValues(aspect, "disconnected").Set(float64(disconnected))
+	}
+
+	// Inbound peer tenure distribution: the eviction-protection input.
+	inbound := s.peers.InboundConnected()
+	tenures := make([]float64, 0, len(inbound))
+	for _, pid := range inbound {
+		connectedAt, err := s.peers.ConnectedAt(pid)
+		if err != nil || connectedAt.IsZero() {
+			continue
+		}
+		tenures = append(tenures, prysmTime.Since(connectedAt).Seconds())
+	}
+	sort.Float64s(tenures)
+	median, p90 := 0.0, 0.0
+	if n := len(tenures); n > 0 {
+		median = tenures[n/2]
+		p90 = tenures[min(n*9/10, n-1)]
+	}
+	inboundPeerTenureSeconds.WithLabelValues("50").Set(median)
+	inboundPeerTenureSeconds.WithLabelValues("90").Set(p90)
+
+	// Scoring-state footprint: flat lines mean pruning and reconciliation keep it bounded.
+	peerScoringTrackedPeers.Set(float64(s.peerScorer.TrackedPeerCount()))
+	gossipRejectionsRetained.Set(float64(s.gossipRejections.RetainedCount()))
+	blockProviderTrackedPeers.Set(float64(s.blockProviderSelector.TrackedPeerCount()))
 
 	upperTCP := strings.ToUpper(string(peers.TCP))
 	upperQUIC := strings.ToUpper(string(peers.QUIC))
@@ -231,7 +324,6 @@ func (s *Service) updateMetrics() {
 	p2pPeerCountDirectionType.WithLabelValues("outbound", upperQUIC).Set(float64(len(s.peers.OutboundConnectedWithProtocol(peers.QUIC))))
 
 	connectedPeersCountByClient := make(map[string]float64)
-	peerScoresByClient := make(map[string][]float64)
 	for _, p := range connectedPeers {
 		pid, err := peer.Decode(p.String())
 		if err != nil {
@@ -241,33 +333,12 @@ func (s *Service) updateMetrics() {
 
 		foundName := agentFromPid(pid, store)
 		connectedPeersCountByClient[foundName] += 1
-
-		// Get peer scoring data.
-		overallScore := s.peers.Scorers().Score(pid)
-		peerScoresByClient[foundName] = append(peerScoresByClient[foundName], overallScore)
 	}
 
 	connectedPeersCount.Reset() // Clear out previous results.
 	for agent, total := range connectedPeersCountByClient {
 		connectedPeersCount.WithLabelValues(agent).Set(total)
 	}
-
-	avgScoreConnectedClients.Reset() // Clear out previous results.
-	for agent, scoringData := range peerScoresByClient {
-		avgScore := average(scoringData)
-		avgScoreConnectedClients.WithLabelValues(agent).Set(avgScore)
-	}
-}
-
-func average(xs []float64) float64 {
-	if len(xs) == 0 {
-		return 0
-	}
-	total := 0.0
-	for _, v := range xs {
-		total += v
-	}
-	return total / float64(len(xs))
 }
 
 func agentFromPid(pid peer.ID, store peerstore.Peerstore) string {

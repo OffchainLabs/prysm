@@ -4,6 +4,7 @@ import (
 	"net"
 	"runtime"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	"github.com/libp2p/go-libp2p/core/control"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -32,7 +33,8 @@ func (*Service) InterceptPeerDial(_ peer.ID) (allow bool) {
 // multiaddr for the given peer.
 func (s *Service) InterceptAddrDial(pid peer.ID, m multiaddr.Multiaddr) (allow bool) {
 	// Disallow bad peers from dialing in.
-	if s.peers.IsBad(pid) != nil {
+	if err := s.IsPeerGreyListed(pid); err != nil {
+		GreyListRefusalCount.WithLabelValues(greyListSiteDialGater, peerscoring.AspectFromError(err)).Inc()
 		return false
 	}
 	return filterConnections(s.addrFilter, m)

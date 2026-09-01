@@ -632,7 +632,7 @@ func TestRPCBeaconBlocksByRange_RPCHandlerRateLimitOverflow(t *testing.T) {
 		}
 		saveBlocks(req)
 
-		for i := 0; i < p2.Peers().Scorers().BadResponsesScorer().Params().Threshold; i++ {
+		for i := 0; i < 5; i++ { // repeat past the grey-list strike threshold
 			err := sendRequest(p1, p2, r, req, false, true)
 			assert.ErrorContains(t, p2ptypes.ErrRateLimited.Error(), err)
 		}
@@ -666,7 +666,7 @@ func TestRPCBeaconBlocksByRange_RPCHandlerRateLimitOverflow(t *testing.T) {
 		}
 
 		// One more request should result in overflow.
-		for i := 0; i < p2.Peers().Scorers().BadResponsesScorer().Params().Threshold; i++ {
+		for i := 0; i < 5; i++ { // repeat past the grey-list strike threshold
 			err := sendRequest(p1, p2, r, req, false, false)
 			assert.ErrorContains(t, p2ptypes.ErrRateLimited.Error(), err)
 		}

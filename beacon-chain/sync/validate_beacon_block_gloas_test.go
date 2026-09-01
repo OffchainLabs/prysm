@@ -247,7 +247,7 @@ func TestFetchPayloadEnvelope_ReceiveHasDeadline(t *testing.T) {
 	p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
 	p1.Connect(p2)
 	p1.Peers().SetConnectionState(p2.PeerID(), peers.Connected)
-	p1.Peers().SetChainState(p2.PeerID(), &ethpb.StatusV2{})
+	setPeerStatus(p1.PeerScoring(), p2.PeerID(), &ethpb.StatusV2{})
 
 	root := [32]byte{0x42}
 	envelope := &ethpb.SignedExecutionPayloadEnvelope{

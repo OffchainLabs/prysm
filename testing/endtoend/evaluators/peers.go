@@ -37,9 +37,6 @@ func peersTest(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
 		if res.ScoreInfo.BlockProviderScore < 0 {
 			baseErr = wrapError(baseErr, "Block provider score for peer %s is %f and negative.", res.PeerId, res.ScoreInfo.BlockProviderScore)
 		}
-		if res.ScoreInfo.OverallScore < 0 {
-			baseErr = wrapError(baseErr, "Overall score for peer %s is %f and negative.", res.PeerId, res.ScoreInfo.OverallScore)
-		}
 		if res.ScoreInfo.ValidationError != "" {
 			baseErr = wrapError(baseErr, "Peer %s has a validation error: %s", res.PeerId, res.ScoreInfo.ValidationError)
 		}

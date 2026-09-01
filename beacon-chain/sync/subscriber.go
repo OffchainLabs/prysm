@@ -3,7 +3,6 @@ package sync
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"runtime/debug"
 	"slices"
 	"strings"
@@ -23,7 +22,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/messagehandler"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -550,12 +548,15 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 			b = pubsub.ValidationIgnore
 		}
 		if b == pubsub.ValidationReject {
+			agent := agentString(pid, s.cfg.p2p.Host())
+			s.cfg.p2p.GossipRejections().Record(pid, topic, agent, err)
+			gossipScore, _, _ := s.cfg.p2p.PeerScoring().GossipData(pid)
 			fields := logrus.Fields{
 				"topic":        topic,
 				"multiaddress": multiAddr(pid, s.cfg.p2p.Peers()),
 				"peerID":       pid.String(),
-				"agent":        agentString(pid, s.cfg.p2p.Host()),
-				"gossipScore":  s.cfg.p2p.Peers().Scorers().GossipScorer().Score(pid),
+				"agent":        agent,
+				"gossipScore":  gossipScore,
 			}
 			if features.Get().EnableFullSSZDataLogging {
 				fields["message"] = hexutil.Encode(msg.Data)
@@ -565,12 +566,13 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 		}
 		if b == pubsub.ValidationIgnore {
 			if err != nil && !errorIsIgnored(err) {
+				gossipScore, _, _ := s.cfg.p2p.PeerScoring().GossipData(pid)
 				log.WithError(err).WithFields(logrus.Fields{
 					"topic":        topic,
 					"multiaddress": multiAddr(pid, s.cfg.p2p.Peers()),
 					"peerID":       pid.String(),
 					"agent":        agentString(pid, s.cfg.p2p.Host()),
-					"gossipScore":  fmt.Sprintf("%.2f", s.cfg.p2p.Peers().Scorers().GossipScorer().Score(pid)),
+					"gossipScore":  fmt.Sprintf("%.2f", gossipScore),
 				}).Debug("Gossip message was ignored")
 			}
 			messageIgnoredValidationCounter.WithLabelValues(topic).Inc()
@@ -804,12 +806,63 @@ func (s *Service) persistentAndAggregatorSubnetIndices(currentSlot primitives.Sl
 	return mapFromSlice(persistentSubnetIndices, aggregatorSubnetIndices)
 }
 
-// filterNeededPeers filters out the set of peers required to maintain
-// at least minimumPeersPerSubnet in our attestation subnets. Peers that participate
-// in multiple subnets count toward all of them.
+// wantedSubnet identifies one subnet of a specific gossip topic family that peers may be
+// needed in to maintain coverage.
+type wantedSubnet struct {
+	topicFormat string
+	subnet      uint64
+}
+
+// Subnet type labels for subnet-coverage metrics.
+const (
+	subnetTypeAttestation   = "attestation"
+	subnetTypeSyncCommittee = "sync_committee"
+	subnetTypeDataColumn    = "data_column"
+	subnetTypeUnknown       = "unknown"
+)
+
+// subnetTypeLabel maps a subnet topic format to its metrics label.
+func subnetTypeLabel(topicFormat string) string {
+	switch topicFormat {
+	case p2p.AttestationSubnetTopicFormat:
+		return subnetTypeAttestation
+	case p2p.SyncCommitteeSubnetTopicFormat:
+		return subnetTypeSyncCommittee
+	case p2p.DataColumnSubnetTopicFormat:
+		return subnetTypeDataColumn
+	default:
+		return subnetTypeUnknown
+	}
+}
+
+// wantedSubnetsForSlot returns the subnets the node currently needs peers on: attestation
+// subnets for persistent/aggregator/attester duties, active sync-committee subnets
+// post-Altair, and data-column subnets post-Fulu.
+func (s *Service) wantedSubnetsForSlot(currentSlot primitives.Slot) map[wantedSubnet]bool {
+	currentEpoch := slots.ToEpoch(currentSlot)
+
+	wantedSubnets := make(map[wantedSubnet]bool)
+	addWanted := func(topicFormat string, subnets map[uint64]bool) {
+		for subnet := range subnets {
+			wantedSubnets[wantedSubnet{topicFormat: topicFormat, subnet: subnet}] = true
+		}
+	}
+	addWanted(p2p.AttestationSubnetTopicFormat, s.persistentAndAggregatorSubnetIndices(currentSlot))
+	addWanted(p2p.AttestationSubnetTopicFormat, attesterSubnetIndices(currentSlot))
+	if params.BeaconConfig().AltairForkEpoch <= currentEpoch {
+		addWanted(p2p.SyncCommitteeSubnetTopicFormat, s.activeSyncSubnetIndices(currentSlot))
+	}
+	if params.BeaconConfig().FuluForkEpoch <= currentEpoch {
+		addWanted(p2p.DataColumnSubnetTopicFormat, s.dataColumnSubnetIndices(currentSlot))
+	}
+	return wantedSubnets
+}
+
+// filterNeededPeers filters out the set of peers required to maintain at least
+// minimumPeersPerSubnet in our attestation, sync-committee and data-column subnets.
+// Peers that participate in multiple subnets count toward all of them.
 func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
-	currentSlot := s.cfg.clock.CurrentSlot()
 
 	// Exit early if nothing to filter.
 	if len(pids) == 0 {
@@ -817,17 +870,7 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 	}
 
 	digest := s.currentForkDigest()
-
-	wantedSubnets := make(map[uint64]bool)
-	for subnet := range s.persistentAndAggregatorSubnetIndices(currentSlot) {
-		wantedSubnets[subnet] = true
-	}
-
-	for subnet := range attesterSubnetIndices(currentSlot) {
-		wantedSubnets[subnet] = true
-	}
-
-	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()]
+	wantedSubnets := s.wantedSubnetsForSlot(s.cfg.clock.CurrentSlot())
 
 	pidSet := make(map[peer.ID]bool, len(pids))
 	for _, pid := range pids {
@@ -836,46 +879,57 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 
 	// For each wanted subnet, get the current peer count and track which
 	// candidate peers participate in each subnet.
-	subnetPeerCount := make(map[uint64]int, len(wantedSubnets))
-	peerSubnets := make(map[peer.ID][]uint64)
-	for subnet := range wantedSubnets {
-		subnetTopic := fmt.Sprintf(topic, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
+	subnetPeerCount := make(map[wantedSubnet]int, len(wantedSubnets))
+	peerSubnets := make(map[peer.ID][]wantedSubnet)
+	for ws := range wantedSubnets {
+		subnetTopic := fmt.Sprintf(ws.topicFormat, digest, ws.subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
 		peers := s.cfg.p2p.PubSub().ListPeers(subnetTopic)
-		subnetPeerCount[subnet] = len(peers)
+		subnetPeerCount[ws] = len(peers)
 		for _, pid := range peers {
 			if pidSet[pid] {
-				peerSubnets[pid] = append(peerSubnets[pid], subnet)
+				peerSubnets[pid] = append(peerSubnets[pid], ws)
 			}
 		}
 	}
 
-	// Sort candidates by ascending subnet count so we try to prune peers
+	// Sort a copy by ascending subnet count so we try to prune peers
 	// covering fewer subnets first, preserving multi-subnet peers that are
-	// more valuable for maintaining minimums across subnets.
-	slices.SortFunc(pids, func(a, b peer.ID) int {
+	// more valuable for maintaining minimums across subnets. The stable sort
+	// keeps the caller's eviction-priority order as the tie-break within
+	// equal subnet counts.
+	candidates := slices.Clone(pids)
+	slices.SortStableFunc(candidates, func(a, b peer.ID) int {
 		return len(peerSubnets[a]) - len(peerSubnets[b])
 	})
 
 	// Greedily prune each candidate if doing so would not drop any of its
 	// subnets below the minimum peer threshold.
-	prunable := make([]peer.ID, 0, len(pids))
-	for _, pid := range pids {
+	pruneSet := make(map[peer.ID]bool, len(candidates))
+	for _, pid := range candidates {
 		subnets := peerSubnets[pid]
 		canPrune := true
 		for _, subnet := range subnets {
 			if subnetPeerCount[subnet] <= minimumPeersPerSubnet {
 				canPrune = false
+				pruneProtectedPeersCount.WithLabelValues(subnetTypeLabel(subnet.topicFormat)).Inc()
 				break
 			}
 		}
 		if canPrune {
-			prunable = append(prunable, pid)
+			pruneSet[pid] = true
 			for _, subnet := range subnets {
 				subnetPeerCount[subnet]--
 			}
 		}
 	}
 
+	// Return prunable peers in the caller's original (eviction-priority) order.
+	prunable := make([]peer.ID, 0, len(pruneSet))
+	for _, pid := range pids {
+		if pruneSet[pid] {
+			prunable = append(prunable, pid)
+		}
+	}
 	return prunable
 }
 

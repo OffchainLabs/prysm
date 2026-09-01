@@ -71,11 +71,11 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		msg := types.DataColumnsByRootIdentifiers{{Columns: []uint64{1, 2, 3}}}
-		require.Equal(t, true, localP2P.Peers().Scorers().BadResponsesScorer().Score(remoteP2P.PeerID()) >= 0)
+		require.Equal(t, 0, localP2P.PeerScoring().BadResponseCount(remoteP2P.PeerID()))
 
 		err = service.dataColumnSidecarByRootRPCHandler(t.Context(), msg, stream)
 		require.NotNil(t, err)
-		require.Equal(t, true, localP2P.Peers().Scorers().BadResponsesScorer().Score(remoteP2P.PeerID()) < 0)
+		require.Equal(t, true, localP2P.PeerScoring().BadResponseCount(remoteP2P.PeerID()) > 0)
 
 		if util.WaitTimeout(&wg, 1*time.Second) {
 			t.Fatal("Did not receive stream within 1 sec")
@@ -210,7 +210,7 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 
 		err = service.dataColumnSidecarByRootRPCHandler(ctx, msg, stream)
 		require.NoError(t, err)
-		require.Equal(t, true, localP2P.Peers().Scorers().BadResponsesScorer().Score(remoteP2P.PeerID()) >= 0)
+		require.Equal(t, 0, localP2P.PeerScoring().BadResponseCount(remoteP2P.PeerID()))
 
 		if util.WaitTimeout(&wg, 1*time.Minute) {
 			t.Fatal("Did not receive stream within 1 sec")

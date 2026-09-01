@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/time"
@@ -138,7 +139,7 @@ func (s *Service) sendPingRequest(ctx context.Context, peerID peer.ID) error {
 
 	// If the peer responded with an error, increment the bad responses scorer.
 	if code != 0 {
-		s.downscorePeer(peerID, "NotNullPingReadStatusCode")
+		s.cfg.p2p.PeerScoring().RecordBadResponse(peerID, peerscoring.SourceRPCPing, "NotNullPingReadStatusCode")
 		return errors.Errorf("code: %d - %s", code, errMsg)
 	}
 
@@ -192,10 +193,12 @@ func (s *Service) isSequenceNumberUpToDate(incomingSequenceNumber uint64, peerID
 	// The peer's sequence number must be less than or equal to the sequence number we have in our store.
 	storedSequenceNumber := storedMetadata.SequenceNumber()
 	if storedSequenceNumber > incomingSequenceNumber {
-		s.downscorePeer(peerID, "pingInvalidSequenceNumber", logrus.Fields{
+		s.cfg.p2p.PeerScoring().RecordBadResponse(peerID, peerscoring.SourceRPCPing, "pingInvalidSequenceNumber")
+		log.WithFields(logrus.Fields{
+			"peerID":                 peerID,
 			"storedSequenceNumber":   storedSequenceNumber,
 			"incomingSequenceNumber": incomingSequenceNumber,
-		})
+		}).Debug("Peer sent invalid ping sequence number")
 		return false, p2ptypes.ErrInvalidSequenceNum
 	}
 

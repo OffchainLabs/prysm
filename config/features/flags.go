@@ -46,10 +46,6 @@ var (
 		Usage: `WARNING: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API..
 		Disables displaying logs for newly connected grpc clients.`,
 	}
-	disablePeerScorer = &cli.BoolFlag{
-		Name:  "disable-peer-scorer",
-		Usage: "(Danger): Disables P2P peer scorer. Do NOT use this in production!",
-	}
 	writeWalletPasswordOnWebOnboarding = &cli.BoolFlag{
 		Name: "write-wallet-password-on-web-onboarding",
 		Usage: `(Danger): Writes the wallet password to the wallet directory on completing Prysm web onboarding.
@@ -278,7 +274,6 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	SepoliaTestnet,
 	HoodiTestnet,
 	Mainnet,
-	disablePeerScorer,
 	disableBroadcastSlashingFlag,
 	disableStakinContractCheck,
 	SaveFullExecutionPayloads,

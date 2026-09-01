@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"fmt"
+	"math"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -484,6 +485,48 @@ func Test_wrapAndReportValidation(t *testing.T) {
 	}
 }
 
+func Test_wrapAndReportValidation_RecordsRejection(t *testing.T) {
+	p2pService := p2ptest.NewTestP2P(t)
+	mChain := &mockChain.ChainService{
+		Genesis:        time.Now(),
+		ValidatorsRoot: [32]byte{0x01},
+	}
+	clock := startup.NewClock(mChain.Genesis, mChain.ValidatorsRoot)
+	topic := fmt.Sprintf(p2p.BlockSubnetTopicFormat, params.ForkDigest(clock.CurrentEpoch())) + encoder.SszNetworkEncoder{}.ProtocolSuffix()
+	chainStarted := &atomic.Bool{}
+	chainStarted.Store(true)
+	s := &Service{
+		chainStarted: chainStarted,
+		cfg: &config{
+			chain: mChain,
+			clock: clock,
+			p2p:   p2pService,
+		},
+		subHandler: newSubTopicHandler(),
+	}
+	_, v := s.wrapAndReportValidation(topic, func(_ context.Context, _ peer.ID, _ *pubsub.Message) (pubsub.ValidationResult, error) {
+		return pubsub.ValidationReject, fmt.Errorf("bad signature")
+	})
+	pid := peer.ID("rejected-peer")
+	require.NoError(t, p2pService.BHost.Peerstore().Put(pid, "AgentVersion", "lighthouse/v1.0"))
+	msg := &pubsub.Message{Message: &pubsubpb.Message{Topic: &topic}}
+
+	require.Equal(t, pubsub.ValidationReject, v(t.Context(), pid, msg))
+
+	got := p2pService.GossipRejections().Rejections(pid)
+	require.Equal(t, 1, len(got.ByTopic[topic]))
+	assert.Equal(t, "lighthouse/v1.0", got.ByTopic[topic][0].Agent)
+	assert.Equal(t, "bad signature", got.ByTopic[topic][0].Reason)
+	require.Equal(t, 1, len(got.ByAgent["lighthouse/v1.0"]))
+	assert.Equal(t, topic, got.ByAgent["lighthouse/v1.0"][0].Topic)
+
+	// Rejects converted to ignores by an expired context are not recorded.
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	require.Equal(t, pubsub.ValidationIgnore, v(ctx, pid, msg))
+	require.Equal(t, 1, len(p2pService.GossipRejections().Rejections(pid).ByTopic[topic]))
+}
+
 func Test_wrapAndReportValidation_NextEpochDigest(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -651,6 +694,132 @@ func TestFilterSubnetPeers(t *testing.T) {
 
 	recPeers = r.filterNeededPeers(wantedPeers)
 	assert.Equal(t, 1, len(recPeers), "expected at least 1 suitable peer to prune")
+
+	// Prunable peers come back in the caller's original (eviction-priority) order.
+	p4 := createPeer(t)
+	p5 := createPeer(t)
+	p.Connect(p4)
+	p.Connect(p5)
+	ordered := []peer.ID{p5.PeerID(), p3.PeerID(), p4.PeerID()}
+	recPeers = r.filterNeededPeers(ordered)
+	assert.DeepEqual(t, ordered, recPeers)
+}
+
+// newFilterPeersService builds the TestFilterSubnetPeers harness: a sync service backed by a
+// pubsub tracer at slot 100 with MinimumPeersPerSubnet set to 4.
+func newFilterPeersService(t *testing.T) (*Service, *p2ptest.TestP2P, *p2ptest.GossipTracer) {
+	gFlags := new(flags.GlobalFlags)
+	gFlags.MinimumPeersPerSubnet = 4
+	flags.Init(gFlags)
+	t.Cleanup(func() { flags.Init(new(flags.GlobalFlags)) })
+
+	tracer := p2ptest.NewGossipTracer()
+	p := p2ptest.NewTestP2PWithPubsubOptions(t, []pubsub.Option{pubsub.WithRawTracer(tracer)})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	currSlot := primitives.Slot(100)
+
+	gt := time.Now()
+	slotDuration := params.BeaconConfig().SlotDuration()
+	genPlus100 := func() time.Time {
+		return gt.Add(time.Duration(uint64(currSlot)) * slotDuration)
+	}
+	chain := &mockChain.ChainService{
+		Genesis:        gt,
+		ValidatorsRoot: [32]byte{'A'},
+		FinalizedRoots: map[[32]byte]bool{
+			{}: true,
+		},
+	}
+	clock := startup.NewClock(chain.Genesis, chain.ValidatorsRoot, startup.WithNower(genPlus100))
+	require.Equal(t, currSlot, clock.CurrentSlot())
+	r := &Service{
+		ctx: ctx,
+		cfg: &config{
+			chain: chain,
+			clock: clock,
+			p2p:   p,
+		},
+		chainStarted: &atomic.Bool{},
+		subHandler:   newSubTopicHandler(),
+	}
+	markInitSyncComplete(t, r)
+	return r, p, tracer
+}
+
+func TestFilterSubnetPeers_DataColumnSubnets(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.MainnetConfig()
+	cfg.SlotDurationMilliseconds = 1000
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	r, p, tracer := newFilterPeersService(t)
+
+	// Compute our wanted column subnets exactly as production does and pick one.
+	wantedSubnets := r.dataColumnSubnetIndices(r.cfg.clock.CurrentSlot())
+	require.Equal(t, true, len(wantedSubnets) > 0, "expected wanted data column subnets")
+	idx := uint64(math.MaxUint64)
+	for subnet := range wantedSubnets {
+		idx = min(idx, subnet)
+	}
+
+	digest := r.currentForkDigest()
+	columnTopic := r.addDigestAndIndexToTopic("/eth2/%x/data_column_sidecar_%d"+r.cfg.p2p.Encoding().ProtocolSuffix(), digest, idx)
+	_, err := tracer.JoinAndWatchTopic(t.Context(), columnTopic, p)
+	require.NoError(t, err)
+
+	pColumn := createPeer(t, columnTopic)
+	pNone := createPeer(t)
+	p.Connect(pColumn)
+	p.Connect(pNone)
+	require.NoError(t, tracer.CanPublishToPeer(t.Context(), columnTopic, pColumn.PeerID()))
+
+	// The sole provider of a wanted column subnet is protected; the topic-less peer is prunable.
+	recPeers := r.filterNeededPeers([]peer.ID{pColumn.PeerID(), pNone.PeerID()})
+	assert.DeepEqual(t, []peer.ID{pNone.PeerID()}, recPeers)
+
+	// With an excess of column-subnet peers exactly one becomes prunable.
+	wantedPeers := []peer.ID{pColumn.PeerID()}
+	for i := 1; i <= flags.Get().MinimumPeersPerSubnet; i++ {
+		nPeer := createPeer(t, columnTopic)
+		p.Connect(nPeer)
+		require.NoError(t, tracer.CanPublishToPeer(t.Context(), columnTopic, nPeer.PeerID()))
+		wantedPeers = append(wantedPeers, nPeer.PeerID())
+	}
+	recPeers = r.filterNeededPeers(wantedPeers)
+	assert.Equal(t, 1, len(recPeers), "expected exactly 1 suitable peer to prune")
+}
+
+func TestFilterSubnetPeers_SyncCommitteeSubnets(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.MainnetConfig()
+	cfg.SlotDurationMilliseconds = 1000
+	cfg.AltairForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	r, p, tracer := newFilterPeersService(t)
+	defer cache.SyncSubnetIDs.EmptyAllCaches()
+
+	// Register a sync committee duty on subnet 5 for the current epoch.
+	currEpoch := slots.ToEpoch(r.cfg.clock.CurrentSlot())
+	cache.SyncSubnetIDs.AddSyncCommitteeSubnets([]byte("pubkey"), currEpoch, []uint64{5}, 10*time.Second)
+
+	digest := r.currentForkDigest()
+	syncTopic := r.addDigestAndIndexToTopic("/eth2/%x/sync_committee_%d"+r.cfg.p2p.Encoding().ProtocolSuffix(), digest, 5)
+	_, err := tracer.JoinAndWatchTopic(t.Context(), syncTopic, p)
+	require.NoError(t, err)
+
+	pSync := createPeer(t, syncTopic)
+	pNone := createPeer(t)
+	p.Connect(pSync)
+	p.Connect(pNone)
+	require.NoError(t, tracer.CanPublishToPeer(t.Context(), syncTopic, pSync.PeerID()))
+
+	// The sole provider of an active sync committee subnet is protected.
+	recPeers := r.filterNeededPeers([]peer.ID{pSync.PeerID(), pNone.PeerID()})
+	assert.DeepEqual(t, []peer.ID{pNone.PeerID()}, recPeers)
 }
 
 func TestSubscribeWithSyncSubnets_DynamicOK(t *testing.T) {

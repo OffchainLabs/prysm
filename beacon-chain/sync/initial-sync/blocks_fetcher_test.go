@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	beaconsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
@@ -950,9 +949,7 @@ func TestBlocksFetcher_requestBlocksDownscoreOnInvalidData(t *testing.T) {
 	})
 
 	// Verify the peer has no bad responses before the request
-	scoreBeforeRequest, err := p1.Peers().Scorers().BadResponsesScorer().Count(p2.PeerID())
-	require.ErrorIs(t, err, peerdata.ErrPeerUnknown)
-	assert.Equal(t, -1, scoreBeforeRequest)
+	assert.Equal(t, 0, p1.PeerScoring().BadResponseCount(p2.PeerID()))
 
 	// Use fetchBlocksFromPeer which includes the downscoring logic
 	r := &fetchRequestResponse{start: 100, count: 64}
@@ -960,8 +957,7 @@ func TestBlocksFetcher_requestBlocksDownscoreOnInvalidData(t *testing.T) {
 	assert.ErrorContains(t, errNoPeersAvailable.Error(), r.err)
 
 	// Verify the peer was downscored
-	scoreAfterRequest, err := p1.Peers().Scorers().BadResponsesScorer().Count(p2.PeerID())
-	assert.NoError(t, err)
+	scoreAfterRequest := p1.PeerScoring().BadResponseCount(p2.PeerID())
 	assert.Equal(t, 1, scoreAfterRequest)
 }
 
