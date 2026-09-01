@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
@@ -37,19 +36,7 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 
 	v.waitUntilAttestationDueOrValidBlock(ctx, slot)
 
-	var b strings.Builder
-	if err := b.WriteByte(byte(attestationSigningLock)); err != nil {
-		log.WithError(err).Error("Could not write role byte for lock key")
-		tracing.AnnotateError(span, err)
-		return
-	}
-	_, err := b.Write(pubKey[:])
-	if err != nil {
-		log.WithError(err).Error("Could not write pubkey bytes for lock key")
-		tracing.AnnotateError(span, err)
-		return
-	}
-	lock := async.NewMultilock(b.String())
+	lock := async.NewMultilock(string(append([]byte{byte(attestationSigningLock)}, pubKey[:]...)))
 	lock.Lock()
 	defer lock.Unlock()
 

@@ -152,8 +152,8 @@ func (r *runner) run(ctx context.Context) {
 				continue
 			}
 			// executePlan ends the span after all work and reporting complete.
-			rolesCtx, _ := context.WithDeadline(ctx, deadline) //nolint:govet
-			go executePlan(rolesCtx, plan, v, span)
+			planCtx, _ := context.WithDeadline(ctx, deadline) //nolint:govet
+			go executePlan(planCtx, plan, v, span)
 		case e := <-v.EventsChan():
 			v.ProcessEvent(ctx, e)
 		case currentKeys := <-v.AccountsChangedChan(): // should be less of a priority than next slot

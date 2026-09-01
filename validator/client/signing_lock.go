@@ -1,7 +1,6 @@
 package client
 
-// signingLockNamespace keeps the per-validator attestation and proposal locks
-// distinct without coupling lock identity to the slot scheduler's data model.
+// signingLockNamespace keeps per-validator attestation and proposal locks distinct.
 type signingLockNamespace byte
 
 const (

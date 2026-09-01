@@ -12,9 +12,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// dutyAssignment is the immutable subset of a validator duty needed while
-// executing work for a slot. A plan owns these values; workflows must not look
-// the assignment up again after planning.
+// dutyAssignment is a plan-owned duty copy; never re-read the store after planning.
 type dutyAssignment struct {
 	publicKey               pubkey
 	validatorIndex          primitives.ValidatorIndex
@@ -43,9 +41,7 @@ func newDutyAssignment(pk pubkey, duty *ethpb.ValidatorDuty) dutyAssignment {
 	}
 }
 
-// slotPlan is a coherent, in-memory decision about all work for one slot.
-// Its buckets describe executable work directly, instead of requiring the
-// runner to interpret a set of competing roles.
+// slotPlan is all decided work for one slot, from a single duty snapshot.
 type slotPlan struct {
 	slot                primitives.Slot
 	dutyRevision        uint64
@@ -55,9 +51,7 @@ type slotPlan struct {
 	payloadAttestations []dutyAssignment
 }
 
-// planSlot builds all work for slot from one duty-store snapshot. The returned
-// plan does not alias duty-store data and is safe to execute after the store is
-// refreshed.
+// planSlot builds all work for slot; the plan stays valid across duty refreshes.
 func (v *validator) planSlot(ctx context.Context, slot primitives.Slot) (slotPlan, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.planSlot")
 	defer span.End()
@@ -68,7 +62,6 @@ func (v *validator) planSlot(ctx context.Context, slot primitives.Slot) (slotPla
 	}
 
 	plan := slotPlan{slot: slot, dutyRevision: snap.revision}
-	syncCommitteeIndices := make(map[pubkey]int)
 	var syncCommitteePubkeys []pubkey
 
 	for pk, duty := range snap.currentDuties() {
@@ -100,14 +93,12 @@ func (v *validator) planSlot(ctx context.Context, slot primitives.Slot) (slotPla
 			plan.attestations = append(plan.attestations, work)
 		}
 
-		// A sync committee assignment in slot produces a signature for slot - 1
-		// for inclusion in slot. At an epoch boundary, use the next committee.
+		// Sync duty at slot signs for slot-1; at epoch end, use the next committee.
 		inSyncCommittee := duty.IsSyncCommittee
 		if slots.IsEpochEnd(slot) {
 			inSyncCommittee = snap.isNextSyncCommittee(duty.ValidatorIndex)
 		}
 		if inSyncCommittee {
-			syncCommitteeIndices[pk] = len(plan.syncCommittee)
 			plan.syncCommittee = append(plan.syncCommittee, syncCommitteeWork{duty: assignment})
 			syncCommitteePubkeys = append(syncCommitteePubkeys, pk)
 		}
@@ -122,13 +113,12 @@ func (v *validator) planSlot(ctx context.Context, slot primitives.Slot) (slotPla
 		log.WithError(err).Error("Could not check if any validator is a sync committee aggregator")
 		return plan, nil
 	}
+	aggregators := make(map[pubkey]bool, len(aggPubkeys))
 	for _, pk := range aggPubkeys {
-		i, ok := syncCommitteeIndices[pk]
-		if !ok {
-			log.WithField("pubkey", bytesutil.Trunc(pk[:])).Warn("Sync committee aggregator is missing a planned duty")
-			continue
-		}
-		plan.syncCommittee[i].aggregate = true
+		aggregators[pk] = true
+	}
+	for i := range plan.syncCommittee {
+		plan.syncCommittee[i].aggregate = aggregators[plan.syncCommittee[i].duty.publicKey]
 	}
 
 	return plan, nil
