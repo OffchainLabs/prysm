@@ -174,10 +174,6 @@ func (s *Service) ProcessDepositLog(ctx context.Context, depositLog *gethtypes.L
 	validData := true
 	if !s.chainStartData.Chainstarted {
 		s.chainStartData.ChainstartDeposits = append(s.chainStartData.ChainstartDeposits, deposit)
-		root, err := s.depositTrie.HashTreeRoot()
-		if err != nil {
-			return errors.Wrap(err, "unable to determine root of deposit trie")
-		}
 		eth1Data := &ethpb.Eth1Data{
 			DepositRoot:  root[:],
 			DepositCount: uint64(len(s.chainStartData.ChainstartDeposits)),
@@ -187,10 +183,6 @@ func (s *Service) ProcessDepositLog(ctx context.Context, depositLog *gethtypes.L
 			validData = false
 		}
 	} else {
-		root, err := s.depositTrie.HashTreeRoot()
-		if err != nil {
-			return errors.Wrap(err, "unable to determine root of deposit trie")
-		}
 		s.cfg.depositCache.InsertPendingDeposit(ctx, deposit, depositLog.BlockNumber, index, root)
 	}
 	if validData {
