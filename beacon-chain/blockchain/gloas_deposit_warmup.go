@@ -39,11 +39,6 @@ var (
 		Name: "gloas_deposit_warmup_remaining",
 		Help: "Gloas fork upgrade deposit signature candidates not yet pre-verified. Must reach zero before the fork.",
 	})
-	gloasDepositWarmupVerifySeconds = promauto.NewHistogram(prometheus.HistogramOpts{
-		Name:    "gloas_deposit_warmup_verify_seconds",
-		Help:    "Measured duration of a single pending deposit signature verification.",
-		Buckets: []float64{0.0005, 0.001, 0.002, 0.004, 0.008, 0.016},
-	})
 )
 
 func depositWarmupWorkers() int {
@@ -89,6 +84,10 @@ func (s *Service) runGloasDepositWarmup() {
 }
 
 func (s *Service) warmDepositSignatures() {
+	// Results would be refused, so every candidate would stay cold and be reverified every slot.
+	if cache.DepositSignature.Full() {
+		return
+	}
 	ctx, cancel := context.WithTimeout(s.ctx, depositWarmupBudget)
 	defer cancel()
 
@@ -111,12 +110,7 @@ func (s *Service) warmDepositSignatures() {
 		return
 	}
 
-	start := stdtime.Now()
 	verified := s.verifyDepositSignatures(ctx, cold)
-	if verified == 0 {
-		return
-	}
-	gloasDepositWarmupVerifySeconds.Observe(stdtime.Since(start).Seconds() / float64(verified))
 	gloasDepositWarmupRemaining.Set(float64(len(cold) - verified))
 }
 

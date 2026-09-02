@@ -91,3 +91,16 @@ func TestDepositSignatureCache_Concurrent(t *testing.T) {
 	wg.Wait()
 	require.Equal(t, 8*128, c.Len())
 }
+
+func TestDepositSignatureCache_Full(t *testing.T) {
+	c := newDepositSignatureCache()
+	require.Equal(t, false, c.Full())
+	for i := range depositSignatureCacheCap {
+		var key [32]byte
+		key[0], key[1], key[2] = byte(i), byte(i>>8), byte(i>>16)
+		c.Put(key, true)
+	}
+	require.Equal(t, true, c.Full())
+	c.Clear()
+	require.Equal(t, false, c.Full())
+}

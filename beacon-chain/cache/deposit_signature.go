@@ -32,17 +32,17 @@ var (
 // DepositSignature memoizes deposit signature verification results, which never expire.
 var DepositSignature = newDepositSignatureCache()
 
-type DepositSignatureCache struct {
+type depositSignatureCache struct {
 	mu      sync.RWMutex
 	entries map[[32]byte]bool
 }
 
-func newDepositSignatureCache() *DepositSignatureCache {
-	return &DepositSignatureCache{entries: make(map[[32]byte]bool)}
+func newDepositSignatureCache() *depositSignatureCache {
+	return &depositSignatureCache{entries: make(map[[32]byte]bool)}
 }
 
 // An absent key means unknown, never invalid.
-func (c *DepositSignatureCache) Get(key [32]byte) (bool, bool) {
+func (c *depositSignatureCache) Get(key [32]byte) (bool, bool) {
 	c.mu.RLock()
 	valid, ok := c.entries[key]
 	c.mu.RUnlock()
@@ -55,14 +55,14 @@ func (c *DepositSignatureCache) Get(key [32]byte) (bool, bool) {
 }
 
 // Has does not record a hit or a miss, so pre-verification cannot skew the critical-path hit rate.
-func (c *DepositSignatureCache) Has(key [32]byte) bool {
+func (c *depositSignatureCache) Has(key [32]byte) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	_, ok := c.entries[key]
 	return ok
 }
 
-func (c *DepositSignatureCache) Put(key [32]byte, valid bool) {
+func (c *depositSignatureCache) Put(key [32]byte, valid bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if _, ok := c.entries[key]; !ok && len(c.entries) >= depositSignatureCacheCap {
@@ -73,13 +73,20 @@ func (c *DepositSignatureCache) Put(key [32]byte, valid bool) {
 	depositSignatureCacheSize.Set(float64(len(c.entries)))
 }
 
-func (c *DepositSignatureCache) Len() int {
+// Full reports whether the cache is at capacity and will refuse new entries.
+func (c *depositSignatureCache) Full() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.entries) >= depositSignatureCacheCap
+}
+
+func (c *depositSignatureCache) Len() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return len(c.entries)
 }
 
-func (c *DepositSignatureCache) Clear() {
+func (c *depositSignatureCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.entries = make(map[[32]byte]bool)
