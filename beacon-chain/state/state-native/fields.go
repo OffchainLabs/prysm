@@ -115,7 +115,7 @@ var (
 		types.PTCWindow,
 	}
 
-	gloasProgressiveSchema *progressiveStateSchema
+	gloasProgressiveSchema *ProgressiveStateSchema
 	gloasFields            []types.FieldIndex
 )
 
@@ -139,7 +139,7 @@ func init() {
 	gloasFields = gloasProgressiveSchema.fields
 }
 
-func progressiveStateSchemaForVersion(v int) (*progressiveStateSchema, bool) {
+func ProgressiveStateSchemaForVersion(v int) (*ProgressiveStateSchema, bool) {
 	switch v {
 	case version.Gloas:
 		return gloasProgressiveSchema, true
@@ -148,7 +148,7 @@ func progressiveStateSchemaForVersion(v int) (*progressiveStateSchema, bool) {
 	}
 }
 
-type progressiveStateSchema struct {
+type ProgressiveStateSchema struct {
 	// activeFields uses stable, append-only field positions and retains false
 	// entries for fields removed in later forks.
 	activeFields []bool
@@ -158,7 +158,7 @@ type progressiveStateSchema struct {
 	fieldIndex map[types.FieldIndex]int
 }
 
-func newProgressiveStateFieldsSchema(allFields []types.FieldIndex, inactiveFields []types.FieldIndex, forkFieldCount int) (*progressiveStateSchema, error) {
+func newProgressiveStateFieldsSchema(allFields []types.FieldIndex, inactiveFields []types.FieldIndex, forkFieldCount int) (*ProgressiveStateSchema, error) {
 	if len(allFields) == 0 {
 		return nil, fmt.Errorf("progressive state schema requires at least one field")
 	}
@@ -206,7 +206,7 @@ func newProgressiveStateFieldsSchema(allFields []types.FieldIndex, inactiveField
 		return nil, fmt.Errorf("fields count does not match expected count: got %d, expected %d", len(fields), forkFieldCount)
 	}
 
-	schema := &progressiveStateSchema{
+	schema := &ProgressiveStateSchema{
 		activeFields: activeFields,
 		fields:       fields,
 		fieldIndex:   fieldIndex,
@@ -215,7 +215,15 @@ func newProgressiveStateFieldsSchema(allFields []types.FieldIndex, inactiveField
 	return schema, nil
 }
 
-func (schema *progressiveStateSchema) getFieldIndex(field types.FieldIndex) (int, bool) {
+func (schema *ProgressiveStateSchema) GetFieldIndex(field types.FieldIndex) (int, bool) {
 	index, ok := schema.fieldIndex[field]
 	return index, ok
+}
+
+func (schema *ProgressiveStateSchema) ActiveFields() []bool {
+	return schema.activeFields
+}
+
+func (schema *ProgressiveStateSchema) Fields() []types.FieldIndex {
+	return schema.fields
 }

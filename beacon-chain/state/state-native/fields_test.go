@@ -11,7 +11,7 @@ import (
 )
 
 func TestGloasProgressiveStateSchema(t *testing.T) {
-	schema, ok := progressiveStateSchemaForVersion(version.Gloas)
+	schema, ok := ProgressiveStateSchemaForVersion(version.Gloas)
 	require.Equal(t, true, ok)
 	require.Equal(t, params.BeaconConfig().BeaconStateGloasFieldCount, len(schema.fields))
 	require.Equal(t, len(schema.fields), len(schema.activeFields))
@@ -22,7 +22,7 @@ func TestGloasProgressiveStateSchema(t *testing.T) {
 		require.Equal(t, true, schema.activeFields[i], "field %s should be active", field.String())
 		require.Equal(t, i, field.RealPosition(), "unexpected Gloas position for field %s", field.String())
 
-		index, found := schema.getFieldIndex(field)
+		index, found := schema.GetFieldIndex(field)
 		require.Equal(t, true, found, "field %s should have an index", field.String())
 		require.Equal(t, i, index, "unexpected index for field %s", field.String())
 	}
@@ -81,7 +81,7 @@ func TestNewProgressiveStateFieldsSchema(t *testing.T) {
 		}
 		for _, tt := range tests {
 			t.Run(tt.field.String(), func(t *testing.T) {
-				index, found := schema.getFieldIndex(tt.field)
+				index, found := schema.GetFieldIndex(tt.field)
 				require.Equal(t, tt.found, found)
 				require.Equal(t, tt.index, index)
 			})
@@ -100,7 +100,7 @@ func TestNewProgressiveStateFieldsSchema(t *testing.T) {
 
 		require.DeepEqual(t, []bool{true, false, true}, schema.activeFields)
 		require.DeepEqual(t, []types.FieldIndex{types.GenesisTime, types.Balances}, schema.fields)
-		index, found := schema.getFieldIndex(types.GenesisTime)
+		index, found := schema.GetFieldIndex(types.GenesisTime)
 		require.Equal(t, true, found)
 		require.Equal(t, 0, index)
 	})
@@ -170,7 +170,7 @@ func TestNewProgressiveStateFieldsSchema(t *testing.T) {
 }
 
 func TestProgressiveStateSchemaForVersion_Unsupported(t *testing.T) {
-	schema, ok := progressiveStateSchemaForVersion(version.Gloas + 1)
+	schema, ok := ProgressiveStateSchemaForVersion(version.Gloas + 1)
 	require.Equal(t, false, ok)
 	require.IsNil(t, schema)
 }

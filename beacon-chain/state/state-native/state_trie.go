@@ -999,7 +999,7 @@ func (b *BeaconState) HashTreeRoot(ctx context.Context) ([32]byte, error) {
 }
 
 func (b *BeaconState) progressiveHashTreeRoot(ctx context.Context) ([32]byte, error) {
-	schema, ok := progressiveStateSchemaForVersion(b.version)
+	schema, ok := ProgressiveStateSchemaForVersion(b.version)
 	if !ok {
 		return [32]byte{}, fmt.Errorf("progressiveHashTreeRoot: unsupported version: %s", version.String(b.version))
 	}
@@ -1011,7 +1011,7 @@ func (b *BeaconState) progressiveHashTreeRoot(ctx context.Context) ([32]byte, er
 		return [32]byte{}, err
 	}
 
-	root, err := ssz.MixInActiveFields(b.progressiveMerkleTree.Root(), schema.activeFields)
+	root, err := ssz.MixInActiveFields(b.progressiveMerkleTree.Root(), schema.ActiveFields())
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("could not mix in progressive container active fields: %w", err)
 	}
@@ -1024,7 +1024,7 @@ func (b *BeaconState) progressiveHashTreeRoot(ctx context.Context) ([32]byte, er
 //
 // WARNING: Caller must acquire the mutex before using.
 func (b *BeaconState) initializeProgressiveMerkleTree(ctx context.Context) error {
-	schema, ok := progressiveStateSchemaForVersion(b.version)
+	schema, ok := ProgressiveStateSchemaForVersion(b.version)
 	if !ok {
 		return fmt.Errorf("initializeProgressiveMerkleTree: unsupported version: %s", version.String(b.version))
 	}
@@ -1033,8 +1033,8 @@ func (b *BeaconState) initializeProgressiveMerkleTree(ctx context.Context) error
 		return nil
 	}
 
-	fieldRoots := make([][]byte, len(schema.fields))
-	for fieldIndex, field := range schema.fields {
+	fieldRoots := make([][]byte, len(schema.Fields()))
+	for fieldIndex, field := range schema.Fields() {
 		root, err := b.rootSelector(ctx, field)
 		if err != nil {
 			return fmt.Errorf("could not compute progressive field %s: %w", field.String(), err)
@@ -1052,7 +1052,7 @@ func (b *BeaconState) initializeProgressiveMerkleTree(ctx context.Context) error
 //
 // WARNING: Caller must acquire the mutex before using.
 func (b *BeaconState) recomputeProgressiveDirtyFields(ctx context.Context) error {
-	schema, ok := progressiveStateSchemaForVersion(b.version)
+	schema, ok := ProgressiveStateSchemaForVersion(b.version)
 	if !ok {
 		return fmt.Errorf("recomputeProgressiveDirtyFields: unsupported version: %s", version.String(b.version))
 	}
@@ -1062,7 +1062,7 @@ func (b *BeaconState) recomputeProgressiveDirtyFields(ctx context.Context) error
 		if err != nil {
 			return err
 		}
-		fieldIndex, ok := schema.getFieldIndex(field)
+		fieldIndex, ok := schema.GetFieldIndex(field)
 		if !ok {
 			return fmt.Errorf("could not find field index for progressive field %s in %s", field.String(), version.String(b.version))
 		}
