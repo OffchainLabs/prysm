@@ -77,9 +77,6 @@ func (s *Service) runGloasDepositWarmup() {
 				s.warmDepositSignatures()
 				continue
 			}
-			// Warming is pointless once the fork epoch has passed, but a reorg across the
-			// boundary re-runs the upgrade, so the results are only safe to drop once the fork
-			// epoch can no longer be reverted.
 			if s.FinalizedCheckpt().Epoch > cfg.GloasForkEpoch {
 				cache.DepositSignature.Clear()
 				return
