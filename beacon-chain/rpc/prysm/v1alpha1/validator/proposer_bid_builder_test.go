@@ -230,7 +230,7 @@ func TestBestBid(t *testing.T) {
 		require.IsNil(t, got)
 
 		// An entry naming the key extends its cap to the gossip payment.
-		cfg.Builders = []*ethpb.BuilderEntry{{Url: "http://a", BuilderPubkeys: [][]byte{builderPk[:]}, MaxExecutionPayment: 900}}
+		cfg.Builders = []*ethpb.BuilderEntry{{Url: []byte("http://a"), BuilderPubkeys: [][]byte{builderPk[:]}, MaxExecutionPayment: 900}}
 		got, src, effective := bestBid(head, localWithGwei(500), p2p, nil, cfg)
 		require.NotNil(t, got)
 		require.Equal(t, bidSourceP2P, src)
@@ -276,10 +276,11 @@ func TestValidateBuilderBid(t *testing.T) {
 		require.ErrorContains(t, "nil builder bid", vs.validateBuilderBid(head, nil, query, entry(1000)))
 	})
 
-	t.Run("payment exceeds max", func(t *testing.T) {
-		vs := &Server{}
-		err := vs.validateBuilderBid(head, fullBid(), query, entry(50))
-		require.ErrorContains(t, "exceeds max", err)
+	t.Run("payment above cap is accepted", func(t *testing.T) {
+		vs := &Server{NewExecutionPayloadBidVerifier: func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
+			return &fakeBidVerifier{}
+		}}
+		require.NoError(t, vs.validateBuilderBid(head, fullBid(), query, entry(50)))
 	})
 
 	t.Run("entry builder pubkeys binding", func(t *testing.T) {
@@ -355,13 +356,13 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 	parentRoot := [32]byte{1, 2, 3}
 	parentHash := [32]byte{9, 9, 9}
 	pubkey := [48]byte{4, 5, 6}
-	entries := []*ethpb.BuilderEntry{{Url: "http://builder"}}
+	entries := []*ethpb.BuilderEntry{{Url: []byte("http://builder")}}
 	head, err := util.NewBeaconStateGloas()
 	require.NoError(t, err)
 
 	bid := func(builderIndex primitives.BuilderIndex, value primitives.Gwei) beaconbuilder.PayloadBid {
 		return beaconbuilder.PayloadBid{
-			Entry: &ethpb.BuilderEntry{Url: "http://builder", MaxExecutionPayment: math.MaxUint64, BuilderBoostFactor: 100},
+			Entry: &ethpb.BuilderEntry{Url: []byte("http://builder"), MaxExecutionPayment: math.MaxUint64, BuilderBoostFactor: 100},
 			Bid: &ethpb.SignedExecutionPayloadBid{
 				Message: &ethpb.ExecutionPayloadBid{
 					Slot:            slot,
@@ -408,7 +409,36 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 		got := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
 		require.NotNil(t, got)
 		require.Equal(t, primitives.BuilderIndex(2), got.bid.Message.BuilderIndex)
-		require.Equal(t, "http://builder", got.entry.GetUrl())
+		require.Equal(t, "http://builder", string(got.entry.GetUrl()))
+	})
+
+	t.Run("payment above the entry cap counts only up to the cap", func(t *testing.T) {
+		capped := bid(1, 500)
+		capped.Entry = &ethpb.BuilderEntry{Url: []byte("http://builder"), MaxExecutionPayment: 100, BuilderBoostFactor: 100}
+		capped.Bid.Message.ExecutionPayment = 10_000
+		vs := &Server{
+			BlockBuilder:                   &builderTest.MockBuilderService{PayloadBids: []beaconbuilder.PayloadBid{capped, bid(2, 700)}},
+			NewExecutionPayloadBidVerifier: passAll,
+		}
+		// Raw total 10500 loses to 700 because only 100 of the payment counts.
+		got := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
+		require.NotNil(t, got)
+		require.Equal(t, primitives.BuilderIndex(2), got.bid.Message.BuilderIndex)
+	})
+
+	t.Run("over-cap bid wins at its capped value with payment unmodified", func(t *testing.T) {
+		capped := bid(1, 500)
+		capped.Entry = &ethpb.BuilderEntry{Url: []byte("http://builder"), MaxExecutionPayment: 100, BuilderBoostFactor: 100}
+		capped.Bid.Message.ExecutionPayment = 10_000
+		vs := &Server{
+			BlockBuilder:                   &builderTest.MockBuilderService{PayloadBids: []beaconbuilder.PayloadBid{capped, bid(2, 550)}},
+			NewExecutionPayloadBidVerifier: passAll,
+		}
+		// Capped effective 600 beats 550; the winning bid keeps its raw payment.
+		got := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
+		require.NotNil(t, got)
+		require.Equal(t, primitives.BuilderIndex(1), got.bid.Message.BuilderIndex)
+		require.Equal(t, primitives.Gwei(10_000), got.bid.Message.ExecutionPayment)
 	})
 
 	t.Run("discards invalid bids", func(t *testing.T) {
@@ -522,7 +552,7 @@ func TestSetExecutionPayloadBid_PrefersBuilderBid(t *testing.T) {
 
 	// No P2P cache, so the Builder-API bid is the only remote candidate.
 	vs := &Server{}
-	win := &winningBuilderBid{bid: builderBid, entry: &ethpb.BuilderEntry{Url: "http://builder", MaxExecutionPayment: 1000, BuilderBoostFactor: 100}}
+	win := &winningBuilderBid{bid: builderBid, entry: &ethpb.BuilderEntry{Url: []byte("http://builder"), MaxExecutionPayment: 1000, BuilderBoostFactor: 100}}
 	src, err := vs.setExecutionPayloadBid(t.Context(), sBlk, nil, local, win, nil, false)
 	require.NoError(t, err)
 	require.Equal(t, bidSourceBuilderAPI, src)

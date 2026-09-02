@@ -77,6 +77,7 @@ var appFlags = []cli.Flag{
 	flags.Web3SignerURLFlag,
 	flags.Web3SignerPublicValidatorKeysFlag,
 	flags.Web3SignerKeyFileFlag,
+	flags.Web3SignerKeyPollIntervalFlag,
 	flags.SuggestedFeeRecipientFlag,
 	flags.ProposerSettingsURLFlag,
 	flags.ProposerSettingsFlag,

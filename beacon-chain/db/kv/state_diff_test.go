@@ -820,6 +820,50 @@ func TestStateDiff_OffsetCache(t *testing.T) {
 	}
 }
 
+type blockingMarshalBeaconState struct {
+	state.ReadOnlyBeaconState
+	started chan struct{}
+	release chan struct{}
+}
+
+func (s *blockingMarshalBeaconState) MarshalSSZ() ([]byte, error) {
+	close(s.started)
+	<-s.release
+	return s.ReadOnlyBeaconState.MarshalSSZ()
+}
+
+func TestStateDiffCache_AnchorAccess(t *testing.T) {
+	setDefaultStateDiffExponents()
+
+	t.Run("out of range read", func(t *testing.T) {
+		cache := &stateDiffCache{anchors: make([][]byte, 1)}
+		require.IsNil(t, cache.getAnchor(-1))
+		require.IsNil(t, cache.getAnchor(1))
+	})
+
+	t.Run("reanchor during encoding", func(t *testing.T) {
+		cache := &stateDiffCache{anchors: make([][]byte, len(flags.Get().StateDiffExponents)-1)}
+		anchor, _ := createState(t, 0, version.Phase0)
+		blockingAnchor := &blockingMarshalBeaconState{
+			ReadOnlyBeaconState: anchor,
+			started:             make(chan struct{}),
+			release:             make(chan struct{}),
+		}
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- cache.setAnchor(0, blockingAnchor)
+		}()
+
+		<-blockingAnchor.started
+		cache.reanchor(32, make([]bool, len(flags.Get().StateDiffExponents)))
+		close(blockingAnchor.release)
+
+		require.NoError(t, <-errCh)
+		require.IsNil(t, cache.getAnchor(0))
+		require.Equal(t, uint64(32), cache.getOffset())
+	})
+}
+
 func TestStateDiff_AnchorCache(t *testing.T) {
 	setDefaultStateDiffExponents()
 

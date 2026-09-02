@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	rpctesting "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared/testing"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
@@ -14,9 +15,11 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/mock"
 	testhelpers "github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/test-helpers"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/grpc/metadata"
 )
 
 func TestProposeBeaconBlock_SSZ_Error(t *testing.T) {
@@ -763,4 +766,47 @@ func TestBuildBlockResult_MarshalSSZError(t *testing.T) {
 	require.NoError(t, err)
 	_, err = res.marshalSSZ()
 	assert.ErrorContains(t, "failed to serialize phase0 beacon block", err)
+}
+
+func TestProposeBeaconBlock_GloasBuilderUrlEcho(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	signedBlock := &ethpb.GenericSignedBeaconBlock_Gloas{
+		Gloas: util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{}),
+	}
+
+	t.Run("builder url set adds the header", func(t *testing.T) {
+		handler := mock.NewMockHandler(ctrl)
+		expectPostSSZWithFallback(handler)
+		handler.EXPECT().PostSSZ(
+			gomock.Any(),
+			"/eth/v2/beacon/blocks",
+			map[string]string{
+				"Eth-Consensus-Version": "gloas",
+				api.BuilderUrlHeader:    "http://builder.example",
+			},
+			gomock.Any(),
+		).Return(nil).Times(1)
+
+		validatorClient := &beaconApiValidatorClient{handler: handler}
+		ctx := metadata.AppendToOutgoingContext(t.Context(), api.BuilderUrlHeader, "http://builder.example")
+		_, err := validatorClient.proposeBeaconBlock(ctx, &ethpb.GenericSignedBeaconBlock{Block: signedBlock})
+		require.NoError(t, err)
+	})
+
+	t.Run("no builder url omits the header", func(t *testing.T) {
+		handler := mock.NewMockHandler(ctrl)
+		expectPostSSZWithFallback(handler)
+		handler.EXPECT().PostSSZ(
+			gomock.Any(),
+			"/eth/v2/beacon/blocks",
+			map[string]string{"Eth-Consensus-Version": "gloas"},
+			gomock.Any(),
+		).Return(nil).Times(1)
+
+		validatorClient := &beaconApiValidatorClient{handler: handler}
+		_, err := validatorClient.proposeBeaconBlock(t.Context(), &ethpb.GenericSignedBeaconBlock{Block: signedBlock})
+		require.NoError(t, err)
+	})
 }

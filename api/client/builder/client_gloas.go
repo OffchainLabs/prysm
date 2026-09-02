@@ -19,7 +19,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-const postBeaconBlockPath = "/eth/v1/builder/beacon_block"
+const postBeaconBlockPath = "/eth/v1/builder/beacon_blocks"
 
 func executionPayloadBidPath(slot primitives.Slot, parentHash, parentRoot [32]byte, proposerPubkey [48]byte) string {
 	return fmt.Sprintf("/eth/v1/builder/execution_payload_bid/%d/%#x/%#x/%#x", slot, parentHash, parentRoot, proposerPubkey)
@@ -44,7 +44,7 @@ func (c *Client) GetExecutionPayloadBid(
 	slot primitives.Slot,
 	parentHash, parentRoot [32]byte,
 	proposerPubkey [48]byte,
-	auth *ethpb.SignedRequestAuth,
+	auth *ethpb.SignedBuilderRequestAuth,
 ) (*ethpb.SignedExecutionPayloadBid, error) {
 	return sszFallback(c, func(ssz bool) (*ethpb.SignedExecutionPayloadBid, error) {
 		return c.getExecutionPayloadBid(ctx, slot, parentHash, parentRoot, proposerPubkey, auth, ssz)
@@ -56,11 +56,11 @@ func (c *Client) getExecutionPayloadBid(
 	slot primitives.Slot,
 	parentHash, parentRoot [32]byte,
 	proposerPubkey [48]byte,
-	auth *ethpb.SignedRequestAuth,
+	auth *ethpb.SignedBuilderRequestAuth,
 	ssz bool,
 ) (*ethpb.SignedExecutionPayloadBid, error) {
 	if auth == nil {
-		return nil, errors.Wrap(errMalformedRequest, "nil signed request auth")
+		return nil, errors.Wrap(errMalformedRequest, "nil signed builder request auth")
 	}
 	accept := api.JsonMediaType
 	if ssz {
@@ -73,12 +73,12 @@ func (c *Client) getExecutionPayloadBid(
 		contentType = api.OctetStreamMediaType
 		body, err = auth.MarshalSSZ()
 		if err != nil {
-			return nil, errors.Wrap(err, "could not ssz encode SignedRequestAuth")
+			return nil, errors.Wrap(err, "could not ssz encode SignedBuilderRequestAuth")
 		}
 	} else {
-		body, err = json.Marshal(structs.SignedRequestAuthFromConsensus(auth))
+		body, err = json.Marshal(structs.SignedBuilderRequestAuthFromConsensus(auth))
 		if err != nil {
-			return nil, errors.Wrap(err, "could not json encode SignedRequestAuth")
+			return nil, errors.Wrap(err, "could not json encode SignedBuilderRequestAuth")
 		}
 	}
 	opts := []reqOption{func(r *http.Request) {

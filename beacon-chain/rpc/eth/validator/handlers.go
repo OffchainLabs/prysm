@@ -267,9 +267,9 @@ func (s *Server) SubmitSignedProposerPreferences(w http.ResponseWriter, r *http.
 		decodeErr error
 	)
 	if httputil.IsRequestSsz(r) {
-		prefs, failures, decodeErr = decodeSignedProposerPreferencesSSZ(r.Body)
+		prefs, failures, decodeErr = server.DecodeSSZList[ethpbalpha.SignedProposerPreferences](r.Body)
 	} else {
-		prefs, failures, decodeErr = decodeSignedProposerPreferencesJSON(r.Body)
+		prefs, failures, decodeErr = server.DecodeJSONList(r.Body, (*structs.SignedProposerPreferences).ToConsensus)
 	}
 	if decodeErr != nil {
 		if errors.Is(decodeErr, io.EOF) {
@@ -308,49 +308,6 @@ func (s *Server) SubmitSignedProposerPreferences(w http.ResponseWriter, r *http.
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-}
-
-// decodeSignedProposerPreferencesJSON decodes a JSON array of SignedProposerPreferences.
-func decodeSignedProposerPreferencesJSON(r io.Reader) ([]*ethpbalpha.SignedProposerPreferences, []*server.IndexedError, error) {
-	var data []*structs.SignedProposerPreferences
-	if err := json.NewDecoder(r).Decode(&data); err != nil {
-		return nil, nil, err
-	}
-	prefs := make([]*ethpbalpha.SignedProposerPreferences, len(data))
-	var failures []*server.IndexedError
-	for i, item := range data {
-		consensusItem, err := item.ToConsensus()
-		if err != nil {
-			failures = append(failures, &server.IndexedError{Index: i, Message: err.Error()})
-			continue
-		}
-		prefs[i] = consensusItem
-	}
-	return prefs, failures, nil
-}
-
-// decodeSignedProposerPreferencesSSZ decodes the SSZ encoding
-func decodeSignedProposerPreferencesSSZ(r io.Reader) ([]*ethpbalpha.SignedProposerPreferences, []*server.IndexedError, error) {
-	body, err := io.ReadAll(r)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "could not read request body")
-	}
-	sszSize := (&ethpbalpha.SignedProposerPreferences{}).SizeSSZ()
-	if len(body) == 0 || len(body)%sszSize != 0 {
-		return nil, nil, errors.New("invalid SSZ signed proposer preferences list size")
-	}
-	n := len(body) / sszSize
-	prefs := make([]*ethpbalpha.SignedProposerPreferences, n)
-	var failures []*server.IndexedError
-	for i := range n {
-		m := &ethpbalpha.SignedProposerPreferences{}
-		if err := m.UnmarshalSSZ(body[i*sszSize : (i+1)*sszSize]); err != nil {
-			failures = append(failures, &server.IndexedError{Index: i, Message: "Could not decode SSZ message: " + err.Error()})
-			continue
-		}
-		prefs[i] = m
-	}
-	return prefs, failures, nil
 }
 
 // SubmitContributionAndProofs publishes multiple signed sync committee contribution and proofs.
@@ -506,26 +463,9 @@ func decodeSignedAggregates(r *http.Request, v int) ([]ethpbalpha.SignedAggregat
 	if httputil.IsRequestSsz(r) {
 		return decodeSignedAggregatesSSZ(r.Body, v)
 	}
-	return decodeSignedAggregatesJSON(r.Body, v)
-}
-
-// decodeSignedAggregatesJSON decodes a JSON array of signed aggregate and proofs.
-func decodeSignedAggregatesJSON(body io.Reader, v int) ([]ethpbalpha.SignedAggregateAttAndProof, []*server.IndexedError, error) {
-	var raw []json.RawMessage
-	if err := json.NewDecoder(body).Decode(&raw); err != nil {
-		return nil, nil, err
-	}
-	aggregates := make([]ethpbalpha.SignedAggregateAttAndProof, len(raw))
-	var failures []*server.IndexedError
-	for i, item := range raw {
-		aggregate, err := unmarshalSignedAggregateJSON(item, v)
-		if err != nil {
-			failures = append(failures, &server.IndexedError{Index: i, Message: err.Error()})
-			continue
-		}
-		aggregates[i] = aggregate
-	}
-	return aggregates, failures, nil
+	return server.DecodeJSONList(r.Body, func(raw *json.RawMessage) (ethpbalpha.SignedAggregateAttAndProof, error) {
+		return unmarshalSignedAggregateJSON(*raw, v)
+	})
 }
 
 // decodeSignedAggregatesSSZ decodes the SSZ List[SignedAggregateAndProof].
@@ -545,19 +485,9 @@ func decodeSignedAggregatesSSZ(body io.Reader, v int) ([]ethpbalpha.SignedAggreg
 		return nil, nil, fmt.Errorf("split SSZ list: %w", err)
 	}
 
-	var (
-		aggregates = make([]ethpbalpha.SignedAggregateAttAndProof, len(raw))
-		failures   []*server.IndexedError
-	)
-
-	for i, elem := range raw {
-		aggregate, err := unmarshalSignedAggregateSSZ(elem, v)
-		if err != nil {
-			failures = append(failures, &server.IndexedError{Index: i, Message: err.Error()})
-			continue
-		}
-		aggregates[i] = aggregate
-	}
+	aggregates, failures := server.ConvertList(raw, func(elem []byte) (ethpbalpha.SignedAggregateAttAndProof, error) {
+		return unmarshalSignedAggregateSSZ(elem, v)
+	})
 	return aggregates, failures, nil
 }
 

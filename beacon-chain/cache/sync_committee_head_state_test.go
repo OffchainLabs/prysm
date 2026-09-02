@@ -43,13 +43,13 @@ func TestSyncCommitteeHeadState(t *testing.T) {
 	require.NoError(t, err)
 	type put struct {
 		slot  primitives.Slot
-		state state.BeaconState
+		state state.ReadOnlyBeaconState
 	}
 	tests := []struct {
 		name       string
 		key        primitives.Slot
 		put        *put
-		want       state.BeaconState
+		want       state.ReadOnlyBeaconState
 		wantErr    bool
 		wantPutErr bool
 	}{
