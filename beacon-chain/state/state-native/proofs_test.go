@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -157,5 +158,61 @@ func TestBeaconStateMerkleProofs_bellatrix(t *testing.T) {
 
 		valid = trie.VerifyMerkleProof(newRoot[:], finalizedRoot, gIndex, proof)
 		require.Equal(t, true, valid)
+	})
+}
+
+func TestBeaconStateMerkleProofs_Gloas(t *testing.T) {
+	reset := features.InitWithReset(&features.Flags{})
+	defer reset()
+
+	ctx := t.Context()
+	gloas, err := util.NewBeaconStateGloas()
+	require.NoError(t, err)
+	htr, err := gloas.HashTreeRoot(ctx)
+	require.NoError(t, err)
+
+	t.Run("current sync committee", func(t *testing.T) {
+		committee, err := gloas.CurrentSyncCommittee()
+		require.NoError(t, err)
+		committeeRoot, err := committee.HashTreeRoot()
+		require.NoError(t, err)
+		proof, err := gloas.CurrentSyncCommitteeProof(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 11, len(proof))
+		require.Equal(t, true, trie.VerifyMerkleProof(htr[:], committeeRoot[:], 2945, proof))
+	})
+
+	t.Run("next sync committee", func(t *testing.T) {
+		committee, err := gloas.NextSyncCommittee()
+		require.NoError(t, err)
+		committeeRoot, err := committee.HashTreeRoot()
+		require.NoError(t, err)
+		proof, err := gloas.NextSyncCommitteeProof(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 11, len(proof))
+		require.Equal(t, true, trie.VerifyMerkleProof(htr[:], committeeRoot[:], 2946, proof))
+	})
+
+	t.Run("finalized root", func(t *testing.T) {
+		finalizedRoot := gloas.FinalizedCheckpoint().Root
+		proof, err := gloas.FinalizedRootProof(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 9, len(proof))
+		require.Equal(t, true, trie.VerifyMerkleProof(htr[:], finalizedRoot, 735, proof))
+	})
+
+	t.Run("recomputes dirty fields", func(t *testing.T) {
+		checkpoint := gloas.FinalizedCheckpoint()
+		checkpoint.Epoch = 100
+		checkpoint.Root[0] = 1
+		require.NoError(t, gloas.SetFinalizedCheckpoint(checkpoint))
+
+		proof, err := gloas.FinalizedRootProof(ctx)
+		require.NoError(t, err)
+		newRoot, err := gloas.HashTreeRoot(ctx)
+		require.NoError(t, err)
+		finalizedRoot := gloas.FinalizedCheckpoint().Root
+		require.Equal(t, false, trie.VerifyMerkleProof(htr[:], finalizedRoot, 735, proof))
+		require.Equal(t, true, trie.VerifyMerkleProof(newRoot[:], finalizedRoot, 735, proof))
 	})
 }

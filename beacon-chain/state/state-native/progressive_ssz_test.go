@@ -30,6 +30,32 @@ func TestProgressiveSSZEnabled(t *testing.T) {
 	require.Equal(t, false, features.ProgressiveSSZEnabled(version.Fulu))
 }
 
+func TestValidateFieldIndex_AllForks(t *testing.T) {
+	versions := []int{
+		version.Phase0,
+		version.Altair,
+		version.Bellatrix,
+		version.Capella,
+		version.Deneb,
+		version.Electra,
+		version.Fulu,
+		version.Gloas,
+	}
+	for _, stateVersion := range versions {
+		t.Run(version.String(stateVersion), func(t *testing.T) {
+			st := &BeaconState{version: stateVersion}
+			require.NoError(t, st.validateFieldIndex(types.GenesisTime))
+		})
+	}
+
+	for _, stateVersion := range versions[:len(versions)-1] {
+		t.Run(version.String(stateVersion)+" rejects Gloas field", func(t *testing.T) {
+			st := &BeaconState{version: stateVersion}
+			require.ErrorContains(t, "not supported", st.validateFieldIndex(types.PTCWindow))
+		})
+	}
+}
+
 func TestComputeFieldRootsWithHasher_ProgressiveSSZFields(t *testing.T) {
 	ctx := context.Background()
 	st := newGloasStateForProgressiveSSZTests(t)
