@@ -69,6 +69,7 @@ type Getter interface {
 	ForkChoiceDump(context.Context) (*forkchoice2.Dump, error)
 	ForkChoiceDumpV2(context.Context) (*forkchoice2.DumpV2, error)
 	IsAncestor(root [32]byte, ancestorRoot [32]byte) (bool, error)
+	SlashedIndices() map[primitives.ValidatorIndex]bool
 	Tips() ([][32]byte, []primitives.Slot)
 	UnrealizedJustification(root [32]byte) (*forkchoicetypes.Checkpoint, error)
 	VoteSnapshot(buf []forkchoicetypes.VoteData) []forkchoicetypes.VoteData
@@ -77,7 +78,6 @@ type Getter interface {
 
 type FastGetter interface {
 	FinalizedCheckpoint() *forkchoicetypes.Checkpoint
-	SlashedIndices() map[primitives.ValidatorIndex]bool
 	FinalizedPayloadBlockHash() [32]byte
 	HasFullNode([32]byte) bool
 	HasNode([32]byte) bool

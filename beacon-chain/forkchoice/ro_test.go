@@ -54,7 +54,6 @@ const (
 	canonicalNodeAtSlotCalled
 	confirmedPayloadBlockHashCalled
 	payloadWeightsCalled
-	slashedIndicesCalled
 	hasPayloadBlockHashCalled
 )
 
@@ -222,11 +221,6 @@ func TestROLocking(t *testing.T) {
 			name: "gasLimitCalled",
 			call: gasLimitCalled,
 			cb:   func(g FastGetter) { _, err := g.GasLimit([32]byte{}); _discard(t, err) },
-		},
-		{
-			name: "slashedIndicesCalled",
-			call: slashedIndicesCalled,
-			cb:   func(g FastGetter) { g.SlashedIndices() },
 		},
 		{
 			name: "hasPayloadBlockHashCalled",
@@ -461,9 +455,4 @@ func (ro *mockROForkchoice) ConfirmedPayloadBlockHash(_ [32]byte) [32]byte {
 func (ro *mockROForkchoice) CanonicalNodeAtSlot(_ primitives.Slot) ([32]byte, bool) {
 	ro.calls = append(ro.calls, canonicalNodeAtSlotCalled)
 	return [32]byte{}, false
-}
-
-func (ro *mockROForkchoice) SlashedIndices() map[primitives.ValidatorIndex]bool {
-	ro.calls = append(ro.calls, slashedIndicesCalled)
-	return nil
 }

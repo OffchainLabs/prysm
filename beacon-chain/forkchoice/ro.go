@@ -288,10 +288,3 @@ func (ro *ROForkChoice) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, boo
 	defer ro.l.RUnlock()
 	return ro.getter.CanonicalNodeAtSlot(slot)
 }
-
-// SlashedIndices delegates to the underlying forkchoice call, under a lock.
-func (ro *ROForkChoice) SlashedIndices() map[primitives.ValidatorIndex]bool {
-	ro.l.RLock()
-	defer ro.l.RUnlock()
-	return ro.getter.SlashedIndices()
-}
