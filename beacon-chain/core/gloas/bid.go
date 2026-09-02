@@ -93,6 +93,10 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 		return errors.Wrap(err, "failed to get bid from wrapped bid")
 	}
 
+	if bid.BlockHash() == bid.ParentBlockHash() {
+		return fmt.Errorf("bid block hash %x equals parent block hash", bid.BlockHash())
+	}
+
 	builderIndex := bid.BuilderIndex()
 	amount := bid.Value()
 

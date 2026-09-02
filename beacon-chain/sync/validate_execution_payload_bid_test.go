@@ -43,6 +43,21 @@ func TestValidateExecutionPayloadBidGossip_InvalidTopic(t *testing.T) {
 	require.Equal(t, pubsub.ValidationReject, result)
 }
 
+func TestValidateExecutionPayloadBidGossip_BlockHashEqualsParent(t *testing.T) {
+	ctx := context.Background()
+	s, _, signedBid := setupExecutionPayloadBidService(t)
+	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
+
+	signedBid.Message.BlockHash = signedBid.Message.ParentBlockHash
+	msg := executionPayloadBidToPubsub(t, s, s.cfg.p2p, signedBid)
+	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+	require.ErrorContains(t, "bid block hash equals parent block hash", err)
+	require.Equal(t, pubsub.ValidationReject, result)
+
+	// The rejected bid must not be cached as seen.
+	require.Equal(t, false, s.hasSeenExecutionPayloadBid(executionPayloadBidTupleKey(mustBid(t, signedBid))))
+}
+
 func TestValidateExecutionPayloadBidGossip_AlreadySeenTuple(t *testing.T) {
 	ctx := context.Background()
 	s, msg, signedBid := setupExecutionPayloadBidService(t)
