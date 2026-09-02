@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -234,6 +235,96 @@ func TestService_GetRecentPreState(t *testing.T) {
 		slot:  31,
 	}
 	require.NotNil(t, service.getRecentPreState(ctx, &ethpb.Checkpoint{Epoch: 1, Root: ckRoot}))
+}
+
+func TestService_GetRecentPreState_NextEpochUsesHeadState(t *testing.T) {
+	service, _ := minimalTestService(t)
+	ctx := t.Context()
+
+	s, err := util.NewBeaconState()
+	require.NoError(t, err)
+	require.NoError(t, s.SetSlot(31))
+	ckRoot := bytesutil.PadTo([]byte{'A'}, fieldparams.RootLength)
+	cp0 := &ethpb.Checkpoint{Epoch: 0, Root: ckRoot}
+	require.NoError(t, s.SetFinalizedCheckpoint(cp0))
+
+	st, blk, err := prepareForkchoiceState(ctx, 31, [32]byte(ckRoot), [32]byte{}, [32]byte{'R'}, cp0, cp0)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+	service.head = &head{
+		root:  [32]byte(ckRoot),
+		state: s,
+		block: blk,
+		slot:  31,
+	}
+	recent := service.getRecentPreState(ctx, &ethpb.Checkpoint{Epoch: 1, Root: ckRoot})
+	require.NotNil(t, recent)
+	require.Equal(t, primitives.Slot(31), recent.Slot())
+}
+
+func TestService_GetRecentPreState_NextEpochCommitteesMatchAdvancedState(t *testing.T) {
+	helpers.ClearCache()
+	defer helpers.ClearCache()
+	ctx := t.Context()
+
+	st, _ := util.DeterministicGenesisState(t, 8192)
+	require.NoError(t, st.SetSlot(31))
+
+	activeCount, err := helpers.ActiveValidatorCount(ctx, st, 1)
+	require.NoError(t, err)
+	committeeCount := helpers.SlotCommitteeCount(activeCount)
+	require.Equal(t, true, committeeCount > 1)
+
+	headCommittees := make(map[[2]uint64][]primitives.ValidatorIndex)
+	for slot := primitives.Slot(32); slot < 64; slot++ {
+		for idx := primitives.CommitteeIndex(0); idx < primitives.CommitteeIndex(committeeCount); idx++ {
+			committee, err := helpers.BeaconCommitteeFromState(ctx, st, slot, idx)
+			require.NoError(t, err)
+			headCommittees[[2]uint64{uint64(slot), uint64(idx)}] = committee
+		}
+	}
+
+	// Cleared so the advanced state's committees are computed independently, the committee cache is seed keyed.
+	helpers.ClearCache()
+	advanced, err := transition.ProcessSlots(ctx, st.Copy(), 32)
+	require.NoError(t, err)
+	for slot := primitives.Slot(32); slot < 64; slot++ {
+		for idx := primitives.CommitteeIndex(0); idx < primitives.CommitteeIndex(committeeCount); idx++ {
+			committee, err := helpers.BeaconCommitteeFromState(ctx, advanced, slot, idx)
+			require.NoError(t, err)
+			require.DeepEqual(t, headCommittees[[2]uint64{uint64(slot), uint64(idx)}], committee)
+		}
+	}
+}
+
+func TestService_GetRecentPreState_ForkBoundaryFallsBack(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.AltairForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	service, _ := minimalTestService(t)
+	ctx := t.Context()
+
+	s, _ := util.DeterministicGenesisState(t, 64)
+	require.NoError(t, s.SetSlot(31))
+	ckRoot := bytesutil.PadTo([]byte{'A'}, fieldparams.RootLength)
+	cp0 := &ethpb.Checkpoint{Epoch: 0, Root: ckRoot}
+	require.NoError(t, s.SetFinalizedCheckpoint(cp0))
+
+	st, blk, err := prepareForkchoiceState(ctx, 31, [32]byte(ckRoot), [32]byte{}, [32]byte{'R'}, cp0, cp0)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+	service.head = &head{
+		root:  [32]byte(ckRoot),
+		state: s,
+		block: blk,
+		slot:  31,
+	}
+	recent := service.getRecentPreState(ctx, &ethpb.Checkpoint{Epoch: 1, Root: ckRoot})
+	require.NotNil(t, recent)
+	require.Equal(t, primitives.Slot(32), recent.Slot())
+	require.Equal(t, version.Altair, recent.Version())
 }
 
 func TestService_GetRecentPreState_Epoch_0(t *testing.T) {

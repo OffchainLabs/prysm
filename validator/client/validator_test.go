@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net/http"
+	"net/http/httptest"
+	"runtime"
 	"slices"
 	"sort"
 	"strings"
@@ -958,6 +961,130 @@ func TestValidator_WaitForKeymanagerInitialization_web3Signer(t *testing.T) {
 			require.NotNil(t, km)
 		})
 	}
+}
+
+func settledPollerCount() int {
+	// countURLPollerInStack counts the number of pollRemoteKeysFromURL goroutines in the stack trace.
+	countURLPollerInStack := func() int {
+		buf := make([]byte, 1<<20)
+		for {
+			n := runtime.Stack(buf, true)
+			if n < len(buf) {
+				return strings.Count(string(buf[:n]), "pollRemoteKeysFromURL")
+			}
+			buf = make([]byte, 2*len(buf))
+		}
+	}
+
+	count := 0
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		count = countURLPollerInStack()
+		if count == 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return count
+}
+
+func TestInitialize_Keymanager(t *testing.T) {
+	gvr := func() []byte {
+		root := make([]byte, 32)
+		copy(root[2:], "a")
+		return root
+	}()
+
+	newWeb3SignerTestValidator := func(t *testing.T, keysURL string, pollInterval time.Duration) *validator {
+		ctx := t.Context()
+		db := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false)
+		require.NoError(t, db.SaveGenesisValidatorsRoot(ctx, gvr))
+		return &validator{
+			db: db,
+			web3SignerConfig: &remoteweb3signer.SetupConfig{
+				BaseEndpoint:  "http://localhost:8545",
+				PublicKeysURL: keysURL,
+				PollInterval:  pollInterval,
+			},
+			accountsChangedChannel: make(chan [][fieldparams.BLSPubkeyLength]byte, 2),
+		}
+	}
+
+	setupInitTest := func(t *testing.T) (*validator, *validatormock.MockValidatorClient, *validatormock.MockNodeClient, *atomic.Value) {
+		var resp atomic.Value
+		resp.Store(`["0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"]`)
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte(resp.Load().(string)))
+		}))
+		t.Cleanup(srv.Close)
+
+		v := newWeb3SignerTestValidator(t, srv.URL, 20*time.Millisecond)
+		ctrl := gomock.NewController(t)
+		validatorClient := validatormock.NewMockValidatorClient(ctrl)
+		nodeClient := validatormock.NewMockNodeClient(ctrl)
+		v.validatorClient = validatorClient
+		v.nodeClient = nodeClient
+		return v, validatorClient, nodeClient, &resp
+	}
+	chainStarted := func() *ethpb.ChainStartResponse {
+		return &ethpb.ChainStartResponse{
+			Started:               true,
+			GenesisTime:           uint64(time.Now().Unix()),
+			GenesisValidatorsRoot: gvr,
+		}
+	}
+
+	oldBackOff := backOffPeriod
+	backOffPeriod = 5 * time.Millisecond
+	defer func() { backOffPeriod = oldBackOff }()
+
+	t.Run("initialized once per runner", func(t *testing.T) {
+		v, validatorClient, nodeClient, resp := setupInitTest(t)
+		validatorClient.EXPECT().WaitForChainStart(gomock.Any(), gomock.Any()).Return(chainStarted(), nil).Times(3)
+
+		// Two connection errors followed by a successful sync status check.
+		gomock.InOrder(
+			nodeClient.EXPECT().SyncStatus(gomock.Any(), gomock.Any()).Return(nil, errors.New("connection refused")),
+			nodeClient.EXPECT().SyncStatus(gomock.Any(), gomock.Any()).Return(nil, errors.New("connection refused")),
+			nodeClient.EXPECT().SyncStatus(gomock.Any(), gomock.Any()).Return(&ethpb.SyncStatus{Syncing: false}, nil),
+		)
+		validatorClient.EXPECT().MultipleValidatorStatus(gomock.Any(), gomock.Any()).DoAndReturn(allActiveStatuses)
+
+		require.NoError(t, initialize(t.Context(), v))
+		require.Equal(t, 1, settledPollerCount(), "expected exactly one key poller goroutine")
+
+		// Test that subscription delivers exactly one event.
+		resp.Store(`["0xb2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"]`)
+		select {
+		case <-v.accountsChangedChannel:
+		case <-time.After(5 * time.Second):
+			t.Fatal("timed out waiting for accounts changed event")
+		}
+		select {
+		case <-v.accountsChangedChannel:
+			t.Fatal("duplicate accounts changed delivery from a leaked keymanager")
+		case <-time.After(500 * time.Millisecond):
+		}
+	})
+
+	t.Run("rebuilt by a runner restart", func(t *testing.T) {
+		v, validatorClient, nodeClient, _ := setupInitTest(t)
+		validatorClient.EXPECT().WaitForChainStart(gomock.Any(), gomock.Any()).Return(chainStarted(), nil).Times(2)
+		nodeClient.EXPECT().SyncStatus(gomock.Any(), gomock.Any()).Return(&ethpb.SyncStatus{Syncing: false}, nil).Times(2)
+		validatorClient.EXPECT().MultipleValidatorStatus(gomock.Any(), gomock.Any()).DoAndReturn(allActiveStatuses).Times(2)
+
+		runnerCtx, cancel := context.WithCancel(t.Context())
+		require.NoError(t, initialize(runnerCtx, v))
+		km := v.km
+
+		// Simulate a health-monitor runner restart.
+		cancel()
+		v.Done()
+		require.NoError(t, initialize(t.Context(), v))
+		require.Equal(t, false, km == v.km, "restart must rebuild the keymanager")
+		require.Equal(t, 1, settledPollerCount(), "expected exactly one key poller goroutine after restart")
+	})
 }
 
 func TestValidator_WaitForKeymanagerInitialization_Web(t *testing.T) {
