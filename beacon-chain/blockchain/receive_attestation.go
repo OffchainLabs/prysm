@@ -126,6 +126,9 @@ func (s *Service) spawnProcessAttestationsRoutine() {
 // notifyFastConfirmation emits a fast_confirmation event after every run of the fast
 // confirmation rule regardless of whether the confirmed block changed.
 func (s *Service) notifyFastConfirmation(currentSlot primitives.Slot) {
+	if s.fcr == nil {
+		return
+	}
 	root := s.fcr.ConfirmedRoot()
 
 	s.cfg.ForkChoiceStore.RLock()

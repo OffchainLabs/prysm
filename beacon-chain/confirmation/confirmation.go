@@ -40,6 +40,7 @@ type FastConfirmationRule struct {
 
 // New follows the spec's get_fast_confirmation_store, the anchor is the finalized checkpoint at startup.
 func New(fc ForkchoiceReader, committees CommitteeAccessor, balances BalanceAccessor, anchorCheckpoint forkchoicetypes.Checkpoint) *FastConfirmationRule {
+	registerMetrics()
 	return &FastConfirmationRule{
 		confirmedRoot:                             anchorCheckpoint.Root,
 		previousSlotHead:                          anchorCheckpoint.Root,
