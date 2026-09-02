@@ -66,11 +66,7 @@ func (s *Service) sendFCU(cfg *postBlockProcessConfig) {
 		s.updateCachesPostBlockProcessing(cfg)
 		s.ForkChoicer().Lock()
 	}
-	fcuArgs, err := s.getFCUArgs(cfg)
-	if err != nil {
-		log.WithError(err).Error("Could not get forkchoice update argument")
-		return
-	}
+	fcuArgs := s.getFCUArgs(cfg)
 	// If head has not been updated and attributes are nil, we can skip the FCU.
 	if !s.isNewHead(cfg.headRoot, true) && (fcuArgs.attributes == nil || fcuArgs.attributes.IsEmpty()) {
 		return
