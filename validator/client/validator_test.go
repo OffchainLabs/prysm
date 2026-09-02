@@ -43,8 +43,10 @@ import (
 	dbTest "github.com/OffchainLabs/prysm/v7/validator/db/testing"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager/derived"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
+	constant "github.com/OffchainLabs/prysm/v7/validator/testing"
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -248,6 +250,32 @@ func TestRecheckKeys(t *testing.T) {
 				kp := randKeypair(t)
 				require.NoError(t, km.ImportKeypairs(ctx, [][]byte{kp.pri.Marshal()}, [][]byte{kp.pub[:]}))
 				waitForProposedKeys(t, valDB, kp.pub)
+			})
+
+			t.Run("derived keymanager gets runtime buckets", func(t *testing.T) {
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				local.ResetCaches()
+				w := wallet.New(&wallet.Config{
+					WalletDir:      t.TempDir(),
+					KeymanagerKind: keymanager.Derived,
+					WalletPassword: "TestWalletPassword123!",
+				})
+				require.NoError(t, w.SaveWallet())
+				km, err := derived.NewKeymanager(ctx, &derived.SetupConfig{Wallet: w})
+				require.NoError(t, err)
+				valDB := dbTest.SetupDB(t, t.TempDir(), nil, isSlashingProtectionMinimal)
+
+				recheckKeys(ctx, valDB, km)
+				keys, err := valDB.ProposedPublicKeys(ctx)
+				require.NoError(t, err)
+				require.Equal(t, 0, len(keys))
+
+				require.NoError(t, km.RecoverAccountsFromMnemonic(ctx, constant.TestMnemonic, derived.DefaultMnemonicLanguage, "", 1))
+				recovered, err := km.FetchValidatingPublicKeys(ctx)
+				require.NoError(t, err)
+				require.Equal(t, 1, len(recovered))
+				waitForProposedKeys(t, valDB, recovered...)
 			})
 
 			t.Run("non-local keymanager gets startup and runtime buckets", func(t *testing.T) {
