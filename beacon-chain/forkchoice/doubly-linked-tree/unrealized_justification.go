@@ -19,11 +19,11 @@ func (s *Store) setUnrealizedJustifiedCheckpoint(blockRoot [32]byte, epoch primi
 	if !ok || en == nil {
 		return errors.Wrap(ErrNilNode, "could not set unrealized justified checkpoint")
 	}
-	if epoch < en.node.unrealizedJustifiedEpoch {
+	if epoch < en.node.unrealizedJustified.Epoch {
 		return errInvalidUnrealizedJustifiedEpoch
 	}
-	en.node.unrealizedJustifiedEpoch = epoch
-	en.node.unrealizedJustifiedRoot = cpRoot
+	en.node.unrealizedJustified.Epoch = epoch
+	en.node.unrealizedJustified.Root = cpRoot
 	return nil
 }
 
@@ -44,7 +44,7 @@ func (s *Store) setUnrealizedFinalizedEpoch(root [32]byte, epoch primitives.Epoc
 func (f *ForkChoice) updateUnrealizedCheckpoints(ctx context.Context) error {
 	for _, en := range f.store.emptyNodeByRoot {
 		node := en.node
-		node.justifiedEpoch = node.unrealizedJustifiedEpoch
+		node.justifiedEpoch = node.unrealizedJustified.Epoch
 		node.finalizedEpoch = node.unrealizedFinalizedEpoch
 		if node.justifiedEpoch > f.store.justifiedCheckpoint.Epoch {
 			f.store.prevJustifiedCheckpoint = f.store.justifiedCheckpoint
@@ -68,13 +68,13 @@ func (s *Store) pullTips(state state.BeaconState, node *Node, jc, fc *ethpb.Chec
 	currentEpoch := slots.ToEpoch(slots.CurrentSlot(s.genesisTime))
 	stateSlot := state.Slot()
 	stateEpoch := slots.ToEpoch(stateSlot)
-	currJustified := pn.unrealizedJustifiedEpoch == currentEpoch
-	prevJustified := pn.unrealizedJustifiedEpoch+1 == currentEpoch
+	currJustified := pn.unrealizedJustified.Epoch == currentEpoch
+	prevJustified := pn.unrealizedJustified.Epoch+1 == currentEpoch
 	tooEarlyForCurr := slots.SinceEpochStarts(stateSlot)*3 < params.BeaconConfig().SlotsPerEpoch*2
 	// Exit early if it's justified or too early to be justified.
 	if currJustified || (stateEpoch == currentEpoch && prevJustified && tooEarlyForCurr) {
-		node.unrealizedJustifiedEpoch = pn.unrealizedJustifiedEpoch
-		node.unrealizedJustifiedRoot = pn.unrealizedJustifiedRoot
+		node.unrealizedJustified.Epoch = pn.unrealizedJustified.Epoch
+		node.unrealizedJustified.Root = pn.unrealizedJustified.Root
 		node.unrealizedFinalizedEpoch = pn.unrealizedFinalizedEpoch
 		return jc, fc
 	}
@@ -92,17 +92,14 @@ func (s *Store) pullTips(state state.BeaconState, node *Node, jc, fc *ethpb.Chec
 		}
 	}
 	if uf.Epoch > s.unrealizedFinalizedCheckpoint.Epoch {
-		s.unrealizedJustifiedCheckpoint = &forkchoicetypes.Checkpoint{
-			Epoch: uj.Epoch, Root: bytesutil.ToBytes32(uj.Root),
-		}
 		s.unrealizedFinalizedCheckpoint = &forkchoicetypes.Checkpoint{
 			Epoch: uf.Epoch, Root: bytesutil.ToBytes32(uf.Root),
 		}
 	}
 
 	// Update node's checkpoints.
-	node.unrealizedJustifiedEpoch = uj.Epoch
-	node.unrealizedJustifiedRoot = bytesutil.ToBytes32(uj.Root)
+	node.unrealizedJustified.Epoch = uj.Epoch
+	node.unrealizedJustified.Root = bytesutil.ToBytes32(uj.Root)
 	node.unrealizedFinalizedEpoch = uf.Epoch
 	if stateEpoch < currentEpoch {
 		jc, fc = uj, uf

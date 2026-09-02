@@ -325,8 +325,8 @@ func (f *ForkChoice) updateBalances() error {
 			newBalance = newBalances[index]
 		}
 
-		if oldBalance != newBalance || vote.currentRoot == zHash ||
-			slots.ToEpoch(vote.currentSlot) != slots.ToEpoch(vote.nextSlot) {
+		if oldBalance != newBalance || vote.currentRoot != vote.nextRoot ||
+			vote.currentSlot != vote.nextSlot || vote.currentPayloadStatus != vote.nextPayloadStatus {
 			// Add new balance to the next vote target if the root is known.
 			pn, pending := f.store.resolveVoteNode(vote.nextRoot, vote.nextSlot, vote.nextPayloadStatus)
 			if pn != nil && vote.nextRoot != zHash {
@@ -897,8 +897,8 @@ func (f *ForkChoice) UnrealizedJustification(root [32]byte) (*forkchoicetypes.Ch
 		return nil, errors.Wrap(ErrNilNode, "could not get unrealized justification")
 	}
 	return &forkchoicetypes.Checkpoint{
-		Epoch: en.node.unrealizedJustifiedEpoch,
-		Root:  en.node.unrealizedJustifiedRoot,
+		Epoch: en.node.unrealizedJustified.Epoch,
+		Root:  en.node.unrealizedJustified.Root,
 	}, nil
 }
 

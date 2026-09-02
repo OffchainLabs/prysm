@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -119,8 +120,7 @@ func (s *Store) insert(ctx context.Context,
 		root:                        root,
 		parent:                      parent,
 		justifiedEpoch:              justifiedEpoch,
-		unrealizedJustifiedEpoch:    justifiedEpoch,
-		unrealizedJustifiedRoot:     justifiedRoot,
+		unrealizedJustified:         forkchoicetypes.Checkpoint{Epoch: justifiedEpoch, Root: justifiedRoot},
 		finalizedEpoch:              finalizedEpoch,
 		unrealizedFinalizedEpoch:    finalizedEpoch,
 		blockHash:                   blockHash,

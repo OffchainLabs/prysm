@@ -61,8 +61,7 @@ type Node struct {
 	target                      *Node                        // target checkpoint for
 	bestDescendant              *Node                        // bestDescendant node of this node.
 	justifiedEpoch              primitives.Epoch             // justifiedEpoch of this node.
-	unrealizedJustifiedEpoch    primitives.Epoch             // the epoch that would be justified if the block would be advanced to the next epoch.
-	unrealizedJustifiedRoot     [fieldparams.RootLength]byte // the root of the unrealized justified checkpoint.
+	unrealizedJustified         forkchoicetypes.Checkpoint   // the checkpoint that would be justified if the block would be advanced to the next epoch.
 	finalizedEpoch              primitives.Epoch             // finalizedEpoch of this node.
 	unrealizedFinalizedEpoch    primitives.Epoch             // the epoch that would be finalized if the block would be advanced to the next epoch.
 	balance                     uint64                       // the balance that voted for this node directly

@@ -22,11 +22,11 @@ func TestStore_SetUnrealizedEpochs(t *testing.T) {
 	state, blkRoot, err = prepareForkchoiceState(ctx, 102, [32]byte{'c'}, [32]byte{'b'}, [32]byte{'C'}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-	require.Equal(t, primitives.Epoch(1), f.store.emptyNodeByRoot[[32]byte{'b'}].node.unrealizedJustifiedEpoch)
+	require.Equal(t, primitives.Epoch(1), f.store.emptyNodeByRoot[[32]byte{'b'}].node.unrealizedJustified.Epoch)
 	require.Equal(t, primitives.Epoch(1), f.store.emptyNodeByRoot[[32]byte{'b'}].node.unrealizedFinalizedEpoch)
 	require.NoError(t, f.store.setUnrealizedJustifiedCheckpoint([32]byte{'b'}, 2, [32]byte{}))
 	require.NoError(t, f.store.setUnrealizedFinalizedEpoch([32]byte{'b'}, 2))
-	require.Equal(t, primitives.Epoch(2), f.store.emptyNodeByRoot[[32]byte{'b'}].node.unrealizedJustifiedEpoch)
+	require.Equal(t, primitives.Epoch(2), f.store.emptyNodeByRoot[[32]byte{'b'}].node.unrealizedJustified.Epoch)
 	require.Equal(t, primitives.Epoch(2), f.store.emptyNodeByRoot[[32]byte{'b'}].node.unrealizedFinalizedEpoch)
 
 	require.ErrorIs(t, errInvalidUnrealizedJustifiedEpoch, f.store.setUnrealizedJustifiedCheckpoint([32]byte{'b'}, 0, [32]byte{}))
@@ -263,13 +263,13 @@ func TestStore_PullTips_Heuristics(t *testing.T) {
 		st, root, err := prepareForkchoiceState(ctx, 65, [32]byte{'p'}, [32]byte{}, [32]byte{}, 1, 1)
 		require.NoError(tt, err)
 		require.NoError(tt, f.InsertNode(ctx, st, root))
-		f.store.emptyNodeByRoot[[32]byte{'p'}].node.unrealizedJustifiedEpoch = primitives.Epoch(2)
+		f.store.emptyNodeByRoot[[32]byte{'p'}].node.unrealizedJustified.Epoch = primitives.Epoch(2)
 		driftGenesisTime(f, 66, 0)
 
 		st, root, err = prepareForkchoiceState(ctx, 66, [32]byte{'h'}, [32]byte{'p'}, [32]byte{}, 1, 1)
 		require.NoError(tt, err)
 		require.NoError(tt, f.InsertNode(ctx, st, root))
-		require.Equal(tt, primitives.Epoch(2), f.store.emptyNodeByRoot[[32]byte{'h'}].node.unrealizedJustifiedEpoch)
+		require.Equal(tt, primitives.Epoch(2), f.store.emptyNodeByRoot[[32]byte{'h'}].node.unrealizedJustified.Epoch)
 		require.Equal(tt, primitives.Epoch(1), f.store.emptyNodeByRoot[[32]byte{'h'}].node.unrealizedFinalizedEpoch)
 	})
 
@@ -278,13 +278,13 @@ func TestStore_PullTips_Heuristics(t *testing.T) {
 		st, root, err := prepareForkchoiceState(ctx, 95, [32]byte{'p'}, [32]byte{}, [32]byte{}, 1, 1)
 		require.NoError(tt, err)
 		require.NoError(tt, f.InsertNode(ctx, st, root))
-		f.store.emptyNodeByRoot[[32]byte{'p'}].node.unrealizedJustifiedEpoch = primitives.Epoch(2)
+		f.store.emptyNodeByRoot[[32]byte{'p'}].node.unrealizedJustified.Epoch = primitives.Epoch(2)
 		driftGenesisTime(f, 96, 0)
 
 		st, root, err = prepareForkchoiceState(ctx, 96, [32]byte{'h'}, [32]byte{'p'}, [32]byte{}, 1, 1)
 		require.NoError(tt, err)
 		require.NoError(tt, f.InsertNode(ctx, st, root))
-		require.Equal(tt, primitives.Epoch(2), f.store.emptyNodeByRoot[[32]byte{'h'}].node.unrealizedJustifiedEpoch)
+		require.Equal(tt, primitives.Epoch(2), f.store.emptyNodeByRoot[[32]byte{'h'}].node.unrealizedJustified.Epoch)
 		require.Equal(tt, primitives.Epoch(1), f.store.emptyNodeByRoot[[32]byte{'h'}].node.unrealizedFinalizedEpoch)
 	})
 	t.Run("Previous Epoch is justified and not too early for current", func(tt *testing.T) {
@@ -292,7 +292,7 @@ func TestStore_PullTips_Heuristics(t *testing.T) {
 		st, root, err := prepareForkchoiceState(ctx, 95, [32]byte{'p'}, [32]byte{}, [32]byte{}, 1, 1)
 		require.NoError(tt, err)
 		require.NoError(tt, f.InsertNode(ctx, st, root))
-		f.store.emptyNodeByRoot[[32]byte{'p'}].node.unrealizedJustifiedEpoch = primitives.Epoch(2)
+		f.store.emptyNodeByRoot[[32]byte{'p'}].node.unrealizedJustified.Epoch = primitives.Epoch(2)
 		driftGenesisTime(f, 127, 0)
 
 		st, root, err = prepareForkchoiceState(ctx, 127, [32]byte{'h'}, [32]byte{'p'}, [32]byte{}, 1, 1)
@@ -302,14 +302,30 @@ func TestStore_PullTips_Heuristics(t *testing.T) {
 		// This test checks that the heuristics in pullTips did not apply and
 		// the test continues to compute a bogus unrealized
 		// justification
-		require.Equal(tt, primitives.Epoch(1), f.store.emptyNodeByRoot[[32]byte{'h'}].node.unrealizedJustifiedEpoch)
+		require.Equal(tt, primitives.Epoch(1), f.store.emptyNodeByRoot[[32]byte{'h'}].node.unrealizedJustified.Epoch)
+	})
+	t.Run("Store unrealized justified does not regress on finalized advance", func(tt *testing.T) {
+		f := setup(1, 1)
+		st, root, err := prepareForkchoiceState(ctx, 95, [32]byte{'p'}, [32]byte{}, [32]byte{}, 1, 1)
+		require.NoError(tt, err)
+		require.NoError(tt, f.InsertNode(ctx, st, root))
+		f.store.unrealizedJustifiedCheckpoint = &forkchoicetypes.Checkpoint{Epoch: 5, Root: [32]byte{'j'}}
+		f.store.unrealizedFinalizedCheckpoint = &forkchoicetypes.Checkpoint{}
+		driftGenesisTime(f, 127, 0)
+
+		st, root, err = prepareForkchoiceState(ctx, 127, [32]byte{'h'}, [32]byte{'p'}, [32]byte{}, 1, 1)
+		require.NoError(tt, err)
+		require.NoError(tt, f.InsertNode(ctx, st, root))
+		require.Equal(tt, primitives.Epoch(1), f.store.unrealizedFinalizedCheckpoint.Epoch)
+		require.Equal(tt, primitives.Epoch(5), f.store.unrealizedJustifiedCheckpoint.Epoch)
+		require.Equal(tt, [32]byte{'j'}, f.store.unrealizedJustifiedCheckpoint.Root)
 	})
 	t.Run("Block from previous Epoch", func(tt *testing.T) {
 		f := setup(1, 1)
 		st, root, err := prepareForkchoiceState(ctx, 94, [32]byte{'p'}, [32]byte{}, [32]byte{}, 1, 1)
 		require.NoError(tt, err)
 		require.NoError(tt, f.InsertNode(ctx, st, root))
-		f.store.emptyNodeByRoot[[32]byte{'p'}].node.unrealizedJustifiedEpoch = primitives.Epoch(2)
+		f.store.emptyNodeByRoot[[32]byte{'p'}].node.unrealizedJustified.Epoch = primitives.Epoch(2)
 		driftGenesisTime(f, 96, 0)
 
 		st, root, err = prepareForkchoiceState(ctx, 95, [32]byte{'h'}, [32]byte{'p'}, [32]byte{}, 1, 1)
@@ -319,7 +335,7 @@ func TestStore_PullTips_Heuristics(t *testing.T) {
 		// This test checks that the heuristics in pullTips did not apply and
 		// the test continues to compute a bogus unrealized
 		// justification
-		require.Equal(tt, primitives.Epoch(1), f.store.emptyNodeByRoot[[32]byte{'h'}].node.unrealizedJustifiedEpoch)
+		require.Equal(tt, primitives.Epoch(1), f.store.emptyNodeByRoot[[32]byte{'h'}].node.unrealizedJustified.Epoch)
 	})
 	t.Run("Previous Epoch is not justified", func(tt *testing.T) {
 		f := setup(1, 1)
@@ -335,6 +351,6 @@ func TestStore_PullTips_Heuristics(t *testing.T) {
 		// This test checks that the heuristics in pullTips did not apply and
 		// the test continues to compute a bogus unrealized
 		// justification
-		require.Equal(tt, primitives.Epoch(2), f.store.emptyNodeByRoot[[32]byte{'h'}].node.unrealizedJustifiedEpoch)
+		require.Equal(tt, primitives.Epoch(2), f.store.emptyNodeByRoot[[32]byte{'h'}].node.unrealizedJustified.Epoch)
 	})
 }

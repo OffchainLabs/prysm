@@ -480,6 +480,27 @@ func TestForkChoice_UpdateJustifiedAndFinalizedCheckpoints(t *testing.T) {
 	require.Equal(t, f.store.finalizedCheckpoint.Root, fc.Root)
 }
 
+func TestForkChoice_UpdateJustifiedCheckpointBackfillsUnrealized(t *testing.T) {
+	f := setup(0, 0)
+	ctx := t.Context()
+
+	jc := &forkchoicetypes.Checkpoint{Root: [32]byte{'a'}, Epoch: 2}
+	require.NoError(t, f.UpdateJustifiedCheckpoint(ctx, jc))
+	require.Equal(t, primitives.Epoch(2), f.store.unrealizedJustifiedCheckpoint.Epoch)
+	require.Equal(t, [32]byte{'a'}, f.store.unrealizedJustifiedCheckpoint.Root)
+
+	// A zero-root stub at the same epoch is replaced.
+	f.store.unrealizedJustifiedCheckpoint = &forkchoicetypes.Checkpoint{Epoch: 3}
+	require.NoError(t, f.UpdateJustifiedCheckpoint(ctx, &forkchoicetypes.Checkpoint{Root: [32]byte{'b'}, Epoch: 3}))
+	require.Equal(t, [32]byte{'b'}, f.store.unrealizedJustifiedCheckpoint.Root)
+
+	// An unrealized checkpoint ahead of the realized one is kept.
+	f.store.unrealizedJustifiedCheckpoint = &forkchoicetypes.Checkpoint{Root: [32]byte{'c'}, Epoch: 5}
+	require.NoError(t, f.UpdateJustifiedCheckpoint(ctx, &forkchoicetypes.Checkpoint{Root: [32]byte{'d'}, Epoch: 4}))
+	require.Equal(t, primitives.Epoch(5), f.store.unrealizedJustifiedCheckpoint.Epoch)
+	require.Equal(t, [32]byte{'c'}, f.store.unrealizedJustifiedCheckpoint.Root)
+}
+
 func TestStore_CommonAncestor(t *testing.T) {
 	ctx := t.Context()
 	f := setup(0, 0)
@@ -626,7 +647,7 @@ func TestStore_CommonAncestor(t *testing.T) {
 		slot:                     100,
 		root:                     [32]byte{'y'},
 		justifiedEpoch:           1,
-		unrealizedJustifiedEpoch: 1,
+		unrealizedJustified:      forkchoicetypes.Checkpoint{Epoch: 1},
 		finalizedEpoch:           1,
 		unrealizedFinalizedEpoch: 1,
 	}
@@ -1141,8 +1162,8 @@ func TestForkChoice_UnrealizedJustification(t *testing.T) {
 	// Set unrealized justified epoch and root
 	ujRoot := [32]byte{0xAA}
 	en := f.store.emptyNodeByRoot[indexToHash(1)]
-	en.node.unrealizedJustifiedEpoch = 2
-	en.node.unrealizedJustifiedRoot = ujRoot
+	en.node.unrealizedJustified.Epoch = 2
+	en.node.unrealizedJustified.Root = ujRoot
 
 	cp, err := f.UnrealizedJustification(indexToHash(1))
 	require.NoError(t, err)
@@ -1164,7 +1185,7 @@ func TestForkChoice_VotingSource(t *testing.T) {
 
 	en := f.store.emptyNodeByRoot[indexToHash(1)]
 	en.node.justifiedEpoch = 1
-	en.node.unrealizedJustifiedEpoch = 2
+	en.node.unrealizedJustified.Epoch = 2
 
 	// Set genesis time so current epoch is 0 (block epoch 0 == current epoch 0):
 	// current epoch == block epoch → returns justified (realized)

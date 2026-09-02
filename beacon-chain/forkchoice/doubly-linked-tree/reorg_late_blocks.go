@@ -70,7 +70,7 @@ func (f *ForkChoice) ShouldOverrideFCU() (override bool) {
 		return
 	}
 	// Do not orphan a block that has higher justification than the parent
-	// if head.unrealizedJustifiedEpoch > parent.unrealizedJustifiedEpoch {
+	// if head.unrealizedJustified.Epoch > parent.unrealizedJustified.Epoch {
 	//		return
 	// }
 
