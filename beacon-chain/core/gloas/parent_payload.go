@@ -80,7 +80,7 @@ func ApplyParentExecutionPayload(
 	}
 	parentSlot := parentBid.Slot()
 
-	if err := validateExecutionRequestLengths(reqs); err != nil {
+	if err := ValidateExecutionRequestLengths(reqs); err != nil {
 		return err
 	}
 
@@ -104,9 +104,9 @@ func ApplyParentExecutionPayload(
 	return nil
 }
 
-// validateExecutionRequestLengths enforces the per-payload maxima that remain
+// ValidateExecutionRequestLengths enforces the per-payload maxima that remain
 // consensus-layer checks now that EIP-7688 uses ProgressiveList SSZ types.
-func validateExecutionRequestLengths(reqs *enginev1.ExecutionRequestsGloas) error {
+func ValidateExecutionRequestLengths(reqs *enginev1.ExecutionRequestsGloas) error {
 	cfg := params.BeaconConfig()
 	if uint64(len(reqs.GetWithdrawals())) > cfg.MaxWithdrawalRequestsPerPayload {
 		return errors.Errorf("too many withdrawal requests: %d > %d", len(reqs.GetWithdrawals()), cfg.MaxWithdrawalRequestsPerPayload)
