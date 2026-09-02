@@ -312,6 +312,14 @@ var (
 		Value:   "",
 		Aliases: []string{"remote-signer-keys-file"},
 	}
+	Web3SignerKeyPollIntervalFlag = &cli.DurationFlag{
+		Name: "validators-external-signer-poll-interval",
+		Usage: `Interval to poll the external signer public-keys URL for added or removed validators (e.g. 30s, 5m). 
+		Zero or negative disables polling. A failed or empty response keeps the current keys, 
+		so removing every key from the URL will not stop validating.`,
+		Value:   0,
+		Aliases: []string{"remote-signer-poll-interval"},
+	}
 
 	// KeymanagerKindFlag defines the kind of keymanager desired by a user during wallet creation.
 	KeymanagerKindFlag = &cli.StringFlag{
@@ -388,11 +396,11 @@ var (
 		Usage: "To enable the use of prysm validator client in Distributed Validator Cluster",
 		Value: false,
 	}
-	// EnableStatelessFlag enables the stateless block production path for Gloas: the validator requests the
-	// block and execution payload envelope in a single v4 call instead of fetching them in two separate calls.
+	// EnableStatelessFlag enables the stateless block production path from Gloas onward: the validator requests
+	// the block and execution payload envelope in a single v4 call instead of fetching them in two separate calls.
 	EnableStatelessFlag = &cli.BoolFlag{
 		Name:  "stateless",
-		Usage: "Enables stateless block production for Gloas: the validator requests the block and execution payload envelope together and republishes the envelope itself. Works over both the gRPC and REST validator clients.",
+		Usage: "Enables stateless block production from Gloas onward: the validator requests the block and execution payload envelope together and republishes the envelope itself. Works over both the gRPC and REST validator clients. Forced on when several beacon nodes are configured, since only the node that built a block can reveal its payload.",
 		Value: false,
 	}
 	// DisableDutiesPolling disables the polling of duties on dependent root changes.

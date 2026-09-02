@@ -160,7 +160,7 @@ type BeaconChainConfig struct {
 	DomainBeaconBuilder               [4]byte `yaml:"DOMAIN_BEACON_BUILDER" spec:"true"`                 // DomainBeaconBuilder defines the BLS signature domain for beacon block builder.
 	DomainPTCAttester                 [4]byte `yaml:"DOMAIN_PTC_ATTESTER" spec:"true"`                   // DomainPTCAttester defines the BLS signature domain for payload transaction committee attester.
 	DomainProposerPreferences         [4]byte `yaml:"DOMAIN_PROPOSER_PREFERENCES" spec:"true"`           // DomainProposerPreferences defines the BLS signature domain for proposer preferences.
-	DomainRequestAuth                 [4]byte `yaml:"DOMAIN_REQUEST_AUTH" spec:"true"`                   // DomainRequestAuth defines the BLS signature domain for builder bid request authentication.
+	DomainBuilderRequestAuth          [4]byte `yaml:"DOMAIN_BUILDER_REQUEST_AUTH" spec:"true"`           // DomainBuilderRequestAuth defines the BLS signature domain for builder bid request authentication.
 	DomainBuilderDeposit              [4]byte `yaml:"DOMAIN_BUILDER_DEPOSIT" spec:"true"`                // DomainBuilderDeposit defines the BLS signature domain for builder deposit requests (EIP-8282).
 
 	// Prysm constants.
@@ -853,4 +853,12 @@ func (b *BeaconChainConfig) SlotDurationMillis() uint64 {
 func (b *BeaconChainConfig) SlotComponentDuration(bp primitives.BP) time.Duration {
 	ms := uint64(bp) * b.SlotDurationMillis() / uint64(BasisPoints)
 	return time.Duration(ms) * time.Millisecond
+}
+
+// AttestationDueBPSAtSlot returns the attestation due time in basis points of the slot.
+func (b *BeaconChainConfig) AttestationDueBPSAtSlot(slot primitives.Slot) primitives.BP {
+	if primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch)) >= b.GloasForkEpoch {
+		return b.AttestationDueBPSGloas
+	}
+	return b.AttestationDueBPS
 }

@@ -43,6 +43,7 @@ go_test(
         "//beacon-chain/forkchoice/doubly-linked-tree:go_default_library",
         "//beacon-chain/forkchoice/types:go_default_library",
         "//beacon-chain/rpc/core:go_default_library",
+        "//beacon-chain/rpc/eth/helpers:go_default_library",
         "//beacon-chain/rpc/testutil:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",

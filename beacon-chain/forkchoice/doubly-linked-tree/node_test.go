@@ -330,3 +330,29 @@ func TestNode_TimeStampsChecks(t *testing.T) {
 	require.ErrorContains(t, "invalid timestamp", err)
 	require.Equal(t, false, late)
 }
+
+func TestNode_ArrivedEarlyGloas(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	genesis := time.Now().Truncate(time.Second)
+	offset := 3500 * time.Millisecond
+	for _, tc := range []struct {
+		name  string
+		slot  primitives.Slot
+		early bool
+	}{
+		{"pre-gloas slot is early", 1, true},
+		{"gloas slot is late", primitives.Slot(cfg.SlotsPerEpoch), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			slotStart := genesis.Add(time.Duration(uint64(tc.slot)*cfg.SlotDurationMillis()) * time.Millisecond)
+			n := &PayloadNode{node: &Node{slot: tc.slot}, timestamp: slotStart.Add(offset)}
+			early, err := n.arrivedEarly(genesis)
+			require.NoError(t, err)
+			require.Equal(t, tc.early, early)
+		})
+	}
+}

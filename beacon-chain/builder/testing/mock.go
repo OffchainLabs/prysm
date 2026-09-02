@@ -2,6 +2,8 @@ package testing
 
 import (
 	"context"
+	"math"
+	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/api/client/builder"
 	beaconbuilder "github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
@@ -45,7 +47,18 @@ type MockBuilderService struct {
 	ErrGetExecutionPayloadBid     error
 	ErrSubmitSignedBeaconBlock    error
 	ErrSubmitBuilderPreferences   error
+	ErrSubmitBuilderPrefsByURL    map[string]error
 	Cfg                           *Config
+
+	mu                   sync.Mutex
+	SubmittedPreferences []string
+}
+
+// SubmittedPreferenceUrls returns the urls preferences were submitted to.
+func (s *MockBuilderService) SubmittedPreferenceUrls() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string{}, s.SubmittedPreferences...)
 }
 
 // Configured for mocking.
@@ -124,8 +137,29 @@ func (s *MockBuilderService) RegisterValidator(context.Context, []*ethpb.SignedV
 }
 
 // SubmitBuilderPreferences for mocking.
-func (s *MockBuilderService) SubmitBuilderPreferences(_ context.Context, _ [48]byte, _ *ethpb.BuilderPreferencesRequestV1) error {
-	return s.ErrSubmitBuilderPreferences
+func (s *MockBuilderService) SubmitBuilderPreferences(_ context.Context, entries []*ethpb.BuilderPreferencesEntry) map[int]string {
+	failures := make(map[int]string)
+	for i, e := range entries {
+		if e == nil {
+			continue
+		}
+		if len(e.GetUrl()) == 0 {
+			failures[i] = "builder url is required"
+			continue
+		}
+		err := s.ErrSubmitBuilderPreferences
+		if urlErr, ok := s.ErrSubmitBuilderPrefsByURL[string(e.Url)]; ok {
+			err = urlErr
+		}
+		if err != nil {
+			failures[i] = "could not submit builder preferences: " + err.Error()
+			continue
+		}
+		s.mu.Lock()
+		s.SubmittedPreferences = append(s.SubmittedPreferences, string(e.Url))
+		s.mu.Unlock()
+	}
+	return failures
 }
 
 // SubmitBlindedBlockPostFulu for mocking.
@@ -134,12 +168,12 @@ func (s *MockBuilderService) SubmitBlindedBlockPostFulu(_ context.Context, _ int
 }
 
 // GetExecutionPayloadBid for mocking.
-func (s *MockBuilderService) GetExecutionPayloadBid(_ context.Context, _ primitives.Slot, _, _ [32]byte, _ [48]byte, _ []*ethpb.SignedRequestAuthV1) ([]beaconbuilder.PayloadBid, error) {
+func (s *MockBuilderService) GetExecutionPayloadBid(_ context.Context, _ primitives.Slot, _, _ [32]byte, _ [48]byte, _ []*ethpb.BuilderEntry) ([]beaconbuilder.PayloadBid, error) {
 	if s.PayloadBids != nil {
 		return s.PayloadBids, s.ErrGetExecutionPayloadBid
 	}
 	if s.PayloadBid != nil {
-		return []beaconbuilder.PayloadBid{{Bid: s.PayloadBid}}, s.ErrGetExecutionPayloadBid
+		return []beaconbuilder.PayloadBid{{Entry: &ethpb.BuilderEntry{Url: []byte("http://builder"), MaxExecutionPayment: math.MaxUint64, BuilderBoostFactor: 100}, Bid: s.PayloadBid}}, s.ErrGetExecutionPayloadBid
 	}
 	return nil, s.ErrGetExecutionPayloadBid
 }

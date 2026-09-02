@@ -5,8 +5,11 @@ import (
 	"encoding/binary"
 	"flag"
 	"fmt"
+	"iter"
 	"math"
 	"os"
+	"slices"
+	"sync"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
@@ -39,6 +42,155 @@ func Test_diffToState(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, hdiff.slot, target.Slot())
 	require.Equal(t, hdiff.targetVersion, target.Version())
+}
+
+func TestDiffSameState(t *testing.T) {
+	st, _ := util.DeterministicGenesisStateElectra(t, 32)
+	diff, err := Diff(st, st)
+	require.NoError(t, err)
+	require.Equal(t, true, len(diff.StateDiff) > 0)
+}
+
+type mutateAtSyncCommitteeState struct {
+	state.ReadOnlyBeaconState
+	mutate func() error
+	once   sync.Once
+	err    error
+}
+
+func (s *mutateAtSyncCommitteeState) CurrentSyncCommittee() (*ethpb.SyncCommittee, error) {
+	s.once.Do(func() {
+		done := make(chan error, 1)
+		go func() {
+			done <- s.mutate()
+		}()
+		s.err = <-done
+	})
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.ReadOnlyBeaconState.CurrentSyncCommittee()
+}
+
+type stateVectors struct {
+	previousParticipation []byte
+	currentParticipation  []byte
+	inactivityScores      []uint64
+}
+
+func snapshotStateVectors(st state.ReadOnlyBeaconState) (stateVectors, error) {
+	previousParticipation, err := st.PreviousEpochParticipation()
+	if err != nil {
+		return stateVectors{}, err
+	}
+	currentParticipation, err := st.CurrentEpochParticipation()
+	if err != nil {
+		return stateVectors{}, err
+	}
+	inactivityScores, err := st.InactivityScores()
+	if err != nil {
+		return stateVectors{}, err
+	}
+	return stateVectors{
+		previousParticipation: previousParticipation,
+		currentParticipation:  currentParticipation,
+		inactivityScores:      inactivityScores,
+	}, nil
+}
+
+func setStateVectors(st state.BeaconState, vectors stateVectors) error {
+	if err := st.SetPreviousParticipationBits(bytes.Clone(vectors.previousParticipation)); err != nil {
+		return err
+	}
+	if err := st.SetCurrentParticipationBits(bytes.Clone(vectors.currentParticipation)); err != nil {
+		return err
+	}
+	return st.SetInactivityScores(vectors.inactivityScores)
+}
+
+func mutateStateVectors(st state.BeaconState, vectors stateVectors) error {
+	if err := st.ModifyPreviousParticipationBits(func(participation []byte) ([]byte, error) {
+		copy(participation, vectors.previousParticipation)
+		return participation, nil
+	}); err != nil {
+		return err
+	}
+	if err := st.ModifyCurrentParticipationBits(func(participation []byte) ([]byte, error) {
+		copy(participation, vectors.currentParticipation)
+		return participation, nil
+	}); err != nil {
+		return err
+	}
+	return st.SetInactivityScores(vectors.inactivityScores)
+}
+
+func filledStateVectors(count int, offset byte) stateVectors {
+	previousParticipation := bytes.Repeat([]byte{offset}, count)
+	currentParticipation := bytes.Repeat([]byte{offset + 1}, count)
+	inactivityScores := make([]uint64, count)
+	for i := range inactivityScores {
+		inactivityScores[i] = uint64(offset) + uint64(i)
+	}
+	return stateVectors{
+		previousParticipation: previousParticipation,
+		currentParticipation:  currentParticipation,
+		inactivityScores:      inactivityScores,
+	}
+}
+
+func requireStateVectorsEqual(t *testing.T, expected stateVectors, actual state.ReadOnlyBeaconState) {
+	t.Helper()
+	actualVectors, err := snapshotStateVectors(actual)
+	require.NoError(t, err)
+	require.Equal(t, true, bytes.Equal(expected.previousParticipation, actualVectors.previousParticipation))
+	require.Equal(t, true, bytes.Equal(expected.currentParticipation, actualVectors.currentParticipation))
+	require.Equal(t, true, slices.Equal(expected.inactivityScores, actualVectors.inactivityScores))
+}
+
+func TestDiffSnapshotsStateVectorsBeforeConcurrentMutation(t *testing.T) {
+	source, _ := util.DeterministicGenesisStateElectra(t, 32)
+	target := source.Copy()
+	initial := filledStateVectors(32, 1)
+	mutated := filledStateVectors(32, 101)
+	require.NoError(t, setStateVectors(target, initial))
+
+	wrappedTarget := &mutateAtSyncCommitteeState{
+		ReadOnlyBeaconState: target,
+		mutate: func() error {
+			return mutateStateVectors(target, mutated)
+		},
+	}
+	diff, err := Diff(source, wrappedTarget)
+	require.NoError(t, err)
+
+	result, err := ApplyDiff(t.Context(), source.Copy(), diff)
+	require.NoError(t, err)
+	requireStateVectorsEqual(t, initial, result)
+	requireStateVectorsEqual(t, mutated, target)
+}
+
+func TestDiffStateVectorsRemainStableWhenCopyMutates(t *testing.T) {
+	source, _ := util.DeterministicGenesisStateElectra(t, 32)
+	target := source.Copy()
+	initial := filledStateVectors(32, 1)
+	mutated := filledStateVectors(32, 101)
+	require.NoError(t, setStateVectors(target, initial))
+	mutableCopy := target.Copy()
+
+	wrappedTarget := &mutateAtSyncCommitteeState{
+		ReadOnlyBeaconState: target,
+		mutate: func() error {
+			return mutateStateVectors(mutableCopy, mutated)
+		},
+	}
+	diff, err := Diff(source, wrappedTarget)
+	require.NoError(t, err)
+
+	result, err := ApplyDiff(t.Context(), source.Copy(), diff)
+	require.NoError(t, err)
+	requireStateVectorsEqual(t, initial, result)
+	requireStateVectorsEqual(t, initial, target)
+	requireStateVectorsEqual(t, mutated, mutableCopy)
 }
 
 func Test_kmpIndex(t *testing.T) {
@@ -308,6 +460,23 @@ func Test_validatorsEqual(t *testing.T) {
 	require.NotEqual(t, 0, len(sourceDiffs), "Should detect validator differences")
 }
 
+func TestValidatorWithdrawalCredentialsFallback(t *testing.T) {
+	expected := [fieldparams.RootLength]byte{1, 2, 3}
+	validator, err := state_native.NewValidator(&ethpb.Validator{WithdrawalCredentials: expected[:]})
+	require.NoError(t, err)
+
+	legacyValidator := struct {
+		state.ReadOnlyValidator
+	}{ReadOnlyValidator: validator}
+	_, hasFastPath := any(legacyValidator).(withdrawalCredentialsProvider)
+	require.Equal(t, false, hasFastPath)
+	require.Equal(t, expected, validatorWithdrawalCredentials(legacyValidator))
+
+	returned := legacyValidator.GetWithdrawalCredentials()
+	returned[0] = 0xff
+	require.Equal(t, expected, validatorWithdrawalCredentials(legacyValidator))
+}
+
 // Test_updateToVersion tests the version upgrade functionality
 func Test_updateToVersion(t *testing.T) {
 	ctx := t.Context()
@@ -422,6 +591,43 @@ func Test_diffToVals(t *testing.T) {
 		}
 		require.Equal(t, true, found)
 	})
+}
+
+type validatorIterationState struct {
+	state.ReadOnlyBeaconState
+	materializedCalls int
+	streamedCalls     int
+}
+
+func (s *validatorIterationState) ValidatorsReadOnly() []state.ReadOnlyValidator {
+	s.materializedCalls++
+	return s.ReadOnlyBeaconState.ValidatorsReadOnly()
+}
+
+func (s *validatorIterationState) ValidatorsReadOnlySeq() iter.Seq2[primitives.ValidatorIndex, state.ReadOnlyValidator] {
+	s.streamedCalls++
+	return s.ReadOnlyBeaconState.ValidatorsReadOnlySeq()
+}
+
+func TestDiffToValsStreamsValidators(t *testing.T) {
+	source, _ := util.DeterministicGenesisStateElectra(t, 32)
+	target := source.Copy()
+	appended, err := source.ValidatorAtIndexReadOnly(0)
+	require.NoError(t, err)
+	validator := appended.Copy()
+	validator.PublicKey[0]++
+	require.NoError(t, target.AppendValidator(validator))
+
+	streamingSource := &validatorIterationState{ReadOnlyBeaconState: source}
+	streamingTarget := &validatorIterationState{ReadOnlyBeaconState: target}
+	diffs, err := diffToVals(streamingSource, streamingTarget)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(diffs))
+	require.Equal(t, uint32(32), diffs[0].index)
+	require.Equal(t, 0, streamingSource.materializedCalls)
+	require.Equal(t, 0, streamingTarget.materializedCalls)
+	require.Equal(t, 1, streamingSource.streamedCalls)
+	require.Equal(t, 1, streamingTarget.streamedCalls)
 }
 
 // Test_newValidatorDiffs tests validator diff deserialization
@@ -720,6 +926,11 @@ func Test_applyStateDiff(t *testing.T) {
 	// Create state diff
 	stateDiff, err := diffToState(source, target)
 	require.NoError(t, err)
+	expectedVectors, err := snapshotStateVectors(target)
+	require.NoError(t, err)
+	require.Equal(t, true, bytes.Equal(expectedVectors.previousParticipation, stateDiff.previousEpochParticipation))
+	require.Equal(t, true, bytes.Equal(expectedVectors.currentParticipation, stateDiff.currentEpochParticipation))
+	require.Equal(t, true, slices.Equal(expectedVectors.inactivityScores, stateDiff.inactivityScores))
 
 	// Apply diff to source
 	result, err := applyStateDiff(ctx, source, stateDiff)
@@ -728,6 +939,7 @@ func Test_applyStateDiff(t *testing.T) {
 	// Verify result matches target
 	require.Equal(t, target.Slot(), result.Slot())
 	require.Equal(t, target.Version(), result.Version())
+	requireStateVectorsEqual(t, expectedVectors, result)
 }
 
 // Test_computeLPS tests the LPS array computation for KMP algorithm
@@ -810,7 +1022,7 @@ func Test_diffBlockRoots(t *testing.T) {
 
 	// Create diff
 	diff := &stateDiff{}
-	diffBlockRoots(diff, source, target)
+	require.NoError(t, diffBlockRoots(diff, source, target))
 
 	// Verify diff contains changes
 	require.NotEqual(t, [32]byte{}, diff.blockRoots[0])
@@ -829,7 +1041,7 @@ func Test_diffStateRoots(t *testing.T) {
 
 	// Create diff
 	diff := &stateDiff{}
-	diffStateRoots(diff, source, target)
+	require.NoError(t, diffStateRoots(diff, source, target))
 
 	// Verify diff contains changes
 	require.NotEqual(t, [32]byte{}, diff.stateRoots[0])
@@ -870,6 +1082,8 @@ func Test_stateDiff_serialize(t *testing.T) {
 	// Serialize
 	serialized := stateDiff.serialize()
 	require.Equal(t, true, len(serialized) > 0)
+	require.Equal(t, stateDiff.serializedSize(), len(serialized))
+	require.Equal(t, len(serialized), cap(serialized))
 
 	// Verify it can be deserialized back (need to compress with snappy first)
 	compressed := snappy.Encode(nil, serialized)
@@ -877,6 +1091,43 @@ func Test_stateDiff_serialize(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, stateDiff.slot, deserializedDiff.slot)
 	require.Equal(t, stateDiff.targetVersion, deserializedDiff.targetVersion)
+	previousParticipation, err := target.PreviousEpochParticipation()
+	require.NoError(t, err)
+	currentParticipation, err := target.CurrentEpochParticipation()
+	require.NoError(t, err)
+	inactivityScores, err := target.InactivityScores()
+	require.NoError(t, err)
+	require.DeepEqual(t, previousParticipation, deserializedDiff.previousEpochParticipation)
+	require.DeepEqual(t, currentParticipation, deserializedDiff.currentEpochParticipation)
+	require.DeepEqual(t, inactivityScores, deserializedDiff.inactivityScores)
+	reserialized := deserializedDiff.serialize()
+	require.DeepEqual(t, serialized, reserialized)
+	require.Equal(t, deserializedDiff.serializedSize(), len(reserialized))
+	require.Equal(t, len(reserialized), cap(reserialized))
+}
+
+func Test_stateDiff_serializedSizePhase0(t *testing.T) {
+	source, _ := util.DeterministicGenesisState(t, 32)
+	target := source.Copy()
+	require.NoError(t, target.SetSlot(source.Slot()+1))
+
+	stateDiff, err := diffToState(source, target)
+	require.NoError(t, err)
+	serialized := stateDiff.serialize()
+	require.Equal(t, stateDiff.serializedSize(), len(serialized))
+	require.Equal(t, len(serialized), cap(serialized))
+}
+
+func Test_stateDiff_serializedSizeFulu(t *testing.T) {
+	source, _ := util.DeterministicGenesisStateFulu(t, 32)
+	target := source.Copy()
+	require.NoError(t, target.SetSlot(source.Slot()+1))
+
+	stateDiff, err := diffToState(source, target)
+	require.NoError(t, err)
+	serialized := stateDiff.serialize()
+	require.Equal(t, stateDiff.serializedSize(), len(serialized))
+	require.Equal(t, len(serialized), cap(serialized))
 }
 
 func Test_hdiff_serialize(t *testing.T) {
@@ -889,7 +1140,8 @@ func Test_hdiff_serialize(t *testing.T) {
 	require.NoError(t, err)
 
 	// Serialize
-	serialized := hdiff.serialize()
+	serialized, err := hdiff.serialize()
+	require.NoError(t, err)
 	require.Equal(t, true, len(serialized.StateDiff) > 0)
 	require.Equal(t, true, len(serialized.ValidatorDiffs) >= 0)
 	require.Equal(t, true, len(serialized.BalancesDiff) >= 0)
@@ -1117,7 +1369,10 @@ func BenchmarkSerialization(b *testing.B) {
 	}
 
 	for b.Loop() {
-		_ = hdiff.serialize()
+		_, err := hdiff.serialize()
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 

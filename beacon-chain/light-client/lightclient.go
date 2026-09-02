@@ -525,7 +525,7 @@ func ComputeWithdrawalsRoot(payload interfaces.ExecutionData) ([]byte, error) {
 }
 
 func progressiveExecutionPayloadSSZEnabled(payload interfaces.ExecutionData) bool {
-	if payload == nil || !features.Get().EnableProgressiveSSZ {
+	if payload == nil || !features.ProgressiveSSZEnabled(version.Gloas) {
 		return false
 	}
 	_, ok := payload.Proto().(*enginev1.ExecutionPayloadGloas)

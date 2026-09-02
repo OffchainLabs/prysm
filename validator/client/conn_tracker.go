@@ -12,6 +12,7 @@ type pushKind string
 
 const (
 	proposerPrefsPush pushKind = "proposer-preferences"
+	builderPrefsPush  pushKind = "builder-preferences"
 	registrationsPush pushKind = "validator-registrations"
 	eventStreamBind   pushKind = "event-stream"
 )

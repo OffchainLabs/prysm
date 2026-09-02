@@ -368,8 +368,7 @@ func (b *BeaconState) AddBuilderFromDeposit(pubkey [fieldparams.BLSPubkeyLength]
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	// process_builder_deposit_request sets version to withdrawal_credentials[0].
-	return b.addBuilderFromDepositAtEpoch(pubkey, withdrawalCredentials[0], withdrawalCredentials, amount, slots.ToEpoch(b.slot))
+	return b.addBuilderFromDepositAtEpoch(pubkey, params.BeaconConfig().PayloadBuilderVersion, withdrawalCredentials, amount, slots.ToEpoch(b.slot))
 }
 
 func (b *BeaconState) addBuilderFromDepositAtEpoch(pubkey [fieldparams.BLSPubkeyLength]byte, builderVersion byte, withdrawalCredentials [fieldparams.RootLength]byte, amount uint64, depositEpoch primitives.Epoch) error {

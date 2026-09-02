@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/async"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -28,6 +29,7 @@ import (
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -90,10 +92,10 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 
 	// Request block from beacon node
 	b, err := v.validatorClient.BeaconBlock(ctx, &ethpb.BlockRequest{
-		Slot:                slot,
-		RandaoReveal:        randaoReveal,
-		Graffiti:            g,
-		BuilderRequestAuths: v.builderRequestAuthsForSlot(pubKey, slot),
+		Slot:          slot,
+		RandaoReveal:  randaoReveal,
+		Graffiti:      g,
+		BuilderConfig: v.builderConfigForSlot(ctx, pubKey, slot),
 	})
 	if err != nil {
 		log.WithField("slot", slot).WithError(err).Error("Failed to request block from beacon node")
@@ -168,6 +170,10 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 			}
 		default:
 			log.Errorf("Unsupported block version %s", version.String(blk.Version()))
+			if v.emitAccountMetrics {
+				ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
+			}
+			return
 		}
 	} else {
 		genericSignedBlock, err = blk.PbGenericBlock()
@@ -180,7 +186,13 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		}
 	}
 
-	blkResp, err := v.validatorClient.ProposeBeaconBlock(ctx, genericSignedBlock)
+	// The winning builder url travels as request metadata so any beacon node can forward the block.
+	proposeCtx := ctx
+	if b.BuilderUrl != "" {
+		proposeCtx = metadata.AppendToOutgoingContext(ctx, api.BuilderUrlHeader, b.BuilderUrl)
+	}
+
+	blkResp, err := v.validatorClient.ProposeBeaconBlock(proposeCtx, genericSignedBlock)
 	if err != nil {
 		log.WithField("slot", slot).WithError(err).Error("Failed to propose block")
 		if v.emitAccountMetrics {
@@ -189,9 +201,12 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		return
 	}
 
+	// The block was already accepted: a failed reveal must not skip the proposal logging and metrics.
 	if err := v.proposeSelfBuildEnvelope(ctx, slot, pubKey, blk); err != nil {
-		log.WithError(err).Error("Failed to propose self-build envelope")
-		return
+		log.WithField("slot", slot).WithError(err).Error("Failed to propose self-build envelope")
+		if v.emitAccountMetrics {
+			ValidatorProposeEnvelopeFailVec.WithLabelValues(fmtKey).Inc()
+		}
 	}
 
 	span.SetAttributes(

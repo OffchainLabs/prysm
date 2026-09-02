@@ -49,7 +49,7 @@ func NextEpoch(state state.ReadOnlyBeaconState) primitives.Epoch {
 }
 
 // HigherEqualThanAltairVersionAndEpoch returns if the input state `s` has a higher version number than Altair state and input epoch `e` is higher equal than fork epoch.
-func HigherEqualThanAltairVersionAndEpoch(s state.BeaconState, e primitives.Epoch) bool {
+func HigherEqualThanAltairVersionAndEpoch(s state.ReadOnlyBeaconState, e primitives.Epoch) bool {
 	return s.Version() >= version.Altair && e >= params.BeaconConfig().AltairForkEpoch
 }
 

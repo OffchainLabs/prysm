@@ -23,9 +23,9 @@ func requireGloasScheduled(w http.ResponseWriter) bool {
 	return false
 }
 
-// GetBuilders implements GET /eth/v1/validator/{pubkey}/builders: the key's config resolved against default_config, safe to re-submit.
-func (s *Server) GetBuilders(w http.ResponseWriter, r *http.Request) {
-	_, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.GetBuilders")
+// GetBuilderConfig implements GET /eth/v1/validator/{pubkey}/builder_config: the key's config resolved against default_config, safe to re-submit.
+func (s *Server) GetBuilderConfig(w http.ResponseWriter, r *http.Request) {
+	_, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.GetBuilderConfig")
 	defer span.End()
 
 	if !requireGloasScheduled(w) {
@@ -50,13 +50,13 @@ func (s *Server) GetBuilders(w http.ResponseWriter, r *http.Request) {
 	if out.Builders == nil {
 		out.Builders = []*BuilderEntry{}
 	}
-	httputil.WriteJson(w, &GetBuildersResponse{Data: out})
+	httputil.WriteJson(w, &GetBuilderConfigResponse{Data: out})
 }
 
-// SetBuilders implements POST /eth/v1/validator/{pubkey}/builders, replacing the
+// SetBuilderConfig implements POST /eth/v1/validator/{pubkey}/builder_config, replacing the
 // key's builder config in full; fee recipient, gas limit and graffiti are untouched.
-func (s *Server) SetBuilders(w http.ResponseWriter, r *http.Request) {
-	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.SetBuilders")
+func (s *Server) SetBuilderConfig(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.SetBuilderConfig")
 	defer span.End()
 
 	if !requireGloasScheduled(w) {
@@ -114,10 +114,10 @@ func (s *Server) SetBuilders(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-// DeleteBuilders implements DELETE /eth/v1/validator/{pubkey}/builders: the key
+// DeleteBuilderConfig implements DELETE /eth/v1/validator/{pubkey}/builder_config: the key
 // follows the validator client defaults again; not the same as builders: [].
-func (s *Server) DeleteBuilders(w http.ResponseWriter, r *http.Request) {
-	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.DeleteBuilders")
+func (s *Server) DeleteBuilderConfig(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.DeleteBuilderConfig")
 	defer span.End()
 
 	if !requireGloasScheduled(w) {

@@ -1,6 +1,6 @@
 ### Added
 
-- Add `GET`/`POST`/`DELETE /eth/v1/validator/{pubkey}/builders` keymanager endpoints for per-key builder configuration (keymanager-APIs #88). The endpoints respond 501 on networks without a scheduled gloas fork, where builder configuration cannot take effect.
+- Add `GET`/`POST`/`DELETE /eth/v1/validator/{pubkey}/builder_config` keymanager endpoints for per-key builder configuration (keymanager-APIs #88). The endpoints respond 501 on networks without a scheduled gloas fork, where builder configuration cannot take effect.
 
 ### Changed
 
