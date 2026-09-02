@@ -66,7 +66,7 @@ func (v *validator) waitForActivation(ctx context.Context, accountsChanged bool)
 		select {
 		case <-ctx.Done():
 			log.Debug("Context closed, exiting WaitForActivation")
-			return ctx.Err()
+			return errors.Wrap(ctx.Err(), "context closed while waiting for activation")
 		case <-v.accountsChangedChannel:
 			accountsChanged = true
 			continue

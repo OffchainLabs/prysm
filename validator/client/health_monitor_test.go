@@ -292,6 +292,26 @@ func TestHealthMonitor_WaitForHealthy(t *testing.T) {
 		}()
 		require.ErrorIs(t, monitor.WaitForHealthy(ctx), context.Canceled)
 	})
+
+	t.Run("a returned waiter does not block later probes", func(t *testing.T) {
+		monitor, _ := testHealthMonitor(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		require.ErrorIs(t, monitor.WaitForHealthy(ctx), context.Canceled)
+
+		// The verdict send is synchronous, so a stale subscription would stall here.
+		probed := make(chan bool, 1)
+		go func() {
+			monitor.performHealthCheck()
+			monitor.performHealthCheck()
+			probed <- true
+		}()
+		select {
+		case <-probed:
+		case <-time.After(time.Second):
+			t.Fatal("probes blocked on a waiter that already returned")
+		}
+	})
 }
 
 func healthTestClient(t *testing.T) *validatormock.MockValidatorClient {

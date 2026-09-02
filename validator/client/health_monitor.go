@@ -24,7 +24,7 @@ type healthMonitor struct {
 	maxFails        int
 	healthyCh       chan bool // emits true → healthy, false → unhealthy
 	healthEventFeed *event.Feed
-	probed          chan struct{} // closed by the next probe; nil while nobody waits
+	probeFeed       event.Feed // every verdict, where healthEventFeed carries only changes
 	fails           int
 	isHealthy       bool
 	sync.RWMutex
@@ -57,9 +57,13 @@ func (m *healthMonitor) IsHealthy() bool {
 
 func (m *healthMonitor) performHealthCheck() {
 	ishealthy := m.client.EnsureReady(m.ctx)
+	m.updateStatus(ishealthy)
+	m.probeFeed.Send(ishealthy)
+}
+
+func (m *healthMonitor) updateStatus(ishealthy bool) {
 	m.Lock()
 	defer m.Unlock()
-	defer m.wakeWaiters() // deferred last so it runs first, still under the lock
 	if ishealthy {
 		m.fails = 0
 	} else if m.maxFails > 0 && m.fails < m.maxFails {
@@ -95,25 +99,6 @@ func (m *healthMonitor) performHealthCheck() {
 	go m.healthEventFeed.Send(ishealthy) // non blocking send
 }
 
-// wakeWaiters releases every pending WaitForHealthy call; the caller holds the lock.
-func (m *healthMonitor) wakeWaiters() {
-	if m.probed == nil {
-		return
-	}
-	close(m.probed)
-	m.probed = nil
-}
-
-// nextProbe returns a channel that closes once the next probe has recorded its verdict.
-func (m *healthMonitor) nextProbe() <-chan struct{} {
-	m.Lock()
-	defer m.Unlock()
-	if m.probed == nil {
-		m.probed = make(chan struct{})
-	}
-	return m.probed
-}
-
 func (m *healthMonitor) loop() {
 	log.Debug("Starting health check routine for beacon node apis")
 	ticker := time.NewTicker(params.BeaconConfig().SlotDuration())
@@ -142,15 +127,18 @@ func (m *healthMonitor) HealthyChan() <-chan bool { return m.healthyCh }
 
 // WaitForHealthy blocks until a probe completed after the call reports the beacon node healthy.
 func (m *healthMonitor) WaitForHealthy(ctx context.Context) error {
+	verdicts := make(chan bool, 1)
+	sub := m.probeFeed.Subscribe(verdicts)
+	defer sub.Unsubscribe()
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-m.nextProbe():
+		case healthy := <-verdicts:
+			if healthy {
+				return nil
+			}
+			log.WithField("url", api.RedactEndpointList(m.client.Host())).Warn("Beacon node still unhealthy, waiting before retrying")
 		}
-		if m.IsHealthy() {
-			return nil
-		}
-		log.WithField("url", api.RedactEndpointList(m.client.Host())).Warn("Beacon node still unhealthy, waiting before retrying")
 	}
 }
