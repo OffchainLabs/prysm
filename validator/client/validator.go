@@ -43,7 +43,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/graffiti"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
-	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/ethereum/go-ethereum/common"
@@ -262,12 +261,8 @@ func recheckKeys(ctx context.Context, valDB db.Database, km keymanager.IKeymanag
 	defer span.End()
 
 	// Subscribe before the initial fetch so account changes in between are not missed.
-	var sub event.Subscription
-	var pubKeysChan chan [][fieldparams.BLSPubkeyLength]byte
-	if localKM, ok := km.(*local.Keymanager); ok {
-		pubKeysChan = make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
-		sub = localKM.SubscribeAccountChanges(pubKeysChan)
-	}
+	pubKeysChan := make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
+	sub := km.SubscribeAccountChanges(pubKeysChan)
 	validatingKeys, err := km.FetchValidatingPublicKeys(ctx)
 	if err != nil {
 		log.WithError(err).Debug("Could not fetch validating keys")
@@ -275,13 +270,11 @@ func recheckKeys(ctx context.Context, valDB db.Database, km keymanager.IKeymanag
 	if err := valDB.UpdatePublicKeysBuckets(validatingKeys); err != nil {
 		log.WithError(err).Debug("Could not update public keys buckets")
 	}
-	if sub != nil {
-		go recheckValidatingKeysBucket(ctx, valDB, sub, pubKeysChan)
-	}
+	go recheckValidatingKeysBucket(ctx, valDB, sub, pubKeysChan)
 }
 
 // recheckValidatingKeysBucket creates missing DB buckets for keys pushed by the
-// local keymanager's account-change subscription.
+// keymanager's account-change subscription.
 func recheckValidatingKeysBucket(ctx context.Context, valDB db.Database, sub event.Subscription, pubKeysChan chan [][fieldparams.BLSPubkeyLength]byte) {
 	ctx, span := trace.StartSpan(ctx, "validator.recheckValidatingKeysBucket")
 	defer span.End()

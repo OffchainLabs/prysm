@@ -250,7 +250,7 @@ func TestRecheckKeys(t *testing.T) {
 				waitForProposedKeys(t, valDB, kp.pub)
 			})
 
-			t.Run("non-local keymanager gets startup buckets", func(t *testing.T) {
+			t.Run("non-local keymanager gets startup and runtime buckets", func(t *testing.T) {
 				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
 				km := genMockKeymanager(t, 2)
@@ -260,6 +260,11 @@ func TestRecheckKeys(t *testing.T) {
 				keys, err := valDB.ProposedPublicKeys(ctx)
 				require.NoError(t, err)
 				require.DeepEqual(t, sortedKeys(km.keys), sortedKeys(keys))
+
+				kp := randKeypair(t)
+				newKeys := append(slices.Clone(km.keys), kp.pub)
+				km.SimulateAccountChanges(newKeys)
+				waitForProposedKeys(t, valDB, newKeys...)
 			})
 		})
 	}
