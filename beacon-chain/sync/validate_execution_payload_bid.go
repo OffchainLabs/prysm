@@ -58,6 +58,11 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 		return pubsub.ValidationIgnore, err
 	}
 
+	// [REJECT] bid.block_hash != bid.parent_block_hash.
+	if bid.BlockHash() == bid.ParentBlockHash() {
+		return pubsub.ValidationReject, errors.New("bid block hash equals parent block hash")
+	}
+
 	// [IGNORE] local policy: this builder is blacklisted by the circuit breaker.
 	if s.builderCircuitBreaker.Blacklisted(bid.BuilderIndex(), slots.ToEpoch(bid.Slot())) {
 		return pubsub.ValidationIgnore, nil
