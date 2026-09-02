@@ -6,10 +6,9 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
-
-const maxProgressiveStateFields = 256
 
 var (
 	phase0Fields = []types.FieldIndex{
@@ -163,8 +162,8 @@ func newProgressiveStateFieldsSchema(allFields []types.FieldIndex, inactiveField
 	if len(allFields) == 0 {
 		return nil, fmt.Errorf("progressive state schema requires at least one field")
 	}
-	if len(allFields) > maxProgressiveStateFields {
-		return nil, fmt.Errorf("progressive state schema has %d fields, maximum is %d", len(allFields), maxProgressiveStateFields)
+	if len(allFields) > ssz.MaxProgressiveActiveFields {
+		return nil, fmt.Errorf("progressive state schema has %d fields, maximum is %d", len(allFields), ssz.MaxProgressiveActiveFields)
 	}
 
 	knownFields := make(map[types.FieldIndex]struct{}, len(allFields))

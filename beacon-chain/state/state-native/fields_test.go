@@ -5,6 +5,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
@@ -29,16 +30,16 @@ func TestGloasProgressiveStateSchema(t *testing.T) {
 
 func TestNewProgressiveStateFieldsSchema(t *testing.T) {
 	t.Run("MaximumFields", func(t *testing.T) {
-		allFields := make([]types.FieldIndex, maxProgressiveStateFields)
+		allFields := make([]types.FieldIndex, ssz.MaxProgressiveActiveFields)
 		for i := range allFields {
 			allFields[i] = types.FieldIndex(i)
 		}
 
 		schema, err := newProgressiveStateFieldsSchema(allFields, nil, len(allFields))
 		require.NoError(t, err)
-		require.Equal(t, maxProgressiveStateFields, len(schema.activeFields))
-		require.Equal(t, maxProgressiveStateFields, len(schema.fields))
-		require.Equal(t, maxProgressiveStateFields, len(schema.fieldIndex))
+		require.Equal(t, ssz.MaxProgressiveActiveFields, len(schema.activeFields))
+		require.Equal(t, ssz.MaxProgressiveActiveFields, len(schema.fields))
+		require.Equal(t, ssz.MaxProgressiveActiveFields, len(schema.fieldIndex))
 		for i, active := range schema.activeFields {
 			require.Equal(t, true, active, "field position %d should be active", i)
 		}
@@ -105,7 +106,7 @@ func TestNewProgressiveStateFieldsSchema(t *testing.T) {
 	})
 
 	t.Run("Invalid", func(t *testing.T) {
-		tooManyFields := make([]types.FieldIndex, maxProgressiveStateFields+1)
+		tooManyFields := make([]types.FieldIndex, ssz.MaxProgressiveActiveFields+1)
 
 		tests := []struct {
 			name           string
