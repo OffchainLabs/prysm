@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -241,24 +242,41 @@ func TestHealthMonitor_HealthyChan_ReceivesUpdates(t *testing.T) {
 
 func TestHealthMonitor_WaitForHealthy(t *testing.T) {
 	originalSlotDurationMs := params.BeaconConfig().SlotDurationMilliseconds
-	params.BeaconConfig().SlotDurationMilliseconds = 50
+	params.BeaconConfig().SlotDurationMilliseconds = 20
 	defer func() { params.BeaconConfig().SlotDurationMilliseconds = originalSlotDurationMs }()
 
-	t.Run("returns after one probe interval when healthy", func(t *testing.T) {
-		monitor := &healthMonitor{isHealthy: true}
-		start := time.Now()
-		require.NoError(t, monitor.WaitForHealthy(context.Background()))
-		assert.False(t, time.Since(start) < healthProbeInterval(), "returned before a fresh verdict was possible")
+	t.Run("a verdict recorded before the call does not release it", func(t *testing.T) {
+		monitor, healthy := testHealthMonitor(t)
+		healthy.Store(true)
+		monitor.performHealthCheck()
+		require.True(t, monitor.IsHealthy())
+
+		done := make(chan error, 1)
+		go func() { done <- monitor.WaitForHealthy(context.Background()) }()
+		select {
+		case <-done:
+			t.Fatal("returned on a verdict recorded before the call")
+		case <-time.After(100 * time.Millisecond):
+		}
+		require.Eventually(t, func() bool {
+			monitor.performHealthCheck()
+			select {
+			case err := <-done:
+				require.NoError(t, err)
+				return true
+			default:
+				return false
+			}
+		}, 2*time.Second, 10*time.Millisecond)
 	})
 
-	t.Run("blocks until the monitor reports healthy", func(t *testing.T) {
-		monitor := &healthMonitor{}
+	t.Run("blocks until a probe reports healthy", func(t *testing.T) {
+		monitor, healthy := testHealthMonitor(t)
+		monitor.Start()
 		flipped := make(chan time.Time, 1)
 		go func() {
-			time.Sleep(200 * time.Millisecond)
-			monitor.Lock()
-			monitor.isHealthy = true
-			monitor.Unlock()
+			time.Sleep(150 * time.Millisecond)
+			healthy.Store(true)
 			flipped <- time.Now()
 		}()
 		require.NoError(t, monitor.WaitForHealthy(context.Background()))
@@ -266,10 +284,10 @@ func TestHealthMonitor_WaitForHealthy(t *testing.T) {
 	})
 
 	t.Run("returns the context error when canceled", func(t *testing.T) {
-		monitor := &healthMonitor{}
+		monitor, _ := testHealthMonitor(t)
 		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 			cancel()
 		}()
 		require.ErrorIs(t, monitor.WaitForHealthy(ctx), context.Canceled)
@@ -280,4 +298,25 @@ func healthTestClient(t *testing.T) *validatormock.MockValidatorClient {
 	vc := validatormock.NewMockValidatorClient(gomock.NewController(t))
 	vc.EXPECT().Host().Return("http://localhost:3500").AnyTimes()
 	return vc
+}
+
+// testHealthMonitor returns an unstarted monitor whose probes report the flag's
+// current value; status events are drained so probes never block on them.
+func testHealthMonitor(t *testing.T) (*healthMonitor, *atomic.Bool) {
+	var healthy atomic.Bool
+	vc := healthTestClient(t)
+	vc.EXPECT().EnsureReady(gomock.Any()).DoAndReturn(func(context.Context) bool { return healthy.Load() }).AnyTimes()
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	monitor := newHealthMonitor(ctx, cancel, 0, vc)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-monitor.HealthyChan():
+			}
+		}
+	}()
+	return monitor, &healthy
 }

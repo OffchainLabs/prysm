@@ -21,92 +21,107 @@ func (v *validator) WaitForActivation(ctx context.Context) error {
 	return v.waitForActivation(ctx, false)
 }
 
-// waitForActivation implements WaitForActivation. accountsChanged marks calls
-// re-entered after a key change, whose keys HandleKeyReload never saw.
+// waitForActivation implements WaitForActivation. accountsChanged marks passes
+// entered after a key change, whose keys HandleKeyReload never saw.
 func (v *validator) waitForActivation(ctx context.Context, accountsChanged bool) error {
 	ctx, span := trace.StartSpan(ctx, "validator.WaitForActivation")
 	defer span.End()
 
-	// Step 1: Fetch validating public keys.
-	validatingKeys, err := v.km.FetchValidatingPublicKeys(ctx)
-	if err != nil {
-		return errors.Wrap(err, msgCouldNotFetchKeys)
-	}
+	for {
+		// Step 1: Fetch validating public keys.
+		validatingKeys, err := v.km.FetchValidatingPublicKeys(ctx)
+		if err != nil {
+			return errors.Wrap(err, msgCouldNotFetchKeys)
+		}
 
-	// Startup keys are vetted by the startup doppelganger check instead.
-	if accountsChanged {
-		v.trackReloadedKeysForDoppelGanger(validatingKeys)
-	}
+		// Startup keys are vetted by the startup doppelganger check instead.
+		if accountsChanged {
+			v.trackReloadedKeysForDoppelGanger(validatingKeys)
+		}
 
-	// Step 2: If no keys, wait for accounts change or context cancellation.
-	if len(validatingKeys) == 0 {
-		log.Warn(msgNoKeysFetched)
-		return v.waitForAccountsChange(ctx)
-	}
+		// Step 2: If no keys, wait for accounts change or context cancellation.
+		if len(validatingKeys) == 0 {
+			log.Warn(msgNoKeysFetched)
+			if err := v.waitForAccountsChange(ctx); err != nil {
+				return errors.Wrap(err, "could not wait for accounts change")
+			}
+			accountsChanged = true
+			continue
+		}
 
-	// Step 3: update validator statuses in cache.
-	if err := v.updateValidatorStatusCache(ctx, validatingKeys); err != nil {
-		return v.retryWaitForActivation(ctx, span, err, "Connection broken while waiting for activation. Reconnecting...", accountsChanged)
-	}
+		// Step 3: update validator statuses in cache.
+		if err := v.updateValidatorStatusCache(ctx, validatingKeys); err != nil {
+			if err := v.waitBeforeRetry(ctx, span, err, "Connection broken while waiting for activation. Reconnecting..."); err != nil {
+				return err
+			}
+			continue
+		}
 
-	// Step 4: Check and log validator statuses.
-	someAreActive := v.checkAndLogValidatorStatus()
-	if !someAreActive {
-		// Step 6: If no active validators, wait for accounts change, context cancellation, or next epoch.
+		// Step 4: Check and log validator statuses.
+		if v.checkAndLogValidatorStatus() {
+			return nil
+		}
+
+		// Step 5: If no active validators, wait for accounts change, context cancellation, or next epoch.
 		select {
 		case <-ctx.Done():
 			log.Debug("Context closed, exiting WaitForActivation")
 			return ctx.Err()
 		case <-v.accountsChangedChannel:
-			// Accounts (keys) changed, restart the process.
-			return v.waitForActivation(ctx, true)
+			accountsChanged = true
+			continue
 		default:
-			if err := v.waitForNextEpoch(ctx, v.genesisTime); err != nil {
-				return v.retryWaitForActivation(ctx, span, err, "Failed to wait for next epoch. Reconnecting...", accountsChanged)
-			}
-			return v.waitForActivation(ctx, accountsChanged)
 		}
+		changed, err := v.waitForNextEpoch(ctx, v.genesisTime)
+		if err != nil {
+			if err := v.waitBeforeRetry(ctx, span, err, "Failed to wait for next epoch. Reconnecting..."); err != nil {
+				return err
+			}
+			continue
+		}
+		if changed {
+			accountsChanged = true
+		}
+	}
+}
+
+// waitBeforeRetry logs the failure and blocks until the beacon node is healthy again.
+func (v *validator) waitBeforeRetry(ctx context.Context, span octrace.Span, err error, message string) error {
+	tracing.AnnotateError(span, err)
+	log.WithError(err).Error(message)
+	if err := v.healthMonitor.WaitForHealthy(ctx); err != nil {
+		return errors.Wrap(err, "could not wait for a healthy beacon node")
 	}
 	return nil
 }
 
-func (v *validator) retryWaitForActivation(ctx context.Context, span octrace.Span, err error, message string, accountsChanged bool) error {
-	tracing.AnnotateError(span, err)
-	log.WithError(err).Error(message)
-	if err := v.healthMonitor.WaitForHealthy(ctx); err != nil {
-		return err
-	}
-	return v.waitForActivation(ctx, accountsChanged)
-}
-
+// waitForAccountsChange blocks until the keymanager reports a key change.
 func (v *validator) waitForAccountsChange(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		log.Debug("Context closed, exiting waitForAccountsChange")
 		return ctx.Err()
 	case <-v.accountsChangedChannel:
-		// If the accounts changed, try again.
-		return v.waitForActivation(ctx, true)
+		return nil
 	}
 }
 
-// waitForNextEpoch creates a blocking function to wait until the next epoch start given the current slot
-func (v *validator) waitForNextEpoch(ctx context.Context, genesis time.Time) error {
+// waitForNextEpoch blocks until the next epoch starts, or returns true as soon
+// as the accounts change instead.
+func (v *validator) waitForNextEpoch(ctx context.Context, genesis time.Time) (bool, error) {
 	waitTime, err := slots.SecondsUntilNextEpochStart(genesis)
 	if err != nil {
-		return err
+		return false, errors.Wrap(err, "could not compute time until next epoch")
 	}
 	log.WithField("seconds_until_next_epoch", waitTime).Warn("No active validator keys provided. Waiting until next epoch to check again...")
 	select {
 	case <-ctx.Done():
 		log.Debug("Context closed, exiting waitForNextEpoch")
-		return ctx.Err()
+		return false, ctx.Err()
 	case <-v.accountsChangedChannel:
-		// Accounts (keys) changed, restart the process.
-		return v.waitForActivation(ctx, true)
+		return true, nil
 	case <-time.After(time.Duration(waitTime) * time.Second):
 		log.Debug("Done waiting for epoch start")
-		// The ticker has ticked, indicating we've reached the next epoch
-		return nil
+		return false, nil
 	}
 }
