@@ -206,12 +206,15 @@ func TestMixInActiveFields(t *testing.T) {
 	root := chunkFromIndex(42)
 	activeFields := []bool{true, false, true, true, false, false, false, true, true}
 
-	got, err := ssz.MixInActiveFields(root, activeFields)
-	require.NoError(t, err)
-
 	var packed [32]byte
 	packed[0] = 0b10001101
 	packed[1] = 0b00000001
+	gotPacked, err := ssz.PackActiveFields(activeFields)
+	require.NoError(t, err)
+	require.Equal(t, packed, gotPacked)
+
+	got, err := ssz.MixInActiveFields(root, activeFields)
+	require.NoError(t, err)
 	expected := hashPair(root, packed)
 	require.Equal(t, expected, got)
 }

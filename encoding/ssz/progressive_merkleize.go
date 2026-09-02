@@ -130,6 +130,15 @@ func ContainerRootProgressive(fieldRoots [][32]byte, activeFields []bool) ([32]b
 // MixInActiveFields computes hash(root, pack_bits(activeFields)) where
 // activeFields is restricted to at most 256 bits.
 func MixInActiveFields(root [32]byte, activeFields []bool) ([32]byte, error) {
+	packed, err := PackActiveFields(activeFields)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	return hashPair(hash.Hash, root, packed), nil
+}
+
+// PackActiveFields packs active field flags into a single SSZ chunk.
+func PackActiveFields(activeFields []bool) ([32]byte, error) {
 	if len(activeFields) > maxProgressiveActiveFields {
 		return [32]byte{}, fmt.Errorf("active fields length %d exceeds maximum %d", len(activeFields), maxProgressiveActiveFields)
 	}
@@ -141,7 +150,7 @@ func MixInActiveFields(root [32]byte, activeFields []bool) ([32]byte, error) {
 		}
 		packed[i/8] |= 1 << (uint(i) % 8)
 	}
-	return hashPair(hash.Hash, root, packed), nil
+	return packed, nil
 }
 
 func hashPair(hashFunc func([]byte) [32]byte, left, right [32]byte) [32]byte {

@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -132,6 +133,64 @@ func TestProgressiveTree_Copy(t *testing.T) {
 	require.DeepNotSSZEqual(t, tree.Root(), copied.Root())
 }
 
+func TestProgressiveTree_Proof(t *testing.T) {
+	t.Run("VerifiesEveryLeaf", func(t *testing.T) {
+		for _, count := range []int{1, 2, 5, 6, 21, 22, 46, 85} {
+			t.Run(strconv.Itoa(count), func(t *testing.T) {
+				leaves := progressiveTestLeaves(count)
+				tree := MerkleizeProgressive(progressiveLeavesAsBytes(leaves))
+				root := tree.Root()
+
+				for index := range leaves {
+					proof, err := tree.Proof(index)
+					require.NoError(t, err)
+					subtreeIndex, _ := progressiveSubtreeForIndex(index)
+					require.Equal(t, 3*subtreeIndex+1, len(proof))
+					require.Equal(t, true, trie.VerifyMerkleProof(
+						root[:], leaves[index][:], progressiveBodyGeneralizedIndex(index), proofAsBytes(proof),
+					))
+				}
+			})
+		}
+	})
+
+	t.Run("UsesRecomputedNodes", func(t *testing.T) {
+		leaves := progressiveTestLeaves(46)
+		tree := MerkleizeProgressive(progressiveLeavesAsBytes(leaves))
+		leaves[35][0]++
+		require.NoError(t, tree.RecomputeRoot(35, leaves[35]))
+
+		proof, err := tree.Proof(35)
+		require.NoError(t, err)
+		root := tree.Root()
+		require.Equal(t, true, trie.VerifyMerkleProof(
+			root[:], leaves[35][:], progressiveBodyGeneralizedIndex(35), proofAsBytes(proof),
+		))
+	})
+
+	t.Run("Errors", func(t *testing.T) {
+		tree := MerkleizeProgressive(progressiveLeavesAsBytes(progressiveTestLeaves(5)))
+		tests := []struct {
+			name      string
+			tree      *ProgressiveTree
+			index     int
+			wantError string
+		}{
+			{name: "nil tree", index: 0, wantError: "empty progressive tree"},
+			{name: "empty tree", tree: MerkleizeProgressive(nil), index: 0, wantError: "empty progressive tree"},
+			{name: "negative index", tree: tree, index: -1, wantError: "outside tree capacity"},
+			{name: "index beyond capacity", tree: tree, index: 5, wantError: "outside tree capacity"},
+		}
+
+		for _, test := range tests {
+			t.Run(test.name, func(t *testing.T) {
+				_, err := test.tree.Proof(test.index)
+				require.ErrorContains(t, test.wantError, err)
+			})
+		}
+	})
+}
+
 func progressiveTestLeaves(count int) [][32]byte {
 	leaves := make([][32]byte, count)
 	for i := range leaves {
@@ -146,6 +205,24 @@ func progressiveLeavesAsBytes(leaves [][32]byte) [][]byte {
 		asBytes[i] = leaves[i][:]
 	}
 	return asBytes
+}
+
+func proofAsBytes(proof [][32]byte) [][]byte {
+	asBytes := make([][]byte, len(proof))
+	for i := range proof {
+		asBytes[i] = proof[i][:]
+	}
+	return asBytes
+}
+
+func progressiveBodyGeneralizedIndex(globalIndex int) uint64 {
+	level, localIndex := progressiveSubtreeForIndex(globalIndex)
+	generalizedIndex := uint64(1)
+	for range level {
+		generalizedIndex = generalizedIndex<<1 | 1
+	}
+	generalizedIndex <<= 1
+	return generalizedIndex<<uint(2*level) | uint64(localIndex)
 }
 
 func TestProgressiveSubtreeForIndex(t *testing.T) {
