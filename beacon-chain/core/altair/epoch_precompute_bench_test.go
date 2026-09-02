@@ -1,7 +1,6 @@
 package altair_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
@@ -22,10 +21,9 @@ const benchPrecomputeValidatorCount = 16384
 
 func BenchmarkInitializePrecomputeValidators(b *testing.B) {
 	st, _ := util.DeterministicGenesisStateAltair(b, benchPrecomputeValidatorCount)
-	ctx := context.Background()
+	ctx := b.Context()
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if _, _, err := altair.InitializePrecomputeValidators(ctx, st); err != nil {
 			b.Fatal(err)
 		}
@@ -34,7 +32,7 @@ func BenchmarkInitializePrecomputeValidators(b *testing.B) {
 
 func BenchmarkAttestationsDelta(b *testing.B) {
 	st, _ := util.DeterministicGenesisStateAltair(b, benchPrecomputeValidatorCount)
-	ctx := context.Background()
+	ctx := b.Context()
 	vp, bal, err := altair.InitializePrecomputeValidators(ctx, st)
 	if err != nil {
 		b.Fatal(err)
@@ -44,8 +42,7 @@ func BenchmarkAttestationsDelta(b *testing.B) {
 		b.Fatal(err)
 	}
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if _, err := altair.AttestationsDelta(st, bal, vp); err != nil {
 			b.Fatal(err)
 		}
