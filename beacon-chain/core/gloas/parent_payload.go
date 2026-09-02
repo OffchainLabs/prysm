@@ -78,7 +78,7 @@ func ApplyParentExecutionPayload(
 	if err != nil {
 		return errors.Wrap(err, "could not get latest execution payload bid")
 	}
-	parentSlot := st.LatestBlockHeader().Slot
+	parentSlot := parentBid.Slot()
 
 	if err := validateExecutionRequestLengths(reqs); err != nil {
 		return err
