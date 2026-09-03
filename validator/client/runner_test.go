@@ -13,6 +13,12 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	logTest "github.com/sirupsen/logrus/hooks/test"
+	"go.uber.org/mock/gomock"
+
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -30,12 +36,7 @@ import (
 	testing2 "github.com/OffchainLabs/prysm/v7/validator/db/testing"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
-	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.opentelemetry.io/otel/trace"
-	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -473,7 +474,6 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 				BuilderConfig: &proposer.BuilderConfig{
 					Enabled:  true,
 					GasLimit: 60_000_000,
-					Relays:   []string{"https://example.com"},
 				},
 				GraffitiConfig: &proposer.GraffitiConfig{
 					Graffiti: "foobar",

@@ -5,8 +5,10 @@ import (
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -225,4 +227,49 @@ func TestStore_SaveProposerSettings(t *testing.T) {
 			require.DeepEqual(t, tt.expectedConfiguration, actualConfiguration, "configuration should return expected")
 		})
 	}
+}
+
+// v2 settings with a builders list must survive a filesystem round-trip: Version
+// preserved and optional entry bytes normalized to nil (matching the bolt backend).
+func TestStore_ProposerSettings_V2BuildersRoundTrip(t *testing.T) {
+	ctx := t.Context()
+	u64 := func(v uint64) *validator.Uint64 { u := validator.Uint64(v); return &u }
+	key := getPubkeyFromString(t, "0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+
+	in := &proposer.Settings{
+		Version: proposer.SchemaV2,
+		ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+			key: {
+				FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")},
+				GasLimit:           40000000,
+				BuilderConfig: &proposer.BuilderConfig{
+					Enabled: true,
+					Builders: []*proposer.BuilderEntry{
+						{URL: "https://builder-a.example", AuthData: []byte("secret"), MaxExecutionPayment: u64(1000000000)},
+						{URL: "https://builder-b.example"},
+					},
+				},
+			},
+		},
+	}
+
+	store, err := NewStore(t.TempDir(), nil)
+	require.NoError(t, err)
+	require.NoError(t, store.SaveProposerSettings(ctx, in))
+
+	got, err := store.ProposerSettings(ctx)
+	require.NoError(t, err)
+	require.DeepEqual(t, in, got)
+
+	// The entry without auth_data must load back as nil, not empty-non-nil.
+	require.IsNil(t, got.ProposeConfig[key].BuilderConfig.Builders[1].AuthData)
+
+	// An explicit empty list (use no builders) must survive the round-trip
+	// rather than reloading as nil (inherit).
+	in.ProposeConfig[key].BuilderConfig.Builders = []*proposer.BuilderEntry{}
+	require.NoError(t, store.SaveProposerSettings(ctx, in))
+	got, err = store.ProposerSettings(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, got.ProposeConfig[key].BuilderConfig.Builders)
+	require.Equal(t, 0, len(got.ProposeConfig[key].BuilderConfig.Builders))
 }

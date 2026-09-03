@@ -17,7 +17,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/httprest"
 	"github.com/OffchainLabs/prysm/v7/api/server/middleware"
@@ -107,6 +106,7 @@ type BeaconNode struct {
 	depositCache              cache.DepositCache
 	proposerPreferencesCache  *cache.ProposerPreferencesCache
 	subscribedValidatorsCache *cache.SubscribedValidatorsCache
+	builderCircuitBreaker     *cache.BuilderCircuitBreaker
 	payloadIDCache            *cache.PayloadIDCache
 	executionPayloadCache     *cache.ExecutionPayloadEnvelopeCache
 	stateFeed                 *event.Feed
@@ -173,6 +173,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		blsToExecPool:             blstoexec.NewPool(),
 		proposerPreferencesCache:  cache.NewProposerPreferencesCache(),
 		subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
+		builderCircuitBreaker:     cache.NewBuilderCircuitBreaker(),
 		payloadIDCache:            cache.NewPayloadIDCache(),
 		executionPayloadCache:     cache.NewExecutionPayloadEnvelopeCache(),
 		slasherBlockHeadersFeed:   new(event.Feed),
@@ -783,6 +784,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithDataColumnStorage(b.DataColumnStorage),
 		blockchain.WithProposerPreferencesCache(b.proposerPreferencesCache),
 		blockchain.WithSubscribedValidatorsCache(b.subscribedValidatorsCache),
+		blockchain.WithBuilderCircuitBreaker(b.builderCircuitBreaker),
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
 		blockchain.WithSyncChecker(b.syncChecker),
 		blockchain.WithSlasherEnabled(b.slasherEnabled),
@@ -884,6 +886,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithAvailableBlocker(bFillStore),
 		regularsync.WithProposerPreferencesCache(b.proposerPreferencesCache),
 		regularsync.WithSubscribedValidatorsCache(b.subscribedValidatorsCache),
+		regularsync.WithBuilderCircuitBreaker(b.builderCircuitBreaker),
 		regularsync.WithSlasherEnabled(b.slasherEnabled),
 		regularsync.WithLightClientStore(b.lcStore),
 		regularsync.WithBatchVerifierLimit(b.cliCtx.Int(flags.BatchVerifierLimit.Name)),
@@ -1046,6 +1049,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		DataColumnStorage:                b.DataColumnStorage,
 		ProposerPreferencesCache:         b.proposerPreferencesCache,
 		SubscribedValidatorsCache:        b.subscribedValidatorsCache,
+		BuilderCircuitBreaker:            b.builderCircuitBreaker,
 		HighestBidCache:                  regularSyncService.HighestExecutionPayloadBidCache(),
 		PayloadIDCache:                   b.payloadIDCache,
 		ExecutionPayloadEnvelopeCache:    b.executionPayloadCache,
@@ -1161,7 +1165,6 @@ func (b *BeaconNode) registerBuilderService(cliCtx *cli.Context) error {
 }
 
 func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
-	genesis := time.Unix(int64(params.BeaconConfig().MinGenesisTime+params.BeaconConfig().GenesisDelay), 0)
 	var backfillService *backfill.Service
 	if err := b.services.FetchService(&backfillService); err != nil {
 		return err
@@ -1176,7 +1179,7 @@ func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
 	p, err := pruner.New(
 		cliCtx.Context,
 		b.db,
-		genesis,
+		b.ClockWaiter,
 		initSyncWaiter(cliCtx.Context, b.initialSyncComplete),
 		backfillService.WaitForCompletion,
 		b.fetchP2P(),

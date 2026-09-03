@@ -82,6 +82,7 @@ type config struct {
 	PayloadIDCache            *cache.PayloadIDCache
 	ProposerPreferencesCache  *cache.ProposerPreferencesCache
 	SubscribedValidatorsCache *cache.SubscribedValidatorsCache
+	BuilderCircuitBreaker     *cache.BuilderCircuitBreaker
 	AttestationCache          *cache.AttestationCache
 	AttPool                   attestations.Pool
 	ExitPool                  voluntaryexits.PoolManager
@@ -377,7 +378,7 @@ func (s *Service) saveGenesisData(ctx context.Context, genesisState state.Beacon
 	}
 
 	s.originBlockRoot = genesisBlkRoot
-	s.cfg.StateGen.SaveFinalizedState(0 /*slot*/, genesisBlkRoot, genesisState)
+	s.cfg.StateGen.SaveFinalizedState(genesisBlkRoot, genesisState)
 
 	s.cfg.ForkChoiceStore.Lock()
 	defer s.cfg.ForkChoiceStore.Unlock()

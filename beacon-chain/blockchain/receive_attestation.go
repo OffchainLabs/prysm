@@ -37,7 +37,7 @@ type AttestationReceiver interface {
 	InForkchoice([32]byte) bool
 }
 
-// AttestationTargetState returns the pre state of attestation.
+// AttestationTargetState returns a state valid for the target epoch's committees and signature domains, its slot may be one epoch behind the target.
 func (s *Service) AttestationTargetState(ctx context.Context, target *ethpb.Checkpoint) (state.ReadOnlyBeaconState, error) {
 	ss, err := slots.EpochStart(target.Epoch)
 	if err != nil {

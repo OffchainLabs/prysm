@@ -44,7 +44,7 @@ type StateManager interface {
 	DeleteStateFromCaches(ctx context.Context, blockRoot [32]byte) error
 	ForceCheckpoint(ctx context.Context, root []byte) error
 	SaveState(ctx context.Context, blockRoot [32]byte, st state.BeaconState) error
-	SaveFinalizedState(fSlot primitives.Slot, fRoot [32]byte, fState state.BeaconState)
+	SaveFinalizedState(fRoot [32]byte, fState state.BeaconState)
 	MigrateToCold(ctx context.Context, fRoot [32]byte) error
 	StateByRoot(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)
 	StateByRootNoCopy(ctx context.Context, blockRoot [32]byte) (state.ReadOnlyBeaconState, error)
@@ -64,6 +64,7 @@ type State struct {
 	saveHotStateDB          *saveHotStateDbConfig
 	avb                     coverage.AvailableBlocker
 	migrationLock           *sync.Mutex
+	migratedSlot            primitives.Slot // guarded by migrationLock after initialization
 	fc                      forkchoice.ForkChoicer
 }
 
@@ -77,10 +78,8 @@ type saveHotStateDbConfig struct {
 	blockRootsOfSavedStates [][32]byte
 }
 
-// This tracks the finalized point. It's also the point where slot and the block root of
-// cold and hot sections of the DB splits.
+// finalizedInfo caches a finalized block root and its matching state for replay and balance lookups.
 type finalizedInfo struct {
-	slot  primitives.Slot
 	root  [32]byte
 	state state.BeaconState
 	lock  sync.RWMutex
@@ -102,7 +101,7 @@ func New(beaconDB db.NoHeadAccessDatabase, fc forkchoice.ForkChoicer, opts ...Op
 	s := &State{
 		beaconDB:                beaconDB,
 		hotStateCache:           newHotStateCache(),
-		finalizedInfo:           &finalizedInfo{slot: 0, root: params.BeaconConfig().ZeroHash},
+		finalizedInfo:           &finalizedInfo{root: params.BeaconConfig().ZeroHash},
 		slotsPerArchivedPoint:   params.BeaconConfig().SlotsPerArchivedPoint,
 		epochBoundaryStateCache: newBoundaryStateCache(),
 		saveHotStateDB: &saveHotStateDbConfig{
@@ -158,7 +157,8 @@ func (s *State) Resume(ctx context.Context, fState state.BeaconState) (state.Bea
 		}
 	}()
 
-	s.finalizedInfo = &finalizedInfo{slot: st.Slot(), root: fRoot, state: st.Copy()}
+	s.migratedSlot = st.Slot()
+	s.finalizedInfo = &finalizedInfo{root: fRoot, state: st.Copy()}
 	populatePubkeyCache(ctx, st)
 	return st, nil
 }
@@ -192,22 +192,12 @@ func populatePubkeyCache(ctx context.Context, st state.ReadOnlyBeaconState) {
 	})
 }
 
-// SaveFinalizedState saves the finalized slot, root and state into memory to be used by state gen service.
-// This used for migration at the correct start slot and used for hot state play back to ensure
-// lower bound to start is always at the last finalized state.
-func (s *State) SaveFinalizedState(fSlot primitives.Slot, fRoot [32]byte, fState state.BeaconState) {
+// SaveFinalizedState caches a finalized block root and its matching state.
+func (s *State) SaveFinalizedState(fRoot [32]byte, fState state.BeaconState) {
 	s.finalizedInfo.lock.Lock()
 	defer s.finalizedInfo.lock.Unlock()
 	s.finalizedInfo.root = fRoot
 	s.finalizedInfo.state = fState.Copy()
-	s.finalizedInfo.slot = fSlot
-}
-
-// Returns the cached and copied finalized state.
-func (s *State) FinalizedState() state.BeaconState {
-	s.finalizedInfo.lock.RLock()
-	defer s.finalizedInfo.lock.RUnlock()
-	return s.finalizedInfo.state.Copy()
 }
 
 // finalizedStateIfRoot returns a copy of the cached finalized state only if

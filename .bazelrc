@@ -24,6 +24,11 @@ build --workspace_status_command=./hack/workspace_status.sh
 build --define blst_disabled=false
 run --define blst_disabled=false
 
+# SSZ progressive merkleization is ON by default: gloas (EIP-7688) mandates it
+# and the consensus-spec fixtures expect the progressive hash_tree_root values.
+# Pass --//tools:disable_progressive_merkleization to build/test the bounded
+# form instead. See //tools:BUILD.bazel.
+
 build:blst_disabled --define blst_disabled=true
 build:blst_disabled --define gotags=blst_disabled
 

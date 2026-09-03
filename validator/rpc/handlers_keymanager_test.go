@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/io/file"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -947,50 +949,34 @@ func TestServer_SetGasLimit(t *testing.T) {
 		wantErr          string
 	}{
 		{
-			name:             "ProposerSettings is nil",
+			name:             "nil settings create fresh v2 settings with the option-level value",
 			pubkey:           pubkey1,
 			newGasLimit:      9999,
 			proposerSettings: nil,
-			wantErr:          "No proposer settings were found to update",
+			w:                []*want{{pubkey1, 9999}},
 		},
 		{
-			name:        "ProposerSettings.ProposeConfig is nil AND ProposerSettings.DefaultConfig is nil",
+			name:        "empty settings accept the write at the option level",
 			pubkey:      pubkey1,
 			newGasLimit: 9999,
 			proposerSettings: &proposer.Settings{
 				ProposeConfig: nil,
 				DefaultConfig: nil,
 			},
-			wantErr: "Gas limit changes only apply when builder is enabled",
+			w: []*want{{pubkey1, 9999}},
 		},
 		{
-			name:        "ProposerSettings.ProposeConfig is nil AND ProposerSettings.DefaultConfig.BuilderConfig is nil",
+			name:        "no builder config anywhere still accepts the write",
 			pubkey:      pubkey1,
 			newGasLimit: 9999,
 			proposerSettings: &proposer.Settings{
 				ProposeConfig: nil,
-				DefaultConfig: &proposer.Option{
-					BuilderConfig: nil,
-				},
+				DefaultConfig: &proposer.Option{BuilderConfig: nil},
 			},
-			wantErr: "Gas limit changes only apply when builder is enabled",
+			w: []*want{{pubkey1, 9999}},
 		},
 		{
-			name:        "ProposerSettings.ProposeConfig is defined for pubkey, BuilderConfig is nil AND ProposerSettings.DefaultConfig is nil",
-			pubkey:      pubkey1,
-			newGasLimit: 9999,
-			proposerSettings: &proposer.Settings{
-				ProposeConfig: map[[48]byte]*proposer.Option{
-					bytesutil.ToBytes48(pubkey1): {
-						BuilderConfig: nil,
-					},
-				},
-				DefaultConfig: nil,
-			},
-			wantErr: "Gas limit changes only apply when builder is enabled",
-		},
-		{
-			name:        "ProposerSettings.ProposeConfig is defined for pubkey, BuilderConfig is defined AND ProposerSettings.DefaultConfig is nil",
+			name:        "disabled builder no longer gates the write",
 			pubkey:      pubkey1,
 			newGasLimit: 9999,
 			proposerSettings: &proposer.Settings{
@@ -1001,10 +987,10 @@ func TestServer_SetGasLimit(t *testing.T) {
 				},
 				DefaultConfig: nil,
 			},
-			wantErr: "Gas limit changes only apply when builder is enabled",
+			w: []*want{{pubkey1, 9999}},
 		},
 		{
-			name:        "ProposerSettings.ProposeConfig is NOT defined for pubkey, BuilderConfig is defined AND ProposerSettings.DefaultConfig is nil",
+			name:        "option-level write wins over an existing builder-level value",
 			pubkey:      pubkey2,
 			newGasLimit: 9999,
 			proposerSettings: &proposer.Settings{
@@ -1018,33 +1004,21 @@ func TestServer_SetGasLimit(t *testing.T) {
 				},
 				DefaultConfig: nil,
 			},
-			w: []*want{{
-				pubkey2,
-				9999,
-			},
-			},
+			w: []*want{{pubkey2, 9999}},
 		},
 		{
-			name:        "ProposerSettings.ProposeConfig is defined for pubkey, BuilderConfig is nil AND ProposerSettings.DefaultConfig.BuilderConfig is defined",
+			name:        "write for a key with no option creates one",
 			pubkey:      pubkey1,
 			newGasLimit: 9999,
 			proposerSettings: &proposer.Settings{
 				ProposeConfig: map[[48]byte]*proposer.Option{
-					bytesutil.ToBytes48(pubkey2): {
-						BuilderConfig: nil,
-					},
+					bytesutil.ToBytes48(pubkey2): {BuilderConfig: nil},
 				},
 				DefaultConfig: &proposer.Option{
-					BuilderConfig: &proposer.BuilderConfig{
-						Enabled: true,
-					},
+					BuilderConfig: &proposer.BuilderConfig{Enabled: true},
 				},
 			},
-			w: []*want{{
-				pubkey1,
-				9999,
-			},
-			},
+			w: []*want{{pubkey1, 9999}},
 		},
 	}
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
@@ -1057,8 +1031,14 @@ func TestServer_SetGasLimit(t *testing.T) {
 					return tt.proposerSettings.Clone()
 				}).AnyTimes()
 				var written *proposer.Settings
-				vs.EXPECT().SetProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, s *proposer.Settings) error {
-					written = s
+				vs.EXPECT().UpdateProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
+					next, err := mutate(tt.proposerSettings.Clone())
+					if err != nil {
+						return err
+					}
+					if next != nil {
+						written = next
+					}
 					return nil
 				}).AnyTimes()
 				_ = written
@@ -1090,7 +1070,8 @@ func TestServer_SetGasLimit(t *testing.T) {
 				} else {
 					assert.Equal(t, http.StatusAccepted, w.Code)
 					for _, wantObj := range tt.w {
-						assert.Equal(t, wantObj.gaslimit, uint64(written.ProposeConfig[bytesutil.ToBytes48(wantObj.pubkey)].BuilderConfig.GasLimit))
+						require.NotNil(t, written)
+						assert.Equal(t, wantObj.gaslimit, uint64(written.GasLimit(bytesutil.ToBytes48(wantObj.pubkey))))
 					}
 				}
 			})
@@ -1124,13 +1105,28 @@ func TestServer_SetGasLimit_InvalidPubKey(t *testing.T) {
 }
 
 func TestServer_SetGasLimit_NilSettings(t *testing.T) {
+	// Fresh settings are stamped v2 only once the network schedules gloas.
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 100
+	params.OverrideBeaconConfig(cfg)
 	pubkey, err := hexutil.Decode("0xaf2e7ba294e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493")
 	require.NoError(t, err)
 
 	validatorDB := dbtest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false)
 	vs := validatormock.NewMockValidatorService(gomock.NewController(t))
 	vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
-	vs.EXPECT().ProposerSettings().Return(nil).AnyTimes()
+	var written *proposer.Settings
+	vs.EXPECT().UpdateProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
+		next, err := mutate(nil)
+		if err != nil {
+			return err
+		}
+		if next != nil {
+			written = next
+		}
+		return nil
+	})
 	s := &Server{validatorService: vs, db: validatorDB}
 
 	body, err := json.Marshal(&SetGasLimitRequest{GasLimit: "9999"})
@@ -1141,8 +1137,11 @@ func TestServer_SetGasLimit_NilSettings(t *testing.T) {
 	w.Body = &bytes.Buffer{}
 
 	s.SetGasLimit(w, req)
-	assert.NotEqual(t, http.StatusAccepted, w.Code)
-	require.StringContains(t, "No proposer settings were found to update", w.Body.String())
+	// Nil settings are created fresh at v2 with the option-level value.
+	assert.Equal(t, http.StatusAccepted, w.Code)
+	require.NotNil(t, written)
+	assert.Equal(t, proposer.SchemaV2, written.Version)
+	assert.Equal(t, validator.Uint64(9999), written.ProposeConfig[bytesutil.ToBytes48(pubkey)].GasLimit)
 }
 
 func TestServer_DeleteGasLimit(t *testing.T) {
@@ -1262,13 +1261,19 @@ func TestServer_DeleteGasLimit(t *testing.T) {
 				vs.EXPECT().ProposerSettings().DoAndReturn(func() *proposer.Settings {
 					return tt.proposerSettings.Clone()
 				}).AnyTimes()
+				// The handler always runs the transactional update; a 404 row's
+				// mutate simply declines to write.
 				var written *proposer.Settings
-				if tt.wantError == nil {
-					vs.EXPECT().SetProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, s *proposer.Settings) error {
-						written = s
-						return nil
-					})
-				}
+				vs.EXPECT().UpdateProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
+					next, err := mutate(tt.proposerSettings.Clone())
+					if err != nil {
+						return err
+					}
+					if next != nil {
+						written = next
+					}
+					return nil
+				}).AnyTimes()
 				s := &Server{
 					validatorService: vs,
 					db:               validatorDB,
@@ -1313,8 +1318,14 @@ func TestServer_GasLimit_V2Schema(t *testing.T) {
 		vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
 		vs.EXPECT().ProposerSettings().Return(settings).AnyTimes()
 		var written *proposer.Settings
-		vs.EXPECT().SetProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, s *proposer.Settings) error {
-			written = s
+		vs.EXPECT().UpdateProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
+			next, err := mutate(settings.Clone())
+			if err != nil {
+				return err
+			}
+			if next != nil {
+				written = next
+			}
 			return nil
 		}).AnyTimes()
 		return &Server{
@@ -1360,7 +1371,7 @@ func TestServer_GasLimit_V2Schema(t *testing.T) {
 		assert.Equal(t, "42424242", resp.Data.GasLimit)
 	})
 
-	t.Run("DeleteGasLimit resets per-validator GasLimit to chain default on v2", func(t *testing.T) {
+	t.Run("DeleteGasLimit unsets the per-validator GasLimit on v2", func(t *testing.T) {
 		params.BeaconConfig().DefaultBuilderGasLimit = uint64(0xbbdd)
 		s, written := setupServer(t, &proposer.Settings{
 			Version: 2,
@@ -1375,7 +1386,12 @@ func TestServer_GasLimit_V2Schema(t *testing.T) {
 
 		s.DeleteGasLimit(w, req)
 		assert.Equal(t, http.StatusNoContent, w.Code)
-		assert.Equal(t, validator.Uint64(0xbbdd), written().ProposeConfig[bytesutil.ToBytes48(pubkey1)].GasLimit)
+		// Unset rather than pinned to today's chain default, so the key follows
+		// future default gas limit increases; reads resolve the chain default.
+		ps := written()
+		require.NotNil(t, ps)
+		assert.Equal(t, validator.Uint64(0), ps.ProposeConfig[bytesutil.ToBytes48(pubkey1)].GasLimit)
+		assert.Equal(t, validator.Uint64(0xbbdd), ps.GasLimit(bytesutil.ToBytes48(pubkey1)))
 	})
 
 	t.Run("DeleteGasLimit returns 404 on v2 when no per-validator entry exists", func(t *testing.T) {
@@ -1394,10 +1410,15 @@ func TestServer_ListRemoteKeys(t *testing.T) {
 	ctx := t.Context()
 	root := make([]byte, fieldparams.RootLength)
 	root[0] = 1
+	flagKey := "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"
+	fileKey := "0x800057e262bfe42413c2cfce948ff77f11efeea19721f590c8b5b2f32fecb0e164cafba987c80465878408d05b97c9be"
+	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+	require.NoError(t, file.WriteFile(keyFilePath, []byte(fileKey+"\n")))
 	config := &remoteweb3signer.SetupConfig{
 		BaseEndpoint:          "http://example.com",
 		GenesisValidatorsRoot: root,
-		ProvidedPublicKeys:    []string{"0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"},
+		ProvidedPublicKeys:    []string{flagKey},
+		KeyFilePath:           keyFilePath,
 	}
 	km, err := remoteweb3signer.NewKeymanager(ctx, config)
 	require.NoError(t, err)
@@ -1408,9 +1429,6 @@ func TestServer_ListRemoteKeys(t *testing.T) {
 		walletInitialized: true,
 		validatorService:  vs,
 	}
-	expectedKeys, err := km.FetchValidatingPublicKeys(ctx)
-	require.NoError(t, err)
-
 	t.Run("returns proper data with existing pub keystores", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/eth/v1/remotekeys", nil)
 		w := httptest.NewRecorder()
@@ -1419,8 +1437,12 @@ func TestServer_ListRemoteKeys(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		resp := &ListRemoteKeysResponse{}
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), resp))
-		for i := 0; i < len(resp.Data); i++ {
-			require.DeepEqual(t, hexutil.Encode(expectedKeys[i][:]), resp.Data[i].Pubkey)
+		wantReadonly := map[string]bool{flagKey: true, fileKey: false}
+		require.Equal(t, len(wantReadonly), len(resp.Data))
+		for _, key := range resp.Data {
+			readonly, ok := wantReadonly[key.Pubkey]
+			require.Equal(t, true, ok)
+			require.Equal(t, readonly, key.Readonly)
 		}
 	})
 	t.Run("calling list keystores while using a remote wallet returns empty", func(t *testing.T) {
@@ -1439,10 +1461,12 @@ func TestServer_ImportRemoteKeys(t *testing.T) {
 	ctx := t.Context()
 	root := make([]byte, fieldparams.RootLength)
 	root[0] = 1
+	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+	require.NoError(t, file.WriteFile(keyFilePath, nil))
 	config := &remoteweb3signer.SetupConfig{
 		BaseEndpoint:          "http://example.com",
 		GenesisValidatorsRoot: root,
-		ProvidedPublicKeys:    nil,
+		KeyFilePath:           keyFilePath,
 	}
 	km, err := remoteweb3signer.NewKeymanager(ctx, config)
 	require.NoError(t, err)
@@ -1483,6 +1507,33 @@ func TestServer_ImportRemoteKeys(t *testing.T) {
 			require.Equal(t, fmt.Sprintf("%v", expectedStatuses[i].Status), strings.ToLower(string(resp.Data[i].Status)))
 		}
 	})
+
+	t.Run("no key file", func(t *testing.T) {
+		config := &remoteweb3signer.SetupConfig{
+			BaseEndpoint:          "http://example.com",
+			GenesisValidatorsRoot: root,
+		}
+		km, err := remoteweb3signer.NewKeymanager(ctx, config)
+		require.NoError(t, err)
+		vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+		vs.EXPECT().Keymanager().Return(km, nil).AnyTimes()
+		vs.EXPECT().RemoteSignerConfig().Return(config).AnyTimes()
+		s := &Server{walletInitialized: true, validatorService: vs}
+
+		b, err := json.Marshal(&ImportRemoteKeysRequest{RemoteKeys: []*RemoteKey{{Pubkey: pubkey}}})
+		require.NoError(t, err)
+		req := httptest.NewRequest("POST", "/eth/v1/remotekeys", bytes.NewReader(b))
+		w := httptest.NewRecorder()
+		w.Body = &bytes.Buffer{}
+		s.ImportRemoteKeys(w, req)
+
+		// Per-key statuses in a 200, never an HTTP error.
+		require.Equal(t, http.StatusOK, w.Code)
+		resp := &RemoteKeysResponse{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), resp))
+		require.Equal(t, 1, len(resp.Data))
+		require.Equal(t, keymanager.StatusError, resp.Data[0].Status)
+	})
 }
 
 func TestServer_DeleteRemoteKeys(t *testing.T) {
@@ -1490,10 +1541,12 @@ func TestServer_DeleteRemoteKeys(t *testing.T) {
 	root := make([]byte, fieldparams.RootLength)
 	root[0] = 1
 	pkey := "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"
+	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+	require.NoError(t, file.WriteFile(keyFilePath, []byte(pkey+"\n")))
 	config := &remoteweb3signer.SetupConfig{
 		BaseEndpoint:          "http://example.com",
 		GenesisValidatorsRoot: root,
-		ProvidedPublicKeys:    []string{pkey},
+		KeyFilePath:           keyFilePath,
 	}
 	km, err := remoteweb3signer.NewKeymanager(ctx, config)
 	require.NoError(t, err)
@@ -1532,6 +1585,40 @@ func TestServer_DeleteRemoteKeys(t *testing.T) {
 		expectedKeys, err := km.FetchValidatingPublicKeys(ctx)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(expectedKeys))
+	})
+
+	t.Run("unknown and derived keys", func(t *testing.T) {
+		unknownKey := "0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"
+		// pkey comes from the flag, not the key file, so it is not deletable.
+		keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+		require.NoError(t, file.WriteFile(keyFilePath, nil))
+		config := &remoteweb3signer.SetupConfig{
+			BaseEndpoint:          "http://example.com",
+			GenesisValidatorsRoot: root,
+			KeyFilePath:           keyFilePath,
+			ProvidedPublicKeys:    []string{pkey},
+		}
+		km, err := remoteweb3signer.NewKeymanager(ctx, config)
+		require.NoError(t, err)
+		vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+		vs.EXPECT().Keymanager().Return(km, nil).AnyTimes()
+		vs.EXPECT().RemoteSignerConfig().Return(config).AnyTimes()
+		s := &Server{walletInitialized: true, validatorService: vs}
+
+		b, err := json.Marshal(&DeleteRemoteKeysRequest{Pubkeys: []string{pkey, unknownKey}})
+		require.NoError(t, err)
+		req := httptest.NewRequest("DELETE", "/eth/v1/remotekeys", bytes.NewReader(b))
+		w := httptest.NewRecorder()
+		w.Body = &bytes.Buffer{}
+		s.DeleteRemoteKeys(w, req)
+
+		// Nothing matched, but the spec still wants a 200 with statuses in request order.
+		require.Equal(t, http.StatusOK, w.Code)
+		resp := &RemoteKeysResponse{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), resp))
+		require.Equal(t, 2, len(resp.Data))
+		require.Equal(t, keymanager.StatusError, resp.Data[0].Status)
+		require.Equal(t, keymanager.StatusNotFound, resp.Data[1].Status)
 	})
 }
 
@@ -1763,8 +1850,14 @@ func TestServer_FeeRecipientByPubkey(t *testing.T) {
 					return tt.proposerSettings.Clone()
 				}).AnyTimes()
 				var written *proposer.Settings
-				vs.EXPECT().SetProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, s *proposer.Settings) error {
-					written = s
+				vs.EXPECT().UpdateProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
+					next, err := mutate(tt.proposerSettings.Clone())
+					if err != nil {
+						return err
+					}
+					if next != nil {
+						written = next
+					}
 					return nil
 				}).AnyTimes()
 				_ = written
@@ -1875,8 +1968,14 @@ func TestServer_DeleteFeeRecipientByPubkey(t *testing.T) {
 					return tt.proposerSettings.Clone()
 				}).AnyTimes()
 				var written *proposer.Settings
-				vs.EXPECT().SetProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, s *proposer.Settings) error {
-					written = s
+				vs.EXPECT().UpdateProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
+					next, err := mutate(tt.proposerSettings.Clone())
+					if err != nil {
+						return err
+					}
+					if next != nil {
+						written = next
+					}
 					return nil
 				}).AnyTimes()
 				_ = written

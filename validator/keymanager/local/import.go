@@ -32,6 +32,8 @@ func (km *Keymanager) ImportKeystores(
 	if len(passwords) != len(keystores) {
 		return nil, ErrMismatchedNumPasswords
 	}
+	km.mu.Lock()
+	defer km.mu.Unlock()
 	decryptor := keystorev4.New()
 	bar := initializeProgressBar(len(keystores), "Importing accounts...")
 	keys := map[string]string{}
@@ -86,7 +88,7 @@ func (km *Keymanager) ImportKeystores(
 		storeCopy.PrivateKeys = append(storeCopy.PrivateKeys, []byte(privKey))
 	}
 	// 3) & 4) save to disk and re-initializes keystore
-	if err := km.SaveStoreAndReInitialize(ctx, storeCopy); err != nil {
+	if err := km.saveStoreAndReInitialize(ctx, storeCopy); err != nil {
 		return nil, err
 	}
 
@@ -105,6 +107,8 @@ func (km *Keymanager) ImportKeypairs(ctx context.Context, privKeys, pubKeys [][]
 			"number of private keys and public keys is not equal: %d != %d", len(privKeys), len(pubKeys),
 		)
 	}
+	km.mu.Lock()
+	defer km.mu.Unlock()
 	// 1) Copy the in memory keystore
 	storeCopy := km.accountsStore.Copy()
 
@@ -112,7 +116,7 @@ func (km *Keymanager) ImportKeypairs(ctx context.Context, privKeys, pubKeys [][]
 	updateAccountsStoreKeys(storeCopy, privKeys, pubKeys)
 
 	// 3) & 4) save to disk and re-initializes keystore
-	if err := km.SaveStoreAndReInitialize(ctx, storeCopy); err != nil {
+	if err := km.saveStoreAndReInitialize(ctx, storeCopy); err != nil {
 		return err
 	}
 

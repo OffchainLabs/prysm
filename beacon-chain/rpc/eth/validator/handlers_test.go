@@ -48,6 +48,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
@@ -823,6 +824,128 @@ func TestSubmitAggregateAndProofsV2(t *testing.T) {
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusBadRequest, e.Code)
 	})
+	t.Run("single ssz", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		config := params.BeaconConfig()
+		config.ElectraForkEpoch = 0
+		params.OverrideBeaconConfig(config)
+
+		broadcaster := &p2pmock.MockBroadcaster{}
+		s.CoreService.Broadcaster = broadcaster
+
+		body := bytes.NewBuffer(sszAggregateList(t, singleAggregateElectra, version.Electra))
+		request := httptest.NewRequest(http.MethodPost, "http://example.com", body)
+		request.Header.Set(api.VersionHeader, version.String(version.Electra))
+		request.Header.Set("Content-Type", api.OctetStreamMediaType)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.SubmitAggregateAndProofsV2(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+		assert.Equal(t, 1, len(broadcaster.BroadcastMessages))
+	})
+	t.Run("single ssz-pre-electra", func(t *testing.T) {
+		broadcaster := &p2pmock.MockBroadcaster{}
+		s.CoreService.Broadcaster = broadcaster
+
+		body := bytes.NewBuffer(sszAggregateList(t, singleAggregate, version.Phase0))
+		request := httptest.NewRequest(http.MethodPost, "http://example.com", body)
+		request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+		request.Header.Set("Content-Type", api.OctetStreamMediaType)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.SubmitAggregateAndProofsV2(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+		assert.Equal(t, 1, len(broadcaster.BroadcastMessages))
+	})
+	t.Run("multiple ssz", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		config := params.BeaconConfig()
+		config.ElectraForkEpoch = 0
+		params.OverrideBeaconConfig(config)
+
+		broadcaster := &p2pmock.MockBroadcaster{}
+		s.CoreService.Broadcaster = broadcaster
+		s.CoreService.SyncCommitteePool = synccommittee.NewStore()
+
+		body := bytes.NewBuffer(sszAggregateList(t, multipleAggregatesElectra, version.Electra))
+		request := httptest.NewRequest(http.MethodPost, "http://example.com", body)
+		request.Header.Set(api.VersionHeader, version.String(version.Electra))
+		request.Header.Set("Content-Type", api.OctetStreamMediaType)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.SubmitAggregateAndProofsV2(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+		assert.Equal(t, 2, len(broadcaster.BroadcastMessages))
+	})
+	t.Run("multiple ssz-pre-electra", func(t *testing.T) {
+		broadcaster := &p2pmock.MockBroadcaster{}
+		s.CoreService.Broadcaster = broadcaster
+		s.CoreService.SyncCommitteePool = synccommittee.NewStore()
+
+		body := bytes.NewBuffer(sszAggregateList(t, multipleAggregates, version.Phase0))
+		request := httptest.NewRequest(http.MethodPost, "http://example.com", body)
+		request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+		request.Header.Set("Content-Type", api.OctetStreamMediaType)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.SubmitAggregateAndProofsV2(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+		assert.Equal(t, 2, len(broadcaster.BroadcastMessages))
+	})
+	t.Run("no body ssz", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
+		request.Header.Set(api.VersionHeader, version.String(version.Electra))
+		request.Header.Set("Content-Type", api.OctetStreamMediaType)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.SubmitAggregateAndProofsV2(writer, request)
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.Equal(t, http.StatusBadRequest, e.Code)
+		assert.Equal(t, true, strings.Contains(e.Message, "No data submitted"))
+	})
+	t.Run("invalid ssz", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewBuffer([]byte{1, 2, 3}))
+		request.Header.Set(api.VersionHeader, version.String(version.Electra))
+		request.Header.Set("Content-Type", api.OctetStreamMediaType)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.SubmitAggregateAndProofsV2(writer, request)
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.Equal(t, http.StatusBadRequest, e.Code)
+	})
+}
+
+// sszAggregateList re-encodes a JSON aggregate array as the SSZ List[SignedAggregateAndProof].
+func sszAggregateList(t *testing.T, jsonList string, v int) []byte {
+	var raw []json.RawMessage
+	require.NoError(t, json.Unmarshal([]byte(jsonList), &raw))
+
+	elements := make([][]byte, len(raw))
+	for i, item := range raw {
+		aggregate, err := unmarshalSignedAggregateJSON(item, v)
+		require.NoError(t, err)
+		elements[i], err = aggregate.MarshalSSZ()
+		require.NoError(t, err)
+	}
+
+	var offsets, data []byte
+	offset := 4 * len(elements)
+	for _, e := range elements {
+		offsets = ssz.WriteOffset(offsets, offset)
+		offset += len(e)
+		data = append(data, e...)
+	}
+	return append(offsets, data...)
 }
 
 func TestSubmitSyncCommitteeSubscription(t *testing.T) {
@@ -4381,7 +4504,7 @@ var (
       "aggregator_index": "1",
       "aggregate": {
         "aggregation_bits": "0x01",
-        "committee_bits": "0x01",
+        "committee_bits": "0x0100000000000000",
         "signature": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505",
         "data": {
           "slot": "1",
@@ -4408,7 +4531,7 @@ var (
       "aggregator_index": "1",
       "aggregate": {
         "aggregation_bits": "0x01",
-		"committee_bits": "0x01",
+		"committee_bits": "0x0100000000000000",
         "signature": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505",
         "data": {
           "slot": "1",
@@ -4433,7 +4556,7 @@ var (
       "aggregator_index": "1",
       "aggregate": {
         "aggregation_bits": "0x01",
-		"committee_bits": "0x01",
+		"committee_bits": "0x0100000000000000",
         "signature": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505",
         "data": {
           "slot": "1",
@@ -4462,7 +4585,7 @@ var (
       "aggregator_index": "foo",
       "aggregate": {
         "aggregation_bits": "0x01",
-		"committee_bits": "0x01",
+		"committee_bits": "0x0100000000000000",
         "signature": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505",
         "data": {
           "slot": "1",

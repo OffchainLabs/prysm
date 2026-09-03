@@ -5,6 +5,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -14,41 +15,117 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-func TestVerifyOperationLengths_Electra(t *testing.T) {
-	t.Run("happy path", func(t *testing.T) {
-		s, _ := util.DeterministicGenesisStateElectra(t, 1)
-		sb, err := consensusblocks.NewSignedBeaconBlock(util.NewBeaconBlockElectra())
-		require.NoError(t, err)
-		require.NoError(t, electra.VerifyBlockDepositLength(sb.Block().Body(), s))
-	})
-	t.Run("eth1depositIndex less than eth1depositIndexLimit & number of deposits incorrect", func(t *testing.T) {
-		s, _ := util.DeterministicGenesisStateElectra(t, 1)
-		sb, err := consensusblocks.NewSignedBeaconBlock(util.NewBeaconBlockElectra())
-		require.NoError(t, err)
-		require.NoError(t, s.SetEth1DepositIndex(0))
-		require.NoError(t, s.SetDepositRequestsStartIndex(1))
-		err = electra.VerifyBlockDepositLength(sb.Block().Body(), s)
-		require.ErrorContains(t, "incorrect outstanding deposits in block body", err)
-	})
-	t.Run("eth1depositIndex more than eth1depositIndexLimit & number of deposits is not 0", func(t *testing.T) {
-		s, _ := util.DeterministicGenesisStateElectra(t, 1)
-		sb, err := consensusblocks.NewSignedBeaconBlock(util.NewBeaconBlockElectra())
-		require.NoError(t, err)
-		sb.SetDeposits([]*ethpb.Deposit{
-			{
-				Data: &ethpb.Deposit_Data{
-					PublicKey:             []byte{1, 2, 3},
-					Amount:                1000,
-					WithdrawalCredentials: make([]byte, common.AddressLength),
-					Signature:             []byte{4, 5, 6},
-				},
+func TestVerifyBlockDepositLength(t *testing.T) {
+	oneDeposit := []*ethpb.Deposit{
+		{
+			Data: &ethpb.Deposit_Data{
+				PublicKey:             []byte{1, 2, 3},
+				Amount:                1000,
+				WithdrawalCredentials: make([]byte, common.AddressLength),
+				Signature:             []byte{4, 5, 6},
 			},
+		},
+	}
+	unsetStartIndex := params.BeaconConfig().UnsetDepositRequestsStartIndex
+
+	// From Fulu onward the start index is never set, so every post-Fulu case below leaves the Eth1
+	// bridge unfinished: the Electra limit would have asked for a deposit there, which is what
+	// makes each case fail if the Fulu branch is removed. Gloas is covered alongside Fulu because
+	// the gate is keyed on `>= version.Fulu`.
+	for _, tt := range []struct {
+		name             string
+		newState         func(testing.TB) state.BeaconState
+		newBlock         func() any
+		eth1DepositIndex uint64
+		startIndex       uint64
+		deposits         []*ethpb.Deposit
+		wantErr          string
+	}{
+		{
+			name:             "electra accepts an empty body once eth1_deposit_index reached the limit",
+			newState:         func(t testing.TB) state.BeaconState { s, _ := util.DeterministicGenesisStateElectra(t, 64); return s },
+			newBlock:         func() any { return util.NewBeaconBlockElectra() },
+			eth1DepositIndex: 64,
+			startIndex:       unsetStartIndex,
+		},
+		{
+			name:             "electra requires the outstanding Eth1 bridge deposits",
+			newState:         func(t testing.TB) state.BeaconState { s, _ := util.DeterministicGenesisStateElectra(t, 64); return s },
+			newBlock:         func() any { return util.NewBeaconBlockElectra() },
+			eth1DepositIndex: 0,
+			startIndex:       1,
+			wantErr:          "incorrect outstanding deposits in block body",
+		},
+		{
+			name:             "electra rejects an Eth1 bridge deposit once the bridge is drained",
+			newState:         func(t testing.TB) state.BeaconState { s, _ := util.DeterministicGenesisStateElectra(t, 64); return s },
+			newBlock:         func() any { return util.NewBeaconBlockElectra() },
+			eth1DepositIndex: 1,
+			startIndex:       1,
+			deposits:         oneDeposit,
+			wantErr:          "incorrect outstanding deposits in block body",
+		},
+		{
+			name: "fulu accepts an empty body while the Eth1 bridge is unfinished",
+			newState: func(t testing.TB) state.BeaconState {
+				s, _ := util.DeterministicGenesisStateFulu(t, 64)
+				return s
+			},
+			newBlock:         func() any { return util.NewBeaconBlockFulu() },
+			eth1DepositIndex: 0,
+			startIndex:       unsetStartIndex,
+		},
+		{
+			name: "fulu rejects an Eth1 bridge deposit",
+			newState: func(t testing.TB) state.BeaconState {
+				s, _ := util.DeterministicGenesisStateFulu(t, 64)
+				return s
+			},
+			newBlock:         func() any { return util.NewBeaconBlockFulu() },
+			eth1DepositIndex: 0,
+			startIndex:       unsetStartIndex,
+			deposits:         oneDeposit,
+			wantErr:          "eth1 bridge deposits are not allowed from Fulu",
+		},
+		{
+			name: "gloas accepts an empty body while the Eth1 bridge is unfinished",
+			newState: func(t testing.TB) state.BeaconState {
+				s, _ := util.DeterministicGenesisStateGloas(t, 64)
+				return s
+			},
+			newBlock:         func() any { return util.NewBeaconBlockGloas() },
+			eth1DepositIndex: 0,
+			startIndex:       unsetStartIndex,
+		},
+		{
+			name: "gloas rejects an Eth1 bridge deposit",
+			newState: func(t testing.TB) state.BeaconState {
+				s, _ := util.DeterministicGenesisStateGloas(t, 64)
+				return s
+			},
+			newBlock:         func() any { return util.NewBeaconBlockGloas() },
+			eth1DepositIndex: 0,
+			startIndex:       unsetStartIndex,
+			deposits:         oneDeposit,
+			wantErr:          "eth1 bridge deposits are not allowed from Fulu",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s := tt.newState(t)
+			require.NoError(t, s.SetEth1DepositIndex(tt.eth1DepositIndex))
+			require.NoError(t, s.SetDepositRequestsStartIndex(tt.startIndex))
+			sb, err := consensusblocks.NewSignedBeaconBlock(tt.newBlock())
+			require.NoError(t, err)
+			sb.SetDeposits(tt.deposits)
+
+			err = electra.VerifyBlockDepositLength(sb.Block().Body(), s)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, tt.wantErr, err)
 		})
-		require.NoError(t, s.SetEth1DepositIndex(1))
-		require.NoError(t, s.SetDepositRequestsStartIndex(1))
-		err = electra.VerifyBlockDepositLength(sb.Block().Body(), s)
-		require.ErrorContains(t, "incorrect outstanding deposits in block body", err)
-	})
+	}
 }
 
 func TestProcessEpoch_CanProcessElectra(t *testing.T) {

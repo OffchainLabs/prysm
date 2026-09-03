@@ -245,7 +245,7 @@ func topLevelRoots(body interfaces.ReadOnlyBeaconBlockBody) ([][]byte, error) {
 
 	// Proposer slashings
 	ps := body.ProposerSlashings()
-	root, err = ssz.MerkleizeListSSZ(ps, params.BeaconConfig().MaxProposerSlashings)
+	root, err = blockBodyListRoot(body.Version(), ps, params.BeaconConfig().MaxProposerSlashings)
 	if err != nil {
 		return nil, err
 	}
@@ -255,9 +255,9 @@ func topLevelRoots(body interfaces.ReadOnlyBeaconBlockBody) ([][]byte, error) {
 	as := body.AttesterSlashings()
 	bodyVersion := body.Version()
 	if bodyVersion < version.Electra {
-		root, err = ssz.MerkleizeListSSZ(as, params.BeaconConfig().MaxAttesterSlashings)
+		root, err = blockBodyListRoot(bodyVersion, as, params.BeaconConfig().MaxAttesterSlashings)
 	} else {
-		root, err = ssz.MerkleizeListSSZ(as, params.BeaconConfig().MaxAttesterSlashingsElectra)
+		root, err = blockBodyListRoot(bodyVersion, as, params.BeaconConfig().MaxAttesterSlashingsElectra)
 	}
 	if err != nil {
 		return nil, err
@@ -267,9 +267,9 @@ func topLevelRoots(body interfaces.ReadOnlyBeaconBlockBody) ([][]byte, error) {
 	// Attestations
 	att := body.Attestations()
 	if bodyVersion < version.Electra {
-		root, err = ssz.MerkleizeListSSZ(att, params.BeaconConfig().MaxAttestations)
+		root, err = blockBodyListRoot(bodyVersion, att, params.BeaconConfig().MaxAttestations)
 	} else {
-		root, err = ssz.MerkleizeListSSZ(att, params.BeaconConfig().MaxAttestationsElectra)
+		root, err = blockBodyListRoot(bodyVersion, att, params.BeaconConfig().MaxAttestationsElectra)
 	}
 	if err != nil {
 		return nil, err
@@ -278,7 +278,7 @@ func topLevelRoots(body interfaces.ReadOnlyBeaconBlockBody) ([][]byte, error) {
 
 	// Deposits
 	dep := body.Deposits()
-	root, err = ssz.MerkleizeListSSZ(dep, params.BeaconConfig().MaxDeposits)
+	root, err = blockBodyListRoot(body.Version(), dep, params.BeaconConfig().MaxDeposits)
 	if err != nil {
 		return nil, err
 	}
@@ -286,7 +286,7 @@ func topLevelRoots(body interfaces.ReadOnlyBeaconBlockBody) ([][]byte, error) {
 
 	// Voluntary Exits
 	ve := body.VoluntaryExits()
-	root, err = ssz.MerkleizeListSSZ(ve, params.BeaconConfig().MaxVoluntaryExits)
+	root, err = blockBodyListRoot(body.Version(), ve, params.BeaconConfig().MaxVoluntaryExits)
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +319,7 @@ func topLevelRoots(body interfaces.ReadOnlyBeaconBlockBody) ([][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	root, err = ssz.MerkleizeListSSZ(bls, params.BeaconConfig().MaxBlsToExecutionChanges)
+	root, err = blockBodyListRoot(body.Version(), bls, params.BeaconConfig().MaxBlsToExecutionChanges)
 	if err != nil {
 		return nil, err
 	}

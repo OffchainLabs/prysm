@@ -47,7 +47,7 @@ func (v *validator) nonBlacklistedKeys(ctx context.Context) ([][fieldparams.BLSP
 // isActiveForDuties reports whether a validator status entry indicates the
 // validator currently has duties to perform — i.e. it is in (or about to be
 // in) the beacon-state active set. Shared by filteredKeysAndIndices and
-// filterAndCacheActiveKeys so both call sites agree on the same predicate.
+// activeKeysFromCache so both call sites agree on the same predicate.
 func isActiveForDuties(s *ethpb.ValidatorStatusResponse, currEpoch primitives.Epoch) bool {
 	if s == nil {
 		return false
@@ -63,10 +63,9 @@ func isActiveForDuties(s *ethpb.ValidatorStatusResponse, currEpoch primitives.Ep
 	return false
 }
 
-// filteredKeysAndIndices returns the subset of keys with duties to fetch for
-// the given epoch (see isActiveForDuties), and the corresponding sorted
-// validator indices. Sorted indices let callers compare against a previously
-// stored set to detect drift.
+// filteredKeysAndIndices returns the keys eligible for duties at the given epoch —
+// active (see isActiveForDuties) and not held pending a doppelganger check — and the
+// corresponding sorted indices, which let callers detect drift against a stored set.
 func (v *validator) filteredKeysAndIndices(keys [][fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch) ([][fieldparams.BLSPubkeyLength]byte, []primitives.ValidatorIndex) {
 	outKeys := make([][fieldparams.BLSPubkeyLength]byte, 0, len(keys))
 	indices := make([]primitives.ValidatorIndex, 0, len(keys))
@@ -74,6 +73,10 @@ func (v *validator) filteredKeysAndIndices(keys [][fieldparams.BLSPubkeyLength]b
 	for _, pk := range keys {
 		st, ok := statuses[pk]
 		if !ok || !isActiveForDuties(st.status, epoch) {
+			continue
+		}
+		// Reloaded keys stay out of duties until their doppelganger check clears.
+		if v.isDoppelGangerPending(pk) {
 			continue
 		}
 		outKeys = append(outKeys, pk)
@@ -97,17 +100,23 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 
 	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
 
-	filteredKeys, filteredIndices := v.filteredKeysAndIndices(keys, epoch)
 	if epoch >= params.BeaconConfig().GloasForkEpoch {
+		_, filteredIndices := v.filteredKeysAndIndices(keys, epoch)
 		err = v.updateDutiesSplit(ctx, epoch, filteredIndices)
 	} else {
-		err = v.updateDutiesCombined(ctx, epoch, filteredKeys)
+		// Combined duties include sync assignments that remain valid after validator exit.
+		err = v.updateDutiesCombined(ctx, epoch, keys)
 	}
 	if err != nil {
 		return errors.Wrap(err, "could not fetch duties")
 	}
 
 	if !v.duties.isInitialized() {
+		return nil
+	}
+	snap := v.duties.snapshot()
+	if snap.currentDutyCount() == 0 && snap.nextDutyCount() == 0 {
+		// A known-empty schedule: skip duty logging and subnet subscriptions.
 		return nil
 	}
 
@@ -122,6 +131,12 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 
 // updateDutiesCombined uses the combined Duties() endpoint (pre-GLOAS).
 func (v *validator) updateDutiesCombined(ctx context.Context, epoch primitives.Epoch, filteredKeys [][fieldparams.BLSPubkeyLength]byte) error {
+	if len(filteredKeys) == 0 {
+		// No eligible keys (none active, or all quarantined): duties for this
+		// epoch are known to be none, which also drops any stale entries.
+		v.duties.writeEmpty(epoch)
+		return nil
+	}
 	req := &ethpb.DutiesRequest{
 		Epoch:      epoch,
 		PublicKeys: bytesutil.FromBytes48Array(filteredKeys),
@@ -164,13 +179,13 @@ func dropIfDivergent[T interface{ GetDependentRoot() []byte }](resp T, attRoot [
 	return zero
 }
 
-// allCurrentDutiesExited reports whether there is at least one duty and all are EXITED.
+// allCurrentDutiesExited reports whether all duties are EXITED with no sync duty remaining.
 func allCurrentDutiesExited(duties []*ethpb.ValidatorDuty) bool {
 	if len(duties) == 0 {
 		return false
 	}
 	for _, d := range duties {
-		if d.Status != ethpb.ValidatorStatus_EXITED {
+		if d.Status != ethpb.ValidatorStatus_EXITED || d.IsSyncCommittee {
 			return false
 		}
 	}
@@ -228,9 +243,9 @@ func (m missingNextDuties) String() string {
 // retry. indices must be sorted (see filteredKeysAndIndices).
 func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex) error {
 	if len(indices) == 0 {
-		// No active keys for this client; drop any previously cached duties so
-		// stale entries don't keep appearing in RolesAt etc.
-		v.duties.reset()
+		// No eligible keys (none active, or all quarantined): duties for this
+		// epoch are known to be none, which also drops any stale entries.
+		v.duties.writeEmpty(epoch)
 		return nil
 	}
 
@@ -774,7 +789,7 @@ func (v *validator) checkDependentRoots(ctx context.Context, prevRoot, currRoot 
 			return errors.Wrap(err, "failed to update duties")
 		}
 		log.Info("Updated duties due to previous dependent root change")
-		v.submitProposerPreferences(ctx)
+		v.resubmitPreferences(ctx)
 		return nil
 	}
 
@@ -798,6 +813,6 @@ func (v *validator) checkDependentRoots(ctx context.Context, prevRoot, currRoot 
 		return errors.Wrap(err, "failed to update duties")
 	}
 	log.Info("Updated duties due to current dependent root change")
-	v.submitProposerPreferences(ctx)
+	v.resubmitPreferences(ctx)
 	return nil
 }
