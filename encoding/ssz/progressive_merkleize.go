@@ -9,7 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 )
 
-const maxProgressiveActiveFields = 256
+const MaxProgressiveActiveFields = 256
 
 // MerkleizeProgressiveChunks computes the progressive Merkle root of 32-byte chunks.
 //
@@ -108,8 +108,8 @@ func ContainerRootProgressive(fieldRoots [][32]byte, activeFields []bool) ([32]b
 		return [32]byte{}, errors.New("active fields cannot be empty")
 	}
 
-	if len(activeFields) > maxProgressiveActiveFields {
-		return [32]byte{}, fmt.Errorf("active fields length %d exceeds maximum %d", len(activeFields), maxProgressiveActiveFields)
+	if len(activeFields) > MaxProgressiveActiveFields {
+		return [32]byte{}, fmt.Errorf("active fields length %d exceeds maximum %d", len(activeFields), MaxProgressiveActiveFields)
 	}
 
 	activeCount := 0
@@ -128,10 +128,10 @@ func ContainerRootProgressive(fieldRoots [][32]byte, activeFields []bool) ([32]b
 }
 
 // MixInActiveFields computes hash(root, pack_bits(activeFields)) where
-// activeFields is restricted to at most 256 bits.
+// activeFields is restricted to at most MaxProgressiveActiveFields bits.
 func MixInActiveFields(root [32]byte, activeFields []bool) ([32]byte, error) {
-	if len(activeFields) > maxProgressiveActiveFields {
-		return [32]byte{}, fmt.Errorf("active fields length %d exceeds maximum %d", len(activeFields), maxProgressiveActiveFields)
+	if len(activeFields) > MaxProgressiveActiveFields {
+		return [32]byte{}, fmt.Errorf("active fields length %d exceeds maximum %d", len(activeFields), MaxProgressiveActiveFields)
 	}
 
 	var packed [32]byte
