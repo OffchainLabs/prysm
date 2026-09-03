@@ -1001,14 +1001,14 @@ func (b *BeaconState) HashTreeRoot(ctx context.Context) ([32]byte, error) {
 func (b *BeaconState) progressiveHashTreeRoot(ctx context.Context) ([32]byte, error) {
 	schema, ok := ProgressiveStateSchemaForVersion(b.version)
 	if !ok {
-		return [32]byte{}, fmt.Errorf("progressiveHashTreeRoot: unsupported version: %s", version.String(b.version))
+		return [32]byte{}, fmt.Errorf("unsupported version for progressive HTR: %s", version.String(b.version))
 	}
 
 	if err := b.initializeProgressiveMerkleTree(ctx); err != nil {
-		return [32]byte{}, err
+		return [32]byte{}, fmt.Errorf("initializeProgressiveMerkleTree: %w", err)
 	}
 	if err := b.recomputeProgressiveDirtyFields(ctx); err != nil {
-		return [32]byte{}, err
+		return [32]byte{}, fmt.Errorf("recomputeProgressiveDirtyFields: %w", err)
 	}
 
 	root, err := ssz.MixInActiveFields(b.progressiveMerkleTree.Root(), schema.ActiveFields())
@@ -1026,7 +1026,7 @@ func (b *BeaconState) progressiveHashTreeRoot(ctx context.Context) ([32]byte, er
 func (b *BeaconState) initializeProgressiveMerkleTree(ctx context.Context) error {
 	schema, ok := ProgressiveStateSchemaForVersion(b.version)
 	if !ok {
-		return fmt.Errorf("initializeProgressiveMerkleTree: unsupported version: %s", version.String(b.version))
+		return fmt.Errorf("unsupported version: %s", version.String(b.version))
 	}
 
 	if b.progressiveMerkleTree != nil {
@@ -1054,7 +1054,7 @@ func (b *BeaconState) initializeProgressiveMerkleTree(ctx context.Context) error
 func (b *BeaconState) recomputeProgressiveDirtyFields(ctx context.Context) error {
 	schema, ok := ProgressiveStateSchemaForVersion(b.version)
 	if !ok {
-		return fmt.Errorf("recomputeProgressiveDirtyFields: unsupported version: %s", version.String(b.version))
+		return fmt.Errorf("unsupported version: %s", version.String(b.version))
 	}
 
 	for field := range b.dirtyFields {

@@ -215,15 +215,15 @@ func newProgressiveStateFieldsSchema(allFields []types.FieldIndex, inactiveField
 	return schema, nil
 }
 
-func (schema *ProgressiveStateSchema) GetFieldIndex(field types.FieldIndex) (int, bool) {
-	index, ok := schema.fieldIndex[field]
+func (s *ProgressiveStateSchema) GetFieldIndex(field types.FieldIndex) (int, bool) {
+	index, ok := s.fieldIndex[field]
 	return index, ok
 }
 
-func (schema *ProgressiveStateSchema) ActiveFields() []bool {
-	return schema.activeFields
+func (s *ProgressiveStateSchema) ActiveFields() []bool {
+	return s.activeFields
 }
 
-func (schema *ProgressiveStateSchema) Fields() []types.FieldIndex {
-	return schema.fields
+func (s *ProgressiveStateSchema) Fields() []types.FieldIndex {
+	return s.fields
 }
