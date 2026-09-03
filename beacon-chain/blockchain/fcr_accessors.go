@@ -76,24 +76,31 @@ func extractBalanceInfo(ctx context.Context, st state.ReadOnlyBeaconState) (*con
 		return nil, err
 	}
 	balances := make([]uint64, st.NumValidators())
+	slashedBalances := make(map[primitives.ValidatorIndex]uint64)
 	epoch := coreTime.CurrentEpoch(st)
 	for idx, val := range st.ValidatorsReadOnlySeq() {
-		if helpers.IsActiveValidatorUsingTrie(val, epoch) && !val.Slashed() {
-			balances[idx] = val.EffectiveBalance()
+		if !helpers.IsActiveValidatorUsingTrie(val, epoch) {
+			continue
 		}
+		if val.Slashed() {
+			// Spec get_equivocation_score counts active slashed validators, this discounts them from the adversarial weight.
+			slashedBalances[idx] = val.EffectiveBalance()
+			continue
+		}
+		balances[idx] = val.EffectiveBalance()
 	}
-	return &confirmation.FFGStateInfo{TotalActiveBalance: total, Balances: balances}, nil
+	return &confirmation.FFGStateInfo{TotalActiveBalance: total, Balances: balances, SlashedBalances: slashedBalances}, nil
 }
 
-func (a *fcrBalanceAccessor) BalanceInfoByCheckpoint(ctx context.Context, cp forkchoicetypes.Checkpoint) ([]uint64, uint64, error) {
+func (a *fcrBalanceAccessor) BalanceInfoByCheckpoint(ctx context.Context, cp forkchoicetypes.Checkpoint) (*confirmation.FFGStateInfo, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if cached, ok := a.byCheckpoint[cp]; ok {
-		return cached.Balances, cached.TotalActiveBalance, nil
+		return cached, nil
 	}
 	epochStart, err := slots.EpochStart(cp.Epoch)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	var st state.ReadOnlyBeaconState
 	cached, err := a.s.checkpointStateCache.StateByCheckpoint(&ethpb.Checkpoint{Epoch: cp.Epoch, Root: cp.Root[:]})
@@ -102,21 +109,21 @@ func (a *fcrBalanceAccessor) BalanceInfoByCheckpoint(ctx context.Context, cp for
 	} else {
 		base, err := a.s.cfg.StateGen.StateByRoot(ctx, cp.Root)
 		if err != nil {
-			return nil, 0, errors.Wrap(err, "could not get state for checkpoint root")
+			return nil, errors.Wrap(err, "could not get state for checkpoint root")
 		}
 		if base == nil || base.IsNil() {
-			return nil, 0, errors.New("nil state for checkpoint root")
+			return nil, errors.New("nil state for checkpoint root")
 		}
 		// Spec's checkpoint state is advanced to the epoch start
 		advanced, err := transition.ProcessSlotsIfPossible(ctx, base, epochStart)
 		if err != nil {
-			return nil, 0, errors.Wrap(err, "could not advance state to checkpoint epoch")
+			return nil, errors.Wrap(err, "could not advance state to checkpoint epoch")
 		}
 		st = advanced
 	}
 	info, err := extractBalanceInfo(ctx, st)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	if a.byCheckpoint == nil {
 		a.byCheckpoint = make(map[forkchoicetypes.Checkpoint]*confirmation.FFGStateInfo)
@@ -132,7 +139,7 @@ func (a *fcrBalanceAccessor) BalanceInfoByCheckpoint(ctx context.Context, cp for
 		delete(a.byCheckpoint, lowest)
 	}
 	a.byCheckpoint[cp] = info
-	return info.Balances, info.TotalActiveBalance, nil
+	return info, nil
 }
 
 func (a *fcrBalanceAccessor) PulledUpHeadState(ctx context.Context, headRoot [32]byte) (*confirmation.FFGStateInfo, error) {

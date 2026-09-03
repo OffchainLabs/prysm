@@ -34,6 +34,6 @@ type CommitteeAccessor interface {
 
 // BalanceAccessor maps to the spec's balance_source and get_pulled_up_head_state state reads.
 type BalanceAccessor interface {
-	BalanceInfoByCheckpoint(ctx context.Context, cp forkchoicetypes.Checkpoint) (balances []uint64, totalActiveBalance uint64, err error)
+	BalanceInfoByCheckpoint(ctx context.Context, cp forkchoicetypes.Checkpoint) (*FFGStateInfo, error)
 	PulledUpHeadState(ctx context.Context, headRoot [32]byte) (*FFGStateInfo, error)
 }

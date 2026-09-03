@@ -30,8 +30,8 @@ func (stubCommittees) Seed(_ context.Context, epoch primitives.Epoch) ([32]byte,
 
 type stubBalances struct{}
 
-func (stubBalances) BalanceInfoByCheckpoint(_ context.Context, _ forkchoicetypes.Checkpoint) ([]uint64, uint64, error) {
-	return []uint64{32e9, 32e9, 32e9, 32e9}, 128e9, nil
+func (stubBalances) BalanceInfoByCheckpoint(_ context.Context, _ forkchoicetypes.Checkpoint) (*confirmation.FFGStateInfo, error) {
+	return &confirmation.FFGStateInfo{TotalActiveBalance: 128e9, Balances: []uint64{32e9, 32e9, 32e9, 32e9}}, nil
 }
 
 func (stubBalances) PulledUpHeadState(_ context.Context, _ [32]byte) (*confirmation.FFGStateInfo, error) {

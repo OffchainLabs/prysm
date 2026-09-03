@@ -166,17 +166,17 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 	}
 
 	// Checkpoint state loads can replay from disk, keep them off the forkchoice lock.
-	balances, totalActiveBalance, err := f.balances.BalanceInfoByCheckpoint(ctx, f.currentEpochObservedJustifiedCheckpoint)
+	info, err := f.balances.BalanceInfoByCheckpoint(ctx, f.currentEpochObservedJustifiedCheckpoint)
 	if err != nil {
 		return
 	}
+	balances, totalActiveBalance := info.Balances, info.TotalActiveBalance
 	// Reconfirmation at epoch start uses the previous balance source, spec get_previous_balance_source.
-	var prevBalances []uint64
-	prevTotalActive := uint64(0)
+	var prevInfo *FFGStateInfo
 	if slots.IsEpochStart(currentSlot) {
-		prevBalances, prevTotalActive, err = f.balances.BalanceInfoByCheckpoint(ctx, f.previousEpochObservedJustifiedCheckpoint)
+		prevInfo, err = f.balances.BalanceInfoByCheckpoint(ctx, f.previousEpochObservedJustifiedCheckpoint)
 		if err != nil {
-			prevBalances = nil
+			prevInfo = nil
 		}
 	}
 
@@ -206,21 +206,21 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 	f.fc.RUnlock()
 	votes := f.votesBuf
 
-	f.support.Build(votes, balances, f.tables, equivocating)
+	f.support.Build(votes, balances, info.SlashedBalances, f.tables, equivocating)
 
 	equivScorer := EquivocationScorer(f.support.EquivocationScore)
 
 	prevSupport := f.support
 	prevTotalActiveBalance := totalActiveBalance
 	prevEquivScorer := equivScorer
-	if prevBalances != nil {
+	if prevInfo != nil {
 		if f.prevSupportBuf == nil {
 			f.prevSupportBuf = NewSupportMap()
 		}
 		ps := f.prevSupportBuf
-		ps.Build(votes, prevBalances, f.tables, equivocating)
+		ps.Build(votes, prevInfo.Balances, prevInfo.SlashedBalances, f.tables, equivocating)
 		prevSupport = ps
-		prevTotalActiveBalance = prevTotalActive
+		prevTotalActiveBalance = prevInfo.TotalActiveBalance
 		prevEquivScorer = EquivocationScorer(ps.EquivocationScore)
 	}
 

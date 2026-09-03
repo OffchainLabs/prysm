@@ -73,12 +73,13 @@ func (t *epochSlotTable) assignedSlot(v primitives.ValidatorIndex) (primitives.S
 // SupportMap pre-aggregates vote support for the slot-range queries FCR needs.
 // totalSupport backs get_attestation_score (a vote credits every ancestor);
 type SupportMap struct {
-	votes        []forkchoicetypes.VoteData
-	balances     []uint64
-	equivocating map[primitives.ValidatorIndex]bool
-	tables       []*epochSlotTable
-	rootWeights  map[[32]byte]uint64
-	totalSupport map[[32]byte]uint64
+	votes           []forkchoicetypes.VoteData
+	balances        []uint64
+	slashedBalances map[primitives.ValidatorIndex]uint64
+	equivocating    map[primitives.ValidatorIndex]bool
+	tables          []*epochSlotTable
+	rootWeights     map[[32]byte]uint64
+	totalSupport    map[[32]byte]uint64
 }
 
 func NewSupportMap() *SupportMap {
@@ -92,11 +93,13 @@ func NewSupportMap() *SupportMap {
 func (s *SupportMap) Build(
 	votes []forkchoicetypes.VoteData,
 	balances []uint64,
+	slashedBalances map[primitives.ValidatorIndex]uint64,
 	tables []*epochSlotTable,
 	equivocating map[primitives.ValidatorIndex]bool,
 ) {
 	s.votes = votes
 	s.balances = balances
+	s.slashedBalances = slashedBalances
 	s.tables = tables
 	s.equivocating = equivocating
 
@@ -190,9 +193,13 @@ func (s *SupportMap) EquivocationScore(startSlot, endSlot primitives.Slot) uint6
 		if !isEquivocating || uint64(idx) >= uint64(len(s.balances)) {
 			continue
 		}
+		bal := s.balances[idx] + s.slashedBalances[idx]
+		if bal == 0 {
+			continue
+		}
 		for _, t := range s.tables {
 			if sl, ok := t.assignedSlot(idx); ok && sl >= startSlot && sl <= endSlot {
-				total += s.balances[idx]
+				total += bal
 				break
 			}
 		}

@@ -44,10 +44,10 @@ func TestBalanceInfoByCheckpoint_SkippedBoundaryUsesCheckpointEpoch(t *testing.T
 	require.NoError(t, tr.db.SaveState(ctx, st, root))
 
 	acc := &fcrBalanceAccessor{s: service}
-	balances, total, err := acc.BalanceInfoByCheckpoint(ctx, forkchoicetypes.Checkpoint{Epoch: 1, Root: root})
+	info, err := acc.BalanceInfoByCheckpoint(ctx, forkchoicetypes.Checkpoint{Epoch: 1, Root: root})
 	require.NoError(t, err)
 
-	require.Equal(t, st.NumValidators(), len(balances))
-	require.Equal(t, cfg.MaxEffectiveBalance, balances[newIdx])
-	require.Equal(t, uint64(st.NumValidators())*cfg.MaxEffectiveBalance, total)
+	require.Equal(t, st.NumValidators(), len(info.Balances))
+	require.Equal(t, cfg.MaxEffectiveBalance, info.Balances[newIdx])
+	require.Equal(t, uint64(st.NumValidators())*cfg.MaxEffectiveBalance, info.TotalActiveBalance)
 }

@@ -13,4 +13,6 @@ type FFGStateInfo struct {
 	TotalActiveBalance uint64
 	// Effective balances by validator index, zero for inactive or slashed validators.
 	Balances []uint64
+	// Effective balances of active but slashed validators, the equivocation score must count them.
+	SlashedBalances map[primitives.ValidatorIndex]uint64
 }

@@ -163,7 +163,7 @@ func TestSupportMap_Build(t *testing.T) {
 	tables := buildTestTables(t, committees, []primitives.Epoch{0}, 0)
 
 	sm := NewSupportMap()
-	sm.Build(votes, balances, tables, nil)
+	sm.Build(votes, balances, nil, tables, nil)
 	sm.Accumulate(fc)
 
 	// --- BlockSupportBetweenSlots (direct votes) ---
@@ -230,7 +230,7 @@ func TestSupportMap_Equivocation(t *testing.T) {
 	tables := buildTestTables(t, committees, []primitives.Epoch{0}, len(balances))
 
 	sm := NewSupportMap()
-	sm.Build(votes, balances, tables, equivocating)
+	sm.Build(votes, balances, nil, tables, equivocating)
 	sm.Accumulate(fc)
 
 	// Validator 1 (200) is equivocating: excluded from support
@@ -240,6 +240,13 @@ func TestSupportMap_Equivocation(t *testing.T) {
 	// ... but counted by the equivocation score in its assigned slot only.
 	require.Equal(t, uint64(200), sm.EquivocationScore(1, 1))
 	require.Equal(t, uint64(0), sm.EquivocationScore(2, 5))
+
+	balances[1] = 0
+	slashed := map[primitives.ValidatorIndex]uint64{1: 200}
+	sm.Build(votes, balances, slashed, tables, equivocating)
+	sm.Accumulate(fc)
+	require.Equal(t, uint64(400), sm.AttestationScore(root1))
+	require.Equal(t, uint64(200), sm.EquivocationScore(1, 1))
 }
 
 // TestSupportMap_EmptySlots tests that querying slots with no committees returns 0.
