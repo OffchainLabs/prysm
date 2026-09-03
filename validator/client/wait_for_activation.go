@@ -8,7 +8,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
-	octrace "go.opentelemetry.io/otel/trace"
 )
 
 // WaitForActivation checks whether the validator pubkey is in the active
@@ -49,10 +48,15 @@ func (v *validator) waitForActivation(ctx context.Context, accountsChanged bool)
 			continue
 		}
 
-		// Step 3: update validator statuses in cache.
+		// Step 3: update validator statuses in cache, waiting out a broken connection.
 		if err := v.updateValidatorStatusCache(ctx, validatingKeys); err != nil {
-			if err := v.waitBeforeRetry(ctx, span, err, "Connection broken while waiting for activation. Reconnecting..."); err != nil {
-				return err
+			if ctx.Err() != nil {
+				return errors.Wrap(ctx.Err(), "context closed while waiting for activation")
+			}
+			tracing.AnnotateError(span, err)
+			log.WithError(err).Error("Connection broken while waiting for activation. Reconnecting...")
+			if err := v.healthMonitor.WaitForHealthy(ctx); err != nil {
+				return errors.Wrap(err, "could not wait for a healthy beacon node")
 			}
 			continue
 		}
@@ -63,36 +67,14 @@ func (v *validator) waitForActivation(ctx context.Context, accountsChanged bool)
 		}
 
 		// Step 5: If no active validators, wait for accounts change, context cancellation, or next epoch.
-		select {
-		case <-ctx.Done():
-			log.Debug("Context closed, exiting WaitForActivation")
-			return errors.Wrap(ctx.Err(), "context closed while waiting for activation")
-		case <-v.accountsChangedChannel:
-			accountsChanged = true
-			continue
-		default:
-		}
 		changed, err := v.waitForNextEpoch(ctx, v.genesisTime)
 		if err != nil {
-			if err := v.waitBeforeRetry(ctx, span, err, "Failed to wait for next epoch. Reconnecting..."); err != nil {
-				return err
-			}
-			continue
+			return errors.Wrap(err, "could not wait for next epoch")
 		}
 		if changed {
 			accountsChanged = true
 		}
 	}
-}
-
-// waitBeforeRetry logs the failure and blocks until the beacon node is healthy again.
-func (v *validator) waitBeforeRetry(ctx context.Context, span octrace.Span, err error, message string) error {
-	tracing.AnnotateError(span, err)
-	log.WithError(err).Error(message)
-	if err := v.healthMonitor.WaitForHealthy(ctx); err != nil {
-		return errors.Wrap(err, "could not wait for a healthy beacon node")
-	}
-	return nil
 }
 
 // waitForAccountsChange blocks until the keymanager reports a key change.

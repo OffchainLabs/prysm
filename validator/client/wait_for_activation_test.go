@@ -396,6 +396,24 @@ func TestWaitForActivation_NextEpoch(t *testing.T) {
 		assert.LogsContain(t, hook, "Waiting until next epoch to check again")
 		assert.LogsContain(t, hook, "Validator activated")
 	})
+
+	t.Run("returns the context error when cancelled mid-wait", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		validatorClient := validatormock.NewMockValidatorClient(ctrl)
+		kp := randKeypair(t)
+		v := &validator{
+			validatorClient:        validatorClient,
+			km:                     newMockKeymanager(t, kp),
+			pubkeyToStatus:         make(map[[48]byte]*validatorStatus),
+			accountsChangedChannel: make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
+			genesisTime:            time.Now(), // a full epoch until the next one, so only the cancel ends the wait
+		}
+		validatorClient.EXPECT().MultipleValidatorStatus(gomock.Any(), gomock.Any()).DoAndReturn(allUnknownStatuses)
+		ctx, cancel := context.WithCancel(t.Context())
+		time.AfterFunc(100*time.Millisecond, cancel)
+
+		require.ErrorIs(t, v.WaitForActivation(ctx), context.Canceled)
+	})
 }
 
 func TestWaitForActivation_AttemptsReconnectionOnFailure(t *testing.T) {
@@ -463,5 +481,27 @@ func TestWaitForActivation_AttemptsReconnectionOnFailure(t *testing.T) {
 		assert.NoError(t, v.WaitForActivation(t.Context()))
 		assert.Equal(t, false, time.Now().Before(<-flipped), "retry completed before the monitor became healthy")
 		assert.LogsContain(t, hook, "Beacon node still unhealthy, waiting before retrying")
+	})
+
+	t.Run("returns the context error instead of waiting when the context is cancelled", func(t *testing.T) {
+		hook := logTest.NewGlobal()
+		ctrl := gomock.NewController(t)
+		validatorClient := validatormock.NewMockValidatorClient(ctrl)
+		kp := randKeypair(t)
+		v := &validator{
+			validatorClient:        validatorClient,
+			km:                     newMockKeymanager(t, kp),
+			pubkeyToStatus:         make(map[[48]byte]*validatorStatus),
+			accountsChangedChannel: make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		validatorClient.EXPECT().MultipleValidatorStatus(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(context.Context, *ethpb.MultipleValidatorStatusRequest) (*ethpb.MultipleValidatorStatusResponse, error) {
+				cancel()
+				return nil, context.Canceled
+			})
+
+		require.ErrorIs(t, v.WaitForActivation(ctx), context.Canceled)
+		assert.LogsDoNotContain(t, hook, "Connection broken while waiting for activation")
 	})
 }
