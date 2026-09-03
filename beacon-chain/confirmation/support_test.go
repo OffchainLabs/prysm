@@ -163,7 +163,8 @@ func TestSupportMap_Build(t *testing.T) {
 	tables := buildTestTables(t, committees, []primitives.Epoch{0}, 0)
 
 	sm := NewSupportMap()
-	sm.Build(votes, balances, tables, nil, fc)
+	sm.Build(votes, balances, tables, nil)
+	sm.Accumulate(fc)
 
 	// --- BlockSupportBetweenSlots (direct votes) ---
 	// Slot 1: validator 0 (100) votes root1, validator 1 (200) votes root2
@@ -229,7 +230,8 @@ func TestSupportMap_Equivocation(t *testing.T) {
 	tables := buildTestTables(t, committees, []primitives.Epoch{0}, len(balances))
 
 	sm := NewSupportMap()
-	sm.Build(votes, balances, tables, equivocating, fc)
+	sm.Build(votes, balances, tables, equivocating)
+	sm.Accumulate(fc)
 
 	// Validator 1 (200) is equivocating: excluded from support
 	require.Equal(t, uint64(400), sm.BlockSupportBetweenSlots(root1, 1, 1)) // 100 + 300

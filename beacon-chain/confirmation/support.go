@@ -77,20 +77,23 @@ type SupportMap struct {
 	balances     []uint64
 	equivocating map[primitives.ValidatorIndex]bool
 	tables       []*epochSlotTable
+	rootWeights  map[[32]byte]uint64
 	totalSupport map[[32]byte]uint64
 }
 
 func NewSupportMap() *SupportMap {
-	return &SupportMap{totalSupport: make(map[[32]byte]uint64)}
+	return &SupportMap{
+		rootWeights:  make(map[[32]byte]uint64),
+		totalSupport: make(map[[32]byte]uint64),
+	}
 }
 
-// Build snapshots the query inputs and aggregates totalSupport.
+// Build snapshots the query inputs and aggregates per-root vote weights, it reads no forkchoice state so it can run off the lock.
 func (s *SupportMap) Build(
 	votes []forkchoicetypes.VoteData,
 	balances []uint64,
 	tables []*epochSlotTable,
 	equivocating map[primitives.ValidatorIndex]bool,
-	fc ForkchoiceReader,
 ) {
 	s.votes = votes
 	s.balances = balances
@@ -99,8 +102,7 @@ func (s *SupportMap) Build(
 
 	hasEquivocating := len(equivocating) > 0
 
-	clear(s.totalSupport)
-	globalVotes := make(map[[32]byte]uint64)
+	clear(s.rootWeights)
 	for i, vote := range votes {
 		if vote.Root == ([32]byte{}) {
 			continue
@@ -111,9 +113,13 @@ func (s *SupportMap) Build(
 		if hasEquivocating && equivocating[primitives.ValidatorIndex(i)] {
 			continue
 		}
-		globalVotes[vote.Root] += balances[i]
+		s.rootWeights[vote.Root] += balances[i]
 	}
-	for root, bal := range globalVotes {
+}
+
+func (s *SupportMap) Accumulate(fc ForkchoiceReader) {
+	clear(s.totalSupport)
+	for root, bal := range s.rootWeights {
 		r := root
 		for {
 			s.totalSupport[r] += bal

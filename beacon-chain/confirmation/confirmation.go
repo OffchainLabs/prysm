@@ -98,7 +98,16 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 	}(time.Now())
 
 	f.fc.RLock()
-	f.updateFastConfirmationVariables(currentSlot)
+	headRoot := f.fc.CachedHeadRoot()
+	var unrealizedJustified forkchoicetypes.Checkpoint
+	if ujc := f.fc.UnrealizedJustifiedCheckpoint(); ujc != nil {
+		unrealizedJustified = *ujc
+	}
+	f.fc.RUnlock()
+
+	f.updateFastConfirmationVariables(currentSlot, headRoot, unrealizedJustified)
+
+	f.fc.RLock()
 	headSlot, headSlotErr := f.fc.Slot(f.currentSlotHead)
 	confirmedRoot := f.ConfirmedRoot()
 	confirmedSlot, confirmedSlotErr := f.fc.Slot(confirmedRoot)
@@ -192,12 +201,12 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 	}
 
 	f.fc.RLock()
-	defer f.fc.RUnlock()
-
 	equivocating := f.fc.SlashedIndices()
 	f.votesBuf = f.fc.VoteSnapshot(f.votesBuf[:0])
+	f.fc.RUnlock()
 	votes := f.votesBuf
-	f.support.Build(votes, balances, f.tables, equivocating, f.fc)
+
+	f.support.Build(votes, balances, f.tables, equivocating)
 
 	equivScorer := EquivocationScorer(f.support.EquivocationScore)
 
@@ -209,10 +218,18 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 			f.prevSupportBuf = NewSupportMap()
 		}
 		ps := f.prevSupportBuf
-		ps.Build(votes, prevBalances, f.tables, equivocating, f.fc)
+		ps.Build(votes, prevBalances, f.tables, equivocating)
 		prevSupport = ps
 		prevTotalActiveBalance = prevTotalActive
 		prevEquivScorer = EquivocationScorer(ps.EquivocationScore)
+	}
+
+	f.fc.RLock()
+	defer f.fc.RUnlock()
+
+	f.support.Accumulate(f.fc)
+	if prevSupport != f.support {
+		prevSupport.Accumulate(f.fc)
 	}
 
 	currentTarget, err := f.getCurrentTarget(ctx, slots.ToEpoch(currentSlot))
@@ -743,7 +760,7 @@ func (f *FastConfirmationRule) getCurrentTarget(ctx context.Context, currentEpoc
 //	    store.current_epoch_observed_justified_checkpoint = (
 //	        store.previous_epoch_greatest_unrealized_checkpoint)
 //	</spec>
-func (f *FastConfirmationRule) updateFastConfirmationVariables(currentSlot primitives.Slot) {
+func (f *FastConfirmationRule) updateFastConfirmationVariables(currentSlot primitives.Slot, headRoot [fieldparams.RootLength]byte, unrealizedJustified forkchoicetypes.Checkpoint) {
 	if f.variablesUpdatedSlot == currentSlot && currentSlot != 0 {
 		return
 	}
@@ -751,13 +768,12 @@ func (f *FastConfirmationRule) updateFastConfirmationVariables(currentSlot primi
 
 	// Rotate slot heads.
 	f.previousSlotHead = f.currentSlotHead
-	f.currentSlotHead = f.fc.CachedHeadRoot()
+	f.currentSlotHead = headRoot
 
 	// At the last slot of the epoch:
 	// snapshot the store-level unrealized justified checkpoint.
 	if slots.IsEpochStart(currentSlot + 1) {
-		ujc := f.fc.UnrealizedJustifiedCheckpoint()
-		f.previousEpochGreatestUnrealizedCheckpoint = *ujc
+		f.previousEpochGreatestUnrealizedCheckpoint = unrealizedJustified
 	}
 
 	// At epoch boundary: rotate observed justified checkpoints.
