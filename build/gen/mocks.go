@@ -51,7 +51,7 @@ func mockSpecsList() mockSpecs {
 		{ifaceMockPath + "/chain_client_mock.go", "validator_mock", ifacePkg, "ChainClient"},
 		{ifaceMockPath + "/node_client_mock.go", "validator_mock", ifacePkg, "NodeClient"},
 		{ifaceMockPath + "/validator_client_mock.go", "validator_mock", ifacePkg, "ValidatorClient"},
-		{ifaceMockPath + "/validator_mock.go", "validator_mock", ifacePkg, "Validator"},
+		{ifaceMockPath + "/validator_service_mock.go", "validator_mock", "github.com/OffchainLabs/prysm/v7/validator/rpc", "ValidatorService"},
 	}
 
 	beaconAPI := []sourceMock{

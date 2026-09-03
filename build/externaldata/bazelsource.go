@@ -39,6 +39,26 @@ func readBazelFile(relPath string) string {
 	return string(data)
 }
 
+// bazelMapValue extracts the string value for key from the Starlark dict assigned to
+// mapName (e.g. `mapName = { "key": "value", ... }`). It first narrows to the dict body so
+// a same-named key elsewhere in the file can't match.
+// lint:nopanic
+func bazelMapValue(content, file, mapName, key string) string {
+	dictRe := regexp.MustCompile(`(?s)` + regexp.QuoteMeta(mapName) + `\s*=\s*\{(.*?)\}`)
+	dm := dictRe.FindStringSubmatch(content)
+	if dm == nil {
+		panic(fmt.Sprintf("externaldata: map %q not found in %s", mapName, file))
+	}
+
+	kvRe := regexp.MustCompile(`"` + regexp.QuoteMeta(key) + `"\s*:\s*"([^"]*)"`)
+	m := kvRe.FindStringSubmatch(dm[1])
+	if m == nil {
+		panic(fmt.Sprintf("externaldata: key %q not found in map %q in %s", key, mapName, file))
+	}
+
+	return m[1]
+}
+
 // bazelVar extracts a top-level `name = "value"` string assignment.
 // lint:nopanic
 func bazelVar(content, file, name string) string {

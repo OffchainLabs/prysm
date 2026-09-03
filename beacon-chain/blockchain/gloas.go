@@ -3,6 +3,7 @@ package blockchain
 import (
 	"context"
 	"math"
+	stdtime "time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	coregloas "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
@@ -54,11 +55,11 @@ func (s *Service) IsBidCompatibleWithHead(bid interfaces.ROExecutionPayloadBid) 
 	return buildsOnParentPayload
 }
 
-func (s *Service) waitUntilEpoch(target primitives.Epoch, secondsPerSlot uint64) error {
+func (s *Service) waitUntilEpoch(target primitives.Epoch, slotDuration stdtime.Duration) error {
 	if slots.ToEpoch(s.CurrentSlot()) >= target {
 		return nil
 	}
-	ticker := slots.NewSlotTicker(s.genesisTime, secondsPerSlot)
+	ticker := slots.NewSlotTicker(s.genesisTime, slotDuration)
 	defer ticker.Done()
 	for {
 		select {
@@ -81,11 +82,11 @@ func (s *Service) runLatePayloadTasks() {
 	if cfg.GloasForkEpoch == math.MaxUint64 {
 		return
 	}
-	if err := s.waitUntilEpoch(cfg.GloasForkEpoch, cfg.SecondsPerSlot); err != nil {
+	if err := s.waitUntilEpoch(cfg.GloasForkEpoch, cfg.SlotDuration()); err != nil {
 		return
 	}
 	offset := cfg.SlotComponentDuration(cfg.PayloadDueBPS)
-	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, offset, cfg.SecondsPerSlot)
+	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, offset, cfg.SlotDuration())
 	defer ticker.Done()
 	for {
 		select {

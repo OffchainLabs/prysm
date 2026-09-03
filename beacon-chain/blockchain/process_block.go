@@ -104,6 +104,9 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 		log.WithError(err).Warn("Could not update head")
 	}
 	newBlockHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
+	// Weights are fresh here: the block's attestations were just fed to forkchoice and Head
+	// recomputed them. A block that lost the head race is still valid evidence about its parent.
+	s.checkBuilderPayloadFailure(cfg.roblock.Block(), cfg.postState)
 	if cfg.headRoot != cfg.roblock.Root() {
 		s.logNonCanonicalBlockReceived(cfg.roblock.Root(), cfg.headRoot)
 		return nil
@@ -466,7 +469,7 @@ func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.Availability
 			return nil
 		}
 		// Bound the wait so unavailable columns error and retry instead of stalling import.
-		daCtx, cancel := context.WithTimeout(ctx, time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second)
+		daCtx, cancel := context.WithTimeout(ctx, params.BeaconConfig().SlotDuration())
 		defer cancel()
 		if err := s.areDataColumnsAvailable(daCtx, roBlock.Root(), slot); err != nil {
 			return errors.Wrapf(err, "are data columns available for block %#x with slot %d", roBlock.Root(), slot)
@@ -487,7 +490,7 @@ func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.Availability
 }
 
 // the caller of this function must not hold a lock in forkchoice store.
-func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.BeaconState) error {
+func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.ReadOnlyBeaconState) error {
 	e := coreTime.CurrentEpoch(st)
 	if err := helpers.UpdateCommitteeCache(ctx, st, e); err != nil {
 		return errors.Wrap(err, "could not update committee cache")
@@ -553,7 +556,7 @@ func (s *Service) updateCachesAndEpochBoundary(ctx context.Context, currentSlot 
 	}
 }
 
-// Epoch boundary tasks: it copies the headState and updates the epoch boundary
+// Epoch boundary tasks: it advances the head state and updates the epoch boundary
 // caches. The caller of this function must not hold a lock in forkchoice store.
 func (s *Service) handleEpochBoundary(ctx context.Context, slot primitives.Slot, headState state.ReadOnlyBeaconState, blockRoot []byte) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.handleEpochBoundary")
@@ -565,12 +568,11 @@ func (s *Service) handleEpochBoundary(ctx context.Context, slot primitives.Slot,
 	if !slots.IsEpochEnd(slot) {
 		return nil
 	}
-	copied := headState.Copy()
-	copied, err := transition.ProcessSlotsUsingNextSlotCache(ctx, copied, blockRoot, slot+1)
+	st, err := transition.ProcessSlotsIfNeeded(ctx, headState, blockRoot, slot+1)
 	if err != nil {
 		return err
 	}
-	return s.updateEpochBoundaryCaches(ctx, copied)
+	return s.updateEpochBoundaryCaches(ctx, st)
 }
 
 // This feeds in the attestations included in the block to fork choice store. It's allows fork choice store
@@ -815,12 +817,9 @@ func (s *Service) runLateBlockTasks() {
 	}
 
 	cfg := params.BeaconConfig()
-	attDueBPS := cfg.AttestationDueBPS
-	if slots.ToEpoch(s.CurrentSlot()) >= cfg.GloasForkEpoch {
-		attDueBPS = cfg.AttestationDueBPSGloas
-	}
+	attDueBPS := cfg.AttestationDueBPSAtSlot(s.CurrentSlot())
 	attThreshold := cfg.SlotComponentDuration(attDueBPS)
-	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SecondsPerSlot)
+	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SlotDuration())
 	for {
 		select {
 		case slot := <-ticker.C():
@@ -828,7 +827,7 @@ func (s *Service) runLateBlockTasks() {
 				ticker.Done()
 				attDueBPS = cfg.AttestationDueBPSGloas
 				attThreshold = cfg.SlotComponentDuration(attDueBPS)
-				ticker = slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SecondsPerSlot)
+				ticker = slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SlotDuration())
 			}
 			s.goroutineCounter.sample(slot)
 			s.lateBlockTasks(s.ctx)
@@ -918,8 +917,8 @@ func (s *Service) isDataAvailable(
 		if len(kzgCommitments) == 0 {
 			return nil
 		}
-		// Initial sync fetches columns via range requests, so check availability synchronously rather than blocking on gossip; fail if missing.
-		if !s.inRegularSync() {
+		// Outside the gossip window, check availability synchronously rather than blocking; fail if missing.
+		if !s.canWaitForGossipSidecars(block.Slot()) {
 			available, err := s.dataColumnsAvailableNow(ctx, root, block.Slot())
 			if err != nil {
 				return errors.Wrap(err, "data columns available now")

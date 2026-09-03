@@ -1,6 +1,9 @@
 package ssz_test
 
 import (
+	"encoding/binary"
+	"errors"
+	"math"
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
@@ -132,4 +135,45 @@ func Test_MerkleizeListSSZ(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, expected, root)
 	})
+}
+
+// countingHashable roots itself as its own index, so misordered shards show up.
+type countingHashable uint64
+
+func (c countingHashable) HashTreeRoot() ([32]byte, error) {
+	if c == errAtIndex {
+		return [32]byte{}, errors.New("boom")
+	}
+	var r [32]byte
+	binary.LittleEndian.PutUint64(r[:8], uint64(c))
+	return r, nil
+}
+
+const errAtIndex = countingHashable(math.MaxUint64)
+
+func Test_ElementRoots_ParallelMatchesSerial(t *testing.T) {
+	for _, n := range []int{0, 1, 511, 512, 513, 1000, 5000, 5001} {
+		elements := make([]countingHashable, n)
+		for i := range elements {
+			elements[i] = countingHashable(i)
+		}
+		roots, err := ssz.ElementRoots(elements)
+		require.NoError(t, err)
+		require.Equal(t, n, len(roots))
+		for i := range elements {
+			require.Equal(t, uint64(i), binary.LittleEndian.Uint64(roots[i][:8]))
+		}
+	}
+}
+
+func Test_ElementRoots_PropagatesError(t *testing.T) {
+	for _, n := range []int{1, 513, 5000} {
+		elements := make([]countingHashable, n)
+		for i := range elements {
+			elements[i] = countingHashable(i)
+		}
+		elements[n-1] = errAtIndex
+		_, err := ssz.ElementRoots(elements)
+		require.ErrorContains(t, "boom", err)
+	}
 }

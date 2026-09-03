@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	prysmTrace "github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
@@ -26,7 +25,7 @@ var backOffPeriod = 10 * time.Second
 
 // runner encapsulates the main validator routine.
 type runner struct {
-	validator     iface.Validator
+	validator     *validator
 	healthMonitor *healthMonitor
 }
 
@@ -36,7 +35,7 @@ type runner struct {
 // Order of operations:
 // 1 - Initialize validator data
 // 2 - Wait for validator activation
-func newRunner(ctx context.Context, v iface.Validator, monitor *healthMonitor) (*runner, error) {
+func newRunner(ctx context.Context, v *validator, monitor *healthMonitor) (*runner, error) {
 	// Initialize validator and get head slot
 	err := initialize(ctx, v)
 	if err != nil {
@@ -111,8 +110,7 @@ func (r *runner) run(ctx context.Context) {
 			log := log.WithField("slot", slot)
 			log.WithField("deadline", deadline).Debug("Set deadline for proposals and attestations")
 
-			// Keep trying to update assignments if they are nil or if we are past an
-			// epoch transition in the beacon node's state.
+			// Refresh assignments at the epoch boundary.
 			if slots.IsEpochStart(slot) {
 				deadline = v.SlotDeadline(slot + params.BeaconConfig().SlotsPerEpoch - 1)
 				dutiesCtx, dutiesCancel := context.WithDeadline(ctx, deadline)
@@ -124,10 +122,16 @@ func (r *runner) run(ctx context.Context) {
 					continue
 				}
 				dutiesCancel()
-			} else {
-				// Mid-epoch: retry any failed next-epoch duties
-				v.MaybeRetryMissingNextDuties(ctx, slot)
 			}
+
+			// Fetch the deferred next-epoch duties in the background. Pre-Gloas this
+			// no-ops: only the split path records the indices needsNextFetch requires.
+			if shouldFetchNextDuties(slot) {
+				v.MaybeFetchNextDuties(ctx, slot)
+			}
+
+			// Background doppelganger check for keys quarantined by a key reload.
+			v.CheckDoppelGangerMidEpoch(ctx, slot)
 
 			// call push proposer settings often to account for the following edge cases:
 			// proposer is activated at the start of epoch and tries to propose immediately
@@ -162,7 +166,11 @@ func (r *runner) run(ctx context.Context) {
 	}
 }
 
-func onAccountsChanged(ctx context.Context, v iface.Validator, current [][48]byte) {
+func shouldFetchNextDuties(slot primitives.Slot) bool {
+	return slots.SinceEpochStarts(slot) >= nextDutiesFetchSlot()
+}
+
+func onAccountsChanged(ctx context.Context, v *validator, current [][48]byte) {
 	ctx, span := prysmTrace.StartSpan(ctx, "validator.accountsChanged")
 	defer span.End()
 
@@ -182,7 +190,7 @@ func onAccountsChanged(ctx context.Context, v iface.Validator, current [][48]byt
 	}
 }
 
-func initialize(ctx context.Context, v iface.Validator) error {
+func initialize(ctx context.Context, v *validator) error {
 	ctx, span := prysmTrace.StartSpan(ctx, "validator.initialize")
 	defer span.End()
 
@@ -190,6 +198,7 @@ func initialize(ctx context.Context, v iface.Validator) error {
 	defer ticker.Stop()
 
 	firstTime := true
+	kmInitialized := false
 
 	for {
 		if !firstTime {
@@ -211,8 +220,12 @@ func initialize(ctx context.Context, v iface.Validator) error {
 			return errors.Wrap(err, "could not determine if beacon chain started")
 		}
 
-		if err := v.WaitForKeymanagerInitialization(ctx); err != nil {
-			return errors.Wrap(err, "Wallet is not ready")
+		// Initialize the keymanager once per runner.
+		if !kmInitialized {
+			if err := v.WaitForKeymanagerInitialization(ctx); err != nil {
+				return errors.Wrap(err, "Wallet is not ready")
+			}
+			kmInitialized = true
 		}
 
 		if err := v.WaitForSync(ctx); err != nil {
@@ -228,7 +241,7 @@ func initialize(ctx context.Context, v iface.Validator) error {
 			return errors.Wrap(err, "could not wait for validator activation")
 		}
 
-		if err := v.CheckDoppelGanger(ctx); err != nil {
+		if err := v.CheckDoppelGangerAtStartup(ctx); err != nil {
 			if isConnectionError(err) {
 				log.WithError(err).Warn("Could not wait for checking doppelganger")
 				continue
@@ -242,24 +255,24 @@ func initialize(ctx context.Context, v iface.Validator) error {
 	return nil
 }
 
-func performRoles(slotCtx context.Context, allRoles map[[48]byte][]iface.ValidatorRole, v iface.Validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {
+func performRoles(slotCtx context.Context, allRoles map[[48]byte][]validatorRole, v *validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {
 	for pubKey, roles := range allRoles {
 		for _, role := range roles {
 			wg.Go(func() {
 				switch role {
-				case iface.RoleAttester:
+				case roleAttester:
 					v.SubmitAttestation(slotCtx, slot, pubKey)
-				case iface.RoleProposer:
+				case roleProposer:
 					v.ProposeBlock(slotCtx, slot, pubKey)
-				case iface.RoleAggregator:
+				case roleAggregator:
 					v.SubmitAggregateAndProof(slotCtx, slot, pubKey)
-				case iface.RoleSyncCommittee:
+				case roleSyncCommittee:
 					v.SubmitSyncCommitteeMessage(slotCtx, slot, pubKey)
-				case iface.RoleSyncCommitteeAggregator:
+				case roleSyncCommitteeAggregator:
 					v.SubmitSignedContributionAndProof(slotCtx, slot, pubKey)
-				case iface.RolePTCMember:
+				case rolePTCMember:
 					v.SubmitPayloadAttestation(slotCtx, slot, pubKey)
-				case iface.RoleUnknown:
+				case roleUnknown:
 					log.WithField("pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:]))).Trace("No active roles, doing nothing")
 				default:
 					log.Warnf("Unhandled role %v", role)

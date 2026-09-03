@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/api"
 	builderapi "github.com/OffchainLabs/prysm/v7/api/client/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
@@ -43,11 +44,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
 	attaggregation "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation/aggregation/attestations"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -58,6 +59,7 @@ import (
 	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
@@ -939,6 +941,20 @@ func injectSlashings(t *testing.T, st state.BeaconState, keys []bls.SecretKey, s
 	return proposerSlashings, attSlashings
 }
 
+func TestBuilderUrlFromContext(t *testing.T) {
+	t.Run("no metadata", func(t *testing.T) {
+		require.Equal(t, "", builderUrlFromContext(t.Context()))
+	})
+	t.Run("metadata without builder url", func(t *testing.T) {
+		ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs("other-key", "v"))
+		require.Equal(t, "", builderUrlFromContext(ctx))
+	})
+	t.Run("builder url present", func(t *testing.T) {
+		ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs(api.BuilderUrlHeader, "http://builder.example"))
+		require.Equal(t, "http://builder.example", builderUrlFromContext(ctx))
+	})
+}
+
 func TestProposer_ProposeBlock_OK(t *testing.T) {
 	// Initialize KZG for Fulu blocks
 	require.NoError(t, kzg.Start())
@@ -985,9 +1001,9 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 				blockToPropose := util.NewBlindedBeaconBlockCapella()
 				blockToPropose.Block.Slot = 5
 				blockToPropose.Block.ParentRoot = parent[:]
-				txRoot, err := ssz.TransactionsRoot([][]byte{})
+				txRoot, err := wrappers.TransactionsRoot([][]byte{})
 				require.NoError(t, err)
-				withdrawalsRoot, err := ssz.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
+				withdrawalsRoot, err := wrappers.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
 				require.NoError(t, err)
 				blockToPropose.Block.Body.ExecutionPayloadHeader.TransactionsRoot = txRoot[:]
 				blockToPropose.Block.Body.ExecutionPayloadHeader.WithdrawalsRoot = withdrawalsRoot[:]
@@ -1002,9 +1018,9 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 				blockToPropose := util.NewBlindedBeaconBlockCapella()
 				blockToPropose.Block.Slot = 5
 				blockToPropose.Block.ParentRoot = parent[:]
-				txRoot, err := ssz.TransactionsRoot([][]byte{})
+				txRoot, err := wrappers.TransactionsRoot([][]byte{})
 				require.NoError(t, err)
-				withdrawalsRoot, err := ssz.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
+				withdrawalsRoot, err := wrappers.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
 				require.NoError(t, err)
 				blockToPropose.Block.Body.ExecutionPayloadHeader.TransactionsRoot = txRoot[:]
 				blockToPropose.Block.Body.ExecutionPayloadHeader.WithdrawalsRoot = withdrawalsRoot[:]
@@ -1065,9 +1081,9 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 				blockToPropose := util.NewBlindedBeaconBlockDeneb()
 				blockToPropose.Message.Slot = 5
 				blockToPropose.Message.ParentRoot = parent[:]
-				txRoot, err := ssz.TransactionsRoot([][]byte{})
+				txRoot, err := wrappers.TransactionsRoot([][]byte{})
 				require.NoError(t, err)
-				withdrawalsRoot, err := ssz.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
+				withdrawalsRoot, err := wrappers.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
 				require.NoError(t, err)
 				blockToPropose.Message.Body.ExecutionPayloadHeader.TransactionsRoot = txRoot[:]
 				blockToPropose.Message.Body.ExecutionPayloadHeader.WithdrawalsRoot = withdrawalsRoot[:]
@@ -1083,9 +1099,9 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 				blockToPropose := util.NewBlindedBeaconBlockDeneb()
 				blockToPropose.Message.Slot = 5
 				blockToPropose.Message.ParentRoot = parent[:]
-				txRoot, err := ssz.TransactionsRoot([][]byte{})
+				txRoot, err := wrappers.TransactionsRoot([][]byte{})
 				require.NoError(t, err)
-				withdrawalsRoot, err := ssz.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
+				withdrawalsRoot, err := wrappers.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
 				require.NoError(t, err)
 				blockToPropose.Message.Body.ExecutionPayloadHeader.TransactionsRoot = txRoot[:]
 				blockToPropose.Message.Body.ExecutionPayloadHeader.WithdrawalsRoot = withdrawalsRoot[:]
@@ -1259,9 +1275,9 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 				blockToPropose := util.NewBlindedBeaconBlockFulu()
 				blockToPropose.Message.Slot = 5
 				blockToPropose.Message.ParentRoot = parent[:]
-				txRoot, err := ssz.TransactionsRoot([][]byte{})
+				txRoot, err := wrappers.TransactionsRoot([][]byte{})
 				require.NoError(t, err)
-				withdrawalsRoot, err := ssz.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
+				withdrawalsRoot, err := wrappers.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
 				require.NoError(t, err)
 				blockToPropose.Message.Body.ExecutionPayloadHeader.TransactionsRoot = txRoot[:]
 				blockToPropose.Message.Body.ExecutionPayloadHeader.WithdrawalsRoot = withdrawalsRoot[:]

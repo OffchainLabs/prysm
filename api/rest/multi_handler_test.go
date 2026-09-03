@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -207,39 +208,32 @@ func TestMultiHandlerPostSSZ(t *testing.T) {
 		srv := sszServer(t, "accepted")
 
 		mh := multi(t, srv.URL)
-		got, header, err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
-		require.NoError(t, err)
-		assert.Equal(t, "accepted", string(got))
-		assert.Equal(t, api.OctetStreamMediaType, header.Get("Content-Type"))
+		requirePostSSZOK(t, mh, body)
 	})
 
-	t.Run("returns the first successful response across the fleet", func(t *testing.T) {
-		a := sszServer(t, "accepted")
-		b := sszServer(t, "accepted")
+	t.Run("succeeds when any node accepts", func(t *testing.T) {
+		bad := jsonServer(t, 0, http.StatusInternalServerError, nil)
+		good := sszServer(t, "accepted")
 
-		mh := multi(t, a.URL, b.URL)
-		got, _, err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
-		require.NoError(t, err)
-		assert.Equal(t, "accepted", string(got))
+		mh := multi(t, bad.URL, good.URL)
+		requirePostSSZOK(t, mh, body)
 	})
 
-	// In a mixed fleet where one node accepts SSZ and another rejects it with 406,
-	// PostSSZ must surface the 406 so the caller can re-broadcast via JSON, rather
-	// than hiding it behind the accepting node's success.
-	t.Run("surfaces a 406 so the caller can fall back to JSON", func(t *testing.T) {
+	// In a mixed fleet where one node accepts SSZ and another rejects the body with 415,
+	// PostSSZ must surface the 415 so the caller can re-broadcast via JSON, rather than
+	// hiding it behind the accepting node's success and never reaching the rejecting node.
+	t.Run("surfaces a 415 so the caller can fall back to JSON", func(t *testing.T) {
 		accepts := sszServer(t, "accepted")
 		rejects := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", api.JsonMediaType)
-			w.WriteHeader(http.StatusNotAcceptable)
-			_, _ = w.Write([]byte(`{"code":406,"message":"needs json"}`))
+			http.Error(w, "Unsupported media type: application/octet-stream", http.StatusUnsupportedMediaType)
 		}))
 		t.Cleanup(rejects.Close)
 
 		mh := multi(t, accepts.URL, rejects.URL)
-		_, _, err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
+		err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
 		require.NotNil(t, err)
-		assert.Equal(t, true, errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusNotAcceptable}),
-			"a node's 406 must surface so the caller falls back to JSON")
+		assert.Equal(t, true, errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}),
+			"a node's 415 must surface so the caller falls back to JSON")
 	})
 
 	t.Run("returns the joined error when every node fails", func(t *testing.T) {
@@ -247,7 +241,7 @@ func TestMultiHandlerPostSSZ(t *testing.T) {
 		bad2 := jsonServer(t, 0, http.StatusBadGateway, nil)
 
 		mh := multi(t, bad1.URL, bad2.URL)
-		_, _, err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
+		err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
 		require.NotNil(t, err)
 	})
 
@@ -263,8 +257,222 @@ func TestMultiHandlerPostSSZ(t *testing.T) {
 		cancel()
 
 		mh := multi(t, srv.URL, srv.URL)
-		_, _, err := mh.PostSSZ(ctx, "/publish", nil, bytes.NewBufferString(body))
+		err := mh.PostSSZ(ctx, "/publish", nil, bytes.NewBufferString(body))
 		assert.Equal(t, true, errors.Is(err, context.Canceled))
+	})
+}
+
+func TestMultiHandlerPostSSZWithFallback(t *testing.T) {
+	// A strict SSZ response preference can draw a 406 from servers that only
+	// serve JSON, so plain posts must accept only JSON responses.
+	t.Run("accepts only JSON responses", func(t *testing.T) {
+		var acceptHeader atomic.Value
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			acceptHeader.Store(r.Header.Get("Accept"))
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(srv.Close)
+
+		mh := multi(t, srv.URL)
+		require.NoError(t, mh.PostSSZWithFallback(
+			context.Background(),
+			"/publish",
+			nil,
+			func() ([]byte, error) { return []byte("ssz"), nil },
+			func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+		))
+		assert.Equal(t, api.JsonMediaType, acceptHeader.Load())
+	})
+
+	t.Run("tracks support per node and endpoint", func(t *testing.T) {
+		var acceptsSSZ, acceptsJSON, rejectsSSZ, rejectsJSON int32
+		accepts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Content-Type") == api.OctetStreamMediaType {
+				atomic.AddInt32(&acceptsSSZ, 1)
+			} else {
+				atomic.AddInt32(&acceptsJSON, 1)
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(accepts.Close)
+		rejects := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Content-Type") == api.OctetStreamMediaType {
+				atomic.AddInt32(&rejectsSSZ, 1)
+				http.Error(w, "unsupported", http.StatusUnsupportedMediaType)
+				return
+			}
+			atomic.AddInt32(&rejectsJSON, 1)
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(rejects.Close)
+
+		mh := multi(t, accepts.URL, rejects.URL)
+		post := func(endpoint string) error {
+			err := mh.PostSSZWithFallback(
+				context.Background(),
+				endpoint,
+				nil,
+				func() ([]byte, error) { return []byte("ssz"), nil },
+				func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+			)
+			return err
+		}
+
+		require.NoError(t, post("/publish"))
+		require.NoError(t, post("/publish"))
+		require.NoError(t, post("/other"))
+
+		assert.Equal(t, int32(3), atomic.LoadInt32(&acceptsSSZ))
+		assert.Equal(t, int32(0), atomic.LoadInt32(&acceptsJSON), "SSZ-capable node must not be downgraded or receive a duplicate")
+		assert.Equal(t, int32(2), atomic.LoadInt32(&rejectsSSZ), "415 must be cached for only the rejecting node and endpoint")
+		assert.Equal(t, int32(3), atomic.LoadInt32(&rejectsJSON))
+	})
+
+	t.Run("non-415 does not poison cache", func(t *testing.T) {
+		var sszHits, jsonHits int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Content-Type") == api.OctetStreamMediaType {
+				atomic.AddInt32(&sszHits, 1)
+			} else {
+				atomic.AddInt32(&jsonHits, 1)
+			}
+			http.Error(w, "boom", http.StatusInternalServerError)
+		}))
+		t.Cleanup(srv.Close)
+
+		mh := multi(t, srv.URL)
+		for range 2 {
+			err := mh.PostSSZWithFallback(
+				context.Background(),
+				"/publish",
+				nil,
+				func() ([]byte, error) { return []byte("ssz"), nil },
+				func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+			)
+			require.NotNil(t, err)
+		}
+
+		assert.Equal(t, int32(2), atomic.LoadInt32(&sszHits))
+		assert.Equal(t, int32(0), atomic.LoadInt32(&jsonHits))
+	})
+
+	t.Run("canceled caller still falls back", func(t *testing.T) {
+		var (
+			release     = make(chan struct{})
+			releaseOnce sync.Once
+			jsonHits    int32
+		)
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Content-Type") == api.OctetStreamMediaType {
+				<-release
+				http.Error(w, "unsupported", http.StatusUnsupportedMediaType)
+				return
+			}
+			atomic.AddInt32(&jsonHits, 1)
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(srv.Close)
+		t.Cleanup(func() { releaseOnce.Do(func() { close(release) }) })
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		mh := multi(t, srv.URL, srv.URL)
+		err := mh.PostSSZWithFallback(
+			ctx,
+			"/publish",
+			nil,
+			func() ([]byte, error) { return []byte("ssz"), nil },
+			func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+		)
+		assert.Equal(t, true, errors.Is(err, context.Canceled))
+
+		releaseOnce.Do(func() { close(release) })
+		require.NoError(t, waitFor(func() bool { return atomic.LoadInt32(&jsonHits) == 2 }))
+	})
+
+	t.Run("single node honors cancellation", func(t *testing.T) {
+		hit := make(chan struct{}, 1)
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			hit <- struct{}{}
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(srv.Close)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		mh := multi(t, srv.URL)
+		err := mh.PostSSZWithFallback(
+			ctx,
+			"/publish",
+			nil,
+			func() ([]byte, error) { return []byte("ssz"), nil },
+			func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+		)
+		assert.Equal(t, true, errors.Is(err, context.Canceled))
+
+		select {
+		case <-hit:
+			t.Fatal("single-node publish ignored caller cancellation")
+		case <-time.After(50 * time.Millisecond):
+		}
+	})
+
+	t.Run("cached node skips SSZ marshal", func(t *testing.T) {
+		var sszHits, jsonHits, sszMarshals int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Content-Type") == api.OctetStreamMediaType {
+				atomic.AddInt32(&sszHits, 1)
+				http.Error(w, "unsupported", http.StatusUnsupportedMediaType)
+				return
+			}
+			atomic.AddInt32(&jsonHits, 1)
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(srv.Close)
+
+		mh := multi(t, srv.URL)
+		for range 2 {
+			err := mh.PostSSZWithFallback(
+				context.Background(),
+				"/publish",
+				nil,
+				func() ([]byte, error) {
+					atomic.AddInt32(&sszMarshals, 1)
+					return []byte("ssz"), nil
+				},
+				func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+			)
+			require.NoError(t, err)
+		}
+
+		assert.Equal(t, int32(1), atomic.LoadInt32(&sszHits))
+		assert.Equal(t, int32(1), atomic.LoadInt32(&sszMarshals))
+		assert.Equal(t, int32(2), atomic.LoadInt32(&jsonHits))
+	})
+
+	t.Run("retries SSZ after cache expires", func(t *testing.T) {
+		var sszHits int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Content-Type") == api.OctetStreamMediaType {
+				atomic.AddInt32(&sszHits, 1)
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(srv.Close)
+
+		mh := multi(t, srv.URL)
+		mh.sszUnsupported.Store(sszSupportKey{host: srv.URL, endpoint: "/publish"}, time.Now().Add(-sszUnsupportedTTL))
+		err := mh.PostSSZWithFallback(
+			context.Background(),
+			"/publish",
+			nil,
+			func() ([]byte, error) { return []byte("ssz"), nil },
+			func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+		)
+		require.NoError(t, err)
+
+		assert.Equal(t, int32(1), atomic.LoadInt32(&sszHits))
 	})
 }
 
@@ -281,7 +489,7 @@ func TestReadUntil(t *testing.T) {
 			return "matched", true, true, nil
 		}
 
-		val, matched, err := readUntil(context.Background(), nil, getConfig{}, accept, round, noopFn)
+		val, matched, err := queryUntilAccepted(context.Background(), nil, queryConfig{}, accept, round, noopFn)
 		require.NoError(t, err)
 		assert.Equal(t, true, matched)
 		assert.Equal(t, "matched", val)
@@ -293,7 +501,7 @@ func TestReadUntil(t *testing.T) {
 			return "fallback", false, true, nil
 		}
 
-		val, matched, err := readUntil(context.Background(), nil, getConfig{}, accept, round, noopFn)
+		val, matched, err := queryUntilAccepted(context.Background(), nil, queryConfig{}, accept, round, noopFn)
 		require.NoError(t, err)
 		assert.Equal(t, false, matched)
 		assert.Equal(t, "fallback", val)
@@ -305,7 +513,7 @@ func TestReadUntil(t *testing.T) {
 			return "", false, false, []error{sentinel}
 		}
 
-		_, matched, err := readUntil(context.Background(), nil, getConfig{}, accept, round, noopFn)
+		_, matched, err := queryUntilAccepted(context.Background(), nil, queryConfig{}, accept, round, noopFn)
 		assert.Equal(t, false, matched)
 		require.NotNil(t, err)
 		assert.Equal(t, true, errors.Is(err, sentinel))
@@ -321,8 +529,8 @@ func TestReadUntil(t *testing.T) {
 			return "stale", false, true, nil
 		}
 
-		cfg := getConfig{pollInterval: time.Millisecond, deadline: time.Now().Add(2 * time.Second)}
-		val, matched, err := readUntil(context.Background(), nil, cfg, accept, round, noopFn)
+		cfg := queryConfig{pollInterval: time.Millisecond, deadline: time.Now().Add(2 * time.Second)}
+		val, matched, err := queryUntilAccepted(context.Background(), nil, cfg, accept, round, noopFn)
 		require.NoError(t, err)
 		assert.Equal(t, true, matched)
 		assert.Equal(t, "fresh", val)
@@ -336,8 +544,8 @@ func TestReadUntil(t *testing.T) {
 			return "stale", false, true, nil // usable 2xx response, but not a match
 		}
 
-		cfg := getConfig{pollInterval: time.Millisecond, deadline: time.Now().Add(2 * time.Second), repollMode: UntilAny2xx}
-		val, matched, err := readUntil(context.Background(), nil, cfg, accept, round, noopFn)
+		cfg := queryConfig{pollInterval: time.Millisecond, deadline: time.Now().Add(2 * time.Second), repollMode: UntilAny2xx}
+		val, matched, err := queryUntilAccepted(context.Background(), nil, cfg, accept, round, noopFn)
 		require.NoError(t, err)
 		assert.Equal(t, false, matched)
 		assert.Equal(t, "stale", val)
@@ -354,8 +562,8 @@ func TestReadUntil(t *testing.T) {
 			return "", false, false, nil // total failure: no usable response this round
 		}
 
-		cfg := getConfig{pollInterval: time.Millisecond, deadline: time.Now().Add(2 * time.Second), repollMode: UntilAny2xx}
-		val, matched, err := readUntil(context.Background(), nil, cfg, accept, round, noopFn)
+		cfg := queryConfig{pollInterval: time.Millisecond, deadline: time.Now().Add(2 * time.Second), repollMode: UntilAny2xx}
+		val, matched, err := queryUntilAccepted(context.Background(), nil, cfg, accept, round, noopFn)
 		require.NoError(t, err)
 		assert.Equal(t, false, matched)
 		assert.Equal(t, "stale", val)
@@ -374,8 +582,8 @@ func TestReadUntil(t *testing.T) {
 			cancel()
 		}()
 
-		cfg := getConfig{pollInterval: time.Hour, deadline: time.Now().Add(time.Hour)}
-		val, matched, err := readUntil(ctx, nil, cfg, accept, round, noopFn)
+		cfg := queryConfig{pollInterval: time.Hour, deadline: time.Now().Add(time.Hour)}
+		val, matched, err := queryUntilAccepted(ctx, nil, cfg, accept, round, noopFn)
 		require.NoError(t, err)
 		assert.Equal(t, false, matched)
 		assert.Equal(t, "stale", val)
@@ -392,8 +600,8 @@ func TestReadUntil(t *testing.T) {
 			cancel()
 		}()
 
-		cfg := getConfig{pollInterval: time.Hour, deadline: time.Now().Add(time.Hour)}
-		_, matched, err := readUntil(ctx, nil, cfg, accept, round, noopFn)
+		cfg := queryConfig{pollInterval: time.Hour, deadline: time.Now().Add(time.Hour)}
+		_, matched, err := queryUntilAccepted(ctx, nil, cfg, accept, round, noopFn)
 		assert.Equal(t, false, matched)
 		require.NotNil(t, err)
 		assert.Equal(t, true, errors.Is(err, context.Canceled))
@@ -413,7 +621,7 @@ func TestRoundFor(t *testing.T) {
 			return "ok", nil
 		}
 
-		round := roundFor[string](getConfig{race: true})
+		round := roundFor[string](queryConfig{race: true})
 		handlers := []*handler{newTestHandler("http://a"), newTestHandler("http://b")}
 		val, matched, ok, _ := round(context.Background(), handlers, time.Time{}, accept, fn)
 		assert.Equal(t, true, matched)
@@ -429,7 +637,7 @@ func TestRoundFor(t *testing.T) {
 			return "ok", nil
 		}
 
-		round := roundFor[string](getConfig{race: false})
+		round := roundFor[string](queryConfig{race: false})
 		handlers := []*handler{newTestHandler("http://a"), newTestHandler("http://b")}
 		val, matched, ok, _ := round(context.Background(), handlers, time.Time{}, accept, fn)
 		assert.Equal(t, true, matched)
@@ -750,4 +958,205 @@ func sszServer(t *testing.T, body string) *httptest.Server {
 	}))
 	t.Cleanup(srv.Close)
 	return srv
+}
+
+// requirePostSSZOK posts and asserts acceptance.
+func requirePostSSZOK(t *testing.T, mh *multiHandler, body string) {
+	t.Helper()
+	err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
+	require.NoError(t, err)
+}
+
+func TestMultiHandlerRequestSSZWithFallback(t *testing.T) {
+	t.Run("returns accepting node body and headers", func(t *testing.T) {
+		var acceptHeader atomic.Value
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			acceptHeader.Store(r.Header.Get("Accept"))
+			w.Header().Set("X-Test-Header", "yes")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("resp-body"))
+		}))
+		t.Cleanup(srv.Close)
+
+		mh := multi(t, srv.URL)
+		body, header, err := mh.RequestSSZWithFallback(
+			context.Background(),
+			"/produce",
+			nil,
+			func() ([]byte, error) { return []byte("ssz"), nil },
+			func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "resp-body", string(body))
+		assert.Equal(t, "yes", header.Get("X-Test-Header"))
+		assert.Equal(t, sszPreferredAccept(), acceptHeader.Load())
+	})
+
+	t.Run("json fallback response is returned on 415", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Content-Type") == api.OctetStreamMediaType {
+				http.Error(w, "unsupported", http.StatusUnsupportedMediaType)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("json-accepted"))
+		}))
+		t.Cleanup(srv.Close)
+
+		mh := multi(t, srv.URL)
+		body, _, err := mh.RequestSSZWithFallback(
+			context.Background(),
+			"/produce",
+			nil,
+			func() ([]byte, error) { return []byte("ssz"), nil },
+			func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "json-accepted", string(body))
+	})
+
+	t.Run("no options try nodes in order and fail over", func(t *testing.T) {
+		bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "boom", http.StatusInternalServerError)
+		}))
+		t.Cleanup(bad.Close)
+		good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("good-body"))
+		}))
+		t.Cleanup(good.Close)
+
+		mh := multi(t, bad.URL, good.URL)
+		body, _, err := mh.RequestSSZWithFallback(
+			context.Background(),
+			"/produce",
+			nil,
+			func() ([]byte, error) { return []byte("ssz"), nil },
+			func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "good-body", string(body))
+	})
+
+	t.Run("no options stop at the first accepting node", func(t *testing.T) {
+		var firstHits, secondHits int32
+		first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			atomic.AddInt32(&firstHits, 1)
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(first.Close)
+		second := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			atomic.AddInt32(&secondHits, 1)
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(second.Close)
+
+		mh := multi(t, first.URL, second.URL)
+		_, _, err := mh.RequestSSZWithFallback(
+			context.Background(),
+			"/produce",
+			nil,
+			func() ([]byte, error) { return []byte("ssz"), nil },
+			func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+		)
+		require.NoError(t, err)
+		assert.Equal(t, int32(1), atomic.LoadInt32(&firstHits))
+		assert.Equal(t, int32(0), atomic.LoadInt32(&secondHits), "in-order read must not contact nodes past the first success")
+	})
+
+	t.Run("no options join errors when every node fails", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "boom", http.StatusInternalServerError)
+		}))
+		t.Cleanup(srv.Close)
+
+		mh := multi(t, srv.URL, srv.URL)
+		_, _, err := mh.RequestSSZWithFallback(
+			context.Background(),
+			"/produce",
+			nil,
+			func() ([]byte, error) { return []byte("ssz"), nil },
+			func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+		)
+		require.NotNil(t, err)
+		assert.StringContains(t, "boom", err.Error())
+	})
+
+	t.Run("options race nodes and do not wait for the slowest", func(t *testing.T) {
+		fast := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("fast"))
+		}))
+		t.Cleanup(fast.Close)
+		slowRelease := make(chan struct{})
+		slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			<-slowRelease
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("slow"))
+		}))
+		t.Cleanup(func() { close(slowRelease); slow.Close() })
+
+		mh := multi(t, slow.URL, fast.URL)
+		start := time.Now()
+		body, _, err := mh.RequestSSZWithFallback(
+			context.Background(),
+			"/produce",
+			nil,
+			func() ([]byte, error) { return []byte("ssz"), nil },
+			func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+			WithRace(),
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "fast", string(body))
+		require.Equal(t, true, time.Since(start) < 2*time.Second, "must not wait for the slow node")
+	})
+
+	t.Run("memo key ignores query parameters", func(t *testing.T) {
+		var sszHits int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Content-Type") == api.OctetStreamMediaType {
+				atomic.AddInt32(&sszHits, 1)
+				http.Error(w, "unsupported", http.StatusUnsupportedMediaType)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(srv.Close)
+
+		mh := multi(t, srv.URL)
+		for _, endpoint := range []string{"/produce/1?randao=aa", "/produce/2?randao=bb", "/produce/3?randao=cc"} {
+			_, _, err := mh.RequestSSZWithFallback(
+				context.Background(),
+				endpoint,
+				nil,
+				func() ([]byte, error) { return []byte("ssz"), nil },
+				func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+			)
+			require.NoError(t, err)
+		}
+		assert.Equal(t, int32(1), atomic.LoadInt32(&sszHits), "the same route with varying slot segments must probe SSZ once")
+
+		var sszHits2 int32
+		srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Content-Type") == api.OctetStreamMediaType {
+				atomic.AddInt32(&sszHits2, 1)
+				http.Error(w, "unsupported", http.StatusUnsupportedMediaType)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(srv2.Close)
+		mh2 := multi(t, srv2.URL)
+		for _, endpoint := range []string{"/produce?slot=1", "/produce?slot=2", "/produce?slot=3"} {
+			_, _, err := mh2.RequestSSZWithFallback(
+				context.Background(),
+				endpoint,
+				nil,
+				func() ([]byte, error) { return []byte("ssz"), nil },
+				func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+			)
+			require.NoError(t, err)
+		}
+		assert.Equal(t, int32(1), atomic.LoadInt32(&sszHits2), "same path with different query params must probe SSZ once")
+	})
 }

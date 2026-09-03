@@ -149,8 +149,7 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 			}
 
 			// Calculate the deadline time by adding three slots duration to the current time
-			secondsPerSlot := params.BeaconConfig().SecondsPerSlot
-			threeSlotDuration := 3 * time.Duration(secondsPerSlot) * time.Second
+			threeSlotDuration := 3 * params.BeaconConfig().SlotDuration()
 			ctxWithTimeout, cancelFunction := context.WithTimeout(ctx, threeSlotDuration)
 			// Process and broadcast the block.
 			if err := s.processAndBroadcastBlock(ctxWithTimeout, b, blkRoot); err != nil {
@@ -161,8 +160,9 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 			cancelFunction()
 
 			// Process synchronously because it's likely that the next pending block depends on it.
-			s.processPendingPayloadEnvelope(ctx, blkRoot)
+			// Columns first: the envelope's availability check reads them from storage.
 			s.processPendingGloasColumns(s.ctx, blkRoot, b)
+			s.processPendingPayloadEnvelope(ctx, blkRoot)
 			s.processPendingPayloadAttestation(ctx, blkRoot)
 			blkRoots = append(blkRoots, blkRoot)
 

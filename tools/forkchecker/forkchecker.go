@@ -54,7 +54,7 @@ func main() {
 		clients[endpt] = pb.NewBeaconChainClient(conn)
 	}
 
-	ticker := time.NewTicker(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	ticker := time.NewTicker(params.BeaconConfig().SlotDuration())
 	go func() {
 		for range ticker.C {
 			if *compare {

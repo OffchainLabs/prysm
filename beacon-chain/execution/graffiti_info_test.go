@@ -8,12 +8,13 @@ import (
 
 func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 	tests := []struct {
-		name         string
-		elCode       string
-		elCommit     string
-		userGraffiti []byte
-		wantPrefix   string // user graffiti appears first
-		wantSuffix   string // client version info appended after
+		name          string
+		elCode        string
+		elCommit      string
+		userGraffiti  []byte
+		disableAppend bool   // client version info is not appended at all
+		wantPrefix    string // user graffiti appears first
+		wantSuffix    string // client version info appended after
 	}{
 		// No EL info cases (CL info "PM" + commit still included when space allows)
 		{
@@ -179,11 +180,35 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			userGraffiti: []byte{},
 			wantPrefix:   "NMabcdPM",
 		},
+		{
+			name:          "Append disabled - empty user graffiti",
+			elCode:        "GE",
+			elCommit:      "abcd1234",
+			userGraffiti:  []byte{},
+			disableAppend: true,
+			wantPrefix:    "",
+		},
+		{
+			name:          "Append disabled - short user graffiti",
+			elCode:        "GE",
+			elCommit:      "abcd1234",
+			userGraffiti:  []byte("my validator"),
+			disableAppend: true,
+			wantPrefix:    "my validator",
+		},
+		{
+			name:          "Append disabled - input with trailing nulls",
+			elCode:        "GE",
+			elCommit:      "abcd1234",
+			userGraffiti:  append([]byte("test"), 0, 0, 0),
+			disableAppend: true,
+			wantPrefix:    "test",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			g := NewGraffitiInfo()
+			g := NewGraffitiInfo(!tt.disableAppend)
 			if tt.elCode != "" {
 				g.UpdateFromEngine(tt.elCode, tt.elCommit)
 			}
@@ -191,6 +216,12 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			result := g.GenerateGraffiti(tt.userGraffiti)
 			resultStr := string(result[:])
 			trimmed := trimNullBytes(resultStr)
+
+			if tt.disableAppend {
+				// Nothing is appended, so the result must be the user graffiti and nothing else.
+				require.Equal(t, tt.wantPrefix, trimmed, "User graffiti was not used as-is")
+				return
+			}
 
 			// Check prefix (user graffiti comes first)
 			require.Equal(t, true, len(trimmed) >= len(tt.wantPrefix), "Result too short for prefix check")
@@ -209,7 +240,7 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 }
 
 func TestGraffitiInfo_UpdateFromEngine(t *testing.T) {
-	g := NewGraffitiInfo()
+	g := NewGraffitiInfo(true)
 
 	// Initially no EL info - should still have CL info (PM + commit)
 	result := g.GenerateGraffiti([]byte{})

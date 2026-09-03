@@ -562,9 +562,7 @@ func computeSubscriptionExpirationTime(nodeID enode.ID, epoch primitives.Epoch) 
 	nodeOffset, _ := computeOffsetAndPrefix(nodeID)
 	pastEpochs := (nodeOffset + uint64(epoch)) % params.BeaconConfig().EpochsPerSubnetSubscription
 	remEpochs := params.BeaconConfig().EpochsPerSubnetSubscription - pastEpochs
-	epochDuration := time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
-	epochTime := time.Duration(remEpochs) * epochDuration
-	return epochTime * time.Second
+	return params.EpochsDuration(primitives.Epoch(remEpochs), params.BeaconConfig())
 }
 
 func computeOffsetAndPrefix(nodeID enode.ID) (uint64, uint64) {

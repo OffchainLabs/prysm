@@ -122,6 +122,7 @@ func Test_pruneAttsFromPool_Electra(t *testing.T) {
 	rob, err := consensusblocks.NewSignedBeaconBlock(bl)
 	require.NoError(t, err)
 	st, _ := util.DeterministicGenesisStateElectra(t, 1024)
+	require.NoError(t, helpers.UpdateCommitteeCache(ctx, st, 0))
 	committees, err := helpers.BeaconCommittees(ctx, st, 0)
 	require.NoError(t, err)
 	// Sanity check to make sure the on-chain att will be decomposed
@@ -2782,6 +2783,9 @@ func testIsAvailableSetup(t *testing.T, p testIsAvailableParams) (context.Contex
 	signedBeaconBlock, err := util.GenerateFullBlockFulu(genesisState, secretKeys, conf, fs+1)
 	require.NoError(t, err)
 
+	// The block is the one being imported, so put its slot at the head of the clock.
+	service.SetGenesisTime(time.Now().Add(time.Duration(-1*int64(fs+1)*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
+
 	block := signedBeaconBlock.Block
 	bodyRoot, err := block.Body.HashTreeRoot()
 	require.NoError(t, err)
@@ -3852,4 +3856,39 @@ func TestRefreshCaches_CachedStateMatchesHeadRoot(t *testing.T) {
 	cached := transition.NextSlotState(headRoot[:], 1)
 	require.NotNil(t, cached)
 	require.Equal(t, primitives.Slot(1), cached.Slot())
+}
+
+// A node in regular sync whose head has fallen behind is past the gossip window of the
+// slot it is importing, so a block with missing columns must fail fast rather than block.
+func TestIsDataAvailable_BehindHead(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.AltairForkEpoch, cfg.BellatrixForkEpoch, cfg.CapellaForkEpoch, cfg.DenebForkEpoch, cfg.ElectraForkEpoch, cfg.FuluForkEpoch = 0, 0, 0, 0, 0, 0
+	params.OverrideBeaconConfig(cfg)
+
+	testParams := testIsAvailableParams{blobKzgCommitmentsCount: 3}
+
+	ctx, cancel, service, root, signed := testIsAvailableSetup(t, testParams)
+	defer cancel()
+
+	// Move the clock 30 slots past the block being imported.
+	behind := signed.Block().Slot() + 30
+	service.SetGenesisTime(time.Now().Add(time.Duration(-1*int64(behind)*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
+	require.Equal(t, true, service.inRegularSync())
+
+	roBlock, err := consensusblocks.NewROBlockWithRoot(signed, root)
+	require.NoError(t, err)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- service.isDataAvailable(ctx, roBlock)
+	}()
+
+	bound := time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second + 2*time.Second
+	select {
+	case err := <-done:
+		require.ErrorContains(t, "data columns unavailable for block", err)
+	case <-time.After(bound):
+		t.Fatal("isDataAvailable blocked on gossip for a slot whose gossip window has closed")
+	}
 }

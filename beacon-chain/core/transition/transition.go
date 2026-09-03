@@ -21,6 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -486,6 +487,35 @@ func VerifyOperationLengths(_ context.Context, state state.BeaconState, b interf
 			params.BeaconConfig().MaxVoluntaryExits,
 		)
 	}
+
+	if body.Version() >= version.Capella {
+		changes, err := body.BLSToExecutionChanges()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get BLS to execution changes")
+		}
+		if uint64(len(changes)) > params.BeaconConfig().MaxBlsToExecutionChanges {
+			return nil, fmt.Errorf(
+				"number of BLS to execution changes (%d) in block body exceeds allowed threshold of %d",
+				len(changes),
+				params.BeaconConfig().MaxBlsToExecutionChanges,
+			)
+		}
+	}
+
+	if body.Version() >= version.Gloas {
+		payloadAtts, err := body.PayloadAttestations()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get payload attestations")
+		}
+		if len(payloadAtts) > fieldparams.MaxPayloadAttestations {
+			return nil, fmt.Errorf(
+				"number of payload attestations (%d) in block body exceeds allowed threshold of %d",
+				len(payloadAtts),
+				fieldparams.MaxPayloadAttestations,
+			)
+		}
+	}
+
 	eth1Data := state.Eth1Data()
 	if eth1Data == nil {
 		return nil, errors.New("nil eth1data in state")

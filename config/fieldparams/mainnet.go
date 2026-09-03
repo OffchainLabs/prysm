@@ -54,4 +54,11 @@ const (
 	// Introduced in Gloas network upgrade.
 	PTCSize                = 512 // PTCSize is the size of the payload timeliness committee.
 	MaxPayloadAttestations = 4   // MaxPayloadAttestations is the maximum number of payload attestations in a block.
+
+	// Type-specific SSZ bounds, introduced in Gloas network upgrade.
+	MaxSignedAggregateAndProofSize   = 16829   // MaxSignedAggregateAndProofSize is the maximum size of a signed aggregate and proof, ~16 KiB.
+	MaxAttesterSlashingSize          = 2097616 // MaxAttesterSlashingSize is the maximum size of an attester slashing, ~2 MiB.
+	MaxDataColumnSidecarSize         = 8585272 // MaxDataColumnSidecarSize is the maximum size of a data column sidecar, ~8 MiB.
+	MaxPartialDataColumnSidecarSize  = 8585741 // MaxPartialDataColumnSidecarSize is the maximum size of a partial data column sidecar, ~8 MiB.
+	MaxSignedExecutionPayloadBidSize = 196932  // MaxSignedExecutionPayloadBidSize is the maximum size of a signed execution payload bid, ~192 KiB.
 )

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/OffchainLabs/prysm/v7/build/bazel"
 	cmdshared "github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -28,7 +29,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
