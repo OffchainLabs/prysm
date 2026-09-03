@@ -112,6 +112,7 @@ type mockKeymanager struct {
 	keys                [][fieldparams.BLSPubkeyLength]byte
 	fetchNoKeys         bool
 	accountsChangedFeed *event.Feed
+	lastSignReq         *validatorpb.SignRequest
 }
 
 var errMockKeyExists = errors.New("key already in mockKeymanager map")
@@ -140,6 +141,9 @@ func (m *mockKeymanager) FetchValidatingPublicKeys(_ context.Context) ([][fieldp
 }
 
 func (m *mockKeymanager) Sign(_ context.Context, req *validatorpb.SignRequest) (bls.Signature, error) {
+	m.lock.Lock()
+	m.lastSignReq = req
+	m.lock.Unlock()
 	var pubKey [fieldparams.BLSPubkeyLength]byte
 	copy(pubKey[:], req.PublicKey)
 	privKey, ok := m.keysMap[pubKey]
@@ -148,6 +152,12 @@ func (m *mockKeymanager) Sign(_ context.Context, req *validatorpb.SignRequest) (
 	}
 	sig := privKey.Sign(req.SigningRoot)
 	return sig, nil
+}
+
+func (m *mockKeymanager) lastSignRequest() *validatorpb.SignRequest {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	return m.lastSignReq
 }
 
 func (m *mockKeymanager) SubscribeAccountChanges(pubKeysChan chan [][fieldparams.BLSPubkeyLength]byte) event.Subscription {

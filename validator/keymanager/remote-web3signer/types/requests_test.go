@@ -532,6 +532,19 @@ func TestGetBlockV2BlindedSignRequest(t *testing.T) {
 			}(t), "FULU"),
 			wantErr: false,
 		},
+		{
+			name: "Happy Path Test Gloas",
+			args: args{
+				request:               mock.GetMockSignRequest("BLOCK_V2_GLOAS"),
+				genesisValidatorsRoot: make([]byte, fieldparams.RootLength),
+			},
+			want: mock.BlockV2BlindedSignRequest(func(t *testing.T) []byte {
+				bytevalue, err := hexutil.Decode("0x97bb2344fda1add4bfe7382ce4700ad02dba5dfe18250215c1063f8967670966")
+				require.NoError(t, err)
+				return bytevalue
+			}(t), "GLOAS"),
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -578,14 +591,6 @@ func TestGetValidatorRegistrationSignRequest(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestGetBlockGloasSignRequest(t *testing.T) {
-	got, err := types.GetBlockV2BlindedSignRequest(mock.GetMockSignRequest("BLOCK_V2_GLOAS"), make([]byte, fieldparams.RootLength))
-	require.NoError(t, err)
-	require.Equal(t, "BLOCK_V2", got.Type)
-	require.Equal(t, "GLOAS", got.BeaconBlock.Version)
-	require.NotNil(t, got.BeaconBlock.BlockHeader)
 }
 
 // setGloasForkEpoch schedules Gloas right after Fulu so mock signing slots resolve to the Gloas fork.
