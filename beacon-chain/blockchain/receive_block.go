@@ -40,6 +40,7 @@ var epochsSinceFinalityExpandCache = primitives.Epoch(4)
 // BlockReceiver interface defines the methods of chain service for receiving and processing new blocks.
 type BlockReceiver interface {
 	ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, avs das.AvailabilityChecker) error
+	ValidateBlockForEquivocation(ctx context.Context, block blocks.ROBlock) error
 	ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock, envelopes []interfaces.ROSignedExecutionPayloadEnvelope, avs das.AvailabilityChecker) error
 	HasBlock(ctx context.Context, root [32]byte) bool
 	RecentBlockSlot(root [32]byte) (primitives.Slot, error)
@@ -160,6 +161,43 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 		return errors.Wrap(err, "handle caches")
 	}
 	s.reportPostBlockProcessing(blockCopy, blockRoot, receivedTime, daWaitedTime)
+	return nil
+}
+
+// ValidateBlockForEquivocation validates an alternate block without importing it into fork choice.
+func (s *Service) ValidateBlockForEquivocation(ctx context.Context, block blocks.ROBlock) error {
+	if block.Version() >= version.Gloas && !s.ParentPayloadReady(block.Block()) {
+		return errors.New("parent execution payload is not ready")
+	}
+	preState, err := s.GetBlockPreState(ctx, block)
+	if err != nil {
+		return errors.Wrap(err, "could not get block's prestate")
+	}
+	preStateVersion, preStateHeader, err := getStateVersionAndPayload(preState)
+	if err != nil {
+		return errors.Wrap(err, "could not get prestate execution payload header")
+	}
+	if _, err := s.validateStateTransition(ctx, preState, block); err != nil {
+		return errors.Wrap(err, "failed to validate consensus state transition function")
+	}
+	if block.Version() < version.Gloas {
+		// Validate execution without pruning fork choice when the alternate payload is invalid.
+		isValidPayload, err := s.notifyNewPayload(ctx, preStateVersion, preStateHeader, block)
+		if err != nil {
+			return errors.Wrap(err, "could not notify the engine of the new payload")
+		}
+		if !isValidPayload {
+			return errors.New("execution payload is optimistic")
+		}
+		if block.Version() < version.Capella {
+			if err := s.validateMergeTransitionBlock(ctx, preStateVersion, preStateHeader, block); err != nil {
+				return errors.Wrap(err, "could not validate merge transition block")
+			}
+		}
+	}
+	if _, err := s.handleDA(ctx, nil, block); err != nil {
+		return errors.Wrap(err, "handle da")
+	}
 	return nil
 }
 

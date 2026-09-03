@@ -48,6 +48,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	gcache "github.com/patrickmn/go-cache"
 	logTest "github.com/sirupsen/logrus/hooks/test"
+	"google.golang.org/protobuf/proto"
 )
 
 // General note for writing validation tests: Use a random value for any field
@@ -1988,6 +1989,152 @@ func Test_validateDenebBeaconBlock(t *testing.T) {
 	bdb, err := blocks.NewSignedBeaconBlock(bd)
 	require.NoError(t, err)
 	require.ErrorIs(t, validateDenebBeaconBlock(bdb.Block()), errRejectCommitmentLen)
+}
+
+type equivocationValidationChain struct {
+	*mock.ChainService
+	validateBlock func(context.Context, blocks.ROBlock) error
+}
+
+func (c *equivocationValidationChain) ValidateBlockForEquivocation(ctx context.Context, block blocks.ROBlock) error {
+	return c.validateBlock(ctx, block)
+}
+
+func TestDetectAndBroadcastEquivocation_ValidatesAlternate(t *testing.T) {
+	ctx := t.Context()
+	preState, keys := util.DeterministicGenesisState(t, 64)
+	head, err := util.GenerateFullBlock(preState.Copy(), keys, &util.BlockGenConfig{}, 1)
+	require.NoError(t, err)
+	signedHead, err := blocks.NewSignedBeaconBlock(head)
+	require.NoError(t, err)
+	headState, err := transition.ExecuteStateTransition(ctx, preState.Copy(), signedHead)
+	require.NoError(t, err)
+	alternate := proto.Clone(head).(*ethpb.SignedBeaconBlock)
+	alternate.Block.Body.Graffiti = bytesutil.PadTo([]byte("alternate"), 32)
+	signature, err := util.BlockSignature(preState.Copy(), alternate.Block, keys)
+	require.NoError(t, err)
+	alternate.Signature = signature.Marshal()
+
+	for _, tc := range []struct {
+		name       string
+		invalid    bool
+		disabled   bool
+		late       bool
+		beforeSlot bool
+	}{
+		{name: "valid alternate received early and validated after deadline"},
+		{name: "invalid state root with valid proposer signature", invalid: true},
+		{name: "tracking disabled", disabled: true},
+		{name: "received at deadline", late: true},
+		{name: "received before slot", beforeSlot: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reset := features.InitWithReset(&features.Flags{TrackEquivocations: !tc.disabled})
+			defer reset()
+			p := p2ptest.NewTestP2P(t)
+			candidate := proto.Clone(alternate).(*ethpb.SignedBeaconBlock)
+			if tc.invalid {
+				candidate.Block.StateRoot[0] ^= 0xff
+				candidate.Signature, err = signing.ComputeDomainAndSign(preState, 0, candidate.Block, params.BeaconConfig().DomainBeaconProposer, keys[candidate.Block.ProposerIndex])
+				require.NoError(t, err)
+			}
+			signedCandidate, err := blocks.NewSignedBeaconBlock(candidate)
+			require.NoError(t, err)
+			genesis := time.Now().Add(-2 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+			pool := &slashingsmock.PoolMock{}
+			chain := &equivocationValidationChain{ChainService: &mock.ChainService{
+				State: headState, Block: signedHead, Genesis: genesis,
+			}}
+			validated := 0
+			chain.validateBlock = func(ctx context.Context, block blocks.ROBlock) error {
+				validated++
+				require.Equal(t, true, p.BroadcastCalled.Load())
+				require.Equal(t, 1, len(pool.PendingPropSlashings))
+				_, err := transition.ExecuteStateTransition(ctx, preState.Copy(), block)
+				return err
+			}
+			s := &Service{cfg: &config{
+				p2p: p, chain: chain, slashingPool: pool,
+				clock: startup.NewClock(genesis, chain.ValidatorsRoot),
+			}}
+			slotStart, err := slots.StartTime(genesis, candidate.Block.Slot)
+			require.NoError(t, err)
+			received := slotStart
+			if tc.late {
+				received = slotStart.Add(params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().EquivocationEarlyDueBPS))
+			} else if tc.beforeSlot {
+				received = slotStart.Add(-time.Nanosecond)
+			}
+			err = s.detectAndBroadcastEquivocation(ctx, signedCandidate, received)
+			if tc.invalid {
+				require.ErrorContains(t, "could not validate equivocating block", err)
+			} else {
+				require.NoError(t, err)
+			}
+			wantValidation := !tc.disabled && !tc.late && !tc.beforeSlot
+			require.Equal(t, wantValidation, validated == 1)
+			key := mock.EquivocationKey{Slot: candidate.Block.Slot, Proposer: candidate.Block.ProposerIndex}
+			if wantValidation && !tc.invalid {
+				root, err := candidate.Block.HashTreeRoot()
+				require.NoError(t, err)
+				require.DeepEqual(t, [][32]byte{root}, chain.RecordedEquivocations[key])
+			} else {
+				require.Equal(t, 0, len(chain.RecordedEquivocations[key]))
+			}
+			require.Equal(t, true, p.BroadcastCalled.Load())
+			require.Equal(t, 1, len(pool.PendingPropSlashings))
+		})
+	}
+}
+
+func TestValidateBeaconBlockPubSub_EquivocationValidationOutsideLock(t *testing.T) {
+	reset := features.InitWithReset(&features.Flags{TrackEquivocations: true})
+	defer reset()
+	ctx := t.Context()
+	st, keys := util.DeterministicGenesisState(t, 64)
+	head, err := util.GenerateFullBlock(st.Copy(), keys, &util.BlockGenConfig{}, 1)
+	require.NoError(t, err)
+	signedHead, err := blocks.NewSignedBeaconBlock(head)
+	require.NoError(t, err)
+	alternate := proto.Clone(head).(*ethpb.SignedBeaconBlock)
+	alternate.Block.StateRoot[0] ^= 0xff
+	alternate.Signature, err = signing.ComputeDomainAndSign(st, 0, alternate.Block, params.BeaconConfig().DomainBeaconProposer, keys[alternate.Block.ProposerIndex])
+	require.NoError(t, err)
+	p := p2ptest.NewTestP2P(t)
+	genesis := time.Now().Add(-time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	chain := &equivocationValidationChain{ChainService: &mock.ChainService{State: st, Block: signedHead, Genesis: genesis}}
+	pool := &slashingsmock.PoolMock{}
+	s := &Service{
+		cfg: &config{
+			p2p: p, chain: chain, initialSync: &mockSync.Sync{}, slashingPool: pool,
+			clock: startup.NewClock(genesis, chain.ValidatorsRoot), blockNotifier: chain.BlockNotifier(),
+		},
+		seenBlockCache: lruwrpr.New(10),
+	}
+	validated := false
+	chain.validateBlock = func(ctx context.Context, block blocks.ROBlock) error {
+		validated = true
+		locked := s.validateBlockLock.TryLock()
+		require.Equal(t, true, locked, "alternate validation must not hold the gossip validation lock")
+		if locked {
+			s.validateBlockLock.Unlock()
+		}
+		require.Equal(t, true, p.BroadcastCalled.Load())
+		require.Equal(t, 1, len(pool.PendingPropSlashings))
+		_, err := transition.ExecuteStateTransition(ctx, st.Copy(), block)
+		return err
+	}
+	s.setSeenBlockIndexSlot(alternate.Block.Slot, alternate.Block.ProposerIndex)
+	buf := new(bytes.Buffer)
+	_, err = p.Encoding().EncodeGossip(buf, alternate)
+	require.NoError(t, err)
+	topic := s.addDigestToTopic(p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlock]()], s.currentForkDigest())
+	msg := &pubsub.Message{Message: &pubsubpb.Message{Data: buf.Bytes(), Topic: &topic}}
+	result, err := s.validateBeaconBlockPubSub(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.Equal(t, true, validated)
+	require.Equal(t, 0, len(chain.RecordedEquivocations))
 }
 
 func TestDetectAndBroadcastEquivocation(t *testing.T) {

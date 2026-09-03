@@ -7,6 +7,10 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	coreblocks "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -27,6 +31,130 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
+
+func TestService_ValidateBlockForEquivocation_Gloas(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.AltairForkEpoch, cfg.BellatrixForkEpoch, cfg.CapellaForkEpoch = 0, 0, 0
+	cfg.DenebForkEpoch, cfg.ElectraForkEpoch, cfg.FuluForkEpoch, cfg.GloasForkEpoch = 0, 0, 0, 0
+	cfg.InitializeForkSchedule()
+	params.OverrideBeaconConfig(cfg)
+	ctx := t.Context()
+	genesis, keys := util.DeterministicGenesisStateGloas(t, 64)
+
+	// Leave the parent's committed payload unavailable so the child builds on its empty branch.
+	parentBid := genesis.ToProto().(*ethpb.BeaconStateGloas).LatestExecutionPayloadBid
+	parentBid.BlockHash[0] = 1
+	wrappedBid, err := blocks.WrappedROExecutionPayloadBid(parentBid)
+	require.NoError(t, err)
+	require.NoError(t, genesis.SetExecutionPayloadBid(wrappedBid))
+	genesisBlock, err := coreblocks.NewGenesisBlockForState(ctx, genesis)
+	require.NoError(t, err)
+	bodyRoot, err := genesisBlock.Block().Body().HashTreeRoot()
+	require.NoError(t, err)
+	header := genesis.LatestBlockHeader()
+	header.BodyRoot = bodyRoot[:]
+	require.NoError(t, genesis.SetLatestBlockHeader(header))
+
+	slotState, err := transition.ProcessSlots(ctx, genesis.Copy(), 1)
+	require.NoError(t, err)
+	parentRoot, err := helpers.BlockRootAtSlot(slotState, 0)
+	require.NoError(t, err)
+	proposer, err := helpers.BeaconProposerIndex(ctx, slotState)
+	require.NoError(t, err)
+	randao, err := util.RandaoReveal(slotState, 0, keys)
+	require.NoError(t, err)
+	prevRandao, err := helpers.RandaoMix(slotState, 0)
+	require.NoError(t, err)
+	latestHash, err := slotState.LatestBlockHash()
+	require.NoError(t, err)
+
+	template := util.NewBeaconBlockGloas()
+	template.Block.Slot = 1
+	template.Block.ProposerIndex = proposer
+	template.Block.ParentRoot = parentRoot
+	template.Block.Body.Eth1Data = slotState.Eth1Data()
+	template.Block.Body.RandaoReveal = randao
+	infinity := [fieldparams.BLSSignatureLength]byte{0xc0}
+	template.Block.Body.SyncAggregate.SyncCommitteeSignature = infinity[:]
+	bid := template.Block.Body.SignedExecutionPayloadBid
+	bid.Signature = infinity[:]
+	bid.Message.Slot = template.Block.Slot
+	bid.Message.BuilderIndex = cfg.BuilderIndexSelfBuild
+	bid.Message.ParentBlockRoot = bytesutil.SafeCopyBytes(parentRoot)
+	bid.Message.ParentBlockHash = latestHash[:]
+	bid.Message.PrevRandao = prevRandao
+	bid.Message.BlockHash[0] = 2
+	requestsRoot, err := template.Block.Body.ParentExecutionRequests.HashTreeRoot()
+	require.NoError(t, err)
+	bid.Message.ExecutionRequestsRoot = requestsRoot[:]
+	signed, err := blocks.NewSignedBeaconBlock(template)
+	require.NoError(t, err)
+	stateRoot, err := transition.CalculateStateRoot(ctx, genesis, signed)
+	require.NoError(t, err)
+	template.Block.StateRoot = stateRoot[:]
+
+	tests := []struct {
+		name      string
+		mutate    func(*ethpb.SignedBeaconBlockGloas)
+		wantedErr string
+	}{
+		{
+			name: "valid empty-parent block is not imported",
+		},
+		{
+			name: "valid proposer signature with invalid state root",
+			mutate: func(block *ethpb.SignedBeaconBlockGloas) {
+				block.Block.StateRoot[0] ^= 1
+			},
+			wantedErr: "could not validate state root",
+		},
+		{
+			name: "valid proposer signature with invalid bid parent",
+			mutate: func(block *ethpb.SignedBeaconBlockGloas) {
+				block.Block.Body.SignedExecutionPayloadBid.Message.ParentBlockRoot[0] ^= 1
+			},
+			wantedErr: "bid parent block root mismatch",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			s, tr := minimalTestService(t)
+			require.NoError(t, s.saveGenesisData(ctx, genesis.Copy()))
+			block := ethpb.CopySignedBeaconBlockGloas(template)
+			if tt.mutate != nil {
+				tt.mutate(block)
+			}
+			block.Signature, err = signing.ComputeDomainAndSign(slotState, 0, block.Block, cfg.DomainBeaconProposer, keys[proposer])
+			require.NoError(t, err)
+			require.NoError(t, coreblocks.VerifyBlockSignature(slotState, proposer, block.Signature, block.Block.HashTreeRoot))
+			signed, err := blocks.NewSignedBeaconBlock(block)
+			require.NoError(t, err)
+			roblock, err := blocks.NewROBlock(signed)
+			require.NoError(t, err)
+			require.Equal(t, false, tr.fcs.HasFullNode(roblock.Block().ParentRoot()))
+			require.Equal(t, true, s.ParentPayloadReady(roblock.Block()))
+			headRoot, err := s.HeadRoot(ctx)
+			require.NoError(t, err)
+			nodeCount := tr.fcs.NodeCount()
+
+			err = s.ValidateBlockForEquivocation(ctx, roblock)
+			if tt.wantedErr != "" {
+				require.ErrorContains(t, tt.wantedErr, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, false, s.InForkchoice(roblock.Root()))
+			require.Equal(t, false, tr.db.HasBlock(ctx, roblock.Root()))
+			require.Equal(t, false, tr.db.HasState(ctx, roblock.Root()))
+			require.Equal(t, nodeCount, tr.fcs.NodeCount())
+			gotHeadRoot, err := s.HeadRoot(ctx)
+			require.NoError(t, err)
+			require.DeepEqual(t, headRoot, gotHeadRoot)
+		})
+	}
+}
 
 func prepareGloasForkchoiceState(
 	_ context.Context,
