@@ -623,11 +623,6 @@ func TestGetExecutionPayloadEnvelopeSignRequest(t *testing.T) {
 		_, err := types.GetExecutionPayloadEnvelopeSignRequest(version.Gloas, req, make([]byte, fieldparams.RootLength))
 		require.ErrorContains(t, "ExecutionPayloadEnvelope is nil", err)
 	})
-	t.Run("Pre-Gloas Fork", func(t *testing.T) {
-		req := mock.GetMockSignRequest("EXECUTION_PAYLOAD_ENVELOPE")
-		_, err := types.GetExecutionPayloadEnvelopeSignRequest(version.Fulu, req, make([]byte, fieldparams.RootLength))
-		require.ErrorContains(t, "requires gloas or later", err)
-	})
 }
 
 func TestGetPayloadAttestationMessageSignRequest(t *testing.T) {
@@ -647,11 +642,6 @@ func TestGetPayloadAttestationMessageSignRequest(t *testing.T) {
 		}
 		_, err := types.GetPayloadAttestationMessageSignRequest(version.Gloas, req, make([]byte, fieldparams.RootLength))
 		require.ErrorContains(t, "PayloadAttestationData is nil", err)
-	})
-	t.Run("Pre-Gloas Fork", func(t *testing.T) {
-		req := mock.GetMockSignRequest("PAYLOAD_ATTESTATION_MESSAGE")
-		_, err := types.GetPayloadAttestationMessageSignRequest(version.Fulu, req, make([]byte, fieldparams.RootLength))
-		require.ErrorContains(t, "requires gloas or later", err)
 	})
 }
 
@@ -673,11 +663,6 @@ func TestGetProposerPreferencesSignRequest(t *testing.T) {
 		_, err := types.GetProposerPreferencesSignRequest(version.Gloas, req, make([]byte, fieldparams.RootLength))
 		require.ErrorContains(t, "ProposerPreferences is nil", err)
 	})
-	t.Run("Pre-Gloas Fork", func(t *testing.T) {
-		req := mock.GetMockSignRequest("PROPOSER_PREFERENCES")
-		_, err := types.GetProposerPreferencesSignRequest(version.Fulu, req, make([]byte, fieldparams.RootLength))
-		require.ErrorContains(t, "requires gloas or later", err)
-	})
 }
 
 func TestGetBuilderRequestAuthSignRequest(t *testing.T) {
@@ -693,9 +678,5 @@ func TestGetBuilderRequestAuthSignRequest(t *testing.T) {
 		}
 		_, err := types.GetBuilderRequestAuthSignRequest(version.Gloas, req)
 		require.ErrorContains(t, "BuilderRequestAuth is nil", err)
-	})
-	t.Run("Pre-Gloas Fork", func(t *testing.T) {
-		_, err := types.GetBuilderRequestAuthSignRequest(version.Fulu, mock.GetMockSignRequest("BUILDER_REQUEST_AUTH"))
-		require.ErrorContains(t, "requires gloas or later", err)
 	})
 }

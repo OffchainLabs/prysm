@@ -494,14 +494,6 @@ func GetBlockV2BlindedSignRequest(request *validatorpb.SignRequest, genesisValid
 	}, nil
 }
 
-// gloasForkName returns the fork name used as the request version for Gloas-introduced signing types.
-func gloasForkName(v int) (string, error) {
-	if v < version.Gloas {
-		return "", fmt.Errorf("signing type requires gloas or later, got fork %s", version.String(v))
-	}
-	return strings.ToUpper(version.String(v)), nil
-}
-
 // GetBuilderRequestAuthSignRequest maps the request for signing type BUILDER_REQUEST_AUTH (gloas builder API).
 func GetBuilderRequestAuthSignRequest(v int, request *validatorpb.SignRequest) (*BuilderRequestAuthSignRequest, error) {
 	if request == nil {
@@ -514,15 +506,11 @@ func GetBuilderRequestAuthSignRequest(v int, request *validatorpb.SignRequest) (
 	if authReq == nil || authReq.BuilderRequestAuth == nil {
 		return nil, errors.New("invalid sign request: BuilderRequestAuth is nil")
 	}
-	forkName, err := gloasForkName(v)
-	if err != nil {
-		return nil, err
-	}
 	return &BuilderRequestAuthSignRequest{
 		Type:        "BUILDER_REQUEST_AUTH",
 		SigningRoot: request.SigningRoot,
 		BuilderRequestAuth: &VersionedBuilderRequestAuth{
-			Version: forkName,
+			Version: strings.ToUpper(version.String(v)),
 			Data: &BuilderRequestAuth{
 				Data: authReq.BuilderRequestAuth.Data,
 				Slot: fmt.Sprint(authReq.BuilderRequestAuth.Slot),
@@ -543,10 +531,6 @@ func GetExecutionPayloadEnvelopeSignRequest(v int, request *validatorpb.SignRequ
 	if envelopeReq == nil || envelopeReq.ExecutionPayloadEnvelope == nil {
 		return nil, errors.New("invalid sign request: ExecutionPayloadEnvelope is nil")
 	}
-	forkName, err := gloasForkName(v)
-	if err != nil {
-		return nil, err
-	}
 	fork, err := MapForkInfo(request.SigningSlot, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
@@ -560,7 +544,7 @@ func GetExecutionPayloadEnvelopeSignRequest(v int, request *validatorpb.SignRequ
 		ForkInfo:    fork,
 		SigningRoot: request.SigningRoot,
 		ExecutionPayloadEnvelope: &VersionedExecutionPayloadEnvelope{
-			Version: forkName,
+			Version: strings.ToUpper(version.String(v)),
 			Data:    envelope,
 		},
 	}, nil
@@ -578,10 +562,6 @@ func GetPayloadAttestationMessageSignRequest(v int, request *validatorpb.SignReq
 	if pa == nil || pa.PayloadAttestationData == nil {
 		return nil, errors.New("invalid sign request: PayloadAttestationData is nil")
 	}
-	forkName, err := gloasForkName(v)
-	if err != nil {
-		return nil, err
-	}
 	fork, err := MapForkInfo(request.SigningSlot, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
@@ -591,7 +571,7 @@ func GetPayloadAttestationMessageSignRequest(v int, request *validatorpb.SignReq
 		ForkInfo:    fork,
 		SigningRoot: request.SigningRoot,
 		PayloadAttestationMessage: &VersionedPayloadAttestationData{
-			Version: forkName,
+			Version: strings.ToUpper(version.String(v)),
 			Data: &PayloadAttestationData{
 				BeaconBlockRoot:   pa.PayloadAttestationData.BeaconBlockRoot,
 				Slot:              fmt.Sprint(pa.PayloadAttestationData.Slot),
@@ -614,10 +594,6 @@ func GetProposerPreferencesSignRequest(v int, request *validatorpb.SignRequest, 
 	if pp == nil || pp.ProposerPreference == nil {
 		return nil, errors.New("invalid sign request: ProposerPreferences is nil")
 	}
-	forkName, err := gloasForkName(v)
-	if err != nil {
-		return nil, err
-	}
 	fork, err := MapForkInfo(request.SigningSlot, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
@@ -627,7 +603,7 @@ func GetProposerPreferencesSignRequest(v int, request *validatorpb.SignRequest, 
 		ForkInfo:    fork,
 		SigningRoot: request.SigningRoot,
 		ProposerPreferences: &VersionedProposerPreferences{
-			Version: forkName,
+			Version: strings.ToUpper(version.String(v)),
 			Data: &ProposerPreferences{
 				DependentRoot:  pp.ProposerPreference.DependentRoot,
 				ProposalSlot:   fmt.Sprint(pp.ProposerPreference.ProposalSlot),
