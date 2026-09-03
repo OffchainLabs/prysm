@@ -26,22 +26,22 @@ func GetAdversarialWeight(
 	blockRoot [32]byte,
 	currentSlot primitives.Slot,
 	equivScorer EquivocationScorer,
-) uint64 {
+) (uint64, error) {
 	blockSlot, err := fc.Slot(blockRoot)
 	if err != nil {
-		return 0
+		return 0, err
 	}
 	parentRoot, err := fc.ParentRoot(blockRoot)
 	if err != nil {
-		return 0
+		return 0, err
 	}
 	parentSlot, err := fc.Slot(parentRoot)
 	if err != nil {
-		return 0
+		return 0, err
 	}
 
 	if currentSlot == 0 {
-		return 0
+		return 0, nil
 	}
 
 	var startSlot primitives.Slot
@@ -54,7 +54,7 @@ func GetAdversarialWeight(
 	}
 
 	equivScore := equivScorer(startSlot, currentSlot-1)
-	return ComputeAdversarialWeight(totalActiveBalance, equivScore, startSlot, currentSlot-1)
+	return ComputeAdversarialWeight(totalActiveBalance, equivScore, startSlot, currentSlot-1), nil
 }
 
 // ComputeEmptySlotSupportDiscount returns the weight that can be discounted from
@@ -85,6 +85,7 @@ func ComputeEmptySlotSupportDiscount(
 	blockRoot [32]byte,
 	equivScorer EquivocationScorer,
 ) uint64 {
+	// A zero discount on error raises the threshold, so these error returns fail closed.
 	blockSlot, err := fc.Slot(blockRoot)
 	if err != nil {
 		return 0
@@ -139,29 +140,32 @@ func ComputeSafetyThreshold(
 	blockRoot [32]byte,
 	currentSlot primitives.Slot,
 	equivScorer EquivocationScorer,
-) uint64 {
+) (uint64, error) {
 	if currentSlot == 0 {
-		return 0
+		return 0, nil
 	}
 	parentRoot, err := fc.ParentRoot(blockRoot)
 	if err != nil {
-		return 0
+		return 0, err
 	}
 	parentSlot, err := fc.Slot(parentRoot)
 	if err != nil {
-		return 0
+		return 0, err
 	}
 
 	proposerScore := ComputeProposerScore(totalActiveBalance)
 	maximumSupport := EstimateCommitteeWeightBetweenSlots(totalActiveBalance, parentSlot+1, currentSlot-1)
 	supportDiscount := ComputeEmptySlotSupportDiscount(fc, support, totalActiveBalance, blockRoot, equivScorer)
-	adversarialWeight := GetAdversarialWeight(fc, totalActiveBalance, blockRoot, currentSlot, equivScorer)
+	adversarialWeight, err := GetAdversarialWeight(fc, totalActiveBalance, blockRoot, currentSlot, equivScorer)
+	if err != nil {
+		return 0, err
+	}
 
 	numerator := maximumSupport + proposerScore + 2*adversarialWeight
 	if supportDiscount < numerator {
-		return (numerator - supportDiscount) / 2
+		return (numerator - supportDiscount) / 2, nil
 	}
-	return 0
+	return 0, nil
 }
 
 // IsOneConfirmed returns true if the block is LMD-GHOST safe: its attestation
@@ -188,6 +192,9 @@ func IsOneConfirmed(
 	}
 
 	score := support.AttestationScore(blockRoot)
-	threshold := ComputeSafetyThreshold(fc, support, totalActiveBalance, blockRoot, currentSlot, equivScorer)
+	threshold, err := ComputeSafetyThreshold(fc, support, totalActiveBalance, blockRoot, currentSlot, equivScorer)
+	if err != nil {
+		return false
+	}
 	return score > threshold
 }

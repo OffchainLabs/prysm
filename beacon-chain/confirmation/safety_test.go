@@ -81,7 +81,8 @@ func TestIsOneConfirmed_FullParticipation(t *testing.T) {
 	// adversarial = EstimateWeight(totalBalance, slot 2, slot 2) * 25/100 = 2,500
 	// discount = 0 (no empty slots between root1 and root2)
 	// threshold = (10,000 + 4,000 + 2*2,500 - 0) / 2 = 9,500
-	threshold := ComputeSafetyThreshold(fc, sm, totalBalance, root2, currentSlot, zeroEquivScorer)
+	threshold, err := ComputeSafetyThreshold(fc, sm, totalBalance, root2, currentSlot, zeroEquivScorer)
+	require.NoError(t, err)
 	require.Equal(t, uint64(9500), threshold)
 
 	// 20,000 > 9,500 → confirmed
@@ -162,13 +163,15 @@ func TestIsOneConfirmed_EmptySlotDiscount(t *testing.T) {
 	require.Equal(t, uint64(15000), discount)
 
 	// Threshold with discount should be lower than without
-	thresholdWithDiscount := ComputeSafetyThreshold(fc, sm, totalBalance, root2, currentSlot, zeroEquivScorer)
+	thresholdWithDiscount, err := ComputeSafetyThreshold(fc, sm, totalBalance, root2, currentSlot, zeroEquivScorer)
+	require.NoError(t, err)
 
 	// Compare: no empty slot support → higher threshold
 	sm2 := NewSupportMap()
 	addTestSupport(sm2, 4, root2, 10_000)
 	rebuildTotalSupportFromSlotRoot(sm2, fc)
-	thresholdWithout := ComputeSafetyThreshold(fc, sm2, totalBalance, root2, currentSlot, zeroEquivScorer)
+	thresholdWithout, err := ComputeSafetyThreshold(fc, sm2, totalBalance, root2, currentSlot, zeroEquivScorer)
+	require.NoError(t, err)
 
 	require.Equal(t, true, thresholdWithDiscount < thresholdWithout)
 }
@@ -225,7 +228,8 @@ func TestGetAdversarialWeight_CurrentSlotZero(t *testing.T) {
 		optimistic: map[[32]byte]bool{},
 	}
 
-	w := GetAdversarialWeight(fc, totalBalance, root1, 0, zeroEquivScorer)
+	w, err := GetAdversarialWeight(fc, totalBalance, root1, 0, zeroEquivScorer)
+	require.NoError(t, err)
 	require.Equal(t, uint64(0), w)
 }
 
@@ -250,7 +254,8 @@ func TestComputeSafetyThreshold_CurrentSlotZero(t *testing.T) {
 	}
 
 	sm := NewSupportMap()
-	threshold := ComputeSafetyThreshold(fc, sm, totalBalance, root1, 0, zeroEquivScorer)
+	threshold, err := ComputeSafetyThreshold(fc, sm, totalBalance, root1, 0, zeroEquivScorer)
+	require.NoError(t, err)
 	require.Equal(t, uint64(0), threshold)
 }
 
@@ -307,7 +312,8 @@ func TestGetAdversarialWeight_EpochCrossing(t *testing.T) {
 		optimistic: map[[32]byte]bool{},
 	}
 
-	w := GetAdversarialWeight(fc, totalBalance, root2, currentSlot, zeroEquivScorer)
+	w, err := GetAdversarialWeight(fc, totalBalance, root2, currentSlot, zeroEquivScorer)
+	require.NoError(t, err)
 
 	// Block crosses epoch boundary, so adversarial range starts at epoch 1 start (slot 32)
 	// Range: [32, currentSlot-1=33], 2 slots
@@ -320,7 +326,8 @@ func TestGetAdversarialWeight_EpochCrossing(t *testing.T) {
 	fc.parents[root3] = root2
 	fc.slotsByRoot[root3] = spe + 1 // slot 33, same epoch as parent (32)
 
-	w2 := GetAdversarialWeight(fc, totalBalance, root3, currentSlot, zeroEquivScorer)
+	w2, err := GetAdversarialWeight(fc, totalBalance, root3, currentSlot, zeroEquivScorer)
+	require.NoError(t, err)
 	// Range starts at block slot (33), so [33, 33], 1 slot
 	// adversarial = 10,000 * 25 / 100 = 2,500
 	require.Equal(t, uint64(2500), w2)
