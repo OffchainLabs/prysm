@@ -2049,7 +2049,7 @@ func TestServer_Graffiti(t *testing.T) {
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 	s.SetGraffiti(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, http.StatusAccepted, w.Code)
 
 	req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/eth/v1/validator/{pubkey}/graffiti"), nil)
 	req.SetPathValue("pubkey", pubkey)
