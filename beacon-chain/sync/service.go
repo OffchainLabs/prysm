@@ -195,6 +195,7 @@ type Service struct {
 	columnSidecarsExecSingleFlight       singleflight.Group
 	reconstructionSingleFlight           singleflight.Group
 	payloadEnvelopeRequestSingleFlight   singleflight.Group
+	equivocationValidationSingleFlight   singleflight.Group
 	availableBlocker                     coverage.AvailableBlocker
 	reconstructionRandGen                *rand.Rand
 	ctxMap                               ContextByteVersions

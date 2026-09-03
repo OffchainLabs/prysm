@@ -3,6 +3,7 @@ package sync
 import (
 	"bytes"
 	"context"
+	stderrors "errors"
 	"fmt"
 	"time"
 
@@ -65,9 +66,6 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		return pubsub.ValidationReject, errors.Wrap(err, "Could not decode message")
 	}
 
-	s.validateBlockLock.Lock()
-	defer s.validateBlockLock.Unlock()
-
 	blk, ok := m.(interfaces.ReadOnlySignedBeaconBlock)
 	if !ok {
 		return pubsub.ValidationReject, errors.New("msg is not ethpb.ReadOnlySignedBeaconBlock")
@@ -100,7 +98,10 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 	}
 
 	// Verify the block is the first block received for the proposer for the slot.
+	s.validateBlockLock.Lock()
 	if s.hasSeenBlockIndexSlot(blk.Block().Slot(), blk.Block().ProposerIndex()) {
+		// Alternate validation can wait for execution or data availability.
+		s.validateBlockLock.Unlock()
 		// Attempt to detect and broadcast equivocation before ignoring
 		err = s.detectAndBroadcastEquivocation(ctx, blk, receivedTime)
 		if err != nil {
@@ -113,6 +114,7 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		}
 		return pubsub.ValidationIgnore, nil
 	}
+	defer s.validateBlockLock.Unlock()
 
 	genesisTime := s.cfg.clock.GenesisTime()
 	if err := slots.VerifyTime(genesisTime, blk.Block().Slot(), earlyBlockProcessingTolerance); err != nil {
@@ -635,38 +637,51 @@ func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interf
 		return errors.Wrap(err, "could not verify proposer slashing")
 	}
 
-	if features.Get().TrackEquivocations {
-		root, err := blk.Block().HashTreeRoot()
-		if err != nil {
-			return errors.Wrap(err, "could not compute block root")
-		}
-		s.recordEarlyEquivocation(slot, proposerIndex, root, receivedTime)
-	}
-
 	// Broadcast if verification passes
+	var broadcastErr error
 	if !features.Get().DisableBroadcastSlashings {
-		if err := s.cfg.p2p.Broadcast(ctx, slashing); err != nil {
-			return errors.Wrap(err, "could not broadcast slashing object")
-		}
+		broadcastErr = s.cfg.p2p.Broadcast(ctx, slashing)
 	}
 
 	// Insert into slashing pool
-	if err := s.cfg.slashingPool.InsertProposerSlashing(ctx, headState, slashing); err != nil {
-		return errors.Wrap(err, "could not insert proposer slashing into pool")
+	poolErr := s.cfg.slashingPool.InsertProposerSlashing(ctx, headState, slashing)
+
+	var equivocationErr error
+	if features.Get().TrackEquivocations {
+		// A valid slashing does not prove the alternate block is valid for fork choice.
+		equivocationErr = s.recordEarlyEquivocation(ctx, blk, receivedTime)
 	}
 
-	return nil
+	return stderrors.Join(
+		errors.Wrap(broadcastErr, "could not broadcast slashing object"),
+		errors.Wrap(poolErr, "could not insert proposer slashing into pool"),
+		equivocationErr,
+	)
 }
 
-func (s *Service) recordEarlyEquivocation(slot primitives.Slot, proposer primitives.ValidatorIndex, root [32]byte, receivedTime time.Time) {
+func (s *Service) recordEarlyEquivocation(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock, receivedTime time.Time) error {
+	slot := blk.Block().Slot()
 	slotStart, err := slots.StartTime(s.cfg.clock.GenesisTime(), slot)
 	if err != nil {
-		return
+		return err
 	}
 	cfg := params.BeaconConfig()
 	deadline := slotStart.Add(cfg.SlotComponentDuration(cfg.EquivocationEarlyDueBPS))
+	// Eligibility depends on arrival time, even if validation finishes after the deadline.
 	if receivedTime.Before(slotStart) || !receivedTime.Before(deadline) {
-		return
+		return nil
 	}
-	s.cfg.chain.RecordBlockForEquivocation(slot, proposer, root)
+	b, err := consensusblocks.NewROBlock(blk)
+	if err != nil {
+		return errors.Wrap(err, "could not compute equivocating block root")
+	}
+	root := b.Root()
+	_, err, _ = s.equivocationValidationSingleFlight.Do(string(root[:]), func() (any, error) {
+		return nil, s.cfg.chain.ValidateBlockForEquivocation(ctx, b)
+	})
+	if err != nil {
+		return errors.Wrap(err, "could not validate equivocating block")
+	}
+	s.cfg.chain.RecordBlockForEquivocation(slot, blk.Block().ProposerIndex(), root)
+	return nil
 }

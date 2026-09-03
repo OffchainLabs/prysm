@@ -7,9 +7,14 @@ import (
 
 	blockchainTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	coreblocks "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
+	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
@@ -182,6 +187,138 @@ func TestService_ReceiveBlock(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestService_ValidateBlockForEquivocation(t *testing.T) {
+	genesis, keys := util.DeterministicGenesisState(t, 64)
+	tests := []struct {
+		name      string
+		mutate    func(*testing.T, *ethpb.SignedBeaconBlock)
+		wantedErr string
+	}{
+		{
+			name: "valid block is not imported",
+		},
+		{
+			name: "valid proposer signature with invalid state root",
+			mutate: func(_ *testing.T, block *ethpb.SignedBeaconBlock) {
+				block.Block.StateRoot[0] ^= 1
+			},
+			wantedErr: "could not validate state root",
+		},
+		{
+			name: "valid proposer signature with invalid RANDAO reveal",
+			mutate: func(t *testing.T, block *ethpb.SignedBeaconBlock) {
+				block.Block.Body.RandaoReveal = keys[(int(block.Block.ProposerIndex)+1)%len(keys)].Sign(make([]byte, 32)).Marshal()
+				_, err := util.BlockSignature(genesis, block.Block, keys)
+				require.NoError(t, err)
+			},
+			wantedErr: "signature in block failed to verify",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			s, tr := minimalTestService(t)
+			require.NoError(t, s.saveGenesisData(ctx, genesis.Copy()))
+			block, err := util.GenerateFullBlock(genesis, keys, &util.BlockGenConfig{}, 1)
+			require.NoError(t, err)
+			if tt.mutate != nil {
+				tt.mutate(t, block)
+			}
+			block.Signature, err = signing.ComputeDomainAndSign(genesis, slots.ToEpoch(block.Block.Slot), block.Block, params.BeaconConfig().DomainBeaconProposer, keys[block.Block.ProposerIndex])
+			require.NoError(t, err)
+			require.NoError(t, coreblocks.VerifyBlockSignature(genesis, block.Block.ProposerIndex, block.Signature, block.Block.HashTreeRoot))
+			signed, err := blocks.NewSignedBeaconBlock(block)
+			require.NoError(t, err)
+			roblock, err := blocks.NewROBlock(signed)
+			require.NoError(t, err)
+			headRoot, err := s.HeadRoot(ctx)
+			require.NoError(t, err)
+			nodeCount := tr.fcs.NodeCount()
+
+			err = s.ValidateBlockForEquivocation(ctx, roblock)
+			if tt.wantedErr != "" {
+				require.ErrorContains(t, tt.wantedErr, err)
+			} else {
+				require.NoError(t, err)
+			}
+			assert.Equal(t, false, s.InForkchoice(roblock.Root()))
+			assert.Equal(t, false, tr.db.HasBlock(ctx, roblock.Root()))
+			assert.Equal(t, false, tr.db.HasState(ctx, roblock.Root()))
+			assert.Equal(t, nodeCount, tr.fcs.NodeCount())
+			gotHeadRoot, err := s.HeadRoot(ctx)
+			require.NoError(t, err)
+			assert.DeepEqual(t, headRoot, gotHeadRoot)
+		})
+	}
+}
+
+func TestService_ValidateBlockForEquivocation_Fulu(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.AltairForkEpoch, cfg.BellatrixForkEpoch, cfg.CapellaForkEpoch = 0, 0, 0
+	cfg.DenebForkEpoch, cfg.ElectraForkEpoch, cfg.FuluForkEpoch = 0, 0, 0
+	params.OverrideBeaconConfig(cfg)
+	genesis, keys := util.DeterministicGenesisStateFulu(t, 64)
+	block, err := util.GenerateFullBlockFulu(genesis, keys, &util.BlockGenConfig{}, 1)
+	require.NoError(t, err)
+	signed, err := blocks.NewSignedBeaconBlock(block)
+	require.NoError(t, err)
+	roblock, err := blocks.NewROBlock(signed)
+	require.NoError(t, err)
+	tests := []struct {
+		name       string
+		payloadErr error
+		knownBlock bool
+		wantedErr  string
+	}{
+		{
+			name: "valid execution payload",
+		},
+		{
+			name:       "optimistic block is not validation evidence",
+			payloadErr: execution.ErrAcceptedSyncingPayloadStatus,
+			knownBlock: true,
+			wantedErr:  "execution payload is optimistic",
+		},
+		{
+			name:       "invalid execution payload does not prune fork choice",
+			payloadErr: execution.ErrInvalidPayloadStatus,
+			knownBlock: true,
+			wantedErr:  ErrInvalidPayload.Error(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			s, tr := minimalTestService(t, WithExecutionEngineCaller(&mockExecution.EngineClient{ErrNewPayload: tt.payloadErr}))
+			require.NoError(t, s.saveGenesisData(ctx, genesis.Copy()))
+			if tt.knownBlock {
+				postState, err := transition.ExecuteStateTransition(ctx, genesis.Copy(), roblock)
+				require.NoError(t, err)
+				require.NoError(t, tr.fcs.InsertNode(ctx, postState, roblock))
+			}
+			nodeCount := tr.fcs.NodeCount()
+			headRoot, err := s.HeadRoot(ctx)
+			require.NoError(t, err)
+
+			err = s.ValidateBlockForEquivocation(ctx, roblock)
+			if tt.wantedErr != "" {
+				require.ErrorContains(t, tt.wantedErr, err)
+			} else {
+				require.NoError(t, err)
+			}
+			assert.Equal(t, tt.knownBlock, s.InForkchoice(roblock.Root()))
+			assert.Equal(t, nodeCount, tr.fcs.NodeCount())
+			assert.Equal(t, false, tr.db.HasBlock(ctx, roblock.Root()))
+			assert.Equal(t, false, tr.db.HasState(ctx, roblock.Root()))
+			gotHeadRoot, err := s.HeadRoot(ctx)
+			require.NoError(t, err)
+			assert.DeepEqual(t, headRoot, gotHeadRoot)
+		})
+	}
+}
+
 func TestHandleDA(t *testing.T) {
 	signedBeaconBlock, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlock{
 		Block: &ethpb.BeaconBlock{

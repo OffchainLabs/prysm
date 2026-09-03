@@ -370,6 +370,11 @@ func (s *ChainService) ReceiveBlock(ctx context.Context, block interfaces.ReadOn
 	return nil
 }
 
+// ValidateBlockForEquivocation mocks validation without importing the block.
+func (*ChainService) ValidateBlockForEquivocation(context.Context, blocks.ROBlock) error {
+	return nil
+}
+
 // GetBlockPreState mocks the same method in the chain service.
 func (s *ChainService) GetBlockPreState(_ context.Context, _ blocks.ROBlock) (state.BeaconState, error) {
 	return s.State, nil
