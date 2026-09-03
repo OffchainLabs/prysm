@@ -22,6 +22,7 @@ type FastConfirmationRule struct {
 
 	previousSlotHead                          [fieldparams.RootLength]byte
 	currentSlotHead                           [fieldparams.RootLength]byte
+	variablesUpdatedSlot                      primitives.Slot
 	currentEpochObservedJustifiedCheckpoint   forkchoicetypes.Checkpoint
 	previousEpochObservedJustifiedCheckpoint  forkchoicetypes.Checkpoint
 	previousEpochGreatestUnrealizedCheckpoint forkchoicetypes.Checkpoint
@@ -214,7 +215,10 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 		prevEquivScorer = EquivocationScorer(ps.EquivocationScore)
 	}
 
-	currentTarget := f.getCurrentTarget(ctx, slots.ToEpoch(currentSlot))
+	currentTarget, err := f.getCurrentTarget(ctx, slots.ToEpoch(currentSlot))
+	if err != nil {
+		return
+	}
 	honest := HonestFFGSupport(sync.OnceValues(func() (uint64, uint64) {
 		ffg := getFFG()
 		s := ComputeHonestFFGSupport(ctx, f.fc, ffg, votes, equivocating, currentTarget, currentSlot, equivScorer)
@@ -708,17 +712,17 @@ func (f *FastConfirmationRule) applyPass2SafetyGate(
 }
 
 // getCurrentTarget implements the spec's get_current_target.
-func (f *FastConfirmationRule) getCurrentTarget(ctx context.Context, currentEpoch primitives.Epoch) forkchoicetypes.Checkpoint {
+func (f *FastConfirmationRule) getCurrentTarget(ctx context.Context, currentEpoch primitives.Epoch) (forkchoicetypes.Checkpoint, error) {
 	head := f.currentSlotHead
 	epochStart, err := slots.EpochStart(currentEpoch)
 	if err != nil {
-		return forkchoicetypes.Checkpoint{}
+		return forkchoicetypes.Checkpoint{}, err
 	}
 	cpRoot, err := f.fc.AncestorRoot(ctx, head, epochStart)
 	if err != nil {
-		return forkchoicetypes.Checkpoint{}
+		return forkchoicetypes.Checkpoint{}, err
 	}
-	return forkchoicetypes.Checkpoint{Epoch: currentEpoch, Root: cpRoot}
+	return forkchoicetypes.Checkpoint{Epoch: currentEpoch, Root: cpRoot}, nil
 }
 
 // updateFastConfirmationVariables must run before get_latest_confirmed, once per slot.
@@ -740,6 +744,11 @@ func (f *FastConfirmationRule) getCurrentTarget(ctx context.Context, currentEpoc
 //	        store.previous_epoch_greatest_unrealized_checkpoint)
 //	</spec>
 func (f *FastConfirmationRule) updateFastConfirmationVariables(currentSlot primitives.Slot) {
+	if f.variablesUpdatedSlot == currentSlot && currentSlot != 0 {
+		return
+	}
+	f.variablesUpdatedSlot = currentSlot
+
 	// Rotate slot heads.
 	f.previousSlotHead = f.currentSlotHead
 	f.currentSlotHead = f.fc.CachedHeadRoot()
