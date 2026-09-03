@@ -461,7 +461,10 @@ func (s *Service) safeBlockHash() [32]byte {
 	if s.fcr != nil {
 		root := s.fcr.ConfirmedRoot()
 		if root != ([32]byte{}) {
-			return s.cfg.ForkChoiceStore.ConfirmedPayloadBlockHash(root)
+			// The lookup can miss, for example on a pruned node, fall back to unrealized justified.
+			if hash := s.cfg.ForkChoiceStore.ConfirmedPayloadBlockHash(root); hash != ([32]byte{}) {
+				return hash
+			}
 		}
 	}
 	return s.cfg.ForkChoiceStore.UnrealizedJustifiedPayloadBlockHash()
