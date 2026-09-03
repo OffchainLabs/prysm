@@ -1,14 +1,20 @@
 package local
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	accountsiface "github.com/OffchainLabs/prysm/v7/validator/accounts/iface"
 	mock "github.com/OffchainLabs/prysm/v7/validator/accounts/testing"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -258,5 +264,92 @@ func TestLocalKeymanager_ImportKeystores(t *testing.T) {
 		require.Equal(t, len(statuses), 0)
 		// local copy did not update due to bad file write
 		require.DeepEqual(t, dr.accountsStore, copyStore)
+	})
+}
+
+// fsWallet is a minimal wallet backed by real files so the keystore file watcher runs.
+type fsWallet struct {
+	dir      string
+	password string
+}
+
+func (w *fsWallet) AccountsDir() string { return w.dir }
+func (w *fsWallet) Dir() string         { return w.dir }
+func (w *fsWallet) Password() string    { return w.password }
+
+func (w *fsWallet) ReadFileAtPath(_ context.Context, pathName, fileName string) ([]byte, error) {
+	b, err := os.ReadFile(filepath.Join(w.dir, pathName, fileName))
+	if os.IsNotExist(err) {
+		return nil, errors.New("no files found")
+	}
+	return b, err
+}
+
+func (w *fsWallet) WriteFileAtPath(_ context.Context, pathName, fileName string, data []byte) (bool, error) {
+	fp := filepath.Join(w.dir, pathName, fileName)
+	if err := os.MkdirAll(filepath.Dir(fp), 0700); err != nil {
+		return false, err
+	}
+	_, statErr := os.Stat(fp)
+	if err := os.WriteFile(fp, data, 0600); err != nil {
+		return false, err
+	}
+	return statErr == nil, nil
+}
+
+func (*fsWallet) InitializeKeymanager(context.Context, accountsiface.InitKeymanagerConfig) (keymanager.IKeymanager, error) {
+	return nil, nil
+}
+
+func (*fsWallet) KeymanagerKind() keymanager.Kind { return keymanager.Local }
+
+func TestLocalKeymanager_ImportKeypairs(t *testing.T) {
+	t.Run("sequential imports with active file watcher", func(t *testing.T) {
+		ResetCaches()
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		km, err := NewKeymanager(ctx, &SetupConfig{Wallet: &fsWallet{dir: t.TempDir(), password: password}})
+		require.NoError(t, err)
+
+		// Each import rewrites the keystore file, which the watcher reloads concurrently.
+		numKeys := 5
+		for range numKeys {
+			priv, err := bls.RandKey()
+			require.NoError(t, err)
+			require.NoError(t, km.ImportKeypairs(ctx, [][]byte{priv.Marshal()}, [][]byte{priv.PublicKey().Marshal()}))
+			time.Sleep(10 * time.Millisecond)
+		}
+		keys, err := km.FetchValidatingPublicKeys(ctx)
+		require.NoError(t, err)
+		require.Equal(t, numKeys, len(keys))
+	})
+	t.Run("imports race concurrent keystore file reloads", func(t *testing.T) {
+		ResetCaches()
+		ctx := t.Context()
+		w := &fsWallet{dir: t.TempDir(), password: password}
+		km, err := NewKeymanager(ctx, &SetupConfig{Wallet: w})
+		require.NoError(t, err)
+		seed, err := bls.RandKey()
+		require.NoError(t, err)
+		require.NoError(t, km.ImportKeypairs(ctx, [][]byte{seed.Marshal()}, [][]byte{seed.PublicKey().Marshal()}))
+
+		accountsFile := filepath.Join(w.dir, AccountsPath, AccountsKeystoreFileName)
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			for range 3 {
+				km.reloadAccountsFromKeystoreFile(accountsFile)
+			}
+		}()
+		for range 3 {
+			priv, err := bls.RandKey()
+			require.NoError(t, err)
+			require.NoError(t, km.ImportKeypairs(ctx, [][]byte{priv.Marshal()}, [][]byte{priv.PublicKey().Marshal()}))
+		}
+		<-done
+
+		keys, err := km.FetchValidatingPublicKeys(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 4, len(keys))
 	})
 }

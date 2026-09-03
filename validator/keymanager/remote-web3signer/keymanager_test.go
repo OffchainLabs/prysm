@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -133,8 +134,10 @@ func TestNewKeymanager(t *testing.T) {
 				BaseEndpoint:          "http://prysm.xyz/",
 				GenesisValidatorsRoot: root,
 				ProvidedPublicKeys:    []string{"0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"},
+				KeyFilePath:           filepath.Join(t.TempDir(), "good_keyfile.txt"),
 			},
-			want: []string{"0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820", "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055", "0x800057e262bfe42413c2cfce948ff77f11efeea19721f590c8b5b2f32fecb0e164cafba987c80465878408d05b97c9be"},
+			fileContents: []string{"0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055", "800057e262bfe42413c2cfce948ff77f11efeea19721f590c8b5b2f32fecb0e164cafba987c80465878408d05b97c9be"},
+			want:         []string{"0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820", "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055", "0x800057e262bfe42413c2cfce948ff77f11efeea19721f590c8b5b2f32fecb0e164cafba987c80465878408d05b97c9be"},
 		},
 	}
 	for _, tt := range tests {
@@ -162,10 +165,10 @@ func TestNewKeymanager(t *testing.T) {
 				require.ErrorContains(t, tt.wantErr, err)
 				return
 			}
-			keys := make([]string, len(km.providedPublicKeys))
-			for i, key := range km.providedPublicKeys {
-				keys[i] = hexutil.Encode(key[:])
-				require.Equal(t, true, slices.Contains(tt.want, keys[i]))
+			all := km.keys.all()
+			require.Equal(t, len(tt.want), len(all))
+			for _, key := range all {
+				require.Equal(t, true, slices.Contains(tt.want, hexutil.Encode(key[:])))
 			}
 		})
 	}
@@ -204,25 +207,29 @@ func TestNewKeyManager_FileAndFlagsWithDifferentKeys(t *testing.T) {
 		ProvidedPublicKeys:    []string{"0x800077e04f8d7496099b3d30ac5430aea64873a45e5bcfe004d2095babcbf55e21138ff0d5691abc29da190aa32755c6"},
 	})
 	require.NoError(t, err)
+	// Both keys validate, but the file keeps holding only its own.
 	wantSlice := []string{"0x800077e04f8d7496099b3d30ac5430aea64873a45e5bcfe004d2095babcbf55e21138ff0d5691abc29da190aa32755c6",
 		"0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055"}
-	// provided public keys are saved to the file
-	keys, _, err := km.readKeyFile()
-	require.NoError(t, err)
-	for _, key := range keys {
+	all := km.keys.all()
+	require.Equal(t, 2, len(all))
+	for _, key := range all {
 		require.Equal(t, slices.Contains(wantSlice, hexutil.Encode(key[:])), true)
 	}
-	// wait for reading to be done
-	time.Sleep(2 * time.Second)
-	// test fall back by clearing file
-	go func() {
-		require.NoError(t, file.WriteFile(keyFilePath, []byte(" ")))
-	}()
-	// waiting for writing to be done
-	time.Sleep(2 * time.Second)
-	require.LogsContain(t, logHook, "Remote signer key file no longer has keys, defaulting to flag provided keys")
+	keys, err := km.readKeyFile()
+	require.NoError(t, err)
+	require.Equal(t, 1, len(keys))
+	require.Equal(t, "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055", hexutil.Encode(keys[0][:]))
+	// Clearing the file empties its source, leaving only the flag provided keys.
+	require.NoError(t, file.WriteFile(keyFilePath, []byte(" ")))
+	deadline := time.Now().Add(5 * time.Second)
+	for len(km.keys.all()) != 1 {
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for the watcher to drop the file keys")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	require.LogsContain(t, logHook, "Remote signer key file has no keys, so the key file no longer contributes any validating keys")
 
-	// fall back to flag provided keys
 	keys, err = km.FetchValidatingPublicKeys(context.TODO())
 	require.NoError(t, err)
 	require.Equal(t, 1, len(keys))
@@ -454,27 +461,106 @@ func TestKeymanager_ExternalURLUnreachable_StartsWhenPolling(t *testing.T) {
 	require.Equal(t, 0, len(keys))
 }
 
-func TestKeymanager_AddPublicKeys(t *testing.T) {
+func TestKeymanager_PollsAlongsideAKeyFile(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	droppedKey := "0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"
+	keptKey := "0x800057e262bfe42413c2cfce948ff77f11efeea19721f590c8b5b2f32fecb0e164cafba987c80465878408d05b97c9be"
+	fileKey := "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055"
+
+	var mu sync.Mutex
+	served := []string{droppedKey, keptKey}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(served))
+	}))
+	defer srv.Close()
+
+	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+	require.NoError(t, file.WriteFile(keyFilePath, []byte(fileKey+"\n")))
+	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
+	require.NoError(t, err)
+	km, err := NewKeymanager(ctx, &SetupConfig{
+		BaseEndpoint:          "http://example.com",
+		GenesisValidatorsRoot: root,
+		PublicKeysURL:         srv.URL + "/api/v1/eth2/publicKeys",
+		KeyFilePath:           keyFilePath,
+		PollInterval:          10 * time.Millisecond,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 3, len(km.keys.all()))
+
+	// The signer drops a key, and the poll picks that up even though a key file is configured.
+	mu.Lock()
+	served = []string{keptKey}
+	mu.Unlock()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		keys, err := km.FetchValidatingPublicKeys(ctx)
+		require.NoError(t, err)
+		if len(keys) == 2 && !slices.Contains(encodeKeys(keys), droppedKey) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for the poll to drop the URL key")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// The file key is untouched by the poller and still deletable through the API.
+	statuses, err := km.DeletePublicKeys([]string{fileKey})
+	require.NoError(t, err)
+	require.Equal(t, keymanager.StatusDeleted, statuses[0].Status)
+}
+
+func TestKeymanager_AddPublicKeys_NoKeyFile(t *testing.T) {
 	ctx := t.Context()
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
 	require.NoError(t, err)
-	config := &SetupConfig{
+	km, err := NewKeymanager(ctx, &SetupConfig{
 		BaseEndpoint:          "http://example.com",
 		GenesisValidatorsRoot: root,
-	}
-	km, err := NewKeymanager(ctx, config)
+	})
 	require.NoError(t, err)
-	publicKeys := []string{"0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"}
-	statuses, err := km.AddPublicKeys(publicKeys)
+
+	statuses, err := km.AddPublicKeys([]string{"0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"})
 	require.NoError(t, err)
-	for _, status := range statuses {
-		require.Equal(t, keymanager.StatusImported, status.Status)
-	}
-	statuses, err = km.AddPublicKeys(publicKeys)
+	require.Equal(t, 1, len(statuses))
+	require.Equal(t, keymanager.StatusError, statuses[0].Status)
+	require.StringContains(t, "validators-external-signer-key-file", statuses[0].Message)
+
+	keys, err := km.FetchValidatingPublicKeys(ctx)
 	require.NoError(t, err)
-	for _, status := range statuses {
-		require.Equal(t, keymanager.StatusDuplicate, status.Status)
-	}
+	require.Equal(t, 0, len(keys))
+}
+
+func TestKeymanager_AddPublicKeys_DuplicateOfDerivedKey(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	flagKey := "0x800077e04f8d7496099b3d30ac5430aea64873a45e5bcfe004d2095babcbf55e21138ff0d5691abc29da190aa32755c6"
+	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+	require.NoError(t, file.WriteFile(keyFilePath, nil))
+	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
+	require.NoError(t, err)
+	km, err := NewKeymanager(ctx, &SetupConfig{
+		BaseEndpoint:          "http://example.com",
+		GenesisValidatorsRoot: root,
+		KeyFilePath:           keyFilePath,
+		ProvidedPublicKeys:    []string{flagKey},
+	})
+	require.NoError(t, err)
+
+	newKey := "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055"
+	statuses, err := km.AddPublicKeys([]string{flagKey, "not-a-key", newKey, newKey})
+	require.NoError(t, err)
+	require.Equal(t, keymanager.StatusDuplicate, statuses[0].Status)
+	require.Equal(t, keymanager.StatusError, statuses[1].Status)
+	require.Equal(t, keymanager.StatusImported, statuses[2].Status)
+	// The same key twice in one request is only imported once.
+	require.Equal(t, keymanager.StatusDuplicate, statuses[3].Status)
 }
 
 func TestKeymanager_AddPublicKeys_WithFile(t *testing.T) {
@@ -505,40 +591,91 @@ func TestKeymanager_AddPublicKeys_WithFile(t *testing.T) {
 	for _, status := range statuses {
 		require.Equal(t, keymanager.StatusDuplicate, status.Status)
 	}
-	keys, _, err := km.readKeyFile()
+	keys, err := km.readKeyFile()
 	require.NoError(t, err)
 	require.Equal(t, len(keys), len(publicKeys))
 	require.Equal(t, hexutil.Encode(keys[0][:]), publicKeys[0])
 }
 
-func TestKeymanager_DeletePublicKeys(t *testing.T) {
-	ctx := t.Context()
+func TestKeymanager_DeletePublicKeys_DerivedKeysAreNotDeletable(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	flagKey := "0x800077e04f8d7496099b3d30ac5430aea64873a45e5bcfe004d2095babcbf55e21138ff0d5691abc29da190aa32755c6"
+	fileKey := "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055"
+	unknownKey := "0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"
+	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+	require.NoError(t, file.WriteFile(keyFilePath, []byte(fileKey+"\n")))
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
 	require.NoError(t, err)
-	config := &SetupConfig{
+	km, err := NewKeymanager(ctx, &SetupConfig{
 		BaseEndpoint:          "http://example.com",
 		GenesisValidatorsRoot: root,
-	}
-	km, err := NewKeymanager(ctx, config)
+		KeyFilePath:           keyFilePath,
+		ProvidedPublicKeys:    []string{flagKey},
+	})
 	require.NoError(t, err)
-	publicKeys := []string{"0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"}
-	statuses, err := km.AddPublicKeys(publicKeys)
-	require.NoError(t, err)
-	for _, status := range statuses {
-		require.Equal(t, keymanager.StatusImported, status.Status)
-	}
 
-	s, err := km.DeletePublicKeys(publicKeys)
+	statuses, err := km.DeletePublicKeys([]string{flagKey, fileKey, unknownKey, fileKey})
 	require.NoError(t, err)
-	for _, status := range s {
-		require.Equal(t, keymanager.StatusDeleted, status.Status)
-	}
+	require.Equal(t, keymanager.StatusError, statuses[0].Status)
+	require.StringContains(t, "validators-external-signer-public-keys", statuses[0].Message)
+	require.Equal(t, keymanager.StatusDeleted, statuses[1].Status)
+	require.Equal(t, keymanager.StatusNotFound, statuses[2].Status)
+	// The same key twice in one request is only deleted once.
+	require.Equal(t, keymanager.StatusNotFound, statuses[3].Status)
 
-	s, err = km.DeletePublicKeys(publicKeys)
+	// Only the file key is gone, the flag key keeps validating.
+	keys, err := km.FetchValidatingPublicKeys(ctx)
 	require.NoError(t, err)
-	for _, status := range s {
-		require.Equal(t, keymanager.StatusNotFound, status.Status)
-	}
+	require.Equal(t, 1, len(keys))
+	require.Equal(t, flagKey, hexutil.Encode(keys[0][:]))
+}
+
+func TestKeymanager_DeletePublicKeys_URLOwnedKey(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	urlKey := "0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode([]string{urlKey}))
+	}))
+	defer srv.Close()
+
+	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+	// Older versions copied URL keys into the key file, so an upgraded deployment can
+	// legitimately have the same key in both sources.
+	require.NoError(t, file.WriteFile(keyFilePath, []byte(urlKey+"\n")))
+	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
+	require.NoError(t, err)
+	km, err := NewKeymanager(ctx, &SetupConfig{
+		BaseEndpoint:          "http://example.com",
+		GenesisValidatorsRoot: root,
+		PublicKeysURL:         srv.URL + "/api/v1/eth2/publicKeys",
+		KeyFilePath:           keyFilePath,
+	})
+	require.NoError(t, err)
+
+	// Deleting cannot stop a URL-owned key from validating, but it must clean up the
+	// stale file copy so the key does not become file-owned if the URL later drops it.
+	statuses, err := km.DeletePublicKeys([]string{urlKey})
+	require.NoError(t, err)
+	require.Equal(t, keymanager.StatusError, statuses[0].Status)
+	require.StringContains(t, "removed from the key file", statuses[0].Message)
+	require.StringContains(t, "continues validating", statuses[0].Message)
+
+	fileKeys, err := km.readKeyFile()
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fileKeys))
+
+	// Nor can it be re-imported as a file key.
+	statuses, err = km.AddPublicKeys([]string{urlKey})
+	require.NoError(t, err)
+	require.Equal(t, keymanager.StatusDuplicate, statuses[0].Status)
+
+	keys, err := km.FetchValidatingPublicKeys(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(keys))
+	require.Equal(t, urlKey, hexutil.Encode(keys[0][:]))
 }
 
 func TestKeymanager_DeletePublicKeys_WithFile(t *testing.T) {
@@ -576,57 +713,44 @@ func TestKeymanager_DeletePublicKeys_WithFile(t *testing.T) {
 	for _, status := range s {
 		require.Equal(t, keymanager.StatusNotFound, status.Status)
 	}
-	keys, _, err := km.readKeyFile()
+	keys, err := km.readKeyFile()
 	require.NoError(t, err)
 	require.Equal(t, len(keys), 1)
 	require.Equal(t, hexutil.Encode(keys[0][:]), publicKeys[1])
 }
 
-func TestKeymanager_DeletePublicKeys_NoKeysDoesNotLeakReadLock(t *testing.T) {
-	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
-	require.NoError(t, err)
-	km, err := NewKeymanager(t.Context(), &SetupConfig{
-		BaseEndpoint:          "http://example.com",
-		GenesisValidatorsRoot: root,
-	})
-	require.NoError(t, err)
+func TestKeymanager_IsReadOnly(t *testing.T) {
+	flagKey, urlKey, fileKey := pubkey{1}, pubkey{2}, pubkey{3}
+	sharedKey := pubkey{4}
+	unknownKey := pubkey{5}
 
-	publicKeys := []string{"0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"}
-	s, err := km.DeletePublicKeys(publicKeys)
-	require.NoError(t, err)
-	for _, status := range s {
-		require.Equal(t, keymanager.StatusNotFound, status.Status)
-	}
-
-	// The early return must not leave a read lock held, or every later writer blocks.
-	require.Equal(t, true, km.lock.TryLock(), "DeletePublicKeys returned holding a read lock")
-	km.lock.Unlock()
-}
-
-func TestEqualKeySet(t *testing.T) {
-	k1 := [48]byte{1}
-	k2 := [48]byte{2}
+	km := &Keymanager{}
+	km.keys.replace(sourceFlag, []pubkey{flagKey, sharedKey})
+	km.keys.replace(sourceURL, []pubkey{urlKey})
+	km.keys.replace(sourceFile, []pubkey{fileKey, sharedKey})
 
 	tests := []struct {
 		name string
-		x    [][48]byte
-		y    [][48]byte
+		key  pubkey
 		want bool
 	}{
-		{name: "both empty", x: nil, y: nil, want: true},
-		{name: "equal single", x: [][48]byte{k1}, y: [][48]byte{k1}, want: true},
-		{name: "same set different order", x: [][48]byte{k1, k2}, y: [][48]byte{k2, k1}, want: true},
-		{name: "different length", x: [][48]byte{k1}, y: [][48]byte{k1, k2}, want: false},
-		{name: "same length different members", x: [][48]byte{k1}, y: [][48]byte{k2}, want: false},
-		{name: "empty vs non-empty", x: nil, y: [][48]byte{k1}, want: false},
-		{name: "duplicate entries keep same distinct set", x: [][48]byte{k1}, y: [][48]byte{k1, k1}, want: true},
-		{name: "duplicate on left is still equal", x: [][48]byte{k1, k1}, y: [][48]byte{k1}, want: true},
-		// A duplicate must not mask a removal: {k1,k2} -> {k1,k1} drops k2.
-		{name: "duplicate does not mask removal", x: [][48]byte{k1, k2}, y: [][48]byte{k1, k1}, want: false},
+		{name: "flag key is read-only", key: flagKey, want: true},
+		{name: "URL key is read-only", key: urlKey, want: true},
+		{name: "file key is writable", key: fileKey, want: false},
+		{name: "key in flag and file is read-only", key: sharedKey, want: true},
+		{name: "unknown key is read-only", key: unknownKey, want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.want, equalKeySet(tt.x, tt.y))
+			require.Equal(t, tt.want, km.IsReadOnly(tt.key))
 		})
 	}
+}
+
+func encodeKeys(keys []pubkey) []string {
+	encoded := make([]string, len(keys))
+	for i, key := range keys {
+		encoded[i] = hexutil.Encode(key[:])
+	}
+	return encoded
 }

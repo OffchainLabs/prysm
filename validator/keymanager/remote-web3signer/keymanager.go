@@ -4,15 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"path/filepath"
-	"slices"
 	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/async/event"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/io/file"
@@ -53,7 +51,9 @@ type SetupConfig struct {
 	ProvidedPublicKeys []string
 
 	// PollInterval makes the keymanager re-fetch the URL (PublicKeysURL) on this interval to
-	// hot-reload the validating public key set. A failed or empty response keeps the current keys.
+	// hot-reload the validating public key set. A failed or empty response keeps the current
+	// keys. Polling only replaces the URL's own keys, so it leaves the flag and key file
+	// keys alone.
 	// Note: Zero or negative disables polling.
 	PollInterval time.Duration
 }
@@ -62,15 +62,13 @@ type SetupConfig struct {
 type Keymanager struct {
 	client                internal.HttpSignerClient
 	genesisValidatorsRoot []byte
-	providedPublicKeys    [][48]byte          // (source of truth) flag loaded + file loaded + api loaded keys
-	flagLoadedKeysMap     map[string][48]byte // stores what was provided from flag ( as opposed to from file )
+	keys                  keySets
 	accountsChangedFeed   *event.Feed
 	validator             *validator.Validate
 	retriesRemaining      int
 	keyFilePath           string
-	lock                  sync.RWMutex
-	// serialize updatePublicKeys as we have multiple concurrent updaters
-	// - URL poller, file watcher, Keymanager API.
+	// serialize key set replacement and its notification across the URL poller, the file
+	// watcher and the keymanager API, so subscribers never observe them out of order.
 	updateLock sync.Mutex
 }
 
@@ -104,16 +102,28 @@ func NewKeymanager(ctx context.Context, cfg *SetupConfig) (*Keymanager, error) {
 		if !keyFileExists {
 			return nil, fmt.Errorf("no file exists in remote signer key file path %s", km.keyFilePath)
 		}
+
+		// NOTE: Warn users rather than fail as only keymanager API write path is dead.
+		if err := keyFileDirWritable(km.keyFilePath); err != nil {
+			log.
+				WithError(err).
+				WithField("dir", filepath.Dir(km.keyFilePath)).
+				Warn("Cannot create files in the remote signer key file directory, so keymanager API imports and deletions will fail. Keys already in the file still validate")
+		}
 	}
 
-	var ppk []string
-	// load key values
+	// Load the derived key sources:
+	// 1. From URL.
 	if cfg.PublicKeysURL != "" {
-		providedPublicKeys, err := km.client.GetPublicKeys(ctx, cfg.PublicKeysURL)
+		raw, err := km.client.GetPublicKeys(ctx, cfg.PublicKeysURL)
 		switch {
 		case err == nil:
-			ppk = providedPublicKeys
-		case cfg.PollInterval > 0 && !keyFileExists:
+			urlKeys, err := decodePublicKeys(raw)
+			if err != nil {
+				return nil, fmt.Errorf("decode public keys: %w", err)
+			}
+			km.keys.replace(sourceURL, urlKeys)
+		case cfg.PollInterval > 0:
 			// Polling will retry, so start with no keys rather than refusing to start.
 			erroredResponsesTotal.Inc()
 			log.
@@ -124,57 +134,26 @@ func NewKeymanager(ctx context.Context, cfg *SetupConfig) (*Keymanager, error) {
 			erroredResponsesTotal.Inc()
 			return nil, errors.Wrapf(err, "could not get public keys from remote server URL %v", api.RedactEndpoint(cfg.PublicKeysURL))
 		}
-	} else if len(cfg.ProvidedPublicKeys) != 0 {
-		ppk = cfg.ProvidedPublicKeys
-	}
-
-	// use a map to remove duplicates
-	flagLoadedKeys := make(map[string][48]byte)
-
-	// Populate the map with existing keys
-	for _, key := range ppk {
-		b, err := bytesutil.DecodeHex48(key)
-		if err != nil {
-			return nil, fmt.Errorf("decode public key %s: %w", key, err)
-		}
-		flagLoadedKeys[key] = b
-	}
-	km.flagLoadedKeysMap = flagLoadedKeys
-
-	// File-based key source is not set here. Start polling from the URL if configured, and hot-reload from file if configured.
-	if !keyFileExists {
-		// Load provided public keys in memory.
-		km.lock.Lock()
-		km.providedPublicKeys = slices.Collect(maps.Values(flagLoadedKeys))
-		km.lock.Unlock()
 
 		go km.pollRemoteKeysFromURL(ctx, cfg.PublicKeysURL, cfg.PollInterval)
+	}
 
+	// 2. From the flag.
+	if len(cfg.ProvidedPublicKeys) != 0 {
+		flagKeys, err := decodePublicKeys(cfg.ProvidedPublicKeys)
+		if err != nil {
+			return nil, fmt.Errorf("decode public keys: %w", err)
+		}
+		km.keys.replace(sourceFlag, flagKeys)
+	}
+
+	// Return early when no persistent storage is configured.
+	if !keyFileExists {
 		return km, nil
 	}
 
 	log.WithField("file", km.keyFilePath).Info("Loading keys from file")
 
-	// Notify users that poll interval flag is a no-op when a key file is provided.
-	if cfg.PollInterval > 0 {
-		log.Warn("Web3Signer key poll interval is set but key file is configured. " +
-			"The poll interval will be ignored since the key file takes precedence over the URL.")
-	}
-
-	_, fileKeys, err := km.readKeyFile()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not read key file")
-	}
-	if len(flagLoadedKeys) != 0 {
-		log.WithField("flagLoadedKeyCount", len(flagLoadedKeys)).WithField("fileLoadedKeyCount", len(fileKeys)).Info("Combining flag loaded keys and file loaded keys.")
-		maps.Copy(fileKeys, flagLoadedKeys)
-		if err = km.savePublicKeysToFile(fileKeys); err != nil {
-			return nil, errors.Wrap(err, "could not save public keys to file")
-		}
-	}
-	km.lock.Lock()
-	km.providedPublicKeys = slices.Collect(maps.Values(fileKeys))
-	km.lock.Unlock()
 	watcherReady := make(chan error, 1)
 	var watcherReadyOnce sync.Once
 	markWatcherReady := func(err error) {
@@ -199,46 +178,30 @@ func NewKeymanager(ctx context.Context, cfg *SetupConfig) (*Keymanager, error) {
 	return km, nil
 }
 
-// equalKeySet reports whether a and b contain the same set of keys, ignoring
-// order and duplicates.
-func equalKeySet(a, b [][fieldparams.BLSPubkeyLength]byte) bool {
-	setA := make(map[[fieldparams.BLSPubkeyLength]byte]struct{}, len(a))
-	for _, k := range a {
-		setA[k] = struct{}{}
-	}
-	distinctB := make(map[[fieldparams.BLSPubkeyLength]byte]struct{}, len(b))
-	for _, k := range b {
-		if _, ok := setA[k]; !ok {
-			return false // b has a key that a does not.
-		}
-		distinctB[k] = struct{}{}
-	}
-
-	return len(setA) == len(distinctB)
-}
-
-func (km *Keymanager) updatePublicKeys(keys [][48]byte) {
+// replaceKeys swaps src's key set and notifies subscribers when the validating set changed.
+func (km *Keymanager) replaceKeys(src keySource, keys []pubkey) {
 	km.updateLock.Lock()
 	defer km.updateLock.Unlock()
 
-	km.lock.Lock()
-	if equalKeySet(km.providedPublicKeys, keys) {
-		km.lock.Unlock()
+	km.replaceKeysLocked(src, keys)
+}
+
+// replaceKeysLocked is replaceKeys for callers that already hold updateLock.
+func (km *Keymanager) replaceKeysLocked(src keySource, keys []pubkey) {
+	changed, union := km.keys.replace(src, keys)
+	if !changed {
 		return
 	}
-	km.providedPublicKeys = keys
-	km.lock.Unlock()
 
-	km.accountsChangedFeed.Send(keys)
-	log.WithField("count", len(keys)).Debug("Updated public keys")
+	km.accountsChangedFeed.Send(union)
+	log.WithField("count", len(union)).Debug("Updated public keys")
 }
 
 // FetchValidatingPublicKeys fetches the validating public keys
-func (km *Keymanager) FetchValidatingPublicKeys(_ context.Context) ([][fieldparams.BLSPubkeyLength]byte, error) {
-	km.lock.RLock()
-	defer km.lock.RUnlock()
-	log.WithField("count", len(km.providedPublicKeys)).Debug("Fetched validating public keys")
-	return km.providedPublicKeys, nil
+func (km *Keymanager) FetchValidatingPublicKeys(_ context.Context) ([]pubkey, error) {
+	keys := km.keys.all()
+	log.WithField("count", len(keys)).Debug("Fetched validating public keys")
+	return keys, nil
 }
 
 // Sign signs the message by using a remote web3signer server.
@@ -587,7 +550,7 @@ func handleRegistration(ctx context.Context, validator *validator.Validate, requ
 }
 
 // SubscribeAccountChanges returns the event subscription for changes to public keys.
-func (km *Keymanager) SubscribeAccountChanges(pubKeysChan chan [][fieldparams.BLSPubkeyLength]byte) event.Subscription {
+func (km *Keymanager) SubscribeAccountChanges(pubKeysChan chan []pubkey) event.Subscription {
 	return km.accountsChangedFeed.Subscribe(pubKeysChan)
 }
 
@@ -646,133 +609,126 @@ func DisplayRemotePublicKeys(validatingPubKeys [][48]byte) {
 
 // AddPublicKeys imports a list of public keys into the keymanager for web3signer use. Returns status with message.
 func (km *Keymanager) AddPublicKeys(pubKeys []string) ([]*keymanager.KeyStatus, error) {
-	importedRemoteKeysStatuses := make([]*keymanager.KeyStatus, len(pubKeys))
-	// Using a map to track both existing and new public keys efficiently
-	combinedKeys := make(map[string][48]byte)
+	statuses := make([]*keymanager.KeyStatus, len(pubKeys))
 
-	// Populate the map with existing keys
-	km.lock.RLock()
-	originalKeysLen := len(km.providedPublicKeys)
-	for _, key := range km.providedPublicKeys {
-		encodedKey := hexutil.Encode(key[:])
-		combinedKeys[encodedKey] = key
+	// Return early when no persistent storage is configured.
+	if km.keyFilePath == "" {
+		for i := range statuses {
+			statuses[i] = &keymanager.KeyStatus{
+				Status:  keymanager.StatusError,
+				Message: "no persistent storage for remote keys is configured; set --" + flags.Web3SignerKeyFileFlag.Name,
+			}
+		}
+		return statuses, nil
 	}
-	km.lock.RUnlock()
+
+	km.updateLock.Lock()
+	defer km.updateLock.Unlock()
+
+	fileKeys := km.keys.get(sourceFile)
+	changed := false
 
 	for i, pubkey := range pubKeys {
-		pubkeyBytes, err := hexutil.Decode(pubkey)
+		key, err := bytesutil.DecodeHex48(pubkey)
 		if err != nil {
-			importedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
-				Status:  keymanager.StatusError,
-				Message: err.Error(),
-			}
+			statuses[i] = &keymanager.KeyStatus{Status: keymanager.StatusError, Message: err.Error()}
 			continue
 		}
-		if len(pubkeyBytes) != fieldparams.BLSPubkeyLength {
-			importedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
-				Status:  keymanager.StatusError,
-				Message: fmt.Sprintf("pubkey byte length (%d) did not match bls pubkey byte length (%d)", len(pubkeyBytes), fieldparams.BLSPubkeyLength),
-			}
-			continue
-		}
-
-		encodedPubkey := hexutil.Encode(pubkeyBytes)
-		if _, exists := combinedKeys[encodedPubkey]; exists {
-			importedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
+		// A key owned by any source, or already staged by this request, is known to the client.
+		_, staged := fileKeys[key]
+		if _, owned := km.keys.owner(key); staged || owned {
+			statuses[i] = &keymanager.KeyStatus{
 				Status:  keymanager.StatusDuplicate,
 				Message: fmt.Sprintf("Duplicate pubkey: %v, already in use", pubkey),
 			}
 			continue
 		}
 
-		// Add the new key to the map
-		combinedKeys[encodedPubkey] = bytesutil.ToBytes48(pubkeyBytes)
-		importedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
+		fileKeys[key] = struct{}{}
+		changed = true
+		statuses[i] = &keymanager.KeyStatus{
 			Status:  keymanager.StatusImported,
 			Message: fmt.Sprintf("Successfully added pubkey: %v", pubkey),
 		}
-		log.Debug("Added pubkey to keymanager for web3signer", "pubkey", pubkey)
+		log.WithField("pubkey", pubkey).Debug("Added pubkey to keymanager for web3signer")
 	}
 
-	if originalKeysLen != len(combinedKeys) {
-		if km.keyFilePath != "" {
-			if err := km.savePublicKeysToFile(combinedKeys); err != nil {
-				return nil, err
-			}
-		} else {
-			km.updatePublicKeys(slices.Collect(maps.Values(combinedKeys)))
+	if changed {
+		if err := km.savePublicKeysToFile(sortedKeys(fileKeys)); err != nil {
+			return nil, fmt.Errorf("save public keys to file: %w", err)
 		}
 	}
 
-	return importedRemoteKeysStatuses, nil
+	return statuses, nil
 }
 
 // DeletePublicKeys removes a list of public keys from the keymanager for web3signer use. Returns status with message.
+// Keys derived from the flag or URL remain validating, but any stale copy in the key file
+// is removed so it cannot take ownership if the derived source later drops the key.
 func (km *Keymanager) DeletePublicKeys(publicKeys []string) ([]*keymanager.KeyStatus, error) {
-	deletedRemoteKeysStatuses := make([]*keymanager.KeyStatus, len(publicKeys))
-	// Using a map to track both existing and new public keys efficiently
-	combinedKeys := make(map[string][48]byte)
-	km.lock.RLock()
-	originalKeysLen := len(km.providedPublicKeys)
-	if originalKeysLen == 0 {
-		km.lock.RUnlock()
-		for i := range deletedRemoteKeysStatuses {
-			deletedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
-				Status:  keymanager.StatusNotFound,
-				Message: "No pubkeys are set in validator",
-			}
-		}
-		return deletedRemoteKeysStatuses, nil
-	}
+	statuses := make([]*keymanager.KeyStatus, len(publicKeys))
 
-	// Populate the map with existing keys
-	for _, key := range km.providedPublicKeys {
-		encodedKey := hexutil.Encode(key[:])
-		combinedKeys[encodedKey] = key
-	}
-	km.lock.RUnlock()
+	km.updateLock.Lock()
+	defer km.updateLock.Unlock()
+
+	fileKeys := km.keys.get(sourceFile)
+	changed := false
 
 	for i, pubkey := range publicKeys {
-		pubkeyBytes, err := hexutil.Decode(pubkey)
+		key, err := bytesutil.DecodeHex48(pubkey)
 		if err != nil {
-			deletedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
+			statuses[i] = &keymanager.KeyStatus{Status: keymanager.StatusError, Message: err.Error()}
+			continue
+		}
+		_, inFile := fileKeys[key]
+		if inFile {
+			delete(fileKeys, key)
+			changed = true
+		}
+		if src, owned := km.keys.owner(key); owned && src != sourceFile {
+			message := fmt.Sprintf("Pubkey: %v is provided by %s and cannot be deleted through the keymanager API", pubkey, src)
+			if inFile {
+				message = fmt.Sprintf("Pubkey: %v was removed from the key file but is still provided by %s and continues validating", pubkey, src)
+			}
+			statuses[i] = &keymanager.KeyStatus{
 				Status:  keymanager.StatusError,
-				Message: err.Error(),
+				Message: message,
 			}
 			continue
 		}
-		if len(pubkeyBytes) != fieldparams.BLSPubkeyLength {
-			deletedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
-				Status:  keymanager.StatusError,
-				Message: fmt.Sprintf("pubkey byte length (%d) did not match bls pubkey byte length (%d)", len(pubkeyBytes), fieldparams.BLSPubkeyLength),
-			}
-			continue
-		}
-		_, exists := combinedKeys[pubkey]
-		if !exists {
-			deletedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
+		// Anything left is deletable only if the file still lists it, which also covers a
+		// key repeated within one request.
+		if !inFile {
+			statuses[i] = &keymanager.KeyStatus{
 				Status:  keymanager.StatusNotFound,
 				Message: fmt.Sprintf("Pubkey: %v not found", pubkey),
 			}
 			continue
 		}
-		delete(combinedKeys, pubkey)
-		deletedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
+
+		statuses[i] = &keymanager.KeyStatus{
 			Status:  keymanager.StatusDeleted,
 			Message: fmt.Sprintf("Successfully deleted pubkey: %v", pubkey),
 		}
 		log.WithField("pubkey", pubkey).Debug("Deleted pubkey from keymanager for remote signer")
 	}
 
-	if originalKeysLen != len(combinedKeys) {
-		if km.keyFilePath != "" {
-			if err := km.savePublicKeysToFile(combinedKeys); err != nil {
-				return nil, err
-			}
-		} else {
-			km.updatePublicKeys(slices.Collect(maps.Values(combinedKeys)))
+	if changed {
+		if err := km.savePublicKeysToFile(sortedKeys(fileKeys)); err != nil {
+			return nil, fmt.Errorf("save public keys to file: %w", err)
 		}
 	}
 
-	return deletedRemoteKeysStatuses, nil
+	return statuses, nil
+}
+
+// IsReadOnly returns true if the key is not owned by the key file, meaning it is derived from the flag or the URL.
+// If the key is not owned by any source, it is also considered read-only.
+func (km *Keymanager) IsReadOnly(key pubkey) bool {
+	src, owned := km.keys.owner(key)
+	if !owned {
+		return true
+	}
+
+	return src != sourceFile
 }

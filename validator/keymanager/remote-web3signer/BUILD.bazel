@@ -3,6 +3,8 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "helper.go",
+        "key_sets.go",
         "key_source_file.go",
         "key_source_url.go",
         "keymanager.go",
@@ -18,6 +20,7 @@ go_library(
     deps = [
         "//api:go_default_library",
         "//async/event:go_default_library",
+        "//cmd/validator/flags:go_default_library",
         "//config/fieldparams:go_default_library",
         "//crypto/bls:go_default_library",
         "//encoding/bytesutil:go_default_library",
@@ -43,6 +46,8 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "helper_test.go",
+        "key_sets_test.go",
         "key_source_file_test.go",
         "key_source_url_test.go",
         "keymanager_test.go",
@@ -50,7 +55,6 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//async/event:go_default_library",
-        "//config/fieldparams:go_default_library",
         "//crypto/bls:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//io/file:go_default_library",
