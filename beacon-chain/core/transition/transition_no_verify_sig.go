@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -346,7 +347,8 @@ func ProcessBlockNoVerifyAnySig(
 func ProcessOperationsNoVerifyAttsSigs(
 	ctx context.Context,
 	state state.BeaconState,
-	beaconBlock interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+	beaconBlock interfaces.ReadOnlyBeaconBlock,
+	parentSlot primitives.Slot) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "core.state.ProcessOperationsNoVerifyAttsSigs")
 	defer span.End()
 	if beaconBlock == nil || beaconBlock.IsNil() {
@@ -359,7 +361,7 @@ func ProcessOperationsNoVerifyAttsSigs(
 
 	blockVersion := beaconBlock.Version()
 	if blockVersion >= version.Gloas {
-		state, err := gloasOperations(ctx, state, beaconBlock)
+		state, err := gloasOperations(ctx, state, beaconBlock, parentSlot)
 		if err != nil {
 			return nil, fmt.Errorf("gloas operations: %w", err)
 		}
@@ -437,6 +439,7 @@ func ProcessBlockForStateRoot(
 		return nil, errors.Wrap(err, "could not process block header")
 	}
 
+	var parentSlot primitives.Slot
 	if state.Version() >= version.Gloas {
 		// <spec fn="process_block" fork="gloas" hash="7d98b5a3">
 		// def process_block(state: BeaconState, block: BeaconBlock) -> None:
@@ -457,6 +460,11 @@ func ProcessBlockForStateRoot(
 		// </spec>
 		if err := gloas.ProcessWithdrawals(state); err != nil {
 			return nil, errors.Wrap(ErrProcessWithdrawalsFailed, err.Error())
+		}
+		// Read before the bid is replaced by this block's, process_attestation needs the parent's slot.
+		parentSlot, err = gloas.ParentSlotFromBid(state)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get parent slot from bid")
 		}
 		if err := gloas.ProcessExecutionPayloadBid(state, blk); err != nil {
 			return nil, errors.Wrap(err, "could not process execution payload bid")
@@ -496,7 +504,7 @@ func ProcessBlockForStateRoot(
 		return nil, errors.Wrap(ErrProcessEth1DataFailed, err.Error())
 	}
 
-	state, err = ProcessOperationsNoVerifyAttsSigs(ctx, state, signed.Block())
+	state, err = ProcessOperationsNoVerifyAttsSigs(ctx, state, signed.Block(), parentSlot)
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return nil, errors.Wrap(err, "could not process block operation")

@@ -3,6 +3,7 @@ package transition
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch/precompute"
@@ -52,7 +53,7 @@ import (
 //	    # [New in Gloas:EIP7732]
 //	    for_ops(body.payload_attestations, process_payload_attestation)
 //	</spec>
-func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces.ReadOnlyBeaconBlock, parentSlot primitives.Slot) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "core.state.gloasOperations")
 	defer span.End()
 
@@ -77,7 +78,7 @@ func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces
 	if err != nil {
 		return nil, errors.Wrap(ErrProcessAttesterSlashingsFailed, err.Error())
 	}
-	st, err = electra.ProcessAttestationsNoVerifySignature(ctx, st, block)
+	st, err = altair.ProcessAttestationsNoVerifySignatureWithParentSlot(ctx, st, block, parentSlot)
 	if err != nil {
 		return nil, errors.Wrap(ErrProcessAttestationsFailed, err.Error())
 	}
