@@ -33,23 +33,23 @@ func TestInitializeEpochValidators_Ok(t *testing.T) {
 	require.NoError(t, err)
 	v, b, err := InitializePrecomputeValidators(t.Context(), s)
 	require.NoError(t, err)
-	assert.DeepEqual(t, &precompute.Validator{
+	assert.DeepEqual(t, precompute.Validator{
 		IsSlashed:                    true,
 		CurrentEpochEffectiveBalance: 100,
 		InactivityScore:              0,
 	}, v[0], "Incorrect validator 0 status")
-	assert.DeepEqual(t, &precompute.Validator{
+	assert.DeepEqual(t, precompute.Validator{
 		IsWithdrawableCurrentEpoch:   true,
 		CurrentEpochEffectiveBalance: 100,
 		InactivityScore:              1,
 	}, v[1], "Incorrect validator 1 status")
-	assert.DeepEqual(t, &precompute.Validator{
+	assert.DeepEqual(t, precompute.Validator{
 		IsActivePrevEpoch:            true,
 		IsActiveCurrentEpoch:         true,
 		CurrentEpochEffectiveBalance: 100,
 		InactivityScore:              2,
 	}, v[2], "Incorrect validator 2 status")
-	assert.DeepEqual(t, &precompute.Validator{
+	assert.DeepEqual(t, precompute.Validator{
 		IsActivePrevEpoch:            true,
 		CurrentEpochEffectiveBalance: 100,
 		InactivityScore:              3,
@@ -94,13 +94,13 @@ func TestProcessEpochParticipation(t *testing.T) {
 	require.NoError(t, err)
 	validators, balance, err = ProcessEpochParticipation(t.Context(), s, balance, validators)
 	require.NoError(t, err)
-	require.DeepEqual(t, &precompute.Validator{
+	require.DeepEqual(t, precompute.Validator{
 		IsActiveCurrentEpoch:         true,
 		IsActivePrevEpoch:            true,
 		IsWithdrawableCurrentEpoch:   true,
 		CurrentEpochEffectiveBalance: params.BeaconConfig().MaxEffectiveBalance,
 	}, validators[0])
-	require.DeepEqual(t, &precompute.Validator{
+	require.DeepEqual(t, precompute.Validator{
 		IsActiveCurrentEpoch:         true,
 		IsActivePrevEpoch:            true,
 		IsWithdrawableCurrentEpoch:   true,
@@ -109,7 +109,7 @@ func TestProcessEpochParticipation(t *testing.T) {
 		IsPrevEpochAttester:          true,
 		IsPrevEpochSourceAttester:    true,
 	}, validators[1])
-	require.DeepEqual(t, &precompute.Validator{
+	require.DeepEqual(t, precompute.Validator{
 		IsActiveCurrentEpoch:         true,
 		IsActivePrevEpoch:            true,
 		IsWithdrawableCurrentEpoch:   true,
@@ -120,7 +120,7 @@ func TestProcessEpochParticipation(t *testing.T) {
 		IsCurrentEpochTargetAttester: true,
 		IsPrevEpochTargetAttester:    true,
 	}, validators[2])
-	require.DeepEqual(t, &precompute.Validator{
+	require.DeepEqual(t, precompute.Validator{
 		IsActiveCurrentEpoch:         true,
 		IsActivePrevEpoch:            true,
 		IsWithdrawableCurrentEpoch:   true,
@@ -172,13 +172,13 @@ func TestProcessEpochParticipation_InactiveValidator(t *testing.T) {
 	require.NoError(t, err)
 	validators, balance, err = ProcessEpochParticipation(t.Context(), st, balance, validators)
 	require.NoError(t, err)
-	require.DeepEqual(t, &precompute.Validator{
+	require.DeepEqual(t, precompute.Validator{
 		IsActiveCurrentEpoch:         false,
 		IsActivePrevEpoch:            false,
 		IsWithdrawableCurrentEpoch:   true,
 		CurrentEpochEffectiveBalance: params.BeaconConfig().MaxEffectiveBalance,
 	}, validators[0])
-	require.DeepEqual(t, &precompute.Validator{
+	require.DeepEqual(t, precompute.Validator{
 		IsActiveCurrentEpoch:         false,
 		IsActivePrevEpoch:            true,
 		IsPrevEpochAttester:          true,
@@ -187,7 +187,7 @@ func TestProcessEpochParticipation_InactiveValidator(t *testing.T) {
 		IsWithdrawableCurrentEpoch:   true,
 		CurrentEpochEffectiveBalance: params.BeaconConfig().MaxEffectiveBalance,
 	}, validators[1])
-	require.DeepEqual(t, &precompute.Validator{
+	require.DeepEqual(t, precompute.Validator{
 		IsActiveCurrentEpoch:         true,
 		IsActivePrevEpoch:            true,
 		IsWithdrawableCurrentEpoch:   true,
@@ -432,7 +432,7 @@ func TestProcessRewardsAndPenaltiesPrecompute_BadState(t *testing.T) {
 	require.NoError(t, err)
 	_, balance, err = ProcessEpochParticipation(t.Context(), s, balance, validators)
 	require.NoError(t, err)
-	_, err = ProcessRewardsAndPenaltiesPrecompute(s, balance, []*precompute.Validator{})
+	_, err = ProcessRewardsAndPenaltiesPrecompute(s, balance, []precompute.Validator{})
 	require.ErrorContains(t, "validator registries not the same length as state's validator registries", err)
 }
 
