@@ -59,6 +59,10 @@ func (f *ForkChoice) Head(
 
 	calledHeadCount.Inc()
 
+	if err := f.cacheWeakHeadCommittees(ctx); err != nil {
+		return [32]byte{}, errors.Wrap(err, "could not cache weak-head committees")
+	}
+
 	if err := f.updateBalances(); err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not update balances")
 	}
@@ -134,9 +138,23 @@ func (f *ForkChoice) InsertNode(ctx context.Context, state state.BeaconState, ro
 		return errInvalidNilCheckpoint
 	}
 	finalizedEpoch := fc.Epoch
+	var slotCommittee []primitives.ValidatorIndex
+	root, slot := roblock.Root(), roblock.Block().Slot()
+	currentSlot := f.store.currentSlot()
+	existing := f.store.emptyNodeByRoot[root]
+	if (existing == nil || existing.node.slotCommittee == nil) && (slot > currentSlot || currentSlot-slot <= 1) {
+		var err error
+		slotCommittee, err = f.weakHeadCommittee(ctx, root, slot, state)
+		if err != nil {
+			return errors.Wrap(err, "could not cache weak-head committee")
+		}
+	}
 	pn, err := f.store.insert(ctx, roblock, justifiedEpoch, finalizedEpoch)
 	if err != nil {
 		return err
+	}
+	if slotCommittee != nil {
+		pn.node.slotCommittee = slotCommittee
 	}
 	if features.Get().TrackEquivocations {
 		if slotStart, err := slots.StartTime(f.store.genesisTime, roblock.Block().Slot()); err == nil {
@@ -739,6 +757,11 @@ func (f *ForkChoice) SetBalancesByRooter(handler forkchoice.BalancesByRooter) {
 	f.balancesByRoot = handler
 }
 
+// SetCommitteesByRooter sets the handler for a block's slot committees.
+func (f *ForkChoice) SetCommitteesByRooter(handler forkchoice.CommitteesByRooter) {
+	f.committeesByRoot = handler
+}
+
 // Weight returns the payload-node weight of the given root if found on the store.
 // For Gloas, this is the node weight used for forkchoice on the payload tree.
 func (f *ForkChoice) Weight(root [32]byte) (uint64, error) {
@@ -779,9 +802,11 @@ func (f *ForkChoice) updateJustifiedBalances(ctx context.Context, root [32]byte)
 	if err != nil {
 		return errors.Wrap(err, "could not get justified balances")
 	}
-	f.justifiedBalances = balances
+	f.justifiedBalances = balances.ActiveNonSlashed
+	f.store.justifiedEffectiveBalances = balances.Effective
+	f.store.weakHeadCommitteeWeight = balances.TotalActive / uint64(params.BeaconConfig().SlotsPerEpoch)
 	f.store.committeeWeight = 0
-	for _, val := range balances {
+	for _, val := range balances.ActiveNonSlashed {
 		if val > 0 {
 			f.store.committeeWeight += val
 		}

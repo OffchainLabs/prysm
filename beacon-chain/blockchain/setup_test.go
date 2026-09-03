@@ -23,6 +23,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2pTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -162,6 +163,24 @@ type testServiceRequirements struct {
 	dc      *depositsnapshot.Cache
 }
 
+func stubTestForkChoiceCommittees(fcs forkchoice.ForkChoicer) {
+	fcs.SetCommitteesByRooter(func(context.Context, [32]byte, primitives.Slot, state.ReadOnlyBeaconState) ([][]primitives.ValidatorIndex, error) {
+		return [][]primitives.ValidatorIndex{}, nil
+	})
+}
+
+func initializeTestForkChoiceBalances(t *testing.T, fcs forkchoice.ForkChoicer, balances []uint64) {
+	t.Helper()
+	var totalActive uint64
+	for _, balance := range balances {
+		totalActive += balance
+	}
+	fcs.SetBalancesByRooter(func(context.Context, [32]byte) (forkchoice.Balances, error) {
+		return forkchoice.Balances{ActiveNonSlashed: balances, Effective: balances, TotalActive: totalActive}, nil
+	})
+	require.NoError(t, fcs.UpdateJustifiedCheckpoint(t.Context(), fcs.JustifiedCheckpoint()))
+}
+
 func minimalTestService(t *testing.T, opts ...Option) (*Service, *testServiceRequirements) {
 	ctx := t.Context()
 	genesis := time.Now().Add(-1 * 4 * time.Duration(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(params.BeaconConfig().SecondsPerSlot)) * time.Second) // Genesis was 4 epochs ago.
@@ -173,7 +192,7 @@ func minimalTestService(t *testing.T, opts ...Option) (*Service, *testServiceReq
 	fcs.SetGenesisTime(genesis)
 	sg := stategen.New(beaconDB, fcs)
 	notif := &mockBeaconNode{}
-	fcs.SetBalancesByRooter(sg.ActiveNonSlashedBalancesByRoot)
+	fcs.SetBalancesByRooter(sg.ForkChoiceBalancesByRoot)
 	cs := startup.NewClockSynchronizer()
 	attPool := attestations.NewPool()
 	attSrv, err := attestations.NewService(ctx, &attestations.Config{Pool: attPool})

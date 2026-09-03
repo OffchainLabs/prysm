@@ -10,6 +10,7 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen/mock",
     visibility = ["//visibility:public"],
     deps = [
+        "//beacon-chain/forkchoice:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//beacon-chain/state/stategen:go_default_library",
         "//consensus-types/primitives:go_default_library",

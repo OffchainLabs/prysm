@@ -708,7 +708,7 @@ func (s *Store) shouldApplyProposerBoost() bool {
 	if p.node.slot+1 != n.slot {
 		return true
 	}
-	if p.node.weight*100 >= s.committeeWeight*params.BeaconConfig().ReorgHeadWeightThreshold {
+	if !s.isHeadWeak(p.node) {
 		return true
 	}
 	// Weak parent: boost unless an equivocation was recorded for (parent slot, proposer).

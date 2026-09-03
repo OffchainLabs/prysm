@@ -649,6 +649,7 @@ func TestAncestor_CanUseForkchoice(t *testing.T) {
 func TestAncestor_CanUseDB(t *testing.T) {
 	service, tr := minimalTestService(t)
 	ctx, beaconDB := tr.ctx, tr.db
+	stubTestForkChoiceCommittees(tr.fcs)
 
 	b1 := util.NewBeaconBlock()
 	b1.Block.Slot = 1
@@ -2042,7 +2043,7 @@ func TestNoViableHead_Reboot(t *testing.T) {
 
 	jroot := bytesutil.ToBytes32(justified.Root)
 	require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, genesisState, jroot))
-	service.cfg.ForkChoiceStore.SetBalancesByRooter(service.cfg.StateGen.ActiveNonSlashedBalancesByRoot)
+	service.cfg.ForkChoiceStore.SetBalancesByRooter(service.cfg.StateGen.ForkChoiceBalancesByRoot)
 	require.NoError(t, service.StartFromSavedState(genesisState))
 	require.NoError(t, service.cfg.BeaconDB.SaveGenesisBlockRoot(ctx, genesisRoot))
 

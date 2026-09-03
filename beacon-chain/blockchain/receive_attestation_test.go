@@ -83,6 +83,7 @@ func TestProcessAttestations_Ok(t *testing.T) {
 	ojc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
 	state, blkRoot, err := prepareForkchoiceState(ctx, 0, tRoot, tRoot, params.BeaconConfig().ZeroHash, ojc, ofc)
 	require.NoError(t, err)
+	stubTestForkChoiceCommittees(service.cfg.ForkChoiceStore)
 	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, state, blkRoot))
 	attsToSave := make([]ethpb.Att, len(atts))
 	copy(attsToSave, atts)
@@ -145,6 +146,7 @@ func TestService_ProcessAttestationsAndUpdateHead(t *testing.T) {
 	util.SaveBlock(t, ctx, service.cfg.BeaconDB, b)
 	state, blkRoot, err := prepareForkchoiceState(ctx, 2, r, service.originBlockRoot, [32]byte{'b'}, ojc, ojc)
 	require.NoError(t, err)
+	stubTestForkChoiceCommittees(service.cfg.ForkChoiceStore)
 	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, state, blkRoot))
 	require.Equal(t, 3, fcs.NodeCount())
 	service.head.root = r // Old head
@@ -196,6 +198,7 @@ func TestService_UpdateHead_NoAtts(t *testing.T) {
 	util.SaveBlock(t, ctx, service.cfg.BeaconDB, b)
 	state, blkRoot, err := prepareForkchoiceState(ctx, 2, r, service.originBlockRoot, [32]byte{'b'}, ojc, ojc)
 	require.NoError(t, err)
+	stubTestForkChoiceCommittees(service.cfg.ForkChoiceStore)
 	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, state, blkRoot))
 	require.Equal(t, 3, fcs.NodeCount())
 

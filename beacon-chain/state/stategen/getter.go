@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -97,27 +98,43 @@ func (s *State) StateByRootNoCopy(ctx context.Context, blockRoot [32]byte) (stat
 	return state, nil
 }
 
-// ActiveNonSlashedBalancesByRoot retrieves the effective balances of all active and non-slashed validators at the
-// state with a given root
-func (s *State) ActiveNonSlashedBalancesByRoot(ctx context.Context, blockRoot [32]byte) ([]uint64, error) {
+// ForkChoiceBalancesByRoot retrieves the checkpoint balances needed by fork choice.
+func (s *State) ForkChoiceBalancesByRoot(ctx context.Context, blockRoot [32]byte) (forkchoice.Balances, error) {
 	st, err := s.StateByRootNoCopy(ctx, blockRoot)
 	if err != nil {
-		return nil, err
+		return forkchoice.Balances{}, err
 	}
 	if st == nil || st.IsNil() {
-		return nil, errNilState
+		return forkchoice.Balances{}, errNilState
 	}
 	epoch := time.CurrentEpoch(st)
 
-	balances := make([]uint64, st.NumValidators())
+	balances := forkchoice.Balances{
+		ActiveNonSlashed: make([]uint64, st.NumValidators()),
+		Effective:        make([]uint64, st.NumValidators()),
+	}
 	for idx, val := range st.ValidatorsReadOnlySeq() {
-		if helpers.IsActiveNonSlashedValidatorUsingTrie(val, epoch) {
-			balances[idx] = val.EffectiveBalance()
-		} else {
-			balances[idx] = 0
+		balances.Effective[idx] = val.EffectiveBalance()
+		if helpers.IsActiveValidatorUsingTrie(val, epoch) {
+			balances.TotalActive += val.EffectiveBalance()
+			if !val.Slashed() {
+				balances.ActiveNonSlashed[idx] = val.EffectiveBalance()
+			}
 		}
 	}
+	balances.TotalActive = max(balances.TotalActive, params.BeaconConfig().EffectiveBalanceIncrement)
 	return balances, nil
+}
+
+// CommitteesByRoot uses the supplied state or cached state only; nil committees mean unavailable.
+func (s *State) CommitteesByRoot(ctx context.Context, blockRoot [32]byte, slot primitives.Slot, st state.ReadOnlyBeaconState) ([][]primitives.ValidatorIndex, error) {
+	if st == nil {
+		st = s.StateByRootIfCachedNoCopy(blockRoot)
+	}
+	if st == nil || st.IsNil() {
+		return nil, nil
+	}
+	return helpers.BeaconCommittees(ctx, st, slot)
 }
 
 // StateByRootInitialSync retrieves the state from the DB for the initial syncing phase.
