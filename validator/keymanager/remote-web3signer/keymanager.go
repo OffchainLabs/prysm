@@ -263,13 +263,13 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 	case *validatorpb.SignRequest_BlockGloas:
 		return handleBlockGloas(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_ExecutionPayloadEnvelope:
-		return handleExecutionPayloadEnvelope(ctx, validator, request, genesisValidatorsRoot)
+		return handleExecutionPayloadEnvelope(ctx, ver, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_PayloadAttestationData:
-		return handlePayloadAttestationMessage(ctx, validator, request, genesisValidatorsRoot)
+		return handlePayloadAttestationMessage(ctx, ver, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_ProposerPreference:
-		return handleProposerPreferences(ctx, validator, request, genesisValidatorsRoot)
-	case *validatorpb.SignRequest_RequestAuth:
-		return handleRequestAuth(ctx, validator, request)
+		return handleProposerPreferences(ctx, ver, validator, request, genesisValidatorsRoot)
+	case *validatorpb.SignRequest_BuilderRequestAuth:
+		return handleBuilderRequestAuth(ctx, ver, validator, request)
 	// We do not support "DEPOSIT" type.
 	/*
 		case *validatorpb.:
@@ -486,20 +486,20 @@ func handleBlockGloas(ctx context.Context, validator *validator.Validate, reques
 	return json.Marshal(signReq)
 }
 
-func handleRequestAuth(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest) ([]byte, error) {
-	signReq, err := types.GetRequestAuthSignRequest(request)
+func handleBuilderRequestAuth(ctx context.Context, fork int, validator *validator.Validate, request *validatorpb.SignRequest) ([]byte, error) {
+	signReq, err := types.GetBuilderRequestAuthSignRequest(fork, request)
 	if err != nil {
 		return nil, err
 	}
 	if err = validator.StructCtx(ctx, signReq); err != nil {
 		return nil, err
 	}
-	requestAuthSignRequestsTotal.Inc()
+	builderRequestAuthSignRequestsTotal.Inc()
 	return json.Marshal(signReq)
 }
 
-func handleExecutionPayloadEnvelope(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	signReq, err := types.GetExecutionPayloadEnvelopeSignRequest(request, genesisValidatorsRoot)
+func handleExecutionPayloadEnvelope(ctx context.Context, fork int, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	signReq, err := types.GetExecutionPayloadEnvelopeSignRequest(fork, request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -510,8 +510,8 @@ func handleExecutionPayloadEnvelope(ctx context.Context, validator *validator.Va
 	return json.Marshal(signReq)
 }
 
-func handlePayloadAttestationMessage(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	signReq, err := types.GetPayloadAttestationMessageSignRequest(request, genesisValidatorsRoot)
+func handlePayloadAttestationMessage(ctx context.Context, fork int, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	signReq, err := types.GetPayloadAttestationMessageSignRequest(fork, request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -522,8 +522,8 @@ func handlePayloadAttestationMessage(ctx context.Context, validator *validator.V
 	return json.Marshal(signReq)
 }
 
-func handleProposerPreferences(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	signReq, err := types.GetProposerPreferencesSignRequest(request, genesisValidatorsRoot)
+func handleProposerPreferences(ctx context.Context, fork int, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	signReq, err := types.GetProposerPreferencesSignRequest(fork, request, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}

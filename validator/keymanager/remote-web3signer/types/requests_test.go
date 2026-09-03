@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -44,6 +45,16 @@ func TestGetAggregateAndProofV2SignRequest(t *testing.T) {
 				genesisValidatorsRoot: make([]byte, fieldparams.RootLength),
 			},
 			want:    mock.AggregateAndProofV2SignRequest(version.Deneb),
+			wantErr: false,
+		},
+		{
+			name: "Happy Path Test Gloas",
+			args: args{
+				version:               version.Gloas,
+				request:               mock.GetMockSignRequest("AGGREGATE_AND_PROOF_V2"),
+				genesisValidatorsRoot: make([]byte, fieldparams.RootLength),
+			},
+			want:    mock.AggregateAndProofV2SignRequest(version.Gloas),
 			wantErr: false,
 		},
 	}
@@ -577,9 +588,19 @@ func TestGetBlockGloasSignRequest(t *testing.T) {
 	require.NotNil(t, got.BeaconBlock.BlockHeader)
 }
 
+// setGloasForkEpoch schedules Gloas right after Fulu so mock signing slots resolve to the Gloas fork.
+func setGloasForkEpoch(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = cfg.FuluForkEpoch + 1
+	params.OverrideBeaconConfig(cfg)
+}
+
 func TestGetExecutionPayloadEnvelopeSignRequest(t *testing.T) {
+	setGloasForkEpoch(t)
 	t.Run("Happy Path Test", func(t *testing.T) {
 		got, err := types.GetExecutionPayloadEnvelopeSignRequest(
+			version.Gloas,
 			mock.GetMockSignRequest("EXECUTION_PAYLOAD_ENVELOPE"),
 			make([]byte, fieldparams.RootLength),
 		)
@@ -594,14 +615,21 @@ func TestGetExecutionPayloadEnvelopeSignRequest(t *testing.T) {
 		req := &validatorpb.SignRequest{
 			Object: &validatorpb.SignRequest_ExecutionPayloadEnvelope{},
 		}
-		_, err := types.GetExecutionPayloadEnvelopeSignRequest(req, make([]byte, fieldparams.RootLength))
+		_, err := types.GetExecutionPayloadEnvelopeSignRequest(version.Gloas, req, make([]byte, fieldparams.RootLength))
 		require.ErrorContains(t, "ExecutionPayloadEnvelope is nil", err)
+	})
+	t.Run("Pre-Gloas Fork", func(t *testing.T) {
+		req := mock.GetMockSignRequest("EXECUTION_PAYLOAD_ENVELOPE")
+		_, err := types.GetExecutionPayloadEnvelopeSignRequest(version.Fulu, req, make([]byte, fieldparams.RootLength))
+		require.ErrorContains(t, "requires gloas or later", err)
 	})
 }
 
 func TestGetPayloadAttestationMessageSignRequest(t *testing.T) {
+	setGloasForkEpoch(t)
 	t.Run("Happy Path Test", func(t *testing.T) {
 		got, err := types.GetPayloadAttestationMessageSignRequest(
+			version.Gloas,
 			mock.GetMockSignRequest("PAYLOAD_ATTESTATION_MESSAGE"),
 			make([]byte, fieldparams.RootLength),
 		)
@@ -612,14 +640,21 @@ func TestGetPayloadAttestationMessageSignRequest(t *testing.T) {
 		req := &validatorpb.SignRequest{
 			Object: &validatorpb.SignRequest_PayloadAttestationData{},
 		}
-		_, err := types.GetPayloadAttestationMessageSignRequest(req, make([]byte, fieldparams.RootLength))
+		_, err := types.GetPayloadAttestationMessageSignRequest(version.Gloas, req, make([]byte, fieldparams.RootLength))
 		require.ErrorContains(t, "PayloadAttestationData is nil", err)
+	})
+	t.Run("Pre-Gloas Fork", func(t *testing.T) {
+		req := mock.GetMockSignRequest("PAYLOAD_ATTESTATION_MESSAGE")
+		_, err := types.GetPayloadAttestationMessageSignRequest(version.Fulu, req, make([]byte, fieldparams.RootLength))
+		require.ErrorContains(t, "requires gloas or later", err)
 	})
 }
 
 func TestGetProposerPreferencesSignRequest(t *testing.T) {
+	setGloasForkEpoch(t)
 	t.Run("Happy Path Test", func(t *testing.T) {
 		got, err := types.GetProposerPreferencesSignRequest(
+			version.Gloas,
 			mock.GetMockSignRequest("PROPOSER_PREFERENCES"),
 			make([]byte, fieldparams.RootLength),
 		)
@@ -630,22 +665,32 @@ func TestGetProposerPreferencesSignRequest(t *testing.T) {
 		req := &validatorpb.SignRequest{
 			Object: &validatorpb.SignRequest_ProposerPreference{},
 		}
-		_, err := types.GetProposerPreferencesSignRequest(req, make([]byte, fieldparams.RootLength))
+		_, err := types.GetProposerPreferencesSignRequest(version.Gloas, req, make([]byte, fieldparams.RootLength))
 		require.ErrorContains(t, "ProposerPreferences is nil", err)
+	})
+	t.Run("Pre-Gloas Fork", func(t *testing.T) {
+		req := mock.GetMockSignRequest("PROPOSER_PREFERENCES")
+		_, err := types.GetProposerPreferencesSignRequest(version.Fulu, req, make([]byte, fieldparams.RootLength))
+		require.ErrorContains(t, "requires gloas or later", err)
 	})
 }
 
-func TestGetRequestAuthSignRequest(t *testing.T) {
+func TestGetBuilderRequestAuthSignRequest(t *testing.T) {
+	setGloasForkEpoch(t)
 	t.Run("Happy Path Test", func(t *testing.T) {
-		got, err := types.GetRequestAuthSignRequest(mock.GetMockSignRequest("BUILDER_REQUEST_AUTH"))
+		got, err := types.GetBuilderRequestAuthSignRequest(version.Gloas, mock.GetMockSignRequest("BUILDER_REQUEST_AUTH"))
 		require.NoError(t, err)
-		require.DeepEqual(t, mock.RequestAuthSignRequest(), got)
+		require.DeepEqual(t, mock.BuilderRequestAuthSignRequest(), got)
 	})
-	t.Run("Nil RequestAuth", func(t *testing.T) {
+	t.Run("Nil BuilderRequestAuth", func(t *testing.T) {
 		req := &validatorpb.SignRequest{
-			Object: &validatorpb.SignRequest_RequestAuth{},
+			Object: &validatorpb.SignRequest_BuilderRequestAuth{},
 		}
-		_, err := types.GetRequestAuthSignRequest(req)
-		require.ErrorContains(t, "RequestAuth is nil", err)
+		_, err := types.GetBuilderRequestAuthSignRequest(version.Gloas, req)
+		require.ErrorContains(t, "BuilderRequestAuth is nil", err)
+	})
+	t.Run("Pre-Gloas Fork", func(t *testing.T) {
+		_, err := types.GetBuilderRequestAuthSignRequest(version.Fulu, mock.GetMockSignRequest("BUILDER_REQUEST_AUTH"))
+		require.ErrorContains(t, "requires gloas or later", err)
 	})
 }

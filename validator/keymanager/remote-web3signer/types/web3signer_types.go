@@ -121,36 +121,36 @@ type ValidatorRegistrationSignRequest struct {
 	ValidatorRegistration *ValidatorRegistration `json:"validator_registration" validate:"required"`
 }
 
-// RequestAuthSignRequest is a request object for web3signer sign api type BUILDER_REQUEST_AUTH (gloas builder API).
+// BuilderRequestAuthSignRequest is a request object for web3signer sign api type BUILDER_REQUEST_AUTH (gloas builder API).
 // Its domain is fork-independent (genesis fork version, zero genesis validators root), so no fork info.
-type RequestAuthSignRequest struct {
-	Type        string        `json:"type" validate:"required"`
-	SigningRoot hexutil.Bytes `json:"signingRoot"`
-	RequestAuth *RequestAuth  `json:"builder_request_auth" validate:"required"`
+type BuilderRequestAuthSignRequest struct {
+	Type               string                       `json:"type" validate:"required"`
+	SigningRoot        hexutil.Bytes                `json:"signingRoot"`
+	BuilderRequestAuth *VersionedBuilderRequestAuth `json:"builder_request_auth" validate:"required"`
 }
 
 // ExecutionPayloadEnvelopeSignRequest is a request object for web3signer sign api type EXECUTION_PAYLOAD_ENVELOPE (gloas).
 type ExecutionPayloadEnvelopeSignRequest struct {
-	Type                     string                    `json:"type" validate:"required"`
-	ForkInfo                 *ForkInfo                 `json:"fork_info" validate:"required"`
-	SigningRoot              hexutil.Bytes             `json:"signingRoot"`
-	ExecutionPayloadEnvelope *ExecutionPayloadEnvelope `json:"execution_payload_envelope" validate:"required"`
+	Type                     string                             `json:"type" validate:"required"`
+	ForkInfo                 *ForkInfo                          `json:"fork_info" validate:"required"`
+	SigningRoot              hexutil.Bytes                      `json:"signingRoot"`
+	ExecutionPayloadEnvelope *VersionedExecutionPayloadEnvelope `json:"execution_payload_envelope" validate:"required"`
 }
 
 // PayloadAttestationMessageSignRequest is a request object for web3signer sign api type PAYLOAD_ATTESTATION_MESSAGE (gloas).
 type PayloadAttestationMessageSignRequest struct {
-	Type                      string                  `json:"type" validate:"required"`
-	ForkInfo                  *ForkInfo               `json:"fork_info" validate:"required"`
-	SigningRoot               hexutil.Bytes           `json:"signingRoot"`
-	PayloadAttestationMessage *PayloadAttestationData `json:"payload_attestation_message" validate:"required"`
+	Type                      string                           `json:"type" validate:"required"`
+	ForkInfo                  *ForkInfo                        `json:"fork_info" validate:"required"`
+	SigningRoot               hexutil.Bytes                    `json:"signingRoot"`
+	PayloadAttestationMessage *VersionedPayloadAttestationData `json:"payload_attestation_message" validate:"required"`
 }
 
 // ProposerPreferencesSignRequest is a request object for web3signer sign api type PROPOSER_PREFERENCES (gloas).
 type ProposerPreferencesSignRequest struct {
-	Type                string               `json:"type" validate:"required"`
-	ForkInfo            *ForkInfo            `json:"fork_info" validate:"required"`
-	SigningRoot         hexutil.Bytes        `json:"signingRoot"`
-	ProposerPreferences *ProposerPreferences `json:"proposer_preferences" validate:"required"`
+	Type                string                        `json:"type" validate:"required"`
+	ForkInfo            *ForkInfo                     `json:"fork_info" validate:"required"`
+	SigningRoot         hexutil.Bytes                 `json:"signingRoot"`
+	ProposerPreferences *VersionedProposerPreferences `json:"proposer_preferences" validate:"required"`
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -400,13 +400,25 @@ type ValidatorRegistration struct {
 	Pubkey       hexutil.Bytes `json:"pubkey"  validate:"required"`       /* bls hexadecimal string */
 }
 
-// RequestAuth a sub property of RequestAuthSignRequest (gloas builder API).
-type RequestAuth struct {
+// VersionedBuilderRequestAuth a sub property of BuilderRequestAuthSignRequest.
+type VersionedBuilderRequestAuth struct {
+	Version string              `json:"version" validate:"required"`
+	Data    *BuilderRequestAuth `json:"data" validate:"required"`
+}
+
+// BuilderRequestAuth a sub property of VersionedBuilderRequestAuth (gloas builder API).
+type BuilderRequestAuth struct {
 	Data hexutil.Bytes `json:"data"` /* ByteList[4096], carries the builder URL */
 	Slot string        `json:"slot"` /* uint64 */
 }
 
-// ExecutionPayloadEnvelope a sub property of ExecutionPayloadEnvelopeSignRequest (gloas).
+// VersionedExecutionPayloadEnvelope a sub property of ExecutionPayloadEnvelopeSignRequest.
+type VersionedExecutionPayloadEnvelope struct {
+	Version string                    `json:"version" validate:"required"`
+	Data    *ExecutionPayloadEnvelope `json:"data" validate:"required"`
+}
+
+// ExecutionPayloadEnvelope a sub property of VersionedExecutionPayloadEnvelope (gloas).
 type ExecutionPayloadEnvelope struct {
 	Payload               *ExecutionPayloadGloas  `json:"payload"`
 	ExecutionRequests     *ExecutionRequestsGloas `json:"execution_requests"`
@@ -492,7 +504,13 @@ type BuilderExitRequest struct {
 	Pubkey        hexutil.Bytes `json:"pubkey"`
 }
 
-// PayloadAttestationData a sub property of PayloadAttestationMessageSignRequest (gloas).
+// VersionedPayloadAttestationData a sub property of PayloadAttestationMessageSignRequest.
+type VersionedPayloadAttestationData struct {
+	Version string                  `json:"version" validate:"required"`
+	Data    *PayloadAttestationData `json:"data" validate:"required"`
+}
+
+// PayloadAttestationData a sub property of VersionedPayloadAttestationData (gloas).
 type PayloadAttestationData struct {
 	BeaconBlockRoot   hexutil.Bytes `json:"beacon_block_root"`
 	Slot              string        `json:"slot"` /* uint64 */
@@ -500,7 +518,13 @@ type PayloadAttestationData struct {
 	BlobDataAvailable bool          `json:"blob_data_available"`
 }
 
-// ProposerPreferences a sub property of ProposerPreferencesSignRequest (gloas).
+// VersionedProposerPreferences a sub property of ProposerPreferencesSignRequest.
+type VersionedProposerPreferences struct {
+	Version string               `json:"version" validate:"required"`
+	Data    *ProposerPreferences `json:"data" validate:"required"`
+}
+
+// ProposerPreferences a sub property of VersionedProposerPreferences (gloas).
 type ProposerPreferences struct {
 	DependentRoot  hexutil.Bytes `json:"dependent_root"`
 	ProposalSlot   string        `json:"proposal_slot"`   /* uint64 */

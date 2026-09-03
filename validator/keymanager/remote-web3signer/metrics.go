@@ -57,8 +57,8 @@ var (
 		Name: "remote_web3signer_validator_registration_sign_requests_total",
 		Help: "Total number of validator registration sign requests",
 	})
-	requestAuthSignRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "remote_web3signer_request_auth_sign_requests_total",
+	builderRequestAuthSignRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "remote_web3signer_builder_request_auth_sign_requests_total",
 		Help: "Total number of builder request auth sign requests",
 	})
 	executionPayloadEnvelopeSignRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{

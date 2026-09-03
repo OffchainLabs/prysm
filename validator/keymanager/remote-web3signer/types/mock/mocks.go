@@ -62,6 +62,16 @@ func CommitteeBits() []byte {
 	}
 }
 
+// gloasSlot is the first slot of the configured Gloas fork; tests must override the mainnet default of MaxUint64.
+func gloasSlot() primitives.Slot {
+	return primitives.Slot(params.BeaconConfig().GloasForkEpoch) * primitives.Slot(params.BeaconConfig().SlotsPerEpoch)
+}
+
+func gloasForkInfo() *types.ForkInfo {
+	forkInfo, _ := types.MapForkInfo(gloasSlot(), make([]byte, fieldparams.RootLength))
+	return forkInfo
+}
+
 // GetMockSignRequest returns a mock SignRequest by type.
 func GetMockSignRequest(t string) *validatorpb.SignRequest {
 	switch t {
@@ -480,13 +490,13 @@ func GetMockSignRequest(t string) *validatorpb.SignRequest {
 			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),
 			SigningRoot:     make([]byte, fieldparams.RootLength),
 			SignatureDomain: make([]byte, 4),
-			Object: &validatorpb.SignRequest_RequestAuth{
-				RequestAuth: &eth.RequestAuthV1{
+			Object: &validatorpb.SignRequest_BuilderRequestAuth{
+				BuilderRequestAuth: &eth.BuilderRequestAuth{
 					Data: []byte("https://builder.example.com"),
 					Slot: 0,
 				},
 			},
-			SigningSlot: 0,
+			SigningSlot: gloasSlot(),
 		}
 	case "EXECUTION_PAYLOAD_ENVELOPE":
 		return &validatorpb.SignRequest{
@@ -496,7 +506,7 @@ func GetMockSignRequest(t string) *validatorpb.SignRequest {
 			Object: &validatorpb.SignRequest_ExecutionPayloadEnvelope{
 				ExecutionPayloadEnvelope: ExecutionPayloadEnvelopeProto(),
 			},
-			SigningSlot: 0,
+			SigningSlot: gloasSlot(),
 		}
 	case "PAYLOAD_ATTESTATION_MESSAGE":
 		return &validatorpb.SignRequest{
@@ -511,7 +521,7 @@ func GetMockSignRequest(t string) *validatorpb.SignRequest {
 					BlobDataAvailable: false,
 				},
 			},
-			SigningSlot: 0,
+			SigningSlot: gloasSlot(),
 		}
 	case "PROPOSER_PREFERENCES":
 		return &validatorpb.SignRequest{
@@ -527,7 +537,7 @@ func GetMockSignRequest(t string) *validatorpb.SignRequest {
 					TargetGasLimit: 30_000_000,
 				},
 			},
-			SigningSlot: 0,
+			SigningSlot: gloasSlot(),
 		}
 	case "RANDAO_REVEAL":
 		return &validatorpb.SignRequest{
@@ -778,14 +788,17 @@ func VoluntaryExitSignRequest() *types.VoluntaryExitSignRequest {
 	}
 }
 
-// RequestAuthSignRequest is a mock implementation of the RequestAuthSignRequest.
-func RequestAuthSignRequest() *types.RequestAuthSignRequest {
-	return &types.RequestAuthSignRequest{
+// BuilderRequestAuthSignRequest is a mock implementation of the BuilderRequestAuthSignRequest.
+func BuilderRequestAuthSignRequest() *types.BuilderRequestAuthSignRequest {
+	return &types.BuilderRequestAuthSignRequest{
 		Type:        "BUILDER_REQUEST_AUTH",
 		SigningRoot: make([]byte, fieldparams.RootLength),
-		RequestAuth: &types.RequestAuth{
-			Data: []byte("https://builder.example.com"),
-			Slot: "0",
+		BuilderRequestAuth: &types.VersionedBuilderRequestAuth{
+			Version: "GLOAS",
+			Data: &types.BuilderRequestAuth{
+				Data: []byte("https://builder.example.com"),
+				Slot: "0",
+			},
 		},
 	}
 }
@@ -831,40 +844,43 @@ func ExecutionPayloadEnvelopeProto() *eth.ExecutionPayloadEnvelope {
 func ExecutionPayloadEnvelopeSignRequest() *types.ExecutionPayloadEnvelopeSignRequest {
 	return &types.ExecutionPayloadEnvelopeSignRequest{
 		Type:        "EXECUTION_PAYLOAD_ENVELOPE",
-		ForkInfo:    ForkInfo(),
+		ForkInfo:    gloasForkInfo(),
 		SigningRoot: make([]byte, fieldparams.RootLength),
-		ExecutionPayloadEnvelope: &types.ExecutionPayloadEnvelope{
-			Payload: &types.ExecutionPayloadGloas{
-				ParentHash:      make([]byte, fieldparams.RootLength),
-				FeeRecipient:    make([]byte, fieldparams.FeeRecipientLength),
-				StateRoot:       make([]byte, fieldparams.RootLength),
-				ReceiptsRoot:    make([]byte, fieldparams.RootLength),
-				LogsBloom:       make([]byte, fieldparams.LogsBloomLength),
-				PrevRandao:      make([]byte, fieldparams.RootLength),
-				BlockNumber:     "0",
-				GasLimit:        "30000000",
-				GasUsed:         "0",
-				Timestamp:       "0",
-				ExtraData:       []byte{},
-				BaseFeePerGas:   "0",
-				BlockHash:       make([]byte, fieldparams.RootLength),
-				Transactions:    []hexutil.Bytes{},
-				Withdrawals:     []*types.Withdrawal{},
-				BlobGasUsed:     "0",
-				ExcessBlobGas:   "0",
-				BlockAccessList: []byte{},
-				SlotNumber:      "0",
+		ExecutionPayloadEnvelope: &types.VersionedExecutionPayloadEnvelope{
+			Version: "GLOAS",
+			Data: &types.ExecutionPayloadEnvelope{
+				Payload: &types.ExecutionPayloadGloas{
+					ParentHash:      make([]byte, fieldparams.RootLength),
+					FeeRecipient:    make([]byte, fieldparams.FeeRecipientLength),
+					StateRoot:       make([]byte, fieldparams.RootLength),
+					ReceiptsRoot:    make([]byte, fieldparams.RootLength),
+					LogsBloom:       make([]byte, fieldparams.LogsBloomLength),
+					PrevRandao:      make([]byte, fieldparams.RootLength),
+					BlockNumber:     "0",
+					GasLimit:        "30000000",
+					GasUsed:         "0",
+					Timestamp:       "0",
+					ExtraData:       []byte{},
+					BaseFeePerGas:   "0",
+					BlockHash:       make([]byte, fieldparams.RootLength),
+					Transactions:    []hexutil.Bytes{},
+					Withdrawals:     []*types.Withdrawal{},
+					BlobGasUsed:     "0",
+					ExcessBlobGas:   "0",
+					BlockAccessList: []byte{},
+					SlotNumber:      "0",
+				},
+				ExecutionRequests: &types.ExecutionRequestsGloas{
+					Deposits:        []*types.DepositRequest{},
+					Withdrawals:     []*types.WithdrawalRequest{},
+					Consolidations:  []*types.ConsolidationRequest{},
+					BuilderDeposits: []*types.BuilderDepositRequest{},
+					BuilderExits:    []*types.BuilderExitRequest{},
+				},
+				BuilderIndex:          "0",
+				BeaconBlockRoot:       make([]byte, fieldparams.RootLength),
+				ParentBeaconBlockRoot: make([]byte, fieldparams.RootLength),
 			},
-			ExecutionRequests: &types.ExecutionRequestsGloas{
-				Deposits:        []*types.DepositRequest{},
-				Withdrawals:     []*types.WithdrawalRequest{},
-				Consolidations:  []*types.ConsolidationRequest{},
-				BuilderDeposits: []*types.BuilderDepositRequest{},
-				BuilderExits:    []*types.BuilderExitRequest{},
-			},
-			BuilderIndex:          "0",
-			BeaconBlockRoot:       make([]byte, fieldparams.RootLength),
-			ParentBeaconBlockRoot: make([]byte, fieldparams.RootLength),
 		},
 	}
 }
@@ -873,13 +889,16 @@ func ExecutionPayloadEnvelopeSignRequest() *types.ExecutionPayloadEnvelopeSignRe
 func PayloadAttestationMessageSignRequest() *types.PayloadAttestationMessageSignRequest {
 	return &types.PayloadAttestationMessageSignRequest{
 		Type:        "PAYLOAD_ATTESTATION_MESSAGE",
-		ForkInfo:    ForkInfo(),
+		ForkInfo:    gloasForkInfo(),
 		SigningRoot: make([]byte, fieldparams.RootLength),
-		PayloadAttestationMessage: &types.PayloadAttestationData{
-			BeaconBlockRoot:   make([]byte, fieldparams.RootLength),
-			Slot:              "0",
-			PayloadPresent:    true,
-			BlobDataAvailable: false,
+		PayloadAttestationMessage: &types.VersionedPayloadAttestationData{
+			Version: "GLOAS",
+			Data: &types.PayloadAttestationData{
+				BeaconBlockRoot:   make([]byte, fieldparams.RootLength),
+				Slot:              "0",
+				PayloadPresent:    true,
+				BlobDataAvailable: false,
+			},
 		},
 	}
 }
@@ -888,14 +907,17 @@ func PayloadAttestationMessageSignRequest() *types.PayloadAttestationMessageSign
 func ProposerPreferencesSignRequest() *types.ProposerPreferencesSignRequest {
 	return &types.ProposerPreferencesSignRequest{
 		Type:        "PROPOSER_PREFERENCES",
-		ForkInfo:    ForkInfo(),
+		ForkInfo:    gloasForkInfo(),
 		SigningRoot: make([]byte, fieldparams.RootLength),
-		ProposerPreferences: &types.ProposerPreferences{
-			DependentRoot:  make([]byte, fieldparams.RootLength),
-			ProposalSlot:   "0",
-			ValidatorIndex: "0",
-			FeeRecipient:   make([]byte, fieldparams.FeeRecipientLength),
-			TargetGasLimit: "30000000",
+		ProposerPreferences: &types.VersionedProposerPreferences{
+			Version: "GLOAS",
+			Data: &types.ProposerPreferences{
+				DependentRoot:  make([]byte, fieldparams.RootLength),
+				ProposalSlot:   "0",
+				ValidatorIndex: "0",
+				FeeRecipient:   make([]byte, fieldparams.FeeRecipientLength),
+				TargetGasLimit: "30000000",
+			},
 		},
 	}
 }
