@@ -37,6 +37,7 @@ type Check struct {
 	PreviousEpochObservedJustifiedCheckpoint  *EpochRoot `json:"previous_epoch_observed_justified_checkpoint"`
 	CurrentEpochObservedJustifiedCheckpoint   *EpochRoot `json:"current_epoch_observed_justified_checkpoint"`
 	PreviousEpochGreatestUnrealizedCheckpoint *EpochRoot `json:"previous_epoch_greatest_unrealized_checkpoint"`
+	SafeExecutionBlockHash                    *string    `json:"safe_execution_block_hash"`
 }
 
 type Meta struct {

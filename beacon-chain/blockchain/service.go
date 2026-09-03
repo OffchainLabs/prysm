@@ -456,6 +456,13 @@ func (s *Service) InitFastConfirmation() {
 	log.Info("Fast confirmation rule enabled")
 }
 
+// SafeBlockHash exposes the engine safe hash choice for spec test checks.
+func (s *Service) SafeBlockHash() [32]byte {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.safeBlockHash()
+}
+
 // safeBlockHash prefers the FCR confirmed root over unrealized justified when the feature is on.
 func (s *Service) safeBlockHash() [32]byte {
 	if s.fcr != nil {

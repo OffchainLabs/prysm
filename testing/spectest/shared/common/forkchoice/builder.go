@@ -310,6 +310,11 @@ func (bb *Builder) Check(t testing.TB, c *Check) {
 		gotRoot := fmt.Sprintf("%#x", cp.Root)
 		require.Equal(t, wantRoot, gotRoot, "previous_epoch_greatest_unrealized_checkpoint root mismatch")
 	}
+	if c.SafeExecutionBlockHash != nil && fcr != nil {
+		want := fmt.Sprintf("%#x", common.FromHex(*c.SafeExecutionBlockHash))
+		got := fmt.Sprintf("%#x", bb.service.SafeBlockHash())
+		require.Equal(t, want, got, "safe_execution_block_hash mismatch")
+	}
 }
 
 func checkPTCVotes(t testing.TB, name string, want *PTCVotes, attesters, values bitfield.Bitvector512) {
