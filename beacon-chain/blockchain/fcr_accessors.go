@@ -2,6 +2,7 @@ package blockchain
 
 import (
 	"context"
+	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/confirmation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -58,7 +59,15 @@ func (a *fcrCommitteeAccessor) Seed(_ context.Context, epoch primitives.Epoch) (
 
 type fcrBalanceAccessor struct {
 	s            *Service
+	mu           sync.Mutex
 	byCheckpoint map[forkchoicetypes.Checkpoint]*confirmation.FFGStateInfo
+	pulledUpKey  pulledUpCacheKey
+	pulledUpInfo *confirmation.FFGStateInfo
+}
+
+type pulledUpCacheKey struct {
+	root  [32]byte
+	epoch primitives.Epoch
 }
 
 func extractBalanceInfo(ctx context.Context, st state.ReadOnlyBeaconState) (*confirmation.FFGStateInfo, error) {
@@ -77,6 +86,8 @@ func extractBalanceInfo(ctx context.Context, st state.ReadOnlyBeaconState) (*con
 }
 
 func (a *fcrBalanceAccessor) BalanceInfoByCheckpoint(ctx context.Context, cp forkchoicetypes.Checkpoint) ([]uint64, uint64, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	if cached, ok := a.byCheckpoint[cp]; ok {
 		return cached.Balances, cached.TotalActiveBalance, nil
 	}
@@ -125,6 +136,14 @@ func (a *fcrBalanceAccessor) BalanceInfoByCheckpoint(ctx context.Context, cp for
 }
 
 func (a *fcrBalanceAccessor) PulledUpHeadState(ctx context.Context, headRoot [32]byte) (*confirmation.FFGStateInfo, error) {
+	currentEpoch := slots.EpochsSinceGenesis(a.s.genesisTime)
+	key := pulledUpCacheKey{root: headRoot, epoch: currentEpoch}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.pulledUpInfo != nil && a.pulledUpKey == key {
+		return a.pulledUpInfo, nil
+	}
+
 	a.s.headLock.RLock()
 	var headState state.BeaconState
 	if a.s.headRoot() == headRoot {
@@ -143,7 +162,6 @@ func (a *fcrBalanceAccessor) PulledUpHeadState(ctx context.Context, headRoot [32
 		headState = st
 	}
 
-	currentEpoch := slots.EpochsSinceGenesis(a.s.genesisTime)
 	stateEpoch := coreTime.CurrentEpoch(headState)
 
 	var st state.ReadOnlyBeaconState
@@ -176,5 +194,11 @@ func (a *fcrBalanceAccessor) PulledUpHeadState(ctx context.Context, headRoot [32
 		st = headState
 	}
 
-	return extractBalanceInfo(ctx, st)
+	info, err := extractBalanceInfo(ctx, st)
+	if err != nil {
+		return nil, err
+	}
+	a.pulledUpKey = key
+	a.pulledUpInfo = info
+	return info, nil
 }
