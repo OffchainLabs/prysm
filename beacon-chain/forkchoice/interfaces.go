@@ -13,9 +13,18 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
-// BalancesByRooter is a handler to obtain the effective balances of the state
-// with the given block root
-type BalancesByRooter func(context.Context, [32]byte) ([]uint64, error)
+// Balances contains the checkpoint balances needed by fork choice.
+type Balances struct {
+	ActiveNonSlashed []uint64 // balances eligible for ordinary fork-choice votes.
+	Effective        []uint64 // all validators, including slashed and inactive validators.
+	TotalActive      uint64   // includes slashed active validators for committee thresholds.
+}
+
+// BalancesByRooter obtains checkpoint balances for the given block root.
+type BalancesByRooter func(context.Context, [32]byte) (Balances, error)
+
+// CommitteesByRooter uses the supplied block state, or cached state when nil; nil committees mean unavailable.
+type CommitteesByRooter func(context.Context, [32]byte, primitives.Slot, state.ReadOnlyBeaconState) ([][]primitives.ValidatorIndex, error)
 
 // ForkChoicer represents the full fork choice interface composed of all the sub-interfaces.
 type ForkChoicer interface {
@@ -118,6 +127,7 @@ type Setter interface {
 	SetOriginRoot([32]byte)
 	NewSlot(context.Context, primitives.Slot) error
 	SetBalancesByRooter(BalancesByRooter)
+	SetCommitteesByRooter(CommitteesByRooter)
 	InsertSlashedIndex(context.Context, primitives.ValidatorIndex)
 	RecordBlockForEquivocation(primitives.Slot, primitives.ValidatorIndex, [32]byte)
 	SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, blobDataAvailable bool)

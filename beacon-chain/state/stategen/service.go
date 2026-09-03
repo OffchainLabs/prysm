@@ -48,7 +48,7 @@ type StateManager interface {
 	MigrateToCold(ctx context.Context, fRoot [32]byte) error
 	StateByRoot(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)
 	StateByRootNoCopy(ctx context.Context, blockRoot [32]byte) (state.ReadOnlyBeaconState, error)
-	ActiveNonSlashedBalancesByRoot(context.Context, [32]byte) ([]uint64, error)
+	ForkChoiceBalancesByRoot(context.Context, [32]byte) (forkchoice.Balances, error)
 	StateByRootIfCachedNoCopy(blockRoot [32]byte) state.ReadOnlyBeaconState
 	StateByRootInitialSync(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)
 	FinalizedReadOnlyBalances() NilCheckableReadOnlyBalances
@@ -115,7 +115,8 @@ func New(beaconDB db.NoHeadAccessDatabase, fc forkchoice.ForkChoicer, opts ...Op
 	}
 	fc.Lock()
 	defer fc.Unlock()
-	fc.SetBalancesByRooter(s.ActiveNonSlashedBalancesByRoot)
+	fc.SetBalancesByRooter(s.ForkChoiceBalancesByRoot)
+	fc.SetCommitteesByRooter(s.CommitteesByRoot)
 	return s
 }
 

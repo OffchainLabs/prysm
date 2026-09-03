@@ -63,6 +63,7 @@ go_test(
         "store_test.go",
         "unrealized_justification_test.go",
         "vote_test.go",
+        "weak_head_test.go",
     ],
     embed = [":go_default_library"],
     deps = [

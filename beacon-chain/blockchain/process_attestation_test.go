@@ -144,6 +144,7 @@ func TestStore_OnAttestation_Ok_DoublyLinkedTree(t *testing.T) {
 		ofc := &ethpb.Checkpoint{Epoch: 0, Root: tRoot[:]}
 		state, roblock, err := prepareForkchoiceState(ctx, 0, tRoot, tRoot, params.BeaconConfig().ZeroHash, ojc, ofc)
 		require.NoError(t, err)
+		stubTestForkChoiceCommittees(service.cfg.ForkChoiceStore)
 		require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, state, roblock))
 		require.NoError(t, service.OnAttestation(ctx, att[0], 0))
 	}

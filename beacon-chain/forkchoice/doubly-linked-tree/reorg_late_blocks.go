@@ -1,9 +1,13 @@
 package doublylinkedtree
 
 import (
+	"context"
+	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
@@ -81,7 +85,7 @@ func (f *ForkChoice) ShouldOverrideFCU() (override bool) {
 	// }
 
 	// Only orphan a block if the head LMD vote is weak
-	if consensusHead.weight*100 > f.store.committeeWeight*params.BeaconConfig().ReorgHeadWeightThreshold {
+	if !f.store.isHeadWeak(consensusHead) {
 		return
 	}
 
@@ -153,7 +157,7 @@ func (f *ForkChoice) GetProposerHead() [32]byte {
 	}
 
 	// Only orphan a block if the head LMD vote is weak
-	if consensusHead.weight*100 > f.store.committeeWeight*params.BeaconConfig().ReorgHeadWeightThreshold {
+	if !f.store.isHeadWeak(consensusHead) {
 		return consensusHead.root
 	}
 
@@ -172,4 +176,77 @@ func (f *ForkChoice) GetProposerHead() [32]byte {
 		return consensusHead.root
 	}
 	return parent.node.root
+}
+
+// cacheWeakHeadCommittees only loads committees for the slots used by weak-head checks.
+func (f *ForkChoice) cacheWeakHeadCommittees(ctx context.Context) error {
+	currentSlot := f.store.currentSlot()
+	for _, pn := range f.store.emptyNodeByRoot {
+		n := pn.node
+		if n.slot <= currentSlot && currentSlot-n.slot > 1 {
+			n.slotCommittee = nil
+			continue
+		}
+		if len(f.store.slashedIndices) == 0 || n.slotCommittee != nil || n.slot > currentSlot {
+			continue
+		}
+		indices, err := f.weakHeadCommittee(ctx, n.root, n.slot, nil)
+		if err != nil {
+			return err
+		}
+		n.slotCommittee = indices
+	}
+	return nil
+}
+
+func (f *ForkChoice) weakHeadCommittee(ctx context.Context, root [32]byte, slot primitives.Slot, st state.ReadOnlyBeaconState) ([]primitives.ValidatorIndex, error) {
+	if f.committeesByRoot == nil {
+		return nil, fmt.Errorf("missing committee provider for root %#x", root)
+	}
+	committees, err := f.committeesByRoot(ctx, root, slot, st)
+	if err != nil {
+		return nil, err
+	}
+	// Preserve unavailable state as nil, distinct from a loaded empty committee.
+	if committees == nil {
+		return nil, nil
+	}
+	indices := make([]primitives.ValidatorIndex, 0)
+	for _, committee := range committees {
+		indices = append(indices, committee...)
+	}
+	return indices, nil
+}
+
+// isHeadWeak restores equivocators' committee weight only for weak-head checks.
+func (s *Store) isHeadWeak(n *Node) bool {
+	if len(s.slashedIndices) != 0 && n.slotCommittee == nil {
+		return false
+	}
+	weight := s.attestationScore(n)
+	for _, index := range n.slotCommittee {
+		if s.slashedIndices[index] && uint64(index) < uint64(len(s.justifiedEffectiveBalances)) {
+			weight += s.justifiedEffectiveBalances[index]
+		}
+	}
+	threshold := s.weakHeadCommitteeWeight * params.BeaconConfig().ReorgHeadWeightThreshold / 100
+	return weight < threshold
+}
+
+// attestationScore reads current balances, excluding proposer boost and stale cached weights.
+func (s *Store) attestationScore(n *Node) uint64 {
+	weight := n.balance
+	if n.root == s.previousProposerBoostRoot {
+		weight -= s.previousProposerBoostScore
+	}
+	for _, pn := range []*PayloadNode{s.emptyNodeByRoot[n.root], s.fullNodeByRoot[n.root]} {
+		if pn == nil {
+			continue
+		}
+		weight += pn.balance
+		for _, child := range pn.children {
+			weight += s.attestationScore(child)
+		}
+	}
+	return weight
 }

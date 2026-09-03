@@ -4,7 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -220,12 +222,21 @@ func setup(justifiedEpoch, finalizedEpoch primitives.Epoch) *ForkChoice {
 	f := New()
 	f.store.justifiedCheckpoint = &forkchoicetypes.Checkpoint{Epoch: justifiedEpoch, Root: params.BeaconConfig().ZeroHash}
 	f.store.finalizedCheckpoint = &forkchoicetypes.Checkpoint{Epoch: finalizedEpoch, Root: params.BeaconConfig().ZeroHash}
-	state, blkRoot, err := prepareForkchoiceState(ctx, 0, params.BeaconConfig().ZeroHash, [32]byte{}, params.BeaconConfig().ZeroHash, justifiedEpoch, finalizedEpoch)
+	st, blkRoot, err := prepareForkchoiceState(ctx, 0, params.BeaconConfig().ZeroHash, [32]byte{}, params.BeaconConfig().ZeroHash, justifiedEpoch, finalizedEpoch)
 	if err != nil {
 		return nil
 	}
-	f.SetBalancesByRooter(func(_ context.Context, _ [32]byte) ([]uint64, error) { return f.justifiedBalances, nil })
-	err = f.InsertNode(ctx, state, blkRoot)
+	f.SetBalancesByRooter(func(_ context.Context, _ [32]byte) (forkchoice.Balances, error) {
+		var total uint64
+		for _, balance := range f.justifiedBalances {
+			total += balance
+		}
+		return forkchoice.Balances{ActiveNonSlashed: f.justifiedBalances, Effective: f.justifiedBalances, TotalActive: total}, nil
+	})
+	f.SetCommitteesByRooter(func(context.Context, [32]byte, primitives.Slot, state.ReadOnlyBeaconState) ([][]primitives.ValidatorIndex, error) {
+		return [][]primitives.ValidatorIndex{}, nil
+	})
+	err = f.InsertNode(ctx, st, blkRoot)
 	if err != nil {
 		return nil
 	}

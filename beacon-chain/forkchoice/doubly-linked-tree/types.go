@@ -19,6 +19,7 @@ type ForkChoice struct {
 	balances          []uint64                    // tracks individual validator's balances last accounted in votes.
 	justifiedBalances []uint64                    // tracks individual validator's last justified balances.
 	balancesByRoot    forkchoice.BalancesByRooter // handler to obtain balances for the state with a given root
+	committeesByRoot  forkchoice.CommitteesByRooter
 }
 
 var _ forkchoice.ForkChoicer = (*ForkChoice)(nil)
@@ -36,6 +37,8 @@ type Store struct {
 	finalizedDependentRoot        [fieldparams.RootLength]byte                  // dependent root at finalized checkpoint.
 	finalizedPayloadBlockHash     [fieldparams.RootLength]byte                  // cached payload hash at the finalized checkpoint. Refreshed before pruning at finalization since the node it resolves from is removed by prune.
 	committeeWeight               uint64                                        // tracks the total active validator balance divided by the number of slots per Epoch.
+	weakHeadCommitteeWeight       uint64                                        // includes slashed active validators for the weak-head threshold.
+	justifiedEffectiveBalances    []uint64                                      // unfiltered effective balances for equivocation accounting.
 	treeRootNode                  *Node                                         // the root node of the store tree.
 	headNode                      *Node                                         // last head Node
 	emptyNodeByRoot               map[[fieldparams.RootLength]byte]*PayloadNode // nodes indexed by roots.
@@ -66,6 +69,7 @@ type Node struct {
 	unrealizedFinalizedEpoch    primitives.Epoch             // the epoch that would be finalized if the block would be advanced to the next epoch.
 	balance                     uint64                       // the balance that voted for this node directly
 	weight                      uint64                       // weight of this node: the total balance including children
+	slotCommittee               []primitives.ValidatorIndex  // all attesters assigned to this block's slot in its own state.
 	payloadAvailabilityVote     bitfield.Bitvector512        // PTC payload availability votes
 	payloadDataAvailabilityVote bitfield.Bitvector512        // PTC payload data availability votes
 	payloadAttesters            bitfield.Bitvector512        // PTC members that have submitted a vote

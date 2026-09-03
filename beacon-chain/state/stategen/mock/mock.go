@@ -4,6 +4,7 @@ package mock
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -60,9 +61,9 @@ func (m *StateManager) StateByRootNoCopy(_ context.Context, blockRoot [32]byte) 
 	return m.StatesByRoot[blockRoot], nil
 }
 
-// ActiveNonSlashedBalancesByRoot --
-func (*StateManager) ActiveNonSlashedBalancesByRoot(_ context.Context, _ [32]byte) ([]uint64, error) {
-	return []uint64{}, nil
+// ForkChoiceBalancesByRoot --
+func (*StateManager) ForkChoiceBalancesByRoot(_ context.Context, _ [32]byte) (forkchoice.Balances, error) {
+	return forkchoice.Balances{}, nil
 }
 
 // StateByRootInitialSync --

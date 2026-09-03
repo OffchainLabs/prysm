@@ -6,6 +6,7 @@ import (
 	"time"
 
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
@@ -145,7 +146,7 @@ func TestUnrealizedJustifiedBlockHash(t *testing.T) {
 	st, roblock, err := prepareForkchoiceState(ctx, 0, [32]byte{}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
 	require.NoError(t, err)
 	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
-	service.cfg.ForkChoiceStore.SetBalancesByRooter(func(_ context.Context, _ [32]byte) ([]uint64, error) { return []uint64{}, nil })
+	service.cfg.ForkChoiceStore.SetBalancesByRooter(func(_ context.Context, _ [32]byte) (forkchoice.Balances, error) { return forkchoice.Balances{}, nil })
 	require.NoError(t, service.cfg.ForkChoiceStore.UpdateJustifiedCheckpoint(ctx, &forkchoicetypes.Checkpoint{Epoch: 6, Root: [32]byte{'j'}}))
 
 	h := service.UnrealizedJustifiedPayloadBlockHash()
@@ -800,7 +801,7 @@ func TestService_ShouldIgnoreData(t *testing.T) {
 	require.NoError(t, fcs.InsertNode(ctx, stC, robC))
 
 	// Set justified checkpoint to nodeB (epoch 1).
-	fcs.SetBalancesByRooter(func(_ context.Context, _ [32]byte) ([]uint64, error) { return []uint64{}, nil })
+	fcs.SetBalancesByRooter(func(_ context.Context, _ [32]byte) (forkchoice.Balances, error) { return forkchoice.Balances{}, nil })
 	require.NoError(t, fcs.UpdateJustifiedCheckpoint(ctx, &forkchoicetypes.Checkpoint{Epoch: 1, Root: nodeBRoot}))
 
 	t.Run("past epoch data is not ignored", func(t *testing.T) {

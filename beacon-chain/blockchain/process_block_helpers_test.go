@@ -54,6 +54,7 @@ func TestSaveHeadIfNeeded_ProposingAndOverride_SkipsSave(t *testing.T) {
 
 	service, tr := minimalTestService(t)
 	ctx, fcs := tr.ctx, tr.fcs
+	initializeTestForkChoiceBalances(t, fcs, []uint64{params.BeaconConfig().MaxEffectiveBalance})
 
 	// Service clock: current slot == 2, so the proposing slot is 3.
 	service.SetGenesisTime(time.Now().Add(-time.Duration(2*params.BeaconConfig().SecondsPerSlot) * time.Second))
@@ -103,6 +104,7 @@ func TestSaveHeadIfNeeded_NotSynced_SkipsPayloadAttribute(t *testing.T) {
 
 	service, tr := minimalTestService(t)
 	ctx, fcs := tr.ctx, tr.fcs
+	initializeTestForkChoiceBalances(t, fcs, []uint64{params.BeaconConfig().MaxEffectiveBalance})
 	service.cfg.SyncChecker = notSyncedChecker{}
 
 	// Service clock: current slot == 2, so the proposing slot is 3.
