@@ -192,7 +192,8 @@ func TestSerializationRoundTrip(t *testing.T) {
 		hdiff, err := newHdiff(diff1)
 		require.NoError(t, err)
 
-		diff2 := hdiff.serialize()
+		diff2, err := hdiff.serialize()
+		require.NoError(t, err)
 
 		// Apply both diffs - should get same result
 		result1, err := ApplyDiff(t.Context(), source, diff1)

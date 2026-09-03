@@ -387,6 +387,10 @@ func (s *Server) SetVoluntaryExit(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, response)
 }
 
+type readOnlyChecker interface {
+	IsReadOnly([fieldparams.BLSPubkeyLength]byte) bool
+}
+
 // ListRemoteKeys returns a list of all public keys defined for web3signer keymanager type.
 func (s *Server) ListRemoteKeys(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.ListRemoteKeys")
@@ -400,11 +404,7 @@ func (s *Server) ListRemoteKeys(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
 		return
 	}
-	km, err := s.validatorService.Keymanager()
-	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+
 	kind, _ := s.keymanagerKind()
 	if kind != keymanager.Web3Signer {
 		log.Debugf("List remote keys keymanager api expected keymanager type %s but got %s", keymanager.Web3Signer.String(), kind.String())
@@ -414,17 +414,32 @@ func (s *Server) ListRemoteKeys(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteJson(w, response)
 		return
 	}
+
+	km, err := s.validatorService.Keymanager()
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	checker, ok := km.(readOnlyChecker)
+	if !ok {
+		// Should never happen.
+		httputil.HandleError(w, "Keymanager does not support read-only check", http.StatusInternalServerError)
+		return
+	}
+
 	pubKeys, err := km.FetchValidatingPublicKeys(ctx)
 	if err != nil {
 		httputil.HandleError(w, errors.Errorf("Could not retrieve public keys: %v", err).Error(), http.StatusInternalServerError)
 		return
 	}
+
 	keystoreResponse := make([]*RemoteKey, len(pubKeys))
-	for i := range pubKeys {
+	for i, pubkey := range pubKeys {
 		keystoreResponse[i] = &RemoteKey{
-			Pubkey:   hexutil.Encode(pubKeys[i][:]),
+			Pubkey:   hexutil.Encode(pubkey[:]),
 			Url:      s.validatorService.RemoteSignerConfig().BaseEndpoint,
-			Readonly: true,
+			Readonly: checker.IsReadOnly(pubkey),
 		}
 	}
 

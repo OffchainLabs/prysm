@@ -312,6 +312,14 @@ var (
 		Value:   "",
 		Aliases: []string{"remote-signer-keys-file"},
 	}
+	Web3SignerKeyPollIntervalFlag = &cli.DurationFlag{
+		Name: "validators-external-signer-poll-interval",
+		Usage: `Interval to poll the external signer public-keys URL for added or removed validators (e.g. 30s, 5m). 
+		Zero or negative disables polling. A failed or empty response keeps the current keys, 
+		so removing every key from the URL will not stop validating.`,
+		Value:   0,
+		Aliases: []string{"remote-signer-poll-interval"},
+	}
 
 	// KeymanagerKindFlag defines the kind of keymanager desired by a user during wallet creation.
 	KeymanagerKindFlag = &cli.StringFlag{

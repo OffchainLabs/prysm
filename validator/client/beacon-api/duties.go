@@ -109,8 +109,8 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 	var wg errgroup.Group
 
 	var attesterDutiesContainer *structs.GetAttesterDutiesResponse
-	var err error
 	wg.Go(func() error {
+		var err error
 		attesterDutiesContainer, err = c.dutiesProvider.AttesterDuties(ctx, epoch, indices)
 		if err != nil {
 			return errors.Wrapf(err, "failed to get attester duties for epoch `%d`", epoch)
@@ -171,6 +171,7 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 
 	var proposerDutiesContainer *structs.GetProposerDutiesResponse
 	wg.Go(func() error {
+		var err error
 		proposerDutiesContainer, err = c.dutiesProvider.ProposerDuties(ctx, epoch)
 		if err != nil {
 			return errors.Wrapf(err, "failed to get proposer duties for epoch `%d`", epoch)
@@ -217,6 +218,8 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 	}
 
 	dutiesContainer.CurrentEpochDuties = duties
+
+	var err error
 	dutiesContainer.CurrDependentRoot, err = hexutil.Decode(proposerDutiesContainer.DependentRoot)
 	if err != nil {
 		return errors.Wrap(err, "failed to decode current dependent root")

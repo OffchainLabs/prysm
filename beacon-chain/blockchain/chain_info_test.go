@@ -872,3 +872,37 @@ func Test_hashForGenesisRoot_Gloas(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, expectedHash, [32]byte(genHash))
 }
+
+type mockSyncChecker struct {
+	synced bool
+}
+
+func (m mockSyncChecker) Synced() bool {
+	return m.synced
+}
+
+func TestCanWaitForGossipSidecars(t *testing.T) {
+	const currentSlot = primitives.Slot(100)
+
+	tests := []struct {
+		name   string
+		slot   primitives.Slot
+		synced bool
+		want   bool
+	}{
+		{name: "current slot", synced: true, slot: currentSlot, want: true},
+		{name: "previous slot", synced: true, slot: currentSlot - 1, want: true},
+		{name: "future slot", synced: true, slot: currentSlot + 1, want: true},
+		{name: "two slots behind", synced: true, slot: currentSlot - 2, want: false},
+		{name: "far behind", synced: true, slot: currentSlot - 30, want: false},
+		{name: "initial sync, current slot", synced: false, slot: currentSlot, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Service{cfg: &config{SyncChecker: mockSyncChecker{synced: tt.synced}}}
+			s.SetGenesisTime(time.Now().Add(time.Duration(-1*int64(currentSlot)*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
+			require.Equal(t, tt.want, s.canWaitForGossipSidecars(tt.slot))
+		})
+	}
+}

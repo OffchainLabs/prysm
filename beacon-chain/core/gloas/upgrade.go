@@ -17,7 +17,7 @@ import (
 
 // UpgradeToGloas updates inputs a generic state to return the version Gloas state.
 //
-//	<spec fn="upgrade_to_gloas" fork="gloas" hash="c769e40a">
+//	<spec fn="upgrade_to_gloas" fork="gloas" hash="571abe9a">
 //	def upgrade_to_gloas(pre: fulu.BeaconState) -> BeaconState:
 //	    epoch = fulu.get_current_epoch(pre)
 //
@@ -38,17 +38,26 @@ import (
 //	        eth1_data=pre.eth1_data,
 //	        eth1_data_votes=pre.eth1_data_votes,
 //	        eth1_deposit_index=pre.eth1_deposit_index,
-//	        validators=pre.validators,
-//	        balances=pre.balances,
+//	        # [Modified in Gloas:EIP7688]
+//	        validators=ProgressiveList[Validator](list(pre.validators)),
+//	        # [Modified in Gloas:EIP7688]
+//	        balances=ProgressiveList[Gwei](list(pre.balances)),
 //	        randao_mixes=pre.randao_mixes,
 //	        slashings=pre.slashings,
-//	        previous_epoch_participation=pre.previous_epoch_participation,
-//	        current_epoch_participation=pre.current_epoch_participation,
+//	        # [Modified in Gloas:EIP7688]
+//	        previous_epoch_participation=ProgressiveList[ParticipationFlags](
+//	            list(pre.previous_epoch_participation)
+//	        ),
+//	        # [Modified in Gloas:EIP7688]
+//	        current_epoch_participation=ProgressiveList[ParticipationFlags](
+//	            list(pre.current_epoch_participation)
+//	        ),
 //	        justification_bits=pre.justification_bits,
 //	        previous_justified_checkpoint=pre.previous_justified_checkpoint,
 //	        current_justified_checkpoint=pre.current_justified_checkpoint,
 //	        finalized_checkpoint=pre.finalized_checkpoint,
-//	        inactivity_scores=pre.inactivity_scores,
+//	        # [Modified in Gloas:EIP7688]
+//	        inactivity_scores=ProgressiveList[uint64](list(pre.inactivity_scores)),
 //	        current_sync_committee=pre.current_sync_committee,
 //	        next_sync_committee=pre.next_sync_committee,
 //	        # [Modified in Gloas:EIP7732]
@@ -64,9 +73,16 @@ import (
 //	        earliest_exit_epoch=pre.earliest_exit_epoch,
 //	        consolidation_balance_to_consume=pre.consolidation_balance_to_consume,
 //	        earliest_consolidation_epoch=pre.earliest_consolidation_epoch,
-//	        pending_deposits=pre.pending_deposits,
-//	        pending_partial_withdrawals=pre.pending_partial_withdrawals,
-//	        pending_consolidations=pre.pending_consolidations,
+//	        # [Modified in Gloas:EIP7688]
+//	        pending_deposits=ProgressiveList[PendingDeposit](list(pre.pending_deposits)),
+//	        # [Modified in Gloas:EIP7688]
+//	        pending_partial_withdrawals=ProgressiveList[PendingPartialWithdrawal](
+//	            list(pre.pending_partial_withdrawals)
+//	        ),
+//	        # [Modified in Gloas:EIP7688]
+//	        pending_consolidations=ProgressiveList[PendingConsolidation](
+//	            list(pre.pending_consolidations)
+//	        ),
 //	        proposer_lookahead=pre.proposer_lookahead,
 //	        # [New in Gloas:EIP7732]
 //	        builders=[],

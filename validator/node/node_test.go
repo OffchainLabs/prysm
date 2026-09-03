@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
@@ -204,6 +205,7 @@ func TestWeb3SignerConfig(t *testing.T) {
 		baseURL          string
 		publicKeysOrURLs []string
 		persistentFile   string
+		pollInterval     time.Duration
 	}
 	tests := []struct {
 		name       string
@@ -239,6 +241,19 @@ func TestWeb3SignerConfig(t *testing.T) {
 				GenesisValidatorsRoot: nil,
 				PublicKeysURL:         "http://localhost:8545/api/v1/eth2/publicKeys",
 				ProvidedPublicKeys:    nil,
+			},
+		},
+		{
+			name: "happy path with external url and poll interval",
+			args: &args{
+				baseURL:          "http://localhost:8545",
+				publicKeysOrURLs: []string{"http://localhost:8545/api/v1/eth2/publicKeys"},
+				pollInterval:     5 * time.Minute,
+			},
+			want: &remoteweb3signer.SetupConfig{
+				BaseEndpoint:  "http://localhost:8545",
+				PublicKeysURL: "http://localhost:8545/api/v1/eth2/publicKeys",
+				PollInterval:  5 * time.Minute,
 			},
 		},
 		{
@@ -306,6 +321,10 @@ func TestWeb3SignerConfig(t *testing.T) {
 			}
 			if tt.args.persistentFile != "" {
 				require.NoError(t, set.Set(flags.Web3SignerKeyFileFlag.Name, tt.args.persistentFile))
+			}
+			set.Duration(flags.Web3SignerKeyPollIntervalFlag.Name, 0, "")
+			if tt.args.pollInterval != 0 {
+				require.NoError(t, set.Set(flags.Web3SignerKeyPollIntervalFlag.Name, tt.args.pollInterval.String()))
 			}
 			cliCtx := cli.NewContext(&app, set, nil)
 			got, err := Web3SignerConfig(cliCtx)
