@@ -3,6 +3,7 @@ package peerdas_test
 import (
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
@@ -388,5 +389,188 @@ func TestPopulateFromBid_DataColumnSidecars(t *testing.T) {
 		require.Equal(t, uint64(i), sidecar.Index())
 		require.Equal(t, 2, len(sidecar.Column()))
 		require.Equal(t, 2, len(sidecar.KzgProofs()))
+	}
+}
+
+func TestPartialColumns_NoCommitmentsReturnsNil(t *testing.T) {
+	// A block with no blob commitments would yield only inert, cell-less partial
+	// columns, so PartialColumns must return nothing rather than build 128 of them.
+	blockPb := util.NewBeaconBlockFulu()
+	blockPb.Block.Body.BlobKzgCommitments = nil
+
+	signedBlock, err := blocks.NewSignedBeaconBlock(blockPb)
+	require.NoError(t, err)
+	rob, err := blocks.NewROBlock(signedBlock)
+	require.NoError(t, err)
+
+	cols, err := peerdas.PartialColumns(bitfield.NewBitlist(0), nil, nil, peerdas.PopulateFromBlock(rob))
+	require.NoError(t, err)
+	require.Equal(t, 0, len(cols))
+}
+
+func TestPartialColumns_Gloas(t *testing.T) {
+	const numberOfColumns = fieldparams.NumberOfColumns
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	buildCellsAndProofs := func(numBlobs int) ([][]kzg.Cell, [][]kzg.Proof) {
+		cellsPerBlob := make([][]kzg.Cell, numBlobs)
+		proofsPerBlob := make([][]kzg.Proof, numBlobs)
+		for b := range numBlobs {
+			cellsPerBlob[b] = make([]kzg.Cell, numberOfColumns)
+			proofsPerBlob[b] = make([]kzg.Proof, numberOfColumns)
+			for i := range numberOfColumns {
+				cellsPerBlob[b][i][0] = byte(i + b*128)
+				proofsPerBlob[b][i][0] = byte(i + b*128)
+			}
+		}
+		return cellsPerBlob, proofsPerBlob
+	}
+
+	tests := []struct {
+		name           string
+		numBlobs       int
+		numCommitments int
+		includedBits   []uint64
+		wantErr        string
+	}{
+		{
+			name:           "all blobs included builds complete columns",
+			numBlobs:       2,
+			numCommitments: 2,
+			includedBits:   []uint64{0, 1},
+		},
+		{
+			name:           "fewer cells than included commitments trips guard",
+			numBlobs:       1,
+			numCommitments: 2,
+			includedBits:   []uint64{0, 1},
+			wantErr:        "insufficient cells or proofs for column",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			commitments := make([][]byte, tt.numCommitments)
+			for i := range commitments {
+				c := make([]byte, 48)
+				c[0] = byte(0xAA + i)
+				commitments[i] = c
+			}
+
+			gloasBlockPb := util.NewBeaconBlockGloas()
+			gloasBlockPb.Block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments = commitments
+			signedGloasBlock, err := blocks.NewSignedBeaconBlock(gloasBlockPb)
+			require.NoError(t, err)
+			gloasRob, err := blocks.NewROBlock(signedGloasBlock)
+			require.NoError(t, err)
+
+			cellsPerBlob, proofsPerBlob := buildCellsAndProofs(tt.numBlobs)
+
+			included := bitfield.NewBitlist(uint64(tt.numCommitments))
+			for _, bit := range tt.includedBits {
+				included.SetBitAt(bit, true)
+			}
+
+			cols, err := peerdas.PartialColumns(included, cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBid(gloasRob))
+			if tt.wantErr != "" {
+				require.ErrorContains(t, tt.wantErr, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, int(numberOfColumns), len(cols))
+			for i := range cols {
+				require.Equal(t, true, cols[i].IsGloas())
+				require.Equal(t, uint64(i), cols[i].Index())
+				require.Equal(t, uint64(tt.numCommitments), cols[i].KzgCommitmentCount())
+				require.Equal(t, true, cols[i].IsComplete())
+			}
+		})
+	}
+}
+
+func TestBidReconstructionSource_Commitments(t *testing.T) {
+	commitment := func(marker byte) []byte {
+		c := make([]byte, 48)
+		c[0] = marker
+		return c
+	}
+
+	newGloasROBlock := func(t *testing.T, mutate func(*ethpb.SignedBeaconBlockGloas), skipHTR bool) blocks.ROBlock {
+		t.Helper()
+		gloasBlockPb := util.NewBeaconBlockGloas()
+		mutate(gloasBlockPb)
+		signed, err := blocks.NewSignedBeaconBlock(gloasBlockPb)
+		require.NoError(t, err)
+		if skipHTR {
+			rob, err := blocks.NewROBlockWithRoot(signed, [32]byte{})
+			require.NoError(t, err)
+			return rob
+		}
+		rob, err := blocks.NewROBlock(signed)
+		require.NoError(t, err)
+		return rob
+	}
+
+	tests := []struct {
+		name    string
+		block   func(t *testing.T) blocks.ROBlock
+		want    [][]byte
+		wantErr string
+	}{
+		{
+			name: "returns bid commitments",
+			block: func(t *testing.T) blocks.ROBlock {
+				return newGloasROBlock(t, func(b *ethpb.SignedBeaconBlockGloas) {
+					b.Block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments = [][]byte{commitment(0xAA), commitment(0xBB)}
+				}, false)
+			},
+			want: [][]byte{commitment(0xAA), commitment(0xBB)},
+		},
+		{
+			name: "nil signed bid",
+			block: func(t *testing.T) blocks.ROBlock {
+				return newGloasROBlock(t, func(b *ethpb.SignedBeaconBlockGloas) {
+					b.Block.Body.SignedExecutionPayloadBid = nil
+				}, true)
+			},
+			wantErr: "nil execution payload bid or bid message",
+		},
+		{
+			name: "nil bid message",
+			block: func(t *testing.T) blocks.ROBlock {
+				return newGloasROBlock(t, func(b *ethpb.SignedBeaconBlockGloas) {
+					b.Block.Body.SignedExecutionPayloadBid.Message = nil
+				}, true)
+			},
+			wantErr: "nil execution payload bid or bid message",
+		},
+		{
+			name: "non-gloas block is unsupported",
+			block: func(t *testing.T) blocks.ROBlock {
+				signed, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockFulu())
+				require.NoError(t, err)
+				rob, err := blocks.NewROBlock(signed)
+				require.NoError(t, err)
+				return rob
+			},
+			wantErr: "signed execution payload bid",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			src := peerdas.PopulateFromBid(tt.block(t))
+			got, err := src.Commitments()
+			if tt.wantErr != "" {
+				require.ErrorContains(t, tt.wantErr, err)
+				return
+			}
+			require.NoError(t, err)
+			require.DeepEqual(t, tt.want, got)
+		})
 	}
 }

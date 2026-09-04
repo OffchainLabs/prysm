@@ -42,6 +42,10 @@ var (
 
 	PartialColumnRequirements = requirementList(GossipDataColumnSidecarRequirements).excluding(RequireCorrectSubnet)
 
+	// GloasPartialColumnRequirements defines the requirements a Gloas partial data column must satisfy
+	// to be upgraded to a VerifiedRODataColumn once complete.
+	GloasPartialColumnRequirements = []Requirement{RequireValidFields, RequireSidecarKzgProofVerified}
+
 	// ByRangeRequestDataColumnSidecarRequirements defines the set of requirements that DataColumnSidecars received
 	// via the by range request must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
 	// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#datacolumnsidecarsbyrange-v1

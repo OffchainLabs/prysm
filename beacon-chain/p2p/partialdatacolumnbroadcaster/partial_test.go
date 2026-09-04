@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"sync"
 	"testing"
@@ -11,7 +12,9 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	libp2p "github.com/libp2p/go-libp2p"
@@ -48,6 +51,10 @@ type callbackRecorder struct {
 	partialVerifierFromHeaderErr     error
 	partialVerifierFromHeaderReject  bool
 	partialVerifierFromTrustedColErr error
+
+	// validateGloasGroupResult is returned from ValidateGloasGroupID; the zero value
+	// (pubsub.ValidationAccept) means the group is accepted.
+	validateGloasGroupResult pubsub.ValidationResult
 }
 
 func newCallbackRecorder(callBuffer int, validateHeaderReject bool, validateColumnErr, validateHeaderErr error) *callbackRecorder {
@@ -91,6 +98,10 @@ func (r *callbackRecorder) HandleColumn(topic string, col blocks.VerifiedRODataC
 
 func (r *callbackRecorder) HandleHeader(header *ethpb.PartialDataColumnHeader, groupID string) {
 	r.handleHeaderCallCh <- headerHandlerCall{header: header, groupID: groupID}
+}
+
+func (r *callbackRecorder) ValidateGloasGroupID(_ primitives.Slot, _ [32]byte) pubsub.ValidationResult {
+	return r.validateGloasGroupResult
 }
 
 type peerFeedbackCall struct {
@@ -245,6 +256,43 @@ func createPartialColumn(t *testing.T, nCells uint64, cells map[uint64][]byte) *
 	return &c
 }
 
+// createGloasPartialColumn mirrors createPartialColumn for Gloas: it has no header or inclusion
+// proof and sources its commitments from the bid (set at construction). Its group id is the 41B
+// Gloas group id (0x01 || SSZ(slot, root)).
+func createGloasPartialColumn(t *testing.T, nCells uint64, cells map[uint64][]byte) *blocks.PartialDataColumn {
+	t.Helper()
+
+	commitments := make([][]byte, nCells)
+	for i := range nCells {
+		commitments[i] = []byte{byte(i + 1)}
+	}
+
+	var root [32]byte
+	copy(root[:], []byte("gloas-test-block-root"))
+
+	c, err := blocks.NewPartialDataColumnGloas(root, 9, 12, commitments)
+	require.NoError(t, err)
+
+	for idx, cell := range cells {
+		ok := c.ExtendFromVerifiedCell(
+			idx,
+			slices.Clone(cell),
+			[]byte{0xC0 + byte(idx)},
+		)
+		require.Equal(t, true, ok)
+	}
+
+	return &c
+}
+
+// buildIncomingGloasRPC is buildIncomingRPC with the fork flag set, as onIncomingRPC would set it
+// after parsing a 41B Gloas group id.
+func buildIncomingGloasRPC(topic string, group []byte, message *ethpb.PartialDataColumnSidecar, partsMetadata []byte) incomingPartialRPC {
+	rpc := buildIncomingRPC(topic, group, message, partsMetadata)
+	rpc.isGloas = true
+	return rpc
+}
+
 func assertPublishedPartialColumnMatches(t *testing.T, expected *blocks.PartialDataColumn, actual *blocks.PartialDataColumn) {
 	t.Helper()
 
@@ -252,7 +300,7 @@ func assertPublishedPartialColumnMatches(t *testing.T, expected *blocks.PartialD
 	require.NotNil(t, actual)
 	require.DeepEqual(t, expected.GroupID(), actual.GroupID())
 	require.Equal(t, true, bytes.Equal(expected.Included, actual.Included))
-	require.DeepEqual(t, expected.Column, actual.Column)
+	require.DeepEqual(t, expected.Column(), actual.Column())
 }
 
 func assertPartialColumnsEqual(t *testing.T, expected *blocks.PartialDataColumn, actual *blocks.PartialDataColumn) {
@@ -261,23 +309,24 @@ func assertPartialColumnsEqual(t *testing.T, expected *blocks.PartialDataColumn,
 	require.NotNil(t, expected)
 	require.NotNil(t, actual)
 
-	expectedRoot, err := expected.SignedBlockHeader.Header.HashTreeRoot()
+	expectedSBH, err := expected.SignedBlockHeader()
 	require.NoError(t, err)
-	actualRoot, err := actual.SignedBlockHeader.Header.HashTreeRoot()
+	expectedRoot, err := expectedSBH.Header.HashTreeRoot()
+	require.NoError(t, err)
+	actualSBH, err := actual.SignedBlockHeader()
+	require.NoError(t, err)
+	actualRoot, err := actualSBH.Header.HashTreeRoot()
 	require.NoError(t, err)
 
 	require.DeepEqual(t, expectedRoot, actualRoot)
 	require.DeepEqual(t, expected.GroupID(), actual.GroupID())
 	require.DeepEqual(t, expected.Included, actual.Included)
-	require.DeepEqual(t, expected.Column, actual.Column)
+	require.DeepEqual(t, expected.Column(), actual.Column())
 }
 
 func newMockPartialVerifier(col *blocks.PartialDataColumn) *verification.PartialColumnVerifier {
 	mv := &verification.MockDataColumnsVerifier{}
-	ro, err := blocks.NewRODataColumn(col.DataColumnSidecar)
-	if err == nil {
-		mv.AppendRODataColumns(ro)
-	}
+	mv.AppendRODataColumns(col.RODataColumn)
 	return verification.NewPartialColumnVerifier(mv, col)
 }
 
@@ -287,10 +336,7 @@ func newMarkedVerifier(col *blocks.PartialDataColumn) *verification.PartialColum
 
 func newMockPartialVerifierWithValidFieldsErr(col *blocks.PartialDataColumn, validFieldsErr error) *verification.PartialColumnVerifier {
 	mv := &verification.MockDataColumnsVerifier{ErrValidFields: validFieldsErr}
-	ro, err := blocks.NewRODataColumn(col.DataColumnSidecar)
-	if err == nil {
-		mv.AppendRODataColumns(ro)
-	}
+	mv.AppendRODataColumns(col.RODataColumn)
 	return verification.NewPartialColumnVerifier(mv, col)
 }
 
@@ -325,8 +371,54 @@ func mustMarshalPartsMetadata(t *testing.T, meta *ethpb.PartialDataColumnPartsMe
 
 func mustMarshalSidecar(t *testing.T, cellsPresent bitfield.Bitlist) []byte {
 	t.Helper()
+	n := cellsPresent.Count()
+	cells := make([][]byte, n)
+	proofs := make([][]byte, n)
+	for i := range cells {
+		cells[i] = make([]byte, 2048)
+		proofs[i] = make([]byte, 48)
+	}
 	b, err := (&ethpb.PartialDataColumnSidecar{
 		CellsPresentBitmap: cellsPresent,
+		PartialColumn:      cells,
+		KzgProofs:          proofs,
+	}).MarshalSSZ()
+	require.NoError(t, err)
+	return b
+}
+
+func mustMarshalSidecarCounts(t *testing.T, cellsPresent bitfield.Bitlist, nCells, nProofs int) []byte {
+	t.Helper()
+	cells := make([][]byte, nCells)
+	for i := range cells {
+		cells[i] = make([]byte, 2048)
+	}
+	proofs := make([][]byte, nProofs)
+	for i := range proofs {
+		proofs[i] = make([]byte, 48)
+	}
+	b, err := (&ethpb.PartialDataColumnSidecar{
+		CellsPresentBitmap: cellsPresent,
+		PartialColumn:      cells,
+		KzgProofs:          proofs,
+	}).MarshalSSZ()
+	require.NoError(t, err)
+	return b
+}
+
+func mustMarshalGloasSidecar(t *testing.T, cellsPresent bitfield.Bitlist) []byte {
+	t.Helper()
+	n := cellsPresent.Count()
+	cells := make([][]byte, n)
+	proofs := make([][]byte, n)
+	for i := range cells {
+		cells[i] = make([]byte, 2048)
+		proofs[i] = make([]byte, 48)
+	}
+	b, err := (&ethpb.PartialDataColumnSidecarGloas{
+		CellsPresentBitmap: cellsPresent,
+		PartialColumn:      cells,
+		KzgProofs:          proofs,
 	}).MarshalSSZ()
 	require.NoError(t, err)
 	return b
@@ -372,18 +464,26 @@ func buildValidatedCells(columnIndex uint64, cellsByIndex map[uint64][]byte) ([]
 	return indices, cells
 }
 
-func buildHeaderFromColumn(c *blocks.PartialDataColumn) *ethpb.PartialDataColumnHeader {
+func buildHeaderFromColumn(t *testing.T, c *blocks.PartialDataColumn) *ethpb.PartialDataColumnHeader {
+	t.Helper()
+	sbh, err := c.SignedBlockHeader()
+	require.NoError(t, err)
+	commitments, err := c.KzgCommitments()
+	require.NoError(t, err)
+	inclusionProof, err := c.KzgCommitmentsInclusionProof()
+	require.NoError(t, err)
 	return &ethpb.PartialDataColumnHeader{
-		SignedBlockHeader:            c.SignedBlockHeader,
-		KzgCommitments:               c.KzgCommitments,
-		KzgCommitmentsInclusionProof: c.KzgCommitmentsInclusionProof,
+		SignedBlockHeader:            sbh,
+		KzgCommitments:               commitments,
+		KzgCommitmentsInclusionProof: inclusionProof,
 	}
 }
 
-func buildHeaderOnlySidecar(c *blocks.PartialDataColumn) *ethpb.PartialDataColumnSidecar {
+func buildHeaderOnlySidecar(t *testing.T, c *blocks.PartialDataColumn) *ethpb.PartialDataColumnSidecar {
+	t.Helper()
 	return &ethpb.PartialDataColumnSidecar{
-		CellsPresentBitmap: testBitlist(uint64(len(c.KzgCommitments))),
-		Header:             []*ethpb.PartialDataColumnHeader{buildHeaderFromColumn(c)},
+		CellsPresentBitmap: testBitlist(c.KzgCommitmentCount()),
+		Header:             []*ethpb.PartialDataColumnHeader{buildHeaderFromColumn(t, c)},
 	}
 }
 
@@ -420,18 +520,21 @@ func buildIncomingRPC(topic string, group []byte, message *ethpb.PartialDataColu
 	}
 }
 
-func buildExpectedCellsToVerify(c *blocks.PartialDataColumn, cellsByIndex map[uint64][]byte) ([]uint64, []blocks.CellProofBundle) {
+func buildExpectedCellsToVerify(t *testing.T, c *blocks.PartialDataColumn, cellsByIndex map[uint64][]byte) ([]uint64, []blocks.CellProofBundle) {
+	t.Helper()
 	indices := make([]uint64, 0, len(cellsByIndex))
 	for idx := range cellsByIndex {
 		indices = append(indices, idx)
 	}
 	slices.Sort(indices)
 
+	commitments, err := c.KzgCommitments()
+	require.NoError(t, err)
 	cells := make([]blocks.CellProofBundle, 0, len(indices))
 	for _, idx := range indices {
 		cells = append(cells, blocks.CellProofBundle{
-			ColumnIndex: c.Index,
-			Commitment:  slices.Clone(c.KzgCommitments[idx]),
+			ColumnIndex: c.Index(),
+			Commitment:  slices.Clone(commitments[idx]),
 			Cell:        slices.Clone(cellsByIndex[idx]),
 			Proof:       []byte{0xB0 + byte(idx)},
 		})
@@ -527,6 +630,7 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 		expectedSentState    func() *ethpb.PartialDataColumnPartsMetadata
 		expectedMesageBitmap bitfield.Bitlist
 		expectedMessage      bool
+		isGloas              bool
 	}{
 		{
 			name: "incoming parts metadata only initializes recvd state",
@@ -691,6 +795,52 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 			},
 			wantErrContains: "requests length mismatch",
 		},
+		{
+			name: "partial message with fewer cells than present bitmap returns malformed error",
+			inputPeerState: func() blocks.PartialDataColumnPeerState {
+				return blocks.PartialDataColumnPeerState{}
+			},
+			inputRPC: func(t *testing.T) *pubsub_pb.PartialMessagesExtension {
+				// Bitmap declares two present cells, but only one cell is carried.
+				return &pubsub_pb.PartialMessagesExtension{
+					PartialMessage: mustMarshalSidecarCounts(t, testBitlist(4, 1, 3), 1, 2),
+				}
+			},
+			wantErrContains: "cells/proofs count does not match present bitmap",
+		},
+		{
+			name: "partial message with fewer proofs than present bitmap returns malformed error",
+			inputPeerState: func() blocks.PartialDataColumnPeerState {
+				return blocks.PartialDataColumnPeerState{}
+			},
+			inputRPC: func(t *testing.T) *pubsub_pb.PartialMessagesExtension {
+				// Bitmap declares two present cells, but only one proof is carried.
+				return &pubsub_pb.PartialMessagesExtension{
+					PartialMessage: mustMarshalSidecarCounts(t, testBitlist(4, 1, 3), 2, 1),
+				}
+			},
+			wantErrContains: "cells/proofs count does not match present bitmap",
+		},
+		{
+			name:    "gloas partial message updates recvd and sent states",
+			isGloas: true,
+			inputPeerState: func() blocks.PartialDataColumnPeerState {
+				return blocks.PartialDataColumnPeerState{}
+			},
+			inputRPC: func(t *testing.T) *pubsub_pb.PartialMessagesExtension {
+				return &pubsub_pb.PartialMessagesExtension{
+					PartialMessage: mustMarshalGloasSidecar(t, testBitlist(4, 1, 3)),
+				}
+			},
+			expectedMessage:      true,
+			expectedMesageBitmap: testBitlist(4, 1, 3),
+			expectedRecvdState: func() *ethpb.PartialDataColumnPartsMetadata {
+				return testPartsMetadata(4, []uint64{1, 3}, nil)
+			},
+			expectedSentState: func() *ethpb.PartialDataColumnPartsMetadata {
+				return testPartsMetadata(4, []uint64{1, 3}, nil)
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -698,7 +848,7 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 			peerState := tt.inputPeerState()
 			originalPeerState := peerState.Clone()
 
-			nextPeerState, msg, err := updatePeerStateFromIncomingRPC(peerState, tt.inputRPC(t))
+			nextPeerState, msg, err := updatePeerStateFromIncomingRPC(peerState, tt.inputRPC(t), tt.isGloas)
 
 			// updatePeerStateFromIncomingRPC must not mutate the input peerState.
 			require.DeepEqual(t, originalPeerState.Recvd, peerState.Recvd)
@@ -712,6 +862,9 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 			require.NoError(t, err)
 			if tt.expectedMessage {
 				require.NotNil(t, msg)
+				if tt.isGloas {
+					require.IsNil(t, msg.Header)
+				}
 				assertBitlistEqual(t, msg.CellsPresentBitmap, tt.expectedMesageBitmap)
 			} else {
 				require.IsNil(t, msg)
@@ -794,9 +947,9 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 				col := createPartialColumn(t, 2, nil)
 				group := col.GroupID()
 				return testSetup{
-					inputRPC:        buildIncomingRPC(validTopic, group, buildHeaderOnlySidecar(col), nil),
+					inputRPC:        buildIncomingRPC(validTopic, group, buildHeaderOnlySidecar(t, col), nil),
 					expectedGroupID: string(group),
-					expectedHeader:  buildHeaderFromColumn(col),
+					expectedHeader:  buildHeaderFromColumn(t, col),
 				}
 			},
 			expectHeaderValidateCall: true,
@@ -810,7 +963,7 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 				col := createPartialColumn(t, 2, nil)
 				wrongGroup := []byte("wrong-group-id")
 				return testSetup{
-					inputRPC: buildIncomingRPC(validTopic, wrongGroup, buildHeaderOnlySidecar(col), nil),
+					inputRPC: buildIncomingRPC(validTopic, wrongGroup, buildHeaderOnlySidecar(t, col), nil),
 				}
 			},
 			expectPeerFeedbackCall: true,
@@ -823,9 +976,9 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 				col := createPartialColumn(t, 2, nil)
 				group := col.GroupID()
 				return testSetup{
-					inputRPC:        buildIncomingRPC(validTopic, group, buildHeaderOnlySidecar(col), nil),
+					inputRPC:        buildIncomingRPC(validTopic, group, buildHeaderOnlySidecar(t, col), nil),
 					expectedGroupID: string(group),
-					expectedHeader:  buildHeaderFromColumn(col),
+					expectedHeader:  buildHeaderFromColumn(t, col),
 				}
 			},
 			expectHeaderValidateCall: true,
@@ -836,9 +989,9 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 				col := createPartialColumn(t, 3, nil)
 				group := col.GroupID()
 				return testSetup{
-					inputRPC:        buildIncomingRPC(validTopic, group, buildHeaderOnlySidecar(col), nil),
+					inputRPC:        buildIncomingRPC(validTopic, group, buildHeaderOnlySidecar(t, col), nil),
 					expectedGroupID: string(group),
-					expectedHeader:  buildHeaderFromColumn(col),
+					expectedHeader:  buildHeaderFromColumn(t, col),
 				}
 			},
 			expectHeaderValidateCall: true,
@@ -854,9 +1007,9 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 				col := createPartialColumn(t, 2, nil)
 				group := col.GroupID()
 				return testSetup{
-					inputRPC:        buildIncomingRPC(invalidTopic, group, buildHeaderOnlySidecar(col), nil),
+					inputRPC:        buildIncomingRPC(invalidTopic, group, buildHeaderOnlySidecar(t, col), nil),
 					expectedGroupID: string(group),
-					expectedHeader:  buildHeaderFromColumn(col),
+					expectedHeader:  buildHeaderFromColumn(t, col),
 				}
 			},
 			expectHeaderHandleCall: false,
@@ -874,7 +1027,7 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 				msg := buildSidecarWithCells(3, map[uint64][]byte{
 					1: {0x22},
 				})
-				cellIndices, cellsToVerify := buildExpectedCellsToVerify(existing, map[uint64][]byte{
+				cellIndices, cellsToVerify := buildExpectedCellsToVerify(t, existing, map[uint64][]byte{
 					1: {0x22},
 				})
 				return testSetup{
@@ -912,7 +1065,7 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 				msg := buildSidecarWithCells(3, map[uint64][]byte{
 					1: {0x44},
 				})
-				_, cellsToVerify := buildExpectedCellsToVerify(existing, map[uint64][]byte{
+				_, cellsToVerify := buildExpectedCellsToVerify(t, existing, map[uint64][]byte{
 					1: {0x44},
 				})
 				return testSetup{
@@ -957,11 +1110,11 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 				// Header already validated for this group, e.g. seen earlier on another column's topic.
 				col := createPartialColumn(t, 3, nil)
 				group := col.GroupID()
-				b.validHeaderCache[string(group)] = buildHeaderFromColumn(col)
+				b.validHeaderCache[string(group)] = buildHeaderFromColumn(t, col)
 				msg := buildSidecarWithCells(3, map[uint64][]byte{
 					1: {0x22},
 				})
-				cellIndices, cellsToVerify := buildExpectedCellsToVerify(col, map[uint64][]byte{
+				cellIndices, cellsToVerify := buildExpectedCellsToVerify(t, col, map[uint64][]byte{
 					1: {0x22},
 				})
 				return testSetup{
@@ -991,7 +1144,7 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 			setup: func(t *testing.T, b *PartialColumnBroadcaster) testSetup {
 				col := createPartialColumn(t, 2, nil)
 				group := col.GroupID()
-				b.validHeaderCache[string(group)] = buildHeaderFromColumn(col)
+				b.validHeaderCache[string(group)] = buildHeaderFromColumn(t, col)
 				msg := buildSidecarWithCells(2, map[uint64][]byte{
 					0: {0x11},
 				})
@@ -1007,11 +1160,13 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 			setup: func(t *testing.T, _ *PartialColumnBroadcaster) testSetup {
 				col := createPartialColumn(t, 2, nil)
 				group := col.GroupID()
+				commitments, err := col.KzgCommitments()
+				require.NoError(t, err)
 				msg := &ethpb.PartialDataColumnSidecar{
 					CellsPresentBitmap: testBitlist(2),
 					Header: []*ethpb.PartialDataColumnHeader{{
 						SignedBlockHeader: nil,
-						KzgCommitments:    col.KzgCommitments,
+						KzgCommitments:    commitments,
 					}},
 				}
 				return testSetup{
@@ -1027,11 +1182,13 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 			setup: func(t *testing.T, _ *PartialColumnBroadcaster) testSetup {
 				col := createPartialColumn(t, 2, nil)
 				group := col.GroupID()
+				commitments, err := col.KzgCommitments()
+				require.NoError(t, err)
 				msg := &ethpb.PartialDataColumnSidecar{
 					CellsPresentBitmap: testBitlist(2),
 					Header: []*ethpb.PartialDataColumnHeader{{
 						SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{Header: nil, Signature: []byte{1}},
-						KzgCommitments:    col.KzgCommitments,
+						KzgCommitments:    commitments,
 					}},
 				}
 				return testSetup{
@@ -1076,6 +1233,21 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 				})
 			},
 		},
+		{
+			name: "header with no KZG commitments is ignored without downscoring the peer",
+			setup: func(t *testing.T, _ *PartialColumnBroadcaster) testSetup {
+				col := createPartialColumn(t, 2, nil)
+				header := buildHeaderFromColumn(t, col)
+				header.KzgCommitments = nil
+				msg := &ethpb.PartialDataColumnSidecar{
+					CellsPresentBitmap: testBitlist(2),
+					Header:             []*ethpb.PartialDataColumnHeader{header},
+				}
+				return testSetup{
+					inputRPC: buildIncomingRPC(validTopic, col.GroupID(), msg, nil),
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1101,9 +1273,15 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 			if tt.expectHeaderValidateCall {
 				select {
 				case call := <-recorder.partialVerifierFromHeaderCallCh:
-					require.DeepEqual(t, setup.expectedHeader.KzgCommitments, call.KzgCommitments)
-					require.DeepEqual(t, setup.expectedHeader.KzgCommitmentsInclusionProof, call.KzgCommitmentsInclusionProof)
-					require.DeepEqual(t, setup.expectedHeader.SignedBlockHeader, call.SignedBlockHeader)
+					callCommitments, err := call.KzgCommitments()
+					require.NoError(t, err)
+					require.DeepEqual(t, setup.expectedHeader.KzgCommitments, callCommitments)
+					callInclusion, err := call.KzgCommitmentsInclusionProof()
+					require.NoError(t, err)
+					require.DeepEqual(t, setup.expectedHeader.KzgCommitmentsInclusionProof, callInclusion)
+					callSBH, err := call.SignedBlockHeader()
+					require.NoError(t, err)
+					require.DeepEqual(t, setup.expectedHeader.SignedBlockHeader, callSBH)
 				case <-t.Context().Done():
 					t.Fatalf("header validation call not received")
 				}
@@ -1176,6 +1354,23 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 	}
 }
 
+func TestPartialColumnBroadcaster_makeVerifierFromHeader_noKzgCommitments(t *testing.T) {
+	const topic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+
+	h := newBroadcasterHarness(t, newMockPubSub(nil, nil))
+
+	// A well-formed header whose KZG commitments have been cleared.
+	col := createPartialColumn(t, 2, nil)
+	header := buildHeaderFromColumn(t, col)
+	header.KzgCommitments = nil
+
+	verifier, err := h.broadcaster.makeVerifierFromHeader(
+		[32]byte{}, header, col.Index(), false, buildIncomingRPC(topic, col.GroupID(), nil, nil))
+
+	require.Equal(t, true, errors.Is(err, errInvalidHeader))
+	require.IsNil(t, verifier)
+}
+
 // Regression test for the validator-semaphore deadlock: when every validator slot is in
 // flight, handlePartialCells must shed the work rather than block the loop goroutine on the
 // semaphore send (a blocking send there deadlocks with the validators that report results
@@ -1239,7 +1434,7 @@ func TestPartialColumnBroadcaster_handleIncomingRPC_ignoresUnsubscribedTopic(t *
 	// h.broadcaster.topics, i.e. we are not subscribed to it.
 	const topic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
 
-	err := h.broadcaster.handleIncomingRPC(buildIncomingRPC(topic, group, buildHeaderOnlySidecar(col), nil))
+	err := h.broadcaster.handleIncomingRPC(buildIncomingRPC(topic, group, buildHeaderOnlySidecar(t, col), nil))
 	require.NoError(t, err)
 
 	require.IsNil(t, h.broadcaster.getDataColumn(topic, group))
@@ -1248,9 +1443,73 @@ func TestPartialColumnBroadcaster_handleIncomingRPC_ignoresUnsubscribedTopic(t *
 	require.Equal(t, 0, len(h.broadcaster.incomingReq))
 }
 
+func TestPartialColumnBroadcaster_handleIncomingRPC_servesPublishedUnsubscribedTopic(t *testing.T) {
+	ps := newMockPubSub(nil, nil)
+	recorder := newCallbackRecorder(8, false, nil, nil)
+	h := newBroadcasterHarness(t, ps)
+	h.broadcaster.callbacks = recorder
+
+	// The proposer holds every cell of its column.
+	col := createPartialColumn(t, 2, map[uint64][]byte{0: {0xA0}, 1: {0xA1}})
+	group := col.GroupID()
+	// Well-formed topic that is published on but never subscribed to.
+	const topic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+
+	require.NoError(t, h.broadcaster.publish(func(yield func(string, blocks.PartialDataColumn) bool) {
+		yield(topic, *col)
+	}))
+	require.Equal(t, 1, ps.publishedColumnCount())
+	_, published := h.broadcaster.publishedTopics.Load(topic)
+	require.Equal(t, true, published)
+
+	// A peer with no cells requesting all of them (the empty-partial fallback shape).
+	// The differing parts metadata must trigger a republish that serves our cells.
+	rpc := buildIncomingRPC(topic, group, nil, mustMarshalPartsMetadata(t, testPartsMetadata(2, nil, []uint64{0, 1})))
+	require.NoError(t, h.broadcaster.handleIncomingRPC(rpc))
+	require.Equal(t, 2, ps.publishedColumnCount())
+
+	// A group we did not publish stays ignored on the unsubscribed topic: peer input
+	// must not allocate verifier/header state there.
+	otherParentRoot := make([]byte, 32)
+	otherParentRoot[0] = 1
+	otherHeader := &ethpb.SignedBeaconBlockHeader{
+		Header: &ethpb.BeaconBlockHeader{
+			ParentRoot: otherParentRoot,
+			StateRoot:  make([]byte, 32),
+			BodyRoot:   make([]byte, 32),
+		},
+		Signature: []byte{1},
+	}
+	otherRoot, err := otherHeader.Header.HashTreeRoot()
+	require.NoError(t, err)
+	otherCol, err := blocks.NewPartialDataColumn(otherRoot, otherHeader, 12, [][]byte{{1}, {2}}, nil)
+	require.NoError(t, err)
+	otherRPC := buildIncomingRPC(topic, otherCol.GroupID(), buildHeaderOnlySidecar(t, &otherCol), nil)
+	require.NoError(t, h.broadcaster.handleIncomingRPC(otherRPC))
+	require.IsNil(t, h.broadcaster.getDataColumn(topic, otherCol.GroupID()))
+	require.Equal(t, 2, ps.publishedColumnCount())
+
+	// Once the published group expires, the topic reverts to fully ignored.
+	for range TTLInSlots + 1 {
+		h.broadcaster.evictExpiredGroups()
+	}
+	_, published = h.broadcaster.publishedTopics.Load(topic)
+	require.Equal(t, false, published)
+	require.NoError(t, h.broadcaster.handleIncomingRPC(rpc))
+	require.Equal(t, 2, ps.publishedColumnCount())
+}
+
 func TestPartialColumnBroadcaster_onIncomingRPC_inputValidation(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 1_000_000
+	params.OverrideBeaconConfig(cfg)
+
 	const from = peer.ID("peer-a")
 	validGroup := createPartialColumn(t, 2, nil).GroupID()
+	// Accepted messages must arrive on a topic whose fork digest matches the group's fork.
+	fuluTopic := fmt.Sprintf("/eth2/%x/data_column_sidecar_0/ssz_snappy", params.ForkDigest(cfg.FuluForkEpoch))
+	gloasTopic := fmt.Sprintf("/eth2/%x/data_column_sidecar_0/ssz_snappy", params.ForkDigest(cfg.GloasForkEpoch))
 
 	tests := []struct {
 		name           string
@@ -1264,7 +1523,7 @@ func TestPartialColumnBroadcaster_onIncomingRPC_inputValidation(t *testing.T) {
 	}{
 		{
 			name:           "in-bounds topic is accepted and enqueued",
-			topic:          "/eth2/abcd1234/data_column_sidecar_0/ssz_snappy",
+			topic:          fuluTopic,
 			expectReject:   false,
 			expectEnqueued: true,
 			subscribed:     true,
@@ -1276,10 +1535,18 @@ func TestPartialColumnBroadcaster_onIncomingRPC_inputValidation(t *testing.T) {
 			expectEnqueued: false,
 		},
 		{
-			name:           "invalid group ID length is rejected",
+			name:           "valid Gloas group ID is accepted and enqueued",
+			topic:          gloasTopic,
+			group:          createGloasPartialColumn(t, 2, nil).GroupID(),
+			expectReject:   false,
+			expectEnqueued: true,
+			subscribed:     true,
+		},
+		{
+			name:           "malformed group ID is rejected",
 			topic:          "/eth2/abcd1234/data_column_sidecar_0/ssz_snappy",
 			group:          []byte("too-short"),
-			expectedErr:    "invalid group ID length",
+			expectedErr:    "parse partial column group id",
 			expectReject:   true,
 			expectEnqueued: false,
 		},
@@ -1354,9 +1621,205 @@ func TestPartialColumnBroadcaster_onIncomingRPC_inputValidation(t *testing.T) {
 	}
 }
 
+// A group ID whose fork contradicts the topic's fork digest is downscored and dropped before
+// the SSZ decode; groups matching their topic's fork pass through.
+func TestPartialColumnBroadcaster_onIncomingRPC_groupForkMustMatchTopicFork(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 1_000_000
+	params.OverrideBeaconConfig(cfg)
+
+	const from = peer.ID("peer-a")
+	fuluTopic := fmt.Sprintf("/eth2/%x/data_column_sidecar_0/ssz_snappy", params.ForkDigest(cfg.FuluForkEpoch))
+	gloasTopic := fmt.Sprintf("/eth2/%x/data_column_sidecar_0/ssz_snappy", params.ForkDigest(cfg.GloasForkEpoch))
+	fuluGroup := createPartialColumn(t, 2, nil).GroupID()
+	gloasGroup := createGloasPartialColumn(t, 2, nil).GroupID()
+
+	tests := []struct {
+		name           string
+		topic          string
+		group          []byte
+		expectMismatch bool
+	}{
+		{name: "fulu group on gloas topic is rejected", topic: gloasTopic, group: fuluGroup, expectMismatch: true},
+		{name: "gloas group on fulu topic is rejected", topic: fuluTopic, group: gloasGroup, expectMismatch: true},
+		{name: "fulu group on fulu topic is accepted", topic: fuluTopic, group: fuluGroup},
+		{name: "gloas group on gloas topic is accepted", topic: gloasTopic, group: gloasGroup},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ps := newMockPubSub(nil, nil)
+			h := newBroadcasterHarness(t, ps)
+			h.broadcaster.subscribedTopics.Store(tt.topic, struct{}{})
+
+			topic := tt.topic
+			rpc := &pubsub_pb.PartialMessagesExtension{
+				TopicID: &topic,
+				GroupID: slices.Clone(tt.group),
+			}
+			peerStates := map[peer.ID]blocks.PartialDataColumnPeerState{}
+
+			err := h.broadcaster.onIncomingRPC(from, peerStates, rpc)
+
+			if tt.expectMismatch {
+				require.ErrorContains(t, "does not match topic fork", err)
+				waitForPeerFeedbackCalls(t, ps, 1)
+				feedback := ps.peerFeedbackCallsSnapshot()
+				require.Equal(t, 1, len(feedback))
+				require.Equal(t, pubsub.PeerFeedbackInvalidMessage, feedback[0].kind)
+				require.Equal(t, from, feedback[0].peerID)
+				require.Equal(t, tt.topic, feedback[0].topic)
+				require.Equal(t, 0, len(h.broadcaster.incomingReq))
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, 0, ps.peerFeedbackCallCount())
+				require.Equal(t, 1, len(h.broadcaster.incomingReq))
+			}
+		})
+	}
+}
+
+func TestPartialColumnBroadcaster_onIncomingRPC_malformedMessageDownscored(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 1_000_000
+	params.OverrideBeaconConfig(cfg)
+
+	const from = peer.ID("peer-a")
+	fuluTopic := fmt.Sprintf("/eth2/%x/data_column_sidecar_0/ssz_snappy", params.ForkDigest(cfg.FuluForkEpoch))
+	gloasTopic := fmt.Sprintf("/eth2/%x/data_column_sidecar_0/ssz_snappy", params.ForkDigest(cfg.GloasForkEpoch))
+	fuluGroup := createPartialColumn(t, 2, nil).GroupID()
+	gloasGroup := createGloasPartialColumn(t, 2, nil).GroupID()
+
+	cells := func(n int) [][]byte {
+		out := make([][]byte, n)
+		for i := range out {
+			out[i] = make([]byte, 2048)
+		}
+		return out
+	}
+	proofs := func(n int) [][]byte {
+		out := make([][]byte, n)
+		for i := range out {
+			out[i] = make([]byte, 48)
+		}
+		return out
+	}
+	gloasMsg := func(t *testing.T, bitmap bitfield.Bitlist, nCells int) []byte {
+		raw, err := (&ethpb.PartialDataColumnSidecarGloas{
+			CellsPresentBitmap: bitmap, PartialColumn: cells(nCells), KzgProofs: proofs(nCells),
+		}).MarshalSSZ()
+		require.NoError(t, err)
+		return raw
+	}
+	fuluMsg := func(t *testing.T, bitmap bitfield.Bitlist, nCells int) []byte {
+		raw, err := (&ethpb.PartialDataColumnSidecar{
+			CellsPresentBitmap: bitmap, PartialColumn: cells(nCells), KzgProofs: proofs(nCells),
+		}).MarshalSSZ()
+		require.NoError(t, err)
+		return raw
+	}
+
+	tests := []struct {
+		name            string
+		topic           string
+		group           []byte
+		partialMessage  []byte
+		expectDownscore bool
+	}{
+		{
+			// Bitmap declares zero present cells but the message still carries a cell + proof.
+			name:            "gloas empty bitmap with cells is malformed",
+			topic:           gloasTopic,
+			group:           gloasGroup,
+			partialMessage:  gloasMsg(t, testBitlist(2), 1),
+			expectDownscore: true,
+		},
+		{
+			// Bitmap declares one present cell but the message carries two.
+			name:            "gloas bitmap count disagrees with cell count",
+			topic:           gloasTopic,
+			group:           gloasGroup,
+			partialMessage:  gloasMsg(t, testBitlist(2, 1), 2),
+			expectDownscore: true,
+		},
+		{
+			// Same malformed shape on the Fulu wire type: the check is fork-agnostic.
+			name:            "fulu empty bitmap with cells is malformed",
+			topic:           fuluTopic,
+			group:           fuluGroup,
+			partialMessage:  fuluMsg(t, testBitlist(2), 1),
+			expectDownscore: true,
+		},
+		{
+			// Bitmap count matches the single cell/proof carried: well-formed, not penalized.
+			name:            "well-formed gloas message is accepted",
+			topic:           gloasTopic,
+			group:           gloasGroup,
+			partialMessage:  gloasMsg(t, testBitlist(2, 1), 1),
+			expectDownscore: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ps := newMockPubSub(nil, nil)
+			h := newBroadcasterHarness(t, ps)
+			h.broadcaster.subscribedTopics.Store(tt.topic, struct{}{})
+
+			topic := tt.topic
+			rpc := &pubsub_pb.PartialMessagesExtension{
+				TopicID:        &topic,
+				GroupID:        slices.Clone(tt.group),
+				PartialMessage: tt.partialMessage,
+			}
+			peerStates := map[peer.ID]blocks.PartialDataColumnPeerState{}
+
+			err := h.broadcaster.onIncomingRPC(from, peerStates, rpc)
+
+			if tt.expectDownscore {
+				require.NotNil(t, err)
+				require.Equal(t, true, errors.Is(err, errMalformedPartialMessage))
+				waitForPeerFeedbackCalls(t, ps, 1)
+				feedback := ps.peerFeedbackCallsSnapshot()
+				require.Equal(t, 1, len(feedback))
+				require.Equal(t, pubsub.PeerFeedbackInvalidMessage, feedback[0].kind)
+				require.Equal(t, from, feedback[0].peerID)
+				require.Equal(t, tt.topic, feedback[0].topic)
+				// Malformed messages are dropped before enqueue.
+				require.Equal(t, 0, len(h.broadcaster.incomingReq))
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, 0, ps.peerFeedbackCallCount())
+				require.Equal(t, 1, len(h.broadcaster.incomingReq))
+			}
+		})
+	}
+}
+
+// Gloas columns have no header to exchange, so no header-sent state is ever allocated for them.
+func TestPartialColumnBroadcaster_headerSentCacheForSkipsGloas(t *testing.T) {
+	h := newBroadcasterHarness(t, newMockPubSub(nil, nil))
+
+	fulu := createPartialColumn(t, 2, nil)
+	cache := h.broadcaster.headerSentCacheFor(fulu.GroupID(), fulu)
+	require.NotNil(t, cache)
+	cache["peer-a"] = true
+	// The same cache is returned for the group on subsequent calls.
+	require.Equal(t, true, h.broadcaster.headerSentCacheFor(fulu.GroupID(), fulu)["peer-a"])
+	require.Equal(t, 1, len(h.broadcaster.headerSentCache))
+
+	gloas := createGloasPartialColumn(t, 2, nil)
+	require.IsNil(t, h.broadcaster.headerSentCacheFor(gloas.GroupID(), gloas))
+	_, ok := h.broadcaster.headerSentCache[string(gloas.GroupID())]
+	require.Equal(t, false, ok)
+	require.Equal(t, 1, len(h.broadcaster.headerSentCache))
+}
+
 func TestPartialColumnBroadcaster_onIncomingRPC_dropsWhenQueueFull(t *testing.T) {
 	const from = peer.ID("peer-a")
-	topic := "/eth2/abcd1234/data_column_sidecar_0/ssz_snappy"
+	topic := fmt.Sprintf("/eth2/%x/data_column_sidecar_0/ssz_snappy", params.ForkDigest(params.BeaconConfig().FuluForkEpoch))
 
 	ps := newMockPubSub(nil, nil)
 	h := newBroadcasterHarness(t, ps)
@@ -1403,6 +1866,35 @@ func TestPartialColumnBroadcaster_onIncomingRPC_ignoresUnsubscribedTopic(t *test
 	require.Equal(t, 0, len(h.broadcaster.incomingReq))
 	require.Equal(t, 0, len(peerStates))
 	require.Equal(t, 0, ps.peerFeedbackCallCount())
+}
+
+func TestPartialColumnBroadcaster_onIncomingRPC_acceptsPublishedTopic(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 1_000_000
+	params.OverrideBeaconConfig(cfg)
+
+	const from = peer.ID("peer-a")
+	topic := fmt.Sprintf("/eth2/%x/data_column_sidecar_37/ssz_snappy", params.ForkDigest(cfg.FuluForkEpoch))
+
+	ps := newMockPubSub(nil, nil)
+	h := newBroadcasterHarness(t, ps)
+	// Published on (proposer flow) but intentionally NOT subscribed to.
+	h.broadcaster.publishedTopics.Store(topic, struct{}{})
+
+	rpc := &pubsub_pb.PartialMessagesExtension{
+		TopicID:       &topic,
+		GroupID:       slices.Clone(createPartialColumn(t, 2, nil).GroupID()),
+		PartsMetadata: mustMarshalPartsMetadata(t, testPartsMetadata(2, []uint64{0}, nil)),
+	}
+	peerStates := map[peer.ID]blocks.PartialDataColumnPeerState{}
+
+	require.NoError(t, h.broadcaster.onIncomingRPC(from, peerStates, rpc))
+
+	// The message is decoded, enqueued for the event loop, and the peer's state is
+	// recorded so later publishes can serve it cells.
+	require.Equal(t, 1, len(h.broadcaster.incomingReq))
+	require.Equal(t, 1, len(peerStates))
 }
 
 func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
@@ -1647,9 +2139,9 @@ func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
 			var cellIndices []uint64
 			var cells []blocks.CellProofBundle
 			if setup.column != nil {
-				columnIndex := setup.column.Index
+				columnIndex := setup.column.Index()
 				if tt.wrongColumnIndex {
-					columnIndex = setup.column.Index + 1
+					columnIndex = setup.column.Index() + 1
 				}
 				cellIndices, cells = buildValidatedCells(columnIndex, tt.validatedCells)
 			} else {
@@ -2239,7 +2731,7 @@ func TestPartialColumnBroadcaster_handleHeader(t *testing.T) {
 			h.broadcaster.callbacks = recorder
 
 			col := createPartialColumn(t, 2, nil)
-			header := buildHeaderFromColumn(col)
+			header := buildHeaderFromColumn(t, col)
 			rpc := buildIncomingRPC(topic, col.GroupID(), nil, nil)
 
 			if tt.saturate {
@@ -2677,4 +3169,147 @@ func TestPartialColumnBroadcaster_flushAggregatedLogs(t *testing.T) {
 	buf.Reset()
 	b.flushAggregatedLogs()
 	require.Equal(t, "", buf.String())
+}
+
+func TestPartialColumnBroadcaster_handleIncomingRPC_Gloas(t *testing.T) {
+	const validTopic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+
+	t.Run("cells without a local verifier are dropped and the peer is downscored", func(t *testing.T) {
+		ps := newMockPubSub(nil, nil)
+		recorder := newCallbackRecorder(8, false, nil, nil)
+		h := newBroadcasterHarness(t, ps)
+		h.broadcaster.callbacks = recorder
+		h.broadcaster.topics[validTopic] = nil
+
+		col := createGloasPartialColumn(t, 3, nil)
+		group := col.GroupID()
+		msg := buildSidecarWithCells(3, map[uint64][]byte{1: {0x22}})
+		rpc := buildIncomingGloasRPC(validTopic, group, msg, nil)
+
+		require.NoError(t, h.broadcaster.handleIncomingRPC(rpc))
+
+		// Gloas has no header to seed from, so nothing is created, validated, completed or republished.
+		require.IsNil(t, h.broadcaster.getDataColumn(validTopic, group))
+		require.Equal(t, 0, ps.publishedColumnCount())
+		require.Equal(t, 0, len(recorder.validateColumnCallCh))
+		require.Equal(t, 0, len(recorder.handleColumnCallCh))
+		// The peer pushed cells before we published, so it is downscored.
+		require.Equal(t, 1, ps.peerFeedbackCallCount())
+		require.Equal(t, pubsub.PeerFeedbackInvalidMessage, ps.peerFeedbackCallsSnapshot()[0].kind)
+	})
+
+	t.Run("an advertisement without cells is not penalized", func(t *testing.T) {
+		ps := newMockPubSub(nil, nil)
+		recorder := newCallbackRecorder(8, false, nil, nil)
+		h := newBroadcasterHarness(t, ps)
+		h.broadcaster.callbacks = recorder
+		h.broadcaster.topics[validTopic] = nil
+
+		col := createGloasPartialColumn(t, 3, nil)
+		group := col.GroupID()
+		// No partial message, only a parts-metadata advertisement: the peer is telling us what it
+		// has, not pushing unsolicited cells, so it must not be downscored.
+		rpc := buildIncomingGloasRPC(validTopic, group, nil, []byte{0x01})
+
+		require.NoError(t, h.broadcaster.handleIncomingRPC(rpc))
+
+		require.IsNil(t, h.broadcaster.getDataColumn(validTopic, group))
+		require.Equal(t, 0, ps.publishedColumnCount())
+		require.Equal(t, 0, ps.peerFeedbackCallCount())
+		require.Equal(t, 0, len(recorder.validateColumnCallCh))
+		require.Equal(t, 0, len(recorder.handleColumnCallCh))
+	})
+
+	t.Run("cells with a local verifier are validated", func(t *testing.T) {
+		ps := newMockPubSub(nil, nil)
+		recorder := newCallbackRecorder(8, false, nil, nil)
+		h := newBroadcasterHarness(t, ps)
+		h.broadcaster.callbacks = recorder
+		h.broadcaster.topics[validTopic] = nil
+
+		// A verifier only exists once we have published locally (we have the block + bid commitments).
+		existing := createGloasPartialColumn(t, 3, map[uint64][]byte{0: {0x11}})
+		group := existing.GroupID()
+		h.broadcaster.partialMsgStore[validTopic] = map[string]*verification.PartialColumnVerifier{
+			string(group): newMockPartialVerifier(existing),
+		}
+		msg := buildSidecarWithCells(3, map[uint64][]byte{1: {0x22}})
+		_, cellsToVerify := buildExpectedCellsToVerify(t, existing, map[uint64][]byte{1: {0x22}})
+		rpc := buildIncomingGloasRPC(validTopic, group, msg, nil)
+
+		require.NoError(t, h.broadcaster.handleIncomingRPC(rpc))
+
+		select {
+		case call := <-recorder.validateColumnCallCh:
+			assertCellProofBundlesEqual(t, cellsToVerify, call)
+		case <-t.Context().Done():
+			t.Fatalf("validateColumn call not received")
+		}
+		waitForPeerFeedbackCalls(t, ps, 1)
+		feedback := ps.peerFeedbackCallsSnapshot()
+		require.Equal(t, pubsub.PeerFeedbackUsefulMessage, feedback[0].kind)
+	})
+}
+
+func TestPartialColumnBroadcaster_Publish_Gloas(t *testing.T) {
+	const topic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+
+	column := createGloasPartialColumn(t, 3, map[uint64][]byte{0: {0x10}})
+
+	ps := newMockPubSub(nil, nil)
+	recorder := newCallbackRecorder(2, false, nil, nil)
+	h := newBroadcasterHarness(t, ps)
+	h.start(recorder)
+	defer h.Stop()
+
+	// First publish seeds a verifier via PartialVerifierFromTrustedColumn and publishes the column.
+	require.NoError(t, h.broadcaster.Publish(t.Context(), func(yield func(string, blocks.PartialDataColumn) bool) {
+		yield(topic, *column)
+	}))
+
+	stored := h.broadcaster.getDataColumn(topic, column.GroupID())
+	require.NotNil(t, stored)
+	require.Equal(t, true, stored.IsGloas())
+	require.Equal(t, true, stored.Published)
+	require.DeepEqual(t, column.GroupID(), stored.GroupID())
+	require.Equal(t, 1, ps.publishedColumnCount())
+
+	select {
+	case call := <-recorder.partialVerifierFromTrustedColumnCallCh:
+		require.Equal(t, true, call.IsGloas())
+		require.DeepEqual(t, column.GroupID(), call.GroupID())
+	case <-t.Context().Done():
+		t.Fatalf("trusted partial verifier call not received")
+	}
+
+	// Re-publishing the same group reuses the existing verifier: deterministic group id keys the
+	// store, so no second verifier is created (the §1 anti-double-publish principle).
+	require.NoError(t, h.broadcaster.Publish(t.Context(), func(yield func(string, blocks.PartialDataColumn) bool) {
+		yield(topic, *column)
+	}))
+	require.Equal(t, 0, len(recorder.partialVerifierFromTrustedColumnCallCh))
+}
+
+func TestPartialColumnBroadcaster_handleIncomingRPC_GloasSlotMismatchRejected(t *testing.T) {
+	const validTopic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+
+	ps := newMockPubSub(nil, nil)
+	recorder := newCallbackRecorder(8, false, nil, nil)
+	// The callback reports a slot/root inconsistency for the group id ([REJECT]).
+	recorder.validateGloasGroupResult = pubsub.ValidationReject
+	h := newBroadcasterHarness(t, ps)
+	h.broadcaster.callbacks = recorder
+	h.broadcaster.topics[validTopic] = nil
+
+	col := createGloasPartialColumn(t, 3, nil)
+	group := col.GroupID()
+	msg := buildSidecarWithCells(3, map[uint64][]byte{1: {0x22}})
+	rpc := buildIncomingGloasRPC(validTopic, group, msg, nil)
+
+	require.NoError(t, h.broadcaster.handleIncomingRPC(rpc))
+
+	// Slot mismatch -> peer downscored, cells dropped (no verifier created).
+	require.Equal(t, 1, ps.peerFeedbackCallCount())
+	require.Equal(t, pubsub.PeerFeedbackInvalidMessage, ps.peerFeedbackCallsSnapshot()[0].kind)
+	require.IsNil(t, h.broadcaster.getDataColumn(validTopic, group))
 }
