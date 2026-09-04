@@ -43,7 +43,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/graffiti"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
-	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/ethereum/go-ethereum/common"
@@ -262,36 +261,32 @@ func recheckKeys(ctx context.Context, valDB db.Database, km keymanager.IKeymanag
 	ctx, span := trace.StartSpan(ctx, "validator.recheckKeys")
 	defer span.End()
 
-	var validatingKeys [][fieldparams.BLSPubkeyLength]byte
-	var err error
-	validatingKeys, err = km.FetchValidatingPublicKeys(ctx)
+	// Subscribe before the initial fetch so account changes in between are not missed.
+	pubKeysChan := make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
+	sub := km.SubscribeAccountChanges(pubKeysChan)
+	validatingKeys, err := km.FetchValidatingPublicKeys(ctx)
 	if err != nil {
 		log.WithError(err).Debug("Could not fetch validating keys")
 	}
 	if err := valDB.UpdatePublicKeysBuckets(validatingKeys); err != nil {
-		go recheckValidatingKeysBucket(ctx, valDB, km)
+		log.WithError(err).Debug("Could not update public keys buckets")
 	}
+	go recheckValidatingKeysBucket(ctx, valDB, sub, pubKeysChan)
 }
 
-// to accounts changes in the keymanager, then updates those keys'
-// buckets in bolt DB if a bucket for a key does not exist.
-func recheckValidatingKeysBucket(ctx context.Context, valDB db.Database, km keymanager.IKeymanager) {
+// recheckValidatingKeysBucket creates missing DB buckets for keys pushed by the
+// keymanager's account-change subscription.
+func recheckValidatingKeysBucket(ctx context.Context, valDB db.Database, sub event.Subscription, pubKeysChan chan [][fieldparams.BLSPubkeyLength]byte) {
 	ctx, span := trace.StartSpan(ctx, "validator.recheckValidatingKeysBucket")
 	defer span.End()
 
-	importedKeymanager, ok := km.(*local.Keymanager)
-	if !ok {
-		return
-	}
-	validatingPubKeysChan := make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
-	sub := importedKeymanager.SubscribeAccountChanges(validatingPubKeysChan)
 	defer func() {
 		sub.Unsubscribe()
-		close(validatingPubKeysChan)
+		close(pubKeysChan)
 	}()
 	for {
 		select {
-		case keys := <-validatingPubKeysChan:
+		case keys := <-pubKeysChan:
 			if err := valDB.UpdatePublicKeysBuckets(keys); err != nil {
 				log.WithError(err).Debug("Could not update public keys buckets")
 				continue
