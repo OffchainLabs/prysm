@@ -1453,6 +1453,7 @@ func TestFetchSidecars(t *testing.T) {
 		// Create a blocks fetcher.
 		fetcher := &blocksFetcher{
 			clock: clock,
+			chain: &mock.ChainService{},
 			p2p:   p2ptest.NewTestP2P(t),
 			dcs:   dataColumnStorage,
 		}
@@ -1478,6 +1479,59 @@ func TestFetchSidecars(t *testing.T) {
 		// We don't check the content of the columns here. The extensive test is done
 		// in TestFetchDataColumnsSidecars.
 		require.Equal(t, samplesPerSlot, uint64(len(blocksWithSidecars[2].Columns)))
+	})
+
+	t.Run("columns for already-imported blocks are carried", func(t *testing.T) {
+		const numberOfColumns = uint64(fieldparams.NumberOfColumns)
+		cfg := params.BeaconConfig()
+		samplesPerSlot := cfg.SamplesPerSlot
+
+		genesisTime := time.Date(2025, time.August, 10, 0, 0, 0, 0, time.UTC)
+		secondsPerSlot := cfg.SecondsPerSlot
+		slotsPerEpoch := cfg.SlotsPerEpoch
+		secondsPerEpoch := uint64(slotsPerEpoch.Mul(secondsPerSlot))
+		retentionEpochs := cfg.MinEpochsForDataColumnSidecarsRequest
+		nowWrtGenesisSecs := retentionEpochs.Add(1).Mul(secondsPerEpoch)
+		now := genesisTime.Add(time.Duration(nowWrtGenesisSecs) * time.Second)
+		nower := func() time.Time { return now }
+		clock := startup.NewClock(genesisTime, [fieldparams.RootLength]byte{}, startup.WithNower(nower))
+
+		dir := t.TempDir()
+		dataColumnStorage, err := filesystem.NewDataColumnStorage(ctx, filesystem.WithDataColumnBasePath(dir))
+		require.NoError(t, err)
+
+		fuluBlock := util.NewBeaconBlockFulu()
+		fuluBlock.Block.Slot = slotsPerEpoch
+		fuluBlock.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, fieldparams.KzgCommitmentSize)}
+		signedFuluBlock, err := blocks.NewSignedBeaconBlock(fuluBlock)
+		require.NoError(t, err)
+		roFuluBlock, err := blocks.NewROBlock(signedFuluBlock)
+		require.NoError(t, err)
+
+		bodyRoot, err := fuluBlock.Block.Body.HashTreeRoot()
+		require.NoError(t, err)
+
+		columnParams := make([]util.DataColumnParam, 0, numberOfColumns)
+		for i := range numberOfColumns {
+			columnParams = append(columnParams, util.DataColumnParam{Index: i, Slot: slotsPerEpoch, BodyRoot: bodyRoot[:]})
+		}
+		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, columnParams)
+		require.NoError(t, dataColumnStorage.Save(verifiedRoDataColumnSidecars))
+
+		// The block is at or below the head slot, so it will be stripped as already processed.
+		headSlot := roFuluBlock.Block().Slot()
+		fetcher := &blocksFetcher{
+			clock: clock,
+			chain: &mock.ChainService{MockHeadSlot: &headSlot},
+			p2p:   p2ptest.NewTestP2P(t),
+			dcs:   dataColumnStorage,
+		}
+
+		r := &fetchRequestResponse{bwb: []blocks.BlockWithROSidecars{{Block: roFuluBlock}}}
+		fetcher.fetchSidecars(ctx, r, nil)
+		require.NoError(t, r.err)
+		require.Equal(t, 0, len(r.bwb[0].Columns))
+		require.Equal(t, samplesPerSlot, uint64(len(r.columnsToSave)))
 	})
 }
 

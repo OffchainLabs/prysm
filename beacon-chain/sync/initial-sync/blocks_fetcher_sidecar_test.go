@@ -14,8 +14,8 @@ import (
 )
 
 // makeEnvelopeForRoot creates an envelope whose BeaconBlockRoot is set to the given block root,
-// i.e. the payload revealed for that block.
-func makeEnvelopeForRoot(t *testing.T, slot primitives.Slot, beaconBlockRoot [32]byte) interfaces.ROSignedExecutionPayloadEnvelope {
+// i.e. the payload revealed for that block, with the given payload block hash and parent hash.
+func makeEnvelopeForRoot(t *testing.T, slot primitives.Slot, beaconBlockRoot, blockHash, parentHash [32]byte) interfaces.ROSignedExecutionPayloadEnvelope {
 	env := &ethpb.SignedExecutionPayloadEnvelope{
 		Signature: make([]byte, fieldparams.BLSSignatureLength),
 		Message: &ethpb.ExecutionPayloadEnvelope{
@@ -23,14 +23,14 @@ func makeEnvelopeForRoot(t *testing.T, slot primitives.Slot, beaconBlockRoot [32
 			ParentBeaconBlockRoot: make([]byte, fieldparams.RootLength),
 			ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 			Payload: &enginev1.ExecutionPayloadGloas{
-				ParentHash:    make([]byte, fieldparams.RootLength),
+				ParentHash:    parentHash[:],
 				FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
 				StateRoot:     make([]byte, fieldparams.RootLength),
 				ReceiptsRoot:  make([]byte, fieldparams.RootLength),
 				LogsBloom:     make([]byte, fieldparams.LogsBloomLength),
 				PrevRandao:    make([]byte, fieldparams.RootLength),
 				BaseFeePerGas: make([]byte, fieldparams.RootLength),
-				BlockHash:     make([]byte, fieldparams.RootLength),
+				BlockHash:     blockHash[:],
 				SlotNumber:    slot,
 			},
 		},
@@ -61,8 +61,8 @@ func TestColumnFetchBlocks(t *testing.T) {
 	t.Run("gloas: only blocks with a revealed payload are selected", func(t *testing.T) {
 		// Envelopes exist for b0 and b2 only; b1's payload is absent.
 		envs := []interfaces.ROSignedExecutionPayloadEnvelope{
-			makeEnvelopeForRoot(t, 1, b0.Root()),
-			makeEnvelopeForRoot(t, 3, b2.Root()),
+			makeEnvelopeForRoot(t, 1, b0.Root(), [32]byte{}, [32]byte{}),
+			makeEnvelopeForRoot(t, 3, b2.Root(), [32]byte{}, [32]byte{}),
 		}
 		bwb := []blocks.BlockWithROSidecars{{Block: b0}, {Block: b1}, {Block: b2}}
 		got, err := columnFetchBlocks(bwb, envs, currentEpoch, noResolveBlock)
@@ -85,7 +85,7 @@ func TestColumnFetchBlocks(t *testing.T) {
 		parent := makeGloasBlock(t, 0, [32]byte{}, [32]byte{0x09})
 		// Envelope is for the parent (the payload the first block builds on), which is not in bwb.
 		envs := []interfaces.ROSignedExecutionPayloadEnvelope{
-			makeEnvelopeForRoot(t, 0, parent.Root()),
+			makeEnvelopeForRoot(t, 0, parent.Root(), [32]byte{}, [32]byte{}),
 		}
 		bwb := []blocks.BlockWithROSidecars{{Block: b0}, {Block: b1}}
 		resolve := func(root [32]byte) (blocks.ROBlock, bool) {
@@ -103,7 +103,7 @@ func TestColumnFetchBlocks(t *testing.T) {
 
 	t.Run("gloas: unresolvable out-of-batch root is skipped without error", func(t *testing.T) {
 		envs := []interfaces.ROSignedExecutionPayloadEnvelope{
-			makeEnvelopeForRoot(t, 0, [32]byte{0xde, 0xad}),
+			makeEnvelopeForRoot(t, 0, [32]byte{0xde, 0xad}, [32]byte{}, [32]byte{}),
 		}
 		bwb := []blocks.BlockWithROSidecars{{Block: b0}}
 		got, err := columnFetchBlocks(bwb, envs, currentEpoch, noResolveBlock)

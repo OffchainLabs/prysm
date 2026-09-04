@@ -784,6 +784,52 @@ func TestService_ValidUnprocessed(t *testing.T) {
 	assert.Equal(t, len(retBlocks), len(batch)-2)
 }
 
+func TestEnvelopesForBlocks(t *testing.T) {
+	ctx := t.Context()
+	notProcessed := func(context.Context, interfaces.ROSignedExecutionPayloadEnvelope) bool { return false }
+
+	parentHash := [32]byte{0x0a}
+	b1OwnHash := [32]byte{0x0b}
+	originRoot := [32]byte{0x01}
+	ancestorRoot := [32]byte{0x02}
+
+	// b1 is the first unprocessed block; its parent's payload was not revealed, so its bid
+	// parent hash points at the last revealed ancestor's payload.
+	b1 := makeGloasBlock(t, 33, originRoot, parentHash)
+	bwb := []blocks.BlockWithROSidecars{{Block: b1}}
+
+	envAncestor := makeEnvelopeForRoot(t, 31, ancestorRoot, parentHash, [32]byte{})
+	envParent := makeEnvelopeForRoot(t, 32, originRoot, parentHash, [32]byte{})
+	envB1 := makeEnvelopeForRoot(t, 33, b1.Root(), b1OwnHash, parentHash)
+
+	t.Run("ancestor envelope with matching hash is skipped", func(t *testing.T) {
+		got := envelopesForBlocks(ctx, bwb, []interfaces.ROSignedExecutionPayloadEnvelope{envAncestor, envB1}, notProcessed)
+		require.Equal(t, 1, len(got))
+		env, err := got[0].Envelope()
+		require.NoError(t, err)
+		require.Equal(t, b1.Root(), env.BeaconBlockRoot())
+	})
+
+	t.Run("parent envelope selected", func(t *testing.T) {
+		got := envelopesForBlocks(ctx, bwb, []interfaces.ROSignedExecutionPayloadEnvelope{envParent, envB1}, notProcessed)
+		require.Equal(t, 2, len(got))
+		env, err := got[0].Envelope()
+		require.NoError(t, err)
+		require.Equal(t, originRoot, env.BeaconBlockRoot())
+	})
+
+	t.Run("no relevant envelopes", func(t *testing.T) {
+		got := envelopesForBlocks(ctx, bwb, []interfaces.ROSignedExecutionPayloadEnvelope{envAncestor}, notProcessed)
+		require.Equal(t, 0, len(got))
+	})
+
+	t.Run("processed envelope skipped", func(t *testing.T) {
+		processed := func(context.Context, interfaces.ROSignedExecutionPayloadEnvelope) bool { return true }
+		got := envelopesForBlocks(ctx, bwb, []interfaces.ROSignedExecutionPayloadEnvelope{envB1}, processed)
+		require.Equal(t, 0, len(got))
+	})
+}
+
 func TestService_PropcessFetchedDataRegSync(t *testing.T) {
 	ctx := t.Context()
 

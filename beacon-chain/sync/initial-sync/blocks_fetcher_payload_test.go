@@ -4,12 +4,9 @@ import (
 	"testing"
 
 	prysmsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -31,28 +28,7 @@ func makeGloasBlock(t *testing.T, slot primitives.Slot, parentRoot [32]byte, par
 
 // makeEnvelope creates an ROSignedExecutionPayloadEnvelope with the given slot, blockHash, and parentHash.
 func makeEnvelope(t *testing.T, slot primitives.Slot, blockHash [32]byte, parentHash [32]byte) interfaces.ROSignedExecutionPayloadEnvelope {
-	env := &ethpb.SignedExecutionPayloadEnvelope{
-		Signature: make([]byte, fieldparams.BLSSignatureLength),
-		Message: &ethpb.ExecutionPayloadEnvelope{
-			BeaconBlockRoot:       make([]byte, fieldparams.RootLength),
-			ParentBeaconBlockRoot: make([]byte, fieldparams.RootLength),
-			ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
-			Payload: &enginev1.ExecutionPayloadGloas{
-				ParentHash:    parentHash[:],
-				FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
-				StateRoot:     make([]byte, fieldparams.RootLength),
-				ReceiptsRoot:  make([]byte, fieldparams.RootLength),
-				LogsBloom:     make([]byte, fieldparams.LogsBloomLength),
-				PrevRandao:    make([]byte, fieldparams.RootLength),
-				BaseFeePerGas: make([]byte, fieldparams.RootLength),
-				BlockHash:     blockHash[:],
-				SlotNumber:    slot,
-			},
-		},
-	}
-	wrapped, err := blocks.WrappedROSignedExecutionPayloadEnvelope(env)
-	require.NoError(t, err)
-	return wrapped
+	return makeEnvelopeForRoot(t, slot, [32]byte{}, blockHash, parentHash)
 }
 
 func TestCheckAllBlocksBuildOnEmpty(t *testing.T) {
@@ -112,6 +88,35 @@ func TestBlockBuiltOnEnvelope(t *testing.T) {
 		env := makeEnvelope(t, 10, blockHash, [32]byte{})
 		blk := makeGloasBlock(t, 11, [32]byte{}, parentHash)
 		full, err := blocks.BlockBuiltOnEnvelope(env, blk)
+		require.NoError(t, err)
+		require.Equal(t, false, full)
+	})
+}
+
+func TestBlockBuiltOnParentEnvelope(t *testing.T) {
+	blockHash := [32]byte{0xaa}
+	parentRoot := [32]byte{0x01}
+
+	t.Run("parent envelope", func(t *testing.T) {
+		blk := makeGloasBlock(t, 11, parentRoot, blockHash)
+		env := makeEnvelopeForRoot(t, 10, parentRoot, blockHash, [32]byte{})
+		full, err := blocks.BlockBuiltOnParentEnvelope(env, blk)
+		require.NoError(t, err)
+		require.Equal(t, true, full)
+	})
+
+	t.Run("ancestor envelope with matching hash", func(t *testing.T) {
+		blk := makeGloasBlock(t, 11, parentRoot, blockHash)
+		env := makeEnvelopeForRoot(t, 9, [32]byte{0x02}, blockHash, [32]byte{})
+		full, err := blocks.BlockBuiltOnParentEnvelope(env, blk)
+		require.NoError(t, err)
+		require.Equal(t, false, full)
+	})
+
+	t.Run("parent root matches but block builds on empty", func(t *testing.T) {
+		blk := makeGloasBlock(t, 11, parentRoot, [32]byte{0xbb})
+		env := makeEnvelopeForRoot(t, 10, parentRoot, blockHash, [32]byte{})
+		full, err := blocks.BlockBuiltOnParentEnvelope(env, blk)
 		require.NoError(t, err)
 		require.Equal(t, false, full)
 	})
