@@ -19,8 +19,9 @@ import (
 )
 
 const (
-	readFreshnessBudget = 500 * time.Millisecond // Floor for a read's deadline.
-	blockPublishMargin  = 250 * time.Millisecond // Time reserved to sign, publish and gossip a block in hand before the committee votes if no accepted block is returned by the deadline.
+	readFreshnessBudget        = 500 * time.Millisecond // Floor for a read's deadline.
+	blockPublishMargin         = 250 * time.Millisecond // Time reserved to sign, publish and gossip a block in hand before the committee votes if no accepted block is returned by the deadline.
+	payloadAttestationDueGrace = 500 * time.Millisecond // Polling time past the PTC due mark, where the node may first serve the data.
 )
 
 var (
@@ -198,8 +199,8 @@ func blockFreshnessOptions(ctx context.Context, decode func([]byte, http.Header)
 //   - WithRace: query every node concurrently.
 //   - WithSSZAccept: among those responses, prefer the one whose beacon_block_root
 //     matches the announced head (decoded via payloadAttestationBeaconBlockRoot).
-//   - WithDeadline: bound the read by the hint deadline (floored by
-//     readFreshnessBudget so a lagging node still gets time to catch up).
+//   - WithDeadline: bound the read by the hint deadline plus a grace (floored by
+//     readFreshnessBudget), since the node may only serve the data at that deadline.
 //   - WithRepoll: keep re-polling until a node reports the head or the deadline
 //     fires.
 func payloadAttestationFreshnessOptions(ctx context.Context) []rest.QueryOption {
@@ -226,7 +227,9 @@ func payloadAttestationFreshnessOptions(ctx context.Context) []rest.QueryOption 
 		return opts
 	}
 
-	deadline := hint.Deadline
+	// The node holds non-final data until the hint deadline (the PTC due mark),
+	// so keep polling past it rather than giving up at that exact instant.
+	deadline := hint.Deadline.Add(payloadAttestationDueGrace)
 	if floor := time.Now().Add(readFreshnessBudget); deadline.Before(floor) {
 		deadline = floor
 	}
