@@ -76,7 +76,7 @@ func TestBlockBuiltOnEnvelope(t *testing.T) {
 	blockHash := [32]byte{0xaa}
 	parentHash := [32]byte{0xbb}
 
-	t.Run("envelope matches block parent hash", func(t *testing.T) {
+	t.Run("matching execution parent hash returns true", func(t *testing.T) {
 		env := makeEnvelope(t, 10, blockHash, [32]byte{})
 		blk := makeGloasBlock(t, 11, [32]byte{}, blockHash)
 		full, err := blocks.BlockBuiltOnEnvelope(env, blk)
@@ -84,7 +84,7 @@ func TestBlockBuiltOnEnvelope(t *testing.T) {
 		require.Equal(t, true, full)
 	})
 
-	t.Run("envelope does not match block parent hash", func(t *testing.T) {
+	t.Run("different execution parent hash returns false", func(t *testing.T) {
 		env := makeEnvelope(t, 10, blockHash, [32]byte{})
 		blk := makeGloasBlock(t, 11, [32]byte{}, parentHash)
 		full, err := blocks.BlockBuiltOnEnvelope(env, blk)
@@ -97,7 +97,7 @@ func TestBlockBuiltOnParentEnvelope(t *testing.T) {
 	blockHash := [32]byte{0xaa}
 	parentRoot := [32]byte{0x01}
 
-	t.Run("parent envelope", func(t *testing.T) {
+	t.Run("matching beacon parent root and execution hash returns true", func(t *testing.T) {
 		blk := makeGloasBlock(t, 11, parentRoot, blockHash)
 		env := makeEnvelopeForRoot(t, 10, parentRoot, blockHash, [32]byte{})
 		full, err := blocks.BlockBuiltOnParentEnvelope(env, blk)
@@ -105,7 +105,7 @@ func TestBlockBuiltOnParentEnvelope(t *testing.T) {
 		require.Equal(t, true, full)
 	})
 
-	t.Run("ancestor envelope with matching hash", func(t *testing.T) {
+	t.Run("ancestor root with matching execution hash returns false", func(t *testing.T) {
 		blk := makeGloasBlock(t, 11, parentRoot, blockHash)
 		env := makeEnvelopeForRoot(t, 9, [32]byte{0x02}, blockHash, [32]byte{})
 		full, err := blocks.BlockBuiltOnParentEnvelope(env, blk)
@@ -113,7 +113,7 @@ func TestBlockBuiltOnParentEnvelope(t *testing.T) {
 		require.Equal(t, false, full)
 	})
 
-	t.Run("parent root matches but block builds on empty", func(t *testing.T) {
+	t.Run("matching beacon parent root with different execution hash returns false", func(t *testing.T) {
 		blk := makeGloasBlock(t, 11, parentRoot, [32]byte{0xbb})
 		env := makeEnvelopeForRoot(t, 10, parentRoot, blockHash, [32]byte{})
 		full, err := blocks.BlockBuiltOnParentEnvelope(env, blk)

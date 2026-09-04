@@ -1362,7 +1362,7 @@ func TestBlockFetcher_HasSufficientBandwidth(t *testing.T) {
 
 func TestFetchSidecars(t *testing.T) {
 	ctx := t.Context()
-	t.Run("No blocks", func(t *testing.T) {
+	t.Run("empty batch returns without fetching sidecars", func(t *testing.T) {
 		fetcher := new(blocksFetcher)
 
 		r := &fetchRequestResponse{bwb: []blocks.BlockWithROSidecars{}}
@@ -1371,7 +1371,7 @@ func TestFetchSidecars(t *testing.T) {
 		assert.Equal(t, peer.ID(""), r.blobsFrom)
 	})
 
-	t.Run("Nominal", func(t *testing.T) {
+	t.Run("route columns for blocks within retention", func(t *testing.T) {
 		const numberOfColumns = uint64(fieldparams.NumberOfColumns)
 		cfg := params.BeaconConfig()
 		samplesPerSlot := cfg.SamplesPerSlot
@@ -1450,88 +1450,41 @@ func TestFetchSidecars(t *testing.T) {
 		err = dataColumnStorage.Save(verifiedRoDataColumnSidecarsFulu2)
 		require.NoError(t, err)
 
-		// Create a blocks fetcher.
-		fetcher := &blocksFetcher{
-			clock: clock,
-			chain: &mock.ChainService{},
-			p2p:   p2ptest.NewTestP2P(t),
-			dcs:   dataColumnStorage,
+		for _, test := range []struct {
+			name        string
+			headSlot    primitives.Slot
+			wantColumns uint64
+			wantCarried uint64
+		}{
+			{name: "block after head keeps columns attached", wantColumns: samplesPerSlot},
+			{name: "block at head carries columns separately", headSlot: roFuluBlock2.Block().Slot(), wantCarried: samplesPerSlot},
+		} {
+			t.Run(test.name, func(t *testing.T) {
+				fetcher := &blocksFetcher{
+					clock: clock,
+					chain: &mock.ChainService{MockHeadSlot: &test.headSlot},
+					p2p:   p2ptest.NewTestP2P(t),
+					dcs:   dataColumnStorage,
+				}
+				blocksWithSidecars := []blocks.BlockWithROSidecars{
+					{Block: roDebebBlock},
+					{Block: roFuluBlock1},
+					{Block: roFuluBlock2},
+				}
+				r := &fetchRequestResponse{bwb: blocksWithSidecars}
+				fetcher.fetchSidecars(t.Context(), r, nil)
+				require.NoError(t, r.err)
+				require.Equal(t, peer.ID(""), r.blobsFrom)
+
+				require.Equal(t, 0, len(blocksWithSidecars[0].Blobs))
+				require.Equal(t, 0, len(blocksWithSidecars[0].Columns))
+				require.Equal(t, 0, len(blocksWithSidecars[1].Blobs))
+				require.Equal(t, 0, len(blocksWithSidecars[1].Columns))
+				require.Equal(t, 0, len(blocksWithSidecars[2].Blobs))
+				require.Equal(t, test.wantColumns, uint64(len(blocksWithSidecars[2].Columns)))
+				require.Equal(t, test.wantCarried, uint64(len(r.columnsToSave)))
+			})
 		}
-
-		// Fetch sidecars.
-		blocksWithSidecars := []blocks.BlockWithROSidecars{
-			{Block: roDebebBlock},
-			{Block: roFuluBlock1},
-			{Block: roFuluBlock2},
-		}
-		r := &fetchRequestResponse{bwb: blocksWithSidecars}
-		fetcher.fetchSidecars(ctx, r, nil)
-		require.NoError(t, r.err)
-		require.Equal(t, peer.ID(""), r.blobsFrom)
-
-		// Verify that block with sidecars were modified correctly.
-		require.Equal(t, 0, len(blocksWithSidecars[0].Blobs))
-		require.Equal(t, 0, len(blocksWithSidecars[0].Columns))
-		require.Equal(t, 0, len(blocksWithSidecars[1].Blobs))
-		require.Equal(t, 0, len(blocksWithSidecars[1].Columns))
-		require.Equal(t, 0, len(blocksWithSidecars[2].Blobs))
-
-		// We don't check the content of the columns here. The extensive test is done
-		// in TestFetchDataColumnsSidecars.
-		require.Equal(t, samplesPerSlot, uint64(len(blocksWithSidecars[2].Columns)))
-	})
-
-	t.Run("columns for already-imported blocks are carried", func(t *testing.T) {
-		const numberOfColumns = uint64(fieldparams.NumberOfColumns)
-		cfg := params.BeaconConfig()
-		samplesPerSlot := cfg.SamplesPerSlot
-
-		genesisTime := time.Date(2025, time.August, 10, 0, 0, 0, 0, time.UTC)
-		secondsPerSlot := cfg.SecondsPerSlot
-		slotsPerEpoch := cfg.SlotsPerEpoch
-		secondsPerEpoch := uint64(slotsPerEpoch.Mul(secondsPerSlot))
-		retentionEpochs := cfg.MinEpochsForDataColumnSidecarsRequest
-		nowWrtGenesisSecs := retentionEpochs.Add(1).Mul(secondsPerEpoch)
-		now := genesisTime.Add(time.Duration(nowWrtGenesisSecs) * time.Second)
-		nower := func() time.Time { return now }
-		clock := startup.NewClock(genesisTime, [fieldparams.RootLength]byte{}, startup.WithNower(nower))
-
-		dir := t.TempDir()
-		dataColumnStorage, err := filesystem.NewDataColumnStorage(ctx, filesystem.WithDataColumnBasePath(dir))
-		require.NoError(t, err)
-
-		fuluBlock := util.NewBeaconBlockFulu()
-		fuluBlock.Block.Slot = slotsPerEpoch
-		fuluBlock.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, fieldparams.KzgCommitmentSize)}
-		signedFuluBlock, err := blocks.NewSignedBeaconBlock(fuluBlock)
-		require.NoError(t, err)
-		roFuluBlock, err := blocks.NewROBlock(signedFuluBlock)
-		require.NoError(t, err)
-
-		bodyRoot, err := fuluBlock.Block.Body.HashTreeRoot()
-		require.NoError(t, err)
-
-		columnParams := make([]util.DataColumnParam, 0, numberOfColumns)
-		for i := range numberOfColumns {
-			columnParams = append(columnParams, util.DataColumnParam{Index: i, Slot: slotsPerEpoch, BodyRoot: bodyRoot[:]})
-		}
-		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, columnParams)
-		require.NoError(t, dataColumnStorage.Save(verifiedRoDataColumnSidecars))
-
-		// The block is at or below the head slot, so it will be stripped as already processed.
-		headSlot := roFuluBlock.Block().Slot()
-		fetcher := &blocksFetcher{
-			clock: clock,
-			chain: &mock.ChainService{MockHeadSlot: &headSlot},
-			p2p:   p2ptest.NewTestP2P(t),
-			dcs:   dataColumnStorage,
-		}
-
-		r := &fetchRequestResponse{bwb: []blocks.BlockWithROSidecars{{Block: roFuluBlock}}}
-		fetcher.fetchSidecars(ctx, r, nil)
-		require.NoError(t, r.err)
-		require.Equal(t, 0, len(r.bwb[0].Columns))
-		require.Equal(t, samplesPerSlot, uint64(len(r.columnsToSave)))
 	})
 }
 

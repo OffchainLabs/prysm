@@ -58,7 +58,7 @@ func TestColumnFetchBlocks(t *testing.T) {
 	b1 := makeGloasBlock(t, 2, b0.Root(), [32]byte{0x11})
 	b2 := makeGloasBlock(t, 3, b1.Root(), [32]byte{0x12})
 
-	t.Run("gloas: only blocks with a revealed payload are selected", func(t *testing.T) {
+	t.Run("Gloas selects only blocks referenced by envelopes", func(t *testing.T) {
 		// Envelopes exist for b0 and b2 only; b1's payload is absent.
 		envs := []interfaces.ROSignedExecutionPayloadEnvelope{
 			makeEnvelopeForRoot(t, 1, b0.Root(), [32]byte{}, [32]byte{}),
@@ -74,14 +74,14 @@ func TestColumnFetchBlocks(t *testing.T) {
 		require.Equal(t, true, roots[b2.Root()])
 	})
 
-	t.Run("gloas: no envelopes means no columns requested", func(t *testing.T) {
+	t.Run("Gloas selects no blocks without envelopes", func(t *testing.T) {
 		bwb := []blocks.BlockWithROSidecars{{Block: b0}, {Block: b1}}
 		got, err := columnFetchBlocks(bwb, nil, currentEpoch, noResolveBlock)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(got))
 	})
 
-	t.Run("gloas: out-of-batch parent payload resolved via resolveBlock", func(t *testing.T) {
+	t.Run("Gloas includes a resolved block outside the batch", func(t *testing.T) {
 		parent := makeGloasBlock(t, 0, [32]byte{}, [32]byte{0x09})
 		// Envelope is for the parent (the payload the first block builds on), which is not in bwb.
 		envs := []interfaces.ROSignedExecutionPayloadEnvelope{
@@ -101,7 +101,7 @@ func TestColumnFetchBlocks(t *testing.T) {
 		require.Equal(t, true, roots[parent.Root()])
 	})
 
-	t.Run("gloas: unresolvable out-of-batch root is skipped without error", func(t *testing.T) {
+	t.Run("Gloas skips an unresolved envelope root", func(t *testing.T) {
 		envs := []interfaces.ROSignedExecutionPayloadEnvelope{
 			makeEnvelopeForRoot(t, 0, [32]byte{0xde, 0xad}, [32]byte{}, [32]byte{}),
 		}
@@ -111,7 +111,7 @@ func TestColumnFetchBlocks(t *testing.T) {
 		require.Equal(t, 0, len(got))
 	})
 
-	t.Run("pre-gloas Fulu blocks are always selected", func(t *testing.T) {
+	t.Run("Fulu selects blocks without envelopes", func(t *testing.T) {
 		fulu := util.NewBeaconBlockFulu()
 		fulu.Block.Slot = 1
 		signed, err := blocks.NewSignedBeaconBlock(fulu)
