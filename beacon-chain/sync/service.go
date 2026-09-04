@@ -487,6 +487,26 @@ func (c *partialColumnCallbacks) PartialVerifierFromTrustedColumn(col *blocks.Pa
 	return c.service.partialVerifierFromTrustedColumn(c.service.ctx, col)
 }
 
+// ValidateGloasGroupID validates a Gloas partial-column group's slot and root against local block state,
+// mirroring the full-column gossip rules: [IGNORE] until a valid block for the group's root has been seen,
+// [REJECT] when that block's slot does not match the group's slot, else [ACCEPT].
+func (c *partialColumnCallbacks) ValidateGloasGroupID(slot primitives.Slot, root [32]byte) pubsub.ValidationResult {
+	// [IGNORE] A valid block for the group's root has not been seen yet.
+	if c.service.cfg.chain == nil || !c.service.cfg.chain.HasBlock(c.service.ctx, root) {
+		return pubsub.ValidationIgnore
+	}
+
+	blockSlot, err := c.service.cfg.chain.RecentBlockSlot(root)
+	if err != nil {
+		return pubsub.ValidationIgnore
+	}
+	// [REJECT] The group's slot must match the slot of the block at beacon_block_root.
+	if blockSlot != slot {
+		return pubsub.ValidationReject
+	}
+	return pubsub.ValidationAccept
+}
+
 // ValidateColumn verifies the KZG proofs for the given cells.
 func (c *partialColumnCallbacks) ValidateColumn(cellsToVerify []blocks.CellProofBundle) error {
 	return peerdas.VerifyDataColumnsCellsKZGProofs(cellsToVerify)
@@ -497,25 +517,32 @@ func (c *partialColumnCallbacks) HandleColumn(topic string, col blocks.VerifiedR
 	ctx, cancel := context.WithTimeout(c.service.ctx, pubsubMessageTimeout)
 	defer cancel()
 
-	slot := col.Slot()
-	proposerIndex, err := col.ProposerIndex()
-	if err != nil {
-		log.WithError(err).Error("Failed to get proposer index from data column")
-		return
-	}
 	commitments, err := col.KzgCommitments()
 	if err != nil {
 		log.WithError(err).Error("Failed to get KZG commitments from data column")
 		return
 	}
-	if c.service.hasSeenDataColumnIndex(slot, proposerIndex, col.Index()) {
-		return
-	}
-
-	c.service.setSeenDataColumnIndex(slot, proposerIndex, col.Index())
 	if len(commitments) == 0 {
 		return
 	}
+
+	if col.IsGloas() {
+		if c.service.hasSeenDataColumnRootIndex(col.BlockRoot(), col.Index()) {
+			return
+		}
+		c.service.setSeenDataColumnRootIndex(col.BlockRoot(), col.Index(), col.Slot())
+	} else {
+		proposerIndex, err := col.ProposerIndex()
+		if err != nil {
+			log.WithError(err).Error("Failed to get proposer index from data column")
+			return
+		}
+		if c.service.hasSeenDataColumnIndex(col.Slot(), proposerIndex, col.Index()) {
+			return
+		}
+		c.service.setSeenDataColumnIndex(col.Slot(), proposerIndex, col.Index())
+	}
+
 	// This column was completed from a partial message.
 	partialMessageColumnCompletionsTotal.WithLabelValues(strconv.FormatUint(col.Index(), 10)).Inc()
 	if err := c.service.verifiedRODataColumnSubscriber(ctx, col); err != nil {

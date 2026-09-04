@@ -249,9 +249,28 @@ func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofs
 	if err != nil {
 		return nil, errors.Wrap(err, "rotate cells and proofs")
 	}
+	if included.Count() > 0 && (uint64(len(cells)) != numberOfColumns || uint64(len(proofs)) != numberOfColumns) {
+		return nil, errors.Errorf("included blobs present but rotated cells/proofs do not cover all columns: got cells=%d proofs=%d, want %d", len(cells), len(proofs), numberOfColumns)
+	}
+
+	if slots.ToEpoch(src.Slot()) >= params.BeaconConfig().GloasForkEpoch {
+		dataColumns, err := partialColumnsGloas(included, cells, proofs, src)
+		if err != nil {
+			return nil, errors.Wrap(err, "partialColumnsGloas")
+		}
+		if len(dataColumns) != 0 {
+			partialDataColumnComputationTime.Observe(float64(time.Since(start).Milliseconds()))
+		}
+		return dataColumns, nil
+	}
+
 	info, err := src.extract()
 	if err != nil {
 		return nil, errors.Wrap(err, "extract block info")
+	}
+
+	if len(info.kzgCommitments) == 0 {
+		return nil, nil
 	}
 
 	dataColumns := make([]blocks.PartialDataColumn, 0, numberOfColumns)
@@ -273,6 +292,41 @@ func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofs
 	}
 
 	partialDataColumnComputationTime.Observe(float64(time.Since(start).Milliseconds()))
+	return dataColumns, nil
+}
+
+func partialColumnsGloas(included bitfield.Bitlist, cells, proofs [][][]byte, src ConstructionPopulator) ([]blocks.PartialDataColumn, error) {
+	commitments, err := src.Commitments()
+	if err != nil {
+		return nil, errors.Wrap(err, "commitments")
+	}
+	if len(commitments) == 0 {
+		return nil, nil
+	}
+
+	const numberOfColumns = uint64(fieldparams.NumberOfColumns)
+	root := src.Root()
+	slot := src.Slot()
+	dataColumns := make([]blocks.PartialDataColumn, 0, numberOfColumns)
+	for idx := range numberOfColumns {
+		dc, err := blocks.NewPartialDataColumnGloas(root, slot, idx, commitments)
+		if err != nil {
+			return nil, errors.Wrap(err, "new gloas partial data column")
+		}
+
+		for i := range len(commitments) {
+			if !included.BitAt(uint64(i)) {
+				continue
+			}
+			if len(cells[idx]) == 0 || len(proofs[idx]) == 0 {
+				return nil, errors.Errorf("insufficient cells or proofs for column %d", idx)
+			}
+			dc.ExtendFromVerifiedCell(uint64(i), cells[idx][0], proofs[idx][0])
+			cells[idx] = cells[idx][1:]
+			proofs[idx] = proofs[idx][1:]
+		}
+		dataColumns = append(dataColumns, dc)
+	}
 	return dataColumns, nil
 }
 
@@ -404,6 +458,9 @@ func (s *BidReconstructionSource) Commitments() ([][]byte, error) {
 	bid, err := s.Block().Body().SignedExecutionPayloadBid()
 	if err != nil {
 		return nil, errors.Wrap(err, "signed execution payload bid")
+	}
+	if bid == nil || bid.Message == nil {
+		return nil, errors.New("nil execution payload bid or bid message")
 	}
 	return bid.Message.BlobKzgCommitments, nil
 }

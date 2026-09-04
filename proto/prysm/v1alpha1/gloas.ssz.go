@@ -4626,6 +4626,243 @@ func (c *IndexedAttestationGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (e
 	return nil
 }
 
+func (c *PartialDataColumnGroupID) SizeSSZ() int {
+	size := 40
+
+	return size
+}
+
+func (c *PartialDataColumnGroupID) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *PartialDataColumnGroupID) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+
+	// Field 0: BeaconBlockRoot
+	if len(c.BeaconBlockRoot) != 32 {
+		return nil, ssz.ErrBytesLength
+	}
+	dst = append(dst, c.BeaconBlockRoot...)
+
+	// Field 1: Slot
+	if dst, err = c.Slot.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("Slot: %w", err)
+	}
+
+	return dst, err
+}
+
+func (c *PartialDataColumnGroupID) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 40 {
+		return ssz.ErrSize
+	}
+
+	sszSlice0 := buf[0:32]  // c.BeaconBlockRoot
+	sszSlice1 := buf[32:40] // c.Slot
+
+	// Field 0: BeaconBlockRoot
+	c.BeaconBlockRoot = make([]byte, 0, 32)
+	c.BeaconBlockRoot = append(c.BeaconBlockRoot, sszSlice0...)
+
+	// Field 1: Slot
+	if err = c.Slot.UnmarshalSSZ(sszSlice1); err != nil {
+		return fmt.Errorf("Slot: %w", err)
+	}
+	return err
+}
+
+func (c *PartialDataColumnGroupID) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *PartialDataColumnGroupID) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: BeaconBlockRoot
+	if len(c.BeaconBlockRoot) != 32 {
+		return ssz.ErrBytesLength
+	}
+	hh.PutBytes(c.BeaconBlockRoot)
+	// Field 1: Slot
+	if err := c.Slot.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("Slot: %w", err)
+	}
+	hh.Merkleize(indx)
+	return nil
+}
+
+func (c *PartialDataColumnSidecarGloas) SizeSSZ() int {
+	size := 12
+	size += len(c.CellsPresentBitmap)
+	size += len(c.PartialColumn) * 2048
+	size += len(c.KzgProofs) * 48
+	return size
+}
+
+func (c *PartialDataColumnSidecarGloas) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *PartialDataColumnSidecarGloas) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+	offset := 12
+
+	// Field 0: CellsPresentBitmap
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(c.CellsPresentBitmap)
+
+	// Field 1: PartialColumn
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(c.PartialColumn) * 2048
+
+	// Field 2: KzgProofs
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(c.KzgProofs) * 48
+
+	// Field 0: CellsPresentBitmap
+	dst = append(dst, c.CellsPresentBitmap...)
+
+	// Field 1: PartialColumn
+	for _, o := range c.PartialColumn {
+		if len(o) != 2048 {
+			return nil, ssz.ErrBytesLength
+		}
+		dst = append(dst, o...)
+	}
+
+	// Field 2: KzgProofs
+	for _, o := range c.KzgProofs {
+		if len(o) != 48 {
+			return nil, ssz.ErrBytesLength
+		}
+		dst = append(dst, o...)
+	}
+	return dst, err
+}
+
+func (c *PartialDataColumnSidecarGloas) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 12 {
+		return ssz.ErrSize
+	}
+
+	sszVarOffset0 := ssz.ReadOffset(buf[0:4]) // c.CellsPresentBitmap
+	if sszVarOffset0 != 12 {
+		return ssz.ErrInvalidVariableOffset
+	}
+	if sszVarOffset0 > size {
+		return ssz.ErrOffset
+	}
+	sszVarOffset1 := ssz.ReadOffset(buf[4:8]) // c.PartialColumn
+	if sszVarOffset1 > size || sszVarOffset1 < sszVarOffset0 {
+		return ssz.ErrOffset
+	}
+	sszVarOffset2 := ssz.ReadOffset(buf[8:12]) // c.KzgProofs
+	if sszVarOffset2 > size || sszVarOffset2 < sszVarOffset1 {
+		return ssz.ErrOffset
+	}
+	sszSlice0 := buf[sszVarOffset0:sszVarOffset1] // c.CellsPresentBitmap
+	sszSlice1 := buf[sszVarOffset1:sszVarOffset2] // c.PartialColumn
+	sszSlice2 := buf[sszVarOffset2:]              // c.KzgProofs
+
+	// Field 0: CellsPresentBitmap
+	if err = ssz.ValidateProgressiveBitlist(sszSlice0); err != nil {
+		return fmt.Errorf("CellsPresentBitmap: %w", err)
+	}
+	c.CellsPresentBitmap = append([]byte{}, go_bitfield.Bitlist(sszSlice0)...)
+
+	// Field 1: PartialColumn
+	{
+		if len(sszSlice1)%2048 != 0 {
+			return fmt.Errorf("misaligned bytes: c.PartialColumn length is %d, which is not a multiple of 2048: %w", len(sszSlice1), ssz.ErrIncorrectListSize)
+		}
+		numElem := len(sszSlice1) / 2048
+		c.PartialColumn = make([][]byte, numElem)
+		for i := 0; i < numElem; i++ {
+			var tmp []byte
+
+			tmpSlice := sszSlice1[i*2048 : (1+i)*2048]
+			tmp = make([]byte, 0, 2048)
+			tmp = append(tmp, tmpSlice...)
+			c.PartialColumn[i] = tmp
+		}
+	}
+
+	// Field 2: KzgProofs
+	{
+		if len(sszSlice2)%48 != 0 {
+			return fmt.Errorf("misaligned bytes: c.KzgProofs length is %d, which is not a multiple of 48: %w", len(sszSlice2), ssz.ErrIncorrectListSize)
+		}
+		numElem := len(sszSlice2) / 48
+		c.KzgProofs = make([][]byte, numElem)
+		for i := 0; i < numElem; i++ {
+			var tmp []byte
+
+			tmpSlice := sszSlice2[i*48 : (1+i)*48]
+			tmp = make([]byte, 0, 48)
+			tmp = append(tmp, tmpSlice...)
+			c.KzgProofs[i] = tmp
+		}
+	}
+	return err
+}
+
+func (c *PartialDataColumnSidecarGloas) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *PartialDataColumnSidecarGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: CellsPresentBitmap
+	if len(c.CellsPresentBitmap) == 0 {
+		return ssz.ErrEmptyBitlist
+	}
+	hh.PutProgressiveBitlist(c.CellsPresentBitmap)
+	// Field 1: PartialColumn
+	{
+		subIndx := hh.Index()
+		for _, o := range c.PartialColumn {
+			if len(o) != 2048 {
+				return ssz.ErrBytesLength
+			}
+			hh.PutBytes(o)
+		}
+		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.PartialColumn)))
+	}
+	// Field 2: KzgProofs
+	{
+		subIndx := hh.Index()
+		for _, o := range c.KzgProofs {
+			if len(o) != 48 {
+				return ssz.ErrBytesLength
+			}
+			hh.PutBytes(o)
+		}
+		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.KzgProofs)))
+	}
+	hh.Merkleize(indx)
+	return nil
+}
+
 func (c *PayloadAttestation) SizeSSZ() int {
 	size := 202
 

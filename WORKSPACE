@@ -290,7 +290,7 @@ consensus_spec_tests(
     name = "consensus_spec_tests",
     flavors = {
         "general": "sha256-xPOV9x9gbCgJNQDjIGeZDkMMxzoid75vO/UJCtzOP2c=",
-        "minimal": "sha256-LKQtMBStfkASQA5CjVEiAx6ROHO6v+0xxew6pd5x88g=",
+        "minimal": "sha256-upIDaGtzEs3fFgv9PUrVXlMdrOZmLgIj/psTuXlTVEE=",
         "mainnet": "sha256-DvnAaSk+IXHddcVZP697l+Mrm83OkoXocJWZOHR8B3Q=",
     },
     version = consensus_spec_version,
