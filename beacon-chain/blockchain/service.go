@@ -53,7 +53,7 @@ type Service struct {
 	originBlockRoot                [32]byte // genesis root, or weak subjectivity checkpoint root, depending on how the node is initialized
 	boundaryRoots                  [][32]byte
 	checkpointStateCache           *cache.CheckpointStateCache
-	attPreStateRegenLock           sync.Mutex
+	attPreStateRegenSem            chan struct{}
 	initSyncBlocks                 map[[32]byte]interfaces.ReadOnlySignedBeaconBlock
 	initSyncBlocksLock             sync.RWMutex
 	wsVerifier                     *WeakSubjectivityVerifier
@@ -187,6 +187,7 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 		cancel:                 cancel,
 		boundaryRoots:          [][32]byte{},
 		checkpointStateCache:   cache.NewCheckpointStateCache(),
+		attPreStateRegenSem:    make(chan struct{}, 1),
 		initSyncBlocks:         make(map[[32]byte]interfaces.ReadOnlySignedBeaconBlock),
 		blobNotifiers:          bn,
 		cfg:                    &config{},

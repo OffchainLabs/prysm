@@ -140,8 +140,12 @@ func (s *Service) getAttPreState(ctx context.Context, c *ethpb.Checkpoint) (stat
 	}
 
 	// Fallback to state regeneration.
-	s.attPreStateRegenLock.Lock()
-	defer s.attPreStateRegenLock.Unlock()
+	select {
+	case s.attPreStateRegenSem <- struct{}{}:
+		defer func() { <-s.attPreStateRegenSem }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

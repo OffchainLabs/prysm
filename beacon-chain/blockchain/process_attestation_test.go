@@ -531,7 +531,20 @@ func TestService_GetAttPreState_RegenSerialized(t *testing.T) {
 	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, root))
 
 	logHook := logTest.NewGlobal()
-	service.attPreStateRegenLock.Lock()
+	service.attPreStateRegenSem <- struct{}{}
+
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	_, err = service.getAttPreState(cancelled, cp1)
+	require.ErrorIs(t, err, context.Canceled)
+	<-service.attPreStateRegenSem
+	for range 20 {
+		_, err = service.getAttPreState(cancelled, cp1)
+		require.ErrorIs(t, err, context.Canceled)
+	}
+	require.Equal(t, 0, len(logHook.AllEntries()), "a dead context must not start a regeneration")
+	service.attPreStateRegenSem <- struct{}{}
+
 	const perTarget = 10
 	type result struct {
 		slot primitives.Slot
@@ -556,7 +569,7 @@ func TestService_GetAttPreState_RegenSerialized(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 	}
 
-	service.attPreStateRegenLock.Unlock()
+	<-service.attPreStateRegenSem
 	slotCount := map[primitives.Slot]int{}
 	for range 2 * perTarget {
 		select {
@@ -577,8 +590,7 @@ func TestService_GetAttPreState_RegenSerialized(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 2, regens, "expected exactly one regeneration per target")
-	require.Equal(t, true, service.attPreStateRegenLock.TryLock())
-	service.attPreStateRegenLock.Unlock()
+	require.Equal(t, 0, len(service.attPreStateRegenSem))
 }
 
 func TestStore_SaveCheckpointState(t *testing.T) {
