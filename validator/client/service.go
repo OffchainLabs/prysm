@@ -184,8 +184,10 @@ func (v *ValidatorService) Start() {
 	}
 
 	validatorClient := NewValidatorClient(v.conn, iface.WithStateless(v.stateless))
+	hm := newHealthMonitor(v.ctx, v.cancel, v.maxHealthChecks, validatorClient)
 
 	v.validator = &validator{
+		healthMonitor:                hm,
 		slotFeed:                     new(event.Feed),
 		startBalances:                make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
 		prevEpochBalances:            make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
@@ -238,7 +240,6 @@ func (v *ValidatorService) Start() {
 		v.validator.aggSelector = selector
 	}
 
-	hm := newHealthMonitor(v.ctx, v.cancel, v.maxHealthChecks, v.validator)
 	hm.Start()
 	defer v.closeClientFunc()
 
@@ -257,7 +258,7 @@ func (v *ValidatorService) Start() {
 			log.Info("Starting validator runner")
 			runnerCtx, runnerCancel := context.WithCancel(v.ctx)
 
-			runner, err := newRunner(runnerCtx, v.validator, hm)
+			runner, err := newRunner(runnerCtx, v.validator)
 			if err != nil {
 				log.WithError(err).Error("Could not create validator runner")
 				runnerCancel() // Ensure context is cancelled
