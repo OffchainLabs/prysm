@@ -796,7 +796,7 @@ func Test_slashableAttestationCheck(t *testing.T) {
 				},
 			}
 
-			err := validator.db.SlashableAttestationCheck(t.Context(), att, pubKey, [32]byte{1}, false, nil)
+			err := validator.db.SlashableAttestationCheck(t.Context(), att, pubKey, [32]byte{1})
 			require.NoError(t, err, "Expected allowed attestation not to throw error")
 		})
 	}
@@ -834,11 +834,11 @@ func Test_slashableAttestationCheck_UpdatesLowestSignedEpochs(t *testing.T) {
 			_, sr, err := validator.domainAndSigningRoot(ctx, att.Data)
 			require.NoError(t, err)
 
-			err = validator.db.SlashableAttestationCheck(t.Context(), att, pubKey, sr, false, nil)
+			err = validator.db.SlashableAttestationCheck(t.Context(), att, pubKey, sr)
 			require.NoError(t, err)
 			differentSigningRoot := [32]byte{2}
 
-			err = validator.db.SlashableAttestationCheck(t.Context(), att, pubKey, differentSigningRoot, false, nil)
+			err = validator.db.SlashableAttestationCheck(t.Context(), att, pubKey, differentSigningRoot)
 			require.ErrorContains(t, "could not sign attestation", err)
 
 			e, exists, err := validator.db.LowestSignedSourceEpoch(t.Context(), pubKey)
@@ -878,7 +878,7 @@ func Test_slashableAttestationCheck_OK(t *testing.T) {
 			sr := [32]byte{1}
 			fakePubkey := bytesutil.ToBytes48([]byte("test"))
 
-			err := validator.db.SlashableAttestationCheck(ctx, att, fakePubkey, sr, false, nil)
+			err := validator.db.SlashableAttestationCheck(ctx, att, fakePubkey, sr)
 			require.NoError(t, err, "Expected allowed attestation not to throw error")
 		})
 	}
@@ -908,7 +908,7 @@ func Test_slashableAttestationCheck_GenesisEpoch(t *testing.T) {
 			}
 
 			fakePubkey := bytesutil.ToBytes48([]byte("test"))
-			err := validator.db.SlashableAttestationCheck(ctx, att, fakePubkey, [32]byte{}, false, nil)
+			err := validator.db.SlashableAttestationCheck(ctx, att, fakePubkey, [32]byte{})
 			require.NoError(t, err, "Expected allowed attestation not to throw error")
 			e, exists, err := validator.db.LowestSignedSourceEpoch(t.Context(), fakePubkey)
 			require.NoError(t, err)
