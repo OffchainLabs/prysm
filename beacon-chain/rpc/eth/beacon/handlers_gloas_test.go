@@ -68,6 +68,8 @@ func (m *mockEnvelopeVerifier) VerifyPayloadHash(_ interfaces.ROExecutionPayload
 func (m *mockEnvelopeVerifier) VerifyExecutionRequestsRoot(_ interfaces.ROExecutionPayloadBid) error {
 	return m.errExecutionRequests
 }
+func (*mockEnvelopeVerifier) VerifyExecutionRequestsLimits() error { return nil }
+func (*mockEnvelopeVerifier) VerifyWithdrawalsLimit() error        { return nil }
 func (m *mockEnvelopeVerifier) VerifySignature(_ context.Context, _ state.ReadOnlyBeaconState) error {
 	return m.errSignature
 }
@@ -649,14 +651,29 @@ func TestPublishExecutionPayloadEnvelope_GossipValidation(t *testing.T) {
 	signed := testSignedEnvelope()
 	envSlot := primitives.Slot(signed.Message.Payload.SlotNumber)
 
-	matchingBid := func() *ethpb.SignedExecutionPayloadBid {
+	matchingBid := func(env *ethpb.SignedExecutionPayloadEnvelope) *ethpb.SignedExecutionPayloadBid {
 		bid := util.GenerateTestSignedExecutionPayloadBid(envSlot)
-		bid.Message.BuilderIndex = signed.Message.BuilderIndex
-		bid.Message.BlockHash = signed.Message.Payload.BlockHash
-		reqRoot, err := signed.Message.ExecutionRequests.HashTreeRoot()
+		bid.Message.BuilderIndex = env.Message.BuilderIndex
+		bid.Message.BlockHash = env.Message.Payload.BlockHash
+		reqRoot, err := env.Message.ExecutionRequests.HashTreeRoot()
 		require.NoError(t, err)
 		bid.Message.ExecutionRequestsRoot = reqRoot[:]
 		return bid
+	}
+
+	oversizedRequests := testSignedEnvelope()
+	for range params.BeaconConfig().MaxBuilderDepositRequestsPerPayload + 1 {
+		oversizedRequests.Message.ExecutionRequests.BuilderDeposits = append(oversizedRequests.Message.ExecutionRequests.BuilderDeposits, &enginev1.BuilderDepositRequest{
+			Pubkey:                make([]byte, 48),
+			WithdrawalCredentials: make([]byte, 32),
+			Signature:             make([]byte, 96),
+		})
+	}
+	oversizedWithdrawals := testSignedEnvelope()
+	for range params.BeaconConfig().MaxWithdrawalsPerPayload + 1 {
+		oversizedWithdrawals.Message.Payload.Withdrawals = append(oversizedWithdrawals.Message.Payload.Withdrawals, &enginev1.Withdrawal{
+			Address: make([]byte, 20),
+		})
 	}
 
 	headState, err := util.NewBeaconStateGloas()
@@ -666,6 +683,8 @@ func TestPublishExecutionPayloadEnvelope_GossipValidation(t *testing.T) {
 
 	cases := []struct {
 		name         string
+		signed       *ethpb.SignedExecutionPayloadEnvelope // defaults to the shared envelope
+		sszBody      bool                                  // bare-envelope SSZ body instead of JSON contents
 		blocker      *testutil.MockBlocker
 		headRoot     [32]byte // defaults to envRoot when zero
 		expectedBody string
@@ -677,7 +696,7 @@ func TestPublishExecutionPayloadEnvelope_GossipValidation(t *testing.T) {
 		},
 		{
 			name:         "envelope block root not head",
-			blocker:      &testutil.MockBlocker{BlockToReturn: gloasBlockWithBid(t, envSlot, matchingBid())},
+			blocker:      &testutil.MockBlocker{BlockToReturn: gloasBlockWithBid(t, envSlot, matchingBid(signed))},
 			headRoot:     bytesutil.ToBytes32(bytesutil.PadTo([]byte("other-head"), 32)),
 			expectedBody: "is not canonical head",
 		},
@@ -695,7 +714,7 @@ func TestPublishExecutionPayloadEnvelope_GossipValidation(t *testing.T) {
 		{
 			name: "payload hash mismatch",
 			blocker: &testutil.MockBlocker{BlockToReturn: gloasBlockWithBid(t, envSlot, func() *ethpb.SignedExecutionPayloadBid {
-				bid := matchingBid()
+				bid := matchingBid(signed)
 				bid.Message.BlockHash = bytesutil.PadTo([]byte("other-hash"), 32)
 				return bid
 			}())},
@@ -704,26 +723,52 @@ func TestPublishExecutionPayloadEnvelope_GossipValidation(t *testing.T) {
 		{
 			name: "execution requests root mismatch",
 			blocker: &testutil.MockBlocker{BlockToReturn: gloasBlockWithBid(t, envSlot, func() *ethpb.SignedExecutionPayloadBid {
-				bid := matchingBid()
+				bid := matchingBid(signed)
 				bid.Message.ExecutionRequestsRoot = make([]byte, 32)
 				return bid
 			}())},
 			expectedBody: "execution requests root does not match",
 		},
 		{
+			// JSON decoding bounds the request lists, so only an SSZ body reaches this check.
+			name:         "execution requests over limit",
+			signed:       oversizedRequests,
+			sszBody:      true,
+			blocker:      &testutil.MockBlocker{BlockToReturn: gloasBlockWithBid(t, envSlot, matchingBid(oversizedRequests))},
+			expectedBody: "too many builder deposit requests",
+		},
+		{
+			name:         "withdrawals over limit",
+			signed:       oversizedWithdrawals,
+			sszBody:      true,
+			blocker:      &testutil.MockBlocker{BlockToReturn: gloasBlockWithBid(t, envSlot, matchingBid(oversizedWithdrawals))},
+			expectedBody: "too many withdrawals",
+		},
+		{
 			// Bid-consistent envelope with a garbage signature must fail the final check.
 			name:         "invalid signature",
-			blocker:      &testutil.MockBlocker{BlockToReturn: gloasBlockWithBid(t, envSlot, matchingBid())},
+			blocker:      &testutil.MockBlocker{BlockToReturn: gloasBlockWithBid(t, envSlot, matchingBid(signed))},
 			expectedBody: "gossip validation failed",
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			contents, err := structs.SignedExecutionPayloadEnvelopeContentsFromConsensus(signed, nil, nil)
-			require.NoError(t, err)
-			body, err := json.Marshal(contents)
-			require.NoError(t, err)
+			signedEnv := tc.signed
+			if signedEnv == nil {
+				signedEnv = signed
+			}
+			var body []byte
+			if tc.sszBody {
+				var err error
+				body, err = signedEnv.MarshalSSZ()
+				require.NoError(t, err)
+			} else {
+				contents, err := structs.SignedExecutionPayloadEnvelopeContentsFromConsensus(signedEnv, nil, nil)
+				require.NoError(t, err)
+				body, err = json.Marshal(contents)
+				require.NoError(t, err)
+			}
 
 			headRoot := tc.headRoot
 			if headRoot == ([32]byte{}) {
@@ -738,7 +783,12 @@ func TestPublishExecutionPayloadEnvelope_GossipValidation(t *testing.T) {
 			}
 			req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
 			req.Header.Set(api.VersionHeader, version.String(version.Gloas))
-			req.Header.Set(api.BlobDataIncludedHeader, "true")
+			if tc.sszBody {
+				req.Header.Set(api.BlobDataIncludedHeader, "false")
+				req.Header.Set("Content-Type", "application/octet-stream")
+			} else {
+				req.Header.Set(api.BlobDataIncludedHeader, "true")
+			}
 			w := httptest.NewRecorder()
 			w.Body = &bytes.Buffer{}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -24,6 +25,8 @@ type ExecutionPayloadEnvelopeVerifier interface {
 	VerifyBuilderValid(interfaces.ROExecutionPayloadBid) error
 	VerifyPayloadHash(interfaces.ROExecutionPayloadBid) error
 	VerifyExecutionRequestsRoot(interfaces.ROExecutionPayloadBid) error
+	VerifyExecutionRequestsLimits() error
+	VerifyWithdrawalsLimit() error
 	VerifySignature(context.Context, state.ReadOnlyBeaconState) error
 	SatisfyRequirement(Requirement)
 }
@@ -42,6 +45,8 @@ var ExecutionPayloadEnvelopeGossipRequirements = []Requirement{
 	RequireBuilderValid,
 	RequirePayloadHashValid,
 	RequireExecutionRequestsRootValid,
+	RequireExecutionRequestsLimitsValid,
+	RequireWithdrawalsLimitValid,
 	RequireBuilderSignatureValid,
 }
 
@@ -56,6 +61,7 @@ var (
 	ErrIncorrectEnvelopeBuilder       = errors.New("builder index does not match committed header")
 	ErrIncorrectEnvelopeBlockHash     = errors.New("block hash does not match committed header")
 	ErrIncorrectExecutionRequestsRoot = errors.New("execution requests root does not match committed bid")
+	ErrTooManyWithdrawals             = errors.New("too many withdrawals in payload")
 )
 
 var _ ExecutionPayloadEnvelopeVerifier = &EnvelopeVerifier{}
@@ -172,6 +178,41 @@ func (v *EnvelopeVerifier) VerifyExecutionRequestsRoot(bid interfaces.ROExecutio
 	bidRoot := bid.ExecutionRequestsRoot()
 	if requestsRoot != bidRoot {
 		return fmt.Errorf("%w: envelope=%#x bid=%#x", ErrIncorrectExecutionRequestsRoot, requestsRoot, bidRoot)
+	}
+	return nil
+}
+
+// VerifyExecutionRequestsLimits checks that each execution request count is within its per-payload limit.
+func (v *EnvelopeVerifier) VerifyExecutionRequestsLimits() (err error) {
+	defer v.record(RequireExecutionRequestsLimitsValid, &err)
+	env, err := v.e.Envelope()
+	if err != nil {
+		return errors.Wrap(err, "failed to get envelope")
+	}
+	return gloas.ValidateExecutionRequestLengths(env.ExecutionRequests())
+}
+
+// VerifyWithdrawalsLimit checks that len(payload.withdrawals) <= MAX_WITHDRAWALS_PER_PAYLOAD.
+func (v *EnvelopeVerifier) VerifyWithdrawalsLimit() (err error) {
+	defer v.record(RequireWithdrawalsLimitValid, &err)
+	env, err := v.e.Envelope()
+	if err != nil {
+		return errors.Wrap(err, "failed to get envelope")
+	}
+	if env.IsBlinded() {
+		return nil
+	}
+	payload, err := env.Execution()
+	if err != nil {
+		return errors.Wrap(err, "failed to get execution payload")
+	}
+	withdrawals, err := payload.Withdrawals()
+	if err != nil {
+		return errors.Wrap(err, "failed to get withdrawals")
+	}
+	limit := params.BeaconConfig().MaxWithdrawalsPerPayload
+	if uint64(len(withdrawals)) > limit {
+		return fmt.Errorf("%w: %d > %d", ErrTooManyWithdrawals, len(withdrawals), limit)
 	}
 	return nil
 }

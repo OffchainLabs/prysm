@@ -127,6 +127,14 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	if err := v.VerifyExecutionRequestsRoot(bid); err != nil {
 		return pubsub.ValidationReject, err
 	}
+	// [REJECT] The execution request counts are within their limits.
+	if err := v.VerifyExecutionRequestsLimits(); err != nil {
+		return pubsub.ValidationReject, err
+	}
+	// [REJECT] The number of withdrawals is within the limit.
+	if err := v.VerifyWithdrawalsLimit(); err != nil {
+		return pubsub.ValidationReject, err
+	}
 
 	// For self-build, the state is retrived via how we retrieve for beacon block optimization
 	// For builder index, the state is retrived via head state read only
