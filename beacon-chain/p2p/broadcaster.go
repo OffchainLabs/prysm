@@ -446,6 +446,17 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 		}
 	}
 
+	// Join every column topic before any publish below. The batch path joins lazily,
+	// and a partial publish that runs before the topic is joined finds no local topic
+	// state in the router, selects no peers, and silently sends nothing. A proposer
+	// that is not subscribed to a topic hits this on its first proposal after a fork.
+	suffix := s.Encoding().ProtocolSuffix()
+	for _, item := range itemsByIndex {
+		if _, err := s.JoinTopic(item.topic + suffix); err != nil {
+			log.WithError(err).WithField("topic", item.topic).Error("Cannot join data column topic")
+		}
+	}
+
 	// Categorize items by peer availability.
 	var itemsWithPeers []*columnBroadcastItem
 	var itemsWithoutPeers []*columnBroadcastItem
