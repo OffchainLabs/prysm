@@ -136,7 +136,7 @@ func TestClient_IPC(t *testing.T) {
 		require.Equal(t, true, ok)
 		p, err := payloadattribute.New(&pb.PayloadAttributes{})
 		require.NoError(t, err)
-		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, &pb.ForkchoiceState{}, p)
+		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, &pb.ForkchoiceState{}, p, nil)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.Status.LatestValidHash, validHash)
 		require.DeepEqual(t, want.PayloadId, payloadID)
@@ -146,7 +146,7 @@ func TestClient_IPC(t *testing.T) {
 		require.Equal(t, true, ok)
 		p, err := payloadattribute.New(&pb.PayloadAttributesV2{})
 		require.NoError(t, err)
-		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, &pb.ForkchoiceState{}, p)
+		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, &pb.ForkchoiceState{}, p, nil)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.Status.LatestValidHash, validHash)
 		require.DeepEqual(t, want.PayloadId, payloadID)
@@ -502,7 +502,7 @@ func TestClient_HTTP(t *testing.T) {
 		srv := forkchoiceUpdateSetup(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p, nil)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.Status.LatestValidHash, validHash)
 		require.DeepEqual(t, want.PayloadId, payloadID)
@@ -526,7 +526,7 @@ func TestClient_HTTP(t *testing.T) {
 		srv := forkchoiceUpdateSetupV2(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p, nil)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.Status.LatestValidHash, validHash)
 		require.DeepEqual(t, want.PayloadId, payloadID)
@@ -549,7 +549,7 @@ func TestClient_HTTP(t *testing.T) {
 		client := forkchoiceUpdateSetup(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p, nil)
 		require.ErrorIs(t, err, ErrAcceptedSyncingPayloadStatus)
 		require.DeepEqual(t, (*pb.PayloadIDBytes)(nil), payloadID)
 		require.DeepEqual(t, []byte(nil), validHash)
@@ -573,7 +573,7 @@ func TestClient_HTTP(t *testing.T) {
 		srv := forkchoiceUpdateSetupV2(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p, nil)
 		require.ErrorIs(t, err, ErrAcceptedSyncingPayloadStatus)
 		require.DeepEqual(t, (*pb.PayloadIDBytes)(nil), payloadID)
 		require.DeepEqual(t, []byte(nil), validHash)
@@ -596,7 +596,7 @@ func TestClient_HTTP(t *testing.T) {
 		client := forkchoiceUpdateSetup(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p, nil)
 		require.ErrorIs(t, err, ErrInvalidPayloadStatus)
 		require.DeepEqual(t, (*pb.PayloadIDBytes)(nil), payloadID)
 		require.DeepEqual(t, want.Status.LatestValidHash, validHash)
@@ -619,7 +619,7 @@ func TestClient_HTTP(t *testing.T) {
 		client := forkchoiceUpdateSetup(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p, nil)
 		require.ErrorIs(t, err, ErrUnknownPayloadStatus)
 		require.DeepEqual(t, (*pb.PayloadIDBytes)(nil), payloadID)
 		require.DeepEqual(t, []byte(nil), validHash)
@@ -2523,7 +2523,7 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("GetBlobsV2 is not supported", func(t *testing.T) {
-		_, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+		_, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock), nil)
 		require.ErrorContains(t, "engine_getBlobsV2 is not supported", err)
 	})
 
@@ -2534,7 +2534,7 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+		dataColumns, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock), nil)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(dataColumns))
 	})
@@ -2547,7 +2547,7 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+		dataColumns, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock), nil)
 		require.NoError(t, err)
 		require.Equal(t, 128, len(dataColumns))
 	})
@@ -2560,7 +2560,7 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 	// 	rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 	// 	defer rpcClient.Close()
 
-	// 	_, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+	// 	_, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock), nil)
 	// 	require.ErrorContains(t, "fetch cells and proofs from execution client", err)
 	// })
 }
@@ -2764,7 +2764,7 @@ func TestConstructDataColumnSidecars_PartialColumns(t *testing.T) {
 			completeBefore := counterValue(t, getBlobsV3CompleteResponsesTotal)
 			partialBefore := counterValue(t, getBlobsV3PartialResponsesTotal)
 
-			sidecars, partials, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+			sidecars, partials, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock), nil)
 			require.NoError(t, err)
 			require.Equal(t, tt.wantSidecars, len(sidecars))
 
@@ -2802,7 +2802,7 @@ func TestConstructDataColumnSidecars_PartialColumns(t *testing.T) {
 		completeBefore := counterValue(t, getBlobsV3CompleteResponsesTotal)
 		partialBefore := counterValue(t, getBlobsV3PartialResponsesTotal)
 
-		_, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+		_, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock), nil)
 		require.ErrorContains(t, "fetch cells and proofs from execution client", err)
 
 		// The request is counted, but latency and the complete/partial response metrics are not.
@@ -2811,6 +2811,230 @@ func TestConstructDataColumnSidecars_PartialColumns(t *testing.T) {
 		require.Equal(t, float64(0), counterValue(t, getBlobsV3CompleteResponsesTotal)-completeBefore)
 		require.Equal(t, float64(0), counterValue(t, getBlobsV3PartialResponsesTotal)-partialBefore)
 	})
+}
+
+// createCellAndProof returns a cell and proof both filled with the given byte pattern, as
+// engine_getBlobsV4 would serve them on the wire.
+func createCellAndProof(pattern byte) (*hexutil.Bytes, *hexutil.Bytes) {
+	cell := hexutil.Bytes(make([]byte, kzg.BytesPerCell))
+	proof := hexutil.Bytes(make([]byte, kzg.BytesPerProof))
+	for i := range cell {
+		cell[i] = pattern
+	}
+	for i := range proof {
+		proof[i] = pattern
+	}
+	return &cell, &proof
+}
+
+// mockV4Result builds an engine_getBlobsV4 response from a matrix of cell fill patterns. getBlobsV4
+// returns already-computed cells grouped by blob, so cellPatterns[i][j] is the pattern used to fill
+// blob i's cell at column requested[j] (createCellAndProof expands the single byte into a full
+// cell). A 0 pattern is a missing cell (EL doesn't have that (blob, column)), and a nil
+// cellPatterns[i] is an absent blob.
+func mockV4Result(cellPatterns [][]byte) []*pb.BlobCellsAndProofsV1 {
+	result := make([]*pb.BlobCellsAndProofsV1, len(cellPatterns))
+	for i, blobPatterns := range cellPatterns {
+		if blobPatterns == nil {
+			continue
+		}
+		cells := make([]*hexutil.Bytes, len(blobPatterns))
+		proofs := make([]*hexutil.Bytes, len(blobPatterns))
+		for j, pattern := range blobPatterns {
+			if pattern == 0 {
+				continue
+			}
+			cells[j], proofs[j] = createCellAndProof(pattern)
+		}
+		result[i] = &pb.BlobCellsAndProofsV1{BlobCells: cells, Proofs: proofs}
+	}
+	return result
+}
+
+// newV4Client wires a Service to a mock engine that answers engine_getBlobsV4 with result.
+func newV4Client(t *testing.T, result []*pb.BlobCellsAndProofsV1, partialColumnsSupported bool) *Service {
+	cli, engine := newMockEngine(t)
+	t.Cleanup(cli.Close)
+	engine.register(GetBlobsV4, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
+		mockWriteResult(t, w, msg, result)
+	})
+	return &Service{
+		rpcClient:               cli,
+		capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV4: nil}},
+		partialColumnsSupported: partialColumnsSupported,
+	}
+}
+
+// TestFetchCellsAndProofsFromExecutionV4 tests the engine_getBlobsV4 path of
+// fetchCellsAndProofsFromExecution.
+func TestFetchCellsAndProofsFromExecutionV4(t *testing.T) {
+	custodyColumns := map[uint64]bool{3: true, 7: true, 50: true}
+	requested := []uint64{3, 7, 50}
+
+	tests := []struct {
+		name         string
+		cellPatterns [][]byte // cellPatterns[i][j] fills blob i's cell at requested[j]; 0 = missing cell, nil row = absent blob
+		wantIncluded uint64
+	}{
+		{
+			name:         "complete response",
+			cellPatterns: [][]byte{{0x03, 0x07, 0x50}},
+			wantIncluded: 1,
+		},
+		{
+			name:         "single cell is missing",
+			cellPatterns: [][]byte{{0x03, 0x07, 0x00}},
+			wantIncluded: 1,
+		},
+		{
+			name:         "two cells are missing, in different columns",
+			cellPatterns: [][]byte{{0x13, 0x17, 0x00}, {0x23, 0x00, 0x50}},
+			wantIncluded: 2,
+		},
+		{
+			name:         "absent blob is excluded",
+			cellPatterns: [][]byte{nil},
+			wantIncluded: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := newV4Client(t, mockV4Result(tt.cellPatterns), false)
+
+			result, err := client.fetchCellsAndProofsFromExecution(
+				t.Context(), createRandomKzgCommitments(t, len(tt.cellPatterns)), custodyColumns)
+			require.NoError(t, err)
+
+			require.Equal(t, tt.wantIncluded, result.Included.Count())
+			require.Equal(t, int(tt.wantIncluded), len(result.CellsPerBlob))
+
+			// Walk the compacted result alongside the input matrix: every present blob must carry
+			// its cells at the absolute custody column, and be nil everywhere else.
+			compact := 0
+			for _, blobPatterns := range tt.cellPatterns {
+				if blobPatterns == nil {
+					continue
+				}
+				cells, proofs := result.CellsPerBlob[compact], result.ProofsPerBlob[compact]
+				compact++
+				require.Equal(t, fieldparams.NumberOfColumns, len(cells))
+				require.Equal(t, fieldparams.NumberOfColumns, len(proofs))
+
+				want := make(map[int]byte)
+				for j, col := range requested {
+					if blobPatterns[j] != 0 {
+						want[int(col)] = blobPatterns[j]
+					}
+				}
+				for col := range fieldparams.NumberOfColumns {
+					if pattern, ok := want[col]; ok {
+						require.NotNil(t, cells[col])
+						require.NotNil(t, proofs[col])
+						require.Equal(t, pattern, cells[col][0])
+						require.Equal(t, pattern, proofs[col][0])
+					} else {
+						require.IsNil(t, cells[col])
+						require.IsNil(t, proofs[col])
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestConstructDataColumnSidecarsV4 runs ConstructDataColumnSidecars over an
+// engine_getBlobsV4 response where every blob is present but different blobs miss different columns:
+//
+//	        col3  col7  col50
+//	blob A    ok    ok   NULL
+//	blob B    ok   NULL   ok
+//
+// Column 3 is complete (promoted to a full sidecar); columns 7 and 50 are each present for only one
+// blob and, when partial columns are enabled, must come back as partials carrying only the real
+// cell - never a zero-filled one - for the blob that has it.
+func TestConstructDataColumnSidecarsV4(t *testing.T) {
+	require.NoError(t, kzg.Start())
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.CapellaForkEpoch = 1
+	cfg.DenebForkEpoch = 2
+	cfg.ElectraForkEpoch = 3
+	cfg.FuluForkEpoch = 4
+	params.OverrideBeaconConfig(cfg)
+
+	custodyColumns := map[uint64]bool{3: true, 7: true, 50: true}
+	// blob A misses column 50, blob B misses column 7.
+	result := mockV4Result([][]byte{{0x13, 0x17, 0x00}, {0x23, 0x00, 0x50}})
+	cell7A := result[0].BlobCells[1]
+	cell50B := result[1].BlobCells[2]
+
+	b := util.NewBeaconBlockFulu()
+	b.Block.Slot = 4 * params.BeaconConfig().SlotsPerEpoch
+	b.Block.Body.BlobKzgCommitments = createRandomKzgCommitments(t, 2)
+	r, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	sb, err := blocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	roBlock, err := blocks.NewROBlockWithRoot(sb, r)
+	require.NoError(t, err)
+	populator := peerdas.PopulateFromBlock(roBlock)
+	ctx := context.Background()
+
+	tests := []struct {
+		name                    string
+		partialColumnsSupported bool
+		wantSidecars            int // only complete columns are promoted; column 3 is the only one
+		wantPartials            int // a partial per column when enabled, none when disabled
+	}{
+		{
+			name:                    "partial columns enabled emits incomplete columns as real-cell-only partials",
+			partialColumnsSupported: true,
+			wantSidecars:            1,
+			wantPartials:            fieldparams.NumberOfColumns,
+		},
+		{
+			name:                    "partial columns disabled emits only complete columns",
+			partialColumnsSupported: false,
+			wantSidecars:            1,
+			wantPartials:            0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := newV4Client(t, result, tt.partialColumnsSupported)
+
+			sidecars, partials, err := client.ConstructDataColumnSidecars(ctx, populator, custodyColumns)
+			require.NoError(t, err)
+			require.Equal(t, tt.wantSidecars, len(sidecars))
+			require.Equal(t, tt.wantPartials, len(partials))
+
+			if !tt.partialColumnsSupported {
+				return
+			}
+
+			// When partials are emitted, each incomplete column must carry only the real cell for
+			// the blob that has it - never a zero-filled one for the blob that doesn't.
+			require.Equal(t, true, partials[3].IsComplete())
+			require.Equal(t, uint64(2), partials[3].Included.Count())
+
+			// Column 7: only blob A (index 0) has it; blob B is left unset.
+			require.Equal(t, false, partials[7].IsComplete())
+			require.Equal(t, true, partials[7].Included.BitAt(0))
+			require.Equal(t, false, partials[7].Included.BitAt(1))
+			require.DeepEqual(t, []byte(*cell7A), partials[7].Column[0])
+			require.Equal(t, 0, len(partials[7].Column[1]))
+
+			// Column 50: only blob B (index 1) has it; blob A is left unset.
+			require.Equal(t, false, partials[50].IsComplete())
+			require.Equal(t, false, partials[50].Included.BitAt(0))
+			require.Equal(t, true, partials[50].Included.BitAt(1))
+			require.Equal(t, 0, len(partials[50].Column[0]))
+			require.DeepEqual(t, []byte(*cell50B), partials[50].Column[1])
+		})
+	}
 }
 
 func createRandomKzgCommitments(t *testing.T, num int) [][]byte {
@@ -3025,4 +3249,15 @@ func TestExecutionBlock_MarshalUnmarshalJSON_BlockAccessList(t *testing.T) {
 	decoded := &pb.ExecutionBlock{}
 	require.NoError(t, decoded.UnmarshalJSON(enc))
 	require.DeepEqual(t, []byte(bal), []byte(decoded.BlockAccessList))
+}
+
+func TestCustodyColumnsBitmask(t *testing.T) {
+	mask := custodyColumnsBitmask(map[uint64]bool{0: true, 7: true, 8: true, 127: true})
+	require.Equal(t, 16, len(mask))
+	require.Equal(t, byte(0x81), mask[0])  // col 0, 7
+	require.Equal(t, byte(0x01), mask[1])  // col 8
+	require.Equal(t, byte(0x80), mask[15]) // col 127
+
+	// out-of-range columns are ignored
+	require.DeepEqual(t, make([]byte, 16), []byte(custodyColumnsBitmask(map[uint64]bool{128: true, 200: true})))
 }

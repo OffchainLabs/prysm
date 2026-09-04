@@ -43,7 +43,7 @@ type Reconstructor interface {
 		ctx context.Context, blockHashes [][32]byte,
 	) (map[[32]byte]*pb.ExecutionPayloadGloas, error)
 	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
-	ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error)
+	ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator, custodyColumns map[uint64]bool) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error)
 	ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.PartialDataColumn, bool, error)
 	ReconstructExecutionPayloadEnvelope(ctx context.Context, envelope *ethpb.SignedBlindedExecutionPayloadEnvelope) (*ethpb.SignedExecutionPayloadEnvelope, error)
 }
@@ -53,7 +53,7 @@ type Reconstructor interface {
 type EngineCaller interface {
 	NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests pb.ExecutionRequester) ([]byte, error)
 	ForkchoiceUpdated(
-		ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer,
+		ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer, custodyColumns map[uint64]bool,
 	) (*pb.PayloadIDBytes, []byte, error)
 	GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error)
 	ExecutionBlockByHash(ctx context.Context, hash common.Hash, withTxs bool) (*pb.ExecutionBlock, error)
@@ -342,7 +342,7 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 	return verifiedBlobs, nil
 }
 
-func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error) {
+func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator, custodyColumns map[uint64]bool) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error) {
 	root := populator.Root()
 
 	// Fetch cells and proofs from the execution client using the KZG commitments from the sidecar.
@@ -350,7 +350,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 	if err != nil {
 		return nil, nil, wrapWithBlockRoot(err, root, "commitments")
 	}
-	cp, err := s.fetchCellsAndProofsFromExecution(ctx, commitments)
+	cp, err := s.fetchCellsAndProofsFromExecution(ctx, commitments, custodyColumns)
 	if err != nil {
 		return nil, nil, wrapWithBlockRoot(err, root, "fetch cells and proofs from execution client")
 	}
@@ -365,53 +365,33 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		return nil, nil, nil
 	}
 
-	haveAllBlobs := cp.Included.Count() == uint64(len(commitments))
-
-	var partialColumns []blocks.PartialDataColumn
-	slot := populator.Slot()
-	if haveAllBlobs {
-		// Construct data column sidecars from the signed block and cells and proofs.
-		roSidecars, err := peerdas.DataColumnSidecars(cp.CellsPerBlob, cp.ProofsPerBlob, populator)
-		if err != nil {
-			return nil, nil, wrapWithBlockRoot(err, populator.Root(), "data column sidecars from column sidecar")
-		}
-		log.WithField("haveAllBlobs", haveAllBlobs).Debug("Constructed full data column sidecars")
-
-		// Upgrade the sidecars to verified sidecars.
-		// We trust the execution layer we are connected to, so we can upgrade the sidecar into a verified one.
-		verifiedROSidecars := upgradeSidecarsToVerifiedSidecars(roSidecars)
-
-		if s.partialColumnsEnabledForSlot(slot) {
-			for _, sidecar := range verifiedROSidecars {
-				pc, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(sidecar)
-				if err != nil {
-					return nil, nil, wrapWithBlockRoot(err, populator.Root(), "partial column from verified ro data column")
-				}
-				partialColumns = append(partialColumns, pc)
-			}
-			log.WithFields(logrus.Fields{
-				"haveAllBlobs": haveAllBlobs,
-				"blockRoot":    fmt.Sprintf("%#x", root),
-				"slot":         slot,
-			}).Debug("Constructed partial data column sidecars")
-		}
-
-		return verifiedROSidecars, partialColumns, nil
+	allPartials, err := peerdas.PartialColumns(cp.Included, cp.CellsPerBlob, cp.ProofsPerBlob, populator)
+	if err != nil {
+		return nil, nil, wrapWithBlockRoot(err, root, "partial columns")
 	}
 
-	if s.partialColumnsEnabledForSlot(slot) {
-		partialColumns, err = peerdas.PartialColumns(cp.Included, cp.CellsPerBlob, cp.ProofsPerBlob, populator)
-		if err != nil {
-			return nil, nil, wrapWithBlockRoot(err, root, "construct partial columns")
+	// Upgrade the columns to verified columns.
+	// We trust the execution layer we are connected to, so we can upgrade the sidecar into a verified one.
+	var complete []blocks.VerifiedRODataColumn
+	for i := range allPartials {
+		if !allPartials[i].IsComplete() {
+			continue
 		}
-		log.WithFields(logrus.Fields{
-			"haveAllBlobs": haveAllBlobs,
-			"blockRoot":    fmt.Sprintf("%#x", root),
-			"slot":         slot,
-		}).Debug("Constructed partial data column sidecars")
+		roSidecar, err := blocks.NewRODataColumnWithRoot(allPartials[i].DataColumnSidecar, root)
+		if err != nil {
+			return nil, nil, wrapWithBlockRoot(err, root, "ro data column")
+		}
+		complete = append(complete, blocks.NewVerifiedRODataColumn(roSidecar))
 	}
 
-	return nil, partialColumns, nil
+	// Incomplete partial columns are only disseminated when partial-column support is enabled for
+	// this slot
+	var partials []blocks.PartialDataColumn
+	if s.partialColumnsEnabledForSlot(populator.Slot()) {
+		partials = allPartials
+	}
+
+	return complete, partials, nil
 }
 
 // ConstructPartialDataColumnSidecarsFromHasBlobs constructs partial
@@ -490,8 +470,36 @@ func (s *Service) ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Con
 }
 
 // fetchCellsAndProofsFromExecution fetches cells and proofs from the execution client (using engine_getBlobsV2 execution API method)
-func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommitments [][]byte) (peerdas.StructuredCellsAndProofs, error) {
+func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommitments [][]byte, custodyColumns map[uint64]bool) (peerdas.StructuredCellsAndProofs, error) {
 	versionedHashes := versionedHashesFromCommitments(kzgCommitments)
+	commitmentCount := uint64(len(kzgCommitments))
+
+	if s.capabilityCache.has(GetBlobsV4) {
+		// requested is the ascending list of absolute custody column indices; the EL's response is
+		// dense: BlobCells[j]/Proofs[j] correspond to requested[j], not to absolute column j.
+		indices := custodyColumnsBitmask(custodyColumns)
+		result, err := s.GetBlobsV4(ctx, versionedHashes, indices)
+		if err != nil {
+			return peerdas.StructuredCellsAndProofs{}, errors.Wrap(err, "get blobs V4")
+		}
+		if len(result) == 0 {
+			return peerdas.StructuredCellsAndProofs{}, nil
+		}
+		received := 0
+		for _, bc := range result {
+			if bc == nil {
+				continue
+			}
+			for _, c := range bc.BlobCells {
+				if c != nil {
+					received++
+				}
+			}
+		}
+		getBlobsV4RequestedCellsTotal.Add(float64(len(custodyColumns) * len(result)))
+		getBlobsV4ReceivedCellsTotal.Add(float64(received))
+		return peerdas.CellsAndProofsFromStructured(commitmentCount, indices, result), nil
+	}
 
 	var blobAndProofs []*pb.BlobAndProofV2
 
@@ -514,13 +522,13 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	}
 
 	// Compute cells and proofs from the blobs and cell proofs.
-	result, err := peerdas.ComputeCellsAndProofsFromStructured(uint64(len(kzgCommitments)), blobAndProofs)
+	result, err := peerdas.ComputeCellsAndProofsFromStructured(commitmentCount, blobAndProofs)
 	if err != nil {
 		return peerdas.StructuredCellsAndProofs{}, errors.Wrap(err, "compute cells and proofs")
 	}
 	if useGetBlobsV3 {
 		switch includedCount := result.Included.Count(); {
-		case includedCount == uint64(len(kzgCommitments)):
+		case includedCount == commitmentCount:
 			getBlobsV3CompleteResponsesTotal.Inc()
 		case includedCount > 0:
 			getBlobsV3PartialResponsesTotal.Inc()
