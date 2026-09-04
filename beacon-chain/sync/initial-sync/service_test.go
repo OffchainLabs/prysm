@@ -636,7 +636,7 @@ func TestFetchOriginSidecars(t *testing.T) {
 
 	genesisValidatorRoot := [fieldparams.RootLength]byte{}
 
-	t.Run("out of retention period", func(t *testing.T) {
+	t.Run("Fulu origin outside retention skips sidecar prefetch", func(t *testing.T) {
 		// Create an origin block.
 		block := util.NewBeaconBlockFulu()
 		signedBlock, err := blocks.NewSignedBeaconBlock(block)
@@ -668,7 +668,7 @@ func TestFetchOriginSidecars(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("no commitments", func(t *testing.T) {
+	t.Run("Fulu origin without commitments skips sidecar prefetch", func(t *testing.T) {
 		// Create an origin block.
 		block := util.NewBeaconBlockFulu()
 		signedBlock, err := blocks.NewSignedBeaconBlock(block)
@@ -701,7 +701,37 @@ func TestFetchOriginSidecars(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("nominal", func(t *testing.T) {
+	t.Run("Gloas origin with commitments skips sidecar prefetch", func(t *testing.T) {
+		// The bid commits to blobs, but the payload may never have been revealed.
+		block := util.NewBeaconBlockGloas()
+		block.Block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments = [][]byte{make([]byte, fieldparams.KzgCommitmentSize)}
+		signedBlock, err := blocks.NewSignedBeaconBlock(block)
+		require.NoError(t, err)
+		roBlock, err := blocks.NewROBlock(signedBlock)
+		require.NoError(t, err)
+
+		db := dbtest.SetupDB(t)
+		err = db.SaveOriginCheckpointBlockRoot(ctx, roBlock.Root())
+		require.NoError(t, err)
+		err = db.SaveBlock(ctx, roBlock)
+		require.NoError(t, err)
+
+		// Within the DA period. No P2P or column storage is wired, so any fetch attempt would fail.
+		nowWrtGenesisSecs := retentionEpochs.Mul(secondsPerEpoch)
+		now := genesisTime.Add(time.Duration(nowWrtGenesisSecs) * time.Second)
+		nower := func() time.Time { return now }
+		clock := startup.NewClock(genesisTime, genesisValidatorRoot, startup.WithNower(nower))
+
+		service := &Service{
+			cfg:   &Config{DB: db},
+			clock: clock,
+		}
+
+		require.Equal(t, true, params.WithinDAPeriod(slots.ToEpoch(roBlock.Block().Slot()), clock.CurrentEpoch()))
+		require.NoError(t, service.fetchOriginSidecars(nil))
+	})
+
+	t.Run("Fulu origin within retention saves required columns", func(t *testing.T) {
 		samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
 		// Start the trusted setup.

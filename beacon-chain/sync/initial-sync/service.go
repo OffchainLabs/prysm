@@ -259,6 +259,12 @@ func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
 
 	blockVersion := roBlock.Version()
 
+	// In Gloas, data availability attaches to the payload envelope, which may not exist for the
+	// origin block. Forward sync imports the origin envelope and its columns when they exist.
+	if blockVersion >= version.Gloas {
+		return nil
+	}
+
 	if blockVersion >= version.Fulu {
 		if err := s.fetchOriginDataColumnSidecars(roBlock); err != nil {
 			return errors.Wrap(err, "fetch origin columns")

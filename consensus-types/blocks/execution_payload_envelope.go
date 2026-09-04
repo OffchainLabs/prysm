@@ -233,3 +233,16 @@ func BlockBuiltOnEnvelope(env interfaces.ROSignedExecutionPayloadEnvelope, blk R
 	}
 	return bytes.Equal(ex.BlockHash(), ph[:]), nil
 }
+
+// BlockBuiltOnParentEnvelope reports whether env is the envelope of blk's parent block and
+// blk's bid builds on its payload. A hash match alone also matches deeper ancestor envelopes.
+func BlockBuiltOnParentEnvelope(env interfaces.ROSignedExecutionPayloadEnvelope, blk ROBlock) (bool, error) {
+	msg, err := env.Envelope()
+	if err != nil {
+		return false, err
+	}
+	if msg.BeaconBlockRoot() != blk.Block().ParentRoot() {
+		return false, nil
+	}
+	return BlockBuiltOnEnvelope(env, blk)
+}

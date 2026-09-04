@@ -156,7 +156,7 @@ func (s *Service) getBatchPrestate(ctx context.Context, b consensusblocks.ROBloc
 		return blockPreState, false, nil // Returning false here is fine since there are no envelopes pre-Gloas
 	}
 	parentRoot := b.Block().ParentRoot()
-	full, err := consensusblocks.BlockBuiltOnEnvelope(envelopes[0], b)
+	full, err := consensusblocks.BlockBuiltOnParentEnvelope(envelopes[0], b)
 	if err != nil {
 		return nil, false, errors.Wrap(err, "could not check if block builds on envelope")
 	}
