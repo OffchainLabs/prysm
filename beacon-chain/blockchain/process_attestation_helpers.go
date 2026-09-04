@@ -140,6 +140,11 @@ func (s *Service) getAttPreState(ctx context.Context, c *ethpb.Checkpoint) (stat
 	}
 
 	// Fallback to state regeneration.
+	s.attPreStateRegenLock.Lock()
+	defer s.attPreStateRegenLock.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	log.WithFields(logrus.Fields{"epoch": c.Epoch, "root": fmt.Sprintf("%#x", c.Root)}).Debug("Regenerating attestation pre-state")
 	baseState, err := s.cfg.StateGen.StateByRoot(ctx, bytesutil.ToBytes32(c.Root))
 	if err != nil {

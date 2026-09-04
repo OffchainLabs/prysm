@@ -53,6 +53,7 @@ type Service struct {
 	originBlockRoot                [32]byte // genesis root, or weak subjectivity checkpoint root, depending on how the node is initialized
 	boundaryRoots                  [][32]byte
 	checkpointStateCache           *cache.CheckpointStateCache
+	attPreStateRegenLock           sync.Mutex
 	initSyncBlocks                 map[[32]byte]interfaces.ReadOnlySignedBeaconBlock
 	initSyncBlocksLock             sync.RWMutex
 	wsVerifier                     *WeakSubjectivityVerifier
