@@ -354,7 +354,7 @@ func TestBuildColumnBatch(t *testing.T) {
 		p := p2ptest.NewTestP2P(t)
 		store := filesystem.NewEphemeralDataColumnStorage(t)
 
-		cb, err := buildColumnBatch(ctx, batch{}, verifiedROBlocks{}, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, batch{}, verifiedROBlocks{}, p, store, specNeeds, nil)
 		require.NoError(t, err)
 		nilIshColumnBatch(t, cb)
 	})
@@ -371,7 +371,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   denebSlot + 10,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds, nil)
 		require.NoError(t, err)
 		nilIshColumnBatch(t, cb)
 	})
@@ -388,7 +388,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot + 10,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds, nil)
 		require.NoError(t, err)
 		nilIshColumnBatch(t, cb)
 	})
@@ -405,7 +405,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds, nil)
 		require.NoError(t, err)
 		require.NotNil(t, cb, "batch at Fulu boundary should not be nil")
 	})
@@ -422,7 +422,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot + 1,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds, nil)
 		require.NoError(t, err)
 		require.NotNil(t, cb, "last block at Fulu boundary should not be nil")
 	})
@@ -438,7 +438,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds, nil)
 		require.NoError(t, err)
 		nilIshColumnBatch(t, cb)
 	})
@@ -464,7 +464,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot + primitives.Slot(postFuluCount),
 		}
 
-		cb, err := buildColumnBatch(ctx, b, allBlocks, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, b, allBlocks, p, store, specNeeds, nil)
 		require.NoError(t, err)
 		require.NotNil(t, cb, "mixed epoch batch should not be nil")
 		// Should only include Fulu blocks
@@ -483,7 +483,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot + 100,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds, nil)
 		require.NoError(t, err)
 		require.NotNil(t, cb, "first block at Fulu should not be nil")
 		require.Equal(t, 3, len(cb.toDownload), "should include all 3 blocks")
@@ -500,7 +500,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot + 10,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds, nil)
 		require.NoError(t, err)
 		require.NotNil(t, cb)
 		require.Equal(t, fuluSlot, cb.first, "first slot should be set")
@@ -519,7 +519,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot + 10,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds, nil)
 		require.NoError(t, err)
 		require.NotNil(t, cb)
 		require.Equal(t, fuluSlot, cb.first, "first should be slot of first block with commitments")
@@ -549,7 +549,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot + 10,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, allBlocks, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, b, allBlocks, p, store, specNeeds, nil)
 		require.NoError(t, err)
 		require.NotNil(t, cb)
 		// Should only have 2 blocks (those with commitments)
@@ -1379,6 +1379,46 @@ func TestNeededSidecarCount(t *testing.T) {
 				"neededSidecarCount should return %d, got %d", tt.expected, result)
 		})
 	}
+}
+
+// TestColumnBatchPruneExpiredUpdatesRequestRange verifies that pruning only part of a
+// column batch also advances the range used for subsequent RPC requests. Otherwise a
+// peer can legitimately return an expired root that is still covered by the stale range,
+// which the response validator rejects because the root was removed from toDownload.
+func TestColumnBatchPruneExpiredUpdatesRequestRange(t *testing.T) {
+	const (
+		expiredSlot       = primitives.Slot(100)
+		firstRetainedSlot = primitives.Slot(101)
+		lastRetainedSlot  = primitives.Slot(102)
+	)
+	remaining := func(slot primitives.Slot) *toDownload {
+		return &toDownload{
+			remaining: peerdas.NewColumnIndicesFromSlice([]uint64{0}),
+			slot:      slot,
+		}
+	}
+	cb := &columnBatch{
+		first:         expiredSlot,
+		last:          lastRetainedSlot,
+		custodyGroups: peerdas.NewColumnIndicesFromSlice([]uint64{0}),
+		toDownload: map[[32]byte]*toDownload{
+			{0x01}: remaining(expiredSlot),
+			{0x02}: remaining(firstRetainedSlot),
+			{0x03}: remaining(lastRetainedSlot),
+		},
+	}
+
+	cb.pruneExpired(das.CurrentNeeds{Col: das.NeedSpan{
+		Begin: firstRetainedSlot,
+		End:   lastRetainedSlot + 1,
+	}}, nil)
+	require.Equal(t, 2, len(cb.toDownload))
+
+	cs := &columnSync{columnBatch: cb}
+	req, err := cs.request([]uint64{0}, columnRequestLimit)
+	require.NoError(t, err)
+	require.Equal(t, firstRetainedSlot, req.StartSlot)
+	require.Equal(t, uint64(2), req.Count)
 }
 
 // TestColumnSyncRequest is a table-driven test that verifies the request method

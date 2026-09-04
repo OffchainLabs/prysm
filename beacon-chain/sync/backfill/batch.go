@@ -73,6 +73,7 @@ type batch struct {
 	seq            int // sequence identifier, ie how many times has the sequence() method served this batch
 	retries        int
 	retryAfter     time.Time
+	retryFrom      batchState // state the batch was in when the retryable error occurred
 	begin          primitives.Slot
 	end            primitives.Slot // half-open interval, [begin, end), ie >= begin, < end.
 	blocks         verifiedROBlocks
@@ -111,6 +112,9 @@ func (b batch) logFields() logrus.Fields {
 	}
 	if b.state == batchSyncColumns {
 		f["nextColumns"] = fmt.Sprintf("%v", b.nextReqCols)
+	}
+	if b.state == batchErrRetryable {
+		f["retryFrom"] = b.retryFrom.String()
 	}
 	if b.state == batchErrRetryable && b.blobs != nil {
 		f["blobsMissing"] = b.blobs.needed()
@@ -193,6 +197,7 @@ func (b batch) withRetryableError(err error) batch {
 	b.err = err
 	b.retries += 1
 	b.retryAfter = time.Now().Add(retryDelay)
+	b.retryFrom = b.state
 
 	msg := "Could not proceed with batch processing due to error"
 	logBase := log.WithFields(b.logFields()).WithError(err)

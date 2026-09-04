@@ -179,6 +179,15 @@ func (s *Service) importBatches(ctx context.Context) {
 		}
 		_, err := s.batchImporter(ctx, current, ib, s.store)
 		if err != nil {
+			if errors.Is(err, errTailColumnsNeeded) {
+				// The tail proved revealed at import time; send the batch back through the worker
+				// pool to download its promoted custody columns without discarding verified blocks.
+				log.WithFields(ib.logFields()).WithError(err).Debug("Returning batch to column sync for revealed tail payload")
+				retry := ib.withState(batchSyncColumns)
+				s.batchSeq.update(retry)
+				s.pool.todo(retry)
+				break
+			}
 			log.WithError(err).WithFields(ib.logFields()).Debug("Backfill batch failed to import")
 			s.batchSeq.update(ib.withError(err))
 			// If a batch fails, the subsequent batches are no longer considered importable.
@@ -223,12 +232,71 @@ func (s *Service) defaultBatchImporter(ctx context.Context, current primitives.S
 	if err := b.ensureParent(bytesutil.ToBytes32(status.LowParentRoot)); err != nil {
 		return status, err
 	}
+	needs := s.syncNeeds.Currently()
+	// A gloas batch tail has no in-batch child to prove payload fullness; settle it against the
+	// already-imported child before the availability check decides whether its columns are required.
+	if err := s.resolveTailFullness(ctx, su, b, needs); err != nil {
+		return status, err
+	}
 	// Import blocks to db and update db state to reflect the newly imported blocks.
 	// Other parts of the beacon node may use the same StatusUpdater instance
 	// via the coverage.AvailableBlocker interface to safely determine if a given slot has been backfilled.
 
-	checker := newCheckMultiplexer(s.syncNeeds.Currently(), b)
+	checker := newCheckMultiplexer(needs, b)
 	return su.fillBack(ctx, current, b.blocks, checker)
+}
+
+// errTailColumnsNeeded means the batch tail was proven to have revealed its payload at import time,
+// so its custody columns became required work that must be downloaded before the batch can import.
+var errTailColumnsNeeded = errors.New("batch tail payload revealed, custody columns required")
+
+// resolveTailFullness settles the payload fullness of the batch tail using the canonical child at
+// BackfillStatus.LowRoot, which ensureParent has proven to be the tail's direct child. A withheld
+// tail needs no columns; a revealed tail has its missing custody columns promoted to required work
+// via errTailColumnsNeeded. If the child cannot be read, the import is deferred rather than guessed.
+func (s *Service) resolveTailFullness(ctx context.Context, su *Store, b batch, needs das.CurrentNeeds) error {
+	if len(b.blocks) == 0 {
+		return nil
+	}
+	tail := b.blocks[len(b.blocks)-1]
+	td := b.columns.blockColumns(tail.Root())
+	if td == nil || td.fullness == fullnessWithheld {
+		return nil
+	}
+	// If the tail left the column retention window while waiting to import, peers are no longer
+	// obligated to serve its columns and none are required; the DA check skips it the same way.
+	if !needs.Col.At(tail.Block().Slot()) {
+		return nil
+	}
+	if td.fullness == fullnessRevealed {
+		// A previously promoted tail stays in column sync until its columns are downloaded.
+		if td.remaining.Count() > 0 {
+			return errors.Wrapf(errTailColumnsNeeded, "root=%#x, slot=%d", tail.Root(), tail.Block().Slot())
+		}
+		return nil
+	}
+	child, err := su.boundaryChild(ctx, tail.Root())
+	if err != nil {
+		return errors.Wrap(err, "boundary child")
+	}
+	if child == nil {
+		// Unreachable after ensureParent; defer the import rather than guess.
+		return errors.Wrapf(errChainBroken, "no imported child to prove payload fullness of tail root=%#x", tail.Root())
+	}
+	fullness, err := fullnessFromChild(tail.Block(), child.Block())
+	if err != nil {
+		return err
+	}
+	td.fullness = fullness
+	if fullness == fullnessWithheld {
+		return nil
+	}
+	td.remaining = das.IndicesNotStored(s.dcStore.Summary(tail.Root()), b.columns.custodyGroups)
+	if td.remaining.Count() == 0 {
+		// All custody columns are already on disk, e.g. persisted by a previous run.
+		return nil
+	}
+	return errors.Wrapf(errTailColumnsNeeded, "root=%#x, slot=%d", tail.Root(), tail.Block().Slot())
 }
 
 func (s *Service) scheduleTodos() {
