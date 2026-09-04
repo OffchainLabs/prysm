@@ -37,6 +37,8 @@ func (s batchState) String() string {
 		return "sync_blobs"
 	case batchSyncColumns:
 		return "sync_columns"
+	case batchSyncEnvelopes:
+		return "sync_envelopes"
 	case batchImportable:
 		return "importable"
 	case batchImportComplete:
@@ -58,6 +60,7 @@ const (
 	batchSequenced
 	batchSyncBlobs
 	batchSyncColumns
+	batchSyncEnvelopes
 	batchImportable
 	batchImportComplete
 	batchErrRetryable
@@ -85,6 +88,7 @@ type batch struct {
 	nextReqCols  []uint64
 	blobs        *blobSync
 	columns      *columnSync
+	envelopes    *envelopeSync
 }
 
 func (b batch) logFields() logrus.Fields {
@@ -105,6 +109,12 @@ func (b batch) logFields() logrus.Fields {
 	}
 	if b.columns != nil {
 		f["colPid"] = b.columns.peer
+	}
+	if b.envelopes != nil {
+		f["envPid"] = b.envelopes.peer
+	}
+	if b.state == batchSyncEnvelopes {
+		f["envPending"] = b.envelopes.unresolved()
 	}
 	if b.retries > 0 {
 		f["retryAfter"] = b.retryAfter.String()
@@ -169,6 +179,9 @@ func (b batch) transitionToNext() batch {
 	}
 	if b.blobs != nil && b.blobs.needed() > 0 {
 		return b.withState(batchSyncBlobs)
+	}
+	if b.envelopes.unresolved() > 0 {
+		return b.withState(batchSyncEnvelopes)
 	}
 	return b.withState(batchImportable)
 }
@@ -302,8 +315,27 @@ func (b batch) selectPeer(picker *sync.PeerPicker, busy map[peer.ID]bool) (peer.
 	if b.state == batchSyncColumns {
 		return picker.ForColumns(b.columns.columnsNeeded(), busy)
 	}
+	// Envelope retries prefer a peer other than the one that served the previous attempt, so a
+	// single withholding peer cannot consume the whole attempt budget. Distinctness is not
+	// required: if no other peer is available, fall back to the ordinary selection below.
+	if avoid := b.envelopeRetryExclusions(busy); avoid != nil {
+		if pid, err := picker.ForBlocks(avoid); err == nil {
+			return pid, nil, nil
+		}
+	}
 	peer, err := picker.ForBlocks(busy)
 	return peer, nil, err
+}
+
+// envelopeRetryExclusions returns the busy set extended with the peer that served the previous
+// envelope fetch pass, or nil when the batch has no envelope attempt to rotate away from.
+func (b batch) envelopeRetryExclusions(busy map[peer.ID]bool) map[peer.ID]bool {
+	if b.state != batchSyncEnvelopes || b.envelopes == nil || b.envelopes.peer == "" {
+		return nil
+	}
+	avoid := busyCopy(busy)
+	avoid[b.envelopes.peer] = true
+	return avoid
 }
 
 func sortBatchDesc(bb []batch) {
