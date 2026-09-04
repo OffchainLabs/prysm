@@ -120,6 +120,7 @@ go_test(
         "aggregate_test.go",
         "aggregator_selector_test.go",
         "attest_test.go",
+        "builder_request_auth_test.go",
         "conn_tracker_test.go",
         "doppelganger_test.go",
         "duties_test.go",

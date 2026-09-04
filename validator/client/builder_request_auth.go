@@ -124,6 +124,7 @@ func (v *validator) signBuilderRequestAuth(
 		SigningRoot:     r[:],
 		SignatureDomain: domain,
 		Object:          &validatorpb.SignRequest_BuilderRequestAuth{BuilderRequestAuth: auth},
+		SigningSlot:     auth.Slot,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "could not sign builder request auth")
