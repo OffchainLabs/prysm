@@ -104,6 +104,8 @@ type validator struct {
 	validatorsRegBatchSize       int
 	duties                       *dutyStore
 	nextFetchInFlight            atomic.Bool
+	missingFetchInFlight         atomic.Bool
+	lastMissingFetch             *missingDutyFetch // touched only by the single-flight missing-duty goroutine
 	doppelGanger                 doppelGangerTracker
 	domainDataCache              *ristretto.Cache[string, proto.Message]
 	slotFeed                     *event.Feed
