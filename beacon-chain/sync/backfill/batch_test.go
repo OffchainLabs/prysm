@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/pkg/errors"
@@ -108,6 +110,17 @@ func TestSortBatchDesc(t *testing.T) {
 	for i := range orderOut {
 		require.Equal(t, orderOut[i], batches[i].end)
 	}
+}
+
+// TestRetryAfterSetupFailure covers handleBlocks failing after b.blocks is set but before
+// b.columns is constructed (e.g. a newColumnSync error): the router's retry path
+// (resetToRetryColumns -> transitionToNext) must rebuild the batch from batchSequenced
+// rather than dereference the nil columnSync.
+func TestRetryAfterSetupFailure(t *testing.T) {
+	b := batch{state: batchSequenced, blocks: verifiedROBlocks{blocks.ROBlock{}}}
+	b = b.withRetryableError(errors.New("newColumnSync failed"))
+	b = resetToRetryColumns(b, das.CurrentNeeds{})
+	require.Equal(t, batchSequenced, b.state)
 }
 
 func TestWaitUntilReady(t *testing.T) {

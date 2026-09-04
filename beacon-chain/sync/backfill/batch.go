@@ -161,7 +161,9 @@ func (b batch) blobRequest() *eth.BlobSidecarsByRangeRequest {
 }
 
 func (b batch) transitionToNext() batch {
-	if len(b.blocks) == 0 {
+	// b.columns is nil when handleBlocks failed between setting b.blocks and constructing
+	// the blob/column sync state; start over with a fresh block request.
+	if len(b.blocks) == 0 || b.columns == nil {
 		return b.withState(batchSequenced)
 	}
 	if len(b.columns.columnsNeeded()) > 0 {
