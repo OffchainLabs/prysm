@@ -17,7 +17,7 @@ import (
 
 // UpgradeToGloas updates inputs a generic state to return the version Gloas state.
 //
-//	<spec fn="upgrade_to_gloas" fork="gloas" hash="ea194305">
+//	<spec fn="upgrade_to_gloas" fork="gloas" hash="6c7b259e">
 //	def upgrade_to_gloas(pre: fulu.BeaconState) -> BeaconState:
 //	    epoch = fulu.get_current_epoch(pre)
 //
@@ -39,21 +39,21 @@ import (
 //	        eth1_data_votes=pre.eth1_data_votes,
 //	        eth1_deposit_index=pre.eth1_deposit_index,
 //	        # [Modified in Gloas:EIP7688]
-//	        validators=Validators(list(pre.validators)),
+//	        validators=Validators(data=pre.validators),
 //	        # [Modified in Gloas:EIP7688]
-//	        balances=Balances(list(pre.balances)),
+//	        balances=Balances(data=pre.balances),
 //	        randao_mixes=pre.randao_mixes,
 //	        slashings=pre.slashings,
 //	        # [Modified in Gloas:EIP7688]
-//	        previous_epoch_participation=EpochParticipation(list(pre.previous_epoch_participation)),
+//	        previous_epoch_participation=EpochParticipation(data=pre.previous_epoch_participation),
 //	        # [Modified in Gloas:EIP7688]
-//	        current_epoch_participation=EpochParticipation(list(pre.current_epoch_participation)),
+//	        current_epoch_participation=EpochParticipation(data=pre.current_epoch_participation),
 //	        justification_bits=pre.justification_bits,
 //	        previous_justified_checkpoint=pre.previous_justified_checkpoint,
 //	        current_justified_checkpoint=pre.current_justified_checkpoint,
 //	        finalized_checkpoint=pre.finalized_checkpoint,
 //	        # [Modified in Gloas:EIP7688]
-//	        inactivity_scores=InactivityScores(list(pre.inactivity_scores)),
+//	        inactivity_scores=InactivityScores(data=pre.inactivity_scores),
 //	        current_sync_committee=pre.current_sync_committee,
 //	        next_sync_committee=pre.next_sync_committee,
 //	        # [Modified in Gloas:EIP7732]
@@ -70,22 +70,20 @@ import (
 //	        consolidation_balance_to_consume=pre.consolidation_balance_to_consume,
 //	        earliest_consolidation_epoch=pre.earliest_consolidation_epoch,
 //	        # [Modified in Gloas:EIP7688]
-//	        pending_deposits=PendingDeposits(list(pre.pending_deposits)),
+//	        pending_deposits=PendingDeposits(data=pre.pending_deposits),
 //	        # [Modified in Gloas:EIP7688]
-//	        pending_partial_withdrawals=PendingPartialWithdrawals(
-//	            list(pre.pending_partial_withdrawals)
-//	        ),
+//	        pending_partial_withdrawals=PendingPartialWithdrawals(data=pre.pending_partial_withdrawals),
 //	        # [Modified in Gloas:EIP7688]
-//	        pending_consolidations=PendingConsolidations(list(pre.pending_consolidations)),
+//	        pending_consolidations=PendingConsolidations(data=pre.pending_consolidations),
 //	        proposer_lookahead=pre.proposer_lookahead,
 //	        # [New in Gloas:EIP7732]
 //	        builders=Builders(),
 //	        # [New in Gloas:EIP7732]
 //	        next_withdrawal_builder_index=BuilderIndex(0),
 //	        # [New in Gloas:EIP7732]
-//	        execution_payload_availability=ExecutionPayloadAvailability([
-//	            0b1 for _ in range(SLOTS_PER_HISTORICAL_ROOT)
-//	        ]),
+//	        execution_payload_availability=ExecutionPayloadAvailability(
+//	            data=[0b1 for _ in range(SLOTS_PER_HISTORICAL_ROOT)]
+//	        ),
 //	        # [New in Gloas:EIP7732]
 //	        builder_pending_payments=BuilderPendingPayments(),
 //	        # [New in Gloas:EIP7732]
@@ -103,13 +101,16 @@ import (
 //	            value=Gwei(0),
 //	            execution_payment=Gwei(0),
 //	            blob_kzg_commitments=BlobKZGCommitments(),
-//	            execution_requests_root=hash_tree_root(ExecutionRequests()),
+//	            execution_requests_root=hash_tree_root(ExecutionRequests.empty()),
 //	        ),
 //	        # [New in Gloas:EIP7732]
 //	        payload_expected_withdrawals=Withdrawals(),
 //	        # [New in Gloas:EIP7732]
-//	        ptc_window=initialize_ptc_window(pre),
+//	        ptc_window=PayloadTimelinessCommitteeWindow(),
 //	    )
+//
+//	    # [New in Gloas:EIP7732]
+//	    post.ptc_window = initialize_ptc_window(post)
 //
 //	    # [New in Gloas:EIP7732]
 //	    onboard_builders_from_pending_deposits(post)
@@ -136,26 +137,27 @@ func UpgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 
 // initializePTCWindow builds the initial PTC window for the Gloas fork upgrade.
 //
-//	<spec fn="initialize_ptc_window" fork="gloas" hash="86379eba">
+//	<spec fn="initialize_ptc_window" fork="gloas" hash="88530cbd">
 //	def initialize_ptc_window(
 //	    state: BeaconState,
-//	) -> PTCWindow:
+//	) -> PayloadTimelinessCommitteeWindow:
 //	    """
 //	    Return the cached PTC window starting from the current epoch.
 //	    Used to initialize the ``ptc_window`` field in the beacon state at genesis and after forks.
 //	    """
 //	    empty_previous_epoch = [
-//	        PTC([ValidatorIndex(0) for _ in range(PTC_SIZE)]) for _ in range(SLOTS_PER_EPOCH)
+//	        PayloadTimelinessCommittee(data=[ValidatorIndex(0) for _ in range(PTC_SIZE)])
+//	        for _ in range(SLOTS_PER_EPOCH)
 //	    ]
 //
 //	    ptcs = []
 //	    current_epoch = get_current_epoch(state)
 //	    for e in range(1 + MIN_SEED_LOOKAHEAD):
-//	        epoch = Epoch(current_epoch + e)
+//	        epoch = current_epoch + e
 //	        start_slot = compute_start_slot_at_epoch(epoch)
-//	        ptcs += [compute_ptc(state, Slot(start_slot + i)) for i in range(SLOTS_PER_EPOCH)]
+//	        ptcs += [compute_ptc(state, start_slot + i) for i in range(SLOTS_PER_EPOCH)]
 //
-//	    return PTCWindow(empty_previous_epoch + ptcs)
+//	    return PayloadTimelinessCommitteeWindow(data=empty_previous_epoch + ptcs)
 //	</spec>
 func initializePTCWindow(ctx context.Context, st state.ReadOnlyBeaconState) ([]*ethpb.PTCs, error) {
 	currentEpoch := slots.ToEpoch(st.Slot())

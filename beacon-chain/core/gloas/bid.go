@@ -18,10 +18,10 @@ import (
 
 // ProcessExecutionPayloadBid processes a signed execution payload bid in the Gloas fork.
 //
-//	<spec fn="process_execution_payload_bid" fork="gloas" hash="ccd70022">
+//	<spec fn="process_execution_payload_bid" fork="gloas" hash="3110eeee">
 //	def process_execution_payload_bid(
 //	    state: BeaconState, signed_bid: SignedExecutionPayloadBid
-//	) -> Slot:
+//	) -> None:
 //	    bid = signed_bid.message
 //	    builder_index = bid.builder_index
 //	    amount = bid.value
@@ -51,13 +51,15 @@ import (
 //	    assert state.slot > GENESIS_SLOT
 //	    # Verify that the bid is for the right parent block
 //	    assert bid.parent_block_hash == state.latest_block_hash
-//	    assert bid.parent_block_root == get_block_root_at_slot(state, Slot(state.slot - 1))
+//	    # Verify that the bid's block hash differs from its parent block hash
+//	    assert bid.block_hash != bid.parent_block_hash
+//	    assert bid.parent_block_root == get_block_root_at_slot(state, state.slot - 1)
 //	    assert bid.prev_randao == get_randao_mix(state, get_current_epoch(state))
 //
 //	    # Record the pending payment if there is some payment
 //	    if amount > 0:
 //	        pending_payment = BuilderPendingPayment(
-//	            weight=0,
+//	            weight=Gwei(0),
 //	            withdrawal=BuilderPendingWithdrawal(
 //	                fee_recipient=bid.fee_recipient,
 //	                amount=amount,
@@ -69,13 +71,8 @@ import (
 //	            pending_payment
 //	        )
 //
-//	    # Cache the parent block's slot before overwriting the bid
-//	    parent_slot = state.latest_execution_payload_bid.slot
-//
 //	    # Cache the signed execution payload bid
 //	    state.latest_execution_payload_bid = bid
-//
-//	    return parent_slot
 //	</spec>
 func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyBeaconBlock) error {
 	signedBid, err := block.Body().SignedExecutionPayloadBid()

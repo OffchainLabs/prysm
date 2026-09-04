@@ -206,19 +206,18 @@ func (b *BeaconState) builderPendingBalanceToWithdraw(builderIndex primitives.Bu
 
 // BuilderPendingBalanceToWithdraw returns the total pending balance to withdraw for a builder.
 //
-//	<spec fn="get_pending_balance_to_withdraw_for_builder" fork="gloas" hash="a5d10dc1">
+//	<spec fn="get_pending_balance_to_withdraw_for_builder" fork="gloas" hash="f3416d55">
 //	def get_pending_balance_to_withdraw_for_builder(
 //	    state: BeaconState, builder_index: BuilderIndex
 //	) -> Gwei:
-//	    return sum(
-//	        withdrawal.amount
-//	        for withdrawal in state.builder_pending_withdrawals
-//	        if withdrawal.builder_index == builder_index
-//	    ) + sum(
-//	        payment.withdrawal.amount
-//	        for payment in state.builder_pending_payments
-//	        if payment.withdrawal.builder_index == builder_index
-//	    )
+//	    balance = Gwei(0)
+//	    for withdrawal in state.builder_pending_withdrawals:
+//	        if withdrawal.builder_index == builder_index:
+//	            balance += withdrawal.amount
+//	    for payment in state.builder_pending_payments:
+//	        if payment.withdrawal.builder_index == builder_index:
+//	            balance += payment.withdrawal.amount
+//	    return balance
 //	</spec>
 func (b *BeaconState) BuilderPendingBalanceToWithdraw(builderIndex primitives.BuilderIndex) (uint64, error) {
 	if b.version < version.Gloas {
@@ -459,7 +458,7 @@ func (b *BeaconState) ExpectedWithdrawalsGloas() (state.ExpectedWithdrawalsGloas
 // appendBuilderWithdrawals returns builder pending withdrawals, the updated withdrawal index,
 // and the processed count.
 //
-//	<spec fn="get_builder_withdrawals" fork="gloas" hash="99b163dc">
+//	<spec fn="get_builder_withdrawals" fork="gloas" hash="f8aade6a">
 //	def get_builder_withdrawals(
 //	    state: BeaconState,
 //	    withdrawal_index: WithdrawalIndex,
@@ -468,7 +467,7 @@ func (b *BeaconState) ExpectedWithdrawalsGloas() (state.ExpectedWithdrawalsGloas
 //	    withdrawals_limit = MAX_WITHDRAWALS_PER_PAYLOAD - 1
 //	    assert len(prior_withdrawals) <= withdrawals_limit
 //
-//	    processed_count: Uint64 = 0
+//	    processed_count = Uint64(0)
 //	    withdrawals: list[Withdrawal] = []
 //	    for withdrawal in state.builder_pending_withdrawals:
 //	        all_withdrawals = list(prior_withdrawals) + withdrawals
@@ -485,7 +484,7 @@ func (b *BeaconState) ExpectedWithdrawalsGloas() (state.ExpectedWithdrawalsGloas
 //	                amount=withdrawal.amount,
 //	            )
 //	        )
-//	        withdrawal_index += WithdrawalIndex(1)
+//	        withdrawal_index += 1
 //	        processed_count += 1
 //
 //	    return withdrawals, withdrawal_index, processed_count
@@ -521,7 +520,7 @@ func (b *BeaconState) appendBuilderWithdrawals(withdrawalIndex uint64, withdrawa
 // appendBuildersSweepWithdrawals returns builder sweep withdrawals, the updated withdrawal index,
 // and the processed count.
 //
-//	<spec fn="get_builders_sweep_withdrawals" fork="gloas" hash="faa91d20">
+//	<spec fn="get_builders_sweep_withdrawals" fork="gloas" hash="2363c4b1">
 //	def get_builders_sweep_withdrawals(
 //	    state: BeaconState,
 //	    withdrawal_index: WithdrawalIndex,
@@ -532,7 +531,7 @@ func (b *BeaconState) appendBuilderWithdrawals(withdrawalIndex uint64, withdrawa
 //	    withdrawals_limit = MAX_WITHDRAWALS_PER_PAYLOAD - 1
 //	    assert len(prior_withdrawals) <= withdrawals_limit
 //
-//	    processed_count: Uint64 = 0
+//	    processed_count = Uint64(0)
 //	    withdrawals: list[Withdrawal] = []
 //	    builder_index = state.next_withdrawal_builder_index
 //	    for _ in range(builders_limit):
@@ -551,9 +550,9 @@ func (b *BeaconState) appendBuilderWithdrawals(withdrawalIndex uint64, withdrawa
 //	                    amount=builder.balance,
 //	                )
 //	            )
-//	            withdrawal_index += WithdrawalIndex(1)
+//	            withdrawal_index += 1
 //
-//	        builder_index = BuilderIndex((builder_index + 1) % len(state.builders))
+//	        builder_index = (builder_index + 1) % len(state.builders)
 //	        processed_count += 1
 //
 //	    return withdrawals, withdrawal_index, processed_count
@@ -693,8 +692,8 @@ func (b *BeaconState) NextWithdrawalBuilderIndex() (primitives.BuilderIndex, err
 // PayloadCommitteeReadOnly returns the payload timeliness committee for a given slot
 // by looking up the cached PTC window in state.
 //
-//	<spec fn="get_ptc" fork="gloas" hash="b38e3477">
-//	def get_ptc(state: BeaconState, slot: Slot) -> PTC:
+//	<spec fn="get_ptc" fork="gloas" hash="c166207e">
+//	def get_ptc(state: BeaconState, slot: Slot) -> PayloadTimelinessCommittee:
 //	    """
 //	    Get the payload timeliness committee for the given ``slot``.
 //	    """
@@ -704,7 +703,7 @@ func (b *BeaconState) NextWithdrawalBuilderIndex() (primitives.BuilderIndex, err
 //	        assert epoch + 1 == state_epoch
 //	        return state.ptc_window[slot % SLOTS_PER_EPOCH]
 //	    assert epoch <= state_epoch + MIN_SEED_LOOKAHEAD
-//	    offset = (epoch - state_epoch + 1) * SLOTS_PER_EPOCH
+//	    offset = Uint64(epoch - state_epoch + 1) * SLOTS_PER_EPOCH
 //	    return state.ptc_window[offset + slot % SLOTS_PER_EPOCH]
 //	</spec>
 func (b *BeaconState) PayloadCommitteeReadOnly(slot primitives.Slot) ([]primitives.ValidatorIndex, error) {

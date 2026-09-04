@@ -468,8 +468,8 @@
 - name: MAX_SIGNED_INCLUSION_LIST_SIZE#heze
   sources: []
   spec: |
-    <spec preset_var="MAX_SIGNED_INCLUSION_LIST_SIZE" fork="heze" hash="805b7bca">
-    MAX_SIGNED_INCLUSION_LIST_SIZE: Uint64 = 8348
+    <spec preset_var="MAX_SIGNED_INCLUSION_LIST_SIZE" fork="heze" hash="fa4d8ca8">
+    MAX_SIGNED_INCLUSION_LIST_SIZE: Uint64 = 41112
     </spec>
 
 - name: MAX_TRANSACTIONS_PER_PAYLOAD#bellatrix

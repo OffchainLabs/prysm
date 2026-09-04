@@ -1,4 +1,4 @@
-version: v1.7.0-alpha.14
+version: v1.7.0-beta.0
 style: full
 
 specrefs:
@@ -216,10 +216,10 @@ exceptions:
     - NextSyncCommitteeBranch#electra
     - NextSyncCommitteeBranch#gloas
     - OptionalPartialDataColumnHeader#fulu
-    - PTC#gloas
-    - PTCAttestingIndices#gloas
-    - PTCBits#gloas
-    - PTCWindow#gloas
+    - PayloadTimelinessCommittee#gloas
+    - PayloadTimelinessCommitteeIndices#gloas
+    - PayloadTimelinessCommitteeBits#gloas
+    - PayloadTimelinessCommitteeWindow#gloas
     - PartialDataColumnPartsMetadata#gloas
     - PayloadAttestations#gloas
     - PendingAttestations#phase0
@@ -396,6 +396,11 @@ exceptions:
     - xor#phase0
     - compute_merkle_branch_root#phase0
     - is_non_strict_superset#phase0
+    - get_pending_attesting_indices#phase0
+    - hash_tree_root#phase0
+    - is_future_epoch#phase0
+    - sha256#phase0
+    - uint_to_bytes#phase0
     # altair
     - compute_merkle_proof#altair
     - compute_sync_committee_period_at_slot#altair
@@ -637,6 +642,7 @@ exceptions:
     - upgrade_lc_optimistic_update_to_gloas#gloas
     - upgrade_lc_store_to_gloas#gloas
     - upgrade_lc_update_to_gloas#gloas
+    - compute_shuffling_dependent_epoch#gloas
     # heze
     - on_execution_payload_envelope#heze
     - compute_fork_version#heze
