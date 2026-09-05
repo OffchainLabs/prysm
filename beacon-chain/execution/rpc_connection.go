@@ -18,21 +18,17 @@ import (
 )
 
 func (s *Service) setupExecutionClientConnections(ctx context.Context, currEndpoint network.Endpoint) error {
-	client, err := s.newRPCClientWithAuth(ctx, currEndpoint)
+	client, err := s.dialExecutionNode(ctx, currEndpoint)
 	if err != nil {
 		return errors.Wrap(err, "could not dial execution node")
 	}
-	// Attach the clients to the service struct.
 	fetcher := ethclient.NewClient(client)
-	s.rpcClient = client
-	s.httpLogger = fetcher
 
 	depositContractCaller, err := contracts.NewDepositContractCaller(s.cfg.depositContractAddr, fetcher)
 	if err != nil {
 		client.Close()
 		return errors.Wrap(err, "could not initialize deposit contract caller")
 	}
-	s.depositContractCaller = depositContractCaller
 
 	// Ensure we have the correct chain and deposit IDs.
 	if err := ensureCorrectExecutionChain(ctx, fetcher); err != nil {
@@ -45,6 +41,12 @@ func (s *Service) setupExecutionClientConnections(ctx context.Context, currEndpo
 		}
 		return errors.Wrap(err, errStr)
 	}
+
+	// Attach the clients to the service struct only after the connection is
+	// validated, so a failed attempt does not replace a working client.
+	s.rpcClient = client
+	s.httpLogger = fetcher
+	s.depositContractCaller = depositContractCaller
 	s.updateConnectedETH1(true)
 	s.runError = nil
 	return nil
@@ -64,10 +66,14 @@ func (s *Service) pollConnectionStatus(ctx context.Context) {
 	}
 	ticker := time.NewTicker(backOffPeriod)
 	defer ticker.Stop()
+	dialTarget := logs.MaskCredentialsLogging(s.cfg.currHttpEndpoint.Url)
+	if s.cfg.rpcClientDialer != nil {
+		dialTarget = "injected RPC client dialer"
+	}
 	for {
 		select {
 		case <-ticker.C:
-			log.Debugf("Trying to dial endpoint: %s", logs.MaskCredentialsLogging(s.cfg.currHttpEndpoint.Url))
+			log.Debugf("Trying to dial endpoint: %s", dialTarget)
 			currClient := s.rpcClient
 			if err := s.setupExecutionClientConnections(ctx, s.cfg.currHttpEndpoint); err != nil {
 				errorLogger(err, "Could not connect to execution client endpoint")
@@ -77,7 +83,7 @@ func (s *Service) pollConnectionStatus(ctx context.Context) {
 			if currClient != nil {
 				currClient.Close()
 			}
-			log.WithField("endpoint", logs.MaskCredentialsLogging(s.cfg.currHttpEndpoint.Url)).Info("Connected to new endpoint")
+			log.WithField("endpoint", dialTarget).Info("Connected to new endpoint")
 
 			c, err := s.ExchangeCapabilities(ctx)
 			if err != nil {
@@ -117,6 +123,21 @@ func (s *Service) retryExecutionClientConnection(ctx context.Context, err error)
 	}
 	// Reset run error in the event of a successful connection.
 	s.runError = nil
+}
+
+// Initializes the execution node RPC client, using the injected dialer when one is configured.
+func (s *Service) dialExecutionNode(ctx context.Context, currEndpoint network.Endpoint) (*gethRPC.Client, error) {
+	if s.cfg.rpcClientDialer == nil {
+		return s.newRPCClientWithAuth(ctx, currEndpoint)
+	}
+	client, err := s.cfg.rpcClientDialer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if client == nil {
+		return nil, errors.New("rpc client dialer returned a nil client")
+	}
+	return client, nil
 }
 
 // Initializes an RPC connection with authentication headers.

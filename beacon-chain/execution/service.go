@@ -118,6 +118,12 @@ func (RPCClientEmpty) CallContext(context.Context, any, string, ...any) error {
 	return errors.New("rpc client is not initialized")
 }
 
+// RPCClientDialer creates the RPC client used to communicate with the execution
+// node. It is re-invoked on every reconnection attempt and must return a new,
+// ready-to-use client on each call. Returned clients are owned and eventually
+// closed by the service.
+type RPCClientDialer func(ctx context.Context) (*gethRPC.Client, error)
+
 // config defines a config struct for dependencies into the service.
 type config struct {
 	depositContractAddr     common.Address
@@ -128,6 +134,7 @@ type config struct {
 	eth1HeaderReqLimit      uint64
 	beaconNodeStatsUpdater  BeaconNodeStatsUpdater
 	currHttpEndpoint        network.Endpoint
+	rpcClientDialer         RPCClientDialer
 	headers                 []string
 	finalizedStateAtStartup state.BeaconState
 	jwtId                   string
@@ -227,7 +234,7 @@ func (s *Service) Start() {
 	}
 	// If the chain has not started already and we don't have access to eth1 nodes, we will not be
 	// able to generate the genesis state.
-	if !s.chainStartData.Chainstarted && s.cfg.currHttpEndpoint.Url == "" {
+	if !s.chainStartData.Chainstarted && s.cfg.currHttpEndpoint.Url == "" && s.cfg.rpcClientDialer == nil {
 		// check for genesis state before shutting down the node,
 		// if a genesis state exists, we can continue on.
 		genState, err := s.cfg.beaconDB.GenesisState(s.ctx)
