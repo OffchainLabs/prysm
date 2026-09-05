@@ -191,7 +191,7 @@ func (s *Store) insert(ctx context.Context,
 		if block.Version() >= version.Gloas {
 			bps = params.BeaconConfig().AttestationDueBPSGloas
 		}
-		boostThreshold := params.BeaconConfig().SlotComponentDuration(bps)
+		boostThreshold := params.BeaconConfig().SlotComponentDurationAt(bps, slot)
 		isFirstBlock := s.proposerBoostRoot == [32]byte{}
 		if currentSlot == slot && sss < boostThreshold && isFirstBlock {
 			depEpoch := slots.ToEpoch(currentSlot)

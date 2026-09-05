@@ -59,7 +59,7 @@ func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid p
 		return pubsub.ValidationReject, nil
 	}
 	earliestValidTime := slotStart.
-		Add(params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS)).
+		Add(params.BeaconConfig().SlotComponentDurationAt(params.BeaconConfig().SyncMessageDueBPS, newUpdate.SignatureSlot())).
 		Add(-params.BeaconConfig().MaximumGossipClockDisparityDuration())
 	if s.cfg.clock.Now().Before(earliestValidTime) {
 		log.Debug("Newly received light client optimistic update ignored. not enough time passed for block to propagate")
@@ -129,7 +129,7 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 		return pubsub.ValidationReject, nil
 	}
 	earliestValidTime := slotStart.
-		Add(params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS)).
+		Add(params.BeaconConfig().SlotComponentDurationAt(params.BeaconConfig().SyncMessageDueBPS, newUpdate.SignatureSlot())).
 		Add(-params.BeaconConfig().MaximumGossipClockDisparityDuration())
 	if s.cfg.clock.Now().Before(earliestValidTime) {
 		log.Debug("Newly received light client finality update ignored. not enough time passed for block to propagate")

@@ -957,7 +957,7 @@ func (s *Service) PayloadAttestationData(
 		return nil, &RpcError{Reason: Internal, Err: fmt.Errorf("could not compute slot start time: %w", err)}
 	}
 	cfg := params.BeaconConfig()
-	deadline := slotStart.Add(cfg.SlotComponentDuration(cfg.PayloadAttestationDueBPS))
+	deadline := slotStart.Add(cfg.SlotComponentDurationAt(cfg.PayloadAttestationDueBPS, slot))
 
 	if cached := s.payloadAttestationData.Load(); cached != nil && cached.Slot == slot {
 		return cached, nil
