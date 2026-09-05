@@ -70,6 +70,12 @@ func NewBuilder(t testing.TB, initialState state.BeaconState, initialBlock inter
 	}
 }
 
+func hasFCRFields(c *Check) bool {
+	return c.ConfirmedRoot != nil || c.PreviousSlotHead != nil || c.CurrentSlotHead != nil ||
+		c.PreviousEpochObservedJustifiedCheckpoint != nil || c.CurrentEpochObservedJustifiedCheckpoint != nil ||
+		c.PreviousEpochGreatestUnrealizedCheckpoint != nil || c.SafeExecutionBlockHash != nil
+}
+
 func (bb *Builder) runFCR(ctx context.Context, slot primitives.Slot) {
 	fcr := bb.service.FCR()
 	if fcr == nil {
@@ -89,10 +95,6 @@ func (bb *Builder) Tick(t testing.TB, tick int64) {
 		lastSlot++
 		bb.service.SetForkChoiceGenesisTime(time.Now().Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot*lastSlot) * time.Second))
 		require.NoError(t, bb.service.NewSlot(t.Context(), primitives.Slot(lastSlot)))
-		if bb.fcr {
-			require.NoError(t, bb.service.UpdateAndSaveHeadWithBalances(t.Context()))
-			bb.runFCR(t.Context(), primitives.Slot(lastSlot))
-		}
 	}
 	if tick > int64(params.BeaconConfig().SecondsPerSlot*lastSlot) {
 		bb.service.SetForkChoiceGenesisTime(time.Now().Add(-1 * time.Duration(tick) * time.Second))
@@ -206,6 +208,10 @@ func (bb *Builder) Check(t testing.TB, c *Check) {
 	}
 	ctx := t.Context()
 	require.NoError(t, bb.service.UpdateAndSaveHeadWithBalances(ctx))
+	// The generator yields a checks step with FCR fields after every on_fast_confirmation call, so the rule runs once per such step, not on ticks.
+	if bb.fcr && hasFCRFields(c) {
+		bb.runFCR(ctx, primitives.Slot(uint64(bb.lastTick)/params.BeaconConfig().SecondsPerSlot))
+	}
 	if c.Head != nil {
 		r, err := bb.service.HeadRoot(ctx)
 		require.NoError(t, err)

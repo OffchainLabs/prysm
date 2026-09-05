@@ -22,7 +22,6 @@ type FastConfirmationRule struct {
 
 	previousSlotHead                          [fieldparams.RootLength]byte
 	currentSlotHead                           [fieldparams.RootLength]byte
-	variablesUpdatedSlot                      primitives.Slot
 	currentEpochObservedJustifiedCheckpoint   forkchoicetypes.Checkpoint
 	previousEpochObservedJustifiedCheckpoint  forkchoicetypes.Checkpoint
 	previousEpochGreatestUnrealizedCheckpoint forkchoicetypes.Checkpoint
@@ -761,11 +760,6 @@ func (f *FastConfirmationRule) getCurrentTarget(ctx context.Context, currentEpoc
 //	        store.previous_epoch_greatest_unrealized_checkpoint)
 //	</spec>
 func (f *FastConfirmationRule) updateFastConfirmationVariables(currentSlot primitives.Slot, headRoot [fieldparams.RootLength]byte, unrealizedJustified forkchoicetypes.Checkpoint) {
-	if f.variablesUpdatedSlot == currentSlot && currentSlot != 0 {
-		return
-	}
-	f.variablesUpdatedSlot = currentSlot
-
 	// Rotate slot heads.
 	f.previousSlotHead = f.currentSlotHead
 	f.currentSlotHead = headRoot

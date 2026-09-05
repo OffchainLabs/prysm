@@ -208,6 +208,25 @@ func TestUpdateFastConfirmationVariables_SlotHeadRotation(t *testing.T) {
 	_ = spe
 }
 
+func TestUpdateFastConfirmationVariables_SecondCallSameSlotRotates(t *testing.T) {
+	anchor := [32]byte{0x10}
+	head1 := [32]byte{1}
+	head2 := [32]byte{2}
+	anchorCp := forkchoicetypes.Checkpoint{Epoch: 0, Root: anchor}
+
+	fc := &mockForkchoiceReader{headRoot: head1}
+	fcr := New(fc, &mockCommitteeAccessor{}, &mockBalanceAccessor{}, anchorCp)
+
+	fcr.OnFastConfirmation(t.Context(), 1)
+	require.Equal(t, anchor, fcr.previousSlotHead)
+	require.Equal(t, head1, fcr.currentSlotHead)
+
+	fc.headRoot = head2
+	fcr.OnFastConfirmation(t.Context(), 1)
+	require.Equal(t, head1, fcr.previousSlotHead)
+	require.Equal(t, head2, fcr.currentSlotHead)
+}
+
 func TestUpdateFastConfirmationVariables_EpochBoundary(t *testing.T) {
 	spe := primitives.Slot(params.BeaconConfig().SlotsPerEpoch)
 	anchor := [32]byte{0x10}
