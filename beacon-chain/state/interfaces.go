@@ -240,6 +240,7 @@ type ReadOnlyDeposits interface {
 	DepositBalanceToConsume() (primitives.Gwei, error)
 	DepositRequestsStartIndex() (uint64, error)
 	PendingDeposits() ([]*ethpb.PendingDeposit, error)
+	ForEachPendingDeposit(f func(*ethpb.PendingDeposit) error) error
 	IsPendingValidator(pubkey []byte) (bool, error)
 }
 

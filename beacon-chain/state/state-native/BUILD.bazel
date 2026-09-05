@@ -123,6 +123,7 @@ go_test(
         "setters_deposit_requests_test.go",
         "setters_deposits_test.go",
         "setters_eth1_test.go",
+        "setters_gloas_onboard_test.go",
         "setters_gloas_test.go",
         "setters_misc_test.go",
         "setters_participation_test.go",
@@ -139,6 +140,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//beacon-chain/cache:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/core/transition:go_default_library",

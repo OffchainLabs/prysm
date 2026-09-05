@@ -368,16 +368,17 @@ func (b *BeaconState) AddBuilderFromDeposit(pubkey [fieldparams.BLSPubkeyLength]
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	return b.addBuilderFromDepositAtEpoch(pubkey, params.BeaconConfig().PayloadBuilderVersion, withdrawalCredentials, amount, slots.ToEpoch(b.slot))
+	_, err := b.addBuilderFromDepositAtEpoch(pubkey, params.BeaconConfig().PayloadBuilderVersion, withdrawalCredentials, amount, slots.ToEpoch(b.slot), 0)
+	return err
 }
 
-func (b *BeaconState) addBuilderFromDepositAtEpoch(pubkey [fieldparams.BLSPubkeyLength]byte, builderVersion byte, withdrawalCredentials [fieldparams.RootLength]byte, amount uint64, depositEpoch primitives.Epoch) error {
+func (b *BeaconState) addBuilderFromDepositAtEpoch(pubkey [fieldparams.BLSPubkeyLength]byte, builderVersion byte, withdrawalCredentials [fieldparams.RootLength]byte, amount uint64, depositEpoch primitives.Epoch, from primitives.BuilderIndex) (primitives.BuilderIndex, error) {
 	if b.version < version.Gloas {
-		return errNotSupported("AddBuilderFromDeposit", b.version)
+		return 0, errNotSupported("AddBuilderFromDeposit", b.version)
 	}
 
 	currentEpoch := slots.ToEpoch(b.slot)
-	index := b.builderInsertionIndex(currentEpoch)
+	index := b.builderInsertionIndex(currentEpoch, from)
 
 	builder := &ethpb.Builder{
 		Pubkey:            bytesutil.SafeCopyBytes(pubkey[:]),
@@ -410,14 +411,17 @@ func (b *BeaconState) addBuilderFromDepositAtEpoch(pubkey [fieldparams.BLSPubkey
 	b.builders = builders
 
 	b.markFieldAsDirty(types.Builders)
-	return nil
+	return index, nil
 }
 
-func (b *BeaconState) builderInsertionIndex(currentEpoch primitives.Epoch) primitives.BuilderIndex {
-	for i, builder := range b.builders {
+// A cursor is equivalent to a full rescan only while inserts merely fill slots and none frees
+// one. Callers that may run after a builder exit must pass 0.
+func (b *BeaconState) builderInsertionIndex(currentEpoch primitives.Epoch, from primitives.BuilderIndex) primitives.BuilderIndex {
+	for i := from; i < primitives.BuilderIndex(len(b.builders)); i++ {
+		builder := b.builders[i]
 		// A nil entry behaves like a zero-value builder, which is reusable.
 		if builder == nil || (builder.WithdrawableEpoch <= currentEpoch && builder.Balance == 0) {
-			return primitives.BuilderIndex(i)
+			return i
 		}
 	}
 	return primitives.BuilderIndex(len(b.builders))
@@ -746,11 +750,14 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 
 	pendingDeposits := b.pendingDeposits
 	newPendingDeposits := make([]*ethpb.PendingDeposit, 0, len(pendingDeposits))
+	pendingIdx := helpers.NewPendingValidatorIndex()
+	var insertionCursor primitives.BuilderIndex
 
 	for _, deposit := range pendingDeposits {
 		pubkey := bytesutil.ToBytes48(deposit.PublicKey)
 		if _, ok := b.validatorIndexByPubkey(pubkey); ok {
 			newPendingDeposits = append(newPendingDeposits, deposit)
+			pendingIdx.Add(deposit)
 			continue
 		}
 
@@ -764,18 +771,20 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 
 		if !helpers.IsBuilderWithdrawalCredential(deposit.WithdrawalCredentials) {
 			newPendingDeposits = append(newPendingDeposits, deposit)
+			pendingIdx.Add(deposit)
 			continue
 		}
-		isPending, err := helpers.IsPendingValidator(newPendingDeposits, deposit.PublicKey)
+		isPending, err := pendingIdx.HasValid(deposit.PublicKey)
 		if err != nil {
 			return err
 		}
 		if isPending {
 			newPendingDeposits = append(newPendingDeposits, deposit)
+			pendingIdx.Add(deposit)
 			continue
 		}
 
-		if err := b.applyDepositForNewBuilder(deposit); err != nil {
+		if err := b.applyDepositForNewBuilder(deposit, &insertionCursor); err != nil {
 			return err
 		}
 	}
@@ -789,7 +798,7 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 }
 
 // applyDepositForNewBuilder onboards a single pending deposit as a new builder, used by onboard_builders_from_pending_deposits.
-func (b *BeaconState) applyDepositForNewBuilder(deposit *ethpb.PendingDeposit) error {
+func (b *BeaconState) applyDepositForNewBuilder(deposit *ethpb.PendingDeposit, insertionCursor *primitives.BuilderIndex) error {
 	valid, err := helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
 		PublicKey:             deposit.PublicKey,
 		WithdrawalCredentials: deposit.WithdrawalCredentials,
@@ -806,10 +815,12 @@ func (b *BeaconState) applyDepositForNewBuilder(deposit *ethpb.PendingDeposit) e
 	}
 	pubkey := bytesutil.ToBytes48(deposit.PublicKey)
 	depositEpoch := slots.ToEpoch(deposit.Slot)
-	if err := b.addBuilderFromDepositAtEpoch(pubkey, params.BeaconConfig().PayloadBuilderVersion, bytesutil.ToBytes32(deposit.WithdrawalCredentials), deposit.Amount, depositEpoch); err != nil {
+	index, err := b.addBuilderFromDepositAtEpoch(pubkey, params.BeaconConfig().PayloadBuilderVersion, bytesutil.ToBytes32(deposit.WithdrawalCredentials), deposit.Amount, depositEpoch, *insertionCursor)
+	if err != nil {
 		log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Skipping builder deposit: could not add builder")
 		return nil
 	}
+	*insertionCursor = index + 1
 	return nil
 }
 
