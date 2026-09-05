@@ -1,6 +1,7 @@
 package state_native
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -681,10 +682,21 @@ func decreaseBalanceWithVal(currBalance, delta primitives.Gwei) primitives.Gwei 
 	return currBalance - delta
 }
 
+type depositSignatureVerifier func(*ethpb.Deposit_Data) (bool, error)
+
+// pendingValidatorStatus caches signature checks for the already-processed prefix of pending
+// deposits for one pubkey. A literal implementation of is_pending_validator rescans and
+// reverifies that prefix for every builder deposit, which can require quadratic work.
+type pendingValidatorStatus struct {
+	deposits []*ethpb.PendingDeposit
+	checked  int
+	found    bool
+}
+
 // OnboardBuildersFromPendingDeposits applies any pending builder deposits at the fork.
 // It mutates the state and prunes pending deposits accordingly.
 //
-//	<spec fn="onboard_builders_from_pending_deposits" fork="gloas" hash="2f9926a6">
+//	<spec fn="onboard_builders_from_pending_deposits" fork="gloas" hash="49853afd">
 //	def onboard_builders_from_pending_deposits(state: BeaconState) -> None:
 //	    """
 //	    Applies any pending deposit for builders, effectively
@@ -692,7 +704,7 @@ func decreaseBalanceWithVal(currBalance, delta primitives.Gwei) primitives.Gwei 
 //	    """
 //	    validator_pubkeys = [v.pubkey for v in state.validators]
 //
-//	    pending_deposits = []
+//	    pending_deposits = PendingDeposits()
 //	    for deposit in state.pending_deposits:
 //	        # Deposits for existing validators stay in the pending queue
 //	        if deposit.pubkey in validator_pubkeys:
@@ -736,9 +748,16 @@ func decreaseBalanceWithVal(currBalance, delta primitives.Gwei) primitives.Gwei 
 //
 //	    state.pending_deposits = pending_deposits
 //	</spec>
-func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
+func (b *BeaconState) OnboardBuildersFromPendingDeposits(ctx context.Context) error {
+	return b.onboardBuildersFromPendingDeposits(ctx, helpers.IsValidDepositSignature)
+}
+
+func (b *BeaconState) onboardBuildersFromPendingDeposits(ctx context.Context, verify depositSignatureVerifier) error {
 	if b.version < version.Gloas {
 		return errNotSupported("OnboardBuildersFromPendingDeposits", b.version)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
 	b.lock.Lock()
@@ -746,8 +765,14 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 
 	pendingDeposits := b.pendingDeposits
 	newPendingDeposits := make([]*ethpb.PendingDeposit, 0, len(pendingDeposits))
+	// For every pubkey in this map, found is true exactly when the already-built
+	// newPendingDeposits prefix contains a valid deposit for that pubkey.
+	pendingValidators := make(map[[fieldparams.BLSPubkeyLength]byte]*pendingValidatorStatus)
 
 	for _, deposit := range pendingDeposits {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		pubkey := bytesutil.ToBytes48(deposit.PublicKey)
 		if _, ok := b.validatorIndexByPubkey(pubkey); ok {
 			newPendingDeposits = append(newPendingDeposits, deposit)
@@ -764,20 +789,53 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 
 		if !helpers.IsBuilderWithdrawalCredential(deposit.WithdrawalCredentials) {
 			newPendingDeposits = append(newPendingDeposits, deposit)
+			status := pendingValidators[pubkey]
+			if status == nil {
+				status = &pendingValidatorStatus{}
+				pendingValidators[pubkey] = status
+			}
+			if !status.found {
+				status.deposits = append(status.deposits, deposit)
+			}
 			continue
 		}
-		isPending, err := helpers.IsPendingValidator(newPendingDeposits, deposit.PublicKey)
-		if err != nil {
-			return err
+
+		status := pendingValidators[pubkey]
+		if status != nil {
+			// Verify only deposits appended since the previous builder candidate. Invalid
+			// deposits remain in the pending queue but never need to be verified again here.
+			for !status.found && status.checked < len(status.deposits) {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				pendingDeposit := status.deposits[status.checked]
+				status.checked++
+				valid, err := verify(&ethpb.Deposit_Data{
+					PublicKey:             pendingDeposit.PublicKey,
+					WithdrawalCredentials: pendingDeposit.WithdrawalCredentials,
+					Amount:                pendingDeposit.Amount,
+					Signature:             pendingDeposit.Signature,
+				})
+				if err != nil {
+					log.WithField("pubkey", fmt.Sprintf("%x", pendingDeposit.PublicKey)).WithError(err).Warn("Could not verify pending deposit signature")
+					continue
+				}
+				if valid {
+					status.found = true
+				}
+			}
 		}
-		if isPending {
+		if status != nil && status.found {
 			newPendingDeposits = append(newPendingDeposits, deposit)
 			continue
 		}
 
-		if err := b.applyDepositForNewBuilder(deposit); err != nil {
+		if err := b.applyDepositForNewBuilder(ctx, deposit, verify); err != nil {
 			return err
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
 	b.sharedFieldReferences[types.PendingDeposits].MinusRef()
@@ -789,8 +847,11 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 }
 
 // applyDepositForNewBuilder onboards a single pending deposit as a new builder, used by onboard_builders_from_pending_deposits.
-func (b *BeaconState) applyDepositForNewBuilder(deposit *ethpb.PendingDeposit) error {
-	valid, err := helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
+func (b *BeaconState) applyDepositForNewBuilder(ctx context.Context, deposit *ethpb.PendingDeposit, verify depositSignatureVerifier) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	valid, err := verify(&ethpb.Deposit_Data{
 		PublicKey:             deposit.PublicKey,
 		WithdrawalCredentials: deposit.WithdrawalCredentials,
 		Amount:                deposit.Amount,
@@ -803,6 +864,9 @@ func (b *BeaconState) applyDepositForNewBuilder(deposit *ethpb.PendingDeposit) e
 	if !valid {
 		log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).Debug("Skipping builder deposit with invalid signature")
 		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	pubkey := bytesutil.ToBytes48(deposit.PublicKey)
 	depositEpoch := slots.ToEpoch(deposit.Slot)

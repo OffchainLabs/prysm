@@ -15,7 +15,7 @@ func DeterministicGenesisStateGloas(t testing.TB, numValidators uint64) (state.B
 	t.Helper()
 
 	fuluState, privKeys := DeterministicGenesisStateFulu(t, numValidators)
-	beaconState, err := gloas.UpgradeToGloas(fuluState)
+	beaconState, err := gloas.UpgradeToGloas(t.Context(), fuluState)
 	if err != nil {
 		t.Fatal(errors.Wrapf(err, "failed to upgrade genesis beacon state of %d validators to gloas", numValidators))
 	}

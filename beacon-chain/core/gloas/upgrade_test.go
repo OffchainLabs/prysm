@@ -2,6 +2,7 @@ package gloas_test
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
@@ -12,12 +13,22 @@ import (
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
+
+func TestUpgradeToGloas_ContextCancellation(t *testing.T) {
+	st, _ := util.DeterministicGenesisStateFulu(t, params.BeaconConfig().MaxValidatorsPerCommittee)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err := gloas.UpgradeToGloas(ctx, st)
+	require.ErrorIs(t, err, context.Canceled)
+}
 
 func TestUpgradeToGloas_Basic(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateFulu(t, params.BeaconConfig().MaxValidatorsPerCommittee)
@@ -35,13 +46,15 @@ func TestUpgradeToGloas_Basic(t *testing.T) {
 	require.NoError(t, st.SetPendingConsolidations([]*ethpb.PendingConsolidation{{SourceIndex: 3, TargetIndex: 4}}))
 
 	blockHash := bytes.Repeat([]byte{0xAB}, 32)
-	header := &enginev1.ExecutionPayloadHeaderDeneb{BlockHash: blockHash}
+	parentHash := bytes.Repeat([]byte{0xCD}, 32)
+	prevRandao := bytes.Repeat([]byte{0xEF}, 32)
+	header := &enginev1.ExecutionPayloadHeaderDeneb{BlockHash: blockHash, ParentHash: parentHash, PrevRandao: prevRandao}
 	wrappedHeader, err := consensusblocks.WrappedExecutionPayloadHeaderDeneb(header)
 	require.NoError(t, err)
 	require.NoError(t, st.SetLatestExecutionPayloadHeader(wrappedHeader))
 
 	preForkState := st.Copy()
-	mSt, err := gloas.UpgradeToGloas(st)
+	mSt, err := gloas.UpgradeToGloas(t.Context(), st)
 	require.NoError(t, err)
 
 	require.Equal(t, preForkState.GenesisTime(), mSt.GenesisTime())
@@ -60,9 +73,11 @@ func TestUpgradeToGloas_Basic(t *testing.T) {
 	copy(wantBlockHash[:], blockHash)
 	require.DeepSSZEqual(t, wantBlockHash, bid.BlockHash())
 	require.DeepSSZEqual(t, [20]byte{}, bid.FeeRecipient())
-	require.DeepSSZEqual(t, [32]byte{}, bid.ParentBlockHash())
-	require.DeepSSZEqual(t, [32]byte{}, bid.ParentBlockRoot())
-	require.DeepSSZEqual(t, [32]byte{}, bid.PrevRandao())
+	require.DeepSSZEqual(t, bytesutil.ToBytes32(parentHash), bid.ParentBlockHash())
+	require.DeepSSZEqual(t, bytesutil.ToBytes32(preForkState.LatestBlockHeader().ParentRoot), bid.ParentBlockRoot())
+	require.DeepSSZEqual(t, bytesutil.ToBytes32(prevRandao), bid.PrevRandao())
+	require.Equal(t, params.BeaconConfig().BuilderIndexSelfBuild, bid.BuilderIndex())
+	require.Equal(t, preForkState.LatestBlockHeader().Slot, bid.Slot())
 
 	latestBlockHash, err := mSt.LatestBlockHash()
 	require.NoError(t, err)
@@ -114,7 +129,7 @@ func TestUpgradeToGloas_OnboardsBuilderDeposit(t *testing.T) {
 
 	require.NoError(t, st.SetPendingDeposits([]*ethpb.PendingDeposit{deposit}))
 
-	mSt, err := gloas.UpgradeToGloas(st)
+	mSt, err := gloas.UpgradeToGloas(t.Context(), st)
 	require.NoError(t, err)
 
 	pbState, ok := mSt.ToProtoUnsafe().(*ethpb.BeaconStateGloas)

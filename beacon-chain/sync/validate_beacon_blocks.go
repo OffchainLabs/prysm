@@ -665,7 +665,7 @@ func (s *Service) recordEarlyEquivocation(slot primitives.Slot, proposer primiti
 	}
 	cfg := params.BeaconConfig()
 	deadline := slotStart.Add(cfg.SlotComponentDuration(cfg.EquivocationEarlyDueBPS))
-	if receivedTime.After(deadline) {
+	if receivedTime.Before(slotStart) || !receivedTime.Before(deadline) {
 		return
 	}
 	s.cfg.chain.RecordBlockForEquivocation(slot, proposer, root)

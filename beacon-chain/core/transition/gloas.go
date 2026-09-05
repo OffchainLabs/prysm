@@ -3,6 +3,7 @@ package transition
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch/precompute"
@@ -20,13 +21,19 @@ import (
 //
 // Spec definition:
 //
-//	<spec fn="process_operations" fork="gloas" hash="5009f53b">
-//	def process_operations(state: BeaconState, body: BeaconBlockBody) -> None:
+//	<spec fn="process_operations" fork="gloas" hash="52aee81b">
+//	def process_operations(
+//	    state: BeaconState,
+//	    body: BeaconBlockBody,
+//	    # [New in Gloas:EIP7732]
+//	    parent_slot: Slot,
+//	) -> None:
 //	    assert len(body.deposits) == 0
 //
-//	    def for_ops(operations: Sequence[Any], fn: Callable[[BeaconState, Any], None]) -> None:
+//	    # [Modified in Gloas:EIP7732]
+//	    def for_ops(operations: Sequence[Any], fn: Callable[..., None], *args: Any) -> None:
 //	        for operation in operations:
-//	            fn(state, operation)
+//	            fn(state, operation, *args)
 //
 //	    # [New in Gloas:EIP7688]
 //	    assert len(body.proposer_slashings) <= MAX_PROPOSER_SLASHINGS
@@ -40,7 +47,7 @@ import (
 //	    for_ops(body.proposer_slashings, process_proposer_slashing)
 //	    for_ops(body.attester_slashings, process_attester_slashing)
 //	    # [Modified in Gloas:EIP7732]
-//	    for_ops(body.attestations, process_attestation)
+//	    for_ops(body.attestations, process_attestation, parent_slot)
 //	    for_ops(body.voluntary_exits, process_voluntary_exit)
 //	    for_ops(body.bls_to_execution_changes, process_bls_to_execution_change)
 //	    # [Modified in Gloas:EIP7732]
@@ -52,7 +59,7 @@ import (
 //	    # [New in Gloas:EIP7732]
 //	    for_ops(body.payload_attestations, process_payload_attestation)
 //	</spec>
-func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces.ReadOnlyBeaconBlock, parentSlot primitives.Slot) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "core.state.gloasOperations")
 	defer span.End()
 
@@ -77,7 +84,7 @@ func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces
 	if err != nil {
 		return nil, errors.Wrap(ErrProcessAttesterSlashingsFailed, err.Error())
 	}
-	st, err = electra.ProcessAttestationsNoVerifySignature(ctx, st, block)
+	st, err = altair.ProcessAttestationsNoVerifySignatureWithParentSlot(ctx, st, block, parentSlot)
 	if err != nil {
 		return nil, errors.Wrap(ErrProcessAttestationsFailed, err.Error())
 	}

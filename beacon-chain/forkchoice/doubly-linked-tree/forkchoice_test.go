@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/binary"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -430,16 +432,40 @@ func TestForkChoice_RecordBlockForEquivocation_DedupesRoot(t *testing.T) {
 }
 
 func TestForkChoice_InsertNode_RecordsFirstSeen(t *testing.T) {
-	f := setup(0, 0)
-	blockRoot := indexToHash(1)
-	st, roblock, err := prepareForkchoiceState(t.Context(), 1, blockRoot, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(t.Context(), st, roblock))
+	resetFn := features.InitWithReset(&features.Flags{TrackEquivocations: true})
+	defer resetFn()
 
-	key := proposerSlotKey{slot: 1, proposer: roblock.Block().ProposerIndex()}
-	roots := f.store.blockRootsBySlotProposer[key]
-	require.Equal(t, 1, len(roots))
-	require.Equal(t, blockRoot, roots[0])
+	slotSecs := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	insertAtSlotOne := func(t *testing.T, genesis time.Time) ([][32]byte, [32]byte) {
+		f := setup(0, 0)
+		f.SetGenesisTime(genesis)
+		blockRoot := indexToHash(1)
+		st, roblock, err := prepareForkchoiceState(t.Context(), 1, blockRoot, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(t.Context(), st, roblock))
+		key := proposerSlotKey{slot: 1, proposer: roblock.Block().ProposerIndex()}
+		return f.store.blockRootsBySlotProposer[key], blockRoot
+	}
+
+	t.Run("records block processed early in its slot", func(t *testing.T) {
+		roots, blockRoot := insertAtSlotOne(t, time.Now().Add(-slotSecs))
+		require.Equal(t, 1, len(roots))
+		require.Equal(t, blockRoot, roots[0])
+	})
+	t.Run("skips block processed past the early cutoff", func(t *testing.T) {
+		roots, _ := insertAtSlotOne(t, time.Now().Add(-2*slotSecs+time.Second))
+		require.Equal(t, 0, len(roots))
+	})
+	t.Run("skips block processed after its slot", func(t *testing.T) {
+		roots, _ := insertAtSlotOne(t, time.Now().Add(-10*slotSecs))
+		require.Equal(t, 0, len(roots))
+	})
+	t.Run("skips recording when tracking is disabled", func(t *testing.T) {
+		resetFn := features.InitWithReset(&features.Flags{})
+		defer resetFn()
+		roots, _ := insertAtSlotOne(t, time.Now().Add(-slotSecs))
+		require.Equal(t, 0, len(roots))
+	})
 }
 
 func TestForkChoice_RecordBlockForEquivocation_PrunedOnFinalization(t *testing.T) {

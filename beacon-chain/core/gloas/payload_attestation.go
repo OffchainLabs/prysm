@@ -109,21 +109,23 @@ func indexedPayloadAttestation(ctx context.Context, st state.ReadOnlyBeaconState
 
 // computePTC computes the payload timeliness committee for a given slot.
 //
-//	<spec fn="compute_ptc" fork="gloas" hash="1dcaa117">
-//	def compute_ptc(state: BeaconState, slot: Slot) -> Vector[ValidatorIndex, PTC_SIZE]:
+//	<spec fn="compute_ptc" fork="gloas" hash="01df9435">
+//	def compute_ptc(state: BeaconState, slot: Slot) -> PTC:
 //	    """
 //	    Get the payload timeliness committee, with possible duplicates, for the given ``slot``.
 //	    """
 //	    epoch = compute_epoch_at_slot(slot)
 //	    seed = hash(get_seed(state, epoch, DOMAIN_PTC_ATTESTER) + uint_to_bytes(slot))
-//	    indices: List[ValidatorIndex] = []
+//	    indices: list[ValidatorIndex] = []
 //	    # Concatenate all committees for this slot in order
 //	    committees_per_slot = get_committee_count_per_slot(state, epoch)
 //	    for i in range(committees_per_slot):
 //	        committee = get_beacon_committee(state, slot, CommitteeIndex(i))
 //	        indices.extend(committee)
-//	    return compute_balance_weighted_selection(
-//	        state, indices, seed, size=PTC_SIZE, shuffle_indices=False
+//	    return PTC(
+//	        compute_balance_weighted_selection(
+//	            state, indices, seed, size=PTC_SIZE, shuffle_indices=False
+//	        )
 //	    )
 //	</spec>
 func computePTC(ctx context.Context, st state.ReadOnlyBeaconState, slot primitives.Slot) ([]primitives.ValidatorIndex, error) {
@@ -219,12 +221,12 @@ func ptcSeed(st state.ReadOnlyBeaconState, epoch primitives.Epoch, slot primitiv
 
 // selectByBalance selects a balance-weighted subset of input candidates.
 //
-//	<spec fn="compute_balance_weighted_selection" fork="gloas" hash="e5dff16e">
+//	<spec fn="compute_balance_weighted_selection" fork="gloas" hash="8c9a8335">
 //	def compute_balance_weighted_selection(
 //	    state: BeaconState,
 //	    indices: Sequence[ValidatorIndex],
 //	    seed: Bytes32,
-//	    size: uint64,
+//	    size: Uint64,
 //	    shuffle_indices: bool,
 //	) -> Sequence[ValidatorIndex]:
 //	    """
@@ -234,11 +236,11 @@ func ptcSeed(st state.ReadOnlyBeaconState, epoch primitives.Epoch, slot primitiv
 //	    ``indices`` is traversed in order. The returned list can contain duplicates.
 //	    """
 //	    MAX_RANDOM_VALUE = 2**16 - 1
-//	    total = uint64(len(indices))
+//	    total = Uint64(len(indices))
 //	    assert total > 0
 //	    effective_balances = [state.validators[index].effective_balance for index in indices]
-//	    selected: List[ValidatorIndex] = []
-//	    i = uint64(0)
+//	    selected: list[ValidatorIndex] = []
+//	    i = Uint64(0)
 //	    while len(selected) < size:
 //	        offset = i % 16 * 2
 //	        if offset == 0:

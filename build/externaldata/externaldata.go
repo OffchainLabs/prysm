@@ -2,6 +2,7 @@ package externaldata
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
@@ -33,6 +34,7 @@ const (
 	ConsensusSpecTestsMinimal = "consensus_spec_tests_minimal"
 	ConsensusSpecTestsMainnet = "consensus_spec_tests_mainnet"
 	ConsensusSpec             = "consensus_spec"
+	CryptographySpecTests     = "cryptography_spec_tests"
 	Mainnet                   = "mainnet"
 	HoleskyTestnet            = "holesky_testnet"
 	SepoliaTestnet            = "sepolia_testnet"
@@ -70,6 +72,7 @@ func buildManifest() []archive {
 		{HoleskyTestnet, archiveURL(workspaceContent(), workspaceFile, HoleskyTestnet), archiveHash(workspaceContent(), workspaceFile, HoleskyTestnet), "external/holesky_testnet", 1, ""},
 		{SepoliaTestnet, archiveURL(workspaceContent(), workspaceFile, SepoliaTestnet), archiveHash(workspaceContent(), workspaceFile, SepoliaTestnet), "external/sepolia_testnet", 1, ""},
 		{HoodiTestnet, archiveURL(workspaceContent(), workspaceFile, HoodiTestnet), archiveHash(workspaceContent(), workspaceFile, HoodiTestnet), "external/hoodi_testnet", 1, ""},
+		{CryptographySpecTests, "https://github.com/ethereum/cryptography-specs/releases/download/" + cryptographySpecTestsVersion() + "/tests.zip", archiveHash(workspaceContent(), workspaceFile, CryptographySpecTests), ".", 0, ""},
 		{BLSSpecTests, "https://github.com/ethereum/bls12-381-tests/releases/download/" + blsVersion() + "/bls_tests_yaml.tar.gz", archiveHash(workspaceContent(), workspaceFile, BLSSpecTests), ".", 0, ""},
 		{EIP3076SpecTests, archiveURL(workspaceContent(), workspaceFile, EIP3076SpecTests), archiveHash(workspaceContent(), workspaceFile, EIP3076SpecTests), "external/eip3076_spec_tests", 1, ""},
 		{EIP4881SpecTests, archiveURL(workspaceContent(), workspaceFile, EIP4881SpecTests), archiveHash(workspaceContent(), workspaceFile, EIP4881SpecTests), "external/eip4881_spec_tests", 1, "*/assets/eip-4881/*"},
@@ -354,15 +357,23 @@ func download(url string) ([]byte, error) {
 	return nil, lastErr
 }
 
-// extract unpacks a gzip'd tar into target, stripping `strip` leading path
-// components and, if include != "", only entries whose (pre-strip) name matches
-// that glob.
-func extract(targz []byte, target string, strip int, include string) error {
+// extract unpacks a gzip'd tar or a zip into target, stripping `strip` leading
+// path components and, if include != "", only entries whose (pre-strip) name
+// matches that glob.
+func extract(data []byte, target string, strip int, include string) error {
 	var includeRe *regexp.Regexp
 	if include != "" {
 		includeRe = globToRegexp(include)
 	}
 
+	if bytes.HasPrefix(data, []byte("PK\x03\x04")) {
+		return extractZip(data, target, strip, includeRe)
+	}
+
+	return extractTarGz(data, target, strip, includeRe)
+}
+
+func extractTarGz(targz []byte, target string, strip int, includeRe *regexp.Regexp) error {
 	gz, err := gzip.NewReader(bytes.NewReader(targz))
 	if err != nil {
 		return fmt.Errorf("gzip new reader: %w", err)
@@ -380,23 +391,12 @@ func extract(targz []byte, target string, strip int, include string) error {
 			return fmt.Errorf("tar next: %w", err)
 		}
 
-		if includeRe != nil && !includeRe.MatchString(hdr.Name) {
-			continue
+		dst, ok, err := entryDest(target, hdr.Name, strip, includeRe)
+		if err != nil {
+			return err
 		}
-
-		rel := stripComponents(hdr.Name, strip)
-		if rel == "" {
+		if !ok {
 			continue
-		}
-
-		cleanTarget := filepath.Clean(target)
-		dst := filepath.Join(cleanTarget, filepath.FromSlash(rel))
-		if dst == cleanTarget {
-			continue
-		}
-
-		if !strings.HasPrefix(dst, cleanTarget+string(os.PathSeparator)) {
-			return fmt.Errorf("externaldata: unsafe path %q in archive", hdr.Name)
 		}
 
 		switch hdr.Typeflag {
@@ -405,24 +405,8 @@ func extract(targz []byte, target string, strip int, include string) error {
 				return fmt.Errorf("mkdir all: %w", err)
 			}
 		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
-				return fmt.Errorf("mkdir all: %w", err)
-			}
-
-			// #nosec G304 -- dst is verified above to stay within the target dir (HasPrefix check)
-			f, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.FileMode(hdr.Mode)&0o777|0o600)
-			if err != nil {
-				return fmt.Errorf("open file: %w", err)
-			}
-
-			// #nosec G110 -- archive bytes are sha256-verified against a pinned hash before extraction
-			if _, err := io.Copy(f, tr); err != nil {
-				_ = f.Close()
-				return fmt.Errorf("copy file: %w", err)
-			}
-
-			if err := f.Close(); err != nil {
-				return fmt.Errorf("close file: %w", err)
+			if err := writeEntry(dst, tr, os.FileMode(hdr.Mode)); err != nil {
+				return err
 			}
 
 		case tar.TypeSymlink:
@@ -432,6 +416,95 @@ func extract(targz []byte, target string, strip int, include string) error {
 			}).Debug("Skipping symlink entry in archive")
 			continue
 		}
+	}
+
+	return nil
+}
+
+func extractZip(data []byte, target string, strip int, includeRe *regexp.Regexp) error {
+	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return fmt.Errorf("zip new reader: %w", err)
+	}
+
+	for _, f := range zr.File {
+		dst, ok, err := entryDest(target, f.Name, strip, includeRe)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
+
+		if f.FileInfo().IsDir() {
+			if err := os.MkdirAll(dst, 0o750); err != nil {
+				return fmt.Errorf("mkdir all: %w", err)
+			}
+			continue
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			return fmt.Errorf("open zip entry: %w", err)
+		}
+
+		if err := writeEntry(dst, rc, f.Mode()); err != nil {
+			_ = rc.Close()
+			return err
+		}
+
+		if err := rc.Close(); err != nil {
+			return fmt.Errorf("close zip entry: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// entryDest resolves an archive entry to its destination path, reporting ok=false
+// when the entry is filtered out or stripped away entirely.
+func entryDest(target, name string, strip int, includeRe *regexp.Regexp) (string, bool, error) {
+	if includeRe != nil && !includeRe.MatchString(name) {
+		return "", false, nil
+	}
+
+	rel := stripComponents(name, strip)
+	if rel == "" {
+		return "", false, nil
+	}
+
+	cleanTarget := filepath.Clean(target)
+	dst := filepath.Join(cleanTarget, filepath.FromSlash(rel))
+	if dst == cleanTarget {
+		return "", false, nil
+	}
+
+	if !strings.HasPrefix(dst, cleanTarget+string(os.PathSeparator)) {
+		return "", false, fmt.Errorf("externaldata: unsafe path %q in archive", name)
+	}
+
+	return dst, true, nil
+}
+
+func writeEntry(dst string, r io.Reader, mode os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
+		return fmt.Errorf("mkdir all: %w", err)
+	}
+
+	// #nosec G304 -- dst is verified by entryDest to stay within the target dir
+	f, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode&0o777|0o600)
+	if err != nil {
+		return fmt.Errorf("open file: %w", err)
+	}
+
+	// #nosec G110 -- archive bytes are sha256-verified against a pinned hash before extraction
+	if _, err := io.Copy(f, r); err != nil {
+		_ = f.Close()
+		return fmt.Errorf("copy file: %w", err)
+	}
+
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("close file: %w", err)
 	}
 
 	return nil
