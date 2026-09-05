@@ -659,6 +659,179 @@ func TestProposerSettingsLoader(t *testing.T) {
 			validatorRegistrationEnabled: true,
 		},
 		{
+			name: "Suggested Fee is the default when v1 file has no default_config",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir:        "./testdata/proposer-config-only.json",
+					url:        "",
+					defaultfee: "0x6e35733c5af9B61374A128e6F85f553aF09ff89B",
+				},
+			},
+			want: func() *proposer.Settings {
+				key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+				require.NoError(t, err)
+				return &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(key1): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{
+								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
+							},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{
+							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89B"),
+						},
+					},
+				}
+			},
+		},
+		{
+			name: "Suggested Fee is the default when v2 file has no default_config",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir:        "./testdata/v2-proposer-config-only.json",
+					url:        "",
+					defaultfee: "0x6e35733c5af9B61374A128e6F85f553aF09ff89B",
+				},
+			},
+			want: func() *proposer.Settings {
+				key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+				require.NoError(t, err)
+				u64 := func(v uint64) *validator.Uint64 { u := validator.Uint64(v); return &u }
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(key1): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{
+								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
+							},
+							GasLimit: 40000000,
+							BuilderConfig: &proposer.BuilderConfig{
+								MinBid: u64(500000000),
+								Builders: []*proposer.BuilderEntry{
+									{URL: "https://builder-a.example"},
+								},
+							},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{
+							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89B"),
+						},
+					},
+				}
+			},
+		},
+		{
+			name: "Suggested Fee replaces db default when file has no default_config",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir:        "./testdata/proposer-config-only.json",
+					url:        "",
+					defaultfee: "0x6e35733c5af9B61374A128e6F85f553aF09ff89B",
+				},
+			},
+			want: func() *proposer.Settings {
+				key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+				require.NoError(t, err)
+				return &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(key1): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{
+								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
+							},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{
+							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89B"),
+						},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				settings := &proposer.Settings{
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{
+							FeeRecipient: common.HexToAddress("0xae967917c465db8578ca9024c205720b1a3651A9"),
+						},
+					},
+				}
+				return db.SaveProposerSettings(t.Context(), settings)
+			},
+		},
+		{
+			name: "Suggested Fee is the default when url has no default_config",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir:        "",
+					url:        "./testdata/proposer-config-only.json",
+					defaultfee: "0x6e35733c5af9B61374A128e6F85f553aF09ff89B",
+				},
+			},
+			want: func() *proposer.Settings {
+				key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+				require.NoError(t, err)
+				return &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(key1): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{
+								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
+							},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{
+							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89B"),
+						},
+					},
+				}
+			},
+		},
+		{
+			name: "file proposer_config replaces db proposer_config while Suggested Fee stays the default",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir:        "./testdata/proposer-config-only.json",
+					url:        "",
+					defaultfee: "0x6e35733c5af9B61374A128e6F85f553aF09ff89B",
+				},
+			},
+			want: func() *proposer.Settings {
+				key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+				require.NoError(t, err)
+				return &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(key1): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{
+								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
+							},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{
+							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89B"),
+						},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				key2, err := hexutil.Decode("0xb057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7b")
+				require.NoError(t, err)
+				settings := &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(key2): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{
+								FeeRecipient: common.HexToAddress("0x60155530FCE8a85ec7055A5F8b2bE214B3DaeFd4"),
+							},
+						},
+					},
+				}
+				return db.SaveProposerSettings(t.Context(), settings)
+			},
+		},
+		{
 			name: "Enable Builder flag overrides empty config",
 			args: args{
 				proposerSettingsFlagValues: &proposerSettingsFlag{

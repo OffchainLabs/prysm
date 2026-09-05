@@ -129,20 +129,6 @@ func (mr *MockValidatorServiceMockRecorder) SetGraffiti(ctx, pubKey, graffiti an
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetGraffiti", reflect.TypeOf((*MockValidatorService)(nil).SetGraffiti), ctx, pubKey, graffiti)
 }
 
-// SetProposerSettings mocks base method.
-func (m *MockValidatorService) SetProposerSettings(ctx context.Context, settings *proposer.Settings) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetProposerSettings", ctx, settings)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SetProposerSettings indicates an expected call of SetProposerSettings.
-func (mr *MockValidatorServiceMockRecorder) SetProposerSettings(ctx, settings any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetProposerSettings", reflect.TypeOf((*MockValidatorService)(nil).SetProposerSettings), ctx, settings)
-}
-
 // UpdateProposerSettings mocks base method.
 func (m *MockValidatorService) UpdateProposerSettings(ctx context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
 	m.ctrl.T.Helper()

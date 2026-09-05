@@ -314,17 +314,6 @@ func (v *ValidatorService) UpdateProposerSettings(ctx context.Context, mutate fu
 	return v.validator.UpdateProposerSettings(ctx, mutate)
 }
 
-// SetProposerSettings sets the proposer settings on the validator service as well as the underlying validator
-func (v *ValidatorService) SetProposerSettings(ctx context.Context, settings *proposer.Settings) error {
-	// validator service proposer settings is only used for pass through from node -> validator service -> validator.
-	// in memory use of proposer settings happens on validator.
-	v.proposerSettings = settings
-
-	// passes settings down to be updated in database and saved in memory.
-	// updates to validator proposer settings will be in the validator object and not validator service.
-	return v.validator.SetProposerSettings(ctx, settings)
-}
-
 // ConstructDialOptions constructs a list of grpc dial options
 func ConstructDialOptions(
 	maxCallRecvMsgSize int,

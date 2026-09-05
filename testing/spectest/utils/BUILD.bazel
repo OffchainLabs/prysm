@@ -5,6 +5,8 @@ go_library(
     testonly = True,
     srcs = [
         "config.go",
+        "crypto_fake.go",  # keep
+        "crypto_real.go",
         "utils.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/testing/spectest/utils",
@@ -22,7 +24,10 @@ go_library(
 go_test(
     name = "go_default_test",
     size = "small",
-    srcs = ["config_test.go"],
+    srcs = [
+        "config_test.go",
+        "utils_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
         "//config/params:go_default_library",

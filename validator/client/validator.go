@@ -722,40 +722,32 @@ func (v *validator) ProposerSettings() *proposer.Settings {
 	return v.proposerSettings
 }
 
-// SetProposerSettings sets and saves the passed in proposer settings overriding the in memory one
-func (v *validator) SetProposerSettings(ctx context.Context, settings *proposer.Settings) error {
-	v.proposerSettingsMu.Lock()
-	defer v.proposerSettingsMu.Unlock()
-	return v.setProposerSettingsLocked(ctx, settings)
-}
-
-func (v *validator) setProposerSettingsLocked(ctx context.Context, settings *proposer.Settings) error {
-	ctx, span := trace.StartSpan(ctx, "validator.SetProposerSettings")
+// UpdateProposerSettings atomically mutates the proposer settings.
+func (v *validator) UpdateProposerSettings(ctx context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
+	ctx, span := trace.StartSpan(ctx, "validator.UpdateProposerSettings")
 	defer span.End()
 
 	if v.db == nil {
 		return errors.New("db is not set")
 	}
-	if err := v.db.SaveProposerSettings(ctx, settings); err != nil {
-		return err
-	}
-	v.proposerSettings = settings
-	return nil
-}
 
-// UpdateProposerSettings atomically mutates the proposer settings: mutate gets a
-// deep copy (nil when unset) and returns what to persist, or nil for a no-op.
-func (v *validator) UpdateProposerSettings(ctx context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
 	v.proposerSettingsMu.Lock()
 	defer v.proposerSettingsMu.Unlock()
+
 	next, err := mutate(v.proposerSettings.Clone())
 	if err != nil {
-		return err
+		return fmt.Errorf("mutate proposer settings: %w", err)
 	}
 	if next == nil {
 		return nil
 	}
-	return v.setProposerSettingsLocked(ctx, next)
+
+	if err := v.db.SaveProposerSettings(ctx, next); err != nil {
+		return fmt.Errorf("save proposer settings: %w", err)
+	}
+
+	v.proposerSettings = next
+	return nil
 }
 
 // PushProposerSettings pushes proposer and builder preferences plus, pre-Gloas,

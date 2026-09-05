@@ -139,33 +139,36 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 			Debug("Loaded proposer settings from DB")
 	}
 
-	// start to process based on load method
+	// start to process based on load method,
+	// each method merges onto the previous method's result.
+	base := dbSettings
 	for _, method := range psl.loadMethods {
 		var err error
 		switch method {
 		case defaultFlag:
-			loadedSettings, err = psl.loadFromDefault(cliCtx, dbSettings)
+			loadedSettings, err = psl.loadFromDefault(cliCtx, base)
 			if err != nil {
 				return nil, err
 			}
 		case fileFlag:
-			loadedSettings, err = psl.loadFromFile(cliCtx, dbSettings)
+			loadedSettings, err = psl.loadFromFile(cliCtx, base)
 			if err != nil {
 				return nil, err
 			}
 		case urlFlag:
-			loadedSettings, err = psl.loadFromURL(cliCtx, dbSettings)
+			loadedSettings, err = psl.loadFromURL(cliCtx, base)
 			if err != nil {
 				return nil, err
 			}
 		case onlyDB, none:
-			loadedSettings = psl.processProposerSettings(&validatorpb.ProposerSettingsPayload{}, dbSettings)
+			loadedSettings = psl.processProposerSettings(&validatorpb.ProposerSettingsPayload{}, base)
 			if psl.existsInDB {
 				log.Info("Proposer settings loaded from the DB")
 			}
 		default:
 			return nil, errors.New("load method for proposer settings does not exist")
 		}
+		base = loadedSettings
 	}
 
 	// exit early if nothing is provided
@@ -419,12 +422,13 @@ func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPay
 
 func processBuilderConfig(current *validatorpb.BuilderConfig, override *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64) *validatorpb.BuilderConfig {
 	if current != nil {
-		current.GasLimit = reviewGasLimit(current.GasLimit)
-		if override != nil {
-			current.Enabled = override.Enabled
-		}
 		if gasLimitOnly != nil {
 			current.GasLimit = *gasLimitOnly
+		} else {
+			current.GasLimit = reviewGasLimit(current.GasLimit)
+		}
+		if override != nil {
+			current.Enabled = override.Enabled
 		}
 		return current
 	}
