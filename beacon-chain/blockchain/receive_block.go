@@ -571,7 +571,13 @@ func (s *Service) validateStateTransition(ctx context.Context, preState state.Be
 		return nil, ErrNotDescendantOfFinalized
 	}
 	stateTransitionStartTime := time.Now()
-	postState, err := transition.ExecuteStateTransition(ctx, preState, signed)
+	var postState state.BeaconState
+	var err error
+	if s.skipBlockSignaturesForTesting {
+		_, postState, err = transition.ExecuteStateTransitionNoVerifyAnySig(ctx, preState, signed)
+	} else {
+		postState, err = transition.ExecuteStateTransition(ctx, preState, signed)
+	}
 	if err != nil {
 		if ctx.Err() != nil || electra.IsExecutionRequestError(err) {
 			return nil, err
@@ -580,6 +586,11 @@ func (s *Service) validateStateTransition(ctx context.Context, preState state.Be
 	}
 	stateTransitionProcessingTime.Observe(float64(time.Since(stateTransitionStartTime).Milliseconds()))
 	return postState, nil
+}
+
+// DisableBlockSignatureVerificationForTesting supports spectest vectors generated with bls_setting 2, their blocks are unsigned.
+func (s *Service) DisableBlockSignatureVerificationForTesting() {
+	s.skipBlockSignaturesForTesting = true
 }
 
 // updateJustificationOnBlock updates the justified checkpoint on DB if the

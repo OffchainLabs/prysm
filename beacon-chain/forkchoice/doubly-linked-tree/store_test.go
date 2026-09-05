@@ -124,7 +124,7 @@ func TestStore_Insert(t *testing.T) {
 	ctx := t.Context()
 	_, blk, err := prepareForkchoiceState(ctx, 100, indexToHash(100), indexToHash(0), payloadHash, 1, 1)
 	require.NoError(t, err)
-	_, err = s.insert(ctx, blk, 1, 1)
+	_, err = s.insert(ctx, blk, 1, [32]byte{}, 1)
 	require.NoError(t, err)
 	assert.Equal(t, 2, len(s.emptyNodeByRoot), "Did not insert block")
 	assert.Equal(t, (*PayloadNode)(nil), treeRootNode.parent, "Incorrect parent")
@@ -319,7 +319,7 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	ctx := t.Context()
 	_, blk, err := prepareForkchoiceState(ctx, 1, [32]byte{'a'}, b, b, 1, 1)
 	require.NoError(t, err)
-	_, err = s.insert(ctx, blk, 1, 1)
+	_, err = s.insert(ctx, blk, 1, [32]byte{}, 1)
 	require.NoError(t, err)
 	count, err := f.ReceivedBlocksLastEpoch()
 	require.NoError(t, err)
@@ -330,7 +330,7 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	// Received block last epoch is 1
 	_, blk, err = prepareForkchoiceState(ctx, 64, [32]byte{'A'}, b, b, 1, 1)
 	require.NoError(t, err)
-	_, err = s.insert(ctx, blk, 1, 1)
+	_, err = s.insert(ctx, blk, 1, [32]byte{}, 1)
 	require.NoError(t, err)
 	f.SetGenesisTime(time.Now().Add(time.Duration((-64*int64(params.BeaconConfig().SecondsPerSlot))-1) * time.Second))
 	count, err = f.ReceivedBlocksLastEpoch()
@@ -342,7 +342,7 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	// Received block last epoch is 2
 	_, blk, err = prepareForkchoiceState(ctx, 65, [32]byte{'B'}, b, b, 1, 1)
 	require.NoError(t, err)
-	_, err = s.insert(ctx, blk, 1, 1)
+	_, err = s.insert(ctx, blk, 1, [32]byte{}, 1)
 	require.NoError(t, err)
 	f.SetGenesisTime(time.Now().Add(time.Duration(-66*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
 	count, err = f.ReceivedBlocksLastEpoch()
@@ -354,7 +354,7 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	// Received block last epoch is 3
 	_, blk, err = prepareForkchoiceState(ctx, 66, [32]byte{'C'}, b, b, 1, 1)
 	require.NoError(t, err)
-	_, err = s.insert(ctx, blk, 1, 1)
+	_, err = s.insert(ctx, blk, 1, [32]byte{}, 1)
 	require.NoError(t, err)
 	f.SetGenesisTime(time.Now().Add(time.Duration(-66*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
 	count, err = f.ReceivedBlocksLastEpoch()
@@ -367,7 +367,7 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	// Received block last epoch is 1
 	_, blk, err = prepareForkchoiceState(ctx, 98, [32]byte{'D'}, b, b, 1, 1)
 	require.NoError(t, err)
-	_, err = s.insert(ctx, blk, 1, 1)
+	_, err = s.insert(ctx, blk, 1, [32]byte{}, 1)
 	require.NoError(t, err)
 	f.SetGenesisTime(time.Now().Add(time.Duration(-98*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
 	count, err = f.ReceivedBlocksLastEpoch()
@@ -381,7 +381,7 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	// Received block last epoch is 1
 	_, blk, err = prepareForkchoiceState(ctx, 132, [32]byte{'E'}, b, b, 1, 1)
 	require.NoError(t, err)
-	_, err = s.insert(ctx, blk, 1, 1)
+	_, err = s.insert(ctx, blk, 1, [32]byte{}, 1)
 	require.NoError(t, err)
 	f.SetGenesisTime(time.Now().Add(time.Duration(-132*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
 	count, err = f.ReceivedBlocksLastEpoch()
@@ -396,7 +396,7 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	// Received block last epoch is still 1. 99 is outside the window
 	_, blk, err = prepareForkchoiceState(ctx, 99, [32]byte{'F'}, b, b, 1, 1)
 	require.NoError(t, err)
-	_, err = s.insert(ctx, blk, 1, 1)
+	_, err = s.insert(ctx, blk, 1, [32]byte{}, 1)
 	require.NoError(t, err)
 	f.SetGenesisTime(time.Now().Add(time.Duration(-132*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
 	count, err = f.ReceivedBlocksLastEpoch()
@@ -411,7 +411,7 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	// Received block last epoch is still 1. 100 is at the same position as 132
 	_, blk, err = prepareForkchoiceState(ctx, 100, [32]byte{'G'}, b, b, 1, 1)
 	require.NoError(t, err)
-	_, err = s.insert(ctx, blk, 1, 1)
+	_, err = s.insert(ctx, blk, 1, [32]byte{}, 1)
 	require.NoError(t, err)
 	f.SetGenesisTime(time.Now().Add(time.Duration(-132*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
 	count, err = f.ReceivedBlocksLastEpoch()
@@ -426,7 +426,7 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	// Received block last epoch is 2. 101 is within the window
 	_, blk, err = prepareForkchoiceState(ctx, 101, [32]byte{'H'}, b, b, 1, 1)
 	require.NoError(t, err)
-	_, err = s.insert(ctx, blk, 1, 1)
+	_, err = s.insert(ctx, blk, 1, [32]byte{}, 1)
 	require.NoError(t, err)
 	f.SetGenesisTime(time.Now().Add(time.Duration(-132*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
 	count, err = f.ReceivedBlocksLastEpoch()

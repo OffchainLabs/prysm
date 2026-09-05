@@ -37,9 +37,7 @@ func TestFakeRejectsMalformedInput(t *testing.T) {
 	require.NotNil(t, err, "batch with mismatched lengths must not verify")
 }
 
-// Key material is real, because the spec computes AggregatePKs unconditionally.
-// Ref: https://github.com/ethereum/consensus-specs/pull/5489
-func TestFakeKeysAreReal(t *testing.T) {
+func TestFakeAggregatedKeys(t *testing.T) {
 	raw := make([][]byte, 3)
 	keys := make([]PublicKey, 3)
 	for i := range raw {
@@ -54,8 +52,18 @@ func TestFakeKeysAreReal(t *testing.T) {
 	require.DeepEqual(t, want.Marshal(), got.Marshal())
 	require.DeepEqual(t, want.Marshal(), AggregateMultiplePubkeys(keys).Marshal())
 
+	SetStubPubkeyAggregation(true)
+	defer SetStubPubkeyAggregation(false)
+	stubbed, err := AggregatePublicKeys(raw)
+	require.NoError(t, err)
+	require.DeepEqual(t, stubPubkey, stubbed.Marshal())
+	require.DeepEqual(t, stubPubkey, AggregateMultiplePubkeys(keys).Marshal())
+	require.DeepEqual(t, stubPubkey, stubbed.Aggregate(keys[0]).Marshal())
+	require.Equal(t, true, stubbed.Equals(stubbed.Copy()))
+	require.Equal(t, false, stubbed.IsInfinite())
+
 	_, err = PublicKeyFromBytes(bytes.Repeat([]byte{0x22}, 48))
-	require.NotNil(t, err, "the spec's unused STUB_PUBKEY is not a valid key")
+	require.NotNil(t, err, "the spec's STUB_PUBKEY is not a valid key")
 	_, err = PublicKeyFromBytes(common.InfinitePublicKey[:])
 	require.Equal(t, common.ErrInfinitePubKey, err)
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -71,7 +72,7 @@ func (s *Store) head(ctx context.Context) ([32]byte, error) {
 // It then updates the new node's parent with the best child and descendant node.
 func (s *Store) insert(ctx context.Context,
 	roblock consensus_blocks.ROBlock,
-	justifiedEpoch, finalizedEpoch primitives.Epoch,
+	justifiedEpoch primitives.Epoch, justifiedRoot [32]byte, finalizedEpoch primitives.Epoch,
 ) (*PayloadNode, error) {
 	ctx, span := trace.StartSpan(ctx, "doublyLinkedForkchoice.insert")
 	defer span.End()
@@ -119,7 +120,7 @@ func (s *Store) insert(ctx context.Context,
 		root:                        root,
 		parent:                      parent,
 		justifiedEpoch:              justifiedEpoch,
-		unrealizedJustifiedEpoch:    justifiedEpoch,
+		unrealizedJustified:         forkchoicetypes.Checkpoint{Epoch: justifiedEpoch, Root: justifiedRoot},
 		finalizedEpoch:              finalizedEpoch,
 		unrealizedFinalizedEpoch:    finalizedEpoch,
 		blockHash:                   blockHash,

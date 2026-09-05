@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -109,10 +111,41 @@ func (s *Service) spawnProcessAttestationsRoutine() {
 					s.cfg.ForkChoiceStore.Unlock()
 
 					s.UpdateHead(s.ctx, slotInterval.Slot)
+
+					// The spec requires running FCR at slot start, after attestations are applied.
+					if s.fcr != nil {
+						s.fcr.OnFastConfirmation(s.ctx, slotInterval.Slot)
+						s.notifyFastConfirmation(slotInterval.Slot)
+					}
 				}
 			}
 		}
 	}()
+}
+
+// notifyFastConfirmation emits a fast_confirmation event after every run of the fast
+// confirmation rule regardless of whether the confirmed block changed.
+func (s *Service) notifyFastConfirmation(currentSlot primitives.Slot) {
+	if s.fcr == nil {
+		return
+	}
+	root := s.fcr.ConfirmedRoot()
+
+	s.cfg.ForkChoiceStore.RLock()
+	slot, err := s.cfg.ForkChoiceStore.Slot(root)
+	s.cfg.ForkChoiceStore.RUnlock()
+	if err != nil {
+		return
+	}
+
+	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
+		Type: statefeed.FastConfirmation,
+		Data: &statefeed.FastConfirmationData{
+			Slot:        slot,
+			BlockRoot:   root,
+			CurrentSlot: currentSlot,
+		},
+	})
 }
 
 // UpdateHead updates the canonical head of the chain based on information from fork-choice attestations and votes.

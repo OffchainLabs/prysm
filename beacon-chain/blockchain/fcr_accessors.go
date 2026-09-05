@@ -1,0 +1,211 @@
+package blockchain
+
+import (
+	"context"
+	"sync"
+
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/confirmation"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/pkg/errors"
+)
+
+type fcrCommitteeAccessor struct {
+	s *Service
+}
+
+func (a *fcrCommitteeAccessor) Committee(ctx context.Context, slot primitives.Slot) ([]primitives.ValidatorIndex, error) {
+	a.s.headLock.RLock()
+	headState := a.s.head.state
+	a.s.headLock.RUnlock()
+	if headState == nil || headState.IsNil() {
+		return nil, errors.New("head state not available")
+	}
+
+	if slots.ToEpoch(slot) > coreTime.CurrentEpoch(headState)+1 {
+		return nil, errors.Errorf("slot %d is beyond the head state's next epoch", slot)
+	}
+	committees, err := helpers.BeaconCommittees(ctx, headState, slot)
+	if err != nil {
+		return nil, err
+	}
+	n := 0
+	for _, committee := range committees {
+		n += len(committee)
+	}
+	result := make([]primitives.ValidatorIndex, 0, n)
+	for _, committee := range committees {
+		result = append(result, committee...)
+	}
+	return result, nil
+}
+
+func (a *fcrCommitteeAccessor) Seed(_ context.Context, epoch primitives.Epoch) ([32]byte, error) {
+	a.s.headLock.RLock()
+	headState := a.s.head.state
+	a.s.headLock.RUnlock()
+	if headState == nil || headState.IsNil() {
+		return [32]byte{}, errors.New("head state not available")
+	}
+	return helpers.Seed(headState, epoch, params.BeaconConfig().DomainBeaconAttester)
+}
+
+type fcrBalanceAccessor struct {
+	s            *Service
+	mu           sync.Mutex
+	byCheckpoint map[forkchoicetypes.Checkpoint]*confirmation.FFGStateInfo
+	pulledUpKey  pulledUpCacheKey
+	pulledUpInfo *confirmation.FFGStateInfo
+}
+
+type pulledUpCacheKey struct {
+	root  [32]byte
+	epoch primitives.Epoch
+}
+
+func extractBalanceInfo(ctx context.Context, st state.ReadOnlyBeaconState) (*confirmation.FFGStateInfo, error) {
+	total, err := helpers.TotalActiveBalance(ctx, st)
+	if err != nil {
+		return nil, err
+	}
+	balances := make([]uint64, st.NumValidators())
+	slashedBalances := make(map[primitives.ValidatorIndex]uint64)
+	epoch := coreTime.CurrentEpoch(st)
+	for idx, val := range st.ValidatorsReadOnlySeq() {
+		if !helpers.IsActiveValidatorUsingTrie(val, epoch) {
+			continue
+		}
+		if val.Slashed() {
+			// Spec get_equivocation_score counts active slashed validators, this discounts them from the adversarial weight.
+			slashedBalances[idx] = val.EffectiveBalance()
+			continue
+		}
+		balances[idx] = val.EffectiveBalance()
+	}
+	return &confirmation.FFGStateInfo{TotalActiveBalance: total, Balances: balances, SlashedBalances: slashedBalances}, nil
+}
+
+func (a *fcrBalanceAccessor) BalanceInfoByCheckpoint(ctx context.Context, cp forkchoicetypes.Checkpoint) (*confirmation.FFGStateInfo, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if cached, ok := a.byCheckpoint[cp]; ok {
+		return cached, nil
+	}
+	epochStart, err := slots.EpochStart(cp.Epoch)
+	if err != nil {
+		return nil, err
+	}
+	var st state.ReadOnlyBeaconState
+	cached, err := a.s.checkpointStateCache.StateByCheckpoint(&ethpb.Checkpoint{Epoch: cp.Epoch, Root: cp.Root[:]})
+	if err == nil && cached != nil && !cached.IsNil() {
+		st = cached
+	} else {
+		base, err := a.s.cfg.StateGen.StateByRoot(ctx, cp.Root)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get state for checkpoint root")
+		}
+		if base == nil || base.IsNil() {
+			return nil, errors.New("nil state for checkpoint root")
+		}
+		// Spec's checkpoint state is advanced to the epoch start
+		advanced, err := transition.ProcessSlotsIfPossible(ctx, base, epochStart)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not advance state to checkpoint epoch")
+		}
+		st = advanced
+	}
+	info, err := extractBalanceInfo(ctx, st)
+	if err != nil {
+		return nil, err
+	}
+	if a.byCheckpoint == nil {
+		a.byCheckpoint = make(map[forkchoicetypes.Checkpoint]*confirmation.FFGStateInfo)
+	} else if len(a.byCheckpoint) > 3 {
+		// Evict the oldest entry, only the current and previous observed justified checkpoints stay live.
+		var lowest forkchoicetypes.Checkpoint
+		first := true
+		for k := range a.byCheckpoint {
+			if first || k.Epoch < lowest.Epoch {
+				lowest, first = k, false
+			}
+		}
+		delete(a.byCheckpoint, lowest)
+	}
+	a.byCheckpoint[cp] = info
+	return info, nil
+}
+
+func (a *fcrBalanceAccessor) PulledUpHeadState(ctx context.Context, headRoot [32]byte) (*confirmation.FFGStateInfo, error) {
+	currentEpoch := slots.EpochsSinceGenesis(a.s.genesisTime)
+	key := pulledUpCacheKey{root: headRoot, epoch: currentEpoch}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.pulledUpInfo != nil && a.pulledUpKey == key {
+		return a.pulledUpInfo, nil
+	}
+
+	a.s.headLock.RLock()
+	var headState state.BeaconState
+	if a.s.headRoot() == headRoot {
+		headState = a.s.head.state
+	}
+	a.s.headLock.RUnlock()
+
+	if headState == nil || headState.IsNil() {
+		st, err := a.s.cfg.StateGen.StateByRoot(ctx, headRoot)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get state for head root")
+		}
+		if st == nil || st.IsNil() {
+			return nil, errors.New("head state not available")
+		}
+		headState = st
+	}
+
+	stateEpoch := coreTime.CurrentEpoch(headState)
+
+	var st state.ReadOnlyBeaconState
+	if stateEpoch < currentEpoch {
+		epochStart, err := slots.EpochStart(currentEpoch)
+		if err != nil {
+			return nil, err
+		}
+
+		cached := transition.NextSlotState(headRoot[:], epochStart)
+		if cached != nil && !cached.IsNil() {
+			if cached.Slot() < epochStart {
+				advanced, err := transition.ProcessSlots(ctx, cached, epochStart)
+				if err != nil {
+					return nil, errors.Wrap(err, "could not advance cached state")
+				}
+				st = advanced
+			} else {
+				st = cached
+			}
+		} else {
+			copied := headState.Copy()
+			advanced, err := transition.ProcessSlots(ctx, copied, epochStart)
+			if err != nil {
+				return nil, errors.Wrap(err, "could not advance head state")
+			}
+			st = advanced
+		}
+	} else {
+		st = headState
+	}
+
+	info, err := extractBalanceInfo(ctx, st)
+	if err != nil {
+		return nil, err
+	}
+	a.pulledUpKey = key
+	a.pulledUpInfo = info
+	return info, nil
+}
