@@ -28,6 +28,26 @@ func TestRedactEndpoint(t *testing.T) {
 			want:     "localhost:4000",
 		},
 		{
+			name:     "grpc ip:port unchanged",
+			endpoint: "127.0.0.1:4000",
+			want:     "127.0.0.1:4000",
+		},
+		{
+			name:     "scheme-less credentials masked",
+			endpoint: "eth:fake-token-not-real@127.0.0.1:4000",
+			want:     "eth:xxxxx@127.0.0.1:4000",
+		},
+		{
+			name:     "unparseable becomes placeholder",
+			endpoint: "http://127.0.0.1:4000\x00",
+			want:     "[invalid endpoint]",
+		},
+		{
+			name:     "unparseable with credentials becomes placeholder",
+			endpoint: "http://user:fake-pass@local host:8080",
+			want:     "[invalid endpoint]",
+		},
+		{
 			name:     "username only still masked",
 			endpoint: "https://eth@bn-lodestar.example.io",
 			want:     "https://eth@bn-lodestar.example.io",
@@ -36,6 +56,53 @@ func TestRedactEndpoint(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			require.Equal(t, tt.want, RedactEndpoint(tt.endpoint))
+		})
+	}
+}
+
+func TestRedactEndpointList(t *testing.T) {
+	tests := []struct {
+		name      string
+		endpoints string
+		want      string
+	}{
+		{
+			name:      "single endpoint behaves like RedactEndpoint",
+			endpoints: "https://eth:fake-token-not-real@bn-lodestar.example.io",
+			want:      "https://eth:xxxxx@bn-lodestar.example.io",
+		},
+		{
+			name:      "credentials of every endpoint masked",
+			endpoints: "https://eth:secret1@host1.example.io,https://eth:secret2@host2.example.io",
+			want:      "https://eth:xxxxx@host1.example.io,https://eth:xxxxx@host2.example.io",
+		},
+		{
+			name:      "surrounding spaces trimmed",
+			endpoints: "https://host1.example.io:3500, https://eth:secret@host2.example.io:3500",
+			want:      "https://host1.example.io:3500,https://eth:xxxxx@host2.example.io:3500",
+		},
+		{
+			name:      "no credentials unchanged",
+			endpoints: "http://host1:3500,http://host2:3500",
+			want:      "http://host1:3500,http://host2:3500",
+		},
+		{
+			name:      "already redacted is left alone",
+			endpoints: "https://eth:xxxxx@host1.example.io,http://host2:3500",
+			want:      "https://eth:xxxxx@host1.example.io,http://host2:3500",
+		},
+		{
+			name:      "empty unchanged",
+			endpoints: "",
+			want:      "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, RedactEndpointList(tt.endpoints))
+			// Redacting twice must be a no-op: callers may receive an
+			// already-redacted value.
+			require.Equal(t, tt.want, RedactEndpointList(RedactEndpointList(tt.endpoints)))
 		})
 	}
 }

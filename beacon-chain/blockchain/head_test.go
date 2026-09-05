@@ -8,7 +8,6 @@ import (
 	"time"
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
@@ -46,10 +45,6 @@ func TestSaveHead_Different(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
 	service := setupBeaconChain(t, beaconDB)
 
-	attDataCache := cache.NewAttestationDataCache()
-	require.NoError(t, attDataCache.Put(&cache.AttestationConsensusData{Slot: 1}))
-	service.cfg.AttestationDataCache = attDataCache
-
 	oldBlock := util.SaveBlock(t, t.Context(), service.cfg.BeaconDB, util.NewBeaconBlock())
 	oldRoot, err := oldBlock.Block().HashTreeRoot()
 	require.NoError(t, err)
@@ -85,9 +80,6 @@ func TestSaveHead_Different(t *testing.T) {
 	require.NoError(t, service.saveHead(t.Context(), newRoot, wsb, headState, false))
 
 	assert.Equal(t, primitives.Slot(1), service.HeadSlot(), "Head did not change")
-
-	// The attestation data cache is cleared in a goroutine once the head changes.
-	require.Eventually(t, func() bool { return attDataCache.Get() == nil }, time.Second, 10*time.Millisecond, "Attestation data cache was not cleared after head update")
 
 	cachedRoot, err := service.HeadRoot(t.Context())
 	require.NoError(t, err)
@@ -175,8 +167,10 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
 		require.NoError(t, srv.notifyNewHeadEvent(t.Context(), 1, newHeadStateRoot, newHeadRoot))
+		require.Eventually(t, func() bool {
+			return len(notifier.ReceivedEvents()) == 1
+		}, 5*time.Second, 50*time.Millisecond, "Expected exactly 1 state notification")
 		events := notifier.ReceivedEvents()
-		require.Equal(t, 1, len(events))
 
 		eventHead, ok := events[0].Data.(*statefeed.HeadData)
 		require.Equal(t, true, ok)
@@ -202,8 +196,10 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 		newHeadStateRoot := [32]byte{2}
 		newHeadRoot := [32]byte{3}
 		require.NoError(t, srv.notifyNewHeadEvent(t.Context(), 0, newHeadStateRoot, newHeadRoot))
+		require.Eventually(t, func() bool {
+			return len(notifier.ReceivedEvents()) == 1
+		}, 5*time.Second, 50*time.Millisecond, "Expected exactly 1 state notification")
 		events := notifier.ReceivedEvents()
-		require.Equal(t, 1, len(events))
 
 		eventHead, ok := events[0].Data.(*statefeed.HeadData)
 		require.Equal(t, true, ok)
@@ -241,8 +237,10 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
 		err = srv.notifyNewHeadEvent(t.Context(), epoch2Start, newHeadStateRoot, newHeadRoot)
 		require.NoError(t, err)
+		require.Eventually(t, func() bool {
+			return len(notifier.ReceivedEvents()) == 1
+		}, 5*time.Second, 50*time.Millisecond, "Expected exactly 1 state notification")
 		events := notifier.ReceivedEvents()
-		require.Equal(t, 1, len(events))
 
 		eventHead, ok := events[0].Data.(*statefeed.HeadData)
 		require.Equal(t, true, ok)
@@ -271,8 +269,10 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
 		newHeadSlot := params.BeaconConfig().SlotsPerEpoch
 		require.NoError(t, srv.notifyNewHeadEvent(t.Context(), newHeadSlot, newHeadStateRoot, newHeadRoot))
+		require.Eventually(t, func() bool {
+			return len(notifier.ReceivedEvents()) == 1
+		}, 5*time.Second, 50*time.Millisecond, "Expected exactly 1 state notification")
 		events := notifier.ReceivedEvents()
-		require.Equal(t, 1, len(events))
 
 		eventHead, ok := events[0].Data.(*statefeed.HeadData)
 		require.Equal(t, true, ok)
@@ -300,8 +300,10 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
 		newHeadSlot := params.BeaconConfig().SlotsPerEpoch
 		require.NoError(t, srv.notifyNewHeadEvent(t.Context(), newHeadSlot, [32]byte{2}, newHeadRoot))
+		require.Eventually(t, func() bool {
+			return len(notifier.ReceivedEvents()) == 1
+		}, 5*time.Second, 50*time.Millisecond, "Expected exactly 1 state notification")
 		events := notifier.ReceivedEvents()
-		require.Equal(t, 1, len(events))
 
 		eventHead, ok := events[0].Data.(*statefeed.HeadData)
 		require.Equal(t, true, ok)
@@ -897,7 +899,7 @@ func TestUpdateHead_noSavedChanges(t *testing.T) {
 
 	bellatrixState, _ := util.DeterministicGenesisStateBellatrix(t, 2)
 	require.NoError(t, beaconDB.SaveState(ctx, bellatrixState, bellatrixBlkRoot))
-	service.cfg.StateGen.SaveFinalizedState(0, bellatrixBlkRoot, bellatrixState)
+	service.cfg.StateGen.SaveFinalizedState(bellatrixBlkRoot, bellatrixState)
 
 	headRoot := service.headRoot()
 	require.Equal(t, [32]byte{}, headRoot)

@@ -108,15 +108,24 @@ func TestLocalSelector_AttestationSelectionProof_ConcurrentDedup(t *testing.T) {
 	}
 }
 
-func TestLocalSelector_RefreshSelectionProofs_ClearsCache(t *testing.T) {
-	s, err := newLocalSelector(&validator{})
+func TestLocalSelector_RefreshSelectionProofs_PrunesPastEpochs(t *testing.T) {
+	spe := params.BeaconConfig().SlotsPerEpoch
+	genesis := time.Now().Add(-time.Duration(uint64(spe)*2*params.BeaconConfig().SecondsPerSlot) * time.Second)
+	s, err := newLocalSelector(&validator{genesisTime: genesis})
 	require.NoError(t, err)
 
-	key := attSelectionKey{slot: 1, index: 0}
-	s.proofCache[key] = []byte("cached")
+	epochStart := 2 * spe
+	past := attSelectionKey{slot: epochStart - 1, index: 0}
+	current := attSelectionKey{slot: epochStart + 1, index: 0}
+	next := attSelectionKey{slot: epochStart + spe, index: 0}
+	s.proofCache[past] = []byte("past")
+	s.proofCache[current] = []byte("current")
+	s.proofCache[next] = []byte("next")
 
 	require.NoError(t, s.RefreshSelectionProofs(t.Context()))
-	assert.Equal(t, 0, len(s.proofCache), "proof cache should be cleared")
+	_, ok := s.proofCache[past]
+	assert.Equal(t, false, ok, "past-epoch proof should be pruned")
+	assert.Equal(t, 2, len(s.proofCache), "current and future proofs should be kept")
 }
 
 func TestDistributedSelector_ClaimAggregateSlot_AlwaysTrue(t *testing.T) {

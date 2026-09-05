@@ -28,6 +28,7 @@ import (
 	validator2 "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	mvslice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpbalpha "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -68,7 +69,18 @@ func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Reques
 	if httputil.RespondWithSsz(r) {
 		var data []byte
 		var err error
-		if v >= version.Electra {
+		if v >= version.Gloas {
+			typedAgg, ok := ethpbalpha.AttestationGloasFromAtt(agg)
+			if !ok {
+				httputil.HandleError(w, fmt.Sprintf("Attestation cannot be converted to type %T", &ethpbalpha.AttestationGloas{}), http.StatusInternalServerError)
+				return
+			}
+			data, err = typedAgg.MarshalSSZ()
+			if err != nil {
+				httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		} else if v >= version.Electra {
 			typedAgg, ok := agg.(*ethpbalpha.AttestationElectra)
 			if !ok {
 				httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.AttestationElectra{}), http.StatusInternalServerError)
@@ -100,7 +112,19 @@ func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Reques
 	resp := &structs.AggregateAttestationResponse{
 		Version: version.String(v),
 	}
-	if v >= version.Electra {
+	if v >= version.Gloas {
+		typedAgg, ok := ethpbalpha.AttestationGloasFromAtt(agg)
+		if !ok {
+			httputil.HandleError(w, fmt.Sprintf("Attestation cannot be converted to type %T", &ethpbalpha.AttestationGloas{}), http.StatusInternalServerError)
+			return
+		}
+		data, err := json.Marshal(structs.AttGloasFromConsensus(typedAgg))
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		resp.Data = data
+	} else if v >= version.Electra {
 		typedAgg, ok := agg.(*ethpbalpha.AttestationElectra)
 		if !ok {
 			httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.AttestationElectra{}), http.StatusInternalServerError)
@@ -243,9 +267,9 @@ func (s *Server) SubmitSignedProposerPreferences(w http.ResponseWriter, r *http.
 		decodeErr error
 	)
 	if httputil.IsRequestSsz(r) {
-		prefs, failures, decodeErr = decodeSignedProposerPreferencesSSZ(r.Body)
+		prefs, failures, decodeErr = server.DecodeSSZList[ethpbalpha.SignedProposerPreferences](r.Body)
 	} else {
-		prefs, failures, decodeErr = decodeSignedProposerPreferencesJSON(r.Body)
+		prefs, failures, decodeErr = server.DecodeJSONList(r.Body, (*structs.SignedProposerPreferences).ToConsensus)
 	}
 	if decodeErr != nil {
 		if errors.Is(decodeErr, io.EOF) {
@@ -284,49 +308,6 @@ func (s *Server) SubmitSignedProposerPreferences(w http.ResponseWriter, r *http.
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-}
-
-// decodeSignedProposerPreferencesJSON decodes a JSON array of SignedProposerPreferences.
-func decodeSignedProposerPreferencesJSON(r io.Reader) ([]*ethpbalpha.SignedProposerPreferences, []*server.IndexedError, error) {
-	var data []*structs.SignedProposerPreferences
-	if err := json.NewDecoder(r).Decode(&data); err != nil {
-		return nil, nil, err
-	}
-	prefs := make([]*ethpbalpha.SignedProposerPreferences, len(data))
-	var failures []*server.IndexedError
-	for i, item := range data {
-		consensusItem, err := item.ToConsensus()
-		if err != nil {
-			failures = append(failures, &server.IndexedError{Index: i, Message: err.Error()})
-			continue
-		}
-		prefs[i] = consensusItem
-	}
-	return prefs, failures, nil
-}
-
-// decodeSignedProposerPreferencesSSZ decodes the SSZ encoding
-func decodeSignedProposerPreferencesSSZ(r io.Reader) ([]*ethpbalpha.SignedProposerPreferences, []*server.IndexedError, error) {
-	body, err := io.ReadAll(r)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "could not read request body")
-	}
-	sszSize := (&ethpbalpha.SignedProposerPreferences{}).SizeSSZ()
-	if len(body) == 0 || len(body)%sszSize != 0 {
-		return nil, nil, errors.New("invalid SSZ signed proposer preferences list size")
-	}
-	n := len(body) / sszSize
-	prefs := make([]*ethpbalpha.SignedProposerPreferences, n)
-	var failures []*server.IndexedError
-	for i := range n {
-		m := &ethpbalpha.SignedProposerPreferences{}
-		if err := m.UnmarshalSSZ(body[i*sszSize : (i+1)*sszSize]); err != nil {
-			failures = append(failures, &server.IndexedError{Index: i, Message: "Could not decode SSZ message: " + err.Error()})
-			continue
-		}
-		prefs[i] = m
-	}
-	return prefs, failures, nil
 }
 
 // SubmitContributionAndProofs publishes multiple signed sync committee contribution and proofs.
@@ -410,20 +391,6 @@ func (s *Server) SubmitAggregateAndProofsV2(w http.ResponseWriter, r *http.Reque
 	ctx, span := trace.StartSpan(r.Context(), "validator.SubmitAggregateAndProofsV2")
 	defer span.End()
 
-	var reqData []json.RawMessage
-	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
-		if errors.Is(err, io.EOF) {
-			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		} else {
-			httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
-		}
-		return
-	}
-	if len(reqData) == 0 {
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		return
-	}
-
 	versionHeader := r.Header.Get(api.VersionHeader)
 	if versionHeader == "" {
 		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
@@ -435,51 +402,27 @@ func (s *Server) SubmitAggregateAndProofsV2(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var failures []*server.IndexedError
+	aggregates, failures, err := decodeSignedAggregates(r, v)
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		} else {
+			httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		}
+		return
+	}
+	if len(aggregates) == 0 {
+		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		return
+	}
+
 	var failedBroadcasts []*server.IndexedError
 
-	var rpcError *core.RpcError
-	for i, raw := range reqData {
-		if v >= version.Electra {
-			var signedAggregate structs.SignedAggregateAttestationAndProofElectra
-			err = json.Unmarshal(raw, &signedAggregate)
-			if err != nil {
-				failures = append(failures, &server.IndexedError{
-					Index:   i,
-					Message: "Could not parse message: " + err.Error(),
-				})
-				continue
-			}
-			consensusItem, err := signedAggregate.ToConsensus()
-			if err != nil {
-				failures = append(failures, &server.IndexedError{
-					Index:   i,
-					Message: "Could not convert request aggregate to consensus aggregate: " + err.Error(),
-				})
-				continue
-			}
-			rpcError = s.CoreService.SubmitSignedAggregateSelectionProof(ctx, consensusItem)
-		} else {
-			var signedAggregate structs.SignedAggregateAttestationAndProof
-			err = json.Unmarshal(raw, &signedAggregate)
-			if err != nil {
-				failures = append(failures, &server.IndexedError{
-					Index:   i,
-					Message: "Could not parse message: " + err.Error(),
-				})
-				continue
-			}
-			consensusItem, err := signedAggregate.ToConsensus()
-			if err != nil {
-				failures = append(failures, &server.IndexedError{
-					Index:   i,
-					Message: "Could not convert request aggregate to consensus aggregate: " + err.Error(),
-				})
-				continue
-			}
-			rpcError = s.CoreService.SubmitSignedAggregateSelectionProof(ctx, consensusItem)
+	for i, aggregate := range aggregates {
+		if aggregate == nil {
+			continue
 		}
-
+		rpcError := s.CoreService.SubmitSignedAggregateSelectionProof(ctx, aggregate)
 		if rpcError != nil {
 			var broadcastFailedErr *server.BroadcastFailedError
 			if errors.As(rpcError.Err, &broadcastFailedErr) {
@@ -513,6 +456,77 @@ func (s *Server) SubmitAggregateAndProofsV2(w http.ResponseWriter, r *http.Reque
 		httputil.WriteError(w, failuresErr)
 		return
 	}
+}
+
+// decodeSignedAggregates decodes the request body into fork-versioned signed aggregate and proofs.
+func decodeSignedAggregates(r *http.Request, v int) ([]ethpbalpha.SignedAggregateAttAndProof, []*server.IndexedError, error) {
+	if httputil.IsRequestSsz(r) {
+		return decodeSignedAggregatesSSZ(r.Body, v)
+	}
+	return server.DecodeJSONList(r.Body, func(raw *json.RawMessage) (ethpbalpha.SignedAggregateAttAndProof, error) {
+		return unmarshalSignedAggregateJSON(*raw, v)
+	})
+}
+
+// decodeSignedAggregatesSSZ decodes the SSZ List[SignedAggregateAndProof].
+func decodeSignedAggregatesSSZ(body io.Reader, v int) ([]ethpbalpha.SignedAggregateAttAndProof, []*server.IndexedError, error) {
+	b, err := io.ReadAll(body)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read request body: %w", err)
+	}
+
+	if len(b) == 0 {
+		return nil, nil, io.EOF
+	}
+
+	cfg := params.BeaconConfig()
+	raw, err := ssz.SplitVariableList(b, int(cfg.MaxCommitteesPerSlot*cfg.TargetAggregatorsPerCommittee))
+	if err != nil {
+		return nil, nil, fmt.Errorf("split SSZ list: %w", err)
+	}
+
+	aggregates, failures := server.ConvertList(raw, func(elem []byte) (ethpbalpha.SignedAggregateAttAndProof, error) {
+		return unmarshalSignedAggregateSSZ(elem, v)
+	})
+	return aggregates, failures, nil
+}
+
+func unmarshalSignedAggregateJSON(raw []byte, v int) (ethpbalpha.SignedAggregateAttAndProof, error) {
+	if v >= version.Electra {
+		var signedAggregate structs.SignedAggregateAttestationAndProofElectra
+		if err := json.Unmarshal(raw, &signedAggregate); err != nil {
+			return nil, fmt.Errorf("unmarshal JSON message: %w", err)
+		}
+		consensusItem, err := signedAggregate.ToConsensus()
+		if err != nil {
+			return nil, fmt.Errorf("convert request aggregate to consensus aggregate: %w", err)
+		}
+		return consensusItem, nil
+	}
+
+	var signedAggregate structs.SignedAggregateAttestationAndProof
+	if err := json.Unmarshal(raw, &signedAggregate); err != nil {
+		return nil, fmt.Errorf("unmarshal JSON message: %w", err)
+	}
+	consensusItem, err := signedAggregate.ToConsensus()
+	if err != nil {
+		return nil, fmt.Errorf("convert request aggregate to consensus aggregate: %w", err)
+	}
+	return consensusItem, nil
+}
+
+func unmarshalSignedAggregateSSZ(raw []byte, v int) (ethpbalpha.SignedAggregateAttAndProof, error) {
+	var consensusItem ethpbalpha.SignedAggregateAttAndProof
+	if v >= version.Electra {
+		consensusItem = &ethpbalpha.SignedAggregateAttestationAndProofElectra{}
+	} else {
+		consensusItem = &ethpbalpha.SignedAggregateAttestationAndProof{}
+	}
+
+	if err := consensusItem.UnmarshalSSZ(raw); err != nil {
+		return nil, fmt.Errorf("unmarshal SSZ message: %w", err)
+	}
+	return consensusItem, nil
 }
 
 // SubmitSyncCommitteeSubscription subscribe to a number of sync committee subnets.
@@ -621,8 +635,7 @@ func (s *Server) SubmitSyncCommitteeSubscription(w http.ResponseWriter, r *http.
 		if err != nil {
 			epochsToWatch = 0
 		}
-		epochDuration := time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second
-		totalDuration := epochDuration * time.Duration(epochsToWatch)
+		totalDuration := params.EpochsDuration(1, params.BeaconConfig()) * time.Duration(epochsToWatch)
 
 		subcommitteeSize := params.BeaconConfig().SyncCommitteeSize / params.BeaconConfig().SyncCommitteeSubnetCount
 		seen := make(map[uint64]bool)

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	rpctesting "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared/testing"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
@@ -14,9 +15,11 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/mock"
 	testhelpers "github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/test-helpers"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/grpc/metadata"
 )
 
 func TestProposeBeaconBlock_SSZ_Error(t *testing.T) {
@@ -104,6 +107,7 @@ func TestProposeBeaconBlock_SSZ_Error(t *testing.T) {
 
 				ctx := t.Context()
 				handler := mock.NewMockHandler(ctrl)
+				expectPostSSZWithFallback(handler)
 
 				// Expect PostSSZ to be called first with SSZ data
 				headers := map[string]string{
@@ -115,10 +119,10 @@ func TestProposeBeaconBlock_SSZ_Error(t *testing.T) {
 					headers,
 					gomock.Any(),
 				).Return(
-					nil, nil, testSuite.returnedError,
+					testSuite.returnedError,
 				).Times(1)
 
-				// No JSON fallback expected for non-406 errors
+				// No JSON fallback expected for non-415 errors
 
 				validatorClient := &beaconApiValidatorClient{handler: handler}
 				_, err := validatorClient.proposeBeaconBlock(ctx, testCase.block)
@@ -166,6 +170,7 @@ func TestProposeBeaconBlock_SSZSuccess_NoFallback(t *testing.T) {
 
 			ctx := t.Context()
 			handler := mock.NewMockHandler(ctrl)
+			expectPostSSZWithFallback(handler)
 
 			// Expect PostSSZ to be called and succeed
 			headers := map[string]string{
@@ -177,7 +182,7 @@ func TestProposeBeaconBlock_SSZSuccess_NoFallback(t *testing.T) {
 				headers,
 				gomock.Any(),
 			).Return(
-				nil, nil, nil,
+				nil,
 			).Times(1)
 
 			// Post should NOT be called when PostSSZ succeeds
@@ -201,6 +206,7 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		handler := mock.NewMockHandler(ctrl)
+		expectPostSSZWithFallback(handler)
 
 		var blockContents structs.SignedBeaconBlockContentsDeneb
 		err := json.Unmarshal([]byte(rpctesting.DenebBlockContents), &blockContents)
@@ -232,6 +238,7 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		handler := mock.NewMockHandler(ctrl)
+		expectPostSSZWithFallback(handler)
 
 		var blindedBlock structs.SignedBlindedBeaconBlockDeneb
 		err := json.Unmarshal([]byte(rpctesting.BlindedDenebBlock), &blindedBlock)
@@ -263,6 +270,7 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		handler := mock.NewMockHandler(ctrl)
+		expectPostSSZWithFallback(handler)
 
 		var blockContents structs.SignedBeaconBlockContentsElectra
 		err := json.Unmarshal([]byte(rpctesting.ElectraBlockContents), &blockContents)
@@ -294,6 +302,7 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		handler := mock.NewMockHandler(ctrl)
+		expectPostSSZWithFallback(handler)
 
 		var blindedBlock structs.SignedBlindedBeaconBlockElectra
 		err := json.Unmarshal([]byte(rpctesting.BlindedElectraBlock), &blindedBlock)
@@ -325,6 +334,7 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		handler := mock.NewMockHandler(ctrl)
+		expectPostSSZWithFallback(handler)
 
 		var blockContents structs.SignedBeaconBlockContentsFulu
 		err := json.Unmarshal([]byte(rpctesting.FuluBlockContents), &blockContents)
@@ -356,6 +366,7 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		handler := mock.NewMockHandler(ctrl)
+		expectPostSSZWithFallback(handler)
 
 		var blindedBlock structs.SignedBlindedBeaconBlockFulu
 		err := json.Unmarshal([]byte(rpctesting.BlindedFuluBlock), &blindedBlock)
@@ -565,7 +576,7 @@ func generateSignedBlindedCapellaBlock() *ethpb.GenericSignedBeaconBlock_Blinded
 	}
 }
 
-func TestProposeBeaconBlock_SSZFails_406_FallbackToJSON(t *testing.T) {
+func TestProposeBeaconBlock_SSZFails_415_FallbackToJSON(t *testing.T) {
 	testCases := []struct {
 		name             string
 		consensusVersion string
@@ -589,6 +600,7 @@ func TestProposeBeaconBlock_SSZFails_406_FallbackToJSON(t *testing.T) {
 
 			ctx := t.Context()
 			handler := mock.NewMockHandler(ctrl)
+			expectPostSSZWithFallback(handler)
 
 			// Expect PostSSZ to be called first and fail
 			handler.EXPECT().PostSSZ(
@@ -597,8 +609,8 @@ func TestProposeBeaconBlock_SSZFails_406_FallbackToJSON(t *testing.T) {
 				gomock.Any(),
 				gomock.Any(),
 			).Return(
-				nil, nil, &httputil.DefaultJsonError{
-					Code:    http.StatusNotAcceptable,
+				&httputil.DefaultJsonError{
+					Code:    http.StatusUnsupportedMediaType,
 					Message: "SSZ not supported",
 				},
 			).Times(1)
@@ -620,12 +632,13 @@ func TestProposeBeaconBlock_SSZFails_406_FallbackToJSON(t *testing.T) {
 	}
 }
 
-func TestProposeBeaconBlock_SSZFails_406_JSONFallbackFails(t *testing.T) {
+func TestProposeBeaconBlock_SSZFails_415_JSONFallbackFails(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	ctx := t.Context()
 	handler := mock.NewMockHandler(ctrl)
+	expectPostSSZWithFallback(handler)
 
 	handler.EXPECT().PostSSZ(
 		gomock.Any(),
@@ -633,8 +646,8 @@ func TestProposeBeaconBlock_SSZFails_406_JSONFallbackFails(t *testing.T) {
 		gomock.Any(),
 		gomock.Any(),
 	).Return(
-		nil, nil, &httputil.DefaultJsonError{
-			Code:    http.StatusNotAcceptable,
+		&httputil.DefaultJsonError{
+			Code:    http.StatusUnsupportedMediaType,
 			Message: "SSZ not supported",
 		},
 	).Times(1)
@@ -653,10 +666,10 @@ func TestProposeBeaconBlock_SSZFails_406_JSONFallbackFails(t *testing.T) {
 	_, err := validatorClient.proposeBeaconBlock(ctx, &ethpb.GenericSignedBeaconBlock{
 		Block: generateSignedPhase0Block(),
 	})
-	assert.ErrorContains(t, "failed to submit block via JSON fallback", err)
+	assert.ErrorContains(t, "post JSON", err)
 }
 
-func TestProposeBeaconBlock_SSZFails_Non406_NoFallback(t *testing.T) {
+func TestProposeBeaconBlock_SSZFails_Non415_NoFallback(t *testing.T) {
 	testCases := []struct {
 		name             string
 		consensusVersion string
@@ -680,8 +693,9 @@ func TestProposeBeaconBlock_SSZFails_Non406_NoFallback(t *testing.T) {
 
 			ctx := t.Context()
 			handler := mock.NewMockHandler(ctrl)
+			expectPostSSZWithFallback(handler)
 
-			// Expect PostSSZ to be called first and fail with non-406 error
+			// Expect PostSSZ to be called first and fail with non-415 error
 			sszHeaders := map[string]string{
 				"Eth-Consensus-Version": testCase.consensusVersion,
 			}
@@ -691,13 +705,13 @@ func TestProposeBeaconBlock_SSZFails_Non406_NoFallback(t *testing.T) {
 				sszHeaders,
 				gomock.Any(),
 			).Return(
-				nil, nil, &httputil.DefaultJsonError{
+				&httputil.DefaultJsonError{
 					Code:    http.StatusInternalServerError,
 					Message: "Internal server error",
 				},
 			).Times(1)
 
-			// Post should NOT be called for non-406 errors
+			// Post should NOT be called for non-415 errors
 			handler.EXPECT().Post(
 				gomock.Any(),
 				gomock.Any(),
@@ -745,8 +759,54 @@ func TestBuildBlockResult_HashTreeRootError(t *testing.T) {
 }
 
 func TestBuildBlockResult_MarshalSSZError(t *testing.T) {
-	_, err := buildBlockResult("phase0", false, badMarshaler{}, okHashable{}, func() ([]byte, error) {
+	// SSZ marshaling is lazy; the error surfaces when the marshal func runs.
+	res, err := buildBlockResult("phase0", false, badMarshaler{}, okHashable{}, func() ([]byte, error) {
 		return []byte(`{}`), nil
 	})
+	require.NoError(t, err)
+	_, err = res.marshalSSZ()
 	assert.ErrorContains(t, "failed to serialize phase0 beacon block", err)
+}
+
+func TestProposeBeaconBlock_GloasBuilderUrlEcho(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	signedBlock := &ethpb.GenericSignedBeaconBlock_Gloas{
+		Gloas: util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{}),
+	}
+
+	t.Run("builder url set adds the header", func(t *testing.T) {
+		handler := mock.NewMockHandler(ctrl)
+		expectPostSSZWithFallback(handler)
+		handler.EXPECT().PostSSZ(
+			gomock.Any(),
+			"/eth/v2/beacon/blocks",
+			map[string]string{
+				"Eth-Consensus-Version": "gloas",
+				api.BuilderUrlHeader:    "http://builder.example",
+			},
+			gomock.Any(),
+		).Return(nil).Times(1)
+
+		validatorClient := &beaconApiValidatorClient{handler: handler}
+		ctx := metadata.AppendToOutgoingContext(t.Context(), api.BuilderUrlHeader, "http://builder.example")
+		_, err := validatorClient.proposeBeaconBlock(ctx, &ethpb.GenericSignedBeaconBlock{Block: signedBlock})
+		require.NoError(t, err)
+	})
+
+	t.Run("no builder url omits the header", func(t *testing.T) {
+		handler := mock.NewMockHandler(ctrl)
+		expectPostSSZWithFallback(handler)
+		handler.EXPECT().PostSSZ(
+			gomock.Any(),
+			"/eth/v2/beacon/blocks",
+			map[string]string{"Eth-Consensus-Version": "gloas"},
+			gomock.Any(),
+		).Return(nil).Times(1)
+
+		validatorClient := &beaconApiValidatorClient{handler: handler}
+		_, err := validatorClient.proposeBeaconBlock(t.Context(), &ethpb.GenericSignedBeaconBlock{Block: signedBlock})
+		require.NoError(t, err)
+	})
 }

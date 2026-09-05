@@ -71,6 +71,9 @@ func GossipTopicMappings(topic string, epoch primitives.Epoch) proto.Message {
 		}
 		return gossipMessage(topic)
 	case AggregateAndProofSubnetTopicFormat:
+		if epoch >= params.BeaconConfig().GloasForkEpoch {
+			return &ethpb.SignedAggregateAttestationAndProofGloas{}
+		}
 		if epoch >= params.BeaconConfig().ElectraForkEpoch {
 			return &ethpb.SignedAggregateAttestationAndProofElectra{}
 		}
@@ -157,6 +160,7 @@ func init() {
 	// Specially handle Gloas objects.
 	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlockGloas]()] = BlockSubnetTopicFormat
 	GossipTypeMapping[reflect.TypeFor[*ethpb.DataColumnSidecarGloas]()] = DataColumnSubnetTopicFormat
+	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedAggregateAttestationAndProofGloas]()] = AggregateAndProofSubnetTopicFormat
 
 	// Payload attestation messages.
 	GossipTypeMapping[reflect.TypeFor[*ethpb.PayloadAttestationMessage]()] = PayloadAttestationMessageTopicFormat

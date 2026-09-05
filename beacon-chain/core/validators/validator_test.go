@@ -169,6 +169,8 @@ func TestInitiateValidatorExit_ProperExit_Electra(t *testing.T) {
 }
 
 func TestSlashValidator_OK(t *testing.T) {
+	helpers.ClearCache()
+
 	validatorCount := 100
 	registry := make([]*ethpb.Validator, 0, validatorCount)
 	balances := make([]uint64, 0, validatorCount)

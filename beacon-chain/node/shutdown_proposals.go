@@ -32,7 +32,7 @@ func (b *BeaconNode) waitForPendingProposals(sigc <-chan os.Signal) {
 	}
 
 	// Re-evaluate the pending duties on every slot boundary.
-	ticker := slots.NewSlotTicker(genesis, params.BeaconConfig().SecondsPerSlot)
+	ticker := slots.NewSlotTicker(genesis, params.BeaconConfig().SlotDuration())
 	defer ticker.Done()
 
 	b.waitForPendingProposalsLoop(sigc, ticker.C(), genesis, chainService.HeadState, chainService.CurrentSlot)

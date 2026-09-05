@@ -130,6 +130,7 @@ func (s *Simulator) Start() {
 	// Override global configuration for simulation purposes.
 	config := params.BeaconConfig().Copy()
 	config.SecondsPerSlot = s.srvConfig.Params.SecondsPerSlot
+	config.SlotDurationMilliseconds = s.srvConfig.Params.SecondsPerSlot * 1000
 	config.SlotsPerEpoch = s.srvConfig.Params.SlotsPerEpoch
 	undo, err := params.SetActiveWithUndo(config)
 	if err != nil {
@@ -168,7 +169,7 @@ func (s *Simulator) Stop() error {
 
 func (s *Simulator) simulateBlocksAndAttestations(ctx context.Context) {
 	// Add a small offset to producing blocks and attestations a little bit after a slot starts.
-	ticker := slots.NewSlotTicker(s.genesisTime.Add(time.Millisecond*500), params.BeaconConfig().SecondsPerSlot)
+	ticker := slots.NewSlotTicker(s.genesisTime.Add(time.Millisecond*500), params.BeaconConfig().SlotDuration())
 	defer ticker.Done()
 	for {
 		select {

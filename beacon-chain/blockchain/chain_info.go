@@ -50,7 +50,7 @@ type ForkchoiceFetcher interface {
 	Ancestor(context.Context, []byte, primitives.Slot) ([]byte, error)
 	BlockHash(root [32]byte) ([32]byte, error)
 	HasPayloadBlockHash(root, blockHash [32]byte) bool
-	GasLimit(root [32]byte) (uint64, error)
+	GasLimit(root, blockHash [32]byte) (uint64, error)
 	CachedHeadRoot() [32]byte
 	GetProposerHead() [32]byte
 	SetForkChoiceGenesisTime(time.Time)
@@ -101,6 +101,7 @@ type HeadFetcher interface {
 	HeadPublicKeyToValidatorIndex(pubKey [fieldparams.BLSPubkeyLength]byte) (primitives.ValidatorIndex, bool)
 	HeadValidatorIndexToPublicKey(ctx context.Context, index primitives.ValidatorIndex) ([fieldparams.BLSPubkeyLength]byte, error)
 	ChainHeads() ([][32]byte, []primitives.Slot)
+	IsBidCompatibleWithHead(interfaces.ROExecutionPayloadBid) bool
 	DependentRootForEpoch([32]byte, primitives.Epoch) ([32]byte, error)
 	TargetRootForEpoch([32]byte, primitives.Epoch) ([32]byte, error)
 	HeadSyncCommitteeFetcher
@@ -136,6 +137,7 @@ type FinalizationFetcher interface {
 	InForkchoice([32]byte) bool
 	IsFinalized(ctx context.Context, blockRoot [32]byte) bool
 	ParentPayloadReady(interfaces.ReadOnlyBeaconBlock) bool
+	BuiltOnFullParent(interfaces.ReadOnlyBeaconBlock) bool
 }
 
 // OptimisticModeFetcher retrieves information about optimistic status of the node.
@@ -453,6 +455,13 @@ func (s *Service) builtOnFullParentInForkchoice(blk interfaces.ReadOnlyBeaconBlo
 	return [32]byte(bid.Message.ParentBlockHash) == blockHash
 }
 
+// BuiltOnFullParent returns true if the block's bid builds on its parent's committed payload.
+func (s *Service) BuiltOnFullParent(blk interfaces.ReadOnlyBeaconBlock) bool {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.builtOnFullParentInForkchoice(blk)
+}
+
 // ParentPayloadReady returns true if the block's parent payload is available in forkchoice.
 func (s *Service) ParentPayloadReady(blk interfaces.ReadOnlyBeaconBlock) bool {
 	if blk.Version() < version.Gloas {
@@ -637,6 +646,11 @@ func (s *Service) RecentBlockSlot(root [32]byte) (primitives.Slot, error) {
 // syncing to the head of the chain.
 func (s *Service) inRegularSync() bool {
 	return s.cfg.SyncChecker.Synced()
+}
+
+// canWaitForGossipSidecars reports whether the sidecars for slot may still arrive over gossip.
+func (s *Service) canWaitForGossipSidecars(slot primitives.Slot) bool {
+	return s.inRegularSync() && slot+1 >= s.CurrentSlot()
 }
 
 // validating returns true if at least one validator is attached to this BN

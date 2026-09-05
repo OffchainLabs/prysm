@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	builderapi "github.com/OffchainLabs/prysm/v7/api/client/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
@@ -36,6 +37,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -111,7 +113,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 		builderBoostFactor = primitives.Gwei(req.BuilderBoostFactor.Value)
 	}
 
-	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor, full, req.EagerPayloadStateRoot, req.BuilderRequestAuths)
+	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor, full, req.EagerPayloadStateRoot, req.BuilderConfig)
 	l := log.WithFields(logrus.Fields{
 		"sinceSlotStartTime": time.Since(t),
 		"validator":          sBlk.Block().ProposerIndex(),
@@ -199,9 +201,9 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 	return head, parentRoot, vs.parentFull(parentRoot), err
 }
 
-func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, parentFull, eagerPayloadStateRoot bool, builderRequestAuths []*ethpb.SignedRequestAuthV1) (*ethpb.GenericBeaconBlock, error) {
+func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, parentFull, eagerPayloadStateRoot bool, builderConfig *ethpb.BuilderConfig) (*ethpb.GenericBeaconBlock, error) {
 	if sBlk.Version() >= version.Gloas {
-		return vs.buildBlockGloas(ctx, sBlk, head, skipMevBoost, parentFull, eagerPayloadStateRoot, builderRequestAuths)
+		return vs.buildBlockGloas(ctx, sBlk, head, skipMevBoost, parentFull, eagerPayloadStateRoot, builderConfig)
 	}
 	return vs.buildBlockFulu(ctx, sBlk, head, skipMevBoost, builderBoostFactor, parentFull)
 }
@@ -286,6 +288,19 @@ func (vs *Server) buildBlockFulu(ctx context.Context, sBlk interfaces.SignedBeac
 	return vs.constructGenericBeaconBlock(sBlk, bundle, winningBid)
 }
 
+// builderUrlFromContext returns the winning builder url echoed by the validator
+// client as request metadata (the Eth-Builder-Url header on the REST API).
+func builderUrlFromContext(ctx context.Context) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ""
+	}
+	if vals := md.Get(api.BuilderUrlHeader); len(vals) > 0 {
+		return vals[0]
+	}
+	return ""
+}
+
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // ProposeBeaconBlock handles the proposal of beacon blocks.
@@ -355,10 +370,8 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		}
 	}
 
-	if block.Version() >= version.Gloas {
-		if src, builderURL := vs.bidSourceForSlot(block.Block().Slot()); src == bidSourceBuilderAPI {
-			go vs.submitBlockToBuilder(block, builderURL)
-		}
+	if builderURL := builderUrlFromContext(ctx); block.Version() >= version.Gloas && builderURL != "" {
+		go vs.submitBlockToBuilder(block, builderURL)
 	}
 
 	if err := <-errChan; err != nil {

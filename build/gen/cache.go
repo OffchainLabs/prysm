@@ -1,8 +1,8 @@
 package main
 
 // This file implements a content-based cache that lets `make gen` skip a kind
-// (proto / ssz / mocks) when none of the files that can affect its output have
-// changed since the last successful run on this checkout.
+// (proto / ssz / mocks / logs) when none of the files that can affect its output
+// have changed since the last successful run on this checkout.
 //
 // For each kind we build a manifest: a sorted (repo-relative-path, sha256) list
 // over that kind's input AND output files, then a single SHA256 over the list.
@@ -127,6 +127,8 @@ func specificFiles(k kind) ([]string, error) {
 		return sszFiles()
 	case kindMocks:
 		return mockFiles()
+	case kindLogs:
+		return logsFiles()
 	default:
 		return nil, fmt.Errorf("unknown kind %q", k)
 	}
@@ -179,9 +181,9 @@ func protoFiles() ([]string, error) {
 }
 
 func sszFiles() ([]string, error) {
-	targets, err := loadSSZTargets()
+	targets, err := loadMethodicalTargets()
 	if err != nil {
-		return nil, fmt.Errorf("loadSSZTargets: %w", err)
+		return nil, fmt.Errorf("loadMethodicalTargets: %w", err)
 	}
 
 	bzl, err := buildBazelFiles()
@@ -191,14 +193,13 @@ func sszFiles() ([]string, error) {
 
 	files := slices.Clone(bzl)
 	for _, target := range targets {
-		for _, dir := range append([]string{target.pkg}, target.protoInc...) {
-			pbs, err := pbgoFiles(dir)
-			if err != nil {
-				return nil, fmt.Errorf("pbgoFiles %s: %w", dir, err)
-			}
-
-			files = append(files, pbs...)
+		pbs, err := pbgoFiles(target.pkg)
+		if err != nil {
+			return nil, fmt.Errorf("pbgoFiles %s: %w", target.pkg, err)
 		}
+
+		files = append(files, pbs...)
+		files = append(files, filepath.ToSlash(filepath.Join(target.pkg, target.configFile)))
 
 		out := filepath.ToSlash(filepath.Join(target.pkg, target.out))
 		minOut := strings.TrimSuffix(out, ".ssz.go") + ".minimal.ssz.go"

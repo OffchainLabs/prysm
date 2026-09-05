@@ -168,6 +168,38 @@ func TestFirstBPOAtFork(t *testing.T) {
 	require.Equal(t, electraMaxBlobs+2, uint64(cfg.MaxBlobsPerBlockAtEpoch(cfg.FuluForkEpoch+2)))
 }
 
+func TestScheduledGasLimit(t *testing.T) {
+	params.SetActiveTestCleanup(t, params.MainnetBeaconConfig)
+	cfg := params.MainnetConfig()
+	cfg.GloasForkEpoch = cfg.FuluForkEpoch + 100
+	cfg.GasLimitSchedule = []params.GasLimitScheduleEntry{
+		{Epoch: cfg.GloasForkEpoch + 50, GasLimit: 90_000_000},
+		{Epoch: cfg.GloasForkEpoch, GasLimit: 60_000_000},
+	}
+	cfg.InitializeForkSchedule()
+	require.Equal(t, cfg.GloasForkEpoch, cfg.GasLimitSchedule[0].Epoch, "schedule not sorted by epoch")
+
+	_, ok := cfg.ScheduledGasLimit(cfg.GloasForkEpoch - 1)
+	require.Equal(t, false, ok)
+	gl, ok := cfg.ScheduledGasLimit(cfg.GloasForkEpoch)
+	require.Equal(t, true, ok)
+	require.Equal(t, uint64(60_000_000), gl)
+	gl, ok = cfg.ScheduledGasLimit(cfg.GloasForkEpoch + 49)
+	require.Equal(t, true, ok)
+	require.Equal(t, uint64(60_000_000), gl)
+	gl, ok = cfg.ScheduledGasLimit(cfg.GloasForkEpoch + 50)
+	require.Equal(t, true, ok)
+	require.Equal(t, uint64(90_000_000), gl)
+
+	cfg.GasLimitSchedule = []params.GasLimitScheduleEntry{{Epoch: cfg.GloasForkEpoch + 10, GasLimit: 60_000_000}}
+	_, ok = cfg.ScheduledGasLimit(cfg.GloasForkEpoch + 9)
+	require.Equal(t, false, ok)
+
+	cfg.GasLimitSchedule = nil
+	_, ok = cfg.ScheduledGasLimit(cfg.GloasForkEpoch)
+	require.Equal(t, false, ok)
+}
+
 func TestMaxBlobsNoSchedule(t *testing.T) {
 	params.SetActiveTestCleanup(t, params.MainnetBeaconConfig)
 	cfg := params.MainnetConfig()

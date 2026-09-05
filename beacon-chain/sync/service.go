@@ -80,7 +80,7 @@ const (
 
 var (
 	// Seconds in one epoch.
-	pendingBlockExpTime = time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second
+	pendingBlockExpTime = params.EpochsDuration(1, params.BeaconConfig())
 	// time to allow processing early blocks.
 	earlyBlockProcessingTolerance = params.BeaconConfig().MaximumGossipClockDisparityDuration()
 	// time to allow processing early attestations.
@@ -204,6 +204,7 @@ type Service struct {
 	payloadAttestationCache              *cache.PayloadAttestationCache
 	proposerPreferencesCache             *cache.ProposerPreferencesCache
 	subscribedValidatorsCache            *cache.SubscribedValidatorsCache
+	builderCircuitBreaker                *cache.BuilderCircuitBreaker
 	digestActions                        perDigestSet
 	subscriptionSpawner                  func(func()) // see Service.spawn for details
 	newExecutionPayloadEnvelopeVerifier  verification.NewExecutionPayloadEnvelopeVerifier

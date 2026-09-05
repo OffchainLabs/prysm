@@ -14,12 +14,9 @@ import (
 // The connection generation must come from whichever provider the factory
 // actually selected, so host switches on the active transport are detected.
 func TestNewValidatorClient_ConnectionGenerationFollowsTransport(t *testing.T) {
-	var (
-		grpcConnCounter uint64 = 2
-		restConnCounter uint64 = 9
-	)
+	var grpcConnCounter uint64 = 2
 	grpcProvider := &grpcutil.MockGrpcProvider{MockHosts: []string{"localhost:4000"}, ConnCounter: grpcConnCounter}
-	restProvider := &rest.MockRestProvider{MockHosts: []string{"http://localhost:3500"}, ConnCounter: restConnCounter}
+	restProvider := &rest.MockRestProvider{MockHosts: []string{"http://localhost:3500"}}
 
 	t.Run("gRPC mode reads grpc counter even when rest provider present", func(t *testing.T) {
 		conn, err := validatorHelpers.NewNodeConnection(
@@ -28,15 +25,16 @@ func TestNewValidatorClient_ConnectionGenerationFollowsTransport(t *testing.T) {
 		assert.Equal(t, grpcConnCounter, NewValidatorClient(conn).ConnectionGeneration())
 	})
 
-	t.Run("REST mode reads rest counter even when grpc provider present", func(t *testing.T) {
+	t.Run("REST mode does not read the grpc counter", func(t *testing.T) {
 		// Regression (r3511683129): gRPC provider is non-nil (its endpoint flag
-		// defaults), but in REST mode the active provider is REST.
+		// defaults), but in REST mode the active provider is REST, whose
+		// generation stays at 0 rather than tracking the gRPC counter.
 		reset := features.InitWithReset(&features.Flags{EnableBeaconRESTApi: true})
 		defer reset()
 		conn, err := validatorHelpers.NewNodeConnection(
 			validatorHelpers.WithGRPCProvider(grpcProvider), validatorHelpers.WithRestProvider(restProvider))
 		require.NoError(t, err)
-		assert.Equal(t, restConnCounter, NewValidatorClient(conn).ConnectionGeneration())
+		assert.Equal(t, uint64(0), NewValidatorClient(conn).ConnectionGeneration())
 	})
 
 	t.Run("REST flag without rest provider falls back to grpc counter", func(t *testing.T) {

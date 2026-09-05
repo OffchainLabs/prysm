@@ -2,12 +2,18 @@ package proposer
 
 import (
 	"fmt"
+	"net/url"
+	"slices"
+	"strings"
+	"sync/atomic"
 
 	"github.com/OffchainLabs/prysm/v7/config"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/io/logs"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -63,7 +69,46 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 		d.GasLimit = ps.DefaultConfig.GasLimit
 		settings.DefaultConfig = d
 	}
+	settings.sanitizeBuilders()
 	return settings, nil
+}
+
+// Every load path (file, URL, database) funnels through here: entries violating the spec
+// limits and (url, auth_data) duplicates are dropped so block production never trips on them.
+func (ps *Settings) sanitizeBuilders() {
+	sanitize := func(opt *Option) {
+		if opt == nil || opt.BuilderConfig == nil || len(opt.BuilderConfig.Builders) == 0 {
+			return
+		}
+		builders := opt.BuilderConfig.Builders
+		seen := make(map[EntryIdentity]bool, len(builders))
+		kept := builders[:0]
+		var reasons []string
+		for _, e := range builders {
+			if e == nil || seen[e.Identity()] {
+				continue
+			}
+			if err := e.Validate(); err != nil {
+				reasons = append(reasons, err.Error())
+				continue
+			}
+			if len(kept) == MaxBuilderEntries {
+				reasons = append(reasons, fmt.Sprintf("more than %d entries", MaxBuilderEntries))
+				break
+			}
+			seen[e.Identity()] = true
+			kept = append(kept, e)
+		}
+		if len(kept) != len(builders) {
+			log.WithField("reasons", strings.Join(reasons, "; ")).
+				Warnf("Removed %d invalid or duplicate builder entries from proposer settings", len(builders)-len(kept))
+			opt.BuilderConfig.Builders = kept
+		}
+	}
+	sanitize(ps.DefaultConfig)
+	for _, opt := range ps.ProposeConfig {
+		sanitize(opt)
+	}
 }
 
 func verifyOption(key string, option *validatorpb.ProposerOptionPayload) error {
@@ -79,13 +124,258 @@ func verifyOption(key string, option *validatorpb.ProposerOptionPayload) error {
 	return nil
 }
 
-// BuilderConfig is the struct representation of the JSON config file set in the validator through the CLI.
-// GasLimit is a number set to help the network decide on the maximum gas in each block.
+// BuilderConfig is the in-memory builder settings.
 type BuilderConfig struct {
-	Enabled             bool             `json:"enabled" yaml:"enabled"`
-	GasLimit            validator.Uint64 `json:"gas_limit,omitempty" yaml:"gas_limit,omitempty"`
-	Relays              []string         `json:"relays,omitempty" yaml:"relays,omitempty"`
-	MaxExecutionPayment validator.Uint64 `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"`
+	Enabled             bool              `json:"enabled" yaml:"enabled"`                                                 // legacy v1 (mev-boost); ignored by v2, dropped at the gloas cutover
+	GasLimit            validator.Uint64  `json:"gas_limit,omitempty" yaml:"gas_limit,omitempty"`                         // legacy v1; v2 gas limits live on the option
+	MaxExecutionPayment *validator.Uint64 `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"` // explicit 0 = trustless-only; unset inherits
+	Builders            []*BuilderEntry   `json:"builders" yaml:"builders"`                                               // nil = inherit, [] = use none; no omitempty so the marker survives marshal
+	MinBid              *validator.Uint64 `json:"min_bid,omitempty" yaml:"min_bid,omitempty"`
+	BuilderBoostFactor  *validator.Uint64 `json:"builder_boost_factor,omitempty" yaml:"builder_boost_factor,omitempty"`
+}
+
+// BuilderEntry is one builder in a proposer's per-key builder list. Unset fields
+// fall back to the enclosing BuilderConfig, then default_config.
+type BuilderEntry struct {
+	URL                 string            `json:"url" yaml:"url"`
+	Pubkeys             [][]byte          `json:"builder_pubkeys,omitempty" yaml:"builder_pubkeys,omitempty"`
+	AuthData            []byte            `json:"auth_data,omitempty" yaml:"auth_data,omitempty"`
+	MinBid              *validator.Uint64 `json:"min_bid,omitempty" yaml:"min_bid,omitempty"`
+	MaxExecutionPayment *validator.Uint64 `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"`
+	BuilderBoostFactor  *validator.Uint64 `json:"builder_boost_factor,omitempty" yaml:"builder_boost_factor,omitempty"`
+}
+
+// EffectiveAuthData resolves omitted auth_data to the spec convention:
+// the UTF-8 bytes of the builder's URL.
+func (be *BuilderEntry) EffectiveAuthData() []byte {
+	if len(be.AuthData) != 0 {
+		return be.AuthData
+	}
+	return []byte(be.URL)
+}
+
+// Spec limits for builder configuration payloads.
+const (
+	MaxBuilderEntries = 64   // MAX_BUILDER_ENTRIES
+	MaxBuilderURLSize = 2048 // MAX_BUILDER_URL_SIZE
+	MaxAuthDataSize   = 4096 // MAX_DATA_SIZE
+	MaxBuilderPubkeys = 64   // MAX_BUILDER_PUBKEYS
+)
+
+// Validate checks the entry against the spec size and format limits. Every config source
+// must enforce it: an entry violating the limits cannot be encoded into a block request.
+func (be *BuilderEntry) Validate() error {
+	if be.URL == "" {
+		return errors.New("url is required")
+	}
+	if len(be.URL) > MaxBuilderURLSize {
+		return errors.Errorf("url exceeds %d bytes", MaxBuilderURLSize)
+	}
+	if u, err := url.Parse(be.URL); err != nil || u.Scheme == "" || u.Host == "" {
+		return errors.New("url is not a valid URL")
+	}
+	if len(be.Pubkeys) > MaxBuilderPubkeys {
+		return errors.Errorf("builder_pubkeys exceeds %d keys", MaxBuilderPubkeys)
+	}
+	for _, pk := range be.Pubkeys {
+		if len(pk) != fieldparams.BLSPubkeyLength {
+			return errors.New("builder_pubkeys contains an invalid BLS public key")
+		}
+	}
+	if len(be.AuthData) > MaxAuthDataSize {
+		return errors.Errorf("auth_data exceeds %d bytes", MaxAuthDataSize)
+	}
+	return nil
+}
+
+// EffectiveBuilderConfig resolves pubkey's builder config against default_config;
+// nil when neither level configures a builder.
+func (ps *Settings) EffectiveBuilderConfig(pubkey [fieldparams.BLSPubkeyLength]byte) *BuilderConfig {
+	if ps == nil {
+		return nil
+	}
+	var perKey, def *BuilderConfig
+	if ps.DefaultConfig != nil {
+		def = ps.DefaultConfig.BuilderConfig
+	}
+	if opt, ok := ps.ProposeConfig[pubkey]; ok && opt != nil {
+		perKey = opt.BuilderConfig
+	}
+	return effectiveBuilderConfig(perKey, def)
+}
+
+// RegistrationFor resolves pubkey's mev-boost registration: fee recipient, gas
+// limit, and participation. Registrations are pushed pre-gloas only.
+func (ps *Settings) RegistrationFor(pubkey [fieldparams.BLSPubkeyLength]byte) (common.Address, validator.Uint64, bool) {
+	feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
+	gasLimit := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+	if ps == nil {
+		return feeRecipient, gasLimit, false
+	}
+	hasFeeRecipient := false
+	if ps.DefaultConfig != nil && ps.DefaultConfig.FeeRecipientConfig != nil {
+		feeRecipient = ps.DefaultConfig.FeeRecipientConfig.FeeRecipient
+		hasFeeRecipient = true
+	}
+	opt := ps.ProposeConfig[pubkey]
+	if opt != nil && opt.FeeRecipientConfig != nil {
+		feeRecipient = opt.FeeRecipientConfig.FeeRecipient
+		hasFeeRecipient = true
+	}
+	enabled := false
+	if ps.DefaultConfig != nil {
+		if in, ok := ps.DefaultConfig.BuilderConfig.registrationEnabled(); ok {
+			enabled = in
+		}
+	}
+	// A per-key choice wins over the default's.
+	if opt != nil {
+		if in, ok := opt.BuilderConfig.registrationEnabled(); ok {
+			enabled = in
+		}
+	}
+	// Explicitly set option-level gas limits win; legacy builder-level values
+	// are the pre-gloas fallback.
+	switch {
+	case opt != nil && opt.GasLimit != 0:
+		gasLimit = opt.GasLimit
+	case ps.DefaultConfig != nil && ps.DefaultConfig.GasLimit != 0:
+		gasLimit = ps.DefaultConfig.GasLimit
+	case opt != nil && opt.BuilderConfig != nil && opt.BuilderConfig.GasLimit != 0:
+		gasLimit = opt.BuilderConfig.GasLimit
+	case ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil && ps.DefaultConfig.BuilderConfig.GasLimit != 0:
+		gasLimit = ps.DefaultConfig.BuilderConfig.GasLimit
+	}
+	return feeRecipient, gasLimit, enabled && hasFeeRecipient
+}
+
+// EntryIdentity is what makes a builder entry unique: its url compared as the
+// exact string and its auth_data as the resolved bytes.
+type EntryIdentity struct {
+	URL  string
+	Auth string
+}
+
+func (be *BuilderEntry) Identity() EntryIdentity {
+	return EntryIdentity{URL: be.URL, Auth: string(be.EffectiveAuthData())}
+}
+
+// NeutralBuilderBoostFactor is the resolved boost when none is configured:
+// pure profit maximization between builder and local payloads.
+const NeutralBuilderBoostFactor = 100
+
+// EffectiveMinBid resolves the config-level floor; unset means no floor.
+func (bc *BuilderConfig) EffectiveMinBid() validator.Uint64 {
+	if bc == nil || bc.MinBid == nil {
+		return 0
+	}
+	return *bc.MinBid
+}
+
+// EffectiveBuilderBoostFactor resolves the config-level boost; unset means neutral.
+func (bc *BuilderConfig) EffectiveBuilderBoostFactor() validator.Uint64 {
+	if bc == nil || bc.BuilderBoostFactor == nil {
+		return NeutralBuilderBoostFactor
+	}
+	return *bc.BuilderBoostFactor
+}
+
+// EffectiveMaxExecutionPayment resolves the ceiling; unset means trustless-only.
+func (bc *BuilderConfig) EffectiveMaxExecutionPayment() validator.Uint64 {
+	if bc == nil || bc.MaxExecutionPayment == nil {
+		return 0
+	}
+	return *bc.MaxExecutionPayment
+}
+
+// EffectiveMinBid resolves this entry's floor, falling back to the enclosing config.
+func (be *BuilderEntry) EffectiveMinBid(bc *BuilderConfig) validator.Uint64 {
+	if be.MinBid != nil {
+		return *be.MinBid
+	}
+	return bc.EffectiveMinBid()
+}
+
+// EffectiveBuilderBoostFactor resolves this entry's boost, falling back to the enclosing config.
+func (be *BuilderEntry) EffectiveBuilderBoostFactor(bc *BuilderConfig) validator.Uint64 {
+	if be.BuilderBoostFactor != nil {
+		return *be.BuilderBoostFactor
+	}
+	return bc.EffectiveBuilderBoostFactor()
+}
+
+// EffectiveMaxExecutionPayment resolves this entry's ceiling, falling back to the enclosing config.
+func (be *BuilderEntry) EffectiveMaxExecutionPayment(bc *BuilderConfig) validator.Uint64 {
+	if be.MaxExecutionPayment != nil {
+		return *be.MaxExecutionPayment
+	}
+	return bc.EffectiveMaxExecutionPayment()
+}
+
+// IsEnabled reports whether the legacy v1 builder path is explicitly enabled.
+// v2 settings ignore the enabled field entirely.
+func (bc *BuilderConfig) IsEnabled() bool {
+	return bc != nil && bc.Enabled
+}
+
+// hasV2Content reports whether any v2 builder field is set; an explicit empty
+// builders list counts.
+func (bc *BuilderConfig) hasV2Content() bool {
+	return bc != nil && (bc.Builders != nil || bc.MinBid != nil || bc.BuilderBoostFactor != nil || bc.MaxExecutionPayment != nil)
+}
+
+// registrationEnabled reports whether this config opts the key in or out of
+// mev-boost registration. ok is false when the config says neither.
+func (bc *BuilderConfig) registrationEnabled() (enabled, ok bool) {
+	switch {
+	case bc == nil:
+		return false, false
+	case len(bc.Builders) > 0 || bc.Enabled:
+		// A nonempty v2 builders list opts in pre-gloas just like v1 enabled.
+		return true, true
+	case bc.Builders != nil:
+		// An explicit empty list means self-build everywhere: no mev-boost either.
+		return false, true
+	case !bc.hasV2Content():
+		// A pure-v1 config without enabled is the legacy wins-wholesale disable.
+		return false, true
+	default:
+		// Gloas knobs (min_bid etc.) without a builders list: no registration choice.
+		return false, false
+	}
+}
+
+// effectiveBuilderConfig merges two config levels with field-level inheritance;
+// the builders list replaces rather than merges.
+func effectiveBuilderConfig(perKey, def *BuilderConfig) *BuilderConfig {
+	if perKey == nil {
+		return def
+	}
+	if def == nil {
+		return perKey
+	}
+	eff := &BuilderConfig{
+		GasLimit:            perKey.GasLimit,
+		MaxExecutionPayment: coalesceUint64(perKey.MaxExecutionPayment, def.MaxExecutionPayment),
+		MinBid:              coalesceUint64(perKey.MinBid, def.MinBid),
+		BuilderBoostFactor:  coalesceUint64(perKey.BuilderBoostFactor, def.BuilderBoostFactor),
+		Builders:            perKey.Builders,
+	}
+	if eff.GasLimit == 0 {
+		eff.GasLimit = def.GasLimit
+	}
+	// A nil list inherits the default's; a non-nil empty list means "use no builders".
+	if eff.Builders == nil {
+		eff.Builders = def.Builders
+	}
+	return eff
+}
+
+func coalesceUint64(a, b *validator.Uint64) *validator.Uint64 {
+	if a != nil {
+		return a
+	}
+	return b
 }
 
 // BuilderConfigFromConsensus converts protobuf to a builder config used in in-memory storage
@@ -96,24 +386,58 @@ func BuilderConfigFromConsensus(from *validatorpb.BuilderConfig) *BuilderConfig 
 	c := &BuilderConfig{
 		Enabled:             from.Enabled,
 		GasLimit:            from.GasLimit,
-		MaxExecutionPayment: from.MaxExecutionPayment,
+		MaxExecutionPayment: cloneUint64(from.MaxExecutionPayment),
+		MinBid:              cloneUint64(from.MinBid),
+		BuilderBoostFactor:  cloneUint64(from.BuilderBoostFactor),
 	}
-	if from.Relays != nil {
-		relays := make([]string, len(from.Relays))
-		copy(relays, from.Relays)
-		c.Relays = relays
+	if len(from.Builders) > 0 {
+		c.Builders = make([]*BuilderEntry, 0, len(from.Builders))
+		for _, b := range from.Builders {
+			c.Builders = append(c.Builders, builderEntryFromConsensus(b))
+		}
+	} else if from.GetBuildersSet() {
+		// An explicitly configured empty list means "use no builders".
+		c.Builders = []*BuilderEntry{}
 	}
 	return c
 }
 
-// Schema versions for proposer settings. SchemaV1Unset is the proto3 zero
-// value — every existing v1 user has it, since the version field is new.
-// Both SchemaV1Unset and SchemaV1 are legacy v1 inputs to the migration.
+func builderEntryFromConsensus(from *validatorpb.BuilderEntry) *BuilderEntry {
+	if from == nil {
+		return nil
+	}
+	e := &BuilderEntry{
+		URL:                 from.Url,
+		MinBid:              from.MinBid,
+		MaxExecutionPayment: from.MaxExecutionPayment,
+		BuilderBoostFactor:  from.BuilderBoostFactor,
+	}
+	// Treat empty as absent so bolt (nil) and filesystem (empty) round-trips agree.
+	if len(from.Pubkeys) != 0 {
+		e.Pubkeys = bytesutil.SafeCopy2dBytes(from.Pubkeys)
+	}
+	if len(from.AuthData) != 0 {
+		e.AuthData = bytesutil.SafeCopyBytes(from.AuthData)
+	}
+	return e
+}
+
+// Schema versions for proposer settings. SchemaV1Unset is the proto3 zero value
+// every pre-versioning user has; both it and SchemaV1 are legacy v1 inputs.
 const (
 	SchemaV1Unset uint32 = 0
 	SchemaV1      uint32 = 1
 	SchemaV2      uint32 = 2
 )
+
+// FreshSettingsVersion is the schema stamped on settings the keymanager APIs
+// create from nothing: v2 once the network schedules gloas, legacy before.
+func FreshSettingsVersion() uint32 {
+	if params.GloasEnabled() {
+		return SchemaV2
+	}
+	return SchemaV1Unset
+}
 
 // Settings is a Prysm internal representation of the fee recipient config on the validator client.
 // validatorpb.ProposerSettingsPayload maps to Settings on import through the CLI.
@@ -241,14 +565,40 @@ func (bc *BuilderConfig) Clone() *BuilderConfig {
 	c := &BuilderConfig{}
 	c.Enabled = bc.Enabled
 	c.GasLimit = bc.GasLimit
-	c.MaxExecutionPayment = bc.MaxExecutionPayment
-	var relays []string
-	if bc.Relays != nil {
-		relays = make([]string, len(bc.Relays))
-		copy(relays, bc.Relays)
-		c.Relays = relays
+	c.MaxExecutionPayment = cloneUint64(bc.MaxExecutionPayment)
+	c.MinBid = cloneUint64(bc.MinBid)
+	c.BuilderBoostFactor = cloneUint64(bc.BuilderBoostFactor)
+	// Preserve nil vs empty: an empty list is the "use no builders" marker.
+	if bc.Builders != nil {
+		c.Builders = make([]*BuilderEntry, 0, len(bc.Builders))
+		for _, b := range bc.Builders {
+			c.Builders = append(c.Builders, b.Clone())
+		}
 	}
 	return c
+}
+
+// Clone creates a deep copy of a builder entry
+func (be *BuilderEntry) Clone() *BuilderEntry {
+	if be == nil {
+		return nil
+	}
+	return &BuilderEntry{
+		URL:                 be.URL,
+		Pubkeys:             bytesutil.SafeCopy2dBytes(be.Pubkeys),
+		AuthData:            bytesutil.SafeCopyBytes(be.AuthData),
+		MinBid:              cloneUint64(be.MinBid),
+		MaxExecutionPayment: cloneUint64(be.MaxExecutionPayment),
+		BuilderBoostFactor:  cloneUint64(be.BuilderBoostFactor),
+	}
+}
+
+func cloneUint64(v *validator.Uint64) *validator.Uint64 {
+	if v == nil {
+		return nil
+	}
+	c := *v
+	return &c
 }
 
 // Clone creates a deep copy of graffiti config
@@ -266,137 +616,254 @@ func (bc *BuilderConfig) ToConsensus() *validatorpb.BuilderConfig {
 	}
 	c := &validatorpb.BuilderConfig{}
 	c.Enabled = bc.Enabled
-	var relays []string
-	if bc.Relays != nil {
-		relays = make([]string, len(bc.Relays))
-		copy(relays, bc.Relays)
-		c.Relays = relays
-	}
 	c.GasLimit = bc.GasLimit
-	c.MaxExecutionPayment = bc.MaxExecutionPayment
+	c.MaxExecutionPayment = cloneUint64(bc.MaxExecutionPayment)
+	c.MinBid = cloneUint64(bc.MinBid)
+	c.BuilderBoostFactor = cloneUint64(bc.BuilderBoostFactor)
+	// BuildersSet preserves nil-vs-empty across the wire: an explicit empty
+	// list is the "use no builders" marker and must survive persistence.
+	c.BuildersSet = bc.Builders != nil
+	if len(bc.Builders) > 0 {
+		c.Builders = make([]*validatorpb.BuilderEntry, 0, len(bc.Builders))
+		for _, b := range bc.Builders {
+			c.Builders = append(c.Builders, b.toConsensus())
+		}
+	}
 	return c
+}
+
+func (be *BuilderEntry) toConsensus() *validatorpb.BuilderEntry {
+	if be == nil {
+		return nil
+	}
+	return &validatorpb.BuilderEntry{
+		Url:                 be.URL,
+		Pubkeys:             bytesutil.SafeCopy2dBytes(be.Pubkeys),
+		AuthData:            bytesutil.SafeCopyBytes(be.AuthData),
+		MinBid:              cloneUint64(be.MinBid),
+		MaxExecutionPayment: cloneUint64(be.MaxExecutionPayment),
+		BuilderBoostFactor:  cloneUint64(be.BuilderBoostFactor),
+	}
 }
 
 func (ps *Settings) isV2() bool {
 	return ps != nil && ps.Version == SchemaV2
 }
 
-// WarnDeprecatedSchema logs a warning when v1 settings are used on a network
-// with gloas scheduled.
+// WarnDeprecatedSchema logs a warning when legacy v1 builder content is loaded
+// on a network with gloas scheduled, regardless of the schema stamp.
 func (ps *Settings) WarnDeprecatedSchema() {
-	if ps == nil || ps.Version == SchemaV2 || !params.GloasEnabled() {
+	if ps == nil || !params.GloasEnabled() {
 		return
 	}
-	log.Warn("Proposer settings use the deprecated v1 schema; they are upgraded automatically at the gloas fork. Please migrate your settings source to v2.")
+	// Fee recipients and graffiti behave identically across schemas; only v1
+	// builder fields give the cutover something to drop.
+	if !ps.HasLegacyBuilderContent() {
+		return
+	}
+	log.Warn("Proposer settings contain deprecated v1 builder fields (enabled, builder-level gas limits); they stop applying at the gloas fork and are replaced with defaults (fee recipients and graffiti carry over). Configure gloas builders via v2 settings or the keymanager API.")
 }
 
-// UpgradeToV2 migrates v1 settings to v2 in place: builder gas limits are
-// promoted to the top-level preferences gas limit (unless one is already set).
-// BuilderConfig is retained because it carries the gloas builder-API relays /
-// enabled / max_execution_payment, which have no top-level v2 field. Settings
-// already on v2 are left untouched. Returns true if changed.
-func (ps *Settings) UpgradeToV2() bool {
-	if ps == nil || ps.isV2() {
+// WarnUnsetMaxExecutionPayment logs when a builder entry resolves to the zero
+// default cap, which silently drops that builder's execution layer payment.
+func (ps *Settings) WarnUnsetMaxExecutionPayment() {
+	if ps == nil || !params.GloasEnabled() {
+		return
+	}
+	seen := make(map[string]bool)
+	var maskedURLs []string
+	collect := func(bc *BuilderConfig) {
+		if bc == nil || bc.MaxExecutionPayment != nil {
+			return
+		}
+		for _, be := range bc.Builders {
+			if be == nil || be.MaxExecutionPayment != nil {
+				continue
+			}
+			masked := logs.MaskCredentialsLogging(be.URL)
+			if seen[masked] {
+				continue
+			}
+			seen[masked] = true
+			maskedURLs = append(maskedURLs, masked)
+		}
+	}
+	if ps.DefaultConfig != nil {
+		collect(ps.DefaultConfig.BuilderConfig)
+	}
+	for pubkey := range ps.ProposeConfig {
+		collect(ps.EffectiveBuilderConfig(pubkey))
+	}
+	if len(maskedURLs) == 0 {
+		return
+	}
+	slices.Sort(maskedURLs)
+	log.WithField("builders", strings.Join(maskedURLs, ", ")).Warn("Builder entries have no max_execution_payment: their execution layer payment is ignored and only collateral-backed bid value counts toward bid selection. Set max_execution_payment to count it, noting such payments rest on the builder's promise to pay.")
+}
+
+// HasLegacyBuilderContent reports whether any level carries v1 builder fields,
+// i.e. whether the gloas cutover has anything to drop.
+func (ps *Settings) HasLegacyBuilderContent() bool {
+	if ps == nil {
 		return false
 	}
-	migrate := func(opt *Option) {
+	legacy := func(opt *Option) bool {
+		return opt != nil && opt.BuilderConfig != nil && (opt.BuilderConfig.Enabled || opt.BuilderConfig.GasLimit != 0)
+	}
+	if legacy(ps.DefaultConfig) {
+		return true
+	}
+	for _, opt := range ps.ProposeConfig {
+		if legacy(opt) {
+			return true
+		}
+	}
+	return false
+}
+
+// UpgradeToV2 is the gloas cutover: legacy v1 builder fields are scrubbed
+// wherever they appear — even under a v2 stamp — and the version is stamped.
+func (ps *Settings) UpgradeToV2() bool {
+	if ps == nil {
+		return false
+	}
+	scrubbed := false
+	scrub := func(opt *Option) {
 		if opt == nil || opt.BuilderConfig == nil {
 			return
 		}
-		if opt.GasLimit == 0 {
-			opt.GasLimit = opt.BuilderConfig.GasLimit
+		bc := opt.BuilderConfig
+		if bc.Enabled || bc.GasLimit != 0 {
+			bc.Enabled = false
+			bc.GasLimit = 0
+			scrubbed = true
+		}
+		// A config left with no v2 content disappears entirely; an explicit
+		// empty builders list is v2 content and survives.
+		if !bc.hasV2Content() {
+			opt.BuilderConfig = nil
+			scrubbed = true
 		}
 	}
-	migrate(ps.DefaultConfig)
+	scrub(ps.DefaultConfig)
 	for _, opt := range ps.ProposeConfig {
-		migrate(opt)
+		scrub(opt)
 	}
+	changed := scrubbed || ps.Version != SchemaV2
 	ps.Version = SchemaV2
-	return true
+	if scrubbed {
+		log.Warn("V1 builder settings, including gas limits, do not apply to gloas and were replaced with defaults; provide v2 proposer settings to configure builders")
+	}
+	return changed
 }
 
-// TargetGasLimit returns the proposer preferences gas limit for pubkey from
-// the top-level fields only: the per-pubkey override, else the default config
-// value, else the chain default. Builder gas limits are registration-only and
-// intentionally not consulted.
-func (ps *Settings) TargetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) validator.Uint64 {
-	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+// TargetGasLimit resolves pubkey's proposer-preference gas limit at epoch: the
+// explicit operator value, else the EIP-8261 schedule, else the chain default.
+func (ps *Settings) TargetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch) validator.Uint64 {
+	scheduled, active := params.BeaconConfig().ScheduledGasLimit(epoch)
+	operator, ok := ps.operatorGasLimit(pubkey)
+	if !ok {
+		if active {
+			return validator.Uint64(scheduled)
+		}
+		return validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+	}
+	if active && uint64(operator) > scheduled {
+		warnGasLimitExceedsSchedule(uint64(operator), scheduled, epoch)
+	}
+	if active && uint64(operator) < scheduled {
+		warnGasLimitBelowSchedule(uint64(operator), scheduled, epoch)
+	}
+	return operator
+}
+
+func (ps *Settings) operatorGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) (validator.Uint64, bool) {
 	if ps == nil {
-		return chainDefault
+		return 0, false
 	}
 	if opt, ok := ps.ProposeConfig[pubkey]; ok && opt != nil && opt.GasLimit != 0 {
-		return opt.GasLimit
+		return opt.GasLimit, true
 	}
 	if ps.DefaultConfig != nil && ps.DefaultConfig.GasLimit != 0 {
-		return ps.DefaultConfig.GasLimit
+		return ps.DefaultConfig.GasLimit, true
 	}
-	return chainDefault
+	return 0, false
 }
 
-// GasLimit returns the gas limit (gwei) for pubkey: the per-pubkey override,
-// else the default config value, else the chain default. v1 reads the builder
-// gas limit; v2 reads the top-level fields.
+var warnedGasLimitScheduleEpoch atomic.Uint64
+
+func warnGasLimitExceedsSchedule(operator, scheduled uint64, epoch primitives.Epoch) {
+	if !warnOncePerEpoch(&warnedGasLimitScheduleEpoch, epoch) {
+		return
+	}
+	log.Warnf("Configured gas limit %d exceeds the recommended maximum of %d at epoch %d", operator, scheduled, epoch)
+}
+
+var warnedGasLimitBelowScheduleEpoch atomic.Uint64
+
+func warnGasLimitBelowSchedule(operator, scheduled uint64, epoch primitives.Epoch) {
+	if !warnOncePerEpoch(&warnedGasLimitBelowScheduleEpoch, epoch) {
+		return
+	}
+	log.Warnf("Configured gas limit %d is below the scheduled network gas limit of %d at epoch %d; remove the explicit gas limit to follow the schedule", operator, scheduled, epoch)
+}
+
+// warnOncePerEpoch reports whether the caller won this epoch's single warning slot.
+func warnOncePerEpoch(guard *atomic.Uint64, epoch primitives.Epoch) bool {
+	e := uint64(epoch) + 1
+	for {
+		prev := guard.Load()
+		if e <= prev {
+			return false
+		}
+		if guard.CompareAndSwap(prev, e) {
+			return true
+		}
+	}
+}
+
+// GasLimit resolves pubkey's gas limit: explicitly set option-level values win,
+// legacy builder-level values are the fallback, else the chain default.
 func (ps *Settings) GasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) validator.Uint64 {
 	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
 	if ps == nil {
 		return chainDefault
 	}
-	if ps.isV2() {
-		return ps.TargetGasLimit(pubkey)
-	}
-	if opt, ok := ps.ProposeConfig[pubkey]; ok && opt != nil && opt.BuilderConfig != nil && opt.BuilderConfig.GasLimit != 0 {
+	opt := ps.ProposeConfig[pubkey]
+	switch {
+	case opt != nil && opt.GasLimit != 0:
+		return opt.GasLimit
+	case ps.DefaultConfig != nil && ps.DefaultConfig.GasLimit != 0:
+		return ps.DefaultConfig.GasLimit
+	case opt != nil && opt.BuilderConfig != nil && opt.BuilderConfig.GasLimit != 0:
 		return opt.BuilderConfig.GasLimit
-	}
-	if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil && ps.DefaultConfig.BuilderConfig.GasLimit != 0 {
+	case ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil && ps.DefaultConfig.BuilderConfig.GasLimit != 0:
 		return ps.DefaultConfig.BuilderConfig.GasLimit
 	}
 	return chainDefault
 }
 
-// SetGasLimit writes the per-pubkey gas limit. v1 requires existing settings
-// with builder enabled.
+// UpsertProposeOption returns pubkey's option, creating it if absent. A new
+// option keeps BuilderConfig nil so it inherits default_config.
+func (ps *Settings) UpsertProposeOption(pubkey [fieldparams.BLSPubkeyLength]byte) *Option {
+	if ps.ProposeConfig == nil {
+		ps.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*Option)
+	}
+	opt := ps.ProposeConfig[pubkey]
+	if opt == nil {
+		opt = &Option{}
+		ps.ProposeConfig[pubkey] = opt
+	}
+	return opt
+}
+
+// SetGasLimit writes the per-pubkey gas limit at the option level, where both
+// pre-gloas registrations and post-gloas preferences read it first.
 func (ps *Settings) SetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte, gasLimit validator.Uint64) error {
 	if ps == nil {
 		return errors.New("No proposer settings were found to update")
 	}
-	if ps.isV2() {
-		if ps.ProposeConfig == nil {
-			ps.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*Option)
-		}
-		opt := ps.ProposeConfig[pubkey]
-		if opt == nil {
-			opt = &Option{}
-			ps.ProposeConfig[pubkey] = opt
-		}
-		opt.GasLimit = gasLimit
-		return nil
-	}
-	builderEnabled := func(o *Option) bool {
-		return o != nil && o.BuilderConfig != nil && o.BuilderConfig.Enabled
-	}
-	if ps.ProposeConfig == nil {
-		if !builderEnabled(ps.DefaultConfig) {
-			return errors.New("Gas limit changes only apply when builder is enabled")
-		}
-		ps.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*Option)
-		opt := ps.DefaultConfig.Clone()
-		opt.BuilderConfig.GasLimit = gasLimit
-		ps.ProposeConfig[pubkey] = opt
-		return nil
-	}
-	if opt, found := ps.ProposeConfig[pubkey]; found {
-		if !builderEnabled(opt) {
-			return errors.New("Gas limit changes only apply when builder is enabled")
-		}
-		opt.BuilderConfig.GasLimit = gasLimit
-		return nil
-	}
-	if !builderEnabled(ps.DefaultConfig) {
-		return errors.New("Gas limit changes only apply when builder is enabled")
-	}
-	opt := ps.DefaultConfig.Clone()
-	opt.BuilderConfig.GasLimit = gasLimit
-	ps.ProposeConfig[pubkey] = opt
+	ps.UpsertProposeOption(pubkey).GasLimit = gasLimit
 	return nil
 }
 
@@ -407,26 +874,27 @@ func (ps *Settings) ResetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) bool
 		return false
 	}
 	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
-	if ps.isV2() {
-		opt, found := ps.ProposeConfig[pubkey]
-		if !found || opt == nil || opt.GasLimit == 0 {
-			return false
-		}
+	opt, found := ps.ProposeConfig[pubkey]
+	if !found || opt == nil {
+		return false
+	}
+	reset := false
+	if opt.GasLimit != 0 {
 		if ps.DefaultConfig != nil && ps.DefaultConfig.GasLimit != 0 {
 			opt.GasLimit = ps.DefaultConfig.GasLimit
 		} else {
-			opt.GasLimit = chainDefault
+			opt.GasLimit = 0
 		}
-		return true
+		reset = true
 	}
-	opt, found := ps.ProposeConfig[pubkey]
-	if !found || opt == nil || opt.BuilderConfig == nil {
-		return false
+	// Legacy per-key builder gas limits reset to the default's builder value.
+	if opt.BuilderConfig != nil && opt.BuilderConfig.GasLimit != 0 {
+		if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil {
+			opt.BuilderConfig.GasLimit = ps.DefaultConfig.BuilderConfig.GasLimit
+		} else {
+			opt.BuilderConfig.GasLimit = chainDefault
+		}
+		reset = true
 	}
-	if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil {
-		opt.BuilderConfig.GasLimit = ps.DefaultConfig.BuilderConfig.GasLimit
-	} else {
-		opt.BuilderConfig.GasLimit = chainDefault
-	}
-	return true
+	return reset
 }

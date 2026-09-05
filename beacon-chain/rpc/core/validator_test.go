@@ -435,9 +435,12 @@ func TestPayloadAttestationData(t *testing.T) {
 			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
 			MockCanonicalFull:  map[primitives.Slot]bool{slot: true},
 			MockPayloadEarly:   map[[32]byte]bool{bytesutil.ToBytes32(root): true},
-			HeadDependentRoot:  bytesutil.ToBytes32(bytesutil.PadTo([]byte{0x01}, 32)),
-			DependentRootCB: func(_ [32]byte, _ primitives.Epoch) ([32]byte, error) {
-				return bytesutil.ToBytes32(bytesutil.PadTo([]byte{0x02}, 32)), nil
+			// The block resolves to a different dependent root than head does.
+			DependentRootCB: func(r [32]byte, _ primitives.Epoch) ([32]byte, error) {
+				if r == bytesutil.ToBytes32(root) {
+					return bytesutil.ToBytes32(bytesutil.PadTo([]byte{0x02}, 32)), nil
+				}
+				return bytesutil.ToBytes32(bytesutil.PadTo([]byte{0x01}, 32)), nil
 			},
 		}
 		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain, ChainInfoFetcher: chain}
@@ -583,4 +586,63 @@ func TestValidatorActiveSetChanges(t *testing.T) {
 		assert.DeepEqual(t, []primitives.ValidatorIndex{7}, res.EjectedIndices)
 		assert.DeepEqual(t, [][]byte{pubKey(7)}, res.EjectedPublicKeys)
 	})
+}
+
+// The first two epochs resolve the dependent root for epoch 0, where the origin fallback applies.
+func TestBuildPayloadAttestationData_GenesisEpochs(t *testing.T) {
+	originRoot := [32]byte{'o', 'r', 'i', 'g', 'i', 'n'}
+	blockRoot := [32]byte{'b', 'l', 'o', 'c', 'k'}
+
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	for _, slot := range []primitives.Slot{0, 1, slotsPerEpoch, 2*slotsPerEpoch - 1} {
+		chain := &mockChain.ChainService{
+			// Forkchoice reports the zero root at genesis; the wrapper maps epoch 0 to the origin root.
+			HeadDependentRoot: [32]byte{},
+			DependentRootCB: func(_ [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+				if epoch == 0 {
+					return originRoot, nil
+				}
+				return [32]byte{'l', 'a', 't', 'e', 'r'}, nil
+			},
+			BlockSlot: slot,
+			Root:      blockRoot[:],
+		}
+		s := &Service{
+			HeadFetcher:       chain,
+			ForkchoiceFetcher: chain,
+			ChainInfoFetcher:  chain,
+		}
+
+		data, rpcErr := s.buildPayloadAttestationData(t.Context(), slot)
+		require.IsNil(t, rpcErr, "slot %d", slot)
+		require.NotNil(t, data)
+		require.DeepEqual(t, blockRoot[:], data.BeaconBlockRoot)
+		require.Equal(t, slot, data.Slot)
+	}
+}
+
+// A block whose shuffling differs from head is still rejected.
+func TestBuildPayloadAttestationData_NonCanonicalShuffling(t *testing.T) {
+	blockRoot := [32]byte{'b', 'l', 'o', 'c', 'k'}
+	slot := 4 * params.BeaconConfig().SlotsPerEpoch
+
+	chain := &mockChain.ChainService{
+		DependentRootCB: func(root [32]byte, _ primitives.Epoch) ([32]byte, error) {
+			if root == blockRoot {
+				return [32]byte{'a'}, nil
+			}
+			return [32]byte{'b'}, nil
+		},
+		BlockSlot: slot,
+		Root:      blockRoot[:],
+	}
+	s := &Service{
+		HeadFetcher:       chain,
+		ForkchoiceFetcher: chain,
+		ChainInfoFetcher:  chain,
+	}
+
+	_, rpcErr := s.buildPayloadAttestationData(t.Context(), slot)
+	require.NotNil(t, rpcErr)
+	require.StringContains(t, "no canonical shuffling block", rpcErr.Err.Error())
 }

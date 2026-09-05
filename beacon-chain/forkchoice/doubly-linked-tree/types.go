@@ -54,6 +54,7 @@ type Store struct {
 type Node struct {
 	slot                        primitives.Slot              // slot of the block converted to the node.
 	proposerIndex               primitives.ValidatorIndex    // proposer index of the block.
+	builderIndex                primitives.BuilderIndex      // builder index committed in the block's bid (Gloas only).
 	root                        [fieldparams.RootLength]byte // root of the block converted to the node.
 	blockHash                   [fieldparams.RootLength]byte // payloadHash of the block converted to the node.
 	parent                      *PayloadNode                 // parent index of this node.

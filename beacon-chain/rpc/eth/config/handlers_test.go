@@ -149,6 +149,7 @@ func TestGetSpec(t *testing.T) {
 	config.ContributionDueBPSGloas = primitives.BP(129)
 	config.PayloadAttestationDueBPS = primitives.BP(130)
 	config.PayloadDueBPS = primitives.BP(131)
+	config.ConfirmationByzantineThreshold = 132
 	config.TerminalBlockHash = common.HexToHash("TerminalBlockHash")
 	config.TerminalBlockHashActivationEpoch = 72
 	config.TerminalTotalDifficulty = "73"
@@ -228,7 +229,7 @@ func TestGetSpec(t *testing.T) {
 	config.DomainApplicationMask = dam
 	var dra [4]byte
 	copy(dra[:], []byte{'1', '0', '0', '1'})
-	config.DomainRequestAuth = dra
+	config.DomainBuilderRequestAuth = dra
 	var dbd [4]byte
 	copy(dbd[:], []byte{'1', '0', '0', '2'})
 	config.DomainBuilderDeposit = dbd
@@ -244,7 +245,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 211, len(data))
+	assert.Equal(t, 218, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -464,7 +465,7 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "0x30303039", v)
 			case "DOMAIN_APPLICATION_MASK":
 				assert.Equal(t, "0x31303030", v)
-			case "DOMAIN_REQUEST_AUTH":
+			case "DOMAIN_BUILDER_REQUEST_AUTH":
 				assert.Equal(t, "0x31303031", v)
 			case "DOMAIN_BUILDER_DEPOSIT":
 				assert.Equal(t, "0x31303032", v)
@@ -540,6 +541,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "130", v)
 			case "PAYLOAD_DUE_BPS":
 				assert.Equal(t, "131", v)
+			case "CONFIRMATION_BYZANTINE_THRESHOLD":
+				assert.Equal(t, "132", v)
 			case "MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT":
 				assert.Equal(t, "8", v)
 			case "MAX_REQUEST_LIGHT_CLIENT_UPDATES":
@@ -672,6 +675,10 @@ func TestGetSpec(t *testing.T) {
 				blobSchedule, ok := v.([]any)
 				assert.Equal(t, true, ok)
 				assert.Equal(t, 2, len(blobSchedule))
+			case "GAS_LIMIT_SCHEDULE":
+				gasLimitSchedule, ok := v.([]any)
+				assert.Equal(t, true, ok)
+				assert.Equal(t, 0, len(gasLimitSchedule))
 			case "FIELD_ELEMENTS_PER_CELL":
 				assert.Equal(t, "64", v) // From fieldparams.CellsPerBlob
 			case "FIELD_ELEMENTS_PER_EXT_BLOB":
@@ -692,6 +699,16 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.BuilderRegistryLimit), 10), v)
 			case "BUILDER_PENDING_WITHDRAWALS_LIMIT":
 				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.BuilderPendingWithdrawalsLimit), 10), v)
+			case "MAX_SIGNED_AGGREGATE_AND_PROOF_SIZE":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.MaxSignedAggregateAndProofSize), 10), v)
+			case "MAX_ATTESTER_SLASHING_SIZE":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.MaxAttesterSlashingSize), 10), v)
+			case "MAX_DATA_COLUMN_SIDECAR_SIZE":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.MaxDataColumnSidecarSize), 10), v)
+			case "MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.MaxPartialDataColumnSidecarSize), 10), v)
+			case "MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.MaxSignedExecutionPayloadBidSize), 10), v)
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}
@@ -845,6 +862,66 @@ func TestGetSpec_BlobSchedule_NotFulu(t *testing.T) {
 	require.Equal(t, true, ok)
 
 	_, exists := data["BLOB_SCHEDULE"]
+	require.Equal(t, false, exists)
+}
+
+func TestGetSpec_GasLimitSchedule(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig().Copy()
+	config.GloasForkEpoch = 1
+	config.GasLimitSchedule = []params.GasLimitScheduleEntry{
+		{Epoch: primitives.Epoch(100), GasLimit: 60_000_000},
+		{Epoch: primitives.Epoch(200), GasLimit: 90_000_000},
+	}
+	params.OverrideBeaconConfig(config)
+
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/config/spec", nil)
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+
+	GetSpec(writer, request)
+	require.Equal(t, http.StatusOK, writer.Code)
+	resp := structs.GetSpecResponse{}
+	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
+	data, ok := resp.Data.(map[string]any)
+	require.Equal(t, true, ok)
+
+	scheduleValue, exists := data["GAS_LIMIT_SCHEDULE"]
+	require.Equal(t, true, exists)
+	scheduleSlice, ok := scheduleValue.([]any)
+	require.Equal(t, true, ok)
+	require.Equal(t, 2, len(scheduleSlice))
+	first, ok := scheduleSlice[0].(map[string]any)
+	require.Equal(t, true, ok)
+	assert.Equal(t, "100", first["EPOCH"])
+	assert.Equal(t, "60000000", first["GAS_LIMIT"])
+	second, ok := scheduleSlice[1].(map[string]any)
+	require.Equal(t, true, ok)
+	assert.Equal(t, "200", second["EPOCH"])
+	assert.Equal(t, "90000000", second["GAS_LIMIT"])
+}
+
+func TestGetSpec_GasLimitSchedule_NotGloas(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig().Copy()
+	config.GloasForkEpoch = math.MaxUint64
+	config.GasLimitSchedule = []params.GasLimitScheduleEntry{
+		{Epoch: primitives.Epoch(100), GasLimit: 60_000_000},
+	}
+	params.OverrideBeaconConfig(config)
+
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/config/spec", nil)
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+
+	GetSpec(writer, request)
+	require.Equal(t, http.StatusOK, writer.Code)
+	resp := structs.GetSpecResponse{}
+	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
+	data, ok := resp.Data.(map[string]any)
+	require.Equal(t, true, ok)
+
+	_, exists := data["GAS_LIMIT_SCHEDULE"]
 	require.Equal(t, false, exists)
 }
 

@@ -35,6 +35,16 @@ func DecodeHexWithLength(s string, length int) ([]byte, error) {
 	return bytes, nil
 }
 
+// DecodeHex32 takes a string and validates whether the string is a hex and has the correct length of 32 bytes.
+func DecodeHex32(s string) ([32]byte, error) {
+	b, err := DecodeHexWithLength(s, 32)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("decode hex with length: %w", err)
+	}
+
+	return ToBytes32(b), nil
+}
+
 // DecodeHexWithMaxLength takes a string and a length in bytes,
 // and validates whether the string is a hex and has the correct length.
 func DecodeHexWithMaxLength(s string, maxLength uint64) ([]byte, error) {
@@ -47,4 +57,14 @@ func DecodeHexWithMaxLength(s string, maxLength uint64) ([]byte, error) {
 		return nil, errors.Wrap(err, fmt.Sprintf("length of %s exceeds max of %d bytes", s, maxLength))
 	}
 	return bytes, nil
+}
+
+// DecodeHex48 takes a string and validates whether the string is a hex and has the correct length of 48 bytes.
+func DecodeHex48(s string) ([48]byte, error) {
+	b, err := DecodeHexWithLength(s, 48)
+	if err != nil {
+		return [48]byte{}, fmt.Errorf("decode hex with length: %w", err)
+	}
+
+	return ToBytes48(b), nil
 }

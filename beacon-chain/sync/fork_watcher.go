@@ -20,7 +20,7 @@ func (s *Service) p2pHandlerControlLoop() {
 	startEntry := params.GetNetworkScheduleEntry(s.cfg.clock.CurrentEpoch())
 	s.registerSubscribers(startEntry)
 
-	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
+	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SlotDuration())
 	for {
 		select {
 		// In the event of a node restart, we will still end up subscribing to the correct

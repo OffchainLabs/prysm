@@ -56,10 +56,12 @@ go_test(
     srcs = [
         "conversions_block_execution_test.go",
         "conversions_block_gloas_test.go",
+        "conversions_gloas_test.go",
         "conversions_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
+        "//api:go_default_library",
         "//beacon-chain/core/feed/state:go_default_library",
         "//config/fieldparams:go_default_library",
         "//consensus-types/blocks:go_default_library",

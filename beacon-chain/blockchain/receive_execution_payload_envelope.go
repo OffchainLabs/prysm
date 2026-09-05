@@ -99,8 +99,8 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		if bid == nil || len(bid.BlobKzgCommitments()) == 0 {
 			return nil
 		}
-		// Initial sync fetches columns via range requests, so check availability synchronously rather than blocking on gossip; fail if missing.
-		if !s.inRegularSync() {
+		// Outside the gossip window, check availability synchronously rather than blocking; fail if missing.
+		if !s.canWaitForGossipSidecars(envelope.Slot()) {
 			available, err := s.dataColumnsAvailableNow(availCtx, root, envelope.Slot())
 			if err != nil {
 				return errors.Wrap(err, "data availability check failed for payload envelope")
@@ -122,6 +122,14 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return err
 	}
 
+	// Persist the envelope before announcing its availability so that consumers of the
+	// execution_payload_available event can immediately fetch it through the beacon API.
+	if err := s.savePostPayload(ctx, signed); err != nil {
+		cancelEL()
+		_ = elGroup.Wait()
+		return err
+	}
+
 	// execution_payload_available is emitted when an execution payload
 	// and all data are available for payload attestation
 	// without verifying the execution payload itself
@@ -135,12 +143,12 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 
 	// Join EL validation group after firing availability event.
 	if err := elGroup.Wait(); err != nil {
+		if dErr := s.cfg.BeaconDB.DeleteExecutionPayloadEnvelope(ctx, root); dErr != nil {
+			log.WithError(dErr).WithField("blockRoot", fmt.Sprintf("%#x", root)).Error("Could not delete execution payload envelope after failed execution validation")
+		}
 		return err
 	}
 
-	if err := s.savePostPayload(ctx, signed); err != nil {
-		return err
-	}
 	if err := s.InsertPayload(envelope); err != nil {
 		return errors.Wrap(err, "could not insert payload into forkchoice")
 	}
@@ -152,6 +160,9 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		}
 		s.cfg.ForkChoiceStore.Unlock()
 	}
+
+	// A revealed payload clears any recorded failure for this builder.
+	s.cfg.BuilderCircuitBreaker.RecordSuccess(envelope.BuilderIndex())
 
 	if err := s.postPayloadTasks(ctx, envelope, blockState); err != nil {
 		return err

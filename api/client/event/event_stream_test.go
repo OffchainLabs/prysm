@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,6 +37,12 @@ func TestNewEventStream(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewEventStream_InvalidHostErrorIsRedacted(t *testing.T) {
+	_, err := NewEventStream(t.Context(), &http.Client{}, "http://user:hunter2@local host:8080", []string{"topic1"})
+	require.NotNil(t, err)
+	require.Equal(t, false, strings.Contains(err.Error(), "hunter2"), "error exposes the host userinfo")
 }
 
 func TestEventStream(t *testing.T) {
@@ -126,8 +133,8 @@ func TestEventStreamRequestError(t *testing.T) {
 	require.NotNil(t, err)
 
 	event := <-eventsChannel
-	if event.EventType != EventConnectionError {
-		t.Errorf("Expected event type %q, got %q", EventConnectionError, event.EventType)
+	if event.Type != EventConnectionError {
+		t.Errorf("Expected event type %q, got %q", EventConnectionError, event.Type)
 	}
 
 }

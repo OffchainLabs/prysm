@@ -13,6 +13,13 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/pkg/errors"
+	logTest "github.com/sirupsen/logrus/hooks/test"
+	"github.com/stretchr/testify/mock"
+	"go.uber.org/mock/gomock"
+	"google.golang.org/grpc/metadata"
+
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
@@ -22,6 +29,7 @@ import (
 	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
 	rpctesting "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
@@ -34,6 +42,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ssz "github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -42,12 +51,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
-	logTest "github.com/sirupsen/logrus/hooks/test"
-	"github.com/stretchr/testify/mock"
-	"go.uber.org/mock/gomock"
 )
 
 // fillGloasBlockTestData populates a Gloas block with non-zero test values for the
@@ -750,6 +753,15 @@ func TestGetBlockAttestationsV2(t *testing.T) {
 	esb, err := blocks.NewSignedBeaconBlock(eb)
 	require.NoError(t, err)
 
+	gloasAtts := make([]*eth.AttestationGloas, len(electraAtts))
+	for i, att := range electraAtts {
+		gloasAtts[i] = eth.AttestationElectraToGloas(att)
+	}
+	gb := util.NewBeaconBlockGloas()
+	gb.Block.Body.Attestations = gloasAtts
+	gsb, err := blocks.NewSignedBeaconBlock(gb)
+	require.NoError(t, err)
+
 	t.Run("ok-pre-electra", func(t *testing.T) {
 		mockChainService := &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{},
@@ -820,6 +832,34 @@ func TestGetBlockAttestationsV2(t *testing.T) {
 
 		assert.DeepEqual(t, eb.Block.Body.Attestations, atts)
 		assert.Equal(t, "electra", resp.Version)
+	})
+	t.Run("ok-gloas", func(t *testing.T) {
+		mockChainService := &chainMock.ChainService{
+			FinalizedRoots: map[[32]byte]bool{},
+		}
+		s := &Server{
+			OptimisticModeFetcher: mockChainService,
+			FinalizationFetcher:   mockChainService,
+			Blocker:               &testutil.MockBlocker{BlockToReturn: gsb},
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}/attestations", nil)
+		request.SetPathValue("block_id", "head")
+		writer := httptest.NewRecorder()
+
+		s.GetBlockAttestationsV2(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+
+		resp := &structs.GetBlockAttestationsV2Response{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.Equal(t, version.String(version.Gloas), resp.Version)
+
+		var attStructs []structs.AttestationElectra
+		require.NoError(t, json.Unmarshal(resp.Data, &attStructs))
+		require.Equal(t, len(gloasAtts), len(attStructs))
+		for i := range attStructs {
+			assert.DeepEqual(t, structs.AttGloasFromConsensus(gloasAtts[i]), &attStructs[i])
+		}
 	})
 	t.Run("execution-optimistic", func(t *testing.T) {
 		r, err := bsb.Block().HashTreeRoot()
@@ -1359,6 +1399,19 @@ func TestGetBlindedBlockSSZ(t *testing.T) {
 }
 
 func TestVersionHeaderFromRequest(t *testing.T) {
+	t.Run("Gloas block returns gloas header", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 8
+		params.OverrideBeaconConfig(cfg)
+
+		slot := uint64(params.BeaconConfig().SlotsPerEpoch) * uint64(params.BeaconConfig().GloasForkEpoch)
+		block := []byte(fmt.Sprintf(`{"message":{"slot":"%d"}}`, slot))
+		versionHead, err := versionHeaderFromRequest(block)
+		require.NoError(t, err)
+		require.Equal(t, version.String(version.Gloas), versionHead)
+	})
+
 	t.Run("Fulu block contents returns fulu header", func(t *testing.T) {
 		cfg := params.BeaconConfig().Copy()
 		cfg.FuluForkEpoch = 7
@@ -1531,6 +1584,35 @@ func TestVersionHeaderFromRequest(t *testing.T) {
 
 func TestPublishBlockV2(t *testing.T) {
 	ctrl := gomock.NewController(t)
+	t.Run("Gloas builder url header is forwarded", func(t *testing.T) {
+		b := util.NewBeaconBlockGloas()
+		fillGloasBlockTestData(b, 1)
+		blkJSON, err := structs.SignedBeaconBlockGloasFromConsensus(b)
+		require.NoError(t, err)
+		body, err := json.Marshal(blkJSON)
+		require.NoError(t, err)
+
+		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+		v1alpha1Server.EXPECT().ProposeBeaconBlock(mock.MatchedBy(func(ctx context.Context) bool {
+			md, ok := metadata.FromIncomingContext(ctx)
+			return ok && len(md.Get(api.BuilderUrlHeader)) == 1 && md.Get(api.BuilderUrlHeader)[0] == "http://builder.example"
+		}), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
+			_, ok := req.Block.(*eth.GenericSignedBeaconBlock_Gloas)
+			return ok
+		}))
+		server := &Server{
+			V1Alpha1ValidatorServer: v1alpha1Server,
+			SyncChecker:             &mockSync.Sync{IsSyncing: false},
+		}
+
+		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(body))
+		request.Header.Set(api.VersionHeader, version.String(version.Gloas))
+		request.Header.Set(api.BuilderUrlHeader, "http://builder.example")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		server.PublishBlockV2(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+	})
 	t.Run("Phase 0", func(t *testing.T) {
 		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
@@ -1754,6 +1836,33 @@ func TestPublishBlockV2(t *testing.T) {
 
 func TestPublishBlockV2SSZ(t *testing.T) {
 	ctrl := gomock.NewController(t)
+	t.Run("Gloas builder url header is forwarded", func(t *testing.T) {
+		b := util.NewBeaconBlockGloas()
+		fillGloasBlockTestData(b, 1)
+		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+		v1alpha1Server.EXPECT().ProposeBeaconBlock(mock.MatchedBy(func(ctx context.Context) bool {
+			md, ok := metadata.FromIncomingContext(ctx)
+			return ok && len(md.Get(api.BuilderUrlHeader)) == 1 && md.Get(api.BuilderUrlHeader)[0] == "http://builder.example"
+		}), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
+			_, ok := req.Block.(*eth.GenericSignedBeaconBlock_Gloas)
+			return ok
+		}))
+		server := &Server{
+			V1Alpha1ValidatorServer: v1alpha1Server,
+			SyncChecker:             &mockSync.Sync{IsSyncing: false},
+		}
+
+		ssz, err := b.MarshalSSZ()
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
+		request.Header.Set("Content-Type", api.OctetStreamMediaType)
+		request.Header.Set(api.VersionHeader, version.String(version.Gloas))
+		request.Header.Set(api.BuilderUrlHeader, "http://builder.example")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		server.PublishBlockV2(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+	})
 	t.Run("Phase 0", func(t *testing.T) {
 		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
@@ -2935,7 +3044,7 @@ func TestGetStateFork(t *testing.T) {
 		util.SaveBlock(t, ctx, db, blk)
 		require.NoError(t, db.SaveGenesisBlockRoot(ctx, root))
 
-		headerRoot, err := fakeState.LatestBlockHeader().HashTreeRoot()
+		headerRoot, err := helpers.BlockRootFromState(t.Context(), fakeState)
 		require.NoError(t, err)
 		chainService = &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{
@@ -3133,7 +3242,7 @@ func TestGetCommittees(t *testing.T) {
 		util.SaveBlock(t, ctx, db, blk)
 		require.NoError(t, db.SaveGenesisBlockRoot(ctx, root))
 
-		headerRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		headerRoot, err := helpers.BlockRootFromState(t.Context(), st)
 		require.NoError(t, err)
 		chainService = &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{
@@ -3669,7 +3778,7 @@ func TestGetFinalityCheckpoints(t *testing.T) {
 		assert.Equal(t, true, resp.ExecutionOptimistic)
 	})
 	t.Run("finalized", func(t *testing.T) {
-		headerRoot, err := fakeState.LatestBlockHeader().HashTreeRoot()
+		headerRoot, err := helpers.BlockRootFromState(t.Context(), fakeState)
 		require.NoError(t, err)
 		chainService := &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{
@@ -4226,7 +4335,7 @@ func TestGetPendingConsolidations(t *testing.T) {
 	})
 
 	t.Run("finalized node", func(t *testing.T) {
-		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		blockRoot, err := helpers.BlockRootFromState(t.Context(), st)
 		require.NoError(t, err)
 
 		finalizedChainService := &chainMock.ChainService{
@@ -4419,7 +4528,7 @@ func TestGetPendingDeposits(t *testing.T) {
 	})
 
 	t.Run("finalized node", func(t *testing.T) {
-		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		blockRoot, err := helpers.BlockRootFromState(t.Context(), st)
 		require.NoError(t, err)
 
 		finalizedChainService := &chainMock.ChainService{
@@ -4609,7 +4718,7 @@ func TestGetPendingPartialWithdrawals(t *testing.T) {
 	})
 
 	t.Run("finalized node", func(t *testing.T) {
-		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		blockRoot, err := helpers.BlockRootFromState(t.Context(), st)
 		require.NoError(t, err)
 
 		finalizedChainService := &chainMock.ChainService{
@@ -4705,7 +4814,7 @@ func TestGetProposerLookahead(t *testing.T) {
 			start := i * validatorIndexSize
 			end := start + validatorIndexSize
 
-			idx := ssz.UnmarshallUint64(responseBytes[start:end])
+			idx := ssz.UnmarshalUint64(responseBytes[start:end])
 			recoveredIndices[i] = primitives.ValidatorIndex(idx)
 		}
 		require.DeepEqual(t, lookahead, recoveredIndices)
@@ -4796,7 +4905,7 @@ func TestGetProposerLookahead(t *testing.T) {
 	})
 
 	t.Run("finalized node", func(t *testing.T) {
-		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		blockRoot, err := helpers.BlockRootFromState(t.Context(), st)
 		require.NoError(t, err)
 
 		finalizedChainService := &chainMock.ChainService{

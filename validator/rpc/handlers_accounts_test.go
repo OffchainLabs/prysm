@@ -21,8 +21,6 @@ import (
 	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/iface"
-	"github.com/OffchainLabs/prysm/v7/validator/client"
-	"github.com/OffchainLabs/prysm/v7/validator/client/testutil"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/derived"
 	constant "github.com/OffchainLabs/prysm/v7/validator/testing"
@@ -52,14 +50,9 @@ func TestServer_ListAccounts(t *testing.T) {
 	require.NoError(t, err)
 	km, err := w.InitializeKeymanager(ctx, iface.InitKeymanagerConfig{ListenForChanges: false})
 	require.NoError(t, err)
-	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Conn:   constant.MockNodeConnection(),
-		Wallet: w,
-		Validator: &testutil.FakeValidator{
-			Km: km,
-		},
-	})
-	require.NoError(t, err)
+	vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+	vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
+	vs.EXPECT().Keymanager().Return(km, nil).AnyTimes()
 	s := &Server{
 		walletInitialized: true,
 		wallet:            w,
@@ -158,14 +151,9 @@ func TestServer_BackupAccounts(t *testing.T) {
 	require.NoError(t, err)
 	km, err := w.InitializeKeymanager(ctx, iface.InitKeymanagerConfig{ListenForChanges: false})
 	require.NoError(t, err)
-	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Conn:   constant.MockNodeConnection(),
-		Wallet: w,
-		Validator: &testutil.FakeValidator{
-			Km: km,
-		},
-	})
-	require.NoError(t, err)
+	vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+	vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
+	vs.EXPECT().Keymanager().Return(km, nil).AnyTimes()
 	s := &Server{
 		walletInitialized: true,
 		wallet:            w,
@@ -283,14 +271,9 @@ func TestServer_VoluntaryExit(t *testing.T) {
 	km, err := w.InitializeKeymanager(ctx, iface.InitKeymanagerConfig{ListenForChanges: false})
 	require.NoError(t, err)
 	require.NoError(t, err)
-	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Conn:   constant.MockNodeConnection(),
-		Wallet: w,
-		Validator: &testutil.FakeValidator{
-			Km: km,
-		},
-	})
-	require.NoError(t, err)
+	vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+	vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
+	vs.EXPECT().Keymanager().Return(km, nil).AnyTimes()
 	s := &Server{
 		walletInitialized:         true,
 		wallet:                    w,

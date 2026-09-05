@@ -5,8 +5,8 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/policies"
 	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
@@ -49,7 +49,7 @@ func builderActive(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) err
 	if lowestBound < params.BeaconConfig().BellatrixForkEpoch {
 		lowestBound = params.BeaconConfig().BellatrixForkEpoch
 	}
-	emptyRt, err := ssz.TransactionsRoot([][]byte{})
+	emptyRt, err := wrappers.TransactionsRoot([][]byte{})
 	if err != nil {
 		return err
 	}

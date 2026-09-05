@@ -3,6 +3,10 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "helper.go",
+        "key_sets.go",
+        "key_source_file.go",
+        "key_source_url.go",
         "keymanager.go",
         "log.go",
         "metrics.go",
@@ -10,10 +14,13 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer",
     visibility = [
         "//cmd/validator:__subpackages__",
+        "//testing/validator-mock:__pkg__",
         "//validator:__subpackages__",
     ],
     deps = [
+        "//api:go_default_library",
         "//async/event:go_default_library",
+        "//cmd/validator/flags:go_default_library",
         "//config/fieldparams:go_default_library",
         "//crypto/bls:go_default_library",
         "//encoding/bytesutil:go_default_library",
@@ -38,10 +45,17 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["keymanager_test.go"],
+    srcs = [
+        "helper_test.go",
+        "key_sets_test.go",
+        "key_source_file_test.go",
+        "key_source_url_test.go",
+        "keymanager_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
-        "//config/fieldparams:go_default_library",
+        "//async/event:go_default_library",
+        "//config/params:go_default_library",
         "//crypto/bls:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//io/file:go_default_library",

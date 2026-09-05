@@ -56,3 +56,12 @@ func TestGenerateAttestations_EpochBoundary(t *testing.T) {
 	_, err := GenerateAttestations(gs, pk, 1, params.BeaconConfig().SlotsPerEpoch, false)
 	require.NoError(t, err)
 }
+
+func TestGenerateAttestations_Gloas(t *testing.T) {
+	gs, pk := DeterministicGenesisStateGloas(t, 64)
+	atts, err := GenerateAttestations(gs, pk, 1, 0, false)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(atts))
+	_, ok := atts[0].(*ethpb.AttestationGloas)
+	require.Equal(t, true, ok)
+}

@@ -8,6 +8,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
+	"github.com/spf13/afero"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -16,8 +19,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/spf13/afero"
 )
 
 func TestBlobStorage_SaveBlobData(t *testing.T) {
