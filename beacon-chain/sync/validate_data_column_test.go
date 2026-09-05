@@ -216,7 +216,11 @@ func TestValidateDataColumn(t *testing.T) {
 	}
 
 	t.Run("seen data column", func(t *testing.T) {
-		service, message := serviceAndMessage(t, testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{}), dataColumnSidecarMsg)
+		failingVerifier := testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{
+			ErrValidFields:             genericError,
+			ErrSidecarKzgProofVerified: genericError,
+		})
+		service, message := serviceAndMessage(t, failingVerifier, dataColumnSidecarMsg)
 		service.setSeenDataColumnIndex(0, 0, 0)
 		result, err := service.validateDataColumn(ctx, "aDummyPID", message)
 		require.NoError(t, err)

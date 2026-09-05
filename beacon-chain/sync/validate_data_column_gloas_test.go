@@ -258,6 +258,26 @@ func TestValidateDataColumnGloas(t *testing.T) {
 		require.ErrorContains(t, "signed beacon block can't be nil", err)
 	})
 
+	t.Run("seen column ignored before block lookup and queue validation", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.DenebForkEpoch = 0
+		cfg.ElectraForkEpoch = 0
+		cfg.FuluForkEpoch = 0
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		sidecar, _ := gloasFixture(t)
+		service, message := serviceAndMessage(t, testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{}), sidecar, sidecar.Index)
+		blockRoot := bytesutil.ToBytes32(sidecar.BeaconBlockRoot)
+		service.setSeenDataColumnRootIndex(blockRoot, sidecar.Index, sidecar.Slot)
+
+		result, err := service.validateDataColumn(ctx, "aDummyPID", message)
+		require.ErrorContains(t, "data column sidecar already seen for block root", err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+		require.Equal(t, false, service.hasPendingGloasColumns(blockRoot))
+	})
+
 	t.Run("rejects oversize column on queue path", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig()

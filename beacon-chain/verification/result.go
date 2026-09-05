@@ -41,8 +41,6 @@ func (r Requirement) String() string {
 		return "RequireValidFieldsGloas"
 	case RequireSidecarKzgProofVerifiedGloas:
 		return "RequireSidecarKzgProofVerifiedGloas"
-	case RequireNotSeenGloas:
-		return "RequireNotSeenGloas"
 	case RequireCurrentSlot:
 		return "RequireCurrentSlot"
 	case RequireMessageNotSeen:
