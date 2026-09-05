@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	dto "github.com/prometheus/client_model/go"
 )
 
 type testResponse struct {
@@ -651,6 +652,7 @@ func TestRaceRound(t *testing.T) {
 	handlers := []*handler{newTestHandler("http://a"), newTestHandler("http://b")}
 
 	t.Run("returns the first response satisfying accept", func(t *testing.T) {
+		nodeResponseTotal.Reset()
 		accept := func(s string) bool { return s == "fresh" }
 		fn := func(_ context.Context, h *handler) (string, error) {
 			if h == handlers[1] {
@@ -664,9 +666,12 @@ func TestRaceRound(t *testing.T) {
 		assert.Equal(t, true, ok)
 		assert.Equal(t, "fresh", val)
 		assert.Equal(t, 0, len(errs))
+		assert.Equal(t, float64(1), counterValue(t, "http://b", outcomeMatched), "the matching host should be credited")
+		assert.Equal(t, float64(0), counterValue(t, "http://a", outcomeMatched))
 	})
 
 	t.Run("falls back to a usable response when none match", func(t *testing.T) {
+		nodeResponseTotal.Reset()
 		accept := func(string) bool { return false } // nothing matches
 		fn := func(context.Context, *handler) (string, error) { return "stale", nil }
 
@@ -674,9 +679,13 @@ func TestRaceRound(t *testing.T) {
 		assert.Equal(t, false, matched)
 		assert.Equal(t, true, ok, "a non-matching 2XX is still a usable response")
 		assert.Equal(t, "stale", val)
+		// Either host can win the race, but exactly one fallback is recorded.
+		fallbacks := counterValue(t, "http://a", outcomeFallback) + counterValue(t, "http://b", outcomeFallback)
+		assert.Equal(t, float64(1), fallbacks)
 	})
 
 	t.Run("reports failure when every handler errors", func(t *testing.T) {
+		nodeResponseTotal.Reset()
 		sentinel := errors.New("boom")
 		accept := func(string) bool { return true }
 		fn := func(context.Context, *handler) (string, error) { return "", sentinel }
@@ -686,9 +695,12 @@ func TestRaceRound(t *testing.T) {
 		assert.Equal(t, false, ok)
 		assert.Equal(t, len(handlers), len(errs))
 		assert.Equal(t, true, errors.Is(errors.Join(errs...), sentinel))
+		assert.Equal(t, float64(1), counterValue(t, "http://a", outcomeError))
+		assert.Equal(t, float64(1), counterValue(t, "http://b", outcomeError))
 	})
 
 	t.Run("stops waiting for a hung handler at the fallback deadline", func(t *testing.T) {
+		nodeResponseTotal.Reset()
 		accept := func(string) bool { return false } // the responding node is lagging
 		fn := func(ctx context.Context, h *handler) (string, error) {
 			if h == handlers[1] {
@@ -709,9 +721,11 @@ func TestRaceRound(t *testing.T) {
 		assert.Equal(t, true, ok)
 		assert.Equal(t, "stale", val, "the usable response must be returned rather than waiting on the hung node")
 		assert.Equal(t, true, time.Since(start) < 10*time.Second, "the round must not wait for the read deadline")
+		assert.Equal(t, float64(1), counterValue(t, "http://a", outcomeFallback), "the expiry path still credits the fallback host")
 	})
 
 	t.Run("returns the fallback when the context is canceled with a usable response in hand", func(t *testing.T) {
+		nodeResponseTotal.Reset()
 		release := make(chan struct{})
 		t.Cleanup(func() { close(release) })
 
@@ -740,6 +754,7 @@ func TestRaceRound(t *testing.T) {
 		assert.Equal(t, true, ok, "a response collected before the cancellation is still usable")
 		assert.Equal(t, "stale", val)
 		assert.Equal(t, true, errors.Is(errors.Join(errs...), context.Canceled))
+		assert.Equal(t, float64(1), counterValue(t, "http://a", outcomeFallback), "the cancellation path still credits the fallback host")
 	})
 
 	t.Run("returns promptly when the context is canceled with nothing in hand", func(t *testing.T) {
@@ -763,6 +778,7 @@ func TestInOrderRound(t *testing.T) {
 	handlers := []*handler{newTestHandler("http://a"), newTestHandler("http://b")}
 
 	t.Run("returns the first response satisfying accept", func(t *testing.T) {
+		nodeResponseTotal.Reset()
 		accept := func(s string) bool { return s == "fresh" }
 		fn := func(_ context.Context, h *handler) (string, error) {
 			if h == handlers[0] {
@@ -776,9 +792,12 @@ func TestInOrderRound(t *testing.T) {
 		assert.Equal(t, true, ok)
 		assert.Equal(t, "fresh", val)
 		assert.Equal(t, 0, len(errs))
+		assert.Equal(t, float64(1), counterValue(t, "http://a", outcomeMatched))
+		assert.Equal(t, float64(0), counterValue(t, "http://b", outcomeMatched))
 	})
 
 	t.Run("falls back to a usable response when none match", func(t *testing.T) {
+		nodeResponseTotal.Reset()
 		accept := func(string) bool { return false } // nothing matches
 		fn := func(context.Context, *handler) (string, error) { return "stale", nil }
 
@@ -786,9 +805,12 @@ func TestInOrderRound(t *testing.T) {
 		assert.Equal(t, false, matched)
 		assert.Equal(t, true, ok, "a non-matching 2XX is still a usable response")
 		assert.Equal(t, "stale", val)
+		assert.Equal(t, float64(1), counterValue(t, "http://a", outcomeFallback), "the first usable host is the fallback")
+		assert.Equal(t, float64(0), counterValue(t, "http://b", outcomeFallback))
 	})
 
 	t.Run("reports failure when every handler errors", func(t *testing.T) {
+		nodeResponseTotal.Reset()
 		sentinel := errors.New("boom")
 		accept := func(string) bool { return true }
 		fn := func(context.Context, *handler) (string, error) { return "", sentinel }
@@ -798,6 +820,20 @@ func TestInOrderRound(t *testing.T) {
 		assert.Equal(t, false, ok)
 		assert.Equal(t, len(handlers), len(errs))
 		assert.Equal(t, true, errors.Is(errors.Join(errs...), sentinel))
+		assert.Equal(t, float64(1), counterValue(t, "http://a", outcomeError))
+		assert.Equal(t, float64(1), counterValue(t, "http://b", outcomeError))
+	})
+
+	t.Run("redacts credentials from the host label", func(t *testing.T) {
+		nodeResponseTotal.Reset()
+		withCreds := []*handler{newTestHandler("http://user:password@first:3500")}
+		accept := func(string) bool { return true }
+		fn := func(context.Context, *handler) (string, error) { return "ok", nil }
+
+		_, matched, _, _ := inOrderRound(context.Background(), withCreds, time.Time{}, accept, fn)
+		assert.Equal(t, true, matched)
+		// The single match landed on the redacted label, so the raw one was never used.
+		assert.Equal(t, float64(1), counterValue(t, "http://user:xxxxx@first:3500", outcomeMatched))
 	})
 
 	t.Run("stops when the context is already canceled", func(t *testing.T) {
@@ -906,6 +942,13 @@ func waitFor(cond func() bool) error {
 		return nil
 	}
 	return context.DeadlineExceeded
+}
+
+// counterValue reads the current nodeResponseTotal count for a host/outcome pair.
+func counterValue(t *testing.T, host, outcome string) float64 {
+	var m dto.Metric
+	require.NoError(t, nodeResponseTotal.WithLabelValues(host, outcome).Write(&m))
+	return m.GetCounter().GetValue()
 }
 
 // newTestHandler builds a *handler pointing at the given base URL.
