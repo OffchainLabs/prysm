@@ -109,21 +109,23 @@ func indexedPayloadAttestation(ctx context.Context, st state.ReadOnlyBeaconState
 
 // computePTC computes the payload timeliness committee for a given slot.
 //
-//	<spec fn="compute_ptc" fork="gloas" hash="1dcaa117">
-//	def compute_ptc(state: BeaconState, slot: Slot) -> Vector[ValidatorIndex, PTC_SIZE]:
+//	<spec fn="compute_ptc" fork="gloas" hash="3248e71b">
+//	def compute_ptc(state: BeaconState, slot: Slot) -> PayloadTimelinessCommittee:
 //	    """
 //	    Get the payload timeliness committee, with possible duplicates, for the given ``slot``.
 //	    """
 //	    epoch = compute_epoch_at_slot(slot)
-//	    seed = hash(get_seed(state, epoch, DOMAIN_PTC_ATTESTER) + uint_to_bytes(slot))
-//	    indices: List[ValidatorIndex] = []
+//	    seed = sha256(get_seed(state, epoch, DOMAIN_PTC_ATTESTER) + uint_to_bytes(slot))
+//	    indices: list[ValidatorIndex] = []
 //	    # Concatenate all committees for this slot in order
 //	    committees_per_slot = get_committee_count_per_slot(state, epoch)
 //	    for i in range(committees_per_slot):
 //	        committee = get_beacon_committee(state, slot, CommitteeIndex(i))
 //	        indices.extend(committee)
-//	    return compute_balance_weighted_selection(
-//	        state, indices, seed, size=PTC_SIZE, shuffle_indices=False
+//	    return PayloadTimelinessCommittee(
+//	        data=compute_balance_weighted_selection(
+//	            state, indices, seed, size=PTC_SIZE, shuffle_indices=False
+//	        )
 //	    )
 //	</spec>
 func computePTC(ctx context.Context, st state.ReadOnlyBeaconState, slot primitives.Slot) ([]primitives.ValidatorIndex, error) {
@@ -219,12 +221,12 @@ func ptcSeed(st state.ReadOnlyBeaconState, epoch primitives.Epoch, slot primitiv
 
 // selectByBalance selects a balance-weighted subset of input candidates.
 //
-//	<spec fn="compute_balance_weighted_selection" fork="gloas" hash="e5dff16e">
+//	<spec fn="compute_balance_weighted_selection" fork="gloas" hash="df4dbaf1">
 //	def compute_balance_weighted_selection(
 //	    state: BeaconState,
 //	    indices: Sequence[ValidatorIndex],
 //	    seed: Bytes32,
-//	    size: uint64,
+//	    size: Uint64,
 //	    shuffle_indices: bool,
 //	) -> Sequence[ValidatorIndex]:
 //	    """
@@ -234,15 +236,15 @@ func ptcSeed(st state.ReadOnlyBeaconState, epoch primitives.Epoch, slot primitiv
 //	    ``indices`` is traversed in order. The returned list can contain duplicates.
 //	    """
 //	    MAX_RANDOM_VALUE = 2**16 - 1
-//	    total = uint64(len(indices))
+//	    total = Uint64(len(indices))
 //	    assert total > 0
 //	    effective_balances = [state.validators[index].effective_balance for index in indices]
-//	    selected: List[ValidatorIndex] = []
-//	    i = uint64(0)
+//	    selected: list[ValidatorIndex] = []
+//	    i = Uint64(0)
 //	    while len(selected) < size:
 //	        offset = i % 16 * 2
 //	        if offset == 0:
-//	            random_bytes = hash(seed + uint_to_bytes(i // 16))
+//	            random_bytes = sha256(seed + uint_to_bytes(i // 16))
 //	        next_index = i % total
 //	        if shuffle_indices:
 //	            next_index = compute_shuffled_index(next_index, total, seed)
@@ -303,7 +305,7 @@ func selectByBalanceFill(
 
 // validIndexedPayloadAttestation verifies the signature of an indexed payload attestation.
 //
-//	<spec fn="is_valid_indexed_payload_attestation" fork="gloas" hash="745c04a1">
+//	<spec fn="is_valid_indexed_payload_attestation" fork="gloas" hash="37b2500a">
 //	def is_valid_indexed_payload_attestation(
 //	    state: BeaconState, attestation: IndexedPayloadAttestation
 //	) -> bool:
@@ -313,7 +315,7 @@ func selectByBalanceFill(
 //	    """
 //	    # Verify indices are non-empty and sorted
 //	    indices = attestation.attesting_indices
-//	    if len(indices) == 0 or indices != sorted(indices):
+//	    if len(indices) == 0 or list(indices) != sorted(indices):
 //	        return False
 //
 //	    # Verify aggregate signature
@@ -364,7 +366,7 @@ func validIndexedPayloadAttestation(st state.ReadOnlyBeaconState, att *consensus
 // ProcessPTCWindow rotates the cached PTC window at epoch boundaries by computing
 // PTC assignments for the new lookahead epoch and shifting the window.
 //
-//	<spec fn="process_ptc_window" fork="gloas" hash="7be3d509">
+//	<spec fn="process_ptc_window" fork="gloas" hash="22d45307">
 //	def process_ptc_window(state: BeaconState) -> None:
 //	    """
 //	    Update the cached PTC window.
@@ -372,7 +374,7 @@ func validIndexedPayloadAttestation(st state.ReadOnlyBeaconState, att *consensus
 //	    # Shift all epochs forward by one
 //	    state.ptc_window[: len(state.ptc_window) - SLOTS_PER_EPOCH] = state.ptc_window[SLOTS_PER_EPOCH:]
 //	    # Fill in the last epoch
-//	    next_epoch = Epoch(get_current_epoch(state) + MIN_SEED_LOOKAHEAD + 1)
+//	    next_epoch = get_current_epoch(state) + MIN_SEED_LOOKAHEAD + 1
 //	    start_slot = compute_start_slot_at_epoch(next_epoch)
 //	    state.ptc_window[len(state.ptc_window) - SLOTS_PER_EPOCH :] = [
 //	        compute_ptc(state, Slot(slot)) for slot in range(start_slot, start_slot + SLOTS_PER_EPOCH)

@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -346,7 +347,8 @@ func ProcessBlockNoVerifyAnySig(
 func ProcessOperationsNoVerifyAttsSigs(
 	ctx context.Context,
 	state state.BeaconState,
-	beaconBlock interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+	beaconBlock interfaces.ReadOnlyBeaconBlock,
+	parentSlot primitives.Slot) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "core.state.ProcessOperationsNoVerifyAttsSigs")
 	defer span.End()
 	if beaconBlock == nil || beaconBlock.IsNil() {
@@ -359,7 +361,7 @@ func ProcessOperationsNoVerifyAttsSigs(
 
 	blockVersion := beaconBlock.Version()
 	if blockVersion >= version.Gloas {
-		state, err := gloasOperations(ctx, state, beaconBlock)
+		state, err := gloasOperations(ctx, state, beaconBlock, parentSlot)
 		if err != nil {
 			return nil, fmt.Errorf("gloas operations: %w", err)
 		}
@@ -420,6 +422,8 @@ func ProcessBlockForStateRoot(
 	blk := signed.Block()
 	body := blk.Body()
 
+	parentSlot := state.LatestBlockHeader().Slot
+
 	if state.Version() >= version.Gloas {
 		if err := gloas.ProcessParentExecutionPayload(ctx, state, blk); err != nil {
 			return nil, errors.Wrap(err, "could not process parent execution payload")
@@ -438,8 +442,11 @@ func ProcessBlockForStateRoot(
 	}
 
 	if state.Version() >= version.Gloas {
-		// <spec fn="process_block" fork="gloas" hash="7d98b5a3">
+		// <spec fn="process_block" fork="gloas" hash="c6ddaa45">
 		// def process_block(state: BeaconState, block: BeaconBlock) -> None:
+		//     # [New in Gloas:EIP7732]
+		//     parent_slot = state.latest_block_header.slot
+		//
 		//     # [New in Gloas:EIP7732]
 		//     process_parent_execution_payload(state, block)
 		//     process_block_header(state, block)
@@ -452,7 +459,7 @@ func ProcessBlockForStateRoot(
 		//     process_randao(state, block.body)
 		//     process_eth1_data(state, block.body)
 		//     # [Modified in Gloas:EIP7732]
-		//     process_operations(state, block.body)
+		//     process_operations(state, block.body, parent_slot)
 		//     process_sync_aggregate(state, block.body.sync_aggregate)
 		// </spec>
 		if err := gloas.ProcessWithdrawals(state); err != nil {
@@ -496,7 +503,7 @@ func ProcessBlockForStateRoot(
 		return nil, errors.Wrap(ErrProcessEth1DataFailed, err.Error())
 	}
 
-	state, err = ProcessOperationsNoVerifyAttsSigs(ctx, state, signed.Block())
+	state, err = ProcessOperationsNoVerifyAttsSigs(ctx, state, signed.Block(), parentSlot)
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return nil, errors.Wrap(err, "could not process block operation")
