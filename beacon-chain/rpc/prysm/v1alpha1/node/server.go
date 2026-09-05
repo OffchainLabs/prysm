@@ -297,7 +297,7 @@ func (ns *Server) GetETH1ConnectionStatus(_ context.Context, _ *empty.Empty) (*e
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // StreamBeaconLogs from the beacon node via a gRPC server-side stream.
-// DEPRECATED: This endpoint doesn't appear to be used and have been marked for deprecation.
+// Deprecated: This endpoint doesn't appear to be used and has been marked for deprecation.
 func (ns *Server) StreamBeaconLogs(_ *empty.Empty, stream ethpb.Health_StreamBeaconLogsServer) error {
 	ch := make(chan []byte, ns.StreamLogsBufferSize)
 	sub := ns.LogsStreamer.LogsFeed().Subscribe(ch)

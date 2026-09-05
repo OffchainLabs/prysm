@@ -54,6 +54,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check deprecated comment format
+        run: |
+          if git grep -nE '^[[:space:]]*//[[:space:]]*DEPRECATED:' -- '*.go'; then
+            echo "Found deprecated comments using DEPRECATED:. Use Deprecated: instead."
+            exit 1
+          fi
+
       - name: Set up Go 1.26.5
         uses: actions/setup-go@v5
         with:
