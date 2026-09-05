@@ -32,14 +32,18 @@ func genSSZ() error {
 		return fmt.Errorf("load methodical targets: %w", err)
 	}
 
-	// Progressive merkleization is gated OFF by default so that generated
-	// hash_tree_root values match the current (non-progressive) spectest
-	// fixtures. This mirrors the //tools:disable_progressive_merkleization
-	// default set in .bazelrc. Set SSZ_PROGRESSIVE=1 to generate the
-	// progressive form once upstream fixtures move to it.
-	progressive, _ := strconv.ParseBool(os.Getenv("SSZ_PROGRESSIVE"))
-	if progressive {
-		fmt.Println("SSZ_PROGRESSIVE=1: generating with progressive merkleization ON")
+	// Progressive merkleization is ON by default: gloas (EIP-7688) mandates it
+	// and the consensus-spec fixtures expect the progressive hash_tree_root
+	// values. This mirrors the //tools:disable_progressive_merkleization
+	// default in .bazelrc. Set SSZ_PROGRESSIVE=0 to generate the bounded form.
+	progressive := true
+	if v, ok := os.LookupEnv("SSZ_PROGRESSIVE"); ok {
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			progressive = parsed
+		}
+	}
+	if !progressive {
+		fmt.Println("SSZ_PROGRESSIVE=0: generating with progressive merkleization OFF")
 	}
 
 	for _, t := range targets {

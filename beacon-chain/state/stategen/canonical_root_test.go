@@ -104,7 +104,8 @@ func TestMigrateToColdHdiff_OrphanAtHighestPopulatedSlot(t *testing.T) {
 	require.NotEqual(t, wantRoot, orphanRoot, "the two candidates must differ for this test to mean anything")
 
 	// Slot 64 is the only boundary in (32, 65), and is absent from the cache to force the lookup path.
-	service.finalizedInfo = &finalizedInfo{slot: 32, root: r32, state: s32.Copy()}
+	service.migratedSlot = 32
+	service.finalizedInfo = &finalizedInfo{root: r32, state: s32.Copy()}
 	require.NoError(t, service.epochBoundaryStateCache.put(r32, s32.Copy()))
 	require.NoError(t, service.MigrateToCold(ctx, r65))
 
@@ -195,7 +196,8 @@ func TestMigrateToColdHdiff_ReorgedSiblingInBoundaryCache(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, wantRoot, orphanRoot, "the two candidates must differ for this test to mean anything")
 
-	service.finalizedInfo = &finalizedInfo{slot: 32, root: r32, state: s32.Copy()}
+	service.migratedSlot = 32
+	service.finalizedInfo = &finalizedInfo{root: r32, state: s32.Copy()}
 	require.NoError(t, service.MigrateToCold(ctx, r96))
 
 	// State() resolves by the summary's slot, so any root mapped to 64 reads the tree at 64.

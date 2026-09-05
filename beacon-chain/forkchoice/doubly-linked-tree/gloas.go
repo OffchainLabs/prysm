@@ -660,19 +660,30 @@ func (f *ForkChoice) BlockHash(root [32]byte) ([32]byte, error) {
 	return en.node.blockHash, nil
 }
 
-// GasLimit returns the gas limit of the latest full payload at or before root.
-func (f *ForkChoice) GasLimit(root [32]byte) (uint64, error) {
+// GasLimit returns the gas limit of the payload with the given block hash as seen from the
+// block with the given root: either the block's own payload (full node) or the latest full
+// payload the block builds on. A bid whose parent_block_hash is the parent payload of its
+// parent_block_root builds on the root as an empty node and must be checked against the
+// parent payload's gas limit, not the root's own payload.
+func (f *ForkChoice) GasLimit(root, blockHash [32]byte) (uint64, error) {
 	s := f.store
-	if fn := s.fullNodeByRoot[root]; fn != nil {
-		return fn.gasLimit, nil
-	}
 	en := s.emptyNodeByRoot[root]
-	if en == nil {
+	if en == nil || en.node == nil {
 		return 0, errors.Wrap(ErrNilNode, "could not get gas limit for root")
+	}
+	if blockHash == en.node.blockHash {
+		fn := s.fullNodeByRoot[root]
+		if fn == nil {
+			return 0, errors.New("payload for root has not been imported")
+		}
+		return fn.gasLimit, nil
 	}
 	fp := s.fullParent(en)
 	if fp == nil {
 		return 0, errors.New("no full ancestor with gas limit")
+	}
+	if blockHash != fp.node.blockHash {
+		return 0, errors.New("block hash is neither the root's payload nor its parent payload")
 	}
 	return fp.gasLimit, nil
 }

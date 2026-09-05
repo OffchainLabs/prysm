@@ -988,8 +988,8 @@ func (s *ChainService) ParentPayloadReady(_ interfaces.ReadOnlyBeaconBlock) bool
 	return true
 }
 
-// GasLimit mocks the execution payload gas limit lookup for a beacon block root.
-func (s *ChainService) GasLimit(root [32]byte) (uint64, error) {
+// GasLimit mocks the execution payload gas limit lookup for a beacon block root. The block hash is ignored.
+func (s *ChainService) GasLimit(root, _ [32]byte) (uint64, error) {
 	if s.ForkchoiceGasLimits != nil {
 		if gasLimit, ok := s.ForkchoiceGasLimits[root]; ok {
 			return gasLimit, nil

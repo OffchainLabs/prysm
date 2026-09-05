@@ -220,7 +220,7 @@ func TestROLocking(t *testing.T) {
 		{
 			name: "gasLimitCalled",
 			call: gasLimitCalled,
-			cb:   func(g FastGetter) { _, err := g.GasLimit([32]byte{}); _discard(t, err) },
+			cb:   func(g FastGetter) { _, err := g.GasLimit([32]byte{}, [32]byte{}); _discard(t, err) },
 		},
 		{
 			name: "hasPayloadBlockHashCalled",
@@ -442,7 +442,7 @@ func (ro *mockROForkchoice) BlockHash(_ [32]byte) ([32]byte, error) {
 	return [32]byte{}, nil
 }
 
-func (ro *mockROForkchoice) GasLimit(_ [32]byte) (uint64, error) {
+func (ro *mockROForkchoice) GasLimit(_, _ [32]byte) (uint64, error) {
 	ro.calls = append(ro.calls, gasLimitCalled)
 	return 0, nil
 }

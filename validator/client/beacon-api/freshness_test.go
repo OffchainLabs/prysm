@@ -241,13 +241,16 @@ func TestPayloadAttestationFreshnessOptions(t *testing.T) {
 		require.Equal(t, time.Duration(0), cfg.PollInterval)
 	})
 
-	t.Run("hint with a deadline sets that deadline and repolls", func(t *testing.T) {
+	t.Run("hint with a deadline polls past that deadline", func(t *testing.T) {
 		deadline := time.Now().Add(time.Hour)
 		ctx := iface.WithHint(context.Background(), headHint([32]byte{0x01}, 10, true, deadline))
 		cfg := rest.ResolveOptions(payloadAttestationFreshnessOptions(ctx)...)
 
 		require.Equal(t, true, cfg.Race)
-		require.Equal(t, deadline, cfg.Deadline)
+		// The node holds non-final data until the hint deadline, so the read must
+		// outlive it or it gives up at the exact instant the data becomes servable.
+		require.Equal(t, deadline.Add(payloadAttestationDueGrace), cfg.Deadline)
+		require.Equal(t, true, cfg.Deadline.After(deadline))
 		// WithRepoll(0) falls back to the default poll interval.
 		require.NotEqual(t, time.Duration(0), cfg.PollInterval)
 	})

@@ -169,27 +169,52 @@ func diffBuilderPendingWithdrawals(diff *stateDiff, source, target state.ReadOnl
 	return nil
 }
 
+func serializedGloasFieldsSize(s *stateDiff) int {
+	size := 8 + s.latestExecutionPayloadBid.SizeSSZ()
+	size += 8 // builderDiffs length.
+	for _, diff := range s.builderDiffs {
+		size += 4 + diff.builder.SizeSSZ()
+	}
+	size += 8 + len(s.executionPayloadAvailability)
+	for _, payment := range s.builderPendingPayments {
+		size += payment.SizeSSZ()
+	}
+	size += 2 * 8 // builderPendingWithdrawalsIndex and diff length.
+	for _, withdrawal := range s.builderPendingWithdrawalsDiff {
+		size += withdrawal.SizeSSZ()
+	}
+	size += len(s.latestBlockHash)
+	size += 8 // payloadExpectedWithdrawals length.
+	for _, withdrawal := range s.payloadExpectedWithdrawals {
+		size += withdrawal.SizeSSZ()
+	}
+	size += 8 // ptcWindow length.
+	for _, ptcs := range s.ptcWindow {
+		size += ptcs.SizeSSZ()
+	}
+	return size
+}
+
 // serializeGloasFields appends the Gloas-specific fields to the serialized stateDiff.
 func serializeGloasFields(ret []byte, s *stateDiff) []byte {
 	// latestExecutionPayloadBid (override, always non-nil).
 	ret = binary.LittleEndian.AppendUint64(ret, uint64(s.latestExecutionPayloadBid.SizeSSZ()))
-	sszBytes, err := s.latestExecutionPayloadBid.MarshalSSZ()
+	var err error
+	ret, err = s.latestExecutionPayloadBid.MarshalSSZTo(ret)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to marshal latestExecutionPayloadBid")
 		return nil
 	}
-	ret = append(ret, sszBytes...)
 
 	// builderDiffs (sparse: count + per-entry index + SSZ builder).
 	ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.builderDiffs)))
 	for _, bd := range s.builderDiffs {
 		ret = binary.LittleEndian.AppendUint32(ret, bd.index)
-		sszBytes, err := bd.builder.MarshalSSZ()
+		ret, err = bd.builder.MarshalSSZTo(ret)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to marshal builder diff")
 			return nil
 		}
-		ret = append(ret, sszBytes...)
 	}
 
 	// nextWithdrawalBuilderIndex.
@@ -200,24 +225,22 @@ func serializeGloasFields(ret []byte, s *stateDiff) []byte {
 
 	// builderPendingPayments (fixed size: 2 * SlotsPerEpoch entries).
 	for _, p := range s.builderPendingPayments {
-		sszBytes, err := p.MarshalSSZ()
+		ret, err = p.MarshalSSZTo(ret)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to marshal builder pending payment")
 			return nil
 		}
-		ret = append(ret, sszBytes...)
 	}
 
 	// builderPendingWithdrawals (prefix-drop index + length-prefixed diff).
 	ret = binary.LittleEndian.AppendUint64(ret, s.builderPendingWithdrawalsIndex)
 	ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.builderPendingWithdrawalsDiff)))
 	for _, w := range s.builderPendingWithdrawalsDiff {
-		sszBytes, err := w.MarshalSSZ()
+		ret, err = w.MarshalSSZTo(ret)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to marshal builder pending withdrawal")
 			return nil
 		}
-		ret = append(ret, sszBytes...)
 	}
 
 	// latestBlockHash (32 bytes).
@@ -226,22 +249,20 @@ func serializeGloasFields(ret []byte, s *stateDiff) []byte {
 	// payloadExpectedWithdrawals (length-prefixed, each entry fixed SSZ).
 	ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.payloadExpectedWithdrawals)))
 	for _, w := range s.payloadExpectedWithdrawals {
-		sszBytes, err := w.MarshalSSZ()
+		ret, err = w.MarshalSSZTo(ret)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to marshal payload expected withdrawal")
 			return nil
 		}
-		ret = append(ret, sszBytes...)
 	}
 
 	ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.ptcWindow)))
 	for _, p := range s.ptcWindow {
-		sszBytes, err := p.MarshalSSZ()
+		ret, err = p.MarshalSSZTo(ret)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to marshal ptc window slot")
 			return nil
 		}
-		ret = append(ret, sszBytes...)
 	}
 
 	return ret

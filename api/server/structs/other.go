@@ -301,14 +301,14 @@ type SignedProposerPreferences struct {
 	Signature string               `json:"signature"`
 }
 
-type RequestAuth struct {
+type BuilderRequestAuth struct {
 	Data string `json:"data"`
 	Slot string `json:"slot"`
 }
 
-type SignedRequestAuth struct {
-	Message   *RequestAuth `json:"message"`
-	Signature string       `json:"signature"`
+type SignedBuilderRequestAuth struct {
+	Message   *BuilderRequestAuth `json:"message"`
+	Signature string              `json:"signature"`
 }
 
 type BuilderPreferences struct {
@@ -316,6 +316,28 @@ type BuilderPreferences struct {
 }
 
 type BuilderPreferencesRequest struct {
-	Preferences *BuilderPreferences `json:"preferences"`
-	Auth        *SignedRequestAuth  `json:"auth"`
+	Preferences *BuilderPreferences       `json:"preferences"`
+	Auth        *SignedBuilderRequestAuth `json:"auth"`
+}
+
+type BuilderPreferencesEntry struct {
+	ProposerPubkey      string                    `json:"proposer_pubkey"`
+	Url                 string                    `json:"url"`
+	Auth                *SignedBuilderRequestAuth `json:"auth"`
+	MaxExecutionPayment string                    `json:"max_execution_payment"`
+}
+
+type BuilderEntry struct {
+	Url                 string                    `json:"url"`
+	Auth                *SignedBuilderRequestAuth `json:"auth"`
+	BuilderPubkeys      []string                  `json:"builder_pubkeys"`
+	MaxExecutionPayment string                    `json:"max_execution_payment"`
+	MinBid              string                    `json:"min_bid"`
+	BuilderBoostFactor  string                    `json:"builder_boost_factor"`
+}
+
+type BuilderConfig struct {
+	MinBid             string          `json:"min_bid"`
+	BuilderBoostFactor string          `json:"builder_boost_factor"`
+	Builders           []*BuilderEntry `json:"builders"`
 }

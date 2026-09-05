@@ -20,7 +20,7 @@ import (
 // RunSSZStaticTests executes "ssz_static" tests.
 //
 // The native-state (`custom`) HashTreeRoot uses progressive merkleization only
-// when features.EnableProgressiveSSZ is set (and version >= Gloas). That runtime
+// for Gloas types unless features.DisableProgressiveSSZ is set. That runtime
 // flag is independent of the --//tools:disable_progressive_merkleization codegen
 // flag, so when running gloas against progressive fixtures set PROGRESSIVE_SSZ=1
 // to align the native-state root with the generated one. Leave it unset for the
@@ -28,7 +28,7 @@ import (
 func RunSSZStaticTests(t *testing.T, config string) {
 	if os.Getenv("PROGRESSIVE_SSZ") != "" {
 		cfg := *features.Get() // nil-safe; copy so other flags are preserved
-		cfg.EnableProgressiveSSZ = true
+		cfg.DisableProgressiveSSZ = false
 		reset := features.InitWithReset(&cfg)
 		defer reset()
 	}
@@ -89,7 +89,7 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		t.Skip("Not a consensus type")
 	case "DataColumnSidecar":
 		obj = &ethpb.DataColumnSidecarGloas{}
-	case "SignedProposerPreferences", "ProposerPreferences":
+	case "SignedProposerPreferences", "ProposerPreferences", "PartialDataColumnGroupID":
 		t.Skip("p2p-only type; not part of the consensus state transition")
 
 	// Standard types that also exist in gloas
@@ -199,7 +199,7 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.DataColumnsByRootIdentifier{}
 	case "MatrixEntry":
 		t.Skip("Unused type")
-	case "PartialDataColumnHeader", "PartialDataColumnPartsMetadata", "PartialDataColumnSidecar", "PartialDataColumnGroupID":
+	case "PartialDataColumnHeader", "PartialDataColumnPartsMetadata", "PartialDataColumnSidecar":
 		t.Skip("Not yet implemented")
 	default:
 		return nil, errors.New("type not found")
