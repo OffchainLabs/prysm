@@ -1,0 +1,15 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary")
+load("@prysm//tools/go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["main.go"],
+    importpath = "github.com/OffchainLabs/prysm/v7/build/crossdocker",
+    visibility = ["//visibility:private"],
+)
+
+go_binary(
+    name = "crossdocker",
+    embed = [":go_default_library"],
+    visibility = ["//visibility:public"],
+)
