@@ -45,6 +45,10 @@ func (e *IndexedErrorContainer) StatusCode() int {
 	return e.Code
 }
 
+func (e *IndexedErrorContainer) Error() string {
+	return fmt.Sprintf("HTTP %d: %s", e.Code, e.Message)
+}
+
 // IndexedError represents an issue when processing a single indexed object e.g. an item in an array.
 type IndexedError struct {
 	Index   int    `json:"index"`

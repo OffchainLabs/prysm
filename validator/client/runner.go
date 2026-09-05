@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/client"
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -155,7 +156,11 @@ func (r *runner) run(ctx context.Context) {
 			}
 			// performRoles calls span.End()
 			rolesCtx, _ := context.WithDeadline(ctx, deadline) //nolint:govet
-			performRoles(rolesCtx, allRoles, v, slot, &wg, span)
+			if features.Get().EnableExperimentalBatchSubmission && features.Get().EnableBeaconRESTApi {
+				performRolesBatch(rolesCtx, allRoles, v, slot, &wg, span)
+			} else {
+				performRoles(rolesCtx, allRoles, v, slot, &wg, span)
+			}
 		case e := <-v.EventsChan():
 			v.ProcessEvent(ctx, e)
 		case currentKeys := <-v.AccountsChangedChan(): // should be less of a priority than next slot
@@ -279,7 +284,45 @@ func performRoles(slotCtx context.Context, allRoles map[[48]byte][]validatorRole
 		}
 	}
 
-	// Wait for all processes to complete, then report span complete.
+	reportSlotCompletion(slotCtx, v, slot, wg, span)
+}
+
+// performRolesBatch batches only the HTTP submission when batch submission flag is set.
+func performRolesBatch(slotCtx context.Context, allRoles map[[48]byte][]validatorRole, v *validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {
+	var attesterKeys [][48]byte
+
+	for pubKey, roles := range allRoles {
+		for _, role := range roles {
+			switch role {
+			case roleAttester:
+				attesterKeys = append(attesterKeys, pubKey)
+			case roleProposer:
+				wg.Go(func() { v.ProposeBlock(slotCtx, slot, pubKey) })
+			case roleAggregator:
+				wg.Go(func() { v.SubmitAggregateAndProof(slotCtx, slot, pubKey) })
+			case roleSyncCommittee:
+				wg.Go(func() { v.SubmitSyncCommitteeMessage(slotCtx, slot, pubKey) })
+			case roleSyncCommitteeAggregator:
+				wg.Go(func() { v.SubmitSignedContributionAndProof(slotCtx, slot, pubKey) })
+			case rolePTCMember:
+				wg.Go(func() { v.SubmitPayloadAttestation(slotCtx, slot, pubKey) })
+			case roleUnknown:
+				log.WithField("pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:]))).Trace("No active roles, doing nothing")
+			default:
+				log.Warnf("Unhandled role %v", role)
+			}
+		}
+	}
+
+	if len(attesterKeys) > 0 {
+		wg.Go(func() { v.SubmitAttestations(slotCtx, slot, attesterKeys) })
+	}
+
+	reportSlotCompletion(slotCtx, v, slot, wg, span)
+}
+
+// reportSlotCompletion waits for all roles to complete, then reports the span and logs the slot.
+func reportSlotCompletion(slotCtx context.Context, v *validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {
 	go func() {
 		wg.Wait()
 		defer span.End()

@@ -558,3 +558,59 @@ func TestGrpcValidatorClient_ConnectionGeneration(t *testing.T) {
 	}
 	require.Equal(t, uint64(7), c.ConnectionGeneration())
 }
+
+func TestGrpcValidatorClient_ProposeAttestation(t *testing.T) {
+	t.Run("returns error when atts length is not 1", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		client := mock2.NewMockBeaconNodeValidatorClient(ctrl)
+		vc := newTestGrpcValidatorClient(t, client, false)
+
+		_, err := vc.ProposeAttestation(t.Context(), nil)
+		require.ErrorContains(t, "gRPC client expects exactly 1 attestation", err)
+
+		_, err = vc.ProposeAttestation(t.Context(), []*eth.Attestation{{}, {}})
+		require.ErrorContains(t, "gRPC client expects exactly 1 attestation", err)
+	})
+
+	t.Run("success when atts length is 1", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		client := mock2.NewMockBeaconNodeValidatorClient(ctrl)
+		expectedResp := &eth.AttestResponse{AttestationDataRoot: []byte("root")}
+		client.EXPECT().ProposeAttestation(gomock.Any(), gomock.Any()).Return(expectedResp, nil).Times(1)
+
+		vc := newTestGrpcValidatorClient(t, client, false)
+		resp, err := vc.ProposeAttestation(t.Context(), []*eth.Attestation{{}})
+		require.NoError(t, err)
+		require.Equal(t, expectedResp, resp)
+	})
+}
+
+func TestGrpcValidatorClient_ProposeAttestationElectra(t *testing.T) {
+	t.Run("returns error when atts length is not 1", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		client := mock2.NewMockBeaconNodeValidatorClient(ctrl)
+		vc := newTestGrpcValidatorClient(t, client, false)
+
+		_, err := vc.ProposeAttestationElectra(t.Context(), nil)
+		require.ErrorContains(t, "gRPC client expects exactly 1 attestation", err)
+
+		_, err = vc.ProposeAttestationElectra(t.Context(), []*eth.SingleAttestation{{}, {}})
+		require.ErrorContains(t, "gRPC client expects exactly 1 attestation", err)
+	})
+
+	t.Run("success when atts length is 1", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		client := mock2.NewMockBeaconNodeValidatorClient(ctrl)
+		expectedResp := &eth.AttestResponse{AttestationDataRoot: []byte("root")}
+		client.EXPECT().ProposeAttestationElectra(gomock.Any(), gomock.Any()).Return(expectedResp, nil).Times(1)
+
+		vc := newTestGrpcValidatorClient(t, client, false)
+		resp, err := vc.ProposeAttestationElectra(t.Context(), []*eth.SingleAttestation{{}})
+		require.NoError(t, err)
+		require.Equal(t, expectedResp, resp)
+	})
+}

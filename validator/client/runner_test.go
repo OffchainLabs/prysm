@@ -25,6 +25,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	prysmTrace "github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/interop"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -396,7 +397,7 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 			Source:          ckpt,
 		}, nil
 	}).AnyTimes()
-	vcm.EXPECT().ProposeAttestation(liveCtx, gomock.Any()).DoAndReturn(func(ctx context.Context, req *ethpb.Attestation) (*ethpb.AttestResponse, error) {
+	vcm.EXPECT().ProposeAttestation(liveCtx, gomock.Any()).DoAndReturn(func(ctx context.Context, atts []*ethpb.Attestation) (*ethpb.AttestResponse, error) {
 		defer assertValidContext(t, timedCtx, ctx)
 		delay(t)
 		return &ethpb.AttestResponse{AttestationDataRoot: make([]byte, fieldparams.RootLength)}, nil
@@ -585,4 +586,36 @@ func TestPerformRolesDispatch(t *testing.T) {
 			wg.Wait()
 		})
 	}
+}
+
+func TestPerformRolesBatch(t *testing.T) {
+	stop := errors.New("stop after dispatch")
+	v, m, validatorKey, finish := setup(t, false)
+	defer finish()
+
+	pubKey1 := [fieldparams.BLSPubkeyLength]byte{1}
+	pubKey2 := bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())
+	v.duties = testDutyStore(
+		&ethpb.ValidatorDuty{PublicKey: pubKey1[:], ValidatorIndex: 1, CommitteeLength: 1},
+		&ethpb.ValidatorDuty{PublicKey: pubKey2[:], ValidatorIndex: 2, CommitteeLength: 1},
+	)
+
+	allRoles := map[[fieldparams.BLSPubkeyLength]byte][]validatorRole{
+		pubKey1: {roleAttester},
+		pubKey2: {roleAttester, roleProposer},
+	}
+
+	// Attester duties are collected into one SubmitAttestations call, other roles stay per-validator.
+	// AttestationData errors short-circuit signing per key, so we verify the batched dispatch
+	// reaches the signing path for both attester keys, and that the proposer role is dispatched separately.
+	m.validatorClient.EXPECT().AttestationData(gomock.Any(), gomock.Any()).Return(nil, stop).Times(2)
+	m.validatorClient.EXPECT().DomainData(gomock.Any(), gomock.Any()).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, fieldparams.RootLength)}, nil).Times(1)
+	m.validatorClient.EXPECT().BeaconBlock(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
+
+	var wg sync.WaitGroup
+	spanCtx, span := prysmTrace.StartSpan(t.Context(), "test")
+
+	performRolesBatch(spanCtx, allRoles, v, primitives.Slot(10), &wg, span)
+	wg.Wait()
+	span.End()
 }

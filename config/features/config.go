@@ -53,6 +53,7 @@ type Flags struct {
 	DisableProgressiveSSZ               bool // DisableProgressiveSSZ turns off progressive SSZ merkleization for Gloas consensus types.
 	ReorgLatePayloads                   bool // ReorgLatePayloads enables reorging late payloads in the beacon node.
 	SubmitBlacklistedBuilderBids        bool // SubmitBlacklistedBuilderBids skips the circuit breaker check when submitting a signed execution payload bid.
+	EnableExperimentalBatchSubmission   bool // EnableExperimentalBatchSubmission batches attestation submissions of the REST validator client.
 
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
@@ -377,6 +378,10 @@ func ConfigureValidator(ctx *cli.Context) error {
 	if ctx.Bool(EnableWebFlag.Name) {
 		logEnabled(EnableWebFlag)
 		cfg.EnableWeb = true
+	}
+	if ctx.Bool(enableExperimentalBatchSubmission.Name) {
+		logEnabled(enableExperimentalBatchSubmission)
+		cfg.EnableExperimentalBatchSubmission = true
 	}
 
 	cfg.KeystoreImportDebounceInterval = ctx.Duration(dynamicKeyReloadDebounceInterval.Name)

@@ -218,6 +218,11 @@ var (
 		Usage: "(Work in progress): Enables the web portal for the validator client.",
 		Value: false,
 	}
+
+	enableExperimentalBatchSubmission = &cli.BoolFlag{
+		Name:  "enable-experimental-batch-submission",
+		Usage: "(Experimental): Submits all attestations of a slot in a single request instead of one per validator. Requires --enable-beacon-rest-api.",
+	}
 	// deprecatedDisableLastEpochTargets is a flag to disable processing of attestations for old blocks.
 	deprecatedDisableLastEpochTargets = &cli.BoolFlag{
 		Name:  "disable-last-epoch-targets",
@@ -261,6 +266,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	EnableBeaconRESTApi,
 	DisableDutiesV2,
 	EnableWebFlag,
+	enableExperimentalBatchSubmission,
 }...)
 
 // E2EValidatorFlags contains a list of the validator feature flags to be tested in E2E.

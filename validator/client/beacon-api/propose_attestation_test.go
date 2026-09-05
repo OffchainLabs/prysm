@@ -4,14 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
-	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/mock"
@@ -20,7 +18,125 @@ import (
 )
 
 func TestProposeAttestation(t *testing.T) {
-	attestation := &ethpb.Attestation{
+	attestation1 := &ethpb.Attestation{
+		AggregationBits: testhelpers.FillByteSlice(4, 74),
+		Data: &ethpb.AttestationData{
+			Slot:            75,
+			CommitteeIndex:  76,
+			BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
+			Source: &ethpb.Checkpoint{
+				Epoch: 78,
+				Root:  testhelpers.FillByteSlice(32, 79),
+			},
+			Target: &ethpb.Checkpoint{
+				Epoch: 80,
+				Root:  testhelpers.FillByteSlice(32, 81),
+			},
+		},
+		Signature: testhelpers.FillByteSlice(96, 82),
+	}
+	attestation2 := &ethpb.Attestation{
+		AggregationBits: testhelpers.FillByteSlice(4, 74),
+		Data: &ethpb.AttestationData{
+			Slot:            75,
+			CommitteeIndex:  77,
+			BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
+			Source: &ethpb.Checkpoint{
+				Epoch: 78,
+				Root:  testhelpers.FillByteSlice(32, 79),
+			},
+			Target: &ethpb.Checkpoint{
+				Epoch: 80,
+				Root:  testhelpers.FillByteSlice(32, 81),
+			},
+		},
+		Signature: testhelpers.FillByteSlice(96, 83),
+	}
+
+	tests := []struct {
+		name         string
+		attestations []*ethpb.Attestation
+		setupMock    func(handler *mock.MockHandler)
+		expectedErr  string
+	}{
+		{
+			name:         "single attestation",
+			attestations: []*ethpb.Attestation{attestation1},
+			setupMock: func(handler *mock.MockHandler) {
+				marshalledAttestations, err := json.Marshal(jsonifyAttestations([]*ethpb.Attestation{attestation1}))
+				require.NoError(t, err)
+				headers := map[string]string{"Eth-Consensus-Version": version.String(attestation1.Version())}
+				handler.EXPECT().Post(
+					gomock.Any(),
+					"/eth/v2/beacon/pool/attestations",
+					headers,
+					bytes.NewBuffer(marshalledAttestations),
+					nil,
+				).Return(nil).Times(1)
+			},
+		},
+		{
+			name:         "multiple attestations",
+			attestations: []*ethpb.Attestation{attestation1, attestation2},
+			setupMock: func(handler *mock.MockHandler) {
+				marshalledAttestations, err := json.Marshal(jsonifyAttestations([]*ethpb.Attestation{attestation1, attestation2}))
+				require.NoError(t, err)
+				headers := map[string]string{"Eth-Consensus-Version": version.String(attestation1.Version())}
+				handler.EXPECT().Post(
+					gomock.Any(),
+					"/eth/v2/beacon/pool/attestations",
+					headers,
+					bytes.NewBuffer(marshalledAttestations),
+					nil,
+				).Return(nil).Times(1)
+			},
+		},
+		{
+			name:         "no attestations",
+			attestations: nil,
+		},
+		{
+			name:         "bad request",
+			attestations: []*ethpb.Attestation{attestation1},
+			setupMock: func(handler *mock.MockHandler) {
+				handler.EXPECT().Post(
+					gomock.Any(),
+					"/eth/v2/beacon/pool/attestations",
+					gomock.Any(),
+					gomock.Any(),
+					nil,
+				).Return(errors.New("bad request")).Times(1)
+			},
+			expectedErr: "bad request",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			handler := mock.NewMockHandler(ctrl)
+			if tt.setupMock != nil {
+				tt.setupMock(handler)
+			}
+			validatorClient := &beaconApiValidatorClient{handler: handler}
+			resp, err := validatorClient.ProposeAttestation(t.Context(), tt.attestations)
+			if tt.expectedErr != "" {
+				require.ErrorContains(t, tt.expectedErr, err)
+				return
+			}
+			require.NoError(t, err)
+			if len(tt.attestations) == 0 {
+				return
+			}
+			attestationDataRoot, err := tt.attestations[0].Data.HashTreeRoot()
+			require.NoError(t, err)
+			require.DeepEqual(t, attestationDataRoot[:], resp.AttestationDataRoot)
+		})
+	}
+}
+
+func TestProposeAttestation_InvalidInput(t *testing.T) {
+	validAttestation := &ethpb.Attestation{
 		AggregationBits: testhelpers.FillByteSlice(4, 74),
 		Data: &ethpb.AttestationData{
 			Slot:            75,
@@ -39,260 +155,289 @@ func TestProposeAttestation(t *testing.T) {
 	}
 
 	tests := []struct {
-		name                 string
-		attestation          *ethpb.Attestation
-		expectedErrorMessage string
-		endpointError        error
-		endpointCall         int
+		name         string
+		attestations []*ethpb.Attestation
+		expectedErrs []string
 	}{
 		{
-			name:         "valid",
-			attestation:  attestation,
-			endpointCall: 1,
-		},
-		{
-			name:                 "nil attestation",
-			expectedErrorMessage: "attestation is nil",
+			name:         "nil attestation",
+			attestations: []*ethpb.Attestation{validAttestation, nil},
+			expectedErrs: []string{"attestation at index 1 is invalid", "attestation is nil"},
 		},
 		{
 			name: "nil attestation data",
-			attestation: &ethpb.Attestation{
+			attestations: []*ethpb.Attestation{validAttestation, {
 				AggregationBits: testhelpers.FillByteSlice(4, 74),
 				Signature:       testhelpers.FillByteSlice(96, 82),
-			},
-			expectedErrorMessage: "attestation is nil",
+			}},
+			expectedErrs: []string{"attestation at index 1 is invalid", "attestation is nil"},
 		},
 		{
 			name: "nil source checkpoint",
-			attestation: &ethpb.Attestation{
+			attestations: []*ethpb.Attestation{validAttestation, {
 				AggregationBits: testhelpers.FillByteSlice(4, 74),
 				Data: &ethpb.AttestationData{
 					Target: &ethpb.Checkpoint{},
 				},
 				Signature: testhelpers.FillByteSlice(96, 82),
-			},
-			expectedErrorMessage: "attestation's source can't be nil",
+			}},
+			expectedErrs: []string{"attestation at index 1 is invalid", "attestation's source can't be nil"},
 		},
 		{
 			name: "nil target checkpoint",
-			attestation: &ethpb.Attestation{
+			attestations: []*ethpb.Attestation{validAttestation, {
 				AggregationBits: testhelpers.FillByteSlice(4, 74),
 				Data: &ethpb.AttestationData{
 					Source: &ethpb.Checkpoint{},
 				},
 				Signature: testhelpers.FillByteSlice(96, 82),
-			},
-			expectedErrorMessage: "attestation's target can't be nil",
+			}},
+			expectedErrs: []string{"attestation at index 1 is invalid", "attestation's target can't be nil"},
 		},
 		{
 			name: "nil aggregation bits",
-			attestation: &ethpb.Attestation{
+			attestations: []*ethpb.Attestation{validAttestation, {
 				Data: &ethpb.AttestationData{
 					Source: &ethpb.Checkpoint{},
 					Target: &ethpb.Checkpoint{},
 				},
 				Signature: testhelpers.FillByteSlice(96, 82),
-			},
-			expectedErrorMessage: "attestation's bitfield can't be nil",
-		},
-		{
-			name:                 "bad request",
-			attestation:          attestation,
-			expectedErrorMessage: "bad request",
-			endpointError:        errors.New("bad request"),
-			endpointCall:         1,
+			}},
+			expectedErrs: []string{"attestation at index 1 is invalid", "attestation's bitfield can't be nil"},
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			handler := mock.NewMockHandler(ctrl)
-
-			var marshalledAttestations []byte
-			if helpers.ValidateNilAttestation(test.attestation) == nil {
-				b, err := json.Marshal(jsonifyAttestations([]*ethpb.Attestation{test.attestation}))
-				require.NoError(t, err)
-				marshalledAttestations = b
-			}
-
-			ctx := t.Context()
-
-			headers := map[string]string{"Eth-Consensus-Version": version.String(test.attestation.Version())}
-			handler.EXPECT().Post(
-				gomock.Any(),
-				"/eth/v2/beacon/pool/attestations",
-				headers,
-				bytes.NewBuffer(marshalledAttestations),
-				nil,
-			).Return(
-				test.endpointError,
-			).Times(test.endpointCall)
-
 			validatorClient := &beaconApiValidatorClient{handler: handler}
-			proposeResponse, err := validatorClient.proposeAttestation(ctx, test.attestation)
-			if test.expectedErrorMessage != "" {
-				require.ErrorContains(t, test.expectedErrorMessage, err)
-				return
+			_, err := validatorClient.ProposeAttestation(t.Context(), tt.attestations)
+			for _, expectedErr := range tt.expectedErrs {
+				require.ErrorContains(t, expectedErr, err)
 			}
-
-			require.NoError(t, err)
-			require.NotNil(t, proposeResponse)
-
-			expectedAttestationDataRoot, err := attestation.Data.HashTreeRoot()
-			require.NoError(t, err)
-
-			// Make sure that the attestation data root is set
-			assert.DeepEqual(t, expectedAttestationDataRoot[:], proposeResponse.AttestationDataRoot)
 		})
 	}
 }
 
-func TestProposeAttestationElectra(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	params.BeaconConfig().ElectraForkEpoch = 0
-	params.BeaconConfig().FuluForkEpoch = 1
-
-	buildSingleAttestation := func(slot primitives.Slot) *ethpb.SingleAttestation {
-		targetEpoch := slots.ToEpoch(slot)
-		sourceEpoch := targetEpoch
-		if targetEpoch > 0 {
-			sourceEpoch = targetEpoch - 1
-		}
-		return &ethpb.SingleAttestation{
-			AttesterIndex: 74,
-			Data: &ethpb.AttestationData{
-				Slot:            slot,
-				CommitteeIndex:  76,
-				BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
-				Source: &ethpb.Checkpoint{
-					Epoch: sourceEpoch,
-					Root:  testhelpers.FillByteSlice(32, 79),
-				},
-				Target: &ethpb.Checkpoint{
-					Epoch: targetEpoch,
-					Root:  testhelpers.FillByteSlice(32, 81),
-				},
+func TestProposeAttestationElectra_Success(t *testing.T) {
+	attestation1 := &ethpb.SingleAttestation{
+		AttesterIndex: 1,
+		Data: &ethpb.AttestationData{
+			Slot:            75,
+			CommitteeIndex:  0,
+			BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
+			Source: &ethpb.Checkpoint{
+				Epoch: 78,
+				Root:  testhelpers.FillByteSlice(32, 79),
 			},
-			Signature:   testhelpers.FillByteSlice(96, 82),
-			CommitteeId: 83,
-		}
+			Target: &ethpb.Checkpoint{
+				Epoch: 80,
+				Root:  testhelpers.FillByteSlice(32, 81),
+			},
+		},
+		Signature: testhelpers.FillByteSlice(96, 82),
 	}
-
-	attestationElectra := buildSingleAttestation(0)
-	attestationFulu := buildSingleAttestation(params.BeaconConfig().SlotsPerEpoch)
+	attestation2 := &ethpb.SingleAttestation{
+		AttesterIndex: 2,
+		Data: &ethpb.AttestationData{
+			Slot:            75,
+			CommitteeIndex:  1,
+			BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
+			Source: &ethpb.Checkpoint{
+				Epoch: 78,
+				Root:  testhelpers.FillByteSlice(32, 79),
+			},
+			Target: &ethpb.Checkpoint{
+				Epoch: 80,
+				Root:  testhelpers.FillByteSlice(32, 81),
+			},
+		},
+		Signature: testhelpers.FillByteSlice(96, 83),
+	}
+	consensusVersion := version.String(slots.ToForkVersion(attestation1.Data.Slot))
 
 	tests := []struct {
-		name                     string
-		attestation              *ethpb.SingleAttestation
-		expectedConsensusVersion string
-		expectedErrorMessage     string
-		endpointError            error
-		endpointCall             int
+		name         string
+		attestations []*ethpb.SingleAttestation
+		setupMock    func(handler *mock.MockHandler)
+		expectedErr  string
 	}{
 		{
-			name:                     "valid electra",
-			attestation:              attestationElectra,
-			expectedConsensusVersion: version.String(slots.ToForkVersion(attestationElectra.GetData().GetSlot())),
-			endpointCall:             1,
+			name:         "single attestation",
+			attestations: []*ethpb.SingleAttestation{attestation1},
+			setupMock: func(handler *mock.MockHandler) {
+				var sszBuf bytes.Buffer
+				sszBytes, err := attestation1.MarshalSSZ()
+				require.NoError(t, err)
+				sszBuf.Write(sszBytes)
+
+				headers := map[string]string{"Eth-Consensus-Version": consensusVersion}
+				expectPostSSZWithFallback(handler)
+				handler.EXPECT().PostSSZ(
+					gomock.Any(),
+					"/eth/v2/beacon/pool/attestations",
+					headers,
+					bytes.NewBuffer(sszBuf.Bytes()),
+				).Return(nil).Times(1)
+			},
 		},
 		{
-			name:                     "valid fulu consensus version",
-			attestation:              attestationFulu,
-			expectedConsensusVersion: version.String(slots.ToForkVersion(attestationFulu.GetData().GetSlot())),
-			endpointCall:             1,
+			name:         "multiple attestations",
+			attestations: []*ethpb.SingleAttestation{attestation1, attestation2},
+			setupMock: func(handler *mock.MockHandler) {
+				var sszBuf bytes.Buffer
+				for _, att := range []*ethpb.SingleAttestation{attestation1, attestation2} {
+					sszBytes, err := att.MarshalSSZ()
+					require.NoError(t, err)
+					sszBuf.Write(sszBytes)
+				}
+
+				headers := map[string]string{"Eth-Consensus-Version": consensusVersion}
+				expectPostSSZWithFallback(handler)
+				handler.EXPECT().PostSSZ(
+					gomock.Any(),
+					"/eth/v2/beacon/pool/attestations",
+					headers,
+					bytes.NewBuffer(sszBuf.Bytes()),
+				).Return(nil).Times(1)
+			},
 		},
 		{
-			name:                 "nil attestation",
-			expectedErrorMessage: "attestation is nil",
+			name:         "no attestations",
+			attestations: nil,
+		},
+		{
+			name:         "unsupported media type falls back to JSON",
+			attestations: []*ethpb.SingleAttestation{attestation1, attestation2},
+			setupMock: func(handler *mock.MockHandler) {
+				headers := map[string]string{"Eth-Consensus-Version": consensusVersion}
+				expectPostSSZWithFallback(handler)
+				handler.EXPECT().PostSSZ(
+					gomock.Any(),
+					"/eth/v2/beacon/pool/attestations",
+					headers,
+					gomock.Any(),
+				).Return(&httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}).Times(1)
+
+				marshalledAttestations, err := json.Marshal(jsonifySingleAttestations([]*ethpb.SingleAttestation{attestation1, attestation2}))
+				require.NoError(t, err)
+				handler.EXPECT().Post(
+					gomock.Any(),
+					"/eth/v2/beacon/pool/attestations",
+					headers,
+					bytes.NewBuffer(marshalledAttestations),
+					nil,
+				).Return(nil).Times(1)
+			},
+		},
+		{
+			name:         "bad request",
+			attestations: []*ethpb.SingleAttestation{attestation1},
+			setupMock: func(handler *mock.MockHandler) {
+				expectPostSSZWithFallback(handler)
+				handler.EXPECT().PostSSZ(
+					gomock.Any(),
+					"/eth/v2/beacon/pool/attestations",
+					gomock.Any(),
+					gomock.Any(),
+				).Return(errors.New("bad request")).Times(1)
+			},
+			expectedErr: "bad request",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			handler := mock.NewMockHandler(ctrl)
+			if tt.setupMock != nil {
+				tt.setupMock(handler)
+			}
+			validatorClient := &beaconApiValidatorClient{handler: handler}
+			_, err := validatorClient.ProposeAttestationElectra(t.Context(), tt.attestations)
+			if tt.expectedErr != "" {
+				require.ErrorContains(t, tt.expectedErr, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestProposeAttestationElectra_InvalidInput(t *testing.T) {
+	validAttestation := &ethpb.SingleAttestation{
+		AttesterIndex: 1,
+		Data: &ethpb.AttestationData{
+			Slot:            75,
+			CommitteeIndex:  0,
+			BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
+			Source: &ethpb.Checkpoint{
+				Epoch: 78,
+				Root:  testhelpers.FillByteSlice(32, 79),
+			},
+			Target: &ethpb.Checkpoint{
+				Epoch: 80,
+				Root:  testhelpers.FillByteSlice(32, 81),
+			},
+		},
+		Signature: testhelpers.FillByteSlice(96, 82),
+	}
+
+	tests := []struct {
+		name         string
+		attestations []*ethpb.SingleAttestation
+		expectedErrs []string
+	}{
+		{
+			name:         "nil attestation",
+			attestations: []*ethpb.SingleAttestation{validAttestation, nil},
+			expectedErrs: []string{"attestation at index 1 is invalid", "attestation is nil"},
 		},
 		{
 			name: "nil attestation data",
-			attestation: &ethpb.SingleAttestation{
+			attestations: []*ethpb.SingleAttestation{validAttestation, {
 				AttesterIndex: 74,
 				Signature:     testhelpers.FillByteSlice(96, 82),
 				CommitteeId:   83,
-			},
-			expectedErrorMessage: "attestation is nil",
+			}},
+			expectedErrs: []string{"attestation at index 1 is invalid", "attestation is nil"},
 		},
 		{
 			name: "nil source checkpoint",
-			attestation: &ethpb.SingleAttestation{
+			attestations: []*ethpb.SingleAttestation{validAttestation, {
 				AttesterIndex: 74,
 				Data: &ethpb.AttestationData{
 					Target: &ethpb.Checkpoint{},
 				},
 				Signature:   testhelpers.FillByteSlice(96, 82),
 				CommitteeId: 83,
-			},
-			expectedErrorMessage: "attestation's source can't be nil",
+			}},
+			expectedErrs: []string{"attestation at index 1 is invalid", "attestation's source can't be nil"},
 		},
 		{
 			name: "nil target checkpoint",
-			attestation: &ethpb.SingleAttestation{
+			attestations: []*ethpb.SingleAttestation{validAttestation, {
 				AttesterIndex: 74,
 				Data: &ethpb.AttestationData{
 					Source: &ethpb.Checkpoint{},
 				},
 				Signature:   testhelpers.FillByteSlice(96, 82),
 				CommitteeId: 83,
-			},
-			expectedErrorMessage: "attestation's target can't be nil",
-		},
-		{
-			name:        "bad request",
-			attestation: attestationElectra,
-			expectedConsensusVersion: version.String(
-				slots.ToForkVersion(attestationElectra.GetData().GetSlot()),
-			),
-			expectedErrorMessage: "bad request",
-			endpointError:        errors.New("bad request"),
-			endpointCall:         1,
+			}},
+			expectedErrs: []string{"attestation at index 1 is invalid", "attestation's target can't be nil"},
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			handler := mock.NewMockHandler(ctrl)
-
-			var marshalledAttestations []byte
-			if helpers.ValidateNilAttestation(test.attestation) == nil {
-				b, err := json.Marshal(jsonifySingleAttestations([]*ethpb.SingleAttestation{test.attestation}))
-				require.NoError(t, err)
-				marshalledAttestations = b
-			}
-
-			ctx := t.Context()
-			headerMatcher := gomock.Any()
-			if test.expectedConsensusVersion != "" {
-				headerMatcher = gomock.Eq(map[string]string{"Eth-Consensus-Version": test.expectedConsensusVersion})
-			}
-			handler.EXPECT().Post(
-				gomock.Any(),
-				"/eth/v2/beacon/pool/attestations",
-				headerMatcher,
-				bytes.NewBuffer(marshalledAttestations),
-				nil,
-			).Return(
-				test.endpointError,
-			).Times(test.endpointCall)
-
 			validatorClient := &beaconApiValidatorClient{handler: handler}
-			proposeResponse, err := validatorClient.proposeAttestationElectra(ctx, test.attestation)
-			if test.expectedErrorMessage != "" {
-				require.ErrorContains(t, test.expectedErrorMessage, err)
-				return
+			_, err := validatorClient.ProposeAttestationElectra(t.Context(), tt.attestations)
+			for _, expectedErr := range tt.expectedErrs {
+				require.ErrorContains(t, expectedErr, err)
 			}
-
-			require.NoError(t, err)
-			require.NotNil(t, proposeResponse)
-
-			expectedAttestationDataRoot, err := test.attestation.Data.HashTreeRoot()
-			require.NoError(t, err)
-
-			// Make sure that the attestation data root is set
-			assert.DeepEqual(t, expectedAttestationDataRoot[:], proposeResponse.AttestationDataRoot)
 		})
 	}
 }

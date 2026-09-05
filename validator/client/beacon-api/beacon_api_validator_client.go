@@ -178,21 +178,21 @@ func (c *beaconApiValidatorClient) PrepareBeaconProposer(ctx context.Context, in
 	})
 }
 
-func (c *beaconApiValidatorClient) ProposeAttestation(ctx context.Context, in *ethpb.Attestation) (*ethpb.AttestResponse, error) {
+func (c *beaconApiValidatorClient) ProposeAttestation(ctx context.Context, atts []*ethpb.Attestation) (*ethpb.AttestResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-api.ProposeAttestation")
 	defer span.End()
 
 	return wrapInMetrics[*ethpb.AttestResponse]("ProposeAttestation", func() (*ethpb.AttestResponse, error) {
-		return c.proposeAttestation(ctx, in)
+		return c.proposeAttestation(ctx, atts)
 	})
 }
 
-func (c *beaconApiValidatorClient) ProposeAttestationElectra(ctx context.Context, in *ethpb.SingleAttestation) (*ethpb.AttestResponse, error) {
+func (c *beaconApiValidatorClient) ProposeAttestationElectra(ctx context.Context, atts []*ethpb.SingleAttestation) (*ethpb.AttestResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-api.ProposeAttestationElectra")
 	defer span.End()
 
 	return wrapInMetrics[*ethpb.AttestResponse]("ProposeAttestationElectra", func() (*ethpb.AttestResponse, error) {
-		return c.proposeAttestationElectra(ctx, in)
+		return c.proposeAttestationElectra(ctx, atts)
 	})
 }
 
