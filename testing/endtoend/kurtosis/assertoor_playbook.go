@@ -18,8 +18,9 @@ const (
 var assertoorPlaybooksFS embed.FS
 
 // RegisterPlaybooks registers and schedules the common Assertoor playbooks
-// under testing/endtoend/kurtosis/playbooks/*.yaml.
-func (kw *KurtosisWrapper) RegisterPlaybooks(ctx context.Context) error {
+// under testing/endtoend/kurtosis/playbooks/*.yaml. config overrides the test
+// level `config:`.
+func (kw *KurtosisWrapper) RegisterPlaybooks(ctx context.Context, config map[string]any) error {
 	baseURL, err := kw.NewAssertoorEndpoint()
 	if err != nil {
 		return fmt.Errorf("failed to get Assertoor endpoint: %w", err)
@@ -46,7 +47,7 @@ func (kw *KurtosisWrapper) RegisterPlaybooks(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to register Assertoor playbook %q: %w", name, err)
 		}
-		if _, err := scheduleAssertoorTest(ctx, baseURL, testID, nil); err != nil {
+		if _, err := scheduleAssertoorTest(ctx, baseURL, testID, config); err != nil {
 			return fmt.Errorf("failed to schedule Assertoor playbook %q: %w", name, err)
 		}
 	}
