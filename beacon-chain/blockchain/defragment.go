@@ -21,3 +21,18 @@ func (s *Service) defragmentState(st state.BeaconState) {
 	elapsedTime := time.Since(startTime)
 	stateDefragmentationTime.Observe(float64(elapsedTime.Milliseconds()))
 }
+
+// defragmentRoutine consumes imported states queued by ReceiveBlock and
+// defragments them off the block-import hot path. Using a single long-lived
+// worker rather than a goroutine per block bounds resource usage under sync or
+// backlog, and the routine exits with the service context.
+func (s *Service) defragmentRoutine() {
+	for {
+		select {
+		case st := <-s.defragmentRequests:
+			s.defragmentState(st)
+		case <-s.ctx.Done():
+			return
+		}
+	}
+}
