@@ -28,6 +28,10 @@ import (
 
 func TestProposerSettingsLoader(t *testing.T) {
 	hook := logtest.NewGlobal()
+	// Keys used by the per-key-replaces-db*.json testdata.
+	keyA := [fieldparams.BLSPubkeyLength]byte{0xaa}
+	keyB := [fieldparams.BLSPubkeyLength]byte{0xbb}
+	keyC := [fieldparams.BLSPubkeyLength]byte{0xcc}
 	type proposerSettingsFlag struct {
 		dir        string
 		url        string
@@ -45,7 +49,8 @@ func TestProposerSettingsLoader(t *testing.T) {
 		urlResponse                  string
 		wantInitErr                  string
 		wantErr                      string
-		wantLog                      string
+		wantLogs                     []string
+		wantNoLogs                   []string
 		withdb                       func(db iface.ValidatorDB) error
 		validatorRegistrationEnabled bool
 		skipDBSavedCheck             bool
@@ -235,7 +240,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 			want: func() *proposer.Settings {
 				return nil
 			},
-			wantLog:          "No proposer settings were provided",
+			wantLogs:         []string{"No proposer settings were provided"},
 			skipDBSavedCheck: true,
 		},
 		{
@@ -288,8 +293,8 @@ func TestProposerSettingsLoader(t *testing.T) {
 					},
 				}
 			},
-			wantErr: "",
-			wantLog: "is not a checksum Ethereum address",
+			wantErr:  "",
+			wantLogs: []string{"is not a checksum Ethereum address"},
 		},
 		{
 			name: "Happy Path Config file File multiple fee recipients",
@@ -969,10 +974,112 @@ func TestProposerSettingsLoader(t *testing.T) {
 			},
 			wantErr: "failed to unmarshal yaml file",
 		},
+		{
+			name: "file per-key entries replace db entries and warn with dropped and overridden keys",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/per-key-replaces-db.json",
+				},
+			},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						keyA: &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x3333333333333333333333333333333333333333")}},
+						keyC: &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x4444444444444444444444444444444444444444")}},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						keyA: &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x1111111111111111111111111111111111111111")}},
+						keyB: &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x2222222222222222222222222222222222222222")}},
+					},
+				})
+			},
+			wantLogs: []string{
+				"differ from the configured settings file/URL",
+				fmt.Sprintf("overriddenKeys=%#x", keyA),
+				fmt.Sprintf("droppedKeys=%#x", keyB),
+				"overriddenCount=1",
+				"droppedCount=1",
+			},
+		},
+		{
+			// Lowercase in the file, checksummed in the DB: the compare runs after normalization.
+			name: "file per-key entries identical to db entries do not warn",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/per-key-identical-to-db.json",
+				},
+			},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						keyA: &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd")}},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						keyA: &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd")}},
+					},
+				})
+			},
+			wantNoLogs: []string{"differ from the configured settings file/URL"},
+		},
+		{
+			name: "file per-key entries with an empty db do not warn",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/per-key-identical-to-db.json",
+				},
+			},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						keyA: &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd")}},
+					},
+				}
+			},
+			wantNoLogs: []string{"differ from the configured settings file/URL"},
+		},
+		{
+			name: "replaced db key list is capped",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/per-key-replaces-db-capped.json",
+				},
+			},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						{0xff}: &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x1111111111111111111111111111111111111111")}},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				settings := &proposer.Settings{ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{}}
+				for i := 0; i < 15; i++ {
+					settings.ProposeConfig[[fieldparams.BLSPubkeyLength]byte{byte(i)}] = &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x1111111111111111111111111111111111111111")}}
+				}
+				return db.SaveProposerSettings(t.Context(), settings)
+			},
+			wantLogs: []string{
+				"differ from the configured settings file/URL",
+				"droppedCount=15",
+				"+5 more",
+				// Sorted hex: the 10th key (first byte 0x09) is listed, the 11th (0x0a) is behind the cap.
+				fmt.Sprintf("%#x", [fieldparams.BLSPubkeyLength]byte{0x09}),
+			},
+			wantNoLogs: []string{fmt.Sprintf("%#x", [fieldparams.BLSPubkeyLength]byte{0x0a})},
+		},
 	}
 	for _, tt := range tests {
 		for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 			t.Run(fmt.Sprintf("%v-minimal:%v", tt.name, isSlashingProtectionMinimal), func(t *testing.T) {
+				hook.Reset()
 				app := cli.App{}
 				set := flag.NewFlagSet("test", 0)
 				if tt.args.proposerSettingsFlagValues.dir != "" {
@@ -1029,10 +1136,11 @@ func TestProposerSettingsLoader(t *testing.T) {
 				} else {
 					require.NoError(t, err)
 				}
-				if tt.wantLog != "" {
-					assert.LogsContain(t, hook,
-						tt.wantLog,
-					)
+				for _, want := range tt.wantLogs {
+					assert.LogsContain(t, hook, want)
+				}
+				for _, notWant := range tt.wantNoLogs {
+					assert.LogsDoNotContain(t, hook, notWant)
 				}
 				w := tt.want()
 				require.DeepEqual(t, w, got)
