@@ -5,8 +5,10 @@
 //
 // The split mirrors eth2spec/utils/bls.py with `bls_active = False`, where only
 // the signature functions are stubbed: Verify/AggregateVerify/FastAggregateVerify
-// return True and Sign/Aggregate return STUB_SIGNATURE, while AggregatePKs is
-// computed for real because their results are data written into the beacon state.
+// return True and Sign/Aggregate return STUB_SIGNATURE. AggregatePKs is computed
+// for real by default, matching consensus-specs#5489, but vectors generated before
+// that fix write STUB_PUBKEY into the beacon state, so SetStubPubkeyAggregation
+// lets the spectest runner opt a bls_setting 2 case into the stub.
 //
 // Never production: the cmd/beacon-chain, cmd/validator and cmd/prysmctl builds fail with the tag.
 package bls
@@ -29,8 +31,14 @@ var (
 	// Note: It is not a curve point, so the real backend cannot even deserialize it.
 	stubSignature = bytes.Repeat([]byte{0x11}, fieldparams.BLSSignatureLength)
 
+	// stubPubkey is what pre-#5489 spec versions return from AggregatePKs with BLS disabled.
+	stubPubkey = bytes.Repeat([]byte{0x22}, fieldparams.BLSPubkeyLength)
+
+	stubPubkeyAggregation bool
+
 	_ common.SecretKey = (*fakeSecretKey)(nil)
 	_ common.Signature = (*fakeSignature)(nil)
+	_ common.PublicKey = (*fakePublicKey)(nil)
 )
 
 type (
@@ -39,6 +47,9 @@ type (
 
 	// fakeSignature holds raw bytes rather than a curve point.
 	fakeSignature struct{ b []byte }
+
+	// fakePublicKey holds raw bytes rather than a curve point.
+	fakePublicKey struct{ b []byte }
 )
 
 // SecretKeyFromBytes --
@@ -84,13 +95,24 @@ func MultipleSignaturesFromBytes(sigs [][]byte) ([]Signature, error) {
 	return out, nil
 }
 
+// SetStubPubkeyAggregation makes AggregatePublicKeys and AggregateMultiplePubkeys return the spec's stub pubkey.
+func SetStubPubkeyAggregation(v bool) {
+	stubPubkeyAggregation = v
+}
+
 // AggregatePublicKeys --
 func AggregatePublicKeys(pubs [][]byte) (PublicKey, error) {
+	if stubPubkeyAggregation {
+		return newPublicKey(), nil
+	}
 	return blst.AggregatePublicKeys(pubs)
 }
 
 // AggregateMultiplePubkeys --
 func AggregateMultiplePubkeys(pubs []PublicKey) PublicKey {
+	if stubPubkeyAggregation {
+		return newPublicKey()
+	}
 	return blst.AggregateMultiplePubkeys(pubs)
 }
 
@@ -181,8 +203,27 @@ func (s *fakeSignature) Marshal() []byte { return copyBytes(s.b) }
 // Copy returns a full deep copy of a signature.
 func (s *fakeSignature) Copy() common.Signature { return &fakeSignature{b: copyBytes(s.b)} }
 
+// Marshal a public key into a byte slice.
+func (p *fakePublicKey) Marshal() []byte { return copyBytes(p.b) }
+
+// Copy returns a full deep copy of a public key.
+func (p *fakePublicKey) Copy() common.PublicKey { return &fakePublicKey{b: copyBytes(p.b)} }
+
+// Aggregate returns the spec's stub pubkey, as AggregatePKs does with BLS disabled.
+func (p *fakePublicKey) Aggregate(_ common.PublicKey) common.PublicKey { return newPublicKey() }
+
+// IsInfinite --
+func (p *fakePublicKey) IsInfinite() bool { return false }
+
+// Equals --
+func (p *fakePublicKey) Equals(p2 common.PublicKey) bool { return bytes.Equal(p.b, p2.Marshal()) }
+
 func newSignature() *fakeSignature {
 	return &fakeSignature{b: copyBytes(stubSignature)}
+}
+
+func newPublicKey() *fakePublicKey {
+	return &fakePublicKey{b: copyBytes(stubPubkey)}
 }
 
 func copyBytes(b []byte) []byte {

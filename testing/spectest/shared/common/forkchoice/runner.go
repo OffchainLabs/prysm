@@ -114,6 +114,7 @@ func runTest(t *testing.T, config string, fork int, basePath string, fcr bool) {
 					require.NoError(t, utils.UnmarshalYaml(metaFile, meta))
 					if meta.BlsSetting == 2 {
 						builder.service.DisableBlockSignatureVerificationForTesting()
+						utils.StubPubkeyAggregation(t)
 					}
 				}
 
