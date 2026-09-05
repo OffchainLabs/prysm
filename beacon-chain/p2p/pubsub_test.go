@@ -12,12 +12,14 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	testp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
 )
 
-func TestService_PublishToTopicConcurrentMapWrite(t *testing.T) {
+func TestService_PublishToTopic_Concurrent(t *testing.T) {
 	cs := startup.NewClockSynchronizer()
 	s, err := NewService(t.Context(), &Config{
 		StateNotifier: &mock.MockStateNotifier{},
@@ -57,6 +59,32 @@ func TestService_PublishToTopicConcurrentMapWrite(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+func TestService_PublishToTopic_CancelWhileWaitingForPeers(t *testing.T) {
+	defer flags.Init(flags.Get())
+	flags.Init(&flags.GlobalFlags{MinimumSyncPeers: 1})
+
+	p := testp2p.NewTestP2P(t)
+	t.Cleanup(func() { require.NoError(t, p.BHost.Close()) })
+	s := &Service{pubsub: p.PubSub(), joinedTopics: make(map[string]*pubsub.Topic)}
+	topic := fmt.Sprintf(BlockSubnetTopicFormat, [4]byte{}) + "/" + encoder.ProtocolSuffixSSZSnappy
+	handle, err := s.JoinTopic(topic)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, s.LeaveTopic(topic)) })
+	require.Equal(t, 0, len(handle.ListPeers()))
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	// Cancel during the 100ms peer wait, with room for scheduler delays.
+	timer := time.AfterFunc(10*time.Millisecond, cancel)
+	defer timer.Stop()
+	start := time.Now()
+	err = s.PublishToTopic(ctx, topic, []byte{})
+	elapsed := time.Since(start)
+	require.ErrorIs(t, err, context.Canceled)
+	require.ErrorContains(t, fmt.Sprintf("unable to find requisite number of peers for topic %s, 0 peers found to publish to", topic), err)
+	assert.Equal(t, true, elapsed < 75*time.Millisecond, "cancellation took %s", elapsed)
 }
 
 func TestExtractGossipDigest(t *testing.T) {
