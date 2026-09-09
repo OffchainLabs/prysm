@@ -176,14 +176,14 @@ func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQue
 	if err := s.saveCarriedColumns(data); err != nil {
 		return 0, err
 	}
-	bwb, envelopes, err := validUnprocessed(ctx, data.bwb, data.envelopes, s.cfg.Chain.HeadSlot(), s.isProcessedBlock, s.isProcessedPayload)
+	bwb, envelopes, err := s.filterProcessedBlocks(ctx, data.bwb, data.envelopes)
 	if err != nil {
 		log.WithError(err).Debug("Batch did not contain a valid sequence of unprocessed blocks")
 		return 0, err
 	}
 
 	if len(bwb) == 0 {
-		return 0, nil
+		return 0, s.processKnownBlockEnvelopes(ctx, envelopes)
 	}
 
 	// Separate blocks with blobs from blocks with data columns.
@@ -260,7 +260,7 @@ func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQue
 			if err != nil {
 				return uint64(len(blocksWithBlobs)), errors.Wrap(err, "could not get envelope from data")
 			}
-			if !s.cfg.Chain.HasFullNode(env.BeaconBlockRoot()) {
+			if !s.isProcessedPayload(ctx, envelopes[0]) {
 				if err := s.cfg.Chain.ReceiveExecutionPayloadEnvelope(ctx, envelopes[0]); err != nil {
 					log.WithError(err).Warning("Execution payload envelope processing failure")
 					return 0, err
@@ -388,6 +388,34 @@ func (s *Service) processBlock(
 type processedChecker func(context.Context, blocks.ROBlock) bool
 type payloadChecker func(context.Context, interfaces.ROSignedExecutionPayloadEnvelope) bool
 
+// filterProcessedBlocks preserves columns attached to blocks removed at consumption time.
+func (s *Service) filterProcessedBlocks(ctx context.Context, bwb []blocks.BlockWithROSidecars, envelopes []interfaces.ROSignedExecutionPayloadEnvelope) ([]blocks.BlockWithROSidecars, []interfaces.ROSignedExecutionPayloadEnvelope, error) {
+	remaining, pending, err := validUnprocessed(ctx, bwb, envelopes, s.cfg.Chain.HeadSlot(), s.isProcessedBlock, s.isProcessedPayload)
+	if err != nil && !errors.Is(err, errBlockAlreadyProcessed) {
+		return nil, nil, err
+	}
+	var columns []blocks.VerifiedRODataColumn
+	for _, b := range bwb[:len(bwb)-len(remaining)] {
+		columns = append(columns, b.Columns...)
+	}
+	if len(columns) > 0 {
+		if saveErr := s.cfg.DataColumnStorage.Save(columns); saveErr != nil {
+			return nil, nil, errors.Wrap(saveErr, "save columns for processed blocks")
+		}
+	}
+	return remaining, pending, err
+}
+
+// processKnownBlockEnvelopes imports a head payload even when its block is already known.
+func (s *Service) processKnownBlockEnvelopes(ctx context.Context, envelopes []interfaces.ROSignedExecutionPayloadEnvelope) error {
+	for _, envelope := range envelopes {
+		if err := s.cfg.Chain.ReceiveExecutionPayloadEnvelope(ctx, envelope); err != nil {
+			return errors.Wrap(err, "process payload envelope of known block")
+		}
+	}
+	return nil
+}
+
 func validUnprocessed(
 	ctx context.Context,
 	bwb []blocks.BlockWithROSidecars,
@@ -419,6 +447,18 @@ func validUnprocessed(
 	if *processed+1 == len(bwb) {
 		maxIncoming := bwb[len(bwb)-1].Block
 		maxRoot := maxIncoming.Root()
+		// Older payloads may be orphaned; only recover the current head on an all-known batch.
+		if maxIncoming.Block().Slot() == headSlot {
+			for _, e := range envelopes {
+				env, err := e.Envelope()
+				if err != nil {
+					return nil, nil, errors.Wrap(err, "get envelope for known head")
+				}
+				if env.BeaconBlockRoot() == maxRoot && !isPayloadProc(ctx, e) {
+					return nil, []interfaces.ROSignedExecutionPayloadEnvelope{e}, nil
+				}
+			}
+		}
 		return nil, nil, fmt.Errorf("%w: headSlot=%d, blockSlot=%d, root=%#x", errBlockAlreadyProcessed, headSlot, maxIncoming.Block().Slot(), maxRoot)
 	}
 	nonProcessedIdx := *processed + 1
@@ -471,10 +511,12 @@ func (s *Service) processBatchedBlocks(ctx context.Context, bwb []blocks.BlockWi
 		return 0, errors.New("0 blocks provided into method")
 	}
 
-	headSlot := s.cfg.Chain.HeadSlot()
-	bwb, envelopes, err := validUnprocessed(ctx, bwb, envelopes, headSlot, s.isProcessedBlock, s.isProcessedPayload)
+	bwb, envelopes, err := s.filterProcessedBlocks(ctx, bwb, envelopes)
 	if err != nil {
 		return 0, err
+	}
+	if len(bwb) == 0 {
+		return 0, s.processKnownBlockEnvelopes(ctx, envelopes)
 	}
 	bwbCount := uint64(len(bwb))
 
@@ -601,13 +643,14 @@ func (s *Service) isProcessedBlock(ctx context.Context, blk blocks.ROBlock) bool
 	return false
 }
 
-// isProcessedPayload checks DB if a payload has been processed
+// isProcessedPayload requires both persistence and successful forkchoice insertion.
 func (s *Service) isProcessedPayload(ctx context.Context, e interfaces.ROSignedExecutionPayloadEnvelope) bool {
 	env, err := e.Envelope()
 	if err != nil {
 		return false
 	}
-	return s.cfg.DB.HasExecutionPayloadEnvelope(ctx, env.BeaconBlockRoot())
+	root := env.BeaconBlockRoot()
+	return s.cfg.DB.HasExecutionPayloadEnvelope(ctx, root) && s.cfg.Chain.HasFullNode(root)
 }
 
 func (s *Service) downscorePeer(peerID peer.ID, reason string) {
