@@ -245,33 +245,36 @@ func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
 		return errors.Errorf("origin block for root %#x not found in database", blockRoot)
 	}
 
-	currentSlot, blockSlot := s.clock.CurrentSlot(), block.Block().Slot()
-	currentEpoch, blockEpoch := slots.ToEpoch(currentSlot), slots.ToEpoch(blockSlot)
-
-	if !params.WithinDAPeriod(blockEpoch, currentEpoch) {
-		return nil
-	}
-
 	roBlock, err := blocks.NewROBlockWithRoot(block, blockRoot)
 	if err != nil {
 		return errors.Wrap(err, "new ro block with root")
 	}
 
-	blockVersion := roBlock.Version()
-
-	if blockVersion >= version.Fulu {
-		if err := s.fetchOriginDataColumnSidecars(roBlock); err != nil {
-			return errors.Wrap(err, "fetch origin columns")
-		}
+	// In Gloas, data availability attaches to the payload envelope, which may not exist for the
+	// origin block. Forward sync imports the origin envelope and its columns when they exist.
+	if roBlock.Version() >= version.Gloas {
+		log.WithFields(logrus.Fields{
+			"blockRoot": fmt.Sprintf("%#x", blockRoot),
+			"slot":      roBlock.Block().Slot(),
+		}).Info("Gloas origin: payload columns are fetched by forward sync")
 		return nil
 	}
 
-	if blockVersion >= version.Deneb {
+	currentEpoch, blockEpoch := s.clock.CurrentEpoch(), slots.ToEpoch(roBlock.Block().Slot())
+	if !params.WithinDAPeriod(blockEpoch, currentEpoch) {
+		return nil
+	}
+
+	switch v := roBlock.Version(); {
+	case v >= version.Fulu:
+		if err := s.fetchOriginDataColumnSidecars(roBlock); err != nil {
+			return errors.Wrap(err, "fetch origin columns")
+		}
+	case v >= version.Deneb:
 		if err := s.fetchOriginBlobSidecars(peers, roBlock); err != nil {
 			return errors.Wrap(err, "fetch origin blobs")
 		}
 	}
-
 	return nil
 }
 
