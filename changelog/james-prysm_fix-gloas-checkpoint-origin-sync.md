@@ -1,3 +1,4 @@
 ### Fixed
 
-- Fix Gloas checkpoint sync when the origin payload is withheld. Defer origin sidecar fetching to forward sync, preserve required FULL-parent data availability, and accept origin envelopes against checkpoint states advanced through skipped slots.
+- Fix Gloas checkpoint sync stalling and repeatedly downscoring peers when the checkpoint origin's payload is withheld. Preserve the origin's data columns when its payload is revealed so forward sync can process it.
+- Validate execution payload envelopes against the latest block header slot so a checkpoint state advanced through empty slots accepts its origin envelope.

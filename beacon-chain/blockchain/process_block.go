@@ -146,44 +146,23 @@ func getStateVersionAndPayload(st state.BeaconState) (int, interfaces.ExecutionD
 	return preStateVersion, preStateHeader, nil
 }
 
-// getBatchPrestate returns the first block's pre-state after checking required parent data availability.
+// getBatchPrestate returns the pre-state to apply to the first beacon block in the batch and returns true if it applied the first envelope before
 func (s *Service) getBatchPrestate(ctx context.Context, b consensusblocks.ROBlock, envelopes []interfaces.ROSignedExecutionPayloadEnvelope) (state.BeaconState, bool, error) {
-	parentRoot := b.Block().ParentRoot()
-	blockPreState, err := s.cfg.StateGen.StateByRootInitialSync(ctx, parentRoot)
-	if err != nil {
-		return nil, false, errors.Wrap(err, "could not get block pre state")
-	}
-	if blockPreState == nil || blockPreState.IsNil() {
-		return nil, false, fmt.Errorf("nil pre state for slot %d", b.Block().Slot())
-	}
-	if b.Version() >= version.Gloas && blockPreState.Version() >= version.Gloas {
-		parentBid, err := blockPreState.LatestExecutionPayloadBid()
-		if err != nil {
-			return nil, false, errors.Wrap(err, "could not get parent execution payload bid")
-		}
-		// The synthetic upgrade bid and genesis do not require separate payload columns.
-		if parentBid != nil && parentBid.Slot() != 0 && len(parentBid.BlobKzgCommitments()) > 0 {
-			parentHash, err := b.ParentHash()
-			if err != nil {
-				return nil, false, err
-			}
-			if parentHash == parentBid.BlockHash() {
-				available, err := s.dataColumnsAvailableNow(ctx, parentRoot, parentBid.Slot())
-				if err != nil {
-					return nil, false, errors.Wrap(err, "could not check parent payload data availability")
-				}
-				if !available {
-					return nil, false, errors.Errorf("data columns unavailable for parent execution payload envelope slot %d root %#x", parentBid.Slot(), parentRoot)
-				}
-			}
-		}
-	}
 	if len(envelopes) == 0 || b.Version() < version.Gloas {
-		return blockPreState, false, nil
+		blockPreState, err := s.cfg.StateGen.StateByRootInitialSync(ctx, b.Block().ParentRoot())
+		if err != nil {
+			return nil, false, errors.Wrap(err, "could not get block pre state")
+		}
+		return blockPreState, false, nil // Returning false here is fine since there are no envelopes pre-Gloas
 	}
+	parentRoot := b.Block().ParentRoot()
 	full, err := consensusblocks.BlockBuiltOnParentEnvelope(envelopes[0], b)
 	if err != nil {
 		return nil, false, errors.Wrap(err, "could not check if block builds on envelope")
+	}
+	blockPreState, err := s.cfg.StateGen.StateByRootInitialSync(ctx, parentRoot)
+	if err != nil {
+		return nil, false, errors.Wrap(err, "could not get block pre state")
 	}
 	if !full {
 		return blockPreState, false, nil
