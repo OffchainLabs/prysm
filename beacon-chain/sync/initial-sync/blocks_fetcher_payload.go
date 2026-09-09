@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	prysmsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
@@ -21,17 +21,15 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// checkAllBlocksBuildOnEmpty rejects payload dependencies except for the genesis parent.
+// checkAllBlocksBuildOnEmpty verifies that all the passed blocks build on top of the empty block
+// It ignores the first block in the slice
 func checkAllBlocksBuildOnEmpty(blks []blocks.BlockWithROSidecars) error {
-	if len(blks) == 0 {
-		return nil
-	}
 	b := blks[0].Block
 	s, err := b.Block().Body().SignedExecutionPayloadBid()
 	if err != nil {
 		return errors.Wrap(err, "get execution payload bid from block")
 	}
-	previousBid := s.Message
+	firstBid := s.Message
 	for i := 1; i < len(blks); i++ {
 		next := blks[i].Block
 		if next.ReadOnlySignedBeaconBlock == nil {
@@ -44,11 +42,10 @@ func checkAllBlocksBuildOnEmpty(blks []blocks.BlockWithROSidecars) error {
 		if err != nil {
 			return errors.Wrap(err, "get execution payload bid from block")
 		}
-		if b.Block().Slot() != 0 && !bytes.Equal(nextSignedBid.Message.ParentBlockHash, previousBid.ParentBlockHash) {
+		if !bytes.Equal(nextSignedBid.Message.ParentBlockHash, firstBid.ParentBlockHash) {
 			return fmt.Errorf("block with root %#x does not build on top of the empty block", next.Root())
 		}
 		b = next
-		previousBid = nextSignedBid.Message
 	}
 	return nil
 }
@@ -58,12 +55,9 @@ func checkAllBlocksBuildOnEmpty(blks []blocks.BlockWithROSidecars) error {
 // not consistent.
 func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse) {
 	if len(r.envelopes) == 0 {
-		if err := checkAllBlocksBuildOnEmpty(r.bwb); err != nil {
-			r.err = err
-			if r.blocksFrom == r.payloadsFrom {
-				r.err = errors.Wrap(prysmsync.ErrInvalidFetchedData, err.Error())
-				f.downscorePeer(r.blocksFrom, r.err)
-			}
+		// Only downscore with bad payload if the same peer provided available blocks
+		if err := checkAllBlocksBuildOnEmpty(r.bwb); err != nil && r.blocksFrom == r.payloadsFrom {
+			f.downscorePeer(r.blocksFrom, errors.Wrap(prysmsync.ErrInvalidFetchedData, err.Error()))
 		}
 		return
 	}
@@ -200,14 +194,11 @@ func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestRespon
 
 // validatePayloadsForImport retains the known anchor without replaying its imported ancestors.
 func (f *blocksFetcher) validatePayloadsForImport(r *fetchRequestResponse, first int) {
-	if first == 0 && r.storedParentPayload == nil {
+	if first == 0 {
 		f.validatePayloadBlockConsistency(r)
 		return
 	}
 	anchor := first - 1
-	if r.storedParentPayload != nil {
-		anchor = first
-	}
 	relevant := *r
 	relevant.bwb = r.bwb[anchor:]
 	relevant.envelopes = nil
@@ -252,62 +243,34 @@ func (f *blocksFetcher) ensureParentPayload(ctx context.Context, r *fetchRequest
 	if err != nil || !full {
 		return err
 	}
-	if f.chain.HasFullNode(parentRoot) && f.db.HasExecutionPayloadEnvelope(ctx, parentRoot) {
-		stored, err := f.db.ExecutionPayloadEnvelope(ctx, parentRoot)
+	insertAt := 0
+	for i, envelope := range r.envelopes {
+		message, err := envelope.Envelope()
 		if err != nil {
 			return err
 		}
-		if stored == nil {
-			return errors.New("nil stored parent execution payload envelope")
-		}
-		envelope, err := blocks.WrappedROBlindedExecutionPayloadEnvelope(stored.Message)
-		if err != nil {
-			return err
-		}
-		childHash, err := child.ParentHash()
-		if err != nil {
-			return err
-		}
-		if envelope.BeaconBlockRoot() == parentRoot && envelope.BlockHash() == childHash && envelope.Slot() == parent.Block().Slot() {
-			r.storedParentPayload = &parent
-			return nil
-		}
-	}
-	for _, envelope := range r.envelopes {
-		matches, err := blocks.BlockBuiltOnParentEnvelope(envelope, child)
-		if err != nil {
-			return err
-		}
-		if matches {
-			message, err := envelope.Envelope()
+		if message.BeaconBlockRoot() == parentRoot {
+			matches, err := blocks.BlockBuiltOnParentEnvelope(envelope, child)
 			if err != nil {
 				return err
 			}
-			if message.Slot() == parent.Block().Slot() {
+			if matches && message.Slot() == parent.Block().Slot() {
 				return nil
 			}
+			if r.blocksFrom == r.payloadsFrom {
+				return errors.Wrap(prysmsync.ErrInvalidFetchedData, "parent payload envelope does not match block")
+			}
+			return errors.New("parent payload envelope does not match block")
+		}
+		if message.Slot() <= parent.Block().Slot() {
+			insertAt = i + 1
 		}
 	}
 	envelope, pid, err := f.fetchParentPayloadFromPeers(ctx, parent, child, r.payloadsFrom, peers)
 	if err != nil {
 		return err
 	}
-	merged := r.envelopes[:0]
-	for _, candidate := range r.envelopes {
-		message, err := candidate.Envelope()
-		if err != nil {
-			return err
-		}
-		if message.BeaconBlockRoot() != parentRoot {
-			merged = append(merged, candidate)
-		}
-	}
-	r.envelopes = append(merged, envelope)
-	sort.SliceStable(r.envelopes, func(i, j int) bool {
-		a, _ := r.envelopes[i].Envelope()
-		b, _ := r.envelopes[j].Envelope()
-		return a.Slot() < b.Slot()
-	})
+	r.envelopes = slices.Insert(r.envelopes, insertAt, envelope)
 	if pid != r.payloadsFrom {
 		// Mixed providers cannot be attributed to the block provider by consistency checks.
 		r.payloadsFrom = ""

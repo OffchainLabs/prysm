@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -66,7 +65,7 @@ func TestColumnFetchBlocks(t *testing.T) {
 			makeEnvelopeForRoot(t, 3, b2.Root(), [32]byte{}, [32]byte{}),
 		}
 		bwb := []blocks.BlockWithROSidecars{{Block: b0}, {Block: b1}, {Block: b2}}
-		got, err := columnFetchBlocks(bwb, envs, nil, currentEpoch, noResolveBlock)
+		got, err := columnFetchBlocks(bwb, envs, currentEpoch, noResolveBlock)
 		require.NoError(t, err)
 		roots := rootSet(got)
 		require.Equal(t, 2, len(got))
@@ -77,7 +76,7 @@ func TestColumnFetchBlocks(t *testing.T) {
 
 	t.Run("Gloas selects no blocks without envelopes", func(t *testing.T) {
 		bwb := []blocks.BlockWithROSidecars{{Block: b0}, {Block: b1}}
-		got, err := columnFetchBlocks(bwb, nil, nil, currentEpoch, noResolveBlock)
+		got, err := columnFetchBlocks(bwb, nil, currentEpoch, noResolveBlock)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(got))
 	})
@@ -95,7 +94,7 @@ func TestColumnFetchBlocks(t *testing.T) {
 			}
 			return blocks.ROBlock{}, false
 		}
-		got, err := columnFetchBlocks(bwb, envs, nil, currentEpoch, resolve)
+		got, err := columnFetchBlocks(bwb, envs, currentEpoch, resolve)
 		require.NoError(t, err)
 		roots := rootSet(got)
 		require.Equal(t, 1, len(got))
@@ -107,7 +106,7 @@ func TestColumnFetchBlocks(t *testing.T) {
 			makeEnvelopeForRoot(t, 0, [32]byte{0xde, 0xad}, [32]byte{}, [32]byte{}),
 		}
 		bwb := []blocks.BlockWithROSidecars{{Block: b0}}
-		got, err := columnFetchBlocks(bwb, envs, nil, currentEpoch, noResolveBlock)
+		got, err := columnFetchBlocks(bwb, envs, currentEpoch, noResolveBlock)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(got))
 	})
@@ -121,27 +120,9 @@ func TestColumnFetchBlocks(t *testing.T) {
 		require.NoError(t, err)
 		bwb := []blocks.BlockWithROSidecars{{Block: roFulu}}
 		// No envelopes: a pre-Gloas block is still considered full and requested by root.
-		got, err := columnFetchBlocks(bwb, nil, nil, currentEpoch, noResolveBlock)
+		got, err := columnFetchBlocks(bwb, nil, currentEpoch, noResolveBlock)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(got))
 		require.Equal(t, true, rootSet(got)[roFulu.Root()])
-	})
-
-	t.Run("stored parent payload still needs columns", func(t *testing.T) {
-		bwb := []blocks.BlockWithROSidecars{{Block: b1}}
-		got, err := columnFetchBlocks(bwb, nil, &b0, currentEpoch, noResolveBlock)
-		require.NoError(t, err)
-		require.Equal(t, 1, len(got))
-		require.Equal(t, b0.Root(), got[0].Root())
-
-		envs := []interfaces.ROSignedExecutionPayloadEnvelope{makeEnvelopeForRoot(t, 1, b0.Root(), [32]byte{}, [32]byte{})}
-		got, err = columnFetchBlocks(append(bwb, blocks.BlockWithROSidecars{Block: b0}), envs, &b0, currentEpoch, noResolveBlock)
-		require.NoError(t, err)
-		require.Equal(t, 1, len(got))
-
-		outsideRetention := params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest.Add(1)
-		got, err = columnFetchBlocks(bwb, nil, &b0, outsideRetention, noResolveBlock)
-		require.NoError(t, err)
-		require.Equal(t, 0, len(got))
 	})
 }
