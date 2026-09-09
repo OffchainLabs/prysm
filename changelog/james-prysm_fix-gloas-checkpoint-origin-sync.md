@@ -1,3 +1,3 @@
 ### Fixed
 
-- Fix Gloas checkpoint sync when the origin payload is withheld. Recover missing FULL-parent envelopes by root during forward sync, preserve and check their data columns, and accept origin envelopes against checkpoint states advanced through skipped slots.
+- Fix Gloas checkpoint sync when the origin payload is withheld. Defer origin sidecar fetching to forward sync, preserve required FULL-parent data availability, and accept origin envelopes against checkpoint states advanced through skipped slots.
