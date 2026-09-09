@@ -486,3 +486,53 @@ func TestFetchParentPayloadFromPeers(t *testing.T) {
 		})
 	}
 }
+
+func TestFetchPayloads_PrefetchedBatchRecoversParentAfterItBecomesKnown(t *testing.T) {
+	parentHash := [32]byte{1}
+	origin := makeGloasBlockWithPayload(t, 10, [32]byte{}, parentHash, [32]byte{2})
+	parent := makeGloasBlockWithPayload(t, 14, origin.Root(), parentHash, [32]byte{3})
+	child := makeGloasBlock(t, 18, parent.Root(), [32]byte{3})
+	parentEnvelope := makeEnvelopeForRoot(t, 14, parent.Root(), [32]byte{3}, parentHash)
+	f, client := newPayloadTestFetcher(t, 10)
+	store := f.db.(db.Database)
+	require.NoError(t, store.SaveBlock(t.Context(), origin.ReadOnlySignedBeaconBlock))
+	server := p2ptest.NewTestP2P(t)
+	client.Connect(server)
+	server.SetStreamHandler(fmt.Sprintf("%s/ssz_snappy", p2p.RPCExecutionPayloadEnvelopesByRangeTopicV1), func(stream network.Stream) {
+		defer func() { assert.NoError(t, stream.Close()) }()
+		req := new(ethpb.ExecutionPayloadEnvelopesByRangeRequest)
+		assert.NoError(t, server.Encoding().DecodeWithMaxLength(stream, req))
+		assert.NoError(t, stream.CloseWrite())
+	})
+	var rootRequests atomic.Int32
+	server.SetStreamHandler(fmt.Sprintf("%s/ssz_snappy", p2p.RPCExecutionPayloadEnvelopesByRootTopicV1), func(stream network.Stream) {
+		defer func() { assert.NoError(t, stream.Close()) }()
+		req := new(p2ptypes.ExecutionPayloadEnvelopesByRootReq)
+		assert.NoError(t, server.Encoding().DecodeWithMaxLength(stream, req))
+		assert.DeepEqual(t, p2ptypes.ExecutionPayloadEnvelopesByRootReq{parent.Root()}, *req)
+		rootRequests.Add(1)
+		assert.NoError(t, prysmsync.WriteExecutionPayloadEnvelopeChunk(stream, server.Encoding(), parentEnvelope.Proto().(*ethpb.SignedExecutionPayloadEnvelope)))
+		assert.NoError(t, stream.CloseWrite())
+	})
+
+	firstBatch := &fetchRequestResponse{start: 14, count: 4, blocksFrom: server.PeerID(), bwb: []blocks.BlockWithROSidecars{{Block: parent}}}
+	f.fetchPayloads(t.Context(), firstBatch, nil)
+	require.NoError(t, firstBatch.err)
+	prefetched := &fetchRequestResponse{start: 18, count: 4, blocksFrom: server.PeerID(), bwb: []blocks.BlockWithROSidecars{{Block: child}}}
+	f.fetchPayloads(t.Context(), prefetched, nil)
+	require.NoError(t, prefetched.err)
+	require.Equal(t, 0, len(prefetched.envelopes))
+	require.Equal(t, int32(0), rootRequests.Load())
+
+	// Simulate the database and head visibility established by importing the first batch.
+	require.NoError(t, store.SaveBlock(t.Context(), parent.ReadOnlySignedBeaconBlock))
+	*f.chain.(*mock.ChainService).MockHeadSlot = parent.Block().Slot()
+	retry := &fetchRequestResponse{start: 18, count: 4, blocksFrom: server.PeerID(), bwb: []blocks.BlockWithROSidecars{{Block: child}}}
+	f.fetchPayloads(t.Context(), retry, nil)
+	require.NoError(t, retry.err)
+	require.Equal(t, int32(1), rootRequests.Load())
+	require.Equal(t, 1, len(retry.envelopes))
+	matches, err := blocks.BlockBuiltOnParentEnvelope(retry.envelopes[0], child)
+	require.NoError(t, err)
+	require.Equal(t, true, matches)
+}
