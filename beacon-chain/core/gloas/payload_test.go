@@ -3,6 +3,7 @@ package gloas
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -234,6 +235,43 @@ func TestVerifyExecutionPayloadEnvelopeWithDeferredSig_Success(t *testing.T) {
 	valid, err := sigBatch.Verify()
 	require.NoError(t, err)
 	require.Equal(t, true, valid)
+}
+
+func TestVerifyExecutionPayloadEnvelope_AdvancedCheckpointState(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		mutate  func(*enginev1.ExecutionPayloadGloas, *ethpb.ExecutionPayloadBid, *ethpb.ExecutionPayloadEnvelope)
+		wantErr string
+	}{
+		{name: "envelope uses latest block slot"},
+		{name: "state slot is not the payload slot", mutate: func(payload *enginev1.ExecutionPayloadGloas, _ *ethpb.ExecutionPayloadBid, _ *ethpb.ExecutionPayloadEnvelope) {
+			payload.SlotNumber = params.BeaconConfig().SlotsPerEpoch
+		}, wantErr: "envelope slot does not match latest block header slot"},
+		{name: "state slot timestamp is not the payload timestamp", mutate: func(payload *enginev1.ExecutionPayloadGloas, _ *ethpb.ExecutionPayloadBid, _ *ethpb.ExecutionPayloadEnvelope) {
+			payload.Timestamp += uint64(params.BeaconConfig().SlotsPerEpoch-5) * params.BeaconConfig().SecondsPerSlot
+		}, wantErr: "payload timestamp does not match expected timestamp"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := buildPayloadFixture(t, test.mutate)
+			require.NoError(t, fixture.state.SetSlot(params.BeaconConfig().SlotsPerEpoch))
+			require.NoError(t, fixture.state.SetGenesisTime(time.Unix(int64(100-5*params.BeaconConfig().SecondsPerSlot), 0)))
+			before := fixture.state.Copy().ToProto()
+			err := VerifyExecutionPayloadEnvelope(t.Context(), fixture.state, fixture.signed)
+			if test.wantErr != "" {
+				require.ErrorContains(t, test.wantErr, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.DeepEqual(t, before, fixture.state.ToProto())
+			_, err = VerifyExecutionPayloadEnvelopeWithDeferredSig(t.Context(), fixture.state, fixture.signed)
+			if test.wantErr != "" {
+				require.ErrorContains(t, test.wantErr, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.DeepEqual(t, before, fixture.state.ToProto())
+		})
+	}
 }
 
 func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {

@@ -251,7 +251,7 @@ func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQue
 	}
 
 	if len(envelopes) > 0 {
-		full, err := blocks.BlockBuiltOnEnvelope(envelopes[0], blocksWithDataColumns[0].Block)
+		full, err := blocks.BlockBuiltOnParentEnvelope(envelopes[0], blocksWithDataColumns[0].Block)
 		if err != nil {
 			return 0, errors.Wrap(err, "could not check if block builds on envelope")
 		}
@@ -445,7 +445,7 @@ func envelopesForBlocks(
 
 	for i, e := range envelopes {
 		// Check if this envelope is the parent envelope for the first block.
-		builtOn, err := blocks.BlockBuiltOnEnvelope(e, bwb[0].Block)
+		builtOn, err := blocks.BlockBuiltOnParentEnvelope(e, bwb[0].Block)
 		if err == nil && builtOn {
 			return envelopes[i:]
 		}
