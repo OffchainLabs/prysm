@@ -363,68 +363,6 @@ func TestGetBatchPrestate(t *testing.T) {
 
 }
 
-func TestVerifyBatchPayloadDependencies(t *testing.T) {
-	for _, test := range []struct {
-		name      string
-		empty     bool
-		envelope  bool
-		wrongRoot bool
-		wrongHash bool
-		genesis   bool
-		wantErr   bool
-	}{
-		{name: "missing full parent envelope", wantErr: true},
-		{name: "full parent envelope present", envelope: true},
-		{name: "ancestor envelope cannot satisfy full parent", envelope: true, wrongRoot: true, wantErr: true},
-		{name: "wrong execution hash cannot satisfy full parent", envelope: true, wrongHash: true, wantErr: true},
-		{name: "empty parent needs no envelope", empty: true},
-		{name: "genesis parent needs no envelope", genesis: true},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			parentRoot, payloadHash := [32]byte{0xa1}, [32]byte{0xb1}
-			parent := util.NewBeaconBlockGloas()
-			parent.Block.Slot = 3
-			if test.genesis {
-				parent.Block.Slot = 0
-			}
-			parent.Block.Body.SignedExecutionPayloadBid.Message.BlockHash = payloadHash[:]
-			parentBlock, err := consensusblocks.NewSignedBeaconBlock(parent)
-			require.NoError(t, err)
-			roParent, err := consensusblocks.NewROBlockWithRoot(parentBlock, parentRoot)
-			require.NoError(t, err)
-			child := util.NewBeaconBlockGloas()
-			child.Block.Slot = 6
-			child.Block.ParentRoot = parentRoot[:]
-			if !test.empty {
-				child.Block.Body.SignedExecutionPayloadBid.Message.ParentBlockHash = payloadHash[:]
-			}
-			childBlock, err := consensusblocks.NewSignedBeaconBlock(child)
-			require.NoError(t, err)
-			roChild, err := consensusblocks.NewROBlock(childBlock)
-			require.NoError(t, err)
-			var envelopes []interfaces.ROSignedExecutionPayloadEnvelope
-			if test.envelope {
-				envelopeRoot, envelopeHash := parentRoot, payloadHash
-				if test.wrongRoot {
-					envelopeRoot = [32]byte{0xff}
-				}
-				if test.wrongHash {
-					envelopeHash = [32]byte{0xff}
-				}
-				envelope, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(testSignedEnvelope(t, envelopeRoot, parent.Block.Slot, envelopeHash[:]))
-				require.NoError(t, err)
-				envelopes = append(envelopes, envelope)
-			}
-			err = verifyBatchPayloadDependencies([]consensusblocks.ROBlock{roParent, roChild}, envelopes)
-			if test.wantErr {
-				require.ErrorContains(t, "missing required parent execution payload envelope", err)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
 func TestCachedPreState_CanGetFromStateSummary(t *testing.T) {
 	service, tr := minimalTestService(t)
 	ctx, beaconDB := tr.ctx, tr.db

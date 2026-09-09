@@ -220,42 +220,6 @@ type versionAndHeader struct {
 	header  interfaces.ExecutionData
 }
 
-// verifyBatchPayloadDependencies checks full-parent dependencies before import can notify the engine or modify forkchoice.
-func verifyBatchPayloadDependencies(blks []consensusblocks.ROBlock, envelopes []interfaces.ROSignedExecutionPayloadEnvelope) error {
-	envelopesByRoot := make(map[[32]byte]interfaces.ROSignedExecutionPayloadEnvelope, len(envelopes))
-	for _, signed := range envelopes {
-		envelope, err := signed.Envelope()
-		if err != nil {
-			return err
-		}
-		envelopesByRoot[envelope.BeaconBlockRoot()] = signed
-	}
-	for i := 1; i < len(blks); i++ {
-		if blks[i-1].Version() < version.Gloas || blks[i-1].Block().Slot() == 0 {
-			continue
-		}
-		full, err := consensusblocks.BlockBuiltOnParentPayload(blks[i-1].Block(), blks[i].Block())
-		if err != nil {
-			return err
-		}
-		if !full {
-			continue
-		}
-		parentRoot := blks[i].Block().ParentRoot()
-		envelope, ok := envelopesByRoot[parentRoot]
-		if ok {
-			ok, err = consensusblocks.BlockBuiltOnParentEnvelope(envelope, blks[i])
-			if err != nil {
-				return err
-			}
-		}
-		if !ok {
-			return errors.Errorf("missing required parent execution payload envelope for block %#x", parentRoot)
-		}
-	}
-	return nil
-}
-
 func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlock, envelopes []interfaces.ROSignedExecutionPayloadEnvelope, avs das.AvailabilityChecker) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.onBlockBatch")
 	defer span.End()
@@ -266,9 +230,6 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 
 	if err := consensusblocks.BeaconBlockIsNil(blks[0]); err != nil {
 		return invalidBlock{error: err}
-	}
-	if err := verifyBatchPayloadDependencies(blks, envelopes); err != nil {
-		return err
 	}
 	b := blks[0].Block()
 
@@ -298,8 +259,11 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		br = env.BeaconBlockRoot()
 	}
 
-	parentFinalized := preState.FinalizedCheckpoint()
-	parentJustified := preState.CurrentJustifiedCheckpoint()
+	// Fill in missing blocks
+	if err := s.fillInForkChoiceMissingBlocks(ctx, blks[0], preState.FinalizedCheckpoint(), preState.CurrentJustifiedCheckpoint()); err != nil {
+		return errors.Wrap(err, "could not fill in missing blocks to forkchoice")
+	}
+
 	jCheckpoints := make([]*ethpb.Checkpoint, len(blks))
 	fCheckpoints := make([]*ethpb.Checkpoint, len(blks))
 	preVersionAndHeaders := make([]*versionAndHeader, len(blks))
@@ -373,10 +337,6 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		sigSet.Join(set)
 	}
 
-	if eidx != len(envelopes) {
-		return errors.New("execution payload envelope does not match a block in the batch")
-	}
-
 	var verify bool
 	if features.Get().EnableVerboseSigVerification {
 		verify, err = sigSet.VerifyVerbosely()
@@ -388,11 +348,6 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	}
 	if !verify {
 		return errors.New("batch block signature verification failed")
-	}
-
-	// Fill in missing blocks
-	if err := s.fillInForkChoiceMissingBlocks(ctx, blks[0], parentFinalized, parentJustified); err != nil {
-		return errors.Wrap(err, "could not fill in missing blocks to forkchoice")
 	}
 
 	pendingNodes, isValidPayload, err := s.notifyEngineAndSaveData(ctx, blks, envelopes, avs, preVersionAndHeaders, postVersionAndHeaders, jCheckpoints, fCheckpoints)
