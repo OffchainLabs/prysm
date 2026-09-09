@@ -81,7 +81,7 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, r *fetchRequestRespon
 	currentSlot := f.clock.CurrentSlot()
 	currentEpoch := slots.ToEpoch(currentSlot)
 
-	roBlocks, err := columnFetchBlocks(postFulu, r.envelopes, currentEpoch, func(root [32]byte) (blocks.ROBlock, bool) {
+	roBlocks, err := columnFetchBlocks(postFulu, r.envelopes, r.storedParentPayload, currentEpoch, func(root [32]byte) (blocks.ROBlock, bool) {
 		return f.resolveBlock(ctx, root)
 	})
 	if err != nil {
@@ -151,13 +151,11 @@ func (f *blocksFetcher) resolveBlock(ctx context.Context, root [32]byte) (blocks
 	return b, err == nil
 }
 
-// columnFetchBlocks selects the post-Fulu blocks (within the DA period) whose data column
-// sidecars must be fetched: pre-Gloas blocks always, and Gloas blocks only when their payload
-// was revealed (an envelope exists for the block root). An envelope may reference a block outside
-// postFulu, resolved via resolveBlock.
+// columnFetchBlocks selects blocks needing columns for supplied or previously verified payloads.
 func columnFetchBlocks(
 	postFulu []blocks.BlockWithROSidecars,
 	envelopes []interfaces.ROSignedExecutionPayloadEnvelope,
+	storedParentPayload *blocks.ROBlock,
 	currentEpoch primitives.Epoch,
 	resolveBlock func(root [32]byte) (blocks.ROBlock, bool),
 ) ([]blocks.ROBlock, error) {
@@ -184,6 +182,9 @@ func columnFetchBlocks(
 		if postFulu[i].Block.Version() < version.Gloas {
 			add(postFulu[i].Block)
 		}
+	}
+	if storedParentPayload != nil {
+		add(*storedParentPayload)
 	}
 
 	for _, e := range envelopes {
