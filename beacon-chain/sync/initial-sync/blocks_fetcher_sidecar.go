@@ -83,7 +83,7 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, r *fetchRequestRespon
 
 	roBlocks, err := columnFetchBlocks(postFulu, r.envelopes, currentEpoch, func(root [32]byte) (blocks.ROBlock, bool) {
 		return f.resolveBlock(ctx, root)
-	})
+	}, r.persistedParent)
 	if err != nil {
 		r.err = errors.Wrap(err, "select blocks needing data column sidecars")
 		return
@@ -144,22 +144,30 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, r *fetchRequestRespon
 // resolveBlock loads an envelope's block that is not part of the current batch.
 func (f *blocksFetcher) resolveBlock(ctx context.Context, root [32]byte) (blocks.ROBlock, bool) {
 	signed, err := f.db.Block(ctx, root)
+	if err == nil {
+		if b, err := blocks.NewROBlockWithRoot(signed, root); err == nil {
+			return b, true
+		}
+	}
+	// The preceding batch's head can still be in the initial sync cache.
+	signed, err = f.chain.HeadBlock(ctx)
 	if err != nil {
 		return blocks.ROBlock{}, false
 	}
-	b, err := blocks.NewROBlockWithRoot(signed, root)
-	return b, err == nil
+	b, err := blocks.NewROBlock(signed)
+	return b, err == nil && b.Root() == root
 }
 
 // columnFetchBlocks selects the post-Fulu blocks (within the DA period) whose data column
 // sidecars must be fetched: pre-Gloas blocks always, and Gloas blocks only when their payload
-// was revealed (an envelope exists for the block root). An envelope may reference a block outside
+// was revealed (a fetched envelope or persisted parent). An envelope may reference a block outside
 // postFulu, resolved via resolveBlock.
 func columnFetchBlocks(
 	postFulu []blocks.BlockWithROSidecars,
 	envelopes []interfaces.ROSignedExecutionPayloadEnvelope,
 	currentEpoch primitives.Epoch,
 	resolveBlock func(root [32]byte) (blocks.ROBlock, bool),
+	persistedParent *blocks.ROBlock,
 ) ([]blocks.ROBlock, error) {
 	blockByRoot := make(map[[32]byte]blocks.ROBlock, len(postFulu))
 	for i := range postFulu {
@@ -178,6 +186,9 @@ func columnFetchBlocks(
 		}
 		seen[root] = true
 		roBlocks = append(roBlocks, b)
+	}
+	if persistedParent != nil {
+		add(*persistedParent)
 	}
 
 	for i := range postFulu {

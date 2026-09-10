@@ -127,6 +127,8 @@ type fetchRequestResponse struct {
 	count        uint64
 	bwb          []blocks.BlockWithROSidecars
 	envelopes    []interfaces.ROSignedExecutionPayloadEnvelope
+	// persistedParent still needs data columns even when its envelope is already stored.
+	persistedParent *blocks.ROBlock
 	// columnsToSave holds columns for a payload whose block is not in bwb (the one the first
 	// block builds on); persisted separately since the per-block save loop only covers bwb.
 	columnsToSave []blocks.VerifiedRODataColumn

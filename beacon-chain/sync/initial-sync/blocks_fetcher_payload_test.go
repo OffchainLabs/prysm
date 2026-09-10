@@ -350,6 +350,7 @@ func TestFetchPayloads_RequiredParent(t *testing.T) {
 		head          primitives.Slot
 		rangePayload  interfaces.ROSignedExecutionPayloadEnvelope
 		missingParent bool
+		persisted     bool
 		unknownFork   bool
 		rootRequests  int32
 		wantPayloads  int
@@ -357,6 +358,12 @@ func TestFetchPayloads_RequiredParent(t *testing.T) {
 	}{
 		{name: "genesis full child needs no envelope", blocks: []blocks.BlockWithROSidecars{{Block: genesis}, {Block: genesisChild}}, head: 0},
 		{name: "skipped slots resolve database parent", blocks: []blocks.BlockWithROSidecars{{Block: child}}, head: 10, rootRequests: 1, wantPayloads: 1},
+		{name: "persisted parent needs no root request", blocks: []blocks.BlockWithROSidecars{{Block: child}}, head: 10, persisted: true, missingParent: true},
+		{name: "persisted parent in batch needs no root request", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 10, persisted: true, missingParent: true},
+		{name: "persisted parent preserves child payload", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 10,
+			persisted: true, missingParent: true, rangePayload: childEnvelope, wantPayloads: 1},
+		{name: "persisted parent skips imported ancestors", blocks: []blocks.BlockWithROSidecars{{Block: older}, {Block: parent}, {Block: child}}, head: 10,
+			persisted: true, missingParent: true, rangePayload: makeEnvelopeForRoot(t, 8, older.Root(), parentHash, [32]byte{3})},
 		{name: "missing full origin rejects batch", blocks: []blocks.BlockWithROSidecars{{Block: child}}, head: 10, missingParent: true, rootRequests: 1},
 		{name: "known origin in batch", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 10, rootRequests: 1, wantPayloads: 1},
 		{name: "unknown fork below head needs parent", blocks: []blocks.BlockWithROSidecars{{Block: child}}, head: 16, unknownFork: true, rootRequests: 1, wantPayloads: 1},
@@ -370,6 +377,8 @@ func TestFetchPayloads_RequiredParent(t *testing.T) {
 			rangePayload: makeEnvelopeForRoot(t, 10, parent.Root(), [32]byte{99}, parentHash), wantPayloads: 1, wantErr: "parent payload envelope does not match block"},
 		{name: "wrong range parent slot rejects batch", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 10,
 			rangePayload: makeEnvelopeForRoot(t, 9, parent.Root(), blockHash, parentHash), wantPayloads: 1, wantErr: "parent payload envelope does not match block"},
+		{name: "persisted parent still rejects wrong range hash", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 10,
+			persisted: true, rangePayload: makeEnvelopeForRoot(t, 10, parent.Root(), [32]byte{99}, parentHash), wantPayloads: 1, wantErr: "parent payload envelope does not match block"},
 		{name: "recovered parent precedes child payload", blocks: []blocks.BlockWithROSidecars{{Block: child}}, head: 10, rangePayload: childEnvelope, rootRequests: 1, wantPayloads: 2},
 		{name: "all known needs no parent", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 14},
 		{name: "all known retains new head payload", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 14, rangePayload: childEnvelope, wantPayloads: 1},
@@ -378,6 +387,9 @@ func TestFetchPayloads_RequiredParent(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			f, client := newPayloadTestFetcher(t, tt.head)
 			require.NoError(t, f.db.(db.Database).SaveBlock(t.Context(), parent.ReadOnlySignedBeaconBlock))
+			if tt.persisted {
+				require.NoError(t, f.db.(db.Database).SaveExecutionPayloadEnvelope(t.Context(), envelope.Proto().(*ethpb.SignedExecutionPayloadEnvelope)))
+			}
 			if !tt.unknownFork {
 				for _, block := range tt.blocks {
 					if block.Block.Block().Slot() <= tt.head {
@@ -413,10 +425,18 @@ func TestFetchPayloads_RequiredParent(t *testing.T) {
 			if tt.wantErr != "" {
 				require.ErrorContains(t, tt.wantErr, r.err)
 				require.Equal(t, true, errors.Is(r.err, prysmsync.ErrInvalidFetchedData))
-			} else if tt.missingParent {
+			} else if tt.missingParent && !tt.persisted {
 				require.ErrorContains(t, "missing payload envelope for FULL parent", r.err)
 			} else {
 				require.NoError(t, r.err)
+			}
+			if tt.persisted && tt.wantErr == "" {
+				require.NotNil(t, r.persistedParent)
+				require.Equal(t, parent.Root(), r.persistedParent.Root())
+				require.Equal(t, server.PeerID(), r.payloadsFrom)
+				downscores, err := client.Peers().Scorers().BadResponsesScorer().Count(server.PeerID())
+				require.NoError(t, err)
+				require.Equal(t, 0, downscores)
 			}
 			require.Equal(t, tt.rootRequests, rootRequests.Load())
 			require.Equal(t, tt.wantPayloads, len(r.envelopes))
@@ -496,6 +516,10 @@ func TestFetchPayloads_PrefetchedBatchRecoversParentAfterItBecomesKnown(t *testi
 	f, client := newPayloadTestFetcher(t, 10)
 	store := f.db.(db.Database)
 	require.NoError(t, store.SaveBlock(t.Context(), origin.ReadOnlySignedBeaconBlock))
+	chain := f.chain.(*mock.ChainService)
+	chain.Block = origin.ReadOnlySignedBeaconBlock
+	_, found := f.resolveBlock(t.Context(), parent.Root())
+	require.Equal(t, false, found)
 	server := p2ptest.NewTestP2P(t)
 	client.Connect(server)
 	server.SetStreamHandler(fmt.Sprintf("%s/ssz_snappy", p2p.RPCExecutionPayloadEnvelopesByRangeTopicV1), func(stream network.Stream) {
@@ -524,9 +548,10 @@ func TestFetchPayloads_PrefetchedBatchRecoversParentAfterItBecomesKnown(t *testi
 	require.Equal(t, 0, len(prefetched.envelopes))
 	require.Equal(t, int32(0), rootRequests.Load())
 
-	// Simulate the database and head visibility established by importing the first batch.
-	require.NoError(t, store.SaveBlock(t.Context(), parent.ReadOnlySignedBeaconBlock))
-	*f.chain.(*mock.ChainService).MockHeadSlot = parent.Block().Slot()
+	// Imported blocks can remain in the initial sync cache until a later database flush.
+	chain.Block = parent.ReadOnlySignedBeaconBlock
+	*chain.MockHeadSlot = parent.Block().Slot()
+	require.Equal(t, false, store.HasBlock(t.Context(), parent.Root()))
 	retry := &fetchRequestResponse{start: 18, count: 4, blocksFrom: server.PeerID(), bwb: []blocks.BlockWithROSidecars{{Block: child}}}
 	f.fetchPayloads(t.Context(), retry, nil)
 	require.NoError(t, retry.err)
