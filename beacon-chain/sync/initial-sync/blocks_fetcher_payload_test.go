@@ -327,7 +327,7 @@ func TestValidatePayloadsForImport_Truncation(t *testing.T) {
 		},
 	}
 	f := &blocksFetcher{}
-	f.validatePayloadsForImport(r, 2)
+	f.validatePayloadsForImport(r, 1)
 	require.NoError(t, r.err)
 	require.Equal(t, 3, len(r.bwb))
 	require.Equal(t, child.Root(), r.bwb[2].Block.Root())
@@ -340,6 +340,7 @@ func TestFetchPayloads_RequiredParent(t *testing.T) {
 	child := makeGloasBlock(t, 14, parent.Root(), blockHash)
 	emptyChild := makeGloasBlock(t, 14, parent.Root(), parentHash)
 	older := makeGloasBlockWithPayload(t, 8, [32]byte{}, [32]byte{3}, parentHash)
+	recentAncestor := makeGloasBlockWithPayload(t, 9, [32]byte{}, [32]byte{3}, parentHash)
 	envelope := makeEnvelopeForRoot(t, 10, parent.Root(), blockHash, parentHash)
 	childEnvelope := makeEnvelopeForRoot(t, 14, child.Root(), [32]byte{4}, blockHash)
 	genesis := makeGloasBlockWithPayload(t, 0, [32]byte{}, parentHash, blockHash)
@@ -373,6 +374,8 @@ func TestFetchPayloads_RequiredParent(t *testing.T) {
 		{name: "old imported transitions need no envelopes", blocks: []blocks.BlockWithROSidecars{{Block: older}, {Block: parent}, {Block: child}}, head: 10, rootRequests: 1, wantPayloads: 1},
 		{name: "recovered parent follows an older range payload", blocks: []blocks.BlockWithROSidecars{{Block: older}, {Block: parent}, {Block: child}}, head: 10,
 			rangePayload: makeEnvelopeForRoot(t, 8, older.Root(), parentHash, [32]byte{3}), rootRequests: 1, wantPayloads: 1},
+		{name: "known parent at index zero filters older envelopes", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 10,
+			rangePayload: makeEnvelopeForRoot(t, 9, recentAncestor.Root(), parentHash, [32]byte{3}), rootRequests: 1, wantPayloads: 1},
 		{name: "empty withheld origin", blocks: []blocks.BlockWithROSidecars{{Block: emptyChild}}, head: 10},
 		{name: "parent already returned by range", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 10, rangePayload: envelope, wantPayloads: 1},
 		{name: "wrong range parent hash rejects batch", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 10,
