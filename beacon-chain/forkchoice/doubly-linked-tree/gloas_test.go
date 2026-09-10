@@ -2413,11 +2413,71 @@ func TestProcessAttestation_SameSlotPayloadVote(t *testing.T) {
 	require.Equal(t, rootA, f.votes[0].nextRoot)
 	require.Equal(t, false, f.votes[0].nextPayloadStatus)
 
-	// Later-slot payload-present vote is recorded.
+	// Later-slot payload-present vote is recorded once the payload is known.
+	pe, err := prepareGloasForkchoicePayload(rootA)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
 	f.ProcessAttestation(ctx, []uint64{1}, rootA, slotA+1, true)
 	require.Equal(t, 2, len(f.votes))
 	require.Equal(t, rootA, f.votes[1].nextRoot)
 	require.Equal(t, true, f.votes[1].nextPayloadStatus)
+}
+
+func TestProcessAttestation_UnknownPayloadVote(t *testing.T) {
+	ctx := t.Context()
+	zeroHash := params.BeaconConfig().ZeroHash
+	validatorBalance := uint64(32000000000)
+	slotA := primitives.Slot(32)
+	rootA := indexToHash(1)
+
+	// setupA returns a forkchoice with block A inserted as an empty node only.
+	setupA := func(t *testing.T) *ForkChoice {
+		f := setupGloas(t, 1, 1)
+		driftGenesisTime(f, slotA, 0)
+		st, blk, err := prepareGloasForkchoiceState(ctx, slotA, rootA, zeroHash, indexToHash(100), zeroHash, 1, 1)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, st, blk))
+		f.justifiedBalances = []uint64{validatorBalance, validatorBalance}
+		return f
+	}
+
+	t.Run("no full node drops the vote", func(t *testing.T) {
+		f := setupA(t)
+		// Validator 0 first votes payload-absent for A.
+		f.ProcessAttestation(ctx, []uint64{0}, rootA, slotA+1, false)
+		require.Equal(t, 1, len(f.votes))
+		before := f.votes[0]
+
+		// A later-epoch payload-present vote for A, whose payload is unknown, is not recorded.
+		f.ProcessAttestation(ctx, []uint64{0, 1}, rootA, slotA+params.BeaconConfig().SlotsPerEpoch, true)
+		require.Equal(t, 1, len(f.votes))
+		assert.DeepEqual(t, before, f.votes[0])
+		require.NoError(t, f.updateBalances())
+
+		// The envelope arriving later must not credit the dropped vote to the full node.
+		pe, err := prepareGloasForkchoicePayload(rootA)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertPayload(pe))
+		fn := f.store.fullNodeByRoot[rootA]
+		require.NotNil(t, fn)
+		assert.Equal(t, uint64(0), fn.balance)
+		assert.Equal(t, uint64(0), fn.weight)
+		assert.Equal(t, validatorBalance, f.store.emptyNodeByRoot[rootA].balance)
+	})
+
+	t.Run("full node present counts the vote", func(t *testing.T) {
+		f := setupA(t)
+		pe, err := prepareGloasForkchoicePayload(rootA)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertPayload(pe))
+
+		f.ProcessAttestation(ctx, []uint64{0}, rootA, slotA+1, true)
+		require.Equal(t, 1, len(f.votes))
+		assert.Equal(t, rootA, f.votes[0].nextRoot)
+		assert.Equal(t, true, f.votes[0].nextPayloadStatus)
+		require.NoError(t, f.updateBalances())
+		assert.Equal(t, validatorBalance, f.store.fullNodeByRoot[rootA].balance)
+	})
 }
 
 // BenchmarkConsensusChildrenLen compares the older length-only use of
