@@ -270,7 +270,7 @@ func (f *blocksFetcher) ensureParentPayload(ctx context.Context, r *fetchRequest
 			insertAt = i + 1
 		}
 	}
-	if f.db.HasExecutionPayloadEnvelope(ctx, parentRoot) {
+	if f.db.HasExecutionPayloadEnvelope(ctx, parentRoot) && f.chain.HasFullNode(parentRoot) {
 		r.persistedParent = &parent
 		return nil
 	}
