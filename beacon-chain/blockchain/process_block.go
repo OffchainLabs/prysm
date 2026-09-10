@@ -166,8 +166,12 @@ func (s *Service) getBatchPrestate(ctx context.Context, b consensusblocks.ROBloc
 	if parentBid == nil {
 		return nil, false, errors.New("nil parent execution payload bid")
 	}
-	// The synthetic bid installed by the Gloas upgrade represents an embedded pre-Gloas payload.
-	if parentBid.Slot() == 0 {
+	latestBlockHash, err := blockPreState.LatestBlockHash()
+	if err != nil {
+		return nil, false, errors.Wrap(err, "could not get latest block hash")
+	}
+	// The upgrade's synthetic bid refers to the already embedded execution payload.
+	if parentBid.BlockHash() == latestBlockHash {
 		return blockPreState, false, nil
 	}
 	parentHash, err := b.ParentHash()
@@ -241,9 +245,6 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	preState, applied, err := s.getBatchPrestate(ctx, blks[0], envelopes)
 	if err != nil {
 		return err
-	}
-	if preState == nil || preState.IsNil() {
-		return fmt.Errorf("nil pre state for slot %d", b.Slot())
 	}
 	var eidx int
 	var br [32]byte
