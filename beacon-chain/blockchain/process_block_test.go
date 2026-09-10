@@ -231,15 +231,16 @@ func TestGetBatchPrestate(t *testing.T) {
 		}, wantErr: "missing required parent execution payload envelope"},
 		{name: "valid full child", supplied: true},
 		{name: "parent state advanced through empty slots", supplied: true, columns: true, storedColumns: true, mutate: func(st *ethpb.BeaconStateGloas, _ *ethpb.SignedExecutionPayloadEnvelope) { st.Slot++ }},
-		{name: "full child with persisted parent envelope", persisted: true},
-		{name: "persisted envelope supplied again", supplied: true, persisted: true},
+		{name: "full child with persisted parent envelope", persisted: true, markedFull: true},
+		{name: "persisted envelope without full node is insufficient", persisted: true, wantErr: "missing required parent execution payload envelope"},
+		{name: "persisted envelope supplied again", supplied: true, persisted: true, markedFull: true},
 		{name: "empty child needs no parent payload", empty: true, columns: true},
 		{name: "empty child does not apply ancestor envelope", empty: true, supplied: true, mutate: func(_ *ethpb.BeaconStateGloas, env *ethpb.SignedExecutionPayloadEnvelope) {
 			env.Message.BeaconBlockRoot = bytesutil.PadTo([]byte{0xff}, 32)
 			env.Message.Payload.BlockHash = make([]byte, 32)
 		}},
 		{name: "full child requires columns", supplied: true, columns: true, wantErr: "data columns unavailable for parent execution payload envelope"},
-		{name: "persisted envelope still requires columns", persisted: true, columns: true, wantErr: "data columns unavailable for parent execution payload envelope"},
+		{name: "persisted envelope still requires columns", persisted: true, markedFull: true, columns: true, wantErr: "data columns unavailable for parent execution payload envelope"},
 		{name: "full child with stored columns", supplied: true, columns: true, storedColumns: true},
 		{name: "parent envelope must match committed bid", supplied: true, mutate: func(st *ethpb.BeaconStateGloas, _ *ethpb.SignedExecutionPayloadEnvelope) {
 			st.LatestExecutionPayloadBid.GasLimit++
