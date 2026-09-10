@@ -131,7 +131,7 @@ func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse)
 // `peers` is a list of peers to use for the request payloads if `pid` fails.
 // `r.bwb` must be sorted by slot.
 func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestResponse, peers []peer.ID) {
-	r.persistedParent = nil
+	r.parentWithReusablePayload = nil
 	if len(r.bwb) == 0 {
 		r.payloadsFrom = ""
 		return
@@ -178,33 +178,33 @@ func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestRespon
 			return
 		}
 	}
-	first := 0
-	for first < len(r.bwb) {
-		block := r.bwb[first].Block
+	firstUnprocessedIndex := 0
+	for firstUnprocessedIndex < len(r.bwb) {
+		block := r.bwb[firstUnprocessedIndex].Block
 		if block.Block().Slot() > headSlot || (block.Block().Slot() > finalizedSlot && !f.chain.HasBlock(ctx, block.Root())) {
 			break
 		}
-		first++
+		firstUnprocessedIndex++
 	}
-	if err := f.ensureParentPayload(ctx, r, peers, first); err != nil {
+	if err := f.ensureParentPayload(ctx, r, peers, firstUnprocessedIndex); err != nil {
 		r.err = errors.Wrap(err, "fetch required parent payload")
 		return
 	}
-	f.validatePayloadsForImport(r, first)
+	f.validatePayloadsForImport(r, firstUnprocessedIndex)
 }
 
-// validatePayloadsForImport retains the known anchor only when its envelope is still required.
-func (f *blocksFetcher) validatePayloadsForImport(r *fetchRequestResponse, first int) {
-	if first == 0 {
+// validatePayloadsForImport includes the preceding known block unless that block's payload can be reused.
+func (f *blocksFetcher) validatePayloadsForImport(r *fetchRequestResponse, firstUnprocessedIndex int) {
+	if firstUnprocessedIndex == 0 {
 		f.validatePayloadBlockConsistency(r)
 		return
 	}
-	anchor := first - 1
-	if r.persistedParent != nil {
-		anchor = first
+	validationStartIndex := firstUnprocessedIndex - 1
+	if r.parentWithReusablePayload != nil {
+		validationStartIndex = firstUnprocessedIndex
 	}
 	relevant := *r
-	relevant.bwb = r.bwb[anchor:]
+	relevant.bwb = r.bwb[validationStartIndex:]
 	relevant.envelopes = nil
 	for _, envelope := range r.envelopes {
 		message, err := envelope.Envelope()
@@ -218,20 +218,20 @@ func (f *blocksFetcher) validatePayloadsForImport(r *fetchRequestResponse, first
 	}
 	f.validatePayloadBlockConsistency(&relevant)
 	r.err = relevant.err
-	r.bwb = r.bwb[:anchor+len(relevant.bwb)]
+	r.bwb = r.bwb[:validationStartIndex+len(relevant.bwb)]
 	r.envelopes = relevant.envelopes
 }
 
-// ensureParentPayload recovers the first unprocessed block's FULL parent across skipped slots.
-func (f *blocksFetcher) ensureParentPayload(ctx context.Context, r *fetchRequestResponse, peers []peer.ID, first int) error {
-	if first == len(r.bwb) {
+// ensureParentPayload ensures the first unprocessed block's required parent payload is supplied or reusable.
+func (f *blocksFetcher) ensureParentPayload(ctx context.Context, r *fetchRequestResponse, peers []peer.ID, firstUnprocessedIndex int) error {
+	if firstUnprocessedIndex == len(r.bwb) {
 		return nil
 	}
-	child := r.bwb[first].Block
+	child := r.bwb[firstUnprocessedIndex].Block
 	parentRoot := child.Block().ParentRoot()
 	var parent blocks.ROBlock
-	if first > 0 && r.bwb[first-1].Block.Root() == parentRoot {
-		parent = r.bwb[first-1].Block
+	if firstUnprocessedIndex > 0 && r.bwb[firstUnprocessedIndex-1].Block.Root() == parentRoot {
+		parent = r.bwb[firstUnprocessedIndex-1].Block
 	} else {
 		var ok bool
 		parent, ok = f.resolveBlock(ctx, parentRoot)
@@ -243,8 +243,8 @@ func (f *blocksFetcher) ensureParentPayload(ctx context.Context, r *fetchRequest
 	if parent.Version() < version.Gloas || parent.Block().Slot() == 0 {
 		return nil
 	}
-	full, err := blocks.BlockBuiltOnParentPayload(parent.Block(), child.Block())
-	if err != nil || !full {
+	buildsOnParentPayload, err := blocks.BlockBuiltOnParentPayload(parent.Block(), child.Block())
+	if err != nil || !buildsOnParentPayload {
 		return err
 	}
 	insertAt := 0
@@ -270,8 +270,9 @@ func (f *blocksFetcher) ensureParentPayload(ctx context.Context, r *fetchRequest
 			insertAt = i + 1
 		}
 	}
+	// Stored envelopes can precede execution processing, so reuse also requires a FULL forkchoice node.
 	if f.db.HasExecutionPayloadEnvelope(ctx, parentRoot) && f.chain.HasFullNode(parentRoot) {
-		r.persistedParent = &parent
+		r.parentWithReusablePayload = &parent
 		return nil
 	}
 	envelope, pid, err := f.fetchParentPayloadFromPeers(ctx, parent, child, r.payloadsFrom, peers)
