@@ -345,21 +345,23 @@ func TestFetchPayloads_RequiredParent(t *testing.T) {
 	genesis := makeGloasBlockWithPayload(t, 0, [32]byte{}, parentHash, blockHash)
 	genesisChild := makeGloasBlock(t, 1, genesis.Root(), blockHash)
 	tests := []struct {
-		name          string
-		blocks        []blocks.BlockWithROSidecars
-		head          primitives.Slot
-		rangePayload  interfaces.ROSignedExecutionPayloadEnvelope
-		missingParent bool
-		persisted     bool
-		unknownFork   bool
-		rootRequests  int32
-		wantPayloads  int
-		wantErr       string
+		name            string
+		blocks          []blocks.BlockWithROSidecars
+		head            primitives.Slot
+		rangePayload    interfaces.ROSignedExecutionPayloadEnvelope
+		missingParent   bool
+		persisted       bool
+		notInForkchoice bool
+		unknownFork     bool
+		rootRequests    int32
+		wantPayloads    int
+		wantErr         string
 	}{
 		{name: "genesis full child needs no envelope", blocks: []blocks.BlockWithROSidecars{{Block: genesis}, {Block: genesisChild}}, head: 0},
 		{name: "skipped slots resolve database parent", blocks: []blocks.BlockWithROSidecars{{Block: child}}, head: 10, rootRequests: 1, wantPayloads: 1},
 		{name: "persisted parent needs no root request", blocks: []blocks.BlockWithROSidecars{{Block: child}}, head: 10, persisted: true, missingParent: true},
 		{name: "persisted parent in batch needs no root request", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 10, persisted: true, missingParent: true},
+		{name: "persisted parent outside forkchoice is fetched", blocks: []blocks.BlockWithROSidecars{{Block: child}}, head: 10, persisted: true, notInForkchoice: true, rootRequests: 1, wantPayloads: 1},
 		{name: "persisted parent preserves child payload", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 10,
 			persisted: true, missingParent: true, rangePayload: childEnvelope, wantPayloads: 1},
 		{name: "persisted parent skips imported ancestors", blocks: []blocks.BlockWithROSidecars{{Block: older}, {Block: parent}, {Block: child}}, head: 10,
@@ -389,6 +391,9 @@ func TestFetchPayloads_RequiredParent(t *testing.T) {
 			require.NoError(t, f.db.(db.Database).SaveBlock(t.Context(), parent.ReadOnlySignedBeaconBlock))
 			if tt.persisted {
 				require.NoError(t, f.db.(db.Database).SaveExecutionPayloadEnvelope(t.Context(), envelope.Proto().(*ethpb.SignedExecutionPayloadEnvelope)))
+			}
+			if tt.persisted && !tt.notInForkchoice {
+				f.chain.(*mock.ChainService).ForkchoiceRoots = map[[32]byte]bool{parent.Root(): true}
 			}
 			if !tt.unknownFork {
 				for _, block := range tt.blocks {
@@ -430,7 +435,10 @@ func TestFetchPayloads_RequiredParent(t *testing.T) {
 			} else {
 				require.NoError(t, r.err)
 			}
-			if tt.persisted && tt.wantErr == "" {
+			if tt.notInForkchoice {
+				require.Equal(t, (*blocks.ROBlock)(nil), r.persistedParent)
+			}
+			if tt.persisted && !tt.notInForkchoice && tt.wantErr == "" {
 				require.NotNil(t, r.persistedParent)
 				require.Equal(t, parent.Root(), r.persistedParent.Root())
 				require.Equal(t, server.PeerID(), r.payloadsFrom)

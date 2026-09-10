@@ -189,7 +189,7 @@ func (s *Service) getBatchPrestate(ctx context.Context, b consensusblocks.ROBloc
 			return nil, false, errors.Wrap(err, "could not check if block builds on envelope")
 		}
 	}
-	persisted := s.cfg.BeaconDB.HasExecutionPayloadEnvelope(ctx, parentRoot)
+	persisted := s.cfg.BeaconDB.HasExecutionPayloadEnvelope(ctx, parentRoot) && s.cfg.ForkChoiceStore.HasFullNode(parentRoot)
 	if !supplied && !persisted {
 		return nil, false, errors.Errorf("missing required parent execution payload envelope for block %#x", parentRoot)
 	}
