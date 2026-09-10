@@ -345,27 +345,27 @@ func TestFetchPayloads_RequiredParent(t *testing.T) {
 	genesis := makeGloasBlockWithPayload(t, 0, [32]byte{}, parentHash, blockHash)
 	genesisChild := makeGloasBlock(t, 1, genesis.Root(), blockHash)
 	tests := []struct {
-		name            string
-		blocks          []blocks.BlockWithROSidecars
-		head            primitives.Slot
-		rangePayload    interfaces.ROSignedExecutionPayloadEnvelope
-		missingParent   bool
-		persisted       bool
-		notInForkchoice bool
-		unknownFork     bool
-		rootRequests    int32
-		wantPayloads    int
-		wantErr         string
+		name                  string
+		blocks                []blocks.BlockWithROSidecars
+		head                  primitives.Slot
+		rangePayload          interfaces.ROSignedExecutionPayloadEnvelope
+		missingParent         bool
+		parentEnvelopeStored  bool
+		parentMissingFullNode bool
+		unknownFork           bool
+		rootRequests          int32
+		wantPayloads          int
+		wantErr               string
 	}{
 		{name: "genesis full child needs no envelope", blocks: []blocks.BlockWithROSidecars{{Block: genesis}, {Block: genesisChild}}, head: 0},
 		{name: "skipped slots resolve database parent", blocks: []blocks.BlockWithROSidecars{{Block: child}}, head: 10, rootRequests: 1, wantPayloads: 1},
-		{name: "persisted parent needs no root request", blocks: []blocks.BlockWithROSidecars{{Block: child}}, head: 10, persisted: true, missingParent: true},
-		{name: "persisted parent in batch needs no root request", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 10, persisted: true, missingParent: true},
-		{name: "persisted parent outside forkchoice is fetched", blocks: []blocks.BlockWithROSidecars{{Block: child}}, head: 10, persisted: true, notInForkchoice: true, rootRequests: 1, wantPayloads: 1},
-		{name: "persisted parent preserves child payload", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 10,
-			persisted: true, missingParent: true, rangePayload: childEnvelope, wantPayloads: 1},
-		{name: "persisted parent skips imported ancestors", blocks: []blocks.BlockWithROSidecars{{Block: older}, {Block: parent}, {Block: child}}, head: 10,
-			persisted: true, missingParent: true, rangePayload: makeEnvelopeForRoot(t, 8, older.Root(), parentHash, [32]byte{3})},
+		{name: "parent with reusable payload needs no root request", blocks: []blocks.BlockWithROSidecars{{Block: child}}, head: 10, parentEnvelopeStored: true, missingParent: true},
+		{name: "parent with reusable payload in batch needs no root request", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 10, parentEnvelopeStored: true, missingParent: true},
+		{name: "stored parent envelope without FULL node is fetched", blocks: []blocks.BlockWithROSidecars{{Block: child}}, head: 10, parentEnvelopeStored: true, parentMissingFullNode: true, rootRequests: 1, wantPayloads: 1},
+		{name: "parent with reusable payload preserves child payload", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 10,
+			parentEnvelopeStored: true, missingParent: true, rangePayload: childEnvelope, wantPayloads: 1},
+		{name: "parent with reusable payload skips imported ancestors", blocks: []blocks.BlockWithROSidecars{{Block: older}, {Block: parent}, {Block: child}}, head: 10,
+			parentEnvelopeStored: true, missingParent: true, rangePayload: makeEnvelopeForRoot(t, 8, older.Root(), parentHash, [32]byte{3})},
 		{name: "missing full origin rejects batch", blocks: []blocks.BlockWithROSidecars{{Block: child}}, head: 10, missingParent: true, rootRequests: 1},
 		{name: "known origin in batch", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 10, rootRequests: 1, wantPayloads: 1},
 		{name: "unknown fork below head needs parent", blocks: []blocks.BlockWithROSidecars{{Block: child}}, head: 16, unknownFork: true, rootRequests: 1, wantPayloads: 1},
@@ -379,8 +379,8 @@ func TestFetchPayloads_RequiredParent(t *testing.T) {
 			rangePayload: makeEnvelopeForRoot(t, 10, parent.Root(), [32]byte{99}, parentHash), wantPayloads: 1, wantErr: "parent payload envelope does not match block"},
 		{name: "wrong range parent slot rejects batch", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 10,
 			rangePayload: makeEnvelopeForRoot(t, 9, parent.Root(), blockHash, parentHash), wantPayloads: 1, wantErr: "parent payload envelope does not match block"},
-		{name: "persisted parent still rejects wrong range hash", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 10,
-			persisted: true, rangePayload: makeEnvelopeForRoot(t, 10, parent.Root(), [32]byte{99}, parentHash), wantPayloads: 1, wantErr: "parent payload envelope does not match block"},
+		{name: "parent with reusable payload still rejects wrong range hash", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 10,
+			parentEnvelopeStored: true, rangePayload: makeEnvelopeForRoot(t, 10, parent.Root(), [32]byte{99}, parentHash), wantPayloads: 1, wantErr: "parent payload envelope does not match block"},
 		{name: "recovered parent precedes child payload", blocks: []blocks.BlockWithROSidecars{{Block: child}}, head: 10, rangePayload: childEnvelope, rootRequests: 1, wantPayloads: 2},
 		{name: "all known needs no parent", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 14},
 		{name: "all known retains new head payload", blocks: []blocks.BlockWithROSidecars{{Block: parent}, {Block: child}}, head: 14, rangePayload: childEnvelope, wantPayloads: 1},
@@ -389,10 +389,10 @@ func TestFetchPayloads_RequiredParent(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			f, client := newPayloadTestFetcher(t, tt.head)
 			require.NoError(t, f.db.(db.Database).SaveBlock(t.Context(), parent.ReadOnlySignedBeaconBlock))
-			if tt.persisted {
+			if tt.parentEnvelopeStored {
 				require.NoError(t, f.db.(db.Database).SaveExecutionPayloadEnvelope(t.Context(), envelope.Proto().(*ethpb.SignedExecutionPayloadEnvelope)))
 			}
-			if tt.persisted && !tt.notInForkchoice {
+			if tt.parentEnvelopeStored && !tt.parentMissingFullNode {
 				f.chain.(*mock.ChainService).ForkchoiceRoots = map[[32]byte]bool{parent.Root(): true}
 			}
 			if !tt.unknownFork {
@@ -430,17 +430,17 @@ func TestFetchPayloads_RequiredParent(t *testing.T) {
 			if tt.wantErr != "" {
 				require.ErrorContains(t, tt.wantErr, r.err)
 				require.Equal(t, true, errors.Is(r.err, prysmsync.ErrInvalidFetchedData))
-			} else if tt.missingParent && !tt.persisted {
+			} else if tt.missingParent && !tt.parentEnvelopeStored {
 				require.ErrorContains(t, "missing payload envelope for FULL parent", r.err)
 			} else {
 				require.NoError(t, r.err)
 			}
-			if tt.notInForkchoice {
-				require.Equal(t, (*blocks.ROBlock)(nil), r.persistedParent)
+			if tt.parentMissingFullNode {
+				require.Equal(t, (*blocks.ROBlock)(nil), r.parentWithReusablePayload)
 			}
-			if tt.persisted && !tt.notInForkchoice && tt.wantErr == "" {
-				require.NotNil(t, r.persistedParent)
-				require.Equal(t, parent.Root(), r.persistedParent.Root())
+			if tt.parentEnvelopeStored && !tt.parentMissingFullNode && tt.wantErr == "" {
+				require.NotNil(t, r.parentWithReusablePayload)
+				require.Equal(t, parent.Root(), r.parentWithReusablePayload.Root())
 				require.Equal(t, server.PeerID(), r.payloadsFrom)
 				downscores, err := client.Peers().Scorers().BadResponsesScorer().Count(server.PeerID())
 				require.NoError(t, err)
