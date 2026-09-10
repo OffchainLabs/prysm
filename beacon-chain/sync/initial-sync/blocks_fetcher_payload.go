@@ -131,6 +131,7 @@ func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse)
 // `peers` is a list of peers to use for the request payloads if `pid` fails.
 // `r.bwb` must be sorted by slot.
 func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestResponse, peers []peer.ID) {
+	r.persistedParent = nil
 	if len(r.bwb) == 0 {
 		r.payloadsFrom = ""
 		return
@@ -192,13 +193,16 @@ func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestRespon
 	f.validatePayloadsForImport(r, first)
 }
 
-// validatePayloadsForImport retains the known anchor without replaying its imported ancestors.
+// validatePayloadsForImport retains the known anchor only when its envelope is still required.
 func (f *blocksFetcher) validatePayloadsForImport(r *fetchRequestResponse, first int) {
 	if first == 0 {
 		f.validatePayloadBlockConsistency(r)
 		return
 	}
 	anchor := first - 1
+	if r.persistedParent != nil {
+		anchor = first
+	}
 	relevant := *r
 	relevant.bwb = r.bwb[anchor:]
 	relevant.envelopes = nil
@@ -265,6 +269,10 @@ func (f *blocksFetcher) ensureParentPayload(ctx context.Context, r *fetchRequest
 		if message.Slot() <= parent.Block().Slot() {
 			insertAt = i + 1
 		}
+	}
+	if f.db.HasExecutionPayloadEnvelope(ctx, parentRoot) {
+		r.persistedParent = &parent
+		return nil
 	}
 	envelope, pid, err := f.fetchParentPayloadFromPeers(ctx, parent, child, r.payloadsFrom, peers)
 	if err != nil {

@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -334,7 +335,7 @@ func TestGetBatchPrestate(t *testing.T) {
 	}{
 		{name: "pre-Gloas parent", version: version.Fulu, slot: 31},
 		{name: "Gloas genesis", version: version.Gloas, slot: 0},
-		{name: "Gloas upgrade with synthetic parent bid", version: version.Gloas, slot: 32},
+		{name: "Gloas upgrade with nonzero synthetic parent bid slot", version: version.Gloas, slot: 32},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			service, tr := minimalTestService(t)
@@ -342,14 +343,37 @@ func TestGetBatchPrestate(t *testing.T) {
 			parentState, err := util.NewBeaconStateFulu()
 			require.NoError(t, err)
 			if test.version == version.Gloas {
-				parentState, err = util.NewBeaconStateGloas()
-				require.NoError(t, err)
+				if test.slot == 0 {
+					parentState, err = util.NewBeaconStateGloas()
+					require.NoError(t, err)
+				} else {
+					parentState, _ = util.DeterministicGenesisStateFulu(t, 64)
+					require.NoError(t, parentState.SetSlot(test.slot))
+					header := parentState.LatestBlockHeader()
+					header.Slot = test.slot - 1
+					require.NoError(t, parentState.SetLatestBlockHeader(header))
+					payload, err := consensusblocks.WrappedExecutionPayloadHeaderDeneb(&enginev1.ExecutionPayloadHeaderDeneb{
+						BlockHash:  bytesutil.PadTo([]byte{0x01}, 32),
+						ParentHash: make([]byte, 32),
+						PrevRandao: make([]byte, 32),
+					})
+					require.NoError(t, err)
+					require.NoError(t, parentState.SetLatestExecutionPayloadHeader(payload))
+					parentState, err = gloas.UpgradeToGloas(parentState)
+					require.NoError(t, err)
+				}
 			}
 			require.NoError(t, parentState.SetSlot(test.slot))
 			require.NoError(t, tr.db.SaveState(tr.ctx, parentState, parentRoot))
 			child := util.NewBeaconBlockGloas()
 			child.Block.Slot = parentState.Slot() + 1
 			child.Block.ParentRoot = parentRoot[:]
+			if test.version == version.Gloas {
+				bid, err := parentState.LatestExecutionPayloadBid()
+				require.NoError(t, err)
+				hash := bid.BlockHash()
+				child.Block.Body.SignedExecutionPayloadBid.Message.ParentBlockHash = hash[:]
+			}
 			block, err := consensusblocks.NewSignedBeaconBlock(child)
 			require.NoError(t, err)
 			roChild, err := consensusblocks.NewROBlock(block)
