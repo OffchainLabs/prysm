@@ -288,11 +288,16 @@ func (f *blocksFetcher) ensureParentPayload(ctx context.Context, r *fetchRequest
 
 func (f *blocksFetcher) fetchParentPayloadFromPeers(ctx context.Context, parent, child blocks.ROBlock, pid peer.ID, peers []peer.ID) (interfaces.ROSignedExecutionPayloadEnvelope, peer.ID, error) {
 	req := p2ptypes.ExecutionPayloadEnvelopesByRootReq{parent.Root()}
+	rangeReq := &p2ppb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: parent.Block().Slot(), Count: 1}
 	for _, p := range dedupPeers(append([]peer.ID{pid}, peers...)) {
 		if err := ctx.Err(); err != nil {
 			return nil, "", err
 		}
 		envelopes, err := prysmsync.SendExecutionPayloadEnvelopesByRootRequest(ctx, f.clock, f.p2p, p, f.ctxMap, &req)
+		if err != nil || len(envelopes) != 1 {
+			// Peers may omit envelopes older than their finalized epoch from ByRoot responses.
+			envelopes, err = prysmsync.SendExecutionPayloadEnvelopesByRangeRequest(ctx, f.clock, f.p2p, p, f.ctxMap, rangeReq)
+		}
 		if err != nil || len(envelopes) != 1 {
 			continue
 		}
