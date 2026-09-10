@@ -127,7 +127,7 @@ func TestColumnFetchBlocks(t *testing.T) {
 		require.Equal(t, true, rootSet(got)[roFulu.Root()])
 	})
 
-	t.Run("persisted parent still needs columns without a fetched envelope", func(t *testing.T) {
+	t.Run("parent with reusable payload still needs columns without a fetched envelope", func(t *testing.T) {
 		bwb := []blocks.BlockWithROSidecars{{Block: b1}}
 		got, err := columnFetchBlocks(bwb, nil, currentEpoch, noResolveBlock, &b0)
 		require.NoError(t, err)
@@ -135,7 +135,7 @@ func TestColumnFetchBlocks(t *testing.T) {
 		require.Equal(t, b0.Root(), got[0].Root())
 	})
 
-	t.Run("persisted parent outside DA period needs no columns", func(t *testing.T) {
+	t.Run("parent with reusable payload outside DA period needs no columns", func(t *testing.T) {
 		currentEpoch := params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest + 1
 		got, err := columnFetchBlocks(nil, nil, currentEpoch, noResolveBlock, &b0)
 		require.NoError(t, err)
