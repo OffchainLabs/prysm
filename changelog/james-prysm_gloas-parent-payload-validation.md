@@ -1,3 +1,4 @@
-### Changed
+### Fixed
 
-- During initial sync, verify a Gloas block's required parent execution payload envelope and its data columns before importing the block, and recover missing parent envelopes by root with a historical range fallback when they are not stored locally.
+- Verify the parent execution payload envelope of the first Gloas block in an initial-sync batch, and the availability of that payload's data columns, before importing the batch.
+- Recover a parent execution payload envelope that is missing from a range response from peers by root, with a by-range fallback, instead of failing the batch.
