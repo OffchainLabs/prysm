@@ -824,7 +824,7 @@ func unexpectedStatusErr(response *http.Response, expected []int) error {
 		sentinel = ErrBadGateway
 	default:
 		log.WithError(ErrNotOK).Debug(msg)
-		return errors.Wrap(ErrNotOK, fmt.Sprintf("unsupported error code: %d", response.StatusCode))
+		return errors.Wrap(ErrNotOK, fmt.Sprintf("unexpected status %d, expected %v", response.StatusCode, expected))
 	}
 	log.WithError(sentinel).Debug(msg)
 	return &httpError{status: response.StatusCode, wrapped: errors.Wrap(sentinel, errorMessageOrBody(bodyBytes))}
