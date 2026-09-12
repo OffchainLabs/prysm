@@ -301,6 +301,7 @@ func (s *Service) GetExecutionPayloadBid(ctx context.Context, slot primitives.Sl
 				return
 			}
 			if bid == nil {
+				log.WithField("builder", logs.MaskCredentialsLogging(url)).WithField("slot", slot).Debug("Builder returned no bid")
 				return
 			}
 			mu.Lock()
