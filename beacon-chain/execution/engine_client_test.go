@@ -2260,7 +2260,7 @@ func TestReconstructBlindedBlockBatch(t *testing.T) {
 
 			t.Fatal("http request should not be made")
 		})
-		results, err := reconstructBlindedBlockBatch(ctx, cli, []interfaces.ReadOnlySignedBeaconBlock{})
+		results, err := reconstructBlindedBlockBatch(ctx, &jsonTransport{rpc: cli}, []interfaces.ReadOnlySignedBeaconBlock{})
 		require.NoError(t, err)
 		require.Equal(t, 0, len(results))
 	})
@@ -2308,13 +2308,10 @@ func Test_ExchangeCapabilities(t *testing.T) {
 		service := &Service{}
 		service.rpcClient = rpcClient
 
-		results, err := service.ExchangeCapabilities(ctx)
-		require.NoError(t, err)
-		require.Equal(t, 0, len(results))
-
-		for _, item := range results {
-			require.NotNil(t, item)
-		}
+		require.NoError(t, service.ExchangeCapabilities(ctx))
+		j, ok := service.engine().(*jsonTransport)
+		require.Equal(t, true, ok)
+		require.Equal(t, 0, len(j.caps.capabilities))
 		assert.LogsContain(t, logHook, "Connected execution client does not support some requested engine methods")
 	})
 	t.Run("list of items", func(t *testing.T) {
@@ -2340,13 +2337,11 @@ func Test_ExchangeCapabilities(t *testing.T) {
 		service := &Service{}
 		service.rpcClient = rpcClient
 
-		results, err := service.ExchangeCapabilities(ctx)
-		require.NoError(t, err)
-		require.Equal(t, 3, len(results))
-
-		for _, item := range results {
-			require.NotNil(t, item)
-		}
+		require.NoError(t, service.ExchangeCapabilities(ctx))
+		eng := service.engine()
+		require.Equal(t, true, eng.Supports("A"))
+		require.Equal(t, true, eng.Supports("B"))
+		require.Equal(t, true, eng.Supports("C"))
 	})
 }
 
@@ -2392,9 +2387,9 @@ func Test_ExchangeCapabilities_StableAcrossCalls(t *testing.T) {
 	service := &Service{}
 	service.rpcClient = rpcClient
 
-	_, err = service.ExchangeCapabilities(ctx)
+	err = service.ExchangeCapabilities(ctx)
 	require.NoError(t, err)
-	_, err = service.ExchangeCapabilities(ctx)
+	err = service.ExchangeCapabilities(ctx)
 	require.NoError(t, err)
 
 	require.Equal(t, 2, len(requested))
@@ -2420,7 +2415,7 @@ func mockSummary(t *testing.T, exists []bool) func(uint64) bool {
 }
 
 func TestReconstructBlobSidecars(t *testing.T) {
-	client := &Service{capabilityCache: &capabilityCache{}}
+	client := &Service{engineTransport: &jsonTransport{caps: &capabilityCache{}}}
 	b := util.NewBeaconBlockDeneb()
 	kzgCommitments := createRandomKzgCommitments(t, 6)
 
@@ -2445,7 +2440,7 @@ func TestReconstructBlobSidecars(t *testing.T) {
 		require.Equal(t, 0, len(verifiedBlobs))
 	})
 
-	client.capabilityCache = &capabilityCache{capabilities: map[string]any{GetBlobsV1: nil}}
+	client.engineTransport = &jsonTransport{caps: &capabilityCache{capabilities: map[string]any{GetBlobsV1: nil}}}
 
 	t.Run("recovered 6 missing blobs", func(t *testing.T) {
 		srv := createBlobServer(t, 6)
@@ -2507,7 +2502,7 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 	cfg.FuluForkEpoch = 4
 	params.OverrideBeaconConfig(cfg)
 
-	client := &Service{capabilityCache: &capabilityCache{}}
+	client := &Service{engineTransport: &jsonTransport{caps: &capabilityCache{}}}
 	b := util.NewBeaconBlockFulu()
 	b.Block.Slot = 4 * params.BeaconConfig().SlotsPerEpoch
 	kzgCommitments := createRandomKzgCommitments(t, 6)
@@ -2589,7 +2584,7 @@ func TestConstructPartialDataColumnSidecarsFromHasBlobs(t *testing.T) {
 
 	t.Run("HasBlobs capability absent returns (nil, false, nil)", func(t *testing.T) {
 		client := &Service{
-			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil}},
+			engineTransport:         &jsonTransport{caps: &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil}}},
 			partialColumnsSupported: true,
 		}
 		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
@@ -2606,7 +2601,7 @@ func TestConstructPartialDataColumnSidecarsFromHasBlobs(t *testing.T) {
 		})
 		client := &Service{
 			rpcClient:               cli,
-			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}},
+			engineTransport:         &jsonTransport{rpc: cli, caps: &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}}},
 			partialColumnsSupported: true,
 		}
 		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
@@ -2623,7 +2618,7 @@ func TestConstructPartialDataColumnSidecarsFromHasBlobs(t *testing.T) {
 		})
 		client := &Service{
 			rpcClient:               cli,
-			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}},
+			engineTransport:         &jsonTransport{rpc: cli, caps: &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}}},
 			partialColumnsSupported: true,
 		}
 		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
@@ -2648,7 +2643,7 @@ func TestConstructPartialDataColumnSidecarsFromHasBlobs(t *testing.T) {
 		})
 		client := &Service{
 			rpcClient:               cli,
-			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}},
+			engineTransport:         &jsonTransport{rpc: cli, caps: &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}}},
 			partialColumnsSupported: true,
 		}
 		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
@@ -2672,7 +2667,7 @@ func TestConstructPartialDataColumnSidecarsFromHasBlobs(t *testing.T) {
 		params.OverrideBeaconConfig(gloasCfg)
 
 		client := &Service{
-			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}},
+			engineTransport:         &jsonTransport{caps: &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}}},
 			partialColumnsSupported: true,
 		}
 		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
@@ -2889,7 +2884,7 @@ func setupRpcClient(t *testing.T, url string, client *Service) (*rpc.Client, *Se
 	require.NoError(t, err)
 
 	client.rpcClient = rpcClient
-	client.capabilityCache = &capabilityCache{capabilities: map[string]any{GetBlobsV1: nil}}
+	client.engineTransport = &jsonTransport{rpc: rpcClient, caps: &capabilityCache{capabilities: map[string]any{GetBlobsV1: nil}}}
 	client.blobVerifier = testNewBlobVerifier()
 
 	return rpcClient, client
@@ -2897,13 +2892,13 @@ func setupRpcClient(t *testing.T, url string, client *Service) (*rpc.Client, *Se
 
 func setupRpcClientV2(t *testing.T, url string, client *Service) (*rpc.Client, *Service) {
 	rpcClient, client := setupRpcClient(t, url, client)
-	client.capabilityCache = &capabilityCache{capabilities: map[string]any{GetBlobsV2: nil}}
+	client.engineTransport = &jsonTransport{rpc: rpcClient, caps: &capabilityCache{capabilities: map[string]any{GetBlobsV2: nil}}}
 	return rpcClient, client
 }
 
 func setupRpcClientV3(t *testing.T, url string, client *Service) (*rpc.Client, *Service) {
 	rpcClient, client := setupRpcClient(t, url, client)
-	client.capabilityCache = &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil}}
+	client.engineTransport = &jsonTransport{rpc: rpcClient, caps: &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil}}}
 	client.partialColumnsSupported = true
 	return rpcClient, client
 }
@@ -2983,7 +2978,9 @@ func TestGloasPayloadFromBlockAndBody(t *testing.T) {
 		bodyBal := hexutil.Bytes{0x0a, 0x0b}
 		txs := []hexutil.Bytes{{0x01}}
 		body := &pb.ExecutionPayloadBodyV2{Transactions: txs, BlockAccessList: &bodyBal}
-		payload, err := gloasPayloadFromBlockAndBody(hash, newBlock([]byte{0x01}), body)
+		ibody, err := blocks.WrappedExecutionPayloadBodyV2JSON(body)
+		require.NoError(t, err)
+		payload, err := gloasPayloadFromBlockAndBody(hash, newBlock([]byte{0x01}), ibody)
 		require.NoError(t, err)
 		require.DeepEqual(t, []byte(bodyBal), payload.BlockAccessList)
 		require.Equal(t, 1, len(payload.Transactions))
@@ -2994,12 +2991,16 @@ func TestGloasPayloadFromBlockAndBody(t *testing.T) {
 	})
 	t.Run("nil BAL in both sources errors", func(t *testing.T) {
 		body := &pb.ExecutionPayloadBodyV2{}
-		_, err := gloasPayloadFromBlockAndBody(hash, newBlock(nil), body)
+		ibody, err := blocks.WrappedExecutionPayloadBodyV2JSON(body)
+		require.NoError(t, err)
+		_, err = gloasPayloadFromBlockAndBody(hash, newBlock(nil), ibody)
 		require.ErrorContains(t, "block access list unavailable", err)
 	})
 	t.Run("block BAL used when body BAL is nil", func(t *testing.T) {
 		body := &pb.ExecutionPayloadBodyV2{}
-		payload, err := gloasPayloadFromBlockAndBody(hash, newBlock([]byte{0x01, 0x02}), body)
+		ibody, err := blocks.WrappedExecutionPayloadBodyV2JSON(body)
+		require.NoError(t, err)
+		payload, err := gloasPayloadFromBlockAndBody(hash, newBlock([]byte{0x01, 0x02}), ibody)
 		require.NoError(t, err)
 		require.DeepEqual(t, []byte{0x01, 0x02}, payload.BlockAccessList)
 	})
