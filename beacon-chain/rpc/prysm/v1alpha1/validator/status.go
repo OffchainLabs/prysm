@@ -119,12 +119,16 @@ func (vs *Server) CheckDoppelGanger(ctx context.Context, req *ethpb.DoppelGanger
 		return nil, status.Error(codes.Internal, "Could not get head state")
 	}
 
+	headSlot := headState.Slot()
+	currEpoch := slots.ToEpoch(headSlot)
+
 	// Return early if we are in phase0.
 	if headState.Version() == version.Phase0 {
 		log.Info("Skipping doppelganger check for Phase 0")
 
 		resp := &ethpb.DoppelGangerResponse{
-			Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{},
+			Responses: make([]*ethpb.DoppelGangerResponse_ValidatorResponse, 0, len(req.ValidatorRequests)),
+			HeadEpoch: currEpoch,
 		}
 		for _, v := range req.ValidatorRequests {
 			resp.Responses = append(resp.Responses,
@@ -135,9 +139,6 @@ func (vs *Server) CheckDoppelGanger(ctx context.Context, req *ethpb.DoppelGanger
 		}
 		return resp, nil
 	}
-
-	headSlot := headState.Slot()
-	currEpoch := slots.ToEpoch(headSlot)
 
 	// If all provided keys are recent we skip this check
 	// as we are unable to effectively determine if a doppelganger
@@ -178,6 +179,7 @@ func (vs *Server) CheckDoppelGanger(ctx context.Context, req *ethpb.DoppelGanger
 
 	resp = &ethpb.DoppelGangerResponse{
 		Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{},
+		HeadEpoch: currEpoch,
 	}
 	for _, v := range req.ValidatorRequests {
 		// If the validator's last recorded epoch was less than 1 epoch
@@ -360,6 +362,7 @@ func checkValidatorsAreRecent(headEpoch primitives.Epoch, req *ethpb.DoppelGange
 	validatorsAreRecent := true
 	resp := &ethpb.DoppelGangerResponse{
 		Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{},
+		HeadEpoch: headEpoch,
 	}
 	for _, v := range req.ValidatorRequests {
 		// Due to how balances are reflected for individual

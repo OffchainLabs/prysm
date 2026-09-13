@@ -58,11 +58,11 @@ func waitForDoppelCheck(t *testing.T, v *validator) {
 	}, 2*time.Second, 10*time.Millisecond, "doppelganger check did not finish")
 }
 
-// mockSyncedChainHead points the validator at a chain whose head is at headEpoch,
-// so clearElapsed sees an up-to-date beacon node.
 func mockSyncedChainHead(ctrl *gomock.Controller, v *validator, headEpoch primitives.Epoch) {
 	chain := validatormock.NewMockChainClient(ctrl)
-	chain.EXPECT().ChainHead(gomock.Any(), gomock.Any()).Return(&ethpb.ChainHead{HeadEpoch: headEpoch}, nil).AnyTimes()
+	chain.EXPECT().ChainHead(gomock.Any(), gomock.Any()).Return(&ethpb.ChainHead{
+		HeadEpoch: headEpoch,
+	}, nil)
 	v.chainClient = chain
 }
 
@@ -195,13 +195,12 @@ func TestCheckDoppelGangerMidEpoch(t *testing.T) {
 		defer ctrl.Finish()
 		client := validatormock.NewMockValidatorClient(ctrl)
 		v := pendingDoppelValidator(t, client, 1, keyA, keyB)
-		mockSyncedChainHead(ctrl, v, 4)
-
 		client.EXPECT().CheckDoppelGanger(gomock.Any(), gomock.Any()).Return(&ethpb.DoppelGangerResponse{
 			Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{
 				{PublicKey: keyA[:], DuplicateExists: false},
 				{PublicKey: keyB[:], DuplicateExists: true},
 			},
+			HeadEpoch: 4,
 		}, nil)
 
 		v.CheckDoppelGangerMidEpoch(t.Context(), slots.CurrentSlot(v.genesisTime))
@@ -213,6 +212,49 @@ func TestCheckDoppelGangerMidEpoch(t *testing.T) {
 		assert.Equal(t, 0, len(v.doppelGanger.pollDue(100)))
 	})
 
+	t.Run("clearing uses only the response head epoch", func(t *testing.T) {
+		enableDoppelGanger(t)
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		client := validatormock.NewMockValidatorClient(ctrl)
+		v := pendingDoppelValidator(t, client, 1, keyA)
+
+		client.EXPECT().CheckDoppelGanger(gomock.Any(), gomock.Any()).Return(&ethpb.DoppelGangerResponse{
+			Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{
+				{PublicKey: keyA[:], DuplicateExists: false},
+			},
+			HeadEpoch: 7,
+		}, nil)
+
+		v.CheckDoppelGangerMidEpoch(t.Context(), slots.CurrentSlot(v.genesisTime))
+		waitForDoppelCheck(t, v)
+
+		// Key added at epoch 1 with a 2-epoch wait clears when head epoch 7 is returned.
+		assert.Equal(t, false, v.isDoppelGangerPending(keyA))
+	})
+
+	t.Run("zero head epoch falls back to ChainHead", func(t *testing.T) {
+		enableDoppelGanger(t)
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		client := validatormock.NewMockValidatorClient(ctrl)
+		v := pendingDoppelValidator(t, client, 1, keyA)
+		mockSyncedChainHead(ctrl, v, 7)
+
+		client.EXPECT().CheckDoppelGanger(gomock.Any(), gomock.Any()).Return(&ethpb.DoppelGangerResponse{
+			Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{
+				{PublicKey: keyA[:], DuplicateExists: false},
+			},
+		}, nil)
+
+		v.CheckDoppelGangerMidEpoch(t.Context(), slots.CurrentSlot(v.genesisTime))
+		waitForDoppelCheck(t, v)
+
+		// HeadEpoch defaults to 0 (old BN without the field): falls back to ChainHead,
+		// which returns head epoch 7 and clears the quarantine.
+		assert.Equal(t, false, v.isDoppelGangerPending(keyA))
+	})
+
 	t.Run("early poll does not clear before the quarantine elapses", func(t *testing.T) {
 		enableDoppelGanger(t)
 		ctrl := gomock.NewController(t)
@@ -220,12 +262,11 @@ func TestCheckDoppelGangerMidEpoch(t *testing.T) {
 		client := validatormock.NewMockValidatorClient(ctrl)
 		// Added this epoch: polled immediately, but a clean result must NOT clear.
 		v := pendingDoppelValidator(t, client, 4, keyA)
-		mockSyncedChainHead(ctrl, v, 4)
-
 		client.EXPECT().CheckDoppelGanger(gomock.Any(), gomock.Any()).Return(&ethpb.DoppelGangerResponse{
 			Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{
 				{PublicKey: keyA[:], DuplicateExists: false},
 			},
+			HeadEpoch: 4,
 		}, nil)
 
 		slot := slots.CurrentSlot(v.genesisTime)
@@ -265,14 +306,13 @@ func TestCheckDoppelGangerMidEpoch(t *testing.T) {
 		defer ctrl.Finish()
 		client := validatormock.NewMockValidatorClient(ctrl)
 		v := pendingDoppelValidator(t, client, 1, keyA)
-		mockSyncedChainHead(ctrl, v, 4)
-
 		// First check fails: the poll epoch must NOT be consumed, so the very next
 		// slot retries and the second (successful) check clears the key.
 		gomock.InOrder(
 			client.EXPECT().CheckDoppelGanger(gomock.Any(), gomock.Any()).Return(nil, errors.New("bn down")),
 			client.EXPECT().CheckDoppelGanger(gomock.Any(), gomock.Any()).Return(&ethpb.DoppelGangerResponse{
 				Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{{PublicKey: keyA[:], DuplicateExists: false}},
+				HeadEpoch: 4,
 			}, nil),
 		)
 
@@ -292,11 +332,10 @@ func TestCheckDoppelGangerMidEpoch(t *testing.T) {
 		defer ctrl.Finish()
 		client := validatormock.NewMockValidatorClient(ctrl)
 		v := pendingDoppelValidator(t, client, 1, keyA, keyB)
-		mockSyncedChainHead(ctrl, v, 4)
-
 		// Response omits keyB entirely: only the explicitly-clean keyA may clear.
 		client.EXPECT().CheckDoppelGanger(gomock.Any(), gomock.Any()).Return(&ethpb.DoppelGangerResponse{
 			Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{{PublicKey: keyA[:], DuplicateExists: false}},
+			HeadEpoch: 4,
 		}, nil)
 
 		v.CheckDoppelGangerMidEpoch(t.Context(), slots.CurrentSlot(v.genesisTime))
@@ -341,11 +380,11 @@ func TestCheckDoppelGangerMidEpoch(t *testing.T) {
 		defer ctrl.Finish()
 		client := validatormock.NewMockValidatorClient(ctrl)
 		v := pendingDoppelValidator(t, client, 1, keyA)
-		// Head stalled inside the wait: its clean answers are unevaluated defaults.
-		mockSyncedChainHead(ctrl, v, 3)
-
+		// Head stalled inside the wait: the response head epoch is within the quarantine
+		// window, so the clean answer must not end the quarantine.
 		client.EXPECT().CheckDoppelGanger(gomock.Any(), gomock.Any()).Return(&ethpb.DoppelGangerResponse{
 			Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{{PublicKey: keyA[:], DuplicateExists: false}},
+			HeadEpoch: 3,
 		}, nil)
 
 		v.CheckDoppelGangerMidEpoch(t.Context(), slots.CurrentSlot(v.genesisTime))
@@ -395,7 +434,6 @@ func TestCheckDoppelGangerMidEpoch(t *testing.T) {
 				defer ctrl.Finish()
 				client := validatormock.NewMockValidatorClient(ctrl)
 				v := pendingDoppelValidator(t, client, tc.addedEpoch, keyA)
-				mockSyncedChainHead(ctrl, v, 4)
 				att := &ethpb.IndexedAttestation{Data: &ethpb.AttestationData{
 					BeaconBlockRoot: make([]byte, 32),
 					Source:          &ethpb.Checkpoint{Epoch: tc.recordEpoch - 1, Root: make([]byte, 32)},
@@ -409,7 +447,7 @@ func TestCheckDoppelGangerMidEpoch(t *testing.T) {
 						assert.Equal(t, tc.addedEpoch, req.ValidatorRequests[0].Epoch, "request must carry the import epoch")
 						return &ethpb.DoppelGangerResponse{Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{
 							{PublicKey: keyA[:], DuplicateExists: false},
-						}}, nil
+						}, HeadEpoch: 4}, nil
 					})
 
 				v.CheckDoppelGangerMidEpoch(t.Context(), slots.CurrentSlot(v.genesisTime))
@@ -427,7 +465,6 @@ func TestCheckDoppelGangerMidEpoch(t *testing.T) {
 		// keyA was imported at epoch 1 and has an empty slashing-protection DB,
 		// as a key migrated from another client would.
 		v := pendingDoppelValidator(t, client, 1, keyA)
-		mockSyncedChainHead(ctrl, v, 4)
 
 		// Requesting epoch 0 would have the node scan epochs before the import,
 		// where the previous client's last attestations register as a duplicate.
@@ -437,7 +474,7 @@ func TestCheckDoppelGangerMidEpoch(t *testing.T) {
 				assert.Equal(t, primitives.Epoch(1), req.ValidatorRequests[0].Epoch, "request must carry the import epoch")
 				return &ethpb.DoppelGangerResponse{Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{
 					{PublicKey: keyA[:], DuplicateExists: false},
-				}}, nil
+				}, HeadEpoch: 4}, nil
 			})
 
 		v.CheckDoppelGangerMidEpoch(t.Context(), slots.CurrentSlot(v.genesisTime))
