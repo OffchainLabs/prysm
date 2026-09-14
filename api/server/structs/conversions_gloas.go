@@ -55,14 +55,9 @@ func BuildersFromConsensus(builders []*ethpb.Builder) []*Builder {
 }
 
 func BuilderFromConsensus(b *ethpb.Builder) *Builder {
-	// The builder version is a Uint8 in the beacon API spec, serialized as a decimal string.
-	var builderVersion uint8
-	if len(b.Version) > 0 {
-		builderVersion = b.Version[0]
-	}
 	return &Builder{
 		Pubkey:            hexutil.Encode(b.Pubkey),
-		Version:           strconv.FormatUint(uint64(builderVersion), 10),
+		Version:           strconv.FormatUint(uint64(b.Version[0]), 10),
 		ExecutionAddress:  hexutil.Encode(b.ExecutionAddress),
 		Balance:           fmt.Sprintf("%d", b.Balance),
 		DepositEpoch:      fmt.Sprintf("%d", b.DepositEpoch),
