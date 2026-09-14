@@ -562,12 +562,12 @@ func TestComputeCellsAndProofsFromStructured(t *testing.T) {
 
 			// Compare cells
 			for j, expectedCell := range expectedCellsPerBlob[i] {
-				require.Equal(t, expectedCell, result.CellsPerBlob[i][j])
+				require.Equal(t, expectedCell, *result.CellsPerBlob[i][j])
 			}
 
 			// Compare proofs
 			for j, expectedProof := range expectedProofsPerBlob[i] {
-				require.Equal(t, expectedProof, result.ProofsPerBlob[i][j])
+				require.Equal(t, expectedProof, *result.ProofsPerBlob[i][j])
 			}
 		}
 	})

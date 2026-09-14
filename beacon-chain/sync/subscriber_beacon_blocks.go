@@ -268,7 +268,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			}
 
 			// Try to reconstruct data column constructedSidecars from the execution client.
-			constructedSidecars, partialColumns, err := s.cfg.executionReconstructor.ConstructDataColumnSidecars(ctx, source)
+			constructedSidecars, partialColumns, err := s.cfg.executionReconstructor.ConstructDataColumnSidecars(ctx, source, columnIndicesToSample)
 			if err != nil {
 				return nil, errors.Wrap(err, "reconstruct data column sidecars")
 			}
@@ -298,11 +298,6 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 
 			// No sidecars are retrieved from the EL, retry later
 			constructedCount := uint64(len(constructedSidecars))
-
-			// Boundary check: the EL returns either no sidecars or the full set.
-			if constructedCount > 0 && constructedCount != fieldparams.NumberOfColumns {
-				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", constructedCount, fieldparams.NumberOfColumns)
-			}
 
 			// Partial columns are published separately above (for all sampled indices), so do not
 			// re-broadcast them here.

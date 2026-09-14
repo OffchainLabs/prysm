@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -17,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
@@ -47,6 +49,7 @@ var (
 		GetBlobsV2,
 		GetBlobsV3,
 		HasBlobs,
+		GetBlobsV4,
 	}
 
 	gloasEngineEndpoints = []string{
@@ -110,6 +113,8 @@ const (
 	GetBlobsV3 = "engine_getBlobsV3"
 	// HasBlobs request string for JSON-RPC.
 	HasBlobs = "engine_hasBlobs"
+	// GetBlobsV4 request string for JSON-RPC.
+	GetBlobsV4 = "engine_getBlobsV4"
 	// GetClientVersionV1 is the JSON-RPC method that identifies the execution client.
 	GetClientVersionV1 = "engine_getClientVersionV1"
 	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
@@ -200,7 +205,7 @@ type ForkchoiceUpdatedResponse struct {
 
 // ForkchoiceUpdated calls the engine_forkchoiceUpdatedV1 method via JSON-RPC.
 func (s *Service) ForkchoiceUpdated(
-	ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer,
+	ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer, custodyColumns map[uint64]bool,
 ) (*pb.PayloadIDBytes, []byte, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ForkchoiceUpdated")
 	defer span.End()
@@ -250,7 +255,7 @@ func (s *Service) ForkchoiceUpdated(
 		if err != nil {
 			return nil, nil, err
 		}
-		err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethodV4, state, a)
+		err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethodV4, state, a, hexutil.Bytes(custodyColumnsBitmask(custodyColumns)))
 		if err != nil {
 			return nil, nil, handleRPCError(err)
 		}
@@ -482,4 +487,30 @@ func (s *Service) HasBlobs(ctx context.Context, versionedHashes []common.Hash) (
 	}
 	hasBlobsLatency.Observe(float64(time.Since(start).Seconds()))
 	return result, nil
+}
+
+// GetBlobsV4 calls the engine_getBlobsV4 method via JSON-RPC.
+// It fetches blob cells and KZG proofs for the given versioned hashes
+// and a bitarray of the custody columns.
+func (s *Service) GetBlobsV4(ctx context.Context, versionedHashes []common.Hash, indicesBitarray []byte) ([]*pb.BlobCellsAndProofsV1, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsV4")
+	defer span.End()
+
+	if !s.capabilityCache.has(GetBlobsV4) {
+		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV4))
+	}
+
+	result := make([]*pb.BlobCellsAndProofsV1, len(versionedHashes))
+	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV4, versionedHashes, hexutil.Bytes(indicesBitarray))
+	return result, handleRPCError(err)
+}
+
+// custodyColumnsBitmask encodes the custody column set as the 16-byte bitarray
+// expected by engine_forkchoiceUpdatedV4 and engine_getBlobsV4.
+func custodyColumnsBitmask(custodyColumns map[uint64]bool) bitfield.Bitvector128 {
+	mask := bitfield.NewBitvector128()
+	for col := range custodyColumns {
+		mask.SetBitAt(col, true)
+	}
+	return mask
 }
