@@ -7,7 +7,10 @@ go_library(
         "assertoor.go",
         "assertoor_playbook.go",
         "assertoor_types.go",
+        "doppelganger.go",
         "helper.go",
+        "logs.go",
+        "starlark.go",
         "wrapper.go",
     ],
     embedsrcs = [
@@ -29,6 +32,7 @@ go_test(
     name = "go_default_test",
     srcs = [
         "assertoor_playbook_test.go",
+        "doppelganger_test.go",
         "helper_test.go",
     ],
     embed = [":go_default_library"],
