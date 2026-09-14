@@ -65,6 +65,11 @@ var (
 		Usage:  deprecatedUsage,
 		Hidden: true,
 	}
+	deprecatedDisableRegistrationCache = &cli.BoolFlag{
+		Name:   "disable-registration-cache",
+		Usage:  deprecatedUsage,
+		Hidden: true,
+	}
 )
 
 // Deprecated flags for both the beacon node and validator client.
@@ -78,6 +83,7 @@ var deprecatedFlags = []cli.Flag{
 	deprecatedInteropEth1DataVotes,
 	deprecatedInteropWriteSSZStateTransitions,
 	deprecatedTrackEquivocations,
+	deprecatedDisableRegistrationCache,
 }
 
 var upcomingDeprecation = []cli.Flag{
