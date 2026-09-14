@@ -1,0 +1,71 @@
+# Check whether non-exiting genesis validators are active, re-checked each epoch.
+# See voluntary-exits.yaml, withdrawals.yaml, and slashings.yaml for the
+# validators excluded below (exited or slashed).
+
+# Replaces those evaluators from legacy E2E:
+# - ValidatorsAreActive
+
+id: validators-active
+name: "Validators are active"
+timeout: 60m
+config:
+  # Overridden at schedule time by the Go harness (see RegisterPlaybooks).
+  epochsToRun: 15
+  # Excluded: 0-1 exit, 2-3 withdraw, 4-6 slashed.
+  expectedExitValidatorIndices:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+tasks:
+  - name: check_clients_are_healthy
+    title: "Check if at least one client is ready"
+    timeout: 5m
+    config:
+      minClientCount: 1
+
+  # This is due to resolve flakiness when `get_consensus_validators` is called before the first slot.
+  - name: check_consensus_slot_range
+    title: "Wait until the first slot"
+    timeout: 3m
+    config:
+      minSlotNumber: 2
+
+  - name: get_consensus_validators
+    id: all_validators
+    title: "Enumerate all validators"
+    config:
+      validatorNamePattern: ".*"   # required selector; matches everyone
+      outputFormat: "indices"
+      maxResults: 100000           # default is 100 — must exceed genesis count
+
+  - name: run_task_background
+    title: "Assert every validator stays active_ongoing until the target epoch"
+    config:
+      exitOnForegroundSuccess: true
+      onBackgroundComplete: failOrIgnore
+      foregroundTask:
+        name: check_consensus_slot_range
+        title: "Run until the target epoch"
+        configVars:
+          minEpochNumber: "epochsToRun"
+      backgroundTask:
+        name: run_task_matrix
+        title: "Assert every validator stays active_ongoing each epoch"
+        configVars:
+          matrixValues: "| .expectedExitValidatorIndices as $excluded | [.tasks.all_validators.outputs.indices[] | select(. as $idx | ($excluded | index($idx) | not))]"
+        config:
+          runConcurrent: true
+          matrixVar: "validatorIndex"
+          task:
+            name: check_consensus_validator_status
+            title: "Validator ${validatorIndex} active"
+            configVars:
+              validatorIndex: "validatorIndex"
+            config:
+              validatorStatus: ["active_ongoing"]
+              failOnCheckMiss: true
+              continueOnPass: true
