@@ -48,6 +48,7 @@ type Flags struct {
 	EnableBeaconRESTApi                 bool // EnableBeaconRESTApi enables experimental usage of the beacon REST API by the validator when querying a beacon node
 	EnableExperimentalAttestationPool   bool // EnableExperimentalAttestationPool enables an experimental attestation pool design.
 	EnableFastConfirmation              bool // EnableFastConfirmation enables the fast confirmation rule (FCR) for rapid block confirmation.
+	EnableExecutionProofs               bool // EnableExecutionProofs enables EIP-8025 execution proof gossip, verification and storage.
 	DisableDutiesV2                     bool // DisableDutiesV2 sets validator client to use the get Duties endpoint
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
 	EnableStateDiff                     bool // EnableStateDiff enables the experimental state diff feature for the beacon node.
@@ -282,6 +283,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.IsSet(enableFastConfirmation.Name) {
 		logEnabled(enableFastConfirmation)
 		cfg.EnableFastConfirmation = true
+	}
+	if ctx.IsSet(EnableExecutionProofsFlag.Name) {
+		logEnabled(EnableExecutionProofsFlag)
+		cfg.EnableExecutionProofs = true
 	}
 	if ctx.IsSet(forceHeadFlag.Name) {
 		logEnabled(forceHeadFlag)

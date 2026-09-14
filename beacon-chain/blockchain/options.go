@@ -97,6 +97,14 @@ func WithProposerPreferencesCache(c *cache.ProposerPreferencesCache) Option {
 	}
 }
 
+// WithExecutionProofCache sets the cache of EIP-8025 per-block proof state.
+func WithExecutionProofCache(c *cache.ExecutionProofCache) Option {
+	return func(s *Service) error {
+		s.cfg.ExecutionProofCache = c
+		return nil
+	}
+}
+
 // WithBuilderCircuitBreaker sets the tracker of builders that failed to reveal their payload.
 func WithBuilderCircuitBreaker(c *cache.BuilderCircuitBreaker) Option {
 	return func(s *Service) error {

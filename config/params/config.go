@@ -162,6 +162,7 @@ type BeaconChainConfig struct {
 	DomainProposerPreferences         [4]byte `yaml:"DOMAIN_PROPOSER_PREFERENCES" spec:"true"`           // DomainProposerPreferences defines the BLS signature domain for proposer preferences.
 	DomainBuilderRequestAuth          [4]byte `yaml:"DOMAIN_BUILDER_REQUEST_AUTH" spec:"true"`           // DomainBuilderRequestAuth defines the BLS signature domain for builder bid request authentication.
 	DomainBuilderDeposit              [4]byte `yaml:"DOMAIN_BUILDER_DEPOSIT" spec:"true"`                // DomainBuilderDeposit defines the BLS signature domain for builder deposit requests (EIP-8282).
+	DomainExecutionProof              [4]byte `yaml:"DOMAIN_EXECUTION_PROOF" spec:"true"`                // DomainExecutionProof defines the BLS signature domain a prover signs an execution proof envelope with (EIP-8025).
 
 	// Prysm constants.
 	GenesisValidatorsRoot          [32]byte        // GenesisValidatorsRoot is the root hash of the genesis validators.
@@ -361,6 +362,10 @@ type BeaconChainConfig struct {
 
 	// Gas Limit Values (EIP-8261)
 	GasLimitSchedule []GasLimitScheduleEntry `yaml:"GAS_LIMIT_SCHEDULE" spec:"true"`
+
+	// Optional execution proofs (EIP-8025)
+	MaxProofSize           uint64 `yaml:"MAX_PROOF_SIZE" spec:"true"`            // MaxProofSize is the maximum size in bytes of the opaque proof data carried by an execution proof.
+	StatelessInputSchemaId uint64 `yaml:"STATELESS_INPUT_SCHEMA_ID" spec:"true"` // StatelessInputSchemaId is a Uint16 encoding the execution-layer protocol fork in its high byte and the stateless input schema revision in its low byte.
 
 	// Deprecated_MaxBlobsPerBlock defines the max blobs that could exist in a block.
 	// Deprecated: This field is no longer supported. Avoid using it.

@@ -182,6 +182,10 @@ var (
 		Name:  "enable-fast-confirmation",
 		Usage: "Enables the fast confirmation rule (FCR) for rapid block confirmation under synchrony assumptions.",
 	}
+	EnableExecutionProofsFlag = &cli.BoolFlag{
+		Name:  "zkvm",
+		Usage: "Enables EIP-8025 optional execution proofs. Requires --proof-node-endpoint to verify the proofs received over gossip.",
+	}
 	EnableStateDiff = &cli.BoolFlag{
 		Name:  "enable-state-diff",
 		Usage: "Enables the experimental state diff feature.",
@@ -304,6 +308,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
 	enableFastConfirmation,
+	EnableExecutionProofsFlag,
 	EnableStateDiff,
 	DisableProgressiveSSZ,
 	reorgLatePayloads,

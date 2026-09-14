@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/OffchainLabs/prysm/v7/api/client/proofnode"
 	"net"
 	"net/http"
 	"os"
@@ -105,6 +106,8 @@ type BeaconNode struct {
 	blsToExecPool             blstoexec.PoolManager
 	depositCache              cache.DepositCache
 	proposerPreferencesCache  *cache.ProposerPreferencesCache
+	executionProofCache       *cache.ExecutionProofCache
+	proofNode                 *proofnode.Client
 	subscribedValidatorsCache *cache.SubscribedValidatorsCache
 	builderCircuitBreaker     *cache.BuilderCircuitBreaker
 	payloadIDCache            *cache.PayloadIDCache
@@ -172,6 +175,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		syncCommitteePool:         synccommittee.NewPool(),
 		blsToExecPool:             blstoexec.NewPool(),
 		proposerPreferencesCache:  cache.NewProposerPreferencesCache(),
+		executionProofCache:       cache.NewExecutionProofCache(),
 		subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
 		builderCircuitBreaker:     cache.NewBuilderCircuitBreaker(),
 		payloadIDCache:            cache.NewPayloadIDCache(),
@@ -188,6 +192,20 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		if err := opt(beacon); err != nil {
 			return nil, err
 		}
+	}
+
+	// EIP-8025: an execution proof-aware node needs a proof node to verify the
+	// proofs it receives, otherwise it could only ever ignore them.
+	if features.Get().EnableExecutionProofs {
+		endpoint := cliCtx.String(flags.ProofNodeEndpoint.Name)
+		if endpoint == "" {
+			return nil, fmt.Errorf("--%s requires --%s to be set", features.EnableExecutionProofsFlag.Name, flags.ProofNodeEndpoint.Name)
+		}
+		proofNode, err := proofnode.NewClient(endpoint)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not create proof node client")
+		}
+		beacon.proofNode = proofNode
 	}
 
 	dbClearer := newDbClearer(cliCtx)
@@ -783,6 +801,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithBlobStorage(b.BlobStorage),
 		blockchain.WithDataColumnStorage(b.DataColumnStorage),
 		blockchain.WithProposerPreferencesCache(b.proposerPreferencesCache),
+		blockchain.WithExecutionProofCache(b.executionProofCache),
 		blockchain.WithSubscribedValidatorsCache(b.subscribedValidatorsCache),
 		blockchain.WithBuilderCircuitBreaker(b.builderCircuitBreaker),
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
@@ -885,6 +904,8 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithVerifierWaiter(b.verifyInitWaiter),
 		regularsync.WithAvailableBlocker(bFillStore),
 		regularsync.WithProposerPreferencesCache(b.proposerPreferencesCache),
+		regularsync.WithExecutionProofCache(b.executionProofCache),
+		regularsync.WithProofNode(b.proofNode),
 		regularsync.WithSubscribedValidatorsCache(b.subscribedValidatorsCache),
 		regularsync.WithBuilderCircuitBreaker(b.builderCircuitBreaker),
 		regularsync.WithSlasherEnabled(b.slasherEnabled),
@@ -1048,6 +1069,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		BlobStorage:                      b.BlobStorage,
 		DataColumnStorage:                b.DataColumnStorage,
 		ProposerPreferencesCache:         b.proposerPreferencesCache,
+		ExecutionProofCache:              b.executionProofCache,
 		SubscribedValidatorsCache:        b.subscribedValidatorsCache,
 		BuilderCircuitBreaker:            b.builderCircuitBreaker,
 		HighestBidCache:                  regularSyncService.HighestExecutionPayloadBidCache(),

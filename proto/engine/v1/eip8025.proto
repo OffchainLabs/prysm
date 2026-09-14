@@ -1,0 +1,106 @@
+syntax = "proto3";
+
+package ethereum.engine.v1;
+
+import "proto/eth/ext/options.proto";
+import "proto/engine/v1/electra.proto";
+import "proto/engine/v1/execution_engine.proto";
+import "proto/engine/v1/gloas.proto";
+
+option csharp_namespace = "Ethereum.Engine.V1";
+option go_package = "github.com/OffchainLabs/prysm/v7/proto/engine/v1;enginev1";
+option java_multiple_files = true;
+option java_outer_classname = "Eip8025Proto";
+option java_package = "org.ethereum.engine.v1";
+option php_namespace = "Ethereum\\Engine\\v1";
+
+// EIP-8025 stateless input schema.
+//
+// The messages below mirror the `NewPayloadRequest` variant that the proof node
+// (zkboost) merkleizes to derive the identifier and public input of an
+// execution proof. They deliberately duplicate `ExecutionPayloadGloas` and
+// `ExecutionRequestsGloas` rather than reusing them, because those two are
+// progressively merkleized (EIP-7688) while the stateless input schema is not:
+// the hash tree roots differ even though the SSZ serializations are identical.
+//
+// The `hash_tree_root` of `SSZNewPayloadRequest` is the value a prover receives
+// back from the proof node and a verifier recomputes locally, so it MUST match
+// the proof node byte for byte. Every list bound here is therefore pinned to
+// the value used by the reference stateless guest
+// (github.com/eth-act/ere-guests, crates/stateless-validator-common) instead of
+// Prysm's preset placeholders, so that a minimal-preset build still agrees with
+// the proof node.
+//
+// NOTE: EIP-8025 beacon-chain.md specifies `SSZNewPayloadRequest` as a
+// `ProgressiveContainer`. The reference guest has not adopted progressive
+// merkleization, and the proof node is authoritative for this root, so the
+// bounded form is what Prysm computes. Revisit when ere-guests adopts EIP-7688.
+
+// StatelessExecutionPayload is the bounded mirror of ExecutionPayloadGloas.
+message StatelessExecutionPayload {
+  bytes parent_hash = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes fee_recipient = 2 [ (ethereum.eth.ext.ssz_size) = "20" ];
+  bytes state_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes receipts_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes logs_bloom = 5 [ (ethereum.eth.ext.ssz_size) = "256" ];
+  bytes prev_randao = 6 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 block_number = 7;
+  uint64 gas_limit = 8;
+  uint64 gas_used = 9;
+  uint64 timestamp = 10;
+  // MAX_EXTRA_DATA_BYTES
+  bytes extra_data = 11 [ (ethereum.eth.ext.ssz_max) = "32" ];
+  bytes base_fee_per_gas = 12 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes block_hash = 13 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  // MAX_TRANSACTIONS_PER_PAYLOAD, MAX_BYTES_PER_TRANSACTION
+  repeated bytes transactions = 14 [
+    (ethereum.eth.ext.ssz_size) = "?,?",
+    (ethereum.eth.ext.ssz_max) = "1048576,1073741824"
+  ];
+  // MAX_WITHDRAWALS_PER_PAYLOAD
+  repeated Withdrawal withdrawals = 15 [ (ethereum.eth.ext.ssz_max) = "16" ];
+  uint64 blob_gas_used = 16;
+  uint64 excess_blob_gas = 17;
+  // MAX_BYTES_PER_TRANSACTION, reused as the block access list bound.
+  bytes block_access_list = 18
+      [ (ethereum.eth.ext.ssz_max) = "1073741824" ];
+  uint64 slot_number = 19;
+}
+
+// StatelessExecutionRequests is the bounded mirror of ExecutionRequestsGloas.
+message StatelessExecutionRequests {
+  // MAX_DEPOSIT_REQUESTS_PER_PAYLOAD
+  repeated DepositRequest deposits = 1
+      [ (ethereum.eth.ext.ssz_max) = "8192" ];
+  // MAX_WITHDRAWAL_REQUESTS_PER_PAYLOAD
+  repeated WithdrawalRequest withdrawals = 2
+      [ (ethereum.eth.ext.ssz_max) = "16" ];
+  // MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD
+  repeated ConsolidationRequest consolidations = 3
+      [ (ethereum.eth.ext.ssz_max) = "2" ];
+  // MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD.
+  //
+  // NOTE: 64 per consensus-specs and the reference guest. Prysm's
+  // `max_builder_deposit_requests_per_payload.size` placeholder is 256, which
+  // disagrees with both; it is not used here so that this root matches the
+  // proof node.
+  repeated BuilderDepositRequest builder_deposits = 4
+      [ (ethereum.eth.ext.ssz_max) = "64" ];
+  // MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD
+  repeated BuilderExitRequest builder_exits = 5
+      [ (ethereum.eth.ext.ssz_max) = "16" ];
+}
+
+// SSZNewPayloadRequest is the Gloas new payload request, the payload-bearing
+// field of the guest's stateless input. Its hash tree root identifies an
+// execution proof and is one field of the proof's public input.
+message SSZNewPayloadRequest {
+  StatelessExecutionPayload execution_payload = 1;
+  // MAX_BLOB_COMMITMENTS_PER_BLOCK
+  repeated bytes versioned_hashes = 2 [
+    (ethereum.eth.ext.ssz_size) = "?,32",
+    (ethereum.eth.ext.ssz_max) = "4096"
+  ];
+  bytes parent_beacon_block_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  StatelessExecutionRequests execution_requests = 4;
+}

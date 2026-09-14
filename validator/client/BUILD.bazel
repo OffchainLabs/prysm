@@ -11,6 +11,7 @@ go_library(
         "doppelganger.go",
         "duties.go",
         "duty_store.go",
+        "execution_proof.go",
         "factory.go",
         "head_tracker.go",
         "health_monitor.go",
