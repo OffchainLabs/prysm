@@ -388,12 +388,7 @@ func TestFetchPayloads_RequiredParent(t *testing.T) {
 			} else {
 				require.NoError(t, r.err)
 			}
-			if tt.parentMissingFullNode {
-				require.Equal(t, (*blocks.ROBlock)(nil), r.parentWithReusablePayload)
-			}
 			if tt.parentEnvelopeStored && !tt.parentMissingFullNode && tt.wantErr == "" {
-				require.NotNil(t, r.parentWithReusablePayload)
-				require.Equal(t, parent.Root(), r.parentWithReusablePayload.Root())
 				require.Equal(t, server.PeerID(), r.payloadsFrom)
 				downscores, err := client.Peers().Scorers().BadResponsesScorer().Count(server.PeerID())
 				require.NoError(t, err)
@@ -449,7 +444,7 @@ func TestFetchPayloads_HistoricalParent(t *testing.T) {
 					req := new(ethpb.ExecutionPayloadEnvelopesByRangeRequest)
 					assert.NoError(t, s.Encoding().DecodeWithMaxLength(stream, req))
 					if req.StartSlot == 351 {
-						assert.Equal(t, uint64(64), req.Count)
+						assert.Equal(t, uint64(65), req.Count)
 						batchRequests.Add(1)
 					} else {
 						assert.Equal(t, parent.Block().Slot(), req.StartSlot)

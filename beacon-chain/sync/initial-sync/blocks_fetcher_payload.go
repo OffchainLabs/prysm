@@ -131,7 +131,6 @@ func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse)
 // `peers` is a list of peers to use for the request payloads if `pid` fails.
 // `r.bwb` must be sorted by slot.
 func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestResponse, peers []peer.ID) {
-	r.parentWithReusablePayload = nil
 	if len(r.bwb) == 0 {
 		r.payloadsFrom = ""
 		return
@@ -161,7 +160,9 @@ func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestRespon
 	if err == nil && start > gloasStart {
 		start--
 	}
-	envelopes, pid, err := f.fetchPayloadEnvelopesFromPeer(ctx, start, r.count, r.blocksFrom, peers)
+	// One extra envelope so the last block's payload travels with its own batch, where its
+	// columns are fetched and checked; the next batch then reuses it instead of failing.
+	envelopes, pid, err := f.fetchPayloadEnvelopesFromPeer(ctx, start, r.count+1, r.blocksFrom, peers)
 	if err != nil {
 		r.err = errors.Wrap(err, "fetch payload envelopes from peer")
 		r.payloadsFrom = ""
@@ -174,7 +175,7 @@ func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestRespon
 	if checkpoint := f.chain.FinalizedCheckpt(); checkpoint != nil {
 		finalizedSlot, err = slots.EpochStart(checkpoint.Epoch)
 		if err != nil {
-			r.err = err
+			r.err = errors.Wrap(err, "finalized epoch start slot")
 			return
 		}
 	}
@@ -187,23 +188,22 @@ func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestRespon
 		firstUnprocessedIndex++
 	}
 	if firstUnprocessedIndex == len(r.bwb) {
-		// Keep the last known block to handle any late head payload.
+		// Keep the last block so an envelope that arrived after its import is still paired with it.
 		f.validatePayloadsForImport(r, firstUnprocessedIndex-1)
 		return
 	}
-	parentWithReusablePayload, err := f.ensureParentPayload(ctx, r, peers, firstUnprocessedIndex)
+	parentPayloadProcessed, err := f.ensureParentPayload(ctx, r, peers, firstUnprocessedIndex)
 	if err != nil {
 		r.err = errors.Wrap(err, "fetch required parent payload")
 		return
 	}
-	r.parentWithReusablePayload = parentWithReusablePayload
 	if firstUnprocessedIndex == 0 {
 		// Preserve the required parent envelope even when its block is outside this batch.
 		f.validatePayloadBlockConsistency(r)
 		return
 	}
 	validationStartIndex := firstUnprocessedIndex
-	if parentWithReusablePayload == nil {
+	if !parentPayloadProcessed {
 		validationStartIndex--
 	}
 	f.validatePayloadsForImport(r, validationStartIndex)
@@ -217,7 +217,7 @@ func (f *blocksFetcher) validatePayloadsForImport(r *fetchRequestResponse, valid
 	for _, envelope := range r.envelopes {
 		message, err := envelope.Envelope()
 		if err != nil {
-			r.err = err
+			r.err = errors.Wrap(err, "envelope")
 			return
 		}
 		if message.Slot() >= relevant.bwb[0].Block.Block().Slot() {
@@ -230,8 +230,9 @@ func (f *blocksFetcher) validatePayloadsForImport(r *fetchRequestResponse, valid
 	r.envelopes = relevant.envelopes
 }
 
-// ensureParentPayload returns a parent with a reusable payload or supplies the required envelope.
-func (f *blocksFetcher) ensureParentPayload(ctx context.Context, r *fetchRequestResponse, peers []peer.ID, firstUnprocessedIndex int) (*blocks.ROBlock, error) {
+// ensureParentPayload reports whether the required parent payload is already processed locally;
+// otherwise it makes sure the parent envelope is in r.envelopes, fetching it from peers if needed.
+func (f *blocksFetcher) ensureParentPayload(ctx context.Context, r *fetchRequestResponse, peers []peer.ID, firstUnprocessedIndex int) (bool, error) {
 	child := r.bwb[firstUnprocessedIndex].Block
 	parentRoot := child.Block().ParentRoot()
 	var parent blocks.ROBlock
@@ -242,34 +243,37 @@ func (f *blocksFetcher) ensureParentPayload(ctx context.Context, r *fetchRequest
 		parent, ok = f.resolveBlock(ctx, parentRoot)
 		if !ok {
 			// An earlier concurrently fetched batch may not have imported the parent yet.
-			return nil, nil
+			return false, nil
 		}
 	}
 	if parent.Version() < version.Gloas || parent.Block().Slot() == 0 {
-		return nil, nil
+		return false, nil
 	}
 	buildsOnParentPayload, err := blocks.BlockBuiltOnParentPayload(parent.Block(), child.Block())
-	if err != nil || !buildsOnParentPayload {
-		return nil, err
+	if err != nil {
+		return false, errors.Wrap(err, "block built on parent payload")
+	}
+	if !buildsOnParentPayload {
+		return false, nil
 	}
 	insertAt := 0
 	for i, envelope := range r.envelopes {
 		message, err := envelope.Envelope()
 		if err != nil {
-			return nil, err
+			return false, errors.Wrap(err, "envelope")
 		}
 		if message.BeaconBlockRoot() == parentRoot {
 			matches, err := blocks.BlockBuiltOnParentEnvelope(envelope, child)
 			if err != nil {
-				return nil, err
+				return false, errors.Wrap(err, "block built on parent envelope")
 			}
 			if matches && message.Slot() == parent.Block().Slot() {
-				return nil, nil
+				return false, nil
 			}
 			if r.blocksFrom == r.payloadsFrom {
-				return nil, errors.Wrap(prysmsync.ErrInvalidFetchedData, "parent payload envelope does not match block")
+				return false, errors.Wrap(prysmsync.ErrInvalidFetchedData, "parent payload envelope does not match block")
 			}
-			return nil, errors.New("parent payload envelope does not match block")
+			return false, errors.New("parent payload envelope does not match block")
 		}
 		if message.Slot() <= parent.Block().Slot() {
 			insertAt = i + 1
@@ -277,18 +281,18 @@ func (f *blocksFetcher) ensureParentPayload(ctx context.Context, r *fetchRequest
 	}
 	// Stored envelopes can precede execution processing, so reuse also requires a FULL forkchoice node.
 	if f.db.HasExecutionPayloadEnvelope(ctx, parentRoot) && f.chain.HasFullNode(parentRoot) {
-		return &parent, nil
+		return true, nil
 	}
 	envelope, pid, err := f.fetchParentPayloadFromPeers(ctx, parent, child, r.payloadsFrom, peers)
 	if err != nil {
-		return nil, err
+		return false, err
 	}
 	r.envelopes = slices.Insert(r.envelopes, insertAt, envelope)
 	if pid != r.payloadsFrom {
 		// Mixed providers cannot be attributed to the block provider by consistency checks.
 		r.payloadsFrom = ""
 	}
-	return nil, nil
+	return false, nil
 }
 
 func (f *blocksFetcher) fetchParentPayloadFromPeers(ctx context.Context, parent, child blocks.ROBlock, pid peer.ID, peers []peer.ID) (interfaces.ROSignedExecutionPayloadEnvelope, peer.ID, error) {
@@ -319,6 +323,12 @@ func (f *blocksFetcher) fetchParentPayloadFromPeers(ctx context.Context, parent,
 			continue
 		}
 		f.p2p.Peers().Scorers().BlockProviderScorer().Touch(p)
+		log.WithFields(logrus.Fields{
+			"parentRoot": fmt.Sprintf("%#x", parent.Root()),
+			"parentSlot": parent.Block().Slot(),
+			"childSlot":  child.Block().Slot(),
+			"peer":       p,
+		}).Debug("Recovered parent execution payload envelope from peer")
 		return wrapped, p, nil
 	}
 	return nil, "", errors.Wrapf(errNoPeersAvailable, "missing payload envelope for FULL parent %#x", parent.Root())
