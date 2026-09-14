@@ -83,7 +83,7 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, r *fetchRequestRespon
 
 	roBlocks, err := columnFetchBlocks(postFulu, r.envelopes, currentEpoch, func(root [32]byte) (blocks.ROBlock, bool) {
 		return f.resolveBlock(ctx, root)
-	}, r.parentWithReusablePayload)
+	})
 	if err != nil {
 		r.err = errors.Wrap(err, "select blocks needing data column sidecars")
 		return
@@ -158,13 +158,13 @@ func (f *blocksFetcher) resolveBlock(ctx context.Context, root [32]byte) (blocks
 	return b, err == nil && b.Root() == root
 }
 
-// columnFetchBlocks selects blocks within the DA period, including Gloas blocks with fetched or reusable payloads.
+// columnFetchBlocks selects the blocks within the DA period whose columns must be fetched: pre-Gloas
+// blocks always, Gloas blocks only when an envelope is present (its block may lie outside the batch).
 func columnFetchBlocks(
 	postFulu []blocks.BlockWithROSidecars,
 	envelopes []interfaces.ROSignedExecutionPayloadEnvelope,
 	currentEpoch primitives.Epoch,
 	resolveBlock func(root [32]byte) (blocks.ROBlock, bool),
-	parentWithReusablePayload *blocks.ROBlock,
 ) ([]blocks.ROBlock, error) {
 	blockByRoot := make(map[[32]byte]blocks.ROBlock, len(postFulu))
 	for i := range postFulu {
@@ -184,10 +184,6 @@ func columnFetchBlocks(
 		seen[root] = true
 		roBlocks = append(roBlocks, b)
 	}
-	if parentWithReusablePayload != nil {
-		add(*parentWithReusablePayload)
-	}
-
 	for i := range postFulu {
 		if postFulu[i].Block.Version() < version.Gloas {
 			add(postFulu[i].Block)
