@@ -320,6 +320,9 @@ func (f *blocksFetcher) fetchParentPayloadFromPeers(ctx context.Context, parent,
 			envelopes, err = prysmsync.SendExecutionPayloadEnvelopesByRangeRequest(ctx, f.clock, f.p2p, p, f.ctxMap, rangeReq)
 		}
 		if err != nil || len(envelopes) != 1 {
+			if errors.Is(err, prysmsync.ErrInvalidFetchedData) {
+				f.downscorePeer(p, err)
+			}
 			continue
 		}
 		wrapped, err := blocks.WrappedROSignedExecutionPayloadEnvelope(envelopes[0])
