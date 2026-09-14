@@ -146,8 +146,9 @@ func getStateVersionAndPayload(st state.BeaconState) (int, interfaces.ExecutionD
 	return preStateVersion, preStateHeader, nil
 }
 
-// prepareBatchPrestate verifies the required parent payload and reports whether the leading envelope belongs to it.
-func (s *Service) prepareBatchPrestate(ctx context.Context, firstBlock consensusblocks.ROBlock, envelopes []interfaces.ROSignedExecutionPayloadEnvelope) (state.BeaconState, bool, error) {
+// prepareBatchPrestate verifies the parent payload the first block builds on. parentEnvelopeSupplied
+// reports that envelopes[0] is that verified parent envelope: the caller skips it and inserts its node.
+func (s *Service) prepareBatchPrestate(ctx context.Context, firstBlock consensusblocks.ROBlock, envelopes []interfaces.ROSignedExecutionPayloadEnvelope) (preState state.BeaconState, parentEnvelopeSupplied bool, err error) {
 	parentRoot := firstBlock.Block().ParentRoot()
 	blockPreState, err := s.cfg.StateGen.StateByRootInitialSync(ctx, parentRoot)
 	if err != nil {
@@ -182,7 +183,6 @@ func (s *Service) prepareBatchPrestate(ctx context.Context, firstBlock consensus
 		return blockPreState, false, nil
 	}
 
-	var parentEnvelopeSupplied bool
 	if len(envelopes) > 0 {
 		parentEnvelopeSupplied, err = consensusblocks.BlockBuiltOnParentEnvelope(envelopes[0], firstBlock)
 		if err != nil {
