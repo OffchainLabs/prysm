@@ -156,13 +156,25 @@ func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestRespon
 
 	// The whole block batch is gloas
 	start := r.start
+	// Include the last block's payload so its columns are fetched and checked with this batch.
+	count := r.count + 1
 	gloasStart, err := slots.EpochStart(params.BeaconConfig().GloasForkEpoch)
 	if err == nil && start > gloasStart {
 		start--
 	}
-	// One extra envelope so the last block's payload travels with its own batch, where its
-	// columns are fetched and checked; the next batch then reuses it instead of failing.
-	envelopes, pid, err := f.fetchPayloadEnvelopesFromPeer(ctx, start, r.count+1, r.blocksFrom, peers)
+	limit := params.BeaconConfig().MaxRequestPayloads
+	if r.count >= limit {
+		// Recover the leading parent separately so each retained block's own payload fits.
+		start = r.bwb[0].Block.Block().Slot()
+		for i, block := range r.bwb {
+			if block.Block.Block().Slot()-start >= primitives.Slot(limit) {
+				r.bwb = r.bwb[:i]
+				break
+			}
+		}
+		count = uint64(r.bwb[len(r.bwb)-1].Block.Block().Slot()-start) + 1
+	}
+	envelopes, pid, err := f.fetchPayloadEnvelopesFromPeer(ctx, start, count, r.blocksFrom, peers)
 	if err != nil {
 		r.err = errors.Wrap(err, "fetch payload envelopes from peer")
 		r.payloadsFrom = ""
