@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -91,8 +92,8 @@ func (s *Service) spawnProcessAttestationsRoutine() {
 			return
 		}
 
-		reorgInterval := params.BeaconConfig().SlotDuration() - reorgLateBlockCountAttestations
-		ticker := slots.NewSlotTickerWithIntervals(s.genesisTime, []time.Duration{0, reorgInterval})
+		reorgInterval := slots.IntervalFunc(doublylinkedtree.ProcessAttestationsThreshold)
+		ticker := slots.NewSlotTickerWithIntervalFuncs(s.genesisTime, []slots.IntervalFunc{slots.FixedInterval(0), reorgInterval})
 		for {
 			select {
 			case <-s.ctx.Done():

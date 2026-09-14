@@ -80,7 +80,7 @@ func TestHeadTracker_Update(t *testing.T) {
 }
 
 func TestWithHeadHint(t *testing.T) {
-	component := params.BeaconConfig().AttestationDueBPS
+	component := params.AttestationDue
 
 	v := &validator{head: newHeadTracker(), genesisTime: time.Unix(0, 0)}
 	const slot = primitives.Slot(7)
@@ -105,7 +105,7 @@ func TestWithHeadHint(t *testing.T) {
 }
 
 func TestWithPayloadHeadHint(t *testing.T) {
-	component := params.BeaconConfig().PayloadAttestationDueBPS
+	component := params.PayloadAttestationDue
 
 	t.Run("attaches the announced payload root and the component deadline", func(t *testing.T) {
 		v := &validator{payloadAvailability: newPayloadAvailability(), genesisTime: time.Unix(0, 0)}

@@ -681,9 +681,10 @@ func (s *Service) ensurePeers(ctx context.Context, tracker *subnetTracker) {
 }
 
 func (s *Service) tryEnsurePeers(ctx context.Context, tracker *subnetTracker) {
-	timeout := params.BeaconConfig().SlotDuration() - 100*time.Millisecond
+	currentSlot := s.cfg.clock.CurrentSlot()
+	timeout := params.BeaconConfig().SlotDurationAt(currentSlot) - 100*time.Millisecond
 	minPeers := flags.Get().MinimumPeersPerSubnet
-	neededSubnets := computeAllNeededSubnets(s.cfg.clock.CurrentSlot(), tracker.getSubnetsToJoin, tracker.getSubnetsRequiringPeers)
+	neededSubnets := computeAllNeededSubnets(currentSlot, tracker.getSubnetsToJoin, tracker.getSubnetsRequiringPeers)
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	err := s.cfg.p2p.FindAndDialPeersWithSubnets(ctx, tracker.topicFormat, tracker.nse.ForkDigest, minPeers, neededSubnets)

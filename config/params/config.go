@@ -362,6 +362,9 @@ type BeaconChainConfig struct {
 	// Gas Limit Values (EIP-8261)
 	GasLimitSchedule []GasLimitScheduleEntry `yaml:"GAS_LIMIT_SCHEDULE" spec:"true"`
 
+	// Slot duration schedule (EIP-8198), empty means a constant slot duration with *_DUE_BPS deadlines.
+	SlotDurationSchedule SlotSchedule `yaml:"SLOT_DURATION_SCHEDULE" spec:"true"`
+
 	// Deprecated_MaxBlobsPerBlock defines the max blobs that could exist in a block.
 	// Deprecated: This field is no longer supported. Avoid using it.
 	DeprecatedMaxBlobsPerBlock int `yaml:"MAX_BLOBS_PER_BLOCK" spec:"true"`
@@ -809,11 +812,12 @@ func GloasEnabled() bool {
 
 // WithinDAPeriod checks if the block epoch is within the data availability retention period.
 func WithinDAPeriod(block, current primitives.Epoch) bool {
-	if block >= BeaconConfig().FuluForkEpoch {
-		return block+BeaconConfig().MinEpochsForDataColumnSidecarsRequest >= current
+	cfg := BeaconConfig()
+	if block >= cfg.FuluForkEpoch {
+		return block >= cfg.RetentionStartEpoch(current, cfg.MinEpochsForDataColumnSidecarsRequest)
 	}
 
-	return block+BeaconConfig().MinEpochsForBlobsSidecarsRequest >= current
+	return block+cfg.MinEpochsForBlobsSidecarsRequest >= current
 }
 
 // EpochsDuration returns the time duration of the given number of epochs.
@@ -853,12 +857,4 @@ func (b *BeaconChainConfig) SlotDurationMillis() uint64 {
 func (b *BeaconChainConfig) SlotComponentDuration(bp primitives.BP) time.Duration {
 	ms := uint64(bp) * b.SlotDurationMillis() / uint64(BasisPoints)
 	return time.Duration(ms) * time.Millisecond
-}
-
-// AttestationDueBPSAtSlot returns the attestation due time in basis points of the slot.
-func (b *BeaconChainConfig) AttestationDueBPSAtSlot(slot primitives.Slot) primitives.BP {
-	if primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch)) >= b.GloasForkEpoch {
-		return b.AttestationDueBPSGloas
-	}
-	return b.AttestationDueBPS
 }

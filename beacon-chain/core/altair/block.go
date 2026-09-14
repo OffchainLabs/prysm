@@ -8,6 +8,7 @@ import (
 	p2pType "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -95,7 +96,7 @@ func processSyncAggregate(ctx context.Context, s state.BeaconState, sync *ethpb.
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	proposerReward, participantReward, err := SyncRewards(activeBalance)
+	proposerReward, participantReward, err := SyncRewards(activeBalance, slots.ToEpoch(s.Slot()))
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -161,10 +162,10 @@ func VerifySyncCommitteeSig(s state.BeaconState, syncKeys []bls.PublicKey, syncS
 }
 
 // SyncRewards returns the proposer reward and the sync participant reward given the total active balance in state.
-func SyncRewards(activeBalance uint64) (proposerReward, participantReward uint64, err error) {
+func SyncRewards(activeBalance uint64, epoch primitives.Epoch) (proposerReward, participantReward uint64, err error) {
 	cfg := params.BeaconConfig()
 	totalActiveIncrements := activeBalance / cfg.EffectiveBalanceIncrement
-	baseRewardPerInc, err := BaseRewardPerIncrement(activeBalance)
+	baseRewardPerInc, err := BaseRewardPerIncrement(activeBalance, epoch)
 	if err != nil {
 		return 0, 0, err
 	}

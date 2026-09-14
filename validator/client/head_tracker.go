@@ -56,7 +56,7 @@ func (h *headTracker) update(slot primitives.Slot, blockRoot string, payloadStat
 
 // withHeadHint attaches a freshness hint carrying the latest tracked head. It
 // errors if the slot deadline cannot be computed; see withHint.
-func (v *validator) withHeadHint(ctx context.Context, slot primitives.Slot, component primitives.BP) (context.Context, error) {
+func (v *validator) withHeadHint(ctx context.Context, slot primitives.Slot, component params.SlotComponent) (context.Context, error) {
 	head := func() (iface.Head, bool) {
 		h := v.head
 
@@ -83,7 +83,7 @@ func (v *validator) withPayloadHeadHint(ctx context.Context, slot primitives.Slo
 		return iface.Head{Root: root, Slot: slot, PayloadStatus: api.PayloadStatusFull}, ok
 	}
 
-	hint, err := v.withHint(ctx, slot, params.BeaconConfig().PayloadAttestationDueBPS, head)
+	hint, err := v.withHint(ctx, slot, params.PayloadAttestationDue, head)
 	if err != nil {
 		return ctx, fmt.Errorf("with hint: %w", err)
 	}
@@ -98,7 +98,7 @@ func (v *validator) withPayloadHeadHint(ctx context.Context, slot primitives.Slo
 func (v *validator) withHint(
 	ctx context.Context,
 	slot primitives.Slot,
-	component primitives.BP,
+	component params.SlotComponent,
 	head func() (iface.Head, bool),
 ) (context.Context, error) {
 	deadline, err := v.slotComponentDeadline(slot, component)

@@ -692,7 +692,7 @@ func TestPrune(t *testing.T) {
 
 		dirs, err = listDir(dataColumnStorage.fs, "1")
 		require.NoError(t, err)
-		require.Equal(t, true, compareSlices([]string{"4099"}, dirs))
+		require.Equal(t, true, compareSlices([]string{"4098", "4099"}, dirs))
 
 		dirs, err = listDir(dataColumnStorage.fs, "2")
 		require.NoError(t, err)

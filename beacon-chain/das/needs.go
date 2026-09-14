@@ -89,7 +89,7 @@ func (n SyncNeeds) Currently() CurrentNeeds {
 	c := CurrentNeeds{
 		Block: n.blockSpan(current),
 		Blob:  NeedSpan{Begin: syncEpochOffset(current, n.blobRetention), End: n.fulu},
-		Col:   NeedSpan{Begin: syncEpochOffset(current, n.colRetention), End: current},
+		Col:   NeedSpan{Begin: columnRetentionStart(current, n.colRetention), End: current},
 	}
 	// Adjust the minimums forward to the slots where the sidecar types were introduced
 	c.Blob.Begin = max(c.Blob.Begin, n.deneb)
@@ -117,6 +117,12 @@ func (n SyncNeeds) DataColumnRetentionChecker() RetentionChecker {
 		current := n.Currently()
 		return current.Col.At(slot)
 	}
+}
+
+// The column window keeps its wall-clock length across slot duration changes, matching what peers are served.
+func columnRetentionStart(current primitives.Slot, retention primitives.Epoch) primitives.Slot {
+	start := params.BeaconConfig().RetentionStartEpoch(slots.ToEpoch(current), retention)
+	return max(slots.UnsafeEpochStart(start), 1)
 }
 
 // syncEpochOffset subtracts a number of epochs as slots from the current slot, with underflow checks.

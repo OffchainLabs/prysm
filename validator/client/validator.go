@@ -460,7 +460,7 @@ func (v *validator) NextSlot() <-chan primitives.Slot {
 
 // SlotDeadline is the start time of the next slot.
 func (v *validator) SlotDeadline(slot primitives.Slot) time.Time {
-	return v.genesisTime.Add(params.SlotsDuration(slot+1, params.BeaconConfig()))
+	return slots.UnsafeStartTime(v.genesisTime, slot+1)
 }
 
 // RolesAt slot returns the validator roles at the given slot. Returns nil if the
@@ -667,7 +667,7 @@ func (v *validator) getAttestationData(ctx context.Context, slot primitives.Slot
 	epoch := slots.ToEpoch(slot)
 	postElectra := epoch >= params.BeaconConfig().ElectraForkEpoch
 
-	ctx, err := v.withHeadHint(ctx, slot, attestationDueComponent(slot))
+	ctx, err := v.withHeadHint(ctx, slot, params.AttestationDue)
 	if err != nil {
 		return nil, fmt.Errorf("attach freshness hint: %w", err)
 	}
@@ -853,7 +853,7 @@ func (v *validator) pushPreferences(ctx context.Context, km keymanager.IKeymanag
 	}
 
 	if prefs := v.buildProposerPreferences(ctx, km, slot, forceFullPush || prefsChanged); len(prefs) > 0 {
-		submitAfterDelay(func(ctx context.Context) {
+		submitAfterDelay(slot, func(ctx context.Context) {
 			if v.submitProposerPreferenceBatch(ctx, prefs) {
 				v.connTracker.confirm(proposerPrefsPush, connGen)
 			}
@@ -865,7 +865,7 @@ func (v *validator) pushPreferences(ctx context.Context, km keymanager.IKeymanag
 	}
 
 	if entries := v.warmBuilderRequestAuths(ctx, km, slot, forceFullPush || builderPrefsChanged); len(entries) > 0 {
-		submitAfterDelay(func(ctx context.Context) {
+		submitAfterDelay(slot, func(ctx context.Context) {
 			if v.submitBuilderPreferenceBatch(ctx, entries) {
 				v.connTracker.confirm(builderPrefsPush, connGen)
 			}
@@ -1170,8 +1170,8 @@ func (v *validator) upgradeProposerSettingsToV2(ctx context.Context) {
 
 // submitAfterDelay runs submit half a slot from now, giving the beacon node
 // time to process the current slot's block, detached from the caller's context.
-func submitAfterDelay(submit func(ctx context.Context)) {
-	delay := params.BeaconConfig().SlotDuration() / 2
+func submitAfterDelay(slot primitives.Slot, submit func(ctx context.Context)) {
+	delay := params.BeaconConfig().SlotDurationAt(slot) / 2
 	time.AfterFunc(delay, func() {
 		ctx, cancel := context.WithTimeout(context.Background(), delay)
 		defer cancel()
@@ -1534,11 +1534,11 @@ func (v *validator) resubmitPreferences(ctx context.Context) {
 	}
 	entries := v.warmBuilderRequestAuths(ctx, km, slot, true)
 	if len(entries) > 0 {
-		submitAfterDelay(func(ctx context.Context) { v.submitBuilderPreferenceBatch(ctx, entries) })
+		submitAfterDelay(slot, func(ctx context.Context) { v.submitBuilderPreferenceBatch(ctx, entries) })
 	}
 	prefs := v.buildProposerPreferences(ctx, km, slot, true)
 	if len(prefs) > 0 {
-		submitAfterDelay(func(ctx context.Context) { v.submitProposerPreferenceBatch(ctx, prefs) })
+		submitAfterDelay(slot, func(ctx context.Context) { v.submitProposerPreferenceBatch(ctx, prefs) })
 	}
 	if len(prefs) > 0 || len(entries) > 0 {
 		log.WithFields(logrus.Fields{

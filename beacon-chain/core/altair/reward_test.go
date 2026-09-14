@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	mathutil "github.com/OffchainLabs/prysm/v7/math"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
@@ -129,7 +130,7 @@ func Test_BaseRewardWithTotalBalance(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := altair.BaseRewardWithTotalBalance(s, tt.valIdx, tt.activeBalance)
+			got, err := altair.BaseRewardWithTotalBalance(s, tt.valIdx, tt.activeBalance, 0)
 			if (err != nil) && (tt.errString != "") {
 				require.ErrorContains(t, tt.errString, err)
 				return
@@ -186,7 +187,7 @@ func Test_BaseRewardPerIncrement(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := altair.BaseRewardPerIncrement(tt.activeBalance)
+			got, err := altair.BaseRewardPerIncrement(tt.activeBalance, 0)
 			if (err != nil) && (tt.errString != "") {
 				require.ErrorContains(t, tt.errString, err)
 				return
@@ -194,4 +195,23 @@ func Test_BaseRewardPerIncrement(t *testing.T) {
 			require.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func Test_BaseRewardPerIncrement_SlotDurationSchedule(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.SlotDurationSchedule = params.SlotSchedule{
+		params.SlotScheduleEntryForTest(0, 12000),
+		params.SlotScheduleEntryForTest(10, 6000),
+	}
+	params.OverrideBeaconConfig(cfg)
+	helpers.ClearCache()
+
+	activeBalance := cfg.MaxEffectiveBalance * 1e6
+	before, err := altair.BaseRewardPerIncrement(activeBalance, 9)
+	require.NoError(t, err)
+	after, err := altair.BaseRewardPerIncrement(activeBalance, 10)
+	require.NoError(t, err)
+	require.Equal(t, cfg.EffectiveBalanceIncrement*cfg.BaseRewardFactor/mathutil.IntegerSquareRoot(activeBalance), before)
+	require.Equal(t, before/2, after)
 }

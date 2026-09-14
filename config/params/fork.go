@@ -111,3 +111,15 @@ func genesisNetworkScheduleEntry() NetworkScheduleEntry {
 	// a properly initialized fork schedule.
 	return NetworkScheduleEntry{Epoch: b.GenesisEpoch, isFork: true, ForkVersion: to4(b.GenesisForkVersion), VersionEnum: version.Phase0}
 }
+
+// ForkEpochForDigest returns the epoch of the network schedule entry carrying the given fork digest.
+func ForkEpochForDigest(digest [4]byte) (primitives.Epoch, bool) {
+	ns := BeaconConfig().networkSchedule
+	ns.mu.RLock()
+	defer ns.mu.RUnlock()
+	entry, ok := ns.byDigest[digest]
+	if !ok {
+		return 0, false
+	}
+	return entry.Epoch, true
+}

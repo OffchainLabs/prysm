@@ -225,8 +225,13 @@ func pubsubGossipParam() pubsub.GossipSubParams {
 // to configure our message id time-cache rather than instantiating
 // it with a router instance.
 func setPubSubParameters() {
-	seenTtl := 2 * params.EpochsDuration(1, params.BeaconConfig())
-	pubsub.TimeCacheDuration = seenTtl
+	cfg := params.BeaconConfig()
+	// The longest era keeps the two epoch window intact when the cache straddles a slot duration change.
+	slotDuration := cfg.SlotDuration()
+	for _, e := range cfg.SlotDurationSchedule {
+		slotDuration = max(slotDuration, time.Duration(e.SlotDurationMillis)*time.Millisecond)
+	}
+	pubsub.TimeCacheDuration = 2 * time.Duration(cfg.SlotsPerEpoch) * slotDuration
 }
 
 // convert from libp2p's internal schema to a compatible prysm protobuf format.
