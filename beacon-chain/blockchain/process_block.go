@@ -176,7 +176,7 @@ func (s *Service) prepareBatchPrestate(ctx context.Context, firstBlock consensus
 	}
 	parentHash, err := firstBlock.ParentHash()
 	if err != nil {
-		return nil, false, err
+		return nil, false, errors.Wrap(err, "could not get parent hash")
 	}
 	if parentHash != parentBid.BlockHash() {
 		return blockPreState, false, nil
@@ -211,10 +211,10 @@ func (s *Service) prepareBatchPrestate(ctx context.Context, firstBlock consensus
 	if parentEnvelopeSupplied && !canReuseParentPayload {
 		env, err := envelopes[0].Envelope()
 		if err != nil {
-			return nil, false, err
+			return nil, false, errors.Wrap(err, "could not get parent execution payload envelope")
 		}
 		if _, err := s.notifyNewEnvelope(ctx, blockPreState, env); err != nil {
-			return nil, false, err
+			return nil, false, errors.Wrap(err, "could not notify parent execution payload envelope")
 		}
 	}
 	return blockPreState, parentEnvelopeSupplied, nil
