@@ -23,6 +23,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -402,6 +403,152 @@ func TestFetchPayloads_RequiredParent(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, parent.Root(), first.BeaconBlockRoot())
 			}
+		})
+	}
+}
+
+func TestFetchPayloads_RangeCountLimit(t *testing.T) {
+	for _, test := range []struct {
+		name             string
+		count            uint64
+		limit            uint64
+		wantStart        primitives.Slot
+		wantCount        uint64
+		wantRootRequests int32
+		parentUnknown    bool
+	}{
+		{name: "default batch", count: 64, limit: 128, wantStart: 100, wantCount: 65},
+		{name: "extra slot fits", count: 127, limit: 128, wantStart: 100, wantCount: 128},
+		{name: "maximum batch", count: 128, limit: 128, wantStart: 101, wantCount: 128, wantRootRequests: 1},
+		{name: "configured payload limit", count: 4, limit: 4, wantStart: 101, wantCount: 4, wantRootRequests: 1},
+		{name: "prefetched parent not yet known", count: 128, limit: 128, wantStart: 101, wantCount: 128, parentUnknown: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := t.Context()
+			f, client := newPayloadTestFetcher(t, 100)
+			params.BeaconConfig().MaxRequestPayloads = test.limit
+			ancestorHash, originHash, firstHash, lastHash := [32]byte{1}, [32]byte{2}, [32]byte{3}, [32]byte{4}
+			origin := makeGloasBlockWithPayload(t, 100, [32]byte{}, ancestorHash, originHash)
+			first := makeGloasBlockWithPayload(t, 101, origin.Root(), originHash, firstHash)
+			lastSlot := primitives.Slot(100 + test.count)
+			last := makeGloasBlockWithPayload(t, lastSlot, first.Root(), firstHash, lastHash)
+			if !test.parentUnknown {
+				require.NoError(t, f.db.(db.Database).SaveBlock(ctx, origin.ReadOnlySignedBeaconBlock))
+			}
+			available := []interfaces.ROSignedExecutionPayloadEnvelope{
+				makeEnvelopeForRoot(t, 100, origin.Root(), originHash, ancestorHash),
+				makeEnvelopeForRoot(t, 101, first.Root(), firstHash, originHash),
+				makeEnvelopeForRoot(t, lastSlot, last.Root(), lastHash, firstHash),
+			}
+			server := p2ptest.NewTestP2P(t)
+			client.Connect(server)
+			var rangeRequests, rootRequests atomic.Int32
+			server.SetStreamHandler(fmt.Sprintf("%s/ssz_snappy", p2p.RPCExecutionPayloadEnvelopesByRangeTopicV1), func(stream network.Stream) {
+				defer func() { assert.NoError(t, stream.Close()) }()
+				req := new(ethpb.ExecutionPayloadEnvelopesByRangeRequest)
+				assert.NoError(t, server.Encoding().DecodeWithMaxLength(stream, req))
+				rangeRequests.Add(1)
+				assert.Equal(t, test.wantStart, req.StartSlot)
+				assert.Equal(t, test.wantCount, req.Count)
+				for _, envelope := range available {
+					message, err := envelope.Envelope()
+					assert.NoError(t, err)
+					if message.Slot() >= req.StartSlot && message.Slot() < req.StartSlot.Add(req.Count) {
+						assert.NoError(t, prysmsync.WriteExecutionPayloadEnvelopeChunk(stream, server.Encoding(), envelope.Proto().(*ethpb.SignedExecutionPayloadEnvelope)))
+					}
+				}
+				assert.NoError(t, stream.CloseWrite())
+			})
+			server.SetStreamHandler(fmt.Sprintf("%s/ssz_snappy", p2p.RPCExecutionPayloadEnvelopesByRootTopicV1), func(stream network.Stream) {
+				defer func() { assert.NoError(t, stream.Close()) }()
+				req := new(p2ptypes.ExecutionPayloadEnvelopesByRootReq)
+				assert.NoError(t, server.Encoding().DecodeWithMaxLength(stream, req))
+				assert.DeepEqual(t, p2ptypes.ExecutionPayloadEnvelopesByRootReq{origin.Root()}, *req)
+				rootRequests.Add(1)
+				assert.NoError(t, prysmsync.WriteExecutionPayloadEnvelopeChunk(stream, server.Encoding(), available[0].Proto().(*ethpb.SignedExecutionPayloadEnvelope)))
+				assert.NoError(t, stream.CloseWrite())
+			})
+			r := &fetchRequestResponse{start: 101, count: test.count, blocksFrom: server.PeerID(), bwb: []blocks.BlockWithROSidecars{{Block: first}, {Block: last}}}
+			f.fetchPayloads(ctx, r, nil)
+			require.NoError(t, r.err)
+			require.Equal(t, 2, len(r.bwb))
+			want := available
+			if test.parentUnknown {
+				want = available[1:]
+			}
+			require.Equal(t, len(want), len(r.envelopes))
+			for i := range want {
+				require.DeepEqual(t, want[i].Proto(), r.envelopes[i].Proto())
+			}
+			require.Equal(t, int32(1), rangeRequests.Load())
+			require.Equal(t, test.wantRootRequests, rootRequests.Load())
+			columnBlocks, err := columnFetchBlocks(r.bwb, r.envelopes, slots.ToEpoch(lastSlot), func(root [32]byte) (blocks.ROBlock, bool) {
+				return f.resolveBlock(ctx, root)
+			})
+			require.NoError(t, err)
+			require.Equal(t, true, rootSet(columnBlocks)[last.Root()])
+			if !test.parentUnknown {
+				require.Equal(t, true, rootSet(columnBlocks)[origin.Root()])
+			}
+			downscores, err := client.Peers().Scorers().BadResponsesScorer().Count(server.PeerID())
+			require.NoError(t, err)
+			require.Equal(t, 0, downscores)
+		})
+	}
+}
+
+func TestFetchPayloads_CappedForkRange(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		firstSlot    primitives.Slot
+		middleSlot   primitives.Slot
+		lastSlot     primitives.Slot
+		wantCount    uint64
+		wantBlocks   int
+		wantPayloads int
+	}{
+		{name: "full transition after capped range", firstSlot: 101, middleSlot: 250, lastSlot: 260, wantCount: 1, wantBlocks: 1},
+		{name: "leading skipped slots", firstSlot: 250, middleSlot: 260, lastSlot: 270, wantCount: 21, wantBlocks: 3, wantPayloads: 1},
+		{name: "block at exclusive end", firstSlot: 101, middleSlot: 229, lastSlot: 230, wantCount: 1, wantBlocks: 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := t.Context()
+			f, client := newPayloadTestFetcher(t, 100)
+			ancestorHash, middleHash := [32]byte{1}, [32]byte{3}
+			origin := makeGloasBlockWithPayload(t, 100, [32]byte{}, ancestorHash, [32]byte{2})
+			f.chain.(*mock.ChainService).BlockSlot = origin.Block().Slot()
+			first := makeGloasBlockWithPayload(t, test.firstSlot, origin.Root(), ancestorHash, [32]byte{4})
+			middle := makeGloasBlockWithPayload(t, test.middleSlot, first.Root(), ancestorHash, middleHash)
+			last := makeGloasBlock(t, test.lastSlot, middle.Root(), middleHash)
+			require.NoError(t, f.db.(db.Database).SaveBlock(ctx, origin.ReadOnlySignedBeaconBlock))
+			envelope := makeEnvelopeForRoot(t, test.middleSlot, middle.Root(), middleHash, ancestorHash)
+			server := p2ptest.NewTestP2P(t)
+			client.Connect(server)
+			var requests atomic.Int32
+			server.SetStreamHandler(fmt.Sprintf("%s/ssz_snappy", p2p.RPCExecutionPayloadEnvelopesByRangeTopicV1), func(stream network.Stream) {
+				defer func() { assert.NoError(t, stream.Close()) }()
+				req := new(ethpb.ExecutionPayloadEnvelopesByRangeRequest)
+				assert.NoError(t, server.Encoding().DecodeWithMaxLength(stream, req))
+				requests.Add(1)
+				assert.Equal(t, test.firstSlot, req.StartSlot)
+				assert.Equal(t, test.wantCount, req.Count)
+				if test.middleSlot >= req.StartSlot && test.middleSlot < req.StartSlot.Add(req.Count) {
+					assert.NoError(t, prysmsync.WriteExecutionPayloadEnvelopeChunk(stream, server.Encoding(), envelope.Proto().(*ethpb.SignedExecutionPayloadEnvelope)))
+				}
+				assert.NoError(t, stream.CloseWrite())
+			})
+			fork, err := f.forkDataFromBlocks(ctx, server.PeerID(), []blocks.BlockWithROSidecars{{Block: first}, {Block: middle}, {Block: last}})
+			require.NoError(t, err)
+			require.Equal(t, test.wantBlocks, len(fork.bwb))
+			require.Equal(t, first.Root(), fork.bwb[0].Block.Root())
+			require.Equal(t, test.wantPayloads, len(fork.envelopes))
+			if test.wantPayloads > 0 {
+				require.DeepEqual(t, envelope.Proto(), fork.envelopes[0].Proto())
+			}
+			require.Equal(t, int32(1), requests.Load())
+			downscores, err := client.Peers().Scorers().BadResponsesScorer().Count(server.PeerID())
+			require.NoError(t, err)
+			require.Equal(t, 0, downscores)
 		})
 	}
 }
