@@ -167,6 +167,68 @@ func TestAt(t *testing.T) {
 	assert.ErrorContains(t, "index 8 out of bounds", err)
 }
 
+func TestAll(t *testing.T) {
+	// What we want to check:
+	// - iteration yields the same (index, value) pairs as calling At with every index up to Len
+	// - correct pairs are returned for an object without individual or appended values
+	// - iteration can be stopped early and the lock is released afterwards
+	// - a slice initialized with nil yields nothing
+
+	s := setup()
+	testCases := []struct {
+		name string
+		obj  *testObject
+	}{
+		{name: "first object", obj: &testObject{id: 1}},
+		{name: "second object", obj: &testObject{id: 2}},
+		{name: "object without individual or appended values", obj: &testObject{id: 999}},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			expected := s.Value(tc.obj)
+			collected := make([]int, 0, len(expected))
+			next := uint64(0)
+			for i, v := range s.All(tc.obj) {
+				require.Equal(t, next, i)
+				collected = append(collected, v)
+				next++
+			}
+			require.Equal(t, s.Len(tc.obj), len(collected))
+			assert.DeepEqual(t, expected, collected)
+			for i, v := range collected {
+				atValue, err := s.At(tc.obj, uint64(i))
+				require.NoError(t, err)
+				assert.Equal(t, atValue, v)
+			}
+		})
+	}
+
+	t.Run("early break releases the lock", func(t *testing.T) {
+		first := &testObject{id: 1}
+		count := 0
+		for range s.All(first) {
+			count++
+			if count == 2 {
+				break
+			}
+		}
+		assert.Equal(t, 2, count)
+		// UpdateAt takes the write lock, so this would deadlock if All kept holding the lock after the break.
+		require.NoError(t, s.UpdateAt(first, 0, 456))
+		v, err := s.At(first, 0)
+		require.NoError(t, err)
+		assert.Equal(t, 456, v)
+	})
+
+	t.Run("nil-initialized slice", func(t *testing.T) {
+		s := &Slice[int]{}
+		s.Init(nil)
+		for range s.All(&testObject{id: 1}) {
+			t.Fatal("expected no items")
+		}
+	})
+}
+
 func TestUpdateAt(t *testing.T) {
 	// What we want to check:
 	// - shared value is updated only for the updated object, creating a new individual value (shared value remains the same)
@@ -801,6 +863,79 @@ func BenchmarkValue(b *testing.B) {
 		}
 		for b.Loop() {
 			s.Value(objs[rand.Intn(_10m)])
+		}
+	})
+}
+
+var benchSink int
+
+// BenchmarkAll compares a full read of the slice through per-index At calls against the All iterator.
+//
+// Results on an Apple M4 Pro (go test -bench BenchmarkAll -benchtime 20x -count 3, medians):
+//
+//	1,000,000 shared items via At                            6.0 ms/op, 0 allocs/op
+//	1,000,000 shared items via All                           2.3 ms/op, 0 allocs/op
+//	1,000,000 items with 100,000 individual values via At    24.4 ms/op, 0 allocs/op
+//	1,000,000 items with 100,000 individual values via All   20.8 ms/op, 0 allocs/op
+func BenchmarkAll(b *testing.B) {
+	const _1m = 1000000
+
+	b.Run("1,000,000 shared items via At", func(b *testing.B) {
+		s := &Slice[int]{}
+		s.Init(make([]int, _1m))
+		obj := &testObject{}
+		b.ReportAllocs()
+		for b.Loop() {
+			for i := range _1m {
+				v, err := s.At(obj, uint64(i))
+				if err != nil {
+					b.Fatal(err)
+				}
+				benchSink += v
+			}
+		}
+	})
+	b.Run("1,000,000 shared items via All", func(b *testing.B) {
+		s := &Slice[int]{}
+		s.Init(make([]int, _1m))
+		obj := &testObject{}
+		b.ReportAllocs()
+		for b.Loop() {
+			for _, v := range s.All(obj) {
+				benchSink += v
+			}
+		}
+	})
+	b.Run("1,000,000 items with 100,000 individual values via At", func(b *testing.B) {
+		s := &Slice[int]{}
+		s.Init(make([]int, _1m))
+		obj := &testObject{id: 1}
+		for i := 0; i < _1m; i += 10 {
+			s.individualItems[uint64(i)] = &MultiValueItem[int]{Values: []*Value[int]{{val: i, ids: []uint64{1}}}}
+		}
+		b.ReportAllocs()
+		for b.Loop() {
+			for i := range _1m {
+				v, err := s.At(obj, uint64(i))
+				if err != nil {
+					b.Fatal(err)
+				}
+				benchSink += v
+			}
+		}
+	})
+	b.Run("1,000,000 items with 100,000 individual values via All", func(b *testing.B) {
+		s := &Slice[int]{}
+		s.Init(make([]int, _1m))
+		obj := &testObject{id: 1}
+		for i := 0; i < _1m; i += 10 {
+			s.individualItems[uint64(i)] = &MultiValueItem[int]{Values: []*Value[int]{{val: i, ids: []uint64{1}}}}
+		}
+		b.ReportAllocs()
+		for b.Loop() {
+			for _, v := range s.All(obj) {
+				benchSink += v
+			}
 		}
 	})
 }
