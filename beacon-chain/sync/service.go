@@ -150,6 +150,9 @@ type Service struct {
 	subHandler                           *subTopicHandler
 	pendingAttsLock                      sync.RWMutex
 	pendingQueueLock                     sync.RWMutex
+	parentFetchLock                      sync.Mutex
+	parentFetchSlot                      primitives.Slot
+	parentFetchRoots                     map[[32]byte]bool
 	chainStarted                         *atomic.Bool
 	validateBlockLock                    sync.RWMutex
 	rateLimiter                          *limiter
