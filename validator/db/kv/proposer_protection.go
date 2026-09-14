@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/validator/db/common"
 	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -203,17 +202,10 @@ func (s *Store) SlashableProposalCheck(
 	pubKey [fieldparams.BLSPubkeyLength]byte,
 	signedBlock interfaces.ReadOnlySignedBeaconBlock,
 	signingRoot [fieldparams.RootLength]byte,
-	emitAccountMetrics bool,
-	validatorProposeFailVec *prometheus.CounterVec,
 ) error {
-	fmtKey := fmt.Sprintf("%#x", pubKey[:])
-
 	blk := signedBlock.Block()
 	prevSigningRoot, proposalAtSlotExists, prevSigningRootExists, err := s.ProposalHistoryForSlot(ctx, pubKey, blk.Slot())
 	if err != nil {
-		if emitAccountMetrics {
-			validatorProposeFailVec.WithLabelValues(fmtKey).Inc()
-		}
 		return errors.Wrap(err, "failed to get proposal history")
 	}
 
@@ -258,17 +250,11 @@ func (s *Store) SlashableProposalCheck(
 	// - the signing root differs,
 	// ==> we consider it slashable.
 	if proposalAtSlotExists && (!prevSigningRootExists || prevSigningRoot != signingRoot) {
-		if emitAccountMetrics {
-			validatorProposeFailVec.WithLabelValues(fmtKey).Inc()
-		}
 		return errors.New(common.FailedBlockSignLocalErr)
 	}
 
 	// Save the proposal for this slot.
 	if err := s.SaveProposalHistoryForSlot(ctx, pubKey, blk.Slot(), signingRoot[:]); err != nil {
-		if emitAccountMetrics {
-			validatorProposeFailVec.WithLabelValues(fmtKey).Inc()
-		}
 		return errors.Wrap(err, "failed to save updated proposal history")
 	}
 
