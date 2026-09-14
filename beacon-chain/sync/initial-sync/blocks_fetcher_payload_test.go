@@ -681,19 +681,30 @@ func TestFetchParentPayloadFromPeers(t *testing.T) {
 	child := makeGloasBlock(t, 14, parent.Root(), blockHash)
 	valid := makeEnvelopeForRoot(t, 10, parent.Root(), blockHash, parentHash)
 	for _, byRange := range []bool{false, true} {
-		for _, response := range []string{"unavailable", "missing", "wrong root", "wrong hash", "wrong slot"} {
-			t.Run(fmt.Sprintf("by range %t/%s", byRange, response), func(t *testing.T) {
+		for _, test := range []struct {
+			response        string
+			rangeDownscores int
+		}{
+			{response: "unavailable"},
+			{response: "missing"},
+			{response: "wrong root"},
+			{response: "wrong hash"},
+			{response: "wrong slot", rangeDownscores: 1},
+		} {
+			t.Run(fmt.Sprintf("by range %t/%s", byRange, test.response), func(t *testing.T) {
 				f, client := newPayloadTestFetcher(t, 10)
 				bad, good := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
 				client.Connect(bad)
 				client.Connect(good)
+				client.Peers().Scorers().BlockProviderScorer().Touch(bad.PeerID())
+				client.Peers().Scorers().BlockProviderScorer().Touch(good.PeerID())
 				var failedRequests, goodRangeRequests atomic.Int32
 				protocol := fmt.Sprintf("%s/ssz_snappy", p2p.RPCExecutionPayloadEnvelopesByRootTopicV1)
 				rangeProtocol := fmt.Sprintf("%s/ssz_snappy", p2p.RPCExecutionPayloadEnvelopesByRangeTopicV1)
 				writeBadResponse := func(stream network.Stream) {
 					failedRequests.Add(1)
 					root, hash, slot := parent.Root(), blockHash, primitives.Slot(10)
-					switch response {
+					switch test.response {
 					case "wrong root":
 						root = [32]byte{99}
 					case "wrong hash":
@@ -701,12 +712,12 @@ func TestFetchParentPayloadFromPeers(t *testing.T) {
 					case "wrong slot":
 						slot = 9
 					}
-					if response != "missing" {
+					if test.response != "missing" {
 						envelope := makeEnvelopeForRoot(t, slot, root, hash, parentHash)
 						assert.NoError(t, prysmsync.WriteExecutionPayloadEnvelopeChunk(stream, bad.Encoding(), envelope.Proto().(*ethpb.SignedExecutionPayloadEnvelope)))
 					}
 				}
-				if byRange || response != "unavailable" {
+				if byRange || test.response != "unavailable" {
 					bad.SetStreamHandler(protocol, func(stream network.Stream) {
 						defer func() { assert.NoError(t, stream.Close()) }()
 						req := new(p2ptypes.ExecutionPayloadEnvelopesByRootReq)
@@ -717,7 +728,7 @@ func TestFetchParentPayloadFromPeers(t *testing.T) {
 						assert.NoError(t, stream.CloseWrite())
 					})
 				}
-				if byRange && response != "unavailable" {
+				if byRange && test.response != "unavailable" {
 					bad.SetStreamHandler(rangeProtocol, func(stream network.Stream) {
 						defer func() { assert.NoError(t, stream.Close()) }()
 						req := new(ethpb.ExecutionPayloadEnvelopesByRangeRequest)
@@ -749,9 +760,22 @@ func TestFetchParentPayloadFromPeers(t *testing.T) {
 				})
 				_, _, err := f.fetchParentPayloadFromPeers(t.Context(), parent, child, bad.PeerID(), nil)
 				require.ErrorContains(t, "missing payload envelope for FULL parent", err)
+				wantDownscores := 0
+				if byRange {
+					wantDownscores = test.rangeDownscores
+				}
+				downscores, err := client.Peers().Scorers().BadResponsesScorer().Count(bad.PeerID())
+				require.NoError(t, err)
+				require.Equal(t, wantDownscores, downscores)
 				envelope, provider, err := f.fetchParentPayloadFromPeers(t.Context(), parent, child, bad.PeerID(), []peer.ID{bad.PeerID(), good.PeerID()})
 				require.NoError(t, err)
 				require.Equal(t, good.PeerID(), provider)
+				downscores, err = client.Peers().Scorers().BadResponsesScorer().Count(bad.PeerID())
+				require.NoError(t, err)
+				require.Equal(t, 2*wantDownscores, downscores)
+				downscores, err = client.Peers().Scorers().BadResponsesScorer().Count(good.PeerID())
+				require.NoError(t, err)
+				require.Equal(t, 0, downscores)
 				matches, err := blocks.BlockBuiltOnParentEnvelope(envelope, child)
 				require.NoError(t, err)
 				require.Equal(t, true, matches)
@@ -760,7 +784,7 @@ func TestFetchParentPayloadFromPeers(t *testing.T) {
 					wantGoodRangeRequests = 1
 				}
 				require.Equal(t, wantGoodRangeRequests, goodRangeRequests.Load())
-				if response != "unavailable" {
+				if test.response != "unavailable" {
 					require.Equal(t, int32(2), failedRequests.Load())
 				}
 			})
