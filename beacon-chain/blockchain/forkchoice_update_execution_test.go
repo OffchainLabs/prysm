@@ -164,6 +164,8 @@ func TestShouldOverrideFCU(t *testing.T) {
 	hook := logTest.NewGlobal()
 	service, tr := minimalTestService(t)
 	ctx, fcs := tr.ctx, tr.fcs
+	stubTestForkChoiceCommittees(fcs)
+	initializeTestForkChoiceBalances(t, fcs, []uint64{params.BeaconConfig().MaxEffectiveBalance})
 
 	service.SetGenesisTime(time.Now().Add(-time.Duration(2*params.BeaconConfig().SecondsPerSlot) * time.Second))
 	fcs.SetGenesisTime(time.Now().Add(-time.Duration(2*params.BeaconConfig().SecondsPerSlot) * time.Second))

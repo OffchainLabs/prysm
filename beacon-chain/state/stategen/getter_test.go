@@ -66,13 +66,124 @@ func TestStateByRoot_ColdState(t *testing.T) {
 	require.NoError(t, err)
 	require.DeepSSZEqual(t, loadedState.ToProtoUnsafe(), beaconState.ToProtoUnsafe())
 
-	bal, err := service.ActiveNonSlashedBalancesByRoot(ctx, bRoot)
+	bal, err := service.ForkChoiceBalancesByRoot(ctx, bRoot)
 	require.NoError(t, err)
-	require.Equal(t, 32, len(bal))
-	for _, balance := range bal[1:] {
+	require.Equal(t, 32, len(bal.ActiveNonSlashed))
+	for _, balance := range bal.ActiveNonSlashed[1:] {
 		require.Equal(t, params.BeaconConfig().MaxEffectiveBalance, balance)
 	}
-	require.Equal(t, uint64(0), bal[0])
+	require.Equal(t, uint64(0), bal.ActiveNonSlashed[0])
+	require.Equal(t, params.BeaconConfig().MaxEffectiveBalance, bal.Effective[0])
+	require.Equal(t, 32*params.BeaconConfig().MaxEffectiveBalance, bal.TotalActive)
+}
+
+func TestForkChoiceBalancesByRoot(t *testing.T) {
+	inc := params.BeaconConfig().EffectiveBalanceIncrement
+	for _, tt := range []struct {
+		name             string
+		allInactive      bool
+		activeNonSlashed []uint64
+		totalActive      uint64
+	}{
+		{
+			name:             "preserves slashed and inactive effective balances",
+			activeNonSlashed: []uint64{32 * inc, 0, 0, 0},
+			totalActive:      56 * inc,
+		},
+		{
+			name:             "minimum total active balance",
+			allInactive:      true,
+			activeNonSlashed: []uint64{0, 0, 0, 0},
+			totalActive:      inc,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			service := New(testDB.SetupDB(t), doublylinkedtree.New())
+			st, _ := util.DeterministicGenesisState(t, 4)
+			effective := []uint64{32 * inc, 24 * inc, 16 * inc, 8 * inc}
+			for i, balance := range effective {
+				index := primitives.ValidatorIndex(i)
+				val, err := st.ValidatorAtIndex(index)
+				require.NoError(t, err)
+				val.EffectiveBalance = balance
+				val.Slashed = i == 1
+				if i == 2 || tt.allInactive {
+					val.ActivationEpoch = 1
+				}
+				if i == 3 {
+					val.ExitEpoch = 0
+				}
+				require.NoError(t, st.UpdateValidatorAtIndex(index, val))
+			}
+			root := [32]byte{'A'}
+			service.hotStateCache.put(root, st)
+
+			balances, err := service.ForkChoiceBalancesByRoot(t.Context(), root)
+			require.NoError(t, err)
+			require.DeepEqual(t, tt.activeNonSlashed, balances.ActiveNonSlashed)
+			require.DeepEqual(t, effective, balances.Effective)
+			require.Equal(t, tt.totalActive, balances.TotalActive)
+		})
+	}
+}
+
+func TestCommitteesByRoot_UsesRequestedSlot(t *testing.T) {
+	ctx := t.Context()
+	service := New(testDB.SetupDB(t), doublylinkedtree.New())
+	st, _ := util.DeterministicGenesisState(t, 64)
+	require.NoError(t, st.SetSlot(1))
+	root := [32]byte{'A'}
+	service.hotStateCache.put(root, st)
+
+	want, err := helpers.BeaconCommittees(ctx, st, 0)
+	require.NoError(t, err)
+	got, err := service.CommitteesByRoot(ctx, root, 0, nil)
+	require.NoError(t, err)
+	require.DeepEqual(t, want, got)
+	stateSlotCommittees, err := helpers.BeaconCommittees(ctx, st, st.Slot())
+	require.NoError(t, err)
+	require.NotEqual(t, stateSlotCommittees[0][0], got[0][0])
+}
+
+func TestCommitteesByRoot_CacheMissDoesNotAccessDB(t *testing.T) {
+	// A nil database makes any fallback to DB lookup or block replay fail.
+	service := New(nil, doublylinkedtree.New())
+	for _, root := range [][32]byte{{}, {'A'}} {
+		committees, err := service.CommitteesByRoot(t.Context(), root, 1, nil)
+		require.NoError(t, err)
+		require.Equal(t, true, committees == nil)
+	}
+}
+
+func TestCommitteesByRoot_ProvidedStateDoesNotAccessDB(t *testing.T) {
+	ctx := t.Context()
+	service := New(nil, doublylinkedtree.New())
+	st, _ := util.DeterministicGenesisState(t, 64)
+	root := [32]byte{'A'}
+	want, err := helpers.BeaconCommittees(ctx, st, 0)
+	require.NoError(t, err)
+	got, err := service.CommitteesByRoot(ctx, root, 0, st)
+	require.NoError(t, err)
+	require.DeepEqual(t, want, got)
+	require.Equal(t, nil, service.StateByRootIfCachedNoCopy(root))
+}
+
+func TestCommitteesByRoot_DoesNotLoadDatabaseState(t *testing.T) {
+	ctx := t.Context()
+	service := New(testDB.SetupDB(t), doublylinkedtree.New())
+	st, _ := util.DeterministicGenesisState(t, 64)
+	root := [32]byte{'A'}
+	require.NoError(t, service.beaconDB.SaveState(ctx, st, root))
+	require.Equal(t, true, service.beaconDB.HasState(ctx, root))
+
+	committees, err := service.CommitteesByRoot(ctx, root, 0, nil)
+	require.NoError(t, err)
+	require.Equal(t, true, committees == nil)
+
+	service.hotStateCache.put(root, st)
+	committees, err = service.CommitteesByRoot(ctx, root, 0, nil)
+	require.NoError(t, err)
+	require.Equal(t, true, committees != nil)
 }
 
 func TestStateByRootIfCachedNoCopy_HotState(t *testing.T) {

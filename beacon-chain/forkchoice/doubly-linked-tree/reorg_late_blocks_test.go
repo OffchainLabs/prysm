@@ -1,10 +1,13 @@
 package doublylinkedtree
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
@@ -17,6 +20,7 @@ func TestForkChoice_ShouldOverrideFCU(t *testing.T) {
 		f.store.committeeWeight += uint64(10)
 	}
 	f.store.committeeWeight /= uint64(params.BeaconConfig().SlotsPerEpoch)
+	f.store.weakHeadCommitteeWeight = f.store.committeeWeight
 	ctx := t.Context()
 	driftGenesisTime(f, 1, 0)
 	st, blk, err := prepareForkchoiceState(ctx, 1, [32]byte{'a'}, [32]byte{}, [32]byte{'A'}, 0, 0)
@@ -92,7 +96,7 @@ func TestForkChoice_ShouldOverrideFCU(t *testing.T) {
 		driftGenesisTime(f, 2, orphanLateBlockFirstThreshold+time.Second)
 	})
 	t.Run("Head is strong", func(t *testing.T) {
-		f.store.headNode.weight = f.store.committeeWeight
+		f.store.headNode.balance = f.store.committeeWeight
 		require.Equal(t, false, f.ShouldOverrideFCU())
 	})
 }
@@ -106,6 +110,7 @@ func TestForkChoice_GetProposerHead(t *testing.T) {
 		f.store.committeeWeight += uint64(10)
 	}
 	f.store.committeeWeight /= uint64(params.BeaconConfig().SlotsPerEpoch)
+	f.store.weakHeadCommitteeWeight = f.store.committeeWeight
 	ctx := t.Context()
 	driftGenesisTime(f, 1, 0)
 	parentRoot := [32]byte{'a'}
@@ -178,7 +183,7 @@ func TestForkChoice_GetProposerHead(t *testing.T) {
 		f.store.headNode.parent.weight = saved
 	})
 	t.Run("Head is strong", func(t *testing.T) {
-		f.store.headNode.weight = f.store.committeeWeight
+		f.store.headNode.balance = f.store.committeeWeight
 		require.Equal(t, childRoot, f.GetProposerHead())
 	})
 }
@@ -198,6 +203,7 @@ func TestForkChoice_ShouldOverrideFCU_EpochBoundary(t *testing.T) {
 		f.store.committeeWeight += uint64(10)
 	}
 	f.store.committeeWeight /= uint64(params.BeaconConfig().SlotsPerEpoch)
+	f.store.weakHeadCommitteeWeight = f.store.committeeWeight
 	ctx := t.Context()
 
 	parentSlot := params.BeaconConfig().SlotsPerEpoch - 2 // 30
@@ -239,6 +245,7 @@ func TestForkChoice_GetProposerHead_EpochBoundary(t *testing.T) {
 		f.store.committeeWeight += uint64(10)
 	}
 	f.store.committeeWeight /= uint64(params.BeaconConfig().SlotsPerEpoch)
+	f.store.weakHeadCommitteeWeight = f.store.committeeWeight
 	ctx := t.Context()
 
 	parentSlot := params.BeaconConfig().SlotsPerEpoch - 2 // 30
@@ -268,4 +275,87 @@ func TestForkChoice_GetProposerHead_EpochBoundary(t *testing.T) {
 	fn.timestamp = fn.timestamp.Add(-1 * (params.BeaconConfig().SlotDuration() - orphanLateBlockFirstThreshold))
 
 	require.Equal(t, parentRoot, f.GetProposerHead())
+}
+
+func TestForkChoice_WeakHeadAfterEquivocation(t *testing.T) {
+	for _, gloas := range []bool{false, true} {
+		name := "pre-Gloas"
+		if gloas {
+			name = "Gloas"
+		}
+		t.Run(name, func(t *testing.T) {
+			for _, inCommittee := range []bool{true, false} {
+				name := "head-slot equivocators"
+				if !inCommittee {
+					name = "other-slot equivocators"
+				}
+				t.Run(name, func(t *testing.T) {
+					f := setup(0, 0)
+					if gloas {
+						f = setupGloas(t, 0, 0)
+					}
+					ctx := t.Context()
+					f.justifiedBalances = make([]uint64, 640)
+					for i := range f.justifiedBalances {
+						f.justifiedBalances[i] = 10
+					}
+					require.NoError(t, f.updateJustifiedBalances(ctx, [32]byte{}))
+					parentRoot, headRoot := [32]byte{'a'}, [32]byte{'b'}
+					f.SetCommitteesByRooter(func(_ context.Context, root [32]byte, slot primitives.Slot, _ state.ReadOnlyBeaconState) ([][]primitives.ValidatorIndex, error) {
+						committee := make([]primitives.ValidatorIndex, 20)
+						for i := range committee {
+							committee[i] = primitives.ValidatorIndex(i + 20)
+							if root == headRoot && slot == 2 && inCommittee {
+								committee[i] = primitives.ValidatorIndex(i)
+							}
+						}
+						return [][]primitives.ValidatorIndex{committee}, nil
+					})
+					driftGenesisTime(f, 1, 5*time.Second)
+					st, blk, err := prepareForkchoiceState(ctx, 1, parentRoot, [32]byte{}, [32]byte{'A'}, 0, 0)
+					if gloas {
+						st, blk, err = prepareGloasForkchoiceState(ctx, 1, parentRoot, [32]byte{}, [32]byte{'A'}, [32]byte{}, 0, 0)
+					}
+					require.NoError(t, err)
+					require.NoError(t, f.InsertNode(ctx, st, blk))
+					parentVoters := make([]uint64, 635)
+					for i := range parentVoters {
+						parentVoters[i] = uint64(i + 5)
+					}
+					driftGenesisTime(f, 2, 5*time.Second)
+					st, blk, err = prepareForkchoiceState(ctx, 2, headRoot, parentRoot, [32]byte{'B'}, 0, 0)
+					if gloas {
+						st, blk, err = prepareGloasForkchoiceState(ctx, 2, headRoot, parentRoot, [32]byte{'B'}, [32]byte{}, 0, 0)
+					}
+					require.NoError(t, err)
+					require.NoError(t, f.InsertNode(ctx, st, blk))
+					f.ProcessAttestation(ctx, []uint64{0, 1, 2, 3, 4}, headRoot, 2, !gloas)
+					f.ProcessAttestation(ctx, parentVoters, parentRoot, 1, !gloas)
+					root, err := f.Head(ctx)
+					require.NoError(t, err)
+					require.Equal(t, headRoot, root)
+					require.Equal(t, uint64(50), f.store.headNode.weight)
+					require.Equal(t, false, f.ShouldOverrideFCU())
+					driftGenesisTime(f, 3, 0)
+					require.Equal(t, headRoot, f.GetProposerHead())
+
+					driftGenesisTime(f, 2, 5*time.Second)
+					f.InsertSlashedIndex(ctx, 0)
+					f.InsertSlashedIndex(ctx, 1)
+					f.InsertSlashedIndex(ctx, 0)
+					root, err = f.Head(ctx)
+					require.NoError(t, err)
+					require.Equal(t, headRoot, root)
+					require.Equal(t, uint64(30), f.store.headNode.weight)
+					require.Equal(t, !inCommittee, f.ShouldOverrideFCU())
+					driftGenesisTime(f, 3, 0)
+					wantRoot := headRoot
+					if !inCommittee {
+						wantRoot = parentRoot
+					}
+					require.Equal(t, wantRoot, f.GetProposerHead())
+				})
+			}
+		})
+	}
 }
