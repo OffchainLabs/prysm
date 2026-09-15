@@ -67,6 +67,9 @@ types:
       CellsPresentBitmap: {type: "ProgressiveBitlist"}
       PartialColumn:      {type: "ProgressiveList"}
       KzgProofs:          {type: "ProgressiveList"}
+  - name: "LightClientBlockDataGloas"
+  - name: "LightClientBootstrapDataGloas"
+  - name: "LightClientEpochDataGloas"
   - name: "PayloadAttestation"
     progressive: {}
   - name: "PayloadAttestationData"

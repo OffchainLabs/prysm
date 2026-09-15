@@ -10,6 +10,8 @@ types:
   - name: "BlobSidecar"
   - name: "BlobSidecars"
   - name: "BuilderBidDeneb"
+  - name: "LightClientBootstrapDataDeneb"
+  - name: "LightClientEpochDataDeneb"
   - name: "LightClientHeaderDeneb"
   - name: "LightClientBootstrapDeneb"
   - name: "LightClientUpdateDeneb"

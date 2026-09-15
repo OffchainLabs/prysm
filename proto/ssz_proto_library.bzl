@@ -7,6 +7,7 @@ These rules allow for variable substitution for hardcoded tag values like ssz-si
 ####### Configuration #######
 
 mainnet = {
+    "slots_per_epoch.size": "32",  # SLOTS_PER_EPOCH
     "block_roots.size": "8192,32",  # SLOTS_PER_HISTORICAL_ROOT, [32]byte
     "state_roots.size": "8192,32",  # SLOTS_PER_HISTORICAL_ROOT, [32]byte
     "eth1_data_votes.size": "2048",  # SLOTS_PER_ETH1_VOTING_PERIOD
@@ -56,6 +57,7 @@ mainnet = {
 }
 
 minimal = {
+    "slots_per_epoch.size": "8",  # SLOTS_PER_EPOCH
     "block_roots.size": "64,32",
     "state_roots.size": "64,32",
     "eth1_data_votes.size": "32",

@@ -9,6 +9,8 @@ types:
   - name: "BuilderBidCapella"
   - name: "HistoricalSummary"
   - name: "LightClientBootstrapCapella"
+  - name: "LightClientBootstrapDataCapella"
+  - name: "LightClientEpochDataCapella"
   - name: "LightClientFinalityUpdateCapella"
   - name: "LightClientHeaderCapella"
   - name: "LightClientOptimisticUpdateCapella"
