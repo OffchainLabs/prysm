@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/confirmation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
@@ -139,6 +140,11 @@ func (s *Service) ProposerBoost() [32]byte {
 	s.cfg.ForkChoiceStore.Lock()
 	defer s.cfg.ForkChoiceStore.Unlock()
 	return s.cfg.ForkChoiceStore.ProposerBoost()
+}
+
+// FCR returns the fast confirmation rule instance, or nil if FCR is not enabled.
+func (s *Service) FCR() *confirmation.FastConfirmationRule {
+	return s.fcr
 }
 
 // ChainHeads returns all possible chain heads (leaves of fork choice tree).

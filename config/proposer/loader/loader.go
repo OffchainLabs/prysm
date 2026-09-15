@@ -2,7 +2,9 @@ package loader
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v7/config"
@@ -14,7 +16,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
+	"google.golang.org/protobuf/proto"
 )
+
+// maxLoggedKeys caps the key lists in the DB-replacement warning.
+const maxLoggedKeys = 10
 
 type settingsType int
 
@@ -27,10 +33,11 @@ const (
 )
 
 type SettingsLoader struct {
-	loadMethods []settingsType
-	existsInDB  bool
-	db          iface.ValidatorDB
-	options     *flagOptions
+	loadMethods    []settingsType
+	existsInDB     bool
+	replacesDBKeys bool
+	db             iface.ValidatorDB
+	options        *flagOptions
 }
 
 type flagOptions struct {
@@ -123,13 +130,15 @@ func determineLoadMethods(cliCtx *cli.Context, loadedFromDB bool) []settingsType
 // Load saves the proposer settings to the database
 func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error) {
 	var loadedSettings, dbSettings *validatorpb.ProposerSettingsPayload
+	var dbps *proposer.Settings
 
 	// override settings based on other options
 	psl.applyOverrides()
 
 	// check if database has settings already
 	if psl.existsInDB {
-		dbps, err := psl.db.ProposerSettings(cliCtx.Context)
+		var err error
+		dbps, err = psl.db.ProposerSettings(cliCtx.Context)
 		if err != nil {
 			return nil, err
 		}
@@ -139,33 +148,36 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 			Debug("Loaded proposer settings from DB")
 	}
 
-	// start to process based on load method
+	// start to process based on load method,
+	// each method merges onto the previous method's result.
+	base := dbSettings
 	for _, method := range psl.loadMethods {
 		var err error
 		switch method {
 		case defaultFlag:
-			loadedSettings, err = psl.loadFromDefault(cliCtx, dbSettings)
+			loadedSettings, err = psl.loadFromDefault(cliCtx, base)
 			if err != nil {
 				return nil, err
 			}
 		case fileFlag:
-			loadedSettings, err = psl.loadFromFile(cliCtx, dbSettings)
+			loadedSettings, err = psl.loadFromFile(cliCtx, base)
 			if err != nil {
 				return nil, err
 			}
 		case urlFlag:
-			loadedSettings, err = psl.loadFromURL(cliCtx, dbSettings)
+			loadedSettings, err = psl.loadFromURL(cliCtx, base)
 			if err != nil {
 				return nil, err
 			}
 		case onlyDB, none:
-			loadedSettings = psl.processProposerSettings(&validatorpb.ProposerSettingsPayload{}, dbSettings)
+			loadedSettings = psl.processProposerSettings(&validatorpb.ProposerSettingsPayload{}, base)
 			if psl.existsInDB {
 				log.Info("Proposer settings loaded from the DB")
 			}
 		default:
 			return nil, errors.New("load method for proposer settings does not exist")
 		}
+		base = loadedSettings
 	}
 
 	// exit early if nothing is provided
@@ -178,10 +190,51 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 		return nil, err
 	}
 	ps.WarnDeprecatedSchema()
+	ps.WarnUnsetMaxExecutionPayment()
+	if psl.replacesDBKeys {
+		warnReplacedDBKeys(dbps, ps)
+	}
 	if err := psl.db.SaveProposerSettings(cliCtx.Context, ps); err != nil {
 		return nil, err
 	}
 	return ps, nil
+}
+
+// warnReplacedDBKeys lists the DB per-key entries the settings file/URL replaced.
+// Comparing normalized settings keeps an unchanged restart quiet.
+func warnReplacedDBKeys(db, merged *proposer.Settings) {
+	if db == nil || len(db.ProposeConfig) == 0 {
+		return
+	}
+	var dropped, overridden []string
+	for key, dbOpt := range db.ProposeConfig {
+		opt, ok := merged.ProposeConfig[key]
+		switch {
+		case !ok:
+			dropped = append(dropped, fmt.Sprintf("%#x", key))
+		case !proto.Equal(opt.ToConsensus(), dbOpt.ToConsensus()):
+			overridden = append(overridden, fmt.Sprintf("%#x", key))
+		}
+	}
+	if len(dropped) == 0 && len(overridden) == 0 {
+		return
+	}
+	log.WithField("droppedKeys", capKeys(dropped)).
+		WithField("droppedCount", len(dropped)).
+		WithField("overriddenKeys", capKeys(overridden)).
+		WithField("overriddenCount", len(overridden)).
+		Warn("Per-key proposer settings saved in the validator DB by a previous run differ from the configured settings file/URL; " +
+			"the settings source is authoritative and the DB entries are replaced. " +
+			"Changes made through the keymanager API do not survive a restart while a settings file or URL is configured")
+}
+
+// capKeys renders a sorted key list, truncated to maxLoggedKeys with a "+N more" tail.
+func capKeys(keys []string) string {
+	sort.Strings(keys)
+	if len(keys) > maxLoggedKeys {
+		return fmt.Sprintf("%s +%d more", strings.Join(keys[:maxLoggedKeys], ","), len(keys)-maxLoggedKeys)
+	}
+	return strings.Join(keys, ",")
 }
 
 func (psl *SettingsLoader) applyOverrides() {
@@ -219,6 +272,7 @@ func (psl *SettingsLoader) loadFromFile(cliCtx *cli.Context, dbSettings *validat
 	}
 	markExplicitEmptyBuilders(settingFromFile)
 	inferSchemaVersion(settingFromFile)
+	psl.replacesDBKeys = len(settingFromFile.ProposerConfig) > 0
 	log.WithField(flags.ProposerSettingsFlag.Name, cliCtx.String(flags.ProposerSettingsFlag.Name)).Info("Proposer settings loaded from file")
 	return psl.processProposerSettings(settingFromFile, dbSettings), nil
 }
@@ -233,6 +287,7 @@ func (psl *SettingsLoader) loadFromURL(cliCtx *cli.Context, dbSettings *validato
 	}
 	markExplicitEmptyBuilders(settingFromURL)
 	inferSchemaVersion(settingFromURL)
+	psl.replacesDBKeys = len(settingFromURL.ProposerConfig) > 0
 	log.WithField(flags.ProposerSettingsURLFlag.Name, cliCtx.String(flags.ProposerSettingsURLFlag.Name)).Infof("Proposer settings loaded from URL")
 	return psl.processProposerSettings(settingFromURL, dbSettings), nil
 }
@@ -327,6 +382,7 @@ func inferSchemaVersion(p *validatorpb.ProposerSettingsPayload) {
 
 // selectProposerConfig keeps the pre-v2 source precedence: a loaded per-key
 // section replaces the DB's entirely, so restarting with a file resets the DB.
+// Load reports what that replaced through warnReplacedDBKeys.
 func selectProposerConfig(db, loaded *validatorpb.ProposerSettingsPayload) map[string]*validatorpb.ProposerOptionPayload {
 	if loaded != nil && len(loaded.ProposerConfig) > 0 {
 		return loaded.ProposerConfig
@@ -418,12 +474,13 @@ func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPay
 
 func processBuilderConfig(current *validatorpb.BuilderConfig, override *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64) *validatorpb.BuilderConfig {
 	if current != nil {
-		current.GasLimit = reviewGasLimit(current.GasLimit)
-		if override != nil {
-			current.Enabled = override.Enabled
-		}
 		if gasLimitOnly != nil {
 			current.GasLimit = *gasLimitOnly
+		} else {
+			current.GasLimit = reviewGasLimit(current.GasLimit)
+		}
+		if override != nil {
+			current.Enabled = override.Enabled
 		}
 		return current
 	}

@@ -17,16 +17,23 @@ import (
 // fan-out: it returns a configurable bid/error and records calls.
 type fakeBuilderClient struct {
 	buildertesting.MockClient
-	url       string
-	bid       *eth.SignedExecutionPayloadBid
-	getErr    error
-	getCount  atomic.Int32
-	prefCount atomic.Int32
+	url         string
+	bid         *eth.SignedExecutionPayloadBid
+	getErr      error
+	statusErr   error
+	getCount    atomic.Int32
+	prefCount   atomic.Int32
+	statusCount atomic.Int32
 }
 
 func (f *fakeBuilderClient) NodeURL() string { return f.url }
 
-func (f *fakeBuilderClient) GetExecutionPayloadBid(context.Context, primitives.Slot, [32]byte, [32]byte, [48]byte, *eth.SignedRequestAuth) (*eth.SignedExecutionPayloadBid, error) {
+func (f *fakeBuilderClient) Status(context.Context) error {
+	f.statusCount.Add(1)
+	return f.statusErr
+}
+
+func (f *fakeBuilderClient) GetExecutionPayloadBid(context.Context, primitives.Slot, [32]byte, [32]byte, [48]byte, *eth.SignedBuilderRequestAuth) (*eth.SignedExecutionPayloadBid, error) {
 	f.getCount.Add(1)
 	return f.bid, f.getErr
 }
@@ -43,7 +50,7 @@ func entryFor(url string) *eth.BuilderEntry {
 func entryWithAuthData(url, data string) *eth.BuilderEntry {
 	return &eth.BuilderEntry{
 		Url:  []byte(url),
-		Auth: &eth.SignedRequestAuth{Message: &eth.RequestAuth{Data: []byte(data)}},
+		Auth: &eth.SignedBuilderRequestAuth{Message: &eth.BuilderRequestAuth{Data: []byte(data)}},
 	}
 }
 
@@ -229,7 +236,7 @@ func TestSubmitBuilderPreferences(t *testing.T) {
 		return &eth.BuilderPreferencesEntry{
 			Url:                 []byte(url),
 			MaxExecutionPayment: 5,
-			Auth:                &eth.SignedRequestAuth{Message: &eth.RequestAuth{Data: []byte("opaque-auth-data")}},
+			Auth:                &eth.SignedBuilderRequestAuth{Message: &eth.BuilderRequestAuth{Data: []byte("opaque-auth-data")}},
 		}
 	}
 
@@ -259,4 +266,19 @@ func TestSubmitBuilderPreferences(t *testing.T) {
 		failures := s.SubmitBuilderPreferences(t.Context(), []*eth.BuilderPreferencesEntry{prefEntry("http://ok")})
 		require.Equal(t, 0, len(failures))
 	})
+}
+
+func TestPingBuilderClients_PingsEveryCachedClient(t *testing.T) {
+	clients := map[string]*fakeBuilderClient{
+		"http://a": {url: "http://a"},
+		"http://b": {url: "http://b", statusErr: errors.New("down")},
+	}
+	s := newMultiplexService(t, clients)
+	for url := range clients {
+		_, err := s.clientFor(url)
+		require.NoError(t, err)
+	}
+	s.pingBuilderClients(t.Context())
+	require.Equal(t, int32(1), clients["http://a"].statusCount.Load())
+	require.Equal(t, int32(1), clients["http://b"].statusCount.Load())
 }

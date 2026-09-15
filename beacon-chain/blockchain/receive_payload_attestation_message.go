@@ -74,12 +74,12 @@ func (s *Service) PtcLookupState(ctx context.Context, blockRoot [32]byte, blockS
 		}
 	}
 	if bytes.Equal(blockDependent[:], headRoot) {
-		headState, err := s.HeadState(ctx)
+		headState, err := s.HeadStateReadOnly(ctx)
 		if err != nil {
 			return nil, err
 		}
 
-		return transition.ProcessSlotsUsingNextSlotCache(ctx, headState, headRoot, blockSlot)
+		return transition.ProcessSlotsIfNeeded(ctx, headState, headRoot, blockSlot)
 	}
 	if st := s.cfg.StateGen.StateByRootIfCachedNoCopy(blockRoot); st != nil && slots.ToEpoch(st.Slot()) == blockEpoch {
 		return st, nil

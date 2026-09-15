@@ -164,10 +164,10 @@ func (b batch) transitionToNext() batch {
 	if len(b.blocks) == 0 {
 		return b.withState(batchSequenced)
 	}
-	if len(b.columns.columnsNeeded()) > 0 {
+	if len(b.columnsNeeded()) > 0 {
 		return b.withState(batchSyncColumns)
 	}
-	if b.blobs != nil && b.blobs.needed() > 0 {
+	if b.blobsNeeded() > 0 {
 		return b.withState(batchSyncBlobs)
 	}
 	return b.withState(batchImportable)

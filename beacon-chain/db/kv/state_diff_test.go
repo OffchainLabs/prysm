@@ -1039,7 +1039,7 @@ func TestStateDiff_EncodingAndDecoding(t *testing.T) {
 	}
 }
 
-func createState(t *testing.T, slot primitives.Slot, v int) (state.ReadOnlyBeaconState, []byte) {
+func createState(t *testing.T, slot primitives.Slot, v int) (state.BeaconState, []byte) {
 	p := params.BeaconConfig()
 	var st state.BeaconState
 	var err error

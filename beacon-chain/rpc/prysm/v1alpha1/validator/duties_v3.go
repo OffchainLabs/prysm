@@ -29,11 +29,7 @@ func (vs *Server) GetAttesterDuties(ctx context.Context, req *ethpb.AttesterDuti
 		return nil, status.Errorf(codes.InvalidArgument, "Request epoch %d can not be greater than next epoch %d", req.Epoch, currentEpoch+1)
 	}
 
-	s, err := vs.HeadFetcher.HeadState(ctx)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
-	}
-	s, err = vs.stateForEpoch(ctx, s, req.Epoch)
+	s, err := vs.stateForEpoch(ctx, req.Epoch)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get state for epoch: %v", err)
 	}
@@ -87,11 +83,7 @@ func (vs *Server) GetProposerDutiesV2(ctx context.Context, req *ethpb.ProposerDu
 		return nil, status.Errorf(codes.InvalidArgument, "Request epoch %d can not be greater than next epoch %d", req.Epoch, currentEpoch+1)
 	}
 
-	s, err := vs.HeadFetcher.HeadState(ctx)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
-	}
-	s, err = vs.stateForEpoch(ctx, s, req.Epoch)
+	s, err := vs.stateForEpoch(ctx, req.Epoch)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get state for epoch: %v", err)
 	}
@@ -142,11 +134,7 @@ func (vs *Server) GetSyncCommitteeDuties(ctx context.Context, req *ethpb.SyncCom
 		return nil, status.Errorf(codes.InvalidArgument, "Request epoch %d can not be greater than last valid epoch %d for sync committee duties", req.Epoch, lastValidEpoch)
 	}
 
-	s, err := vs.HeadFetcher.HeadState(ctx)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
-	}
-	s, err = vs.stateForEpoch(ctx, s, req.Epoch)
+	s, err := vs.stateForEpoch(ctx, req.Epoch)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get state for epoch: %v", err)
 	}
@@ -195,11 +183,7 @@ func (vs *Server) GetPTCDuties(ctx context.Context, req *ethpb.PTCDutiesRequest)
 		return nil, status.Errorf(codes.InvalidArgument, "Request epoch %d can not be greater than next epoch %d", req.Epoch, nextEpoch)
 	}
 
-	s, err := vs.HeadFetcher.HeadState(ctx)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
-	}
-	s, err = vs.stateForEpoch(ctx, s, req.Epoch)
+	s, err := vs.stateForEpoch(ctx, req.Epoch)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get state for epoch: %v", err)
 	}
@@ -237,7 +221,7 @@ func (vs *Server) GetPTCDuties(ctx context.Context, req *ethpb.PTCDutiesRequest)
 
 // attestationDependentRoot returns the dependent root for attestation-style duties.
 // For epochs <= 1 it returns the genesis block root; otherwise it computes the root from state.
-func (vs *Server) attestationDependentRoot(ctx context.Context, s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
+func (vs *Server) attestationDependentRoot(ctx context.Context, s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]byte, error) {
 	if epoch <= 1 {
 		r, err := vs.BeaconDB.GenesisBlockRoot(ctx)
 		if err != nil {
@@ -255,7 +239,7 @@ func (vs *Server) attestationDependentRoot(ctx context.Context, s state.BeaconSt
 // proposalDependentRoot returns the dependent root for proposer duties.
 // Epoch 0 always needs genesis root. Epoch 1 also needs it post-Fulu because
 // V2 uses AttestationDependentRoot which requires epoch > 1.
-func (vs *Server) proposalDependentRoot(ctx context.Context, s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
+func (vs *Server) proposalDependentRoot(ctx context.Context, s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]byte, error) {
 	if epoch == 0 || (epoch == 1 && s.Version() >= version.Fulu) {
 		r, err := vs.BeaconDB.GenesisBlockRoot(ctx)
 		if err != nil {

@@ -25,7 +25,7 @@ TAGFLAG := $(if $(TAGS),-tags=$(TAGS),)
 
 flags ?=
 
-ALLOWED_VARS := GO DIST TAGS flags mode
+ALLOWED_VARS := GO DIST TAGS flags mode bls
 BAD_VARS := $(strip $(foreach v,$(.VARIABLES),$(if $(filter command line,$(origin $(v))),$(filter-out $(ALLOWED_VARS),$(v)))))
 ifneq ($(BAD_VARS),)
 $(error unknown variable(s): $(BAD_VARS)  (allowed: $(ALLOWED_VARS)))
@@ -38,6 +38,8 @@ TEST_MODE     := $(or $(mode),no-race)
 TEST_MODE_BAD := $(filter-out no-race race,$(TEST_MODE))
 TEST_ARGS     := $(filter-out $(COMMANDS),$(MAKECMDGOALS))
 TEST_BAD      := $(filter-out $(TEST_KINDS),$(TEST_ARGS))
+TEST_BLS      := $(or $(bls),real)
+TEST_BLS_BAD  := $(filter-out real fake,$(TEST_BLS))
 
 E2E_ARGS := $(filter-out $(COMMANDS),$(MAKECMDGOALS))
 E2E_BAD  := $(filter-out $(E2E_KINDS),$(E2E_ARGS))
@@ -106,11 +108,12 @@ build:
 .PHONY: test
 test:
 	@$(if $(TEST_MODE_BAD),echo "❌ test: invalid mode '$(TEST_MODE)'  (one of: no-race race)" >&2; exit 1;) \
+	$(if $(TEST_BLS_BAD),echo "❌ test: invalid bls '$(TEST_BLS)'  (one of: real fake)" >&2; exit 1;) \
 	$(if $(TEST_BAD),echo "❌ test: unknown kind(s): $(TEST_BAD)  (one of: $(TEST_KINDS))" >&2; exit 1;) :
 
 	@$(MAKE) --no-print-directory gen
 
-	@GO="$(GO)" $(GO) run ./build/test $(if $(filter race,$(TEST_MODE)),-race,) $(TEST_ARGS)
+	@GO="$(GO)" $(GO) run ./build/test $(if $(filter race,$(TEST_MODE)),-race,) -bls=$(TEST_BLS) $(TEST_ARGS)
 
 .PHONY: testdata
 testdata:
@@ -146,9 +149,10 @@ help: ## Show this help
 	@printf "  \033[36m%-44s\033[0m %s\n" "make help"                                  "Show this help"
 	@echo ""
 	@printf '\033[1mOptions:\033[0m\n'
-	@printf "  \033[36m%-16s\033[0m %s\n" "<bin>:"          "$(BINARIES)"
-	@printf "  \033[36m%-16s\033[0m %s\n" "gen <kind>:"     "$(GEN_KINDS)"
-	@printf "  \033[36m%-16s\033[0m %s\n" "test <kind>:"    "$(TEST_KINDS)"
+	@printf "  \033[36m%-16s\033[0m %s\n" "<bin>:"       "$(BINARIES)"
+	@printf "  \033[36m%-16s\033[0m %s\n" "gen <kind>:"  "$(GEN_KINDS)"
+	@printf "  \033[36m%-16s\033[0m %s\n" "test <kind>:" "$(TEST_KINDS)"
+	@printf "  \033[36m%-16s\033[0m %s\n" "test bls=:"   "real fake  (fake runs the spectest kinds with the stub BLS backend)"
 	@printf "  \033[36m%-16s\033[0m %s\n" "e2e <scenario>:" "$(E2E_SCENARIOS)"
 	@printf "  \033[36m%-16s\033[0m\n" "e2e <suite>:"
 	@printf "    \033[36m%-16s\033[0m %s\n" "presubmit:"      "$(E2E_SUITE_presubmit)"

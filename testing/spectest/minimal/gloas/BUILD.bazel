@@ -19,6 +19,7 @@ go_test(
         "gloas__epoch_processing__rewards_and_penalties_test.go",
         "gloas__epoch_processing__slashings_reset_test.go",
         "gloas__epoch_processing__slashings_test.go",
+        "gloas__fast_confirmation__fast_confirmation_test.go",
         "gloas__finality__finality_test.go",
         "gloas__fork__upgrade_to_gloas_test.go",
         "gloas__fork_transition__transition_test.go",

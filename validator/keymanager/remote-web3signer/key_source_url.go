@@ -2,12 +2,9 @@ package remote_web3signer
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 )
 
 // urlPollTimeout bounds a single public-keys fetch so a hung request cannot stall
@@ -56,28 +53,7 @@ func (km *Keymanager) pollRemoteKeysFromURL(ctx context.Context, url string, int
 				continue
 			}
 
-			km.updatePublicKeys(keys)
+			km.replaceKeys(sourceURL, keys)
 		}
 	}
-}
-
-// decodePublicKeys decodes and dedups hex-encoded BLS public keys.
-func decodePublicKeys(raw []string) ([][fieldparams.BLSPubkeyLength]byte, error) {
-	var (
-		seen = make(map[[fieldparams.BLSPubkeyLength]byte]struct{}, len(raw))
-		keys = make([][fieldparams.BLSPubkeyLength]byte, 0, len(raw))
-	)
-
-	for _, k := range raw {
-		b, err := bytesutil.DecodeHex48(k)
-		if err != nil {
-			return nil, fmt.Errorf("decode public key %s: %w", k, err)
-		}
-		if _, ok := seen[b]; ok {
-			continue
-		}
-		seen[b] = struct{}{}
-		keys = append(keys, b)
-	}
-	return keys, nil
 }

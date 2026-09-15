@@ -32,7 +32,6 @@ type ValidatorService interface {
 	Keymanager() (keymanager.IKeymanager, error)
 	RemoteSignerConfig() *remoteweb3signer.SetupConfig
 	ProposerSettings() *proposer.Settings
-	SetProposerSettings(ctx context.Context, settings *proposer.Settings) error
 	UpdateProposerSettings(ctx context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error
 	Graffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error)
 	SetGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, graffiti []byte) error

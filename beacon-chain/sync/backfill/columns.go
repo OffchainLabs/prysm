@@ -110,12 +110,12 @@ type columnSync struct {
 	bisector *columnBisector
 }
 
-func newColumnSync(ctx context.Context, b batch, blks verifiedROBlocks, current primitives.Slot, p p2p.P2P, cfg *workerCfg) (*columnSync, error) {
+func newColumnSync(ctx context.Context, begin, end primitives.Slot, blks verifiedROBlocks, current primitives.Slot, p p2p.P2P, cfg *workerCfg) (*columnSync, error) {
 	cgc, err := p.CustodyGroupCount(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "custody group count")
 	}
-	cb, err := buildColumnBatch(ctx, b, blks, p, cfg.colStore, cfg.currentNeeds())
+	cb, err := buildColumnBatch(ctx, begin, end, blks, p, cfg.colStore, cfg.currentNeeds())
 	if err != nil {
 		return nil, err
 	}
@@ -141,6 +141,13 @@ func (cs *columnSync) blockColumns(root [32]byte) *toDownload {
 		return nil
 	}
 	return cs.columnBatch.toDownload[root]
+}
+
+func (b batch) columnsNeeded() peerdas.ColumnIndices {
+	if b.columns == nil {
+		return peerdas.ColumnIndices{}
+	}
+	return b.columns.needed()
 }
 
 func (cs *columnSync) columnsNeeded() peerdas.ColumnIndices {
@@ -261,12 +268,12 @@ func currentCustodiedColumns(ctx context.Context, p p2p.P2P) (peerdas.ColumnIndi
 	return peerdas.NewColumnIndicesFromMap(peerInfo.CustodyColumns), nil
 }
 
-func buildColumnBatch(ctx context.Context, b batch, blks verifiedROBlocks, p p2p.P2P, store *filesystem.DataColumnStorage, needs das.CurrentNeeds) (*columnBatch, error) {
+func buildColumnBatch(ctx context.Context, begin, end primitives.Slot, blks verifiedROBlocks, p p2p.P2P, store *filesystem.DataColumnStorage, needs das.CurrentNeeds) (*columnBatch, error) {
 	if len(blks) == 0 {
 		return nil, nil
 	}
 
-	if !needs.Col.At(b.begin) && !needs.Col.At(b.end-1) {
+	if !needs.Col.At(begin) && !needs.Col.At(end-1) {
 		return nil, nil
 	}
 

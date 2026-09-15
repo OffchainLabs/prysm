@@ -54,7 +54,7 @@ type PTCDutyResult struct {
 
 // AttesterDuties computes attester duties for the requested validators at the given epoch.
 // The caller is responsible for providing a state that is adequate for the requested epoch.
-func (s *Service) AttesterDuties(ctx context.Context, st state.BeaconState, epoch primitives.Epoch, indices []primitives.ValidatorIndex) ([]*AttesterDutyResult, *RpcError) {
+func (s *Service) AttesterDuties(ctx context.Context, st state.ReadOnlyBeaconState, epoch primitives.Epoch, indices []primitives.ValidatorIndex) ([]*AttesterDutyResult, *RpcError) {
 	ctx, span := trace.StartSpan(ctx, "coreService.AttesterDuties")
 	defer span.End()
 
@@ -94,7 +94,7 @@ func (s *Service) AttesterDuties(ctx context.Context, st state.BeaconState, epoc
 
 // ProposerDuties computes proposer duties for the given epoch.
 // Results are sorted by slot.
-func (s *Service) ProposerDuties(ctx context.Context, st state.BeaconState, epoch primitives.Epoch) ([]*ProposerDutyResult, *RpcError) {
+func (s *Service) ProposerDuties(ctx context.Context, st state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]*ProposerDutyResult, *RpcError) {
 	ctx, span := trace.StartSpan(ctx, "coreService.ProposerDuties")
 	defer span.End()
 
@@ -125,7 +125,7 @@ func (s *Service) ProposerDuties(ctx context.Context, st state.BeaconState, epoc
 // SyncCommitteeDuties computes sync committee duties for the requested validators.
 // It also registers sync subnets for matched validators.
 // The caller is responsible for providing a state that is adequate for the requested epoch.
-func (s *Service) SyncCommitteeDuties(ctx context.Context, st state.BeaconState, requestedEpoch primitives.Epoch, currentEpoch primitives.Epoch, indices []primitives.ValidatorIndex) ([]*SyncCommitteeDutyResult, *RpcError) {
+func (s *Service) SyncCommitteeDuties(ctx context.Context, st state.ReadOnlyBeaconState, requestedEpoch primitives.Epoch, currentEpoch primitives.Epoch, indices []primitives.ValidatorIndex) ([]*SyncCommitteeDutyResult, *RpcError) {
 	_, span := trace.StartSpan(ctx, "coreService.SyncCommitteeDuties")
 	defer span.End()
 
@@ -190,7 +190,7 @@ func (s *Service) SyncCommitteeDuties(ctx context.Context, st state.BeaconState,
 
 // PTCDuties computes payload timeliness committee duties for the requested validators
 // at the given epoch. Pre-Gloas epochs return an empty result.
-func (s *Service) PTCDuties(ctx context.Context, st state.BeaconState, epoch primitives.Epoch, indices []primitives.ValidatorIndex) ([]*PTCDutyResult, *RpcError) {
+func (s *Service) PTCDuties(ctx context.Context, st state.ReadOnlyBeaconState, epoch primitives.Epoch, indices []primitives.ValidatorIndex) ([]*PTCDutyResult, *RpcError) {
 	_, span := trace.StartSpan(ctx, "coreService.PTCDuties")
 	defer span.End()
 
@@ -255,7 +255,7 @@ func findValidatorIndexInCommittee(committee []primitives.ValidatorIndex, valida
 
 // syncDutyStatus returns a validator.Status suitable for sync subnet registration.
 // It returns Active for any active validator and Pending otherwise.
-func syncDutyStatus(st state.BeaconState, idx primitives.ValidatorIndex) validator.Status {
+func syncDutyStatus(st state.ReadOnlyBeaconState, idx primitives.ValidatorIndex) validator.Status {
 	val, err := st.ValidatorAtIndexReadOnly(idx)
 	if err != nil {
 		return validator.Pending
@@ -270,7 +270,7 @@ func syncDutyStatus(st state.BeaconState, idx primitives.ValidatorIndex) validat
 // AttestationDependentRoot returns the block root at (epoch-1 start - 1),
 // which is the dependent root for attester duties at the given epoch.
 // Callers must handle epoch <= 1 separately (e.g. using the genesis block root from the DB).
-func AttestationDependentRoot(s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
+func AttestationDependentRoot(s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]byte, error) {
 	if epoch <= 1 {
 		return nil, errors.New("epoch <= 1 requires genesis block root from DB")
 	}
@@ -289,7 +289,7 @@ func AttestationDependentRoot(s state.BeaconState, epoch primitives.Epoch) ([]by
 // which is the dependent root for proposer duties at the given epoch.
 // This is the pre-Fulu (v1) calculation used by the REST /eth/v1 endpoint.
 // Callers must handle epoch 0 separately (e.g. using the genesis block root from the DB).
-func ProposalDependentRoot(s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
+func ProposalDependentRoot(s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]byte, error) {
 	if epoch == 0 {
 		return nil, errors.New("epoch 0 requires genesis block root from DB")
 	}
@@ -305,7 +305,7 @@ func ProposalDependentRoot(s state.BeaconState, epoch primitives.Epoch) ([]byte,
 }
 
 // ProposalDependentRootV2 returns the dependent root for proposer duties.
-func ProposalDependentRootV2(s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
+func ProposalDependentRootV2(s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]byte, error) {
 	if s.Version() >= version.Fulu {
 		// Post-Fulu (EIP-7917) the proposer schedule is deterministic from the
 		// previous epoch's state, so the dependent root is (prev_epoch_start - 1),

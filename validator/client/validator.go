@@ -43,7 +43,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/graffiti"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
-	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/ethereum/go-ethereum/common"
@@ -78,7 +77,7 @@ type validator struct {
 	prevEpochBalancesLock        sync.RWMutex
 	attestedSlotsLock            sync.RWMutex
 	cachedAttestationDataLock    sync.RWMutex
-	signedRequestAuthsLock       sync.Mutex
+	builderRequestAuthsLock      sync.Mutex
 	domainDataLock               sync.RWMutex
 	cachedAttestationData        *ethpb.AttestationData
 	graffitiOrderedIndex         uint64
@@ -103,6 +102,7 @@ type validator struct {
 	submittedPayloadAtts         map[submittedPayloadAttKey][]uint64
 	validatorsRegBatchSize       int
 	duties                       *dutyStore
+	healthMonitor                *healthMonitor
 	nextFetchInFlight            atomic.Bool
 	doppelGanger                 doppelGangerTracker
 	domainDataCache              *ristretto.Cache[string, proto.Message]
@@ -115,7 +115,7 @@ type validator struct {
 	pubkeyToStatus               map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus
 	pubkeyToStatusLock           sync.RWMutex // guards pubkeyToStatus; all readers go through statusCache
 	signedValidatorRegistrations map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
-	signedRequestAuths           map[requestAuthKey]*ethpb.SignedRequestAuth
+	builderRequestAuths          map[builderRequestAuthKey]*ethpb.SignedBuilderRequestAuth
 	aggSelector                  aggregatorSelector
 	validatorClient              iface.ValidatorClient
 	chainClient                  iface.ChainClient
@@ -219,6 +219,9 @@ func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 	if err := v.snapshotBootKeysForDoppelGanger(ctx); err != nil {
 		return err
 	}
+	if v.accountChangedSub != nil {
+		v.accountChangedSub.Unsubscribe()
+	}
 	v.accountChangedSub = v.km.SubscribeAccountChanges(v.accountsChangedChannel)
 	return nil
 }
@@ -258,36 +261,32 @@ func recheckKeys(ctx context.Context, valDB db.Database, km keymanager.IKeymanag
 	ctx, span := trace.StartSpan(ctx, "validator.recheckKeys")
 	defer span.End()
 
-	var validatingKeys [][fieldparams.BLSPubkeyLength]byte
-	var err error
-	validatingKeys, err = km.FetchValidatingPublicKeys(ctx)
+	// Subscribe before the initial fetch so account changes in between are not missed.
+	pubKeysChan := make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
+	sub := km.SubscribeAccountChanges(pubKeysChan)
+	validatingKeys, err := km.FetchValidatingPublicKeys(ctx)
 	if err != nil {
 		log.WithError(err).Debug("Could not fetch validating keys")
 	}
 	if err := valDB.UpdatePublicKeysBuckets(validatingKeys); err != nil {
-		go recheckValidatingKeysBucket(ctx, valDB, km)
+		log.WithError(err).Debug("Could not update public keys buckets")
 	}
+	go recheckValidatingKeysBucket(ctx, valDB, sub, pubKeysChan)
 }
 
-// to accounts changes in the keymanager, then updates those keys'
-// buckets in bolt DB if a bucket for a key does not exist.
-func recheckValidatingKeysBucket(ctx context.Context, valDB db.Database, km keymanager.IKeymanager) {
+// recheckValidatingKeysBucket creates missing DB buckets for keys pushed by the
+// keymanager's account-change subscription.
+func recheckValidatingKeysBucket(ctx context.Context, valDB db.Database, sub event.Subscription, pubKeysChan chan [][fieldparams.BLSPubkeyLength]byte) {
 	ctx, span := trace.StartSpan(ctx, "validator.recheckValidatingKeysBucket")
 	defer span.End()
 
-	importedKeymanager, ok := km.(*local.Keymanager)
-	if !ok {
-		return
-	}
-	validatingPubKeysChan := make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
-	sub := importedKeymanager.SubscribeAccountChanges(validatingPubKeysChan)
 	defer func() {
 		sub.Unsubscribe()
-		close(validatingPubKeysChan)
+		close(pubKeysChan)
 	}()
 	for {
 		select {
-		case keys := <-validatingPubKeysChan:
+		case keys := <-pubKeysChan:
 			if err := valDB.UpdatePublicKeysBuckets(keys); err != nil {
 				log.WithError(err).Debug("Could not update public keys buckets")
 				continue
@@ -718,40 +717,32 @@ func (v *validator) ProposerSettings() *proposer.Settings {
 	return v.proposerSettings
 }
 
-// SetProposerSettings sets and saves the passed in proposer settings overriding the in memory one
-func (v *validator) SetProposerSettings(ctx context.Context, settings *proposer.Settings) error {
-	v.proposerSettingsMu.Lock()
-	defer v.proposerSettingsMu.Unlock()
-	return v.setProposerSettingsLocked(ctx, settings)
-}
-
-func (v *validator) setProposerSettingsLocked(ctx context.Context, settings *proposer.Settings) error {
-	ctx, span := trace.StartSpan(ctx, "validator.SetProposerSettings")
+// UpdateProposerSettings atomically mutates the proposer settings.
+func (v *validator) UpdateProposerSettings(ctx context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
+	ctx, span := trace.StartSpan(ctx, "validator.UpdateProposerSettings")
 	defer span.End()
 
 	if v.db == nil {
 		return errors.New("db is not set")
 	}
-	if err := v.db.SaveProposerSettings(ctx, settings); err != nil {
-		return err
-	}
-	v.proposerSettings = settings
-	return nil
-}
 
-// UpdateProposerSettings atomically mutates the proposer settings: mutate gets a
-// deep copy (nil when unset) and returns what to persist, or nil for a no-op.
-func (v *validator) UpdateProposerSettings(ctx context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
 	v.proposerSettingsMu.Lock()
 	defer v.proposerSettingsMu.Unlock()
+
 	next, err := mutate(v.proposerSettings.Clone())
 	if err != nil {
-		return err
+		return fmt.Errorf("mutate proposer settings: %w", err)
 	}
 	if next == nil {
 		return nil
 	}
-	return v.setProposerSettingsLocked(ctx, next)
+
+	if err := v.db.SaveProposerSettings(ctx, next); err != nil {
+		return fmt.Errorf("save proposer settings: %w", err)
+	}
+
+	v.proposerSettings = next
+	return nil
 }
 
 // PushProposerSettings pushes proposer and builder preferences plus, pre-Gloas,
@@ -1414,7 +1405,7 @@ func uint64Ptr(v *validatortypes.Uint64) *uint64 {
 	return &u
 }
 
-// warmBuilderRequestAuths pre-signs request auths for upcoming proposal slots and
+// warmBuilderRequestAuths pre-signs builder request auths for upcoming proposal slots and
 // returns the not-yet-submitted preference entries; force clears the dedup cache.
 func (v *validator) warmBuilderRequestAuths(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, force bool) []*ethpb.BuilderPreferencesEntry {
 	currentEpoch := slots.ToEpoch(slot)
@@ -1435,7 +1426,7 @@ func (v *validator) warmBuilderRequestAuths(ctx context.Context, km keymanager.I
 	// The dedup cache mirrors per-connection server state, so force resets it;
 	// cached signatures survive reconnects and only expire as their slots pass.
 	v.submittedBuilderPrefSlots.prune(force, epochStart)
-	v.pruneSignedRequestAuths(slot)
+	v.pruneSignedBuilderRequestAuths(slot)
 
 	var entries []*ethpb.BuilderPreferencesEntry
 	// Current-epoch: submit after first slot of epoch to avoid stale state.
@@ -1470,7 +1461,7 @@ func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km key
 			}
 			added := false
 			for _, t := range targets {
-				signed, err := v.signRequestAuthCached(ctx, km, pk, t.authData, proposalSlot)
+				signed, err := v.signBuilderRequestAuthCached(ctx, km, pk, t.authData, proposalSlot)
 				if err != nil {
 					log.WithError(err).Warn("Failed to sign builder request auth")
 					continue

@@ -8,6 +8,37 @@ To run all spectests:
 bazel test //... --test_tag_filters=spectest
 ```
 
+## Running with the fake BLS backend
+
+Vectors with `bls_setting: 2` ("BLS ignored") carry the spec's stub signature
+(`0x11*96`), which a real BLS backend rejects while deserializing, before any
+verification happens. Building with `-tags=fake_crypto` swaps the implementation
+behind `crypto/bls` for one that accepts it and treats every signature as valid.
+
+`utils.TestFolders` reads each case's `meta.yaml` and runs only the cases whose
+`bls_setting` matches the compiled-in backend:
+
+| `bls_setting` | real backend | `fake_crypto` |
+| --- | --- | --- |
+| absent / `0` | run | run |
+| `1` | run | skip |
+| `2` | skip | run |
+
+```bash
+make test mainnet-spectest minimal-spectest bls=fake
+```
+
+```bash
+bazel test //testing/spectest/mainnet:go_default_test --@io_bazel_rules_go//go/config:tags=fake_crypto
+bazel test //testing/spectest/minimal:go_default_test --@io_bazel_rules_go//go/config:tags=fake_crypto
+```
+
+The tag must never reach anything but these packages: unit tests that assert
+invalid signatures are rejected, and the primitive BLS conformance tests under
+`testing/bls`, are meaningless under it. `cmd/beacon-chain`, `cmd/validator` and
+`cmd/prysmctl` deliberately fail to compile with the tag, so it cannot end up in
+a released artifact.
+
 ## Adding new tests
 
 New tests must adhere to the following filename convention:

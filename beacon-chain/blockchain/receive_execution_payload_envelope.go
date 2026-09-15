@@ -99,8 +99,8 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		if bid == nil || len(bid.BlobKzgCommitments()) == 0 {
 			return nil
 		}
-		// Initial sync fetches columns via range requests, so check availability synchronously rather than blocking on gossip; fail if missing.
-		if !s.inRegularSync() {
+		// Outside the gossip window, check availability synchronously rather than blocking; fail if missing.
+		if !s.canWaitForGossipSidecars(envelope.Slot()) {
 			available, err := s.dataColumnsAvailableNow(availCtx, root, envelope.Slot())
 			if err != nil {
 				return errors.Wrap(err, "data availability check failed for payload envelope")
@@ -434,11 +434,11 @@ func (s *Service) notifyForkchoiceUpdateGloas(ctx context.Context, blockHash [32
 
 	s.cfg.ForkChoiceStore.RLock()
 	finalizedHash := s.cfg.ForkChoiceStore.FinalizedPayloadBlockHash()
-	justifiedHash := s.cfg.ForkChoiceStore.UnrealizedJustifiedPayloadBlockHash()
+	safeHash := s.safeBlockHash()
 	s.cfg.ForkChoiceStore.RUnlock()
 	fcs := &enginev1.ForkchoiceState{
 		HeadBlockHash:      blockHash[:],
-		SafeBlockHash:      justifiedHash[:],
+		SafeBlockHash:      safeHash[:],
 		FinalizedBlockHash: finalizedHash[:],
 	}
 	if attributes == nil {

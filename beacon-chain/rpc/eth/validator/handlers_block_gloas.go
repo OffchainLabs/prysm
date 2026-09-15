@@ -29,8 +29,8 @@ import (
 // ProduceBlockV4 requests a beacon node to produce a valid Gloas block.
 // When include_payload=true, the response includes the execution payload
 // envelope alongside the beacon block.
-// POST carries a BuilderConfig body naming external builders to request bids from.
-// Endpoint: GET|POST /eth/v4/validator/blocks/{slot}
+// The body carries a BuilderConfig naming external builders to request bids from.
+// Endpoint: POST /eth/v4/validator/blocks/{slot}
 func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.ProduceBlockV4")
 	defer span.End()
@@ -85,13 +85,9 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		graffiti = g
 	}
 
-	var builderConfig *eth.BuilderConfig
-	if r.Method == http.MethodPost {
-		cfg, ok := decodeBuilderConfig(w, r)
-		if !ok {
-			return
-		}
-		builderConfig = cfg
+	builderConfig, ok := decodeBuilderConfig(w, r)
+	if !ok {
+		return
 	}
 
 	// Gloas has no MEV-boost path: p2p-bid and per-builder boosts arrive inside BuilderConfig,

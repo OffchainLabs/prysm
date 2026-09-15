@@ -132,9 +132,7 @@ func (s *Service) domainWithHeadState(ctx context.Context, slot primitives.Slot,
 
 // returns the head state that is advanced up to `slot`. It utilizes the cache `syncCommitteeHeadState` by retrieving using `slot` as key.
 // For the cache miss, it processes head state up to slot and fill the cache with `slot` as key.
-func (s *Service) getSyncCommitteeHeadState(ctx context.Context, slot primitives.Slot) (state.BeaconState, error) {
-	var headState state.BeaconState
-	var err error
+func (s *Service) getSyncCommitteeHeadState(ctx context.Context, slot primitives.Slot) (state.ReadOnlyBeaconState, error) {
 	mLock := async.NewMultilock(fmt.Sprintf("%s-%d", "syncHeadState", slot))
 	mLock.Lock()
 	defer mLock.Unlock()
@@ -144,21 +142,23 @@ func (s *Service) getSyncCommitteeHeadState(ctx context.Context, slot primitives
 	switch {
 	case err == nil:
 		syncHeadStateHit.Inc()
-		headState = cachedState
-		return headState, nil
+		return cachedState, nil
 	case errors.Is(err, cache.ErrNotFound):
-		headState, err = s.HeadState(ctx)
+		headState, err := s.HeadStateReadOnly(ctx)
 		if err != nil {
 			return nil, err
 		}
 		if headState == nil || headState.IsNil() {
 			return nil, errors.New("nil state")
 		}
+		if headState.Slot() > slot {
+			return nil, fmt.Errorf("expected head state slot %d <= slot %d", headState.Slot(), slot)
+		}
 		headRoot, err := s.HeadRoot(ctx)
 		if err != nil {
 			return nil, err
 		}
-		headState, err = transition.ProcessSlotsUsingNextSlotCache(ctx, headState, headRoot, slot)
+		headState, err = transition.ProcessSlotsIfNeeded(ctx, headState, headRoot, slot)
 		if err != nil {
 			return nil, err
 		}

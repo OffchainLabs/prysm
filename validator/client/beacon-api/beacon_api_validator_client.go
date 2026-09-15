@@ -129,7 +129,7 @@ func (c *beaconApiValidatorClient) BeaconBlock(ctx context.Context, in *ethpb.Bl
 	defer span.End()
 
 	return wrapInMetrics[*ethpb.GenericBeaconBlock]("BeaconBlock", func() (*ethpb.GenericBeaconBlock, error) {
-		return c.beaconBlock(ctx, in.Slot, in.RandaoReveal, in.Graffiti)
+		return c.beaconBlock(ctx, in.Slot, in.RandaoReveal, in.Graffiti, in.BuilderConfig)
 	})
 }
 
@@ -286,10 +286,13 @@ func (c *beaconApiValidatorClient) SubmitSignedProposerPreferences(ctx context.C
 	})
 }
 
-// TODO(gloas): Wire up actual REST call to POST /eth/v1alpha1/validator/builder_preferences
-func (c *beaconApiValidatorClient) SubmitBuilderPreferences(_ context.Context, _ *ethpb.SubmitBuilderPreferencesRequest) (*empty.Empty, error) {
-	log.Debug("SubmitBuilderPreferences not yet implemented for beacon API client, skipping")
-	return new(empty.Empty), nil
+func (c *beaconApiValidatorClient) SubmitBuilderPreferences(ctx context.Context, in *ethpb.SubmitBuilderPreferencesRequest) (*empty.Empty, error) {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.SubmitBuilderPreferences")
+	defer span.End()
+
+	return wrapInMetrics[*empty.Empty]("SubmitBuilderPreferences", func() (*empty.Empty, error) {
+		return new(empty.Empty), c.submitBuilderPreferences(ctx, in.GetEntries())
+	})
 }
 
 // TODO(gloas): Wire up actual REST call to POST /eth/v2/beacon/execution_payload/bid

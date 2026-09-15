@@ -178,6 +178,10 @@ var (
 		Name:  "enable-experimental-attestation-pool",
 		Usage: "Enables an experimental attestation pool design.",
 	}
+	enableFastConfirmation = &cli.BoolFlag{
+		Name:  "enable-fast-confirmation",
+		Usage: "Enables the fast confirmation rule (FCR) for rapid block confirmation under synchrony assumptions.",
+	}
 	EnableStateDiff = &cli.BoolFlag{
 		Name:  "enable-state-diff",
 		Usage: "Enables the experimental state diff feature.",
@@ -299,6 +303,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	DisableQUIC,
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
+	enableFastConfirmation,
 	EnableStateDiff,
 	DisableProgressiveSSZ,
 	reorgLatePayloads,

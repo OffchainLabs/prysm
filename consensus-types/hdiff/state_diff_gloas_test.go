@@ -319,6 +319,8 @@ func TestGloasSerializeDeserializeRoundTrip(t *testing.T) {
 
 	raw := sd.serialize()
 	require.NotNil(t, raw)
+	require.Equal(t, sd.serializedSize(), len(raw))
+	require.Equal(t, len(raw), cap(raw))
 	serialized := snappy.Encode(nil, raw)
 
 	// Deserialize → verify fields.
