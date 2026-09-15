@@ -147,7 +147,8 @@ func (b batch) columnsNeeded() peerdas.ColumnIndices {
 	if b.columns == nil {
 		return peerdas.ColumnIndices{}
 	}
-	return b.columns.needed()
+	// Use the guarded columnsNeeded: the embedded columnBatch may be nil.
+	return b.columns.columnsNeeded()
 }
 
 func (cs *columnSync) columnsNeeded() peerdas.ColumnIndices {

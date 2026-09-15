@@ -67,7 +67,11 @@ func (f *blocksFetcher) waitForMinimumPeers(ctx context.Context) ([]peer.ID, err
 		log.WithFields(logrus.Fields{
 			"suitable": len(peers),
 			"required": required}).Info("Waiting for enough suitable peers before syncing")
-		time.Sleep(handshakePollingInterval)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(handshakePollingInterval):
+		}
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -46,6 +47,11 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 	}
 	if len(signedPreferences.Message.DependentRoot) != fieldparams.RootLength {
 		return pubsub.ValidationReject, errors.New("dependent_root must be 32 bytes")
+	}
+
+	// [IGNORE] compute_epoch_at_slot(proposal_slot) >= GLOAS_FORK_EPOCH.
+	if slots.ToEpoch(signedPreferences.Message.ProposalSlot) < params.BeaconConfig().GloasForkEpoch {
+		return pubsub.ValidationIgnore, nil
 	}
 
 	v := s.newSignedProposerPreferencesVerifier(signedPreferences, verification.SignedProposerPreferencesGossipRequirements)
