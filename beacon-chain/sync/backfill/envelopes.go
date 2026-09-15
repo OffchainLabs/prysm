@@ -3,7 +3,8 @@ package backfill
 import (
 	"bytes"
 	"context"
-	"sort"
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -362,12 +363,7 @@ func (es *envelopeSync) buildPages() {
 }
 
 func (es *envelopeSync) pendingSlots() []primitives.Slot {
-	out := make([]primitives.Slot, 0, len(es.pending))
-	for s := range es.pending {
-		out = append(out, s)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
-	return out
+	return slices.Sorted(maps.Keys(es.pending))
 }
 
 func (es *envelopeSync) pendingIn(pg *envelopePage) []primitives.Slot {
@@ -725,12 +721,7 @@ func (es *envelopeSync) finalize(ctx context.Context, db BeaconDB, lowRoot [32]b
 }
 
 func (es *envelopeSync) heldSlots() []primitives.Slot {
-	out := make([]primitives.Slot, 0, len(es.held))
-	for s := range es.held {
-		out = append(out, s)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
-	return out
+	return slices.Sorted(maps.Keys(es.held))
 }
 
 // boundaryChildWithRetries looks up the already-imported child of the batch tail via the
