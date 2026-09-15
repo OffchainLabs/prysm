@@ -596,8 +596,6 @@ func TestPackAttestations_ElectraOnChainAggregates(t *testing.T) {
 		TimeFetcher: &chainMock.ChainService{Slot: &slot},
 	}
 
-	// Ties in aggregate profitability are broken by map iteration order, so the number of
-	// packed attestations is not stable. Only assert what holds for any tie-break.
 	const rewardFromPool = 257776896
 
 	t.Run("ok", func(t *testing.T) {
@@ -795,8 +793,6 @@ func Benchmark_packAttestations_Electra(b *testing.B) {
 	ctx := b.Context()
 
 	params.SetupTestConfigCleanup(b)
-	// The mainnet config panics under the minimal build tag: its SlotsPerHistoricalRoot does
-	// not fit the compiled-in field parameters.
 	cfg := params.BeaconConfig().Copy()
 	cfg.ElectraForkEpoch = 1
 	params.OverrideBeaconConfig(cfg)

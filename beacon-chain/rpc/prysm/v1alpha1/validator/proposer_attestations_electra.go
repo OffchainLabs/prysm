@@ -137,9 +137,6 @@ func (h *candidateHeap) Pop() any {
 	return c
 }
 
-// Marginal reward never grows as more attestations are selected, so a score computed in an
-// earlier round is an upper bound on the current one. The loop below depends on that to leave
-// stale scores in the heap and to drop candidates that reach zero.
 func (a proposerAtts) selectByMarginalReward(ctx context.Context, st state.ReadOnlyBeaconState, limit uint64) (proposerAtts, error) {
 	if len(a) == 0 || limit == 0 {
 		return proposerAtts{}, nil
