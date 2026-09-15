@@ -11,14 +11,21 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
-const maxFuzzValidators = 10000
-const maxFuzzStateDiffSize = 1000
-const maxFuzzHistoricalRoots = 10000
-const maxFuzzDecodedSize = maxFuzzStateDiffSize * 10
-const maxFuzzScanRange = 200
-const fuzzRootsLengthOffset = 16
-const maxFuzzInputSize = 10
-const oneEthInGwei = 1000000000
+const (
+	oneEthInGwei = 1000000000
+	// Caps the StateDiff decode buffer at 8 MiB (= 256KiB * 32) via snappyDecode.
+	maxFuzzStateDiffSize = 256 << 10
+)
+
+// snappyBombSeed is a 15-byte StateDiff whose snappy header declares 2.37 GiB of decoded data.
+// https://github.com/OffchainLabs/prysm/actions/runs/32725115585/job/97425742241
+// Kept as hex escapes: bytes 2-3 were once written as the literal character U+017D, which
+// only happens to be \xc5\xbd while the file stays UTF-8.
+var snappyBombSeed = [][]byte{
+	[]byte("\xff\xc5\xbd\xbd\t\t\t\t\t\xbd\xb6\xaf\xbd\xbd0"),
+	[]byte("\xff"),
+	[]byte("p"),
+}
 
 // FuzzNewHdiff tests parsing variations of realistic diffs
 func FuzzNewHdiff(f *testing.F) {
@@ -65,37 +72,12 @@ func FuzzNewHdiff(f *testing.F) {
 			}
 		}
 	}
+	f.Add(snappyBombSeed[0], snappyBombSeed[1], snappyBombSeed[2])
 
 	f.Fuzz(func(t *testing.T, stateDiff, validatorDiffs, balancesDiff []byte) {
 		// Limit input sizes to reasonable bounds
-		if len(stateDiff) > 5000 || len(validatorDiffs) > 5000 || len(balancesDiff) > 5000 {
+		if len(stateDiff) > maxFuzzStateDiffSize || len(validatorDiffs) > 5000 || len(balancesDiff) > 5000 {
 			return
-		}
-
-		// Bound historical roots length in stateDiff (if it contains snappy-compressed data)
-		// The historicalRootsLength is read after snappy decompression, but we can still
-		// limit the compressed input size to prevent extreme decompression ratios
-		if len(stateDiff) > maxFuzzStateDiffSize {
-			// Limit stateDiff to prevent potential memory bombs from snappy decompression
-			stateDiff = stateDiff[:maxFuzzStateDiffSize]
-		}
-
-		// Bound validator count in validatorDiffs
-		if len(validatorDiffs) >= 8 {
-			count := binary.LittleEndian.Uint64(validatorDiffs[0:8])
-			if count >= maxFuzzValidators {
-				boundedCount := count % maxFuzzValidators
-				binary.LittleEndian.PutUint64(validatorDiffs[0:8], boundedCount)
-			}
-		}
-
-		// Bound balance count in balancesDiff
-		if len(balancesDiff) >= 8 {
-			count := binary.LittleEndian.Uint64(balancesDiff[0:8])
-			if count >= maxFuzzValidators {
-				boundedCount := count % maxFuzzValidators
-				binary.LittleEndian.PutUint64(balancesDiff[0:8], boundedCount)
-			}
 		}
 
 		input := HdiffBytes{
@@ -113,12 +95,6 @@ func FuzzNewHdiff(f *testing.F) {
 // FuzzNewStateDiff tests the newStateDiff function with valid random state diffs
 func FuzzNewStateDiff(f *testing.F) {
 	f.Fuzz(func(t *testing.T, validatorCount uint8, slotDelta uint64, balanceData []byte, validatorData []byte) {
-		defer func() {
-			if r := recover(); r != nil {
-				t.Errorf("newStateDiff panicked: %v", r)
-			}
-		}()
-
 		// Bound validator count to reasonable range
 		validators := uint64(validatorCount%32 + 8) // 8-39 validators
 		if slotDelta > 100 {
@@ -136,7 +112,7 @@ func FuzzNewStateDiff(f *testing.F) {
 		if len(balanceData) >= 8 {
 			balances := target.Balances()
 			numChanges := int(binary.LittleEndian.Uint64(balanceData[:8])) % len(balances)
-			for i := 0; i < numChanges && i*8+8 < len(balanceData); i++ {
+			for i := 0; i < numChanges && (i+2)*8 <= len(balanceData); i++ {
 				idx := i % len(balances)
 				delta := int64(binary.LittleEndian.Uint64(balanceData[i*8+8 : (i+1)*8+8]))
 				// Keep delta reasonable
@@ -189,12 +165,6 @@ func FuzzNewStateDiff(f *testing.F) {
 // FuzzNewValidatorDiffs tests validator diff deserialization with valid diffs
 func FuzzNewValidatorDiffs(f *testing.F) {
 	f.Fuzz(func(t *testing.T, validatorCount uint8, changeData []byte) {
-		defer func() {
-			if r := recover(); r != nil {
-				t.Errorf("newValidatorDiffs panicked: %v", r)
-			}
-		}()
-
 		// Bound validator count to reasonable range
 		validators := uint64(validatorCount%16 + 4) // 4-19 validators
 
@@ -248,12 +218,6 @@ func FuzzNewValidatorDiffs(f *testing.F) {
 // FuzzNewBalancesDiff tests balance diff deserialization with valid diffs
 func FuzzNewBalancesDiff(f *testing.F) {
 	f.Fuzz(func(t *testing.T, balanceCount uint8, balanceData []byte) {
-		defer func() {
-			if r := recover(); r != nil {
-				t.Errorf("newBalancesDiff panicked: %v", r)
-			}
-		}()
-
 		// Bound balance count to reasonable range
 		numBalances := int(balanceCount%32 + 8) // 8-39 balances
 
@@ -266,7 +230,7 @@ func FuzzNewBalancesDiff(f *testing.F) {
 			balances := target.Balances()
 			numChanges := int(binary.LittleEndian.Uint64(balanceData[:8])) % numBalances
 
-			for i := 0; i < numChanges && i*8+8 < len(balanceData); i++ {
+			for i := 0; i < numChanges && (i+2)*8 <= len(balanceData); i++ {
 				idx := i % numBalances
 				delta := int64(binary.LittleEndian.Uint64(balanceData[i*8+8 : (i+1)*8+8]))
 				// Keep delta reasonable
@@ -334,43 +298,22 @@ func FuzzApplyDiff(f *testing.F) {
 		}
 
 		for _, scenario := range scenarios {
-			testTarget := source.Copy()
+			target = source.Copy()
 			scenario()
 
-			validDiff, err := Diff(source, testTarget)
+			validDiff, err := Diff(source, target)
 			if err == nil {
 				f.Add(validDiff.StateDiff, validDiff.ValidatorDiffs, validDiff.BalancesDiff)
 			}
 		}
 	}
 
+	f.Add(snappyBombSeed[0], snappyBombSeed[1], snappyBombSeed[2])
+
 	f.Fuzz(func(t *testing.T, stateDiff, validatorDiffs, balancesDiff []byte) {
 		// Only test with reasonable sized inputs
-		if len(stateDiff) > 10000 || len(validatorDiffs) > 10000 || len(balancesDiff) > 10000 {
+		if len(stateDiff) > maxFuzzStateDiffSize || len(validatorDiffs) > 10000 || len(balancesDiff) > 10000 {
 			return
-		}
-
-		// Bound historical roots length in stateDiff (same as FuzzNewHdiff)
-		if len(stateDiff) > maxFuzzStateDiffSize {
-			stateDiff = stateDiff[:maxFuzzStateDiffSize]
-		}
-
-		// Bound validator count in validatorDiffs
-		if len(validatorDiffs) >= 8 {
-			count := binary.LittleEndian.Uint64(validatorDiffs[0:8])
-			if count >= maxFuzzValidators {
-				boundedCount := count % maxFuzzValidators
-				binary.LittleEndian.PutUint64(validatorDiffs[0:8], boundedCount)
-			}
-		}
-
-		// Bound balance count in balancesDiff
-		if len(balancesDiff) >= 8 {
-			count := binary.LittleEndian.Uint64(balancesDiff[0:8])
-			if count >= maxFuzzValidators {
-				boundedCount := count % maxFuzzValidators
-				binary.LittleEndian.PutUint64(balancesDiff[0:8], boundedCount)
-			}
 		}
 
 		// Create fresh source state for each test
@@ -401,28 +344,7 @@ func FuzzReadPendingAttestation(f *testing.F) {
 	f.Add(largeLength)
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		defer func() {
-			if r := recover(); r != nil {
-				t.Errorf("readPendingAttestation panicked: %v", r)
-			}
-		}()
-
-		// Make a copy since the function modifies the slice
-		dataCopy := make([]byte, len(data))
-		copy(dataCopy, data)
-
-		// Bound the bits length by modifying the first 8 bytes if they exist
-		if len(dataCopy) >= 8 {
-			// Read the bits length and bound it to maxFuzzValidators
-			bitsLength := binary.LittleEndian.Uint64(dataCopy[0:8])
-			if bitsLength >= maxFuzzValidators {
-				boundedLength := bitsLength % maxFuzzValidators
-				binary.LittleEndian.PutUint64(dataCopy[0:8], boundedLength)
-			}
-		}
-
-		_, err := readPendingAttestation(&dataCopy)
-		_ = err
+		_, _ = readPendingAttestation(&data)
 	})
 }
 
@@ -435,12 +357,6 @@ func FuzzKmpIndex(f *testing.F) {
 	f.Add("1,1,1", "2,2,2")
 
 	f.Fuzz(func(t *testing.T, sourceStr string, targetStr string) {
-		defer func() {
-			if r := recover(); r != nil {
-				t.Errorf("kmpIndex panicked: %v", r)
-			}
-		}()
-
 		// Parse comma-separated strings into int slices
 		var source, target []int
 		if sourceStr != "" {
@@ -499,12 +415,6 @@ func FuzzComputeLPS(f *testing.F) {
 	f.Add("")
 
 	f.Fuzz(func(t *testing.T, patternStr string) {
-		defer func() {
-			if r := recover(); r != nil {
-				t.Errorf("computeLPS panicked: %v", r)
-			}
-		}()
-
 		// Parse comma-separated string into int slice
 		var pattern []int
 		if patternStr != "" {
@@ -551,12 +461,6 @@ func FuzzComputeLPS(f *testing.F) {
 // FuzzDiffToBalances tests balance diff computation
 func FuzzDiffToBalances(f *testing.F) {
 	f.Fuzz(func(t *testing.T, sourceData, targetData []byte) {
-		defer func() {
-			if r := recover(); r != nil {
-				t.Errorf("diffToBalances panicked: %v", r)
-			}
-		}()
-
 		// Convert byte data to balance arrays
 		var sourceBalances, targetBalances []uint64
 
@@ -599,12 +503,6 @@ func FuzzDiffToBalances(f *testing.F) {
 // FuzzValidatorsEqual tests validator comparison
 func FuzzValidatorsEqual(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
-		defer func() {
-			if r := recover(); r != nil {
-				t.Errorf("validatorsEqual panicked: %v", r)
-			}
-		}()
-
 		// Create two validators and fuzz their fields
 		if len(data) < 16 {
 			return

@@ -17,18 +17,16 @@ type Step struct {
 }
 
 type Check struct {
-	Time                        *int            `json:"time"`
-	GenesisTime                 int             `json:"genesis_time"`
-	ProposerBoostRoot           *string         `json:"proposer_boost_root"`
-	Head                        *SlotRoot       `json:"head"`
-	JustifiedCheckPoint         *EpochRoot      `json:"justified_checkpoint"`
-	BestJustifiedCheckPoint     *EpochRoot      `json:"best_justified_checkpoint"`
-	FinalizedCheckPoint         *EpochRoot      `json:"finalized_checkpoint"`
-	GetProposerHead             *string         `json:"get_proposer_head"`
-	ShouldOverrideFCU           *ShouldOverride `json:"should_override_forkchoice_update"`
-	HeadPayloadStatus           *int            `json:"head_payload_status"`
-	PayloadTimelinessVote       *PTCVotes       `json:"payload_timeliness_vote"`
-	PayloadDataAvailabilityVote *PTCVotes       `json:"payload_data_availability_vote"`
+	Time                        *int       `json:"time"`
+	GenesisTime                 int        `json:"genesis_time"`
+	ProposerBoostRoot           *string    `json:"proposer_boost_root"`
+	Head                        *SlotRoot  `json:"head"`
+	JustifiedCheckPoint         *EpochRoot `json:"justified_checkpoint"`
+	BestJustifiedCheckPoint     *EpochRoot `json:"best_justified_checkpoint"`
+	FinalizedCheckPoint         *EpochRoot `json:"finalized_checkpoint"`
+	GetProposerHead             *string    `json:"get_proposer_head"`
+	PayloadTimelinessVote       *PTCVotes  `json:"payload_timeliness_vote"`
+	PayloadDataAvailabilityVote *PTCVotes  `json:"payload_data_availability_vote"`
 
 	// Fast confirmation rule fields
 	ConfirmedRoot                             *string    `json:"confirmed_root"`
@@ -50,8 +48,9 @@ type PTCVotes struct {
 }
 
 type SlotRoot struct {
-	Slot int    `json:"slot"`
-	Root string `json:"root"`
+	Slot          int    `json:"slot"`
+	Root          string `json:"root"`
+	PayloadStatus *int   `json:"payload_status"` // Gloas: 0 empty, 1 full.
 }
 
 type EpochRoot struct {
@@ -63,9 +62,4 @@ type MockEngineResp struct {
 	Status          *string `json:"status"`
 	LatestValidHash *string `json:"latest_valid_hash"`
 	ValidationError *string `json:"validation_error"`
-}
-
-type ShouldOverride struct {
-	ValidatorConnected bool `json:"validator_is_connected"`
-	Result             bool `json:"result"`
 }

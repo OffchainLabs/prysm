@@ -149,6 +149,20 @@ func (bb *Builder) ValidBlock(t testing.TB, b interfaces.ReadOnlySignedBeaconBlo
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 	require.NoError(t, bb.service.ReceiveBlock(ctx, b, r, nil))
+	bb.recordIfEarly(b, r)
+}
+
+func (bb *Builder) recordIfEarly(b interfaces.ReadOnlySignedBeaconBlock, root [32]byte) {
+	cfg := params.BeaconConfig()
+	slot := b.Block().Slot()
+	if uint64(bb.lastTick)/cfg.SecondsPerSlot != uint64(slot) {
+		return
+	}
+	slotStart := int64(uint64(slot) * cfg.SecondsPerSlot)
+	if time.Duration(bb.lastTick-slotStart)*time.Second >= cfg.SlotComponentDuration(cfg.EquivocationEarlyDueBPS) {
+		return
+	}
+	bb.service.RecordBlockForEquivocation(slot, b.Block().ProposerIndex(), root)
 }
 
 // ExecutionPayloadEnvelope receives an envelope and notifies the chain service.
@@ -196,7 +210,7 @@ func (bb *Builder) Attestation(t testing.TB, a ethpb.Att) {
 }
 
 // AttesterSlashing receives an attester slashing and feeds it to forkchoice.
-func (bb *Builder) AttesterSlashing(s *ethpb.AttesterSlashing) {
+func (bb *Builder) AttesterSlashing(s ethpb.AttSlashing) {
 	slashings := []ethpb.AttSlashing{s}
 	bb.service.InsertSlashingsToForkChoiceStore(context.TODO(), slashings)
 }
@@ -218,6 +232,15 @@ func (bb *Builder) Check(t testing.TB, c *Check) {
 		wantedRoot := common.FromHex(c.Head.Root)
 		require.Equal(t, true, bytes.Equal(wantedRoot, r), fmt.Sprintf("Roots differ. wanted %#x, got %#x", wantedRoot, r))
 		require.Equal(t, primitives.Slot(c.Head.Slot), bb.service.HeadSlot())
+		if c.Head.PayloadStatus != nil {
+			_, _, full, err := bb.fc.FullHead(ctx)
+			require.NoError(t, err)
+			got := 0
+			if full {
+				got = 1
+			}
+			require.Equal(t, *c.Head.PayloadStatus, got, "head payload status mismatch")
+		}
 	}
 	if c.JustifiedCheckPoint != nil {
 		cp := &ethpb.Checkpoint{
@@ -245,21 +268,6 @@ func (bb *Builder) Check(t testing.TB, c *Check) {
 		got := fmt.Sprintf("%#x", bb.service.GetProposerHead())
 		require.Equal(t, want, got)
 	}
-	if c.HeadPayloadStatus != nil {
-		_, _, full, err := bb.fc.FullHead(ctx)
-		require.NoError(t, err)
-		want := *c.HeadPayloadStatus
-		got := 0
-		if full {
-			got = 1
-		}
-		require.Equal(t, want, got, "head payload status mismatch")
-	}
-	/* TODO: We need to mock the entire proposer system to be able to test this.
-	if c.ShouldOverrideFCU != nil {
-		require.DeepEqual(t, c.ShouldOverrideFCU.Result, bb.service.ShouldOverrideFCU())
-	}
-	*/
 	if c.PayloadTimelinessVote != nil || c.PayloadDataAvailabilityVote != nil {
 		dlt, ok := bb.fc.(*doublylinkedtree.ForkChoice)
 		require.Equal(t, true, ok, "forkchoice is not a doubly linked tree")

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/confirmation"
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -151,6 +152,36 @@ func TestUnrealizedJustifiedBlockHash(t *testing.T) {
 	h := service.UnrealizedJustifiedPayloadBlockHash()
 	require.Equal(t, params.BeaconConfig().ZeroHash, h)
 	require.Equal(t, [32]byte{'j'}, service.cfg.ForkChoiceStore.JustifiedCheckpoint().Root)
+}
+
+func TestSafeBlockHash(t *testing.T) {
+	ctx := t.Context()
+	service := testServiceWithDB(t)
+	ojc := &ethpb.Checkpoint{Root: []byte{'j'}}
+	ofc := &ethpb.Checkpoint{Root: []byte{'f'}}
+	// Genesis carries a zero payload hash, the justified block a real one.
+	st, roblock, err := prepareForkchoiceState(ctx, 0, [32]byte{'g'}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 1, [32]byte{'j'}, [32]byte{'g'}, [32]byte{'p'}, ojc, ofc)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
+	service.cfg.ForkChoiceStore.SetBalancesByRooter(func(_ context.Context, _ [32]byte) ([]uint64, error) { return []uint64{}, nil })
+	require.NoError(t, service.cfg.ForkChoiceStore.UpdateJustifiedCheckpoint(ctx, &forkchoicetypes.Checkpoint{Epoch: 6, Root: [32]byte{'j'}}))
+	require.Equal(t, [32]byte{'p'}, service.UnrealizedJustifiedPayloadBlockHash())
+
+	t.Run("fcr disabled uses unrealized justified", func(t *testing.T) {
+		service.fcr = nil
+		require.Equal(t, [32]byte{'p'}, service.SafeBlockHash())
+	})
+	t.Run("confirmed genesis returns its zero payload hash", func(t *testing.T) {
+		service.fcr = confirmation.New(service.cfg.ForkChoiceStore, nil, nil, forkchoicetypes.Checkpoint{Root: [32]byte{'g'}})
+		require.Equal(t, params.BeaconConfig().ZeroHash, service.SafeBlockHash())
+	})
+	t.Run("pruned confirmed root falls back to unrealized justified", func(t *testing.T) {
+		service.fcr = confirmation.New(service.cfg.ForkChoiceStore, nil, nil, forkchoicetypes.Checkpoint{Root: [32]byte{'x'}})
+		require.Equal(t, [32]byte{'p'}, service.SafeBlockHash())
+	})
 }
 
 func TestHeadSlot_CanRetrieve(t *testing.T) {

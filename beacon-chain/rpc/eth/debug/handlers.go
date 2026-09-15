@@ -2,6 +2,7 @@ package debug
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -22,7 +23,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
@@ -495,23 +495,28 @@ func buildDataColumnSidecarsGloasJsonResponse(verifiedDataColumns []blocks.Verif
 	return sidecars
 }
 
-// buildDataColumnSidecarsSSZResponse builds SSZ response for data column sidecars
+// buildDataColumnSidecarsSSZResponse encodes the sidecars as an SSZ list of variable-size
+// elements: a 4-byte offset per element, followed by the elements themselves.
 func buildDataColumnSidecarsSSZResponse(verifiedDataColumns []blocks.VerifiedRODataColumn) ([]byte, error) {
-	if len(verifiedDataColumns) == 0 {
-		return []byte{}, nil
-	}
-
-	// Pre-allocate buffer for all sidecars using the known SSZ size
-	sizePerSidecar := (&ethpb.DataColumnSidecar{}).SizeSSZ()
-	ssz := make([]byte, 0, sizePerSidecar*len(verifiedDataColumns))
-
-	// Marshal and append each sidecar
+	elements := make([][]byte, len(verifiedDataColumns))
+	total := 4 * len(verifiedDataColumns)
 	for i, sidecar := range verifiedDataColumns {
 		sszrep, err := sidecar.MarshalSSZ()
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to marshal data column sidecar at index %d", i)
 		}
-		ssz = append(ssz, sszrep...)
+		elements[i] = sszrep
+		total += len(sszrep)
+	}
+
+	ssz := make([]byte, 0, total)
+	offset := 4 * len(verifiedDataColumns)
+	for _, element := range elements {
+		ssz = binary.LittleEndian.AppendUint32(ssz, uint32(offset))
+		offset += len(element)
+	}
+	for _, element := range elements {
+		ssz = append(ssz, element...)
 	}
 
 	return ssz, nil

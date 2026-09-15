@@ -851,6 +851,8 @@ func (s *Server) SetGraffiti(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	w.WriteHeader(http.StatusAccepted)
 }
 
 func (s *Server) DeleteGraffiti(w http.ResponseWriter, r *http.Request) {

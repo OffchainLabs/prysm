@@ -33,7 +33,7 @@ func GetProposerRewardNumerator(
 		return 0, fmt.Errorf("attestation slot %d exceeds state slot %d", data.Slot, st.Slot())
 	}
 
-	flags, err := altair.AttestationParticipationFlagIndices(st, data, delay)
+	flags, err := altair.AttestationParticipationFlagIndices(st, data, delay, st.LatestBlockHeader().Slot)
 	if err != nil {
 		return 0, err
 	}
