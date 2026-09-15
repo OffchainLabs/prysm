@@ -8,8 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
-// runLatePayloadRequest requests the head block's envelope by root each slot if it
-// hasn't been seen by the payload-timeliness deadline (PayloadDueBPS).
+// runLatePayloadRequest retries missing head envelopes each slot after the payload-timeliness deadline.
 func (s *Service) runLatePayloadRequest() {
 	clock, err := s.clockWaiter.WaitForClock(s.ctx)
 	if err != nil {
@@ -37,7 +36,7 @@ func (s *Service) runLatePayloadRequest() {
 	}
 }
 
-// requestLatePayload requests the current head block's envelope by root when missing.
+// requestLatePayload also recovers a head left without its payload when initial sync completed.
 func (s *Service) requestLatePayload(slot primitives.Slot) {
 	if !s.chainIsStarted() {
 		return
@@ -45,7 +44,8 @@ func (s *Service) requestLatePayload(slot primitives.Slot) {
 	if s.cfg.initialSync.Syncing() {
 		return
 	}
-	if slot != s.cfg.chain.HeadSlot() {
+	headSlot := s.cfg.chain.HeadSlot()
+	if headSlot > slot || slots.ToEpoch(headSlot) < params.BeaconConfig().GloasForkEpoch {
 		return
 	}
 	headRoot, err := s.cfg.chain.HeadRoot(s.ctx)
