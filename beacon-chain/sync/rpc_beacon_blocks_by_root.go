@@ -10,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync/verify"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -33,19 +32,10 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 	ctx, cancel := context.WithTimeout(ctx, respTimeout)
 	defer cancel()
 
-	requestedRoots := make(map[[fieldparams.RootLength]byte]bool)
-	for _, root := range *requests {
-		requestedRoots[root] = true
-	}
-
 	blks, err := SendBeaconBlocksByRootRequest(ctx, s.cfg.clock, s.cfg.p2p, id, requests, func(blk interfaces.ReadOnlySignedBeaconBlock) error {
 		blkRoot, err := blk.Block().HashTreeRoot()
 		if err != nil {
 			return err
-		}
-
-		if ok := requestedRoots[blkRoot]; !ok {
-			return fmt.Errorf("received unexpected block with root %x", blkRoot)
 		}
 
 		// Verify the signature before queueing, matching the gossip path, since a matched root does not cover it.
