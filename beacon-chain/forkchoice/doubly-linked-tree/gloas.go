@@ -58,7 +58,10 @@ func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock)
 	builderIndex := bid.BuilderIndex()
 	parent := s.emptyNodeByRoot[block.ParentRoot()]
 	if parent == nil {
-		// This is the tree root node.
+		// This is the tree root node: remember the payload it builds on.
+		if s.treeRootNode == nil {
+			s.treeRootParentHash = bid.ParentBlockHash()
+		}
 		return nil, blockHash, builderIndex, nil
 	}
 	if bid.ParentBlockHash() == parent.node.blockHash {
@@ -160,11 +163,11 @@ func (s *Store) fullParent(pn *PayloadNode) *PayloadNode {
 	return parent
 }
 
-// parentHash return the payload hash of the latest full node that this block builds on.
+// parentHash returns the payload hash of the latest full node that this block builds on.
 func (s *Store) parentHash(pn *PayloadNode) [32]byte {
 	fullParent := s.fullParent(pn)
 	if fullParent == nil {
-		return [32]byte{}
+		return s.treeRootParentHash
 	}
 	return fullParent.node.blockHash
 }
@@ -354,7 +357,7 @@ func (s *Store) nodeTreeDump(ctx context.Context, n *Node, nodes []*forkchoice2.
 		ParentRoot:               parentRoot[:],
 		JustifiedEpoch:           n.justifiedEpoch,
 		FinalizedEpoch:           n.finalizedEpoch,
-		UnrealizedJustifiedEpoch: n.unrealizedJustifiedEpoch,
+		UnrealizedJustifiedEpoch: n.unrealizedJustified.Epoch,
 		UnrealizedFinalizedEpoch: n.unrealizedFinalizedEpoch,
 		Balance:                  n.balance,
 		Weight:                   n.weight,
@@ -417,7 +420,7 @@ func (s *Store) nodeTreeDumpV2(ctx context.Context, n *Node, nodes []*forkchoice
 		Target:                          target[:],
 		JustifiedEpoch:                  n.justifiedEpoch,
 		FinalizedEpoch:                  n.finalizedEpoch,
-		UnrealizedJustifiedEpoch:        n.unrealizedJustifiedEpoch,
+		UnrealizedJustifiedEpoch:        n.unrealizedJustified.Epoch,
 		UnrealizedFinalizedEpoch:        n.unrealizedFinalizedEpoch,
 		PayloadAttesterCount:            n.payloadAttesters.Count(),
 		PayloadAvailabilityYesCount:     n.payloadAvailabilityVote.Count(),
@@ -660,19 +663,30 @@ func (f *ForkChoice) BlockHash(root [32]byte) ([32]byte, error) {
 	return en.node.blockHash, nil
 }
 
-// GasLimit returns the gas limit of the latest full payload at or before root.
-func (f *ForkChoice) GasLimit(root [32]byte) (uint64, error) {
+// GasLimit returns the gas limit of the payload with the given block hash as seen from the
+// block with the given root: either the block's own payload (full node) or the latest full
+// payload the block builds on. A bid whose parent_block_hash is the parent payload of its
+// parent_block_root builds on the root as an empty node and must be checked against the
+// parent payload's gas limit, not the root's own payload.
+func (f *ForkChoice) GasLimit(root, blockHash [32]byte) (uint64, error) {
 	s := f.store
-	if fn := s.fullNodeByRoot[root]; fn != nil {
-		return fn.gasLimit, nil
-	}
 	en := s.emptyNodeByRoot[root]
-	if en == nil {
+	if en == nil || en.node == nil {
 		return 0, errors.Wrap(ErrNilNode, "could not get gas limit for root")
+	}
+	if blockHash == en.node.blockHash {
+		fn := s.fullNodeByRoot[root]
+		if fn == nil {
+			return 0, errors.New("payload for root has not been imported")
+		}
+		return fn.gasLimit, nil
 	}
 	fp := s.fullParent(en)
 	if fp == nil {
 		return 0, errors.New("no full ancestor with gas limit")
+	}
+	if blockHash != fp.node.blockHash {
+		return 0, errors.New("block hash is neither the root's payload nor its parent payload")
 	}
 	return fp.gasLimit, nil
 }

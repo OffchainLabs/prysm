@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -236,6 +237,96 @@ func TestService_GetRecentPreState(t *testing.T) {
 	require.NotNil(t, service.getRecentPreState(ctx, &ethpb.Checkpoint{Epoch: 1, Root: ckRoot}))
 }
 
+func TestService_GetRecentPreState_NextEpochUsesHeadState(t *testing.T) {
+	service, _ := minimalTestService(t)
+	ctx := t.Context()
+
+	s, err := util.NewBeaconState()
+	require.NoError(t, err)
+	require.NoError(t, s.SetSlot(31))
+	ckRoot := bytesutil.PadTo([]byte{'A'}, fieldparams.RootLength)
+	cp0 := &ethpb.Checkpoint{Epoch: 0, Root: ckRoot}
+	require.NoError(t, s.SetFinalizedCheckpoint(cp0))
+
+	st, blk, err := prepareForkchoiceState(ctx, 31, [32]byte(ckRoot), [32]byte{}, [32]byte{'R'}, cp0, cp0)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+	service.head = &head{
+		root:  [32]byte(ckRoot),
+		state: s,
+		block: blk,
+		slot:  31,
+	}
+	recent := service.getRecentPreState(ctx, &ethpb.Checkpoint{Epoch: 1, Root: ckRoot})
+	require.NotNil(t, recent)
+	require.Equal(t, primitives.Slot(31), recent.Slot())
+}
+
+func TestService_GetRecentPreState_NextEpochCommitteesMatchAdvancedState(t *testing.T) {
+	helpers.ClearCache()
+	defer helpers.ClearCache()
+	ctx := t.Context()
+
+	st, _ := util.DeterministicGenesisState(t, 8192)
+	require.NoError(t, st.SetSlot(31))
+
+	activeCount, err := helpers.ActiveValidatorCount(ctx, st, 1)
+	require.NoError(t, err)
+	committeeCount := helpers.SlotCommitteeCount(activeCount)
+	require.Equal(t, true, committeeCount > 1)
+
+	headCommittees := make(map[[2]uint64][]primitives.ValidatorIndex)
+	for slot := primitives.Slot(32); slot < 64; slot++ {
+		for idx := primitives.CommitteeIndex(0); idx < primitives.CommitteeIndex(committeeCount); idx++ {
+			committee, err := helpers.BeaconCommitteeFromState(ctx, st, slot, idx)
+			require.NoError(t, err)
+			headCommittees[[2]uint64{uint64(slot), uint64(idx)}] = committee
+		}
+	}
+
+	// Cleared so the advanced state's committees are computed independently, the committee cache is seed keyed.
+	helpers.ClearCache()
+	advanced, err := transition.ProcessSlots(ctx, st.Copy(), 32)
+	require.NoError(t, err)
+	for slot := primitives.Slot(32); slot < 64; slot++ {
+		for idx := primitives.CommitteeIndex(0); idx < primitives.CommitteeIndex(committeeCount); idx++ {
+			committee, err := helpers.BeaconCommitteeFromState(ctx, advanced, slot, idx)
+			require.NoError(t, err)
+			require.DeepEqual(t, headCommittees[[2]uint64{uint64(slot), uint64(idx)}], committee)
+		}
+	}
+}
+
+func TestService_GetRecentPreState_ForkBoundaryFallsBack(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.AltairForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	service, _ := minimalTestService(t)
+	ctx := t.Context()
+
+	s, _ := util.DeterministicGenesisState(t, 64)
+	require.NoError(t, s.SetSlot(31))
+	ckRoot := bytesutil.PadTo([]byte{'A'}, fieldparams.RootLength)
+	cp0 := &ethpb.Checkpoint{Epoch: 0, Root: ckRoot}
+	require.NoError(t, s.SetFinalizedCheckpoint(cp0))
+
+	st, blk, err := prepareForkchoiceState(ctx, 31, [32]byte(ckRoot), [32]byte{}, [32]byte{'R'}, cp0, cp0)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+	service.head = &head{
+		root:  [32]byte(ckRoot),
+		state: s,
+		block: blk,
+		slot:  31,
+	}
+	recent := service.getRecentPreState(ctx, &ethpb.Checkpoint{Epoch: 1, Root: ckRoot})
+	require.NotNil(t, recent)
+	require.Equal(t, primitives.Slot(32), recent.Slot())
+	require.Equal(t, version.Altair, recent.Version())
+}
+
 func TestService_GetRecentPreState_Epoch_0(t *testing.T) {
 	service, _ := minimalTestService(t)
 	ctx := t.Context()
@@ -410,6 +501,96 @@ func TestService_GetAttPreState_Concurrency(t *testing.T) {
 			require.ErrorContains(t, "not a checkpoint in forkchoice", err)
 		}
 	}
+}
+
+func TestService_GetAttPreState_RegenSerialized(t *testing.T) {
+	service, tr := minimalTestService(t)
+	ctx := tr.ctx
+
+	s, err := util.NewBeaconState()
+	require.NoError(t, err)
+	ckRoot := bytesutil.PadTo([]byte{'A'}, fieldparams.RootLength)
+	require.NoError(t, s.SetFinalizedCheckpoint(&ethpb.Checkpoint{Root: ckRoot}))
+	val := &ethpb.Validator{PublicKey: bytesutil.PadTo([]byte("foo"), 48), WithdrawalCredentials: bytesutil.PadTo([]byte("bar"), fieldparams.RootLength)}
+	require.NoError(t, s.SetValidators([]*ethpb.Validator{val}))
+	require.NoError(t, s.SetBalances([]uint64{0}))
+	require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, s, bytesutil.ToBytes32(ckRoot)))
+	require.NoError(t, service.cfg.BeaconDB.SaveStateSummary(ctx, &ethpb.StateSummary{Root: ckRoot}))
+
+	cp1 := &ethpb.Checkpoint{Epoch: 1, Root: ckRoot}
+	st, root, err := prepareForkchoiceState(ctx, 1, [32]byte(cp1.Root), [32]byte{}, [32]byte{'R'}, cp1, cp1)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, root))
+
+	otherRoot := bytesutil.PadTo([]byte{'B'}, fieldparams.RootLength)
+	require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, s, bytesutil.ToBytes32(otherRoot)))
+	require.NoError(t, service.cfg.BeaconDB.SaveStateSummary(ctx, &ethpb.StateSummary{Root: otherRoot}))
+	cp2 := &ethpb.Checkpoint{Epoch: 2, Root: otherRoot}
+	st, root, err = prepareForkchoiceState(ctx, 33, [32]byte(cp2.Root), [32]byte(cp1.Root), [32]byte{'R'}, cp1, cp1)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, root))
+
+	logHook := logTest.NewGlobal()
+	service.attPreStateRegenSem <- struct{}{}
+
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	_, err = service.getAttPreState(cancelled, cp1)
+	require.ErrorIs(t, err, context.Canceled)
+	<-service.attPreStateRegenSem
+	for range 20 {
+		_, err = service.getAttPreState(cancelled, cp1)
+		require.ErrorIs(t, err, context.Canceled)
+	}
+	require.Equal(t, 0, len(logHook.AllEntries()), "a dead context must not start a regeneration")
+	service.attPreStateRegenSem <- struct{}{}
+
+	const perTarget = 10
+	type result struct {
+		slot primitives.Slot
+		err  error
+	}
+	done := make(chan result, 2*perTarget)
+	for _, cp := range []*ethpb.Checkpoint{cp1, cp2} {
+		for range perTarget {
+			go func() {
+				got, err := service.getAttPreState(ctx, cp)
+				if err != nil {
+					done <- result{err: err}
+					return
+				}
+				done <- result{slot: got.Slot()}
+			}()
+		}
+	}
+	select {
+	case r := <-done:
+		t.Fatalf("regeneration ran while another regeneration held the lock: slot %d err %v", r.slot, r.err)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	<-service.attPreStateRegenSem
+	slotCount := map[primitives.Slot]int{}
+	for range 2 * perTarget {
+		select {
+		case r := <-done:
+			require.NoError(t, r.err)
+			slotCount[r.slot]++
+		case <-time.After(10 * time.Second):
+			t.Fatalf("regeneration did not resume after the lock was released, completed %v", slotCount)
+		}
+	}
+	assert.Equal(t, perTarget, slotCount[params.BeaconConfig().SlotsPerEpoch])
+	assert.Equal(t, perTarget, slotCount[2*params.BeaconConfig().SlotsPerEpoch])
+
+	regens := 0
+	for _, e := range logHook.AllEntries() {
+		if e.Message == "Regenerating attestation pre-state" {
+			regens++
+		}
+	}
+	assert.Equal(t, 2, regens, "expected exactly one regeneration per target")
+	require.Equal(t, 0, len(service.attPreStateRegenSem))
 }
 
 func TestStore_SaveCheckpointState(t *testing.T) {

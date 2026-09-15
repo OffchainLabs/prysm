@@ -6,12 +6,14 @@ go_library(
         "bls.go",
         "constants.go",
         "error.go",
+        "fake.go",  # keep
         "interface.go",
         "signature_batch.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/crypto/bls",
     visibility = ["//visibility:public"],
     deps = [
+        "//config/fieldparams:go_default_library",  # keep
         "//crypto/bls/blst:go_default_library",
         "//crypto/bls/common:go_default_library",
         "//crypto/bls/herumi:go_default_library",
@@ -23,10 +25,12 @@ go_test(
     name = "go_default_test",
     srcs = [
         "bls_test.go",
+        "fake_test.go",  # keep
         "signature_batch_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
+        "//crypto/bls/blst:go_default_library",  # keep
         "//crypto/bls/common:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",

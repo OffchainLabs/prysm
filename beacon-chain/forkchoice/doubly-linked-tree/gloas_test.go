@@ -220,7 +220,7 @@ func TestMarkFullNode_SetsGasLimit(t *testing.T) {
 	require.NotNil(t, fn)
 	assert.Equal(t, uint64(30_000_000), fn.gasLimit)
 
-	gl, err := f.GasLimit(root)
+	gl, err := f.GasLimit(root, blockHash)
 	require.NoError(t, err)
 	assert.Equal(t, uint64(30_000_000), gl)
 }
@@ -261,7 +261,7 @@ func TestInsertChain_SetsFullNodeGasLimit(t *testing.T) {
 	require.NotNil(t, fn)
 	assert.Equal(t, uint64(36_000_000), fn.gasLimit)
 
-	gl, err := f.GasLimit(root)
+	gl, err := f.GasLimit(root, blockHash)
 	require.NoError(t, err)
 	assert.Equal(t, uint64(36_000_000), gl)
 }
@@ -464,6 +464,73 @@ func TestParentHash_UnknownRoot(t *testing.T) {
 	f := setupGloas(t, 0, 0)
 
 	assert.Equal(t, [32]byte{}, f.ParentHash(indexToHash(999)))
+}
+
+func TestParentHash_TreeRootBuildsOnPayload(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+	f := New()
+	f.SetBalancesByRooter(func(_ context.Context, _ [32]byte) ([]uint64, error) { return f.justifiedBalances, nil })
+	ctx := t.Context()
+
+	// Genesis-shaped anchor: the bid carries no payload of its own (zero block hash) but records the payload it builds on.
+	rootA := indexToHash(1)
+	preAnchorHash := indexToHash(50)
+	st, roblock, err := prepareGloasForkchoiceState(ctx, 0, rootA, [32]byte{}, params.BeaconConfig().ZeroHash, preAnchorHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	// B builds on A's empty variant, so no full parent exists in the tree.
+	rootB := indexToHash(2)
+	st, roblock, err = prepareGloasForkchoiceState(ctx, 1, rootB, rootA, indexToHash(200), preAnchorHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	assert.Equal(t, preAnchorHash, f.ConfirmedPayloadBlockHash(rootA))
+	assert.Equal(t, preAnchorHash, f.ConfirmedPayloadBlockHash(rootB))
+	assert.Equal(t, preAnchorHash, f.ParentHash(rootB))
+}
+
+func TestParentHash_PrunePreservesLastFullAncestor(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+	f := New()
+	f.SetBalancesByRooter(func(_ context.Context, _ [32]byte) ([]uint64, error) { return f.justifiedBalances, nil })
+	ctx := t.Context()
+
+	h0, h1, h2 := indexToHash(50), indexToHash(100), indexToHash(200)
+	rootA, rootB, rootC, rootD := indexToHash(1), indexToHash(2), indexToHash(3), indexToHash(4)
+
+	// A: genesis-shaped root building on h0. B: builds on A's empty variant and its payload h1 arrives.
+	st, blk, err := prepareGloasForkchoiceState(ctx, 0, rootA, [32]byte{}, params.BeaconConfig().ZeroHash, h0, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+	st, blk, err = prepareGloasForkchoiceState(ctx, 1, rootB, rootA, h1, h0, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+	pe, err := prepareGloasForkchoicePayload(rootB)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+	// C builds on full B but its own payload never arrives; D builds on C's empty variant.
+	st, blk, err = prepareGloasForkchoiceState(ctx, 2, rootC, rootB, h2, h1, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+	st, blk, err = prepareGloasForkchoiceState(ctx, 3, rootD, rootC, indexToHash(300), h1, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+	require.Equal(t, h1, f.ParentHash(rootD))
+
+	// Finalizing C prunes B, the only full ancestor. The walk from D now falls off the root and must still resolve to h1, not h0.
+	f.store.finalizedCheckpoint = &forkchoicetypes.Checkpoint{Epoch: 0, Root: rootC}
+	require.NoError(t, f.store.prune(ctx))
+	require.Equal(t, rootC, f.store.treeRootNode.root)
+	assert.Equal(t, h1, f.ParentHash(rootD))
+	assert.Equal(t, h1, f.ConfirmedPayloadBlockHash(rootC))
+	assert.Equal(t, h1, f.FinalizedPayloadBlockHash())
 }
 
 func TestHasPayloadBlockHash(t *testing.T) {
@@ -2220,7 +2287,7 @@ func TestStore_Prune_IncompatibleFullFinalizedChildren(t *testing.T) {
 
 func TestGasLimit_UnknownRootErrors(t *testing.T) {
 	f := setupGloas(t, 0, 0)
-	_, err := f.GasLimit(indexToHash(999))
+	_, err := f.GasLimit(indexToHash(999), [32]byte{})
 	require.ErrorContains(t, ErrNilNode.Error(), err)
 }
 
@@ -2255,14 +2322,73 @@ func TestGasLimit_GloasEmptyNodeWalksToFullAncestor(t *testing.T) {
 	_, hasFullB := f.store.fullNodeByRoot[rootB]
 	require.Equal(t, false, hasFullB)
 
-	got, err := f.GasLimit(rootB)
+	got, err := f.GasLimit(rootB, blockHashA)
 	require.NoError(t, err)
 	assert.Equal(t, gl, got)
 
 	// Direct full lookup on A also returns gl.
-	got, err = f.GasLimit(rootA)
+	got, err = f.GasLimit(rootA, blockHashA)
 	require.NoError(t, err)
 	assert.Equal(t, gl, got)
+}
+
+func TestGasLimit_GloasParentPayloadVsOwnPayload(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+
+	// A is full with gas limit glA.
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	st, roblock, err := prepareGloasForkchoiceState(ctx, 1, rootA, params.BeaconConfig().ZeroHash, blockHashA, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	const glA = uint64(42_000_000)
+	pe, err := blocks.WrappedROExecutionPayloadEnvelope(&ethpb.ExecutionPayloadEnvelope{
+		BeaconBlockRoot:       rootA[:],
+		ParentBeaconBlockRoot: make([]byte, 32),
+		Payload:               &enginev1.ExecutionPayloadGloas{GasLimit: glA},
+	})
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	// B builds on A's payload; its own payload is revealed with gas limit glB.
+	rootB := indexToHash(2)
+	blockHashB := indexToHash(200)
+	st, roblock, err = prepareGloasForkchoiceState(ctx, 2, rootB, rootA, blockHashB, blockHashA, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	// Before B's payload is imported, a bid on B's own payload cannot be checked,
+	// while a bid treating B as empty is checked against A's payload.
+	_, err = f.GasLimit(rootB, blockHashB)
+	require.ErrorContains(t, "payload for root has not been imported", err)
+	got, err := f.GasLimit(rootB, blockHashA)
+	require.NoError(t, err)
+	assert.Equal(t, glA, got)
+
+	const glB = uint64(43_000_000)
+	pe, err = blocks.WrappedROExecutionPayloadEnvelope(&ethpb.ExecutionPayloadEnvelope{
+		BeaconBlockRoot:       rootB[:],
+		ParentBeaconBlockRoot: rootA[:],
+		Payload:               &enginev1.ExecutionPayloadGloas{GasLimit: glB},
+	})
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	// A bid with parent_block_root B and parent_block_hash B's payload uses glB.
+	got, err = f.GasLimit(rootB, blockHashB)
+	require.NoError(t, err)
+	assert.Equal(t, glB, got)
+	// A bid with parent_block_root B and parent_block_hash A's payload (B treated as empty) still uses glA.
+	got, err = f.GasLimit(rootB, blockHashA)
+	require.NoError(t, err)
+	assert.Equal(t, glA, got)
+	// Any other hash is neither B's payload nor the payload B builds on.
+	_, err = f.GasLimit(rootB, indexToHash(300))
+	require.ErrorContains(t, "neither the root's payload nor its parent payload", err)
+	// Unknown root.
+	_, err = f.GasLimit(indexToHash(3), blockHashA)
+	require.ErrorContains(t, "could not get gas limit for root", err)
 }
 
 func TestProcessAttestation_SameSlotPayloadVote(t *testing.T) {

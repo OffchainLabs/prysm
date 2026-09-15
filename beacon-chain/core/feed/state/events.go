@@ -40,6 +40,8 @@ const (
 	ExecutionPayloadAvailable
 	// ExecutionPayloadProcessed is sent after a payload envelope has been processed.
 	ExecutionPayloadProcessed
+	// FastConfirmation is sent after every run of the fast confirmation rule.
+	FastConfirmation
 )
 
 // BlockProcessedData is the data sent with BlockProcessed events.
@@ -84,6 +86,13 @@ type InitializedData struct {
 type ExecutionPayloadAvailableData struct {
 	Slot      primitives.Slot
 	BlockRoot [32]byte
+}
+
+// FastConfirmationData is the data sent with FastConfirmation events.
+type FastConfirmationData struct {
+	Slot        primitives.Slot
+	BlockRoot   [32]byte
+	CurrentSlot primitives.Slot
 }
 
 // ExecutionPayloadProcessedData is the data sent with ExecutionPayloadProcessed events.

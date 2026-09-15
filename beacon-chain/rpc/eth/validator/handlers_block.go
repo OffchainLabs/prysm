@@ -51,7 +51,6 @@ func (s *Server) ProduceBlockV3(w http.ResponseWriter, r *http.Request) {
 	rawSlot := r.PathValue("slot")
 	rawRandaoReveal := r.URL.Query().Get("randao_reveal")
 	rawGraffiti := r.URL.Query().Get("graffiti")
-	rawSkipRandaoVerification := r.URL.Query().Get("skip_randao_verification")
 
 	var bbFactor *wrapperspb.UInt64Value // default the factor via fall back
 	rawBbFactor, bbValue, ok := shared.UintFromQuery(w, r, "builder_boost_factor", false)
@@ -68,7 +67,7 @@ func (s *Server) ProduceBlockV3(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var randaoReveal []byte
-	if rawSkipRandaoVerification == "true" {
+	if skipRandaoVerification(r) {
 		randaoReveal = common.InfiniteSignature[:]
 	} else {
 		rr, err := bytesutil.DecodeHexWithLength(rawRandaoReveal, fieldparams.BLSSignatureLength)
@@ -648,4 +647,10 @@ func handleProduceFuluV3(
 		ConsensusBlockValue:     consensusBlockValue,
 		Data:                    jsonBytes,
 	})
+}
+
+// skipRandaoVerification reports whether the flag is present; the spec sends it with an empty value, "true" is kept for compatibility.
+func skipRandaoVerification(r *http.Request) bool {
+	v, ok := r.URL.Query()["skip_randao_verification"]
+	return ok && (v[0] == "" || v[0] == "true")
 }

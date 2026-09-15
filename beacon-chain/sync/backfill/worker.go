@@ -196,7 +196,7 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	if err != nil {
 		return b.withRetryableError(err)
 	}
-	cs, err := newColumnSync(ctx, b, verified, current, w.p2p, w.cfg)
+	cs, err := newColumnSync(ctx, b.begin, b.end, verified, current, w.p2p, w.cfg)
 	if err != nil {
 		return b.withRetryableError(err)
 	}
@@ -204,9 +204,11 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	if err != nil {
 		return b.withRetryableError(err)
 	}
-	// Assign the stage state as a unit. A setup error above must not leave b.blocks populated
-	// alongside a nil b.columns: the retryable-error path runs transitionToNext, which reads
-	// b.columns whenever b.blocks is non-empty.
+
+	// Update the batch with the verified blocks, blob sync, column sync, and envelope sync
+	// before transitioning to the next state. Note that if we experience any failures
+	// in newBlobSync, newColumnSync, or newEnvelopeSync, we'll start the whole batch from
+	// scratch for simplicity.
 	b.blocks = verified
 	b.blobs = bs
 	b.columns = cs

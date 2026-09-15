@@ -113,8 +113,8 @@ func (s *Service) requestDataColumnsForEnvelope(root [32]byte) {
 const maxPayloadEnvelopeFetchAttempts = 3
 
 func (s *Service) fetchPayloadEnvelope(root [32]byte) {
-	// Validating the envelope requires the block's data column sidecars; fetch any we are missing.
-	go s.requestDataColumnsForEnvelope(root)
+	// Fetch missing columns before the envelope so envelope processing does not wait on columns that were never requested.
+	s.requestDataColumnsForEnvelope(root)
 
 	bestPeers := s.getBestPeers()
 	if len(bestPeers) == 0 {
@@ -143,7 +143,10 @@ func (s *Service) fetchPayloadEnvelope(root [32]byte) {
 			log.WithError(err).Debug("Could not wrap requested payload envelope")
 			continue
 		}
-		if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(s.ctx, wrapped); err != nil {
+		ctx, cancel := context.WithTimeout(s.ctx, params.BeaconConfig().SlotDuration())
+		err = s.cfg.chain.ReceiveExecutionPayloadEnvelope(ctx, wrapped)
+		cancel()
+		if err != nil {
 			if blockchain.IsInvalidBlock(err) {
 				s.setBadPayload(s.ctx, root)
 				return

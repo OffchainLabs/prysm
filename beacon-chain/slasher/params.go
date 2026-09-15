@@ -1,8 +1,9 @@
 package slasher
 
 import (
+	"encoding/binary"
+
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 // Parameters for slashing detection.
@@ -159,7 +160,7 @@ func (p *Parameters) validatorOffset(validatorIndex primitives.ValidatorIndex) u
 //	validatorChunkIndex * width + chunkIndex = 2*4 + 2 = 10
 func (p *Parameters) flatSliceID(validatorChunkIndex, chunkIndex uint64) []byte {
 	width := p.historyLength.Div(p.chunkSize)
-	return ssz.MarshalUint64(make([]byte, 0), uint64(width.Mul(validatorChunkIndex).Add(chunkIndex)))
+	return binary.LittleEndian.AppendUint64(make([]byte, 0), uint64(width.Mul(validatorChunkIndex).Add(chunkIndex)))
 }
 
 // ValidatorIndexesInChunk Given a validator chunk index, we determine all the validators

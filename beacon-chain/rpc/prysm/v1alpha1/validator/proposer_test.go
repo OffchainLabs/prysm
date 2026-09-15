@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/api"
 	builderapi "github.com/OffchainLabs/prysm/v7/api/client/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
@@ -58,6 +59,7 @@ import (
 	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
@@ -937,6 +939,20 @@ func injectSlashings(t *testing.T, st state.BeaconState, keys []bls.SecretKey, s
 		require.NoError(t, err)
 	}
 	return proposerSlashings, attSlashings
+}
+
+func TestBuilderUrlFromContext(t *testing.T) {
+	t.Run("no metadata", func(t *testing.T) {
+		require.Equal(t, "", builderUrlFromContext(t.Context()))
+	})
+	t.Run("metadata without builder url", func(t *testing.T) {
+		ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs("other-key", "v"))
+		require.Equal(t, "", builderUrlFromContext(ctx))
+	})
+	t.Run("builder url present", func(t *testing.T) {
+		ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs(api.BuilderUrlHeader, "http://builder.example"))
+		require.Equal(t, "http://builder.example", builderUrlFromContext(ctx))
+	})
 }
 
 func TestProposer_ProposeBlock_OK(t *testing.T) {

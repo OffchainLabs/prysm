@@ -1,7 +1,7 @@
 package primitives
 
 import (
-	fssz "github.com/prysmaticlabs/fastssz"
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 )
 
 // SSZBytes --
@@ -9,11 +9,11 @@ type SSZBytes []byte
 
 // HashTreeRoot --
 func (b *SSZBytes) HashTreeRoot() ([32]byte, error) {
-	return fssz.HashWithDefaultHasher(b)
+	return ssz.HashWithDefaultHasher(b)
 }
 
 // HashTreeRootWith --
-func (b *SSZBytes) HashTreeRootWith(hh *fssz.Hasher) error {
+func (b *SSZBytes) HashTreeRootWith(hh *ssz.Hasher) error {
 	indx := hh.Index()
 	hh.PutBytes(*b)
 	hh.Merkleize(indx)

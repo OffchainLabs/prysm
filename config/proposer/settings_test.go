@@ -1,6 +1,8 @@
 package proposer
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -442,6 +444,106 @@ func TestSettings_ResetGasLimit(t *testing.T) {
 	})
 }
 
+func TestSettings_WarnUnsetMaxExecutionPayment(t *testing.T) {
+	const warning = "no max_execution_payment"
+	gloasScheduled := func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 100
+		params.OverrideBeaconConfig(cfg)
+	}
+	key := bytesutil.ToBytes48([]byte("pubkey"))
+
+	t.Run("entry and config both unset warns and names the builder", func(t *testing.T) {
+		gloasScheduled(t)
+		hook := logtest.NewGlobal()
+		ps := &Settings{Version: SchemaV2, DefaultConfig: &Option{
+			BuilderConfig: &BuilderConfig{Builders: []*BuilderEntry{{URL: "https://b.example"}}},
+		}}
+		ps.WarnUnsetMaxExecutionPayment()
+		assert.LogsContain(t, hook, warning)
+		assert.LogsContain(t, hook, "https://b.example")
+	})
+	t.Run("credentials in the builder url are masked", func(t *testing.T) {
+		gloasScheduled(t)
+		hook := logtest.NewGlobal()
+		ps := &Settings{Version: SchemaV2, DefaultConfig: &Option{
+			BuilderConfig: &BuilderConfig{Builders: []*BuilderEntry{{URL: "https://user:password@b.example/secret-path"}}},
+		}}
+		ps.WarnUnsetMaxExecutionPayment()
+		assert.LogsContain(t, hook, "***")
+		assert.LogsDoNotContain(t, hook, "password")
+		assert.LogsDoNotContain(t, hook, "secret-path")
+	})
+	t.Run("entry cap set silent", func(t *testing.T) {
+		gloasScheduled(t)
+		hook := logtest.NewGlobal()
+		ps := &Settings{Version: SchemaV2, DefaultConfig: &Option{
+			BuilderConfig: &BuilderConfig{Builders: []*BuilderEntry{{URL: "https://b.example", MaxExecutionPayment: uint64ValPtr(1000000000)}}},
+		}}
+		ps.WarnUnsetMaxExecutionPayment()
+		assert.LogsDoNotContain(t, hook, warning)
+	})
+	t.Run("config cap set silent", func(t *testing.T) {
+		gloasScheduled(t)
+		hook := logtest.NewGlobal()
+		ps := &Settings{Version: SchemaV2, DefaultConfig: &Option{
+			BuilderConfig: &BuilderConfig{MaxExecutionPayment: uint64ValPtr(1000000000), Builders: []*BuilderEntry{{URL: "https://b.example"}}},
+		}}
+		ps.WarnUnsetMaxExecutionPayment()
+		assert.LogsDoNotContain(t, hook, warning)
+	})
+	t.Run("explicit zero is a deliberate choice and stays silent", func(t *testing.T) {
+		gloasScheduled(t)
+		hook := logtest.NewGlobal()
+		ps := &Settings{Version: SchemaV2, DefaultConfig: &Option{
+			BuilderConfig: &BuilderConfig{Builders: []*BuilderEntry{{URL: "https://b.example", MaxExecutionPayment: uint64ValPtr(0)}}},
+		}}
+		ps.WarnUnsetMaxExecutionPayment()
+		assert.LogsDoNotContain(t, hook, warning)
+	})
+	t.Run("per-key entry inheriting the default cap stays silent", func(t *testing.T) {
+		gloasScheduled(t)
+		hook := logtest.NewGlobal()
+		ps := &Settings{
+			Version:       SchemaV2,
+			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{MaxExecutionPayment: uint64ValPtr(1000000000)}},
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+				key: {BuilderConfig: &BuilderConfig{Builders: []*BuilderEntry{{URL: "https://perkey.example"}}}},
+			},
+		}
+		ps.WarnUnsetMaxExecutionPayment()
+		assert.LogsDoNotContain(t, hook, warning)
+	})
+	t.Run("per-key entry with no cap anywhere warns", func(t *testing.T) {
+		gloasScheduled(t)
+		hook := logtest.NewGlobal()
+		ps := &Settings{
+			Version: SchemaV2,
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+				key: {BuilderConfig: &BuilderConfig{Builders: []*BuilderEntry{{URL: "https://perkey.example"}}}},
+			},
+		}
+		ps.WarnUnsetMaxExecutionPayment()
+		assert.LogsContain(t, hook, "https://perkey.example")
+	})
+	t.Run("no builders silent", func(t *testing.T) {
+		gloasScheduled(t)
+		hook := logtest.NewGlobal()
+		ps := &Settings{Version: SchemaV2, DefaultConfig: &Option{GasLimit: 30000000}}
+		ps.WarnUnsetMaxExecutionPayment()
+		assert.LogsDoNotContain(t, hook, warning)
+	})
+	t.Run("without gloas scheduled silent", func(t *testing.T) {
+		hook := logtest.NewGlobal()
+		ps := &Settings{Version: SchemaV2, DefaultConfig: &Option{
+			BuilderConfig: &BuilderConfig{Builders: []*BuilderEntry{{URL: "https://b.example"}}},
+		}}
+		ps.WarnUnsetMaxExecutionPayment()
+		assert.LogsDoNotContain(t, hook, warning)
+	})
+}
+
 func TestSettings_WarnDeprecatedSchema(t *testing.T) {
 	v1Settings := &Settings{
 		Version: SchemaV1,
@@ -745,6 +847,46 @@ func TestSettingFromConsensus(t *testing.T) {
 		require.DeepEqual(t, []byte("first"), builders[0].AuthData)
 		require.DeepEqual(t, []byte("second"), builders[1].AuthData)
 		require.Equal(t, "https://other.example", builders[2].URL)
+	})
+
+	// Entries violating the spec limits could not be encoded into a block production
+	// request, so every load path must drop them instead of costing a proposal.
+	t.Run("drops entries violating the spec limits", func(t *testing.T) {
+		payload := &validatorpb.ProposerSettingsPayload{
+			Version: SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{
+				Builder: &validatorpb.BuilderConfig{
+					Builders: []*validatorpb.BuilderEntry{
+						{Url: "https://good.example"},
+						{Url: "not a url"},
+						{Url: "https://" + strings.Repeat("a", MaxBuilderURLSize)},
+						{Url: "https://badkey.example", Pubkeys: [][]byte{make([]byte, 47)}},
+						{Url: "https://badauth.example", AuthData: make([]byte, MaxAuthDataSize+1)},
+					},
+				},
+			},
+		}
+		ps, err := SettingFromConsensus(payload)
+		require.NoError(t, err)
+		builders := ps.DefaultConfig.BuilderConfig.Builders
+		require.Equal(t, 1, len(builders))
+		require.Equal(t, "https://good.example", builders[0].URL)
+	})
+
+	t.Run("caps builders at the entry limit", func(t *testing.T) {
+		entries := make([]*validatorpb.BuilderEntry, 0, MaxBuilderEntries+2)
+		for i := 0; i <= MaxBuilderEntries+1; i++ {
+			entries = append(entries, &validatorpb.BuilderEntry{Url: fmt.Sprintf("https://b%d.example", i)})
+		}
+		payload := &validatorpb.ProposerSettingsPayload{
+			Version: SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{
+				Builder: &validatorpb.BuilderConfig{Builders: entries},
+			},
+		}
+		ps, err := SettingFromConsensus(payload)
+		require.NoError(t, err)
+		require.Equal(t, MaxBuilderEntries, len(ps.DefaultConfig.BuilderConfig.Builders))
 	})
 
 	t.Run("v1 explicit max_execution_payment survives ingest", func(t *testing.T) {

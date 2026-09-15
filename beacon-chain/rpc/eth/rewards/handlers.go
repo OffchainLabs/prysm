@@ -251,7 +251,7 @@ func attRewardsBalancesAndVals(
 	w http.ResponseWriter,
 	r *http.Request,
 	st state.BeaconState,
-) (*precompute.Balance, []*precompute.Validator, []primitives.ValidatorIndex, bool) {
+) (*precompute.Balance, []precompute.Validator, []primitives.ValidatorIndex, bool) {
 	allVals, bal, err := altair.InitializePrecomputeValidators(r.Context(), st)
 	if err != nil {
 		httputil.HandleError(w, "Could not initialize precompute validators: "+err.Error(), http.StatusBadRequest)
@@ -269,7 +269,7 @@ func attRewardsBalancesAndVals(
 	if len(valIndices) == len(allVals) {
 		return bal, allVals, valIndices, true
 	} else {
-		filteredVals := make([]*precompute.Validator, len(valIndices))
+		filteredVals := make([]precompute.Validator, len(valIndices))
 		for i, valIx := range valIndices {
 			filteredVals[i] = allVals[valIx]
 		}
@@ -283,7 +283,7 @@ func idealAttRewards(
 	w http.ResponseWriter,
 	st state.BeaconState,
 	bal *precompute.Balance,
-	vals []*precompute.Validator,
+	vals []precompute.Validator,
 ) ([]structs.IdealAttestationReward, bool) {
 	increment := params.BeaconConfig().EffectiveBalanceIncrement
 	maxIdealRewards := int((params.BeaconConfig().MaxEffectiveBalanceElectra - params.BeaconConfig().EjectionBalance) / increment)
@@ -304,9 +304,9 @@ func idealAttRewards(
 	slices.Sort(effectiveBalances)
 
 	idealRewards := make([]structs.IdealAttestationReward, 0, len(effectiveBalances))
-	idealVals := make([]*precompute.Validator, 0, len(effectiveBalances))
+	idealVals := make([]precompute.Validator, 0, len(effectiveBalances))
 	for _, effectiveBalance := range effectiveBalances {
-		idealVals = append(idealVals, &precompute.Validator{
+		idealVals = append(idealVals, precompute.Validator{
 			IsActivePrevEpoch:            true,
 			IsSlashed:                    false,
 			CurrentEpochEffectiveBalance: effectiveBalance,
@@ -349,7 +349,7 @@ func totalAttRewards(
 	w http.ResponseWriter,
 	st state.BeaconState,
 	bal *precompute.Balance,
-	vals []*precompute.Validator,
+	vals []precompute.Validator,
 	valIndices []primitives.ValidatorIndex,
 ) ([]structs.TotalAttestationReward, bool) {
 	totalRewards := make([]structs.TotalAttestationReward, len(valIndices))
@@ -386,7 +386,7 @@ func syncRewardsVals(
 	w http.ResponseWriter,
 	r *http.Request,
 	st state.BeaconState,
-) ([]*precompute.Validator, []primitives.ValidatorIndex, bool) {
+) ([]precompute.Validator, []primitives.ValidatorIndex, bool) {
 	allVals, _, err := altair.InitializePrecomputeValidators(r.Context(), st)
 	if err != nil {
 		httputil.HandleError(w, "Could not initialize precompute validators: "+err.Error(), http.StatusBadRequest)
@@ -413,7 +413,7 @@ func syncRewardsVals(
 	}
 
 	scIndices := make([]primitives.ValidatorIndex, 0, len(allScIndices))
-	scVals := make([]*precompute.Validator, 0, len(allScIndices))
+	scVals := make([]precompute.Validator, 0, len(allScIndices))
 	for _, valIdx := range valIndices {
 		if slices.Contains(allScIndices, valIdx) {
 			scVals = append(scVals, allVals[valIdx])
@@ -424,7 +424,7 @@ func syncRewardsVals(
 	return scVals, scIndices, true
 }
 
-func requestedValIndices(w http.ResponseWriter, r *http.Request, st state.BeaconState, allVals []*precompute.Validator) ([]primitives.ValidatorIndex, bool) {
+func requestedValIndices(w http.ResponseWriter, r *http.Request, st state.BeaconState, allVals []precompute.Validator) ([]primitives.ValidatorIndex, bool) {
 	var rawValIds []string
 	if r.Body != http.NoBody {
 		if err := json.NewDecoder(r.Body).Decode(&rawValIds); err != nil {

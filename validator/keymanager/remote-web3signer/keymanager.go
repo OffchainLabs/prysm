@@ -1,20 +1,16 @@
 package remote_web3signer
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
-	"os"
 	"path/filepath"
-	"slices"
-	"strings"
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/async/event"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/io/file"
@@ -26,11 +22,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer/internal"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer/types"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/fsnotify/fsnotify"
 	"github.com/go-playground/validator/v10"
 	"github.com/logrusorgru/aurora"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -55,19 +49,27 @@ type SetupConfig struct {
 	// a static list of public keys to be passed by the user to determine what accounts should sign.
 	// This will provide a layer of safety against slashing if the web3signer is shared across validators.
 	ProvidedPublicKeys []string
+
+	// PollInterval makes the keymanager re-fetch the URL (PublicKeysURL) on this interval to
+	// hot-reload the validating public key set. A failed or empty response keeps the current
+	// keys. Polling only replaces the URL's own keys, so it leaves the flag and key file
+	// keys alone.
+	// Note: Zero or negative disables polling.
+	PollInterval time.Duration
 }
 
 // Keymanager defines the web3signer keymanager.
 type Keymanager struct {
 	client                internal.HttpSignerClient
 	genesisValidatorsRoot []byte
-	providedPublicKeys    [][48]byte          // (source of truth) flag loaded + file loaded + api loaded keys
-	flagLoadedKeysMap     map[string][48]byte // stores what was provided from flag ( as opposed to from file )
+	keys                  keySets
 	accountsChangedFeed   *event.Feed
 	validator             *validator.Validate
 	retriesRemaining      int
 	keyFilePath           string
-	lock                  sync.RWMutex
+	// serialize key set replacement and its notification across the URL poller, the file
+	// watcher and the keymanager API, so subscribers never observe them out of order.
+	updateLock sync.Mutex
 }
 
 // NewKeymanager instantiates a new web3signer key manager.
@@ -100,316 +102,112 @@ func NewKeymanager(ctx context.Context, cfg *SetupConfig) (*Keymanager, error) {
 		if !keyFileExists {
 			return nil, fmt.Errorf("no file exists in remote signer key file path %s", km.keyFilePath)
 		}
+
+		// NOTE: Warn users rather than fail as only keymanager API write path is dead.
+		if err := keyFileDirWritable(km.keyFilePath); err != nil {
+			log.
+				WithError(err).
+				WithField("dir", filepath.Dir(km.keyFilePath)).
+				Warn("Cannot create files in the remote signer key file directory, so keymanager API imports and deletions will fail. Keys already in the file still validate")
+		}
 	}
 
-	var ppk []string
-	// load key values
+	// Load the derived key sources:
+	// 1. From URL.
 	if cfg.PublicKeysURL != "" {
-		providedPublicKeys, err := km.client.GetPublicKeys(ctx, cfg.PublicKeysURL)
-		if err != nil {
-			erroredResponsesTotal.Inc()
-			return nil, errors.Wrapf(err, "could not get public keys from remote server URL %v", cfg.PublicKeysURL)
-		}
-		ppk = providedPublicKeys
-	} else if len(cfg.ProvidedPublicKeys) != 0 {
-		ppk = cfg.ProvidedPublicKeys
-	}
-
-	// use a map to remove duplicates
-	flagLoadedKeys := make(map[string][48]byte)
-
-	// Populate the map with existing keys
-	for _, key := range ppk {
-		decodedKey, err := hexutil.Decode(key)
-		if err != nil {
-			return nil, errors.Wrapf(err, "could not decode public key %s", key)
-		}
-		if len(decodedKey) != fieldparams.BLSPubkeyLength {
-			return nil, fmt.Errorf("public key %s has invalid length (expected %d, got %d)", decodedKey, fieldparams.BLSPubkeyLength, len(decodedKey))
-		}
-		flagLoadedKeys[key] = bytesutil.ToBytes48(decodedKey)
-	}
-	km.flagLoadedKeysMap = flagLoadedKeys
-
-	// load from file
-	if keyFileExists {
-		log.WithField("file", km.keyFilePath).Info("Loading keys from file")
-		_, fileKeys, err := km.readKeyFile()
-		if err != nil {
-			return nil, errors.Wrap(err, "could not read key file")
-		}
-		if len(flagLoadedKeys) != 0 {
-			log.WithField("flagLoadedKeyCount", len(flagLoadedKeys)).WithField("fileLoadedKeyCount", len(fileKeys)).Info("Combining flag loaded keys and file loaded keys.")
-			maps.Copy(fileKeys, flagLoadedKeys)
-			if err = km.savePublicKeysToFile(fileKeys); err != nil {
-				return nil, errors.Wrap(err, "could not save public keys to file")
-			}
-		}
-		km.lock.Lock()
-		km.providedPublicKeys = slices.Collect(maps.Values(fileKeys))
-		km.lock.Unlock()
-		watcherReady := make(chan error, 1)
-		var watcherReadyOnce sync.Once
-		markWatcherReady := func(err error) {
-			watcherReadyOnce.Do(func() { watcherReady <- err })
-		}
-		go func() {
-			watchErr := km.refreshRemoteKeysFromFileChangesWithRetry(ctx, retryDelay, markWatcherReady)
-			if watchErr != nil {
-				markWatcherReady(watchErr)
-				log.WithError(watchErr).Error("Could not refresh remote keys from file changes")
-			}
-		}()
-		select {
-		case err := <-watcherReady:
+		raw, err := km.client.GetPublicKeys(ctx, cfg.PublicKeysURL)
+		switch {
+		case err == nil:
+			urlKeys, err := decodePublicKeys(raw)
 			if err != nil {
-				return nil, errors.Wrap(err, "could not initialize remote signer key file watcher")
+				return nil, fmt.Errorf("decode public keys: %w", err)
 			}
-		case <-ctx.Done():
-			return nil, errors.Wrap(ctx.Err(), "could not initialize remote signer key file watcher")
+			km.keys.replace(sourceURL, urlKeys)
+		case cfg.PollInterval > 0:
+			// Polling will retry, so start with no keys rather than refusing to start.
+			erroredResponsesTotal.Inc()
+			log.
+				WithError(err).
+				WithField("url", api.RedactEndpoint(cfg.PublicKeysURL)).
+				Warn("Could not get public keys from the remote signer URL, starting with no validating keys and retrying on the next poll")
+		default:
+			erroredResponsesTotal.Inc()
+			return nil, errors.Wrapf(err, "could not get public keys from remote server URL %v", api.RedactEndpoint(cfg.PublicKeysURL))
 		}
-	} else {
-		km.lock.Lock()
-		km.providedPublicKeys = slices.Collect(maps.Values(flagLoadedKeys))
-		km.lock.Unlock()
+
+		go km.pollRemoteKeysFromURL(ctx, cfg.PublicKeysURL, cfg.PollInterval)
+	}
+
+	// 2. From the flag.
+	if len(cfg.ProvidedPublicKeys) != 0 {
+		flagKeys, err := decodePublicKeys(cfg.ProvidedPublicKeys)
+		if err != nil {
+			return nil, fmt.Errorf("decode public keys: %w", err)
+		}
+		km.keys.replace(sourceFlag, flagKeys)
+	}
+
+	// Return early when no persistent storage is configured.
+	if !keyFileExists {
+		return km, nil
+	}
+
+	log.WithField("file", km.keyFilePath).Info("Loading keys from file")
+
+	watcherReady := make(chan error, 1)
+	var watcherReadyOnce sync.Once
+	markWatcherReady := func(err error) {
+		watcherReadyOnce.Do(func() { watcherReady <- err })
+	}
+	go func() {
+		watchErr := km.refreshRemoteKeysFromFileChangesWithRetry(ctx, retryDelay, markWatcherReady)
+		if watchErr != nil {
+			markWatcherReady(watchErr)
+			log.WithError(watchErr).Error("Could not refresh remote keys from file changes")
+		}
+	}()
+	select {
+	case err := <-watcherReady:
+		if err != nil {
+			return nil, errors.Wrap(err, "could not initialize remote signer key file watcher")
+		}
+	case <-ctx.Done():
+		return nil, errors.Wrap(ctx.Err(), "could not initialize remote signer key file watcher")
 	}
 
 	return km, nil
 }
 
-func (km *Keymanager) refreshRemoteKeysFromFileChangesWithRetry(ctx context.Context, retryDelay time.Duration, markReady func(error)) error {
-	initialized := false
-	markInitialized := func(err error) {
-		initialized = true
-		markReady(err)
-	}
-	for {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if km.retriesRemaining == 0 {
-			return errors.New("file check retries remaining exceeded")
-		}
-		err := km.refreshRemoteKeysFromFileChanges(ctx, markInitialized)
-		if err == nil {
-			return nil
-		}
-		// Retries only make sense once the watcher has worked at least once.
-		// Before that, fail startup immediately instead of blocking NewKeymanager
-		// through the retry ladder.
-		if !initialized {
-			return err
-		}
-		km.updatePublicKeys(slices.Collect(maps.Values(km.flagLoadedKeysMap))) // update the keys to flag provided defaults
-		km.retriesRemaining--
-		log.WithError(err).Debug("Error occurred on key refresh")
-		log.WithFields(logrus.Fields{"path": km.keyFilePath, "retriesRemaining": km.retriesRemaining, "retryDelay": retryDelay}).Warnf("Could not refresh keys. Retrying...")
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(retryDelay):
-		}
-	}
+// replaceKeys swaps src's key set and notifies subscribers when the validating set changed.
+func (km *Keymanager) replaceKeys(src keySource, keys []pubkey) {
+	km.updateLock.Lock()
+	defer km.updateLock.Unlock()
+
+	km.replaceKeysLocked(src, keys)
 }
 
-func (km *Keymanager) readKeyFile() ([][48]byte, map[string][48]byte, error) {
-	km.lock.RLock()
-	defer km.lock.RUnlock()
+// replaceKeysLocked is replaceKeys for callers that already hold updateLock.
+func (km *Keymanager) replaceKeysLocked(src keySource, keys []pubkey) {
+	changed, union := km.keys.replace(src, keys)
+	if !changed {
+		return
+	}
 
-	if km.keyFilePath == "" {
-		return nil, nil, errors.New("no key file path provided")
-	}
-	f, err := os.Open(filepath.Clean(km.keyFilePath))
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "could not open remote signer public key file")
-	}
-	defer func() {
-		if err := f.Close(); err != nil {
-			log.WithError(err).Error("Could not close remote signer public key file")
-		}
-	}()
-	// Use a map to track and skip duplicate lines
-	seenKeys := make(map[string][48]byte)
-	scanner := bufio.NewScanner(f)
-	var keys [][48]byte
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		pubkeyLength := (fieldparams.BLSPubkeyLength * 2) + 2
-		if line == "" {
-			// skip empty line
-			continue
-		}
-		// allow for pubkeys without the 0x
-		if len(line) == pubkeyLength-2 && !strings.HasPrefix(line, "0x") {
-			line = "0x" + line
-		}
-		if len(line) != pubkeyLength {
-			log.WithFields(logrus.Fields{
-				"filepath": km.keyFilePath,
-				"key":      line,
-			}).Error("Invalid public key in remote signer key file")
-			continue
-		}
-		if _, found := seenKeys[line]; !found {
-			// If it's a new line, mark it as seen and process it
-			pubkey, err := hexutil.Decode(line)
-			if err != nil {
-				return nil, nil, errors.Wrapf(err, "could not decode public key %s in remote signer key file", line)
-			}
-			bPubkey := bytesutil.ToBytes48(pubkey)
-			seenKeys[line] = bPubkey
-			keys = append(keys, bPubkey)
-		}
-	}
-	// Check for scanning errors
-	if err := scanner.Err(); err != nil {
-		return nil, nil, errors.Wrap(err, "could not scan remote signer public key file")
-	}
-	if len(keys) == 0 {
-		log.Warn("Remote signer key file: no valid public keys found. Defaulting to flag provided keys if any exist.")
-	}
-	return keys, seenKeys, nil
-}
-
-func (km *Keymanager) savePublicKeysToFile(providedPublicKeys map[string][48]byte) error {
-	if km.keyFilePath == "" {
-		return errors.New("no key file provided")
-	}
-	pubkeys := make([][48]byte, 0)
-	// Open the file with write and truncate permissions
-	f, err := os.OpenFile(km.keyFilePath, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0600)
-	if err != nil {
-		return fmt.Errorf("failed to open file: %w", err)
-	}
-	defer func(f *os.File) {
-		err := f.Close()
-		if err != nil {
-			log.WithError(err).Error("Could not close file, proceeding without closing the file")
-		}
-	}(f)
-
-	// Iterate through all lines in the slice and write them to the file
-	for key, value := range providedPublicKeys {
-		if _, err := f.WriteString(key + "\n"); err != nil {
-			return fmt.Errorf("error writing key %s to file: %w", value, err)
-		}
-		pubkeys = append(pubkeys, value)
-	}
-	km.updatePublicKeys(pubkeys)
-	return nil
-}
-
-func (km *Keymanager) refreshRemoteKeysFromFileChanges(ctx context.Context, markReady func(error)) error {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return errors.Wrap(err, "could not initialize file watcher")
-	}
-	defer func() {
-		if err := watcher.Close(); err != nil {
-			log.WithError(err).Error("Could not close file watcher")
-		}
-	}()
-	initialFileInfo, err := os.Stat(km.keyFilePath)
-	if err != nil {
-		return errors.Wrap(err, "could not stat remote signer public key file")
-	}
-	initialFileSize := initialFileInfo.Size()
-	if err := watcher.Add(km.keyFilePath); err != nil {
-		return errors.Wrap(err, "could not add file to file watcher")
-	}
-	log.WithField("path", km.keyFilePath).Info("Successfully initialized file watcher")
-	km.retriesRemaining = maxRetries // reset retries to default
-	// Reload keys on every watcher (re)initialization: a failed refresh resets the
-	// in-memory keys to flag-provided defaults, so a recovery must restore the
-	// file-loaded set even when the flag-provided keys are not empty.
-	fileKeys, _, err := km.readKeyFile()
-	if err != nil {
-		return errors.Wrap(err, "could not read key file")
-	}
-	if len(fileKeys) == 0 {
-		log.Warnln("Remote signer key file no longer has keys, defaulting to flag provided keys")
-		fileKeys = slices.Collect(maps.Values(km.flagLoadedKeysMap))
-	}
-	currentKeys, err := km.FetchValidatingPublicKeys(ctx)
-	if err != nil {
-		return errors.Wrap(err, "could not fetch current keys")
-	}
-	if !slices.Equal(currentKeys, fileKeys) {
-		km.updatePublicKeys(fileKeys)
-	}
-	markReady(nil)
-	for {
-		select {
-		case e, ok := <-watcher.Events:
-			if !ok { // Channel was closed (i.e. Watcher.Close() was called).
-				log.Info("Closing file watcher")
-				return nil
-			}
-			log.WithFields(logrus.Fields{
-				"event": e.Name,
-				"op":    e.Op.String(),
-			}).Debug("Remote signer key file event triggered")
-			if e.Has(fsnotify.Remove) {
-				return errors.New("remote signer key file was removed")
-			}
-			currentFileInfo, err := os.Stat(km.keyFilePath)
-			if err != nil {
-				return errors.Wrap(err, "could not stat remote signer public key file")
-			}
-			if currentFileInfo.Size() != initialFileSize {
-				log.Info("Remote signer key file updated")
-				fileKeys, _, err := km.readKeyFile()
-				if err != nil {
-					return errors.New("could not read key file")
-				}
-				// prioritize file keys over flag keys
-				if len(fileKeys) == 0 {
-					log.Warnln("Remote signer key file no longer has keys, defaulting to flag provided keys")
-					fileKeys = slices.Collect(maps.Values(km.flagLoadedKeysMap))
-				}
-				currentKeys, err := km.FetchValidatingPublicKeys(ctx)
-				if err != nil {
-					return errors.Wrap(err, "could not fetch current keys")
-				}
-				if !slices.Equal(currentKeys, fileKeys) {
-					km.updatePublicKeys(fileKeys)
-				}
-				initialFileSize = currentFileInfo.Size()
-			}
-		case err, ok := <-watcher.Errors:
-			if !ok { // Channel was closed (i.e. Watcher.Close() was called).
-				log.Info("Closing file watcher")
-				return nil
-			}
-			return errors.Wrap(err, "could not watch for file changes")
-		case <-ctx.Done():
-			log.Info("Closing file watcher")
-			return nil
-		}
-	}
-}
-
-func (km *Keymanager) updatePublicKeys(keys [][48]byte) {
-	km.lock.Lock()
-	km.providedPublicKeys = keys
-	km.lock.Unlock()
-	km.accountsChangedFeed.Send(keys)
-	log.WithField("count", len(keys)).Debug("Updated public keys")
+	km.accountsChangedFeed.Send(union)
+	log.WithField("count", len(union)).Debug("Updated public keys")
 }
 
 // FetchValidatingPublicKeys fetches the validating public keys
-func (km *Keymanager) FetchValidatingPublicKeys(_ context.Context) ([][fieldparams.BLSPubkeyLength]byte, error) {
-	km.lock.RLock()
-	defer km.lock.RUnlock()
-	log.WithField("count", len(km.providedPublicKeys)).Debug("Fetched validating public keys")
-	return km.providedPublicKeys, nil
+func (km *Keymanager) FetchValidatingPublicKeys(_ context.Context) ([]pubkey, error) {
+	keys := km.keys.all()
+	log.WithField("count", len(keys)).Debug("Fetched validating public keys")
+	return keys, nil
 }
 
 // Sign signs the message by using a remote web3signer server.
 func (km *Keymanager) Sign(ctx context.Context, request *validatorpb.SignRequest) (bls.Signature, error) {
 	signRequest, err := getSignRequestJson(ctx, km.validator, request, km.genesisValidatorsRoot)
 	if err != nil {
-		erroredResponsesTotal.Inc()
 		return nil, err
 	}
 	signature, err := km.client.Sign(ctx, hexutil.Encode(request.PublicKey), signRequest)
@@ -463,18 +261,15 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 	case *validatorpb.SignRequest_BlindedBlockFulu:
 		return handleBlindedBlockFulu(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlockGloas:
-		// TODO: Implement Gloas block signing for web3signer.
-		return nil, fmt.Errorf("web3signer Gloas block signing not yet implemented")
+		return handleBlockGloas(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_ExecutionPayloadEnvelope:
-		// TODO: Implement execution payload envelope signing for web3signer.
-		return nil, fmt.Errorf("web3signer execution payload envelope signing not yet implemented")
+		return handleExecutionPayloadEnvelope(ctx, ver, validator, request, genesisValidatorsRoot)
+	case *validatorpb.SignRequest_PayloadAttestationData:
+		return handlePayloadAttestationMessage(ctx, ver, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_ProposerPreference:
-		// TODO: Implement proposer preferences signing for web3signer.
-		return nil, fmt.Errorf("web3signer proposer preferences signing not yet implemented")
-	case *validatorpb.SignRequest_RequestAuth:
-		// TODO: Implement builder request auth signing for web3signer.
-		return nil, fmt.Errorf("web3signer request auth signing not yet implemented")
-
+		return handleProposerPreferences(ctx, ver, validator, request, genesisValidatorsRoot)
+	case *validatorpb.SignRequest_BuilderRequestAuth:
+		return handleBuilderRequestAuth(ctx, ver, validator, request)
 	// We do not support "DEPOSIT" type.
 	/*
 		case *validatorpb.:
@@ -679,6 +474,66 @@ func handleBlindedBlockFulu(ctx context.Context, validator *validator.Validate, 
 	return json.Marshal(blindedBlockv2FuluSignRequest)
 }
 
+func handleBlockGloas(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	signReq, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	if err = validator.StructCtx(ctx, signReq); err != nil {
+		return nil, err
+	}
+	remoteBlockSignRequestsTotal.WithLabelValues("gloas", "false").Inc()
+	return json.Marshal(signReq)
+}
+
+func handleBuilderRequestAuth(ctx context.Context, fork int, validator *validator.Validate, request *validatorpb.SignRequest) ([]byte, error) {
+	signReq, err := types.GetBuilderRequestAuthSignRequest(fork, request)
+	if err != nil {
+		return nil, err
+	}
+	if err = validator.StructCtx(ctx, signReq); err != nil {
+		return nil, err
+	}
+	builderRequestAuthSignRequestsTotal.Inc()
+	return json.Marshal(signReq)
+}
+
+func handleExecutionPayloadEnvelope(ctx context.Context, fork int, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	signReq, err := types.GetExecutionPayloadEnvelopeSignRequest(fork, request, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	if err = validator.StructCtx(ctx, signReq); err != nil {
+		return nil, err
+	}
+	executionPayloadEnvelopeSignRequestsTotal.Inc()
+	return json.Marshal(signReq)
+}
+
+func handlePayloadAttestationMessage(ctx context.Context, fork int, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	signReq, err := types.GetPayloadAttestationMessageSignRequest(fork, request, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	if err = validator.StructCtx(ctx, signReq); err != nil {
+		return nil, err
+	}
+	payloadAttestationMessageSignRequestsTotal.Inc()
+	return json.Marshal(signReq)
+}
+
+func handleProposerPreferences(ctx context.Context, fork int, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	signReq, err := types.GetProposerPreferencesSignRequest(fork, request, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	if err = validator.StructCtx(ctx, signReq); err != nil {
+		return nil, err
+	}
+	proposerPreferencesSignRequestsTotal.Inc()
+	return json.Marshal(signReq)
+}
+
 func handleRandaoReveal(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
 	randaoRevealSignRequest, err := types.GetRandaoRevealSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
@@ -752,7 +607,7 @@ func handleRegistration(ctx context.Context, validator *validator.Validate, requ
 }
 
 // SubscribeAccountChanges returns the event subscription for changes to public keys.
-func (km *Keymanager) SubscribeAccountChanges(pubKeysChan chan [][fieldparams.BLSPubkeyLength]byte) event.Subscription {
+func (km *Keymanager) SubscribeAccountChanges(pubKeysChan chan []pubkey) event.Subscription {
 	return km.accountsChangedFeed.Subscribe(pubKeysChan)
 }
 
@@ -811,132 +666,126 @@ func DisplayRemotePublicKeys(validatingPubKeys [][48]byte) {
 
 // AddPublicKeys imports a list of public keys into the keymanager for web3signer use. Returns status with message.
 func (km *Keymanager) AddPublicKeys(pubKeys []string) ([]*keymanager.KeyStatus, error) {
-	importedRemoteKeysStatuses := make([]*keymanager.KeyStatus, len(pubKeys))
-	// Using a map to track both existing and new public keys efficiently
-	combinedKeys := make(map[string][48]byte)
+	statuses := make([]*keymanager.KeyStatus, len(pubKeys))
 
-	// Populate the map with existing keys
-	km.lock.RLock()
-	originalKeysLen := len(km.providedPublicKeys)
-	for _, key := range km.providedPublicKeys {
-		encodedKey := hexutil.Encode(key[:])
-		combinedKeys[encodedKey] = key
+	// Return early when no persistent storage is configured.
+	if km.keyFilePath == "" {
+		for i := range statuses {
+			statuses[i] = &keymanager.KeyStatus{
+				Status:  keymanager.StatusError,
+				Message: "no persistent storage for remote keys is configured; set --" + flags.Web3SignerKeyFileFlag.Name,
+			}
+		}
+		return statuses, nil
 	}
-	km.lock.RUnlock()
+
+	km.updateLock.Lock()
+	defer km.updateLock.Unlock()
+
+	fileKeys := km.keys.get(sourceFile)
+	changed := false
 
 	for i, pubkey := range pubKeys {
-		pubkeyBytes, err := hexutil.Decode(pubkey)
+		key, err := bytesutil.DecodeHex48(pubkey)
 		if err != nil {
-			importedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
-				Status:  keymanager.StatusError,
-				Message: err.Error(),
-			}
+			statuses[i] = &keymanager.KeyStatus{Status: keymanager.StatusError, Message: err.Error()}
 			continue
 		}
-		if len(pubkeyBytes) != fieldparams.BLSPubkeyLength {
-			importedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
-				Status:  keymanager.StatusError,
-				Message: fmt.Sprintf("pubkey byte length (%d) did not match bls pubkey byte length (%d)", len(pubkeyBytes), fieldparams.BLSPubkeyLength),
-			}
-			continue
-		}
-
-		encodedPubkey := hexutil.Encode(pubkeyBytes)
-		if _, exists := combinedKeys[encodedPubkey]; exists {
-			importedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
+		// A key owned by any source, or already staged by this request, is known to the client.
+		_, staged := fileKeys[key]
+		if _, owned := km.keys.owner(key); staged || owned {
+			statuses[i] = &keymanager.KeyStatus{
 				Status:  keymanager.StatusDuplicate,
 				Message: fmt.Sprintf("Duplicate pubkey: %v, already in use", pubkey),
 			}
 			continue
 		}
 
-		// Add the new key to the map
-		combinedKeys[encodedPubkey] = bytesutil.ToBytes48(pubkeyBytes)
-		importedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
+		fileKeys[key] = struct{}{}
+		changed = true
+		statuses[i] = &keymanager.KeyStatus{
 			Status:  keymanager.StatusImported,
 			Message: fmt.Sprintf("Successfully added pubkey: %v", pubkey),
 		}
-		log.Debug("Added pubkey to keymanager for web3signer", "pubkey", pubkey)
+		log.WithField("pubkey", pubkey).Debug("Added pubkey to keymanager for web3signer")
 	}
 
-	if originalKeysLen != len(combinedKeys) {
-		if km.keyFilePath != "" {
-			if err := km.savePublicKeysToFile(combinedKeys); err != nil {
-				return nil, err
-			}
-		} else {
-			km.updatePublicKeys(slices.Collect(maps.Values(combinedKeys)))
+	if changed {
+		if err := km.savePublicKeysToFile(sortedKeys(fileKeys)); err != nil {
+			return nil, fmt.Errorf("save public keys to file: %w", err)
 		}
 	}
 
-	return importedRemoteKeysStatuses, nil
+	return statuses, nil
 }
 
 // DeletePublicKeys removes a list of public keys from the keymanager for web3signer use. Returns status with message.
+// Keys derived from the flag or URL remain validating, but any stale copy in the key file
+// is removed so it cannot take ownership if the derived source later drops the key.
 func (km *Keymanager) DeletePublicKeys(publicKeys []string) ([]*keymanager.KeyStatus, error) {
-	deletedRemoteKeysStatuses := make([]*keymanager.KeyStatus, len(publicKeys))
-	// Using a map to track both existing and new public keys efficiently
-	combinedKeys := make(map[string][48]byte)
-	km.lock.RLock()
-	originalKeysLen := len(km.providedPublicKeys)
-	if originalKeysLen == 0 {
-		for i := range deletedRemoteKeysStatuses {
-			deletedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
-				Status:  keymanager.StatusNotFound,
-				Message: "No pubkeys are set in validator",
-			}
-		}
-		return deletedRemoteKeysStatuses, nil
-	}
+	statuses := make([]*keymanager.KeyStatus, len(publicKeys))
 
-	// Populate the map with existing keys
-	for _, key := range km.providedPublicKeys {
-		encodedKey := hexutil.Encode(key[:])
-		combinedKeys[encodedKey] = key
-	}
-	km.lock.RUnlock()
+	km.updateLock.Lock()
+	defer km.updateLock.Unlock()
+
+	fileKeys := km.keys.get(sourceFile)
+	changed := false
 
 	for i, pubkey := range publicKeys {
-		pubkeyBytes, err := hexutil.Decode(pubkey)
+		key, err := bytesutil.DecodeHex48(pubkey)
 		if err != nil {
-			deletedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
+			statuses[i] = &keymanager.KeyStatus{Status: keymanager.StatusError, Message: err.Error()}
+			continue
+		}
+		_, inFile := fileKeys[key]
+		if inFile {
+			delete(fileKeys, key)
+			changed = true
+		}
+		if src, owned := km.keys.owner(key); owned && src != sourceFile {
+			message := fmt.Sprintf("Pubkey: %v is provided by %s and cannot be deleted through the keymanager API", pubkey, src)
+			if inFile {
+				message = fmt.Sprintf("Pubkey: %v was removed from the key file but is still provided by %s and continues validating", pubkey, src)
+			}
+			statuses[i] = &keymanager.KeyStatus{
 				Status:  keymanager.StatusError,
-				Message: err.Error(),
+				Message: message,
 			}
 			continue
 		}
-		if len(pubkeyBytes) != fieldparams.BLSPubkeyLength {
-			deletedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
-				Status:  keymanager.StatusError,
-				Message: fmt.Sprintf("pubkey byte length (%d) did not match bls pubkey byte length (%d)", len(pubkeyBytes), fieldparams.BLSPubkeyLength),
-			}
-			continue
-		}
-		_, exists := combinedKeys[pubkey]
-		if !exists {
-			deletedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
+		// Anything left is deletable only if the file still lists it, which also covers a
+		// key repeated within one request.
+		if !inFile {
+			statuses[i] = &keymanager.KeyStatus{
 				Status:  keymanager.StatusNotFound,
 				Message: fmt.Sprintf("Pubkey: %v not found", pubkey),
 			}
 			continue
 		}
-		delete(combinedKeys, pubkey)
-		deletedRemoteKeysStatuses[i] = &keymanager.KeyStatus{
+
+		statuses[i] = &keymanager.KeyStatus{
 			Status:  keymanager.StatusDeleted,
 			Message: fmt.Sprintf("Successfully deleted pubkey: %v", pubkey),
 		}
 		log.WithField("pubkey", pubkey).Debug("Deleted pubkey from keymanager for remote signer")
 	}
 
-	if originalKeysLen != len(combinedKeys) {
-		if km.keyFilePath != "" {
-			if err := km.savePublicKeysToFile(combinedKeys); err != nil {
-				return nil, err
-			}
-		} else {
-			km.updatePublicKeys(slices.Collect(maps.Values(combinedKeys)))
+	if changed {
+		if err := km.savePublicKeysToFile(sortedKeys(fileKeys)); err != nil {
+			return nil, fmt.Errorf("save public keys to file: %w", err)
 		}
 	}
 
-	return deletedRemoteKeysStatuses, nil
+	return statuses, nil
+}
+
+// IsReadOnly returns true if the key is not owned by the key file, meaning it is derived from the flag or the URL.
+// If the key is not owned by any source, it is also considered read-only.
+func (km *Keymanager) IsReadOnly(key pubkey) bool {
+	src, owned := km.keys.owner(key)
+	if !owned {
+		return true
+	}
+
+	return src != sourceFile
 }

@@ -1,8 +1,8 @@
 package state_native
 
 import (
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 var errAssertionFailed = errors.New("failed to convert interface to proto state")

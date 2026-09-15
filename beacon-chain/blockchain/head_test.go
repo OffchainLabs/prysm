@@ -899,7 +899,7 @@ func TestUpdateHead_noSavedChanges(t *testing.T) {
 
 	bellatrixState, _ := util.DeterministicGenesisStateBellatrix(t, 2)
 	require.NoError(t, beaconDB.SaveState(ctx, bellatrixState, bellatrixBlkRoot))
-	service.cfg.StateGen.SaveFinalizedState(0, bellatrixBlkRoot, bellatrixState)
+	service.cfg.StateGen.SaveFinalizedState(bellatrixBlkRoot, bellatrixState)
 
 	headRoot := service.headRoot()
 	require.Equal(t, [32]byte{}, headRoot)

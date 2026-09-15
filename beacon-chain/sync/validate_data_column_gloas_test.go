@@ -8,6 +8,11 @@ import (
 	"testing"
 	"time"
 
+	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	pb "github.com/libp2p/go-libp2p-pubsub/pb"
+	"github.com/libp2p/go-libp2p/core/peer"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
@@ -29,10 +34,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	pb "github.com/libp2p/go-libp2p-pubsub/pb"
-	"github.com/libp2p/go-libp2p/core/peer"
-	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 func gloasFixture(t *testing.T) (*ethpb.DataColumnSidecarGloas, interfaces.ReadOnlySignedBeaconBlock) {

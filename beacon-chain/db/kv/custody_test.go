@@ -3,7 +3,6 @@ package kv
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -152,7 +151,7 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 		require.NoError(t, err)
 
 		// Update with a lower slot (should update for backfill)
-		err = db.UpdateEarliestAvailableSlot(ctx, earliestSlot)
+		err = db.UpdateEarliestAvailableSlot(ctx, earliestSlot, initialSlot)
 		require.NoError(t, err)
 
 		storedSlot, storedCount := getCustodyInfoFromDB(t, db)
@@ -163,18 +162,13 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 	t.Run("allow increasing slot within MIN_EPOCHS_FOR_BLOCK_REQUESTS (pruning scenario)", func(t *testing.T) {
 		db := setupDB(t)
 
-		// Calculate the current slot and minimum required slot based on actual current time
-		genesisTime := time.Unix(int64(params.BeaconConfig().MinGenesisTime+params.BeaconConfig().GenesisDelay), 0)
-		currentSlot := slots.CurrentSlot(genesisTime)
-		currentEpoch := slots.ToEpoch(currentSlot)
+		// Compute the minimum required slot for a chain that is 100 epochs older than
+		// MIN_EPOCHS_FOR_BLOCK_REQUESTS.
 		minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+		minRequiredEpoch := primitives.Epoch(100)
 
-		var minRequiredEpoch primitives.Epoch
-		if currentEpoch > minEpochsForBlocks {
-			minRequiredEpoch = currentEpoch - minEpochsForBlocks
-		} else {
-			minRequiredEpoch = 0
-		}
+		currentSlot, err := slots.EpochStart(minEpochsForBlocks + minRequiredEpoch)
+		require.NoError(t, err)
 
 		minRequiredSlot, err := slots.EpochStart(minRequiredEpoch)
 		require.NoError(t, err)
@@ -189,7 +183,7 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 		// Try to increase to a slot that's still BEFORE minRequiredSlot (should succeed)
 		validSlot := minRequiredSlot - 100
 
-		err = db.UpdateEarliestAvailableSlot(ctx, validSlot)
+		err = db.UpdateEarliestAvailableSlot(ctx, validSlot, currentSlot)
 		require.NoError(t, err)
 
 		// Verify the database was updated
@@ -201,18 +195,13 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 	t.Run("prevent increasing slot beyond MIN_EPOCHS_FOR_BLOCK_REQUESTS", func(t *testing.T) {
 		db := setupDB(t)
 
-		// Calculate the current slot and minimum required slot based on actual current time
-		genesisTime := time.Unix(int64(params.BeaconConfig().MinGenesisTime+params.BeaconConfig().GenesisDelay), 0)
-		currentSlot := slots.CurrentSlot(genesisTime)
-		currentEpoch := slots.ToEpoch(currentSlot)
+		// Compute the minimum required slot for a chain that is 100 epochs older than
+		// MIN_EPOCHS_FOR_BLOCK_REQUESTS.
 		minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+		minRequiredEpoch := primitives.Epoch(100)
 
-		var minRequiredEpoch primitives.Epoch
-		if currentEpoch > minEpochsForBlocks {
-			minRequiredEpoch = currentEpoch - minEpochsForBlocks
-		} else {
-			minRequiredEpoch = 0
-		}
+		currentSlot, err := slots.EpochStart(minEpochsForBlocks + minRequiredEpoch)
+		require.NoError(t, err)
 
 		minRequiredSlot, err := slots.EpochStart(minRequiredEpoch)
 		require.NoError(t, err)
@@ -228,7 +217,7 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 		invalidSlot := minRequiredSlot + 100
 
 		// This should fail
-		err = db.UpdateEarliestAvailableSlot(ctx, invalidSlot)
+		err = db.UpdateEarliestAvailableSlot(ctx, invalidSlot, currentSlot)
 		require.ErrorContains(t, "cannot increase earliest available slot", err)
 		require.ErrorContains(t, "exceeds minimum required slot", err)
 
@@ -251,7 +240,7 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 		require.NoError(t, err)
 
 		// Update with the same slot
-		err = db.UpdateEarliestAvailableSlot(ctx, initialSlot)
+		err = db.UpdateEarliestAvailableSlot(ctx, initialSlot, initialSlot)
 		require.NoError(t, err)
 
 		storedSlot, storedCount := getCustodyInfoFromDB(t, db)

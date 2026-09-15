@@ -8,6 +8,11 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/golang/snappy"
+	"github.com/pkg/errors"
+	bolt "go.etcd.io/bbolt"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
 	slashertypes "github.com/OffchainLabs/prysm/v7/beacon-chain/slasher/types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -15,11 +20,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
-	"github.com/golang/snappy"
-	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
-	bolt "go.etcd.io/bbolt"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -361,7 +361,7 @@ func (s *Store) LoadSlasherChunks(
 	encodedKeys := make([][]byte, 0, keysCount)
 
 	// Encode kind.
-	encodedKind := ssz.MarshalUint8(make([]byte, 0), uint8(kind))
+	encodedKind := []byte{byte(kind)}
 
 	// Encode keys.
 	for _, chunkKey := range chunkKeys {
@@ -423,7 +423,7 @@ func (s *Store) SaveSlasherChunks(
 	chunksCount := len(chunks)
 
 	// Encode kind.
-	encodedKind := ssz.MarshalUint8(make([]byte, 0), uint8(kind))
+	encodedKind := []byte{byte(kind)}
 
 	// Encode keys and chunks.
 	encodedKeys := make([][]byte, chunksCount)
@@ -660,7 +660,7 @@ func keyForValidatorProposal(slot primitives.Slot, proposerIndex primitives.Vali
 func encodeSlasherChunk(chunk []uint16) ([]byte, error) {
 	val := make([]byte, 0)
 	for i := range chunk {
-		val = append(val, ssz.MarshalUint16(make([]byte, 0), chunk[i])...)
+		val = binary.LittleEndian.AppendUint16(val, chunk[i])
 	}
 	if len(val) == 0 {
 		return nil, errors.New("cannot encode empty chunk")
@@ -681,7 +681,7 @@ func decodeSlasherChunk(enc []byte) ([]uint16, error) {
 	}
 	chunk := make([]uint16, 0)
 	for i := 0; i < len(chunkBytes); i += 2 {
-		distance := ssz.UnmarshallUint16(chunkBytes[i : i+2])
+		distance := binary.LittleEndian.Uint16(chunkBytes[i : i+2])
 		chunk = append(chunk, distance)
 	}
 	return chunk, nil

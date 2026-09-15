@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/async"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -28,6 +29,7 @@ import (
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -184,9 +186,13 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		}
 	}
 
-	genericSignedBlock.BuilderUrl = b.BuilderUrl
+	// The winning builder url travels as request metadata so any beacon node can forward the block.
+	proposeCtx := ctx
+	if b.BuilderUrl != "" {
+		proposeCtx = metadata.AppendToOutgoingContext(ctx, api.BuilderUrlHeader, b.BuilderUrl)
+	}
 
-	blkResp, err := v.validatorClient.ProposeBeaconBlock(ctx, genericSignedBlock)
+	blkResp, err := v.validatorClient.ProposeBeaconBlock(proposeCtx, genericSignedBlock)
 	if err != nil {
 		log.WithField("slot", slot).WithError(err).Error("Failed to propose block")
 		if v.emitAccountMetrics {

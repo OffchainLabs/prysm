@@ -8,17 +8,20 @@ import (
 	"encoding/binary"
 	"sort"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
+	"github.com/pkg/errors"
+
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 const (
 	maxErrorLength       = 256
 	bytesPerLengthOffset = 4
 )
+
+var ErrIncorrectByteSize = errors.New("incorrect byte size")
 
 // SSZBytes is a bytes slice that satisfies the fast-ssz interface.
 type SSZBytes []byte
@@ -74,7 +77,7 @@ func (r *BeaconBlockByRootsReq) UnmarshalSSZ(buf []byte) error {
 		return errors.Errorf("expected buffer with length of up to %d but received length %d", maxLength, bufLen)
 	}
 	if bufLen%fieldparams.RootLength != 0 {
-		return ssz.ErrIncorrectByteSize
+		return ErrIncorrectByteSize
 	}
 	numOfRoots := bufLen / fieldparams.RootLength
 	roots := make([][fieldparams.RootLength]byte, 0, numOfRoots)
@@ -171,7 +174,7 @@ func (b *BlobSidecarsByRootReq) UnmarshalSSZ(buf []byte) error {
 		return errors.Wrapf(ssz.ErrIncorrectListSize, "expected buffer with length of up to %d but received length %d", maxLength, bufLen)
 	}
 	if bufLen%blobIdSize != 0 {
-		return errors.Wrapf(ssz.ErrIncorrectByteSize, "size=%d", bufLen)
+		return errors.Wrapf(ErrIncorrectByteSize, "size=%d", bufLen)
 	}
 	count := bufLen / blobIdSize
 	*b = make([]*eth.BlobIdentifier, count)

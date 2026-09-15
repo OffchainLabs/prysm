@@ -3,6 +3,7 @@ package blockchain
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
@@ -154,7 +155,45 @@ func TestReceiveExecutionPayloadEnvelope_EmitEvents(t *testing.T) {
 			got := countStateEventsByType(events)
 			require.Equal(t, tt.wantAvailable, got[statefeed.ExecutionPayloadAvailable])
 			require.Equal(t, tt.wantProcessed, got[statefeed.ExecutionPayloadProcessed])
+			require.Equal(t, !tt.wantErr, s.cfg.BeaconDB.HasExecutionPayloadEnvelope(ctx, blockRoot))
 		})
+	}
+}
+
+// TestReceiveExecutionPayloadEnvelope_EnvelopeSavedBeforeAvailableEvent verifies that the
+// envelope is retrievable from the DB by the time `execution_payload_available` is emitted,
+// so API consumers reacting to the event do not race the DB write.
+func TestReceiveExecutionPayloadEnvelope_EnvelopeSavedBeforeAvailableEvent(t *testing.T) {
+	s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+	ctx := t.Context()
+
+	blockRoot := bytesutil.ToBytes32([]byte("envelope-root"))
+	base, blk, signedProto := gloasEnvelopeFixture(t, blockRoot)
+	insertGloasBlock(t, s, base, blk, blockRoot)
+
+	events := make(chan *feed.Event, 10)
+	sub := s.cfg.StateNotifier.StateFeed().Subscribe(events)
+	defer sub.Unsubscribe()
+
+	savedAtEvent := make(chan bool, 1)
+	go func() {
+		for ev := range events {
+			if ev.Type == statefeed.ExecutionPayloadAvailable {
+				savedAtEvent <- s.cfg.BeaconDB.HasExecutionPayloadEnvelope(ctx, blockRoot)
+				return
+			}
+		}
+	}()
+
+	signed, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedProto)
+	require.NoError(t, err)
+	require.NoError(t, s.ReceiveExecutionPayloadEnvelope(ctx, signed))
+
+	select {
+	case saved := <-savedAtEvent:
+		require.Equal(t, true, saved)
+	case <-time.After(5 * time.Second):
+		t.Fatal("execution_payload_available event was not received")
 	}
 }
 

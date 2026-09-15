@@ -5,11 +5,12 @@ import (
 	"errors"
 	"reflect"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
+	"github.com/golang/snappy"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/golang/snappy"
-	fastssz "github.com/prysmaticlabs/fastssz"
-	"google.golang.org/protobuf/proto"
 )
 
 func decode(ctx context.Context, data []byte, dst proto.Message) error {
@@ -25,7 +26,7 @@ func decode(ctx context.Context, data []byte, dst proto.Message) error {
 		return err
 	}
 	if isSSZStorageFormat(dst) {
-		return dst.(fastssz.Unmarshaler).UnmarshalSSZ(data)
+		return dst.(ssz.Unmarshaler).UnmarshalSSZ(data)
 	}
 	return proto.Unmarshal(data, dst)
 }
@@ -44,7 +45,7 @@ func encode(ctx context.Context, msg proto.Message) ([]byte, error) {
 	var enc []byte
 	var err error
 	if isSSZStorageFormat(msg) {
-		enc, err = msg.(fastssz.Marshaler).MarshalSSZ()
+		enc, err = msg.(ssz.Marshaler).MarshalSSZ()
 		if err != nil {
 			return nil, err
 		}

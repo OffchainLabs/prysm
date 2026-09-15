@@ -4,6 +4,10 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/pkg/errors"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
@@ -11,9 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 var errNilPubsubMessage = errors.New("nil pubsub message")

@@ -6,13 +6,15 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
-	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/methodical-ssz/ssz"
+
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	corenet "github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
+
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 )
 
 type rpcHandler func(context.Context, any, libp2pcore.Stream) error

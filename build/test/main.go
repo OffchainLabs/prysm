@@ -27,6 +27,9 @@ const (
 // validKinds are the test passes, in canonical run order.
 var validKinds = []kind{mainnet, mainnetSpectest, minimal, minimalSpectest}
 
+// fakeCryptoKinds are the only passes -bls=fake may run.
+var fakeCryptoKinds = []kind{mainnetSpectest, minimalSpectest}
+
 const (
 	totalRuns = 5
 	rerunMax  = 1000
@@ -55,6 +58,7 @@ func main() {
 
 func run() error {
 	race := flag.Bool("race", false, "run the selected pass(es) with the race detector")
+	bls := flag.String("bls", "real", "BLS backend: real, or fake to accept the spec's stub signatures")
 	flag.Parse()
 
 	goBin := env("GO", "go")
@@ -71,11 +75,20 @@ func run() error {
 		return fmt.Errorf("selecting test passes: %w", err)
 	}
 
+	fake, err := fakeCrypto(*bls, kinds)
+	if err != nil {
+		return fmt.Errorf("validating -bls: %w", err)
+	}
+
 	failed := false
 	for _, kind := range kinds {
 		pkgs, header, tagFlag, err := passSpec(goBin, kind)
 		if err != nil {
 			return fmt.Errorf("pass spec for %s: %w", kind, err)
+		}
+
+		if fake {
+			header, tagFlag = strings.TrimSuffix(header, "===")+"(fake crypto) ===", tagFlag+",fake_crypto"
 		}
 
 		testFlags := []string{tagFlag}
@@ -181,6 +194,23 @@ func mainnetSpectestPackages(goBin string) ([]string, error) {
 	}
 
 	return pkgs, nil
+}
+
+// fakeCrypto validates -bls and reports whether the fake backend was selected.
+func fakeCrypto(bls string, kinds []kind) (bool, error) {
+	if bls == "real" {
+		return false, nil
+	}
+	if bls != "fake" {
+		return false, fmt.Errorf("not a BLS backend: %s (backends: real fake)", bls)
+	}
+	for _, k := range kinds {
+		if !slices.Contains(fakeCryptoKinds, k) {
+			return false, fmt.Errorf("-bls=fake is only valid for %s, not %s", joinKinds(fakeCryptoKinds), k)
+		}
+	}
+
+	return true, nil
 }
 
 func selectKinds(args []string, race bool) ([]kind, error) {

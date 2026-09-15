@@ -452,6 +452,20 @@ func GetBlockV2BlindedSignRequest(request *validatorpb.SignRequest, genesisValid
 			return nil, err
 		}
 		b = beaconBlock
+	case *validatorpb.SignRequest_BlockGloas:
+		version = "GLOAS"
+		block, ok := request.Object.(*validatorpb.SignRequest_BlockGloas)
+		if !ok {
+			return nil, errors.New("failed to cast request object to gloas block")
+		}
+		if block == nil {
+			return nil, errors.New("invalid sign request: gloas block is nil")
+		}
+		beaconBlock, err := blocks.NewBeaconBlock(block.BlockGloas)
+		if err != nil {
+			return nil, err
+		}
+		b = beaconBlock
 	default:
 		return nil, errors.New("invalid sign request - invalid object type")
 	}
@@ -475,6 +489,127 @@ func GetBlockV2BlindedSignRequest(request *validatorpb.SignRequest, genesisValid
 				ParentRoot:    beaconBlockHeader.ParentRoot,
 				StateRoot:     beaconBlockHeader.StateRoot,
 				BodyRoot:      beaconBlockHeader.BodyRoot,
+			},
+		},
+	}, nil
+}
+
+// GetBuilderRequestAuthSignRequest maps the request for signing type BUILDER_REQUEST_AUTH (gloas builder API).
+func GetBuilderRequestAuthSignRequest(v int, request *validatorpb.SignRequest) (*BuilderRequestAuthSignRequest, error) {
+	if request == nil {
+		return nil, errors.New("nil sign request provided")
+	}
+	authReq, ok := request.Object.(*validatorpb.SignRequest_BuilderRequestAuth)
+	if !ok {
+		return nil, errors.New("failed to cast request object to builder request auth")
+	}
+	if authReq == nil || authReq.BuilderRequestAuth == nil {
+		return nil, errors.New("invalid sign request: BuilderRequestAuth is nil")
+	}
+	return &BuilderRequestAuthSignRequest{
+		Type:        "BUILDER_REQUEST_AUTH",
+		SigningRoot: request.SigningRoot,
+		BuilderRequestAuth: &VersionedBuilderRequestAuth{
+			Version: strings.ToUpper(version.String(v)),
+			Data: &BuilderRequestAuth{
+				Data: authReq.BuilderRequestAuth.Data,
+				Slot: fmt.Sprint(authReq.BuilderRequestAuth.Slot),
+			},
+		},
+	}, nil
+}
+
+// GetExecutionPayloadEnvelopeSignRequest maps the request for signing type EXECUTION_PAYLOAD_ENVELOPE (gloas).
+func GetExecutionPayloadEnvelopeSignRequest(v int, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) (*ExecutionPayloadEnvelopeSignRequest, error) {
+	if request == nil {
+		return nil, errors.New("nil sign request provided")
+	}
+	envelopeReq, ok := request.Object.(*validatorpb.SignRequest_ExecutionPayloadEnvelope)
+	if !ok {
+		return nil, errors.New("failed to cast request object to execution payload envelope")
+	}
+	if envelopeReq == nil || envelopeReq.ExecutionPayloadEnvelope == nil {
+		return nil, errors.New("invalid sign request: ExecutionPayloadEnvelope is nil")
+	}
+	fork, err := MapForkInfo(request.SigningSlot, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	envelope, err := MapExecutionPayloadEnvelope(envelopeReq.ExecutionPayloadEnvelope)
+	if err != nil {
+		return nil, err
+	}
+	return &ExecutionPayloadEnvelopeSignRequest{
+		Type:        "EXECUTION_PAYLOAD_ENVELOPE",
+		ForkInfo:    fork,
+		SigningRoot: request.SigningRoot,
+		ExecutionPayloadEnvelope: &VersionedExecutionPayloadEnvelope{
+			Version: strings.ToUpper(version.String(v)),
+			Data:    envelope,
+		},
+	}, nil
+}
+
+// GetPayloadAttestationMessageSignRequest maps the request for signing type PAYLOAD_ATTESTATION_MESSAGE (gloas).
+func GetPayloadAttestationMessageSignRequest(v int, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) (*PayloadAttestationMessageSignRequest, error) {
+	if request == nil {
+		return nil, errors.New("nil sign request provided")
+	}
+	pa, ok := request.Object.(*validatorpb.SignRequest_PayloadAttestationData)
+	if !ok {
+		return nil, errors.New("failed to cast request object to payload attestation data")
+	}
+	if pa == nil || pa.PayloadAttestationData == nil {
+		return nil, errors.New("invalid sign request: PayloadAttestationData is nil")
+	}
+	fork, err := MapForkInfo(request.SigningSlot, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	return &PayloadAttestationMessageSignRequest{
+		Type:        "PAYLOAD_ATTESTATION_MESSAGE",
+		ForkInfo:    fork,
+		SigningRoot: request.SigningRoot,
+		PayloadAttestationMessage: &VersionedPayloadAttestationData{
+			Version: strings.ToUpper(version.String(v)),
+			Data: &PayloadAttestationData{
+				BeaconBlockRoot:   pa.PayloadAttestationData.BeaconBlockRoot,
+				Slot:              fmt.Sprint(pa.PayloadAttestationData.Slot),
+				PayloadPresent:    pa.PayloadAttestationData.PayloadPresent,
+				BlobDataAvailable: pa.PayloadAttestationData.BlobDataAvailable,
+			},
+		},
+	}, nil
+}
+
+// GetProposerPreferencesSignRequest maps the request for signing type PROPOSER_PREFERENCES (gloas).
+func GetProposerPreferencesSignRequest(v int, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) (*ProposerPreferencesSignRequest, error) {
+	if request == nil {
+		return nil, errors.New("nil sign request provided")
+	}
+	pp, ok := request.Object.(*validatorpb.SignRequest_ProposerPreference)
+	if !ok {
+		return nil, errors.New("failed to cast request object to proposer preferences")
+	}
+	if pp == nil || pp.ProposerPreference == nil {
+		return nil, errors.New("invalid sign request: ProposerPreferences is nil")
+	}
+	fork, err := MapForkInfo(request.SigningSlot, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	return &ProposerPreferencesSignRequest{
+		Type:        "PROPOSER_PREFERENCES",
+		ForkInfo:    fork,
+		SigningRoot: request.SigningRoot,
+		ProposerPreferences: &VersionedProposerPreferences{
+			Version: strings.ToUpper(version.String(v)),
+			Data: &ProposerPreferences{
+				DependentRoot:  pp.ProposerPreference.DependentRoot,
+				ProposalSlot:   fmt.Sprint(pp.ProposerPreference.ProposalSlot),
+				ValidatorIndex: fmt.Sprint(pp.ProposerPreference.ValidatorIndex),
+				FeeRecipient:   pp.ProposerPreference.FeeRecipient,
+				TargetGasLimit: fmt.Sprint(pp.ProposerPreference.TargetGasLimit),
 			},
 		},
 	}, nil

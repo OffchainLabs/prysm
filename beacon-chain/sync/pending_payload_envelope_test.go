@@ -117,6 +117,7 @@ func TestProcessPendingPayloadEnvelope_HappyPath(t *testing.T) {
 	require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
 	require.Equal(t, true, s.hasSeenPayloadEnvelope(root, builderIdx))
 	require.Equal(t, true, broadcaster.BroadcastCalled.Load())
+	require.Equal(t, true, chainService.ReceivePayloadEnvelopeCtxHadDeadline)
 }
 
 func TestProcessPendingPayloadEnvelope_DoesNotBroadcastOnReceiveError(t *testing.T) {

@@ -3,12 +3,12 @@ package primitives
 import (
 	"fmt"
 
-	fssz "github.com/prysmaticlabs/fastssz"
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 )
 
-var _ fssz.HashRoot = (BuilderIndex)(0)
-var _ fssz.Marshaler = (*BuilderIndex)(nil)
-var _ fssz.Unmarshaler = (*BuilderIndex)(nil)
+var _ ssz.HashRoot = (BuilderIndex)(0)
+var _ ssz.Marshaler = (*BuilderIndex)(nil)
+var _ ssz.Unmarshaler = (*BuilderIndex)(nil)
 
 // BuilderIndex is an index into the builder registry.
 type BuilderIndex uint64
@@ -25,11 +25,11 @@ func (b BuilderIndex) ToValidatorIndex() ValidatorIndex {
 
 // HashTreeRoot returns the SSZ hash tree root of the index.
 func (b BuilderIndex) HashTreeRoot() ([32]byte, error) {
-	return fssz.HashWithDefaultHasher(b)
+	return ssz.HashWithDefaultHasher(b)
 }
 
 // HashTreeRootWith appends the SSZ uint64 representation of the index to the given hasher.
-func (b BuilderIndex) HashTreeRootWith(hh *fssz.Hasher) error {
+func (b BuilderIndex) HashTreeRootWith(hh *ssz.Hasher) error {
 	hh.PutUint64(uint64(b))
 	return nil
 }
@@ -39,7 +39,7 @@ func (b *BuilderIndex) UnmarshalSSZ(buf []byte) error {
 	if len(buf) != b.SizeSSZ() {
 		return fmt.Errorf("expected buffer of length %d received %d", b.SizeSSZ(), len(buf))
 	}
-	*b = BuilderIndex(fssz.UnmarshallUint64(buf))
+	*b = BuilderIndex(UnmarshalUint64(buf))
 	return nil
 }
 
@@ -54,7 +54,7 @@ func (b *BuilderIndex) MarshalSSZTo(dst []byte) ([]byte, error) {
 
 // MarshalSSZ encodes the index as an SSZ uint64.
 func (b *BuilderIndex) MarshalSSZ() ([]byte, error) {
-	marshalled := fssz.MarshalUint64([]byte{}, uint64(*b))
+	marshalled := MarshalUint64([]byte{}, uint64(*b))
 	return marshalled, nil
 }
 

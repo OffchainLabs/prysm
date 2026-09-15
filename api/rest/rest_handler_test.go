@@ -96,7 +96,7 @@ func TestPostSSZ_MalformedJSONErrorBodyKeepsStatus(t *testing.T) {
 	require.Equal(t, true, errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}), "expected 415 to survive, got %v", err)
 }
 
-func TestPostSSZ_DrainsSuccessBody(t *testing.T) {
+func TestPostSSZ_ReturnsSuccessBodyAndReusesConnection(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
 		_, _ = w.Write([]byte(`{"message":"accepted"}`))
@@ -110,8 +110,11 @@ func TestPostSSZ_DrainsSuccessBody(t *testing.T) {
 		},
 	})
 	c := newHandler(http.Client{}, srv.URL)
-	require.NoError(t, c.PostSSZ(ctx, "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01})))
-	require.NoError(t, c.PostSSZ(ctx, "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01})))
+	body, _, err := c.postWithContentType(ctx, "/eth/v1/test", nil, api.OctetStreamMediaType, bytes.NewBuffer([]byte{0x01}))
+	require.NoError(t, err)
+	require.Equal(t, `{"message":"accepted"}`, string(body))
+	_, _, err = c.postWithContentType(ctx, "/eth/v1/test", nil, api.OctetStreamMediaType, bytes.NewBuffer([]byte{0x01}))
+	require.NoError(t, err)
 	require.Equal(t, true, reused, "expected the second request to reuse the drained connection")
 }
 

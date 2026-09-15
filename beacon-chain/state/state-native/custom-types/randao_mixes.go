@@ -3,24 +3,25 @@ package customtypes
 import (
 	"fmt"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
+
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
-	fssz "github.com/prysmaticlabs/fastssz"
 )
 
-var _ fssz.HashRoot = (RandaoMixes)([][32]byte{})
-var _ fssz.Marshaler = (*RandaoMixes)(nil)
-var _ fssz.Unmarshaler = (*RandaoMixes)(nil)
+var _ ssz.HashRoot = (RandaoMixes)([][32]byte{})
+var _ ssz.Marshaler = (*RandaoMixes)(nil)
+var _ ssz.Unmarshaler = (*RandaoMixes)(nil)
 
 // RandaoMixes represents RANDAO mixes of the beacon state.
 type RandaoMixes [][32]byte
 
 // HashTreeRoot returns calculated hash root.
 func (r RandaoMixes) HashTreeRoot() ([32]byte, error) {
-	return fssz.HashWithDefaultHasher(r)
+	return ssz.HashWithDefaultHasher(r)
 }
 
 // HashTreeRootWith hashes a RandaoMixes object with a Hasher from the default HasherPool.
-func (r RandaoMixes) HashTreeRootWith(hh *fssz.Hasher) error {
+func (r RandaoMixes) HashTreeRootWith(hh *ssz.Hasher) error {
 	index := hh.Index()
 	for _, sRoot := range r {
 		hh.Append(sRoot[:])

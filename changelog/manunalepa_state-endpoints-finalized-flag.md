@@ -1,0 +1,3 @@
+### Fixed
+
+- Report the correct `finalized` flag on the state-based beacon API endpoints (`/eth/v1/beacon/states/{state_id}/root`, `/fork`, `/randao`, `/committees`, `/sync_committees`, `/finality_checkpoints`, `/validators`, `/validator_balances`, `/validator_identities`, `/pending_consolidations`, `/pending_deposits`, `/pending_partial_withdrawals`, `/proposer_lookahead`, `/eth/v2/debug/beacon/states/{state_id}` and `/prysm/v1/beacon/states/{state_id}/validator_count`).

@@ -2,6 +2,7 @@ package enginev1
 
 import (
 	"fmt"
+	"math"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -93,6 +94,8 @@ func decodeExecutionRequestList(raw [][]byte, limits ExecutionRequestLimits) (*E
 // decodeExecutionRequestListGloas decodes the EIP-7685 flat request list into a
 // gloas ExecutionRequests, including builder deposit/exit requests (EIP-8282).
 func decodeExecutionRequestListGloas(raw [][]byte, limits ExecutionRequestLimits) (*ExecutionRequestsGloas, error) {
+	// Gloas removes MAX_DEPOSIT_REQUESTS_PER_PAYLOAD, the EL bounds deposit requests via the gas limit.
+	limits.Deposits = math.MaxUint64 / uint64(drSize)
 	requests := &ExecutionRequestsGloas{}
 	var prevTypeNum *uint8
 	for i := range raw {

@@ -4,6 +4,8 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
+
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -11,7 +13,6 @@ import (
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 func generateBlobIdentifiers(n int) []*eth.BlobIdentifier {
@@ -60,7 +61,7 @@ func TestBlobSidecarsByRootReq_MarshalSSZ(t *testing.T) {
 				in = append(in, byte(0))
 				return in
 			},
-			unmarshalErr: ssz.ErrIncorrectByteSize,
+			unmarshalErr: ErrIncorrectByteSize,
 		},
 	}
 
@@ -313,7 +314,7 @@ func TestDataColumnSidecarsByRootReq_MarshalUnmarshal(t *testing.T) {
 		name         string
 		ids          []*eth.DataColumnsByRootIdentifier
 		marshalErr   error
-		unmarshalErr string
+		unmarshalErr error
 		unmarshalMod func([]byte) []byte
 	}{
 		{
@@ -334,7 +335,7 @@ func TestDataColumnSidecarsByRootReq_MarshalUnmarshal(t *testing.T) {
 				in = append(in, byte(0))
 				return in
 			},
-			unmarshalErr: "a is not evenly divisble by b",
+			unmarshalErr: ssz.ErrIncorrectListSize,
 		},
 		{
 			name: "size too big",
@@ -345,7 +346,7 @@ func TestDataColumnSidecarsByRootReq_MarshalUnmarshal(t *testing.T) {
 				in = append(in, add...)
 				return in
 			},
-			unmarshalErr: "a/b is greater than max",
+			unmarshalErr: ssz.ErrListTooBig,
 		},
 	}
 
@@ -365,8 +366,8 @@ func TestDataColumnSidecarsByRootReq_MarshalUnmarshal(t *testing.T) {
 
 			got := &DataColumnsByRootIdentifiers{}
 			err = got.UnmarshalSSZ(bytes)
-			if c.unmarshalErr != "" {
-				require.ErrorContains(t, c.unmarshalErr, err)
+			if c.unmarshalErr != nil {
+				require.ErrorIs(t, err, c.unmarshalErr)
 				return
 			}
 			require.NoError(t, err)

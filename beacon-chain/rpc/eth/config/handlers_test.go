@@ -229,7 +229,7 @@ func TestGetSpec(t *testing.T) {
 	config.DomainApplicationMask = dam
 	var dra [4]byte
 	copy(dra[:], []byte{'1', '0', '0', '1'})
-	config.DomainRequestAuth = dra
+	config.DomainBuilderRequestAuth = dra
 	var dbd [4]byte
 	copy(dbd[:], []byte{'1', '0', '0', '2'})
 	config.DomainBuilderDeposit = dbd
@@ -465,7 +465,7 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "0x30303039", v)
 			case "DOMAIN_APPLICATION_MASK":
 				assert.Equal(t, "0x31303030", v)
-			case "DOMAIN_REQUEST_AUTH":
+			case "DOMAIN_BUILDER_REQUEST_AUTH":
 				assert.Equal(t, "0x31303031", v)
 			case "DOMAIN_BUILDER_DEPOSIT":
 				assert.Equal(t, "0x31303032", v)

@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"slices"
 
-	fssz "github.com/prysmaticlabs/fastssz"
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 )
 
 // ZW returns a non-nil zero value for primitives.Wei
@@ -19,17 +19,17 @@ type Wei *big.Int
 // Gwei is a denomination of 1e9 Wei represented as an uint64.
 type Gwei uint64
 
-var _ fssz.HashRoot = (Gwei)(0)
-var _ fssz.Marshaler = (*Gwei)(nil)
-var _ fssz.Unmarshaler = (*Gwei)(nil)
+var _ ssz.HashRoot = (Gwei)(0)
+var _ ssz.Marshaler = (*Gwei)(nil)
+var _ ssz.Unmarshaler = (*Gwei)(nil)
 
 // HashTreeRoot --
 func (g Gwei) HashTreeRoot() ([32]byte, error) {
-	return fssz.HashWithDefaultHasher(g)
+	return ssz.HashWithDefaultHasher(g)
 }
 
 // HashTreeRootWith --
-func (g Gwei) HashTreeRootWith(hh *fssz.Hasher) error {
+func (g Gwei) HashTreeRootWith(hh *ssz.Hasher) error {
 	hh.PutUint64(uint64(g))
 	return nil
 }
@@ -39,7 +39,7 @@ func (g *Gwei) UnmarshalSSZ(buf []byte) error {
 	if len(buf) != g.SizeSSZ() {
 		return fmt.Errorf("expected buffer of length %d received %d", g.SizeSSZ(), len(buf))
 	}
-	*g = Gwei(fssz.UnmarshallUint64(buf))
+	*g = Gwei(UnmarshalUint64(buf))
 	return nil
 }
 
@@ -54,7 +54,7 @@ func (g *Gwei) MarshalSSZTo(dst []byte) ([]byte, error) {
 
 // MarshalSSZ --
 func (g *Gwei) MarshalSSZ() ([]byte, error) {
-	marshalled := fssz.MarshalUint64([]byte{}, uint64(*g))
+	marshalled := MarshalUint64([]byte{}, uint64(*g))
 	return marshalled, nil
 }
 

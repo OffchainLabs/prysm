@@ -73,60 +73,6 @@ mapping = {"k": "v"}
 	})
 }
 
-func TestEvalStringList(t *testing.T) {
-	// exprOf parses `name = <rhs>` and returns the RHS expression plus the
-	// surrounding env, so identifiers can be resolved against sibling bindings.
-	exprOf := func(t *testing.T, src string) (build.Expr, map[string]build.Expr) {
-		t.Helper()
-		env := topLevelAssignments(parseContent(t, src))
-		e, ok := env["target"]
-		require.Equal(t, true, ok)
-
-		return e, env
-	}
-
-	t.Run("resolves a single string", func(t *testing.T) {
-		e, env := exprOf(t, `target = "a"`)
-		got, err := evalStringList(e, env)
-		require.NoError(t, err)
-		require.DeepEqual(t, []string{"a"}, got)
-	})
-
-	t.Run("flattens a flat list", func(t *testing.T) {
-		e, env := exprOf(t, `target = ["a", "b", "c"]`)
-		got, err := evalStringList(e, env)
-		require.NoError(t, err)
-		require.DeepEqual(t, []string{"a", "b", "c"}, got)
-	})
-
-	t.Run("resolves an identifier reference", func(t *testing.T) {
-		e, env := exprOf(t, `
-	base = ["a", "b"]
-	target = base
-	`)
-		got, err := evalStringList(e, env)
-		require.NoError(t, err)
-		require.DeepEqual(t, []string{"a", "b"}, got)
-	})
-
-	t.Run("concatenates with the + operator", func(t *testing.T) {
-		e, env := exprOf(t, `
-	base = ["a"]
-	target = base + ["b"] + ["c"]
-	`)
-		got, err := evalStringList(e, env)
-		require.NoError(t, err)
-		require.DeepEqual(t, []string{"a", "b", "c"}, got)
-	})
-
-	t.Run("errors on an unsupported expression kind", func(t *testing.T) {
-		e, env := exprOf(t, `target = 42`)
-		got, err := evalStringList(e, env)
-		require.IsNil(t, got)
-		require.ErrorContains(t, "unsupported expression", err)
-	})
-}
-
 func TestLoadSSZDicts(t *testing.T) {
 	// writeSSZBzl creates proto/ssz_proto_library.bzl under a temp dir and
 	// chdirs into it, so loadSSZDicts resolves its fixed relative path there.
@@ -258,7 +204,7 @@ func TestCompilerMode(t *testing.T) {
 	require.Equal(t, modeCastGRPC, compilerMode(rules[0]))
 }
 
-func TestLoadSSZTargets(t *testing.T) {
+func TestLoadMethodicalTargets(t *testing.T) {
 	// writeBuild writes proto/<pkg>/BUILD.bazel with the given content under dir.
 	writeBuild := func(t *testing.T, dir, pkg, content string) {
 		t.Helper()
@@ -270,52 +216,51 @@ func TestLoadSSZTargets(t *testing.T) {
 	dir := t.TempDir()
 	// "bbb" is written first but must sort after "aaa".
 	writeBuild(t, dir, "bbb", `
-ssz_gen_marshal(
-    name = "ssz_b",
+ssz_methodical(
+    name = "methodical_b",
+    deps = [":go_proto"],
+    config_file = "b.yaml",
     out = "b.ssz.go",
-    objs = ["B"],
 )
 `)
-	// "aaa" holds two rules; both must appear, in file order.
+	// "aaa" holds two rules; both must appear, in file order. The second omits
+	// override_package_name to exercise the optional attr.
 	writeBuild(t, dir, "aaa", `
-COMMON = ["//math:go_default_library"]
-ssz_gen_marshal(
-    name = "ssz_a1",
+ssz_methodical(
+    name = "methodical_a1",
+    deps = [":go_proto"],
+    config_file = "a1.yaml",
+    override_package_name = "eth",
     out = "a1.ssz.go",
-    objs = ["A1"],
-    exclude_objs = ["Skip"],
-    includes = COMMON + ["//proto/eth:go_default_library"],
 )
-ssz_gen_marshal(
-    name = "ssz_a2",
+ssz_methodical(
+    name = "methodical_a2",
+    config_file = "a2.yaml",
     out = "a2.ssz.go",
-    objs = ["A2"],
 )
 `)
-	// No ssz_gen_marshal rule -> skipped entirely.
+	// No ssz_methodical rule -> skipped entirely.
 	writeBuild(t, dir, "ccc", `go_library(name = "go_default_library")`)
 	t.Chdir(dir)
 
-	got, err := loadSSZTargets()
+	got, err := loadMethodicalTargets()
 	require.NoError(t, err)
-	require.DeepEqual(t, []sszTarget{
+	require.DeepEqual(t, []methodicalTarget{
 		{
-			pkg:      "proto/aaa",
-			out:      "a1.ssz.go",
-			libInc:   []string{"math"},
-			protoInc: []string{"proto/eth"},
-			objs:     []string{"A1"},
-			exclude:  []string{"Skip"},
+			pkg:         "proto/aaa",
+			configFile:  "a1.yaml",
+			out:         "a1.ssz.go",
+			overridePkg: "eth",
 		},
 		{
-			pkg:  "proto/aaa",
-			out:  "a2.ssz.go",
-			objs: []string{"A2"},
+			pkg:        "proto/aaa",
+			configFile: "a2.yaml",
+			out:        "a2.ssz.go",
 		},
 		{
-			pkg:  "proto/bbb",
-			out:  "b.ssz.go",
-			objs: []string{"B"},
+			pkg:        "proto/bbb",
+			configFile: "b.yaml",
+			out:        "b.ssz.go",
 		},
 	}, got)
 }

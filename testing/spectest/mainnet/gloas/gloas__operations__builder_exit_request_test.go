@@ -1,0 +1,11 @@
+package gloas
+
+import (
+	"testing"
+
+	"github.com/OffchainLabs/prysm/v7/testing/spectest/shared/gloas/operations"
+)
+
+func TestMainnet_Gloas_Operations_BuilderExitRequest(t *testing.T) {
+	operations.RunBuilderExitRequestTest(t, "mainnet")
+}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 
@@ -29,6 +30,38 @@ type roundtrip func(*http.Request) (*http.Response, error)
 
 func (fn roundtrip) RoundTrip(r *http.Request) (*http.Response, error) {
 	return fn(r)
+}
+
+func TestWithoutRedirects(t *testing.T) {
+	newServers := func(t *testing.T) (*httptest.Server, *int) {
+		targetHits := 0
+		target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			targetHits++
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(target.Close)
+		origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, target.URL, http.StatusTemporaryRedirect)
+		}))
+		t.Cleanup(origin.Close)
+		return origin, &targetHits
+	}
+
+	t.Run("redirect is not followed", func(t *testing.T) {
+		origin, targetHits := newServers(t)
+		c, err := NewClient(origin.URL, WithoutRedirects())
+		require.NoError(t, err)
+		require.NotNil(t, c.Status(context.Background()))
+		require.Equal(t, 0, *targetHits)
+	})
+
+	t.Run("default client follows redirects", func(t *testing.T) {
+		origin, targetHits := newServers(t)
+		c, err := NewClient(origin.URL)
+		require.NoError(t, err)
+		require.NoError(t, c.Status(context.Background()))
+		require.Equal(t, 1, *targetHits)
+	})
 }
 
 func TestClient_Status(t *testing.T) {

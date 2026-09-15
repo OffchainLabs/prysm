@@ -12,11 +12,13 @@ import (
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/confirmation"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	f "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
@@ -26,6 +28,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -53,6 +56,7 @@ type Service struct {
 	originBlockRoot                [32]byte // genesis root, or weak subjectivity checkpoint root, depending on how the node is initialized
 	boundaryRoots                  [][32]byte
 	checkpointStateCache           *cache.CheckpointStateCache
+	attPreStateRegenSem            chan struct{}
 	initSyncBlocks                 map[[32]byte]interfaces.ReadOnlySignedBeaconBlock
 	initSyncBlocksLock             sync.RWMutex
 	wsVerifier                     *WeakSubjectivityVerifier
@@ -70,6 +74,7 @@ type Service struct {
 	syncCommitteeHeadState         *cache.SyncCommitteeHeadStateCache
 	payloadArrivals                *payloadArrivals
 	goroutineCounter               *goroutineCounter
+	fcr                            *confirmation.FastConfirmationRule
 }
 
 // config options for the service.
@@ -186,6 +191,7 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 		cancel:                 cancel,
 		boundaryRoots:          [][32]byte{},
 		checkpointStateCache:   cache.NewCheckpointStateCache(),
+		attPreStateRegenSem:    make(chan struct{}, 1),
 		initSyncBlocks:         make(map[[32]byte]interfaces.ReadOnlySignedBeaconBlock),
 		blobNotifiers:          bn,
 		cfg:                    &config{},
@@ -217,6 +223,7 @@ func (s *Service) Start() {
 	if err := s.StartFromSavedState(s.cfg.FinalizedStateAtStartUp); err != nil {
 		log.Fatal(err)
 	}
+	s.InitFastConfirmation()
 	s.spawnProcessAttestationsRoutine()
 	go s.runLateBlockTasks()
 	go s.runLatePayloadTasks()
@@ -375,7 +382,7 @@ func (s *Service) saveGenesisData(ctx context.Context, genesisState state.Beacon
 	}
 
 	s.originBlockRoot = genesisBlkRoot
-	s.cfg.StateGen.SaveFinalizedState(0 /*slot*/, genesisBlkRoot, genesisState)
+	s.cfg.StateGen.SaveFinalizedState(genesisBlkRoot, genesisState)
 
 	s.cfg.ForkChoiceStore.Lock()
 	defer s.cfg.ForkChoiceStore.Unlock()
@@ -420,6 +427,53 @@ func (s *Service) hasBlock(ctx context.Context, root [32]byte) bool {
 
 func (s *Service) removeStartupState() {
 	s.cfg.FinalizedStateAtStartUp = nil
+}
+
+// InitFastConfirmation initializes the fast confirmation rule if the feature flag is enabled.
+func (s *Service) InitFastConfirmation() {
+	if !features.Get().EnableFastConfirmation {
+		return
+	}
+	s.cfg.ForkChoiceStore.RLock()
+	fc := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
+	s.cfg.ForkChoiceStore.RUnlock()
+
+	anchorRoot := fc.Root
+	// At genesis the finalized checkpoint root is still the zero stub, the head root matches the spec's anchor_root.
+	if anchorRoot == ([32]byte{}) {
+		s.headLock.RLock()
+		anchorRoot = s.headRoot()
+		s.headLock.RUnlock()
+	}
+	anchorCp := forkchoicetypes.Checkpoint{Epoch: fc.Epoch, Root: anchorRoot}
+
+	s.fcr = confirmation.New(
+		s.cfg.ForkChoiceStore,
+		&fcrCommitteeAccessor{s: s},
+		&fcrBalanceAccessor{s: s},
+		anchorCp,
+	)
+
+	log.Info("Fast confirmation rule enabled")
+}
+
+// SafeBlockHash exposes the engine safe hash choice for spec test checks.
+func (s *Service) SafeBlockHash() [32]byte {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.safeBlockHash()
+}
+
+// safeBlockHash prefers the FCR confirmed root over unrealized justified when the feature is on.
+func (s *Service) safeBlockHash() [32]byte {
+	if s.fcr != nil {
+		root := s.fcr.ConfirmedRoot()
+		// A pruned confirmed root falls back to unrealized justified.
+		if root != ([32]byte{}) && s.cfg.ForkChoiceStore.HasNode(root) {
+			return s.cfg.ForkChoiceStore.ConfirmedPayloadBlockHash(root)
+		}
+	}
+	return s.cfg.ForkChoiceStore.UnrealizedJustifiedPayloadBlockHash()
 }
 
 func spawnCountdownIfPreGenesis(ctx context.Context, genesisTime time.Time, db db.HeadAccessDatabase) {

@@ -2,16 +2,26 @@ package sync
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/stretchr/testify/require"
 )
 
@@ -221,4 +231,64 @@ func TestRequestPayloadEnvelope_SkipsWhenAlreadyResolved(t *testing.T) {
 			require.NotPanics(t, func() { s.requestPayloadEnvelope(root) })
 		})
 	}
+}
+
+func TestFetchPayloadEnvelope_ReceiveHasDeadline(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.FuluForkEpoch = 0
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+	params.BeaconConfig().InitializeForkSchedule()
+
+	ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
+	require.NoError(t, err)
+
+	p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+	p1.Connect(p2)
+	p1.Peers().SetConnectionState(p2.PeerID(), peers.Connected)
+	p1.Peers().SetChainState(p2.PeerID(), &ethpb.StatusV2{})
+
+	root := [32]byte{0x42}
+	envelope := &ethpb.SignedExecutionPayloadEnvelope{
+		Message: &ethpb.ExecutionPayloadEnvelope{
+			Payload: &enginev1.ExecutionPayloadGloas{
+				ParentHash:    make([]byte, fieldparams.RootLength),
+				FeeRecipient:  make([]byte, 20),
+				StateRoot:     make([]byte, fieldparams.RootLength),
+				ReceiptsRoot:  make([]byte, fieldparams.RootLength),
+				LogsBloom:     make([]byte, 256),
+				PrevRandao:    make([]byte, fieldparams.RootLength),
+				BaseFeePerGas: make([]byte, fieldparams.RootLength),
+				BlockHash:     make([]byte, fieldparams.RootLength),
+				SlotNumber:    1,
+			},
+			BeaconBlockRoot:       root[:],
+			ParentBeaconBlockRoot: make([]byte, fieldparams.RootLength),
+		},
+		Signature: make([]byte, fieldparams.BLSSignatureLength),
+	}
+
+	protocol := fmt.Sprintf("%s/ssz_snappy", p2p.RPCExecutionPayloadEnvelopesByRootTopicV1)
+	p2.SetStreamHandler(protocol, func(stream network.Stream) {
+		req := new(p2ptypes.ExecutionPayloadEnvelopesByRootReq)
+		require.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+		require.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2.Encoding(), envelope))
+		require.NoError(t, stream.CloseWrite())
+	})
+
+	chain := &mock.ChainService{FinalizedCheckPoint: &ethpb.Checkpoint{}}
+	s := &Service{
+		ctx: context.Background(),
+		cfg: &config{
+			chain: chain,
+			p2p:   p1,
+			clock: startup.NewClock(time.Now(), [fieldparams.RootLength]byte{}),
+		},
+		ctxMap:          ctxMap,
+		badPayloadCache: lruwrpr.New(10),
+	}
+
+	s.fetchPayloadEnvelope(root)
+	require.True(t, chain.ReceivePayloadEnvelopeCtxHadDeadline)
 }

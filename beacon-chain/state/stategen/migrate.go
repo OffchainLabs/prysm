@@ -16,9 +16,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// MigrateToCold advances the finalized info in between the cold and hot state sections.
-// It moves the recent finalized states from the hot section to the cold section and
-// only preserves the ones that are on archived point.
+// MigrateToCold moves finalized states to cold storage and advances the migration cursor.
 func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) error {
 	ctx, span := trace.StartSpan(ctx, "stateGen.MigrateToCold")
 	defer span.End()
@@ -33,9 +31,7 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) error {
 		return s.migrateToColdHdiff(ctx, fRoot)
 	}
 
-	s.finalizedInfo.lock.RLock()
-	oldFSlot := s.finalizedInfo.slot
-	s.finalizedInfo.lock.RUnlock()
+	oldFSlot := s.migratedSlot
 
 	fBlock, err := s.beaconDB.Block(ctx, fRoot)
 	if err != nil {
@@ -125,17 +121,18 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) error {
 		return err
 	}
 	if ok {
-		s.SaveFinalizedState(fSlot, fRoot, fInfo.state)
+		s.SaveFinalizedState(fRoot, fInfo.state)
 	}
+	// The migration can complete without the finalized state being cached. Keep
+	// finalizedInfo coherent and advance its independent migration cursor.
+	s.migratedSlot = fSlot
 
 	return nil
 }
 
 // migrateToColdHdiff saves the state-diffs for slots that are in the state diff tree after finalization
 func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
-	s.finalizedInfo.lock.RLock()
-	oldFSlot := s.finalizedInfo.slot
-	s.finalizedInfo.lock.RUnlock()
+	oldFSlot := s.migratedSlot
 	fSlot, err := s.beaconDB.SlotByBlockRoot(ctx, fRoot)
 	if err != nil {
 		return errors.Wrap(err, "could not get slot by block root")
@@ -221,8 +218,11 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
 		return err
 	}
 	if ok {
-		s.SaveFinalizedState(fSlot, fRoot, fInfo.state)
+		s.SaveFinalizedState(fRoot, fInfo.state)
 	}
+	// The migration can complete without the finalized state being cached. Keep
+	// finalizedInfo coherent and advance its independent migration cursor.
+	s.migratedSlot = fSlot
 	return nil
 }
 

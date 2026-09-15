@@ -2,14 +2,24 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["error.go"],
+    srcs = [
+        "error.go",
+        "list.go",
+    ],
     importpath = "github.com/OffchainLabs/prysm/v7/api/server",
     visibility = ["//visibility:public"],
+    deps = ["@com_github_pkg_errors//:go_default_library"],
 )
 
 go_test(
     name = "go_default_test",
-    srcs = ["error_test.go"],
+    srcs = [
+        "error_test.go",
+        "list_test.go",
+    ],
     embed = [":go_default_library"],
-    deps = ["//testing/assert:go_default_library"],
+    deps = [
+        "//testing/assert:go_default_library",
+        "//testing/require:go_default_library",
+    ],
 )

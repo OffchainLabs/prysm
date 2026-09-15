@@ -222,6 +222,7 @@
   },
   "appendclipped": {
     "exclude_files": {
+      ".*\\.ssz\\.go": "Generated code is ok",
       "external/.*": "Third party code"
     }
   },
@@ -257,7 +258,8 @@
   },
   "rangeint": {
     "exclude_files": {
-      "external/.*": "Third party code"
+      "external/.*": "Third party code",
+      ".*\\.ssz\\.go": "Generated code is ok"
     }
   },
   "reflecttypefor": {

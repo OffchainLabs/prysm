@@ -3,12 +3,12 @@ package primitives
 import (
 	"fmt"
 
-	fssz "github.com/prysmaticlabs/fastssz"
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 )
 
-var _ fssz.HashRoot = (ValidatorIndex)(0)
-var _ fssz.Marshaler = (*ValidatorIndex)(nil)
-var _ fssz.Unmarshaler = (*ValidatorIndex)(nil)
+var _ ssz.HashRoot = (ValidatorIndex)(0)
+var _ ssz.Marshaler = (*ValidatorIndex)(nil)
+var _ ssz.Unmarshaler = (*ValidatorIndex)(nil)
 
 // BuilderIndexFlag marks a ValidatorIndex as a BuilderIndex when the bit is set.
 //
@@ -68,11 +68,11 @@ func (v ValidatorIndex) Mod(x uint64) ValidatorIndex {
 
 // HashTreeRoot --
 func (v ValidatorIndex) HashTreeRoot() ([32]byte, error) {
-	return fssz.HashWithDefaultHasher(v)
+	return ssz.HashWithDefaultHasher(v)
 }
 
 // HashTreeRootWith --
-func (v ValidatorIndex) HashTreeRootWith(hh *fssz.Hasher) error {
+func (v ValidatorIndex) HashTreeRootWith(hh *ssz.Hasher) error {
 	hh.PutUint64(uint64(v))
 	return nil
 }
@@ -82,7 +82,7 @@ func (v *ValidatorIndex) UnmarshalSSZ(buf []byte) error {
 	if len(buf) != v.SizeSSZ() {
 		return fmt.Errorf("expected buffer of length %d received %d", v.SizeSSZ(), len(buf))
 	}
-	*v = ValidatorIndex(fssz.UnmarshallUint64(buf))
+	*v = ValidatorIndex(UnmarshalUint64(buf))
 	return nil
 }
 
@@ -97,7 +97,7 @@ func (v *ValidatorIndex) MarshalSSZTo(dst []byte) ([]byte, error) {
 
 // MarshalSSZ --
 func (v *ValidatorIndex) MarshalSSZ() ([]byte, error) {
-	marshalled := fssz.MarshalUint64([]byte{}, uint64(*v))
+	marshalled := MarshalUint64([]byte{}, uint64(*v))
 	return marshalled, nil
 }
 

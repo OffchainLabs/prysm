@@ -3,7 +3,9 @@ package blocks
 import (
 	"testing"
 
-	"github.com/OffchainLabs/go-bitfield"
+	bitfield "github.com/OffchainLabs/go-bitfield"
+	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
+
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -15,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 func Test_BeaconBlockIsNil(t *testing.T) {

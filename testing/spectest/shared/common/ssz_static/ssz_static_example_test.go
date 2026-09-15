@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
+	"github.com/pkg/errors"
+
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	common "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/common/ssz_static"
-	"github.com/pkg/errors"
-	fssz "github.com/prysmaticlabs/fastssz"
 )
 
 func ExampleRunSSZStaticTests() {
@@ -33,10 +34,10 @@ func ExampleRunSSZStaticTests() {
 			return nil, fmt.Errorf("unsupported type: %s", objectName)
 		}
 		var err error
-		if o, ok := obj.(fssz.Unmarshaler); ok {
+		if o, ok := obj.(ssz.Unmarshaler); ok {
 			err = o.UnmarshalSSZ(serializedBytes)
 		} else {
-			err = errors.New("could not unmarshal object, not a fastssz compatible object")
+			err = errors.New("could not unmarshal object, does not implement Unmarshaler interface")
 		}
 		return obj, err
 	}
@@ -60,7 +61,7 @@ func ExampleRunSSZStaticTests() {
 	var t *testing.T
 	// common.RunSSZStaticTests will run all of the tests found in the spec test folder with the
 	// given config and forkOrPhase. It will then use the unmarshaller to hydrate the types and
-	// ensure that fastssz generated methods match the expected results. It will also test custom
+	// ensure that generated methods match the expected results. It will also test custom
 	// HTR methods if provided.
 	common.RunSSZStaticTests(t,
 		"mainnet", // Network configuration

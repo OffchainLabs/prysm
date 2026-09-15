@@ -609,6 +609,12 @@ def prysm_deps():
         version = "v1.5.7",
     )
     go_repository(
+        name = "com_github_dave_jennifer",
+        importpath = "github.com/dave/jennifer",
+        sum = "h1:B4jJJDHelWcDhlRQxWeo0Npa/pYKBLrirAQoTN45txo=",
+        version = "v1.7.1",
+    )
+    go_repository(
         name = "com_github_davecgh_go_spew",
         importpath = "github.com/davecgh/go-spew",
         sum = "h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=",
@@ -2480,6 +2486,12 @@ def prysm_deps():
         patches = ["//third_party:com_github_offchainlabs_hashtree.patch"],
         sum = "h1:nM8dBAQZzHLzzM14FaAHXnHTAXZIst69v5xWuS48y/c=",
         version = "v0.2.3",
+    )
+    go_repository(
+        name = "com_github_offchainlabs_methodical_ssz",
+        importpath = "github.com/OffchainLabs/methodical-ssz",
+        sum = "h1:X7Rtbyy16t/ruqtADWyYg8GSfJlO9gfXyxmHpB3oYvQ=",
+        version = "v0.0.0-20260703104215-9be4f5c6a334",
     )
     go_repository(
         name = "com_github_oklog_oklog",
@@ -4599,14 +4611,14 @@ def prysm_deps():
     go_repository(
         name = "org_golang_google_genproto_googleapis_api",
         importpath = "google.golang.org/genproto/googleapis/api",
-        sum = "h1:tu/dtnW1o3wfaxCOjSLn5IRX4YDcJrtlpzYkhHhGaC4=",
-        version = "v0.0.0-20260226221140-a57be14db171",
+        sum = "h1:Kjn0N0tCrDgiAFW+lGO4JZ3ck44CehvJQMAwj9QF0G8=",
+        version = "v0.0.0-20260526163538-3dc84a4a5aaa",
     )
     go_repository(
         name = "org_golang_google_genproto_googleapis_rpc",
         importpath = "google.golang.org/genproto/googleapis/rpc",
-        sum = "h1:ggcbiqK8WWh6l1dnltU4BgWGIGo+EVYxCaAPih/zQXQ=",
-        version = "v0.0.0-20260226221140-a57be14db171",
+        sum = "h1:mZHHdPZl0dbGHCflZgAq/Q468DWVFcU2whhB2KAo8fk=",
+        version = "v0.0.0-20260526163538-3dc84a4a5aaa",
     )
     go_repository(
         name = "org_golang_google_grpc",

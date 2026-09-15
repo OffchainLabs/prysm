@@ -50,7 +50,7 @@ type ForkchoiceFetcher interface {
 	Ancestor(context.Context, []byte, primitives.Slot) ([]byte, error)
 	BlockHash(root [32]byte) ([32]byte, error)
 	HasPayloadBlockHash(root, blockHash [32]byte) bool
-	GasLimit(root [32]byte) (uint64, error)
+	GasLimit(root, blockHash [32]byte) (uint64, error)
 	CachedHeadRoot() [32]byte
 	GetProposerHead() [32]byte
 	SetForkChoiceGenesisTime(time.Time)
@@ -646,6 +646,11 @@ func (s *Service) RecentBlockSlot(root [32]byte) (primitives.Slot, error) {
 // syncing to the head of the chain.
 func (s *Service) inRegularSync() bool {
 	return s.cfg.SyncChecker.Synced()
+}
+
+// canWaitForGossipSidecars reports whether the sidecars for slot may still arrive over gossip.
+func (s *Service) canWaitForGossipSidecars(slot primitives.Slot) bool {
+	return s.inRegularSync() && slot+1 >= s.CurrentSlot()
 }
 
 // validating returns true if at least one validator is attached to this BN

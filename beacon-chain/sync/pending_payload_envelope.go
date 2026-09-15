@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/async"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -58,7 +59,10 @@ func (s *Service) processPendingPayloadEnvelope(ctx context.Context, root [32]by
 			continue
 		}
 
-		if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(ctx, e); err != nil {
+		receiveCtx, cancel := context.WithTimeout(ctx, params.BeaconConfig().SlotDuration())
+		err = s.cfg.chain.ReceiveExecutionPayloadEnvelope(receiveCtx, e)
+		cancel()
+		if err != nil {
 			log.WithError(err).Debug("Could not process pending payload envelope")
 			continue
 		}
