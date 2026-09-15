@@ -836,7 +836,7 @@ func TestFetchOriginColumns(t *testing.T) {
 		p2p.Peers().SetConnectionState(other.PeerID(), peers.Connected)
 		p2p.Connect(other)
 
-		p2p.Peers().SetChainState(other.PeerID(), &ethpb.StatusV2{
+		setPeerStatus(p2p.PeerScoring(), other.PeerID(), &ethpb.StatusV2{
 			HeadSlot: 5,
 		})
 

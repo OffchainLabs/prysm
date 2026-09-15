@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -147,15 +148,16 @@ func (s *Service) SubscribeToTopic(topic string, opts ...pubsub.SubOpt) (*pubsub
 	return topicHandle.Subscribe(opts...)
 }
 
-// peerInspector will scrape all the relevant scoring data and add it to our
-// peer handler.
 func (s *Service) peerInspector(peerMap map[peer.ID]*pubsub.PeerScoreSnapshot) {
-	// Iterate through all the connected peers and through any of their
-	// relevant topics.
+	updates := make(map[peer.ID]peerscoring.GossipScoreUpdate, len(peerMap))
 	for pid, snap := range peerMap {
-		s.peers.Scorers().GossipScorer().SetGossipData(pid, snap.Score,
-			snap.BehaviourPenalty, convertTopicScores(snap.Topics))
+		updates[pid] = peerscoring.GossipScoreUpdate{
+			Score:            snap.Score,
+			BehaviourPenalty: snap.BehaviourPenalty,
+			TopicScores:      convertTopicScores(snap.Topics),
+		}
 	}
+	s.peerScorer.ReconcileGossipScores(updates)
 }
 
 // pubsubOptions creates a list of options to configure our router with.

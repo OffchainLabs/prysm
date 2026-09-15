@@ -10,12 +10,40 @@ import (
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	testp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 )
+
+func TestPeerInspectorReconcilesGossipScores(t *testing.T) {
+	s := &Service{peerScorer: peerscoring.NewScorer()}
+
+	s.peerInspector(map[peer.ID]*pubsub.PeerScoreSnapshot{
+		"peer-a": {
+			Score:            -17000,
+			BehaviourPenalty: 2,
+			Topics:           map[string]*pubsub.TopicScoreSnapshot{"/topic": {FirstMessageDeliveries: 3}},
+		},
+	})
+	gScore, bPenalty, topics := s.peerScorer.GossipData("peer-a")
+	require.Equal(t, float64(-17000), gScore)
+	require.Equal(t, float64(2), bPenalty)
+	require.Equal(t, float32(3), topics["/topic"].FirstMessageDeliveries)
+	require.ErrorIs(t, s.peerScorer.IsPeerGreyListed("peer-a"), peerscoring.ErrPeerGreyListed)
+
+	// peer-a dropped out of the report: libp2p purged it, so the grey-listing lifts.
+	s.peerInspector(map[peer.ID]*pubsub.PeerScoreSnapshot{"peer-b": {Score: 1}})
+	require.NoError(t, s.peerScorer.IsPeerGreyListed("peer-a"))
+	gScore, _, _ = s.peerScorer.GossipData("peer-a")
+	require.Equal(t, float64(0), gScore)
+	gScore, _, _ = s.peerScorer.GossipData("peer-b")
+	require.Equal(t, float64(1), gScore)
+}
 
 func TestService_PublishToTopicConcurrentMapWrite(t *testing.T) {
 	cs := startup.NewClockSynchronizer()

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/blockprovider"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
@@ -33,7 +33,7 @@ func TestBlocksFetcher_filterPeers(t *testing.T) {
 	tests := []struct {
 		name   string
 		args   args
-		update func(s *scorers.BlockProviderScorer)
+		update func(s *blockprovider.Selector)
 		want   []peer.ID
 	}{
 		{
@@ -82,7 +82,7 @@ func TestBlocksFetcher_filterPeers(t *testing.T) {
 				peersPercentage: 1.0,
 				capacityWeight:  0.2,
 			},
-			update: func(s *scorers.BlockProviderScorer) {
+			update: func(s *blockprovider.Selector) {
 				s.IncrementProcessedBlocks("a", batchSize*2)
 				s.IncrementProcessedBlocks("b", batchSize*2)
 				s.IncrementProcessedBlocks("c", batchSize*2)
@@ -104,7 +104,7 @@ func TestBlocksFetcher_filterPeers(t *testing.T) {
 				peersPercentage: 0.8,
 				capacityWeight:  0.2,
 			},
-			update: func(s *scorers.BlockProviderScorer) {
+			update: func(s *blockprovider.Selector) {
 				s.IncrementProcessedBlocks("e", s.Params().ProcessedBlocksCap)
 				s.IncrementProcessedBlocks("b", s.Params().ProcessedBlocksCap/2)
 				s.IncrementProcessedBlocks("c", s.Params().ProcessedBlocksCap/4)
@@ -126,7 +126,7 @@ func TestBlocksFetcher_filterPeers(t *testing.T) {
 				peersPercentage: 0.8,
 				capacityWeight:  0.2,
 			},
-			update: func(s *scorers.BlockProviderScorer) {
+			update: func(s *blockprovider.Selector) {
 				// Make sure that score takes priority over capacity.
 				s.IncrementProcessedBlocks("c", batchSize*5)
 				s.IncrementProcessedBlocks("b", batchSize*15)
@@ -155,7 +155,7 @@ func TestBlocksFetcher_filterPeers(t *testing.T) {
 				fetcher.rateLimiter.Add(pid.ID.String(), pid.usedCapacity)
 			}
 			if tt.update != nil {
-				tt.update(fetcher.p2p.Peers().Scorers().BlockProviderScorer())
+				tt.update(fetcher.p2p.BlockProviderSelector())
 			}
 			// Since peer selection is probabilistic (weighted, with high scorers having higher
 			// chance of being selected), we need multiple rounds of filtering to test the order:
@@ -196,8 +196,8 @@ func TestBlocksFetcher_filterPeers(t *testing.T) {
 			// They are deliberately shuffled - so that on the same capacity any of
 			// such peers can be selected. That's why they are sorted here.
 			sort.SliceStable(filteredPIDs, func(i, j int) bool {
-				score1 := fetcher.p2p.Peers().Scorers().BlockProviderScorer().Score(filteredPIDs[i])
-				score2 := fetcher.p2p.Peers().Scorers().BlockProviderScorer().Score(filteredPIDs[j])
+				score1 := fetcher.p2p.BlockProviderSelector().Score(filteredPIDs[i])
+				score2 := fetcher.p2p.BlockProviderSelector().Score(filteredPIDs[j])
 				if score1 == score2 {
 					cap1 := fetcher.rateLimiter.Remaining(filteredPIDs[i].String())
 					cap2 := fetcher.rateLimiter.Remaining(filteredPIDs[j].String())

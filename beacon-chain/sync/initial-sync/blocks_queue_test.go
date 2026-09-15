@@ -1098,10 +1098,10 @@ func TestBlocksQueue_stuckInUnfavourableFork(t *testing.T) {
 		defer func() {
 			p2p.Peers().SetConnectionState(emptyPeer, peers.Disconnected)
 		}()
-		chainState, err := p2p.Peers().ChainState(emptyPeer)
+		chainState, err := p2p.PeerScoring().PeerStatus(emptyPeer)
 		require.NoError(t, err)
 		chainState.HeadSlot = 500
-		p2p.Peers().SetChainState(emptyPeer, chainState)
+		setPeerStatus(p2p.PeerScoring(), emptyPeer, chainState)
 
 		startSlot := mc.HeadSlot() + 1
 		blocksPerRequest := queue.blocksFetcher.blocksPerPeriod

@@ -206,7 +206,6 @@ func TestPingRPCHandler_BadSequenceNumber(t *testing.T) {
 		t.Fatal("Did not receive stream within 1 sec")
 	}
 
-	res, err := p1.Peers().Scorers().BadResponsesScorer().Count(p2.BHost.ID())
-	assert.NoError(t, err)
+	res := p1.PeerScoring().BadResponseCount(p2.BHost.ID())
 	assert.Equal(t, 1, res, "Peer wasn't penalised for providing a bad sequence number")
 }

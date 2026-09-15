@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/async"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
@@ -54,19 +55,14 @@ func (s *Service) maintainPeerStatuses() {
 					return
 				}
 
-				// Disconnect from peers that are considered bad by any of the registered scorers.
-				if err := s.cfg.p2p.Peers().IsBad(id); err != nil {
-					s.disconnectBadPeer(s.ctx, id, err)
+				// Disconnect from peers that are grey-listed by peer scoring.
+				if err := s.cfg.p2p.IsPeerGreyListed(id); err != nil {
+					s.disconnectGreyListedPeer(s.ctx, id, err)
 					return
 				}
 
 				// If the status hasn't been updated in the recent interval time.
-				lastUpdated, err := s.cfg.p2p.Peers().ChainStateLastUpdated(id)
-				if err != nil {
-					// Peer has vanished; nothing to do.
-					return
-				}
-
+				lastUpdated := s.cfg.p2p.PeerScoring().ChainStateLastUpdated(id)
 				if prysmTime.Now().After(lastUpdated.Add(interval)) {
 					if err := s.reValidatePeer(s.ctx, id); err != nil {
 						log.WithError(err).Debug("Cannot re-validate peer")
@@ -77,9 +73,17 @@ func (s *Service) maintainPeerStatuses() {
 		// Wait for all status checks to finish and then proceed onwards to
 		// pruning excess peers.
 		wg.Wait()
-		peerIds := s.cfg.p2p.Peers().PeersToPrune()
-		peerIds = s.filterNeededPeers(peerIds)
+		candidates, numToPrune := s.cfg.p2p.Peers().PruneCandidates()
+		// Drop candidates needed for subnet coverage, then disconnect the first
+		// numToPrune of the remainder in eviction-priority order.
+		peerIds := s.filterNeededPeers(candidates)
+		if uint64(len(peerIds)) > numToPrune {
+			peerIds = peerIds[:numToPrune]
+		}
 		for _, id := range peerIds {
+			if connectedAt, err := s.cfg.p2p.Peers().ConnectedAt(id); err == nil && !connectedAt.IsZero() {
+				prunedPeerTenureSeconds.Observe(prysmTime.Since(connectedAt).Seconds())
+			}
 			if err := s.sendGoodByeAndDisconnect(s.ctx, p2ptypes.GoodbyeCodeTooManyPeers, id); err != nil {
 				log.WithField("peer", id).WithError(err).Debug("Could not disconnect with peer")
 			}
@@ -169,11 +173,11 @@ func (s *Service) sendRPCStatusRequest(ctx context.Context, peer peer.ID) error 
 
 	code, errMsg, err := ReadStatusCode(stream, s.cfg.p2p.Encoding())
 	if err != nil {
-		s.downscorePeer(peer, "statusRequestReadStatusCodeError")
+		s.cfg.p2p.PeerScoring().RecordBadResponse(peer, peerscoring.SourceRPCStatus, "statusRequestReadStatusCodeError")
 		return errors.Wrap(err, "read status code")
 	}
 	if code != 0 {
-		s.downscorePeer(peer, "statusRequestNonNullStatusCode")
+		s.cfg.p2p.PeerScoring().RecordBadResponse(peer, peerscoring.SourceRPCStatus, "statusRequestNonNullStatusCode")
 		return errors.New(errMsg)
 	}
 
@@ -184,9 +188,9 @@ func (s *Service) sendRPCStatusRequest(ctx context.Context, peer peer.ID) error 
 
 	// If validation fails, validation error is logged, and peer status scorer will mark peer as bad.
 	err = s.validateStatusMessage(ctx, msg)
-	s.cfg.p2p.Peers().Scorers().PeerStatusScorer().SetPeerStatus(peer, msg, err)
-	if err := s.cfg.p2p.Peers().IsBad(peer); err != nil {
-		s.disconnectBadPeer(s.ctx, peer, err)
+	s.cfg.p2p.PeerScoring().SetPeerStatus(peer, msg, err)
+	if err := s.cfg.p2p.IsPeerGreyListed(peer); err != nil {
+		s.disconnectGreyListedPeer(s.ctx, peer, err)
 	}
 
 	return err
@@ -196,7 +200,7 @@ func (s *Service) decodeStatus(stream network.Stream, epoch primitives.Epoch) (*
 	if epoch >= params.BeaconConfig().FuluForkEpoch {
 		msg := new(pb.StatusV2)
 		if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
-			s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+			s.cfg.p2p.PeerScoring().RecordBadResponse(stream.Conn().RemotePeer(), peerscoring.SourceRPCStatus, "statusResponseDecodeError")
 			return nil, errors.Wrap(err, "decode with max length")
 		}
 
@@ -205,7 +209,7 @@ func (s *Service) decodeStatus(stream network.Stream, epoch primitives.Epoch) (*
 
 	msg := new(pb.Status)
 	if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+		s.cfg.p2p.PeerScoring().RecordBadResponse(stream.Conn().RemotePeer(), peerscoring.SourceRPCStatus, "statusResponseDecodeError")
 		return nil, errors.Wrap(err, "decode with max length")
 	}
 
@@ -218,7 +222,7 @@ func (s *Service) decodeStatus(stream network.Stream, epoch primitives.Epoch) (*
 }
 
 func (s *Service) reValidatePeer(ctx context.Context, id peer.ID) error {
-	s.cfg.p2p.Peers().Scorers().PeerStatusScorer().SetHeadSlot(s.cfg.chain.HeadSlot())
+	s.cfg.p2p.PeerScoring().SetHeadSlot(s.cfg.chain.HeadSlot())
 	if err := s.sendRPCStatusRequest(ctx, id); err != nil {
 		return err
 	}
@@ -260,7 +264,8 @@ func (s *Service) statusRPCHandler(ctx context.Context, msg any, stream libp2pco
 			respCode = responseCodeServerError
 		case errors.Is(err, p2ptypes.ErrWrongForkDigestVersion):
 			// Respond with our status and disconnect with the peer.
-			s.cfg.p2p.Peers().SetChainState(remotePeer, m)
+			// Store the failed verdict so the peer is grey-listed, matching the outbound path.
+			s.cfg.p2p.PeerScoring().SetPeerStatus(remotePeer, m, err)
 			if err := s.respondWithStatus(ctx, stream); err != nil {
 				return err
 			}
@@ -272,7 +277,7 @@ func (s *Service) statusRPCHandler(ctx context.Context, msg any, stream libp2pco
 			return nil
 		default:
 			respCode = responseCodeInvalidRequest
-			s.downscorePeer(remotePeer, "statusRpcHandlerInvalidMessage")
+			s.cfg.p2p.PeerScoring().RecordBadResponse(remotePeer, peerscoring.SourceRPCStatus, "statusRpcHandlerInvalidMessage")
 		}
 
 		originalErr := err
@@ -289,7 +294,7 @@ func (s *Service) statusRPCHandler(ctx context.Context, msg any, stream libp2pco
 		}
 		return originalErr
 	}
-	s.cfg.p2p.Peers().SetChainState(remotePeer, m)
+	s.cfg.p2p.PeerScoring().SetPeerStatus(remotePeer, m, nil)
 
 	if err := s.respondWithStatus(ctx, stream); err != nil {
 		return err

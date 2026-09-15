@@ -198,8 +198,7 @@ func TestValidateBeaconBlockPubSub_InvalidSignature_DownscoresPeer(t *testing.T)
 	require.ErrorContains(t, "invalid signature", err)
 	assert.Equal(t, pubsub.ValidationReject, res)
 
-	count, err := p.Peers().Scorers().BadResponsesScorer().Count(attacker.PeerID())
-	require.NoError(t, err)
+	count := p.PeerScoring().BadResponseCount(attacker.PeerID())
 	assert.Equal(t, 1, count, "peer should be downscored on invalid signature")
 
 	select {
@@ -1383,7 +1382,7 @@ func TestValidateBeaconBlockPubSub_RequestsUnknownParentBlock(t *testing.T) {
 
 	p1.Peers().Add(new(enr.Record), p2.PeerID(), nil, network.DirOutbound)
 	p1.Peers().SetConnectionState(p2.PeerID(), peers.Connected)
-	p1.Peers().SetChainState(p2.PeerID(), &ethpb.StatusV2{FinalizedEpoch: 2})
+	setPeerStatus(p1.PeerScoring(), p2.PeerID(), &ethpb.StatusV2{FinalizedEpoch: 2})
 
 	pcl := protocol.ID("/eth2/beacon_chain/req/beacon_blocks_by_root/1/ssz_snappy")
 	var wg sync.WaitGroup

@@ -404,7 +404,7 @@ func (f *blocksFetcher) fetchBlobsFromPeer(ctx context.Context, bwb []blocks.Blo
 			log.WithField("peer", p).WithError(err).Debug("Could not request blobs by range from peer")
 			continue
 		}
-		f.p2p.Peers().Scorers().BlockProviderScorer().Touch(p)
+		f.p2p.BlockProviderSelector().Touch(p)
 		if err := verifyAndPopulateBlobs(bwb, blobs, req, f.bs); err != nil {
 			log.WithField("peer", p).WithError(err).Debug("Invalid BeaconBlobsByRange response")
 			continue
@@ -425,7 +425,7 @@ func (f *blocksFetcher) requestBlobs(ctx context.Context, req *p2ppb.BlobSidecar
 		"start":    req.StartSlot,
 		"count":    req.Count,
 		"capacity": f.rateLimiter.Remaining(pid.String()),
-		"score":    f.p2p.Peers().Scorers().BlockProviderScorer().FormatScorePretty(pid),
+		"score":    f.p2p.BlockProviderSelector().FormatScorePretty(pid),
 	}).Debug("Requesting blobs")
 	// We're intentionally abusing the block rate limit here, treating blob requests as if they were block requests.
 	// Since blob requests take more bandwidth than blocks, we should improve how we account for the different kinds

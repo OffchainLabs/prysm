@@ -574,6 +574,8 @@ func TestService_processBatchedBlocksReturnsFilteredCount(t *testing.T) {
 }
 
 func TestService_blockProviderScoring(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
 	currentPeriod := blockLimiterPeriod
 	blockLimiterPeriod = 1 * time.Second
 	defer func() {
@@ -599,7 +601,7 @@ func TestService_blockProviderScoring(t *testing.T) {
 		},
 		{
 			// This peer has all blocks - should be a preferred one.
-			blocks:         makeSequence(1, 320),
+			blocks:         makeSequence(1, 160),
 			finalizedEpoch: 5,
 			headSlot:       160,
 		},
@@ -635,25 +637,26 @@ func TestService_blockProviderScoring(t *testing.T) {
 	chainStarted := &atomic.Bool{}
 	chainStarted.Store(true)
 	s := &Service{
-		ctx:          t.Context(),
+		ctx:          ctx,
 		cfg:          &Config{Chain: mc, P2P: p, DB: beaconDB},
 		synced:       &atomic.Bool{},
 		chainStarted: chainStarted,
+		counter:      ratecounter.NewRateCounter(counterSeconds * time.Second),
 		clock:        clock,
 	}
-	scorer := s.cfg.P2P.Peers().Scorers().BlockProviderScorer()
+	scorer := s.cfg.P2P.BlockProviderSelector()
 	expectedBlockSlots := makeSequence(1, 160)
-	currentSlot := primitives.Slot(160)
+	targetSlot := primitives.Slot(160)
 
 	assert.Equal(t, scorer.MaxScore(), scorer.Score(peer1))
 	assert.Equal(t, scorer.MaxScore(), scorer.Score(peer2))
 	assert.Equal(t, scorer.MaxScore(), scorer.Score(peer3))
 
-	s.genesisTime = makeGenesisTime(currentSlot)
-	assert.NoError(t, s.roundRobinSync())
-	if s.cfg.Chain.HeadSlot() < currentSlot {
-		t.Errorf("Head slot (%d) is less than expected currentSlot (%d)", s.cfg.Chain.HeadSlot(), currentSlot)
-	}
+	// Keep the sync target fixed even when the local clock advances beyond the peers' head.
+	s.genesisTime = makeGenesisTime(targetSlot + 1)
+	require.NoError(t, s.syncToFinalizedEpoch(ctx))
+	require.NoError(t, ctx.Err(), "sync stalled before reaching the finalized target")
+	require.Equal(t, targetSlot, s.cfg.Chain.HeadSlot())
 	assert.Equal(t, true, len(expectedBlockSlots) <= len(mc.BlocksReceived), "Processes wrong number of blocks")
 	var receivedBlockSlots []primitives.Slot
 	for _, blk := range mc.BlocksReceived {
