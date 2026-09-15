@@ -658,7 +658,7 @@ func assertNoWastedAttestations(t *testing.T, st state.BeaconState, atts []ethpb
 		require.NoError(t, err)
 		require.NotEqual(t, uint64(0), got, "attestation %d adds no proposer reward", i)
 		total += got
-		running, err = altair.ProcessAttestationNoVerifySignature(ctx, running, a, totalBalance)
+		running, err = altair.ProcessAttestationNoVerifySignature(ctx, running, a, totalBalance, running.LatestBlockHeader().Slot)
 		require.NoError(t, err)
 	}
 	require.Equal(t, wantTotal, total)

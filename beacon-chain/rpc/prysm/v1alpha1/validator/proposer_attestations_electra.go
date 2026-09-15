@@ -198,6 +198,7 @@ func newAttCandidates(ctx context.Context, st state.ReadOnlyBeaconState, atts pr
 		{cfg.TimelyHeadFlagIndex, cfg.TimelyHeadWeight},
 	}
 	currentEpoch := coretime.CurrentEpoch(st)
+	parentSlot := st.LatestBlockHeader().Slot
 
 	// Unlike the ReadOnly variants, these return copies that are safe to mutate.
 	currParticipation, err := st.CurrentEpochParticipation()
@@ -230,7 +231,7 @@ func newAttCandidates(ctx context.Context, st state.ReadOnlyBeaconState, atts pr
 		}
 		flags, ok := flagsByData[dataRoot]
 		if !ok {
-			participated, err := altair.AttestationParticipationFlagIndices(st, data, delay)
+			participated, err := altair.AttestationParticipationFlagIndices(st, data, delay, parentSlot)
 			if err != nil {
 				log.WithFields(attestationFields(att)).WithError(err).Debug("Could not get participation flag indices")
 				flagsByData[dataRoot] = nil
