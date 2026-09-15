@@ -176,6 +176,44 @@ func TestSubmitPayloadAttestation_RetriesAtDeadlineAfterUnavailable(t *testing.T
 	}
 }
 
+// A pre-deadline failure that only arrives after the deadline is still retried.
+func TestPayloadAttestationDataWithRetry_ResponseCrossesDeadline(t *testing.T) {
+	v, m, key, finish := setup(t, false)
+	defer finish()
+	ptcRetrySetup(t, v, key)
+
+	const slot primitives.Slot = 1
+	want := &ethpb.PayloadAttestationData{
+		Slot: slot, PayloadPresent: false, BlobDataAvailable: true,
+	}
+	var deadline time.Time
+	gomock.InOrder(
+		m.validatorClient.EXPECT().
+			PayloadAttestationData(gomock.Any(), slot).
+			DoAndReturn(func(_ context.Context, _ primitives.Slot) (*ethpb.PayloadAttestationData, error) {
+				require.Equal(t, true, time.Now().Before(deadline))
+				// Deliver a pre-deadline failure after the deadline has passed.
+				err := unavailableErr()
+				time.Sleep(time.Until(deadline.Add(time.Millisecond)))
+				return nil, err
+			}),
+		m.validatorClient.EXPECT().
+			PayloadAttestationData(gomock.Any(), slot).
+			Return(want, nil),
+	)
+
+	// Start the slot after mock setup to preserve the pre-deadline window.
+	cfg := params.BeaconConfig()
+	v.genesisTime = time.Now().Add(-cfg.SlotDuration())
+	deadline, err := v.slotComponentDeadline(slot, cfg.PayloadAttestationDueBPS)
+	require.NoError(t, err)
+
+	got, retried, err := v.payloadAttestationDataWithRetry(t.Context(), slot)
+	require.NoError(t, err)
+	require.Equal(t, true, retried)
+	require.DeepEqual(t, want, got)
+}
+
 // After the deadline there is nothing to wait for, so the request is not repeated.
 func TestSubmitPayloadAttestation_NoRetryAfterDeadline(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
