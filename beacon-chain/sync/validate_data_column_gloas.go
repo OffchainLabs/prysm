@@ -285,7 +285,22 @@ func (s *Service) processPendingGloasColumns(ctx context.Context, root [fieldpar
 			return
 		}
 
-		if err := s.cfg.p2p.BroadcastDataColumnSidecars(ctx, verified, nil); err != nil {
+		var partials []blocks.PartialDataColumn
+		if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
+			partials = make([]blocks.PartialDataColumn, 0, len(verified))
+			// bid commitments are already set above
+			for _, v := range verified {
+				pc, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(v)
+				if err != nil {
+					log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Warn("Failed to build pending Gloas partial column")
+					partials = nil
+					break
+				}
+				partials = append(partials, pc)
+			}
+		}
+
+		if err := s.cfg.p2p.BroadcastDataColumnSidecars(ctx, verified, partials); err != nil {
 			log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Warn("Failed to broadcast pending Gloas columns")
 		}
 

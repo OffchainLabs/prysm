@@ -89,8 +89,10 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		t.Skip("Not a consensus type")
 	case "DataColumnSidecar":
 		obj = &ethpb.DataColumnSidecarGloas{}
-	case "SignedProposerPreferences", "ProposerPreferences", "PartialDataColumnGroupID":
+	case "SignedProposerPreferences", "ProposerPreferences":
 		t.Skip("p2p-only type; not part of the consensus state transition")
+	case "PartialDataColumnGroupID":
+		obj = &ethpb.PartialDataColumnGroupID{}
 
 	// Standard types that also exist in gloas
 	case "ExecutionPayload":
