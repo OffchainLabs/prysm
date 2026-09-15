@@ -25,6 +25,7 @@ type CurrentNeeds struct {
 	Block NeedSpan
 	Blob  NeedSpan
 	Col   NeedSpan
+	Env   NeedSpan
 }
 
 // SyncNeeds holds configuration and state for determining what data is needed
@@ -33,6 +34,7 @@ type SyncNeeds struct {
 	current func() primitives.Slot
 	deneb   primitives.Slot
 	fulu    primitives.Slot
+	gloas   primitives.Slot
 
 	oldestSlotFlagPtr  *primitives.Slot
 	validOldestSlotPtr *primitives.Slot
@@ -55,10 +57,16 @@ func NewSyncNeeds(current CurrentSlotter, oldestSlotFlagPtr *primitives.Slot, bl
 	if err != nil {
 		return SyncNeeds{}, errors.Wrap(err, "fulu fork slot")
 	}
+	gloasBoundary := min(params.BeaconConfig().GloasForkEpoch, slots.MaxSafeEpoch())
+	gloas, err := slots.EpochStart(gloasBoundary)
+	if err != nil {
+		return SyncNeeds{}, errors.Wrap(err, "gloas fork slot")
+	}
 	sn := SyncNeeds{
 		current:           func() primitives.Slot { return current() },
 		deneb:             deneb,
 		fulu:              fulu,
+		gloas:             gloas,
 		blobRetentionFlag: blobRetentionFlag,
 	}
 	// We apply the --blob-retention-epochs flag to both blob and column retention.
@@ -90,10 +98,14 @@ func (n SyncNeeds) Currently() CurrentNeeds {
 		Block: n.blockSpan(current),
 		Blob:  NeedSpan{Begin: syncEpochOffset(current, n.blobRetention), End: n.fulu},
 		Col:   NeedSpan{Begin: syncEpochOffset(current, n.colRetention), End: current},
+		// Env intentionally uses the spec minimum block retention rather than blockSpan,
+		// so it never inherits the --backfill-oldest-slot archival flag.
+		Env: NeedSpan{Begin: syncEpochOffset(current, n.blockRetention), End: current},
 	}
 	// Adjust the minimums forward to the slots where the sidecar types were introduced
 	c.Blob.Begin = max(c.Blob.Begin, n.deneb)
 	c.Col.Begin = max(c.Col.Begin, n.fulu)
+	c.Env.Begin = max(c.Env.Begin, n.gloas)
 
 	return c
 }
