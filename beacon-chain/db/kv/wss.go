@@ -70,10 +70,7 @@ func (s *Store) SaveOrigin(ctx context.Context, serState, serBlock []byte) error
 	}
 
 	if features.Get().EnableArchive && features.Get().EnableStateDiff {
-		// The archive origin owns the tree offset, and the checkpoint slot is generally not a boundary of
-		// that tree, so the origin state cannot go into the tree. Keep it addressable by root instead:
-		// State/HasState consult the hot snapshot bucket first, which is what lets stategen and backfill
-		// find it until the forward walk has regenerated states above it.
+		// The checkpoint slot is generally not a tree boundary, so keep the origin state addressable by root.
 		if err := s.SaveHotStateSnapshot(ctx, state, blockRoot); err != nil {
 			return errors.Wrap(err, "save checkpoint origin state snapshot")
 		}

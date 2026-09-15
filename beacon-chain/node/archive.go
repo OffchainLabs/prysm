@@ -29,15 +29,7 @@ type archiveOriginInitializer interface {
 	ArchiveStatus(ctx context.Context) (*kv.ArchiveStatus, error)
 }
 
-// initArchiveOrigin loads and validates the archive origin state, but deliberately writes nothing. The
-// anchor is only committed by finalizeArchiveOrigin, once the sync origin exists and the origin has been
-// checked against it: the tree offset cannot be moved once written, so a rejected origin would otherwise
-// leave a database that can only be recovered by deleting it.
-//
-// It runs before startDB so that a bad flag fails before checkpoint sync downloads anything, and after
-// genesis.Initialize and the fork schedule are set up, hence its position at the top of startBaseServices
-// rather than right after the database is opened. Nothing can steal the offset in the meantime:
-// initializeStateDiff refuses to set it in archive mode.
+// initArchiveOrigin loads and validates the archive origin state, but deliberately writes nothing.
 func (b *BeaconNode) initArchiveOrigin(cliCtx *cli.Context) error {
 	if !features.Get().EnableArchive {
 		return nil
@@ -70,9 +62,7 @@ func (b *BeaconNode) initArchiveOrigin(cliCtx *cli.Context) error {
 	return nil
 }
 
-// finalizeArchiveOrigin anchors the state-diff tree at the archive origin. It runs after startDB, because
-// the sync origin it validates against only exists once genesis or checkpoint data has been written, and
-// because anchoring is irreversible: every check that can fail must run first.
+// finalizeArchiveOrigin anchors the state-diff tree at the archive origin, once the sync origin exists.
 func (b *BeaconNode) finalizeArchiveOrigin(ctx context.Context) error {
 	st := b.archiveOriginState
 	if st == nil {
@@ -163,9 +153,7 @@ func archiveOriginState(cliCtx *cli.Context) (state.BeaconState, error) {
 	return st, nil
 }
 
-// validateArchiveOrigin runs the checks that are possible before any blocks have been backfilled. The state
-// contents themselves are operator-provided trust input, exactly like --checkpoint-state; they are verified
-// cryptographically once the forward walk replays the first block on top of them.
+// validateArchiveOrigin runs the checks that are possible before any blocks have been backfilled.
 func validateArchiveOrigin(st state.BeaconState) error {
 	if st == nil || st.IsNil() {
 		return errors.New("archive origin state is nil")

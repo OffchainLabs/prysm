@@ -1,6 +1,4 @@
-// Package archive regenerates the historical beacon states of an archive node. Once backfill has downloaded
-// every block down to the archive origin, this service replays the chain forward from the origin state and
-// persists a state at every boundary of the state-diff tree, making any historical state cheap to serve.
+// Package archive regenerates the historical beacon states of an archive node.
 package archive
 
 import (
@@ -149,9 +147,7 @@ func (s *Service) round(ctx context.Context) (bool, error) {
 	}
 
 	next := nextBoundary(as.OriginSlot, as.RegeneratedThroughSlot)
-	// Persisting the completed status is what disarms the frontier guard in the database, so stategen runs it
-	// under the migration lock before it stops suppressing migration. If it fails nothing has opened, and this
-	// reports "not handed off" so the next round tries again.
+	// Persisting the completed status disarms the frontier guard in the database, so a failure reports no handoff.
 	complete := *as
 	complete.Complete = true
 	handedOff, err := s.sg.CompleteArchiveRegeneration(ctx, next, func(ctx context.Context) error {
@@ -171,9 +167,7 @@ func (s *Service) round(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-// target is the highest slot the walk may reach: the start of the finalized epoch. Blocks below it are all in
-// epochs older than the finalized one, so the finalized index holds a real container for each of them rather
-// than a needs-reindexing marker.
+// target is the highest slot the walk may reach: the start of the finalized epoch.
 func (s *Service) target(ctx context.Context) (primitives.Slot, error) {
 	cp, err := s.db.FinalizedCheckpoint(ctx)
 	if err != nil {

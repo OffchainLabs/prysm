@@ -153,9 +153,7 @@ func TestInitializeArchiveOrigin_RejectsChangedOrigin(t *testing.T) {
 	require.ErrorContains(t, "archive origin state changed", err)
 }
 
-// In archive mode only InitializeArchiveOrigin may anchor the tree. That holds before an origin exists,
-// which is what lets the node defer anchoring until it has checked the origin against the sync origin, and
-// after one exists, since everything below the offset becomes unrepresentable.
+// In archive mode only InitializeArchiveOrigin may anchor the tree.
 func TestInitializeStateDiff_ArchiveNeverAnchors(t *testing.T) {
 	setDefaultStateDiffExponents()
 	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true, EnableArchive: true})
@@ -236,9 +234,7 @@ func TestSaveStateByDiff_RejectsWritesAboveArchiveFrontier(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, true, has)
 
-	// A boundary above the frontier is refused rather than written without an anchor. It has to be an error
-	// and not a skip: the caller advances its finalized info on success, so a silent skip would leave a hole
-	// nothing ever comes back for.
+	// A boundary above the frontier is an error rather than a silent skip.
 	above, _ := createState(t, 512, version.Phase0)
 	err = db.saveStateByDiff(ctx, above)
 	require.ErrorIs(t, err, ErrAboveArchiveFrontier)

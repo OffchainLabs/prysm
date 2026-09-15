@@ -110,10 +110,7 @@ func TestWalk_ResumesFromFrontier(t *testing.T) {
 	}
 }
 
-// The late-block reorg shape: the highest slot holding any block at or below a boundary holds only a block
-// that lost fork choice. Orphans are never removed from the slot index, so the boundary state has to be built
-// from the canonical block below it. Picking the orphan writes a state no chain ever had, and the walk then
-// dies on the next boundary because the canonical chain does not descend from it.
+// Orphans stay in the slot index, so a boundary state has to be built from the canonical block below one.
 func TestWalk_SkipsOrphanAtHighestPopulatedSlot(t *testing.T) {
 	setStateDiffExponents([]int{11, 9, 5})
 	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true, EnableArchive: true})

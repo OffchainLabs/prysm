@@ -184,9 +184,7 @@ func TestCompleteArchiveRegeneration(t *testing.T) {
 	require.Equal(t, fRoot, service.finalizedInfo.root)
 }
 
-// The database carries its own gate on tree writes, disarmed by recording the handoff. If that record cannot
-// be written, migration must stay suppressed: opening this side alone leaves migration running against a
-// guard that rejects it, which is silent data loss rather than a retry.
+// If the handoff cannot be recorded, migration must stay suppressed rather than run against a closed gate.
 func TestCompleteArchiveRegeneration_MarkCompleteFailureKeepsSuppression(t *testing.T) {
 	ctx := t.Context()
 	setStateDiffExponents()

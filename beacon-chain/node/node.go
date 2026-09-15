@@ -348,9 +348,7 @@ func configureBeacon(cliCtx *cli.Context) error {
 
 func startBaseServices(cliCtx *cli.Context, beacon *BeaconNode, depositAddress string, clearer *dbClearer) (*backfill.Store, error) {
 	ctx := cliCtx.Context
-	// Loads and validates the archive origin without touching the database, so that a bad origin fails
-	// before checkpoint sync downloads anything. Must precede startDB for that reason only; the offset
-	// itself is anchored by finalizeArchiveOrigin below.
+	// Validates the archive origin without touching the database; finalizeArchiveOrigin anchors it below.
 	if err := beacon.initArchiveOrigin(cliCtx); err != nil {
 		return nil, errors.Wrap(err, "could not initialize archive origin")
 	}

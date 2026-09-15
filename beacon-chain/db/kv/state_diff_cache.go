@@ -15,15 +15,7 @@ import (
 	"go.etcd.io/bbolt"
 )
 
-// anchorMemoSize is how many deserialized anchors are kept alongside the compressed ones. Anchors are stored
-// compressed precisely to bound memory, so memoizing every level would defeat that: with the default
-// exponents it would pin six full states.
-//
-// Two is enough to capture the reuse that matters. Writes advance in slot order, so the deepest level's
-// anchor serves every boundary inside its span (15 of every 16 with the default exponents), and the one
-// request that interrupts the run is the deepest level's own write asking for the level above it. Holding
-// those two means no misses in steady state; anything shallower is requested rarely enough that
-// re-deserializing it is cheaper than keeping it resident.
+// anchorMemoSize is how many deserialized anchors are kept alongside the compressed ones.
 const anchorMemoSize = 2
 
 // anchorMemoEntry is a deserialized anchor. A nil state marks an unused slot.
@@ -38,9 +30,7 @@ type stateDiffCache struct {
 	levelsWithData   []bool
 	offset           uint64
 	anchorGeneration uint64
-	// memo is an LRU of already deserialized anchors. getAnchor is called once per diff written and an
-	// anchor is reused for every slot in its span, so without it a long forward walk pays a full state
-	// deserialization per boundary. Entries are dropped whenever the underlying bytes change.
+	// memo is an LRU of already deserialized anchors.
 	memo [anchorMemoSize]anchorMemoEntry
 }
 
@@ -255,9 +245,7 @@ func newStateDiffCache(s *Store) (*stateDiffCache, error) {
 	}, nil
 }
 
-// getAnchor returns the anchor state for the given level. The result must be treated as read-only: it is
-// shared with every caller until the anchor is replaced. It is only ever consumed by hdiff.Diff, which does
-// not mutate its inputs.
+// getAnchor returns the anchor state for the given level. The result must be treated as read-only.
 func (c *stateDiffCache) getAnchor(level int) state.ReadOnlyBeaconState {
 	// memoGet promotes the entry it finds, so the lookup needs the write lock. Only the lookup runs under
 	// it: the deserialization below is far too expensive to hold any lock across.

@@ -12,9 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// SetArchivePending marks whether an archive node is still regenerating historical states. While pending,
-// cold-state migration is suppressed and full states are periodically snapshotted by root so restarts do not
-// have to replay from the sync origin.
+// SetArchivePending marks whether an archive node is still regenerating historical states.
 func (s *State) SetArchivePending(pending bool) {
 	s.archive.lock.Lock()
 	defer s.archive.lock.Unlock()
@@ -28,18 +26,7 @@ func (s *State) ArchivePending() bool {
 	return s.archive.pending
 }
 
-// CompleteArchiveRegeneration hands cold-state migration back to the normal finalization-driven path. It
-// reports whether the handoff happened; the caller keeps walking when it did not.
-//
-// nextUnwrittenBoundary is the lowest tree boundary the walk has not written yet. The handoff only completes
-// once that is above the finalized checkpoint slot, meaning every anchor a live write below finalization
-// could resolve to already exists. It is deliberately not a comparison against the walk's frontier: boundary
-// spacing need not divide the epoch, so the frontier can never equal the checkpoint slot exactly.
-//
-// markComplete records the handoff durably. It runs while the migration lock is held and before this node
-// stops suppressing migration, because the database carries a second gate of its own: the frontier guard in
-// saveStateByDiff. Opening this one first would leave a window where migration runs but the guard still
-// rejects its writes. A failure here is reported as "not handed off" so the caller simply tries again.
+// CompleteArchiveRegeneration hands migration back to the finalization-driven path, reporting if it happened.
 func (s *State) CompleteArchiveRegeneration(
 	ctx context.Context,
 	nextUnwrittenBoundary primitives.Slot,
@@ -93,9 +80,7 @@ func (s *State) CompleteArchiveRegeneration(
 	return true, nil
 }
 
-// saveArchiveResumeSnapshot persists a full state by root at a coarse interval so that a restart during
-// regeneration has a nearby replay base. It keeps only the newest snapshot; the bucket-wide
-// ClearHotStateSnapshots cannot be used here because it would also drop the checkpoint origin state.
+// saveArchiveResumeSnapshot persists a full state by root at a coarse interval, keeping only the newest.
 func (s *State) saveArchiveResumeSnapshot(ctx context.Context, blockRoot [32]byte, st state.BeaconState) error {
 	if st.Slot()%archiveResumeSnapshotInterval != 0 {
 		return nil

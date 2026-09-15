@@ -46,10 +46,7 @@ type SyncNeeds struct {
 
 type CurrentSlotter func() primitives.Slot
 
-// NewSyncNeeds builds the SyncNeeds used by backfill to decide what to download. archiveOriginSlot, when
-// non-nil, is the slot of an archive node's origin state and overrides every other block floor; unlike
-// oldestSlotFlagPtr it is not validated against MIN_EPOCHS_FOR_BLOCK_REQUESTS, because an archive node needs
-// every block above its origin no matter how young the chain is.
+// NewSyncNeeds builds the SyncNeeds used by backfill; a non-nil archiveOriginSlot overrides every block floor.
 func NewSyncNeeds(current CurrentSlotter, oldestSlotFlagPtr, archiveOriginSlot *primitives.Slot, blobRetentionFlag primitives.Epoch) (SyncNeeds, error) {
 	deneb, err := slots.EpochStart(params.BeaconConfig().DenebForkEpoch)
 	if err != nil {

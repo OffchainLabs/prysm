@@ -18,8 +18,6 @@ import (
 )
 
 // verifyEveryNBlocks is how often the walk checks a replayed state against the block's committed state root.
-// Every check is a full hash_tree_root, so this is a periodic integrity probe rather than a per-block check.
-// The first block of every run is always checked, which is what verifies the operator-supplied origin state.
 const verifyEveryNBlocks = 8192
 
 // walk regenerates every state-diff tree boundary in (frontier, target] and persists it. It carries the
@@ -98,9 +96,7 @@ func replayBlock(
 	if err != nil {
 		return nil, 0, errors.Wrapf(err, "could not process slots to block slot %d", slot)
 	}
-	// No signature or execution-layer verification: these blocks are already finalized and were verified by
-	// backfill or by the live chain. ProcessBlockForStateRoot still enforces parent-root continuity, so a hole
-	// in the chain surfaces here as an error rather than as a silently wrong state.
+	// These blocks are already finalized, so no signature or execution-layer verification is needed.
 	st, err = transition.ProcessBlockForStateRoot(ctx, st, blk)
 	if err != nil {
 		return nil, 0, errors.Wrapf(err, "could not process block at slot %d", slot)

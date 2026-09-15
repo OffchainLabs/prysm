@@ -692,9 +692,7 @@ func TestCurrentNeedsIntegration(t *testing.T) {
 	}
 }
 
-// The archive origin is a hard floor: unlike --backfill-oldest-slot it is not validated against
-// MIN_EPOCHS_FOR_BLOCK_REQUESTS, because an archive node needs every block above its origin however young
-// the chain is.
+// The archive origin is a hard floor, unlike --backfill-oldest-slot.
 func TestSyncNeeds_ArchiveOriginTakesPrecedence(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch

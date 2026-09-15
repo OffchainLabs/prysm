@@ -335,11 +335,7 @@ func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.Rea
 		return nil
 	}
 
-	// In archive mode the archive origin owns the offset and nothing else may set it: everything below the
-	// offset is unrepresentable, so anchoring at genesis or at the checkpoint block would discard the
-	// archive. InitializeArchiveOrigin calls anchorStateDiff directly, and it is the only caller that may.
-	// This also lets the node defer anchoring until the sync origin is known, so an archive origin above it
-	// is rejected before anything has been written.
+	// In archive mode the archive origin owns the offset; only InitializeArchiveOrigin may set it.
 	if features.Get().EnableArchive {
 		log.WithFields(logrus.Fields{
 			"requestedSlot":  slot,
@@ -351,9 +347,7 @@ func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.Rea
 	return s.anchorStateDiff(slot, initialState)
 }
 
-// anchorStateDiff writes the state-diff metadata, builds the cache and stores the initial full snapshot,
-// anchoring the tree at the given slot. The offset can never be moved afterwards, so callers own the
-// decision of which slot the tree belongs to.
+// anchorStateDiff writes the state-diff metadata, builds the cache and stores the initial full snapshot.
 func (s *Store) anchorStateDiff(slot primitives.Slot, initialState state.ReadOnlyBeaconState) error {
 	if slot%32 != 0 {
 		return errors.New("cannot initialize state diff with a non epoch boundary offset")

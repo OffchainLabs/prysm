@@ -55,15 +55,7 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 		return nil
 	}
 
-	// While an archive walk is filling the tree from the offset upwards, only the walk may write. A write
-	// further above its frontier has no anchor chain beneath it, and it becomes that level's maximum slot,
-	// which makes the integrity check in startStateDiff fail on the next boot. The walk itself always writes
-	// the next boundary above the frontier, so that one slot stays open.
-	//
-	// Nothing should reach this while regeneration is pending: migration is suppressed and ForceCheckpoint is
-	// routed to a hot snapshot, both keyed off the same handoff. So this is an error rather than a skip.
-	// Swallowing it would let migration advance its finalized info over boundaries that were never written,
-	// leaving holes nothing ever revisits; failing here makes the caller retry once the frontier catches up.
+	// While an archive walk is filling the tree, only the walk may write: above its frontier there is no anchor.
 	if frontier, pending := s.archivePending(); pending && uint64(slot) > uint64(frontier)+deepestDiffSpan() {
 		return errors.Wrapf(ErrAboveArchiveFrontier, "slot %d is above the archive frontier %d", slot, frontier)
 	}
@@ -82,9 +74,7 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 	return s.saveHdiff(lvl, anchorState, st)
 }
 
-// StateBySlotFromDiffTree returns the state at the given slot directly from the state-diff tree. The slot must
-// be a saving point in the tree (see SlotInDiffTree). Unlike State, it addresses the tree by slot, so it can
-// reach boundary states whose slot had no block and which therefore have no root that commits to them.
+// StateBySlotFromDiffTree returns the state at the given slot from the tree; slot must be a saving point.
 func (s *Store) StateBySlotFromDiffTree(ctx context.Context, slot primitives.Slot) (state.BeaconState, error) {
 	return s.stateByDiff(ctx, slot)
 }

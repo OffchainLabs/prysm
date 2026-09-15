@@ -25,9 +25,7 @@ import (
 
 var defaultHotStateDBInterval primitives.Slot = 128
 
-// archiveResumeSnapshotInterval is how often an archive node persists a full state by root while historical
-// regeneration is still running. Cold-state migration is suppressed during that window, so without these the
-// only replay base is the sync origin and restart cost grows without bound.
+// archiveResumeSnapshotInterval is how often an archive node persists a full state by root during regeneration.
 var archiveResumeSnapshotInterval primitives.Slot = 2048
 
 var populatePubkeyCacheOnce sync.Once
@@ -74,9 +72,7 @@ type State struct {
 	archive                 *archiveState
 }
 
-// archiveState tracks whether an archive node is still regenerating history. While it is, nothing but the
-// archive walk may write into the state-diff tree, because the live chain's anchors lie in the not yet
-// regenerated past.
+// archiveState tracks whether an archive node is still regenerating history.
 type archiveState struct {
 	lock                sync.RWMutex
 	pending             bool

@@ -50,9 +50,7 @@ func TestValidateArchiveOrigin(t *testing.T) {
 	})
 }
 
-// Anchoring the tree is irreversible, so an archive origin the node cannot backfill down to must be
-// rejected before anything is written. Otherwise the operator's only recovery is deleting the database:
-// InitializeArchiveOrigin refuses to move an offset that already exists.
+// Anchoring is irreversible, so an origin the node cannot backfill down to must be rejected before any write.
 func TestFinalizeArchiveOrigin_RejectedOriginLeavesDBReAnchorable(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true, EnableArchive: true})

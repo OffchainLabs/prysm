@@ -17,13 +17,7 @@ type CanonicalBlockDB interface {
 	FinalizedCheckpoint(ctx context.Context) (*ethpb.Checkpoint, error)
 }
 
-// CanonicalBlockAtOrBelow returns the slot and root of the highest canonical block at or below the given
-// slot, descending past slots that hold only blocks which lost fork choice. Those are never deleted from the
-// slot index, so the slot index alone cannot answer this question: canonicality comes from the finalized
-// index, which is decisive below the finalized checkpoint slot and is also populated for backfilled blocks.
-//
-// floor is a slot already known to be canonical; descending past it is an error rather than a walk to
-// genesis. Every failure wraps errUnknownBlock.
+// CanonicalBlockAtOrBelow returns the highest canonical block at or below slot, skipping orphaned slots.
 func CanonicalBlockAtOrBelow(
 	ctx context.Context,
 	db CanonicalBlockDB,
@@ -54,9 +48,7 @@ func CanonicalBlockAtOrBelow(
 			}
 			next = high
 		default:
-			// Every block whose epoch equals the finalized checkpoint's epoch is in the finalized index,
-			// canonical or not: that part of the index is a re-indexing marker rather than a canonicality
-			// claim. The checkpoint root is authoritative for its own slot, so prefer it when it is here.
+			// The checkpoint root is authoritative for its own slot, so prefer it when it is here.
 			cpRoot, err := finalizedCheckpointRoot(ctx, db)
 			if err != nil {
 				return 0, [32]byte{}, err

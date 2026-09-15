@@ -16,10 +16,7 @@ import (
 // archiveStatusLen is the encoded size of an ArchiveStatus: two slots, a state root and the complete flag.
 const archiveStatusLen = 8 + 8 + 32 + 1
 
-// ArchiveStatus tracks the progress of an archive node's historical state regeneration. There is only one
-// ArchiveStatus value in the database. It is stored next to the state-diff offset because it describes the
-// same tree: OriginSlot is the tree offset, and RegeneratedThroughSlot is the highest tree boundary that has
-// been written by the forward walk.
+// ArchiveStatus tracks the progress of an archive node's historical state regeneration.
 type ArchiveStatus struct {
 	OriginSlot             primitives.Slot
 	RegeneratedThroughSlot primitives.Slot
@@ -103,10 +100,7 @@ func (s *Store) setArchiveStatus(as *ArchiveStatus) {
 	s.archiveStatus = &cp
 }
 
-// archivePending reports whether an archive walk is in progress, along with the highest boundary slot it has
-// written. While pending, the live chain must not write into the diff tree: the tree levels above the walk's
-// frontier have no anchors yet, and a stray write becomes the level maximum that startStateDiff validates
-// against on the next boot.
+// archivePending reports whether an archive walk is in progress and the highest boundary slot it has written.
 func (s *Store) archivePending() (primitives.Slot, bool) {
 	s.archiveLock.RLock()
 	defer s.archiveLock.RUnlock()
@@ -116,9 +110,7 @@ func (s *Store) archivePending() (primitives.Slot, bool) {
 	return s.archiveStatus.RegeneratedThroughSlot, true
 }
 
-// InitializeArchiveOrigin anchors the state-diff tree at the given archive origin state and records the
-// resulting ArchiveStatus. It is the only caller allowed to set the offset in archive mode, and refuses to
-// move the offset of a tree that already has one.
+// InitializeArchiveOrigin anchors the state-diff tree at the given origin state and records the status.
 func (s *Store) InitializeArchiveOrigin(ctx context.Context, st state.BeaconState) error {
 	if !features.Get().EnableStateDiff {
 		return errors.New("archive mode requires the state-diff database layout")

@@ -89,9 +89,7 @@ func (s *Store) HasHotStateSnapshot(ctx context.Context, blockRoot [32]byte) boo
 	return has
 }
 
-// DeleteHotStateSnapshots removes the given roots from the hot state snapshots bucket. Archive mode uses this
-// to keep only the most recent restart-resume snapshot, since ClearHotStateSnapshots is all-or-nothing and
-// would also drop the checkpoint origin state that backfill depends on.
+// DeleteHotStateSnapshots removes the given roots from the hot state snapshots bucket.
 func (s *Store) DeleteHotStateSnapshots(ctx context.Context, blockRoots [][32]byte) error {
 	_, span := trace.StartSpan(ctx, "BeaconDB.DeleteHotStateSnapshots")
 	defer span.End()
