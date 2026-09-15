@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -129,6 +130,19 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	}
 	// [IGNORE] bid.value is less or equal than the builder's excess balance.
 	if err := v.VerifyBuilderCanCoverBid(st); err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	// [IGNORE] the parent's payload does not try to exit the builder.
+	if err := v.VerifyBuilderNotExiting(st, func(root [32]byte) ([]*enginev1.BuilderExitRequest, error) {
+		envelope, err := s.cfg.beaconDB.ExecutionPayloadEnvelope(ctx, root)
+		if err != nil {
+			return nil, err
+		}
+		if envelope == nil || envelope.Message == nil {
+			return nil, nil
+		}
+		return envelope.Message.ExecutionRequests.GetBuilderExits(), nil
+	}); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
 	// [IGNORE] bid.parent_block_hash is the block hash of a known execution payload in fork choice
