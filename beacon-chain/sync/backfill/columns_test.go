@@ -629,6 +629,13 @@ func TestColumnSync_ColumnsNeeded(t *testing.T) {
 	})
 }
 
+// TestBatch_ColumnsNeeded covers a non-nil columnSync with a nil embedded columnBatch (what
+// newColumnSync returns when no columns are needed), which panicked via the promoted needed().
+func TestBatch_ColumnsNeeded(t *testing.T) {
+	require.Equal(t, 0, batch{}.columnsNeeded().Count())
+	require.Equal(t, 0, batch{columns: &columnSync{}}.columnsNeeded().Count())
+}
+
 // TestValidatingColumnRequest_CountedValidation tests the countedValidation method
 func TestValidatingColumnRequest_CountedValidation(t *testing.T) {
 	mockPeer := peer.ID("test-peer")
