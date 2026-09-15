@@ -213,6 +213,7 @@ ssz_proto_files(
         "gloas.proto",
 	"gloas_builder_api.proto",
         "light_client.proto",
+        "light_client_backfill.proto",
         "partial_data_columns.proto",
         "sync_committee.proto",
         "withdrawals.proto",
