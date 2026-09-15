@@ -3,9 +3,13 @@ package blocks
 import (
 	"testing"
 
+	methodicalssz "github.com/OffchainLabs/methodical-ssz/ssz"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
@@ -147,7 +151,7 @@ func TestComputeBlockBodyFieldRoots_Electra(t *testing.T) {
 	require.DeepEqual(t, correctHash[:], hash)
 }
 
-func TestComputeBlockBodyFieldRoots_Gloas_ProgressiveSSZ(t *testing.T) {
+func TestComputeBlockBodyFieldRoots_Gloas_ProgressiveSSZGate(t *testing.T) {
 	blockBodyGloas := hydrateBeaconBlockBodyGloas()
 	i, err := NewBeaconBlockBody(blockBodyGloas)
 	require.NoError(t, err)
@@ -168,4 +172,153 @@ func TestComputeBlockBodyFieldRoots_Gloas_ProgressiveSSZ(t *testing.T) {
 	bounded, err := ssz.MerkleizeListSSZ(payloadAttestations, fieldparams.MaxPayloadAttestations)
 	require.NoError(t, err)
 	require.DeepNotSSZEqual(t, bounded[:], roots[11])
+	require.Equal(t, 13, len(roots))
+
+	rootChunks := make([][32]byte, len(roots))
+	activeFields := make([]bool, len(roots))
+	for i := range roots {
+		copy(rootChunks[i][:], roots[i])
+		activeFields[i] = true
+	}
+	computedBodyRoot, err := ssz.ContainerRootProgressive(rootChunks, activeFields)
+	require.NoError(t, err)
+	expectedBodyRoot, err := b.HashTreeRoot()
+	require.NoError(t, err)
+	require.DeepEqual(t, expectedBodyRoot, computedBodyRoot)
+}
+
+func TestPayloadProof(t *testing.T) {
+	t.Run("pre-Gloas", func(t *testing.T) {
+		body := hydrateBeaconBlockBodyBellatrix()
+		block, err := NewBeaconBlock(&eth.BeaconBlockBellatrix{Body: body})
+		require.NoError(t, err)
+
+		proof, err := PayloadProof(t.Context(), block)
+		require.NoError(t, err)
+		bodyRoot, err := block.Body().HashTreeRoot()
+		require.NoError(t, err)
+		payload, err := block.Body().Execution()
+		require.NoError(t, err)
+		payloadRoot, err := payload.HashTreeRoot()
+		require.NoError(t, err)
+		require.Equal(t, true, trie.VerifyMerkleProof(bodyRoot[:], payloadRoot[:], 25, proof))
+	})
+
+	t.Run("rejects Gloas", func(t *testing.T) {
+		block, err := NewBeaconBlock(&eth.BeaconBlockGloas{Body: hydrateBeaconBlockBodyGloas()})
+		require.NoError(t, err)
+		_, err = PayloadProof(t.Context(), block)
+		require.ErrorContains(t, "use ExecutionBlockHashProof", err)
+	})
+}
+
+func TestProgressiveContainerActiveFields(t *testing.T) {
+	tests := []struct {
+		name      string
+		container progressiveContainerType
+		want      [32]byte
+	}{
+		{
+			name:      "execution payload bid",
+			container: executionPayloadBidProgressiveContainer,
+			want:      [32]byte{0xff, 0x0f},
+		},
+		{
+			name:      "beacon block body",
+			container: beaconBlockBodyProgressiveContainer,
+			want:      [32]byte{0xff, 0x1f},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			activeFields, err := progressiveContainerActiveFields(version.Gloas, test.container)
+			require.NoError(t, err)
+			packed, err := ssz.PackActiveFields(activeFields)
+			require.NoError(t, err)
+			require.DeepEqual(t, test.want, packed)
+		})
+	}
+
+	t.Run("unsupported version", func(t *testing.T) {
+		_, err := progressiveContainerActiveFields(version.Fulu, beaconBlockBodyProgressiveContainer)
+		require.ErrorContains(t, "not defined for fulu", err)
+	})
+
+	t.Run("unknown container", func(t *testing.T) {
+		_, err := progressiveContainerActiveFields(version.Gloas, progressiveContainerType(2))
+		require.ErrorContains(t, "unknown progressive container", err)
+	})
+}
+
+func TestExecutionBlockHashProof(t *testing.T) {
+	newGloasBlock := func(t *testing.T) *BeaconBlock {
+		body := hydrateBeaconBlockBodyGloas()
+		body.SignedExecutionPayloadBid.Message.ParentBlockHash[0] = 0x42
+		body.SignedExecutionPayloadBid.Message.GasLimit = 30_000_000
+		block, err := NewBeaconBlock(&eth.BeaconBlockGloas{Body: body})
+		require.NoError(t, err)
+		wrapped, ok := block.(*BeaconBlock)
+		require.Equal(t, true, ok)
+		return wrapped
+	}
+
+	t.Run("proves Gloas parent block hash", func(t *testing.T) {
+		reset := features.InitWithReset(&features.Flags{})
+		defer reset()
+
+		block := newGloasBlock(t)
+		proof, err := ExecutionBlockHashProof(t.Context(), block)
+		require.NoError(t, err)
+		require.Equal(t, 11, len(proof))
+		bodyRoot, err := block.Body().HashTreeRoot()
+		require.NoError(t, err)
+		signedBid, err := block.Body().SignedExecutionPayloadBid()
+		require.NoError(t, err)
+		require.Equal(t, true, trie.VerifyMerkleProof(
+			bodyRoot[:], signedBid.Message.ParentBlockHash, 2856, proof,
+		))
+	})
+
+	t.Run("rejects pre-Gloas block", func(t *testing.T) {
+		block, err := NewBeaconBlock(&eth.BeaconBlockBellatrix{Body: hydrateBeaconBlockBodyBellatrix()})
+		require.NoError(t, err)
+		_, err = ExecutionBlockHashProof(t.Context(), block)
+		require.ErrorContains(t, version.String(version.Bellatrix), err)
+	})
+
+	t.Run("rejects missing bid", func(t *testing.T) {
+		reset := features.InitWithReset(&features.Flags{})
+		defer reset()
+		block := newGloasBlock(t)
+		block.body.signedExecutionPayloadBid = nil
+		_, err := ExecutionBlockHashProof(t.Context(), block)
+		require.ErrorContains(t, "bid is nil", err)
+	})
+
+	t.Run("rejects invalid bid field", func(t *testing.T) {
+		reset := features.InitWithReset(&features.Flags{})
+		defer reset()
+		block := newGloasBlock(t)
+		block.body.signedExecutionPayloadBid.Message.ParentBlockHash = nil
+		_, err := ExecutionBlockHashProof(t.Context(), block)
+		require.ErrorIs(t, err, methodicalssz.ErrBytesLength)
+	})
+
+	t.Run("rejects invalid commitment", func(t *testing.T) {
+		reset := features.InitWithReset(&features.Flags{})
+		defer reset()
+		block := newGloasBlock(t)
+		block.body.signedExecutionPayloadBid.Message.BlobKzgCommitments[0] = nil
+		_, err := ExecutionBlockHashProof(t.Context(), block)
+		require.ErrorIs(t, err, methodicalssz.ErrBytesLength)
+	})
+
+	t.Run("rejects invalid signature", func(t *testing.T) {
+		reset := features.InitWithReset(&features.Flags{})
+		defer reset()
+		block := newGloasBlock(t)
+		block.body.signedExecutionPayloadBid.Signature = nil
+		_, err := ExecutionBlockHashProof(t.Context(), block)
+		require.ErrorIs(t, err, methodicalssz.ErrBytesLength)
+	})
 }
