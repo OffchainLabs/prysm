@@ -6,6 +6,7 @@ import (
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -23,6 +24,66 @@ func TestBeaconStateMerkleProofs_phase0_notsupported(t *testing.T) {
 		require.ErrorContains(t, "not supported", err)
 	})
 }
+
+func TestLightClientGeneralizedIndicesForVersion(t *testing.T) {
+	reset := features.InitWithReset(&features.Flags{})
+	defer reset()
+
+	tests := []struct {
+		name       string
+		version    int
+		finalized  uint64
+		current    uint64
+		next       uint64
+		committees bool
+	}{
+		{name: "phase0", version: version.Phase0, finalized: 105},
+		{name: "altair", version: version.Altair, finalized: 105, current: 54, next: 55, committees: true},
+		{name: "deneb", version: version.Deneb, finalized: 105, current: 54, next: 55, committees: true},
+		{name: "electra", version: version.Electra, finalized: 169, current: 86, next: 87, committees: true},
+		{name: "fulu", version: version.Fulu, finalized: 169, current: 86, next: 87, committees: true},
+		{name: "gloas", version: version.Gloas, finalized: 735, current: 2945, next: 2946, committees: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			finalized, err := statenative.FinalizedRootGeneralizedIndexForVersion(test.version)
+			require.NoError(t, err)
+			require.Equal(t, test.finalized, finalized)
+
+			current, currentErr := statenative.CurrentSyncCommitteeGeneralizedIndexForVersion(test.version)
+			next, nextErr := statenative.NextSyncCommitteeGeneralizedIndexForVersion(test.version)
+			if !test.committees {
+				require.ErrorContains(t, "not supported", currentErr)
+				require.ErrorContains(t, "not supported", nextErr)
+				return
+			}
+			require.NoError(t, currentErr)
+			require.NoError(t, nextErr)
+			require.Equal(t, test.current, current)
+			require.Equal(t, test.next, next)
+		})
+	}
+
+	t.Run("Gloas legacy fallback", func(t *testing.T) {
+		reset := features.InitWithReset(&features.Flags{DisableProgressiveSSZ: true})
+		defer reset()
+		finalized, err := statenative.FinalizedRootGeneralizedIndexForVersion(version.Gloas)
+		require.NoError(t, err)
+		current, err := statenative.CurrentSyncCommitteeGeneralizedIndexForVersion(version.Gloas)
+		require.NoError(t, err)
+		next, err := statenative.NextSyncCommitteeGeneralizedIndexForVersion(version.Gloas)
+		require.NoError(t, err)
+		require.Equal(t, uint64(169), finalized)
+		require.Equal(t, uint64(86), current)
+		require.Equal(t, uint64(87), next)
+	})
+
+	t.Run("unknown version", func(t *testing.T) {
+		_, err := statenative.FinalizedRootGeneralizedIndexForVersion(-1)
+		require.ErrorContains(t, "not supported", err)
+	})
+}
+
 func TestBeaconStateMerkleProofs_altair(t *testing.T) {
 	ctx := t.Context()
 	altair, err := util.NewBeaconStateAltair()
@@ -179,7 +240,9 @@ func TestBeaconStateMerkleProofs_Gloas(t *testing.T) {
 		proof, err := gloas.CurrentSyncCommitteeProof(ctx)
 		require.NoError(t, err)
 		require.Equal(t, 11, len(proof))
-		require.Equal(t, true, trie.VerifyMerkleProof(htr[:], committeeRoot[:], 2945, proof))
+		gIndex, err := statenative.CurrentSyncCommitteeGeneralizedIndexForVersion(gloas.Version())
+		require.NoError(t, err)
+		require.Equal(t, true, trie.VerifyMerkleProof(htr[:], committeeRoot[:], gIndex, proof))
 	})
 
 	t.Run("next sync committee", func(t *testing.T) {
@@ -190,7 +253,9 @@ func TestBeaconStateMerkleProofs_Gloas(t *testing.T) {
 		proof, err := gloas.NextSyncCommitteeProof(ctx)
 		require.NoError(t, err)
 		require.Equal(t, 11, len(proof))
-		require.Equal(t, true, trie.VerifyMerkleProof(htr[:], committeeRoot[:], 2946, proof))
+		gIndex, err := statenative.NextSyncCommitteeGeneralizedIndexForVersion(gloas.Version())
+		require.NoError(t, err)
+		require.Equal(t, true, trie.VerifyMerkleProof(htr[:], committeeRoot[:], gIndex, proof))
 	})
 
 	t.Run("finalized root", func(t *testing.T) {
@@ -198,7 +263,9 @@ func TestBeaconStateMerkleProofs_Gloas(t *testing.T) {
 		proof, err := gloas.FinalizedRootProof(ctx)
 		require.NoError(t, err)
 		require.Equal(t, 9, len(proof))
-		require.Equal(t, true, trie.VerifyMerkleProof(htr[:], finalizedRoot, 735, proof))
+		gIndex, err := statenative.FinalizedRootGeneralizedIndexForVersion(gloas.Version())
+		require.NoError(t, err)
+		require.Equal(t, true, trie.VerifyMerkleProof(htr[:], finalizedRoot, gIndex, proof))
 	})
 
 	t.Run("recomputes dirty fields", func(t *testing.T) {
@@ -212,8 +279,10 @@ func TestBeaconStateMerkleProofs_Gloas(t *testing.T) {
 		newRoot, err := gloas.HashTreeRoot(ctx)
 		require.NoError(t, err)
 		finalizedRoot := gloas.FinalizedCheckpoint().Root
-		require.Equal(t, false, trie.VerifyMerkleProof(htr[:], finalizedRoot, 735, proof))
-		require.Equal(t, true, trie.VerifyMerkleProof(newRoot[:], finalizedRoot, 735, proof))
+		gIndex, err := statenative.FinalizedRootGeneralizedIndexForVersion(gloas.Version())
+		require.NoError(t, err)
+		require.Equal(t, false, trie.VerifyMerkleProof(htr[:], finalizedRoot, gIndex, proof))
+		require.Equal(t, true, trie.VerifyMerkleProof(newRoot[:], finalizedRoot, gIndex, proof))
 	})
 
 	t.Run("legacy fallback", func(t *testing.T) {
@@ -231,6 +300,8 @@ func TestBeaconStateMerkleProofs_Gloas(t *testing.T) {
 		proof, err := legacy.CurrentSyncCommitteeProof(ctx)
 		require.NoError(t, err)
 		require.Equal(t, 6, len(proof))
-		require.Equal(t, true, trie.VerifyMerkleProof(legacyRoot[:], committeeRoot[:], 86, proof))
+		gIndex, err := statenative.CurrentSyncCommitteeGeneralizedIndexForVersion(legacy.Version())
+		require.NoError(t, err)
+		require.Equal(t, true, trie.VerifyMerkleProof(legacyRoot[:], committeeRoot[:], gIndex, proof))
 	})
 }
