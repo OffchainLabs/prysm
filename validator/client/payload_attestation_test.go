@@ -78,9 +78,8 @@ func TestSubmitPayloadAttestation_NoHeadBlockForSlot(t *testing.T) {
 	}
 }
 
-// ptcRetrySetup configures a validator whose payload attestation deadline for slot 1 is
-// shortly ahead, with the availability event already delivered so the duty issues its
-// first request straight away. It returns the deadline lead time.
+// ptcRetrySetup puts the slot 1 payload attestation deadline shortly ahead with the
+// availability event already delivered, and returns the deadline lead time.
 func ptcRetrySetup(t *testing.T, validator *validator, validatorKey bls.SecretKey) time.Duration {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -111,8 +110,7 @@ func ptcRetrySetup(t *testing.T, validator *validator, validatorKey bls.SecretKe
 	return lead
 }
 
-// unavailableErr mirrors the error the gRPC client returns for a beacon node that is
-// withholding non-final payload attestation data.
+// unavailableErr mirrors the gRPC error for a node withholding non-final data.
 func unavailableErr() error {
 	return errors.Wrap(
 		status.Error(codes.Unavailable, "payload attestation data not yet final for slot 1"),
@@ -120,10 +118,8 @@ func unavailableErr() error {
 	)
 }
 
-// This is the regression test for issue #17464: when the payload envelope lands between
-// PAYLOAD_DUE_BPS and PAYLOAD_ATTESTATION_DUE_BPS the event releases the waiter early,
-// the beacon node withholds the data, and the validator has to ask again at the deadline
-// rather than abstaining.
+// Regression test for issue #17464: a request released early by the availability event
+// is retried at the deadline rather than abstaining.
 func TestSubmitPayloadAttestation_RetriesAtDeadlineAfterUnavailable(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
@@ -180,8 +176,7 @@ func TestSubmitPayloadAttestation_RetriesAtDeadlineAfterUnavailable(t *testing.T
 	}
 }
 
-// After the deadline there is nothing left to wait for, so the request must not be
-// repeated and the slot is skipped as before.
+// After the deadline there is nothing to wait for, so the request is not repeated.
 func TestSubmitPayloadAttestation_NoRetryAfterDeadline(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -206,16 +201,14 @@ func TestSubmitPayloadAttestation_NoRetryAfterDeadline(t *testing.T) {
 	require.LogsDoNotContain(t, hook, "Could not request payload attestation data")
 }
 
-// When the node is still withholding at the deadline the slot is skipped, but only after
-// a second attempt.
+// A node still withholding at the deadline skips the slot after a second attempt.
 func TestSubmitPayloadAttestation_RetryStillUnavailable(t *testing.T) {
 	hook := logTest.NewGlobal()
 	validator, m, validatorKey, finish := setup(t, false)
 	defer finish()
 	ptcRetrySetup(t, validator, validatorKey)
 
-	// No DomainData or SubmitPayloadAttestation expectations: gomock fails the test on an
-	// unexpected call, which asserts that nothing is signed or submitted.
+	// No DomainData or SubmitPayloadAttestation expectations: an unexpected call fails.
 	m.validatorClient.EXPECT().
 		PayloadAttestationData(gomock.Any(), primitives.Slot(1)).
 		Return(nil, unavailableErr()).
@@ -229,8 +222,7 @@ func TestSubmitPayloadAttestation_RetryStillUnavailable(t *testing.T) {
 	require.LogsDoNotContain(t, hook, "Submitted new payload attestation")
 }
 
-// A block that only reaches the queried node after the event was relayed by another one
-// still yields a vote.
+// A block reaching the queried node only after the retry still yields a vote.
 func TestSubmitPayloadAttestation_RetryOnNoBlockThenBlockArrives(t *testing.T) {
 	hook := logTest.NewGlobal()
 	validator, m, validatorKey, finish := setup(t, false)
@@ -268,8 +260,7 @@ func TestSubmitPayloadAttestation_RetryOnNoBlockThenBlockArrives(t *testing.T) {
 	require.LogsDoNotContain(t, hook, "Skipping payload attestation")
 }
 
-// waitUntilSlotComponent returns silently on cancellation, so the retry must not fire a
-// request on a dead context.
+// A cancelled context aborts the wait instead of retrying on a dead context.
 func TestSubmitPayloadAttestation_RetryAbortsOnContextCancel(t *testing.T) {
 	hook := logTest.NewGlobal()
 	validator, m, validatorKey, finish := setup(t, false)

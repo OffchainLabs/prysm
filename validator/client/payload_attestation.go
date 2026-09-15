@@ -23,30 +23,19 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Result labels for validatorPayloadAttestationSubmissionTotal, shared with the
-// failure classifier so the metric and the logs cannot drift apart.
+// Result labels for validatorPayloadAttestationSubmissionTotal.
 const (
 	payloadAttestationSuccess            = "success"
 	payloadAttestationFailed             = "failed"
 	payloadAttestationSkippedNoBlock     = "skipped_no_block"
 	payloadAttestationSkippedUnavailable = "skipped_unavailable"
 
-	// Outcome label for validatorPayloadAttestationRetryTotal when the retry
-	// returned the data the first request could not get.
+	// Outcome label for validatorPayloadAttestationRetryTotal.
 	payloadAttestationRecovered = "recovered"
 )
 
 // payloadAttestationDataWithRetry requests the payload attestation data for slot, asking
 // once more at the payload attestation deadline when the first request fails before it.
-//
-// Before the deadline the beacon node withholds the data unless the payload arrived
-// timely and its data is available, since either flag may still flip. A PTC member
-// released early by the execution_payload_available event therefore asks too soon
-// whenever the payload landed between PAYLOAD_DUE_BPS and PAYLOAD_ATTESTATION_DUE_BPS,
-// and has to ask again at the deadline, where the node answers with whatever it has. One
-// retry is enough: the payload arrival is recorded when the envelope is imported, so the
-// answer can only change at the deadline itself.
-//
 // It reports whether a second request was made.
 func (v *validator) payloadAttestationDataWithRetry(ctx context.Context, slot primitives.Slot) (*ethpb.PayloadAttestationData, bool, error) {
 	component := params.BeaconConfig().PayloadAttestationDueBPS
@@ -81,21 +70,17 @@ func payloadAttestationRetryOutcome(err error) string {
 }
 
 // payloadAttestationDataFailure maps a PayloadAttestationData failure to its submission
-// metric label. Both transports are covered: the gRPC client returns a status code, the
-// beacon API a *httputil.DefaultJsonError carrying the HTTP status. A multi-node read
-// joins several failures, so errors.Is (which walks the whole tree) is used rather than
-// errors.As (which stops at the first match).
+// metric label, covering both the gRPC status code and the beacon API HTTP status.
+// errors.Is is used rather than errors.As because a multi-node read joins several
+// failures and only the former walks the whole tree.
 func payloadAttestationDataFailure(err error) string {
 	code := status.Code(errors.Cause(err))
 
-	// The data is not final yet, or the node cannot answer.
 	if code == codes.Unavailable ||
 		errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusServiceUnavailable}) {
 		return payloadAttestationSkippedUnavailable
 	}
 
-	// No block for the slot. core.NoContent maps to codes.NotFound over gRPC and to 204
-	// over HTTP.
 	if code == codes.NotFound ||
 		errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusNoContent}) ||
 		errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusNotFound}) {

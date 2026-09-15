@@ -104,9 +104,7 @@ func TestPayloadAttestationData_EndpointError(t *testing.T) {
 	require.ErrorContains(t, "boom", err)
 }
 
-// The HTTP status must survive the wrap chain so the validator client can tell a
-// withheld-but-not-final answer and a "no block for this slot" answer apart from a
-// genuine failure.
+// The HTTP status survives the wrap chain so the validator client can classify it.
 func TestPayloadAttestationData_StatusSurvivesWrap(t *testing.T) {
 	for _, tt := range []struct {
 		name string

@@ -212,10 +212,8 @@ func (c *handler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Hea
 	if err != nil {
 		return nil, nil, err
 	}
-	// A 204 carries no body by definition, so a read that exists to decode one cannot use
-	// it. Surface it as a typed error so callers can tell "no content" from a decode
-	// failure, and so a multi-node read never prefers an empty body over another node's
-	// data. Only reads are affected: a write may legitimately answer 204.
+	// A 204 carries no body to decode, so surface it as a typed error instead of an
+	// empty success body.
 	if httpResp.StatusCode == http.StatusNoContent {
 		return nil, nil, &httputil.DefaultJsonError{Code: http.StatusNoContent, Message: "no content"}
 	}

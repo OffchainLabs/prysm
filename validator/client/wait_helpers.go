@@ -34,7 +34,6 @@ func (v *validator) slotComponentDeadline(slot primitives.Slot, component primit
 }
 
 // beforeSlotComponent reports whether now still precedes the slot component deadline.
-// A slot with no reachable deadline reports false.
 func (v *validator) beforeSlotComponent(slot primitives.Slot, component primitives.BP) bool {
 	deadline, err := v.slotComponentDeadline(slot, component)
 	if err != nil {
