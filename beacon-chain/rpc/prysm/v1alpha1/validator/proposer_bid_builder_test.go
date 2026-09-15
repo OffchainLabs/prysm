@@ -25,7 +25,7 @@ import (
 // configurable errors and captures the parent-linkage closures for assertion.
 type fakeBidVerifier struct {
 	slotErr, activeErr, versionErr, coverErr, blobErr, randaoErr, sigErr error
-	rootSeenErr, parentHashErr, feeErr, gasErr                           error
+	rootSeenErr, parentHashErr, feeErr, gasErr, exitingErr               error
 	rootSeenFn                                                           func([32]byte) bool
 	hasPayloadFn                                                         func([32]byte, [32]byte) bool
 }
@@ -57,6 +57,9 @@ func (v *fakeBidVerifier) VerifyParentBlockHash(fn func([32]byte, [32]byte) bool
 	return v.parentHashErr
 }
 func (v *fakeBidVerifier) VerifyGasLimitTargetCompatible(uint64, uint64) error { return v.gasErr }
+func (v *fakeBidVerifier) VerifyBuilderNotExiting(state.ReadOnlyBeaconState, func([32]byte) ([]*enginev1.BuilderExitRequest, error)) error {
+	return v.exitingErr
+}
 func (v *fakeBidVerifier) VerifyBuilderCanCoverBid(state.ReadOnlyBeaconState) error {
 	return v.coverErr
 }

@@ -503,6 +503,96 @@ func TestService_GetAttPreState_Concurrency(t *testing.T) {
 	}
 }
 
+func TestService_GetAttPreState_RegenSerialized(t *testing.T) {
+	service, tr := minimalTestService(t)
+	ctx := tr.ctx
+
+	s, err := util.NewBeaconState()
+	require.NoError(t, err)
+	ckRoot := bytesutil.PadTo([]byte{'A'}, fieldparams.RootLength)
+	require.NoError(t, s.SetFinalizedCheckpoint(&ethpb.Checkpoint{Root: ckRoot}))
+	val := &ethpb.Validator{PublicKey: bytesutil.PadTo([]byte("foo"), 48), WithdrawalCredentials: bytesutil.PadTo([]byte("bar"), fieldparams.RootLength)}
+	require.NoError(t, s.SetValidators([]*ethpb.Validator{val}))
+	require.NoError(t, s.SetBalances([]uint64{0}))
+	require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, s, bytesutil.ToBytes32(ckRoot)))
+	require.NoError(t, service.cfg.BeaconDB.SaveStateSummary(ctx, &ethpb.StateSummary{Root: ckRoot}))
+
+	cp1 := &ethpb.Checkpoint{Epoch: 1, Root: ckRoot}
+	st, root, err := prepareForkchoiceState(ctx, 1, [32]byte(cp1.Root), [32]byte{}, [32]byte{'R'}, cp1, cp1)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, root))
+
+	otherRoot := bytesutil.PadTo([]byte{'B'}, fieldparams.RootLength)
+	require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, s, bytesutil.ToBytes32(otherRoot)))
+	require.NoError(t, service.cfg.BeaconDB.SaveStateSummary(ctx, &ethpb.StateSummary{Root: otherRoot}))
+	cp2 := &ethpb.Checkpoint{Epoch: 2, Root: otherRoot}
+	st, root, err = prepareForkchoiceState(ctx, 33, [32]byte(cp2.Root), [32]byte(cp1.Root), [32]byte{'R'}, cp1, cp1)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, root))
+
+	logHook := logTest.NewGlobal()
+	service.attPreStateRegenSem <- struct{}{}
+
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	_, err = service.getAttPreState(cancelled, cp1)
+	require.ErrorIs(t, err, context.Canceled)
+	<-service.attPreStateRegenSem
+	for range 20 {
+		_, err = service.getAttPreState(cancelled, cp1)
+		require.ErrorIs(t, err, context.Canceled)
+	}
+	require.Equal(t, 0, len(logHook.AllEntries()), "a dead context must not start a regeneration")
+	service.attPreStateRegenSem <- struct{}{}
+
+	const perTarget = 10
+	type result struct {
+		slot primitives.Slot
+		err  error
+	}
+	done := make(chan result, 2*perTarget)
+	for _, cp := range []*ethpb.Checkpoint{cp1, cp2} {
+		for range perTarget {
+			go func() {
+				got, err := service.getAttPreState(ctx, cp)
+				if err != nil {
+					done <- result{err: err}
+					return
+				}
+				done <- result{slot: got.Slot()}
+			}()
+		}
+	}
+	select {
+	case r := <-done:
+		t.Fatalf("regeneration ran while another regeneration held the lock: slot %d err %v", r.slot, r.err)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	<-service.attPreStateRegenSem
+	slotCount := map[primitives.Slot]int{}
+	for range 2 * perTarget {
+		select {
+		case r := <-done:
+			require.NoError(t, r.err)
+			slotCount[r.slot]++
+		case <-time.After(10 * time.Second):
+			t.Fatalf("regeneration did not resume after the lock was released, completed %v", slotCount)
+		}
+	}
+	assert.Equal(t, perTarget, slotCount[params.BeaconConfig().SlotsPerEpoch])
+	assert.Equal(t, perTarget, slotCount[2*params.BeaconConfig().SlotsPerEpoch])
+
+	regens := 0
+	for _, e := range logHook.AllEntries() {
+		if e.Message == "Regenerating attestation pre-state" {
+			regens++
+		}
+	}
+	assert.Equal(t, 2, regens, "expected exactly one regeneration per target")
+	require.Equal(t, 0, len(service.attPreStateRegenSem))
+}
+
 func TestStore_SaveCheckpointState(t *testing.T) {
 	service, tr := minimalTestService(t)
 	ctx := tr.ctx
