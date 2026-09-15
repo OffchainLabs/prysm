@@ -2,6 +2,7 @@ package blockchain
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -196,6 +198,70 @@ func TestReceiveExecutionPayloadEnvelope_EnvelopeSavedBeforeAvailableEvent(t *te
 		require.Equal(t, true, saved)
 	case <-time.After(5 * time.Second):
 		t.Fatal("execution_payload_available event was not received")
+	}
+}
+
+type payloadInsertionFailure struct {
+	forkchoice.ForkChoicer
+	err error
+}
+
+func (f *payloadInsertionFailure) InsertPayload(envelope interfaces.ROExecutionPayloadEnvelope) error {
+	if f.err != nil {
+		return f.err
+	}
+	return f.ForkChoicer.InsertPayload(envelope)
+}
+
+func TestReceiveExecutionPayloadEnvelope_RetryAfterPersistence(t *testing.T) {
+	for _, test := range []struct {
+		name             string
+		wantErr          string
+		invalidSignature bool
+		invalidExecution bool
+	}{
+		{name: "retry validates and restores full node"},
+		{name: "retry verifies signature", invalidSignature: true, wantErr: "signature verification failed"},
+		{name: "retry verifies execution", invalidExecution: true, wantErr: ErrInvalidPayload.Error()},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			engine := &batchParentEngine{}
+			s, _ := setupGloasService(t, &engine.EngineClient)
+			s.cfg.ExecutionEngineCaller = engine
+			ctx := t.Context()
+			blockRoot := bytesutil.ToBytes32([]byte("persisted-envelope-root"))
+			base, blk, signedProto := gloasEnvelopeFixture(t, blockRoot)
+			insertGloasBlock(t, s, base, blk, blockRoot)
+			signed, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedProto)
+			require.NoError(t, err)
+
+			insertionErr := errors.New("temporary payload insertion failure")
+			fcs := &payloadInsertionFailure{ForkChoicer: s.cfg.ForkChoiceStore, err: insertionErr}
+			s.cfg.ForkChoiceStore = fcs
+			require.ErrorIs(t, s.ReceiveExecutionPayloadEnvelope(ctx, signed), insertionErr)
+			require.Equal(t, 1, engine.calls)
+			require.Equal(t, true, s.cfg.BeaconDB.HasExecutionPayloadEnvelope(ctx, blockRoot))
+			require.Equal(t, true, s.HasNode(blockRoot))
+			require.Equal(t, false, s.HasFullNode(blockRoot))
+
+			fcs.err = nil
+			if test.invalidSignature {
+				signedProto.Signature = make([]byte, len(signedProto.Signature))
+			}
+			if test.invalidExecution {
+				engine.ErrNewPayload = execution.ErrInvalidPayloadStatus
+			}
+			err = s.ReceiveExecutionPayloadEnvelope(ctx, signed)
+			if test.wantErr != "" {
+				require.ErrorContains(t, test.wantErr, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, 2, engine.calls)
+			require.Equal(t, test.invalidExecution, IsInvalidBlock(err))
+			require.Equal(t, test.wantErr == "", s.HasFullNode(blockRoot))
+			require.Equal(t, !test.invalidExecution, s.cfg.BeaconDB.HasExecutionPayloadEnvelope(ctx, blockRoot))
+		})
 	}
 }
 

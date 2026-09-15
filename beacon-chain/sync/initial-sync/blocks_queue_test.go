@@ -177,6 +177,58 @@ func TestBlocksQueue_StopDuringPeerRetry(t *testing.T) {
 	})
 }
 
+func TestBlocksQueue_Loop_CompletesWithMissingHeadPayload(t *testing.T) {
+	useMinimalInitialSyncConfig(t)
+	headSlot := primitives.Slot(90)
+	mc, p2p, beaconDB := initializeTestServices(t, nil, []*peerData{
+		{finalizedEpoch: 8, headSlot: headSlot},
+		{finalizedEpoch: 8, headSlot: headSlot},
+	})
+	block := util.NewBeaconBlockGloas()
+	block.Block.Slot = headSlot
+	head, err := blocks.NewSignedBeaconBlock(block)
+	require.NoError(t, err)
+	root, err := head.Block().HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, beaconDB.SaveBlock(t.Context(), head))
+	require.NoError(t, mc.State.SetSlot(headSlot))
+	mc.Block = head
+	mc.Root = root[:]
+	mc.Slot = &headSlot
+	mc.ForkchoiceRoots = map[[32]byte]bool{root: true}
+	mc.MockCanonicalRoots = map[primitives.Slot][32]byte{headSlot: root}
+	mc.MockCanonicalFull = map[primitives.Slot]bool{headSlot: false}
+	require.Equal(t, true, mc.HasNode(root))
+	require.Equal(t, false, mc.HasFullNode(root))
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	clock, _ := newClockAtSlot(headSlot + 1)
+	queue := newBlocksQueue(ctx, &blocksQueueConfig{
+		chain:               mc,
+		p2p:                 p2p,
+		clock:               clock,
+		highestExpectedSlot: headSlot,
+		mode:                modeNonConstrained,
+	})
+	require.NoError(t, queue.start())
+	t.Cleanup(func() { assert.NoError(t, queue.stop()) })
+
+	select {
+	case <-queue.quit:
+	case <-time.After(5 * time.Second):
+		t.Fatal("queue did not finish while the terminal head payload was missing")
+	}
+
+	require.NoError(t, ctx.Err(), "queue must finish without external cancellation")
+	require.Equal(t, headSlot, queue.highestExpectedSlot)
+	require.Equal(t, false, mc.HasFullNode(root), "completion must not depend on obtaining the head payload")
+	_, open := <-queue.fetchedData
+	require.Equal(t, false, open, "queue must close its output for the initial-sync handoff")
+	_, open = <-queue.blocksFetcher.requestResponses()
+	require.Equal(t, false, open, "queue must stop the fetcher before handing off")
+}
+
 func TestBlocksQueue_Loop(t *testing.T) {
 	currentPeriod := blockLimiterPeriod
 	blockLimiterPeriod = 1 * time.Second
