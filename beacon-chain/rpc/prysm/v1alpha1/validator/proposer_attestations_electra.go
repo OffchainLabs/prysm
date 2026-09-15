@@ -160,7 +160,7 @@ func (a proposerAtts) selectByMarginalReward(ctx context.Context, st state.ReadO
 
 	h := candidateHeap(candidates)
 	for _, c := range h {
-		c.score = c.marginalReward()
+		c.score = c.marginalRewardNumerator()
 		c.scoredRound = 1
 	}
 	heap.Init(&h)
@@ -171,7 +171,7 @@ func (a proposerAtts) selectByMarginalReward(ctx context.Context, st state.ReadO
 		for h.Len() > 0 {
 			c := heap.Pop(&h).(*attCandidate)
 			if c.scoredRound != round {
-				c.score = c.marginalReward()
+				c.score = c.marginalRewardNumerator()
 				c.scoredRound = round
 			}
 			if c.score == 0 {
@@ -350,9 +350,14 @@ func attCommittees(att ethpb.Att, slotCommittees [][]primitives.ValidatorIndex) 
 	return committees, nil
 }
 
-// Mirrors electra.GetProposerRewardNumerator, but scored against participation as the block
-// being built would leave it rather than against the untouched pre-block state.
-func (c *attCandidate) marginalReward() uint64 {
+// marginalRewardNumerator mirrors the proposer reward numerator accumulated by process_attestation
+// (https://github.com/ethereum/consensus-specs/blob/master/specs/electra/beacon-chain.md#modified-process_attestation),
+// as implemented by electra.GetProposerRewardNumerator, but scored against participation as the
+// block being built would leave it rather than against the untouched pre-block state.
+//
+// The denominator is intentionally omitted: it is the same constant for every candidate, so it
+// only scales the scores and never reorders them.
+func (c *attCandidate) marginalRewardNumerator() uint64 {
 	var numerator uint64
 	for i, index := range c.attestingIndices {
 		missing := c.flagMask &^ c.participation[index]
