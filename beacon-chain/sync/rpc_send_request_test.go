@@ -1316,6 +1316,72 @@ func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 		return roSidecar
 	}
 
+	for _, tc := range []struct {
+		name        string
+		sendSidecar bool
+	}{
+		{name: "cancel before response"},
+		{name: "cancel waiting for EOF", sendSidecar: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			protocol := fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRootTopicV1)
+			clock := startup.NewClock(time.Now(), [fieldparams.RootLength]byte{})
+			p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+			t.Cleanup(func() { assert.NoError(t, p1.Host().Close()) })
+			t.Cleanup(func() { assert.NoError(t, p2.Host().Close()) })
+			p1.Connect(p2)
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			sidecar := createSidecar(slotIndex{Index: 1})
+			root := sidecar.BlockRoot()
+			request := p2ptypes.DataColumnsByRootIdentifiers{{BlockRoot: root[:], Columns: []uint64{sidecar.Index()}}}
+			release := make(chan struct{})
+			defer close(release)
+			ready := make(chan error, 1)
+			p2.SetStreamHandler(protocol, func(stream network.Stream) {
+				defer func() { _ = stream.Reset() }()
+				req := new(p2ptypes.DataColumnsByRootIdentifiers)
+				if err := p2.Encoding().DecodeWithMaxLength(stream, req); err != nil {
+					ready <- err
+					return
+				}
+				if tc.sendSidecar {
+					if err := WriteDataColumnSidecarChunk(stream, clock, p2.Encoding(), sidecar); err != nil {
+						ready <- err
+						return
+					}
+				}
+				ready <- nil
+				<-release
+			})
+			done := make(chan error, 1)
+			go func() {
+				_, err := SendDataColumnSidecarsByRootRequest(DataColumnSidecarsParams{
+					Ctx:                     ctx,
+					Tor:                     clock,
+					P2P:                     p1,
+					CtxMap:                  ctxMap,
+					DownscorePeerOnRPCFault: true,
+				}, p2.PeerID(), request)
+				done <- err
+			}()
+			select {
+			case err := <-ready:
+				require.NoError(t, err)
+			case <-time.After(5 * time.Second):
+				t.Fatal("request did not reach the peer")
+			}
+			cancel()
+			select {
+			case err := <-done:
+				require.ErrorIs(t, err, context.Canceled)
+			case <-time.After(time.Second):
+				t.Fatal("cancellation did not interrupt the data column stream")
+			}
+			require.Equal(t, float64(0), p1.Peers().Scorers().BadResponsesScorer().Score(p2.PeerID()))
+		})
+	}
+
 	testCases := []struct {
 		name          string
 		slotIndices   []slotIndex

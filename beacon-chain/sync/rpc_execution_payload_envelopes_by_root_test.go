@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -61,6 +62,61 @@ func TestSendExecutionPayloadEnvelopesByRootRequest(t *testing.T) {
 	rootA := [32]byte{0xAA}
 	rootB := [32]byte{0xBB}
 	rootC := [32]byte{0xCC}
+
+	for _, tc := range []struct {
+		name         string
+		sendEnvelope bool
+	}{
+		{name: "cancel before response"},
+		{name: "cancel waiting for EOF", sendEnvelope: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+			t.Cleanup(func() { assert.NoError(t, p1.Host().Close()) })
+			t.Cleanup(func() { assert.NoError(t, p2.Host().Close()) })
+			p1.Connect(p2)
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			release := make(chan struct{})
+			defer close(release)
+			ready := make(chan error, 1)
+			p2.SetStreamHandler(protocol, func(stream network.Stream) {
+				defer func() { _ = stream.Reset() }()
+				req := new(p2ptypes.ExecutionPayloadEnvelopesByRootReq)
+				if err := p2.Encoding().DecodeWithMaxLength(stream, req); err != nil {
+					ready <- err
+					return
+				}
+				if tc.sendEnvelope {
+					if err := WriteExecutionPayloadEnvelopeChunk(stream, p2.Encoding(), makeEnvelope(rootA, 1)); err != nil {
+						ready <- err
+						return
+					}
+				}
+				ready <- nil
+				<-release
+			})
+			done := make(chan error, 1)
+			go func() {
+				req := p2ptypes.ExecutionPayloadEnvelopesByRootReq{rootA}
+				_, err := SendExecutionPayloadEnvelopesByRootRequest(ctx, clock, p1, p2.PeerID(), ctxMap, &req)
+				done <- err
+			}()
+			select {
+			case err := <-ready:
+				require.NoError(t, err)
+			case <-time.After(5 * time.Second):
+				t.Fatal("request did not reach the peer")
+			}
+			cancel()
+			select {
+			case err := <-done:
+				require.ErrorIs(t, err, context.Canceled)
+			case <-time.After(time.Second):
+				t.Fatal("cancellation did not interrupt the envelope stream")
+			}
+		})
+	}
 
 	t.Run("short valid subset response", func(t *testing.T) {
 		// Request [A, B], server responds with only [A] — should accept.

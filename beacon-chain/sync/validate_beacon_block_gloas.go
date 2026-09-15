@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 )
 
 // validateExecutionPayloadBid validates execution payload bid gossip rules.
@@ -85,37 +86,39 @@ func (s *Service) requestPayloadEnvelope(root [32]byte) {
 	})
 }
 
-// requestDataColumnsForEnvelope fetches and stores the data column sidecars needed to
-// validate the envelope for root, if the block carries commitments and we are missing them.
-func (s *Service) requestDataColumnsForEnvelope(root [32]byte) {
+// requestDataColumnsForEnvelope fetches and stores the missing columns needed to validate the envelope.
+func (s *Service) requestDataColumnsForEnvelope(ctx context.Context, root [32]byte) error {
 	if !s.cfg.chain.HasNode(root) {
-		return
+		return nil
 	}
-	blk, err := s.cfg.beaconDB.Block(s.ctx, root)
+	blk, err := s.cfg.beaconDB.Block(ctx, root)
 	if err != nil {
-		log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Error("Could not fetch block for payload envelope data columns")
-		return
+		return errors.Wrap(err, "could not fetch block for payload envelope data columns")
 	}
 	if err := consensusblocks.BeaconBlockIsNil(blk); err != nil {
-		return
+		return err
+	}
+	if !params.WithinDAPeriod(slots.ToEpoch(blk.Block().Slot()), slots.ToEpoch(s.cfg.clock.CurrentSlot())) {
+		return nil
+	}
+	commitments, err := blk.Block().Body().BlobKzgCommitments()
+	if err != nil {
+		return errors.Wrap(err, "could not get payload envelope data column commitments")
+	}
+	if len(commitments) == 0 {
+		return nil
 	}
 	roBlock, err := consensusblocks.NewROBlockWithRoot(blk, root)
 	if err != nil {
-		log.WithError(err).Debug("Could not wrap block for payload envelope data columns")
-		return
+		return errors.Wrap(err, "could not wrap block for payload envelope data columns")
 	}
-	s.processPendingGloasColumns(s.ctx, root, blk)
-	if err := s.fetchAndSaveDataColumnSidecars([]consensusblocks.ROBlock{roBlock}); err != nil {
-		log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Debug("Could not fetch data column sidecars for payload envelope")
-	}
+	s.processPendingGloasColumns(ctx, root, blk)
+	return s.fetchAndSaveDataColumnSidecars(ctx, []consensusblocks.ROBlock{roBlock})
 }
 
 const maxPayloadEnvelopeFetchAttempts = 3
 
 func (s *Service) fetchPayloadEnvelope(root [32]byte) {
-	// Fetch missing columns before the envelope so envelope processing does not wait on columns that were never requested.
-	s.requestDataColumnsForEnvelope(root)
-
 	bestPeers := s.getBestPeers()
 	if len(bestPeers) == 0 {
 		return
@@ -125,12 +128,29 @@ func (s *Service) fetchPayloadEnvelope(root [32]byte) {
 	if len(bestPeers) > maxPayloadEnvelopeFetchAttempts {
 		bestPeers = bestPeers[:maxPayloadEnvelopeFetchAttempts]
 	}
+
+	fetchCtx, cancelFetch := context.WithTimeout(s.ctx, params.BeaconConfig().SlotDuration())
+	var columns errgroup.Group
+	columns.Go(func() error {
+		err := s.requestDataColumnsForEnvelope(fetchCtx, root)
+		if err != nil {
+			cancelFetch()
+		}
+		return err
+	})
+	defer func() {
+		cancelFetch()
+		if err := columns.Wait(); err != nil {
+			log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Debug("Could not fetch data column sidecars for payload envelope")
+		}
+	}()
+
 	req := p2ptypes.ExecutionPayloadEnvelopesByRootReq{root}
 	for _, pid := range bestPeers {
-		if s.cfg.chain.HasFullNode(root) {
+		if fetchCtx.Err() != nil || s.cfg.chain.HasFullNode(root) {
 			return
 		}
-		envelopes, err := SendExecutionPayloadEnvelopesByRootRequest(s.ctx, s.cfg.clock, s.cfg.p2p, pid, s.ctxMap, &req)
+		envelopes, err := SendExecutionPayloadEnvelopesByRootRequest(fetchCtx, s.cfg.clock, s.cfg.p2p, pid, s.ctxMap, &req)
 		if err != nil {
 			log.WithError(err).WithField("peer", pid).Debug("Could not request payload envelope by root")
 			continue
@@ -142,6 +162,10 @@ func (s *Service) fetchPayloadEnvelope(root [32]byte) {
 		if err != nil {
 			log.WithError(err).Debug("Could not wrap requested payload envelope")
 			continue
+		}
+		// Download in parallel, but persist columns before starting the import deadline.
+		if columns.Wait() != nil || fetchCtx.Err() != nil || s.cfg.chain.HasFullNode(root) {
+			return
 		}
 		ctx, cancel := context.WithTimeout(s.ctx, params.BeaconConfig().SlotDuration())
 		err = s.cfg.chain.ReceiveExecutionPayloadEnvelope(ctx, wrapped)

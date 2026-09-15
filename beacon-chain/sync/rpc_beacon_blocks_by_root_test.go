@@ -584,7 +584,7 @@ func TestRequestAndSaveMissingDataColumnSidecars_MissingColumns(t *testing.T) {
 	})
 
 	t.Run("gloas block fails without columns on the strict path", func(t *testing.T) {
-		err := newService(t).fetchAndSaveDataColumnSidecars([]blocks.ROBlock{newGloasBlock(t)})
+		err := newService(t).fetchAndSaveDataColumnSidecars(t.Context(), []blocks.ROBlock{newGloasBlock(t)})
 		require.ErrorContains(t, "some sidecars are still missing after fetch", err)
 	})
 

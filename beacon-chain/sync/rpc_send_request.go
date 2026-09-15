@@ -693,6 +693,9 @@ func SendDataColumnSidecarsByRootRequest(p DataColumnSidecarsParams, peer goPeer
 	// Send the request to the peer.
 	stream, err := p.P2P.Send(p.Ctx, identifiers, topic, peer)
 	if err != nil {
+		if ctxErr := p.Ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
 		if p.DownscorePeerOnRPCFault {
 			downscorePeer(p.P2P, peer, "cannotSendDataColumnSidecarsByRootRequest")
 		}
@@ -700,6 +703,15 @@ func SendDataColumnSidecarsByRootRequest(p DataColumnSidecarsParams, peer goPeer
 		return nil, errors.Wrap(err, "p2p api send")
 	}
 	defer closeStream(stream, log)
+	stopReset := context.AfterFunc(p.Ctx, func() {
+		if err := stream.Reset(); isValidStreamError(err) {
+			log.WithError(err).WithFields(logrus.Fields{
+				"protocol": stream.Protocol(),
+				"peer":     peer,
+			}).Debug("Could not reset canceled data column stream")
+		}
+	})
+	defer stopReset()
 
 	// Read the data column sidecars from the stream.
 	roDataColumns := make([]blocks.RODataColumn, 0, count)
@@ -707,6 +719,9 @@ func SendDataColumnSidecarsByRootRequest(p DataColumnSidecarsParams, peer goPeer
 	// Read the data column sidecars from the stream.
 	for range count {
 		roDataColumn, err := readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap, isSidecarIndexRootRequested(identifiers), isSidecarSizeValid())
+		if ctxErr := p.Ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
 		if errors.Is(err, io.EOF) {
 			if p.DownscorePeerOnRPCFault && len(roDataColumns) == 0 {
 				downscorePeer(p.P2P, peer, "noReturnedSidecar")
@@ -730,7 +745,11 @@ func SendDataColumnSidecarsByRootRequest(p DataColumnSidecarsParams, peer goPeer
 	}
 
 	// All requested sidecars were delivered by the peer. Expecting EOF.
-	if _, err := readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap); !errors.Is(err, io.EOF) {
+	_, err = readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap)
+	if ctxErr := p.Ctx.Err(); ctxErr != nil {
+		return nil, ctxErr
+	}
+	if !errors.Is(err, io.EOF) {
 		if p.DownscorePeerOnRPCFault {
 			downscorePeer(p.P2P, peer, "tooManyResponseDataColumnSidecars")
 		}
@@ -870,9 +889,21 @@ func SendExecutionPayloadEnvelopesByRootRequest(
 	log.WithField("topic", topic).Debug("Sending execution payload envelopes by root request")
 	stream, err := p2pApi.Send(ctx, req, topic, pid)
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
 		return nil, err
 	}
 	defer closeStream(stream, log)
+	stopReset := context.AfterFunc(ctx, func() {
+		if err := stream.Reset(); isValidStreamError(err) {
+			log.WithError(err).WithFields(logrus.Fields{
+				"protocol": stream.Protocol(),
+				"peer":     pid,
+			}).Debug("Could not reset canceled payload envelope stream")
+		}
+	})
+	defer stopReset()
 
 	max := min(uint64(len(*req)), params.BeaconConfig().MaxRequestPayloads)
 
@@ -885,6 +916,9 @@ func SendExecutionPayloadEnvelopesByRootRequest(
 	envelopes := make([]*ethpb.SignedExecutionPayloadEnvelope, 0, len(*req))
 	for i := range max + 1 {
 		envelope, err := readChunkedExecutionPayloadEnvelope(stream, p2pApi.Encoding(), ctxMap)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
 		if errors.Is(err, io.EOF) {
 			break
 		}

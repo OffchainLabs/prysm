@@ -114,19 +114,19 @@ func (s *Service) requestAndSaveMissingDataColumnSidecars(blks []blocks.ROBlock)
 		}
 	}
 
-	return s.fetchAndSaveDataColumnSidecars(preGloasBlocks)
+	return s.fetchAndSaveDataColumnSidecars(s.ctx, preGloasBlocks)
 }
 
 // fetchAndSaveDataColumnSidecars fetches the missing custody columns for the given blocks
 // and saves them to the storage, failing if any remain missing.
-func (s *Service) fetchAndSaveDataColumnSidecars(blks []blocks.ROBlock) error {
+func (s *Service) fetchAndSaveDataColumnSidecars(ctx context.Context, blks []blocks.ROBlock) error {
 	if len(blks) == 0 {
 		return nil
 	}
 
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
-	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount(s.ctx)
+	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount(ctx)
 	if err != nil {
 		return errors.Wrap(err, "custody group count")
 	}
@@ -139,7 +139,7 @@ func (s *Service) fetchAndSaveDataColumnSidecars(blks []blocks.ROBlock) error {
 
 	// Fetch missing data column sidecars.
 	params := DataColumnSidecarsParams{
-		Ctx:           s.ctx,
+		Ctx:           ctx,
 		Tor:           s.cfg.clock,
 		P2P:           s.cfg.p2p,
 		CtxMap:        s.ctxMap,
