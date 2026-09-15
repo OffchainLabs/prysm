@@ -56,6 +56,7 @@ type Service struct {
 	originBlockRoot                [32]byte // genesis root, or weak subjectivity checkpoint root, depending on how the node is initialized
 	boundaryRoots                  [][32]byte
 	checkpointStateCache           *cache.CheckpointStateCache
+	attPreStateRegenSem            chan struct{}
 	initSyncBlocks                 map[[32]byte]interfaces.ReadOnlySignedBeaconBlock
 	initSyncBlocksLock             sync.RWMutex
 	wsVerifier                     *WeakSubjectivityVerifier
@@ -68,7 +69,6 @@ type Service struct {
 	blobStorage                    *filesystem.BlobStorage
 	dataColumnStorage              *filesystem.DataColumnStorage
 	slasherEnabled                 bool
-	skipBlockSignaturesForTesting  bool
 	lcStore                        *lightClient.Store
 	startWaitingDataColumnSidecars chan bool // for testing purposes only
 	syncCommitteeHeadState         *cache.SyncCommitteeHeadStateCache
@@ -191,6 +191,7 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 		cancel:                 cancel,
 		boundaryRoots:          [][32]byte{},
 		checkpointStateCache:   cache.NewCheckpointStateCache(),
+		attPreStateRegenSem:    make(chan struct{}, 1),
 		initSyncBlocks:         make(map[[32]byte]interfaces.ReadOnlySignedBeaconBlock),
 		blobNotifiers:          bn,
 		cfg:                    &config{},
@@ -226,6 +227,7 @@ func (s *Service) Start() {
 	s.spawnProcessAttestationsRoutine()
 	go s.runLateBlockTasks()
 	go s.runLatePayloadTasks()
+	go s.runGloasDepositWarmup()
 }
 
 // Stop the blockchain service's main event loop and associated goroutines.
@@ -467,11 +469,9 @@ func (s *Service) SafeBlockHash() [32]byte {
 func (s *Service) safeBlockHash() [32]byte {
 	if s.fcr != nil {
 		root := s.fcr.ConfirmedRoot()
-		if root != ([32]byte{}) {
-			// The lookup can miss, for example on a pruned node, fall back to unrealized justified.
-			if hash := s.cfg.ForkChoiceStore.ConfirmedPayloadBlockHash(root); hash != ([32]byte{}) {
-				return hash
-			}
+		// A pruned confirmed root falls back to unrealized justified.
+		if root != ([32]byte{}) && s.cfg.ForkChoiceStore.HasNode(root) {
+			return s.cfg.ForkChoiceStore.ConfirmedPayloadBlockHash(root)
 		}
 	}
 	return s.cfg.ForkChoiceStore.UnrealizedJustifiedPayloadBlockHash()

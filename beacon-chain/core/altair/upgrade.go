@@ -154,7 +154,7 @@ func TranslateParticipation(ctx context.Context, state state.BeaconState, atts [
 	}
 
 	for _, att := range atts {
-		participatedFlags, err := AttestationParticipationFlagIndices(state, att.Data, att.InclusionDelay)
+		participatedFlags, err := AttestationParticipationFlagIndices(state, att.Data, att.InclusionDelay, 0)
 		if err != nil {
 			return nil, err
 		}

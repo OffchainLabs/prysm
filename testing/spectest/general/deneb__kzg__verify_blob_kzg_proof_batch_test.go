@@ -27,9 +27,9 @@ type KZGTestData struct {
 
 func TestVerifyBlobKZGProofBatch(t *testing.T) {
 	require.NoError(t, kzgPrysm.Start())
-	testFolders, testFolderPath := utils.TestFolders(t, "general", "deneb", "kzg/verify_blob_kzg_proof_batch/kzg-mainnet")
+	testFolders, testFolderPath := utils.TestFolders(t, "kzg", "verify_blob_kzg_proof_batch", "")
 	if len(testFolders) == 0 {
-		t.Fatalf("No test folders found for %s/%s/%s", "general", "deneb", "kzg/verify_blob_kzg_proof_batch/kzg-mainnet")
+		t.Fatalf("No test folders found for kzg/verify_blob_kzg_proof_batch")
 	}
 	for _, folder := range testFolders {
 		t.Run(folder.Name(), func(t *testing.T) {

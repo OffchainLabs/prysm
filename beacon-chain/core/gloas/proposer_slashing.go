@@ -12,7 +12,7 @@ import (
 
 // RemoveBuilderPendingPayment removes the pending builder payment for the proposal slot.
 //
-//	<spec fn="process_proposer_slashing" fork="gloas" lines="22-36" hash="7c05993d">
+//	<spec fn="process_proposer_slashing" fork="gloas" lines="22-36" hash="13bd9969">
 //	# [New in Gloas:EIP7732]
 //	# Remove the BuilderPendingPayment corresponding to this proposal if it is
 //	# still in the 2-epoch window. Only clear it when the slashed validator is
@@ -24,7 +24,7 @@ import (
 //	    payment_index = SLOTS_PER_EPOCH + slot % SLOTS_PER_EPOCH
 //	    payment = state.builder_pending_payments[payment_index]
 //	    if payment.proposer_index == header_1.proposer_index:
-//	        state.builder_pending_payments[payment_index] = BuilderPendingPayment()
+//	        state.builder_pending_payments[payment_index] = BuilderPendingPayment.empty()
 //	elif proposal_epoch == get_previous_epoch(state):
 //	    payment_index = slot % SLOTS_PER_EPOCH
 //	    payment = state.builder_pending_payments[payment_index]

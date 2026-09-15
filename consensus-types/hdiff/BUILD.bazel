@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "log.go",
+        "snappy.go",
         "state_diff.go",
         "state_diff_gloas.go",
     ],
@@ -41,6 +42,7 @@ go_test(
         "fuzz_test.go",
         "property_test.go",
         "security_test.go",
+        "snappy_test.go",
         "state_diff_gloas_test.go",
         "state_diff_test.go",
     ],

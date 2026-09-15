@@ -151,6 +151,15 @@ type hdiff struct {
 	balancesDiff   []int64
 }
 
+// minValidatorDiffSize is the serialized size of a validatorDiff with nil PublicKey and WithdrawalCredentials.
+// - index: 4 bytes
+// - PublicKey: 1 byte (nil marker)
+// - WithdrawalCredentials: 1 byte (nil marker)
+// - EffectiveBalance: 8 bytes
+// - Slashed: 1 byte
+// - ActivationEpoch: 4*8 bytes (4 fields of 8 bytes each)
+const minValidatorDiffSize = 4 + 1 + 1 + 8 + 1 + 4*8
+
 // validatorDiff is a type that represents a difference between two validators.
 type validatorDiff struct {
 	Slashed                    bool             // new value (here because of alignement)
@@ -300,7 +309,7 @@ func (ret *stateDiff) readHistoricalRoots(data *[]byte) error {
 	}
 	historicalRootsLength := int(binary.LittleEndian.Uint64((*data)[:8])) // lint:ignore uintcast
 	(*data) = (*data)[8:]
-	if len(*data) < historicalRootsLength*fieldparams.RootLength {
+	if historicalRootsLength < 0 || historicalRootsLength > len(*data)/fieldparams.RootLength {
 		return errors.Wrap(errDataSmall, "historicalRoots")
 	}
 	ret.historicalRoots = make([][fieldparams.RootLength]byte, historicalRootsLength)
@@ -339,7 +348,7 @@ func (ret *stateDiff) readEth1DataVotes(data *[]byte) error {
 	}
 	ret.eth1VotesAppend = ((*data)[0] == nilMarker)
 	eth1DataVotesLength := int(binary.LittleEndian.Uint64((*data)[1 : 1+8])) // lint:ignore uintcast
-	if len(*data) < 1+8+eth1DataVotesLength*eth1DataLength {
+	if eth1DataVotesLength < 0 || eth1DataVotesLength > (len(*data)-9)/eth1DataLength {
 		return errors.Wrap(errDataSmall, "eth1DataVotes")
 	}
 	ret.eth1DataVotes = make([]*ethpb.Eth1Data, eth1DataVotesLength)
@@ -391,6 +400,9 @@ func (ret *stateDiff) readSlashings(data *[]byte) error {
 	return nil
 }
 
+// pendingAttestationFixedSize is 8 (bits length field) + 128 (AttestationData) + 16 (inclusion delay, proposer index).
+const pendingAttestationFixedSize = 152
+
 func readPendingAttestation(data *[]byte) (*ethpb.PendingAttestation, error) {
 	if len(*data) < 8 {
 		return nil, errors.Wrap(errDataSmall, "pendingAttestation")
@@ -399,9 +411,7 @@ func readPendingAttestation(data *[]byte) (*ethpb.PendingAttestation, error) {
 	if bitsLength < 0 {
 		return nil, errors.Wrap(errDataSmall, "pendingAttestation: negative bitsLength")
 	}
-	// Check for integer overflow: 8 + bitsLength + 144
-	const fixedSize = 152 // 8 (length field) + 144 (fixed fields)
-	if bitsLength > len(*data)-fixedSize {
+	if bitsLength > len(*data)-pendingAttestationFixedSize {
 		return nil, errors.Wrap(errDataSmall, "pendingAttestation")
 	}
 	pending := &ethpb.PendingAttestation{}
@@ -422,8 +432,8 @@ func (ret *stateDiff) readPreviousEpochAttestations(data *[]byte) error {
 		return errors.Wrap(errDataSmall, "previousEpochAttestations")
 	}
 	previousEpochAttestationsLength := int(binary.LittleEndian.Uint64((*data)[:8])) // lint:ignore uintcast
-	if previousEpochAttestationsLength < 0 {
-		return errors.Wrap(errDataSmall, "previousEpochAttestations: negative length")
+	if previousEpochAttestationsLength < 0 || previousEpochAttestationsLength > (len(*data)-8)/pendingAttestationFixedSize {
+		return errors.Wrap(errDataSmall, "previousEpochAttestations")
 	}
 	ret.previousEpochAttestations = make([]*ethpb.PendingAttestation, previousEpochAttestationsLength)
 	(*data) = (*data)[8:]
@@ -442,8 +452,8 @@ func (ret *stateDiff) readCurrentEpochAttestations(data *[]byte) error {
 		return errors.Wrap(errDataSmall, "currentEpochAttestations")
 	}
 	currentEpochAttestationsLength := int(binary.LittleEndian.Uint64((*data)[:8])) // lint:ignore uintcast
-	if currentEpochAttestationsLength < 0 {
-		return errors.Wrap(errDataSmall, "currentEpochAttestations: negative length")
+	if currentEpochAttestationsLength < 0 || currentEpochAttestationsLength > (len(*data)-8)/pendingAttestationFixedSize {
+		return errors.Wrap(errDataSmall, "currentEpochAttestations")
 	}
 	ret.currentEpochAttestations = make([]*ethpb.PendingAttestation, currentEpochAttestationsLength)
 	(*data) = (*data)[8:]
@@ -544,7 +554,7 @@ func (ret *stateDiff) readInactivityScores(data *[]byte) error {
 	if inactivityScoresLength < 0 {
 		return errors.Wrap(errDataSmall, "inactivityScores: negative length")
 	}
-	if len(*data)-8 < inactivityScoresLength*8 {
+	if inactivityScoresLength > (len(*data)-8)/8 {
 		return errors.Wrap(errDataSmall, "inactivityScores")
 	}
 	ret.inactivityScores = make([]uint64, inactivityScoresLength)
@@ -662,7 +672,7 @@ func (ret *stateDiff) readHistoricalSummaries(data *[]byte) error {
 	if historicalSummariesLength < 0 {
 		return errors.Wrap(errDataSmall, "historicalSummaries: negative length")
 	}
-	if len(*data) < 8+historicalSummariesLength*fieldparams.RootLength*2 {
+	if historicalSummariesLength > (len(*data)-8)/(2*fieldparams.RootLength) {
 		return errors.Wrap(errDataSmall, "historicalSummaries")
 	}
 	ret.historicalSummaries = make([]*ethpb.HistoricalSummary, historicalSummariesLength)
@@ -701,7 +711,7 @@ func (ret *stateDiff) readPendingDeposits(data *[]byte) error {
 	if pendingDepositDiffLength < 0 {
 		return errors.Wrap(errDataSmall, "pendingDeposits: negative length")
 	}
-	if len(*data) < 16+pendingDepositDiffLength*pendingDepositLength {
+	if pendingDepositDiffLength > (len(*data)-16)/pendingDepositLength {
 		return errors.Wrap(errDataSmall, "pendingDepositDiff")
 	}
 	ret.pendingDepositDiff = make([]*ethpb.PendingDeposit, pendingDepositDiffLength)
@@ -729,7 +739,7 @@ func (ret *stateDiff) readPendingPartialWithdrawals(data *[]byte) error {
 	if pendingPartialWithdrawalsDiffLength < 0 {
 		return errors.Wrap(errDataSmall, "pendingPartialWithdrawals: negative length")
 	}
-	if len(*data) < 16+pendingPartialWithdrawalsDiffLength*pendingPartialWithdrawalLength {
+	if pendingPartialWithdrawalsDiffLength > (len(*data)-16)/pendingPartialWithdrawalLength {
 		return errors.Wrap(errDataSmall, "pendingPartialWithdrawalsDiff")
 	}
 	ret.pendingPartialWithdrawalsDiff = make([]*ethpb.PendingPartialWithdrawal, pendingPartialWithdrawalsDiffLength)
@@ -755,7 +765,7 @@ func (ret *stateDiff) readPendingConsolidations(data *[]byte) error {
 	if pendingConsolidationsDiffsLength < 0 {
 		return errors.Wrap(errDataSmall, "pendingConsolidations: negative length")
 	}
-	if len(*data) < 16+pendingConsolidationsDiffsLength*pendingConsolidationLength {
+	if pendingConsolidationsDiffsLength > (len(*data)-16)/pendingConsolidationLength {
 		return errors.Wrap(errDataSmall, "pendingConsolidationsDiffs")
 	}
 	ret.pendingConsolidationsDiffs = make([]*ethpb.PendingConsolidation, pendingConsolidationsDiffsLength)
@@ -787,7 +797,7 @@ func (ret *stateDiff) readProposerLookahead(data *[]byte) error {
 
 // newStateDiff deserializes a new stateDiff object from the given data.
 func newStateDiff(input []byte) (*stateDiff, error) {
-	data, err := snappy.Decode(nil, input)
+	data, err := snappyDecode(input)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decode snappy")
 	}
@@ -906,7 +916,7 @@ func newStateDiff(input []byte) (*stateDiff, error) {
 
 // newValidatorDiffs deserializes a new validator diffs from the given data.
 func newValidatorDiffs(input []byte) ([]validatorDiff, error) {
-	data, err := snappy.Decode(nil, input)
+	data, err := snappyDecode(input)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decode snappy")
 	}
@@ -916,6 +926,10 @@ func newValidatorDiffs(input []byte) ([]validatorDiff, error) {
 	}
 	validatorDiffsLength := binary.LittleEndian.Uint64(data[cursor : cursor+8])
 	cursor += 8
+	if validatorDiffsLength > uint64(len(data)-cursor)/minValidatorDiffSize {
+		return nil, errors.Wrap(errDataSmall, "validatorDiffs")
+	}
+
 	validatorDiffs := make([]validatorDiff, validatorDiffsLength)
 	for i := range validatorDiffsLength {
 		if len(data[cursor:]) < 4 {
@@ -984,7 +998,7 @@ func newValidatorDiffs(input []byte) ([]validatorDiff, error) {
 
 // newBalancesDiff deserializes a new balances diff from the given data.
 func newBalancesDiff(input []byte) ([]int64, error) {
-	data, err := snappy.Decode(nil, input)
+	data, err := snappyDecode(input)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decode snappy")
 	}
@@ -992,8 +1006,8 @@ func newBalancesDiff(input []byte) ([]int64, error) {
 		return nil, errors.Wrap(errDataSmall, "balancesDiff")
 	}
 	balancesLength := int(binary.LittleEndian.Uint64(data[:8])) // lint:ignore uintcast
-	if balancesLength < 0 {
-		return nil, errors.Wrap(errDataSmall, "balancesDiff: negative length")
+	if balancesLength < 0 || balancesLength > (len(data)-8)/8 {
+		return nil, errors.Wrap(errDataSmall, "balancesDiff")
 	}
 	if len(data) != 8+balancesLength*8 {
 		return nil, errors.Errorf("incorrect length of balancesDiff, expected %d, got %d", 8+balancesLength*8, len(data))

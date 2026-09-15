@@ -288,6 +288,7 @@ func (s *Store) prune(ctx context.Context) error {
 		return nil
 	}
 	s.finalizedPayloadBlockHash = s.checkpointPayloadHashForRoot(finalizedRoot)
+	treeRootParentHash := s.parentHash(fen)
 
 	// Save the new finalized dependent root because it will be pruned
 	s.finalizedDependentRoot = fn.parent.node.root
@@ -299,6 +300,7 @@ func (s *Store) prune(ctx context.Context) error {
 
 	fn.parent = nil
 	s.treeRootNode = fn
+	s.treeRootParentHash = treeRootParentHash
 
 	prunedCount.Inc()
 	// Prune all children of the finalized checkpoint block that are incompatible with it

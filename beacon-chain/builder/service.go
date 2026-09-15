@@ -2,6 +2,7 @@ package builder
 
 import (
 	"context"
+	"maps"
 	"net"
 	"net/url"
 	"reflect"
@@ -177,9 +178,43 @@ func (s *Service) dialValidated(url string) (builder.BuilderClient, error) {
 	return c, nil
 }
 
+// Kept under the transport idle timeout and typical proxy keepalive so bid requests reuse a warm TLS session.
+const builderKeepAliveInterval = 30 * time.Second
+
 // Start initializes the service.
 func (s *Service) Start() {
 	go s.pollRelayerStatus(s.ctx)
+	go s.keepBuilderClientsWarm(s.ctx)
+}
+
+func (s *Service) keepBuilderClientsWarm(ctx context.Context) {
+	ticker := time.NewTicker(builderKeepAliveInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			s.pingBuilderClients(ctx)
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *Service) pingBuilderClients(ctx context.Context) {
+	s.clientsMu.RLock()
+	clients := maps.Clone(s.clients)
+	s.clientsMu.RUnlock()
+	var wg sync.WaitGroup
+	for url, c := range clients {
+		wg.Go(func() {
+			pingCtx, cancel := context.WithTimeout(ctx, builderKeepAliveInterval)
+			defer cancel()
+			if err := c.Status(pingCtx); err != nil {
+				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(url)).Debug("Builder keep-alive ping failed")
+			}
+		})
+	}
+	wg.Wait()
 }
 
 // Stop halts the service.

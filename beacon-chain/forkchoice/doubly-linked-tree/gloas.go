@@ -58,7 +58,10 @@ func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock)
 	builderIndex := bid.BuilderIndex()
 	parent := s.emptyNodeByRoot[block.ParentRoot()]
 	if parent == nil {
-		// This is the tree root node.
+		// This is the tree root node: remember the payload it builds on.
+		if s.treeRootNode == nil {
+			s.treeRootParentHash = bid.ParentBlockHash()
+		}
 		return nil, blockHash, builderIndex, nil
 	}
 	if bid.ParentBlockHash() == parent.node.blockHash {
@@ -160,11 +163,11 @@ func (s *Store) fullParent(pn *PayloadNode) *PayloadNode {
 	return parent
 }
 
-// parentHash return the payload hash of the latest full node that this block builds on.
+// parentHash returns the payload hash of the latest full node that this block builds on.
 func (s *Store) parentHash(pn *PayloadNode) [32]byte {
 	fullParent := s.fullParent(pn)
 	if fullParent == nil {
-		return [32]byte{}
+		return s.treeRootParentHash
 	}
 	return fullParent.node.blockHash
 }

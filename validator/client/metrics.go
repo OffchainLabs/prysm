@@ -223,6 +223,14 @@ var (
 		},
 		[]string{"result"},
 	)
+	validatorPayloadAttestationRetryTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "validator",
+			Name:      "payload_attestation_data_retry_total",
+			Help:      "The number of payload attestation data requests retried at the PTC deadline, by outcome.",
+		},
+		[]string{"outcome"},
+	)
 	validatorSelfBuildEnvelopeSubmissionTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "validator",
