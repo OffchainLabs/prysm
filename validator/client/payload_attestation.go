@@ -54,7 +54,7 @@ func (v *validator) payloadAttestationDataWithRetry(ctx context.Context, slot pr
 	v.waitUntilSlotComponent(ctx, slot, component)
 	// waitUntilSlotComponent returns silently on cancellation, so check before retrying.
 	if ctx.Err() != nil {
-		return nil, true, err
+		return nil, true, errors.Wrap(err, "context canceled while waiting for the payload attestation deadline")
 	}
 
 	data, err = v.validatorClient.PayloadAttestationData(ctx, slot)
