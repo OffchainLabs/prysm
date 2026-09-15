@@ -2121,7 +2121,7 @@
 - name: finalized_root_gindex_at_slot#altair
   sources:
     - file: beacon-chain/state/state-native/proofs.go
-      search: func FinalizedRootGeneralizedIndex(
+      search: func FinalizedRootGeneralizedIndexForVersion(
   spec: |
     <spec fn="finalized_root_gindex_at_slot" fork="altair" hash="9028cbc5">
     def finalized_root_gindex_at_slot(_slot: Slot) -> GeneralizedIndex:
