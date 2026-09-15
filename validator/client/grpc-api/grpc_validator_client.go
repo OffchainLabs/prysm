@@ -248,12 +248,18 @@ func (c *grpcValidatorClient) PrepareBeaconProposer(ctx context.Context, in *eth
 	return c.getClient().PrepareBeaconProposer(ctx, in)
 }
 
-func (c *grpcValidatorClient) ProposeAttestation(ctx context.Context, in *ethpb.Attestation) (*ethpb.AttestResponse, error) {
-	return c.getClient().ProposeAttestation(ctx, in)
+func (c *grpcValidatorClient) ProposeAttestation(ctx context.Context, atts []*ethpb.Attestation) (*ethpb.AttestResponse, error) {
+	if len(atts) != 1 {
+		return nil, errors.New("gRPC client expects exactly 1 attestation")
+	}
+	return c.getClient().ProposeAttestation(ctx, atts[0])
 }
 
-func (c *grpcValidatorClient) ProposeAttestationElectra(ctx context.Context, in *ethpb.SingleAttestation) (*ethpb.AttestResponse, error) {
-	return c.getClient().ProposeAttestationElectra(ctx, in)
+func (c *grpcValidatorClient) ProposeAttestationElectra(ctx context.Context, atts []*ethpb.SingleAttestation) (*ethpb.AttestResponse, error) {
+	if len(atts) != 1 {
+		return nil, errors.New("gRPC client expects exactly 1 attestation")
+	}
+	return c.getClient().ProposeAttestationElectra(ctx, atts[0])
 }
 
 func (c *grpcValidatorClient) ProposeBeaconBlock(ctx context.Context, in *ethpb.GenericSignedBeaconBlock) (*ethpb.ProposeResponse, error) {

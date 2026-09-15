@@ -23,6 +23,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
+
+	testing2 "github.com/OffchainLabs/prysm/v7/validator/db/testing"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
 	"gopkg.in/d4l3k/messagediff.v1"
@@ -39,7 +42,7 @@ func TestRequestAttestation_ValidatorDutiesRequestFailure(t *testing.T) {
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
 			validator.SubmitAttestation(t.Context(), 30, pubKey)
-			require.LogsContain(t, hook, "Could not fetch validator assignment")
+			require.LogsContain(t, hook, "could not fetch validator assignment")
 		})
 	}
 }
@@ -91,13 +94,13 @@ func TestAttestToBlockHead_SubmitAttestation_RequestFailure(t *testing.T) {
 			).Times(2).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil /*err*/)
 			m.validatorClient.EXPECT().ProposeAttestation(
 				gomock.Any(), // ctx
-				gomock.AssignableToTypeOf(&ethpb.Attestation{}),
+				gomock.AssignableToTypeOf([]*ethpb.Attestation{}),
 			).Return(nil, errors.New("something went wrong"))
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
 			validator.SubmitAttestation(t.Context(), 30, pubKey)
-			require.LogsContain(t, hook, "Could not submit attestation to beacon node")
+			require.LogsContain(t, hook, "could not submit attestation to beacon node")
 		})
 	}
 }
@@ -202,13 +205,13 @@ func TestSubmitAttestation_ElectraCommitteeIndex(t *testing.T) {
 				if tt.isPostElectra {
 					m.validatorClient.EXPECT().ProposeAttestationElectra(
 						gomock.Any(), // ctx
-						gomock.AssignableToTypeOf(&ethpb.SingleAttestation{}),
-					).Return(&ethpb.AttestResponse{}, nil)
+						gomock.AssignableToTypeOf([]*ethpb.SingleAttestation{}),
+					).Return(nil, nil)
 				} else {
 					m.validatorClient.EXPECT().ProposeAttestation(
 						gomock.Any(), // ctx
-						gomock.AssignableToTypeOf(&ethpb.Attestation{}),
-					).Return(&ethpb.AttestResponse{}, nil)
+						gomock.AssignableToTypeOf([]*ethpb.Attestation{}),
+					).Return(nil, nil)
 				}
 
 				validator.SubmitAttestation(t.Context(), tt.attestationSlot, pubKey)
@@ -262,10 +265,10 @@ func TestAttestToBlockHead_AttestsCorrectly(t *testing.T) {
 			var generatedAttestation *ethpb.Attestation
 			m.validatorClient.EXPECT().ProposeAttestation(
 				gomock.Any(), // ctx
-				gomock.AssignableToTypeOf(&ethpb.Attestation{}),
-			).Do(func(_ context.Context, att *ethpb.Attestation) {
-				generatedAttestation = att
-			}).Return(&ethpb.AttestResponse{}, nil /* error */)
+				gomock.AssignableToTypeOf([]*ethpb.Attestation{}),
+			).Do(func(_ context.Context, atts []*ethpb.Attestation) {
+				generatedAttestation = atts[0]
+			}).Return(nil, nil /* error */)
 
 			validator.SubmitAttestation(t.Context(), 30, pubKey)
 
@@ -340,10 +343,10 @@ func TestAttestToBlockHead_AttestsCorrectly(t *testing.T) {
 			var generatedAttestation *ethpb.SingleAttestation
 			m.validatorClient.EXPECT().ProposeAttestationElectra(
 				gomock.Any(), // ctx
-				gomock.AssignableToTypeOf(&ethpb.SingleAttestation{}),
-			).Do(func(_ context.Context, att *ethpb.SingleAttestation) {
-				generatedAttestation = att
-			}).Return(&ethpb.AttestResponse{}, nil /* error */)
+				gomock.AssignableToTypeOf([]*ethpb.SingleAttestation{}),
+			).Do(func(_ context.Context, atts []*ethpb.SingleAttestation) {
+				generatedAttestation = atts[0]
+			}).Return(nil, nil /* error */)
 
 			validator.SubmitAttestation(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(electraForkEpoch), pubKey)
 
@@ -425,12 +428,12 @@ func TestAttestToBlockHead_BlocksDoubleAtt(t *testing.T) {
 
 			m.validatorClient.EXPECT().ProposeAttestation(
 				gomock.Any(), // ctx
-				gomock.AssignableToTypeOf(&ethpb.Attestation{}),
-			).Return(&ethpb.AttestResponse{AttestationDataRoot: make([]byte, 32)}, nil /* error */)
+				gomock.AssignableToTypeOf([]*ethpb.Attestation{}),
+			).Return(nil, nil /* error */)
 
 			validator.SubmitAttestation(t.Context(), 30, pubKey)
 			validator.SubmitAttestation(t.Context(), 30, pubKey)
-			require.LogsContain(t, hook, "Failed attestation slashing protection")
+			require.LogsContain(t, hook, "failed attestation slashing protection")
 		})
 	}
 }
@@ -479,12 +482,12 @@ func TestAttestToBlockHead_BlocksSurroundAtt(t *testing.T) {
 
 			m.validatorClient.EXPECT().ProposeAttestation(
 				gomock.Any(), // ctx
-				gomock.AssignableToTypeOf(&ethpb.Attestation{}),
-			).Return(&ethpb.AttestResponse{}, nil /* error */)
+				gomock.AssignableToTypeOf([]*ethpb.Attestation{}),
+			).Return(nil, nil /* error */)
 
 			validator.SubmitAttestation(t.Context(), 30, pubKey)
 			validator.SubmitAttestation(t.Context(), 30, pubKey)
-			require.LogsContain(t, hook, "Failed attestation slashing protection")
+			require.LogsContain(t, hook, "failed attestation slashing protection")
 		})
 	}
 }
@@ -525,8 +528,8 @@ func TestAttestToBlockHead_BlocksSurroundedAtt(t *testing.T) {
 
 			m.validatorClient.EXPECT().ProposeAttestation(
 				gomock.Any(), // ctx
-				gomock.AssignableToTypeOf(&ethpb.Attestation{}),
-			).Return(&ethpb.AttestResponse{}, nil /* error */)
+				gomock.AssignableToTypeOf([]*ethpb.Attestation{}),
+			).Return(nil, nil /* error */)
 
 			validator.SubmitAttestation(t.Context(), 30, pubKey)
 			require.LogsDoNotContain(t, hook, failedAttLocalProtectionErr)
@@ -541,7 +544,7 @@ func TestAttestToBlockHead_BlocksSurroundedAtt(t *testing.T) {
 			}, nil)
 
 			validator.SubmitAttestation(t.Context(), 30, pubKey)
-			require.LogsContain(t, hook, "Failed attestation slashing protection")
+			require.LogsContain(t, hook, "failed attestation slashing protection")
 		})
 	}
 }
@@ -567,8 +570,8 @@ func TestAttestToBlockHead_DoesNotAttestBeforeDelay(t *testing.T) {
 
 			m.validatorClient.EXPECT().ProposeAttestation(
 				gomock.Any(), // ctx
-				gomock.AssignableToTypeOf(&ethpb.Attestation{}),
-			).Return(&ethpb.AttestResponse{}, nil /* error */).Times(0)
+				gomock.AssignableToTypeOf([]*ethpb.Attestation{}),
+			).Return(nil, nil /* error */).Times(0)
 
 			timer := time.NewTimer(1 * time.Second)
 			go validator.SubmitAttestation(t.Context(), 0, pubKey)
@@ -618,7 +621,7 @@ func TestAttestToBlockHead_DoesAttestAfterDelay(t *testing.T) {
 			m.validatorClient.EXPECT().ProposeAttestation(
 				gomock.Any(), // ctx
 				gomock.Any(),
-			).Return(&ethpb.AttestResponse{}, nil).Times(1)
+			).Return(nil, nil).Times(1)
 
 			validator.SubmitAttestation(t.Context(), 0, pubKey)
 		})
@@ -657,10 +660,10 @@ func TestAttestToBlockHead_CorrectBitfieldLength(t *testing.T) {
 			var generatedAttestation *ethpb.Attestation
 			m.validatorClient.EXPECT().ProposeAttestation(
 				gomock.Any(), // ctx
-				gomock.AssignableToTypeOf(&ethpb.Attestation{}),
-			).Do(func(_ context.Context, att *ethpb.Attestation) {
-				generatedAttestation = att
-			}).Return(&ethpb.AttestResponse{}, nil /* error */)
+				gomock.AssignableToTypeOf([]*ethpb.Attestation{}),
+			).Do(func(_ context.Context, atts []*ethpb.Attestation) {
+				generatedAttestation = atts[0]
+			}).Return(nil, nil /* error */)
 
 			validator.SubmitAttestation(t.Context(), 30, pubKey)
 
@@ -919,5 +922,63 @@ func Test_slashableAttestationCheck_GenesisEpoch(t *testing.T) {
 			require.Equal(t, true, exists)
 			require.Equal(t, primitives.Epoch(0), e)
 		})
+	}
+}
+
+func TestSubmitAttestations_Batches(t *testing.T) {
+	kp1 := randKeypair(t)
+	kp2 := randKeypair(t)
+
+	valDB := testing2.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{kp1.pub, kp2.pub}, false)
+	ctrl := gomock.NewController(t)
+	mockClient := validatormock.NewMockValidatorClient(ctrl)
+
+	v := &validator{
+		db:                        valDB,
+		km:                        newMockKeymanager(t, kp1, kp2),
+		validatorClient:           mockClient,
+		graffiti:                  []byte{},
+		payloadAvailability:       newPayloadAvailability(),
+		submittedAtts:             make(map[submittedAttKey]*submittedAtt),
+		submittedAggregates:       make(map[submittedAttKey]*submittedAtt),
+		attestedSlotsByKeyByEpoch: make(map[primitives.Epoch]map[[fieldparams.BLSPubkeyLength]byte]primitives.Slot),
+	}
+	v.duties = testDutyStore(
+		&ethpb.ValidatorDuty{PublicKey: kp1.pub[:], CommitteeIndex: 1, CommitteeLength: 4, ValidatorIndex: 1},
+		&ethpb.ValidatorDuty{PublicKey: kp2.pub[:], CommitteeIndex: 2, CommitteeLength: 4, ValidatorIndex: 2},
+	)
+
+	beaconBlockRoot := bytesutil.ToBytes32([]byte("A"))
+	targetRoot := bytesutil.ToBytes32([]byte("B"))
+	sourceRoot := bytesutil.ToBytes32([]byte("C"))
+	mockClient.EXPECT().AttestationData(
+		gomock.Any(),
+		gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
+	).Times(2).Return(&ethpb.AttestationData{
+		BeaconBlockRoot: beaconBlockRoot[:],
+		Target:          &ethpb.Checkpoint{Root: targetRoot[:]},
+		Source:          &ethpb.Checkpoint{Root: sourceRoot[:], Epoch: 3},
+	}, nil)
+	mockClient.EXPECT().DomainData(
+		gomock.Any(),
+		gomock.Any(),
+	).Times(4).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
+
+	var capturedAtts []*ethpb.Attestation
+	mockClient.EXPECT().ProposeAttestation(
+		gomock.Any(),
+		gomock.AssignableToTypeOf([]*ethpb.Attestation{}),
+	).DoAndReturn(func(_ context.Context, atts []*ethpb.Attestation) (*ethpb.AttestResponse, error) {
+		capturedAtts = atts
+		return nil, nil
+	}).Times(1)
+
+	v.SubmitAttestations(t.Context(), 30, [][fieldparams.BLSPubkeyLength]byte{kp1.pub, kp2.pub})
+
+	require.Equal(t, 2, len(capturedAtts), "expected both attestations submitted in a single ProposeAttestation call")
+	// Both validators share the same attestation data, so they are recorded under one key.
+	require.Equal(t, 1, len(v.submittedAtts))
+	for _, submitted := range v.submittedAtts {
+		require.Equal(t, 2, len(submitted.pubkeys), "expected both validators recorded for logging")
 	}
 }

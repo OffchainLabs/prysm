@@ -60,6 +60,18 @@ func TestConfigureValidator_RESTApiEnabledByEndpoint(t *testing.T) {
 	assert.Equal(t, false, Get().EnableBeaconRESTApi)
 }
 
+func TestConfigureValidator_EnableExperimentalBatchSubmission(t *testing.T) {
+	defer Init(&Flags{})
+	app := cli.App{}
+
+	set := flag.NewFlagSet("test", 0)
+	set.Bool(enableExperimentalBatchSubmission.Name, false, "test")
+	require.NoError(t, set.Set(enableExperimentalBatchSubmission.Name, "true"))
+	context := cli.NewContext(&app, set, nil)
+	require.NoError(t, ConfigureValidator(context))
+	assert.Equal(t, true, Get().EnableExperimentalBatchSubmission)
+}
+
 func TestConfigureBeaconConfig(t *testing.T) {
 	app := cli.App{}
 	set := flag.NewFlagSet("test", 0)

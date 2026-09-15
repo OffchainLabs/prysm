@@ -297,33 +297,33 @@ func (mr *MockValidatorClientMockRecorder) PrepareBeaconProposer(ctx, in any) *g
 }
 
 // ProposeAttestation mocks base method.
-func (m *MockValidatorClient) ProposeAttestation(ctx context.Context, in *eth.Attestation) (*eth.AttestResponse, error) {
+func (m *MockValidatorClient) ProposeAttestation(ctx context.Context, atts []*eth.Attestation) (*eth.AttestResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ProposeAttestation", ctx, in)
+	ret := m.ctrl.Call(m, "ProposeAttestation", ctx, atts)
 	ret0, _ := ret[0].(*eth.AttestResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ProposeAttestation indicates an expected call of ProposeAttestation.
-func (mr *MockValidatorClientMockRecorder) ProposeAttestation(ctx, in any) *gomock.Call {
+func (mr *MockValidatorClientMockRecorder) ProposeAttestation(ctx, atts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposeAttestation", reflect.TypeOf((*MockValidatorClient)(nil).ProposeAttestation), ctx, in)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposeAttestation", reflect.TypeOf((*MockValidatorClient)(nil).ProposeAttestation), ctx, atts)
 }
 
 // ProposeAttestationElectra mocks base method.
-func (m *MockValidatorClient) ProposeAttestationElectra(ctx context.Context, in *eth.SingleAttestation) (*eth.AttestResponse, error) {
+func (m *MockValidatorClient) ProposeAttestationElectra(ctx context.Context, atts []*eth.SingleAttestation) (*eth.AttestResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ProposeAttestationElectra", ctx, in)
+	ret := m.ctrl.Call(m, "ProposeAttestationElectra", ctx, atts)
 	ret0, _ := ret[0].(*eth.AttestResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ProposeAttestationElectra indicates an expected call of ProposeAttestationElectra.
-func (mr *MockValidatorClientMockRecorder) ProposeAttestationElectra(ctx, in any) *gomock.Call {
+func (mr *MockValidatorClientMockRecorder) ProposeAttestationElectra(ctx, atts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposeAttestationElectra", reflect.TypeOf((*MockValidatorClient)(nil).ProposeAttestationElectra), ctx, in)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposeAttestationElectra", reflect.TypeOf((*MockValidatorClient)(nil).ProposeAttestationElectra), ctx, atts)
 }
 
 // ProposeBeaconBlock mocks base method.

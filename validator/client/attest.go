@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/api/server"
 	"github.com/OffchainLabs/prysm/v7/async"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -22,6 +24,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	otelTrace "go.opentelemetry.io/otel/trace"
 )
 
 var failedAttLocalProtectionErr = "attempted to make slashable attestation, rejected by local slashing protection"
@@ -35,60 +38,66 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 	defer span.End()
 	span.SetAttributes(trace.StringAttribute("validator", fmt.Sprintf("%#x", pubKey)))
 
+	att, err := v.signAttestation(ctx, slot, pubKey)
+	if err != nil {
+		v.recordAttestationFailure(span, slot, pubKey, err)
+		return
+	}
+	if att == nil {
+		return
+	}
+	if err := v.submitSignedAttestation(ctx, att); err != nil {
+		v.recordAttestationFailure(span, slot, pubKey, err)
+		return
+	}
+	if err := v.recordSubmittedAttestation(span, slot, pubKey, att); err != nil {
+		v.recordAttestationFailure(span, slot, pubKey, err)
+	}
+}
+
+func (v *validator) signAttestation(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte) (ethpb.Att, error) {
+	ctx, span := trace.StartSpan(ctx, "validator.signAttestation")
+	defer span.End()
+	span.SetAttributes(trace.StringAttribute("validator", fmt.Sprintf("%#x", pubKey)))
+
 	v.waitUntilAttestationDueOrValidBlock(ctx, slot)
 
 	var b strings.Builder
 	if err := b.WriteByte(byte(roleAttester)); err != nil {
-		log.WithError(err).Error("Could not write role byte for lock key")
 		tracing.AnnotateError(span, err)
-		return
+		return nil, errors.Wrap(err, "could not write role byte for lock key")
 	}
 	_, err := b.Write(pubKey[:])
 	if err != nil {
-		log.WithError(err).Error("Could not write pubkey bytes for lock key")
 		tracing.AnnotateError(span, err)
-		return
+		return nil, errors.Wrap(err, "could not write pubkey bytes for lock key")
 	}
 	lock := async.NewMultilock(b.String())
 	lock.Lock()
 	defer lock.Unlock()
 
-	fmtKey := fmt.Sprintf("%#x", pubKey[:])
-	log := log.WithField("pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:]))).WithField("slot", slot)
 	duty, err := v.duty(pubKey)
 	if err != nil {
-		log.WithError(err).Error("Could not fetch validator assignment")
-		if v.emitAccountMetrics {
-			ValidatorAttestFailVec.WithLabelValues(fmtKey).Inc()
-		}
 		tracing.AnnotateError(span, err)
-		return
+		return nil, errors.Wrap(err, "could not fetch validator assignment")
 	}
 	if duty.CommitteeLength == 0 {
-		log.Debug("Empty committee for validator duty, not attesting")
-		return
+		log.WithFields(attesterLogFields(slot, pubKey)).Debug("Empty committee for validator duty, not attesting")
+		return nil, nil
 	}
 
 	postElectra := slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch
 
 	data, err := v.getAttestationData(ctx, slot, duty.CommitteeIndex)
 	if err != nil {
-		log.WithError(err).Error("Could not request attestation to sign at slot")
-		if v.emitAccountMetrics {
-			ValidatorAttestFailVec.WithLabelValues(fmtKey).Inc()
-		}
 		tracing.AnnotateError(span, err)
-		return
+		return nil, errors.Wrap(err, "could not request attestation to sign at slot")
 	}
 
 	sig, _, err := v.signAtt(ctx, pubKey, data, slot)
 	if err != nil {
-		log.WithError(err).Error("Could not sign attestation")
-		if v.emitAccountMetrics {
-			ValidatorAttestFailVec.WithLabelValues(fmtKey).Inc()
-		}
 		tracing.AnnotateError(span, err)
-		return
+		return nil, errors.Wrap(err, "could not sign attestation")
 	}
 
 	var indexedAtt ethpb.IndexedAtt
@@ -108,83 +117,94 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 
 	_, signingRoot, err := v.domainAndSigningRoot(ctx, indexedAtt.GetData())
 	if err != nil {
-		log.WithError(err).Error("Could not get domain and signing root from attestation")
-		if v.emitAccountMetrics {
-			ValidatorAttestFailVec.WithLabelValues(fmtKey).Inc()
-		}
 		tracing.AnnotateError(span, err)
-		return
+		return nil, errors.Wrap(err, "could not get domain and signing root from attestation")
 	}
 
-	// Send the attestation to the beacon node.
 	if err := v.db.SlashableAttestationCheck(ctx, indexedAtt, pubKey, signingRoot, v.emitAccountMetrics, ValidatorAttestFailVec); err != nil {
-		log.WithError(err).Error("Failed attestation slashing protection check")
 		log.WithFields(
 			attestationLogFields(pubKey, indexedAtt),
 		).Debug("Attempted slashable attestation details")
 		tracing.AnnotateError(span, err)
-		return
+		return nil, errors.Wrap(err, "failed attestation slashing protection check")
 	}
 
-	var aggregationBitfield bitfield.Bitlist
-	var attestation ethpb.Att
-	var attResp *ethpb.AttestResponse
 	if postElectra {
-		sa := &ethpb.SingleAttestation{
+		return &ethpb.SingleAttestation{
 			Data:          data,
 			AttesterIndex: duty.ValidatorIndex,
 			CommitteeId:   duty.CommitteeIndex,
 			Signature:     sig,
-		}
-		attestation = sa
-		attResp, err = v.validatorClient.ProposeAttestationElectra(ctx, sa)
-	} else {
-		aggregationBitfield = bitfield.NewBitlist(duty.CommitteeLength)
-		aggregationBitfield.SetBitAt(duty.ValidatorCommitteeIndex, true)
-		a := &ethpb.Attestation{
-			Data:            data,
-			AggregationBits: aggregationBitfield,
-			Signature:       sig,
-		}
-		attestation = a
-		attResp, err = v.validatorClient.ProposeAttestation(ctx, a)
+		}, nil
 	}
-	if err != nil {
-		log.WithError(err).Error("Could not submit attestation to beacon node")
-		if v.emitAccountMetrics {
-			ValidatorAttestFailVec.WithLabelValues(fmtKey).Inc()
-		}
-		tracing.AnnotateError(span, err)
-		return
-	}
+	aggregationBitfield := bitfield.NewBitlist(duty.CommitteeLength)
+	aggregationBitfield.SetBitAt(duty.ValidatorCommitteeIndex, true)
+	return &ethpb.Attestation{
+		Data:            data,
+		AggregationBits: aggregationBitfield,
+		Signature:       sig,
+	}, nil
+}
 
+// submitSignedAttestation sends a signed attestation to the beacon node.
+func (v *validator) submitSignedAttestation(ctx context.Context, attestation ethpb.Att) error {
+	var err error
+	switch a := attestation.(type) {
+	case *ethpb.SingleAttestation:
+		_, err = v.validatorClient.ProposeAttestationElectra(ctx, []*ethpb.SingleAttestation{a})
+	case *ethpb.Attestation:
+		_, err = v.validatorClient.ProposeAttestation(ctx, []*ethpb.Attestation{a})
+	default:
+		return errors.Errorf("unexpected attestation type %T", a)
+	}
+	return errors.Wrap(err, "could not submit attestation to beacon node")
+}
+
+// recordSubmittedAttestation saves a submitted attestation for end-of-slot logging, bumps success
+// metrics, and annotates the span with it.
+func (v *validator) recordSubmittedAttestation(span otelTrace.Span, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte, attestation ethpb.Att) error {
 	if err := v.saveSubmittedAtt(attestation, pubKey[:], false); err != nil {
-		log.WithError(err).Error("Could not save validator index for logging")
-		if v.emitAccountMetrics {
-			ValidatorAttestFailVec.WithLabelValues(fmtKey).Inc()
-		}
-		tracing.AnnotateError(span, err)
-		return
+		return errors.Wrap(err, "could not save validator index for logging")
+	}
+	if v.emitAccountMetrics {
+		fmtKey := fmt.Sprintf("%#x", pubKey[:])
+		ValidatorAttestSuccessVec.WithLabelValues(fmtKey).Inc()
+		ValidatorAttestedSlotsGaugeVec.WithLabelValues(fmtKey).Set(float64(slot))
 	}
 
+	data := attestation.GetData()
 	span.SetAttributes(
 		trace.Int64Attribute("slot", int64(slot)), // lint:ignore uintcast -- This conversion is OK for tracing.
-		trace.StringAttribute("attestationHash", fmt.Sprintf("%#x", attResp.AttestationDataRoot)),
 		trace.StringAttribute("blockRoot", fmt.Sprintf("%#x", data.BeaconBlockRoot)),
 		trace.Int64Attribute("justifiedEpoch", int64(data.Source.Epoch)),
 		trace.Int64Attribute("targetEpoch", int64(data.Target.Epoch)),
 	)
-	if postElectra {
-		span.SetAttributes(trace.Int64Attribute("attesterIndex", int64(duty.ValidatorIndex)))
-		span.SetAttributes(trace.Int64Attribute("committeeIndex", int64(duty.CommitteeIndex)))
-	} else {
-		span.SetAttributes(trace.StringAttribute("aggregationBitfield", fmt.Sprintf("%#x", aggregationBitfield)))
+	if dataRoot, err := data.HashTreeRoot(); err == nil {
+		span.SetAttributes(trace.StringAttribute("attestationHash", fmt.Sprintf("%#x", dataRoot[:])))
+	}
+	if sa, ok := attestation.(*ethpb.SingleAttestation); ok {
+		span.SetAttributes(trace.Int64Attribute("attesterIndex", int64(sa.AttesterIndex)))
+		span.SetAttributes(trace.Int64Attribute("committeeIndex", int64(sa.CommitteeId)))
+	} else if a, ok := attestation.(*ethpb.Attestation); ok {
+		span.SetAttributes(trace.StringAttribute("aggregationBitfield", fmt.Sprintf("%#x", a.AggregationBits)))
 		span.SetAttributes(trace.Int64Attribute("committeeIndex", int64(data.CommitteeIndex)))
 	}
+	return nil
+}
 
+// recordAttestationFailure logs a failed attester duty and bumps failure metrics.
+func (v *validator) recordAttestationFailure(span otelTrace.Span, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte, err error) {
+	log.WithError(err).WithFields(attesterLogFields(slot, pubKey)).Error("Could not submit attestation")
 	if v.emitAccountMetrics {
-		ValidatorAttestSuccessVec.WithLabelValues(fmtKey).Inc()
-		ValidatorAttestedSlotsGaugeVec.WithLabelValues(fmtKey).Set(float64(slot))
+		ValidatorAttestFailVec.WithLabelValues(fmt.Sprintf("%#x", pubKey[:])).Inc()
+	}
+	tracing.AnnotateError(span, err)
+}
+
+func attesterLogFields(slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte) logrus.Fields {
+	return logrus.Fields{
+		"pubkey": fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:])),
+		"slot":   slot,
 	}
 }
 
@@ -319,5 +339,111 @@ func attestationLogFields(pubKey [fieldparams.BLSPubkeyLength]byte, indexedAtt e
 		"targetEpoch":    indexedAtt.GetData().Target.Epoch,
 		"targetRoot":     fmt.Sprintf("%#x", indexedAtt.GetData().Target.Root),
 		"signature":      fmt.Sprintf("%#x", indexedAtt.GetSignature()),
+	}
+}
+
+type signedAtt struct {
+	pubKey [fieldparams.BLSPubkeyLength]byte
+	att    ethpb.Att
+}
+
+// SubmitAttestations completes the attester responsibility for the given validators at a slot,
+// signing per-validator as usual but submitting all attestations in a single request.
+func (v *validator) SubmitAttestations(ctx context.Context, slot primitives.Slot, pubKeys [][fieldparams.BLSPubkeyLength]byte) {
+	ctx, span := trace.StartSpan(ctx, "validator.SubmitAttestations")
+	defer span.End()
+
+	results := make([]signedAtt, len(pubKeys))
+	var wg sync.WaitGroup
+	for i, pubKey := range pubKeys {
+		wg.Go(func() {
+			att, err := v.signAttestation(ctx, slot, pubKey)
+			if err != nil {
+				v.recordAttestationFailure(span, slot, pubKey, err)
+				return
+			}
+			if att != nil {
+				results[i] = signedAtt{pubKey: pubKey, att: att}
+			}
+		})
+	}
+	wg.Wait()
+
+	if slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch {
+		var (
+			attestations []*ethpb.SingleAttestation
+			submitted    []signedAtt
+		)
+		for _, result := range results {
+			if att, ok := result.att.(*ethpb.SingleAttestation); ok {
+				attestations = append(attestations, att)
+				submitted = append(submitted, result)
+			}
+		}
+
+		if len(attestations) == 0 {
+			return
+		}
+		_, err := v.validatorClient.ProposeAttestationElectra(ctx, attestations)
+		v.recordSubmittedAttestations(span, slot, submitted, err)
+		return
+	}
+
+	var (
+		attestations []*ethpb.Attestation
+		submitted    []signedAtt
+	)
+	for _, result := range results {
+		if att, ok := result.att.(*ethpb.Attestation); ok {
+			attestations = append(attestations, att)
+			submitted = append(submitted, result)
+		}
+	}
+	if len(attestations) == 0 {
+		return
+	}
+	_, err := v.validatorClient.ProposeAttestation(ctx, attestations)
+	v.recordSubmittedAttestations(span, slot, submitted, err)
+}
+
+// recordSubmittedAttestations applies a batch submission result to per-validator logging and metrics.
+func (v *validator) recordSubmittedAttestations(span otelTrace.Span, slot primitives.Slot, results []signedAtt, err error) {
+	if err == nil {
+		for _, res := range results {
+			if res.att != nil {
+				if recErr := v.recordSubmittedAttestation(span, slot, res.pubKey, res.att); recErr != nil {
+					v.recordAttestationFailure(span, slot, res.pubKey, recErr)
+				}
+			}
+		}
+		return
+	}
+
+	var indexedErr *server.IndexedErrorContainer
+	if errors.As(err, &indexedErr) && len(indexedErr.Failures) > 0 {
+		failedIndices := make(map[int]string, len(indexedErr.Failures))
+		for _, f := range indexedErr.Failures {
+			failedIndices[f.Index] = f.Message
+		}
+
+		for i, res := range results {
+			if res.att == nil {
+				continue
+			}
+			if failMsg, failed := failedIndices[i]; failed {
+				v.recordAttestationFailure(span, slot, res.pubKey, errors.New(failMsg))
+			} else {
+				if recErr := v.recordSubmittedAttestation(span, slot, res.pubKey, res.att); recErr != nil {
+					v.recordAttestationFailure(span, slot, res.pubKey, recErr)
+				}
+			}
+		}
+		return
+	}
+
+	for _, res := range results {
+		if res.att != nil {
+			v.recordAttestationFailure(span, slot, res.pubKey, err)
+		}
 	}
 }
