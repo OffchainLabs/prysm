@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -120,6 +121,7 @@ func TestSendExecutionPayloadEnvelopesByRootRequest(t *testing.T) {
 		reqRoots := p2ptypes.ExecutionPayloadEnvelopesByRootReq{rootA, rootB}
 		_, err := SendExecutionPayloadEnvelopesByRootRequest(t.Context(), clock, p1, p2p2.PeerID(), ctxMap, &reqRoots)
 		require.ErrorContains(t, "unrequested or duplicate", err)
+		require.ErrorIs(t, err, ErrInvalidFetchedData)
 
 		if util.WaitTimeout(&wg, time.Second) {
 			t.Fatal("Did not receive stream within 1 sec")
@@ -150,6 +152,7 @@ func TestSendExecutionPayloadEnvelopesByRootRequest(t *testing.T) {
 		reqRoots := p2ptypes.ExecutionPayloadEnvelopesByRootReq{rootA, rootB}
 		_, err := SendExecutionPayloadEnvelopesByRootRequest(t.Context(), clock, p1, p2p2.PeerID(), ctxMap, &reqRoots)
 		require.ErrorContains(t, "unrequested or duplicate", err)
+		require.ErrorIs(t, err, ErrInvalidFetchedData)
 
 		if util.WaitTimeout(&wg, time.Second) {
 			t.Fatal("Did not receive stream within 1 sec")
@@ -183,6 +186,7 @@ func TestSendExecutionPayloadEnvelopesByRootRequest(t *testing.T) {
 		reqRoots := p2ptypes.ExecutionPayloadEnvelopesByRootReq{rootA, rootB}
 		_, err := SendExecutionPayloadEnvelopesByRootRequest(t.Context(), clock, p1, p2p2.PeerID(), ctxMap, &reqRoots)
 		require.ErrorContains(t, "more execution payload envelopes than requested", err)
+		require.ErrorIs(t, err, ErrInvalidFetchedData)
 
 		if util.WaitTimeout(&wg, time.Second) {
 			t.Fatal("Did not receive stream within 1 sec")
@@ -236,6 +240,35 @@ func TestSendExecutionPayloadEnvelopesByRootRequest(t *testing.T) {
 		reqRoots := p2ptypes.ExecutionPayloadEnvelopesByRootReq{rootA, rootB, rootC}
 		_, err := SendExecutionPayloadEnvelopesByRootRequest(t.Context(), clock, nil, "", ctxMap, &reqRoots)
 		require.ErrorContains(t, "requested more than MAX_REQUEST_PAYLOADS", err)
+		require.Equal(t, false, errors.Is(err, ErrInvalidFetchedData))
+	})
+
+	t.Run("resource unavailable is not invalid data", func(t *testing.T) {
+		p1, p2p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+		p1.Connect(p2p2)
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		p2p2.SetStreamHandler(protocol, func(stream network.Stream) {
+			defer wg.Done()
+
+			req := new(p2ptypes.ExecutionPayloadEnvelopesByRootReq)
+			assert.NoError(t, p2p2.Encoding().DecodeWithMaxLength(stream, req))
+			response, err := createErrorResponse(responseCodeResourceUnavailable, p2ptypes.ErrResourceUnavailable.Error(), p2p2)
+			assert.NoError(t, err)
+			_, err = stream.Write(response)
+			assert.NoError(t, err)
+			assert.NoError(t, stream.CloseWrite())
+		})
+
+		reqRoots := p2ptypes.ExecutionPayloadEnvelopesByRootReq{rootA}
+		_, err := SendExecutionPayloadEnvelopesByRootRequest(t.Context(), clock, p1, p2p2.PeerID(), ctxMap, &reqRoots)
+		require.ErrorContains(t, p2ptypes.ErrResourceUnavailable.Error(), err)
+		require.Equal(t, false, errors.Is(err, ErrInvalidFetchedData))
+
+		if util.WaitTimeout(&wg, time.Second) {
+			t.Fatal("Did not receive stream within 1 sec")
+		}
 	})
 
 	t.Run("empty response accepted", func(t *testing.T) {
