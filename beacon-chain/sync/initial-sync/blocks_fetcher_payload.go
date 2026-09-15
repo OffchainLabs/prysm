@@ -21,6 +21,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Each parent recovery tries at most three peers, with up to two RPCs per peer.
+const maxParentPayloadFetchAttempts = 3
+
 // checkAllBlocksBuildOnEmpty verifies that all the passed blocks build on top of the empty block
 // It ignores the first block in the slice
 func checkAllBlocksBuildOnEmpty(blks []blocks.BlockWithROSidecars) error {
@@ -310,12 +313,22 @@ func (f *blocksFetcher) ensureParentPayload(ctx context.Context, r *fetchRequest
 func (f *blocksFetcher) fetchParentPayloadFromPeers(ctx context.Context, parent, child blocks.ROBlock, pid peer.ID, peers []peer.ID) (interfaces.ROSignedExecutionPayloadEnvelope, peer.ID, error) {
 	req := p2ptypes.ExecutionPayloadEnvelopesByRootReq{parent.Root()}
 	rangeReq := &p2ppb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: parent.Block().Slot(), Count: 1}
-	for _, p := range dedupPeers(append([]peer.ID{pid}, peers...)) {
+	candidates := dedupPeers(append([]peer.ID{pid}, peers...))
+	candidates = append(candidates[:1], f.filterPeers(ctx, candidates[1:], 1)...)
+	candidates = candidates[:min(len(candidates), maxParentPayloadFetchAttempts)]
+	for _, p := range candidates {
 		if err := ctx.Err(); err != nil {
 			return nil, "", err
 		}
 		envelopes, err := prysmsync.SendExecutionPayloadEnvelopesByRootRequest(ctx, f.clock, f.p2p, p, f.ctxMap, &req)
+		if errors.Is(err, prysmsync.ErrInvalidFetchedData) {
+			f.downscorePeer(p, err)
+			continue
+		}
 		if err != nil || len(envelopes) != 1 {
+			if err := ctx.Err(); err != nil {
+				return nil, "", err
+			}
 			// Peers may omit envelopes older than their finalized epoch from ByRoot responses.
 			envelopes, err = prysmsync.SendExecutionPayloadEnvelopesByRangeRequest(ctx, f.clock, f.p2p, p, f.ctxMap, rangeReq)
 		}
@@ -329,12 +342,17 @@ func (f *blocksFetcher) fetchParentPayloadFromPeers(ctx context.Context, parent,
 		if err != nil {
 			continue
 		}
-		matches, err := blocks.BlockBuiltOnParentEnvelope(wrapped, child)
-		if err != nil || !matches {
+		envelope, err := wrapped.Envelope()
+		if err != nil {
 			continue
 		}
-		envelope, err := wrapped.Envelope()
-		if err != nil || envelope.Slot() != parent.Block().Slot() {
+		// A range response may legitimately contain a different fork at the parent slot.
+		if envelope.BeaconBlockRoot() != parent.Root() {
+			continue
+		}
+		matches, err := blocks.BlockBuiltOnParentEnvelope(wrapped, child)
+		if err != nil || !matches || envelope.Slot() != parent.Block().Slot() {
+			f.downscorePeer(p, errors.Wrap(prysmsync.ErrInvalidFetchedData, "parent payload envelope does not match block"))
 			continue
 		}
 		f.p2p.Peers().Scorers().BlockProviderScorer().Touch(p)
