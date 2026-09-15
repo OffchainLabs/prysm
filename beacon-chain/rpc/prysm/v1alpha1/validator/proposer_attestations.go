@@ -139,7 +139,8 @@ func onChainAggregates(attsById map[attestation.Id][]ethpb.Att) (proposerAtts, e
 
 	// We construct the first on-chain aggregate by taking the first aggregate for each ID.
 	// We construct the second on-chain aggregate by taking the second aggregate for each ID.
-	// We continue doing this until we run out of aggregates.
+	// We continue doing this until we run out of aggregates or until we have built as many
+	// layers as a block could possibly include, whichever comes first.
 	maxLayers := int(params.BeaconConfig().MaxAttestationsElectra) // lint:ignore uintcast -- always small.
 	idx := 0
 	for ; idx < maxLayers; idx++ {
