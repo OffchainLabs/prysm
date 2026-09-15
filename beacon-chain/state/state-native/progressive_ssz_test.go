@@ -31,16 +31,7 @@ func TestProgressiveSSZEnabled(t *testing.T) {
 }
 
 func TestValidateFieldIndex_AllForks(t *testing.T) {
-	versions := []int{
-		version.Phase0,
-		version.Altair,
-		version.Bellatrix,
-		version.Capella,
-		version.Deneb,
-		version.Electra,
-		version.Fulu,
-		version.Gloas,
-	}
+	versions := version.AllIncludingUnreleased()
 	for _, stateVersion := range versions {
 		t.Run(version.String(stateVersion), func(t *testing.T) {
 			st := &BeaconState{version: stateVersion}
@@ -48,17 +39,26 @@ func TestValidateFieldIndex_AllForks(t *testing.T) {
 		})
 	}
 
-	for _, stateVersion := range versions[:len(versions)-1] {
+	for _, stateVersion := range versions {
+		if stateVersion >= version.Gloas {
+			break
+		}
 		t.Run(version.String(stateVersion)+" rejects Gloas field", func(t *testing.T) {
 			st := &BeaconState{version: stateVersion}
 			require.ErrorContains(t, "not supported", st.validateFieldIndex(types.PTCWindow))
 		})
 	}
 
-	t.Run("Gloas rejects replaced field", func(t *testing.T) {
-		st := &BeaconState{version: version.Gloas}
-		require.ErrorContains(t, "not supported", st.validateFieldIndex(types.LatestExecutionPayloadHeaderDeneb))
-	})
+	for _, stateVersion := range versions {
+		if stateVersion < version.Gloas {
+			continue
+		}
+		t.Run("Post-Gloas rejects replaced field", func(t *testing.T) {
+			st := &BeaconState{version: stateVersion}
+			require.ErrorContains(t, "not supported", st.validateFieldIndex(types.LatestExecutionPayloadHeaderDeneb))
+		})
+	}
+
 }
 
 func TestComputeFieldRootsWithHasher_ProgressiveSSZFields(t *testing.T) {

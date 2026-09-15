@@ -66,6 +66,11 @@ func All() []int {
 	return supportedVersions
 }
 
+// AllIncludingUnreleased returns a list of all fork versions, including unreleased ones.
+func AllIncludingUnreleased() []int {
+	return allVersions
+}
+
 // IsUnsupported reports whether the provided version is currently gate-kept.
 func IsUnsupported(version int) bool {
 	_, ok := unsupportedVersions[version]
