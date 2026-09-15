@@ -1,0 +1,230 @@
+// Copyright 2025 Prysmatic Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+syntax = "proto3";
+
+package ethereum.eth.v1alpha1;
+
+import "proto/engine/v1/execution_engine.proto";
+import "proto/eth/ext/options.proto";
+import "proto/prysm/v1alpha1/beacon_core_types.proto";
+
+option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
+
+//
+// reference spec: https://hackmd.io/@etan-status/decentralized-cl-sync
+// reference impl: https://github.com/status-im/nimbus-eth2/pull/8966
+//
+
+// LightClientBlockData Altair - Fulu
+message LightClientBlockData {
+  uint64 proposer_index = 1 [ (ethereum.eth.ext.cast_type) =
+                                  "github.com/OffchainLabs/prysm/v7/"
+                                  "consensus-types/primitives.ValidatorIndex" ];
+
+  bytes state_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  bytes sync_committee_bits = 3 [
+    (ethereum.eth.ext.ssz_size) = "sync_committee_bytes.size",
+    (ethereum.eth.ext.cast_type) = "sync_committee_bits.type"
+  ];
+
+  bytes sync_committee_signature_root = 4
+      [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  repeated bytes sync_aggregate_branch = 5
+      [ (ethereum.eth.ext.ssz_size) = "4,32" ];
+}
+
+// LightClientBlockData Gloas
+message LightClientBlockDataGloas {
+  uint64 proposer_index = 1 [ (ethereum.eth.ext.cast_type) =
+                                  "github.com/OffchainLabs/prysm/v7/"
+                                  "consensus-types/primitives.ValidatorIndex" ];
+
+  bytes state_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  bytes sync_committee_bits = 3 [
+    (ethereum.eth.ext.ssz_size) = "sync_committee_bytes.size",
+    (ethereum.eth.ext.cast_type) = "sync_committee_bits.type"
+  ];
+
+  bytes sync_committee_signature_root = 4
+      [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  // BeaconBlockBody switch to progressive container at Gloas
+  repeated bytes sync_aggregate_branch = 5
+      [ (ethereum.eth.ext.ssz_size) = "8,32" ];
+}
+
+// LCBootstrap Altair & Bellatrix
+message LightClientBootstrapDataAltair {
+  repeated SyncCommittee current_sync_committee = 1
+      [ (ethereum.eth.ext.ssz_max) = "1" ];
+
+  repeated bytes current_sync_committee_branch = 2
+      [ (ethereum.eth.ext.ssz_size) = "5,32" ];
+}
+
+// LCBootstrap Capella
+message LightClientBootstrapDataCapella {
+  repeated SyncCommittee current_sync_committee = 1
+      [ (ethereum.eth.ext.ssz_max) = "1" ];
+
+  repeated bytes current_sync_committee_branch = 2
+      [ (ethereum.eth.ext.ssz_size) = "5,32" ];
+
+  ethereum.engine.v1.ExecutionPayloadHeaderCapella execution = 3;
+
+  repeated bytes execution_branch = 4 [ (ethereum.eth.ext.ssz_size) = "4,32" ];
+}
+
+// LCBootstrap Deneb
+message LightClientBootstrapDataDeneb {
+  repeated SyncCommittee current_sync_committee = 1
+      [ (ethereum.eth.ext.ssz_max) = "1" ];
+
+  repeated bytes current_sync_committee_branch = 2
+      [ (ethereum.eth.ext.ssz_size) = "5,32" ];
+
+  ethereum.engine.v1.ExecutionPayloadHeaderDeneb execution = 3;
+
+  repeated bytes execution_branch = 4 [ (ethereum.eth.ext.ssz_size) = "4,32" ];
+}
+
+// LCBootstrap Electra & Fulu
+message LightClientBootstrapDataElectra {
+  repeated SyncCommittee current_sync_committee = 1
+      [ (ethereum.eth.ext.ssz_max) = "1" ];
+
+  repeated bytes current_sync_committee_branch = 2
+      [ (ethereum.eth.ext.ssz_size) = "6,32" ];
+
+  ethereum.engine.v1.ExecutionPayloadHeaderDeneb execution = 3;
+
+  repeated bytes execution_branch = 4 [ (ethereum.eth.ext.ssz_size) = "4,32" ];
+}
+
+// LCBootstrap Gloas
+message LightClientBootstrapDataGloas {
+  repeated SyncCommittee current_sync_committee = 1
+      [ (ethereum.eth.ext.ssz_max) = "1" ];
+
+  repeated bytes current_sync_committee_branch = 2
+      [ (ethereum.eth.ext.ssz_size) = "11,32" ];
+
+  bytes execution_block_hash = 3
+      [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  repeated bytes execution_branch = 4 [ (ethereum.eth.ext.ssz_size) = "11,32" ];
+}
+
+
+// LCEpochData Altair, Bellatrix.
+message LightClientEpochDataAltair {
+  uint64 epoch = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
+  ];
+
+  BeaconBlockHeader parent_block_header = 2;
+
+  repeated LightClientBlockData block_data = 3
+      [ (ethereum.eth.ext.ssz_size) = "slots_per_epoch.size" ];
+
+  LightClientBootstrapDataAltair bootstrap_data = 4;
+
+  bytes finalized_root = 5 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  repeated bytes finality_branch = 6 [ (ethereum.eth.ext.ssz_size) = "6,32" ];
+}
+
+// LCEpochData Capella
+message LightClientEpochDataCapella {
+  uint64 epoch = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
+  ];
+
+  BeaconBlockHeader parent_block_header = 2;
+
+  repeated LightClientBlockData block_data = 3
+      [ (ethereum.eth.ext.ssz_size) = "slots_per_epoch.size" ];
+
+  LightClientBootstrapDataCapella bootstrap_data = 4;
+
+  bytes finalized_root = 5 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  repeated bytes finality_branch = 6
+      [ (ethereum.eth.ext.ssz_size) = "6,32" ];
+}
+
+// LCEpochData Deneb
+message LightClientEpochDataDeneb {
+   uint64 epoch = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
+  ];
+
+  BeaconBlockHeader parent_block_header = 2;
+
+  repeated LightClientBlockData block_data = 3
+      [ (ethereum.eth.ext.ssz_size) = "slots_per_epoch.size" ];
+
+  LightClientBootstrapDataDeneb bootstrap_data = 4;
+
+  bytes finalized_root = 5 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  repeated bytes finality_branch = 6
+      [ (ethereum.eth.ext.ssz_size) = "6,32" ];
+}
+
+// LCEpochData Electra & Fulu
+message LightClientEpochDataElectra {
+   uint64 epoch = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
+  ];
+
+  BeaconBlockHeader parent_block_header = 2;
+
+  repeated LightClientBlockData block_data = 3
+      [ (ethereum.eth.ext.ssz_size) = "slots_per_epoch.size" ];
+
+  LightClientBootstrapDataElectra bootstrap_data = 4;
+
+  bytes finalized_root = 5 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  repeated bytes finality_branch = 6
+      [ (ethereum.eth.ext.ssz_size) = "7,32" ];
+}
+
+// LCEpochData Gloas
+message LightClientEpochDataGloas {
+   uint64 epoch = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
+  ];
+
+  BeaconBlockHeader parent_block_header = 2;
+
+  repeated LightClientBlockDataGloas block_data = 3
+      [ (ethereum.eth.ext.ssz_size) = "slots_per_epoch.size" ];
+
+  LightClientBootstrapDataGloas bootstrap_data = 4;
+
+  bytes finalized_root = 5 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  repeated bytes finality_branch = 6
+      [ (ethereum.eth.ext.ssz_size) = "9,32" ];
+}
