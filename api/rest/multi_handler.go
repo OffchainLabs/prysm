@@ -470,8 +470,9 @@ func raceRound[T any](ctx context.Context, handlers []*handler, fallbackDeadline
 	defer cancel()
 
 	type result struct {
-		val T
-		err error
+		val  T
+		err  error
+		host string
 	}
 
 	// Call fn concurrently and asynchronously on every handler, sending the result to results.
@@ -479,13 +480,14 @@ func raceRound[T any](ctx context.Context, handlers []*handler, fallbackDeadline
 	for _, h := range handlers {
 		go func(h *handler) {
 			val, err := fn(ctx, h)
-			results <- result{val: val, err: err}
+			results <- result{val: val, err: err, host: h.Host()}
 		}(h)
 	}
 
 	var (
-		fallback *T
-		errs     []error
+		fallback     *T
+		fallbackHost string
+		errs         []error
 	)
 
 	var fallbackExpiry <-chan time.Time
@@ -496,10 +498,12 @@ func raceRound[T any](ctx context.Context, handlers []*handler, fallbackDeadline
 		select {
 		case r = <-results:
 		case <-fallbackExpiry:
+			recordResponse(fallbackHost, outcomeFallback)
 			return *fallback, false, true, errs
 		case <-ctx.Done():
 			errs = append(errs, ctx.Err())
 			if fallback != nil {
+				recordResponse(fallbackHost, outcomeFallback)
 				return *fallback, false, true, errs
 			}
 
@@ -508,17 +512,20 @@ func raceRound[T any](ctx context.Context, handlers []*handler, fallbackDeadline
 		}
 
 		if r.err != nil {
+			recordResponse(r.host, outcomeError)
 			errs = append(errs, r.err)
 			continue
 		}
 
 		// If r.val satisfies accept, return it immediately.
 		if accept(r.val) {
+			recordResponse(r.host, outcomeMatched)
 			return r.val, true, true, errs
 		}
 
 		if fallback == nil {
 			fallback = &r.val
+			fallbackHost = r.host
 
 			if !fallbackDeadline.IsZero() {
 				fallbackExpiry = time.After(time.Until(fallbackDeadline))
@@ -527,6 +534,7 @@ func raceRound[T any](ctx context.Context, handlers []*handler, fallbackDeadline
 	}
 
 	if fallback != nil {
+		recordResponse(fallbackHost, outcomeFallback)
 		return *fallback, false, true, errs
 	}
 
@@ -545,8 +553,9 @@ func raceRound[T any](ctx context.Context, handlers []*handler, fallbackDeadline
 //     the context was cancelled mid-run).
 func inOrderRound[T any](ctx context.Context, handlers []*handler, fallbackDeadline time.Time, accept func(T) bool, fn queryFunc[T]) (T, bool, bool, []error) {
 	var (
-		fallback *T
-		errs     []error
+		fallback     *T
+		fallbackHost string
+		errs         []error
 	)
 
 	for _, handler := range handlers {
@@ -572,22 +581,26 @@ func inOrderRound[T any](ctx context.Context, handlers []*handler, fallbackDeadl
 		val, err := fn(callCtx, handler)
 		cancel()
 		if err != nil {
+			recordResponse(handler.Host(), outcomeError)
 			errs = append(errs, err)
 			continue
 		}
 
 		// If val satisfies accept, return it immediately.
 		if accept(val) {
+			recordResponse(handler.Host(), outcomeMatched)
 			return val, true, true, errs
 		}
 
 		// If no fallback has been recorded yet, record this val as a best-effort fallback.
 		if fallback == nil {
 			fallback = &val
+			fallbackHost = handler.Host()
 		}
 	}
 
 	if fallback != nil {
+		recordResponse(fallbackHost, outcomeFallback)
 		return *fallback, false, true, errs
 	}
 
