@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -45,6 +46,35 @@ func TestUnmarshalFromFile_Success(t *testing.T) {
 	var result map[string]string
 	require.NoError(t, UnmarshalFromFile(tmpFile.Name(), &result))
 	require.Equal(t, result["key"], "value")
+}
+
+func TestUnmarshal_RejectsUnknownFields(t *testing.T) {
+	type target struct {
+		Key string `json:"key"`
+	}
+	bodies := map[string]string{
+		"json": `{"key":"value","bogus":1}`,
+		"yaml": "key: value\nbogus: 1\n",
+	}
+	t.Run("file", func(t *testing.T) {
+		for name, body := range bodies {
+			t.Run(name, func(t *testing.T) {
+				path := filepath.Join(t.TempDir(), "settings."+name)
+				require.NoError(t, os.WriteFile(path, []byte(body), params.BeaconIoConfig().ReadWritePermissions))
+				var got target
+				require.ErrorContains(t, `unknown field "bogus"`, UnmarshalFromFile(path, &got))
+			})
+		}
+	})
+	t.Run("url", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, err := w.Write([]byte(bodies["json"]))
+			require.NoError(t, err)
+		}))
+		defer server.Close()
+		var got target
+		require.ErrorContains(t, `unknown field "bogus"`, UnmarshalFromURL(t.Context(), server.URL, &got))
+	})
 }
 
 func TestWarnNonChecksummedAddress(t *testing.T) {
