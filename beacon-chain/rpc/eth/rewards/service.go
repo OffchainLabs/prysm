@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	coreblocks "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
@@ -16,6 +17,7 @@ import (
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
@@ -44,6 +46,15 @@ func (rs *BlockRewardService) GetBlockRewardsData(ctx context.Context, blk inter
 	st, httpErr := rs.GetStateForRewards(ctx, blk)
 	if httpErr != nil {
 		return nil, httpErr
+	}
+
+	if st.Version() >= version.Gloas {
+		if err := gloas.ProcessParentExecutionPayload(ctx, st, blk); err != nil {
+			return nil, &httputil.DefaultJsonError{
+				Message: "Could not process parent execution payload: " + err.Error(),
+				Code:    http.StatusInternalServerError,
+			}
+		}
 	}
 
 	proposerIndex := blk.ProposerIndex()

@@ -368,8 +368,7 @@ func (b *BeaconState) AddBuilderFromDeposit(pubkey [fieldparams.BLSPubkeyLength]
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	// process_builder_deposit_request sets version to withdrawal_credentials[0].
-	return b.addBuilderFromDepositAtEpoch(pubkey, withdrawalCredentials[0], withdrawalCredentials, amount, slots.ToEpoch(b.slot))
+	return b.addBuilderFromDepositAtEpoch(pubkey, params.BeaconConfig().PayloadBuilderVersion, withdrawalCredentials, amount, slots.ToEpoch(b.slot))
 }
 
 func (b *BeaconState) addBuilderFromDepositAtEpoch(pubkey [fieldparams.BLSPubkeyLength]byte, builderVersion byte, withdrawalCredentials [fieldparams.RootLength]byte, amount uint64, depositEpoch primitives.Epoch) error {
@@ -685,7 +684,7 @@ func decreaseBalanceWithVal(currBalance, delta primitives.Gwei) primitives.Gwei 
 // OnboardBuildersFromPendingDeposits applies any pending builder deposits at the fork.
 // It mutates the state and prunes pending deposits accordingly.
 //
-//	<spec fn="onboard_builders_from_pending_deposits" fork="gloas" hash="2f9926a6">
+//	<spec fn="onboard_builders_from_pending_deposits" fork="gloas" hash="49853afd">
 //	def onboard_builders_from_pending_deposits(state: BeaconState) -> None:
 //	    """
 //	    Applies any pending deposit for builders, effectively
@@ -693,7 +692,7 @@ func decreaseBalanceWithVal(currBalance, delta primitives.Gwei) primitives.Gwei 
 //	    """
 //	    validator_pubkeys = [v.pubkey for v in state.validators]
 //
-//	    pending_deposits = []
+//	    pending_deposits = PendingDeposits()
 //	    for deposit in state.pending_deposits:
 //	        # Deposits for existing validators stay in the pending queue
 //	        if deposit.pubkey in validator_pubkeys:

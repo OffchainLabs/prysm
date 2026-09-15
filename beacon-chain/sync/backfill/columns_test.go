@@ -354,7 +354,7 @@ func TestBuildColumnBatch(t *testing.T) {
 		p := p2ptest.NewTestP2P(t)
 		store := filesystem.NewEphemeralDataColumnStorage(t)
 
-		cb, err := buildColumnBatch(ctx, batch{}, verifiedROBlocks{}, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, 0, 0, verifiedROBlocks{}, p, store, specNeeds)
 		require.NoError(t, err)
 		nilIshColumnBatch(t, cb)
 	})
@@ -371,7 +371,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   denebSlot + 10,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, b.begin, b.end, blks, p, store, specNeeds)
 		require.NoError(t, err)
 		nilIshColumnBatch(t, cb)
 	})
@@ -388,7 +388,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot + 10,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, b.begin, b.end, blks, p, store, specNeeds)
 		require.NoError(t, err)
 		nilIshColumnBatch(t, cb)
 	})
@@ -405,7 +405,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, b.begin, b.end, blks, p, store, specNeeds)
 		require.NoError(t, err)
 		require.NotNil(t, cb, "batch at Fulu boundary should not be nil")
 	})
@@ -422,7 +422,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot + 1,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, b.begin, b.end, blks, p, store, specNeeds)
 		require.NoError(t, err)
 		require.NotNil(t, cb, "last block at Fulu boundary should not be nil")
 	})
@@ -438,7 +438,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, b.begin, b.end, blks, p, store, specNeeds)
 		require.NoError(t, err)
 		nilIshColumnBatch(t, cb)
 	})
@@ -464,7 +464,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot + primitives.Slot(postFuluCount),
 		}
 
-		cb, err := buildColumnBatch(ctx, b, allBlocks, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, b.begin, b.end, allBlocks, p, store, specNeeds)
 		require.NoError(t, err)
 		require.NotNil(t, cb, "mixed epoch batch should not be nil")
 		// Should only include Fulu blocks
@@ -483,7 +483,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot + 100,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, b.begin, b.end, blks, p, store, specNeeds)
 		require.NoError(t, err)
 		require.NotNil(t, cb, "first block at Fulu should not be nil")
 		require.Equal(t, 3, len(cb.toDownload), "should include all 3 blocks")
@@ -500,7 +500,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot + 10,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, b.begin, b.end, blks, p, store, specNeeds)
 		require.NoError(t, err)
 		require.NotNil(t, cb)
 		require.Equal(t, fuluSlot, cb.first, "first slot should be set")
@@ -519,7 +519,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot + 10,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, b.begin, b.end, blks, p, store, specNeeds)
 		require.NoError(t, err)
 		require.NotNil(t, cb)
 		require.Equal(t, fuluSlot, cb.first, "first should be slot of first block with commitments")
@@ -549,7 +549,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot + 10,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, allBlocks, p, store, specNeeds)
+		cb, err := buildColumnBatch(ctx, b.begin, b.end, allBlocks, p, store, specNeeds)
 		require.NoError(t, err)
 		require.NotNil(t, cb)
 		// Should only have 2 blocks (those with commitments)
@@ -934,7 +934,7 @@ func TestNewColumnSync(t *testing.T) {
 		}
 
 		// Empty blocks should result in nil columnBatch
-		cs, err := newColumnSync(ctx, batch{}, verifiedROBlocks{}, current, p2p, cfg)
+		cs, err := newColumnSync(ctx, 0, 0, verifiedROBlocks{}, current, p2p, cfg)
 		require.NoError(t, err)
 		require.NotNil(t, cs, "columnSync should not be nil")
 		require.Equal(t, true, cs.columnBatch == nil, "columnBatch should be nil for empty blocks")
@@ -946,21 +946,15 @@ func TestNewColumnSync(t *testing.T) {
 		colStore := filesystem.NewEphemeralDataColumnStorage(t)
 		current := fuluSlot + 100
 
-		blks, _ := testBlobGen(t, fuluSlot, 2)
-		b := batch{
-			begin:  fuluSlot,
-			end:    fuluSlot + 10,
-			blocks: blks,
-		}
-
 		cfg := &workerCfg{
 			colStore:     colStore,
 			downscore:    func(peer.ID, string, error) {},
 			currentNeeds: func() das.CurrentNeeds { return mockCurrentSpecNeeds() },
 		}
-
-		cs, err := newColumnSync(ctx, b, blks, current, p2p, cfg)
+		blks, _ := testBlobGen(t, fuluSlot, 2)
+		cs, err := newColumnSync(ctx, fuluSlot, fuluSlot+10, blks, current, p2p, cfg)
 		require.NoError(t, err)
+
 		require.NotNil(t, cs)
 		require.NotNil(t, cs.columnBatch, "columnBatch should be initialized")
 		require.NotNil(t, cs.store, "store should be initialized")

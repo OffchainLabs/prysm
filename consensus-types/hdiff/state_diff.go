@@ -38,13 +38,26 @@ type HdiffBytes struct {
 	BalancesDiff   []byte
 }
 
+type withdrawalCredentialsProvider interface {
+	WithdrawalCredentials() [fieldparams.RootLength]byte
+}
+
+func validatorWithdrawalCredentials(validator state.ReadOnlyValidator) [fieldparams.RootLength]byte {
+	if provider, ok := validator.(withdrawalCredentialsProvider); ok {
+		return provider.WithdrawalCredentials()
+	}
+	var credentials [fieldparams.RootLength]byte
+	copy(credentials[:], validator.GetWithdrawalCredentials())
+	return credentials
+}
+
 // Diff computes the difference between two beacon states and returns it as a serialized HdiffBytes object.
 func Diff(source, target state.ReadOnlyBeaconState) (HdiffBytes, error) {
 	h, err := diffInternal(source, target)
 	if err != nil {
 		return HdiffBytes{}, err
 	}
-	return h.serialize(), nil
+	return h.serialize()
 }
 
 // ApplyDiff appplies the given serialized diff to the source beacon state and returns the resulting state.
@@ -137,6 +150,15 @@ type hdiff struct {
 	validatorDiffs []validatorDiff
 	balancesDiff   []int64
 }
+
+// minValidatorDiffSize is the serialized size of a validatorDiff with nil PublicKey and WithdrawalCredentials.
+// - index: 4 bytes
+// - PublicKey: 1 byte (nil marker)
+// - WithdrawalCredentials: 1 byte (nil marker)
+// - EffectiveBalance: 8 bytes
+// - Slashed: 1 byte
+// - ActivationEpoch: 4*8 bytes (4 fields of 8 bytes each)
+const minValidatorDiffSize = 4 + 1 + 1 + 8 + 1 + 4*8
 
 // validatorDiff is a type that represents a difference between two validators.
 type validatorDiff struct {
@@ -287,7 +309,7 @@ func (ret *stateDiff) readHistoricalRoots(data *[]byte) error {
 	}
 	historicalRootsLength := int(binary.LittleEndian.Uint64((*data)[:8])) // lint:ignore uintcast
 	(*data) = (*data)[8:]
-	if len(*data) < historicalRootsLength*fieldparams.RootLength {
+	if historicalRootsLength < 0 || historicalRootsLength > len(*data)/fieldparams.RootLength {
 		return errors.Wrap(errDataSmall, "historicalRoots")
 	}
 	ret.historicalRoots = make([][fieldparams.RootLength]byte, historicalRootsLength)
@@ -326,7 +348,7 @@ func (ret *stateDiff) readEth1DataVotes(data *[]byte) error {
 	}
 	ret.eth1VotesAppend = ((*data)[0] == nilMarker)
 	eth1DataVotesLength := int(binary.LittleEndian.Uint64((*data)[1 : 1+8])) // lint:ignore uintcast
-	if len(*data) < 1+8+eth1DataVotesLength*eth1DataLength {
+	if eth1DataVotesLength < 0 || eth1DataVotesLength > (len(*data)-9)/eth1DataLength {
 		return errors.Wrap(errDataSmall, "eth1DataVotes")
 	}
 	ret.eth1DataVotes = make([]*ethpb.Eth1Data, eth1DataVotesLength)
@@ -378,6 +400,9 @@ func (ret *stateDiff) readSlashings(data *[]byte) error {
 	return nil
 }
 
+// pendingAttestationFixedSize is 8 (bits length field) + 128 (AttestationData) + 16 (inclusion delay, proposer index).
+const pendingAttestationFixedSize = 152
+
 func readPendingAttestation(data *[]byte) (*ethpb.PendingAttestation, error) {
 	if len(*data) < 8 {
 		return nil, errors.Wrap(errDataSmall, "pendingAttestation")
@@ -386,9 +411,7 @@ func readPendingAttestation(data *[]byte) (*ethpb.PendingAttestation, error) {
 	if bitsLength < 0 {
 		return nil, errors.Wrap(errDataSmall, "pendingAttestation: negative bitsLength")
 	}
-	// Check for integer overflow: 8 + bitsLength + 144
-	const fixedSize = 152 // 8 (length field) + 144 (fixed fields)
-	if bitsLength > len(*data)-fixedSize {
+	if bitsLength > len(*data)-pendingAttestationFixedSize {
 		return nil, errors.Wrap(errDataSmall, "pendingAttestation")
 	}
 	pending := &ethpb.PendingAttestation{}
@@ -409,8 +432,8 @@ func (ret *stateDiff) readPreviousEpochAttestations(data *[]byte) error {
 		return errors.Wrap(errDataSmall, "previousEpochAttestations")
 	}
 	previousEpochAttestationsLength := int(binary.LittleEndian.Uint64((*data)[:8])) // lint:ignore uintcast
-	if previousEpochAttestationsLength < 0 {
-		return errors.Wrap(errDataSmall, "previousEpochAttestations: negative length")
+	if previousEpochAttestationsLength < 0 || previousEpochAttestationsLength > (len(*data)-8)/pendingAttestationFixedSize {
+		return errors.Wrap(errDataSmall, "previousEpochAttestations")
 	}
 	ret.previousEpochAttestations = make([]*ethpb.PendingAttestation, previousEpochAttestationsLength)
 	(*data) = (*data)[8:]
@@ -429,8 +452,8 @@ func (ret *stateDiff) readCurrentEpochAttestations(data *[]byte) error {
 		return errors.Wrap(errDataSmall, "currentEpochAttestations")
 	}
 	currentEpochAttestationsLength := int(binary.LittleEndian.Uint64((*data)[:8])) // lint:ignore uintcast
-	if currentEpochAttestationsLength < 0 {
-		return errors.Wrap(errDataSmall, "currentEpochAttestations: negative length")
+	if currentEpochAttestationsLength < 0 || currentEpochAttestationsLength > (len(*data)-8)/pendingAttestationFixedSize {
+		return errors.Wrap(errDataSmall, "currentEpochAttestations")
 	}
 	ret.currentEpochAttestations = make([]*ethpb.PendingAttestation, currentEpochAttestationsLength)
 	(*data) = (*data)[8:]
@@ -531,7 +554,7 @@ func (ret *stateDiff) readInactivityScores(data *[]byte) error {
 	if inactivityScoresLength < 0 {
 		return errors.Wrap(errDataSmall, "inactivityScores: negative length")
 	}
-	if len(*data)-8 < inactivityScoresLength*8 {
+	if inactivityScoresLength > (len(*data)-8)/8 {
 		return errors.Wrap(errDataSmall, "inactivityScores")
 	}
 	ret.inactivityScores = make([]uint64, inactivityScoresLength)
@@ -649,7 +672,7 @@ func (ret *stateDiff) readHistoricalSummaries(data *[]byte) error {
 	if historicalSummariesLength < 0 {
 		return errors.Wrap(errDataSmall, "historicalSummaries: negative length")
 	}
-	if len(*data) < 8+historicalSummariesLength*fieldparams.RootLength*2 {
+	if historicalSummariesLength > (len(*data)-8)/(2*fieldparams.RootLength) {
 		return errors.Wrap(errDataSmall, "historicalSummaries")
 	}
 	ret.historicalSummaries = make([]*ethpb.HistoricalSummary, historicalSummariesLength)
@@ -688,7 +711,7 @@ func (ret *stateDiff) readPendingDeposits(data *[]byte) error {
 	if pendingDepositDiffLength < 0 {
 		return errors.Wrap(errDataSmall, "pendingDeposits: negative length")
 	}
-	if len(*data) < 16+pendingDepositDiffLength*pendingDepositLength {
+	if pendingDepositDiffLength > (len(*data)-16)/pendingDepositLength {
 		return errors.Wrap(errDataSmall, "pendingDepositDiff")
 	}
 	ret.pendingDepositDiff = make([]*ethpb.PendingDeposit, pendingDepositDiffLength)
@@ -716,7 +739,7 @@ func (ret *stateDiff) readPendingPartialWithdrawals(data *[]byte) error {
 	if pendingPartialWithdrawalsDiffLength < 0 {
 		return errors.Wrap(errDataSmall, "pendingPartialWithdrawals: negative length")
 	}
-	if len(*data) < 16+pendingPartialWithdrawalsDiffLength*pendingPartialWithdrawalLength {
+	if pendingPartialWithdrawalsDiffLength > (len(*data)-16)/pendingPartialWithdrawalLength {
 		return errors.Wrap(errDataSmall, "pendingPartialWithdrawalsDiff")
 	}
 	ret.pendingPartialWithdrawalsDiff = make([]*ethpb.PendingPartialWithdrawal, pendingPartialWithdrawalsDiffLength)
@@ -742,7 +765,7 @@ func (ret *stateDiff) readPendingConsolidations(data *[]byte) error {
 	if pendingConsolidationsDiffsLength < 0 {
 		return errors.Wrap(errDataSmall, "pendingConsolidations: negative length")
 	}
-	if len(*data) < 16+pendingConsolidationsDiffsLength*pendingConsolidationLength {
+	if pendingConsolidationsDiffsLength > (len(*data)-16)/pendingConsolidationLength {
 		return errors.Wrap(errDataSmall, "pendingConsolidationsDiffs")
 	}
 	ret.pendingConsolidationsDiffs = make([]*ethpb.PendingConsolidation, pendingConsolidationsDiffsLength)
@@ -774,7 +797,7 @@ func (ret *stateDiff) readProposerLookahead(data *[]byte) error {
 
 // newStateDiff deserializes a new stateDiff object from the given data.
 func newStateDiff(input []byte) (*stateDiff, error) {
-	data, err := snappy.Decode(nil, input)
+	data, err := snappyDecode(input)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decode snappy")
 	}
@@ -893,7 +916,7 @@ func newStateDiff(input []byte) (*stateDiff, error) {
 
 // newValidatorDiffs deserializes a new validator diffs from the given data.
 func newValidatorDiffs(input []byte) ([]validatorDiff, error) {
-	data, err := snappy.Decode(nil, input)
+	data, err := snappyDecode(input)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decode snappy")
 	}
@@ -903,6 +926,10 @@ func newValidatorDiffs(input []byte) ([]validatorDiff, error) {
 	}
 	validatorDiffsLength := binary.LittleEndian.Uint64(data[cursor : cursor+8])
 	cursor += 8
+	if validatorDiffsLength > uint64(len(data)-cursor)/minValidatorDiffSize {
+		return nil, errors.Wrap(errDataSmall, "validatorDiffs")
+	}
+
 	validatorDiffs := make([]validatorDiff, validatorDiffsLength)
 	for i := range validatorDiffsLength {
 		if len(data[cursor:]) < 4 {
@@ -971,7 +998,7 @@ func newValidatorDiffs(input []byte) ([]validatorDiff, error) {
 
 // newBalancesDiff deserializes a new balances diff from the given data.
 func newBalancesDiff(input []byte) ([]int64, error) {
-	data, err := snappy.Decode(nil, input)
+	data, err := snappyDecode(input)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decode snappy")
 	}
@@ -979,8 +1006,8 @@ func newBalancesDiff(input []byte) ([]int64, error) {
 		return nil, errors.Wrap(errDataSmall, "balancesDiff")
 	}
 	balancesLength := int(binary.LittleEndian.Uint64(data[:8])) // lint:ignore uintcast
-	if balancesLength < 0 {
-		return nil, errors.Wrap(errDataSmall, "balancesDiff: negative length")
+	if balancesLength < 0 || balancesLength > (len(data)-8)/8 {
+		return nil, errors.Wrap(errDataSmall, "balancesDiff")
 	}
 	if len(data) != 8+balancesLength*8 {
 		return nil, errors.Errorf("incorrect length of balancesDiff, expected %d, got %d", 8+balancesLength*8, len(data))
@@ -992,8 +1019,102 @@ func newBalancesDiff(input []byte) ([]int64, error) {
 	return balances, nil
 }
 
+func (s *stateDiff) serializedSize() int {
+	size := 2 * 8 // targetVersion and slot.
+
+	size++ // fork marker.
+	if s.fork != nil {
+		size += len(s.fork.PreviousVersion) + len(s.fork.CurrentVersion) + 8
+	}
+
+	size++ // latestBlockHeader marker.
+	if s.latestBlockHeader != nil {
+		size += 2*8 + len(s.latestBlockHeader.ParentRoot) + len(s.latestBlockHeader.StateRoot) + len(s.latestBlockHeader.BodyRoot)
+	}
+
+	size += len(s.blockRoots) * fieldparams.RootLength
+	size += len(s.stateRoots) * fieldparams.RootLength
+	size += 8 + len(s.historicalRoots)*fieldparams.RootLength
+
+	size++ // eth1Data marker.
+	if s.eth1Data != nil {
+		size += len(s.eth1Data.DepositRoot) + 8 + len(s.eth1Data.BlockHash)
+	}
+	size += 1 + 8 // eth1VotesAppend marker and eth1DataVotes length.
+	for _, vote := range s.eth1DataVotes {
+		size += len(vote.DepositRoot) + 8 + len(vote.BlockHash)
+	}
+	size += 8 // eth1DepositIndex.
+	size += len(s.randaoMixes) * fieldparams.RootLength
+	size += len(s.slashings) * 8
+
+	if s.targetVersion == version.Phase0 {
+		size += serializedPendingAttestationsSize(s.previousEpochAttestations)
+		size += serializedPendingAttestationsSize(s.currentEpochAttestations)
+	} else {
+		size += 8 + len(s.previousEpochParticipation)
+		size += 8 + len(s.currentEpochParticipation)
+	}
+
+	size++ // justificationBits.
+	size += 8 + len(s.previousJustifiedCheckpoint.Root)
+	size += 8 + len(s.currentJustifiedCheckpoint.Root)
+	size += 8 + len(s.finalizedCheckpoint.Root)
+	size += 8 + len(s.inactivityScores)*8
+	size += serializedSyncCommitteeSize(s.currentSyncCommittee)
+	size += serializedSyncCommitteeSize(s.nextSyncCommittee)
+
+	if s.targetVersion < version.Gloas {
+		size++ // executionPayloadHeader marker.
+		if s.executionPayloadHeader != nil {
+			size += 8 + s.executionPayloadHeader.SizeSSZ()
+		}
+	}
+
+	size += 2 * 8 // withdrawal indices.
+	size += 8     // historicalSummaries length.
+	for _, summary := range s.historicalSummaries {
+		size += len(summary.BlockSummaryRoot) + len(summary.StateSummaryRoot)
+	}
+
+	size += 6 * 8 // Electra scalar fields.
+	size += 2 * 8 // pendingDepositIndex and pendingDepositDiff length.
+	for _, deposit := range s.pendingDepositDiff {
+		size += len(deposit.PublicKey) + len(deposit.WithdrawalCredentials) + 8 + len(deposit.Signature) + 8
+	}
+	size += 2*8 + len(s.pendingPartialWithdrawalsDiff)*pendingPartialWithdrawalLength
+	size += 2*8 + len(s.pendingConsolidationsDiffs)*pendingConsolidationLength
+
+	if s.targetVersion >= version.Fulu {
+		size += len(s.proposerLookahead) * 8
+	}
+	if s.targetVersion >= version.Gloas {
+		size += serializedGloasFieldsSize(s)
+	}
+	return size
+}
+
+func serializedPendingAttestationsSize(attestations []*ethpb.PendingAttestation) int {
+	size := 8 // List length.
+	for _, attestation := range attestations {
+		size += 8 + len(attestation.AggregationBits) + attestation.Data.SizeSSZ() + 2*8
+	}
+	return size
+}
+
+func serializedSyncCommitteeSize(committee *ethpb.SyncCommittee) int {
+	size := 1 // Nil marker.
+	if committee == nil {
+		return size
+	}
+	for _, pubkey := range committee.Pubkeys {
+		size += len(pubkey)
+	}
+	return size + len(committee.AggregatePubkey)
+}
+
 func (s *stateDiff) serialize() []byte {
-	ret := make([]byte, 0)
+	ret := make([]byte, 0, s.serializedSize())
 	ret = binary.LittleEndian.AppendUint64(ret, uint64(s.targetVersion))
 	ret = binary.LittleEndian.AppendUint64(ret, uint64(s.slot))
 	if s.fork == nil {
@@ -1104,8 +1225,8 @@ func (s *stateDiff) serialize() []byte {
 	ret = append(ret, s.finalizedCheckpoint.Root...)
 
 	ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.inactivityScores)))
-	for _, s := range s.inactivityScores {
-		ret = binary.LittleEndian.AppendUint64(ret, s)
+	for _, score := range s.inactivityScores {
+		ret = binary.LittleEndian.AppendUint64(ret, score)
 	}
 
 	if s.currentSyncCommittee == nil {
@@ -1194,7 +1315,20 @@ func (s *stateDiff) serialize() []byte {
 	return ret
 }
 
-func (h *hdiff) serialize() HdiffBytes {
+func (h *hdiff) serialize() (HdiffBytes, error) {
+	stateBytes := h.stateDiff.serialize()
+	if stateBytes == nil {
+		return HdiffBytes{}, errors.New("failed to serialize state diff")
+	}
+	serializedState := snappy.Encode(nil, stateBytes)
+
+	bals := make([]byte, 0, 8+len(h.balancesDiff)*8)
+	bals = binary.LittleEndian.AppendUint64(bals, uint64(len(h.balancesDiff)))
+	for _, b := range h.balancesDiff {
+		bals = binary.LittleEndian.AppendUint64(bals, uint64(b))
+	}
+	serializedBalances := snappy.Encode(nil, bals)
+
 	vals := make([]byte, 0)
 	vals = binary.LittleEndian.AppendUint64(vals, uint64(len(h.validatorDiffs)))
 	for _, v := range h.validatorDiffs {
@@ -1223,16 +1357,11 @@ func (h *hdiff) serialize() HdiffBytes {
 		vals = binary.LittleEndian.AppendUint64(vals, uint64(v.WithdrawableEpoch))
 	}
 
-	bals := make([]byte, 0, 8+len(h.balancesDiff)*8)
-	bals = binary.LittleEndian.AppendUint64(bals, uint64(len(h.balancesDiff)))
-	for _, b := range h.balancesDiff {
-		bals = binary.LittleEndian.AppendUint64(bals, uint64(b))
-	}
 	return HdiffBytes{
-		StateDiff:      snappy.Encode(nil, h.stateDiff.serialize()),
+		StateDiff:      serializedState,
 		ValidatorDiffs: snappy.Encode(nil, vals),
-		BalancesDiff:   snappy.Encode(nil, bals),
-	}
+		BalancesDiff:   serializedBalances,
+	}, nil
 }
 
 // diffToVals computes the difference between two BeaconStates and returns a slice of validatorDiffs.
@@ -1253,29 +1382,33 @@ func diffToVals(source, target state.ReadOnlyBeaconState) ([]validatorDiff, erro
 		if sourceIndex != expectedIndex {
 			return nil, errors.Errorf("source validators iterator returned index %d, expected %d", sourceIndex, expectedIndex)
 		}
-		targetIndex, ti, ok := nextTarget()
-		if !ok {
+		if processed >= sourceCount {
+			return nil, errors.Errorf("source validators iterator exceeds reported length %d", sourceCount)
+		}
+		targetIndex, targetValidator, targetOK := nextTarget()
+		if !targetOK {
 			return nil, errors.Errorf("target validators iterator ended at index %d, expected length %d", processed, targetCount)
 		}
 		if targetIndex != expectedIndex {
 			return nil, errors.Errorf("target validators iterator returned index %d, expected %d", targetIndex, expectedIndex)
 		}
-		if validatorsEqual(s, ti) {
+		if validatorsEqual(s, targetValidator) {
 			processed++
 			expectedIndex++
 			continue
 		}
 		d := validatorDiff{
-			Slashed:                    ti.Slashed(),
+			Slashed:                    targetValidator.Slashed(),
 			index:                      uint32(processed),
-			EffectiveBalance:           ti.EffectiveBalance(),
-			ActivationEligibilityEpoch: ti.ActivationEligibilityEpoch(),
-			ActivationEpoch:            ti.ActivationEpoch(),
-			ExitEpoch:                  ti.ExitEpoch(),
-			WithdrawableEpoch:          ti.WithdrawableEpoch(),
+			EffectiveBalance:           targetValidator.EffectiveBalance(),
+			ActivationEligibilityEpoch: targetValidator.ActivationEligibilityEpoch(),
+			ActivationEpoch:            targetValidator.ActivationEpoch(),
+			ExitEpoch:                  targetValidator.ExitEpoch(),
+			WithdrawableEpoch:          targetValidator.WithdrawableEpoch(),
 		}
-		if !bytes.Equal(s.GetWithdrawalCredentials(), ti.GetWithdrawalCredentials()) {
-			d.WithdrawalCredentials = slices.Clone(ti.GetWithdrawalCredentials())
+		if validatorWithdrawalCredentials(s) != validatorWithdrawalCredentials(targetValidator) {
+			credentials := validatorWithdrawalCredentials(targetValidator)
+			d.WithdrawalCredentials = slices.Clone(credentials[:])
 		}
 		diffs = append(diffs, d)
 		processed++
@@ -1285,26 +1418,30 @@ func diffToVals(source, target state.ReadOnlyBeaconState) ([]validatorDiff, erro
 		return nil, errors.Errorf("source validators iterator ended at index %d, expected length %d", processed, sourceCount)
 	}
 	for i := sourceCount; i < targetCount; i++ {
-		targetIndex, ti, ok := nextTarget()
-		if !ok {
+		targetIndex, targetValidator, targetOK := nextTarget()
+		if !targetOK {
 			return nil, errors.Errorf("target validators iterator ended at index %d, expected length %d", i, targetCount)
 		}
 		if targetIndex != expectedIndex {
 			return nil, errors.Errorf("target validators iterator returned index %d, expected %d", targetIndex, expectedIndex)
 		}
-		pubkey := ti.PublicKey()
+		pubkey := targetValidator.PublicKey()
+		credentials := validatorWithdrawalCredentials(targetValidator)
 		diffs = append(diffs, validatorDiff{
-			Slashed:                    ti.Slashed(),
+			Slashed:                    targetValidator.Slashed(),
 			index:                      uint32(i),
 			PublicKey:                  pubkey[:],
-			WithdrawalCredentials:      slices.Clone(ti.GetWithdrawalCredentials()),
-			EffectiveBalance:           ti.EffectiveBalance(),
-			ActivationEligibilityEpoch: ti.ActivationEligibilityEpoch(),
-			ActivationEpoch:            ti.ActivationEpoch(),
-			ExitEpoch:                  ti.ExitEpoch(),
-			WithdrawableEpoch:          ti.WithdrawableEpoch(),
+			WithdrawalCredentials:      slices.Clone(credentials[:]),
+			EffectiveBalance:           targetValidator.EffectiveBalance(),
+			ActivationEligibilityEpoch: targetValidator.ActivationEligibilityEpoch(),
+			ActivationEpoch:            targetValidator.ActivationEpoch(),
+			ExitEpoch:                  targetValidator.ExitEpoch(),
+			WithdrawableEpoch:          targetValidator.WithdrawableEpoch(),
 		})
 		expectedIndex++
+	}
+	if targetIndex, _, ok := nextTarget(); ok {
+		return nil, errors.Errorf("target validators iterator exceeds reported length %d at index %d", targetCount, targetIndex)
 	}
 	return diffs, nil
 }
@@ -1318,7 +1455,7 @@ func validatorsEqual(s, t state.ReadOnlyValidator) bool {
 	if s == nil || t == nil {
 		return false
 	}
-	if !bytes.Equal(s.GetWithdrawalCredentials(), t.GetWithdrawalCredentials()) {
+	if validatorWithdrawalCredentials(s) != validatorWithdrawalCredentials(t) {
 		return false
 	}
 	if s.EffectiveBalance() != t.EffectiveBalance() {
@@ -1391,8 +1528,12 @@ func diffToState(source, target state.ReadOnlyBeaconState) (*stateDiff, error) {
 	if !helpers.BlockHeadersEqual(source.LatestBlockHeader(), target.LatestBlockHeader()) {
 		ret.latestBlockHeader = target.LatestBlockHeader()
 	}
-	diffBlockRoots(ret, source, target)
-	diffStateRoots(ret, source, target)
+	if err := diffBlockRoots(ret, source, target); err != nil {
+		return nil, errors.Wrap(err, "failed to diff block roots")
+	}
+	if err := diffStateRoots(ret, source, target); err != nil {
+		return nil, errors.Wrap(err, "failed to diff state roots")
+	}
 	var err error
 	ret.historicalRoots, err = diffHistoricalRoots(source, target)
 	if err != nil {
@@ -1403,7 +1544,9 @@ func diffToState(source, target state.ReadOnlyBeaconState) (*stateDiff, error) {
 	}
 	diffEth1DataVotes(ret, source, target)
 	ret.eth1DepositIndex = target.Eth1DepositIndex()
-	diffRandaoMixes(ret, source, target)
+	if err := diffRandaoMixes(ret, source, target); err != nil {
+		return nil, errors.Wrap(err, "failed to diff RANDAO mixes")
+	}
 	diffSlashings(ret, source, target)
 	if target.Version() < version.Altair {
 		ret.previousEpochAttestations, err = target.PreviousEpochAttestations()
@@ -1508,43 +1651,39 @@ func diffJustificationBits(target state.ReadOnlyBeaconState) byte {
 }
 
 // diffBlockRoots computes the difference between two BeaconStates' block roots.
-func diffBlockRoots(diff *stateDiff, source, target state.ReadOnlyBeaconState) {
+func diffBlockRoots(diff *stateDiff, source, target state.ReadOnlyBeaconState) error {
 	sRoots := source.BlockRoots()
 	tRoots := target.BlockRoots()
 	if len(sRoots) != len(tRoots) {
-		logrus.Errorf("Block roots length mismatch: source %d, target %d", len(sRoots), len(tRoots))
-		return
+		return errors.Errorf("block roots length mismatch: source %d, target %d", len(sRoots), len(tRoots))
 	}
 	if len(sRoots) != fieldparams.BlockRootsLength {
-		logrus.Errorf("Block roots length mismatch: expected: %d, source %d", fieldparams.BlockRootsLength, len(sRoots))
-		return
+		return errors.Errorf("block roots length mismatch: expected %d, source %d", fieldparams.BlockRootsLength, len(sRoots))
 	}
 	for i := range fieldparams.BlockRootsLength {
 		if !bytes.Equal(sRoots[i], tRoots[i]) {
-			// This copy can be avoided if we use [][]byte instead of [][32]byte.
 			copy(diff.blockRoots[i][:], tRoots[i])
 		}
 	}
+	return nil
 }
 
 // diffStateRoots computes the difference between two BeaconStates' state roots.
-func diffStateRoots(diff *stateDiff, source, target state.ReadOnlyBeaconState) {
+func diffStateRoots(diff *stateDiff, source, target state.ReadOnlyBeaconState) error {
 	sRoots := source.StateRoots()
 	tRoots := target.StateRoots()
 	if len(sRoots) != len(tRoots) {
-		logrus.Errorf("State roots length mismatch: source %d, target %d", len(sRoots), len(tRoots))
-		return
+		return errors.Errorf("state roots length mismatch: source %d, target %d", len(sRoots), len(tRoots))
 	}
 	if len(sRoots) != fieldparams.StateRootsLength {
-		logrus.Errorf("State roots length mismatch: expected %d, source %d", fieldparams.StateRootsLength, len(sRoots))
-		return
+		return errors.Errorf("state roots length mismatch: expected %d, source %d", fieldparams.StateRootsLength, len(sRoots))
 	}
 	for i := range fieldparams.StateRootsLength {
 		if !bytes.Equal(sRoots[i], tRoots[i]) {
-			// This copy can be avoided if we use [][]byte instead of [][32]byte.
 			copy(diff.stateRoots[i][:], tRoots[i])
 		}
 	}
+	return nil
 }
 
 func diffHistoricalRoots(source, target state.ReadOnlyBeaconState) ([][fieldparams.RootLength]byte, error) {
@@ -1586,23 +1725,21 @@ func diffEth1DataVotes(diff *stateDiff, source, target state.ReadOnlyBeaconState
 	diff.eth1DataVotes = tVotes
 }
 
-func diffRandaoMixes(diff *stateDiff, source, target state.ReadOnlyBeaconState) {
+func diffRandaoMixes(diff *stateDiff, source, target state.ReadOnlyBeaconState) error {
 	sMixes := source.RandaoMixes()
 	tMixes := target.RandaoMixes()
 	if len(sMixes) != len(tMixes) {
-		logrus.Errorf("Randao mixes length mismatch: source %d, target %d", len(sMixes), len(tMixes))
-		return
+		return errors.Errorf("RANDAO mixes length mismatch: source %d, target %d", len(sMixes), len(tMixes))
 	}
 	if len(sMixes) != fieldparams.RandaoMixesLength {
-		logrus.Errorf("Randao mixes length mismatch: expected %d, source %d", fieldparams.RandaoMixesLength, len(sMixes))
-		return
+		return errors.Errorf("RANDAO mixes length mismatch: expected %d, source %d", fieldparams.RandaoMixesLength, len(sMixes))
 	}
 	for i := range fieldparams.RandaoMixesLength {
 		if !bytes.Equal(sMixes[i], tMixes[i]) {
-			// This copy can be avoided if we use [][]byte instead of [][32]byte.
 			copy(diff.randaoMixes[i][:], tMixes[i])
 		}
 	}
+	return nil
 }
 
 func diffSlashings(diff *stateDiff, source, target state.ReadOnlyBeaconState) {

@@ -8,7 +8,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
-	octrace "go.opentelemetry.io/otel/trace"
 )
 
 // WaitForActivation checks whether the validator pubkey is in the active
@@ -21,111 +20,90 @@ func (v *validator) WaitForActivation(ctx context.Context) error {
 	return v.waitForActivation(ctx, false)
 }
 
-// waitForActivation implements WaitForActivation. accountsChanged marks calls
-// re-entered after a key change, whose keys HandleKeyReload never saw.
+// waitForActivation implements WaitForActivation. accountsChanged marks passes
+// entered after a key change, whose keys HandleKeyReload never saw.
 func (v *validator) waitForActivation(ctx context.Context, accountsChanged bool) error {
 	ctx, span := trace.StartSpan(ctx, "validator.WaitForActivation")
 	defer span.End()
 
-	// Step 1: Fetch validating public keys.
-	validatingKeys, err := v.km.FetchValidatingPublicKeys(ctx)
-	if err != nil {
-		return errors.Wrap(err, msgCouldNotFetchKeys)
-	}
+	for {
+		// Step 1: Fetch validating public keys.
+		validatingKeys, err := v.km.FetchValidatingPublicKeys(ctx)
+		if err != nil {
+			return errors.Wrap(err, msgCouldNotFetchKeys)
+		}
 
-	// Startup keys are vetted by the startup doppelganger check instead.
-	if accountsChanged {
-		v.trackReloadedKeysForDoppelGanger(validatingKeys)
-	}
+		// Startup keys are vetted by the startup doppelganger check instead.
+		if accountsChanged {
+			v.trackReloadedKeysForDoppelGanger(validatingKeys)
+		}
 
-	// Step 2: If no keys, wait for accounts change or context cancellation.
-	if len(validatingKeys) == 0 {
-		log.Warn(msgNoKeysFetched)
-		return v.waitForAccountsChange(ctx)
-	}
-
-	// Step 3: update validator statuses in cache.
-	if err := v.updateValidatorStatusCache(ctx, validatingKeys); err != nil {
-		return v.retryWaitForActivation(ctx, span, err, "Connection broken while waiting for activation. Reconnecting...", accountsChanged)
-	}
-
-	// Step 4: Check and log validator statuses.
-	someAreActive := v.checkAndLogValidatorStatus()
-	if !someAreActive {
-		// Step 6: If no active validators, wait for accounts change, context cancellation, or next epoch.
-		select {
-		case <-ctx.Done():
-			log.Debug("Context closed, exiting WaitForActivation")
-			return ctx.Err()
-		case <-v.accountsChangedChannel:
-			// Accounts (keys) changed, restart the process.
-			return v.waitForActivation(ctx, true)
-		default:
-			if err := v.waitForNextEpoch(ctx, v.genesisTime); err != nil {
-				return v.retryWaitForActivation(ctx, span, err, "Failed to wait for next epoch. Reconnecting...", accountsChanged)
+		// Step 2: If no keys, wait for accounts change or context cancellation.
+		if len(validatingKeys) == 0 {
+			log.Warn(msgNoKeysFetched)
+			if err := v.waitForAccountsChange(ctx); err != nil {
+				return errors.Wrap(err, "could not wait for accounts change")
 			}
-			return v.waitForActivation(incrementRetries(ctx), accountsChanged)
+			accountsChanged = true
+			continue
+		}
+
+		// Step 3: update validator statuses in cache, waiting out a broken connection.
+		if err := v.updateValidatorStatusCache(ctx, validatingKeys); err != nil {
+			if ctx.Err() != nil {
+				return errors.Wrap(ctx.Err(), "context closed while waiting for activation")
+			}
+			tracing.AnnotateError(span, err)
+			log.WithError(err).Error("Connection broken while waiting for activation. Reconnecting...")
+			if err := v.healthMonitor.WaitForHealthy(ctx); err != nil {
+				return errors.Wrap(err, "could not wait for a healthy beacon node")
+			}
+			continue
+		}
+
+		// Step 4: Check and log validator statuses.
+		if v.checkAndLogValidatorStatus() {
+			return nil
+		}
+
+		// Step 5: If no active validators, wait for accounts change, context cancellation, or next epoch.
+		changed, err := v.waitForNextEpoch(ctx, v.genesisTime)
+		if err != nil {
+			return errors.Wrap(err, "could not wait for next epoch")
+		}
+		if changed {
+			accountsChanged = true
 		}
 	}
-	return nil
 }
 
-func (v *validator) retryWaitForActivation(ctx context.Context, span octrace.Span, err error, message string, accountsChanged bool) error {
-	tracing.AnnotateError(span, err)
-	attempts := activationAttempts(ctx)
-	log.WithError(err).WithField("attempts", attempts).Error(message)
-	// Reconnection attempt backoff, up to 60s.
-	time.Sleep(time.Second * time.Duration(min(uint64(attempts), 60)))
-	// TODO: refactor this to use the health tracker instead for reattempt
-	return v.waitForActivation(incrementRetries(ctx), accountsChanged)
-}
-
+// waitForAccountsChange blocks until the keymanager reports a key change.
 func (v *validator) waitForAccountsChange(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		log.Debug("Context closed, exiting waitForAccountsChange")
 		return ctx.Err()
 	case <-v.accountsChangedChannel:
-		// If the accounts changed, try again.
-		return v.waitForActivation(ctx, true)
+		return nil
 	}
 }
 
-// waitForNextEpoch creates a blocking function to wait until the next epoch start given the current slot
-func (v *validator) waitForNextEpoch(ctx context.Context, genesis time.Time) error {
+// waitForNextEpoch blocks until the next epoch starts, or returns true as soon
+// as the accounts change instead.
+func (v *validator) waitForNextEpoch(ctx context.Context, genesis time.Time) (bool, error) {
 	waitTime, err := slots.SecondsUntilNextEpochStart(genesis)
 	if err != nil {
-		return err
+		return false, errors.Wrap(err, "could not compute time until next epoch")
 	}
 	log.WithField("seconds_until_next_epoch", waitTime).Warn("No active validator keys provided. Waiting until next epoch to check again...")
 	select {
 	case <-ctx.Done():
 		log.Debug("Context closed, exiting waitForNextEpoch")
-		return ctx.Err()
+		return false, ctx.Err()
 	case <-v.accountsChangedChannel:
-		// Accounts (keys) changed, restart the process.
-		return v.waitForActivation(ctx, true)
+		return true, nil
 	case <-time.After(time.Duration(waitTime) * time.Second):
 		log.Debug("Done waiting for epoch start")
-		// The ticker has ticked, indicating we've reached the next epoch
-		return nil
+		return false, nil
 	}
-}
-
-// Preferred way to use context keys is with a non built-in type. See: RVV-B0003
-type waitForActivationContextKey string
-
-const waitForActivationAttemptsContextKey = waitForActivationContextKey("WaitForActivation-attempts")
-
-func activationAttempts(ctx context.Context) int {
-	attempts, ok := ctx.Value(waitForActivationAttemptsContextKey).(int)
-	if !ok {
-		return 1
-	}
-	return attempts
-}
-
-func incrementRetries(ctx context.Context) context.Context {
-	attempts := activationAttempts(ctx)
-	return context.WithValue(ctx, waitForActivationAttemptsContextKey, attempts+1)
 }

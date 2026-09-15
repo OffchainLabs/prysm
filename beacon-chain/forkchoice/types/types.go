@@ -15,6 +15,13 @@ type Checkpoint struct {
 	Root  [fieldparams.RootLength]byte
 }
 
+// VoteData is the public subset of a validator's vote needed by the fast confirmation rule.
+type VoteData struct {
+	Root          [fieldparams.RootLength]byte
+	Slot          primitives.Slot
+	PayloadStatus bool
+}
+
 // BlockAndCheckpoints to call the InsertOptimisticChain function
 type BlockAndCheckpoints struct {
 	Block               consensus_blocks.ROBlock

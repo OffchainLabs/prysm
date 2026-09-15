@@ -19,8 +19,9 @@ import (
 )
 
 const (
-	readFreshnessBudget = 500 * time.Millisecond // Floor for a read's deadline.
-	blockPublishMargin  = 250 * time.Millisecond // Time reserved to sign, publish and gossip a block in hand before the committee votes if no accepted block is returned by the deadline.
+	readFreshnessBudget        = 500 * time.Millisecond // Floor for a read's deadline.
+	blockPublishMargin         = 250 * time.Millisecond // Time reserved to sign, publish and gossip a block in hand before the committee votes if no accepted block is returned by the deadline.
+	payloadAttestationDueGrace = 500 * time.Millisecond // Polling time past the PTC due mark, where the node may first serve the data.
 )
 
 var (
@@ -34,14 +35,14 @@ var (
 // attestationFreshnessOptions builds the read options that steer an attestation
 // data read toward a node that already imported the head announced on ctx, or nil
 // if ctx has no hint. See readFreshnessOptions.
-func attestationFreshnessOptions(ctx context.Context) []rest.GetOption {
+func attestationFreshnessOptions(ctx context.Context) []rest.QueryOption {
 	return readFreshnessOptions(ctx, attestationMatcher)
 }
 
 // syncCommitteeFreshnessOptions builds the read options that steer a sync
 // committee read toward a node that already imported the head announced on ctx, or
 // nil if ctx has no hint. See readFreshnessOptions.
-func syncCommitteeFreshnessOptions(ctx context.Context) []rest.GetOption {
+func syncCommitteeFreshnessOptions(ctx context.Context) []rest.QueryOption {
 	return readFreshnessOptions(ctx, syncCommitteeMatcher)
 }
 
@@ -97,7 +98,7 @@ func attestationIndexFor(head iface.Head) (uint64, bool) {
 //     readFreshnessBudget so a lagging node still gets time to catch up).
 //   - WithRepoll (UntilAccepted): keep re-polling every node until one
 //     reports the announced head or the deadline fires.
-func readFreshnessOptions(ctx context.Context, matches func(json.RawMessage, iface.Head) bool) []rest.GetOption {
+func readFreshnessOptions(ctx context.Context, matches func(json.RawMessage, iface.Head) bool) []rest.QueryOption {
 	hint, ok := freshnessHint(ctx)
 	if !ok {
 		return nil
@@ -114,7 +115,7 @@ func readFreshnessOptions(ctx context.Context, matches func(json.RawMessage, ifa
 	}
 
 	// Race the nodes to select the one that already imported the announced head.
-	opts := []rest.GetOption{rest.WithRace(), rest.WithAccept(accept)}
+	opts := []rest.QueryOption{rest.WithRace(), rest.WithAccept(accept)}
 
 	// Manage deadline.
 	if hint.Deadline.IsZero() {
@@ -144,7 +145,7 @@ func readFreshnessOptions(ctx context.Context, matches func(json.RawMessage, ifa
 //   - WithDeadline: bound the read by the caller's context deadline.
 //   - WithFallbackDeadline: stop waiting on the nodes that have not answered at
 //     the hint deadline.
-func blockFreshnessOptions(ctx context.Context, decode func([]byte, http.Header) (*ethpb.GenericBeaconBlock, error)) []rest.GetOption {
+func blockFreshnessOptions(ctx context.Context, decode func([]byte, http.Header) (*ethpb.GenericBeaconBlock, error)) []rest.QueryOption {
 	hint, ok := freshnessHint(ctx)
 	if !ok {
 		return nil
@@ -172,7 +173,7 @@ func blockFreshnessOptions(ctx context.Context, decode func([]byte, http.Header)
 
 	// Race the nodes to select the one whose block builds on the announced head,
 	// re-polling until at least one node returns a block.
-	opts := []rest.GetOption{
+	opts := []rest.QueryOption{
 		rest.WithRace(),
 		rest.WithSSZAccept(accept),
 		rest.WithRepoll(rest.UntilAny2xx),
@@ -198,11 +199,11 @@ func blockFreshnessOptions(ctx context.Context, decode func([]byte, http.Header)
 //   - WithRace: query every node concurrently.
 //   - WithSSZAccept: among those responses, prefer the one whose beacon_block_root
 //     matches the announced head (decoded via payloadAttestationBeaconBlockRoot).
-//   - WithDeadline: bound the read by the hint deadline (floored by
-//     readFreshnessBudget so a lagging node still gets time to catch up).
+//   - WithDeadline: bound the read by the hint deadline plus a grace (floored by
+//     readFreshnessBudget), since the node may only serve the data at that deadline.
 //   - WithRepoll: keep re-polling until a node reports the head or the deadline
 //     fires.
-func payloadAttestationFreshnessOptions(ctx context.Context) []rest.GetOption {
+func payloadAttestationFreshnessOptions(ctx context.Context) []rest.QueryOption {
 	hint, ok := freshnessHint(ctx)
 	if !ok {
 		return nil
@@ -220,13 +221,15 @@ func payloadAttestationFreshnessOptions(ctx context.Context) []rest.GetOption {
 	}
 
 	// Race the nodes to select the one that already imported the announced head.
-	opts := []rest.GetOption{rest.WithRace(), rest.WithSSZAccept(accept)}
+	opts := []rest.QueryOption{rest.WithRace(), rest.WithSSZAccept(accept)}
 
 	if hint.Deadline.IsZero() {
 		return opts
 	}
 
-	deadline := hint.Deadline
+	// The node holds non-final data until the hint deadline (the PTC due mark),
+	// so keep polling past it rather than giving up at that exact instant.
+	deadline := hint.Deadline.Add(payloadAttestationDueGrace)
 	if floor := time.Now().Add(readFreshnessBudget); deadline.Before(floor) {
 		deadline = floor
 	}

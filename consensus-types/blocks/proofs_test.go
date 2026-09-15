@@ -156,7 +156,7 @@ func TestComputeBlockBodyFieldRoots_Gloas_ProgressiveSSZGate(t *testing.T) {
 	b, ok := i.(*BeaconBlockBody)
 	require.Equal(t, true, ok)
 
-	reset := features.InitWithReset(&features.Flags{})
+	reset := features.InitWithReset(&features.Flags{DisableProgressiveSSZ: true})
 	defer reset()
 
 	legacyRoots, err := ComputeBlockBodyFieldRoots(t.Context(), b)
@@ -169,7 +169,7 @@ func TestComputeBlockBodyFieldRoots_Gloas_ProgressiveSSZGate(t *testing.T) {
 	require.NoError(t, err)
 	require.DeepEqual(t, expectedLegacyPayloadAttestationsRoot[:], legacyRoots[11])
 
-	reset = features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset = features.InitWithReset(&features.Flags{})
 	defer reset()
 
 	progressiveRoots, err := ComputeBlockBodyFieldRoots(t.Context(), b)

@@ -58,3 +58,13 @@ func DecodeHexWithMaxLength(s string, maxLength uint64) ([]byte, error) {
 	}
 	return bytes, nil
 }
+
+// DecodeHex48 takes a string and validates whether the string is a hex and has the correct length of 48 bytes.
+func DecodeHex48(s string) ([48]byte, error) {
+	b, err := DecodeHexWithLength(s, 48)
+	if err != nil {
+		return [48]byte{}, fmt.Errorf("decode hex with length: %w", err)
+	}
+
+	return ToBytes48(b), nil
+}

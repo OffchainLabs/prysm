@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/bits"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -237,7 +238,7 @@ func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.
 		if pb.Bid == nil || pb.Entry == nil {
 			continue
 		}
-		url := pb.Entry.GetUrl()
+		url := string(pb.Entry.GetUrl())
 		if vs.BuilderCircuitBreaker.Blacklisted(pb.Bid.Message.BuilderIndex, epoch) {
 			bidLog = append(bidLog, fmt.Sprintf("%s(builder=%d discarded: blacklisted)", logs.MaskCredentialsLogging(url), pb.Bid.Message.BuilderIndex))
 			continue
@@ -276,9 +277,6 @@ func (vs *Server) validateBuilderBid(head state.BeaconState, signed *ethpb.Signe
 		return errors.New("nil builder bid")
 	}
 	bid := signed.Message
-	if bid.ExecutionPayment > entry.MaxExecutionPayment {
-		return errors.Errorf("bid execution payment %d exceeds max %d", bid.ExecutionPayment, entry.MaxExecutionPayment)
-	}
 	if len(entry.BuilderPubkeys) > 0 {
 		pk, err := head.BuilderPubkey(bid.BuilderIndex)
 		if err != nil {
@@ -357,7 +355,8 @@ func (vs *Server) submitBlockToBuilder(block interfaces.ReadOnlySignedBeaconBloc
 	ctx, cancel := context.WithTimeout(context.Background(), params.BeaconConfig().SlotDuration())
 	defer cancel()
 	if err := vs.BlockBuilder.SubmitSignedBeaconBlock(ctx, builderURL, block); err != nil {
-		log.WithError(err).Error("Could not submit signed beacon block to builder")
+		// Quoted: the url is caller-supplied and may fail validation for containing control bytes.
+		log.WithError(err).WithField("builder", strconv.Quote(logs.MaskCredentialsLogging(builderURL))).Error("Could not submit signed beacon block to builder")
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -40,8 +41,8 @@ func (vs *Server) SubmitSignedExecutionPayloadBid(
 			"execution payload bids are not supported before Gloas fork (slot %d)", req.Message.Slot)
 	}
 
-	// Do not broadcast a bid this node would itself ignore on gossip.
-	if vs.BuilderCircuitBreaker.Blacklisted(req.Message.BuilderIndex, slots.ToEpoch(req.Message.Slot)) {
+	if !features.Get().SubmitBlacklistedBuilderBids &&
+		vs.BuilderCircuitBreaker.Blacklisted(req.Message.BuilderIndex, slots.ToEpoch(req.Message.Slot)) {
 		return nil, status.Errorf(codes.FailedPrecondition, "builder %d is blacklisted by the circuit breaker", req.Message.BuilderIndex)
 	}
 

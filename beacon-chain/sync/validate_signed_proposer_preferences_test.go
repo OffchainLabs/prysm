@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -186,6 +187,19 @@ func TestValidateSignedProposerPreferencesGossip_EpochPlus2DependentRootMismatch
 	require.Equal(t, primitives.Epoch(1), gotEpoch)
 }
 
+func TestValidateSignedProposerPreferencesGossip_PreGloasProposalEpoch(t *testing.T) {
+	ctx := context.Background()
+	s, msg, _ := setupSignedProposerPreferencesService(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 2
+	params.OverrideBeaconConfig(cfg)
+
+	// The proposal slot is in epoch 1, before the fork.
+	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+}
+
 func TestValidateSignedProposerPreferencesGossip_HappyPath(t *testing.T) {
 	ctx := context.Background()
 	s, msg, signedPreferences := setupSignedProposerPreferencesService(t)
@@ -253,6 +267,12 @@ func testNewSignedProposerPreferencesVerifier(m mockSignedProposerPreferencesVer
 // the checkpoint state.
 func setupSignedProposerPreferencesService(t *testing.T) (*Service, *pubsub.Message, *ethpb.SignedProposerPreferences) {
 	t.Helper()
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+	params.BeaconConfig().InitializeForkSchedule()
 
 	ctx := context.Background()
 	db := dbtest.SetupDB(t)

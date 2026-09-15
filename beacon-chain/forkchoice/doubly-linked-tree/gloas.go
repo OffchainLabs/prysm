@@ -58,7 +58,10 @@ func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock)
 	builderIndex := bid.BuilderIndex()
 	parent := s.emptyNodeByRoot[block.ParentRoot()]
 	if parent == nil {
-		// This is the tree root node.
+		// This is the tree root node: remember the payload it builds on.
+		if s.treeRootNode == nil {
+			s.treeRootParentHash = bid.ParentBlockHash()
+		}
 		return nil, blockHash, builderIndex, nil
 	}
 	if bid.ParentBlockHash() == parent.node.blockHash {
@@ -160,11 +163,11 @@ func (s *Store) fullParent(pn *PayloadNode) *PayloadNode {
 	return parent
 }
 
-// parentHash return the payload hash of the latest full node that this block builds on.
+// parentHash returns the payload hash of the latest full node that this block builds on.
 func (s *Store) parentHash(pn *PayloadNode) [32]byte {
 	fullParent := s.fullParent(pn)
 	if fullParent == nil {
-		return [32]byte{}
+		return s.treeRootParentHash
 	}
 	return fullParent.node.blockHash
 }
@@ -354,7 +357,7 @@ func (s *Store) nodeTreeDump(ctx context.Context, n *Node, nodes []*forkchoice2.
 		ParentRoot:               parentRoot[:],
 		JustifiedEpoch:           n.justifiedEpoch,
 		FinalizedEpoch:           n.finalizedEpoch,
-		UnrealizedJustifiedEpoch: n.unrealizedJustifiedEpoch,
+		UnrealizedJustifiedEpoch: n.unrealizedJustified.Epoch,
 		UnrealizedFinalizedEpoch: n.unrealizedFinalizedEpoch,
 		Balance:                  n.balance,
 		Weight:                   n.weight,
@@ -417,7 +420,7 @@ func (s *Store) nodeTreeDumpV2(ctx context.Context, n *Node, nodes []*forkchoice
 		Target:                          target[:],
 		JustifiedEpoch:                  n.justifiedEpoch,
 		FinalizedEpoch:                  n.finalizedEpoch,
-		UnrealizedJustifiedEpoch:        n.unrealizedJustifiedEpoch,
+		UnrealizedJustifiedEpoch:        n.unrealizedJustified.Epoch,
 		UnrealizedFinalizedEpoch:        n.unrealizedFinalizedEpoch,
 		PayloadAttesterCount:            n.payloadAttesters.Count(),
 		PayloadAvailabilityYesCount:     n.payloadAvailabilityVote.Count(),

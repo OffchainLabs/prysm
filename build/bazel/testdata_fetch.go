@@ -35,9 +35,9 @@ func archiveForPath(path string) (string, bool) {
 
 	switch first {
 	case "tests":
-		// Consensus spec tests: tests/{general,minimal,mainnet}/...
+		// Spec tests: tests/{general,minimal,mainnet,kzg}/...
 		category, _, _ := strings.Cut(rest, "/")
-		if name, ok := consensusSpecTestArchives[category]; ok {
+		if name, ok := specTestArchives[category]; ok {
 			return name, true
 		}
 		return "", false
@@ -60,11 +60,12 @@ func archiveForPath(path string) (string, bool) {
 	return "", false
 }
 
-// consensusSpecTestArchives maps a consensus-spec test category.
-var consensusSpecTestArchives = map[string]string{
+// specTestArchives maps a top-level spec test category to its archive.
+var specTestArchives = map[string]string{
 	"general": externaldata.ConsensusSpecTestsGeneral,
 	"minimal": externaldata.ConsensusSpecTestsMinimal,
 	"mainnet": externaldata.ConsensusSpecTestsMainnet,
+	"kzg":     externaldata.CryptographySpecTests,
 }
 
 // blsCategories are the top-level directories the bls12-381 test archive unpacks

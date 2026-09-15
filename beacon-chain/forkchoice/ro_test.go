@@ -31,6 +31,7 @@ const (
 	previousJustifiedCheckpointCalled
 	justifiedPayloadBlockHashCalled
 	unrealizedJustifiedPayloadBlockHashCalled
+	unrealizedJustifiedCheckpointCalled
 	nodeCountCalled
 	highestReceivedBlockSlotCalled
 	highestReceivedBlockRootCalled
@@ -51,6 +52,7 @@ const (
 	dependentRootCalled
 	dependentRootForEpochCalled
 	canonicalNodeAtSlotCalled
+	confirmedPayloadBlockHashCalled
 	payloadWeightsCalled
 	hasPayloadBlockHashCalled
 )
@@ -141,6 +143,11 @@ func TestROLocking(t *testing.T) {
 			cb:   func(g FastGetter) { g.UnrealizedJustifiedPayloadBlockHash() },
 		},
 		{
+			name: "unrealizedJustifiedCheckpointCalled",
+			call: unrealizedJustifiedCheckpointCalled,
+			cb:   func(g FastGetter) { g.UnrealizedJustifiedCheckpoint() },
+		},
+		{
 			name: "nodeCountCalled",
 			call: nodeCountCalled,
 			cb:   func(g FastGetter) { g.NodeCount() },
@@ -199,6 +206,11 @@ func TestROLocking(t *testing.T) {
 			name: "dependentRootCalled",
 			call: dependentRootCalled,
 			cb:   func(g FastGetter) { _, err := g.DependentRoot(0); _discard(t, err) },
+		},
+		{
+			name: "confirmedPayloadBlockHashCalled",
+			call: confirmedPayloadBlockHashCalled,
+			cb:   func(g FastGetter) { g.ConfirmedPayloadBlockHash([32]byte{}) },
 		},
 		{
 			name: "canonicalNodeAtSlotCalled",
@@ -327,6 +339,11 @@ func (ro *mockROForkchoice) UnrealizedJustifiedPayloadBlockHash() [32]byte {
 	return [32]byte{}
 }
 
+func (ro *mockROForkchoice) UnrealizedJustifiedCheckpoint() *forkchoicetypes.Checkpoint {
+	ro.calls = append(ro.calls, unrealizedJustifiedCheckpointCalled)
+	return nil
+}
+
 func (ro *mockROForkchoice) NodeCount() int {
 	ro.calls = append(ro.calls, nodeCountCalled)
 	return 0
@@ -428,6 +445,11 @@ func (ro *mockROForkchoice) BlockHash(_ [32]byte) ([32]byte, error) {
 func (ro *mockROForkchoice) GasLimit(_, _ [32]byte) (uint64, error) {
 	ro.calls = append(ro.calls, gasLimitCalled)
 	return 0, nil
+}
+
+func (ro *mockROForkchoice) ConfirmedPayloadBlockHash(_ [32]byte) [32]byte {
+	ro.calls = append(ro.calls, confirmedPayloadBlockHashCalled)
+	return [32]byte{}
 }
 
 func (ro *mockROForkchoice) CanonicalNodeAtSlot(_ primitives.Slot) ([32]byte, bool) {

@@ -18,9 +18,12 @@ var (
 	workspaceContent = sync.OnceValue(func() string { return readBazelFile(workspaceFile) })
 	e2eDepsContent   = sync.OnceValue(func() string { return readBazelFile(e2eDepsFile) })
 
-	consensusSpecVersion = sync.OnceValue(func() string { return bazelVar(workspaceContent(), workspaceFile, "consensus_spec_version") })
-	blsVersion           = sync.OnceValue(func() string { return bazelVar(workspaceContent(), workspaceFile, "bls_test_version") })
-	lighthouseVersion    = sync.OnceValue(func() string { return bazelVar(e2eDepsContent(), e2eDepsFile, "lighthouse_version") })
+	consensusSpecVersion         = sync.OnceValue(func() string { return bazelVar(workspaceContent(), workspaceFile, "consensus_spec_version") })
+	cryptographySpecTestsVersion = sync.OnceValue(func() string {
+		return bazelVar(workspaceContent(), workspaceFile, "cryptography_spec_tests_version")
+	})
+	blsVersion        = sync.OnceValue(func() string { return bazelVar(workspaceContent(), workspaceFile, "bls_test_version") })
+	lighthouseVersion = sync.OnceValue(func() string { return bazelVar(e2eDepsContent(), e2eDepsFile, "lighthouse_version") })
 )
 
 // readBazelFile reads a Bazel build file relative to the module root.

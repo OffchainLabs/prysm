@@ -1,4 +1,4 @@
-version: v1.7.0-alpha.11
+version: v1.7.0-beta.0
 style: full
 
 specrefs:
@@ -18,7 +18,6 @@ specrefs:
 exceptions:
   presets:
     # gloas
-    - BUILDER_PENDING_WITHDRAWALS_LIMIT#gloas
     - MAX_PAYLOAD_ATTESTATIONS#gloas
     - PTC_SIZE#gloas
 
@@ -41,19 +40,8 @@ exceptions:
     - PAYLOAD_STATUS_VALID#bellatrix
     - SAFE_SLOTS_TO_IMPORT_OPTIMISTICALLY#bellatrix
     # deneb
-    - BLS_MODULUS#deneb
-    - BYTES_PER_COMMITMENT#deneb
     - BYTES_PER_FIELD_ELEMENT#deneb
-    - BYTES_PER_PROOF#deneb
-    - FIAT_SHAMIR_PROTOCOL_DOMAIN#deneb
-    - G1_POINT_AT_INFINITY#deneb
     - G2_POINT_AT_INFINITY#deneb
-    - KZG_ENDIANNESS#deneb
-    - KZG_SETUP_G2_LENGTH#deneb
-    - KZG_SETUP_G2_MONOMIAL#deneb
-    - PRIMITIVE_ROOT_OF_UNITY#deneb
-    - RANDOM_CHALLENGE_KZG_BATCH_DOMAIN#deneb
-    - RANDOM_CHALLENGE_KZG_CELL_BATCH_DOMAIN#fulu
     # fulu
     - UINT256_MAX#fulu
     # gloas
@@ -93,13 +81,16 @@ exceptions:
     - HEZE_FORK_EPOCH#heze
     - HEZE_FORK_VERSION#heze
     - INCLUSION_LIST_DUE_BPS#heze
-    - MAX_BYTES_PER_INCLUSION_LIST#heze
+    - MAX_TRANSACTIONS_BYTES_PER_INCLUSION_LIST#heze
     - MAX_REQUEST_INCLUSION_LIST#heze
+    - MIN_SLOTS_FOR_INCLUSION_LISTS_REQUESTS#heze
 
+    - GAS_LIMIT_SCHEDULE#gloas
   ssz_objects:
     # phase0
     - Eth1Block#phase0
     # fulu
+    - PartialDataColumnGroupID#fulu
     - PartialDataColumnHeader#fulu
     - PartialDataColumnPartsMetadata#fulu
     - PartialDataColumnSidecar#fulu
@@ -144,6 +135,128 @@ exceptions:
     - BuilderDepositRequest#gloas
     - BuilderExitRequest#gloas
     - ExecutionRequests#gloas
+    - AggregationBits#electra
+    - AggregationBits#gloas
+    - AggregationBits#phase0
+    - Attestations#electra
+    - Attestations#gloas
+    - Attestations#phase0
+    - AttesterSlashings#electra
+    - AttesterSlashings#gloas
+    - AttesterSlashings#phase0
+    - AttestingIndices#electra
+    - AttestingIndices#gloas
+    - AttestingIndices#phase0
+    - Attnets#phase0
+    - BLSToExecutionChanges#capella
+    - BLSToExecutionChanges#gloas
+    - Balances#gloas
+    - Balances#phase0
+    - BeaconBlockRoots#deneb
+    - BeaconBlockRoots#phase0
+    - Blob#deneb
+    - BlobKZGCommitments#deneb
+    - BlobKZGCommitments#gloas
+    - Blobs#deneb
+    - BlockAccessList#gloas
+    - BlockRoots#phase0
+    - BuilderDepositRequests#gloas
+    - BuilderExitRequests#gloas
+    - BuilderPendingPayments#gloas
+    - BuilderPendingWithdrawals#gloas
+    - Builders#gloas
+    - Cell#fulu
+    - CellKZGProofs#fulu
+    - Cells#fulu
+    - CellsBitList#fulu
+    - CellsBitList#gloas
+    - CommitteeBits#electra
+    - ConsolidationRequests#electra
+    - ConsolidationRequests#gloas
+    - CurrentSyncCommitteeBranch#altair
+    - CurrentSyncCommitteeBranch#electra
+    - CurrentSyncCommitteeBranch#gloas
+    - CustodyColumnBits#gloas
+    - DataColumn#fulu
+    - DataColumn#gloas
+    - DataColumnIndices#fulu
+    - DataColumnsByRootIdentifiers#fulu
+    - DepositDataList#phase0
+    - DepositProof#phase0
+    - DepositRequests#electra
+    - DepositRequests#gloas
+    - Deposits#gloas
+    - Deposits#phase0
+    - EpochParticipation#altair
+    - EpochParticipation#gloas
+    - ErrorMessage#phase0
+    - Eth1DataVotes#phase0
+    - ExecutionBranch#capella
+    - ExecutionBranch#gloas
+    - ExecutionPayloadAvailability#gloas
+    - ExecutionPayloadEnvelopeRoots#gloas
+    - ExtraData#bellatrix
+    - FinalityBranch#altair
+    - FinalityBranch#electra
+    - FinalityBranch#gloas
+    - HistoricalRoots#phase0
+    - HistoricalSummaries#capella
+    - InactivityScores#altair
+    - InactivityScores#gloas
+    - InclusionListBits#heze
+    - InclusionListCommittee#heze
+    - JustificationBits#phase0
+    - KZGCommitmentInclusionProof#deneb
+    - KZGCommitmentsInclusionProof#fulu
+    - KZGProofs#deneb
+    - KZGProofs#gloas
+    - LightClientUpdates#altair
+    - LogsBloom#bellatrix
+    - NextSyncCommitteeBranch#altair
+    - NextSyncCommitteeBranch#electra
+    - NextSyncCommitteeBranch#gloas
+    - OptionalPartialDataColumnHeader#fulu
+    - PayloadTimelinessCommittee#gloas
+    - PayloadTimelinessCommitteeIndices#gloas
+    - PayloadTimelinessCommitteeBits#gloas
+    - PayloadTimelinessCommitteeWindow#gloas
+    - PartialDataColumnPartsMetadata#gloas
+    - PayloadAttestations#gloas
+    - PendingAttestations#phase0
+    - PendingConsolidations#electra
+    - PendingConsolidations#gloas
+    - PendingDeposits#electra
+    - PendingDeposits#gloas
+    - PendingPartialWithdrawals#electra
+    - PendingPartialWithdrawals#gloas
+    - Proofs#fulu
+    - ProposerIndices#fulu
+    - ProposerLookahead#fulu
+    - ProposerSlashings#gloas
+    - ProposerSlashings#phase0
+    - RandaoMixes#phase0
+    - SignedBeaconBlocks#deneb
+    - SignedBeaconBlocks#phase0
+    - SignedExecutionPayloadEnvelopes#gloas
+    - SignedInclusionLists#heze
+    - Slashings#phase0
+    - StateRoots#phase0
+    - SyncCommitteeBits#altair
+    - SyncCommitteePubkeys#altair
+    - SyncSubcommitteeBits#altair
+    - Syncnets#altair
+    - Transaction#bellatrix
+    - Transaction#gloas
+    - Transactions#bellatrix
+    - Transactions#gloas
+    - Validators#gloas
+    - Validators#phase0
+    - VoluntaryExits#gloas
+    - VoluntaryExits#phase0
+    - WithdrawalRequests#electra
+    - WithdrawalRequests#gloas
+    - Withdrawals#capella
+    - Withdrawals#gloas
   dataclasses:
     # phase0
     - FastConfirmationStore#phase0
@@ -181,60 +294,8 @@ exceptions:
     - PayloadAttributes#heze
     - Store#heze
 
+    - InclusionListEntry#heze
   functions:
-    # Functions implemented by KZG library for EIP-4844
-    - bit_reversal_permutation#deneb
-    - blob_to_kzg_commitment#deneb
-    - blob_to_polynomial#deneb
-    - bls_field_to_bytes#deneb
-    - bytes_to_bls_field#deneb
-    - bytes_to_kzg_commitment#deneb
-    - bytes_to_kzg_proof#deneb
-    - compute_blob_kzg_proof#deneb
-    - compute_challenge#deneb
-    - compute_kzg_proof#deneb
-    - compute_kzg_proof_impl#deneb
-    - compute_powers#deneb
-    - compute_quotient_eval_within_domain#deneb
-    - compute_roots_of_unity#deneb
-    - evaluate_polynomial_in_evaluation_form#deneb
-    - g1_lincomb#deneb
-    - hash_to_bls_field#deneb
-    - is_power_of_two#deneb
-    - reverse_bits#deneb
-    - validate_kzg_g1#deneb
-    - verify_blob_kzg_proof#deneb
-    - verify_blob_kzg_proof_batch#deneb
-    - verify_kzg_proof#deneb
-    - verify_kzg_proof_batch#deneb
-    - verify_kzg_proof_impl#deneb
-
-    # Functions implemented by KZG library for EIP-7594
-    - _fft_field#fulu
-    - add_polynomialcoeff#fulu
-    - cell_to_coset_evals#fulu
-    - compute_cells#fulu
-    - compute_cells_and_kzg_proofs#fulu
-    - compute_cells_and_kzg_proofs_polynomialcoeff#fulu
-    - compute_kzg_proof_multi_impl#fulu
-    - compute_verify_cell_kzg_proof_batch_challenge#fulu
-    - construct_vanishing_polynomial#fulu
-    - coset_evals_to_cell#fulu
-    - coset_fft_field#fulu
-    - coset_for_cell#fulu
-    - coset_shift_for_cell#fulu
-    - divide_polynomialcoeff#fulu
-    - evaluate_polynomialcoeff#fulu
-    - fft_field#fulu
-    - interpolate_polynomialcoeff#fulu
-    - multiply_polynomialcoeff#fulu
-    - polynomial_eval_to_coeff#fulu
-    - recover_cells_and_kzg_proofs#fulu
-    - recover_polynomialcoeff#fulu
-    - vanishing_polynomialcoeff#fulu
-    - verify_cell_kzg_proof_batch#fulu
-    - verify_cell_kzg_proof_batch_impl#fulu
-
     # phase0
     - adjust_committee_weight_estimate_to_ensure_safety#phase0
     - compute_adversarial_weight#phase0
@@ -253,7 +314,7 @@ exceptions:
     - get_current_balance_source#phase0
     - get_current_target#phase0
     - get_current_target_score#phase0
-    - get_dependent_root#phase0
+    - get_shuffling_dependent_root#phase0
     - get_equivocation_score#phase0
     - get_fast_confirmation_store#phase0
     - get_latest_confirmed#phase0
@@ -277,7 +338,6 @@ exceptions:
     - compute_attestation_subnet_prefix_bits#phase0
     - compute_min_epochs_for_block_requests#phase0
     - compute_time_at_slot_ms#phase0
-    - is_not_from_future_slot#phase0
     - is_within_slot_range#phase0
     - update_proposer_boost_root#phase0
     - is_proposer_equivocation#phase0
@@ -336,6 +396,11 @@ exceptions:
     - xor#phase0
     - compute_merkle_branch_root#phase0
     - is_non_strict_superset#phase0
+    - get_pending_attesting_indices#phase0
+    - hash_tree_root#phase0
+    - is_future_epoch#phase0
+    - sha256#phase0
+    - uint_to_bytes#phase0
     # altair
     - compute_merkle_proof#altair
     - compute_sync_committee_period_at_slot#altair
@@ -390,7 +455,9 @@ exceptions:
     # deneb
     - compute_max_request_blob_sidecars#deneb
     - get_lc_execution_root#deneb
+    - is_current_or_previous_epoch#deneb
     - is_valid_light_client_header#deneb
+    - is_within_epoch#deneb
     - prepare_execution_payload#deneb
     - upgrade_lc_bootstrap_to_deneb#deneb
     - upgrade_lc_finality_update_to_deneb#deneb
@@ -448,8 +515,10 @@ exceptions:
     # gloas
     - get_latest_message_epoch#gloas
     - get_payload_due_ms#gloas
+    - is_bid_compatible_with_head#gloas
     - is_gas_limit_target_compatible#gloas
     - is_payload_verified#gloas
+    - is_valid_dependent_root#gloas
     - on_execution_payload_envelope#gloas
     - payload_data_availability#gloas
     - payload_timeliness#gloas
@@ -478,7 +547,7 @@ exceptions:
     - get_forkchoice_store#gloas
     - get_head#gloas
     - get_indexed_payload_attestation#gloas
-    - get_dependent_root#gloas
+    - get_shuffling_dependent_root#gloas
     - get_next_sync_committee_indices#gloas
     - get_node_children#gloas
     - get_node_for_root#gloas
@@ -536,7 +605,7 @@ exceptions:
     - get_builder_withdrawals#gloas
     - get_builders_sweep_withdrawals#gloas
     - get_index_for_new_builder#gloas
-    - get_proposer_preferences_signature#gloas
+    - get_signed_proposer_preferences#gloas
     - get_upcoming_proposal_slots#gloas
     - is_active_builder#gloas
     - is_builder_index#gloas
@@ -545,7 +614,6 @@ exceptions:
     - is_head_late#gloas
     - is_head_weak#gloas
     - is_parent_strong#gloas
-    - is_valid_proposal_slot#gloas
     - onboard_builders_from_pending_deposits#gloas
     - process_deposit_request#gloas
     - record_block_timeliness#gloas
@@ -559,11 +627,13 @@ exceptions:
     - block_to_light_client_header#gloas
     - compute_exit_epoch_and_update_churn#gloas
     - compute_weak_subjectivity_period#gloas
+    - current_sync_committee_gindex_at_slot#gloas
+    - finalized_root_gindex_at_slot#gloas
+    - next_sync_committee_gindex_at_slot#gloas
     - get_activation_churn_limit#gloas
     - get_consolidation_churn_limit#gloas
     - get_exit_churn_limit#gloas
     - get_lc_execution_root#gloas
-    - get_proposer_dependent_root#gloas
     - is_valid_light_client_header#gloas
     - process_pending_deposits#gloas
     - upgrade_lc_bootstrap_to_gloas#gloas
@@ -572,13 +642,16 @@ exceptions:
     - upgrade_lc_optimistic_update_to_gloas#gloas
     - upgrade_lc_store_to_gloas#gloas
     - upgrade_lc_update_to_gloas#gloas
+    - compute_shuffling_dependent_epoch#gloas
     # heze
     - on_execution_payload_envelope#heze
     - compute_fork_version#heze
     - get_forkchoice_store#heze
     - get_inclusion_list_committee_assignment#heze
+    - get_inclusion_list_bits#heze
     - get_inclusion_list_committee#heze
     - get_inclusion_list_signature#heze
+    - is_inclusion_list_bits_inclusive#heze
     - get_inclusion_list_store#heze
     - get_inclusion_list_transactions#heze
     - is_payload_inclusion_list_satisfied#heze
@@ -599,16 +672,42 @@ exceptions:
     - process_builder_deposit_request#gloas
     - process_builder_exit_request#gloas
     # phase0
-    - is_epoch_boundary#phase0
+    - compute_shuffling_dependent_slot#phase0
+    - get_custody_column_bits#gloas
+    - get_proposer_head#fulu
+    - get_scheduled_gas_limit#gloas
+    - get_set_bit_count#phase0
+    - get_signed_inclusion_list#heze
+    - is_current_or_next_slot#gloas
+    - is_future_slot#phase0
+    - is_past_slot#gloas
+    - is_shuffling_stable#phase0
+    - validate_beacon_aggregate_and_proof_gossip#gloas
+    - validate_beacon_attestation_gossip#gloas
+    - validate_beacon_block_gossip#gloas
+    - validate_data_column_sidecar_gossip#gloas
+    - validate_execution_payload_bid_gossip#gloas
+    - validate_execution_payload_envelope_gossip#gloas
+    - validate_partial_data_column_sidecar_gossip#gloas
+    - validate_payload_attestation_message_gossip#gloas
+    - validate_proposer_preferences_gossip#gloas
+    - verify_attestation_payload_status#gloas
+    - verify_block_body_operation_limits#gloas
+    - verify_execution_requests_limits#gloas
   presets:
     # gloas
-    - BUILDER_PENDING_WITHDRAWALS_LIMIT#gloas
-    - BUILDER_REGISTRY_LIMIT#gloas
+    - MAX_ATTESTER_SLASHING_SIZE#gloas
     - MAX_BUILDERS_PER_WITHDRAWALS_SWEEP#gloas
+    - MAX_DATA_COLUMN_SIDECAR_SIZE#gloas
+    - MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE#gloas
     - MAX_PAYLOAD_ATTESTATIONS#gloas
+    - MAX_SIGNED_AGGREGATE_AND_PROOF_SIZE#gloas
+    - MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE#gloas
     - PTC_SIZE#gloas
     # heze
     - INCLUSION_LIST_COMMITTEE_SIZE#heze
+    - MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE_HEZE#heze
+    - MAX_SIGNED_INCLUSION_LIST_SIZE#heze
     # gloas (EIP-8282)
     - MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD#gloas
     - MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD#gloas

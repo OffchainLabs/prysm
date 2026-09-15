@@ -186,6 +186,10 @@ func TestForkChoice_GetProposerHead(t *testing.T) {
 // Regression test: a weak, late head whose next slot lands on an epoch boundary
 // must still be reorgeable. Reorgs used to be skipped on epoch boundaries.
 func TestForkChoice_ShouldOverrideFCU_EpochBoundary(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	f := setup(0, 0)
 	numValidators := uint64(640)
 	f.justifiedBalances = make([]uint64, numValidators)
@@ -223,6 +227,10 @@ func TestForkChoice_ShouldOverrideFCU_EpochBoundary(t *testing.T) {
 // Regression test: GetProposerHead must orphan a weak, late head even when the
 // proposing slot is an epoch boundary.
 func TestForkChoice_GetProposerHead_EpochBoundary(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	f := setup(0, 0)
 	numValidators := uint64(640)
 	f.justifiedBalances = make([]uint64, numValidators)

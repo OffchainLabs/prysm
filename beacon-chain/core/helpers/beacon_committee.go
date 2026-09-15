@@ -278,7 +278,7 @@ type CommitteeAssignment struct {
 // VerifyAssignmentEpoch verifies if the given epoch is valid for assignment based on the provided state.
 // It checks if the epoch is not greater than the next epoch, and if the start slot of the epoch is greater
 // than or equal to the minimum valid start slot calculated based on the state's current slot and historical roots.
-func VerifyAssignmentEpoch(epoch primitives.Epoch, state state.BeaconState) error {
+func VerifyAssignmentEpoch(epoch primitives.Epoch, state state.ReadOnlyBeaconState) error {
 	nextEpoch := time.NextEpoch(state)
 	if epoch > nextEpoch {
 		return fmt.Errorf("epoch %d can't be greater than next epoch %d", epoch, nextEpoch)
@@ -301,7 +301,7 @@ func VerifyAssignmentEpoch(epoch primitives.Epoch, state state.BeaconState) erro
 // ProposerAssignments calculates proposer assignments for each validator during the specified epoch.
 // It verifies the validity of the epoch, then iterates through each slot in the epoch to determine the
 // proposer for that slot and assigns them accordingly.
-func ProposerAssignments(ctx context.Context, state state.BeaconState, epoch primitives.Epoch) (map[primitives.ValidatorIndex][]primitives.Slot, error) {
+func ProposerAssignments(ctx context.Context, state state.ReadOnlyBeaconState, epoch primitives.Epoch) (map[primitives.ValidatorIndex][]primitives.Slot, error) {
 	ctx, span := trace.StartSpan(ctx, "helpers.ProposerAssignments")
 	defer span.End()
 
@@ -338,7 +338,7 @@ func ProposerAssignments(ctx context.Context, state state.BeaconState, epoch pri
 // CommitteeAssignments calculates committee assignments for each validator during the specified epoch.
 // It retrieves active validator indices, determines the number of committees per slot, and computes
 // assignments for each validator based on their presence in the provided validators slice.
-func CommitteeAssignments(ctx context.Context, state state.BeaconState, epoch primitives.Epoch, validators []primitives.ValidatorIndex) (map[primitives.ValidatorIndex]*CommitteeAssignment, error) {
+func CommitteeAssignments(ctx context.Context, state state.ReadOnlyBeaconState, epoch primitives.Epoch, validators []primitives.ValidatorIndex) (map[primitives.ValidatorIndex]*CommitteeAssignment, error) {
 	ctx, span := trace.StartSpan(ctx, "helpers.CommitteeAssignments")
 	defer span.End()
 

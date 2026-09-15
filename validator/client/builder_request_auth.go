@@ -15,27 +15,25 @@ import (
 	"github.com/pkg/errors"
 )
 
-type requestAuthKey struct {
+type builderRequestAuthKey struct {
 	pk   pubkey
 	slot primitives.Slot
 	data string
 }
 
-// builderConfigForSlot resolves the builder config for pk's proposal at slot from one
-// settings snapshot, signing any request auth not already cached by the warm push.
+// builderConfigForSlot never returns nil; absent settings yield a neutral config.
 func (v *validator) builderConfigForSlot(ctx context.Context, pk pubkey, slot primitives.Slot) *ethpb.BuilderConfig {
+	cfg := &ethpb.BuilderConfig{BuilderBoostFactor: uint64(proposer.NeutralBuilderBoostFactor)}
 	ps := v.ProposerSettings()
 	if ps == nil {
-		return nil
+		return cfg
 	}
 	bc := ps.EffectiveBuilderConfig(pk)
 	if bc == nil {
-		return nil
+		return cfg
 	}
-	cfg := &ethpb.BuilderConfig{
-		MinBid:             primitives.Gwei(uint64OrDefault(uint64Ptr(bc.MinBid), 0)),
-		BuilderBoostFactor: uint64OrDefault(uint64Ptr(bc.BuilderBoostFactor), uint64(proposer.NeutralBuilderBoostFactor)),
-	}
+	cfg.MinBid = primitives.Gwei(uint64OrDefault(uint64Ptr(bc.MinBid), 0))
+	cfg.BuilderBoostFactor = uint64OrDefault(uint64Ptr(bc.BuilderBoostFactor), uint64(proposer.NeutralBuilderBoostFactor))
 	targets := builderTargets(bc)
 	if len(targets) == 0 {
 		return cfg
@@ -46,13 +44,13 @@ func (v *validator) builderConfigForSlot(ctx context.Context, pk pubkey, slot pr
 		return cfg
 	}
 	for _, t := range targets {
-		signed, err := v.signRequestAuthCached(ctx, km, pk, t.authData, slot)
+		signed, err := v.signBuilderRequestAuthCached(ctx, km, pk, t.authData, slot)
 		if err != nil {
 			log.WithError(err).Warn("Failed to sign builder request auth")
 			continue
 		}
 		cfg.Builders = append(cfg.Builders, &ethpb.BuilderEntry{
-			Url:                 t.url,
+			Url:                 []byte(t.url),
 			Auth:                signed,
 			BuilderPubkeys:      t.pubkeys,
 			MaxExecutionPayment: primitives.Gwei(t.maxPayment),
@@ -70,50 +68,50 @@ func uint64OrDefault(v *uint64, def uint64) uint64 {
 	return *v
 }
 
-func (v *validator) pruneSignedRequestAuths(slot primitives.Slot) {
-	v.signedRequestAuthsLock.Lock()
-	defer v.signedRequestAuthsLock.Unlock()
-	for k := range v.signedRequestAuths {
+func (v *validator) pruneSignedBuilderRequestAuths(slot primitives.Slot) {
+	v.builderRequestAuthsLock.Lock()
+	defer v.builderRequestAuthsLock.Unlock()
+	for k := range v.builderRequestAuths {
 		if k.slot < slot {
-			delete(v.signedRequestAuths, k)
+			delete(v.builderRequestAuths, k)
 		}
 	}
 }
 
-func (v *validator) signRequestAuthCached(ctx context.Context, km keymanager.IKeymanager, pk pubkey, authData []byte, slot primitives.Slot) (*ethpb.SignedRequestAuth, error) {
-	key := requestAuthKey{pk: pk, slot: slot, data: string(authData)}
-	v.signedRequestAuthsLock.Lock()
-	signed, ok := v.signedRequestAuths[key]
-	v.signedRequestAuthsLock.Unlock()
+func (v *validator) signBuilderRequestAuthCached(ctx context.Context, km keymanager.IKeymanager, pk pubkey, authData []byte, slot primitives.Slot) (*ethpb.SignedBuilderRequestAuth, error) {
+	key := builderRequestAuthKey{pk: pk, slot: slot, data: string(authData)}
+	v.builderRequestAuthsLock.Lock()
+	signed, ok := v.builderRequestAuths[key]
+	v.builderRequestAuthsLock.Unlock()
 	if ok {
 		return signed, nil
 	}
-	signed, err := v.signRequestAuth(ctx, km, pk, &ethpb.RequestAuth{Data: authData, Slot: slot})
+	signed, err := v.signBuilderRequestAuth(ctx, km, pk, &ethpb.BuilderRequestAuth{Data: authData, Slot: slot})
 	if err != nil {
 		return nil, err
 	}
-	v.signedRequestAuthsLock.Lock()
-	if v.signedRequestAuths == nil {
-		v.signedRequestAuths = make(map[requestAuthKey]*ethpb.SignedRequestAuth)
+	v.builderRequestAuthsLock.Lock()
+	if v.builderRequestAuths == nil {
+		v.builderRequestAuths = make(map[builderRequestAuthKey]*ethpb.SignedBuilderRequestAuth)
 	}
-	v.signedRequestAuths[key] = signed
-	v.signedRequestAuthsLock.Unlock()
+	v.builderRequestAuths[key] = signed
+	v.builderRequestAuthsLock.Unlock()
 	return signed, nil
 }
 
-// Domain is fork-independent: compute_domain(DOMAIN_REQUEST_AUTH) with genesis fork version and zero genesis validators root.
-func (v *validator) signRequestAuth(
+// Domain is fork-independent: compute_domain(DOMAIN_BUILDER_REQUEST_AUTH) with genesis fork version and zero genesis validators root.
+func (v *validator) signBuilderRequestAuth(
 	ctx context.Context,
 	km keymanager.IKeymanager,
 	pubkey [fieldparams.BLSPubkeyLength]byte,
-	auth *ethpb.RequestAuth,
-) (*ethpb.SignedRequestAuth, error) {
-	ctx, span := trace.StartSpan(ctx, "validator.signRequestAuth")
+	auth *ethpb.BuilderRequestAuth,
+) (*ethpb.SignedBuilderRequestAuth, error) {
+	ctx, span := trace.StartSpan(ctx, "validator.signBuilderRequestAuth")
 	defer span.End()
 
-	domain, err := signing.ComputeDomain(params.BeaconConfig().DomainRequestAuth, params.BeaconConfig().GenesisForkVersion, make([]byte, 32))
+	domain, err := signing.ComputeDomain(params.BeaconConfig().DomainBuilderRequestAuth, params.BeaconConfig().GenesisForkVersion, make([]byte, 32))
 	if err != nil {
-		return nil, errors.Wrap(err, "could not compute request auth domain")
+		return nil, errors.Wrap(err, "could not compute builder request auth domain")
 	}
 
 	r, err := signing.ComputeSigningRoot(auth, domain)
@@ -125,13 +123,14 @@ func (v *validator) signRequestAuth(
 		PublicKey:       pubkey[:],
 		SigningRoot:     r[:],
 		SignatureDomain: domain,
-		Object:          &validatorpb.SignRequest_RequestAuth{RequestAuth: auth},
+		Object:          &validatorpb.SignRequest_BuilderRequestAuth{BuilderRequestAuth: auth},
+		SigningSlot:     auth.Slot,
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, "could not sign request auth")
+		return nil, errors.Wrap(err, "could not sign builder request auth")
 	}
 
-	return &ethpb.SignedRequestAuth{
+	return &ethpb.SignedBuilderRequestAuth{
 		Message:   auth,
 		Signature: sig.Marshal(),
 	}, nil

@@ -9,9 +9,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
-func TestNewGetConfig(t *testing.T) {
+func TestNewQueryConfig(t *testing.T) {
 	t.Run("defaults accept any 2XX response", func(t *testing.T) {
-		cfg := newGetConfig(nil)
+		cfg := newQueryConfig(nil)
 
 		require.Equal(t, false, cfg.race)
 		require.Equal(t, time.Duration(0), cfg.pollInterval)
@@ -24,31 +24,31 @@ func TestNewGetConfig(t *testing.T) {
 
 	t.Run("applies options in order", func(t *testing.T) {
 		var order []int
-		first := func(c *getConfig) { order = append(order, 1) }
-		second := func(c *getConfig) { order = append(order, 2) }
+		first := func(c *queryConfig) { order = append(order, 1) }
+		second := func(c *queryConfig) { order = append(order, 2) }
 
-		newGetConfig([]GetOption{first, second})
+		newQueryConfig([]QueryOption{first, second})
 
 		require.DeepEqual(t, []int{1, 2}, order)
 	})
 }
 
 func TestWithRace(t *testing.T) {
-	cfg := newGetConfig([]GetOption{WithRace()})
+	cfg := newQueryConfig([]QueryOption{WithRace()})
 	require.Equal(t, true, cfg.race)
 }
 
 func TestWithAccept(t *testing.T) {
 	t.Run("narrows the acceptance criterion", func(t *testing.T) {
 		accept := func(raw json.RawMessage) bool { return string(raw) == "ok" }
-		cfg := newGetConfig([]GetOption{WithAccept(accept)})
+		cfg := newQueryConfig([]QueryOption{WithAccept(accept)})
 
 		require.Equal(t, true, cfg.accept(json.RawMessage("ok")))
 		require.Equal(t, false, cfg.accept(json.RawMessage("nope")))
 	})
 
 	t.Run("ignores a nil acceptance function", func(t *testing.T) {
-		cfg := newGetConfig([]GetOption{WithAccept(nil)})
+		cfg := newQueryConfig([]QueryOption{WithAccept(nil)})
 
 		// The default (accept anything) is preserved.
 		require.Equal(t, true, cfg.accept(json.RawMessage("whatever")))
@@ -60,7 +60,7 @@ func TestWithSSZAccept(t *testing.T) {
 		accept := func(body []byte, hdr http.Header) bool {
 			return string(body) == "ok" && hdr.Get("X-Test") == "yes"
 		}
-		cfg := newGetConfig([]GetOption{WithSSZAccept(accept)})
+		cfg := newQueryConfig([]QueryOption{WithSSZAccept(accept)})
 
 		require.Equal(t, true, cfg.sszAccept([]byte("ok"), http.Header{"X-Test": {"yes"}}))
 		require.Equal(t, false, cfg.sszAccept([]byte("ok"), http.Header{}))
@@ -68,7 +68,7 @@ func TestWithSSZAccept(t *testing.T) {
 	})
 
 	t.Run("ignores a nil acceptance function", func(t *testing.T) {
-		cfg := newGetConfig([]GetOption{WithSSZAccept(nil)})
+		cfg := newQueryConfig([]QueryOption{WithSSZAccept(nil)})
 
 		// The default (accept anything) is preserved.
 		require.Equal(t, true, cfg.sszAccept([]byte("whatever"), http.Header{}))
@@ -77,7 +77,7 @@ func TestWithSSZAccept(t *testing.T) {
 
 func TestWithDeadline(t *testing.T) {
 	deadline := time.Now().Add(time.Hour)
-	cfg := newGetConfig([]GetOption{WithDeadline(deadline)})
+	cfg := newQueryConfig([]QueryOption{WithDeadline(deadline)})
 	require.Equal(t, deadline, cfg.deadline)
 }
 
@@ -95,13 +95,13 @@ func TestResolveOptions(t *testing.T) {
 
 func TestWithRepoll(t *testing.T) {
 	t.Run("sets the default interval and the mode", func(t *testing.T) {
-		cfg := newGetConfig([]GetOption{WithRepoll(UntilAny2xx)})
+		cfg := newQueryConfig([]QueryOption{WithRepoll(UntilAny2xx)})
 		require.Equal(t, defaultPollInterval, cfg.pollInterval)
 		require.Equal(t, UntilAny2xx, cfg.repollMode)
 	})
 
 	t.Run("sets the UntilAccepted mode", func(t *testing.T) {
-		cfg := newGetConfig([]GetOption{WithRepoll(UntilAccepted)})
+		cfg := newQueryConfig([]QueryOption{WithRepoll(UntilAccepted)})
 		require.Equal(t, defaultPollInterval, cfg.pollInterval)
 		require.Equal(t, UntilAccepted, cfg.repollMode)
 	})

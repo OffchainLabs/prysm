@@ -79,7 +79,7 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 			return nil, status.Errorf(codes.Internal, "Could not set execution payload bid: %v", bidErr)
 		}
 		if src == bidSourceBuilderAPI && builderWin != nil {
-			builderURL = builderWin.entry.GetUrl()
+			builderURL = string(builderWin.entry.GetUrl())
 		}
 		selfBuilt = src == bidSourceSelfBuild
 	}

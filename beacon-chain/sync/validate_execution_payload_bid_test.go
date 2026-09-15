@@ -23,6 +23,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -41,6 +42,21 @@ func TestValidateExecutionPayloadBidGossip_InvalidTopic(t *testing.T) {
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", &pubsub.Message{Message: &pb.Message{}})
 	require.ErrorIs(t, p2p.ErrInvalidTopic, err)
 	require.Equal(t, pubsub.ValidationReject, result)
+}
+
+func TestValidateExecutionPayloadBidGossip_BlockHashEqualsParent(t *testing.T) {
+	ctx := context.Background()
+	s, _, signedBid := setupExecutionPayloadBidService(t)
+	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
+
+	signedBid.Message.BlockHash = signedBid.Message.ParentBlockHash
+	msg := executionPayloadBidToPubsub(t, s, s.cfg.p2p, signedBid)
+	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+	require.ErrorContains(t, "bid block hash equals parent block hash", err)
+	require.Equal(t, pubsub.ValidationReject, result)
+
+	// The rejected bid must not be cached as seen.
+	require.Equal(t, false, s.hasSeenExecutionPayloadBid(executionPayloadBidTupleKey(mustBid(t, signedBid))))
 }
 
 func TestValidateExecutionPayloadBidGossip_AlreadySeenTuple(t *testing.T) {
@@ -195,6 +211,12 @@ func TestValidateExecutionPayloadBidGossip_ErrorPathsWithMock(t *testing.T) {
 		{
 			name:      "builder cannot cover",
 			verifier:  mockExecutionPayloadBidVerifier{errBuilderCanCoverBid: errors.New("cannot cover")},
+			result:    pubsub.ValidationIgnore,
+			wantError: true,
+		},
+		{
+			name:      "builder exited by parent payload",
+			verifier:  mockExecutionPayloadBidVerifier{errBuilderNotExiting: errors.New("builder may exit")},
 			result:    pubsub.ValidationIgnore,
 			wantError: true,
 		},
@@ -469,6 +491,7 @@ type mockExecutionPayloadBidVerifier struct {
 	errSlotHigherThanParent  error
 	errParentBlockHash       error
 	errBuilderCanCoverBid    error
+	errBuilderNotExiting     error
 	errSignature             error
 }
 
@@ -528,6 +551,10 @@ func (m *mockExecutionPayloadBidVerifier) VerifyParentBlockHash(func([32]byte, [
 
 func (m *mockExecutionPayloadBidVerifier) VerifyBuilderCanCoverBid(state.ReadOnlyBeaconState) error {
 	return m.errBuilderCanCoverBid
+}
+
+func (m *mockExecutionPayloadBidVerifier) VerifyBuilderNotExiting(state.ReadOnlyBeaconState, func([32]byte) ([]*enginev1.BuilderExitRequest, error)) error {
+	return m.errBuilderNotExiting
 }
 
 func (m *mockExecutionPayloadBidVerifier) VerifySignature(state.ReadOnlyBeaconState) error {

@@ -37,14 +37,8 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 		return nil, status.Errorf(codes.Unavailable, "Request epoch %d can not be greater than next epoch %d", req.Epoch, currentEpoch+1)
 	}
 
-	// Load head state
-	s, err := vs.HeadFetcher.HeadState(ctx)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
-	}
-
-	// Advance to start of requested epoch if necessary
-	s, err = vs.stateForEpoch(ctx, s, req.Epoch)
+	// Load a read only head state advanced to the start of the requested epoch if necessary.
+	s, err := vs.stateForEpoch(ctx, req.Epoch)
 	if err != nil {
 		return nil, err
 	}
@@ -228,12 +222,16 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 	}, nil
 }
 
-// stateForEpoch returns a state advanced (with empty slot transitions) to the
-// start slot of the requested epoch.
-func (vs *Server) stateForEpoch(ctx context.Context, s state.BeaconState, reqEpoch primitives.Epoch) (state.BeaconState, error) {
+// stateForEpoch returns a read only head state advanced (with empty slot
+// transitions) to the start slot of the requested epoch.
+func (vs *Server) stateForEpoch(ctx context.Context, reqEpoch primitives.Epoch) (state.ReadOnlyBeaconState, error) {
 	epochStartSlot, err := slots.EpochStart(reqEpoch)
 	if err != nil {
 		return nil, err
+	}
+	s, err := vs.HeadFetcher.HeadStateReadOnly(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
 	}
 	if s.Slot() >= epochStartSlot {
 		return s, nil
@@ -242,7 +240,7 @@ func (vs *Server) stateForEpoch(ctx context.Context, s state.BeaconState, reqEpo
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not retrieve head root: %v", err)
 	}
-	s, err = transition.ProcessSlotsUsingNextSlotCache(ctx, s, headRoot, epochStartSlot)
+	s, err = transition.ProcessSlotsIfNeeded(ctx, s, headRoot, epochStartSlot)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not process slots up to %d: %v", epochStartSlot, err)
 	}
