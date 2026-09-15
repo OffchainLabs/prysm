@@ -20,8 +20,17 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/sirupsen/logrus"
 )
+
+// onChainAggregateLayersCapped tracks how often aggregates were dropped because on-chain
+// aggregate generation hit the maximum number of layers.
+var onChainAggregateLayersCapped = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "on_chain_aggregate_layers_capped",
+	Help: "The number of times aggregates were dropped for exceeding the maximum number of on-chain aggregate layers.",
+})
 
 type proposerAtts []ethpb.Att
 
@@ -172,6 +181,7 @@ func onChainAggregates(attsById map[attestation.Id][]ethpb.Att) (proposerAtts, e
 			}
 		}
 		if dropped > 0 {
+			onChainAggregateLayersCapped.Inc()
 			log.WithField("droppedAggregates", dropped).Debug("Ignoring aggregates beyond the maximum number of on-chain aggregate layers")
 		}
 	}
