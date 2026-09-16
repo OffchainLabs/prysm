@@ -144,12 +144,15 @@ func (cs *columnSync) blockColumns(root [32]byte) *toDownload {
 }
 
 func (b batch) columnsNeeded() peerdas.ColumnIndices {
+	if b.columns == nil {
+		return peerdas.ColumnIndices{}
+	}
+	// Use the guarded columnsNeeded: the embedded columnBatch may be nil.
 	return b.columns.columnsNeeded()
 }
 
 func (cs *columnSync) columnsNeeded() peerdas.ColumnIndices {
-	// A batch whose stage setup failed can reach transitionToNext with no columnSync at all.
-	if cs == nil || cs.columnBatch == nil {
+	if cs.columnBatch == nil {
 		return peerdas.ColumnIndices{}
 	}
 	return cs.columnBatch.needed()
