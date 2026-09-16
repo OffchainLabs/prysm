@@ -155,105 +155,58 @@ func TestWaitForChainStart_StreamSetupFails(t *testing.T) {
 }
 
 func TestStartEventStream(t *testing.T) {
-	hook := logTest.NewGlobal()
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	beaconNodeValidatorClient := mock2.NewMockBeaconNodeValidatorClient(ctrl)
-	grpcClient := &grpcValidatorClient{
-		grpcClientManager: newGrpcClientManager(
-			validatorTesting.MockNodeConnection(),
-			func(_ grpc.ClientConnInterface) eth.BeaconNodeValidatorClient {
-				return beaconNodeValidatorClient
-			},
-		),
-	}
-	tests := []struct {
-		name    string
-		topics  []string
-		prepare func()
-		verify  func(t *testing.T, event *eventClient.Event)
+	for _, tc := range []struct {
+		name        string
+		topics      []string
+		wantType    string
+		wantWarning bool
 	}{
-		{
-			name:   "Happy path Head topic",
-			topics: []string{"head"},
-			prepare: func() {
-				stream := mock2.NewMockBeaconNodeValidator_StreamSlotsClient(ctrl)
-				beaconNodeValidatorClient.EXPECT().StreamSlots(gomock.Any(),
-					&eth.StreamSlotsRequest{VerifiedOnly: true}).Return(stream, nil)
-				stream.EXPECT().Context().Return(ctx).AnyTimes()
-				stream.EXPECT().Recv().Return(
-					&eth.StreamSlotsResponse{Slot: 123},
-					nil,
-				).AnyTimes()
-			},
-			verify: func(t *testing.T, event *eventClient.Event) {
-				require.Equal(t, event.Type, eventClient.EventHead)
-				head := structs.HeadEvent{}
-				require.NoError(t, json.Unmarshal(event.Data, &head))
-				require.Equal(t, head.Slot, "123")
-			},
-		},
-		{
-			name:   "no head produces error",
-			topics: []string{"unsupportedTopic"},
-			prepare: func() {
-				stream := mock2.NewMockBeaconNodeValidator_StreamSlotsClient(ctrl)
-				beaconNodeValidatorClient.EXPECT().StreamSlots(gomock.Any(),
-					&eth.StreamSlotsRequest{VerifiedOnly: true}).Return(stream, nil)
-				stream.EXPECT().Context().Return(ctx).AnyTimes()
-				stream.EXPECT().Recv().Return(
-					&eth.StreamSlotsResponse{Slot: 123},
-					nil,
-				).AnyTimes()
-			},
-			verify: func(t *testing.T, event *eventClient.Event) {
-				require.Equal(t, event.Type, eventClient.EventConnectionError)
-			},
-		},
-		{
-			name:   "Unsupported topics warning",
-			topics: []string{"head", "unsupportedTopic"},
-			prepare: func() {
-				stream := mock2.NewMockBeaconNodeValidator_StreamSlotsClient(ctrl)
-				beaconNodeValidatorClient.EXPECT().StreamSlots(gomock.Any(),
-					&eth.StreamSlotsRequest{VerifiedOnly: true}).Return(stream, nil)
-				stream.EXPECT().Context().Return(ctx).AnyTimes()
-				stream.EXPECT().Recv().Return(
-					&eth.StreamSlotsResponse{Slot: 123},
-					nil,
-				).AnyTimes()
-			},
-			verify: func(t *testing.T, event *eventClient.Event) {
-				require.Equal(t, event.Type, eventClient.EventHead)
-				head := structs.HeadEvent{}
-				require.NoError(t, json.Unmarshal(event.Data, &head))
-				require.Equal(t, head.Slot, "123")
-				assert.LogsContain(t, hook, "gRPC only supports the head topic")
-			},
-		},
-		{
-			name:    "No topics error",
-			topics:  []string{},
-			prepare: func() {},
-			verify: func(t *testing.T, event *eventClient.Event) {
-				require.Equal(t, event.Type, eventClient.EventError)
-			},
-		},
-	}
-
-	for _, tc := range tests {
+		{name: "head", topics: []string{"head"}, wantType: eventClient.EventHead},
+		{name: "head v2 retains slot stream", topics: []string{"head_v2"}, wantType: eventClient.EventHead},
+		{name: "unsupported only", topics: []string{"unsupportedTopic"}, wantType: eventClient.EventConnectionError},
+		{name: "unsupported topic warning", topics: []string{"head", "unsupportedTopic"}, wantType: eventClient.EventHead, wantWarning: true},
+		{name: "no topics", wantType: eventClient.EventError},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
-			eventsChannel := make(chan *eventClient.Event, 1) // Buffer to prevent blocking
-			tc.prepare()                                      // Setup mock expectations
-
-			go grpcClient.StartEventStream(ctx, tc.topics, eventsChannel)
-
-			event := <-eventsChannel
-			// Depending on what you're testing, you may need a timeout or a specific number of events to read
-			time.AfterFunc(1*time.Second, cancel) // Prevents hanging forever
-			tc.verify(t, event)
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			hook := logTest.NewGlobal()
+			ctrl := gomock.NewController(t)
+			rpcClient := mock2.NewMockBeaconNodeValidatorClient(ctrl)
+			if tc.wantType == eventClient.EventHead {
+				stream := mock2.NewMockBeaconNodeValidator_StreamSlotsClient(ctrl)
+				rpcClient.EXPECT().StreamSlots(gomock.Any(), &eth.StreamSlotsRequest{VerifiedOnly: true}).Return(stream, nil)
+				stream.EXPECT().Recv().Return(&eth.StreamSlotsResponse{Slot: 123}, nil).AnyTimes()
+			}
+			grpcClient := &grpcValidatorClient{
+				grpcClientManager: newGrpcClientManager(validatorTesting.MockNodeConnection(), func(grpc.ClientConnInterface) eth.BeaconNodeValidatorClient { return rpcClient }),
+			}
+			events := make(chan *eventClient.Event)
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				grpcClient.StartEventStream(ctx, tc.topics, events)
+			}()
+			select {
+			case ev := <-events:
+				require.Equal(t, tc.wantType, ev.Type)
+				if ev.Type == eventClient.EventHead {
+					var head structs.HeadEvent
+					require.NoError(t, json.Unmarshal(ev.Data, &head))
+					require.Equal(t, "123", head.Slot)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("event stream did not respond")
+			}
+			cancel()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("event stream did not stop")
+			}
+			if tc.wantWarning {
+				assert.LogsContain(t, hook, "Unsupported gRPC event topic")
+			}
 		})
 	}
 }
