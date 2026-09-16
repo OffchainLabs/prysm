@@ -2537,7 +2537,10 @@ func TestUpdateNewFullNodeWeight_SkipsSlashed(t *testing.T) {
 		st, blk, err := prepareGloasForkchoiceState(ctx, 1, root, zeroHash, indexToHash(100), zeroHash, 0, 0)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, st, blk))
-		f.ProcessAttestation(ctx, []uint64{0, 1}, root, 2, true)
+		f.votes = []Vote{
+			{nextRoot: root, nextSlot: 2, nextPayloadStatus: true},
+			{nextRoot: root, nextSlot: 2, nextPayloadStatus: true},
+		}
 		f.justifiedBalances = []uint64{100, 200}
 		require.NoError(t, f.updateBalances())
 		require.Equal(t, true, f.votes[0].currentPayloadStatus)
