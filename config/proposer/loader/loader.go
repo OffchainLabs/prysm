@@ -144,10 +144,9 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 		}
 		dbSettings = dbps.ToConsensus()
 
-		// The DB is not user-editable, so an unknown version is coerced rather than rejected.
+		// Load merges onto and rewrites the DB, so an unknown version must not be reinterpreted.
 		if dbSettings.Version > proposer.SchemaV2 {
-			log.Warnf("Validator DB holds proposer settings with unsupported version %d; treating them as version %d", dbSettings.Version, proposer.SchemaV2)
-			dbSettings.Version = proposer.SchemaV2
+			return nil, fmt.Errorf("validator DB holds proposer settings with unsupported version %d, written by a newer Prysm; run that version or reset the validator DB", dbSettings.Version)
 		}
 
 		log.WithField("version", dbSettings.Version).

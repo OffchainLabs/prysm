@@ -1223,7 +1223,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 			wantErr: "builders_set is not a settings key",
 		},
 		{
-			name: "unsupported version already in the DB is coerced to v2",
+			name: "unsupported version already in the DB is rejected",
 			args: args{proposerSettingsFlagValues: &proposerSettingsFlag{}},
 			withdb: func(db iface.ValidatorDB) error {
 				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
@@ -1231,13 +1231,24 @@ func TestProposerSettingsLoader(t *testing.T) {
 					DefaultConfig: &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")}},
 				})
 			},
-			want: func() *proposer.Settings {
-				return &proposer.Settings{
-					Version:       proposer.SchemaV2,
-					DefaultConfig: &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")}},
-				}
+			want:    func() *proposer.Settings { return nil },
+			wantErr: "validator DB holds proposer settings with unsupported version 3",
+		},
+		{
+			name: "unsupported version already in the DB is rejected even with a configured file",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/good-v2-url-proposer-config.json",
+				},
 			},
-			wantLogs: []string{"unsupported version 3; treating them as version 2"},
+			withdb: func(db iface.ValidatorDB) error {
+				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
+					Version:       proposer.SchemaV2 + 1,
+					DefaultConfig: &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x1111111111111111111111111111111111111111")}},
+				})
+			},
+			want:    func() *proposer.Settings { return nil },
+			wantErr: "validator DB holds proposer settings with unsupported version 3",
 		},
 		{
 			name: "unknown key in JSON file is rejected",
