@@ -115,26 +115,13 @@ func receiveSlotEvents(ctx context.Context, rpcClient ethpb.BeaconNodeValidatorC
 	if err != nil {
 		return err
 	}
-	for {
-		res, err := stream.Recv()
-		if err != nil {
-			return err
-		}
-		if res == nil {
-			continue
-		}
-		data, err := json.Marshal(&structs.HeadEvent{
+	return forwardStream(ctx, eventsChannel, stream, eventClient.EventHead, func(res *ethpb.StreamSlotsResponse) any {
+		return &structs.HeadEvent{
 			Slot:                      strconv.FormatUint(uint64(res.Slot), 10),
 			PreviousDutyDependentRoot: hexutil.Encode(res.PreviousDutyDependentRoot),
 			CurrentDutyDependentRoot:  hexutil.Encode(res.CurrentDutyDependentRoot),
-		})
-		if err != nil {
-			return errors.Wrap(err, "failed to marshal head event")
 		}
-		if !sendEvent(ctx, eventsChannel, &eventClient.Event{Type: eventClient.EventHead, Data: data}) {
-			return ctx.Err()
-		}
-	}
+	})
 }
 
 func receivePayloadAvailableEvents(ctx context.Context, rpcClient ethpb.BeaconNodeValidatorClient, eventsChannel chan<- *eventClient.Event) error {
@@ -142,6 +129,16 @@ func receivePayloadAvailableEvents(ctx context.Context, rpcClient ethpb.BeaconNo
 	if err != nil {
 		return err
 	}
+	return forwardStream(ctx, eventsChannel, stream, eventClient.EventExecutionPayloadAvailable, func(res *ethpb.StreamExecutionPayloadAvailableResponse) any {
+		return &structs.ExecutionPayloadAvailableEvent{
+			Slot:      strconv.FormatUint(uint64(res.Slot), 10),
+			BlockRoot: hexutil.Encode(res.BlockRoot),
+		}
+	})
+}
+
+// forwardStream relays each received message to eventsChannel as a JSON event until Recv or the send fails.
+func forwardStream[T any](ctx context.Context, eventsChannel chan<- *eventClient.Event, stream interface{ Recv() (*T, error) }, eventType string, toEvent func(*T) any) error {
 	for {
 		res, err := stream.Recv()
 		if err != nil {
@@ -150,14 +147,11 @@ func receivePayloadAvailableEvents(ctx context.Context, rpcClient ethpb.BeaconNo
 		if res == nil {
 			continue
 		}
-		data, err := json.Marshal(&structs.ExecutionPayloadAvailableEvent{
-			Slot:      strconv.FormatUint(uint64(res.Slot), 10),
-			BlockRoot: hexutil.Encode(res.BlockRoot),
-		})
+		data, err := json.Marshal(toEvent(res))
 		if err != nil {
-			return errors.Wrap(err, "failed to marshal payload availability event")
+			return errors.Wrapf(err, "failed to marshal %s event", eventType)
 		}
-		if !sendEvent(ctx, eventsChannel, &eventClient.Event{Type: eventClient.EventExecutionPayloadAvailable, Data: data}) {
+		if !sendEvent(ctx, eventsChannel, &eventClient.Event{Type: eventType, Data: data}) {
 			return ctx.Err()
 		}
 	}
