@@ -210,7 +210,7 @@ func (bb *Builder) Attestation(t testing.TB, a ethpb.Att) {
 }
 
 // AttesterSlashing receives an attester slashing and feeds it to forkchoice.
-func (bb *Builder) AttesterSlashing(s *ethpb.AttesterSlashing) {
+func (bb *Builder) AttesterSlashing(s ethpb.AttSlashing) {
 	slashings := []ethpb.AttSlashing{s}
 	bb.service.InsertSlashingsToForkChoiceStore(context.TODO(), slashings)
 }
@@ -268,11 +268,6 @@ func (bb *Builder) Check(t testing.TB, c *Check) {
 		got := fmt.Sprintf("%#x", bb.service.GetProposerHead())
 		require.Equal(t, want, got)
 	}
-	/* TODO: We need to mock the entire proposer system to be able to test this.
-	if c.ShouldOverrideFCU != nil {
-		require.DeepEqual(t, c.ShouldOverrideFCU.Result, bb.service.ShouldOverrideFCU())
-	}
-	*/
 	if c.PayloadTimelinessVote != nil || c.PayloadDataAvailabilityVote != nil {
 		dlt, ok := bb.fc.(*doublylinkedtree.ForkChoice)
 		require.Equal(t, true, ok, "forkchoice is not a doubly linked tree")

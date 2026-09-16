@@ -198,6 +198,8 @@ func SendBeaconBlocksByRootRequest(
 		return nil, err
 	}
 	defer closeStream(stream, log)
+	stop := context.AfterFunc(ctx, func() { _ = stream.Reset() })
+	defer stop()
 
 	// Augment block processing function, if non-nil block processor is provided.
 	blocks := make([]interfaces.ReadOnlySignedBeaconBlock, 0, len(*req))
@@ -873,6 +875,8 @@ func SendExecutionPayloadEnvelopesByRootRequest(
 		return nil, err
 	}
 	defer closeStream(stream, log)
+	stop := context.AfterFunc(ctx, func() { _ = stream.Reset() })
+	defer stop()
 
 	max := min(uint64(len(*req)), params.BeaconConfig().MaxRequestPayloads)
 
