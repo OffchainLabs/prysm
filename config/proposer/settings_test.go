@@ -929,6 +929,27 @@ func TestSettingFromConsensus(t *testing.T) {
 		require.NotNil(t, bc.MaxExecutionPayment)
 		require.Equal(t, validator.Uint64(0), *bc.MaxExecutionPayment)
 	})
+
+	t.Run("nil proposer_config entry is skipped", func(t *testing.T) {
+		nilKey := hexutil.MustDecode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+		liveKey := hexutil.MustDecode("0xb057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+
+		got, err := SettingFromConsensus(&validatorpb.ProposerSettingsPayload{
+			Version: SchemaV2,
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				hexutil.Encode(nilKey):  nil,
+				hexutil.Encode(liveKey): {FeeRecipient: "0x6e35733c5af9B61374A128e6F85f553aF09ff89A"},
+			},
+		})
+		require.NoError(t, err)
+
+		require.Equal(t, 1, len(got.ProposeConfig))
+		_, ok := got.ProposeConfig[bytesutil.ToBytes48(nilKey)]
+		require.Equal(t, false, ok)
+		live := got.ProposeConfig[bytesutil.ToBytes48(liveKey)]
+		require.NotNil(t, live)
+		require.Equal(t, common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"), live.FeeRecipientConfig.FeeRecipient)
+	})
 }
 
 func TestRegistrationFor(t *testing.T) {

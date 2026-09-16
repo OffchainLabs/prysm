@@ -26,7 +26,6 @@ import (
 	dbTest "github.com/OffchainLabs/prysm/v7/validator/db/testing"
 )
 
-// legacyRelaysSettings is what testdata/legacy-relays-proposer-config.json loads to: relays dropped, the rest intact.
 func legacyRelaysSettings() *proposer.Settings {
 	key1 := hexutil.MustDecode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
 	return &proposer.Settings{
@@ -420,32 +419,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 					defaultfee: "",
 				},
 			},
-			want: func() *proposer.Settings {
-				key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
-				require.NoError(t, err)
-				return &proposer.Settings{
-					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
-						bytesutil.ToBytes48(key1): {
-							FeeRecipientConfig: &proposer.FeeRecipientConfig{
-								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
-							},
-							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
-								GasLimit: 40000000,
-							},
-						},
-					},
-					DefaultConfig: &proposer.Option{
-						FeeRecipientConfig: &proposer.FeeRecipientConfig{
-							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
-						},
-						BuilderConfig: &proposer.BuilderConfig{
-							Enabled:  false,
-							GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
-						},
-					},
-				}
-			},
+			want:    legacyRelaysSettings,
 			wantErr: "",
 		},
 		{
@@ -1211,6 +1185,27 @@ func TestProposerSettingsLoader(t *testing.T) {
 				},
 			},
 			want: goodV2URLSettings,
+		},
+		{
+			name: "null proposer_config entry is skipped",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/null-entry-proposer-config.json",
+				},
+			},
+			want: func() *proposer.Settings {
+				liveKey := hexutil.MustDecode("0xb057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+				return &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(liveKey): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+					},
+				}
+			},
 		},
 		{
 			name: "internal builders_set key is rejected",

@@ -26,6 +26,10 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 	if len(ps.ProposerConfig) != 0 {
 		settings.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*Option)
 		for key, optionPayload := range ps.ProposerConfig {
+			if optionPayload == nil {
+				continue
+			}
+
 			decodedKey, err := hexutil.Decode(key)
 			if err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("cannot decode public key %s", key))
