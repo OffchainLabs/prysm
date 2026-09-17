@@ -4,6 +4,7 @@ package validator
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
@@ -188,6 +189,16 @@ func TestSubmitPayloadAttestation_InvalidSignature(t *testing.T) {
 	assert.Equal(t, false, receiver.received)
 	assert.Equal(t, 0, len(pool.PendingPayloadAttestations(slot)))
 	assert.Equal(t, 0, len(events))
+
+	// A state miss is a transient condition and must stay retriable (Unavailable, not InvalidArgument).
+	chain.State = nil
+	_, err = vs.SubmitPayloadAttestation(t.Context(), msg)
+	assert.Equal(t, codes.Unavailable, status.Code(err))
+
+	chain.PtcLookupStateErr = errors.New("lookup failed")
+	_, err = vs.SubmitPayloadAttestation(t.Context(), msg)
+	assert.Equal(t, codes.Internal, status.Code(err))
+	assert.Equal(t, false, p2p.BroadcastCalled.Load())
 }
 
 func TestSubmitPayloadAttestation_Syncing(t *testing.T) {

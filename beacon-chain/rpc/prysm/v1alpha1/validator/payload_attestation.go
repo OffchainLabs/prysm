@@ -69,7 +69,7 @@ func (vs *Server) SubmitPayloadAttestation(
 
 	st, indices, err := vs.payloadAttestationStateAndCommitteeIndices(ctx, msg)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "Could not determine PTC committee index: %v", err)
+		return nil, err
 	}
 	if err := verification.VerifyPayloadAttestationMessageSignature(st, msg); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "Invalid payload attestation signature: %v", err)
@@ -106,14 +106,14 @@ func (vs *Server) payloadAttestationStateAndCommitteeIndices(ctx context.Context
 	root := bytesutil.ToBytes32(msg.Data.BeaconBlockRoot)
 	st, err := vs.PayloadAttestationReceiver.PtcLookupState(ctx, root, msg.Data.Slot)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, status.Errorf(codes.Internal, "Could not look up state for payload attestation: %v", err)
 	}
 	if st == nil {
 		return nil, nil, status.Errorf(codes.Unavailable, "unable to find state for payload attestation")
 	}
 	indices, err := gloas.PayloadCommitteeIndices(ctx, st, msg.Data.Slot, msg.ValidatorIndex)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, status.Errorf(codes.InvalidArgument, "Could not determine PTC committee index: %v", err)
 	}
 	return st, indices, nil
 }
