@@ -44,19 +44,20 @@ func (s *eventStreamServer) StreamExecutionPayloadAvailable(_ *emptypb.Empty, st
 	return s.payload(stream)
 }
 
-func eventStreamRPCClient(t *testing.T, server *eventStreamServer) ethpb.BeaconNodeValidatorClient {
+func eventStreamRPCClient(t *testing.T, server *eventStreamServer, opts ...grpc.DialOption) ethpb.BeaconNodeValidatorClient {
 	t.Helper()
 	listener := bufconn.Listen(1024 * 1024)
 	grpcServer := grpc.NewServer()
 	ethpb.RegisterBeaconNodeValidatorServer(grpcServer, server)
 	go func() { _ = grpcServer.Serve(listener) }()
 	t.Cleanup(grpcServer.Stop)
-	conn, err := grpc.NewClient("passthrough:///event-stream-test",
+	opts = append(opts,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
 			return listener.DialContext(ctx)
 		}),
 	)
+	conn, err := grpc.NewClient("passthrough:///event-stream-test", opts...)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, conn.Close()) })
 	return ethpb.NewBeaconNodeValidatorClient(conn)
@@ -105,10 +106,20 @@ func TestStartEventStream_PayloadForwarding(t *testing.T) {
 	}{
 		{name: "default topics", topics: eventClient.DefaultEventTopics, heads: true},
 		{name: "payload only", topics: []string{eventClient.EventExecutionPayloadAvailable}},
+		{
+			name:   "duplicate topics with head first",
+			topics: []string{eventClient.EventHead, eventClient.EventHeadV2, eventClient.EventHead, eventClient.EventExecutionPayloadAvailable, eventClient.EventExecutionPayloadAvailable},
+			heads:  true,
+		},
+		{
+			name:   "duplicate topics with payload and head_v2 first",
+			topics: []string{eventClient.EventExecutionPayloadAvailable, eventClient.EventHeadV2, eventClient.EventHead, eventClient.EventExecutionPayloadAvailable, eventClient.EventHeadV2},
+			heads:  true,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := bytes.Repeat([]byte{0xab}, 32)
-			slotRequests := make(chan *ethpb.StreamSlotsRequest, 1)
+			slotRequests := make(chan *ethpb.StreamSlotsRequest, len(tc.topics))
 			server := &eventStreamServer{
 				slots: func(req *ethpb.StreamSlotsRequest, stream ethpb.BeaconNodeValidator_StreamSlotsServer) error {
 					slotRequests <- req
@@ -126,7 +137,17 @@ func TestStartEventStream_PayloadForwarding(t *testing.T) {
 					return stream.Context().Err()
 				},
 			}
-			client := eventStreamClient(eventStreamRPCClient(t, server))
+			var slotCalls, payloadCalls atomic.Int32
+			countStreams := grpc.WithStreamInterceptor(func(ctx context.Context, desc *grpc.StreamDesc, conn *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+				switch method {
+				case "/ethereum.eth.v1alpha1.BeaconNodeValidator/StreamSlots":
+					slotCalls.Add(1)
+				case "/ethereum.eth.v1alpha1.BeaconNodeValidator/StreamExecutionPayloadAvailable":
+					payloadCalls.Add(1)
+				}
+				return streamer(ctx, desc, conn, method, opts...)
+			})
+			client := eventStreamClient(eventStreamRPCClient(t, server, countStreams))
 			events := make(chan *eventClient.Event, 2)
 			cancel, done := runEventStream(t, client, tc.topics, events)
 			count := 1
@@ -158,6 +179,12 @@ func TestStartEventStream_PayloadForwarding(t *testing.T) {
 			cancel()
 			awaitEventStreamValue(t, done)
 			require.Equal(t, false, client.EventStreamIsRunning())
+			require.Equal(t, int32(1), payloadCalls.Load())
+			wantSlotCalls := int32(0)
+			if tc.heads {
+				wantSlotCalls = 1
+			}
+			require.Equal(t, wantSlotCalls, slotCalls.Load())
 			if !tc.heads {
 				select {
 				case <-slotRequests:
@@ -281,18 +308,26 @@ func TestStartEventStream_UnimplementedPayloadOnlyStops(t *testing.T) {
 }
 
 func TestStartEventStream_FailureCancelsSibling(t *testing.T) {
-	for _, failingStream := range []string{"slots", "payload"} {
-		t.Run(failingStream, func(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		stream string
+		code   codes.Code
+	}{
+		{name: "slots unavailable", stream: "slots", code: codes.Unavailable},
+		{name: "payload unavailable", stream: "payload", code: codes.Unavailable},
+		{name: "slots unimplemented", stream: "slots", code: codes.Unimplemented},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			started := make(chan struct{}, 2)
 			stopped := make(chan struct{}, 2)
 			fail := make(chan struct{})
 			handler := func(ctx context.Context, stream string) error {
 				started <- struct{}{}
 				defer func() { stopped <- struct{}{} }()
-				if stream == failingStream {
+				if stream == tc.stream {
 					select {
 					case <-fail:
-						return status.Error(codes.Unavailable, "stream interrupted")
+						return status.Error(tc.code, "stream interrupted")
 					case <-ctx.Done():
 						return ctx.Err()
 					}
@@ -317,6 +352,7 @@ func TestStartEventStream_FailureCancelsSibling(t *testing.T) {
 			ev := awaitEventStreamValue(t, events)
 			require.Equal(t, eventClient.EventConnectionError, ev.Type)
 			require.StringContains(t, "stream interrupted", string(ev.Data))
+			require.StringContains(t, tc.code.String(), string(ev.Data))
 			awaitEventStreamValue(t, done)
 			awaitEventStreamValue(t, stopped)
 			awaitEventStreamValue(t, stopped)

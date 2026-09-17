@@ -105,6 +105,7 @@ func TestPayloadAvailability_GRPCReleasesPTCWaiter(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("PTC waiter did not return after payload availability: ", ctx.Err())
 	}
+	require.NoError(t, ctx.Err())
 	require.Equal(t, true, time.Now().Before(deadline), "PTC waiter must return before its deadline")
 	gotRoot, available := v.payloadAvailability.payloadRoot(slot)
 	require.Equal(t, true, available)
