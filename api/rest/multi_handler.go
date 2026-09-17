@@ -393,6 +393,7 @@ func queryUntilAccepted[T any](
 	var (
 		zero     T
 		fallback *T
+		reported []error
 	)
 
 	for {
@@ -417,6 +418,12 @@ func queryUntilAccepted[T any](
 			fallback = &val
 		}
 
+		// The deadline interrupts the final round, leaving it with only cancellation
+		// errors. Keep the last round that carried the nodes' own answers.
+		if hasNodeFailure(errs) {
+			reported = errs
+		}
+
 		// Stop after this round unless re-polling is enabled and there is still
 		// time left on the deadline. In UntilAny2xx mode a usable fallback
 		// also ends the re-polling.
@@ -430,7 +437,11 @@ func queryUntilAccepted[T any](
 				return *fallback, false, nil
 			}
 
-			return zero, false, errors.Join(errs...)
+			if reported == nil {
+				reported = errs
+			}
+
+			return zero, false, errors.Join(reported...)
 		}
 
 		// Wait for the poll interval to elapse.
@@ -440,10 +451,26 @@ func queryUntilAccepted[T any](
 				return *fallback, false, nil
 			}
 
+			if reported != nil {
+				return zero, false, errors.Join(reported...)
+			}
+
 			return zero, false, ctx.Err()
 		case <-time.After(cfg.pollInterval):
 		}
 	}
+}
+
+// hasNodeFailure reports whether errs carries a node's own answer rather than only
+// the cancellation of a round the deadline cut short.
+func hasNodeFailure(errs []error) bool {
+	for _, err := range errs {
+		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // roundFor selects the query strategy.

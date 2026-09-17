@@ -1160,3 +1160,31 @@ func TestMultiHandlerRequestSSZWithFallback(t *testing.T) {
 		assert.Equal(t, int32(1), atomic.LoadInt32(&sszHits2), "same path with different query params must probe SSZ once")
 	})
 }
+
+func TestQueryUntilAccepted(t *testing.T) {
+	// A node answering 204 keeps failing the accept predicate, so the read re-polls
+	// until the deadline. The caller must still see the node's status rather than the
+	// cancellation of whichever round the deadline happened to interrupt.
+	t.Run("node status survives a deadline-interrupted final round", func(t *testing.T) {
+		var hits int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			atomic.AddInt32(&hits, 1)
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		t.Cleanup(srv.Close)
+
+		mh := multi(t, srv.URL)
+		_, _, err := mh.GetSSZ(
+			context.Background(),
+			"/x",
+			WithRace(),
+			WithSSZAccept(func([]byte, http.Header) bool { return false }),
+			WithDeadline(time.Now().Add(300*time.Millisecond)),
+			WithRepoll(UntilAccepted),
+		)
+		require.NotNil(t, err)
+		assert.Equal(t, true, errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusNoContent}),
+			"caller must be able to classify the node's 204, got: "+err.Error())
+		assert.Equal(t, true, atomic.LoadInt32(&hits) > 1, "the read should have re-polled")
+	})
+}
