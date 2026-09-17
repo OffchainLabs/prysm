@@ -69,6 +69,7 @@ func All() []int {
 // AllIncludingUnreleased returns a list of all fork versions, including unreleased ones.
 func AllIncludingUnreleased() []int {
 	return allVersions
+}
 
 // Before returns all supported fork versions strictly earlier than the provided version.
 func Before(version int) []int {
