@@ -82,6 +82,20 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 	if dependentEpoch > 0 {
 		dependentEpoch--
 	}
+
+	// [REJECT] the dependent block is not after compute_shuffling_dependent_slot(proposal_epoch).
+	dependentSlot, err := slots.ShufflingDependentSlot(proposalEpoch)
+	if err != nil {
+		return pubsub.ValidationIgnore, errors.Wrap(err, "shuffling dependent slot")
+	}
+	blockSlot, err := s.cfg.chain.RecentBlockSlot(dependentRoot)
+	if err != nil {
+		return pubsub.ValidationIgnore, errors.Wrap(err, "dependent root slot")
+	}
+	if blockSlot > dependentSlot {
+		return pubsub.ValidationReject, errors.Errorf("dependent block slot %d is after shuffling dependent slot %d", blockSlot, dependentSlot)
+	}
+
 	headRoot, err := s.cfg.chain.HeadRoot(ctx)
 	if err != nil {
 		return pubsub.ValidationIgnore, errors.Wrap(err, "head root")
