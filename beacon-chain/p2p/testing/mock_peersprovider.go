@@ -4,8 +4,9 @@ import (
 	"context"
 	"sync"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/blockprovider"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -22,8 +23,35 @@ const (
 
 // MockPeersProvider implements PeersProvider for testing.
 type MockPeersProvider struct {
-	lock  sync.Mutex
-	peers *peers.Status
+	lock     sync.Mutex
+	peers    *peers.Status
+	scorer   *peerscoring.Scorer
+	selector *blockprovider.Selector
+}
+
+// BlockProviderSelector provides access to the mock's block provider selector.
+func (m *MockPeersProvider) BlockProviderSelector() *blockprovider.Selector {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	if m.selector == nil {
+		m.selector = blockprovider.NewSelector(context.Background(), nil)
+	}
+	return m.selector
+}
+
+// PeerScoring provides access to the mock's peer scorer.
+func (m *MockPeersProvider) PeerScoring() *peerscoring.Scorer {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	return m.peerScorer()
+}
+
+// peerScorer lazily creates the scorer shared with the mock's peer statuses.
+func (m *MockPeersProvider) peerScorer() *peerscoring.Scorer {
+	if m.scorer == nil {
+		m.scorer = peerscoring.NewScorer(peerscoring.WithBadResponseGreyListThreshold(5))
+	}
+	return m.scorer
 }
 
 // ClearPeers removes all known peers.
@@ -32,11 +60,7 @@ func (m *MockPeersProvider) ClearPeers() {
 	defer m.lock.Unlock()
 	m.peers = peers.NewStatus(context.Background(), &peers.StatusConfig{
 		PeerLimit: 30,
-		ScorerParams: &scorers.Config{
-			BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
-				Threshold: 5,
-			},
-		},
+		Scoring:   m.peerScorer(),
 	})
 }
 
@@ -47,11 +71,7 @@ func (m *MockPeersProvider) Peers() *peers.Status {
 	if m.peers == nil {
 		m.peers = peers.NewStatus(context.Background(), &peers.StatusConfig{
 			PeerLimit: 30,
-			ScorerParams: &scorers.Config{
-				BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
-					Threshold: 5,
-				},
-			},
+			Scoring:   m.peerScorer(),
 		})
 		// Pretend we are connected to two peers
 		id0, err := peer.Decode(MockRawPeerId0)
@@ -64,7 +84,7 @@ func (m *MockPeersProvider) Peers() *peers.Status {
 		}
 		m.peers.Add(createENR(), id0, ma0, network.DirInbound)
 		m.peers.SetConnectionState(id0, peers.Connected)
-		m.peers.SetChainState(id0, &pb.StatusV2{FinalizedEpoch: 10})
+		m.peerScorer().SetPeerStatus(id0, &pb.StatusV2{FinalizedEpoch: 10}, nil)
 		id1, err := peer.Decode(MockRawPeerId1)
 		if err != nil {
 			log.WithError(err).Debug("Cannot decode")
@@ -75,7 +95,7 @@ func (m *MockPeersProvider) Peers() *peers.Status {
 		}
 		m.peers.Add(createENR(), id1, ma1, network.DirOutbound)
 		m.peers.SetConnectionState(id1, peers.Connected)
-		m.peers.SetChainState(id1, &pb.StatusV2{FinalizedEpoch: 11})
+		m.peerScorer().SetPeerStatus(id1, &pb.StatusV2{FinalizedEpoch: 11}, nil)
 	}
 	return m.peers
 }

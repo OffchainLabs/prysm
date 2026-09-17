@@ -60,6 +60,11 @@ var (
 		Usage:  deprecatedUsage,
 		Hidden: true,
 	}
+	deprecatedDisablePeerScorer = &cli.BoolFlag{
+		Name:   "disable-peer-scorer",
+		Usage:  deprecatedUsage,
+		Hidden: true,
+	}
 	deprecatedTrackEquivocations = &cli.BoolFlag{
 		Name:   "track-equivocations",
 		Usage:  deprecatedUsage,
@@ -77,6 +82,7 @@ var deprecatedFlags = []cli.Flag{
 	deprecatedInteropStartIndex,
 	deprecatedInteropEth1DataVotes,
 	deprecatedInteropWriteSSZStateTransitions,
+	deprecatedDisablePeerScorer,
 	deprecatedTrackEquivocations,
 }
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -45,7 +46,7 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg any, stre
 	cs := s.cfg.clock.CurrentSlot()
 	remotePeer := stream.Conn().RemotePeer()
 	if err := validateBlobByRootRequest(blobIdents, cs); err != nil {
-		s.downscorePeer(remotePeer, "blobSidecarsByRootRpcHandlerValidationError")
+		s.cfg.p2p.PeerScoring().RecordBadResponse(remotePeer, peerscoring.SourceRPCRequest, "blobSidecarsByRootRpcHandlerValidationError")
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		return err
 	}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -16,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/paulbellamy/ratecounter"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -310,7 +310,7 @@ func syncFields(b blocks.ROBlock) logrus.Fields {
 func (s *Service) highestFinalizedEpoch() primitives.Epoch {
 	highest := primitives.Epoch(0)
 	for _, pid := range s.cfg.P2P.Peers().Connected() {
-		peerChainState, err := s.cfg.P2P.Peers().ChainState(pid)
+		peerChainState, err := s.cfg.P2P.PeerScoring().PeerStatus(pid)
 
 		if err != nil || peerChainState == nil {
 			continue
@@ -570,15 +570,15 @@ func isPunishableError(err error) bool {
 func (s *Service) updatePeerScorerStats(data *blocksQueueFetchedData, count uint64, err error) {
 	if isPunishableError(err) {
 		if verification.IsBlobValidationFailure(err) {
-			s.downscorePeer(data.blobsFrom, "invalidBlobs")
+			s.cfg.P2P.PeerScoring().RecordBadResponse(data.blobsFrom, peerscoring.SourceSync, "invalidBlobs")
 		} else {
-			s.downscorePeer(data.blocksFrom, "invalidBlocks")
+			s.cfg.P2P.PeerScoring().RecordBadResponse(data.blocksFrom, peerscoring.SourceSync, "invalidBlocks")
 		}
 
 		// If the error is punishable, exit here so that we don't give them credit for providing bad blocks.
 		return
 	}
-	s.cfg.P2P.Peers().Scorers().BlockProviderScorer().IncrementProcessedBlocks(data.blocksFrom, count)
+	s.cfg.P2P.BlockProviderSelector().IncrementProcessedBlocks(data.blocksFrom, count)
 }
 
 // isProcessedBlock checks DB and local cache for presence of a given block, to avoid duplicates.
@@ -608,9 +608,4 @@ func (s *Service) isProcessedPayload(ctx context.Context, e interfaces.ROSignedE
 		return false
 	}
 	return s.cfg.DB.HasExecutionPayloadEnvelope(ctx, env.BeaconBlockRoot())
-}
-
-func (s *Service) downscorePeer(peerID peer.ID, reason string) {
-	newScore := s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Increment(peerID)
-	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }

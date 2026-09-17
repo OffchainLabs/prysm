@@ -119,8 +119,7 @@ func TestRPC_ReceivesInvalidMessage(t *testing.T) {
 	require.NoError(t, err)
 
 	time.Sleep(1 * time.Second)
-	faultCount, err := p2p.Peers().Scorers().BadResponsesScorer().Count(remotePeer.BHost.ID())
-	require.NoError(t, err)
+	faultCount := p2p.PeerScoring().BadResponseCount(remotePeer.BHost.ID())
 
 	assert.Equal(t, 1, faultCount, "peer was not penalised for sending bad message")
 

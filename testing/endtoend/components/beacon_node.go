@@ -5,6 +5,7 @@ package components
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/build/bazel"
 	cmdshared "github.com/OffchainLabs/prysm/v7/cmd"
@@ -233,6 +235,8 @@ func (node *BeaconNode) Start(ctx context.Context) error {
 	if node.config.TestCheckpointSync {
 		expectedNumOfPeers += 1
 	}
+	// Allow every expected peer to connect inbound without triggering inbound-limit pruning.
+	maxPeers := int(math.Ceil(float64(expectedNumOfPeers) / peers.InboundRatio))
 	jwtPath := path.Join(e2e.TestParams.TestPath, "eth1data/"+strconv.Itoa(node.index)+"/")
 	if index == 0 {
 		jwtPath = path.Join(e2e.TestParams.TestPath, "eth1data/miner/")
@@ -259,7 +263,7 @@ func (node *BeaconNode) Start(ctx context.Context) error {
 		fmt.Sprintf("--%s=%d", cmdshared.P2PUDPPort.Name, e2e.TestParams.Ports.PrysmBeaconNodeUDPPort+index),
 		fmt.Sprintf("--%s=%d", cmdshared.P2PQUICPort.Name, e2e.TestParams.Ports.PrysmBeaconNodeQUICPort+index),
 		fmt.Sprintf("--%s=%d", cmdshared.P2PTCPPort.Name, e2e.TestParams.Ports.PrysmBeaconNodeTCPPort+index),
-		fmt.Sprintf("--%s=%d", cmdshared.P2PMaxPeers.Name, expectedNumOfPeers),
+		fmt.Sprintf("--%s=%d", cmdshared.P2PMaxPeers.Name, maxPeers),
 		fmt.Sprintf("--%s=%d", flags.MonitoringPortFlag.Name, e2e.TestParams.Ports.PrysmBeaconNodeMetricsPort+index),
 		fmt.Sprintf("--%s=%d", flags.HTTPServerPort.Name, e2e.TestParams.Ports.PrysmBeaconNodeHTTPPort+index),
 		fmt.Sprintf("--%s=%d", flags.ContractDeploymentBlock.Name, 0),
