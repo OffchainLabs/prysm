@@ -85,6 +85,42 @@ func (p *ProgressiveTree) Root() [32]byte {
 	return p.spine[0]
 }
 
+// Proof returns the Merkle branch from a leaf to the progressive tree root.
+func (p *ProgressiveTree) Proof(globalIndex int) ([][32]byte, error) {
+	if p == nil || len(p.subtreeLayers) == 0 {
+		return nil, fmt.Errorf("cannot prove a leaf in an empty progressive tree")
+	}
+
+	subtreeIndex, localIndex := progressiveSubtreeForIndex(globalIndex)
+	if subtreeIndex < 0 || subtreeIndex >= len(p.subtreeLayers) {
+		return nil, fmt.Errorf("progressive leaf index %d is outside tree capacity", globalIndex)
+	}
+
+	layers := p.subtreeLayers[subtreeIndex]
+	if localIndex < 0 || localIndex >= len(layers[0]) {
+		return nil, fmt.Errorf("progressive leaf index %d is outside subtree capacity", globalIndex)
+	}
+
+	proof := make([][32]byte, 0, len(layers)+subtreeIndex)
+	currentIndex := localIndex
+	for layerIndex := 0; layerIndex < len(layers)-1; layerIndex++ {
+		proof = append(proof, layers[layerIndex][currentIndex^1])
+		currentIndex /= 2
+	}
+
+	var successor [32]byte
+	if subtreeIndex+1 < len(p.spine) {
+		successor = p.spine[subtreeIndex+1]
+	}
+	proof = append(proof, successor)
+
+	for level := subtreeIndex - 1; level >= 0; level-- {
+		subtree := p.subtreeLayers[level]
+		proof = append(proof, subtree[len(subtree)-1][0])
+	}
+	return proof, nil
+}
+
 // RecomputeRoot updates one leaf and recomputes only its balanced subtree
 // branch and the affected portion of the progressive spine.
 func (p *ProgressiveTree) RecomputeRoot(globalIndex int, newLeaf [32]byte) error {
