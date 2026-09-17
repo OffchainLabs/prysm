@@ -145,8 +145,13 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 		dbSettings = dbps.ToConsensus()
 
 		// Load merges onto and rewrites the DB, so an unknown version must not be reinterpreted.
-		if dbSettings.Version > proposer.SchemaV2 {
-			return nil, fmt.Errorf("validator DB holds proposer settings with unsupported version %d, written by a newer Prysm; run that version or reset the validator DB", dbSettings.Version)
+		if dbSettings.Version > proposer.MaxSchemaVersion {
+			return nil, fmt.Errorf(
+				"validator DB holds proposer settings with unsupported version %d (max supported: %d), "+
+					"written by a newer Prysm; run that version or reset the validator DB",
+				dbSettings.Version,
+				proposer.MaxSchemaVersion,
+			)
 		}
 
 		log.WithField("version", dbSettings.Version).
@@ -351,8 +356,8 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 // as v1, and the persistence-only builders_set marker that strict decoding cannot
 // tell apart from a documented key.
 func checkSchemaVersion(p *validatorpb.ProposerSettingsPayload) error {
-	if p.Version > proposer.SchemaV2 {
-		return fmt.Errorf("unsupported proposer settings version %d; the highest supported version is %d", p.Version, proposer.SchemaV2)
+	if p.Version > proposer.MaxSchemaVersion {
+		return fmt.Errorf("unsupported proposer settings version %d; the highest supported version is %d", p.Version, proposer.MaxSchemaVersion)
 	}
 	if p.DefaultConfig.GetBuilder().GetBuildersSet() {
 		return errors.New("default_config.builder.builders_set is not a settings key; use \"builders\": []")
