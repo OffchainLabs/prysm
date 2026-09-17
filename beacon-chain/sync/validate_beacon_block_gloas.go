@@ -10,7 +10,6 @@ import (
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -111,13 +110,9 @@ func (s *Service) requestDataColumnsForEnvelope(root [32]byte) {
 	}
 }
 
-// Each peer gets one root request and at most one historical range fallback.
 const maxPayloadEnvelopeFetchAttempts = 3
 
 func (s *Service) fetchPayloadEnvelope(root [32]byte) {
-	if s.ctx.Err() != nil {
-		return
-	}
 	// Fetch missing columns before the envelope so envelope processing does not wait on columns that were never requested.
 	s.requestDataColumnsForEnvelope(root)
 
@@ -132,7 +127,7 @@ func (s *Service) fetchPayloadEnvelope(root [32]byte) {
 	}
 	req := p2ptypes.ExecutionPayloadEnvelopesByRootReq{root}
 	for _, pid := range bestPeers {
-		if s.ctx.Err() != nil || s.cfg.chain.HasFullNode(root) {
+		if s.cfg.chain.HasFullNode(root) {
 			return
 		}
 		envelopes, err := SendExecutionPayloadEnvelopesByRootRequest(s.ctx, s.cfg.clock, s.cfg.p2p, pid, s.ctxMap, &req)
@@ -141,44 +136,11 @@ func (s *Service) fetchPayloadEnvelope(root [32]byte) {
 			continue
 		}
 		if len(envelopes) == 0 {
-			slot, err := s.cfg.chain.RecentBlockSlot(root)
-			if err != nil {
-				log.WithError(err).Debug("Could not get block slot for payload envelope range request")
-				continue
-			}
-			// Some peers incorrectly omit pre-finalization envelopes from by-root responses.
-			peerState, err := s.cfg.p2p.Peers().ChainState(pid)
-			if err != nil || peerState == nil || slots.ToEpoch(slot) >= peerState.FinalizedEpoch {
-				continue
-			}
-			if s.ctx.Err() != nil || s.cfg.chain.HasFullNode(root) {
-				return
-			}
-			envelopes, err = SendExecutionPayloadEnvelopesByRangeRequest(s.ctx, s.cfg.clock, s.cfg.p2p, pid, s.ctxMap,
-				&ethpb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: slot, Count: 1})
-			if err != nil {
-				if errors.Is(err, ErrInvalidFetchedData) || errors.Is(err, errMaxRequestEnvelopesExceeded) {
-					s.downscorePeer(pid, "invalidPayloadEnvelopeRange")
-				}
-				log.WithError(err).WithField("peer", pid).Debug("Could not request payload envelope by range")
-				continue
-			}
-			if len(envelopes) == 0 {
-				continue
-			}
+			continue
 		}
 		wrapped, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(envelopes[0])
 		if err != nil {
 			log.WithError(err).Debug("Could not wrap requested payload envelope")
-			continue
-		}
-		envelope, err := wrapped.Envelope()
-		if err != nil {
-			log.WithError(err).Debug("Could not get requested payload envelope")
-			continue
-		}
-		// A range response may legitimately contain a different fork at the requested slot.
-		if envelope.BeaconBlockRoot() != root {
 			continue
 		}
 		ctx, cancel := context.WithTimeout(s.ctx, params.BeaconConfig().SlotDuration())
