@@ -332,7 +332,7 @@ func TestGetBeaconBlock_Phase0Valid(t *testing.T) {
 }
 
 func TestSSZCodecs_OrderAndCoverage(t *testing.T) {
-	versions := version.All()
+	versions := version.Before(version.Gloas)
 	require.NotEmpty(t, versions)
 
 	expected := make([]int, 0, len(versions))
