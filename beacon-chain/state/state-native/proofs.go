@@ -3,11 +3,14 @@ package state_native
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
 
@@ -87,17 +90,53 @@ func (b *BeaconState) proofByFieldIndex(ctx context.Context, f types.FieldIndex)
 		return nil, err
 	}
 
+	if features.ProgressiveSSZEnabled(b.version) {
+		return b.progressiveProofByFieldIndex(ctx, f)
+	}
+
 	if err := b.initializeMerkleLayers(ctx); err != nil {
 		return nil, err
 	}
 	if err := b.recomputeDirtyFields(ctx); err != nil {
 		return nil, err
 	}
-	// Proof generation still uses the legacy balanced container tree. If it
-	// consumed dirty fields, force the progressive cache to rebuild before it
-	// is used again.
 	b.progressiveMerkleTree = nil
 	return trie.ProofFromMerkleLayers(b.merkleLayers, f.RealPosition()), nil
+}
+
+func (b *BeaconState) progressiveProofByFieldIndex(ctx context.Context, f types.FieldIndex) ([][]byte, error) {
+	if err := b.initializeProgressiveMerkleTree(ctx); err != nil {
+		return nil, err
+	}
+	if err := b.recomputeProgressiveDirtyFields(ctx); err != nil {
+		return nil, err
+	}
+
+	schema, ok := ProgressiveStateSchemaForVersion(b.version)
+	if !ok {
+		return nil, fmt.Errorf("progressive state schema not found for version %v", b.version)
+	}
+	fieldPos, ok := schema.GetFieldIndex(f)
+	if !ok {
+		return nil, fmt.Errorf("field index %s not found for version %v", f.String(), b.version)
+	}
+
+	branch, err := b.progressiveMerkleTree.Proof(fieldPos)
+	if err != nil {
+		return nil, err
+	}
+	activeFieldsRoot, err := ssz.PackActiveFields(schema.ActiveFields())
+	if err != nil {
+		return nil, err
+	}
+	branch = append(branch, activeFieldsRoot)
+
+	proof := make([][]byte, len(branch))
+	for i := range branch {
+		proof[i] = branch[i][:]
+	}
+	b.merkleLayers = nil
+	return proof, nil
 }
 
 func (b *BeaconState) validateFieldIndex(f types.FieldIndex) error {
@@ -128,6 +167,15 @@ func (b *BeaconState) validateFieldIndex(f types.FieldIndex) error {
 		}
 	case version.Fulu:
 		if f.RealPosition() > params.BeaconConfig().BeaconStateFuluFieldCount-1 {
+			return errNotSupported(f.String(), b.version)
+		}
+	case version.Gloas:
+		schema, ok := ProgressiveStateSchemaForVersion(version.Gloas)
+		if !ok {
+			return fmt.Errorf("progressive state schema not found for version %v", b.version)
+		}
+		_, ok = schema.GetFieldIndex(f)
+		if !ok {
 			return errNotSupported(f.String(), b.version)
 		}
 	}
