@@ -683,9 +683,8 @@ func blockIndices(slot primitives.Slot, parentRoot [32]byte) map[string][]byte {
 func (s *Store) SaveHeadBlockRoot(ctx context.Context, blockRoot [32]byte) error {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveHeadBlockRoot")
 	defer span.End()
-	hasStateSummary := s.HasStateSummary(ctx, blockRoot)
-	hasStateInDB := s.HasState(ctx, blockRoot)
-	if !(hasStateInDB || hasStateSummary) {
+
+	if !s.HasStateSummary(ctx, blockRoot) && !s.HasState(ctx, blockRoot) {
 		return errors.New("no state or state summary found with head block root")
 	}
 
