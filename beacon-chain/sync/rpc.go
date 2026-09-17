@@ -38,6 +38,18 @@ var (
 // not be relayed to the peer.
 type rpcHandler func(context.Context, any, libp2pcore.Stream) error
 
+// unboundedTopics are the rpc topics needed to maintain the peering itself; their responses are tiny and
+// must never wait behind a peer's throttled data streams.
+var unboundedTopics = map[string]struct{}{
+	p2p.RPCGoodByeTopicV1:  {},
+	p2p.RPCMetaDataTopicV1: {},
+	p2p.RPCMetaDataTopicV2: {},
+	p2p.RPCMetaDataTopicV3: {},
+	p2p.RPCPingTopicV1:     {},
+	p2p.RPCStatusTopicV1:   {},
+	p2p.RPCStatusTopicV2:   {},
+}
+
 // rpcHandlerByTopicFromFork returns the RPC handlers for a given fork index.
 func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandler, error) {
 	// Gloas: https://github.com/ethereum/consensus-specs/blob/master/specs/gloas/p2p-interface.md#messages
@@ -268,59 +280,62 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 			p2p.RPCLightClientFinalityUpdateTopicV1:   true,
 		}
 
+		// The request is decoded before waiting for a throttled stream, so that the wait can never eat into
+		// the read deadline and get a throttled peer penalized with a request decode error.
+		var msg any
 		if topics[baseTopic] {
-			if err := handle(ctx, base, stream); err != nil {
-				messageFailedProcessingCounter.WithLabelValues(topic).Inc()
-				if !errors.Is(err, p2ptypes.ErrWrongForkDigestVersion) {
-					log.WithError(err).Debug("Could not handle p2p RPC")
-				}
-				tracing.AnnotateError(span, err)
-			}
-			return
-		}
-
-		// Given we have an input argument that can be pointer or the actual object, this gives us
-		// a way to check for its reflect.Kind and based on the result, we can decode
-		// accordingly.
-		if t.Kind() == reflect.Pointer {
-			msg, ok := reflect.New(t.Elem()).Interface().(ssz.Unmarshaler)
+			msg = base
+		} else if t.Kind() == reflect.Pointer {
+			// Given we have an input argument that can be pointer or the actual object, this gives us
+			// a way to check for its reflect.Kind and based on the result, we can decode
+			// accordingly.
+			m, ok := reflect.New(t.Elem()).Interface().(ssz.Unmarshaler)
 			if !ok {
-				log.Errorf("message of %T does not support marshaller interface", msg)
+				log.Errorf("message of %T does not support marshaller interface", m)
 				return
 			}
-			if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
+			if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, m); err != nil {
 				logStreamErrors(err, topic)
 				tracing.AnnotateError(span, err)
 				s.cfg.p2p.PeerScoring().RecordBadResponse(remotePeer, peerscoring.SourceRPCRequest, "requestDecodeError:"+topic)
 				return
 			}
-			if err := handle(ctx, msg, stream); err != nil {
-				messageFailedProcessingCounter.WithLabelValues(topic).Inc()
-				if !errors.Is(err, p2ptypes.ErrWrongForkDigestVersion) {
-					log.WithError(err).Debug("Could not handle p2p RPC")
-				}
-				tracing.AnnotateError(span, err)
-			}
+			msg = m
 		} else {
 			nTyp := reflect.New(t)
-			msg, ok := nTyp.Interface().(ssz.Unmarshaler)
+			m, ok := nTyp.Interface().(ssz.Unmarshaler)
 			if !ok {
-				log.Errorf("message of %T does not support marshaller interface", msg)
+				log.Errorf("message of %T does not support marshaller interface", m)
 				return
 			}
-			if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
+			if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, m); err != nil {
 				logStreamErrors(err, topic)
 				tracing.AnnotateError(span, err)
 				s.cfg.p2p.PeerScoring().RecordBadResponse(remotePeer, peerscoring.SourceRPCRequest, "requestDecodeError:"+topic)
 				return
 			}
-			if err := handle(ctx, nTyp.Elem().Interface(), stream); err != nil {
-				messageFailedProcessingCounter.WithLabelValues(topic).Inc()
-				if !errors.Is(err, p2ptypes.ErrWrongForkDigestVersion) {
-					log.WithError(err).Debug("Could not handle p2p RPC")
-				}
-				tracing.AnnotateError(span, err)
+			msg = nTyp.Elem().Interface()
+		}
+
+		// Serve the response through the per-peer bandwidth throttle. Not getting a throttled stream in time
+		// is our doing, not the peer's, so it is never scored against the peer.
+		if _, unbounded := unboundedTopics[baseTopic]; !unbounded && s.peerThrottleMux.enabled() {
+			throttled, err := s.peerThrottleMux.throttle(ctx, remotePeer, stream)
+			if err != nil {
+				rpcThrottleWaitFailed.Inc()
+				log.WithError(err).Debug("Could not acquire throttled stream")
+				return
 			}
+			defer throttled.cleanup()
+			stream = throttled
+		}
+
+		if err := handle(ctx, msg, stream); err != nil {
+			messageFailedProcessingCounter.WithLabelValues(topic).Inc()
+			if !errors.Is(err, p2ptypes.ErrWrongForkDigestVersion) {
+				log.WithError(err).Debug("Could not handle p2p RPC")
+			}
+			tracing.AnnotateError(span, err)
 		}
 	})
 	log.Debug("Registered new RPC handler")

@@ -93,6 +93,7 @@ require (
 	go.uber.org/mock v0.5.2
 	golang.org/x/crypto v0.52.0
 	golang.org/x/sync v0.20.0
+	golang.org/x/time v0.12.0
 	golang.org/x/tools v0.44.0
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1
 	google.golang.org/grpc v1.81.1
@@ -286,7 +287,6 @@ require (
 	golang.org/x/telemetry v0.0.0-20260409153401-be6f6cb8b1fa // indirect
 	golang.org/x/term v0.43.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
-	golang.org/x/time v0.12.0 // indirect
 	golang.org/x/tools/go/expect v0.1.1-deprecated // indirect
 	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect

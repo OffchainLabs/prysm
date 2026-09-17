@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/storage"
 	backfill "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/sync/backfill/flags"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/sync/checkpoint"
+	syncflags "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/sync/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/runtime/debug"
 	"github.com/urfave/cli/v2"
@@ -113,6 +114,9 @@ var appHelpFlagGroups = []flagGroup{
 			flags.SubscribeToAllSubnets,
 			flags.Supernode,
 			flags.SemiSupernode,
+			syncflags.ThrottleBPS,
+			syncflags.ThrottleBurst,
+			syncflags.ThrottleStreamsPerPeer,
 		},
 	},
 	{ // Flags relevant to storing data on disk and configuring the beacon chain database.

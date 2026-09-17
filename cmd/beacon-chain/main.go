@@ -22,6 +22,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/genesis"
 	jwtcommands "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/jwt"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/storage"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/sync"
 	backfill "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/sync/backfill"
 	bflags "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/sync/backfill/flags"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/sync/checkpoint"
@@ -168,7 +169,9 @@ var appFlags = []cli.Flag{
 }
 
 func init() {
-	appFlags = cmd.WrapFlags(append(appFlags, features.BeaconChainFlags...))
+	appFlags = append(appFlags, features.BeaconChainFlags...)
+	appFlags = append(appFlags, sync.Flags...)
+	appFlags = cmd.WrapFlags(appFlags)
 }
 
 func before(ctx *cli.Context) error {
@@ -385,6 +388,7 @@ func startNode(ctx *cli.Context, cancel context.CancelFunc) error {
 		storage.BeaconNodeOptions,
 		backfill.BeaconNodeOptions,
 		das.BeaconNodeOptions,
+		sync.BeaconNodeOptions,
 	}
 
 	beacon, err := node.New(ctx, cancel, optFuncs, opts...)

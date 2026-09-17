@@ -214,6 +214,8 @@ type Service struct {
 	selfBuildSigFailSlot                 primitives.Slot
 	pendingPayloadAttestations           map[[32]byte][]*ethpb.PayloadAttestationMessage
 	pendingPayloadAttestationLock        sync.RWMutex
+	peerThrottleMux                      *peerThrottleMux
+	peerThrottleMuxOptions               []ThrottleMuxOption
 }
 
 // NewService initializes new regular sync service.
@@ -268,6 +270,8 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 	})
 	r.subHandler = newSubTopicHandler()
 	r.rateLimiter = newRateLimiter(r.cfg.p2p)
+	r.peerThrottleMux = newPeerThrottleMux(ctx, r.peerThrottleMuxOptions...)
+	r.peerThrottleMux.spawnPruner()
 	r.initCaches()
 
 	return r

@@ -135,6 +135,7 @@ type BeaconNode struct {
 	lcStore                   *lightclient.Store
 	ConfigOptions             []params.Option
 	SyncNeedsWaiter           func() (das.SyncNeeds, error)
+	SyncOptions               []regularsync.Option
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -858,8 +859,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		return err
 	}
 
-	rs := regularsync.NewService(
-		b.ctx,
+	b.SyncOptions = append(b.SyncOptions,
 		regularsync.WithDatabase(b.db),
 		regularsync.WithP2P(b.fetchP2P()),
 		regularsync.WithChainService(chainService),
@@ -892,6 +892,8 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithBatchVerifierLimit(b.cliCtx.Int(flags.BatchVerifierLimit.Name)),
 		regularsync.WithPayloadAttestationPool(b.payloadAttestationPool),
 	)
+
+	rs := regularsync.NewService(b.ctx, b.SyncOptions...)
 	return b.services.RegisterService(rs)
 }
 

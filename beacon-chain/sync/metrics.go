@@ -245,6 +245,34 @@ var (
 			Help: "Count the number of times data columns have been recovered from the execution layer.",
 		},
 	)
+	rpcThrottleStreamMilliseconds = promauto.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "rpc_throttle_stream_milliseconds",
+			Help: "Time spent writing response data with throttling applied",
+		},
+	)
+	rpcThrottleWrittenBytes = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "rpc_throttle_written_bytes",
+			Help: "Bytes written through throttling RPC streams",
+		},
+	)
+	rpcThrottleWaitFailed = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "rpc_throttle_wait_failed_total",
+			Help: "Count of RPC requests dropped because no throttled stream became available for the peer in time",
+		},
+	)
+	rpcPeerThrottlesPruned = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "rpc_peer_throttle_prune_total",
+			Help: "Count of pruned RPC peer throttles",
+		})
+	rpcPeerThrottlesCreated = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "rpc_peer_throttle_create_total",
+			Help: "Count of created RPC peer throttles",
+		})
 	syncExecutionPayloadEnvelopeArrivalDelaySeconds = promauto.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "sync_execution_payload_envelope_arrival_delay_seconds",

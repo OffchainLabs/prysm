@@ -58,6 +58,7 @@ go_library(
         "subscriber_sync_committee_message.go",
         "subscriber_sync_contribution_proof.go",
         "subscription_topic_handler.go",
+        "throttle.go",
         "validate_aggregate_proof.go",
         "validate_attester_slashing.go",
         "validate_beacon_attestation.go",
@@ -175,6 +176,7 @@ go_library(
         "@org_golang_google_protobuf//proto:go_default_library",
         "@org_golang_x_sync//errgroup:go_default_library",
         "@org_golang_x_sync//singleflight:go_default_library",
+        "@org_golang_x_time//rate:go_default_library",
     ],
 )
 
@@ -223,6 +225,7 @@ go_test(
         "scoring_helpers_test.go",
         "service_test.go",
         "slot_aware_cache_test.go",
+        "stream_mock_test.go",
         "subscriber_beacon_aggregate_proof_test.go",
         "subscriber_beacon_blocks_test.go",
         "subscriber_data_column_sidecar_test.go",
@@ -232,6 +235,7 @@ go_test(
         "subscription_topic_handler_test.go",
         "sync_fuzz_test.go",
         "sync_test.go",
+        "throttle_test.go",
         "validate_aggregate_proof_test.go",
         "validate_attester_slashing_test.go",
         "validate_beacon_attestation_test.go",
@@ -346,5 +350,6 @@ go_test(
         "@com_github_sirupsen_logrus//hooks/test:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
+        "@org_golang_x_time//rate:go_default_library",
     ],
 )
