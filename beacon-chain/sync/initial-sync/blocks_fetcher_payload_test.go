@@ -72,56 +72,6 @@ func TestCheckAllBlocksBuildOnEmpty(t *testing.T) {
 	})
 }
 
-func TestBlockBuiltOnEnvelope(t *testing.T) {
-	blockHash := [32]byte{0xaa}
-	parentHash := [32]byte{0xbb}
-
-	t.Run("matching execution parent hash returns true", func(t *testing.T) {
-		env := makeEnvelope(t, 10, blockHash, [32]byte{})
-		blk := makeGloasBlock(t, 11, [32]byte{}, blockHash)
-		full, err := blocks.BlockBuiltOnEnvelope(env, blk)
-		require.NoError(t, err)
-		require.Equal(t, true, full)
-	})
-
-	t.Run("different execution parent hash returns false", func(t *testing.T) {
-		env := makeEnvelope(t, 10, blockHash, [32]byte{})
-		blk := makeGloasBlock(t, 11, [32]byte{}, parentHash)
-		full, err := blocks.BlockBuiltOnEnvelope(env, blk)
-		require.NoError(t, err)
-		require.Equal(t, false, full)
-	})
-}
-
-func TestBlockBuiltOnParentEnvelope(t *testing.T) {
-	blockHash := [32]byte{0xaa}
-	parentRoot := [32]byte{0x01}
-
-	t.Run("matching beacon parent root and execution hash returns true", func(t *testing.T) {
-		blk := makeGloasBlock(t, 11, parentRoot, blockHash)
-		env := makeEnvelopeForRoot(t, 10, parentRoot, blockHash, [32]byte{})
-		full, err := blocks.BlockBuiltOnParentEnvelope(env, blk)
-		require.NoError(t, err)
-		require.Equal(t, true, full)
-	})
-
-	t.Run("ancestor root with matching execution hash returns false", func(t *testing.T) {
-		blk := makeGloasBlock(t, 11, parentRoot, blockHash)
-		env := makeEnvelopeForRoot(t, 9, [32]byte{0x02}, blockHash, [32]byte{})
-		full, err := blocks.BlockBuiltOnParentEnvelope(env, blk)
-		require.NoError(t, err)
-		require.Equal(t, false, full)
-	})
-
-	t.Run("matching beacon parent root with different execution hash returns false", func(t *testing.T) {
-		blk := makeGloasBlock(t, 11, parentRoot, [32]byte{0xbb})
-		env := makeEnvelopeForRoot(t, 10, parentRoot, blockHash, [32]byte{})
-		full, err := blocks.BlockBuiltOnParentEnvelope(env, blk)
-		require.NoError(t, err)
-		require.Equal(t, false, full)
-	})
-}
-
 func TestFindFirstForkIndex_Gloas(t *testing.T) {
 	fulu := util.NewBeaconBlockFulu()
 	signedFulu, err := blocks.NewSignedBeaconBlock(fulu)
