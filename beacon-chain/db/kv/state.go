@@ -1184,6 +1184,9 @@ func (s *Store) getStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) 
 }
 
 func (s *Store) hasStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) (bool, error) {
+	if s.stateDiffCache == nil {
+		return false, nil
+	}
 	stateSummary, err := s.StateSummary(ctx, blockRoot)
 	if err != nil {
 		return false, err
