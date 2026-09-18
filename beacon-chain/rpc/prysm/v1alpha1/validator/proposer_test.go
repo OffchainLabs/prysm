@@ -3513,8 +3513,9 @@ func TestProposer_GetFeeRecipientByPubKey(t *testing.T) {
 	bsRoot, err := beaconState.HashTreeRoot(ctx)
 	require.NoError(t, err)
 	proposerServer := &Server{
-		BeaconDB:    db,
-		HeadFetcher: &mock.ChainService{Root: bsRoot[:], State: beaconState},
+		BeaconDB:                 db,
+		HeadFetcher:              &mock.ChainService{Root: bsRoot[:], State: beaconState},
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 	}
 	pubkey, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
 	require.NoError(t, err)
@@ -3535,8 +3536,10 @@ func TestProposer_GetFeeRecipientByPubKey(t *testing.T) {
 		PublicKey: beaconState.Validators()[0].PublicKey,
 	})
 	require.NoError(t, err)
-	err = proposerServer.BeaconDB.SaveFeeRecipientsByValidatorIDs(ctx, []primitives.ValidatorIndex{index.Index}, []common.Address{common.HexToAddress("0x055Fb65722E7b2455012BFEBf6177F1D2e9728D8")})
-	require.NoError(t, err)
+	proposerServer.ProposerPreferencesCache.SetDefault(cache.ProposerPreference{
+		ValidatorIndex: index.Index,
+		FeeRecipient:   primitives.ExecutionAddress(common.HexToAddress("0x055Fb65722E7b2455012BFEBf6177F1D2e9728D8")),
+	})
 	resp, err = proposerServer.GetFeeRecipientByPubKey(ctx, &ethpb.FeeRecipientByPubKeyRequest{
 		PublicKey: beaconState.Validators()[0].PublicKey,
 	})

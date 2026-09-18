@@ -18,8 +18,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/pkg/errors"
 	bolt "go.etcd.io/bbolt"
 	"google.golang.org/protobuf/proto"
 )
@@ -1338,54 +1336,6 @@ func TestStore_BlocksBySlot_BlockRootsBySlot(t *testing.T) {
 			assert.Equal(t, true, hasBlockRoots, "Expected no block roots")
 		})
 	}
-}
-
-func TestStore_FeeRecipientByValidatorID(t *testing.T) {
-	db := setupDB(t)
-	ctx := t.Context()
-	ids := []primitives.ValidatorIndex{0, 0, 0}
-	feeRecipients := []common.Address{{}, {}, {}, {}}
-	require.ErrorContains(t, "validatorIDs and feeRecipients must be the same length", db.SaveFeeRecipientsByValidatorIDs(ctx, ids, feeRecipients))
-
-	ids = []primitives.ValidatorIndex{0, 1, 2}
-	feeRecipients = []common.Address{{'a'}, {'b'}, {'c'}}
-	require.NoError(t, db.SaveFeeRecipientsByValidatorIDs(ctx, ids, feeRecipients))
-	f, err := db.FeeRecipientByValidatorID(ctx, 0)
-	require.NoError(t, err)
-	require.Equal(t, common.Address{'a'}, f)
-	f, err = db.FeeRecipientByValidatorID(ctx, 1)
-	require.NoError(t, err)
-	require.Equal(t, common.Address{'b'}, f)
-	f, err = db.FeeRecipientByValidatorID(ctx, 2)
-	require.NoError(t, err)
-	require.Equal(t, common.Address{'c'}, f)
-	_, err = db.FeeRecipientByValidatorID(ctx, 3)
-	want := errors.Wrap(ErrNotFoundFeeRecipient, "validator id 3")
-	require.Equal(t, want.Error(), err.Error())
-
-	// Registrations are no longer written by Prysm, but legacy entries must still resolve a fee
-	// recipient. Write straight to the registration bucket, standing in for a node that ran with
-	// the removed --disable-registration-cache flag.
-	// TODO: neither bucket is written by Prysm anymore (PrepareBeaconProposer now populates
-	// ProposerPreferencesCache), so FeeRecipientByValidatorID and SaveFeeRecipientsByValidatorIDs
-	// should be removed along with this test once GetFeeRecipientByPubKey is dropped.
-	enc, err := encode(ctx, &ethpb.ValidatorRegistrationV1{
-		FeeRecipient: bytesutil.PadTo([]byte("a"), 20),
-		GasLimit:     1,
-		Timestamp:    2,
-		Pubkey:       bytesutil.PadTo([]byte("b"), 48),
-	})
-	require.NoError(t, err)
-	require.NoError(t, db.db.Update(func(tx *bolt.Tx) error {
-		return tx.Bucket(registrationBucket).Put(bytesutil.Uint64ToBytesBigEndian(3), enc)
-	}))
-	f, err = db.FeeRecipientByValidatorID(ctx, 3)
-	require.NoError(t, err)
-	require.Equal(t, common.Address{'a'}, f)
-
-	_, err = db.FeeRecipientByValidatorID(ctx, 4)
-	want = errors.Wrap(ErrNotFoundFeeRecipient, "validator id 4")
-	require.Equal(t, want.Error(), err.Error())
 }
 
 // Block creates a phase0 beacon block at the specified slot and saves it to the database.

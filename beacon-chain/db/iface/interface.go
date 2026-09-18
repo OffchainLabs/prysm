@@ -56,8 +56,6 @@ type ReadOnlyDatabase interface {
 	DepositContractAddress(ctx context.Context) ([]byte, error)
 	// ExecutionChainData operations.
 	ExecutionChainData(ctx context.Context) (*ethpb.ETH1ChainData, error)
-	// Fee recipients operations.
-	FeeRecipientByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (common.Address, error)
 	// Light client operations
 	LightClientUpdates(ctx context.Context, startPeriod, endPeriod uint64) (map[uint64]interfaces.LightClientUpdate, error)
 	LightClientUpdate(ctx context.Context, period uint64) (interfaces.LightClientUpdate, error)
@@ -113,8 +111,6 @@ type NoHeadAccessDatabase interface {
 	SaveExecutionChainData(ctx context.Context, data *ethpb.ETH1ChainData) error
 	// Run any required database migrations.
 	RunMigrations(ctx context.Context) error
-	// Fee recipients operations.
-	SaveFeeRecipientsByValidatorIDs(ctx context.Context, ids []primitives.ValidatorIndex, addrs []common.Address) error
 	// light client operations
 	SaveLightClientUpdate(ctx context.Context, period uint64, update interfaces.LightClientUpdate) error
 	SaveLightClientBootstrap(ctx context.Context, blockRoot []byte, bootstrap interfaces.LightClientBootstrap) error
