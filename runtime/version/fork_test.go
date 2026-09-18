@@ -59,6 +59,64 @@ func TestVersionSorting(t *testing.T) {
 	}
 }
 
+func TestBefore(t *testing.T) {
+	tests := []struct {
+		name   string
+		cutoff int
+		want   []int
+	}{
+		{
+			name:   "before first fork",
+			cutoff: version.Phase0 - 1,
+		},
+		{
+			name:   "at first fork",
+			cutoff: version.Phase0,
+		},
+		{
+			name:   "first fork only",
+			cutoff: version.Altair,
+			want:   []int{version.Phase0},
+		},
+		{
+			name:   "middle fork is excluded",
+			cutoff: version.Deneb,
+			want:   []int{version.Phase0, version.Altair, version.Bellatrix, version.Capella},
+		},
+		{
+			name:   "before gloas",
+			cutoff: version.Gloas,
+			want:   []int{version.Phase0, version.Altair, version.Bellatrix, version.Capella, version.Deneb, version.Electra, version.Fulu},
+		},
+		{
+			name:   "after latest fork returns all supported forks",
+			cutoff: version.Gloas + 1,
+			want:   slices.Clone(version.All()),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := version.Before(tt.cutoff)
+			if !slices.Equal(tt.want, got) {
+				t.Errorf("Before(%d) = %v, want %v", tt.cutoff, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBefore_AppendDoesNotChangeAll(t *testing.T) {
+	all := version.All()
+	original := slices.Clone(all)
+	t.Cleanup(func() {
+		copy(all, original)
+	})
+
+	got := append(version.Before(version.Altair), version.Gloas)
+	assert.Equal(t, []int{version.Phase0, version.Gloas}, got)
+	assert.Equal(t, original, version.All(), "appending to Before must not overwrite supported fork versions")
+}
+
 func TestUnsupportedVersionsExcludedFromAll(t *testing.T) {
 	for _, v := range unsupportedVersions() {
 		assert.NotContains(t, version.All(), v, "unsupported version %s should not be returned by version.All()", version.String(v))
