@@ -424,7 +424,7 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 	}
 
 	log.Debugln("Registering builder service")
-	if err := beacon.registerBuilderService(cliCtx); err != nil {
+	if err := beacon.registerBuilderService(); err != nil {
 		return errors.Wrap(err, "could not register builder service")
 	}
 
@@ -1144,19 +1144,15 @@ func (b *BeaconNode) registerValidatorMonitorService(initialSyncComplete chan st
 	return b.services.RegisterService(svc)
 }
 
-func (b *BeaconNode) registerBuilderService(cliCtx *cli.Context) error {
+func (b *BeaconNode) registerBuilderService() error {
 	var chainService *blockchain.Service
 	if err := b.services.FetchService(&chainService); err != nil {
 		return err
 	}
 
 	opts := b.serviceFlagOpts.builderOpts
-	opts = append(opts, builder.WithHeadFetcher(chainService), builder.WithDatabase(b.db))
+	opts = append(opts, builder.WithHeadFetcher(chainService))
 
-	// make cache the default.
-	if !cliCtx.Bool(features.DisableRegistrationCache.Name) {
-		opts = append(opts, builder.WithRegistrationCache())
-	}
 	svc, err := builder.NewService(b.ctx, opts...)
 	if err != nil {
 		return err
