@@ -90,6 +90,8 @@ func FromForkVersion(cv [fieldparams.VersionLength]byte) (*VersionedUnmarshaler,
 		fork = version.Fulu
 	case bytesutil.ToBytes4(cfg.GloasForkVersion):
 		fork = version.Gloas
+	case bytesutil.ToBytes4(cfg.DecoupledForkVersion):
+		fork = version.Decoupled
 	default:
 		return nil, errors.Wrapf(ErrForkNotFound, "version=%#x", cv)
 	}

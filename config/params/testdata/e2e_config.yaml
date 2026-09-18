@@ -53,6 +53,9 @@ FULU_FORK_EPOCH: 16
 # Gloas
 GLOAS_FORK_VERSION: 0x070000fd
 
+# Decoupled
+DECOUPLED_FORK_VERSION: 0x100000fd
+
 
 # Time parameters
 # ---------------------------------------------------------------
