@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -33,10 +34,14 @@ func TestProposerSettingsLoader(t *testing.T) {
 	keyB := [fieldparams.BLSPubkeyLength]byte{0xbb}
 	keyC := [fieldparams.BLSPubkeyLength]byte{0xcc}
 	type proposerSettingsFlag struct {
-		dir        string
-		url        string
-		defaultfee string
-		defaultgas string
+		dir               string
+		url               string
+		defaultfee        string
+		defaultgas        string
+		builderURLs       string
+		builderMinBid     string
+		builderBoost      string
+		builderMaxPayment string
 	}
 
 	type args struct {
@@ -91,6 +96,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 				}
 				return db.SaveProposerSettings(t.Context(), settings)
 			},
+			wantNoLogs: []string{"take precedence over the configured defaults"},
 		},
 		{
 			name: "graffiti from file",
@@ -1248,6 +1254,217 @@ func TestProposerSettingsLoader(t *testing.T) {
 			},
 			wantNoLogs: []string{fmt.Sprintf("%#x", [fieldparams.BLSPubkeyLength]byte{0x0a})},
 		},
+		{
+			name: "builder flags alone build a v2 default that is not persisted",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					builderURLs:       "https://builder-a.example, https://builder-b.example#0x0123",
+					builderMinBid:     "500000000",
+					builderBoost:      "90",
+					builderMaxPayment: "0",
+				},
+			},
+			want: func() *proposer.Settings {
+				minBid, boost, maxPayment := validator.Uint64(500000000), validator.Uint64(90), validator.Uint64(0)
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						BuilderConfig: &proposer.BuilderConfig{
+							Builders: []*proposer.BuilderEntry{
+								{URL: "https://builder-a.example"},
+								{URL: "https://builder-b.example", AuthData: []byte{0x01, 0x23}},
+							},
+							MinBid:              &minBid,
+							BuilderBoostFactor:  &boost,
+							MaxExecutionPayment: &maxPayment,
+						},
+					},
+				}
+			},
+			wantLogs:         []string{"Proposer settings loaded from default", "no Gloas fork scheduled"},
+			skipDBSavedCheck: true,
+		},
+		{
+			name: "fee recipient and builder flags define the default",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					defaultfee:  "0x6e35733c5af9B61374A128e6F85f553aF09ff89A",
+					builderURLs: "https://builder-a.example",
+				},
+			},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						BuilderConfig:      &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{{URL: "https://builder-a.example"}}},
+					},
+				}
+			},
+		},
+		{
+			name: "builder flags replace a v1 db default and keep its per-key entries",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					defaultfee:  "0x6e35733c5af9B61374A128e6F85f553aF09ff89A",
+					builderURLs: "https://builder-a.example",
+				},
+			},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						keyA: {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")},
+							BuilderConfig:      &proposer.BuilderConfig{Enabled: true, GasLimit: validator.Uint64(30000000)},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						BuilderConfig:      &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{{URL: "https://builder-a.example"}}},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						keyA: {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")},
+							BuilderConfig:      &proposer.BuilderConfig{Enabled: true, GasLimit: validator.Uint64(30000000)},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0xAe967917c465db8578ca9024c205720b1a3651A9")},
+						BuilderConfig:      &proposer.BuilderConfig{Enabled: true, GasLimit: validator.Uint64(40000000)},
+					},
+				})
+			},
+			wantLogs: []string{"take precedence over the configured defaults", "perKeyCount=1"},
+		},
+		{
+			name: "settings file default_config replaces the builder flag defaults",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir:         "./testdata/good-prepare-beacon-proposer-config.json",
+					builderURLs: "https://builder-a.example",
+				},
+			},
+			want: func() *proposer.Settings {
+				key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+				require.NoError(t, err)
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(key1): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+					},
+				}
+			},
+			wantLogs:   []string{"replaces the builder defaults set by --builder-urls"},
+			wantNoLogs: []string{"take precedence over the configured defaults"},
+		},
+		{
+			name: "settings file without default_config keeps the builder flag defaults",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir:         "./testdata/proposer-config-only.json",
+					defaultfee:  "0x6e35733c5af9B61374A128e6F85f553aF09ff89A",
+					builderURLs: "https://builder-a.example",
+				},
+			},
+			want: func() *proposer.Settings {
+				key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+				require.NoError(t, err)
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(key1): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						BuilderConfig:      &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{{URL: "https://builder-a.example"}}},
+					},
+				}
+			},
+			wantNoLogs: []string{"replaces the builder defaults"},
+		},
+		{
+			name: "legacy builder flags coexist with the builder flag defaults",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					defaultfee:  "0x6e35733c5af9B61374A128e6F85f553aF09ff89A",
+					defaultgas:  "50000000",
+					builderURLs: "https://builder-a.example",
+				},
+			},
+			validatorRegistrationEnabled: true,
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						BuilderConfig: &proposer.BuilderConfig{
+							Enabled:  true,
+							GasLimit: validator.Uint64(50000000),
+							Builders: []*proposer.BuilderEntry{{URL: "https://builder-a.example"}},
+						},
+					},
+				}
+			},
+			wantLogs: []string{"no effect after the gloas fork"},
+		},
+		{
+			name: "a later run without builder flags rebuilds the default from the flags",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					defaultfee: "0x6e35733c5af9B61374A128e6F85f553aF09ff89A",
+				},
+			},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						BuilderConfig:      &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{{URL: "https://builder-a.example"}}},
+					},
+				})
+			},
+		},
+		{
+			name: "invalid builder url fails",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{builderURLs: "builder-a.example"},
+			},
+			wantErr: "url is not a valid URL",
+		},
+		{
+			name: "invalid builder auth fragment fails",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{builderURLs: "https://builder-a.example#token"},
+			},
+			wantErr: "not 0x-prefixed hex",
+		},
+		{
+			name: "duplicate builder url fails",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{builderURLs: "https://builder-a.example,https://builder-a.example"},
+			},
+			wantErr: "more than once",
+		},
 	}
 	for _, tt := range tests {
 		for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
@@ -1283,6 +1500,20 @@ func TestProposerSettingsLoader(t *testing.T) {
 				}
 				if tt.validatorRegistrationEnabled {
 					set.Bool(flags.EnableBuilderFlag.Name, true, "")
+				}
+				if v := tt.args.proposerSettingsFlagValues.builderURLs; v != "" {
+					set.Var(cli.NewStringSlice(), flags.BuilderURLsFlag.Name, "")
+					require.NoError(t, set.Set(flags.BuilderURLsFlag.Name, v))
+				}
+				for name, v := range map[string]string{
+					flags.BuilderMinBidFlag.Name:              tt.args.proposerSettingsFlagValues.builderMinBid,
+					flags.BuilderBoostFactorFlag.Name:         tt.args.proposerSettingsFlagValues.builderBoost,
+					flags.BuilderMaxExecutionPaymentFlag.Name: tt.args.proposerSettingsFlagValues.builderMaxPayment,
+				} {
+					if v != "" {
+						set.Uint64(name, 0, "")
+						require.NoError(t, set.Set(name, v))
+					}
 				}
 				cliCtx := cli.NewContext(&app, set, nil)
 				validatorDB := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
@@ -1846,5 +2077,110 @@ func Test_inferSchemaVersion(t *testing.T) {
 		}
 		inferSchemaVersion(p)
 		require.Equal(t, uint32(proposer.SchemaV1Unset), p.Version)
+	})
+}
+
+func Test_determineLoadMethods(t *testing.T) {
+	newCtx := func(t *testing.T, names ...string) *cli.Context {
+		set := flag.NewFlagSet("test", 0)
+		for _, name := range names {
+			set.String(name, "", "")
+			require.NoError(t, set.Set(name, "x"))
+		}
+		return cli.NewContext(&cli.App{}, set, nil)
+	}
+	t.Run("nothing set and no db", func(t *testing.T) {
+		require.DeepEqual(t, []settingsType{none}, determineLoadMethods(newCtx(t), false))
+	})
+	t.Run("nothing set with a db", func(t *testing.T) {
+		require.DeepEqual(t, []settingsType{onlyDB}, determineLoadMethods(newCtx(t), true))
+	})
+	t.Run("a builder flag alone selects the default flag source", func(t *testing.T) {
+		require.DeepEqual(t, []settingsType{defaultFlag}, determineLoadMethods(newCtx(t, flags.BuilderMinBidFlag.Name), true))
+	})
+	t.Run("sources are ordered default, file, url", func(t *testing.T) {
+		got := determineLoadMethods(newCtx(t, flags.ProposerSettingsURLFlag.Name, flags.ProposerSettingsFlag.Name, flags.BuilderURLsFlag.Name), false)
+		require.DeepEqual(t, []settingsType{defaultFlag, fileFlag, urlFlag}, got)
+	})
+}
+
+func Test_parseBuilderURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		want    *proposer.BuilderEntry
+		wantErr string
+	}{
+		{name: "plain url", raw: "https://builder-a.example", want: &proposer.BuilderEntry{URL: "https://builder-a.example"}},
+		{name: "auth fragment is decoded and stripped", raw: "https://builder-a.example#0x0123", want: &proposer.BuilderEntry{URL: "https://builder-a.example", AuthData: []byte{0x01, 0x23}}},
+		{name: "surrounding whitespace is trimmed", raw: "  https://builder-a.example ", want: &proposer.BuilderEntry{URL: "https://builder-a.example"}},
+		{name: "path and query are kept verbatim", raw: "https://builder-a.example/v1?x=1", want: &proposer.BuilderEntry{URL: "https://builder-a.example/v1?x=1"}},
+		{name: "empty fragment", raw: "https://builder-a.example#", wantErr: "not 0x-prefixed hex"},
+		{name: "non-hex fragment", raw: "https://builder-a.example#token", wantErr: "not 0x-prefixed hex"},
+		{name: "odd-length hex fragment", raw: "https://builder-a.example#0x123", wantErr: "not 0x-prefixed hex"},
+		{name: "missing scheme", raw: "builder-a.example", wantErr: "url is not a valid URL"},
+		{name: "blank", raw: " ", wantErr: "empty builder url"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseBuilderURL(tt.raw)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, tt.wantErr, err)
+				return
+			}
+			require.NoError(t, err)
+			require.DeepEqual(t, tt.want, got)
+		})
+	}
+}
+
+func Test_builderConfigFromFlags(t *testing.T) {
+	newCtx := func(t *testing.T, urls string, nums map[string]string) *cli.Context {
+		set := flag.NewFlagSet("test", 0)
+		if urls != "" {
+			set.Var(cli.NewStringSlice(), flags.BuilderURLsFlag.Name, "")
+			require.NoError(t, set.Set(flags.BuilderURLsFlag.Name, urls))
+		}
+		for name, v := range nums {
+			set.Uint64(name, 0, "")
+			require.NoError(t, set.Set(name, v))
+		}
+		return cli.NewContext(&cli.App{}, set, nil)
+	}
+	t.Run("no builder flags", func(t *testing.T) {
+		got, err := builderConfigFromFlags(newCtx(t, "", nil))
+		require.NoError(t, err)
+		require.IsNil(t, got)
+	})
+	t.Run("unset numeric flags stay nil so per-key and default resolution apply", func(t *testing.T) {
+		got, err := builderConfigFromFlags(newCtx(t, "https://builder-a.example", nil))
+		require.NoError(t, err)
+		require.IsNil(t, got.MinBid)
+		require.IsNil(t, got.BuilderBoostFactor)
+		require.IsNil(t, got.MaxExecutionPayment)
+	})
+	t.Run("explicit zero max execution payment is kept", func(t *testing.T) {
+		got, err := builderConfigFromFlags(newCtx(t, "", map[string]string{flags.BuilderMaxExecutionPaymentFlag.Name: "0"}))
+		require.NoError(t, err)
+		require.IsNil(t, got.Builders)
+		require.NotNil(t, got.MaxExecutionPayment)
+		require.Equal(t, validator.Uint64(0), *got.MaxExecutionPayment)
+	})
+	t.Run("same url with different auth data is two entries", func(t *testing.T) {
+		got, err := builderConfigFromFlags(newCtx(t, "https://builder-a.example,https://builder-a.example#0x01", nil))
+		require.NoError(t, err)
+		require.Equal(t, 2, len(got.Builders))
+	})
+	t.Run("duplicate url fails", func(t *testing.T) {
+		_, err := builderConfigFromFlags(newCtx(t, "https://builder-a.example,https://builder-a.example", nil))
+		require.ErrorContains(t, "more than once", err)
+	})
+	t.Run("more than the spec limit fails", func(t *testing.T) {
+		urls := make([]string, 0, proposer.MaxBuilderEntries+1)
+		for i := 0; i <= proposer.MaxBuilderEntries; i++ {
+			urls = append(urls, fmt.Sprintf("https://builder-%d.example", i))
+		}
+		_, err := builderConfigFromFlags(newCtx(t, strings.Join(urls, ","), nil))
+		require.ErrorContains(t, fmt.Sprintf("more than %d builders", proposer.MaxBuilderEntries), err)
 	})
 }

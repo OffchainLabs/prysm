@@ -11,9 +11,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
+	"github.com/OffchainLabs/prysm/v7/io/logs"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/validator/db/iface"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 	"google.golang.org/protobuf/proto"
@@ -21,6 +23,14 @@ import (
 
 // maxLoggedKeys caps the key lists in the DB-replacement warning.
 const maxLoggedKeys = 10
+
+// builderDefaultFlags write v2 builder content into default_config and make the flags a v2 source.
+var builderDefaultFlags = []cli.Flag{
+	flags.BuilderURLsFlag,
+	flags.BuilderMinBidFlag,
+	flags.BuilderBoostFactorFlag,
+	flags.BuilderMaxExecutionPaymentFlag,
+}
 
 type settingsType int
 
@@ -108,7 +118,7 @@ func NewProposerSettingsLoader(cliCtx *cli.Context, db iface.ValidatorDB, opts .
 func determineLoadMethods(cliCtx *cli.Context, loadedFromDB bool) []settingsType {
 	var methods []settingsType
 
-	if cliCtx.IsSet(flags.SuggestedFeeRecipientFlag.Name) {
+	if cliCtx.IsSet(flags.SuggestedFeeRecipientFlag.Name) || len(setBuilderFlagNames(cliCtx)) > 0 {
 		methods = append(methods, defaultFlag)
 	}
 	if cliCtx.IsSet(flags.ProposerSettingsFlag.Name) {
@@ -193,6 +203,8 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 	ps.WarnUnsetMaxExecutionPayment()
 	if psl.replacesDBKeys {
 		warnReplacedDBKeys(dbps, ps)
+	} else {
+		psl.logRetainedDBKeys(dbps)
 	}
 	if err := psl.db.SaveProposerSettings(cliCtx.Context, ps); err != nil {
 		return nil, err
@@ -228,6 +240,17 @@ func warnReplacedDBKeys(db, merged *proposer.Settings) {
 			"Changes made through the keymanager API do not survive a restart while a settings file or URL is configured")
 }
 
+// logRetainedDBKeys points out DB per-key entries that outrank defaults a flag, file or URL configured.
+func (psl *SettingsLoader) logRetainedDBKeys(db *proposer.Settings) {
+	if db == nil || len(db.ProposeConfig) == 0 || psl.loadMethods[0] == onlyDB || psl.loadMethods[0] == none {
+		return
+	}
+	log.WithField("perKeyCount", len(db.ProposeConfig)).
+		Info("Per-key proposer settings saved in the validator DB by a previous run take precedence over the configured defaults. " +
+			"The keymanager API GET /eth/v1/validator/{pubkey}/feerecipient, gas_limit and builder_config endpoints show a key's resolved settings; " +
+			"their DELETE endpoints return a key to the defaults")
+}
+
 // capKeys renders a sorted key list, truncated to maxLoggedKeys with a "+N more" tail.
 func capKeys(keys []string) string {
 	sort.Strings(keys)
@@ -243,23 +266,131 @@ func (psl *SettingsLoader) applyOverrides() {
 	}
 }
 
+// loadFromDefault builds default_config from the flags; the builder flags make it a v2 source.
 func (psl *SettingsLoader) loadFromDefault(cliCtx *cli.Context, dbSettings *validatorpb.ProposerSettingsPayload) (*validatorpb.ProposerSettingsPayload, error) {
-	suggestedFeeRecipient := cliCtx.String(flags.SuggestedFeeRecipientFlag.Name)
-	if !common.IsHexAddress(suggestedFeeRecipient) {
-		return nil, errors.Errorf("--%s is not a valid Ethereum address", flags.SuggestedFeeRecipientFlag.Name)
+	option := &validatorpb.ProposerOptionPayload{}
+	loaded := &validatorpb.ProposerSettingsPayload{DefaultConfig: option}
+	logEntry := log
+	if cliCtx.IsSet(flags.SuggestedFeeRecipientFlag.Name) {
+		suggestedFeeRecipient := cliCtx.String(flags.SuggestedFeeRecipientFlag.Name)
+		if !common.IsHexAddress(suggestedFeeRecipient) {
+			return nil, errors.Errorf("--%s is not a valid Ethereum address", flags.SuggestedFeeRecipientFlag.Name)
+		}
+		if err := config.WarnNonChecksummedAddress(suggestedFeeRecipient); err != nil {
+			return nil, err
+		}
+		option.FeeRecipient = suggestedFeeRecipient
+		logEntry = logEntry.WithField(flags.SuggestedFeeRecipientFlag.Name, suggestedFeeRecipient)
 	}
-	if err := config.WarnNonChecksummedAddress(suggestedFeeRecipient); err != nil {
+	builder, err := builderConfigFromFlags(cliCtx)
+	if err != nil {
 		return nil, err
+	}
+	if builder != nil {
+		option.Builder = builder.ToConsensus()
+		loaded.Version = proposer.SchemaV2
+		if len(builder.Builders) > 0 {
+			logEntry = logEntry.WithField("builders", maskedBuilderURLs(builder.Builders))
+		}
+		if !params.GloasEnabled() {
+			log.Warnf("%s configure Gloas builders, but this network has no Gloas fork scheduled", strings.Join(setBuilderFlagNames(cliCtx), ", "))
+		}
 	}
 
 	if psl.existsInDB && len(psl.loadMethods) == 1 {
 		// only log the below if default flag is the only load method
 		log.Debug("Overriding previously saved proposer default settings.")
 	}
-	log.WithField(flags.SuggestedFeeRecipientFlag.Name, cliCtx.String(flags.SuggestedFeeRecipientFlag.Name)).Info("Proposer settings loaded from default")
-	return psl.processProposerSettings(&validatorpb.ProposerSettingsPayload{DefaultConfig: &validatorpb.ProposerOptionPayload{
-		FeeRecipient: suggestedFeeRecipient,
-	}}, dbSettings), nil
+	logEntry.Info("Proposer settings loaded from default")
+	return psl.processProposerSettings(loaded, dbSettings), nil
+}
+
+// setBuilderFlagNames lists the builder default flags present on the command line, "--" prefixed.
+func setBuilderFlagNames(cliCtx *cli.Context) []string {
+	var names []string
+	for _, f := range builderDefaultFlags {
+		if name := f.Names()[0]; cliCtx.IsSet(name) {
+			names = append(names, "--"+name)
+		}
+	}
+	return names
+}
+
+// builderConfigFromFlags assembles the default_config builder from the builder flags; nil when none is set.
+func builderConfigFromFlags(cliCtx *cli.Context) (*proposer.BuilderConfig, error) {
+	if len(setBuilderFlagNames(cliCtx)) == 0 {
+		return nil, nil
+	}
+	bc := &proposer.BuilderConfig{}
+	if cliCtx.IsSet(flags.BuilderURLsFlag.Name) {
+		raw := cliCtx.StringSlice(flags.BuilderURLsFlag.Name)
+		if len(raw) > proposer.MaxBuilderEntries {
+			return nil, errors.Errorf("--%s lists more than %d builders", flags.BuilderURLsFlag.Name, proposer.MaxBuilderEntries)
+		}
+		seen := make(map[proposer.EntryIdentity]bool, len(raw))
+		bc.Builders = make([]*proposer.BuilderEntry, 0, len(raw))
+		for _, r := range raw {
+			be, err := parseBuilderURL(r)
+			if err != nil {
+				return nil, errors.Wrapf(err, "--%s", flags.BuilderURLsFlag.Name)
+			}
+			if seen[be.Identity()] {
+				return nil, errors.Errorf("--%s lists %s more than once", flags.BuilderURLsFlag.Name, logs.MaskCredentialsLogging(be.URL))
+			}
+			seen[be.Identity()] = true
+			bc.Builders = append(bc.Builders, be)
+		}
+	}
+	bc.MinBid = uint64FlagValue(cliCtx, flags.BuilderMinBidFlag)
+	bc.BuilderBoostFactor = uint64FlagValue(cliCtx, flags.BuilderBoostFactorFlag)
+	bc.MaxExecutionPayment = uint64FlagValue(cliCtx, flags.BuilderMaxExecutionPaymentFlag)
+	return bc, nil
+}
+
+// uint64FlagValue returns nil for an unset flag so an explicit 0 stays distinct from "inherit".
+func uint64FlagValue(cliCtx *cli.Context, f *cli.Uint64Flag) *validator.Uint64 {
+	if !cliCtx.IsSet(f.Name) {
+		return nil
+	}
+	v := validator.Uint64(cliCtx.Uint64(f.Name))
+	return &v
+}
+
+// parseBuilderURL splits a --builder-urls entry into its URL and optional "#0x..." auth fragment.
+func parseBuilderURL(raw string) (*proposer.BuilderEntry, error) {
+	rawURL, fragment, hasFragment := strings.Cut(strings.TrimSpace(raw), "#")
+	if rawURL == "" {
+		return nil, errors.New("empty builder url")
+	}
+	be := &proposer.BuilderEntry{URL: rawURL}
+	if hasFragment {
+		auth, err := hexutil.Decode(fragment)
+		if err != nil {
+			return nil, errors.Errorf("auth fragment of %s is not 0x-prefixed hex", logs.MaskCredentialsLogging(rawURL))
+		}
+		be.AuthData = auth
+	}
+	if err := be.Validate(); err != nil {
+		return nil, errors.Wrap(err, logs.MaskCredentialsLogging(rawURL))
+	}
+	return be, nil
+}
+
+func maskedBuilderURLs(entries []*proposer.BuilderEntry) string {
+	urls := make([]string, 0, len(entries))
+	for _, be := range entries {
+		urls = append(urls, logs.MaskCredentialsLogging(be.URL))
+	}
+	return strings.Join(urls, ",")
+}
+
+// A source's default_config replaces the flag-built one whole, builder flags included.
+func warnBuilderFlagsReplaced(cliCtx *cli.Context, loaded *validatorpb.ProposerSettingsPayload, source string) {
+	names := setBuilderFlagNames(cliCtx)
+	if loaded.DefaultConfig == nil || len(names) == 0 {
+		return
+	}
+	log.Warnf("default_config from --%s replaces the builder defaults set by %s", source, strings.Join(names, ", "))
 }
 
 func (psl *SettingsLoader) loadFromFile(cliCtx *cli.Context, dbSettings *validatorpb.ProposerSettingsPayload) (*validatorpb.ProposerSettingsPayload, error) {
@@ -272,6 +403,7 @@ func (psl *SettingsLoader) loadFromFile(cliCtx *cli.Context, dbSettings *validat
 	}
 	markExplicitEmptyBuilders(settingFromFile)
 	inferSchemaVersion(settingFromFile)
+	warnBuilderFlagsReplaced(cliCtx, settingFromFile, flags.ProposerSettingsFlag.Name)
 	psl.replacesDBKeys = len(settingFromFile.ProposerConfig) > 0
 	log.WithField(flags.ProposerSettingsFlag.Name, cliCtx.String(flags.ProposerSettingsFlag.Name)).Info("Proposer settings loaded from file")
 	return psl.processProposerSettings(settingFromFile, dbSettings), nil
@@ -287,6 +419,7 @@ func (psl *SettingsLoader) loadFromURL(cliCtx *cli.Context, dbSettings *validato
 	}
 	markExplicitEmptyBuilders(settingFromURL)
 	inferSchemaVersion(settingFromURL)
+	warnBuilderFlagsReplaced(cliCtx, settingFromURL, flags.ProposerSettingsURLFlag.Name)
 	psl.replacesDBKeys = len(settingFromURL.ProposerConfig) > 0
 	log.WithField(flags.ProposerSettingsURLFlag.Name, cliCtx.String(flags.ProposerSettingsURLFlag.Name)).Infof("Proposer settings loaded from URL")
 	return psl.processProposerSettings(settingFromURL, dbSettings), nil
