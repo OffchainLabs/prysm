@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	methodicalssz "github.com/OffchainLabs/methodical-ssz/ssz"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -15,11 +16,22 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
 
 const (
-	payloadFieldIndex = 9
+	payloadFieldIndex                   = 9
+	signedExecutionPayloadBidFieldIndex = 10
+	parentBlockHashFieldIndex           = 0
+	executionPayloadBidFieldCount       = 12
+)
+
+type progressiveContainerType uint8
+
+const (
+	executionPayloadBidProgressiveContainer progressiveContainerType = iota
+	beaconBlockBodyProgressiveContainer
 )
 
 func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody) ([][]byte, error) {
@@ -264,6 +276,9 @@ func PayloadProof(ctx context.Context, block interfaces.ReadOnlyBeaconBlock) ([]
 	if !ok {
 		return nil, errors.New("failed to cast block body")
 	}
+	if blockBody.version >= version.Gloas {
+		return nil, errors.New("payload proof is not supported for Gloas; use ExecutionBlockHashProof")
+	}
 
 	fieldRoots, err := ComputeBlockBodyFieldRoots(ctx, blockBody)
 	if err != nil {
@@ -274,4 +289,181 @@ func PayloadProof(ctx context.Context, block interfaces.ReadOnlyBeaconBlock) ([]
 	proof := trie.ProofFromMerkleLayers(fieldRootsTrie, payloadFieldIndex)
 
 	return proof, nil
+}
+
+// ExecutionBlockHashProof returns the Gloas Merkle branch for
+// BeaconBlockBody.signed_execution_payload_bid.message.parent_block_hash.
+func ExecutionBlockHashProof(ctx context.Context, block interfaces.ReadOnlyBeaconBlock) ([][]byte, error) {
+	if block.Version() != version.Gloas {
+		return nil, fmt.Errorf("execution block hash proof is not supported for %s", version.String(block.Version()))
+	}
+	if !features.ProgressiveSSZEnabled(block.Version()) {
+		return nil, errors.New("execution block hash proof requires progressive SSZ")
+	}
+
+	i := block.Body()
+	blockBody, ok := i.(*BeaconBlockBody)
+	if !ok {
+		return nil, errors.New("failed to cast block body")
+	}
+	signedBid, err := blockBody.SignedExecutionPayloadBid()
+	if err != nil {
+		return nil, err
+	}
+	if signedBid == nil || signedBid.Message == nil {
+		return nil, errors.New("signed execution payload bid is nil")
+	}
+
+	bidFieldRoots, err := executionPayloadBidFieldRoots(signedBid.Message)
+	if err != nil {
+		return nil, err
+	}
+	proof, err := progressiveContainerFieldProof(
+		bidFieldRoots,
+		parentBlockHashFieldIndex,
+		block.Version(),
+		executionPayloadBidProgressiveContainer,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	signatureRoot, err := fixedByteVectorRoot(signedBid.Signature, fieldparams.BLSSignatureLength)
+	if err != nil {
+		return nil, fmt.Errorf("signature: %w", err)
+	}
+	proof = append(proof, signatureRoot[:])
+
+	bodyFieldRoots, err := ComputeBlockBodyFieldRoots(ctx, blockBody)
+	if err != nil {
+		return nil, err
+	}
+	blockBodyProof, err := progressiveContainerFieldProof(
+		bodyFieldRoots,
+		signedExecutionPayloadBidFieldIndex,
+		block.Version(),
+		beaconBlockBodyProgressiveContainer,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return append(proof, blockBodyProof...), nil
+}
+
+func executionPayloadBidFieldRoots(bid *eth.ExecutionPayloadBid) ([][]byte, error) {
+	fieldRoots := make([][]byte, executionPayloadBidFieldCount)
+	fixedFields := []struct {
+		index  int
+		value  []byte
+		length int
+	}{
+		{index: 0, value: bid.ParentBlockHash, length: fieldparams.RootLength},
+		{index: 1, value: bid.ParentBlockRoot, length: fieldparams.RootLength},
+		{index: 2, value: bid.BlockHash, length: fieldparams.RootLength},
+		{index: 3, value: bid.PrevRandao, length: fieldparams.RootLength},
+		{index: 4, value: bid.FeeRecipient, length: fieldparams.FeeRecipientLength},
+		{index: 11, value: bid.ExecutionRequestsRoot, length: fieldparams.RootLength},
+	}
+	for _, field := range fixedFields {
+		root, err := fixedByteVectorRoot(field.value, field.length)
+		if err != nil {
+			return nil, err
+		}
+		fieldRoots[field.index] = root[:]
+	}
+
+	for index, value := range []uint64{
+		bid.GasLimit,
+		uint64(bid.BuilderIndex),
+		uint64(bid.Slot),
+		uint64(bid.Value),
+		uint64(bid.ExecutionPayment),
+	} {
+		root := ssz.Uint64Root(value)
+		fieldRoots[index+5] = root[:]
+	}
+
+	commitmentsRoot, err := blobKzgCommitmentsProgressiveRoot(bid.BlobKzgCommitments)
+	if err != nil {
+		return nil, err
+	}
+	fieldRoots[10] = commitmentsRoot[:]
+	return fieldRoots, nil
+}
+
+func blobKzgCommitmentsProgressiveRoot(commitments [][]byte) ([32]byte, error) {
+	if uint64(len(commitments)) > params.BeaconConfig().MaxBlobCommitmentsPerBlock {
+		return [32]byte{}, fmt.Errorf("slice exceeds max length %d", params.BeaconConfig().MaxBlobCommitmentsPerBlock)
+	}
+
+	roots := make([][32]byte, len(commitments))
+	for i, commitment := range commitments {
+		root, err := fixedByteVectorRoot(commitment, fieldparams.BLSPubkeyLength)
+		if err != nil {
+			return [32]byte{}, err
+		}
+		roots[i] = root
+	}
+
+	body := ssz.MerkleizeProgressiveChunks(roots)
+	var length [32]byte
+	binary.LittleEndian.PutUint64(length[:8], uint64(len(commitments)))
+	return ssz.MixInLength(body, length[:]), nil
+}
+
+func progressiveContainerFieldProof(
+	fieldRoots [][]byte,
+	fieldIndex int,
+	v int,
+	container progressiveContainerType,
+) ([][]byte, error) {
+	branch, err := stateutil.MerkleizeProgressive(fieldRoots).Proof(fieldIndex)
+	if err != nil {
+		return nil, err
+	}
+	activeFields, err := progressiveContainerActiveFields(v, container)
+	if err != nil {
+		return nil, err
+	}
+	activeFieldsRoot, err := ssz.PackActiveFields(activeFields)
+	if err != nil {
+		return nil, err
+	}
+	branch = append(branch, activeFieldsRoot)
+
+	proof := make([][]byte, len(branch))
+	for i := range branch {
+		proof[i] = branch[i][:]
+	}
+	return proof, nil
+}
+
+func progressiveContainerActiveFields(v int, container progressiveContainerType) ([]bool, error) {
+	if v != version.Gloas {
+		return nil, fmt.Errorf("progressive container active fields are not defined for %s", version.String(v))
+	}
+
+	switch container {
+	case executionPayloadBidProgressiveContainer:
+		af := make([]bool, 12)
+		for i := range af {
+			af[i] = true
+		}
+		return af, nil
+	case beaconBlockBodyProgressiveContainer:
+		af := make([]bool, 13)
+		for i := range af {
+			af[i] = true
+		}
+		return af, nil
+	default:
+		return nil, fmt.Errorf("unknown progressive container type %d", container)
+	}
+}
+
+func fixedByteVectorRoot(value []byte, length int) ([32]byte, error) {
+	if len(value) != length {
+		return [32]byte{}, methodicalssz.ErrBytesLength
+	}
+	return ssz.MerkleizeByteSliceSSZ(value)
 }
