@@ -49,6 +49,8 @@ mainnet = {
     "ptc_committee_indices.size": "512",  # PTC_SIZE
     "ptc.size": "64",  # Gloas: Payload Timeliness Committee aggregation bits (PTC_SIZE = 512)
     "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector512",
+    "available_committee.size": "64",  # Decoupled: available committee aggregation bits (AVAILABLE_COMMITTEE_SIZE = 512)
+    "available_committee.type": "github.com/OffchainLabs/go-bitfield.Bitvector512",
     "payload_attestation.size": "4",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body
     "execution_payload_availability.size": "1024",  # Gloas: SLOTS_PER_HISTORICAL_ROOT
     "builder_pending_payments.size": "64",  # Gloas: vector length (2 * SLOTS_PER_EPOCH)
@@ -98,6 +100,8 @@ minimal = {
     "ptc_committee_indices.size": "16",  # PTC_SIZE
     "ptc.size": "2",  # Gloas: Payload Timeliness Committee aggregation bits (PTC_SIZE = 16)
     "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector16",
+    "available_committee.size": "64",  # Decoupled: available committee aggregation bits (AVAILABLE_COMMITTEE_SIZE = 512, a spec constant with no minimal variant)
+    "available_committee.type": "github.com/OffchainLabs/go-bitfield.Bitvector512",
     "payload_attestation.size": "4",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body
     "execution_payload_availability.size": "8",  # Gloas: SLOTS_PER_HISTORICAL_ROOT
     "builder_pending_payments.size": "16",  # Gloas: vector length (2 * SLOTS_PER_EPOCH)

@@ -1,0 +1,4 @@
+package: "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+types:
+  - name: "AvailableAttestationData"
+  - name: "AvailableAttestation"

@@ -52,8 +52,9 @@ const (
 	CellsPerBlob    = 64  // CellsPerBlob refers to the number of cells in a (non-extended) blob.
 
 	// Introduced in Gloas network upgrade.
-	PTCSize                = 16 // PTCSize is the size of the payload timeliness committee.
-	MaxPayloadAttestations = 4  // MaxPayloadAttestations is the maximum number of payload attestations in a block.
+	PTCSize                = 16  // PTCSize is the size of the payload timeliness committee.
+	AvailableCommitteeSize = 512 // AvailableCommitteeSize is the size of the Decoupled available attestation committee.
+	MaxPayloadAttestations = 4   // MaxPayloadAttestations is the maximum number of payload attestations in a block.
 
 	// Type-specific SSZ bounds, introduced in Gloas network upgrade.
 	MaxSignedAggregateAndProofSize   = 1462    // MaxSignedAggregateAndProofSize is the maximum size of a signed aggregate and proof, ~1 KiB.
