@@ -1166,9 +1166,9 @@ func TestQueryUntilAccepted(t *testing.T) {
 	// until the deadline. The caller must still see the node's status rather than the
 	// cancellation of whichever round the deadline happened to interrupt.
 	t.Run("node status survives a deadline-interrupted final round", func(t *testing.T) {
-		var hits int32
+		var hits atomic.Int32
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			atomic.AddInt32(&hits, 1)
+			hits.Add(1)
 			w.WriteHeader(http.StatusNoContent)
 		}))
 		t.Cleanup(srv.Close)
