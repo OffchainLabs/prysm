@@ -3,6 +3,7 @@ package sync
 import (
 	"bytes"
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -43,85 +44,95 @@ func expectFailure(t *testing.T, expectedCode uint8, expectedErrorMsg string, st
 
 // expectResetStream status code from a stream in regular sync.
 func expectResetStream(t *testing.T, stream network.Stream) {
-	expectedErr := "stream reset"
 	_, _, err := ReadStatusCode(stream, &encoder.SszNetworkEncoder{})
-	require.ErrorContains(t, expectedErr, err)
+	require.NotNil(t, err, "expected stream error")
+
+	// TCP muxers surface a stream reset; QUIC surfaces a connection close.
+	tcpErr := "stream reset"
+	quicErr := "connection closed"
+
+	isExpectedErr := strings.Contains(err.Error(), tcpErr) || strings.Contains(err.Error(), quicErr)
+	require.Equal(t, true, isExpectedErr, "expected stream reset or connection closed error, got: %v", err)
 }
 
 func TestRegisterRPC_ReceivesValidMessage(t *testing.T) {
-	p2p := p2ptest.NewTestP2P(t)
-	r := &Service{
-		ctx:         t.Context(),
-		cfg:         &config{p2p: p2p},
-		rateLimiter: newRateLimiter(p2p),
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	topic := "/testing/foobar/1"
-	handler := func(ctx context.Context, msg any, stream libp2pcore.Stream) error {
-		m, ok := msg.(*ethpb.Fork)
-		if !ok {
-			t.Error("Object is not of type *pb.TestSimpleMessage")
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		p2p := p2ptest.NewTestP2P(t)
+		r := &Service{
+			ctx:         t.Context(),
+			cfg:         &config{p2p: p2p},
+			rateLimiter: newRateLimiter(p2p),
 		}
-		assert.DeepEqual(t, []byte("fooo"), m.CurrentVersion, "Unexpected incoming message")
-		wg.Done()
 
-		return nil
-	}
-	prysmP2P.RPCTopicMappings[topic] = new(ethpb.Fork)
-	// Cleanup Topic mappings
-	defer func() {
-		delete(prysmP2P.RPCTopicMappings, topic)
-	}()
-	r.registerRPC(topic, handler)
+		var wg sync.WaitGroup
+		wg.Add(1)
+		topic := "/testing/foobar/1"
+		handler := func(ctx context.Context, msg any, stream libp2pcore.Stream) error {
+			m, ok := msg.(*ethpb.Fork)
+			if !ok {
+				t.Error("Object is not of type *pb.TestSimpleMessage")
+			}
+			assert.DeepEqual(t, []byte("fooo"), m.CurrentVersion, "Unexpected incoming message")
+			wg.Done()
 
-	p2p.ReceiveRPC(topic, &ethpb.Fork{CurrentVersion: []byte("fooo"), PreviousVersion: []byte("barr")})
+			return nil
+		}
+		prysmP2P.RPCTopicMappings[topic] = new(ethpb.Fork)
+		// Cleanup Topic mappings
+		defer func() {
+			delete(prysmP2P.RPCTopicMappings, topic)
+		}()
+		r.registerRPC(topic, handler)
 
-	if util.WaitTimeout(&wg, time.Second) {
-		t.Fatal("Did not receive RPC in 1 second")
-	}
+		p2p.ReceiveRPC(topic, &ethpb.Fork{CurrentVersion: []byte("fooo"), PreviousVersion: []byte("barr")})
+
+		if util.WaitTimeout(&wg, time.Second) {
+			t.Fatal("Did not receive RPC in 1 second")
+		}
+	})
 }
 
 func TestRPC_ReceivesInvalidMessage(t *testing.T) {
-	p2p := p2ptest.NewTestP2P(t)
-	remotePeer := p2ptest.NewTestP2P(t)
-	remotePeer.Connect(p2p)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		p2p := p2ptest.NewTestP2P(t)
+		remotePeer := p2ptest.NewTestP2P(t)
+		remotePeer.Connect(p2p)
 
-	r := &Service{
-		ctx:         t.Context(),
-		cfg:         &config{p2p: p2p},
-		rateLimiter: newRateLimiter(p2p),
-	}
-
-	topic := "/testing/foobar/1"
-	handler := func(ctx context.Context, msg any, stream libp2pcore.Stream) error {
-		m, ok := msg.(*ethpb.Fork)
-		if !ok {
-			t.Error("Object is not of type *pb.Fork")
+		r := &Service{
+			ctx:         t.Context(),
+			cfg:         &config{p2p: p2p},
+			rateLimiter: newRateLimiter(p2p),
 		}
-		if !bytes.Equal(m.CurrentVersion, []byte("fooo")) {
-			t.Errorf("Unexpected incoming message: %+v", m)
+
+		topic := "/testing/foobar/1"
+		handler := func(ctx context.Context, msg any, stream libp2pcore.Stream) error {
+			m, ok := msg.(*ethpb.Fork)
+			if !ok {
+				t.Error("Object is not of type *pb.Fork")
+			}
+			if !bytes.Equal(m.CurrentVersion, []byte("fooo")) {
+				t.Errorf("Unexpected incoming message: %+v", m)
+			}
+			return nil
 		}
-		return nil
-	}
-	prysmP2P.RPCTopicMappings[topic] = new(ethpb.Fork)
-	// Cleanup Topic mappings
-	defer func() {
-		delete(prysmP2P.RPCTopicMappings, topic)
-	}()
-	r.registerRPC(topic, handler)
+		prysmP2P.RPCTopicMappings[topic] = new(ethpb.Fork)
+		// Cleanup Topic mappings
+		defer func() {
+			delete(prysmP2P.RPCTopicMappings, topic)
+		}()
+		r.registerRPC(topic, handler)
 
-	stream, err := remotePeer.Host().NewStream(t.Context(), p2p.BHost.ID(), protocol.ID(topic+p2p.Encoding().ProtocolSuffix()))
-	require.NoError(t, err)
-	// Write invalid SSZ object to peer.
-	_, err = stream.Write([]byte("JUNK MESSAGE"))
-	require.NoError(t, err)
+		stream, err := remotePeer.Host().NewStream(t.Context(), p2p.BHost.ID(), protocol.ID(topic+p2p.Encoding().ProtocolSuffix()))
+		require.NoError(t, err)
+		// Write invalid SSZ object to peer.
+		_, err = stream.Write([]byte("JUNK MESSAGE"))
+		require.NoError(t, err)
 
-	time.Sleep(1 * time.Second)
-	faultCount, err := p2p.Peers().Scorers().BadResponsesScorer().Count(remotePeer.BHost.ID())
-	require.NoError(t, err)
+		time.Sleep(1 * time.Second)
+		faultCount, err := p2p.Peers().Scorers().BadResponsesScorer().Count(remotePeer.BHost.ID())
+		require.NoError(t, err)
 
-	assert.Equal(t, 1, faultCount, "peer was not penalised for sending bad message")
+		assert.Equal(t, 1, faultCount, "peer was not penalised for sending bad message")
 
+	})
 }

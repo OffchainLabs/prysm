@@ -471,44 +471,46 @@ func TestHaveAllSidecarsBeenSeen(t *testing.T) {
 // TestBroadcastAndReceiveUnseenDataColumnSidecars_GloasUsesRootKey verifies the unseen filter keys
 // Gloas sidecars by (block root, index): a column already seen under that key is skipped, the rest pass.
 func TestBroadcastAndReceiveUnseenDataColumnSidecars_GloasUsesRootKey(t *testing.T) {
-	chainService := &chainMock.ChainService{}
-	s := Service{
-		cfg: &config{
-			p2p:               mockp2p.NewTestP2P(t),
-			chain:             chainService,
-			clock:             startup.NewClock(time.Now(), [32]byte{}),
-			dataColumnStorage: filesystem.NewEphemeralDataColumnStorage(t),
-			operationNotifier: &chainMock.MockOperationNotifier{},
-		},
-		seenDataColumnCache: newSlotAwareCache(seenDataColumnSize),
-	}
+	mockp2p.SynctestTest(t, func(t *testing.T) {
+		chainService := &chainMock.ChainService{}
+		s := Service{
+			cfg: &config{
+				p2p:               mockp2p.NewTestP2P(t),
+				chain:             chainService,
+				clock:             startup.NewClock(time.Now(), [32]byte{}),
+				dataColumnStorage: filesystem.NewEphemeralDataColumnStorage(t),
+				operationNotifier: &chainMock.MockOperationNotifier{},
+			},
+			seenDataColumnCache: newSlotAwareCache(seenDataColumnSize),
+		}
 
-	slot := primitives.Slot(7)
-	root := [fieldparams.RootLength]byte{0xab}
-	needed := map[uint64]bool{0: true, 1: true, 2: true}
+		slot := primitives.Slot(7)
+		root := [fieldparams.RootLength]byte{0xab}
+		needed := map[uint64]bool{0: true, 1: true, 2: true}
 
-	sidecars := make([]blocks.VerifiedRODataColumn, 0, 3)
-	for i := range uint64(3) {
-		gdc, err := blocks.NewRODataColumnGloasWithRoot(&ethpb.DataColumnSidecarGloas{
-			Index:           i,
-			Slot:            slot,
-			BeaconBlockRoot: root[:],
-		}, root)
+		sidecars := make([]blocks.VerifiedRODataColumn, 0, 3)
+		for i := range uint64(3) {
+			gdc, err := blocks.NewRODataColumnGloasWithRoot(&ethpb.DataColumnSidecarGloas{
+				Index:           i,
+				Slot:            slot,
+				BeaconBlockRoot: root[:],
+			}, root)
+			require.NoError(t, err)
+			sidecars = append(sidecars, blocks.VerifiedRODataColumn{RODataColumn: gdc})
+		}
+
+		// Mark index 1 already seen via the Gloas (root, index) key.
+		s.setSeenDataColumnRootIndex(root, 1, slot)
+
+		unseen, err := s.broadcastAndReceiveUnseenDataColumnSidecars(t.Context(), slot, 0, needed, sidecars, false)
 		require.NoError(t, err)
-		sidecars = append(sidecars, blocks.VerifiedRODataColumn{RODataColumn: gdc})
-	}
 
-	// Mark index 1 already seen via the Gloas (root, index) key.
-	s.setSeenDataColumnRootIndex(root, 1, slot)
-
-	unseen, err := s.broadcastAndReceiveUnseenDataColumnSidecars(t.Context(), slot, 0, needed, sidecars, false)
-	require.NoError(t, err)
-
-	require.Equal(t, 2, len(unseen))
-	require.Equal(t, true, unseen[0])
-	_, seen1 := unseen[1]
-	require.Equal(t, false, seen1)
-	require.Equal(t, true, unseen[2])
+		require.Equal(t, 2, len(unseen))
+		require.Equal(t, true, unseen[0])
+		_, seen1 := unseen[1]
+		require.Equal(t, false, seen1)
+		require.Equal(t, true, unseen[2])
+	})
 }
 
 // TestProcessDataColumnSidecarsFromExecution_GloasEarlyExitWhenAllSeen verifies that when every
@@ -516,65 +518,67 @@ func TestBroadcastAndReceiveUnseenDataColumnSidecars_GloasUsesRootKey(t *testing
 // path exits early instead of reconstructing and re-broadcasting. Gloas columns are tracked under
 // the (block root, index) key, so the early-exit must consult that key, not the Fulu one.
 func TestProcessDataColumnSidecarsFromExecution_GloasEarlyExitWhenAllSeen(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.CapellaForkEpoch = 0
-	cfg.DenebForkEpoch = 0
-	cfg.ElectraForkEpoch = 0
-	cfg.FuluForkEpoch = 0
-	cfg.GloasForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
+	mockp2p.SynctestTest(t, func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.CapellaForkEpoch = 0
+		cfg.DenebForkEpoch = 0
+		cfg.ElectraForkEpoch = 0
+		cfg.FuluForkEpoch = 0
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
 
-	chainService := &chainMock.ChainService{Genesis: time.Now()}
+		chainService := &chainMock.ChainService{Genesis: time.Now()}
 
-	// The EL would return a full set of columns if it were ever consulted.
-	elColumns := make([]blocks.VerifiedRODataColumn, fieldparams.NumberOfColumns)
-	for i := range elColumns {
-		gdc, err := blocks.NewRODataColumnGloas(&ethpb.DataColumnSidecarGloas{
-			Index:           uint64(i),
-			Slot:            primitives.Slot(1),
-			BeaconBlockRoot: make([]byte, 32),
-		})
-		require.NoError(t, err)
-		elColumns[i] = blocks.VerifiedRODataColumn{RODataColumn: gdc}
-	}
+		// The EL would return a full set of columns if it were ever consulted.
+		elColumns := make([]blocks.VerifiedRODataColumn, fieldparams.NumberOfColumns)
+		for i := range elColumns {
+			gdc, err := blocks.NewRODataColumnGloas(&ethpb.DataColumnSidecarGloas{
+				Index:           uint64(i),
+				Slot:            primitives.Slot(1),
+				BeaconBlockRoot: make([]byte, 32),
+			})
+			require.NoError(t, err)
+			elColumns[i] = blocks.VerifiedRODataColumn{RODataColumn: gdc}
+		}
 
-	s := Service{
-		cfg: &config{
-			p2p:               mockp2p.NewTestP2P(t),
-			chain:             chainService,
-			clock:             startup.NewClock(time.Now(), [32]byte{}),
-			dataColumnStorage: filesystem.NewEphemeralDataColumnStorage(t),
-			executionReconstructor: &mockExecution.EngineClient{
-				DataColumnSidecars: elColumns,
+		s := Service{
+			cfg: &config{
+				p2p:               mockp2p.NewTestP2P(t),
+				chain:             chainService,
+				clock:             startup.NewClock(time.Now(), [32]byte{}),
+				dataColumnStorage: filesystem.NewEphemeralDataColumnStorage(t),
+				executionReconstructor: &mockExecution.EngineClient{
+					DataColumnSidecars: elColumns,
+				},
+				operationNotifier: &chainMock.MockOperationNotifier{},
 			},
-			operationNotifier: &chainMock.MockOperationNotifier{},
-		},
-		seenDataColumnCache: newSlotAwareCache(seenDataColumnSize),
-	}
+			seenDataColumnCache: newSlotAwareCache(seenDataColumnSize),
+		}
 
-	_, _, err := s.cfg.p2p.UpdateCustodyInfo(0, params.BeaconConfig().CustodyRequirement)
-	require.NoError(t, err)
+		_, _, err := s.cfg.p2p.UpdateCustodyInfo(0, params.BeaconConfig().CustodyRequirement)
+		require.NoError(t, err)
 
-	b := util.NewBeaconBlockGloas()
-	b.Block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments = [][]byte{make([]byte, 48)}
-	b.Block.Slot = 1
+		b := util.NewBeaconBlockGloas()
+		b.Block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments = [][]byte{make([]byte, 48)}
+		b.Block.Slot = 1
 
-	sb, err := blocks.NewSignedBeaconBlock(b)
-	require.NoError(t, err)
-	roBlock, err := blocks.NewROBlock(sb)
-	require.NoError(t, err)
+		sb, err := blocks.NewSignedBeaconBlock(b)
+		require.NoError(t, err)
+		roBlock, err := blocks.NewROBlock(sb)
+		require.NoError(t, err)
 
-	// Simulate every column already received via gossip: mark seen under the Gloas (root, index) key.
-	root := roBlock.Root()
-	for i := range uint64(fieldparams.NumberOfColumns) {
-		s.setSeenDataColumnRootIndex(root, i, primitives.Slot(1))
-	}
+		// Simulate every column already received via gossip: mark seen under the Gloas (root, index) key.
+		root := roBlock.Root()
+		for i := range uint64(fieldparams.NumberOfColumns) {
+			s.setSeenDataColumnRootIndex(root, i, primitives.Slot(1))
+		}
 
-	require.NoError(t, s.processSidecarsFromExecutionFromBlock(t.Context(), roBlock))
+		require.NoError(t, s.processSidecarsFromExecutionFromBlock(t.Context(), roBlock))
 
-	// Early-exit must skip EL reconstruction entirely, so nothing is reconstructed/received.
-	require.Equal(t, 0, len(chainService.DataColumns))
+		// Early-exit must skip EL reconstruction entirely, so nothing is reconstructed/received.
+		require.Equal(t, 0, len(chainService.DataColumns))
+	})
 }
 
 func TestColumnIndicesToSample(t *testing.T) {
@@ -603,19 +607,21 @@ func TestColumnIndicesToSample(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			p2p := mockp2p.NewTestP2P(t)
-			_, _, err := p2p.UpdateCustodyInfo(earliestAvailableSlot, tc.custodyGroupCount)
-			require.NoError(t, err)
+			mockp2p.SynctestTest(t, func(t *testing.T) {
+				p2p := mockp2p.NewTestP2P(t)
+				_, _, err := p2p.UpdateCustodyInfo(earliestAvailableSlot, tc.custodyGroupCount)
+				require.NoError(t, err)
 
-			service := NewService(t.Context(), WithP2P(p2p))
+				service := NewService(t.Context(), WithP2P(p2p))
 
-			actual, err := service.columnIndicesToSample()
-			require.NoError(t, err)
+				actual, err := service.columnIndicesToSample()
+				require.NoError(t, err)
 
-			require.Equal(t, len(tc.expected), len(actual))
-			for index := range tc.expected {
-				require.Equal(t, true, actual[index])
-			}
+				require.Equal(t, len(tc.expected), len(actual))
+				for index := range tc.expected {
+					require.Equal(t, true, actual[index])
+				}
+			})
 		})
 	}
 }
@@ -646,42 +652,44 @@ func (b *blockingReconstructor) ReconstructBlobSidecars(ctx context.Context, _ i
 // sidecar-reconstruction goroutine survives the pubsub handler returning: its
 // context must not be cancelled when the handler's context is cancelled.
 func TestService_beaconBlockSubscriber_sidecarContextDetached(t *testing.T) {
-	db := dbtest.SetupDB(t)
-	rec := &blockingReconstructor{
-		EngineClient:    &mockExecution.EngineClient{},
-		parentCancelled: make(chan struct{}),
-		ownCtxCancelled: make(chan bool, 1),
-	}
-	s := &Service{
-		ctx: context.Background(),
-		cfg: &config{
-			p2p: mockp2p.NewTestP2P(t),
-			chain: &chainMock.ChainService{
-				DB:      db,
-				Root:    make([]byte, 32),
-				Genesis: time.Now(),
+	mockp2p.SynctestTest(t, func(t *testing.T) {
+		db := dbtest.SetupDB(t)
+		rec := &blockingReconstructor{
+			EngineClient:    &mockExecution.EngineClient{},
+			parentCancelled: make(chan struct{}),
+			ownCtxCancelled: make(chan bool, 1),
+		}
+		s := &Service{
+			ctx: context.Background(),
+			cfg: &config{
+				p2p: mockp2p.NewTestP2P(t),
+				chain: &chainMock.ChainService{
+					DB:      db,
+					Root:    make([]byte, 32),
+					Genesis: time.Now(),
+				},
+				clock:                  startup.NewClock(time.Now(), [32]byte{}),
+				attPool:                attestations.NewPool(),
+				blobStorage:            filesystem.NewEphemeralBlobStorage(t),
+				executionReconstructor: rec,
+				operationNotifier:      &chainMock.MockOperationNotifier{},
 			},
-			clock:                  startup.NewClock(time.Now(), [32]byte{}),
-			attPool:                attestations.NewPool(),
-			blobStorage:            filesystem.NewEphemeralBlobStorage(t),
-			executionReconstructor: rec,
-			operationNotifier:      &chainMock.MockOperationNotifier{},
-		},
-		seenBlobCache: lruwrpr.New(1),
-	}
-	s.initCaches()
+			seenBlobCache: lruwrpr.New(1),
+		}
+		s.initCaches()
 
-	b := util.NewBeaconBlockDeneb()
-	b.Block.Body.BlobKzgCommitments = [][]byte{bytesutil.PadTo([]byte{0x01}, 48)}
+		b := util.NewBeaconBlockDeneb()
+		b.Block.Body.BlobKzgCommitments = [][]byte{bytesutil.PadTo([]byte{0x01}, 48)}
 
-	parentCtx, cancel := context.WithCancel(context.Background())
-	// The handler spawns the reconstruction goroutine then returns (ReceiveBlock may
-	// error on the mock's nil state, which is fine: the goroutine is spawned first).
-	_ = s.beaconBlockSubscriber(parentCtx, b)
-	// Cancelling the parent context is the moment that previously aborted the in-flight
-	// reconstruction goroutine. Signal the mock to make its observation afterwards.
-	cancel()
-	close(rec.parentCancelled)
+		parentCtx, cancel := context.WithCancel(context.Background())
+		// The handler spawns the reconstruction goroutine then returns (ReceiveBlock may
+		// error on the mock's nil state, which is fine: the goroutine is spawned first).
+		_ = s.beaconBlockSubscriber(parentCtx, b)
+		// Cancelling the parent context is the moment that previously aborted the in-flight
+		// reconstruction goroutine. Signal the mock to make its observation afterwards.
+		cancel()
+		close(rec.parentCancelled)
 
-	require.Equal(t, false, <-rec.ownCtxCancelled)
+		require.Equal(t, false, <-rec.ownCtxCancelled)
+	})
 }

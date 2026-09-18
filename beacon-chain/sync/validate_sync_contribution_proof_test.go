@@ -887,141 +887,143 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 }
 
 func TestValidateSyncContributionAndProof(t *testing.T) {
-	ctx := t.Context()
-	database := testingdb.SetupDB(t)
-	headRoot, keys := fillUpBlocksAndState(ctx, t, database)
-	defaultTopic := p2p.SyncContributionAndProofSubnetTopicFormat
-	defaultTopic = fmt.Sprintf(defaultTopic, []byte{0xAB, 0x00, 0xCC, 0x9E})
-	defaultTopic = defaultTopic + "/" + encoder.ProtocolSuffixSSZSnappy
-	var emptySig [96]byte
-	pid := peer.ID("random")
-	msg := &ethpb.SignedContributionAndProof{
-		Message: &ethpb.ContributionAndProof{
-			AggregatorIndex: 1,
-			Contribution: &ethpb.SyncCommitteeContribution{
-				Slot:              0,
-				SubcommitteeIndex: 1,
-				BlockRoot:         params.BeaconConfig().ZeroHash[:],
-				AggregationBits:   bitfield.NewBitvector128(),
-				Signature:         emptySig[:],
+	mockp2p.SynctestTest(t, func(t *testing.T) {
+		ctx := t.Context()
+		database := testingdb.SetupDB(t)
+		headRoot, keys := fillUpBlocksAndState(ctx, t, database)
+		defaultTopic := p2p.SyncContributionAndProofSubnetTopicFormat
+		defaultTopic = fmt.Sprintf(defaultTopic, []byte{0xAB, 0x00, 0xCC, 0x9E})
+		defaultTopic = defaultTopic + "/" + encoder.ProtocolSuffixSSZSnappy
+		var emptySig [96]byte
+		pid := peer.ID("random")
+		msg := &ethpb.SignedContributionAndProof{
+			Message: &ethpb.ContributionAndProof{
+				AggregatorIndex: 1,
+				Contribution: &ethpb.SyncCommitteeContribution{
+					Slot:              0,
+					SubcommitteeIndex: 1,
+					BlockRoot:         params.BeaconConfig().ZeroHash[:],
+					AggregationBits:   bitfield.NewBitvector128(),
+					Signature:         emptySig[:],
+				},
+				SelectionProof: emptySig[:],
 			},
-			SelectionProof: emptySig[:],
-		},
-		Signature: emptySig[:],
-	}
-	chainService := &mockChain.ChainService{
-		Genesis:        time.Now(),
-		ValidatorsRoot: [32]byte{'A'},
-	}
-	s := NewService(t.Context(),
-		WithP2P(mockp2p.NewTestP2P(t)),
-		WithInitialSync(&mockSync.Sync{IsSyncing: false}),
-		WithChainService(chainService),
-		WithOperationNotifier(chainService.OperationNotifier()),
-	)
-	s.cfg.clock = startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)
-	go s.verifierRoutine()
-	s.cfg.stateGen = stategen.New(database, doublylinkedtree.New())
-	msg.Message.Contribution.BlockRoot = headRoot[:]
-	s.cfg.beaconDB = database
-	hState, err := database.State(t.Context(), headRoot)
-	assert.NoError(t, err)
-	sc, err := hState.CurrentSyncCommittee()
-	assert.NoError(t, err)
-	cd, err := signing.Domain(hState.Fork(), slots.ToEpoch(slots.PrevSlot(hState.Slot())), params.BeaconConfig().DomainContributionAndProof, hState.GenesisValidatorsRoot())
-	assert.NoError(t, err)
-	d, err := signing.Domain(hState.Fork(), slots.ToEpoch(hState.Slot()), params.BeaconConfig().DomainSyncCommittee, hState.GenesisValidatorsRoot())
-	assert.NoError(t, err)
-	var pubkeys [][]byte
-	for i := uint64(0); i < params.BeaconConfig().SyncCommitteeSubnetCount; i++ {
-		coms, err := altair.SyncSubCommitteePubkeys(sc, primitives.CommitteeIndex(i))
-		pubkeys = coms
+			Signature: emptySig[:],
+		}
+		chainService := &mockChain.ChainService{
+			Genesis:        time.Now(),
+			ValidatorsRoot: [32]byte{'A'},
+		}
+		s := NewService(t.Context(),
+			WithP2P(mockp2p.NewTestP2P(t)),
+			WithInitialSync(&mockSync.Sync{IsSyncing: false}),
+			WithChainService(chainService),
+			WithOperationNotifier(chainService.OperationNotifier()),
+		)
+		s.cfg.clock = startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)
+		go s.verifierRoutine()
+		s.cfg.stateGen = stategen.New(database, doublylinkedtree.New())
+		msg.Message.Contribution.BlockRoot = headRoot[:]
+		s.cfg.beaconDB = database
+		hState, err := database.State(t.Context(), headRoot)
 		assert.NoError(t, err)
-		for _, p := range coms {
-			idx, ok := hState.ValidatorIndexByPubkey(bytesutil.ToBytes48(p))
-			assert.Equal(t, true, ok)
-			rt, err := syncSelectionProofSigningRoot(hState, slots.PrevSlot(hState.Slot()), primitives.CommitteeIndex(i))
+		sc, err := hState.CurrentSyncCommittee()
+		assert.NoError(t, err)
+		cd, err := signing.Domain(hState.Fork(), slots.ToEpoch(slots.PrevSlot(hState.Slot())), params.BeaconConfig().DomainContributionAndProof, hState.GenesisValidatorsRoot())
+		assert.NoError(t, err)
+		d, err := signing.Domain(hState.Fork(), slots.ToEpoch(hState.Slot()), params.BeaconConfig().DomainSyncCommittee, hState.GenesisValidatorsRoot())
+		assert.NoError(t, err)
+		var pubkeys [][]byte
+		for i := uint64(0); i < params.BeaconConfig().SyncCommitteeSubnetCount; i++ {
+			coms, err := altair.SyncSubCommitteePubkeys(sc, primitives.CommitteeIndex(i))
+			pubkeys = coms
 			assert.NoError(t, err)
-			sig := keys[idx].Sign(rt[:])
-			isAggregator, err := altair.IsSyncCommitteeAggregator(sig.Marshal())
-			require.NoError(t, err)
-			if isAggregator {
-				msg.Message.AggregatorIndex = idx
-				msg.Message.SelectionProof = sig.Marshal()
-				msg.Message.Contribution.Slot = slots.PrevSlot(hState.Slot())
-				msg.Message.Contribution.SubcommitteeIndex = i
-				msg.Message.Contribution.BlockRoot = headRoot[:]
-				msg.Message.Contribution.AggregationBits = bitfield.NewBitvector128()
-				// Only Sign for 1 validator.
-				rawBytes := p2ptypes.SSZBytes(headRoot[:])
-				sigRoot, err := signing.ComputeSigningRoot(&rawBytes, d)
-				assert.NoError(t, err)
-				valIdx, ok := hState.ValidatorIndexByPubkey(bytesutil.ToBytes48(coms[0]))
+			for _, p := range coms {
+				idx, ok := hState.ValidatorIndexByPubkey(bytesutil.ToBytes48(p))
 				assert.Equal(t, true, ok)
-				sig = keys[valIdx].Sign(sigRoot[:])
-				msg.Message.Contribution.AggregationBits.SetBitAt(uint64(0), true)
-				msg.Message.Contribution.Signature = sig.Marshal()
-
-				sigRoot, err = signing.ComputeSigningRoot(msg.Message, cd)
+				rt, err := syncSelectionProofSigningRoot(hState, slots.PrevSlot(hState.Slot()), primitives.CommitteeIndex(i))
 				assert.NoError(t, err)
-				contrSig := keys[idx].Sign(sigRoot[:])
-				msg.Signature = contrSig.Marshal()
-				break
+				sig := keys[idx].Sign(rt[:])
+				isAggregator, err := altair.IsSyncCommitteeAggregator(sig.Marshal())
+				require.NoError(t, err)
+				if isAggregator {
+					msg.Message.AggregatorIndex = idx
+					msg.Message.SelectionProof = sig.Marshal()
+					msg.Message.Contribution.Slot = slots.PrevSlot(hState.Slot())
+					msg.Message.Contribution.SubcommitteeIndex = i
+					msg.Message.Contribution.BlockRoot = headRoot[:]
+					msg.Message.Contribution.AggregationBits = bitfield.NewBitvector128()
+					// Only Sign for 1 validator.
+					rawBytes := p2ptypes.SSZBytes(headRoot[:])
+					sigRoot, err := signing.ComputeSigningRoot(&rawBytes, d)
+					assert.NoError(t, err)
+					valIdx, ok := hState.ValidatorIndexByPubkey(bytesutil.ToBytes48(coms[0]))
+					assert.Equal(t, true, ok)
+					sig = keys[valIdx].Sign(sigRoot[:])
+					msg.Message.Contribution.AggregationBits.SetBitAt(uint64(0), true)
+					msg.Message.Contribution.Signature = sig.Marshal()
+
+					sigRoot, err = signing.ComputeSigningRoot(msg.Message, cd)
+					assert.NoError(t, err)
+					contrSig := keys[idx].Sign(sigRoot[:])
+					msg.Signature = contrSig.Marshal()
+					break
+				}
 			}
 		}
-	}
 
-	pd, err := signing.Domain(hState.Fork(), slots.ToEpoch(slots.PrevSlot(hState.Slot())), params.BeaconConfig().DomainSyncCommitteeSelectionProof, hState.GenesisValidatorsRoot())
-	require.NoError(t, err)
-	subCommitteeSize := params.BeaconConfig().SyncCommitteeSize / params.BeaconConfig().SyncCommitteeSubnetCount
-	s.cfg.chain = &mockChain.ChainService{
-		ValidatorsRoot:              [32]byte{'A'},
-		Genesis:                     time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(msg.Message.Contribution.Slot)),
-		SyncCommitteeIndices:        []primitives.CommitteeIndex{primitives.CommitteeIndex(msg.Message.Contribution.SubcommitteeIndex * subCommitteeSize)},
-		PublicKey:                   bytesutil.ToBytes48(keys[msg.Message.AggregatorIndex].PublicKey().Marshal()),
-		SyncSelectionProofDomain:    pd,
-		SyncContributionProofDomain: cd,
-		SyncCommitteeDomain:         d,
-		SyncCommitteePubkeys:        pubkeys,
-	}
-	s.cfg.clock = startup.NewClock(s.cfg.chain.GenesisTime(), s.cfg.chain.GenesisValidatorsRoot())
-	s.initCaches()
-
-	marshalledObj, err := msg.MarshalSSZ()
-	assert.NoError(t, err)
-	marshalledObj = snappy.Encode(nil, marshalledObj)
-	pubsubMsg := &pubsub.Message{
-		Message: &pubsubpb.Message{
-			Data:  marshalledObj,
-			Topic: &defaultTopic,
-		},
-		ReceivedFrom:  "",
-		ValidatorData: nil,
-	}
-
-	// Subscribe to operation notifications.
-	opChannel := make(chan *feed.Event, 1)
-	opSub := s.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
-	defer opSub.Unsubscribe()
-
-	_, err = s.validateSyncContributionAndProof(ctx, pid, pubsubMsg)
-	require.NoError(t, err)
-
-	// Ensure the state notification was broadcast.
-	notificationFound := false
-	for !notificationFound {
-		select {
-		case event := <-opChannel:
-			if event.Type == opfeed.SyncCommitteeContributionReceived {
-				notificationFound = true
-				_, ok := event.Data.(*opfeed.SyncCommitteeContributionReceivedData)
-				assert.Equal(t, true, ok, "Entity is not of type *opfeed.SyncCommitteeContributionReceivedData")
-			}
-		case <-opSub.Err():
-			t.Error("Subscription to state notifier failed")
-			return
+		pd, err := signing.Domain(hState.Fork(), slots.ToEpoch(slots.PrevSlot(hState.Slot())), params.BeaconConfig().DomainSyncCommitteeSelectionProof, hState.GenesisValidatorsRoot())
+		require.NoError(t, err)
+		subCommitteeSize := params.BeaconConfig().SyncCommitteeSize / params.BeaconConfig().SyncCommitteeSubnetCount
+		s.cfg.chain = &mockChain.ChainService{
+			ValidatorsRoot:              [32]byte{'A'},
+			Genesis:                     time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(msg.Message.Contribution.Slot)),
+			SyncCommitteeIndices:        []primitives.CommitteeIndex{primitives.CommitteeIndex(msg.Message.Contribution.SubcommitteeIndex * subCommitteeSize)},
+			PublicKey:                   bytesutil.ToBytes48(keys[msg.Message.AggregatorIndex].PublicKey().Marshal()),
+			SyncSelectionProofDomain:    pd,
+			SyncContributionProofDomain: cd,
+			SyncCommitteeDomain:         d,
+			SyncCommitteePubkeys:        pubkeys,
 		}
-	}
+		s.cfg.clock = startup.NewClock(s.cfg.chain.GenesisTime(), s.cfg.chain.GenesisValidatorsRoot())
+		s.initCaches()
+
+		marshalledObj, err := msg.MarshalSSZ()
+		assert.NoError(t, err)
+		marshalledObj = snappy.Encode(nil, marshalledObj)
+		pubsubMsg := &pubsub.Message{
+			Message: &pubsubpb.Message{
+				Data:  marshalledObj,
+				Topic: &defaultTopic,
+			},
+			ReceivedFrom:  "",
+			ValidatorData: nil,
+		}
+
+		// Subscribe to operation notifications.
+		opChannel := make(chan *feed.Event, 1)
+		opSub := s.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
+		defer opSub.Unsubscribe()
+
+		_, err = s.validateSyncContributionAndProof(ctx, pid, pubsubMsg)
+		require.NoError(t, err)
+
+		// Ensure the state notification was broadcast.
+		notificationFound := false
+		for !notificationFound {
+			select {
+			case event := <-opChannel:
+				if event.Type == opfeed.SyncCommitteeContributionReceived {
+					notificationFound = true
+					_, ok := event.Data.(*opfeed.SyncCommitteeContributionReceivedData)
+					assert.Equal(t, true, ok, "Entity is not of type *opfeed.SyncCommitteeContributionReceivedData")
+				}
+			case <-opSub.Err():
+				t.Error("Subscription to state notifier failed")
+				return
+			}
+		}
+	})
 }
 
 func fillUpBlocksAndState(ctx context.Context, t *testing.T, beaconDB db.Database) ([32]byte, []bls.SecretKey) {
@@ -1061,115 +1063,117 @@ func syncSelectionProofSigningRoot(st state.BeaconState, slot primitives.Slot, c
 }
 
 func TestService_setSyncContributionIndexSlotSeen(t *testing.T) {
-	s := NewService(t.Context(), WithP2P(mockp2p.NewTestP2P(t)))
-	s.initCaches()
+	mockp2p.SynctestTest(t, func(t *testing.T) {
+		s := NewService(t.Context(), WithP2P(mockp2p.NewTestP2P(t)))
+		s.initCaches()
 
-	// Empty cache
-	b0 := bitfield.NewBitvector128()
-	b0.SetBitAt(0, true)
-	has, err := s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
-		AggregationBits: b0,
-	})
-	require.NoError(t, err)
-	require.Equal(t, false, has)
+		// Empty cache
+		b0 := bitfield.NewBitvector128()
+		b0.SetBitAt(0, true)
+		has, err := s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
+			AggregationBits: b0,
+		})
+		require.NoError(t, err)
+		require.Equal(t, false, has)
 
-	// Cache with entries but same key
-	require.NoError(t, s.setSyncContributionBits(&ethpb.SyncCommitteeContribution{
-		AggregationBits: b0,
-	}))
-	has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
-		AggregationBits: b0,
-	})
-	require.NoError(t, err)
-	require.Equal(t, true, has)
-	b1 := bitfield.NewBitvector128()
-	b1.SetBitAt(1, true)
-	has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
-		AggregationBits: b1,
-	})
-	require.NoError(t, err)
-	require.Equal(t, false, has)
-	b2 := bitfield.NewBitvector128()
-	b2.SetBitAt(1, true)
-	b2.SetBitAt(2, true)
-	has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
-		AggregationBits: b2,
-	})
-	require.NoError(t, err)
-	require.Equal(t, false, has)
-	b2.SetBitAt(0, true)
-	has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
-		AggregationBits: b2,
-	})
-	require.NoError(t, err)
-	require.Equal(t, true, has)
+		// Cache with entries but same key
+		require.NoError(t, s.setSyncContributionBits(&ethpb.SyncCommitteeContribution{
+			AggregationBits: b0,
+		}))
+		has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
+			AggregationBits: b0,
+		})
+		require.NoError(t, err)
+		require.Equal(t, true, has)
+		b1 := bitfield.NewBitvector128()
+		b1.SetBitAt(1, true)
+		has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
+			AggregationBits: b1,
+		})
+		require.NoError(t, err)
+		require.Equal(t, false, has)
+		b2 := bitfield.NewBitvector128()
+		b2.SetBitAt(1, true)
+		b2.SetBitAt(2, true)
+		has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
+			AggregationBits: b2,
+		})
+		require.NoError(t, err)
+		require.Equal(t, false, has)
+		b2.SetBitAt(0, true)
+		has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
+			AggregationBits: b2,
+		})
+		require.NoError(t, err)
+		require.Equal(t, true, has)
 
-	// Make sure set doesn't contain existing overlaps
-	require.Equal(t, 1, s.syncContributionBitsOverlapCache.Len())
+		// Make sure set doesn't contain existing overlaps
+		require.Equal(t, 1, s.syncContributionBitsOverlapCache.Len())
 
-	// Cache with entries but different key
-	has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
-		Slot:              1,
-		SubcommitteeIndex: 2,
-		BlockRoot:         []byte{'A'},
-		AggregationBits:   b0,
-	})
-	require.NoError(t, err)
-	require.Equal(t, false, has)
-	require.NoError(t, s.setSyncContributionBits(&ethpb.SyncCommitteeContribution{
-		Slot:              1,
-		SubcommitteeIndex: 2,
-		BlockRoot:         []byte{'A'},
-		AggregationBits:   b2,
-	}))
-	has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
-		Slot:              1,
-		SubcommitteeIndex: 2,
-		BlockRoot:         []byte{'A'},
-		AggregationBits:   b0,
-	})
-	require.NoError(t, err)
-	require.Equal(t, true, has)
-	has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
-		Slot:              1,
-		SubcommitteeIndex: 2,
-		BlockRoot:         []byte{'A'},
-		AggregationBits:   b1,
-	})
-	require.NoError(t, err)
-	require.Equal(t, true, has)
-	has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
-		Slot:              1,
-		SubcommitteeIndex: 2,
-		BlockRoot:         []byte{'A'},
-		AggregationBits:   b2,
-	})
-	require.NoError(t, err)
-	require.Equal(t, true, has)
+		// Cache with entries but different key
+		has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
+			Slot:              1,
+			SubcommitteeIndex: 2,
+			BlockRoot:         []byte{'A'},
+			AggregationBits:   b0,
+		})
+		require.NoError(t, err)
+		require.Equal(t, false, has)
+		require.NoError(t, s.setSyncContributionBits(&ethpb.SyncCommitteeContribution{
+			Slot:              1,
+			SubcommitteeIndex: 2,
+			BlockRoot:         []byte{'A'},
+			AggregationBits:   b2,
+		}))
+		has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
+			Slot:              1,
+			SubcommitteeIndex: 2,
+			BlockRoot:         []byte{'A'},
+			AggregationBits:   b0,
+		})
+		require.NoError(t, err)
+		require.Equal(t, true, has)
+		has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
+			Slot:              1,
+			SubcommitteeIndex: 2,
+			BlockRoot:         []byte{'A'},
+			AggregationBits:   b1,
+		})
+		require.NoError(t, err)
+		require.Equal(t, true, has)
+		has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
+			Slot:              1,
+			SubcommitteeIndex: 2,
+			BlockRoot:         []byte{'A'},
+			AggregationBits:   b2,
+		})
+		require.NoError(t, err)
+		require.Equal(t, true, has)
 
-	// Check invariant with the keys
-	has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
-		Slot:              2,
-		SubcommitteeIndex: 2,
-		BlockRoot:         []byte{'A'},
-		AggregationBits:   b0,
+		// Check invariant with the keys
+		has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
+			Slot:              2,
+			SubcommitteeIndex: 2,
+			BlockRoot:         []byte{'A'},
+			AggregationBits:   b0,
+		})
+		require.NoError(t, err)
+		require.Equal(t, false, has)
+		has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
+			Slot:              1,
+			SubcommitteeIndex: 2,
+			BlockRoot:         []byte{'B'},
+			AggregationBits:   b0,
+		})
+		require.NoError(t, err)
+		require.Equal(t, false, has)
+		has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
+			Slot:              1,
+			SubcommitteeIndex: 3,
+			BlockRoot:         []byte{'A'},
+			AggregationBits:   b0,
+		})
+		require.NoError(t, err)
+		require.Equal(t, false, has)
 	})
-	require.NoError(t, err)
-	require.Equal(t, false, has)
-	has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
-		Slot:              1,
-		SubcommitteeIndex: 2,
-		BlockRoot:         []byte{'B'},
-		AggregationBits:   b0,
-	})
-	require.NoError(t, err)
-	require.Equal(t, false, has)
-	has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
-		Slot:              1,
-		SubcommitteeIndex: 3,
-		BlockRoot:         []byte{'A'},
-		AggregationBits:   b0,
-	})
-	require.NoError(t, err)
-	require.Equal(t, false, has)
 }

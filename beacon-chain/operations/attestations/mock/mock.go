@@ -78,6 +78,11 @@ func (*PoolMock) SeenAggregatedAttestationCount() int {
 	panic("implement me")
 }
 
+// DeleteExpiredSeenBits --
+func (*PoolMock) DeleteExpiredSeenBits() {
+	panic("implement me")
+}
+
 // SaveUnaggregatedAttestation --
 func (*PoolMock) SaveUnaggregatedAttestation(_ ethpb.Att) error {
 	panic("implement me")

@@ -36,26 +36,30 @@ import (
 )
 
 func TestValidateExecutionPayloadEnvelope_InvalidTopic(t *testing.T) {
-	ctx := context.Background()
-	p := p2ptest.NewTestP2P(t)
-	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}}}
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		p := p2ptest.NewTestP2P(t)
+		s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}}}
 
-	result, err := s.validateExecutionPayloadEnvelope(ctx, "", &pubsub.Message{
-		Message: &pb.Message{},
+		result, err := s.validateExecutionPayloadEnvelope(ctx, "", &pubsub.Message{
+			Message: &pb.Message{},
+		})
+		require.ErrorIs(t, p2p.ErrInvalidTopic, err)
+		require.Equal(t, result, pubsub.ValidationReject)
 	})
-	require.ErrorIs(t, p2p.ErrInvalidTopic, err)
-	require.Equal(t, result, pubsub.ValidationReject)
 }
 
 func TestValidateExecutionPayloadEnvelope_AlreadySeen(t *testing.T) {
-	ctx := context.Background()
-	s, msg, builderIdx, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
-	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{})
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		s, msg, builderIdx, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+		s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{})
 
-	s.setSeenPayloadEnvelope(root, builderIdx)
-	result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
-	require.NoError(t, err)
-	require.Equal(t, result, pubsub.ValidationIgnore)
+		s.setSeenPayloadEnvelope(root, builderIdx)
+		result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
+		require.NoError(t, err)
+		require.Equal(t, result, pubsub.ValidationIgnore)
+	})
 }
 
 func TestValidateExecutionPayloadEnvelope_ErrorPathsWithMock(t *testing.T) {
@@ -111,28 +115,32 @@ func TestValidateExecutionPayloadEnvelope_ErrorPathsWithMock(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			s, msg, _, _ := setupExecutionPayloadEnvelopeService(t, 1, 1)
-			s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(tc.verifier)
+			p2ptest.SynctestTest(t, func(t *testing.T) {
+				s, msg, _, _ := setupExecutionPayloadEnvelopeService(t, 1, 1)
+				s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(tc.verifier)
 
-			result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
-			if tc.wantError {
-				require.NotNil(t, err)
-			}
-			require.Equal(t, result, tc.result)
+				result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
+				if tc.wantError {
+					require.NotNil(t, err)
+				}
+				require.Equal(t, result, tc.result)
+			})
 		})
 	}
 }
 
 func TestValidateExecutionPayloadEnvelope_HappyPath(t *testing.T) {
-	ctx := context.Background()
-	s, msg, builderIdx, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
-	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{})
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		s, msg, builderIdx, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+		s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{})
 
-	require.Equal(t, false, s.hasSeenPayloadEnvelope(root, builderIdx))
-	result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
-	require.NoError(t, err)
-	require.Equal(t, result, pubsub.ValidationAccept)
-	require.Equal(t, true, s.hasSeenPayloadEnvelope(root, builderIdx))
+		require.Equal(t, false, s.hasSeenPayloadEnvelope(root, builderIdx))
+		result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
+		require.NoError(t, err)
+		require.Equal(t, result, pubsub.ValidationAccept)
+		require.Equal(t, true, s.hasSeenPayloadEnvelope(root, builderIdx))
+	})
 }
 
 func TestValidateExecutionPayloadEnvelope_BlockSeenButNotInDB_NoPanic(t *testing.T) {
@@ -307,19 +315,21 @@ func (r *recordingEnvelopeVerifier) SatisfyRequirement(req verification.Requirem
 // A successful gossip validation must exercise every requirement in the gossip
 // list — catches a requirement being added without a matching check.
 func TestValidateExecutionPayloadEnvelope_CoversAllGossipRequirements(t *testing.T) {
-	ctx := context.Background()
-	s, msg, _, _ := setupExecutionPayloadEnvelopeService(t, 1, 1)
-	rec := &recordingEnvelopeVerifier{recorded: map[verification.Requirement]bool{}}
-	s.newExecutionPayloadEnvelopeVerifier = func(_ interfaces.ROSignedExecutionPayloadEnvelope, _ []verification.Requirement) verification.ExecutionPayloadEnvelopeVerifier {
-		return rec
-	}
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		s, msg, _, _ := setupExecutionPayloadEnvelopeService(t, 1, 1)
+		rec := &recordingEnvelopeVerifier{recorded: map[verification.Requirement]bool{}}
+		s.newExecutionPayloadEnvelopeVerifier = func(_ interfaces.ROSignedExecutionPayloadEnvelope, _ []verification.Requirement) verification.ExecutionPayloadEnvelopeVerifier {
+			return rec
+		}
 
-	result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
-	require.NoError(t, err)
-	require.Equal(t, pubsub.ValidationAccept, result)
-	for _, req := range verification.ExecutionPayloadEnvelopeGossipRequirements {
-		require.Equal(t, true, rec.recorded[req], "requirement %s is in the gossip list but never checked", req)
-	}
+		result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationAccept, result)
+		for _, req := range verification.ExecutionPayloadEnvelopeGossipRequirements {
+			require.Equal(t, true, rec.recorded[req], "requirement %s is in the gossip list but never checked", req)
+		}
+	})
 }
 
 func testNewExecutionPayloadEnvelopeVerifier(m mockExecutionPayloadEnvelopeVerifier) verification.NewExecutionPayloadEnvelopeVerifier {
@@ -424,42 +434,44 @@ func TestQueuePendingPayloadEnvelope_SelfBuildInvalidSignature(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			p := p2ptest.NewTestP2P(t)
-			chainService := &mock.ChainService{
-				Genesis:             time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
-				FinalizedCheckPoint: &ethpb.Checkpoint{},
-			}
-			st, err := util.NewBeaconStateFulu()
-			require.NoError(t, err)
-			chainService.State = st
-
-			s := &Service{
-				seenPayloadEnvelopeCache: lruwrpr.New(10),
-				pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
-				cfg: &config{
-					p2p:         p,
-					initialSync: &mockSync.Sync{},
-					chain:       chainService,
-					clock:       startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
-				},
-			}
-			s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{
-				errBlockRootSeen: errors.New("not seen"),
-				errSignature:     errors.New("bad signature"),
-			})
-
-			root := [32]byte{0x01}
-			blockHash := [32]byte{0x02}
-			env := testSignedExecutionPayloadEnvelope(t, 1, tc.builderIdx, root, blockHash)
-			msg := envelopeToPubsub(t, s, p, env)
-
-			result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
-			if tc.wantError {
-				require.NotNil(t, err)
-			} else {
+			p2ptest.SynctestTest(t, func(t *testing.T) {
+				p := p2ptest.NewTestP2P(t)
+				chainService := &mock.ChainService{
+					Genesis:             time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
+					FinalizedCheckPoint: &ethpb.Checkpoint{},
+				}
+				st, err := util.NewBeaconStateFulu()
 				require.NoError(t, err)
-			}
-			require.Equal(t, tc.result, result)
+				chainService.State = st
+
+				s := &Service{
+					seenPayloadEnvelopeCache: lruwrpr.New(10),
+					pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
+					cfg: &config{
+						p2p:         p,
+						initialSync: &mockSync.Sync{},
+						chain:       chainService,
+						clock:       startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+					},
+				}
+				s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{
+					errBlockRootSeen: errors.New("not seen"),
+					errSignature:     errors.New("bad signature"),
+				})
+
+				root := [32]byte{0x01}
+				blockHash := [32]byte{0x02}
+				env := testSignedExecutionPayloadEnvelope(t, 1, tc.builderIdx, root, blockHash)
+				msg := envelopeToPubsub(t, s, p, env)
+
+				result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
+				if tc.wantError {
+					require.NotNil(t, err)
+				} else {
+					require.NoError(t, err)
+				}
+				require.Equal(t, tc.result, result)
+			})
 		})
 	}
 }
