@@ -1185,16 +1185,16 @@ func TestQueryUntilAccepted(t *testing.T) {
 		require.NotNil(t, err)
 		assert.Equal(t, true, errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusNoContent}),
 			"caller must be able to classify the node's 204, got: "+err.Error())
-		assert.Equal(t, true, atomic.LoadInt32(&hits) > 1, "the read should have re-polled")
+		assert.Equal(t, true, hits.Load() > 1, "the read should have re-polled")
 	})
 
 	// Checking the deadline before each round avoids most doomed rounds, but one that
 	// starts with a sliver of budget can still be cut mid-flight and must not mask the
 	// answer the nodes already gave.
 	t.Run("node status survives a round cut off mid-flight", func(t *testing.T) {
-		var hits int32
+		var hits atomic.Int32
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if atomic.AddInt32(&hits, 1) == 1 {
+			if hits.Add(1) == 1 {
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
@@ -1215,6 +1215,6 @@ func TestQueryUntilAccepted(t *testing.T) {
 		require.NotNil(t, err)
 		assert.Equal(t, true, errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusNoContent}),
 			"caller must be able to classify the node's 204, got: "+err.Error())
-		assert.Equal(t, int32(2), atomic.LoadInt32(&hits), "a second round should have started and been cut off")
+		assert.Equal(t, int32(2), hits.Load(), "a second round should have started and been cut off")
 	})
 }

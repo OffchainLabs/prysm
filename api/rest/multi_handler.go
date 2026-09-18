@@ -405,6 +405,7 @@ func queryUntilAccepted[T any](
 
 		// Run a round of queries.
 		val, matched, ok, errs := round(roundCtx, handlers, cfg.fallbackDeadline, accept, fn)
+		deadlineCut := errors.Is(roundCtx.Err(), context.DeadlineExceeded)
 		roundCancel()
 
 		// If a match was found, return it immediately.
@@ -418,9 +419,9 @@ func queryUntilAccepted[T any](
 			fallback = &val
 		}
 
-		// A round the deadline cuts short reports only cancellation. Keep the last
-		// round that carried the nodes' own answers.
-		if hasNodeFailure(errs) {
+		// A round the deadline cuts short reports only the cancellation; keep the last
+		// round that ran to completion.
+		if !deadlineCut {
 			reported = errs
 		}
 
@@ -470,18 +471,6 @@ func queryUntilAccepted[T any](
 			return finish()
 		}
 	}
-}
-
-// hasNodeFailure reports whether errs carries a node's own answer rather than only
-// the cancellation of a round the deadline cut short.
-func hasNodeFailure(errs []error) bool {
-	for _, err := range errs {
-		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
-			return true
-		}
-	}
-
-	return false
 }
 
 // roundFor selects the query strategy.
