@@ -32,11 +32,6 @@ func TestService_PartialVerifierFromTrustedColumn(t *testing.T) {
 			wantErr: errHeaderNil,
 		},
 		{
-			name:    "nil signed header",
-			col:     &blocks.PartialDataColumn{DataColumnSidecar: &ethpb.DataColumnSidecar{}},
-			wantErr: errHeaderNil,
-		},
-		{
 			name:    "empty commitments",
 			col:     buildPartialColumn(t, 0, nil),
 			wantErr: errHeaderEmptyCommitments,
@@ -65,6 +60,17 @@ func TestService_PartialVerifierFromTrustedColumn(t *testing.T) {
 				require.ErrorContains(t, "invalid fields", err)
 			},
 		},
+		{
+			name:         "gloas column builds verifier and completes",
+			col:          buildGloasPartialColumn(t, 2, []uint64{0, 1}),
+			verifier:     verification.MockDataColumnsVerifier{},
+			expectResult: true,
+			verify: func(t *testing.T, v *verification.PartialColumnVerifier) {
+				_, ok, err := v.Complete()
+				require.NoError(t, err)
+				require.Equal(t, true, ok)
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -80,6 +86,29 @@ func TestService_PartialVerifierFromTrustedColumn(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestService_PartialVerifierFromTrustedGloasColumn(t *testing.T) {
+	service := &Service{
+		newColumnsVerifier: testNewColumnsVerifier(verification.MockDataColumnsVerifier{}),
+	}
+
+	t.Run("builds verifier and completes", func(t *testing.T) {
+		v, err := service.partialVerifierFromTrustedGloasColumn(buildGloasPartialColumn(t, 2, []uint64{0, 1}))
+		require.NoError(t, err)
+		require.NotNil(t, v)
+
+		_, ok, err := v.Complete()
+		require.NoError(t, err)
+		require.Equal(t, true, ok)
+	})
+
+	t.Run("empty commitments errors", func(t *testing.T) {
+		// A column with no commitments has a zero-length Included bitlist.
+		v, err := service.partialVerifierFromTrustedGloasColumn(&blocks.PartialDataColumn{})
+		require.ErrorIs(t, err, errEmptyCommitments)
+		require.IsNil(t, v)
+	})
 }
 
 func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
@@ -118,6 +147,12 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 			name:       "nil column",
 			col:        nil,
 			wantErr:    errHeaderNil,
+			wantResult: pubsub.ValidationIgnore,
+		},
+		{
+			name:       "gloas column rejected by fulu header path",
+			col:        buildGloasPartialColumn(t, 2, nil),
+			wantErr:    errColumnNotFulu,
 			wantResult: pubsub.ValidationIgnore,
 		},
 		{
@@ -288,6 +323,26 @@ func buildPartialColumn(t *testing.T, nCommitments int, included []uint64) *bloc
 		commitments,
 		inclusionProof,
 	)
+	require.NoError(t, err)
+
+	for _, idx := range included {
+		extended := col.ExtendFromVerifiedCell(idx, []byte{byte(idx + 1)}, []byte{byte(idx + 2)})
+		require.Equal(t, true, extended)
+	}
+
+	return &col
+}
+
+func buildGloasPartialColumn(t *testing.T, nCommitments int, included []uint64) *blocks.PartialDataColumn {
+	t.Helper()
+
+	commitments := make([][]byte, nCommitments)
+	for i := range nCommitments {
+		commitments[i] = make([]byte, fieldparams.KzgCommitmentSize)
+		commitments[i][0] = byte(i + 1)
+	}
+
+	col, err := blocks.NewPartialDataColumnGloas([fieldparams.RootLength]byte{}, 0, 0, commitments)
 	require.NoError(t, err)
 
 	for _, idx := range included {
