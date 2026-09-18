@@ -63,6 +63,7 @@ func TestServiceInit(t *testing.T) {
 		return das.NewSyncNeeds(
 			clock.CurrentSlot,
 			nil,
+			nil,
 			primitives.Epoch(0),
 		)
 	}

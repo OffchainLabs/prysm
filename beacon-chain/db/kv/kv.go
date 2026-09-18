@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
@@ -119,6 +120,8 @@ type Store struct {
 	validatorEntryCache *ristretto.Cache[[]byte, *ethpb.Validator]
 	stateSummaryCache   *stateSummaryCache
 	stateDiffCache      *stateDiffCache
+	archiveStatus       *ArchiveStatus
+	archiveLock         sync.RWMutex
 	ctx                 context.Context
 }
 
@@ -245,6 +248,20 @@ func NewKVStore(ctx context.Context, dirPath string, opts ...KVStoreOption) (*St
 func (kv *Store) startStateDiff(ctx context.Context) error {
 	if !features.Get().EnableStateDiff {
 		return nil
+	}
+	// Load the archive status before anything can write to the tree, so the frontier guard in
+	// saveStateByDiff is armed for the whole run.
+	as, err := kv.ArchiveStatus(ctx)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return err
+	}
+	if as != nil {
+		kv.setArchiveStatus(as)
+		log.WithFields(logrus.Fields{
+			"originSlot":             as.OriginSlot,
+			"regeneratedThroughSlot": as.RegeneratedThroughSlot,
+			"complete":               as.Complete,
+		}).Info("Archive state regeneration status loaded")
 	}
 	// Check if offset already exists (existing state-diff database).
 	hasOffset, err := kv.hasStateDiffOffset()
