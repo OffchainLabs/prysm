@@ -34,8 +34,7 @@ func genSSZ() error {
 
 	// Progressive merkleization is ON by default: gloas (EIP-7688) mandates it
 	// and the consensus-spec fixtures expect the progressive hash_tree_root
-	// values. This mirrors the //tools:disable_progressive_merkleization
-	// default in .bazelrc. Set SSZ_PROGRESSIVE=0 to generate the bounded form.
+	// values. Set SSZ_PROGRESSIVE=0 to generate the bounded form.
 	progressive := true
 	if v, ok := os.LookupEnv("SSZ_PROGRESSIVE"); ok {
 		if parsed, err := strconv.ParseBool(v); err == nil {
