@@ -425,7 +425,8 @@ func queryUntilAccepted[T any](
 			reported = errs
 		}
 
-		// finish returns the best-effort fallback, else the nodes' last own answers.
+		// finish returns the best-effort fallback, else the nodes' last own answers,
+		// keeping the caller's cancellation in the chain when there is one.
 		finish := func() (T, bool, error) {
 			if fallback != nil {
 				return *fallback, false, nil
@@ -435,7 +436,12 @@ func queryUntilAccepted[T any](
 				reported = errs
 			}
 
-			return zero, false, errors.Join(reported...)
+			joined := errors.Join(reported...)
+			if ctx.Err() != nil {
+				return zero, false, errors.Join(joined, ctx.Err())
+			}
+
+			return zero, false, joined
 		}
 
 		// Stop after this round unless re-polling is enabled and there is still
@@ -453,15 +459,7 @@ func queryUntilAccepted[T any](
 		// Wait for the poll interval to elapse.
 		select {
 		case <-ctx.Done():
-			if fallback != nil {
-				return *fallback, false, nil
-			}
-
-			if reported != nil {
-				return zero, false, errors.Join(reported...)
-			}
-
-			return zero, false, ctx.Err()
+			return finish()
 		case <-time.After(cfg.pollInterval):
 		}
 

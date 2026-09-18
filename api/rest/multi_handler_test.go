@@ -1217,4 +1217,35 @@ func TestQueryUntilAccepted(t *testing.T) {
 			"caller must be able to classify the node's 204, got: "+err.Error())
 		assert.Equal(t, int32(2), hits.Load(), "a second round should have started and been cut off")
 	})
+
+	// A caller giving up between rounds must see both the nodes' last answer and its
+	// own cancellation, so either can be classified downstream.
+	t.Run("caller cancellation keeps the node status and the cancellation", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		t.Cleanup(srv.Close)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		t.Cleanup(cancel)
+		go func() {
+			time.Sleep(20 * time.Millisecond) // lands inside the first poll sleep
+			cancel()
+		}()
+
+		mh := multi(t, srv.URL)
+		_, _, err := mh.GetSSZ(
+			ctx,
+			"/x",
+			WithRace(),
+			WithSSZAccept(func([]byte, http.Header) bool { return false }),
+			WithDeadline(time.Now().Add(time.Hour)),
+			WithRepoll(UntilAccepted),
+		)
+		require.NotNil(t, err)
+		assert.Equal(t, true, errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusNoContent}),
+			"node status must survive, got: "+err.Error())
+		assert.Equal(t, true, errors.Is(err, context.Canceled),
+			"cancellation must survive, got: "+err.Error())
+	})
 }
