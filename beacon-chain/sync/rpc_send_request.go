@@ -896,14 +896,14 @@ func SendExecutionPayloadEnvelopesByRootRequest(
 			return nil, err
 		}
 		if i == max {
-			return nil, errors.New("peer returned more execution payload envelopes than requested")
+			return nil, errors.Wrap(ErrInvalidFetchedData, "peer returned more execution payload envelopes than requested")
 		}
 		// Validate that the returned envelope was actually requested and not a duplicate.
 		if envelope.Message != nil {
 			root := bytesutil.ToBytes32(envelope.Message.BeaconBlockRoot)
 			remaining, ok := pendingRoots[root]
 			if !ok || remaining <= 0 {
-				return nil, errors.Errorf("received unrequested or duplicate execution payload envelope for root %#x", root)
+				return nil, errors.Wrapf(ErrInvalidFetchedData, "received unrequested or duplicate execution payload envelope for root %#x", root)
 			}
 			pendingRoots[root] = remaining - 1
 		}

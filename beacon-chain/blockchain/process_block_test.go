@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -30,6 +31,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations/kv"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -197,50 +199,190 @@ func TestStore_OnBlockBatch_NotifyNewPayload(t *testing.T) {
 	require.NoError(t, service.onBlockBatch(ctx, blks, nil, &das.MockAvailabilityStore{}))
 }
 
-func TestGetBatchPrestate(t *testing.T) {
-	parentRoot, ancestorRoot := [32]byte{0xa2}, [32]byte{0xa1}
-	parentHash, ancestorHash := [32]byte{0xb2}, [32]byte{0xb1}
+type batchParentEngine struct {
+	mockExecution.EngineClient
+	calls int
+}
+
+func (e *batchParentEngine) NewPayload(ctx context.Context, payload interfaces.ExecutionData, hashes []common.Hash, parent *common.Hash, requests enginev1.ExecutionRequester) ([]byte, error) {
+	e.calls++
+	return e.EngineClient.NewPayload(ctx, payload, hashes, parent, requests)
+}
+
+func TestPrepareBatchPrestate(t *testing.T) {
 	for _, test := range []struct {
-		name         string
-		envelopeRoot [32]byte
-		payloadHash  [32]byte
-		slot         primitives.Slot
-		wantApplied  bool
+		name                 string
+		supplyParentEnvelope bool
+		parentEnvelopeStored bool
+		buildsOnEmptyParent  bool
+		columns              bool
+		storedColumns        bool
+		parentHasFullNode    bool
+		wantEngineCalls      int
+		mutate               func(*ethpb.BeaconStateGloas, *ethpb.SignedExecutionPayloadEnvelope)
+		wantErr              string
 	}{
-		{"ancestor envelope with matching execution hash is not applied", ancestorRoot, ancestorHash, 31, false},
-		{"parent envelope with matching execution hash is applied", parentRoot, parentHash, 32, true},
+		{name: "child building on FULL parent requires parent envelope", wantErr: "missing required parent execution payload envelope"},
+		{name: "full forkchoice node alone is insufficient", parentHasFullNode: true, wantErr: "missing required parent execution payload envelope"},
+		{name: "child building on FULL parent rejects ancestor with matching payload hash", supplyParentEnvelope: true, mutate: func(_ *ethpb.BeaconStateGloas, env *ethpb.SignedExecutionPayloadEnvelope) {
+			env.Message.BeaconBlockRoot = bytesutil.PadTo([]byte{0xff}, 32)
+		}, wantErr: "missing required parent execution payload envelope"},
+		{name: "child building on FULL parent rejects wrong execution hash", supplyParentEnvelope: true, mutate: func(_ *ethpb.BeaconStateGloas, env *ethpb.SignedExecutionPayloadEnvelope) {
+			env.Message.Payload.BlockHash = bytesutil.PadTo([]byte{0xff}, 32)
+		}, wantErr: "missing required parent execution payload envelope"},
+		{name: "valid child building on FULL parent", supplyParentEnvelope: true, wantEngineCalls: 1},
+		{name: "parent state advanced through empty slots", supplyParentEnvelope: true, columns: true, storedColumns: true, wantEngineCalls: 1, mutate: func(st *ethpb.BeaconStateGloas, _ *ethpb.SignedExecutionPayloadEnvelope) { st.Slot++ }},
+		{name: "child builds on parent with reusable payload", parentEnvelopeStored: true, parentHasFullNode: true},
+		{name: "stored envelope without FULL node is insufficient", parentEnvelopeStored: true, wantErr: "missing required parent execution payload envelope"},
+		{name: "stored envelope with FULL node supplied again", supplyParentEnvelope: true, parentEnvelopeStored: true, parentHasFullNode: true},
+		{name: "child building on EMPTY parent needs no parent payload", buildsOnEmptyParent: true, columns: true},
+		{name: "child building on EMPTY parent does not apply ancestor envelope", buildsOnEmptyParent: true, supplyParentEnvelope: true, mutate: func(_ *ethpb.BeaconStateGloas, env *ethpb.SignedExecutionPayloadEnvelope) {
+			env.Message.BeaconBlockRoot = bytesutil.PadTo([]byte{0xff}, 32)
+			env.Message.Payload.BlockHash = make([]byte, 32)
+		}},
+		{name: "child building on FULL parent requires columns", supplyParentEnvelope: true, columns: true, wantErr: "data columns unavailable for parent execution payload envelope"},
+		{name: "reusable parent payload still requires columns", parentEnvelopeStored: true, parentHasFullNode: true, columns: true, wantErr: "data columns unavailable for parent execution payload envelope"},
+		{name: "child building on FULL parent with stored columns", supplyParentEnvelope: true, columns: true, storedColumns: true, wantEngineCalls: 1},
+		{name: "parent envelope must match committed bid", supplyParentEnvelope: true, mutate: func(st *ethpb.BeaconStateGloas, _ *ethpb.SignedExecutionPayloadEnvelope) {
+			st.LatestExecutionPayloadBid.GasLimit++
+		}, wantErr: "committed bid gas limit does not match payload gas limit"},
+		{name: "parent envelope must match parent beacon root", supplyParentEnvelope: true, mutate: func(st *ethpb.BeaconStateGloas, _ *ethpb.SignedExecutionPayloadEnvelope) {
+			st.LatestBlockHeader.ParentRoot = make([]byte, 32)
+		}, wantErr: "envelope parent beacon block root does not match"},
+		{name: "parent envelope signature must verify", supplyParentEnvelope: true, mutate: func(_ *ethpb.BeaconStateGloas, env *ethpb.SignedExecutionPayloadEnvelope) {
+			env.Signature = make([]byte, 96)
+		}, wantErr: "signature verification failed"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			service, tr := minimalTestService(t, WithExecutionEngineCaller(&mockExecution.EngineClient{}))
-			parentState, err := util.NewBeaconStateGloas(func(st *ethpb.BeaconStateGloas) error {
-				st.Slot = 32
-				st.LatestBlockHash = ancestorHash[:]
-				st.LatestExecutionPayloadBid.BlockHash = parentHash[:]
-				return nil
-			})
+			engine := &batchParentEngine{}
+			service, tr := minimalTestService(t, WithExecutionEngineCaller(engine))
+			parentHeader := &ethpb.BeaconBlockHeader{Slot: 5, ParentRoot: make([]byte, 32), StateRoot: make([]byte, 32), BodyRoot: make([]byte, 32)}
+			parentRoot, err := parentHeader.HashTreeRoot()
 			require.NoError(t, err)
-			require.NoError(t, tr.db.SaveState(tr.ctx, parentState, parentRoot))
+			base, parentBlock, protoEnvelope := gloasEnvelopeFixture(t, parentRoot)
+			base.LatestExecutionPayloadBid.Slot = base.Slot
+			if test.columns {
+				base.LatestExecutionPayloadBid.BlobKzgCommitments = [][]byte{make([]byte, 48)}
+			}
+			if test.mutate != nil {
+				test.mutate(base, protoEnvelope)
+			}
+			parentState, err := state_native.InitializeFromProtoGloas(base)
+			require.NoError(t, err)
+			require.NoError(t, tr.sg.SaveState(tr.ctx, parentRoot, parentState))
+			require.NoError(t, tr.db.SaveStateSummary(tr.ctx, &ethpb.StateSummary{Root: parentRoot[:], Slot: base.Slot}))
+			parent, err := consensusblocks.NewSignedBeaconBlock(parentBlock)
+			require.NoError(t, err)
+			roParent, err := consensusblocks.NewROBlockWithRoot(parent, parentRoot)
+			require.NoError(t, err)
+			require.NoError(t, service.InsertNode(tr.ctx, parentState, roParent))
+			require.Equal(t, false, service.HasFullNode(parentRoot))
+			if test.parentHasFullNode {
+				service.cfg.ForkChoiceStore.MarkFullNode(parentRoot, 0)
+			}
+			if test.parentEnvelopeStored {
+				require.NoError(t, tr.db.SaveExecutionPayloadEnvelope(tr.ctx, protoEnvelope))
+			}
+			if test.storedColumns {
+				columnParams := make([]util.DataColumnParam, peerdas.MinimumColumnCountToReconstruct())
+				for i := range columnParams {
+					columnParams[i] = util.DataColumnParam{Index: uint64(i), Slot: parentHeader.Slot}
+				}
+				_, columns := util.CreateTestVerifiedRoDataColumnSidecars(t, columnParams)
+				require.NoError(t, service.dataColumnStorage.Save(columns))
+			}
 
 			child := util.NewBeaconBlockGloas()
-			child.Block.Slot = 33
+			child.Block.Slot = base.Slot + 3
 			child.Block.ParentRoot = parentRoot[:]
-			child.Block.Body.SignedExecutionPayloadBid.Message.ParentBlockHash = test.payloadHash[:]
+			child.Block.Body.SignedExecutionPayloadBid.Message.ParentBlockHash = base.LatestExecutionPayloadBid.BlockHash
+			if test.buildsOnEmptyParent {
+				child.Block.Body.SignedExecutionPayloadBid.Message.ParentBlockHash = base.LatestBlockHash
+			}
 			childBlock, err := consensusblocks.NewSignedBeaconBlock(child)
 			require.NoError(t, err)
 			roChild, err := consensusblocks.NewROBlock(childBlock)
 			require.NoError(t, err)
-			protoEnvelope := testSignedEnvelope(t, test.envelopeRoot, test.slot, test.payloadHash[:])
-			protoEnvelope.Message.Payload.SlotNumber = test.slot
-			protoEnvelope.Message.Payload.ParentHash = ancestorHash[:]
-			envelope, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(protoEnvelope)
+			var envelopes []interfaces.ROSignedExecutionPayloadEnvelope
+			if test.supplyParentEnvelope {
+				envelope, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(protoEnvelope)
+				require.NoError(t, err)
+				envelopes = append(envelopes, envelope)
+			}
+			if test.wantErr != "" {
+				err := service.ReceiveBlockBatch(tr.ctx, []consensusblocks.ROBlock{roChild}, envelopes, &das.MockAvailabilityStore{})
+				require.ErrorContains(t, test.wantErr, err)
+				require.Equal(t, 0, engine.calls)
+				require.Equal(t, test.parentHasFullNode, service.HasFullNode(parentRoot))
+				require.Equal(t, false, service.HasNode(roChild.Root()))
+				return
+			}
+			wantState := parentState.Copy().ToProto()
+			got, parentEnvelopeSupplied, err := service.prepareBatchPrestate(tr.ctx, roChild, envelopes)
 			require.NoError(t, err)
+			require.Equal(t, test.supplyParentEnvelope && !test.buildsOnEmptyParent, parentEnvelopeSupplied)
+			require.DeepEqual(t, wantState, got.ToProto())
+			require.Equal(t, test.wantEngineCalls, engine.calls)
+		})
+	}
 
-			got, applied, err := service.getBatchPrestate(tr.ctx, roChild, []interfaces.ROSignedExecutionPayloadEnvelope{envelope})
+	for _, test := range []struct {
+		name    string
+		version int
+		slot    primitives.Slot
+	}{
+		{name: "pre-Gloas parent", version: version.Fulu, slot: 31},
+		{name: "Gloas genesis", version: version.Gloas, slot: 0},
+		{name: "Gloas upgrade with nonzero synthetic parent bid slot", version: version.Gloas, slot: 32},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			service, tr := minimalTestService(t)
+			parentRoot := [32]byte{0xf1}
+			parentState, err := util.NewBeaconStateFulu()
 			require.NoError(t, err)
-			require.Equal(t, test.wantApplied, applied)
+			if test.version == version.Gloas {
+				if test.slot == 0 {
+					parentState, err = util.NewBeaconStateGloas()
+					require.NoError(t, err)
+				} else {
+					parentState, _ = util.DeterministicGenesisStateFulu(t, 64)
+					require.NoError(t, parentState.SetSlot(test.slot))
+					header := parentState.LatestBlockHeader()
+					header.Slot = test.slot - 1
+					require.NoError(t, parentState.SetLatestBlockHeader(header))
+					payload, err := consensusblocks.WrappedExecutionPayloadHeaderDeneb(&enginev1.ExecutionPayloadHeaderDeneb{
+						BlockHash:  bytesutil.PadTo([]byte{0x01}, 32),
+						ParentHash: make([]byte, 32),
+						PrevRandao: make([]byte, 32),
+					})
+					require.NoError(t, err)
+					require.NoError(t, parentState.SetLatestExecutionPayloadHeader(payload))
+					parentState, err = gloas.UpgradeToGloas(parentState)
+					require.NoError(t, err)
+				}
+			}
+			require.NoError(t, parentState.SetSlot(test.slot))
+			require.NoError(t, tr.db.SaveState(tr.ctx, parentState, parentRoot))
+			child := util.NewBeaconBlockGloas()
+			child.Block.Slot = parentState.Slot() + 1
+			child.Block.ParentRoot = parentRoot[:]
+			if test.version == version.Gloas {
+				bid, err := parentState.LatestExecutionPayloadBid()
+				require.NoError(t, err)
+				hash := bid.BlockHash()
+				child.Block.Body.SignedExecutionPayloadBid.Message.ParentBlockHash = hash[:]
+			}
+			block, err := consensusblocks.NewSignedBeaconBlock(child)
+			require.NoError(t, err)
+			roChild, err := consensusblocks.NewROBlock(block)
+			require.NoError(t, err)
+			got, parentEnvelopeSupplied, err := service.prepareBatchPrestate(tr.ctx, roChild, nil)
+			require.NoError(t, err)
+			require.Equal(t, false, parentEnvelopeSupplied)
 			require.DeepEqual(t, parentState.ToProto(), got.ToProto())
 		})
 	}
+
 }
 
 func TestCachedPreState_CanGetFromStateSummary(t *testing.T) {
