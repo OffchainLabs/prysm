@@ -3689,7 +3689,6 @@ func TestServer_ProposeBeaconBlock_PostFuluBlindedBlock(t *testing.T) {
 
 		mockBuilder := &builderTest.MockBuilderService{
 			HasConfigured:                 true,
-			Cfg:                           &builderTest.Config{BeaconDB: db},
 			ErrSubmitBlindedBlockPostFulu: nil, // Success case
 		}
 
@@ -3738,7 +3737,6 @@ func TestServer_ProposeBeaconBlock_PostFuluBlindedBlock(t *testing.T) {
 
 		mockBuilder := &builderTest.MockBuilderService{
 			HasConfigured:                 true,
-			Cfg:                           &builderTest.Config{BeaconDB: db},
 			ErrSubmitBlindedBlockPostFulu: errors.New("post-Fulu builder submission failed"),
 		}
 
@@ -3785,7 +3783,6 @@ func TestServer_ProposeBeaconBlock_PostFuluBlindedBlock(t *testing.T) {
 
 		mockBuilder := &builderTest.MockBuilderService{
 			HasConfigured: true,
-			Cfg:           &builderTest.Config{BeaconDB: db},
 			PayloadDeneb:  &enginev1.ExecutionPayloadDeneb{},
 			BlobBundle:    &enginev1.BlobsBundle{},
 		}
@@ -3835,7 +3832,6 @@ func TestServer_ProposeBeaconBlock_PostFuluBlindedBlock(t *testing.T) {
 
 		mockBuilder := &builderTest.MockBuilderService{
 			HasConfigured:                 true,
-			Cfg:                           &builderTest.Config{BeaconDB: db},
 			ErrSubmitBlindedBlockPostFulu: nil,
 		}
 
@@ -3929,7 +3925,6 @@ func TestServer_ProposeBeaconBlock_PostFuluBlindedBlock(t *testing.T) {
 
 		mockBuilder := &builderTest.MockBuilderService{
 			HasConfigured:         true,
-			Cfg:                   &builderTest.Config{BeaconDB: db},
 			PayloadDeneb:          &enginev1.ExecutionPayloadDeneb{},
 			ErrSubmitBlindedBlock: builderapi.ErrBadGateway,
 		}

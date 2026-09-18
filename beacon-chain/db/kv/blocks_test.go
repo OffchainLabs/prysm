@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"testing"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -1364,78 +1363,28 @@ func TestStore_FeeRecipientByValidatorID(t *testing.T) {
 	want := errors.Wrap(ErrNotFoundFeeRecipient, "validator id 3")
 	require.Equal(t, want.Error(), err.Error())
 
-	regs := []*ethpb.ValidatorRegistrationV1{
-		{
-			FeeRecipient: bytesutil.PadTo([]byte("a"), 20),
-			GasLimit:     1,
-			Timestamp:    2,
-			Pubkey:       bytesutil.PadTo([]byte("b"), 48),
-		}}
-	require.NoError(t, db.SaveRegistrationsByValidatorIDs(ctx, []primitives.ValidatorIndex{3}, regs))
+	// Registrations are no longer written by Prysm, but legacy entries must still resolve a fee
+	// recipient. Write straight to the registration bucket, standing in for a node that ran with
+	// the removed --disable-registration-cache flag.
+	// TODO: neither bucket is written by Prysm anymore (PrepareBeaconProposer now populates
+	// ProposerPreferencesCache), so FeeRecipientByValidatorID and SaveFeeRecipientsByValidatorIDs
+	// should be removed along with this test once GetFeeRecipientByPubKey is dropped.
+	enc, err := encode(ctx, &ethpb.ValidatorRegistrationV1{
+		FeeRecipient: bytesutil.PadTo([]byte("a"), 20),
+		GasLimit:     1,
+		Timestamp:    2,
+		Pubkey:       bytesutil.PadTo([]byte("b"), 48),
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.db.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket(registrationBucket).Put(bytesutil.Uint64ToBytesBigEndian(3), enc)
+	}))
 	f, err = db.FeeRecipientByValidatorID(ctx, 3)
 	require.NoError(t, err)
 	require.Equal(t, common.Address{'a'}, f)
 
 	_, err = db.FeeRecipientByValidatorID(ctx, 4)
 	want = errors.Wrap(ErrNotFoundFeeRecipient, "validator id 4")
-	require.Equal(t, want.Error(), err.Error())
-}
-
-func TestStore_RegistrationsByValidatorID(t *testing.T) {
-	db := setupDB(t)
-	ctx := t.Context()
-	ids := []primitives.ValidatorIndex{0, 0, 0}
-	regs := []*ethpb.ValidatorRegistrationV1{{}, {}, {}, {}}
-	require.ErrorContains(t, "ids and registrations must be the same length", db.SaveRegistrationsByValidatorIDs(ctx, ids, regs))
-	timestamp := time.Now().Unix()
-	ids = []primitives.ValidatorIndex{0, 1, 2}
-	regs = []*ethpb.ValidatorRegistrationV1{
-		{
-			FeeRecipient: bytesutil.PadTo([]byte("a"), 20),
-			GasLimit:     1,
-			Timestamp:    uint64(timestamp),
-			Pubkey:       bytesutil.PadTo([]byte("b"), 48),
-		},
-		{
-			FeeRecipient: bytesutil.PadTo([]byte("c"), 20),
-			GasLimit:     3,
-			Timestamp:    uint64(timestamp),
-			Pubkey:       bytesutil.PadTo([]byte("d"), 48),
-		},
-		{
-			FeeRecipient: bytesutil.PadTo([]byte("e"), 20),
-			GasLimit:     5,
-			Timestamp:    uint64(timestamp),
-			Pubkey:       bytesutil.PadTo([]byte("f"), 48),
-		},
-	}
-	require.NoError(t, db.SaveRegistrationsByValidatorIDs(ctx, ids, regs))
-	f, err := db.RegistrationByValidatorID(ctx, 0)
-	require.NoError(t, err)
-	require.DeepEqual(t, &ethpb.ValidatorRegistrationV1{
-		FeeRecipient: bytesutil.PadTo([]byte("a"), 20),
-		GasLimit:     1,
-		Timestamp:    uint64(timestamp),
-		Pubkey:       bytesutil.PadTo([]byte("b"), 48),
-	}, f)
-	f, err = db.RegistrationByValidatorID(ctx, 1)
-	require.NoError(t, err)
-	require.DeepEqual(t, &ethpb.ValidatorRegistrationV1{
-		FeeRecipient: bytesutil.PadTo([]byte("c"), 20),
-		GasLimit:     3,
-		Timestamp:    uint64(timestamp),
-		Pubkey:       bytesutil.PadTo([]byte("d"), 48),
-	}, f)
-	f, err = db.RegistrationByValidatorID(ctx, 2)
-	require.NoError(t, err)
-	require.DeepEqual(t, &ethpb.ValidatorRegistrationV1{
-		FeeRecipient: bytesutil.PadTo([]byte("e"), 20),
-		GasLimit:     5,
-		Timestamp:    uint64(timestamp),
-		Pubkey:       bytesutil.PadTo([]byte("f"), 48),
-	}, f)
-	_, err = db.RegistrationByValidatorID(ctx, 3)
-	want := errors.Wrap(ErrNotFoundFeeRecipient, "validator id 3")
 	require.Equal(t, want.Error(), err.Error())
 }
 

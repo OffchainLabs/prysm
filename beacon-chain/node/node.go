@@ -1151,7 +1151,7 @@ func (b *BeaconNode) registerBuilderService() error {
 	}
 
 	opts := b.serviceFlagOpts.builderOpts
-	opts = append(opts, builder.WithHeadFetcher(chainService), builder.WithDatabase(b.db), builder.WithRegistrationCache())
+	opts = append(opts, builder.WithHeadFetcher(chainService))
 
 	svc, err := builder.NewService(b.ctx, opts...)
 	if err != nil {

@@ -903,48 +903,6 @@ func (s *Store) SaveFeeRecipientsByValidatorIDs(ctx context.Context, ids []primi
 	})
 }
 
-// RegistrationByValidatorID returns the validator registration object for a validator id.
-// `ErrNotFoundFeeRecipient` is returned if the validator id is not found.
-func (s *Store) RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error) {
-	ctx, span := trace.StartSpan(ctx, "BeaconDB.RegistrationByValidatorID")
-	defer span.End()
-	reg := &ethpb.ValidatorRegistrationV1{}
-	err := s.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(registrationBucket)
-		enc := bkt.Get(bytesutil.Uint64ToBytesBigEndian(uint64(id)))
-		if enc == nil {
-			return errors.Wrapf(ErrNotFoundFeeRecipient, "validator id %d", id)
-		}
-		return decode(ctx, enc, reg)
-	})
-	return reg, err
-}
-
-// SaveRegistrationsByValidatorIDs saves the validator registrations for validator ids.
-// Error is returned if `ids` and `registrations` are not the same length.
-func (s *Store) SaveRegistrationsByValidatorIDs(ctx context.Context, ids []primitives.ValidatorIndex, regs []*ethpb.ValidatorRegistrationV1) error {
-	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveRegistrationsByValidatorIDs")
-	defer span.End()
-
-	if len(ids) != len(regs) {
-		return errors.New("ids and registrations must be the same length")
-	}
-
-	return s.db.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(registrationBucket)
-		for i, id := range ids {
-			enc, err := encode(ctx, regs[i])
-			if err != nil {
-				return err
-			}
-			if err := bkt.Put(bytesutil.Uint64ToBytesBigEndian(uint64(id)), enc); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-}
-
 // EarliestStoredSlot returns the earliest slot in the database.
 func (s *Store) EarliestSlot(ctx context.Context) (primitives.Slot, error) {
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch

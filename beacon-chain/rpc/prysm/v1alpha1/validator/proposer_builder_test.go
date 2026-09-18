@@ -9,7 +9,7 @@ import (
 	blockchainTest "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	testing2 "github.com/OffchainLabs/prysm/v7/beacon-chain/builder/testing"
-	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
@@ -82,20 +82,17 @@ func TestServer_validatorRegistered(t *testing.T) {
 	ctx := t.Context()
 
 	reg, err := proposerServer.validatorRegistered(ctx, 0)
-	require.ErrorContains(t, "nil beacon db", err)
-	require.Equal(t, false, reg)
-	db := dbTest.SetupDB(t)
-	realBuilder, err := builder.NewService(t.Context(), builder.WithDatabase(db))
-	require.NoError(t, err)
-	proposerServer.BlockBuilder = realBuilder
-	reg, err = proposerServer.validatorRegistered(ctx, 0)
 	require.NoError(t, err)
 	require.Equal(t, false, reg)
 
 	f := bytesutil.PadTo([]byte{}, fieldparams.FeeRecipientLength)
 	p := bytesutil.PadTo([]byte{}, fieldparams.BLSPubkeyLength)
-	require.NoError(t, db.SaveRegistrationsByValidatorIDs(ctx, []primitives.ValidatorIndex{0, 1},
-		[]*ethpb.ValidatorRegistrationV1{{FeeRecipient: f, Timestamp: uint64(time.Now().Unix()), Pubkey: p}, {FeeRecipient: f, Timestamp: uint64(time.Now().Unix()), Pubkey: p}}))
+	regCache := cache.NewRegistrationCache()
+	regCache.UpdateIndexToRegisteredMap(ctx, map[primitives.ValidatorIndex]*ethpb.ValidatorRegistrationV1{
+		0: {FeeRecipient: f, Timestamp: uint64(time.Now().Unix()), Pubkey: p},
+		1: {FeeRecipient: f, Timestamp: uint64(time.Now().Unix()), Pubkey: p},
+	})
+	proposerServer.BlockBuilder = &testing2.MockBuilderService{RegistrationCache: regCache}
 
 	reg, err = proposerServer.validatorRegistered(ctx, 0)
 	require.NoError(t, err)
@@ -103,7 +100,9 @@ func TestServer_validatorRegistered(t *testing.T) {
 	reg, err = proposerServer.validatorRegistered(ctx, 1)
 	require.NoError(t, err)
 	require.Equal(t, true, reg)
-
+	reg, err = proposerServer.validatorRegistered(ctx, 2)
+	require.NoError(t, err)
+	require.Equal(t, false, reg)
 }
 
 func TestServer_canUseBuilder(t *testing.T) {
@@ -123,11 +122,10 @@ func TestServer_canUseBuilder(t *testing.T) {
 	reg, err = proposerServer.canUseBuilder(ctx, params.BeaconConfig().MaxBuilderConsecutiveMissedSlots+1, 0)
 	require.NoError(t, err)
 	require.Equal(t, false, reg)
-	db := dbTest.SetupDB(t)
-
+	regCache := cache.NewRegistrationCache()
 	proposerServer.BlockBuilder = &testing2.MockBuilderService{
-		HasConfigured: true,
-		Cfg:           &testing2.Config{BeaconDB: db},
+		HasConfigured:     true,
+		RegistrationCache: regCache,
 	}
 
 	reg, err = proposerServer.canUseBuilder(ctx, 1, 0)
@@ -136,8 +134,9 @@ func TestServer_canUseBuilder(t *testing.T) {
 
 	f := bytesutil.PadTo([]byte{}, fieldparams.FeeRecipientLength)
 	p := bytesutil.PadTo([]byte{}, fieldparams.BLSPubkeyLength)
-	require.NoError(t, db.SaveRegistrationsByValidatorIDs(ctx, []primitives.ValidatorIndex{0},
-		[]*ethpb.ValidatorRegistrationV1{{FeeRecipient: f, Timestamp: uint64(time.Now().Unix()), Pubkey: p}}))
+	regCache.UpdateIndexToRegisteredMap(ctx, map[primitives.ValidatorIndex]*ethpb.ValidatorRegistrationV1{
+		0: {FeeRecipient: f, Timestamp: uint64(time.Now().Unix()), Pubkey: p},
+	})
 
 	reg, err = proposerServer.canUseBuilder(ctx, params.BeaconConfig().MaxBuilderConsecutiveMissedSlots-1, 0)
 	require.NoError(t, err)
