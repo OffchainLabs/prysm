@@ -211,7 +211,8 @@ type Service struct {
 	pendingPayloadEnvelopes              map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope
 	pendingEnvelopeLock                  sync.RWMutex
 	selfBuildSigFailures                 int
-	selfBuildSigFailSlot                 primitives.Slot
+	selfBuildSlot                        primitives.Slot
+	selfBuildSeenProposers               map[primitives.ValidatorIndex]struct{}
 	pendingPayloadAttestations           map[[32]byte][]*ethpb.PayloadAttestationMessage
 	pendingPayloadAttestationLock        sync.RWMutex
 }
@@ -233,6 +234,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		payloadAttestationCache:    &cache.PayloadAttestationCache{},
 		proposerPreferencesCache:   cache.NewProposerPreferencesCache(),
 		pendingPayloadEnvelopes:    make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
+		selfBuildSeenProposers:     make(map[primitives.ValidatorIndex]struct{}),
 		pendingPayloadAttestations: make(map[[32]byte][]*ethpb.PayloadAttestationMessage),
 	}
 
