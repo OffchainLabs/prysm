@@ -86,6 +86,9 @@ def _ssz_methodical_impl(ctx):
         outputs = [ctx.outputs.out],
         command = """
         {cmd} {args}
+        if ! grep -q 'binary\\.' {out}; then
+          grep -v '^\tbinary "encoding/binary"$' {out} > {out}.tmp && mv {out}.tmp {out}
+        fi
         """.format(
             out_base = out_base,
             json_list = all_pkg_list.path,

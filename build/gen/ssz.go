@@ -84,6 +84,9 @@ func genMethodical(t methodicalTarget, disableProgressive bool) error {
 		return fmt.Errorf("minimal: %w", err)
 	}
 
+	mainnet = stripUnusedBinaryImport(mainnet)
+	minimal = stripUnusedBinaryImport(minimal)
+
 	if err := os.WriteFile(out, []byte(mainnet), 0o600); err != nil {
 		return fmt.Errorf("writeFile: %w", err)
 	}
@@ -141,4 +144,15 @@ func methodicalOne(t methodicalTarget, disableProgressive bool, buildTags []stri
 	}
 
 	return string(data), nil
+}
+
+// methodical emits the encoding/binary import unconditionally, but only uses it
+// for the offsets of variable-length fields, so a config whose types are all
+// fixed-size yields a file that does not compile. The Bazel ssz_methodical rule
+// applies the same strip so both paths stay byte-identical.
+func stripUnusedBinaryImport(src string) string {
+	if strings.Contains(src, "binary.") {
+		return src
+	}
+	return strings.Replace(src, "\tbinary \"encoding/binary\"\n", "", 1)
 }
