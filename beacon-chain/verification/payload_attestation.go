@@ -12,6 +12,7 @@ import (
 	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
@@ -121,7 +122,8 @@ func (v *PayloadAttMsgVerifier) VerifyValidatorInPTC(ctx context.Context, st sta
 func (v *PayloadAttMsgVerifier) VerifySignature(st state.ReadOnlyBeaconState) (err error) {
 	defer v.record(RequireSignatureValid, &err)
 
-	err = validatePayloadAttestationMessageSignature(st, v.pa)
+	sig := v.pa.Signature()
+	err = verifyPayloadAttestationMessageSignature(st, v.pa, sig[:])
 	if err != nil {
 		return err
 	}
@@ -142,8 +144,16 @@ func (v *PayloadAttMsgVerifier) SatisfyRequirement(req Requirement) {
 	v.record(req, nil)
 }
 
-// ValidatePayloadAttestationMessageSignature verifies the signature of a payload attestation message.
-func validatePayloadAttestationMessageSignature(st state.ReadOnlyBeaconState, payloadAtt payloadattestation.ROMessage) error {
+// VerifyPayloadAttestationMessageSignature verifies the signature of a raw payload attestation message.
+func VerifyPayloadAttestationMessageSignature(st state.ReadOnlyBeaconState, msg *eth.PayloadAttestationMessage) error {
+	payloadAtt, err := payloadattestation.NewReadOnly(msg)
+	if err != nil {
+		return err
+	}
+	return verifyPayloadAttestationMessageSignature(st, payloadAtt, msg.Signature)
+}
+
+func verifyPayloadAttestationMessageSignature(st state.ReadOnlyBeaconState, payloadAtt payloadattestation.ROMessage, signature []byte) error {
 	val, err := st.ValidatorAtIndex(payloadAtt.ValidatorIndex())
 	if err != nil {
 		return fmt.Errorf("validator %d: %w", payloadAtt.ValidatorIndex(), err)
@@ -154,8 +164,7 @@ func validatePayloadAttestationMessageSignature(st state.ReadOnlyBeaconState, pa
 		return fmt.Errorf("public key: %w", err)
 	}
 
-	s := payloadAtt.Signature()
-	sig, err := bls.SignatureFromBytes(s[:])
+	sig, err := bls.SignatureFromBytes(signature)
 	if err != nil {
 		return fmt.Errorf("signature bytes: %w", err)
 	}
