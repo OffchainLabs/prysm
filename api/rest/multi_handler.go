@@ -418,10 +418,23 @@ func queryUntilAccepted[T any](
 			fallback = &val
 		}
 
-		// The deadline interrupts the final round, leaving it with only cancellation
-		// errors. Keep the last round that carried the nodes' own answers.
+		// A round the deadline cuts short reports only cancellation. Keep the last
+		// round that carried the nodes' own answers.
 		if hasNodeFailure(errs) {
 			reported = errs
+		}
+
+		// finish returns the best-effort fallback, else the nodes' last own answers.
+		finish := func() (T, bool, error) {
+			if fallback != nil {
+				return *fallback, false, nil
+			}
+
+			if reported == nil {
+				reported = errs
+			}
+
+			return zero, false, errors.Join(reported...)
 		}
 
 		// Stop after this round unless re-polling is enabled and there is still
@@ -433,15 +446,7 @@ func queryUntilAccepted[T any](
 		}
 
 		if repollExhausted {
-			if fallback != nil {
-				return *fallback, false, nil
-			}
-
-			if reported == nil {
-				reported = errs
-			}
-
-			return zero, false, errors.Join(reported...)
+			return finish()
 		}
 
 		// Wait for the poll interval to elapse.
@@ -457,6 +462,12 @@ func queryUntilAccepted[T any](
 
 			return zero, false, ctx.Err()
 		case <-time.After(cfg.pollInterval):
+		}
+
+		// Do not start a round the deadline would cut short: the completed rounds
+		// already hold the nodes' answers.
+		if !time.Now().Before(cfg.deadline) {
+			return finish()
 		}
 	}
 }
