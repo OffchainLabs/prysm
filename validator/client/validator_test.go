@@ -785,7 +785,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 						att := createAttestation(10, 12)
 						rt, err := att.Data.HashTreeRoot()
 						assert.NoError(t, err)
-						assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt, att))
+						assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt[:], att))
 						signedRoot := rt[:]
 						if isSlashingProtectionMinimal {
 							signedRoot = nil
@@ -820,7 +820,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 						att := createAttestation(10, 12)
 						rt, err := att.Data.HashTreeRoot()
 						assert.NoError(t, err)
-						assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt, att))
+						assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt[:], att))
 						if i%3 == 0 {
 							resp.Responses = append(resp.Responses, &ethpb.DoppelGangerResponse_ValidatorResponse{PublicKey: pkey[:], DuplicateExists: true})
 						}
@@ -861,7 +861,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 						att := createAttestation(10, 12)
 						rt, err := att.Data.HashTreeRoot()
 						assert.NoError(t, err)
-						assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt, att))
+						assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt[:], att))
 						if i%9 == 0 {
 							resp.Responses = append(resp.Responses, &ethpb.DoppelGangerResponse_ValidatorResponse{PublicKey: pkey[:], DuplicateExists: true})
 						}
@@ -902,7 +902,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 							att := createAttestation(10+primitives.Epoch(j), 12+primitives.Epoch(j))
 							rt, err := att.Data.HashTreeRoot()
 							assert.NoError(t, err)
-							assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt, att))
+							assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt[:], att))
 
 							signedRoot := rt[:]
 							if isSlashingProtectionMinimal {
@@ -982,13 +982,13 @@ func TestValidatorAttestationsAreOrdered(t *testing.T) {
 			att := createAttestation(10, 14)
 			rt, err := att.Data.HashTreeRoot()
 			assert.NoError(t, err)
-			assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), k, rt, att))
+			assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), k, rt[:], att))
 
 			att = createAttestation(6, 8)
 			rt, err = att.Data.HashTreeRoot()
 			assert.NoError(t, err)
 
-			err = db.SaveAttestationForPubKey(t.Context(), k, rt, att)
+			err = db.SaveAttestationForPubKey(t.Context(), k, rt[:], att)
 			if isSlashingProtectionMinimal {
 				assert.ErrorContains(t, "could not sign attestation with source lower than recorded source epoch", err)
 			} else {
@@ -999,7 +999,7 @@ func TestValidatorAttestationsAreOrdered(t *testing.T) {
 			rt, err = att.Data.HashTreeRoot()
 			assert.NoError(t, err)
 
-			err = db.SaveAttestationForPubKey(t.Context(), k, rt, att)
+			err = db.SaveAttestationForPubKey(t.Context(), k, rt[:], att)
 			if isSlashingProtectionMinimal {
 				assert.ErrorContains(t, "could not sign attestation with target lower than or equal to recorded target epoch", err)
 			} else {
@@ -1010,7 +1010,7 @@ func TestValidatorAttestationsAreOrdered(t *testing.T) {
 			rt, err = att.Data.HashTreeRoot()
 			assert.NoError(t, err)
 
-			err = db.SaveAttestationForPubKey(t.Context(), k, rt, att)
+			err = db.SaveAttestationForPubKey(t.Context(), k, rt[:], att)
 			if isSlashingProtectionMinimal {
 				assert.ErrorContains(t, "could not sign attestation with source lower than recorded source epoch", err)
 			} else {

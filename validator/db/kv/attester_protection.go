@@ -200,7 +200,7 @@ func (s *Store) SlashableAttestationCheck(
 		return errors.Wrap(err, failedAttLocalProtectionErr)
 	}
 
-	if err := s.SaveAttestationForPubKey(ctx, pubKey, signingRoot32, indexedAtt); err != nil {
+	if err := s.SaveAttestationForPubKey(ctx, pubKey, signingRoot32[:], indexedAtt); err != nil {
 		return errors.Wrap(err, "could not save attestation history for validator public key")
 	}
 
@@ -375,7 +375,7 @@ func (s *Store) SaveAttestationsForPubKey(
 // SaveAttestationForPubKey saves an attestation for a validator public
 // key for local validator slashing protection.
 func (s *Store) SaveAttestationForPubKey(
-	ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, signingRoot [fieldparams.RootLength]byte, att ethpb.IndexedAtt,
+	ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, signingRoot []byte, att ethpb.IndexedAtt,
 ) error {
 	ctx, span := trace.StartSpan(ctx, "Validator.SaveAttestationForPubKey")
 	defer span.End()
@@ -385,7 +385,7 @@ func (s *Store) SaveAttestationForPubKey(
 			PubKey:      pubKey,
 			Source:      att.GetData().Source.Epoch,
 			Target:      att.GetData().Target.Epoch,
-			SigningRoot: signingRoot[:],
+			SigningRoot: signingRoot,
 		},
 	}
 

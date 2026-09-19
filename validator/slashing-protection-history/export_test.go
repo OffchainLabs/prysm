@@ -50,11 +50,11 @@ func Test_getSignedAttestationsByPubKey(t *testing.T) {
 			lowestSourceEpoch := primitives.Epoch(0)
 			lowestTargetEpoch := primitives.Epoch(4)
 
-			require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], [32]byte{4}, createAttestation(
+			require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], []byte{4}, createAttestation(
 				lowestSourceEpoch,
 				lowestTargetEpoch,
 			)))
-			require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], [32]byte{5}, createAttestation(
+			require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], []byte{5}, createAttestation(
 				lowestSourceEpoch,
 				lowestTargetEpoch+1,
 			)))
@@ -111,11 +111,11 @@ func Test_getSignedAttestationsByPubKey(t *testing.T) {
 
 		// Next up, we simulate a DB affected by the bug where the next entry
 		// has a target epoch less than the previous one.
-		require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], [32]byte{4}, createAttestation(
+		require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], []byte{4}, createAttestation(
 			lowestSourceEpoch,
 			lowestTargetEpoch,
 		)))
-		require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], [32]byte{5}, createAttestation(
+		require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], []byte{5}, createAttestation(
 			1,
 			2,
 		)))
@@ -158,11 +158,11 @@ func Test_getSignedAttestationsByPubKey(t *testing.T) {
 
 		// Next up, we simulate a DB affected by the bug where the next entry
 		// has a target epoch less than the previous one.
-		require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], [32]byte{4}, createAttestation(
+		require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], []byte{4}, createAttestation(
 			lowestSourceEpoch,
 			lowestTargetEpoch,
 		)))
-		require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], [32]byte{5}, createAttestation(
+		require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], []byte{5}, createAttestation(
 			1,
 			2,
 		)))
