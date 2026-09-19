@@ -121,6 +121,11 @@ func genProto() error {
 		}
 
 		if bytes.Equal(mainData, minData) {
+			// A proto that stops differing by network leaves its old twin behind otherwise.
+			minTwin := strings.TrimSuffix(rel, ".pb.go") + ".minimal.pb.go"
+			if err := os.Remove(minTwin); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("remove stale twin %s: %w", minTwin, err)
+			}
 			return copyFile(path, rel)
 		}
 
