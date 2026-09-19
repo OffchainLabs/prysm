@@ -12,6 +12,8 @@ types:
   - name: "BuilderBidElectra"
   - name: "IndexedAttestationElectra"
   - name: "LightClientBootstrapElectra"
+  - name: "LightClientBootstrapDataElectra"
+  - name: "LightClientEpochDataElectra"
   - name: "LightClientUpdateElectra"
   - name: "LightClientFinalityUpdateElectra"
   - name: "PendingDeposit"

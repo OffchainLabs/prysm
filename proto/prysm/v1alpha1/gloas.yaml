@@ -56,6 +56,9 @@ types:
     progressive: {}
     fields:
       AttestingIndices: {type: "ProgressiveList"}
+  - name: "LightClientBlockDataGloas"
+  - name: "LightClientBootstrapDataGloas"
+  - name: "LightClientEpochDataGloas"
   - name: "PayloadAttestation"
     progressive: {}
   - name: "PayloadAttestationData"

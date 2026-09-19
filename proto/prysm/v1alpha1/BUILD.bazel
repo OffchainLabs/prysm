@@ -213,6 +213,7 @@ ssz_proto_files(
         "gloas.proto",
 	"gloas_builder_api.proto",
         "light_client.proto",
+        "light_client_backfill.proto",
         "partial_data_columns.proto",
         "sync_committee.proto",
         "withdrawals.proto",
@@ -244,5 +245,28 @@ go_test(
         "//testing/require:go_default_library",
         "//testing/util:go_default_library",
         "@com_github_google_gofuzz//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "light_client_backfill_test",
+    size = "small",
+    srcs = [
+        "light_client_backfill_proof_test.go",
+        "light_client_backfill_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = [
+        "//config/fieldparams:go_default_library",
+        "//consensus-types/blocks:go_default_library",
+        "//consensus-types/primitives:go_default_library",
+        "//encoding/ssz:go_default_library",
+        "//encoding/ssz/query:go_default_library",
+        "//proto/engine/v1:go_default_library",
+        "//testing/require:go_default_library",
+        "//testing/util:go_default_library",
+        "@com_github_prysmaticlabs_fastssz//:go_default_library",
+        "@org_golang_google_protobuf//proto:go_default_library",
+        "@org_golang_google_protobuf//reflect/protoreflect:go_default_library",
     ],
 )
