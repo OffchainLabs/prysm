@@ -928,11 +928,8 @@ func Test_filterSlashablePubKeysFromAttestations(t *testing.T) {
 				attestingHistory, err := transformSignedAttestations(pubKey, signedAtts)
 				require.NoError(t, err)
 				for _, att := range attestingHistory {
-					var signingRoot [32]byte
-					copy(signingRoot[:], att.SigningRoot)
-
 					indexedAtt := createAttestation(att.Source, att.Target)
-					err := validatorDB.SaveAttestationForPubKey(ctx, pubKey, signingRoot, indexedAtt)
+					err := validatorDB.SaveAttestationForPubKey(ctx, pubKey, att.SigningRoot, indexedAtt)
 					require.NoError(t, err)
 				}
 			}
