@@ -87,6 +87,9 @@ func (s *Service) Start() {
 
 func (s *Service) run() {
 	s.waitForChainInitialization()
+	if s.genesisTime.IsZero() {
+		return
+	}
 	s.waitForSync(s.genesisTime)
 
 	log.Info("Completed chain sync, starting slashing detection")
@@ -202,6 +205,7 @@ func (s *Service) waitForChainInitialization() {
 	clock, err := s.serviceCfg.ClockWaiter.WaitForClock(s.ctx)
 	if err != nil {
 		log.WithError(err).Error("Could not receive chain start notification")
+		return
 	}
 	s.genesisTime = clock.GenesisTime()
 	log.WithField("genesisTime", s.genesisTime).Info(
