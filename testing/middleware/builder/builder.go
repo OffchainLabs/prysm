@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 	"github.com/OffchainLabs/prysm/v7/api"
 	builderAPI "github.com/OffchainLabs/prysm/v7/api/client/builder"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -39,7 +40,6 @@ import (
 	gethRPC "github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/sirupsen/logrus"
 )
 

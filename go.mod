@@ -64,7 +64,6 @@ require (
 	github.com/prometheus/client_golang v1.22.0
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/prom2json v1.3.0
-	github.com/prysmaticlabs/fastssz v0.0.0-20260421202104-7a6eb71e6e45
 	github.com/prysmaticlabs/prombbolt v0.0.0-20210126082820-9b7adba6db7c
 	github.com/r3labs/sse/v2 v2.10.0
 	github.com/rs/cors v1.7.0
