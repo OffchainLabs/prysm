@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "execution.go",
+        "execution_body.go",
         "execution_payload_envelope.go",
         "factory.go",
         "get_payload.go",
@@ -54,6 +55,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "execution_body_test.go",
         "execution_payload_envelope_test.go",
         "execution_test.go",
         "factory_test.go",
@@ -88,6 +90,7 @@ go_test(
         "//runtime/version:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
+        "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_libp2p_go_libp2p//core/peer:go_default_library",
         "@com_github_libp2p_go_libp2p_pubsub//partialmessages:go_default_library",
         "@com_github_offchainlabs_methodical_ssz//ssz:go_default_library",

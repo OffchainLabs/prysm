@@ -8,6 +8,7 @@ go_library(
         "deposit.go",
         "engine_client.go",
         "engine_jsonrpc.go",
+        "engine_transport.go",
         "errors.go",
         "execution_block.go",
         "graffiti_info.go",
