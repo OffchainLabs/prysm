@@ -23,9 +23,12 @@ func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 			if err != nil {
 				return das.SyncNeeds{}, errors.Wrap(err, "sync needs WaitForClock")
 			}
+			// Read lazily: the archive origin is only resolved once the db is open, which happens
+			// after this closure is built but before backfill invokes it.
 			return das.NewSyncNeeds(
 				clock.CurrentSlot,
 				oldestBackfillSlot,
+				n.ArchiveOriginSlot,
 				blobRetentionEpochs,
 			)
 		}

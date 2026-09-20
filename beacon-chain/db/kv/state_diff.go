@@ -55,6 +55,11 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 		return nil
 	}
 
+	// While an archive walk is filling the tree, only the walk may write: above its frontier there is no anchor.
+	if frontier, pending := s.archivePending(); pending && uint64(slot) > uint64(frontier)+deepestDiffSpan() {
+		return errors.Wrapf(ErrAboveArchiveFrontier, "slot %d is above the archive frontier %d", slot, frontier)
+	}
+
 	// Save full state if level is 0.
 	if lvl == 0 {
 		return s.saveFullSnapshot(st)
@@ -67,6 +72,11 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 	}
 
 	return s.saveHdiff(lvl, anchorState, st)
+}
+
+// StateBySlotFromDiffTree returns the state at the given slot from the tree; slot must be a saving point.
+func (s *Store) StateBySlotFromDiffTree(ctx context.Context, slot primitives.Slot) (state.BeaconState, error) {
+	return s.stateByDiff(ctx, slot)
 }
 
 // stateByDiff retrieves the full state for a given slot.

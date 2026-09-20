@@ -25,6 +25,9 @@ import (
 
 var defaultHotStateDBInterval primitives.Slot = 128
 
+// archiveResumeSnapshotInterval is how often an archive node persists a full state by root during regeneration.
+var archiveResumeSnapshotInterval primitives.Slot = 2048
+
 var populatePubkeyCacheOnce sync.Once
 
 // NilCheckableReadOnlyBalances adds the IsNil method to ReadOnlyBalances
@@ -66,6 +69,14 @@ type State struct {
 	migrationLock           *sync.Mutex
 	migratedSlot            primitives.Slot // guarded by migrationLock after initialization
 	fc                      forkchoice.ForkChoicer
+	archive                 *archiveState
+}
+
+// archiveState tracks whether an archive node is still regenerating history.
+type archiveState struct {
+	lock                sync.RWMutex
+	pending             bool
+	resumeSnapshotRoots [][32]byte
 }
 
 // This tracks the config in the event of long non-finality,
@@ -109,6 +120,7 @@ func New(beaconDB db.NoHeadAccessDatabase, fc forkchoice.ForkChoicer, opts ...Op
 		},
 		migrationLock: new(sync.Mutex),
 		fc:            fc,
+		archive:       &archiveState{},
 	}
 	for _, o := range opts {
 		o(s)
