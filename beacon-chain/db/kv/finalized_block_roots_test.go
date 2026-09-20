@@ -50,7 +50,7 @@ func TestStore_IsFinalizedBlock(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, true, db.IsFinalizedBlock(ctx, root), "Block at index %d was not considered finalized in the index", i)
 	}
-	for i := slotsPerEpoch * 3; i < uint64(len(blks)); i++ {
+	for i := slotsPerEpoch * 2; i < uint64(len(blks)); i++ {
 		root, err := blks[i].Block().HashTreeRoot()
 		require.NoError(t, err)
 		assert.Equal(t, false, db.IsFinalizedBlock(ctx, root), "Block at index %d was considered finalized in the index, but should not have", i)
