@@ -108,15 +108,21 @@ func (s *Service) LatestExecutionBlock(ctx context.Context) (*pb.ExecutionBlock,
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.LatestExecutionBlock")
 	defer span.End()
 
-	result := &pb.ExecutionBlock{}
+	var result *pb.ExecutionBlock
 	err := s.rpcClient.CallContext(
 		ctx,
-		result,
+		&result,
 		BlockByNumberMethod,
 		"latest",
 		false, /* no full transaction objects */
 	)
-	return result, handleRPCError(err)
+	if err := handleRPCError(err); err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, errors.Wrap(ethereum.NotFound, "latest execution block")
+	}
+	return result, nil
 }
 
 // ExecutionBlockByHash fetches an execution engine block by hash by calling
@@ -124,9 +130,15 @@ func (s *Service) LatestExecutionBlock(ctx context.Context) (*pb.ExecutionBlock,
 func (s *Service) ExecutionBlockByHash(ctx context.Context, hash common.Hash, withTxs bool) (*pb.ExecutionBlock, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ExecutionBlockByHash")
 	defer span.End()
-	result := &pb.ExecutionBlock{}
-	err := s.rpcClient.CallContext(ctx, result, BlockByHashMethod, hash, withTxs)
-	return result, handleRPCError(err)
+	var result *pb.ExecutionBlock
+	err := s.rpcClient.CallContext(ctx, &result, BlockByHashMethod, hash, withTxs)
+	if err := handleRPCError(err); err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, errors.Wrapf(ethereum.NotFound, "execution block %#x", hash)
+	}
+	return result, nil
 }
 
 // ExecutionBlocksByHashes fetches a batch of execution engine blocks by hash by calling
@@ -136,28 +148,30 @@ func (s *Service) ExecutionBlocksByHashes(ctx context.Context, hashes []common.H
 	defer span.End()
 	numOfHashes := len(hashes)
 	elems := make([]gethRPC.BatchElem, 0, numOfHashes)
-	execBlks := make([]*pb.ExecutionBlock, 0, numOfHashes)
+	execBlks := make([]*pb.ExecutionBlock, numOfHashes)
 	if numOfHashes == 0 {
 		return execBlks, nil
 	}
-	for _, h := range hashes {
-		blk := &pb.ExecutionBlock{}
-		newH := h
+	// Decoding into the slice slot keeps a null result as a nil block. Decoding into a
+	// non-nil block instead hands "null" to UnmarshalJSON, which misreports a bad header.
+	for i, h := range hashes {
 		elems = append(elems, gethRPC.BatchElem{
 			Method: BlockByHashMethod,
-			Args:   []any{newH, withTxs},
-			Result: blk,
+			Args:   []any{h, withTxs},
+			Result: &execBlks[i],
 			Error:  error(nil),
 		})
-		execBlks = append(execBlks, blk)
 	}
 	ioErr := s.rpcClient.BatchCall(elems)
 	if ioErr != nil {
 		return nil, ioErr
 	}
-	for _, e := range elems {
+	for i, e := range elems {
 		if e.Error != nil {
 			return nil, handleRPCError(e.Error)
+		}
+		if execBlks[i] == nil {
+			return nil, errors.Wrapf(ethereum.NotFound, "execution block %#x", hashes[i])
 		}
 	}
 	return execBlks, nil

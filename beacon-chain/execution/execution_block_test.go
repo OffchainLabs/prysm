@@ -1,12 +1,20 @@
 package execution
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
 	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
 )
 
@@ -24,6 +32,104 @@ func TestHeaderByNumber_NotFound(t *testing.T) {
 
 	_, err := srv.HeaderByNumber(t.Context(), big.NewInt(100))
 	assert.Equal(t, ethereum.NotFound, err)
+}
+
+// jsonRPCResultServer answers every request, batched or not, with the given result.
+func jsonRPCResultServer(t *testing.T, result any) *httptest.Server {
+	type request struct {
+		ID json.RawMessage `json:"id"`
+	}
+	respond := func(id json.RawMessage) map[string]any {
+		return map[string]any{"jsonrpc": "2.0", "id": id, "result": result}
+	}
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		defer func() {
+			require.NoError(t, r.Body.Close())
+		}()
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		body = bytes.TrimLeft(body, " \t\r\n")
+
+		if len(body) > 0 && body[0] == '[' {
+			var reqs []request
+			require.NoError(t, json.Unmarshal(body, &reqs))
+			resps := make([]map[string]any, len(reqs))
+			for i, req := range reqs {
+				resps[i] = respond(req.ID)
+			}
+			require.NoError(t, json.NewEncoder(w).Encode(resps))
+			return
+		}
+		var req request
+		require.NoError(t, json.Unmarshal(body, &req))
+		require.NoError(t, json.NewEncoder(w).Encode(respond(req.ID)))
+	}))
+}
+
+func serviceWithHTTPClient(t *testing.T, srv *httptest.Server) *Service {
+	rpcClient, err := rpc.DialHTTP(srv.URL)
+	require.NoError(t, err)
+	t.Cleanup(rpcClient.Close)
+
+	s := &Service{}
+	s.rpcClient = rpcClient
+	return s
+}
+
+func TestExecutionBlockByHash(t *testing.T) {
+	t.Run("block is returned", func(t *testing.T) {
+		want, ok := fixtures()["ExecutionBlock"].(*pb.ExecutionBlock)
+		require.Equal(t, true, ok)
+		srv := jsonRPCResultServer(t, want)
+		defer srv.Close()
+
+		blk, err := serviceWithHTTPClient(t, srv).ExecutionBlockByHash(t.Context(), common.BytesToHash([]byte("foo")), false)
+		require.NoError(t, err)
+		require.DeepEqual(t, want, blk)
+	})
+	t.Run("null result is reported as not found", func(t *testing.T) {
+		srv := jsonRPCResultServer(t, nil)
+		defer srv.Close()
+
+		blk, err := serviceWithHTTPClient(t, srv).ExecutionBlockByHash(t.Context(), common.BytesToHash([]byte("foo")), false)
+		require.ErrorIs(t, err, ethereum.NotFound)
+		require.IsNil(t, blk)
+	})
+}
+
+func TestExecutionBlocksByHashes(t *testing.T) {
+	hashes := []common.Hash{common.BytesToHash([]byte("foo")), common.BytesToHash([]byte("bar"))}
+
+	t.Run("no hashes requested", func(t *testing.T) {
+		srv := jsonRPCResultServer(t, nil)
+		defer srv.Close()
+
+		blks, err := serviceWithHTTPClient(t, srv).ExecutionBlocksByHashes(t.Context(), nil, false)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(blks))
+	})
+	t.Run("blocks are returned", func(t *testing.T) {
+		want, ok := fixtures()["ExecutionBlock"].(*pb.ExecutionBlock)
+		require.Equal(t, true, ok)
+		srv := jsonRPCResultServer(t, want)
+		defer srv.Close()
+
+		blks, err := serviceWithHTTPClient(t, srv).ExecutionBlocksByHashes(t.Context(), hashes, false)
+		require.NoError(t, err)
+		require.Equal(t, len(hashes), len(blks))
+		for _, blk := range blks {
+			require.DeepEqual(t, want, blk)
+		}
+	})
+	t.Run("null result is reported as not found", func(t *testing.T) {
+		srv := jsonRPCResultServer(t, nil)
+		defer srv.Close()
+
+		blks, err := serviceWithHTTPClient(t, srv).ExecutionBlocksByHashes(t.Context(), hashes, false)
+		require.ErrorIs(t, err, ethereum.NotFound)
+		require.IsNil(t, blks)
+	})
 }
 
 func Test_tDStringToUint256(t *testing.T) {

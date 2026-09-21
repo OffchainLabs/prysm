@@ -80,7 +80,7 @@ func (reconstructionRPCClient) Close() {}
 
 func (c reconstructionRPCClient) BatchCall(elems []rpc.BatchElem) error {
 	for i := range elems {
-		*elems[i].Result.(*pb.ExecutionBlock) = *c.block
+		*elems[i].Result.(**pb.ExecutionBlock) = c.block
 	}
 	return nil
 }

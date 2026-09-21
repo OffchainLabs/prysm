@@ -821,7 +821,7 @@ func (s *slowRPCClient) BatchCall(b []rpc.BatchElem) error {
 			return err
 		}
 		h := &gethTypes.Header{Number: num}
-		*e.Result.(*types.HeaderInfo) = types.HeaderInfo{Number: h.Number, Hash: h.Hash()}
+		*e.Result.(**types.HeaderInfo) = &types.HeaderInfo{Number: h.Number, Hash: h.Hash()}
 	}
 	return nil
 }

@@ -34,6 +34,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -452,31 +453,32 @@ func (s *Service) batchRequestHeaders(startBlock, endBlock uint64) ([]*types.Hea
 	}
 	requestRange := (endBlock - startBlock) + 1
 	elems := make([]gethRPC.BatchElem, 0, requestRange)
-	headers := make([]*types.HeaderInfo, 0, requestRange)
+	headers := make([]*types.HeaderInfo, requestRange)
+	// Decoding into the slice slot keeps a null result as a nil header. Decoding into a
+	// non-nil header instead hands "null" to UnmarshalJSON, which misreports a bad field.
 	for i := startBlock; i <= endBlock; i++ {
-		header := &types.HeaderInfo{}
 		elems = append(elems, gethRPC.BatchElem{
 			Method: "eth_getBlockByNumber",
 			Args:   []any{hexutil.EncodeBig(new(big.Int).SetUint64(i)), false},
-			Result: header,
+			Result: &headers[i-startBlock],
 			Error:  error(nil),
 		})
-		headers = append(headers, header)
 	}
 	ioErr := s.rpcClient.BatchCall(elems)
 	if ioErr != nil {
 		return nil, ioErr
 	}
-	for _, e := range elems {
+	for i, e := range elems {
 		if e.Error != nil {
 			return nil, e.Error
 		}
+		if headers[i] == nil {
+			return nil, errors.Wrapf(ethereum.NotFound, "execution block %d", startBlock+uint64(i))
+		}
 	}
 	for _, h := range headers {
-		if h != nil {
-			if err := s.headerCache.AddHeader(h); err != nil {
-				return nil, err
-			}
+		if err := s.headerCache.AddHeader(h); err != nil {
+			return nil, err
 		}
 	}
 	return headers, nil
