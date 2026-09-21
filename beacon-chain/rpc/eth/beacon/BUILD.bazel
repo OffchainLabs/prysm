@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "handlers.go",
+        "handlers_builders.go",
         "handlers_gloas.go",
         "handlers_pool.go",
         "handlers_state.go",
@@ -77,6 +78,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "handlers_builders_test.go",
         "handlers_equivocation_test.go",
         "handlers_gloas_bid_test.go",
         "handlers_gloas_test.go",

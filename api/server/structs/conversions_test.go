@@ -512,7 +512,7 @@ func TestROExecutionPayloadBidFromConsensus(t *testing.T) {
 func TestBuilderConversionsFromConsensus(t *testing.T) {
 	builder := &eth.Builder{
 		Pubkey:            bytes.Repeat([]byte{0xAA}, 48),
-		Version:           bytes.Repeat([]byte{0x01}, 4),
+		Version:           []byte{0x0C},
 		ExecutionAddress:  bytes.Repeat([]byte{0xBB}, 20),
 		Balance:           42,
 		DepositEpoch:      3,
@@ -520,7 +520,7 @@ func TestBuilderConversionsFromConsensus(t *testing.T) {
 	}
 	wantBuilder := &Builder{
 		Pubkey:            hexutil.Encode(builder.Pubkey),
-		Version:           hexutil.Encode(builder.Version),
+		Version:           "12",
 		ExecutionAddress:  hexutil.Encode(builder.ExecutionAddress),
 		Balance:           "42",
 		DepositEpoch:      "3",

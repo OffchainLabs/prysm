@@ -2463,3 +2463,51 @@ func BenchmarkConsensusChildrenLen(b *testing.B) {
 		}
 	})
 }
+
+func TestUpdateNewFullNodeWeight_SkipsSlashed(t *testing.T) {
+	zeroHash := params.BeaconConfig().ZeroHash
+
+	// Setup:
+	// - block at slot 1
+	// - validator 0 and 1 vote payload-present for it at slot 2 (before payload is known)
+	setupParkedVotes := func(t *testing.T) (*ForkChoice, [32]byte) {
+		f := setupGloas(t, 0, 0)
+		ctx := t.Context()
+		root := indexToHash(1)
+		st, blk, err := prepareGloasForkchoiceState(ctx, 1, root, zeroHash, indexToHash(100), zeroHash, 0, 0)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, st, blk))
+		f.ProcessAttestation(ctx, []uint64{0, 1}, root, 2, true)
+		f.justifiedBalances = []uint64{100, 200}
+		require.NoError(t, f.updateBalances())
+		require.Equal(t, true, f.votes[0].currentPayloadStatus)
+		return f, root
+	}
+
+	t.Run("slashed before payload arrives", func(t *testing.T) {
+		f, root := setupParkedVotes(t)
+
+		f.InsertSlashedIndex(t.Context(), 0)
+		pe, err := prepareGloasForkchoicePayload(root)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertPayload(pe))
+
+		fn := f.store.fullNodeByRoot[root]
+		require.NotNil(t, fn)
+		assert.Equal(t, uint64(200), fn.balance)
+		assert.Equal(t, uint64(200), fn.weight)
+	})
+
+	t.Run("slashed after payload arrives", func(t *testing.T) {
+		f, root := setupParkedVotes(t)
+		pe, err := prepareGloasForkchoicePayload(root)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertPayload(pe))
+		fn := f.store.fullNodeByRoot[root]
+		require.NotNil(t, fn)
+		require.Equal(t, uint64(300), fn.balance)
+
+		f.InsertSlashedIndex(t.Context(), 0)
+		assert.Equal(t, uint64(200), fn.balance)
+	})
+}

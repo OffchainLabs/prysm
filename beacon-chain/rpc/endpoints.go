@@ -964,6 +964,17 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
+			template: "/eth/v1/beacon/states/{state_id}/builders",
+			name:     namespace + ".GetStateBuilders",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetStateBuilders,
+			methods: []string{http.MethodPost},
+		},
+		{
 			template: "/eth/v1/beacon/pool/payload_attestations",
 			name:     namespace + ".ListPayloadAttestations",
 			middleware: []middleware.Middleware{
