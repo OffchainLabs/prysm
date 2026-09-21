@@ -48,7 +48,7 @@ def _ssz_methodical_impl(ctx):
 
     # concat the stdlib with all the other json file paths and write to disk
     json_out = [stdlib] + all_json_files.keys()
-    all_pkg_list = ctx.actions.declare_file("methodical-pkg-list.json")
+    all_pkg_list = ctx.actions.declare_file(ctx.label.name + "-pkg-list.json")
     ctx.actions.write(all_pkg_list, content = json.encode(json_out))
     out_base = ctx.outputs.out.root.path
 
@@ -59,8 +59,11 @@ def _ssz_methodical_impl(ctx):
     # //build/gen writes. methodical emits no header on its own; both codegen
     # paths drive it through --go-build-constraint.
     go_build_constraint = "!minimal"
+    # Match genception's source filtering to the selected preset.
+    go_tags = ""
     if ctx.attr._network[BuildSettingInfo].value == "minimal":
         go_build_constraint = "minimal"
+        go_tags = "minimal"
 
     args = [
         "gen",
@@ -76,6 +79,7 @@ def _ssz_methodical_impl(ctx):
         env = {
             "PACKAGE_JSON_INVENTORY": all_pkg_list.path,
             "PACKAGES_BASE": out_base,
+            "GOTAGS": go_tags,
             "GOCACHE": "./.gocache",
             "GOPACKAGESDRIVER": ctx.file.genception.path,
             "GOPACKAGESDRIVER_LOG_PATH": out_base + "/gopackagesdriver.log",
