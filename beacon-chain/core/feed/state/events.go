@@ -14,8 +14,8 @@ import (
 const (
 	// BlockProcessed is sent after a block has been processed and updated the state database.
 	BlockProcessed = iota + 1
-	// ChainStarted is sent when enough validators are active to start proposing blocks.
-	ChainStarted
+	// deprecated: ChainStarted was sent by the eth1-driven pre-genesis chain-start path.
+	_
 	// deprecated: Initialized is sent when the internal beacon node's state is ready to be accessed.
 	_
 	// deprecated: Synced is sent when the beacon node has completed syncing and is ready to participate in the network.
@@ -60,12 +60,6 @@ type BlockProcessedData struct {
 	Verified bool
 	// Optimistic is true if the block is optimistic.
 	Optimistic bool
-}
-
-// ChainStartedData is the data sent with ChainStarted events.
-type ChainStartedData struct {
-	// StartTime is the time at which the chain started.
-	StartTime time.Time
 }
 
 // SyncedData is the data sent with Synced events.

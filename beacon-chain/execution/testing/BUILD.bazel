@@ -17,8 +17,6 @@ go_library(
         "//async/event:go_default_library",
         "//beacon-chain/core/peerdas:go_default_library",
         "//beacon-chain/execution/types:go_default_library",
-        "//beacon-chain/state:go_default_library",
-        "//beacon-chain/state/state-native:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",

@@ -765,7 +765,6 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithForkChoiceStore(fc),
 		blockchain.WithDatabase(b.db),
 		blockchain.WithDepositCache(b.depositCache),
-		blockchain.WithChainStartFetcher(web3Service),
 		blockchain.WithExecutionEngineCaller(web3Service),
 		blockchain.WithAttestationCache(b.attestationCache),
 		blockchain.WithAttestationPool(b.attestationPool),
@@ -980,7 +979,6 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 	}
 
 	depositFetcher := b.depositCache
-	chainStartFetcher := web3Service
 
 	host := b.cliCtx.String(flags.RPCHost.Name)
 	port := b.cliCtx.String(flags.RPCPort.Name)
@@ -1032,7 +1030,6 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		SyncCommitteeObjectPool:          b.syncCommitteePool,
 		ExecutionChainService:            web3Service,
 		ExecutionChainInfoFetcher:        web3Service,
-		ChainStartFetcher:                chainStartFetcher,
 		SyncService:                      syncService,
 		DepositFetcher:                   depositFetcher,
 		PendingDepositFetcher:            b.depositCache,

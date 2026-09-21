@@ -6,9 +6,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 )
@@ -46,25 +43,6 @@ func (*FaultyExecutionChain) BlockTimeByHeight(context.Context, *big.Int) (uint6
 // BlockByTimestamp --
 func (*FaultyExecutionChain) BlockByTimestamp(context.Context, uint64) (*types.HeaderInfo, error) {
 	return &types.HeaderInfo{Number: big.NewInt(0)}, nil
-}
-
-// ChainStartEth1Data --
-func (*FaultyExecutionChain) ChainStartEth1Data() *ethpb.Eth1Data {
-	return &ethpb.Eth1Data{}
-}
-
-// PreGenesisState --
-func (*FaultyExecutionChain) PreGenesisState() state.BeaconState {
-	s, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
-	if err != nil {
-		panic("could not initialize state") // lint:nopanic -- test code.
-	}
-	return s
-}
-
-// ClearPreGenesisData --
-func (*FaultyExecutionChain) ClearPreGenesisData() {
-	// no-op
 }
 
 // IsConnectedToETH1 --
