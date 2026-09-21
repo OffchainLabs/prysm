@@ -1571,7 +1571,7 @@ func (v *validator) buildSignedRegReqs(
 	}
 
 	if ps.DefaultConfig != nil && ps.DefaultConfig.FeeRecipientConfig == nil && ps.DefaultConfig.BuilderConfig != nil {
-		if ps.Version == proposer.SchemaV2 {
+		if ps.Version >= proposer.SchemaV2 {
 			log.Warn("Default builder config has no default fee recipient; only keys with their own fee recipient can register")
 		} else {
 			log.Warn("Builder is `enabled` in default config but will be ignored because no fee recipient was provided!")

@@ -274,7 +274,7 @@ func (psl *SettingsLoader) applyOverrides() {
 	}
 }
 
-// loadFromDefault builds default_config from the flags; the builder flags make it a v2 source.
+// loadFromDefault builds default_config from the flags; the builder flags stamp the current schema.
 func (psl *SettingsLoader) loadFromDefault(cliCtx *cli.Context, dbSettings *validatorpb.ProposerSettingsPayload) (*validatorpb.ProposerSettingsPayload, error) {
 	option := &validatorpb.ProposerOptionPayload{}
 	loaded := &validatorpb.ProposerSettingsPayload{DefaultConfig: option}
@@ -300,7 +300,7 @@ func (psl *SettingsLoader) loadFromDefault(cliCtx *cli.Context, dbSettings *vali
 	}
 	if builder != nil {
 		option.Builder = builder.ToConsensus()
-		loaded.Version = proposer.SchemaV2
+		loaded.Version = proposer.MaxSchemaVersion
 		if len(builder.Builders) > 0 {
 			logEntry = logEntry.WithField("builders", maskedBuilderURLs(builder.Builders))
 		}
@@ -454,8 +454,8 @@ func (psl *SettingsLoader) processProposerSettings(loadedSettings, dbSettings *v
 }
 
 // mergeProposerSettings merges database settings with loaded settings, giving
-// precedence to loadedSettings. Dispatches by schema version: v1 still flows
-// through Builder; v2 lives on Option directly.
+// precedence to loadedSettings. Legacy (v1) schemas merge through Builder; every
+// later schema takes the current path.
 func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, options *flagOptions) *validatorpb.ProposerSettingsPayload {
 	merged := &validatorpb.ProposerSettingsPayload{}
 	if db != nil {
@@ -476,10 +476,10 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 		builderFlagsSet = options.builderFlagsSet
 	}
 
-	if merged.Version == proposer.SchemaV2 {
-		return mergeProposerSettingsV2(merged, loaded, db, builderConfig, gasLimitOnly, builderFlagsSet)
+	if merged.Version < proposer.SchemaV2 {
+		return mergeLegacyProposerSettings(merged, loaded, db, builderConfig, gasLimitOnly)
 	}
-	return mergeProposerSettingsV1(merged, loaded, db, builderConfig, gasLimitOnly)
+	return mergeCurrentProposerSettings(merged, loaded, db, builderConfig, gasLimitOnly, builderFlagsSet)
 }
 
 // hasGloasBuilderFields reports whether a payload builder configures the Gloas builder API; an explicit empty list counts.
@@ -563,7 +563,7 @@ func selectProposerConfig(db, loaded *validatorpb.ProposerSettingsPayload) map[s
 	return nil
 }
 
-func mergeProposerSettingsV1(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64) *validatorpb.ProposerSettingsPayload {
+func mergeLegacyProposerSettings(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64) *validatorpb.ProposerSettingsPayload {
 	stripDBBuilder := builderConfig == nil
 
 	if db != nil && db.DefaultConfig != nil {
@@ -605,7 +605,7 @@ func mergeProposerSettingsV1(merged, loaded, db *validatorpb.ProposerSettingsPay
 	return merged
 }
 
-func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64, builderFlagsSet bool) *validatorpb.ProposerSettingsPayload {
+func mergeCurrentProposerSettings(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64, builderFlagsSet bool) *validatorpb.ProposerSettingsPayload {
 	// Builder flags are per-run: a run without them drops the v2 builder fields an
 	// earlier flag run persisted in default_config. Legacy fields follow their own flags.
 	if db != nil && db.DefaultConfig != nil && !builderFlagsSet {
