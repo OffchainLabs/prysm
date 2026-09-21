@@ -180,6 +180,11 @@ func (s *Service) ReconstructFullGloasExecutionPayloadsByHash(
 	}
 
 	for i, h := range requestHashes {
+		// Peers may ask for envelopes of orphaned blocks the execution client has already unwound.
+		if execBlocks[i] == nil || bodiesV2[i] == nil {
+			log.WithField("blockHash", fmt.Sprintf("%#x", h)).Debug("Execution client does not have block, skipping payload reconstruction")
+			continue
+		}
 		payload, err := gloasPayloadFromBlockAndBody(h, execBlocks[i], bodiesV2[i])
 		if err != nil {
 			return nil, err
