@@ -1,6 +1,7 @@
 package equality
 
 import (
+	"bytes"
 	"reflect"
 	"unsafe"
 
@@ -17,6 +18,8 @@ type visit struct {
 	a2  unsafe.Pointer // #nosec G103 -- Test use only
 	typ reflect.Type
 }
+
+var protoMessageType = reflect.TypeFor[proto.Message]()
 
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -35,6 +38,9 @@ func deepValueEqual(v1, v2 reflect.Value, visited map[visit]bool, depth int) boo
 	}
 	if v1.Type() != v2.Type() {
 		return false
+	}
+	if v1.Type().Implements(protoMessageType) {
+		return deepValueEqualExportedOnly(v1, v2, visited, depth)
 	}
 	// We want to avoid putting more in the visited map than we need to.
 	// For any possible reference cycle that might be encountered,
@@ -91,6 +97,9 @@ func deepValueEqual(v1, v2 reflect.Value, visited map[visit]bool, depth int) boo
 		}
 		if v1.Pointer() == v2.Pointer() {
 			return true
+		}
+		if eq, ok := flatSliceEqual(v1, v2); ok {
+			return eq
 		}
 		for i := 0; i < v1.Len(); i++ {
 			if !deepValueEqual(v1.Index(i), v2.Index(i), visited, depth+1) {
@@ -182,6 +191,9 @@ func deepValueEqualExportedOnly(v1, v2 reflect.Value, visited map[visit]bool, de
 		if v1.Pointer() == v2.Pointer() {
 			return true
 		}
+		if eq, ok := flatSliceEqual(v1, v2); ok {
+			return eq
+		}
 		for i := 0; i < v1.Len(); i++ {
 			if !deepValueEqualExportedOnly(v1.Index(i), v2.Index(i), visited, depth+1) {
 				return false
@@ -249,6 +261,34 @@ func deepValueBaseTypeEqual(v1, v2 reflect.Value) bool {
 	}
 }
 
+// flatSliceEqual compares the slice shapes that dominate a beacon state ([]byte, [][]byte and
+// []uint64) without recursing per element. ok is false when v1 is some other slice type.
+// Callers have already handled nil/empty and length mismatches.
+func flatSliceEqual(v1, v2 reflect.Value) (equal, ok bool) {
+	switch elem := v1.Type().Elem(); elem.Kind() {
+	case reflect.Uint8:
+		return bytes.Equal(v1.Bytes(), v2.Bytes()), true
+	case reflect.Uint64:
+		for i := 0; i < v1.Len(); i++ {
+			if v1.Index(i).Uint() != v2.Index(i).Uint() {
+				return false, true
+			}
+		}
+		return true, true
+	case reflect.Slice:
+		if elem.Elem().Kind() != reflect.Uint8 {
+			return false, false
+		}
+		for i := 0; i < v1.Len(); i++ {
+			if !bytes.Equal(v1.Index(i).Bytes(), v2.Index(i).Bytes()) {
+				return false, true
+			}
+		}
+		return true, true
+	}
+	return false, false
+}
+
 // DeepEqual reports whether two SSZ-able values x and y are “deeply equal,” defined as follows:
 // Two values of identical type are deeply equal if one of the following cases applies:
 //
@@ -258,6 +298,7 @@ func deepValueBaseTypeEqual(v1, v2 reflect.Value) bool {
 //
 // Struct values are deeply equal if their corresponding fields,
 // both exported and unexported, are deeply equal.
+// Protobuf messages are the exception - only their exported fields are compared.
 //
 // Interface values are deeply equal if they hold deeply equal concrete values.
 //
@@ -305,21 +346,5 @@ func DeepEqual(x, y any) bool {
 	if v1.Type() != v2.Type() {
 		return false
 	}
-	if IsProto(x) && IsProto(y) {
-		// Exclude unexported fields for protos.
-		return deepValueEqualExportedOnly(v1, v2, make(map[visit]bool), 0)
-	}
 	return deepValueEqual(v1, v2, make(map[visit]bool), 0)
-}
-
-func IsProto(item any) bool {
-	typ := reflect.TypeOf(item)
-	kind := typ.Kind()
-	if kind != reflect.Slice && kind != reflect.Array && kind != reflect.Map {
-		_, ok := item.(proto.Message)
-		return ok
-	}
-	elemTyp := typ.Elem()
-	modelType := reflect.TypeFor[proto.Message]()
-	return elemTyp.Implements(modelType)
 }

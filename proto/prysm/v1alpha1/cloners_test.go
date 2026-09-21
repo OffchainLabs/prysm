@@ -1378,3 +1378,9 @@ func TestCopyBuilderPendingPayment(t *testing.T) {
 		}
 	})
 }
+
+func TestCopySlice_NilStaysNil(t *testing.T) {
+	var nilForks []*v1alpha1.Fork
+	assert.Equal(t, true, v1alpha1.CopySlice(nilForks) == nil)
+	assert.Equal(t, 0, len(v1alpha1.CopySlice([]*v1alpha1.Fork{})))
+}

@@ -15,7 +15,7 @@ func TestNewBeaconState(t *testing.T) {
 	require.NoError(t, err)
 	got := &ethpb.BeaconState{}
 	require.NoError(t, got.UnmarshalSSZ(b))
-	assert.DeepEqual(t, st.ToProtoUnsafe(), got)
+	assert.DeepSSZEqual(t, st.ToProtoUnsafe(), got)
 }
 
 func TestNewBeaconStateAltair(t *testing.T) {
@@ -25,7 +25,7 @@ func TestNewBeaconStateAltair(t *testing.T) {
 	require.NoError(t, err)
 	got := &ethpb.BeaconStateAltair{}
 	require.NoError(t, got.UnmarshalSSZ(b))
-	assert.DeepEqual(t, st.ToProtoUnsafe(), got)
+	assert.DeepSSZEqual(t, st.ToProtoUnsafe(), got)
 }
 
 func TestNewBeaconStateBellatrix(t *testing.T) {
@@ -35,7 +35,7 @@ func TestNewBeaconStateBellatrix(t *testing.T) {
 	require.NoError(t, err)
 	got := &ethpb.BeaconStateBellatrix{}
 	require.NoError(t, got.UnmarshalSSZ(b))
-	assert.DeepEqual(t, st.ToProtoUnsafe(), got)
+	assert.DeepSSZEqual(t, st.ToProtoUnsafe(), got)
 }
 
 func TestNewBeaconStateCapella(t *testing.T) {
@@ -45,7 +45,7 @@ func TestNewBeaconStateCapella(t *testing.T) {
 	require.NoError(t, err)
 	got := &ethpb.BeaconStateCapella{}
 	require.NoError(t, got.UnmarshalSSZ(b))
-	assert.DeepEqual(t, st.ToProtoUnsafe(), got)
+	assert.DeepSSZEqual(t, st.ToProtoUnsafe(), got)
 }
 
 func TestNewBeaconStateDeneb(t *testing.T) {
@@ -55,7 +55,7 @@ func TestNewBeaconStateDeneb(t *testing.T) {
 	require.NoError(t, err)
 	got := &ethpb.BeaconStateDeneb{}
 	require.NoError(t, got.UnmarshalSSZ(b))
-	assert.DeepEqual(t, st.ToProtoUnsafe(), got)
+	assert.DeepSSZEqual(t, st.ToProtoUnsafe(), got)
 }
 
 func TestNewBeaconStateElectra(t *testing.T) {
@@ -65,7 +65,7 @@ func TestNewBeaconStateElectra(t *testing.T) {
 	require.NoError(t, err)
 	got := &ethpb.BeaconStateElectra{}
 	require.NoError(t, got.UnmarshalSSZ(b))
-	assert.DeepEqual(t, st.ToProtoUnsafe(), got)
+	assert.DeepSSZEqual(t, st.ToProtoUnsafe(), got)
 }
 
 func TestNewBeaconStateFulu(t *testing.T) {
@@ -75,7 +75,7 @@ func TestNewBeaconStateFulu(t *testing.T) {
 	require.NoError(t, err)
 	got := &ethpb.BeaconStateFulu{}
 	require.NoError(t, got.UnmarshalSSZ(b))
-	assert.DeepEqual(t, st.ToProtoUnsafe(), got)
+	assert.DeepSSZEqual(t, st.ToProtoUnsafe(), got)
 }
 
 func TestNewBeaconStateGloas(t *testing.T) {

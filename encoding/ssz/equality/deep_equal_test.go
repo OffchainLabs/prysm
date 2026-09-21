@@ -59,6 +59,18 @@ func TestDeepEqualStructs_Unexported(t *testing.T) {
 }
 
 func TestDeepEqualProto(t *testing.T) {
+	t.Run("nested messages", func(t *testing.T) {
+		type state struct{ Fork *ethpb.Fork }
+		a := &state{Fork: &ethpb.Fork{Epoch: 1}}
+		b := &state{Fork: &ethpb.Fork{Epoch: 1}}
+		assert.Equal(t, true, equality.DeepEqual(a, b))
+		b.Fork.Epoch = 2
+		assert.Equal(t, false, equality.DeepEqual(a, b))
+		assert.Equal(t, false, equality.DeepEqual([]*ethpb.Fork{a.Fork}, []*ethpb.Fork{b.Fork}))
+		b.Fork = nil
+		assert.Equal(t, false, equality.DeepEqual(a, b))
+	})
+
 	var fork1, fork2 *ethpb.Fork
 	assert.Equal(t, true, equality.DeepEqual(fork1, fork2))
 
@@ -86,48 +98,18 @@ func TestDeepEqualProto(t *testing.T) {
 	assert.Equal(t, true, equality.DeepEqual(checkpoint1, checkpoint2))
 }
 
-func Test_IsProto(t *testing.T) {
-	tests := []struct {
-		name string
-		item any
-		want bool
-	}{
-		{
-			name: "uint64",
-			item: 0,
-			want: false,
-		},
-		{
-			name: "string",
-			item: "foobar cheese",
-			want: false,
-		},
-		{
-			name: "uint64 array",
-			item: []uint64{1, 2, 3, 4, 5, 6},
-			want: false,
-		},
-		{
-			name: "Attestation",
-			item: &ethpb.Attestation{},
-			want: true,
-		},
-		{
-			name: "Array of attestations",
-			item: []*ethpb.Attestation{},
-			want: true,
-		},
-		{
-			name: "Map of attestations",
-			item: make(map[uint64]*ethpb.Attestation),
-			want: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := equality.IsProto(tt.item); got != tt.want {
-				t.Errorf("isProtoSlice() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+// A value type that gets proto.Message through an embedded pointer (like blocks.ROBlob) must be
+// compared on exported fields only, without panicking on its unexported ones.
+type embedsProto struct {
+	*ethpb.Fork
+	root [32]byte
+}
+
+func TestDeepEqualProto_EmbeddedInValue(t *testing.T) {
+	a := embedsProto{Fork: &ethpb.Fork{Epoch: 1}, root: [32]byte{1}}
+	b := embedsProto{Fork: &ethpb.Fork{Epoch: 1}, root: [32]byte{2}}
+	c := embedsProto{Fork: &ethpb.Fork{Epoch: 2}, root: [32]byte{1}}
+	assert.Equal(t, true, equality.DeepEqual(a, b))
+	assert.Equal(t, false, equality.DeepEqual(a, c))
+	assert.Equal(t, true, equality.DeepEqual([]embedsProto{a}, []embedsProto{b}))
 }

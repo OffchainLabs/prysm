@@ -10,6 +10,9 @@ type copier[T any] interface {
 }
 
 func CopySlice[T any, C copier[T]](original []C) []T {
+	if original == nil {
+		return nil
+	}
 	// Create a new slice with the same length as the original
 	newSlice := make([]T, len(original))
 	for i := range newSlice {
@@ -292,5 +295,36 @@ func CopyBuilderPendingWithdrawal(original *BuilderPendingWithdrawal) *BuilderPe
 		FeeRecipient: bytesutil.SafeCopyBytes(original.FeeRecipient),
 		Amount:       original.Amount,
 		BuilderIndex: original.BuilderIndex,
+	}
+}
+
+// Copy deep-copies the fork.
+func (f *Fork) Copy() *Fork {
+	if f == nil {
+		return nil
+	}
+	return &Fork{
+		PreviousVersion: bytesutil.SafeCopyBytes(f.PreviousVersion),
+		CurrentVersion:  bytesutil.SafeCopyBytes(f.CurrentVersion),
+		Epoch:           f.Epoch,
+	}
+}
+
+// Copy deep-copies the validator.
+func (v *Validator) Copy() *Validator {
+	if v == nil {
+		return nil
+	}
+	return CopyValidator(v)
+}
+
+// Copy deep-copies the sync committee.
+func (sc *SyncCommittee) Copy() *SyncCommittee {
+	if sc == nil {
+		return nil
+	}
+	return &SyncCommittee{
+		Pubkeys:         bytesutil.SafeCopy2dBytes(sc.Pubkeys),
+		AggregatePubkey: bytesutil.SafeCopyBytes(sc.AggregatePubkey),
 	}
 }
