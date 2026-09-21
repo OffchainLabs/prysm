@@ -51,14 +51,6 @@ func TestDB_ConvertDatabase(t *testing.T) {
 	for _, minimalToComplete := range [...]bool{false, true} {
 		for _, withProposerSettings := range [...]bool{false, true} {
 			t.Run(fmt.Sprintf("minimalToComplete=%v", minimalToComplete), func(t *testing.T) {
-				// Create signing root.
-				// A converted proposal has no signing root, but the complete database pads it with zeros on read.
-				signingRoot := [fieldparams.RootLength]byte{}
-				var proposalSigningRootBytes []byte
-				if minimalToComplete {
-					proposalSigningRootBytes = signingRoot[:]
-				}
-
 				// Create database directory path.
 				datadir := t.TempDir()
 
@@ -187,7 +179,7 @@ func TestDB_ConvertDatabase(t *testing.T) {
 				expectedProposals := []*common.Proposal{
 					{
 						Slot:        43,
-						SigningRoot: proposalSigningRootBytes,
+						SigningRoot: nil,
 					},
 				}
 

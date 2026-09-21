@@ -50,11 +50,14 @@ func Test_getSignedAttestationsByPubKey(t *testing.T) {
 			lowestSourceEpoch := primitives.Epoch(0)
 			lowestTargetEpoch := primitives.Epoch(4)
 
-			require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], []byte{4}, createAttestation(
+			dummyRoot4 := [fieldparams.RootLength]byte{4}
+			dummyRoot5 := [fieldparams.RootLength]byte{5}
+
+			require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], dummyRoot4[:], createAttestation(
 				lowestSourceEpoch,
 				lowestTargetEpoch,
 			)))
-			require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], []byte{5}, createAttestation(
+			require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], dummyRoot5[:], createAttestation(
 				lowestSourceEpoch,
 				lowestTargetEpoch+1,
 			)))
@@ -111,11 +114,14 @@ func Test_getSignedAttestationsByPubKey(t *testing.T) {
 
 		// Next up, we simulate a DB affected by the bug where the next entry
 		// has a target epoch less than the previous one.
-		require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], []byte{4}, createAttestation(
+		dummyRoot4 := [fieldparams.RootLength]byte{4}
+		dummyRoot5 := [fieldparams.RootLength]byte{5}
+
+		require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], dummyRoot4[:], createAttestation(
 			lowestSourceEpoch,
 			lowestTargetEpoch,
 		)))
-		require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], []byte{5}, createAttestation(
+		require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], dummyRoot5[:], createAttestation(
 			1,
 			2,
 		)))
@@ -158,11 +164,14 @@ func Test_getSignedAttestationsByPubKey(t *testing.T) {
 
 		// Next up, we simulate a DB affected by the bug where the next entry
 		// has a target epoch less than the previous one.
-		require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], []byte{4}, createAttestation(
+		dummyRoot4 := [fieldparams.RootLength]byte{4}
+		dummyRoot5 := [fieldparams.RootLength]byte{5}
+
+		require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], dummyRoot4[:], createAttestation(
 			lowestSourceEpoch,
 			lowestTargetEpoch,
 		)))
-		require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], []byte{5}, createAttestation(
+		require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKeys[0], dummyRoot5[:], createAttestation(
 			1,
 			2,
 		)))
@@ -227,8 +236,7 @@ func Test_getSignedBlocksByPubKey(t *testing.T) {
 					SigningRoot: fmt.Sprintf("%#x", dummyRoot1),
 				},
 				{
-					Slot:        "3",
-					SigningRoot: "0x0000000000000000000000000000000000000000000000000000000000000000",
+					Slot: "3",
 				},
 				{
 					Slot:        "5",

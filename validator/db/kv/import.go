@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/pkg/errors"
+
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -16,7 +18,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/db/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/slashing-protection-history/format"
-	"github.com/pkg/errors"
 )
 
 // ImportStandardProtection takes in EIP-3076 compliant JSON file used for slashing protection
@@ -275,9 +276,8 @@ func filterSlashablePubKeysFromBlocks(_ context.Context, historyByPubKey map[[fi
 	// Given signing roots are optional in the EIP standard, we behave as follows:
 	// For a given block:
 	//   If we have a previous block with the same slot in our history:
-	//     If signing root is nil, we consider that proposer public key as slashable
-	//     If signing root is not nil , then we compare signing roots. If they are different,
-	//     then we consider that proposer public key as slashable.
+	//     We compare signing roots. If they are different, then we consider that proposer
+	//     public key as slashable.
 	bar := common.InitializeProgressBar(len(historyByPubKey), "Filter slashable pubkeys from blocks:")
 	slashablePubKeys := make([][fieldparams.BLSPubkeyLength]byte, 0)
 	for pubKey, proposals := range historyByPubKey {
@@ -287,7 +287,7 @@ func filterSlashablePubKeysFromBlocks(_ context.Context, historyByPubKey map[[fi
 		seenSigningRootsBySlot := make(map[primitives.Slot][]byte)
 		for _, blk := range proposals.Proposals {
 			if signingRoot, ok := seenSigningRootsBySlot[blk.Slot]; ok {
-				if signingRoot == nil || !bytes.Equal(signingRoot, blk.SigningRoot) {
+				if !bytes.Equal(signingRoot, blk.SigningRoot) {
 					slashablePubKeys = append(slashablePubKeys, pubKey)
 					break
 				}
@@ -307,7 +307,7 @@ func filterSlashablePubKeysFromAttestations(
 	// First we need to find attestations that are slashable with respect to other
 	// attestations within the same JSON import.
 	for pubKey, signedAtts := range signedAttsByPubKey {
-		signingRootsByTarget := make(map[primitives.Epoch][]byte)
+		attestationsByTarget := make(map[primitives.Epoch]*common.AttestationRecord)
 		targetEpochsBySource := make(map[primitives.Epoch][]primitives.Epoch)
 
 		bar := common.InitializeProgressBar(
@@ -321,8 +321,8 @@ func filterSlashablePubKeysFromAttestations(
 				log.WithError(err).Debug("Could not increase progress bar")
 			}
 			// Check for double votes.
-			if sr, ok := signingRootsByTarget[att.Target]; ok {
-				if slashings.SigningRootsDiffer(sr, att.SigningRoot) {
+			if previousAtt, ok := attestationsByTarget[att.Target]; ok {
+				if previousAtt.Source != att.Source || !bytes.Equal(previousAtt.SigningRoot, att.SigningRoot) {
 					slashablePubKeys = append(slashablePubKeys, pubKey)
 					break Loop
 				}
@@ -339,7 +339,7 @@ func filterSlashablePubKeysFromAttestations(
 					}
 				}
 			}
-			signingRootsByTarget[att.Target] = att.SigningRoot
+			attestationsByTarget[att.Target] = att
 			targetEpochsBySource[att.Source] = append(targetEpochsBySource[att.Source], att.Target)
 		}
 	}
