@@ -73,17 +73,6 @@ func (g *goodLogger) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]
 	return g.backend.Client().FilterLogs(ctx, q)
 }
 
-type goodNotifier struct {
-	MockStateFeed *event.Feed
-}
-
-func (g *goodNotifier) StateFeed() event.SubscriberSender {
-	if g.MockStateFeed == nil {
-		g.MockStateFeed = new(event.Feed)
-	}
-	return g.MockStateFeed
-}
-
 func TestStart_OK(t *testing.T) {
 	hook := logTest.NewGlobal()
 	beaconDB := dbutil.SetupDB(t)

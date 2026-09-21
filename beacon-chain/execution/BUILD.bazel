@@ -32,7 +32,6 @@ go_library(
         "//api/server/structs:go_default_library",
         "//beacon-chain/cache:go_default_library",
         "//beacon-chain/cache/depositsnapshot:go_default_library",
-        "//beacon-chain/core/feed/state:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/peerdas:go_default_library",
         "//beacon-chain/db:go_default_library",

@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -23,7 +22,6 @@ import (
 
 // Chain defines a properly functioning mock for the powchain service.
 type Chain struct {
-	ChainFeed         *event.Feed
 	LatestBlockNumber *big.Int
 	HashesByHeight    map[int][]byte
 	TimesByHeight     map[int]uint64
@@ -31,8 +29,6 @@ type Chain struct {
 	GenesisEth1Block  *big.Int
 	CurrEndpoint      string
 	CurrError         error
-	Endpoints         []string
-	Errors            []error
 	NotConnected      bool
 }
 
@@ -111,14 +107,6 @@ func (m *Chain) ExecutionClientEndpoint() string {
 
 func (m *Chain) ExecutionClientConnectionErr() error {
 	return m.CurrError
-}
-
-func (m *Chain) ETH1Endpoints() []string {
-	return m.Endpoints
-}
-
-func (m *Chain) ETH1ConnectionErrors() []error {
-	return m.Errors
 }
 
 // RPCClient defines the mock rpc client.

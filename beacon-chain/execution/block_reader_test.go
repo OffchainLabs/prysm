@@ -22,7 +22,6 @@ import (
 
 func setDefaultMocks(service *Service) *Service {
 	service.httpLogger = &goodLogger{}
-	service.cfg.stateNotifier = &goodNotifier{}
 	return service
 }
 

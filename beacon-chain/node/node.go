@@ -821,7 +821,6 @@ func (b *BeaconNode) registerPOWChainService() error {
 		execution.WithDepositContractAddress(common.HexToAddress(depositContractAddr)),
 		execution.WithDatabase(b.db),
 		execution.WithDepositCache(b.depositCache),
-		execution.WithStateNotifier(b),
 		execution.WithStateGen(b.stateGen),
 		execution.WithBeaconNodeStatsUpdater(bs),
 		execution.WithFinalizedStateAtStartup(b.finalizedStateAtStartUp),

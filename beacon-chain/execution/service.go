@@ -14,7 +14,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
-	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
@@ -115,7 +114,6 @@ type config struct {
 	depositContractAddr     common.Address
 	beaconDB                db.HeadAccessDatabase
 	depositCache            cache.DepositCache
-	stateNotifier           statefeed.Notifier
 	stateGen                *stategen.State
 	eth1HeaderReqLimit      uint64
 	beaconNodeStatsUpdater  BeaconNodeStatsUpdater
@@ -126,12 +124,8 @@ type config struct {
 	jwtId                   string
 }
 
-// Service fetches important information about the canonical
-// eth1 chain via a web3 endpoint using an ethclient.
-// The beacon chain requires synchronization with the eth1 chain's current
-// block hash, block number, and access to logs within the
-// Validator Registration Contract on the eth1 chain to kick off the beacon
-// chain's validator registration process.
+// Service tracks the canonical execution chain over an RPC endpoint: latest
+// headers for eth1 data voting, deposit contract logs, and the engine API.
 type Service struct {
 	partialColumnsSupported bool
 	connectedETH1           bool
