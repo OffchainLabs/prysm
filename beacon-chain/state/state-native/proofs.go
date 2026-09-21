@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -90,7 +89,7 @@ func (b *BeaconState) proofByFieldIndex(ctx context.Context, f types.FieldIndex)
 		return nil, err
 	}
 
-	if features.ProgressiveSSZEnabled(b.version) {
+	if b.version >= version.Gloas {
 		return b.progressiveProofByFieldIndex(ctx, f)
 	}
 

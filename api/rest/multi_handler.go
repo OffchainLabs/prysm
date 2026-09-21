@@ -393,6 +393,7 @@ func queryUntilAccepted[T any](
 	var (
 		zero     T
 		fallback *T
+		reported []error
 	)
 
 	for {
@@ -404,6 +405,7 @@ func queryUntilAccepted[T any](
 
 		// Run a round of queries.
 		val, matched, ok, errs := round(roundCtx, handlers, cfg.fallbackDeadline, accept, fn)
+		deadlineCut := errors.Is(roundCtx.Err(), context.DeadlineExceeded)
 		roundCancel()
 
 		// If a match was found, return it immediately.
@@ -417,6 +419,31 @@ func queryUntilAccepted[T any](
 			fallback = &val
 		}
 
+		// A round the deadline cuts short reports only the cancellation; keep the last
+		// round that ran to completion.
+		if !deadlineCut {
+			reported = errs
+		}
+
+		// finish returns the best-effort fallback, else the nodes' last own answers,
+		// keeping the caller's cancellation in the chain when there is one.
+		finish := func() (T, bool, error) {
+			if fallback != nil {
+				return *fallback, false, nil
+			}
+
+			if reported == nil {
+				reported = errs
+			}
+
+			joined := errors.Join(reported...)
+			if ctx.Err() != nil {
+				return zero, false, errors.Join(joined, ctx.Err())
+			}
+
+			return zero, false, joined
+		}
+
 		// Stop after this round unless re-polling is enabled and there is still
 		// time left on the deadline. In UntilAny2xx mode a usable fallback
 		// also ends the re-polling.
@@ -426,22 +453,20 @@ func queryUntilAccepted[T any](
 		}
 
 		if repollExhausted {
-			if fallback != nil {
-				return *fallback, false, nil
-			}
-
-			return zero, false, errors.Join(errs...)
+			return finish()
 		}
 
 		// Wait for the poll interval to elapse.
 		select {
 		case <-ctx.Done():
-			if fallback != nil {
-				return *fallback, false, nil
-			}
-
-			return zero, false, ctx.Err()
+			return finish()
 		case <-time.After(cfg.pollInterval):
+		}
+
+		// Do not start a round the deadline would cut short: the completed rounds
+		// already hold the nodes' answers.
+		if !time.Now().Before(cfg.deadline) {
+			return finish()
 		}
 	}
 }
