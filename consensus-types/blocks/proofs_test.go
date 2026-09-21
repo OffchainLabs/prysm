@@ -3,7 +3,6 @@ package blocks
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
@@ -148,7 +147,7 @@ func TestComputeBlockBodyFieldRoots_Electra(t *testing.T) {
 	require.DeepEqual(t, correctHash[:], hash)
 }
 
-func TestComputeBlockBodyFieldRoots_Gloas_ProgressiveSSZGate(t *testing.T) {
+func TestComputeBlockBodyFieldRoots_Gloas_ProgressiveSSZ(t *testing.T) {
 	blockBodyGloas := hydrateBeaconBlockBodyGloas()
 	i, err := NewBeaconBlockBody(blockBodyGloas)
 	require.NoError(t, err)
@@ -156,28 +155,17 @@ func TestComputeBlockBodyFieldRoots_Gloas_ProgressiveSSZGate(t *testing.T) {
 	b, ok := i.(*BeaconBlockBody)
 	require.Equal(t, true, ok)
 
-	reset := features.InitWithReset(&features.Flags{DisableProgressiveSSZ: true})
-	defer reset()
-
-	legacyRoots, err := ComputeBlockBodyFieldRoots(t.Context(), b)
+	roots, err := ComputeBlockBodyFieldRoots(t.Context(), b)
 	require.NoError(t, err)
-	require.Equal(t, 13, len(legacyRoots))
+	require.Equal(t, 13, len(roots))
 
 	payloadAttestations, err := b.PayloadAttestations()
 	require.NoError(t, err)
-	expectedLegacyPayloadAttestationsRoot, err := ssz.MerkleizeListSSZ(payloadAttestations, fieldparams.MaxPayloadAttestations)
+	expected, err := ssz.MerkleizeListSSZProgressive(payloadAttestations)
 	require.NoError(t, err)
-	require.DeepEqual(t, expectedLegacyPayloadAttestationsRoot[:], legacyRoots[11])
+	require.DeepEqual(t, expected[:], roots[11])
 
-	reset = features.InitWithReset(&features.Flags{})
-	defer reset()
-
-	progressiveRoots, err := ComputeBlockBodyFieldRoots(t.Context(), b)
+	bounded, err := ssz.MerkleizeListSSZ(payloadAttestations, fieldparams.MaxPayloadAttestations)
 	require.NoError(t, err)
-	require.Equal(t, 13, len(progressiveRoots))
-
-	expectedProgressivePayloadAttestationsRoot, err := ssz.MerkleizeListSSZProgressive(payloadAttestations)
-	require.NoError(t, err)
-	require.DeepEqual(t, expectedProgressivePayloadAttestationsRoot[:], progressiveRoots[11])
-	require.DeepNotSSZEqual(t, legacyRoots[11], progressiveRoots[11])
+	require.DeepNotSSZEqual(t, bounded[:], roots[11])
 }
