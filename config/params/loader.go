@@ -60,7 +60,19 @@ func reconcileSlotDuration(conf *BeaconChainConfig, hasSecondsPerSlot, hasSlotDu
 	return nil
 }
 
+// UnmarshalConfig unmarshals a chain config yaml file, only logging strict-mode complaints about unknown or malformed fields.
 func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConfig, error) {
+	c, err := UnmarshalConfigStrict(yamlFile, conf)
+	var typeError *yaml.TypeError
+	if errors.As(err, &typeError) {
+		log.WithError(err).Error("There were some issues parsing the config from a yaml file")
+		return c, nil
+	}
+	return c, err
+}
+
+// UnmarshalConfigStrict is UnmarshalConfig, but returns the *yaml.TypeError listing unknown or malformed fields next to the otherwise usable config.
+func UnmarshalConfigStrict(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConfig, error) {
 	// To track if config name is defined inside config file.
 	hasConfigName := false
 	// SECONDS_PER_SLOT and SLOT_DURATION_MS express the same value. Track which ones the file
@@ -96,13 +108,13 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 		}
 	}
 	yamlFile = []byte(strings.Join(lines, "\n"))
+	var strictErr error
 	if err := yaml.UnmarshalStrict(yamlFile, conf); err != nil {
 		var typeError *yaml.TypeError
 		if !errors.As(err, &typeError) {
 			return nil, errors.Wrap(err, "Failed to parse chain config yaml file.")
-		} else {
-			log.WithError(err).Error("There were some issues parsing the config from a yaml file")
 		}
+		strictErr = err
 	}
 	if !hasConfigName {
 		conf.ConfigName = DevnetName
@@ -115,7 +127,7 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 	// Recompute the fork schedule
 	conf.InitializeForkSchedule()
 	log.Debugf("Config file values: %+v", conf)
-	return conf, nil
+	return conf, strictErr
 }
 
 func UnmarshalConfigFile(path string, conf *BeaconChainConfig) (*BeaconChainConfig, error) {
