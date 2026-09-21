@@ -17,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"google.golang.org/protobuf/proto"
 )
 
 func TestProcessSyncCommitteeUpdates_CanRotate(t *testing.T) {
@@ -171,7 +170,7 @@ func TestProcessSlashings_SlashedLess(t *testing.T) {
 	for i, tt := range tests {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			helpers.ClearCache()
-			original := proto.Clone(tt.state)
+			original := tt.state.Copy()
 			s, err := state_native.InitializeFromProtoAltair(tt.state)
 			require.NoError(t, err)
 			require.NoError(t, epoch.ProcessSlashings(t.Context(), s))

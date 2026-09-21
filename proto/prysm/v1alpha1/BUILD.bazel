@@ -55,7 +55,7 @@ ssz_methodical(
 
 ssz_methodical(
     name = "methodical_altair",
-    deps = [":go_proto"],
+    deps = [":beacon_state_go"],
     config_file = "altair.yaml",
     override_package_name = "eth",
     out = "altair.ssz.go",
@@ -144,11 +144,28 @@ go_proto_library(
     ],
 )
 
+# Native BeaconState{Fork} structs.
+go_library(
+    name = "beacon_state_go",
+    srcs = [
+        "beacon_state_mainnet.go",
+        "beacon_state_minimal.go",  # keep
+    ],
+    embed = [":go_proto"],
+    importpath = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//consensus-types/primitives:go_default_library",
+        "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
+    ],
+)
+
 go_library(
     name = "go_default_library",
     srcs = [
         "attestation.go",
         "beacon_block.go",
+        "beacon_state.go",
         "cloners.go",
         "eip_7521.go",
         "gloas.go",
@@ -168,7 +185,7 @@ go_library(
         ":methodical_phase0", # keep
         "validator.go",
     ],
-    embed = [":go_proto"],
+    embed = [":beacon_state_go"],
     importpath = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1",
     visibility = ["//visibility:public"],
     deps = [
@@ -230,6 +247,7 @@ go_test(
         "attestation_gloas_test.go",
         "attestation_fuzz_test.go",
         "beacon_block_fuzz_test.go",
+        "beacon_state_test.go",
         "cloners_test.go",
         "eip_7521_fuzz_test.go",
         "export_test.go",

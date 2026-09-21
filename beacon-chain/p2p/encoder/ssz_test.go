@@ -97,7 +97,6 @@ type BlobSidecarCreator struct{}
 type BlobSidecarsCreator struct{}
 type Deposit_DataCreator struct{}
 type BeaconStateCreator struct{}
-type BeaconStateAltairCreator struct{}
 type ForkCreator struct{}
 type PendingAttestationCreator struct{}
 type HistoricalBatchCreator struct{}
@@ -268,7 +267,6 @@ func (BlobSidecarCreator) Create() MarshalerProtoMessage        { return &ethpb.
 func (BlobSidecarsCreator) Create() MarshalerProtoMessage       { return &ethpb.BlobSidecars{} }
 func (Deposit_DataCreator) Create() MarshalerProtoMessage       { return &ethpb.Deposit_Data{} }
 func (BeaconStateCreator) Create() MarshalerProtoMessage        { return &ethpb.BeaconState{} }
-func (BeaconStateAltairCreator) Create() MarshalerProtoMessage  { return &ethpb.BeaconStateAltair{} }
 func (ForkCreator) Create() MarshalerProtoMessage               { return &ethpb.Fork{} }
 func (PendingAttestationCreator) Create() MarshalerProtoMessage { return &ethpb.PendingAttestation{} }
 func (HistoricalBatchCreator) Create() MarshalerProtoMessage    { return &ethpb.HistoricalBatch{} }
@@ -392,7 +390,6 @@ var creators = []MarshalerProtoCreator{
 	BlobSidecarsCreator{},
 	Deposit_DataCreator{},
 	BeaconStateCreator{},
-	BeaconStateAltairCreator{},
 	ForkCreator{},
 	PendingAttestationCreator{},
 	HistoricalBatchCreator{},
