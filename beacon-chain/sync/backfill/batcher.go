@@ -42,7 +42,8 @@ func (c *batchSequencer) sequence() ([]batch, error) {
 			// Since we always create batches from high to low, we can assume we've already created the
 			// descendent batches from the batch we're dropping, so there won't be another batch depending on
 			// this one - we can stop adding batches and mark put this one in the batchEndSequence state.
-			// When all batches are in batchEndSequence, worker pool spins down and marks backfill complete.
+			// The pool treats that signal as the end of the sequence once nothing is left outstanding,
+			// which spins the workers down and lets the service report completion. See p2pBatchWorkerPool.complete.
 			if c.seq[i].expired(needs) {
 				c.seq[i] = c.seq[i].withState(batchEndSequence)
 			} else {
@@ -139,6 +140,26 @@ func (c *batchSequencer) countWithState(s batchState) int {
 		}
 	}
 	return n
+}
+
+// fatalError returns the error of the first batch that failed in a way the service cannot recover
+// from, or nil if no batch is in that state. A batch with a fatal error is never sequenced again,
+// and every later batch depends on it to chain parent roots, so the runloop cannot tell the
+// difference between waiting for that batch to be retried and having nothing left to do unless the
+// error is surfaced here.
+func (c *batchSequencer) fatalError() error {
+	for i := range c.seq {
+		if c.seq[i].state != batchErrFatal {
+			continue
+		}
+		if c.seq[i].err != nil {
+			return c.seq[i].err
+		}
+		// withFatalError always records an error, so this is a defensive fallback for a batch that
+		// somehow reaches the fatal state without one.
+		return errors.Errorf("batch %s failed with an unrecoverable error", c.seq[i].id())
+	}
+	return nil
 }
 
 // numTodo computes the number of remaining batches for metrics and logging purposes.

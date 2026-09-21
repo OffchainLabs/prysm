@@ -3,6 +3,7 @@ package backfill
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
@@ -43,13 +44,24 @@ type Service struct {
 	dcStore         *filesystem.DataColumnStorage
 	initSyncWaiter  func() error
 	complete        chan struct{}
-	workerCfg       *workerCfg
-	fuluStart       primitives.Slot
-	denebStart      primitives.Slot
-	progressLogger  *intervalLogger
+	// completeOnce guards close(complete) so that every exit path from Start can unblock waiters
+	// without racing another path over the channel.
+	completeOnce sync.Once
+	// completionErr is what WaitForCompletion returns once complete is closed. It is written before
+	// the channel is closed, so readers that observe the close also observe the value.
+	completionErr  error
+	workerCfg      *workerCfg
+	fuluStart      primitives.Slot
+	denebStart     primitives.Slot
+	progressLogger *intervalLogger
 }
 
 const progressLogInterval = 60
+
+// errMissingSyncNeedsWaiter is used when the service is started without the callback it needs to
+// learn which slots must be backfilled. Backfill cannot make progress without it, so waiters are
+// unblocked with this error rather than left parked indefinitely.
+var errMissingSyncNeedsWaiter = errors.New("service missing sync needs waiter")
 
 var _ runtime.Service = (*Service)(nil)
 
@@ -152,18 +164,28 @@ func NewService(ctx context.Context, su *Store, bStore *filesystem.BlobStorage, 
 	return s, nil
 }
 
-func (s *Service) updateComplete() bool {
+// updateComplete collects the next finished batch from the worker pool and feeds it to the sequencer.
+// It returns true when the runloop must stop, with the error that ended backfill, or nil if the
+// sequence reached its end normally.
+func (s *Service) updateComplete() (bool, error) {
 	b, err := s.pool.complete()
 	if err != nil {
 		if errors.Is(err, errEndSequence) {
 			log.WithField("backfillSlot", b.begin).Info("Backfill is complete")
-			return true
+			return true, nil
 		}
+		if s.ctx.Err() != nil {
+			// The node is shutting down, which stops the pool with a context error. That is not a
+			// backfill failure, and waiters already see the same error through the context.
+			log.WithError(err).Info("Backfill worker pool stopped")
+			return true, s.ctx.Err()
+		}
+		err = errors.Wrap(err, "unhandled error from backfill worker pool")
 		log.WithError(err).Error("Service received unhandled error from worker pool")
-		return true
+		return true, err
 	}
 	s.batchSeq.update(b)
-	return false
+	return false, nil
 }
 
 func (s *Service) importBatches(ctx context.Context) {
@@ -254,7 +276,7 @@ func (s *Service) scheduleTodos() {
 func (s *Service) Start() {
 	if !s.enabled {
 		log.Info("Service not enabled")
-		s.markComplete()
+		s.markComplete(nil)
 		return
 	}
 	ctx, cancel := context.WithCancel(s.ctx)
@@ -265,24 +287,29 @@ func (s *Service) Start() {
 
 	if s.store.isGenesisSync() {
 		log.Info("Node synced from genesis, shutting down backfill")
-		s.markComplete()
+		s.markComplete(nil)
 		return
 	}
 
 	clock, err := s.cw.WaitForClock(ctx)
 	if err != nil {
-		log.WithError(err).Error("Service failed to start while waiting for genesis data")
+		err = errors.Wrap(err, "service failed to start while waiting for genesis data")
+		log.WithError(err).Error("Could not start backfill service")
+		s.markComplete(err)
 		return
 	}
 	s.clock = clock
 
 	if s.syncNeedsWaiter == nil {
 		log.Error("Service missing sync needs waiter; cannot start")
+		s.markComplete(errMissingSyncNeedsWaiter)
 		return
 	}
 	syncNeeds, err := s.syncNeedsWaiter()
 	if err != nil {
-		log.WithError(err).Error("Service failed to start while waiting for sync needs")
+		err = errors.Wrap(err, "service failed to start while waiting for sync needs")
+		log.WithError(err).Error("Could not start backfill service")
+		s.markComplete(err)
 		return
 	}
 	s.syncNeeds = syncNeeds
@@ -294,14 +321,16 @@ func (s *Service) Start() {
 		log.WithField("minimumSlot", needs.Block.Begin).
 			WithField("backfillLowestSlot", status.LowSlot).
 			Info("Exiting backfill service; minimum block retention slot > lowest backfilled block")
-		s.markComplete()
+		s.markComplete(nil)
 		return
 	}
 
 	if s.initSyncWaiter != nil {
 		log.Info("Service waiting for initial-sync to reach head before starting")
 		if err := s.initSyncWaiter(); err != nil {
-			log.WithError(err).Error("Error waiting for init-sync to complete")
+			err = errors.Wrap(err, "error waiting for init-sync to complete")
+			log.WithError(err).Error("Could not start backfill service")
+			s.markComplete(err)
 			return
 		}
 	}
@@ -316,7 +345,9 @@ func (s *Service) Start() {
 		}
 
 		if err = initWorkerCfg(ctx, s.workerCfg, s.verifierWaiter, s.store); err != nil {
-			log.WithError(err).Error("Could not initialize blob verifier in backfill service")
+			err = errors.Wrap(err, "could not initialize blob verifier in backfill service")
+			log.WithError(err).Error("Could not start backfill service")
+			s.markComplete(err)
 			return
 		}
 	}
@@ -328,7 +359,9 @@ func (s *Service) Start() {
 	s.pool.spawn(ctx, s.nWorkers, s.pa, s.workerCfg)
 	s.batchSeq = newBatchSequencer(s.nWorkers, primitives.Slot(status.LowSlot), primitives.Slot(s.batchSize), s.syncNeeds.Currently)
 	if err = s.initBatches(); err != nil {
-		log.WithError(err).Error("Non-recoverable error in backfill service")
+		err = errors.Wrap(err, "non-recoverable error in backfill service")
+		log.WithError(err).Error("Could not start backfill service")
+		s.markComplete(err)
 		return
 	}
 
@@ -343,11 +376,21 @@ func (s *Service) Start() {
 		if ctx.Err() != nil {
 			return
 		}
-		if s.updateComplete() {
-			s.markComplete()
+		if done, err := s.updateComplete(); done {
+			s.markComplete(err)
 			return
 		}
 		s.importBatches(ctx)
+		// A batch that failed with an unrecoverable error is never sequenced again, and the batches
+		// queued behind it can never be chained to the canonical chain without it. Without stopping
+		// here the runloop keeps waiting for progress that cannot happen, which leaves waiters like
+		// the db pruner parked while making it look like there is simply nothing left to do.
+		if err := s.batchSeq.fatalError(); err != nil {
+			err = errors.Wrap(err, "backfill stopped on an unrecoverable batch error")
+			log.WithError(err).Error("Non-recoverable error in backfill service")
+			s.markComplete(err)
+			return
+		}
 		batchesWaiting.Set(float64(s.batchSeq.countWithState(batchImportable)))
 		s.scheduleTodos()
 		s.logProgress()
@@ -385,9 +428,20 @@ func newDataColumnVerifierFromInitializer(ini *verification.Initializer) verific
 	}
 }
 
-func (s *Service) markComplete() {
-	close(s.complete)
-	log.Info("Marked as complete")
+// markComplete unblocks WaitForCompletion. A nil error means backfill finished successfully; any
+// other error is handed to waiters, like the db pruner, so they can decide not to act on it. Every
+// exit path from Start must call this, otherwise waiters stay parked until the node shuts down.
+func (s *Service) markComplete(err error) {
+	s.completeOnce.Do(func() {
+		s.completionErr = err
+		close(s.complete)
+		if err != nil {
+			// The error itself is logged by whoever gave up on the backfill.
+			log.Info("Marked as stopped")
+			return
+		}
+		log.Info("Marked as complete")
+	})
 }
 
 func (s *Service) WaitForCompletion() error {
@@ -395,7 +449,7 @@ func (s *Service) WaitForCompletion() error {
 	case <-s.ctx.Done():
 		return s.ctx.Err()
 	case <-s.complete:
-		return nil
+		return s.completionErr
 	}
 }
 

@@ -40,15 +40,25 @@ func defaultNewWorker(p p2p.P2P) newWorker {
 // ie a value of 1s means we'll make ~1 req/sec per peer.
 const minReqInterval = time.Second
 
+// p2pBatchWorkerPool is driven by exactly one consumer goroutine: the backfill service runloop,
+// which calls todo() to hand out batches and complete() to collect finished ones. The router and
+// worker goroutines never touch endSeq or outstanding; when the router retires a batch early it
+// hands it back through fromRouter, so complete() accounts for it like any other delivery.
 type p2pBatchWorkerPool struct {
-	maxBatches     int
-	newWorker      newWorker
-	toWorkers      chan batch
-	fromWorkers    chan batch
-	toRouter       chan batch
-	fromRouter     chan batch
-	shutdownErr    chan error
-	endSeq         []batch
+	maxBatches  int
+	newWorker   newWorker
+	toWorkers   chan batch
+	fromWorkers chan batch
+	toRouter    chan batch
+	fromRouter  chan batch
+	shutdownErr chan error
+	// endSeq holds the first batchEndSequence signal received from the runloop. It is a control
+	// signal rather than a batch with work attached, and only the first one is kept because
+	// complete() needs a single signal to know the sequence has ended.
+	endSeq []batch
+	// outstanding counts the batches handed to todo() that complete() has not returned yet.
+	// It is the pool's view of "there is still work that may produce something to import".
+	outstanding    int
 	ctx            context.Context
 	cancel         func()
 	earliest       primitives.Slot // earliest is the earliest slot a worker is processing
@@ -69,7 +79,7 @@ func newP2PBatchWorkerPool(p p2p.P2P, maxBatches int, needs func() das.CurrentNe
 		toWorkers:      make(chan batch),
 		fromWorkers:    make(chan batch),
 		maxBatches:     maxBatches,
-		shutdownErr:    make(chan error),
+		shutdownErr:    make(chan error, 1),
 		peerCache:      sync.NewDASPeerCache(p),
 		p2p:            p,
 		peerFailLogger: newIntervalLogger(log, 5),
@@ -90,22 +100,40 @@ func (p *p2pBatchWorkerPool) todo(b batch) {
 	// Intercept batchEndSequence batches so workers can remain unaware of this state.
 	// Workers don't know what to do with batchEndSequence batches. They are a signal to the pool that the batcher
 	// has stopped producing things for the workers to do and the pool is close to winding down. See complete()
-	// to understand how the pool manages the state where all workers are idle
-	// and all incoming batches signal end of sequence.
+	// to understand how the pool uses that signal together with the outstanding batch count to wind down.
+	// The sequencer may re-emit the signal on every scheduling pass that has nothing else to hand out,
+	// so only the first one is kept.
 	if b.state == batchEndSequence {
-		p.endSeq = append(p.endSeq, b)
+		if len(p.endSeq) == 0 {
+			p.endSeq = append(p.endSeq, b)
+		}
 		return
 	}
+	p.outstanding++
 	p.toRouter <- b
 }
 
 func (p *p2pBatchWorkerPool) complete() (batch, error) {
-	if len(p.endSeq) == p.maxBatches {
+	// A batchEndSequence signal is handed out by the runloop itself, so it generates no worker
+	// traffic. It arrives on a scheduling pass where the batcher had no real batch left to sequence,
+	// which means that once every outstanding batch has been returned there is nothing left to
+	// download and nothing left to import. Checking that here, before blocking below, is what keeps
+	// the runloop from parking forever on the turn after the final batch is imported. The outstanding
+	// check is what keeps us from reporting completion while a batch is still in flight, including one
+	// that will fail and be sequenced again.
+	if len(p.endSeq) > 0 && p.outstanding == 0 {
 		return p.endSeq[0], errEndSequence
 	}
 
 	select {
 	case b := <-p.fromRouter:
+		// Every fromRouter delivery is a batch leaving the pool for good: either importable work for
+		// the runloop, or a batch the router retired because it fell outside the retention window.
+		if p.outstanding == 0 {
+			log.WithFields(b.logFields()).Debug("Batch completed without being assigned to a worker")
+		} else {
+			p.outstanding--
+		}
 		return b, nil
 	case err := <-p.shutdownErr:
 		return batch{}, errors.Wrap(err, "fatal error from backfill worker pool")
@@ -188,7 +216,12 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 	for i, b := range todo {
 		needs := p.needs()
 		if b.expired(needs) {
-			p.endSeq = append(p.endSeq, b.withState(batchEndSequence))
+			// Hand the retired batch back to the runloop through the same channel as finished work
+			// rather than recording it as an end-of-sequence signal here: endSeq belongs to the
+			// goroutine that calls todo()/complete(), and this batch is already counted as
+			// outstanding, so complete() releases it from that accounting. The sequencer will
+			// re-emit the end of the sequence through todo() once it has nothing left to download.
+			p.fromRouter <- b.withState(batchEndSequence)
 			continue
 		}
 		excludePeers := busy
@@ -255,5 +288,12 @@ func (p *p2pBatchWorkerPool) updateEarliest(current primitives.Slot) {
 
 func (p *p2pBatchWorkerPool) shutdown(err error) {
 	p.cancel()
-	p.shutdownErr <- err
+	// The runloop only reads shutdownErr from complete(), and it can fail anywhere else: importing a
+	// batch, or blocked handing one to the router. A blocking send here would park the router goroutine
+	// with the busy peer map held, so the signal is buffered and sent without blocking. An already
+	// pending error means the pool is winding down, so dropping a later one loses nothing.
+	select {
+	case p.shutdownErr <- err:
+	default:
+	}
 }
