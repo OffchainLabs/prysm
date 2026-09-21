@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
-	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/api/client"
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
@@ -13,6 +12,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -57,56 +57,30 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 	subCtx, finish := c.eventStreamGuard.Replace(ctx)
 	defer finish()
 	rpcClient := c.getClient()
-	streamCtx, cancel := context.WithCancel(subCtx)
-	var readers sync.WaitGroup
-	defer func() {
-		cancel()
-		readers.Wait()
-		c.eventStreamGuard.MarkRunning(false)
-	}()
 
-	type result struct {
-		payload bool
-		err     error
-	}
-	results := make(chan result, 2)
-	start := func(isPayload bool, read func(context.Context, ethpb.BeaconNodeValidatorClient, chan<- *eventClient.Event) error) {
-		readers.Add(1)
-		go func() {
-			defer readers.Done()
-			results <- result{payload: isPayload, err: read(streamCtx, rpcClient, eventsChannel)}
-		}()
-	}
+	// The group context stops the sibling stream as soon as one of them fails.
+	g, gctx := errgroup.WithContext(subCtx)
 	if head {
-		start(false, receiveSlotEvents)
+		g.Go(func() error { return receiveSlotEvents(gctx, rpcClient, eventsChannel) })
 	}
 	if payload {
-		start(true, receivePayloadAvailableEvents)
+		g.Go(func() error {
+			err := receivePayloadAvailableEvents(gctx, rpcClient, eventsChannel)
+			if status.Code(errors.Cause(err)) == codes.Unimplemented {
+				log.Warn("Beacon node does not support payload availability streaming; gRPC PTC votes will wait for the deadline. Upgrade the beacon node or use --beacon-rest-api-provider for on-arrival voting")
+				return nil
+			}
+			return err
+		})
 	}
 	c.eventStreamGuard.MarkRunning(true)
-	for {
-		select {
-		case <-subCtx.Done():
-			return
-		case res := <-results:
-			if res.payload && status.Code(errors.Cause(res.err)) == codes.Unimplemented {
-				log.Warn("Beacon node does not support payload availability streaming; gRPC PTC votes will wait for the deadline. Upgrade the beacon node or use --beacon-rest-api-provider for on-arrival voting")
-				if !head {
-					return
-				}
-				continue
-			}
-			cancel()
-			readers.Wait()
-			c.eventStreamGuard.MarkRunning(false)
-			if res.err != nil && subCtx.Err() == nil {
-				sendEvent(subCtx, eventsChannel, &eventClient.Event{
-					Type: eventClient.EventConnectionError,
-					Data: []byte(errors.Wrap(client.ErrConnectionIssue, res.err.Error()).Error()),
-				})
-			}
-			return
-		}
+	err := g.Wait()
+	c.eventStreamGuard.MarkRunning(false)
+	if err != nil && subCtx.Err() == nil {
+		sendEvent(subCtx, eventsChannel, &eventClient.Event{
+			Type: eventClient.EventConnectionError,
+			Data: []byte(errors.Wrap(client.ErrConnectionIssue, err.Error()).Error()),
+		})
 	}
 }
 
