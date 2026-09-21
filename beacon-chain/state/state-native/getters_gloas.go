@@ -714,6 +714,10 @@ func (b *BeaconState) PayloadCommitteeReadOnly(slot primitives.Slot) ([]primitiv
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
+	if b.fork != nil && bytes.Equal(b.fork.CurrentVersion, params.BeaconConfig().GloasForkVersion) && slots.ToEpoch(slot) < b.fork.Epoch {
+		return nil, fmt.Errorf("ptc lookup for slot %d precedes the gloas fork epoch %d", slot, b.fork.Epoch)
+	}
+
 	offset, err := ptcWindowOffset(b.slot, slot)
 	if err != nil {
 		return nil, err
