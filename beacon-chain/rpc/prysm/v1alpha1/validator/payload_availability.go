@@ -13,6 +13,8 @@ import (
 
 const payloadAvailabilityBufferSize = 16
 
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
+//
 // StreamExecutionPayloadAvailable announces payload availability independently of execution validation.
 func (vs *Server) StreamExecutionPayloadAvailable(_ *emptypb.Empty, stream ethpb.BeaconNodeValidator_StreamExecutionPayloadAvailableServer) error {
 	ctx, cancel := context.WithCancel(stream.Context())
