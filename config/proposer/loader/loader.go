@@ -51,8 +51,9 @@ type SettingsLoader struct {
 }
 
 type flagOptions struct {
-	builderConfig *proposer.BuilderConfig
-	gasLimit      *validator.Uint64
+	builderConfig   *proposer.BuilderConfig
+	gasLimit        *validator.Uint64
+	builderFlagsSet bool
 }
 
 // SettingsLoaderOption sets additional options that affect the proposer settings
@@ -102,7 +103,11 @@ func NewProposerSettingsLoader(cliCtx *cli.Context, db iface.ValidatorDB, opts .
 	if err != nil {
 		return nil, err
 	}
-	psl := &SettingsLoader{db: db, existsInDB: psExists, options: &flagOptions{}}
+	psl := &SettingsLoader{
+		db:         db,
+		existsInDB: psExists,
+		options:    &flagOptions{builderFlagsSet: len(setBuilderFlagNames(cliCtx)) > 0},
+	}
 
 	psl.loadMethods = determineLoadMethods(cliCtx, psl.existsInDB)
 
@@ -157,6 +162,8 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 			WithField("proposerConfigCount", len(dbSettings.ProposerConfig)).
 			Debug("Loaded proposer settings from DB")
 	}
+	// Captured before the merges below rewrite the DB payload in place.
+	hadDefaultBuilders := hasDefaultBuilders(dbSettings)
 
 	// start to process based on load method,
 	// each method merges onto the previous method's result.
@@ -189,6 +196,10 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 		}
 		base = loadedSettings
 	}
+	if hadDefaultBuilders && !hasDefaultBuilders(loadedSettings) {
+		log.Warn("Dropped the default builder settings a previous run stored in the validator DB because neither builder flags nor a settings source configured a builders list this run; pass --" +
+			flags.BuilderURLsFlag.Name + " or the settings file on every start")
+	}
 
 	// exit early if nothing is provided
 	if loadedSettings == nil || (loadedSettings.ProposerConfig == nil && loadedSettings.DefaultConfig == nil) {
@@ -203,8 +214,11 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 	ps.WarnUnsetMaxExecutionPayment()
 	if psl.replacesDBKeys {
 		warnReplacedDBKeys(dbps, ps)
-	} else {
-		psl.logRetainedDBKeys(dbps)
+	}
+	// Flag-only builder defaults are rebuilt every run and never persisted on their own.
+	if !ps.ShouldBeSaved() {
+		log.Debug("Proposer settings carry nothing to persist; validator DB left unchanged")
+		return ps, nil
 	}
 	if err := psl.db.SaveProposerSettings(cliCtx.Context, ps); err != nil {
 		return nil, err
@@ -240,15 +254,9 @@ func warnReplacedDBKeys(db, merged *proposer.Settings) {
 			"Changes made through the keymanager API do not survive a restart while a settings file or URL is configured")
 }
 
-// logRetainedDBKeys points out DB per-key entries that outrank defaults a flag, file or URL configured.
-func (psl *SettingsLoader) logRetainedDBKeys(db *proposer.Settings) {
-	if db == nil || len(db.ProposeConfig) == 0 || psl.loadMethods[0] == onlyDB || psl.loadMethods[0] == none {
-		return
-	}
-	log.WithField("perKeyCount", len(db.ProposeConfig)).
-		Info("Per-key proposer settings saved in the validator DB by a previous run take precedence over the configured defaults. " +
-			"The keymanager API GET /eth/v1/validator/{pubkey}/feerecipient, gas_limit and builder_config endpoints show a key's resolved settings; " +
-			"their DELETE endpoints return a key to the defaults")
+// hasDefaultBuilders reports whether default_config names at least one builder.
+func hasDefaultBuilders(p *validatorpb.ProposerSettingsPayload) bool {
+	return p != nil && p.DefaultConfig != nil && len(p.DefaultConfig.Builder.GetBuilders()) > 0
 }
 
 // capKeys renders a sorted key list, truncated to maxLoggedKeys with a "+N more" tail.
@@ -281,6 +289,10 @@ func (psl *SettingsLoader) loadFromDefault(cliCtx *cli.Context, dbSettings *vali
 		}
 		option.FeeRecipient = suggestedFeeRecipient
 		logEntry = logEntry.WithField(flags.SuggestedFeeRecipientFlag.Name, suggestedFeeRecipient)
+	} else if dbSettings != nil && dbSettings.DefaultConfig != nil {
+		// Builder flags alone replace only the builder half of the persisted default.
+		option.FeeRecipient = dbSettings.DefaultConfig.FeeRecipient
+		option.GasLimit = dbSettings.DefaultConfig.GasLimit
 	}
 	builder, err := builderConfigFromFlags(cliCtx)
 	if err != nil {
@@ -455,17 +467,47 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 
 	var builderConfig *validatorpb.BuilderConfig
 	var gasLimitOnly *validator.Uint64
+	builderFlagsSet := false
 	if options != nil {
 		if options.builderConfig != nil {
 			builderConfig = options.builderConfig.ToConsensus()
 		}
 		gasLimitOnly = options.gasLimit
+		builderFlagsSet = options.builderFlagsSet
 	}
 
 	if merged.Version == proposer.SchemaV2 {
-		return mergeProposerSettingsV2(merged, loaded, db, builderConfig, gasLimitOnly)
+		return mergeProposerSettingsV2(merged, loaded, db, builderConfig, gasLimitOnly, builderFlagsSet)
 	}
 	return mergeProposerSettingsV1(merged, loaded, db, builderConfig, gasLimitOnly)
+}
+
+// hasGloasBuilderFields reports whether a payload builder configures the Gloas builder API; an explicit empty list counts.
+func hasGloasBuilderFields(b *validatorpb.BuilderConfig) bool {
+	return b != nil && (len(b.Builders) > 0 || b.BuildersSet || b.MinBid != nil ||
+		b.BuilderBoostFactor != nil || b.MaxExecutionPayment != nil)
+}
+
+// clearBuilderFlagFields clears the fields the builder flags own; a config left with zero legacy fields disappears.
+func clearBuilderFlagFields(b *validatorpb.BuilderConfig) *validatorpb.BuilderConfig {
+	if b == nil {
+		return nil
+	}
+	b.Builders, b.BuildersSet, b.MinBid, b.BuilderBoostFactor, b.MaxExecutionPayment = nil, false, nil, nil, nil
+	if !b.Enabled && b.GasLimit == 0 {
+		return nil
+	}
+	return b
+}
+
+// enableLegacyPerKeyBuilders opts legacy-only per-key blocks in, as v1 --enable-builder
+// does. Blocks with v2 content, including builders: [], keep their own choice.
+func enableLegacyPerKeyBuilders(merged *validatorpb.ProposerSettingsPayload) {
+	for _, opt := range merged.ProposerConfig {
+		if opt != nil && opt.Builder != nil && !hasGloasBuilderFields(opt.Builder) {
+			opt.Builder.Enabled = true
+		}
+	}
 }
 
 // markExplicitEmptyBuilders stamps the persistence marker for a user source's
@@ -492,12 +534,7 @@ func inferSchemaVersion(p *validatorpb.ProposerSettingsPayload) {
 		return
 	}
 	hasV2 := func(opt *validatorpb.ProposerOptionPayload) bool {
-		if opt == nil || opt.Builder == nil {
-			return false
-		}
-		b := opt.Builder
-		return len(b.Builders) > 0 || b.BuildersSet || b.MinBid != nil ||
-			b.BuilderBoostFactor != nil || b.MaxExecutionPayment != nil
+		return opt != nil && hasGloasBuilderFields(opt.Builder)
 	}
 	found := hasV2(p.DefaultConfig)
 	for _, opt := range p.ProposerConfig {
@@ -568,7 +605,12 @@ func mergeProposerSettingsV1(merged, loaded, db *validatorpb.ProposerSettingsPay
 	return merged
 }
 
-func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64) *validatorpb.ProposerSettingsPayload {
+func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64, builderFlagsSet bool) *validatorpb.ProposerSettingsPayload {
+	// Builder flags are per-run: a run without them drops the v2 builder fields an
+	// earlier flag run persisted in default_config. Legacy fields follow their own flags.
+	if db != nil && db.DefaultConfig != nil && !builderFlagsSet {
+		db.DefaultConfig.Builder = clearBuilderFlagFields(db.DefaultConfig.Builder)
+	}
 	if db != nil && db.DefaultConfig != nil {
 		merged.DefaultConfig = db.DefaultConfig
 	}
@@ -576,6 +618,10 @@ func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPay
 		merged.DefaultConfig = loaded.DefaultConfig
 	}
 	merged.ProposerConfig = selectProposerConfig(db, loaded)
+
+	if builderFlagsSet && merged.DefaultConfig != nil && len(merged.DefaultConfig.Builder.GetBuilders()) > 0 {
+		enableLegacyPerKeyBuilders(merged)
+	}
 
 	// --enable-builder is legacy content: it still forces the default mev-boost
 	// toggle on for pre-gloas registrations, and is inert from the fork onward.
