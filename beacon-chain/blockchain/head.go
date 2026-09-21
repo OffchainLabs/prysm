@@ -8,7 +8,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -347,8 +349,7 @@ func (s *Service) notifyNewHeadEvent(
 	newHeadStateRoot,
 	newHeadRoot [32]byte,
 ) error {
-	currEpoch := slots.ToEpoch(newHeadSlot)
-	previousDutyDependentRoot, currentDutyDependentRoot, err := s.headEventDependentRoots(currEpoch)
+	previousDutyDependentRoot, currentDutyDependentRoot, err := s.headEventDependentRoots(ctx, newHeadSlot)
 	if err != nil {
 		return err
 	}
@@ -397,8 +398,7 @@ func (s *Service) notifyNewHeadV2Event(
 	if newHeadRoot == s.lastHeadV2Root && payloadStatus == s.lastHeadV2Status {
 		return nil
 	}
-	currEpoch := slots.ToEpoch(newHeadSlot)
-	currentEpochDependentRoot, nextEpochDependentRoot, err := s.headEventDependentRoots(currEpoch)
+	currentEpochDependentRoot, nextEpochDependentRoot, err := s.headEventDependentRoots(ctx, newHeadSlot)
 	if err != nil {
 		return err
 	}
@@ -432,28 +432,51 @@ func (s *Service) notifyNewHeadV2Event(
 	return nil
 }
 
-// headEventDependentRoots computes the previous/current duty dependent roots shared by the
-// head and head_v2 events for the given head epoch, falling back to the origin root.
-// Note that the return values can be differently named depending on the context
-// they are used; head and head_v2.
-//
-// All dependent roots use the genesis block root in the case of underflow.
-func (s *Service) headEventDependentRoots(currEpoch primitives.Epoch) (previousDutyDependentRoot, currentDutyDependentRoot [32]byte, err error) {
-	currentDutyDependentRoot, err = s.DependentRoot(currEpoch)
+// headEventDependentRoots uses head state history when forkchoice lacks an event's dependent root.
+func (s *Service) headEventDependentRoots(ctx context.Context, headSlot primitives.Slot) (previousDutyDependentRoot, currentDutyDependentRoot [32]byte, err error) {
+	var headState state.ReadOnlyBeaconState
+	dependentRootWithStateFallback := func(epoch primitives.Epoch) ([32]byte, error) {
+		if epoch == 0 {
+			return s.originBlockRoot, nil
+		}
+		root, err := s.DependentRoot(epoch)
+		if err == nil && root != [32]byte{} {
+			return root, nil
+		}
+		if err != nil && !errors.Is(err, doublylinkedtree.ErrNilNode) {
+			return [32]byte{}, err
+		}
+		if headState == nil {
+			headState, err = s.HeadStateReadOnly(ctx)
+			if err != nil {
+				return [32]byte{}, errors.Wrap(err, "could not get head state")
+			}
+		}
+		// The dependent root is the last block root before the requested epoch.
+		precedingEpoch := epoch.Sub(1)
+		dependentSlot, err := slots.EpochEnd(precedingEpoch)
+		if err != nil {
+			return [32]byte{}, errors.Wrap(err, "could not get duty slot")
+		}
+		rootBytes, err := helpers.BlockRootAtSlot(headState, dependentSlot)
+		if err != nil {
+			return [32]byte{}, err
+		}
+		return bytesutil.ToBytes32(rootBytes), nil
+	}
+
+	currentEpoch := slots.ToEpoch(headSlot)
+	currentDutyDependentRoot, err = dependentRootWithStateFallback(currentEpoch)
 	if err != nil {
 		return [32]byte{}, [32]byte{}, errors.Wrap(err, "could not get duty dependent root")
 	}
-	if currentDutyDependentRoot == [32]byte{} {
-		currentDutyDependentRoot = s.originBlockRoot
-	}
-	if currEpoch > 0 {
-		previousDutyDependentRoot, err = s.DependentRoot(currEpoch.Sub(1))
+	previousDutyDependentRoot = s.originBlockRoot
+	if currentEpoch > 0 {
+		previousEpoch := currentEpoch.Sub(1)
+		previousDutyDependentRoot, err = dependentRootWithStateFallback(previousEpoch)
 		if err != nil {
 			return [32]byte{}, [32]byte{}, errors.Wrap(err, "could not get duty dependent root")
 		}
-	}
-	if previousDutyDependentRoot == [32]byte{} {
-		previousDutyDependentRoot = s.originBlockRoot
 	}
 	return previousDutyDependentRoot, currentDutyDependentRoot, nil
 }

@@ -221,7 +221,7 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 		srv.SetGenesisTime(time.Now())
 		srv.originBlockRoot = genesisRoot
 		notifier := srv.cfg.StateNotifier.(*mock.MockStateNotifier)
-		st, blk, err := prepareForkchoiceState(t.Context(), 0, [32]byte{}, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		st, blk, err := prepareForkchoiceState(t.Context(), 0, srv.originBlockRoot, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
 		require.NoError(t, err)
 		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
 		epoch1Start, err := slots.EpochStart(1)
@@ -232,7 +232,7 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 
 		newHeadStateRoot := [32]byte{2}
 		newHeadRoot := [32]byte{3}
-		st, blk, err = prepareForkchoiceState(t.Context(), 0, newHeadRoot, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		st, blk, err = prepareForkchoiceState(t.Context(), 0, newHeadRoot, srv.originBlockRoot, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
 		require.NoError(t, err)
 		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
 		err = srv.notifyNewHeadEvent(t.Context(), epoch2Start, newHeadStateRoot, newHeadRoot)
@@ -259,12 +259,12 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 		srv.SetGenesisTime(time.Now())
 		notifier := srv.cfg.StateNotifier.(*mock.MockStateNotifier)
 		srv.originBlockRoot = [32]byte{1}
-		st, blk, err := prepareForkchoiceState(t.Context(), 0, [32]byte{}, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		st, blk, err := prepareForkchoiceState(t.Context(), 0, srv.originBlockRoot, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
 		require.NoError(t, err)
 		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
 		newHeadStateRoot := [32]byte{2}
 		newHeadRoot := [32]byte{3}
-		st, blk, err = prepareForkchoiceState(t.Context(), 32, newHeadRoot, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		st, blk, err = prepareForkchoiceState(t.Context(), 32, newHeadRoot, srv.originBlockRoot, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
 		require.NoError(t, err)
 		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
 		newHeadSlot := params.BeaconConfig().SlotsPerEpoch
@@ -286,16 +286,16 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 		}
 		require.DeepEqual(t, wanted, eventHead)
 	})
-	t.Run("previous dependent root zero hash falls back to origin", func(t *testing.T) {
+	t.Run("genesis dependent root uses origin", func(t *testing.T) {
 		srv := testServiceWithDB(t)
 		srv.SetGenesisTime(time.Now())
 		notifier := srv.cfg.StateNotifier.(*mock.MockStateNotifier)
 		srv.originBlockRoot = [32]byte{0xab}
-		st, blk, err := prepareForkchoiceState(t.Context(), 0, [32]byte{}, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		st, blk, err := prepareForkchoiceState(t.Context(), 0, srv.originBlockRoot, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
 		require.NoError(t, err)
 		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
 		newHeadRoot := [32]byte{3}
-		st, blk, err = prepareForkchoiceState(t.Context(), 32, newHeadRoot, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		st, blk, err = prepareForkchoiceState(t.Context(), 32, newHeadRoot, srv.originBlockRoot, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
 		require.NoError(t, err)
 		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
 		newHeadSlot := params.BeaconConfig().SlotsPerEpoch
@@ -307,8 +307,7 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 
 		eventHead, ok := events[0].Data.(*statefeed.HeadData)
 		require.Equal(t, true, ok)
-		// DependentRoot(0) returns zero hash since the forkchoice tree is sparse.
-		// The fix ensures it falls back to originBlockRoot instead of sending zeros.
+		// Epoch zero uses the genesis root.
 		assert.DeepEqual(t, srv.originBlockRoot, eventHead.PreviousDutyDependentRoot)
 		assert.DeepEqual(t, srv.originBlockRoot, eventHead.CurrentDutyDependentRoot)
 	})
@@ -325,12 +324,12 @@ func Test_notifyNewHeadV2Event(t *testing.T) {
 		srv := testServiceWithDB(t)
 		srv.SetGenesisTime(time.Now())
 		srv.originBlockRoot = [32]byte{1}
-		st, blk, err := prepareForkchoiceState(t.Context(), 0, [32]byte{}, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		st, blk, err := prepareForkchoiceState(t.Context(), 0, srv.originBlockRoot, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
 		require.NoError(t, err)
 		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
 		newHeadStateRoot := [32]byte{2}
 		newHeadRoot := [32]byte{3}
-		st, blk, err = prepareForkchoiceState(t.Context(), headSlot, newHeadRoot, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		st, blk, err = prepareForkchoiceState(t.Context(), headSlot, newHeadRoot, srv.originBlockRoot, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
 		require.NoError(t, err)
 		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
 		require.NoError(t, srv.cfg.ForkChoiceStore.SetOptimisticToValid(t.Context(), newHeadRoot))
@@ -913,4 +912,126 @@ func TestUpdateHead_noSavedChanges(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, headRoot, newRoot)
 	require.Equal(t, headRoot, service.headRoot())
+}
+
+func Test_notifyHeadEvents_CheckpointHistory(t *testing.T) {
+	spe := params.BeaconConfig().SlotsPerEpoch
+	history := params.BeaconConfig().SlotsPerHistoricalRoot
+	anchor, parent, older, headRoot := [32]byte{'a'}, [32]byte{'p'}, [32]byte{'o'}, [32]byte{'h'}
+	tests := []struct {
+		name       string
+		anchorSlot primitives.Slot
+		headSlot   primitives.Slot
+		stateSlot  primitives.Slot
+		wantPrev   [32]byte
+		wantCurr   [32]byte
+	}{
+		{name: "anchor epoch", anchorSlot: 2 * spe, headSlot: 2*spe + 1, stateSlot: 2*spe + 1, wantPrev: older, wantCurr: parent},
+		{name: "following epoch", anchorSlot: 2 * spe, headSlot: 3 * spe, stateSlot: 3 * spe, wantPrev: parent, wantCurr: anchor},
+		{name: "skipped checkpoint boundary", anchorSlot: 2*spe - 1, headSlot: 2*spe + 1, stateSlot: 2*spe + 1, wantPrev: older, wantCurr: anchor},
+		{name: "historical ring wrapped", anchorSlot: history + 2*spe, headSlot: history + 2*spe + 1, stateSlot: history + 2*spe + 1, wantPrev: older, wantCurr: parent},
+		{name: "newer head state", anchorSlot: 2 * spe, headSlot: 2*spe + 1, stateSlot: 3*spe + 1, wantPrev: older, wantCurr: parent},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			srv := testServiceWithDB(t)
+			srv.SetGenesisTime(time.Now())
+			srv.originBlockRoot = anchor
+			st, blk, err := prepareForkchoiceState(ctx, tt.anchorSlot, anchor, parent, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+			require.NoError(t, err)
+			require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+			st, blk, err = prepareForkchoiceState(ctx, tt.headSlot, headRoot, anchor, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+			require.NoError(t, err)
+			require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+			currentHeadRoot := headRoot
+			if tt.stateSlot > tt.headSlot {
+				currentHeadRoot = [32]byte{'n'}
+				st, blk, err = prepareForkchoiceState(ctx, tt.stateSlot, currentHeadRoot, headRoot, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+				require.NoError(t, err)
+				require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+			}
+			selectedRoot, err := srv.cfg.ForkChoiceStore.Head(ctx)
+			require.NoError(t, err)
+			require.Equal(t, currentHeadRoot, selectedRoot)
+
+			headState, err := util.NewBeaconState()
+			require.NoError(t, err)
+			require.NoError(t, headState.SetSlot(tt.stateSlot))
+			currentStart, err := slots.EpochStart(slots.ToEpoch(tt.headSlot))
+			require.NoError(t, err)
+			require.NoError(t, headState.UpdateBlockRootAtIndex(uint64((currentStart-spe-1)%history), tt.wantPrev))
+			require.NoError(t, headState.UpdateBlockRootAtIndex(uint64((currentStart-1)%history), tt.wantCurr))
+			srv.head = &head{root: currentHeadRoot, slot: tt.stateSlot, state: headState}
+
+			events := make(chan *feed.Event, 3)
+			sub := srv.cfg.StateNotifier.StateFeed().Subscribe(events)
+			defer sub.Unsubscribe()
+			headStateRoot := [32]byte{'s'}
+			require.NoError(t, srv.notifyNewHeadEvent(ctx, tt.headSlot, headStateRoot, headRoot))
+			event := <-events
+			require.Equal(t, feed.EventType(statefeed.NewHead), event.Type)
+			legacy, ok := event.Data.(*statefeed.HeadData)
+			require.Equal(t, true, ok)
+			require.Equal(t, tt.wantPrev, legacy.PreviousDutyDependentRoot)
+			require.Equal(t, tt.wantCurr, legacy.CurrentDutyDependentRoot)
+
+			for _, full := range []bool{false, true} {
+				require.NoError(t, srv.notifyNewHeadV2Event(ctx, tt.headSlot, headStateRoot, headRoot, version.Gloas, full))
+				event = <-events
+				require.Equal(t, feed.EventType(statefeed.NewHeadV2), event.Type)
+				v2, ok := event.Data.(*statefeed.HeadV2Data)
+				require.Equal(t, true, ok)
+				require.Equal(t, tt.wantPrev, v2.CurrentEpochDependentRoot)
+				require.Equal(t, tt.wantCurr, v2.NextEpochDependentRoot)
+				wantStatus := statefeed.PayloadStatusEmpty
+				if full {
+					wantStatus = statefeed.PayloadStatusFull
+				}
+				require.Equal(t, wantStatus, v2.PayloadStatus)
+			}
+		})
+	}
+}
+
+func Test_headEventDependentRoots(t *testing.T) {
+	spe := params.BeaconConfig().SlotsPerEpoch
+	t.Run("forkchoice roots need no head state", func(t *testing.T) {
+		ctx := t.Context()
+		srv := testServiceWithDB(t)
+		root := [32]byte{'r'}
+		st, blk, err := prepareForkchoiceState(ctx, spe-1, root, [32]byte{'p'}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		require.NoError(t, err)
+		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+		srv.cfg.StateGen = nil
+		prev, curr, err := srv.headEventDependentRoots(ctx, 2*spe)
+		require.NoError(t, err)
+		require.Equal(t, root, prev)
+		require.Equal(t, root, curr)
+	})
+	t.Run("genesis needs no forkchoice history or head state", func(t *testing.T) {
+		srv := testServiceWithDB(t)
+		srv.originBlockRoot = [32]byte{'g'}
+		srv.cfg.StateGen = nil
+		for _, headSlot := range []primitives.Slot{0, spe - 1} {
+			prev, curr, err := srv.headEventDependentRoots(t.Context(), headSlot)
+			require.NoError(t, err)
+			require.Equal(t, srv.originBlockRoot, prev)
+			require.Equal(t, srv.originBlockRoot, curr)
+		}
+	})
+	t.Run("missing history propagates state bounds error", func(t *testing.T) {
+		ctx := t.Context()
+		srv := testServiceWithDB(t)
+		anchor := [32]byte{'a'}
+		st, blk, err := prepareForkchoiceState(ctx, 2*spe, anchor, [32]byte{'p'}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		require.NoError(t, err)
+		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+		headState, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, headState.SetSlot(params.BeaconConfig().SlotsPerHistoricalRoot+2*spe))
+		srv.head = &head{root: anchor, state: headState}
+		_, _, err = srv.headEventDependentRoots(ctx, 2*spe+1)
+		require.ErrorContains(t, "out of bounds", err)
+	})
 }
