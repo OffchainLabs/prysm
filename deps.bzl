@@ -2872,12 +2872,6 @@ def prysm_deps():
         version = "v0.16.1",
     )
     go_repository(
-        name = "com_github_prometheus_prom2json",
-        importpath = "github.com/prometheus/prom2json",
-        sum = "h1:BlqrtbT9lLH3ZsOVhXPsHzFrApCTKRifB7gjJuypu6Y=",
-        version = "v1.3.0",
-    )
-    go_repository(
         name = "com_github_protolambda_bls12_381_util",
         importpath = "github.com/protolambda/bls12-381-util",
         sum = "h1:05DU2wJN7DTU7z28+Q+zejXkIsA/MF8JZQGhtBZZiWk=",
