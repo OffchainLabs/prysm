@@ -13,8 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/interop"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	log "github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
 )
 
 func TestBeaconState_ProtoBeaconStateCompatibility(t *testing.T) {
@@ -72,7 +70,7 @@ func setupGenesisState(t testing.TB, count uint64) *ethpb.BeaconState {
 	return genesisState
 }
 
-func BenchmarkCloneValidators_Proto(b *testing.B) {
+func BenchmarkCloneValidators_Copy(b *testing.B) {
 
 	validators := make([]*ethpb.Validator, 16384)
 	somePubKey := [fieldparams.BLSPubkeyLength]byte{1, 2, 3}
@@ -91,7 +89,7 @@ func BenchmarkCloneValidators_Proto(b *testing.B) {
 	}
 
 	for b.Loop() {
-		cloneValidatorsWithProto(validators)
+		cloneValidatorsWithCopy(validators)
 	}
 }
 
@@ -142,14 +140,10 @@ func BenchmarkStateClone_Manual(b *testing.B) {
 	}
 }
 
-func cloneValidatorsWithProto(vals []*ethpb.Validator) []*ethpb.Validator {
-	var ok bool
+func cloneValidatorsWithCopy(vals []*ethpb.Validator) []*ethpb.Validator {
 	res := make([]*ethpb.Validator, len(vals))
 	for i := range res {
-		res[i], ok = proto.Clone(vals[i]).(*ethpb.Validator)
-		if !ok {
-			log.Debug("Entity is not of type *ethpb.Validator")
-		}
+		res[i] = vals[i].Copy()
 	}
 	return res
 }
