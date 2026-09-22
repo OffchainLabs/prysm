@@ -1941,32 +1941,83 @@ func diffPendingConsolidations(diff *stateDiff, source, target state.ReadOnlyBea
 
 // applyValidatorDiff applies the validator diff to the source state in place.
 func applyValidatorDiff(source state.BeaconState, diff []validatorDiff) (state.BeaconState, error) {
+	sourceLength := source.NumValidators()
+	rebuildRegistry, err := validateValidatorDiffIndices(sourceLength, diff)
+	if err != nil {
+		return nil, err
+	}
+	if rebuildRegistry {
+		return applyValidatorDiffWithRegistryRebuild(source, diff)
+	}
+
+	validatorCount := uint64(sourceLength)
+	for _, d := range diff {
+		idx := primitives.ValidatorIndex(d.index)
+		if uint64(d.index) == validatorCount {
+			if err := source.AppendValidator(applyValidatorChange(&ethpb.Validator{}, d)); err != nil {
+				return nil, errors.Wrapf(err, "failed to append validator at index %d", d.index)
+			}
+			validatorCount++
+			continue
+		}
+
+		validator, err := source.ValidatorAtIndexReadOnly(idx)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to get validator at index %d", d.index)
+		}
+		if err := source.UpdateValidatorAtIndex(idx, applyValidatorChange(validator.Copy(), d)); err != nil {
+			return nil, errors.Wrapf(err, "failed to update validator at index %d", d.index)
+		}
+	}
+	return source, nil
+}
+
+func validateValidatorDiffIndices(sourceLength int, diff []validatorDiff) (bool, error) {
+	validatorCount := uint64(sourceLength)
+	rebuildRegistry := false
+	for _, d := range diff {
+		idx := uint64(d.index)
+		if idx > validatorCount {
+			return false, errors.Errorf("validator index %d is greater than length %d", d.index, validatorCount)
+		}
+		if idx == validatorCount {
+			validatorCount++
+			continue
+		}
+		// Changing an existing public key requires rebuilding the validator index map.
+		rebuildRegistry = rebuildRegistry || d.PublicKey != nil
+	}
+	return rebuildRegistry, nil
+}
+
+func applyValidatorDiffWithRegistryRebuild(source state.BeaconState, diff []validatorDiff) (state.BeaconState, error) {
 	sVals := source.Validators()
 	for _, d := range diff {
-		if d.index > uint32(len(sVals)) {
-			return nil, errors.Errorf("validator index %d is greater than length %d", d.index, len(sVals))
-		}
-		if d.index == uint32(len(sVals)) {
-			// A valid diff should never have an index greater than the length of the source validators.
+		if uint64(d.index) == uint64(len(sVals)) {
 			sVals = append(sVals, &ethpb.Validator{})
 		}
-		if d.PublicKey != nil {
-			sVals[d.index].PublicKey = slices.Clone(d.PublicKey)
-		}
-		if d.WithdrawalCredentials != nil {
-			sVals[d.index].WithdrawalCredentials = slices.Clone(d.WithdrawalCredentials)
-		}
-		sVals[d.index].EffectiveBalance = d.EffectiveBalance
-		sVals[d.index].Slashed = d.Slashed
-		sVals[d.index].ActivationEligibilityEpoch = d.ActivationEligibilityEpoch
-		sVals[d.index].ActivationEpoch = d.ActivationEpoch
-		sVals[d.index].ExitEpoch = d.ExitEpoch
-		sVals[d.index].WithdrawableEpoch = d.WithdrawableEpoch
+		applyValidatorChange(sVals[d.index], d)
 	}
 	if err := source.SetValidators(sVals); err != nil {
 		return nil, errors.Wrap(err, "failed to set validators")
 	}
 	return source, nil
+}
+
+func applyValidatorChange(validator *ethpb.Validator, diff validatorDiff) *ethpb.Validator {
+	if diff.PublicKey != nil {
+		validator.PublicKey = slices.Clone(diff.PublicKey)
+	}
+	if diff.WithdrawalCredentials != nil {
+		validator.WithdrawalCredentials = slices.Clone(diff.WithdrawalCredentials)
+	}
+	validator.EffectiveBalance = diff.EffectiveBalance
+	validator.Slashed = diff.Slashed
+	validator.ActivationEligibilityEpoch = diff.ActivationEligibilityEpoch
+	validator.ActivationEpoch = diff.ActivationEpoch
+	validator.ExitEpoch = diff.ExitEpoch
+	validator.WithdrawableEpoch = diff.WithdrawableEpoch
+	return validator
 }
 
 // applyBalancesDiff applies the balances diff to the source state in place.

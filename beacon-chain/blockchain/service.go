@@ -56,6 +56,7 @@ type Service struct {
 	originBlockRoot                [32]byte // genesis root, or weak subjectivity checkpoint root, depending on how the node is initialized
 	boundaryRoots                  [][32]byte
 	checkpointStateCache           *cache.CheckpointStateCache
+	attPreStateRegenSem            chan struct{}
 	initSyncBlocks                 map[[32]byte]interfaces.ReadOnlySignedBeaconBlock
 	initSyncBlocksLock             sync.RWMutex
 	wsVerifier                     *WeakSubjectivityVerifier
@@ -68,7 +69,6 @@ type Service struct {
 	blobStorage                    *filesystem.BlobStorage
 	dataColumnStorage              *filesystem.DataColumnStorage
 	slasherEnabled                 bool
-	skipBlockSignaturesForTesting  bool
 	lcStore                        *lightClient.Store
 	startWaitingDataColumnSidecars chan bool // for testing purposes only
 	syncCommitteeHeadState         *cache.SyncCommitteeHeadStateCache
@@ -80,7 +80,6 @@ type Service struct {
 // config options for the service.
 type config struct {
 	BeaconBlockBuf            int
-	ChainStartFetcher         execution.ChainStartFetcher
 	BeaconDB                  db.HeadAccessDatabase
 	DepositCache              cache.DepositCache
 	PayloadIDCache            *cache.PayloadIDCache
@@ -191,6 +190,7 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 		cancel:                 cancel,
 		boundaryRoots:          [][32]byte{},
 		checkpointStateCache:   cache.NewCheckpointStateCache(),
+		attPreStateRegenSem:    make(chan struct{}, 1),
 		initSyncBlocks:         make(map[[32]byte]interfaces.ReadOnlySignedBeaconBlock),
 		blobNotifiers:          bn,
 		cfg:                    &config{},
@@ -226,6 +226,7 @@ func (s *Service) Start() {
 	s.spawnProcessAttestationsRoutine()
 	go s.runLateBlockTasks()
 	go s.runLatePayloadTasks()
+	go s.runGloasDepositWarmup()
 }
 
 // Stop the blockchain service's main event loop and associated goroutines.

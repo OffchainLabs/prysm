@@ -62,6 +62,13 @@ type blobSync struct {
 	peer     peer.ID
 }
 
+func (b batch) blobsNeeded() int {
+	if b.blobs == nil {
+		return 0
+	}
+	return b.blobs.needed()
+}
+
 func (bs *blobSync) needed() int {
 	return len(bs.expected) - bs.next
 }

@@ -80,7 +80,7 @@ func (reconstructionRPCClient) Close() {}
 
 func (c reconstructionRPCClient) BatchCall(elems []rpc.BatchElem) error {
 	for i := range elems {
-		*elems[i].Result.(*pb.ExecutionBlock) = *c.block
+		*elems[i].Result.(**pb.ExecutionBlock) = c.block
 	}
 	return nil
 }
@@ -3025,4 +3025,53 @@ func TestExecutionBlock_MarshalUnmarshalJSON_BlockAccessList(t *testing.T) {
 	decoded := &pb.ExecutionBlock{}
 	require.NoError(t, decoded.UnmarshalJSON(enc))
 	require.DeepEqual(t, []byte(bal), []byte(decoded.BlockAccessList))
+}
+
+func TestExecutionBlocksByHashes_NullResultIsNil(t *testing.T) {
+	want, ok := fixtures()["ExecutionBlock"].(*pb.ExecutionBlock)
+	require.Equal(t, true, ok)
+	known := common.BytesToHash([]byte("known"))
+	missing := common.BytesToHash([]byte("missing"))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			require.NoError(t, r.Body.Close())
+		}()
+		var reqs []struct {
+			ID     json.RawMessage   `json:"id"`
+			Params []json.RawMessage `json:"params"`
+		}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&reqs))
+		resps := make([]map[string]any, 0, len(reqs))
+		for _, req := range reqs {
+			var result any
+			if strings.Contains(string(req.Params[0]), known.Hex()) {
+				result = want
+			}
+			resps = append(resps, map[string]any{"jsonrpc": "2.0", "id": req.ID, "result": result})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(resps))
+	}))
+	defer srv.Close()
+
+	rpcClient, err := rpc.DialHTTP(srv.URL)
+	require.NoError(t, err)
+	defer rpcClient.Close()
+	service := &Service{}
+	service.rpcClient = rpcClient
+
+	blks, err := service.ExecutionBlocksByHashes(t.Context(), []common.Hash{missing, known}, false)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(blks))
+	require.IsNil(t, blks[0])
+	require.DeepEqual(t, want, blks[1])
+}
+
+func TestReconstructFullGloasExecutionPayloadsByHash_MissingBlock(t *testing.T) {
+	hash := common.BytesToHash([]byte("missing"))
+	service := &Service{}
+	service.rpcClient = reconstructionRPCClient{body: &pb.ExecutionPayloadBodyV2{}}
+
+	_, err := service.ReconstructFullGloasExecutionPayloadsByHash(t.Context(), [][32]byte{hash})
+	require.ErrorContains(t, "execution block "+hash.Hex()+" not found", err)
 }
