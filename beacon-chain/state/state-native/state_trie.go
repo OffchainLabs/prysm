@@ -69,7 +69,7 @@ func InitializeFromProtoCapella(st *ethpb.BeaconStateCapella) (state.BeaconState
 
 // InitializeFromProtoDeneb the beacon state from a protobuf representation.
 func InitializeFromProtoDeneb(st *ethpb.BeaconStateDeneb) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafeDeneb(proto.Clone(st).(*ethpb.BeaconStateDeneb))
+	return InitializeFromProtoUnsafeDeneb(st.Copy())
 }
 
 // InitializeFromProtoElectra the beacon state from a protobuf representation.

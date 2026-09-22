@@ -176,3 +176,47 @@ func TestBeaconStateCapella_Copy(t *testing.T) {
 	require.Equal(t, byte(2), orig.HistoricalSummaries[0].BlockSummaryRoot[0])
 	require.Equal(t, (*v1alpha1.BeaconStateCapella)(nil), (*v1alpha1.BeaconStateCapella)(nil).Copy())
 }
+
+func TestBeaconStateDeneb_FieldParity(t *testing.T) {
+	assertStateFields(t, reflect.TypeFor[v1alpha1.BeaconStateDeneb](), []string{
+		"GenesisTime uint64",
+		"GenesisValidatorsRoot []uint8 ssz-size",
+		"Slot primitives.Slot",
+		"Fork *eth.Fork",
+		"LatestBlockHeader *eth.BeaconBlockHeader",
+		"BlockRoots [][]uint8 ssz-size",
+		"StateRoots [][]uint8 ssz-size",
+		"HistoricalRoots [][]uint8 ssz-size ssz-max",
+		"Eth1Data *eth.Eth1Data",
+		"Eth1DataVotes []*eth.Eth1Data ssz-max",
+		"Eth1DepositIndex uint64",
+		"Validators []*eth.Validator ssz-max",
+		"Balances []uint64 ssz-max",
+		"RandaoMixes [][]uint8 ssz-size",
+		"Slashings []uint64 ssz-size",
+		"PreviousEpochParticipation []uint8 ssz-max",
+		"CurrentEpochParticipation []uint8 ssz-max",
+		"JustificationBits bitfield.Bitvector4 ssz-size",
+		"PreviousJustifiedCheckpoint *eth.Checkpoint",
+		"CurrentJustifiedCheckpoint *eth.Checkpoint",
+		"FinalizedCheckpoint *eth.Checkpoint",
+		"InactivityScores []uint64 ssz-max",
+		"CurrentSyncCommittee *eth.SyncCommittee",
+		"NextSyncCommittee *eth.SyncCommittee",
+		"LatestExecutionPayloadHeader *enginev1.ExecutionPayloadHeaderDeneb",
+		"NextWithdrawalIndex uint64",
+		"NextWithdrawalValidatorIndex primitives.ValidatorIndex",
+		"HistoricalSummaries []*eth.HistoricalSummary ssz-max",
+	})
+}
+
+func TestBeaconStateDeneb_Copy(t *testing.T) {
+	orig := &v1alpha1.BeaconStateDeneb{LatestExecutionPayloadHeader: &enginev1.ExecutionPayloadHeaderDeneb{ParentHash: []byte{1}, BlobGasUsed: 2}}
+	cp := orig.Copy()
+	require.DeepSSZEqual(t, orig, cp)
+	cp.LatestExecutionPayloadHeader.ParentHash[0] = 3
+	cp.LatestExecutionPayloadHeader.BlobGasUsed = 4
+	require.Equal(t, byte(1), orig.LatestExecutionPayloadHeader.ParentHash[0])
+	require.Equal(t, uint64(2), orig.LatestExecutionPayloadHeader.BlobGasUsed)
+	require.Equal(t, (*v1alpha1.BeaconStateDeneb)(nil), (*v1alpha1.BeaconStateDeneb)(nil).Copy())
+}
