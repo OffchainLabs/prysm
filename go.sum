@@ -33,8 +33,8 @@ github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERo
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/OffchainLabs/go-bitfield v0.0.0-20260504143531-5cbb6d0f5f2e h1:M9Ia6En5b8/imySo4xQeeoJPG2tOOJEKk/GnfBI86Hk=
 github.com/OffchainLabs/go-bitfield v0.0.0-20260504143531-5cbb6d0f5f2e/go.mod h1:6TZI4FU6zT8x6ZfWa1J8YQ2NgW0wLV/W3fHRca8ISBo=
-github.com/OffchainLabs/hashtree v0.2.3 h1:nM8dBAQZzHLzzM14FaAHXnHTAXZIst69v5xWuS48y/c=
-github.com/OffchainLabs/hashtree v0.2.3/go.mod h1:b07+cRZs+eAR8TR57CB9TQlt5Gnl/06Xs76xt/1wq0M=
+github.com/OffchainLabs/hashtree v0.2.6 h1:AsOLM1faXwAHARO5Cg1Qu3hPOLKpQBUJ+4ap+0ZKEGU=
+github.com/OffchainLabs/hashtree v0.2.6/go.mod h1:b07+cRZs+eAR8TR57CB9TQlt5Gnl/06Xs76xt/1wq0M=
 github.com/OffchainLabs/methodical-ssz v0.0.0-20260703104215-9be4f5c6a334 h1:X7Rtbyy16t/ruqtADWyYg8GSfJlO9gfXyxmHpB3oYvQ=
 github.com/OffchainLabs/methodical-ssz v0.0.0-20260703104215-9be4f5c6a334/go.mod h1:V1D4kNhhNQ7jltlUDOZfSt750UypPV0wkhakdlcrEd0=
 github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20251001021608-1fe7b43fc4d6 h1:1zYrtlhrZ6/b6SAjLSfKzWtdgqK0U+HtH/VcBWh1BaU=
