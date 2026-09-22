@@ -1668,14 +1668,14 @@ func TestPTCVotedEarlyAndAvailableAndLate(t *testing.T) {
 		assert.Equal(t, false, f.PTCVotedLate(root))
 	})
 
-	t.Run("early false without blob data majority", func(t *testing.T) {
+	t.Run("blob data unavailable majority is a late verdict", func(t *testing.T) {
 		f, root := setupForkchoice(t)
 		majority := uint64(fieldparams.PTCSize/2) + 1
 		for i := range majority {
 			f.SetPTCVote(root, i, true, false)
 		}
 		assert.Equal(t, false, f.PTCVotedEarlyAndAvailable(root))
-		assert.Equal(t, false, f.PTCVotedLate(root))
+		assert.Equal(t, true, f.PTCVotedLate(root))
 	})
 
 	t.Run("late requires payload not present majority", func(t *testing.T) {

@@ -298,11 +298,15 @@ func ptcVotedLate(n *Node) bool {
 		return false
 	}
 	attesters := n.payloadAttesters.Count()
-	payloadPresent := n.payloadAvailabilityVote.Count()
-	if payloadPresent >= attesters {
+	return ptcVotedNo(attesters, n.payloadAvailabilityVote.Count()) ||
+		ptcVotedNo(attesters, n.payloadDataAvailabilityVote.Count())
+}
+
+func ptcVotedNo(attesters, yes uint64) bool {
+	if yes >= attesters {
 		return false
 	}
-	return attesters-payloadPresent > fieldparams.PTCSize/2
+	return attesters-yes > fieldparams.PTCSize/2
 }
 
 // choosePayloadContent chooses between empty or full for the passed consensus node.
@@ -631,7 +635,7 @@ func (f *ForkChoice) PTCVotedEarlyAndAvailable(root [32]byte) bool {
 	return ptcVotedEarlyAndAvailable(en.node)
 }
 
-// PTCVotedLate returns whether the PTC has majority-voted that the payload is not present.
+// PTCVotedLate returns whether the PTC has majority-voted that the payload is not present or its blob data is unavailable.
 func (f *ForkChoice) PTCVotedLate(root [32]byte) bool {
 	en := f.store.emptyNodeByRoot[root]
 	if en == nil || en.node == nil {
