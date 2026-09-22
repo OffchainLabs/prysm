@@ -105,7 +105,6 @@ type ForkDataCreator struct{}
 type DepositMessageCreator struct{}
 type SyncCommitteeCreator struct{}
 type SyncAggregatorSelectionDataCreator struct{}
-type BeaconStateCapellaCreator struct{}
 type BeaconStateDenebCreator struct{}
 type BeaconStateElectraCreator struct{}
 type PowBlockCreator struct{}
@@ -276,7 +275,6 @@ func (SyncCommitteeCreator) Create() MarshalerProtoMessage      { return &ethpb.
 func (SyncAggregatorSelectionDataCreator) Create() MarshalerProtoMessage {
 	return &ethpb.SyncAggregatorSelectionData{}
 }
-func (BeaconStateCapellaCreator) Create() MarshalerProtoMessage { return &ethpb.BeaconStateCapella{} }
 func (BeaconStateDenebCreator) Create() MarshalerProtoMessage   { return &ethpb.BeaconStateDeneb{} }
 func (BeaconStateElectraCreator) Create() MarshalerProtoMessage { return &ethpb.BeaconStateElectra{} }
 func (PowBlockCreator) Create() MarshalerProtoMessage           { return &ethpb.PowBlock{} }
@@ -394,7 +392,6 @@ var creators = []MarshalerProtoCreator{
 	DepositMessageCreator{},
 	SyncCommitteeCreator{},
 	SyncAggregatorSelectionDataCreator{},
-	BeaconStateCapellaCreator{},
 	BeaconStateDenebCreator{},
 	BeaconStateElectraCreator{},
 	PowBlockCreator{},

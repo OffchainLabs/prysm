@@ -71,7 +71,7 @@ ssz_methodical(
 
 ssz_methodical(
     name = "methodical_capella",
-    deps = [":go_proto"],
+    deps = [":beacon_state_go"],
     config_file = "capella.yaml",
     override_package_name = "eth",
     out = "capella.ssz.go",
