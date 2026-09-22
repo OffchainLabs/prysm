@@ -1,11 +1,9 @@
 // Package state contains types for state operation-specific events fired
-// during the runtime of a beacon node such state initialization, state updates,
-// and chain start.
+// during the runtime of a beacon node such as block processing, head and
+// finality updates.
 package state
 
 import (
-	"time"
-
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -14,8 +12,8 @@ import (
 const (
 	// BlockProcessed is sent after a block has been processed and updated the state database.
 	BlockProcessed = iota + 1
-	// ChainStarted is sent when enough validators are active to start proposing blocks.
-	ChainStarted
+	// deprecated: ChainStarted was sent by the eth1-driven pre-genesis chain-start path.
+	_
 	// deprecated: Initialized is sent when the internal beacon node's state is ready to be accessed.
 	_
 	// deprecated: Synced is sent when the beacon node has completed syncing and is ready to participate in the network.
@@ -60,26 +58,6 @@ type BlockProcessedData struct {
 	Verified bool
 	// Optimistic is true if the block is optimistic.
 	Optimistic bool
-}
-
-// ChainStartedData is the data sent with ChainStarted events.
-type ChainStartedData struct {
-	// StartTime is the time at which the chain started.
-	StartTime time.Time
-}
-
-// SyncedData is the data sent with Synced events.
-type SyncedData struct {
-	// StartTime is the time at which the chain started.
-	StartTime time.Time
-}
-
-// InitializedData is the data sent with Initialized events.
-type InitializedData struct {
-	// StartTime is the time at which the chain started.
-	StartTime time.Time
-	// GenesisValidatorsRoot represents state.validators.HashTreeRoot().
-	GenesisValidatorsRoot []byte
 }
 
 // ExecutionPayloadAvailableData is the data sent with ExecutionPayloadAvailable events.

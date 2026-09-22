@@ -130,7 +130,7 @@ message SyncStatus {
 message Genesis {
   option deprecated = true;
 
-  // UTC time specified in the chain start event in the deposit contract.
+  // UTC time of the beacon chain genesis.
   google.protobuf.Timestamp genesis_time = 1;
 
   // Address of the deposit contract in the Ethereum 1 chain.

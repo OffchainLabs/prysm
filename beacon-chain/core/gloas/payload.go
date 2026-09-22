@@ -108,13 +108,13 @@ func VerifyExecutionPayloadEnvelopeWithDeferredSig(
 // validatePayloadConsistency checks that the envelope and payload are consistent
 // with the beacon block header, the committed bid, and the current state.
 func validatePayloadConsistency(ctx context.Context, st state.BeaconState, envelope interfaces.ROExecutionPayloadEnvelope) error {
-	if envelope.Slot() != st.Slot() {
-		return errors.Errorf("envelope slot does not match state slot: envelope=%d, state=%d", envelope.Slot(), st.Slot())
-	}
-
 	header := st.LatestBlockHeader()
 	if header == nil {
 		return errors.New("latest block header is nil")
+	}
+	// Checkpoint states can advance across empty slots after their latest block.
+	if envelope.Slot() != header.Slot {
+		return errors.Errorf("envelope slot does not match latest block header slot: envelope=%d, block=%d", envelope.Slot(), header.Slot)
 	}
 	envelopeParent := envelope.ParentBeaconBlockRoot()
 	if !bytes.Equal(envelopeParent[:], header.ParentRoot) {
@@ -181,7 +181,7 @@ func validatePayloadConsistency(ctx context.Context, st state.BeaconState, envel
 		return errors.Errorf("payload parent hash does not match state latest block hash: payload=%#x, state=%#x", payload.ParentHash(), latestBlockHash)
 	}
 
-	t, err := slots.StartTime(st.GenesisTime(), st.Slot())
+	t, err := slots.StartTime(st.GenesisTime(), header.Slot)
 	if err != nil {
 		return errors.Wrap(err, "could not compute timestamp")
 	}

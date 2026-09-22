@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"reflect"
 	"runtime/debug"
 	"sort"
 	"sync"
@@ -15,13 +14,10 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
-	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
-	native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -64,17 +60,7 @@ var (
 	backOffPeriod = 15 * time.Second
 	// amount of times before we log the status of the eth1 dial attempt.
 	logThreshold = 8
-	// period to log chainstart related information
-	logPeriod = 1 * time.Minute
 )
-
-// ChainStartFetcher retrieves information pertaining to the chain start event
-// of the beacon chain for usage across various services.
-type ChainStartFetcher interface {
-	ChainStartEth1Data() *ethpb.Eth1Data
-	PreGenesisState() state.BeaconState
-	ClearPreGenesisData()
-}
 
 // ChainInfoFetcher retrieves information about eth1 metadata at the Ethereum consensus genesis time.
 type ChainInfoFetcher interface {
@@ -94,7 +80,6 @@ type POWBlockFetcher interface {
 
 // Chain defines a standard interface for the powchain service in Prysm.
 type Chain interface {
-	ChainStartFetcher
 	ChainInfoFetcher
 	POWBlockFetcher
 }
@@ -129,7 +114,6 @@ type config struct {
 	depositContractAddr     common.Address
 	beaconDB                db.HeadAccessDatabase
 	depositCache            cache.DepositCache
-	stateNotifier           statefeed.Notifier
 	stateGen                *stategen.State
 	eth1HeaderReqLimit      uint64
 	beaconNodeStatsUpdater  BeaconNodeStatsUpdater
@@ -140,12 +124,8 @@ type config struct {
 	jwtId                   string
 }
 
-// Service fetches important information about the canonical
-// eth1 chain via a web3 endpoint using an ethclient.
-// The beacon chain requires synchronization with the eth1 chain's current
-// block hash, block number, and access to logs within the
-// Validator Registration Contract on the eth1 chain to kick off the beacon
-// chain's validator registration process.
+// Service tracks the canonical execution chain over an RPC endpoint: latest
+// headers for eth1 data voting, deposit contract logs, and the engine API.
 type Service struct {
 	partialColumnsSupported bool
 	connectedETH1           bool
@@ -166,7 +146,6 @@ type Service struct {
 	chainStartData          *ethpb.ChainStartData
 	lastReceivedMerkleIndex int64 // Keeps track of the last received index to prevent log spam.
 	runError                error
-	preGenesisState         state.BeaconState
 	verifierWaiter          *verification.InitializerWaiter
 	blobVerifier            verification.NewBlobVerifier
 	capabilityCache         *capabilityCache
@@ -180,10 +159,6 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 	var depositTrie cache.MerkleTree
 	var err error
 	depositTrie = depositsnapshot.NewDepositTree()
-	genState, err := transition.EmptyGenesisState()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not set up genesis state")
-	}
 
 	s := &Service{
 		ctx:       ctx,
@@ -202,11 +177,9 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 		headerCache: newHeaderCache(),
 		depositTrie: depositTrie,
 		chainStartData: &ethpb.ChainStartData{
-			Eth1Data:           &ethpb.Eth1Data{},
-			ChainstartDeposits: make([]*ethpb.Deposit, 0),
+			Eth1Data: &ethpb.Eth1Data{},
 		},
 		lastReceivedMerkleIndex: -1,
-		preGenesisState:         genState,
 		eth1HeadTicker:          time.NewTicker(time.Duration(params.BeaconConfig().SecondsPerETH1Block) * time.Second),
 		capabilityCache:         &capabilityCache{},
 	}
@@ -231,19 +204,6 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 func (s *Service) Start() {
 	if err := s.setupExecutionClientConnections(s.ctx, s.cfg.currHttpEndpoint); err != nil {
 		log.WithError(err).Error("Could not connect to execution endpoint")
-	}
-	// If the chain has not started already and we don't have access to eth1 nodes, we will not be
-	// able to generate the genesis state.
-	if !s.chainStartData.Chainstarted && s.cfg.currHttpEndpoint.Url == "" && s.cfg.rpcClientDialer == nil {
-		// check for genesis state before shutting down the node,
-		// if a genesis state exists, we can continue on.
-		genState, err := s.cfg.beaconDB.GenesisState(s.ctx)
-		if err != nil {
-			log.Fatal(err)
-		}
-		if genState == nil || genState.IsNil() {
-			log.Fatal("cannot create genesis state: no eth1 http endpoint defined")
-		}
 	}
 
 	v, err := s.verifierWaiter.WaitForInitializer(s.ctx)
@@ -270,23 +230,6 @@ func (s *Service) Stop() error {
 		s.rpcClient.Close()
 	}
 	return nil
-}
-
-// ClearPreGenesisData clears out the stored chainstart deposits and beacon state.
-func (s *Service) ClearPreGenesisData() {
-	s.chainStartData.ChainstartDeposits = []*ethpb.Deposit{}
-	s.preGenesisState = &native.BeaconState{}
-}
-
-// ChainStartEth1Data returns the eth1 data at chainstart.
-func (s *Service) ChainStartEth1Data() *ethpb.Eth1Data {
-	return s.chainStartData.Eth1Data
-}
-
-// PreGenesisState returns a state that contains
-// pre-chainstart deposits.
-func (s *Service) PreGenesisState() state.BeaconState {
-	return s.preGenesisState
 }
 
 // Status is service health checks. Return nil or error.
@@ -374,11 +317,6 @@ func (s *Service) initDepositCaches(ctx context.Context, ctrs []*ethpb.DepositCo
 		return nil
 	}
 	s.cfg.depositCache.InsertDepositContainers(ctx, ctrs)
-	if !s.chainStartData.Chainstarted {
-		// Do not add to pending cache if no genesis state exists.
-		validDepositsCount.Add(float64(s.preGenesisState.Eth1DepositIndex()))
-		return nil
-	}
 	genesisState, err := s.cfg.beaconDB.GenesisState(ctx)
 	if err != nil {
 		return err
@@ -506,13 +444,6 @@ func (s *Service) handleETH1FollowDistance() {
 	if time.Unix(int64(s.latestEth1Data.BlockTime), 0).Before(fiveMinutesTimeout) {
 		log.Warn("Execution client is not syncing")
 	}
-	if !s.chainStartData.Chainstarted {
-		if err := s.processChainStartFromBlockNum(ctx, big.NewInt(int64(s.latestEth1Data.LastRequestedBlock))); err != nil {
-			s.runError = errors.Wrap(err, "processChainStartFromBlockNum")
-			log.Error(err)
-			return
-		}
-	}
 
 	// If the last requested block has not changed,
 	// we do not request batched logs as this means there are no new
@@ -589,7 +520,7 @@ func (s *Service) initPOWService() {
 			}
 			// Handle edge case with embedded genesis state by fetching genesis header to determine
 			// its height only if the deposit requests have not started yet (Pre Pectra EIP-6110 behavior).
-			if s.chainStartData.Chainstarted && s.chainStartData.GenesisBlock == 0 && !s.depositRequestsStarted {
+			if s.chainStartData.GenesisBlock == 0 && !s.depositRequestsStarted {
 				genHash := common.BytesToHash(s.chainStartData.Eth1Data.BlockHash)
 				genBlock := s.chainStartData.GenesisBlock
 				// In the event our provided chainstart data references a non-existent block hash,
@@ -626,9 +557,6 @@ func (s *Service) run(done <-chan struct{}) {
 	// no longer of use.
 	s.removeStartupState()
 
-	chainstartTicker := time.NewTicker(logPeriod)
-	defer chainstartTicker.Stop()
-
 	// Update graffiti info 4 times per epoch (~96 seconds with 12s slots and 32 slots/epoch)
 	graffitiTicker := time.NewTicker(96 * time.Second)
 	defer graffitiTicker.Stop()
@@ -653,46 +581,10 @@ func (s *Service) run(done <-chan struct{}) {
 			}
 			s.processBlockHeader(head)
 			s.handleETH1FollowDistance()
-		case <-chainstartTicker.C:
-			if s.chainStartData.Chainstarted {
-				chainstartTicker.Stop()
-				continue
-			}
-			s.logTillChainStart(context.Background())
 		case <-graffitiTicker.C:
 			s.updateGraffitiInfo()
 		}
 	}
-}
-
-// logs the current thresholds required to hit chainstart every minute.
-func (s *Service) logTillChainStart(ctx context.Context) {
-	if s.chainStartData.Chainstarted {
-		return
-	}
-	_, blockTime, err := s.retrieveBlockHashAndTime(s.ctx, big.NewInt(int64(s.latestEth1Data.LastRequestedBlock)))
-	if err != nil {
-		log.Error(err)
-		return
-	}
-	valCount, genesisTime := s.currentCountAndTime(ctx, blockTime)
-	valNeeded := uint64(0)
-	if valCount < params.BeaconConfig().MinGenesisActiveValidatorCount {
-		valNeeded = params.BeaconConfig().MinGenesisActiveValidatorCount - valCount
-	}
-	secondsLeft := uint64(0)
-	if genesisTime < params.BeaconConfig().MinGenesisTime {
-		secondsLeft = params.BeaconConfig().MinGenesisTime - genesisTime
-	}
-
-	fields := logrus.Fields{
-		"additionalValidatorsNeeded": valNeeded,
-	}
-	if secondsLeft > 0 {
-		fields["Generating genesis state in"] = time.Duration(secondsLeft) * time.Second
-	}
-
-	log.WithFields(fields).Info("Currently waiting for chainstart")
 }
 
 // cacheHeadersForEth1DataVote makes sure that voting for eth1data after startup utilizes cached headers
@@ -801,12 +693,6 @@ func (s *Service) initializeEth1Data(ctx context.Context, eth1DataInDB *ethpb.ET
 		return err
 	}
 	s.chainStartData = eth1DataInDB.ChainstartData
-	if !reflect.ValueOf(eth1DataInDB.BeaconState).IsZero() {
-		s.preGenesisState, err = native.InitializeFromProtoPhase0(eth1DataInDB.BeaconState)
-		if err != nil {
-			return errors.Wrap(err, "Could not initialize state trie")
-		}
-	}
 	s.latestEth1Data = eth1DataInDB.CurrentEth1Data
 	ctrs := eth1DataInDB.DepositContainers
 	// Look at previously finalized index, as we are building off a finalized
@@ -869,22 +755,15 @@ func (s *Service) validPowchainData(ctx context.Context) (*ethpb.ETH1ChainData, 
 	if genState == nil || genState.IsNil() {
 		return eth1Data, nil
 	}
-	if s.depositRequestsStarted || eth1Data == nil || !eth1Data.ChainstartData.Chainstarted || !validateDepositContainers(eth1Data.DepositContainers) {
-		pbState, err := native.ProtobufBeaconStatePhase0(s.preGenesisState.ToProtoUnsafe())
-		if err != nil {
-			return nil, err
-		}
+	if s.depositRequestsStarted || eth1Data == nil || !validateDepositContainers(eth1Data.DepositContainers) {
 		s.chainStartData = &ethpb.ChainStartData{
-			Chainstarted:       true,
-			GenesisTime:        uint64(genState.GenesisTime().Unix()),
-			GenesisBlock:       0,
-			Eth1Data:           genState.Eth1Data(),
-			ChainstartDeposits: make([]*ethpb.Deposit, 0),
+			GenesisTime:  uint64(genState.GenesisTime().Unix()),
+			GenesisBlock: 0,
+			Eth1Data:     genState.Eth1Data(),
 		}
 		eth1Data = &ethpb.ETH1ChainData{
 			CurrentEth1Data:   s.latestEth1Data,
 			ChainstartData:    s.chainStartData,
-			BeaconState:       pbState,
 			DepositContainers: s.cfg.depositCache.AllDepositContainers(ctx),
 		}
 		trie, ok := s.depositTrie.(*depositsnapshot.DepositTree)
