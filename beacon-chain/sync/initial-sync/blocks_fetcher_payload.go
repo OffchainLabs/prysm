@@ -21,7 +21,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// Each parent recovery tries at most three peers, with up to two RPCs per peer.
 const maxParentPayloadFetchAttempts = 3
 
 // checkAllBlocksBuildOnEmpty verifies that all the passed blocks build on top of the empty block
@@ -167,7 +166,7 @@ func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestRespon
 	}
 	limit := params.BeaconConfig().MaxRequestPayloads
 	if r.count >= limit {
-		// Recover the leading parent separately so each retained block's own payload fits.
+		// Fetch the parent separately to keep the range within the request limit.
 		start = r.bwb[0].Block.Block().Slot()
 		for i, block := range r.bwb {
 			if block.Block.Block().Slot()-start >= primitives.Slot(limit) {
@@ -207,7 +206,7 @@ func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestRespon
 		f.validatePayloadsForImport(r, firstUnprocessedIndex-1)
 		return
 	}
-	parentPayloadProcessed, err := f.ensureParentPayload(ctx, r, peers, firstUnprocessedIndex)
+	reuseStoredParent, err := f.ensureParentPayload(ctx, r, peers, firstUnprocessedIndex)
 	if err != nil {
 		r.err = errors.Wrap(err, "fetch required parent payload")
 		return
@@ -218,7 +217,7 @@ func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestRespon
 		return
 	}
 	validationStartIndex := firstUnprocessedIndex
-	if !parentPayloadProcessed {
+	if !reuseStoredParent {
 		validationStartIndex--
 	}
 	f.validatePayloadsForImport(r, validationStartIndex)
@@ -245,8 +244,7 @@ func (f *blocksFetcher) validatePayloadsForImport(r *fetchRequestResponse, valid
 	r.envelopes = relevant.envelopes
 }
 
-// ensureParentPayload reports whether the required parent payload is already processed locally;
-// otherwise it makes sure the parent envelope is in r.envelopes, fetching it from peers if needed.
+// ensureParentPayload returns true when it reuses a stored parent envelope.
 func (f *blocksFetcher) ensureParentPayload(ctx context.Context, r *fetchRequestResponse, peers []peer.ID, firstUnprocessedIndex int) (bool, error) {
 	child := r.bwb[firstUnprocessedIndex].Block
 	parentRoot := child.Block().ParentRoot()
@@ -294,7 +292,6 @@ func (f *blocksFetcher) ensureParentPayload(ctx context.Context, r *fetchRequest
 			insertAt = i + 1
 		}
 	}
-	// Stored envelopes can precede execution processing, so reuse also requires a FULL forkchoice node.
 	if f.db.HasExecutionPayloadEnvelope(ctx, parentRoot) && f.chain.HasFullNode(parentRoot) {
 		return true, nil
 	}
@@ -304,7 +301,7 @@ func (f *blocksFetcher) ensureParentPayload(ctx context.Context, r *fetchRequest
 	}
 	r.envelopes = slices.Insert(r.envelopes, insertAt, envelope)
 	if pid != r.payloadsFrom {
-		// Mixed providers cannot be attributed to the block provider by consistency checks.
+		// Do not blame the block peer for envelopes fetched from other peers.
 		r.payloadsFrom = ""
 	}
 	return false, nil
@@ -312,7 +309,6 @@ func (f *blocksFetcher) ensureParentPayload(ctx context.Context, r *fetchRequest
 
 func (f *blocksFetcher) fetchParentPayloadFromPeers(ctx context.Context, parent, child blocks.ROBlock, pid peer.ID, peers []peer.ID) (interfaces.ROSignedExecutionPayloadEnvelope, peer.ID, error) {
 	req := p2ptypes.ExecutionPayloadEnvelopesByRootReq{parent.Root()}
-	rangeReq := &p2ppb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: parent.Block().Slot(), Count: 1}
 	candidates := dedupPeers(append([]peer.ID{pid}, peers...))
 	candidates = append(candidates[:1], f.filterPeers(ctx, candidates[1:], 1)...)
 	candidates = candidates[:min(len(candidates), maxParentPayloadFetchAttempts)]
@@ -321,18 +317,10 @@ func (f *blocksFetcher) fetchParentPayloadFromPeers(ctx context.Context, parent,
 			return nil, "", err
 		}
 		envelopes, err := prysmsync.SendExecutionPayloadEnvelopesByRootRequest(ctx, f.clock, f.p2p, p, f.ctxMap, &req)
-		if errors.Is(err, prysmsync.ErrInvalidFetchedData) {
-			f.downscorePeer(p, err)
-			continue
-		}
 		if err != nil || len(envelopes) != 1 {
 			if err := ctx.Err(); err != nil {
 				return nil, "", err
 			}
-			// Peers may omit envelopes older than their finalized epoch from ByRoot responses.
-			envelopes, err = prysmsync.SendExecutionPayloadEnvelopesByRangeRequest(ctx, f.clock, f.p2p, p, f.ctxMap, rangeReq)
-		}
-		if err != nil || len(envelopes) != 1 {
 			if errors.Is(err, prysmsync.ErrInvalidFetchedData) {
 				f.downscorePeer(p, err)
 			}
@@ -346,10 +334,6 @@ func (f *blocksFetcher) fetchParentPayloadFromPeers(ctx context.Context, parent,
 		if err != nil {
 			continue
 		}
-		// A range response may legitimately contain a different fork at the parent slot.
-		if envelope.BeaconBlockRoot() != parent.Root() {
-			continue
-		}
 		matches, err := blocks.BlockBuiltOnParentEnvelope(wrapped, child)
 		if err != nil || !matches || envelope.Slot() != parent.Block().Slot() {
 			f.downscorePeer(p, errors.Wrap(prysmsync.ErrInvalidFetchedData, "parent payload envelope does not match block"))
@@ -361,7 +345,7 @@ func (f *blocksFetcher) fetchParentPayloadFromPeers(ctx context.Context, parent,
 			"parentSlot": parent.Block().Slot(),
 			"childSlot":  child.Block().Slot(),
 			"peer":       p,
-		}).Debug("Recovered parent execution payload envelope from peer")
+		}).Debug("Fetched missing parent execution payload envelope")
 		return wrapped, p, nil
 	}
 	return nil, "", errors.Wrapf(errNoPeersAvailable, "missing payload envelope for FULL parent %#x", parent.Root())

@@ -146,8 +146,7 @@ func getStateVersionAndPayload(st state.BeaconState) (int, interfaces.ExecutionD
 	return preStateVersion, preStateHeader, nil
 }
 
-// prepareBatchPrestate verifies the parent payload the first block builds on. parentEnvelopeSupplied
-// reports that envelopes[0] is that verified parent envelope: the caller skips it and inserts its node.
+// The bool reports whether envelopes[0] is the verified parent envelope.
 func (s *Service) prepareBatchPrestate(ctx context.Context, firstBlock consensusblocks.ROBlock, envelopes []interfaces.ROSignedExecutionPayloadEnvelope) (preState state.BeaconState, parentEnvelopeSupplied bool, err error) {
 	parentRoot := firstBlock.Block().ParentRoot()
 	blockPreState, err := s.cfg.StateGen.StateByRootInitialSync(ctx, parentRoot)
@@ -171,7 +170,7 @@ func (s *Service) prepareBatchPrestate(ctx context.Context, firstBlock consensus
 	if err != nil {
 		return nil, false, errors.Wrap(err, "could not get latest block hash")
 	}
-	// The upgrade's synthetic bid refers to the already embedded execution payload.
+	// The synthetic upgrade bid has no separate envelope.
 	if parentBid.BlockHash() == latestBlockHash {
 		return blockPreState, false, nil
 	}
@@ -189,7 +188,6 @@ func (s *Service) prepareBatchPrestate(ctx context.Context, firstBlock consensus
 			return nil, false, errors.Wrap(err, "could not check if block builds on envelope")
 		}
 	}
-	// Storage alone does not establish completed execution processing; the FULL node may still be optimistic.
 	canReuseParentPayload := s.cfg.BeaconDB.HasExecutionPayloadEnvelope(ctx, parentRoot) && s.cfg.ForkChoiceStore.HasFullNode(parentRoot)
 	if !parentEnvelopeSupplied && !canReuseParentPayload {
 		return nil, false, errors.Errorf("missing required parent execution payload envelope for block %#x", parentRoot)
@@ -199,7 +197,8 @@ func (s *Service) prepareBatchPrestate(ctx context.Context, firstBlock consensus
 			return nil, false, errors.Wrap(err, "could not verify parent execution payload envelope")
 		}
 	}
-	if len(parentBid.BlobKzgCommitments()) > 0 {
+	// A FULL node exists only after its columns were checked.
+	if parentEnvelopeSupplied && len(parentBid.BlobKzgCommitments()) > 0 {
 		available, err := s.dataColumnsAvailableNow(ctx, parentRoot, parentBid.Slot())
 		if err != nil {
 			return nil, false, errors.Wrap(err, "could not check parent payload data availability")
