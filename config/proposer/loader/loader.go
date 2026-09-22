@@ -123,7 +123,7 @@ func NewProposerSettingsLoader(cliCtx *cli.Context, db iface.ValidatorDB, opts .
 func determineLoadMethods(cliCtx *cli.Context, loadedFromDB bool) []settingsType {
 	var methods []settingsType
 
-	if cliCtx.IsSet(flags.SuggestedFeeRecipientFlag.Name) || len(setBuilderFlagNames(cliCtx)) > 0 {
+	if cliCtx.IsSet(flags.SuggestedFeeRecipientFlag.Name) || cliCtx.IsSet(flags.BuilderGasLimitFlag.Name) || len(setBuilderFlagNames(cliCtx)) > 0 {
 		methods = append(methods, defaultFlag)
 	}
 	if cliCtx.IsSet(flags.ProposerSettingsFlag.Name) {
@@ -175,6 +175,7 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 	}
 	// Captured before the merges below rewrite the DB payload in place.
 	hadDefaultBuilders := hasDefaultBuilders(dbSettings)
+	hadDefaultGasLimit := dbSettings.GetDefaultConfig().GetGasLimit() != 0
 
 	// start to process based on load method,
 	// each method merges onto the previous method's result.
@@ -210,6 +211,10 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 	if hadDefaultBuilders && !hasDefaultBuilders(loadedSettings) {
 		log.Warn("Dropped the default builder settings a previous run stored in the validator DB because neither builder flags nor a settings source configured a builders list this run; pass --" +
 			flags.BuilderURLsFlag.Name + " or the settings file on every start")
+	}
+	if hadDefaultGasLimit && loadedSettings.GetDefaultConfig().GetGasLimit() == 0 {
+		log.Warn("Dropped the default gas limit a previous run stored in the validator DB because neither --" +
+			flags.BuilderGasLimitFlag.Name + " nor a settings source configured one this run; pass it on every start to keep it")
 	}
 
 	// exit early if nothing is provided
@@ -301,9 +306,13 @@ func (psl *SettingsLoader) loadFromDefault(cliCtx *cli.Context, dbSettings *vali
 		option.FeeRecipient = suggestedFeeRecipient
 		logEntry = logEntry.WithField(flags.SuggestedFeeRecipientFlag.Name, suggestedFeeRecipient)
 	} else if dbSettings != nil && dbSettings.DefaultConfig != nil {
-		// Builder flags alone replace only the builder half of the persisted default.
+		// Other default flags alone keep the persisted default fee recipient.
 		option.FeeRecipient = dbSettings.DefaultConfig.FeeRecipient
-		option.GasLimit = dbSettings.DefaultConfig.GasLimit
+	}
+	if psl.options.gasLimit != nil {
+		option.GasLimit = *psl.options.gasLimit
+		logEntry = logEntry.WithField(flags.BuilderGasLimitFlag.Name, uint64(option.GasLimit))
+		warnGasLimitOverridesSchedule(option.GasLimit)
 	}
 	builder, err := builderConfigFromFlags(cliCtx)
 	if err != nil {
@@ -326,6 +335,22 @@ func (psl *SettingsLoader) loadFromDefault(cliCtx *cli.Context, dbSettings *vali
 	}
 	logEntry.Info("Proposer settings loaded from default")
 	return psl.processProposerSettings(loaded, dbSettings), nil
+}
+
+// From Gloas the default gas limit is the signed proposer preference, so the flag
+// overrides the EIP-8261 schedule; operators are told to remove it once the fork is live.
+func warnGasLimitOverridesSchedule(gas validator.Uint64) {
+	if !params.GloasEnabled() {
+		return
+	}
+	log.Warnf("--%s overrides the network gas limit schedule from the Gloas fork; remove it to follow the schedule", flags.BuilderGasLimitFlag.Name)
+	var highest uint64
+	for _, e := range params.BeaconConfig().GasLimitSchedule {
+		highest = max(highest, e.GasLimit)
+	}
+	if highest != 0 && uint64(gas) > highest {
+		log.Warnf("--%s %d exceeds the highest scheduled gas limit of %d", flags.BuilderGasLimitFlag.Name, gas, highest)
+	}
 }
 
 // setBuilderFlagNames lists the builder default flags present on the command line, "--" prefixed.
@@ -493,10 +518,16 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 		builderFlagsSet = options.builderFlagsSet
 	}
 
+	// The default gas limit is per-run like the builder defaults: a run without
+	// --suggested-gas-limit drops the persisted one so the schedule applies again.
+	if db != nil && db.DefaultConfig != nil && gasLimitOnly == nil {
+		db.DefaultConfig.GasLimit = 0
+	}
+
 	if merged.Version < proposer.SchemaV2 {
 		return mergeLegacyProposerSettings(merged, loaded, db, builderConfig, gasLimitOnly)
 	}
-	return mergeCurrentProposerSettings(merged, loaded, db, builderConfig, gasLimitOnly, builderFlagsSet)
+	return mergeCurrentProposerSettings(merged, loaded, db, builderConfig, builderFlagsSet)
 }
 
 // hasGloasBuilderFields reports whether a payload builder configures the Gloas builder API; an explicit empty list counts.
@@ -640,7 +671,7 @@ func mergeLegacyProposerSettings(merged, loaded, db *validatorpb.ProposerSetting
 	return merged
 }
 
-func mergeCurrentProposerSettings(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64, builderFlagsSet bool) *validatorpb.ProposerSettingsPayload {
+func mergeCurrentProposerSettings(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, builderFlagsSet bool) *validatorpb.ProposerSettingsPayload {
 	// Builder flags are per-run: a run without them drops the v2 builder fields an
 	// earlier flag run persisted in default_config. Legacy fields follow their own flags.
 	if db != nil && db.DefaultConfig != nil && !builderFlagsSet {
@@ -669,19 +700,6 @@ func mergeCurrentProposerSettings(merged, loaded, db *validatorpb.ProposerSettin
 		}
 		merged.DefaultConfig.Builder.Enabled = true
 		log.Warnf("--%s is legacy (pre-gloas) mev-boost content and has no effect after the gloas fork; configure builders via the settings source or keymanager API", flags.EnableBuilderFlag.Name)
-	}
-
-	// --suggested-gas-limit is likewise legacy content: it applies to the
-	// pre-gloas builder gas limit and never overrides v2 or schedule values.
-	if gasLimitOnly != nil {
-		if merged.DefaultConfig == nil {
-			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{}
-		}
-		if merged.DefaultConfig.Builder == nil {
-			merged.DefaultConfig.Builder = &validatorpb.BuilderConfig{}
-		}
-		merged.DefaultConfig.Builder.GasLimit = *gasLimitOnly
-		log.Warnf("--%s is legacy (pre-gloas) content and has no effect after the gloas fork; set gas limits in v2 proposer settings or via the keymanager API", flags.BuilderGasLimitFlag.Name)
 	}
 	return merged
 }

@@ -565,6 +565,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 						FeeRecipientConfig: &proposer.FeeRecipientConfig{
 							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 						},
+						GasLimit: 50000000,
 						BuilderConfig: &proposer.BuilderConfig{
 							Enabled:  true,
 							GasLimit: 50000000,
@@ -1557,15 +1558,14 @@ func TestProposerSettingsLoader(t *testing.T) {
 					Version: proposer.SchemaV2,
 					DefaultConfig: &proposer.Option{
 						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						GasLimit:           50000000,
 						BuilderConfig: &proposer.BuilderConfig{
 							Enabled:  true,
-							GasLimit: validator.Uint64(50000000),
 							Builders: []*proposer.BuilderEntry{{URL: "https://builder-a.example"}},
 						},
 					},
 				}
 			},
-			wantLogs: []string{"no effect after the gloas fork"},
 		},
 		{
 			name: "a later run without builder flags rebuilds the default from the flags",
@@ -1764,6 +1764,64 @@ func TestProposerSettingsLoader(t *testing.T) {
 					},
 				})
 			},
+		},
+		{
+			name: "gas limit flag alone is a default source",
+			args: args{proposerSettingsFlagValues: &proposerSettingsFlag{defaultgas: "50000000"}},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					DefaultConfig: &proposer.Option{
+						GasLimit:      50000000,
+						BuilderConfig: &proposer.BuilderConfig{GasLimit: 50000000},
+					},
+				}
+			},
+			wantLogs: []string{"Proposer settings loaded from default"},
+		},
+		{
+			name: "a run without the gas limit flag drops the persisted default gas limit and warns",
+			args: args{proposerSettingsFlagValues: &proposerSettingsFlag{defaultfee: "0x6e35733c5af9B61374A128e6F85f553aF09ff89A"}},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						GasLimit:           45000000,
+					},
+				})
+			},
+			wantLogs: []string{"Dropped the default gas limit"},
+		},
+		{
+			name: "a run with the gas limit flag replaces the persisted default gas limit without warning",
+			args: args{proposerSettingsFlagValues: &proposerSettingsFlag{defaultfee: "0x6e35733c5af9B61374A128e6F85f553aF09ff89A", defaultgas: "50000000"}},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						GasLimit:           50000000,
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						GasLimit:           45000000,
+					},
+				})
+			},
+			wantNoLogs: []string{"Dropped the default gas limit"},
 		},
 		{
 			name: "invalid builder url fails",
@@ -1969,9 +2027,9 @@ func Test_ProposerSettingsLoader_DoesNotMigrateAtLoad(t *testing.T) {
 		got, err := loader.Load(cliCtx)
 		require.NoError(t, err)
 		require.NotNil(t, got)
-		// Migration is deferred; settings stay in v1 form at load time.
+		// Migration is deferred; the flag sets the option-level default but the version stays v1.
 		require.Equal(t, uint32(0), got.Version)
-		require.Equal(t, validator.Uint64(0), got.DefaultConfig.GasLimit)
+		require.Equal(t, validator.Uint64(12345678), got.DefaultConfig.GasLimit)
 		require.NotNil(t, got.DefaultConfig.BuilderConfig)
 		require.Equal(t, validator.Uint64(12345678), got.DefaultConfig.BuilderConfig.GasLimit)
 	})
@@ -1990,7 +2048,7 @@ func Test_ProposerSettingsLoader_DoesNotMigrateAtLoad(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, got)
 		require.Equal(t, uint32(0), got.Version)
-		require.Equal(t, validator.Uint64(0), got.DefaultConfig.GasLimit)
+		require.Equal(t, validator.Uint64(12345678), got.DefaultConfig.GasLimit)
 		require.NotNil(t, got.DefaultConfig.BuilderConfig)
 		require.Equal(t, validator.Uint64(12345678), got.DefaultConfig.BuilderConfig.GasLimit)
 	})
@@ -2028,7 +2086,7 @@ func Test_ProposerSettingsLoader_DoesNotMigrateAtLoad(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, got)
 		require.Equal(t, proposer.SchemaV1, got.Version)
-		require.Equal(t, validator.Uint64(0), got.DefaultConfig.GasLimit)
+		require.Equal(t, validator.Uint64(12345678), got.DefaultConfig.GasLimit)
 		require.NotNil(t, got.DefaultConfig.BuilderConfig)
 		// CLI --suggested-gas-limit applied to BuilderConfig.GasLimit in v1.
 		require.Equal(t, validator.Uint64(12345678), got.DefaultConfig.BuilderConfig.GasLimit)
@@ -2199,19 +2257,15 @@ func Test_mergeProposerSettings_CreatesDefaultFromGasLimitFlag(t *testing.T) {
 	require.Equal(t, gl, merged.DefaultConfig.Builder.GasLimit)
 }
 
-func Test_mergeProposerSettings_V2GasLimitIsLegacyContent(t *testing.T) {
+func Test_mergeProposerSettings_V2GasLimitLeftToDefaultSource(t *testing.T) {
 	gl := validator.Uint64(12345678)
 	merged := mergeProposerSettings(
 		nil,
 		&validatorpb.ProposerSettingsPayload{Version: proposer.SchemaV2},
 		&flagOptions{gasLimit: &gl},
 	)
-	// The flag writes only legacy builder-level content, so post-fork
-	// resolution and the gas limit schedule are never overridden by it.
-	require.NotNil(t, merged.DefaultConfig)
-	require.Equal(t, validator.Uint64(0), merged.DefaultConfig.GasLimit)
-	require.NotNil(t, merged.DefaultConfig.Builder)
-	require.Equal(t, gl, merged.DefaultConfig.Builder.GasLimit)
+	// The default source writes the option-level gas limit; the merge adds no legacy builder content.
+	require.IsNil(t, merged.DefaultConfig)
 }
 
 func Test_mergeProposerSettings_VersionGatesBuilderReset(t *testing.T) {
@@ -2387,7 +2441,8 @@ func Test_mergeProposerSettings_V2LoadedOverridesDB(t *testing.T) {
 		}
 		merged := mergeProposerSettings(nil, db, &flagOptions{})
 		require.Equal(t, "0xdb", merged.DefaultConfig.FeeRecipient)
-		require.Equal(t, validator.Uint64(1), merged.DefaultConfig.GasLimit)
+		// The default gas limit is per-run and gone without the flag; per-key values stay.
+		require.Equal(t, validator.Uint64(0), merged.DefaultConfig.GasLimit)
 		require.Equal(t, "0xdbkey", merged.ProposerConfig["0xkey"].FeeRecipient)
 		require.Equal(t, validator.Uint64(2), merged.ProposerConfig["0xkey"].GasLimit)
 	})
@@ -2403,11 +2458,10 @@ func Test_mergeProposerSettings_V2GasLimitNeverOverridesOptions(t *testing.T) {
 		},
 	}
 	merged := mergeProposerSettings(nil, db, &flagOptions{gasLimit: &gl})
-	// Explicit v2 option-level values are the operator's; the legacy flag
-	// no longer stomps them at any level.
+	// The merge never touches option-level values or adds legacy builder content.
 	require.Equal(t, validator.Uint64(1), merged.DefaultConfig.GasLimit)
 	require.Equal(t, validator.Uint64(2), merged.ProposerConfig["0xkey"].GasLimit)
-	require.Equal(t, gl, merged.DefaultConfig.Builder.GasLimit)
+	require.IsNil(t, merged.DefaultConfig.Builder)
 }
 
 func Test_markExplicitEmptyBuilders(t *testing.T) {
@@ -2513,6 +2567,9 @@ func Test_determineLoadMethods(t *testing.T) {
 	t.Run("a builder flag alone selects the default flag source", func(t *testing.T) {
 		require.DeepEqual(t, []settingsType{defaultFlag}, determineLoadMethods(newCtx(t, flags.BuilderMinBidFlag.Name), true))
 	})
+	t.Run("the gas limit flag alone selects the default flag source", func(t *testing.T) {
+		require.DeepEqual(t, []settingsType{defaultFlag}, determineLoadMethods(newCtx(t, flags.BuilderGasLimitFlag.Name), true))
+	})
 	t.Run("sources are ordered default, file, url", func(t *testing.T) {
 		got := determineLoadMethods(newCtx(t, flags.ProposerSettingsURLFlag.Name, flags.ProposerSettingsFlag.Name, flags.BuilderURLsFlag.Name), false)
 		require.DeepEqual(t, []settingsType{defaultFlag, fileFlag, urlFlag}, got)
@@ -2597,5 +2654,40 @@ func Test_builderConfigFromFlags(t *testing.T) {
 		}
 		_, err := builderConfigFromFlags(newCtx(t, strings.Join(urls, ","), nil))
 		require.ErrorContains(t, fmt.Sprintf("more than %d builders", proposer.MaxBuilderEntries), err)
+	})
+}
+
+func Test_warnGasLimitOverridesSchedule(t *testing.T) {
+	hook := logtest.NewGlobal()
+	withGloas := func(t *testing.T, schedule []params.GasLimitScheduleEntry) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 100
+		cfg.GasLimitSchedule = schedule
+		params.OverrideBeaconConfig(cfg)
+	}
+	t.Run("no gloas fork scheduled stays silent", func(t *testing.T) {
+		hook.Reset()
+		warnGasLimitOverridesSchedule(90_000_000)
+		assert.LogsDoNotContain(t, hook, "overrides the network gas limit schedule")
+	})
+	t.Run("gloas scheduled warns that the flag overrides the schedule", func(t *testing.T) {
+		hook.Reset()
+		withGloas(t, nil)
+		warnGasLimitOverridesSchedule(60_000_000)
+		assert.LogsContain(t, hook, "overrides the network gas limit schedule")
+		assert.LogsDoNotContain(t, hook, "exceeds the highest scheduled gas limit")
+	})
+	t.Run("value within the schedule does not warn about exceeding it", func(t *testing.T) {
+		hook.Reset()
+		withGloas(t, []params.GasLimitScheduleEntry{{Epoch: 100, GasLimit: 60_000_000}, {Epoch: 200, GasLimit: 100_000_000}})
+		warnGasLimitOverridesSchedule(80_000_000)
+		assert.LogsDoNotContain(t, hook, "exceeds the highest scheduled gas limit")
+	})
+	t.Run("value above the highest scheduled entry warns", func(t *testing.T) {
+		hook.Reset()
+		withGloas(t, []params.GasLimitScheduleEntry{{Epoch: 100, GasLimit: 60_000_000}, {Epoch: 200, GasLimit: 100_000_000}})
+		warnGasLimitOverridesSchedule(120_000_000)
+		assert.LogsContain(t, hook, "exceeds the highest scheduled gas limit of 100000000")
 	})
 }

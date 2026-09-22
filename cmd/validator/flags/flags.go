@@ -380,10 +380,12 @@ var (
 		Value:   false,
 		Aliases: []string{"enable-validator-registration"},
 	}
-	// BuilderGasLimitFlag defines the gas limit for the builder to use for constructing a payload.
+	// BuilderGasLimitFlag sets the default_config gas limit, read by registrations and Gloas preferences.
 	BuilderGasLimitFlag = &cli.StringFlag{
-		Name:  "suggested-gas-limit",
-		Usage: "Sets gas limit for the builder to use for constructing a payload for all the validators.",
+		Name: "suggested-gas-limit",
+		Usage: `Sets the default gas limit for all validators: registered with builders before Gloas and signed into
+		proposer preferences from Gloas onward, where it overrides the network gas limit schedule. Remove it to follow
+		the schedule. ` + perKeyPrecedenceNote,
 		Value: fmt.Sprint(params.BeaconConfig().DefaultBuilderGasLimit),
 	}
 	// BuilderURLsFlag sets the default_config builders list for Gloas bid requests.
@@ -392,7 +394,7 @@ var (
 		Usage: `Comma-separated URLs of Gloas builders to request execution payload bids from, for all validators.
 		Auth data agreed with a builder may be appended as a hex fragment (https://builder.example#0x0123); otherwise
 		the URL's UTF-8 bytes are used. Before Gloas a non-empty list also enables builder validator registration,
-		like --` + EnableBuilderFlag.Name + `. ` + perKeyPrecedenceNote,
+		like --` + EnableBuilderFlag.Name + `; set the gas limit with --` + BuilderGasLimitFlag.Name + `. ` + perKeyPrecedenceNote,
 	}
 	// BuilderMinBidFlag sets the default_config min_bid for Gloas bids.
 	BuilderMinBidFlag = &cli.Uint64Flag{
