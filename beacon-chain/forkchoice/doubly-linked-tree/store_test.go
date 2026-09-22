@@ -602,6 +602,47 @@ func TestStore_TargetRootForEpoch(t *testing.T) {
 	require.Equal(t, blk1.Root(), dependent)
 }
 
+func TestStore_DependentRoot_PrunedHead(t *testing.T) {
+	// A stale/pruned head makes the dependent-root walk return ErrNilNode. dependentRoot
+	// substitutes finalizedDependentRoot only for the finalized epoch; for any other
+	// epoch the error must surface. Regression for the dropped ePBS head_v2 event.
+	const finalizedEpoch = 3
+	finalizedDependentRoot := [32]byte{'x'}
+
+	staleHeadStore := func(t *testing.T) *ForkChoice {
+		ctx := t.Context()
+		f := setup(finalizedEpoch, finalizedEpoch)
+		state, blk, err := prepareForkchoiceState(ctx, params.BeaconConfig().SlotsPerEpoch, [32]byte{'a'}, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, finalizedEpoch, finalizedEpoch)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, state, blk))
+
+		s := f.store
+		s.finalizedDependentRoot = finalizedDependentRoot
+		// Head points at a root not in forkchoice (pruned), so the walk returns ErrNilNode.
+		s.headNode = &Node{root: [32]byte{'z'}, slot: finalizedEpoch * params.BeaconConfig().SlotsPerEpoch}
+		return f
+	}
+
+	t.Run("finalized epoch falls back to finalizedDependentRoot", func(t *testing.T) {
+		f := staleHeadStore(t)
+		dependent, err := f.DependentRoot(finalizedEpoch)
+		require.NoError(t, err)
+		require.Equal(t, finalizedDependentRoot, dependent)
+	})
+
+	t.Run("epoch after finalized surfaces the missing node", func(t *testing.T) {
+		f := staleHeadStore(t)
+		_, err := f.DependentRoot(finalizedEpoch + 2)
+		require.ErrorIs(t, err, ErrNilNode)
+	})
+
+	t.Run("epoch before finalized does not return finalizedDependentRoot", func(t *testing.T) {
+		f := staleHeadStore(t)
+		_, err := f.DependentRoot(finalizedEpoch - 2)
+		require.ErrorIs(t, err, ErrNilNode)
+	})
+}
+
 func TestStore_DependentRootForEpoch(t *testing.T) {
 	ctx := t.Context()
 	f := setup(1, 1)
