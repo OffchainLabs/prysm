@@ -150,6 +150,7 @@ go_library(
     srcs = [
         "beacon_state_mainnet.go",
         "beacon_state_minimal.go",  # keep
+        "beacon_state_types.go",
     ],
     embed = [":go_proto"],
     importpath = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1",
@@ -225,7 +226,6 @@ ssz_proto_files(
         "attestation.proto",
         "beacon_block.proto",
         "beacon_core_types.proto",
-        "beacon_state.proto",
         "blobs.proto",
         "data_columns.proto",
         "gloas.proto",

@@ -253,3 +253,17 @@ message Validator {
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
   ];
 }
+
+// The state summary object is defined for summarizing a state
+// of a given slot. The summary facilitates regeneration of a
+// specific state to allow easy playback using pre-saved state
+// and blocks.
+message StateSummary {
+  // The slot of the state.
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  // The block root of the state.
+  bytes root = 2;
+}

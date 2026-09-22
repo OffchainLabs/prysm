@@ -38,6 +38,13 @@ func TestBeaconState_FieldParity(t *testing.T) {
 	})
 }
 
+func TestHistoricalBatch_FieldParity(t *testing.T) {
+	assertStateFields(t, reflect.TypeFor[v1alpha1.HistoricalBatch](), []string{
+		"BlockRoots [][]uint8 ssz-size",
+		"StateRoots [][]uint8 ssz-size",
+	})
+}
+
 func TestBeaconState_Copy(t *testing.T) {
 	orig := &v1alpha1.BeaconState{PreviousEpochAttestations: []*v1alpha1.PendingAttestation{{AggregationBits: []byte{1}, Data: &v1alpha1.AttestationData{BeaconBlockRoot: []byte{2}}}}, CurrentEpochAttestations: []*v1alpha1.PendingAttestation{{ProposerIndex: 3}}}
 	cp := orig.Copy()

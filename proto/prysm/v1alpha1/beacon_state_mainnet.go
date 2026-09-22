@@ -33,6 +33,12 @@ type BeaconState struct {
 	FinalizedCheckpoint         *Checkpoint
 }
 
+// HistoricalBatch is the Phase0 container whose root is appended to historical_roots.
+type HistoricalBatch struct {
+	BlockRoots [][]byte `ssz-size:"8192,32"`
+	StateRoots [][]byte `ssz-size:"8192,32"`
+}
+
 // BeaconStateAltair is the Altair SSZ state.
 type BeaconStateAltair struct {
 	GenesisTime                 uint64

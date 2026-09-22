@@ -7,8 +7,6 @@ These rules allow for variable substitution for hardcoded tag values like ssz-si
 ####### Configuration #######
 
 mainnet = {
-    "block_roots.size": "8192,32",  # SLOTS_PER_HISTORICAL_ROOT, [32]byte
-    "state_roots.size": "8192,32",  # SLOTS_PER_HISTORICAL_ROOT, [32]byte
     "sync_committee_bits.size": "512",  # SYNC_COMMITTEE_SIZE
     "sync_committee_bytes.size": "64",
     "sync_committee_bits.type": "github.com/OffchainLabs/go-bitfield.Bitvector512",
@@ -43,8 +41,6 @@ mainnet = {
 }
 
 minimal = {
-    "block_roots.size": "64,32",
-    "state_roots.size": "64,32",
     "sync_committee_bits.size": "32",
     "sync_committee_bytes.size": "4",
     "sync_committee_bits.type": "github.com/OffchainLabs/go-bitfield.Bitvector32",

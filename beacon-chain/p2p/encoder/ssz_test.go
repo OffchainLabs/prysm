@@ -98,13 +98,8 @@ type BlobSidecarsCreator struct{}
 type Deposit_DataCreator struct{}
 type ForkCreator struct{}
 type PendingAttestationCreator struct{}
-type HistoricalBatchCreator struct{}
-type SigningDataCreator struct{}
-type ForkDataCreator struct{}
-type DepositMessageCreator struct{}
 type SyncCommitteeCreator struct{}
 type SyncAggregatorSelectionDataCreator struct{}
-type PowBlockCreator struct{}
 type HistoricalSummaryCreator struct{}
 type BlobIdentifierCreator struct{}
 type PendingDepositCreator struct{}
@@ -263,15 +258,10 @@ func (BlobSidecarsCreator) Create() MarshalerProtoMessage       { return &ethpb.
 func (Deposit_DataCreator) Create() MarshalerProtoMessage       { return &ethpb.Deposit_Data{} }
 func (ForkCreator) Create() MarshalerProtoMessage               { return &ethpb.Fork{} }
 func (PendingAttestationCreator) Create() MarshalerProtoMessage { return &ethpb.PendingAttestation{} }
-func (HistoricalBatchCreator) Create() MarshalerProtoMessage    { return &ethpb.HistoricalBatch{} }
-func (SigningDataCreator) Create() MarshalerProtoMessage        { return &ethpb.SigningData{} }
-func (ForkDataCreator) Create() MarshalerProtoMessage           { return &ethpb.ForkData{} }
-func (DepositMessageCreator) Create() MarshalerProtoMessage     { return &ethpb.DepositMessage{} }
 func (SyncCommitteeCreator) Create() MarshalerProtoMessage      { return &ethpb.SyncCommittee{} }
 func (SyncAggregatorSelectionDataCreator) Create() MarshalerProtoMessage {
 	return &ethpb.SyncAggregatorSelectionData{}
 }
-func (PowBlockCreator) Create() MarshalerProtoMessage          { return &ethpb.PowBlock{} }
 func (HistoricalSummaryCreator) Create() MarshalerProtoMessage { return &ethpb.HistoricalSummary{} }
 func (BlobIdentifierCreator) Create() MarshalerProtoMessage    { return &ethpb.BlobIdentifier{} }
 func (PendingDepositCreator) Create() MarshalerProtoMessage {
@@ -379,13 +369,8 @@ var creators = []MarshalerProtoCreator{
 	Deposit_DataCreator{},
 	ForkCreator{},
 	PendingAttestationCreator{},
-	HistoricalBatchCreator{},
-	SigningDataCreator{},
-	ForkDataCreator{},
-	DepositMessageCreator{},
 	SyncCommitteeCreator{},
 	SyncAggregatorSelectionDataCreator{},
-	PowBlockCreator{},
 	HistoricalSummaryCreator{},
 	BlobIdentifierCreator{},
 	PendingDepositCreator{},
