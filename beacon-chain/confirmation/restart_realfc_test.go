@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/confirmation"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -76,7 +77,10 @@ func TestOnFastConfirmation_RealForkchoice_EpochBoundaryRestart(t *testing.T) {
 	ctx := context.Background()
 
 	fc := doublylinkedtree.New()
-	fc.SetBalancesByRooter(func(_ context.Context, _ [32]byte) ([]uint64, error) { return []uint64{}, nil })
+	fc.SetBalancesByRooter(func(_ context.Context, _ [32]byte) (forkchoice.Balances, error) { return forkchoice.Balances{}, nil })
+	fc.SetCommitteesByRooter(func(context.Context, [32]byte, primitives.Slot, state.ReadOnlyBeaconState) ([][]primitives.ValidatorIndex, error) {
+		return [][]primitives.ValidatorIndex{}, nil
+	})
 
 	setWallSlot := func(s primitives.Slot) {
 		fc.SetGenesisTime(time.Now().Add(-time.Duration(uint64(s)*params.BeaconConfig().SecondsPerSlot) * time.Second))

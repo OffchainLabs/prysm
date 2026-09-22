@@ -11,6 +11,7 @@ func (f *ForkChoice) applyProposerBoostScore() error {
 	s := f.store
 	proposerScore := uint64(0)
 	s.removePreviousProposerBoost()
+	s.previousProposerBoostScore = 0
 	if s.shouldApplyProposerBoost() {
 		proposerScore = s.applyNewProposerBoost()
 	}

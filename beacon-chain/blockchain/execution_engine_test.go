@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	bstate "github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
@@ -286,7 +287,9 @@ func Test_NotifyForkchoiceUpdate_NIlLVH(t *testing.T) {
 	brd, err := wbd.Block().HashTreeRoot()
 	require.NoError(t, err)
 
-	fcs.SetBalancesByRooter(func(context.Context, [32]byte) ([]uint64, error) { return []uint64{50, 100, 200}, nil })
+	fcs.SetBalancesByRooter(func(context.Context, [32]byte) (forkchoice.Balances, error) {
+		return forkchoice.Balances{ActiveNonSlashed: []uint64{50, 100, 200}, Effective: []uint64{50, 100, 200}, TotalActive: 350}, nil
+	})
 	require.NoError(t, fcs.UpdateJustifiedCheckpoint(ctx, &forkchoicetypes.Checkpoint{}))
 	ojc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
 	ofc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
@@ -398,7 +401,9 @@ func Test_NotifyForkchoiceUpdateRecursive_DoublyLinkedTree(t *testing.T) {
 	brg, err := wbg.Block().HashTreeRoot()
 	require.NoError(t, err)
 
-	fcs.SetBalancesByRooter(func(context.Context, [32]byte) ([]uint64, error) { return []uint64{50, 100, 200}, nil })
+	fcs.SetBalancesByRooter(func(context.Context, [32]byte) (forkchoice.Balances, error) {
+		return forkchoice.Balances{ActiveNonSlashed: []uint64{50, 100, 200}, Effective: []uint64{50, 100, 200}, TotalActive: 350}, nil
+	})
 	require.NoError(t, fcs.UpdateJustifiedCheckpoint(ctx, &forkchoicetypes.Checkpoint{}))
 	ojc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
 	ofc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
@@ -433,10 +438,12 @@ func Test_NotifyForkchoiceUpdateRecursive_DoublyLinkedTree(t *testing.T) {
 	fcs.ProcessAttestation(ctx, []uint64{0}, brd, params.BeaconConfig().SlotsPerEpoch, true)
 	fcs.ProcessAttestation(ctx, []uint64{1}, brf, params.BeaconConfig().SlotsPerEpoch, true)
 	fcs.ProcessAttestation(ctx, []uint64{2}, brg, params.BeaconConfig().SlotsPerEpoch, true)
-	fcs.SetBalancesByRooter(service.cfg.StateGen.ActiveNonSlashedBalancesByRoot)
+	fcs.SetBalancesByRooter(service.cfg.StateGen.ForkChoiceBalancesByRoot)
 	jc := &forkchoicetypes.Checkpoint{Epoch: 0, Root: bra}
 	require.NoError(t, fcs.UpdateJustifiedCheckpoint(ctx, jc))
-	fcs.SetBalancesByRooter(func(context.Context, [32]byte) ([]uint64, error) { return []uint64{50, 100, 200}, nil })
+	fcs.SetBalancesByRooter(func(context.Context, [32]byte) (forkchoice.Balances, error) {
+		return forkchoice.Balances{ActiveNonSlashed: []uint64{50, 100, 200}, Effective: []uint64{50, 100, 200}, TotalActive: 350}, nil
+	})
 	require.NoError(t, fcs.UpdateJustifiedCheckpoint(ctx, &forkchoicetypes.Checkpoint{}))
 	headRoot, err := fcs.Head(ctx)
 	require.NoError(t, err)
@@ -893,6 +900,7 @@ func Test_UpdateLastValidatedCheckpoint(t *testing.T) {
 	params.OverrideBeaconConfig(params.MainnetConfig())
 	service, tr := minimalTestService(t)
 	ctx, beaconDB, fcs := tr.ctx, tr.db, tr.fcs
+	stubTestForkChoiceCommittees(fcs)
 
 	var genesisStateRoot [32]byte
 	genesisBlk := blocks.NewGenesisBlock(genesisStateRoot[:])
@@ -970,7 +978,7 @@ func Test_UpdateLastValidatedCheckpoint(t *testing.T) {
 	twentyfc := &ethpb.Checkpoint{Epoch: 20, Root: validRoot[:]}
 	state, blkRoot, err = prepareForkchoiceState(ctx, 640, validRoot, genesisRoot, params.BeaconConfig().ZeroHash, twentyjc, twentyfc)
 	require.NoError(t, err)
-	fcs.SetBalancesByRooter(func(_ context.Context, _ [32]byte) ([]uint64, error) { return []uint64{}, nil })
+	fcs.SetBalancesByRooter(func(_ context.Context, _ [32]byte) (forkchoice.Balances, error) { return forkchoice.Balances{}, nil })
 	require.NoError(t, fcs.InsertNode(ctx, state, blkRoot))
 	require.NoError(t, fcs.SetOptimisticToValid(ctx, validRoot))
 	assert.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, validRoot))

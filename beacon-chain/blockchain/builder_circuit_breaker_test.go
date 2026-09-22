@@ -6,6 +6,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
@@ -88,7 +89,13 @@ func setupBuilderFailureTest(
 	service, tr := setupGloasService(t, &mockExecution.EngineClient{})
 	require.NoError(t, WithBuilderCircuitBreaker(cb)(service))
 	service.cfg.ForkChoiceStore.SetBalancesByRooter(
-		func(context.Context, [32]byte) ([]uint64, error) { return balances, nil })
+		func(context.Context, [32]byte) (forkchoice.Balances, error) {
+			var totalActive uint64
+			for _, balance := range balances {
+				totalActive += balance
+			}
+			return forkchoice.Balances{ActiveNonSlashed: balances, Effective: balances, TotalActive: totalActive}, nil
+		})
 
 	parentHash := bytesutil.ToBytes32([]byte("parenthash"))
 	parentRoot := bytesutil.ToBytes32([]byte("parentroot"))

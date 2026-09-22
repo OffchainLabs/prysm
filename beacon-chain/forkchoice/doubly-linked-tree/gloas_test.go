@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
@@ -472,7 +473,9 @@ func TestParentHash_TreeRootBuildsOnPayload(t *testing.T) {
 	cfg.GloasForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 	f := New()
-	f.SetBalancesByRooter(func(_ context.Context, _ [32]byte) ([]uint64, error) { return f.justifiedBalances, nil })
+	f.SetBalancesByRooter(func(_ context.Context, _ [32]byte) (forkchoice.Balances, error) {
+		return forkchoice.Balances{ActiveNonSlashed: f.justifiedBalances, Effective: f.justifiedBalances}, nil
+	})
 	ctx := t.Context()
 
 	// Genesis-shaped anchor: the bid carries no payload of its own (zero block hash) but records the payload it builds on.
@@ -499,7 +502,9 @@ func TestParentHash_PrunePreservesLastFullAncestor(t *testing.T) {
 	cfg.GloasForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 	f := New()
-	f.SetBalancesByRooter(func(_ context.Context, _ [32]byte) ([]uint64, error) { return f.justifiedBalances, nil })
+	f.SetBalancesByRooter(func(_ context.Context, _ [32]byte) (forkchoice.Balances, error) {
+		return forkchoice.Balances{ActiveNonSlashed: f.justifiedBalances, Effective: f.justifiedBalances}, nil
+	})
 	ctx := t.Context()
 
 	h0, h1, h2 := indexToHash(50), indexToHash(100), indexToHash(200)
@@ -597,6 +602,7 @@ func TestGloasHeadComputation(t *testing.T) {
 	}
 	f.justifiedBalances = balances
 	f.store.committeeWeight = uint64(len(balances)*10) / uint64(params.BeaconConfig().SlotsPerEpoch)
+	f.store.weakHeadCommitteeWeight = f.store.committeeWeight
 	zeroHash := params.BeaconConfig().ZeroHash
 
 	// Head starts at finalized (genesis).
@@ -879,6 +885,7 @@ func TestGloasHeadComputation_FullPayloadWithPTCBeatsEmptyChildBoost(t *testing.
 	}
 	f.justifiedBalances = balances
 	s.committeeWeight = uint64(len(balances)*10) / uint64(params.BeaconConfig().SlotsPerEpoch)
+	s.weakHeadCommitteeWeight = s.committeeWeight
 	zeroHash := params.BeaconConfig().ZeroHash
 
 	headRoot, err := f.Head(ctx)
@@ -981,6 +988,8 @@ func TestGloasCouldBuilderWithhold(t *testing.T) {
 
 	f.store.committeeWeight = 100
 
+	f.store.weakHeadCommitteeWeight = f.store.committeeWeight
+
 	t.Run("at the threshold", func(t *testing.T) {
 		en.node.balance = 60
 		require.Equal(t, true, f.CouldBuilderWithhold(root))
@@ -1000,6 +1009,71 @@ func TestGloasCouldBuilderWithhold(t *testing.T) {
 	})
 }
 
+func TestGloasProposerBoost_WeakParentAfterEquivocation(t *testing.T) {
+	for _, inCommittee := range []bool{true, false} {
+		name := "parent-slot equivocators"
+		if !inCommittee {
+			name = "other-slot equivocators"
+		}
+		t.Run(name, func(t *testing.T) {
+			f := setupGloas(t, 0, 0)
+			s := f.store
+			ctx := t.Context()
+			f.justifiedBalances = make([]uint64, 640)
+			for i := range f.justifiedBalances {
+				f.justifiedBalances[i] = 10
+			}
+			require.NoError(t, f.updateJustifiedBalances(ctx, [32]byte{}))
+			parentRoot, childRoot := [32]byte{'p'}, [32]byte{'c'}
+			f.SetCommitteesByRooter(func(_ context.Context, root [32]byte, _ primitives.Slot, _ state.ReadOnlyBeaconState) ([][]primitives.ValidatorIndex, error) {
+				if root == parentRoot && inCommittee {
+					return [][]primitives.ValidatorIndex{{0, 1}}, nil
+				}
+				return [][]primitives.ValidatorIndex{{20, 21}}, nil
+			})
+			driftGenesisTime(f, 2, 5*time.Second)
+			st, blk, err := prepareGloasForkchoiceState(ctx, 2, parentRoot, [32]byte{}, [32]byte{'P'}, [32]byte{}, 0, 0)
+			require.NoError(t, err)
+			require.NoError(t, f.InsertNode(ctx, st, blk))
+			f.ProcessAttestation(ctx, []uint64{0, 1, 2, 3, 4}, parentRoot, 2, false)
+			_, err = f.Head(ctx)
+			require.NoError(t, err)
+			f.RecordBlockForEquivocation(2, 0, [32]byte{'e'})
+			driftGenesisTime(f, 3, 0)
+			require.NoError(t, f.NewSlot(ctx, 3))
+			st, blk, err = prepareGloasForkchoiceState(ctx, 3, childRoot, parentRoot, [32]byte{'C'}, [32]byte{}, 0, 0)
+			require.NoError(t, err)
+			require.NoError(t, f.InsertNode(ctx, st, blk))
+			require.Equal(t, childRoot, s.proposerBoostRoot)
+			_, err = f.Head(ctx)
+			require.NoError(t, err)
+			require.Equal(t, uint64(80), s.previousProposerBoostScore)
+
+			require.Equal(t, 0, len(s.slashedIndices))
+			require.Equal(t, true, s.emptyNodeByRoot[parentRoot].node.slotCommittee != nil)
+			lookupCalls := 0
+			f.SetCommitteesByRooter(func(context.Context, [32]byte, primitives.Slot, state.ReadOnlyBeaconState) ([][]primitives.ValidatorIndex, error) {
+				lookupCalls++
+				return nil, nil
+			})
+			f.InsertSlashedIndex(ctx, 0)
+			f.InsertSlashedIndex(ctx, 1)
+			wantBoost := uint64(0)
+			if inCommittee {
+				wantBoost = 80
+			}
+			for range 2 {
+				_, err = f.Head(ctx)
+				require.NoError(t, err)
+				require.Equal(t, wantBoost, s.previousProposerBoostScore)
+				require.Equal(t, uint64(30), s.attestationScore(s.emptyNodeByRoot[parentRoot].node))
+				require.Equal(t, wantBoost, s.emptyNodeByRoot[childRoot].node.balance)
+			}
+			require.Equal(t, 0, lookupCalls)
+		})
+	}
+}
+
 // TestGloasProposerBoostWithParentWeight is similar to TestGloasHeadComputation
 // but adds an attestation on the parent so that shouldApplyProposerBoost
 // passes at consecutive slots (parent.weight >= committeeWeight * threshold / 100).
@@ -1013,6 +1087,7 @@ func TestGloasProposerBoostWithParentWeight(t *testing.T) {
 	}
 	f.justifiedBalances = balances
 	f.store.committeeWeight = uint64(len(balances)*10) / uint64(params.BeaconConfig().SlotsPerEpoch)
+	f.store.weakHeadCommitteeWeight = f.store.committeeWeight
 	zeroHash := params.BeaconConfig().ZeroHash
 
 	// Insert A at slot 32 building on genesis.
@@ -1136,6 +1211,7 @@ func TestGloasProposerBoostBlockedByEquivocation(t *testing.T) {
 	}
 	f.justifiedBalances = balances
 	f.store.committeeWeight = uint64(len(balances)*10) / uint64(params.BeaconConfig().SlotsPerEpoch)
+	f.store.weakHeadCommitteeWeight = f.store.committeeWeight
 	zeroHash := params.BeaconConfig().ZeroHash
 
 	slotA := primitives.Slot(32)
@@ -1366,6 +1442,7 @@ func TestGloasForkedBranches(t *testing.T) {
 	}
 	f.justifiedBalances = balances
 	s.committeeWeight = uint64(len(balances)*10) / uint64(params.BeaconConfig().SlotsPerEpoch)
+	s.weakHeadCommitteeWeight = s.committeeWeight
 	zeroHash := params.BeaconConfig().ZeroHash
 
 	// Build:
@@ -1489,6 +1566,7 @@ func TestGloasPTCOverridesProposerBoost(t *testing.T) {
 	}
 	f.justifiedBalances = balances
 	s.committeeWeight = uint64(len(balances)*10) / uint64(params.BeaconConfig().SlotsPerEpoch)
+	s.weakHeadCommitteeWeight = s.committeeWeight
 	zeroHash := params.BeaconConfig().ZeroHash
 
 	slotA := primitives.Slot(32)
@@ -1785,6 +1863,7 @@ func TestGloasDeepForkWeightPropagation(t *testing.T) {
 	}
 	f.justifiedBalances = balances
 	s.committeeWeight = uint64(len(balances)*10) / uint64(params.BeaconConfig().SlotsPerEpoch)
+	s.weakHeadCommitteeWeight = s.committeeWeight
 	zeroHash := params.BeaconConfig().ZeroHash
 
 	// Build:
@@ -2177,6 +2256,7 @@ func TestLatestCanonicalHashForRoot_SameParentReorg(t *testing.T) {
 	}
 	f.justifiedBalances = balances
 	s.committeeWeight = uint64(len(balances)*10) / uint64(params.BeaconConfig().SlotsPerEpoch)
+	s.weakHeadCommitteeWeight = s.committeeWeight
 
 	// Slot A at epoch boundary (slot 32). Bid blockHashA, parentHash = genesis (zeroHash).
 	slotA := primitives.Slot(32)
