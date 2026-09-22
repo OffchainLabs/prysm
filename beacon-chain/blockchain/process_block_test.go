@@ -241,6 +241,7 @@ func TestPrepareBatchPrestate(t *testing.T) {
 			env.Message.Payload.BlockHash = make([]byte, 32)
 		}},
 		{name: "child building on FULL parent requires columns", supplyParentEnvelope: true, columns: true, wantErr: "data columns unavailable for parent execution payload envelope"},
+		{name: "reusable parent payload does not recheck columns", parentEnvelopeStored: true, parentHasFullNode: true, columns: true},
 		{name: "child building on FULL parent with stored columns", supplyParentEnvelope: true, columns: true, storedColumns: true, wantEngineCalls: 1},
 		{name: "parent envelope must match committed bid", supplyParentEnvelope: true, mutate: func(st *ethpb.BeaconStateGloas, _ *ethpb.SignedExecutionPayloadEnvelope) {
 			st.LatestExecutionPayloadBid.GasLimit++

@@ -144,7 +144,10 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, r *fetchRequestRespon
 // resolveBlock loads an envelope's block that is not part of the current batch.
 func (f *blocksFetcher) resolveBlock(ctx context.Context, root [32]byte) (blocks.ROBlock, bool) {
 	signed, err := f.db.Block(ctx, root)
-	if err == nil {
+	if err != nil {
+		log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Error("Could not read block from DB")
+	}
+	if signed != nil {
 		if b, err := blocks.NewROBlockWithRoot(signed, root); err == nil {
 			return b, true
 		}

@@ -321,6 +321,7 @@ func (f *blocksFetcher) fetchParentPayloadFromPeers(ctx context.Context, parent,
 			if err := ctx.Err(); err != nil {
 				return nil, "", err
 			}
+			log.WithField("peer", p).WithError(err).Debug("Could not fetch parent payload envelope by root")
 			if errors.Is(err, prysmsync.ErrInvalidFetchedData) {
 				f.downscorePeer(p, err)
 			}
