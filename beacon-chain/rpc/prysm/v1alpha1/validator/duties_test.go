@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
@@ -15,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -511,5 +513,60 @@ func BenchmarkCommitteeAssignment(b *testing.B) {
 	for b.Loop() {
 		_, err := vs.GetDuties(b.Context(), req)
 		assert.NoError(b, err)
+	}
+}
+
+type dependentRootStub struct {
+	blockchain.ForkchoiceFetcher
+	roots map[primitives.Epoch][32]byte
+	errs  map[primitives.Epoch]error
+}
+
+func (s dependentRootStub) DependentRoot(e primitives.Epoch) ([32]byte, error) {
+	return s.roots[e], s.errs[e]
+}
+
+func TestGetDuties_DependentRootsBelowTree(t *testing.T) {
+	curr, prev := [32]byte{'c'}, [32]byte{'p'}
+	tests := []struct {
+		name     string
+		roots    map[primitives.Epoch][32]byte
+		errs     map[primitives.Epoch]error
+		wantPrev [32]byte
+		wantCurr [32]byte
+	}{
+		{name: "both known", roots: map[primitives.Epoch][32]byte{2: curr, 1: prev}, wantPrev: prev, wantCurr: curr},
+		{name: "previous epoch below the tree root", roots: map[primitives.Epoch][32]byte{2: curr}, errs: map[primitives.Epoch]error{1: doublylinkedtree.ErrNilNode}, wantCurr: curr},
+		{name: "current epoch unknown skips the previous lookup", errs: map[primitives.Epoch]error{1: doublylinkedtree.ErrNilNode}},
+	}
+	deposits, _, err := util.DeterministicDepositsAndKeys(params.BeaconConfig().MinGenesisActiveValidatorCount)
+	require.NoError(t, err)
+	eth1Data, err := util.DeterministicEth1Data(len(deposits))
+	require.NoError(t, err)
+	bs, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
+	require.NoError(t, err)
+	genesisRoot, err := util.NewBeaconBlock().Block.HashTreeRoot()
+	require.NoError(t, err)
+	twoEpochs := time.Duration(2*uint64(params.BeaconConfig().SlotsPerEpoch)) * params.BeaconConfig().SlotDuration()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			chain := &mockChain.ChainService{State: bs, Root: genesisRoot[:], Genesis: time.Now().Add(-twoEpochs)}
+			vs := &Server{
+				HeadFetcher:       chain,
+				TimeFetcher:       chain,
+				ForkchoiceFetcher: dependentRootStub{ForkchoiceFetcher: chain, roots: tt.roots, errs: tt.errs},
+				SyncChecker:       &mockSync.Sync{IsSyncing: false},
+				PayloadIDCache:    cache.NewPayloadIDCache(),
+			}
+			req := &ethpb.DutiesRequest{PublicKeys: [][]byte{deposits[0].Data.PublicKey}, Epoch: 2}
+			res, err := vs.GetDuties(t.Context(), req)
+			require.NoError(t, err)
+			require.DeepEqual(t, tt.wantPrev[:], res.PreviousDutyDependentRoot)
+			require.DeepEqual(t, tt.wantCurr[:], res.CurrentDutyDependentRoot)
+			resV2, err := vs.GetDutiesV2(t.Context(), req)
+			require.NoError(t, err)
+			require.DeepEqual(t, tt.wantPrev[:], resV2.PreviousDutyDependentRoot)
+			require.DeepEqual(t, tt.wantCurr[:], resV2.CurrentDutyDependentRoot)
+		})
 	}
 }

@@ -2,10 +2,12 @@ package validator
 
 import (
 	"context"
+	"errors"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -209,6 +211,10 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 	prevDependentRoot := currDependentRoot
 	if currDependentRoot != [32]byte{} && currentEpoch > 0 {
 		prevDependentRoot, err = vs.ForkchoiceFetcher.DependentRoot(currentEpoch - 1)
+		// Zero means unknown: forkchoice holds nothing below its tree root at startup.
+		if errors.Is(err, doublylinkedtree.ErrNilNode) {
+			prevDependentRoot, err = [32]byte{}, nil
+		}
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not get previous dependent root: %v", err)
 		}
