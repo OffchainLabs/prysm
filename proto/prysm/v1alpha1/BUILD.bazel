@@ -63,7 +63,7 @@ ssz_methodical(
 
 ssz_methodical(
     name = "methodical_bellatrix",
-    deps = [":go_proto"],
+    deps = [":beacon_state_go"],
     config_file = "bellatrix.yaml",
     override_package_name = "eth",
     out = "bellatrix.ssz.go",
@@ -156,6 +156,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//consensus-types/primitives:go_default_library",
+        "//proto/engine/v1:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
     ],
 )

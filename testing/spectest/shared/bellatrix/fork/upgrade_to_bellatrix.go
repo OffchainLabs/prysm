@@ -12,7 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/golang/snappy"
-	"google.golang.org/protobuf/proto"
 )
 
 // RunUpgradeToBellatrix is a helper function that runs bellatrix's fork spec tests.
@@ -53,9 +52,7 @@ func RunUpgradeToBellatrix(t *testing.T, config string) {
 				t.Fatalf("Failed to unmarshal: %v", err)
 			}
 
-			if !proto.Equal(postStateFromFile, postStateFromFunction) {
-				t.Fatal("Post state does not match expected")
-			}
+			require.DeepSSZEqual(t, postStateFromFile, postStateFromFunction, "Post state does not match expected")
 		})
 	}
 }

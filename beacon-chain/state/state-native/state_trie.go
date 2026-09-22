@@ -59,7 +59,7 @@ func InitializeFromProtoAltair(st *ethpb.BeaconStateAltair) (state.BeaconState, 
 
 // InitializeFromProtoBellatrix the beacon state from a protobuf representation.
 func InitializeFromProtoBellatrix(st *ethpb.BeaconStateBellatrix) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafeBellatrix(proto.Clone(st).(*ethpb.BeaconStateBellatrix))
+	return InitializeFromProtoUnsafeBellatrix(st.Copy())
 }
 
 // InitializeFromProtoCapella the beacon state from a protobuf representation.
