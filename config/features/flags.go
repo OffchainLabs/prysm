@@ -239,6 +239,10 @@ var (
 		Usage:  "Skips the builder circuit breaker check when submitting a signed execution payload bid, so a blacklisted builder still broadcasts its bid. For testing only.",
 		Hidden: true,
 	}
+	disableBuilderRelayCircuitBreaker = &cli.BoolFlag{
+		Name:  "disable-builder-relay-circuit-breaker",
+		Usage: "Stops the builder circuit breaker from tracking which builders each direct connection endpoint serves, so a failing builder no longer bans the endpoints serving it.",
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.

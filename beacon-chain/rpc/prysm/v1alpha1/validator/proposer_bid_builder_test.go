@@ -9,6 +9,7 @@ import (
 
 	beaconbuilder "github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	builderTest "github.com/OffchainLabs/prysm/v7/beacon-chain/builder/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -18,6 +19,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
@@ -486,6 +488,62 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 			},
 		}
 		require.IsNil(t, vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries)))
+	})
+
+	t.Run("learns which builders an endpoint serves", func(t *testing.T) {
+		cb := cache.NewBuilderCircuitBreaker()
+		vs := &Server{
+			BlockBuilder:                   &builderTest.MockBuilderService{PayloadBids: []beaconbuilder.PayloadBid{bid(1, 500), bid(2, 1500)}},
+			NewExecutionPayloadBidVerifier: passAll,
+			BuilderCircuitBreaker:          cb,
+		}
+		require.NotNil(t, vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries)))
+
+		// Charging builder 2 must ban the endpoint and, through it, builder 1.
+		epoch := slots.ToEpoch(slot)
+		out := cb.RecordFailure(2, [32]byte{0xaa}, epoch)
+		require.Equal(t, true, out.Blacklisted)
+		require.Equal(t, 1, len(out.BannedRelays))
+		require.Equal(t, true, cb.RelayBanned("http://builder", epoch))
+		require.Equal(t, true, cb.Blacklisted(1, epoch))
+	})
+
+	t.Run("does not learn from a bid replayed by two endpoints", func(t *testing.T) {
+		replayed := bid(1, 500)
+		other := bid(1, 500)
+		other.Entry = &ethpb.BuilderEntry{Url: []byte("http://other"), MaxExecutionPayment: math.MaxUint64, BuilderBoostFactor: 100}
+		cb := cache.NewBuilderCircuitBreaker()
+		vs := &Server{
+			BlockBuilder:                   &builderTest.MockBuilderService{PayloadBids: []beaconbuilder.PayloadBid{replayed, other}},
+			NewExecutionPayloadBidVerifier: passAll,
+			BuilderCircuitBreaker:          cb,
+		}
+		require.NotNil(t, vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries)))
+
+		epoch := slots.ToEpoch(slot)
+		require.Equal(t, 0, len(cb.RecordFailure(1, [32]byte{0xbb}, epoch).BannedRelays))
+		require.Equal(t, false, cb.RelayBanned("http://builder", epoch))
+		require.Equal(t, false, cb.RelayBanned("http://other", epoch))
+	})
+
+	t.Run("banned endpoints are never contacted", func(t *testing.T) {
+		cb := cache.NewBuilderCircuitBreaker()
+		epoch := slots.ToEpoch(slot)
+		cb.ObserveRelayBid("http://banned", 7, epoch)
+		require.Equal(t, true, cb.RecordFailure(7, [32]byte{0xcc}, epoch).Blacklisted)
+
+		mock := &builderTest.MockBuilderService{PayloadBids: []beaconbuilder.PayloadBid{bid(1, 500)}}
+		vs := &Server{BlockBuilder: mock, NewExecutionPayloadBidVerifier: passAll, BuilderCircuitBreaker: cb}
+		two := []*ethpb.BuilderEntry{{Url: []byte("http://banned")}, {Url: []byte("http://builder")}}
+		require.NotNil(t, vs.getBuilderExecutionPayloadBid(t.Context(), head, query(two)))
+		require.DeepEqual(t, []string{"http://builder"}, mock.RequestedBidUrls())
+
+		// With every endpoint banned, no request is made at all.
+		mock2 := &builderTest.MockBuilderService{PayloadBids: []beaconbuilder.PayloadBid{bid(1, 500)}}
+		vs.BlockBuilder = mock2
+		onlyBanned := []*ethpb.BuilderEntry{{Url: []byte("http://banned")}}
+		require.IsNil(t, vs.getBuilderExecutionPayloadBid(t.Context(), head, query(onlyBanned)))
+		require.Equal(t, 0, len(mock2.RequestedBidUrls()))
 	})
 
 	t.Run("nil on builder error", func(t *testing.T) {

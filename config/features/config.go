@@ -53,6 +53,7 @@ type Flags struct {
 	DisableProgressiveSSZ               bool // DisableProgressiveSSZ turns off progressive SSZ merkleization for Gloas consensus types.
 	ReorgLatePayloads                   bool // ReorgLatePayloads enables reorging late payloads in the beacon node.
 	SubmitBlacklistedBuilderBids        bool // SubmitBlacklistedBuilderBids skips the circuit breaker check when submitting a signed execution payload bid.
+	DisableBuilderRelayCircuitBreaker   bool // DisableBuilderRelayCircuitBreaker stops the circuit breaker from tracking and banning direct connection endpoints.
 
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
@@ -317,6 +318,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.Bool(submitBlacklistedBuilderBids.Name) {
 		logEnabled(submitBlacklistedBuilderBids)
 		cfg.SubmitBlacklistedBuilderBids = true
+	}
+	if ctx.Bool(disableBuilderRelayCircuitBreaker.Name) {
+		logEnabled(disableBuilderRelayCircuitBreaker)
+		cfg.DisableBuilderRelayCircuitBreaker = true
 	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}

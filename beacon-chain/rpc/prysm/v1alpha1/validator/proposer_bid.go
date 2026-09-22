@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -219,9 +220,14 @@ func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.
 	if vs.BlockBuilder == nil || len(q.entries) == 0 {
 		return nil
 	}
+	epoch := slots.ToEpoch(q.slot)
+	entries := vs.allowedBuilderEntries(q, epoch)
+	if len(entries) == 0 {
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(ctx, builderBidTimeout)
 	defer cancel()
-	bids, err := vs.BlockBuilder.GetExecutionPayloadBid(ctx, q.slot, q.parentHash, q.parentRoot, q.pubkey, q.entries)
+	bids, err := vs.BlockBuilder.GetExecutionPayloadBid(ctx, q.slot, q.parentHash, q.parentRoot, q.pubkey, entries)
 	if err != nil {
 		builderGetPayloadMissCount.Inc()
 		log.WithError(err).Error("Could not get builder execution payload bid")
@@ -233,7 +239,7 @@ func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.
 		bestBoosted primitives.Gwei
 	)
 	bidLog := make([]string, 0, len(bids))
-	epoch := slots.ToEpoch(q.slot)
+	replayed := replayedSignatures(bids)
 	for _, pb := range bids {
 		if pb.Bid == nil || pb.Entry == nil {
 			continue
@@ -246,6 +252,11 @@ func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.
 		if err := vs.validateBuilderBid(head, pb.Bid, q, pb.Entry); err != nil {
 			bidLog = append(bidLog, fmt.Sprintf("%s(builder=%d discarded: %v)", logs.MaskCredentialsLogging(url), pb.Bid.Message.BuilderIndex, err))
 			continue
+		}
+		// The signature proves the builder authored the bid, not that this endpoint serves it, so
+		// a bid offered verbatim by several endpoints teaches us nothing.
+		if !replayed[bytesutil.ToBytes96(pb.Bid.Signature)] {
+			vs.BuilderCircuitBreaker.ObserveRelayBid(url, pb.Bid.Message.BuilderIndex, epoch)
 		}
 		effective := effectiveBidValue(pb.Bid, uint64(pb.Entry.MaxExecutionPayment))
 		if effective < pb.Entry.MinBid {
@@ -269,6 +280,47 @@ func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.
 		return nil
 	}
 	return best
+}
+
+// allowedBuilderEntries drops entries whose endpoint the circuit breaker banned, so a banned
+// endpoint is not contacted at all rather than merely having its bids discarded.
+func (vs *Server) allowedBuilderEntries(q *builderBidQuery, epoch primitives.Epoch) []*ethpb.BuilderEntry {
+	allowed := make([]*ethpb.BuilderEntry, 0, len(q.entries))
+	var banned []string
+	for _, e := range q.entries {
+		url := string(e.GetUrl())
+		if vs.BuilderCircuitBreaker.RelayBanned(url, epoch) {
+			banned = append(banned, logs.MaskCredentialsLogging(url))
+			continue
+		}
+		allowed = append(allowed, e)
+	}
+	if len(banned) > 0 {
+		log.WithFields(logrus.Fields{
+			"slot":    q.slot,
+			"relays":  strings.Join(banned, ","),
+			"skipped": len(banned),
+		}).Debug("Skipping banned builder endpoints")
+	}
+	return allowed
+}
+
+func replayedSignatures(bids []builder.PayloadBid) map[[96]byte]bool {
+	seen := make(map[[96]byte]string, len(bids))
+	replayed := make(map[[96]byte]bool)
+	for _, pb := range bids {
+		if pb.Bid == nil || pb.Entry == nil || len(pb.Bid.Signature) != fieldparams.BLSSignatureLength {
+			continue
+		}
+		sig := bytesutil.ToBytes96(pb.Bid.Signature)
+		url := string(pb.Entry.GetUrl())
+		if prev, ok := seen[sig]; ok && prev != url {
+			replayed[sig] = true
+			continue
+		}
+		seen[sig] = url
+	}
+	return replayed
 }
 
 // validateBuilderBid mirrors process_execution_payload_bid so a chosen bid never invalidates the proposer's own block.

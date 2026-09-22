@@ -314,6 +314,10 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BuilderFailureBackOffPeriod:    5,
 	BuilderCriticalFailedBuilders:  7,
 	BuilderFailureWeightThreshold:  60,
+	BuilderRelayBlacklistPeriod:    32,
+	BuilderRelayAssociationTTL:     64,
+	BuilderMaxTrackedRelays:        64,
+	BuilderMaxIndicesPerRelay:      16,
 
 	// Execution engine timeout value
 	ExecutionEngineTimeoutValue: 8, // 8 seconds default based on: https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md#core

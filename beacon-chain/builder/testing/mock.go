@@ -52,6 +52,14 @@ type MockBuilderService struct {
 
 	mu                   sync.Mutex
 	SubmittedPreferences []string
+	requestedEntries     []string
+}
+
+// RequestedBidUrls returns the entry urls the last bid request was made for.
+func (s *MockBuilderService) RequestedBidUrls() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.requestedEntries...)
 }
 
 // SubmittedPreferenceUrls returns the urls preferences were submitted to.
@@ -168,7 +176,13 @@ func (s *MockBuilderService) SubmitBlindedBlockPostFulu(_ context.Context, _ int
 }
 
 // GetExecutionPayloadBid for mocking.
-func (s *MockBuilderService) GetExecutionPayloadBid(_ context.Context, _ primitives.Slot, _, _ [32]byte, _ [48]byte, _ []*ethpb.BuilderEntry) ([]beaconbuilder.PayloadBid, error) {
+func (s *MockBuilderService) GetExecutionPayloadBid(_ context.Context, _ primitives.Slot, _, _ [32]byte, _ [48]byte, entries []*ethpb.BuilderEntry) ([]beaconbuilder.PayloadBid, error) {
+	s.mu.Lock()
+	s.requestedEntries = s.requestedEntries[:0]
+	for _, e := range entries {
+		s.requestedEntries = append(s.requestedEntries, string(e.GetUrl()))
+	}
+	s.mu.Unlock()
 	if s.PayloadBids != nil {
 		return s.PayloadBids, s.ErrGetExecutionPayloadBid
 	}
