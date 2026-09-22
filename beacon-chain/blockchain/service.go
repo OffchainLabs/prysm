@@ -80,7 +80,6 @@ type Service struct {
 // config options for the service.
 type config struct {
 	BeaconBlockBuf            int
-	ChainStartFetcher         execution.ChainStartFetcher
 	BeaconDB                  db.HeadAccessDatabase
 	DepositCache              cache.DepositCache
 	PayloadIDCache            *cache.PayloadIDCache
