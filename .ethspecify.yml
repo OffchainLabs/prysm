@@ -385,6 +385,7 @@ exceptions:
     - is_parent_strong#phase0
     - is_proposer#phase0
     - is_proposing_on_time#phase0
+    - is_valid_genesis_state#phase0
     - is_valid_merkle_branch#phase0
     - on_tick#phase0
     - on_tick_per_slot#phase0
