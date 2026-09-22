@@ -1,6 +1,7 @@
 package kv
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -231,9 +232,11 @@ func (s *Store) CheckSlashableAttestation(
 			targetEpochBytes := bytesutil.EpochToBytesBigEndian(att.GetData().Target.Epoch)
 			existingSigningRoot := signingRootsBucket.Get(targetEpochBytes)
 
-			// If a signing root exists in the database, and if this database signing root is empty => We consider the new attestation as a double vote.
+			// If a signing root exists in the database, and if this database signing root is empty => We consider the new attestation as a double vote,
+			// unless it is a repeat of the database attestation (see isRepeatWithoutSigningRoot).
 			// If a signing root exists in the database, and if this database signing differs from the signing root of the new attestation => We consider the new attestation as a double vote.
-			if existingSigningRoot != nil && (len(existingSigningRoot) == 0 || slashings.SigningRootsDiffer(existingSigningRoot, signingRoot)) {
+			if existingSigningRoot != nil && !isRepeatWithoutSigningRoot(pkBucket, existingSigningRoot, signingRoot, att) &&
+				(len(existingSigningRoot) == 0 || slashings.SigningRootsDiffer(existingSigningRoot, signingRoot)) {
 				slashKind = DoubleVote
 				return fmt.Errorf(doubleVoteMessage, att.GetData().Target.Epoch, existingSigningRoot)
 			}
@@ -265,6 +268,28 @@ func (s *Store) CheckSlashableAttestation(
 
 	tracing.AnnotateError(span, err)
 	return slashKind, err
+}
+
+// isRepeatWithoutSigningRoot returns true if neither the new attestation nor the database one at the same
+// target epoch has a signing root, and the database only holds the new attestation's source epoch for this
+// target epoch. Signing roots are optional in EIP-3076 (only when importing, as signing always provides one).
+func isRepeatWithoutSigningRoot(pkBucket *bolt.Bucket, existingSigningRoot, signingRoot []byte, att ethpb.IndexedAtt) bool {
+	if len(existingSigningRoot) != 0 || len(signingRoot) != 0 {
+		return false
+	}
+
+	targetEpochsBucket := pkBucket.Bucket(attestationTargetEpochsBucket)
+	if targetEpochsBucket == nil {
+		return false
+	}
+
+	existingSourceEpochs := targetEpochsBucket.Get(bytesutil.EpochToBytesBigEndian(att.GetData().Target.Epoch))
+	if len(existingSourceEpochs) == 0 {
+		return false
+	}
+
+	sourceEpochBytes := bytesutil.EpochToBytesBigEndian(att.GetData().Source.Epoch)
+	return bytes.Equal(existingSourceEpochs, bytes.Repeat(sourceEpochBytes, len(existingSourceEpochs)/len(sourceEpochBytes)))
 }
 
 // Iterate from the back of the bucket since we are looking for target_epoch > att.target_epoch

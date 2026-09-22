@@ -933,6 +933,54 @@ func Test_filterSlashablePubKeysFromAttestations(t *testing.T) {
 				{1}: true,
 			},
 		},
+		{
+			name: "Considers optional signing roots with respect to the database",
+			previousAttsByPubKey: map[[fieldparams.BLSPubkeyLength]byte][]*format.SignedAttestation{
+				{1}: {
+					{SourceEpoch: "2", TargetEpoch: "4"},
+				},
+				{2}: {
+					{SourceEpoch: "2", TargetEpoch: "4"},
+				},
+				{3}: {
+					{SourceEpoch: "2", TargetEpoch: "4"},
+				},
+				{4}: {
+					{SourceEpoch: "2", TargetEpoch: "4", SigningRoot: firstRoot},
+				},
+				{5}: {
+					{SourceEpoch: "1", TargetEpoch: "10"},
+					{SourceEpoch: "2", TargetEpoch: "4"},
+				},
+			},
+			incomingAttsByPubKey: map[[fieldparams.BLSPubkeyLength]byte][]*format.SignedAttestation{
+				// Same attestation as the one in the database, both without signing root.
+				{1}: {
+					{SourceEpoch: "2", TargetEpoch: "4"},
+				},
+				// Same target epoch as the one in the database, but another source epoch.
+				{2}: {
+					{SourceEpoch: "3", TargetEpoch: "4"},
+				},
+				// Same attestation as the one in the database, with a signing root on only one of them.
+				{3}: {
+					{SourceEpoch: "2", TargetEpoch: "4", SigningRoot: firstRoot},
+				},
+				{4}: {
+					{SourceEpoch: "2", TargetEpoch: "4"},
+				},
+				// Same attestation as one in the database, but surrounded by another one in the database.
+				{5}: {
+					{SourceEpoch: "2", TargetEpoch: "4"},
+				},
+			},
+			want: map[[fieldparams.BLSPubkeyLength]byte]bool{
+				{2}: true,
+				{3}: true,
+				{4}: true,
+				{5}: true,
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -972,6 +1020,59 @@ func Test_filterSlashablePubKeysFromAttestations(t *testing.T) {
 			}
 
 			requireSlashablePubKeys(t, tt.want, got)
+		})
+	}
+}
+
+func TestStore_ImportInterchangeData_ImportTwice(t *testing.T) {
+	ctx := t.Context()
+
+	const signingRoot = "0x4ff6f743a43f3b4f95350831aeaf0a122a1a392922c45db804ae16b4b6f2e850"
+
+	tests := []struct {
+		name        string
+		signingRoot string
+	}{
+		{
+			name:        "attestation with signing root",
+			signingRoot: signingRoot,
+		},
+		{
+			name:        "attestation without signing root",
+			signingRoot: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			publicKeys, err := valtest.CreateRandomPubKeys(1)
+			require.NoError(t, err, "could not create public key")
+			validatorDB := setupDB(t, publicKeys)
+
+			interchangeJSON := &format.EIPSlashingProtectionFormat{}
+			interchangeJSON.Metadata.InterchangeFormatVersion = format.InterchangeFormatVersion
+			interchangeJSON.Metadata.GenesisValidatorsRoot = fmt.Sprintf("%#x", bytesutil.PadTo([]byte{32}, 32))
+			interchangeJSON.Data = []*format.ProtectionData{
+				{
+					Pubkey: fmt.Sprintf("%#x", publicKeys[0]),
+					SignedAttestations: []*format.SignedAttestation{
+						{SourceEpoch: "2290", TargetEpoch: "3007", SigningRoot: tt.signingRoot},
+					},
+				},
+			}
+
+			blob, err := json.Marshal(interchangeJSON)
+			require.NoError(t, err, "could not marshal interchange JSON")
+
+			// Importing the same file twice should not blacklist the public key.
+			for range 2 {
+				err = validatorDB.ImportStandardProtectionJSON(ctx, bytes.NewBuffer(blob))
+				require.NoError(t, err, "could not import interchange JSON")
+
+				blacklistedPublicKeys, err := validatorDB.EIPImportBlacklistedPublicKeys(ctx)
+				require.NoError(t, err, "could not get blacklisted public keys")
+				require.Equal(t, 0, len(blacklistedPublicKeys), "unexpected blacklisting of the public key")
+			}
 		})
 	}
 }

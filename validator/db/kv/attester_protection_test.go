@@ -340,9 +340,7 @@ func TestStore_SaveAttestationsForPubKey(t *testing.T) {
 	signingRoots := make([][]byte, 0)
 	for i := primitives.Epoch(1); i < 10; i++ {
 		atts = append(atts, createAttestation(i-1, i))
-		var sr []byte
-		copy(sr, fmt.Sprintf("%d", i))
-		signingRoots = append(signingRoots, sr)
+		signingRoots = append(signingRoots, bytesutil.PadTo([]byte(fmt.Sprintf("%d", i)), fieldparams.RootLength))
 	}
 	err := validatorDB.SaveAttestationsForPubKey(
 		ctx,
