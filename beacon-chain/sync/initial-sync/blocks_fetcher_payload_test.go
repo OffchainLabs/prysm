@@ -146,10 +146,9 @@ func TestValidatePayloadBlockConsistency(t *testing.T) {
 	// Block 2: parentRoot = b1.Root(), parentBlockHash = hash2 (different from hash1 => needs envelope)
 	b2 := makeGloasBlock(t, 12, b1.Root(), hash2)
 
-	// Envelopes: env0 has blockHash=hash1 (matches b1's parentBlockHash)
-	// env1 has blockHash=hash2 (matches b2's parentBlockHash)
-	env0 := makeEnvelope(t, 10, hash0, [32]byte{})
-	env1 := makeEnvelope(t, 11, hash1, hash0)
+	// env0 is the payload of b0's parent (root zero, hash0); env1 is b0's own payload (hash1).
+	env0 := makeEnvelope(t, 9, hash0, [32]byte{})
+	env1 := makeEnvelopeForRoot(t, 10, b0.Root(), hash1, hash0)
 
 	t.Run("consistent envelopes and blocks, envelope is first", func(t *testing.T) {
 		f := &blocksFetcher{}
@@ -183,7 +182,7 @@ func TestValidatePayloadBlockConsistency(t *testing.T) {
 	})
 
 	t.Run("extra envelopes truncated", func(t *testing.T) {
-		env2 := makeEnvelope(t, 12, hash2, hash1)
+		env2 := makeEnvelopeForRoot(t, 11, b1.Root(), hash2, hash1)
 		f := &blocksFetcher{}
 		// All blocks have the same parentBlockHash => no envelope transitions needed
 		sameHash := [32]byte{0x99}
