@@ -61,6 +61,8 @@ func SepoliaConfig() *BeaconChainConfig {
 			Epoch:            275712, // 2025-10-27 23:16:48 UTC
 		},
 	}
+	cfg.MinBuilderWithdrawabilityDelay = 64
+	cfg.PayloadDueBPS = 5000
 	cfg.InitializeForkSchedule()
 	return cfg
 }
