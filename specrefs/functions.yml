@@ -7644,9 +7644,7 @@
     </spec>
 
 - name: is_valid_genesis_state#phase0
-  sources:
-    - file: beacon-chain/core/transition/state.go
-      search: func IsValidGenesisState(
+  sources: []
   spec: |
     <spec fn="is_valid_genesis_state" fork="phase0" hash="af8478cd">
     def is_valid_genesis_state(state: BeaconState) -> bool:
