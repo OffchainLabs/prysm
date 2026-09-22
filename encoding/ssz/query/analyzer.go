@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"unicode"
 )
 
 const offsetBytes = 4
@@ -354,11 +355,7 @@ func analyzeContainerType(value reflect.Value) (*SszInfo, error) {
 		}
 
 		tag := structFieldInfo.Tag
-		goFieldName := structFieldInfo.Name
-		fieldName, err := parseFieldNameFromTag(tag)
-		if err != nil {
-			return nil, fmt.Errorf("could not parse field name from tag for field %s: %w", goFieldName, err)
-		}
+		fieldName := specFieldName(structFieldInfo)
 
 		// Analyze each field so that we can complete full SSZ information.
 		info, err := analyzeType(value.Field(i), &tag)
@@ -370,7 +367,7 @@ func analyzeContainerType(value reflect.Value) (*SszInfo, error) {
 		fields[fieldName] = &fieldInfo{
 			sszInfo:     info,
 			offset:      currentOffset,
-			goFieldName: goFieldName,
+			goFieldName: structFieldInfo.Name,
 		}
 		// Persist order
 		order = append(order, fieldName)
@@ -441,25 +438,28 @@ func castToSSZObject(value reflect.Value) SSZObject {
 	return nil
 }
 
-// parseFieldNameFromTag extracts the field name (`snake_case` format)
-// from a struct tag by looking for the json tag.
-// The JSON tag contains the field name in the first part.
-// e.g., "attesting_indices,omitempty" -> "attesting_indices".
-func parseFieldNameFromTag(tag reflect.StructTag) (string, error) {
-	jsonTag := tag.Get("json")
-	if jsonTag == "" {
-		return "", errors.New("no JSON tag found")
+// specFieldName returns the spec (snake_case) name of a struct field. Protobuf-generated structs
+// carry it in the json tag; hand-written SSZ types (the beacon states) carry no tags, so it is
+// derived from the Go field name.
+func specFieldName(f reflect.StructField) string {
+	if name, _, _ := strings.Cut(f.Tag.Get("json"), ","); name != "" && name != "-" {
+		return name
 	}
+	return toSnakeCase(f.Name)
+}
 
-	substrings := strings.Split(jsonTag, ",")
-	if len(substrings) == 0 {
-		return "", errors.New("invalid JSON tag format")
+// toSnakeCase converts CamelCase to snake_case, e.g. Eth1DataVotes -> eth1_data_votes.
+// Consecutive capitals get one underscore each; no field reached through this path has any.
+func toSnakeCase(s string) string {
+	var b strings.Builder
+	for i, r := range s {
+		if unicode.IsUpper(r) {
+			if i > 0 {
+				b.WriteByte('_')
+			}
+			r = unicode.ToLower(r)
+		}
+		b.WriteRune(r)
 	}
-
-	fieldName := strings.TrimSpace(substrings[0])
-	if fieldName == "" {
-		return "", errors.New("empty field name")
-	}
-
-	return fieldName, nil
+	return b.String()
 }
