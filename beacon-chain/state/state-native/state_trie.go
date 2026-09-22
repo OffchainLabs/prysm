@@ -23,7 +23,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
-	"google.golang.org/protobuf/proto"
 )
 
 // promotionThresholdByField defines absolute overlay promotion thresholds
@@ -49,7 +48,7 @@ const (
 
 // InitializeFromProtoPhase0 the beacon state from a protobuf representation.
 func InitializeFromProtoPhase0(st *ethpb.BeaconState) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafePhase0(proto.Clone(st).(*ethpb.BeaconState))
+	return InitializeFromProtoUnsafePhase0(st.Copy())
 }
 
 // InitializeFromProtoAltair the beacon state from a protobuf representation.

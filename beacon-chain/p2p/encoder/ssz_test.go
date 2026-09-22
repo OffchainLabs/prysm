@@ -96,7 +96,6 @@ type BuilderBidDenebCreator struct{}
 type BlobSidecarCreator struct{}
 type BlobSidecarsCreator struct{}
 type Deposit_DataCreator struct{}
-type BeaconStateCreator struct{}
 type ForkCreator struct{}
 type PendingAttestationCreator struct{}
 type HistoricalBatchCreator struct{}
@@ -262,7 +261,6 @@ func (BuilderBidDenebCreator) Create() MarshalerProtoMessage    { return &ethpb.
 func (BlobSidecarCreator) Create() MarshalerProtoMessage        { return &ethpb.BlobSidecar{} }
 func (BlobSidecarsCreator) Create() MarshalerProtoMessage       { return &ethpb.BlobSidecars{} }
 func (Deposit_DataCreator) Create() MarshalerProtoMessage       { return &ethpb.Deposit_Data{} }
-func (BeaconStateCreator) Create() MarshalerProtoMessage        { return &ethpb.BeaconState{} }
 func (ForkCreator) Create() MarshalerProtoMessage               { return &ethpb.Fork{} }
 func (PendingAttestationCreator) Create() MarshalerProtoMessage { return &ethpb.PendingAttestation{} }
 func (HistoricalBatchCreator) Create() MarshalerProtoMessage    { return &ethpb.HistoricalBatch{} }
@@ -379,7 +377,6 @@ var creators = []MarshalerProtoCreator{
 	BlobSidecarCreator{},
 	BlobSidecarsCreator{},
 	Deposit_DataCreator{},
-	BeaconStateCreator{},
 	ForkCreator{},
 	PendingAttestationCreator{},
 	HistoricalBatchCreator{},

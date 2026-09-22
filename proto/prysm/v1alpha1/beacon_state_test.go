@@ -12,6 +12,45 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
+func TestBeaconState_FieldParity(t *testing.T) {
+	assertStateFields(t, reflect.TypeFor[v1alpha1.BeaconState](), []string{
+		"GenesisTime uint64",
+		"GenesisValidatorsRoot []uint8 ssz-size",
+		"Slot primitives.Slot",
+		"Fork *eth.Fork",
+		"LatestBlockHeader *eth.BeaconBlockHeader",
+		"BlockRoots [][]uint8 ssz-size",
+		"StateRoots [][]uint8 ssz-size",
+		"HistoricalRoots [][]uint8 ssz-size ssz-max",
+		"Eth1Data *eth.Eth1Data",
+		"Eth1DataVotes []*eth.Eth1Data ssz-max",
+		"Eth1DepositIndex uint64",
+		"Validators []*eth.Validator ssz-max",
+		"Balances []uint64 ssz-max",
+		"RandaoMixes [][]uint8 ssz-size",
+		"Slashings []uint64 ssz-size",
+		"PreviousEpochAttestations []*eth.PendingAttestation ssz-max",
+		"CurrentEpochAttestations []*eth.PendingAttestation ssz-max",
+		"JustificationBits bitfield.Bitvector4 ssz-size",
+		"PreviousJustifiedCheckpoint *eth.Checkpoint",
+		"CurrentJustifiedCheckpoint *eth.Checkpoint",
+		"FinalizedCheckpoint *eth.Checkpoint",
+	})
+}
+
+func TestBeaconState_Copy(t *testing.T) {
+	orig := &v1alpha1.BeaconState{PreviousEpochAttestations: []*v1alpha1.PendingAttestation{{AggregationBits: []byte{1}, Data: &v1alpha1.AttestationData{BeaconBlockRoot: []byte{2}}}}, CurrentEpochAttestations: []*v1alpha1.PendingAttestation{{ProposerIndex: 3}}}
+	cp := orig.Copy()
+	require.DeepSSZEqual(t, orig, cp)
+	cp.PreviousEpochAttestations[0].AggregationBits[0] = 4
+	cp.PreviousEpochAttestations[0].Data.BeaconBlockRoot[0] = 5
+	cp.CurrentEpochAttestations[0].ProposerIndex = 6
+	require.Equal(t, byte(1), orig.PreviousEpochAttestations[0].AggregationBits[0])
+	require.Equal(t, byte(2), orig.PreviousEpochAttestations[0].Data.BeaconBlockRoot[0])
+	require.Equal(t, primitives.ValidatorIndex(3), orig.CurrentEpochAttestations[0].ProposerIndex)
+	require.Equal(t, (*v1alpha1.BeaconState)(nil), (*v1alpha1.BeaconState)(nil).Copy())
+}
+
 // Both presets must match the same field schema.
 func TestBeaconStateAltair_FieldParity(t *testing.T) {
 	want := []string{

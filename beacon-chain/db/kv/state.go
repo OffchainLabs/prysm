@@ -292,13 +292,17 @@ func (s *Store) saveStatesEfficientInternal(ctx context.Context, tx *bolt.Tx, bl
 }
 
 func (s *Store) processPhase0(ctx context.Context, pbState *ethpb.BeaconState, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
-	encodedState, err := encode(ctx, pbState)
+	rawObj, err := pbState.MarshalSSZ()
+	pbState.Validators = valEntries
 	if err != nil {
 		return err
 	}
-	pbState.Validators = valEntries
+	encodedState := snappy.Encode(nil, rawObj)
 	if err := bucket.Put(rootHash, encodedState); err != nil {
 		return err
 	}

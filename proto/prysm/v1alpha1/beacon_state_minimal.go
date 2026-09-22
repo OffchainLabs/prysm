@@ -8,6 +8,31 @@ import (
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 )
 
+// BeaconState is the Phase0 SSZ state.
+type BeaconState struct {
+	GenesisTime                 uint64
+	GenesisValidatorsRoot       []byte `ssz-size:"32"`
+	Slot                        primitives.Slot
+	Fork                        *Fork
+	LatestBlockHeader           *BeaconBlockHeader
+	BlockRoots                  [][]byte `ssz-size:"64,32"`
+	StateRoots                  [][]byte `ssz-size:"64,32"`
+	HistoricalRoots             [][]byte `ssz-max:"16777216" ssz-size:"?,32"`
+	Eth1Data                    *Eth1Data
+	Eth1DataVotes               []*Eth1Data `ssz-max:"32"`
+	Eth1DepositIndex            uint64
+	Validators                  []*Validator          `ssz-max:"1099511627776"`
+	Balances                    []uint64              `ssz-max:"1099511627776"`
+	RandaoMixes                 [][]byte              `ssz-size:"64,32"`
+	Slashings                   []uint64              `ssz-size:"64"`
+	PreviousEpochAttestations   []*PendingAttestation `ssz-max:"1024"`
+	CurrentEpochAttestations    []*PendingAttestation `ssz-max:"1024"`
+	JustificationBits           bitfield.Bitvector4   `ssz-size:"1"`
+	PreviousJustifiedCheckpoint *Checkpoint
+	CurrentJustifiedCheckpoint  *Checkpoint
+	FinalizedCheckpoint         *Checkpoint
+}
+
 // BeaconStateAltair is the Altair SSZ state.
 type BeaconStateAltair struct {
 	GenesisTime                 uint64

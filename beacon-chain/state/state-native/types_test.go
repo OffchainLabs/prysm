@@ -23,8 +23,7 @@ func TestBeaconState_ProtoBeaconStateCompatibility(t *testing.T) {
 	genesis := setupGenesisState(t, 64)
 	customState, err := statenative.InitializeFromProtoPhase0(genesis)
 	require.NoError(t, err)
-	cloned, ok := proto.Clone(genesis).(*ethpb.BeaconState)
-	assert.Equal(t, true, ok, "Object is not of type *ethpb.BeaconState")
+	cloned := genesis.Copy()
 	custom := customState.ToProto()
 	assert.DeepSSZEqual(t, cloned, custom)
 
@@ -119,15 +118,14 @@ func BenchmarkCloneValidators_Manual(b *testing.B) {
 	}
 }
 
-func BenchmarkStateClone_Proto(b *testing.B) {
+func BenchmarkStateClone_Copy(b *testing.B) {
 
 	params.SetupTestConfigCleanup(b)
 	params.OverrideBeaconConfig(params.MinimalSpecConfig())
 	genesis := setupGenesisState(b, 64)
 
 	for b.Loop() {
-		_, ok := proto.Clone(genesis).(*ethpb.BeaconState)
-		assert.Equal(b, true, ok, "Entity is not of type *ethpb.BeaconState")
+		_ = genesis.Copy()
 	}
 }
 

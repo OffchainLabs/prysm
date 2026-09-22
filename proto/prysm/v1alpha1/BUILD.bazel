@@ -47,7 +47,7 @@ proto_library(
 
 ssz_methodical(
     name = "methodical_phase0",
-    deps = [":go_proto"],
+    deps = [":beacon_state_go"],
     config_file = "phase0.yaml",
     override_package_name = "eth",
     out = "phase0.ssz.go",
