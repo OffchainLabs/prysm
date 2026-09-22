@@ -190,10 +190,6 @@ func (s *Store) SaveStates(ctx context.Context, states []state.ReadOnlyBeaconSta
 	return nil
 }
 
-type withValidators interface {
-	GetValidators() []*ethpb.Validator
-}
-
 // SaveStatesEfficient stores multiple states to the db (new schema) using the provided corresponding roots.
 func (s *Store) SaveStatesEfficient(ctx context.Context, states []state.ReadOnlyBeaconState, blockRoots [][32]byte) error {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveStatesEfficient")
@@ -219,11 +215,7 @@ func getValidators(states []state.ReadOnlyBeaconState) ([][]byte, map[string]*et
 	validatorsEntries := make(map[string]*ethpb.Validator) // It's a map to make sure that you store only new validator entries.
 	validatorKeys := make([][]byte, len(states))           // For every state, this stores a compressed list of validator keys.
 	for i, st := range states {
-		pb, ok := st.ToProtoUnsafe().(withValidators)
-		if !ok {
-			return nil, nil, errors.New("could not cast state to interface with GetValidators()")
-		}
-		validators := pb.GetValidators()
+		validators := st.Validators()
 
 		// yank out the validators and store them in separate table to save space.
 		var hashes []byte
