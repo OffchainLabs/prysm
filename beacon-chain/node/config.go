@@ -90,6 +90,71 @@ func configureBuilderCircuitBreaker(cliCtx *cli.Context) error {
 		}
 	}
 
+	return configureGloasBuilderCircuitBreaker(cliCtx)
+}
+
+func configureGloasBuilderCircuitBreaker(cliCtx *cli.Context) error {
+	counts := map[*cli.Uint64Flag]*uint64{}
+	epochs := map[*cli.Uint64Flag]*primitives.Epoch{}
+
+	c := params.BeaconConfig().Copy()
+	counts[flags.BuilderAllowedFailures] = &c.BuilderAllowedFailures
+	counts[flags.BuilderCriticalFailures] = &c.BuilderCriticalFailures
+	counts[flags.BuilderCriticalFailedBuilders] = &c.BuilderCriticalFailedBuilders
+	epochs[flags.BuilderBlacklistPeriod] = &c.BuilderBlacklistPeriod
+	epochs[flags.BuilderCriticalBlacklistPeriod] = &c.BuilderCriticalBlacklistPeriod
+	epochs[flags.BuilderRelayBlacklistPeriod] = &c.BuilderRelayBlacklistPeriod
+	epochs[flags.BuilderFailureBackOffPeriod] = &c.BuilderFailureBackOffPeriod
+
+	var set bool
+	for f, dst := range counts {
+		if cliCtx.IsSet(f.Name) {
+			*dst = cliCtx.Uint64(f.Name)
+			set = true
+		}
+	}
+	for f, dst := range epochs {
+		if cliCtx.IsSet(f.Name) {
+			*dst = primitives.Epoch(cliCtx.Uint64(f.Name))
+			set = true
+		}
+	}
+	if !set {
+		return nil
+	}
+
+	if c.BuilderBlacklistPeriod == 0 {
+		return fmt.Errorf("--%s must be greater than 0, a zero period never blacklists", flags.BuilderBlacklistPeriod.Name)
+	}
+	if c.BuilderCriticalBlacklistPeriod < c.BuilderBlacklistPeriod {
+		return fmt.Errorf("--%s (%d) must not be below --%s (%d)",
+			flags.BuilderCriticalBlacklistPeriod.Name, c.BuilderCriticalBlacklistPeriod,
+			flags.BuilderBlacklistPeriod.Name, c.BuilderBlacklistPeriod)
+	}
+	if c.BuilderCriticalFailures <= c.BuilderAllowedFailures {
+		return fmt.Errorf("--%s (%d) must be greater than --%s (%d), otherwise the critical ban is unreachable",
+			flags.BuilderCriticalFailures.Name, c.BuilderCriticalFailures,
+			flags.BuilderAllowedFailures.Name, c.BuilderAllowedFailures)
+	}
+	if c.BuilderCriticalFailedBuilders == 0 {
+		return fmt.Errorf("--%s must be greater than 0, a zero threshold forces permanent self-building", flags.BuilderCriticalFailedBuilders.Name)
+	}
+	if c.BuilderRelayBlacklistPeriod == 0 {
+		return fmt.Errorf("--%s must be greater than 0, use --disable-builder-relay-circuit-breaker to turn endpoint banning off", flags.BuilderRelayBlacklistPeriod.Name)
+	}
+
+	if err := params.SetActive(c); err != nil {
+		return err
+	}
+	log.WithFields(logrus.Fields{
+		"allowedFailures":         c.BuilderAllowedFailures,
+		"criticalFailures":        c.BuilderCriticalFailures,
+		"blacklistPeriod":         c.BuilderBlacklistPeriod,
+		"criticalBlacklistPeriod": c.BuilderCriticalBlacklistPeriod,
+		"relayBlacklistPeriod":    c.BuilderRelayBlacklistPeriod,
+		"failureBackOffPeriod":    c.BuilderFailureBackOffPeriod,
+		"criticalFailedBuilders":  c.BuilderCriticalFailedBuilders,
+	}).Warning("Overriding the Gloas builder circuit breaker defaults. Too tolerant a configuration leaves this node exposed to builders that do not reveal payloads")
 	return nil
 }
 
