@@ -2,12 +2,11 @@ package validator
 
 import (
 	"context"
-	"errors"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	ethhelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -147,24 +146,32 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 		validatorAssignments = append(validatorAssignments, assignment)
 		nextValidatorAssignments = append(nextValidatorAssignments, nextAssignment)
 	}
-	currDependentRoot, err := vs.ForkchoiceFetcher.DependentRoot(currentEpoch)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
+	stateEpoch := slots.ToEpoch(s.Slot())
+	var currDependentRoot []byte
+	if currentEpoch > stateEpoch {
+		// A lagging state's latest block also covers subsequent empty slots.
+		root, err := ethhelpers.BlockRootFromState(ctx, s.Copy())
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not get head block root: %v", err)
+		}
+		currDependentRoot = root[:]
+	} else {
+		currDependentRoot, err = vs.attestationDependentRoot(ctx, s, currentEpoch.Add(1))
+		if err != nil {
+			return nil, err
+		}
 	}
 	prevDependentRoot := currDependentRoot
-	if currDependentRoot != [32]byte{} && currentEpoch > 0 {
-		prevDependentRoot, err = vs.ForkchoiceFetcher.DependentRoot(currentEpoch - 1)
-		// Zero means unknown: forkchoice holds nothing below its tree root at startup.
-		if errors.Is(err, doublylinkedtree.ErrNilNode) {
-			prevDependentRoot, err = [32]byte{}, nil
-		}
+	if currentEpoch <= stateEpoch.Add(1) {
+		prevDependentRoot, err = vs.attestationDependentRoot(ctx, s, currentEpoch)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not get previous dependent root: %v", err)
+			return nil, err
 		}
 	}
+
 	return &ethpb.DutiesResponse{
-		PreviousDutyDependentRoot: prevDependentRoot[:],
-		CurrentDutyDependentRoot:  currDependentRoot[:],
+		PreviousDutyDependentRoot: prevDependentRoot,
+		CurrentDutyDependentRoot:  currDependentRoot,
 		CurrentEpochDuties:        validatorAssignments,
 		NextEpochDuties:           nextValidatorAssignments,
 	}, nil
