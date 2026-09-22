@@ -211,3 +211,53 @@ type BeaconStateFulu struct {
 	PendingConsolidations         []*PendingConsolidation     `ssz-max:"64"`
 	ProposerLookahead             []primitives.ValidatorIndex `ssz-size:"16"`
 }
+
+// BeaconStateGloas is the Gloas SSZ state.
+type BeaconStateGloas struct {
+	GenesisTime                   uint64
+	GenesisValidatorsRoot         []byte `ssz-size:"32"`
+	Slot                          primitives.Slot
+	Fork                          *Fork
+	LatestBlockHeader             *BeaconBlockHeader
+	BlockRoots                    [][]byte `ssz-size:"64,32"`
+	StateRoots                    [][]byte `ssz-size:"64,32"`
+	HistoricalRoots               [][]byte `ssz-max:"16777216" ssz-size:"?,32"`
+	Eth1Data                      *Eth1Data
+	Eth1DataVotes                 []*Eth1Data `ssz-max:"32"`
+	Eth1DepositIndex              uint64
+	Validators                    []*Validator        `ssz-max:"1099511627776"`
+	Balances                      []uint64            `ssz-max:"1099511627776"`
+	RandaoMixes                   [][]byte            `ssz-size:"64,32"`
+	Slashings                     []uint64            `ssz-size:"64"`
+	PreviousEpochParticipation    []byte              `ssz-max:"1099511627776"`
+	CurrentEpochParticipation     []byte              `ssz-max:"1099511627776"`
+	JustificationBits             bitfield.Bitvector4 `ssz-size:"1"`
+	PreviousJustifiedCheckpoint   *Checkpoint
+	CurrentJustifiedCheckpoint    *Checkpoint
+	FinalizedCheckpoint           *Checkpoint
+	InactivityScores              []uint64 `ssz-max:"1099511627776"`
+	CurrentSyncCommittee          *SyncCommittee
+	NextSyncCommittee             *SyncCommittee
+	LatestBlockHash               []byte `ssz-size:"32"`
+	NextWithdrawalIndex           uint64
+	NextWithdrawalValidatorIndex  primitives.ValidatorIndex
+	HistoricalSummaries           []*HistoricalSummary `ssz-max:"16777216"`
+	DepositRequestsStartIndex     uint64
+	DepositBalanceToConsume       primitives.Gwei
+	ExitBalanceToConsume          primitives.Gwei
+	EarliestExitEpoch             primitives.Epoch
+	ConsolidationBalanceToConsume primitives.Gwei
+	EarliestConsolidationEpoch    primitives.Epoch
+	PendingDeposits               []*PendingDeposit           `ssz-max:"134217728"`
+	PendingPartialWithdrawals     []*PendingPartialWithdrawal `ssz-max:"64"`
+	PendingConsolidations         []*PendingConsolidation     `ssz-max:"64"`
+	ProposerLookahead             []primitives.ValidatorIndex `ssz-size:"16"`
+	Builders                      []*Builder                  `ssz-max:"1099511627776"`
+	NextWithdrawalBuilderIndex    primitives.BuilderIndex
+	ExecutionPayloadAvailability  []byte                      `ssz-size:"8"`
+	BuilderPendingPayments        []*BuilderPendingPayment    `ssz-size:"16"`
+	BuilderPendingWithdrawals     []*BuilderPendingWithdrawal `ssz-max:"1048576"`
+	LatestExecutionPayloadBid     *ExecutionPayloadBid
+	PayloadExpectedWithdrawals    []*enginev1.Withdrawal `ssz-max:"4"`
+	PtcWindow                     []*PTCs                `ssz-size:"24"`
+}

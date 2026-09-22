@@ -327,3 +327,69 @@ func TestBeaconStateFulu_Copy(t *testing.T) {
 	require.Equal(t, primitives.ValidatorIndex(1), orig.ProposerLookahead[0])
 	require.Equal(t, (*v1alpha1.BeaconStateFulu)(nil), (*v1alpha1.BeaconStateFulu)(nil).Copy())
 }
+
+func TestBeaconStateGloas_FieldParity(t *testing.T) {
+	assertStateFields(t, reflect.TypeFor[v1alpha1.BeaconStateGloas](), []string{
+		"GenesisTime uint64",
+		"GenesisValidatorsRoot []uint8 ssz-size",
+		"Slot primitives.Slot",
+		"Fork *eth.Fork",
+		"LatestBlockHeader *eth.BeaconBlockHeader",
+		"BlockRoots [][]uint8 ssz-size",
+		"StateRoots [][]uint8 ssz-size",
+		"HistoricalRoots [][]uint8 ssz-size ssz-max",
+		"Eth1Data *eth.Eth1Data",
+		"Eth1DataVotes []*eth.Eth1Data ssz-max",
+		"Eth1DepositIndex uint64",
+		"Validators []*eth.Validator ssz-max",
+		"Balances []uint64 ssz-max",
+		"RandaoMixes [][]uint8 ssz-size",
+		"Slashings []uint64 ssz-size",
+		"PreviousEpochParticipation []uint8 ssz-max",
+		"CurrentEpochParticipation []uint8 ssz-max",
+		"JustificationBits bitfield.Bitvector4 ssz-size",
+		"PreviousJustifiedCheckpoint *eth.Checkpoint",
+		"CurrentJustifiedCheckpoint *eth.Checkpoint",
+		"FinalizedCheckpoint *eth.Checkpoint",
+		"InactivityScores []uint64 ssz-max",
+		"CurrentSyncCommittee *eth.SyncCommittee",
+		"NextSyncCommittee *eth.SyncCommittee",
+		"LatestBlockHash []uint8 ssz-size",
+		"NextWithdrawalIndex uint64",
+		"NextWithdrawalValidatorIndex primitives.ValidatorIndex",
+		"HistoricalSummaries []*eth.HistoricalSummary ssz-max",
+		"DepositRequestsStartIndex uint64",
+		"DepositBalanceToConsume primitives.Gwei",
+		"ExitBalanceToConsume primitives.Gwei",
+		"EarliestExitEpoch primitives.Epoch",
+		"ConsolidationBalanceToConsume primitives.Gwei",
+		"EarliestConsolidationEpoch primitives.Epoch",
+		"PendingDeposits []*eth.PendingDeposit ssz-max",
+		"PendingPartialWithdrawals []*eth.PendingPartialWithdrawal ssz-max",
+		"PendingConsolidations []*eth.PendingConsolidation ssz-max",
+		"ProposerLookahead []primitives.ValidatorIndex ssz-size",
+		"Builders []*eth.Builder ssz-max",
+		"NextWithdrawalBuilderIndex primitives.BuilderIndex",
+		"ExecutionPayloadAvailability []uint8 ssz-size",
+		"BuilderPendingPayments []*eth.BuilderPendingPayment ssz-size",
+		"BuilderPendingWithdrawals []*eth.BuilderPendingWithdrawal ssz-max",
+		"LatestExecutionPayloadBid *eth.ExecutionPayloadBid",
+		"PayloadExpectedWithdrawals []*enginev1.Withdrawal ssz-max",
+		"PtcWindow []*eth.PTCs ssz-size",
+	})
+}
+
+func TestBeaconStateGloas_Copy(t *testing.T) {
+	orig := &v1alpha1.BeaconStateGloas{Builders: []*v1alpha1.Builder{{Pubkey: []byte{1}}}, ExecutionPayloadAvailability: []byte{2}, PtcWindow: []*v1alpha1.PTCs{{ValidatorIndices: []primitives.ValidatorIndex{3}}}, LatestExecutionPayloadBid: &v1alpha1.ExecutionPayloadBid{BuilderIndex: 4, ParentBlockHash: []byte{5}}}
+	cp := orig.Copy()
+	require.DeepSSZEqual(t, orig, cp)
+	cp.Builders[0].Pubkey[0] = 6
+	cp.ExecutionPayloadAvailability[0] = 7
+	cp.PtcWindow[0].ValidatorIndices[0] = 8
+	cp.LatestExecutionPayloadBid.ParentBlockHash[0] = 9
+	require.Equal(t, byte(1), orig.Builders[0].Pubkey[0])
+	require.Equal(t, byte(2), orig.ExecutionPayloadAvailability[0])
+	require.Equal(t, primitives.ValidatorIndex(3), orig.PtcWindow[0].ValidatorIndices[0])
+	require.Equal(t, byte(5), orig.LatestExecutionPayloadBid.ParentBlockHash[0])
+	require.Equal(t, (*v1alpha1.BeaconStateGloas)(nil), (*v1alpha1.BeaconStateGloas)(nil).Copy())
+}

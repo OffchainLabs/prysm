@@ -85,7 +85,7 @@ func TestNewBeaconStateGloas(t *testing.T) {
 	require.NoError(t, err)
 	got := &ethpb.BeaconStateGloas{}
 	require.NoError(t, got.UnmarshalSSZ(b))
-	assert.DeepEqual(t, st.ToProtoUnsafe(), got)
+	assert.DeepSSZEqual(t, st.ToProtoUnsafe(), got)
 }
 
 func TestNewBeaconState_HashTreeRoot(t *testing.T) {

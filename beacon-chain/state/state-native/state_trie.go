@@ -84,7 +84,7 @@ func InitializeFromProtoFulu(st *ethpb.BeaconStateFulu) (state.BeaconState, erro
 
 // InitializeFromProtoGloas the beacon state from a protobuf representation.
 func InitializeFromProtoGloas(st *ethpb.BeaconStateGloas) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafeGloas(proto.Clone(st).(*ethpb.BeaconStateGloas))
+	return InitializeFromProtoUnsafeGloas(st.Copy())
 }
 
 // InitializeFromProtoUnsafePhase0 directly uses the beacon state protobuf fields

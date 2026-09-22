@@ -3,6 +3,7 @@ package equality_test
 import (
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz/equality"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -17,6 +18,9 @@ func TestDeepEqualBasicTypes(t *testing.T) {
 
 	assert.Equal(t, true, equality.DeepEqual(uint64(1234567890), uint64(1234567890)))
 	assert.Equal(t, false, equality.DeepEqual(uint64(1234567890), uint64(987653210)))
+	assert.Equal(t, true, equality.DeepEqual(primitives.BuilderIndex(1), primitives.BuilderIndex(1)))
+	assert.Equal(t, false, equality.DeepEqual(primitives.BuilderIndex(1), primitives.BuilderIndex(2)))
+	assert.Equal(t, false, equality.DeepEqual(primitives.BuilderIndex(1), uint64(1)))
 
 	assert.Equal(t, true, equality.DeepEqual("hello", "hello"))
 	assert.Equal(t, false, equality.DeepEqual("hello", "world"))

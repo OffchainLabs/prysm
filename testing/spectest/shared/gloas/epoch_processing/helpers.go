@@ -13,9 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/golang/snappy"
-	"github.com/google/go-cmp/cmp"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/testing/protocmp"
 )
 
 type epochOperation func(*testing.T, state.BeaconState) (state.BeaconState, error)
@@ -62,10 +59,7 @@ func RunEpochOperationTest(
 
 		pbState, err := state_native.ProtobufBeaconStateGloas(beaconState.ToProtoUnsafe())
 		require.NoError(t, err)
-		if !proto.Equal(pbState, postBeaconState) {
-			t.Log(cmp.Diff(postBeaconState, pbState, protocmp.Transform()))
-			t.Fatal("Post state does not match expected")
-		}
+		require.DeepSSZEqual(t, pbState, postBeaconState, "Post state does not match expected")
 	} else {
 		if err == nil {
 			t.Fatal("Did not fail when expected")
