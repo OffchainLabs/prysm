@@ -26,13 +26,17 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 	if len(ps.ProposerConfig) != 0 {
 		settings.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*Option)
 		for key, optionPayload := range ps.ProposerConfig {
-			decodedKey, err := hexutil.Decode(key)
+			// Check whether key is well-formed.
+			decodedKey, err := bytesutil.DecodeHex48(key)
 			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("cannot decode public key %s", key))
+				return nil, fmt.Errorf("decode public key %s: %w", key, err)
 			}
-			if len(decodedKey) != fieldparams.BLSPubkeyLength {
-				return nil, fmt.Errorf("%v is not a bls public key", key)
+
+			// Check whether the payload is parsed as a non-nil value.
+			if optionPayload == nil {
+				continue
 			}
+
 			p := &Option{}
 			if optionPayload.Graffiti != nil {
 				p.GraffitiConfig = &GraffitiConfig{*optionPayload.Graffiti}
@@ -47,7 +51,7 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 				p.BuilderConfig = BuilderConfigFromConsensus(optionPayload.Builder)
 			}
 			p.GasLimit = optionPayload.GasLimit
-			settings.ProposeConfig[bytesutil.ToBytes48(decodedKey)] = p
+			settings.ProposeConfig[decodedKey] = p
 		}
 	}
 	if ps.DefaultConfig != nil {
@@ -428,6 +432,9 @@ const (
 	SchemaV1Unset uint32 = 0
 	SchemaV1      uint32 = 1
 	SchemaV2      uint32 = 2
+
+	// The highest schema version currently supported.
+	MaxSchemaVersion = SchemaV2
 )
 
 // FreshSettingsVersion is the schema stamped on settings the keymanager APIs

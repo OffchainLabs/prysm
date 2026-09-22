@@ -143,6 +143,17 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 			return nil, err
 		}
 		dbSettings = dbps.ToConsensus()
+
+		// Load merges onto and rewrites the DB, so an unknown version must not be reinterpreted.
+		if dbSettings.Version > proposer.MaxSchemaVersion {
+			return nil, fmt.Errorf(
+				"validator DB holds proposer settings with unsupported version %d (max supported: %d), "+
+					"written by a newer Prysm; run that version or reset the validator DB",
+				dbSettings.Version,
+				proposer.MaxSchemaVersion,
+			)
+		}
+
 		log.WithField("version", dbSettings.Version).
 			WithField("proposerConfigCount", len(dbSettings.ProposerConfig)).
 			Debug("Loaded proposer settings from DB")
@@ -270,6 +281,9 @@ func (psl *SettingsLoader) loadFromFile(cliCtx *cli.Context, dbSettings *validat
 	if settingFromFile == nil {
 		return nil, errors.Errorf("proposer settings is empty after unmarshalling from file specified by %s flag", flags.ProposerSettingsFlag.Name)
 	}
+	if err := checkSchemaVersion(settingFromFile); err != nil {
+		return nil, err
+	}
 	markExplicitEmptyBuilders(settingFromFile)
 	inferSchemaVersion(settingFromFile)
 	psl.replacesDBKeys = len(settingFromFile.ProposerConfig) > 0
@@ -284,6 +298,9 @@ func (psl *SettingsLoader) loadFromURL(cliCtx *cli.Context, dbSettings *validato
 	}
 	if settingFromURL == nil {
 		return nil, errors.Errorf("proposer settings is empty after unmarshalling from url specified by %s flag", flags.ProposerSettingsURLFlag.Name)
+	}
+	if err := checkSchemaVersion(settingFromURL); err != nil {
+		return nil, err
 	}
 	markExplicitEmptyBuilders(settingFromURL)
 	inferSchemaVersion(settingFromURL)
@@ -333,6 +350,24 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 		return mergeProposerSettingsV2(merged, loaded, db, builderConfig, gasLimitOnly)
 	}
 	return mergeProposerSettingsV1(merged, loaded, db, builderConfig, gasLimitOnly)
+}
+
+// checkSchemaVersion rejects versions the merge path would otherwise silently treat
+// as v1, and the persistence-only builders_set marker that strict decoding cannot
+// tell apart from a documented key.
+func checkSchemaVersion(p *validatorpb.ProposerSettingsPayload) error {
+	if p.Version > proposer.MaxSchemaVersion {
+		return fmt.Errorf("unsupported proposer settings version %d; the highest supported version is %d", p.Version, proposer.MaxSchemaVersion)
+	}
+	if p.DefaultConfig.GetBuilder().GetBuildersSet() {
+		return errors.New("default_config.builder.builders_set is not a settings key; use \"builders\": []")
+	}
+	for key, opt := range p.ProposerConfig {
+		if opt.GetBuilder().GetBuildersSet() {
+			return fmt.Errorf("proposer_config[%s].builder.builders_set is not a settings key; use \"builders\": []", key)
+		}
+	}
+	return nil
 }
 
 // markExplicitEmptyBuilders stamps the persistence marker for a user source's

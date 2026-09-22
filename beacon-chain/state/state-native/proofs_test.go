@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -162,9 +161,6 @@ func TestBeaconStateMerkleProofs_bellatrix(t *testing.T) {
 }
 
 func TestBeaconStateMerkleProofs_Gloas(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{})
-	defer reset()
-
 	ctx := t.Context()
 	gloas, err := util.NewBeaconStateGloas()
 	require.NoError(t, err)
@@ -214,23 +210,5 @@ func TestBeaconStateMerkleProofs_Gloas(t *testing.T) {
 		finalizedRoot := gloas.FinalizedCheckpoint().Root
 		require.Equal(t, false, trie.VerifyMerkleProof(htr[:], finalizedRoot, 735, proof))
 		require.Equal(t, true, trie.VerifyMerkleProof(newRoot[:], finalizedRoot, 735, proof))
-	})
-
-	t.Run("legacy fallback", func(t *testing.T) {
-		reset := features.InitWithReset(&features.Flags{DisableProgressiveSSZ: true})
-		defer reset()
-
-		legacy, err := util.NewBeaconStateGloas()
-		require.NoError(t, err)
-		legacyRoot, err := legacy.HashTreeRoot(ctx)
-		require.NoError(t, err)
-		committee, err := legacy.CurrentSyncCommittee()
-		require.NoError(t, err)
-		committeeRoot, err := committee.HashTreeRoot()
-		require.NoError(t, err)
-		proof, err := legacy.CurrentSyncCommitteeProof(ctx)
-		require.NoError(t, err)
-		require.Equal(t, 6, len(proof))
-		require.Equal(t, true, trie.VerifyMerkleProof(legacyRoot[:], committeeRoot[:], 86, proof))
 	})
 }

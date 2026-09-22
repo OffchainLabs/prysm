@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -232,7 +231,7 @@ func ProcessWithdrawals(st state.BeaconState, executionData interfaces.Execution
 }
 
 func withdrawalSliceRoot(withdrawals []*enginev1.Withdrawal, stateVersion int) ([32]byte, error) {
-	if features.ProgressiveSSZEnabled(stateVersion) {
+	if stateVersion >= version.Gloas {
 		return wrappers.WithdrawalSliceRootProgressive(withdrawals)
 	}
 	return wrappers.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
