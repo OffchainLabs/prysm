@@ -953,8 +953,8 @@ func TestPartialColumnVerifierExtendFromVerifiedCell(t *testing.T) {
 			require.Equal(t, tc.wantExtended, extended)
 			require.Equal(t, tc.wantMarked, pv.Column.Included.BitAt(tc.cellIndex))
 
-			require.Equal(t, true, reflect.DeepEqual(tc.wantCell, pv.Column.Column[tc.cellIndex]))
-			require.Equal(t, true, reflect.DeepEqual(tc.wantProof, pv.Column.KzgProofs[tc.cellIndex]))
+			require.Equal(t, true, reflect.DeepEqual(tc.wantCell, pv.Column.Column()[tc.cellIndex]))
+			require.Equal(t, true, reflect.DeepEqual(tc.wantProof, pv.Column.KzgProofs()[tc.cellIndex]))
 		})
 	}
 }
