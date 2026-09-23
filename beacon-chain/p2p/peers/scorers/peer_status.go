@@ -117,12 +117,17 @@ func (s *PeerStatusScorer) SetPeerStatus(pid peer.ID, chainState *pb.StatusV2, v
 	defer s.store.Unlock()
 
 	peerData := s.store.PeerDataGetOrCreate(pid)
-	peerData.ChainState = chainState
-	peerData.ChainStateLastUpdated = time.Now()
 	peerData.ChainStateValidationError = validationError
 
+	if validationError != nil {
+		return
+	}
+
+	peerData.ChainState = chainState
+	peerData.ChainStateLastUpdated = time.Now()
+
 	// Update maximum known head slot (scores will be calculated with respect to that maximum value).
-	if validationError == nil && chainState != nil && chainState.HeadSlot > s.highestPeerHeadSlot {
+	if chainState != nil && chainState.HeadSlot > s.highestPeerHeadSlot {
 		s.highestPeerHeadSlot = chainState.HeadSlot
 	}
 }

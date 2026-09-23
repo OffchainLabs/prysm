@@ -7,11 +7,13 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 func validExecutionPayloadEnvelope() *ethpb.ExecutionPayloadEnvelope {
@@ -140,4 +142,73 @@ func TestWrappedROSignedExecutionPayloadEnvelope(t *testing.T) {
 
 		require.Equal(t, signed, wrapped.Proto())
 	})
+}
+
+func gloasBlockWithBid(t *testing.T, parentRoot, parentBlockHash [32]byte) blocks.ROBlock {
+	blk := util.NewBeaconBlockGloas()
+	blk.Block.ParentRoot = parentRoot[:]
+	blk.Block.Body.SignedExecutionPayloadBid.Message.ParentBlockHash = parentBlockHash[:]
+	signed, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	ro, err := blocks.NewROBlock(signed)
+	require.NoError(t, err)
+	return ro
+}
+
+func signedEnvelopeFor(t *testing.T, beaconBlockRoot, blockHash [32]byte) interfaces.ROSignedExecutionPayloadEnvelope {
+	env := validExecutionPayloadEnvelope()
+	env.BeaconBlockRoot = beaconBlockRoot[:]
+	env.Payload.BlockHash = blockHash[:]
+	signed, err := blocks.WrappedROSignedExecutionPayloadEnvelope(&ethpb.SignedExecutionPayloadEnvelope{
+		Message:   env,
+		Signature: bytes.Repeat([]byte{0xAB}, 96),
+	})
+	require.NoError(t, err)
+	return signed
+}
+
+func TestBlockBuiltOnEnvelope(t *testing.T) {
+	blockHash, parentRoot := [32]byte{0xaa}, [32]byte{0x01}
+
+	for _, test := range []struct {
+		name          string
+		envRoot       [32]byte
+		blkParentHash [32]byte
+		wantBuiltOn   bool
+	}{
+		{name: "matching execution parent hash returns true", envRoot: parentRoot, blkParentHash: blockHash, wantBuiltOn: true},
+		{name: "ancestor root with matching execution hash returns true", envRoot: [32]byte{0x02}, blkParentHash: blockHash, wantBuiltOn: true},
+		{name: "different execution parent hash returns false", envRoot: parentRoot, blkParentHash: [32]byte{0xbb}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			env := signedEnvelopeFor(t, test.envRoot, blockHash)
+			blk := gloasBlockWithBid(t, parentRoot, test.blkParentHash)
+			builtOn, err := blocks.BlockBuiltOnEnvelope(env, blk)
+			require.NoError(t, err)
+			require.Equal(t, test.wantBuiltOn, builtOn)
+		})
+	}
+}
+
+func TestBlockBuiltOnParentEnvelope(t *testing.T) {
+	blockHash, parentRoot := [32]byte{0xaa}, [32]byte{0x01}
+
+	for _, test := range []struct {
+		name          string
+		envRoot       [32]byte
+		blkParentHash [32]byte
+		wantBuiltOn   bool
+	}{
+		{name: "matching beacon parent root and execution hash returns true", envRoot: parentRoot, blkParentHash: blockHash, wantBuiltOn: true},
+		{name: "ancestor root with matching execution hash returns false", envRoot: [32]byte{0x02}, blkParentHash: blockHash},
+		{name: "matching beacon parent root with different execution hash returns false", envRoot: parentRoot, blkParentHash: [32]byte{0xbb}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			env := signedEnvelopeFor(t, test.envRoot, blockHash)
+			blk := gloasBlockWithBid(t, parentRoot, test.blkParentHash)
+			builtOn, err := blocks.BlockBuiltOnParentEnvelope(env, blk)
+			require.NoError(t, err)
+			require.Equal(t, test.wantBuiltOn, builtOn)
+		})
+	}
 }

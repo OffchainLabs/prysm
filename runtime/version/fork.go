@@ -66,6 +66,17 @@ func All() []int {
 	return supportedVersions
 }
 
+// AllIncludingUnreleased returns a list of all fork versions, including unreleased ones.
+func AllIncludingUnreleased() []int {
+	return allVersions
+}
+
+// Before returns all supported fork versions strictly earlier than the provided version.
+func Before(version int) []int {
+	end := sort.SearchInts(supportedVersions, version)
+	return supportedVersions[:end:end]
+}
+
 // IsUnsupported reports whether the provided version is currently gate-kept.
 func IsUnsupported(version int) bool {
 	_, ok := unsupportedVersions[version]
