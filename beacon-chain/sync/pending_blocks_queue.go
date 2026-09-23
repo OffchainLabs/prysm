@@ -311,9 +311,7 @@ func (s *Service) receiveAndBroadCastBlock(ctx context.Context, b interfaces.Rea
 		return err
 	}
 
-	// Use the block's own fork digest: a pending block resolved after a fork transition
-	// must not go out on the current fork's topic, where peers cannot decode it.
-	if err := s.cfg.p2p.BroadcastForEpoch(ctx, pb, slots.ToEpoch(blockSlot)); err != nil {
+	if err := s.cfg.p2p.Broadcast(ctx, pb); err != nil {
 		log.WithError(err).Debug("Could not broadcast block")
 		return err
 	}
