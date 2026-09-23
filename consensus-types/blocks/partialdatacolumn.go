@@ -371,19 +371,28 @@ func (p *PartialDataColumn) marshalCellsMessage(cells, proofs [][]byte, present 
 	return encoded, nil
 }
 
-// DecodePartialColumnSidecar SSZ-decodes an incoming partial-message body into the in-memory
-// PartialDataColumnSidecar.
-func DecodePartialColumnSidecar(raw []byte, isGloas bool) (*ethpb.PartialDataColumnSidecar, error) {
+// PartialColumnMessage is the fork-neutral view of a decoded partial-message body: the cells,
+// proofs and present bitmap shared by the Fulu (*ethpb.PartialDataColumnSidecar) and Gloas
+// (*ethpb.PartialDataColumnSidecarGloas) wire types.
+type PartialColumnMessage interface {
+	GetCellsPresentBitmap() bitfield.Bitlist
+	GetPartialColumn() [][]byte
+	GetKzgProofs() [][]byte
+}
+
+var (
+	_ PartialColumnMessage = (*ethpb.PartialDataColumnSidecar)(nil)
+	_ PartialColumnMessage = (*ethpb.PartialDataColumnSidecarGloas)(nil)
+)
+
+// DecodePartialColumnSidecar SSZ-decodes an incoming partial-message body into the wire type of its fork.
+func DecodePartialColumnSidecar(raw []byte, isGloas bool) (PartialColumnMessage, error) {
 	if isGloas {
-		gloas := &ethpb.PartialDataColumnSidecarGloas{}
-		if err := gloas.UnmarshalSSZ(raw); err != nil {
+		sidecar := &ethpb.PartialDataColumnSidecarGloas{}
+		if err := sidecar.UnmarshalSSZ(raw); err != nil {
 			return nil, errors.Wrap(err, "unmarshal gloas partial data column sidecar")
 		}
-		return &ethpb.PartialDataColumnSidecar{
-			CellsPresentBitmap: gloas.CellsPresentBitmap,
-			PartialColumn:      gloas.PartialColumn,
-			KzgProofs:          gloas.KzgProofs,
-		}, nil
+		return sidecar, nil
 	}
 	sidecar := &ethpb.PartialDataColumnSidecar{}
 	if err := sidecar.UnmarshalSSZ(raw); err != nil {
@@ -607,18 +616,19 @@ func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerS
 }
 
 // CellsToVerifyFromPartialMessage returns cells from the partial message that need to be verified.
-func (p *PartialDataColumn) CellsToVerifyFromPartialMessage(message *ethpb.PartialDataColumnSidecar) ([]uint64, []CellProofBundle, error) {
-	included := message.CellsPresentBitmap
+func (p *PartialDataColumn) CellsToVerifyFromPartialMessage(message PartialColumnMessage) ([]uint64, []CellProofBundle, error) {
+	included := message.GetCellsPresentBitmap()
 	if included.Len() == 0 {
 		return nil, nil, nil
 	}
 
 	// Some basic sanity checks
 	includedCells := included.Count()
-	if uint64(len(message.KzgProofs)) != includedCells {
+	cells, proofs := message.GetPartialColumn(), message.GetKzgProofs()
+	if uint64(len(proofs)) != includedCells {
 		return nil, nil, errors.New("invalid message. Missing KZG proofs")
 	}
-	if uint64(len(message.PartialColumn)) != includedCells {
+	if uint64(len(cells)) != includedCells {
 		return nil, nil, errors.New("invalid message. Missing cells")
 	}
 
@@ -641,7 +651,7 @@ func (p *PartialDataColumn) CellsToVerifyFromPartialMessage(message *ethpb.Parti
 		if !included.BitAt(i) {
 			continue
 		}
-		if j >= len(message.PartialColumn) {
+		if j >= len(cells) {
 			break
 		}
 
@@ -649,8 +659,8 @@ func (p *PartialDataColumn) CellsToVerifyFromPartialMessage(message *ethpb.Parti
 			cellIndices = append(cellIndices, i)
 			cellsToVerify = append(cellsToVerify, CellProofBundle{
 				ColumnIndex: index,
-				Cell:        message.PartialColumn[j],
-				Proof:       message.KzgProofs[j],
+				Cell:        cells[j],
+				Proof:       proofs[j],
 				// Use the commitment from our datacolumn, indexed by i since we
 				// have all commitments.
 				Commitment: commitments[i],

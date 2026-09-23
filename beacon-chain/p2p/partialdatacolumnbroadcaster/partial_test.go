@@ -287,7 +287,7 @@ func createGloasPartialColumn(t *testing.T, nCells uint64, cells map[uint64][]by
 
 // buildIncomingGloasRPC is buildIncomingRPC with the fork flag set, as onIncomingRPC would set it
 // after parsing a 41B Gloas group id.
-func buildIncomingGloasRPC(topic string, group []byte, message *ethpb.PartialDataColumnSidecar, partsMetadata []byte) incomingPartialRPC {
+func buildIncomingGloasRPC(topic string, group []byte, message blocks.PartialColumnMessage, partsMetadata []byte) incomingPartialRPC {
 	rpc := buildIncomingRPC(topic, group, message, partsMetadata)
 	rpc.isGloas = true
 	return rpc
@@ -506,7 +506,16 @@ func buildSidecarWithCells(nCells uint64, cellsByIndex map[uint64][]byte) *ethpb
 	return msg
 }
 
-func buildIncomingRPC(topic string, group []byte, message *ethpb.PartialDataColumnSidecar, partsMetadata []byte) incomingPartialRPC {
+func buildGloasSidecarWithCells(nCells uint64, cellsByIndex map[uint64][]byte) *ethpb.PartialDataColumnSidecarGloas {
+	msg := buildSidecarWithCells(nCells, cellsByIndex)
+	return &ethpb.PartialDataColumnSidecarGloas{
+		CellsPresentBitmap: msg.CellsPresentBitmap,
+		PartialColumn:      msg.PartialColumn,
+		KzgProofs:          msg.KzgProofs,
+	}
+}
+
+func buildIncomingRPC(topic string, group []byte, message blocks.PartialColumnMessage, partsMetadata []byte) incomingPartialRPC {
 	topicCopy := topic
 	return incomingPartialRPC{
 		PartialMessagesExtension: &pubsub_pb.PartialMessagesExtension{
@@ -862,10 +871,9 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 			require.NoError(t, err)
 			if tt.expectedMessage {
 				require.NotNil(t, msg)
-				if tt.isGloas {
-					require.IsNil(t, msg.Header)
-				}
-				assertBitlistEqual(t, msg.CellsPresentBitmap, tt.expectedMesageBitmap)
+				_, isGloasMsg := msg.(*ethpb.PartialDataColumnSidecarGloas)
+				require.Equal(t, tt.isGloas, isGloasMsg)
+				assertBitlistEqual(t, msg.GetCellsPresentBitmap(), tt.expectedMesageBitmap)
 			} else {
 				require.IsNil(t, msg)
 			}
@@ -3183,7 +3191,7 @@ func TestPartialColumnBroadcaster_handleIncomingRPC_Gloas(t *testing.T) {
 
 		col := createGloasPartialColumn(t, 3, nil)
 		group := col.GroupID()
-		msg := buildSidecarWithCells(3, map[uint64][]byte{1: {0x22}})
+		msg := buildGloasSidecarWithCells(3, map[uint64][]byte{1: {0x22}})
 		rpc := buildIncomingGloasRPC(validTopic, group, msg, nil)
 
 		require.NoError(t, h.broadcaster.handleIncomingRPC(rpc))
@@ -3233,7 +3241,7 @@ func TestPartialColumnBroadcaster_handleIncomingRPC_Gloas(t *testing.T) {
 		h.broadcaster.partialMsgStore[validTopic] = map[string]*verification.PartialColumnVerifier{
 			string(group): newMockPartialVerifier(existing),
 		}
-		msg := buildSidecarWithCells(3, map[uint64][]byte{1: {0x22}})
+		msg := buildGloasSidecarWithCells(3, map[uint64][]byte{1: {0x22}})
 		_, cellsToVerify := buildExpectedCellsToVerify(t, existing, map[uint64][]byte{1: {0x22}})
 		rpc := buildIncomingGloasRPC(validTopic, group, msg, nil)
 
@@ -3303,7 +3311,7 @@ func TestPartialColumnBroadcaster_handleIncomingRPC_GloasSlotMismatchRejected(t 
 
 	col := createGloasPartialColumn(t, 3, nil)
 	group := col.GroupID()
-	msg := buildSidecarWithCells(3, map[uint64][]byte{1: {0x22}})
+	msg := buildGloasSidecarWithCells(3, map[uint64][]byte{1: {0x22}})
 	rpc := buildIncomingGloasRPC(validTopic, group, msg, nil)
 
 	require.NoError(t, h.broadcaster.handleIncomingRPC(rpc))

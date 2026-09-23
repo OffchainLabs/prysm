@@ -487,11 +487,10 @@ func (c *partialColumnCallbacks) PartialVerifierFromTrustedColumn(col *blocks.Pa
 	return c.service.partialVerifierFromTrustedColumn(c.service.ctx, col)
 }
 
-// ValidateGloasGroupID validates a Gloas partial-column group's slot and root against local block state,
-// mirroring the full-column gossip rules: [IGNORE] until a valid block for the group's root has been seen,
-// [REJECT] when that block's slot does not match the group's slot, else [ACCEPT].
+// ValidateGloasGroupID validates a Gloas partial-column group ID against local block state.
+// https://github.com/ethereum/consensus-specs/blob/master/specs/gloas/partial-columns/p2p-interface.md#the-gossip-domain-gossipsub
 func (c *partialColumnCallbacks) ValidateGloasGroupID(slot primitives.Slot, root [32]byte) pubsub.ValidationResult {
-	// [IGNORE] A valid block for the group's root has not been seen yet.
+	// [IGNORE] The group ID's block has been seen (via gossip or non-gossip sources)
 	if c.service.cfg.chain == nil || !c.service.cfg.chain.HasBlock(c.service.ctx, root) {
 		return pubsub.ValidationIgnore
 	}
@@ -500,7 +499,7 @@ func (c *partialColumnCallbacks) ValidateGloasGroupID(slot primitives.Slot, root
 	if err != nil {
 		return pubsub.ValidationIgnore
 	}
-	// [REJECT] The group's slot must match the slot of the block at beacon_block_root.
+	// [REJECT] The group ID's slot matches the slot of the block
 	if blockSlot != slot {
 		return pubsub.ValidationReject
 	}

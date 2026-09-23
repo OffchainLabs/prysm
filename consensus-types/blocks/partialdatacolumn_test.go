@@ -1567,7 +1567,7 @@ func TestPartialDataColumn_cellsToSendToPeer_Gloas(t *testing.T) {
 func TestPartialDataColumn_CellsToVerifyFromPartialMessage_Gloas(t *testing.T) {
 	// A Gloas column verifies incoming cells against its bid commitments.
 	p := mustNewGloasPartialColumn(t, 4, 1)
-	msg := &ethpb.PartialDataColumnSidecar{
+	msg := &ethpb.PartialDataColumnSidecarGloas{
 		CellsPresentBitmap: testBitlist(4, 0, 1, 3),
 		PartialColumn:      [][]byte{{0xA}, {0xB}, {0xC}},
 		KzgProofs:          [][]byte{{0x1}, {0x2}, {0x3}},
@@ -1632,7 +1632,7 @@ func TestDecodePartialColumnSidecar(t *testing.T) {
 	present.SetBitAt(0, true)
 	present.SetBitAt(2, true)
 
-	t.Run("gloas wire decodes and normalizes with a nil header", func(t *testing.T) {
+	t.Run("gloas wire decodes into the gloas type", func(t *testing.T) {
 		raw, err := (&ethpb.PartialDataColumnSidecarGloas{
 			CellsPresentBitmap: present,
 			PartialColumn:      cells,
@@ -1642,13 +1642,14 @@ func TestDecodePartialColumnSidecar(t *testing.T) {
 
 		got, err := DecodePartialColumnSidecar(raw, true)
 		require.NoError(t, err)
-		require.IsNil(t, got.Header)
-		require.DeepEqual(t, present, got.CellsPresentBitmap)
-		require.DeepEqual(t, cells, got.PartialColumn)
-		require.DeepEqual(t, proofs, got.KzgProofs)
+		_, isGloas := got.(*ethpb.PartialDataColumnSidecarGloas)
+		require.Equal(t, true, isGloas)
+		require.DeepEqual(t, present, got.GetCellsPresentBitmap())
+		require.DeepEqual(t, cells, got.GetPartialColumn())
+		require.DeepEqual(t, proofs, got.GetKzgProofs())
 	})
 
-	t.Run("fulu wire decodes", func(t *testing.T) {
+	t.Run("fulu wire decodes into the fulu type", func(t *testing.T) {
 		raw, err := (&ethpb.PartialDataColumnSidecar{
 			CellsPresentBitmap: present,
 			PartialColumn:      cells,
@@ -1658,9 +1659,11 @@ func TestDecodePartialColumnSidecar(t *testing.T) {
 
 		got, err := DecodePartialColumnSidecar(raw, false)
 		require.NoError(t, err)
-		require.DeepEqual(t, present, got.CellsPresentBitmap)
-		require.DeepEqual(t, cells, got.PartialColumn)
-		require.DeepEqual(t, proofs, got.KzgProofs)
+		_, isFulu := got.(*ethpb.PartialDataColumnSidecar)
+		require.Equal(t, true, isFulu)
+		require.DeepEqual(t, present, got.GetCellsPresentBitmap())
+		require.DeepEqual(t, cells, got.GetPartialColumn())
+		require.DeepEqual(t, proofs, got.GetKzgProofs())
 	})
 
 	t.Run("gloas wire is rejected when decoded as fulu", func(t *testing.T) {

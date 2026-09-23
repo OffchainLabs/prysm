@@ -256,7 +256,7 @@ func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofs
 	if slots.ToEpoch(src.Slot()) >= params.BeaconConfig().GloasForkEpoch {
 		dataColumns, err := partialColumnsGloas(included, cells, proofs, src)
 		if err != nil {
-			return nil, errors.Wrap(err, "partialColumnsGloas")
+			return nil, errors.Wrap(err, "build partial columns gloas")
 		}
 		if len(dataColumns) != 0 {
 			partialDataColumnComputationTime.Observe(float64(time.Since(start).Milliseconds()))

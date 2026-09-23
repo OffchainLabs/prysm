@@ -82,9 +82,9 @@ type ColumnCallbacks interface {
 	HandleColumn(topic string, col blocks.VerifiedRODataColumn)
 	// HandleHeader is called when a new partial data column header is first validated.
 	HandleHeader(header *ethpb.PartialDataColumnHeader, groupID string)
-	// ValidateGloasGroupID validates a Gloas partial-column group's slot and root against local block state:
-	// [REJECT] when a seen block at the group's root has a different slot, [IGNORE] when no block for
-	// the root has been seen, else [ACCEPT].
+	// ValidateGloasGroupID validates a Gloas partial-column group ID against local block state:
+	// [IGNORE] The group ID's block has been seen, [REJECT] The group ID's slot matches the slot
+	// of the block, else [ACCEPT].
 	ValidateGloasGroupID(slot primitives.Slot, root [32]byte) pubsub.ValidationResult
 }
 
@@ -245,7 +245,7 @@ type unsubscribe struct {
 type incomingPartialRPC struct {
 	*pubsub_pb.PartialMessagesExtension
 	from    peer.ID
-	message *ethpb.PartialDataColumnSidecar
+	message blocks.PartialColumnMessage
 	isGloas bool
 	slot    primitives.Slot
 	root    [32]byte
@@ -617,7 +617,7 @@ func decodePartsMetadataFromPeerState(state *ethpb.PartialDataColumnPartsMetadat
 }
 
 func updatePeerStateFromIncomingRPC(peerState blocks.PartialDataColumnPeerState, rpc *pubsub_pb.PartialMessagesExtension, isGloas bool) (blocks.PartialDataColumnPeerState,
-	*ethpb.PartialDataColumnSidecar, error) {
+	blocks.PartialColumnMessage, error) {
 	peerState = peerState.Clone()
 	hasIncomingPartsMetadata := len(rpc.PartsMetadata) > 0
 	hasMessage := len(rpc.PartialMessage) > 0
@@ -657,15 +657,16 @@ func updatePeerStateFromIncomingRPC(peerState blocks.PartialDataColumnPeerState,
 		return peerState, nil, errors.Wrap(err, "failed to unmarshal partial message data")
 	}
 
-	present := message.CellsPresentBitmap.Count()
-	if uint64(len(message.PartialColumn)) != present || uint64(len(message.KzgProofs)) != present {
+	cellsPresent := message.GetCellsPresentBitmap()
+	present := cellsPresent.Count()
+	if uint64(len(message.GetPartialColumn())) != present || uint64(len(message.GetKzgProofs())) != present {
 		return peerState, nil, errors.Wrap(errMalformedPartialMessage, "cells/proofs count does not match present bitmap")
 	}
-	if len(message.CellsPresentBitmap) == 0 {
+	if len(cellsPresent) == 0 {
 		return peerState, message, nil
 	}
 
-	nKzgCommitments := message.CellsPresentBitmap.Len()
+	nKzgCommitments := cellsPresent.Len()
 	if nKzgCommitments == 0 {
 		return peerState, nil, errors.New("length of cells present bitmap is 0")
 	}
@@ -676,7 +677,7 @@ func updatePeerStateFromIncomingRPC(peerState blocks.PartialDataColumnPeerState,
 		if err != nil {
 			return peerState, nil, errors.Wrap(err, "received")
 		}
-		recvdState, err := blocks.MergeAvailableIntoPartsMetadata(recievedMeta, message.CellsPresentBitmap)
+		recvdState, err := blocks.MergeAvailableIntoPartsMetadata(recievedMeta, cellsPresent)
 		if err != nil {
 			return peerState, nil, errors.Wrap(err, "merge available cells into received parts metadata")
 		}
@@ -688,7 +689,7 @@ func updatePeerStateFromIncomingRPC(peerState blocks.PartialDataColumnPeerState,
 		return peerState, nil, errors.Wrap(err, "sent")
 	}
 
-	sentState, err := blocks.MergeAvailableIntoPartsMetadata(sentMeta, message.CellsPresentBitmap)
+	sentState, err := blocks.MergeAvailableIntoPartsMetadata(sentMeta, cellsPresent)
 	if err != nil {
 		return peerState, nil, errors.Wrap(err, "merge available cells into sent parts metadata")
 	}
@@ -729,7 +730,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 			p.reportPeerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
 			return nil
 		}
-		if hasMessage && message.CellsPresentBitmap.Count() > 0 {
+		if hasMessage && message.GetCellsPresentBitmap().Count() > 0 {
 			p.logger.WithFields(rpc.logFields()).Debug("Peer pushed Gloas cells before we published our column; downscoring")
 			p.reportPeerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
 		}
@@ -862,18 +863,17 @@ func (p *PartialColumnBroadcaster) makeVerifierFromHeader(root [fieldparams.Root
 	return verifier, nil
 }
 
-func (p *PartialColumnBroadcaster) getHeader(groupID []byte, message *ethpb.PartialDataColumnSidecar) (*ethpb.PartialDataColumnHeader, bool) {
+func (p *PartialColumnBroadcaster) getHeader(groupID []byte, message blocks.PartialColumnMessage) (*ethpb.PartialDataColumnHeader, bool) {
 	if cachedHeader, ok := p.validHeaderCache[string(groupID)]; ok {
 		return cachedHeader, true
-	} else {
-		// We haven't seen this group before. Check if we have a valid header.
-		if len(message.Header) == 0 {
-			p.logger.Debug("No partial column found and no header in message, ignoring")
-			return nil, false
-		}
-
-		return message.Header[0], false
 	}
+	// We haven't seen this group before. Only the Fulu wire type can carry a header.
+	fulu, ok := message.(*ethpb.PartialDataColumnSidecar)
+	if !ok || len(fulu.Header) == 0 {
+		p.logger.Debug("No partial column found and no header in message, ignoring")
+		return nil, false
+	}
+	return fulu.Header[0], false
 }
 
 func (p *PartialColumnBroadcaster) republishColumn(ourDataColumn *blocks.PartialDataColumn, rpc incomingPartialRPC,
@@ -904,7 +904,7 @@ func (p *PartialColumnBroadcaster) republishColumn(ourDataColumn *blocks.Partial
 	return nil
 }
 
-func (p *PartialColumnBroadcaster) handlePartialCells(ourDataColumn *blocks.PartialDataColumn, message *ethpb.PartialDataColumnSidecar,
+func (p *PartialColumnBroadcaster) handlePartialCells(ourDataColumn *blocks.PartialDataColumn, message blocks.PartialColumnMessage,
 	rpc incomingPartialRPC) error {
 	topicId := rpc.GetTopicID()
 

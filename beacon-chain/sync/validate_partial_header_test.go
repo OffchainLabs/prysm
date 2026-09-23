@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
@@ -29,7 +30,7 @@ func TestService_PartialVerifierFromTrustedColumn(t *testing.T) {
 		{
 			name:    "nil column",
 			col:     nil,
-			wantErr: errHeaderNil,
+			wantErr: errNilColumn,
 		},
 		{
 			name:    "empty commitments",
@@ -61,6 +62,11 @@ func TestService_PartialVerifierFromTrustedColumn(t *testing.T) {
 			},
 		},
 		{
+			name:    "gloas column with empty commitments",
+			col:     buildGloasPartialColumnWithoutCommitments(t),
+			wantErr: errEmptyCommitments,
+		},
+		{
 			name:         "gloas column builds verifier and completes",
 			col:          buildGloasPartialColumn(t, 2, []uint64{0, 1}),
 			verifier:     verification.MockDataColumnsVerifier{},
@@ -86,29 +92,6 @@ func TestService_PartialVerifierFromTrustedColumn(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestService_PartialVerifierFromTrustedGloasColumn(t *testing.T) {
-	service := &Service{
-		newColumnsVerifier: testNewColumnsVerifier(verification.MockDataColumnsVerifier{}),
-	}
-
-	t.Run("builds verifier and completes", func(t *testing.T) {
-		v, err := service.partialVerifierFromTrustedGloasColumn(buildGloasPartialColumn(t, 2, []uint64{0, 1}))
-		require.NoError(t, err)
-		require.NotNil(t, v)
-
-		_, ok, err := v.Complete()
-		require.NoError(t, err)
-		require.Equal(t, true, ok)
-	})
-
-	t.Run("empty commitments errors", func(t *testing.T) {
-		// A column with no commitments has a zero-length Included bitlist.
-		v, err := service.partialVerifierFromTrustedGloasColumn(&blocks.PartialDataColumn{})
-		require.ErrorIs(t, err, errEmptyCommitments)
-		require.IsNil(t, v)
-	})
 }
 
 func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
@@ -146,7 +129,7 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 		{
 			name:       "nil column",
 			col:        nil,
-			wantErr:    errHeaderNil,
+			wantErr:    errNilColumn,
 			wantResult: pubsub.ValidationIgnore,
 		},
 		{
@@ -351,4 +334,15 @@ func buildGloasPartialColumn(t *testing.T, nCommitments int, included []uint64) 
 	}
 
 	return &col
+}
+
+func buildGloasPartialColumnWithoutCommitments(t *testing.T) *blocks.PartialDataColumn {
+	t.Helper()
+
+	ro, err := blocks.NewRODataColumnGloasWithRoot(&ethpb.DataColumnSidecarGloas{
+		BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+	}, [fieldparams.RootLength]byte{})
+	require.NoError(t, err)
+
+	return &blocks.PartialDataColumn{RODataColumn: ro, Included: bitfield.NewBitlist(0)}
 }

@@ -15,11 +15,12 @@ var errHeaderEmptyCommitments = errors.New("header has no kzg commitments")
 var errEmptyCommitments = errors.New("no kzg commitments")
 var errHeaderParentNotSeen = errors.New("header parent not seen")
 var errHeaderNil = errors.New("nil header")
+var errNilColumn = errors.New("nil partial data column")
 var errColumnNotFulu = errors.New("partial column is not a fulu type")
 
 func (s *Service) partialVerifierFromTrustedColumn(_ context.Context, col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
 	if col == nil {
-		return nil, errHeaderNil
+		return nil, errNilColumn
 	}
 	// Gloas partial columns carry no signed block header or inclusion proof, so the Fulu
 	// header path does not apply. Seed a verifier from the bid commitments instead.
@@ -70,7 +71,7 @@ func (s *Service) partialVerifierFromTrustedGloasColumn(col *blocks.PartialDataC
 // validatePartialDataColumn validates only the header-applicable checks for a partial data column.
 func (s *Service) validatePartialDataColumnHeader(ctx context.Context, col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, pubsub.ValidationResult, error) {
 	if col == nil {
-		return nil, pubsub.ValidationIgnore, errHeaderNil
+		return nil, pubsub.ValidationIgnore, errNilColumn
 	}
 	// Gloas partial columns carry no signed block header, so this Fulu header path does not apply.
 	if col.IsGloas() {
