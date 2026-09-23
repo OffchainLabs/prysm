@@ -269,6 +269,14 @@ var (
 		Name: "builder_self_build_only",
 		Help: "1 when the builder circuit breaker forces self-building, 0 otherwise.",
 	})
+	builderRelaysBannedCount = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "builder_relays_banned_count",
+		Help: "Number of direct connection endpoints currently banned by the circuit breaker.",
+	})
+	builderCollateralBlacklistedCount = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "builder_collateral_blacklisted_count",
+		Help: "Number of builders blacklisted only because an endpoint serving them is banned.",
+	})
 	goroutineCountGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "beacon_goroutine_count",
 		Help: "Goroutine count sampled once per slot.",

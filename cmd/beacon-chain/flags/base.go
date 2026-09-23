@@ -85,6 +85,43 @@ var (
 		Usage: "Timeout to use when fetching a block header from the builder API, as a duration (e.g. 1s, 2s, 2500ms). Must be greater than 0. Only effective up to the Fulu fork.",
 		Value: params.BeaconConfig().BuilderHeaderTimeout,
 	}
+	// BuilderAllowedFailures and the flags below tune the Gloas builder circuit breaker, which bans
+	// builders that win an auction and then fail to reveal the payload.
+	BuilderAllowedFailures = &cli.Uint64Flag{
+		Name:  "builder-allowed-failures",
+		Usage: "Number of payload delivery failures a builder is allowed before this node blacklists it.",
+		Value: params.BeaconConfig().BuilderAllowedFailures,
+	}
+	BuilderCriticalFailures = &cli.Uint64Flag{
+		Name:  "builder-critical-failures",
+		Usage: "Failure count at which a builder earns the longer blacklist set by --builder-critical-blacklist-period.",
+		Value: params.BeaconConfig().BuilderCriticalFailures,
+	}
+	BuilderBlacklistPeriod = &cli.Uint64Flag{
+		Name:  "builder-blacklist-period",
+		Usage: "Number of epochs a builder stays blacklisted on its first offense. Must be greater than 0.",
+		Value: uint64(params.BeaconConfig().BuilderBlacklistPeriod),
+	}
+	BuilderCriticalBlacklistPeriod = &cli.Uint64Flag{
+		Name:  "builder-critical-blacklist-period",
+		Usage: "Number of epochs a builder stays blacklisted once it reaches --builder-critical-failures.",
+		Value: uint64(params.BeaconConfig().BuilderCriticalBlacklistPeriod),
+	}
+	BuilderRelayBlacklistPeriod = &cli.Uint64Flag{
+		Name:  "builder-relay-blacklist-period",
+		Usage: "Maximum number of epochs a direct connection endpoint stays banned for serving a builder that failed to reveal a payload. Never exceeds the offending builder's own blacklist.",
+		Value: uint64(params.BeaconConfig().BuilderRelayBlacklistPeriod),
+	}
+	BuilderFailureBackOffPeriod = &cli.Uint64Flag{
+		Name:  "builder-failure-backoff-period",
+		Usage: "Number of epochs without a failure after which a builder's failure counter resets to zero.",
+		Value: uint64(params.BeaconConfig().BuilderFailureBackOffPeriod),
+	}
+	BuilderCriticalFailedBuilders = &cli.Uint64Flag{
+		Name:  "builder-critical-failed-builders",
+		Usage: "Number of concurrently blacklisted builders that forces this node to fall back to self-building. Must be greater than 0.",
+		Value: params.BeaconConfig().BuilderCriticalFailedBuilders,
+	}
 	// ExecutionEngineEndpoint provides an HTTP access endpoint to connect to an execution client on the execution layer
 	ExecutionEngineEndpoint = &cli.StringFlag{
 		Name:  "execution-endpoint",
