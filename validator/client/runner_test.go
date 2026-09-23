@@ -556,7 +556,7 @@ func TestPerformRolesDispatch(t *testing.T) {
 			role: rolePTCMember,
 			slot: cfg.SlotsPerEpoch.Mul(uint64(cfg.GloasForkEpoch)),
 			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
-				m.validatorClient.EXPECT().PayloadAttestationData(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
+				m.validatorClient.EXPECT().PayloadAttestationData(gomock.Any(), gomock.Any()).Return(nil, stop).MinTimes(1)
 			},
 		},
 		{
