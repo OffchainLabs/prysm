@@ -322,6 +322,10 @@ func configureBeacon(cliCtx *cli.Context) error {
 		return errors.Wrap(err, "could not configure builder header timeout")
 	}
 
+	if err := configureBuilderBidTimeout(cliCtx); err != nil {
+		return errors.Wrap(err, "could not configure builder bid timeout")
+	}
+
 	if err := configureSlotsPerArchivedPoint(cliCtx); err != nil {
 		return errors.Wrap(err, "could not configure slots per archived point")
 	}

@@ -146,6 +146,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.MinBuilderBid,
 			flags.MinBuilderDiff,
 			flags.BuilderHeaderTimeout,
+			flags.BuilderBidTimeout,
 			flags.SuggestedFeeRecipient,
 			flags.DisableBuilderSSZ,
 		},

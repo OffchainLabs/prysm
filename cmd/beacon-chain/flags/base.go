@@ -85,6 +85,13 @@ var (
 		Usage: "Timeout to use when fetching a block header from the builder API, as a duration (e.g. 1s, 2s, 2500ms). Must be greater than 0. Only effective up to the Fulu fork.",
 		Value: params.BeaconConfig().BuilderHeaderTimeout,
 	}
+	// BuilderBidTimeout bounds how long the beacon node waits for builder relays to return
+	// execution payload bids before giving up and using the P2P bid or a self-built payload.
+	BuilderBidTimeout = &cli.DurationFlag{
+		Name:  "builder-bid-timeout",
+		Usage: "Timeout to use when fetching execution payload bids from the builder API, as a duration (e.g. 600ms, 1s). Must be greater than 0. Only effective from the Gloas fork onward.",
+		Value: params.BeaconConfig().BuilderBidTimeout,
+	}
 	// ExecutionEngineEndpoint provides an HTTP access endpoint to connect to an execution client on the execution layer
 	ExecutionEngineEndpoint = &cli.StringFlag{
 		Name:  "execution-endpoint",
