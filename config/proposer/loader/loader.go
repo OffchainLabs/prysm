@@ -438,7 +438,7 @@ func warnBuilderFlagsReplaced(cliCtx *cli.Context, loaded *validatorpb.ProposerS
 	if loaded.DefaultConfig == nil || len(names) == 0 {
 		return
 	}
-	log.Warnf("default_config from --%s replaces the builder defaults set by %s", source, strings.Join(names, ", "))
+	log.Warnf("The default_config from --%s replaces the builder defaults set by %s", source, strings.Join(names, ", "))
 }
 
 func (psl *SettingsLoader) loadFromFile(cliCtx *cli.Context, dbSettings *validatorpb.ProposerSettingsPayload) (*validatorpb.ProposerSettingsPayload, error) {
