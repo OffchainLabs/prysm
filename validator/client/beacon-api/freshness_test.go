@@ -221,97 +221,6 @@ func TestBlockFreshnessOptions(t *testing.T) {
 	})
 }
 
-func TestPayloadAttestationFreshnessOptions(t *testing.T) {
-	octetHeader := http.Header{"Content-Type": {api.OctetStreamMediaType}}
-
-	t.Run("no hint yields no options", func(t *testing.T) {
-		// A ctx without a freshness hint yields no options: the read falls back
-		// to its default (first-success) behavior.
-		require.Equal(t, true, payloadAttestationFreshnessOptions(context.Background()) == nil)
-	})
-
-	t.Run("hint without deadline sets race and ssz-accept only", func(t *testing.T) {
-		ctx := iface.WithHint(context.Background(), headHint([32]byte{0xaa}, 10, true, time.Time{}))
-		cfg := rest.ResolveOptions(payloadAttestationFreshnessOptions(ctx)...)
-
-		// With a zero deadline we get race + ssz-accept but neither a deadline nor repolling.
-		require.Equal(t, true, cfg.Race)
-		require.NotNil(t, cfg.SSZAccept)
-		require.Equal(t, true, cfg.Deadline.IsZero())
-		require.Equal(t, time.Duration(0), cfg.PollInterval)
-	})
-
-	t.Run("hint with a deadline polls past that deadline", func(t *testing.T) {
-		deadline := time.Now().Add(time.Hour)
-		ctx := iface.WithHint(context.Background(), headHint([32]byte{0x01}, 10, true, deadline))
-		cfg := rest.ResolveOptions(payloadAttestationFreshnessOptions(ctx)...)
-
-		require.Equal(t, true, cfg.Race)
-		// The node holds non-final data until the hint deadline, so the read must
-		// outlive it or it gives up at the exact instant the data becomes servable.
-		require.Equal(t, deadline.Add(payloadAttestationDueGrace), cfg.Deadline)
-		require.Equal(t, true, cfg.Deadline.After(deadline))
-		// WithRepoll(0) falls back to the default poll interval.
-		require.NotEqual(t, time.Duration(0), cfg.PollInterval)
-	})
-
-	t.Run("a past deadline is floored so a lagging node still gets time", func(t *testing.T) {
-		// A deadline already in the past would leave no budget; it is raised to
-		// now + readFreshnessBudget.
-		ctx := iface.WithHint(context.Background(), headHint([32]byte{0x01}, 10, true, time.Now().Add(-time.Hour)))
-
-		before := time.Now()
-		cfg := rest.ResolveOptions(payloadAttestationFreshnessOptions(ctx)...)
-		after := time.Now()
-
-		require.Equal(t, true, cfg.Deadline.After(before.Add(readFreshnessBudget-time.Second)))
-		require.Equal(t, true, cfg.Deadline.Before(after.Add(readFreshnessBudget+time.Second)))
-	})
-
-	t.Run("accept matches the announced head against an SSZ response", func(t *testing.T) {
-		want := [32]byte{0x11, 0x22, 0x33}
-		other := [32]byte{0x44}
-
-		ctx := iface.WithHint(context.Background(), headHint(want, 10, true, time.Time{}))
-		cfg := rest.ResolveOptions(payloadAttestationFreshnessOptions(ctx)...)
-
-		require.Equal(t, true, cfg.SSZAccept(payloadAttestationSSZ(t, want), octetHeader))
-		require.Equal(t, false, cfg.SSZAccept(payloadAttestationSSZ(t, other), octetHeader))
-		require.Equal(t, false, cfg.SSZAccept([]byte("not ssz"), octetHeader))
-	})
-
-	t.Run("accept falls back to first-success when head unknown", func(t *testing.T) {
-		// When the tracked head is not yet known (ok=false), the accept criterion
-		// accepts any response without inspecting it.
-		ctx := iface.WithHint(context.Background(), headHint([32]byte{}, 0, false, time.Time{}))
-		cfg := rest.ResolveOptions(payloadAttestationFreshnessOptions(ctx)...)
-
-		require.Equal(t, true, cfg.SSZAccept(payloadAttestationSSZ(t, [32]byte{0x99}), octetHeader))
-		require.Equal(t, true, cfg.SSZAccept([]byte("garbage"), http.Header{}))
-	})
-}
-
-func TestPayloadAttestationBeaconBlockRoot(t *testing.T) {
-	root := [32]byte{0x11, 0x22, 0x33}
-
-	t.Run("decodes a JSON response when the content type is not octet-stream", func(t *testing.T) {
-		for _, hdr := range []http.Header{
-			{},                                     // no content type
-			{"Content-Type": {"application/json"}}, // explicit JSON
-		} {
-			got, ok := payloadAttestationBeaconBlockRoot(attestationDataJSON(root), hdr)
-			require.Equal(t, true, ok)
-			require.Equal(t, root, got)
-		}
-	})
-
-	t.Run("rejects a JSON response whose root is not a valid 32-byte hex", func(t *testing.T) {
-		// Present and non-empty, but too short to decode into a 32-byte root.
-		_, ok := payloadAttestationBeaconBlockRoot([]byte(`{"data":{"beacon_block_root":"0x1234"}}`), http.Header{})
-		require.Equal(t, false, ok)
-	})
-}
-
 // headHint returns a Hint whose Head resolver reports the given root/slot/ok and
 // whose deadline is the given time.
 func headHint(root [32]byte, slot primitives.Slot, ok bool, deadline time.Time) iface.Hint {
@@ -338,13 +247,6 @@ func attestationDataJSON(root [32]byte) json.RawMessage {
 // post-Gloas signals the payload status of the attested head.
 func attestationDataJSONWithIndex(root [32]byte, index uint64) json.RawMessage {
 	return json.RawMessage(fmt.Sprintf(`{"data":{"beacon_block_root":"%#x","index":"%d"}}`, root, index))
-}
-
-// payloadAttestationSSZ marshals a PayloadAttestationData whose beacon_block_root is root.
-func payloadAttestationSSZ(t *testing.T, root [32]byte) []byte {
-	body, err := (&ethpb.PayloadAttestationData{BeaconBlockRoot: root[:]}).MarshalSSZ()
-	require.NoError(t, err)
-	return body
 }
 
 // genericBlockWithParent returns a Phase0 GenericBeaconBlock whose parent root is root.

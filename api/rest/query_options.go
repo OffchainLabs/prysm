@@ -18,13 +18,16 @@ const (
 
 // queryConfig holds the per-call configuration.
 type queryConfig struct {
-	race             bool                                    // When true, query all nodes concurrently. When false, try nodes in order.
-	accept           func(json.RawMessage) bool              // Acceptance criterion for a JSON Get.
-	sszAccept        func(body []byte, hdr http.Header) bool // Acceptance criterion for a GetSSZ.
-	pollInterval     time.Duration                           // When > 0, keep re-polling all nodes until the deadline, waiting this long between rounds.
-	repollMode       RepollMode                              // When re-polling, the condition under which retrying stops.
-	deadline         time.Time                               // Absolute instant by which the read must finish
-	fallbackDeadline time.Time                               // If non-zero, bounds the wait for the nodes that have not answered yet once a usable response is in hand.
+	race              bool // When true, query all nodes concurrently. When false, try nodes in order.
+	independentRepoll bool
+	accept            func(json.RawMessage) bool              // Acceptance criterion for a JSON Get.
+	sszAccept         func(body []byte, hdr http.Header) bool // Acceptance criterion for a GetSSZ.
+	sszValidate       func(body []byte, hdr http.Header) error
+	pollInterval      time.Duration // When > 0, keep re-polling all nodes until the deadline, waiting this long between rounds.
+	repollMode        RepollMode    // When re-polling, the condition under which retrying stops.
+	onRetry           func()
+	deadline          time.Time // Absolute instant by which the read must finish
+	fallbackDeadline  time.Time // If non-zero, bounds the wait for the nodes that have not answered yet once a usable response is in hand.
 }
 
 // QueryOption customizes a read query (Get, GetSSZ, RequestSSZWithFallback).
@@ -73,6 +76,14 @@ func WithSSZAccept(accept func(body []byte, header http.Header) bool) QueryOptio
 	}
 }
 
+// WithSSZResponseValidator rejects unusable GetSSZ and RequestSSZWithFallback
+// responses before acceptance or fallback selection. validate may run concurrently.
+func WithSSZResponseValidator(validate func(body []byte, header http.Header) error) QueryOption {
+	return func(c *queryConfig) {
+		c.sszValidate = validate
+	}
+}
+
 // WithDeadline sets a deadline for the read.
 func WithDeadline(t time.Time) QueryOption {
 	return func(c *queryConfig) {
@@ -100,17 +111,31 @@ func WithRepoll(mode RepollMode) QueryOption {
 	}
 }
 
+// WithIndependentRepoll races nodes and retries each completed request after
+// interval until a response is accepted or the deadline is reached. It requires
+// a positive interval and WithDeadline. The latest usable response is the fallback.
+// onRetry runs before each repeated request and may run concurrently across nodes.
+func WithIndependentRepoll(interval time.Duration, onRetry func()) QueryOption {
+	return func(c *queryConfig) {
+		c.race = true
+		c.independentRepoll = true
+		c.pollInterval = interval
+		c.onRetry = onRetry
+	}
+}
+
 // ResolvedConfig is a read-only view of the configuration a set of QueryOptions
 // produces. It lets other packages unit-test the options they build without
 // exercising a full HTTP read (queryConfig itself is unexported).
 type ResolvedConfig struct {
-	Race             bool
-	Accept           func(raw json.RawMessage) bool
-	SSZAccept        func(body []byte, hdr http.Header) bool
-	PollInterval     time.Duration
-	RepollMode       RepollMode
-	Deadline         time.Time
-	FallbackDeadline time.Time
+	Race              bool
+	IndependentRepoll bool
+	Accept            func(raw json.RawMessage) bool
+	SSZAccept         func(body []byte, hdr http.Header) bool
+	PollInterval      time.Duration
+	RepollMode        RepollMode
+	Deadline          time.Time
+	FallbackDeadline  time.Time
 }
 
 // ResolveOptions folds opts into a ResolvedConfig for inspection.
@@ -118,12 +143,13 @@ func ResolveOptions(opts ...QueryOption) ResolvedConfig {
 	cfg := newQueryConfig(opts)
 
 	return ResolvedConfig{
-		Race:             cfg.race,
-		Accept:           cfg.accept,
-		SSZAccept:        cfg.sszAccept,
-		PollInterval:     cfg.pollInterval,
-		RepollMode:       cfg.repollMode,
-		Deadline:         cfg.deadline,
-		FallbackDeadline: cfg.fallbackDeadline,
+		Race:              cfg.race,
+		Accept:            cfg.accept,
+		SSZAccept:         cfg.sszAccept,
+		PollInterval:      cfg.pollInterval,
+		RepollMode:        cfg.repollMode,
+		IndependentRepoll: cfg.independentRepoll,
+		Deadline:          cfg.deadline,
+		FallbackDeadline:  cfg.fallbackDeadline,
 	}
 }

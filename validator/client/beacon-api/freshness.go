@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api"
@@ -19,9 +18,8 @@ import (
 )
 
 const (
-	readFreshnessBudget        = 500 * time.Millisecond // Floor for a read's deadline.
-	blockPublishMargin         = 250 * time.Millisecond // Time reserved to sign, publish and gossip a block in hand before the committee votes if no accepted block is returned by the deadline.
-	payloadAttestationDueGrace = 500 * time.Millisecond // Polling time past the PTC due mark, where the node may first serve the data.
+	readFreshnessBudget = 500 * time.Millisecond // Floor for a read's deadline.
+	blockPublishMargin  = 250 * time.Millisecond // Time reserved to sign, publish and gossip a block in hand before the committee votes if no accepted block is returned by the deadline.
 )
 
 var (
@@ -191,67 +189,6 @@ func blockFreshnessOptions(ctx context.Context, decode func([]byte, http.Header)
 	}
 
 	return opts
-}
-
-// payloadAttestationFreshnessOptions builds the read options that steer an SSZ
-// payload attestation data read toward a node that already imported the head
-// announced on ctx, or nil if ctx has no hint. It uses:
-//   - WithRace: query every node concurrently.
-//   - WithSSZAccept: among those responses, prefer the one whose beacon_block_root
-//     matches the announced head (decoded via payloadAttestationBeaconBlockRoot).
-//   - WithDeadline: bound the read by the hint deadline plus a grace (floored by
-//     readFreshnessBudget), since the node may only serve the data at that deadline.
-//   - WithRepoll: keep re-polling until a node reports the head or the deadline
-//     fires.
-func payloadAttestationFreshnessOptions(ctx context.Context) []rest.QueryOption {
-	hint, ok := freshnessHint(ctx)
-	if !ok {
-		return nil
-	}
-
-	accept := func(body []byte, hdr http.Header) bool {
-		want, known := hint.Head()
-		if !known {
-			// No head expectation yet: we cannot do better than first-success.
-			return true
-		}
-
-		gotRoot, ok := payloadAttestationBeaconBlockRoot(body, hdr)
-		return ok && gotRoot == want.Root
-	}
-
-	// Race the nodes to select the one that already imported the announced head.
-	opts := []rest.QueryOption{rest.WithRace(), rest.WithSSZAccept(accept)}
-
-	if hint.Deadline.IsZero() {
-		return opts
-	}
-
-	// The node holds non-final data until the hint deadline (the PTC due mark),
-	// so keep polling past it rather than giving up at that exact instant.
-	deadline := hint.Deadline.Add(payloadAttestationDueGrace)
-	if floor := time.Now().Add(readFreshnessBudget); deadline.Before(floor) {
-		deadline = floor
-	}
-
-	// Keep re-polling until a node reports the head or the deadline fires.
-	opts = append(opts, rest.WithDeadline(deadline), rest.WithRepoll(rest.UntilAccepted))
-	return opts
-}
-
-// payloadAttestationBeaconBlockRoot extracts the beacon_block_root from a payload
-// attestation data response, which GetSSZ may return as SSZ or JSON.
-func payloadAttestationBeaconBlockRoot(body []byte, hdr http.Header) ([32]byte, bool) {
-	if strings.Contains(hdr.Get("Content-Type"), api.OctetStreamMediaType) {
-		d := &ethpb.PayloadAttestationData{}
-		if err := d.UnmarshalSSZ(body); err != nil {
-			return [32]byte{}, false
-		}
-
-		return bytesutil.ToBytes32(d.BeaconBlockRoot), true
-	}
-
-	return rootExtractor("beacon_block_root")(json.RawMessage(body))
 }
 
 // freshnessHint returns the freshness hint on ctx, if one usable for head
