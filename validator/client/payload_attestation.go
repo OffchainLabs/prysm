@@ -2,8 +2,10 @@ package client
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -17,6 +19,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
@@ -24,8 +27,8 @@ import (
 )
 
 const (
-	payloadAttestationRetryWindow   = 500 * time.Millisecond
-	payloadAttestationRetryInterval = 50 * time.Millisecond
+	payloadAttestationReadGrace    = 500 * time.Millisecond
+	payloadAttestationPollInterval = 50 * time.Millisecond
 )
 
 // Result labels for validatorPayloadAttestationSubmissionTotal.
@@ -35,55 +38,78 @@ const (
 	payloadAttestationSkippedNoBlock     = "skipped_no_block"
 	payloadAttestationSkippedUnavailable = "skipped_unavailable"
 
-	// Outcome label for validatorPayloadAttestationRetryTotal.
+	// Outcome labels for validatorPayloadAttestationRetryTotal.
 	payloadAttestationRecovered = "recovered"
+	payloadAttestationFallback  = "fallback"
 )
 
-// payloadAttestationDataWithRetry requests the payload attestation data for slot and,
-// if that fails, polls again from the payload attestation deadline for a short window.
-// It reports whether a retry was made.
+// gRPC and REST share this read budget, root preference and fallback policy.
 func (v *validator) payloadAttestationDataWithRetry(ctx context.Context, slot primitives.Slot) (*ethpb.PayloadAttestationData, bool, error) {
-	data, err := v.validatorClient.PayloadAttestationData(ctx, slot)
-	if err == nil {
-		return data, false, nil
+	deadline, err := v.slotComponentDeadline(slot, params.BeaconConfig().PayloadAttestationDueBPS)
+	if err != nil {
+		return nil, false, err
 	}
-
-	log.WithField("slot", slot).WithError(err).
-		Debug("Payload attestation data not final yet, polling from the deadline")
-
-	v.waitUntilSlotComponent(ctx, slot, params.BeaconConfig().PayloadAttestationDueBPS)
-	// waitUntilSlotComponent returns silently on cancellation, so check before retrying.
-	if ctx.Err() != nil {
-		return nil, true, errors.Wrap(err, "context canceled while waiting for the payload attestation deadline")
+	if now := time.Now(); deadline.Before(now) {
+		deadline = now
 	}
-	// The beacon node's clock may trail ours, so keep asking briefly past the deadline.
-	retryCtx, cancel := context.WithTimeout(ctx, payloadAttestationRetryWindow)
+	readCtx, cancel := context.WithDeadline(ctx, deadline.Add(payloadAttestationReadGrace))
 	defer cancel()
-	for {
-		data, retryErr := v.validatorClient.PayloadAttestationData(retryCtx, slot)
-		if retryErr == nil {
-			return data, true, nil
+	var retried atomic.Bool
+	readCtx = iface.WithPayloadAttestationRetry(readCtx, payloadAttestationPollInterval, func() { retried.Store(true) })
+
+	var fallback *ethpb.PayloadAttestationData
+	var lastErr error
+	for attempts := 0; readCtx.Err() == nil; attempts++ {
+		if attempts > 0 {
+			retried.Store(true)
 		}
-		if retryCtx.Err() == nil {
-			err = retryErr
+		data, err := v.validatorClient.PayloadAttestationData(readCtx, slot)
+		if ctx.Err() != nil {
+			return nil, retried.Load(), stderrors.Join(lastErr, err, ctx.Err())
+		}
+		if err == nil {
+			if payloadAttestationMatchesHint(ctx, data) {
+				return data, retried.Load(), nil
+			}
+			fallback = data
+		} else if readCtx.Err() == nil || lastErr == nil {
+			lastErr = err
 		}
 		select {
-		case <-retryCtx.Done():
-			if ctx.Err() != nil {
-				return nil, true, errors.Wrap(err, "context canceled while retrying payload attestation data")
-			}
-			return nil, true, err
-		case <-time.After(payloadAttestationRetryInterval):
+		case <-readCtx.Done():
+		case <-time.After(payloadAttestationPollInterval):
 		}
 	}
+	if ctx.Err() != nil {
+		return nil, retried.Load(), stderrors.Join(lastErr, ctx.Err())
+	}
+	if fallback != nil {
+		return fallback, retried.Load(), nil
+	}
+	if lastErr == nil {
+		lastErr = readCtx.Err()
+	}
+	return nil, retried.Load(), lastErr
+}
+
+func payloadAttestationMatchesHint(ctx context.Context, data *ethpb.PayloadAttestationData) bool {
+	hint, ok := iface.FromContext(ctx)
+	if !ok {
+		return true
+	}
+	head, known := hint.Head()
+	return !known || bytesutil.ToBytes32(data.BeaconBlockRoot) == head.Root
 }
 
 // payloadAttestationRetryOutcome labels the result of a retried request.
-func payloadAttestationRetryOutcome(err error) string {
-	if err == nil {
-		return payloadAttestationRecovered
+func payloadAttestationRetryOutcome(ctx context.Context, data *ethpb.PayloadAttestationData, err error) string {
+	if err != nil {
+		return payloadAttestationDataFailure(err)
 	}
-	return payloadAttestationDataFailure(err)
+	if !payloadAttestationMatchesHint(ctx, data) {
+		return payloadAttestationFallback
+	}
+	return payloadAttestationRecovered
 }
 
 // payloadAttestationDataFailure maps a PayloadAttestationData failure to its submission
@@ -129,7 +155,7 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 
 	data, retried, err := v.payloadAttestationDataWithRetry(ctx, slot)
 	if retried {
-		validatorPayloadAttestationRetryTotal.WithLabelValues(payloadAttestationRetryOutcome(err)).Inc()
+		validatorPayloadAttestationRetryTotal.WithLabelValues(payloadAttestationRetryOutcome(ctx, data, err)).Inc()
 	}
 	if err != nil {
 		result := payloadAttestationDataFailure(err)

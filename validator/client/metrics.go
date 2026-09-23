@@ -227,7 +227,7 @@ var (
 		prometheus.CounterOpts{
 			Namespace: "validator",
 			Name:      "payload_attestation_data_retry_total",
-			Help:      "The number of payload attestation data requests retried at the PTC deadline, by outcome.",
+			Help:      "The number of payload attestation data reads that needed retries, by outcome.",
 		},
 		[]string{"outcome"},
 	)
