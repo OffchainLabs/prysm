@@ -16,8 +16,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// GenesisBeaconStateBellatrix gets called when MinGenesisActiveValidatorCount count of
-// full deposits were made to the deposit contract and the ChainStart log gets emitted.
+// GenesisBeaconStateBellatrix builds the Bellatrix genesis state from the genesis deposits and eth1 data.
 //
 // Spec pseudocode definition:
 //
@@ -88,7 +87,7 @@ func GenesisBeaconStateBellatrix(ctx context.Context, deposits []*ethpb.Deposit,
 }
 
 // OptimizedGenesisBeaconStateBellatrix is used to create a state that has already processed deposits. This is to efficiently
-// create a mainnet state at chainstart.
+// create a mainnet genesis state.
 func OptimizedGenesisBeaconStateBellatrix(genesisTime uint64, preState state.BeaconState, eth1Data *ethpb.Eth1Data, ep *enginev1.ExecutionPayload) (state.BeaconState, error) {
 	if eth1Data == nil {
 		return nil, errors.New("no eth1data provided for genesis state")

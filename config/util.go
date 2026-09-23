@@ -41,7 +41,9 @@ func UnmarshalFromURL(ctx context.Context, from string, to any) error {
 	if resp.StatusCode != http.StatusOK {
 		return errors.Errorf("http request to %v failed with status code %d", from, resp.StatusCode)
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&to); err != nil {
+	dec := json.NewDecoder(resp.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&to); err != nil {
 		return errors.Wrap(err, "failed to decode http response")
 	}
 	return nil
@@ -54,7 +56,7 @@ func UnmarshalFromFile(from string, to any) error {
 		return errors.Wrap(err, "failed to open file")
 	}
 
-	if err := yaml.Unmarshal(b, to); err != nil {
+	if err := yaml.UnmarshalStrict(b, to); err != nil {
 		return errors.Wrap(err, "failed to unmarshal yaml file")
 	}
 	return nil

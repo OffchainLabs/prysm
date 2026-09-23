@@ -673,45 +673,175 @@ func Test_newValidatorDiffs(t *testing.T) {
 	require.NotNil(t, err)
 }
 
-// Test_applyValidatorDiff tests applying validator changes to state
+type validatorMutationTrackingState struct {
+	state.BeaconState
+	fullReads     int
+	fullWrites    int
+	indexedReads  int
+	indexedWrites int
+	appends       int
+}
+
+func (s *validatorMutationTrackingState) Validators() []*ethpb.Validator {
+	s.fullReads++
+	return s.BeaconState.Validators()
+}
+
+func (s *validatorMutationTrackingState) SetValidators(validators []*ethpb.Validator) error {
+	s.fullWrites++
+	return s.BeaconState.SetValidators(validators)
+}
+
+func (s *validatorMutationTrackingState) ValidatorAtIndexReadOnly(idx primitives.ValidatorIndex) (state.ReadOnlyValidator, error) {
+	s.indexedReads++
+	return s.BeaconState.ValidatorAtIndexReadOnly(idx)
+}
+
+func (s *validatorMutationTrackingState) UpdateValidatorAtIndex(idx primitives.ValidatorIndex, validator *ethpb.Validator) error {
+	s.indexedWrites++
+	return s.BeaconState.UpdateValidatorAtIndex(idx, validator)
+}
+
+func (s *validatorMutationTrackingState) AppendValidator(validator *ethpb.Validator) error {
+	s.appends++
+	return s.BeaconState.AppendValidator(validator)
+}
+
+func validatorDiffFromProto(index uint32, validator *ethpb.Validator) validatorDiff {
+	return validatorDiff{
+		index:                      index,
+		EffectiveBalance:           validator.EffectiveBalance,
+		Slashed:                    validator.Slashed,
+		ActivationEligibilityEpoch: validator.ActivationEligibilityEpoch,
+		ActivationEpoch:            validator.ActivationEpoch,
+		ExitEpoch:                  validator.ExitEpoch,
+		WithdrawableEpoch:          validator.WithdrawableEpoch,
+	}
+}
+
+// Test_applyValidatorDiff tests applying validator changes to state.
 func Test_applyValidatorDiff(t *testing.T) {
-	source, _ := util.DeterministicGenesisStateElectra(t, 32)
-	target := source.Copy()
+	t.Run("updates only changed validators", func(t *testing.T) {
+		source, _ := util.DeterministicGenesisStateElectra(t, 32)
+		original, err := source.ValidatorAtIndex(0)
+		require.NoError(t, err)
+		diff := validatorDiffFromProto(0, original)
+		diff.Slashed = true
+		diff.EffectiveBalance += 1000
+		tracking := &validatorMutationTrackingState{BeaconState: source}
 
-	// Modify validators in target
-	vals := target.Validators()
-	modifiedVal := &ethpb.Validator{
-		PublicKey:                  vals[0].PublicKey,
-		WithdrawalCredentials:      vals[0].WithdrawalCredentials,
-		EffectiveBalance:           vals[0].EffectiveBalance,
-		Slashed:                    vals[0].Slashed,
-		ActivationEligibilityEpoch: vals[0].ActivationEligibilityEpoch,
-		ActivationEpoch:            vals[0].ActivationEpoch,
-		ExitEpoch:                  vals[0].ExitEpoch,
-		WithdrawableEpoch:          vals[0].WithdrawableEpoch,
-	}
-	modifiedVal.Slashed = true
-	modifiedVal.EffectiveBalance = vals[0].EffectiveBalance + 1000
-	vals[0] = modifiedVal
-	require.NoError(t, target.SetValidators(vals))
+		_, err = applyValidatorDiff(tracking, []validatorDiff{diff})
+		require.NoError(t, err)
+		require.Equal(t, 0, tracking.fullReads)
+		require.Equal(t, 0, tracking.fullWrites)
+		require.Equal(t, 1, tracking.indexedReads)
+		require.Equal(t, 1, tracking.indexedWrites)
+		require.Equal(t, 0, tracking.appends)
 
-	// Create validator diffs
-	diffs, err := diffToVals(source, target)
-	require.NoError(t, err)
+		updated, err := source.ValidatorAtIndexReadOnly(0)
+		require.NoError(t, err)
+		require.Equal(t, true, updated.Slashed())
+		require.Equal(t, original.EffectiveBalance+1000, updated.EffectiveBalance())
+		updatedPubkey := updated.PublicKey()
+		require.DeepEqual(t, original.PublicKey, updatedPubkey[:])
+		require.DeepEqual(t, original.WithdrawalCredentials, updated.GetWithdrawalCredentials())
+	})
 
-	// Apply diffs to source
-	result, err := applyValidatorDiff(source, diffs)
-	require.NoError(t, err)
+	t.Run("appends validators directly", func(t *testing.T) {
+		source, _ := util.DeterministicGenesisStateElectra(t, 4)
+		validator := &ethpb.Validator{
+			PublicKey:                  make([]byte, fieldparams.BLSPubkeyLength),
+			WithdrawalCredentials:      make([]byte, fieldparams.RootLength),
+			EffectiveBalance:           32_000_000_000,
+			ActivationEligibilityEpoch: 1,
+			ActivationEpoch:            2,
+			ExitEpoch:                  math.MaxUint64,
+			WithdrawableEpoch:          math.MaxUint64,
+		}
+		binary.LittleEndian.PutUint64(validator.PublicKey, 1000)
+		binary.LittleEndian.PutUint64(validator.WithdrawalCredentials, 2000)
+		diff := validatorDiffFromProto(uint32(source.NumValidators()), validator)
+		diff.PublicKey = slices.Clone(validator.PublicKey)
+		diff.WithdrawalCredentials = slices.Clone(validator.WithdrawalCredentials)
+		tracking := &validatorMutationTrackingState{BeaconState: source}
 
-	// Verify result matches target
-	resultVals := result.Validators()
-	targetVals := target.Validators()
-	require.Equal(t, len(targetVals), len(resultVals))
+		_, err := applyValidatorDiff(tracking, []validatorDiff{diff})
+		require.NoError(t, err)
+		require.Equal(t, 0, tracking.fullReads)
+		require.Equal(t, 0, tracking.fullWrites)
+		require.Equal(t, 0, tracking.indexedReads)
+		require.Equal(t, 0, tracking.indexedWrites)
+		require.Equal(t, 1, tracking.appends)
+		require.Equal(t, 5, source.NumValidators())
 
-	for i, val := range resultVals {
-		require.Equal(t, targetVals[i].Slashed, val.Slashed)
-		require.Equal(t, targetVals[i].EffectiveBalance, val.EffectiveBalance)
-	}
+		appended, err := source.ValidatorAtIndex(4)
+		require.NoError(t, err)
+		require.DeepEqual(t, validator, appended)
+		var pubkey [fieldparams.BLSPubkeyLength]byte
+		copy(pubkey[:], validator.PublicKey)
+		idx, ok := source.ValidatorIndexByPubkey(pubkey)
+		require.Equal(t, true, ok)
+		require.Equal(t, primitives.ValidatorIndex(4), idx)
+	})
+
+	t.Run("validates all indices before mutation", func(t *testing.T) {
+		source, _ := util.DeterministicGenesisStateElectra(t, 4)
+		original, err := source.ValidatorAtIndex(0)
+		require.NoError(t, err)
+		valid := validatorDiffFromProto(0, original)
+		valid.Slashed = !original.Slashed
+		invalid := validatorDiff{index: uint32(source.NumValidators() + 1)}
+		tracking := &validatorMutationTrackingState{BeaconState: source}
+
+		_, err = applyValidatorDiff(tracking, []validatorDiff{valid, invalid})
+		require.ErrorContains(t, "validator index 5 is greater than length 4", err)
+		require.Equal(t, 0, tracking.fullReads)
+		require.Equal(t, 0, tracking.fullWrites)
+		require.Equal(t, 0, tracking.indexedReads)
+		require.Equal(t, 0, tracking.indexedWrites)
+		require.Equal(t, 0, tracking.appends)
+
+		unchanged, err := source.ValidatorAtIndex(0)
+		require.NoError(t, err)
+		require.DeepEqual(t, original, unchanged)
+	})
+
+	t.Run("rebuilds registry for an existing public key change", func(t *testing.T) {
+		source, _ := util.DeterministicGenesisStateElectra(t, 4)
+		original, err := source.ValidatorAtIndex(0)
+		require.NoError(t, err)
+		diff := validatorDiffFromProto(0, original)
+		diff.PublicKey = slices.Clone(original.PublicKey)
+		diff.PublicKey[0]++
+		tracking := &validatorMutationTrackingState{BeaconState: source}
+
+		_, err = applyValidatorDiff(tracking, []validatorDiff{diff})
+		require.NoError(t, err)
+		require.Equal(t, 1, tracking.fullReads)
+		require.Equal(t, 1, tracking.fullWrites)
+		require.Equal(t, 0, tracking.indexedReads)
+		require.Equal(t, 0, tracking.indexedWrites)
+		require.Equal(t, 0, tracking.appends)
+
+		var pubkey [fieldparams.BLSPubkeyLength]byte
+		copy(pubkey[:], diff.PublicKey)
+		idx, ok := source.ValidatorIndexByPubkey(pubkey)
+		require.Equal(t, true, ok)
+		require.Equal(t, primitives.ValidatorIndex(0), idx)
+	})
+
+	t.Run("empty diff avoids registry access", func(t *testing.T) {
+		source, _ := util.DeterministicGenesisStateElectra(t, 4)
+		tracking := &validatorMutationTrackingState{BeaconState: source}
+
+		_, err := applyValidatorDiff(tracking, nil)
+		require.NoError(t, err)
+		require.Equal(t, 0, tracking.fullReads)
+		require.Equal(t, 0, tracking.fullWrites)
+		require.Equal(t, 0, tracking.indexedReads)
+		require.Equal(t, 0, tracking.indexedWrites)
+		require.Equal(t, 0, tracking.appends)
+	})
 }
 
 // TestApplyDiff_WithSignificantValidatorGrowth reproduces a bug where a Diff created from a

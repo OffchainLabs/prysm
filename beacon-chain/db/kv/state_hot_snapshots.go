@@ -2,6 +2,7 @@ package kv
 
 import (
 	"context"
+	"fmt"
 	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -21,15 +22,10 @@ func (s *Store) SaveHotStateSnapshot(ctx context.Context, st state.ReadOnlyBeaco
 		return errors.New("nil state")
 	}
 
-	stateBytes, err := st.MarshalSSZ()
+	compressedEnc, err := encodeStateWithKey(st)
 	if err != nil {
-		return err
+		return fmt.Errorf("encode state with key: %w", err)
 	}
-	enc, err := addKey(st.Version(), stateBytes)
-	if err != nil {
-		return err
-	}
-	compressedEnc := snappy.Encode(nil, enc)
 
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(hotStateSnapshotsBucket)

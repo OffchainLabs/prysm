@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -18,17 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
-
-func TestProgressiveSSZEnabled(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{DisableProgressiveSSZ: true})
-	defer reset()
-	require.Equal(t, false, features.ProgressiveSSZEnabled(version.Gloas))
-
-	reset = features.InitWithReset(&features.Flags{})
-	defer reset()
-	require.Equal(t, true, features.ProgressiveSSZEnabled(version.Gloas))
-	require.Equal(t, false, features.ProgressiveSSZEnabled(version.Fulu))
-}
 
 func TestValidateFieldIndex_AllForks(t *testing.T) {
 	versions := version.AllIncludingUnreleased()
@@ -63,34 +51,28 @@ func TestValidateFieldIndex_AllForks(t *testing.T) {
 
 func TestComputeFieldRootsWithHasher_ProgressiveSSZFields(t *testing.T) {
 	ctx := context.Background()
-	st := newGloasStateForProgressiveSSZTests(t)
 
 	tests := []struct {
+		st          *BeaconState
 		name        string
 		progressive bool
 	}{
-		{name: "legacy"},
-		{name: "progressive", progressive: true},
+		{name: "fulu bounded", st: newFuluStateForProgressiveSSZTests(t)},
+		{name: "gloas progressive", st: newGloasStateForProgressiveSSZTests(t), progressive: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			reset := features.InitWithReset(&features.Flags{DisableProgressiveSSZ: !tt.progressive})
-			defer reset()
-
-			roots, err := ComputeFieldRootsWithHasher(context.Background(), st)
+			st := tt.st
+			roots, err := ComputeFieldRootsWithHasher(ctx, st)
 			require.NoError(t, err)
 
-			var pendingDepositsRoot, pendingPartialWithdrawalsRoot, pendingConsolidationsRoot, expectedWithdrawalsRoot, buildersRoot [32]byte
+			var pendingDepositsRoot, pendingPartialWithdrawalsRoot, pendingConsolidationsRoot [32]byte
 			if tt.progressive {
 				pendingDepositsRoot, err = ssz.SliceRootProgressive(st.pendingDeposits)
 				require.NoError(t, err)
 				pendingPartialWithdrawalsRoot, err = ssz.SliceRootProgressive(st.pendingPartialWithdrawals)
 				require.NoError(t, err)
 				pendingConsolidationsRoot, err = ssz.SliceRootProgressive(st.pendingConsolidations)
-				require.NoError(t, err)
-				expectedWithdrawalsRoot, err = ssz.SliceRootProgressive(st.payloadExpectedWithdrawals)
-				require.NoError(t, err)
-				buildersRoot, err = stateutil.BuildersRoot(version.Gloas, st.builders)
 				require.NoError(t, err)
 			} else {
 				pendingDepositsRoot, err = ssz.SliceRoot(st.pendingDeposits, fieldparams.PendingDepositsLimit)
@@ -99,17 +81,11 @@ func TestComputeFieldRootsWithHasher_ProgressiveSSZFields(t *testing.T) {
 				require.NoError(t, err)
 				pendingConsolidationsRoot, err = ssz.SliceRoot(st.pendingConsolidations, fieldparams.PendingConsolidationsLimit)
 				require.NoError(t, err)
-				expectedWithdrawalsRoot, err = ssz.SliceRoot(st.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
-				require.NoError(t, err)
-				buildersRoot, err = ssz.SliceRoot(st.builders, fieldparams.BuilderRegistryLimit)
-				require.NoError(t, err)
 			}
 
 			require.DeepEqual(t, pendingDepositsRoot[:], roots[types.PendingDeposits.RealPosition()])
 			require.DeepEqual(t, pendingPartialWithdrawalsRoot[:], roots[types.PendingPartialWithdrawals.RealPosition()])
 			require.DeepEqual(t, pendingConsolidationsRoot[:], roots[types.PendingConsolidations.RealPosition()])
-			require.DeepEqual(t, expectedWithdrawalsRoot[:], roots[types.PayloadExpectedWithdrawals.RealPosition()])
-			require.DeepEqual(t, buildersRoot[:], roots[types.Builders.RealPosition()])
 
 			rootSelectorPendingDepositsRoot, err := st.rootSelector(ctx, types.PendingDeposits)
 			require.NoError(t, err)
@@ -122,6 +98,18 @@ func TestComputeFieldRootsWithHasher_ProgressiveSSZFields(t *testing.T) {
 			rootSelectorPendingConsolidationsRoot, err := st.rootSelector(ctx, types.PendingConsolidations)
 			require.NoError(t, err)
 			require.DeepEqual(t, rootSelectorPendingConsolidationsRoot[:], roots[types.PendingConsolidations.RealPosition()])
+
+			if !tt.progressive {
+				return
+			}
+
+			// Gloas-only fields.
+			expectedWithdrawalsRoot, err := ssz.SliceRootProgressive(st.payloadExpectedWithdrawals)
+			require.NoError(t, err)
+			buildersRoot, err := stateutil.BuildersRoot(version.Gloas, st.builders)
+			require.NoError(t, err)
+			require.DeepEqual(t, expectedWithdrawalsRoot[:], roots[types.PayloadExpectedWithdrawals.RealPosition()])
+			require.DeepEqual(t, buildersRoot[:], roots[types.Builders.RealPosition()])
 
 			rootSelectorExpectedWithdrawalsRoot, err := st.rootSelector(ctx, types.PayloadExpectedWithdrawals)
 			require.NoError(t, err)
@@ -145,25 +133,21 @@ func TestHashTreeRoot(t *testing.T) {
 	})
 
 	t.Run("ProgressiveSSZGate", func(t *testing.T) {
-		st := newGloasStateForProgressiveSSZTests(t)
-
-		reset := features.InitWithReset(&features.Flags{DisableProgressiveSSZ: true})
-		defer reset()
-
-		legacyRoot, err := st.HashTreeRoot(context.Background())
+		fulu := newFuluStateForProgressiveSSZTests(t)
+		legacyRoot, err := fulu.HashTreeRoot(context.Background())
 		require.NoError(t, err)
+		require.IsNil(t, fulu.progressiveMerkleTree)
 
-		legacyFieldRoots, err := ComputeFieldRootsWithHasher(context.Background(), st)
+		legacyFieldRoots, err := ComputeFieldRootsWithHasher(context.Background(), fulu)
 		require.NoError(t, err)
 		legacyLayers := stateutil.Merkleize(legacyFieldRoots)
 		expectedLegacyRoot := bytesutil.ToBytes32(legacyLayers[len(legacyLayers)-1][0])
 		require.Equal(t, expectedLegacyRoot, legacyRoot)
 
-		reset = features.InitWithReset(&features.Flags{DisableProgressiveSSZ: false})
-		defer reset()
-
+		st := newGloasStateForProgressiveSSZTests(t)
 		progressiveRoot, err := st.HashTreeRoot(context.Background())
 		require.NoError(t, err)
+		require.NotNil(t, st.progressiveMerkleTree)
 
 		progressiveFieldRootsBytes, err := ComputeFieldRootsWithHasher(context.Background(), st)
 		require.NoError(t, err)
@@ -180,7 +164,8 @@ func TestHashTreeRoot(t *testing.T) {
 		expectedProgressiveRoot, err := ssz.ContainerRootProgressive(progressiveFieldRoots, activeFields)
 		require.NoError(t, err)
 		require.Equal(t, expectedProgressiveRoot, progressiveRoot)
-		require.DeepNotSSZEqual(t, legacyRoot, progressiveRoot)
+		binaryLayers := stateutil.Merkleize(progressiveFieldRootsBytes)
+		require.DeepNotSSZEqual(t, bytesutil.ToBytes32(binaryLayers[len(binaryLayers)-1][0]), progressiveRoot)
 
 		progressiveRootAgain, err := st.HashTreeRoot(context.Background())
 		require.NoError(t, err)
@@ -274,6 +259,65 @@ func progressiveRootFromScratch(t *testing.T, st *BeaconState) [32]byte {
 func newGloasStateForProgressiveSSZTests(t *testing.T) *BeaconState {
 	t.Helper()
 
+	st, err := InitializeFromProtoUnsafeGloas(gloasStateProtoForProgressiveSSZTests())
+	require.NoError(t, err)
+
+	bs, ok := st.(*BeaconState)
+	require.Equal(t, true, ok)
+	return bs
+}
+
+// newFuluStateForProgressiveSSZTests mirrors the Gloas fixture minus the Gloas-only fields.
+func newFuluStateForProgressiveSSZTests(t *testing.T) *BeaconState {
+	t.Helper()
+
+	g := gloasStateProtoForProgressiveSSZTests()
+	st, err := InitializeFromProtoUnsafeFulu(&ethpb.BeaconStateFulu{
+		BlockRoots:                  g.BlockRoots,
+		StateRoots:                  g.StateRoots,
+		Slashings:                   g.Slashings,
+		RandaoMixes:                 g.RandaoMixes,
+		Validators:                  g.Validators,
+		Balances:                    g.Balances,
+		CurrentJustifiedCheckpoint:  g.CurrentJustifiedCheckpoint,
+		Eth1Data:                    g.Eth1Data,
+		Fork:                        g.Fork,
+		Eth1DataVotes:               g.Eth1DataVotes,
+		HistoricalRoots:             g.HistoricalRoots,
+		JustificationBits:           g.JustificationBits,
+		FinalizedCheckpoint:         g.FinalizedCheckpoint,
+		LatestBlockHeader:           g.LatestBlockHeader,
+		PreviousJustifiedCheckpoint: g.PreviousJustifiedCheckpoint,
+		PreviousEpochParticipation:  g.PreviousEpochParticipation,
+		CurrentEpochParticipation:   g.CurrentEpochParticipation,
+		InactivityScores:            g.InactivityScores,
+		CurrentSyncCommittee:        g.CurrentSyncCommittee,
+		NextSyncCommittee:           g.NextSyncCommittee,
+		PendingDeposits:             g.PendingDeposits,
+		PendingPartialWithdrawals:   g.PendingPartialWithdrawals,
+		PendingConsolidations:       g.PendingConsolidations,
+		ProposerLookahead:           g.ProposerLookahead,
+		LatestExecutionPayloadHeader: &enginev1.ExecutionPayloadHeaderDeneb{
+			ParentHash:       make([]byte, fieldparams.RootLength),
+			FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+			StateRoot:        make([]byte, fieldparams.RootLength),
+			ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+			LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+			PrevRandao:       make([]byte, fieldparams.RootLength),
+			BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+			BlockHash:        make([]byte, fieldparams.RootLength),
+			TransactionsRoot: make([]byte, fieldparams.RootLength),
+			WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+		},
+	})
+	require.NoError(t, err)
+
+	bs, ok := st.(*BeaconState)
+	require.Equal(t, true, ok)
+	return bs
+}
+
+func gloasStateProtoForProgressiveSSZTests() *ethpb.BeaconStateGloas {
 	pubkeys := make([][]byte, 512)
 	for i := range pubkeys {
 		pubkeys[i] = make([]byte, fieldparams.BLSPubkeyLength)
@@ -302,7 +346,7 @@ func newGloasStateForProgressiveSSZTests(t *testing.T) *BeaconState {
 	withdrawalCredentials := make([]byte, fieldparams.RootLength)
 	signature := make([]byte, fieldparams.BLSSignatureLength)
 
-	st, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+	return &ethpb.BeaconStateGloas{
 		BlockRoots:  filledByteSlice2D(uint64(params.BeaconConfig().SlotsPerHistoricalRoot), fieldparams.RootLength),
 		StateRoots:  filledByteSlice2D(uint64(params.BeaconConfig().SlotsPerHistoricalRoot), fieldparams.RootLength),
 		Slashings:   make([]uint64, params.BeaconConfig().EpochsPerSlashingsVector),
@@ -380,12 +424,7 @@ func newGloasStateForProgressiveSSZTests(t *testing.T) *BeaconState {
 		LatestBlockHash:              make([]byte, fieldparams.RootLength),
 		PayloadExpectedWithdrawals:   make([]*enginev1.Withdrawal, 0),
 		PtcWindow:                    ptcWindow,
-	})
-	require.NoError(t, err)
-
-	bs, ok := st.(*BeaconState)
-	require.Equal(t, true, ok)
-	return bs
+	}
 }
 
 func filledByteSlice2D(length uint64, innerLen int) [][]byte {

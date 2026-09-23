@@ -3,16 +3,16 @@ package stateutil
 import (
 	"encoding/binary"
 
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
 
 // ParticipationBitsRoot computes the HashTreeRoot merkleization of
 // participation roots for the supplied state version.
 func ParticipationBitsRoot(stateVersion int, bits []byte) ([32]byte, error) {
-	if features.ProgressiveSSZEnabled(stateVersion) {
+	if stateVersion >= version.Gloas {
 		return participationBitsRootProgressive(bits)
 	}
 	return participationBitsRoot(bits)
