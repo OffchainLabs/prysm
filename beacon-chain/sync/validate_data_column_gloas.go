@@ -293,8 +293,7 @@ func (s *Service) processPendingGloasColumns(ctx context.Context, root [fieldpar
 				pc, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(v)
 				if err != nil {
 					log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Warn("Failed to build pending Gloas partial column")
-					partials = nil
-					break
+					continue
 				}
 				partials = append(partials, pc)
 			}
