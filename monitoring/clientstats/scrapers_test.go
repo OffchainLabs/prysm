@@ -1,6 +1,7 @@
 package clientstats
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,8 +11,11 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/expfmt"
 	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
+	"google.golang.org/protobuf/encoding/protodelim"
 )
 
 func init() {
@@ -19,9 +23,10 @@ func init() {
 }
 
 type mockRT struct {
-	body       string
-	status     string
-	statusCode int
+	body        string
+	contentType string
+	status      string
+	statusCode  int
 }
 
 func (rt *mockRT) RoundTrip(_ *http.Request) (*http.Response, error) {
@@ -36,6 +41,7 @@ func (rt *mockRT) RoundTrip(_ *http.Request) (*http.Response, error) {
 	return &http.Response{
 		Status:     status,
 		StatusCode: statusCode,
+		Header:     http.Header{"Content-Type": {rt.contentType}},
 		Body:       io.NopCloser(strings.NewReader(rt.body)),
 	}, nil
 }
@@ -213,7 +219,7 @@ func TestBadInput(t *testing.T) {
 	require.LogsContain(t, hook, "Failed to get prysm_version")
 }
 
-func TestScrapePromReturnsFetchMetricFamiliesError(t *testing.T) {
+func TestScrapePromReturnsHTTPError(t *testing.T) {
 	_, err := scrapeProm("http://localhost/metrics", &mockRT{
 		body:       "upstream failure",
 		status:     "500 Internal Server Error",
@@ -221,6 +227,50 @@ func TestScrapePromReturnsFetchMetricFamiliesError(t *testing.T) {
 	})
 
 	require.ErrorContains(t, "returned HTTP status 500 Internal Server Error", err)
+}
+
+func TestScrapePromFormats(t *testing.T) {
+	var protobufBody bytes.Buffer
+	for name, value := range map[string]float64{"first_metric": 1, "second_metric": 2} {
+		_, err := protodelim.MarshalTo(&protobufBody, &dto.MetricFamily{
+			Name: new(name),
+			Type: dto.MetricType_GAUGE.Enum(),
+			Metric: []*dto.Metric{{
+				Gauge: &dto.Gauge{Value: new(value)},
+			}},
+		})
+		require.NoError(t, err)
+	}
+	const textBody = "# TYPE first_metric gauge\nfirst_metric 1\n# TYPE second_metric gauge\nsecond_metric 2\n"
+	tests := []struct {
+		name        string
+		contentType string
+		body        string
+		wantErr     string
+	}{
+		{name: "text", contentType: string(expfmt.FmtText), body: textBody},
+		{name: "text without content type", body: textBody},
+		{name: "protobuf", contentType: string(expfmt.FmtProtoDelim), body: protobufBody.String()},
+		{name: "invalid text", contentType: string(expfmt.FmtText), body: "first_metric invalid\n", wantErr: "decoding metrics"},
+		{name: "truncated protobuf", contentType: string(expfmt.FmtProtoDelim), body: protobufBody.String()[:protobufBody.Len()-1], wantErr: "unexpected EOF"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			families, err := scrapeProm("http://localhost/metrics", &mockRT{body: tt.body, contentType: tt.contentType})
+			if tt.wantErr != "" {
+				require.ErrorContains(t, tt.wantErr, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, 2, len(families))
+			for name, value := range map[string]float64{"first_metric": 1, "second_metric": 2} {
+				family, ok := families[name]
+				require.Equal(t, true, ok)
+				require.Equal(t, 1, len(family.GetMetric()))
+				require.Equal(t, value, family.GetMetric()[0].GetGauge().GetValue())
+			}
+		})
+	}
 }
 
 var prometheusTestBody = `

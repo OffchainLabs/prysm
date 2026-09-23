@@ -217,7 +217,7 @@ func gloasPayloadFromExecutionBlock(
 	requestedHash [32]byte, blk *pb.ExecutionBlock,
 ) (*pb.ExecutionPayloadGloas, error) {
 	if blk == nil {
-		return nil, errors.New("execution block not found")
+		return nil, errors.Errorf("execution block %#x not found", requestedHash)
 	}
 	if blk.Hash == (common.Hash{}) || blk.Hash != requestedHash {
 		return nil, errors.New("execution block hash mismatch")

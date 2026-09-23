@@ -12,7 +12,6 @@ import (
 	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -984,7 +983,7 @@ func (b *BeaconState) HashTreeRoot(ctx context.Context) ([32]byte, error) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	if features.ProgressiveSSZEnabled(b.version) {
+	if b.version >= version.Gloas {
 		return b.progressiveHashTreeRoot(ctx)
 	}
 	b.progressiveMerkleTree = nil
@@ -1273,7 +1272,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	_, span := trace.StartSpan(ctx, "beaconState.rootSelector")
 	defer span.End()
 	span.SetAttributes(trace.StringAttribute("field", field.String()))
-	progressiveSSZ := features.ProgressiveSSZEnabled(b.version)
+	progressiveSSZ := b.version >= version.Gloas
 
 	switch field {
 	case types.GenesisTime:

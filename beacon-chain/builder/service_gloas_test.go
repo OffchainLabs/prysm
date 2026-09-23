@@ -11,6 +11,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/sirupsen/logrus"
+	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
 // fakeBuilderClient is a per-URL builder client for exercising the multiplex
@@ -281,4 +283,16 @@ func TestPingBuilderClients_PingsEveryCachedClient(t *testing.T) {
 	s.pingBuilderClients(t.Context())
 	require.Equal(t, int32(1), clients["http://a"].statusCount.Load())
 	require.Equal(t, int32(1), clients["http://b"].statusCount.Load())
+}
+
+func TestGetExecutionPayloadBid_LogsWhenBuilderReturnsNoBid(t *testing.T) {
+	hook := logTest.NewGlobal()
+	prev := logrus.GetLevel()
+	logrus.SetLevel(logrus.DebugLevel)
+	t.Cleanup(func() { logrus.SetLevel(prev) })
+	s := newMultiplexService(t, map[string]*fakeBuilderClient{"http://none": {url: "http://none"}})
+	bids, err := s.GetExecutionPayloadBid(t.Context(), 7, [32]byte{}, [32]byte{}, [48]byte{}, []*eth.BuilderEntry{entryFor("http://none")})
+	require.NoError(t, err)
+	require.Equal(t, 0, len(bids))
+	require.LogsContain(t, hook, "Builder returned no bid")
 }
