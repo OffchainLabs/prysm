@@ -1,11 +1,14 @@
 package proposer
 
 import (
+	"encoding/binary"
 	"fmt"
+	"net/netip"
 	"net/url"
 	"slices"
 	"strings"
 	"sync/atomic"
+	"unicode"
 
 	"github.com/OffchainLabs/prysm/v7/config"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -149,13 +152,42 @@ type BuilderEntry struct {
 	BuilderBoostFactor  *validator.Uint64 `json:"builder_boost_factor,omitempty" yaml:"builder_boost_factor,omitempty"`
 }
 
-// EffectiveAuthData resolves omitted auth_data to the spec convention:
-// the UTF-8 bytes of the builder's URL.
+// EffectiveAuthData resolves omitted auth_data to the spec default.
 func (be *BuilderEntry) EffectiveAuthData() []byte {
 	if len(be.AuthData) != 0 {
 		return be.AuthData
 	}
-	return []byte(be.URL)
+	u, err := url.Parse(be.URL)
+	if err != nil {
+		return nil
+	}
+	host := strings.ToLower(u.Hostname())
+	addr, err := netip.ParseAddr(host)
+	if err != nil || addr.Is4() {
+		// a name or an IPv4 literal is used as-is
+		return []byte(host)
+	}
+	if addr.Is4In6() {
+		// IPv4-mapped IPv6 address. Hand-wired here to match with the spec.
+		// Go's netip renders these in mixed notation (::ffff:192.0.2.1)
+		// while spec wants ::ffff:c000:201 (hex groups only).
+		//
+		// Their 16 bytes are always shaped like this:
+		//
+		//	bytes   0 .. 9    10, 11   12, 13   14, 15
+		//	        00 x 10   ff ff    |<-- IPv4 4 bytes -->|
+		//	groups  g1..g5=0  g6=ffff  g7       g8
+		//
+		// so 192.0.2.1 (c0 00 02 01) gives g7=0xc000, g8=0x0201 -> "::ffff:c000:201".
+		b := addr.As16()
+		return fmt.Appendf(
+			nil,
+			"[::ffff:%x:%x]",
+			binary.BigEndian.Uint16(b[12:14]), // g7
+			binary.BigEndian.Uint16(b[14:16]), // g8
+		)
+	}
+	return []byte("[" + addr.String() + "]")
 }
 
 // Spec limits for builder configuration payloads.
@@ -175,8 +207,20 @@ func (be *BuilderEntry) Validate() error {
 	if len(be.URL) > MaxBuilderURLSize {
 		return errors.Errorf("url exceeds %d bytes", MaxBuilderURLSize)
 	}
-	if u, err := url.Parse(be.URL); err != nil || u.Scheme == "" || u.Host == "" {
+	u, err := url.Parse(be.URL)
+	if err != nil || u.Scheme == "" || u.Host == "" {
 		return errors.New("url is not a valid URL")
+	}
+
+	// Check whether hostname is empty.
+	host := u.Hostname()
+	if host == "" {
+		return errors.New("url is missing a hostname")
+	}
+
+	// Check punycode: host must be ASCII.
+	if strings.IndexFunc(host, func(r rune) bool { return r > unicode.MaxASCII }) >= 0 {
+		return errors.New("url hostname must be ASCII; encode internationalized names as punycode")
 	}
 	if len(be.Pubkeys) > MaxBuilderPubkeys {
 		return errors.Errorf("builder_pubkeys exceeds %d keys", MaxBuilderPubkeys)
