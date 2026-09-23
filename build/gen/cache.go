@@ -193,12 +193,12 @@ func sszFiles() ([]string, error) {
 
 	files := slices.Clone(bzl)
 	for _, target := range targets {
-		pbs, err := pbgoFiles(target.pkg)
+		srcs, err := goPkgFiles(target.pkg)
 		if err != nil {
-			return nil, fmt.Errorf("pbgoFiles %s: %w", target.pkg, err)
+			return nil, fmt.Errorf("goPkgFiles %s: %w", target.pkg, err)
 		}
 
-		files = append(files, pbs...)
+		files = append(files, srcs...)
 		files = append(files, filepath.ToSlash(filepath.Join(target.pkg, target.configFile)))
 
 		out := filepath.ToSlash(filepath.Join(target.pkg, target.out))
@@ -228,30 +228,6 @@ func mockFiles() ([]string, error) {
 	}
 
 	return files, nil
-}
-
-// pbgoFiles returns the .pb.go files in dir, skipping .minimal.pb.go twins.
-//
-// The .minimal.pb.go twins are not fed to sszgen: the minimal variant is
-// regenerated from .proto files into a temp dir at gen time and they are proto
-// outputs already covered by the proto manifest.
-func pbgoFiles(dir string) ([]string, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("readDir %s: %w", dir, err)
-	}
-
-	var out []string
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".pb.go") || strings.HasSuffix(name, ".minimal.pb.go") {
-			continue
-		}
-
-		out = append(out, filepath.ToSlash(filepath.Join(dir, name)))
-	}
-
-	return out, nil
 }
 
 func goPkgFiles(dir string) ([]string, error) {

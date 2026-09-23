@@ -12,6 +12,22 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
+func assertStateFields(t *testing.T, rt reflect.Type, want []string) {
+	t.Helper()
+	got := make([]string, 0, rt.NumField())
+	for i := range rt.NumField() {
+		f := rt.Field(i)
+		parts := []string{f.Name, f.Type.String()}
+		for _, key := range []string{"ssz-size", "ssz-max"} {
+			if _, ok := f.Tag.Lookup(key); ok {
+				parts = append(parts, key)
+			}
+		}
+		got = append(got, strings.Join(parts, " "))
+	}
+	require.DeepEqual(t, want, got)
+}
+
 func TestBeaconState_FieldParity(t *testing.T) {
 	assertStateFields(t, reflect.TypeFor[v1alpha1.BeaconState](), []string{
 		"GenesisTime uint64",
@@ -87,22 +103,6 @@ func TestBeaconStateAltair_FieldParity(t *testing.T) {
 		"NextSyncCommittee *eth.SyncCommittee",
 	}
 	assertStateFields(t, reflect.TypeFor[v1alpha1.BeaconStateAltair](), want)
-}
-
-func assertStateFields(t *testing.T, rt reflect.Type, want []string) {
-	t.Helper()
-	got := make([]string, 0, rt.NumField())
-	for i := range rt.NumField() {
-		f := rt.Field(i)
-		parts := []string{f.Name, f.Type.String()}
-		for _, key := range []string{"ssz-size", "ssz-max"} {
-			if _, ok := f.Tag.Lookup(key); ok {
-				parts = append(parts, key)
-			}
-		}
-		got = append(got, strings.Join(parts, " "))
-	}
-	require.DeepEqual(t, want, got)
 }
 
 func TestBeaconStateAltair_Copy(t *testing.T) {

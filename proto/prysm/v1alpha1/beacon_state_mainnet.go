@@ -48,7 +48,7 @@ type BeaconStateAltair struct {
 	LatestBlockHeader           *BeaconBlockHeader
 	BlockRoots                  [][]byte `ssz-size:"8192,32"`
 	StateRoots                  [][]byte `ssz-size:"8192,32"`
-	HistoricalRoots             [][]byte `ssz-size:"?,32" ssz-max:"16777216"`
+	HistoricalRoots             [][]byte `ssz-max:"16777216" ssz-size:"?,32"`
 	Eth1Data                    *Eth1Data
 	Eth1DataVotes               []*Eth1Data `ssz-max:"2048"`
 	Eth1DepositIndex            uint64
