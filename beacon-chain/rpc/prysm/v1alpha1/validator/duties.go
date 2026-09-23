@@ -6,7 +6,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
-	ethhelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -150,11 +149,10 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 	var currDependentRoot []byte
 	if currentEpoch > stateEpoch {
 		// A lagging state's latest block also covers subsequent empty slots.
-		root, err := ethhelpers.BlockRootFromState(ctx, s.Copy())
+		currDependentRoot, err = vs.HeadFetcher.HeadRoot(ctx)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not get head block root: %v", err)
 		}
-		currDependentRoot = root[:]
 	} else {
 		currDependentRoot, err = vs.attestationDependentRoot(ctx, s, currentEpoch.Add(1))
 		if err != nil {
