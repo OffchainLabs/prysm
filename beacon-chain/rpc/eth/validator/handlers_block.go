@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/rewards"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
@@ -20,6 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -63,6 +65,10 @@ func (s *Server) ProduceBlockV3(w http.ResponseWriter, r *http.Request) {
 
 	slot, valid := shared.ValidateUint(w, "slot", rawSlot)
 	if !valid {
+		return
+	}
+	if slots.ToEpoch(primitives.Slot(slot)) >= params.BeaconConfig().GloasForkEpoch {
+		httputil.HandleError(w, "Block production v3 is not supported from Gloas onwards, use v4", http.StatusBadRequest)
 		return
 	}
 
