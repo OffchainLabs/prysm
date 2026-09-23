@@ -63,9 +63,20 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 		}
 	}
 
+	var partialColumns []consensusblocks.PartialDataColumn
+	if len(roSidecars) > 0 && vs.ExecutionEngineCaller.PartialColumnsSupported() {
+		commitments, err := sBlk.Block().Body().BlobKzgCommitments()
+		if err != nil {
+			log.WithError(err).Error("Failed to get blob kzg commitments for partial columns")
+		} else if partialColumns, err = partialColumnsFromSidecars(roSidecars, commitments); err != nil {
+			log.WithError(err).Error("Failed to build partial columns")
+		}
+	}
+
 	vs.ExecutionPayloadEnvelopeCache.Set(&cache.ExecutionPayloadContents{
-		Envelope:    envelope,
-		DataColumns: roSidecars,
+		Envelope:       envelope,
+		DataColumns:    roSidecars,
+		PartialColumns: partialColumns,
 	})
 	return envelope, nil
 }
@@ -148,10 +159,12 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	// KZG verification stays synchronous, never gossip unverified sidecars. A cached-root match means
 	// the columns were built locally from the engine's own bundle, so verification is skipped.
 	var sidecars []consensusblocks.RODataColumn
-	if cachedSidecars, ok := vs.cachedDataColumns(signed.Message); ok {
+	var partialColumns []consensusblocks.PartialDataColumn
+	if cachedSidecars, cachedPartials, ok := vs.cachedDataColumns(signed.Message); ok {
 		sidecars = cachedSidecars
+		partialColumns = cachedPartials
 	} else if len(blobs) > 0 {
-		sidecars, err = vs.sidecarsFromContents(blobs, kzgProofs, envSlot, beaconBlockRoot)
+		sidecars, partialColumns, err = vs.sidecarsFromContents(blobs, kzgProofs, envSlot, beaconBlockRoot)
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "invalid execution payload envelope contents: %v", err)
 		}
@@ -168,7 +181,11 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 		verifiedSidecars = append(verifiedSidecars, consensusblocks.NewVerifiedRODataColumn(sidecar))
 	}
 	if len(verifiedSidecars) > 0 {
-		if err := vs.P2P.BroadcastDataColumnSidecars(ctx, verifiedSidecars, nil); err != nil {
+		log.WithFields(logrus.Fields{
+			"columns":  len(sidecars),
+			"partials": len(partialColumns),
+		}).Debug("Broadcasting Gloas data column sidecars")
+		if err := vs.P2P.BroadcastDataColumnSidecars(ctx, verifiedSidecars, partialColumns); err != nil {
 			log.WithError(err).Error("Failed to broadcast Gloas data column sidecars")
 		}
 	}
@@ -200,25 +217,25 @@ func (vs *Server) importPublishedEnvelope(log *logrus.Entry, sidecars []consensu
 	log.WithField("duration", time.Since(start)).Debug("Imported published execution payload envelope")
 }
 
-// cachedDataColumns returns the precomputed data columns when the published envelope is the cached
-// one, matched by envelope root so a same-slot candidate's columns are never reused.
-func (vs *Server) cachedDataColumns(envelope *ethpb.ExecutionPayloadEnvelope) ([]consensusblocks.RODataColumn, bool) {
+// cachedDataColumns returns the precomputed data columns and partial columns when the published
+// envelope is the cached one, matched by envelope root so a same-slot candidate's columns are never reused.
+func (vs *Server) cachedDataColumns(envelope *ethpb.ExecutionPayloadEnvelope) ([]consensusblocks.RODataColumn, []consensusblocks.PartialDataColumn, bool) {
 	cached, ok := vs.ExecutionPayloadEnvelopeCache.Contents()
 	if !ok || cached.Envelope == nil {
-		return nil, false
+		return nil, nil, false
 	}
 	cachedRoot, err := cached.Envelope.HashTreeRoot()
 	if err != nil {
-		return nil, false
+		return nil, nil, false
 	}
 	submittedRoot, err := envelope.HashTreeRoot()
 	if err != nil {
-		return nil, false
+		return nil, nil, false
 	}
 	if cachedRoot != submittedRoot {
-		return nil, false
+		return nil, nil, false
 	}
-	return cached.DataColumns, true
+	return cached.DataColumns, cached.PartialColumns, true
 }
 
 // resolveEnvelopeToPublish extracts the signed envelope plus any caller-supplied blobs. The stateful
@@ -259,34 +276,65 @@ func (vs *Server) resolveEnvelopeToPublish(req *ethpb.GenericSignedExecutionPayl
 }
 
 // sidecarsFromContents verifies caller-supplied blobs+KZG proofs (stateless publish) and builds the
-// data column sidecars for the slot. The publish path upgrades them to "verified" without re-checking.
-func (vs *Server) sidecarsFromContents(blobs, kzgProofs [][]byte, slot primitives.Slot, blockRoot [32]byte) ([]consensusblocks.RODataColumn, error) {
-	if err := verifyCellProofs(blobs, kzgProofs); err != nil {
-		return nil, errors.Wrap(err, "kzg verification failed")
+// data column sidecars for the slot, plus partial columns when partial-column support is enabled.
+// The publish path upgrades them to "verified" without re-checking.
+func (vs *Server) sidecarsFromContents(blobs, kzgProofs [][]byte, slot primitives.Slot, blockRoot [32]byte) ([]consensusblocks.RODataColumn, []consensusblocks.PartialDataColumn, error) {
+	commitments, err := verifyCellProofs(blobs, kzgProofs)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "kzg verification failed")
 	}
 	cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(blobs, kzgProofs)
 	if err != nil {
-		return nil, errors.Wrap(err, "compute cells and proofs")
+		return nil, nil, errors.Wrap(err, "compute cells and proofs")
 	}
-	return peerdas.DataColumnSidecarsGloas(cellsPerBlob, proofsPerBlob, slot, blockRoot)
+	sidecars, err := peerdas.DataColumnSidecarsGloas(cellsPerBlob, proofsPerBlob, slot, blockRoot)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "DataColumnSidecarsGloas")
+	}
+
+	var partialColumns []consensusblocks.PartialDataColumn
+	if vs.ExecutionEngineCaller.PartialColumnsSupported() {
+		partialColumns, err = partialColumnsFromSidecars(sidecars, commitments)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "partialColumnsFromSidecars")
+		}
+	}
+	return sidecars, partialColumns, nil
 }
 
-// verifyCellProofs batch-verifies cell proofs against commitments derived from the blobs.
-func verifyCellProofs(blobs [][]byte, flatProofs [][]byte) error {
+// verifyCellProofs derives the KZG commitment for each blob and batch-verifies the cell proofs
+// against them, returning the commitments so callers can seed Gloas sidecars (which carry none inline).
+func verifyCellProofs(blobs, flatProofs [][]byte) ([][]byte, error) {
 	commitments := make([][]byte, len(blobs))
 	for i, blob := range blobs {
 		if len(blob) != kzg.BytesPerBlob {
-			return errors.Errorf("blob %d has wrong size %d", i, len(blob))
+			return nil, errors.Errorf("blob %d has wrong size %d", i, len(blob))
 		}
 		var b kzg.Blob
 		copy(b[:], blob)
 		c, err := kzg.BlobToKZGCommitment(&b)
 		if err != nil {
-			return errors.Wrapf(err, "compute kzg commitment for blob %d", i)
+			return nil, errors.Wrapf(err, "compute kzg commitment for blob %d", i)
 		}
 		commitments[i] = c[:]
 	}
-	return kzg.VerifyCellKZGProofBatchFromBlobData(blobs, commitments, flatProofs, fieldparams.NumberOfColumns)
+	if err := kzg.VerifyCellKZGProofBatchFromBlobData(blobs, commitments, flatProofs, fieldparams.NumberOfColumns); err != nil {
+		return nil, errors.Wrap(err, "VerifyCellKZGProofBatchFromBlobData")
+	}
+	return commitments, nil
+}
+
+func partialColumnsFromSidecars(sidecars []consensusblocks.RODataColumn, commitments [][]byte) ([]consensusblocks.PartialDataColumn, error) {
+	partialColumns := make([]consensusblocks.PartialDataColumn, 0, len(sidecars))
+	for i := range sidecars {
+		sidecars[i].SetBidCommitments(commitments)
+		pc, err := consensusblocks.NewPartialDataColumnFromVerifiedRODataColumn(consensusblocks.NewVerifiedRODataColumn(sidecars[i]))
+		if err != nil {
+			return nil, errors.Wrap(err, "partial column from verified ro data column")
+		}
+		partialColumns = append(partialColumns, pc)
+	}
+	return partialColumns, nil
 }
 
 // setParentExecutionRequests populates the parent_execution_requests field

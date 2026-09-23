@@ -378,14 +378,99 @@ func TestQueuePendingPayloadEnvelope_SelfBuildSigFailuresResetPerSlot(t *testing
 	// Failures accumulated in a previous slot must not carry over.
 	currentSlot := s.cfg.clock.CurrentSlot()
 	s.selfBuildSigFailures = maxSelfBuildSigFailures
-	s.selfBuildSigFailSlot = currentSlot - 1
+	s.selfBuildSlot = currentSlot - 1
 
 	v := &mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("bad signature")}
 	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
 	require.Equal(t, 1, s.selfBuildSigFailures)
-	require.Equal(t, currentSlot, s.selfBuildSigFailSlot)
+	require.Equal(t, currentSlot, s.selfBuildSlot)
+}
+
+func proposerLookaheadWith(t *testing.T, proposer primitives.ValidatorIndex) []primitives.ValidatorIndex {
+	t.Helper()
+	size := int(params.BeaconConfig().MinSeedLookahead+1) * int(params.BeaconConfig().SlotsPerEpoch)
+	la := make([]primitives.ValidatorIndex, size)
+	for i := range la {
+		la[i] = proposer
+	}
+	return la
+}
+
+func queueSelfBuildEnvelope(t *testing.T, ctx context.Context, s *Service, v *mockExecutionPayloadEnvelopeVerifier, root [32]byte) pubsub.ValidationResult {
+	t.Helper()
+	signedEnv := testSignedExecutionPayloadEnvelope(t, 1, params.BeaconConfig().BuilderIndexSelfBuild, root, [32]byte{0x02})
+	e, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedEnv)
+	require.NoError(t, err)
+	env, err := e.Envelope()
+	require.NoError(t, err)
+	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
+	require.NoError(t, err)
+	return result
+}
+
+func TestQueuePendingPayloadEnvelope_SelfBuildFloodSingleProposer(t *testing.T) {
+	ctx := context.Background()
+	s, _, _, _ := setupExecutionPayloadEnvelopeService(t, 1, 1)
+	cs, ok := s.cfg.chain.(*mock.ChainService)
+	require.Equal(t, true, ok)
+	require.NoError(t, cs.State.SetProposerLookahead(proposerLookaheadWith(t, 7)))
+
+	const n = 50
+	for i := 0; i < n; i++ {
+		result := queueSelfBuildEnvelope(t, ctx, s, &mockExecutionPayloadEnvelopeVerifier{}, [32]byte{byte(i + 1)})
+		require.Equal(t, pubsub.ValidationIgnore, result)
+	}
+	require.Equal(t, 1, len(s.pendingPayloadEnvelopes))
+	require.Equal(t, 1, len(s.selfBuildSeenProposers))
+}
+
+func TestQueuePendingPayloadEnvelope_SelfBuildDistinctProposers(t *testing.T) {
+	ctx := context.Background()
+	s, _, _, _ := setupExecutionPayloadEnvelopeService(t, 1, 1)
+	cs, ok := s.cfg.chain.(*mock.ChainService)
+	require.Equal(t, true, ok)
+
+	// Proposer A on the current head branch.
+	require.NoError(t, cs.State.SetProposerLookahead(proposerLookaheadWith(t, 3)))
+	rootA := [32]byte{0xAA}
+	require.Equal(t, pubsub.ValidationIgnore, queueSelfBuildEnvelope(t, ctx, s, &mockExecutionPayloadEnvelopeVerifier{}, rootA))
+	require.Equal(t, 1, len(s.pendingPayloadEnvelopes))
+
+	// Reorg head to a branch whose slot-1 proposer is B.
+	st2, err := util.NewBeaconStateFulu()
+	require.NoError(t, err)
+	require.NoError(t, st2.SetProposerLookahead(proposerLookaheadWith(t, 9)))
+	cs.State = st2
+	rootB := [32]byte{0xBB}
+	require.Equal(t, pubsub.ValidationIgnore, queueSelfBuildEnvelope(t, ctx, s, &mockExecutionPayloadEnvelopeVerifier{}, rootB))
+
+	require.Equal(t, 2, len(s.pendingPayloadEnvelopes))
+	require.Equal(t, 2, len(s.selfBuildSeenProposers))
+	_, okA := s.pendingPayloadEnvelopes[rootA]
+	_, okB := s.pendingPayloadEnvelopes[rootB]
+	require.Equal(t, true, okA)
+	require.Equal(t, true, okB)
+}
+
+func TestQueuePendingPayloadEnvelope_SelfBuildBadSigDoesNotReserve(t *testing.T) {
+	ctx := context.Background()
+	s, _, _, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+	cs, ok := s.cfg.chain.(*mock.ChainService)
+	require.Equal(t, true, ok)
+	require.NoError(t, cs.State.SetProposerLookahead(proposerLookaheadWith(t, 5)))
+
+	badResult := queueSelfBuildEnvelope(t, ctx, s, &mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("bad signature")}, root)
+	require.Equal(t, pubsub.ValidationIgnore, badResult)
+	require.Equal(t, 1, s.selfBuildSigFailures)
+	require.Equal(t, 0, len(s.selfBuildSeenProposers))
+	require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
+
+	goodResult := queueSelfBuildEnvelope(t, ctx, s, &mockExecutionPayloadEnvelopeVerifier{}, root)
+	require.Equal(t, pubsub.ValidationIgnore, goodResult)
+	require.Equal(t, 1, len(s.selfBuildSeenProposers))
+	require.Equal(t, 1, len(s.pendingPayloadEnvelopes))
 }
 
 func TestQueuePendingPayloadEnvelope_IgnoreBadSignature(t *testing.T) {

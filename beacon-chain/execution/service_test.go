@@ -40,7 +40,6 @@ import (
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
-var _ ChainStartFetcher = (*Service)(nil)
 var _ ChainInfoFetcher = (*Service)(nil)
 var _ POWBlockFetcher = (*Service)(nil)
 var _ Chain = (*Service)(nil)
@@ -73,19 +72,6 @@ func (g *goodLogger) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]
 	}
 	return g.backend.Client().FilterLogs(ctx, q)
 }
-
-type goodNotifier struct {
-	MockStateFeed *event.Feed
-}
-
-func (g *goodNotifier) StateFeed() event.SubscriberSender {
-	if g.MockStateFeed == nil {
-		g.MockStateFeed = new(event.Feed)
-	}
-	return g.MockStateFeed
-}
-
-var depositsReqForChainStart = 64
 
 func TestStart_OK(t *testing.T) {
 	hook := logTest.NewGlobal()
@@ -125,20 +111,6 @@ func TestStart_OK(t *testing.T) {
 	}
 	hook.Reset()
 	web3Service.cancel()
-}
-
-func TestStart_NoHttpEndpointDefinedFails_WithoutChainStarted(t *testing.T) {
-	hook := logTest.NewGlobal()
-	beaconDB := dbutil.SetupDB(t)
-	testAcc, err := mock.Setup()
-	require.NoError(t, err, "Unable to set up simulated backend")
-	_, err = NewService(t.Context(),
-		WithHttpEndpoint(""),
-		WithDepositContractAddress(testAcc.ContractAddr),
-		WithDatabase(beaconDB),
-	)
-	require.NoError(t, err)
-	require.LogsDoNotContain(t, hook, "missing address")
 }
 
 func TestStop_OK(t *testing.T) {
@@ -307,75 +279,20 @@ func TestHandlePanic_OK(t *testing.T) {
 	require.LogsContain(t, hook, "Panicked when handling data from ETH 1.0 Chain!")
 }
 
-func TestLogTillGenesis_OK(t *testing.T) {
-	// Reset the var at the end of the test.
-	currPeriod := logPeriod
-	logPeriod = 1 * time.Second
-	defer func() {
-		logPeriod = currPeriod
-	}()
-
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.Eth1FollowDistance = 5
-	params.OverrideBeaconConfig(cfg)
-
-	nCfg := params.BeaconNetworkConfig()
-	nCfg.ContractDeploymentBlock = 0
-	params.OverrideBeaconNetworkConfig(nCfg)
-
-	hook := logTest.NewGlobal()
-	testAcc, err := mock.Setup()
-	require.NoError(t, err, "Unable to set up simulated backend")
-	beaconDB := dbutil.SetupDB(t)
-	server, endpoint, err := mockExecution.SetupRPCServer()
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		server.Stop()
-	})
-	web3Service, err := NewService(t.Context(),
-		WithHttpEndpoint(endpoint),
-		WithDepositContractAddress(testAcc.ContractAddr),
-		WithDatabase(beaconDB),
-	)
-	require.NoError(t, err, "unable to setup web3 ETH1.0 chain service")
-	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend.Client())
-	require.NoError(t, err)
-
-	web3Service.rpcClient = &mockExecution.RPCClient{Backend: testAcc.Backend}
-	web3Service.httpLogger = testAcc.Backend.Client()
-	for range 30 {
-		testAcc.Backend.Commit()
-	}
-	web3Service.latestEth1Data = &ethpb.LatestETH1Data{LastRequestedBlock: 0}
-	// Spin off to a separate routine
-	go web3Service.run(web3Service.ctx.Done())
-	// Wait for 2 seconds so that the
-	// info is logged.
-	time.Sleep(2 * time.Second)
-	web3Service.cancel()
-	assert.LogsContain(t, hook, "Currently waiting for chainstart")
-}
-
 func TestInitDepositCache_OK(t *testing.T) {
 	ctrs := []*ethpb.DepositContainer{
 		{Index: 0, Eth1BlockHeight: 2, Deposit: &ethpb.Deposit{Proof: [][]byte{[]byte("A")}, Data: &ethpb.Deposit_Data{PublicKey: []byte{}}}},
 		{Index: 1, Eth1BlockHeight: 4, Deposit: &ethpb.Deposit{Proof: [][]byte{[]byte("B")}, Data: &ethpb.Deposit_Data{PublicKey: []byte{}}}},
 		{Index: 2, Eth1BlockHeight: 6, Deposit: &ethpb.Deposit{Proof: [][]byte{[]byte("c")}, Data: &ethpb.Deposit_Data{PublicKey: []byte{}}}},
 	}
-	gs, _ := util.DeterministicGenesisState(t, 1)
 	beaconDB := dbutil.SetupDB(t)
 	s := &Service{
-		chainStartData:  &ethpb.ChainStartData{Chainstarted: false},
-		preGenesisState: gs,
-		cfg:             &config{beaconDB: beaconDB},
+		chainStartData: &ethpb.ChainStartData{},
+		cfg:            &config{beaconDB: beaconDB},
 	}
 	var err error
 	s.cfg.depositCache, err = depositsnapshot.New()
 	require.NoError(t, err)
-	require.NoError(t, s.initDepositCaches(t.Context(), ctrs))
-
-	require.Equal(t, 0, len(s.cfg.depositCache.PendingContainers(t.Context(), nil)))
 
 	blockRootA := [32]byte{'a'}
 
@@ -384,7 +301,6 @@ func TestInitDepositCache_OK(t *testing.T) {
 	require.NoError(t, s.cfg.beaconDB.SaveGenesisBlockRoot(t.Context(), blockRootA))
 	require.NoError(t, s.cfg.beaconDB.SaveState(t.Context(), emptyState, blockRootA))
 	genesis.StoreStateDuringTest(t, emptyState)
-	s.chainStartData.Chainstarted = true
 	require.NoError(t, s.initDepositCaches(t.Context(), ctrs))
 	require.Equal(t, 3, len(s.cfg.depositCache.PendingContainers(t.Context(), nil)))
 }
@@ -425,19 +341,14 @@ func TestInitDepositCacheWithFinalization_OK(t *testing.T) {
 			},
 		},
 	}
-	gs, _ := util.DeterministicGenesisState(t, 1)
 	beaconDB := dbutil.SetupDB(t)
 	s := &Service{
-		chainStartData:  &ethpb.ChainStartData{Chainstarted: false},
-		preGenesisState: gs,
-		cfg:             &config{beaconDB: beaconDB},
+		chainStartData: &ethpb.ChainStartData{},
+		cfg:            &config{beaconDB: beaconDB},
 	}
 	var err error
 	s.cfg.depositCache, err = depositsnapshot.New()
 	require.NoError(t, err)
-	require.NoError(t, s.initDepositCaches(t.Context(), ctrs))
-
-	require.Equal(t, 0, len(s.cfg.depositCache.PendingContainers(t.Context(), nil)))
 
 	headBlock := util.NewBeaconBlock()
 	headRoot, err := headBlock.Block.HashTreeRoot()
@@ -457,7 +368,6 @@ func TestInitDepositCacheWithFinalization_OK(t *testing.T) {
 	require.NoError(t, beaconDB.SaveFinalizedCheckpoint(ctx, &ethpb.Checkpoint{Epoch: slots.ToEpoch(0), Root: headRoot[:]}))
 	s.cfg.finalizedStateAtStartup = emptyState
 
-	s.chainStartData.Chainstarted = true
 	require.NoError(t, s.initDepositCaches(t.Context(), ctrs))
 	fDeposits, err := s.cfg.depositCache.FinalizedDeposits(ctx)
 	require.NoError(t, err)
@@ -600,7 +510,7 @@ func TestService_EnsureConsistentPowchainData(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.NotNil(t, eth1Data)
-	assert.Equal(t, true, eth1Data.ChainstartData.Chainstarted)
+	assert.Equal(t, uint64(genState.GenesisTime().Unix()), eth1Data.ChainstartData.GenesisTime)
 }
 
 func TestService_InitializeCorrectly(t *testing.T) {
@@ -657,7 +567,7 @@ func TestService_EnsureValidPowchainData(t *testing.T) {
 	require.NoError(t, s1.cfg.beaconDB.SaveGenesisData(t.Context(), genState))
 
 	err = s1.cfg.beaconDB.SaveExecutionChainData(t.Context(), &ethpb.ETH1ChainData{
-		ChainstartData:    &ethpb.ChainStartData{Chainstarted: true},
+		ChainstartData:    &ethpb.ChainStartData{},
 		DepositContainers: []*ethpb.DepositContainer{{Index: 1}},
 	})
 	require.NoError(t, err)
@@ -847,11 +757,6 @@ func TestService_migrateOldDepositTree(t *testing.T) {
 	)
 	require.NoError(t, err)
 	eth1Data := &ethpb.ETH1ChainData{
-		BeaconState: &ethpb.BeaconState{
-			Eth1Data: &ethpb.Eth1Data{
-				DepositCount: 800,
-			},
-		},
 		CurrentEth1Data: &ethpb.LatestETH1Data{
 			BlockHeight: 100,
 		},
