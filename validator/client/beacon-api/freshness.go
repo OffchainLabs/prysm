@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api"
@@ -189,6 +190,50 @@ func blockFreshnessOptions(ctx context.Context, decode func([]byte, http.Header)
 	}
 
 	return opts
+}
+
+// The common PTC read sets the deadline; REST retries nodes independently.
+func payloadAttestationFreshnessOptions(ctx context.Context) []rest.QueryOption {
+	var opts []rest.QueryOption
+	if deadline, bounded := ctx.Deadline(); bounded {
+		opts = append(opts, rest.WithDeadline(deadline), rest.WithIndependentRepoll(50*time.Millisecond),
+			rest.WithSSZResponseValidator(func(body []byte, header http.Header) error {
+				_, err := decodePayloadAttestationData(body, header)
+				return err
+			}))
+	}
+	hint, ok := freshnessHint(ctx)
+	if !ok {
+		return opts
+	}
+
+	accept := func(body []byte, hdr http.Header) bool {
+		want, known := hint.Head()
+		if !known {
+			// With no known head to match, accept the first successful response.
+			return true
+		}
+
+		gotRoot, ok := payloadAttestationBeaconBlockRoot(body, hdr)
+		return ok && gotRoot == want.Root
+	}
+
+	return append(opts, rest.WithRace(), rest.WithSSZAccept(accept))
+}
+
+// payloadAttestationBeaconBlockRoot extracts the beacon_block_root from a payload
+// attestation data response, which GetSSZ may return as SSZ or JSON.
+func payloadAttestationBeaconBlockRoot(body []byte, hdr http.Header) ([32]byte, bool) {
+	if strings.Contains(hdr.Get("Content-Type"), api.OctetStreamMediaType) {
+		d := &ethpb.PayloadAttestationData{}
+		if err := d.UnmarshalSSZ(body); err != nil {
+			return [32]byte{}, false
+		}
+
+		return bytesutil.ToBytes32(d.BeaconBlockRoot), true
+	}
+
+	return rootExtractor("beacon_block_root")(json.RawMessage(body))
 }
 
 // freshnessHint returns the freshness hint on ctx, if one usable for head

@@ -43,10 +43,7 @@ func queryIndependentlyUntilAccepted[T any](ctx context.Context, handlers []*han
 }
 
 func independentlyPollHandler[T any](ctx context.Context, index int, h *handler, cfg queryConfig, fn queryFunc[T], results chan<- independentQueryResult[T]) {
-	for retry := false; ctx.Err() == nil; retry = true {
-		if retry && cfg.onRetry != nil {
-			cfg.onRetry()
-		}
+	for ctx.Err() == nil {
 		val, err := fn(ctx, h)
 		select {
 		case results <- independentQueryResult[T]{index: index, val: val, err: err}:

@@ -1,3 +1,3 @@
 ### Changed
 
-- PTC data reads share one bounded retry policy across gRPC and REST; REST beacon nodes are polled independently so stalled nodes do not delay responsive peers.
+- Apply the same PTC data read deadline to gRPC and REST, and retry REST beacon nodes independently so stalled nodes do not delay responsive peers.

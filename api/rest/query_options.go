@@ -25,9 +25,8 @@ type queryConfig struct {
 	sszValidate       func(body []byte, hdr http.Header) error
 	pollInterval      time.Duration // When > 0, keep re-polling all nodes until the deadline, waiting this long between rounds.
 	repollMode        RepollMode    // When re-polling, the condition under which retrying stops.
-	onRetry           func()
-	deadline          time.Time // Absolute instant by which the read must finish
-	fallbackDeadline  time.Time // If non-zero, bounds the wait for the nodes that have not answered yet once a usable response is in hand.
+	deadline          time.Time     // Absolute instant by which the read must finish
+	fallbackDeadline  time.Time     // If non-zero, bounds the wait for the nodes that have not answered yet once a usable response is in hand.
 }
 
 // QueryOption customizes a read query (Get, GetSSZ, RequestSSZWithFallback).
@@ -114,13 +113,11 @@ func WithRepoll(mode RepollMode) QueryOption {
 // WithIndependentRepoll races nodes and retries each completed request after
 // interval until a response is accepted or the deadline is reached. It requires
 // a positive interval and WithDeadline. The latest usable response is the fallback.
-// onRetry runs before each repeated request and may run concurrently across nodes.
-func WithIndependentRepoll(interval time.Duration, onRetry func()) QueryOption {
+func WithIndependentRepoll(interval time.Duration) QueryOption {
 	return func(c *queryConfig) {
 		c.race = true
 		c.independentRepoll = true
 		c.pollInterval = interval
-		c.onRetry = onRetry
 	}
 }
 

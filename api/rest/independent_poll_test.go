@@ -32,7 +32,6 @@ func TestIndependentRepollCutoff(t *testing.T) {
 			}
 			handlers := []*handler{{}, {}}
 			var calls, active [2]atomic.Int32
-			var retries atomic.Int32
 			var overlap, wrongDeadline atomic.Bool
 			status := &httputil.DefaultJsonError{Code: http.StatusServiceUnavailable}
 			fn := func(ctx context.Context, h *handler) (string, error) {
@@ -59,7 +58,7 @@ func TestIndependentRepollCutoff(t *testing.T) {
 				}
 				return "", ctx.Err()
 			}
-			cfg := newQueryConfig([]QueryOption{WithDeadline(deadline), WithIndependentRepoll(time.Millisecond, func() { retries.Add(1) })})
+			cfg := newQueryConfig([]QueryOption{WithDeadline(deadline), WithIndependentRepoll(time.Millisecond)})
 			_, matched, err := queryUntilAccepted(ctx, handlers, cfg, func(string) bool { return false }, raceRound[string], fn)
 			require.ErrorIs(t, err, status)
 			if earlierParent {
@@ -71,7 +70,6 @@ func TestIndependentRepollCutoff(t *testing.T) {
 			assert.Equal(t, false, overlap.Load())
 			assert.Equal(t, true, calls[0].Load() > 1)
 			assert.Equal(t, int32(1), calls[1].Load())
-			assert.Equal(t, calls[0].Load()-1, retries.Load())
 		})
 	}
 }
@@ -115,7 +113,7 @@ func TestIndependentRepollRetainsResults(t *testing.T) {
 			}))
 			t.Cleanup(server.Close)
 			body, _, err := multi(t, server.URL).GetSSZ(ctx, "/x",
-				WithIndependentRepoll(10*time.Millisecond, nil),
+				WithIndependentRepoll(10*time.Millisecond),
 				WithDeadline(time.Now().Add(150*time.Millisecond)),
 				WithSSZAccept(func([]byte, http.Header) bool { return false }),
 			)
@@ -146,18 +144,17 @@ func TestIndependentRepollRequiresIntervalAndDeadline(t *testing.T) {
 		{name: "negative interval", interval: -time.Millisecond, deadline: time.Now().Add(time.Second)},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			var calls, retries atomic.Int32
+			var calls atomic.Int32
 			fn := func(context.Context, *handler) (string, error) {
 				calls.Add(1)
 				return "fallback", nil
 			}
-			cfg := newQueryConfig([]QueryOption{WithDeadline(tt.deadline), WithIndependentRepoll(tt.interval, func() { retries.Add(1) })})
+			cfg := newQueryConfig([]QueryOption{WithDeadline(tt.deadline), WithIndependentRepoll(tt.interval)})
 			got, matched, err := queryUntilAccepted(t.Context(), []*handler{{}}, cfg, func(string) bool { return false }, raceRound[string], fn)
 			require.NoError(t, err)
 			require.Equal(t, "fallback", got)
 			require.Equal(t, false, matched)
 			require.Equal(t, int32(1), calls.Load())
-			require.Equal(t, int32(0), retries.Load())
 		})
 	}
 }
