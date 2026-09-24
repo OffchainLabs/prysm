@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"testing"
 
-	bitfield "github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	v1alpha1 "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -1271,8 +1270,8 @@ func genExecutionPayloadBidGloas() *v1alpha1.ExecutionPayloadBid {
 func genPayloadAttestations(num int) []*v1alpha1.PayloadAttestation {
 	pas := make([]*v1alpha1.PayloadAttestation, num)
 	for i := range pas {
-		bits := bitfield.NewBitvector512()
-		bits.SetBitAt(uint64(i%512), true)
+		bits := v1alpha1.NewPayloadAttestationAggregationBits()
+		bits.SetBitAt(uint64(i)%bits.Len(), true)
 
 		pas[i] = &v1alpha1.PayloadAttestation{
 			AggregationBits: bits,
@@ -1377,4 +1376,10 @@ func TestCopyBuilderPendingPayment(t *testing.T) {
 			t.Fatalf("withdrawal builder index mutated on copy: %d", copied.Withdrawal.BuilderIndex)
 		}
 	})
+}
+
+func TestCopySlice_NilStaysNil(t *testing.T) {
+	var nilForks []*v1alpha1.Fork
+	assert.Equal(t, true, v1alpha1.CopySlice(nilForks) == nil)
+	assert.Equal(t, 0, len(v1alpha1.CopySlice([]*v1alpha1.Fork{})))
 }

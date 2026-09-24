@@ -7,7 +7,6 @@ import (
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -102,8 +101,8 @@ func TestGenesisState_HashEquality(t *testing.T) {
 	pbstate, err := state_native.ProtobufBeaconStatePhase0(state.ToProto())
 	require.NoError(t, err)
 
-	root1, err1 := hash.Proto(pbState1)
-	root2, err2 := hash.Proto(pbstate)
+	root1, err1 := pbState1.HashTreeRoot()
+	root2, err2 := pbstate.HashTreeRoot()
 
 	if err1 != nil || err2 != nil {
 		t.Fatalf("Failed to marshal state to bytes: %v %v", err1, err2)

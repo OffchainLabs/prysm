@@ -213,3 +213,23 @@ message SingleAttestation {
   AttestationData data = 3;
   bytes signature = 4 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
+
+// PendingAttestation is the Phase0 attestation record kept in the state until epoch processing.
+message PendingAttestation {
+  // Bitfield representation of validator indices that have voted exactly
+  // the same vote and have been aggregated into this attestation.
+  bytes aggregation_bits = 1 [
+    (ethereum.eth.ext.ssz_max) = "2048",
+    (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
+  ];
+  AttestationData data = 2;
+  // The difference of when attestation gets created and get included on chain.
+  uint64 inclusion_delay = 3 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  // The proposer who included the attestation in the block.
+  uint64 proposer_index = 4 [ (ethereum.eth.ext.cast_type) =
+                                  "github.com/OffchainLabs/prysm/v7/"
+                                  "consensus-types/primitives.ValidatorIndex" ];
+}

@@ -147,6 +147,7 @@ var minimalPkgs = []string{
 	"./beacon-chain/rpc/prysm/v1alpha1/beacon",
 	"./beacon-chain/rpc/prysm/v1alpha1/validator",
 	"./config/fieldparams",
+	"./proto/prysm/v1alpha1",
 }
 
 // excludeRe matches the packages dropped from the mainnet pass: E2E (heavy), all

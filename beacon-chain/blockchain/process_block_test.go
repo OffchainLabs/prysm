@@ -238,7 +238,7 @@ func TestGetBatchPrestate(t *testing.T) {
 			got, applied, err := service.getBatchPrestate(tr.ctx, roChild, []interfaces.ROSignedExecutionPayloadEnvelope{envelope})
 			require.NoError(t, err)
 			require.Equal(t, test.wantApplied, applied)
-			require.DeepEqual(t, parentState.ToProto(), got.ToProto())
+			require.DeepSSZEqual(t, parentState.ToProto(), got.ToProto())
 		})
 	}
 }

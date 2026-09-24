@@ -16,9 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/golang/snappy"
-	"github.com/google/go-cmp/cmp"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/testing/protocmp"
 )
 
 func init() {
@@ -85,10 +82,7 @@ func RunFinalityTest(t *testing.T, config string) {
 			require.NoError(t, postBeaconState.UnmarshalSSZ(postBeaconStateSSZ), "Failed to unmarshal")
 			pbState, err := state_native.ProtobufBeaconStateGloas(beaconState.ToProtoUnsafe())
 			require.NoError(t, err)
-			if !proto.Equal(pbState, postBeaconState) {
-				t.Log(cmp.Diff(postBeaconState, pbState, protocmp.Transform()))
-				t.Fatal("Post state does not match expected")
-			}
+			require.DeepSSZEqual(t, pbState, postBeaconState, "Post state does not match expected")
 		})
 	}
 }
