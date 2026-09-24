@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sort"
 
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	prysmsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
@@ -166,9 +167,13 @@ func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestRespon
 	}
 	limit := params.BeaconConfig().MaxRequestPayloads
 	if r.count >= limit {
-		// Fetch the parent separately; the batch limit is capped at the payload limit,
-		// so the blocks' own slot span always fits.
+		// Fetch the parent separately and cut the blocks to one payload request;
+		// fork recovery passes block sets wider than the batch limit.
 		start = r.bwb[0].Block.Block().Slot()
+		cut := sort.Search(len(r.bwb), func(i int) bool {
+			return r.bwb[i].Block.Block().Slot()-start >= primitives.Slot(limit)
+		})
+		r.bwb = r.bwb[:cut]
 		count = uint64(r.bwb[len(r.bwb)-1].Block.Block().Slot()-start) + 1
 	}
 	envelopes, pid, err := f.fetchPayloadEnvelopesFromPeer(ctx, start, count, r.blocksFrom, peers)
