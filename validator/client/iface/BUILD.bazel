@@ -7,7 +7,6 @@ go_library(
         "freshness.go",
         "node_client.go",
         "options.go",
-        "payload_attestation.go",
         "validator_client.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/validator/client/iface",

@@ -2,19 +2,14 @@ package beacon_api
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"strings"
-	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api"
-	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
@@ -24,7 +19,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/mock"
 	testhelpers "github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/test-helpers"
-	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/mock/gomock"
 )
@@ -95,57 +89,6 @@ func TestPayloadAttestationData_NilData(t *testing.T) {
 	client := &beaconApiValidatorClient{handler: handler}
 	_, err := client.payloadAttestationData(ctx, 1)
 	require.ErrorContains(t, "payload attestation data is nil", err)
-}
-
-func TestPayloadAttestationData_SingleRound(t *testing.T) {
-	root := [32]byte{0xab}
-	data := &ethpb.PayloadAttestationData{BeaconBlockRoot: root[:], Slot: 42}
-	sszBody, err := data.MarshalSSZ()
-	require.NoError(t, err)
-	jsonBody, err := json.Marshal(structs.GetPayloadAttestationDataResponse{
-		Data: structs.PayloadAttestationDataFromConsensus(data),
-	})
-	require.NoError(t, err)
-
-	for _, tt := range []struct {
-		name        string
-		status      int
-		contentType string
-		body        []byte
-	}{
-		{name: "unavailable", status: http.StatusServiceUnavailable},
-		{name: "no block", status: http.StatusNoContent},
-		{name: "mismatched SSZ root", status: http.StatusOK, contentType: api.OctetStreamMediaType, body: sszBody},
-		{name: "mismatched JSON root", status: http.StatusOK, contentType: api.JsonMediaType, body: jsonBody},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			var requests atomic.Int32
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				requests.Add(1)
-				assert.Equal(t, "/eth/v1/validator/payload_attestation_data?slot=42", r.URL.RequestURI())
-				w.Header().Set("Content-Type", tt.contentType)
-				w.WriteHeader(tt.status)
-				_, err := w.Write(tt.body)
-				assert.NoError(t, err)
-			}))
-			defer server.Close()
-			provider, err := rest.NewRestConnectionProvider(server.URL)
-			require.NoError(t, err)
-			client := &beaconApiValidatorClient{handler: provider.Handler()}
-			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
-			defer cancel()
-			ctx = iface.WithHint(ctx, headHint([32]byte{0xcd}, 42, true, time.Now().Add(-time.Hour)))
-
-			got, err := client.payloadAttestationData(ctx, 42)
-			if tt.status == http.StatusOK {
-				require.NoError(t, err)
-				require.DeepEqual(t, data, got)
-			} else {
-				require.Equal(t, true, errors.Is(err, &httputil.DefaultJsonError{Code: tt.status}))
-			}
-			require.Equal(t, int32(1), requests.Load())
-		})
-	}
 }
 
 func TestPayloadAttestationData_EndpointError(t *testing.T) {

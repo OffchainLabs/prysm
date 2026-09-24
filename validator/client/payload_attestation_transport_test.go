@@ -147,7 +147,7 @@ func TestPayloadAttestationDataWithRetry_TransportReadiness(t *testing.T) {
 				got, retried, err := v.payloadAttestationDataWithRetry(ctx, 1)
 				require.NoError(t, err)
 				require.DeepEqual(t, want, got)
-				require.Equal(t, true, retried)
+				require.Equal(t, transport == "grpc", retried)
 				require.Equal(t, true, calls.Load() >= 2)
 				require.Equal(t, true, time.Now().UnixNano() >= readyAt.Load())
 				require.NoError(t, ctx.Err())
@@ -189,13 +189,51 @@ func TestPayloadAttestationDataWithRetry_TransportBudget(t *testing.T) {
 				}
 				require.Equal(t, (*ethpb.PayloadAttestationData)(nil), got)
 				require.Equal(t, tt.outcome, payloadAttestationDataFailure(err))
-				require.Equal(t, true, retried)
+				require.Equal(t, transport == "grpc", retried)
 				require.Equal(t, true, calls.Load() >= 2)
 				require.Equal(t, true, calls.Load() <= int32(payloadAttestationReadGrace/payloadAttestationPollInterval))
 				require.Equal(t, true, time.Since(start) >= payloadAttestationReadGrace)
 				require.NoError(t, ctx.Err())
 			})
 		}
+	}
+}
+
+func TestPayloadAttestationDataWithRetry_GRPCSuccessfulDifferentRoot(t *testing.T) {
+	for _, tt := range []struct {
+		name           string
+		dueLead        time.Duration
+		payloadPresent bool
+	}{
+		{name: "positive vote before due", dueLead: 2 * time.Second, payloadPresent: true},
+		{name: "negative vote after due", dueLead: -time.Second},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls atomic.Int32
+			var readDeadline atomic.Int64
+			root := [32]byte{0xbb}
+			want := &ethpb.PayloadAttestationData{Slot: 1, BeaconBlockRoot: root[:], PayloadPresent: tt.payloadPresent, BlobDataAvailable: true}
+			client := payloadAttestationTransportClient(t, "grpc", func(ctx context.Context, _ primitives.Slot) (*ethpb.PayloadAttestationData, error) {
+				calls.Add(1)
+				deadline, _ := ctx.Deadline()
+				readDeadline.Store(deadline.UnixNano())
+				return want, nil
+			})
+			v := payloadAttestationTransportValidator(client, time.Now().Add(tt.dueLead))
+			announced := [32]byte{0xaa}
+			v.payloadAvailability.notify(1, &announced)
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			ctx, err := v.withPayloadHeadHint(ctx, 1)
+			require.NoError(t, err)
+
+			got, retried, err := v.payloadAttestationDataWithRetry(ctx, 1)
+			require.NoError(t, err)
+			require.DeepEqual(t, want, got)
+			require.Equal(t, false, retried)
+			require.Equal(t, int32(1), calls.Load())
+			require.Equal(t, true, time.Now().Before(time.Unix(0, readDeadline.Load())), "a successful response must not wait for the read cutoff")
+		})
 	}
 }
 
@@ -263,7 +301,7 @@ func TestPayloadAttestationDataWithRetry_RESTIndependentNodes(t *testing.T) {
 				got, retried, err := v.payloadAttestationDataWithRetry(ctx, 1)
 				require.NoError(t, err)
 				require.DeepEqual(t, want, got)
-				require.Equal(t, tt.late || tt.slowWinner, retried)
+				require.Equal(t, false, retried)
 				require.NoError(t, ctx.Err())
 				if tt.late {
 					require.Equal(t, true, earlyCalls.Load() > 0)
@@ -321,7 +359,7 @@ func TestPayloadAttestationDataWithRetry_RESTMalformedResponsePreservesFallback(
 			got, retried, err := v.payloadAttestationDataWithRetry(ctx, 1)
 			require.NoError(t, err)
 			require.DeepEqual(t, want, got)
-			require.Equal(t, true, retried)
+			require.Equal(t, false, retried)
 			require.Equal(t, true, calls.Load() >= 2)
 			require.NoError(t, ctx.Err())
 		})
