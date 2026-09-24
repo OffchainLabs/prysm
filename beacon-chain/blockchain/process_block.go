@@ -200,7 +200,6 @@ func (s *Service) prepareBatchPrestate(ctx context.Context, firstBlock consensus
 			return nil, false, errors.Wrap(err, "could not verify parent execution payload envelope")
 		}
 	}
-	// A FULL node exists only after its columns were checked.
 	if parentEnvelopeSupplied && len(parentBid.BlobKzgCommitments()) > 0 {
 		available, err := s.dataColumnsAvailableNow(ctx, parentRoot, parentBid.Slot())
 		if err != nil {
