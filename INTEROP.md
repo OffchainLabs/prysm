@@ -55,7 +55,7 @@ If you only need a `genesis.ssz` (e.g. for a custom harness), `prysmctl` still
 generates one from a chain config:
 
 ```sh
-curl https://raw.githubusercontent.com/ethereum/consensus-specs/refs/heads/dev/configs/minimal.yaml -o /tmp/minimal.yaml
+curl https://raw.githubusercontent.com/ethereum/consensus-specs/refs/heads/master/configs/minimal.yaml -o /tmp/minimal.yaml
 
 bazel run //cmd/prysmctl --config=minimal -- \
   testnet generate-genesis \
