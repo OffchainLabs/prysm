@@ -179,6 +179,7 @@ func populateBeaconNodeStats(pf metricMap) BeaconNodeStats {
 
 	var f *dto.MetricFamily
 	var m *dto.Metric
+	headSlotSet := false
 
 	f, err = pf.getFamily("beacon_head_slot")
 	if err != nil {
@@ -186,6 +187,7 @@ func populateBeaconNodeStats(pf metricMap) BeaconNodeStats {
 	} else {
 		m = f.Metric[0]
 		bs.SyncBeaconHeadSlot = int64(m.Gauge.GetValue())
+		headSlotSet = true
 	}
 
 	f, err = pf.getFamily("beacon_clock_time_slot")
@@ -193,7 +195,8 @@ func populateBeaconNodeStats(pf metricMap) BeaconNodeStats {
 		log.WithError(err).Debug("Failed to get beacon_clock_time_slot")
 	} else {
 		m = f.Metric[0]
-		if int64(m.Gauge.GetValue()) == bs.SyncBeaconHeadSlot {
+		// Only compare if beacon_head_slot was successfully retrieved
+		if headSlotSet && int64(m.Gauge.GetValue()) == bs.SyncBeaconHeadSlot {
 			bs.SyncEth2Synced = true
 		}
 	}
