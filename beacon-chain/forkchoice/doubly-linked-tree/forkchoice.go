@@ -166,7 +166,7 @@ func (f *ForkChoice) InsertNode(ctx context.Context, state state.BeaconState, ro
 func (f *ForkChoice) updateCheckpoints(ctx context.Context, jc, fc *ethpb.Checkpoint) error {
 	if jc.Epoch > f.store.justifiedCheckpoint.Epoch {
 		f.store.prevJustifiedCheckpoint = f.store.justifiedCheckpoint
-		jcRoot := bytesutil.ToBytes32(jc.Root)
+		jcRoot := f.store.clampCheckpointRoot(jc.Epoch, bytesutil.ToBytes32(jc.Root))
 		f.store.justifiedCheckpoint = &forkchoicetypes.Checkpoint{Epoch: jc.Epoch, Root: jcRoot}
 		if err := f.updateJustifiedBalances(ctx, jcRoot); err != nil {
 			return errors.Wrap(err, "could not update justified balances")
@@ -178,7 +178,7 @@ func (f *ForkChoice) updateCheckpoints(ctx context.Context, jc, fc *ethpb.Checkp
 	}
 	f.store.finalizedCheckpoint = &forkchoicetypes.Checkpoint{
 		Epoch: fc.Epoch,
-		Root:  bytesutil.ToBytes32(fc.Root),
+		Root:  f.store.clampCheckpointRoot(fc.Epoch, bytesutil.ToBytes32(fc.Root)),
 	}
 	return f.store.prune(ctx)
 }
@@ -630,11 +630,6 @@ func (f *ForkChoice) SetGenesisTime(genesis time.Time) {
 	f.store.genesisTime = genesis.Truncate(time.Second) // Genesis time has a precision of 1 second.
 }
 
-// SetOriginRoot sets the genesis block root
-func (f *ForkChoice) SetOriginRoot(root [32]byte) {
-	f.store.originRoot = root
-}
-
 // CachedHeadRoot returns the last cached head root
 func (f *ForkChoice) CachedHeadRoot() [32]byte {
 	node := f.store.headNode
@@ -793,7 +788,14 @@ func (f *ForkChoice) PayloadWeights(root [32]byte) (emptyWeight, fullWeight uint
 func (f *ForkChoice) updateJustifiedBalances(ctx context.Context, root [32]byte) error {
 	balances, err := f.balancesByRoot(ctx, root)
 	if err != nil {
-		return errors.Wrap(err, "could not get justified balances")
+		if f.store.treeRootNode == nil || f.store.treeRootNode.root == root {
+			return errors.Wrap(err, "could not get justified balances")
+		}
+		log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Warn("Falling back to forkchoice root for justified balances")
+		balances, err = f.balancesByRoot(ctx, f.store.treeRootNode.root)
+		if err != nil {
+			return errors.Wrap(err, "could not get justified balances")
+		}
 	}
 	f.justifiedBalances = balances
 	f.store.committeeWeight = 0

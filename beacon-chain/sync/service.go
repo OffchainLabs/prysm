@@ -151,6 +151,8 @@ type Service struct {
 	pendingAttsLock                      sync.RWMutex
 	pendingQueueLock                     sync.RWMutex
 	chainStarted                         *atomic.Bool
+	orphanedOrigin                       atomic.Bool
+	orphanedOriginStreak                 int
 	validateBlockLock                    sync.RWMutex
 	rateLimiter                          *limiter
 	seenBlockLock                        sync.RWMutex
@@ -400,6 +402,9 @@ func (s *Service) Stop() error {
 
 // Status of the currently running regular sync service.
 func (s *Service) Status() error {
+	if s.orphanedOrigin.Load() {
+		return errOrphanedOrigin
+	}
 	// If our head slot is on a previous epoch and our peers are reporting their head block are
 	// in the most recent epoch, then we might be out of sync.
 	if headEpoch := slots.ToEpoch(s.cfg.chain.HeadSlot()); headEpoch+1 < slots.ToEpoch(s.cfg.clock.CurrentSlot()) &&

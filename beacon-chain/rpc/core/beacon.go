@@ -74,6 +74,10 @@ func (s *Service) ChainHead(ctx context.Context) (*ethpb.ChainHead, *RpcError) {
 	}
 
 	justifiedCheckpoint := s.FinalizedFetcher.CurrentJustifiedCheckpt()
+	// A checkpoint synced node treats its origin as finalized before the network justifies it.
+	if justifiedCheckpoint != nil && justifiedCheckpoint.Epoch < finalizedCheckpoint.Epoch {
+		justifiedCheckpoint = finalizedCheckpoint
+	}
 	if err := validateCP(justifiedCheckpoint, "justified"); err != nil {
 		return nil, &RpcError{
 			Err:    errors.Wrap(err, "could not get current justified checkpoint"),
