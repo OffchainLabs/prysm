@@ -2,6 +2,7 @@ package kv
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -109,20 +110,35 @@ func (s *Store) DeleteExecutionPayloadEnvelope(ctx context.Context, blockRoot [3
 	defer span.End()
 
 	return s.db.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(executionPayloadEnvelopesBucket)
-		// Read the existing entry to find the BlockHash for index cleanup.
-		enc := bkt.Get(blockRoot[:])
-		if enc != nil {
-			blinded, err := decodeBlindedEnvelope(enc)
-			if err == nil && blinded.Message != nil {
-				blockHash := bytesutil.ToBytes32(blinded.Message.BlockHash)
-				if err := tx.Bucket(executionPayloadEnvelopeBlockHashBucket).Delete(blockHash[:]); err != nil {
-					return err
-				}
+		return deleteExecutionPayloadEnvelopeTx(tx, blockRoot)
+	})
+}
+
+// 	 removes a signed execution payload envelope by beacon block
+// root and cleans up the BlockHash index entry within an existing bolt transaction. Callers
+// already inside an Update transaction (e.g. DeleteHistoricalDataBeforeSlot) should use this
+// helper directly to keep deletions atomic with surrounding work.
+//
+// If the envelope is absent for the given root (e.g. pre-Gloas blocks), this is a no-op.
+// If the stored envelope cannot be decoded, the secondary index entry is left intact and an
+// error is logged, but the primary entry is still deleted so a corrupted record does not
+// permanently block pruning.
+func deleteExecutionPayloadEnvelopeTx(tx *bolt.Tx, blockRoot [32]byte) error {
+	bkt := tx.Bucket(executionPayloadEnvelopesBucket)
+	enc := bkt.Get(blockRoot[:])
+	if enc != nil {
+		blinded, err := decodeBlindedEnvelope(enc)
+		if err != nil {
+			log.WithError(err).WithField("root", fmt.Sprintf("%#x", blockRoot)).
+				Error("could not decode execution payload envelope during prune; secondary index entry may leak")
+		} else if blinded.Message != nil {
+			blockHash := bytesutil.ToBytes32(blinded.Message.BlockHash)
+			if err := tx.Bucket(executionPayloadEnvelopeBlockHashBucket).Delete(blockHash[:]); err != nil {
+				return err
 			}
 		}
-		return bkt.Delete(blockRoot[:])
-	})
+	}
+	return bkt.Delete(blockRoot[:])
 }
 
 // blindEnvelope converts a full signed envelope to its blinded form by replacing
