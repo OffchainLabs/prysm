@@ -47,22 +47,21 @@ func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 		return []node.Option{opt}, nil
 	}
 
-	if blockPath == "" && statePath == "" {
+	switch {
+	case blockPath == "" && statePath == "":
 		return nil, nil
-	}
-	if blockPath != "" && statePath == "" {
-		return nil, errors.New("--checkpoint-block specified, but not --checkpoint-state. both are required")
-	}
-	if blockPath == "" && statePath != "" {
+	case blockPath == "":
 		return nil, errors.New("--checkpoint-state specified, but not --checkpoint-block. both are required")
-	}
-
-	opt := func(node *node.BeaconNode) (err error) {
-		node.CheckpointInitializer, err = checkpoint.NewFileInitializer(blockPath, statePath)
-		if err != nil {
-			return errors.Wrap(err, "error preparing to initialize checkpoint from local ssz files")
+	case statePath == "":
+		return nil, errors.New("--checkpoint-block specified, but not --checkpoint-state. both are required")
+	default:
+		opt := func(node *node.BeaconNode) (err error) {
+			node.CheckpointInitializer, err = checkpoint.NewFileInitializer(blockPath, statePath)
+			if err != nil {
+				return errors.Wrap(err, "error preparing to initialize checkpoint from local ssz files")
+			}
+			return nil
 		}
-		return nil
+		return []node.Option{opt}, nil
 	}
-	return []node.Option{opt}, nil
 }
