@@ -35,6 +35,9 @@ const (
 	KzgCommitmentSize                     = 48                // KzgCommitmentSize defines the byte length of a KZG commitment.
 	KzgCommitmentInclusionProofDepth      = 17                // Merkle proof depth for blob_kzg_commitments list item
 	ExecutionBranchDepth                  = 4                 // ExecutionBranchDepth defines the number of leaves in a merkle proof of the execution payload header.
+	ExecutionBranchDepthGloas             = 11                // ExecutionBranchDepthGloas is the execution block hash proof depth.
+	SyncCommitteeBranchDepthGloas         = 11                // SyncCommitteeBranchDepthGloas is the sync committee proof depth.
+	FinalityBranchDepthGloas              = 9                 // FinalityBranchDepthGloas is the finalized checkpoint root proof depth.
 	SyncCommitteeBranchDepth              = 5                 // SyncCommitteeBranchDepth defines the number of leaves in a merkle proof of a sync committee.
 	SyncCommitteeBranchDepthElectra       = 6                 // SyncCommitteeBranchDepthElectra defines the number of leaves in a merkle proof of a sync committee.
 	FinalityBranchDepth                   = 6                 // FinalityBranchDepth defines the number of leaves in a merkle proof of the finalized checkpoint root.
