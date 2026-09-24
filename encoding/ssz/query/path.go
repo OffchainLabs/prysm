@@ -139,7 +139,7 @@ func validateRawPath(rawPath string) error {
 	}
 
 	// 4. Reject len() calls not at the start of the path
-	if strings.Index(rawPath, "len(") > 0 {
+	if prefix, _, ok := strings.Cut(rawPath, "len("); ok && prefix != "" {
 		return fmt.Errorf("len() call must be at the start of the path: %s", rawPath)
 	}
 

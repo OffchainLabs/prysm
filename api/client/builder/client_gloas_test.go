@@ -153,14 +153,15 @@ func TestClient_GetExecutionPayloadBid(t *testing.T) {
 				require.Equal(t, true, dateMs > 0)
 				timeoutMs, err := strconv.ParseInt(r.Header.Get("X-Timeout-Ms"), 10, 64)
 				require.NoError(t, err)
-				require.Equal(t, true, timeoutMs > 0 && timeoutMs <= 300)
+				require.Equal(t, true, timeoutMs > 0 && timeoutMs <= 600)
 				h := http.Header{}
 				h.Set("Content-Type", api.JsonMediaType)
 				return &http.Response{StatusCode: http.StatusOK, Header: h, Body: io.NopCloser(bytes.NewReader(jsonBody)), Request: r}, nil
 			}),
 		}
 		c := &Client{hc: hc, baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"}}
-		dctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
+		// Mirrors the default builder bid budget, params.BuilderBidTolerance.
+		dctx, cancel := context.WithTimeout(ctx, 600*time.Millisecond)
 		defer cancel()
 		got, err := c.GetExecutionPayloadBid(dctx, slot, parentHash, parentRoot, pubkey, testBuilderRequestAuth())
 		require.NoError(t, err)
