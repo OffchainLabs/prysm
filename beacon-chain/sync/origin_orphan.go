@@ -17,7 +17,10 @@ const orphanedOriginStreakThreshold = 2
 // detectOrphanedOrigin reports when peers finalize a chain that excludes our checkpoint origin.
 func (s *Service) detectOrphanedOrigin(ctx context.Context) {
 	cp := s.cfg.chain.FinalizedCheckpt()
-	if cp == nil {
+	if cp == nil || s.orphanedOriginStreak == nil {
+		return
+	}
+	if _, err := s.cfg.beaconDB.OriginCheckpointBlockRoot(ctx); err != nil {
 		return
 	}
 	ours := bytesutil.ToBytes32(cp.Root)
@@ -34,19 +37,16 @@ func (s *Service) detectOrphanedOrigin(ctx context.Context) {
 		conflicting++
 	}
 
-	if conflicting < flags.Get().MinimumSyncPeers {
-		s.orphanedOriginStreak = 0
-		s.orphanedOrigin.Store(false)
+	if conflicting == 0 || conflicting < flags.Get().MinimumSyncPeers {
+		s.orphanedOriginStreak.Store(0)
 		originOrphanedSuspected.Set(0)
 		return
 	}
 
-	s.orphanedOriginStreak++
-	if s.orphanedOriginStreak < orphanedOriginStreakThreshold {
+	if s.orphanedOriginStreak.Add(1) < orphanedOriginStreakThreshold {
 		return
 	}
 
-	s.orphanedOrigin.Store(true)
 	originOrphanedSuspected.Set(1)
 	log.WithFields(logrus.Fields{
 		"finalizedEpoch": cp.Epoch,
