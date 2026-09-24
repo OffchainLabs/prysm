@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -34,7 +35,7 @@ var (
 type SkipSlotCache struct {
 	cache      *lru.Cache
 	lock       sync.RWMutex
-	disabled   bool // Allow for programmatic toggling of the cache, useful during initial sync.
+	disabled   atomic.Bool // Allow for programmatic toggling of the cache, useful during initial sync.
 	inProgress map[[32]byte]bool
 }
 
@@ -48,12 +49,12 @@ func NewSkipSlotCache() *SkipSlotCache {
 
 // Enable the skip slot cache.
 func (c *SkipSlotCache) Enable() {
-	c.disabled = false
+	c.disabled.Store(false)
 }
 
 // Disable the skip slot cache.
 func (c *SkipSlotCache) Disable() {
-	c.disabled = true
+	c.disabled.Store(true)
 }
 
 // Get waits for any in progress calculation to complete before returning a
@@ -61,7 +62,7 @@ func (c *SkipSlotCache) Disable() {
 func (c *SkipSlotCache) Get(ctx context.Context, r [32]byte) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "skipSlotCache.Get")
 	defer span.End()
-	if c.disabled {
+	if c.disabled.Load() {
 		// Return a miss result if cache is not enabled.
 		skipSlotCacheMiss.Inc()
 		return nil, nil
@@ -129,7 +130,7 @@ func (c *SkipSlotCache) MarkNotInProgress(r [32]byte) {
 
 // Put the response in the cache.
 func (c *SkipSlotCache) Put(_ context.Context, r [32]byte, state state.BeaconState) {
-	if c.disabled {
+	if c.disabled.Load() {
 		return
 	}
 	// Copy state so cached value is not mutated.
