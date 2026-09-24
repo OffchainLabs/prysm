@@ -528,6 +528,15 @@ func (s *Service) createListener(
 		return nil, errors.Wrap(err, "could not listen to UDP")
 	}
 
+	success := false
+	defer func() {
+		if !success {
+			if err := conn.Close(); err != nil {
+				log.WithError(err).Error("Failed to close UDP connection")
+			}
+		}
+	}()
+
 	localNode, err := s.createLocalNode(
 		privKey,
 		ipAddr,
@@ -561,6 +570,7 @@ func (s *Service) createListener(
 		return nil, errors.Wrap(err, "could not listen to discV5")
 	}
 
+	success = true
 	return listener, nil
 }
 
