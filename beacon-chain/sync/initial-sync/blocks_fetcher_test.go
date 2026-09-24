@@ -1339,6 +1339,8 @@ func TestBatchLimit(t *testing.T) {
 	params.OverrideBeaconConfig(testCfg)
 
 	assert.Equal(t, params.BeaconConfig().MaxRequestBlocksDeneb, uint64(maxBatchLimit()))
+	// fetchPayloads relies on a full block batch fitting in one payload range request.
+	assert.Equal(t, true, uint64(maxBatchLimit()) <= params.BeaconConfig().MaxRequestPayloads)
 }
 
 func TestBlockFetcher_HasSufficientBandwidth(t *testing.T) {

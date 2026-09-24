@@ -413,16 +413,18 @@ func TestFetchPayloads_RangeCountLimit(t *testing.T) {
 		name             string
 		count            uint64
 		limit            uint64
+		firstSlot        primitives.Slot
 		wantStart        primitives.Slot
 		wantCount        uint64
 		wantRootRequests int32
 		parentUnknown    bool
 	}{
-		{name: "default batch", count: 64, limit: 128, wantStart: 100, wantCount: 65},
-		{name: "extra slot fits", count: 127, limit: 128, wantStart: 100, wantCount: 128},
-		{name: "maximum batch", count: 128, limit: 128, wantStart: 101, wantCount: 128, wantRootRequests: 1},
-		{name: "configured payload limit", count: 4, limit: 4, wantStart: 101, wantCount: 4, wantRootRequests: 1},
-		{name: "prefetched parent not yet known", count: 128, limit: 128, wantStart: 101, wantCount: 128, parentUnknown: true},
+		{name: "default batch", count: 64, limit: 128, firstSlot: 101, wantStart: 100, wantCount: 65},
+		{name: "extra slot fits", count: 127, limit: 128, firstSlot: 101, wantStart: 100, wantCount: 128},
+		{name: "maximum batch", count: 128, limit: 128, firstSlot: 101, wantStart: 101, wantCount: 128, wantRootRequests: 1},
+		{name: "maximum batch with leading empty slots", count: 128, limit: 128, firstSlot: 105, wantStart: 105, wantCount: 124, wantRootRequests: 1},
+		{name: "configured payload limit", count: 4, limit: 4, firstSlot: 101, wantStart: 101, wantCount: 4, wantRootRequests: 1},
+		{name: "prefetched parent not yet known", count: 128, limit: 128, firstSlot: 101, wantStart: 101, wantCount: 128, parentUnknown: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := t.Context()
@@ -430,7 +432,7 @@ func TestFetchPayloads_RangeCountLimit(t *testing.T) {
 			params.BeaconConfig().MaxRequestPayloads = test.limit
 			ancestorHash, originHash, firstHash, lastHash := [32]byte{1}, [32]byte{2}, [32]byte{3}, [32]byte{4}
 			origin := makeGloasBlockWithPayload(t, 100, [32]byte{}, ancestorHash, originHash)
-			first := makeGloasBlockWithPayload(t, 101, origin.Root(), originHash, firstHash)
+			first := makeGloasBlockWithPayload(t, test.firstSlot, origin.Root(), originHash, firstHash)
 			lastSlot := primitives.Slot(100 + test.count)
 			last := makeGloasBlockWithPayload(t, lastSlot, first.Root(), firstHash, lastHash)
 			if !test.parentUnknown {
@@ -438,7 +440,7 @@ func TestFetchPayloads_RangeCountLimit(t *testing.T) {
 			}
 			available := []interfaces.ROSignedExecutionPayloadEnvelope{
 				makeEnvelopeForRoot(t, 100, origin.Root(), originHash, ancestorHash),
-				makeEnvelopeForRoot(t, 101, first.Root(), firstHash, originHash),
+				makeEnvelopeForRoot(t, test.firstSlot, first.Root(), firstHash, originHash),
 				makeEnvelopeForRoot(t, lastSlot, last.Root(), lastHash, firstHash),
 			}
 			server := p2ptest.NewTestP2P(t)

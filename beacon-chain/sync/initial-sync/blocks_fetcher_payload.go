@@ -166,14 +166,9 @@ func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestRespon
 	}
 	limit := params.BeaconConfig().MaxRequestPayloads
 	if r.count >= limit {
-		// Fetch the parent separately to keep the range within the request limit.
+		// Fetch the parent separately; the batch limit is capped at the payload limit,
+		// so the blocks' own slot span always fits.
 		start = r.bwb[0].Block.Block().Slot()
-		for i, block := range r.bwb {
-			if block.Block.Block().Slot()-start >= primitives.Slot(limit) {
-				r.bwb = r.bwb[:i]
-				break
-			}
-		}
 		count = uint64(r.bwb[len(r.bwb)-1].Block.Block().Slot()-start) + 1
 	}
 	envelopes, pid, err := f.fetchPayloadEnvelopesFromPeer(ctx, start, count, r.blocksFrom, peers)
