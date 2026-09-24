@@ -702,7 +702,7 @@ func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 		DB:                    b.db,
 		StateGen:              b.stateGen,
 		ClockWaiter:           b.ClockWaiter,
-		PartialDataColumns:    b.cliCtx.Bool(flags.PartialDataColumns.Name),
+		PartialDataColumns:    !b.cliCtx.Bool(flags.DisablePartialDataColumns.Name),
 	})
 	if err != nil {
 		return err
@@ -829,7 +829,7 @@ func (b *BeaconNode) registerPOWChainService() error {
 		execution.WithGraffitiInfo(graffitiInfo),
 	)
 
-	if b.cliCtx.Bool(flags.PartialDataColumns.Name) {
+	if !b.cliCtx.Bool(flags.DisablePartialDataColumns.Name) {
 		opts = append(opts, execution.WithPartialColumnsSupported())
 	}
 	web3Service, err := execution.NewService(b.ctx, opts...)
