@@ -1,10 +1,10 @@
 package rpc
 
 import (
-	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
@@ -74,9 +74,8 @@ func (s *Server) ImportSlashingProtection(w http.ResponseWriter, r *http.Request
 		httputil.HandleError(w, "empty slashing_protection_json specified", http.StatusBadRequest)
 		return
 	}
-	enc := []byte(req.SlashingProtectionJson)
-	buf := bytes.NewBuffer(enc)
-	if err := s.db.ImportStandardProtectionJSON(ctx, buf); err != nil {
+	rdr := strings.NewReader(req.SlashingProtectionJson)
+	if err := s.db.ImportStandardProtectionJSON(ctx, rdr); err != nil {
 		httputil.HandleError(w, errors.Wrap(err, "could not import slashing protection history").Error(), http.StatusInternalServerError)
 		return
 	}
