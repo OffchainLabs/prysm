@@ -22,6 +22,8 @@ func NewWrappedOptimisticUpdate(m proto.Message) (interfaces.LightClientOptimist
 		return NewWrappedOptimisticUpdateCapella(t)
 	case *pb.LightClientOptimisticUpdateDeneb:
 		return NewWrappedOptimisticUpdateDeneb(t)
+	case *pb.LightClientOptimisticUpdateGloas:
+		return NewWrappedOptimisticUpdateGloas(t)
 	default:
 		return nil, fmt.Errorf("cannot construct light client optimistic update from type %T", t)
 	}
@@ -59,6 +61,15 @@ func NewOptimisticUpdateFromUpdate(update interfaces.LightClientUpdate) (interfa
 	case *updateElectra:
 		return &optimisticUpdateDeneb{
 			p: &pb.LightClientOptimisticUpdateDeneb{
+				AttestedHeader: t.p.AttestedHeader,
+				SyncAggregate:  t.p.SyncAggregate,
+				SignatureSlot:  t.p.SignatureSlot,
+			},
+			attestedHeader: t.attestedHeader,
+		}, nil
+	case *updateGloas:
+		return &optimisticUpdateGloas{
+			p: &pb.LightClientOptimisticUpdateGloas{
 				AttestedHeader: t.p.AttestedHeader,
 				SyncAggregate:  t.p.SyncAggregate,
 				SignatureSlot:  t.p.SignatureSlot,

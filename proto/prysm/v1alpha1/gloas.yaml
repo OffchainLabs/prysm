@@ -1,5 +1,10 @@
 package: "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 types:
+  - name: "LightClientHeaderGloas"
+  - name: "LightClientBootstrapGloas"
+  - name: "LightClientUpdateGloas"
+  - name: "LightClientFinalityUpdateGloas"
+  - name: "LightClientOptimisticUpdateGloas"
   - name: "AttestationGloas"
     progressive: {}
     fields:
