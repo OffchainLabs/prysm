@@ -1241,8 +1241,11 @@ func computeTotalCount(input map[[fieldparams.RootLength]byte]map[uint64]bool) i
 
 // verifySidecarHeaderMatchesBlock checks that the signature in the sidecar's embedded SignedBlockHeader matches the block's signature.
 func verifySidecarHeaderMatchesBlock(sidecar blocks.RODataColumn, block blocks.ROBlock) error {
-	// Gloas sidecars do not include a SignedBlockHeader.
+	// Gloas sidecars do not include a SignedBlockHeader, so the slot is the only field binding them to the block.
 	if sidecar.IsGloas() {
+		if sidecar.Slot() != block.Block().Slot() {
+			return fmt.Errorf("sidecar slot %d does not match block slot %d: %w", sidecar.Slot(), block.Block().Slot(), ErrSidecarHeaderMismatch)
+		}
 		return nil
 	}
 
