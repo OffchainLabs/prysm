@@ -146,7 +146,8 @@ func getStateVersionAndPayload(st state.BeaconState) (int, interfaces.ExecutionD
 	return preStateVersion, preStateHeader, nil
 }
 
-// The bool reports whether envelopes[0] is the verified parent envelope.
+// prepareBatchPrestate returns the first block's pre-state and whether envelopes[0] is its parent's envelope, verified
+// and applied. If the block builds on the parent's payload, that envelope must be supplied or already stored and full.
 func (s *Service) prepareBatchPrestate(ctx context.Context, firstBlock consensusblocks.ROBlock, envelopes []interfaces.ROSignedExecutionPayloadEnvelope) (preState state.BeaconState, parentEnvelopeSupplied bool, err error) {
 	parentRoot := firstBlock.Block().ParentRoot()
 	blockPreState, err := s.cfg.StateGen.StateByRootInitialSync(ctx, parentRoot)
@@ -188,6 +189,8 @@ func (s *Service) prepareBatchPrestate(ctx context.Context, firstBlock consensus
 			return nil, false, errors.Wrap(err, "could not check if block builds on envelope")
 		}
 	}
+	// A stored envelope may lack a full node (restart, pending EL check), and a full node may precede the save;
+	// only both mean the payload was applied and persisted.
 	canReuseParentPayload := s.cfg.BeaconDB.HasExecutionPayloadEnvelope(ctx, parentRoot) && s.cfg.ForkChoiceStore.HasFullNode(parentRoot)
 	if !parentEnvelopeSupplied && !canReuseParentPayload {
 		return nil, false, errors.Errorf("missing required parent execution payload envelope for block %#x", parentRoot)
