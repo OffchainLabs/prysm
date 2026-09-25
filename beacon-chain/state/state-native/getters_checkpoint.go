@@ -5,7 +5,10 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 // JustificationBits marking which epochs have been justified in the beacon chain.
@@ -96,6 +99,18 @@ func (b *BeaconState) MatchPreviousJustifiedCheckpoint(c *ethpb.Checkpoint) bool
 
 // FinalizedCheckpoint denoting an epoch and block root.
 func (b *BeaconState) FinalizedCheckpoint() *ethpb.Checkpoint {
+	// Spec: is_eligible_for_activation, is_active_builder. Decoupled finality is slot-based, so legacy callers get a derived epoch view.
+	if b.version >= version.Decoupled {
+		b.lock.RLock()
+		defer b.lock.RUnlock()
+		if b.finalizedCheckpointDecoupled == nil {
+			return nil
+		}
+		return &ethpb.Checkpoint{
+			Epoch: slots.ToEpoch(b.finalizedCheckpointDecoupled.Slot),
+			Root:  bytesutil.SafeCopyBytes(b.finalizedCheckpointDecoupled.Root),
+		}
+	}
 	if b.finalizedCheckpoint == nil {
 		return nil
 	}
@@ -114,11 +129,22 @@ func (b *BeaconState) finalizedCheckpointVal() *ethpb.Checkpoint {
 
 // FinalizedCheckpointEpoch returns the epoch value of the finalized checkpoint.
 func (b *BeaconState) FinalizedCheckpointEpoch() primitives.Epoch {
-	if b.finalizedCheckpoint == nil {
-		return 0
-	}
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
+	return b.finalizedCheckpointEpochLockFree()
+}
+
+// Spec: get_finality_delay. The Decoupled epoch is compute_epoch_at_slot(finalized_checkpoint.slot).
+func (b *BeaconState) finalizedCheckpointEpochLockFree() primitives.Epoch {
+	if b.version >= version.Decoupled {
+		if b.finalizedCheckpointDecoupled == nil {
+			return 0
+		}
+		return slots.ToEpoch(b.finalizedCheckpointDecoupled.Slot)
+	}
+	if b.finalizedCheckpoint == nil {
+		return 0
+	}
 	return b.finalizedCheckpoint.Epoch
 }

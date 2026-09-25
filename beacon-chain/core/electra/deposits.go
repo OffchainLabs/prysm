@@ -277,9 +277,19 @@ func ProcessPendingDeposits(ctx context.Context, st state.BeaconState, activeBal
 	}
 	availableForProcessing := depBalToConsume + helpers.ActivationChurnLimitForVersion(st.Version(), activeBalance)
 
-	finalizedSlot, err := slots.EpochStart(st.FinalizedCheckpoint().Epoch)
-	if err != nil {
-		return errors.Wrap(err, "could not get finalized slot")
+	// Spec: process_pending_deposits (simplex) reads the exact finalized slot, the epoch start would round it down.
+	var finalizedSlot primitives.Slot
+	if st.Version() >= version.Decoupled {
+		fc, err := st.FinalizedCheckpointDecoupled()
+		if err != nil {
+			return errors.Wrap(err, "could not get finalized checkpoint")
+		}
+		finalizedSlot = fc.Slot
+	} else {
+		finalizedSlot, err = slots.EpochStart(st.FinalizedCheckpoint().Epoch)
+		if err != nil {
+			return errors.Wrap(err, "could not get finalized slot")
+		}
 	}
 
 	// The former deposit mechanism is removed, so the Eth1 bridge gate in the

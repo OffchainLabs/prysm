@@ -213,6 +213,18 @@ type BeaconChainConfig struct {
 	DecoupledForkVersion []byte           `yaml:"DECOUPLED_FORK_VERSION" spec:"true"` // DecoupledForkVersion is used to represent the fork version for decoupled.
 	DecoupledForkEpoch   primitives.Epoch `yaml:"DECOUPLED_FORK_EPOCH" spec:"true"`   // DecoupledForkEpoch is used to represent the assigned fork epoch for decoupled.
 
+	// Decoupled constants. Spec: Finality constants, Participation flag indices, Domain types.
+	GenesisHeight                 primitives.Height
+	FarFutureHeight               primitives.Height
+	GenesisRound                  primitives.Round
+	FinalityQuorumNumerator       uint64
+	FinalityQuorumDenominator     uint64
+	KNonjustifiable               uint64
+	FinalityDebtThreshold         uint64
+	TimeoutDelayRounds            uint64 // Spec: δ_t = 2R, PDF §6.1.
+	TimelyFinalityTargetFlagIndex uint8
+	DomainAvailableAttester       [4]byte `yaml:"DOMAIN_AVAILABLE_ATTESTER" spec:"true"`
+
 	ForkVersionSchedule map[[fieldparams.VersionLength]byte]primitives.Epoch // Schedule of fork epochs by version.
 	ForkVersionNames    map[[fieldparams.VersionLength]byte]string           // Human-readable names of fork versions.
 

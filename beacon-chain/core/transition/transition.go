@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/capella"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/decoupled"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/deneb"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
 	e "github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch"
@@ -154,6 +155,12 @@ func ProcessSlot(ctx context.Context, state state.BeaconState) (state.BeaconStat
 		index := uint64((state.Slot() + 1) % params.BeaconConfig().SlotsPerHistoricalRoot)
 		if err := state.UpdateExecutionPayloadAvailabilityAtIndex(index, 0x0); err != nil {
 			return nil, err
+		}
+	}
+
+	if state.Version() >= version.Decoupled {
+		if err := decoupled.FillHeightTargetRoot(state, prevBlockRoot); err != nil {
+			return nil, errors.Wrap(err, "could not fill height target root")
 		}
 	}
 
@@ -306,6 +313,14 @@ func ProcessSlotsCore(ctx context.Context, span trace.Span, state state.BeaconSt
 			return nil, errors.Wrap(err, "could not process slot")
 		}
 
+		// Spec: process_slots (simplex). Round processing precedes epoch processing at a shared boundary.
+		if state.Version() >= version.Decoupled && decoupled.IsRoundBoundary(state.Slot()) {
+			if err := decoupled.ProcessRound(ctx, state); err != nil {
+				tracing.AnnotateError(span, err)
+				return nil, errors.Wrap(err, "could not process round")
+			}
+		}
+
 		state, err = ProcessEpoch(ctx, state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
@@ -335,7 +350,11 @@ func ProcessEpoch(ctx context.Context, state state.BeaconState) (state.BeaconSta
 
 	var err error
 	if time.CanProcessEpoch(state) {
-		if state.Version() >= version.Gloas {
+		if state.Version() >= version.Decoupled {
+			if err = decoupled.ProcessEpoch(ctx, state); err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("could not process %s epoch", version.String(state.Version())))
+			}
+		} else if state.Version() >= version.Gloas {
 			if err = processEpochGloas(ctx, state); err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("could not process %s epoch", version.String(state.Version())))
 			}

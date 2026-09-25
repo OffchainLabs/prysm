@@ -24,7 +24,7 @@ func TestBuilderQuorumThreshold(t *testing.T) {
 	st, err := state_native.InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{Validators: validators})
 	require.NoError(t, err)
 
-	got, err := builderQuorumThreshold(t.Context(), st)
+	got, err := BuilderQuorumThreshold(t.Context(), st)
 	require.NoError(t, err)
 
 	total := uint64(len(validators)) * cfg.MaxEffectiveBalance

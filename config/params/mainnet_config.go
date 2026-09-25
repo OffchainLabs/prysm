@@ -259,6 +259,17 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	DecoupledForkVersion: []byte{16, 0, 0, 0},
 	DecoupledForkEpoch:   mainnetDecoupledForkEpoch,
 
+	GenesisHeight:                 1,
+	FarFutureHeight:               math.MaxUint64,
+	GenesisRound:                  0,
+	FinalityQuorumNumerator:       2,
+	FinalityQuorumDenominator:     3,
+	KNonjustifiable:               8,
+	FinalityDebtThreshold:         2,
+	TimeoutDelayRounds:            2,
+	TimelyFinalityTargetFlagIndex: 0,
+	DomainAvailableAttester:       bytesutil.Uint32ToBytes4(0x0F000000),
+
 	// New values introduced in Altair hard fork 1.
 	// Participation flag indices.
 	TimelySourceFlagIndex: 0,

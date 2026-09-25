@@ -29,7 +29,7 @@ import (
 //	    state.builder_pending_payments[SLOTS_PER_EPOCH:] = new_payments
 //	</spec>
 func ProcessBuilderPendingPayments(ctx context.Context, state state.BeaconState) error {
-	quorum, err := builderQuorumThreshold(ctx, state)
+	quorum, err := BuilderQuorumThreshold(ctx, state)
 	if err != nil {
 		return errors.Wrap(err, "could not compute builder payment quorum threshold")
 	}
@@ -60,7 +60,7 @@ func ProcessBuilderPendingPayments(ctx context.Context, state state.BeaconState)
 	return nil
 }
 
-// builderQuorumThreshold calculates the quorum threshold for builder payments.
+// BuilderQuorumThreshold calculates the quorum threshold for builder payments.
 //
 //	<spec fn="get_builder_payment_quorum_threshold" fork="gloas" hash="deb18056">
 //	def get_builder_payment_quorum_threshold(state: BeaconState) -> Uint64:
@@ -71,7 +71,7 @@ func ProcessBuilderPendingPayments(ctx context.Context, state state.BeaconState)
 //	    quorum = per_slot_balance * BUILDER_PAYMENT_THRESHOLD_NUMERATOR
 //	    return Uint64(quorum // BUILDER_PAYMENT_THRESHOLD_DENOMINATOR)
 //	</spec>
-func builderQuorumThreshold(ctx context.Context, state state.ReadOnlyBeaconState) (primitives.Gwei, error) {
+func BuilderQuorumThreshold(ctx context.Context, state state.ReadOnlyBeaconState) (primitives.Gwei, error) {
 	activeBalance, err := helpers.TotalActiveBalance(ctx, state)
 	if err != nil {
 		return 0, errors.Wrap(err, "could not get total active balance")
