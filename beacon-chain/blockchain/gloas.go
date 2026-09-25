@@ -237,6 +237,7 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 		log.WithError(err).Error("Could not get latest block hash")
 		return
 	}
+	s.firePayloadAttributesEventForHead(hr, currentSlot+1, attr, bh[:])
 	pid, err := s.notifyForkchoiceUpdateGloas(ctx, bh, attr)
 	if err != nil {
 		log.WithError(err).Error("Could not notify forkchoice update")
@@ -249,10 +250,12 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 	var pId [8]byte
 	copy(pId[:], pid[:])
 	s.cfg.PayloadIDCache.Set(currentSlot+1, hr, false, pId)
-	s.firePayloadAttributesEventForHead(hr, currentSlot+1, attr, bh[:])
 }
 
 func (s *Service) fcuFromReorgData(headBlock interfaces.ReadOnlySignedBeaconBlock, hr [32]byte, hash [32]byte, full bool, attr payloadattribute.Attributer, proposingSlot primitives.Slot) {
+	if !attr.IsEmpty() {
+		s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, hr, proposingSlot, attr, hash[:])
+	}
 	pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, hash, attr)
 	if err != nil {
 		log.WithError(err).Error("Could not update forkchoice with engine")
@@ -266,10 +269,6 @@ func (s *Service) fcuFromReorgData(headBlock interfaces.ReadOnlySignedBeaconBloc
 	var pId [8]byte
 	copy(pId[:], pid[:])
 	s.cfg.PayloadIDCache.Set(proposingSlot, hr, full, pId)
-
-	if !attr.IsEmpty() {
-		s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, hr, proposingSlot, attr, hash[:])
-	}
 }
 
 func (s *Service) firePayloadAttributesEventForHead(headRoot [32]byte, proposingSlot primitives.Slot, attr payloadattribute.Attributer, parentBlockHash []byte) {
