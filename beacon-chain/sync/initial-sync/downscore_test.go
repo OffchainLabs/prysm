@@ -6,7 +6,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
 	p2pt "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
@@ -82,35 +81,22 @@ func TestUpdatePeerScorerStats(t *testing.T) {
 				switch c.downPeer {
 				case testDownscoreBlock:
 					// block should be downscored
-					blocksCount, err := s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Count(data.blocksFrom)
-					require.NoError(t, err)
-					require.Equal(t, 1, blocksCount)
-					// blob should not be downscored - also we expect a not found error since peer scoring did not interact with blobs
-					blobCount, err := s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Count(data.blobsFrom)
-					require.ErrorIs(t, err, peerdata.ErrPeerUnknown)
-					require.Equal(t, -1, blobCount)
+					require.Equal(t, 1, s.cfg.P2P.PeerScoring().BadResponseCount(data.blocksFrom))
+					// blob should not be downscored
+					require.Equal(t, 0, s.cfg.P2P.PeerScoring().BadResponseCount(data.blobsFrom))
 				case testDownscoreBlob:
-					// block should not be downscored - also we expect a not found error since peer scoring did not interact with blocks
-					blocksCount, err := s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Count(data.blocksFrom)
-					require.ErrorIs(t, err, peerdata.ErrPeerUnknown)
-					require.Equal(t, -1, blocksCount)
+					// block should not be downscored
+					require.Equal(t, 0, s.cfg.P2P.PeerScoring().BadResponseCount(data.blocksFrom))
 					// blob should be downscored
-					blobCount, err := s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Count(data.blobsFrom)
-					require.NoError(t, err)
-					require.Equal(t, 1, blobCount)
+					require.Equal(t, 1, s.cfg.P2P.PeerScoring().BadResponseCount(data.blobsFrom))
 				}
 				assert.Equal(t, uint64(0), s.cfg.P2P.Peers().Scorers().BlockProviderScorer().ProcessedBlocks(data.blocksFrom))
 				return
 			}
 			// block should not be downscored - also we expect a not found error since peer scoring did not interact with blocks
-			blocksCount, err := s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Count(data.blocksFrom)
-			// The scorer will know about the the block peer because it will have a processed blocks count
-			require.NoError(t, err)
-			require.Equal(t, 0, blocksCount)
-			// no downscore, so scorer doesn't know the peer
-			blobCount, err := s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Count(data.blobsFrom)
-			require.ErrorIs(t, err, peerdata.ErrPeerUnknown)
-			require.Equal(t, -1, blobCount)
+			require.Equal(t, 0, s.cfg.P2P.PeerScoring().BadResponseCount(data.blocksFrom))
+			// no downscore recorded for the blob peer
+			require.Equal(t, 0, s.cfg.P2P.PeerScoring().BadResponseCount(data.blobsFrom))
 
 			assert.Equal(t, c.processed, s.cfg.P2P.Peers().Scorers().BlockProviderScorer().ProcessedBlocks(data.blocksFrom))
 		})
@@ -184,35 +170,25 @@ func TestOnDataReceivedDownscore(t *testing.T) {
 				switch c.downPeer {
 				case testDownscoreBlock:
 					// block should be downscored
-					blocksCount, err := p2p.Peers().Scorers().BadResponsesScorer().Count(data.blocksFrom)
-					require.NoError(t, err)
+					blocksCount := p2p.PeerScoring().BadResponseCount(data.blocksFrom)
 					require.Equal(t, 1, blocksCount)
-					// blob should not be downscored - also we expect a not found error since peer scoring did not interact with blobs
-					blobCount, err := p2p.Peers().Scorers().BadResponsesScorer().Count(data.blobsFrom)
-					require.ErrorIs(t, err, peerdata.ErrPeerUnknown)
-					require.Equal(t, -1, blobCount)
+					// blob should not be downscored
+					require.Equal(t, 0, p2p.PeerScoring().BadResponseCount(data.blobsFrom))
 				case testDownscoreBlob:
-					// block should not be downscored - also we expect a not found error since peer scoring did not interact with blocks
-					blocksCount, err := p2p.Peers().Scorers().BadResponsesScorer().Count(data.blocksFrom)
-					require.ErrorIs(t, err, peerdata.ErrPeerUnknown)
-					require.Equal(t, -1, blocksCount)
+					// block should not be downscored
+					require.Equal(t, 0, p2p.PeerScoring().BadResponseCount(data.blocksFrom))
 					// blob should be downscored
-					blobCount, err := p2p.Peers().Scorers().BadResponsesScorer().Count(data.blobsFrom)
-					require.NoError(t, err)
+					blobCount := p2p.PeerScoring().BadResponseCount(data.blobsFrom)
 					require.Equal(t, 1, blobCount)
 				}
 				assert.Equal(t, uint64(0), p2p.Peers().Scorers().BlockProviderScorer().ProcessedBlocks(data.blocksFrom))
 				return
 			}
 			// block should not be downscored - also we expect a not found error since peer scoring did not interact with blocks
-			blocksCount, err := p2p.Peers().Scorers().BadResponsesScorer().Count(data.blocksFrom)
-			// no downscore, so scorer doesn't know the peer
-			require.ErrorIs(t, err, peerdata.ErrPeerUnknown)
-			require.Equal(t, -1, blocksCount)
-			blobCount, err := p2p.Peers().Scorers().BadResponsesScorer().Count(data.blobsFrom)
-			// no downscore, so scorer doesn't know the peer
-			require.ErrorIs(t, err, peerdata.ErrPeerUnknown)
-			require.Equal(t, -1, blobCount)
+			// no downscore recorded for the peer
+			require.Equal(t, 0, p2p.PeerScoring().BadResponseCount(data.blocksFrom))
+			// no downscore recorded for the peer
+			require.Equal(t, 0, p2p.PeerScoring().BadResponseCount(data.blobsFrom))
 		})
 	}
 }

@@ -16,7 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -64,6 +64,8 @@ type TestP2P struct {
 	DelaySend             bool
 	Digest                [4]byte
 	peers                 *peers.Status
+	peerScorer            *peerscoring.Scorer
+	gossipRejections      *peerscoring.GossipRejectionsStore
 	LocalMetadata         metadata.Metadata
 	custodyInfoMut        sync.RWMutex // protects custodyGroupCount and earliestAvailableSlot
 	earliestAvailableSlot primitives.Slot
@@ -104,21 +106,20 @@ func NewTestP2PWithPubsubOptions(t *testing.T, pubsubOpts []pubsub.Option, userO
 		t.Fatal(err)
 	}
 
+	peerScorer := peerscoring.NewScorer(peerscoring.WithBadResponseGreyListThreshold(5))
 	peerStatuses := peers.NewStatus(context.Background(), &peers.StatusConfig{
 		PeerLimit: 30,
-		ScorerParams: &scorers.Config{
-			BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
-				Threshold: 5,
-			},
-		},
+		Scoring:   peerScorer,
 	})
 	return &TestP2P{
-		t:            t,
-		BHost:        h,
-		pubsub:       ps,
-		joinedTopics: map[string]*pubsub.Topic{},
-		peers:        peerStatuses,
-		enr:          new(enr.Record),
+		t:                t,
+		BHost:            h,
+		pubsub:           ps,
+		joinedTopics:     map[string]*pubsub.Topic{},
+		peers:            peerStatuses,
+		peerScorer:       peerScorer,
+		gossipRejections: peerscoring.NewGossipRejectionsStore(),
+		enr:              new(enr.Record),
 	}
 }
 
@@ -461,6 +462,21 @@ func (*TestP2P) Started() bool {
 // Peers returns the peer status.
 func (p *TestP2P) Peers() *peers.Status {
 	return p.peers
+}
+
+// PeerScoring returns the peer scoring and grey-listing service.
+func (p *TestP2P) PeerScoring() *peerscoring.Scorer {
+	return p.peerScorer
+}
+
+// GossipRejections returns the store of gossip messages our validators rejected.
+func (p *TestP2P) GossipRejections() *peerscoring.GossipRejectionsStore {
+	return p.gossipRejections
+}
+
+// IsPeerGreyListed mirrors the production grey-list verdict.
+func (p *TestP2P) IsPeerGreyListed(pid peer.ID) error {
+	return p.peers.IsPeerGreyListed(pid)
 }
 
 // FindAndDialPeersWithSubnets mocks the p2p func.

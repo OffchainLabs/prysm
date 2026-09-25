@@ -7,6 +7,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -61,7 +62,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg any
 
 	// Penalize peers that send invalid requests.
 	if err := validateDataColumnsByRootRequest(totalRequested); err != nil {
-		s.downscorePeer(remotePeer, "dataColumnSidecarByRootRPCHandlerValidationError")
+		s.cfg.p2p.PeerScoring().RecordBadResponse(remotePeer, peerscoring.SourceRPCRequest, "dataColumnSidecarByRootRPCHandlerValidationError")
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		return errors.Wrap(err, "validate data columns by root request")
 	}

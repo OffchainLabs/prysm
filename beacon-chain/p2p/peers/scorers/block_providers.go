@@ -8,7 +8,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -293,9 +292,6 @@ func (s *BlockProviderScorer) mapScoresAndPeers(
 func (s *BlockProviderScorer) FormatScorePretty(pid peer.ID) string {
 	s.store.RLock()
 	defer s.store.RUnlock()
-	if !features.Get().EnablePeerScorer {
-		return "disabled"
-	}
 	score := s.scoreNoLock(pid)
 	return fmt.Sprintf("[%0.1f%%, raw: %0.2f,  blocks: %d/%d]",
 		(score/s.MaxScore())*100, score, s.processedBlocksNoLock(pid), s.config.ProcessedBlocksCap)

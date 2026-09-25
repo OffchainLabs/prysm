@@ -12,7 +12,7 @@ import (
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	testp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -55,6 +55,20 @@ func TestService_Stop_DontPanicIfDv5ListenerIsNotInited(t *testing.T) {
 	s, err := NewService(t.Context(), &Config{StateNotifier: &mock.MockStateNotifier{}, DB: testDB.SetupDB(t)})
 	require.NoError(t, err)
 	assert.NoError(t, s.Stop())
+}
+
+func TestService_TrustedPeersProtectedFromConnManager(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	s, err := NewService(t.Context(), &Config{StateNotifier: &mock.MockStateNotifier{}, DB: testDB.SetupDB(t)})
+	require.NoError(t, err)
+	defer func() { assert.NoError(t, s.Stop()) }()
+	pid := peer.ID("trusted-test-peer")
+
+	s.peers.SetTrustedPeers([]peer.ID{pid})
+	assert.Equal(t, true, s.host.ConnManager().IsProtected(pid, trustedPeerConnTag))
+
+	s.peers.DeleteTrustedPeers([]peer.ID{pid})
+	assert.Equal(t, false, s.host.ConnManager().IsProtected(pid, trustedPeerConnTag))
 }
 
 func TestService_Start_OnlyStartsOnce(t *testing.T) {
@@ -350,25 +364,21 @@ func initializeStateWithForkDigest(_ context.Context, t *testing.T, gs startup.C
 
 func TestService_connectWithPeer(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
+	greyListedScorer := peerscoring.NewScorer()
+	for range 10 {
+		greyListedScorer.RecordBadResponse("bad", peerscoring.Unknown, "test")
+	}
 	tests := []struct {
 		name    string
-		peers   *peers.Status
+		scorer  *peerscoring.Scorer
 		info    peer.AddrInfo
 		wantErr string
 	}{
 		{
-			name: "bad peer",
-			peers: func() *peers.Status {
-				ps := peers.NewStatus(t.Context(), &peers.StatusConfig{
-					ScorerParams: &scorers.Config{},
-				})
-				for range 10 {
-					ps.Scorers().BadResponsesScorer().Increment("bad")
-				}
-				return ps
-			}(),
+			name:    "grey-listed peer",
+			scorer:  greyListedScorer,
 			info:    peer.AddrInfo{ID: "bad"},
-			wantErr: "bad peer",
+			wantErr: "grey-listed peer",
 		},
 	}
 	for _, tt := range tests {
@@ -381,8 +391,9 @@ func TestService_connectWithPeer(t *testing.T) {
 			}()
 			ctx := t.Context()
 			s := &Service{
-				host:  h,
-				peers: tt.peers,
+				host:       h,
+				peers:      peers.NewStatus(t.Context(), &peers.StatusConfig{Scoring: tt.scorer}),
+				peerScorer: tt.scorer,
 			}
 			err := s.connectWithPeer(ctx, tt.info)
 			if len(tt.wantErr) > 0 {

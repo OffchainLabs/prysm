@@ -12,7 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	testp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -744,6 +744,7 @@ func TestFindPeersWithSubnets_NodeDeduplication(t *testing.T) {
 
 			fakePeer := testp2p.NewTestP2P(t)
 
+			scorer := peerscoring.NewScorer()
 			s := &Service{
 				cfg: &Config{
 					MaxPeers: 30,
@@ -751,9 +752,10 @@ func TestFindPeersWithSubnets_NodeDeduplication(t *testing.T) {
 				},
 				genesisTime:           time.Now(),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+				peerScorer:            scorer,
 				peers: peers.NewStatus(ctx, &peers.StatusConfig{
-					PeerLimit:    30,
-					ScorerParams: &scorers.Config{},
+					PeerLimit: 30,
+					Scoring:   scorer,
 				}),
 				host: fakePeer.BHost,
 			}
@@ -949,6 +951,7 @@ func TestFindPeersWithSubnets_FilterPeerRemoval(t *testing.T) {
 			fakePeer := testp2p.NewTestP2P(t)
 
 			// Create mock service
+			scorer := peerscoring.NewScorer()
 			s := &Service{
 				cfg: &Config{
 					MaxPeers: 30,
@@ -956,9 +959,10 @@ func TestFindPeersWithSubnets_FilterPeerRemoval(t *testing.T) {
 				},
 				genesisTime:           time.Now(),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+				peerScorer:            scorer,
 				peers: peers.NewStatus(ctx, &peers.StatusConfig{
-					PeerLimit:    30,
-					ScorerParams: &scorers.Config{},
+					PeerLimit: 30,
+					Scoring:   scorer,
 				}),
 				host: fakePeer.BHost,
 			}
@@ -970,10 +974,10 @@ func TestFindPeersWithSubnets_FilterPeerRemoval(t *testing.T) {
 					peerData, _, _ := convertToAddrInfo(node)
 					if peerData != nil {
 						s.peers.Add(node.Record(), peerData.ID, nil, network.DirUnknown)
-						// Mark as bad peer - this will make filterPeer return false
-						s.peers.Scorers().BadResponsesScorer().Increment(peerData.ID)
-						s.peers.Scorers().BadResponsesScorer().Increment(peerData.ID)
-						s.peers.Scorers().BadResponsesScorer().Increment(peerData.ID)
+						// Mark as grey-listed peer - this will make filterPeer return false
+						for range 10 {
+							s.peerScorer.RecordBadResponse(peerData.ID, peerscoring.Unknown, "test")
+						}
 					}
 				}
 			}
@@ -1069,6 +1073,7 @@ func TestFindPeersWithSubnets_received_bad_existing_node(t *testing.T) {
 
 	fakePeer := testp2p.NewTestP2P(t)
 
+	scorer := peerscoring.NewScorer()
 	service := &Service{
 		cfg: &Config{
 			MaxPeers: 30,
@@ -1076,9 +1081,10 @@ func TestFindPeersWithSubnets_received_bad_existing_node(t *testing.T) {
 		},
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+		peerScorer:            scorer,
 		peers: peers.NewStatus(ctx, &peers.StatusConfig{
-			PeerLimit:    30,
-			ScorerParams: &scorers.Config{},
+			PeerLimit: 30,
+			Scoring:   scorer,
 		}),
 		host: fakePeer.BHost,
 	}
@@ -1093,9 +1099,9 @@ func TestFindPeersWithSubnets_received_bad_existing_node(t *testing.T) {
 				peerData, _, _ := convertToAddrInfo(node1_seq2)
 				if peerData != nil {
 					service.peers.Add(node1_seq2.Record(), peerData.ID, nil, network.DirUnknown)
-					// Mark as bad peer - need enough increments to exceed threshold (6)
+					// Mark as grey-listed peer - record enough strikes to exceed the threshold.
 					for range 10 {
-						service.peers.Scorers().BadResponsesScorer().Increment(peerData.ID)
+						service.peerScorer.RecordBadResponse(peerData.ID, peerscoring.Unknown, "test")
 					}
 				}
 			},
