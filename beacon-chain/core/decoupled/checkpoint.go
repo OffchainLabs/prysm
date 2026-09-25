@@ -1,14 +1,8 @@
 package decoupled
 
 import (
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
-
-// Spec: the ⊥ block reference, PDF §4. The state hashes this pointer, so it is a value, never nil.
-func emptyCheckpoint() *ethpb.CheckpointDecoupled {
-	return &ethpb.CheckpointDecoupled{Slot: 0, Root: make([]byte, fieldparams.RootLength)}
-}
 
 // Spec: the ⊥ block reference, PDF §4. Tolerant of a nil pointer from a freshly built message.
 func isEmptyCheckpoint(c *ethpb.CheckpointDecoupled) bool {

@@ -510,6 +510,12 @@ func AddValidatorToRegistry(beaconState state.BeaconState, pubKey []byte, withdr
 			return err
 		}
 	}
+	// Spec: add_validator_to_registry from the old spec appends a false bit to the three per-validator vote lists.
+	if beaconState.Version() >= version.Decoupled {
+		if err := beaconState.AppendDecoupledValidatorBits(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

@@ -453,6 +453,15 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 		upgraded = true
 	}
 
+	if time.CanUpgradeToDecoupled(slot) {
+		state, err = decoupled.UpgradeToDecoupled(ctx, state)
+		if err != nil {
+			tracing.AnnotateError(span, err)
+			return nil, err
+		}
+		upgraded = true
+	}
+
 	if upgraded {
 		log.WithField("version", version.String(state.Version())).Info("Upgraded state to")
 	}

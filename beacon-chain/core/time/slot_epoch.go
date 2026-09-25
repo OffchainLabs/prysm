@@ -117,6 +117,11 @@ func CanUpgradeToGloas(slot primitives.Slot) bool {
 	return epochStart && gloasEpoch
 }
 
+// Spec: the upgrade_to_simplex trigger, state.slot % SLOTS_PER_EPOCH == 0 and compute_epoch_at_slot(state.slot) == DECOUPLED_FORK_EPOCH
+func CanUpgradeToDecoupled(slot primitives.Slot) bool {
+	return slots.IsEpochStart(slot) && slots.ToEpoch(slot) == params.BeaconConfig().DecoupledForkEpoch
+}
+
 // CanProcessEpoch checks the eligibility to process epoch.
 // The epoch can be processed at the end of the last slot of every epoch.
 //

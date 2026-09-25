@@ -153,3 +153,38 @@ func (b *BeaconState) SetBuilderPendingPaymentsDecoupled(val []*ethpb.BuilderPen
 	b.rebuildTrie[types.BuilderPendingPaymentsDecoupled] = true
 	return nil
 }
+
+func growBitlist(b bitfield.Bitlist) bitfield.Bitlist {
+	n := b.Len()
+	out := bitfield.NewBitlist(n + 1)
+	for i := range n {
+		if b.BitAt(i) {
+			out.SetBitAt(i, true)
+		}
+	}
+	return out
+}
+
+// Spec: add_validator_to_registry from the old spec, one false bit on each of target_participation, progress and finality_participation. The PDF fixes the validator set.
+func (b *BeaconState) AppendDecoupledValidatorBits() error {
+	if b.version < version.Decoupled {
+		return errNotSupported("AppendDecoupledValidatorBits", b.version)
+	}
+	for _, f := range []struct {
+		get func() (bitfield.Bitlist, error)
+		set func(bitfield.Bitlist) error
+	}{
+		{b.TargetParticipation, b.SetTargetParticipation},
+		{b.Progress, b.SetProgress},
+		{b.FinalityParticipation, b.SetFinalityParticipation},
+	} {
+		bits, err := f.get()
+		if err != nil {
+			return err
+		}
+		if err := f.set(growBitlist(bits)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
