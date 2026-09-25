@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -205,7 +204,7 @@ func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody)
 }
 
 func blockBodyListRoot[T ssz.Hashable](bodyVersion int, elements []T, limit uint64) ([32]byte, error) {
-	if features.ProgressiveSSZEnabled(bodyVersion) {
+	if bodyVersion >= version.Gloas {
 		if uint64(len(elements)) > limit {
 			return [32]byte{}, fmt.Errorf("slice exceeds max length %d", limit)
 		}

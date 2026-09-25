@@ -5,7 +5,6 @@ package beacon
 
 import (
 	"context"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
@@ -28,7 +27,6 @@ import (
 type Server struct {
 	BeaconDB                    db.ReadOnlyDatabase
 	Ctx                         context.Context
-	ChainStartFetcher           execution.ChainStartFetcher
 	HeadFetcher                 blockchain.HeadFetcher
 	CanonicalFetcher            blockchain.CanonicalFetcher
 	FinalizationFetcher         blockchain.FinalizationFetcher
@@ -42,7 +40,6 @@ type Server struct {
 	AttestationCache            *cache.AttestationCache
 	AttestationsPool            attestations.Pool
 	SlashingsPool               slashings.PoolManager
-	ChainStartChan              chan time.Time
 	ReceivedAttestationsBuffer  chan *ethpb.Attestation
 	CollectedAttestationsBuffer chan []*ethpb.Attestation
 	StateGen                    stategen.StateManager

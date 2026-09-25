@@ -7,7 +7,6 @@ import (
 	"slices"
 
 	"github.com/OffchainLabs/methodical-ssz/ssz"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	bolt "go.etcd.io/bbolt"
@@ -848,101 +847,6 @@ func (s *Store) LowestRootsAtOrAboveSlot(ctx context.Context, slot primitives.Sl
 		return nil
 	})
 	return fs, roots, err
-}
-
-// FeeRecipientByValidatorID returns the fee recipient for a validator id.
-// `ErrNotFoundFeeRecipient` is returned if the validator id is not found.
-func (s *Store) FeeRecipientByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (common.Address, error) {
-	ctx, span := trace.StartSpan(ctx, "BeaconDB.FeeRecipientByValidatorID")
-	defer span.End()
-	var addr []byte
-	err := s.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(feeRecipientBucket)
-		stored := bkt.Get(bytesutil.Uint64ToBytesBigEndian(uint64(id)))
-		if len(stored) > 0 {
-			addr = slices.Clone(stored)
-		}
-		// IF the fee recipient is not found in the standard fee recipient bucket, then
-		// check the registration bucket. The fee recipient may be there.
-		// This is to resolve imcompatility until we fully migrate to the registration bucket.
-		if addr == nil {
-			bkt = tx.Bucket(registrationBucket)
-			enc := bkt.Get(bytesutil.Uint64ToBytesBigEndian(uint64(id)))
-			if enc == nil {
-				return errors.Wrapf(ErrNotFoundFeeRecipient, "validator id %d", id)
-			}
-			reg := &ethpb.ValidatorRegistrationV1{}
-			if err := decode(ctx, enc, reg); err != nil {
-				return err
-			}
-			addr = slices.Clone(reg.FeeRecipient)
-		}
-		return nil
-	})
-	return common.BytesToAddress(addr), err
-}
-
-// SaveFeeRecipientsByValidatorIDs saves the fee recipients for validator ids.
-// Error is returned if `ids` and `recipients` are not the same length.
-func (s *Store) SaveFeeRecipientsByValidatorIDs(ctx context.Context, ids []primitives.ValidatorIndex, feeRecipients []common.Address) error {
-	_, span := trace.StartSpan(ctx, "BeaconDB.SaveFeeRecipientByValidatorID")
-	defer span.End()
-
-	if len(ids) != len(feeRecipients) {
-		return errors.New("validatorIDs and feeRecipients must be the same length")
-	}
-
-	return s.db.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(feeRecipientBucket)
-		for i, id := range ids {
-			if err := bkt.Put(bytesutil.Uint64ToBytesBigEndian(uint64(id)), feeRecipients[i].Bytes()); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-}
-
-// RegistrationByValidatorID returns the validator registration object for a validator id.
-// `ErrNotFoundFeeRecipient` is returned if the validator id is not found.
-func (s *Store) RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error) {
-	ctx, span := trace.StartSpan(ctx, "BeaconDB.RegistrationByValidatorID")
-	defer span.End()
-	reg := &ethpb.ValidatorRegistrationV1{}
-	err := s.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(registrationBucket)
-		enc := bkt.Get(bytesutil.Uint64ToBytesBigEndian(uint64(id)))
-		if enc == nil {
-			return errors.Wrapf(ErrNotFoundFeeRecipient, "validator id %d", id)
-		}
-		return decode(ctx, enc, reg)
-	})
-	return reg, err
-}
-
-// SaveRegistrationsByValidatorIDs saves the validator registrations for validator ids.
-// Error is returned if `ids` and `registrations` are not the same length.
-func (s *Store) SaveRegistrationsByValidatorIDs(ctx context.Context, ids []primitives.ValidatorIndex, regs []*ethpb.ValidatorRegistrationV1) error {
-	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveRegistrationsByValidatorIDs")
-	defer span.End()
-
-	if len(ids) != len(regs) {
-		return errors.New("ids and registrations must be the same length")
-	}
-
-	return s.db.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(registrationBucket)
-		for i, id := range ids {
-			enc, err := encode(ctx, regs[i])
-			if err != nil {
-				return err
-			}
-			if err := bkt.Put(bytesutil.Uint64ToBytesBigEndian(uint64(id)), enc); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
 }
 
 // EarliestStoredSlot returns the earliest slot in the database.

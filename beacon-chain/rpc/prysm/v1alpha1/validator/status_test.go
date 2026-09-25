@@ -270,11 +270,10 @@ func TestValidatorStatus_Pending(t *testing.T) {
 		},
 	}
 	vs := &Server{
-		ChainStartFetcher: p,
-		BlockFetcher:      p,
-		Eth1InfoFetcher:   p,
-		DepositFetcher:    depositCache,
-		HeadFetcher:       &mockChain.ChainService{State: st, Root: genesisRoot[:]},
+		BlockFetcher:    p,
+		Eth1InfoFetcher: p,
+		DepositFetcher:  depositCache,
+		HeadFetcher:     &mockChain.ChainService{State: st, Root: genesisRoot[:]},
 	}
 	req := &ethpb.ValidatorStatusRequest{
 		PublicKey: pubKey,
@@ -332,11 +331,10 @@ func TestValidatorStatus_Exiting(t *testing.T) {
 		},
 	}
 	vs := &Server{
-		ChainStartFetcher: p,
-		BlockFetcher:      p,
-		Eth1InfoFetcher:   p,
-		DepositFetcher:    depositCache,
-		HeadFetcher:       &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
+		BlockFetcher:    p,
+		Eth1InfoFetcher: p,
+		DepositFetcher:  depositCache,
+		HeadFetcher:     &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
 	}
 	req := &ethpb.ValidatorStatusRequest{
 		PublicKey: pubKey,
@@ -391,11 +389,10 @@ func TestValidatorStatus_Slashing(t *testing.T) {
 		},
 	}
 	vs := &Server{
-		ChainStartFetcher: p,
-		Eth1InfoFetcher:   p,
-		DepositFetcher:    depositCache,
-		BlockFetcher:      p,
-		HeadFetcher:       &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
+		Eth1InfoFetcher: p,
+		DepositFetcher:  depositCache,
+		BlockFetcher:    p,
+		HeadFetcher:     &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
 	}
 	req := &ethpb.ValidatorStatusRequest{
 		PublicKey: pubKey,
@@ -449,11 +446,10 @@ func TestValidatorStatus_Exited(t *testing.T) {
 		},
 	}
 	vs := &Server{
-		ChainStartFetcher: p,
-		Eth1InfoFetcher:   p,
-		BlockFetcher:      p,
-		DepositFetcher:    depositCache,
-		HeadFetcher:       &mockChain.ChainService{State: st, Root: genesisRoot[:]},
+		Eth1InfoFetcher: p,
+		BlockFetcher:    p,
+		DepositFetcher:  depositCache,
+		HeadFetcher:     &mockChain.ChainService{State: st, Root: genesisRoot[:]},
 	}
 	req := &ethpb.ValidatorStatusRequest{
 		PublicKey: pubKey,
@@ -535,12 +531,11 @@ func TestActivationStatus_OK(t *testing.T) {
 	assert.NoError(t, depositCache.InsertDeposit(t.Context(), dep, 0, 1, root))
 
 	vs := &Server{
-		Ctx:               t.Context(),
-		ChainStartFetcher: &mockExecution.Chain{},
-		BlockFetcher:      &mockExecution.Chain{},
-		Eth1InfoFetcher:   &mockExecution.Chain{},
-		DepositFetcher:    depositCache,
-		HeadFetcher:       &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
+		Ctx:             t.Context(),
+		BlockFetcher:    &mockExecution.Chain{},
+		Eth1InfoFetcher: &mockExecution.Chain{},
+		DepositFetcher:  depositCache,
+		HeadFetcher:     &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
 	}
 	activeExists, response, err := vs.activationStatus(t.Context(), pubKeys)
 	require.NoError(t, err)
@@ -686,11 +681,10 @@ func TestValidatorStatus_CorrectActivationQueue(t *testing.T) {
 		},
 	}
 	vs := &Server{
-		ChainStartFetcher: p,
-		BlockFetcher:      p,
-		Eth1InfoFetcher:   p,
-		DepositFetcher:    depositCache,
-		HeadFetcher:       &mockChain.ChainService{State: st, Root: genesisRoot[:]},
+		BlockFetcher:    p,
+		Eth1InfoFetcher: p,
+		DepositFetcher:  depositCache,
+		HeadFetcher:     &mockChain.ChainService{State: st, Root: genesisRoot[:]},
 	}
 	req := &ethpb.ValidatorStatusRequest{
 		PublicKey: pbKey,
@@ -765,13 +759,12 @@ func TestMultipleValidatorStatus_Pubkeys(t *testing.T) {
 	assert.NoError(t, depositCache.InsertDeposit(t.Context(), dep, 0, 1, root))
 
 	vs := &Server{
-		Ctx:               t.Context(),
-		ChainStartFetcher: &mockExecution.Chain{},
-		BlockFetcher:      &mockExecution.Chain{},
-		Eth1InfoFetcher:   &mockExecution.Chain{},
-		DepositFetcher:    depositCache,
-		HeadFetcher:       &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
-		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		Ctx:             t.Context(),
+		BlockFetcher:    &mockExecution.Chain{},
+		Eth1InfoFetcher: &mockExecution.Chain{},
+		DepositFetcher:  depositCache,
+		HeadFetcher:     &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
+		SyncChecker:     &mockSync.Sync{IsSyncing: false},
 	}
 
 	want := []*ethpb.ValidatorStatusResponse{
@@ -860,12 +853,11 @@ func TestMultipleValidatorStatus_Indices(t *testing.T) {
 	require.NoError(t, err, "Could not get signing root")
 
 	vs := &Server{
-		Ctx:               t.Context(),
-		ChainStartFetcher: &mockExecution.Chain{},
-		BlockFetcher:      &mockExecution.Chain{},
-		Eth1InfoFetcher:   &mockExecution.Chain{},
-		HeadFetcher:       &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
-		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		Ctx:             t.Context(),
+		BlockFetcher:    &mockExecution.Chain{},
+		Eth1InfoFetcher: &mockExecution.Chain{},
+		HeadFetcher:     &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
+		SyncChecker:     &mockSync.Sync{IsSyncing: false},
 	}
 
 	want := []*ethpb.ValidatorStatusResponse{

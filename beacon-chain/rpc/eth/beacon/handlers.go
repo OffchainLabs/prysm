@@ -196,6 +196,11 @@ func (s *Server) GetBlindedBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if blk.Version() >= version.Gloas {
+		httputil.HandleError(w, "Blinded blocks are not supported from Gloas onwards", http.StatusBadRequest)
+		return
+	}
+
 	// Convert to blinded block (if it's not already).
 	if blk.Version() >= version.Bellatrix && !blk.IsBlinded() {
 		blk, err = blk.ToBlinded()

@@ -194,7 +194,7 @@ func (s *Service) payloadIncluded(ctx context.Context, canonicalBlocks []blocks.
 	if i+1 < len(canonicalBlocks) {
 		successor = canonicalBlocks[i+1].Block()
 	} else {
-		successorBlock, err := s.canonicalSuccessorBlock(ctx, block.Block().Slot()+1)
+		successorBlock, _, err := s.canonicalSuccessorBlock(ctx, block.Block().Slot()+1)
 		if err != nil {
 			return false, errors.Wrap(err, "canonical successor block")
 		}

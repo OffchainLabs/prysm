@@ -8,7 +8,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/client/builder"
 	beaconbuilder "github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -19,11 +18,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
-
-// Config defines a config struct for dependencies into the service.
-type Config struct {
-	BeaconDB db.HeadAccessDatabase
-}
 
 // MockBuilderService to mock builder.
 type MockBuilderService struct {
@@ -48,7 +42,6 @@ type MockBuilderService struct {
 	ErrSubmitSignedBeaconBlock    error
 	ErrSubmitBuilderPreferences   error
 	ErrSubmitBuilderPrefsByURL    map[string]error
-	Cfg                           *Config
 
 	mu                   sync.Mutex
 	SubmittedPreferences []string
@@ -120,15 +113,12 @@ func (s *MockBuilderService) GetHeader(_ context.Context, slot primitives.Slot, 
 	return w, s.ErrGetHeader
 }
 
-// RegistrationByValidatorID returns either the values from the cache or db.
-func (s *MockBuilderService) RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error) {
-	if s.RegistrationCache != nil {
-		return s.RegistrationCache.RegistrationByIndex(id)
+// RegistrationByValidatorID returns the value from the mock registration cache.
+func (s *MockBuilderService) RegistrationByValidatorID(_ context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error) {
+	if s.RegistrationCache == nil {
+		return nil, cache.ErrNotFoundRegistration
 	}
-	if s.Cfg.BeaconDB != nil {
-		return s.Cfg.BeaconDB.RegistrationByValidatorID(ctx, id)
-	}
-	return nil, cache.ErrNotFoundRegistration
+	return s.RegistrationCache.RegistrationByIndex(id)
 }
 
 // RegisterValidator for mocking.
