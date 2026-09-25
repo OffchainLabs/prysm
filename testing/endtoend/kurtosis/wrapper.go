@@ -113,6 +113,64 @@ func (kw *KurtosisWrapper) RunPackageWithNetworkConfig(packageId string, network
 	return nil
 }
 
+// StartService starts a previously-stopped service (e.g. a skip_start beacon
+// node) by running a one-line Starlark script in the enclave.
+func (kw *KurtosisWrapper) StartService(name string) error {
+	if kw.enclaveCtx == nil {
+		return fmt.Errorf("enclave context is nil")
+	}
+	script := fmt.Sprintf("def run(plan):\n    plan.start_service(%q)\n", name)
+	err := kw.runStarlarkScript(script)
+	if err != nil {
+		return fmt.Errorf("failed to start service %q: %w", name, err)
+	}
+	return nil
+}
+
+// ServiceAction surfaces orchestration actions (start/stop) for services in the enclave.
+type ServiceAction string
+
+const (
+	ServiceStart ServiceAction = "start"
+)
+
+// ScheduleServiceAction applies the given action to the services after delay.
+func (kw *KurtosisWrapper) ScheduleServiceAction(delay time.Duration, action ServiceAction, services ...string) {
+	kw.t.Logf("Will %s services %v after %s", action, services, delay)
+
+	done := make(chan error, len(services))
+	go func() {
+		select {
+		case <-kw.ctx.Done():
+			return // run ended before the services were due to change state
+		case <-time.After(delay):
+		}
+		for _, name := range services {
+			kw.t.Logf("%s service %q", action, name)
+
+			switch action {
+			case ServiceStart:
+				done <- kw.StartService(name)
+			default:
+				done <- fmt.Errorf("unknown Kurtosis service action %q", action)
+			}
+		}
+	}()
+
+	kw.t.Cleanup(func() {
+		// Non-blocking: report any action that actually ran and failed.
+		for range services {
+			select {
+			case err := <-done:
+				if err != nil {
+					kw.t.Errorf("Failed to %s service: %v", action, err)
+				}
+			default:
+			}
+		}
+	})
+}
+
 // prysmCLServices returns all Prysm beacon (CL) service contexts in the enclave
 // keyed by name, plus their names sorted ("cl-<i>-prysm-<el>").
 func (kw *KurtosisWrapper) prysmCLServices() (map[services.ServiceName]*services.ServiceContext, []string, error) {
@@ -124,9 +182,12 @@ func (kw *KurtosisWrapper) prysmCLServices() (map[services.ServiceName]*services
 
 	// Prysm beacon nodes are the CL services: "cl-<i>-prysm-<el>".
 	var names []string
-	for name := range all {
+	for name, sc := range all {
 		n := string(name)
 		if strings.HasPrefix(n, "cl-") && strings.Contains(n, "prysm") {
+			if isStoppedService(sc) {
+				continue
+			}
 			names = append(names, n)
 		}
 	}
@@ -135,6 +196,27 @@ func (kw *KurtosisWrapper) prysmCLServices() (map[services.ServiceName]*services
 		return nil, nil, fmt.Errorf("no prysm CL beacon services found in enclave %q", kw.enclaveName)
 	}
 	return all, names, nil
+}
+
+// StoppedPrysmCLName returns the name of the stopped Prysm beacon (CL) service in the enclave, which is the skip_start sync node.
+func (kw *KurtosisWrapper) StoppedPrysmCLName() ([]string, error) {
+	all, err := kw.enclaveCtx.GetServiceContexts(map[string]bool{})
+	if err != nil {
+		return nil, fmt.Errorf("list services: %w", err)
+	}
+	var stopped []string
+	for name, sc := range all {
+		n := string(name)
+		if strings.HasPrefix(n, "cl-") && strings.Contains(n, "prysm") && isStoppedService(sc) {
+			stopped = append(stopped, n)
+		}
+	}
+
+	// NOTE: One for sync node, other for checkpoint sync node.
+	if len(stopped) > 2 {
+		return nil, fmt.Errorf("expected at most two stopped prysm CL nodes, found %v", stopped)
+	}
+	return stopped, nil
 }
 
 // NewBeaconRESTEndpoints discovers the published Beacon REST ("http") port of
@@ -168,4 +250,10 @@ func (kw *KurtosisWrapper) NewAssertoorEndpoint() (string, error) {
 		return "", fmt.Errorf("assertoor service has no published http port")
 	}
 	return fmt.Sprintf("http://127.0.0.1:%d", httpPort.GetNumber()), nil // lint:ignore uintcast -- a uint16 port never exceeds int.
+}
+
+// isStoppedService returns true if the service has no published ports, which
+// is how we identify the skip_start sync node in the enclave.
+func isStoppedService(sc *services.ServiceContext) bool {
+	return len(sc.GetPublicPorts()) == 0
 }
