@@ -3,10 +3,12 @@ syntax = "proto3";
 package ethereum.eth.v1alpha1;
 
 import "proto/engine/v1/execution_engine.proto";
+import "proto/engine/v1/gloas.proto";
 import "proto/eth/ext/options.proto";
 import "proto/prysm/v1alpha1/beacon_core_types.proto";
 import "proto/prysm/v1alpha1/eip_7251.proto";
 import "proto/prysm/v1alpha1/gloas.proto";
+import "proto/prysm/v1alpha1/withdrawals.proto";
 
 option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
 
@@ -286,3 +288,50 @@ message BeaconStateDecoupled {
   ];
 }
 
+// Spec: block B (PDF §2.1). The Gloas body with B.votes as available_attestations and B.attestations as attestations.
+message BeaconBlockBodyDecoupled {
+  bytes randao_reveal = 1 [ (ethereum.eth.ext.ssz_size) = "96" ];
+  Eth1Data eth1_data = 2;
+  bytes graffiti = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  repeated ProposerSlashing proposer_slashings = 4
+      [ (ethereum.eth.ext.ssz_max) = "16" ];
+  repeated AttesterSlashingDecoupled attester_slashings = 5
+      [ (ethereum.eth.ext.ssz_max) = "1" ];
+  repeated AttestationDecoupled attestations = 6
+      [ (ethereum.eth.ext.ssz_max) = "8" ];
+  repeated Deposit deposits = 7 [ (ethereum.eth.ext.ssz_max) = "16" ];
+  repeated SignedVoluntaryExit voluntary_exits = 8
+      [ (ethereum.eth.ext.ssz_max) = "16" ];
+  SyncAggregate sync_aggregate = 9;
+  repeated SignedBLSToExecutionChange bls_to_execution_changes = 10
+      [ (ethereum.eth.ext.ssz_max) = "16" ];
+  SignedExecutionPayloadBid signed_execution_payload_bid = 11;
+  repeated PayloadAttestation payload_attestations = 12
+      [ (ethereum.eth.ext.ssz_max) = "payload_attestation.size" ];
+  ethereum.engine.v1.ExecutionRequestsGloas parent_execution_requests = 13;
+  repeated AvailableAttestation available_attestations = 14
+      [ (ethereum.eth.ext.ssz_max) = "available_attestation.size" ];
+  // Spec: B.support_votes ⊆ B.votes (PDF §2.1). Bit i marks available_attestations[i].
+  bytes support_votes = 15 [
+    (ethereum.eth.ext.ssz_max) = "available_attestation.size",
+    (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
+  ];
+}
+
+message BeaconBlockDecoupled {
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  uint64 proposer_index = 2 [ (ethereum.eth.ext.cast_type) =
+                                  "github.com/OffchainLabs/prysm/v7/"
+                                  "consensus-types/primitives.ValidatorIndex" ];
+  bytes parent_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes state_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  BeaconBlockBodyDecoupled body = 5;
+}
+
+message SignedBeaconBlockDecoupled {
+  BeaconBlockDecoupled block = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}

@@ -2,6 +2,7 @@ package blocks
 
 import (
 	"fmt"
+	"github.com/OffchainLabs/go-bitfield"
 
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -218,6 +219,22 @@ func (b *SignedBeaconBlock) SetParentExecutionRequests(r *enginev1.ExecutionRequ
 		return consensus_types.ErrNotSupported("SetParentExecutionRequests", b.version)
 	}
 	b.block.body.parentExecutionRequests = r
+	return nil
+}
+
+func (b *SignedBeaconBlock) SetAvailableAttestations(a []*eth.AvailableAttestation) error {
+	if b.version < version.Decoupled {
+		return consensus_types.ErrNotSupported("SetAvailableAttestations", b.version)
+	}
+	b.block.body.availableAttestations = a
+	return nil
+}
+
+func (b *SignedBeaconBlock) SetSupportVotes(v bitfield.Bitlist) error {
+	if b.version < version.Decoupled {
+		return consensus_types.ErrNotSupported("SetSupportVotes", b.version)
+	}
+	b.block.body.supportVotes = v
 	return nil
 }
 

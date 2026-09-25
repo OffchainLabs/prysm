@@ -374,6 +374,8 @@ func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.Rea
 
 func keyForSnapshot(v int) ([]byte, error) {
 	switch v {
+	case version.Decoupled:
+		return decoupledKey, nil
 	case version.Gloas:
 		return gloasKey, nil
 	case version.Fulu:
@@ -408,6 +410,12 @@ func addKey(v int, bytes []byte) ([]byte, error) {
 
 func decodeStateSnapshot(enc []byte) (state.BeaconState, error) {
 	switch {
+	case hasDecoupledKey(enc):
+		var decoupledState ethpb.BeaconStateDecoupled
+		if err := decoupledState.UnmarshalSSZ(enc[len(decoupledKey):]); err != nil {
+			return nil, err
+		}
+		return statenative.InitializeFromProtoUnsafeDecoupled(&decoupledState)
 	case hasGloasKey(enc):
 		var gloasState ethpb.BeaconStateGloas
 		if err := gloasState.UnmarshalSSZ(enc[len(gloasKey):]); err != nil {

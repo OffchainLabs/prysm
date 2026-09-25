@@ -198,6 +198,19 @@ func (b *SignedBeaconBlock) Proto() (proto.Message, error) { // nolint:gocognit
 			Block:     block,
 			Signature: b.signature[:],
 		}, nil
+	case version.Decoupled:
+		var block *eth.BeaconBlockDecoupled
+		if blockMessage != nil {
+			var ok bool
+			block, ok = blockMessage.(*eth.BeaconBlockDecoupled)
+			if !ok {
+				return nil, errIncorrectBlockVersion
+			}
+		}
+		return &eth.SignedBeaconBlockDecoupled{
+			Block:     block,
+			Signature: b.signature[:],
+		}, nil
 	default:
 		return nil, errors.New("unsupported signed beacon block version")
 	}
@@ -422,6 +435,22 @@ func (b *BeaconBlock) Proto() (proto.Message, error) { // nolint:gocognit
 			}
 		}
 		return &eth.BeaconBlockGloas{
+			Slot:          b.slot,
+			ProposerIndex: b.proposerIndex,
+			ParentRoot:    b.parentRoot[:],
+			StateRoot:     b.stateRoot[:],
+			Body:          body,
+		}, nil
+	case version.Decoupled:
+		var body *eth.BeaconBlockBodyDecoupled
+		if bodyMessage != nil {
+			var ok bool
+			body, ok = bodyMessage.(*eth.BeaconBlockBodyDecoupled)
+			if !ok {
+				return nil, errIncorrectBodyVersion
+			}
+		}
+		return &eth.BeaconBlockDecoupled{
 			Slot:          b.slot,
 			ProposerIndex: b.proposerIndex,
 			ParentRoot:    b.parentRoot[:],
@@ -712,6 +741,24 @@ func (b *BeaconBlockBody) Proto() (proto.Message, error) {
 			SignedExecutionPayloadBid: b.signedExecutionPayloadBid,
 			PayloadAttestations:       b.payloadAttestations,
 			ParentExecutionRequests:   b.parentExecutionRequests,
+		}, nil
+	case version.Decoupled:
+		return &eth.BeaconBlockBodyDecoupled{
+			RandaoReveal:              b.randaoReveal[:],
+			Eth1Data:                  b.eth1Data,
+			Graffiti:                  b.graffiti[:],
+			ProposerSlashings:         b.proposerSlashings,
+			AttesterSlashings:         b.attesterSlashingsDecoupled,
+			Attestations:              b.attestationsDecoupled,
+			Deposits:                  b.deposits,
+			VoluntaryExits:            b.voluntaryExits,
+			SyncAggregate:             b.syncAggregate,
+			BlsToExecutionChanges:     b.blsToExecutionChanges,
+			SignedExecutionPayloadBid: b.signedExecutionPayloadBid,
+			PayloadAttestations:       b.payloadAttestations,
+			ParentExecutionRequests:   b.parentExecutionRequests,
+			AvailableAttestations:     b.availableAttestations,
+			SupportVotes:              b.supportVotes,
 		}, nil
 	default:
 		return nil, errors.New("unsupported beacon block body version")
@@ -1588,6 +1635,77 @@ func initBlockBodyFromProtoGloas(pb *eth.BeaconBlockBodyGloas) (*BeaconBlockBody
 		signedExecutionPayloadBid: pb.SignedExecutionPayloadBid,
 		payloadAttestations:       pb.PayloadAttestations,
 		parentExecutionRequests:   per,
+	}
+	return b, nil
+}
+
+// ----------------------------------------------------------------------------
+// Decoupled
+// ----------------------------------------------------------------------------
+
+func initSignedBlockFromProtoDecoupled(pb *eth.SignedBeaconBlockDecoupled) (*SignedBeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+
+	block, err := initBlockFromProtoDecoupled(pb.Block)
+	if err != nil {
+		return nil, err
+	}
+	b := &SignedBeaconBlock{
+		version:   version.Decoupled,
+		block:     block,
+		signature: bytesutil.ToBytes96(pb.Signature),
+	}
+	return b, nil
+}
+
+func initBlockFromProtoDecoupled(pb *eth.BeaconBlockDecoupled) (*BeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+
+	body, err := initBlockBodyFromProtoDecoupled(pb.Body)
+	if err != nil {
+		return nil, err
+	}
+	b := &BeaconBlock{
+		version:       version.Decoupled,
+		slot:          pb.Slot,
+		proposerIndex: pb.ProposerIndex,
+		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
+		stateRoot:     bytesutil.ToBytes32(pb.StateRoot),
+		body:          body,
+	}
+	return b, nil
+}
+
+func initBlockBodyFromProtoDecoupled(pb *eth.BeaconBlockBodyDecoupled) (*BeaconBlockBody, error) {
+	if pb == nil {
+		return nil, errNilBlockBody
+	}
+
+	per := pb.ParentExecutionRequests
+	if per == nil {
+		per = &enginev1.ExecutionRequestsGloas{}
+	}
+	b := &BeaconBlockBody{
+		version:                    version.Decoupled,
+		randaoReveal:               bytesutil.ToBytes96(pb.RandaoReveal),
+		eth1Data:                   pb.Eth1Data,
+		graffiti:                   bytesutil.ToBytes32(pb.Graffiti),
+		proposerSlashings:          pb.ProposerSlashings,
+		attesterSlashingsDecoupled: pb.AttesterSlashings,
+		attestationsDecoupled:      pb.Attestations,
+		deposits:                   pb.Deposits,
+		voluntaryExits:             pb.VoluntaryExits,
+		syncAggregate:              pb.SyncAggregate,
+		blsToExecutionChanges:      pb.BlsToExecutionChanges,
+		signedExecutionPayloadBid:  pb.SignedExecutionPayloadBid,
+		payloadAttestations:        pb.PayloadAttestations,
+		parentExecutionRequests:    per,
+		availableAttestations:      pb.AvailableAttestations,
+		supportVotes:               pb.SupportVotes,
 	}
 	return b, nil
 }

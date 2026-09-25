@@ -54,6 +54,7 @@ mainnet = {
     "available_committee.size": "64",  # Decoupled: available committee aggregation bits (AVAILABLE_COMMITTEE_SIZE = 512)
     "available_committee.type": "github.com/OffchainLabs/go-bitfield.Bitvector512",
     "payload_attestation.size": "4",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body
+    "available_attestation.size": "8",  # Decoupled: MAX_AVAILABLE_ATTESTATIONS
     "execution_payload_availability.size": "1024",  # Gloas: SLOTS_PER_HISTORICAL_ROOT
     "builder_pending_payments.size": "64",  # Gloas: vector length (2 * SLOTS_PER_EPOCH)
     "builder_registry_limit": "1099511627776",  # Gloas: BUILDER_REGISTRY_LIMIT (same for mainnet/minimal)
@@ -107,6 +108,7 @@ minimal = {
     "available_committee.size": "64",  # Decoupled: available committee aggregation bits (AVAILABLE_COMMITTEE_SIZE = 512, a spec constant with no minimal variant)
     "available_committee.type": "github.com/OffchainLabs/go-bitfield.Bitvector512",
     "payload_attestation.size": "4",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body
+    "available_attestation.size": "8",  # Decoupled: MAX_AVAILABLE_ATTESTATIONS
     "execution_payload_availability.size": "8",  # Gloas: SLOTS_PER_HISTORICAL_ROOT
     "builder_pending_payments.size": "16",  # Gloas: vector length (2 * SLOTS_PER_EPOCH)
     "builder_registry_limit": "1099511627776",  # Gloas: BUILDER_REGISTRY_LIMIT (same for mainnet/minimal)

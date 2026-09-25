@@ -94,3 +94,10 @@ func hasGloasKey(enc []byte) bool {
 	}
 	return bytes.Equal(enc[:len(gloasKey)], gloasKey)
 }
+
+func hasDecoupledKey(enc []byte) bool {
+	if len(decoupledKey) >= len(enc) {
+		return false
+	}
+	return bytes.Equal(enc[:len(decoupledKey)], decoupledKey)
+}

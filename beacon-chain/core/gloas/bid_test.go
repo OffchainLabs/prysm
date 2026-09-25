@@ -2,6 +2,7 @@ package gloas
 
 import (
 	"bytes"
+	"github.com/OffchainLabs/go-bitfield"
 	"testing"
 
 	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
@@ -55,6 +56,18 @@ func (s stubBlockBody) SignedExecutionPayloadBid() (*ethpb.SignedExecutionPayloa
 	return s.signedBid, nil
 }
 func (s stubBlockBody) ParentExecutionRequests() (*enginev1.ExecutionRequestsGloas, error) {
+	return nil, nil
+}
+func (s stubBlockBody) AttesterSlashingsDecoupled() ([]*ethpb.AttesterSlashingDecoupled, error) {
+	return nil, nil
+}
+func (s stubBlockBody) AttestationsDecoupled() ([]*ethpb.AttestationDecoupled, error) {
+	return nil, nil
+}
+func (s stubBlockBody) AvailableAttestations() ([]*ethpb.AvailableAttestation, error) {
+	return nil, nil
+}
+func (s stubBlockBody) SupportVotes() (bitfield.Bitlist, error) {
 	return nil, nil
 }
 func (s stubBlockBody) MarshalSSZ() ([]byte, error)         { return nil, nil }

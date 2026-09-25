@@ -1,6 +1,7 @@
 package blocks
 
 import (
+	"github.com/OffchainLabs/go-bitfield"
 	field_params "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -62,6 +63,11 @@ type BeaconBlockBody struct {
 	signedExecutionPayloadBid *eth.SignedExecutionPayloadBid
 	payloadAttestations       []*eth.PayloadAttestation
 	parentExecutionRequests   *enginev1.ExecutionRequestsGloas
+
+	attesterSlashingsDecoupled []*eth.AttesterSlashingDecoupled
+	attestationsDecoupled      []*eth.AttestationDecoupled
+	availableAttestations      []*eth.AvailableAttestation
+	supportVotes               bitfield.Bitlist
 }
 
 var _ interfaces.ReadOnlyBeaconBlockBody = &BeaconBlockBody{}

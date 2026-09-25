@@ -2,6 +2,7 @@ package blocks
 
 import (
 	"fmt"
+	"github.com/OffchainLabs/go-bitfield"
 
 	"github.com/OffchainLabs/methodical-ssz/ssz"
 	"github.com/pkg/errors"
@@ -83,6 +84,8 @@ func (b *SignedBeaconBlock) Copy() (interfaces.SignedBeaconBlock, error) {
 		return initSignedBlockFromProtoFulu(pb.(*eth.SignedBeaconBlockFulu).Copy())
 	case version.Gloas:
 		return initSignedBlockFromProtoGloas(eth.CopySignedBeaconBlockGloas(pb.(*eth.SignedBeaconBlockGloas)))
+	case version.Decoupled:
+		return initSignedBlockFromProtoDecoupled(eth.CopySignedBeaconBlockDecoupled(pb.(*eth.SignedBeaconBlockDecoupled)))
 	default:
 		return nil, errIncorrectBlockVersion
 	}
@@ -163,6 +166,10 @@ func (b *SignedBeaconBlock) PbGenericBlock() (*eth.GenericSignedBeaconBlock, err
 	case version.Gloas:
 		return &eth.GenericSignedBeaconBlock{
 			Block: &eth.GenericSignedBeaconBlock_Gloas{Gloas: pb.(*eth.SignedBeaconBlockGloas)},
+		}, nil
+	case version.Decoupled:
+		return &eth.GenericSignedBeaconBlock{
+			Block: &eth.GenericSignedBeaconBlock_Decoupled{Decoupled: pb.(*eth.SignedBeaconBlockDecoupled)},
 		}, nil
 	default:
 		return nil, errIncorrectBlockVersion
@@ -446,6 +453,8 @@ func (b *SignedBeaconBlock) MarshalSSZ() ([]byte, error) {
 		return pb.(*eth.SignedBeaconBlockFulu).MarshalSSZ()
 	case version.Gloas:
 		return pb.(*eth.SignedBeaconBlockGloas).MarshalSSZ()
+	case version.Decoupled:
+		return pb.(*eth.SignedBeaconBlockDecoupled).MarshalSSZ()
 	default:
 		return []byte{}, errIncorrectBlockVersion
 	}
@@ -490,6 +499,8 @@ func (b *SignedBeaconBlock) MarshalSSZTo(dst []byte) ([]byte, error) {
 		return pb.(*eth.SignedBeaconBlockFulu).MarshalSSZTo(dst)
 	case version.Gloas:
 		return pb.(*eth.SignedBeaconBlockGloas).MarshalSSZTo(dst)
+	case version.Decoupled:
+		return pb.(*eth.SignedBeaconBlockDecoupled).MarshalSSZTo(dst)
 	default:
 		return []byte{}, errIncorrectBlockVersion
 	}
@@ -539,6 +550,8 @@ func (b *SignedBeaconBlock) SizeSSZ() int {
 		return pb.(*eth.SignedBeaconBlockFulu).SizeSSZ()
 	case version.Gloas:
 		return pb.(*eth.SignedBeaconBlockGloas).SizeSSZ()
+	case version.Decoupled:
+		return pb.(*eth.SignedBeaconBlockDecoupled).SizeSSZ()
 	default:
 		panic(incorrectBlockVersion)
 	}
@@ -689,6 +702,16 @@ func (b *SignedBeaconBlock) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
+	case version.Decoupled:
+		pb := &eth.SignedBeaconBlockDecoupled{}
+		err := pb.UnmarshalSSZ(buf)
+		if err != nil {
+			return err
+		}
+		newBlock, err = initSignedBlockFromProtoDecoupled(pb)
+		if err != nil {
+			return err
+		}
 	default:
 		return errIncorrectBlockVersion
 	}
@@ -774,6 +797,8 @@ func (b *BeaconBlock) HashTreeRoot() ([field_params.RootLength]byte, error) {
 		return pb.(*eth.BeaconBlockElectra).HashTreeRoot()
 	case version.Gloas:
 		return pb.(*eth.BeaconBlockGloas).HashTreeRoot()
+	case version.Decoupled:
+		return pb.(*eth.BeaconBlockDecoupled).HashTreeRoot()
 
 	default:
 		return [field_params.RootLength]byte{}, errIncorrectBlockVersion
@@ -818,6 +843,8 @@ func (b *BeaconBlock) HashTreeRootWith(h *ssz.Hasher) error {
 		return pb.(*eth.BeaconBlockElectra).HashTreeRootWith(h)
 	case version.Gloas:
 		return pb.(*eth.BeaconBlockGloas).HashTreeRootWith(h)
+	case version.Decoupled:
+		return pb.(*eth.BeaconBlockDecoupled).HashTreeRootWith(h)
 	default:
 		return errIncorrectBlockVersion
 	}
@@ -862,6 +889,8 @@ func (b *BeaconBlock) MarshalSSZ() ([]byte, error) {
 		return pb.(*eth.BeaconBlockElectra).MarshalSSZ()
 	case version.Gloas:
 		return pb.(*eth.BeaconBlockGloas).MarshalSSZ()
+	case version.Decoupled:
+		return pb.(*eth.BeaconBlockDecoupled).MarshalSSZ()
 	default:
 		return []byte{}, errIncorrectBlockVersion
 	}
@@ -906,6 +935,8 @@ func (b *BeaconBlock) MarshalSSZTo(dst []byte) ([]byte, error) {
 		return pb.(*eth.BeaconBlockElectra).MarshalSSZTo(dst)
 	case version.Gloas:
 		return pb.(*eth.BeaconBlockGloas).MarshalSSZTo(dst)
+	case version.Decoupled:
+		return pb.(*eth.BeaconBlockDecoupled).MarshalSSZTo(dst)
 	default:
 		return []byte{}, errIncorrectBlockVersion
 	}
@@ -955,6 +986,8 @@ func (b *BeaconBlock) SizeSSZ() int {
 		return pb.(*eth.BeaconBlockElectra).SizeSSZ()
 	case version.Gloas:
 		return pb.(*eth.BeaconBlockGloas).SizeSSZ()
+	case version.Decoupled:
+		return pb.(*eth.BeaconBlockDecoupled).SizeSSZ()
 	default:
 		panic(incorrectBodyVersion)
 	}
@@ -1105,6 +1138,16 @@ func (b *BeaconBlock) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
+	case version.Decoupled:
+		pb := &eth.BeaconBlockDecoupled{}
+		if err := pb.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+		var err error
+		newBlock, err = initBlockFromProtoDecoupled(pb)
+		if err != nil {
+			return err
+		}
 	default:
 		return errIncorrectBlockVersion
 	}
@@ -1150,6 +1193,8 @@ func (b *BeaconBlock) AsSignRequestObject() (validatorpb.SignRequestObject, erro
 		return &validatorpb.SignRequest_BlockFulu{BlockFulu: pb.(*eth.BeaconBlockElectra)}, nil
 	case version.Gloas:
 		return &validatorpb.SignRequest_BlockGloas{BlockGloas: pb.(*eth.BeaconBlockGloas)}, nil
+	case version.Decoupled:
+		return nil, consensus_types.ErrNotSupported("AsSignRequestObject", b.version)
 	default:
 		return nil, errIncorrectBlockVersion
 	}
@@ -1313,6 +1358,34 @@ func (b *BeaconBlockBody) PayloadAttestations() ([]*eth.PayloadAttestation, erro
 	return nil, consensus_types.ErrNotSupported("PayloadAttestations", b.version)
 }
 
+func (b *BeaconBlockBody) AttesterSlashingsDecoupled() ([]*eth.AttesterSlashingDecoupled, error) {
+	if b.version >= version.Decoupled {
+		return b.attesterSlashingsDecoupled, nil
+	}
+	return nil, consensus_types.ErrNotSupported("AttesterSlashingsDecoupled", b.version)
+}
+
+func (b *BeaconBlockBody) AttestationsDecoupled() ([]*eth.AttestationDecoupled, error) {
+	if b.version >= version.Decoupled {
+		return b.attestationsDecoupled, nil
+	}
+	return nil, consensus_types.ErrNotSupported("AttestationsDecoupled", b.version)
+}
+
+func (b *BeaconBlockBody) AvailableAttestations() ([]*eth.AvailableAttestation, error) {
+	if b.version >= version.Decoupled {
+		return b.availableAttestations, nil
+	}
+	return nil, consensus_types.ErrNotSupported("AvailableAttestations", b.version)
+}
+
+func (b *BeaconBlockBody) SupportVotes() (bitfield.Bitlist, error) {
+	if b.version >= version.Decoupled {
+		return b.supportVotes, nil
+	}
+	return nil, consensus_types.ErrNotSupported("SupportVotes", b.version)
+}
+
 // SignedExecutionPayloadBid returns the signed execution payload header in the block.
 func (b *BeaconBlockBody) SignedExecutionPayloadBid() (*eth.SignedExecutionPayloadBid, error) {
 	if b.version >= version.Gloas {
@@ -1372,6 +1445,8 @@ func (b *BeaconBlockBody) HashTreeRoot() ([field_params.RootLength]byte, error) 
 		return pb.(*eth.BeaconBlockBodyElectra).HashTreeRoot()
 	case version.Gloas:
 		return pb.(*eth.BeaconBlockBodyGloas).HashTreeRoot()
+	case version.Decoupled:
+		return pb.(*eth.BeaconBlockBodyDecoupled).HashTreeRoot()
 	default:
 		return [field_params.RootLength]byte{}, errIncorrectBodyVersion
 	}

@@ -1302,6 +1302,11 @@ func unmarshalBlock(_ context.Context, enc []byte) (interfaces.ReadOnlySignedBea
 		if err := rawBlock.UnmarshalSSZ(enc[len(gloasKey):]); err != nil {
 			return nil, errors.Wrap(err, "could not unmarshal Gloas block")
 		}
+	case hasDecoupledKey(enc):
+		rawBlock = &ethpb.SignedBeaconBlockDecoupled{}
+		if err := rawBlock.UnmarshalSSZ(enc[len(decoupledKey):]); err != nil {
+			return nil, errors.Wrap(err, "could not unmarshal Decoupled block")
+		}
 	default:
 		// Marshal block bytes to phase 0 beacon block.
 		rawBlock = &ethpb.SignedBeaconBlock{}
@@ -1331,6 +1336,10 @@ func encodeBlock(blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
 
 func keyForBlock(blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
 	v := blk.Version()
+
+	if v >= version.Decoupled {
+		return decoupledKey, nil
+	}
 
 	if v >= version.Gloas {
 		// Gloas blocks are never blinded (no execution payload in block body).

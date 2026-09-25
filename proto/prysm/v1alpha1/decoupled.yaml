@@ -35,3 +35,17 @@ types:
       TargetParticipation:        {type: "ProgressiveBitlist"}
       Progress:                   {type: "ProgressiveBitlist"}
       FinalityParticipation:      {type: "ProgressiveBitlist"}
+  - name: "BeaconBlockBodyDecoupled"
+    progressive: {}
+    fields:
+      ProposerSlashings:     {type: "ProgressiveList"}
+      AttesterSlashings:     {type: "ProgressiveList"}
+      Attestations:          {type: "ProgressiveList"}
+      Deposits:              {type: "ProgressiveList"}
+      VoluntaryExits:        {type: "ProgressiveList"}
+      BlsToExecutionChanges: {type: "ProgressiveList"}
+      PayloadAttestations:   {type: "ProgressiveList"}
+      AvailableAttestations: {type: "ProgressiveList"}
+      SupportVotes:          {type: "ProgressiveBitlist"}
+  - name: "BeaconBlockDecoupled"
+  - name: "SignedBeaconBlockDecoupled"

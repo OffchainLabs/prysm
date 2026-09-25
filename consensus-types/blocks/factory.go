@@ -86,6 +86,10 @@ func NewSignedBeaconBlock(i any) (interfaces.SignedBeaconBlock, error) {
 		return initSignedBlockFromProtoGloas(b.Gloas)
 	case *eth.SignedBeaconBlockGloas:
 		return initSignedBlockFromProtoGloas(b)
+	case *eth.GenericSignedBeaconBlock_Decoupled:
+		return initSignedBlockFromProtoDecoupled(b.Decoupled)
+	case *eth.SignedBeaconBlockDecoupled:
+		return initSignedBlockFromProtoDecoupled(b)
 	default:
 		return nil, errors.Wrapf(ErrUnsupportedSignedBeaconBlock, "unable to create block from type %T", i)
 	}
@@ -146,6 +150,10 @@ func NewBeaconBlock(i any) (interfaces.ReadOnlyBeaconBlock, error) {
 		return initBlockFromProtoGloas(b.Gloas)
 	case *eth.BeaconBlockGloas:
 		return initBlockFromProtoGloas(b)
+	case *eth.GenericBeaconBlock_Decoupled:
+		return initBlockFromProtoDecoupled(b.Decoupled)
+	case *eth.BeaconBlockDecoupled:
+		return initBlockFromProtoDecoupled(b)
 	default:
 		return nil, errors.Wrapf(errUnsupportedBeaconBlock, "unable to create block from type %T", i)
 	}
@@ -178,6 +186,8 @@ func NewBeaconBlockBody(i any) (interfaces.ReadOnlyBeaconBlockBody, error) {
 		return initBlindedBlockBodyFromProtoElectra(b)
 	case *eth.BeaconBlockBodyGloas:
 		return initBlockBodyFromProtoGloas(b)
+	case *eth.BeaconBlockBodyDecoupled:
+		return initBlockBodyFromProtoDecoupled(b)
 	default:
 		return nil, errors.Wrapf(errUnsupportedBeaconBlockBody, "unable to create block body from type %T", i)
 	}
@@ -276,6 +286,12 @@ func BuildSignedBeaconBlock(blk interfaces.ReadOnlyBeaconBlock, signature []byte
 			return nil, errIncorrectBlockVersion
 		}
 		return NewSignedBeaconBlock(&eth.SignedBeaconBlockGloas{Block: pb, Signature: signature})
+	case version.Decoupled:
+		pb, ok := pb.(*eth.BeaconBlockDecoupled)
+		if !ok {
+			return nil, errIncorrectBlockVersion
+		}
+		return NewSignedBeaconBlock(&eth.SignedBeaconBlockDecoupled{Block: pb, Signature: signature})
 	default:
 		return nil, errUnsupportedBeaconBlock
 	}
@@ -647,6 +663,8 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 		}
 	case version.Gloas:
 		return nil, errors.Wrap(errUnsupportedBeaconBlock, "gloas blocks are not supported in this function")
+	case version.Decoupled:
+		return nil, errors.Wrap(errUnsupportedBeaconBlock, "decoupled blocks are not supported in this function")
 	default:
 		return nil, errors.New("Block not of known type")
 	}

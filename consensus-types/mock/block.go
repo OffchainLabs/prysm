@@ -3,6 +3,7 @@
 package mock
 
 import (
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/methodical-ssz/ssz"
 	"google.golang.org/protobuf/proto"
 
@@ -286,6 +287,22 @@ func (b *BeaconBlockBody) SignedExecutionPayloadBid() (*eth.SignedExecutionPaylo
 }
 
 func (b *BeaconBlockBody) ParentExecutionRequests() (*enginev1.ExecutionRequestsGloas, error) {
+	panic("implement me")
+}
+
+func (b *BeaconBlockBody) AttesterSlashingsDecoupled() ([]*eth.AttesterSlashingDecoupled, error) {
+	panic("implement me")
+}
+
+func (b *BeaconBlockBody) AttestationsDecoupled() ([]*eth.AttestationDecoupled, error) {
+	panic("implement me")
+}
+
+func (b *BeaconBlockBody) AvailableAttestations() ([]*eth.AvailableAttestation, error) {
+	panic("implement me")
+}
+
+func (b *BeaconBlockBody) SupportVotes() (bitfield.Bitlist, error) {
 	panic("implement me")
 }
 
