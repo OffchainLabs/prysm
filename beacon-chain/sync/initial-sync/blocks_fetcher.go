@@ -388,7 +388,7 @@ func (f *blocksFetcher) fetchBlocksFromPeer(
 			}
 			continue
 		}
-		f.p2p.Peers().Scorers().BlockProviderScorer().Touch(p)
+		f.p2p.BlockProviderSelector().Touch(p)
 		robs, err := sortedBlockWithVerifiedBlobSlice(blocks)
 		if err != nil {
 			log.WithField("peer", p).WithError(err).Debug("Invalid BeaconBlocksByRange response")
@@ -442,7 +442,7 @@ func (f *blocksFetcher) requestBlocks(
 		"count":    req.Count,
 		"step":     req.Step,
 		"capacity": f.rateLimiter.Remaining(pid.String()),
-		"score":    f.p2p.Peers().Scorers().BlockProviderScorer().FormatScorePretty(pid),
+		"score":    f.p2p.BlockProviderSelector().FormatScorePretty(pid),
 	}).Debug("Requesting blocks")
 	if f.rateLimiter.Remaining(pid.String()) < int64(req.Count) {
 		if err := f.waitForBandwidth(pid, req.Count); err != nil {
@@ -470,7 +470,7 @@ func (f *blocksFetcher) requestBlocksByRoot(
 		"peer":     pid,
 		"numRoots": len(*req),
 		"capacity": f.rateLimiter.Remaining(pid.String()),
-		"score":    f.p2p.Peers().Scorers().BlockProviderScorer().FormatScorePretty(pid),
+		"score":    f.p2p.BlockProviderSelector().FormatScorePretty(pid),
 	}).Debug("Requesting blocks (by roots)")
 	if f.rateLimiter.Remaining(pid.String()) < int64(len(*req)) {
 		if err := f.waitForBandwidth(pid, uint64(len(*req))); err != nil {

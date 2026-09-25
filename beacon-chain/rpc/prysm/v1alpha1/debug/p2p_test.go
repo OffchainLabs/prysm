@@ -14,9 +14,10 @@ func TestDebugServer_GetPeer(t *testing.T) {
 	peersProvider := &mockP2p.MockPeersProvider{}
 	mP2P := mockP2p.NewTestP2P(t)
 	ds := &Server{
-		PeersFetcher:       peersProvider,
-		PeerScoringFetcher: peersProvider,
-		PeerManager:        &mockP2p.MockPeerManager{BHost: mP2P.BHost},
+		PeersFetcher:         peersProvider,
+		PeerScoringFetcher:   peersProvider,
+		BlockProviderFetcher: peersProvider,
+		PeerManager:          &mockP2p.MockPeerManager{BHost: mP2P.BHost},
 	}
 	// Pick the seeded inbound peer deterministically (All() has map iteration order).
 	firstPeer := peersProvider.Peers().Inbound()[0]
@@ -33,9 +34,10 @@ func TestDebugServer_ListPeers(t *testing.T) {
 	peersProvider := &mockP2p.MockPeersProvider{}
 	mP2P := mockP2p.NewTestP2P(t)
 	ds := &Server{
-		PeersFetcher:       peersProvider,
-		PeerScoringFetcher: peersProvider,
-		PeerManager:        &mockP2p.MockPeerManager{BHost: mP2P.BHost},
+		PeersFetcher:         peersProvider,
+		PeerScoringFetcher:   peersProvider,
+		BlockProviderFetcher: peersProvider,
+		PeerManager:          &mockP2p.MockPeerManager{BHost: mP2P.BHost},
 	}
 
 	res, err := ds.ListPeers(t.Context(), &empty.Empty{})
