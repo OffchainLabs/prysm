@@ -210,23 +210,51 @@ func TestPeerStatusGetters(t *testing.T) {
 	require.ErrorIs(t, err, ErrNoPeerStatus)
 	require.Equal(t, true, s.ChainStateLastUpdated(testPid).IsZero())
 
-	// Status stored with a validation error.
+	// A status that fails validation records the verdict but no chain state.
 	chainState := &pb.StatusV2{HeadSlot: 42}
 	s.SetPeerStatus(testPid, chainState, validationErr)
-	got, err := s.PeerStatus(testPid)
-	require.NoError(t, err)
-	require.Equal(t, chainState, got)
+	_, err = s.PeerStatus(testPid)
+	require.ErrorIs(t, err, ErrNoPeerStatus)
 	require.Equal(t, false, s.ChainStateLastUpdated(testPid).IsZero())
 	require.Equal(t, validationErr, s.ValidationError(testPid))
 
-	// A later exchange overwrites the verdict.
+	// A later valid exchange stores the chain state and clears the verdict.
 	s.SetPeerStatus(testPid, chainState, nil)
+	got, err := s.PeerStatus(testPid)
+	require.NoError(t, err)
+	require.Equal(t, chainState, got)
 	require.NoError(t, s.ValidationError(testPid))
 
+	// A failed exchange keeps the last known good chain state.
+	s.SetPeerStatus(testPid, &pb.StatusV2{HeadSlot: 99}, validationErr)
+	got, err = s.PeerStatus(testPid)
+	require.NoError(t, err)
+	require.Equal(t, chainState, got)
+	require.Equal(t, validationErr, s.ValidationError(testPid))
+
 	// Status stored with a nil chain state reads as no status.
-	s.SetPeerStatus(testPid, nil, validationErr)
+	s.SetPeerStatus(testPid, nil, nil)
 	_, err = s.PeerStatus(testPid)
 	require.ErrorIs(t, err, ErrNoPeerStatus)
+}
+
+func TestSetPeerStatusKeepsLastGoodState(t *testing.T) {
+	s := NewScorer()
+
+	s.SetPeerStatus(testPid, &pb.StatusV2{HeadSlot: 128, FinalizedEpoch: 4}, nil)
+	s.SetPeerStatus(testPid, &pb.StatusV2{HeadSlot: 256, FinalizedEpoch: 9}, p2ptypes.ErrInvalidEpoch)
+
+	status, err := s.PeerStatus(testPid)
+	require.NoError(t, err)
+	require.Equal(t, primitives.Slot(128), status.HeadSlot)
+	require.Equal(t, primitives.Epoch(4), status.FinalizedEpoch)
+	require.ErrorIs(t, s.ValidationError(testPid), p2ptypes.ErrInvalidEpoch)
+
+	// A peer whose first exchange fails validation has no chain state at all.
+	s.SetPeerStatus("peer-2", &pb.StatusV2{HeadSlot: 256, FinalizedEpoch: 9}, p2ptypes.ErrInvalidEpoch)
+	status, err = s.PeerStatus("peer-2")
+	require.ErrorIs(t, err, ErrNoPeerStatus)
+	require.Equal(t, (*pb.StatusV2)(nil), status)
 }
 
 func TestHighestHeadSlot(t *testing.T) {
@@ -300,7 +328,12 @@ func TestSetPeerStatus(t *testing.T) {
 			require.Equal(t, tc.wantHighest, s.highestKnownHeadSlot)
 			status := s.info[testPid].rpcStatus
 			require.NotNil(t, status)
-			require.Equal(t, tc.chainState, status.chainState)
+			if tc.validationErr != nil {
+				// No earlier valid exchange, so there is no good state to keep.
+				require.Equal(t, (*pb.StatusV2)(nil), status.chainState)
+			} else {
+				require.Equal(t, tc.chainState, status.chainState)
+			}
 			require.Equal(t, tc.validationErr, status.validationError)
 		})
 	}

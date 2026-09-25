@@ -96,7 +96,6 @@ type Config struct {
 	BlobReceiver                     blockchain.BlobReceiver
 	DataColumnReceiver               blockchain.DataColumnReceiver
 	ExecutionChainService            execution.Chain
-	ChainStartFetcher                execution.ChainStartFetcher
 	ExecutionChainInfoFetcher        execution.ChainInfoFetcher
 	GenesisTimeFetcher               blockchain.TimeFetcher
 	GenesisFetcher                   blockchain.GenesisFetcher
@@ -247,7 +246,6 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		TimeFetcher:                      s.cfg.GenesisTimeFetcher,
 		BlockFetcher:                     s.cfg.ExecutionChainService,
 		DepositFetcher:                   s.cfg.DepositFetcher,
-		ChainStartFetcher:                s.cfg.ChainStartFetcher,
 		Eth1InfoFetcher:                  s.cfg.ExecutionChainService,
 		OptimisticModeFetcher:            s.cfg.OptimisticModeFetcher,
 		SyncChecker:                      s.cfg.SyncService,
@@ -308,7 +306,6 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		HeadFetcher:                 s.cfg.HeadFetcher,
 		FinalizationFetcher:         s.cfg.FinalizationFetcher,
 		CanonicalFetcher:            s.cfg.CanonicalFetcher,
-		ChainStartFetcher:           s.cfg.ChainStartFetcher,
 		DepositFetcher:              s.cfg.DepositFetcher,
 		BlockFetcher:                s.cfg.ExecutionChainService,
 		GenesisTimeFetcher:          s.cfg.GenesisTimeFetcher,

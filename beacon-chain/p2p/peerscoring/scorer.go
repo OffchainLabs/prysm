@@ -89,9 +89,12 @@ type BadResponse struct {
 
 // RpcStatus is a peer's last status exchange together with our validation verdict on it.
 type RpcStatus struct {
-	chainState      *pb.StatusV2
+	// chainState is the last advertised view that passed validation.
+	chainState *pb.StatusV2
+	// validationError is the verdict on the most recent exchange.
 	validationError error
-	lastUpdated     time.Time
+	// lastUpdated is when the most recent exchange was recorded.
+	lastUpdated time.Time
 }
 
 // PeerScoringInfo holds all per-peer state the scorers judge a peer by.
@@ -247,12 +250,24 @@ func (s *Scorer) RemovePeers(pids []peer.ID) {
 }
 
 // SetPeerStatus stores the peer's latest status exchange and our validation verdict on it.
+// A status that failed validation only records the verdict: the last chain state that
+// passed validation is kept so consumers never read a view we already rejected.
 func (s *Scorer) SetPeerStatus(pid peer.ID, chainState *pb.StatusV2, validationError error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.getPeerScoringInfo(pid).rpcStatus = &RpcStatus{chainState: chainState, validationError: validationError, lastUpdated: time.Now()}
-	if validationError == nil && chainState != nil && chainState.HeadSlot > s.highestKnownHeadSlot {
+	pi := s.getPeerScoringInfo(pid)
+	status := &RpcStatus{validationError: validationError, lastUpdated: time.Now()}
+	if validationError != nil {
+		if pi.rpcStatus != nil {
+			status.chainState = pi.rpcStatus.chainState
+		}
+		pi.rpcStatus = status
+		return
+	}
+	status.chainState = chainState
+	pi.rpcStatus = status
+	if chainState != nil && chainState.HeadSlot > s.highestKnownHeadSlot {
 		s.highestKnownHeadSlot = chainState.HeadSlot
 	}
 }
@@ -272,7 +287,7 @@ func (s *Scorer) PeerStatus(pid peer.ID) (*pb.StatusV2, error) {
 	return pi.rpcStatus.chainState, nil
 }
 
-// ChainStateLastUpdated returns when the peer's status was last stored; zero if never.
+// ChainStateLastUpdated returns when the peer's last status exchange was recorded; zero if never.
 func (s *Scorer) ChainStateLastUpdated(pid peer.ID) time.Time {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

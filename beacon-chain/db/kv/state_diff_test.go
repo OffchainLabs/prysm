@@ -826,10 +826,10 @@ type blockingMarshalBeaconState struct {
 	release chan struct{}
 }
 
-func (s *blockingMarshalBeaconState) MarshalSSZ() ([]byte, error) {
+func (s *blockingMarshalBeaconState) ToProto() any {
 	close(s.started)
 	<-s.release
-	return s.ReadOnlyBeaconState.MarshalSSZ()
+	return s.ReadOnlyBeaconState.ToProto()
 }
 
 func TestStateDiffCache_AnchorAccess(t *testing.T) {
@@ -1039,7 +1039,7 @@ func TestStateDiff_EncodingAndDecoding(t *testing.T) {
 	}
 }
 
-func createState(t *testing.T, slot primitives.Slot, v int) (state.ReadOnlyBeaconState, []byte) {
+func createState(t *testing.T, slot primitives.Slot, v int) (state.BeaconState, []byte) {
 	p := params.BeaconConfig()
 	var st state.BeaconState
 	var err error

@@ -39,6 +39,7 @@ jobs:
           go-version-file: 'go.mod'
       - uses: shogo82148/actions-go-fuzz/run@v0
         with:
+          base-branch: develop
           packages: ${{ matrix.package }}
           fuzz-regexp: ${{ matrix.func }}
           fuzz-time: "20m"

@@ -70,6 +70,16 @@ var (
 		Usage:  deprecatedUsage,
 		Hidden: true,
 	}
+	deprecatedDisableRegistrationCache = &cli.BoolFlag{
+		Name:   "disable-registration-cache",
+		Usage:  deprecatedUsage,
+		Hidden: true,
+	}
+	deprecatedPartialDataColumns = &cli.BoolFlag{
+		Name:   "partial-data-columns",
+		Usage:  deprecatedUsage,
+		Hidden: true,
+	}
 )
 
 // Deprecated flags for both the beacon node and validator client.
@@ -84,6 +94,7 @@ var deprecatedFlags = []cli.Flag{
 	deprecatedInteropWriteSSZStateTransitions,
 	deprecatedDisablePeerScorer,
 	deprecatedTrackEquivocations,
+	deprecatedDisableRegistrationCache,
 }
 
 var upcomingDeprecation = []cli.Flag{
@@ -95,4 +106,5 @@ var upcomingDeprecation = []cli.Flag{
 var deprecatedBeaconFlags = []cli.Flag{
 	deprecatedDisableLastEpochTargets,
 	deprecatedEnableBuilderSSZ,
+	deprecatedPartialDataColumns,
 }

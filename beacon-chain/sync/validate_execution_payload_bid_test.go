@@ -23,6 +23,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -210,6 +211,12 @@ func TestValidateExecutionPayloadBidGossip_ErrorPathsWithMock(t *testing.T) {
 		{
 			name:      "builder cannot cover",
 			verifier:  mockExecutionPayloadBidVerifier{errBuilderCanCoverBid: errors.New("cannot cover")},
+			result:    pubsub.ValidationIgnore,
+			wantError: true,
+		},
+		{
+			name:      "builder exited by parent payload",
+			verifier:  mockExecutionPayloadBidVerifier{errBuilderNotExiting: errors.New("builder may exit")},
 			result:    pubsub.ValidationIgnore,
 			wantError: true,
 		},
@@ -484,6 +491,7 @@ type mockExecutionPayloadBidVerifier struct {
 	errSlotHigherThanParent  error
 	errParentBlockHash       error
 	errBuilderCanCoverBid    error
+	errBuilderNotExiting     error
 	errSignature             error
 }
 
@@ -543,6 +551,10 @@ func (m *mockExecutionPayloadBidVerifier) VerifyParentBlockHash(func([32]byte, [
 
 func (m *mockExecutionPayloadBidVerifier) VerifyBuilderCanCoverBid(state.ReadOnlyBeaconState) error {
 	return m.errBuilderCanCoverBid
+}
+
+func (m *mockExecutionPayloadBidVerifier) VerifyBuilderNotExiting(state.ReadOnlyBeaconState, func([32]byte) ([]*enginev1.BuilderExitRequest, error)) error {
+	return m.errBuilderNotExiting
 }
 
 func (m *mockExecutionPayloadBidVerifier) VerifySignature(state.ReadOnlyBeaconState) error {

@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -149,8 +150,7 @@ func TestValidateSignedProposerPreferencesGossip_DependentRootMismatchSkipsState
 
 	chainService := s.cfg.chain.(*mock.ChainService)
 	chainService.HeadStateErr = errors.New("head state should not load")
-	chainService.DependentRootCB = func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
-		require.Equal(t, [32]byte{}, root)
+	chainService.DependentRootCB = func(_ [32]byte, epoch primitives.Epoch) ([32]byte, error) {
 		require.Equal(t, primitives.Epoch(0), epoch)
 		return [32]byte{0xbb}, nil
 	}
@@ -172,9 +172,9 @@ func TestValidateSignedProposerPreferencesGossip_EpochPlus2DependentRootMismatch
 	var gotEpoch primitives.Epoch
 	expectedRoot := [32]byte{0xaa}
 	s.cfg.chain.(*mock.ChainService).DependentRootCB = func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
-		called = true
-		gotRoot = root
-		gotEpoch = epoch
+		if !called {
+			called, gotRoot, gotEpoch = true, root, epoch
+		}
 		return expectedRoot, nil
 	}
 
@@ -184,6 +184,61 @@ func TestValidateSignedProposerPreferencesGossip_EpochPlus2DependentRootMismatch
 	require.Equal(t, true, called)
 	require.Equal(t, [32]byte{}, gotRoot)
 	require.Equal(t, primitives.Epoch(1), gotEpoch)
+}
+
+func TestValidateSignedProposerPreferencesGossip_PreGloasProposalEpoch(t *testing.T) {
+	ctx := context.Background()
+	s, msg, _ := setupSignedProposerPreferencesService(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 2
+	params.OverrideBeaconConfig(cfg)
+
+	// The proposal slot is in epoch 1, before the fork.
+	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+}
+
+func TestValidateSignedProposerPreferencesGossip_DependentRootOnOtherBranch(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		hasChild   bool
+		cached     bool
+		wantResult pubsub.ValidationResult
+		wantError  string
+	}{
+		{name: "non-head leaf", cached: true, wantResult: pubsub.ValidationIgnore, wantError: "not a possible dependent block"},
+		{name: "child across boundary without cached state", hasChild: true, wantResult: pubsub.ValidationIgnore, wantError: "is not cached"},
+		{name: "child across boundary with cached state", hasChild: true, cached: true, wantResult: pubsub.ValidationAccept},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			s, _, signedPreferences := setupSignedProposerPreferencesService(t)
+			chainService := s.cfg.chain.(*mock.ChainService)
+			chainService.HeadStateErr = errors.New("head state should not load")
+			tips, _ := chainService.ChainHeads()
+			dependentRoot := tips[0]
+			signedPreferences.Message.DependentRoot = dependentRoot[:]
+			msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
+			chainService.DependentRootCB = func(root [32]byte, _ primitives.Epoch) ([32]byte, error) {
+				if root == dependentRoot || (tc.hasChild && root == tips[1]) {
+					return dependentRoot, nil
+				}
+				return [32]byte{0xbb}, nil
+			}
+			if tc.cached {
+				require.NoError(t, s.cfg.stateGen.SaveState(ctx, dependentRoot, chainService.State))
+			}
+
+			result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
+			if tc.wantError != "" {
+				require.ErrorContains(t, tc.wantError, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tc.wantResult, result)
+		})
+	}
 }
 
 func TestValidateSignedProposerPreferencesGossip_HappyPath(t *testing.T) {
@@ -253,6 +308,12 @@ func testNewSignedProposerPreferencesVerifier(m mockSignedProposerPreferencesVer
 // the checkpoint state.
 func setupSignedProposerPreferencesService(t *testing.T) (*Service, *pubsub.Message, *ethpb.SignedProposerPreferences) {
 	t.Helper()
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+	params.BeaconConfig().InitializeForkSchedule()
 
 	ctx := context.Background()
 	db := dbtest.SetupDB(t)

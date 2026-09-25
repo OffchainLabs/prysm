@@ -10,11 +10,15 @@ import (
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
 func TestProcessDataColumnSidecarsFromReconstruction(t *testing.T) {
@@ -122,8 +126,112 @@ func TestProcessDataColumnSidecarsFromReconstruction(t *testing.T) {
 		broadcastedPartials := p2p.BroadcastedPartialColumns()
 		require.Equal(t, len(unseenExpected), len(broadcastedPartials))
 		for _, partial := range broadcastedPartials {
-			require.Equal(t, true, unseenExpected[partial.Index])
+			require.Equal(t, true, unseenExpected[partial.Index()])
 		}
+	})
+}
+
+func TestProcessDataColumnSidecarsFromReconstruction_Gloas(t *testing.T) {
+	const blobCount = 4
+
+	ctx := t.Context()
+	require.NoError(t, kzg.Start())
+
+	// Build real cells and proofs with the Fulu generator, then re-wrap them as Gloas sidecars
+	// committed to a Gloas block whose bid carries the commitments.
+	_, _, fuluSidecars := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
+	require.Equal(t, fieldparams.NumberOfColumns, len(fuluSidecars))
+	commitments, err := fuluSidecars[0].KzgCommitments()
+	require.NoError(t, err)
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	blockPb := util.NewBeaconBlockGloas()
+	blockPb.Block.Slot = fuluSidecars[0].Slot()
+	blockPb.Block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments = commitments
+	signedBlock, err := blocks.NewSignedBeaconBlock(blockPb)
+	require.NoError(t, err)
+	root, err := signedBlock.Block().HashTreeRoot()
+	require.NoError(t, err)
+
+	gloasSidecars := make([]blocks.VerifiedRODataColumn, 0, len(fuluSidecars))
+	for _, sidecar := range fuluSidecars {
+		ro, err := blocks.NewRODataColumnGloasWithRoot(&ethpb.DataColumnSidecarGloas{
+			Index:           sidecar.Index(),
+			Slot:            sidecar.Slot(),
+			BeaconBlockRoot: root[:],
+			Column:          sidecar.Column(),
+			KzgProofs:       sidecar.KzgProofs(),
+		}, root)
+		require.NoError(t, err)
+		gloasSidecars = append(gloasSidecars, blocks.NewVerifiedRODataColumn(ro))
+	}
+
+	minimumCount := peerdas.MinimumColumnCountToReconstruct()
+
+	// newService wires a service with the partial broadcaster enabled and exactly enough columns
+	// received and stored to allow reconstruction. The block is saved to the DB only on request.
+	newService := func(t *testing.T, saveBlock bool) (*Service, *p2ptest.TestP2P, *mockChain.ChainService) {
+		beaconDB := dbtest.SetupDB(t)
+		if saveBlock {
+			require.NoError(t, beaconDB.SaveBlock(ctx, signedBlock))
+		}
+
+		chainService := &mockChain.ChainService{}
+		p2p := p2ptest.NewTestP2P(t)
+		p2p.EnablePartialColumnBroadcaster()
+		storage := filesystem.NewEphemeralDataColumnStorage(t)
+
+		service := NewService(
+			ctx,
+			WithP2P(p2p),
+			WithDatabase(beaconDB),
+			WithDataColumnStorage(storage),
+			WithChainService(chainService),
+			WithOperationNotifier(chainService.OperationNotifier()),
+		)
+
+		received := gloasSidecars[:minimumCount]
+		require.NoError(t, service.receiveDataColumnSidecars(ctx, received))
+		require.NoError(t, storage.Save(received))
+		require.Equal(t, minimumCount, uint64(len(chainService.DataColumns)))
+
+		return service, p2p, chainService
+	}
+
+	t.Run("block in db seeds bid commitments and broadcasts partial columns", func(t *testing.T) {
+		service, p2p, chainService := newService(t, true)
+
+		require.NoError(t, service.processDataColumnSidecarsFromReconstruction(ctx, gloasSidecars[0]))
+
+		require.Equal(t, true, p2p.BroadcastCalled.Load())
+		partials := p2p.BroadcastedPartialColumns()
+		require.NotEqual(t, 0, len(partials))
+		for _, partial := range partials {
+			require.Equal(t, true, partial.IsGloas())
+			got, err := partial.KzgCommitments()
+			require.NoError(t, err)
+			require.DeepEqual(t, commitments, got)
+			require.Equal(t, true, service.hasSeenDataColumnRootIndex(root, partial.Index()))
+		}
+		// One partial column per reconstructed column we needed, on top of the ones received up front.
+		require.Equal(t, int(minimumCount)+len(partials), len(chainService.DataColumns))
+	})
+
+	t.Run("block missing from db skips partial columns but still broadcasts full columns", func(t *testing.T) {
+		hook := logTest.NewGlobal()
+		service, p2p, chainService := newService(t, false)
+
+		require.NoError(t, service.processDataColumnSidecarsFromReconstruction(ctx, gloasSidecars[0]))
+
+		require.LogsContain(t, hook, "Failed to get bid commitments for reconstructed Gloas columns")
+		require.Equal(t, true, p2p.BroadcastCalled.Load())
+		require.Equal(t, 0, len(p2p.BroadcastedPartialColumns()))
+		require.Equal(t, true, len(chainService.DataColumns) > int(minimumCount))
 	})
 }
 

@@ -37,6 +37,7 @@ type Store struct {
 	finalizedPayloadBlockHash     [fieldparams.RootLength]byte                  // cached payload hash at the finalized checkpoint. Refreshed before pruning at finalization since the node it resolves from is removed by prune.
 	committeeWeight               uint64                                        // tracks the total active validator balance divided by the number of slots per Epoch.
 	treeRootNode                  *Node                                         // the root node of the store tree.
+	treeRootParentHash            [fieldparams.RootLength]byte                  // payload hash the tree root's bid builds on (Gloas). Answers the full-parent walk when it falls off the tree.
 	headNode                      *Node                                         // last head Node
 	emptyNodeByRoot               map[[fieldparams.RootLength]byte]*PayloadNode // nodes indexed by roots.
 	fullNodeByRoot                map[[fieldparams.RootLength]byte]*PayloadNode // full nodes (the payload was present) indexed by beacon block root.

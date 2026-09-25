@@ -4,13 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	// enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -18,20 +16,7 @@ import (
 )
 
 // RunSSZStaticTests executes "ssz_static" tests.
-//
-// The native-state (`custom`) HashTreeRoot uses progressive merkleization only
-// for Gloas types unless features.DisableProgressiveSSZ is set. That runtime
-// flag is independent of the --//tools:disable_progressive_merkleization codegen
-// flag, so when running gloas against progressive fixtures set PROGRESSIVE_SSZ=1
-// to align the native-state root with the generated one. Leave it unset for the
-// non-progressive fixture set.
 func RunSSZStaticTests(t *testing.T, config string) {
-	if os.Getenv("PROGRESSIVE_SSZ") != "" {
-		cfg := *features.Get() // nil-safe; copy so other flags are preserved
-		cfg.DisableProgressiveSSZ = false
-		reset := features.InitWithReset(&cfg)
-		defer reset()
-	}
 	common.RunSSZStaticTests(t, config, "gloas", unmarshalledSSZ, customHtr)
 }
 
@@ -89,8 +74,12 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		t.Skip("Not a consensus type")
 	case "DataColumnSidecar":
 		obj = &ethpb.DataColumnSidecarGloas{}
-	case "SignedProposerPreferences", "ProposerPreferences", "PartialDataColumnGroupID":
+	case "SignedProposerPreferences", "ProposerPreferences":
 		t.Skip("p2p-only type; not part of the consensus state transition")
+	case "PartialDataColumnGroupID":
+		obj = &ethpb.PartialDataColumnGroupID{}
+	case "PartialDataColumnSidecar":
+		obj = &ethpb.PartialDataColumnSidecarGloas{}
 
 	// Standard types that also exist in gloas
 	case "ExecutionPayload":
@@ -199,7 +188,7 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.DataColumnsByRootIdentifier{}
 	case "MatrixEntry":
 		t.Skip("Unused type")
-	case "PartialDataColumnHeader", "PartialDataColumnPartsMetadata", "PartialDataColumnSidecar":
+	case "PartialDataColumnHeader", "PartialDataColumnPartsMetadata":
 		t.Skip("Not yet implemented")
 	default:
 		return nil, errors.New("type not found")

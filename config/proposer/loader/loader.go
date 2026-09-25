@@ -2,7 +2,9 @@ package loader
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v7/config"
@@ -14,7 +16,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
+	"google.golang.org/protobuf/proto"
 )
+
+// maxLoggedKeys caps the key lists in the DB-replacement warning.
+const maxLoggedKeys = 10
 
 type settingsType int
 
@@ -27,10 +33,11 @@ const (
 )
 
 type SettingsLoader struct {
-	loadMethods []settingsType
-	existsInDB  bool
-	db          iface.ValidatorDB
-	options     *flagOptions
+	loadMethods    []settingsType
+	existsInDB     bool
+	replacesDBKeys bool
+	db             iface.ValidatorDB
+	options        *flagOptions
 }
 
 type flagOptions struct {
@@ -123,17 +130,30 @@ func determineLoadMethods(cliCtx *cli.Context, loadedFromDB bool) []settingsType
 // Load saves the proposer settings to the database
 func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error) {
 	var loadedSettings, dbSettings *validatorpb.ProposerSettingsPayload
+	var dbps *proposer.Settings
 
 	// override settings based on other options
 	psl.applyOverrides()
 
 	// check if database has settings already
 	if psl.existsInDB {
-		dbps, err := psl.db.ProposerSettings(cliCtx.Context)
+		var err error
+		dbps, err = psl.db.ProposerSettings(cliCtx.Context)
 		if err != nil {
 			return nil, err
 		}
 		dbSettings = dbps.ToConsensus()
+
+		// Load merges onto and rewrites the DB, so an unknown version must not be reinterpreted.
+		if dbSettings.Version > proposer.MaxSchemaVersion {
+			return nil, fmt.Errorf(
+				"validator DB holds proposer settings with unsupported version %d (max supported: %d), "+
+					"written by a newer Prysm; run that version or reset the validator DB",
+				dbSettings.Version,
+				proposer.MaxSchemaVersion,
+			)
+		}
+
 		log.WithField("version", dbSettings.Version).
 			WithField("proposerConfigCount", len(dbSettings.ProposerConfig)).
 			Debug("Loaded proposer settings from DB")
@@ -182,10 +202,50 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 	}
 	ps.WarnDeprecatedSchema()
 	ps.WarnUnsetMaxExecutionPayment()
+	if psl.replacesDBKeys {
+		warnReplacedDBKeys(dbps, ps)
+	}
 	if err := psl.db.SaveProposerSettings(cliCtx.Context, ps); err != nil {
 		return nil, err
 	}
 	return ps, nil
+}
+
+// warnReplacedDBKeys lists the DB per-key entries the settings file/URL replaced.
+// Comparing normalized settings keeps an unchanged restart quiet.
+func warnReplacedDBKeys(db, merged *proposer.Settings) {
+	if db == nil || len(db.ProposeConfig) == 0 {
+		return
+	}
+	var dropped, overridden []string
+	for key, dbOpt := range db.ProposeConfig {
+		opt, ok := merged.ProposeConfig[key]
+		switch {
+		case !ok:
+			dropped = append(dropped, fmt.Sprintf("%#x", key))
+		case !proto.Equal(opt.ToConsensus(), dbOpt.ToConsensus()):
+			overridden = append(overridden, fmt.Sprintf("%#x", key))
+		}
+	}
+	if len(dropped) == 0 && len(overridden) == 0 {
+		return
+	}
+	log.WithField("droppedKeys", capKeys(dropped)).
+		WithField("droppedCount", len(dropped)).
+		WithField("overriddenKeys", capKeys(overridden)).
+		WithField("overriddenCount", len(overridden)).
+		Warn("Per-key proposer settings saved in the validator DB by a previous run differ from the configured settings file/URL; " +
+			"the settings source is authoritative and the DB entries are replaced. " +
+			"Changes made through the keymanager API do not survive a restart while a settings file or URL is configured")
+}
+
+// capKeys renders a sorted key list, truncated to maxLoggedKeys with a "+N more" tail.
+func capKeys(keys []string) string {
+	sort.Strings(keys)
+	if len(keys) > maxLoggedKeys {
+		return fmt.Sprintf("%s +%d more", strings.Join(keys[:maxLoggedKeys], ","), len(keys)-maxLoggedKeys)
+	}
+	return strings.Join(keys, ",")
 }
 
 func (psl *SettingsLoader) applyOverrides() {
@@ -221,8 +281,12 @@ func (psl *SettingsLoader) loadFromFile(cliCtx *cli.Context, dbSettings *validat
 	if settingFromFile == nil {
 		return nil, errors.Errorf("proposer settings is empty after unmarshalling from file specified by %s flag", flags.ProposerSettingsFlag.Name)
 	}
+	if err := checkSchemaVersion(settingFromFile); err != nil {
+		return nil, err
+	}
 	markExplicitEmptyBuilders(settingFromFile)
 	inferSchemaVersion(settingFromFile)
+	psl.replacesDBKeys = len(settingFromFile.ProposerConfig) > 0
 	log.WithField(flags.ProposerSettingsFlag.Name, cliCtx.String(flags.ProposerSettingsFlag.Name)).Info("Proposer settings loaded from file")
 	return psl.processProposerSettings(settingFromFile, dbSettings), nil
 }
@@ -235,8 +299,12 @@ func (psl *SettingsLoader) loadFromURL(cliCtx *cli.Context, dbSettings *validato
 	if settingFromURL == nil {
 		return nil, errors.Errorf("proposer settings is empty after unmarshalling from url specified by %s flag", flags.ProposerSettingsURLFlag.Name)
 	}
+	if err := checkSchemaVersion(settingFromURL); err != nil {
+		return nil, err
+	}
 	markExplicitEmptyBuilders(settingFromURL)
 	inferSchemaVersion(settingFromURL)
+	psl.replacesDBKeys = len(settingFromURL.ProposerConfig) > 0
 	log.WithField(flags.ProposerSettingsURLFlag.Name, cliCtx.String(flags.ProposerSettingsURLFlag.Name)).Infof("Proposer settings loaded from URL")
 	return psl.processProposerSettings(settingFromURL, dbSettings), nil
 }
@@ -282,6 +350,24 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 		return mergeProposerSettingsV2(merged, loaded, db, builderConfig, gasLimitOnly)
 	}
 	return mergeProposerSettingsV1(merged, loaded, db, builderConfig, gasLimitOnly)
+}
+
+// checkSchemaVersion rejects versions the merge path would otherwise silently treat
+// as v1, and the persistence-only builders_set marker that strict decoding cannot
+// tell apart from a documented key.
+func checkSchemaVersion(p *validatorpb.ProposerSettingsPayload) error {
+	if p.Version > proposer.MaxSchemaVersion {
+		return fmt.Errorf("unsupported proposer settings version %d; the highest supported version is %d", p.Version, proposer.MaxSchemaVersion)
+	}
+	if p.DefaultConfig.GetBuilder().GetBuildersSet() {
+		return errors.New("default_config.builder.builders_set is not a settings key; use \"builders\": []")
+	}
+	for key, opt := range p.ProposerConfig {
+		if opt.GetBuilder().GetBuildersSet() {
+			return fmt.Errorf("proposer_config[%s].builder.builders_set is not a settings key; use \"builders\": []", key)
+		}
+	}
+	return nil
 }
 
 // markExplicitEmptyBuilders stamps the persistence marker for a user source's
@@ -331,6 +417,7 @@ func inferSchemaVersion(p *validatorpb.ProposerSettingsPayload) {
 
 // selectProposerConfig keeps the pre-v2 source precedence: a loaded per-key
 // section replaces the DB's entirely, so restarting with a file resets the DB.
+// Load reports what that replaced through warnReplacedDBKeys.
 func selectProposerConfig(db, loaded *validatorpb.ProposerSettingsPayload) map[string]*validatorpb.ProposerOptionPayload {
 	if loaded != nil && len(loaded.ProposerConfig) > 0 {
 		return loaded.ProposerConfig

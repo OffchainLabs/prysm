@@ -1,13 +1,19 @@
 package hdiff
 
 import (
+	"encoding/binary"
 	"fmt"
+	"math"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
 
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/golang/snappy"
 )
 
 // TestIntegerOverflowProtection tests protection against balance overflow attacks
@@ -384,4 +390,113 @@ func TestConcurrencySafety(t *testing.T) {
 			t.Error(err)
 		}
 	})
+}
+
+func TestOversizedLengthFields(t *testing.T) {
+	hugeCount := make([]byte, 8)
+
+	// Keep a regressed decoder's allocation bounded while exceeding the 1 MiB budget.
+	binary.LittleEndian.PutUint64(hugeCount, 1<<18)
+	s := &stateDiff{}
+	gloas := func(b []byte) error { return s.readGloasFields(&b) }
+	cases := []struct {
+		name    string
+		decode  func([]byte) error
+		input   []byte
+		wantErr error
+	}{
+		{"snappy_header_4GiB", func(b []byte) error { _, err := newStateDiff(b); return err }, []byte{0xff, 0xff, 0xff, 0xff, 0x0f, 0x00}, snappy.ErrCorrupt},
+		{"validator_diffs_count", func(b []byte) error { _, err := newValidatorDiffs(b); return err }, snappy.Encode(nil, hugeCount), errDataSmall},
+		{"previous_epoch_attestations_count", func(b []byte) error { return s.readPreviousEpochAttestations(&b) }, hugeCount, errDataSmall},
+		{"current_epoch_attestations_count", func(b []byte) error { return s.readCurrentEpochAttestations(&b) }, hugeCount, errDataSmall},
+		// Gloas collections live inside one reader, so feed a valid prefix up to each count. The counts
+		// below are positive as int but make count*elementSize negative, which used to slip past
+		// `len < count*size` and reach make(). ptcWindow had no bound at all, so any large count works.
+		{"gloas_builder_diffs_count", gloas, gloasCollectionInput(t, "builderDiffs", math.MaxInt64/(4+builderLength)+1), errDataSmall},
+		{"gloas_builder_pending_withdrawals_count", gloas, gloasCollectionInput(t, "builderPendingWithdrawals", math.MaxInt64/builderPendingWithdrawalLength+1), errDataSmall},
+		{"gloas_payload_expected_withdrawals_count", gloas, gloasCollectionInput(t, "payloadExpectedWithdrawals", math.MaxInt64/withdrawalLength+1), errDataSmall},
+		{"gloas_ptc_window_count", gloas, gloasCollectionInput(t, "ptcWindow", 1<<18), errDataSmall},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var before, after runtime.MemStats
+			runtime.ReadMemStats(&before)
+			err := tc.decode(tc.input)
+			runtime.ReadMemStats(&after)
+			require.ErrorIs(t, err, tc.wantErr)
+			allocated := after.TotalAlloc - before.TotalAlloc
+			require.Equal(t, true, allocated < 1<<20, "allocated %d bytes for a %d-byte input", allocated, len(tc.input))
+		})
+	}
+}
+
+func TestCollectionCountBoundaries(t *testing.T) {
+	s := &stateDiff{}
+	for _, decoder := range []struct {
+		name        string
+		prefix      []byte // bytes the reader consumes before the count
+		elementSize int
+		decode      func([]byte) error
+	}{
+		{"historical_roots", nil, fieldparams.RootLength, func(b []byte) error { return s.readHistoricalRoots(&b) }},
+		{"eth1_data_votes", []byte{nilMarker}, eth1DataLength, func(b []byte) error { return s.readEth1DataVotes(&b) }},
+		{"previous_epoch_attestations", nil, pendingAttestationFixedSize, func(b []byte) error { return s.readPreviousEpochAttestations(&b) }},
+		{"current_epoch_attestations", nil, pendingAttestationFixedSize, func(b []byte) error { return s.readCurrentEpochAttestations(&b) }},
+		{"inactivity_scores", nil, 8, func(b []byte) error { return s.readInactivityScores(&b) }},
+		{"historical_summaries", nil, 2 * fieldparams.RootLength, func(b []byte) error { return s.readHistoricalSummaries(&b) }},
+		{"pending_deposits", make([]byte, 8), pendingDepositLength, func(b []byte) error { return s.readPendingDeposits(&b) }},
+		{"pending_partial_withdrawals", make([]byte, 8), pendingPartialWithdrawalLength, func(b []byte) error { return s.readPendingPartialWithdrawals(&b) }},
+		{"pending_consolidations", make([]byte, 8), pendingConsolidationLength, func(b []byte) error { return s.readPendingConsolidations(&b) }},
+		{"validator_diffs", nil, minValidatorDiffSize, func(b []byte) error { _, err := newValidatorDiffs(snappy.Encode(nil, b)); return err }},
+		{"balances_diff", nil, 8, func(b []byte) error { _, err := newBalancesDiff(snappy.Encode(nil, b)); return err }},
+	} {
+		t.Run(decoder.name, func(t *testing.T) {
+			for _, tc := range []struct {
+				name        string
+				count       uint64
+				payloadSize int
+				wantErr     error
+			}{
+				{"empty", 0, 0, nil},
+				{"one_element", 1, decoder.elementSize, nil},
+				{"two_elements", 2, 2 * decoder.elementSize, nil},
+				{"missing_element", 1, 0, errDataSmall},
+				{"one_byte_short", 1, decoder.elementSize - 1, errDataSmall},
+				{"count_exceeds_payload", 2, decoder.elementSize, errDataSmall},
+				{"max_uint64", ^uint64(0), 0, errDataSmall},
+				// Positive as int, but count*elementSize overflows to a negative int for every element size.
+				{"count_times_size_overflows", math.MaxInt64/uint64(decoder.elementSize) + 1, 0, errDataSmall},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					input := make([]byte, len(decoder.prefix)+8+tc.payloadSize)
+					copy(input, decoder.prefix)
+					binary.LittleEndian.PutUint64(input[len(decoder.prefix):], tc.count)
+					require.ErrorIs(t, decoder.decode(input), tc.wantErr)
+				})
+			}
+		})
+	}
+}
+
+// gloasCollectionInput serializes the Gloas section up to the named collection and writes count as its length field.
+func gloasCollectionInput(t *testing.T, collection string, count uint64) []byte {
+	bid, err := util.HydrateExecutionPayloadBid(&ethpb.ExecutionPayloadBid{}).MarshalSSZ()
+	require.NoError(t, err)
+	u64 := func(v uint64) []byte { return binary.LittleEndian.AppendUint64(nil, v) }
+	b := append(u64(uint64(len(bid))), bid...)
+	if collection != "builderDiffs" {
+		b = append(b, u64(0)...)                                           // builderDiffs count
+		b = append(b, u64(0)...)                                           // nextWithdrawalBuilderIndex
+		b = append(b, make([]byte, executionPayloadAvailabilityLength)...) // executionPayloadAvailability
+		b = append(b, make([]byte, builderPendingPaymentsTotalLength)...)  // builderPendingPayments
+		b = append(b, u64(0)...)                                           // builderPendingWithdrawalsIndex
+	}
+	if collection != "builderDiffs" && collection != "builderPendingWithdrawals" {
+		b = append(b, u64(0)...)                               // builderPendingWithdrawals count
+		b = append(b, make([]byte, fieldparams.RootLength)...) // latestBlockHash
+	}
+	if collection == "ptcWindow" {
+		b = append(b, u64(0)...) // payloadExpectedWithdrawals count
+	}
+	return append(b, u64(count)...)
 }

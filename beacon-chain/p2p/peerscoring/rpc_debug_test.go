@@ -46,7 +46,9 @@ func TestBuildPeerDebugFullPicture(t *testing.T) {
 		HeadRoot:              []byte{8, 9},
 		HeadSlot:              256,
 		EarliestAvailableSlot: 12,
-	}, errors.New("some validation issue"))
+	}, nil)
+	// A later failed exchange records the verdict but keeps the last good chain state.
+	s.SetPeerStatus(pid, &pb.StatusV2{HeadSlot: 300}, errors.New("some validation issue"))
 	s.SetGossipScore(pid, -42.5, 1.5, nil)
 	rej.Record(pid, "/eth2/0000/beacon_block/ssz_snappy", "teku/1.2.3", errors.New("bad signature"))
 

@@ -298,7 +298,7 @@ func (ret *stateDiff) readGloasFields(data *[]byte) error {
 	}
 	*data = (*data)[8:]
 	entrySize := 4 + builderLength // uint32 index + fixed SSZ builder
-	if len(*data) < builderDiffsCount*entrySize {
+	if builderDiffsCount > len(*data)/entrySize {
 		return errors.Wrap(errDataSmall, "builderDiffs data")
 	}
 	ret.builderDiffs = make([]builderDiff, builderDiffsCount)
@@ -350,7 +350,7 @@ func (ret *stateDiff) readGloasFields(data *[]byte) error {
 		return errors.Wrap(errDataSmall, "builderPendingWithdrawals: negative count")
 	}
 	*data = (*data)[16:]
-	if len(*data) < bpwCount*builderPendingWithdrawalLength {
+	if bpwCount > len(*data)/builderPendingWithdrawalLength {
 		return errors.Wrap(errDataSmall, "builderPendingWithdrawals data")
 	}
 	ret.builderPendingWithdrawalsDiff = make([]*ethpb.BuilderPendingWithdrawal, bpwCount)
@@ -378,7 +378,7 @@ func (ret *stateDiff) readGloasFields(data *[]byte) error {
 		return errors.Wrap(errDataSmall, "payloadExpectedWithdrawals: negative count")
 	}
 	*data = (*data)[8:]
-	if len(*data) < pewCount*withdrawalLength {
+	if pewCount > len(*data)/withdrawalLength {
 		return errors.Wrap(errDataSmall, "payloadExpectedWithdrawals data")
 	}
 	ret.payloadExpectedWithdrawals = make([]*enginev1.Withdrawal, pewCount)
@@ -399,13 +399,13 @@ func (ret *stateDiff) readGloasFields(data *[]byte) error {
 		return errors.Wrap(errDataSmall, "ptcWindow: negative count")
 	}
 	*data = (*data)[8:]
+	ptcSize := (&ethpb.PTCs{}).SizeSSZ()
+	if ptcCount > len(*data)/ptcSize {
+		return errors.Wrap(errDataSmall, "ptcWindow data")
+	}
 	ret.ptcWindow = make([]*ethpb.PTCs, ptcCount)
 	for i := range ptcCount {
 		ret.ptcWindow[i] = &ethpb.PTCs{}
-		ptcSize := ret.ptcWindow[i].SizeSSZ()
-		if len(*data) < ptcSize {
-			return errors.Wrap(errDataSmall, "ptcWindow data")
-		}
 		if err := ret.ptcWindow[i].UnmarshalSSZ((*data)[:ptcSize]); err != nil {
 			return errors.Wrap(err, "failed to unmarshal ptc window slot")
 		}
