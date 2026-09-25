@@ -4,10 +4,13 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 // Spec: BuilderPendingPayment()
@@ -17,6 +20,33 @@ func emptyBuilderPendingPayment() *ethpb.BuilderPendingPaymentDecoupled {
 		TimelyHeadParticipation: make([]byte, fieldparams.AvailableCommitteeSize/8),
 		Withdrawal:              &ethpb.BuilderPendingWithdrawal{FeeRecipient: make([]byte, fieldparams.FeeRecipientLength)},
 	}
+}
+
+// Spec: process_proposer_slashing, the payment step. The claim is cancelled but both seat bitmaps stay as replay protection.
+func CancelBuilderPendingPayment(st state.BeaconState, header *ethpb.BeaconBlockHeader) error {
+	cfg := params.BeaconConfig()
+	proposalEpoch := slots.ToEpoch(header.Slot)
+	currentEpoch := time.CurrentEpoch(st)
+	var index primitives.Slot
+	switch {
+	case proposalEpoch == currentEpoch:
+		index = cfg.SlotsPerEpoch + header.Slot%cfg.SlotsPerEpoch
+	case proposalEpoch+1 == currentEpoch:
+		index = header.Slot % cfg.SlotsPerEpoch
+	default:
+		return nil
+	}
+	payments, err := st.BuilderPendingPaymentsDecoupled()
+	if err != nil {
+		return err
+	}
+	p := payments[index]
+	payments[index] = &ethpb.BuilderPendingPaymentDecoupled{
+		AvailableParticipation:  p.AvailableParticipation,
+		TimelyHeadParticipation: p.TimelyHeadParticipation,
+		Withdrawal:              &ethpb.BuilderPendingWithdrawal{FeeRecipient: make([]byte, fieldparams.FeeRecipientLength)},
+	}
+	return st.SetBuilderPendingPaymentsDecoupled(payments)
 }
 
 // Spec: process_builder_pending_payments. Legacy weight pays pre-fork claims, the seat popcount pays post-fork ones.
