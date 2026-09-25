@@ -60,7 +60,7 @@ func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse)
 		return
 	}
 
-	full, err := blocks.BlockBuiltOnEnvelope(r.envelopes[0], r.bwb[0].Block)
+	full, err := blocks.BlockBuiltOnParentEnvelope(r.envelopes[0], r.bwb[0].Block)
 	if err != nil {
 		r.err = errors.Wrap(prysmsync.ErrInvalidFetchedData, err.Error())
 		return
@@ -98,7 +98,7 @@ func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse)
 			return
 		}
 		env := r.envelopes[pidx]
-		full, err := blocks.BlockBuiltOnEnvelope(env, b.Block)
+		full, err := blocks.BlockBuiltOnParentEnvelope(env, b.Block)
 		if err != nil || !full {
 			if r.blocksFrom == r.payloadsFrom {
 				r.err = errors.Wrap(prysmsync.ErrInvalidFetchedData, "envelope does not match block")
