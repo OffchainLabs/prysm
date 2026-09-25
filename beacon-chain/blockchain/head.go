@@ -100,7 +100,8 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 	if err != nil {
 		log.WithError(err).Error("Could not check if node is optimistically synced")
 	}
-	if headBlock.Block().ParentRoot() != oldHeadRoot {
+	// A post-Gloas payload status flip re-saves the same head root, which is not a reorg.
+	if newHeadRoot != oldHeadRoot && headBlock.Block().ParentRoot() != oldHeadRoot {
 		// A chain re-org occurred, so we fire an event notifying the rest of the services.
 		commonRoot, forkSlot, err := s.cfg.ForkChoiceStore.CommonAncestor(ctx, oldHeadRoot, newHeadRoot)
 		if err != nil {
