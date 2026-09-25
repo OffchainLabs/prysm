@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "custody.go",
         "handlers.go",
+        "jobs.go",
         "server.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/node",
@@ -23,6 +24,7 @@ go_library(
         "//monitoring/tracing/trace:go_default_library",
         "//network/httputil:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
+        "//runtime/jobs:go_default_library",
         "@com_github_libp2p_go_libp2p//core/network:go_default_library",
         "@com_github_libp2p_go_libp2p//core/peer:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
@@ -34,6 +36,7 @@ go_test(
     srcs = [
         "custody_test.go",
         "handlers_test.go",
+        "jobs_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
@@ -47,6 +50,7 @@ go_test(
         "//consensus-types/primitives:go_default_library",
         "//network/httputil:go_default_library",
         "//proto/dbval:go_default_library",
+        "//runtime/jobs:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "@com_github_ethereum_go_ethereum//p2p/enode:go_default_library",

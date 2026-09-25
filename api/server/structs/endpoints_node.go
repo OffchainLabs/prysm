@@ -93,6 +93,31 @@ type PeersResponse struct {
 	Peers []*Peer `json:"peers"`
 }
 
+type GetJobsResponse struct {
+	Data []*JobData `json:"data"`
+}
+
+type GetJobResponse struct {
+	Data *JobData `json:"data"`
+}
+
+type JobData struct {
+	Id         string       `json:"id"`
+	Status     string       `json:"status"`
+	Phase      string       `json:"phase,omitempty"`
+	StartedAt  string       `json:"started_at,omitempty"`
+	UpdatedAt  string       `json:"updated_at,omitempty"`
+	FinishedAt string       `json:"finished_at,omitempty"`
+	Error      string       `json:"error,omitempty"`
+	Progress   *JobProgress `json:"progress,omitempty"`
+}
+
+type JobProgress struct {
+	Current string `json:"current"`
+	Total   string `json:"total"`
+	Units   string `json:"units,omitempty"`
+}
+
 type GetCustodyResponse struct {
 	Data *CustodyData `json:"data"`
 }
