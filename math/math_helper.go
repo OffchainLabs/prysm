@@ -192,5 +192,8 @@ func AddInt(i ...int) (int, error) {
 
 // IsValidUint256 given a bigint checks if the value is a valid Uint256
 func IsValidUint256(bi *big.Int) bool {
+	if bi == nil {
+		return false
+	}
 	return bi.Cmp(big.NewInt(0)) >= 0 && bi.BitLen() <= 256
 }
