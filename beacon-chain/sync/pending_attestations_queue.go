@@ -361,11 +361,19 @@ func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAg
 	}
 
 	att := aggregate.AggregateAttestationAndProof().AggregateVal()
+	epoch := att.GetData().Target.Epoch
+	aggregatorIndex := aggregate.AggregateAttestationAndProof().GetAggregatorIndex()
+	if s.hasSeenAggregatorIndexEpoch(epoch, aggregatorIndex) {
+		return nil
+	}
+
 	if err := s.saveAttestation(att); err != nil {
 		return errors.Wrap(err, "save attestation")
 	}
 
-	_ = s.setAggregatorIndexEpochSeen(att.GetData().Target.Epoch, aggregate.AggregateAttestationAndProof().GetAggregatorIndex())
+	if first := s.setAggregatorIndexEpochSeen(epoch, aggregatorIndex); !first {
+		return nil
+	}
 
 	if err := s.cfg.p2p.Broadcast(ctx, aggregate); err != nil {
 		log.WithError(err).Debug("Could not broadcast aggregated attestation")
