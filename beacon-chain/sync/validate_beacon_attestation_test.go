@@ -795,7 +795,7 @@ func Test_validateGloasCommitteeIndex(t *testing.T) {
 func TestService_validateUnaggregatedAttTopic_SubnetMatch(t *testing.T) {
 	ctx := t.Context()
 	p := p2ptest.NewTestP2P(t)
-	s := &Service{cfg: &config{p2p: p}}
+	s := &Service{cfg: &config{p2p: p, clock: startup.NewClock(time.Now(), [32]byte{}, startup.WithSlotAsNow(1))}}
 
 	st, _ := util.DeterministicGenesisState(t, 64)
 	require.NoError(t, st.SetSlot(1))
@@ -837,4 +837,39 @@ func TestService_validateUnaggregatedAttTopic_SubnetMatch(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestService_validateUnaggregatedAttTopic_PreviousForkAttestationOnCurrentTopic(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := t.Context()
+	p := p2ptest.NewTestP2P(t)
+	s := &Service{cfg: &config{p2p: p, clock: startup.NewClock(time.Now(), [32]byte{}, startup.WithSlotAsNow(cfg.SlotsPerEpoch))}}
+
+	st, _ := util.DeterministicGenesisState(t, 64)
+	require.NoError(t, st.SetSlot(1))
+
+	att := &ethpb.Attestation{
+		AggregationBits: bitfield.Bitlist{0b101},
+		Data: &ethpb.AttestationData{
+			Slot:           1,
+			CommitteeIndex: 0,
+			Target:         &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+			Source:         &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+		},
+	}
+	valCount, err := helpers.ActiveValidatorCount(ctx, st, 0)
+	require.NoError(t, err)
+	subnet := helpers.ComputeSubnetForAttestation(valCount, att)
+	gloasDigest := params.ForkDigest(1)
+	require.NotEqual(t, params.ForkDigest(0), gloasDigest)
+	topic := fmt.Sprintf(p2p.AttestationSubnetTopicFormat, gloasDigest, subnet) + p.Encoding().ProtocolSuffix()
+
+	res, err := s.validateUnaggregatedAttTopic(ctx, att, st, topic)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, res)
 }
