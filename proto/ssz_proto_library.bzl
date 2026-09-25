@@ -46,6 +46,8 @@ mainnet = {
     "kzg_commitments_inclusion_proof_depth.size": "4",
     "proposer_lookahead_size": "64",  # (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH
     "ptc_window.size": "96",  # (2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH
+    "available_committee_window.size": "96",  # Decoupled: (2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH, same as ptc_window
+    "available_committee_indices.size": "512",  # Decoupled: AVAILABLE_COMMITTEE_SIZE
     "ptc_committee_indices.size": "512",  # PTC_SIZE
     "ptc.size": "64",  # Gloas: Payload Timeliness Committee aggregation bits (PTC_SIZE = 512)
     "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector512",
@@ -97,6 +99,8 @@ minimal = {
     "kzg_commitments_inclusion_proof_depth.size": "4",
     "proposer_lookahead_size": "16",  # (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH
     "ptc_window.size": "24",  # (2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH
+    "available_committee_window.size": "24",  # Decoupled: (2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH, same as ptc_window
+    "available_committee_indices.size": "512",  # Decoupled: AVAILABLE_COMMITTEE_SIZE, a constant with no minimal variant
     "ptc_committee_indices.size": "16",  # PTC_SIZE
     "ptc.size": "2",  # Gloas: Payload Timeliness Committee aggregation bits (PTC_SIZE = 16)
     "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector16",

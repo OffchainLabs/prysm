@@ -2,7 +2,11 @@ syntax = "proto3";
 
 package ethereum.eth.v1alpha1;
 
+import "proto/engine/v1/execution_engine.proto";
 import "proto/eth/ext/options.proto";
+import "proto/prysm/v1alpha1/beacon_core_types.proto";
+import "proto/prysm/v1alpha1/eip_7251.proto";
+import "proto/prysm/v1alpha1/gloas.proto";
 
 option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
 
@@ -121,3 +125,164 @@ message SingleAttestationDecoupled {
   AttestationDataDecoupled data = 3;
   bytes signature = 4 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
+
+// Spec: one Vector[ValidatorIndex, AVAILABLE_COMMITTEE_SIZE] entry of available_committee_window.
+message AvailableCommittee {
+  repeated uint64 validator_indices = 1 [
+    (ethereum.eth.ext.ssz_size) = "available_committee_indices.size",
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/"
+        "primitives.ValidatorIndex"
+  ];
+}
+
+// Spec:
+// class BuilderPendingPayment(Container):
+//     weight: Gwei  # Legacy Gloas weight for payments created before the fork
+//     available_participation: Bitvector[AVAILABLE_COMMITTEE_SIZE]
+//     timely_head_participation: Bitvector[AVAILABLE_COMMITTEE_SIZE]
+//     withdrawal: BuilderPendingWithdrawal
+message BuilderPendingPaymentDecoupled {
+  uint64 weight = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
+  ];
+  bytes available_participation = 2 [
+    (ethereum.eth.ext.ssz_size) = "available_committee.size",
+    (ethereum.eth.ext.cast_type) = "available_committee.type"
+  ];
+  bytes timely_head_participation = 3 [
+    (ethereum.eth.ext.ssz_size) = "available_committee.size",
+    (ethereum.eth.ext.cast_type) = "available_committee.type"
+  ];
+  BuilderPendingWithdrawal withdrawal = 4;
+}
+
+// Spec: Gloas plus the PDF's chain state σ (PDF §4.2). Declaration order is the SSZ order, field numbers are only identifiers.
+message BeaconStateDecoupled {
+  uint64 genesis_time = 1001;
+  bytes genesis_validators_root = 1002 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 slot = 1003 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  Fork fork = 1004;
+  BeaconBlockHeader latest_block_header = 2001;
+  repeated bytes block_roots = 2002
+      [ (ethereum.eth.ext.ssz_size) = "block_roots.size" ];
+  repeated bytes state_roots = 2003
+      [ (ethereum.eth.ext.ssz_size) = "state_roots.size" ];
+  repeated bytes historical_roots = 2004 [
+    (ethereum.eth.ext.ssz_size) = "?,32",
+    (ethereum.eth.ext.ssz_max) = "16777216"
+  ];
+  Eth1Data eth1_data = 3001;
+  repeated Eth1Data eth1_data_votes = 3002
+      [ (ethereum.eth.ext.ssz_max) = "eth1_data_votes.size" ];
+  uint64 eth1_deposit_index = 3003;
+  repeated Validator validators = 4001
+      [ (ethereum.eth.ext.ssz_max) = "1099511627776" ];
+  repeated uint64 balances = 4002
+      [ (ethereum.eth.ext.ssz_max) = "1099511627776" ];
+  repeated bytes randao_mixes = 5001
+      [ (ethereum.eth.ext.ssz_size) = "randao_mixes.size" ];
+  repeated uint64 slashings = 6001
+      [ (ethereum.eth.ext.ssz_size) = "slashings.size" ];
+  bytes previous_round_participation = 7001
+      [ (ethereum.eth.ext.ssz_max) = "1099511627776" ];
+  bytes current_round_participation = 7002
+      [ (ethereum.eth.ext.ssz_max) = "1099511627776" ];
+  CheckpointDecoupled justified_checkpoint = 8003;
+  CheckpointDecoupled finalized_checkpoint = 8004;
+  repeated uint64 inactivity_scores = 9001
+      [ (ethereum.eth.ext.ssz_max) = "1099511627776" ];
+  SyncCommittee current_sync_committee = 9002;
+  SyncCommittee next_sync_committee = 9003;
+  ExecutionPayloadBid latest_execution_payload_bid = 14006;
+  uint64 next_withdrawal_index = 11001;
+  uint64 next_withdrawal_validator_index = 11002
+      [ (ethereum.eth.ext.cast_type) =
+            "github.com/OffchainLabs/prysm/v7/consensus-types/"
+            "primitives.ValidatorIndex" ];
+  repeated HistoricalSummary historical_summaries = 11003
+      [ (ethereum.eth.ext.ssz_max) = "16777216" ];
+  uint64 deposit_requests_start_index = 12001;
+  uint64 deposit_balance_to_consume = 12002 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
+  ];
+  uint64 exit_balance_to_consume = 12003 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
+  ];
+  uint64 earliest_exit_epoch = 12004 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
+  ];
+  uint64 consolidation_balance_to_consume = 12005 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
+  ];
+  uint64 earliest_consolidation_epoch = 12006 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
+  ];
+  repeated PendingDeposit pending_deposits = 12007
+      [ (ethereum.eth.ext.ssz_max) = "pending_deposits_limit" ];
+  repeated PendingPartialWithdrawal pending_partial_withdrawals = 12008
+      [ (ethereum.eth.ext.ssz_max) = "pending_partial_withdrawals_limit" ];
+  repeated PendingConsolidation pending_consolidations = 12009
+      [ (ethereum.eth.ext.ssz_max) = "pending_consolidations_limit" ];
+  repeated uint64 proposer_lookahead = 13001 [
+    (ethereum.eth.ext.ssz_size) = "proposer_lookahead_size",
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/"
+        "primitives.ValidatorIndex"
+  ];
+  repeated Builder builders = 14001
+      [ (ethereum.eth.ext.ssz_max) = "builder_registry_limit" ];
+  uint64 next_withdrawal_builder_index = 14002
+      [ (ethereum.eth.ext.cast_type) =
+            "github.com/OffchainLabs/prysm/v7/consensus-types/"
+            "primitives.BuilderIndex" ];
+  bytes execution_payload_availability = 14003
+      [ (ethereum.eth.ext.ssz_size) = "execution_payload_availability.size" ];
+  repeated BuilderPendingPaymentDecoupled builder_pending_payments = 14004
+      [ (ethereum.eth.ext.ssz_size) = "builder_pending_payments.size" ];
+  repeated BuilderPendingWithdrawal builder_pending_withdrawals = 14005
+      [ (ethereum.eth.ext.ssz_max) = "1048576" ];
+  bytes latest_block_hash = 10001 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  repeated ethereum.engine.v1.Withdrawal payload_expected_withdrawals = 14007
+      [ (ethereum.eth.ext.ssz_max) = "withdrawal.size" ];
+  repeated PTCs ptc_window = 14008
+      [ (ethereum.eth.ext.ssz_size) = "ptc_window.size" ];
+  repeated AvailableCommittee available_committee_window = 15001
+      [ (ethereum.eth.ext.ssz_size) = "available_committee_window.size" ];
+  uint64 justified_height = 15002 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Height"
+  ];
+  uint64 finalized_height = 15003 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Height"
+  ];
+  uint64 current_height = 15004 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Height"
+  ];
+  bool current_height_nonjustifiable = 15005;
+  CheckpointDecoupled current_height_target = 15007;
+  bytes target_participation = 15009 [
+    (ethereum.eth.ext.ssz_max) = "1099511627776",
+    (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
+  ];
+  bytes progress = 15010 [
+    (ethereum.eth.ext.ssz_max) = "1099511627776",
+    (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
+  ];
+  bytes finality_participation = 15011 [
+    (ethereum.eth.ext.ssz_max) = "1099511627776",
+    (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
+  ];
+}
+

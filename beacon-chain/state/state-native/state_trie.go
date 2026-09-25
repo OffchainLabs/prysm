@@ -46,6 +46,7 @@ const (
 	electraSharedFieldRefCount   = 10
 	fuluSharedFieldRefCount      = 11
 	gloasSharedFieldRefCount     = 14 // Adds Builders + BuilderPendingWithdrawals + PTCWindow to the shared-ref set and LatestExecutionPayloadHeader is removed
+	decoupledSharedFieldRefCount = 18 // Gloas plus the committee window and the three Decoupled bitlists
 )
 
 // InitializeFromProtoPhase0 the beacon state from a protobuf representation.
@@ -86,6 +87,10 @@ func InitializeFromProtoFulu(st *ethpb.BeaconStateFulu) (state.BeaconState, erro
 // InitializeFromProtoGloas the beacon state from a protobuf representation.
 func InitializeFromProtoGloas(st *ethpb.BeaconStateGloas) (state.BeaconState, error) {
 	return InitializeFromProtoUnsafeGloas(proto.Clone(st).(*ethpb.BeaconStateGloas))
+}
+
+func InitializeFromProtoDecoupled(st *ethpb.BeaconStateDecoupled) (state.BeaconState, error) {
+	return InitializeFromProtoUnsafeDecoupled(proto.Clone(st).(*ethpb.BeaconStateDecoupled))
 }
 
 // InitializeFromProtoUnsafePhase0 directly uses the beacon state protobuf fields
@@ -806,6 +811,128 @@ func InitializeFromProtoUnsafeGloas(st *ethpb.BeaconStateGloas) (state.BeaconSta
 	return b, nil
 }
 
+func InitializeFromProtoUnsafeDecoupled(st *ethpb.BeaconStateDecoupled) (state.BeaconState, error) {
+	if st == nil {
+		return nil, errors.New("received nil state")
+	}
+
+	hRoots := customtypes.HistoricalRoots(make([][32]byte, len(st.HistoricalRoots)))
+	for i, r := range st.HistoricalRoots {
+		hRoots[i] = bytesutil.ToBytes32(r)
+	}
+
+	proposerLookahead := make([]primitives.ValidatorIndex, len(st.ProposerLookahead))
+	for i, v := range st.ProposerLookahead {
+		proposerLookahead[i] = primitives.ValidatorIndex(v)
+	}
+
+	fieldCount := params.BeaconConfig().BeaconStateDecoupledFieldCount
+	b := &BeaconState{
+		version:                         version.Decoupled,
+		genesisTime:                     st.GenesisTime,
+		genesisValidatorsRoot:           bytesutil.ToBytes32(st.GenesisValidatorsRoot),
+		slot:                            st.Slot,
+		fork:                            st.Fork,
+		latestBlockHeader:               st.LatestBlockHeader,
+		historicalRoots:                 hRoots,
+		eth1Data:                        st.Eth1Data,
+		eth1DataVotes:                   st.Eth1DataVotes,
+		eth1DepositIndex:                st.Eth1DepositIndex,
+		slashings:                       st.Slashings,
+		previousEpochParticipation:      st.PreviousRoundParticipation,
+		currentEpochParticipation:       st.CurrentRoundParticipation,
+		currentSyncCommittee:            st.CurrentSyncCommittee,
+		nextSyncCommittee:               st.NextSyncCommittee,
+		nextWithdrawalIndex:             st.NextWithdrawalIndex,
+		nextWithdrawalValidatorIndex:    st.NextWithdrawalValidatorIndex,
+		historicalSummaries:             st.HistoricalSummaries,
+		depositRequestsStartIndex:       st.DepositRequestsStartIndex,
+		depositBalanceToConsume:         st.DepositBalanceToConsume,
+		exitBalanceToConsume:            st.ExitBalanceToConsume,
+		earliestExitEpoch:               st.EarliestExitEpoch,
+		consolidationBalanceToConsume:   st.ConsolidationBalanceToConsume,
+		earliestConsolidationEpoch:      st.EarliestConsolidationEpoch,
+		pendingDeposits:                 st.PendingDeposits,
+		pendingPartialWithdrawals:       st.PendingPartialWithdrawals,
+		pendingConsolidations:           st.PendingConsolidations,
+		proposerLookahead:               proposerLookahead,
+		latestExecutionPayloadBid:       st.LatestExecutionPayloadBid,
+		builders:                        st.Builders,
+		nextWithdrawalBuilderIndex:      st.NextWithdrawalBuilderIndex,
+		executionPayloadAvailability:    st.ExecutionPayloadAvailability,
+		builderPendingPaymentsDecoupled: st.BuilderPendingPayments,
+		builderPendingWithdrawals:       st.BuilderPendingWithdrawals,
+		latestBlockHash:                 st.LatestBlockHash,
+		payloadExpectedWithdrawals:      st.PayloadExpectedWithdrawals,
+		ptcWindow:                       st.PtcWindow,
+		justifiedCheckpointDecoupled:    st.JustifiedCheckpoint,
+		finalizedCheckpointDecoupled:    st.FinalizedCheckpoint,
+		availableCommitteeWindow:        st.AvailableCommitteeWindow,
+		justifiedHeight:                 st.JustifiedHeight,
+		finalizedHeight:                 st.FinalizedHeight,
+		currentHeight:                   st.CurrentHeight,
+		currentHeightNonjustifiable:     st.CurrentHeightNonjustifiable,
+		currentHeightTarget:             st.CurrentHeightTarget,
+		targetParticipation:             st.TargetParticipation,
+		progress:                        st.Progress,
+		finalityParticipation:           st.FinalityParticipation,
+		dirtyFields:                     make(map[types.FieldIndex]bool, fieldCount),
+		dirtyIndices:                    make(map[types.FieldIndex][]uint64, fieldCount),
+		stateFieldLeaves:                make(map[types.FieldIndex]*fieldtrie.FieldTrie, len(fieldMap)),
+		rebuildTrie:                     make(map[types.FieldIndex]bool, fieldCount),
+		valMapHandler:                   stateutil.NewValMapHandler(st.Validators),
+		builderIdxMap:                   newBuilderIdxMap(st.Builders),
+	}
+
+	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
+	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
+	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
+	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
+	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
+	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
+	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, decoupledSharedFieldRefCount)
+
+	for _, f := range decoupledFields {
+		b.dirtyFields[f] = true
+		b.rebuildTrie[f] = true
+		b.dirtyIndices[f] = []uint64{}
+		dt, ok := fieldMap[f]
+		if !ok {
+			continue
+		}
+		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0, promotionThresholdByField[f])
+		if err != nil {
+			return nil, err
+		}
+		b.stateFieldLeaves[f] = trie
+	}
+
+	// Initialize field reference tracking for shared data.
+	b.sharedFieldReferences[types.HistoricalRoots] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.Eth1DataVotes] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.Slashings] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.PreviousEpochParticipationBits] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.CurrentEpochParticipationBits] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.HistoricalSummaries] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.PendingDeposits] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.PendingPartialWithdrawals] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.PendingConsolidations] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.ProposerLookahead] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)                  // New in Gloas.
+	b.sharedFieldReferences[types.BuilderPendingWithdrawals] = stateutil.NewRef(1) // New in Gloas.
+	b.sharedFieldReferences[types.AvailableCommitteeWindow] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.TargetParticipation] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.Progress] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.FinalityParticipation] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.PTCWindow] = stateutil.NewRef(1) // New in Gloas.
+
+	state.Count.Inc()
+	// Finalizer runs when dst is being destroyed in garbage collection.
+	runtime.SetFinalizer(b, finalizerCleanup)
+
+	return b, nil
+}
+
 // Copy returns a deep copy of the beacon state.
 func (b *BeaconState) Copy() state.BeaconState {
 	b.lock.RLock()
@@ -829,12 +956,18 @@ func (b *BeaconState) Copy() state.BeaconState {
 		fieldCount = params.BeaconConfig().BeaconStateFuluFieldCount
 	case version.Gloas:
 		fieldCount = params.BeaconConfig().BeaconStateGloasFieldCount
+	case version.Decoupled:
+		fieldCount = params.BeaconConfig().BeaconStateDecoupledFieldCount
 	}
 
 	dst := &BeaconState{
 		version: b.version,
 
 		// Primitive types, safe to copy.
+		justifiedHeight:               b.justifiedHeight,
+		finalizedHeight:               b.finalizedHeight,
+		currentHeight:                 b.currentHeight,
+		currentHeightNonjustifiable:   b.currentHeightNonjustifiable,
 		genesisTime:                   b.genesisTime,
 		slot:                          b.slot,
 		eth1DepositIndex:              b.eth1DepositIndex,
@@ -848,17 +981,22 @@ func (b *BeaconState) Copy() state.BeaconState {
 		earliestConsolidationEpoch:    b.earliestConsolidationEpoch,
 
 		// Large arrays, infrequently changed, constant size.
-		blockRootsMultiValue:      b.blockRootsMultiValue,
-		stateRootsMultiValue:      b.stateRootsMultiValue,
-		randaoMixesMultiValue:     b.randaoMixesMultiValue,
-		previousEpochAttestations: b.previousEpochAttestations,
-		currentEpochAttestations:  b.currentEpochAttestations,
-		eth1DataVotes:             b.eth1DataVotes,
-		slashings:                 b.slashings,
-		proposerLookahead:         b.proposerLookahead,
-		ptcWindow:                 b.ptcWindow,
+		availableCommitteeWindow:        b.availableCommitteeWindow,
+		builderPendingPaymentsDecoupled: b.builderPendingPaymentsDecoupled,
+		blockRootsMultiValue:            b.blockRootsMultiValue,
+		stateRootsMultiValue:            b.stateRootsMultiValue,
+		randaoMixesMultiValue:           b.randaoMixesMultiValue,
+		previousEpochAttestations:       b.previousEpochAttestations,
+		currentEpochAttestations:        b.currentEpochAttestations,
+		eth1DataVotes:                   b.eth1DataVotes,
+		slashings:                       b.slashings,
+		proposerLookahead:               b.proposerLookahead,
+		ptcWindow:                       b.ptcWindow,
 
 		// Large arrays, increases over time.
+		targetParticipation:        b.targetParticipation,
+		progress:                   b.progress,
+		finalityParticipation:      b.finalityParticipation,
 		balancesMultiValue:         b.balancesMultiValue,
 		historicalRoots:            b.historicalRoots,
 		historicalSummaries:        b.historicalSummaries,
@@ -872,6 +1010,9 @@ func (b *BeaconState) Copy() state.BeaconState {
 		builders:                   b.builders,
 
 		// Everything else, too small to be concerned about, constant size.
+		justifiedCheckpointDecoupled:        b.justifiedCheckpointDecoupled.Copy(),
+		finalizedCheckpointDecoupled:        b.finalizedCheckpointDecoupled.Copy(),
+		currentHeightTarget:                 b.currentHeightTarget.Copy(),
 		genesisValidatorsRoot:               b.genesisValidatorsRoot,
 		justificationBits:                   b.justificationBitsVal(),
 		fork:                                b.forkVal(),
@@ -932,6 +1073,8 @@ func (b *BeaconState) Copy() state.BeaconState {
 		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, fuluSharedFieldRefCount)
 	case version.Gloas:
 		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, gloasSharedFieldRefCount)
+	case version.Decoupled:
+		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, decoupledSharedFieldRefCount)
 	}
 
 	for field, ref := range b.sharedFieldReferences {
@@ -1104,6 +1247,8 @@ func (b *BeaconState) initializeMerkleLayers(ctx context.Context) error {
 		b.dirtyFields = make(map[types.FieldIndex]bool, params.BeaconConfig().BeaconStateFuluFieldCount)
 	case version.Gloas:
 		b.dirtyFields = make(map[types.FieldIndex]bool, params.BeaconConfig().BeaconStateGloasFieldCount)
+	case version.Decoupled:
+		b.dirtyFields = make(map[types.FieldIndex]bool, params.BeaconConfig().BeaconStateDecoupledFieldCount)
 	default:
 		return fmt.Errorf("unknown state version (%s) when computing dirty fields in merklization", version.String(b.version))
 	}
@@ -1419,6 +1564,33 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 		return stateutil.PayloadExpectedWithdrawalsRoot(b.version, b.payloadExpectedWithdrawals)
 	case types.PTCWindow:
 		return stateutil.PTCWindowRoot(b.ptcWindow)
+	case types.JustifiedCheckpointDecoupled:
+		return b.justifiedCheckpointDecoupled.HashTreeRoot()
+	case types.FinalizedCheckpointDecoupled:
+		return b.finalizedCheckpointDecoupled.HashTreeRoot()
+	case types.AvailableCommitteeWindow:
+		return stateutil.AvailableCommitteeWindowRoot(b.availableCommitteeWindow)
+	case types.JustifiedHeight:
+		return ssz.Uint64Root(uint64(b.justifiedHeight)), nil
+	case types.FinalizedHeight:
+		return ssz.Uint64Root(uint64(b.finalizedHeight)), nil
+	case types.CurrentHeight:
+		return ssz.Uint64Root(uint64(b.currentHeight)), nil
+	case types.CurrentHeightNonjustifiable:
+		if b.currentHeightNonjustifiable {
+			return ssz.Uint64Root(1), nil
+		}
+		return ssz.Uint64Root(0), nil
+	case types.CurrentHeightTarget:
+		return b.currentHeightTarget.HashTreeRoot()
+	case types.TargetParticipation:
+		return stateutil.ProgressiveBitlistRoot(b.targetParticipation)
+	case types.Progress:
+		return stateutil.ProgressiveBitlistRoot(b.progress)
+	case types.FinalityParticipation:
+		return stateutil.ProgressiveBitlistRoot(b.finalityParticipation)
+	case types.BuilderPendingPaymentsDecoupled:
+		return stateutil.BuilderPendingPaymentsDecoupledRoot(b.builderPendingPaymentsDecoupled)
 	}
 	return [32]byte{}, errors.New("invalid field index provided")
 }

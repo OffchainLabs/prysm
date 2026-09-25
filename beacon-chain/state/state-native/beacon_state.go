@@ -83,6 +83,20 @@ type BeaconState struct {
 	payloadExpectedWithdrawals   []*enginev1.Withdrawal
 	ptcWindow                    []*ethpb.PTCs
 
+	// Decoupled fields
+	justifiedCheckpointDecoupled    *ethpb.CheckpointDecoupled
+	finalizedCheckpointDecoupled    *ethpb.CheckpointDecoupled
+	availableCommitteeWindow        []*ethpb.AvailableCommittee
+	justifiedHeight                 primitives.Height
+	finalizedHeight                 primitives.Height
+	currentHeight                   primitives.Height
+	currentHeightNonjustifiable     bool
+	currentHeightTarget             *ethpb.CheckpointDecoupled
+	targetParticipation             bitfield.Bitlist
+	progress                        bitfield.Bitlist
+	finalityParticipation           bitfield.Bitlist
+	builderPendingPaymentsDecoupled []*ethpb.BuilderPendingPaymentDecoupled
+
 	id                    uint64
 	lock                  sync.RWMutex
 	dirtyFields           map[types.FieldIndex]bool

@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "error.go",
         "interfaces.go",
+        "interfaces_decoupled.go",
         "interfaces_gloas.go",
         "prometheus.go",
     ],

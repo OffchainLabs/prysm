@@ -132,6 +132,30 @@ func (f FieldIndex) String() string {
 		return "payloadExpectedWithdrawals"
 	case PTCWindow:
 		return "ptcWindow"
+	case JustifiedCheckpointDecoupled:
+		return "justifiedCheckpointDecoupled"
+	case FinalizedCheckpointDecoupled:
+		return "finalizedCheckpointDecoupled"
+	case AvailableCommitteeWindow:
+		return "availableCommitteeWindow"
+	case JustifiedHeight:
+		return "justifiedHeight"
+	case FinalizedHeight:
+		return "finalizedHeight"
+	case CurrentHeight:
+		return "currentHeight"
+	case CurrentHeightNonjustifiable:
+		return "currentHeightNonjustifiable"
+	case CurrentHeightTarget:
+		return "currentHeightTarget"
+	case TargetParticipation:
+		return "targetParticipation"
+	case Progress:
+		return "progress"
+	case FinalityParticipation:
+		return "finalityParticipation"
+	case BuilderPendingPaymentsDecoupled:
+		return "builderPendingPaymentsDecoupled"
 	default:
 		return fmt.Sprintf("unknown field index number: %d", f)
 	}
@@ -233,6 +257,30 @@ func (f FieldIndex) RealPosition() int {
 		return 44
 	case PTCWindow:
 		return 45
+	case JustifiedCheckpointDecoupled:
+		return 46
+	case FinalizedCheckpointDecoupled:
+		return 47
+	case AvailableCommitteeWindow:
+		return 48
+	case JustifiedHeight:
+		return 49
+	case FinalizedHeight:
+		return 50
+	case CurrentHeight:
+		return 51
+	case CurrentHeightNonjustifiable:
+		return 52
+	case CurrentHeightTarget:
+		return 53
+	case TargetParticipation:
+		return 54
+	case Progress:
+		return 55
+	case FinalityParticipation:
+		return 56
+	case BuilderPendingPaymentsDecoupled:
+		return 57
 	default:
 		return -1
 	}
@@ -289,24 +337,36 @@ const (
 	NextWithdrawalIndex
 	NextWithdrawalValidatorIndex
 	HistoricalSummaries
-	DepositRequestsStartIndex     // Electra: EIP-6110
-	DepositBalanceToConsume       // Electra: EIP-7251
-	ExitBalanceToConsume          // Electra: EIP-7251
-	EarliestExitEpoch             // Electra: EIP-7251
-	ConsolidationBalanceToConsume // Electra: EIP-7251
-	EarliestConsolidationEpoch    // Electra: EIP-7251
-	PendingDeposits               // Electra: EIP-7251
-	PendingPartialWithdrawals     // Electra: EIP-7251
-	PendingConsolidations         // Electra: EIP-7251
-	ProposerLookahead             // Fulu: EIP-7917
-	Builders                      // Gloas: EIP-7732
-	NextWithdrawalBuilderIndex    // Gloas: EIP-7732
-	ExecutionPayloadAvailability  // Gloas: EIP-7732
-	BuilderPendingPayments        // Gloas: EIP-7732
-	BuilderPendingWithdrawals     // Gloas: EIP-7732
-	LatestBlockHash               // Gloas: EIP-7732
-	PayloadExpectedWithdrawals    // Gloas: EIP-7732
-	PTCWindow                     // Gloas: EIP-7732
+	DepositRequestsStartIndex       // Electra: EIP-6110
+	DepositBalanceToConsume         // Electra: EIP-7251
+	ExitBalanceToConsume            // Electra: EIP-7251
+	EarliestExitEpoch               // Electra: EIP-7251
+	ConsolidationBalanceToConsume   // Electra: EIP-7251
+	EarliestConsolidationEpoch      // Electra: EIP-7251
+	PendingDeposits                 // Electra: EIP-7251
+	PendingPartialWithdrawals       // Electra: EIP-7251
+	PendingConsolidations           // Electra: EIP-7251
+	ProposerLookahead               // Fulu: EIP-7917
+	Builders                        // Gloas: EIP-7732
+	NextWithdrawalBuilderIndex      // Gloas: EIP-7732
+	ExecutionPayloadAvailability    // Gloas: EIP-7732
+	BuilderPendingPayments          // Gloas: EIP-7732
+	BuilderPendingWithdrawals       // Gloas: EIP-7732
+	LatestBlockHash                 // Gloas: EIP-7732
+	PayloadExpectedWithdrawals      // Gloas: EIP-7732
+	PTCWindow                       // Gloas: EIP-7732
+	JustifiedCheckpointDecoupled    // Decoupled
+	FinalizedCheckpointDecoupled    // Decoupled
+	AvailableCommitteeWindow        // Decoupled
+	JustifiedHeight                 // Decoupled
+	FinalizedHeight                 // Decoupled
+	CurrentHeight                   // Decoupled
+	CurrentHeightNonjustifiable     // Decoupled
+	CurrentHeightTarget             // Decoupled
+	TargetParticipation             // Decoupled
+	Progress                        // Decoupled
+	FinalityParticipation           // Decoupled
+	BuilderPendingPaymentsDecoupled // Decoupled: replaces BuilderPendingPayments with the four-field payment
 )
 
 // Enumerator keeps track of the number of states created since the node's start.
