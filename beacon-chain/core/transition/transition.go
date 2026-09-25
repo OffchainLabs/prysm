@@ -475,14 +475,29 @@ func VerifyOperationLengths(_ context.Context, state state.BeaconState, b interf
 		)
 	}
 
+	// The legacy getters return nil on a Decoupled body, so the counts come from the typed getters there.
+	attesterSlashingCount := len(body.AttesterSlashings())
+	attestationCount := len(body.Attestations())
+	if body.Version() >= version.Decoupled {
+		ds, err := body.AttesterSlashingsDecoupled()
+		if err != nil {
+			return nil, err
+		}
+		da, err := body.AttestationsDecoupled()
+		if err != nil {
+			return nil, err
+		}
+		attesterSlashingCount, attestationCount = len(ds), len(da)
+	}
+
 	maxSlashings := params.BeaconConfig().MaxAttesterSlashings
 	if body.Version() >= version.Electra {
 		maxSlashings = params.BeaconConfig().MaxAttesterSlashingsElectra
 	}
-	if uint64(len(body.AttesterSlashings())) > maxSlashings {
+	if uint64(attesterSlashingCount) > maxSlashings {
 		return nil, fmt.Errorf(
 			"number of attester slashings (%d) in block body exceeds allowed threshold of %d",
-			len(body.AttesterSlashings()),
+			attesterSlashingCount,
 			maxSlashings,
 		)
 	}
@@ -491,10 +506,10 @@ func VerifyOperationLengths(_ context.Context, state state.BeaconState, b interf
 	if body.Version() >= version.Electra {
 		maxAttestations = params.BeaconConfig().MaxAttestationsElectra
 	}
-	if uint64(len(body.Attestations())) > maxAttestations {
+	if uint64(attestationCount) > maxAttestations {
 		return nil, fmt.Errorf(
 			"number of attestations (%d) in block body exceeds allowed threshold of %d",
-			len(body.Attestations()),
+			attestationCount,
 			maxAttestations,
 		)
 	}
@@ -532,6 +547,24 @@ func VerifyOperationLengths(_ context.Context, state state.BeaconState, b interf
 				len(payloadAtts),
 				fieldparams.MaxPayloadAttestations,
 			)
+		}
+	}
+
+	// Spec: MAX_AVAILABLE_ATTESTATIONS, and one B.support_votes bit per aggregate of B.votes (PDF §2.1).
+	if body.Version() >= version.Decoupled {
+		available, err := body.AvailableAttestations()
+		if err != nil {
+			return nil, err
+		}
+		if len(available) > fieldparams.MaxAvailableAttestations {
+			return nil, fmt.Errorf("number of available attestations (%d) in block body exceeds allowed threshold of %d", len(available), fieldparams.MaxAvailableAttestations)
+		}
+		support, err := body.SupportVotes()
+		if err != nil {
+			return nil, err
+		}
+		if support.Len() != uint64(len(available)) {
+			return nil, fmt.Errorf("support votes length %d does not match %d available attestations", support.Len(), len(available))
 		}
 	}
 

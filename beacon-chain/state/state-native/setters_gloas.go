@@ -157,11 +157,15 @@ func (b *BeaconState) QueueBuilderPaymentForSlot(parentSlot primitives.Slot) err
 	currentEpoch := slots.ToEpoch(b.slot)
 	parentEpoch := slots.ToEpoch(parentSlot)
 
+	queue := b.queueBuilderPaymentAtIndex
+	if b.version >= version.Decoupled {
+		queue = b.queueBuilderPaymentDecoupledAtIndex
+	}
 	if parentEpoch == currentEpoch {
-		return b.queueBuilderPaymentAtIndex(slotsPerEpoch + (parentSlot % slotsPerEpoch))
+		return queue(slotsPerEpoch + (parentSlot % slotsPerEpoch))
 	}
 	if parentEpoch+1 == currentEpoch {
-		return b.queueBuilderPaymentAtIndex(parentSlot % slotsPerEpoch)
+		return queue(parentSlot % slotsPerEpoch)
 	}
 	bid := b.latestExecutionPayloadBid
 	if bid == nil || bid.Value == 0 {
@@ -176,6 +180,39 @@ func (b *BeaconState) QueueBuilderPaymentForSlot(parentSlot primitives.Slot) err
 }
 
 // queueBuilderPaymentAtIndex requires the caller to hold the state lock.
+// Spec: apply_parent_execution_payload (gloas), inherited by Decoupled, clears the whole payment including the bitmaps.
+func (b *BeaconState) queueBuilderPaymentDecoupledAtIndex(paymentIndex primitives.Slot) error {
+	if uint64(paymentIndex) >= uint64(len(b.builderPendingPaymentsDecoupled)) {
+		return fmt.Errorf("builder pending payments index %d out of range (len=%d)", paymentIndex, len(b.builderPendingPaymentsDecoupled))
+	}
+	payment := b.builderPendingPaymentsDecoupled[paymentIndex]
+	if payment != nil && payment.Withdrawal != nil && payment.Withdrawal.Amount > 0 {
+		b.appendBuilderPendingWithdrawalsLockFree([]*ethpb.BuilderPendingWithdrawal{ethpb.CopyBuilderPendingWithdrawal(payment.Withdrawal)})
+	}
+	b.builderPendingPaymentsDecoupled[paymentIndex] = &ethpb.BuilderPendingPaymentDecoupled{
+		AvailableParticipation:  make([]byte, fieldparams.AvailableCommitteeSize/8),
+		TimelyHeadParticipation: make([]byte, fieldparams.AvailableCommitteeSize/8),
+		Withdrawal:              &ethpb.BuilderPendingWithdrawal{FeeRecipient: make([]byte, fieldparams.FeeRecipientLength)},
+	}
+	b.markFieldAsDirty(types.BuilderPendingPaymentsDecoupled)
+	return nil
+}
+
+// Spec: process_execution_payload_bid (gloas), the payment write, for the Decoupled ring.
+func (b *BeaconState) SetBuilderPendingPaymentDecoupled(index primitives.Slot, payment *ethpb.BuilderPendingPaymentDecoupled) error {
+	if b.version < version.Decoupled {
+		return errNotSupported("SetBuilderPendingPaymentDecoupled", b.version)
+	}
+	b.lock.Lock()
+	defer b.lock.Unlock()
+	if uint64(index) >= uint64(len(b.builderPendingPaymentsDecoupled)) {
+		return fmt.Errorf("builder pending payments index %d out of range (len=%d)", index, len(b.builderPendingPaymentsDecoupled))
+	}
+	b.builderPendingPaymentsDecoupled[index] = payment
+	b.markFieldAsDirty(types.BuilderPendingPaymentsDecoupled)
+	return nil
+}
+
 func (b *BeaconState) queueBuilderPaymentAtIndex(paymentIndex primitives.Slot) error {
 	if uint64(paymentIndex) >= uint64(len(b.builderPendingPayments)) {
 		return fmt.Errorf("builder pending payments index %d out of range (len=%d)", paymentIndex, len(b.builderPendingPayments))

@@ -34,4 +34,5 @@ type writeOnlyDecoupledFields interface {
 	SetProgress(bitfield.Bitlist) error
 	SetFinalityParticipation(bitfield.Bitlist) error
 	SetBuilderPendingPaymentsDecoupled([]*ethpb.BuilderPendingPaymentDecoupled) error
+	SetBuilderPendingPaymentDecoupled(primitives.Slot, *ethpb.BuilderPendingPaymentDecoupled) error
 }

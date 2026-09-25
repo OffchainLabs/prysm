@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	b "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/decoupled"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
@@ -292,9 +293,21 @@ func ProcessBlockNoVerifyAnySig(
 		return set, nil, errors.Wrap(err, "could not retrieve randao signature set")
 	}
 	set.RandaoSignatures = rSet
-	aSet, err := b.AttestationSignatureBatch(ctx, st, signed.Block().Body().Attestations())
-	if err != nil {
-		return set, nil, errors.Wrap(err, "could not retrieve attestation signature set")
+	var aSet *bls.SignatureBatch
+	if blk.Version() >= version.Decoupled {
+		atts, err := blk.Body().AttestationsDecoupled()
+		if err != nil {
+			return set, nil, err
+		}
+		aSet, err = decoupled.AttestationSignatureBatch(ctx, st, atts)
+		if err != nil {
+			return set, nil, errors.Wrap(err, "could not retrieve attestation signature set")
+		}
+	} else {
+		aSet, err = b.AttestationSignatureBatch(ctx, st, signed.Block().Body().Attestations())
+		if err != nil {
+			return set, nil, errors.Wrap(err, "could not retrieve attestation signature set")
+		}
 	}
 	set.AttestationSignatures = aSet
 
@@ -360,6 +373,15 @@ func ProcessOperationsNoVerifyAttsSigs(
 	}
 
 	blockVersion := beaconBlock.Version()
+	if blockVersion >= version.Decoupled {
+		state, err := decoupledOperations(ctx, state, beaconBlock)
+		if err != nil {
+			return nil, fmt.Errorf("decoupled operations: %w", err)
+		}
+
+		return state, nil
+	}
+
 	if blockVersion >= version.Gloas {
 		state, err := gloasOperations(ctx, state, beaconBlock, parentSlot)
 		if err != nil {
@@ -507,6 +529,13 @@ func ProcessBlockForStateRoot(
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return nil, errors.Wrap(err, "could not process block operation")
+	}
+
+	// Spec: state_transition runs process_height_events after the block's attestations, PDF §4.
+	if state.Version() >= version.Decoupled {
+		if err := decoupled.ProcessHeightEvents(ctx, state); err != nil {
+			return nil, errors.Wrap(err, "could not process height events")
+		}
 	}
 
 	if signed.Block().Version() == version.Phase0 {

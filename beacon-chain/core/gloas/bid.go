@@ -6,12 +6,14 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
@@ -146,18 +148,31 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 
 	if amount > 0 {
 		feeRecipient := bid.FeeRecipient()
-		pendingPayment := &ethpb.BuilderPendingPayment{
-			Weight: 0,
-			Withdrawal: &ethpb.BuilderPendingWithdrawal{
-				FeeRecipient: feeRecipient[:],
-				Amount:       amount,
-				BuilderIndex: builderIndex,
-			},
-			ProposerIndex: block.ProposerIndex(),
+		withdrawal := &ethpb.BuilderPendingWithdrawal{
+			FeeRecipient: feeRecipient[:],
+			Amount:       amount,
+			BuilderIndex: builderIndex,
 		}
 		slotIndex := params.BeaconConfig().SlotsPerEpoch + (bid.Slot() % params.BeaconConfig().SlotsPerEpoch)
-		if err := st.SetBuilderPendingPayment(slotIndex, pendingPayment); err != nil {
-			return errors.Wrap(err, "failed to set pending payment")
+		// Spec: process_execution_payload_bid (simplex inherits it), the Decoupled payment carries seat bitmaps instead of weight.
+		if st.Version() >= version.Decoupled {
+			payment := &ethpb.BuilderPendingPaymentDecoupled{
+				AvailableParticipation:  make([]byte, fieldparams.AvailableCommitteeSize/8),
+				TimelyHeadParticipation: make([]byte, fieldparams.AvailableCommitteeSize/8),
+				Withdrawal:              withdrawal,
+			}
+			if err := st.SetBuilderPendingPaymentDecoupled(slotIndex, payment); err != nil {
+				return errors.Wrap(err, "failed to set pending payment")
+			}
+		} else {
+			pendingPayment := &ethpb.BuilderPendingPayment{
+				Weight:        0,
+				Withdrawal:    withdrawal,
+				ProposerIndex: block.ProposerIndex(),
+			}
+			if err := st.SetBuilderPendingPayment(slotIndex, pendingPayment); err != nil {
+				return errors.Wrap(err, "failed to set pending payment")
+			}
 		}
 	}
 

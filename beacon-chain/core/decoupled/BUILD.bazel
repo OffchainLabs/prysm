@@ -3,6 +3,8 @@ load("@prysm//tools/go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = [
+        "attestation.go",
+        "available_attestation.go",
         "checkpoint.go",
         "committee.go",
         "epoch.go",
@@ -11,6 +13,7 @@ go_library(
         "pending_payment.go",
         "rewards.go",
         "round.go",
+        "signature.go",
         "slashing.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/core/decoupled",

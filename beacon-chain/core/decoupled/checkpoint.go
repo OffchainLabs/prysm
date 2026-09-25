@@ -1,8 +1,6 @@
 package decoupled
 
 import (
-	"bytes"
-
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
@@ -24,11 +22,4 @@ func isEmptyRoot(root []byte) bool {
 		}
 	}
 	return true
-}
-
-func checkpointsEqual(a, b *ethpb.CheckpointDecoupled) bool {
-	if isEmptyCheckpoint(a) || isEmptyCheckpoint(b) {
-		return isEmptyCheckpoint(a) && isEmptyCheckpoint(b)
-	}
-	return a.Slot == b.Slot && bytes.Equal(a.Root, b.Root)
 }

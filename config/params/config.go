@@ -222,6 +222,7 @@ type BeaconChainConfig struct {
 	KNonjustifiable               uint64
 	FinalityDebtThreshold         uint64
 	TimeoutDelayRounds            uint64 // Spec: δ_t = 2R, PDF §6.1.
+	SGWindowRounds                uint64 // Spec: η_SG, the vote expiry window in rounds, PDF §3.3.
 	TimelyFinalityTargetFlagIndex uint8
 	DomainAvailableAttester       [4]byte `yaml:"DOMAIN_AVAILABLE_ATTESTER" spec:"true"`
 

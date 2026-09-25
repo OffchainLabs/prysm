@@ -3,6 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "decoupled.go",
         "electra.go",
         "errors.go",
         "gloas.go",

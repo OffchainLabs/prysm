@@ -267,6 +267,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	KNonjustifiable:               8,
 	FinalityDebtThreshold:         2,
 	TimeoutDelayRounds:            2,
+	SGWindowRounds:                4,
 	TimelyFinalityTargetFlagIndex: 0,
 	DomainAvailableAttester:       bytesutil.Uint32ToBytes4(0x0F000000),
 
