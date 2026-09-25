@@ -3,7 +3,6 @@ package p2p
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/blockprovider"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
@@ -39,7 +38,6 @@ type (
 		PeersProvider
 		PeerScoringProvider
 		PeerGreyLister
-		BlockProviderSelectorProvider
 		GossipRejectionsProvider
 		MetadataProvider
 		CustodyManager
@@ -132,12 +130,6 @@ type (
 	// PeerScoringProvider abstracts access to peer scoring.
 	PeerScoringProvider interface {
 		PeerScoring() *peerscoring.Scorer
-	}
-
-	// BlockProviderSelectorProvider abstracts access to the block provider selector
-	// used for sync peer selection.
-	BlockProviderSelectorProvider interface {
-		BlockProviderSelector() *blockprovider.Selector
 	}
 
 	// PeerGreyLister exposes the composite grey-list verdict for a peer.

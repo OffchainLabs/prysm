@@ -205,7 +205,7 @@ func (f *blocksFetcher) fetchPayloadEnvelopesFromPeer(
 			}
 			continue
 		}
-		f.p2p.BlockProviderSelector().Touch(p)
+		f.p2p.Peers().Scorers().BlockProviderScorer().Touch(p)
 		roEnvelopes := make([]interfaces.ROSignedExecutionPayloadEnvelope, 0, len(envelopes))
 		for _, env := range envelopes {
 			wrapped, err := blocks.WrappedROSignedExecutionPayloadEnvelope(env)

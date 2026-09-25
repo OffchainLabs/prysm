@@ -644,7 +644,7 @@ func TestService_blockProviderScoring(t *testing.T) {
 		counter:      ratecounter.NewRateCounter(counterSeconds * time.Second),
 		clock:        clock,
 	}
-	scorer := s.cfg.P2P.BlockProviderSelector()
+	scorer := s.cfg.P2P.Peers().Scorers().BlockProviderScorer()
 	expectedBlockSlots := makeSequence(1, 160)
 	targetSlot := primitives.Slot(160)
 

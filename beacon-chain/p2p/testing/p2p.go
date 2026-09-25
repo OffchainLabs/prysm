@@ -13,7 +13,6 @@ import (
 
 	"github.com/OffchainLabs/methodical-ssz/ssz"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/blockprovider"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
@@ -66,7 +65,6 @@ type TestP2P struct {
 	Digest                [4]byte
 	peers                 *peers.Status
 	peerScorer            *peerscoring.Scorer
-	blockProviderSelector *blockprovider.Selector
 	gossipRejections      *peerscoring.GossipRejectionsStore
 	LocalMetadata         metadata.Metadata
 	custodyInfoMut        sync.RWMutex // protects custodyGroupCount and earliestAvailableSlot
@@ -114,15 +112,14 @@ func NewTestP2PWithPubsubOptions(t *testing.T, pubsubOpts []pubsub.Option, userO
 		Scoring:   peerScorer,
 	})
 	return &TestP2P{
-		t:                     t,
-		BHost:                 h,
-		pubsub:                ps,
-		joinedTopics:          map[string]*pubsub.Topic{},
-		peers:                 peerStatuses,
-		peerScorer:            peerScorer,
-		blockProviderSelector: blockprovider.NewSelector(context.Background(), nil),
-		gossipRejections:      peerscoring.NewGossipRejectionsStore(),
-		enr:                   new(enr.Record),
+		t:                t,
+		BHost:            h,
+		pubsub:           ps,
+		joinedTopics:     map[string]*pubsub.Topic{},
+		peers:            peerStatuses,
+		peerScorer:       peerScorer,
+		gossipRejections: peerscoring.NewGossipRejectionsStore(),
+		enr:              new(enr.Record),
 	}
 }
 
@@ -470,11 +467,6 @@ func (p *TestP2P) Peers() *peers.Status {
 // PeerScoring returns the peer scoring and grey-listing service.
 func (p *TestP2P) PeerScoring() *peerscoring.Scorer {
 	return p.peerScorer
-}
-
-// BlockProviderSelector returns the block provider selector used for sync peer selection.
-func (p *TestP2P) BlockProviderSelector() *blockprovider.Selector {
-	return p.blockProviderSelector
 }
 
 // GossipRejections returns the store of gossip messages our validators rejected.

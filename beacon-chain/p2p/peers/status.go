@@ -33,6 +33,7 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -96,6 +97,7 @@ type (
 	// Status is the structure holding the peer status information.
 	Status struct {
 		ctx     context.Context
+		scorers *scorers.Service
 		scoring *peerscoring.Scorer
 		store   *peerdata.Store
 		// rand is not concurrency-safe; every use must hold the store write lock.
@@ -111,6 +113,8 @@ type (
 	StatusConfig struct {
 		// PeerLimit specifies maximum amount of concurrent peers that are expected to be connect to the node.
 		PeerLimit int
+		// ScorerParams holds peer scorer configuration params.
+		ScorerParams *scorers.Config
 		// Scoring judges peers; a default scorer is created when nil.
 		Scoring *peerscoring.Scorer
 		// Rand overrides the internal random generator.
@@ -144,6 +148,7 @@ func NewStatus(ctx context.Context, config *StatusConfig) *Status {
 	return &Status{
 		ctx:                   ctx,
 		store:                 store,
+		scorers:               scorers.NewService(ctx, store, config.ScorerParams),
 		scoring:               scoring,
 		ipTracker:             map[string]uint64{},
 		ipColocationWhitelist: config.IPColocationWhitelist,
@@ -160,6 +165,11 @@ func (p *Status) UpdateENR(record *enr.Record, pid peer.ID) {
 	if peerData, ok := p.store.PeerData(pid); ok {
 		peerData.Enr = record
 	}
+}
+
+// Scorers exposes peer scoring management service.
+func (p *Status) Scorers() *scorers.Service {
+	return p.scorers
 }
 
 // MaxPeerLimit returns the max peer limit stored in the current peer store.

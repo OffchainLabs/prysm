@@ -115,7 +115,6 @@ type Config struct {
 	PeerScoringFetcher               p2p.PeerScoringProvider
 	PeerGreyLister                   p2p.PeerGreyLister
 	GossipRejectionsFetcher          p2p.GossipRejectionsProvider
-	BlockProviderFetcher             p2p.BlockProviderSelectorProvider
 	PeerManager                      p2p.PeerManager
 	MetadataProvider                 p2p.MetadataProvider
 	CustodyManager                   p2p.CustodyManager
@@ -340,15 +339,14 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 	ethpbv1alpha1.RegisterBeaconChainServer(s.grpcServer, beaconChainServer)
 	if s.cfg.EnableDebugRPCEndpoints {
 		debugServer := &debugv1alpha1.Server{
-			GenesisTimeFetcher:   s.cfg.GenesisTimeFetcher,
-			BeaconDB:             s.cfg.BeaconDB,
-			StateGen:             s.cfg.StateGen,
-			HeadFetcher:          s.cfg.HeadFetcher,
-			PeerManager:          s.cfg.PeerManager,
-			PeersFetcher:         s.cfg.PeersFetcher,
-			PeerScoringFetcher:   s.cfg.PeerScoringFetcher,
-			BlockProviderFetcher: s.cfg.BlockProviderFetcher,
-			ReplayerBuilder:      ch,
+			GenesisTimeFetcher: s.cfg.GenesisTimeFetcher,
+			BeaconDB:           s.cfg.BeaconDB,
+			StateGen:           s.cfg.StateGen,
+			HeadFetcher:        s.cfg.HeadFetcher,
+			PeerManager:        s.cfg.PeerManager,
+			PeersFetcher:       s.cfg.PeersFetcher,
+			PeerScoringFetcher: s.cfg.PeerScoringFetcher,
+			ReplayerBuilder:    ch,
 		}
 		ethpbv1alpha1.RegisterDebugServer(s.grpcServer, debugServer)
 	}

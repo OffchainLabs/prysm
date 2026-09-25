@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/async"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/blockprovider"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
@@ -78,7 +77,6 @@ type Service struct {
 	cfg                      *Config
 	peers                    *peers.Status
 	peerScorer               *peerscoring.Scorer
-	blockProviderSelector    *blockprovider.Selector
 	gossipRejections         *peerscoring.GossipRejectionsStore
 	addrFilter               *multiaddr.Filters
 	ipLimiter                *leakybucket.Collector
@@ -202,8 +200,6 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 	)
 	go s.peerScorer.Start(ctx)
 
-	s.blockProviderSelector = blockprovider.NewSelector(ctx, nil /* use default params */)
-
 	s.gossipRejections = peerscoring.NewGossipRejectionsStore()
 
 	s.peers = peers.NewStatus(ctx, &peers.StatusConfig{
@@ -292,10 +288,8 @@ func (s *Service) Start() {
 		ensurePeerConnections(s.ctx, s.host, s.peers, relayNodes...)
 	})
 	async.RunEvery(s.ctx, 30*time.Minute, func() {
-		// Peers pruned from the store are also dropped from the block provider selector
-		// and the gossip rejections store.
+		// Peers pruned from the store are also dropped from the gossip rejections store.
 		prunedPeers := s.peers.Prune()
-		s.blockProviderSelector.RemovePeers(prunedPeers)
 		s.gossipRejections.RemovePeers(prunedPeers)
 	})
 	async.RunEvery(s.ctx, time.Duration(params.BeaconConfig().RespTimeout)*time.Second, s.updateMetrics)
@@ -424,11 +418,6 @@ func (s *Service) Peers() *peers.Status {
 // PeerScoring returns the peer scoring and grey-listing service.
 func (s *Service) PeerScoring() *peerscoring.Scorer {
 	return s.peerScorer
-}
-
-// BlockProviderSelector returns the block provider selector used for sync peer selection.
-func (s *Service) BlockProviderSelector() *blockprovider.Selector {
-	return s.blockProviderSelector
 }
 
 // GossipRejections returns the store of gossip messages our validators rejected.

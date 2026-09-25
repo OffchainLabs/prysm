@@ -220,10 +220,6 @@ var (
 		Name: "p2p_gossip_rejections_retained",
 		Help: "Gossip rejections currently retained across all peers.",
 	})
-	blockProviderTrackedPeers = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "p2p_blockprovider_tracked_peers",
-		Help: "Peers the block provider selector currently holds stats for.",
-	})
 )
 
 func (s *Service) updateMetrics() {
@@ -259,7 +255,6 @@ func (s *Service) updateMetrics() {
 	// Scoring-state footprint: flat lines mean pruning and reconciliation keep it bounded.
 	peerScoringTrackedPeers.Set(float64(s.peerScorer.TrackedPeerCount()))
 	gossipRejectionsRetained.Set(float64(s.gossipRejections.RetainedCount()))
-	blockProviderTrackedPeers.Set(float64(s.blockProviderSelector.TrackedPeerCount()))
 
 	upperTCP := strings.ToUpper(string(peers.TCP))
 	upperQUIC := strings.ToUpper(string(peers.QUIC))
