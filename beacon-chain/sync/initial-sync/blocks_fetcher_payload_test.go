@@ -203,6 +203,24 @@ func TestValidatePayloadBlockConsistency(t *testing.T) {
 		require.Equal(t, 1, len(r.envelopes))
 	})
 
+	t.Run("envelope with a foreign root but a matching hash chain is rejected", func(t *testing.T) {
+		foreign := makeEnvelopeForRoot(t, 10, [32]byte{0xab}, hash1, hash0)
+		last := makeEnvelopeForRoot(t, 11, b1.Root(), hash2, hash1)
+		f := &blocksFetcher{}
+		r := &fetchRequestResponse{
+			blocksFrom:   "peer1",
+			payloadsFrom: "peer1",
+			bwb: []blocks.BlockWithROSidecars{
+				{Block: b0},
+				{Block: b1},
+			},
+			envelopes: []interfaces.ROSignedExecutionPayloadEnvelope{env0, foreign, last},
+		}
+		f.validatePayloadBlockConsistency(r)
+		require.ErrorContains(t, "envelope does not match block", r.err)
+		require.Equal(t, true, errors.Is(r.err, prysmsync.ErrInvalidFetchedData))
+	})
+
 	t.Run("mismatched envelope from different peer does not wrap ErrInvalidFetchedData", func(t *testing.T) {
 		wrongEnv := makeEnvelope(t, 10, [32]byte{0xff}, [32]byte{})
 		f := &blocksFetcher{}
