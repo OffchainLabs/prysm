@@ -20,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
@@ -109,6 +110,8 @@ func TestUpdateDuties_OK(t *testing.T) {
 	assert.Equal(t, params.BeaconConfig().SlotsPerEpoch, gotDuty.AttesterSlot, "Unexpected validator assignments")
 	assert.Equal(t, resp.CurrentEpochDuties[0].CommitteeIndex, gotDuty.CommitteeIndex, "Unexpected validator assignments")
 	assert.Equal(t, resp.CurrentEpochDuties[0].ValidatorIndex, gotDuty.ValidatorIndex, "Unexpected validator assignments")
+	// The mid-epoch missing-duty fetch keys off the recorded epoch.
+	assert.Equal(t, slots.ToEpoch(slots.CurrentSlot(v.genesisTime)+1), snap.epoch())
 }
 
 func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
@@ -1540,4 +1543,367 @@ func activeStatusFor(kp keypair) map[pubkey]*validatorStatus {
 	return map[pubkey]*validatorStatus{
 		kp.pub: {publicKey: kp.pub[:], status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}},
 	}
+}
+
+func TestFetchMissingDuties(t *testing.T) {
+	const epoch = primitives.Epoch(5)
+	rootCurr := bytesutil.PadTo([]byte{0x11}, 32)
+	rootNext := bytesutil.PadTo([]byte{0x22}, 32)
+
+	// setup builds a validator inside epoch with key A (index 42) already in the
+	// duty store and key B (index 43) in the wallet with no duties yet.
+	setup := func(t *testing.T, gloasEpoch primitives.Epoch) (*validator, *validatormock.MockValidatorClient, keypair, keypair) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.AltairForkEpoch = 0
+		cfg.FuluForkEpoch = 0
+		cfg.GloasForkEpoch = gloasEpoch
+		params.OverrideBeaconConfig(cfg)
+
+		ctrl := gomock.NewController(t)
+		client := validatormock.NewMockValidatorClient(ctrl)
+		kpA, kpB := randKeypair(t), randKeypair(t)
+		spe := params.BeaconConfig().SlotsPerEpoch
+		genesis := time.Now().Add(-time.Duration(uint64(primitives.Slot(epoch)*spe)*params.BeaconConfig().SecondsPerSlot) * time.Second)
+
+		v := &validator{
+			km:              newMockKeymanager(t, kpA, kpB),
+			validatorClient: client,
+			duties:          &dutyStore{},
+			genesisTime:     genesis,
+			pubkeyToStatus: map[pubkey]*validatorStatus{
+				kpA.pub: {publicKey: kpA.pub[:], status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}, index: 42},
+				kpB.pub: {publicKey: kpB.pub[:], status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}, index: 43},
+			},
+		}
+		v.aggSelector = testLocalSelector(t, v)
+		// Selection-proof signing during subnet subscription fetches domain data.
+		client.EXPECT().DomainData(gomock.Any(), gomock.Any()).Return(
+			&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).AnyTimes()
+		return v, client, kpA, kpB
+	}
+
+	seedStore := func(v *validator, kpA keypair, indices []primitives.ValidatorIndex, missing missingNextDuties) {
+		spe := params.BeaconConfig().SlotsPerEpoch
+		var d dutyStoreData
+		d.setFromContainer(&ethpb.ValidatorDutiesContainer{
+			PrevDependentRoot: rootCurr,
+			CurrDependentRoot: rootNext,
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{{
+				PublicKey: kpA.pub[:], ValidatorIndex: 42,
+				AttesterSlot: primitives.Slot(epoch)*spe + 3, Status: ethpb.ValidatorStatus_ACTIVE,
+			}},
+			NextEpochDuties: []*ethpb.ValidatorDuty{{
+				PublicKey: kpA.pub[:], ValidatorIndex: 42,
+				AttesterSlot: primitives.Slot(epoch+1)*spe + 3, Status: ethpb.ValidatorStatus_ACTIVE,
+			}},
+		})
+		d.epoch = epoch
+		d.indices = indices
+		d.missingNext = missing
+		v.duties.write(d)
+	}
+
+	expectSubscription := func(client *validatormock.MockValidatorClient) *sync.WaitGroup {
+		var wg sync.WaitGroup
+		wg.Add(1)
+		client.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest) (*emptypb.Empty, error) {
+				wg.Done()
+				return nil, nil
+			})
+		return &wg
+	}
+
+	t.Run("split path fetches only missing keys", func(t *testing.T) {
+		v, client, kpA, kpB := setup(t, 0)
+		seedStore(v, kpA, []primitives.ValidatorIndex{42}, 0)
+		spe := params.BeaconConfig().SlotsPerEpoch
+		newIndices := []primitives.ValidatorIndex{43}
+
+		client.EXPECT().AttesterDuties(gomock.Any(), epoch, newIndices).Return(&ethpb.AttesterDutiesResponse{
+			DependentRoot: rootCurr,
+			Duties: []*ethpb.AttesterDuty{{
+				Pubkey: kpB.pub[:], ValidatorIndex: 43,
+				Slot: primitives.Slot(epoch)*spe + 4, CommitteeIndex: 1, CommitteeLength: 64, CommitteesAtSlot: 4,
+			}},
+		}, nil)
+		client.EXPECT().ProposerDuties(gomock.Any(), epoch).Return(&ethpb.ProposerDutiesResponse{
+			DependentRoot: rootCurr,
+			Duties:        []*ethpb.ProposerDutyV2{{Pubkey: kpB.pub[:], ValidatorIndex: 43, Slot: primitives.Slot(epoch)*spe + 2}},
+		}, nil)
+		client.EXPECT().SyncCommitteeDuties(gomock.Any(), epoch, newIndices).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil)
+		client.EXPECT().PTCDuties(gomock.Any(), epoch, newIndices).Return(&ethpb.PTCDutiesResponse{DependentRoot: rootCurr}, nil)
+
+		client.EXPECT().AttesterDuties(gomock.Any(), epoch+1, newIndices).Return(&ethpb.AttesterDutiesResponse{
+			DependentRoot: rootNext,
+			Duties: []*ethpb.AttesterDuty{{
+				Pubkey: kpB.pub[:], ValidatorIndex: 43,
+				Slot: primitives.Slot(epoch+1)*spe + 4, CommitteeIndex: 2, CommitteeLength: 64, CommitteesAtSlot: 4,
+			}},
+		}, nil)
+		client.EXPECT().ProposerDuties(gomock.Any(), epoch+1).Return(&ethpb.ProposerDutiesResponse{DependentRoot: rootNext}, nil)
+		client.EXPECT().SyncCommitteeDuties(gomock.Any(), epoch+1, newIndices).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil)
+		client.EXPECT().PTCDuties(gomock.Any(), epoch+1, newIndices).Return(&ethpb.PTCDutiesResponse{DependentRoot: rootNext}, nil)
+		wg := expectSubscription(client)
+
+		require.NoError(t, v.fetchMissingDuties(t.Context()))
+		util.WaitTimeout(wg, 2*time.Second)
+
+		snap := v.duties.snapshot()
+		assert.Equal(t, 2, snap.currentDutyCount())
+		assert.Equal(t, 2, snap.nextDutyCount())
+		gotA, ok := snap.currentDuty(kpA.pub)
+		require.Equal(t, true, ok)
+		assert.Equal(t, primitives.Slot(epoch)*spe+3, gotA.AttesterSlot)
+		gotB, ok := snap.currentDuty(kpB.pub)
+		require.Equal(t, true, ok)
+		assert.Equal(t, primitives.Slot(epoch)*spe+4, gotB.AttesterSlot)
+		assert.DeepEqual(t, []primitives.Slot{primitives.Slot(epoch)*spe + 2}, snap.proposerSlots(43))
+		assert.DeepEqual(t, []primitives.ValidatorIndex{42, 43}, snap.indices())
+		assert.Equal(t, true, snap.missingNext() == 0)
+		assert.Equal(t, primitives.Epoch(epoch), snap.epoch())
+		assert.DeepEqual(t, rootCurr, snap.prevDependentRoot())
+		assert.DeepEqual(t, rootNext, snap.currDependentRoot())
+	})
+
+	t.Run("no-op when nothing is missing", func(t *testing.T) {
+		v, _, kpA, kpB := setup(t, 0)
+		seedStore(v, kpA, []primitives.ValidatorIndex{42}, 0)
+		// B already has duties: nothing to fetch, no RPCs expected.
+		v.duties.mergeDuties(v.duties.snapshot().revision,
+			[]*ethpb.ValidatorDuty{{PublicKey: kpB.pub[:], ValidatorIndex: 43, Status: ethpb.ValidatorStatus_ACTIVE}},
+			nil, []primitives.ValidatorIndex{42, 43}, 0, func(pubkey) bool { return true })
+		rev := v.duties.snapshot().revision
+
+		require.NoError(t, v.fetchMissingDuties(t.Context()))
+		assert.Equal(t, rev, v.duties.snapshot().revision)
+	})
+
+	t.Run("duty-less keys are not refetched every slot", func(t *testing.T) {
+		v, client, kpA, _ := setup(t, 0)
+		seedStore(v, kpA, []primitives.ValidatorIndex{42}, 0)
+		newIndices := []primitives.ValidatorIndex{43}
+
+		// The beacon node knows no duties for B this epoch: all four current-epoch
+		// endpoints and the next-epoch probe answer once, then the result sticks.
+		client.EXPECT().AttesterDuties(gomock.Any(), epoch, newIndices).Return(&ethpb.AttesterDutiesResponse{DependentRoot: rootCurr}, nil).Times(1)
+		client.EXPECT().ProposerDuties(gomock.Any(), epoch).Return(&ethpb.ProposerDutiesResponse{DependentRoot: rootCurr}, nil).Times(1)
+		client.EXPECT().SyncCommitteeDuties(gomock.Any(), epoch, newIndices).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil).Times(1)
+		client.EXPECT().PTCDuties(gomock.Any(), epoch, newIndices).Return(&ethpb.PTCDutiesResponse{DependentRoot: rootCurr}, nil).Times(1)
+		client.EXPECT().AttesterDuties(gomock.Any(), epoch+1, newIndices).Return(&ethpb.AttesterDutiesResponse{DependentRoot: rootNext}, nil).Times(1)
+		client.EXPECT().ProposerDuties(gomock.Any(), epoch+1).Return(&ethpb.ProposerDutiesResponse{DependentRoot: rootNext}, nil).Times(1)
+		client.EXPECT().SyncCommitteeDuties(gomock.Any(), epoch+1, newIndices).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil).Times(1)
+		client.EXPECT().PTCDuties(gomock.Any(), epoch+1, newIndices).Return(&ethpb.PTCDutiesResponse{DependentRoot: rootNext}, nil).Times(1)
+
+		require.NoError(t, v.fetchMissingDuties(t.Context()))
+		require.NoError(t, v.fetchMissingDuties(t.Context()))
+
+		snap := v.duties.snapshot()
+		assert.Equal(t, 1, snap.currentDutyCount())
+		assert.DeepEqual(t, []primitives.ValidatorIndex{42, 43}, snap.indices())
+		assert.Equal(t, true, snap.missingNext() == 0)
+	})
+
+	t.Run("prunes wallet-removed keys without any fetch", func(t *testing.T) {
+		v, _, kpA, kpB := setup(t, 0)
+		v.km = newMockKeymanager(t, kpA) // B was removed from the wallet
+		seedStore(v, kpA, []primitives.ValidatorIndex{42, 43}, 0)
+		v.duties.mergeDuties(v.duties.snapshot().revision,
+			[]*ethpb.ValidatorDuty{{PublicKey: kpB.pub[:], ValidatorIndex: 43, Status: ethpb.ValidatorStatus_ACTIVE}},
+			nil, []primitives.ValidatorIndex{42, 43}, 0, func(pubkey) bool { return true })
+
+		require.NoError(t, v.fetchMissingDuties(t.Context()))
+
+		snap := v.duties.snapshot()
+		assert.Equal(t, 1, snap.currentDutyCount())
+		_, ok := snap.currentDuty(kpB.pub)
+		assert.Equal(t, false, ok)
+		assert.DeepEqual(t, []primitives.ValidatorIndex{42}, snap.indices())
+	})
+
+	t.Run("dependent root mismatch aborts the merge", func(t *testing.T) {
+		v, client, kpA, _ := setup(t, 0)
+		seedStore(v, kpA, []primitives.ValidatorIndex{42}, 0)
+		rev := v.duties.snapshot().revision
+
+		// The failure must not latch: a later slot retries the fetch.
+		client.EXPECT().AttesterDuties(gomock.Any(), epoch, gomock.Any()).Return(&ethpb.AttesterDutiesResponse{
+			DependentRoot: bytesutil.PadTo([]byte{0x99}, 32),
+		}, nil).Times(2)
+		client.EXPECT().ProposerDuties(gomock.Any(), epoch).Return(&ethpb.ProposerDutiesResponse{}, nil).AnyTimes()
+		client.EXPECT().SyncCommitteeDuties(gomock.Any(), epoch, gomock.Any()).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil).AnyTimes()
+		client.EXPECT().PTCDuties(gomock.Any(), epoch, gomock.Any()).Return(&ethpb.PTCDutiesResponse{}, nil).AnyTimes()
+
+		for range 2 {
+			err := v.fetchMissingDuties(t.Context())
+			require.ErrorContains(t, "dependent root changed", err)
+		}
+		assert.Equal(t, rev, v.duties.snapshot().revision)
+	})
+
+	t.Run("doppelganger-pending keys stay excluded", func(t *testing.T) {
+		v, _, kpA, kpB := setup(t, 0)
+		seedStore(v, kpA, []primitives.ValidatorIndex{42}, 0)
+		v.doppelGanger.vetStartup([]pubkey{kpB.pub}, nil, epoch)
+		rev := v.duties.snapshot().revision
+
+		require.NoError(t, v.fetchMissingDuties(t.Context()))
+		assert.Equal(t, rev, v.duties.snapshot().revision)
+	})
+
+	t.Run("stale store epoch defers to the boundary fetch", func(t *testing.T) {
+		v, _, kpA, _ := setup(t, 0)
+		seedStore(v, kpA, []primitives.ValidatorIndex{42}, 0)
+		v.duties.mu.Lock()
+		v.duties.data.epoch = epoch - 1
+		v.duties.mu.Unlock()
+		rev := v.duties.snapshot().revision
+
+		require.NoError(t, v.fetchMissingDuties(t.Context()))
+		assert.Equal(t, rev, v.duties.snapshot().revision)
+	})
+
+	t.Run("merged duties survive boundary promotion", func(t *testing.T) {
+		v, client, kpA, kpB := setup(t, 0)
+		seedStore(v, kpA, []primitives.ValidatorIndex{42}, 0)
+		spe := params.BeaconConfig().SlotsPerEpoch
+		newIndices := []primitives.ValidatorIndex{43}
+
+		client.EXPECT().AttesterDuties(gomock.Any(), epoch, newIndices).Return(&ethpb.AttesterDutiesResponse{
+			DependentRoot: rootCurr,
+			Duties: []*ethpb.AttesterDuty{{
+				Pubkey: kpB.pub[:], ValidatorIndex: 43,
+				Slot: primitives.Slot(epoch)*spe + 4, CommitteeIndex: 1, CommitteeLength: 64, CommitteesAtSlot: 4,
+			}},
+		}, nil)
+		client.EXPECT().ProposerDuties(gomock.Any(), epoch).Return(&ethpb.ProposerDutiesResponse{DependentRoot: rootCurr}, nil)
+		client.EXPECT().SyncCommitteeDuties(gomock.Any(), epoch, newIndices).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil)
+		client.EXPECT().PTCDuties(gomock.Any(), epoch, newIndices).Return(&ethpb.PTCDutiesResponse{DependentRoot: rootCurr}, nil)
+		client.EXPECT().AttesterDuties(gomock.Any(), epoch+1, newIndices).Return(&ethpb.AttesterDutiesResponse{
+			DependentRoot: rootNext,
+			Duties: []*ethpb.AttesterDuty{{
+				Pubkey: kpB.pub[:], ValidatorIndex: 43,
+				Slot: primitives.Slot(epoch+1)*spe + 4, CommitteeIndex: 2, CommitteeLength: 64, CommitteesAtSlot: 4,
+			}},
+		}, nil)
+		client.EXPECT().ProposerDuties(gomock.Any(), epoch+1).Return(&ethpb.ProposerDutiesResponse{DependentRoot: rootNext}, nil)
+		client.EXPECT().SyncCommitteeDuties(gomock.Any(), epoch+1, newIndices).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil)
+		client.EXPECT().PTCDuties(gomock.Any(), epoch+1, newIndices).Return(&ethpb.PTCDutiesResponse{DependentRoot: rootNext}, nil)
+		wg := expectSubscription(client)
+
+		require.NoError(t, v.fetchMissingDuties(t.Context()))
+		util.WaitTimeout(wg, 2*time.Second)
+		require.Equal(t, true, v.duties.snapshot().missingNext() == 0)
+
+		// The boundary must promote the merged next-epoch duties without a single
+		// RPC: any unexpected client call fails the test.
+		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch+1, []primitives.ValidatorIndex{42, 43}))
+
+		snap := v.duties.snapshot()
+		assert.Equal(t, primitives.Epoch(epoch+1), snap.epoch())
+		assert.Equal(t, 2, snap.currentDutyCount())
+		gotB, ok := snap.currentDuty(kpB.pub)
+		require.Equal(t, true, ok)
+		assert.Equal(t, primitives.Slot(epoch+1)*spe+4, gotB.AttesterSlot)
+		assert.Equal(t, missingNextAll, snap.missingNext())
+	})
+
+	t.Run("next-epoch attester failure defers to the full rebuild", func(t *testing.T) {
+		v, client, kpA, kpB := setup(t, 0)
+		seedStore(v, kpA, []primitives.ValidatorIndex{42}, 0)
+		spe := params.BeaconConfig().SlotsPerEpoch
+		newIndices := []primitives.ValidatorIndex{43}
+
+		client.EXPECT().AttesterDuties(gomock.Any(), epoch, newIndices).Return(&ethpb.AttesterDutiesResponse{
+			DependentRoot: rootCurr,
+			Duties: []*ethpb.AttesterDuty{{
+				Pubkey: kpB.pub[:], ValidatorIndex: 43,
+				Slot: primitives.Slot(epoch)*spe + 4, CommitteeIndex: 1, CommitteeLength: 64, CommitteesAtSlot: 4,
+			}},
+		}, nil)
+		client.EXPECT().ProposerDuties(gomock.Any(), epoch).Return(&ethpb.ProposerDutiesResponse{DependentRoot: rootCurr}, nil)
+		client.EXPECT().SyncCommitteeDuties(gomock.Any(), epoch, newIndices).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil)
+		client.EXPECT().PTCDuties(gomock.Any(), epoch, newIndices).Return(&ethpb.PTCDutiesResponse{DependentRoot: rootCurr}, nil)
+		client.EXPECT().AttesterDuties(gomock.Any(), epoch+1, newIndices).Return(nil, errors.New("next attester fail"))
+		client.EXPECT().ProposerDuties(gomock.Any(), epoch+1).Return(&ethpb.ProposerDutiesResponse{DependentRoot: rootNext}, nil).AnyTimes()
+		client.EXPECT().SyncCommitteeDuties(gomock.Any(), epoch+1, newIndices).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil).AnyTimes()
+		client.EXPECT().PTCDuties(gomock.Any(), epoch+1, newIndices).Return(&ethpb.PTCDutiesResponse{DependentRoot: rootNext}, nil).AnyTimes()
+		wg := expectSubscription(client)
+
+		require.NoError(t, v.fetchMissingDuties(t.Context()))
+		util.WaitTimeout(wg, 2*time.Second)
+
+		snap := v.duties.snapshot()
+		// B's current-epoch duty landed, and the failed next-epoch spine is
+		// flagged so ensureNextEpochDuties rebuilds it with the merged indices.
+		assert.Equal(t, 2, snap.currentDutyCount())
+		_, ok := snap.currentDuty(kpB.pub)
+		assert.Equal(t, true, ok)
+		assert.Equal(t, true, snap.missingNext()&missingNextAttester != 0)
+		assert.DeepEqual(t, []primitives.ValidatorIndex{42, 43}, snap.indices())
+	})
+
+	t.Run("no next-epoch requests while its spine is missing", func(t *testing.T) {
+		v, client, kpA, kpB := setup(t, 0)
+		seedStore(v, kpA, []primitives.ValidatorIndex{42}, missingNextAll)
+		spe := params.BeaconConfig().SlotsPerEpoch
+		newIndices := []primitives.ValidatorIndex{43}
+
+		// Only current-epoch endpoints may be hit: any epoch+1 call fails the test.
+		client.EXPECT().AttesterDuties(gomock.Any(), epoch, newIndices).Return(&ethpb.AttesterDutiesResponse{
+			DependentRoot: rootCurr,
+			Duties: []*ethpb.AttesterDuty{{
+				Pubkey: kpB.pub[:], ValidatorIndex: 43,
+				Slot: primitives.Slot(epoch)*spe + 4, CommitteeIndex: 1, CommitteeLength: 64, CommitteesAtSlot: 4,
+			}},
+		}, nil)
+		client.EXPECT().ProposerDuties(gomock.Any(), epoch).Return(&ethpb.ProposerDutiesResponse{DependentRoot: rootCurr}, nil)
+		client.EXPECT().SyncCommitteeDuties(gomock.Any(), epoch, newIndices).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil)
+		client.EXPECT().PTCDuties(gomock.Any(), epoch, newIndices).Return(&ethpb.PTCDutiesResponse{DependentRoot: rootCurr}, nil)
+		wg := expectSubscription(client)
+
+		require.NoError(t, v.fetchMissingDuties(t.Context()))
+		util.WaitTimeout(wg, 2*time.Second)
+
+		snap := v.duties.snapshot()
+		assert.Equal(t, 2, snap.currentDutyCount())
+		assert.Equal(t, missingNextAll, snap.missingNext())
+		assert.DeepEqual(t, []primitives.ValidatorIndex{42, 43}, snap.indices())
+	})
+
+	t.Run("combined path fetches only missing keys", func(t *testing.T) {
+		v, client, kpA, kpB := setup(t, params.BeaconConfig().FarFutureEpoch)
+		seedStore(v, kpA, nil, missingNextPtc)
+		spe := params.BeaconConfig().SlotsPerEpoch
+
+		client.EXPECT().Duties(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, req *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
+				require.Equal(t, 1, len(req.PublicKeys))
+				assert.DeepEqual(t, kpB.pub[:], req.PublicKeys[0])
+				assert.Equal(t, primitives.Epoch(epoch), req.Epoch)
+				return &ethpb.ValidatorDutiesContainer{
+					PrevDependentRoot: rootCurr,
+					CurrDependentRoot: rootNext,
+					CurrentEpochDuties: []*ethpb.ValidatorDuty{{
+						PublicKey: kpB.pub[:], ValidatorIndex: 43,
+						AttesterSlot: primitives.Slot(epoch)*spe + 4, Status: ethpb.ValidatorStatus_ACTIVE,
+					}},
+					NextEpochDuties: []*ethpb.ValidatorDuty{{
+						PublicKey: kpB.pub[:], ValidatorIndex: 43,
+						AttesterSlot: primitives.Slot(epoch+1)*spe + 4, Status: ethpb.ValidatorStatus_ACTIVE,
+					}},
+				}, nil
+			})
+		wg := expectSubscription(client)
+
+		require.NoError(t, v.fetchMissingDuties(t.Context()))
+		util.WaitTimeout(wg, 2*time.Second)
+
+		snap := v.duties.snapshot()
+		assert.Equal(t, 2, snap.currentDutyCount())
+		assert.Equal(t, 2, snap.nextDutyCount())
+		assert.Equal(t, 0, len(snap.indices()))
+		assert.Equal(t, missingNextPtc, snap.missingNext())
+	})
 }
