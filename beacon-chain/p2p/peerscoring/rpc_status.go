@@ -35,7 +35,7 @@ func (rpcStatusScorer) IsPeerGreyListed(_ peer.ID, si *scoringInfo) error {
 		if errors.Is(status.validationError, terminal) {
 			// A refused peer can never clear the verdict itself, so it expires after the
 			// TTL; the peer then ages out through regular peer-store pruning.
-			if time.Since(status.lastUpdated) >= si.params.statusGreyListTTL {
+			if time.Since(status.verdictAt) >= si.params.statusGreyListTTL {
 				return nil
 			}
 			return fmt.Errorf("%w: status validation failed: %w", ErrPeerGreyListed, status.validationError)
@@ -50,5 +50,5 @@ func (r rpcStatusScorer) TimeToWhiteListing(pid peer.ID, si *scoringInfo) time.D
 	if r.IsPeerGreyListed(pid, si) == nil {
 		return 0
 	}
-	return si.params.statusGreyListTTL - time.Since(si.peerInfo.rpcStatus.lastUpdated)
+	return si.params.statusGreyListTTL - time.Since(si.peerInfo.rpcStatus.verdictAt)
 }

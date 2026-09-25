@@ -23,26 +23,26 @@ func TestRpcStatusScorer(t *testing.T) {
 		{"no chain state", &RpcStatus{}, false},
 		{
 			"non-terminal validation error does not greylist",
-			&RpcStatus{chainState: &pb.StatusV2{HeadSlot: 50}, validationError: errors.New("temporary"), lastUpdated: fresh},
+			&RpcStatus{chainState: &pb.StatusV2{HeadSlot: 50}, validationError: errors.New("temporary"), verdictAt: fresh},
 			false,
 		},
 		// Terminal validation errors greylist the peer until the verdict expires.
-		{"wrong fork digest greylists", &RpcStatus{validationError: p2ptypes.ErrWrongForkDigestVersion, lastUpdated: fresh}, true},
-		{"invalid finalized root greylists", &RpcStatus{validationError: p2ptypes.ErrInvalidFinalizedRoot, lastUpdated: fresh}, true},
-		{"invalid request greylists", &RpcStatus{validationError: p2ptypes.ErrInvalidRequest, lastUpdated: fresh}, true},
+		{"wrong fork digest greylists", &RpcStatus{validationError: p2ptypes.ErrWrongForkDigestVersion, verdictAt: fresh}, true},
+		{"invalid finalized root greylists", &RpcStatus{validationError: p2ptypes.ErrInvalidFinalizedRoot, verdictAt: fresh}, true},
+		{"invalid request greylists", &RpcStatus{validationError: p2ptypes.ErrInvalidRequest, verdictAt: fresh}, true},
 		{
 			"wrapped terminal error greylists",
-			&RpcStatus{validationError: errors.Wrap(p2ptypes.ErrWrongForkDigestVersion, "status"), lastUpdated: fresh},
+			&RpcStatus{validationError: errors.Wrap(p2ptypes.ErrWrongForkDigestVersion, "status"), verdictAt: fresh},
 			true,
 		},
 		{
 			"terminal error with chain state still greylists",
-			&RpcStatus{chainState: &pb.StatusV2{HeadSlot: 50}, validationError: p2ptypes.ErrInvalidRequest, lastUpdated: fresh},
+			&RpcStatus{chainState: &pb.StatusV2{HeadSlot: 50}, validationError: p2ptypes.ErrInvalidRequest, verdictAt: fresh},
 			true,
 		},
 		{
 			"terminal verdict older than the TTL no longer greylists",
-			&RpcStatus{validationError: p2ptypes.ErrWrongForkDigestVersion, lastUpdated: expired},
+			&RpcStatus{validationError: p2ptypes.ErrWrongForkDigestVersion, verdictAt: expired},
 			false,
 		},
 	}

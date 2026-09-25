@@ -91,10 +91,12 @@ type BadResponse struct {
 type RpcStatus struct {
 	// chainState is the last advertised view that passed validation.
 	chainState *pb.StatusV2
+	// lastUpdated is when chainState was stored; a rejected exchange does not advance it.
+	lastUpdated time.Time
 	// validationError is the verdict on the most recent exchange.
 	validationError error
-	// lastUpdated is when the most recent exchange was recorded.
-	lastUpdated time.Time
+	// verdictAt is when the most recent exchange was recorded.
+	verdictAt time.Time
 }
 
 // PeerScoringInfo holds all per-peer state the scorers judge a peer by.
@@ -257,15 +259,18 @@ func (s *Scorer) SetPeerStatus(pid peer.ID, chainState *pb.StatusV2, validationE
 	defer s.mu.Unlock()
 
 	pi := s.getPeerScoringInfo(pid)
-	status := &RpcStatus{validationError: validationError, lastUpdated: time.Now()}
+	now := time.Now()
+	status := &RpcStatus{validationError: validationError, verdictAt: now}
 	if validationError != nil {
 		if pi.rpcStatus != nil {
 			status.chainState = pi.rpcStatus.chainState
+			status.lastUpdated = pi.rpcStatus.lastUpdated
 		}
 		pi.rpcStatus = status
 		return
 	}
 	status.chainState = chainState
+	status.lastUpdated = now
 	pi.rpcStatus = status
 	if chainState != nil && chainState.HeadSlot > s.highestKnownHeadSlot {
 		s.highestKnownHeadSlot = chainState.HeadSlot
@@ -287,7 +292,7 @@ func (s *Scorer) PeerStatus(pid peer.ID) (*pb.StatusV2, error) {
 	return pi.rpcStatus.chainState, nil
 }
 
-// ChainStateLastUpdated returns when the peer's last status exchange was recorded; zero if never.
+// ChainStateLastUpdated returns when the peer's chain state last passed validation; zero if never.
 func (s *Scorer) ChainStateLastUpdated(pid peer.ID) time.Time {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

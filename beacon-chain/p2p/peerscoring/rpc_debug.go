@@ -118,7 +118,8 @@ type RpcStatusDebug struct {
 	// ChainState is nil when no parseable status was stored with the exchange.
 	ChainState      *ChainStateDebug `json:"chain_state,omitempty"`
 	ValidationError string           `json:"validation_error,omitempty"`
-	LastUpdated     string           `json:"last_updated"`
+	// LastUpdated is when the most recent status exchange (and its verdict) was recorded.
+	LastUpdated string `json:"last_updated"`
 }
 
 // ChainStateDebug is the chain view the peer advertised in its last status exchange.
@@ -341,7 +342,7 @@ func (s *Scorer) debugInfo(pid peer.ID, includeTopicScores bool) *PeerScoringDeb
 		})
 	}
 	if rs := pi.rpcStatus; rs != nil {
-		st := &RpcStatusDebug{LastUpdated: debugTime(rs.lastUpdated)}
+		st := &RpcStatusDebug{LastUpdated: debugTime(rs.verdictAt)}
 		if rs.validationError != nil {
 			st.ValidationError = rs.validationError.Error()
 		}
