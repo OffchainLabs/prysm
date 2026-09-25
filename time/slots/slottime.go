@@ -121,6 +121,20 @@ func UnsafeEpochStart(epoch primitives.Epoch) primitives.Slot {
 	return es
 }
 
+// ShufflingDependentSlot is compute_shuffling_dependent_slot: the last slot whose
+// block can be the shuffling dependent root for epoch.
+func ShufflingDependentSlot(epoch primitives.Epoch) (primitives.Slot, error) {
+	lookahead := params.BeaconConfig().MinSeedLookahead
+	if epoch <= lookahead {
+		return 0, nil
+	}
+	start, err := EpochStart(epoch - lookahead)
+	if err != nil {
+		return 0, err
+	}
+	return start - 1, nil
+}
+
 // EpochEnd returns the last slot number of the
 // current epoch.
 func EpochEnd(epoch primitives.Epoch) (primitives.Slot, error) {
