@@ -590,6 +590,10 @@ func (s *Service) handleBlockAttestations(ctx context.Context, blk interfaces.Re
 		}
 		r := bytesutil.ToBytes32(a.GetData().BeaconBlockRoot)
 		if s.cfg.ForkChoiceStore.HasNode(r) {
+			tr, err := s.cfg.ForkChoiceStore.TargetRootForEpoch(r, a.GetData().Target.Epoch)
+			if err != nil || tr != bytesutil.ToBytes32(a.GetData().Target.Root) {
+				continue
+			}
 			payloadStatus := true
 			if a.GetData().Target.Epoch >= params.BeaconConfig().GloasForkEpoch {
 				payloadStatus = a.GetData().CommitteeIndex == 1

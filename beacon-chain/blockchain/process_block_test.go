@@ -3801,7 +3801,7 @@ func TestHandleBlockAttestations_GloasSameSlotPayloadVote(t *testing.T) {
 
 	// blockWithPayloadVote returns a slot-2 block carrying a committee-index-1
 	// (payload-present) attestation for blockRoot, dated attSlot.
-	blockWithPayloadVote := func(attSlot primitives.Slot) interfaces.ReadOnlyBeaconBlock {
+	blockWithPayloadVote := func(attSlot primitives.Slot, targetRoot []byte) interfaces.ReadOnlyBeaconBlock {
 		committee, err := helpers.BeaconCommitteeFromState(ctx, headState, attSlot, 0)
 		require.NoError(t, err)
 		require.NotEqual(t, 0, len(committee))
@@ -3822,7 +3822,7 @@ func TestHandleBlockAttestations_GloasSameSlotPayloadVote(t *testing.T) {
 								CommitteeIndex:  1,
 								BeaconBlockRoot: blockRoot[:],
 								Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
-								Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+								Target:          &ethpb.Checkpoint{Root: targetRoot},
 							},
 							Signature: make([]byte, 96),
 						},
@@ -3837,13 +3837,20 @@ func TestHandleBlockAttestations_GloasSameSlotPayloadVote(t *testing.T) {
 
 	t.Run("same-slot payload vote is skipped", func(t *testing.T) {
 		logHook := logTest.NewGlobal()
-		require.NoError(t, s.handleBlockAttestations(ctx, blockWithPayloadVote(1), headState))
+		require.NoError(t, s.handleBlockAttestations(ctx, blockWithPayloadVote(1, make([]byte, 32)), headState))
 		require.LogsContain(t, logHook, "Skipping same-slot payload-present attestation")
 	})
 
 	t.Run("prior-slot payload vote is processed", func(t *testing.T) {
 		logHook := logTest.NewGlobal()
-		require.NoError(t, s.handleBlockAttestations(ctx, blockWithPayloadVote(2), headState))
+		require.NoError(t, s.handleBlockAttestations(ctx, blockWithPayloadVote(2, make([]byte, 32)), headState))
+		require.LogsDoNotContain(t, logHook, "Skipping same-slot payload-present attestation")
+	})
+
+	t.Run("vote with inconsistent target is dropped", func(t *testing.T) {
+		logHook := logTest.NewGlobal()
+		badTarget := bytesutil.PadTo([]byte("bad"), 32)
+		require.NoError(t, s.handleBlockAttestations(ctx, blockWithPayloadVote(1, badTarget), headState))
 		require.LogsDoNotContain(t, logHook, "Skipping same-slot payload-present attestation")
 	})
 }

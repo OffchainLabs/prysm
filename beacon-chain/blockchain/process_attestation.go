@@ -72,8 +72,13 @@ func (s *Service) OnAttestation(ctx context.Context, a ethpb.Att, disparity time
 		return errors.Wrap(err, "could not verify attestation beacon block")
 	}
 
-	// Note that LMD GHOST and FFG consistency check is ignored because it was performed in sync's validation pipeline:
-	// validate_aggregate_proof.go and validate_beacon_attestation.go
+	tr, err := s.cfg.ForkChoiceStore.TargetRootForEpoch(bytesutil.ToBytes32(a.GetData().BeaconBlockRoot), tgt.Epoch)
+	if err != nil {
+		return err
+	}
+	if tr != bytesutil.ToBytes32(tgt.Root) {
+		return fmt.Errorf("FFG and LMD votes are not consistent, target root: %#x, canonical target root: %#x", tgt.Root, tr)
+	}
 
 	// Verify attestations can only affect the fork choice of subsequent slots.
 	if err := slots.VerifyTime(s.genesisTime, a.GetData().Slot+1, disparity); err != nil {
