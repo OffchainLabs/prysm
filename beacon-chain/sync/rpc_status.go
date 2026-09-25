@@ -77,6 +77,7 @@ func (s *Service) maintainPeerStatuses() {
 		// Wait for all status checks to finish and then proceed onwards to
 		// pruning excess peers.
 		wg.Wait()
+		s.detectOrphanedOrigin(s.ctx)
 		peerIds := s.cfg.p2p.Peers().PeersToPrune()
 		peerIds = s.filterNeededPeers(peerIds)
 		for _, id := range peerIds {
@@ -453,6 +454,10 @@ func (s *Service) validateStatusMessage(ctx context.Context, genericMsg any) err
 	if finalizedAtGenesis && rootIsEqual {
 		return nil
 	}
+	// We hold no blocks below our origin, so this checkpoint is neither provable nor refutable.
+	if s.predatesEarliestBlock(ctx, msg.FinalizedEpoch) {
+		return nil
+	}
 	if !s.cfg.chain.IsFinalized(ctx, bytesutil.ToBytes32(msg.FinalizedRoot)) {
 		log.WithField("root", fmt.Sprintf("%#x", msg.FinalizedRoot)).Debug("Could not validate finalized root")
 		return p2ptypes.ErrInvalidFinalizedRoot
@@ -490,6 +495,21 @@ func (s *Service) validateStatusMessage(ctx context.Context, genericMsg any) err
 		return nil
 	}
 	return p2ptypes.ErrInvalidEpoch
+}
+
+func (s *Service) predatesEarliestBlock(ctx context.Context, epoch primitives.Epoch) bool {
+	if s.cfg.beaconDB == nil {
+		return false
+	}
+	bf, err := s.cfg.beaconDB.BackfillStatus(ctx)
+	if err != nil || bf == nil || bf.LowSlot == 0 {
+		return false
+	}
+	startSlot, err := slots.EpochStart(epoch)
+	if err != nil {
+		return false
+	}
+	return uint64(startSlot) < bf.LowSlot
 }
 
 func statusV2(msg any) (*pb.StatusV2, error) {

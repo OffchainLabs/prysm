@@ -140,6 +140,10 @@ func (s *Service) setupForkchoiceRoot(st state.BeaconState) error {
 	if err := s.cfg.ForkChoiceStore.InsertNode(s.ctx, st, roblock); err != nil {
 		return errors.Wrap(err, "could not insert finalized block to forkchoice")
 	}
+	// Re-apply now that the node exists, so the finalized payload hash is resolvable.
+	if err := s.cfg.ForkChoiceStore.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Epoch: cp.Epoch, Root: fRoot}); err != nil {
+		return errors.Wrap(err, "could not update finalized checkpoint")
+	}
 	if !features.Get().EnableStartOptimistic {
 		lastValidatedCheckpoint, err := s.cfg.BeaconDB.LastValidatedCheckpoint(s.ctx)
 		if err != nil {

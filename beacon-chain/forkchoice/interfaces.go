@@ -123,7 +123,6 @@ type Setter interface {
 	UpdateJustifiedCheckpoint(context.Context, *forkchoicetypes.Checkpoint) error
 	UpdateFinalizedCheckpoint(*forkchoicetypes.Checkpoint) error
 	SetGenesisTime(time.Time)
-	SetOriginRoot([32]byte)
 	NewSlot(context.Context, primitives.Slot) error
 	SetBalancesByRooter(BalancesByRooter)
 	InsertSlashedIndex(context.Context, primitives.ValidatorIndex)

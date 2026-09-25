@@ -625,11 +625,11 @@ func (s *Service) sendNewFinalizedEvent(ctx context.Context, postState state.Bea
 
 	blk, err := s.cfg.BeaconDB.Block(ctx, bytesutil.ToBytes32(postState.FinalizedCheckpoint().Root))
 	if err != nil {
-		log.WithError(err).Error("Could not retrieve block for finalized checkpoint root. Finalized event will not be emitted")
+		log.WithError(err).Debug("Could not retrieve block for finalized checkpoint root. Finalized event will not be emitted")
 		return
 	}
 	if blk == nil || blk.IsNil() || blk.Block() == nil || blk.Block().IsNil() {
-		log.WithError(err).Error("Block retrieved for finalized checkpoint root is nil. Finalized event will not be emitted")
+		log.Debug("Block retrieved for finalized checkpoint root is nil. Finalized event will not be emitted")
 		return
 	}
 	stateRoot := blk.Block().StateRoot()

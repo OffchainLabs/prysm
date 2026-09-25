@@ -21,8 +21,9 @@ func (s *Service) maintainCustodyInfo() error {
 	// Rationale of slot choice:
 	// - If syncing with an empty DB from genesis, then justifiedSlot = finalizedSlot = 0,
 	//   and the node starts to sync from slot 0 ==> Using justifiedSlot is correct.
-	// - If syncing with an empty DB from a checkpoint, then justifiedSlot = finalizedSlot = checkpointSlot,
-	//   and the node starts to sync from checkpointSlot ==> Using justifiedSlot is correct.
+	// - If syncing with an empty DB from a checkpoint, then finalizedSlot = checkpointSlot and
+	//   justifiedSlot <= finalizedSlot, and the node starts to sync from checkpointSlot
+	//   ==> Using finalizedSlot is correct.
 	// - If syncing with a non-empty DB, then justifiedSlot > finalizedSlot,
 	//   and the node starts to sync from justifiedSlot + 1 ==> Using justifiedSlot + 1 is correct.
 	const interval = 1 * time.Minute
@@ -55,7 +56,7 @@ func (s *Service) maintainCustodyInfo() error {
 		return errors.Wrap(err, "epoch start for justified slot")
 	}
 
-	slot := justifiedSlot
+	slot := max(justifiedSlot, finalizedSlot)
 	if justifiedSlot > finalizedSlot {
 		slot++
 	}

@@ -295,6 +295,23 @@ func (s *Service) verifyBlkFinalizedSlot(b interfaces.ReadOnlyBeaconBlock) error
 	return nil
 }
 
+// checkpointWithStoredRoot replaces an unresolvable checkpoint root with the forkchoice root.
+func (s *Service) checkpointWithStoredRoot(ctx context.Context, cp *ethpb.Checkpoint) *ethpb.Checkpoint {
+	root := bytesutil.ToBytes32(cp.Root)
+	if root == params.BeaconConfig().ZeroHash {
+		return cp
+	}
+	if s.cfg.BeaconDB.HasStateSummary(ctx, root) || s.cfg.BeaconDB.HasState(ctx, root) || s.cfg.BeaconDB.HasBlock(ctx, root) {
+		return cp
+	}
+	fRoot := s.ensureRootNotZeros(s.cfg.ForkChoiceStore.FinalizedCheckpoint().Root)
+	log.WithFields(logrus.Fields{
+		"epoch": cp.Epoch,
+		"root":  fmt.Sprintf("%#x", cp.Root),
+	}).Debug("Checkpoint root predates the origin, substituting the forkchoice root")
+	return &ethpb.Checkpoint{Epoch: cp.Epoch, Root: fRoot[:]}
+}
+
 // updateFinalized saves the init sync blocks, finalized checkpoint, migrates
 // to cold old states and saves the last validated checkpoint to DB. It returns
 // early if the new checkpoint is older than the one on db.
@@ -378,11 +395,15 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 	}
 	pendingNodes := make([]*forkchoicetypes.BlockAndCheckpoints, 0)
 
-	// Fork choice only matters from last finalized slot.
+	// Fork choice only matters from the tree root.
 	finalized := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
-	fSlot, err := slots.EpochStart(finalized.Epoch)
+	fRoot := s.ensureRootNotZeros(finalized.Root)
+	fSlot, err := s.cfg.ForkChoiceStore.Slot(fRoot)
 	if err != nil {
-		return err
+		fSlot, err = slots.EpochStart(finalized.Epoch)
+		if err != nil {
+			return err
+		}
 	}
 	root := signed.Block().ParentRoot()
 	child := signed
@@ -425,7 +446,7 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 	} else {
 		s.insertFirstPayloadIfNeeded(ctx, pendingNodes[len(pendingNodes)-1].Block.Block())
 	}
-	if root != s.ensureRootNotZeros(finalized.Root) && !s.cfg.ForkChoiceStore.HasNode(root) {
+	if root != fRoot && !s.cfg.ForkChoiceStore.HasNode(root) {
 		return ErrNotDescendantOfFinalized
 	}
 
