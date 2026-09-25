@@ -67,6 +67,7 @@ go_test(
     name = "go_default_test",
     srcs = [
         "fork_test.go",
+        "metrics_test.go",
         "node_test.go",
         "operations_test.go",
         "validator_test.go",
@@ -74,6 +75,7 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//api/server/structs:go_default_library",
+        "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//runtime/version:go_default_library",

@@ -12,6 +12,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/genesis"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
@@ -19,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -90,6 +92,11 @@ func metricsTest(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
 	currentSlot := slots.CurrentSlot(genesis.Time())
 	currentEpoch := slots.ToEpoch(currentSlot)
 	forkDigest := params.ForkDigest(currentEpoch)
+
+	if err := checkHeadSlots(conns...); err != nil {
+		return err
+	}
+
 	for i := range conns {
 		response, err := http.Get(fmt.Sprintf("http://localhost:%d/metrics", e2e.TestParams.Ports.PrysmBeaconNodeMetricsPort+i))
 		if err != nil {
@@ -105,24 +112,6 @@ func metricsTest(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
 			return err
 		}
 		time.Sleep(connTimeDelay)
-
-		beaconClient := eth.NewBeaconChainClient(conns[i])
-		nodeClient := eth.NewNodeClient(conns[i])
-		chainHead, err := beaconClient.GetChainHead(context.Background(), &emptypb.Empty{})
-		if err != nil {
-			return err
-		}
-		genesisResp, err := nodeClient.GetGenesis(context.Background(), &emptypb.Empty{})
-		if err != nil {
-			return err
-		}
-		timeSlot := slots.CurrentSlot(genesisResp.GenesisTime.AsTime())
-		// Allow 1 slot tolerance due to race between calculating current slot
-		// and fetching chain head - a slot boundary may occur between these calls.
-		// Check: chainHead.HeadSlot <= timeSlot <= chainHead.HeadSlot + 1
-		if uint64(chainHead.HeadSlot) > uint64(timeSlot) || uint64(timeSlot) > uint64(chainHead.HeadSlot)+1 {
-			return fmt.Errorf("expected metrics slot to equal chain head slot, expected %d, received %d", timeSlot, chainHead.HeadSlot)
-		}
 
 		for _, test := range metricLessThanTests {
 			topic := test.topic
@@ -146,6 +135,109 @@ func metricsTest(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+// headSlotCheckTimeout bounds how long checkHeadSlots keeps polling before it gives up:
+// one slot, so a block that is still propagating when the evaluator starts can arrive.
+func headSlotCheckTimeout() time.Duration {
+	return params.BeaconConfig().SlotDuration()
+}
+
+// skippedSlotTolerance is how far a node's head may trail the wall-clock slot when no node
+// has a block for the missing slots, i.e. they were skipped network-wide (for example
+// proposals missed under load) rather than missed by that node. A quarter of an epoch
+// keeps a stalled chain failing the check.
+func skippedSlotTolerance() primitives.Slot {
+	return params.BeaconConfig().SlotsPerEpoch / 4
+}
+
+// checkHeadSlots verifies that every node's chain head is keeping up with the wall clock.
+func checkHeadSlots(conns ...*grpc.ClientConn) error {
+	if len(conns) == 0 {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), headSlotCheckTimeout())
+	defer cancel()
+
+	genesisResp, err := eth.NewNodeClient(conns[0]).GetGenesis(ctx, &emptypb.Empty{})
+	if err != nil {
+		return err
+	}
+	clients := make([]eth.BeaconChainClient, len(conns))
+	for i, conn := range conns {
+		clients[i] = eth.NewBeaconChainClient(conn)
+	}
+	return waitForHeadsNearClock(ctx, genesisResp.GenesisTime.AsTime(), skippedSlotTolerance(), clients...)
+}
+
+// waitForHeadsNearClock polls every node's chain head until compareHeadSlots accepts all
+// of them, or ctx expires, in which case the last comparison error is returned.
+func waitForHeadsNearClock(ctx context.Context, genesisTime time.Time, tolerance primitives.Slot, clients ...eth.BeaconChainClient) error {
+	ticker := time.NewTicker(connTimeDelay)
+	defer ticker.Stop()
+
+	var lastErr error
+	for {
+		heads := make([]primitives.Slot, len(clients))
+		g, gctx := errgroup.WithContext(ctx)
+		for i, client := range clients {
+			g.Go(func() error {
+				chainHead, err := client.GetChainHead(gctx, &emptypb.Empty{})
+				if err != nil {
+					return errors.Wrapf(err, "connection number=%d", i)
+				}
+				heads[i] = chainHead.HeadSlot
+				return nil
+			})
+		}
+		if err := g.Wait(); err != nil {
+			if ctx.Err() != nil && lastErr != nil {
+				return lastErr
+			}
+			return err
+		}
+		// Read the clock after the heads: a slot boundary crossed while fetching can only
+		// make the clock later than the heads, which the one-slot allowance covers.
+		if lastErr = compareHeadSlots(heads, slots.CurrentSlot(genesisTime), tolerance); lastErr == nil {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return lastErr
+		case <-ticker.C:
+		}
+	}
+}
+
+// compareHeadSlots checks each head slot against the wall-clock slot. A head at the clock
+// slot, or one slot behind it (the current slot's block may still be on its way), always
+// passes. A head that trails by more is accepted only when it is at, or within one slot
+// of, the highest head across all nodes and the shortfall is within tolerance: no node
+// has a block for the missing slots, so they were skipped, not missed by this node.
+// Anything else is a node lagging the chain, or a chain that has stalled.
+func compareHeadSlots(heads []primitives.Slot, timeSlot, tolerance primitives.Slot) error {
+	var highest primitives.Slot
+	for _, head := range heads {
+		highest = max(highest, head)
+	}
+	for i, head := range heads {
+		if head > timeSlot {
+			return fmt.Errorf("node %d head slot %d is ahead of wall-clock slot %d", i, head, timeSlot)
+		}
+		shortfall := timeSlot - head
+		if shortfall <= 1 {
+			continue
+		}
+		if highest-head <= 1 && shortfall <= tolerance {
+			continue
+		}
+		return fmt.Errorf(
+			"node %d head slot %d trails wall-clock slot %d by %d slots (highest head across nodes %d, skipped-slot tolerance %d)",
+			i, head, timeSlot, shortfall, highest, tolerance,
+		)
 	}
 	return nil
 }
