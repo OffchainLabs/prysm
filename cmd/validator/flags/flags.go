@@ -23,6 +23,9 @@ const (
 	DefaultMaxHealthChecks = 0
 )
 
+// perKeyPrecedenceNote closes the usage of every flag that only sets proposer defaults.
+const perKeyPrecedenceNote = "Per-key settings from a proposer settings file, URL, or the keymanager API take precedence."
+
 var (
 	// DisableAccountMetricsFlag disables the prometheus metrics for validator accounts, default false.
 	DisableAccountMetricsFlag = &cli.BoolFlag{
@@ -363,10 +366,9 @@ var (
 	// SuggestedFeeRecipientFlag defines the address of the fee recipient.
 	SuggestedFeeRecipientFlag = &cli.StringFlag{
 		Name: "suggested-fee-recipient",
-		Usage: `Sets ALL validators' mapping to a suggested eth address to receive gas fees when proposing a block.
-		Note that this is only a suggestion when integrating with a Builder API, which may choose to specify
-		a different fee recipient as payment for the blocks it builds.For additional setting overrides use the 
-		--` + ProposerSettingsFlag.Name + " or --" + ProposerSettingsURLFlag.Name + " flags.",
+		Usage: `Sets the default address that receives the fees of blocks proposed by all validators. A builder
+		integrated through the Builder API may pay a different address as payment for the blocks it builds.
+		` + perKeyPrecedenceNote,
 		Value: params.BeaconConfig().EthBurnAddressHex,
 	}
 	// EnableBuilderFlag enables the periodic validator registration API calls that will update the custom builder with validator settings.
@@ -378,11 +380,43 @@ var (
 		Value:   false,
 		Aliases: []string{"enable-validator-registration"},
 	}
-	// BuilderGasLimitFlag defines the gas limit for the builder to use for constructing a payload.
+	// BuilderGasLimitFlag sets the default_config gas limit, read by registrations and Gloas preferences.
 	BuilderGasLimitFlag = &cli.StringFlag{
-		Name:  "suggested-gas-limit",
-		Usage: "Sets gas limit for the builder to use for constructing a payload for all the validators.",
+		Name: "suggested-gas-limit",
+		Usage: `Sets the default gas limit for all validators: registered with builders before Gloas and signed into
+		proposer preferences from Gloas onward, where it overrides the network gas limit schedule. Remove it to follow
+		the schedule. ` + perKeyPrecedenceNote,
 		Value: fmt.Sprint(params.BeaconConfig().DefaultBuilderGasLimit),
+	}
+	// BuilderURLsFlag sets the default_config builders list for Gloas bid requests.
+	BuilderURLsFlag = &cli.StringSliceFlag{
+		Name: "builder-urls",
+		Usage: `Comma-separated URLs of Gloas builders to request execution payload bids from, for all validators.
+		Auth data agreed with a builder may be appended as a hex fragment (https://builder.example#0x0123); otherwise
+		the URL's UTF-8 bytes are used. Before Gloas a non-empty list also enables builder validator registration,
+		like --` + EnableBuilderFlag.Name + `; set the gas limit with --` + BuilderGasLimitFlag.Name + `. ` + perKeyPrecedenceNote,
+	}
+	// BuilderMinBidFlag sets the default_config min_bid for Gloas bids.
+	BuilderMinBidFlag = &cli.Uint64Flag{
+		Name: "builder-min-bid",
+		Usage: `Minimum total payment in Gwei a Gloas builder bid must offer to be considered, for all validators:
+		the bid value plus its execution payment up to --builder-max-execution-payment. Only used from Gloas onward.
+		` + perKeyPrecedenceNote,
+	}
+	// BuilderBoostFactorFlag sets the default_config builder_boost_factor for Gloas bids.
+	BuilderBoostFactorFlag = &cli.Uint64Flag{
+		Name: "builder-boost-factor",
+		Usage: `Percentage applied to Gloas builder bid values when comparing them with a locally built payload, for
+		all validators. 100 is neutral, below 100 favors the local payload, 0 always uses it. Only used from Gloas onward.
+		` + perKeyPrecedenceNote,
+		Value: 100,
+	}
+	// BuilderMaxExecutionPaymentFlag sets the default_config max_execution_payment for Gloas bids.
+	BuilderMaxExecutionPaymentFlag = &cli.Uint64Flag{
+		Name: "builder-max-execution-payment",
+		Usage: `Maximum execution layer payment in Gwei counted toward a Gloas builder bid, for all validators. 0 counts
+		only the collateral-backed bid value; payments above that rest on the builder's promise to pay. Only used from Gloas onward.
+		` + perKeyPrecedenceNote,
 	}
 	// ValidatorsRegistrationBatchSizeFlag sets the maximum size for one batch of validator registrations. Use a non-positive value to disable batching.
 	ValidatorsRegistrationBatchSizeFlag = &cli.IntFlag{

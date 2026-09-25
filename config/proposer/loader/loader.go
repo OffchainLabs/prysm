@@ -11,9 +11,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
+	"github.com/OffchainLabs/prysm/v7/io/logs"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/validator/db/iface"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 	"google.golang.org/protobuf/proto"
@@ -21,6 +23,14 @@ import (
 
 // maxLoggedKeys caps the key lists in the DB-replacement warning.
 const maxLoggedKeys = 10
+
+// builderDefaultFlags write v2 builder content into default_config and make the flags a v2 source.
+var builderDefaultFlags = []cli.Flag{
+	flags.BuilderURLsFlag,
+	flags.BuilderMinBidFlag,
+	flags.BuilderBoostFactorFlag,
+	flags.BuilderMaxExecutionPaymentFlag,
+}
 
 type settingsType int
 
@@ -41,8 +51,9 @@ type SettingsLoader struct {
 }
 
 type flagOptions struct {
-	builderConfig *proposer.BuilderConfig
-	gasLimit      *validator.Uint64
+	builderConfig   *proposer.BuilderConfig
+	gasLimit        *validator.Uint64
+	builderFlagsSet bool
 }
 
 // SettingsLoaderOption sets additional options that affect the proposer settings
@@ -92,7 +103,11 @@ func NewProposerSettingsLoader(cliCtx *cli.Context, db iface.ValidatorDB, opts .
 	if err != nil {
 		return nil, err
 	}
-	psl := &SettingsLoader{db: db, existsInDB: psExists, options: &flagOptions{}}
+	psl := &SettingsLoader{
+		db:         db,
+		existsInDB: psExists,
+		options:    &flagOptions{builderFlagsSet: len(setBuilderFlagNames(cliCtx)) > 0},
+	}
 
 	psl.loadMethods = determineLoadMethods(cliCtx, psl.existsInDB)
 
@@ -108,7 +123,7 @@ func NewProposerSettingsLoader(cliCtx *cli.Context, db iface.ValidatorDB, opts .
 func determineLoadMethods(cliCtx *cli.Context, loadedFromDB bool) []settingsType {
 	var methods []settingsType
 
-	if cliCtx.IsSet(flags.SuggestedFeeRecipientFlag.Name) {
+	if cliCtx.IsSet(flags.SuggestedFeeRecipientFlag.Name) || cliCtx.IsSet(flags.BuilderGasLimitFlag.Name) || len(setBuilderFlagNames(cliCtx)) > 0 {
 		methods = append(methods, defaultFlag)
 	}
 	if cliCtx.IsSet(flags.ProposerSettingsFlag.Name) {
@@ -158,6 +173,9 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 			WithField("proposerConfigCount", len(dbSettings.ProposerConfig)).
 			Debug("Loaded proposer settings from DB")
 	}
+	// Captured before the merges below rewrite the DB payload in place.
+	hadDefaultBuilders := hasDefaultBuilders(dbSettings)
+	hadDefaultGasLimit := dbSettings.GetDefaultConfig().GetGasLimit() != 0
 
 	// start to process based on load method,
 	// each method merges onto the previous method's result.
@@ -190,6 +208,14 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 		}
 		base = loadedSettings
 	}
+	if hadDefaultBuilders && !hasDefaultBuilders(loadedSettings) {
+		log.Warn("Dropped the default builder settings a previous run stored in the validator DB because neither builder flags nor a settings source configured a builders list this run; pass --" +
+			flags.BuilderURLsFlag.Name + " or the settings file on every start")
+	}
+	if hadDefaultGasLimit && loadedSettings.GetDefaultConfig().GetGasLimit() == 0 {
+		log.Warn("Dropped the default gas limit a previous run stored in the validator DB because neither --" +
+			flags.BuilderGasLimitFlag.Name + " nor a settings source configured one this run; pass it on every start to keep it")
+	}
 
 	// exit early if nothing is provided
 	if loadedSettings == nil || (loadedSettings.ProposerConfig == nil && loadedSettings.DefaultConfig == nil) {
@@ -204,6 +230,11 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 	ps.WarnUnsetMaxExecutionPayment()
 	if psl.replacesDBKeys {
 		warnReplacedDBKeys(dbps, ps)
+	}
+	// Flag-only builder defaults are rebuilt every run and never persisted on their own.
+	if !ps.ShouldBeSaved() {
+		log.Debug("Proposer settings carry nothing to persist; validator DB left unchanged")
+		return ps, nil
 	}
 	if err := psl.db.SaveProposerSettings(cliCtx.Context, ps); err != nil {
 		return nil, err
@@ -239,6 +270,11 @@ func warnReplacedDBKeys(db, merged *proposer.Settings) {
 			"Changes made through the keymanager API do not survive a restart while a settings file or URL is configured")
 }
 
+// hasDefaultBuilders reports whether default_config names at least one builder.
+func hasDefaultBuilders(p *validatorpb.ProposerSettingsPayload) bool {
+	return p != nil && p.DefaultConfig != nil && len(p.DefaultConfig.Builder.GetBuilders()) > 0
+}
+
 // capKeys renders a sorted key list, truncated to maxLoggedKeys with a "+N more" tail.
 func capKeys(keys []string) string {
 	sort.Strings(keys)
@@ -254,23 +290,155 @@ func (psl *SettingsLoader) applyOverrides() {
 	}
 }
 
+// loadFromDefault builds default_config from the flags; the builder flags stamp the current schema.
 func (psl *SettingsLoader) loadFromDefault(cliCtx *cli.Context, dbSettings *validatorpb.ProposerSettingsPayload) (*validatorpb.ProposerSettingsPayload, error) {
-	suggestedFeeRecipient := cliCtx.String(flags.SuggestedFeeRecipientFlag.Name)
-	if !common.IsHexAddress(suggestedFeeRecipient) {
-		return nil, errors.Errorf("--%s is not a valid Ethereum address", flags.SuggestedFeeRecipientFlag.Name)
+	option := &validatorpb.ProposerOptionPayload{}
+	loaded := &validatorpb.ProposerSettingsPayload{DefaultConfig: option}
+	logEntry := log
+	if cliCtx.IsSet(flags.SuggestedFeeRecipientFlag.Name) {
+		suggestedFeeRecipient := cliCtx.String(flags.SuggestedFeeRecipientFlag.Name)
+		if !common.IsHexAddress(suggestedFeeRecipient) {
+			return nil, errors.Errorf("--%s is not a valid Ethereum address", flags.SuggestedFeeRecipientFlag.Name)
+		}
+		if err := config.WarnNonChecksummedAddress(suggestedFeeRecipient); err != nil {
+			return nil, err
+		}
+		option.FeeRecipient = suggestedFeeRecipient
+		logEntry = logEntry.WithField(flags.SuggestedFeeRecipientFlag.Name, suggestedFeeRecipient)
+	} else if dbSettings != nil && dbSettings.DefaultConfig != nil {
+		// Other default flags alone keep the persisted default fee recipient.
+		option.FeeRecipient = dbSettings.DefaultConfig.FeeRecipient
 	}
-	if err := config.WarnNonChecksummedAddress(suggestedFeeRecipient); err != nil {
+	if psl.options.gasLimit != nil {
+		option.GasLimit = *psl.options.gasLimit
+		logEntry = logEntry.WithField(flags.BuilderGasLimitFlag.Name, uint64(option.GasLimit))
+		warnGasLimitOverridesSchedule(option.GasLimit)
+	}
+	builder, err := builderConfigFromFlags(cliCtx)
+	if err != nil {
 		return nil, err
+	}
+	if builder != nil {
+		option.Builder = builder.ToConsensus()
+		loaded.Version = proposer.MaxSchemaVersion
+		if len(builder.Builders) > 0 {
+			logEntry = logEntry.WithField("builders", maskedBuilderURLs(builder.Builders))
+		}
+		if !params.GloasEnabled() {
+			log.Warnf("%s configure Gloas builders, but this network has no Gloas fork scheduled", strings.Join(setBuilderFlagNames(cliCtx), ", "))
+		}
 	}
 
 	if psl.existsInDB && len(psl.loadMethods) == 1 {
 		// only log the below if default flag is the only load method
 		log.Debug("Overriding previously saved proposer default settings.")
 	}
-	log.WithField(flags.SuggestedFeeRecipientFlag.Name, cliCtx.String(flags.SuggestedFeeRecipientFlag.Name)).Info("Proposer settings loaded from default")
-	return psl.processProposerSettings(&validatorpb.ProposerSettingsPayload{DefaultConfig: &validatorpb.ProposerOptionPayload{
-		FeeRecipient: suggestedFeeRecipient,
-	}}, dbSettings), nil
+	logEntry.Info("Proposer settings loaded from default")
+	return psl.processProposerSettings(loaded, dbSettings), nil
+}
+
+// From Gloas the default gas limit is the signed proposer preference, so the flag
+// overrides the EIP-8261 schedule; operators are told to remove it once the fork is live.
+func warnGasLimitOverridesSchedule(gas validator.Uint64) {
+	if !params.GloasEnabled() {
+		return
+	}
+	log.Warnf("--%s overrides the network gas limit schedule from the Gloas fork; remove it to follow the schedule", flags.BuilderGasLimitFlag.Name)
+	var highest uint64
+	for _, e := range params.BeaconConfig().GasLimitSchedule {
+		highest = max(highest, e.GasLimit)
+	}
+	if highest != 0 && uint64(gas) > highest {
+		log.Warnf("--%s %d exceeds the highest scheduled gas limit of %d", flags.BuilderGasLimitFlag.Name, gas, highest)
+	}
+}
+
+// setBuilderFlagNames lists the builder default flags present on the command line, "--" prefixed.
+func setBuilderFlagNames(cliCtx *cli.Context) []string {
+	var names []string
+	for _, f := range builderDefaultFlags {
+		if name := f.Names()[0]; cliCtx.IsSet(name) {
+			names = append(names, "--"+name)
+		}
+	}
+	return names
+}
+
+// builderConfigFromFlags assembles the default_config builder from the builder flags; nil when none is set.
+func builderConfigFromFlags(cliCtx *cli.Context) (*proposer.BuilderConfig, error) {
+	if len(setBuilderFlagNames(cliCtx)) == 0 {
+		return nil, nil
+	}
+	bc := &proposer.BuilderConfig{}
+	if cliCtx.IsSet(flags.BuilderURLsFlag.Name) {
+		raw := cliCtx.StringSlice(flags.BuilderURLsFlag.Name)
+		if len(raw) > proposer.MaxBuilderEntries {
+			return nil, errors.Errorf("--%s lists more than %d builders", flags.BuilderURLsFlag.Name, proposer.MaxBuilderEntries)
+		}
+		seen := make(map[proposer.EntryIdentity]bool, len(raw))
+		bc.Builders = make([]*proposer.BuilderEntry, 0, len(raw))
+		for _, r := range raw {
+			be, err := parseBuilderURL(r)
+			if err != nil {
+				return nil, errors.Wrapf(err, "--%s", flags.BuilderURLsFlag.Name)
+			}
+			if seen[be.Identity()] {
+				return nil, errors.Errorf("--%s lists %s more than once", flags.BuilderURLsFlag.Name, logs.MaskCredentialsLogging(be.URL))
+			}
+			seen[be.Identity()] = true
+			bc.Builders = append(bc.Builders, be)
+		}
+	}
+	bc.MinBid = uint64FlagValue(cliCtx, flags.BuilderMinBidFlag)
+	bc.BuilderBoostFactor = uint64FlagValue(cliCtx, flags.BuilderBoostFactorFlag)
+	bc.MaxExecutionPayment = uint64FlagValue(cliCtx, flags.BuilderMaxExecutionPaymentFlag)
+	return bc, nil
+}
+
+// uint64FlagValue returns nil for an unset flag so an explicit 0 stays distinct from "inherit".
+func uint64FlagValue(cliCtx *cli.Context, f *cli.Uint64Flag) *validator.Uint64 {
+	if !cliCtx.IsSet(f.Name) {
+		return nil
+	}
+	v := validator.Uint64(cliCtx.Uint64(f.Name))
+	return &v
+}
+
+// parseBuilderURL splits a --builder-urls entry into its URL and optional "#0x..." auth fragment.
+func parseBuilderURL(raw string) (*proposer.BuilderEntry, error) {
+	rawURL, fragment, hasFragment := strings.Cut(strings.TrimSpace(raw), "#")
+	if rawURL == "" {
+		return nil, errors.New("empty builder url")
+	}
+	be := &proposer.BuilderEntry{URL: rawURL}
+	if hasFragment {
+		auth, err := hexutil.Decode(fragment)
+		if err != nil {
+			return nil, errors.Errorf("auth fragment of %s is not 0x-prefixed hex", logs.MaskCredentialsLogging(rawURL))
+		}
+		be.AuthData = auth
+	}
+	if err := be.Validate(); err != nil {
+		return nil, errors.Wrap(err, logs.MaskCredentialsLogging(rawURL))
+	}
+	return be, nil
+}
+
+func maskedBuilderURLs(entries []*proposer.BuilderEntry) string {
+	urls := make([]string, 0, len(entries))
+	for _, be := range entries {
+		urls = append(urls, logs.MaskCredentialsLogging(be.URL))
+	}
+	return strings.Join(urls, ",")
+}
+
+// A source's default_config replaces the flag-built one whole, builder flags included.
+func warnBuilderFlagsReplaced(cliCtx *cli.Context, loaded *validatorpb.ProposerSettingsPayload, source string) {
+	names := setBuilderFlagNames(cliCtx)
+	if loaded.DefaultConfig == nil || len(names) == 0 {
+		return
+	}
+	log.Warnf("The default_config from --%s replaces the builder defaults set by %s", source, strings.Join(names, ", "))
 }
 
 func (psl *SettingsLoader) loadFromFile(cliCtx *cli.Context, dbSettings *validatorpb.ProposerSettingsPayload) (*validatorpb.ProposerSettingsPayload, error) {
@@ -286,6 +454,7 @@ func (psl *SettingsLoader) loadFromFile(cliCtx *cli.Context, dbSettings *validat
 	}
 	markExplicitEmptyBuilders(settingFromFile)
 	inferSchemaVersion(settingFromFile)
+	warnBuilderFlagsReplaced(cliCtx, settingFromFile, flags.ProposerSettingsFlag.Name)
 	psl.replacesDBKeys = len(settingFromFile.ProposerConfig) > 0
 	log.WithField(flags.ProposerSettingsFlag.Name, cliCtx.String(flags.ProposerSettingsFlag.Name)).Info("Proposer settings loaded from file")
 	return psl.processProposerSettings(settingFromFile, dbSettings), nil
@@ -304,6 +473,7 @@ func (psl *SettingsLoader) loadFromURL(cliCtx *cli.Context, dbSettings *validato
 	}
 	markExplicitEmptyBuilders(settingFromURL)
 	inferSchemaVersion(settingFromURL)
+	warnBuilderFlagsReplaced(cliCtx, settingFromURL, flags.ProposerSettingsURLFlag.Name)
 	psl.replacesDBKeys = len(settingFromURL.ProposerConfig) > 0
 	log.WithField(flags.ProposerSettingsURLFlag.Name, cliCtx.String(flags.ProposerSettingsURLFlag.Name)).Infof("Proposer settings loaded from URL")
 	return psl.processProposerSettings(settingFromURL, dbSettings), nil
@@ -326,8 +496,8 @@ func (psl *SettingsLoader) processProposerSettings(loadedSettings, dbSettings *v
 }
 
 // mergeProposerSettings merges database settings with loaded settings, giving
-// precedence to loadedSettings. Dispatches by schema version: v1 still flows
-// through Builder; v2 lives on Option directly.
+// precedence to loadedSettings. Legacy (v1) schemas merge through Builder; every
+// later schema takes the current path.
 func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, options *flagOptions) *validatorpb.ProposerSettingsPayload {
 	merged := &validatorpb.ProposerSettingsPayload{}
 	if db != nil {
@@ -339,17 +509,53 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 
 	var builderConfig *validatorpb.BuilderConfig
 	var gasLimitOnly *validator.Uint64
+	builderFlagsSet := false
 	if options != nil {
 		if options.builderConfig != nil {
 			builderConfig = options.builderConfig.ToConsensus()
 		}
 		gasLimitOnly = options.gasLimit
+		builderFlagsSet = options.builderFlagsSet
 	}
 
-	if merged.Version == proposer.SchemaV2 {
-		return mergeProposerSettingsV2(merged, loaded, db, builderConfig, gasLimitOnly)
+	// The default gas limit is per-run like the builder defaults: a run without
+	// --suggested-gas-limit drops the persisted one so the schedule applies again.
+	if db != nil && db.DefaultConfig != nil && gasLimitOnly == nil {
+		db.DefaultConfig.GasLimit = 0
 	}
-	return mergeProposerSettingsV1(merged, loaded, db, builderConfig, gasLimitOnly)
+
+	if merged.Version < proposer.SchemaV2 {
+		return mergeLegacyProposerSettings(merged, loaded, db, builderConfig, gasLimitOnly)
+	}
+	return mergeCurrentProposerSettings(merged, loaded, db, builderConfig, builderFlagsSet)
+}
+
+// hasGloasBuilderFields reports whether a payload builder configures the Gloas builder API; an explicit empty list counts.
+func hasGloasBuilderFields(b *validatorpb.BuilderConfig) bool {
+	return b != nil && (len(b.Builders) > 0 || b.BuildersSet || b.MinBid != nil ||
+		b.BuilderBoostFactor != nil || b.MaxExecutionPayment != nil)
+}
+
+// clearBuilderFlagFields clears the fields the builder flags own; a config left with zero legacy fields disappears.
+func clearBuilderFlagFields(b *validatorpb.BuilderConfig) *validatorpb.BuilderConfig {
+	if b == nil {
+		return nil
+	}
+	b.Builders, b.BuildersSet, b.MinBid, b.BuilderBoostFactor, b.MaxExecutionPayment = nil, false, nil, nil, nil
+	if !b.Enabled && b.GasLimit == 0 {
+		return nil
+	}
+	return b
+}
+
+// enableLegacyPerKeyBuilders opts legacy-only per-key blocks in, as v1 --enable-builder
+// does. Blocks with v2 content, including builders: [], keep their own choice.
+func enableLegacyPerKeyBuilders(merged *validatorpb.ProposerSettingsPayload) {
+	for _, opt := range merged.ProposerConfig {
+		if opt != nil && opt.Builder != nil && !hasGloasBuilderFields(opt.Builder) {
+			opt.Builder.Enabled = true
+		}
+	}
 }
 
 // checkSchemaVersion rejects versions the merge path would otherwise silently treat
@@ -394,12 +600,7 @@ func inferSchemaVersion(p *validatorpb.ProposerSettingsPayload) {
 		return
 	}
 	hasV2 := func(opt *validatorpb.ProposerOptionPayload) bool {
-		if opt == nil || opt.Builder == nil {
-			return false
-		}
-		b := opt.Builder
-		return len(b.Builders) > 0 || b.BuildersSet || b.MinBid != nil ||
-			b.BuilderBoostFactor != nil || b.MaxExecutionPayment != nil
+		return opt != nil && hasGloasBuilderFields(opt.Builder)
 	}
 	found := hasV2(p.DefaultConfig)
 	for _, opt := range p.ProposerConfig {
@@ -428,7 +629,7 @@ func selectProposerConfig(db, loaded *validatorpb.ProposerSettingsPayload) map[s
 	return nil
 }
 
-func mergeProposerSettingsV1(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64) *validatorpb.ProposerSettingsPayload {
+func mergeLegacyProposerSettings(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64) *validatorpb.ProposerSettingsPayload {
 	stripDBBuilder := builderConfig == nil
 
 	if db != nil && db.DefaultConfig != nil {
@@ -470,7 +671,12 @@ func mergeProposerSettingsV1(merged, loaded, db *validatorpb.ProposerSettingsPay
 	return merged
 }
 
-func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64) *validatorpb.ProposerSettingsPayload {
+func mergeCurrentProposerSettings(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, builderFlagsSet bool) *validatorpb.ProposerSettingsPayload {
+	// Builder flags are per-run: a run without them drops the v2 builder fields an
+	// earlier flag run persisted in default_config. Legacy fields follow their own flags.
+	if db != nil && db.DefaultConfig != nil && !builderFlagsSet {
+		db.DefaultConfig.Builder = clearBuilderFlagFields(db.DefaultConfig.Builder)
+	}
 	if db != nil && db.DefaultConfig != nil {
 		merged.DefaultConfig = db.DefaultConfig
 	}
@@ -478,6 +684,10 @@ func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPay
 		merged.DefaultConfig = loaded.DefaultConfig
 	}
 	merged.ProposerConfig = selectProposerConfig(db, loaded)
+
+	if builderFlagsSet && merged.DefaultConfig != nil && len(merged.DefaultConfig.Builder.GetBuilders()) > 0 {
+		enableLegacyPerKeyBuilders(merged)
+	}
 
 	// --enable-builder is legacy content: it still forces the default mev-boost
 	// toggle on for pre-gloas registrations, and is inert from the fork onward.
@@ -490,19 +700,6 @@ func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPay
 		}
 		merged.DefaultConfig.Builder.Enabled = true
 		log.Warnf("--%s is legacy (pre-gloas) mev-boost content and has no effect after the gloas fork; configure builders via the settings source or keymanager API", flags.EnableBuilderFlag.Name)
-	}
-
-	// --suggested-gas-limit is likewise legacy content: it applies to the
-	// pre-gloas builder gas limit and never overrides v2 or schedule values.
-	if gasLimitOnly != nil {
-		if merged.DefaultConfig == nil {
-			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{}
-		}
-		if merged.DefaultConfig.Builder == nil {
-			merged.DefaultConfig.Builder = &validatorpb.BuilderConfig{}
-		}
-		merged.DefaultConfig.Builder.GasLimit = *gasLimitOnly
-		log.Warnf("--%s is legacy (pre-gloas) content and has no effect after the gloas fork; set gas limits in v2 proposer settings or via the keymanager API", flags.BuilderGasLimitFlag.Name)
 	}
 	return merged
 }
