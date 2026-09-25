@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -137,7 +136,7 @@ func TestStore_ImportInterchangeData_OK(t *testing.T) {
 			// We expect we have an attesting history for the attestation and when
 			// attempting to verify the same att is slashable with a different signing root,
 			// we expect to receive a double vote slashing kind.
-			err := s.SaveAttestationForPubKey(ctx, publicKeys[i], [fieldparams.RootLength]byte{}, indexedAtt)
+			err := s.SaveAttestationForPubKey(ctx, publicKeys[i], []byte{}, indexedAtt)
 			require.ErrorContains(t, "could not sign attestation", err)
 		}
 	}

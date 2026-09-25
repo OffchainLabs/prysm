@@ -4,7 +4,6 @@ import (
 	"context"
 	"path/filepath"
 
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -197,7 +196,8 @@ func ConvertDatabase(ctx context.Context, sourceDataDir string, targetDataDir st
 			},
 		}
 
-		if err := targetDatabase.SaveAttestationForPubKey(ctx, pubkey, [fieldparams.RootLength]byte{}, indexedAttestation); err != nil {
+		// Save the attestation with an unknown signing root, since the minimal database does not store signing roots.
+		if err := targetDatabase.SaveAttestationForPubKey(ctx, pubkey, nil, indexedAttestation); err != nil {
 			return errors.Wrap(err, "could not save attestation for public key")
 		}
 	}

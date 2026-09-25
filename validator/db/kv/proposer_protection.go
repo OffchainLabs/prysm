@@ -89,12 +89,16 @@ func (s *Store) ProposalHistoryForPubKey(ctx context.Context, publicKey [fieldpa
 		}
 		return valBucket.ForEach(func(slotKey, signingRootBytes []byte) error {
 			slot := bytesutil.BytesToSlotBigEndian(slotKey)
-			sr := make([]byte, fieldparams.RootLength)
-			copy(sr, signingRootBytes)
-			proposals = append(proposals, &common.Proposal{
-				Slot:        slot,
-				SigningRoot: sr,
-			})
+			proposal := &common.Proposal{Slot: slot}
+
+			// Signing roots are optional, so a proposal without a signing root keeps it unknown,
+			// instead of being zero-filled into a specific, known signing root.
+			if len(signingRootBytes) != 0 {
+				proposal.SigningRoot = make([]byte, fieldparams.RootLength)
+				copy(proposal.SigningRoot, signingRootBytes)
+			}
+
+			proposals = append(proposals, proposal)
 			return nil
 		})
 	})

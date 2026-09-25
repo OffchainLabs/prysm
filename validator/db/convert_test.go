@@ -50,13 +50,6 @@ func TestDB_ConvertDatabase(t *testing.T) {
 	for _, minimalToComplete := range [...]bool{false, true} {
 		for _, withProposerSettings := range [...]bool{false, true} {
 			t.Run(fmt.Sprintf("minimalToComplete=%v", minimalToComplete), func(t *testing.T) {
-				// Create signing root
-				signingRoot := [fieldparams.RootLength]byte{}
-				var signingRootBytes []byte
-				if minimalToComplete {
-					signingRootBytes = signingRoot[:]
-				}
-
 				// Create database directory path.
 				datadir := t.TempDir()
 
@@ -156,7 +149,7 @@ func TestDB_ConvertDatabase(t *testing.T) {
 						PubKey:      pubkey1,
 						Source:      primitives.Epoch(2),
 						Target:      primitives.Epoch(3),
-						SigningRoot: signingRootBytes,
+						SigningRoot: nil,
 					},
 				}
 
@@ -165,7 +158,7 @@ func TestDB_ConvertDatabase(t *testing.T) {
 						PubKey:      pubkey2,
 						Source:      primitives.Epoch(2),
 						Target:      primitives.Epoch(3),
-						SigningRoot: signingRootBytes,
+						SigningRoot: nil,
 					},
 				}
 
@@ -185,7 +178,7 @@ func TestDB_ConvertDatabase(t *testing.T) {
 				expectedProposals := []*common.Proposal{
 					{
 						Slot:        43,
-						SigningRoot: signingRootBytes,
+						SigningRoot: nil,
 					},
 				}
 
@@ -264,4 +257,70 @@ func TestDB_ConvertDatabase(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestDB_ConvertDatabase_UnknownSigningRoot(t *testing.T) {
+	ctx := t.Context()
+
+	pubKeyString := "0x80000060606fa05c7339dd7bcd0d3e4d8b573fa30dea2fdb4997031a703e3300326e3c054be682f92d9c367cd647bbea"
+	pubkey := getPubkeyFromString(t, pubKeyString)
+
+	datadir := t.TempDir()
+
+	// Create the minimal source database and save an attestation in it.
+	sourceDatabase, err := filesystem.NewStore(datadir, &filesystem.Config{
+		PubKeys: [][fieldparams.BLSPubkeyLength]byte{pubkey},
+	})
+	require.NoError(t, err, "could not create source database")
+
+	attestation := &ethpb.IndexedAttestation{
+		Data: &ethpb.AttestationData{
+			Source: &ethpb.Checkpoint{Epoch: 1},
+			Target: &ethpb.Checkpoint{Epoch: 5},
+		},
+	}
+
+	err = sourceDatabase.SaveAttestationForPubKey(ctx, pubkey, nil, attestation)
+	require.NoError(t, err, "could not save attestation")
+
+	err = sourceDatabase.Close()
+	require.NoError(t, err, "could not close source database")
+
+	// Minimal to complete database conversion.
+	err = ConvertDatabase(ctx, datadir, datadir, true /* minimalToComplete */)
+	require.NoError(t, err, "could not convert source to target database")
+
+	targetDatabase, err := kv.NewKVStore(ctx, datadir, nil)
+	require.NoError(t, err, "could not get complete database")
+
+	defer func() {
+		require.NoError(t, targetDatabase.Close(), "could not close target database")
+	}()
+
+	// The converted attestation should exist with an unknown signing root.
+	expectedAttestationRecords := []*common.AttestationRecord{
+		{
+			PubKey:      pubkey,
+			Source:      primitives.Epoch(1),
+			Target:      primitives.Epoch(5),
+			SigningRoot: nil,
+		},
+	}
+
+	actualAttestationRecords, err := targetDatabase.AttestationHistoryForPubKey(ctx, pubkey)
+	require.NoError(t, err, "could not get attestations from target database")
+	require.DeepEqual(t, expectedAttestationRecords, actualAttestationRecords, "attestations should match")
+
+	// An unknown signing root should not be treated as the all-zero signing root,
+	// so a new attestation with the same target epoch should be a double vote.
+	newAttestation := &ethpb.IndexedAttestation{
+		Data: &ethpb.AttestationData{
+			Source: &ethpb.Checkpoint{Epoch: 2},
+			Target: &ethpb.Checkpoint{Epoch: 5},
+		},
+	}
+
+	slashingKind, err := targetDatabase.CheckSlashableAttestation(ctx, pubkey, make([]byte, fieldparams.RootLength), newAttestation)
+	require.ErrorContains(t, "double vote found", err, "attestation with an unknown existing signing root should be slashable")
+	require.Equal(t, kv.DoubleVote, slashingKind, "slashing kind should be a double vote")
 }
