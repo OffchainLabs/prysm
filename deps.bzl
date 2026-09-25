@@ -2496,8 +2496,8 @@ def prysm_deps():
         importpath = "github.com/OffchainLabs/hashtree",
         patch_args = ["-p1"],
         patches = ["//third_party:com_github_offchainlabs_hashtree.patch"],
-        sum = "h1:nM8dBAQZzHLzzM14FaAHXnHTAXZIst69v5xWuS48y/c=",
-        version = "v0.2.3",
+        sum = "h1:AsOLM1faXwAHARO5Cg1Qu3hPOLKpQBUJ+4ap+0ZKEGU=",
+        version = "v0.2.6",
     )
     go_repository(
         name = "com_github_offchainlabs_methodical_ssz",

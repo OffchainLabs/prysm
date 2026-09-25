@@ -151,8 +151,6 @@ var Buckets = [][]byte{
 	// Migrations
 	migrationsBucket,
 
-	feeRecipientBucket,
-	registrationBucket,
 	custodyBucket,
 	executionPayloadEnvelopesBucket,
 	executionPayloadEnvelopeBlockHashBucket,

@@ -188,7 +188,8 @@ func (in *BuilderConfig) ToConsensus() (*proposer.BuilderConfig, error) {
 		return nil, errors.Errorf("builders exceeds %d entries", proposer.MaxBuilderEntries)
 	}
 	// Non-nil (possibly empty) list means "use exactly these builders", not "inherit".
-	// Omitted auth_data compares as its derived value, so it collides with the explicit form.
+	// Omitted auth_data compares as its derived value (the url's hostname), so it
+	// collides with the explicit form.
 	bc.Builders = make([]*proposer.BuilderEntry, 0, len(in.Builders))
 	seen := make(map[proposer.EntryIdentity]bool, len(in.Builders))
 	for i, entry := range in.Builders {

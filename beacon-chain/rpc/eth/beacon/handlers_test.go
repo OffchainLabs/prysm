@@ -1283,6 +1283,24 @@ func TestGetBlindedBlock(t *testing.T) {
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		assert.Equal(t, false, resp.Finalized)
 	})
+	t.Run("gloas", func(t *testing.T) {
+		sb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockGloas())
+		require.NoError(t, err)
+
+		s := &Server{
+			FinalizationFetcher: &chainMock.ChainService{},
+			Blocker:             &testutil.MockBlocker{BlockToReturn: sb},
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/beacon/blinded_blocks/{block_id}", nil)
+		request.SetPathValue("block_id", "head")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetBlindedBlock(writer, request)
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		assert.StringContains(t, "not supported from Gloas", writer.Body.String())
+	})
 }
 
 func TestGetBlindedBlockSSZ(t *testing.T) {

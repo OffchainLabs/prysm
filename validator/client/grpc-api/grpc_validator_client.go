@@ -2,8 +2,6 @@ package grpc_api
 
 import (
 	"context"
-	"encoding/json"
-	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/api/client"
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
@@ -11,12 +9,10 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/client/cache"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
 	grpcretry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	"github.com/pkg/errors"
@@ -365,112 +361,6 @@ func NewGrpcValidatorClient(conn *validatorHelpers.NodeConnection, opts ...iface
 		c.envelopeCache = cache.NewExecutionPayloadEnvelopeCache()
 	}
 	return c
-}
-
-// sendEvent forwards ev unless ctx is canceled, so a canceled (replaced)
-// stream can always exit even when the channel is full.
-func sendEvent(ctx context.Context, eventsChannel chan<- *eventClient.Event, ev *eventClient.Event) bool {
-	select {
-	case eventsChannel <- ev:
-		return true
-	case <-ctx.Done():
-		return false
-	}
-}
-
-func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []string, eventsChannel chan<- *eventClient.Event) {
-	ctx, span := trace.StartSpan(ctx, "validator.gRPCClient.StartEventStream")
-	defer span.End()
-	if len(topics) == 0 {
-		sendEvent(ctx, eventsChannel, &eventClient.Event{
-			Type: eventClient.EventError,
-			Data: []byte(errors.New("no topics were added").Error()),
-		})
-		return
-	}
-	// TODO(13563): ONLY WORKS WITH HEAD TOPIC.
-	containsHead := false
-
-	// Treat EventHeadV2 and EventHead as equivalent for the purpose of this check,
-	// since the gRPC API only supports the head topic, and head_v2 is a superset of head.
-	for _, topic := range topics {
-		if topic == eventClient.EventHead || topic == eventClient.EventHeadV2 {
-			containsHead = true
-			break
-		}
-	}
-	if !containsHead {
-		sendEvent(ctx, eventsChannel, &eventClient.Event{
-			Type: eventClient.EventConnectionError,
-			Data: []byte(errors.Wrap(client.ErrConnectionIssue, "gRPC only supports the head topic, and head topic was not passed").Error()),
-		})
-	}
-	if containsHead && len(topics) > 1 {
-		log.Warn("gRPC only supports the head topic, other topics will be ignored")
-	}
-
-	// Replace any previous stream (e.g. bound to a pre-switch host) so two
-	// streams never feed the channel concurrently.
-	subCtx, finish := c.eventStreamGuard.Replace(ctx)
-	defer finish()
-
-	stream, err := c.getClient().StreamSlots(subCtx, &ethpb.StreamSlotsRequest{VerifiedOnly: true})
-	if err != nil {
-		sendEvent(subCtx, eventsChannel, &eventClient.Event{
-			Type: eventClient.EventConnectionError,
-			Data: []byte(errors.Wrap(client.ErrConnectionIssue, err.Error()).Error()),
-		})
-		return
-	}
-	c.eventStreamGuard.MarkRunning(true)
-	defer c.eventStreamGuard.MarkRunning(false)
-	for {
-		select {
-		case <-subCtx.Done():
-			log.Info("Context canceled, stopping event stream")
-			return
-		default:
-			res, err := stream.Recv()
-			if err != nil {
-				sendEvent(subCtx, eventsChannel, &eventClient.Event{
-					Type: eventClient.EventConnectionError,
-					Data: []byte(errors.Wrap(client.ErrConnectionIssue, err.Error()).Error()),
-				})
-				return
-			}
-			if res == nil {
-				continue
-			}
-			// Consumer unmarshals into structs.HeadEvent but only reads these fields, so we only emit them.
-			b, err := json.Marshal(struct {
-				Slot                      string `json:"slot"`
-				PreviousDutyDependentRoot string `json:"previous_duty_dependent_root"`
-				CurrentDutyDependentRoot  string `json:"current_duty_dependent_root"`
-			}{
-				Slot:                      strconv.FormatUint(uint64(res.Slot), 10),
-				PreviousDutyDependentRoot: hexutil.Encode(res.PreviousDutyDependentRoot),
-				CurrentDutyDependentRoot:  hexutil.Encode(res.CurrentDutyDependentRoot),
-			})
-			if err != nil {
-				if !sendEvent(subCtx, eventsChannel, &eventClient.Event{
-					Type: eventClient.EventError,
-					Data: []byte(errors.Wrap(err, "failed to marshal Head Event").Error()),
-				}) {
-					return
-				}
-			}
-			if !sendEvent(subCtx, eventsChannel, &eventClient.Event{
-				Type: eventClient.EventHead,
-				Data: b,
-			}) {
-				return
-			}
-		}
-	}
-}
-
-func (c *grpcValidatorClient) EventStreamIsRunning() bool {
-	return c.eventStreamGuard.IsRunning()
 }
 
 func (c *grpcValidatorClient) Host() string {

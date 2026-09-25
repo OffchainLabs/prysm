@@ -823,7 +823,7 @@ func TestSettings_TargetGasLimit_Schedule(t *testing.T) {
 func TestSettingFromConsensus(t *testing.T) {
 	// Persisted payloads may predate url-required and (url, auth_data) uniqueness:
 	// url-less entries drop, (url, auth) duplicates keep the first, and an omitted
-	// auth_data compares as its derived value (the url's UTF-8 bytes).
+	// auth_data compares as its derived value (the url's hostname).
 	t.Run("dedups builders", func(t *testing.T) {
 		payload := &validatorpb.ProposerSettingsPayload{
 			Version: SchemaV2,
@@ -834,7 +834,7 @@ func TestSettingFromConsensus(t *testing.T) {
 						{Url: "https://b.example", AuthData: []byte("second")},
 						{Url: "https://b.example", AuthData: []byte("first")},
 						{Url: "https://other.example"},
-						{Url: "https://other.example", AuthData: []byte("https://other.example")},
+						{Url: "https://other.example", AuthData: []byte("other.example")},
 						{AuthData: []byte("url-less")},
 					},
 				},
@@ -1253,4 +1253,62 @@ func TestUpgradeToV2_DropsBuilderContent(t *testing.T) {
 	// The pure-v1 per-key config is gone entirely.
 	require.IsNil(t, ps.ProposeConfig[key].BuilderConfig)
 	require.Equal(t, false, ps.UpgradeToV2())
+}
+
+func TestBuilderEntry_EffectiveAuthData(t *testing.T) {
+	t.Run("derives the spec (builder-specs) default from the url hostname", func(t *testing.T) {
+		cases := map[string]string{
+			"https://builder.example.com/":             "builder.example.com",
+			"HTTPS://Builder.Example.com:443/bids?x=1": "builder.example.com",
+			"https://builder.example.com:8080":         "builder.example.com",
+			"https://user:pw@builder.example.com/":     "builder.example.com",
+			"https://10.0.0.5:18550/eth/v1/builder":    "10.0.0.5",
+			"https://[0:0:0:0:0:0:0:1]:8443/":          "[::1]",
+			"https://[::ffff:192.0.2.1]/":              "[::ffff:c000:201]",
+		}
+		for u, want := range cases {
+			t.Run(u, func(t *testing.T) {
+				require.Equal(t, want, string((&BuilderEntry{URL: u}).EffectiveAuthData()))
+			})
+		}
+	})
+
+	t.Run("explicit auth_data wins untouched", func(t *testing.T) {
+		be := &BuilderEntry{URL: "https://builder.example.com/", AuthData: []byte("custom")}
+		require.DeepEqual(t, []byte("custom"), be.EffectiveAuthData())
+	})
+}
+
+func TestBuilderEntry_Validate_Hostname(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		wantErr string
+	}{
+		{
+			name:    "no hostname",
+			url:     "https://:8080",
+			wantErr: "url is missing a hostname",
+		},
+		{
+			name:    "non-ASCII hostname",
+			url:     "https://bü.example",
+			wantErr: "must be ASCII",
+		},
+		{
+			name: "valid punycode hostname",
+			url:  "https://xn--b-eha.example",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := (&BuilderEntry{URL: tt.url}).Validate()
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, tt.wantErr, err)
+		})
+	}
 }
