@@ -362,6 +362,8 @@ type BeaconChainConfig struct {
 	// Blobs Values
 	BlobSchedule []BlobScheduleEntry `yaml:"BLOB_SCHEDULE" spec:"true"`
 
+	RoundSchedule []RoundScheduleEntry `yaml:"ROUND_SCHEDULE" spec:"true"`
+
 	// Gas Limit Values (EIP-8261)
 	GasLimitSchedule []GasLimitScheduleEntry `yaml:"GAS_LIMIT_SCHEDULE" spec:"true"`
 
@@ -439,6 +441,12 @@ func (e NetworkScheduleEntry) LogFields() logrus.Fields {
 
 type BlobScheduleEntry NetworkScheduleEntry
 
+type RoundScheduleEntry struct {
+	Slot          primitives.Slot  `yaml:"SLOT" json:"SLOT"`
+	SlotsPerRound uint64           `yaml:"SLOTS_PER_ROUND" json:"SLOTS_PER_ROUND"`
+	StartRound    primitives.Round `yaml:"START_ROUND" json:"START_ROUND"`
+}
+
 type GasLimitScheduleEntry struct {
 	GasLimit uint64           `yaml:"GAS_LIMIT" json:"GAS_LIMIT"`
 	Epoch    primitives.Epoch `yaml:"EPOCH" json:"EPOCH"`
@@ -455,6 +463,36 @@ func (b *BeaconChainConfig) ScheduledGasLimit(epoch primitives.Epoch) (uint64, b
 		}
 	}
 	return 0, false
+}
+
+const minSlotsPerRound = 3
+
+func (b *BeaconChainConfig) ValidateRoundSchedule() error {
+	entries := make([]RoundScheduleEntry, len(b.RoundSchedule))
+	copy(entries, b.RoundSchedule)
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Slot < entries[j].Slot })
+
+	spe := uint64(b.SlotsPerEpoch)
+	for i, e := range entries {
+		if i > 0 && entries[i-1].Slot == e.Slot {
+			return errors.Errorf("round schedule: duplicate entries at slot %d", e.Slot)
+		}
+		if e.SlotsPerRound < minSlotsPerRound || spe%e.SlotsPerRound != 0 {
+			return errors.Errorf("round schedule: slot %d has SLOTS_PER_ROUND %d, which must be at least %d and divide SLOTS_PER_EPOCH %d", e.Slot, e.SlotsPerRound, minSlotsPerRound, spe)
+		}
+		if uint64(e.Slot)%spe != 0 {
+			return errors.Errorf("round schedule: slot %d is not epoch aligned", e.Slot)
+		}
+		want := primitives.Round(uint64(e.Slot) / spe)
+		if i > 0 {
+			prev := entries[i-1]
+			want = prev.StartRound + primitives.Round(uint64(e.Slot-prev.Slot)/prev.SlotsPerRound)
+		}
+		if e.StartRound != want {
+			return errors.Errorf("round schedule: slot %d has START_ROUND %d, want %d", e.Slot, e.StartRound, want)
+		}
+	}
+	return nil
 }
 
 func (b *BeaconChainConfig) ApplyOptions(opts ...Option) {
@@ -476,6 +514,12 @@ func (b *BeaconChainConfig) InitializeForkSchedule() {
 	sort.Slice(b.GasLimitSchedule, func(i, j int) bool {
 		return b.GasLimitSchedule[i].Epoch < b.GasLimitSchedule[j].Epoch
 	})
+	sort.Slice(b.RoundSchedule, func(i, j int) bool {
+		return b.RoundSchedule[i].Slot < b.RoundSchedule[j].Slot
+	})
+	if err := b.ValidateRoundSchedule(); err != nil {
+		log.WithError(err).Error("Invalid round schedule")
+	}
 	combined := b.forkSchedule.merge(b.bpoSchedule)
 	if err := combined.prepare(b); err != nil {
 		log.WithError(err).Error("Failed to prepare network schedule")

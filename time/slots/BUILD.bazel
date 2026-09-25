@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "countdown.go",
         "log.go",
+        "round.go",
         "slotticker.go",
         "slottime.go",
     ],
