@@ -1,6 +1,8 @@
 package state_native_test
 
 import (
+	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -160,60 +162,127 @@ func TestHasPendingBalanceToWithdraw(t *testing.T) {
 	require.Equal(t, false, ok)
 }
 
+const benchRegistrySize = 2_300_000 // ~ number of validators on mainnet at the time of writing
+
+var (
+	benchRegistryOnce     sync.Once
+	benchRegistryShared   state.BeaconState
+	benchRegistryDiverged state.BeaconState
+	benchRegistryErr      error
+)
+
+// benchRegistryStates returns two cached states holding benchRegistrySize validators each: one
+// whose registry consists purely of shared multi-value slice items, and a copy of it in which
+// every 10th validator has been updated, so that 10% of the registry resolves to individual
+// values. The latter approximates a head state that has diverged from its ancestors.
+func benchRegistryStates(b *testing.B) (sharedOnly, tenPctIndividual state.BeaconState) {
+	benchRegistryOnce.Do(func() {
+		vals := make([]*ethpb.Validator, benchRegistrySize)
+		for i := range vals {
+			pk := make([]byte, 48)
+			wc := make([]byte, 32)
+			pk[0] = byte(i)
+			vals[i] = &ethpb.Validator{
+				PublicKey:             pk,
+				WithdrawalCredentials: wc,
+				EffectiveBalance:      32_000_000_000,
+				ExitEpoch:             100,
+				ActivationEpoch:       1,
+			}
+		}
+		benchRegistryShared, benchRegistryErr = statenative.InitializeFromProtoUnsafeDeneb(&ethpb.BeaconStateDeneb{Validators: vals})
+		if benchRegistryErr != nil {
+			return
+		}
+		diverged := benchRegistryShared.Copy()
+		for i := 0; i < benchRegistrySize; i += 10 {
+			idx := primitives.ValidatorIndex(i)
+			var v *ethpb.Validator
+			v, benchRegistryErr = diverged.ValidatorAtIndex(idx)
+			if benchRegistryErr != nil {
+				return
+			}
+			v.EffectiveBalance = 31_000_000_000
+			if benchRegistryErr = diverged.UpdateValidatorAtIndex(idx, v); benchRegistryErr != nil {
+				return
+			}
+		}
+		benchRegistryDiverged = diverged
+		// Collect the sizeable setup garbage now so that it is not attributed to the first
+		// measured iterations.
+		runtime.GC()
+	})
+	require.NoError(b, benchRegistryErr)
+	return benchRegistryShared, benchRegistryDiverged
+}
+
 // BenchmarkValidatorsReadOnlySeq measures the per-validator cost of iterating the
 // registry through the ReadOnlyValidator wrapper.
+//
+// Results on an Apple M4 Pro, comparing the previous implementation (one lock acquisition
+// and At call per index) against the bulk All iterator
+// (go test -benchtime 20x -count 12, benchstat medians):
+//
+//	shared values only       per-index At 91.0 ms/op, bulk All 75.4 ms/op (-17%)
+//	10% individual values    per-index At 93.7 ms/op, bulk All 78.7 ms/op (-16%)
 func BenchmarkValidatorsReadOnlySeq(b *testing.B) {
-	const n = 2_300_000 // ~ number of validators on mainnet at the time of writing
-
-	vals := make([]*ethpb.Validator, n)
-	for i := range vals {
-		pk := make([]byte, 48)
-		wc := make([]byte, 32)
-		pk[0] = byte(i)
-		vals[i] = &ethpb.Validator{
-			PublicKey:             pk,
-			WithdrawalCredentials: wc,
-			EffectiveBalance:      32_000_000_000,
-			ExitEpoch:             100,
-			ActivationEpoch:       1,
-		}
+	sharedOnly, tenPctIndividual := benchRegistryStates(b)
+	for _, tc := range []struct {
+		name string
+		st   state.BeaconState
+	}{
+		{name: "shared values only", st: sharedOnly},
+		{name: "10% individual values", st: tenPctIndividual},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				for _, v := range tc.st.ValidatorsReadOnlySeq() {
+					_ = v.EffectiveBalance()
+				}
+			}
+		})
 	}
-	st, err := statenative.InitializeFromProtoUnsafeDeneb(&ethpb.BeaconStateDeneb{Validators: vals})
-	require.NoError(b, err)
+}
 
-	b.ReportAllocs()
-	for b.Loop() {
-		for _, v := range st.ValidatorsReadOnlySeq() {
-			_ = v.EffectiveBalance()
-		}
+// BenchmarkPublicKeys measures the cost of building the index-aligned list of every
+// validator public key.
+//
+// Results on an Apple M4 Pro, comparing the previous implementation (one lock acquisition
+// and At call per index) against the bulk All iterator
+// (go test -benchtime 20x -count 12, benchstat medians):
+//
+//	shared values only       per-index At 84.6 ms/op, bulk All 62.5 ms/op (-26%)
+//	10% individual values    per-index At 83.0 ms/op, bulk All 58.9 ms/op (-29%)
+func BenchmarkPublicKeys(b *testing.B) {
+	sharedOnly, tenPctIndividual := benchRegistryStates(b)
+	for _, tc := range []struct {
+		name string
+		st   state.BeaconState
+	}{
+		{name: "shared values only", st: sharedOnly},
+		{name: "10% individual values", st: tenPctIndividual},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				keys, err := tc.st.PublicKeys()
+				require.NoError(b, err)
+				require.Equal(b, benchRegistrySize, len(keys))
+			}
+		})
 	}
 }
 
 // BenchmarkValidatorsReadOnly measures the cost of building the full slice of read-only
 // validator wrappers returned by ValidatorsReadOnly.
 func BenchmarkValidatorsReadOnly(b *testing.B) {
-	const n = 2_300_000 // ~ number of validators on mainnet at the time of writing
-
-	vals := make([]*ethpb.Validator, n)
-	for i := range vals {
-		pk := make([]byte, 48)
-		wc := make([]byte, 32)
-		pk[0] = byte(i)
-		vals[i] = &ethpb.Validator{
-			PublicKey:             pk,
-			WithdrawalCredentials: wc,
-			EffectiveBalance:      32_000_000_000,
-			ExitEpoch:             100,
-			ActivationEpoch:       1,
-		}
-	}
-	st, err := statenative.InitializeFromProtoUnsafeDeneb(&ethpb.BeaconStateDeneb{Validators: vals})
-	require.NoError(b, err)
+	st, _ := benchRegistryStates(b)
 
 	b.ReportAllocs()
 	for b.Loop() {
 		ros := st.ValidatorsReadOnly()
-		require.Equal(b, n, len(ros))
+		require.Equal(b, benchRegistrySize, len(ros))
 	}
 }
 

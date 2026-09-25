@@ -91,6 +91,7 @@ package mvslice
 
 import (
 	"fmt"
+	"iter"
 	"slices"
 	"sync"
 
@@ -282,6 +283,53 @@ func (s *Slice[V]) At(obj Identifiable, index uint64) (V, error) {
 		}
 		var def V
 		return def, fmt.Errorf("index %d %w", index, ErrOutOfBounds)
+	}
+}
+
+// All returns an iterator over the input object's (index, value) pairs in index order.
+// It is equivalent to calling At with every index from 0 up to Len(obj)-1, but the lock is
+// acquired once for the whole iteration instead of once per item. The lock is held until
+// iteration stops, so the caller must not invoke any mutating method of the slice from
+// inside the loop.
+func (s *Slice[V]) All(obj Identifiable) iter.Seq2[uint64, V] {
+	return func(yield func(uint64, V) bool) {
+		s.lock.RLock()
+		defer s.lock.RUnlock()
+
+		for i, shared := range s.sharedItems {
+			v := shared
+			if ind, ok := s.individualItems[uint64(i)]; ok {
+				for _, ival := range ind.Values {
+					if _, found := containsId(ival.ids, obj.Id()); found {
+						v = ival.val
+						break
+					}
+				}
+			}
+			if !yield(uint64(i), v) {
+				return
+			}
+		}
+
+		sharedLen := uint64(len(s.sharedItems))
+		for i, item := range s.appendedItems {
+			found := false
+			var v V
+			for _, ival := range item.Values {
+				if _, found = containsId(ival.ids, obj.Id()); found {
+					v = ival.val
+					break
+				}
+			}
+			if !found {
+				// This is an optimization. If we didn't find an appended item at index i,
+				// then all larger indices don't have an appended item for the object either.
+				return
+			}
+			if !yield(sharedLen+uint64(i), v) {
+				return
+			}
+		}
 	}
 }
 
