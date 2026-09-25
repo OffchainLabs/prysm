@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/build/bazel"
@@ -61,25 +62,42 @@ type eip3076TestCase struct {
 	} `json:"steps"`
 }
 
-func setupEIP3076SpecTests(t *testing.T) []*eip3076TestCase {
+// loadEIP3076SpecTests reads the EIP-3076 spec fixture with memoization.
+var loadEIP3076SpecTests = sync.OnceValues(func() ([]*eip3076TestCase, error) {
 	if !bazel.BuiltWithBazel() {
-		require.NoError(t, externaldata.Fetch(externaldata.EIP3076SpecTests))
+		if err := externaldata.Fetch(externaldata.EIP3076SpecTests); err != nil {
+			return nil, fmt.Errorf("fetch: %w", err)
+		}
 	}
 
 	testFolders, err := bazel.ListRunfiles()
-	require.NoError(t, err)
+	if err != nil {
+		return nil, fmt.Errorf("list runfiles: %w", err)
+	}
 
 	testCases := make([]*eip3076TestCase, 0)
 	for _, ff := range testFolders {
 		if strings.Contains(ff.ShortPath, externaldata.EIP3076SpecTests) &&
 			strings.Contains(ff.ShortPath, "generated/") {
 			enc, err := file.ReadFileAsBytes(ff.Path)
-			require.NoError(t, err)
+			if err != nil {
+				return nil, fmt.Errorf("read file %q: %w", ff.Path, err)
+			}
 			testCase := &eip3076TestCase{}
-			require.NoError(t, json.Unmarshal(enc, testCase))
+			if err := json.Unmarshal(enc, testCase); err != nil {
+				return nil, fmt.Errorf("unmarshal file %q: %w", ff.Path, err)
+			}
 			testCases = append(testCases, testCase)
 		}
 	}
+	return testCases, nil
+})
+
+// setupEIP3076SpecTests returns the memoized spec cases.
+func setupEIP3076SpecTests(t *testing.T) []*eip3076TestCase {
+	testCases, err := loadEIP3076SpecTests()
+	require.NoError(t, err)
+	require.NotEmpty(t, testCases, "no EIP-3076 spec test cases found")
 	return testCases
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/build/bazel"
@@ -162,7 +163,8 @@ func (sd *snapshot) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
-func readTestCases() ([]testCase, error) {
+// readTestCases loads the EIP-4881 spec fixture with memoization.
+var readTestCases = sync.OnceValues(func() ([]testCase, error) {
 	if !bazel.BuiltWithBazel() {
 		if err := externaldata.Fetch(externaldata.EIP4881SpecTests); err != nil {
 			return nil, fmt.Errorf("fetch: %w", err)
@@ -192,7 +194,7 @@ func readTestCases() ([]testCase, error) {
 		}
 	}
 	return nil, errors.New("spec test file not found")
-}
+})
 
 func TestRead(t *testing.T) {
 	_, err := readTestCases()
