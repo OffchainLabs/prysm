@@ -217,17 +217,8 @@ func BlockBuiltOnParentPayload(parent, child interfaces.ReadOnlyBeaconBlock) (bo
 	return bytes.Equal(childBid.Message.ParentBlockHash, parentBid.Message.BlockHash), nil
 }
 
-// BlockBuiltOnEnvelope matches on execution block hash alone, so it also accepts an ancestor's
-// envelope when blk's parent had no payload. BlockBuiltOnParentEnvelope rejects that case.
-func BlockBuiltOnEnvelope(env interfaces.ROSignedExecutionPayloadEnvelope, blk ROBlock) (bool, error) {
-	msg, err := env.Envelope()
-	if err != nil {
-		return false, err
-	}
-	return blockBuiltOnPayload(msg, blk)
-}
-
-// BlockBuiltOnParentEnvelope additionally requires env to be the envelope of blk's parent block.
+// BlockBuiltOnParentEnvelope reports whether env is the payload of blk's parent block and blk builds on it.
+// The root check matters when the parent was empty: an ancestor's payload then matches blk's parent hash.
 func BlockBuiltOnParentEnvelope(env interfaces.ROSignedExecutionPayloadEnvelope, blk ROBlock) (bool, error) {
 	msg, err := env.Envelope()
 	if err != nil {
@@ -236,10 +227,6 @@ func BlockBuiltOnParentEnvelope(env interfaces.ROSignedExecutionPayloadEnvelope,
 	if msg.BeaconBlockRoot() != blk.Block().ParentRoot() {
 		return false, nil
 	}
-	return blockBuiltOnPayload(msg, blk)
-}
-
-func blockBuiltOnPayload(msg interfaces.ROExecutionPayloadEnvelope, blk ROBlock) (bool, error) {
 	ex, err := msg.Execution()
 	if err != nil {
 		return false, err
