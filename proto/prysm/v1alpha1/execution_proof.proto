@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package ethereum.eth.v1alpha1;
+
+import "proto/eth/ext/options.proto";
+
+option csharp_namespace = "Ethereum.Eth.V1Alpha1";
+option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
+option java_multiple_files = true;
+option java_outer_classname = "ExecutionProofProto";
+option java_package = "org.ethereum.eth.v1alpha1";
+option php_namespace = "Ethereum\\Eth\\v1alpha1";
+
+// EIP-8025 optional execution proofs.
+//
+// Execution proofs are non-consensus artifacts: verifying or storing one does
+// not change beacon state, fork choice, or the Gloas payload status. They
+// propagate exclusively over the `execution_proof` gossip topic; EIP-8025
+// defines no Req/Resp protocol.
+
+// ExecutionProofEnvelope carries an execution proof for the payload revealed
+// for a beacon block. It is the object a prover signs.
+message ExecutionProofEnvelope {
+  // MAX_PROOF_SIZE. The opaque proof bytes, a ProgressiveList[Byte].
+  bytes proof_data = 1 [ (ethereum.eth.ext.ssz_max) = "4194304" ];
+  // The identifier of the proof system, guest program and version, a Uint8.
+  bytes proof_type = 2 [ (ethereum.eth.ext.ssz_size) = "1" ];
+  bytes beacon_block_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+}
+
+// SignedExecutionProofEnvelope is the gossiped form of an execution proof,
+// authenticated by the active validator that produced it.
+message SignedExecutionProofEnvelope {
+  ExecutionProofEnvelope message = 1;
+  uint64 validator_index = 2 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"
+  ];
+  bytes signature = 3 [
+    (ethereum.eth.ext.ssz_size) = "96",
+    (ethereum.eth.ext.spec_name) = "signature"
+  ];
+}

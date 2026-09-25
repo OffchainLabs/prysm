@@ -41,6 +41,25 @@ var (
 	}
 
 	// BeaconRESTApiProviderFlag defines a beacon node REST API endpoint.
+	// EnableProverFlag turns this validator client into an EIP-8025 prover.
+	EnableProverFlag = &cli.BoolFlag{
+		Name:  "enable-prover",
+		Usage: "Generates EIP-8025 execution proofs for revealed payloads and broadcasts them, signed by one of this client's active validators. Requires --proof-node-endpoint.",
+	}
+
+	// ProofNodeEndpointFlag is the proof node that generates the proofs.
+	ProofNodeEndpointFlag = &cli.StringFlag{
+		Name:  "proof-node-endpoint",
+		Usage: "An EIP-8025 proof node http endpoint, used to generate execution proofs. Required by --enable-prover.",
+		Value: "",
+	}
+
+	// ProofTypesFlag restricts which proof types a prover generates.
+	ProofTypesFlag = &cli.StringSliceFlag{
+		Name:  "proof-types",
+		Usage: "Restricts the EIP-8025 proof types this prover generates, by id: 0=ethrex-openvm, 1=ethrex-sp1, 2=ethrex-zisk, 3=reth-openvm, 4=reth-sp1, 5=reth-zisk. Defaults to every type the proof node can produce.",
+	}
+
 	BeaconRESTApiProviderFlag = &cli.StringFlag{
 		Name:    "beacon-rest-api-provider",
 		Aliases: []string{"beacon-rest"},

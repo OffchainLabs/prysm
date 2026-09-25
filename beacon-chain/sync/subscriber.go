@@ -384,6 +384,17 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 				nse,
 			)
 		})
+
+		if features.Get().EnableExecutionProofs {
+			s.spawn(func() {
+				s.subscribe(
+					p2p.ExecutionProofTopicFormat,
+					s.validateExecutionProof,
+					s.executionProofSubscriber,
+					nse,
+				)
+			})
+		}
 	}
 	return true
 }

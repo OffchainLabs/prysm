@@ -30,6 +30,14 @@ var (
 		Value: "",
 	}
 
+	// ProofNodeEndpoint provides an HTTP access endpoint to an EIP-8025 proof
+	// node, which verifies the execution proofs received over gossip.
+	ProofNodeEndpoint = &cli.StringFlag{
+		Name:  "proof-node-endpoint",
+		Usage: "An EIP-8025 proof node http endpoint, used to verify execution proofs received over gossip. Required by --zkvm.",
+		Value: "",
+	}
+
 	// DisableBuilderSSZ turns off SSZ encoding for Builder APIs, falling back to JSON.
 	DisableBuilderSSZ = &cli.BoolFlag{
 		Name:  "disable-builder-ssz",

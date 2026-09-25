@@ -17,6 +17,7 @@ go_library(
         "//cmd/beacon-chain:__subpackages__",
     ],
     deps = [
+        "//api/client/proofnode:go_default_library",
         "//api/server/httprest:go_default_library",
         "//api/server/middleware:go_default_library",
         "//async/event:go_default_library",

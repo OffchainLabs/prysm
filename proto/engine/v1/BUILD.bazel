@@ -96,6 +96,7 @@ go_library(
 ssz_proto_files(
     name = "ssz_proto_files",
     srcs = [
+        "eip8025.proto",
         "electra.proto",
         "execution_engine.proto",
         "fulu.proto",

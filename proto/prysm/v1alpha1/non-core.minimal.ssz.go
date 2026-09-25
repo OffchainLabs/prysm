@@ -606,6 +606,107 @@ func (c *ExecutionPayloadEnvelopesByRangeRequest) HashTreeRootWith(hh *ssz.Hashe
 	return nil
 }
 
+func (c *ExecutionProofEnvelope) SizeSSZ() int {
+	size := 37
+	size += len(c.ProofData)
+	return size
+}
+
+func (c *ExecutionProofEnvelope) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *ExecutionProofEnvelope) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+	offset := 37
+
+	// Field 0: ProofData
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(c.ProofData)
+
+	// Field 1: ProofType
+	if len(c.ProofType) != 1 {
+		return nil, ssz.ErrBytesLength
+	}
+	dst = append(dst, c.ProofType...)
+
+	// Field 2: BeaconBlockRoot
+	if len(c.BeaconBlockRoot) != 32 {
+		return nil, ssz.ErrBytesLength
+	}
+	dst = append(dst, c.BeaconBlockRoot...)
+
+	// Field 0: ProofData
+	dst = append(dst, c.ProofData...)
+	return dst, err
+}
+
+func (c *ExecutionProofEnvelope) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 37 {
+		return ssz.ErrSize
+	}
+
+	sszSlice1 := buf[4:5]  // c.ProofType
+	sszSlice2 := buf[5:37] // c.BeaconBlockRoot
+
+	sszVarOffset0 := ssz.ReadOffset(buf[0:4]) // c.ProofData
+	if sszVarOffset0 != 37 {
+		return ssz.ErrInvalidVariableOffset
+	}
+	if sszVarOffset0 > size {
+		return ssz.ErrOffset
+	}
+	sszSlice0 := buf[sszVarOffset0:] // c.ProofData
+
+	// Field 0: ProofData
+	c.ProofData = append([]byte{}, sszSlice0...)
+
+	// Field 1: ProofType
+	c.ProofType = make([]byte, 0, 1)
+	c.ProofType = append(c.ProofType, sszSlice1...)
+
+	// Field 2: BeaconBlockRoot
+	c.BeaconBlockRoot = make([]byte, 0, 32)
+	c.BeaconBlockRoot = append(c.BeaconBlockRoot, sszSlice2...)
+	return err
+}
+
+func (c *ExecutionProofEnvelope) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *ExecutionProofEnvelope) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: ProofData
+	{
+		subIndx := hh.Index()
+		hh.AppendBytes32(c.ProofData)
+		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.ProofData)))
+	}
+	// Field 1: ProofType
+	if len(c.ProofType) != 1 {
+		return ssz.ErrBytesLength
+	}
+	hh.PutBytes(c.ProofType)
+	// Field 2: BeaconBlockRoot
+	if len(c.BeaconBlockRoot) != 32 {
+		return ssz.ErrBytesLength
+	}
+	hh.PutBytes(c.BeaconBlockRoot)
+	hh.Merkleize(indx)
+	return nil
+}
+
 func (c *MetaDataV0) SizeSSZ() int {
 	size := 16
 
@@ -940,6 +1041,115 @@ func (c *SignedBuilderBid) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		return fmt.Errorf("Message: %w", err)
 	}
 	// Field 1: Signature
+	if len(c.Signature) != 96 {
+		return ssz.ErrBytesLength
+	}
+	hh.PutBytes(c.Signature)
+	hh.Merkleize(indx)
+	return nil
+}
+
+func (c *SignedExecutionProofEnvelope) SizeSSZ() int {
+	size := 108
+	if c.Message == nil {
+		c.Message = new(ExecutionProofEnvelope)
+	}
+	size += c.Message.SizeSSZ()
+	return size
+}
+
+func (c *SignedExecutionProofEnvelope) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *SignedExecutionProofEnvelope) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+	offset := 108
+
+	// Field 0: Message
+	if c.Message == nil {
+		c.Message = new(ExecutionProofEnvelope)
+	}
+	dst = ssz.WriteOffset(dst, offset)
+	offset += c.Message.SizeSSZ()
+
+	// Field 1: ValidatorIndex
+	if dst, err = c.ValidatorIndex.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("ValidatorIndex: %w", err)
+	}
+
+	// Field 2: Signature
+	if len(c.Signature) != 96 {
+		return nil, ssz.ErrBytesLength
+	}
+	dst = append(dst, c.Signature...)
+
+	// Field 0: Message
+	if dst, err = c.Message.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("Message: %w", err)
+	}
+	return dst, err
+}
+
+func (c *SignedExecutionProofEnvelope) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 108 {
+		return ssz.ErrSize
+	}
+
+	sszSlice1 := buf[4:12]   // c.ValidatorIndex
+	sszSlice2 := buf[12:108] // c.Signature
+
+	sszVarOffset0 := ssz.ReadOffset(buf[0:4]) // c.Message
+	if sszVarOffset0 != 108 {
+		return ssz.ErrInvalidVariableOffset
+	}
+	if sszVarOffset0 > size {
+		return ssz.ErrOffset
+	}
+	sszSlice0 := buf[sszVarOffset0:] // c.Message
+
+	// Field 0: Message
+	c.Message = new(ExecutionProofEnvelope)
+	if err = c.Message.UnmarshalSSZ(sszSlice0); err != nil {
+		return fmt.Errorf("Message: %w", err)
+	}
+
+	// Field 1: ValidatorIndex
+	if err = c.ValidatorIndex.UnmarshalSSZ(sszSlice1); err != nil {
+		return fmt.Errorf("ValidatorIndex: %w", err)
+	}
+
+	// Field 2: Signature
+	c.Signature = make([]byte, 0, 96)
+	c.Signature = append(c.Signature, sszSlice2...)
+	return err
+}
+
+func (c *SignedExecutionProofEnvelope) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *SignedExecutionProofEnvelope) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: Message
+	if err := c.Message.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("Message: %w", err)
+	}
+	// Field 1: ValidatorIndex
+	if err := c.ValidatorIndex.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("ValidatorIndex: %w", err)
+	}
+	// Field 2: Signature
 	if len(c.Signature) != 96 {
 		return ssz.ErrBytesLength
 	}

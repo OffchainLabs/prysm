@@ -141,6 +141,11 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		},
 	})
 
+	// EIP-8025: memoize the blockRoot -> newPayloadRequestRoot link while the
+	// full payload is still in hand. Envelopes are persisted blinded, so
+	// recomputing it later would cost an execution client round trip per proof.
+	s.recordNewPayloadRequestRoot(envelope, blockState)
+
 	// Join EL validation group after firing availability event.
 	if err := elGroup.Wait(); err != nil {
 		if dErr := s.cfg.BeaconDB.DeleteExecutionPayloadEnvelope(ctx, root); dErr != nil {

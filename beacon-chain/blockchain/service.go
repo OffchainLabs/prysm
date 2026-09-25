@@ -86,6 +86,7 @@ type config struct {
 	ProposerPreferencesCache  *cache.ProposerPreferencesCache
 	SubscribedValidatorsCache *cache.SubscribedValidatorsCache
 	BuilderCircuitBreaker     *cache.BuilderCircuitBreaker
+	ExecutionProofCache       *cache.ExecutionProofCache
 	AttestationCache          *cache.AttestationCache
 	AttPool                   attestations.Pool
 	ExitPool                  voluntaryexits.PoolManager

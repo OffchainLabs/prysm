@@ -34,5 +34,11 @@ types:
       Consolidations: {type: "ProgressiveList"}
       BuilderDeposits: {type: "ProgressiveList"}
       BuilderExits: {type: "ProgressiveList"}
+  # EIP-8025 stateless input schema. Deliberately NOT progressive: these mirror
+  # the reference stateless guest, which merkleizes bounded lists, and their
+  # root is the execution-proof identifier and public input.
+  - name: "SSZNewPayloadRequest"
+  - name: "StatelessExecutionPayload"
+  - name: "StatelessExecutionRequests"
   - name: "Withdrawal"
   - name: "WithdrawalRequest"

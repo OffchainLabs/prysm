@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"github.com/OffchainLabs/prysm/v7/api/client/proofnode"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	blockfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/block"
@@ -210,6 +211,23 @@ func WithPayloadAttestationCache(c *cache.PayloadAttestationCache) Option {
 func WithProposerPreferencesCache(c *cache.ProposerPreferencesCache) Option {
 	return func(s *Service) error {
 		s.proposerPreferencesCache = c
+		return nil
+	}
+}
+
+// WithExecutionProofCache sets the cache of EIP-8025 per-block proof state.
+func WithExecutionProofCache(c *cache.ExecutionProofCache) Option {
+	return func(s *Service) error {
+		s.cfg.executionProofCache = c
+		return nil
+	}
+}
+
+// WithProofNode sets the client of the EIP-8025 proof node that verifies the
+// execution proofs received over gossip.
+func WithProofNode(c *proofnode.Client) Option {
+	return func(s *Service) error {
+		s.cfg.proofNode = c
 		return nil
 	}
 }

@@ -11,6 +11,7 @@ type NetworkConfig struct {
 	AttSubnetKey               string // AttSubnetKey is the ENR key of the subnet bitfield.
 	SyncCommsSubnetKey         string // SyncCommsSubnetKey is the ENR key of the sync committee subnet bitfield.
 	CustodyGroupCountKey       string // CustodyGroupsCountKey is the ENR key of the custody group count.
+	ExecutionProofKey          string // ExecutionProofKey is the ENR key advertising execution-proof awareness (EIP-8025).
 	MinimumPeersInSubnetSearch uint64 // PeersInSubnetSearch is the required amount of peers that we need to be able to lookup in a subnet search.
 
 	// Chain Network Config

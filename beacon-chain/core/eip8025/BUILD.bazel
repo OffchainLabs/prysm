@@ -1,0 +1,17 @@
+load("@prysm//tools/go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["execution_proof.go"],
+    importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/core/eip8025",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//beacon-chain/core/helpers:go_default_library",
+        "//beacon-chain/core/signing:go_default_library",
+        "//beacon-chain/state:go_default_library",
+        "//config/params:go_default_library",
+        "//consensus-types/blocks:go_default_library",
+        "//crypto/bls:go_default_library",
+        "//time/slots:go_default_library",
+    ],
+)
