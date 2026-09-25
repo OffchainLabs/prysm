@@ -36,3 +36,88 @@ message AvailableAttestation {
   AvailableAttestationData data = 2;
   bytes signature = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
+
+// Spec: the PDF names blocks T, J and F directly (PDF §4.1). Prysm keeps the slot beside the root.
+message CheckpointDecoupled {
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  bytes root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+}
+
+// Spec: the combined attestation (val, round, safe, h, T, τ, h_f, T_f), PDF §4.1. The round is ToRound(slot).
+message AttestationDataDecoupled {
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  bytes safe_block_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  CheckpointDecoupled target = 3;
+  uint64 height = 4 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Height"
+  ];
+  bool timeout = 5;
+  CheckpointDecoupled finality_target = 6;
+  uint64 finality_height = 7 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Height"
+  ];
+}
+
+// Spec: Attestation, inherited from Gloas with the Decoupled AttestationData.
+message AttestationDecoupled {
+  bytes aggregation_bits = 1 [
+    (ethereum.eth.ext.ssz_max) = "max_attesting_indices.size",
+    (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
+  ];
+  AttestationDataDecoupled data = 2;
+  bytes signature = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
+  bytes committee_bits = 4 [
+    (ethereum.eth.ext.ssz_size) = "committee_bits.size",
+    (ethereum.eth.ext.cast_type) = "committee_bits.type"
+  ];
+}
+
+// Spec: IndexedAttestation, inherited with the Decoupled AttestationData.
+message IndexedAttestationDecoupled {
+  repeated uint64 attesting_indices = 1
+      [ (ethereum.eth.ext.ssz_max) = "max_attesting_indices.size" ];
+  AttestationDataDecoupled data = 2;
+  bytes signature = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// Spec: AttesterSlashing, inherited with the Decoupled IndexedAttestation.
+message AttesterSlashingDecoupled {
+  IndexedAttestationDecoupled attestation_1 = 1;
+  IndexedAttestationDecoupled attestation_2 = 2;
+}
+
+// Spec: AggregateAndProof, inherited with the Decoupled Attestation.
+message AggregateAttestationAndProofDecoupled {
+  uint64 aggregator_index = 1
+      [ (ethereum.eth.ext.cast_type) =
+            "github.com/OffchainLabs/prysm/v7/consensus-types/"
+            "primitives.ValidatorIndex" ];
+  AttestationDecoupled aggregate = 2;
+  bytes selection_proof = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// Spec: SignedAggregateAndProof, inherited with the Decoupled AggregateAndProof.
+message SignedAggregateAttestationAndProofDecoupled {
+  AggregateAttestationAndProofDecoupled message = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// Spec: SingleAttestation, inherited from Electra with the Decoupled AttestationData.
+message SingleAttestationDecoupled {
+  uint64 committee_id = 1 [ (ethereum.eth.ext.cast_type) =
+                                "github.com/OffchainLabs/prysm/v7/"
+                                "consensus-types/primitives.CommitteeIndex" ];
+  uint64 attester_index = 2 [ (ethereum.eth.ext.cast_type) =
+                                  "github.com/OffchainLabs/prysm/v7/"
+                                  "consensus-types/primitives.ValidatorIndex" ];
+  AttestationDataDecoupled data = 3;
+  bytes signature = 4 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
