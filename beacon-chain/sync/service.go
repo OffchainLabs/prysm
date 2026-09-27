@@ -147,6 +147,7 @@ type Service struct {
 	slotToPendingBlocks                  *gcache.Cache
 	seenPendingBlocks                    map[[32]byte]bool
 	blkRootToPendingAtts                 map[[32]byte][]any
+	numPendingAtts                       int // total attestations across blkRootToPendingAtts, guarded by pendingAttsLock
 	subHandler                           *subTopicHandler
 	pendingAttsLock                      sync.RWMutex
 	pendingQueueLock                     sync.RWMutex
