@@ -1,0 +1,3 @@
+### Fixed
+
+- eliminate data race on skip slot cache disabled flag
