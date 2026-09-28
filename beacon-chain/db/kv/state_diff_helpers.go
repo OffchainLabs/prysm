@@ -190,20 +190,14 @@ func (s *Store) getAnchorState(ctx context.Context, offset uint64, lvl int, slot
 
 	// Check if we have the anchor in cache.
 	startTime := time.Now()
-	anchor = s.stateDiffCache.getAnchor(anchorLvl)
-	if anchor != nil && anchor.Slot() == anchorSlot {
+	anchor = s.stateDiffCache.getAnchor(anchorLvl, withExactSlot(anchorSlot))
+	if anchor != nil {
 		stateDiffGetAnchorStateCacheHitReadTime.Observe(float64(time.Since(startTime)) / float64(time.Millisecond))
 		stateDiffGetAnchorStateCacheHit.Inc()
 		return anchor, nil
 	}
 	stateDiffGetAnchorStateCacheMissTime.Observe(float64(time.Since(startTime)) / float64(time.Millisecond))
 	stateDiffGetAnchorStateCacheMiss.Inc()
-	if anchor != nil {
-		log.WithField("level", anchorLvl).
-			WithField("expectedSlot", anchorSlot).
-			WithField("cachedSlot", anchor.Slot()).
-			Warn("Cached state-diff anchor slot mismatch; reloading anchor from database")
-	}
 
 	// If not, load it from the database.
 	startTime = time.Now()
