@@ -58,6 +58,7 @@ type ChainService struct {
 	MockDataAvailable                    map[[32]byte]bool
 	MockDataAvailableErr                 error
 	ParentPayloadReadyVal                *bool
+	HasPayloadBlockHashVal               *bool
 	BlockSlot                            primitives.Slot
 	RecentBlockSlotErr                   error
 	OptimisticRoots                      map[[32]byte]bool
@@ -651,6 +652,9 @@ func (s *ChainService) BlockHash(root [32]byte) ([32]byte, error) {
 
 // HasPayloadBlockHash mocks the same method in the chain service.
 func (s *ChainService) HasPayloadBlockHash(root, blockHash [32]byte) bool {
+	if s.HasPayloadBlockHashVal != nil {
+		return *s.HasPayloadBlockHashVal
+	}
 	if s.ForkChoiceStore == nil {
 		return false
 	}

@@ -19,6 +19,7 @@ import (
 // validateExecutionPayloadBid validates execution payload bid gossip rules.
 // [REJECT] The bid's parent (defined by bid.parent_block_root) equals the block's parent (defined by block.parent_root).
 // [REJECT] The length of KZG commitments is less than or equal to the limitation defined in the consensus layer.
+// [REJECT] If the parent is not full, the bid builds on the parent's execution head.
 func (s *Service) validateExecutionPayloadBid(ctx context.Context, blk interfaces.ReadOnlyBeaconBlock) (pubsub.ValidationResult, error) {
 	if blk.Version() < version.Gloas {
 		return pubsub.ValidationAccept, nil
@@ -43,6 +44,10 @@ func (s *Service) validateExecutionPayloadBid(ctx context.Context, blk interface
 	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlockAtEpoch(slots.ToEpoch(blk.Slot()))
 	if bid.BlobKzgCommitmentCount() > uint64(maxBlobsPerBlock) {
 		return pubsub.ValidationReject, errors.Wrapf(errRejectCommitmentLen, "%d > %d", bid.BlobKzgCommitmentCount(), maxBlobsPerBlock)
+	}
+
+	if !s.cfg.chain.HasPayloadBlockHash(blk.ParentRoot(), bid.ParentBlockHash()) {
+		return pubsub.ValidationReject, errors.New("bid does not build on the parent's execution head")
 	}
 
 	return pubsub.ValidationAccept, nil
