@@ -1258,4 +1258,12 @@ func TestVerifyByRootDataColumnSidecars_SeedsGloasBidCommitments(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, len(verified))
 	})
+
+	t.Run("rejects sidecar whose slot does not match the block", func(t *testing.T) {
+		forged := &ethpb.DataColumnSidecarGloas{Index: 5, Slot: 1_000_000, BeaconBlockRoot: root[:]}
+		forgedColumn, err := blocks.NewRODataColumnGloasWithRoot(forged, root)
+		require.NoError(t, err)
+		_, err = verifyByRootDataColumnSidecars(newVerifier, blockByRoot, []blocks.RODataColumn{forgedColumn})
+		require.ErrorIs(t, err, ErrSidecarHeaderMismatch)
+	})
 }
