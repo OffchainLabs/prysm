@@ -1,7 +1,7 @@
 package helpers_test
 
 import (
-	"math/rand"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -476,9 +476,8 @@ func TestIsCurrentEpochSyncCommittee_SameBlockRoot(t *testing.T) {
 	assert.NoError(t, state.SetSlot(primitives.Slot(wantedSlot)))
 	syncCommittee, err = state.CurrentSyncCommittee()
 	assert.NoError(t, err)
-	rand.Shuffle(len(syncCommittee.Pubkeys), func(i, j int) {
-		syncCommittee.Pubkeys[i], syncCommittee.Pubkeys[j] = syncCommittee.Pubkeys[j], syncCommittee.Pubkeys[i]
-	})
+	// Reverse rather than shuffle: a shuffle may leave validator 200 at the same position.
+	slices.Reverse(syncCommittee.Pubkeys)
 	require.NoError(t, state.SetCurrentSyncCommittee(syncCommittee))
 	newIdxs, err := helpers.CurrentPeriodSyncSubcommitteeIndices(state, 200)
 	require.NoError(t, err)
