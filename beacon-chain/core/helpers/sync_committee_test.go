@@ -4,7 +4,6 @@ import (
 	"math/rand"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -290,7 +289,7 @@ func TestCurrentEpochSyncSubcommitteeIndices_UsingCommittee(t *testing.T) {
 	require.DeepEqual(t, []primitives.CommitteeIndex{0}, index)
 
 	// Test that cache was able to fill on miss.
-	time.Sleep(100 * time.Millisecond)
+	helpers.WaitForSyncCommitteeCacheFills()
 	index, err = helpers.SyncCommitteeCache().CurrentPeriodIndexPosition(root, 0)
 	require.NoError(t, err)
 	require.DeepEqual(t, []primitives.CommitteeIndex{0}, index)

@@ -4,6 +4,7 @@ package helpers
 
 import (
 	"bytes"
+	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
@@ -18,7 +19,18 @@ import (
 
 var (
 	syncCommitteeCache = cache.NewSyncCommittee()
+	// pendingSyncCommitteeCacheFills tracks in-flight fillSyncCommitteeCacheOnMiss goroutines.
+	pendingSyncCommitteeCacheFills sync.WaitGroup
 )
+
+// fillSyncCommitteeCacheOnMiss asynchronously fills the sync committee cache for the given root.
+func fillSyncCommitteeCacheOnMiss(root [32]byte, st state.ReadOnlyBeaconState) {
+	pendingSyncCommitteeCacheFills.Go(func() {
+		if err := syncCommitteeCache.UpdatePositionsInCommittee(root, st); err != nil {
+			log.WithError(err).Error("Could not fill sync committee cache on miss")
+		}
+	})
+}
 
 // CurrentPeriodPositions returns committee indices of the current period sync committee for input validators.
 func CurrentPeriodPositions(st state.BeaconState, indices []primitives.ValidatorIndex) ([][]primitives.CommitteeIndex, error) {
@@ -33,12 +45,7 @@ func CurrentPeriodPositions(st state.BeaconState, indices []primitives.Validator
 			return nil, err
 		}
 
-		// Fill in the cache on miss.
-		go func() {
-			if err := syncCommitteeCache.UpdatePositionsInCommittee(root, st); err != nil {
-				log.WithError(err).Error("Could not fill sync committee cache on miss")
-			}
-		}()
+		fillSyncCommitteeCacheOnMiss(root, st)
 
 		pos = make([][]primitives.CommitteeIndex, len(indices))
 		for i, idx := range indices {
@@ -73,12 +80,7 @@ func IsCurrentPeriodSyncCommittee(st state.ReadOnlyBeaconState, valIdx primitive
 			return false, err
 		}
 
-		// Fill in the cache on miss.
-		go func() {
-			if err := syncCommitteeCache.UpdatePositionsInCommittee(root, st); err != nil {
-				log.WithError(err).Error("Could not fill sync committee cache on miss")
-			}
-		}()
+		fillSyncCommitteeCacheOnMiss(root, st)
 
 		return len(findSubCommitteeIndices(val.PublicKey, committee.Pubkeys)) > 0, nil
 	}
@@ -139,12 +141,7 @@ func CurrentPeriodSyncSubcommitteeIndices(
 			return nil, err
 		}
 
-		// Fill in the cache on miss.
-		go func() {
-			if err := syncCommitteeCache.UpdatePositionsInCommittee(root, st); err != nil {
-				log.WithError(err).Error("Could not fill sync committee cache on miss")
-			}
-		}()
+		fillSyncCommitteeCacheOnMiss(root, st)
 
 		return findSubCommitteeIndices(pk[:], committee.Pubkeys), nil
 	}

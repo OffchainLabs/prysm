@@ -477,6 +477,7 @@ func CompressCommitteeCache() {
 
 // ClearCache clears the beacon committee cache and sync committee cache.
 func ClearCache() {
+	pendingSyncCommitteeCacheFills.Wait()
 	committeeCache.Clear()
 	syncCommitteeCache.Clear()
 	balanceCache.Clear()
