@@ -74,8 +74,12 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		t.Skip("Not a consensus type")
 	case "DataColumnSidecar":
 		obj = &ethpb.DataColumnSidecarGloas{}
-	case "SignedProposerPreferences", "ProposerPreferences", "PartialDataColumnGroupID":
+	case "SignedProposerPreferences", "ProposerPreferences":
 		t.Skip("p2p-only type; not part of the consensus state transition")
+	case "PartialDataColumnGroupID":
+		obj = &ethpb.PartialDataColumnGroupID{}
+	case "PartialDataColumnSidecar":
+		obj = &ethpb.PartialDataColumnSidecarGloas{}
 
 	// Standard types that also exist in gloas
 	case "ExecutionPayload":
@@ -184,7 +188,7 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.DataColumnsByRootIdentifier{}
 	case "MatrixEntry":
 		t.Skip("Unused type")
-	case "PartialDataColumnHeader", "PartialDataColumnPartsMetadata", "PartialDataColumnSidecar":
+	case "PartialDataColumnHeader", "PartialDataColumnPartsMetadata":
 		t.Skip("Not yet implemented")
 	default:
 		return nil, errors.New("type not found")

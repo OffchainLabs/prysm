@@ -155,11 +155,6 @@ var (
 		Name:  "disable-resource-manager",
 		Usage: "Disables running the libp2p resource manager.",
 	}
-	// DisableRegistrationCache a flag for disabling the validator registration cache and use db instead.
-	DisableRegistrationCache = &cli.BoolFlag{
-		Name:  "disable-registration-cache",
-		Usage: "Temporary flag for disabling the validator registration cache instead of using the DB. Note: registrations do not clear on restart while using the DB.",
-	}
 	// BlobSaveFsync enforces durable filesystem writes for use cases where blob availability is critical.
 	BlobSaveFsync = &cli.BoolFlag{
 		Name:  "blob-save-fsync",
@@ -292,7 +287,6 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	aggregateSecondInterval,
 	aggregateThirdInterval,
 	disableResourceManager,
-	DisableRegistrationCache,
 	EnableLightClient,
 	BlobSaveFsync,
 	DisableQUIC,

@@ -77,6 +77,10 @@ def _ssz_methodical_impl(ctx):
             "PACKAGE_JSON_INVENTORY": all_pkg_list.path,
             "PACKAGES_BASE": out_base,
             "GOCACHE": "./.gocache",
+            # Filter package sources for the target platform during cross-compilation.
+            "GOOS": go_ctx.env["GOOS"],
+            "GOARCH": go_ctx.env["GOARCH"],
+            "CGO_ENABLED": go_ctx.env["CGO_ENABLED"],
             "GOPACKAGESDRIVER": ctx.file.genception.path,
             "GOPACKAGESDRIVER_LOG_PATH": out_base + "/gopackagesdriver.log",
         },

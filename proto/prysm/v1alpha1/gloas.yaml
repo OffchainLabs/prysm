@@ -56,6 +56,12 @@ types:
     progressive: {}
     fields:
       AttestingIndices: {type: "ProgressiveList"}
+  - name: "PartialDataColumnGroupID"
+  - name: "PartialDataColumnSidecarGloas"
+    fields:
+      CellsPresentBitmap: {type: "ProgressiveBitlist"}
+      PartialColumn:      {type: "ProgressiveList"}
+      KzgProofs:          {type: "ProgressiveList"}
   - name: "PayloadAttestation"
     progressive: {}
   - name: "PayloadAttestationData"

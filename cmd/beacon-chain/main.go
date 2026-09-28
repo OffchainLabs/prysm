@@ -88,6 +88,7 @@ var appFlags = []cli.Flag{
 	flags.MinBuilderBid,
 	flags.MinBuilderDiff,
 	flags.BuilderHeaderTimeout,
+	flags.BuilderBidTimeout,
 	flags.BeaconDBPruning,
 	flags.PrunerRetentionEpochs,
 	flags.DisableBuilderSSZ,
@@ -163,7 +164,7 @@ var appFlags = []cli.Flag{
 	flags.BatchVerifierLimit,
 	flags.StateDiffExponents,
 	flags.DisableEphemeralLogFile,
-	flags.PartialDataColumns,
+	flags.DisablePartialDataColumns,
 	flags.DisableGraffitiClientAppend,
 }
 

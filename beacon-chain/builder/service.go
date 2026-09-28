@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/client/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -52,7 +51,6 @@ type PayloadBid struct {
 // config defines a config struct for dependencies into the service.
 type config struct {
 	builderClient builder.BuilderClient
-	beaconDB      db.HeadAccessDatabase
 	headFetcher   blockchain.HeadFetcher
 }
 
@@ -75,10 +73,11 @@ type Service struct {
 func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	s := &Service{
-		ctx:     ctx,
-		cancel:  cancel,
-		cfg:     &config{},
-		clients: make(map[string]builder.BuilderClient),
+		ctx:               ctx,
+		cancel:            cancel,
+		cfg:               &config{},
+		clients:           make(map[string]builder.BuilderClient),
+		registrationCache: cache.NewRegistrationCache(),
 	}
 	for _, opt := range opts {
 		if err := opt(s); err != nil {
@@ -404,7 +403,7 @@ func (s *Service) Status() error {
 }
 
 // RegisterValidator registers a validator with the builder relay network.
-// It also saves the registration object to the DB.
+// It also caches the registration object.
 func (s *Service) RegisterValidator(ctx context.Context, reg []*ethpb.SignedValidatorRegistrationV1) error {
 	ctx, span := trace.StartSpan(ctx, "builder.RegisterValidator")
 	defer span.End()
@@ -415,10 +414,6 @@ func (s *Service) RegisterValidator(ctx context.Context, reg []*ethpb.SignedVali
 	if s.c == nil {
 		return ErrNoBuilder
 	}
-
-	// should be removed if db is removed
-	idxs := make([]primitives.ValidatorIndex, 0)
-	msgs := make([]*ethpb.ValidatorRegistrationV1, 0)
 
 	indexToRegistration := make(map[primitives.ValidatorIndex]*ethpb.ValidatorRegistrationV1)
 
@@ -432,8 +427,6 @@ func (s *Service) RegisterValidator(ctx context.Context, reg []*ethpb.SignedVali
 			log.Warnf("Skipping validator registration for pubkey=%#x - not in current validator set.", r.Message.Pubkey)
 			continue
 		}
-		idxs = append(idxs, nx)
-		msgs = append(msgs, r.Message)
 		valid = append(valid, r)
 		indexToRegistration[nx] = r.Message
 	}
@@ -441,27 +434,16 @@ func (s *Service) RegisterValidator(ctx context.Context, reg []*ethpb.SignedVali
 		return errors.Wrap(err, "could not register validator(s)")
 	}
 
-	if len(indexToRegistration) != len(msgs) {
+	if len(indexToRegistration) != len(valid) {
 		return errors.New("ids and registrations must be the same length")
 	}
-	if s.registrationCache != nil {
-		s.registrationCache.UpdateIndexToRegisteredMap(ctx, indexToRegistration)
-		return nil
-	} else {
-		return s.cfg.beaconDB.SaveRegistrationsByValidatorIDs(ctx, idxs, msgs)
-	}
+	s.registrationCache.UpdateIndexToRegisteredMap(ctx, indexToRegistration)
+	return nil
 }
 
-// RegistrationByValidatorID returns either the values from the cache or db.
-func (s *Service) RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error) {
-	if s.registrationCache != nil {
-		return s.registrationCache.RegistrationByIndex(id)
-	} else {
-		if s.cfg == nil || s.cfg.beaconDB == nil {
-			return nil, errors.New("nil beacon db")
-		}
-		return s.cfg.beaconDB.RegistrationByValidatorID(ctx, id)
-	}
+// RegistrationByValidatorID returns the cached registration for a validator id.
+func (s *Service) RegistrationByValidatorID(_ context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error) {
+	return s.registrationCache.RegistrationByIndex(id)
 }
 
 // Configured returns true if the user has configured a builder client.

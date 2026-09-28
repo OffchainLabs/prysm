@@ -3778,6 +3778,104 @@ func TestHandleBlockPayloadAttestations(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, s.handleBlockPayloadAttestations(ctx, wsb.Block(), headState))
 	})
+
+	t.Run("vote is written to every seat of the voter", func(t *testing.T) {
+		s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+		ctx := t.Context()
+
+		blockRoot := bytesutil.ToBytes32([]byte("root1"))
+		headState := gloasStateWithValidators(t, 2, 2048)
+		base, insertBlk := testGloasState(t, 1, params.BeaconConfig().ZeroHash, bytesutil.ToBytes32([]byte("hash1")))
+		insertGloasBlock(t, s, base, insertBlk, blockRoot)
+
+		ptc, err := headState.PayloadCommitteeReadOnly(1)
+		require.NoError(t, err)
+		seats := make(map[primitives.ValidatorIndex][]uint64)
+		for i, idx := range ptc {
+			seats[idx] = append(seats[idx], uint64(i))
+		}
+		var voterSeats []uint64
+		for _, ss := range seats {
+			if len(ss) > 1 {
+				voterSeats = ss
+				break
+			}
+		}
+		require.NotEqual(t, 0, len(voterSeats), "expected a validator holding multiple PTC seats")
+
+		bits := bitfield.NewBitvector512()
+		bits.SetBitAt(voterSeats[0], true)
+		blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+			Block: &ethpb.BeaconBlockGloas{
+				Slot: 2,
+				Body: &ethpb.BeaconBlockBodyGloas{
+					PayloadAttestations: []*ethpb.PayloadAttestation{
+						{
+							AggregationBits: bits,
+							Data: &ethpb.PayloadAttestationData{
+								BeaconBlockRoot:   blockRoot[:],
+								Slot:              1,
+								PayloadPresent:    true,
+								BlobDataAvailable: true,
+							},
+							Signature: make([]byte, 96),
+						},
+					},
+				},
+			},
+		})
+		wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		require.NoError(t, s.handleBlockPayloadAttestations(ctx, wsb.Block(), headState))
+
+		attesters, present, available, ok := s.cfg.ForkChoiceStore.(*doublylinkedtree.ForkChoice).PTCVotes(blockRoot)
+		require.Equal(t, true, ok)
+		require.Equal(t, uint64(len(voterSeats)), attesters.Count())
+		for _, seat := range voterSeats {
+			require.Equal(t, true, attesters.BitAt(seat))
+			require.Equal(t, true, present.BitAt(seat))
+			require.Equal(t, true, available.BitAt(seat))
+		}
+	})
+
+	t.Run("vote for a block from an earlier slot is skipped", func(t *testing.T) {
+		s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+		ctx := t.Context()
+
+		blockRoot := bytesutil.ToBytes32([]byte("root1"))
+		headState := gloasStateWithValidators(t, 3, 2048)
+		base, insertBlk := testGloasState(t, 1, params.BeaconConfig().ZeroHash, bytesutil.ToBytes32([]byte("hash1")))
+		insertGloasBlock(t, s, base, insertBlk, blockRoot)
+
+		bits := bitfield.NewBitvector512()
+		bits.SetBitAt(0, true)
+		blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+			Block: &ethpb.BeaconBlockGloas{
+				Slot: 3,
+				Body: &ethpb.BeaconBlockBodyGloas{
+					PayloadAttestations: []*ethpb.PayloadAttestation{
+						{
+							AggregationBits: bits,
+							Data: &ethpb.PayloadAttestationData{
+								BeaconBlockRoot:   blockRoot[:],
+								Slot:              2,
+								PayloadPresent:    true,
+								BlobDataAvailable: true,
+							},
+							Signature: make([]byte, 96),
+						},
+					},
+				},
+			},
+		})
+		wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		require.NoError(t, s.handleBlockPayloadAttestations(ctx, wsb.Block(), headState))
+
+		attesters, _, _, ok := s.cfg.ForkChoiceStore.(*doublylinkedtree.ForkChoice).PTCVotes(blockRoot)
+		require.Equal(t, true, ok)
+		require.Equal(t, uint64(0), attesters.Count())
+	})
 }
 
 func TestHandleBlockAttestations_GloasSameSlotPayloadVote(t *testing.T) {
