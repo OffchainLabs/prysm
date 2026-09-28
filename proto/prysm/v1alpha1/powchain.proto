@@ -4,7 +4,6 @@ package ethereum.eth.v1alpha1;
 
 import "google/protobuf/descriptor.proto";
 import "proto/prysm/v1alpha1/beacon_core_types.proto";
-import "proto/prysm/v1alpha1/beacon_state.proto";
 import "proto/eth/ext/options.proto";
 
 option csharp_namespace = "Ethereum.Eth.V1alpha1";
@@ -17,9 +16,10 @@ option php_namespace = "Ethereum\\Eth\\v1alpha1";
 // ETH1ChainData is a container which holds all the relevant eth1
 // information
 message ETH1ChainData {
+  // Field 3 held the pre-genesis beacon state; kept reserved so old DB records decode.
+  reserved 3;
   LatestETH1Data current_eth1_data = 1;
   ChainStartData chainstart_data = 2;
-  BeaconState beacon_state = 3;
   SparseMerkleTrie trie = 4;
   repeated DepositContainer deposit_containers = 5;
   DepositSnapshot deposit_snapshot = 6;
@@ -47,11 +47,11 @@ message LatestETH1Data {
 
 // ChainStartData contains all the information related to chainstart.
 message ChainStartData {
-  bool chainstarted = 1;
+  // Fields 1 and 5 held chainstarted and chainstart_deposits; kept reserved so old DB records decode.
+  reserved 1, 5;
   uint64 genesis_time = 2;
   uint64 genesis_block = 3;
   Eth1Data eth1_data = 4;
-  repeated Deposit chainstart_deposits = 5;
 }
 
 // SparseMerkleTrie is used to describe the model of our deposit trie.

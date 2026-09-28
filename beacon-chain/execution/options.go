@@ -2,7 +2,6 @@ package execution
 
 import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
@@ -45,6 +44,16 @@ func WithHttpEndpointAndJWTSecret(endpointString string, secret []byte) Option {
 	}
 }
 
+// WithRPCClientDialer supplies a dialer used to create the execution node RPC
+// client (e.g. one from go-ethereum's rpc.DialInProc), taking precedence over
+// any configured endpoint, JWT secret, and headers.
+func WithRPCClientDialer(dialer RPCClientDialer) Option {
+	return func(s *Service) error {
+		s.cfg.rpcClientDialer = dialer
+		return nil
+	}
+}
+
 // WithHeaders adds headers to the execution node JSON-RPC requests.
 func WithHeaders(headers []string) Option {
 	return func(s *Service) error {
@@ -73,14 +82,6 @@ func WithDatabase(database db.HeadAccessDatabase) Option {
 func WithDepositCache(cache cache.DepositCache) Option {
 	return func(s *Service) error {
 		s.cfg.depositCache = cache
-		return nil
-	}
-}
-
-// WithStateNotifier for subscribing to state changes.
-func WithStateNotifier(notifier statefeed.Notifier) Option {
-	return func(s *Service) error {
-		s.cfg.stateNotifier = notifier
 		return nil
 	}
 }

@@ -113,7 +113,7 @@ func TestFuzzprocessOperationsNoVerify_1000(t *testing.T) {
 		}
 		wb, err := blocks.NewBeaconBlock(bb)
 		require.NoError(t, err)
-		s, err := ProcessOperationsNoVerifyAttsSigs(ctx, state, wb)
+		s, err := ProcessOperationsNoVerifyAttsSigs(ctx, state, wb, 0)
 		if err != nil && s != nil {
 			t.Fatalf("state should be nil on err. found: %v on error: %v for block body: %v", s, err, bb)
 		}
@@ -175,7 +175,7 @@ func TestFuzzProcessBlockForStateRoot_1000(t *testing.T) {
 	SkipSlotCache.Disable()
 	defer SkipSlotCache.Enable()
 	ctx := t.Context()
-	state, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
+	state, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{LatestBlockHeader: &ethpb.BeaconBlockHeader{}})
 	require.NoError(t, err)
 	sb := &ethpb.SignedBeaconBlock{}
 	fuzzer := fuzz.NewWithSeed(0)

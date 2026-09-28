@@ -97,6 +97,8 @@ func (r Requirement) String() string {
 		return "RequireBidParentBlockHashValid"
 	case RequireBidBuilderCanCover:
 		return "RequireBidBuilderCanCover"
+	case RequireBidBuilderNotExiting:
+		return "RequireBidBuilderNotExiting"
 	case RequireBidSignatureValid:
 		return "RequireBidSignatureValid"
 	case RequireBidSlotMatches:

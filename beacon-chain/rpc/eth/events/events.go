@@ -64,6 +64,8 @@ const (
 	BLSToExecutionChangeTopic = "bls_to_execution_change"
 	// PayloadAttributesTopic represents a new payload attributes for execution payload building event topic.
 	PayloadAttributesTopic = "payload_attributes"
+	// FastConfirmationTopic is emitted after every run of the fast confirmation rule.
+	FastConfirmationTopic = "fast_confirmation"
 	// BlobSidecarTopic represents a new blob sidecar event topic
 	BlobSidecarTopic = "blob_sidecar"
 	// ProposerSlashingTopic represents a new proposer slashing event topic
@@ -144,6 +146,7 @@ var stateFeedEventTopics = map[feed.EventType]string{
 	statefeed.PayloadAttributes:           PayloadAttributesTopic,
 	statefeed.ExecutionPayloadAvailable:   ExecutionPayloadAvailableTopic,
 	statefeed.ExecutionPayloadProcessed:   ExecutionPayloadTopic,
+	statefeed.FastConfirmation:            FastConfirmationTopic,
 }
 
 var topicsForStateFeed = topicsForFeed(stateFeedEventTopics)
@@ -508,6 +511,8 @@ func topicForEvent(event *feed.Event) string {
 		return ExecutionPayloadAvailableTopic
 	case *statefeed.ExecutionPayloadProcessedData:
 		return ExecutionPayloadTopic
+	case *statefeed.FastConfirmationData:
+		return FastConfirmationTopic
 	case *operation.ExecutionPayloadGossipReceivedData:
 		return ExecutionPayloadGossipTopic
 	default:
@@ -725,6 +730,14 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 			return jsonMarshalReader(eventName, &structs.ExecutionPayloadAvailableEvent{
 				Slot:      fmt.Sprintf("%d", v.Slot),
 				BlockRoot: hexutil.Encode(v.BlockRoot[:]),
+			})
+		}, nil
+	case *statefeed.FastConfirmationData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, &structs.FastConfirmationEvent{
+				Block:       hexutil.Encode(v.BlockRoot[:]),
+				Slot:        fmt.Sprintf("%d", v.Slot),
+				CurrentSlot: fmt.Sprintf("%d", v.CurrentSlot),
 			})
 		}, nil
 	case *statefeed.ExecutionPayloadProcessedData:

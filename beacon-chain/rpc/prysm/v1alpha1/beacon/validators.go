@@ -471,10 +471,10 @@ func (bs *Server) GetValidatorQueue(
 		}
 	}
 	sort.Slice(activationQ, func(i, j int) bool {
-		return vals[i].ActivationEligibilityEpoch < vals[j].ActivationEligibilityEpoch
+		return vals[activationQ[i]].ActivationEligibilityEpoch < vals[activationQ[j]].ActivationEligibilityEpoch
 	})
 	sort.Slice(awaitingExit, func(i, j int) bool {
-		return vals[i].WithdrawableEpoch < vals[j].WithdrawableEpoch
+		return vals[awaitingExit[i]].WithdrawableEpoch < vals[awaitingExit[j]].WithdrawableEpoch
 	})
 
 	// Only activate just enough validators according to the activation churn limit.

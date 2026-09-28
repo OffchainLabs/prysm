@@ -290,8 +290,6 @@ func TestServer_getExecutionPayloadContextTimeout(t *testing.T) {
 		Root: b1r[:],
 	}))
 
-	require.NoError(t, beaconDB.SaveFeeRecipientsByValidatorIDs(t.Context(), []primitives.ValidatorIndex{0}, []common.Address{{}}))
-
 	cfg := params.BeaconConfig().Copy()
 	cfg.TerminalBlockHash = common.Hash{'a'}
 	cfg.TerminalBlockHashActivationEpoch = 1

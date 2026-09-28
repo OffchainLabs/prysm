@@ -259,6 +259,11 @@ func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
 
 	blockVersion := roBlock.Version()
 
+	// Gloas DA is on the payload envelope; forward sync imports it if the origin's payload was revealed.
+	if blockVersion >= version.Gloas {
+		return nil
+	}
+
 	if blockVersion >= version.Fulu {
 		if err := s.fetchOriginDataColumnSidecars(roBlock); err != nil {
 			return errors.Wrap(err, "fetch origin columns")
@@ -343,7 +348,11 @@ func (s *Service) waitForMinimumPeers() ([]peer.ID, error) {
 			"suitable": len(peers),
 			"required": required,
 		}).Info("Waiting for enough suitable peers before syncing")
-		time.Sleep(handshakePollingInterval)
+		select {
+		case <-s.ctx.Done():
+			return nil, s.ctx.Err()
+		case <-time.After(handshakePollingInterval):
+		}
 	}
 }
 

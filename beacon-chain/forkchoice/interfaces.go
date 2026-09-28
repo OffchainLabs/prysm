@@ -64,10 +64,16 @@ type AttestationProcessor interface {
 type Getter interface {
 	FastGetter
 	AncestorRoot(ctx context.Context, root [32]byte, slot primitives.Slot) ([32]byte, error)
+	AncestorRoots(root [32]byte, terminalRoot [32]byte) ([][32]byte, error)
 	CommonAncestor(ctx context.Context, root1 [32]byte, root2 [32]byte) ([32]byte, primitives.Slot, error)
 	ForkChoiceDump(context.Context) (*forkchoice2.Dump, error)
 	ForkChoiceDumpV2(context.Context) (*forkchoice2.DumpV2, error)
+	IsAncestor(root [32]byte, ancestorRoot [32]byte) (bool, error)
+	SlashedIndices() map[primitives.ValidatorIndex]bool
 	Tips() ([][32]byte, []primitives.Slot)
+	UnrealizedJustification(root [32]byte) (*forkchoicetypes.Checkpoint, error)
+	VoteSnapshot(buf []forkchoicetypes.VoteData) []forkchoicetypes.VoteData
+	VotingSource(root [32]byte) (*forkchoicetypes.Checkpoint, error)
 }
 
 type FastGetter interface {
@@ -84,6 +90,7 @@ type FastGetter interface {
 	JustifiedCheckpoint() *forkchoicetypes.Checkpoint
 	JustifiedPayloadBlockHash() [32]byte
 	NodeCount() int
+	UnrealizedJustifiedCheckpoint() *forkchoicetypes.Checkpoint
 	PreviousJustifiedCheckpoint() *forkchoicetypes.Checkpoint
 	ProposerBoost() [fieldparams.RootLength]byte
 	ReceivedBlocksLastEpoch() (uint64, error)
@@ -106,6 +113,7 @@ type FastGetter interface {
 	BlockHash(root [32]byte) ([32]byte, error)
 	GasLimit(root, blockHash [32]byte) (uint64, error)
 	CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool)
+	ConfirmedPayloadBlockHash(root [32]byte) [32]byte
 }
 
 // Setter allows to set forkchoice information

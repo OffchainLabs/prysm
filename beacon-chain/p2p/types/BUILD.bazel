@@ -6,6 +6,7 @@ go_library(
         "object_mapping.go",
         "rpc_errors.go",
         "rpc_goodbye_codes.go",
+        "topics.go",
         "types.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types",

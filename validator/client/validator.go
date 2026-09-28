@@ -43,7 +43,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/graffiti"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
-	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/ethereum/go-ethereum/common"
@@ -103,6 +102,7 @@ type validator struct {
 	submittedPayloadAtts         map[submittedPayloadAttKey][]uint64
 	validatorsRegBatchSize       int
 	duties                       *dutyStore
+	healthMonitor                *healthMonitor
 	nextFetchInFlight            atomic.Bool
 	doppelGanger                 doppelGangerTracker
 	domainDataCache              *ristretto.Cache[string, proto.Message]
@@ -261,36 +261,32 @@ func recheckKeys(ctx context.Context, valDB db.Database, km keymanager.IKeymanag
 	ctx, span := trace.StartSpan(ctx, "validator.recheckKeys")
 	defer span.End()
 
-	var validatingKeys [][fieldparams.BLSPubkeyLength]byte
-	var err error
-	validatingKeys, err = km.FetchValidatingPublicKeys(ctx)
+	// Subscribe before the initial fetch so account changes in between are not missed.
+	pubKeysChan := make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
+	sub := km.SubscribeAccountChanges(pubKeysChan)
+	validatingKeys, err := km.FetchValidatingPublicKeys(ctx)
 	if err != nil {
 		log.WithError(err).Debug("Could not fetch validating keys")
 	}
 	if err := valDB.UpdatePublicKeysBuckets(validatingKeys); err != nil {
-		go recheckValidatingKeysBucket(ctx, valDB, km)
+		log.WithError(err).Debug("Could not update public keys buckets")
 	}
+	go recheckValidatingKeysBucket(ctx, valDB, sub, pubKeysChan)
 }
 
-// to accounts changes in the keymanager, then updates those keys'
-// buckets in bolt DB if a bucket for a key does not exist.
-func recheckValidatingKeysBucket(ctx context.Context, valDB db.Database, km keymanager.IKeymanager) {
+// recheckValidatingKeysBucket creates missing DB buckets for keys pushed by the
+// keymanager's account-change subscription.
+func recheckValidatingKeysBucket(ctx context.Context, valDB db.Database, sub event.Subscription, pubKeysChan chan [][fieldparams.BLSPubkeyLength]byte) {
 	ctx, span := trace.StartSpan(ctx, "validator.recheckValidatingKeysBucket")
 	defer span.End()
 
-	importedKeymanager, ok := km.(*local.Keymanager)
-	if !ok {
-		return
-	}
-	validatingPubKeysChan := make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
-	sub := importedKeymanager.SubscribeAccountChanges(validatingPubKeysChan)
 	defer func() {
 		sub.Unsubscribe()
-		close(validatingPubKeysChan)
+		close(pubKeysChan)
 	}()
 	for {
 		select {
-		case keys := <-validatingPubKeysChan:
+		case keys := <-pubKeysChan:
 			if err := valDB.UpdatePublicKeysBuckets(keys); err != nil {
 				log.WithError(err).Debug("Could not update public keys buckets")
 				continue
@@ -304,10 +300,8 @@ func recheckValidatingKeysBucket(ctx context.Context, valDB db.Database, km keym
 	}
 }
 
-// WaitForChainStart checks whether the beacon node has started its runtime. That is,
-// it calls to the beacon node which then verifies the ETH1.0 deposit contract logs to check
-// for the ChainStart log to have been emitted. If so, it starts a ticker based on the ChainStart
-// unix timestamp which will be used to keep track of time within the validator client.
+// WaitForChainStart returns genesis time and validators root once the node clock is set,
+// then starts a slot ticker from that genesis time.
 func (v *validator) WaitForChainStart(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "validator.WaitForChainStart")
 	defer span.End()
@@ -379,7 +373,7 @@ func (v *validator) SetTicker() {
 	if v.ticker != nil {
 		v.ticker.Done()
 	}
-	// Once the ChainStart log is received, we update the genesis time of the validator client
+	// Once genesis info is received, we update the genesis time of the validator client
 	// and begin a slot ticker used to track the current slot the beacon node is in.
 	v.ticker = slots.NewSlotTicker(v.genesisTime, params.BeaconConfig().SlotDuration())
 	log.WithField("genesisTime", v.genesisTime).Info("Beacon chain started")
@@ -721,40 +715,32 @@ func (v *validator) ProposerSettings() *proposer.Settings {
 	return v.proposerSettings
 }
 
-// SetProposerSettings sets and saves the passed in proposer settings overriding the in memory one
-func (v *validator) SetProposerSettings(ctx context.Context, settings *proposer.Settings) error {
-	v.proposerSettingsMu.Lock()
-	defer v.proposerSettingsMu.Unlock()
-	return v.setProposerSettingsLocked(ctx, settings)
-}
-
-func (v *validator) setProposerSettingsLocked(ctx context.Context, settings *proposer.Settings) error {
-	ctx, span := trace.StartSpan(ctx, "validator.SetProposerSettings")
+// UpdateProposerSettings atomically mutates the proposer settings.
+func (v *validator) UpdateProposerSettings(ctx context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
+	ctx, span := trace.StartSpan(ctx, "validator.UpdateProposerSettings")
 	defer span.End()
 
 	if v.db == nil {
 		return errors.New("db is not set")
 	}
-	if err := v.db.SaveProposerSettings(ctx, settings); err != nil {
-		return err
-	}
-	v.proposerSettings = settings
-	return nil
-}
 
-// UpdateProposerSettings atomically mutates the proposer settings: mutate gets a
-// deep copy (nil when unset) and returns what to persist, or nil for a no-op.
-func (v *validator) UpdateProposerSettings(ctx context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
 	v.proposerSettingsMu.Lock()
 	defer v.proposerSettingsMu.Unlock()
+
 	next, err := mutate(v.proposerSettings.Clone())
 	if err != nil {
-		return err
+		return fmt.Errorf("mutate proposer settings: %w", err)
 	}
 	if next == nil {
 		return nil
 	}
-	return v.setProposerSettingsLocked(ctx, next)
+
+	if err := v.db.SaveProposerSettings(ctx, next); err != nil {
+		return fmt.Errorf("save proposer settings: %w", err)
+	}
+
+	v.proposerSettings = next
+	return nil
 }
 
 // PushProposerSettings pushes proposer and builder preferences plus, pre-Gloas,

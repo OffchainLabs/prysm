@@ -1335,6 +1335,14 @@ func TestServer_GetValidatorQueue_PendingActivation(t *testing.T) {
 	headState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
 		Validators: []*ethpb.Validator{
 			{
+				// Already activated, so not part of the activation queue. This makes
+				// queue positions differ from validator indices.
+				ActivationEpoch:            0,
+				ActivationEligibilityEpoch: 0,
+				PublicKey:                  pubKey(0),
+				WithdrawalCredentials:      make([]byte, 32),
+			},
+			{
 				ActivationEpoch:            helpers.ActivationExitEpoch(0),
 				ActivationEligibilityEpoch: 3,
 				PublicKey:                  pubKey(3),
@@ -1376,7 +1384,7 @@ func TestServer_GetValidatorQueue_PendingActivation(t *testing.T) {
 	wantChurn := helpers.ValidatorActivationChurnLimit(activeValidatorCount)
 	assert.Equal(t, wantChurn, res.ChurnLimit)
 	assert.DeepEqual(t, wanted, res.ActivationPublicKeys)
-	wantedActiveIndices := []primitives.ValidatorIndex{2, 1, 0}
+	wantedActiveIndices := []primitives.ValidatorIndex{3, 2, 1}
 	assert.DeepEqual(t, wantedActiveIndices, res.ActivationValidatorIndices)
 }
 
@@ -1432,10 +1440,12 @@ func TestServer_GetValidatorQueue_PendingExit(t *testing.T) {
 	headState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
 		Validators: []*ethpb.Validator{
 			{
+				// Not exiting, so not part of the exit queue. This makes queue
+				// positions differ from validator indices.
 				ActivationEpoch:       0,
-				ExitEpoch:             4,
-				WithdrawableEpoch:     3,
-				PublicKey:             pubKey(3),
+				ExitEpoch:             params.BeaconConfig().FarFutureEpoch,
+				WithdrawableEpoch:     params.BeaconConfig().FarFutureEpoch,
+				PublicKey:             pubKey(0),
 				WithdrawalCredentials: make([]byte, 32),
 			},
 			{
@@ -1443,6 +1453,13 @@ func TestServer_GetValidatorQueue_PendingExit(t *testing.T) {
 				ExitEpoch:             4,
 				WithdrawableEpoch:     2,
 				PublicKey:             pubKey(2),
+				WithdrawalCredentials: make([]byte, 32),
+			},
+			{
+				ActivationEpoch:       0,
+				ExitEpoch:             4,
+				WithdrawableEpoch:     3,
+				PublicKey:             pubKey(3),
 				WithdrawalCredentials: make([]byte, 32),
 			},
 			{

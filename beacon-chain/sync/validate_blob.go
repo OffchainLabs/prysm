@@ -85,7 +85,7 @@ func (s *Service) validateBlob(ctx context.Context, pid peer.ID, msg *pubsub.Mes
 
 	if err := vf.SidecarParentSeen(s.hasBadBlock); err != nil {
 		go func() {
-			if err := s.sendBatchRootRequest(context.Background(), [][32]byte{blob.ParentRoot()}, rand.NewGenerator()); err != nil {
+			if err := s.sendBatchRootRequest(s.ctx, [][32]byte{blob.ParentRoot()}, rand.NewGenerator()); err != nil {
 				log.WithError(err).WithFields(blobFields(blob)).Debug("Failed to send batch root request")
 			}
 		}()

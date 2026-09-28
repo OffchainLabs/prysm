@@ -197,6 +197,52 @@ func TestStore_OnBlockBatch_NotifyNewPayload(t *testing.T) {
 	require.NoError(t, service.onBlockBatch(ctx, blks, nil, &das.MockAvailabilityStore{}))
 }
 
+func TestGetBatchPrestate(t *testing.T) {
+	parentRoot, ancestorRoot := [32]byte{0xa2}, [32]byte{0xa1}
+	parentHash, ancestorHash := [32]byte{0xb2}, [32]byte{0xb1}
+	for _, test := range []struct {
+		name         string
+		envelopeRoot [32]byte
+		payloadHash  [32]byte
+		slot         primitives.Slot
+		wantApplied  bool
+	}{
+		{"ancestor envelope with matching execution hash is not applied", ancestorRoot, ancestorHash, 31, false},
+		{"parent envelope with matching execution hash is applied", parentRoot, parentHash, 32, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			service, tr := minimalTestService(t, WithExecutionEngineCaller(&mockExecution.EngineClient{}))
+			parentState, err := util.NewBeaconStateGloas(func(st *ethpb.BeaconStateGloas) error {
+				st.Slot = 32
+				st.LatestBlockHash = ancestorHash[:]
+				st.LatestExecutionPayloadBid.BlockHash = parentHash[:]
+				return nil
+			})
+			require.NoError(t, err)
+			require.NoError(t, tr.db.SaveState(tr.ctx, parentState, parentRoot))
+
+			child := util.NewBeaconBlockGloas()
+			child.Block.Slot = 33
+			child.Block.ParentRoot = parentRoot[:]
+			child.Block.Body.SignedExecutionPayloadBid.Message.ParentBlockHash = test.payloadHash[:]
+			childBlock, err := consensusblocks.NewSignedBeaconBlock(child)
+			require.NoError(t, err)
+			roChild, err := consensusblocks.NewROBlock(childBlock)
+			require.NoError(t, err)
+			protoEnvelope := testSignedEnvelope(t, test.envelopeRoot, test.slot, test.payloadHash[:])
+			protoEnvelope.Message.Payload.SlotNumber = test.slot
+			protoEnvelope.Message.Payload.ParentHash = ancestorHash[:]
+			envelope, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(protoEnvelope)
+			require.NoError(t, err)
+
+			got, applied, err := service.getBatchPrestate(tr.ctx, roChild, []interfaces.ROSignedExecutionPayloadEnvelope{envelope})
+			require.NoError(t, err)
+			require.Equal(t, test.wantApplied, applied)
+			require.DeepEqual(t, parentState.ToProto(), got.ToProto())
+		})
+	}
+}
+
 func TestCachedPreState_CanGetFromStateSummary(t *testing.T) {
 	service, tr := minimalTestService(t)
 	ctx, beaconDB := tr.ctx, tr.db

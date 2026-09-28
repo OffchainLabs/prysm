@@ -7,10 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
-// orphanLateBlockProposingEarly determines the maximum threshold that we
-// consider the node is proposing early and sure to receive proposer boost
-const orphanLateBlockProposingEarly = 2
-
 // ShouldOverrideFCU returns whether the current forkchoice head is weak
 // and thus may be reorged when proposing the next block.
 // This function should only be called if the following two conditions are
@@ -46,6 +42,12 @@ func (f *ForkChoice) ShouldOverrideFCU() (override bool) {
 		return
 	}
 
+	// is_shuffling_stable, removed in Fulu by EIP-7917
+	proposalSlot := consensusHead.slot + 1
+	if slots.ToEpoch(proposalSlot) < params.BeaconConfig().FuluForkEpoch && slots.IsEpochStart(proposalSlot) {
+		return
+	}
+
 	head := f.store.choosePayloadContent(consensusHead)
 	// Only reorg blocks that arrive late
 	early, err := head.arrivedEarly(f.store.genesisTime)
@@ -70,7 +72,7 @@ func (f *ForkChoice) ShouldOverrideFCU() (override bool) {
 		return
 	}
 	// Do not orphan a block that has higher justification than the parent
-	// if head.unrealizedJustifiedEpoch > parent.unrealizedJustifiedEpoch {
+	// if head.unrealizedJustified.Epoch > parent.unrealizedJustified.Epoch {
 	//		return
 	// }
 
@@ -110,6 +112,10 @@ func (f *ForkChoice) GetProposerHead() [32]byte {
 	// Only reorg blocks from the previous slot.
 	currentSlot := slots.CurrentSlot(f.store.genesisTime)
 	if consensusHead.slot+1 != currentSlot {
+		return consensusHead.root
+	}
+	// is_shuffling_stable, removed in Fulu by EIP-7917
+	if slots.ToEpoch(currentSlot) < params.BeaconConfig().FuluForkEpoch && slots.IsEpochStart(currentSlot) {
 		return consensusHead.root
 	}
 	// Only reorg blocks that arrive late
@@ -158,7 +164,7 @@ func (f *ForkChoice) GetProposerHead() [32]byte {
 		log.WithError(err).Error("could not check if proposing early")
 		return consensusHead.root
 	}
-	if sss >= orphanLateBlockProposingEarly*time.Second {
+	if sss > params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().ProposerReorgCutoffBPS) {
 		return consensusHead.root
 	}
 	return parent.node.root

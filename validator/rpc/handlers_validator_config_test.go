@@ -49,10 +49,6 @@ func setupConfigServer(t *testing.T, numKeys int) (*Server, [][48]byte) {
 	vs.EXPECT().ProposerSettings().DoAndReturn(func() *proposer.Settings {
 		return stored
 	}).AnyTimes()
-	vs.EXPECT().SetProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, s *proposer.Settings) error {
-		stored = s
-		return nil
-	}).AnyTimes()
 	vs.EXPECT().UpdateProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
 		next, err := mutate(stored.Clone())
 		if err != nil {
@@ -149,11 +145,13 @@ func TestServer_SetBuilderConfig(t *testing.T) {
 		srv, keys := setupConfigServer(t, 2)
 		pkA := hexutil.Encode(keys[0][:])
 		pkB := hexutil.Encode(keys[1][:])
-		require.NoError(t, srv.validatorService.SetProposerSettings(t.Context(), &proposer.Settings{
-			Version: proposer.SchemaV2,
-			DefaultConfig: &proposer.Option{
-				BuilderConfig: &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{{URL: "https://default.example"}}},
-			},
+		require.NoError(t, srv.validatorService.UpdateProposerSettings(t.Context(), func(*proposer.Settings) (*proposer.Settings, error) {
+			return &proposer.Settings{
+				Version: proposer.SchemaV2,
+				DefaultConfig: &proposer.Option{
+					BuilderConfig: &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{{URL: "https://default.example"}}},
+				},
+			}, nil
 		}))
 		require.Equal(t, http.StatusAccepted, postBuilderConfig(t, srv, pkA, `{"builders":[]}`).Code)
 		require.Equal(t, http.StatusAccepted, postBuilderConfig(t, srv, pkB, `{"builders":[{"url":"https://b.example"}]}`).Code)
@@ -166,12 +164,14 @@ func TestServer_SetBuilderConfig(t *testing.T) {
 		srv, keys := setupConfigServer(t, 1)
 		pk := hexutil.Encode(keys[0][:])
 		recipient := common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")
-		require.NoError(t, srv.validatorService.SetProposerSettings(t.Context(), &proposer.Settings{
-			Version: proposer.SchemaV1,
-			DefaultConfig: &proposer.Option{
-				FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: recipient},
-				BuilderConfig:      &proposer.BuilderConfig{Enabled: true},
-			},
+		require.NoError(t, srv.validatorService.UpdateProposerSettings(t.Context(), func(*proposer.Settings) (*proposer.Settings, error) {
+			return &proposer.Settings{
+				Version: proposer.SchemaV1,
+				DefaultConfig: &proposer.Option{
+					FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: recipient},
+					BuilderConfig:      &proposer.BuilderConfig{Enabled: true},
+				},
+			}, nil
 		}))
 		require.Equal(t, http.StatusAccepted, postBuilderConfig(t, srv, pk, `{}`).Code)
 
@@ -185,12 +185,14 @@ func TestServer_SetBuilderConfig(t *testing.T) {
 		srv, keys := setupConfigServer(t, 1)
 		pk := hexutil.Encode(keys[0][:])
 		recipient := common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")
-		require.NoError(t, srv.validatorService.SetProposerSettings(t.Context(), &proposer.Settings{
-			Version: proposer.SchemaV1,
-			DefaultConfig: &proposer.Option{
-				FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: recipient},
-				BuilderConfig:      &proposer.BuilderConfig{Enabled: true},
-			},
+		require.NoError(t, srv.validatorService.UpdateProposerSettings(t.Context(), func(*proposer.Settings) (*proposer.Settings, error) {
+			return &proposer.Settings{
+				Version: proposer.SchemaV1,
+				DefaultConfig: &proposer.Option{
+					FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: recipient},
+					BuilderConfig:      &proposer.BuilderConfig{Enabled: true},
+				},
+			}, nil
 		}))
 		require.Equal(t, http.StatusAccepted, postBuilderConfig(t, srv, pk, `{"min_bid":"5"}`).Code)
 
@@ -207,11 +209,13 @@ func TestServer_SetBuilderConfig(t *testing.T) {
 	t.Run("upgrades v1 settings in place", func(t *testing.T) {
 		srv, keys := setupConfigServer(t, 1)
 		pk := hexutil.Encode(keys[0][:])
-		require.NoError(t, srv.validatorService.SetProposerSettings(t.Context(), &proposer.Settings{
-			Version: proposer.SchemaV1,
-			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
-				keys[0]: {BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 999}},
-			},
+		require.NoError(t, srv.validatorService.UpdateProposerSettings(t.Context(), func(*proposer.Settings) (*proposer.Settings, error) {
+			return &proposer.Settings{
+				Version: proposer.SchemaV1,
+				ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+					keys[0]: {BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 999}},
+				},
+			}, nil
 		}))
 		require.Equal(t, http.StatusAccepted, postBuilderConfig(t, srv, pk, `{"builders":[{"url":"https://a.example"}]}`).Code)
 
@@ -253,7 +257,7 @@ func TestServer_SetBuilderConfig(t *testing.T) {
 			"entry without url":                                 {`{"builders":[{"min_bid":"1"}]}`, "url is required"},
 			"pubkey-only entry":                                 {`{"builders":[{"builder_pubkeys":["` + bpk + `"]}]}`, "url is required"},
 			"same url and auth_data":                            {`{"builders":[{"url":"https://a"},{"url":"https://a"}]}`, "share the same url and auth_data"},
-			"omitted auth_data collides with its derived value": {`{"builders":[{"url":"https://a"},{"url":"https://a","auth_data":"` + hexutil.Encode([]byte("https://a")) + `"}]}`, "share the same url and auth_data"},
+			"omitted auth_data collides with its derived value": {`{"builders":[{"url":"https://a"},{"url":"https://a","auth_data":"` + hexutil.Encode([]byte("a")) + `"}]}`, "share the same url and auth_data"},
 			"invalid url":                                       {`{"builders":[{"url":"not a url"}]}`, "url is not a valid URL"},
 			"url too long":                                      {`{"builders":[{"url":"` + longURL + `"}]}`, "url exceeds 2048 bytes"},
 			"invalid builder_pubkeys entry":                     {`{"builders":[{"url":"https://a","builder_pubkeys":["0x1234"]}]}`, "builder_pubkeys contains an invalid BLS public key"},
@@ -305,7 +309,7 @@ func TestServer_SetBuilderConfig(t *testing.T) {
 }
 
 func TestServer_GetBuilderConfig(t *testing.T) {
-	// GET is fully resolved: omitted auth_data becomes the url's UTF-8 bytes, and
+	// GET is fully resolved: omitted auth_data becomes the url's hostname, and
 	// unset values become the runtime fallbacks (no floor, neutral boost, trustless-only).
 	t.Run("nil proposer settings resolve to runtime defaults", func(t *testing.T) {
 		srv, keys := setupConfigServer(t, 1)
@@ -329,7 +333,7 @@ func TestServer_GetBuilderConfig(t *testing.T) {
 		require.Equal(t, "0", *cfg.MinBid)
 		require.Equal(t, "100", *cfg.BuilderBoostFactor)
 		require.Equal(t, 1, len(cfg.Builders))
-		require.Equal(t, hexutil.Encode([]byte("https://a.example")), *cfg.Builders[0].AuthData)
+		require.Equal(t, hexutil.Encode([]byte("a.example")), *cfg.Builders[0].AuthData)
 		require.Equal(t, "0", *cfg.Builders[0].MinBid)
 		require.Equal(t, "100", *cfg.Builders[0].BuilderBoostFactor)
 		require.Equal(t, "0", *cfg.Builders[0].MaxExecutionPayment)
@@ -338,11 +342,13 @@ func TestServer_GetBuilderConfig(t *testing.T) {
 	t.Run("resolves default_config for an unconfigured key", func(t *testing.T) {
 		srv, keys := setupConfigServer(t, 1)
 		pk := hexutil.Encode(keys[0][:])
-		require.NoError(t, srv.validatorService.SetProposerSettings(t.Context(), &proposer.Settings{
-			Version: proposer.SchemaV2,
-			DefaultConfig: &proposer.Option{
-				BuilderConfig: &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{{URL: "https://default.example"}}},
-			},
+		require.NoError(t, srv.validatorService.UpdateProposerSettings(t.Context(), func(*proposer.Settings) (*proposer.Settings, error) {
+			return &proposer.Settings{
+				Version: proposer.SchemaV2,
+				DefaultConfig: &proposer.Option{
+					BuilderConfig: &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{{URL: "https://default.example"}}},
+				},
+			}, nil
 		}))
 
 		_, cfg := getBuilderConfig(t, srv, pk)

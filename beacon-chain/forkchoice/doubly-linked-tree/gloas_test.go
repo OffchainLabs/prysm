@@ -466,6 +466,73 @@ func TestParentHash_UnknownRoot(t *testing.T) {
 	assert.Equal(t, [32]byte{}, f.ParentHash(indexToHash(999)))
 }
 
+func TestParentHash_TreeRootBuildsOnPayload(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+	f := New()
+	f.SetBalancesByRooter(func(_ context.Context, _ [32]byte) ([]uint64, error) { return f.justifiedBalances, nil })
+	ctx := t.Context()
+
+	// Genesis-shaped anchor: the bid carries no payload of its own (zero block hash) but records the payload it builds on.
+	rootA := indexToHash(1)
+	preAnchorHash := indexToHash(50)
+	st, roblock, err := prepareGloasForkchoiceState(ctx, 0, rootA, [32]byte{}, params.BeaconConfig().ZeroHash, preAnchorHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	// B builds on A's empty variant, so no full parent exists in the tree.
+	rootB := indexToHash(2)
+	st, roblock, err = prepareGloasForkchoiceState(ctx, 1, rootB, rootA, indexToHash(200), preAnchorHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	assert.Equal(t, preAnchorHash, f.ConfirmedPayloadBlockHash(rootA))
+	assert.Equal(t, preAnchorHash, f.ConfirmedPayloadBlockHash(rootB))
+	assert.Equal(t, preAnchorHash, f.ParentHash(rootB))
+}
+
+func TestParentHash_PrunePreservesLastFullAncestor(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+	f := New()
+	f.SetBalancesByRooter(func(_ context.Context, _ [32]byte) ([]uint64, error) { return f.justifiedBalances, nil })
+	ctx := t.Context()
+
+	h0, h1, h2 := indexToHash(50), indexToHash(100), indexToHash(200)
+	rootA, rootB, rootC, rootD := indexToHash(1), indexToHash(2), indexToHash(3), indexToHash(4)
+
+	// A: genesis-shaped root building on h0. B: builds on A's empty variant and its payload h1 arrives.
+	st, blk, err := prepareGloasForkchoiceState(ctx, 0, rootA, [32]byte{}, params.BeaconConfig().ZeroHash, h0, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+	st, blk, err = prepareGloasForkchoiceState(ctx, 1, rootB, rootA, h1, h0, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+	pe, err := prepareGloasForkchoicePayload(rootB)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+	// C builds on full B but its own payload never arrives; D builds on C's empty variant.
+	st, blk, err = prepareGloasForkchoiceState(ctx, 2, rootC, rootB, h2, h1, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+	st, blk, err = prepareGloasForkchoiceState(ctx, 3, rootD, rootC, indexToHash(300), h1, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+	require.Equal(t, h1, f.ParentHash(rootD))
+
+	// Finalizing C prunes B, the only full ancestor. The walk from D now falls off the root and must still resolve to h1, not h0.
+	f.store.finalizedCheckpoint = &forkchoicetypes.Checkpoint{Epoch: 0, Root: rootC}
+	require.NoError(t, f.store.prune(ctx))
+	require.Equal(t, rootC, f.store.treeRootNode.root)
+	assert.Equal(t, h1, f.ParentHash(rootD))
+	assert.Equal(t, h1, f.ConfirmedPayloadBlockHash(rootC))
+	assert.Equal(t, h1, f.FinalizedPayloadBlockHash())
+}
+
 func TestHasPayloadBlockHash(t *testing.T) {
 	f := setupGloas(t, 0, 0)
 	ctx := t.Context()
@@ -2394,5 +2461,53 @@ func BenchmarkConsensusChildrenLen(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_ = !s.hasConsensusChildren(n)
 		}
+	})
+}
+
+func TestUpdateNewFullNodeWeight_SkipsSlashed(t *testing.T) {
+	zeroHash := params.BeaconConfig().ZeroHash
+
+	// Setup:
+	// - block at slot 1
+	// - validator 0 and 1 vote payload-present for it at slot 2 (before payload is known)
+	setupParkedVotes := func(t *testing.T) (*ForkChoice, [32]byte) {
+		f := setupGloas(t, 0, 0)
+		ctx := t.Context()
+		root := indexToHash(1)
+		st, blk, err := prepareGloasForkchoiceState(ctx, 1, root, zeroHash, indexToHash(100), zeroHash, 0, 0)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, st, blk))
+		f.ProcessAttestation(ctx, []uint64{0, 1}, root, 2, true)
+		f.justifiedBalances = []uint64{100, 200}
+		require.NoError(t, f.updateBalances())
+		require.Equal(t, true, f.votes[0].currentPayloadStatus)
+		return f, root
+	}
+
+	t.Run("slashed before payload arrives", func(t *testing.T) {
+		f, root := setupParkedVotes(t)
+
+		f.InsertSlashedIndex(t.Context(), 0)
+		pe, err := prepareGloasForkchoicePayload(root)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertPayload(pe))
+
+		fn := f.store.fullNodeByRoot[root]
+		require.NotNil(t, fn)
+		assert.Equal(t, uint64(200), fn.balance)
+		assert.Equal(t, uint64(200), fn.weight)
+	})
+
+	t.Run("slashed after payload arrives", func(t *testing.T) {
+		f, root := setupParkedVotes(t)
+		pe, err := prepareGloasForkchoicePayload(root)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertPayload(pe))
+		fn := f.store.fullNodeByRoot[root]
+		require.NotNil(t, fn)
+		require.Equal(t, uint64(300), fn.balance)
+
+		f.InsertSlashedIndex(t.Context(), 0)
+		assert.Equal(t, uint64(200), fn.balance)
 	})
 }

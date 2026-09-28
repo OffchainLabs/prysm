@@ -83,6 +83,7 @@ func runnerTestValidator(t *testing.T, ctx context.Context) (*validator, *valida
 		submittedAggregates:          make(map[submittedAttKey]*submittedAtt),
 		attestedSlotsByKeyByEpoch:    make(map[primitives.Epoch]map[[fieldparams.BLSPubkeyLength]byte]primitives.Slot),
 		accountsChangedChannel:       make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
+		healthMonitor:                &healthMonitor{isHealthy: true},
 	}
 	v.aggSelector = testLocalSelector(t, v)
 	return v, vc, nc
@@ -146,7 +147,7 @@ func TestInitialize(t *testing.T) {
 		vc.EXPECT().PrepareBeaconProposer(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 		vc.EXPECT().DomainData(gomock.Any(), gomock.Any()).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).AnyTimes()
 
-		_, err := newRunner(ctx, v, &healthMonitor{isHealthy: true})
+		_, err := newRunner(ctx, v)
 		require.NoError(t, err) // duties failures are logged, not fatal
 		require.LogsContain(t, hook, "Failed to update assignments")
 	})
@@ -202,7 +203,7 @@ func TestRun_ExitsOnCancelledContext(t *testing.T) {
 	vc.EXPECT().DomainData(gomock.Any(), gomock.Any()).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).AnyTimes()
 	vc.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
-	r, err := newRunner(ctx, v, &healthMonitor{isHealthy: true})
+	r, err := newRunner(ctx, v)
 	require.NoError(t, err)
 
 	cancelled, cancel := context.WithCancel(ctx)
@@ -486,10 +487,11 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 		submittedAtts:                make(map[submittedAttKey]*submittedAtt),
 		submittedAggregates:          make(map[submittedAttKey]*submittedAtt),
 		attestedSlotsByKeyByEpoch:    make(map[primitives.Epoch]map[[fieldparams.BLSPubkeyLength]byte]primitives.Slot),
+		healthMonitor:                &healthMonitor{isHealthy: true},
 	}
 	v.aggSelector = testLocalSelector(t, v)
 
-	r, err := newRunner(timedCtx, v, &healthMonitor{isHealthy: true})
+	r, err := newRunner(timedCtx, v)
 	require.NoError(t, err)
 	r.run(timedCtx)
 }

@@ -9,7 +9,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -30,8 +29,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
-
-const builderBidTimeout = 300 * time.Millisecond
 
 // bidSource indicates where the winning execution payload bid came from.
 type bidSource int
@@ -219,7 +216,7 @@ func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.
 	if vs.BlockBuilder == nil || len(q.entries) == 0 {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(ctx, builderBidTimeout)
+	ctx, cancel := context.WithTimeout(ctx, params.BeaconConfig().BuilderBidTimeout)
 	defer cancel()
 	bids, err := vs.BlockBuilder.GetExecutionPayloadBid(ctx, q.slot, q.parentHash, q.parentRoot, q.pubkey, q.entries)
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
 	dbutil "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
@@ -21,7 +22,6 @@ import (
 
 func setDefaultMocks(service *Service) *Service {
 	service.httpLogger = &goodLogger{}
-	service.cfg.stateNotifier = &goodNotifier{}
 	return service
 }
 
@@ -30,6 +30,8 @@ func TestLatestMainchainInfo_OK(t *testing.T) {
 	require.NoError(t, err, "Unable to set up simulated backend")
 
 	beaconDB := dbutil.SetupDB(t)
+	depositCache, err := depositsnapshot.New()
+	require.NoError(t, err)
 	server, endpoint, err := mockExecution.SetupRPCServer()
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -39,6 +41,7 @@ func TestLatestMainchainInfo_OK(t *testing.T) {
 		WithHttpEndpoint(endpoint),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(beaconDB),
+		WithDepositCache(depositCache),
 	)
 	require.NoError(t, err, "Unable to setup web3 ETH1.0 chain service")
 

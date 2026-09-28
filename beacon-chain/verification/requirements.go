@@ -54,6 +54,7 @@ const (
 	RequireBidSlotHigherThanParent
 	RequireBidParentBlockHashValid
 	RequireBidBuilderCanCover
+	RequireBidBuilderNotExiting
 	RequireBidSignatureValid
 	RequireBidSlotMatches
 	RequireBidCompatibleWithHead

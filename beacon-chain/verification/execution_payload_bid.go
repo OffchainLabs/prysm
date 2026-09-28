@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
@@ -28,6 +29,7 @@ var ExecutionPayloadBidGossipRequirements = []Requirement{
 	RequireBidParentBlockHashValid,
 	RequireBidGasLimitCompatible,
 	RequireBidBuilderCanCover,
+	RequireBidBuilderNotExiting,
 	RequireBidSignatureValid,
 }
 
@@ -66,6 +68,7 @@ var (
 	ErrBidSlotNotHigherThanParent   = errors.New("bid slot is not higher than parent block slot")
 	ErrBidParentBlockHashMismatch   = errors.New("parent block hash does not match forkchoice")
 	ErrBidBuilderCannotCover        = errors.New("builder cannot cover bid")
+	ErrBidBuilderExitedByParent     = errors.New("parent payload exits the bid builder")
 )
 
 // payloadBuilderVersion is PAYLOAD_BUILDER_VERSION: the builder version byte
@@ -232,9 +235,9 @@ func (v *BidVerifier) VerifyGasLimitTargetCompatible(parentGasLimit, targetGasLi
 // isGasLimitTargetCompatible reports whether gasLimit is compatible with
 // targetGasLimit under the EIP-1559 transition rule from parentGasLimit.
 //
-//	<spec fn="is_gas_limit_target_compatible" fork="gloas" hash="3fa22023">
+//	<spec fn="is_gas_limit_target_compatible" fork="gloas" hash="c45c6892">
 //	def is_gas_limit_target_compatible(
-//	    parent_gas_limit: uint64, gas_limit: uint64, target_gas_limit: uint64
+//	    parent_gas_limit: Uint64, gas_limit: Uint64, target_gas_limit: Uint64
 //	) -> bool:
 //	    """
 //	    Check if ``gas_limit`` is compatible with ``target_gas_limit`` under the
@@ -244,11 +247,11 @@ func (v *BidVerifier) VerifyGasLimitTargetCompatible(parentGasLimit, targetGasLi
 //	    min_gas_limit = parent_gas_limit - max_gas_limit_difference
 //	    max_gas_limit = parent_gas_limit + max_gas_limit_difference
 //
-//	    if target_gas_limit >= min_gas_limit and target_gas_limit <= max_gas_limit:
-//	        return gas_limit == target_gas_limit
+//	    if target_gas_limit < min_gas_limit:
+//	        return gas_limit == min_gas_limit
 //	    if target_gas_limit > max_gas_limit:
 //	        return gas_limit == max_gas_limit
-//	    return gas_limit == min_gas_limit
+//	    return gas_limit == target_gas_limit
 //	</spec>
 func isGasLimitTargetCompatible(parentGasLimit, gasLimit, targetGasLimit uint64) bool {
 	maxDiff := max(parentGasLimit/1024, 1) - 1
@@ -330,6 +333,38 @@ func (v *BidVerifier) VerifyBuilderCanCoverBid(st state.ReadOnlyBeaconState) (er
 	}
 	if !ok {
 		return fmt.Errorf("%w: builder=%d amount=%d", ErrBidBuilderCannotCover, bid.BuilderIndex(), bid.Value())
+	}
+	return nil
+}
+
+// VerifyBuilderNotExiting verifies the parent's payload does not exit the bid's builder.
+// The exits lookup is only consulted when the bid builds on the parent's revealed payload.
+func (v *BidVerifier) VerifyBuilderNotExiting(st state.ReadOnlyBeaconState, exits func([32]byte) ([]*enginev1.BuilderExitRequest, error)) (err error) {
+	defer v.record(RequireBidBuilderNotExiting, &err)
+
+	bid, err := v.b.Bid()
+	if err != nil {
+		return errors.Wrap(err, "failed to get bid")
+	}
+	latest, err := st.LatestExecutionPayloadBid()
+	if err != nil {
+		return errors.Wrap(err, "failed to get latest execution payload bid")
+	}
+	if bid.ParentBlockHash() != latest.BlockHash() {
+		return nil
+	}
+	builder, err := st.Builder(bid.BuilderIndex())
+	if err != nil {
+		return errors.Wrap(err, "failed to get builder")
+	}
+	requests, err := exits(bid.ParentBlockRoot())
+	if err != nil {
+		return errors.Wrap(err, "failed to get parent builder exits")
+	}
+	for _, r := range requests {
+		if bytes.Equal(r.Pubkey, builder.Pubkey) && bytes.Equal(r.SourceAddress, builder.ExecutionAddress) {
+			return fmt.Errorf("%w: builder=%d", ErrBidBuilderExitedByParent, bid.BuilderIndex())
+		}
 	}
 	return nil
 }

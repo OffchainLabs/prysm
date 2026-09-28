@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 
@@ -183,7 +184,7 @@ func newStateDiffCache(s *Store) (*stateDiffCache, error) {
 	}, nil
 }
 
-func (c *stateDiffCache) getAnchor(level int) state.ReadOnlyBeaconState {
+func (c *stateDiffCache) getAnchor(level int) state.BeaconState {
 	c.RLock()
 	if level < 0 || level >= len(c.anchors) {
 		c.RUnlock()
@@ -222,15 +223,10 @@ func (c *stateDiffCache) setAnchor(level int, anchor state.ReadOnlyBeaconState) 
 		return errors.New("state diff cache: anchor cannot be nil")
 	}
 
-	anchorSSZ, err := anchor.MarshalSSZ()
+	encoded, err := encodeStateWithKey(anchor)
 	if err != nil {
-		return err
+		return fmt.Errorf("encode state with key: %w", err)
 	}
-	versionedAnchorBytes, err := addKey(anchor.Version(), anchorSSZ)
-	if err != nil {
-		return err
-	}
-	encoded := snappy.Encode(nil, versionedAnchorBytes)
 	compressed := make([]byte, len(encoded))
 	copy(compressed, encoded)
 

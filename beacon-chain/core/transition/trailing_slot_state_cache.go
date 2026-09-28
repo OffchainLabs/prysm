@@ -92,6 +92,16 @@ func UpdateNextSlotCache(ctx context.Context, root []byte, state state.ReadOnlyB
 	return nil
 }
 
+// ClearNextSlotCache clears the next slot state cache.
+func ClearNextSlotCache() {
+	nsc.Lock()
+	defer nsc.Unlock()
+	nsc.prevRoot = nil
+	nsc.lastRoot = nil
+	nsc.prevState = nil
+	nsc.lastState = nil
+}
+
 // LastCachedState returns the last cached state and root in the cache
 func LastCachedState() ([]byte, state.BeaconState) {
 	nsc.Lock()

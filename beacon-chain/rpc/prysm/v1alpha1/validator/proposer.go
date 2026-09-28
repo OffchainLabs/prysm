@@ -17,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -612,7 +611,8 @@ func (vs *Server) PrepareBeaconProposer(
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
-// GetFeeRecipientByPubKey returns a fee recipient from the beacon node's settings or db based on a given public key
+// GetFeeRecipientByPubKey returns a fee recipient from the beacon node's settings or the proposer
+// preferences cache based on a given public key.
 func (vs *Server) GetFeeRecipientByPubKey(ctx context.Context, request *ethpb.FeeRecipientByPubKeyRequest) (*ethpb.FeeRecipientByPubKeyResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.GetFeeRecipientByPublicKey")
 	defer span.End()
@@ -631,19 +631,13 @@ func (vs *Server) GetFeeRecipientByPubKey(ctx context.Context, request *ethpb.Fe
 			return nil, err
 		}
 	}
-	address, err := vs.BeaconDB.FeeRecipientByValidatorID(ctx, resp.GetIndex())
-	if err != nil {
-		if errors.Is(err, kv.ErrNotFoundFeeRecipient) {
-			return &ethpb.FeeRecipientByPubKeyResponse{
-				FeeRecipient: params.BeaconConfig().DefaultFeeRecipient.Bytes(),
-			}, nil
-		} else {
-			log.WithError(err).Error("An error occurred while retrieving fee recipient from db")
-			return nil, status.Errorf(codes.Internal, "error=%s", err)
-		}
-	}
+	// Only the default set by PrepareBeaconProposer. Post-Gloas, per-slot preferences arrive by
+	// gossip keyed by (dependentRoot, slot), which this request has no way to name; the endpoint
+	// is deprecated alongside PrepareBeaconProposer itself.
+	pref, _ := vs.ProposerPreferencesCache.DefaultFor(resp.GetIndex())
+	feeRecipient := pref.FeeRecipientOrDefault()
 	return &ethpb.FeeRecipientByPubKeyResponse{
-		FeeRecipient: address.Bytes(),
+		FeeRecipient: feeRecipient[:],
 	}, nil
 }
 

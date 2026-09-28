@@ -23,14 +23,51 @@
         selection_proof: BLSSignature
     </spec>
 
+- name: AggregationBits#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="AggregationBits" fork="phase0" hash="5c80e433">
+    class AggregationBits(BitList):
+        """
+        The participation bits of a single committee, one bit per member in
+        committee order.
+        """
+
+        LIMIT = MAX_VALIDATORS_PER_COMMITTEE
+    </spec>
+
+- name: AggregationBits#electra
+  sources: []
+  spec: |
+    <spec ssz_object="AggregationBits" fork="electra" hash="c99d5c6c">
+    class AggregationBits(BitList):
+        """
+        The participation bits of all committees participating in an attestation,
+        concatenated in committee order.
+        """
+
+        LIMIT = MAX_VALIDATORS_PER_COMMITTEE * MAX_COMMITTEES_PER_SLOT
+    </spec>
+
+- name: AggregationBits#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="AggregationBits" fork="gloas" hash="f78b17ab">
+    class AggregationBits(ProgressiveBitList):
+        """
+        The participation bits of all committees participating in an attestation,
+        concatenated in committee order.
+        """
+    </spec>
+
 - name: Attestation#phase0
   sources:
     - file: proto/prysm/v1alpha1/attestation.proto
       search: message Attestation {
   spec: |
-    <spec ssz_object="Attestation" fork="phase0" hash="5fc71dce">
+    <spec ssz_object="Attestation" fork="phase0" hash="ba57d9f7">
     class Attestation(Container):
-        aggregation_bits: Bitlist[MAX_VALIDATORS_PER_COMMITTEE]
+        aggregation_bits: AggregationBits
         data: AttestationData
         signature: BLSSignature
     </spec>
@@ -40,14 +77,14 @@
     - file: proto/prysm/v1alpha1/attestation.proto
       search: message AttestationElectra {
   spec: |
-    <spec ssz_object="Attestation" fork="electra" hash="05913162">
+    <spec ssz_object="Attestation" fork="electra" hash="8c85d7c1">
     class Attestation(Container):
         # [Modified in Electra:EIP7549]
         aggregation_bits: AggregationBits
         data: AttestationData
         signature: BLSSignature
         # [New in Electra:EIP7549]
-        committee_bits: Bitvector[MAX_COMMITTEES_PER_SLOT]
+        committee_bits: CommitteeBits
     </spec>
 
 - name: Attestation#gloas
@@ -55,12 +92,14 @@
     - file: proto/prysm/v1alpha1/attestation.proto
       search: message AttestationGloas {
   spec: |
-    <spec ssz_object="Attestation" fork="gloas" hash="6dcc1383">
-    class Attestation(ProgressiveContainer(active_fields=[1] * 4)):  # type: ignore
+    <spec ssz_object="Attestation" fork="gloas" hash="a67cf33f">
+    class Attestation(ProgressiveContainer):
+        ACTIVE_FIELDS = active_fields(width=4)
+
         aggregation_bits: AggregationBits
         data: AttestationData
         signature: BLSSignature
-        committee_bits: Bitvector[MAX_COMMITTEES_PER_SLOT]
+        committee_bits: CommitteeBits
     </spec>
 
 - name: AttestationData#phase0
@@ -75,6 +114,40 @@
         beacon_block_root: Root
         source: Checkpoint
         target: Checkpoint
+    </spec>
+
+- name: Attestations#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="Attestations" fork="phase0" hash="df017725">
+    class Attestations(List[Attestation]):
+        """
+        The attestations included in a beacon block.
+        """
+
+        LIMIT = MAX_ATTESTATIONS
+    </spec>
+
+- name: Attestations#electra
+  sources: []
+  spec: |
+    <spec ssz_object="Attestations" fork="electra" hash="85432fec">
+    class Attestations(List[Attestation]):
+        """
+        The attestations included in a beacon block.
+        """
+
+        LIMIT = MAX_ATTESTATIONS_ELECTRA
+    </spec>
+
+- name: Attestations#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="Attestations" fork="gloas" hash="7687a79a">
+    class Attestations(ProgressiveList[Attestation]):
+        """
+        The attestations included in a beacon block.
+        """
     </spec>
 
 - name: AttesterSlashing#phase0
@@ -101,6 +174,86 @@
         attestation_2: IndexedAttestation
     </spec>
 
+- name: AttesterSlashings#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="AttesterSlashings" fork="phase0" hash="5c73207a">
+    class AttesterSlashings(List[AttesterSlashing]):
+        """
+        The attester slashings included in a beacon block.
+        """
+
+        LIMIT = MAX_ATTESTER_SLASHINGS
+    </spec>
+
+- name: AttesterSlashings#electra
+  sources: []
+  spec: |
+    <spec ssz_object="AttesterSlashings" fork="electra" hash="488f02dc">
+    class AttesterSlashings(List[AttesterSlashing]):
+        """
+        The attester slashings included in a beacon block.
+        """
+
+        LIMIT = MAX_ATTESTER_SLASHINGS_ELECTRA
+    </spec>
+
+- name: AttesterSlashings#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="AttesterSlashings" fork="gloas" hash="84747a80">
+    class AttesterSlashings(ProgressiveList[AttesterSlashing]):
+        """
+        The attester slashings included in a beacon block.
+        """
+    </spec>
+
+- name: AttestingIndices#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="AttestingIndices" fork="phase0" hash="920247bb">
+    class AttestingIndices(List[ValidatorIndex]):
+        """
+        The indices of the validators participating in an attestation.
+        """
+
+        LIMIT = MAX_VALIDATORS_PER_COMMITTEE
+    </spec>
+
+- name: AttestingIndices#electra
+  sources: []
+  spec: |
+    <spec ssz_object="AttestingIndices" fork="electra" hash="8b17ae2f">
+    class AttestingIndices(List[ValidatorIndex]):
+        """
+        The indices of the validators participating in an attestation.
+        """
+
+        LIMIT = MAX_VALIDATORS_PER_COMMITTEE * MAX_COMMITTEES_PER_SLOT
+    </spec>
+
+- name: AttestingIndices#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="AttestingIndices" fork="gloas" hash="42569463">
+    class AttestingIndices(ProgressiveList[ValidatorIndex]):
+        """
+        The indices of the validators participating in an attestation.
+        """
+    </spec>
+
+- name: Attnets#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="Attnets" fork="phase0" hash="a91bcc88">
+    class Attnets(BitVector):
+        """
+        The attestation subnets a node is subscribed to, one bit per subnet.
+        """
+
+        LENGTH = ATTESTATION_SUBNET_COUNT
+    </spec>
+
 - name: BLSToExecutionChange#capella
   sources:
     - file: proto/prysm/v1alpha1/withdrawals.proto
@@ -111,6 +264,52 @@
         validator_index: ValidatorIndex
         from_bls_pubkey: BLSPubkey
         to_execution_address: ExecutionAddress
+    </spec>
+
+- name: BLSToExecutionChanges#capella
+  sources: []
+  spec: |
+    <spec ssz_object="BLSToExecutionChanges" fork="capella" hash="59f893a2">
+    class BLSToExecutionChanges(List[SignedBLSToExecutionChange]):
+        """
+        The signed BLS-to-execution credential changes included in a beacon
+        block.
+        """
+
+        LIMIT = MAX_BLS_TO_EXECUTION_CHANGES
+    </spec>
+
+- name: BLSToExecutionChanges#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="BLSToExecutionChanges" fork="gloas" hash="01736e3a">
+    class BLSToExecutionChanges(ProgressiveList[SignedBLSToExecutionChange]):
+        """
+        The signed BLS-to-execution credential changes included in a beacon
+        block.
+        """
+    </spec>
+
+- name: Balances#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="Balances" fork="phase0" hash="b76054b3">
+    class Balances(List[Gwei]):
+        """
+        The balances of all validators.
+        """
+
+        LIMIT = VALIDATOR_REGISTRY_LIMIT
+    </spec>
+
+- name: Balances#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="Balances" fork="gloas" hash="ee949cce">
+    class Balances(ProgressiveList[Gwei]):
+        """
+        The balances of all validators.
+        """
     </spec>
 
 - name: BeaconBlock#phase0
@@ -132,16 +331,16 @@
     - file: proto/eth/v1/beacon_block.proto
       search: message BeaconBlockBody {
   spec: |
-    <spec ssz_object="BeaconBlockBody" fork="phase0" hash="e982fea2">
+    <spec ssz_object="BeaconBlockBody" fork="phase0" hash="ae856cd4">
     class BeaconBlockBody(Container):
         randao_reveal: BLSSignature
         eth1_data: Eth1Data
         graffiti: Bytes32
-        proposer_slashings: List[ProposerSlashing, MAX_PROPOSER_SLASHINGS]
-        attester_slashings: List[AttesterSlashing, MAX_ATTESTER_SLASHINGS]
-        attestations: List[Attestation, MAX_ATTESTATIONS]
-        deposits: List[Deposit, MAX_DEPOSITS]
-        voluntary_exits: List[SignedVoluntaryExit, MAX_VOLUNTARY_EXITS]
+        proposer_slashings: ProposerSlashings
+        attester_slashings: AttesterSlashings
+        attestations: Attestations
+        deposits: Deposits
+        voluntary_exits: VoluntaryExits
     </spec>
 
 - name: BeaconBlockBody#altair
@@ -149,16 +348,16 @@
     - file: proto/prysm/v1alpha1/beacon_block.proto
       search: message BeaconBlockBodyAltair {
   spec: |
-    <spec ssz_object="BeaconBlockBody" fork="altair" hash="4afb2e64">
+    <spec ssz_object="BeaconBlockBody" fork="altair" hash="1a3ef507">
     class BeaconBlockBody(Container):
         randao_reveal: BLSSignature
         eth1_data: Eth1Data
         graffiti: Bytes32
-        proposer_slashings: List[ProposerSlashing, MAX_PROPOSER_SLASHINGS]
-        attester_slashings: List[AttesterSlashing, MAX_ATTESTER_SLASHINGS]
-        attestations: List[Attestation, MAX_ATTESTATIONS]
-        deposits: List[Deposit, MAX_DEPOSITS]
-        voluntary_exits: List[SignedVoluntaryExit, MAX_VOLUNTARY_EXITS]
+        proposer_slashings: ProposerSlashings
+        attester_slashings: AttesterSlashings
+        attestations: Attestations
+        deposits: Deposits
+        voluntary_exits: VoluntaryExits
         # [New in Altair]
         sync_aggregate: SyncAggregate
     </spec>
@@ -168,16 +367,16 @@
     - file: proto/prysm/v1alpha1/beacon_block.proto
       search: message BeaconBlockBodyBellatrix {
   spec: |
-    <spec ssz_object="BeaconBlockBody" fork="bellatrix" hash="2ba73fc8">
+    <spec ssz_object="BeaconBlockBody" fork="bellatrix" hash="0f4ea4d2">
     class BeaconBlockBody(Container):
         randao_reveal: BLSSignature
         eth1_data: Eth1Data
         graffiti: Bytes32
-        proposer_slashings: List[ProposerSlashing, MAX_PROPOSER_SLASHINGS]
-        attester_slashings: List[AttesterSlashing, MAX_ATTESTER_SLASHINGS]
-        attestations: List[Attestation, MAX_ATTESTATIONS]
-        deposits: List[Deposit, MAX_DEPOSITS]
-        voluntary_exits: List[SignedVoluntaryExit, MAX_VOLUNTARY_EXITS]
+        proposer_slashings: ProposerSlashings
+        attester_slashings: AttesterSlashings
+        attestations: Attestations
+        deposits: Deposits
+        voluntary_exits: VoluntaryExits
         sync_aggregate: SyncAggregate
         # [New in Bellatrix]
         execution_payload: ExecutionPayload
@@ -188,20 +387,20 @@
     - file: proto/prysm/v1alpha1/beacon_block.proto
       search: message BeaconBlockBodyCapella {
   spec: |
-    <spec ssz_object="BeaconBlockBody" fork="capella" hash="3136f99b">
+    <spec ssz_object="BeaconBlockBody" fork="capella" hash="626d8670">
     class BeaconBlockBody(Container):
         randao_reveal: BLSSignature
         eth1_data: Eth1Data
         graffiti: Bytes32
-        proposer_slashings: List[ProposerSlashing, MAX_PROPOSER_SLASHINGS]
-        attester_slashings: List[AttesterSlashing, MAX_ATTESTER_SLASHINGS]
-        attestations: List[Attestation, MAX_ATTESTATIONS]
-        deposits: List[Deposit, MAX_DEPOSITS]
-        voluntary_exits: List[SignedVoluntaryExit, MAX_VOLUNTARY_EXITS]
+        proposer_slashings: ProposerSlashings
+        attester_slashings: AttesterSlashings
+        attestations: Attestations
+        deposits: Deposits
+        voluntary_exits: VoluntaryExits
         sync_aggregate: SyncAggregate
         execution_payload: ExecutionPayload
         # [New in Capella]
-        bls_to_execution_changes: List[SignedBLSToExecutionChange, MAX_BLS_TO_EXECUTION_CHANGES]
+        bls_to_execution_changes: BLSToExecutionChanges
     </spec>
 
 - name: BeaconBlockBody#deneb
@@ -209,22 +408,22 @@
     - file: proto/prysm/v1alpha1/beacon_block.proto
       search: message BeaconBlockBodyDeneb {
   spec: |
-    <spec ssz_object="BeaconBlockBody" fork="deneb" hash="cf0c1053">
+    <spec ssz_object="BeaconBlockBody" fork="deneb" hash="28ee7033">
     class BeaconBlockBody(Container):
         randao_reveal: BLSSignature
         eth1_data: Eth1Data
         graffiti: Bytes32
-        proposer_slashings: List[ProposerSlashing, MAX_PROPOSER_SLASHINGS]
-        attester_slashings: List[AttesterSlashing, MAX_ATTESTER_SLASHINGS]
-        attestations: List[Attestation, MAX_ATTESTATIONS]
-        deposits: List[Deposit, MAX_DEPOSITS]
-        voluntary_exits: List[SignedVoluntaryExit, MAX_VOLUNTARY_EXITS]
+        proposer_slashings: ProposerSlashings
+        attester_slashings: AttesterSlashings
+        attestations: Attestations
+        deposits: Deposits
+        voluntary_exits: VoluntaryExits
         sync_aggregate: SyncAggregate
         # [Modified in Deneb:EIP4844]
         execution_payload: ExecutionPayload
-        bls_to_execution_changes: List[SignedBLSToExecutionChange, MAX_BLS_TO_EXECUTION_CHANGES]
+        bls_to_execution_changes: BLSToExecutionChanges
         # [New in Deneb:EIP4844]
-        blob_kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        blob_kzg_commitments: BlobKZGCommitments
     </spec>
 
 - name: BeaconBlockBody#electra
@@ -232,22 +431,22 @@
     - file: proto/prysm/v1alpha1/beacon_block.proto
       search: message BeaconBlockBodyElectra {
   spec: |
-    <spec ssz_object="BeaconBlockBody" fork="electra" hash="cd172b8c">
+    <spec ssz_object="BeaconBlockBody" fork="electra" hash="5f4ab5d1">
     class BeaconBlockBody(Container):
         randao_reveal: BLSSignature
         eth1_data: Eth1Data
         graffiti: Bytes32
-        proposer_slashings: List[ProposerSlashing, MAX_PROPOSER_SLASHINGS]
+        proposer_slashings: ProposerSlashings
         # [Modified in Electra:EIP7549]
-        attester_slashings: List[AttesterSlashing, MAX_ATTESTER_SLASHINGS_ELECTRA]
+        attester_slashings: AttesterSlashings
         # [Modified in Electra:EIP7549]
-        attestations: List[Attestation, MAX_ATTESTATIONS_ELECTRA]
-        deposits: List[Deposit, MAX_DEPOSITS]
-        voluntary_exits: List[SignedVoluntaryExit, MAX_VOLUNTARY_EXITS]
+        attestations: Attestations
+        deposits: Deposits
+        voluntary_exits: VoluntaryExits
         sync_aggregate: SyncAggregate
         execution_payload: ExecutionPayload
-        bls_to_execution_changes: List[SignedBLSToExecutionChange, MAX_BLS_TO_EXECUTION_CHANGES]
-        blob_kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        bls_to_execution_changes: BLSToExecutionChanges
+        blob_kzg_commitments: BlobKZGCommitments
         # [New in Electra]
         execution_requests: ExecutionRequests
     </spec>
@@ -255,26 +454,28 @@
 - name: BeaconBlockBody#gloas
   sources: []
   spec: |
-    <spec ssz_object="BeaconBlockBody" fork="gloas" hash="3e50ab06">
-    class BeaconBlockBody(ProgressiveContainer(active_fields=[1] * 13)):  # type: ignore
+    <spec ssz_object="BeaconBlockBody" fork="gloas" hash="866d659a">
+    class BeaconBlockBody(ProgressiveContainer):
+        ACTIVE_FIELDS = active_fields(width=13)
+
         randao_reveal: BLSSignature
         eth1_data: Eth1Data
         graffiti: Bytes32
         # [Modified in Gloas:EIP7688]
-        proposer_slashings: ProgressiveList[ProposerSlashing]
+        proposer_slashings: ProposerSlashings
         # [Modified in Gloas:EIP7688]
-        attester_slashings: ProgressiveList[AttesterSlashing]
+        attester_slashings: AttesterSlashings
         # [Modified in Gloas:EIP7688]
-        attestations: ProgressiveList[Attestation]
+        attestations: Attestations
         # [Modified in Gloas:EIP7688]
-        deposits: ProgressiveList[Deposit]
+        deposits: Deposits
         # [Modified in Gloas:EIP7688]
-        voluntary_exits: ProgressiveList[SignedVoluntaryExit]
+        voluntary_exits: VoluntaryExits
         sync_aggregate: SyncAggregate
         # [Modified in Gloas:EIP7732]
         # Removed `execution_payload`
         # [Modified in Gloas:EIP7688]
-        bls_to_execution_changes: ProgressiveList[SignedBLSToExecutionChange]
+        bls_to_execution_changes: BLSToExecutionChanges
         # [Modified in Gloas:EIP7732]
         # Removed `blob_kzg_commitments`
         # [Modified in Gloas:EIP7732]
@@ -282,7 +483,7 @@
         # [New in Gloas:EIP7732]
         signed_execution_payload_bid: SignedExecutionPayloadBid
         # [New in Gloas:EIP7732]
-        payload_attestations: ProgressiveList[PayloadAttestation]
+        payload_attestations: PayloadAttestations
         # [New in Gloas:EIP7732]
         parent_execution_requests: ExecutionRequests
     </spec>
@@ -301,31 +502,55 @@
         body_root: Root
     </spec>
 
+- name: BeaconBlockRoots#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="BeaconBlockRoots" fork="phase0" hash="f4001566">
+    class BeaconBlockRoots(List[Root]):
+        """
+        Beacon block roots requested in a ``BeaconBlocksByRoot`` request.
+        """
+
+        LIMIT = MAX_REQUEST_BLOCKS
+    </spec>
+
+- name: BeaconBlockRoots#deneb
+  sources: []
+  spec: |
+    <spec ssz_object="BeaconBlockRoots" fork="deneb" hash="3a4b6975">
+    class BeaconBlockRoots(List[Root]):
+        """
+        Beacon block roots requested in a ``BeaconBlocksByRoot`` request.
+        """
+
+        LIMIT = MAX_REQUEST_BLOCKS_DENEB
+    </spec>
+
 - name: BeaconState#phase0
   sources:
     - file: proto/prysm/v1alpha1/beacon_state.proto
       search: message BeaconState {
   spec: |
-    <spec ssz_object="BeaconState" fork="phase0" hash="05beaa1c">
+    <spec ssz_object="BeaconState" fork="phase0" hash="12a06e56">
     class BeaconState(Container):
-        genesis_time: uint64
+        genesis_time: Uint64
         genesis_validators_root: Root
         slot: Slot
         fork: Fork
         latest_block_header: BeaconBlockHeader
-        block_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
-        state_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
-        historical_roots: List[Root, HISTORICAL_ROOTS_LIMIT]
+        block_roots: BlockRoots
+        state_roots: StateRoots
+        historical_roots: HistoricalRoots
         eth1_data: Eth1Data
-        eth1_data_votes: List[Eth1Data, EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH]
-        eth1_deposit_index: uint64
-        validators: List[Validator, VALIDATOR_REGISTRY_LIMIT]
-        balances: List[Gwei, VALIDATOR_REGISTRY_LIMIT]
-        randao_mixes: Vector[Bytes32, EPOCHS_PER_HISTORICAL_VECTOR]
-        slashings: Vector[Gwei, EPOCHS_PER_SLASHINGS_VECTOR]
-        previous_epoch_attestations: List[PendingAttestation, MAX_ATTESTATIONS * SLOTS_PER_EPOCH]
-        current_epoch_attestations: List[PendingAttestation, MAX_ATTESTATIONS * SLOTS_PER_EPOCH]
-        justification_bits: Bitvector[JUSTIFICATION_BITS_LENGTH]
+        eth1_data_votes: Eth1DataVotes
+        eth1_deposit_index: Uint64
+        validators: Validators
+        balances: Balances
+        randao_mixes: RandaoMixes
+        slashings: Slashings
+        previous_epoch_attestations: PendingAttestations
+        current_epoch_attestations: PendingAttestations
+        justification_bits: JustificationBits
         previous_justified_checkpoint: Checkpoint
         current_justified_checkpoint: Checkpoint
         finalized_checkpoint: Checkpoint
@@ -336,33 +561,33 @@
     - file: proto/prysm/v1alpha1/beacon_state.proto
       search: message BeaconStateAltair {
   spec: |
-    <spec ssz_object="BeaconState" fork="altair" hash="8de7d5fb">
+    <spec ssz_object="BeaconState" fork="altair" hash="e8fdd772">
     class BeaconState(Container):
-        genesis_time: uint64
+        genesis_time: Uint64
         genesis_validators_root: Root
         slot: Slot
         fork: Fork
         latest_block_header: BeaconBlockHeader
-        block_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
-        state_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
-        historical_roots: List[Root, HISTORICAL_ROOTS_LIMIT]
+        block_roots: BlockRoots
+        state_roots: StateRoots
+        historical_roots: HistoricalRoots
         eth1_data: Eth1Data
-        eth1_data_votes: List[Eth1Data, EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH]
-        eth1_deposit_index: uint64
-        validators: List[Validator, VALIDATOR_REGISTRY_LIMIT]
-        balances: List[Gwei, VALIDATOR_REGISTRY_LIMIT]
-        randao_mixes: Vector[Bytes32, EPOCHS_PER_HISTORICAL_VECTOR]
-        slashings: Vector[Gwei, EPOCHS_PER_SLASHINGS_VECTOR]
+        eth1_data_votes: Eth1DataVotes
+        eth1_deposit_index: Uint64
+        validators: Validators
+        balances: Balances
+        randao_mixes: RandaoMixes
+        slashings: Slashings
         # [Modified in Altair]
-        previous_epoch_participation: List[ParticipationFlags, VALIDATOR_REGISTRY_LIMIT]
+        previous_epoch_participation: EpochParticipation
         # [Modified in Altair]
-        current_epoch_participation: List[ParticipationFlags, VALIDATOR_REGISTRY_LIMIT]
-        justification_bits: Bitvector[JUSTIFICATION_BITS_LENGTH]
+        current_epoch_participation: EpochParticipation
+        justification_bits: JustificationBits
         previous_justified_checkpoint: Checkpoint
         current_justified_checkpoint: Checkpoint
         finalized_checkpoint: Checkpoint
         # [New in Altair]
-        inactivity_scores: List[uint64, VALIDATOR_REGISTRY_LIMIT]
+        inactivity_scores: InactivityScores
         # [New in Altair]
         current_sync_committee: SyncCommittee
         # [New in Altair]
@@ -374,30 +599,30 @@
     - file: proto/prysm/v1alpha1/beacon_state.proto
       search: message BeaconStateBellatrix {
   spec: |
-    <spec ssz_object="BeaconState" fork="bellatrix" hash="e5633a51">
+    <spec ssz_object="BeaconState" fork="bellatrix" hash="11a63238">
     class BeaconState(Container):
-        genesis_time: uint64
+        genesis_time: Uint64
         genesis_validators_root: Root
         slot: Slot
         fork: Fork
         latest_block_header: BeaconBlockHeader
-        block_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
-        state_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
-        historical_roots: List[Root, HISTORICAL_ROOTS_LIMIT]
+        block_roots: BlockRoots
+        state_roots: StateRoots
+        historical_roots: HistoricalRoots
         eth1_data: Eth1Data
-        eth1_data_votes: List[Eth1Data, EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH]
-        eth1_deposit_index: uint64
-        validators: List[Validator, VALIDATOR_REGISTRY_LIMIT]
-        balances: List[Gwei, VALIDATOR_REGISTRY_LIMIT]
-        randao_mixes: Vector[Bytes32, EPOCHS_PER_HISTORICAL_VECTOR]
-        slashings: Vector[Gwei, EPOCHS_PER_SLASHINGS_VECTOR]
-        previous_epoch_participation: List[ParticipationFlags, VALIDATOR_REGISTRY_LIMIT]
-        current_epoch_participation: List[ParticipationFlags, VALIDATOR_REGISTRY_LIMIT]
-        justification_bits: Bitvector[JUSTIFICATION_BITS_LENGTH]
+        eth1_data_votes: Eth1DataVotes
+        eth1_deposit_index: Uint64
+        validators: Validators
+        balances: Balances
+        randao_mixes: RandaoMixes
+        slashings: Slashings
+        previous_epoch_participation: EpochParticipation
+        current_epoch_participation: EpochParticipation
+        justification_bits: JustificationBits
         previous_justified_checkpoint: Checkpoint
         current_justified_checkpoint: Checkpoint
         finalized_checkpoint: Checkpoint
-        inactivity_scores: List[uint64, VALIDATOR_REGISTRY_LIMIT]
+        inactivity_scores: InactivityScores
         current_sync_committee: SyncCommittee
         next_sync_committee: SyncCommittee
         # [New in Bellatrix]
@@ -409,30 +634,30 @@
     - file: proto/prysm/v1alpha1/beacon_state.proto
       search: message BeaconStateCapella {
   spec: |
-    <spec ssz_object="BeaconState" fork="capella" hash="245ba83b">
+    <spec ssz_object="BeaconState" fork="capella" hash="c2303ee8">
     class BeaconState(Container):
-        genesis_time: uint64
+        genesis_time: Uint64
         genesis_validators_root: Root
         slot: Slot
         fork: Fork
         latest_block_header: BeaconBlockHeader
-        block_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
-        state_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
-        historical_roots: List[Root, HISTORICAL_ROOTS_LIMIT]
+        block_roots: BlockRoots
+        state_roots: StateRoots
+        historical_roots: HistoricalRoots
         eth1_data: Eth1Data
-        eth1_data_votes: List[Eth1Data, EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH]
-        eth1_deposit_index: uint64
-        validators: List[Validator, VALIDATOR_REGISTRY_LIMIT]
-        balances: List[Gwei, VALIDATOR_REGISTRY_LIMIT]
-        randao_mixes: Vector[Bytes32, EPOCHS_PER_HISTORICAL_VECTOR]
-        slashings: Vector[Gwei, EPOCHS_PER_SLASHINGS_VECTOR]
-        previous_epoch_participation: List[ParticipationFlags, VALIDATOR_REGISTRY_LIMIT]
-        current_epoch_participation: List[ParticipationFlags, VALIDATOR_REGISTRY_LIMIT]
-        justification_bits: Bitvector[JUSTIFICATION_BITS_LENGTH]
+        eth1_data_votes: Eth1DataVotes
+        eth1_deposit_index: Uint64
+        validators: Validators
+        balances: Balances
+        randao_mixes: RandaoMixes
+        slashings: Slashings
+        previous_epoch_participation: EpochParticipation
+        current_epoch_participation: EpochParticipation
+        justification_bits: JustificationBits
         previous_justified_checkpoint: Checkpoint
         current_justified_checkpoint: Checkpoint
         finalized_checkpoint: Checkpoint
-        inactivity_scores: List[uint64, VALIDATOR_REGISTRY_LIMIT]
+        inactivity_scores: InactivityScores
         current_sync_committee: SyncCommittee
         next_sync_committee: SyncCommittee
         # [Modified in Capella]
@@ -442,7 +667,7 @@
         # [New in Capella]
         next_withdrawal_validator_index: ValidatorIndex
         # [New in Capella]
-        historical_summaries: List[HistoricalSummary, HISTORICAL_ROOTS_LIMIT]
+        historical_summaries: HistoricalSummaries
     </spec>
 
 - name: BeaconState#deneb
@@ -450,37 +675,37 @@
     - file: proto/prysm/v1alpha1/beacon_state.proto
       search: message BeaconStateDeneb {
   spec: |
-    <spec ssz_object="BeaconState" fork="deneb" hash="32fd9dc4">
+    <spec ssz_object="BeaconState" fork="deneb" hash="dbdea71f">
     class BeaconState(Container):
-        genesis_time: uint64
+        genesis_time: Uint64
         genesis_validators_root: Root
         slot: Slot
         fork: Fork
         latest_block_header: BeaconBlockHeader
-        block_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
-        state_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
-        historical_roots: List[Root, HISTORICAL_ROOTS_LIMIT]
+        block_roots: BlockRoots
+        state_roots: StateRoots
+        historical_roots: HistoricalRoots
         eth1_data: Eth1Data
-        eth1_data_votes: List[Eth1Data, EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH]
-        eth1_deposit_index: uint64
-        validators: List[Validator, VALIDATOR_REGISTRY_LIMIT]
-        balances: List[Gwei, VALIDATOR_REGISTRY_LIMIT]
-        randao_mixes: Vector[Bytes32, EPOCHS_PER_HISTORICAL_VECTOR]
-        slashings: Vector[Gwei, EPOCHS_PER_SLASHINGS_VECTOR]
-        previous_epoch_participation: List[ParticipationFlags, VALIDATOR_REGISTRY_LIMIT]
-        current_epoch_participation: List[ParticipationFlags, VALIDATOR_REGISTRY_LIMIT]
-        justification_bits: Bitvector[JUSTIFICATION_BITS_LENGTH]
+        eth1_data_votes: Eth1DataVotes
+        eth1_deposit_index: Uint64
+        validators: Validators
+        balances: Balances
+        randao_mixes: RandaoMixes
+        slashings: Slashings
+        previous_epoch_participation: EpochParticipation
+        current_epoch_participation: EpochParticipation
+        justification_bits: JustificationBits
         previous_justified_checkpoint: Checkpoint
         current_justified_checkpoint: Checkpoint
         finalized_checkpoint: Checkpoint
-        inactivity_scores: List[uint64, VALIDATOR_REGISTRY_LIMIT]
+        inactivity_scores: InactivityScores
         current_sync_committee: SyncCommittee
         next_sync_committee: SyncCommittee
         # [Modified in Deneb:EIP4844]
         latest_execution_payload_header: ExecutionPayloadHeader
         next_withdrawal_index: WithdrawalIndex
         next_withdrawal_validator_index: ValidatorIndex
-        historical_summaries: List[HistoricalSummary, HISTORICAL_ROOTS_LIMIT]
+        historical_summaries: HistoricalSummaries
     </spec>
 
 - name: BeaconState#electra
@@ -488,38 +713,38 @@
     - file: proto/prysm/v1alpha1/beacon_state.proto
       search: message BeaconStateElectra {
   spec: |
-    <spec ssz_object="BeaconState" fork="electra" hash="55e40daf">
+    <spec ssz_object="BeaconState" fork="electra" hash="aa3aa109">
     class BeaconState(Container):
-        genesis_time: uint64
+        genesis_time: Uint64
         genesis_validators_root: Root
         slot: Slot
         fork: Fork
         latest_block_header: BeaconBlockHeader
-        block_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
-        state_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
-        historical_roots: List[Root, HISTORICAL_ROOTS_LIMIT]
+        block_roots: BlockRoots
+        state_roots: StateRoots
+        historical_roots: HistoricalRoots
         eth1_data: Eth1Data
-        eth1_data_votes: List[Eth1Data, EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH]
-        eth1_deposit_index: uint64
-        validators: List[Validator, VALIDATOR_REGISTRY_LIMIT]
-        balances: List[Gwei, VALIDATOR_REGISTRY_LIMIT]
-        randao_mixes: Vector[Bytes32, EPOCHS_PER_HISTORICAL_VECTOR]
-        slashings: Vector[Gwei, EPOCHS_PER_SLASHINGS_VECTOR]
-        previous_epoch_participation: List[ParticipationFlags, VALIDATOR_REGISTRY_LIMIT]
-        current_epoch_participation: List[ParticipationFlags, VALIDATOR_REGISTRY_LIMIT]
-        justification_bits: Bitvector[JUSTIFICATION_BITS_LENGTH]
+        eth1_data_votes: Eth1DataVotes
+        eth1_deposit_index: Uint64
+        validators: Validators
+        balances: Balances
+        randao_mixes: RandaoMixes
+        slashings: Slashings
+        previous_epoch_participation: EpochParticipation
+        current_epoch_participation: EpochParticipation
+        justification_bits: JustificationBits
         previous_justified_checkpoint: Checkpoint
         current_justified_checkpoint: Checkpoint
         finalized_checkpoint: Checkpoint
-        inactivity_scores: List[uint64, VALIDATOR_REGISTRY_LIMIT]
+        inactivity_scores: InactivityScores
         current_sync_committee: SyncCommittee
         next_sync_committee: SyncCommittee
         latest_execution_payload_header: ExecutionPayloadHeader
         next_withdrawal_index: WithdrawalIndex
         next_withdrawal_validator_index: ValidatorIndex
-        historical_summaries: List[HistoricalSummary, HISTORICAL_ROOTS_LIMIT]
+        historical_summaries: HistoricalSummaries
         # [New in Electra:EIP6110]
-        deposit_requests_start_index: uint64
+        deposit_requests_start_index: Uint64
         # [New in Electra:EIP7251]
         deposit_balance_to_consume: Gwei
         # [New in Electra:EIP7251]
@@ -531,11 +756,11 @@
         # [New in Electra:EIP7251]
         earliest_consolidation_epoch: Epoch
         # [New in Electra:EIP7251]
-        pending_deposits: List[PendingDeposit, PENDING_DEPOSITS_LIMIT]
+        pending_deposits: PendingDeposits
         # [New in Electra:EIP7251]
-        pending_partial_withdrawals: List[PendingPartialWithdrawal, PENDING_PARTIAL_WITHDRAWALS_LIMIT]
+        pending_partial_withdrawals: PendingPartialWithdrawals
         # [New in Electra:EIP7251]
-        pending_consolidations: List[PendingConsolidation, PENDING_CONSOLIDATIONS_LIMIT]
+        pending_consolidations: PendingConsolidations
     </spec>
 
 - name: BeaconState#fulu
@@ -543,81 +768,83 @@
     - file: proto/prysm/v1alpha1/beacon_state.proto
       search: message BeaconStateFulu {
   spec: |
-    <spec ssz_object="BeaconState" fork="fulu" hash="0923b253">
+    <spec ssz_object="BeaconState" fork="fulu" hash="4b837a4f">
     class BeaconState(Container):
-        genesis_time: uint64
+        genesis_time: Uint64
         genesis_validators_root: Root
         slot: Slot
         fork: Fork
         latest_block_header: BeaconBlockHeader
-        block_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
-        state_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
-        historical_roots: List[Root, HISTORICAL_ROOTS_LIMIT]
+        block_roots: BlockRoots
+        state_roots: StateRoots
+        historical_roots: HistoricalRoots
         eth1_data: Eth1Data
-        eth1_data_votes: List[Eth1Data, EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH]
-        eth1_deposit_index: uint64
-        validators: List[Validator, VALIDATOR_REGISTRY_LIMIT]
-        balances: List[Gwei, VALIDATOR_REGISTRY_LIMIT]
-        randao_mixes: Vector[Bytes32, EPOCHS_PER_HISTORICAL_VECTOR]
-        slashings: Vector[Gwei, EPOCHS_PER_SLASHINGS_VECTOR]
-        previous_epoch_participation: List[ParticipationFlags, VALIDATOR_REGISTRY_LIMIT]
-        current_epoch_participation: List[ParticipationFlags, VALIDATOR_REGISTRY_LIMIT]
-        justification_bits: Bitvector[JUSTIFICATION_BITS_LENGTH]
+        eth1_data_votes: Eth1DataVotes
+        eth1_deposit_index: Uint64
+        validators: Validators
+        balances: Balances
+        randao_mixes: RandaoMixes
+        slashings: Slashings
+        previous_epoch_participation: EpochParticipation
+        current_epoch_participation: EpochParticipation
+        justification_bits: JustificationBits
         previous_justified_checkpoint: Checkpoint
         current_justified_checkpoint: Checkpoint
         finalized_checkpoint: Checkpoint
-        inactivity_scores: List[uint64, VALIDATOR_REGISTRY_LIMIT]
+        inactivity_scores: InactivityScores
         current_sync_committee: SyncCommittee
         next_sync_committee: SyncCommittee
         latest_execution_payload_header: ExecutionPayloadHeader
         next_withdrawal_index: WithdrawalIndex
         next_withdrawal_validator_index: ValidatorIndex
-        historical_summaries: List[HistoricalSummary, HISTORICAL_ROOTS_LIMIT]
-        deposit_requests_start_index: uint64
+        historical_summaries: HistoricalSummaries
+        deposit_requests_start_index: Uint64
         deposit_balance_to_consume: Gwei
         exit_balance_to_consume: Gwei
         earliest_exit_epoch: Epoch
         consolidation_balance_to_consume: Gwei
         earliest_consolidation_epoch: Epoch
-        pending_deposits: List[PendingDeposit, PENDING_DEPOSITS_LIMIT]
-        pending_partial_withdrawals: List[PendingPartialWithdrawal, PENDING_PARTIAL_WITHDRAWALS_LIMIT]
-        pending_consolidations: List[PendingConsolidation, PENDING_CONSOLIDATIONS_LIMIT]
+        pending_deposits: PendingDeposits
+        pending_partial_withdrawals: PendingPartialWithdrawals
+        pending_consolidations: PendingConsolidations
         # [New in Fulu:EIP7917]
-        proposer_lookahead: Vector[ValidatorIndex, (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH]
+        proposer_lookahead: ProposerLookahead
     </spec>
 
 - name: BeaconState#gloas
   sources: []
   spec: |
-    <spec ssz_object="BeaconState" fork="gloas" hash="14b204a8">
-    class BeaconState(ProgressiveContainer(active_fields=[1] * 46)):  # type: ignore
-        genesis_time: uint64
+    <spec ssz_object="BeaconState" fork="gloas" hash="f52b370d">
+    class BeaconState(ProgressiveContainer):
+        ACTIVE_FIELDS = active_fields(width=46)
+
+        genesis_time: Uint64
         genesis_validators_root: Root
         slot: Slot
         fork: Fork
         latest_block_header: BeaconBlockHeader
-        block_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
-        state_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
-        historical_roots: List[Root, HISTORICAL_ROOTS_LIMIT]
+        block_roots: BlockRoots
+        state_roots: StateRoots
+        historical_roots: HistoricalRoots
         eth1_data: Eth1Data
-        eth1_data_votes: List[Eth1Data, EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH]
-        eth1_deposit_index: uint64
+        eth1_data_votes: Eth1DataVotes
+        eth1_deposit_index: Uint64
         # [Modified in Gloas:EIP7688]
-        validators: ProgressiveList[Validator]
+        validators: Validators
         # [Modified in Gloas:EIP7688]
-        balances: ProgressiveList[Gwei]
-        randao_mixes: Vector[Bytes32, EPOCHS_PER_HISTORICAL_VECTOR]
-        slashings: Vector[Gwei, EPOCHS_PER_SLASHINGS_VECTOR]
+        balances: Balances
+        randao_mixes: RandaoMixes
+        slashings: Slashings
         # [Modified in Gloas:EIP7688]
-        previous_epoch_participation: ProgressiveList[ParticipationFlags]
+        previous_epoch_participation: EpochParticipation
         # [Modified in Gloas:EIP7688]
-        current_epoch_participation: ProgressiveList[ParticipationFlags]
-        justification_bits: Bitvector[JUSTIFICATION_BITS_LENGTH]
+        current_epoch_participation: EpochParticipation
+        justification_bits: JustificationBits
         previous_justified_checkpoint: Checkpoint
         current_justified_checkpoint: Checkpoint
         finalized_checkpoint: Checkpoint
         # [Modified in Gloas:EIP7688]
-        inactivity_scores: ProgressiveList[uint64]
+        inactivity_scores: InactivityScores
         current_sync_committee: SyncCommittee
         next_sync_committee: SyncCommittee
         # [Modified in Gloas:EIP7732]
@@ -626,144 +853,160 @@
         latest_block_hash: Hash32
         next_withdrawal_index: WithdrawalIndex
         next_withdrawal_validator_index: ValidatorIndex
-        historical_summaries: List[HistoricalSummary, HISTORICAL_ROOTS_LIMIT]
-        deposit_requests_start_index: uint64
+        historical_summaries: HistoricalSummaries
+        deposit_requests_start_index: Uint64
         deposit_balance_to_consume: Gwei
         exit_balance_to_consume: Gwei
         earliest_exit_epoch: Epoch
         consolidation_balance_to_consume: Gwei
         earliest_consolidation_epoch: Epoch
         # [Modified in Gloas:EIP7688]
-        pending_deposits: ProgressiveList[PendingDeposit]
+        pending_deposits: PendingDeposits
         # [Modified in Gloas:EIP7688]
-        pending_partial_withdrawals: ProgressiveList[PendingPartialWithdrawal]
+        pending_partial_withdrawals: PendingPartialWithdrawals
         # [Modified in Gloas:EIP7688]
-        pending_consolidations: ProgressiveList[PendingConsolidation]
-        proposer_lookahead: Vector[ValidatorIndex, (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH]
+        pending_consolidations: PendingConsolidations
+        proposer_lookahead: ProposerLookahead
         # [New in Gloas:EIP7732]
-        builders: ProgressiveList[Builder]
+        builders: Builders
         # [New in Gloas:EIP7732]
         next_withdrawal_builder_index: BuilderIndex
         # [New in Gloas:EIP7732]
-        execution_payload_availability: Bitvector[SLOTS_PER_HISTORICAL_ROOT]
+        execution_payload_availability: ExecutionPayloadAvailability
         # [New in Gloas:EIP7732]
-        builder_pending_payments: Vector[BuilderPendingPayment, 2 * SLOTS_PER_EPOCH]
+        builder_pending_payments: BuilderPendingPayments
         # [New in Gloas:EIP7732]
-        builder_pending_withdrawals: ProgressiveList[BuilderPendingWithdrawal]
+        builder_pending_withdrawals: BuilderPendingWithdrawals
         # [New in Gloas:EIP7732]
         latest_execution_payload_bid: ExecutionPayloadBid
         # [New in Gloas:EIP7732]
-        payload_expected_withdrawals: ProgressiveList[Withdrawal]
+        payload_expected_withdrawals: Withdrawals
         # [New in Gloas:EIP7732]
-        ptc_window: Vector[Vector[ValidatorIndex, PTC_SIZE], (2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH]
+        ptc_window: PayloadTimelinessCommitteeWindow
     </spec>
 
 - name: BeaconState#heze
   sources: []
   spec: |
-    <spec ssz_object="BeaconState" fork="heze" hash="86ad69e6">
-    class BeaconState(ProgressiveContainer(active_fields=[1] * 46)):  # type: ignore
-        genesis_time: uint64
+    <spec ssz_object="BeaconState" fork="heze" hash="1011120d">
+    class BeaconState(ProgressiveContainer):
+        ACTIVE_FIELDS = active_fields(width=46)
+
+        genesis_time: Uint64
         genesis_validators_root: Root
         slot: Slot
         fork: Fork
         latest_block_header: BeaconBlockHeader
-        block_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
-        state_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
-        historical_roots: List[Root, HISTORICAL_ROOTS_LIMIT]
+        block_roots: BlockRoots
+        state_roots: StateRoots
+        historical_roots: HistoricalRoots
         eth1_data: Eth1Data
-        eth1_data_votes: List[Eth1Data, EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH]
-        eth1_deposit_index: uint64
-        validators: ProgressiveList[Validator]
-        balances: ProgressiveList[Gwei]
-        randao_mixes: Vector[Bytes32, EPOCHS_PER_HISTORICAL_VECTOR]
-        slashings: Vector[Gwei, EPOCHS_PER_SLASHINGS_VECTOR]
-        previous_epoch_participation: ProgressiveList[ParticipationFlags]
-        current_epoch_participation: ProgressiveList[ParticipationFlags]
-        justification_bits: Bitvector[JUSTIFICATION_BITS_LENGTH]
+        eth1_data_votes: Eth1DataVotes
+        eth1_deposit_index: Uint64
+        validators: Validators
+        balances: Balances
+        randao_mixes: RandaoMixes
+        slashings: Slashings
+        previous_epoch_participation: EpochParticipation
+        current_epoch_participation: EpochParticipation
+        justification_bits: JustificationBits
         previous_justified_checkpoint: Checkpoint
         current_justified_checkpoint: Checkpoint
         finalized_checkpoint: Checkpoint
-        inactivity_scores: ProgressiveList[uint64]
+        inactivity_scores: InactivityScores
         current_sync_committee: SyncCommittee
         next_sync_committee: SyncCommittee
         latest_block_hash: Hash32
         next_withdrawal_index: WithdrawalIndex
         next_withdrawal_validator_index: ValidatorIndex
-        historical_summaries: List[HistoricalSummary, HISTORICAL_ROOTS_LIMIT]
-        deposit_requests_start_index: uint64
+        historical_summaries: HistoricalSummaries
+        deposit_requests_start_index: Uint64
         deposit_balance_to_consume: Gwei
         exit_balance_to_consume: Gwei
         earliest_exit_epoch: Epoch
         consolidation_balance_to_consume: Gwei
         earliest_consolidation_epoch: Epoch
-        pending_deposits: ProgressiveList[PendingDeposit]
-        pending_partial_withdrawals: ProgressiveList[PendingPartialWithdrawal]
-        pending_consolidations: ProgressiveList[PendingConsolidation]
-        proposer_lookahead: Vector[ValidatorIndex, (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH]
-        builders: ProgressiveList[Builder]
+        pending_deposits: PendingDeposits
+        pending_partial_withdrawals: PendingPartialWithdrawals
+        pending_consolidations: PendingConsolidations
+        proposer_lookahead: ProposerLookahead
+        builders: Builders
         next_withdrawal_builder_index: BuilderIndex
-        execution_payload_availability: Bitvector[SLOTS_PER_HISTORICAL_ROOT]
-        builder_pending_payments: Vector[BuilderPendingPayment, 2 * SLOTS_PER_EPOCH]
-        builder_pending_withdrawals: ProgressiveList[BuilderPendingWithdrawal]
+        execution_payload_availability: ExecutionPayloadAvailability
+        builder_pending_payments: BuilderPendingPayments
+        builder_pending_withdrawals: BuilderPendingWithdrawals
         # [Modified in Heze:EIP7805]
         latest_execution_payload_bid: ExecutionPayloadBid
-        payload_expected_withdrawals: ProgressiveList[Withdrawal]
-        ptc_window: Vector[Vector[ValidatorIndex, PTC_SIZE], (2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH]
+        payload_expected_withdrawals: Withdrawals
+        ptc_window: PayloadTimelinessCommitteeWindow
     </spec>
 
 - name: BeaconState#heze
   sources: []
   spec: |
-    <spec ssz_object="BeaconState" fork="heze" hash="86ad69e6">
-    class BeaconState(ProgressiveContainer(active_fields=[1] * 46)):  # type: ignore
-        genesis_time: uint64
+    <spec ssz_object="BeaconState" fork="heze" hash="1011120d">
+    class BeaconState(ProgressiveContainer):
+        ACTIVE_FIELDS = active_fields(width=46)
+
+        genesis_time: Uint64
         genesis_validators_root: Root
         slot: Slot
         fork: Fork
         latest_block_header: BeaconBlockHeader
-        block_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
-        state_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
-        historical_roots: List[Root, HISTORICAL_ROOTS_LIMIT]
+        block_roots: BlockRoots
+        state_roots: StateRoots
+        historical_roots: HistoricalRoots
         eth1_data: Eth1Data
-        eth1_data_votes: List[Eth1Data, EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH]
-        eth1_deposit_index: uint64
-        validators: ProgressiveList[Validator]
-        balances: ProgressiveList[Gwei]
-        randao_mixes: Vector[Bytes32, EPOCHS_PER_HISTORICAL_VECTOR]
-        slashings: Vector[Gwei, EPOCHS_PER_SLASHINGS_VECTOR]
-        previous_epoch_participation: ProgressiveList[ParticipationFlags]
-        current_epoch_participation: ProgressiveList[ParticipationFlags]
-        justification_bits: Bitvector[JUSTIFICATION_BITS_LENGTH]
+        eth1_data_votes: Eth1DataVotes
+        eth1_deposit_index: Uint64
+        validators: Validators
+        balances: Balances
+        randao_mixes: RandaoMixes
+        slashings: Slashings
+        previous_epoch_participation: EpochParticipation
+        current_epoch_participation: EpochParticipation
+        justification_bits: JustificationBits
         previous_justified_checkpoint: Checkpoint
         current_justified_checkpoint: Checkpoint
         finalized_checkpoint: Checkpoint
-        inactivity_scores: ProgressiveList[uint64]
+        inactivity_scores: InactivityScores
         current_sync_committee: SyncCommittee
         next_sync_committee: SyncCommittee
         latest_block_hash: Hash32
         next_withdrawal_index: WithdrawalIndex
         next_withdrawal_validator_index: ValidatorIndex
-        historical_summaries: List[HistoricalSummary, HISTORICAL_ROOTS_LIMIT]
-        deposit_requests_start_index: uint64
+        historical_summaries: HistoricalSummaries
+        deposit_requests_start_index: Uint64
         deposit_balance_to_consume: Gwei
         exit_balance_to_consume: Gwei
         earliest_exit_epoch: Epoch
         consolidation_balance_to_consume: Gwei
         earliest_consolidation_epoch: Epoch
-        pending_deposits: ProgressiveList[PendingDeposit]
-        pending_partial_withdrawals: ProgressiveList[PendingPartialWithdrawal]
-        pending_consolidations: ProgressiveList[PendingConsolidation]
-        proposer_lookahead: Vector[ValidatorIndex, (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH]
-        builders: ProgressiveList[Builder]
+        pending_deposits: PendingDeposits
+        pending_partial_withdrawals: PendingPartialWithdrawals
+        pending_consolidations: PendingConsolidations
+        proposer_lookahead: ProposerLookahead
+        builders: Builders
         next_withdrawal_builder_index: BuilderIndex
-        execution_payload_availability: Bitvector[SLOTS_PER_HISTORICAL_ROOT]
-        builder_pending_payments: Vector[BuilderPendingPayment, 2 * SLOTS_PER_EPOCH]
-        builder_pending_withdrawals: ProgressiveList[BuilderPendingWithdrawal]
+        execution_payload_availability: ExecutionPayloadAvailability
+        builder_pending_payments: BuilderPendingPayments
+        builder_pending_withdrawals: BuilderPendingWithdrawals
         # [Modified in Heze:EIP7805]
         latest_execution_payload_bid: ExecutionPayloadBid
-        payload_expected_withdrawals: ProgressiveList[Withdrawal]
-        ptc_window: Vector[Vector[ValidatorIndex, PTC_SIZE], (2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH]
+        payload_expected_withdrawals: Withdrawals
+        ptc_window: PayloadTimelinessCommitteeWindow
+    </spec>
+
+- name: Blob#deneb
+  sources: []
+  spec: |
+    <spec ssz_object="Blob" fork="deneb" hash="03a38f58">
+    class Blob(ByteVector):
+        """
+        A blob of data, encoded as a sequence of BLS scalar field elements.
+        """
+
+        LENGTH = BYTES_PER_FIELD_ELEMENT * FIELD_ELEMENTS_PER_BLOB
     </spec>
 
 - name: BlobIdentifier#deneb
@@ -777,28 +1020,85 @@
         index: BlobIndex
     </spec>
 
+- name: BlobKZGCommitments#deneb
+  sources: []
+  spec: |
+    <spec ssz_object="BlobKZGCommitments" fork="deneb" hash="509b79a9">
+    class BlobKZGCommitments(List[KZGCommitment]):
+        """
+        The KZG commitments to the blobs of a beacon block.
+        """
+
+        LIMIT = MAX_BLOB_COMMITMENTS_PER_BLOCK
+    </spec>
+
+- name: BlobKZGCommitments#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="BlobKZGCommitments" fork="gloas" hash="b314c15b">
+    class BlobKZGCommitments(ProgressiveList[KZGCommitment]):
+        """
+        The KZG commitments to the blobs of a beacon block.
+        """
+    </spec>
+
 - name: BlobSidecar#deneb
   sources:
     - file: proto/prysm/v1alpha1/beacon_block.proto
       search: message BlobSidecar {
   spec: |
-    <spec ssz_object="BlobSidecar" fork="deneb" hash="b4f28e34">
+    <spec ssz_object="BlobSidecar" fork="deneb" hash="e63cb211">
     class BlobSidecar(Container):
         index: BlobIndex
         blob: Blob
         kzg_commitment: KZGCommitment
         kzg_proof: KZGProof
         signed_block_header: SignedBeaconBlockHeader
-        kzg_commitment_inclusion_proof: Vector[Bytes32, KZG_COMMITMENT_INCLUSION_PROOF_DEPTH]
+        kzg_commitment_inclusion_proof: KZGCommitmentInclusionProof
+    </spec>
+
+- name: Blobs#deneb
+  sources: []
+  spec: |
+    <spec ssz_object="Blobs" fork="deneb" hash="5368a98c">
+    class Blobs(List[Blob]):
+        """
+        The blobs of a single beacon block.
+        """
+
+        LIMIT = MAX_BLOB_COMMITMENTS_PER_BLOCK
+    </spec>
+
+- name: BlockAccessList#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="BlockAccessList" fork="gloas" hash="af22400c">
+    class BlockAccessList(ProgressiveList[Byte]):
+        """
+        The serialized block access list of an execution payload.
+        """
+    </spec>
+
+- name: BlockRoots#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="BlockRoots" fork="phase0" hash="d7b85dc7">
+    class BlockRoots(Vector[Root]):
+        """
+        A rolling window of recent block roots, indexed by slot modulo
+        ``SLOTS_PER_HISTORICAL_ROOT``.
+        """
+
+        LENGTH = SLOTS_PER_HISTORICAL_ROOT
     </spec>
 
 - name: Builder#gloas
   sources: []
   spec: |
-    <spec ssz_object="Builder" fork="gloas" hash="ae177179">
+    <spec ssz_object="Builder" fork="gloas" hash="c95d3cd2">
     class Builder(Container):
         pubkey: BLSPubkey
-        version: uint8
+        version: Uint8
         execution_address: ExecutionAddress
         balance: Gwei
         deposit_epoch: Epoch
@@ -816,6 +1116,16 @@
         signature: BLSSignature
     </spec>
 
+- name: BuilderDepositRequests#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="BuilderDepositRequests" fork="gloas" hash="7e9ad1a2">
+    class BuilderDepositRequests(ProgressiveList[BuilderDepositRequest]):
+        """
+        The builder deposit requests pertaining to a single execution payload.
+        """
+    </spec>
+
 - name: BuilderExitRequest#gloas
   sources: []
   spec: |
@@ -823,6 +1133,16 @@
     class BuilderExitRequest(Container):
         source_address: ExecutionAddress
         pubkey: BLSPubkey
+    </spec>
+
+- name: BuilderExitRequests#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="BuilderExitRequests" fork="gloas" hash="97dd32ce">
+    class BuilderExitRequests(ProgressiveList[BuilderExitRequest]):
+        """
+        The builder exit requests pertaining to a single execution payload.
+        """
     </spec>
 
 - name: BuilderPendingPayment#gloas
@@ -835,6 +1155,18 @@
         proposer_index: ValidatorIndex
     </spec>
 
+- name: BuilderPendingPayments#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="BuilderPendingPayments" fork="gloas" hash="862b4264">
+    class BuilderPendingPayments(Vector[BuilderPendingPayment]):
+        """
+        The pending builder payments of the previous and current epoch.
+        """
+
+        LENGTH = 2 * SLOTS_PER_EPOCH
+    </spec>
+
 - name: BuilderPendingWithdrawal#gloas
   sources: []
   spec: |
@@ -843,6 +1175,84 @@
         fee_recipient: ExecutionAddress
         amount: Gwei
         builder_index: BuilderIndex
+    </spec>
+
+- name: BuilderPendingWithdrawals#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="BuilderPendingWithdrawals" fork="gloas" hash="dbae2178">
+    class BuilderPendingWithdrawals(ProgressiveList[BuilderPendingWithdrawal]):
+        """
+        The queue of builder withdrawals awaiting processing.
+        """
+    </spec>
+
+- name: Builders#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="Builders" fork="gloas" hash="20c737d4">
+    class Builders(ProgressiveList[Builder]):
+        """
+        The builder registry.
+        """
+    </spec>
+
+- name: Cell#fulu
+  sources: []
+  spec: |
+    <spec ssz_object="Cell" fork="fulu" hash="6e5ae9ab">
+    class Cell(ByteVector):
+        """
+        The unit of extended blob data that has its own ``KZGProof``.
+        """
+
+        LENGTH = BYTES_PER_FIELD_ELEMENT * FIELD_ELEMENTS_PER_CELL
+    </spec>
+
+- name: CellKZGProofs#fulu
+  sources: []
+  spec: |
+    <spec ssz_object="CellKZGProofs" fork="fulu" hash="d1030e89">
+    class CellKZGProofs(List[KZGProof]):
+        """
+        The KZG cell proofs for every blob in a block, one proof per cell.
+        """
+
+        LIMIT = FIELD_ELEMENTS_PER_EXT_BLOB * MAX_BLOB_COMMITMENTS_PER_BLOCK
+    </spec>
+
+- name: Cells#fulu
+  sources: []
+  spec: |
+    <spec ssz_object="Cells" fork="fulu" hash="2ac5f6f5">
+    class Cells(Vector[Cell]):
+        """
+        The cells of a single extended blob.
+        """
+
+        LENGTH = CELLS_PER_EXT_BLOB
+    </spec>
+
+- name: CellsBitList#fulu
+  sources: []
+  spec: |
+    <spec ssz_object="CellsBitList" fork="fulu" hash="60babb90">
+    class CellsBitList(BitList):
+        """
+        A bitfield over the cells of a column, one bit per blob.
+        """
+
+        LIMIT = MAX_BLOB_COMMITMENTS_PER_BLOCK
+    </spec>
+
+- name: CellsBitList#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="CellsBitList" fork="gloas" hash="3b9205a0">
+    class CellsBitList(ProgressiveBitList):
+        """
+        A bitfield over the cells of a column, one bit per blob.
+        """
     </spec>
 
 - name: Checkpoint#phase0
@@ -854,6 +1264,18 @@
     class Checkpoint(Container):
         epoch: Epoch
         root: Root
+    </spec>
+
+- name: CommitteeBits#electra
+  sources: []
+  spec: |
+    <spec ssz_object="CommitteeBits" fork="electra" hash="8f33ddbc">
+    class CommitteeBits(BitVector):
+        """
+        Bits marking which committees of a slot participate in an attestation.
+        """
+
+        LENGTH = MAX_COMMITTEES_PER_SLOT
     </spec>
 
 - name: ConsolidationRequest#electra
@@ -868,6 +1290,28 @@
         target_pubkey: BLSPubkey
     </spec>
 
+- name: ConsolidationRequests#electra
+  sources: []
+  spec: |
+    <spec ssz_object="ConsolidationRequests" fork="electra" hash="239bea5d">
+    class ConsolidationRequests(List[ConsolidationRequest]):
+        """
+        The consolidation requests pertaining to a single execution payload.
+        """
+
+        LIMIT = MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD
+    </spec>
+
+- name: ConsolidationRequests#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="ConsolidationRequests" fork="gloas" hash="0feeb09e">
+    class ConsolidationRequests(ProgressiveList[ConsolidationRequest]):
+        """
+        The consolidation requests pertaining to a single execution payload.
+        """
+    </spec>
+
 - name: ContributionAndProof#altair
   sources:
     - file: proto/prysm/v1alpha1/sync_committee.proto
@@ -880,33 +1324,115 @@
         selection_proof: BLSSignature
     </spec>
 
+- name: CurrentSyncCommitteeBranch#altair
+  sources: []
+  spec: |
+    <spec ssz_object="CurrentSyncCommitteeBranch" fork="altair" hash="e6312ca6">
+    class CurrentSyncCommitteeBranch(Vector[Bytes32]):
+        """
+        A Merkle branch proving ``current_sync_committee`` within ``BeaconState``.
+        """
+
+        LENGTH = floorlog2(CURRENT_SYNC_COMMITTEE_GINDEX)
+    </spec>
+
+- name: CurrentSyncCommitteeBranch#electra
+  sources: []
+  spec: |
+    <spec ssz_object="CurrentSyncCommitteeBranch" fork="electra" hash="ee15d206">
+    class CurrentSyncCommitteeBranch(Vector[Bytes32]):
+        """
+        A Merkle branch proving ``current_sync_committee`` within ``BeaconState``.
+        """
+
+        LENGTH = floorlog2(CURRENT_SYNC_COMMITTEE_GINDEX_ELECTRA)
+    </spec>
+
+- name: CurrentSyncCommitteeBranch#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="CurrentSyncCommitteeBranch" fork="gloas" hash="7e823495">
+    class CurrentSyncCommitteeBranch(Vector[Bytes32]):
+        """
+        A Merkle branch proving ``current_sync_committee`` within ``BeaconState``.
+        """
+
+        LENGTH = floorlog2(CURRENT_SYNC_COMMITTEE_GINDEX_GLOAS)
+    </spec>
+
+- name: CustodyColumnBits#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="CustodyColumnBits" fork="gloas" hash="b35abdb2">
+    class CustodyColumnBits(BitVector):
+        """
+        Bits marking the data columns custodied by a node, one bit per column.
+        """
+
+        LENGTH = NUMBER_OF_COLUMNS
+    </spec>
+
+- name: DataColumn#fulu
+  sources: []
+  spec: |
+    <spec ssz_object="DataColumn" fork="fulu" hash="a770de8a">
+    class DataColumn(List[Cell]):
+        """
+        A column of the extended blob data matrix, with at most one cell per blob.
+        """
+
+        LIMIT = MAX_BLOB_COMMITMENTS_PER_BLOCK
+    </spec>
+
+- name: DataColumn#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="DataColumn" fork="gloas" hash="2b5f55e6">
+    class DataColumn(ProgressiveList[Cell]):
+        """
+        A column of the extended blob data matrix, with at most one cell per blob.
+        """
+    </spec>
+
+- name: DataColumnIndices#fulu
+  sources: []
+  spec: |
+    <spec ssz_object="DataColumnIndices" fork="fulu" hash="fc211b32">
+    class DataColumnIndices(List[ColumnIndex]):
+        """
+        The indices of the data columns being requested.
+        """
+
+        LIMIT = NUMBER_OF_COLUMNS
+    </spec>
+
 - name: DataColumnSidecar#fulu
   sources:
     - file: proto/prysm/v1alpha1/data_columns.proto
       search: message DataColumnSidecar {
   spec: |
-    <spec ssz_object="DataColumnSidecar" fork="fulu" hash="03586114">
+    <spec ssz_object="DataColumnSidecar" fork="fulu" hash="f33d3096">
     class DataColumnSidecar(Container):
         index: ColumnIndex
-        column: List[Cell, MAX_BLOB_COMMITMENTS_PER_BLOCK]
-        kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
-        kzg_proofs: List[KZGProof, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        column: DataColumn
+        kzg_commitments: BlobKZGCommitments
+        kzg_proofs: KZGProofs
         signed_block_header: SignedBeaconBlockHeader
-        kzg_commitments_inclusion_proof: Vector[Bytes32, KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH]
+        kzg_commitments_inclusion_proof: KZGCommitmentsInclusionProof
     </spec>
 
 - name: DataColumnSidecar#gloas
   sources: []
   spec: |
-    <spec ssz_object="DataColumnSidecar" fork="gloas" hash="18cd6bcf">
+    <spec ssz_object="DataColumnSidecar" fork="gloas" hash="ee540fea">
     class DataColumnSidecar(Container):
         index: ColumnIndex
         # [Modified in Gloas:EIP7688]
-        column: ProgressiveList[Cell]
+        column: DataColumn
         # [Modified in Gloas:EIP7732]
         # Removed `kzg_commitments`
         # [Modified in Gloas:EIP7688]
-        kzg_proofs: ProgressiveList[KZGProof]
+        kzg_proofs: KZGProofs
         # [Modified in Gloas:EIP7732]
         # Removed `signed_block_header`
         # [Modified in Gloas:EIP7732]
@@ -922,10 +1448,23 @@
     - file: proto/prysm/v1alpha1/data_columns.proto
       search: message DataColumnsByRootIdentifier {
   spec: |
-    <spec ssz_object="DataColumnsByRootIdentifier" fork="fulu" hash="f0478456">
+    <spec ssz_object="DataColumnsByRootIdentifier" fork="fulu" hash="8865719d">
     class DataColumnsByRootIdentifier(Container):
         block_root: Root
-        columns: List[ColumnIndex, NUMBER_OF_COLUMNS]
+        columns: DataColumnIndices
+    </spec>
+
+- name: DataColumnsByRootIdentifiers#fulu
+  sources: []
+  spec: |
+    <spec ssz_object="DataColumnsByRootIdentifiers" fork="fulu" hash="9c6ec357">
+    class DataColumnsByRootIdentifiers(List[DataColumnsByRootIdentifier]):
+        """
+        The identifiers of the data column sidecars requested in a
+        ``DataColumnSidecarsByRoot`` request.
+        """
+
+        LIMIT = MAX_REQUEST_BLOCKS_DENEB
     </spec>
 
 - name: Deposit#phase0
@@ -933,9 +1472,9 @@
     - file: proto/eth/v1/beacon_block.proto
       search: message Deposit {
   spec: |
-    <spec ssz_object="Deposit" fork="phase0" hash="cc281399">
+    <spec ssz_object="Deposit" fork="phase0" hash="e820a881">
     class Deposit(Container):
-        proof: Vector[Bytes32, DEPOSIT_CONTRACT_TREE_DEPTH + 1]
+        proof: DepositProof
         data: DepositData
     </spec>
 
@@ -952,6 +1491,18 @@
         signature: BLSSignature
     </spec>
 
+- name: DepositDataList#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="DepositDataList" fork="phase0" hash="b5a046ce">
+    class DepositDataList(List[DepositData]):
+        """
+        The ``DepositData`` of deposits made to the deposit contract.
+        """
+
+        LIMIT = 2**DEPOSIT_CONTRACT_TREE_DEPTH
+    </spec>
+
 - name: DepositMessage#phase0
   sources:
     - file: proto/prysm/v1alpha1/beacon_state.proto
@@ -964,28 +1515,119 @@
         amount: Gwei
     </spec>
 
+- name: DepositProof#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="DepositProof" fork="phase0" hash="c8345b0f">
+    class DepositProof(Vector[Bytes32]):
+        """
+        A Merkle proof of a deposit in the deposit contract's tree. The node
+        beyond the tree depth accounts for the deposit count mix-in.
+        """
+
+        LENGTH = DEPOSIT_CONTRACT_TREE_DEPTH + 1
+    </spec>
+
 - name: DepositRequest#electra
   sources:
     - file: proto/engine/v1/electra.proto
       search: message DepositRequest {
   spec: |
-    <spec ssz_object="DepositRequest" fork="electra" hash="3af9895d">
+    <spec ssz_object="DepositRequest" fork="electra" hash="f51e4afe">
     class DepositRequest(Container):
         pubkey: BLSPubkey
         withdrawal_credentials: Bytes32
         amount: Gwei
         signature: BLSSignature
-        index: uint64
+        index: Uint64
+    </spec>
+
+- name: DepositRequests#electra
+  sources: []
+  spec: |
+    <spec ssz_object="DepositRequests" fork="electra" hash="1b6bbbdb">
+    class DepositRequests(List[DepositRequest]):
+        """
+        The deposit requests pertaining to a single execution payload.
+        """
+
+        LIMIT = MAX_DEPOSIT_REQUESTS_PER_PAYLOAD
+    </spec>
+
+- name: DepositRequests#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="DepositRequests" fork="gloas" hash="f4f6095a">
+    class DepositRequests(ProgressiveList[DepositRequest]):
+        """
+        The deposit requests pertaining to a single execution payload.
+        """
+    </spec>
+
+- name: Deposits#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="Deposits" fork="phase0" hash="171172c8">
+    class Deposits(List[Deposit]):
+        """
+        The deposits included in a beacon block.
+        """
+
+        LIMIT = MAX_DEPOSITS
+    </spec>
+
+- name: Deposits#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="Deposits" fork="gloas" hash="630997d7">
+    class Deposits(ProgressiveList[Deposit]):
+        """
+        The deposits included in a beacon block.
+        """
+    </spec>
+
+- name: EpochParticipation#altair
+  sources: []
+  spec: |
+    <spec ssz_object="EpochParticipation" fork="altair" hash="28cfe0ee">
+    class EpochParticipation(List[ParticipationFlags]):
+        """
+        The participation flags of each validator for an epoch.
+        """
+
+        LIMIT = VALIDATOR_REGISTRY_LIMIT
+    </spec>
+
+- name: EpochParticipation#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="EpochParticipation" fork="gloas" hash="90bed26d">
+    class EpochParticipation(ProgressiveList[ParticipationFlags]):
+        """
+        The participation flags of each validator for an epoch.
+        """
+    </spec>
+
+- name: ErrorMessage#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="ErrorMessage" fork="phase0" hash="93175f34">
+    class ErrorMessage(List[Byte]):
+        """
+        The error message of an unsuccessful response chunk.
+        """
+
+        LIMIT = 256
     </spec>
 
 - name: Eth1Block#phase0
   sources: []
   spec: |
-    <spec ssz_object="Eth1Block" fork="phase0" hash="0a5c6b45">
+    <spec ssz_object="Eth1Block" fork="phase0" hash="587ddda8">
     class Eth1Block(Container):
-        timestamp: uint64
+        timestamp: Uint64
         deposit_root: Root
-        deposit_count: uint64
+        deposit_count: Uint64
     </spec>
 
 - name: Eth1Data#phase0
@@ -993,11 +1635,48 @@
     - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message Eth1Data {
   spec: |
-    <spec ssz_object="Eth1Data" fork="phase0" hash="1d7be228">
+    <spec ssz_object="Eth1Data" fork="phase0" hash="e4ca9042">
     class Eth1Data(Container):
         deposit_root: Root
-        deposit_count: uint64
+        deposit_count: Uint64
         block_hash: Hash32
+    </spec>
+
+- name: Eth1DataVotes#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="Eth1DataVotes" fork="phase0" hash="e9263e27">
+    class Eth1DataVotes(List[Eth1Data]):
+        """
+        The ``Eth1Data`` votes of the current voting period.
+        """
+
+        LIMIT = Uint64(EPOCHS_PER_ETH1_VOTING_PERIOD) * Uint64(SLOTS_PER_EPOCH)
+    </spec>
+
+- name: ExecutionBranch#capella
+  sources: []
+  spec: |
+    <spec ssz_object="ExecutionBranch" fork="capella" hash="0b01336f">
+    class ExecutionBranch(Vector[Bytes32]):
+        """
+        A Merkle branch proving ``execution_payload`` within ``BeaconBlockBody``.
+        """
+
+        LENGTH = floorlog2(EXECUTION_PAYLOAD_GINDEX)
+    </spec>
+
+- name: ExecutionBranch#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="ExecutionBranch" fork="gloas" hash="6c449965">
+    class ExecutionBranch(Vector[Bytes32]):
+        """
+        A Merkle branch proving the execution block hash within
+        ``BeaconBlockBody``.
+        """
+
+        LENGTH = floorlog2(EXECUTION_BLOCK_HASH_GINDEX_GLOAS)
     </spec>
 
 - name: ExecutionPayload#bellatrix
@@ -1005,22 +1684,22 @@
     - file: proto/engine/v1/execution_engine.proto
       search: message ExecutionPayload {
   spec: |
-    <spec ssz_object="ExecutionPayload" fork="bellatrix" hash="da4d8580">
+    <spec ssz_object="ExecutionPayload" fork="bellatrix" hash="a6b01aa3">
     class ExecutionPayload(Container):
         parent_hash: Hash32
         fee_recipient: ExecutionAddress
         state_root: Bytes32
         receipts_root: Bytes32
-        logs_bloom: ByteVector[BYTES_PER_LOGS_BLOOM]
+        logs_bloom: LogsBloom
         prev_randao: Bytes32
-        block_number: uint64
-        gas_limit: uint64
-        gas_used: uint64
-        timestamp: uint64
-        extra_data: ByteList[MAX_EXTRA_DATA_BYTES]
-        base_fee_per_gas: uint256
+        block_number: Uint64
+        gas_limit: Uint64
+        gas_used: Uint64
+        timestamp: Uint64
+        extra_data: ExtraData
+        base_fee_per_gas: Uint256
         block_hash: Hash32
-        transactions: List[Transaction, MAX_TRANSACTIONS_PER_PAYLOAD]
+        transactions: Transactions
     </spec>
 
 - name: ExecutionPayload#capella
@@ -1028,24 +1707,24 @@
     - file: proto/engine/v1/execution_engine.proto
       search: message ExecutionPayloadCapella {
   spec: |
-    <spec ssz_object="ExecutionPayload" fork="capella" hash="5533cb47">
+    <spec ssz_object="ExecutionPayload" fork="capella" hash="2a31ca39">
     class ExecutionPayload(Container):
         parent_hash: Hash32
         fee_recipient: ExecutionAddress
         state_root: Bytes32
         receipts_root: Bytes32
-        logs_bloom: ByteVector[BYTES_PER_LOGS_BLOOM]
+        logs_bloom: LogsBloom
         prev_randao: Bytes32
-        block_number: uint64
-        gas_limit: uint64
-        gas_used: uint64
-        timestamp: uint64
-        extra_data: ByteList[MAX_EXTRA_DATA_BYTES]
-        base_fee_per_gas: uint256
+        block_number: Uint64
+        gas_limit: Uint64
+        gas_used: Uint64
+        timestamp: Uint64
+        extra_data: ExtraData
+        base_fee_per_gas: Uint256
         block_hash: Hash32
-        transactions: List[Transaction, MAX_TRANSACTIONS_PER_PAYLOAD]
+        transactions: Transactions
         # [New in Capella]
-        withdrawals: List[Withdrawal, MAX_WITHDRAWALS_PER_PAYLOAD]
+        withdrawals: Withdrawals
     </spec>
 
 - name: ExecutionPayload#deneb
@@ -1053,104 +1732,125 @@
     - file: proto/engine/v1/execution_engine.proto
       search: message ExecutionPayloadDeneb {
   spec: |
-    <spec ssz_object="ExecutionPayload" fork="deneb" hash="974f7cc9">
+    <spec ssz_object="ExecutionPayload" fork="deneb" hash="704edf55">
     class ExecutionPayload(Container):
         parent_hash: Hash32
         fee_recipient: ExecutionAddress
         state_root: Bytes32
         receipts_root: Bytes32
-        logs_bloom: ByteVector[BYTES_PER_LOGS_BLOOM]
+        logs_bloom: LogsBloom
         prev_randao: Bytes32
-        block_number: uint64
-        gas_limit: uint64
-        gas_used: uint64
-        timestamp: uint64
-        extra_data: ByteList[MAX_EXTRA_DATA_BYTES]
-        base_fee_per_gas: uint256
+        block_number: Uint64
+        gas_limit: Uint64
+        gas_used: Uint64
+        timestamp: Uint64
+        extra_data: ExtraData
+        base_fee_per_gas: Uint256
         block_hash: Hash32
-        transactions: List[Transaction, MAX_TRANSACTIONS_PER_PAYLOAD]
-        withdrawals: List[Withdrawal, MAX_WITHDRAWALS_PER_PAYLOAD]
+        transactions: Transactions
+        withdrawals: Withdrawals
         # [New in Deneb:EIP4844]
-        blob_gas_used: uint64
+        blob_gas_used: Uint64
         # [New in Deneb:EIP4844]
-        excess_blob_gas: uint64
+        excess_blob_gas: Uint64
     </spec>
 
 - name: ExecutionPayload#gloas
   sources: []
   spec: |
-    <spec ssz_object="ExecutionPayload" fork="gloas" hash="0bee8801">
-    class ExecutionPayload(ProgressiveContainer(active_fields=[1] * 19)):  # type: ignore
+    <spec ssz_object="ExecutionPayload" fork="gloas" hash="6b162d36">
+    class ExecutionPayload(ProgressiveContainer):
+        ACTIVE_FIELDS = active_fields(width=19)
+
         parent_hash: Hash32
         fee_recipient: ExecutionAddress
         state_root: Bytes32
         receipts_root: Bytes32
-        logs_bloom: ByteVector[BYTES_PER_LOGS_BLOOM]
+        logs_bloom: LogsBloom
         prev_randao: Bytes32
-        block_number: uint64
-        gas_limit: uint64
-        gas_used: uint64
-        timestamp: uint64
-        extra_data: ByteList[MAX_EXTRA_DATA_BYTES]
-        base_fee_per_gas: uint256
+        block_number: Uint64
+        gas_limit: Uint64
+        gas_used: Uint64
+        timestamp: Uint64
+        extra_data: ExtraData
+        base_fee_per_gas: Uint256
         block_hash: Hash32
         # [Modified in Gloas:EIP7688]
-        transactions: ProgressiveList[Transaction]
+        transactions: Transactions
         # [Modified in Gloas:EIP7688]
-        withdrawals: ProgressiveList[Withdrawal]
-        blob_gas_used: uint64
-        excess_blob_gas: uint64
+        withdrawals: Withdrawals
+        blob_gas_used: Uint64
+        excess_blob_gas: Uint64
         # [New in Gloas:EIP7928]
         block_access_list: BlockAccessList
         # [New in Gloas:EIP7843]
-        slot_number: uint64
+        slot_number: Uint64
+    </spec>
+
+- name: ExecutionPayloadAvailability#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="ExecutionPayloadAvailability" fork="gloas" hash="601b84e7">
+    class ExecutionPayloadAvailability(BitVector):
+        """
+        Bits tracking payload availability for recent slots, indexed by slot
+        modulo ``SLOTS_PER_HISTORICAL_ROOT``.
+        """
+
+        LENGTH = SLOTS_PER_HISTORICAL_ROOT
     </spec>
 
 - name: ExecutionPayloadBid#gloas
   sources: []
   spec: |
-    <spec ssz_object="ExecutionPayloadBid" fork="gloas" hash="7465947d">
-    class ExecutionPayloadBid(ProgressiveContainer(active_fields=[1] * 12)):  # type: ignore
+    <spec ssz_object="ExecutionPayloadBid" fork="gloas" hash="d1bb5b22">
+    class ExecutionPayloadBid(ProgressiveContainer):
+        ACTIVE_FIELDS = active_fields(width=12)
+
         parent_block_hash: Hash32
         parent_block_root: Root
         block_hash: Hash32
         prev_randao: Bytes32
         fee_recipient: ExecutionAddress
-        gas_limit: uint64
+        gas_limit: Uint64
         builder_index: BuilderIndex
         slot: Slot
         value: Gwei
         execution_payment: Gwei
-        blob_kzg_commitments: ProgressiveList[KZGCommitment]
+        blob_kzg_commitments: BlobKZGCommitments
         execution_requests_root: Root
     </spec>
 
 - name: ExecutionPayloadBid#heze
   sources: []
   spec: |
-    <spec ssz_object="ExecutionPayloadBid" fork="heze" hash="7d0dbe33">
-    class ExecutionPayloadBid(ProgressiveContainer(active_fields=[1] * 13)):  # type: ignore
+    <spec ssz_object="ExecutionPayloadBid" fork="heze" hash="b8244b40">
+    class ExecutionPayloadBid(ProgressiveContainer):
+        ACTIVE_FIELDS = active_fields(width=13)
+
         parent_block_hash: Hash32
         parent_block_root: Root
         block_hash: Hash32
         prev_randao: Bytes32
         fee_recipient: ExecutionAddress
-        gas_limit: uint64
+        gas_limit: Uint64
         builder_index: BuilderIndex
         slot: Slot
         value: Gwei
         execution_payment: Gwei
-        blob_kzg_commitments: ProgressiveList[KZGCommitment]
+        blob_kzg_commitments: BlobKZGCommitments
         execution_requests_root: Root
         # [New in Heze:EIP7805]
-        inclusion_list_bits: Bitvector[INCLUSION_LIST_COMMITTEE_SIZE]
+        inclusion_list_bits: InclusionListBits
     </spec>
 
 - name: ExecutionPayloadEnvelope#gloas
   sources: []
   spec: |
-    <spec ssz_object="ExecutionPayloadEnvelope" fork="gloas" hash="be1e70fd">
-    class ExecutionPayloadEnvelope(ProgressiveContainer(active_fields=[1] * 5)):  # type: ignore
+    <spec ssz_object="ExecutionPayloadEnvelope" fork="gloas" hash="938932ad">
+    class ExecutionPayloadEnvelope(ProgressiveContainer):
+        ACTIVE_FIELDS = active_fields(width=5)
+
         payload: ExecutionPayload
         execution_requests: ExecutionRequests
         builder_index: BuilderIndex
@@ -1158,25 +1858,38 @@
         parent_beacon_block_root: Root
     </spec>
 
+- name: ExecutionPayloadEnvelopeRoots#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="ExecutionPayloadEnvelopeRoots" fork="gloas" hash="daccb10b">
+    class ExecutionPayloadEnvelopeRoots(List[Root]):
+        """
+        The beacon block roots of the payload envelopes requested in an
+        ``ExecutionPayloadEnvelopesByRoot`` request.
+        """
+
+        LIMIT = MAX_REQUEST_PAYLOADS
+    </spec>
+
 - name: ExecutionPayloadHeader#bellatrix
   sources:
     - file: proto/engine/v1/execution_engine.proto
       search: message ExecutionPayloadHeader {
   spec: |
-    <spec ssz_object="ExecutionPayloadHeader" fork="bellatrix" hash="08fc7165">
+    <spec ssz_object="ExecutionPayloadHeader" fork="bellatrix" hash="63fe743f">
     class ExecutionPayloadHeader(Container):
         parent_hash: Hash32
         fee_recipient: ExecutionAddress
         state_root: Bytes32
         receipts_root: Bytes32
-        logs_bloom: ByteVector[BYTES_PER_LOGS_BLOOM]
+        logs_bloom: LogsBloom
         prev_randao: Bytes32
-        block_number: uint64
-        gas_limit: uint64
-        gas_used: uint64
-        timestamp: uint64
-        extra_data: ByteList[MAX_EXTRA_DATA_BYTES]
-        base_fee_per_gas: uint256
+        block_number: Uint64
+        gas_limit: Uint64
+        gas_used: Uint64
+        timestamp: Uint64
+        extra_data: ExtraData
+        base_fee_per_gas: Uint256
         block_hash: Hash32
         transactions_root: Root
     </spec>
@@ -1186,20 +1899,20 @@
     - file: proto/engine/v1/execution_engine.proto
       search: message ExecutionPayloadHeaderCapella {
   spec: |
-    <spec ssz_object="ExecutionPayloadHeader" fork="capella" hash="5f481de3">
+    <spec ssz_object="ExecutionPayloadHeader" fork="capella" hash="dd46d040">
     class ExecutionPayloadHeader(Container):
         parent_hash: Hash32
         fee_recipient: ExecutionAddress
         state_root: Bytes32
         receipts_root: Bytes32
-        logs_bloom: ByteVector[BYTES_PER_LOGS_BLOOM]
+        logs_bloom: LogsBloom
         prev_randao: Bytes32
-        block_number: uint64
-        gas_limit: uint64
-        gas_used: uint64
-        timestamp: uint64
-        extra_data: ByteList[MAX_EXTRA_DATA_BYTES]
-        base_fee_per_gas: uint256
+        block_number: Uint64
+        gas_limit: Uint64
+        gas_used: Uint64
+        timestamp: Uint64
+        extra_data: ExtraData
+        base_fee_per_gas: Uint256
         block_hash: Hash32
         transactions_root: Root
         # [New in Capella]
@@ -1211,27 +1924,27 @@
     - file: proto/engine/v1/execution_engine.proto
       search: message ExecutionPayloadHeaderDeneb {
   spec: |
-    <spec ssz_object="ExecutionPayloadHeader" fork="deneb" hash="957fa918">
+    <spec ssz_object="ExecutionPayloadHeader" fork="deneb" hash="a1fbee3d">
     class ExecutionPayloadHeader(Container):
         parent_hash: Hash32
         fee_recipient: ExecutionAddress
         state_root: Bytes32
         receipts_root: Bytes32
-        logs_bloom: ByteVector[BYTES_PER_LOGS_BLOOM]
+        logs_bloom: LogsBloom
         prev_randao: Bytes32
-        block_number: uint64
-        gas_limit: uint64
-        gas_used: uint64
-        timestamp: uint64
-        extra_data: ByteList[MAX_EXTRA_DATA_BYTES]
-        base_fee_per_gas: uint256
+        block_number: Uint64
+        gas_limit: Uint64
+        gas_used: Uint64
+        timestamp: Uint64
+        extra_data: ExtraData
+        base_fee_per_gas: Uint256
         block_hash: Hash32
         transactions_root: Root
         withdrawals_root: Root
         # [New in Deneb:EIP4844]
-        blob_gas_used: uint64
+        blob_gas_used: Uint64
         # [New in Deneb:EIP4844]
-        excess_blob_gas: uint64
+        excess_blob_gas: Uint64
     </spec>
 
 - name: ExecutionRequests#electra
@@ -1252,8 +1965,10 @@
 - name: ExecutionRequests#gloas
   sources: []
   spec: |
-    <spec ssz_object="ExecutionRequests" fork="gloas" hash="70af6a68">
-    class ExecutionRequests(ProgressiveContainer(active_fields=[1] * 5)):  # type: ignore
+    <spec ssz_object="ExecutionRequests" fork="gloas" hash="93f338b8">
+    class ExecutionRequests(ProgressiveContainer):
+        ACTIVE_FIELDS = active_fields(width=5)
+
         deposits: DepositRequests
         withdrawals: WithdrawalRequests
         consolidations: ConsolidationRequests
@@ -1261,6 +1976,57 @@
         builder_deposits: BuilderDepositRequests
         # [New in Gloas:EIP8282]
         builder_exits: BuilderExitRequests
+    </spec>
+
+- name: ExtraData#bellatrix
+  sources: []
+  spec: |
+    <spec ssz_object="ExtraData" fork="bellatrix" hash="de72a1ca">
+    class ExtraData(ByteList):
+        """
+        Arbitrary extra data included in an execution payload.
+        """
+
+        LIMIT = MAX_EXTRA_DATA_BYTES
+    </spec>
+
+- name: FinalityBranch#altair
+  sources: []
+  spec: |
+    <spec ssz_object="FinalityBranch" fork="altair" hash="1fc13c88">
+    class FinalityBranch(Vector[Bytes32]):
+        """
+        A Merkle branch proving ``finalized_checkpoint.root`` within
+        ``BeaconState``.
+        """
+
+        LENGTH = floorlog2(FINALIZED_ROOT_GINDEX)
+    </spec>
+
+- name: FinalityBranch#electra
+  sources: []
+  spec: |
+    <spec ssz_object="FinalityBranch" fork="electra" hash="5221c6ed">
+    class FinalityBranch(Vector[Bytes32]):
+        """
+        A Merkle branch proving ``finalized_checkpoint.root`` within
+        ``BeaconState``.
+        """
+
+        LENGTH = floorlog2(FINALIZED_ROOT_GINDEX_ELECTRA)
+    </spec>
+
+- name: FinalityBranch#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="FinalityBranch" fork="gloas" hash="463225e2">
+    class FinalityBranch(Vector[Bytes32]):
+        """
+        A Merkle branch proving ``finalized_checkpoint.root`` within
+        ``BeaconState``.
+        """
+
+        LENGTH = floorlog2(FINALIZED_ROOT_GINDEX_GLOAS)
     </spec>
 
 - name: Fork#phase0
@@ -1291,10 +2057,34 @@
     - file: proto/prysm/v1alpha1/beacon_state.proto
       search: message HistoricalBatch {
   spec: |
-    <spec ssz_object="HistoricalBatch" fork="phase0" hash="3b677eb3">
+    <spec ssz_object="HistoricalBatch" fork="phase0" hash="a39a75cd">
     class HistoricalBatch(Container):
-        block_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
-        state_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
+        block_roots: BlockRoots
+        state_roots: StateRoots
+    </spec>
+
+- name: HistoricalRoots#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="HistoricalRoots" fork="phase0" hash="955fefdf">
+    class HistoricalRoots(List[Root]):
+        """
+        The roots of ``HistoricalBatch`` objects.
+        """
+
+        LIMIT = HISTORICAL_ROOTS_LIMIT
+    </spec>
+
+- name: HistoricalSummaries#capella
+  sources: []
+  spec: |
+    <spec ssz_object="HistoricalSummaries" fork="capella" hash="852c1d04">
+    class HistoricalSummaries(List[HistoricalSummary]):
+        """
+        Summaries of the chain's block and state root history.
+        """
+
+        LIMIT = HISTORICAL_ROOTS_LIMIT
     </spec>
 
 - name: HistoricalSummary#capella
@@ -1308,15 +2098,62 @@
         state_summary_root: Root
     </spec>
 
+- name: InactivityScores#altair
+  sources: []
+  spec: |
+    <spec ssz_object="InactivityScores" fork="altair" hash="ce239274">
+    class InactivityScores(List[Uint64]):
+        """
+        Each validator's inactivity score, tracking missed timely target votes.
+        """
+
+        LIMIT = VALIDATOR_REGISTRY_LIMIT
+    </spec>
+
+- name: InactivityScores#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="InactivityScores" fork="gloas" hash="a58ac260">
+    class InactivityScores(ProgressiveList[Uint64]):
+        """
+        Each validator's inactivity score, tracking missed timely target votes.
+        """
+    </spec>
+
 - name: InclusionList#heze
   sources: []
   spec: |
-    <spec ssz_object="InclusionList" fork="heze" hash="b6409409">
+    <spec ssz_object="InclusionList" fork="heze" hash="e97e4658">
     class InclusionList(Container):
         slot: Slot
         validator_index: ValidatorIndex
-        inclusion_list_committee_root: Root
-        transactions: ProgressiveList[Transaction]
+        dependent_root: Root
+        transactions: Transactions
+    </spec>
+
+- name: InclusionListBits#heze
+  sources: []
+  spec: |
+    <spec ssz_object="InclusionListBits" fork="heze" hash="c3296dc8">
+    class InclusionListBits(BitVector):
+        """
+        A bitfield over the inclusion list committee, one bit per member in
+        committee order.
+        """
+
+        LENGTH = INCLUSION_LIST_COMMITTEE_SIZE
+    </spec>
+
+- name: InclusionListCommittee#heze
+  sources: []
+  spec: |
+    <spec ssz_object="InclusionListCommittee" fork="heze" hash="8eb55a4c">
+    class InclusionListCommittee(Vector[ValidatorIndex]):
+        """
+        The inclusion list committee of a slot.
+        """
+
+        LENGTH = INCLUSION_LIST_COMMITTEE_SIZE
     </spec>
 
 - name: IndexedAttestation#phase0
@@ -1324,9 +2161,9 @@
     - file: proto/prysm/v1alpha1/beacon_block.proto
       search: message IndexedAttestation {
   spec: |
-    <spec ssz_object="IndexedAttestation" fork="phase0" hash="b321d4c3">
+    <spec ssz_object="IndexedAttestation" fork="phase0" hash="c675364e">
     class IndexedAttestation(Container):
-        attesting_indices: List[ValidatorIndex, MAX_VALIDATORS_PER_COMMITTEE]
+        attesting_indices: AttestingIndices
         data: AttestationData
         signature: BLSSignature
     </spec>
@@ -1349,8 +2186,10 @@
     - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message IndexedAttestationGloas {
   spec: |
-    <spec ssz_object="IndexedAttestation" fork="gloas" hash="8eb640da">
-    class IndexedAttestation(ProgressiveContainer(active_fields=[1] * 3)):  # type: ignore
+    <spec ssz_object="IndexedAttestation" fork="gloas" hash="f8e8c5fc">
+    class IndexedAttestation(ProgressiveContainer):
+        ACTIVE_FIELDS = active_fields(width=3)
+
         attesting_indices: AttestingIndices
         data: AttestationData
         signature: BLSSignature
@@ -1359,11 +2198,73 @@
 - name: IndexedPayloadAttestation#gloas
   sources: []
   spec: |
-    <spec ssz_object="IndexedPayloadAttestation" fork="gloas" hash="c165cb61">
-    class IndexedPayloadAttestation(ProgressiveContainer(active_fields=[1] * 3)):  # type: ignore
-        attesting_indices: List[ValidatorIndex, PTC_SIZE]
+    <spec ssz_object="IndexedPayloadAttestation" fork="gloas" hash="cf8284f6">
+    class IndexedPayloadAttestation(ProgressiveContainer):
+        ACTIVE_FIELDS = active_fields(width=3)
+
+        attesting_indices: PayloadTimelinessCommitteeIndices
         data: PayloadAttestationData
         signature: BLSSignature
+    </spec>
+
+- name: JustificationBits#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="JustificationBits" fork="phase0" hash="af1e9782">
+    class JustificationBits(BitVector):
+        """
+        The justification status of the last ``JUSTIFICATION_BITS_LENGTH`` epochs.
+        """
+
+        LENGTH = JUSTIFICATION_BITS_LENGTH
+    </spec>
+
+- name: KZGCommitmentInclusionProof#deneb
+  sources: []
+  spec: |
+    <spec ssz_object="KZGCommitmentInclusionProof" fork="deneb" hash="d59f4dbe">
+    class KZGCommitmentInclusionProof(Vector[Bytes32]):
+        """
+        A Merkle branch proving a blob's KZG commitment within
+        ``BeaconBlockBody``.
+        """
+
+        LENGTH = KZG_COMMITMENT_INCLUSION_PROOF_DEPTH
+    </spec>
+
+- name: KZGCommitmentsInclusionProof#fulu
+  sources: []
+  spec: |
+    <spec ssz_object="KZGCommitmentsInclusionProof" fork="fulu" hash="04811959">
+    class KZGCommitmentsInclusionProof(Vector[Bytes32]):
+        """
+        A Merkle branch proving a block's blob KZG commitments within
+        ``BeaconBlockBody``.
+        """
+
+        LENGTH = KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH
+    </spec>
+
+- name: KZGProofs#deneb
+  sources: []
+  spec: |
+    <spec ssz_object="KZGProofs" fork="deneb" hash="8e163ed4">
+    class KZGProofs(List[KZGProof]):
+        """
+        A list of KZG proofs, one for each blob or cell being proven.
+        """
+
+        LIMIT = MAX_BLOB_COMMITMENTS_PER_BLOCK
+    </spec>
+
+- name: KZGProofs#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="KZGProofs" fork="gloas" hash="5e0ae5cd">
+    class KZGProofs(ProgressiveList[KZGProof]):
+        """
+        The KZG cell proofs of the cells held by a data column.
+        """
     </spec>
 
 - name: LightClientBootstrap#altair
@@ -1524,6 +2425,30 @@
         signature_slot: Slot
     </spec>
 
+- name: LightClientUpdates#altair
+  sources: []
+  spec: |
+    <spec ssz_object="LightClientUpdates" fork="altair" hash="ac9ec826">
+    class LightClientUpdates(List[LightClientUpdate]):
+        """
+        Light client updates returned in a ``LightClientUpdatesByRange`` response.
+        """
+
+        LIMIT = MAX_REQUEST_LIGHT_CLIENT_UPDATES
+    </spec>
+
+- name: LogsBloom#bellatrix
+  sources: []
+  spec: |
+    <spec ssz_object="LogsBloom" fork="bellatrix" hash="b398c7f7">
+    class LogsBloom(ByteVector):
+        """
+        A Bloom filter aggregating the logs emitted by an execution payload.
+        """
+
+        LENGTH = BYTES_PER_LOGS_BLOOM
+    </spec>
+
 - name: MatrixEntry#fulu
   sources: []
   spec: |
@@ -1533,6 +2458,55 @@
         kzg_proof: KZGProof
         column_index: ColumnIndex
         row_index: RowIndex
+    </spec>
+
+- name: NextSyncCommitteeBranch#altair
+  sources: []
+  spec: |
+    <spec ssz_object="NextSyncCommitteeBranch" fork="altair" hash="13ec9ae2">
+    class NextSyncCommitteeBranch(Vector[Bytes32]):
+        """
+        A Merkle branch proving ``next_sync_committee`` within ``BeaconState``.
+        """
+
+        LENGTH = floorlog2(NEXT_SYNC_COMMITTEE_GINDEX)
+    </spec>
+
+- name: NextSyncCommitteeBranch#electra
+  sources: []
+  spec: |
+    <spec ssz_object="NextSyncCommitteeBranch" fork="electra" hash="55073fa9">
+    class NextSyncCommitteeBranch(Vector[Bytes32]):
+        """
+        A Merkle branch proving ``next_sync_committee`` within ``BeaconState``.
+        """
+
+        LENGTH = floorlog2(NEXT_SYNC_COMMITTEE_GINDEX_ELECTRA)
+    </spec>
+
+- name: NextSyncCommitteeBranch#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="NextSyncCommitteeBranch" fork="gloas" hash="e48587bc">
+    class NextSyncCommitteeBranch(Vector[Bytes32]):
+        """
+        A Merkle branch proving ``next_sync_committee`` within ``BeaconState``.
+        """
+
+        LENGTH = floorlog2(NEXT_SYNC_COMMITTEE_GINDEX_GLOAS)
+    </spec>
+
+- name: OptionalPartialDataColumnHeader#fulu
+  sources: []
+  spec: |
+    <spec ssz_object="OptionalPartialDataColumnHeader" fork="fulu" hash="fd837e0d">
+    class OptionalPartialDataColumnHeader(List[PartialDataColumnHeader]):
+        """
+        A header that may or may not be present, encoded as a list of length zero
+        or one.
+        """
+
+        LIMIT = 1
     </spec>
 
 - name: PartialDataColumnGroupID#fulu
@@ -1556,60 +2530,73 @@
 - name: PartialDataColumnHeader#fulu
   sources: []
   spec: |
-    <spec ssz_object="PartialDataColumnHeader" fork="fulu" hash="9a335538">
+    <spec ssz_object="PartialDataColumnHeader" fork="fulu" hash="22b37cf9">
     class PartialDataColumnHeader(Container):
-        kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        kzg_commitments: BlobKZGCommitments
         signed_block_header: SignedBeaconBlockHeader
-        kzg_commitments_inclusion_proof: Vector[Bytes32, KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH]
+        kzg_commitments_inclusion_proof: KZGCommitmentsInclusionProof
     </spec>
 
 - name: PartialDataColumnHeader#gloas
   sources: []
   spec: |
-    <spec ssz_object="PartialDataColumnHeader" fork="gloas" hash="9a335538">
+    <spec ssz_object="PartialDataColumnHeader" fork="gloas" hash="22b37cf9">
     class PartialDataColumnHeader(Container):
-        kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        kzg_commitments: BlobKZGCommitments
         signed_block_header: SignedBeaconBlockHeader
-        kzg_commitments_inclusion_proof: Vector[Bytes32, KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH]
+        kzg_commitments_inclusion_proof: KZGCommitmentsInclusionProof
     </spec>
 
 - name: PartialDataColumnPartsMetadata#fulu
   sources: []
   spec: |
-    <spec ssz_object="PartialDataColumnPartsMetadata" fork="fulu" hash="de766326">
+    <spec ssz_object="PartialDataColumnPartsMetadata" fork="fulu" hash="b5207720">
     class PartialDataColumnPartsMetadata(Container):
-        available: Bitlist[MAX_BLOB_COMMITMENTS_PER_BLOCK]
-        requests: Bitlist[MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        available: CellsBitList
+        requests: CellsBitList
+    </spec>
+
+- name: PartialDataColumnPartsMetadata#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="PartialDataColumnPartsMetadata" fork="gloas" hash="5d754ee2">
+    class PartialDataColumnPartsMetadata(Container):
+        # [Modified in Gloas:EIP7688]
+        available: CellsBitList
+        # [Modified in Gloas:EIP7688]
+        requests: CellsBitList
     </spec>
 
 - name: PartialDataColumnSidecar#fulu
   sources: []
   spec: |
-    <spec ssz_object="PartialDataColumnSidecar" fork="fulu" hash="91f75478">
+    <spec ssz_object="PartialDataColumnSidecar" fork="fulu" hash="481c6189">
     class PartialDataColumnSidecar(Container):
-        cells_present_bitmap: Bitlist[MAX_BLOB_COMMITMENTS_PER_BLOCK]
-        partial_column: List[Cell, MAX_BLOB_COMMITMENTS_PER_BLOCK]
-        kzg_proofs: List[KZGProof, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        cells_present_bitmap: CellsBitList
+        partial_column: DataColumn
+        kzg_proofs: KZGProofs
         # Optional header, only sent on eager pushes
-        header: List[PartialDataColumnHeader, 1]
+        header: OptionalPartialDataColumnHeader
     </spec>
 
 - name: PartialDataColumnSidecar#gloas
   sources: []
   spec: |
-    <spec ssz_object="PartialDataColumnSidecar" fork="gloas" hash="0b62b015">
+    <spec ssz_object="PartialDataColumnSidecar" fork="gloas" hash="b7052f45">
     class PartialDataColumnSidecar(Container):
-        cells_present_bitmap: ProgressiveBitlist
-        partial_column: ProgressiveList[Cell]
-        kzg_proofs: ProgressiveList[KZGProof]
+        cells_present_bitmap: CellsBitList
+        partial_column: DataColumn
+        kzg_proofs: KZGProofs
     </spec>
 
 - name: PayloadAttestation#gloas
   sources: []
   spec: |
-    <spec ssz_object="PayloadAttestation" fork="gloas" hash="688576d4">
-    class PayloadAttestation(ProgressiveContainer(active_fields=[1] * 3)):  # type: ignore
-        aggregation_bits: Bitvector[PTC_SIZE]
+    <spec ssz_object="PayloadAttestation" fork="gloas" hash="347d5e08">
+    class PayloadAttestation(ProgressiveContainer):
+        ACTIVE_FIELDS = active_fields(width=3)
+
+        aggregation_bits: PayloadTimelinessCommitteeBits
         data: PayloadAttestationData
         signature: BLSSignature
     </spec>
@@ -1617,12 +2604,12 @@
 - name: PayloadAttestationData#gloas
   sources: []
   spec: |
-    <spec ssz_object="PayloadAttestationData" fork="gloas" hash="9f1b7f92">
+    <spec ssz_object="PayloadAttestationData" fork="gloas" hash="739fcbbb">
     class PayloadAttestationData(Container):
         beacon_block_root: Root
         slot: Slot
-        payload_present: boolean
-        blob_data_available: boolean
+        payload_present: Boolean
+        blob_data_available: Boolean
     </spec>
 
 - name: PayloadAttestationMessage#gloas
@@ -1635,17 +2622,39 @@
         signature: BLSSignature
     </spec>
 
+- name: PayloadAttestations#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="PayloadAttestations" fork="gloas" hash="e247813b">
+    class PayloadAttestations(ProgressiveList[PayloadAttestation]):
+        """
+        The payload attestations included in a beacon block.
+        """
+    </spec>
+
 - name: PendingAttestation#phase0
   sources:
     - file: proto/prysm/v1alpha1/beacon_state.proto
       search: message PendingAttestation {
   spec: |
-    <spec ssz_object="PendingAttestation" fork="phase0" hash="e0a37cea">
+    <spec ssz_object="PendingAttestation" fork="phase0" hash="e82bd1c2">
     class PendingAttestation(Container):
-        aggregation_bits: Bitlist[MAX_VALIDATORS_PER_COMMITTEE]
+        aggregation_bits: AggregationBits
         data: AttestationData
         inclusion_delay: Slot
         proposer_index: ValidatorIndex
+    </spec>
+
+- name: PendingAttestations#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="PendingAttestations" fork="phase0" hash="3372c1f9">
+    class PendingAttestations(List[PendingAttestation]):
+        """
+        The attestations included in blocks during an epoch.
+        """
+
+        LIMIT = MAX_ATTESTATIONS * SLOTS_PER_EPOCH
     </spec>
 
 - name: PendingConsolidation#electra
@@ -1657,6 +2666,28 @@
     class PendingConsolidation(Container):
         source_index: ValidatorIndex
         target_index: ValidatorIndex
+    </spec>
+
+- name: PendingConsolidations#electra
+  sources: []
+  spec: |
+    <spec ssz_object="PendingConsolidations" fork="electra" hash="989231bc">
+    class PendingConsolidations(List[PendingConsolidation]):
+        """
+        The queue of consolidations awaiting processing.
+        """
+
+        LIMIT = PENDING_CONSOLIDATIONS_LIMIT
+    </spec>
+
+- name: PendingConsolidations#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="PendingConsolidations" fork="gloas" hash="8a088d95">
+    class PendingConsolidations(ProgressiveList[PendingConsolidation]):
+        """
+        The queue of consolidations awaiting processing.
+        """
     </spec>
 
 - name: PendingDeposit#electra
@@ -1673,6 +2704,28 @@
         slot: Slot
     </spec>
 
+- name: PendingDeposits#electra
+  sources: []
+  spec: |
+    <spec ssz_object="PendingDeposits" fork="electra" hash="11aa9136">
+    class PendingDeposits(List[PendingDeposit]):
+        """
+        The queue of deposits awaiting processing.
+        """
+
+        LIMIT = PENDING_DEPOSITS_LIMIT
+    </spec>
+
+- name: PendingDeposits#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="PendingDeposits" fork="gloas" hash="5d204e7e">
+    class PendingDeposits(ProgressiveList[PendingDeposit]):
+        """
+        The queue of deposits awaiting processing.
+        """
+    </spec>
+
 - name: PendingPartialWithdrawal#electra
   sources:
     - file: proto/prysm/v1alpha1/eip_7251.proto
@@ -1685,28 +2738,87 @@
         withdrawable_epoch: Epoch
     </spec>
 
+- name: PendingPartialWithdrawals#electra
+  sources: []
+  spec: |
+    <spec ssz_object="PendingPartialWithdrawals" fork="electra" hash="96ebf8cc">
+    class PendingPartialWithdrawals(List[PendingPartialWithdrawal]):
+        """
+        The queue of partial withdrawals awaiting processing.
+        """
+
+        LIMIT = PENDING_PARTIAL_WITHDRAWALS_LIMIT
+    </spec>
+
+- name: PendingPartialWithdrawals#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="PendingPartialWithdrawals" fork="gloas" hash="fdade6fe">
+    class PendingPartialWithdrawals(ProgressiveList[PendingPartialWithdrawal]):
+        """
+        The queue of partial withdrawals awaiting processing.
+        """
+    </spec>
+
 - name: PowBlock#bellatrix
   sources:
     - file: proto/prysm/v1alpha1/beacon_state.proto
       search: message PowBlock {
   spec: |
-    <spec ssz_object="PowBlock" fork="bellatrix" hash="c6c8739a">
+    <spec ssz_object="PowBlock" fork="bellatrix" hash="a3b91158">
     class PowBlock(Container):
         block_hash: Hash32
         parent_hash: Hash32
-        total_difficulty: uint256
+        total_difficulty: Uint256
+    </spec>
+
+- name: Proofs#fulu
+  sources: []
+  spec: |
+    <spec ssz_object="Proofs" fork="fulu" hash="679d6e1b">
+    class Proofs(Vector[KZGProof]):
+        """
+        The KZG proofs for the cells of a single extended blob.
+        """
+
+        LENGTH = CELLS_PER_EXT_BLOB
+    </spec>
+
+- name: ProposerIndices#fulu
+  sources: []
+  spec: |
+    <spec ssz_object="ProposerIndices" fork="fulu" hash="1e50ccfe">
+    class ProposerIndices(Vector[ValidatorIndex]):
+        """
+        The proposer indices for every slot of a single epoch.
+        """
+
+        LENGTH = SLOTS_PER_EPOCH
+    </spec>
+
+- name: ProposerLookahead#fulu
+  sources: []
+  spec: |
+    <spec ssz_object="ProposerLookahead" fork="fulu" hash="f3625814">
+    class ProposerLookahead(Vector[ValidatorIndex]):
+        """
+        The precomputed proposer indices for the current and next
+        ``MIN_SEED_LOOKAHEAD`` epochs.
+        """
+
+        LENGTH = Uint64(MIN_SEED_LOOKAHEAD + 1) * Uint64(SLOTS_PER_EPOCH)
     </spec>
 
 - name: ProposerPreferences#gloas
   sources: []
   spec: |
-    <spec ssz_object="ProposerPreferences" fork="gloas" hash="305cd154">
+    <spec ssz_object="ProposerPreferences" fork="gloas" hash="43f09631">
     class ProposerPreferences(Container):
         dependent_root: Root
         proposal_slot: Slot
         validator_index: ValidatorIndex
         fee_recipient: ExecutionAddress
-        target_gas_limit: uint64
+        target_gas_limit: Uint64
     </spec>
 
 - name: ProposerSlashing#phase0
@@ -1718,6 +2830,41 @@
     class ProposerSlashing(Container):
         signed_header_1: SignedBeaconBlockHeader
         signed_header_2: SignedBeaconBlockHeader
+    </spec>
+
+- name: ProposerSlashings#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="ProposerSlashings" fork="phase0" hash="d930815f">
+    class ProposerSlashings(List[ProposerSlashing]):
+        """
+        The proposer slashings included in a beacon block.
+        """
+
+        LIMIT = MAX_PROPOSER_SLASHINGS
+    </spec>
+
+- name: ProposerSlashings#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="ProposerSlashings" fork="gloas" hash="3c87674a">
+    class ProposerSlashings(ProgressiveList[ProposerSlashing]):
+        """
+        The proposer slashings included in a beacon block.
+        """
+    </spec>
+
+- name: RandaoMixes#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="RandaoMixes" fork="phase0" hash="52d8ceec">
+    class RandaoMixes(Vector[Bytes32]):
+        """
+        A rolling window of accumulated RANDAO mixes, indexed by epoch modulo
+        ``EPOCHS_PER_HISTORICAL_VECTOR``.
+        """
+
+        LENGTH = EPOCHS_PER_HISTORICAL_VECTOR
     </spec>
 
 - name: SignedAggregateAndProof#phase0
@@ -1776,6 +2923,32 @@
         signature: BLSSignature
     </spec>
 
+- name: SignedBeaconBlocks#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="SignedBeaconBlocks" fork="phase0" hash="55c94960">
+    class SignedBeaconBlocks(List[SignedBeaconBlock]):
+        """
+        Signed beacon blocks returned in a ``BeaconBlocksByRange`` or
+        ``BeaconBlocksByRoot`` response.
+        """
+
+        LIMIT = MAX_REQUEST_BLOCKS
+    </spec>
+
+- name: SignedBeaconBlocks#deneb
+  sources: []
+  spec: |
+    <spec ssz_object="SignedBeaconBlocks" fork="deneb" hash="363a3db0">
+    class SignedBeaconBlocks(List[SignedBeaconBlock]):
+        """
+        Signed beacon blocks returned in a ``BeaconBlocksByRange`` or
+        ``BeaconBlocksByRoot`` response.
+        """
+
+        LIMIT = MAX_REQUEST_BLOCKS_DENEB
+    </spec>
+
 - name: SignedContributionAndProof#altair
   sources:
     - file: proto/prysm/v1alpha1/sync_committee.proto
@@ -1815,6 +2988,20 @@
         signature: BLSSignature
     </spec>
 
+- name: SignedExecutionPayloadEnvelopes#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="SignedExecutionPayloadEnvelopes" fork="gloas" hash="826dc65b">
+    class SignedExecutionPayloadEnvelopes(List[SignedExecutionPayloadEnvelope]):
+        """
+        Signed execution payload envelopes returned in an
+        ``ExecutionPayloadEnvelopesByRange`` or
+        ``ExecutionPayloadEnvelopesByRoot`` response.
+        """
+
+        LIMIT = MAX_REQUEST_PAYLOADS
+    </spec>
+
 - name: SignedInclusionList#heze
   sources: []
   spec: |
@@ -1822,6 +3009,19 @@
     class SignedInclusionList(Container):
         message: InclusionList
         signature: BLSSignature
+    </spec>
+
+- name: SignedInclusionLists#heze
+  sources: []
+  spec: |
+    <spec ssz_object="SignedInclusionLists" fork="heze" hash="7c8a75df">
+    class SignedInclusionLists(List[SignedInclusionList]):
+        """
+        Signed inclusion lists returned in an ``InclusionListsByIndices``
+        response.
+        """
+
+        LIMIT = MAX_REQUEST_INCLUSION_LIST
     </spec>
 
 - name: SignedProposerPreferences#gloas
@@ -1868,14 +3068,40 @@
         signature: BLSSignature
     </spec>
 
+- name: Slashings#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="Slashings" fork="phase0" hash="11432368">
+    class Slashings(Vector[Gwei]):
+        """
+        Per-epoch sums of slashed effective balances, indexed by epoch modulo
+        ``EPOCHS_PER_SLASHINGS_VECTOR``.
+        """
+
+        LENGTH = EPOCHS_PER_SLASHINGS_VECTOR
+    </spec>
+
+- name: StateRoots#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="StateRoots" fork="phase0" hash="0a905c60">
+    class StateRoots(Vector[Root]):
+        """
+        A rolling window of recent state roots, indexed by slot modulo
+        ``SLOTS_PER_HISTORICAL_ROOT``.
+        """
+
+        LENGTH = SLOTS_PER_HISTORICAL_ROOT
+    </spec>
+
 - name: SyncAggregate#altair
   sources:
     - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message SyncAggregate {
   spec: |
-    <spec ssz_object="SyncAggregate" fork="altair" hash="51e247e5">
+    <spec ssz_object="SyncAggregate" fork="altair" hash="615b4468">
     class SyncAggregate(Container):
-        sync_committee_bits: Bitvector[SYNC_COMMITTEE_SIZE]
+        sync_committee_bits: SyncCommitteeBits
         sync_committee_signature: BLSSignature
     </spec>
 
@@ -1884,10 +3110,10 @@
     - file: proto/prysm/v1alpha1/beacon_state.proto
       search: message SyncAggregatorSelectionData {
   spec: |
-    <spec ssz_object="SyncAggregatorSelectionData" fork="altair" hash="990a8a7f">
+    <spec ssz_object="SyncAggregatorSelectionData" fork="altair" hash="ea5dd5f9">
     class SyncAggregatorSelectionData(Container):
         slot: Slot
-        subcommittee_index: uint64
+        subcommittee_index: Uint64
     </spec>
 
 - name: SyncCommittee#altair
@@ -1895,10 +3121,23 @@
     - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message SyncCommittee {
   spec: |
-    <spec ssz_object="SyncCommittee" fork="altair" hash="b1d52376">
+    <spec ssz_object="SyncCommittee" fork="altair" hash="ad00d2f4">
     class SyncCommittee(Container):
-        pubkeys: Vector[BLSPubkey, SYNC_COMMITTEE_SIZE]
+        pubkeys: SyncCommitteePubkeys
         aggregate_pubkey: BLSPubkey
+    </spec>
+
+- name: SyncCommitteeBits#altair
+  sources: []
+  spec: |
+    <spec ssz_object="SyncCommitteeBits" fork="altair" hash="37237af7">
+    class SyncCommitteeBits(BitVector):
+        """
+        The participation bits of the sync committee, one bit per member in
+        committee order.
+        """
+
+        LENGTH = SYNC_COMMITTEE_SIZE
     </spec>
 
 - name: SyncCommitteeContribution#altair
@@ -1906,12 +3145,12 @@
     - file: proto/prysm/v1alpha1/sync_committee.proto
       search: message SyncCommitteeContribution {
   spec: |
-    <spec ssz_object="SyncCommitteeContribution" fork="altair" hash="9f9b0125">
+    <spec ssz_object="SyncCommitteeContribution" fork="altair" hash="498358fb">
     class SyncCommitteeContribution(Container):
         slot: Slot
         beacon_block_root: Root
-        subcommittee_index: uint64
-        aggregation_bits: Bitvector[SYNC_COMMITTEE_SIZE // SYNC_COMMITTEE_SUBNET_COUNT]
+        subcommittee_index: Uint64
+        aggregation_bits: SyncSubcommitteeBits
         signature: BLSSignature
     </spec>
 
@@ -1928,21 +3167,126 @@
         signature: BLSSignature
     </spec>
 
+- name: SyncCommitteePubkeys#altair
+  sources: []
+  spec: |
+    <spec ssz_object="SyncCommitteePubkeys" fork="altair" hash="afe02371">
+    class SyncCommitteePubkeys(Vector[BLSPubkey]):
+        """
+        The public keys of the sync committee members, in committee order.
+        """
+
+        LENGTH = SYNC_COMMITTEE_SIZE
+    </spec>
+
+- name: SyncSubcommitteeBits#altair
+  sources: []
+  spec: |
+    <spec ssz_object="SyncSubcommitteeBits" fork="altair" hash="2a0115ed">
+    class SyncSubcommitteeBits(BitVector):
+        """
+        The participation bits of a single sync subcommittee, one bit per member
+        in subcommittee order.
+        """
+
+        LENGTH = SYNC_COMMITTEE_SIZE // SYNC_COMMITTEE_SUBNET_COUNT
+    </spec>
+
+- name: Syncnets#altair
+  sources: []
+  spec: |
+    <spec ssz_object="Syncnets" fork="altair" hash="7d9fab5a">
+    class Syncnets(BitVector):
+        """
+        The sync committee subnets a node is subscribed to, one bit per subnet.
+        """
+
+        LENGTH = SYNC_COMMITTEE_SUBNET_COUNT
+    </spec>
+
+- name: Transaction#bellatrix
+  sources: []
+  spec: |
+    <spec ssz_object="Transaction" fork="bellatrix" hash="9fcd709e">
+    class Transaction(ByteList):
+        """
+        An opaque execution-layer transaction, either a typed transaction
+        envelope or a legacy RLP-encoded transaction.
+        """
+
+        LIMIT = MAX_BYTES_PER_TRANSACTION
+    </spec>
+
+- name: Transaction#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="Transaction" fork="gloas" hash="0416b8e6">
+    class Transaction(ProgressiveList[Byte]):
+        """
+        An opaque execution-layer transaction, either a typed transaction
+        envelope or a legacy RLP-encoded transaction.
+        """
+    </spec>
+
+- name: Transactions#bellatrix
+  sources: []
+  spec: |
+    <spec ssz_object="Transactions" fork="bellatrix" hash="f5f59d45">
+    class Transactions(List[Transaction]):
+        """
+        A list of execution-layer transactions.
+        """
+
+        LIMIT = MAX_TRANSACTIONS_PER_PAYLOAD
+    </spec>
+
+- name: Transactions#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="Transactions" fork="gloas" hash="81b4dd22">
+    class Transactions(ProgressiveList[Transaction]):
+        """
+        A list of execution-layer transactions.
+        """
+    </spec>
+
 - name: Validator#phase0
   sources:
     - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message Validator {
   spec: |
-    <spec ssz_object="Validator" fork="phase0" hash="54f88c17">
+    <spec ssz_object="Validator" fork="phase0" hash="d767a9f4">
     class Validator(Container):
         pubkey: BLSPubkey
         withdrawal_credentials: Bytes32
         effective_balance: Gwei
-        slashed: boolean
+        slashed: Boolean
         activation_eligibility_epoch: Epoch
         activation_epoch: Epoch
         exit_epoch: Epoch
         withdrawable_epoch: Epoch
+    </spec>
+
+- name: Validators#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="Validators" fork="phase0" hash="cecd25af">
+    class Validators(List[Validator]):
+        """
+        The validator registry.
+        """
+
+        LIMIT = VALIDATOR_REGISTRY_LIMIT
+    </spec>
+
+- name: Validators#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="Validators" fork="gloas" hash="bc16b340">
+    class Validators(ProgressiveList[Validator]):
+        """
+        The validator registry.
+        """
     </spec>
 
 - name: VoluntaryExit#phase0
@@ -1954,6 +3298,28 @@
     class VoluntaryExit(Container):
         epoch: Epoch
         validator_index: ValidatorIndex
+    </spec>
+
+- name: VoluntaryExits#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="VoluntaryExits" fork="phase0" hash="884272fa">
+    class VoluntaryExits(List[SignedVoluntaryExit]):
+        """
+        The signed voluntary exits included in a beacon block.
+        """
+
+        LIMIT = MAX_VOLUNTARY_EXITS
+    </spec>
+
+- name: VoluntaryExits#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="VoluntaryExits" fork="gloas" hash="471b4604">
+    class VoluntaryExits(ProgressiveList[SignedVoluntaryExit]):
+        """
+        The signed voluntary exits included in a beacon block.
+        """
     </spec>
 
 - name: Withdrawal#capella
@@ -1979,4 +3345,48 @@
         source_address: ExecutionAddress
         validator_pubkey: BLSPubkey
         amount: Gwei
+    </spec>
+
+- name: WithdrawalRequests#electra
+  sources: []
+  spec: |
+    <spec ssz_object="WithdrawalRequests" fork="electra" hash="760dfc14">
+    class WithdrawalRequests(List[WithdrawalRequest]):
+        """
+        The withdrawal requests pertaining to a single execution payload.
+        """
+
+        LIMIT = MAX_WITHDRAWAL_REQUESTS_PER_PAYLOAD
+    </spec>
+
+- name: WithdrawalRequests#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="WithdrawalRequests" fork="gloas" hash="606da280">
+    class WithdrawalRequests(ProgressiveList[WithdrawalRequest]):
+        """
+        The withdrawal requests pertaining to a single execution payload.
+        """
+    </spec>
+
+- name: Withdrawals#capella
+  sources: []
+  spec: |
+    <spec ssz_object="Withdrawals" fork="capella" hash="5e3fb3d0">
+    class Withdrawals(List[Withdrawal]):
+        """
+        A list of withdrawals.
+        """
+
+        LIMIT = MAX_WITHDRAWALS_PER_PAYLOAD
+    </spec>
+
+- name: Withdrawals#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="Withdrawals" fork="gloas" hash="4c0df84b">
+    class Withdrawals(ProgressiveList[Withdrawal]):
+        """
+        A list of withdrawals.
+        """
     </spec>

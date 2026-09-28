@@ -6,6 +6,7 @@ go_library(
         "beacon_state.go",
         "doc.go",
         "error.go",
+        "fields.go",
         "getters_attestation.go",
         "getters_block.go",
         "getters_checkpoint.go",
@@ -64,7 +65,6 @@ go_library(
         "//beacon-chain/state/state-native/custom-types:go_default_library",
         "//beacon-chain/state/state-native/types:go_default_library",
         "//beacon-chain/state/stateutil:go_default_library",
-        "//config/features:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
@@ -97,6 +97,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "fields_test.go",
         "getters_attestation_test.go",
         "getters_block_test.go",
         "getters_checkpoint_test.go",
@@ -123,6 +124,7 @@ go_test(
         "setters_deposit_requests_test.go",
         "setters_deposits_test.go",
         "setters_eth1_test.go",
+        "setters_gloas_onboard_test.go",
         "setters_gloas_test.go",
         "setters_misc_test.go",
         "setters_participation_test.go",
@@ -139,6 +141,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//beacon-chain/cache:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/core/transition:go_default_library",

@@ -2,7 +2,9 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,14 +19,14 @@ import (
 
 // TestHealthMonitor_IsHealthy_Concurrency tests thread-safety of IsHealthy.
 func TestHealthMonitor_IsHealthy_Concurrency(t *testing.T) {
-	v, vc := healthTestValidator(t)
+	vc := healthTestClient(t)
 	parentCtx, parentCancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	t.Cleanup(parentCancel)
 
 	// Expectation for newHealthMonitor's EnsureReady call
 	vc.EXPECT().EnsureReady(gomock.Any()).Return(true).Times(1)
 
-	monitor := newHealthMonitor(parentCtx, parentCancel, 3, v)
+	monitor := newHealthMonitor(parentCtx, parentCancel, 3, vc)
 	require.NotNil(t, monitor)
 	monitor.Start()
 	time.Sleep(100 * time.Millisecond)
@@ -112,13 +114,35 @@ func TestHealthMonitor_PerformHealthCheck(t *testing.T) {
 		{
 			name:               "Max Fails Reached - Stays Unhealthy and Cancels",
 			initialIsHealthy:   false,
-			initialFails:       2, // One fail away from maxFails
+			initialFails:       1, // One fail away from maxFails
 			maxFails:           2,
 			ensureReadyReturns: false,
 			expectedIsHealthy:  false,
 			expectedFails:      2,
 			expectCancelCalled: true,
 			expectStatusUpdate: false, // Status was already false, no new update sent before cancel
+		},
+		{
+			name:               "Max Fails of One - Cancels on the First Failure",
+			initialIsHealthy:   true,
+			initialFails:       0,
+			maxFails:           1,
+			ensureReadyReturns: false,
+			expectedIsHealthy:  false,
+			expectedFails:      1,
+			expectCancelCalled: true,
+			expectStatusUpdate: false, // The monitor is shutting down, no update sent before cancel
+		},
+		{
+			name:               "One Fail Away From Max - Stays Alive",
+			initialIsHealthy:   false,
+			initialFails:       1,
+			maxFails:           3,
+			ensureReadyReturns: false,
+			expectedIsHealthy:  false,
+			expectedFails:      2,
+			expectCancelCalled: false,
+			expectStatusUpdate: false,
 		},
 		{
 			name:               "MaxFails is 0 - Remains Unhealthy, No Cancel",
@@ -142,11 +166,11 @@ func TestHealthMonitor_PerformHealthCheck(t *testing.T) {
 				monitorCancelFunc() // Propagate to monitorCtx if needed for other parts
 			}
 
-			v, vc := healthTestValidator(t)
+			vc := healthTestClient(t)
 			monitor := &healthMonitor{
 				ctx:             monitorCtx,         // Context for the monitor's operations
 				cancel:          testCancelCallback, // This is m.cancel()
-				v:               v,
+				client:          vc,
 				maxFails:        tt.maxFails,
 				healthyCh:       make(chan bool, 1),
 				fails:           tt.initialFails,
@@ -189,9 +213,66 @@ func TestHealthMonitor_PerformHealthCheck(t *testing.T) {
 	}
 }
 
+// TestHealthMonitor_CancelsOnMaxConsecutiveFails checks that the monitor stops on the
+// maxFails-th consecutive failed health check rather than one check later, and that a
+// healthy check in between resets the count.
+func TestHealthMonitor_CancelsOnMaxConsecutiveFails(t *testing.T) {
+	newMonitor := func(t *testing.T, maxFails int, healthy *atomic.Bool) (*healthMonitor, *bool) {
+		var canceled bool
+		vc := healthTestClient(t)
+		vc.EXPECT().EnsureReady(gomock.Any()).DoAndReturn(func(context.Context) bool { return healthy.Load() }).AnyTimes()
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		monitor := &healthMonitor{
+			ctx:             ctx,
+			cancel:          func() { canceled = true; cancel() },
+			client:          vc,
+			maxFails:        maxFails,
+			healthyCh:       make(chan bool, 8), // buffered so status events never block a probe
+			healthEventFeed: new(event.Feed),
+		}
+		monitor.healthEventFeed.Subscribe(monitor.healthyCh)
+		return monitor, &canceled
+	}
+
+	for _, maxFails := range []int{1, 2, 3} {
+		t.Run(fmt.Sprintf("maxFails of %d cancels on failure %d", maxFails, maxFails), func(t *testing.T) {
+			var healthy atomic.Bool
+			monitor, canceled := newMonitor(t, maxFails, &healthy)
+
+			for i := 1; i <= maxFails; i++ {
+				monitor.performHealthCheck()
+				if i < maxFails {
+					require.False(t, *canceled, "canceled after %d of %d failed health checks", i, maxFails)
+				}
+			}
+			require.True(t, *canceled, "did not cancel after %d failed health checks", maxFails)
+			assert.Equal(t, maxFails, monitor.fails)
+		})
+	}
+
+	t.Run("a healthy check resets the count", func(t *testing.T) {
+		var healthy atomic.Bool
+		monitor, canceled := newMonitor(t, 3, &healthy)
+
+		monitor.performHealthCheck()
+		monitor.performHealthCheck()
+		healthy.Store(true)
+		monitor.performHealthCheck()
+		require.Equal(t, 0, monitor.fails)
+
+		healthy.Store(false)
+		monitor.performHealthCheck()
+		monitor.performHealthCheck()
+		require.False(t, *canceled, "canceled before reaching maxFails again")
+		monitor.performHealthCheck()
+		require.True(t, *canceled, "did not cancel on the third consecutive failure")
+	})
+}
+
 // TestHealthMonitor_HealthyChan_ReceivesUpdates tests channel behavior.
 func TestHealthMonitor_HealthyChan_ReceivesUpdates(t *testing.T) {
-	v, vc := healthTestValidator(t)
+	vc := healthTestClient(t)
 	monitorCtx, monitorCancelFunc := context.WithCancel(context.Background())
 
 	originalSlotDurationMs := params.BeaconConfig().SlotDurationMilliseconds
@@ -201,7 +282,7 @@ func TestHealthMonitor_HealthyChan_ReceivesUpdates(t *testing.T) {
 		monitorCancelFunc() // Ensure monitor context is cleaned up
 	}()
 
-	monitor := newHealthMonitor(monitorCtx, monitorCancelFunc, 3, v)
+	monitor := newHealthMonitor(monitorCtx, monitorCancelFunc, 3, vc)
 	require.NotNil(t, monitor)
 
 	ch := monitor.HealthyChan()
@@ -239,8 +320,103 @@ func TestHealthMonitor_HealthyChan_ReceivesUpdates(t *testing.T) {
 	monitor.Stop() // This calls monitorCancelFunc
 }
 
-func healthTestValidator(t *testing.T) (*validator, *validatormock.MockValidatorClient) {
+func TestHealthMonitor_WaitForHealthy(t *testing.T) {
+	originalSlotDurationMs := params.BeaconConfig().SlotDurationMilliseconds
+	params.BeaconConfig().SlotDurationMilliseconds = 20
+	defer func() { params.BeaconConfig().SlotDurationMilliseconds = originalSlotDurationMs }()
+
+	t.Run("a verdict recorded before the call does not release it", func(t *testing.T) {
+		monitor, healthy := testHealthMonitor(t)
+		healthy.Store(true)
+		monitor.performHealthCheck()
+		require.True(t, monitor.IsHealthy())
+
+		done := make(chan error, 1)
+		go func() { done <- monitor.WaitForHealthy(context.Background()) }()
+		select {
+		case <-done:
+			t.Fatal("returned on a verdict recorded before the call")
+		case <-time.After(100 * time.Millisecond):
+		}
+		require.Eventually(t, func() bool {
+			monitor.performHealthCheck()
+			select {
+			case err := <-done:
+				require.NoError(t, err)
+				return true
+			default:
+				return false
+			}
+		}, 2*time.Second, 10*time.Millisecond)
+	})
+
+	t.Run("blocks until a probe reports healthy", func(t *testing.T) {
+		monitor, healthy := testHealthMonitor(t)
+		monitor.Start()
+		flipped := make(chan time.Time, 1)
+		go func() {
+			time.Sleep(150 * time.Millisecond)
+			healthy.Store(true)
+			flipped <- time.Now()
+		}()
+		require.NoError(t, monitor.WaitForHealthy(context.Background()))
+		assert.False(t, time.Now().Before(<-flipped), "returned before the monitor became healthy")
+	})
+
+	t.Run("returns the context error when canceled", func(t *testing.T) {
+		monitor, _ := testHealthMonitor(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			time.Sleep(50 * time.Millisecond)
+			cancel()
+		}()
+		require.ErrorIs(t, monitor.WaitForHealthy(ctx), context.Canceled)
+	})
+
+	t.Run("a returned waiter does not block later probes", func(t *testing.T) {
+		monitor, _ := testHealthMonitor(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		require.ErrorIs(t, monitor.WaitForHealthy(ctx), context.Canceled)
+
+		// The verdict send is synchronous, so a stale subscription would stall here.
+		probed := make(chan bool, 1)
+		go func() {
+			monitor.performHealthCheck()
+			monitor.performHealthCheck()
+			probed <- true
+		}()
+		select {
+		case <-probed:
+		case <-time.After(time.Second):
+			t.Fatal("probes blocked on a waiter that already returned")
+		}
+	})
+}
+
+func healthTestClient(t *testing.T) *validatormock.MockValidatorClient {
 	vc := validatormock.NewMockValidatorClient(gomock.NewController(t))
 	vc.EXPECT().Host().Return("http://localhost:3500").AnyTimes()
-	return &validator{validatorClient: vc}, vc
+	return vc
+}
+
+// testHealthMonitor returns an unstarted monitor whose probes report the flag's
+// current value; status events are drained so probes never block on them.
+func testHealthMonitor(t *testing.T) (*healthMonitor, *atomic.Bool) {
+	var healthy atomic.Bool
+	vc := healthTestClient(t)
+	vc.EXPECT().EnsureReady(gomock.Any()).DoAndReturn(func(context.Context) bool { return healthy.Load() }).AnyTimes()
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	monitor := newHealthMonitor(ctx, cancel, 0, vc)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-monitor.HealthyChan():
+			}
+		}
+	}()
+	return monitor, &healthy
 }

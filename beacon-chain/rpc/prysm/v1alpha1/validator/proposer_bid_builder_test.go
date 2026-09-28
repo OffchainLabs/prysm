@@ -3,14 +3,17 @@
 package validator
 
 import (
+	"context"
 	"math"
 	"math/big"
 	"testing"
+	"time"
 
 	beaconbuilder "github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	builderTest "github.com/OffchainLabs/prysm/v7/beacon-chain/builder/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -25,7 +28,7 @@ import (
 // configurable errors and captures the parent-linkage closures for assertion.
 type fakeBidVerifier struct {
 	slotErr, activeErr, versionErr, coverErr, blobErr, randaoErr, sigErr error
-	rootSeenErr, parentHashErr, feeErr, gasErr                           error
+	rootSeenErr, parentHashErr, feeErr, gasErr, exitingErr               error
 	rootSeenFn                                                           func([32]byte) bool
 	hasPayloadFn                                                         func([32]byte, [32]byte) bool
 }
@@ -57,6 +60,9 @@ func (v *fakeBidVerifier) VerifyParentBlockHash(fn func([32]byte, [32]byte) bool
 	return v.parentHashErr
 }
 func (v *fakeBidVerifier) VerifyGasLimitTargetCompatible(uint64, uint64) error { return v.gasErr }
+func (v *fakeBidVerifier) VerifyBuilderNotExiting(state.ReadOnlyBeaconState, func([32]byte) ([]*enginev1.BuilderExitRequest, error)) error {
+	return v.exitingErr
+}
 func (v *fakeBidVerifier) VerifyBuilderCanCoverBid(state.ReadOnlyBeaconState) error {
 	return v.coverErr
 }
@@ -351,6 +357,23 @@ func TestValidateBuilderBid(t *testing.T) {
 	})
 }
 
+// deadlineCapturingBuilder reports the context budget it was handed instead of returning
+// bids, so the deadline getBuilderExecutionPayloadBid installs is directly observable.
+type deadlineCapturingBuilder struct {
+	*builderTest.MockBuilderService
+	budget chan time.Duration
+}
+
+func (b *deadlineCapturingBuilder) GetExecutionPayloadBid(ctx context.Context, _ primitives.Slot, _, _ [32]byte, _ [48]byte, _ []*ethpb.BuilderEntry) ([]beaconbuilder.PayloadBid, error) {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		b.budget <- 0
+		return nil, errors.New("no deadline set on the builder bid context")
+	}
+	b.budget <- time.Until(deadline)
+	return nil, errors.New("stop")
+}
+
 func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 	slot := primitives.Slot(100)
 	parentRoot := [32]byte{1, 2, 3}
@@ -494,6 +517,26 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 			NewExecutionPayloadBidVerifier: passAll,
 		}
 		require.IsNil(t, vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries)))
+	})
+
+	t.Run("bounds the builder call at BuilderBidTimeout", func(t *testing.T) {
+		const configured = 150 * time.Millisecond
+		params.SetupTestConfigCleanup(t)
+		c := params.BeaconConfig().Copy()
+		c.BuilderBidTimeout = configured
+		require.NoError(t, params.SetActive(c))
+
+		b := &deadlineCapturingBuilder{MockBuilderService: &builderTest.MockBuilderService{}, budget: make(chan time.Duration, 1)}
+		vs := &Server{BlockBuilder: b, NewExecutionPayloadBidVerifier: passAll}
+
+		require.IsNil(t, vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries)))
+
+		// A budget of the full default would mean the config was ignored; a budget of 0
+		// would mean no deadline was installed at all.
+		budget := <-b.budget
+		if budget <= configured/2 || budget > configured {
+			t.Fatalf("builder context budget = %s, want (%s, %s]", budget, configured/2, configured)
+		}
 	})
 }
 

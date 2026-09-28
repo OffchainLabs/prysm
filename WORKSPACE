@@ -282,16 +282,16 @@ filegroup(
     url = "https://github.com/ethereum/EIPs/archive/5480440fe51742ed23342b68cf106cefd427e39d.tar.gz",
 )
 
-consensus_spec_version = "v1.7.0-alpha.12"
+consensus_spec_version = "v1.7.0-beta.0"
 
 load("@prysm//tools:download_spectests.bzl", "consensus_spec_tests")
 
 consensus_spec_tests(
     name = "consensus_spec_tests",
     flavors = {
-        "general": "sha256-Mp889Ykn3yYU7K+8546zxSWKE+hzHS9BC7Mdjkpbnq8=",
-        "minimal": "sha256-fXng6W/dZmqnDLdBNyk1xdMNStYHrjmYhSEulxSliwc=",
-        "mainnet": "sha256-8AV9Ks3qJzDsaMrCx5aq2JF04Q6bOKxorX2KocDL2Fw=",
+        "general": "sha256-xPOV9x9gbCgJNQDjIGeZDkMMxzoid75vO/UJCtzOP2c=",
+        "minimal": "sha256-upIDaGtzEs3fFgv9PUrVXlMdrOZmLgIj/psTuXlTVEE=",
+        "mainnet": "sha256-DvnAaSk+IXHddcVZP697l+Mrm83OkoXocJWZOHR8B3Q=",
     },
     version = consensus_spec_version,
 )
@@ -307,9 +307,26 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-bd1ii7rnjYwiEun4br2U/E+zJ9lXZ72WxIditScOM/0=",
+    integrity = "sha256-oEM5og6m5Vg7yWPKfEevFviYKO3tFcktr4peYgDVYiA=",
     strip_prefix = "consensus-specs-" + consensus_spec_version[1:],
     url = "https://github.com/ethereum/consensus-specs/archive/refs/tags/%s.tar.gz" % consensus_spec_version,
+)
+
+cryptography_spec_tests_version = "v0.1.0"
+
+http_archive(
+    name = "cryptography_spec_tests",
+    build_file_content = """
+filegroup(
+    name = "test_data",
+    srcs = glob([
+        "**/*.yaml",
+    ]),
+    visibility = ["//visibility:public"],
+)
+    """,
+    integrity = "sha256-7rSJPrVE93CBDZSZAH67C5MZQx6kEr1Uc24cJ02j0Dc=",
+    url = "https://github.com/ethereum/cryptography-specs/releases/download/%s/tests.zip" % cryptography_spec_tests_version,
 )
 
 bls_test_version = "v0.1.1"
@@ -372,9 +389,9 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 """,
-    integrity = "sha256-+UZgfvBcea0K0sbvAJZOz5ZNmxdWZYbohP38heUuc6w=",
-    strip_prefix = "sepolia-f9158732adb1a2a6440613ad2232eb50e7384c4f",
-    url = "https://github.com/eth-clients/sepolia/archive/f9158732adb1a2a6440613ad2232eb50e7384c4f.tar.gz",
+    integrity = "sha256-s5Ryi2LUrAgxfOKS1TS1jLzTGWqcdJZ026X6loiJtG8=",
+    strip_prefix = "sepolia-a88075861ba0bd7f9227cf7b519aaec5b6a36156",
+    url = "https://github.com/eth-clients/sepolia/archive/a88075861ba0bd7f9227cf7b519aaec5b6a36156.tar.gz",
 )
 
 http_archive(

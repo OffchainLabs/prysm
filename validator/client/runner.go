@@ -25,8 +25,7 @@ var backOffPeriod = 10 * time.Second
 
 // runner encapsulates the main validator routine.
 type runner struct {
-	validator     *validator
-	healthMonitor *healthMonitor
+	validator *validator
 }
 
 // newRunner creates a new runner instance and performs all necessary initialization.
@@ -35,7 +34,7 @@ type runner struct {
 // Order of operations:
 // 1 - Initialize validator data
 // 2 - Wait for validator activation
-func newRunner(ctx context.Context, v *validator, monitor *healthMonitor) (*runner, error) {
+func newRunner(ctx context.Context, v *validator) (*runner, error) {
 	// Initialize validator and get head slot
 	err := initialize(ctx, v)
 	if err != nil {
@@ -67,8 +66,7 @@ func newRunner(ctx context.Context, v *validator, monitor *healthMonitor) (*runn
 		log.WithError(err).Warn("Failed to push initial proposer settings, will retry on next slot")
 	}
 	return &runner{
-		validator:     v,
-		healthMonitor: monitor,
+		validator: v,
 	}, nil
 }
 
@@ -92,7 +90,7 @@ func (r *runner) run(ctx context.Context) {
 			//nolint:govet
 			return // Exit if context is canceled.
 		case slot := <-v.NextSlot():
-			if !r.healthMonitor.IsHealthy() {
+			if !v.healthMonitor.IsHealthy() {
 				log.WithField("url", api.RedactEndpointList(r.validator.Host())).Warning("Beacon node unhealthy, stopping runner")
 				return
 			}

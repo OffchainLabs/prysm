@@ -53,16 +53,3 @@ func TestOptimizedGenesisBeaconState_1000(t *testing.T) {
 		}
 	}
 }
-
-func TestIsValidGenesisState_100000(_ *testing.T) {
-	SkipSlotCache.Disable()
-	defer SkipSlotCache.Enable()
-	fuzzer := fuzz.NewWithSeed(0)
-	fuzzer.NilChance(0.1)
-	var chainStartDepositCount, currentTime uint64
-	for range 100000 {
-		fuzzer.Fuzz(&chainStartDepositCount)
-		fuzzer.Fuzz(&currentTime)
-		IsValidGenesisState(chainStartDepositCount, currentTime)
-	}
-}

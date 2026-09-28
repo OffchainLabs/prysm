@@ -549,7 +549,7 @@ func TestProcessExecutionPayloadBid_SlotMismatch(t *testing.T) {
 	bid := &ethpb.ExecutionPayloadBid{
 		ParentBlockHash:       latestHash[:],
 		ParentBlockRoot:       bytes.Repeat([]byte{0xAA}, 32),
-		BlockHash:             bytes.Repeat([]byte{0xBB}, 32),
+		BlockHash:             bytes.Repeat([]byte{0xDD}, 32),
 		PrevRandao:            randao[:],
 		GasLimit:              1,
 		BuilderIndex:          builderIdx,
@@ -616,6 +616,49 @@ func TestProcessExecutionPayloadBid_ParentHashMismatch(t *testing.T) {
 
 	err = ProcessExecutionPayloadBid(state, block)
 	require.ErrorContains(t, "parent block hash mismatch", err)
+}
+
+func TestProcessExecutionPayloadBid_BlockHashEqualsParent(t *testing.T) {
+	slot := primitives.Slot(14)
+	builderIdx := primitives.BuilderIndex(1)
+	proposerIdx := primitives.ValidatorIndex(2)
+	randao := [32]byte(bytes.Repeat([]byte{0xAA}, 32))
+	latestHash := [32]byte(bytes.Repeat([]byte{0xBB}, 32))
+
+	sk, err := bls.RandKey()
+	require.NoError(t, err)
+	var pubKey [48]byte
+	copy(pubKey[:], sk.PublicKey().Marshal())
+
+	state := buildGloasState(t, slot, proposerIdx, builderIdx, params.BeaconConfig().MinDepositAmount+1000, randao, latestHash, pubKey)
+
+	bid := &ethpb.ExecutionPayloadBid{
+		ParentBlockHash:       latestHash[:],
+		ParentBlockRoot:       bytes.Repeat([]byte{0xAA}, 32),
+		BlockHash:             latestHash[:], // equals parent block hash
+		PrevRandao:            randao[:],
+		GasLimit:              1,
+		BuilderIndex:          builderIdx,
+		Slot:                  slot,
+		Value:                 1,
+		ExecutionPayment:      0,
+		BlobKzgCommitments:    blobCommitmentsForSlot(slot, 1),
+		FeeRecipient:          bytes.Repeat([]byte{0x55}, 20),
+		ExecutionRequestsRoot: make([]byte, 32),
+	}
+	genesis := bytesutil.ToBytes32(state.GenesisValidatorsRoot())
+	sig := signBid(t, sk, bid, state.Fork(), genesis)
+	signed := &ethpb.SignedExecutionPayloadBid{Message: bid, Signature: sig[:]}
+	block := stubBlock{
+		slot:       slot,
+		proposer:   proposerIdx,
+		parentRoot: bytesutil.ToBytes32(bid.ParentBlockRoot),
+		body:       stubBlockBody{signedBid: signed},
+		v:          version.Gloas,
+	}
+
+	err = ProcessExecutionPayloadBid(state, block)
+	require.ErrorContains(t, "equals parent block hash", err)
 }
 
 func TestProcessExecutionPayloadBid_ParentRootMismatch(t *testing.T) {

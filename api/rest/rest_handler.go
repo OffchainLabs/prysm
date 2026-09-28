@@ -208,7 +208,16 @@ func (c *handler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Hea
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to perform request for endpoint %s", api.RedactEndpoint(url))
 	}
-	return readRawResponse(req, httpResp)
+	body, hdr, err := readRawResponse(req, httpResp)
+	if err != nil {
+		return nil, nil, err
+	}
+	// A 204 carries no body to decode, so surface it as a typed error instead of an
+	// empty success body.
+	if httpResp.StatusCode == http.StatusNoContent {
+		return nil, nil, &httputil.DefaultJsonError{Code: http.StatusNoContent, Message: "no content"}
+	}
+	return body, hdr, nil
 }
 
 // postWithContentType sends a POST with the given request content type and returns

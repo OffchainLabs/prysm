@@ -11,20 +11,29 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/sirupsen/logrus"
+	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
 // fakeBuilderClient is a per-URL builder client for exercising the multiplex
 // fan-out: it returns a configurable bid/error and records calls.
 type fakeBuilderClient struct {
 	buildertesting.MockClient
-	url       string
-	bid       *eth.SignedExecutionPayloadBid
-	getErr    error
-	getCount  atomic.Int32
-	prefCount atomic.Int32
+	url         string
+	bid         *eth.SignedExecutionPayloadBid
+	getErr      error
+	statusErr   error
+	getCount    atomic.Int32
+	prefCount   atomic.Int32
+	statusCount atomic.Int32
 }
 
 func (f *fakeBuilderClient) NodeURL() string { return f.url }
+
+func (f *fakeBuilderClient) Status(context.Context) error {
+	f.statusCount.Add(1)
+	return f.statusErr
+}
 
 func (f *fakeBuilderClient) GetExecutionPayloadBid(context.Context, primitives.Slot, [32]byte, [32]byte, [48]byte, *eth.SignedBuilderRequestAuth) (*eth.SignedExecutionPayloadBid, error) {
 	f.getCount.Add(1)
@@ -259,4 +268,31 @@ func TestSubmitBuilderPreferences(t *testing.T) {
 		failures := s.SubmitBuilderPreferences(t.Context(), []*eth.BuilderPreferencesEntry{prefEntry("http://ok")})
 		require.Equal(t, 0, len(failures))
 	})
+}
+
+func TestPingBuilderClients_PingsEveryCachedClient(t *testing.T) {
+	clients := map[string]*fakeBuilderClient{
+		"http://a": {url: "http://a"},
+		"http://b": {url: "http://b", statusErr: errors.New("down")},
+	}
+	s := newMultiplexService(t, clients)
+	for url := range clients {
+		_, err := s.clientFor(url)
+		require.NoError(t, err)
+	}
+	s.pingBuilderClients(t.Context())
+	require.Equal(t, int32(1), clients["http://a"].statusCount.Load())
+	require.Equal(t, int32(1), clients["http://b"].statusCount.Load())
+}
+
+func TestGetExecutionPayloadBid_LogsWhenBuilderReturnsNoBid(t *testing.T) {
+	hook := logTest.NewGlobal()
+	prev := logrus.GetLevel()
+	logrus.SetLevel(logrus.DebugLevel)
+	t.Cleanup(func() { logrus.SetLevel(prev) })
+	s := newMultiplexService(t, map[string]*fakeBuilderClient{"http://none": {url: "http://none"}})
+	bids, err := s.GetExecutionPayloadBid(t.Context(), 7, [32]byte{}, [32]byte{}, [48]byte{}, []*eth.BuilderEntry{entryFor("http://none")})
+	require.NoError(t, err)
+	require.Equal(t, 0, len(bids))
+	require.LogsContain(t, hook, "Builder returned no bid")
 }
