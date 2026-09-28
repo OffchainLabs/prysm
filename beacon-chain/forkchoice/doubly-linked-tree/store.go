@@ -167,6 +167,7 @@ func (s *Store) insert(ctx context.Context,
 
 	if parent == nil {
 		if s.treeRootNode == nil {
+			s.finalizedDependentRoot = block.ParentRoot()
 			s.treeRootNode = n
 			s.headNode = n
 			s.highestReceivedNode = n

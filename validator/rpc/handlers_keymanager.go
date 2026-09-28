@@ -873,4 +873,5 @@ func (s *Server) DeleteGraffiti(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, err.Error(), http.StatusNotFound)
 		return
 	}
+	w.WriteHeader(http.StatusNoContent)
 }

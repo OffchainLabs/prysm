@@ -488,6 +488,85 @@ func TestStateDiff_SaveAndReadFullSnapshot(t *testing.T) {
 	}
 }
 
+func TestStateDiff_GetFullSnapshot(t *testing.T) {
+	const snapshotSlot = primitives.Slot(96)
+	for _, tt := range []struct {
+		name       string
+		prepare    func(t *testing.T, db *Store)
+		wantDBRead bool
+	}{
+		{name: "matching cache"},
+		{
+			name: "nil cache",
+			prepare: func(_ *testing.T, db *Store) {
+				db.stateDiffCache = nil
+			},
+			wantDBRead: true,
+		},
+		{
+			name: "empty cache",
+			prepare: func(_ *testing.T, db *Store) {
+				db.stateDiffCache.clearAnchors()
+			},
+			wantDBRead: true,
+		},
+		{
+			name: "older cached snapshot",
+			prepare: func(t *testing.T, db *Store) {
+				st, _ := createState(t, snapshotSlot-64, version.Phase0)
+				require.NoError(t, db.stateDiffCache.setAnchor(0, st))
+			},
+			wantDBRead: true,
+		},
+		{
+			name: "newer cached snapshot",
+			prepare: func(t *testing.T, db *Store) {
+				st, _ := createState(t, snapshotSlot+64, version.Phase0)
+				require.NoError(t, db.saveFullSnapshot(st))
+			},
+			wantDBRead: true,
+		},
+		{
+			name: "corrupt cached snapshot",
+			prepare: func(_ *testing.T, db *Store) {
+				db.stateDiffCache.anchors[0] = []byte{0xff}
+			},
+			wantDBRead: true,
+		},
+		{
+			name: "single level",
+			prepare: func(_ *testing.T, db *Store) {
+				setStateDiffExponents([]int{6})
+				db.stateDiffCache.clearAnchors()
+			},
+			wantDBRead: true,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			setStateDiffExponents([]int{6, 5})
+			db := setupDB(t)
+			require.NoError(t, setOffsetInDB(db, 32))
+			st, _ := createState(t, snapshotSlot, version.Phase0)
+			require.NoError(t, db.saveFullSnapshot(st))
+			if tt.prepare != nil {
+				tt.prepare(t, db)
+			}
+
+			before := db.db.Stats().TxN
+			got, err := db.getFullSnapshot(uint64(snapshotSlot))
+			require.NoError(t, err)
+			require.Equal(t, tt.wantDBRead, db.db.Stats().TxN > before)
+			require.DeepSSZEqual(t, st.ToProto(), got.ToProto())
+
+			// Mutating the returned state must not affect subsequent reads.
+			require.NoError(t, got.SetSlot(snapshotSlot+1))
+			got, err = db.getFullSnapshot(uint64(snapshotSlot))
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, st.ToProto(), got.ToProto())
+		})
+	}
+}
+
 func TestStateDiff_SaveDiff(t *testing.T) {
 	setDefaultStateDiffExponents()
 

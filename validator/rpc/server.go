@@ -17,6 +17,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/io/logs"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
 	iface "github.com/OffchainLabs/prysm/v7/validator/client/iface"
@@ -192,7 +193,9 @@ func (s *Server) InitializeRoutesWithWebHandler() error {
 		}
 		if features.Get().EnableWeb {
 			web.Handler(w, r)
+			return
 		}
+		httputil.HandleError(w, "Not found", http.StatusNotFound)
 	})
 	return nil
 }

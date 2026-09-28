@@ -1,14 +1,18 @@
 package doublylinkedtree
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 func TestStore_JustifiedEpoch(t *testing.T) {
@@ -600,6 +604,59 @@ func TestStore_TargetRootForEpoch(t *testing.T) {
 	dependent, err = f.DependentRootForEpoch(blk4.Root(), 3)
 	require.NoError(t, err)
 	require.Equal(t, blk1.Root(), dependent)
+}
+
+func TestStore_DependentRoot_CheckpointStartup(t *testing.T) {
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	checkpointSlot := 2 * slotsPerEpoch
+	for _, tt := range []struct {
+		name       string
+		anchorSlot primitives.Slot
+	}{
+		{"exact checkpoint boundary", checkpointSlot},
+		{"skipped checkpoint boundary", checkpointSlot.Sub(1)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			st, keys := util.DeterministicGenesisState(t, 64)
+			var anchor blocks.ROBlock
+			for _, slot := range []primitives.Slot{slotsPerEpoch.Sub(1), tt.anchorSlot.Sub(1), tt.anchorSlot} {
+				signed, err := util.GenerateFullBlock(st, keys, &util.BlockGenConfig{}, slot)
+				require.NoError(t, err)
+				blk, err := blocks.NewSignedBeaconBlock(signed)
+				require.NoError(t, err)
+				st, err = transition.ExecuteStateTransition(ctx, st, blk)
+				require.NoError(t, err)
+				anchor, err = blocks.NewROBlock(blk)
+				require.NoError(t, err)
+			}
+			if st.Slot() < checkpointSlot {
+				var err error
+				st, err = transition.ProcessSlots(ctx, st, checkpointSlot)
+				require.NoError(t, err)
+			}
+			wantBytes, err := st.BlockRootAtIndex(uint64(checkpointSlot.Sub(1)))
+			require.NoError(t, err)
+			want := [32]byte(wantBytes)
+			require.NotEqual(t, [32]byte{}, want)
+
+			f := New()
+			f.SetBalancesByRooter(func(context.Context, [32]byte) ([]uint64, error) { return nil, nil })
+			cp := &forkchoicetypes.Checkpoint{Epoch: 2, Root: anchor.Root()}
+			require.NoError(t, f.UpdateJustifiedCheckpoint(ctx, cp))
+			require.NoError(t, f.UpdateFinalizedCheckpoint(cp))
+			require.NoError(t, f.InsertNode(ctx, st, anchor))
+			require.Equal(t, anchor.Root(), f.CachedHeadRoot())
+			require.Equal(t, 1, f.NodeCount())
+
+			dependent, err := f.DependentRoot(cp.Epoch)
+			require.NoError(t, err)
+			assert.Equal(t, want, dependent)
+			dependent, err = f.DependentRootForEpoch(anchor.Root(), cp.Epoch)
+			require.NoError(t, err)
+			assert.Equal(t, want, dependent)
+		})
+	}
 }
 
 func TestStore_DependentRootForEpoch(t *testing.T) {

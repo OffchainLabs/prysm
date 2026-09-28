@@ -184,7 +184,7 @@ func newStateDiffCache(s *Store) (*stateDiffCache, error) {
 	}, nil
 }
 
-func (c *stateDiffCache) getAnchor(level int) state.ReadOnlyBeaconState {
+func (c *stateDiffCache) getAnchor(level int) state.BeaconState {
 	c.RLock()
 	if level < 0 || level >= len(c.anchors) {
 		c.RUnlock()

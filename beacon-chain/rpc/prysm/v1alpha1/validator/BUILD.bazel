@@ -68,7 +68,6 @@ go_library(
         "//beacon-chain/core/transition:go_default_library",
         "//beacon-chain/core/validators:go_default_library",
         "//beacon-chain/db:go_default_library",
-        "//beacon-chain/db/kv:go_default_library",
         "//beacon-chain/execution:go_default_library",
         "//beacon-chain/operations/attestations:go_default_library",
         "//beacon-chain/operations/blstoexec:go_default_library",
