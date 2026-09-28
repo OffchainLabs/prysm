@@ -31,6 +31,22 @@ func payloadToBody(t *testing.T, ed interfaces.ExecutionData) *pb.ExecutionPaylo
 	return body
 }
 
+// mockWriteBodiesByHash answers a GetPayloadBodiesByHashV1 request with the bodies of the given headers,
+// in the order of the requested hashes, as an execution client would.
+func mockWriteBodiesByHash(t *testing.T, w http.ResponseWriter, msg *jsonrpcMessage, headers ...interfaces.ExecutionData) {
+	bodyByHash := make(map[[32]byte]*pb.ExecutionPayloadBodyV1, len(headers))
+	for _, header := range headers {
+		bodyByHash[bytesutil.ToBytes32(header.BlockHash())] = payloadToBody(t, header)
+	}
+
+	hashes := mockParseHexByteList(t, msg.Params)
+	bodies := make([]*pb.ExecutionPayloadBodyV1, 0, len(hashes))
+	for _, hash := range hashes {
+		bodies = append(bodies, bodyByHash[bytesutil.ToBytes32(hash)])
+	}
+	mockWriteResult(t, w, msg, bodies)
+}
+
 type blindedBlockFixtures struct {
 	denebBlock      *fullAndBlinded
 	emptyDenebBlock *fullAndBlinded
@@ -118,11 +134,7 @@ func TestPayloadBodiesViaUnblinder(t *testing.T) {
 	t.Run("mix of non-empty and empty", func(t *testing.T) {
 		cli, srv := newMockEngine(t)
 		srv.register(GetPayloadBodiesByHashV1, func(msg *jsonrpcMessage, w http.ResponseWriter, r *http.Request) {
-			executionPayloadBodies := []*pb.ExecutionPayloadBodyV1{
-				payloadToBody(t, fx.denebBlock.blinded.header),
-				payloadToBody(t, fx.emptyDenebBlock.blinded.header),
-			}
-			mockWriteResult(t, w, msg, executionPayloadBodies)
+			mockWriteBodiesByHash(t, w, msg, fx.denebBlock.blinded.header, fx.emptyDenebBlock.blinded.header)
 		})
 		ctx := t.Context()
 
@@ -344,8 +356,7 @@ func TestReconstructBlindedBlockBatchDenebAndBeyond(t *testing.T) {
 		cli, srv := newMockEngine(t)
 		fx := testBlindedBlockFixtures(t)
 		srv.register(GetPayloadBodiesByHashV1, func(msg *jsonrpcMessage, w http.ResponseWriter, r *http.Request) {
-			executionPayloadBodies := []*pb.ExecutionPayloadBodyV1{payloadToBody(t, fx.denebBlock.blinded.header), payloadToBody(t, fx.electra.blinded.header), payloadToBody(t, fx.fulu.blinded.header)}
-			mockWriteResult(t, w, msg, executionPayloadBodies)
+			mockWriteBodiesByHash(t, w, msg, fx.denebBlock.blinded.header, fx.electra.blinded.header, fx.fulu.blinded.header)
 		})
 		blinded := []interfaces.ReadOnlySignedBeaconBlock{
 			fx.denebBlock.blinded.block,
