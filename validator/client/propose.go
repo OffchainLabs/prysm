@@ -523,18 +523,19 @@ func (v *validator) Graffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyL
 	ctx, span := trace.StartSpan(ctx, "validator.Graffiti")
 	defer span.End()
 
-	if v.proposerSettings != nil {
+	proposerSettings := v.ProposerSettings()
+	if proposerSettings != nil {
 		// Check proposer settings for specific key first
-		if v.proposerSettings.ProposeConfig != nil {
-			option, ok := v.proposerSettings.ProposeConfig[pubKey]
+		if proposerSettings.ProposeConfig != nil {
+			option, ok := proposerSettings.ProposeConfig[pubKey]
 			if ok && option.GraffitiConfig != nil {
 				return []byte(option.GraffitiConfig.Graffiti), nil
 			}
 		}
 		// Check proposer settings for default settings second
-		if v.proposerSettings.DefaultConfig != nil {
-			if v.proposerSettings.DefaultConfig.GraffitiConfig != nil {
-				return []byte(v.proposerSettings.DefaultConfig.GraffitiConfig.Graffiti), nil
+		if proposerSettings.DefaultConfig != nil {
+			if proposerSettings.DefaultConfig.GraffitiConfig != nil {
+				return []byte(proposerSettings.DefaultConfig.GraffitiConfig.Graffiti), nil
 			}
 		}
 	}

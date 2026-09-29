@@ -227,7 +227,7 @@ func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffBytes, error) {
 
 func (s *Store) getFullSnapshot(slot uint64) (state.BeaconState, error) {
 	if s.stateDiffCache != nil {
-		if anchor := s.stateDiffCache.getAnchor(0); anchor != nil && uint64(anchor.Slot()) == slot {
+		if anchor := s.stateDiffCache.getAnchor(0, withExactSlot(primitives.Slot(slot))); anchor != nil {
 			return anchor, nil
 		}
 	}

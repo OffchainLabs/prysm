@@ -576,6 +576,13 @@ func TestService_processBatchedBlocksReturnsFilteredCount(t *testing.T) {
 }
 
 func TestService_blockProviderScoring(t *testing.T) {
+	// Use a slot much longer than the test, so the current slot does not change while the test runs.
+	// The exact value does not matter.
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.SlotDurationMilliseconds = uint64((24 * time.Hour).Milliseconds())
+	params.OverrideBeaconConfig(cfg)
+
 	currentPeriod := blockLimiterPeriod
 	blockLimiterPeriod = 1 * time.Second
 	defer func() {

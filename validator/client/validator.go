@@ -90,8 +90,8 @@ type validator struct {
 	startBalances                map[[fieldparams.BLSPubkeyLength]byte]uint64
 	attestedSlotsByKeyByEpoch    map[primitives.Epoch]map[[fieldparams.BLSPubkeyLength]byte]primitives.Slot
 	web3SignerConfig             *remoteweb3signer.SetupConfig
-	proposerSettings             *proposer.Settings // clone-then-swap under proposerSettingsMu; reads are lock-free
-	proposerSettingsMu           sync.Mutex
+	proposerSettings             *proposer.Settings // immutable snapshot guarded by proposerSettingsMu
+	proposerSettingsMu           sync.RWMutex
 	submittedPrefSlots           slotReservations
 	submittedBuilderPrefSlots    slotReservations
 	connTracker                  connTracker // per push kind, the conn generation last confirmed pushed
@@ -712,6 +712,8 @@ func (v *validator) getAttestationData(ctx context.Context, slot primitives.Slot
 
 // ProposerSettings gets the current proposer settings saved in memory validator
 func (v *validator) ProposerSettings() *proposer.Settings {
+	v.proposerSettingsMu.RLock()
+	defer v.proposerSettingsMu.RUnlock()
 	return v.proposerSettings
 }
 
@@ -1569,7 +1571,7 @@ func (v *validator) buildSignedRegReqs(
 	}
 
 	if ps.DefaultConfig != nil && ps.DefaultConfig.FeeRecipientConfig == nil && ps.DefaultConfig.BuilderConfig != nil {
-		if ps.Version == proposer.SchemaV2 {
+		if ps.Version >= proposer.SchemaV2 {
 			log.Warn("Default builder config has no default fee recipient; only keys with their own fee recipient can register")
 		} else {
 			log.Warn("Builder is `enabled` in default config but will be ignored because no fee recipient was provided!")
