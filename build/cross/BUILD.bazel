@@ -3,10 +3,12 @@ load("@prysm//tools/go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
-    srcs = ["main.go"],
+    srcs = [
+        "crossbuild.go",
+        "main.go",
+    ],
     importpath = "github.com/OffchainLabs/prysm/v7/build/cross",
     visibility = ["//visibility:private"],
-    deps = ["//build/crossbuild:go_default_library"],
 )
 
 go_binary(

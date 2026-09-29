@@ -1,4 +1,4 @@
-package crossbuild
+package main
 
 import (
 	"fmt"

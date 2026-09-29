@@ -198,7 +198,7 @@ DIST_TARGETS  := $(foreach s,$(filter $(CROSS_PLATFORMS),$(DIST_PLAT_SEL)),$(fil
 endif
 
 # Env for the in-container dist build (build/crossdocker -> build/cross). dist is always a
-# release build: stamped + stripped (-s -w) + PGO'd. crossbuild reads PGO_beacon_chain
+# release build: stamped + stripped (-s -w) + PGO'd. build/cross reads PGO_beacon_chain
 # (underscore) and applies it only to beacon-chain.
 DIST_LDFLAGS := $(LDFLAGS_STAMPED) -s -w
 BUILD_CROSS_ENV = GO="$(GO)" DIST="$(DIST)" GIT_TAG="$(GIT_TAG)" \
