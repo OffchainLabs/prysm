@@ -29,21 +29,32 @@ func TestLightClientGeneralizedIndicesForVersion(t *testing.T) {
 	reset := features.InitWithReset(&features.Flags{})
 	defer reset()
 
-	tests := []struct {
+	type test struct {
 		name       string
 		version    int
 		finalized  uint64
 		current    uint64
 		next       uint64
 		committees bool
-	}{
-		{name: "phase0", version: version.Phase0, finalized: 105},
-		{name: "altair", version: version.Altair, finalized: 105, current: 54, next: 55, committees: true},
-		{name: "deneb", version: version.Deneb, finalized: 105, current: 54, next: 55, committees: true},
-		{name: "electra", version: version.Electra, finalized: 169, current: 86, next: 87, committees: true},
-		{name: "fulu", version: version.Fulu, finalized: 169, current: 86, next: 87, committees: true},
-		{name: "gloas", version: version.Gloas, finalized: 735, current: 2945, next: 2946, committees: true},
 	}
+
+	var tests []test
+
+	for _, v := range version.AllIncludingUnreleased() {
+		switch v {
+		case version.Phase0:
+			tests = append(tests, test{name: "phase0", version: v, finalized: 105})
+		case version.Altair, version.Bellatrix, version.Capella, version.Deneb:
+			tests = append(tests, test{name: version.String(v), version: v, finalized: 105, current: 54, next: 55, committees: true})
+		case version.Electra, version.Fulu:
+			tests = append(tests, test{name: version.String(v), version: v, finalized: 169, current: 86, next: 87, committees: true})
+		case version.Gloas:
+			tests = append(tests, test{name: "gloas", version: v, finalized: 735, current: 2945, next: 2946, committees: true})
+		default:
+			t.Fatalf("unsupported version: %d", v)
+		}
+	}
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			finalized, err := statenative.FinalizedRootGeneralizedIndexForVersion(test.version)
