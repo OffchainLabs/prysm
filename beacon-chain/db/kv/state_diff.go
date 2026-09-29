@@ -226,6 +226,12 @@ func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffBytes, error) {
 }
 
 func (s *Store) getFullSnapshot(slot uint64) (state.BeaconState, error) {
+	if s.stateDiffCache != nil {
+		if anchor := s.stateDiffCache.getAnchor(0); anchor != nil && uint64(anchor.Slot()) == slot {
+			return anchor, nil
+		}
+	}
+
 	key := makeKeyForStateDiffTree(0, slot)
 	var compressed []byte
 

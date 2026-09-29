@@ -366,9 +366,9 @@ func (bc *BuilderConfig) IsEnabled() bool {
 	return bc != nil && bc.Enabled
 }
 
-// hasV2Content reports whether any v2 builder field is set; an explicit empty
-// builders list counts.
-func (bc *BuilderConfig) hasV2Content() bool {
+// hasGloasBuilderFields reports whether any Gloas builder field is set; an explicit
+// empty builders list counts.
+func (bc *BuilderConfig) hasGloasBuilderFields() bool {
 	return bc != nil && (bc.Builders != nil || bc.MinBid != nil || bc.BuilderBoostFactor != nil || bc.MaxExecutionPayment != nil)
 }
 
@@ -384,7 +384,7 @@ func (bc *BuilderConfig) registrationEnabled() (enabled, ok bool) {
 	case bc.Builders != nil:
 		// An explicit empty list means self-build everywhere: no mev-boost either.
 		return false, true
-	case !bc.hasV2Content():
+	case !bc.hasGloasBuilderFields():
 		// A pure-v1 config without enabled is the legacy wins-wholesale disable.
 		return false, true
 	default:
@@ -485,7 +485,7 @@ const (
 // create from nothing: v2 once the network schedules gloas, legacy before.
 func FreshSettingsVersion() uint32 {
 	if params.GloasEnabled() {
-		return SchemaV2
+		return MaxSchemaVersion
 	}
 	return SchemaV1Unset
 }
@@ -697,10 +697,6 @@ func (be *BuilderEntry) toConsensus() *validatorpb.BuilderEntry {
 	}
 }
 
-func (ps *Settings) isV2() bool {
-	return ps != nil && ps.Version == SchemaV2
-}
-
 // WarnDeprecatedSchema logs a warning when legacy v1 builder content is loaded
 // on a network with gloas scheduled, regardless of the schema stamp.
 func (ps *Settings) WarnDeprecatedSchema() {
@@ -791,7 +787,7 @@ func (ps *Settings) UpgradeToV2() bool {
 		}
 		// A config left with no v2 content disappears entirely; an explicit
 		// empty builders list is v2 content and survives.
-		if !bc.hasV2Content() {
+		if !bc.hasGloasBuilderFields() {
 			opt.BuilderConfig = nil
 			scrubbed = true
 		}
@@ -800,8 +796,10 @@ func (ps *Settings) UpgradeToV2() bool {
 	for _, opt := range ps.ProposeConfig {
 		scrub(opt)
 	}
-	changed := scrubbed || ps.Version != SchemaV2
-	ps.Version = SchemaV2
+	changed := scrubbed || ps.Version < SchemaV2
+	if ps.Version < SchemaV2 {
+		ps.Version = SchemaV2
+	}
 	if scrubbed {
 		log.Warn("V1 builder settings, including gas limits, do not apply to gloas and were replaced with defaults; provide v2 proposer settings to configure builders")
 	}

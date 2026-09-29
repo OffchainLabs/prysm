@@ -61,26 +61,30 @@ func (m *healthMonitor) performHealthCheck() {
 	m.probeFeed.Send(ishealthy)
 }
 
+// updateStatus records a probe verdict. A healthy verdict resets the consecutive
+// failure count; the maxFails-th consecutive failure stops the monitor. A maxFails
+// of zero or less means failures are counted indefinitely.
 func (m *healthMonitor) updateStatus(ishealthy bool) {
 	m.Lock()
 	defer m.Unlock()
 	if ishealthy {
 		m.fails = 0
-	} else if m.maxFails > 0 && m.fails < m.maxFails {
+	} else if m.maxFails > 0 {
+		m.fails++
+		if m.fails >= m.maxFails {
+			log.WithFields(logrus.Fields{
+				"maxFails": m.maxFails,
+				"url":      api.RedactEndpointList(m.client.Host()),
+			}).Warn("Maximum health checks reached. Stopping health check routine")
+			m.isHealthy = ishealthy
+			m.cancel()
+			return
+		}
 		log.WithFields(logrus.Fields{
 			"fails":    m.fails,
 			"maxFails": m.maxFails,
 			"url":      api.RedactEndpointList(m.client.Host()),
 		}).Warn("Failed health check, beacon node is unresponsive")
-		m.fails++
-	} else if m.maxFails > 0 && m.fails >= m.maxFails {
-		log.WithFields(logrus.Fields{
-			"maxFails": m.maxFails,
-			"url":      api.RedactEndpointList(m.client.Host()),
-		}).Warn("Maximum health checks reached. Stopping health check routine")
-		m.isHealthy = ishealthy
-		m.cancel()
-		return
 	}
 	if ishealthy == m.isHealthy {
 		// is not a new status so skip update
