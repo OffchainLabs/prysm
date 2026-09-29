@@ -45,7 +45,7 @@ func main() {
 
 	err := OpenAddresses(*addressFilePath)
 	if err != nil {
-		panic(err)
+		logrus.WithError(err).Fatal("Could not load addresses")
 	}
 
 	err = ConnectionToGeth(*web3URL)
@@ -165,23 +165,35 @@ func OpenAddresses(filename string) error {
 	}
 	defer func() {
 		if err := file.Close(); err != nil {
-			panic(err)
+			logrus.WithError(err).Error("Could not close addresses file")
 		}
 	}()
 	scanner := bufio.NewScanner(file)
-	allWatching = []*Watching{}
+	watching := []*Watching{}
+	lineNum := 0
 	for scanner.Scan() {
-		object := strings.Split(scanner.Text(), ":")
-		if common.IsHexAddress(object[1]) {
-			w := &Watching{
-				Name:    object[0],
-				Address: object[1],
-			}
-			allWatching = append(allWatching, w)
+		lineNum++
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
 		}
+		name, address, ok := strings.Cut(line, ":")
+		if !ok {
+			return fmt.Errorf("invalid address entry on line %d: expected name:address", lineNum)
+		}
+		name = strings.TrimSpace(name)
+		address = strings.TrimSpace(address)
+		if name == "" {
+			return fmt.Errorf("invalid address entry on line %d: name is empty", lineNum)
+		}
+		if !common.IsHexAddress(address) {
+			return fmt.Errorf("invalid address entry on line %d: invalid hex address", lineNum)
+		}
+		watching = append(watching, &Watching{Name: name, Address: address})
 	}
 	if err := scanner.Err(); err != nil {
-		return err
+		return fmt.Errorf("could not read addresses file: %w", err)
 	}
-	return err
+	allWatching = watching
+	return nil
 }

@@ -1,5 +1,5 @@
 load("@io_bazel_rules_go//go:def.bzl", "go_binary")
-load("@prysm//tools/go:def.bzl", "go_library")
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 load("//tools:prysm_image.bzl", "prysm_image_upload")
 
 go_library(
@@ -20,6 +20,13 @@ go_binary(
     name = "eth1exporter",
     embed = [":go_default_library"],
     visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["main_test.go"],
+    embed = [":go_default_library"],
+    deps = ["//testing/require:go_default_library"],
 )
 
 prysm_image_upload(
