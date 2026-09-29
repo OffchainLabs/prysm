@@ -2028,8 +2028,8 @@ def prysm_deps():
         patches = [
             "//third_party:com_github_libp2p_go_libp2p_pubsub-cloneof.patch",
         ],
-        sum = "h1:SNdvB6V0eYMXLRR95n+4vpxJKbFsbHhgjPdDiTpGoo0=",
-        version = "v0.17.0",
+        sum = "h1:xTIqlwk0okgZxHrPjtht8RvzknYQ4CeqGawKm7arYbM=",
+        version = "v0.18.0",
     )
     go_repository(
         name = "com_github_libp2p_go_libp2p_testing",
