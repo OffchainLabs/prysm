@@ -1,2 +1,3 @@
 bazel-*
 .git
+dist/
