@@ -11,6 +11,7 @@ import (
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 func signedBuilderDepositRequest(t *testing.T, sk bls.SecretKey, cred [32]byte, amount uint64) *enginev1.BuilderDepositRequest {
@@ -46,7 +47,7 @@ func TestProcessBuilderDepositRequest_NewBuilderValidSignature(t *testing.T) {
 	builder, err := st.Builder(idx)
 	require.NoError(t, err)
 	require.DeepEqual(t, req.Pubkey, builder.Pubkey)
-	require.DeepEqual(t, []byte{cred[0]}, builder.Version)
+	require.DeepEqual(t, []byte{params.BeaconConfig().PayloadBuilderVersion}, builder.Version)
 	require.DeepEqual(t, cred[12:], builder.ExecutionAddress)
 	require.Equal(t, uint64(1234), uint64(builder.Balance))
 	require.Equal(t, params.BeaconConfig().FarFutureEpoch, builder.WithdrawableEpoch)
@@ -63,6 +64,50 @@ func TestProcessBuilderDepositRequest_NewBuilderInvalidSignatureIgnored(t *testi
 
 	_, ok := st.BuilderIndexByPubkey(toBytes48(req.Pubkey))
 	require.Equal(t, false, ok)
+}
+
+func TestProcessBuilderDepositRequest_NewBuilderNonBuilderPrefixIgnored(t *testing.T) {
+	sk, err := bls.RandKey()
+	require.NoError(t, err)
+	cred := builderWithdrawalCredentials()
+	cred[0] = 0x01
+	req := signedBuilderDepositRequest(t, sk, cred, 1234)
+
+	st := newGloasState(t, nil, nil)
+	require.NoError(t, processBuilderDepositRequest(t.Context(), st, req, sigKnownValid))
+
+	_, ok := st.BuilderIndexByPubkey(toBytes48(req.Pubkey))
+	require.Equal(t, false, ok)
+}
+
+func TestProcessBuilderDepositRequest_TopUpNonBuilderPrefixIgnored(t *testing.T) {
+	sk, err := bls.RandKey()
+	require.NoError(t, err)
+	pubkey := sk.PublicKey().Marshal()
+	builders := []*ethpb.Builder{{
+		Pubkey:            pubkey,
+		Version:           []byte{params.BeaconConfig().PayloadBuilderVersion},
+		ExecutionAddress:  bytes.Repeat([]byte{0x11}, 20),
+		Balance:           5,
+		WithdrawableEpoch: params.BeaconConfig().FarFutureEpoch,
+	}}
+	st := newGloasState(t, nil, builders)
+
+	cred := builderWithdrawalCredentials()
+	cred[0] = 0x01
+	req := &enginev1.BuilderDepositRequest{
+		Pubkey:                pubkey,
+		WithdrawalCredentials: cred[:],
+		Amount:                200,
+		Signature:             make([]byte, 96),
+	}
+	require.NoError(t, processBuilderDepositRequest(t.Context(), st, req, sigKnownValid))
+
+	idx, ok := st.BuilderIndexByPubkey(toBytes48(pubkey))
+	require.Equal(t, true, ok)
+	builder, err := st.Builder(idx)
+	require.NoError(t, err)
+	require.Equal(t, uint64(5), uint64(builder.Balance))
 }
 
 func TestProcessBuilderDepositRequest_ExistingBuilderTopsUpNoSignatureCheck(t *testing.T) {
@@ -91,6 +136,68 @@ func TestProcessBuilderDepositRequest_ExistingBuilderTopsUpNoSignatureCheck(t *t
 	builder, err := st.Builder(idx)
 	require.NoError(t, err)
 	require.Equal(t, uint64(205), uint64(builder.Balance))
+}
+
+func TestProcessBuilderDepositRequest_ExitedSweptBuilderTopUpResetsWithdrawableEpoch(t *testing.T) {
+	sk, err := bls.RandKey()
+	require.NoError(t, err)
+	pubkey := sk.PublicKey().Marshal()
+	builders := []*ethpb.Builder{{
+		Pubkey:            pubkey,
+		Version:           []byte{params.BeaconConfig().BuilderWithdrawalPrefixByte},
+		ExecutionAddress:  bytes.Repeat([]byte{0x11}, 20),
+		Balance:           0,
+		WithdrawableEpoch: 0,
+	}}
+	st := newGloasState(t, nil, builders)
+
+	cred := builderWithdrawalCredentials()
+	req := &enginev1.BuilderDepositRequest{
+		Pubkey:                pubkey,
+		WithdrawalCredentials: cred[:],
+		Amount:                200,
+		Signature:             make([]byte, 96),
+	}
+	require.NoError(t, processBuilderDepositRequest(t.Context(), st, req, sigUnverified))
+
+	idx, ok := st.BuilderIndexByPubkey(toBytes48(pubkey))
+	require.Equal(t, true, ok)
+	builder, err := st.Builder(idx)
+	require.NoError(t, err)
+	require.Equal(t, uint64(200), uint64(builder.Balance))
+	expected := slots.ToEpoch(st.Slot()) + params.BeaconConfig().MinBuilderWithdrawabilityDelay
+	require.Equal(t, expected, builder.WithdrawableEpoch)
+}
+
+func TestProcessBuilderDepositRequest_ExitedUnsweptBuilderTopUpKeepsWithdrawableEpoch(t *testing.T) {
+	sk, err := bls.RandKey()
+	require.NoError(t, err)
+	pubkey := sk.PublicKey().Marshal()
+	exitedEpoch := primitives.Epoch(1)
+	builders := []*ethpb.Builder{{
+		Pubkey:            pubkey,
+		Version:           []byte{params.BeaconConfig().BuilderWithdrawalPrefixByte},
+		ExecutionAddress:  bytes.Repeat([]byte{0x11}, 20),
+		Balance:           5,
+		WithdrawableEpoch: exitedEpoch,
+	}}
+	st := newGloasState(t, nil, builders)
+
+	cred := builderWithdrawalCredentials()
+	req := &enginev1.BuilderDepositRequest{
+		Pubkey:                pubkey,
+		WithdrawalCredentials: cred[:],
+		Amount:                200,
+		Signature:             make([]byte, 96),
+	}
+	require.NoError(t, processBuilderDepositRequest(t.Context(), st, req, sigUnverified))
+
+	idx, ok := st.BuilderIndexByPubkey(toBytes48(pubkey))
+	require.Equal(t, true, ok)
+	builder, err := st.Builder(idx)
+	require.NoError(t, err)
+	require.Equal(t, uint64(205), uint64(builder.Balance))
+	require.Equal(t, exitedEpoch, builder.WithdrawableEpoch)
 }
 
 func TestProcessBuilderDepositRequests_BatchMixedValidInvalidAndTopUp(t *testing.T) {

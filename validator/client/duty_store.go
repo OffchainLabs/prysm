@@ -317,11 +317,13 @@ func (ds *dutyStore) needsNextFetch() bool {
 	return ds.data.initialized && ds.data.missingNext != 0 && len(ds.data.indices) > 0
 }
 
-func (ds *dutyStore) reset() {
-	ds.mu.Lock()
-	defer ds.mu.Unlock()
-	ds.data.reset()
-	ds.revision++
+// writeEmpty records that epoch has no duties for this client. The store stays
+// initialized so role lookups return no roles instead of erroring.
+func (ds *dutyStore) writeEmpty(epoch primitives.Epoch) {
+	var data dutyStoreData
+	data.setFromContainer(&ethpb.ValidatorDutiesContainer{})
+	data.epoch = epoch
+	ds.write(data)
 }
 
 func (ds *dutyStore) isInitialized() bool {

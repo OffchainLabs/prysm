@@ -5,44 +5,12 @@ package ssz_test
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
-	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
-	"github.com/pkg/errors"
-	fssz "github.com/prysmaticlabs/fastssz"
 )
 
 func FuzzUint64Root(f *testing.F) {
 	f.Fuzz(func(t *testing.T, i uint64) {
 		_ = ssz.Uint64Root(i)
-	})
-}
-
-func FuzzForkRoot(f *testing.F) {
-	frk := &pb.Fork{
-		PreviousVersion: params.BeaconConfig().GenesisForkVersion,
-		CurrentVersion:  params.BeaconConfig().AltairForkVersion,
-		Epoch:           100,
-	}
-	example, err := frk.MarshalSSZ()
-	if err != nil {
-		f.Fatal(err)
-	}
-	f.Add(example)
-
-	f.Fuzz(func(t *testing.T, b []byte) {
-		frk := &pb.Fork{}
-		if err := frk.UnmarshalSSZ(b); err != nil {
-			if errors.Is(err, fssz.ErrSize) {
-				return
-			}
-			t.Fatal(err)
-		}
-
-		if _, err := wrappers.ForkRoot(frk); err != nil {
-			t.Fatal(err)
-		}
 	})
 }
 

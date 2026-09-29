@@ -131,6 +131,7 @@ func TestPublishExecutionPayloadEnvelope_StatefulSendsBareEnvelope(t *testing.T)
 		api.BlobDataIncludedHeader: "false",
 	}
 	handler := mock.NewMockHandler(ctrl)
+	expectPostSSZWithFallback(handler)
 	handler.EXPECT().PostSSZ(
 		gomock.Any(),
 		"/eth/v1/beacon/execution_payload_envelopes",
@@ -159,6 +160,7 @@ func TestPublishExecutionPayloadEnvelope_StatefulJSONFallbackOn415(t *testing.T)
 		api.BlobDataIncludedHeader: "false",
 	}
 	handler := mock.NewMockHandler(ctrl)
+	expectPostSSZWithFallback(handler)
 	handler.EXPECT().PostSSZ(
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 	).Return(&httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType, Message: "unsupported media type"})
@@ -200,6 +202,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessSendsContents(t *testing.T) {
 		api.BlobDataIncludedHeader: "true",
 	}
 	handler := mock.NewMockHandler(ctrl)
+	expectPostSSZWithFallback(handler)
 	handler.EXPECT().PostSSZ(
 		gomock.Any(),
 		"/eth/v1/beacon/execution_payload_envelopes",
@@ -234,6 +237,7 @@ func TestPublishExecutionPayloadEnvelope_Error(t *testing.T) {
 	}
 
 	handler := mock.NewMockHandler(ctrl)
+	expectPostSSZWithFallback(handler)
 	handler.EXPECT().PostSSZ(
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 	).Return(errors.New("server error"))

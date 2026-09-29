@@ -57,6 +57,7 @@ go_test(
         "attestation_test.go",
         "beacon_committee_test.go",
         "block_test.go",
+        "deposit_signature_cache_test.go",
         "deposit_test.go",
         "legacy_test.go",
         "private_access_fuzz_noop_test.go",  # keep
@@ -85,6 +86,7 @@ go_test(
         "//container/slice:go_default_library",
         "//container/trie:go_default_library",
         "//crypto/bls:go_default_library",
+        "//crypto/bls/common:go_default_library",
         "//crypto/hash:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//proto/engine/v1:go_default_library",

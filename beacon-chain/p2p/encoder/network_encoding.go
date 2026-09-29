@@ -3,7 +3,7 @@ package encoder
 import (
 	"io"
 
-	ssz "github.com/prysmaticlabs/fastssz"
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 )
 
 // NetworkEncoding represents an encoder compatible with Ethereum consensus p2p.

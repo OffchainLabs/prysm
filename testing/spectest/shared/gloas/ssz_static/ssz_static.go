@@ -3,15 +3,16 @@ package ssz_static
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	// enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	common "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/common/ssz_static"
-	fssz "github.com/prysmaticlabs/fastssz"
 )
 
 // RunSSZStaticTests executes "ssz_static" tests.
@@ -75,6 +76,10 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.DataColumnSidecarGloas{}
 	case "SignedProposerPreferences", "ProposerPreferences":
 		t.Skip("p2p-only type; not part of the consensus state transition")
+	case "PartialDataColumnGroupID":
+		obj = &ethpb.PartialDataColumnGroupID{}
+	case "PartialDataColumnSidecar":
+		obj = &ethpb.PartialDataColumnSidecarGloas{}
 
 	// Standard types that also exist in gloas
 	case "ExecutionPayload":
@@ -86,7 +91,7 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 	case "AttestationData":
 		obj = &ethpb.AttestationData{}
 	case "AttesterSlashing":
-		obj = &ethpb.AttesterSlashingElectra{}
+		obj = &ethpb.AttesterSlashingGloas{}
 	case "AggregateAndProof":
 		obj = &ethpb.AggregateAttestationAndProofGloas{}
 	case "BeaconBlockHeader":
@@ -110,7 +115,7 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 	case "HistoricalBatch":
 		obj = &ethpb.HistoricalBatch{}
 	case "IndexedAttestation":
-		obj = &ethpb.IndexedAttestationElectra{}
+		obj = &ethpb.IndexedAttestationGloas{}
 	case "PendingAttestation":
 		obj = &ethpb.PendingAttestation{}
 	case "ProposerSlashing":
@@ -183,17 +188,17 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.DataColumnsByRootIdentifier{}
 	case "MatrixEntry":
 		t.Skip("Unused type")
-	case "PartialDataColumnHeader", "PartialDataColumnPartsMetadata", "PartialDataColumnSidecar", "PartialDataColumnGroupID":
+	case "PartialDataColumnHeader", "PartialDataColumnPartsMetadata":
 		t.Skip("Not yet implemented")
 	default:
 		return nil, errors.New("type not found")
 	}
 
 	var err error
-	if o, ok := obj.(fssz.Unmarshaler); ok {
+	if o, ok := obj.(ssz.Unmarshaler); ok {
 		err = o.UnmarshalSSZ(serializedBytes)
 	} else {
-		err = errors.New("could not unmarshal object, not a fastssz compatible object")
+		err = fmt.Errorf("selected type %T for folder %s does not implement ssz.Unmarshaler", obj, folderName)
 	}
 
 	return obj, err

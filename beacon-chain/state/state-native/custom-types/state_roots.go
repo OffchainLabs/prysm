@@ -3,24 +3,25 @@ package customtypes
 import (
 	"fmt"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
+
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
-	fssz "github.com/prysmaticlabs/fastssz"
 )
 
-var _ fssz.HashRoot = (StateRoots)([][32]byte{})
-var _ fssz.Marshaler = (*StateRoots)(nil)
-var _ fssz.Unmarshaler = (*StateRoots)(nil)
+var _ ssz.HashRoot = (StateRoots)([][32]byte{})
+var _ ssz.Marshaler = (*StateRoots)(nil)
+var _ ssz.Unmarshaler = (*StateRoots)(nil)
 
 // StateRoots represents block roots of the beacon state.
 type StateRoots [][32]byte
 
 // HashTreeRoot returns calculated hash root.
 func (r StateRoots) HashTreeRoot() ([32]byte, error) {
-	return fssz.HashWithDefaultHasher(r)
+	return ssz.HashWithDefaultHasher(r)
 }
 
 // HashTreeRootWith hashes a StateRoots object with a Hasher from the default HasherPool.
-func (r StateRoots) HashTreeRootWith(hh *fssz.Hasher) error {
+func (r StateRoots) HashTreeRootWith(hh *ssz.Hasher) error {
 	index := hh.Index()
 	for _, sRoot := range r {
 		hh.Append(sRoot[:])

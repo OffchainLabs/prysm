@@ -24,6 +24,11 @@ build --workspace_status_command=./hack/workspace_status.sh
 build --define blst_disabled=false
 run --define blst_disabled=false
 
+# SSZ progressive merkleization is ON by default: gloas (EIP-7688) mandates it
+# and the consensus-spec fixtures expect the progressive hash_tree_root values.
+# The only escape hatch is at codegen time: SSZ_PROGRESSIVE=0 make gen ssz
+# regenerates the bounded form (see build/gen/ssz.go).
+
 build:blst_disabled --define blst_disabled=true
 build:blst_disabled --define gotags=blst_disabled
 

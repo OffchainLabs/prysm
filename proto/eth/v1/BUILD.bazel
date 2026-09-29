@@ -29,37 +29,14 @@ proto_library(
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
 load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
 load("//proto:ssz_proto_library.bzl", "ssz_proto_files")
-load("//tools:ssz.bzl", "SSZ_DEPS", "ssz_gen_marshal")
+load("//tools:methodical.bzl", "ssz_methodical")
 
-ssz_gen_marshal(
-    name = "ssz_generated_files",
-    go_proto = ":go_proto",
+ssz_methodical(
+    name = "methodical_gateway",
+    deps = [":go_proto"],
+    config_file = "gateway.yaml",
+    override_package_name = "v1",
     out = "gateway.ssz.go",
-    includes = [
-        "//consensus-types/primitives:go_default_library",
-        "//proto/engine/v1:go_default_library",
-    ],
-    objs = [
-        "AggregateAttestationAndProof",
-        "Attestation",
-        "AttestationData",
-        "AttesterSlashing",
-        "BeaconBlock",
-        "BeaconBlockHeader",
-        "Checkpoint",
-        "Deposit",
-        "DepositData",
-        "Eth1Data",
-        "IndexedAttestation",
-        "ProposerSlashing",
-        "SignedAggregateAttestationAndProof",
-        "SignedBeaconBlock",
-        "SignedBeaconBlockHeader",
-        "SignedVoluntaryExit",
-        "SyncAggregate",
-        "Validator",
-        "VoluntaryExit",
-    ],
 )
 
 go_proto_library(
@@ -86,15 +63,16 @@ go_proto_library(
 go_library(
     name = "go_default_library",
     srcs = [
-        ":ssz_generated_files",
+        ":methodical_gateway",
     ],
     embed = [
         ":go_proto",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/proto/eth/v1",
     visibility = ["//visibility:public"],
-    deps = SSZ_DEPS + [
+    deps = [
         "@org_golang_google_protobuf//types/descriptorpb",
+        "@com_github_offchainlabs_methodical_ssz//ssz:go_default_library",
     ],
 )
 

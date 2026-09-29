@@ -1,12 +1,12 @@
 package slasher
 
 import (
+	"encoding/binary"
 	"reflect"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
-	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 func TestDefaultParams(t *testing.T) {
@@ -299,7 +299,7 @@ func TestParams_flatSliceID(t *testing.T) {
 				historyLength:      tt.fields.historyLength,
 			}
 			got := c.flatSliceID(tt.validatorChunkIndex, tt.chunkIndex)
-			decoded := ssz.UnmarshallUint64(got)
+			decoded := binary.LittleEndian.Uint64(got)
 			if decoded != tt.want {
 				t.Errorf("diskKey() = %v, want %v", got, tt.want)
 			}

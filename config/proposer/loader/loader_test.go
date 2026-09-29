@@ -6,7 +6,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	logtest "github.com/sirupsen/logrus/hooks/test"
+	"github.com/urfave/cli/v2"
 
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -19,19 +25,60 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/validator/db/iface"
 	dbTest "github.com/OffchainLabs/prysm/v7/validator/db/testing"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	logtest "github.com/sirupsen/logrus/hooks/test"
-	"github.com/urfave/cli/v2"
 )
+
+func legacyRelaysSettings() *proposer.Settings {
+	key1 := hexutil.MustDecode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+	return &proposer.Settings{
+		ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+			bytesutil.ToBytes48(key1): {
+				FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")},
+				BuilderConfig:      &proposer.BuilderConfig{Enabled: true, GasLimit: validator.Uint64(40000000)},
+			},
+		},
+		DefaultConfig: &proposer.Option{
+			FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+			BuilderConfig:      &proposer.BuilderConfig{Enabled: false, GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)},
+		},
+	}
+}
+
+// goodV2URLSettings is what testdata/good-v2-url-proposer-config.json loads to.
+func goodV2URLSettings() *proposer.Settings {
+	u64 := func(v uint64) *validator.Uint64 { u := validator.Uint64(v); return &u }
+	return &proposer.Settings{
+		Version: proposer.SchemaV2,
+		DefaultConfig: &proposer.Option{
+			FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+			GasLimit:           30000000,
+			BuilderConfig: &proposer.BuilderConfig{
+				MaxExecutionPayment: u64(0),
+				Builders: []*proposer.BuilderEntry{{
+					URL:      "https://builder-a.example",
+					Pubkeys:  [][]byte{make([]byte, fieldparams.BLSPubkeyLength)},
+					AuthData: []byte("hello"),
+					MinBid:   u64(1),
+				}},
+			},
+		},
+	}
+}
 
 func TestProposerSettingsLoader(t *testing.T) {
 	hook := logtest.NewGlobal()
+	// Keys used by the per-key-replaces-db*.json testdata.
+	keyA := [fieldparams.BLSPubkeyLength]byte{0xaa}
+	keyB := [fieldparams.BLSPubkeyLength]byte{0xbb}
+	keyC := [fieldparams.BLSPubkeyLength]byte{0xcc}
 	type proposerSettingsFlag struct {
-		dir        string
-		url        string
-		defaultfee string
-		defaultgas string
+		dir               string
+		url               string
+		defaultfee        string
+		defaultgas        string
+		builderURLs       string
+		builderMinBid     string
+		builderBoost      string
+		builderMaxPayment string
 	}
 
 	type args struct {
@@ -44,7 +91,8 @@ func TestProposerSettingsLoader(t *testing.T) {
 		urlResponse                  string
 		wantInitErr                  string
 		wantErr                      string
-		wantLog                      string
+		wantLogs                     []string
+		wantNoLogs                   []string
 		withdb                       func(db iface.ValidatorDB) error
 		validatorRegistrationEnabled bool
 		skipDBSavedCheck             bool
@@ -234,7 +282,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 			want: func() *proposer.Settings {
 				return nil
 			},
-			wantLog:          "No proposer settings were provided",
+			wantLogs:         []string{"No proposer settings were provided"},
 			skipDBSavedCheck: true,
 		},
 		{
@@ -287,8 +335,8 @@ func TestProposerSettingsLoader(t *testing.T) {
 					},
 				}
 			},
-			wantErr: "",
-			wantLog: "is not a checksum Ethereum address",
+			wantErr:  "",
+			wantLogs: []string{"is not a checksum Ethereum address"},
 		},
 		{
 			name: "Happy Path Config file File multiple fee recipients",
@@ -376,18 +424,32 @@ func TestProposerSettingsLoader(t *testing.T) {
 					defaultfee: "",
 				},
 			},
+			want:    legacyRelaysSettings,
+			wantErr: "",
+		},
+		{
+			name: "unversioned file with v2 builder fields is inferred as v2",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/good-v2-proposer-config-unversioned.json",
+				},
+			},
 			want: func() *proposer.Settings {
 				key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
 				require.NoError(t, err)
+				u64 := func(v uint64) *validator.Uint64 { u := validator.Uint64(v); return &u }
 				return &proposer.Settings{
+					Version: proposer.SchemaV2,
 					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
 						bytesutil.ToBytes48(key1): {
 							FeeRecipientConfig: &proposer.FeeRecipientConfig{
 								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
 							},
 							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
-								GasLimit: 40000000,
+								MinBid: u64(500000000),
+								Builders: []*proposer.BuilderEntry{
+									{URL: "https://builder-a.example"},
+								},
 							},
 						},
 					},
@@ -395,10 +457,45 @@ func TestProposerSettingsLoader(t *testing.T) {
 						FeeRecipientConfig: &proposer.FeeRecipientConfig{
 							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 						},
-						BuilderConfig: &proposer.BuilderConfig{
-							Enabled:  false,
-							GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
+					},
+				}
+			},
+			wantErr: "",
+		},
+		{
+			name: "v2 file with builders list loads at v2 and dedups duplicate builder urls",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/good-v2-proposer-config.json",
+				},
+			},
+			want: func() *proposer.Settings {
+				key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+				require.NoError(t, err)
+				u64 := func(v uint64) *validator.Uint64 { u := validator.Uint64(v); return &u }
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(key1): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{
+								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
+							},
+							GasLimit: 40000000,
+							BuilderConfig: &proposer.BuilderConfig{
+								MinBid: u64(500000000),
+								Builders: []*proposer.BuilderEntry{
+									{URL: "https://builder-a.example", MaxExecutionPayment: u64(1000000000)},
+									{URL: "https://builder-b.example"},
+								},
+							},
 						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{
+							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
+						},
+						GasLimit:      30000000,
+						BuilderConfig: &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{}},
 					},
 				}
 			},
@@ -468,6 +565,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 						FeeRecipientConfig: &proposer.FeeRecipientConfig{
 							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 						},
+						GasLimit: 50000000,
 						BuilderConfig: &proposer.BuilderConfig{
 							Enabled:  true,
 							GasLimit: 50000000,
@@ -582,6 +680,179 @@ func TestProposerSettingsLoader(t *testing.T) {
 			},
 			wantErr:                      "",
 			validatorRegistrationEnabled: true,
+		},
+		{
+			name: "Suggested Fee is the default when v1 file has no default_config",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir:        "./testdata/proposer-config-only.json",
+					url:        "",
+					defaultfee: "0x6e35733c5af9B61374A128e6F85f553aF09ff89B",
+				},
+			},
+			want: func() *proposer.Settings {
+				key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+				require.NoError(t, err)
+				return &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(key1): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{
+								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
+							},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{
+							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89B"),
+						},
+					},
+				}
+			},
+		},
+		{
+			name: "Suggested Fee is the default when v2 file has no default_config",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir:        "./testdata/v2-proposer-config-only.json",
+					url:        "",
+					defaultfee: "0x6e35733c5af9B61374A128e6F85f553aF09ff89B",
+				},
+			},
+			want: func() *proposer.Settings {
+				key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+				require.NoError(t, err)
+				u64 := func(v uint64) *validator.Uint64 { u := validator.Uint64(v); return &u }
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(key1): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{
+								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
+							},
+							GasLimit: 40000000,
+							BuilderConfig: &proposer.BuilderConfig{
+								MinBid: u64(500000000),
+								Builders: []*proposer.BuilderEntry{
+									{URL: "https://builder-a.example"},
+								},
+							},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{
+							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89B"),
+						},
+					},
+				}
+			},
+		},
+		{
+			name: "Suggested Fee replaces db default when file has no default_config",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir:        "./testdata/proposer-config-only.json",
+					url:        "",
+					defaultfee: "0x6e35733c5af9B61374A128e6F85f553aF09ff89B",
+				},
+			},
+			want: func() *proposer.Settings {
+				key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+				require.NoError(t, err)
+				return &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(key1): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{
+								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
+							},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{
+							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89B"),
+						},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				settings := &proposer.Settings{
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{
+							FeeRecipient: common.HexToAddress("0xae967917c465db8578ca9024c205720b1a3651A9"),
+						},
+					},
+				}
+				return db.SaveProposerSettings(t.Context(), settings)
+			},
+		},
+		{
+			name: "Suggested Fee is the default when url has no default_config",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir:        "",
+					url:        "./testdata/proposer-config-only.json",
+					defaultfee: "0x6e35733c5af9B61374A128e6F85f553aF09ff89B",
+				},
+			},
+			want: func() *proposer.Settings {
+				key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+				require.NoError(t, err)
+				return &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(key1): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{
+								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
+							},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{
+							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89B"),
+						},
+					},
+				}
+			},
+		},
+		{
+			name: "file proposer_config replaces db proposer_config while Suggested Fee stays the default",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir:        "./testdata/proposer-config-only.json",
+					url:        "",
+					defaultfee: "0x6e35733c5af9B61374A128e6F85f553aF09ff89B",
+				},
+			},
+			want: func() *proposer.Settings {
+				key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+				require.NoError(t, err)
+				return &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(key1): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{
+								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
+							},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{
+							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89B"),
+						},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				key2, err := hexutil.Decode("0xb057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7b")
+				require.NoError(t, err)
+				settings := &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(key2): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{
+								FeeRecipient: common.HexToAddress("0x60155530FCE8a85ec7055A5F8b2bE214B3DaeFd4"),
+							},
+						},
+					},
+				}
+				return db.SaveProposerSettings(t.Context(), settings)
+			},
 		},
 		{
 			name: "Enable Builder flag overrides empty config",
@@ -894,10 +1165,690 @@ func TestProposerSettingsLoader(t *testing.T) {
 			},
 			wantErr: "failed to unmarshal yaml file",
 		},
+		{
+			name: "legacy relays key is accepted and ignored",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/legacy-relays-proposer-config.json",
+				},
+			},
+			want: legacyRelaysSettings,
+		},
+		{
+			name: "legacy relays key from URL is accepted and ignored",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					url: "./testdata/legacy-relays-proposer-config.json",
+				},
+			},
+			want: legacyRelaysSettings,
+		},
+		{
+			name: "v2 from URL with string and number uints, explicit zero and base64 bytes",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					url: "./testdata/good-v2-url-proposer-config.json",
+				},
+			},
+			want: goodV2URLSettings,
+		},
+		{
+			name: "null proposer_config entry is skipped",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/null-entry-proposer-config.json",
+				},
+			},
+			want: func() *proposer.Settings {
+				liveKey := hexutil.MustDecode("0xb057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+				return &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(liveKey): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+					},
+				}
+			},
+		},
+		{
+			name: "internal builders_set key is rejected",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/builders-set-key-proposer-config.json",
+				},
+			},
+			want:    func() *proposer.Settings { return nil },
+			wantErr: "builders_set is not a settings key",
+		},
+		{
+			name: "unsupported version already in the DB is rejected",
+			args: args{proposerSettingsFlagValues: &proposerSettingsFlag{}},
+			withdb: func(db iface.ValidatorDB) error {
+				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
+					Version:       proposer.SchemaV2 + 1,
+					DefaultConfig: &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")}},
+				})
+			},
+			want:    func() *proposer.Settings { return nil },
+			wantErr: "validator DB holds proposer settings with unsupported version 3",
+		},
+		{
+			name: "unsupported version already in the DB is rejected even with a configured file",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/good-v2-url-proposer-config.json",
+				},
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
+					Version:       proposer.SchemaV2 + 1,
+					DefaultConfig: &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x1111111111111111111111111111111111111111")}},
+				})
+			},
+			want:    func() *proposer.Settings { return nil },
+			wantErr: "validator DB holds proposer settings with unsupported version 3",
+		},
+		{
+			name: "unknown key in JSON file is rejected",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/unknown-key-proposer-config.json",
+				},
+			},
+			want:    func() *proposer.Settings { return nil },
+			wantErr: `unknown field "fee_recipent"`,
+		},
+		{
+			name: "unknown key in YAML file is rejected",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/unknown-key-proposer-config.yaml",
+				},
+			},
+			want:    func() *proposer.Settings { return nil },
+			wantErr: `unknown field "builder_pubkeys"`,
+		},
+		{
+			name: "unknown key from URL is rejected",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					url: "./testdata/unknown-key-proposer-config.json",
+				},
+			},
+			want:    func() *proposer.Settings { return nil },
+			wantErr: `unknown field "fee_recipent"`,
+		},
+		{
+			name: "unsupported version in file is rejected",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/unsupported-version-proposer-config.json",
+				},
+			},
+			want:    func() *proposer.Settings { return nil },
+			wantErr: "unsupported proposer settings version 3",
+		},
+		{
+			name: "unsupported version from URL is rejected",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					url: "./testdata/unsupported-version-proposer-config.json",
+				},
+			},
+			want:    func() *proposer.Settings { return nil },
+			wantErr: "unsupported proposer settings version 3",
+		},
+		{
+			name: "file per-key entries replace db entries and warn with dropped and overridden keys",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/per-key-replaces-db.json",
+				},
+			},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						keyA: &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x3333333333333333333333333333333333333333")}},
+						keyC: &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x4444444444444444444444444444444444444444")}},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						keyA: &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x1111111111111111111111111111111111111111")}},
+						keyB: &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x2222222222222222222222222222222222222222")}},
+					},
+				})
+			},
+			wantLogs: []string{
+				"differ from the configured settings file/URL",
+				fmt.Sprintf("overriddenKeys=%#x", keyA),
+				fmt.Sprintf("droppedKeys=%#x", keyB),
+				"overriddenCount=1",
+				"droppedCount=1",
+			},
+		},
+		{
+			// Lowercase in the file, checksummed in the DB: the compare runs after normalization.
+			name: "file per-key entries identical to db entries do not warn",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/per-key-identical-to-db.json",
+				},
+			},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						keyA: &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd")}},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						keyA: &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd")}},
+					},
+				})
+			},
+			wantNoLogs: []string{"differ from the configured settings file/URL"},
+		},
+		{
+			name: "file per-key entries with an empty db do not warn",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/per-key-identical-to-db.json",
+				},
+			},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						keyA: &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd")}},
+					},
+				}
+			},
+			wantNoLogs: []string{"differ from the configured settings file/URL"},
+		},
+		{
+			name: "replaced db key list is capped",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/per-key-replaces-db-capped.json",
+				},
+			},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						{0xff}: &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x1111111111111111111111111111111111111111")}},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				settings := &proposer.Settings{ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{}}
+				for i := 0; i < 15; i++ {
+					settings.ProposeConfig[[fieldparams.BLSPubkeyLength]byte{byte(i)}] = &proposer.Option{FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x1111111111111111111111111111111111111111")}}
+				}
+				return db.SaveProposerSettings(t.Context(), settings)
+			},
+			wantLogs: []string{
+				"differ from the configured settings file/URL",
+				"droppedCount=15",
+				"+5 more",
+				// Sorted hex: the 10th key (first byte 0x09) is listed, the 11th (0x0a) is behind the cap.
+				fmt.Sprintf("%#x", [fieldparams.BLSPubkeyLength]byte{0x09}),
+			},
+			wantNoLogs: []string{fmt.Sprintf("%#x", [fieldparams.BLSPubkeyLength]byte{0x0a})},
+		},
+		{
+			name: "builder flags alone build a v2 default that is not persisted",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					builderURLs:       "https://builder-a.example, https://builder-b.example#0x0123",
+					builderMinBid:     "500000000",
+					builderBoost:      "90",
+					builderMaxPayment: "0",
+				},
+			},
+			want: func() *proposer.Settings {
+				minBid, boost, maxPayment := validator.Uint64(500000000), validator.Uint64(90), validator.Uint64(0)
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						BuilderConfig: &proposer.BuilderConfig{
+							Builders: []*proposer.BuilderEntry{
+								{URL: "https://builder-a.example"},
+								{URL: "https://builder-b.example", AuthData: []byte{0x01, 0x23}},
+							},
+							MinBid:              &minBid,
+							BuilderBoostFactor:  &boost,
+							MaxExecutionPayment: &maxPayment,
+						},
+					},
+				}
+			},
+			wantLogs:         []string{"Proposer settings loaded from default", "no Gloas fork scheduled"},
+			wantNoLogs:       []string{"nothing has been saved"},
+			skipDBSavedCheck: true,
+		},
+		{
+			name: "fee recipient and builder flags define the default",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					defaultfee:  "0x6e35733c5af9B61374A128e6F85f553aF09ff89A",
+					builderURLs: "https://builder-a.example",
+				},
+			},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						BuilderConfig:      &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{{URL: "https://builder-a.example"}}},
+					},
+				}
+			},
+		},
+		{
+			name: "builder flags replace a v1 db default and keep its per-key entries",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					defaultfee:  "0x6e35733c5af9B61374A128e6F85f553aF09ff89A",
+					builderURLs: "https://builder-a.example",
+				},
+			},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						keyA: {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")},
+							BuilderConfig:      &proposer.BuilderConfig{Enabled: true, GasLimit: validator.Uint64(30000000)},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						BuilderConfig:      &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{{URL: "https://builder-a.example"}}},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						keyA: {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")},
+							BuilderConfig:      &proposer.BuilderConfig{Enabled: true, GasLimit: validator.Uint64(30000000)},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0xAe967917c465db8578ca9024c205720b1a3651A9")},
+						BuilderConfig:      &proposer.BuilderConfig{Enabled: true, GasLimit: validator.Uint64(40000000)},
+					},
+				})
+			},
+			wantNoLogs: []string{"Dropped the default builder settings"},
+		},
+		{
+			name: "settings file default_config replaces the builder flag defaults",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir:         "./testdata/good-prepare-beacon-proposer-config.json",
+					builderURLs: "https://builder-a.example",
+				},
+			},
+			want: func() *proposer.Settings {
+				key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+				require.NoError(t, err)
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(key1): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+					},
+				}
+			},
+			wantLogs:   []string{"replaces the builder defaults set by --builder-urls"},
+			wantNoLogs: []string{"Dropped the default builder settings"},
+		},
+		{
+			name: "settings file without default_config keeps the builder flag defaults",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir:         "./testdata/proposer-config-only.json",
+					defaultfee:  "0x6e35733c5af9B61374A128e6F85f553aF09ff89A",
+					builderURLs: "https://builder-a.example",
+				},
+			},
+			want: func() *proposer.Settings {
+				key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+				require.NoError(t, err)
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(key1): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						BuilderConfig:      &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{{URL: "https://builder-a.example"}}},
+					},
+				}
+			},
+			wantNoLogs: []string{"replaces the builder defaults"},
+		},
+		{
+			name: "legacy builder flags coexist with the builder flag defaults",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					defaultfee:  "0x6e35733c5af9B61374A128e6F85f553aF09ff89A",
+					defaultgas:  "50000000",
+					builderURLs: "https://builder-a.example",
+				},
+			},
+			validatorRegistrationEnabled: true,
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						GasLimit:           50000000,
+						BuilderConfig: &proposer.BuilderConfig{
+							Enabled:  true,
+							Builders: []*proposer.BuilderEntry{{URL: "https://builder-a.example"}},
+						},
+					},
+				}
+			},
+		},
+		{
+			name: "a later run without builder flags rebuilds the default from the flags",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					defaultfee: "0x6e35733c5af9B61374A128e6F85f553aF09ff89A",
+				},
+			},
+			wantLogs: []string{"Dropped the default builder settings"},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						BuilderConfig:      &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{{URL: "https://builder-a.example"}}},
+					},
+				})
+			},
+		},
+		{
+			name: "a flagless run drops persisted flag builders and keeps per-key entries",
+			args: args{proposerSettingsFlagValues: &proposerSettingsFlag{}},
+			want: func() *proposer.Settings {
+				minBid := validator.Uint64(1)
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						keyA: {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")},
+							BuilderConfig:      &proposer.BuilderConfig{Enabled: true, GasLimit: validator.Uint64(30000000)},
+						},
+						keyB: {BuilderConfig: &proposer.BuilderConfig{MinBid: &minBid}},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				minBid := validator.Uint64(1)
+				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
+					Version: proposer.SchemaV2,
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						keyA: {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")},
+							BuilderConfig:      &proposer.BuilderConfig{Enabled: true, GasLimit: validator.Uint64(30000000)},
+						},
+						keyB: {BuilderConfig: &proposer.BuilderConfig{MinBid: &minBid}},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						BuilderConfig:      &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{{URL: "https://builder-a.example"}}},
+					},
+				})
+			},
+			wantLogs: []string{"Proposer settings loaded from the DB", "Dropped the default builder settings"},
+		},
+		{
+			name:                         "--enable-builder alone does not keep persisted flag builders",
+			args:                         args{proposerSettingsFlagValues: &proposerSettingsFlag{}},
+			validatorRegistrationEnabled: true,
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						BuilderConfig:      &proposer.BuilderConfig{Enabled: true},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						BuilderConfig:      &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{{URL: "https://builder-a.example"}}},
+					},
+				})
+			},
+			wantLogs: []string{"no effect after the gloas fork", "Dropped the default builder settings"},
+		},
+		{
+			name: "builder flags alone keep the persisted default fee recipient",
+			args: args{proposerSettingsFlagValues: &proposerSettingsFlag{builderURLs: "https://builder-a.example"}},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						BuilderConfig:      &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{{URL: "https://builder-a.example"}}},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						BuilderConfig:      &proposer.BuilderConfig{Enabled: true, GasLimit: validator.Uint64(40000000)},
+					},
+				})
+			},
+			wantLogs:   []string{"Proposer settings loaded from default"},
+			wantNoLogs: []string{"Dropped the default builder settings"},
+		},
+		{
+			name: "a settings file that keeps configuring default builders does not warn",
+			args: args{proposerSettingsFlagValues: &proposerSettingsFlag{dir: "./testdata/v2-default-builders.json"}},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						BuilderConfig:      &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{{URL: "https://builder-a.example"}}},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						BuilderConfig:      &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{{URL: "https://builder-a.example"}}},
+					},
+				})
+			},
+			wantNoLogs: []string{"Dropped the default builder settings"},
+		},
+		{
+			name: "a settings file without default builders drops persisted flag builders and warns",
+			args: args{proposerSettingsFlagValues: &proposerSettingsFlag{dir: "./testdata/good-prepare-beacon-proposer-config.json"}},
+			want: func() *proposer.Settings {
+				key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+				require.NoError(t, err)
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(key1): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						BuilderConfig:      &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{{URL: "https://builder-a.example"}}},
+					},
+				})
+			},
+			wantLogs: []string{"Dropped the default builder settings"},
+		},
+		{
+			name: "builder flags opt legacy-only per-key blocks in and leave explicit opt-outs",
+			args: args{proposerSettingsFlagValues: &proposerSettingsFlag{
+				defaultfee:  "0x6e35733c5af9B61374A128e6F85f553aF09ff89A",
+				builderURLs: "https://builder-a.example",
+			}},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						keyA: {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")},
+							BuilderConfig:      &proposer.BuilderConfig{Enabled: true, GasLimit: validator.Uint64(30000000)},
+						},
+						keyB: {BuilderConfig: &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{}}},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						BuilderConfig:      &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{{URL: "https://builder-a.example"}}},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
+					Version: proposer.SchemaV2,
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						keyA: {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")},
+							BuilderConfig:      &proposer.BuilderConfig{GasLimit: validator.Uint64(30000000)},
+						},
+						keyB: {BuilderConfig: &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{}}},
+					},
+				})
+			},
+		},
+		{
+			name: "gas limit flag alone is a default source",
+			args: args{proposerSettingsFlagValues: &proposerSettingsFlag{defaultgas: "50000000"}},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					DefaultConfig: &proposer.Option{
+						GasLimit:      50000000,
+						BuilderConfig: &proposer.BuilderConfig{GasLimit: 50000000},
+					},
+				}
+			},
+			wantLogs: []string{"Proposer settings loaded from default"},
+		},
+		{
+			name: "a run without the gas limit flag drops the persisted default gas limit and warns",
+			args: args{proposerSettingsFlagValues: &proposerSettingsFlag{defaultfee: "0x6e35733c5af9B61374A128e6F85f553aF09ff89A"}},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						GasLimit:           45000000,
+					},
+				})
+			},
+			wantLogs: []string{"Dropped the default gas limit"},
+		},
+		{
+			name: "a run with the gas limit flag replaces the persisted default gas limit without warning",
+			args: args{proposerSettingsFlagValues: &proposerSettingsFlag{defaultfee: "0x6e35733c5af9B61374A128e6F85f553aF09ff89A", defaultgas: "50000000"}},
+			want: func() *proposer.Settings {
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						GasLimit:           50000000,
+					},
+				}
+			},
+			withdb: func(db iface.ValidatorDB) error {
+				return db.SaveProposerSettings(t.Context(), &proposer.Settings{
+					Version: proposer.SchemaV2,
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")},
+						GasLimit:           45000000,
+					},
+				})
+			},
+			wantNoLogs: []string{"Dropped the default gas limit"},
+		},
+		{
+			name: "invalid builder url fails",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{builderURLs: "builder-a.example"},
+			},
+			wantErr: "url is not a valid URL",
+		},
+		{
+			name: "invalid builder auth fragment fails",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{builderURLs: "https://builder-a.example#token"},
+			},
+			wantErr: "not 0x-prefixed hex",
+		},
+		{
+			name: "duplicate builder url fails",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{builderURLs: "https://builder-a.example,https://builder-a.example"},
+			},
+			wantErr: "more than once",
+		},
 	}
 	for _, tt := range tests {
 		for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 			t.Run(fmt.Sprintf("%v-minimal:%v", tt.name, isSlashingProtectionMinimal), func(t *testing.T) {
+				hook.Reset()
 				app := cli.App{}
 				set := flag.NewFlagSet("test", 0)
 				if tt.args.proposerSettingsFlagValues.dir != "" {
@@ -929,6 +1880,20 @@ func TestProposerSettingsLoader(t *testing.T) {
 				if tt.validatorRegistrationEnabled {
 					set.Bool(flags.EnableBuilderFlag.Name, true, "")
 				}
+				if v := tt.args.proposerSettingsFlagValues.builderURLs; v != "" {
+					set.Var(cli.NewStringSlice(), flags.BuilderURLsFlag.Name, "")
+					require.NoError(t, set.Set(flags.BuilderURLsFlag.Name, v))
+				}
+				for name, v := range map[string]string{
+					flags.BuilderMinBidFlag.Name:              tt.args.proposerSettingsFlagValues.builderMinBid,
+					flags.BuilderBoostFactorFlag.Name:         tt.args.proposerSettingsFlagValues.builderBoost,
+					flags.BuilderMaxExecutionPaymentFlag.Name: tt.args.proposerSettingsFlagValues.builderMaxPayment,
+				} {
+					if v != "" {
+						set.Uint64(name, 0, "")
+						require.NoError(t, set.Set(name, v))
+					}
+				}
 				cliCtx := cli.NewContext(&app, set, nil)
 				validatorDB := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
 				if tt.withdb != nil {
@@ -954,10 +1919,11 @@ func TestProposerSettingsLoader(t *testing.T) {
 				} else {
 					require.NoError(t, err)
 				}
-				if tt.wantLog != "" {
-					assert.LogsContain(t, hook,
-						tt.wantLog,
-					)
+				for _, want := range tt.wantLogs {
+					assert.LogsContain(t, hook, want)
+				}
+				for _, notWant := range tt.wantNoLogs {
+					assert.LogsDoNotContain(t, hook, notWant)
 				}
 				w := tt.want()
 				require.DeepEqual(t, w, got)
@@ -995,7 +1961,6 @@ func Test_ProposerSettingsLoaderWithOnlyBuilder_DoesNotSaveInDB(t *testing.T) {
 					BuilderConfig: &proposer.BuilderConfig{
 						Enabled:  true,
 						GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
-						Relays:   nil,
 					},
 				},
 			}
@@ -1027,7 +1992,7 @@ func Test_ProposerSettingsLoader_GasLimitWithoutBuilder(t *testing.T) {
 			require.NotNil(t, got)
 			require.NotNil(t, got.DefaultConfig)
 			require.NotNil(t, got.DefaultConfig.BuilderConfig)
-			require.Equal(t, false, got.DefaultConfig.BuilderConfig.Enabled)
+			require.Equal(t, false, got.DefaultConfig.BuilderConfig.IsEnabled())
 			require.Equal(t, validator.Uint64(12345678), got.DefaultConfig.BuilderConfig.GasLimit)
 		})
 	}
@@ -1062,9 +2027,9 @@ func Test_ProposerSettingsLoader_DoesNotMigrateAtLoad(t *testing.T) {
 		got, err := loader.Load(cliCtx)
 		require.NoError(t, err)
 		require.NotNil(t, got)
-		// Migration is deferred; settings stay in v1 form at load time.
+		// Migration is deferred; the flag sets the option-level default but the version stays v1.
 		require.Equal(t, uint32(0), got.Version)
-		require.Equal(t, validator.Uint64(0), got.DefaultConfig.GasLimit)
+		require.Equal(t, validator.Uint64(12345678), got.DefaultConfig.GasLimit)
 		require.NotNil(t, got.DefaultConfig.BuilderConfig)
 		require.Equal(t, validator.Uint64(12345678), got.DefaultConfig.BuilderConfig.GasLimit)
 	})
@@ -1083,7 +2048,7 @@ func Test_ProposerSettingsLoader_DoesNotMigrateAtLoad(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, got)
 		require.Equal(t, uint32(0), got.Version)
-		require.Equal(t, validator.Uint64(0), got.DefaultConfig.GasLimit)
+		require.Equal(t, validator.Uint64(12345678), got.DefaultConfig.GasLimit)
 		require.NotNil(t, got.DefaultConfig.BuilderConfig)
 		require.Equal(t, validator.Uint64(12345678), got.DefaultConfig.BuilderConfig.GasLimit)
 	})
@@ -1121,7 +2086,7 @@ func Test_ProposerSettingsLoader_DoesNotMigrateAtLoad(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, got)
 		require.Equal(t, proposer.SchemaV1, got.Version)
-		require.Equal(t, validator.Uint64(0), got.DefaultConfig.GasLimit)
+		require.Equal(t, validator.Uint64(12345678), got.DefaultConfig.GasLimit)
 		require.NotNil(t, got.DefaultConfig.BuilderConfig)
 		// CLI --suggested-gas-limit applied to BuilderConfig.GasLimit in v1.
 		require.Equal(t, validator.Uint64(12345678), got.DefaultConfig.BuilderConfig.GasLimit)
@@ -1180,7 +2145,7 @@ func Test_mergeProposerSettings_VersionPrecedence(t *testing.T) {
 		)
 		require.Equal(t, uint32(proposer.SchemaV2), merged.Version)
 	})
-	t.Run("unversioned v1 content does not inherit v2 from db", func(t *testing.T) {
+	t.Run("v1 content merged into a v2 db coexists; version never regresses", func(t *testing.T) {
 		merged := mergeProposerSettings(
 			&validatorpb.ProposerSettingsPayload{
 				DefaultConfig: &validatorpb.ProposerOptionPayload{
@@ -1190,13 +2155,51 @@ func Test_mergeProposerSettings_VersionPrecedence(t *testing.T) {
 			&validatorpb.ProposerSettingsPayload{Version: proposer.SchemaV2},
 			&flagOptions{},
 		)
-		require.Equal(t, uint32(0), merged.Version)
+		require.Equal(t, uint32(proposer.SchemaV2), merged.Version)
+		// Semantics are fork-keyed: legacy content stays for pre-gloas reads and
+		// is stripped by the post-fork cleanup, not by the merge.
 		require.NotNil(t, merged.DefaultConfig.Builder)
+		require.Equal(t, true, merged.DefaultConfig.Builder.Enabled)
+	})
+	t.Run("file per-key section replaces the DB's entirely", func(t *testing.T) {
+		dbPayload := &validatorpb.ProposerSettingsPayload{
+			Version: proposer.SchemaV2,
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				"0xaa": {FeeRecipient: "0x1111111111111111111111111111111111111111"},
+				"0xbb": {FeeRecipient: "0x2222222222222222222222222222222222222222", GasLimit: 45000000},
+			},
+		}
+		filePayload := &validatorpb.ProposerSettingsPayload{
+			Version: proposer.SchemaV2,
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				"0xaa": {FeeRecipient: "0x3333333333333333333333333333333333333333"},
+			},
+		}
+		merged := mergeProposerSettings(filePayload, dbPayload, &flagOptions{})
+		require.Equal(t, 1, len(merged.ProposerConfig))
+		require.Equal(t, "0x3333333333333333333333333333333333333333", merged.ProposerConfig["0xaa"].FeeRecipient)
+		// Restarting with a file resets DB-resident keys the file does not name.
+		require.IsNil(t, merged.ProposerConfig["0xbb"])
+	})
+	t.Run("db per-key section kept when the file has none", func(t *testing.T) {
+		dbPayload := &validatorpb.ProposerSettingsPayload{
+			Version: proposer.SchemaV2,
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				"0xaa": {FeeRecipient: "0x1111111111111111111111111111111111111111"},
+			},
+		}
+		filePayload := &validatorpb.ProposerSettingsPayload{
+			Version:       proposer.SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0x4444444444444444444444444444444444444444"},
+		}
+		merged := mergeProposerSettings(filePayload, dbPayload, &flagOptions{})
+		require.Equal(t, 1, len(merged.ProposerConfig))
+		require.Equal(t, "0x1111111111111111111111111111111111111111", merged.ProposerConfig["0xaa"].FeeRecipient)
 	})
 }
 
-// Restarting with the same v1 file after migration persisted v2 to the DB must
-// reload in v1 form so the runtime upgrade re-applies the file's gas limits.
+// Restarting with the same v1 file after migration persisted v2 to the DB keeps
+// the v2 version and promotes the file's content so its gas limits stay readable.
 func TestSettingsLoader_V1FileAfterMigratedDB(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -1223,15 +2226,22 @@ func TestSettingsLoader_V1FileAfterMigratedDB(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, got)
 
-	require.Equal(t, uint32(0), got.Version)
+	require.Equal(t, proposer.SchemaV2, got.Version)
+	// The v1 file's builder content survives the merge for pre-gloas reads;
+	// the post-fork cleanup is what strips it.
 	require.NotNil(t, got.DefaultConfig.BuilderConfig)
-	require.Equal(t, validator.Uint64(40000000), got.DefaultConfig.BuilderConfig.GasLimit)
-	assert.LogsContain(t, hook, "deprecated v1 schema")
+	assert.LogsDoNotContain(t, hook, "deprecated v1 schema")
 
-	require.Equal(t, true, got.UpgradeToV2())
 	key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
 	require.NoError(t, err)
+	// Pre-gloas reads still resolve the v1 builder gas limit as a fallback.
 	require.Equal(t, validator.Uint64(60000000), got.GasLimit(bytesutil.ToBytes48(key1)))
+
+	// The cutover scrubs the v1 content even under the v2 stamp, then no-ops.
+	require.Equal(t, true, got.UpgradeToV2())
+	require.IsNil(t, got.DefaultConfig.BuilderConfig)
+	require.Equal(t, validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit), got.GasLimit(bytesutil.ToBytes48(key1)))
+	require.Equal(t, false, got.UpgradeToV2())
 }
 
 func Test_mergeProposerSettings_CreatesDefaultFromGasLimitFlag(t *testing.T) {
@@ -1243,25 +2253,24 @@ func Test_mergeProposerSettings_CreatesDefaultFromGasLimitFlag(t *testing.T) {
 	)
 	require.NotNil(t, merged.DefaultConfig)
 	require.NotNil(t, merged.DefaultConfig.Builder)
-	require.Equal(t, false, merged.DefaultConfig.Builder.Enabled)
+	require.Equal(t, false, merged.DefaultConfig.Builder.GetEnabled())
 	require.Equal(t, gl, merged.DefaultConfig.Builder.GasLimit)
 }
 
-func Test_mergeProposerSettings_V2GasLimitOnlyGoesToOption(t *testing.T) {
+func Test_mergeProposerSettings_V2GasLimitLeftToDefaultSource(t *testing.T) {
 	gl := validator.Uint64(12345678)
 	merged := mergeProposerSettings(
 		nil,
 		&validatorpb.ProposerSettingsPayload{Version: proposer.SchemaV2},
 		&flagOptions{gasLimit: &gl},
 	)
-	require.NotNil(t, merged.DefaultConfig)
-	require.IsNil(t, merged.DefaultConfig.Builder)
-	require.Equal(t, gl, merged.DefaultConfig.GasLimit)
+	// The default source writes the option-level gas limit; the merge adds no legacy builder content.
+	require.IsNil(t, merged.DefaultConfig)
 }
 
 func Test_mergeProposerSettings_VersionGatesBuilderReset(t *testing.T) {
 	v1Builder := func() *validatorpb.BuilderConfig {
-		return &validatorpb.BuilderConfig{Enabled: true, GasLimit: 40000000, Relays: []string{"r"}}
+		return &validatorpb.BuilderConfig{Enabled: true, GasLimit: 40000000}
 	}
 	t.Run("v1 db without enable-builder drops DB builder", func(t *testing.T) {
 		db := &validatorpb.ProposerSettingsPayload{
@@ -1271,7 +2280,7 @@ func Test_mergeProposerSettings_VersionGatesBuilderReset(t *testing.T) {
 		merged := mergeProposerSettings(nil, db, &flagOptions{})
 		require.IsNil(t, merged.DefaultConfig.Builder)
 	})
-	t.Run("v2 db without enable-builder preserves DB builder", func(t *testing.T) {
+	t.Run("v2 db without enable-builder preserves a legacy DB builder", func(t *testing.T) {
 		db := &validatorpb.ProposerSettingsPayload{
 			Version:       proposer.SchemaV2,
 			DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0x", Builder: v1Builder()},
@@ -1279,6 +2288,124 @@ func Test_mergeProposerSettings_VersionGatesBuilderReset(t *testing.T) {
 		merged := mergeProposerSettings(nil, db, &flagOptions{})
 		require.NotNil(t, merged.DefaultConfig.Builder)
 		require.Equal(t, validator.Uint64(40000000), merged.DefaultConfig.Builder.GasLimit)
+	})
+	t.Run("v2 db without builder flags drops the default's v2 builder fields only", func(t *testing.T) {
+		minBid := validator.Uint64(1)
+		db := &validatorpb.ProposerSettingsPayload{
+			Version: proposer.SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0x", Builder: &validatorpb.BuilderConfig{
+				Enabled:  true,
+				Builders: []*validatorpb.BuilderEntry{{Url: "https://a.example"}},
+				MinBid:   &minBid,
+			}},
+		}
+		merged := mergeProposerSettings(nil, db, &flagOptions{})
+		require.Equal(t, true, merged.DefaultConfig.Builder.Enabled)
+		require.Equal(t, 0, len(merged.DefaultConfig.Builder.Builders))
+		require.IsNil(t, merged.DefaultConfig.Builder.MinBid)
+	})
+	t.Run("v2 db without builder flags drops a v2-only default builder entirely", func(t *testing.T) {
+		db := &validatorpb.ProposerSettingsPayload{
+			Version: proposer.SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0x", Builder: &validatorpb.BuilderConfig{
+				Builders: []*validatorpb.BuilderEntry{{Url: "https://a.example"}},
+			}},
+		}
+		merged := mergeProposerSettings(nil, db, &flagOptions{})
+		require.IsNil(t, merged.DefaultConfig.Builder)
+		require.Equal(t, "0x", merged.DefaultConfig.FeeRecipient)
+	})
+	t.Run("v2 db keeps the default's v2 builder fields when builder flags are set", func(t *testing.T) {
+		db := &validatorpb.ProposerSettingsPayload{
+			Version: proposer.SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0x", Builder: &validatorpb.BuilderConfig{
+				Builders: []*validatorpb.BuilderEntry{{Url: "https://a.example"}},
+			}},
+		}
+		merged := mergeProposerSettings(nil, db, &flagOptions{builderFlagsSet: true})
+		require.Equal(t, 1, len(merged.DefaultConfig.Builder.Builders))
+	})
+	t.Run("v2 db per-key blocks are never stripped", func(t *testing.T) {
+		minBid := validator.Uint64(1)
+		db := &validatorpb.ProposerSettingsPayload{
+			Version: proposer.SchemaV2,
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				"0xaa": {FeeRecipient: "0x", Builder: v1Builder()},
+				"0xbb": {Builder: &validatorpb.BuilderConfig{MinBid: &minBid}},
+			},
+		}
+		merged := mergeProposerSettings(nil, db, &flagOptions{})
+		require.Equal(t, true, merged.ProposerConfig["0xaa"].Builder.Enabled)
+		require.NotNil(t, merged.ProposerConfig["0xbb"].Builder.MinBid)
+	})
+	t.Run("flag builders opt legacy-only per-key blocks in; builders: [] still opts out", func(t *testing.T) {
+		db := &validatorpb.ProposerSettingsPayload{
+			Version: proposer.SchemaV2,
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				"0xaa": {Builder: &validatorpb.BuilderConfig{GasLimit: 30000000}},
+				"0xbb": {Builder: &validatorpb.BuilderConfig{BuildersSet: true}},
+			},
+		}
+		loaded := &validatorpb.ProposerSettingsPayload{
+			Version: proposer.SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{
+				Builder: &validatorpb.BuilderConfig{Builders: []*validatorpb.BuilderEntry{{Url: "https://a.example"}}},
+			},
+		}
+		merged := mergeProposerSettings(loaded, db, &flagOptions{builderFlagsSet: true})
+		require.Equal(t, true, merged.ProposerConfig["0xaa"].Builder.Enabled)
+		require.Equal(t, validator.Uint64(30000000), merged.ProposerConfig["0xaa"].Builder.GasLimit)
+		require.Equal(t, false, merged.ProposerConfig["0xbb"].Builder.Enabled)
+	})
+	t.Run("a builder flag without a list does not opt legacy-only per-key blocks in", func(t *testing.T) {
+		minBid := validator.Uint64(1)
+		db := &validatorpb.ProposerSettingsPayload{
+			Version: proposer.SchemaV2,
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				"0xaa": {Builder: &validatorpb.BuilderConfig{GasLimit: 30000000}},
+			},
+		}
+		loaded := &validatorpb.ProposerSettingsPayload{
+			Version:       proposer.SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{Builder: &validatorpb.BuilderConfig{MinBid: &minBid}},
+		}
+		merged := mergeProposerSettings(loaded, db, &flagOptions{builderFlagsSet: true})
+		require.Equal(t, false, merged.ProposerConfig["0xaa"].Builder.Enabled)
+	})
+	t.Run("v2 --enable-builder leaves per-key blocks alone", func(t *testing.T) {
+		opts := &flagOptions{builderConfig: &proposer.BuilderConfig{Enabled: true}}
+		db := &validatorpb.ProposerSettingsPayload{
+			Version: proposer.SchemaV2,
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				"0xaa": {Builder: &validatorpb.BuilderConfig{GasLimit: 30000000}},
+			},
+		}
+		merged := mergeProposerSettings(nil, db, opts)
+		require.Equal(t, false, merged.ProposerConfig["0xaa"].Builder.Enabled)
+	})
+	t.Run("v2 --enable-builder still forces the legacy toggle and warns", func(t *testing.T) {
+		hook := logtest.NewGlobal()
+		opts := &flagOptions{builderConfig: &proposer.BuilderConfig{Enabled: true}}
+		db := &validatorpb.ProposerSettingsPayload{
+			Version:       proposer.SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0x"},
+		}
+		merged := mergeProposerSettings(nil, db, opts)
+		require.NotNil(t, merged.DefaultConfig.Builder)
+		require.Equal(t, true, merged.DefaultConfig.Builder.Enabled)
+		assert.LogsContain(t, hook, "no effect after the gloas fork")
+	})
+	t.Run("v1 builder content merged into v2 coexists until the post-fork cleanup", func(t *testing.T) {
+		file := &validatorpb.ProposerSettingsPayload{
+			DefaultConfig: &validatorpb.ProposerOptionPayload{
+				FeeRecipient: "0x",
+				Builder:      &validatorpb.BuilderConfig{GasLimit: 30000000},
+			},
+		}
+		db := &validatorpb.ProposerSettingsPayload{Version: proposer.SchemaV2}
+		merged := mergeProposerSettings(file, db, &flagOptions{})
+		require.NotNil(t, merged.DefaultConfig.Builder)
+		require.Equal(t, validator.Uint64(30000000), merged.DefaultConfig.Builder.GasLimit)
 	})
 }
 
@@ -1314,26 +2441,14 @@ func Test_mergeProposerSettings_V2LoadedOverridesDB(t *testing.T) {
 		}
 		merged := mergeProposerSettings(nil, db, &flagOptions{})
 		require.Equal(t, "0xdb", merged.DefaultConfig.FeeRecipient)
-		require.Equal(t, validator.Uint64(1), merged.DefaultConfig.GasLimit)
+		// The default gas limit is per-run and gone without the flag; per-key values stay.
+		require.Equal(t, validator.Uint64(0), merged.DefaultConfig.GasLimit)
 		require.Equal(t, "0xdbkey", merged.ProposerConfig["0xkey"].FeeRecipient)
 		require.Equal(t, validator.Uint64(2), merged.ProposerConfig["0xkey"].GasLimit)
 	})
 }
 
-func Test_mergeProposerSettings_V2GasLimitOverwritesExistingDefault(t *testing.T) {
-	gl := validator.Uint64(12345678)
-	db := &validatorpb.ProposerSettingsPayload{
-		Version:       proposer.SchemaV2,
-		DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0xdb", GasLimit: 1},
-	}
-	merged := mergeProposerSettings(nil, db, &flagOptions{gasLimit: &gl})
-	require.NotNil(t, merged.DefaultConfig)
-	require.IsNil(t, merged.DefaultConfig.Builder)
-	require.Equal(t, "0xdb", merged.DefaultConfig.FeeRecipient)
-	require.Equal(t, gl, merged.DefaultConfig.GasLimit)
-}
-
-func Test_mergeProposerSettings_V2GasLimitOverwritesPerValidator(t *testing.T) {
+func Test_mergeProposerSettings_V2GasLimitNeverOverridesOptions(t *testing.T) {
 	gl := validator.Uint64(12345678)
 	db := &validatorpb.ProposerSettingsPayload{
 		Version:       proposer.SchemaV2,
@@ -1343,6 +2458,236 @@ func Test_mergeProposerSettings_V2GasLimitOverwritesPerValidator(t *testing.T) {
 		},
 	}
 	merged := mergeProposerSettings(nil, db, &flagOptions{gasLimit: &gl})
-	require.Equal(t, gl, merged.DefaultConfig.GasLimit)
-	require.Equal(t, gl, merged.ProposerConfig["0xkey"].GasLimit)
+	// The merge never touches option-level values or adds legacy builder content.
+	require.Equal(t, validator.Uint64(1), merged.DefaultConfig.GasLimit)
+	require.Equal(t, validator.Uint64(2), merged.ProposerConfig["0xkey"].GasLimit)
+	require.IsNil(t, merged.DefaultConfig.Builder)
+}
+
+func Test_markExplicitEmptyBuilders(t *testing.T) {
+	entry := &validatorpb.BuilderEntry{Url: "https://a.example"}
+	t.Run("explicit empty list gains the marker", func(t *testing.T) {
+		p := &validatorpb.ProposerSettingsPayload{
+			DefaultConfig: &validatorpb.ProposerOptionPayload{
+				Builder: &validatorpb.BuilderConfig{Builders: []*validatorpb.BuilderEntry{}},
+			},
+		}
+		markExplicitEmptyBuilders(p)
+		require.Equal(t, true, p.DefaultConfig.Builder.BuildersSet)
+	})
+	t.Run("nonempty list gains the marker too", func(t *testing.T) {
+		p := &validatorpb.ProposerSettingsPayload{
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				"0xaa": {Builder: &validatorpb.BuilderConfig{Builders: []*validatorpb.BuilderEntry{entry}}},
+			},
+		}
+		markExplicitEmptyBuilders(p)
+		require.Equal(t, true, p.ProposerConfig["0xaa"].Builder.BuildersSet)
+	})
+	t.Run("absent list stays unmarked", func(t *testing.T) {
+		p := &validatorpb.ProposerSettingsPayload{
+			DefaultConfig:  &validatorpb.ProposerOptionPayload{Builder: &validatorpb.BuilderConfig{Enabled: true}},
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{"0xaa": {}, "0xbb": nil},
+		}
+		markExplicitEmptyBuilders(p)
+		require.Equal(t, false, p.DefaultConfig.Builder.BuildersSet)
+	})
+}
+
+func Test_inferSchemaVersion(t *testing.T) {
+	u64 := func(v uint64) *validator.Uint64 { u := validator.Uint64(v); return &u }
+	v2Cases := map[string]*validatorpb.BuilderConfig{
+		"builders list":         {Builders: []*validatorpb.BuilderEntry{{Url: "https://a.example"}}},
+		"builders set marker":   {BuildersSet: true},
+		"min_bid":               {MinBid: u64(1)},
+		"builder_boost_factor":  {BuilderBoostFactor: u64(100)},
+		"max_execution_payment": {MaxExecutionPayment: u64(0)},
+	}
+	for name, bc := range v2Cases {
+		t.Run("unversioned with "+name+" infers v2", func(t *testing.T) {
+			p := &validatorpb.ProposerSettingsPayload{
+				DefaultConfig: &validatorpb.ProposerOptionPayload{Builder: bc},
+			}
+			inferSchemaVersion(p)
+			require.Equal(t, uint32(proposer.SchemaV2), p.Version)
+		})
+	}
+	t.Run("per-key v2 content infers v2", func(t *testing.T) {
+		p := &validatorpb.ProposerSettingsPayload{
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				"0xaa": {Builder: &validatorpb.BuilderConfig{MinBid: u64(1)}},
+			},
+		}
+		inferSchemaVersion(p)
+		require.Equal(t, uint32(proposer.SchemaV2), p.Version)
+	})
+	t.Run("pure v1 content stays unversioned", func(t *testing.T) {
+		p := &validatorpb.ProposerSettingsPayload{
+			DefaultConfig: &validatorpb.ProposerOptionPayload{
+				Builder: &validatorpb.BuilderConfig{Enabled: true, GasLimit: 30000000},
+			},
+		}
+		inferSchemaVersion(p)
+		require.Equal(t, uint32(proposer.SchemaV1Unset), p.Version)
+	})
+	t.Run("explicit version is never overridden", func(t *testing.T) {
+		p := &validatorpb.ProposerSettingsPayload{
+			Version: proposer.SchemaV1,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{
+				Builder: &validatorpb.BuilderConfig{MinBid: u64(1)},
+			},
+		}
+		inferSchemaVersion(p)
+		require.Equal(t, uint32(proposer.SchemaV1), p.Version)
+	})
+	t.Run("no builder content stays unversioned", func(t *testing.T) {
+		p := &validatorpb.ProposerSettingsPayload{
+			DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0x"},
+		}
+		inferSchemaVersion(p)
+		require.Equal(t, uint32(proposer.SchemaV1Unset), p.Version)
+	})
+}
+
+func Test_determineLoadMethods(t *testing.T) {
+	newCtx := func(t *testing.T, names ...string) *cli.Context {
+		set := flag.NewFlagSet("test", 0)
+		for _, name := range names {
+			set.String(name, "", "")
+			require.NoError(t, set.Set(name, "x"))
+		}
+		return cli.NewContext(&cli.App{}, set, nil)
+	}
+	t.Run("nothing set and no db", func(t *testing.T) {
+		require.DeepEqual(t, []settingsType{none}, determineLoadMethods(newCtx(t), false))
+	})
+	t.Run("nothing set with a db", func(t *testing.T) {
+		require.DeepEqual(t, []settingsType{onlyDB}, determineLoadMethods(newCtx(t), true))
+	})
+	t.Run("a builder flag alone selects the default flag source", func(t *testing.T) {
+		require.DeepEqual(t, []settingsType{defaultFlag}, determineLoadMethods(newCtx(t, flags.BuilderMinBidFlag.Name), true))
+	})
+	t.Run("the gas limit flag alone selects the default flag source", func(t *testing.T) {
+		require.DeepEqual(t, []settingsType{defaultFlag}, determineLoadMethods(newCtx(t, flags.BuilderGasLimitFlag.Name), true))
+	})
+	t.Run("sources are ordered default, file, url", func(t *testing.T) {
+		got := determineLoadMethods(newCtx(t, flags.ProposerSettingsURLFlag.Name, flags.ProposerSettingsFlag.Name, flags.BuilderURLsFlag.Name), false)
+		require.DeepEqual(t, []settingsType{defaultFlag, fileFlag, urlFlag}, got)
+	})
+}
+
+func Test_parseBuilderURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		want    *proposer.BuilderEntry
+		wantErr string
+	}{
+		{name: "plain url", raw: "https://builder-a.example", want: &proposer.BuilderEntry{URL: "https://builder-a.example"}},
+		{name: "auth fragment is decoded and stripped", raw: "https://builder-a.example#0x0123", want: &proposer.BuilderEntry{URL: "https://builder-a.example", AuthData: []byte{0x01, 0x23}}},
+		{name: "surrounding whitespace is trimmed", raw: "  https://builder-a.example ", want: &proposer.BuilderEntry{URL: "https://builder-a.example"}},
+		{name: "path and query are kept verbatim", raw: "https://builder-a.example/v1?x=1", want: &proposer.BuilderEntry{URL: "https://builder-a.example/v1?x=1"}},
+		{name: "empty fragment", raw: "https://builder-a.example#", wantErr: "not 0x-prefixed hex"},
+		{name: "non-hex fragment", raw: "https://builder-a.example#token", wantErr: "not 0x-prefixed hex"},
+		{name: "odd-length hex fragment", raw: "https://builder-a.example#0x123", wantErr: "not 0x-prefixed hex"},
+		{name: "missing scheme", raw: "builder-a.example", wantErr: "url is not a valid URL"},
+		{name: "blank", raw: " ", wantErr: "empty builder url"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseBuilderURL(tt.raw)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, tt.wantErr, err)
+				return
+			}
+			require.NoError(t, err)
+			require.DeepEqual(t, tt.want, got)
+		})
+	}
+}
+
+func Test_builderConfigFromFlags(t *testing.T) {
+	newCtx := func(t *testing.T, urls string, nums map[string]string) *cli.Context {
+		set := flag.NewFlagSet("test", 0)
+		if urls != "" {
+			set.Var(cli.NewStringSlice(), flags.BuilderURLsFlag.Name, "")
+			require.NoError(t, set.Set(flags.BuilderURLsFlag.Name, urls))
+		}
+		for name, v := range nums {
+			set.Uint64(name, 0, "")
+			require.NoError(t, set.Set(name, v))
+		}
+		return cli.NewContext(&cli.App{}, set, nil)
+	}
+	t.Run("no builder flags", func(t *testing.T) {
+		got, err := builderConfigFromFlags(newCtx(t, "", nil))
+		require.NoError(t, err)
+		require.IsNil(t, got)
+	})
+	t.Run("unset numeric flags stay nil so per-key and default resolution apply", func(t *testing.T) {
+		got, err := builderConfigFromFlags(newCtx(t, "https://builder-a.example", nil))
+		require.NoError(t, err)
+		require.IsNil(t, got.MinBid)
+		require.IsNil(t, got.BuilderBoostFactor)
+		require.IsNil(t, got.MaxExecutionPayment)
+	})
+	t.Run("explicit zero max execution payment is kept", func(t *testing.T) {
+		got, err := builderConfigFromFlags(newCtx(t, "", map[string]string{flags.BuilderMaxExecutionPaymentFlag.Name: "0"}))
+		require.NoError(t, err)
+		require.IsNil(t, got.Builders)
+		require.NotNil(t, got.MaxExecutionPayment)
+		require.Equal(t, validator.Uint64(0), *got.MaxExecutionPayment)
+	})
+	t.Run("same url with different auth data is two entries", func(t *testing.T) {
+		got, err := builderConfigFromFlags(newCtx(t, "https://builder-a.example,https://builder-a.example#0x01", nil))
+		require.NoError(t, err)
+		require.Equal(t, 2, len(got.Builders))
+	})
+	t.Run("duplicate url fails", func(t *testing.T) {
+		_, err := builderConfigFromFlags(newCtx(t, "https://builder-a.example,https://builder-a.example", nil))
+		require.ErrorContains(t, "more than once", err)
+	})
+	t.Run("more than the spec limit fails", func(t *testing.T) {
+		urls := make([]string, 0, proposer.MaxBuilderEntries+1)
+		for i := 0; i <= proposer.MaxBuilderEntries; i++ {
+			urls = append(urls, fmt.Sprintf("https://builder-%d.example", i))
+		}
+		_, err := builderConfigFromFlags(newCtx(t, strings.Join(urls, ","), nil))
+		require.ErrorContains(t, fmt.Sprintf("more than %d builders", proposer.MaxBuilderEntries), err)
+	})
+}
+
+func Test_warnGasLimitOverridesSchedule(t *testing.T) {
+	hook := logtest.NewGlobal()
+	withGloas := func(t *testing.T, schedule []params.GasLimitScheduleEntry) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 100
+		cfg.GasLimitSchedule = schedule
+		params.OverrideBeaconConfig(cfg)
+	}
+	t.Run("no gloas fork scheduled stays silent", func(t *testing.T) {
+		hook.Reset()
+		warnGasLimitOverridesSchedule(90_000_000)
+		assert.LogsDoNotContain(t, hook, "overrides the network gas limit schedule")
+	})
+	t.Run("gloas scheduled warns that the flag overrides the schedule", func(t *testing.T) {
+		hook.Reset()
+		withGloas(t, nil)
+		warnGasLimitOverridesSchedule(60_000_000)
+		assert.LogsContain(t, hook, "overrides the network gas limit schedule")
+		assert.LogsDoNotContain(t, hook, "exceeds the highest scheduled gas limit")
+	})
+	t.Run("value within the schedule does not warn about exceeding it", func(t *testing.T) {
+		hook.Reset()
+		withGloas(t, []params.GasLimitScheduleEntry{{Epoch: 100, GasLimit: 60_000_000}, {Epoch: 200, GasLimit: 100_000_000}})
+		warnGasLimitOverridesSchedule(80_000_000)
+		assert.LogsDoNotContain(t, hook, "exceeds the highest scheduled gas limit")
+	})
+	t.Run("value above the highest scheduled entry warns", func(t *testing.T) {
+		hook.Reset()
+		withGloas(t, []params.GasLimitScheduleEntry{{Epoch: 100, GasLimit: 60_000_000}, {Epoch: 200, GasLimit: 100_000_000}})
+		warnGasLimitOverridesSchedule(120_000_000)
+		assert.LogsContain(t, hook, "exceeds the highest scheduled gas limit of 100000000")
+	})
 }

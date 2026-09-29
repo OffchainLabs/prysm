@@ -3,10 +3,13 @@ package beacon_api
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -23,18 +26,19 @@ func TestSubmitSignedAggregateSelectionProof_Valid(t *testing.T) {
 	defer ctrl.Finish()
 
 	signedAggregateAndProof := generateSignedAggregateAndProofJson()
-	marshalledSignedAggregateSignedAndProof, err := json.Marshal([]*structs.SignedAggregateAttestationAndProof{jsonifySignedAggregateAndProof(signedAggregateAndProof)})
+	elem, err := signedAggregateAndProof.MarshalSSZ()
 	require.NoError(t, err)
+	sszBody := ssz.MarshalVariableList(elem)
 
 	ctx := t.Context()
 	headers := map[string]string{"Eth-Consensus-Version": version.String(signedAggregateAndProof.Message.Version())}
 	handler := mock.NewMockHandler(ctrl)
-	handler.EXPECT().Post(
+	expectPostSSZWithFallback(handler)
+	handler.EXPECT().PostSSZ(
 		gomock.Any(),
 		"/eth/v2/validator/aggregate_and_proofs",
 		headers,
-		bytes.NewBuffer(marshalledSignedAggregateSignedAndProof),
-		nil,
+		bytes.NewBuffer(sszBody),
 	).Return(
 		nil,
 	).Times(1)
@@ -50,7 +54,7 @@ func TestSubmitSignedAggregateSelectionProof_Valid(t *testing.T) {
 	assert.DeepEqual(t, attestationDataRoot[:], resp.AttestationDataRoot)
 }
 
-func TestSubmitSignedAggregateSelectionProof_BadRequest(t *testing.T) {
+func TestSubmitSignedAggregateSelectionProof_JsonFallback(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -61,6 +65,10 @@ func TestSubmitSignedAggregateSelectionProof_BadRequest(t *testing.T) {
 	ctx := t.Context()
 	headers := map[string]string{"Eth-Consensus-Version": version.String(signedAggregateAndProof.Message.Version())}
 	handler := mock.NewMockHandler(ctrl)
+	expectPostSSZWithFallback(handler)
+	handler.EXPECT().PostSSZ(gomock.Any(), "/eth/v2/validator/aggregate_and_proofs", headers, gomock.Any()).Return(
+		&httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType, Message: "unsupported media type"},
+	).Times(1)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v2/validator/aggregate_and_proofs",
@@ -68,11 +76,37 @@ func TestSubmitSignedAggregateSelectionProof_BadRequest(t *testing.T) {
 		bytes.NewBuffer(marshalledSignedAggregateSignedAndProof),
 		nil,
 	).Return(
-		errors.New("bad request"),
+		nil,
 	).Times(1)
 
 	validatorClient := &beaconApiValidatorClient{handler: handler}
 	_, err = validatorClient.submitSignedAggregateSelectionProof(ctx, &ethpb.SignedAggregateSubmitRequest{
+		SignedAggregateAndProof: signedAggregateAndProof,
+	})
+	require.NoError(t, err)
+}
+
+func TestSubmitSignedAggregateSelectionProof_BadRequest(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	signedAggregateAndProof := generateSignedAggregateAndProofJson()
+
+	ctx := t.Context()
+	headers := map[string]string{"Eth-Consensus-Version": version.String(signedAggregateAndProof.Message.Version())}
+	handler := mock.NewMockHandler(ctrl)
+	expectPostSSZWithFallback(handler)
+	handler.EXPECT().PostSSZ(
+		gomock.Any(),
+		"/eth/v2/validator/aggregate_and_proofs",
+		headers,
+		gomock.Any(),
+	).Return(
+		errors.New("bad request"),
+	).Times(1)
+
+	validatorClient := &beaconApiValidatorClient{handler: handler}
+	_, err := validatorClient.submitSignedAggregateSelectionProof(ctx, &ethpb.SignedAggregateSubmitRequest{
 		SignedAggregateAndProof: signedAggregateAndProof,
 	})
 	assert.ErrorContains(t, "bad request", err)
@@ -87,19 +121,20 @@ func TestSubmitSignedAggregateSelectionProofElectra_Valid(t *testing.T) {
 	defer ctrl.Finish()
 
 	signedAggregateAndProofElectra := generateSignedAggregateAndProofElectraJson()
-	marshalledSignedAggregateSignedAndProofElectra, err := json.Marshal([]*structs.SignedAggregateAttestationAndProofElectra{jsonifySignedAggregateAndProofElectra(signedAggregateAndProofElectra)})
+	elem, err := signedAggregateAndProofElectra.MarshalSSZ()
 	require.NoError(t, err)
+	sszBody := ssz.MarshalVariableList(elem)
 
 	ctx := t.Context()
 	expectedVersion := version.String(slots.ToForkVersion(signedAggregateAndProofElectra.Message.Aggregate.Data.Slot))
 	headers := map[string]string{"Eth-Consensus-Version": expectedVersion}
 	handler := mock.NewMockHandler(ctrl)
-	handler.EXPECT().Post(
+	expectPostSSZWithFallback(handler)
+	handler.EXPECT().PostSSZ(
 		gomock.Any(),
 		"/eth/v2/validator/aggregate_and_proofs",
 		headers,
-		bytes.NewBuffer(marshalledSignedAggregateSignedAndProofElectra),
-		nil,
+		bytes.NewBuffer(sszBody),
 	).Return(
 		nil,
 	).Times(1)
@@ -115,7 +150,7 @@ func TestSubmitSignedAggregateSelectionProofElectra_Valid(t *testing.T) {
 	assert.DeepEqual(t, attestationDataRoot[:], resp.AttestationDataRoot)
 }
 
-func TestSubmitSignedAggregateSelectionProofElectra_BadRequest(t *testing.T) {
+func TestSubmitSignedAggregateSelectionProofElectra_JsonFallback(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.BeaconConfig().ElectraForkEpoch = 0
 	params.BeaconConfig().FuluForkEpoch = 100
@@ -131,6 +166,10 @@ func TestSubmitSignedAggregateSelectionProofElectra_BadRequest(t *testing.T) {
 	expectedVersion := version.String(slots.ToForkVersion(signedAggregateAndProofElectra.Message.Aggregate.Data.Slot))
 	headers := map[string]string{"Eth-Consensus-Version": expectedVersion}
 	handler := mock.NewMockHandler(ctrl)
+	expectPostSSZWithFallback(handler)
+	handler.EXPECT().PostSSZ(gomock.Any(), "/eth/v2/validator/aggregate_and_proofs", headers, gomock.Any()).Return(
+		&httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType, Message: "unsupported media type"},
+	).Times(1)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v2/validator/aggregate_and_proofs",
@@ -138,11 +177,42 @@ func TestSubmitSignedAggregateSelectionProofElectra_BadRequest(t *testing.T) {
 		bytes.NewBuffer(marshalledSignedAggregateSignedAndProofElectra),
 		nil,
 	).Return(
-		errors.New("bad request"),
+		nil,
 	).Times(1)
 
 	validatorClient := &beaconApiValidatorClient{handler: handler}
 	_, err = validatorClient.submitSignedAggregateSelectionProofElectra(ctx, &ethpb.SignedAggregateSubmitElectraRequest{
+		SignedAggregateAndProof: signedAggregateAndProofElectra,
+	})
+	require.NoError(t, err)
+}
+
+func TestSubmitSignedAggregateSelectionProofElectra_BadRequest(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().ElectraForkEpoch = 0
+	params.BeaconConfig().FuluForkEpoch = 100
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	signedAggregateAndProofElectra := generateSignedAggregateAndProofElectraJson()
+
+	ctx := t.Context()
+	expectedVersion := version.String(slots.ToForkVersion(signedAggregateAndProofElectra.Message.Aggregate.Data.Slot))
+	headers := map[string]string{"Eth-Consensus-Version": expectedVersion}
+	handler := mock.NewMockHandler(ctrl)
+	expectPostSSZWithFallback(handler)
+	handler.EXPECT().PostSSZ(
+		gomock.Any(),
+		"/eth/v2/validator/aggregate_and_proofs",
+		headers,
+		gomock.Any(),
+	).Return(
+		errors.New("bad request"),
+	).Times(1)
+
+	validatorClient := &beaconApiValidatorClient{handler: handler}
+	_, err := validatorClient.submitSignedAggregateSelectionProofElectra(ctx, &ethpb.SignedAggregateSubmitElectraRequest{
 		SignedAggregateAndProof: signedAggregateAndProofElectra,
 	})
 	assert.ErrorContains(t, "bad request", err)
@@ -157,19 +227,20 @@ func TestSubmitSignedAggregateSelectionProofElectra_FuluVersion(t *testing.T) {
 	defer ctrl.Finish()
 
 	signedAggregateAndProofElectra := generateSignedAggregateAndProofElectraJson()
-	marshalledSignedAggregateSignedAndProofElectra, err := json.Marshal([]*structs.SignedAggregateAttestationAndProofElectra{jsonifySignedAggregateAndProofElectra(signedAggregateAndProofElectra)})
+	elem, err := signedAggregateAndProofElectra.MarshalSSZ()
 	require.NoError(t, err)
+	sszBody := ssz.MarshalVariableList(elem)
 
 	ctx := t.Context()
 	expectedVersion := version.String(slots.ToForkVersion(signedAggregateAndProofElectra.Message.Aggregate.Data.Slot))
 	headers := map[string]string{"Eth-Consensus-Version": expectedVersion}
 	handler := mock.NewMockHandler(ctrl)
-	handler.EXPECT().Post(
+	expectPostSSZWithFallback(handler)
+	handler.EXPECT().PostSSZ(
 		gomock.Any(),
 		"/eth/v2/validator/aggregate_and_proofs",
 		headers,
-		bytes.NewBuffer(marshalledSignedAggregateSignedAndProofElectra),
-		nil,
+		bytes.NewBuffer(sszBody),
 	).Return(
 		nil,
 	).Times(1)

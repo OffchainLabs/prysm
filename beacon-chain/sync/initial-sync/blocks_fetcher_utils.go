@@ -22,9 +22,46 @@ import (
 // Blocks are stored in an ascending slot order. The first block is guaranteed to have parent
 // either in DB or initial sync cache.
 type forkData struct {
-	blocksFrom peer.ID
-	blobsFrom  peer.ID
-	bwb        []blocks.BlockWithROSidecars
+	blocksFrom    peer.ID
+	blobsFrom     peer.ID
+	bwb           []blocks.BlockWithROSidecars
+	envelopes     []interfaces.ROSignedExecutionPayloadEnvelope
+	columnsToSave []blocks.VerifiedRODataColumn
+}
+
+func (f *blocksFetcher) forkDataFromBlocks(ctx context.Context, pid peer.ID, bwb []blocks.BlockWithROSidecars) (*forkData, error) {
+	if len(bwb) == 0 {
+		return nil, errors.New("no blocks to build fork data from")
+	}
+	lastSlot := bwb[len(bwb)-1].Block.Block().Slot()
+	start := bwb[0].Block.Block().Slot()
+	parentRoot := bwb[0].Block.Block().ParentRoot()
+	if slot, err := f.chain.RecentBlockSlot(parentRoot); err == nil {
+		start = slot + 1
+	} else if parent, err := f.db.Block(ctx, parentRoot); err == nil && blocks.BeaconBlockIsNil(parent) == nil {
+		start = parent.Block().Slot() + 1
+	}
+	r := &fetchRequestResponse{
+		blocksFrom: pid,
+		bwb:        bwb,
+		start:      start,
+		count:      uint64(lastSlot.FlooredSubSlot(start)) + 1,
+	}
+	f.fetchPayloads(ctx, r, []peer.ID{pid})
+	if r.err != nil {
+		return nil, errors.Wrap(r.err, "fetch payloads")
+	}
+	f.fetchSidecars(ctx, r, []peer.ID{pid})
+	if r.err != nil {
+		return nil, errors.Wrap(r.err, "fetch sidecars")
+	}
+	return &forkData{
+		blocksFrom:    pid,
+		blobsFrom:     r.blobsFrom,
+		bwb:           r.bwb,
+		envelopes:     r.envelopes,
+		columnsToSave: r.columnsToSave,
+	}, nil
 }
 
 // nonSkippedSlotAfter checks slots after the given one in an attempt to find a non-empty future slot.
@@ -280,17 +317,9 @@ func (f *blocksFetcher) findForkWithPeer(ctx context.Context, pid peer.ID, slot 
 			return nil, errors.Wrap(err, "invalid blocks received in findForkWithPeer")
 		}
 
-		// We need to fetch the blobs for the given alt-chain if any exist, so that we can try to verify and import
-		// the blocks.
-		r := &fetchRequestResponse{blocksFrom: pid, bwb: bwb}
-		f.fetchSidecars(ctx, r, []peer.ID{pid})
-		if r.err != nil {
-			return nil, errors.Wrap(r.err, "fetch sidecars")
-		}
-
-		// The caller will use the BlocksWith VerifiedBlobs in bwb as the starting point for
+		// The caller will use the completed fork data as the starting point for
 		// round-robin syncing the alternate chain.
-		return &forkData{blocksFrom: pid, blobsFrom: r.blobsFrom, bwb: bwb}, nil
+		return f.forkDataFromBlocks(ctx, pid, bwb)
 	}
 	return nil, errNoAlternateBlocks
 }
@@ -306,16 +335,7 @@ func (f *blocksFetcher) findAncestor(ctx context.Context, pid peer.ID, b interfa
 			if err != nil {
 				return nil, errors.Wrap(err, "received invalid blocks in findAncestor")
 			}
-			r := &fetchRequestResponse{blocksFrom: pid, bwb: bwb}
-			f.fetchSidecars(ctx, r, []peer.ID{pid})
-			if r.err != nil {
-				return nil, errors.Wrap(r.err, "fetch sidecars")
-			}
-			return &forkData{
-				blocksFrom: pid,
-				bwb:        bwb,
-				blobsFrom:  r.blobsFrom,
-			}, nil
+			return f.forkDataFromBlocks(ctx, pid, bwb)
 		}
 		// Request block's parent.
 		req := &p2pTypes.BeaconBlockByRootsReq{parentRoot}

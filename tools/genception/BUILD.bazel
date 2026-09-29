@@ -1,0 +1,5 @@
+alias(
+    name = "methodicalgen",
+    actual = "@com_github_offchainlabs_methodical_ssz//cmd/ssz:ssz",
+    visibility = ["//visibility:public"],
+)

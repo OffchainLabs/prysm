@@ -196,6 +196,12 @@ func prepareConfigSpec() (map[string]any, error) {
 	data["MAX_PAYLOAD_ATTESTATIONS"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.MaxPayloadAttestations)), "MAX_PAYLOAD_ATTESTATIONS")
 	data["BUILDER_REGISTRY_LIMIT"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.BuilderRegistryLimit)), "BUILDER_REGISTRY_LIMIT")
 	data["BUILDER_PENDING_WITHDRAWALS_LIMIT"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.BuilderPendingWithdrawalsLimit)), "BUILDER_PENDING_WITHDRAWALS_LIMIT")
+	// Gloas type-specific SSZ bounds.
+	data["MAX_SIGNED_AGGREGATE_AND_PROOF_SIZE"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.MaxSignedAggregateAndProofSize)), "MAX_SIGNED_AGGREGATE_AND_PROOF_SIZE")
+	data["MAX_ATTESTER_SLASHING_SIZE"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.MaxAttesterSlashingSize)), "MAX_ATTESTER_SLASHING_SIZE")
+	data["MAX_DATA_COLUMN_SIDECAR_SIZE"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.MaxDataColumnSidecarSize)), "MAX_DATA_COLUMN_SIDECAR_SIZE")
+	data["MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.MaxPartialDataColumnSidecarSize)), "MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE")
+	data["MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.MaxSignedExecutionPayloadBidSize)), "MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE")
 
 	return data, nil
 }

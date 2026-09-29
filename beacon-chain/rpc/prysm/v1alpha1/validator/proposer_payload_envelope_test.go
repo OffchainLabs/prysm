@@ -11,13 +11,17 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -203,6 +207,56 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_RejectsBadProofs(t *t
 	require.ErrorContains(t, "kzg verification failed", err)
 }
 
+// Stateless (builder) publish must build partial columns from the supplied blobs when partial
+// columns are supported, mirroring the self-build arm — otherwise builder envelopes broadcast full
+// columns but zero partials.
+func TestSidecarsFromContents_BuildsPartialColumns(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+	require.NoError(t, kzg.Start())
+
+	blobCount := 2
+	rawBlobs := make([]kzg.Blob, blobCount)
+	for i := range rawBlobs {
+		rawBlobs[i] = kzg.Blob{uint8(i + 1)}
+	}
+	_, proofsPerBlob := util.GenerateCellsAndProofs(t, rawBlobs)
+
+	flatBlobs := make([][]byte, blobCount)
+	for i, b := range rawBlobs {
+		flatBlobs[i] = b[:]
+	}
+	flatProofs := make([][]byte, 0, blobCount*fieldparams.NumberOfColumns)
+	for _, proofs := range proofsPerBlob {
+		for _, p := range proofs {
+			flatProofs = append(flatProofs, p[:])
+		}
+	}
+
+	var blockRoot [32]byte
+
+	// Partial columns enabled: one fully-included partial per full sidecar, with a Gloas group id.
+	vs := &Server{ExecutionEngineCaller: &mockExecution.EngineClient{PartialColumnsSupportedFlag: true}}
+	sidecars, partials, err := vs.sidecarsFromContents(flatBlobs, flatProofs, 1, blockRoot)
+	require.NoError(t, err)
+	require.Equal(t, fieldparams.NumberOfColumns, len(sidecars))
+	require.Equal(t, len(sidecars), len(partials))
+	for i := range partials {
+		require.Equal(t, true, partials[i].IsComplete())
+		// Gloas partial-column group ids are versioned with a 0x01 prefix byte.
+		require.Equal(t, byte(0x01), partials[i].GroupID()[0])
+	}
+
+	// Partial columns disabled: full sidecars only, no partials.
+	vsOff := &Server{ExecutionEngineCaller: &mockExecution.EngineClient{PartialColumnsSupportedFlag: false}}
+	sidecarsOff, partialsOff, err := vsOff.sidecarsFromContents(flatBlobs, flatProofs, 1, blockRoot)
+	require.NoError(t, err)
+	require.Equal(t, fieldparams.NumberOfColumns, len(sidecarsOff))
+	require.Equal(t, 0, len(partialsOff))
+}
+
 func TestGetExecutionPayloadEnvelopeRPC_Success(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -250,24 +304,7 @@ func TestPublishExecutionPayloadEnvelope_SignedEnvelopeArm(t *testing.T) {
 	cfg.GloasForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 
-	envelope := &ethpb.ExecutionPayloadEnvelope{
-		Payload: &enginev1.ExecutionPayloadGloas{
-			ParentHash:    make([]byte, 32),
-			FeeRecipient:  make([]byte, 20),
-			StateRoot:     make([]byte, 32),
-			ReceiptsRoot:  make([]byte, 32),
-			LogsBloom:     make([]byte, 256),
-			PrevRandao:    make([]byte, 32),
-			BaseFeePerGas: make([]byte, 32),
-			BlockHash:     make([]byte, 32),
-			ExtraData:     make([]byte, 0),
-			SlotNumber:    1,
-		},
-		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
-		BuilderIndex:          0,
-		BeaconBlockRoot:       make([]byte, 32),
-		ParentBeaconBlockRoot: make([]byte, 32),
-	}
+	envelope := testEnvelope(1)
 	signed := &ethpb.SignedExecutionPayloadEnvelope{Message: envelope, Signature: make([]byte, 96)}
 	statefulReq := &ethpb.GenericSignedExecutionPayloadEnvelope{
 		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_SignedEnvelope{SignedEnvelope: signed},
@@ -403,6 +440,101 @@ func TestPublishExecutionPayloadEnvelope_ImportFailureDoesNotFailPublish(t *test
 	require.NotNil(t, resp)
 	require.Equal(t, true, broadcaster.BroadcastCalled.Load())
 	waitForEnvelopeImport(t, receiver)
+}
+
+// Contents-arm sidecar selection: precomputed columns are reused only for the cached envelope,
+// and a cache hit skips verification of the submitted blob data.
+func TestPublishExecutionPayloadEnvelope_ContentsArmCachedColumns(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	envelope := testEnvelope(1)
+	signed := &ethpb.SignedExecutionPayloadEnvelope{Message: envelope, Signature: make([]byte, 96)}
+
+	// Zero-valued cells and proofs suffice: no subtest path performs KZG operations on them.
+	columns, err := peerdas.DataColumnSidecarsGloas(
+		[][]kzg.Cell{make([]kzg.Cell, fieldparams.NumberOfColumns)},
+		[][]kzg.Proof{make([]kzg.Proof, fieldparams.NumberOfColumns)},
+		1, bytesutil.ToBytes32(envelope.BeaconBlockRoot),
+	)
+	require.NoError(t, err)
+
+	newServer := func(t *testing.T, cached *ethpb.ExecutionPayloadEnvelope) (*Server, *mockExecutionPayloadEnvelopeReceiver, *mockChain.ChainService) {
+		envReceiver := &mockExecutionPayloadEnvelopeReceiver{done: make(chan struct{})}
+		chain := &mockChain.ChainService{}
+		vs := &Server{
+			Ctx:                              t.Context(),
+			P2P:                              &mockp2p.MockBroadcaster{},
+			ExecutionPayloadEnvelopeReceiver: envReceiver,
+			DataColumnReceiver:               chain,
+			ExecutionPayloadEnvelopeCache:    cache.NewExecutionPayloadEnvelopeCache(),
+		}
+		vs.ExecutionPayloadEnvelopeCache.Set(&cache.ExecutionPayloadContents{Envelope: cached, DataColumns: columns})
+		return vs, envReceiver, chain
+	}
+
+	contentsReq := func(blobs, kzgProofs [][]byte) *ethpb.GenericSignedExecutionPayloadEnvelope {
+		return &ethpb.GenericSignedExecutionPayloadEnvelope{
+			Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_Contents{
+				Contents: &ethpb.SignedExecutionPayloadEnvelopeContents{
+					SignedExecutionPayloadEnvelope: signed,
+					Blobs:                          blobs,
+					KzgProofs:                      kzgProofs,
+				},
+			},
+		}
+	}
+
+	t.Run("same-slot cached candidate with a different root is not used", func(t *testing.T) {
+		other := proto.Clone(envelope).(*ethpb.ExecutionPayloadEnvelope)
+		other.BuilderIndex = envelope.BuilderIndex + 1
+		vs, envReceiver, chain := newServer(t, other)
+
+		_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), contentsReq(nil, nil))
+		require.NoError(t, err)
+		// Sidecars are received before the envelope import, so the count is final here.
+		waitForEnvelopeImport(t, envReceiver)
+		require.Equal(t, 0, len(chain.DataColumns))
+	})
+
+	t.Run("matching cached envelope reuses cached columns without verifying blob data", func(t *testing.T) {
+		vs, envReceiver, chain := newServer(t, envelope)
+
+		// Unverifiable proofs pass only because the cached columns are reused and never rebuilt.
+		blob := kzg.Blob{1}
+		badProofs := make([][]byte, fieldparams.NumberOfColumns)
+		for i := range badProofs {
+			badProofs[i] = bytes.Repeat([]byte{0xff}, 48)
+		}
+		_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), contentsReq([][]byte{blob[:]}, badProofs))
+		require.NoError(t, err)
+		waitForEnvelopeImport(t, envReceiver)
+		require.Equal(t, fieldparams.NumberOfColumns, len(chain.DataColumns))
+	})
+}
+
+// testEnvelope returns a minimally populated execution payload envelope for the slot.
+func testEnvelope(slot primitives.Slot) *ethpb.ExecutionPayloadEnvelope {
+	return &ethpb.ExecutionPayloadEnvelope{
+		Payload: &enginev1.ExecutionPayloadGloas{
+			ParentHash:    make([]byte, 32),
+			FeeRecipient:  make([]byte, 20),
+			StateRoot:     make([]byte, 32),
+			ReceiptsRoot:  make([]byte, 32),
+			LogsBloom:     make([]byte, 256),
+			PrevRandao:    make([]byte, 32),
+			BaseFeePerGas: make([]byte, 32),
+			BlockHash:     make([]byte, 32),
+			ExtraData:     make([]byte, 0),
+			SlotNumber:    slot,
+		},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
+		BuilderIndex:          0,
+		BeaconBlockRoot:       make([]byte, 32),
+		ParentBeaconBlockRoot: make([]byte, 32),
+	}
 }
 
 type mockExecutionPayloadEnvelopeReceiver struct {

@@ -55,7 +55,8 @@ var (
 	WithBuilderFlag = &cli.BoolFlag{
 		Name:    "with-builder",
 		Aliases: []string{"wb"},
-		Usage:   "adds default builder options to proposer settings output, used for enabling mev-boost and relays",
+		Usage: "adds legacy (pre-gloas) mev-boost builder options to the proposer settings output; " +
+			"these are discontinued at the gloas fork, where builder participation requires v2 settings with a builders list",
 	}
 
 	DefaultFeeRecipientFlag = &cli.StringFlag{

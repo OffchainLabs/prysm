@@ -1,4 +1,4 @@
-// Command to generate proto, SSZ and mock files.
+// Command to generate proto, SSZ, mock and log files.
 
 package main
 
@@ -17,9 +17,10 @@ const (
 	kindProto kind = "proto"
 	kindSSZ   kind = "ssz"
 	kindMocks kind = "mocks"
+	kindLogs  kind = "logs"
 )
 
-var allKinds = []kind{kindProto, kindSSZ, kindMocks}
+var allKinds = []kind{kindProto, kindSSZ, kindMocks, kindLogs}
 
 type mode string
 
@@ -119,8 +120,10 @@ func genKind(k kind) error {
 		return genSSZ()
 	case kindMocks:
 		return genMocks()
+	case kindLogs:
+		return genLogs()
 	default:
-		return fmt.Errorf("unknown kind %q (want %s|%s|%s)", k, kindProto, kindSSZ, kindMocks)
+		return fmt.Errorf("unknown kind %q (want %s|%s|%s|%s)", k, kindProto, kindSSZ, kindMocks, kindLogs)
 	}
 }
 

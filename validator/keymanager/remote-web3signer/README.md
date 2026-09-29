@@ -23,6 +23,24 @@ with hex keys
 with url
 - `--validators-external-signer-public-keys=https://web3signer.com/api/v1/eth2/publicKeys`
 
+### Key sources
+
+Public keys are tracked per source and the validating set is their union. Every key has
+exactly one owner, and a source only ever replaces its own set:
+
+- `--validators-external-signer-public-keys` (flag): fixed at startup.
+- `--validators-external-signer-url` public keys endpoint: replaced whole on every poll.
+- `--validators-external-signer-key-file`: written by the operator and by the keymanager API.
+
+Because a source only replaces its own set, `--validators-external-signer-poll-interval` works
+whether or not a key file is configured: a poll swaps the URL's keys and leaves the flag and
+file keys alone.
+
+The keymanager API therefore only mutates the key file source. `POST /eth/v1/remotekeys`
+needs a key file, otherwise there is no permanent storage to import into and it reports
+`error`. `DELETE /eth/v1/remotekeys` reports `error` for keys owned by the flag or the URL,
+because they would come straight back on the next reload.
+
 ### API
 
 - Get Public keys: returns all public keys currently stored with web3signer excluding newly added keys if reload keys

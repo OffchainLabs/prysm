@@ -217,6 +217,34 @@ func TestProcessPayloadAttestations_IndexedVerificationError(t *testing.T) {
 	require.ErrorContains(t, "validator 0", err)
 }
 
+func TestProcessPayloadAttestations_PreGloasSlot(t *testing.T) {
+	setupTestConfig(t)
+
+	sk, pk := newKey(t)
+	st := newTestState(t, []*eth.Validator{activeValidator(pk)}, 2)
+	require.NoError(t, st.SetFork(&eth.Fork{
+		PreviousVersion: params.BeaconConfig().FuluForkVersion,
+		CurrentVersion:  params.BeaconConfig().GloasForkVersion,
+		Epoch:           2,
+	}))
+	parentRoot := bytes.Repeat([]byte{0xaa}, 32)
+	require.NoError(t, st.SetLatestBlockHeader(&eth.BeaconBlockHeader{ParentRoot: parentRoot}))
+
+	attData := &eth.PayloadAttestationData{
+		BeaconBlockRoot: parentRoot,
+		Slot:            1,
+	}
+	att := &eth.PayloadAttestation{
+		Data:            attData,
+		AggregationBits: setBits(bitfield.NewBitvector512(), 0),
+		Signature:       signAttestation(t, st, attData, []common.SecretKey{sk}),
+	}
+	body := buildBody(t, att)
+
+	err := gloas.ProcessPayloadAttestations(t.Context(), st, body)
+	require.ErrorContains(t, "precedes the gloas fork epoch", err)
+}
+
 func newTestState(t *testing.T, vals []*eth.Validator, slot primitives.Slot) state.BeaconState {
 	t.Helper()
 

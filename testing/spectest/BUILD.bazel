@@ -1,0 +1,14 @@
+load("//tools:methodical.bzl", "ssz_gen_spectest")
+
+# Generates the methodical-ssz spec test package into testing/spectest/methodical
+# (out_dir lands the tree-artifact directory at this package's path). It is run,
+# and its output copied back into the source tree, by hack/update-go-spectest.sh
+# -- the generate-and-commit workflow that mirrors hack/update-go-ssz.sh. The
+# fixtures come from the un-extracted release tarball exposed by the
+# consensus_spec_tests repo rule (see tools/download_spectests.bzl).
+ssz_gen_spectest(
+    name = "methodical_spectest",
+    config_file = "methodical-spectest.yaml",
+    out_dir = "methodical",
+    release_tarball = "@consensus_spec_tests//:mainnet.tar.gz",
+)

@@ -140,11 +140,12 @@ func TestSpecificFiles(t *testing.T) {
 	t.Run("ssz delegates to sszFiles", func(t *testing.T) {
 		writeRepo(t, map[string]string{
 			"proto/foo/service.pb.go": "package foo\n",
+			"proto/foo/gateway.yaml":  "package: foo\n",
 			"proto/foo/BUILD.bazel": `
-	ssz_gen_marshal(
-	    name = "ssz_foo",
+	ssz_methodical(
+	    name = "methodical_foo",
+	    config_file = "gateway.yaml",
 	    out = "x.ssz.go",
-	    objs = ["X"],
 	)
 	`,
 		})

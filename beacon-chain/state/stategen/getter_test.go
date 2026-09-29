@@ -42,7 +42,6 @@ func TestStateByRoot_ColdState(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
 
 	service := New(beaconDB, doublylinkedtree.New())
-	service.finalizedInfo.slot = 2
 	service.slotsPerArchivedPoint = 1
 
 	b := util.NewBeaconBlock()
@@ -96,7 +95,6 @@ func TestStateByRootIfCachedNoCopy_ColdState(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
 
 	service := New(beaconDB, doublylinkedtree.New())
-	service.finalizedInfo.slot = 2
 	service.slotsPerArchivedPoint = 1
 
 	b := util.NewBeaconBlock()
@@ -264,7 +262,6 @@ func TestLoadStateByRoot(t *testing.T) {
 	persistFinalizedStruct := func(r testChain, slot primitives.Slot) {
 		st := r.state(t, slot)
 		r.srv.finalizedInfo.state = st
-		r.srv.finalizedInfo.slot = st.Slot()
 		r.srv.finalizedInfo.root = r.blockRoot(t, slot)
 	}
 

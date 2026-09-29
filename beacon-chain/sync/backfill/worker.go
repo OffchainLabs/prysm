@@ -151,17 +151,21 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	}
 	blockDownloadBytesApprox.Add(float64(bdl))
 	log.WithFields(b.logFields()).WithField("bytesDownloaded", bdl).Trace("Blocks downloaded")
-	b.blocks = verified
 
 	bscfg := &blobSyncConfig{currentNeeds: w.cfg.currentNeeds, nbv: w.cfg.newVB, store: w.cfg.blobStore}
 	bs, err := newBlobSync(current, verified, bscfg)
 	if err != nil {
 		return b.withRetryableError(err)
 	}
-	cs, err := newColumnSync(ctx, b, verified, current, w.p2p, w.cfg)
+	cs, err := newColumnSync(ctx, b.begin, b.end, verified, current, w.p2p, w.cfg)
 	if err != nil {
 		return b.withRetryableError(err)
 	}
+
+	// Update the batch with the verified blocks, blob sync, and column sync
+	// before transitioning to the next state. Note that if we experience any failures
+	// in newBlobSync or newColumnSync, we'll start the whole batch from scratch for simplicity.
+	b.blocks = verified
 	b.blobs = bs
 	b.columns = cs
 	return b.transitionToNext()

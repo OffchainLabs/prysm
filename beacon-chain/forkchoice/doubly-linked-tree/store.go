@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -71,7 +72,7 @@ func (s *Store) head(ctx context.Context) ([32]byte, error) {
 // It then updates the new node's parent with the best child and descendant node.
 func (s *Store) insert(ctx context.Context,
 	roblock consensus_blocks.ROBlock,
-	justifiedEpoch, finalizedEpoch primitives.Epoch,
+	justifiedEpoch primitives.Epoch, justifiedRoot [32]byte, finalizedEpoch primitives.Epoch,
 ) (*PayloadNode, error) {
 	ctx, span := trace.StartSpan(ctx, "doublyLinkedForkchoice.insert")
 	defer span.End()
@@ -85,10 +86,13 @@ func (s *Store) insert(ctx context.Context,
 	block := roblock.Block()
 	slot := block.Slot()
 	var parent *PayloadNode
-	blockHash := &[32]byte{}
+	var blockHash [32]byte
 	var gasLimit uint64
+	var builderIndex primitives.BuilderIndex
 	if block.Version() >= version.Gloas {
-		if err := s.resolveParentPayloadStatus(block, &parent, blockHash); err != nil {
+		var err error
+		parent, blockHash, builderIndex, err = s.resolveParentPayloadStatus(block)
+		if err != nil {
 			return nil, err
 		}
 	} else {
@@ -112,13 +116,14 @@ func (s *Store) insert(ctx context.Context,
 	n := &Node{
 		slot:                        slot,
 		proposerIndex:               block.ProposerIndex(),
+		builderIndex:                builderIndex,
 		root:                        root,
 		parent:                      parent,
 		justifiedEpoch:              justifiedEpoch,
-		unrealizedJustifiedEpoch:    justifiedEpoch,
+		unrealizedJustified:         forkchoicetypes.Checkpoint{Epoch: justifiedEpoch, Root: justifiedRoot},
 		finalizedEpoch:              finalizedEpoch,
 		unrealizedFinalizedEpoch:    finalizedEpoch,
-		blockHash:                   *blockHash,
+		blockHash:                   blockHash,
 		payloadAvailabilityVote:     bitfield.NewBitvector512(),
 		payloadDataAvailabilityVote: bitfield.NewBitvector512(),
 		payloadAttesters:            bitfield.NewBitvector512(),
@@ -162,6 +167,7 @@ func (s *Store) insert(ctx context.Context,
 
 	if parent == nil {
 		if s.treeRootNode == nil {
+			s.finalizedDependentRoot = block.ParentRoot()
 			s.treeRootNode = n
 			s.headNode = n
 			s.highestReceivedNode = n
@@ -283,6 +289,7 @@ func (s *Store) prune(ctx context.Context) error {
 		return nil
 	}
 	s.finalizedPayloadBlockHash = s.checkpointPayloadHashForRoot(finalizedRoot)
+	treeRootParentHash := s.parentHash(fen)
 
 	// Save the new finalized dependent root because it will be pruned
 	s.finalizedDependentRoot = fn.parent.node.root
@@ -294,6 +301,7 @@ func (s *Store) prune(ctx context.Context) error {
 
 	fn.parent = nil
 	s.treeRootNode = fn
+	s.treeRootParentHash = treeRootParentHash
 
 	prunedCount.Inc()
 	// Prune all children of the finalized checkpoint block that are incompatible with it

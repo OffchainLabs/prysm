@@ -5,8 +5,11 @@ import (
 	"encoding/binary"
 	"flag"
 	"fmt"
+	"iter"
 	"math"
 	"os"
+	"slices"
+	"sync"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
@@ -39,6 +42,155 @@ func Test_diffToState(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, hdiff.slot, target.Slot())
 	require.Equal(t, hdiff.targetVersion, target.Version())
+}
+
+func TestDiffSameState(t *testing.T) {
+	st, _ := util.DeterministicGenesisStateElectra(t, 32)
+	diff, err := Diff(st, st)
+	require.NoError(t, err)
+	require.Equal(t, true, len(diff.StateDiff) > 0)
+}
+
+type mutateAtSyncCommitteeState struct {
+	state.ReadOnlyBeaconState
+	mutate func() error
+	once   sync.Once
+	err    error
+}
+
+func (s *mutateAtSyncCommitteeState) CurrentSyncCommittee() (*ethpb.SyncCommittee, error) {
+	s.once.Do(func() {
+		done := make(chan error, 1)
+		go func() {
+			done <- s.mutate()
+		}()
+		s.err = <-done
+	})
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.ReadOnlyBeaconState.CurrentSyncCommittee()
+}
+
+type stateVectors struct {
+	previousParticipation []byte
+	currentParticipation  []byte
+	inactivityScores      []uint64
+}
+
+func snapshotStateVectors(st state.ReadOnlyBeaconState) (stateVectors, error) {
+	previousParticipation, err := st.PreviousEpochParticipation()
+	if err != nil {
+		return stateVectors{}, err
+	}
+	currentParticipation, err := st.CurrentEpochParticipation()
+	if err != nil {
+		return stateVectors{}, err
+	}
+	inactivityScores, err := st.InactivityScores()
+	if err != nil {
+		return stateVectors{}, err
+	}
+	return stateVectors{
+		previousParticipation: previousParticipation,
+		currentParticipation:  currentParticipation,
+		inactivityScores:      inactivityScores,
+	}, nil
+}
+
+func setStateVectors(st state.BeaconState, vectors stateVectors) error {
+	if err := st.SetPreviousParticipationBits(bytes.Clone(vectors.previousParticipation)); err != nil {
+		return err
+	}
+	if err := st.SetCurrentParticipationBits(bytes.Clone(vectors.currentParticipation)); err != nil {
+		return err
+	}
+	return st.SetInactivityScores(vectors.inactivityScores)
+}
+
+func mutateStateVectors(st state.BeaconState, vectors stateVectors) error {
+	if err := st.ModifyPreviousParticipationBits(func(participation []byte) ([]byte, error) {
+		copy(participation, vectors.previousParticipation)
+		return participation, nil
+	}); err != nil {
+		return err
+	}
+	if err := st.ModifyCurrentParticipationBits(func(participation []byte) ([]byte, error) {
+		copy(participation, vectors.currentParticipation)
+		return participation, nil
+	}); err != nil {
+		return err
+	}
+	return st.SetInactivityScores(vectors.inactivityScores)
+}
+
+func filledStateVectors(count int, offset byte) stateVectors {
+	previousParticipation := bytes.Repeat([]byte{offset}, count)
+	currentParticipation := bytes.Repeat([]byte{offset + 1}, count)
+	inactivityScores := make([]uint64, count)
+	for i := range inactivityScores {
+		inactivityScores[i] = uint64(offset) + uint64(i)
+	}
+	return stateVectors{
+		previousParticipation: previousParticipation,
+		currentParticipation:  currentParticipation,
+		inactivityScores:      inactivityScores,
+	}
+}
+
+func requireStateVectorsEqual(t *testing.T, expected stateVectors, actual state.ReadOnlyBeaconState) {
+	t.Helper()
+	actualVectors, err := snapshotStateVectors(actual)
+	require.NoError(t, err)
+	require.Equal(t, true, bytes.Equal(expected.previousParticipation, actualVectors.previousParticipation))
+	require.Equal(t, true, bytes.Equal(expected.currentParticipation, actualVectors.currentParticipation))
+	require.Equal(t, true, slices.Equal(expected.inactivityScores, actualVectors.inactivityScores))
+}
+
+func TestDiffSnapshotsStateVectorsBeforeConcurrentMutation(t *testing.T) {
+	source, _ := util.DeterministicGenesisStateElectra(t, 32)
+	target := source.Copy()
+	initial := filledStateVectors(32, 1)
+	mutated := filledStateVectors(32, 101)
+	require.NoError(t, setStateVectors(target, initial))
+
+	wrappedTarget := &mutateAtSyncCommitteeState{
+		ReadOnlyBeaconState: target,
+		mutate: func() error {
+			return mutateStateVectors(target, mutated)
+		},
+	}
+	diff, err := Diff(source, wrappedTarget)
+	require.NoError(t, err)
+
+	result, err := ApplyDiff(t.Context(), source.Copy(), diff)
+	require.NoError(t, err)
+	requireStateVectorsEqual(t, initial, result)
+	requireStateVectorsEqual(t, mutated, target)
+}
+
+func TestDiffStateVectorsRemainStableWhenCopyMutates(t *testing.T) {
+	source, _ := util.DeterministicGenesisStateElectra(t, 32)
+	target := source.Copy()
+	initial := filledStateVectors(32, 1)
+	mutated := filledStateVectors(32, 101)
+	require.NoError(t, setStateVectors(target, initial))
+	mutableCopy := target.Copy()
+
+	wrappedTarget := &mutateAtSyncCommitteeState{
+		ReadOnlyBeaconState: target,
+		mutate: func() error {
+			return mutateStateVectors(mutableCopy, mutated)
+		},
+	}
+	diff, err := Diff(source, wrappedTarget)
+	require.NoError(t, err)
+
+	result, err := ApplyDiff(t.Context(), source.Copy(), diff)
+	require.NoError(t, err)
+	requireStateVectorsEqual(t, initial, result)
+	requireStateVectorsEqual(t, initial, target)
+	requireStateVectorsEqual(t, mutated, mutableCopy)
 }
 
 func Test_kmpIndex(t *testing.T) {
@@ -308,6 +460,23 @@ func Test_validatorsEqual(t *testing.T) {
 	require.NotEqual(t, 0, len(sourceDiffs), "Should detect validator differences")
 }
 
+func TestValidatorWithdrawalCredentialsFallback(t *testing.T) {
+	expected := [fieldparams.RootLength]byte{1, 2, 3}
+	validator, err := state_native.NewValidator(&ethpb.Validator{WithdrawalCredentials: expected[:]})
+	require.NoError(t, err)
+
+	legacyValidator := struct {
+		state.ReadOnlyValidator
+	}{ReadOnlyValidator: validator}
+	_, hasFastPath := any(legacyValidator).(withdrawalCredentialsProvider)
+	require.Equal(t, false, hasFastPath)
+	require.Equal(t, expected, validatorWithdrawalCredentials(legacyValidator))
+
+	returned := legacyValidator.GetWithdrawalCredentials()
+	returned[0] = 0xff
+	require.Equal(t, expected, validatorWithdrawalCredentials(legacyValidator))
+}
+
 // Test_updateToVersion tests the version upgrade functionality
 func Test_updateToVersion(t *testing.T) {
 	ctx := t.Context()
@@ -424,6 +593,43 @@ func Test_diffToVals(t *testing.T) {
 	})
 }
 
+type validatorIterationState struct {
+	state.ReadOnlyBeaconState
+	materializedCalls int
+	streamedCalls     int
+}
+
+func (s *validatorIterationState) ValidatorsReadOnly() []state.ReadOnlyValidator {
+	s.materializedCalls++
+	return s.ReadOnlyBeaconState.ValidatorsReadOnly()
+}
+
+func (s *validatorIterationState) ValidatorsReadOnlySeq() iter.Seq2[primitives.ValidatorIndex, state.ReadOnlyValidator] {
+	s.streamedCalls++
+	return s.ReadOnlyBeaconState.ValidatorsReadOnlySeq()
+}
+
+func TestDiffToValsStreamsValidators(t *testing.T) {
+	source, _ := util.DeterministicGenesisStateElectra(t, 32)
+	target := source.Copy()
+	appended, err := source.ValidatorAtIndexReadOnly(0)
+	require.NoError(t, err)
+	validator := appended.Copy()
+	validator.PublicKey[0]++
+	require.NoError(t, target.AppendValidator(validator))
+
+	streamingSource := &validatorIterationState{ReadOnlyBeaconState: source}
+	streamingTarget := &validatorIterationState{ReadOnlyBeaconState: target}
+	diffs, err := diffToVals(streamingSource, streamingTarget)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(diffs))
+	require.Equal(t, uint32(32), diffs[0].index)
+	require.Equal(t, 0, streamingSource.materializedCalls)
+	require.Equal(t, 0, streamingTarget.materializedCalls)
+	require.Equal(t, 1, streamingSource.streamedCalls)
+	require.Equal(t, 1, streamingTarget.streamedCalls)
+}
+
 // Test_newValidatorDiffs tests validator diff deserialization
 func Test_newValidatorDiffs(t *testing.T) {
 	source, _ := util.DeterministicGenesisStateElectra(t, 32)
@@ -467,45 +673,175 @@ func Test_newValidatorDiffs(t *testing.T) {
 	require.NotNil(t, err)
 }
 
-// Test_applyValidatorDiff tests applying validator changes to state
+type validatorMutationTrackingState struct {
+	state.BeaconState
+	fullReads     int
+	fullWrites    int
+	indexedReads  int
+	indexedWrites int
+	appends       int
+}
+
+func (s *validatorMutationTrackingState) Validators() []*ethpb.Validator {
+	s.fullReads++
+	return s.BeaconState.Validators()
+}
+
+func (s *validatorMutationTrackingState) SetValidators(validators []*ethpb.Validator) error {
+	s.fullWrites++
+	return s.BeaconState.SetValidators(validators)
+}
+
+func (s *validatorMutationTrackingState) ValidatorAtIndexReadOnly(idx primitives.ValidatorIndex) (state.ReadOnlyValidator, error) {
+	s.indexedReads++
+	return s.BeaconState.ValidatorAtIndexReadOnly(idx)
+}
+
+func (s *validatorMutationTrackingState) UpdateValidatorAtIndex(idx primitives.ValidatorIndex, validator *ethpb.Validator) error {
+	s.indexedWrites++
+	return s.BeaconState.UpdateValidatorAtIndex(idx, validator)
+}
+
+func (s *validatorMutationTrackingState) AppendValidator(validator *ethpb.Validator) error {
+	s.appends++
+	return s.BeaconState.AppendValidator(validator)
+}
+
+func validatorDiffFromProto(index uint32, validator *ethpb.Validator) validatorDiff {
+	return validatorDiff{
+		index:                      index,
+		EffectiveBalance:           validator.EffectiveBalance,
+		Slashed:                    validator.Slashed,
+		ActivationEligibilityEpoch: validator.ActivationEligibilityEpoch,
+		ActivationEpoch:            validator.ActivationEpoch,
+		ExitEpoch:                  validator.ExitEpoch,
+		WithdrawableEpoch:          validator.WithdrawableEpoch,
+	}
+}
+
+// Test_applyValidatorDiff tests applying validator changes to state.
 func Test_applyValidatorDiff(t *testing.T) {
-	source, _ := util.DeterministicGenesisStateElectra(t, 32)
-	target := source.Copy()
+	t.Run("updates only changed validators", func(t *testing.T) {
+		source, _ := util.DeterministicGenesisStateElectra(t, 32)
+		original, err := source.ValidatorAtIndex(0)
+		require.NoError(t, err)
+		diff := validatorDiffFromProto(0, original)
+		diff.Slashed = true
+		diff.EffectiveBalance += 1000
+		tracking := &validatorMutationTrackingState{BeaconState: source}
 
-	// Modify validators in target
-	vals := target.Validators()
-	modifiedVal := &ethpb.Validator{
-		PublicKey:                  vals[0].PublicKey,
-		WithdrawalCredentials:      vals[0].WithdrawalCredentials,
-		EffectiveBalance:           vals[0].EffectiveBalance,
-		Slashed:                    vals[0].Slashed,
-		ActivationEligibilityEpoch: vals[0].ActivationEligibilityEpoch,
-		ActivationEpoch:            vals[0].ActivationEpoch,
-		ExitEpoch:                  vals[0].ExitEpoch,
-		WithdrawableEpoch:          vals[0].WithdrawableEpoch,
-	}
-	modifiedVal.Slashed = true
-	modifiedVal.EffectiveBalance = vals[0].EffectiveBalance + 1000
-	vals[0] = modifiedVal
-	require.NoError(t, target.SetValidators(vals))
+		_, err = applyValidatorDiff(tracking, []validatorDiff{diff})
+		require.NoError(t, err)
+		require.Equal(t, 0, tracking.fullReads)
+		require.Equal(t, 0, tracking.fullWrites)
+		require.Equal(t, 1, tracking.indexedReads)
+		require.Equal(t, 1, tracking.indexedWrites)
+		require.Equal(t, 0, tracking.appends)
 
-	// Create validator diffs
-	diffs, err := diffToVals(source, target)
-	require.NoError(t, err)
+		updated, err := source.ValidatorAtIndexReadOnly(0)
+		require.NoError(t, err)
+		require.Equal(t, true, updated.Slashed())
+		require.Equal(t, original.EffectiveBalance+1000, updated.EffectiveBalance())
+		updatedPubkey := updated.PublicKey()
+		require.DeepEqual(t, original.PublicKey, updatedPubkey[:])
+		require.DeepEqual(t, original.WithdrawalCredentials, updated.GetWithdrawalCredentials())
+	})
 
-	// Apply diffs to source
-	result, err := applyValidatorDiff(source, diffs)
-	require.NoError(t, err)
+	t.Run("appends validators directly", func(t *testing.T) {
+		source, _ := util.DeterministicGenesisStateElectra(t, 4)
+		validator := &ethpb.Validator{
+			PublicKey:                  make([]byte, fieldparams.BLSPubkeyLength),
+			WithdrawalCredentials:      make([]byte, fieldparams.RootLength),
+			EffectiveBalance:           32_000_000_000,
+			ActivationEligibilityEpoch: 1,
+			ActivationEpoch:            2,
+			ExitEpoch:                  math.MaxUint64,
+			WithdrawableEpoch:          math.MaxUint64,
+		}
+		binary.LittleEndian.PutUint64(validator.PublicKey, 1000)
+		binary.LittleEndian.PutUint64(validator.WithdrawalCredentials, 2000)
+		diff := validatorDiffFromProto(uint32(source.NumValidators()), validator)
+		diff.PublicKey = slices.Clone(validator.PublicKey)
+		diff.WithdrawalCredentials = slices.Clone(validator.WithdrawalCredentials)
+		tracking := &validatorMutationTrackingState{BeaconState: source}
 
-	// Verify result matches target
-	resultVals := result.Validators()
-	targetVals := target.Validators()
-	require.Equal(t, len(targetVals), len(resultVals))
+		_, err := applyValidatorDiff(tracking, []validatorDiff{diff})
+		require.NoError(t, err)
+		require.Equal(t, 0, tracking.fullReads)
+		require.Equal(t, 0, tracking.fullWrites)
+		require.Equal(t, 0, tracking.indexedReads)
+		require.Equal(t, 0, tracking.indexedWrites)
+		require.Equal(t, 1, tracking.appends)
+		require.Equal(t, 5, source.NumValidators())
 
-	for i, val := range resultVals {
-		require.Equal(t, targetVals[i].Slashed, val.Slashed)
-		require.Equal(t, targetVals[i].EffectiveBalance, val.EffectiveBalance)
-	}
+		appended, err := source.ValidatorAtIndex(4)
+		require.NoError(t, err)
+		require.DeepEqual(t, validator, appended)
+		var pubkey [fieldparams.BLSPubkeyLength]byte
+		copy(pubkey[:], validator.PublicKey)
+		idx, ok := source.ValidatorIndexByPubkey(pubkey)
+		require.Equal(t, true, ok)
+		require.Equal(t, primitives.ValidatorIndex(4), idx)
+	})
+
+	t.Run("validates all indices before mutation", func(t *testing.T) {
+		source, _ := util.DeterministicGenesisStateElectra(t, 4)
+		original, err := source.ValidatorAtIndex(0)
+		require.NoError(t, err)
+		valid := validatorDiffFromProto(0, original)
+		valid.Slashed = !original.Slashed
+		invalid := validatorDiff{index: uint32(source.NumValidators() + 1)}
+		tracking := &validatorMutationTrackingState{BeaconState: source}
+
+		_, err = applyValidatorDiff(tracking, []validatorDiff{valid, invalid})
+		require.ErrorContains(t, "validator index 5 is greater than length 4", err)
+		require.Equal(t, 0, tracking.fullReads)
+		require.Equal(t, 0, tracking.fullWrites)
+		require.Equal(t, 0, tracking.indexedReads)
+		require.Equal(t, 0, tracking.indexedWrites)
+		require.Equal(t, 0, tracking.appends)
+
+		unchanged, err := source.ValidatorAtIndex(0)
+		require.NoError(t, err)
+		require.DeepEqual(t, original, unchanged)
+	})
+
+	t.Run("rebuilds registry for an existing public key change", func(t *testing.T) {
+		source, _ := util.DeterministicGenesisStateElectra(t, 4)
+		original, err := source.ValidatorAtIndex(0)
+		require.NoError(t, err)
+		diff := validatorDiffFromProto(0, original)
+		diff.PublicKey = slices.Clone(original.PublicKey)
+		diff.PublicKey[0]++
+		tracking := &validatorMutationTrackingState{BeaconState: source}
+
+		_, err = applyValidatorDiff(tracking, []validatorDiff{diff})
+		require.NoError(t, err)
+		require.Equal(t, 1, tracking.fullReads)
+		require.Equal(t, 1, tracking.fullWrites)
+		require.Equal(t, 0, tracking.indexedReads)
+		require.Equal(t, 0, tracking.indexedWrites)
+		require.Equal(t, 0, tracking.appends)
+
+		var pubkey [fieldparams.BLSPubkeyLength]byte
+		copy(pubkey[:], diff.PublicKey)
+		idx, ok := source.ValidatorIndexByPubkey(pubkey)
+		require.Equal(t, true, ok)
+		require.Equal(t, primitives.ValidatorIndex(0), idx)
+	})
+
+	t.Run("empty diff avoids registry access", func(t *testing.T) {
+		source, _ := util.DeterministicGenesisStateElectra(t, 4)
+		tracking := &validatorMutationTrackingState{BeaconState: source}
+
+		_, err := applyValidatorDiff(tracking, nil)
+		require.NoError(t, err)
+		require.Equal(t, 0, tracking.fullReads)
+		require.Equal(t, 0, tracking.fullWrites)
+		require.Equal(t, 0, tracking.indexedReads)
+		require.Equal(t, 0, tracking.indexedWrites)
+		require.Equal(t, 0, tracking.appends)
+	})
 }
 
 // TestApplyDiff_WithSignificantValidatorGrowth reproduces a bug where a Diff created from a
@@ -720,6 +1056,11 @@ func Test_applyStateDiff(t *testing.T) {
 	// Create state diff
 	stateDiff, err := diffToState(source, target)
 	require.NoError(t, err)
+	expectedVectors, err := snapshotStateVectors(target)
+	require.NoError(t, err)
+	require.Equal(t, true, bytes.Equal(expectedVectors.previousParticipation, stateDiff.previousEpochParticipation))
+	require.Equal(t, true, bytes.Equal(expectedVectors.currentParticipation, stateDiff.currentEpochParticipation))
+	require.Equal(t, true, slices.Equal(expectedVectors.inactivityScores, stateDiff.inactivityScores))
 
 	// Apply diff to source
 	result, err := applyStateDiff(ctx, source, stateDiff)
@@ -728,6 +1069,7 @@ func Test_applyStateDiff(t *testing.T) {
 	// Verify result matches target
 	require.Equal(t, target.Slot(), result.Slot())
 	require.Equal(t, target.Version(), result.Version())
+	requireStateVectorsEqual(t, expectedVectors, result)
 }
 
 // Test_computeLPS tests the LPS array computation for KMP algorithm
@@ -810,7 +1152,7 @@ func Test_diffBlockRoots(t *testing.T) {
 
 	// Create diff
 	diff := &stateDiff{}
-	diffBlockRoots(diff, source, target)
+	require.NoError(t, diffBlockRoots(diff, source, target))
 
 	// Verify diff contains changes
 	require.NotEqual(t, [32]byte{}, diff.blockRoots[0])
@@ -829,7 +1171,7 @@ func Test_diffStateRoots(t *testing.T) {
 
 	// Create diff
 	diff := &stateDiff{}
-	diffStateRoots(diff, source, target)
+	require.NoError(t, diffStateRoots(diff, source, target))
 
 	// Verify diff contains changes
 	require.NotEqual(t, [32]byte{}, diff.stateRoots[0])
@@ -870,6 +1212,8 @@ func Test_stateDiff_serialize(t *testing.T) {
 	// Serialize
 	serialized := stateDiff.serialize()
 	require.Equal(t, true, len(serialized) > 0)
+	require.Equal(t, stateDiff.serializedSize(), len(serialized))
+	require.Equal(t, len(serialized), cap(serialized))
 
 	// Verify it can be deserialized back (need to compress with snappy first)
 	compressed := snappy.Encode(nil, serialized)
@@ -877,6 +1221,43 @@ func Test_stateDiff_serialize(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, stateDiff.slot, deserializedDiff.slot)
 	require.Equal(t, stateDiff.targetVersion, deserializedDiff.targetVersion)
+	previousParticipation, err := target.PreviousEpochParticipation()
+	require.NoError(t, err)
+	currentParticipation, err := target.CurrentEpochParticipation()
+	require.NoError(t, err)
+	inactivityScores, err := target.InactivityScores()
+	require.NoError(t, err)
+	require.DeepEqual(t, previousParticipation, deserializedDiff.previousEpochParticipation)
+	require.DeepEqual(t, currentParticipation, deserializedDiff.currentEpochParticipation)
+	require.DeepEqual(t, inactivityScores, deserializedDiff.inactivityScores)
+	reserialized := deserializedDiff.serialize()
+	require.DeepEqual(t, serialized, reserialized)
+	require.Equal(t, deserializedDiff.serializedSize(), len(reserialized))
+	require.Equal(t, len(reserialized), cap(reserialized))
+}
+
+func Test_stateDiff_serializedSizePhase0(t *testing.T) {
+	source, _ := util.DeterministicGenesisState(t, 32)
+	target := source.Copy()
+	require.NoError(t, target.SetSlot(source.Slot()+1))
+
+	stateDiff, err := diffToState(source, target)
+	require.NoError(t, err)
+	serialized := stateDiff.serialize()
+	require.Equal(t, stateDiff.serializedSize(), len(serialized))
+	require.Equal(t, len(serialized), cap(serialized))
+}
+
+func Test_stateDiff_serializedSizeFulu(t *testing.T) {
+	source, _ := util.DeterministicGenesisStateFulu(t, 32)
+	target := source.Copy()
+	require.NoError(t, target.SetSlot(source.Slot()+1))
+
+	stateDiff, err := diffToState(source, target)
+	require.NoError(t, err)
+	serialized := stateDiff.serialize()
+	require.Equal(t, stateDiff.serializedSize(), len(serialized))
+	require.Equal(t, len(serialized), cap(serialized))
 }
 
 func Test_hdiff_serialize(t *testing.T) {
@@ -889,7 +1270,8 @@ func Test_hdiff_serialize(t *testing.T) {
 	require.NoError(t, err)
 
 	// Serialize
-	serialized := hdiff.serialize()
+	serialized, err := hdiff.serialize()
+	require.NoError(t, err)
 	require.Equal(t, true, len(serialized.StateDiff) > 0)
 	require.Equal(t, true, len(serialized.ValidatorDiffs) >= 0)
 	require.Equal(t, true, len(serialized.BalancesDiff) >= 0)
@@ -1117,7 +1499,10 @@ func BenchmarkSerialization(b *testing.B) {
 	}
 
 	for b.Loop() {
-		_ = hdiff.serialize()
+		_, err := hdiff.serialize()
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 

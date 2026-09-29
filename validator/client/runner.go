@@ -25,8 +25,7 @@ var backOffPeriod = 10 * time.Second
 
 // runner encapsulates the main validator routine.
 type runner struct {
-	validator     *validator
-	healthMonitor *healthMonitor
+	validator *validator
 }
 
 // newRunner creates a new runner instance and performs all necessary initialization.
@@ -35,7 +34,7 @@ type runner struct {
 // Order of operations:
 // 1 - Initialize validator data
 // 2 - Wait for validator activation
-func newRunner(ctx context.Context, v *validator, monitor *healthMonitor) (*runner, error) {
+func newRunner(ctx context.Context, v *validator) (*runner, error) {
 	// Initialize validator and get head slot
 	err := initialize(ctx, v)
 	if err != nil {
@@ -67,8 +66,7 @@ func newRunner(ctx context.Context, v *validator, monitor *healthMonitor) (*runn
 		log.WithError(err).Warn("Failed to push initial proposer settings, will retry on next slot")
 	}
 	return &runner{
-		validator:     v,
-		healthMonitor: monitor,
+		validator: v,
 	}, nil
 }
 
@@ -92,7 +90,7 @@ func (r *runner) run(ctx context.Context) {
 			//nolint:govet
 			return // Exit if context is canceled.
 		case slot := <-v.NextSlot():
-			if !r.healthMonitor.IsHealthy() {
+			if !v.healthMonitor.IsHealthy() {
 				log.WithField("url", api.RedactEndpointList(r.validator.Host())).Warning("Beacon node unhealthy, stopping runner")
 				return
 			}
@@ -129,6 +127,9 @@ func (r *runner) run(ctx context.Context) {
 			if shouldFetchNextDuties(slot) {
 				v.MaybeFetchNextDuties(ctx, slot)
 			}
+
+			// Background doppelganger check for keys quarantined by a key reload.
+			v.CheckDoppelGangerMidEpoch(ctx, slot)
 
 			// call push proposer settings often to account for the following edge cases:
 			// proposer is activated at the start of epoch and tries to propose immediately
@@ -195,6 +196,7 @@ func initialize(ctx context.Context, v *validator) error {
 	defer ticker.Stop()
 
 	firstTime := true
+	kmInitialized := false
 
 	for {
 		if !firstTime {
@@ -216,8 +218,12 @@ func initialize(ctx context.Context, v *validator) error {
 			return errors.Wrap(err, "could not determine if beacon chain started")
 		}
 
-		if err := v.WaitForKeymanagerInitialization(ctx); err != nil {
-			return errors.Wrap(err, "Wallet is not ready")
+		// Initialize the keymanager once per runner.
+		if !kmInitialized {
+			if err := v.WaitForKeymanagerInitialization(ctx); err != nil {
+				return errors.Wrap(err, "Wallet is not ready")
+			}
+			kmInitialized = true
 		}
 
 		if err := v.WaitForSync(ctx); err != nil {
@@ -233,7 +239,7 @@ func initialize(ctx context.Context, v *validator) error {
 			return errors.Wrap(err, "could not wait for validator activation")
 		}
 
-		if err := v.CheckDoppelGanger(ctx); err != nil {
+		if err := v.CheckDoppelGangerAtStartup(ctx); err != nil {
 			if isConnectionError(err) {
 				log.WithError(err).Warn("Could not wait for checking doppelganger")
 				continue

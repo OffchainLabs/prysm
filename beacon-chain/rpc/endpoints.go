@@ -254,7 +254,7 @@ func (s *Service) validatorEndpoints(
 			template: "/eth/v2/validator/aggregate_and_proofs",
 			name:     namespace + ".SubmitAggregateAndProofsV2",
 			middleware: []middleware.Middleware{
-				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
@@ -414,11 +414,23 @@ func (s *Service) validatorEndpoints(
 			template: "/eth/v4/validator/blocks/{slot}",
 			name:     namespace + ".ProduceBlockV4",
 			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.ProduceBlockV4,
-			methods: []string{http.MethodGet},
+			methods: []string{http.MethodPost},
+		},
+		{
+			template: "/eth/v1/validator/builder_preferences",
+			name:     namespace + ".SubmitBuilderPreferences",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.SubmitBuilderPreferences,
+			methods: []string{http.MethodPost},
 		},
 		{
 			template: "/eth/v1/validator/beacon_committee_selections",
@@ -950,6 +962,17 @@ func (s *Service) beaconEndpoints(
 			},
 			handler: server.GetProposerLookahead,
 			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/beacon/states/{state_id}/builders",
+			name:     namespace + ".GetStateBuilders",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetStateBuilders,
+			methods: []string{http.MethodPost},
 		},
 		{
 			template: "/eth/v1/beacon/pool/payload_attestations",

@@ -3,23 +3,23 @@ package customtypes
 import (
 	"fmt"
 
-	fssz "github.com/prysmaticlabs/fastssz"
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 )
 
-var _ fssz.HashRoot = (HistoricalRoots)([][32]byte{})
-var _ fssz.Marshaler = (*HistoricalRoots)(nil)
-var _ fssz.Unmarshaler = (*HistoricalRoots)(nil)
+var _ ssz.HashRoot = (HistoricalRoots)([][32]byte{})
+var _ ssz.Marshaler = (*HistoricalRoots)(nil)
+var _ ssz.Unmarshaler = (*HistoricalRoots)(nil)
 
 // HistoricalRoots represents a 32 bytes HistoricalRoots object in Ethereum beacon chain consensus.
 type HistoricalRoots [][32]byte
 
 // HashTreeRoot returns calculated hash root.
 func (r HistoricalRoots) HashTreeRoot() ([32]byte, error) {
-	return fssz.HashWithDefaultHasher(r)
+	return ssz.HashWithDefaultHasher(r)
 }
 
 // HashTreeRootWith hashes a HistoricalRoots object with a Hasher from the default HasherPool.
-func (r HistoricalRoots) HashTreeRootWith(hh *fssz.Hasher) error {
+func (r HistoricalRoots) HashTreeRootWith(hh *ssz.Hasher) error {
 	index := hh.Index()
 	for _, sRoot := range r {
 		hh.Append(sRoot[:])

@@ -16,6 +16,11 @@ const (
 	BytesPerChunk = 32
 )
 
+// UnmarshalUint64 decodes a little-endian uint64 from the first 8 bytes of buf.
+func UnmarshalUint64(buf []byte) uint64 {
+	return binary.LittleEndian.Uint64(buf)
+}
+
 // BitlistRoot returns the mix in length of a bitwise Merkleized bitfield.
 func BitlistRoot(bfield bitfield.Bitfield, maxCapacity uint64) ([32]byte, error) {
 	limit := (maxCapacity + 255) / 256

@@ -1,14 +1,11 @@
 package beacon_api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"net/http"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
-	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
@@ -25,25 +22,20 @@ func (c *beaconApiValidatorClient) submitSignedProposerPreferences(ctx context.C
 
 	headers := map[string]string{api.VersionHeader: version.String(version.Gloas)}
 
-	// Prefer SSZ; fall back to JSON if the beacon node does not accept octet-stream request bodies.
-	sszBody, err := marshalSignedProposerPreferencesSSZ(prefs)
-	if err != nil {
-		return err
+	sszFn := func() ([]byte, error) {
+		return marshalSignedProposerPreferencesSSZ(prefs)
 	}
-	if err = c.handler.PostSSZ(ctx, proposerPreferencesEndpoint, headers, bytes.NewBuffer(sszBody)); err == nil {
-		return nil
+	jsonFn := func() ([]byte, error) {
+		return marshalSignedProposerPreferencesJSON(prefs)
 	}
-	errJson := &httputil.DefaultJsonError{}
-	if !errors.As(err, &errJson) || errJson.Code != http.StatusUnsupportedMediaType {
-		return err
-	}
-	log.WithError(err).Warn("Beacon node does not accept SSZ proposer preferences, falling back to JSON")
 
-	jsonBody, err := marshalSignedProposerPreferencesJSON(prefs)
-	if err != nil {
-		return err
-	}
-	return c.handler.Post(ctx, proposerPreferencesEndpoint, headers, bytes.NewBuffer(jsonBody), nil)
+	return c.handler.PostSSZWithFallback(
+		ctx,
+		proposerPreferencesEndpoint,
+		headers,
+		sszFn,
+		jsonFn,
+	)
 }
 
 // marshalSignedProposerPreferencesSSZ encodes prefs as the SSZ List[SignedProposerPreferences],

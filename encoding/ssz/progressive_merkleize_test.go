@@ -188,7 +188,7 @@ func TestContainerRootProgressive_EmptyActiveFields(t *testing.T) {
 }
 
 func TestContainerRootProgressive_ActiveFieldsExceedsLimit(t *testing.T) {
-	af := make([]bool, 257)
+	af := make([]bool, ssz.MaxProgressiveActiveFields+1)
 	_, err := ssz.ContainerRootProgressive([][32]byte{}, af)
 	require.ErrorContains(t, "exceeds maximum", err)
 }
@@ -206,18 +206,21 @@ func TestMixInActiveFields(t *testing.T) {
 	root := chunkFromIndex(42)
 	activeFields := []bool{true, false, true, true, false, false, false, true, true}
 
-	got, err := ssz.MixInActiveFields(root, activeFields)
-	require.NoError(t, err)
-
 	var packed [32]byte
 	packed[0] = 0b10001101
 	packed[1] = 0b00000001
+	gotPacked, err := ssz.PackActiveFields(activeFields)
+	require.NoError(t, err)
+	require.Equal(t, packed, gotPacked)
+
+	got, err := ssz.MixInActiveFields(root, activeFields)
+	require.NoError(t, err)
 	expected := hashPair(root, packed)
 	require.Equal(t, expected, got)
 }
 
 func TestMixInActiveFields_TooMany(t *testing.T) {
-	activeFields := make([]bool, 257)
+	activeFields := make([]bool, ssz.MaxProgressiveActiveFields+1)
 	_, err := ssz.MixInActiveFields(chunkFromIndex(0), activeFields)
 	require.ErrorContains(t, "exceeds maximum 256", err)
 }

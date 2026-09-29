@@ -1,17 +1,14 @@
 package beacon_api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
@@ -50,24 +47,15 @@ func (c *beaconApiValidatorClient) submitPayloadAttestation(ctx context.Context,
 	}
 	headers := map[string]string{api.VersionHeader: version.String(version.Gloas)}
 
-	// Prefer SSZ; fall back to JSON if the beacon node does not accept octet-stream request bodies.
-	// The SSZ body is the List[PayloadAttestationMessage] encoding, here a single fixed-size element.
-	sszBody, err := msg.MarshalSSZ()
-	if err != nil {
-		return errors.Wrap(err, "failed to marshal payload attestation message ssz")
+	jsonFn := func() ([]byte, error) {
+		return json.Marshal([]*structs.PayloadAttestationMessage{structs.PayloadAttestationMessageFromConsensus(msg)})
 	}
-	if err = c.handler.PostSSZ(ctx, payloadAttestationsEndpoint, headers, bytes.NewBuffer(sszBody)); err == nil {
-		return nil
-	}
-	errJson := &httputil.DefaultJsonError{}
-	if !errors.As(err, &errJson) || errJson.Code != http.StatusUnsupportedMediaType {
-		return err
-	}
-	log.WithError(err).Warn("Beacon node does not accept SSZ payload attestations, falling back to JSON")
 
-	jsonBody, err := json.Marshal([]*structs.PayloadAttestationMessage{structs.PayloadAttestationMessageFromConsensus(msg)})
-	if err != nil {
-		return errors.Wrap(err, "failed to marshal payload attestation message")
-	}
-	return c.handler.Post(ctx, payloadAttestationsEndpoint, headers, bytes.NewBuffer(jsonBody), nil)
+	return c.handler.PostSSZWithFallback(
+		ctx,
+		payloadAttestationsEndpoint,
+		headers,
+		msg.MarshalSSZ,
+		jsonFn,
+	)
 }

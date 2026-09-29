@@ -3,6 +3,7 @@ package blocks
 import (
 	"bytes"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -10,7 +11,6 @@ import (
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/pkg/errors"
-	fastssz "github.com/prysmaticlabs/fastssz"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -104,7 +104,7 @@ func (e executionPayload) HashTreeRoot() ([32]byte, error) {
 }
 
 // HashTreeRootWith --
-func (e executionPayload) HashTreeRootWith(hh *fastssz.Hasher) error {
+func (e executionPayload) HashTreeRootWith(hh *ssz.Hasher) error {
 	return e.p.HashTreeRootWith(hh)
 }
 
@@ -267,7 +267,7 @@ func (e executionPayloadHeader) HashTreeRoot() ([32]byte, error) {
 }
 
 // HashTreeRootWith --
-func (e executionPayloadHeader) HashTreeRootWith(hh *fastssz.Hasher) error {
+func (e executionPayloadHeader) HashTreeRootWith(hh *ssz.Hasher) error {
 	return e.p.HashTreeRootWith(hh)
 }
 
@@ -458,7 +458,7 @@ func (e executionPayloadCapella) HashTreeRoot() ([32]byte, error) {
 }
 
 // HashTreeRootWith --
-func (e executionPayloadCapella) HashTreeRootWith(hh *fastssz.Hasher) error {
+func (e executionPayloadCapella) HashTreeRootWith(hh *ssz.Hasher) error {
 	return e.p.HashTreeRootWith(hh)
 }
 
@@ -621,7 +621,7 @@ func (e executionPayloadHeaderCapella) HashTreeRoot() ([32]byte, error) {
 }
 
 // HashTreeRootWith --
-func (e executionPayloadHeaderCapella) HashTreeRootWith(hh *fastssz.Hasher) error {
+func (e executionPayloadHeaderCapella) HashTreeRootWith(hh *ssz.Hasher) error {
 	return e.p.HashTreeRootWith(hh)
 }
 
@@ -930,7 +930,7 @@ func (e executionPayloadHeaderDeneb) HashTreeRoot() ([32]byte, error) {
 }
 
 // HashTreeRootWith --
-func (e executionPayloadHeaderDeneb) HashTreeRootWith(hh *fastssz.Hasher) error {
+func (e executionPayloadHeaderDeneb) HashTreeRootWith(hh *ssz.Hasher) error {
 	return e.p.HashTreeRootWith(hh)
 }
 
@@ -1093,7 +1093,7 @@ func (e executionPayloadDeneb) HashTreeRoot() ([32]byte, error) {
 }
 
 // HashTreeRootWith --
-func (e executionPayloadDeneb) HashTreeRootWith(hh *fastssz.Hasher) error {
+func (e executionPayloadDeneb) HashTreeRootWith(hh *ssz.Hasher) error {
 	return e.p.HashTreeRootWith(hh)
 }
 
@@ -1254,7 +1254,7 @@ func (e executionPayloadGloas) HashTreeRoot() ([32]byte, error) {
 }
 
 // HashTreeRootWith --
-func (e executionPayloadGloas) HashTreeRootWith(hh *fastssz.Hasher) error {
+func (e executionPayloadGloas) HashTreeRootWith(hh *ssz.Hasher) error {
 	return e.p.HashTreeRootWith(hh)
 }
 

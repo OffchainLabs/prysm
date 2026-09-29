@@ -1514,6 +1514,83 @@ func TestValidateBeaconBlockPubSub_RejectBlocksFromBadParent(t *testing.T) {
 	}
 }
 
+func TestValidateBeaconBlockPubSub_RejectBlockSlotNotAfterParent(t *testing.T) {
+	tests := []struct {
+		name       string
+		parentSlot primitives.Slot
+		blockSlot  primitives.Slot
+	}{
+		{name: "block slot lower than parent slot", parentSlot: 5, blockSlot: 3},
+		{name: "block slot equal to parent slot", parentSlot: 5, blockSlot: 5},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := dbtest.SetupDB(t)
+			p := p2ptest.NewTestP2P(t)
+			ctx := t.Context()
+			beaconState, privKeys := util.DeterministicGenesisState(t, 100)
+
+			parentBlock := util.NewBeaconBlock()
+			parentBlock.Block.Slot = tt.parentSlot
+			util.SaveBlock(t, ctx, db, parentBlock)
+			bRoot, err := parentBlock.Block.HashTreeRoot()
+			require.NoError(t, err)
+			require.NoError(t, db.SaveState(ctx, beaconState, bRoot))
+			require.NoError(t, db.SaveStateSummary(ctx, &ethpb.StateSummary{Root: bRoot[:]}))
+
+			copied := beaconState.Copy()
+			require.NoError(t, copied.SetSlot(tt.blockSlot))
+			proposerIdx, err := helpers.BeaconProposerIndex(ctx, copied)
+			require.NoError(t, err)
+			msg := util.NewBeaconBlock()
+			msg.Block.ParentRoot = bRoot[:]
+			msg.Block.Slot = tt.blockSlot
+			msg.Block.ProposerIndex = proposerIdx
+			msg.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, msg.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[proposerIdx])
+			require.NoError(t, err)
+
+			chainService := &mock.ChainService{
+				Genesis:   time.Unix(time.Now().Unix()-8*int64(params.BeaconConfig().SecondsPerSlot), 0),
+				State:     beaconState,
+				Root:      bRoot[:],
+				BlockSlot: tt.parentSlot,
+				FinalizedCheckPoint: &ethpb.Checkpoint{
+					Epoch: 0,
+					Root:  make([]byte, 32),
+				},
+				DB: db,
+			}
+			r := &Service{
+				cfg: &config{
+					beaconDB:          db,
+					p2p:               p,
+					initialSync:       &mockSync.Sync{IsSyncing: false},
+					chain:             chainService,
+					clock:             startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+					blockNotifier:     chainService.BlockNotifier(),
+					operationNotifier: chainService.OperationNotifier(),
+					stateGen:          stategen.New(db, doublylinkedtree.New()),
+				},
+				seenBlockCache:      lruwrpr.New(10),
+				badBlockCache:       lruwrpr.New(10),
+				slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
+				seenPendingBlocks:   make(map[[32]byte]bool),
+			}
+
+			buf := new(bytes.Buffer)
+			_, err = p.Encoding().EncodeGossip(buf, msg)
+			require.NoError(t, err)
+			topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlock]()]
+			topic = r.addDigestToTopic(topic, r.currentForkDigest())
+			m := &pubsub.Message{Message: &pubsubpb.Message{Data: buf.Bytes(), Topic: &topic}}
+
+			res, err := r.validateBeaconBlockPubSub(ctx, "", m)
+			require.ErrorIs(t, err, errBlockSlotNotAfterParent)
+			require.Equal(t, pubsub.ValidationReject, res)
+		})
+	}
+}
+
 func TestService_setBadBlock_DoesntSetWithContextErr(t *testing.T) {
 	s := Service{}
 	s.initCaches()
@@ -2228,6 +2305,56 @@ func TestDetectAndBroadcastEquivocation(t *testing.T) {
 		// Past the early deadline (75% of slot at default mainnet config).
 		lateReceived := slotStart.Add(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
 		require.NoError(t, r.detectAndBroadcastEquivocation(ctx, signedNewBlock, lateReceived))
+
+		require.Equal(t, 0, len(chainService.RecordedEquivocations))
+	})
+
+	t.Run("equivocation received before slot start not recorded when flag on", func(t *testing.T) {
+		resetFn := features.InitWithReset(&features.Flags{TrackEquivocations: true})
+		defer resetFn()
+
+		headBlock := util.NewBeaconBlock()
+		headBlock.Block.Slot = 1
+		headBlock.Block.ProposerIndex = 0
+		headBlock.Block.ParentRoot = bytesutil.PadTo([]byte("parent1"), 32)
+		sig1, err := signing.ComputeDomainAndSign(beaconState, 0, headBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+		require.NoError(t, err)
+		headBlock.Signature = sig1
+
+		newBlock := util.NewBeaconBlock()
+		newBlock.Block.Slot = 1
+		newBlock.Block.ProposerIndex = 0
+		newBlock.Block.ParentRoot = bytesutil.PadTo([]byte("parent2"), 32)
+		sig2, err := signing.ComputeDomainAndSign(beaconState, 0, newBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+		require.NoError(t, err)
+		newBlock.Signature = sig2
+
+		signedHeadBlock, err := blocks.NewSignedBeaconBlock(headBlock)
+		require.NoError(t, err)
+		signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
+		require.NoError(t, err)
+
+		genesis := time.Now()
+		chainService := &mock.ChainService{
+			State:   beaconState,
+			Genesis: genesis,
+			Block:   signedHeadBlock,
+		}
+
+		r := &Service{
+			cfg: &config{
+				p2p:          p,
+				chain:        chainService,
+				slashingPool: &slashingsmock.PoolMock{},
+				clock:        startup.NewClock(genesis, chainService.ValidatorsRoot),
+			},
+			seenBlockCache: lruwrpr.New(10),
+		}
+
+		slotStart, err := slots.StartTime(genesis, 1)
+		require.NoError(t, err)
+		earlyReceived := slotStart.Add(-time.Second)
+		require.NoError(t, r.detectAndBroadcastEquivocation(ctx, signedNewBlock, earlyReceived))
 
 		require.Equal(t, 0, len(chainService.RecordedEquivocations))
 	})

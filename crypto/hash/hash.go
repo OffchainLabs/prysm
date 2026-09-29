@@ -7,12 +7,13 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 	"github.com/minio/highwayhash"
 	"github.com/minio/sha256-simd"
-	fastssz "github.com/prysmaticlabs/fastssz"
 	"golang.org/x/crypto/sha3"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 )
 
 // ErrNilProto can occur when attempting to hash a protobuf message that is nil
@@ -108,7 +109,7 @@ func Proto(msg proto.Message) (result [32]byte, err error) {
 		return [32]byte{}, ErrNilProto
 	}
 	var data []byte
-	if m, ok := msg.(fastssz.Marshaler); ok {
+	if m, ok := msg.(ssz.Marshaler); ok {
 		data, err = m.MarshalSSZ()
 	} else {
 		data, err = proto.Marshal(msg)

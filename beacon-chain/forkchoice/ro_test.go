@@ -31,12 +31,15 @@ const (
 	previousJustifiedCheckpointCalled
 	justifiedPayloadBlockHashCalled
 	unrealizedJustifiedPayloadBlockHashCalled
+	unrealizedJustifiedCheckpointCalled
 	nodeCountCalled
 	highestReceivedBlockSlotCalled
 	highestReceivedBlockRootCalled
 	receivedBlocksLastEpochCalled
 	weightCalled
 	consensusNodeWeightCalled
+	couldBuilderWithholdCalled
+	builderIndexCalled
 	isOptimisticCalled
 	shouldOverrideFCUCalled
 	slotCalled
@@ -49,6 +52,7 @@ const (
 	dependentRootCalled
 	dependentRootForEpochCalled
 	canonicalNodeAtSlotCalled
+	confirmedPayloadBlockHashCalled
 	payloadWeightsCalled
 	hasPayloadBlockHashCalled
 )
@@ -139,6 +143,11 @@ func TestROLocking(t *testing.T) {
 			cb:   func(g FastGetter) { g.UnrealizedJustifiedPayloadBlockHash() },
 		},
 		{
+			name: "unrealizedJustifiedCheckpointCalled",
+			call: unrealizedJustifiedCheckpointCalled,
+			cb:   func(g FastGetter) { g.UnrealizedJustifiedCheckpoint() },
+		},
+		{
 			name: "nodeCountCalled",
 			call: nodeCountCalled,
 			cb:   func(g FastGetter) { g.NodeCount() },
@@ -162,6 +171,16 @@ func TestROLocking(t *testing.T) {
 			name: "consensusNodeWeightCalled",
 			call: consensusNodeWeightCalled,
 			cb:   func(g FastGetter) { _, err := g.ConsensusNodeWeight([32]byte{}); _discard(t, err) },
+		},
+		{
+			name: "couldBuilderWithholdCalled",
+			call: couldBuilderWithholdCalled,
+			cb:   func(g FastGetter) { g.CouldBuilderWithhold([32]byte{}) },
+		},
+		{
+			name: "builderIndexCalled",
+			call: builderIndexCalled,
+			cb:   func(g FastGetter) { _, err := g.BuilderIndex([32]byte{}); _discard(t, err) },
 		},
 		{
 			name: "isOptimisticCalled",
@@ -189,6 +208,11 @@ func TestROLocking(t *testing.T) {
 			cb:   func(g FastGetter) { _, err := g.DependentRoot(0); _discard(t, err) },
 		},
 		{
+			name: "confirmedPayloadBlockHashCalled",
+			call: confirmedPayloadBlockHashCalled,
+			cb:   func(g FastGetter) { g.ConfirmedPayloadBlockHash([32]byte{}) },
+		},
+		{
 			name: "canonicalNodeAtSlotCalled",
 			call: canonicalNodeAtSlotCalled,
 			cb:   func(g FastGetter) { g.CanonicalNodeAtSlot(0) },
@@ -196,7 +220,7 @@ func TestROLocking(t *testing.T) {
 		{
 			name: "gasLimitCalled",
 			call: gasLimitCalled,
-			cb:   func(g FastGetter) { _, err := g.GasLimit([32]byte{}); _discard(t, err) },
+			cb:   func(g FastGetter) { _, err := g.GasLimit([32]byte{}, [32]byte{}); _discard(t, err) },
 		},
 		{
 			name: "hasPayloadBlockHashCalled",
@@ -315,6 +339,11 @@ func (ro *mockROForkchoice) UnrealizedJustifiedPayloadBlockHash() [32]byte {
 	return [32]byte{}
 }
 
+func (ro *mockROForkchoice) UnrealizedJustifiedCheckpoint() *forkchoicetypes.Checkpoint {
+	ro.calls = append(ro.calls, unrealizedJustifiedCheckpointCalled)
+	return nil
+}
+
 func (ro *mockROForkchoice) NodeCount() int {
 	ro.calls = append(ro.calls, nodeCountCalled)
 	return 0
@@ -342,6 +371,16 @@ func (ro *mockROForkchoice) Weight(_ [32]byte) (uint64, error) {
 
 func (ro *mockROForkchoice) ConsensusNodeWeight(_ [32]byte) (uint64, error) {
 	ro.calls = append(ro.calls, consensusNodeWeightCalled)
+	return 0, nil
+}
+
+func (ro *mockROForkchoice) CouldBuilderWithhold(_ [32]byte) bool {
+	ro.calls = append(ro.calls, couldBuilderWithholdCalled)
+	return false
+}
+
+func (ro *mockROForkchoice) BuilderIndex(_ [32]byte) (primitives.BuilderIndex, error) {
+	ro.calls = append(ro.calls, builderIndexCalled)
 	return 0, nil
 }
 
@@ -403,9 +442,14 @@ func (ro *mockROForkchoice) BlockHash(_ [32]byte) ([32]byte, error) {
 	return [32]byte{}, nil
 }
 
-func (ro *mockROForkchoice) GasLimit(_ [32]byte) (uint64, error) {
+func (ro *mockROForkchoice) GasLimit(_, _ [32]byte) (uint64, error) {
 	ro.calls = append(ro.calls, gasLimitCalled)
 	return 0, nil
+}
+
+func (ro *mockROForkchoice) ConfirmedPayloadBlockHash(_ [32]byte) [32]byte {
+	ro.calls = append(ro.calls, confirmedPayloadBlockHashCalled)
+	return [32]byte{}
 }
 
 func (ro *mockROForkchoice) CanonicalNodeAtSlot(_ primitives.Slot) ([32]byte, bool) {

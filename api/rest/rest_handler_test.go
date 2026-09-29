@@ -64,6 +64,32 @@ func TestGetSSZ_NonJSONErrorBodyIsTyped(t *testing.T) {
 	require.Equal(t, http.StatusNotAcceptable, errJson.Code)
 }
 
+// A 204 on a read surfaces as a typed error rather than an empty success body.
+func TestGetSSZ_NoContentIsTypedError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	c := newHandler(http.Client{}, srv.URL)
+	body, _, err := c.GetSSZ(context.Background(), "/eth/v1/test")
+	require.NotNil(t, err)
+	require.Equal(t, 0, len(body))
+	require.Equal(t, true, errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusNoContent}),
+		"expected a 204 DefaultJsonError, got %v", err)
+}
+
+// A 204 on a write stays a plain success, unlike a 204 on a read.
+func TestPostSSZ_NoContentIsSuccess(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	c := newHandler(http.Client{}, srv.URL)
+	require.NoError(t, c.PostSSZ(context.Background(), "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01})))
+}
+
 // A JSON error body is decoded into the typed error's fields.
 func TestPostSSZ_JSONErrorBodyIsDecoded(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -96,7 +122,7 @@ func TestPostSSZ_MalformedJSONErrorBodyKeepsStatus(t *testing.T) {
 	require.Equal(t, true, errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}), "expected 415 to survive, got %v", err)
 }
 
-func TestPostSSZ_DrainsSuccessBody(t *testing.T) {
+func TestPostSSZ_ReturnsSuccessBodyAndReusesConnection(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
 		_, _ = w.Write([]byte(`{"message":"accepted"}`))
@@ -110,8 +136,11 @@ func TestPostSSZ_DrainsSuccessBody(t *testing.T) {
 		},
 	})
 	c := newHandler(http.Client{}, srv.URL)
-	require.NoError(t, c.PostSSZ(ctx, "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01})))
-	require.NoError(t, c.PostSSZ(ctx, "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01})))
+	body, _, err := c.postWithContentType(ctx, "/eth/v1/test", nil, api.OctetStreamMediaType, bytes.NewBuffer([]byte{0x01}))
+	require.NoError(t, err)
+	require.Equal(t, `{"message":"accepted"}`, string(body))
+	_, _, err = c.postWithContentType(ctx, "/eth/v1/test", nil, api.OctetStreamMediaType, bytes.NewBuffer([]byte{0x01}))
+	require.NoError(t, err)
 	require.Equal(t, true, reused, "expected the second request to reuse the drained connection")
 }
 

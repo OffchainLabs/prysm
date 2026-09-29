@@ -4,12 +4,14 @@ package validator
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -102,4 +104,34 @@ func TestSetP2PBidFallback_NoCachedBidErrors(t *testing.T) {
 
 	err = vs.setP2PBidFallback(context.Background(), sBlk, st, false)
 	require.ErrorContains(t, "no cached P2P bid", err)
+}
+
+func TestGloasPayloadValue(t *testing.T) {
+	vs := &Server{}
+	newBlockWithBid := func(value, payment primitives.Gwei) interfaces.SignedBeaconBlock {
+		blk := util.NewBeaconBlockGloas()
+		blk.Block.Body.SignedExecutionPayloadBid.Message.Value = value
+		blk.Block.Body.SignedExecutionPayloadBid.Message.ExecutionPayment = payment
+		sBlk, err := consensusblocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		return sBlk
+	}
+
+	t.Run("self-built uses local bid", func(t *testing.T) {
+		local := &consensusblocks.GetPayloadResponse{Bid: primitives.Uint64ToWei(123456789)}
+		got := vs.gloasPayloadValue(newBlockWithBid(0, 0), local, true)
+		require.Equal(t, "123456789", primitives.WeiToBigInt(got).String())
+	})
+	t.Run("self-built without local bid is zero", func(t *testing.T) {
+		got := vs.gloasPayloadValue(newBlockWithBid(0, 0), nil, true)
+		require.Equal(t, "0", primitives.WeiToBigInt(got).String())
+	})
+	t.Run("external bid uses bid value in wei", func(t *testing.T) {
+		got := vs.gloasPayloadValue(newBlockWithBid(3, 2), &consensusblocks.GetPayloadResponse{}, false)
+		require.Equal(t, "3000000000", primitives.WeiToBigInt(got).String())
+	})
+	t.Run("external bid value does not overflow", func(t *testing.T) {
+		got := vs.gloasPayloadValue(newBlockWithBid(primitives.Gwei(math.MaxUint64), 0), nil, false)
+		require.Equal(t, "18446744073709551615000000000", primitives.WeiToBigInt(got).String())
+	})
 }

@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -8,7 +9,6 @@ import (
 	v1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
-	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 // SignedBid is an interface describing the method set of a signed builder bid.

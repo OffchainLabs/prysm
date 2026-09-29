@@ -3,13 +3,14 @@ package primitives
 import (
 	"fmt"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
+
 	"github.com/OffchainLabs/prysm/v7/math"
-	fssz "github.com/prysmaticlabs/fastssz"
 )
 
-var _ fssz.HashRoot = (Slot)(0)
-var _ fssz.Marshaler = (*Slot)(nil)
-var _ fssz.Unmarshaler = (*Slot)(nil)
+var _ ssz.HashRoot = (Slot)(0)
+var _ ssz.Marshaler = (*Slot)(nil)
+var _ ssz.Unmarshaler = (*Slot)(nil)
 
 // Slot represents a single slot.
 type Slot uint64
@@ -169,11 +170,11 @@ func (s Slot) SafeModSlot(x Slot) (Slot, error) {
 
 // HashTreeRoot --
 func (s Slot) HashTreeRoot() ([32]byte, error) {
-	return fssz.HashWithDefaultHasher(s)
+	return ssz.HashWithDefaultHasher(s)
 }
 
 // HashTreeRootWith --
-func (s Slot) HashTreeRootWith(hh *fssz.Hasher) error {
+func (s Slot) HashTreeRootWith(hh *ssz.Hasher) error {
 	hh.PutUint64(uint64(s))
 	return nil
 }
@@ -183,7 +184,7 @@ func (s *Slot) UnmarshalSSZ(buf []byte) error {
 	if len(buf) != s.SizeSSZ() {
 		return fmt.Errorf("expected buffer of length %d received %d", s.SizeSSZ(), len(buf))
 	}
-	*s = Slot(fssz.UnmarshallUint64(buf))
+	*s = Slot(UnmarshalUint64(buf))
 	return nil
 }
 
@@ -198,7 +199,7 @@ func (s *Slot) MarshalSSZTo(dst []byte) ([]byte, error) {
 
 // MarshalSSZ --
 func (s *Slot) MarshalSSZ() ([]byte, error) {
-	marshalled := fssz.MarshalUint64([]byte{}, uint64(*s))
+	marshalled := MarshalUint64([]byte{}, uint64(*s))
 	return marshalled, nil
 }
 

@@ -124,6 +124,23 @@ type ValidatorIdentity struct {
 	ActivationEpoch string `json:"activation_epoch"`
 }
 
+type GetStateBuildersRequest struct {
+	Ids      []string `json:"ids,omitempty"`
+	Statuses []string `json:"statuses,omitempty"`
+}
+
+type GetStateBuildersResponse struct {
+	ExecutionOptimistic bool               `json:"execution_optimistic"`
+	Finalized           bool               `json:"finalized"`
+	Data                []*BuilderResponse `json:"data"`
+}
+
+type BuilderResponse struct {
+	Index   string   `json:"index"`
+	Status  string   `json:"status"`
+	Builder *Builder `json:"builder"`
+}
+
 type GetBlockResponse struct {
 	Data *SignedBlock `json:"data"`
 }

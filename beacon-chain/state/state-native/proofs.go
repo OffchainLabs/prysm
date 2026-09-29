@@ -3,39 +3,81 @@ package state_native
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
 
-const (
-	finalizedRootIndex = uint64(105) // Precomputed value.
-)
+type lightClientGeneralizedIndices struct {
+	finalizedRoot        uint64
+	currentSyncCommittee uint64
+	nextSyncCommittee    uint64
+}
 
-// FinalizedRootGeneralizedIndex for the beacon state.
-func FinalizedRootGeneralizedIndex() uint64 {
-	return finalizedRootIndex
+// FinalizedRootGeneralizedIndexForVersion returns the finalized checkpoint root
+// generalized index for the given state version and SSZ mode.
+func FinalizedRootGeneralizedIndexForVersion(stateVersion int) (uint64, error) {
+	indices, err := lightClientGeneralizedIndicesForVersion(stateVersion)
+	if err != nil {
+		return 0, err
+	}
+	return indices.finalizedRoot, nil
+}
+
+// CurrentSyncCommitteeGeneralizedIndexForVersion returns the current sync
+// committee generalized index for the given state version and SSZ mode.
+func CurrentSyncCommitteeGeneralizedIndexForVersion(stateVersion int) (uint64, error) {
+	if stateVersion == version.Phase0 {
+		return 0, errNotSupported("CurrentSyncCommitteeGeneralizedIndex", stateVersion)
+	}
+	indices, err := lightClientGeneralizedIndicesForVersion(stateVersion)
+	if err != nil {
+		return 0, err
+	}
+	return indices.currentSyncCommittee, nil
+}
+
+// NextSyncCommitteeGeneralizedIndexForVersion returns the next sync committee
+// generalized index for the given state version and SSZ mode.
+func NextSyncCommitteeGeneralizedIndexForVersion(stateVersion int) (uint64, error) {
+	if stateVersion == version.Phase0 {
+		return 0, errNotSupported("NextSyncCommitteeGeneralizedIndex", stateVersion)
+	}
+	indices, err := lightClientGeneralizedIndicesForVersion(stateVersion)
+	if err != nil {
+		return 0, err
+	}
+	return indices.nextSyncCommittee, nil
+}
+
+func lightClientGeneralizedIndicesForVersion(stateVersion int) (lightClientGeneralizedIndices, error) {
+	switch stateVersion {
+	case version.Phase0:
+		return lightClientGeneralizedIndices{finalizedRoot: 105}, nil
+	case version.Altair, version.Bellatrix, version.Capella, version.Deneb:
+		return lightClientGeneralizedIndices{finalizedRoot: 105, currentSyncCommittee: 54, nextSyncCommittee: 55}, nil
+	case version.Electra, version.Fulu:
+		return lightClientGeneralizedIndices{finalizedRoot: 169, currentSyncCommittee: 86, nextSyncCommittee: 87}, nil
+	case version.Gloas:
+		return lightClientGeneralizedIndices{finalizedRoot: 735, currentSyncCommittee: 2945, nextSyncCommittee: 2946}, nil
+	default:
+		return lightClientGeneralizedIndices{}, errNotSupported("light client generalized indices", stateVersion)
+	}
 }
 
 // CurrentSyncCommitteeGeneralizedIndex for the beacon state.
 func (b *BeaconState) CurrentSyncCommitteeGeneralizedIndex() (uint64, error) {
-	if b.version == version.Phase0 {
-		return 0, errNotSupported("CurrentSyncCommitteeGeneralizedIndex", b.version)
-	}
-
-	return uint64(types.CurrentSyncCommittee.RealPosition()), nil
+	return CurrentSyncCommitteeGeneralizedIndexForVersion(b.version)
 }
 
 // NextSyncCommitteeGeneralizedIndex for the beacon state.
 func (b *BeaconState) NextSyncCommitteeGeneralizedIndex() (uint64, error) {
-	if b.version == version.Phase0 {
-		return 0, errNotSupported("NextSyncCommitteeGeneralizedIndex", b.version)
-	}
-
-	return uint64(types.NextSyncCommittee.RealPosition()), nil
+	return NextSyncCommitteeGeneralizedIndexForVersion(b.version)
 }
 
 // CurrentSyncCommitteeProof from the state's Merkle trie representation.
@@ -87,17 +129,53 @@ func (b *BeaconState) proofByFieldIndex(ctx context.Context, f types.FieldIndex)
 		return nil, err
 	}
 
+	if b.version >= version.Gloas {
+		return b.progressiveProofByFieldIndex(ctx, f)
+	}
+
 	if err := b.initializeMerkleLayers(ctx); err != nil {
 		return nil, err
 	}
 	if err := b.recomputeDirtyFields(ctx); err != nil {
 		return nil, err
 	}
-	// Proof generation still uses the legacy balanced container tree. If it
-	// consumed dirty fields, force the progressive cache to rebuild before it
-	// is used again.
 	b.progressiveMerkleTree = nil
 	return trie.ProofFromMerkleLayers(b.merkleLayers, f.RealPosition()), nil
+}
+
+func (b *BeaconState) progressiveProofByFieldIndex(ctx context.Context, f types.FieldIndex) ([][]byte, error) {
+	if err := b.initializeProgressiveMerkleTree(ctx); err != nil {
+		return nil, err
+	}
+	if err := b.recomputeProgressiveDirtyFields(ctx); err != nil {
+		return nil, err
+	}
+
+	schema, ok := ProgressiveStateSchemaForVersion(b.version)
+	if !ok {
+		return nil, fmt.Errorf("progressive state schema not found for version %v", b.version)
+	}
+	fieldPos, ok := schema.GetFieldIndex(f)
+	if !ok {
+		return nil, fmt.Errorf("field index %s not found for version %v", f.String(), b.version)
+	}
+
+	branch, err := b.progressiveMerkleTree.Proof(fieldPos)
+	if err != nil {
+		return nil, err
+	}
+	activeFieldsRoot, err := ssz.PackActiveFields(schema.ActiveFields())
+	if err != nil {
+		return nil, err
+	}
+	branch = append(branch, activeFieldsRoot)
+
+	proof := make([][]byte, len(branch))
+	for i := range branch {
+		proof[i] = branch[i][:]
+	}
+	b.merkleLayers = nil
+	return proof, nil
 }
 
 func (b *BeaconState) validateFieldIndex(f types.FieldIndex) error {
@@ -128,6 +206,15 @@ func (b *BeaconState) validateFieldIndex(f types.FieldIndex) error {
 		}
 	case version.Fulu:
 		if f.RealPosition() > params.BeaconConfig().BeaconStateFuluFieldCount-1 {
+			return errNotSupported(f.String(), b.version)
+		}
+	case version.Gloas:
+		schema, ok := ProgressiveStateSchemaForVersion(version.Gloas)
+		if !ok {
+			return fmt.Errorf("progressive state schema not found for version %v", b.version)
+		}
+		_, ok = schema.GetFieldIndex(f)
+		if !ok {
 			return errNotSupported(f.String(), b.version)
 		}
 	}

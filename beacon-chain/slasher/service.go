@@ -201,7 +201,7 @@ func (*Service) Status() error {
 func (s *Service) waitForChainInitialization() {
 	clock, err := s.serviceCfg.ClockWaiter.WaitForClock(s.ctx)
 	if err != nil {
-		log.WithError(err).Error("Could not receive chain start notification")
+		log.WithError(err).Error("Could not receive genesis clock")
 	}
 	s.genesisTime = clock.GenesisTime()
 	log.WithField("genesisTime", s.genesisTime).Info(

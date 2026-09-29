@@ -10,6 +10,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
@@ -24,11 +30,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
 )
 
 const minimumPeersPerSubnetForBroadcast = 1
@@ -430,18 +431,28 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 	if s.partialColumnBroadcaster != nil {
 		for i := range partialColumns {
 			pc := &partialColumns[i]
-			topic, wrappedSubIdx, subnet := columnToTopic(pc.Index, forkDigest)
-			item, ok := itemsByIndex[pc.Index]
+			topic, wrappedSubIdx, subnet := columnToTopic(pc.Index(), forkDigest)
+			item, ok := itemsByIndex[pc.Index()]
 			if !ok {
 				item = &columnBroadcastItem{
-					index:         pc.Index,
+					index:         pc.Index(),
 					topic:         topic,
 					wrappedSubIdx: wrappedSubIdx,
 					subnet:        subnet,
 				}
-				itemsByIndex[pc.Index] = item
+				itemsByIndex[pc.Index()] = item
 			}
 			item.partialColumn = pc
+		}
+	}
+
+	// Join every column topic before any publish below. The batch path joins lazily,
+	// and a partial publish that runs before the topic is joined finds no local topic
+	// state in the router.
+	suffix := s.Encoding().ProtocolSuffix()
+	for _, item := range itemsByIndex {
+		if _, err := s.JoinTopic(item.topic + suffix); err != nil {
+			log.WithError(err).WithField("topic", item.topic).Error("Cannot join data column topic")
 		}
 	}
 

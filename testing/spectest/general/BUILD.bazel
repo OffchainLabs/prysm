@@ -9,7 +9,7 @@ go_test(
         "fulu__kzg__recover_cells_and_kzg_proofs_test.go",
         "fulu__kzg__verify_cell_kzg_proof_batch_test.go",
     ],
-    data = ["@consensus_spec_tests//:test_data"],
+    data = ["@cryptography_spec_tests//:test_data"],
     tags = ["spectest"],
     deps = [
         "//beacon-chain/blockchain/kzg:go_default_library",

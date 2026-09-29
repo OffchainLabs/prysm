@@ -1,11 +1,9 @@
 package beacon_api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strconv"
 	"strings"
 
@@ -13,7 +11,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -75,10 +72,6 @@ func (c *beaconApiValidatorClient) publishExecutionPayloadEnvelope(
 	slot := primitives.Slot(envelope.Message.Payload.SlotNumber)
 	cachedEnv, blobs, kzgProofs := c.envelopeCache.Take(slot)
 	if cachedEnv == nil {
-		ssz, err := envelope.MarshalSSZ()
-		if err != nil {
-			return nil, errors.Wrap(err, "could not marshal envelope SSZ")
-		}
 		jsonFn := func() ([]byte, error) {
 			j, jerr := structs.SignedExecutionPayloadEnvelopeFromConsensus(envelope)
 			if jerr != nil {
@@ -86,7 +79,7 @@ func (c *beaconApiValidatorClient) publishExecutionPayloadEnvelope(
 			}
 			return json.Marshal(j)
 		}
-		if err := c.postEnvelope(ctx, endpoint, envelopeHeaders(false), ssz, jsonFn); err != nil {
+		if err := c.handler.PostSSZWithFallback(ctx, endpoint, envelopeHeaders(false), envelope.MarshalSSZ, jsonFn); err != nil {
 			return nil, errors.Wrap(err, "could not publish execution payload envelope")
 		}
 		return &empty.Empty{}, nil
@@ -97,10 +90,6 @@ func (c *beaconApiValidatorClient) publishExecutionPayloadEnvelope(
 		KzgProofs:                      kzgProofs,
 		Blobs:                          blobs,
 	}
-	ssz, err := contents.MarshalSSZ()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not marshal envelope contents SSZ")
-	}
 	jsonFn := func() ([]byte, error) {
 		j, jerr := structs.SignedExecutionPayloadEnvelopeContentsFromConsensus(envelope, kzgProofs, blobs)
 		if jerr != nil {
@@ -108,7 +97,7 @@ func (c *beaconApiValidatorClient) publishExecutionPayloadEnvelope(
 		}
 		return json.Marshal(j)
 	}
-	if err := c.postEnvelope(ctx, endpoint, envelopeHeaders(true), ssz, jsonFn); err != nil {
+	if err := c.handler.PostSSZWithFallback(ctx, endpoint, envelopeHeaders(true), contents.MarshalSSZ, jsonFn); err != nil {
 		return nil, errors.Wrap(err, "could not publish execution payload envelope contents")
 	}
 	return &empty.Empty{}, nil
@@ -119,21 +108,4 @@ func envelopeHeaders(blobDataIncluded bool) map[string]string {
 		api.VersionHeader:          version.String(version.Gloas),
 		api.BlobDataIncludedHeader: strconv.FormatBool(blobDataIncluded),
 	}
-}
-
-// postEnvelope publishes SSZ first; on 415 Unsupported Media Type falls back to JSON.
-func (c *beaconApiValidatorClient) postEnvelope(ctx context.Context, endpoint string, headers map[string]string, ssz []byte, jsonFn func() ([]byte, error)) error {
-	err := c.handler.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(ssz))
-	if err == nil {
-		return nil
-	}
-	if !errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}) {
-		return err
-	}
-	log.WithError(err).Warn("Envelope SSZ publish rejected, falling back to JSON")
-	body, jerr := jsonFn()
-	if jerr != nil {
-		return errors.Wrap(jerr, "could not marshal envelope JSON for fallback")
-	}
-	return c.handler.Post(ctx, endpoint, headers, bytes.NewBuffer(body), nil)
 }

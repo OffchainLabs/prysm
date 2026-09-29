@@ -254,7 +254,7 @@ func TestNode_SetFullyValidated(t *testing.T) {
 		require.Equal(t, storeNodes[i].node.weight, respNode.Weight)
 		require.Equal(t, storeNodes[i].optimistic, respNode.ExecutionOptimistic)
 		require.Equal(t, storeNodes[i].node.justifiedEpoch, respNode.JustifiedEpoch)
-		require.Equal(t, storeNodes[i].node.unrealizedJustifiedEpoch, respNode.UnrealizedJustifiedEpoch)
+		require.Equal(t, storeNodes[i].node.unrealizedJustified.Epoch, respNode.UnrealizedJustifiedEpoch)
 		require.Equal(t, storeNodes[i].node.finalizedEpoch, respNode.FinalizedEpoch)
 		require.Equal(t, storeNodes[i].node.unrealizedFinalizedEpoch, respNode.UnrealizedFinalizedEpoch)
 		require.Equal(t, storeNodes[i].timestamp, respNode.Timestamp)
@@ -329,4 +329,30 @@ func TestNode_TimeStampsChecks(t *testing.T) {
 	late, err = f.store.choosePayloadContent(f.store.headNode).arrivedAfterOrphanCheck(f.store.genesisTime)
 	require.ErrorContains(t, "invalid timestamp", err)
 	require.Equal(t, false, late)
+}
+
+func TestNode_ArrivedEarlyGloas(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	genesis := time.Now().Truncate(time.Second)
+	offset := 3500 * time.Millisecond
+	for _, tc := range []struct {
+		name  string
+		slot  primitives.Slot
+		early bool
+	}{
+		{"pre-gloas slot is early", 1, true},
+		{"gloas slot is late", primitives.Slot(cfg.SlotsPerEpoch), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			slotStart := genesis.Add(time.Duration(uint64(tc.slot)*cfg.SlotDurationMillis()) * time.Millisecond)
+			n := &PayloadNode{node: &Node{slot: tc.slot}, timestamp: slotStart.Add(offset)}
+			early, err := n.arrivedEarly(genesis)
+			require.NoError(t, err)
+			require.Equal(t, tc.early, early)
+		})
+	}
 }

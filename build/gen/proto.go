@@ -41,16 +41,6 @@ const (
 	modeStock    = "stock"
 )
 
-// typeDiffering lists the generated *.pb.go whose Go
-// field TYPE differs between mainnet and minimal.
-var typeDiffering = map[string]bool{
-	"proto/prysm/v1alpha1/attestation.pb.go":       true,
-	"proto/prysm/v1alpha1/sync_committee.pb.go":    true,
-	"proto/prysm/v1alpha1/beacon_core_types.pb.go": true,
-	"proto/prysm/v1alpha1/gloas.pb.go":             true,
-	"proto/eth/v1/beacon_block.pb.go":              true,
-}
-
 func protoPkgDirs(pkgs map[string]string) []string {
 	dirs := make([]string, 0, len(pkgs))
 	for dir := range pkgs {
@@ -99,9 +89,15 @@ func genProto() error {
 		return fmt.Errorf("generate minimal: %w", err)
 	}
 
-	// Write each mainnet *.pb.go back to its source-relative path:
-	// - untagged for config-invariant protos
-	// - //go:build !minimal file plus a <name>.minimal.pb.go twin for the type-differing ones.
+	// Write each mainnet *.pb.go back to its source-relative path. When the
+	// mainnet and minimal generated code is byte-identical the proto is
+	// config-invariant and is written once, untagged. When they differ -- a
+	// field's Go type changed (e.g. Bitvector512 vs Bitvector32) or an
+	// ssz-size/ssz-max struct tag changed with the network -- the file is split
+	// into a //go:build !minimal file plus a <name>.minimal.pb.go twin. Keeping
+	// both variants in the tree lets the SSZ generator read the correct sizes
+	// for each network via -tags minimal, and lets `go build -tags minimal`
+	// select the right sources with no build-time codegen.
 	err = filepath.WalkDir(outMain, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".pb.go") {
 			return err
@@ -113,7 +109,18 @@ func genProto() error {
 		}
 		rel = filepath.ToSlash(rel)
 
-		if !typeDiffering[rel] {
+		mainData, err := os.ReadFile(path) // #nosec G304 -- path is under our own temp out dir
+		if err != nil {
+			return fmt.Errorf("readFile: %w", err)
+		}
+
+		minPath := filepath.Join(outMin, rel)
+		minData, err := os.ReadFile(minPath) // #nosec G304 -- minPath is under our own temp out dir
+		if err != nil {
+			return fmt.Errorf("readFile: %w", err)
+		}
+
+		if bytes.Equal(mainData, minData) {
 			return copyFile(path, rel)
 		}
 
@@ -123,7 +130,7 @@ func genProto() error {
 
 		minTwin := strings.TrimSuffix(rel, ".pb.go") + ".minimal.pb.go"
 
-		if err := writeTagged("minimal", filepath.Join(outMin, rel), minTwin); err != nil {
+		if err := writeTagged("minimal", minPath, minTwin); err != nil {
 			return fmt.Errorf("writeTagged: %w", err)
 		}
 
@@ -168,36 +175,6 @@ func applyGenModes(root string) error {
 
 		return nil
 	})
-}
-
-func emitMinimalPbgo(dir string) error {
-	_, minimal, err := loadSSZDicts()
-	if err != nil {
-		return fmt.Errorf("load SSZ dicts: %w", err)
-	}
-
-	pkgs, err := loadProtoPkgs()
-	if err != nil {
-		return fmt.Errorf("load proto pkgs: %w", err)
-	}
-
-	tmpRoot, err := os.MkdirTemp("", "gen-minpb-")
-	if err != nil {
-		return fmt.Errorf("mkdirTemp: %w", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpRoot) }()
-
-	googleapisInc, err := fetchGoogleapis(filepath.Join(tmpRoot, "googleapis"))
-	if err != nil {
-		return fmt.Errorf("fetch googleapis: %w", err)
-	}
-
-	binDir, err := buildProtoPlugins(tmpRoot)
-	if err != nil {
-		return fmt.Errorf("build proto plugins: %w", err)
-	}
-
-	return generateNetwork(minimal, dir, binDir, googleapisInc, pkgs)
 }
 
 func fetchGoogleapis(dest string) (string, error) {

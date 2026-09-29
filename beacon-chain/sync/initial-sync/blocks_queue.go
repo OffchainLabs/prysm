@@ -238,7 +238,11 @@ func (q *blocksQueue) loop() {
 						} else {
 							q.exitConditions.noRequiredPeersErrRetries++
 							log.Debug("Waiting for finalized peers")
-							time.Sleep(noRequiredPeersErrRefreshInterval)
+							select {
+							case <-q.ctx.Done():
+								return
+							case <-time.After(noRequiredPeersErrRefreshInterval):
+							}
 						}
 						continue
 					}
@@ -444,7 +448,7 @@ func (q *blocksQueue) onProcessSkippedEvent(ctx context.Context) eventHandlerFn 
 
 		// All machines are skipped, FSMs need reset.
 		startSlot := q.chain.HeadSlot() + 1
-		if q.mode == modeNonConstrained && startSlot > bestFinalizedSlot {
+		if q.mode == modeStopOnFinalizedEpoch || startSlot > bestFinalizedSlot {
 			q.staleEpochs[slots.ToEpoch(startSlot)]++
 			// If FSMs have been reset enough times, try to explore alternative forks.
 			if q.staleEpochs[slots.ToEpoch(startSlot)] >= maxResetAttempts {

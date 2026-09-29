@@ -33,4 +33,5 @@ Prysm implements the [Ethereum consensus specs](https://github.com/ethereum/cons
 - Branch from and target `develop`.
 - Every PR needs a changelog fragment: `changelog/<github_user>_<branch_name>.md` (managed by `unclog`).
 - Keep comments short — one line, no multi-line explanations.
+- When appropriate, prefer subtests and nested subtests over multiple test functions that exercise the same production function.
 - Verify tests you add or modify with `/test`.

@@ -411,6 +411,23 @@ func TestGetStateRoot(t *testing.T) {
 		}
 		_, err := p.StateRoot(ctx, []byte(strconv.FormatUint(1, 10)))
 		assert.ErrorContains(t, "slot cannot be in the future", err)
+		// The state does not exist, so callers must be able to map this to a 404.
+		var notFoundErr *StateNotFoundError
+		assert.Equal(t, true, errors.As(err, &notFoundErr))
+	})
+	t.Run("no block at slot", func(t *testing.T) {
+		db := testDB.SetupDB(t)
+		slot := primitives.Slot(40)
+		p := BeaconDbStater{
+			GenesisTimeFetcher: &chainMock.ChainService{Slot: &slot},
+			BeaconDB:           db,
+		}
+
+		_, err := p.StateRoot(ctx, []byte(strconv.FormatUint(uint64(slot), 10)))
+		assert.ErrorContains(t, "no block exists at slot 40", err)
+		// The state does not exist, so callers must be able to map this to a 404.
+		var notFoundErr *StateNotFoundError
+		assert.Equal(t, true, errors.As(err, &notFoundErr))
 	})
 
 	t.Run("invalid state", func(t *testing.T) {
@@ -431,6 +448,9 @@ func TestStateBySlot_FutureSlot(t *testing.T) {
 	p := BeaconDbStater{GenesisTimeFetcher: &chainMock.ChainService{Slot: &slot}}
 	_, err := p.StateBySlot(t.Context(), 101)
 	assert.ErrorContains(t, "requested slot is in the future", err)
+	// The state does not exist, so callers must be able to map this to a 404.
+	var notFoundErr *StateNotFoundError
+	assert.Equal(t, true, errors.As(err, &notFoundErr))
 }
 
 func TestStateBySlot_AfterHeadSlot(t *testing.T) {

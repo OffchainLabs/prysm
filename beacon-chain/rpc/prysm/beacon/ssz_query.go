@@ -11,7 +11,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz/query"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
@@ -56,13 +55,7 @@ func (s *Server) QueryBeaconState(w http.ResponseWriter, r *http.Request) {
 	}
 
 	stateRoot, err := s.Stater.StateRoot(ctx, []byte(stateID))
-	if err != nil {
-		var rootNotFoundErr *lookup.StateRootNotFoundError
-		if errors.As(err, &rootNotFoundErr) {
-			httputil.HandleError(w, "State root not found: "+rootNotFoundErr.Error(), http.StatusNotFound)
-			return
-		}
-		httputil.HandleError(w, "Could not get state root: "+err.Error(), http.StatusInternalServerError)
+	if !shared.WriteStateRootFetchError(w, err) {
 		return
 	}
 

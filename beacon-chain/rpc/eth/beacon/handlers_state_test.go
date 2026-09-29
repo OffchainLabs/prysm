@@ -8,12 +8,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -25,6 +28,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/pkg/errors"
 )
 
 func TestGetStateRoot(t *testing.T) {
@@ -91,7 +95,7 @@ func TestGetStateRoot(t *testing.T) {
 	})
 
 	t.Run("finalized", func(t *testing.T) {
-		headerRoot, err := fakeState.LatestBlockHeader().HashTreeRoot()
+		headerRoot, err := helpers.BlockRootFromState(t.Context(), fakeState)
 		require.NoError(t, err)
 		chainService := &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{
@@ -119,6 +123,71 @@ func TestGetStateRoot(t *testing.T) {
 		resp := &structs.GetStateRootResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		assert.DeepEqual(t, true, resp.Finalized)
+	})
+
+	// A state ID that resolves to no state must be a 404, not a 500.
+	t.Run("state not found", func(t *testing.T) {
+		chainService := &chainMock.ChainService{}
+		stateNotFoundErr := lookup.NewStateNotFoundError(8192, []byte("test"))
+		s := &Server{
+			Stater:                &testutil.MockStater{CustomError: &stateNotFoundErr},
+			HeadFetcher:           chainService,
+			OptimisticModeFetcher: chainService,
+			FinalizationFetcher:   chainService,
+			BeaconDB:              db,
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com//eth/v1/beacon/states/{state_id}/root", nil)
+		request.SetPathValue("state_id", "1506150")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetStateRoot(writer, request)
+		require.Equal(t, http.StatusNotFound, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.Equal(t, http.StatusNotFound, e.Code)
+		assert.StringContains(t, stateNotFoundErr.Error(), e.Message)
+	})
+
+	t.Run("state root not found", func(t *testing.T) {
+		chainService := &chainMock.ChainService{}
+		rootNotFoundErr := lookup.NewStateRootNotFoundError(8192)
+		s := &Server{
+			Stater:                &testutil.MockStater{CustomError: &rootNotFoundErr},
+			HeadFetcher:           chainService,
+			OptimisticModeFetcher: chainService,
+			FinalizationFetcher:   chainService,
+			BeaconDB:              db,
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com//eth/v1/beacon/states/{state_id}/root", nil)
+		request.SetPathValue("state_id", "0x"+strings.Repeat("f", 64))
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetStateRoot(writer, request)
+		require.Equal(t, http.StatusNotFound, writer.Code)
+	})
+
+	t.Run("invalid state ID", func(t *testing.T) {
+		chainService := &chainMock.ChainService{}
+		parseErr := lookup.NewStateIdParseError(errors.New("foo"))
+		s := &Server{
+			Stater:                &testutil.MockStater{CustomError: &parseErr},
+			HeadFetcher:           chainService,
+			OptimisticModeFetcher: chainService,
+			FinalizationFetcher:   chainService,
+			BeaconDB:              db,
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com//eth/v1/beacon/states/{state_id}/root", nil)
+		request.SetPathValue("state_id", "foo")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetStateRoot(writer, request)
+		require.Equal(t, http.StatusBadRequest, writer.Code)
 	})
 }
 
@@ -281,7 +350,7 @@ func TestGetRandao(t *testing.T) {
 		util.SaveBlock(t, ctx, db, blk)
 		require.NoError(t, db.SaveGenesisBlockRoot(ctx, root))
 
-		headerRoot, err := headSt.LatestBlockHeader().HashTreeRoot()
+		headerRoot, err := helpers.BlockRootFromState(t.Context(), st)
 		require.NoError(t, err)
 		chainService := &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{
@@ -593,7 +662,7 @@ func TestGetSyncCommittees(t *testing.T) {
 		util.SaveBlock(t, ctx, db, blk)
 		require.NoError(t, db.SaveGenesisBlockRoot(ctx, root))
 
-		headerRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		headerRoot, err := helpers.BlockRootFromState(t.Context(), st)
 		require.NoError(t, err)
 		stSlot := st.Slot()
 		chainService := &chainMock.ChainService{

@@ -170,7 +170,7 @@ func TestProcessOperationsNoVerifyAttsSigs_OK(t *testing.T) {
 	require.NoError(t, err)
 	beaconState, err = transition.ProcessSlots(t.Context(), beaconState, wsb.Block().Slot())
 	require.NoError(t, err)
-	_, err = transition.ProcessOperationsNoVerifyAttsSigs(t.Context(), beaconState, wsb.Block())
+	_, err = transition.ProcessOperationsNoVerifyAttsSigs(t.Context(), beaconState, wsb.Block(), 0)
 	require.NoError(t, err)
 }
 
@@ -180,7 +180,7 @@ func TestProcessOperationsNoVerifyAttsSigsBellatrix_OK(t *testing.T) {
 	require.NoError(t, err)
 	beaconState, err = transition.ProcessSlots(t.Context(), beaconState, wsb.Block().Slot())
 	require.NoError(t, err)
-	_, err = transition.ProcessOperationsNoVerifyAttsSigs(t.Context(), beaconState, wsb.Block())
+	_, err = transition.ProcessOperationsNoVerifyAttsSigs(t.Context(), beaconState, wsb.Block(), 0)
 	require.NoError(t, err)
 }
 
@@ -190,7 +190,7 @@ func TestProcessOperationsNoVerifyAttsSigsCapella_OK(t *testing.T) {
 	require.NoError(t, err)
 	beaconState, err = transition.ProcessSlots(t.Context(), beaconState, wsb.Block().Slot())
 	require.NoError(t, err)
-	_, err = transition.ProcessOperationsNoVerifyAttsSigs(t.Context(), beaconState, wsb.Block())
+	_, err = transition.ProcessOperationsNoVerifyAttsSigs(t.Context(), beaconState, wsb.Block(), 0)
 	require.NoError(t, err)
 }
 

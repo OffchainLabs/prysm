@@ -56,14 +56,6 @@ func WithDatabase(beaconDB db.HeadAccessDatabase) Option {
 	}
 }
 
-// WithChainStartFetcher to retrieve information about genesis.
-func WithChainStartFetcher(f execution.ChainStartFetcher) Option {
-	return func(s *Service) error {
-		s.cfg.ChainStartFetcher = f
-		return nil
-	}
-}
-
 // WithExecutionEngineCaller to call execution engine.
 func WithExecutionEngineCaller(c execution.EngineCaller) Option {
 	return func(s *Service) error {
@@ -93,6 +85,14 @@ func WithPayloadIDCache(c *cache.PayloadIDCache) Option {
 func WithProposerPreferencesCache(c *cache.ProposerPreferencesCache) Option {
 	return func(s *Service) error {
 		s.cfg.ProposerPreferencesCache = c
+		return nil
+	}
+}
+
+// WithBuilderCircuitBreaker sets the tracker of builders that failed to reveal their payload.
+func WithBuilderCircuitBreaker(c *cache.BuilderCircuitBreaker) Option {
+	return func(s *Service) error {
+		s.cfg.BuilderCircuitBreaker = c
 		return nil
 	}
 }

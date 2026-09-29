@@ -1,0 +1,7 @@
+package: "github.com/OffchainLabs/prysm/v7/proto/ssz_query/testing"
+types:
+  - name: "FixedNestedContainer"
+  - name: "FixedTestContainer"
+  - name: "VariableNestedContainer"
+  - name: "VariableOuterContainer"
+  - name: "VariableTestContainer"

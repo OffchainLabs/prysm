@@ -1,0 +1,21 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary")
+load("@prysm//tools/go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["main.go"],
+    importpath = "github.com/OffchainLabs/prysm/v7/tools/ssztrace",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//proto/engine/v1:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
+        "@com_github_golang_snappy//:go_default_library",
+        "@com_github_offchainlabs_methodical_ssz//ssz:go_default_library",
+    ],
+)
+
+go_binary(
+    name = "ssztrace",
+    embed = [":go_default_library"],
+    visibility = ["//visibility:public"],
+)

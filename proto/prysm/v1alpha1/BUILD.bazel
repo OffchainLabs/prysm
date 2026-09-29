@@ -10,7 +10,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
 load("@rules_proto//proto:defs.bzl", "proto_library")
 load("//proto:ssz_proto_library.bzl", "ssz_proto_files")
-load("//tools:ssz.bzl", "SSZ_DEPS", "ssz_gen_marshal")
+load("//tools:methodical.bzl", "ssz_methodical")
 
 proto_library(
     name = "proto",
@@ -45,332 +45,76 @@ proto_library(
 # Go
 ##############################################################################
 
-ssz_phase0_objs = [
-    "AggregateAttestationAndProof",
-    "Attestation",
-    "AttestationData",
-    "AttesterSlashing",
-    "BeaconBlock",
-    "BeaconBlockHeader",
-    "BeaconState",
-    "Checkpoint",
-    "Deposit",
-    "Deposit_Data",
-    "DepositMessage",
-    "ENRForkID",
-    "Eth1Data",
-    "Fork",
-    "ForkData",
-    "HistoricalBatch",
-    "IndexedAttestation",
-    "PowBlock",
-    "ProposerSlashing",
-    "SignedAggregateAttestationAndProof",
-    "SignedBeaconBlock",
-    "SignedBeaconBlockHeader",
-    "SignedVoluntaryExit",
-    "SigningData",
-    "Status",
-    "Status",
-    "Validator",
-    "ValidatorBalance",
-    "ValidatorIdentity",
-    "VoluntaryExit",
-]
-
-ssz_altair_objs = [
-    "BeaconBlockAltair",
-    "BeaconBlockBodyAltair",
-    "BeaconStateAltair",
-    "ContributionAndProof",
-    "LightClientHeaderAltair",
-    "LightClientBootstrapAltair",
-    "LightClientUpdateAltair",
-    "LightClientFinalityUpdateAltair",
-    "LightClientOptimisticUpdateAltair",
-    "SignedBeaconBlockAltair",
-    "SignedContributionAndProof",
-    "SyncAggregate",
-    "SyncAggregate",
-    "SyncAggregatorSelectionData",
-    "SyncCommittee",
-    "SyncCommitteeContribution",
-    "SyncCommitteeMessage",
-]
-
-ssz_bellatrix_objs = [
-    "BeaconBlockBellatrix",
-    "BeaconBlockBodyBellatrix",
-    "BeaconStateBellatrix",
-    "BlindedBeaconBlockBellatrix",
-    "BlindedBeaconBlockBodyBellatrix",
-    "SignedBeaconBlockBellatrix",
-    "SignedBlindedBeaconBlockBellatrix",
-]
-
-ssz_capella_objs = [
-    "BLSToExecutionChange",
-    "BeaconBlockBodyCapella",
-    "BeaconBlockCapella",
-    "BeaconStateCapella",
-    "BlindedBeaconBlockBodyCapella",
-    "BlindedBeaconBlockCapella",
-    "BuilderBidCapella",
-    "HistoricalSummary",
-    "LightClientHeaderCapella",
-    "LightClientBootstrapCapella",
-    "LightClientUpdateCapella",
-    "LightClientFinalityUpdateCapella",
-    "LightClientOptimisticUpdateCapella",
-    "SignedBLSToExecutionChange",
-    "SignedBeaconBlockCapella",
-    "SignedBlindedBeaconBlockCapella",
-    "Withdrawal",
-    "SignedBuilderBidCapella",
-]
-
-ssz_deneb_objs = [
-    "BeaconBlockBodyDeneb",
-    "BeaconBlockContentsDeneb",
-    "BeaconBlockDeneb",
-    "BeaconStateDeneb",
-    "BlindedBeaconBlockBodyDeneb",
-    "BlindedBeaconBlockDeneb",
-    "BlobIdentifier",
-    "BlobSidecar",
-    "BlobSidecars",
-    "BuilderBidDeneb",
-    "LightClientHeaderDeneb",
-    "LightClientBootstrapDeneb",
-    "LightClientUpdateDeneb",
-    "LightClientFinalityUpdateDeneb",
-    "LightClientOptimisticUpdateDeneb",
-    "SignedBeaconBlockContentsDeneb",
-    "SignedBeaconBlockDeneb",
-    "SignedBlindedBeaconBlockDeneb",
-    "SignedBuilderBidDeneb",
-]
-
-ssz_electra_objs = [
-    "AggregateAttestationAndProofElectra",
-    "AggregateAttestationAndProofSingle",
-    "AttestationElectra",
-    "AttesterSlashingElectra",
-    "BeaconBlockElectra",
-    "BeaconBlockBodyElectra",
-    "BeaconBlockContentsElectra",
-    "BeaconStateElectra",
-    "BlindedBeaconBlockBodyElectra",
-    "BlindedBeaconBlockElectra",
-    "BuilderBidElectra",
-    "Consolidation",
-    "IndexedAttestationElectra",
-    "LightClientHeaderElectra",
-    "LightClientBootstrapElectra",
-    "LightClientUpdateElectra",
-    "LightClientFinalityUpdateElectra",
-    "PendingDeposit",
-    "PendingDeposits",
-    "PendingConsolidation",
-    "PendingPartialWithdrawal",
-    "SignedAggregateAttestationAndProofElectra",
-    "SignedAggregateAttestationAndProofSingle",
-    "SignedBeaconBlockContentsElectra",
-    "SignedBeaconBlockElectra",
-    "SignedBlindedBeaconBlockElectra",
-    "SignedConsolidation",
-    "SingleAttestation",
-    "SignedBuilderBidElectra",
-]
-
-ssz_fulu_objs = [
-    "BeaconBlockContentsFulu",
-    "BeaconStateFulu",
-    "BlindedBeaconBlockFulu",
-    "DataColumnIdentifier",
-    "DataColumnsByRootIdentifier",
-    "DataColumnSidecar",
-    "PartialDataColumnPartsMetadata",
-    "PartialDataColumnSidecar",
-    "StatusV2",
-    "SignedBeaconBlockContentsFulu",
-    "SignedBeaconBlockFulu",
-    "SignedBlindedBeaconBlockFulu",
-]
-
-ssz_gloas_objs = [
-    "AggregateAttestationAndProofGloas",
-    "AttesterSlashingGloas",
-    "IndexedAttestationGloas",
-    "BlindedExecutionPayloadEnvelope",
-    "BuilderPendingPayment",
-    "BuilderPendingWithdrawal",
-    "DataColumnSidecarGloas",
-    "ExecutionPayloadEnvelope",
-    "PTCs",
-    "ProposerPreferences",
-    "SignedProposerPreferences",
-    "SignedAggregateAttestationAndProofGloas",
-    "PayloadAttestation",
-    "PayloadAttestationData",
-    "PayloadAttestationMessage",
-    "ExecutionPayloadBid",
-    "SignedExecutionPayloadBid",
-    "SignedBlindedExecutionPayloadEnvelope",
-    "SignedExecutionPayloadEnvelope",
-    "SignedExecutionPayloadEnvelopeContents",
-    "BeaconBlockGloas",
-    "BeaconBlockContentsGloas",
-    "SignedBeaconBlockGloas",
-    "BeaconStateGloas",
-]
-
-ssz_gloas_builder_api_objs = [
-    "RequestAuthV1",
-    "SignedRequestAuthV1",
-    "BuilderPreferencesV1",
-    "BuilderPreferencesRequestV1",
-]
-
-ssz_gen_marshal(
-    name = "ssz_generated_phase0",
+ssz_methodical(
+    name = "methodical_phase0",
+    deps = [":go_proto"],
+    config_file = "phase0.yaml",
+    override_package_name = "eth",
     out = "phase0.ssz.go",
-    go_proto = ":go_proto",
-    includes = [
-        "//consensus-types/primitives:go_default_library",
-        "//math:go_default_library",
-        "//proto/engine/v1:go_default_library",
-    ],
-    objs = ssz_phase0_objs,
 )
 
-ssz_gen_marshal(
-    name = "ssz_generated_altair",
+ssz_methodical(
+    name = "methodical_altair",
+    deps = [":go_proto"],
+    config_file = "altair.yaml",
+    override_package_name = "eth",
     out = "altair.ssz.go",
-    exclude_objs = ssz_phase0_objs,
-    go_proto = ":go_proto",
-    includes = [
-        "//consensus-types/primitives:go_default_library",
-        "//math:go_default_library",
-        "//proto/engine/v1:go_default_library",
-    ],
-    objs = ssz_altair_objs,
 )
 
-ssz_gen_marshal(
-    name = "ssz_generated_bellatrix",
+ssz_methodical(
+    name = "methodical_bellatrix",
+    deps = [":go_proto"],
+    config_file = "bellatrix.yaml",
+    override_package_name = "eth",
     out = "bellatrix.ssz.go",
-    exclude_objs = ssz_phase0_objs + ssz_altair_objs,
-    go_proto = ":go_proto",
-    includes = [
-        "//consensus-types/primitives:go_default_library",
-        "//math:go_default_library",
-        "//proto/engine/v1:go_default_library",
-    ],
-    objs = ssz_bellatrix_objs,
 )
 
-ssz_gen_marshal(
-    name = "ssz_generated_capella",
+ssz_methodical(
+    name = "methodical_capella",
+    deps = [":go_proto"],
+    config_file = "capella.yaml",
+    override_package_name = "eth",
     out = "capella.ssz.go",
-    exclude_objs = ssz_phase0_objs + ssz_altair_objs + ssz_bellatrix_objs,
-    go_proto = ":go_proto",
-    includes = [
-        "//consensus-types/primitives:go_default_library",
-        "//math:go_default_library",
-        "//proto/engine/v1:go_default_library",
-    ],
-    objs = ssz_capella_objs,
 )
 
-ssz_gen_marshal(
-    name = "ssz_generated_deneb",
+ssz_methodical(
+    name = "methodical_deneb",
+    deps = [":go_proto"],
+    config_file = "deneb.yaml",
+    override_package_name = "eth",
     out = "deneb.ssz.go",
-    exclude_objs = ssz_phase0_objs + ssz_altair_objs + ssz_bellatrix_objs + ssz_capella_objs,
-    go_proto = ":go_proto",
-    includes = [
-        "//consensus-types/primitives:go_default_library",
-        "//math:go_default_library",
-        "//proto/engine/v1:go_default_library",
-    ],
-    objs = ssz_deneb_objs,
 )
 
-ssz_gen_marshal(
-    name = "ssz_generated_electra",
+ssz_methodical(
+    name = "methodical_electra",
+    deps = [":go_proto"],
+    config_file = "electra.yaml",
+    override_package_name = "eth",
     out = "electra.ssz.go",
-    exclude_objs = ssz_phase0_objs + ssz_altair_objs + ssz_bellatrix_objs + ssz_capella_objs + ssz_deneb_objs,
-    go_proto = ":go_proto",
-    includes = [
-        "//consensus-types/primitives:go_default_library",
-        "//math:go_default_library",
-        "//proto/engine/v1:go_default_library",
-    ],
-    objs = ssz_electra_objs,
 )
 
-ssz_gen_marshal(
-    name = "ssz_generated_fulu",
+ssz_methodical(
+    name = "methodical_fulu",
+    deps = [":go_proto"],
+    config_file = "fulu.yaml",
+    override_package_name = "eth",
     out = "fulu.ssz.go",
-    exclude_objs = ssz_phase0_objs + ssz_altair_objs + ssz_bellatrix_objs + ssz_capella_objs + ssz_deneb_objs + ssz_electra_objs,
-    go_proto = ":go_proto",
-    includes = [
-        "//consensus-types/primitives:go_default_library",
-        "//math:go_default_library",
-        "//proto/engine/v1:go_default_library",
-    ],
-    objs = ssz_fulu_objs,
 )
 
-ssz_gen_marshal(
-    name = "ssz_generated_gloas",
+ssz_methodical(
+    name = "methodical_gloas",
+    deps = [":go_proto"],
+    config_file = "gloas.yaml",
+    override_package_name = "eth",
     out = "gloas.ssz.go",
-    exclude_objs = ssz_phase0_objs + ssz_altair_objs + ssz_bellatrix_objs + ssz_capella_objs + ssz_deneb_objs + ssz_electra_objs + ssz_fulu_objs,
-    go_proto = ":go_proto",
-    includes = [
-        "//consensus-types/primitives:go_default_library",
-        "//math:go_default_library",
-        "//proto/engine/v1:go_default_library",
-    ],
-    objs = ssz_gloas_objs,
 )
 
-ssz_gen_marshal(
-    name = "ssz_generated_gloas_builder_api",
-    out = "gloas_builder_api.ssz.go",
-    exclude_objs = ssz_phase0_objs + ssz_altair_objs + ssz_bellatrix_objs + ssz_capella_objs + ssz_deneb_objs + ssz_electra_objs + ssz_fulu_objs + ssz_gloas_objs,
-    go_proto = ":go_proto",
-    includes = [
-        "//consensus-types/primitives:go_default_library",
-        "//math:go_default_library",
-        "//proto/engine/v1:go_default_library",
-    ],
-    objs = ssz_gloas_builder_api_objs,
-)
-
-ssz_gen_marshal(
-    name = "ssz_generated_non_core",
+ssz_methodical(
+    name = "methodical_non_core",
+    deps = [":go_proto"],
+    config_file = "non-core.yaml",
     out = "non-core.ssz.go",
-    go_proto = ":go_proto",
-    includes = [
-        "//consensus-types/primitives:go_default_library",
-        "//math:go_default_library",
-        "//proto/engine/v1:go_default_library",
-    ],
-    objs = [
-        "BeaconBlocksByRangeRequest",
-        "BlobSidecarsByRangeRequest",
-        "DataColumnSidecarsByRangeRequest",
-        "ExecutionPayloadEnvelopesByRangeRequest",
-        "MetaDataV0",
-        "MetaDataV1",
-        "MetaDataV2",
-        "SignedValidatorRegistrationV1",
-        "ValidatorRegistrationV1",
-        "BuilderBid",
-        "SignedBuilderBid",
-        "DepositSnapshot",
-    ],
+    override_package_name = "eth",
 )
 
 go_proto_library(
@@ -413,23 +157,21 @@ go_library(
         "sync_committee_minimal.go",  # keep
         "payload_attestation_mainnet.go",
         "payload_attestation_minimal.go",  # keep
+        ":methodical_altair", # keep
+        ":methodical_bellatrix", # keep
+        ":methodical_capella", # keep
+        ":methodical_deneb", # keep
+        ":methodical_electra", # keep
+        ":methodical_fulu", # keep
+        ":methodical_gloas", # keep
+        ":methodical_non_core", # keep
+        ":methodical_phase0", # keep
         "validator.go",
-        ":ssz_generated_altair",  # keep
-        ":ssz_generated_bellatrix",  # keep
-        ":ssz_generated_capella",  # keep
-        ":ssz_generated_deneb",  # keep
-        ":ssz_generated_electra",  # keep
-        ":ssz_generated_fulu",  # keep
-        ":ssz_generated_gloas",  # keep
-        ":ssz_generated_gloas_builder_api",  # keep
-        ":ssz_generated_non_core",  # keep
-        ":ssz_generated_phase0",  # keep
     ],
     embed = [":go_proto"],
     importpath = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1",
     visibility = ["//visibility:public"],
-    deps = SSZ_DEPS + [
-        "//consensus-types/primitives:go_default_library",
+    deps = [
         "//encoding/bytesutil:go_default_library",
         "//math:go_default_library",
         "//proto/engine/v1:go_default_library",
@@ -437,6 +179,8 @@ go_library(
         "//runtime/version:go_default_library",
         "@com_github_golang_protobuf//proto:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
+        "@com_github_offchainlabs_methodical_ssz//ssz:go_default_library",
+	"@com_github_prysmaticlabs_fastssz//:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",  # keep
         "@com_github_sirupsen_logrus//:go_default_library",
         "@com_github_sirupsen_logrus//hooks/test:go_default_library",
@@ -467,7 +211,7 @@ ssz_proto_files(
         "blobs.proto",
         "data_columns.proto",
         "gloas.proto",
-        "gloas_builder_api.proto",
+	"gloas_builder_api.proto",
         "light_client.proto",
         "partial_data_columns.proto",
         "sync_committee.proto",

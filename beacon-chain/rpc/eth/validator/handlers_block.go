@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/rewards"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
@@ -20,6 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -51,7 +53,6 @@ func (s *Server) ProduceBlockV3(w http.ResponseWriter, r *http.Request) {
 	rawSlot := r.PathValue("slot")
 	rawRandaoReveal := r.URL.Query().Get("randao_reveal")
 	rawGraffiti := r.URL.Query().Get("graffiti")
-	rawSkipRandaoVerification := r.URL.Query().Get("skip_randao_verification")
 
 	var bbFactor *wrapperspb.UInt64Value // default the factor via fall back
 	rawBbFactor, bbValue, ok := shared.UintFromQuery(w, r, "builder_boost_factor", false)
@@ -66,9 +67,13 @@ func (s *Server) ProduceBlockV3(w http.ResponseWriter, r *http.Request) {
 	if !valid {
 		return
 	}
+	if slots.ToEpoch(primitives.Slot(slot)) >= params.BeaconConfig().GloasForkEpoch {
+		httputil.HandleError(w, "Block production v3 is not supported from Gloas onwards, use v4", http.StatusBadRequest)
+		return
+	}
 
 	var randaoReveal []byte
-	if rawSkipRandaoVerification == "true" {
+	if skipRandaoVerification(r) {
 		randaoReveal = common.InfiniteSignature[:]
 	} else {
 		rr, err := bytesutil.DecodeHexWithLength(rawRandaoReveal, fieldparams.BLSSignatureLength)
@@ -648,4 +653,10 @@ func handleProduceFuluV3(
 		ConsensusBlockValue:     consensusBlockValue,
 		Data:                    jsonBytes,
 	})
+}
+
+// skipRandaoVerification reports whether the flag is present; the spec sends it with an empty value, "true" is kept for compatibility.
+func skipRandaoVerification(r *http.Request) bool {
+	v, ok := r.URL.Query()["skip_randao_verification"]
+	return ok && (v[0] == "" || v[0] == "true")
 }

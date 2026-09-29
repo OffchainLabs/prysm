@@ -8,25 +8,26 @@ import (
 	"math"
 	"testing"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
+	gogo "github.com/gogo/protobuf/proto"
+	"github.com/google/go-cmp/cmp"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/testing/protocmp"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	gogo "github.com/gogo/protobuf/proto"
-	"github.com/google/go-cmp/cmp"
-	fastssz "github.com/prysmaticlabs/fastssz"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
-	"google.golang.org/protobuf/testing/protocmp"
 )
 
-// Define an interface that combines fastssz.Marshaler and proto.Message
+// Define an interface that combines ssz.Marshaler and proto.Message
 type MarshalerProtoMessage interface {
-	fastssz.Marshaler
+	ssz.Marshaler
 	proto.Message
-	fastssz.Unmarshaler
+	ssz.Unmarshaler
 }
 
 type MarshalerProtoCreator interface {

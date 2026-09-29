@@ -160,8 +160,9 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 			cancelFunction()
 
 			// Process synchronously because it's likely that the next pending block depends on it.
-			s.processPendingPayloadEnvelope(ctx, blkRoot)
+			// Columns first: the envelope's availability check reads them from storage.
 			s.processPendingGloasColumns(s.ctx, blkRoot, b)
+			s.processPendingPayloadEnvelope(ctx, blkRoot)
 			s.processPendingPayloadAttestation(ctx, blkRoot)
 			blkRoots = append(blkRoots, blkRoot)
 
@@ -397,6 +398,9 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 	pid := bestPeers[randomIndex]
 
 	for range numOfTries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		req := p2ptypes.BeaconBlockByRootsReq(roots)
 
 		// Get the current epoch.
@@ -425,11 +429,9 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 
 		// Optimistically request parent payload envelopes in parallel with the parent blocks.
 		var wg sync.WaitGroup
-		wg.Add(1)
-		go func(pid core.PeerID, roots p2ptypes.BeaconBlockByRootsReq) {
-			defer wg.Done()
-			s.fetchAndQueuePayloadEnvelopesForRoots(ctx, pid, roots)
-		}(pid, req)
+		wg.Go(func() {
+			s.fetchAndQueuePayloadEnvelopesForRoots(ctx, pid, req)
+		})
 
 		// Send the request to the peer.
 		if err := s.sendBeaconBlocksRequest(ctx, &req, pid); err != nil {
@@ -437,6 +439,9 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 			log.WithError(err).Debug("Could not send recent block request")
 		}
 		wg.Wait()
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 
 		// Filter out roots that are already seen in pending blocks.
 		newRoots := make([][32]byte, 0, rootCount)
@@ -503,6 +508,8 @@ func (s *Service) fetchAndQueuePayloadEnvelopesForRoots(
 		return
 	}
 
+	ctx, cancel := context.WithTimeout(ctx, respTimeout)
+	defer cancel()
 	envelopes, err := SendExecutionPayloadEnvelopesByRootRequest(ctx, s.cfg.clock, s.cfg.p2p, pid, s.ctxMap, &envelopeRoots)
 	if err != nil {
 		log.WithError(err).Debug("Could not request execution payload envelopes by root")

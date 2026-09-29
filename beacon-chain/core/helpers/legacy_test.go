@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/stretchr/testify/require"
 )
@@ -27,6 +28,22 @@ func TestDepositRequestHaveStarted(t *testing.T) {
 		st, _ := util.DeterministicGenesisStateElectra(t, 1)
 		require.NoError(t, st.SetEth1DepositIndex(33))
 		require.NoError(t, st.SetDepositRequestsStartIndex(33))
+		result := helpers.DepositRequestsStarted(st)
+		require.True(t, result)
+	})
+
+	t.Run("Version is Fulu returns true even with an unset requestsStartIndex", func(t *testing.T) {
+		st, _ := util.DeterministicGenesisStateFulu(t, 1)
+		require.NoError(t, st.SetEth1DepositIndex(1))
+		require.NoError(t, st.SetDepositRequestsStartIndex(params.BeaconConfig().UnsetDepositRequestsStartIndex))
+		result := helpers.DepositRequestsStarted(st)
+		require.True(t, result)
+	})
+
+	t.Run("Version is above Fulu returns true even with an unset requestsStartIndex", func(t *testing.T) {
+		st, _ := util.DeterministicGenesisStateGloas(t, 64)
+		require.NoError(t, st.SetEth1DepositIndex(1))
+		require.NoError(t, st.SetDepositRequestsStartIndex(params.BeaconConfig().UnsetDepositRequestsStartIndex))
 		result := helpers.DepositRequestsStarted(st)
 		require.True(t, result)
 	})

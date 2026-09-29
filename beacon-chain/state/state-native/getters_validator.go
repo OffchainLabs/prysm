@@ -223,7 +223,8 @@ func (b *BeaconState) NumValidators() int {
 
 // ValidatorsReadOnlySeq returns an iterator over every (index, read-only validator) pair in
 // the registry. The state's read lock is held for the entire duration of iteration, so callers
-// must not call mutating state methods from inside the loop.
+// must not call mutating state methods from inside the loop. Each read-only validator is valid
+// only until yield returns and must not be retained.
 func (b *BeaconState) ValidatorsReadOnlySeq() iter.Seq2[primitives.ValidatorIndex, state.ReadOnlyValidator] {
 	return func(yield func(primitives.ValidatorIndex, state.ReadOnlyValidator) bool) {
 		b.lock.RLock()

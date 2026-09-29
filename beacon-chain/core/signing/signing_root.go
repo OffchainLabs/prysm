@@ -3,6 +3,7 @@ package signing
 import (
 	"sync"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -10,7 +11,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	fssz "github.com/prysmaticlabs/fastssz"
 )
 
 // ForkVersionByteLength length of fork version byte array.
@@ -55,13 +55,13 @@ const (
 )
 
 // ComputeDomainAndSign computes the domain and signing root and sign it using the passed in private key.
-func ComputeDomainAndSign(st state.ReadOnlyBeaconState, epoch primitives.Epoch, obj fssz.HashRoot, domain [4]byte, key bls.SecretKey) ([]byte, error) {
+func ComputeDomainAndSign(st state.ReadOnlyBeaconState, epoch primitives.Epoch, obj ssz.HashRoot, domain [4]byte, key bls.SecretKey) ([]byte, error) {
 	return ComputeDomainAndSignWithoutState(st.Fork(), epoch, domain, st.GenesisValidatorsRoot(), obj, key)
 }
 
 // ComputeDomainAndSignWithoutState offers the same functionality as ComputeDomainAndSign without the need to provide a BeaconState.
 // This is particularly helpful for signing values in tests.
-func ComputeDomainAndSignWithoutState(fork *ethpb.Fork, epoch primitives.Epoch, domain [4]byte, vr []byte, obj fssz.HashRoot, key bls.SecretKey) ([]byte, error) {
+func ComputeDomainAndSignWithoutState(fork *ethpb.Fork, epoch primitives.Epoch, domain [4]byte, vr []byte, obj ssz.HashRoot, key bls.SecretKey) ([]byte, error) {
 	// EIP-7044: Beginning in Deneb, fix the fork version to Capella for signed exits.
 	// This allows for signed validator exits to be valid forever.
 	if domain == params.BeaconConfig().DomainVoluntaryExit && epoch >= params.BeaconConfig().DenebForkEpoch {
@@ -94,7 +94,7 @@ func ComputeDomainAndSignWithoutState(fork *ethpb.Fork, epoch primitives.Epoch, 
 //	       object_root=hash_tree_root(ssz_object),
 //	       domain=domain,
 //	   ))
-func ComputeSigningRoot(object fssz.HashRoot, domain []byte) ([32]byte, error) {
+func ComputeSigningRoot(object ssz.HashRoot, domain []byte) ([32]byte, error) {
 	return Data(object.HashTreeRoot, domain)
 }
 
@@ -119,7 +119,7 @@ func ComputeSigningRootForRoot(root [32]byte, domain []byte) ([32]byte, error) {
 }
 
 // ComputeDomainVerifySigningRoot computes domain and verifies signing root of an object given the beacon state, validator index and signature.
-func ComputeDomainVerifySigningRoot(st state.ReadOnlyBeaconState, index primitives.ValidatorIndex, epoch primitives.Epoch, obj fssz.HashRoot, domain [4]byte, sig []byte) error {
+func ComputeDomainVerifySigningRoot(st state.ReadOnlyBeaconState, index primitives.ValidatorIndex, epoch primitives.Epoch, obj ssz.HashRoot, domain [4]byte, sig []byte) error {
 	v, err := st.ValidatorAtIndex(index)
 	if err != nil {
 		return err
@@ -132,7 +132,7 @@ func ComputeDomainVerifySigningRoot(st state.ReadOnlyBeaconState, index primitiv
 }
 
 // VerifySigningRoot verifies the signing root of an object given its public key, signature and domain.
-func VerifySigningRoot(obj fssz.HashRoot, pub, signature, domain []byte) error {
+func VerifySigningRoot(obj ssz.HashRoot, pub, signature, domain []byte) error {
 	publicKey, err := bls.PublicKeyFromBytes(pub)
 	if err != nil {
 		return errors.Wrap(err, "could not convert bytes to public key")

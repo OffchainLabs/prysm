@@ -17,7 +17,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/httprest"
 	"github.com/OffchainLabs/prysm/v7/api/server/middleware"
@@ -107,6 +106,7 @@ type BeaconNode struct {
 	depositCache              cache.DepositCache
 	proposerPreferencesCache  *cache.ProposerPreferencesCache
 	subscribedValidatorsCache *cache.SubscribedValidatorsCache
+	builderCircuitBreaker     *cache.BuilderCircuitBreaker
 	payloadIDCache            *cache.PayloadIDCache
 	executionPayloadCache     *cache.ExecutionPayloadEnvelopeCache
 	stateFeed                 *event.Feed
@@ -173,6 +173,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		blsToExecPool:             blstoexec.NewPool(),
 		proposerPreferencesCache:  cache.NewProposerPreferencesCache(),
 		subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
+		builderCircuitBreaker:     cache.NewBuilderCircuitBreaker(),
 		payloadIDCache:            cache.NewPayloadIDCache(),
 		executionPayloadCache:     cache.NewExecutionPayloadEnvelopeCache(),
 		slasherBlockHeadersFeed:   new(event.Feed),
@@ -321,6 +322,10 @@ func configureBeacon(cliCtx *cli.Context) error {
 		return errors.Wrap(err, "could not configure builder header timeout")
 	}
 
+	if err := configureBuilderBidTimeout(cliCtx); err != nil {
+		return errors.Wrap(err, "could not configure builder bid timeout")
+	}
+
 	if err := configureSlotsPerArchivedPoint(cliCtx); err != nil {
 		return errors.Wrap(err, "could not configure slots per archived point")
 	}
@@ -423,7 +428,7 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 	}
 
 	log.Debugln("Registering builder service")
-	if err := beacon.registerBuilderService(cliCtx); err != nil {
+	if err := beacon.registerBuilderService(); err != nil {
 		return errors.Wrap(err, "could not register builder service")
 	}
 
@@ -701,7 +706,7 @@ func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 		DB:                    b.db,
 		StateGen:              b.stateGen,
 		ClockWaiter:           b.ClockWaiter,
-		PartialDataColumns:    b.cliCtx.Bool(flags.PartialDataColumns.Name),
+		PartialDataColumns:    !b.cliCtx.Bool(flags.DisablePartialDataColumns.Name),
 	})
 	if err != nil {
 		return err
@@ -764,7 +769,6 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithForkChoiceStore(fc),
 		blockchain.WithDatabase(b.db),
 		blockchain.WithDepositCache(b.depositCache),
-		blockchain.WithChainStartFetcher(web3Service),
 		blockchain.WithExecutionEngineCaller(web3Service),
 		blockchain.WithAttestationCache(b.attestationCache),
 		blockchain.WithAttestationPool(b.attestationPool),
@@ -783,6 +787,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithDataColumnStorage(b.DataColumnStorage),
 		blockchain.WithProposerPreferencesCache(b.proposerPreferencesCache),
 		blockchain.WithSubscribedValidatorsCache(b.subscribedValidatorsCache),
+		blockchain.WithBuilderCircuitBreaker(b.builderCircuitBreaker),
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
 		blockchain.WithSyncChecker(b.syncChecker),
 		blockchain.WithSlasherEnabled(b.slasherEnabled),
@@ -820,7 +825,6 @@ func (b *BeaconNode) registerPOWChainService() error {
 		execution.WithDepositContractAddress(common.HexToAddress(depositContractAddr)),
 		execution.WithDatabase(b.db),
 		execution.WithDepositCache(b.depositCache),
-		execution.WithStateNotifier(b),
 		execution.WithStateGen(b.stateGen),
 		execution.WithBeaconNodeStatsUpdater(bs),
 		execution.WithFinalizedStateAtStartup(b.finalizedStateAtStartUp),
@@ -829,7 +833,7 @@ func (b *BeaconNode) registerPOWChainService() error {
 		execution.WithGraffitiInfo(graffitiInfo),
 	)
 
-	if b.cliCtx.Bool(flags.PartialDataColumns.Name) {
+	if !b.cliCtx.Bool(flags.DisablePartialDataColumns.Name) {
 		opts = append(opts, execution.WithPartialColumnsSupported())
 	}
 	web3Service, err := execution.NewService(b.ctx, opts...)
@@ -884,6 +888,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithAvailableBlocker(bFillStore),
 		regularsync.WithProposerPreferencesCache(b.proposerPreferencesCache),
 		regularsync.WithSubscribedValidatorsCache(b.subscribedValidatorsCache),
+		regularsync.WithBuilderCircuitBreaker(b.builderCircuitBreaker),
 		regularsync.WithSlasherEnabled(b.slasherEnabled),
 		regularsync.WithLightClientStore(b.lcStore),
 		regularsync.WithBatchVerifierLimit(b.cliCtx.Int(flags.BatchVerifierLimit.Name)),
@@ -977,7 +982,6 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 	}
 
 	depositFetcher := b.depositCache
-	chainStartFetcher := web3Service
 
 	host := b.cliCtx.String(flags.RPCHost.Name)
 	port := b.cliCtx.String(flags.RPCPort.Name)
@@ -1029,7 +1033,6 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		SyncCommitteeObjectPool:          b.syncCommitteePool,
 		ExecutionChainService:            web3Service,
 		ExecutionChainInfoFetcher:        web3Service,
-		ChainStartFetcher:                chainStartFetcher,
 		SyncService:                      syncService,
 		DepositFetcher:                   depositFetcher,
 		PendingDepositFetcher:            b.depositCache,
@@ -1046,6 +1049,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		DataColumnStorage:                b.DataColumnStorage,
 		ProposerPreferencesCache:         b.proposerPreferencesCache,
 		SubscribedValidatorsCache:        b.subscribedValidatorsCache,
+		BuilderCircuitBreaker:            b.builderCircuitBreaker,
 		HighestBidCache:                  regularSyncService.HighestExecutionPayloadBidCache(),
 		PayloadIDCache:                   b.payloadIDCache,
 		ExecutionPayloadEnvelopeCache:    b.executionPayloadCache,
@@ -1140,19 +1144,15 @@ func (b *BeaconNode) registerValidatorMonitorService(initialSyncComplete chan st
 	return b.services.RegisterService(svc)
 }
 
-func (b *BeaconNode) registerBuilderService(cliCtx *cli.Context) error {
+func (b *BeaconNode) registerBuilderService() error {
 	var chainService *blockchain.Service
 	if err := b.services.FetchService(&chainService); err != nil {
 		return err
 	}
 
 	opts := b.serviceFlagOpts.builderOpts
-	opts = append(opts, builder.WithHeadFetcher(chainService), builder.WithDatabase(b.db))
+	opts = append(opts, builder.WithHeadFetcher(chainService))
 
-	// make cache the default.
-	if !cliCtx.Bool(features.DisableRegistrationCache.Name) {
-		opts = append(opts, builder.WithRegistrationCache())
-	}
 	svc, err := builder.NewService(b.ctx, opts...)
 	if err != nil {
 		return err
@@ -1161,7 +1161,6 @@ func (b *BeaconNode) registerBuilderService(cliCtx *cli.Context) error {
 }
 
 func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
-	genesis := time.Unix(int64(params.BeaconConfig().MinGenesisTime+params.BeaconConfig().GenesisDelay), 0)
 	var backfillService *backfill.Service
 	if err := b.services.FetchService(&backfillService); err != nil {
 		return err
@@ -1176,7 +1175,7 @@ func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
 	p, err := pruner.New(
 		cliCtx.Context,
 		b.db,
-		genesis,
+		b.ClockWaiter,
 		initSyncWaiter(cliCtx.Context, b.initialSyncComplete),
 		backfillService.WaitForCompletion,
 		b.fetchP2P(),

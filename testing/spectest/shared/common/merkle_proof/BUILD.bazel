@@ -16,6 +16,6 @@ go_library(
         "//testing/spectest/utils:go_default_library",
         "//testing/util:go_default_library",
         "@com_github_golang_snappy//:go_default_library",
-        "@com_github_prysmaticlabs_fastssz//:go_default_library",
+        "@com_github_offchainlabs_methodical_ssz//ssz:go_default_library",
     ],
 )

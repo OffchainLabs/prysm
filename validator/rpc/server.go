@@ -17,6 +17,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/io/logs"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
 	iface "github.com/OffchainLabs/prysm/v7/validator/client/iface"
@@ -32,7 +33,7 @@ type ValidatorService interface {
 	Keymanager() (keymanager.IKeymanager, error)
 	RemoteSignerConfig() *remoteweb3signer.SetupConfig
 	ProposerSettings() *proposer.Settings
-	SetProposerSettings(ctx context.Context, settings *proposer.Settings) error
+	UpdateProposerSettings(ctx context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error
 	Graffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error)
 	SetGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, graffiti []byte) error
 	DeleteGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) error
@@ -192,7 +193,9 @@ func (s *Server) InitializeRoutesWithWebHandler() error {
 		}
 		if features.Get().EnableWeb {
 			web.Handler(w, r)
+			return
 		}
+		httputil.HandleError(w, "Not found", http.StatusNotFound)
 	})
 	return nil
 }
@@ -221,6 +224,9 @@ func (s *Server) InitializeRoutes() error {
 	s.router.HandleFunc("GET /eth/v1/validator/{pubkey}/graffiti", s.GetGraffiti)
 	s.router.HandleFunc("POST /eth/v1/validator/{pubkey}/graffiti", s.SetGraffiti)
 	s.router.HandleFunc("DELETE /eth/v1/validator/{pubkey}/graffiti", s.DeleteGraffiti)
+	s.router.HandleFunc("GET /eth/v1/validator/{pubkey}/builder_config", s.GetBuilderConfig)
+	s.router.HandleFunc("POST /eth/v1/validator/{pubkey}/builder_config", s.SetBuilderConfig)
+	s.router.HandleFunc("DELETE /eth/v1/validator/{pubkey}/builder_config", s.DeleteBuilderConfig)
 
 	// auth endpoint
 	s.router.HandleFunc("GET "+api.WebUrlPrefix+"initialize", s.Initialize)

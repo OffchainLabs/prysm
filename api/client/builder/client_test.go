@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 
@@ -29,6 +30,38 @@ type roundtrip func(*http.Request) (*http.Response, error)
 
 func (fn roundtrip) RoundTrip(r *http.Request) (*http.Response, error) {
 	return fn(r)
+}
+
+func TestWithoutRedirects(t *testing.T) {
+	newServers := func(t *testing.T) (*httptest.Server, *int) {
+		targetHits := 0
+		target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			targetHits++
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(target.Close)
+		origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, target.URL, http.StatusTemporaryRedirect)
+		}))
+		t.Cleanup(origin.Close)
+		return origin, &targetHits
+	}
+
+	t.Run("redirect is not followed", func(t *testing.T) {
+		origin, targetHits := newServers(t)
+		c, err := NewClient(origin.URL, WithoutRedirects())
+		require.NoError(t, err)
+		require.NotNil(t, c.Status(context.Background()))
+		require.Equal(t, 0, *targetHits)
+	})
+
+	t.Run("default client follows redirects", func(t *testing.T) {
+		origin, targetHits := newServers(t)
+		c, err := NewClient(origin.URL)
+		require.NoError(t, err)
+		require.NoError(t, c.Status(context.Background()))
+		require.Equal(t, 1, *targetHits)
+	})
 }
 
 func TestClient_Status(t *testing.T) {
@@ -81,7 +114,7 @@ func TestClient_Status(t *testing.T) {
 		hc:      hc,
 		baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"},
 	}
-	require.ErrorIs(t, c.Status(ctx), ErrNotOK)
+	require.ErrorIs(t, c.Status(ctx), ErrUnexpectedStatus)
 }
 
 func TestClient_RegisterValidator(t *testing.T) {
@@ -251,7 +284,7 @@ func TestClient_GetHeader(t *testing.T) {
 		}
 
 		_, err := c.GetHeader(ctx, slot, bytesutil.ToBytes32(parentHash), bytesutil.ToBytes48(pubkey))
-		require.ErrorIs(t, err, ErrNotOK)
+		require.ErrorIs(t, err, ErrUnexpectedStatus)
 	})
 	t.Run("header not available", func(t *testing.T) {
 		hc := &http.Client{
@@ -1790,7 +1823,7 @@ func TestSubmitBlindedBlockPostFulu(t *testing.T) {
 		sbbb, err := blocks.NewSignedBeaconBlock(testSignedBlindedBeaconBlockBellatrix(t))
 		require.NoError(t, err)
 		err = c.SubmitBlindedBlockPostFulu(ctx, sbbb)
-		require.ErrorIs(t, err, ErrNotOK)
+		require.ErrorIs(t, err, ErrUnexpectedStatus)
 	})
 }
 

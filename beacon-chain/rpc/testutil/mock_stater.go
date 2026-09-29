@@ -38,6 +38,9 @@ func (m *MockStater) State(ctx context.Context, id []byte) (state.BeaconState, e
 
 // StateRoot --
 func (m *MockStater) StateRoot(context.Context, []byte) ([]byte, error) {
+	if m.CustomError != nil {
+		return nil, m.CustomError
+	}
 	return m.BeaconStateRoot, nil
 }
 

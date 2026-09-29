@@ -52,6 +52,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "canonical_root_test.go",
         "epoch_boundary_state_cache_test.go",
         "getter_test.go",
         "history_test.go",

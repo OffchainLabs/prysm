@@ -13,6 +13,12 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	logTest "github.com/sirupsen/logrus/hooks/test"
+	"go.uber.org/mock/gomock"
+
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -30,12 +36,7 @@ import (
 	testing2 "github.com/OffchainLabs/prysm/v7/validator/db/testing"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
-	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.opentelemetry.io/otel/trace"
-	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -82,6 +83,7 @@ func runnerTestValidator(t *testing.T, ctx context.Context) (*validator, *valida
 		submittedAggregates:          make(map[submittedAttKey]*submittedAtt),
 		attestedSlotsByKeyByEpoch:    make(map[primitives.Epoch]map[[fieldparams.BLSPubkeyLength]byte]primitives.Slot),
 		accountsChangedChannel:       make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
+		healthMonitor:                &healthMonitor{isHealthy: true},
 	}
 	v.aggSelector = testLocalSelector(t, v)
 	return v, vc, nc
@@ -145,7 +147,7 @@ func TestInitialize(t *testing.T) {
 		vc.EXPECT().PrepareBeaconProposer(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 		vc.EXPECT().DomainData(gomock.Any(), gomock.Any()).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).AnyTimes()
 
-		_, err := newRunner(ctx, v, &healthMonitor{isHealthy: true})
+		_, err := newRunner(ctx, v)
 		require.NoError(t, err) // duties failures are logged, not fatal
 		require.LogsContain(t, hook, "Failed to update assignments")
 	})
@@ -201,7 +203,7 @@ func TestRun_ExitsOnCancelledContext(t *testing.T) {
 	vc.EXPECT().DomainData(gomock.Any(), gomock.Any()).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).AnyTimes()
 	vc.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
-	r, err := newRunner(ctx, v, &healthMonitor{isHealthy: true})
+	r, err := newRunner(ctx, v)
 	require.NoError(t, err)
 
 	cancelled, cancel := context.WithCancel(ctx)
@@ -473,7 +475,6 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 				BuilderConfig: &proposer.BuilderConfig{
 					Enabled:  true,
 					GasLimit: 60_000_000,
-					Relays:   []string{"https://example.com"},
 				},
 				GraffitiConfig: &proposer.GraffitiConfig{
 					Graffiti: "foobar",
@@ -486,10 +487,11 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 		submittedAtts:                make(map[submittedAttKey]*submittedAtt),
 		submittedAggregates:          make(map[submittedAttKey]*submittedAtt),
 		attestedSlotsByKeyByEpoch:    make(map[primitives.Epoch]map[[fieldparams.BLSPubkeyLength]byte]primitives.Slot),
+		healthMonitor:                &healthMonitor{isHealthy: true},
 	}
 	v.aggSelector = testLocalSelector(t, v)
 
-	r, err := newRunner(timedCtx, v, &healthMonitor{isHealthy: true})
+	r, err := newRunner(timedCtx, v)
 	require.NoError(t, err)
 	r.run(timedCtx)
 }

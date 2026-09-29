@@ -2,14 +2,18 @@ package builder
 
 import (
 	"context"
+	"maps"
+	"net"
+	"net/url"
 	"reflect"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/client/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -29,24 +33,24 @@ type BlockBuilder interface {
 	SubmitBlindedBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error)
 	SubmitBlindedBlockPostFulu(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) error
 	GetHeader(ctx context.Context, slot primitives.Slot, parentHash [32]byte, pubKey [48]byte) (builder.SignedBid, error)
-	GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash, parentRoot [32]byte, proposerPubkey [48]byte, auths []*ethpb.SignedRequestAuthV1) ([]PayloadBid, error)
+	GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash, parentRoot [32]byte, proposerPubkey [48]byte, entries []*ethpb.BuilderEntry) ([]PayloadBid, error)
 	SubmitSignedBeaconBlock(ctx context.Context, builderURL string, block interfaces.ReadOnlySignedBeaconBlock) error
-	SubmitBuilderPreferences(ctx context.Context, validatorPubkey [48]byte, req *ethpb.BuilderPreferencesRequestV1) error
+	SubmitBuilderPreferences(ctx context.Context, entries []*ethpb.BuilderPreferencesEntry) map[int]string
 	RegisterValidator(ctx context.Context, reg []*ethpb.SignedValidatorRegistrationV1) error
 	RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error)
 	Configured() bool
 }
 
-// PayloadBid carries the builder URL so the proposer can route the signed block back to the winning builder.
+// PayloadBid carries the entry that produced the bid so the proposer can apply
+// its limits and route the signed block back to the winning builder.
 type PayloadBid struct {
-	BuilderURL string
-	Bid        *ethpb.SignedExecutionPayloadBid
+	Entry *ethpb.BuilderEntry
+	Bid   *ethpb.SignedExecutionPayloadBid
 }
 
 // config defines a config struct for dependencies into the service.
 type config struct {
 	builderClient builder.BuilderClient
-	beaconDB      db.HeadAccessDatabase
 	headFetcher   blockchain.HeadFetcher
 }
 
@@ -69,10 +73,11 @@ type Service struct {
 func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	s := &Service{
-		ctx:     ctx,
-		cancel:  cancel,
-		cfg:     &config{},
-		clients: make(map[string]builder.BuilderClient),
+		ctx:               ctx,
+		cancel:            cancel,
+		cfg:               &config{},
+		clients:           make(map[string]builder.BuilderClient),
+		registrationCache: cache.NewRegistrationCache(),
 	}
 	for _, opt := range opts {
 		if err := opt(s); err != nil {
@@ -81,7 +86,9 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 	}
 	if s.dial == nil {
 		s.dial = func(url string) (builder.BuilderClient, error) {
-			return builder.NewClient(url, s.clientOpts...)
+			// Per-URL builder clients never follow redirects (beacon-APIs builder url requirement).
+			opts := append([]builder.ClientOpt{builder.WithoutRedirects()}, s.clientOpts...)
+			return builder.NewClient(url, opts...)
 		}
 	}
 	if s.cfg.builderClient != nil && !reflect.ValueOf(s.cfg.builderClient).IsNil() {
@@ -100,6 +107,33 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 	return s, nil
 }
 
+// printableASCII reports whether s contains only printable non-space ASCII,
+// so it can travel verbatim as an HTTP header or gRPC metadata value.
+func printableASCII(s string) bool {
+	return !strings.ContainsFunc(s, func(r rune) bool { return r < '!' || r > '~' })
+}
+
+// validBuilderURL accepts http(s) urls and bare host:port (which dials as http).
+func validBuilderURL(raw string) error {
+	if !printableASCII(raw) {
+		return errors.New("malformed builder url")
+	}
+	if u, err := url.Parse(raw); err == nil && u.Host != "" {
+		if u.Scheme == "http" || u.Scheme == "https" {
+			return nil
+		}
+		return errors.Errorf("builder url scheme must be http or https, got %q", u.Scheme)
+	}
+	host, port, err := net.SplitHostPort(raw)
+	if err != nil || host == "" {
+		return errors.New("malformed builder url")
+	}
+	if _, err := strconv.ParseUint(port, 10, 16); err != nil {
+		return errors.New("malformed builder url")
+	}
+	return nil
+}
+
 func (s *Service) clientFor(url string) (builder.BuilderClient, error) {
 	s.clientsMu.RLock()
 	c, ok := s.clients[url]
@@ -112,17 +146,74 @@ func (s *Service) clientFor(url string) (builder.BuilderClient, error) {
 	if c, ok := s.clients[url]; ok {
 		return c, nil
 	}
-	c, err := s.dial(url)
+	c, err := s.dialValidated(url)
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not create builder client for %s", logs.MaskCredentialsLogging(url))
+		return nil, err
 	}
 	s.clients[url] = c
 	return c, nil
 }
 
+// submitClientFor serves cached clients but dials without caching, so transient
+// publish-time urls do not accumulate in the client map.
+func (s *Service) submitClientFor(url string) (builder.BuilderClient, error) {
+	s.clientsMu.RLock()
+	c, ok := s.clients[url]
+	s.clientsMu.RUnlock()
+	if ok {
+		return c, nil
+	}
+	return s.dialValidated(url)
+}
+
+func (s *Service) dialValidated(url string) (builder.BuilderClient, error) {
+	if err := validBuilderURL(url); err != nil {
+		return nil, err
+	}
+	c, err := s.dial(url)
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not create builder client for %s", logs.MaskCredentialsLogging(url))
+	}
+	return c, nil
+}
+
+// Kept under the transport idle timeout and typical proxy keepalive so bid requests reuse a warm TLS session.
+const builderKeepAliveInterval = 30 * time.Second
+
 // Start initializes the service.
 func (s *Service) Start() {
 	go s.pollRelayerStatus(s.ctx)
+	go s.keepBuilderClientsWarm(s.ctx)
+}
+
+func (s *Service) keepBuilderClientsWarm(ctx context.Context) {
+	ticker := time.NewTicker(builderKeepAliveInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			s.pingBuilderClients(ctx)
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *Service) pingBuilderClients(ctx context.Context) {
+	s.clientsMu.RLock()
+	clients := maps.Clone(s.clients)
+	s.clientsMu.RUnlock()
+	var wg sync.WaitGroup
+	for url, c := range clients {
+		wg.Go(func() {
+			pingCtx, cancel := context.WithTimeout(ctx, builderKeepAliveInterval)
+			defer cancel()
+			if err := c.Status(pingCtx); err != nil {
+				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(url)).Debug("Builder keep-alive ping failed")
+			}
+		})
+	}
+	wg.Wait()
 }
 
 // Stop halts the service.
@@ -162,24 +253,29 @@ func (s *Service) SubmitBlindedBlockPostFulu(ctx context.Context, b interfaces.R
 	return s.c.SubmitBlindedBlockPostFulu(ctx, b)
 }
 
-// Builders are queried concurrently, a failing builder drops only its own bid.
-func (s *Service) GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash, parentRoot [32]byte, proposerPubkey [48]byte, auths []*ethpb.SignedRequestAuthV1) ([]PayloadBid, error) {
+func (s *Service) GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash, parentRoot [32]byte, proposerPubkey [48]byte, entries []*ethpb.BuilderEntry) ([]PayloadBid, error) {
 	ctx, span := trace.StartSpan(ctx, "builder.GetExecutionPayloadBid")
 	defer span.End()
 
-	byURL := make(map[string]*ethpb.SignedRequestAuthV1, len(auths))
-	urls := make([]string, 0, len(auths))
-	for _, a := range auths {
-		url := string(a.GetMessage().GetData())
-		if url == "" {
+	type entryIdentity struct {
+		url  string
+		data string
+	}
+	seen := make(map[entryIdentity]bool, len(entries))
+	unique := make([]*ethpb.BuilderEntry, 0, len(entries))
+	for _, e := range entries {
+		if len(e.GetUrl()) == 0 {
 			continue
 		}
-		if _, ok := byURL[url]; !ok {
-			byURL[url] = a
-			urls = append(urls, url)
+		id := entryIdentity{url: string(e.GetUrl()), data: string(e.GetAuth().GetMessage().GetData())}
+		if seen[id] {
+			log.WithField("builder", logs.MaskCredentialsLogging(string(e.GetUrl()))).Debug("Dropping duplicate builder entry, first one wins")
+			continue
 		}
+		seen[id] = true
+		unique = append(unique, e)
 	}
-	if len(urls) == 0 {
+	if len(unique) == 0 {
 		return nil, nil
 	}
 
@@ -188,27 +284,29 @@ func (s *Service) GetExecutionPayloadBid(ctx context.Context, slot primitives.Sl
 		bids []PayloadBid
 		wg   sync.WaitGroup
 	)
-	for _, url := range urls {
+	for _, e := range unique {
 		wg.Add(1)
-		go func(url string) {
+		go func(e *ethpb.BuilderEntry) {
 			defer wg.Done()
+			url := string(e.GetUrl())
 			c, err := s.clientFor(url)
 			if err != nil {
 				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(url)).Warn("Could not get builder client")
 				return
 			}
-			bid, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, proposerPubkey, byURL[url])
+			bid, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, proposerPubkey, e.GetAuth())
 			if err != nil {
 				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(url)).Warn("Could not get builder execution payload bid")
 				return
 			}
 			if bid == nil {
+				log.WithField("builder", logs.MaskCredentialsLogging(url)).WithField("slot", slot).Debug("Builder returned no bid")
 				return
 			}
 			mu.Lock()
-			bids = append(bids, PayloadBid{BuilderURL: url, Bid: bid})
+			bids = append(bids, PayloadBid{Entry: e, Bid: bid})
 			mu.Unlock()
-		}(url)
+		}(e)
 	}
 	wg.Wait()
 	return bids, nil
@@ -222,7 +320,7 @@ func (s *Service) SubmitSignedBeaconBlock(ctx context.Context, builderURL string
 		tracing.AnnotateError(span, ErrNoBuilder)
 		return ErrNoBuilder
 	}
-	c, err := s.clientFor(builderURL)
+	c, err := s.submitClientFor(builderURL)
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return err
@@ -230,20 +328,50 @@ func (s *Service) SubmitSignedBeaconBlock(ctx context.Context, builderURL string
 	return c.SubmitSignedBeaconBlock(ctx, b)
 }
 
-// Routed to the builder named in the signed request auth.
-func (s *Service) SubmitBuilderPreferences(ctx context.Context, validatorPubkey [48]byte, req *ethpb.BuilderPreferencesRequestV1) error {
+// SubmitBuilderPreferences forwards each entry to its own builder url concurrently, returning
+// failure messages keyed by entry position. Nil entries are skipped; auth is forwarded unchanged.
+func (s *Service) SubmitBuilderPreferences(ctx context.Context, entries []*ethpb.BuilderPreferencesEntry) map[int]string {
 	ctx, span := trace.StartSpan(ctx, "builder.SubmitBuilderPreferences")
 	defer span.End()
-	url := string(req.GetAuth().GetMessage().GetData())
-	if url == "" {
-		return errors.New("builder preferences missing builder url")
+	var wg sync.WaitGroup
+	// Each entry writes only its own index, so the goroutines need no locking.
+	msgs := make([]string, len(entries))
+	for i, e := range entries {
+		if e == nil {
+			continue
+		}
+		if len(e.GetUrl()) == 0 {
+			log.Warn("Skipping builder preferences entry with no builder url")
+			msgs[i] = "builder url is required"
+			continue
+		}
+		wg.Add(1)
+		go func(i int, e *ethpb.BuilderPreferencesEntry) {
+			defer wg.Done()
+			url := string(e.Url)
+			c, err := s.clientFor(url)
+			if err == nil {
+				req := &ethpb.BuilderPreferencesRequest{
+					Preferences: &ethpb.BuilderPreferences{MaxExecutionPayment: e.MaxExecutionPayment},
+					Auth:        e.Auth,
+				}
+				err = c.SubmitBuilderPreferences(ctx, bytesutil.ToBytes48(e.ProposerPubkey), req)
+			}
+			if err != nil {
+				tracing.AnnotateError(span, err)
+				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(url)).Warn("Could not submit builder preferences")
+				msgs[i] = "could not submit builder preferences: " + logs.MaskCredentialsLogging(err.Error())
+			}
+		}(i, e)
 	}
-	c, err := s.clientFor(url)
-	if err != nil {
-		tracing.AnnotateError(span, err)
-		return err
+	wg.Wait()
+	failures := make(map[int]string)
+	for i, msg := range msgs {
+		if msg != "" {
+			failures[i] = msg
+		}
 	}
-	return c.SubmitBuilderPreferences(ctx, validatorPubkey, req)
+	return failures
 }
 
 // GetHeader retrieves the header for a given slot and parent hash from the builder relay network.
@@ -275,7 +403,7 @@ func (s *Service) Status() error {
 }
 
 // RegisterValidator registers a validator with the builder relay network.
-// It also saves the registration object to the DB.
+// It also caches the registration object.
 func (s *Service) RegisterValidator(ctx context.Context, reg []*ethpb.SignedValidatorRegistrationV1) error {
 	ctx, span := trace.StartSpan(ctx, "builder.RegisterValidator")
 	defer span.End()
@@ -286,10 +414,6 @@ func (s *Service) RegisterValidator(ctx context.Context, reg []*ethpb.SignedVali
 	if s.c == nil {
 		return ErrNoBuilder
 	}
-
-	// should be removed if db is removed
-	idxs := make([]primitives.ValidatorIndex, 0)
-	msgs := make([]*ethpb.ValidatorRegistrationV1, 0)
 
 	indexToRegistration := make(map[primitives.ValidatorIndex]*ethpb.ValidatorRegistrationV1)
 
@@ -303,8 +427,6 @@ func (s *Service) RegisterValidator(ctx context.Context, reg []*ethpb.SignedVali
 			log.Warnf("Skipping validator registration for pubkey=%#x - not in current validator set.", r.Message.Pubkey)
 			continue
 		}
-		idxs = append(idxs, nx)
-		msgs = append(msgs, r.Message)
 		valid = append(valid, r)
 		indexToRegistration[nx] = r.Message
 	}
@@ -312,27 +434,16 @@ func (s *Service) RegisterValidator(ctx context.Context, reg []*ethpb.SignedVali
 		return errors.Wrap(err, "could not register validator(s)")
 	}
 
-	if len(indexToRegistration) != len(msgs) {
+	if len(indexToRegistration) != len(valid) {
 		return errors.New("ids and registrations must be the same length")
 	}
-	if s.registrationCache != nil {
-		s.registrationCache.UpdateIndexToRegisteredMap(ctx, indexToRegistration)
-		return nil
-	} else {
-		return s.cfg.beaconDB.SaveRegistrationsByValidatorIDs(ctx, idxs, msgs)
-	}
+	s.registrationCache.UpdateIndexToRegisteredMap(ctx, indexToRegistration)
+	return nil
 }
 
-// RegistrationByValidatorID returns either the values from the cache or db.
-func (s *Service) RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error) {
-	if s.registrationCache != nil {
-		return s.registrationCache.RegistrationByIndex(id)
-	} else {
-		if s.cfg == nil || s.cfg.beaconDB == nil {
-			return nil, errors.New("nil beacon db")
-		}
-		return s.cfg.beaconDB.RegistrationByValidatorID(ctx, id)
-	}
+// RegistrationByValidatorID returns the cached registration for a validator id.
+func (s *Service) RegistrationByValidatorID(_ context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error) {
+	return s.registrationCache.RegistrationByIndex(id)
 }
 
 // Configured returns true if the user has configured a builder client.

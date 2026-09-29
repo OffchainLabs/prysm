@@ -82,6 +82,13 @@ func (km *Keymanager) listenForAccountChanges(ctx context.Context) {
 }
 
 func (km *Keymanager) reloadAccountsFromKeystoreFile(accountsFilePath string) {
+	km.mu.Lock()
+	defer km.mu.Unlock()
+	km.reloadAccountsFromKeystoreFileLocked(accountsFilePath)
+}
+
+// reloadAccountsFromKeystoreFileLocked requires km.mu to be held.
+func (km *Keymanager) reloadAccountsFromKeystoreFileLocked(accountsFilePath string) {
 	if km.wallet == nil {
 		log.Error("Could not reload accounts because wallet was undefined")
 		return

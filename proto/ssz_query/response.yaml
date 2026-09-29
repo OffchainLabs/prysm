@@ -1,0 +1,5 @@
+package: "github.com/OffchainLabs/prysm/v7/proto/ssz_query"
+types:
+  - name: "SSZQueryProof"
+  - name: "SSZQueryResponse"
+  - name: "SSZQueryResponseWithProof"

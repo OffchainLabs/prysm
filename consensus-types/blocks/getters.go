@@ -3,6 +3,9 @@ package blocks
 import (
 	"fmt"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
+	"github.com/pkg/errors"
+
 	field_params "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -11,8 +14,6 @@ import (
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
-	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 // BeaconBlockIsNil checks if any composite field of input signed beacon block is nil.
@@ -497,7 +498,7 @@ func (b *SignedBeaconBlock) MarshalSSZTo(dst []byte) ([]byte, error) {
 // SizeSSZ returns the size of the serialized signed block
 //
 // WARNING: This function panics. It is required to change the signature
-// of fastssz's SizeSSZ() interface function to avoid panicking.
+// of the SizeSSZ() interface function to avoid panicking.
 // Changing the signature causes very problematic issues with wealdtech deps.
 // For the time being panicking is preferable.
 // lint:nopanic -- Panic warning is communicated in godoc commentary.
@@ -913,7 +914,7 @@ func (b *BeaconBlock) MarshalSSZTo(dst []byte) ([]byte, error) {
 // SizeSSZ returns the size of the serialized block.
 //
 // WARNING: This function panics. It is required to change the signature
-// of fastssz's SizeSSZ() interface function to avoid panicking.
+// of the SizeSSZ() interface function to avoid panicking.
 // Changing the signature causes very problematic issues with wealdtech deps.
 // For the time being panicking is preferable.
 // lint:nopanic -- Panic is communicated in godoc.
@@ -1283,7 +1284,10 @@ func (b *BeaconBlockBody) BlobKzgCommitments() ([][]byte, error) {
 	if b.version >= version.Gloas {
 		signedBid, err := b.SignedExecutionPayloadBid()
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "could not get signed execution payload bid")
+		}
+		if signedBid == nil || signedBid.Message == nil {
+			return nil, errors.New("nil execution payload bid or bid message")
 		}
 		return signedBid.Message.BlobKzgCommitments, nil
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -38,6 +39,11 @@ func (vs *Server) SubmitSignedExecutionPayloadBid(
 	if slots.ToEpoch(req.Message.Slot) < params.BeaconConfig().GloasForkEpoch {
 		return nil, status.Errorf(codes.InvalidArgument,
 			"execution payload bids are not supported before Gloas fork (slot %d)", req.Message.Slot)
+	}
+
+	if !features.Get().SubmitBlacklistedBuilderBids &&
+		vs.BuilderCircuitBreaker.Blacklisted(req.Message.BuilderIndex, slots.ToEpoch(req.Message.Slot)) {
+		return nil, status.Errorf(codes.FailedPrecondition, "builder %d is blacklisted by the circuit breaker", req.Message.BuilderIndex)
 	}
 
 	if err := vs.validateSubmittedBid(ctx, req); err != nil {
@@ -116,7 +122,7 @@ func (vs *Server) validateSubmittedBid(ctx context.Context, signed *ethpb.Signed
 	if err := v.VerifyParentBlockHash(vs.ForkchoiceFetcher.HasPayloadBlockHash); err != nil {
 		return status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	parentGasLimit, err := vs.ForkchoiceFetcher.GasLimit(parentRoot)
+	parentGasLimit, err := vs.ForkchoiceFetcher.GasLimit(parentRoot, bid.ParentBlockHash())
 	if err != nil {
 		return status.Errorf(codes.FailedPrecondition, "could not get parent gas limit: %v", err)
 	}

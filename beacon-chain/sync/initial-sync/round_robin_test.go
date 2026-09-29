@@ -13,11 +13,13 @@ import (
 	p2pt "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/container/slice"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -772,16 +774,73 @@ func TestService_ValidUnprocessed(t *testing.T) {
 		currBlockRoot = blk1Root
 	}
 
+	notProcessed := func(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) bool { return false }
 	retBlocks, _, err := validUnprocessed(t.Context(), batch, nil, 2, func(ctx context.Context, block blocks.ROBlock) bool {
 		// Ignore first 2 blocks in the batch.
 		return block.Block().Slot() <= 2
-	}, func(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) bool {
-		return false
-	})
+	}, notProcessed)
 	require.NoError(t, err)
 
 	// Ensure that the unprocessed batch is returned correctly.
 	assert.Equal(t, len(retBlocks), len(batch)-2)
+
+	t.Run("gloas: ancestor envelope dropped with the imported origin", func(t *testing.T) {
+		parentHash, ancestorRoot := [32]byte{0x0a}, [32]byte{0x02}
+		origin := makeGloasBlock(t, 32, ancestorRoot, parentHash)
+		// The origin's payload was withheld, so b1's bid parent hash is the ancestor's payload hash.
+		b1 := makeGloasBlock(t, 33, origin.Root(), parentHash)
+		envAncestor := makeEnvelopeForRoot(t, 31, ancestorRoot, parentHash, [32]byte{})
+		envB1 := makeEnvelopeForRoot(t, 33, b1.Root(), [32]byte{0x0b}, parentHash)
+		isProcessed := func(_ context.Context, b blocks.ROBlock) bool { return b.Root() == origin.Root() }
+
+		remaining, got, err := validUnprocessed(t.Context(), []blocks.BlockWithROSidecars{{Block: origin}, {Block: b1}},
+			[]interfaces.ROSignedExecutionPayloadEnvelope{envAncestor, envB1}, origin.Block().Slot(), isProcessed, notProcessed)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(remaining))
+		require.Equal(t, b1.Root(), remaining[0].Block.Root())
+		require.Equal(t, 1, len(got))
+		env, err := got[0].Envelope()
+		require.NoError(t, err)
+		require.Equal(t, b1.Root(), env.BeaconBlockRoot())
+	})
+}
+
+func TestEnvelopesForBlocks(t *testing.T) {
+	ctx := t.Context()
+	notProcessed := func(context.Context, interfaces.ROSignedExecutionPayloadEnvelope) bool { return false }
+
+	parentHash := [32]byte{0x0a}
+	b1OwnHash := [32]byte{0x0b}
+	ancestorRoot := [32]byte{0x02}
+	originRoot := makeGloasBlock(t, 32, ancestorRoot, parentHash).Root()
+
+	// b1 is the first unprocessed block; its parent's payload was not revealed, so its bid
+	// parent hash points at the last revealed ancestor's payload.
+	b1 := makeGloasBlock(t, 33, originRoot, parentHash)
+	bwb := []blocks.BlockWithROSidecars{{Block: b1}}
+
+	envAncestor := makeEnvelopeForRoot(t, 31, ancestorRoot, parentHash, [32]byte{})
+	envParent := makeEnvelopeForRoot(t, 32, originRoot, parentHash, [32]byte{})
+	envB1 := makeEnvelopeForRoot(t, 33, b1.Root(), b1OwnHash, parentHash)
+
+	t.Run("keep parent envelope needed by the first unprocessed block", func(t *testing.T) {
+		got := envelopesForBlocks(ctx, bwb, []interfaces.ROSignedExecutionPayloadEnvelope{envParent, envB1}, notProcessed)
+		require.Equal(t, 2, len(got))
+		env, err := got[0].Envelope()
+		require.NoError(t, err)
+		require.Equal(t, originRoot, env.BeaconBlockRoot())
+	})
+
+	t.Run("return no envelopes when only an ancestor envelope is available", func(t *testing.T) {
+		got := envelopesForBlocks(ctx, bwb, []interfaces.ROSignedExecutionPayloadEnvelope{envAncestor}, notProcessed)
+		require.Equal(t, 0, len(got))
+	})
+
+	t.Run("skip already processed payload envelope", func(t *testing.T) {
+		processed := func(context.Context, interfaces.ROSignedExecutionPayloadEnvelope) bool { return true }
+		got := envelopesForBlocks(ctx, bwb, []interfaces.ROSignedExecutionPayloadEnvelope{envB1}, processed)
+		require.Equal(t, 0, len(got))
+	})
 }
 
 func TestService_PropcessFetchedDataRegSync(t *testing.T) {
@@ -934,4 +993,102 @@ func TestService_processBlocksWithDataColumns(t *testing.T) {
 			require.Equal(t, true, summary.HasIndex(i))
 		}
 	})
+}
+
+type originColumnsChain struct {
+	*mock.ChainService
+	onEnvelope func(interfaces.ROSignedExecutionPayloadEnvelope)
+	onBatch    func([]blocks.ROBlock, []interfaces.ROSignedExecutionPayloadEnvelope)
+}
+
+func (c *originColumnsChain) ReceiveExecutionPayloadEnvelope(ctx context.Context, e interfaces.ROSignedExecutionPayloadEnvelope) error {
+	c.onEnvelope(e)
+	return c.ChainService.ReceiveExecutionPayloadEnvelope(ctx, e)
+}
+
+func (c *originColumnsChain) ReceiveBlockBatch(ctx context.Context, blks []blocks.ROBlock, envs []interfaces.ROSignedExecutionPayloadEnvelope, avs das.AvailabilityChecker) error {
+	c.onBatch(blks, envs)
+	return c.ChainService.ReceiveBlockBatch(ctx, blks, envs, avs)
+}
+
+func TestService_ProcessFetchedData(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.SetGenesisFork(t, params.BeaconConfig().Copy(), version.Gloas)
+
+	for _, mode := range []string{"regular", "batch"} {
+		t.Run(mode+" sync saves carried origin columns before processing", func(t *testing.T) {
+			ctx := t.Context()
+			storage := filesystem.NewEphemeralDataColumnStorage(t)
+			beaconDB := dbtest.SetupDB(t)
+			const originSlot = primitives.Slot(32)
+			originHash, ancestorHash := [32]byte{0x91}, [32]byte{0x90}
+			originProto := util.NewBeaconBlockGloas()
+			originProto.Block.Slot = originSlot
+			bid := originProto.Block.Body.SignedExecutionPayloadBid.Message
+			bid.ParentBlockHash, bid.BlockHash = ancestorHash[:], originHash[:]
+			bid.BlobKzgCommitments = [][]byte{make([]byte, fieldparams.KzgCommitmentSize)}
+			originSigned, err := blocks.NewSignedBeaconBlock(originProto)
+			require.NoError(t, err)
+			origin, err := blocks.NewROBlock(originSigned)
+			require.NoError(t, err)
+			originRoot := origin.Root()
+			child := makeGloasBlock(t, originSlot+1, originRoot, originHash)
+			envelope := makeEnvelopeForRoot(t, originSlot, originRoot, originHash, ancestorHash)
+			require.NoError(t, beaconDB.SaveBlock(ctx, origin))
+			column, err := blocks.NewRODataColumnGloas(&eth.DataColumnSidecarGloas{
+				Column: [][]byte{make([]byte, 2048)}, KzgProofs: [][]byte{make([]byte, fieldparams.KzgCommitmentSize)},
+				Slot: originSlot, BeaconBlockRoot: originRoot[:],
+			})
+			require.NoError(t, err)
+			st, err := util.NewBeaconStateGloas()
+			require.NoError(t, err)
+			require.NoError(t, st.SetSlot(originSlot))
+			chain := &originColumnsChain{ChainService: &mock.ChainService{
+				FinalizedCheckPoint: &eth.Checkpoint{}, DB: beaconDB, State: st, Root: originRoot[:],
+			}}
+			received := false
+			assertStored := func() {
+				stored, err := storage.Get(originRoot, nil)
+				require.NoError(t, err)
+				require.Equal(t, 1, len(stored))
+				require.Equal(t, true, stored[0].IsGloas())
+				require.Equal(t, originRoot, stored[0].BlockRoot())
+			}
+			chain.onEnvelope = func(e interfaces.ROSignedExecutionPayloadEnvelope) {
+				require.Equal(t, 0, len(chain.BlocksReceived))
+				require.DeepEqual(t, envelope.Proto(), e.Proto())
+				assertStored()
+				received = true
+			}
+			chain.onBatch = func(blks []blocks.ROBlock, envs []interfaces.ROSignedExecutionPayloadEnvelope) {
+				require.Equal(t, 1, len(blks))
+				require.Equal(t, child.Root(), blks[0].Root())
+				require.Equal(t, 1, len(envs))
+				require.DeepEqual(t, envelope.Proto(), envs[0].Proto())
+				assertStored()
+				received = true
+			}
+			service := &Service{
+				cfg:         &Config{Chain: chain, DB: beaconDB, P2P: p2pt.NewTestP2P(t), DataColumnStorage: storage},
+				genesisTime: makeGenesisTime(originSlot * 2),
+				counter:     ratecounter.NewRateCounter(counterSeconds * time.Second),
+			}
+			data := &blocksQueueFetchedData{
+				bwb:           []blocks.BlockWithROSidecars{{Block: origin}, {Block: child}},
+				envelopes:     []interfaces.ROSignedExecutionPayloadEnvelope{envelope},
+				columnsToSave: []blocks.VerifiedRODataColumn{blocks.NewVerifiedRODataColumn(column)},
+			}
+			require.Equal(t, uint64(0), storage.Summary(originRoot).Count())
+			if mode == "regular" {
+				processed, err := service.processFetchedDataRegSync(ctx, data)
+				require.NoError(t, err)
+				require.Equal(t, uint64(1), processed)
+			} else {
+				service.processFetchedData(ctx, data)
+			}
+			require.Equal(t, true, received)
+			require.Equal(t, 1, len(chain.BlocksReceived))
+			require.Equal(t, child.Block().Slot(), chain.BlocksReceived[0].Block().Slot())
+		})
+	}
 }

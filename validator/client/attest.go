@@ -256,12 +256,7 @@ func (v *validator) setHighestSlot(slot primitives.Slot) {
 // attestationDueComponent returns the slot-component basis points for the
 // attestation due time.
 func attestationDueComponent(slot primitives.Slot) primitives.BP {
-	cfg := params.BeaconConfig()
-	if slots.ToEpoch(slot) >= cfg.GloasForkEpoch {
-		return cfg.AttestationDueBPSGloas
-	}
-
-	return cfg.AttestationDueBPS
+	return params.BeaconConfig().AttestationDueBPSAtSlot(slot)
 }
 
 // waitUntilAttestationDueOrValidBlock waits until (a) or (b) whichever comes first:

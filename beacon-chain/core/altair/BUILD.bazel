@@ -53,6 +53,7 @@ go_test(
         "block_test.go",
         "deposit_fuzz_test.go",
         "deposit_test.go",
+        "epoch_precompute_bench_test.go",
         "epoch_precompute_test.go",
         "epoch_spec_test.go",
         "exports_test.go",

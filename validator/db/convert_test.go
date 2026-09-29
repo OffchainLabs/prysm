@@ -97,7 +97,6 @@ func TestDB_ConvertDatabase(t *testing.T) {
 				require.NoError(t, err, "could not save graffiti ordered index")
 
 				// Save the proposer settings.
-				var relays []string = nil
 				expectedProposerSettings := &proposer.Settings{}
 
 				if withProposerSettings {
@@ -110,7 +109,6 @@ func TestDB_ConvertDatabase(t *testing.T) {
 								BuilderConfig: &proposer.BuilderConfig{
 									Enabled:  true,
 									GasLimit: 42,
-									Relays:   relays,
 								},
 							},
 						},
@@ -121,7 +119,6 @@ func TestDB_ConvertDatabase(t *testing.T) {
 							BuilderConfig: &proposer.BuilderConfig{
 								Enabled:  false,
 								GasLimit: 43,
-								Relays:   relays,
 							},
 						},
 					}

@@ -69,6 +69,16 @@ var (
 			"pubkey",
 		},
 	)
+	// ValidatorProposeEnvelopeFailVec used to count failed self-build envelope submissions.
+	ValidatorProposeEnvelopeFailVec = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "validator",
+			Name:      "failed_envelope_submissions",
+		},
+		[]string{
+			"pubkey",
+		},
+	)
 	// ValidatorBalancesGaugeVec used to keep track of validator balances by public key.
 	ValidatorBalancesGaugeVec = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -212,6 +222,14 @@ var (
 			Help:      "The number of payload attestation submissions by result in the validator client.",
 		},
 		[]string{"result"},
+	)
+	validatorPayloadAttestationRetryTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "validator",
+			Name:      "payload_attestation_data_retry_total",
+			Help:      "The number of payload attestation data requests retried at the PTC deadline, by outcome.",
+		},
+		[]string{"outcome"},
 	)
 	validatorSelfBuildEnvelopeSubmissionTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{

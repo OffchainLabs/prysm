@@ -25,6 +25,8 @@ func (q *blocksQueue) resetFromFork(fork *forkData) error {
 	}
 	fsm := q.smm.addStateMachine(firstBlock.Slot())
 	fsm.fetched.bwb = fork.bwb
+	fsm.fetched.envelopes = fork.envelopes
+	fsm.fetched.columnsToSave = fork.columnsToSave
 	fsm.fetched.blocksFrom, fsm.fetched.blobsFrom = fork.blocksFrom, fork.blobsFrom
 	fsm.state = stateDataParsed
 

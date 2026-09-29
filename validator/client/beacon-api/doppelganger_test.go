@@ -45,6 +45,7 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 		name                        string
 		doppelGangerInput           *ethpb.DoppelGangerRequest
 		doppelGangerExpectedOutput  *ethpb.DoppelGangerResponse
+		omittedPubKeys              [][]byte
 		getSyncingOutput            *structs.SyncStatusResponse
 		getForkOutput               *structs.GetStateForkResponse
 		getHeadersOutput            *structs.GetBlockHeadersResponse
@@ -182,10 +183,11 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 					{PublicKey: pubKey2, DuplicateExists: true},  // not recent - duplicate on previous epoch
 					{PublicKey: pubKey3, DuplicateExists: true},  // not recent - duplicate on current epoch
 					{PublicKey: pubKey4, DuplicateExists: true},  // not recent - duplicate on both previous and current epoch
-					{PublicKey: pubKey5, DuplicateExists: false}, // non existing validator
+					// pubKey5 omitted: non existing validator cannot be evaluated
 					{PublicKey: pubKey6, DuplicateExists: false}, // not recent - not duplicate
 				},
 			},
+			omittedPubKeys: [][]byte{pubKey5},
 			getSyncingOutput: &structs.SyncStatusResponse{
 				Data: &structs.SyncStatusResponseData{
 					IsSyncing: false,
@@ -278,6 +280,51 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 							{Index: "66666", IsLive: false}, // not recent - not duplicate
 						},
 					},
+				},
+			},
+		},
+		{
+			name: "none of the checked keys exist on chain",
+			doppelGangerInput: &ethpb.DoppelGangerRequest{
+				ValidatorRequests: []*ethpb.DoppelGangerRequest_ValidatorRequest{
+					{PublicKey: pubKey1, Epoch: 80},
+					{PublicKey: pubKey2, Epoch: 80},
+				},
+			},
+			doppelGangerExpectedOutput: &ethpb.DoppelGangerResponse{
+				Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{},
+			},
+			omittedPubKeys: [][]byte{pubKey1, pubKey2},
+			getSyncingOutput: &structs.SyncStatusResponse{
+				Data: &structs.SyncStatusResponseData{
+					IsSyncing: false,
+				},
+			},
+			getForkOutput: &structs.GetStateForkResponse{
+				Data: &structs.Fork{
+					PreviousVersion: "0x01000000",
+					CurrentVersion:  "0x02000000",
+					Epoch:           "2",
+				},
+			},
+			getHeadersOutput: &structs.GetBlockHeadersResponse{
+				Data: []*structs.SignedBeaconBlockHeaderContainer{
+					{
+						Header: &structs.SignedBeaconBlockHeader{
+							Message: &structs.BeaconBlockHeader{
+								Slot: "3201",
+							},
+						},
+					},
+				},
+			},
+			getStateValidatorsInterface: &struct {
+				input  []string
+				output *structs.GetValidatorsResponse
+			}{
+				input: []string{stringPubKey1, stringPubKey2},
+				output: &structs.GetValidatorsResponse{
+					Data: []*structs.ValidatorContainer{},
 				},
 			},
 		},
@@ -383,6 +430,12 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 
 			require.DeepEqual(t, testCase.doppelGangerExpectedOutput, doppelGangerActualOutput)
 			assert.NoError(t, err)
+
+			for _, omitted := range testCase.omittedPubKeys {
+				for _, r := range doppelGangerActualOutput.Responses {
+					require.Equal(t, false, bytes.Equal(r.PublicKey, omitted), "pubkey %#x should be omitted from the response", omitted)
+				}
+			}
 		})
 	}
 }

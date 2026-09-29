@@ -214,6 +214,14 @@ func WithProposerPreferencesCache(c *cache.ProposerPreferencesCache) Option {
 	}
 }
 
+// WithBuilderCircuitBreaker sets the tracker used to ignore bids from blacklisted builders.
+func WithBuilderCircuitBreaker(c *cache.BuilderCircuitBreaker) Option {
+	return func(s *Service) error {
+		s.builderCircuitBreaker = c
+		return nil
+	}
+}
+
 func WithSubscribedValidatorsCache(c *cache.SubscribedValidatorsCache) Option {
 	return func(s *Service) error {
 		s.subscribedValidatorsCache = c

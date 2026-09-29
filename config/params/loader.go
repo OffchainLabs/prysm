@@ -301,6 +301,7 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		fmt.Sprintf("CONTRIBUTION_DUE_BPS_GLOAS: %d", cfg.ContributionDueBPSGloas),
 		fmt.Sprintf("PAYLOAD_ATTESTATION_DUE_BPS: %d", cfg.PayloadAttestationDueBPS),
 		fmt.Sprintf("PAYLOAD_DUE_BPS: %d", cfg.PayloadDueBPS),
+		fmt.Sprintf("CONFIRMATION_BYZANTINE_THRESHOLD: %d", cfg.ConfirmationByzantineThreshold),
 	}
 
 	if ms := cfg.SlotDurationMillis(); ms%1000 == 0 {

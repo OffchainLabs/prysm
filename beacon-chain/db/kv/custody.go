@@ -2,7 +2,6 @@ package kv
 
 import (
 	"context"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -74,7 +73,7 @@ func (s *Store) UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot pri
 }
 
 // UpdateEarliestAvailableSlot updates the earliest available slot.
-func (s *Store) UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailableSlot primitives.Slot) error {
+func (s *Store) UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailableSlot, currentSlot primitives.Slot) error {
 	_, span := trace.StartSpan(ctx, "BeaconDB.UpdateEarliestAvailableSlot")
 	defer span.End()
 
@@ -104,8 +103,6 @@ func (s *Store) UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailab
 
 		// Prevent increase within the MIN_EPOCHS_FOR_BLOCK_REQUESTS period
 		// This ensures we don't voluntarily refuse to serve mandatory block data
-		genesisTime := time.Unix(int64(params.BeaconConfig().MinGenesisTime+params.BeaconConfig().GenesisDelay), 0)
-		currentSlot := slots.CurrentSlot(genesisTime)
 		currentEpoch := slots.ToEpoch(currentSlot)
 		minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
 

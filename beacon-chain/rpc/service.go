@@ -96,7 +96,6 @@ type Config struct {
 	BlobReceiver                     blockchain.BlobReceiver
 	DataColumnReceiver               blockchain.DataColumnReceiver
 	ExecutionChainService            execution.Chain
-	ChainStartFetcher                execution.ChainStartFetcher
 	ExecutionChainInfoFetcher        execution.ChainInfoFetcher
 	GenesisTimeFetcher               blockchain.TimeFetcher
 	GenesisFetcher                   blockchain.GenesisFetcher
@@ -132,6 +131,7 @@ type Config struct {
 	ProposerPreferencesCache         *cache.ProposerPreferencesCache
 	SubscribedValidatorsCache        *cache.SubscribedValidatorsCache
 	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
+	BuilderCircuitBreaker            *cache.BuilderCircuitBreaker
 	PayloadIDCache                   *cache.PayloadIDCache
 	ExecutionPayloadEnvelopeCache    *cache.ExecutionPayloadEnvelopeCache
 	LCStore                          *lightClient.Store
@@ -243,7 +243,6 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		TimeFetcher:                      s.cfg.GenesisTimeFetcher,
 		BlockFetcher:                     s.cfg.ExecutionChainService,
 		DepositFetcher:                   s.cfg.DepositFetcher,
-		ChainStartFetcher:                s.cfg.ChainStartFetcher,
 		Eth1InfoFetcher:                  s.cfg.ExecutionChainService,
 		OptimisticModeFetcher:            s.cfg.OptimisticModeFetcher,
 		SyncChecker:                      s.cfg.SyncService,
@@ -272,6 +271,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		ProposerPreferencesCache:         s.cfg.ProposerPreferencesCache,
 		SubscribedValidatorsCache:        s.cfg.SubscribedValidatorsCache,
 		HighestBidCache:                  s.cfg.HighestBidCache,
+		BuilderCircuitBreaker:            s.cfg.BuilderCircuitBreaker,
 		PayloadIDCache:                   s.cfg.PayloadIDCache,
 		ExecutionPayloadEnvelopeCache:    s.cfg.ExecutionPayloadEnvelopeCache,
 		AttestationStateFetcher:          s.cfg.AttestationReceiver,
@@ -303,7 +303,6 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		HeadFetcher:                 s.cfg.HeadFetcher,
 		FinalizationFetcher:         s.cfg.FinalizationFetcher,
 		CanonicalFetcher:            s.cfg.CanonicalFetcher,
-		ChainStartFetcher:           s.cfg.ChainStartFetcher,
 		DepositFetcher:              s.cfg.DepositFetcher,
 		BlockFetcher:                s.cfg.ExecutionChainService,
 		GenesisTimeFetcher:          s.cfg.GenesisTimeFetcher,

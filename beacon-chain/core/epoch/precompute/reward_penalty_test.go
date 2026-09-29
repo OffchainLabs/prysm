@@ -223,7 +223,7 @@ func TestProposerDeltaPrecompute_HappyCase(t *testing.T) {
 
 	proposerIndex := primitives.ValidatorIndex(1)
 	b := &Balance{ActiveCurrentEpoch: 1000}
-	v := []*Validator{
+	v := []Validator{
 		{IsPrevEpochAttester: true, CurrentEpochEffectiveBalance: 32, ProposerIndex: proposerIndex},
 	}
 	r, err := ProposersDelta(beaconState, b, v)
@@ -245,7 +245,7 @@ func TestProposerDeltaPrecompute_ValidatorIndexOutOfRange(t *testing.T) {
 
 	proposerIndex := primitives.ValidatorIndex(validatorCount)
 	b := &Balance{ActiveCurrentEpoch: 1000}
-	v := []*Validator{
+	v := []Validator{
 		{IsPrevEpochAttester: true, CurrentEpochEffectiveBalance: 32, ProposerIndex: proposerIndex},
 	}
 	_, err = ProposersDelta(beaconState, b, v)
@@ -261,7 +261,7 @@ func TestProposerDeltaPrecompute_SlashedCase(t *testing.T) {
 
 	proposerIndex := primitives.ValidatorIndex(1)
 	b := &Balance{ActiveCurrentEpoch: 1000}
-	v := []*Validator{
+	v := []Validator{
 		{IsPrevEpochAttester: true, CurrentEpochEffectiveBalance: 32, ProposerIndex: proposerIndex, IsSlashed: true},
 	}
 	r, err := ProposersDelta(beaconState, b, v)

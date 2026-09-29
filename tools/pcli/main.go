@@ -10,6 +10,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
+	"github.com/kr/pretty"
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v2"
+	"gopkg.in/d4l3k/messagediff.v1"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch/precompute"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -21,12 +28,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	prefixed "github.com/OffchainLabs/prysm/v7/runtime/logging/logrus-prefixed-formatter"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
-	"github.com/kr/pretty"
-	"github.com/pkg/errors"
-	fssz "github.com/prysmaticlabs/fastssz"
-	log "github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v2"
-	"gopkg.in/d4l3k/messagediff.v1"
 )
 
 var blockPath string
@@ -65,7 +66,7 @@ var prettyCommand = &cli.Command{
 		},
 	},
 	Action: func(c *cli.Context) error {
-		var data fssz.Unmarshaler
+		var data ssz.Unmarshaler
 		switch sszType {
 		case "block":
 			data = &ethpb.BeaconBlock{}
@@ -323,7 +324,7 @@ func main() {
 }
 
 // dataFetcher fetches and unmarshals data from file to provided data structure.
-func dataFetcher(fPath string, data fssz.Unmarshaler) error {
+func dataFetcher(fPath string, data ssz.Unmarshaler) error {
 	rawFile, err := os.ReadFile(fPath) // #nosec G304
 	if err != nil {
 		return err
@@ -359,7 +360,7 @@ func detectBlock(fPath string) (interfaces.SignedBeaconBlock, error) {
 	return vu.UnmarshalBeaconBlock(rawFile)
 }
 
-func prettyPrint(sszPath string, data fssz.Unmarshaler) {
+func prettyPrint(sszPath string, data ssz.Unmarshaler) {
 	if err := dataFetcher(sszPath, data); err != nil {
 		log.Fatal(err)
 	}

@@ -4,17 +4,18 @@ set -euo pipefail
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
 
-# Regenerate all log.go files
-./hack/gen-logs.sh
+# Regenerate all log.go files. `mode=force` ignores the generation cache, which
+# could otherwise make this check a no-op.
+make gen logs mode=force
 
-# Fail if that changed anything
-if ! git diff --quiet -- ./ || [[ -n "$(git ls-files --others --exclude-standard -- ./)" ]]; then
+# Fail if that changed any log.go
+if ! git diff --quiet -- '*log.go' || [[ -n "$(git ls-files --others --exclude-standard -- '*log.go')" ]]; then
   echo "ERROR: log.go files are out of date. Please run:"
-  echo "  ./hack/gen-logs.sh"
+  echo "  make gen logs"
   echo "and commit the changes."
   echo
-  git diff --stat -- ./ || true
-  git status --porcelain -- ./ || true
+  git diff --stat -- '*log.go' || true
+  git status --porcelain -- '*log.go' || true
   exit 1
 fi
 

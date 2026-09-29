@@ -116,6 +116,10 @@ var appHelpFlagGroups = []flagGroup{
 			flags.SuggestedFeeRecipientFlag,
 			flags.EnableBuilderFlag,
 			flags.BuilderGasLimitFlag,
+			flags.BuilderURLsFlag,
+			flags.BuilderMinBidFlag,
+			flags.BuilderBoostFactorFlag,
+			flags.BuilderMaxExecutionPaymentFlag,
 			flags.ValidatorsRegistrationBatchSizeFlag,
 			flags.EnableStatelessFlag,
 			flags.GraffitiFlag,
@@ -128,6 +132,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.Web3SignerURLFlag,
 			flags.Web3SignerPublicValidatorKeysFlag,
 			flags.Web3SignerKeyFileFlag,
+			flags.Web3SignerKeyPollIntervalFlag,
 		},
 	},
 	{

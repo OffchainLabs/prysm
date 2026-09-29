@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
@@ -17,8 +18,19 @@ import (
 	"github.com/OffchainLabs/prysm/v7/math"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/golang/snappy"
 	pkgerrors "github.com/pkg/errors"
 	"go.etcd.io/bbolt"
+)
+
+const (
+	// stateDiffTreeKeyLength is the length of a state-diff tree key, before any suffix.
+	stateDiffTreeKeyLength = 16
+
+	// stateDiffTreeKeySlotEnd is the end of the meaningful part of a state-diff tree key: a level
+	// byte followed by a little-endian slot. The bytes up to stateDiffTreeKeyLength are padding,
+	// and are always zero.
+	stateDiffTreeKeySlotEnd = 9
 )
 
 var (
@@ -26,6 +38,18 @@ var (
 	exponentsKey                = []byte("exponents")
 	ErrSlotBeforeOffset         = errors.New("slot is before state-diff root offset")
 	errExponentsMetadataMissing = errors.New("state diff exponents metadata not found")
+
+	// stateKeyByVersion is the key prefix stored in front of a state's SSZ bytes, per fork.
+	stateKeyByVersion = map[int][]byte{
+		version.Phase0:    phase0Key,
+		version.Altair:    altairKey,
+		version.Bellatrix: bellatrixKey,
+		version.Capella:   capellaKey,
+		version.Deneb:     denebKey,
+		version.Electra:   ElectraKey,
+		version.Fulu:      fuluKey,
+		version.Gloas:     gloasKey,
+	}
 )
 
 func encodeStateDiffExponents(exponents []int) ([]byte, error) {
@@ -112,10 +136,36 @@ func (s *Store) loadStateDiffExponents() ([]int, error) {
 }
 
 func makeKeyForStateDiffTree(level int, slot uint64) []byte {
-	buf := make([]byte, 16)
+	buf := make([]byte, stateDiffTreeKeyLength)
 	buf[0] = byte(level)
-	binary.LittleEndian.PutUint64(buf[1:], slot)
+	binary.LittleEndian.PutUint64(buf[1:stateDiffTreeKeySlotEnd], slot)
 	return buf
+}
+
+// isStateDiffTreeKey reports whether the given key holds a tree entry, as opposed to one of the
+// metadata keys stored in the same bucket.
+func isStateDiffTreeKey(key []byte) bool {
+	if len(key) < stateDiffTreeKeyLength {
+		return false
+	}
+
+	if int(key[0]) >= len(flags.Get().StateDiffExponents) {
+		return false
+	}
+
+	for _, padding := range key[stateDiffTreeKeySlotEnd:stateDiffTreeKeyLength] {
+		if padding != 0 {
+			return false
+		}
+	}
+
+	return true
+}
+
+// stateDiffTreeKeySlot returns the slot a state-diff tree key is stored at.
+// It must only be called on a key that isStateDiffTreeKey accepts.
+func stateDiffTreeKeySlot(key []byte) uint64 {
+	return binary.LittleEndian.Uint64(key[1:stateDiffTreeKeySlotEnd])
 }
 
 func (s *Store) getAnchorState(ctx context.Context, offset uint64, lvl int, slot primitives.Slot) (anchor state.ReadOnlyBeaconState, err error) {
@@ -127,10 +177,8 @@ func (s *Store) getAnchorState(ctx context.Context, offset uint64, lvl int, slot
 		return nil, ErrSlotBeforeOffset
 	}
 	relSlot := uint64(slot) - offset
+	// The exponents are validated at node startup, so they always fit in a uint64 shift.
 	prevExp := flags.Get().StateDiffExponents[lvl-1]
-	if prevExp < flags.MinStateDiffExponent || prevExp >= 64 {
-		return nil, fmt.Errorf("state diff exponent %d out of range for uint64", prevExp)
-	}
 	span := math.PowerOf2(uint64(prevExp))
 	anchorSlot := primitives.Slot(uint64(slot) - relSlot%span)
 
@@ -142,20 +190,14 @@ func (s *Store) getAnchorState(ctx context.Context, offset uint64, lvl int, slot
 
 	// Check if we have the anchor in cache.
 	startTime := time.Now()
-	anchor = s.stateDiffCache.getAnchor(anchorLvl)
-	if anchor != nil && anchor.Slot() == anchorSlot {
+	anchor = s.stateDiffCache.getAnchor(anchorLvl, withExactSlot(anchorSlot))
+	if anchor != nil {
 		stateDiffGetAnchorStateCacheHitReadTime.Observe(float64(time.Since(startTime)) / float64(time.Millisecond))
 		stateDiffGetAnchorStateCacheHit.Inc()
 		return anchor, nil
 	}
 	stateDiffGetAnchorStateCacheMissTime.Observe(float64(time.Since(startTime)) / float64(time.Millisecond))
 	stateDiffGetAnchorStateCacheMiss.Inc()
-	if anchor != nil {
-		log.WithField("level", anchorLvl).
-			WithField("expectedSlot", anchorSlot).
-			WithField("cachedSlot", anchor.Slot()).
-			Warn("Cached state-diff anchor slot mismatch; reloading anchor from database")
-	}
 
 	// If not, load it from the database.
 	startTime = time.Now()
@@ -179,10 +221,8 @@ func computeLevel(offset uint64, slot primitives.Slot) int {
 		return -1
 	}
 	rel := uint64(slot) - offset
+	// The exponents are validated at node startup, so they always fit in a uint64 shift.
 	for i, exp := range flags.Get().StateDiffExponents {
-		if exp < flags.MinStateDiffExponent || exp >= 64 {
-			return -1
-		}
 		span := math.PowerOf2(uint64(exp))
 		if rel%span == 0 {
 			return i
@@ -340,38 +380,30 @@ func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.Rea
 	return nil
 }
 
-func keyForSnapshot(v int) ([]byte, error) {
-	switch v {
-	case version.Gloas:
-		return gloasKey, nil
-	case version.Fulu:
-		return fuluKey, nil
-	case version.Electra:
-		return ElectraKey, nil
-	case version.Deneb:
-		return denebKey, nil
-	case version.Capella:
-		return capellaKey, nil
-	case version.Bellatrix:
-		return bellatrixKey, nil
-	case version.Altair:
-		return altairKey, nil
-	case version.Phase0:
-		return phase0Key, nil
-	default:
-		return nil, errors.New("unsupported fork")
+// encodeProtoWithKey returns snappy(versionKey || ssz(pb)), marshaling straight into the prefixed buffer.
+func encodeProtoWithKey(v int, pb ssz.Marshaler) ([]byte, error) {
+	key, ok := stateKeyByVersion[v]
+	if !ok {
+		return nil, fmt.Errorf("unsupported fork %s", version.String(v))
 	}
+
+	// Allocate a buffer with enough capacity as the size can be derived.
+	buf := make([]byte, len(key), len(key)+pb.SizeSSZ())
+	copy(buf, key)
+	buf, err := pb.MarshalSSZTo(buf)
+	if err != nil {
+		return nil, fmt.Errorf("marshal SSZ to buffer: %w", err)
+	}
+	return snappy.Encode(nil, buf), nil
 }
 
-func addKey(v int, bytes []byte) ([]byte, error) {
-	key, err := keyForSnapshot(v)
-	if err != nil {
-		return nil, err
+// encodeStateWithKey is encodeProtoWithKey for a native state.
+func encodeStateWithKey(st state.ReadOnlyBeaconState) ([]byte, error) {
+	pb, ok := st.ToProto().(ssz.Marshaler)
+	if !ok {
+		return nil, errors.New("state does not marshal to ssz")
 	}
-	enc := make([]byte, len(key)+len(bytes))
-	copy(enc, key)
-	copy(enc[len(key):], bytes)
-	return enc, nil
+	return encodeProtoWithKey(st.Version(), pb)
 }
 
 func decodeStateSnapshot(enc []byte) (state.BeaconState, error) {

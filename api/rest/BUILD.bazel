@@ -3,10 +3,10 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
-        "get_options.go",
         "log.go",
         "mock_rest_provider.go",
         "multi_handler.go",
+        "query_options.go",
         "rest_connection_provider.go",
         "rest_handler.go",
     ],
@@ -28,8 +28,8 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
-        "get_options_test.go",
         "multi_handler_test.go",
+        "query_options_test.go",
         "rest_connection_provider_test.go",
         "rest_handler_client_test.go",
         "rest_handler_test.go",

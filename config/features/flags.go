@@ -97,8 +97,8 @@ var (
 	}
 	enableDoppelGangerProtection = &cli.BoolFlag{
 		Name: "enable-doppelganger",
-		Usage: `Enables the validator to perform a doppelganger check. 
-		This is not a foolproof method to find duplicate instances in the network. 
+		Usage: `Enables the validator to perform a doppelganger check.
+		This is not a foolproof method to find duplicate instances in the network.
 		Your validator will still be vulnerable if it is being run in unsafe configurations.`,
 	}
 	disableStakinContractCheck = &cli.BoolFlag{
@@ -155,11 +155,6 @@ var (
 		Name:  "disable-resource-manager",
 		Usage: "Disables running the libp2p resource manager.",
 	}
-	// DisableRegistrationCache a flag for disabling the validator registration cache and use db instead.
-	DisableRegistrationCache = &cli.BoolFlag{
-		Name:  "disable-registration-cache",
-		Usage: "Temporary flag for disabling the validator registration cache instead of using the DB. Note: registrations do not clear on restart while using the DB.",
-	}
 	// BlobSaveFsync enforces durable filesystem writes for use cases where blob availability is critical.
 	BlobSaveFsync = &cli.BoolFlag{
 		Name:  "blob-save-fsync",
@@ -178,14 +173,13 @@ var (
 		Name:  "enable-experimental-attestation-pool",
 		Usage: "Enables an experimental attestation pool design.",
 	}
+	enableFastConfirmation = &cli.BoolFlag{
+		Name:  "enable-fast-confirmation",
+		Usage: "Enables the fast confirmation rule (FCR) for rapid block confirmation under synchrony assumptions.",
+	}
 	EnableStateDiff = &cli.BoolFlag{
 		Name:  "enable-state-diff",
 		Usage: "Enables the experimental state diff feature.",
-	}
-	EnableProgressiveSSZ = &cli.BoolFlag{
-		Name:   "enable-progressive-ssz",
-		Usage:  "Enables experimental progressive SSZ merkleization for converted consensus types.",
-		Hidden: true,
 	}
 	reorgLatePayloads = &cli.BoolFlag{
 		Name:   "reorg-late-payloads",
@@ -228,9 +222,16 @@ var (
 		Name:  "ignore-unviable-attestations",
 		Usage: "Ignores attestations whose target state is not viable with respect to the current head (avoid expensive state replay from lagging attesters).",
 	}
-	trackEquivocations = &cli.BoolFlag{
-		Name:  "track-equivocations",
-		Usage: "Records proposer equivocations observed on gossip and marks the slot in forkchoice if the equivocation arrives before the configured early deadline.",
+	disableTrackEquivocations = &cli.BoolFlag{
+		Name:  "disable-track-equivocations",
+		Usage: "Disables recording proposer equivocations observed on gossip into forkchoice.",
+	}
+	// submitBlacklistedBuilderBids lets a builder broadcast its own bids even while this node's
+	// circuit breaker has it blacklisted. Testing only: peers still ignore the bid on gossip.
+	submitBlacklistedBuilderBids = &cli.BoolFlag{
+		Name:   "submit-blacklisted-builder-bids",
+		Usage:  "Skips the builder circuit breaker check when submitting a signed execution payload bid, so a blacklisted builder still broadcasts its bid. For testing only.",
+		Hidden: true,
 	}
 )
 
@@ -277,7 +278,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	SaveFullExecutionPayloads,
 	enableStartupOptimistic,
 	ignoreUnviableAttestations,
-	trackEquivocations,
+	disableTrackEquivocations,
 	enableFullSSZDataLogging,
 	disableVerboseSigVerification,
 	enableProposerPreprocessing,
@@ -286,18 +287,18 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	aggregateSecondInterval,
 	aggregateThirdInterval,
 	disableResourceManager,
-	DisableRegistrationCache,
 	EnableLightClient,
 	BlobSaveFsync,
 	DisableQUIC,
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
+	enableFastConfirmation,
 	EnableStateDiff,
-	EnableProgressiveSSZ,
 	reorgLatePayloads,
 	forceHeadFlag,
 	blacklistRoots,
 	enableHashtree,
+	submitBlacklistedBuilderBids,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {

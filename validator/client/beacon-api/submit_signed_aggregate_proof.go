@@ -1,25 +1,33 @@
 package beacon_api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
+const aggregateAndProofsEndpoint = "/eth/v2/validator/aggregate_and_proofs"
+
 func (c *beaconApiValidatorClient) submitSignedAggregateSelectionProof(ctx context.Context, in *ethpb.SignedAggregateSubmitRequest) (*ethpb.SignedAggregateSubmitResponse, error) {
-	body, err := json.Marshal([]*structs.SignedAggregateAttestationAndProof{jsonifySignedAggregateAndProof(in.SignedAggregateAndProof)})
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshal SignedAggregateAttestationAndProof")
-	}
 	headers := map[string]string{"Eth-Consensus-Version": version.String(in.SignedAggregateAndProof.Version())}
-	err = c.handler.Post(ctx, "/eth/v2/validator/aggregate_and_proofs", headers, bytes.NewBuffer(body), nil)
-	if err != nil {
+	jsonFn := func() ([]byte, error) {
+		return json.Marshal([]*structs.SignedAggregateAttestationAndProof{jsonifySignedAggregateAndProof(in.SignedAggregateAndProof)})
+	}
+	sszFn := func() ([]byte, error) {
+		elem, err := in.SignedAggregateAndProof.MarshalSSZ()
+		if err != nil {
+			return nil, err
+		}
+		return ssz.MarshalVariableList(elem), nil
+	}
+
+	if err := c.handler.PostSSZWithFallback(ctx, aggregateAndProofsEndpoint, headers, sszFn, jsonFn); err != nil {
 		return nil, err
 	}
 
@@ -32,14 +40,21 @@ func (c *beaconApiValidatorClient) submitSignedAggregateSelectionProof(ctx conte
 }
 
 func (c *beaconApiValidatorClient) submitSignedAggregateSelectionProofElectra(ctx context.Context, in *ethpb.SignedAggregateSubmitElectraRequest) (*ethpb.SignedAggregateSubmitResponse, error) {
-	body, err := json.Marshal([]*structs.SignedAggregateAttestationAndProofElectra{jsonifySignedAggregateAndProofElectra(in.SignedAggregateAndProof)})
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshal SignedAggregateAttestationAndProofElectra")
-	}
 	dataSlot := in.SignedAggregateAndProof.Message.Aggregate.Data.Slot
 	consensusVersion := version.String(slots.ToForkVersion(dataSlot))
 	headers := map[string]string{"Eth-Consensus-Version": consensusVersion}
-	if err = c.handler.Post(ctx, "/eth/v2/validator/aggregate_and_proofs", headers, bytes.NewBuffer(body), nil); err != nil {
+	jsonFn := func() ([]byte, error) {
+		return json.Marshal([]*structs.SignedAggregateAttestationAndProofElectra{jsonifySignedAggregateAndProofElectra(in.SignedAggregateAndProof)})
+	}
+	sszFn := func() ([]byte, error) {
+		elem, err := in.SignedAggregateAndProof.MarshalSSZ()
+		if err != nil {
+			return nil, err
+		}
+		return ssz.MarshalVariableList(elem), nil
+	}
+
+	if err := c.handler.PostSSZWithFallback(ctx, aggregateAndProofsEndpoint, headers, sszFn, jsonFn); err != nil {
 		return nil, err
 	}
 

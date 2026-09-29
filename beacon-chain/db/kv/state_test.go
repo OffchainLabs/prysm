@@ -193,6 +193,47 @@ func TestState_CanSaveRetrieve(t *testing.T) {
 	}
 }
 
+// TestSaveStatesEfficient_AllVersions exercises the efficient state save path for every
+// fork version, so that a fork added to version.All() is covered automatically.
+func TestSaveStatesEfficient_AllVersions(t *testing.T) {
+	// enable historical state representation flag to test this
+	resetCfg := features.InitWithReset(&features.Flags{
+		EnableHistoricalSpaceRepresentation: true,
+	})
+	defer resetCfg()
+
+	// Gloas is included explicitly since it is not yet in version.All().
+	versions := append([]int{}, version.All()...)
+	if version.IsUnsupported(version.Gloas) {
+		versions = append(versions, version.Gloas)
+	}
+
+	for _, v := range versions {
+		t.Run(version.String(v), func(t *testing.T) {
+			db := setupDB(t)
+			st, _ := createState(t, 100, v)
+			require.NoError(t, st.SetValidators(validators(10)))
+
+			r := bytesutil.ToBytes32([]byte(version.String(v)))
+			require.Equal(t, false, db.HasState(t.Context(), r))
+
+			require.NoError(t, db.SaveStatesEfficient(t.Context(), []state.ReadOnlyBeaconState{st}, [][32]byte{r}))
+			require.Equal(t, true, db.HasState(t.Context(), r))
+
+			savedSt, err := db.State(t.Context(), r)
+			require.NoError(t, err)
+
+			// Compare SSZ encodings rather than the proto structs because DeepSSZEqual
+			// does not handle some Gloas primitive types (e.g. BuilderIndex).
+			stSSZ, err := st.MarshalSSZ()
+			require.NoError(t, err)
+			savedStSSZ, err := savedSt.MarshalSSZ()
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, stSSZ, savedStSSZ)
+		})
+	}
+}
+
 func TestState_CanSaveRetrieveValidatorEntries(t *testing.T) {
 	db := setupDB(t)
 

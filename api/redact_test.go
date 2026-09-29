@@ -28,6 +28,26 @@ func TestRedactEndpoint(t *testing.T) {
 			want:     "localhost:4000",
 		},
 		{
+			name:     "grpc ip:port unchanged",
+			endpoint: "127.0.0.1:4000",
+			want:     "127.0.0.1:4000",
+		},
+		{
+			name:     "scheme-less credentials masked",
+			endpoint: "eth:fake-token-not-real@127.0.0.1:4000",
+			want:     "eth:xxxxx@127.0.0.1:4000",
+		},
+		{
+			name:     "unparseable becomes placeholder",
+			endpoint: "http://127.0.0.1:4000\x00",
+			want:     "[invalid endpoint]",
+		},
+		{
+			name:     "unparseable with credentials becomes placeholder",
+			endpoint: "http://user:fake-pass@local host:8080",
+			want:     "[invalid endpoint]",
+		},
+		{
 			name:     "username only still masked",
 			endpoint: "https://eth@bn-lodestar.example.io",
 			want:     "https://eth@bn-lodestar.example.io",
