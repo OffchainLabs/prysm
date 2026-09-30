@@ -498,20 +498,14 @@ func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.
 	}
 
 	var baseSnapshot state.BeaconState
-	// first, try to see if our cache has anything useful here.
-	// we go backwards from the node that we want, and if we find a cached anchor,
-	// we can use that as the base snapshot, and then only apply the diffs from that anchor to the target slot.
+	// try to see if our cache has anything useful.
 	if s.stateDiffCache != nil {
 		for i := len(diffChainItems) - 1; i >= 0; i-- {
 			item := diffChainItems[i]
 			cachedAnchor := s.stateDiffCache.getAnchor(item.level, withExactSlot(primitives.Slot(item.slot)))
 			if cachedAnchor != nil {
 				baseSnapshot = cachedAnchor
-				if i == len(diffChainItems)-1 {
-					diffChainItems = []diffItem{}
-				} else if i < len(diffChainItems)-1 {
-					diffChainItems = diffChainItems[i+1:]
-				}
+				diffChainItems = diffChainItems[i+1:]
 				break
 			}
 		}
