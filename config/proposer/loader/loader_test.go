@@ -1269,7 +1269,17 @@ func TestProposerSettingsLoader(t *testing.T) {
 				},
 			},
 			want:    func() *proposer.Settings { return nil },
-			wantErr: `unknown field "builder_pubkeys"`,
+			wantErr: `unknown field "pubkeys"`,
+		},
+		{
+			name: "non-hex builder auth_data in file is rejected",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/bad-hex-builder-proposer-config.json",
+				},
+			},
+			want:    func() *proposer.Settings { return nil },
+			wantErr: "default_config.builder.builders[0]: decode auth_data: hex string without 0x prefix",
 		},
 		{
 			name: "unknown key from URL is rejected",

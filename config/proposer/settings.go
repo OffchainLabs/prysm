@@ -150,6 +150,7 @@ type BuilderEntry struct {
 	MinBid              *validator.Uint64 `json:"min_bid,omitempty" yaml:"min_bid,omitempty"`
 	MaxExecutionPayment *validator.Uint64 `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"`
 	BuilderBoostFactor  *validator.Uint64 `json:"builder_boost_factor,omitempty" yaml:"builder_boost_factor,omitempty"`
+	decodeErr           error             // set when the source hex did not decode; Validate reports it
 }
 
 // EffectiveAuthData resolves omitted auth_data to the spec default.
@@ -201,6 +202,9 @@ const (
 // Validate checks the entry against the spec size and format limits. Every config source
 // must enforce it: an entry violating the limits cannot be encoded into a block request.
 func (be *BuilderEntry) Validate() error {
+	if be.decodeErr != nil {
+		return be.decodeErr
+	}
 	if be.URL == "" {
 		return errors.New("url is required")
 	}
@@ -450,10 +454,20 @@ func BuilderConfigFromConsensus(from *validatorpb.BuilderConfig) *BuilderConfig 
 	return c
 }
 
+// builderEntryFromConsensus keeps an entry whose hex fails to decode, marked so sanitizeBuilders drops it.
 func builderEntryFromConsensus(from *validatorpb.BuilderEntry) *BuilderEntry {
 	if from == nil {
 		return nil
 	}
+	e, err := DecodeBuilderEntry(from)
+	if err != nil {
+		return &BuilderEntry{URL: from.Url, decodeErr: err}
+	}
+	return e
+}
+
+// DecodeBuilderEntry converts a payload entry, decoding its 0x-hex builder_pubkeys and auth_data.
+func DecodeBuilderEntry(from *validatorpb.BuilderEntry) (*BuilderEntry, error) {
 	e := &BuilderEntry{
 		URL:                 from.Url,
 		MinBid:              from.MinBid,
@@ -461,13 +475,23 @@ func builderEntryFromConsensus(from *validatorpb.BuilderEntry) *BuilderEntry {
 		BuilderBoostFactor:  from.BuilderBoostFactor,
 	}
 	// Treat empty as absent so bolt (nil) and filesystem (empty) round-trips agree.
-	if len(from.Pubkeys) != 0 {
-		e.Pubkeys = bytesutil.SafeCopy2dBytes(from.Pubkeys)
+	for i, raw := range from.BuilderPubkeys {
+		pk, err := hexutil.Decode(raw)
+		if err != nil {
+			return nil, errors.Wrapf(err, "decode builder_pubkeys[%d]", i)
+		}
+		e.Pubkeys = append(e.Pubkeys, pk)
 	}
-	if len(from.AuthData) != 0 {
-		e.AuthData = bytesutil.SafeCopyBytes(from.AuthData)
+	if from.AuthData != nil {
+		ad, err := hexutil.Decode(*from.AuthData)
+		if err != nil {
+			return nil, errors.Wrap(err, "decode auth_data")
+		}
+		if len(ad) != 0 {
+			e.AuthData = ad
+		}
 	}
-	return e
+	return e, nil
 }
 
 // Schema versions for proposer settings. SchemaV1Unset is the proto3 zero value
@@ -641,6 +665,7 @@ func (be *BuilderEntry) Clone() *BuilderEntry {
 		MinBid:              cloneUint64(be.MinBid),
 		MaxExecutionPayment: cloneUint64(be.MaxExecutionPayment),
 		BuilderBoostFactor:  cloneUint64(be.BuilderBoostFactor),
+		decodeErr:           be.decodeErr,
 	}
 }
 
@@ -687,14 +712,19 @@ func (be *BuilderEntry) toConsensus() *validatorpb.BuilderEntry {
 	if be == nil {
 		return nil
 	}
-	return &validatorpb.BuilderEntry{
+	e := &validatorpb.BuilderEntry{
 		Url:                 be.URL,
-		Pubkeys:             bytesutil.SafeCopy2dBytes(be.Pubkeys),
-		AuthData:            bytesutil.SafeCopyBytes(be.AuthData),
 		MinBid:              cloneUint64(be.MinBid),
 		MaxExecutionPayment: cloneUint64(be.MaxExecutionPayment),
 		BuilderBoostFactor:  cloneUint64(be.BuilderBoostFactor),
 	}
+	for _, pk := range be.Pubkeys {
+		e.BuilderPubkeys = append(e.BuilderPubkeys, hexutil.Encode(pk))
+	}
+	if len(be.AuthData) != 0 {
+		e.AuthData = new(hexutil.Encode(be.AuthData))
+	}
+	return e
 }
 
 // WarnDeprecatedSchema logs a warning when legacy v1 builder content is loaded
