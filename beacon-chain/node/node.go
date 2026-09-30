@@ -41,6 +41,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/sweepthreshold"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -109,6 +110,7 @@ type BeaconNode struct {
 	builderCircuitBreaker     *cache.BuilderCircuitBreaker
 	payloadIDCache            *cache.PayloadIDCache
 	executionPayloadCache     *cache.ExecutionPayloadEnvelopeCache
+	mockSweepThresholdPool    *sweepthreshold.MockPool
 	stateFeed                 *event.Feed
 	blockFeed                 *event.Feed
 	opFeed                    *event.Feed
@@ -176,6 +178,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		builderCircuitBreaker:     cache.NewBuilderCircuitBreaker(),
 		payloadIDCache:            cache.NewPayloadIDCache(),
 		executionPayloadCache:     cache.NewExecutionPayloadEnvelopeCache(),
+		mockSweepThresholdPool:    sweepthreshold.NewMockPool(),
 		slasherBlockHeadersFeed:   new(event.Feed),
 		slasherAttestationsFeed:   new(event.Feed),
 		serviceFlagOpts:           &serviceFlagOpts{},
@@ -1053,6 +1056,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		HighestBidCache:                  regularSyncService.HighestExecutionPayloadBidCache(),
 		PayloadIDCache:                   b.payloadIDCache,
 		ExecutionPayloadEnvelopeCache:    b.executionPayloadCache,
+		MockSweepThresholdPool:           b.mockSweepThresholdPool,
 		LCStore:                          b.lcStore,
 		GraffitiInfo:                     web3Service.GraffitiInfo(),
 		VerifierWaiter:                   b.verifyInitWaiter,

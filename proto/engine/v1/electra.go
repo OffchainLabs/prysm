@@ -348,8 +348,29 @@ func (e *ExecutionRequests) FlattenRequests() ([]hexutil.Bytes, error) {
 
 // FlattenRequests encodes the Gloas execution requests (including builder
 // requests) for the engine API.
+//
+// DEVNET ONLY: set sweep threshold requests (EIP-8148, type 0x05) are dropped before
+// the list reaches the execution client. They are mocked on the consensus side because
+// no execution client emits them yet, so the execution block header's requests_hash
+// does not commit to them. Passing them to newPayload would make the engine recompute
+// a different block hash and reject the payload as INVALID.
+//
+// TODO: Remove this filter once an execution client actually produces type 0x05
+// requests; at that point the engine must see them for requests_hash to match.
 func (e *ExecutionRequestsGloas) FlattenRequests() ([]hexutil.Bytes, error) {
-	return EncodeExecutionRequestsGloas(e)
+	if e == nil || len(e.SweepThresholds) == 0 {
+		return EncodeExecutionRequestsGloas(e)
+	}
+
+	forEngine := &ExecutionRequestsGloas{
+		Deposits:        e.Deposits,
+		Withdrawals:     e.Withdrawals,
+		Consolidations:  e.Consolidations,
+		BuilderDeposits: e.BuilderDeposits,
+		BuilderExits:    e.BuilderExits,
+	}
+
+	return EncodeExecutionRequestsGloas(forEngine)
 }
 
 type sszUnmarshaler interface {

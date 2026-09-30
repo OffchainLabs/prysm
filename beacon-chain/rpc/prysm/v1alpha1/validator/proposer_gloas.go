@@ -6,12 +6,14 @@ import (
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -46,6 +48,9 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 			return nil, status.Errorf(codes.Internal, "Could not get local payload and no P2P bid fallback: %v", fbErr)
 		}
 	} else {
+		// DEVNET ONLY. Must run before setExecutionPayloadBid, which commits to execution_requests_root.
+		vs.injectMockSweepThresholdRequests(local, sBlk.Block().Slot())
+
 		// The circuit breaker gate is applied here rather than at bid selection so the builder-API
 		// round trip is skipped too.
 		epoch := slots.ToEpoch(sBlk.Block().Slot())
@@ -138,4 +143,40 @@ func (vs *Server) gloasPayloadValue(sBlk interfaces.SignedBeaconBlock, local *co
 	}
 	value := new(big.Int).SetUint64(uint64(bid.Message.Value))
 	return value.Mul(value, big.NewInt(1e9))
+}
+
+// injectMockSweepThresholdRequests appends devnet-only EIP-8148 set sweep threshold requests
+// to the payload the execution client just returned, so the request type can be exercised
+// before any execution client implements EIP-7685 request type 0x05. Requests are staged
+// via POST /prysm/v1/debug/beacon/sweep_threshold_requests and drained here exactly once.
+func (vs *Server) injectMockSweepThresholdRequests(local *consensusblocks.GetPayloadResponse, slot primitives.Slot) {
+	if local == nil || local.ExecutionRequestsGloas == nil {
+		return
+	}
+
+	mocked := vs.MockSweepThresholdPool.Drain()
+	if len(mocked) == 0 {
+		return
+	}
+
+	requests := local.ExecutionRequestsGloas
+	room := int(params.BeaconConfig().MaxSetSweepThresholdRequestsPerPayload) - len(requests.SweepThresholds)
+	if room <= 0 {
+		log.WithField("slot", slot).Warning("Dropping mocked set sweep threshold requests, payload is already at the per-payload limit")
+		return
+	}
+
+	if len(mocked) > room {
+		log.WithFields(logrus.Fields{
+			"slot":    slot,
+			"dropped": len(mocked) - room,
+		}).Warning("Dropping mocked set sweep threshold requests over the per-payload limit")
+		mocked = mocked[:room]
+	}
+
+	requests.SweepThresholds = append(requests.SweepThresholds, mocked...)
+	log.WithFields(logrus.Fields{
+		"slot":  slot,
+		"count": len(mocked),
+	}).Warning("DEVNET ONLY: injected mocked EIP-8148 set sweep threshold requests into the local payload")
 }
