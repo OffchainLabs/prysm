@@ -495,11 +495,7 @@ func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.
 		lastSeenDiffRelSlot = diffSlot
 	}
 
-	baseSnapshot, err := s.getFullSnapshot(baseAnchorSlot)
-	if err != nil {
-		return nil, nil, err
-	}
-
+	// Reject incomplete chains before repeatedly decoding a large snapshot during replay searches.
 	diffChain := make([]hdiff.HdiffBytes, 0, len(diffChainItems))
 	for _, item := range diffChainItems {
 		diff, err := s.getDiff(item.level, item.slot)
@@ -507,6 +503,11 @@ func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.
 			return nil, nil, err
 		}
 		diffChain = append(diffChain, diff)
+	}
+
+	baseSnapshot, err := s.getFullSnapshot(baseAnchorSlot)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return baseSnapshot, diffChain, nil

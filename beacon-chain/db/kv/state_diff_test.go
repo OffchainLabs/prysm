@@ -360,6 +360,63 @@ func TestStateDiff_EmptyLevelDoesNotReturnEarlierState(t *testing.T) {
 	require.ErrorIs(t, err, ErrNotFoundState)
 }
 
+func TestStateDiff_ChecksMissingDiffBeforeSnapshot(t *testing.T) {
+	oldFlags := *flags.Get()
+	t.Cleanup(func() { flags.Init(&oldFlags) })
+	setStateDiffExponents([]int{7, 6, 5})
+	for _, missing := range []struct {
+		level int
+		slot  uint64
+	}{{1, 64}, {2, 96}} {
+		t.Run(fmt.Sprintf("level=%d", missing.level), func(t *testing.T) {
+			db := setupDB(t)
+			require.NoError(t, setOffsetInDB(db, 0))
+			for _, slot := range []primitives.Slot{0, 64, 96} {
+				st, _ := createState(t, slot, version.Phase0)
+				require.NoError(t, db.saveStateByDiff(t.Context(), st))
+			}
+			require.NoError(t, db.db.Update(func(tx *bbolt.Tx) error {
+				bucket := tx.Bucket(stateDiffBucket)
+				if err := bucket.Delete(makeKeyForStateDiffTree(0, 0)); err != nil {
+					return err
+				}
+				return bucket.Delete(append(makeKeyForStateDiffTree(missing.level, missing.slot), stateSuffix...))
+			}))
+			db.stateDiffCache.clearAnchors()
+			_, _, err := db.getBaseAndDiffChain(0, 96)
+			require.ErrorIs(t, err, ErrNotFoundState)
+			require.ErrorContains(t, fmt.Sprintf("level %d slot %d", missing.level, missing.slot), err)
+		})
+	}
+}
+
+func BenchmarkStateDiffMissingHistory(b *testing.B) {
+	oldFlags := *flags.Get()
+	b.Cleanup(func() { flags.Init(&oldFlags) })
+	setStateDiffExponents([]int{7, 6, 5})
+	db := setupDB(b)
+	require.NoError(b, setOffsetInDB(db, 0))
+	st, err := util.NewBeaconState()
+	require.NoError(b, err)
+	validators := make([]*ethpb.Validator, 65536)
+	for i := range validators {
+		pubkey := make([]byte, 48)
+		binary.LittleEndian.PutUint64(pubkey, uint64(i))
+		validators[i] = &ethpb.Validator{PublicKey: pubkey, WithdrawalCredentials: make([]byte, 32)}
+	}
+	require.NoError(b, st.SetValidators(validators))
+	require.NoError(b, db.saveFullSnapshot(st))
+	db.stateDiffCache.clearAnchors()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		_, err := db.stateByDiff(b.Context(), 96)
+		if !errors.Is(err, ErrNotFoundState) {
+			b.Fatalf("expected missing history, got %v", err)
+		}
+	}
+}
+
 func TestStateDiff_CorruptHistoryIsNotMissing(t *testing.T) {
 	oldFlags := *flags.Get()
 	t.Cleanup(func() { flags.Init(&oldFlags) })
