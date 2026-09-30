@@ -23,6 +23,6 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
 
 FROM gcr.io/distroless/cc-debian12
 ARG BIN=beacon-chain
-LABEL org.opencontainers.image.source="https://github.com/prysmaticlabs/prysm"
+LABEL org.opencontainers.image.source="https://github.com/OffchainLabs/prysm"
 COPY --from=build /out/${BIN} /entrypoint
 ENTRYPOINT ["/entrypoint"]

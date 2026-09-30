@@ -24,7 +24,7 @@ FROM ${BASE}
 ARG BIN
 ARG TAG
 ARG TARGETARCH
-LABEL org.opencontainers.image.source="https://github.com/prysmaticlabs/prysm"
+LABEL org.opencontainers.image.source="https://github.com/OffchainLabs/prysm"
 COPY --from=rootfs /rootfs/ /
 COPY dist/${BIN}-${TAG}-linux-${TARGETARCH} /${BIN}
 ENTRYPOINT ["/entrypoint"]
