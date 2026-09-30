@@ -41,9 +41,10 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 	var builderURL string
 	local, err := vs.getLocalPayload(ctx, sBlk.Block(), head, parentFull)
 	if err != nil {
-		log.WithError(err).Warn("Could not get local payload, falling back to P2P bid")
-		if fbErr := vs.setP2PBidFallback(ctx, sBlk, head, parentFull); fbErr != nil {
-			return nil, status.Errorf(codes.Internal, "Could not get local payload and no P2P bid fallback: %v", fbErr)
+		log.WithError(err).Warn("Could not get local payload, falling back to remote bids")
+		var fbErr error
+		if builderURL, fbErr = vs.setRemoteBidFallback(ctx, sBlk, head, parentFull, skipBuilder, builderConfig); fbErr != nil {
+			return nil, status.Errorf(codes.Internal, "Could not get local payload and no remote bid fallback: %v", fbErr)
 		}
 	} else {
 		// The circuit breaker gate is applied here rather than at bid selection so the builder-API
@@ -51,28 +52,8 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 		epoch := slots.ToEpoch(sBlk.Block().Slot())
 		selfBuildOnly := local.OverrideBuilder || skipBuilder || vs.BuilderCircuitBreaker.SelfBuildOnly(epoch)
 		var builderWin *winningBuilderBid
-		if !selfBuildOnly && len(builderConfig.GetBuilders()) > 0 {
-			val, valErr := head.ValidatorAtIndexReadOnly(sBlk.Block().ProposerIndex())
-			parentGasLimit, glErr := vs.ForkchoiceFetcher.GasLimit(sBlk.Block().ParentRoot(), bytesutil.ToBytes32(local.ExecutionData.ParentHash()))
-			switch {
-			case valErr != nil:
-				log.WithError(valErr).Error("Could not get proposer for builder bid request")
-			case glErr != nil:
-				log.WithError(glErr).Error("Could not get parent gas limit for builder bid request")
-			default:
-				pref := vs.proposerPreferenceForProposal(ctx, head, sBlk.Block().Slot(), sBlk.Block().ProposerIndex())
-				feeRecipient := pref.FeeRecipientOrDefault()
-				builderWin = vs.getBuilderExecutionPayloadBid(ctx, head, &builderBidQuery{
-					slot:           sBlk.Block().Slot(),
-					parentRoot:     sBlk.Block().ParentRoot(),
-					parentHash:     bytesutil.ToBytes32(local.ExecutionData.ParentHash()),
-					pubkey:         val.PublicKey(),
-					feeRecipient:   feeRecipient[:],
-					parentGasLimit: parentGasLimit,
-					targetGasLimit: pref.GasLimitOr(parentGasLimit),
-					entries:        builderConfig.GetBuilders(),
-				})
-			}
+		if !selfBuildOnly {
+			builderWin = vs.builderBidForProposal(ctx, sBlk, head, bytesutil.ToBytes32(local.ExecutionData.ParentHash()), builderConfig)
 		}
 		src, bidErr := vs.setExecutionPayloadBid(ctx, sBlk, head, local, builderWin, builderConfig, selfBuildOnly)
 		if bidErr != nil {

@@ -200,6 +200,34 @@ func p2pExecutionPaymentCap(head state.BeaconState, builderConfig *ethpb.Builder
 	return maxCap
 }
 
+func (vs *Server) builderBidForProposal(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, parentHash [32]byte, builderConfig *ethpb.BuilderConfig) *winningBuilderBid {
+	if len(builderConfig.GetBuilders()) == 0 {
+		return nil
+	}
+	val, err := head.ValidatorAtIndexReadOnly(sBlk.Block().ProposerIndex())
+	if err != nil {
+		log.WithError(err).Error("Could not get proposer for builder bid request")
+		return nil
+	}
+	parentGasLimit, err := vs.ForkchoiceFetcher.GasLimit(sBlk.Block().ParentRoot(), parentHash)
+	if err != nil {
+		log.WithError(err).Error("Could not get parent gas limit for builder bid request")
+		return nil
+	}
+	pref := vs.proposerPreferenceForProposal(ctx, head, sBlk.Block().Slot(), sBlk.Block().ProposerIndex())
+	feeRecipient := pref.FeeRecipientOrDefault()
+	return vs.getBuilderExecutionPayloadBid(ctx, head, &builderBidQuery{
+		slot:           sBlk.Block().Slot(),
+		parentRoot:     sBlk.Block().ParentRoot(),
+		parentHash:     parentHash,
+		pubkey:         val.PublicKey(),
+		feeRecipient:   feeRecipient[:],
+		parentGasLimit: parentGasLimit,
+		targetGasLimit: pref.GasLimitOr(parentGasLimit),
+		entries:        builderConfig.GetBuilders(),
+	})
+}
+
 // builderBidQuery carries the proposal context builder bids are requested and validated against.
 type builderBidQuery struct {
 	slot           primitives.Slot
@@ -360,27 +388,53 @@ func (vs *Server) submitBlockToBuilder(block interfaces.ReadOnlySignedBeaconBloc
 	}
 }
 
-// setP2PBidFallback uses a cached P2P bid when the local EL self-build is unavailable.
-// The circuit breaker is deliberately not consulted here: with no local payload at all, a block
-// carrying a possibly-undelivered bid still beats missing the slot outright.
-func (vs *Server) setP2PBidFallback(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, parentFull bool) error {
-	if vs.HighestBidCache == nil {
-		return errors.New("highest bid cache is nil")
-	}
+// The circuit breaker is deliberately not consulted here, with no local payload a possibly-undelivered bid still beats missing the slot.
+func (vs *Server) setRemoteBidFallback(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, parentFull, skipBuilder bool, builderConfig *ethpb.BuilderConfig) (string, error) {
 	slot := sBlk.Block().Slot()
 	parentRoot := sBlk.Block().ParentRoot()
 	parentHash, err := vs.getParentBlockHash(ctx, head, slot, parentRoot, parentFull)
 	if err != nil {
-		return errors.Wrap(err, "could not get parent block hash")
+		return "", errors.Wrap(err, "could not get parent block hash")
 	}
-	cached, ok := vs.HighestBidCache.Get(slot, bytesutil.ToBytes32(parentHash), parentRoot)
-	if !ok {
-		return errors.New("no cached P2P bid available")
+	ph := bytesutil.ToBytes32(parentHash)
+
+	var chosen *ethpb.SignedExecutionPayloadBid
+	var chosenURL string
+	var chosenEffective, chosenBoosted primitives.Gwei
+	src := bidSourceP2P
+	if vs.HighestBidCache != nil {
+		if cached, ok := vs.HighestBidCache.Get(slot, ph, parentRoot); ok {
+			boostFactor := uint64(proposer.NeutralBuilderBoostFactor)
+			if builderConfig != nil {
+				boostFactor = builderConfig.BuilderBoostFactor
+			}
+			chosen = cached
+			chosenEffective = effectiveBidValue(cached, p2pExecutionPaymentCap(head, builderConfig, cached))
+			chosenBoosted = boostedBidValue(chosenEffective, boostFactor)
+		}
 	}
-	if err := sBlk.SetSignedExecutionPayloadBid(cached); err != nil {
-		return errors.Wrap(err, "could not set cached P2P execution payload bid")
+	// skip_mev_boost suppresses Builder-API solicitation but not P2P bids, which arrive regardless.
+	if !skipBuilder {
+		if win := vs.builderBidForProposal(ctx, sBlk, head, ph, builderConfig); win != nil {
+			effective := effectiveBidValue(win.bid, uint64(win.entry.MaxExecutionPayment))
+			if boosted := boostedBidValue(effective, win.entry.BuilderBoostFactor); chosen == nil || boosted > chosenBoosted {
+				chosen, chosenURL, chosenEffective, src = win.bid, string(win.entry.GetUrl()), effective, bidSourceBuilderAPI
+			}
+		}
 	}
-	return nil
+	if chosen == nil {
+		return "", errors.New("no cached P2P or builder bid available")
+	}
+	if err := sBlk.SetSignedExecutionPayloadBid(chosen); err != nil {
+		return "", errors.Wrap(err, "could not set remote execution payload bid")
+	}
+	log.WithFields(logrus.Fields{
+		"slot":      slot,
+		"source":    src,
+		"builder":   chosen.Message.BuilderIndex,
+		"valueGwei": uint64(chosenEffective),
+	}).Info("Chose payload bid without local payload")
+	return chosenURL, nil
 }
 
 func (vs *Server) cachedP2PBid(sBlk interfaces.SignedBeaconBlock, local *consensusblocks.GetPayloadResponse) *ethpb.SignedExecutionPayloadBid {
