@@ -490,9 +490,7 @@ func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.
 			continue
 		}
 		level := i + 1
-		if s.stateDiffCache != nil && !s.stateDiffCache.levelHasData(level) {
-			continue
-		}
+		// Every distinct ancestor is required, even if its cache level is empty.
 		diffChainItems = append(diffChainItems, diffItem{level: level, slot: diffSlot + offset})
 		lastSeenDiffRelSlot = diffSlot
 	}
