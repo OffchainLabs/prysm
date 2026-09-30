@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
@@ -460,6 +461,10 @@ func FuzzComputeLPS(f *testing.F) {
 
 // FuzzDiffToBalances tests balance diff computation
 func FuzzDiffToBalances(f *testing.F) {
+	f.Add([]byte{}, []byte{})
+	f.Add([]byte{}, binary.LittleEndian.AppendUint64(nil, ^uint64(0)))
+	f.Add(binary.LittleEndian.AppendUint64(nil, ^uint64(0)), make([]byte, 8))
+	f.Add(make([]byte, 16), make([]byte, 8))
 	f.Fuzz(func(t *testing.T, sourceData, targetData []byte) {
 		// Convert byte data to balance arrays
 		var sourceBalances, targetBalances []uint64
@@ -480,23 +485,22 @@ func FuzzDiffToBalances(f *testing.F) {
 		source, _ := util.DeterministicGenesisStateElectra(t, 1)
 		target, _ := util.DeterministicGenesisStateElectra(t, 1)
 
-		if len(sourceBalances) > 0 {
-			_ = source.SetBalances(sourceBalances)
-		}
-		if len(targetBalances) > 0 {
-			_ = target.SetBalances(targetBalances)
-		}
+		require.NoError(t, source.SetBalances(sourceBalances))
+		require.NoError(t, target.SetBalances(targetBalances))
 
-		result, err := diffToBalances(source, target)
-
-		// If no error, verify result consistency
-		if err == nil && len(result) > 0 {
-			// Result length should match target length
-			if len(result) != len(target.Balances()) {
-				t.Errorf("diffToBalances result length mismatch: got %d, expected %d",
-					len(result), len(target.Balances()))
-			}
+		encoded, err := diffToBalances(source, target)
+		if len(targetBalances) < len(sourceBalances) {
+			require.NotNil(t, err)
+			return
 		}
+		require.NoError(t, err)
+		want, err := legacyBalanceDiff(source, target)
+		require.NoError(t, err)
+		require.DeepEqual(t, want, encoded)
+
+		result, err := newBalancesDiff(encoded)
+		require.NoError(t, err)
+		require.Equal(t, len(targetBalances), len(result))
 	})
 }
 

@@ -149,6 +149,8 @@ type hdiff struct {
 	stateDiff      *stateDiff
 	validatorDiffs []validatorDiff
 	balancesDiff   []int64
+	// Populated during diff creation instead of balancesDiff, which is used when decoding.
+	serializedBalances []byte
 }
 
 // minValidatorDiffSize is the serialized size of a validatorDiff with nil PublicKey and WithdrawalCredentials.
@@ -1322,12 +1324,15 @@ func (h *hdiff) serialize() (HdiffBytes, error) {
 	}
 	serializedState := snappy.Encode(nil, stateBytes)
 
-	bals := make([]byte, 0, 8+len(h.balancesDiff)*8)
-	bals = binary.LittleEndian.AppendUint64(bals, uint64(len(h.balancesDiff)))
-	for _, b := range h.balancesDiff {
-		bals = binary.LittleEndian.AppendUint64(bals, uint64(b))
+	serializedBalances := h.serializedBalances
+	if serializedBalances == nil {
+		bals := make([]byte, 0, 8+len(h.balancesDiff)*8)
+		bals = binary.LittleEndian.AppendUint64(bals, uint64(len(h.balancesDiff)))
+		for _, b := range h.balancesDiff {
+			bals = binary.LittleEndian.AppendUint64(bals, uint64(b))
+		}
+		serializedBalances = snappy.Encode(nil, bals)
 	}
-	serializedBalances := snappy.Encode(nil, bals)
 
 	vals := make([]byte, 0)
 	vals = binary.LittleEndian.AppendUint64(vals, uint64(len(h.validatorDiffs)))
@@ -1476,25 +1481,57 @@ func validatorsEqual(s, t state.ReadOnlyValidator) bool {
 	return s.WithdrawableEpoch() == t.WithdrawableEpoch()
 }
 
-// diffToBalances computes the difference between two BeaconStates' balances.
-func diffToBalances(source, target state.ReadOnlyBeaconState) ([]int64, error) {
-	sBalances := source.Balances()
-	tBalances := target.Balances()
-	if len(tBalances) < len(sBalances) {
-		return nil, errors.Errorf("target balances length %d is less than source %d", len(tBalances), len(sBalances))
+const balanceDiffBatchSize = 1024
+
+type balanceRangeReader interface {
+	ReadBalancesAt(start primitives.ValidatorIndex, dst []uint64) error
+}
+
+func readBalanceRange(st state.ReadOnlyBeaconState, start int, dst []uint64) error {
+	if reader, ok := st.(balanceRangeReader); ok {
+		return reader.ReadBalancesAt(primitives.ValidatorIndex(start), dst)
 	}
-	diffs := make([]int64, len(tBalances))
-	for i, s := range sBalances {
-		if tBalances[i] >= s {
-			diffs[i] = int64(tBalances[i] - s)
-		} else {
-			diffs[i] = -int64(s - tBalances[i])
+	for i := range dst {
+		v, err := st.BalanceAtIndex(primitives.ValidatorIndex(start + i))
+		if err != nil {
+			return errors.Wrapf(err, "balance at index %d", start+i)
+		}
+		dst[i] = v
+	}
+	return nil
+}
+
+// diffToBalances computes balance differences directly into their Snappy-compressed encoding.
+func diffToBalances(source, target state.ReadOnlyBeaconState) ([]byte, error) {
+	sourceCount, targetCount := source.BalancesLength(), target.BalancesLength()
+	if sourceCount < 0 || targetCount < sourceCount {
+		return nil, errors.Errorf("invalid balances lengths: source %d, target %d", sourceCount, targetCount)
+	}
+	if targetCount > (int(^uint(0)>>1)-8)/8 {
+		return nil, errors.New("balances diff length overflows int")
+	}
+	data := make([]byte, 8+targetCount*8)
+	binary.LittleEndian.PutUint64(data, uint64(targetCount))
+	sourceBalances := make([]uint64, min(targetCount, balanceDiffBatchSize))
+	targetBalances := make([]uint64, len(sourceBalances))
+	for start := 0; start < targetCount; start += balanceDiffBatchSize {
+		count := min(targetCount-start, balanceDiffBatchSize)
+		if err := readBalanceRange(target, start, targetBalances[:count]); err != nil {
+			return nil, errors.Wrapf(err, "target balance at index %d", start)
+		}
+		sourceCountInBatch := min(count, max(sourceCount-start, 0))
+		if sourceCountInBatch > 0 {
+			if err := readBalanceRange(source, start, sourceBalances[:sourceCountInBatch]); err != nil {
+				return nil, errors.Wrapf(err, "source balance at index %d", start)
+			}
+		}
+		clear(sourceBalances[sourceCountInBatch:count])
+		for i, t := range targetBalances[:count] {
+			// Unsigned subtraction preserves the existing two's-complement delta encoding.
+			binary.LittleEndian.PutUint64(data[8+(start+i)*8:], t-sourceBalances[i])
 		}
 	}
-	for i, t := range tBalances[len(sBalances):] {
-		diffs[i+len(sBalances)] = int64(t) // lint:ignore uintcast
-	}
-	return diffs, nil
+	return snappy.Encode(nil, data), nil
 }
 
 func diffInternal(source, target state.ReadOnlyBeaconState) (*hdiff, error) {
@@ -1511,9 +1548,9 @@ func diffInternal(source, target state.ReadOnlyBeaconState) (*hdiff, error) {
 		return nil, err
 	}
 	return &hdiff{
-		stateDiff:      stateDiff,
-		validatorDiffs: validatorDiffs,
-		balancesDiff:   balancesDiffs,
+		stateDiff:          stateDiff,
+		validatorDiffs:     validatorDiffs,
+		serializedBalances: balancesDiffs,
 	}, nil
 }
 

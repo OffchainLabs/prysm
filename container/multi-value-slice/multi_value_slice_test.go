@@ -2,6 +2,7 @@ package mvslice
 
 import (
 	"math/rand"
+	"slices"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -102,6 +103,54 @@ func TestValue(t *testing.T) {
 	assert.Equal(t, 1, v[0])
 	assert.Equal(t, 2, v[1])
 	assert.Equal(t, 3, v[2])
+}
+
+func TestReadAt(t *testing.T) {
+	s := setup()
+	for _, id := range []uint64{1, 2, 999} {
+		obj := &testObject{id: id}
+		want := s.Value(obj)
+		for start := 0; start <= len(want); start++ {
+			for count := 0; count <= len(want)-start; count++ {
+				dst := make([]int, count)
+				require.NoError(t, s.ReadAt(obj, uint64(start), dst))
+				require.Equal(t, true, slices.Equal(want[start:start+count], dst))
+				if count > 0 {
+					dst[0] = -1
+				}
+				require.Equal(t, true, slices.Equal(want, s.Value(obj)))
+			}
+		}
+		for _, start := range []uint64{uint64(len(want)), uint64(len(want) + 1), ^uint64(0)} {
+			dst := []int{-1, -2}
+			err := s.ReadAt(obj, start, dst)
+			require.ErrorIs(t, err, ErrOutOfBounds)
+			require.DeepEqual(t, []int{-1, -2}, dst)
+		}
+		require.ErrorIs(t, s.ReadAt(obj, uint64(len(want)+1), nil), ErrOutOfBounds)
+	}
+	t.Run("empty", func(t *testing.T) {
+		s := &Slice[int]{}
+		s.Init(nil)
+		require.NoError(t, s.ReadAt(&testObject{}, 0, nil))
+		require.ErrorIs(t, s.ReadAt(&testObject{}, 0, make([]int, 1)), ErrOutOfBounds)
+	})
+	t.Run("shared and appended without overrides", func(t *testing.T) {
+		s := &Slice[int]{}
+		s.Init([]int{1, 2, 3})
+		obj := &testObject{}
+		dst := make([]int, 2)
+		require.NoError(t, s.ReadAt(obj, 1, dst))
+		require.DeepEqual(t, []int{2, 3}, dst)
+		s.Append(obj, 4)
+		require.NoError(t, s.ReadAt(obj, 2, dst))
+		require.DeepEqual(t, []int{3, 4}, dst)
+	})
+	t.Run("missing appended value", func(t *testing.T) {
+		s := setup()
+		s.cachedLengths[1] = 8
+		require.ErrorIs(t, s.ReadAt(&testObject{id: 1}, 7, make([]int, 1)), ErrOutOfBounds)
+	})
 }
 
 func TestAt(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	mvslice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -289,6 +290,20 @@ func (b *BeaconState) BalancesLength() int {
 		return 0
 	}
 	return b.balancesMultiValue.Len(b)
+}
+
+// ReadBalancesAt copies a balance range into caller-owned dst without materializing the full list.
+func (b *BeaconState) ReadBalancesAt(start primitives.ValidatorIndex, dst []uint64) error {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	if b.balancesMultiValue == nil {
+		if start == 0 && len(dst) == 0 {
+			return nil
+		}
+		return errors.Wrap(mvslice.ErrOutOfBounds, "balance range")
+	}
+	return b.balancesMultiValue.ReadAt(b, uint64(start), dst)
 }
 
 // Slashings of validators on the beacon chain.

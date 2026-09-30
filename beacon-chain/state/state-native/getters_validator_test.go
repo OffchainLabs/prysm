@@ -1,6 +1,8 @@
 package state_native_test
 
 import (
+	"slices"
+	"sync"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -68,6 +70,63 @@ func TestValidatorIndexes(t *testing.T) {
 		readOnlyBytes := readOnlyState.PublicKey()
 		require.NotEmpty(t, readOnlyBytes)
 		require.Equal(t, hexutil.Encode(readOnlyBytes[:]), hexutil.Encode(byteValue[:]))
+	})
+}
+
+func TestReadBalancesAt(t *testing.T) {
+	base, err := statenative.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{Balances: []uint64{10, 20, 30}})
+	require.NoError(t, err)
+	copyState := base.Copy()
+	require.NoError(t, copyState.UpdateBalancesAtIndex(1, 99))
+	require.NoError(t, copyState.AppendBalance(40))
+	for _, st := range []state.BeaconState{base, copyState} {
+		reader := st.(*statenative.BeaconState)
+		want := st.Balances()
+		dst := make([]uint64, len(want))
+		require.NoError(t, reader.ReadBalancesAt(0, dst))
+		require.DeepEqual(t, want, dst)
+		dst[0] = 999
+		require.DeepEqual(t, want, st.Balances())
+		require.NoError(t, reader.ReadBalancesAt(1, dst[:2]))
+		require.DeepEqual(t, want[1:3], dst[:2])
+		require.NoError(t, reader.ReadBalancesAt(primitives.ValidatorIndex(len(want)), nil))
+		for _, start := range []primitives.ValidatorIndex{primitives.ValidatorIndex(len(want)), ^primitives.ValidatorIndex(0)} {
+			before := slices.Clone(dst)
+			require.ErrorContains(t, "out of bounds", reader.ReadBalancesAt(start, dst))
+			require.DeepEqual(t, before, dst)
+		}
+	}
+	t.Run("nil balances", func(t *testing.T) {
+		st := &statenative.BeaconState{}
+		require.NoError(t, st.ReadBalancesAt(0, nil))
+		require.ErrorContains(t, "out of bounds", st.ReadBalancesAt(1, nil))
+		require.ErrorContains(t, "out of bounds", st.ReadBalancesAt(0, make([]uint64, 1)))
+	})
+	t.Run("concurrent reads and writes", func(t *testing.T) {
+		var wg sync.WaitGroup
+		errs := make(chan error, 2)
+		wg.Go(func() {
+			for i := range 100 {
+				if err := base.UpdateBalancesAtIndex(0, uint64(i)); err != nil {
+					errs <- err
+					return
+				}
+			}
+		})
+		wg.Go(func() {
+			var dst [3]uint64
+			for range 100 {
+				if err := base.(*statenative.BeaconState).ReadBalancesAt(0, dst[:]); err != nil {
+					errs <- err
+					return
+				}
+			}
+		})
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			require.NoError(t, err)
+		}
 	})
 }
 

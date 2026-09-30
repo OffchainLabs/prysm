@@ -383,8 +383,11 @@ func Test_diffInternal(t *testing.T) {
 		require.NotNil(t, hdiff)
 		require.Equal(t, 0, len(hdiff.validatorDiffs))
 		// Balance diff should have same length as validators but all zeros
-		require.Equal(t, len(source.Balances()), len(hdiff.balancesDiff))
-		for _, diff := range hdiff.balancesDiff {
+		require.IsNil(t, hdiff.balancesDiff)
+		balances, err := newBalancesDiff(hdiff.serializedBalances)
+		require.NoError(t, err)
+		require.Equal(t, len(source.Balances()), len(balances))
+		for _, diff := range balances {
 			require.Equal(t, int64(0), diff)
 		}
 	})
@@ -917,7 +920,9 @@ func Test_diffToBalances(t *testing.T) {
 	target := source.Copy()
 
 	t.Run("no balance changes", func(t *testing.T) {
-		diffs, err := diffToBalances(source, target)
+		encoded, err := diffToBalances(source, target)
+		require.NoError(t, err)
+		diffs, err := newBalancesDiff(encoded)
 		require.NoError(t, err)
 		// Balance diff should have same length as validators but all zeros
 		require.Equal(t, len(source.Balances()), len(diffs))
@@ -933,7 +938,9 @@ func Test_diffToBalances(t *testing.T) {
 		bals[5] += 2000
 		require.NoError(t, target.SetBalances(bals))
 
-		diffs, err := diffToBalances(source, target)
+		encoded, err := diffToBalances(source, target)
+		require.NoError(t, err)
+		diffs, err := newBalancesDiff(encoded)
 		require.NoError(t, err)
 
 		// Should have diffs for changed balances only
@@ -966,7 +973,9 @@ func Test_newBalancesDiff(t *testing.T) {
 	require.NoError(t, target.SetBalances(bals))
 
 	// Create diff and serialize
-	originalDiffs, err := diffToBalances(source, target)
+	encoded, err := diffToBalances(source, target)
+	require.NoError(t, err)
+	originalDiffs, err := newBalancesDiff(encoded)
 	require.NoError(t, err)
 
 	hdiffBytes, err := Diff(source, target)
@@ -999,7 +1008,9 @@ func Test_applyBalancesDiff(t *testing.T) {
 	require.NoError(t, target.SetBalances(bals))
 
 	// Create balance diffs
-	diffs, err := diffToBalances(source, target)
+	encoded, err := diffToBalances(source, target)
+	require.NoError(t, err)
+	diffs, err := newBalancesDiff(encoded)
 	require.NoError(t, err)
 
 	// Apply diffs to source
@@ -1526,7 +1537,7 @@ func BenchmarkDeserialization(b *testing.B) {
 	}
 }
 
-// BenchmarkBalanceDiff measures balance diff computation
+// BenchmarkBalanceDiff measures balance diff computation and encoding.
 func BenchmarkBalanceDiff(b *testing.B) {
 	sizes := []uint64{100, 500, 1000, 5000, 10000}
 

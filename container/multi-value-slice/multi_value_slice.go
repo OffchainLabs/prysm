@@ -256,6 +256,38 @@ func (s *Slice[V]) At(obj Identifiable, index uint64) (V, error) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
+	return s.at(obj, index)
+}
+
+// ReadAt copies a range of the object's values into dst under a single read lock.
+func (s *Slice[V]) ReadAt(obj Identifiable, index uint64, dst []V) error {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	length, ok := s.cachedLengths[obj.Id()]
+	if !ok {
+		length = len(s.sharedItems)
+	}
+	if index > uint64(length) || uint64(len(dst)) > uint64(length)-index {
+		return fmt.Errorf("range starting at %d with length %d %w", index, len(dst), ErrOutOfBounds)
+	}
+	end := index + uint64(len(dst))
+	if len(s.individualItems) == 0 && end <= uint64(len(s.sharedItems)) {
+		copy(dst, s.sharedItems[index:end])
+		return nil
+	}
+	for i := range dst {
+		v, err := s.at(obj, index+uint64(i))
+		if err != nil {
+			return err
+		}
+		dst[i] = v
+	}
+	return nil
+}
+
+// at requires the caller to hold the slice lock.
+func (s *Slice[V]) at(obj Identifiable, index uint64) (V, error) {
 	if index >= uint64(len(s.sharedItems)+len(s.appendedItems)) {
 		var def V
 		return def, fmt.Errorf("index %d %w", index, ErrOutOfBounds)

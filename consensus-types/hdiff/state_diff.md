@@ -152,7 +152,8 @@ When comparing a source state *s* and a target state *t*, before serializing, th
 type hdiff struct {
 	stateDiff      *stateDiff
 	validatorDiffs []validatorDiff
-	balancesDiff   []int64
+	balancesDiff   []int64 // Populated when decoding.
+	serializedBalances []byte // Populated when creating a diff instead of balancesDiff.
 }
 ```
 
@@ -248,6 +249,8 @@ type validatorDiff struct {
 #### The `balancesDiff`  slice
 
 Given a source state `s` and a target state `t` assumed to be newer than `s`, so that the length of `t.balances` is greater or equal than that of `s.balances`. Then the `balancesDiff` slice inside the `hdiff` structure is computed simply as the algebraic difference, it's *i-th* entry is given by `t.balances[i] - s.balances[i]` where the second term is considered as zero if `i ≥ len(s.balances)`. 
+
+During diff creation, these differences are written directly into an exactly sized byte buffer, then Snappy-compressed into `serializedBalances`. Native states fill two reusable, bounded balance buffers through `ReadBalancesAt`, acquiring locks once per batch instead of once per balance. Other state implementations fall back to per-index reads. This avoids materializing the full source and target balance lists or an intermediate `[]int64`. The wire format remains an eight-byte little-endian count followed by eight-byte two's-complement differences. Decoding and patching still use `balancesDiff`.
 
 #### Deserializing with `newHdiff` 
 
@@ -433,4 +436,4 @@ The exported function
 ```go
 func Diff(source, target state.ReadOnlyBeaconState) (HdiffBytes, error)
 ```
-Takes two states and returns the corresponding diff bytes. This function calls the function `diffInternal` which in turn calls `diffToState`, `diffToVals` and `diffToBalances` that each return the corresponding component of an internal `hdiff` structure. Then we call `serialize()` on the correponding `hdiff` structure. The function `serialize` constructs the `data` byte slice as described above in the [Deserialization](#deserialization) section and finally it calls `snappy.Encode()` on each of the three slices. 
+Takes two states and returns the corresponding diff bytes. This function calls `diffInternal`, which calls `diffToState`, `diffToVals` and `diffToBalances`. The balance component is already serialized and compressed at this point. Then `serialize()` encodes and compresses the state and validator components, and reuses the encoded balance component. When reserializing a decoded `hdiff`, it encodes the native balance differences instead.
