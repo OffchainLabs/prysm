@@ -242,6 +242,7 @@ type ReadOnlyDeposits interface {
 	PendingDeposits() ([]*ethpb.PendingDeposit, error)
 	ForEachPendingDeposit(f func(*ethpb.PendingDeposit) error) error
 	IsPendingValidator(pubkey []byte) (bool, error)
+	NumPendingDeposits() (uint64, error)
 }
 
 type ReadOnlyConsolidations interface {
