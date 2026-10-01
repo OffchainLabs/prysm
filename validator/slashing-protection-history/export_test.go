@@ -32,6 +32,28 @@ func TestExportStandardProtectionJSON_EmptyGenesisRoot(t *testing.T) {
 	}
 }
 
+func TestExportStandardProtectionJSON_AttestationWithoutProposalIndex(t *testing.T) {
+	ctx := t.Context()
+	pubKey := [fieldparams.BLSPubkeyLength]byte{1}
+	validatorDB := dbtest.SetupDB(t, t.TempDir(), nil, false)
+	genesisValidatorsRoot := [32]byte{1}
+	require.NoError(t, validatorDB.SaveGenesisValidatorsRoot(ctx, genesisValidatorsRoot[:]))
+	require.NoError(t, validatorDB.SaveAttestationForPubKey(
+		ctx,
+		pubKey,
+		[32]byte{4},
+		createAttestation(3, 4),
+	))
+
+	exported, err := ExportStandardProtectionJSON(ctx, validatorDB)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(exported.Data))
+	assert.Equal(t, 0, len(exported.Data[0].SignedBlocks))
+	require.Equal(t, 1, len(exported.Data[0].SignedAttestations))
+	assert.Equal(t, "3", exported.Data[0].SignedAttestations[0].SourceEpoch)
+	assert.Equal(t, "4", exported.Data[0].SignedAttestations[0].TargetEpoch)
+}
+
 func Test_getSignedAttestationsByPubKey(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("OK/isSlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {

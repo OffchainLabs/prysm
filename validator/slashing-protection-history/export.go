@@ -98,11 +98,12 @@ func ExportStandardProtectionJSON(
 		if err != nil {
 			return nil, errors.Wrapf(err, "could not retrieve signed attestations for public key %s", pubKeyHex)
 		}
-		if _, ok := dataByPubKey[pubKey]; !ok {
-			// This should never happen
-			return nil, errors.Wrapf(err, "could not retrieve proposer public key from array")
+		data, ok := dataByPubKey[pubKey]
+		if !ok {
+			data = &format.ProtectionData{Pubkey: pubKeyHex}
+			dataByPubKey[pubKey] = data
 		}
-		dataByPubKey[pubKey].SignedAttestations = signedAttestations
+		data.SignedAttestations = signedAttestations
 
 		if err := bar.Add(1); err != nil {
 			return nil, err
