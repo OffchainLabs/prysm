@@ -212,6 +212,8 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	}
 	var eidx int
 	var br [32]byte
+	// blockEnvelopes[i] is the envelope verified against blks[i]; nil when the block has none.
+	blockEnvelopes := make([]interfaces.ROSignedExecutionPayloadEnvelope, len(blks))
 	sigSet := bls.NewSet()
 	if applied {
 		eidx = 1
@@ -278,6 +280,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 				return err
 			}
 			sigSet.Join(envSigSet)
+			blockEnvelopes[i] = envelopes[eidx]
 			eidx++
 			if eidx < len(envelopes) {
 				nextEnv, err := envelopes[eidx].Envelope()
@@ -306,6 +309,9 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		}
 		sigSet.Join(set)
 	}
+	if eidx != len(envelopes) {
+		return errBatchEnvelopeMismatch
+	}
 
 	var verify bool
 	if features.Get().EnableVerboseSigVerification {
@@ -320,7 +326,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		return errors.New("batch block signature verification failed")
 	}
 
-	pendingNodes, isValidPayload, err := s.notifyEngineAndSaveData(ctx, blks, envelopes, avs, preVersionAndHeaders, postVersionAndHeaders, jCheckpoints, fCheckpoints)
+	pendingNodes, isValidPayload, err := s.notifyEngineAndSaveData(ctx, blks, blockEnvelopes, avs, preVersionAndHeaders, postVersionAndHeaders, jCheckpoints, fCheckpoints)
 	if err != nil {
 		return err
 	}
@@ -358,10 +364,11 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	return s.saveHeadNoDB(ctx, lastB, lastBR, preState, !isValidPayload)
 }
 
+// blockEnvelopes is indexed by block and holds only envelopes that onBlockBatch verified.
 func (s *Service) notifyEngineAndSaveData(
 	ctx context.Context,
 	blks []consensusblocks.ROBlock,
-	envelopes []interfaces.ROSignedExecutionPayloadEnvelope,
+	blockEnvelopes []interfaces.ROSignedExecutionPayloadEnvelope,
 	avs das.AvailabilityChecker,
 	preVersionAndHeaders []*versionAndHeader,
 	postVersionAndHeaders []*versionAndHeader,
@@ -372,15 +379,6 @@ func (s *Service) notifyEngineAndSaveData(
 	pendingNodes := make([]*forkchoicetypes.BlockAndCheckpoints, len(blks))
 	var isValidPayload bool
 	var err error
-
-	envMap := make(map[[32]byte]int, len(envelopes))
-	for i, e := range envelopes {
-		env, err := e.Envelope()
-		if err != nil {
-			return nil, false, err
-		}
-		envMap[env.BeaconBlockRoot()] = i
-	}
 
 	for i, b := range blks {
 		root := b.Root()
@@ -403,19 +401,16 @@ func (s *Service) notifyEngineAndSaveData(
 				}
 			}
 			args.HasPayload = true
-		} else {
-			idx, ok := envMap[root]
-			if ok {
-				env, err := envelopes[idx].Envelope()
-				if err != nil {
-					return nil, false, err
-				}
-				isValidPayload, err = s.notifyNewEnvelopeFromBlock(ctx, b, env)
-				if err != nil {
-					return nil, false, errors.Wrap(err, "could not notify new envelope from block")
-				}
-				args.HasPayload = true
+		} else if blockEnvelopes[i] != nil {
+			env, err := blockEnvelopes[i].Envelope()
+			if err != nil {
+				return nil, false, err
 			}
+			isValidPayload, err = s.notifyNewEnvelopeFromBlock(ctx, b, env)
+			if err != nil {
+				return nil, false, errors.Wrap(err, "could not notify new envelope from block")
+			}
+			args.HasPayload = true
 		}
 		if args.HasPayload {
 			if err := s.areSidecarsAvailable(ctx, avs, b); err != nil {

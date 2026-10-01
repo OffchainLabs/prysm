@@ -146,10 +146,9 @@ func TestValidatePayloadBlockConsistency(t *testing.T) {
 	// Block 2: parentRoot = b1.Root(), parentBlockHash = hash2 (different from hash1 => needs envelope)
 	b2 := makeGloasBlock(t, 12, b1.Root(), hash2)
 
-	// Envelopes: env0 has blockHash=hash1 (matches b1's parentBlockHash)
-	// env1 has blockHash=hash2 (matches b2's parentBlockHash)
-	env0 := makeEnvelope(t, 10, hash0, [32]byte{})
-	env1 := makeEnvelope(t, 11, hash1, hash0)
+	// env0 is the payload of b0's parent (root zero, hash0); env1 is b0's own payload (hash1).
+	env0 := makeEnvelope(t, 9, hash0, [32]byte{})
+	env1 := makeEnvelopeForRoot(t, 10, b0.Root(), hash1, hash0)
 
 	t.Run("consistent envelopes and blocks, envelope is first", func(t *testing.T) {
 		f := &blocksFetcher{}
@@ -183,7 +182,7 @@ func TestValidatePayloadBlockConsistency(t *testing.T) {
 	})
 
 	t.Run("extra envelopes truncated", func(t *testing.T) {
-		env2 := makeEnvelope(t, 12, hash2, hash1)
+		env2 := makeEnvelopeForRoot(t, 11, b1.Root(), hash2, hash1)
 		f := &blocksFetcher{}
 		// All blocks have the same parentBlockHash => no envelope transitions needed
 		sameHash := [32]byte{0x99}
@@ -202,6 +201,24 @@ func TestValidatePayloadBlockConsistency(t *testing.T) {
 		require.NoError(t, r.err)
 		// Extra envelope should be truncated
 		require.Equal(t, 1, len(r.envelopes))
+	})
+
+	t.Run("envelope with a foreign root but a matching hash chain is rejected", func(t *testing.T) {
+		foreign := makeEnvelopeForRoot(t, 10, [32]byte{0xab}, hash1, hash0)
+		last := makeEnvelopeForRoot(t, 11, b1.Root(), hash2, hash1)
+		f := &blocksFetcher{}
+		r := &fetchRequestResponse{
+			blocksFrom:   "peer1",
+			payloadsFrom: "peer1",
+			bwb: []blocks.BlockWithROSidecars{
+				{Block: b0},
+				{Block: b1},
+			},
+			envelopes: []interfaces.ROSignedExecutionPayloadEnvelope{env0, foreign, last},
+		}
+		f.validatePayloadBlockConsistency(r)
+		require.ErrorContains(t, "envelope does not match block", r.err)
+		require.Equal(t, true, errors.Is(r.err, prysmsync.ErrInvalidFetchedData))
 	})
 
 	t.Run("mismatched envelope from different peer does not wrap ErrInvalidFetchedData", func(t *testing.T) {
