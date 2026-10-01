@@ -190,6 +190,49 @@ func TestRetry_On_ConnectionError(t *testing.T) {
 	assert.Equal(t, int32(1), activation.Load(), "Expected WaitForActivation() to be reached once")
 }
 
+// TestInitialize_ExitsPromptlyOnCancelledContext guards the reconnect backoff: the retry
+// loop must observe a cancelled context straight away instead of waiting out
+// backOffPeriod on the ticker first.
+func TestInitialize_ExitsPromptlyOnCancelledContext(t *testing.T) {
+	oldBackOff := backOffPeriod
+	// Deliberately long: waiting this out is what the test is meant to catch.
+	backOffPeriod = 10 * time.Second
+	t.Cleanup(func() { backOffPeriod = oldBackOff })
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	v, vc, _ := runnerTestValidator(t, ctx)
+
+	// WaitForChainStart maps io.EOF to a connection error, so initialize() retries and
+	// parks on the backoff.
+	attempted := make(chan struct{})
+	var once sync.Once
+	vc.EXPECT().WaitForChainStart(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(context.Context, *emptypb.Empty) (*ethpb.ChainStartResponse, error) {
+			once.Do(func() { close(attempted) })
+			return nil, io.EOF
+		}).AnyTimes()
+
+	done := make(chan error, 1)
+	go func() { done <- initialize(ctx, v) }()
+
+	select {
+	case <-attempted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("initialize never attempted the chain start handshake")
+	}
+	// Give the retry loop a moment to reach the backoff wait before cancelling.
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-done:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(2 * time.Second):
+		t.Fatal("initialize did not return on a cancelled context until the backoff expired")
+	}
+}
+
 func TestRun_ExitsOnCancelledContext(t *testing.T) {
 	ctx := t.Context()
 	v, vc, nc := runnerTestValidator(t, ctx)
