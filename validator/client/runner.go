@@ -200,11 +200,14 @@ func initialize(ctx context.Context, v *validator) error {
 
 	for {
 		if !firstTime {
-			if ctx.Err() != nil {
+			// Wait out the backoff before retrying, but keep watching the context so a
+			// cancellation is observed immediately instead of up to backOffPeriod later.
+			select {
+			case <-ticker.C:
+			case <-ctx.Done():
 				log.Info("Context canceled, stopping validator")
-				return errors.New("context canceled")
+				return ctx.Err()
 			}
-			<-ticker.C
 		}
 
 		firstTime = false
