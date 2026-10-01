@@ -185,7 +185,7 @@ func (f *blocksFetcher) fetchPayloadEnvelopesFromPeer(
 		StartSlot: start,
 		Count:     count,
 	}
-	peers = f.filterPeers(ctx, peers, peersPercentagePerRequest)
+	peers = f.filterPeers(ctx, peers, peersPercentagePerRequest, start)
 	// Try the block provider first, then best bandwidth peers, then the rest.
 	peers = append([]peer.ID{pid}, peers...)
 	bestPeers := f.hasSufficientBandwidth(peers, req.Count)

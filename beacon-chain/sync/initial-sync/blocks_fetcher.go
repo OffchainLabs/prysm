@@ -362,7 +362,7 @@ func (f *blocksFetcher) fetchBlocksFromPeer(
 	ctx, span := trace.StartSpan(ctx, "initialsync.fetchBlocksFromPeer")
 	defer span.End()
 
-	peers = f.filterPeers(ctx, peers, peersPercentagePerRequest)
+	peers = f.filterPeers(ctx, peers, peersPercentagePerRequest, r.start)
 	req := &p2ppb.BeaconBlocksByRangeRequest{
 		StartSlot: r.start,
 		Count:     r.count,

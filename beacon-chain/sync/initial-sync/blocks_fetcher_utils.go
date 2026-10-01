@@ -86,7 +86,7 @@ func (f *blocksFetcher) nonSkippedSlotAfter(ctx context.Context, slot primitives
 	}
 
 	// Transform peer list to avoid eclipsing (filter, shuffle, trim).
-	peers = f.filterPeers(ctx, peers, peersPercentagePerRequest)
+	peers = f.filterPeers(ctx, peers, peersPercentagePerRequest, slot)
 	return f.nonSkippedSlotAfterWithPeersTarget(ctx, slot, peers, targetEpoch)
 }
 

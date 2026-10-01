@@ -10,9 +10,11 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	p2pt "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
@@ -223,7 +225,7 @@ func TestBlocksFetcher_filterPeers(t *testing.T) {
 			var filteredPIDs []peer.ID
 			var err error
 			for range 1000 {
-				filteredPIDs = fetcher.filterPeers(t.Context(), peerIDs, tt.args.peersPercentage)
+				filteredPIDs = fetcher.filterPeers(t.Context(), peerIDs, tt.args.peersPercentage, 0)
 				if len(filteredPIDs) <= 1 {
 					break
 				}
@@ -400,5 +402,68 @@ func TestBlocksFetcher_removeStalePeerLocks(t *testing.T) {
 			})
 			assert.DeepEqual(t, peersOut1, peersOut2, "Unexpected peers map")
 		})
+	}
+}
+
+// TestBlocksFetcher_filterPeers_EarliestAvailableSlot covers #17567.
+//
+// A peer advertises, in its Status v2 handshake, the earliest slot from which
+// it can serve blocks (Fulu, EIP-7594). Peer selection must not hand such a
+// peer a *_by_range request that starts below that value, because the peer can
+// only answer ResourceUnavailable (error code 3).
+//
+// Prior to the fix filterPeers scored peers on provider score and rate-limiter
+// capacity alone, so a peer that cannot serve the range stayed in the list and
+// was picked on exactly the same footing as one that can.
+func TestBlocksFetcher_filterPeers_EarliestAvailableSlot(t *testing.T) {
+	const (
+		requestStartSlot = primitives.Slot(100)
+		earliestSlot     = primitives.Slot(150) // above the request: cannot serve it
+	)
+
+	mc, p2p, _ := initializeTestServices(t, []primitives.Slot{}, []*peerData{})
+	fetcher := newBlocksFetcher(t.Context(), &blocksFetcherConfig{
+		chain:                    mc,
+		p2p:                      p2p,
+		peerFilterCapacityWeight: 0.2,
+	})
+	fetcher.rateLimiter = leakybucket.NewCollector(0.000001, 10000, 1*time.Second, false)
+
+	// canServe advertises nothing above the request, so it is usable.
+	canServe := p2pt.NewTestP2P(t)
+	// cannotServe advertises a slot above the request, so it is not usable.
+	cannotServe := p2pt.NewTestP2P(t)
+	defer func() {
+		require.NoError(t, p2p.Disconnect(canServe.PeerID()))
+		require.NoError(t, p2p.Disconnect(cannotServe.PeerID()))
+	}()
+	p2p.Connect(canServe)
+	p2p.Connect(cannotServe)
+
+	p2p.Peers().SetChainState(canServe.PeerID(), &ethpb.StatusV2{
+		HeadSlot:              1000,
+		EarliestAvailableSlot: 0,
+	})
+	p2p.Peers().SetChainState(cannotServe.PeerID(), &ethpb.StatusV2{
+		HeadSlot:              1000,
+		EarliestAvailableSlot: earliestSlot,
+	})
+
+	// Give both peers the same provider score and capacity so the only thing
+	// that can separate them is the advertised serve range.
+	scorer := fetcher.p2p.Peers().Scorers().BlockProviderScorer()
+	scorer.IncrementProcessedBlocks(canServe.PeerID(), 100)
+	scorer.IncrementProcessedBlocks(cannotServe.PeerID(), 100)
+	fetcher.rateLimiter.Add(canServe.PeerID().String(), 0)
+	fetcher.rateLimiter.Add(cannotServe.PeerID().String(), 0)
+
+	// Run repeatedly: selection is weighted/random, so a single pass would not
+	// prove the unusable peer is excluded rather than merely ranked lower.
+	for range 50 {
+		got := fetcher.filterPeers(t.Context(), []peer.ID{canServe.PeerID(), cannotServe.PeerID()}, 1.0, requestStartSlot)
+		for _, pid := range got {
+			require.NotEqual(t, cannotServe.PeerID().String(), pid.String(),
+				"peer advertising earliest_available_slot above the request start slot must not be selected")
+		}
 	}
 }

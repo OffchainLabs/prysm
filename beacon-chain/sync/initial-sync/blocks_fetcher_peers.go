@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -77,10 +78,17 @@ func (f *blocksFetcher) waitForMinimumPeers(ctx context.Context) ([]peer.ID, err
 
 // filterPeers returns transformed list of peers, weight sorted by scores and capacity remaining.
 // List can be further constrained using peersPercentage, where only percentage of peers are returned.
-func (f *blocksFetcher) filterPeers(ctx context.Context, peers []peer.ID, peersPercentage float64) []peer.ID {
+// Peers advertising an earliest_available_slot above startSlot are dropped first: they cannot serve
+// the range, so selecting them only produces ResourceUnavailable replies.
+func (f *blocksFetcher) filterPeers(ctx context.Context, peers []peer.ID, peersPercentage float64, startSlot primitives.Slot) []peer.ID {
 	_, span := trace.StartSpan(ctx, "initialsync.filterPeers")
 	defer span.End()
 
+	if len(peers) == 0 {
+		return peers
+	}
+
+	peers = f.peersServingSlot(peers, startSlot)
 	if len(peers) == 0 {
 		return peers
 	}
@@ -104,6 +112,24 @@ func (f *blocksFetcher) filterPeers(ctx context.Context, peers []peer.ID, peersP
 	})
 
 	return trimPeers(peers, peersPercentage)
+}
+
+// peersServingSlot drops peers whose advertised earliest_available_slot is above startSlot.
+// A peer only advertises that field once it has one (Fulu Status v2), so a missing
+// value is treated as "can serve from the genesis slot" rather than excluding the peer.
+func (f *blocksFetcher) peersServingSlot(peers []peer.ID, startSlot primitives.Slot) []peer.ID {
+	if startSlot == 0 {
+		return peers
+	}
+	serving := make([]peer.ID, 0, len(peers))
+	for _, pid := range peers {
+		state, err := f.p2p.Peers().ChainState(pid)
+		if err == nil && state != nil && state.EarliestAvailableSlot > startSlot {
+			continue
+		}
+		serving = append(serving, pid)
+	}
+	return serving
 }
 
 // trimPeers limits peer list, returning only specified percentage of peers.

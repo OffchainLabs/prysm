@@ -393,7 +393,7 @@ func (f *blocksFetcher) fetchBlobsFromPeer(ctx context.Context, bwb []blocks.Blo
 	if req == nil {
 		return "", nil
 	}
-	peers = f.filterPeers(ctx, peers, peersPercentagePerRequest)
+	peers = f.filterPeers(ctx, peers, peersPercentagePerRequest, blobWindowStart)
 	// We dial the initial peer first to ensure that we get the desired set of blobs.
 	peers = append([]peer.ID{pid}, peers...)
 	peers = f.hasSufficientBandwidth(peers, req.Count)
