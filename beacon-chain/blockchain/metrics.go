@@ -47,6 +47,10 @@ var (
 		Name: "beacon_finalized_root",
 		Help: "Last finalized root of the processed state",
 	})
+	beaconHeadStateRoot = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "beacon_head_state_root",
+		Help: "State root of the head block of the beacon chain",
+	})
 	beaconCurrentJustifiedEpoch = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "beacon_current_justified_epoch",
 		Help: "Current justified epoch of the processed state",
@@ -276,10 +280,11 @@ var (
 )
 
 // reportSlotMetrics reports slot related metrics.
-func reportSlotMetrics(stateSlot, headSlot, clockSlot primitives.Slot, finalizedCheckpoint *ethpb.Checkpoint) {
+func reportSlotMetrics(stateSlot, headSlot, clockSlot primitives.Slot, finalizedCheckpoint *ethpb.Checkpoint, headStateRoot [32]byte) {
 	clockTimeSlot.Set(float64(clockSlot))
 	beaconSlot.Set(float64(stateSlot))
 	beaconHeadSlot.Set(float64(headSlot))
+	beaconHeadStateRoot.Set(float64(bytesutil.ToLowInt64(headStateRoot[:])))
 	if finalizedCheckpoint != nil {
 		headFinalizedEpoch.Set(float64(finalizedCheckpoint.Epoch))
 		headFinalizedRoot.Set(float64(bytesutil.ToLowInt64(finalizedCheckpoint.Root)))
