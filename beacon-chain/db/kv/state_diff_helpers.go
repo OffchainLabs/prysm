@@ -500,6 +500,10 @@ func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.
 	if s.stateDiffCache != nil {
 		for i := len(diffChainItems) - 1; i >= 0; i-- {
 			item := diffChainItems[i]
+			// Ignore stray cached anchors without making required ancestor diffs optional.
+			if !s.stateDiffCache.levelHasData(item.level) {
+				continue
+			}
 			cachedAnchor := s.stateDiffCache.getAnchor(item.level, withExactSlot(primitives.Slot(item.slot)))
 			if cachedAnchor != nil {
 				baseSnapshot = cachedAnchor

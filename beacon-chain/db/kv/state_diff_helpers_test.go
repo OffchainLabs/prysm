@@ -64,6 +64,10 @@ func TestGetBaseAndDiffChain_CachedAncestors(t *testing.T) {
 					prepare: func(_ *testing.T, db *Store) { db.stateDiffCache.clearAnchors() },
 				},
 				{
+					name: "empty level flags with stored diffs", target: 480, wantDiffs: []primitives.Slot{256, 384, 448, 480}, wantReads: 4,
+					prepare: func(_ *testing.T, db *Store) { clear(db.stateDiffCache.levelsWithData[1:]) },
+				},
+				{
 					name: "nil cache", target: 480, wantDiffs: []primitives.Slot{256, 384, 448, 480}, wantReads: 5,
 					prepare: func(_ *testing.T, db *Store) { db.stateDiffCache = nil },
 				},
@@ -160,8 +164,6 @@ func TestGetBaseAndDiffChain_TreeBoundaries(t *testing.T) {
 	}{
 		{name: "single exponent", exponents: []int{5}, slots: []primitives.Slot{0, 32}, target: 32, wantBase: 32},
 		{name: "two levels with uncached leaf", exponents: []int{7, 5}, slots: []primitives.Slot{0, 32, 96}, target: 96, wantDiffs: 1},
-		{name: "empty intermediate levels", exponents: []int{9, 8, 7, 6, 5}, slots: []primitives.Slot{0, 448, 480}, target: 480, wantBase: 448, wantDiffs: 1},
-		{name: "only leaf level has diffs", exponents: []int{9, 8, 7, 6, 5}, slots: []primitives.Slot{0, 480}, target: 480, wantDiffs: 1},
 		{name: "next full snapshot", exponents: []int{9, 8, 7, 6, 5}, slots: []primitives.Slot{0, 256, 384, 448, 480, 512}, target: 512, wantBase: 512},
 		{name: "leaf in next tree", exponents: []int{9, 8, 7, 6, 5}, slots: []primitives.Slot{0, 256, 384, 448, 480, 512, 768, 800}, target: 800, wantBase: 768, wantDiffs: 1},
 		{name: "old tree with newer cached anchors", exponents: []int{9, 8, 7, 6, 5}, slots: []primitives.Slot{0, 256, 384, 448, 480, 512, 768, 800}, target: 480, wantDiffs: 4},
@@ -179,22 +181,68 @@ func TestGetBaseAndDiffChain_TreeBoundaries(t *testing.T) {
 		})
 	}
 
-	t.Run("ignore anchors for levels without data", func(t *testing.T) {
-		db, states := setupStateDiffReadTree(t, 32, []int{9, 8, 7, 6, 5}, []primitives.Slot{0, 448, 480})
-		db.stateDiffCache.anchors[3] = anchor{}
-		stray := states[0].Copy()
-		require.NoError(t, stray.SetSlot(32+384))
-		require.NoError(t, stray.UpdateBalancesAtIndex(0, 123))
-		require.NoError(t, db.stateDiffCache.setAnchor(2, stray))
-		require.Equal(t, false, db.stateDiffCache.levelHasData(2))
-		base, chain, err := db.getBaseAndDiffChain(32, 32+480)
-		require.NoError(t, err)
-		require.Equal(t, primitives.Slot(32), base.Slot())
-		require.Equal(t, 2, len(chain))
-		got, err := db.stateByDiff(t.Context(), 32+480)
-		require.NoError(t, err)
-		assertStateDiffRead(t, states[480], got)
-	})
+	for _, tt := range []struct {
+		name        string
+		missing     []primitives.Slot
+		strayAnchor bool
+		wantMissing bool
+	}{
+		{name: "cached descendant bypasses empty intermediate levels", missing: []primitives.Slot{256, 384}},
+		{name: "only leaf level has diffs", missing: []primitives.Slot{256, 384, 448}, wantMissing: true},
+		{name: "ignore anchors for levels without data", missing: []primitives.Slot{256, 384}, strayAnchor: true, wantMissing: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			const offset = primitives.Slot(32)
+			// Save valid diffs before removing their ancestors to simulate incomplete history.
+			db, states := setupStateDiffReadTree(t, offset, []int{9, 8, 7, 6, 5}, []primitives.Slot{0, 256, 384, 448, 480})
+			require.NoError(t, db.db.Update(func(tx *bbolt.Tx) error {
+				bucket := tx.Bucket(stateDiffBucket)
+				for _, rel := range tt.missing {
+					level := computeLevel(uint64(offset), offset+rel)
+					for _, suffix := range []string{stateSuffix, validatorSuffix, balancesSuffix} {
+						if err := bucket.Delete(append(makeKeyForStateDiffTree(level, uint64(offset+rel)), suffix...)); err != nil {
+							return err
+						}
+					}
+				}
+				return nil
+			}))
+			for _, rel := range tt.missing {
+				level := computeLevel(uint64(offset), offset+rel)
+				db.stateDiffCache.anchors[level] = anchor{}
+				db.stateDiffCache.levelsWithData[level] = false
+			}
+			if tt.strayAnchor {
+				db.stateDiffCache.anchors[3] = anchor{}
+				stray := states[0].Copy()
+				require.NoError(t, stray.SetSlot(offset+384))
+				require.NoError(t, stray.UpdateBalancesAtIndex(0, 123))
+				require.NoError(t, db.stateDiffCache.setAnchor(2, stray))
+				require.Equal(t, false, db.stateDiffCache.levelHasData(2))
+			}
+
+			base, chain, err := db.getBaseAndDiffChain(uint64(offset), offset+480)
+			if tt.wantMissing {
+				require.ErrorIs(t, err, ErrNotFoundState)
+				require.ErrorContains(t, "level 1 slot 288", err)
+				require.IsNil(t, base)
+				require.IsNil(t, chain)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, offset+448, base.Slot())
+				require.Equal(t, 1, len(chain))
+				got, err := db.stateByDiff(t.Context(), offset+480)
+				require.NoError(t, err)
+				assertStateDiffRead(t, states[480], got)
+				// Without the cached descendant, the missing ancestors are required again.
+				db.stateDiffCache.clearAnchors()
+			}
+			got, err := db.stateByDiff(t.Context(), offset+480)
+			require.ErrorIs(t, err, ErrNotFoundState)
+			require.ErrorContains(t, "level 1 slot 288", err)
+			require.IsNil(t, got)
+		})
+	}
 }
 
 func TestGetBaseAndDiffChain_BypassesCachedPrefix(t *testing.T) {
