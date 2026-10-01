@@ -6,6 +6,7 @@ import (
 	"time"
 
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -15,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
 
@@ -251,6 +253,11 @@ func validateDataColumnsByRange(request *pb.DataColumnSidecarsByRangeRequest, cu
 		return nil, errors.Wrap(p2ptypes.ErrInvalidRequest, "overflow end - start + 1")
 	}
 
-	rangeParameters := &rangeParams{start: startSlot, end: endSlot, size: uint64(size)}
+	// Keep the complete request range while limiting the slot width of each database read.
+	batchLimit := min(
+		uint64(flags.Get().BlockBatchLimit),
+		params.MaxRequestBlock(slots.ToEpoch(currentSlot)),
+	)
+	rangeParameters := &rangeParams{start: startSlot, end: endSlot, size: min(uint64(size), batchLimit)}
 	return rangeParameters, nil
 }
