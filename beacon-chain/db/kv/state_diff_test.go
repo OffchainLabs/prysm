@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -636,6 +637,63 @@ func TestStateDiff_GetBaseAndDiffChainRejectsMissingAncestorLevel(t *testing.T) 
 	require.ErrorIs(t, err, ErrNotFoundState)
 	require.ErrorContains(t, "level 1 slot 262144", err)
 	require.IsNil(t, diffChain)
+}
+
+type cancelAfterCheckContext struct {
+	context.Context
+	cancel context.CancelFunc
+}
+
+func (c *cancelAfterCheckContext) Err() error {
+	err := c.Context.Err()
+	c.cancel()
+	return err
+}
+
+func TestStateDiff_StateByDiffCachedAnchorCanceled(t *testing.T) {
+	for _, cached := range []bool{false, true} {
+		t.Run(fmt.Sprintf("cached=%t", cached), func(t *testing.T) {
+			setStateDiffExponents([]int{7, 6, 5})
+			db := setupDB(t)
+			require.NoError(t, setOffsetInDB(db, 0))
+			base, _ := createState(t, 0, version.Phase0)
+			require.NoError(t, db.saveFullSnapshot(base))
+			target := base.Copy()
+			require.NoError(t, target.SetSlot(64))
+			require.NoError(t, db.saveStateByDiff(t.Context(), target))
+			target = target.Copy()
+			require.NoError(t, target.SetSlot(96))
+			require.NoError(t, db.saveStateByDiff(t.Context(), target))
+			if !cached {
+				db.stateDiffCache.clearAnchors()
+			}
+			for _, slot := range []primitives.Slot{0, 64, 96} {
+				t.Run(fmt.Sprintf("slot=%d", slot), func(t *testing.T) {
+					ctx, cancel := context.WithCancel(t.Context())
+					cancel()
+					before := db.db.Stats().TxN
+					got, err := db.stateByDiff(ctx, slot)
+					require.ErrorIs(t, err, context.Canceled)
+					require.IsNil(t, got)
+					require.Equal(t, before, db.db.Stats().TxN)
+
+					ctx, cancel = context.WithDeadline(t.Context(), time.Time{})
+					defer cancel()
+					got, err = db.stateByDiff(ctx, slot)
+					require.ErrorIs(t, err, context.DeadlineExceeded)
+					require.IsNil(t, got)
+					require.Equal(t, before, db.db.Stats().TxN)
+
+					// Cancel immediately after the initial check, before reconstruction finishes.
+					ctx, cancel = context.WithCancel(t.Context())
+					defer cancel()
+					got, err = db.stateByDiff(&cancelAfterCheckContext{Context: ctx, cancel: cancel}, slot)
+					require.ErrorIs(t, err, context.Canceled)
+					require.IsNil(t, got)
+				})
+			}
+		})
+	}
 }
 
 func TestStateDiff_SaveAndReadFullSnapshot(t *testing.T) {

@@ -1,4 +1,5 @@
 bazel-*
 .git
-dist/
 third_party/testdata/
+dist/*.tar
+dist/*.deb
