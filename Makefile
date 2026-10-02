@@ -30,7 +30,7 @@ TAGFLAG := $(if $(TAGS),-tags=$(TAGS),)
 
 flags ?=
 
-ALLOWED_VARS := GO DIST TAGS flags mode bls platform SOURCE_DATE_EPOCH DOCKER_REGISTRY DOCKER_TAG
+ALLOWED_VARS := GO DIST TAGS flags mode bls hash platform SOURCE_DATE_EPOCH DOCKER_REGISTRY DOCKER_TAG
 BAD_VARS := $(strip $(foreach v,$(.VARIABLES),$(if $(filter command line,$(origin $(v))),$(filter-out $(ALLOWED_VARS),$(v)))))
 ifneq ($(BAD_VARS),)
 $(error unknown variable(s): $(BAD_VARS)  (allowed: $(ALLOWED_VARS)))
@@ -46,6 +46,8 @@ TEST_BAD      := $(filter-out $(TEST_KINDS),$(TEST_ARGS))
 TEST_SEL      := $(or $(TEST_ARGS),$(TEST_KINDS))
 TEST_BLS      := $(or $(bls),real)
 TEST_BLS_BAD  := $(filter-out real fake,$(TEST_BLS))
+TEST_HASH     := $(or $(hash),gohashtree)
+TEST_HASH_BAD := $(filter-out gohashtree hashtree,$(TEST_HASH))
 
 LINT_ARGS := $(filter-out $(COMMANDS),$(MAKECMDGOALS))
 LINT_BAD  := $(filter-out $(LINT_KINDS),$(LINT_ARGS))
@@ -149,6 +151,7 @@ build:
 test:
 	@$(if $(TEST_MODE_BAD),echo "❌ test: invalid mode '$(TEST_MODE)'  (one of: no-race race)" >&2; exit 1;) \
 	$(if $(TEST_BLS_BAD),echo "❌ test: invalid bls '$(TEST_BLS)'  (one of: real fake)" >&2; exit 1;) \
+	$(if $(TEST_HASH_BAD),echo "❌ test: invalid hash '$(TEST_HASH)'  (one of: gohashtree hashtree)" >&2; exit 1;) \
 	$(if $(TEST_BAD),echo "❌ test: unknown kind(s): $(TEST_BAD)  (one of: $(TEST_KINDS))" >&2; exit 1;) :
 
 	@$(MAKE) --no-print-directory gen
@@ -158,7 +161,7 @@ test:
 	$(if $(filter mainnet mainnet-spectest,$(TEST_SEL)),$(LINT_DEVELOP))
 	$(if $(filter minimal minimal-spectest,$(TEST_SEL)),$(LINT_MINIMAL))
 
-	@GO="$(GO)" $(GO) run ./build/test $(if $(filter race,$(TEST_MODE)),-race,) -bls=$(TEST_BLS) $(TEST_ARGS)
+	@GO="$(GO)" $(GO) run ./build/test $(if $(filter race,$(TEST_MODE)),-race,) -bls=$(TEST_BLS) -hash=$(TEST_HASH) $(TEST_ARGS)
 
 .PHONY: testdata
 testdata:
@@ -299,16 +302,16 @@ help: ## Show this help
 	@printf '\033[0m'
 	@echo ""
 	@printf '\033[1mCommands:\033[0m\n'
-	@printf "  \033[36m%-58s\033[0m %s\n" "make run <bin> [flags=...] [-- <args>]"                     "Run a binary"
-	@printf "  \033[36m%-58s\033[0m %s\n" "make build [<bin>...] [flags=...]"                          "Build a binary (default: all)"
-	@printf "  \033[36m%-58s\033[0m %s\n" "make gen [<kind>...] [mode=force|no-force]"                 "Create generated code (default: all,no-force)"
-	@printf "  \033[36m%-58s\033[0m %s\n" "make test [<kind>...] [mode=no-race|race] [bls=real|fake]"  "Run unit tests (default: all,no-race,real)"
-	@printf "  \033[36m%-58s\033[0m %s\n" "make lint [fix]"                                            "Run static analysis (prysm-vet). 'fix' auto-fixes findings"
-	@printf "  \033[36m%-58s\033[0m %s\n" "make e2e [<scenario>|<suite>...]"                           "Run end-to-end tests (default: presubmit)"
-	@printf "  \033[36m%-58s\033[0m %s\n" "make dist [<bin>...] [platform=...]"                        "Build official release binaries (default: all bins, all platforms)"
-	@printf "  \033[36m%-58s\033[0m %s\n" "make testdata"                                              "Pre-fetch external spec-test data"
-	@printf "  \033[36m%-58s\033[0m %s\n" "make clean"                                                 "Clean everything"
-	@printf "  \033[36m%-58s\033[0m %s\n" "make help"                                                  "Show this help"
+	@printf "  \033[36m%-84s\033[0m %s\n" "make run <bin> [flags=...] [-- <args>]"                                                "Run a binary"
+	@printf "  \033[36m%-84s\033[0m %s\n" "make build [<bin>...] [flags=...]"                                                     "Build a binary (default: all)"
+	@printf "  \033[36m%-84s\033[0m %s\n" "make gen [<kind>...] [mode=force|no-force]"                                            "Create generated code (default: all,no-force)"
+	@printf "  \033[36m%-84s\033[0m %s\n" "make test [<kind>...] [mode=no-race|race] [bls=real|fake] [hash=gohashtree|hashtree]"  "Run unit tests (default: all,no-race,real,gohashtree)"
+	@printf "  \033[36m%-84s\033[0m %s\n" "make lint [fix]"                                                                       "Run static analysis (prysm-vet). 'fix' auto-fixes findings"
+	@printf "  \033[36m%-84s\033[0m %s\n" "make e2e [<scenario>|<suite>...]"                                                      "Run end-to-end tests (default: presubmit)"
+	@printf "  \033[36m%-84s\033[0m %s\n" "make dist [<bin>...] [platform=...]"                                                   "Build official release binaries (default: all bins, all platforms)"
+	@printf "  \033[36m%-84s\033[0m %s\n" "make testdata"                                                                         "Pre-fetch external spec-test data"
+	@printf "  \033[36m%-84s\033[0m %s\n" "make clean"                                                                            "Clean everything"
+	@printf "  \033[36m%-84s\033[0m %s\n" "make help"                                                                             "Show this help"
 	@echo ""
 	@printf '\033[1mOptions:\033[0m\n'
 	@printf "  \033[36m%-16s\033[0m %s\n" "<bin>:"       "$(BINARIES)"

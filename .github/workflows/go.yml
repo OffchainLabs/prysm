@@ -108,7 +108,7 @@ jobs:
            CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
 
   test-mainnet-spectest:
-    name: Test (mainnet spectests)
+    name: Test (mainnet spectests, gohashtree)
     runs-on: ubuntu-4
     # TODO: Remove `continue-on-error: true` when removing Bazel
     continue-on-error: true
@@ -121,6 +121,23 @@ jobs:
           go-version-file: 'go.mod'
       - name: Run mainnet spectests
         run: make test mainnet-spectest
+        env:
+           CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
+
+  test-mainnet-spectest-hashtree:
+    name: Test (mainnet spectests, hashtree)
+    runs-on: ubuntu-4
+    # TODO: Remove `continue-on-error: true` when removing Bazel
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: Run mainnet spectests with hashtree built from source
+        run: make test mainnet-spectest hash=hashtree
         env:
            CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
 

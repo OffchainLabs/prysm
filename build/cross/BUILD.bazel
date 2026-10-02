@@ -9,6 +9,7 @@ go_library(
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/build/cross",
     visibility = ["//visibility:private"],
+    deps = ["//build/cdeps:go_default_library"],
 )
 
 go_binary(

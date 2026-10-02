@@ -35,6 +35,7 @@ password.txt
 
 # Dist files
 dist
+.cdeps
 
 # deepsource cli
 bin

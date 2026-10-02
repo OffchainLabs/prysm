@@ -8,10 +8,14 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/OffchainLabs/prysm/v7/build/cdeps"
 )
 
 // kind is a unit-test pass.
@@ -29,6 +33,17 @@ var validKinds = []kind{mainnet, mainnetSpectest, minimal, minimalSpectest}
 
 // fakeCryptoKinds are the only passes -bls=fake may run.
 var fakeCryptoKinds = []kind{mainnetSpectest, minimalSpectest}
+
+// testHashtree is the from-source hashtree copy linked into the -hash=hashtree test binaries.
+var testHashtree = cdeps.Hashtree{Dir: filepath.Join(".cdeps", "test")}
+
+// hashtreeTriples maps a host GOOS/GOARCH to the zig target compiling hashtree for it. The
+// linux triples are the `make dist` ones, so the tests link the same objects as the release.
+var hashtreeTriples = map[string]string{
+	"linux/amd64":  "x86_64-linux-gnu.2.31",
+	"linux/arm64":  "aarch64-linux-gnu.2.31",
+	"darwin/arm64": "aarch64-macos",
+}
 
 const (
 	totalRuns = 5
@@ -59,6 +74,7 @@ func main() {
 func run() error {
 	race := flag.Bool("race", false, "run the selected pass(es) with the race detector")
 	bls := flag.String("bls", "real", "BLS backend: real, or fake to accept the spec's stub signatures")
+	hash := flag.String("hash", "gohashtree", "hashing library: gohashtree, or hashtree built from source")
 	flag.Parse()
 
 	goBin := env("GO", "go")
@@ -80,6 +96,18 @@ func run() error {
 		return fmt.Errorf("validating -bls: %w", err)
 	}
 
+	useHashtree, err := hashtreeSelected(*hash)
+	if err != nil {
+		return fmt.Errorf("validating -hash: %w", err)
+	}
+
+	modfileFlag := ""
+	if useHashtree {
+		if modfileFlag, err = buildHashtree(goBin); err != nil {
+			return fmt.Errorf("building hashtree from source: %w", err)
+		}
+	}
+
 	failed := false
 	for _, kind := range kinds {
 		pkgs, header, tagFlag, err := passSpec(goBin, kind)
@@ -91,7 +119,15 @@ func run() error {
 			header, tagFlag = strings.TrimSuffix(header, "===")+"(fake crypto) ===", tagFlag+",fake_crypto"
 		}
 
+		if useHashtree {
+			header, tagFlag = strings.TrimSuffix(header, "===")+"(hashtree from source) ===", tagFlag+",force_hashtree"
+		}
+
 		testFlags := []string{tagFlag}
+		if modfileFlag != "" {
+			testFlags = append(testFlags, modfileFlag)
+		}
+
 		if *race {
 			testFlags = append(testFlags, "-race")
 		}
@@ -111,6 +147,10 @@ func run() error {
 	suffix := ""
 	if *race {
 		suffix = " with -race"
+	}
+
+	if useHashtree {
+		suffix += " with hashtree from source"
 	}
 
 	fmt.Printf(
@@ -211,6 +251,44 @@ func fakeCrypto(bls string, kinds []kind) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// hashtreeSelected validates -hash and reports whether hashtree was selected.
+func hashtreeSelected(hash string) (bool, error) {
+	switch hash {
+	case "gohashtree":
+		return false, nil
+	case "hashtree":
+		return true, nil
+	}
+
+	return false, fmt.Errorf("not a hashing library: %s (libraries: gohashtree hashtree)", hash)
+}
+
+// buildHashtree builds hashtree from source for the host and returns the -modfile flag
+// linking it.
+func buildHashtree(goBin string) (string, error) {
+	platform := runtime.GOOS + "/" + runtime.GOARCH
+	triple, ok := hashtreeTriples[platform]
+	if !ok {
+		return "", fmt.Errorf("hashtree has no native code to build for %s", platform)
+	}
+
+	zig, err := cdeps.Provision("install-zig.sh")
+	if err != nil {
+		return "", fmt.Errorf("provision zig: %w", err)
+	}
+
+	modfile, err := testHashtree.Prepare(goBin)
+	if err != nil {
+		return "", fmt.Errorf("prepare: %w", err)
+	}
+
+	if err := testHashtree.Build(runtime.GOOS, runtime.GOARCH, zig+" cc -target "+triple, "", zig); err != nil {
+		return "", fmt.Errorf("build: %w", err)
+	}
+
+	return "-modfile=" + modfile, nil
 }
 
 func selectKinds(args []string, race bool) ([]kind, error) {

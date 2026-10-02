@@ -14,7 +14,7 @@ const minSliceSizeToParallelize = 5000
 // Hash hashes chunks pairwise into digests using the configured hashing library.
 // It performs input validation (odd chunks, digest length).
 func Hash(digests, chunks [][32]byte) error {
-	if features.Get().EnableHashtree {
+	if forceHashtree || features.Get().EnableHashtree {
 		return hashtree.Hash(digests, chunks)
 	}
 	return gohashtree.Hash(digests, chunks)
@@ -23,7 +23,7 @@ func Hash(digests, chunks [][32]byte) error {
 // HashChunks hashes chunks pairwise into digests without error checking.
 // The caller must ensure inputs are valid (even chunks, sufficient digest space).
 func HashChunks(digests, chunks [][32]byte) {
-	if features.Get().EnableHashtree {
+	if forceHashtree || features.Get().EnableHashtree {
 		if err := hashtree.Hash(digests, chunks); err != nil {
 			log.WithError(err).Error("Could not hash chunks")
 		}

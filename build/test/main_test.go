@@ -110,6 +110,19 @@ func TestPassSpec(t *testing.T) {
 	})
 }
 
+func TestHashtreeSelected(t *testing.T) {
+	got, err := hashtreeSelected("gohashtree")
+	require.NoError(t, err)
+	require.Equal(t, false, got)
+
+	got, err = hashtreeSelected("hashtree")
+	require.NoError(t, err)
+	require.Equal(t, true, got)
+
+	_, err = hashtreeSelected("bogus")
+	require.ErrorContains(t, "not a hashing library: bogus", err)
+}
+
 func TestSelectKinds(t *testing.T) {
 	t.Run("no args runs every pass", func(t *testing.T) {
 		got, err := selectKinds(nil, false)

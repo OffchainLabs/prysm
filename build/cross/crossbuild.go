@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+
+	"github.com/OffchainLabs/prysm/v7/build/cdeps"
 )
 
 type Config struct {
@@ -42,6 +44,9 @@ const (
 	ARM64 Arch = "arm64"
 )
 
+// distHashtree is the from-source hashtree copy linked into the dist binaries.
+var distHashtree = cdeps.Hashtree{Dir: filepath.Join(".cdeps", "dist")}
+
 // beaconChain is the one binary that gets PGO and an extra amd64 "modern" (ADX) artifact.
 const beaconChain = "beacon-chain"
 
@@ -59,13 +64,18 @@ func (c Config) Build() error {
 		}
 	}
 
-	zig, err := provision("install-zig.sh")
+	zig, err := cdeps.Provision("install-zig.sh")
 	if err != nil {
 		return fmt.Errorf("provision zig: %w", err)
 	}
 
 	if err := os.MkdirAll(c.Dist, 0o750); err != nil {
 		return fmt.Errorf("create dist dir: %w", err)
+	}
+
+	modfile, err := distHashtree.Prepare(c.Go)
+	if err != nil {
+		return fmt.Errorf("prepare hashtree: %w", err)
 	}
 
 	total := c.artifactCount()
@@ -76,6 +86,10 @@ func (c Config) Build() error {
 		cc, cxx, extra, pathPrefix, err := c.toolchain(t, zig, &osxcross)
 		if err != nil {
 			return fmt.Errorf("toolchain: %w", err)
+		}
+
+		if err := distHashtree.Build(string(t.OS), string(t.Arch), cc, pathPrefix, zig); err != nil {
+			return fmt.Errorf("build hashtree: %w", err)
 		}
 
 		ext := ""
@@ -92,7 +106,7 @@ func (c Config) Build() error {
 			out := filepath.Join(c.Dist, fmt.Sprintf("%s-%s-%s-%s%s", bin, c.Tag, t.OS, t.Arch, ext))
 			n++
 
-			b := builder{cfg: c, t: t, cc: cc, cxx: cxx, pathPrefix: pathPrefix}
+			b := builder{cfg: c, t: t, cc: cc, cxx: cxx, pathPrefix: pathPrefix, modfile: modfile}
 			fmt.Printf("[%d/%d] → %s/%s  %s  (%s - portable)\n", n, total, t.OS, t.Arch, bin, c.Mode)
 			if err := b.compile(out, "./cmd/"+bin, c.cgoCFlags(c.BLSTPortable, extra), pgo); err != nil {
 				return fmt.Errorf("compile: %w", err)
@@ -153,7 +167,7 @@ func (c Config) toolchain(t Target, zig string, osxcross *string) (cc, cxx, extr
 
 	case Darwin:
 		if *osxcross == "" {
-			if *osxcross, err = provision("install-osxcross.sh"); err != nil {
+			if *osxcross, err = cdeps.Provision("install-osxcross.sh"); err != nil {
 				return
 			}
 		}
@@ -164,7 +178,7 @@ func (c Config) toolchain(t Target, zig string, osxcross *string) (cc, cxx, extr
 		}
 
 	case Windows:
-		if _, err = provision("install-mingw.sh"); err != nil {
+		if _, err = cdeps.Provision("install-mingw.sh"); err != nil {
 			return
 		}
 
@@ -181,6 +195,7 @@ type builder struct {
 	t          Target
 	cc, cxx    string
 	pathPrefix string
+	modfile    string // -modfile with the from-source hashtree replace
 }
 
 func (b builder) compile(out, pkg, cgoCFlags, pgo string) error {
@@ -189,7 +204,7 @@ func (b builder) compile(out, pkg, cgoCFlags, pgo string) error {
 		args = append(args, b.cfg.Tagflag)
 	}
 
-	args = append(args, "-trimpath")
+	args = append(args, "-trimpath", "-modfile="+b.modfile)
 	if pgo != "" {
 		args = append(args, pgo)
 	}
@@ -231,19 +246,6 @@ func (c Config) artifactCount() int {
 	}
 
 	return m
-}
-
-func provision(script string) (string, error) {
-	// #nosec G204 -- build-time tooling: `script` is one of the in-repo literals passed by callers below.
-	cmd := exec.Command(filepath.Join("tools", "cross-toolchain", script))
-	cmd.Stderr = os.Stderr
-
-	path, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("%s: %w", script, err)
-	}
-
-	return strings.TrimSpace(string(path)), nil
 }
 
 // defaultTargets is the build matrix used when CROSS_TARGETS is unset.

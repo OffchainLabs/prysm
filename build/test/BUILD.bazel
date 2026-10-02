@@ -6,6 +6,7 @@ go_library(
     srcs = ["main.go"],
     importpath = "github.com/OffchainLabs/prysm/v7/build/test",
     visibility = ["//visibility:private"],
+    deps = ["//build/cdeps:go_default_library"],
 )
 
 go_binary(
