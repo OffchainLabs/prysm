@@ -15,7 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/golang/snappy"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -99,11 +98,8 @@ func TestStartStateDiff_ValidateOnStartup(t *testing.T) {
 	flags.Init(&globalFlags)
 
 	st, _ := createState(t, 0, version.Phase0)
-	stateBytes, err := st.MarshalSSZ()
+	enc, err := encodeStateWithKey(st)
 	require.NoError(t, err)
-	enc, err := addKey(st.Version(), stateBytes)
-	require.NoError(t, err)
-	enc = snappy.Encode(nil, enc)
 
 	store := setupDB(t)
 	require.NoError(t, store.db.Update(func(tx *bolt.Tx) error {

@@ -11,7 +11,7 @@ import (
 
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	dto "github.com/prometheus/client_model/go"
-	"github.com/prometheus/prom2json"
+	"github.com/prometheus/common/expfmt"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -69,35 +69,37 @@ func NewValidatorScraper(promExpoURL string) Scraper {
 	}
 }
 
-// note on tripper -- under the hood FetchMetricFamilies constructs an http.Client,
-// which, if transport is nil, will just use the DefaultTransport, so we
-// really only bother specifying the transport in tests, otherwise we let
-// the zero-value (which is nil) flow through so that the default transport
-// will be used.
+// A nil tripper uses http.DefaultTransport.
 func scrapeProm(url string, tripper http.RoundTripper) (map[string]*dto.MetricFamily, error) {
-	mfChan := make(chan *dto.MetricFamily)
-	errChan := make(chan error, 1)
-	go func() {
-		// FetchMetricFamilies handles grpc flavored prometheus ez
-		// but at the cost of the awkward channel select loop below
-		errChan <- prom2json.FetchMetricFamilies(url, mfChan, tripper)
-	}()
-	result := make(map[string]*dto.MetricFamily)
-	// channel select accumulates results from FetchMetricFamilies
-	// unless there is an error.
-	for {
-		select {
-		case fam, chanOpen := <-mfChan:
-			// FetchMetricFamilies will close the channel when done
-			// at which point we want to stop the goroutine
-			if fam == nil && !chanOpen {
-				return result, <-errChan
-			}
-			ptr := fam
-			result[fam.GetName()] = ptr
-		case err := <-errChan:
-			return result, err
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating GET request for URL %q failed: %w", url, err)
+	}
+	req.Header.Set("Accept", string(expfmt.FmtProtoDelim)+";q=0.7,"+string(expfmt.FmtText)+";q=0.3")
+	client := http.Client{Transport: tripper}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("executing GET request for URL %q failed: %w", url, err)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.WithError(err).Error("Failed to close metrics response body")
 		}
+	}()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GET request for URL %q returned HTTP status %s", url, resp.Status)
+	}
+
+	decoder := expfmt.NewDecoder(resp.Body, expfmt.ResponseFormat(resp.Header))
+	result := make(map[string]*dto.MetricFamily)
+	for {
+		fam := new(dto.MetricFamily)
+		if err := decoder.Decode(fam); err == io.EOF {
+			return result, nil
+		} else if err != nil {
+			return nil, fmt.Errorf("decoding metrics from URL %q failed: %w", url, err)
+		}
+		result[fam.GetName()] = fam
 	}
 }
 

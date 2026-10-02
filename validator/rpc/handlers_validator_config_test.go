@@ -257,7 +257,7 @@ func TestServer_SetBuilderConfig(t *testing.T) {
 			"entry without url":                                 {`{"builders":[{"min_bid":"1"}]}`, "url is required"},
 			"pubkey-only entry":                                 {`{"builders":[{"builder_pubkeys":["` + bpk + `"]}]}`, "url is required"},
 			"same url and auth_data":                            {`{"builders":[{"url":"https://a"},{"url":"https://a"}]}`, "share the same url and auth_data"},
-			"omitted auth_data collides with its derived value": {`{"builders":[{"url":"https://a"},{"url":"https://a","auth_data":"` + hexutil.Encode([]byte("https://a")) + `"}]}`, "share the same url and auth_data"},
+			"omitted auth_data collides with its derived value": {`{"builders":[{"url":"https://a"},{"url":"https://a","auth_data":"` + hexutil.Encode([]byte("a")) + `"}]}`, "share the same url and auth_data"},
 			"invalid url":                                       {`{"builders":[{"url":"not a url"}]}`, "url is not a valid URL"},
 			"url too long":                                      {`{"builders":[{"url":"` + longURL + `"}]}`, "url exceeds 2048 bytes"},
 			"invalid builder_pubkeys entry":                     {`{"builders":[{"url":"https://a","builder_pubkeys":["0x1234"]}]}`, "builder_pubkeys contains an invalid BLS public key"},
@@ -309,7 +309,7 @@ func TestServer_SetBuilderConfig(t *testing.T) {
 }
 
 func TestServer_GetBuilderConfig(t *testing.T) {
-	// GET is fully resolved: omitted auth_data becomes the url's UTF-8 bytes, and
+	// GET is fully resolved: omitted auth_data becomes the url's hostname, and
 	// unset values become the runtime fallbacks (no floor, neutral boost, trustless-only).
 	t.Run("nil proposer settings resolve to runtime defaults", func(t *testing.T) {
 		srv, keys := setupConfigServer(t, 1)
@@ -333,7 +333,7 @@ func TestServer_GetBuilderConfig(t *testing.T) {
 		require.Equal(t, "0", *cfg.MinBid)
 		require.Equal(t, "100", *cfg.BuilderBoostFactor)
 		require.Equal(t, 1, len(cfg.Builders))
-		require.Equal(t, hexutil.Encode([]byte("https://a.example")), *cfg.Builders[0].AuthData)
+		require.Equal(t, hexutil.Encode([]byte("a.example")), *cfg.Builders[0].AuthData)
 		require.Equal(t, "0", *cfg.Builders[0].MinBid)
 		require.Equal(t, "100", *cfg.Builders[0].BuilderBoostFactor)
 		require.Equal(t, "0", *cfg.Builders[0].MaxExecutionPayment)

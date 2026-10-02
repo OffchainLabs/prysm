@@ -819,12 +819,12 @@ func unexpectedStatusErr(response *http.Response, expected []int) error {
 	case http.StatusNotFound:
 		sentinel = ErrNotFound
 	case http.StatusInternalServerError:
-		sentinel = ErrNotOK
+		sentinel = ErrUnexpectedStatus
 	case http.StatusBadGateway:
 		sentinel = ErrBadGateway
 	default:
-		log.WithError(ErrNotOK).Debug(msg)
-		return errors.Wrap(ErrNotOK, fmt.Sprintf("unsupported error code: %d", response.StatusCode))
+		log.WithError(ErrUnexpectedStatus).Debug(msg)
+		return errors.Wrap(ErrUnexpectedStatus, fmt.Sprintf("unexpected status %d, expected %v", response.StatusCode, expected))
 	}
 	log.WithError(sentinel).Debug(msg)
 	return &httpError{status: response.StatusCode, wrapped: errors.Wrap(sentinel, errorMessageOrBody(bodyBytes))}

@@ -46,6 +46,7 @@ func SepoliaConfig() *BeaconChainConfig {
 	cfg.ElectraForkVersion = []byte{0x90, 0x00, 0x00, 0x74}
 	cfg.FuluForkEpoch = 272640 // 2025-10-14 07:36:00 UTC
 	cfg.FuluForkVersion = []byte{0x90, 0x00, 0x00, 0x75}
+	cfg.GloasForkEpoch = 353024 // 2026-10-06 13:53:36 UTC
 	cfg.GloasForkVersion = []byte{0x90, 0x00, 0x00, 0x76}
 	cfg.TerminalTotalDifficulty = "17000000000000000"
 	cfg.DepositContractAddress = "0x7f02C3E3c98b133055B8B348B2Ac625669Ed295D"
@@ -60,6 +61,8 @@ func SepoliaConfig() *BeaconChainConfig {
 			Epoch:            275712, // 2025-10-27 23:16:48 UTC
 		},
 	}
+	cfg.MinBuilderWithdrawabilityDelay = 64
+	cfg.PayloadDueBPS = 5000
 	cfg.InitializeForkSchedule()
 	return cfg
 }

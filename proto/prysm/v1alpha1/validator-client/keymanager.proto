@@ -135,8 +135,9 @@ message BuilderConfig {
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
   ];
-  reserved 3;
-  reserved "relays";
+  // relays is legacy v1 (mev-boost) content that is never read; it stays declared
+  // so strict settings decoding keeps accepting files that still carry it.
+  repeated string relays = 3 [deprecated = true];
   // max_execution_payment is the maximum execution layer payment (in Gwei) the
   // proposer will accept from a builder for the Gloas builder API. Explicit 0
   // means trustless-only; unset inherits; 2^64-1 means accept any amount.
@@ -164,9 +165,8 @@ message BuilderConfig {
 // left unset inherit from the enclosing BuilderConfig, then default_config.
 message BuilderEntry {
   string url = 1;
-  // pubkeys filters accepted bids to these builder keys; empty accepts any.
-  repeated bytes pubkeys = 2;
-  optional bytes auth_data = 3;
+  repeated string builder_pubkeys = 2;
+  optional string auth_data = 3;
   optional uint64 min_bid = 4 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"

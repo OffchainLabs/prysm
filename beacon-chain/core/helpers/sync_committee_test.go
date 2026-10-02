@@ -1,10 +1,9 @@
 package helpers_test
 
 import (
-	"math/rand"
+	"slices"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -290,7 +289,7 @@ func TestCurrentEpochSyncSubcommitteeIndices_UsingCommittee(t *testing.T) {
 	require.DeepEqual(t, []primitives.CommitteeIndex{0}, index)
 
 	// Test that cache was able to fill on miss.
-	time.Sleep(100 * time.Millisecond)
+	helpers.WaitForSyncCommitteeCacheFills()
 	index, err = helpers.SyncCommitteeCache().CurrentPeriodIndexPosition(root, 0)
 	require.NoError(t, err)
 	require.DeepEqual(t, []primitives.CommitteeIndex{0}, index)
@@ -477,9 +476,8 @@ func TestIsCurrentEpochSyncCommittee_SameBlockRoot(t *testing.T) {
 	assert.NoError(t, state.SetSlot(primitives.Slot(wantedSlot)))
 	syncCommittee, err = state.CurrentSyncCommittee()
 	assert.NoError(t, err)
-	rand.Shuffle(len(syncCommittee.Pubkeys), func(i, j int) {
-		syncCommittee.Pubkeys[i], syncCommittee.Pubkeys[j] = syncCommittee.Pubkeys[j], syncCommittee.Pubkeys[i]
-	})
+	// Reverse rather than shuffle: a shuffle may leave validator 200 at the same position.
+	slices.Reverse(syncCommittee.Pubkeys)
 	require.NoError(t, state.SetCurrentSyncCommittee(syncCommittee))
 	newIdxs, err := helpers.CurrentPeriodSyncSubcommitteeIndices(state, 200)
 	require.NoError(t, err)

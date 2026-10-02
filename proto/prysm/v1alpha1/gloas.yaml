@@ -1,5 +1,10 @@
 package: "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 types:
+  - name: "LightClientHeaderGloas"
+  - name: "LightClientBootstrapGloas"
+  - name: "LightClientUpdateGloas"
+  - name: "LightClientFinalityUpdateGloas"
+  - name: "LightClientOptimisticUpdateGloas"
   - name: "AttestationGloas"
     progressive: {}
     fields:
@@ -56,6 +61,15 @@ types:
     progressive: {}
     fields:
       AttestingIndices: {type: "ProgressiveList"}
+  - name: "PartialDataColumnGroupID"
+  - name: "PartialDataColumnSidecarGloas"
+    fields:
+      CellsPresentBitmap: {type: "ProgressiveBitlist"}
+      PartialColumn:      {type: "ProgressiveList"}
+      KzgProofs:          {type: "ProgressiveList"}
+  - name: "LightClientBlockDataGloas"
+  - name: "LightClientBootstrapDataGloas"
+  - name: "LightClientEpochDataGloas"
   - name: "PayloadAttestation"
     progressive: {}
   - name: "PayloadAttestationData"

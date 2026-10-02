@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api"
@@ -101,6 +102,34 @@ func TestPayloadAttestationData_EndpointError(t *testing.T) {
 	client := &beaconApiValidatorClient{handler: handler}
 	_, err := client.payloadAttestationData(ctx, 1)
 	require.ErrorContains(t, "boom", err)
+}
+
+// The HTTP status survives the wrap chain so the validator client can classify it.
+func TestPayloadAttestationData_StatusSurvivesWrap(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		code int
+	}{
+		{name: "service unavailable", code: http.StatusServiceUnavailable},
+		{name: "no content", code: http.StatusNoContent},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			handler := mock.NewMockHandler(ctrl)
+			handler.EXPECT().GetSSZ(gomock.Any(), gomock.Any()).
+				Return(nil, nil, &httputil.DefaultJsonError{Code: tt.code}).Times(1)
+
+			client := &beaconApiValidatorClient{handler: handler}
+			_, err := client.payloadAttestationData(t.Context(), 1)
+			require.NotNil(t, err)
+			require.Equal(t, true, errors.Is(err, &httputil.DefaultJsonError{Code: tt.code}),
+				"expected a %d DefaultJsonError, got %v", tt.code, err)
+			// A 204 must not degrade into an empty-body decode failure.
+			require.Equal(t, false, strings.Contains(err.Error(), "unexpected end of JSON input"),
+				"status was lost and the empty body was decoded instead: %v", err)
+		})
+	}
 }
 
 func TestSubmitPayloadAttestation(t *testing.T) {

@@ -623,7 +623,7 @@ func TestSubmitAttestationsV2(t *testing.T) {
 	c := params.BeaconConfig().Copy()
 	// Required for correct committee size calculation.
 	c.SlotsPerEpoch = 1
-	params.OverrideBeaconConfig(c)
+	params.SetActiveTestCleanup(t, c)
 
 	_, keys, err := util.DeterministicDepositsAndKeys(2)
 	require.NoError(t, err)

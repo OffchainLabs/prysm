@@ -563,6 +563,12 @@ service BeaconNodeValidator {
       body : "*"
     };
   }
+
+  // Streams payload and custody-data availability without waiting for execution validation.
+  rpc StreamExecutionPayloadAvailable(google.protobuf.Empty)
+      returns (stream StreamExecutionPayloadAvailableResponse) {
+    option deprecated = true;
+  }
 }
 
 // SyncMessageBlockRootResponse for beacon chain validator to retrieve and
@@ -1530,4 +1536,15 @@ message PayloadAttestationDataRequest {
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
   ];
+}
+
+// StreamExecutionPayloadAvailableResponse identifies an available payload and its beacon block.
+message StreamExecutionPayloadAvailableResponse {
+  option deprecated = true;
+
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  bytes block_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }

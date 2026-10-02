@@ -114,7 +114,7 @@ func TestClient_Status(t *testing.T) {
 		hc:      hc,
 		baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"},
 	}
-	require.ErrorIs(t, c.Status(ctx), ErrNotOK)
+	require.ErrorIs(t, c.Status(ctx), ErrUnexpectedStatus)
 }
 
 func TestClient_RegisterValidator(t *testing.T) {
@@ -284,7 +284,7 @@ func TestClient_GetHeader(t *testing.T) {
 		}
 
 		_, err := c.GetHeader(ctx, slot, bytesutil.ToBytes32(parentHash), bytesutil.ToBytes48(pubkey))
-		require.ErrorIs(t, err, ErrNotOK)
+		require.ErrorIs(t, err, ErrUnexpectedStatus)
 	})
 	t.Run("header not available", func(t *testing.T) {
 		hc := &http.Client{
@@ -1823,7 +1823,7 @@ func TestSubmitBlindedBlockPostFulu(t *testing.T) {
 		sbbb, err := blocks.NewSignedBeaconBlock(testSignedBlindedBeaconBlockBellatrix(t))
 		require.NoError(t, err)
 		err = c.SubmitBlindedBlockPostFulu(ctx, sbbb)
-		require.ErrorIs(t, err, ErrNotOK)
+		require.ErrorIs(t, err, ErrUnexpectedStatus)
 	})
 }
 

@@ -57,7 +57,7 @@ func BuildersFromConsensus(builders []*ethpb.Builder) []*Builder {
 func BuilderFromConsensus(b *ethpb.Builder) *Builder {
 	return &Builder{
 		Pubkey:            hexutil.Encode(b.Pubkey),
-		Version:           hexutil.Encode(b.Version),
+		Version:           strconv.FormatUint(uint64(b.Version[0]), 10),
 		ExecutionAddress:  hexutil.Encode(b.ExecutionAddress),
 		Balance:           fmt.Sprintf("%d", b.Balance),
 		DepositEpoch:      fmt.Sprintf("%d", b.DepositEpoch),

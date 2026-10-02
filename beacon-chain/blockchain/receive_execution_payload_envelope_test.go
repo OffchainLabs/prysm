@@ -40,6 +40,8 @@ func gloasEnvelopeFixture(t *testing.T, blockRoot [32]byte) (*ethpb.BeaconStateG
 
 	// Get base state and patch the state to be consistent with the payload we will build and sign.
 	base, blk := testGloasState(t, slot, bytesutil.ToBytes32(parentBeaconRoot), blockHash)
+	base.LatestBlockHeader.Slot = slot
+	base.LatestExecutionPayloadBid.Slot = slot
 	base.Fork = &ethpb.Fork{
 		CurrentVersion:  bytes.Repeat([]byte{0x01}, 4),
 		PreviousVersion: bytes.Repeat([]byte{0x01}, 4),
