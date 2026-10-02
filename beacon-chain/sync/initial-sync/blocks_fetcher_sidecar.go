@@ -145,16 +145,24 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, r *fetchRequestRespon
 func (f *blocksFetcher) resolveBlock(ctx context.Context, root [32]byte) (blocks.ROBlock, bool) {
 	signed, err := f.db.Block(ctx, root)
 	if err != nil {
+		log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Error("Could not read block from DB")
+	}
+	if signed != nil {
+		if b, err := blocks.NewROBlockWithRoot(signed, root); err == nil {
+			return b, true
+		}
+	}
+	// The preceding batch's head can still be in the initial sync cache.
+	signed, err = f.chain.HeadBlock(ctx)
+	if err != nil {
 		return blocks.ROBlock{}, false
 	}
-	b, err := blocks.NewROBlockWithRoot(signed, root)
-	return b, err == nil
+	b, err := blocks.NewROBlock(signed)
+	return b, err == nil && b.Root() == root
 }
 
-// columnFetchBlocks selects the post-Fulu blocks (within the DA period) whose data column
-// sidecars must be fetched: pre-Gloas blocks always, and Gloas blocks only when their payload
-// was revealed (an envelope exists for the block root). An envelope may reference a block outside
-// postFulu, resolved via resolveBlock.
+// columnFetchBlocks selects the blocks within the DA period whose columns must be fetched: pre-Gloas
+// blocks always, Gloas blocks only when an envelope is present (its block may lie outside the batch).
 func columnFetchBlocks(
 	postFulu []blocks.BlockWithROSidecars,
 	envelopes []interfaces.ROSignedExecutionPayloadEnvelope,
@@ -179,7 +187,6 @@ func columnFetchBlocks(
 		seen[root] = true
 		roBlocks = append(roBlocks, b)
 	}
-
 	for i := range postFulu {
 		if postFulu[i].Block.Version() < version.Gloas {
 			add(postFulu[i].Block)

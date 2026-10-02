@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sort"
 
 	prysmsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -154,11 +155,24 @@ func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestRespon
 
 	// The whole block batch is gloas
 	start := r.start
+	// Include the last block's payload so its columns are fetched and checked with this batch.
+	count := r.count + 1
 	gloasStart, err := slots.EpochStart(params.BeaconConfig().GloasForkEpoch)
 	if err == nil && start > gloasStart {
 		start--
 	}
-	envelopes, pid, err := f.fetchPayloadEnvelopesFromPeer(ctx, start, r.count, r.blocksFrom, peers)
+	limit := params.BeaconConfig().MaxRequestPayloads
+	if r.count >= limit {
+		// Start at the first block and cut the blocks to one payload request;
+		// fork recovery passes block sets wider than the batch limit.
+		start = r.bwb[0].Block.Block().Slot()
+		cut := sort.Search(len(r.bwb), func(i int) bool {
+			return r.bwb[i].Block.Block().Slot()-start >= primitives.Slot(limit)
+		})
+		r.bwb = r.bwb[:cut]
+		count = uint64(r.bwb[len(r.bwb)-1].Block.Block().Slot()-start) + 1
+	}
+	envelopes, pid, err := f.fetchPayloadEnvelopesFromPeer(ctx, start, count, r.blocksFrom, peers)
 	if err != nil {
 		r.err = errors.Wrap(err, "fetch payload envelopes from peer")
 		r.payloadsFrom = ""
@@ -166,7 +180,111 @@ func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestRespon
 	}
 	r.envelopes = envelopes
 	r.payloadsFrom = pid
-	f.validatePayloadBlockConsistency(r)
+	headSlot := f.chain.HeadSlot()
+	finalizedSlot := primitives.Slot(0)
+	if checkpoint := f.chain.FinalizedCheckpt(); checkpoint != nil {
+		finalizedSlot, err = slots.EpochStart(checkpoint.Epoch)
+		if err != nil {
+			r.err = errors.Wrap(err, "finalized epoch start slot")
+			return
+		}
+	}
+	firstUnprocessedIndex := 0
+	for firstUnprocessedIndex < len(r.bwb) {
+		block := r.bwb[firstUnprocessedIndex].Block
+		if block.Block().Slot() > headSlot || (block.Block().Slot() > finalizedSlot && !f.chain.HasBlock(ctx, block.Root())) {
+			break
+		}
+		firstUnprocessedIndex++
+	}
+	if firstUnprocessedIndex == len(r.bwb) {
+		// Keep the last block: its envelope can arrive after the block itself was imported.
+		f.validatePayloadsForImport(r, firstUnprocessedIndex-1)
+		return
+	}
+	parentImported, err := f.ensureParentPayload(ctx, r, firstUnprocessedIndex)
+	if err != nil {
+		r.err = errors.Wrap(err, "check parent payload")
+		return
+	}
+	if firstUnprocessedIndex == 0 {
+		// Preserve the required parent envelope even when its block is outside this batch.
+		f.validatePayloadBlockConsistency(r)
+		return
+	}
+	validationStartIndex := firstUnprocessedIndex
+	if !parentImported {
+		validationStartIndex--
+	}
+	f.validatePayloadsForImport(r, validationStartIndex)
+}
+
+// validatePayloadsForImport validates the selected suffix and drops envelopes older than its first block.
+func (f *blocksFetcher) validatePayloadsForImport(r *fetchRequestResponse, validationStartIndex int) {
+	relevant := *r
+	relevant.bwb = r.bwb[validationStartIndex:]
+	relevant.envelopes = nil
+	for _, envelope := range r.envelopes {
+		message, err := envelope.Envelope()
+		if err != nil {
+			r.err = errors.Wrap(err, "envelope")
+			return
+		}
+		if message.Slot() >= relevant.bwb[0].Block.Block().Slot() {
+			relevant.envelopes = append(relevant.envelopes, envelope)
+		}
+	}
+	f.validatePayloadBlockConsistency(&relevant)
+	r.err = relevant.err
+	r.bwb = r.bwb[:validationStartIndex+len(relevant.bwb)]
+	r.envelopes = relevant.envelopes
+}
+
+// ensureParentPayload returns true when the parent's payload is already imported.
+func (f *blocksFetcher) ensureParentPayload(ctx context.Context, r *fetchRequestResponse, firstUnprocessedIndex int) (bool, error) {
+	child := r.bwb[firstUnprocessedIndex].Block
+	parentRoot := child.Block().ParentRoot()
+	var parent blocks.ROBlock
+	if firstUnprocessedIndex > 0 && r.bwb[firstUnprocessedIndex-1].Block.Root() == parentRoot {
+		parent = r.bwb[firstUnprocessedIndex-1].Block
+	} else {
+		var ok bool
+		parent, ok = f.resolveBlock(ctx, parentRoot)
+		if !ok {
+			// An earlier concurrently fetched batch may not have imported the parent yet.
+			return false, nil
+		}
+	}
+	if parent.Version() < version.Gloas || parent.Block().Slot() == 0 {
+		return false, nil
+	}
+	buildsOnParentPayload, err := blocks.BlockBuiltOnParentPayload(parent.Block(), child.Block())
+	if err != nil {
+		return false, errors.Wrap(err, "block built on parent payload")
+	}
+	if !buildsOnParentPayload {
+		return false, nil
+	}
+	for _, envelope := range r.envelopes {
+		message, err := envelope.Envelope()
+		if err != nil {
+			return false, errors.Wrap(err, "envelope")
+		}
+		if message.BeaconBlockRoot() == parentRoot {
+			matches, err := blocks.BlockBuiltOnParentEnvelope(envelope, child)
+			if err != nil {
+				return false, errors.Wrap(err, "block built on parent envelope")
+			}
+			if matches && message.Slot() == parent.Block().Slot() {
+				return false, nil
+			}
+			if r.blocksFrom == r.payloadsFrom {
+				return false, errors.Wrap(prysmsync.ErrInvalidFetchedData, "parent payload envelope does not match block")
+			}
+			return false, errors.New("parent payload envelope does not match block")
+		}
+	}
+	return f.chain.HasFullNode(parentRoot), nil
 }
 
 // fetchPayloadEnvelopesFromPeer fetches execution payload envelopes by range,
