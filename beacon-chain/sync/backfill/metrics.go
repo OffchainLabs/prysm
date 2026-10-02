@@ -123,6 +123,32 @@ var (
 			Buckets: []float64{3, 5, 10, 20, 100, 200},
 		},
 	)
+
+	envelopeDownloadCount = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "backfill_envelopes_download_count",
+			Help: "Number of SignedExecutionPayloadEnvelope values downloaded from peers for backfill.",
+		},
+	)
+	envelopeVerifiedCount = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "backfill_envelopes_verified_count",
+			Help: "Number of backfilled execution payload envelopes that passed full verification.",
+		},
+	)
+	envelopeSlotsSkipped = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "backfill_envelope_slots_skipped",
+			Help: "Number of slots whose execution payload envelope was skipped during backfill, by reason.",
+		},
+		[]string{"reason"},
+	)
+	envelopeConflictsKept = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "backfill_envelope_conflicts_kept",
+			Help: "Number of backfilled envelopes dropped because a conflicting envelope was already stored.",
+		},
+	)
 )
 
 func blobValidationMetrics(_ blocks.ROBlob) error {

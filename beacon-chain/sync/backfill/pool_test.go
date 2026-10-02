@@ -534,3 +534,68 @@ func TestExpirationFlowEndToEnd(t *testing.T) {
 		})
 	}
 }
+
+// TestProcessTodoExpiresEnvelopesWithoutPeers asserts that envelope attempt-budget expiry runs
+// independently of peer assignment: a queued batch whose envelope budget has lapsed is routed
+// onward to import even when no peer can be assigned, instead of stalling block backfill.
+func TestProcessTodoExpiresEnvelopesWithoutPeers(t *testing.T) {
+	ctx := t.Context()
+	pool := newP2PBatchWorkerPool(p2ptest.NewTestP2P(t), 2, mockCurrentNeedsFunc(0, 1<<32))
+
+	c := makeEnvChain(t, envChainCfg{start: 10, n: 3})
+	recon := &mockReconstructor{payloads: c.reconPayloads(t, 0, 1, 2)}
+	cfg := testEnvSyncCfg(t, c, recon, &downscoreRecorder{})
+	es, err := newEnvelopeSync(ctx, c.blks, cfg)
+	require.NoError(t, err)
+	b := batch{begin: 10, end: 13, blocks: c.blks, columns: &columnSync{}, envelopes: es, state: batchSyncEnvelopes}
+
+	// No peer is ever assignable in this test.
+	noPeers := &mockAssigner{err: peers.ErrInsufficientSuitable}
+
+	// Before any attempt the budget is not anchored, so the batch must stay queued: giving up
+	// before the first attempt would skip slots that were never requested.
+	todo, err := pool.processTodo([]batch{b}, noPeers, map[peer.ID]bool{})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(todo))
+
+	// One empty attempt anchors the budget; then the budget lapses while no peer is available.
+	f := &scriptedFetcher{}
+	es.fetchPass(ctx, "peer-a", f.fetch)
+	require.Equal(t, true, es.unresolved() > 0)
+	now := time.Now()
+	es.now = func() time.Time { return now.Add(time.Hour) }
+
+	todo, err = pool.processTodo(todo, noPeers, map[peer.ID]bool{})
+	require.NoError(t, err)
+	require.Equal(t, 0, len(todo))
+	select {
+	case done := <-pool.fromRouter:
+		require.Equal(t, batchImportable, done.state)
+		require.Equal(t, 0, done.envelopes.unresolved())
+		require.Equal(t, 2, len(done.envelopes.skips[envSkipPeerExhausted]))
+	default:
+		t.Fatal("expected the expired batch to be routed for import")
+	}
+}
+
+// TestEnvelopeRetryExclusions asserts the envelope stage prefers a peer other than the previous
+// assignment without mutating the shared busy set.
+func TestEnvelopeRetryExclusions(t *testing.T) {
+	c := makeEnvChain(t, envChainCfg{start: 10, n: 2})
+	recon := &mockReconstructor{payloads: c.reconPayloads(t, 0, 1)}
+	es, err := newEnvelopeSync(t.Context(), c.blks, testEnvSyncCfg(t, c, recon, &downscoreRecorder{}))
+	require.NoError(t, err)
+
+	busy := map[peer.ID]bool{"busy-peer": true}
+	// Wrong state or no prior attempt: no exclusions.
+	require.IsNil(t, batch{state: batchSequenced, envelopes: es}.envelopeRetryExclusions(busy))
+	require.IsNil(t, batch{state: batchSyncEnvelopes, envelopes: es}.envelopeRetryExclusions(busy))
+	require.IsNil(t, batch{state: batchSyncEnvelopes}.envelopeRetryExclusions(busy))
+
+	es.peer = "prev-peer"
+	avoid := batch{state: batchSyncEnvelopes, envelopes: es}.envelopeRetryExclusions(busy)
+	require.Equal(t, 2, len(avoid))
+	require.Equal(t, true, avoid["prev-peer"])
+	require.Equal(t, true, avoid["busy-peer"])
+	require.Equal(t, 1, len(busy)) // the shared busy set is untouched
+}
