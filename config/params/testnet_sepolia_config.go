@@ -61,6 +61,12 @@ func SepoliaConfig() *BeaconChainConfig {
 			Epoch:            275712, // 2025-10-27 23:16:48 UTC
 		},
 	}
+	cfg.GasLimitSchedule = []GasLimitScheduleEntry{
+		{
+			GasLimit: 200_000_000,
+			Epoch:    353024, // 2026-10-06 13:53:36 UTC
+		},
+	}
 	cfg.MinBuilderWithdrawabilityDelay = 64
 	cfg.PayloadDueBPS = 5000
 	cfg.InitializeForkSchedule()
