@@ -9,7 +9,6 @@ import (
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"google.golang.org/grpc/codes"
@@ -36,53 +35,45 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 		}
 	})
 
+	// The circuit breaker gate is applied here rather than at bid selection so the builder-API
+	// round trip is skipped too.
+	epoch := slots.ToEpoch(sBlk.Block().Slot())
+	skipBuilderAPI := skipBuilder || vs.BuilderCircuitBreaker.SelfBuildOnly(epoch)
+	var pending *pendingBuilderBid
+	if !skipBuilderAPI {
+		pending = vs.requestBuilderBid(ctx, sBlk.Block(), head, parentFull, builderConfig)
+	}
+	defer pending.abort()
+
 	// local is our self-build candidate and the baseline for comparing incoming bids.
-	var selfBuilt bool
-	var builderURL string
+	var builderWin *winningBuilderBid
+	var src bidSource
 	local, err := vs.getLocalPayload(ctx, sBlk.Block(), head, parentFull)
 	if err != nil {
-		log.WithError(err).Warn("Could not get local payload, falling back to P2P bid")
-		if fbErr := vs.setP2PBidFallback(ctx, sBlk, head, parentFull); fbErr != nil {
-			return nil, status.Errorf(codes.Internal, "Could not get local payload and no P2P bid fallback: %v", fbErr)
+		log.WithError(err).Warn("Could not get local payload, falling back to remote bids")
+		builderWin = pending.wait()
+		var fbErr error
+		src, fbErr = vs.setRemoteBidFallback(ctx, sBlk, head, parentFull, builderWin, builderConfig)
+		if fbErr != nil {
+			return nil, status.Errorf(codes.Internal, "Could not get local payload and no remote bid fallback: %v", fbErr)
 		}
 	} else {
-		// The circuit breaker gate is applied here rather than at bid selection so the builder-API
-		// round trip is skipped too.
-		epoch := slots.ToEpoch(sBlk.Block().Slot())
-		selfBuildOnly := local.OverrideBuilder || skipBuilder || vs.BuilderCircuitBreaker.SelfBuildOnly(epoch)
-		var builderWin *winningBuilderBid
-		if !selfBuildOnly && len(builderConfig.GetBuilders()) > 0 {
-			val, valErr := head.ValidatorAtIndexReadOnly(sBlk.Block().ProposerIndex())
-			parentGasLimit, glErr := vs.ForkchoiceFetcher.GasLimit(sBlk.Block().ParentRoot(), bytesutil.ToBytes32(local.ExecutionData.ParentHash()))
-			switch {
-			case valErr != nil:
-				log.WithError(valErr).Error("Could not get proposer for builder bid request")
-			case glErr != nil:
-				log.WithError(glErr).Error("Could not get parent gas limit for builder bid request")
-			default:
-				pref := vs.proposerPreferenceForProposal(ctx, head, sBlk.Block().Slot(), sBlk.Block().ProposerIndex())
-				feeRecipient := pref.FeeRecipientOrDefault()
-				builderWin = vs.getBuilderExecutionPayloadBid(ctx, head, &builderBidQuery{
-					slot:           sBlk.Block().Slot(),
-					parentRoot:     sBlk.Block().ParentRoot(),
-					parentHash:     bytesutil.ToBytes32(local.ExecutionData.ParentHash()),
-					pubkey:         val.PublicKey(),
-					feeRecipient:   feeRecipient[:],
-					parentGasLimit: parentGasLimit,
-					targetGasLimit: pref.GasLimitOr(parentGasLimit),
-					entries:        builderConfig.GetBuilders(),
-				})
-			}
+		if local.OverrideBuilder {
+			pending.abort()
+		} else {
+			builderWin = pending.wait()
 		}
-		src, bidErr := vs.setExecutionPayloadBid(ctx, sBlk, head, local, builderWin, builderConfig, selfBuildOnly)
+		var bidErr error
+		src, bidErr = vs.setExecutionPayloadBid(ctx, sBlk, head, local, builderWin, builderConfig, local.OverrideBuilder || skipBuilderAPI)
 		if bidErr != nil {
 			return nil, status.Errorf(codes.Internal, "Could not set execution payload bid: %v", bidErr)
 		}
-		if src == bidSourceBuilderAPI && builderWin != nil {
-			builderURL = string(builderWin.entry.GetUrl())
-		}
-		selfBuilt = src == bidSourceSelfBuild
 	}
+	var builderURL string
+	if src == bidSourceBuilderAPI && builderWin != nil {
+		builderURL = string(builderWin.entry.GetUrl())
+	}
+	selfBuilt := src == bidSourceSelfBuild
 
 	wg.Wait()
 

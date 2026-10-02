@@ -9,8 +9,10 @@ import (
 	"testing"
 	"time"
 
+	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	beaconbuilder "github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	builderTest "github.com/OffchainLabs/prysm/v7/beacon-chain/builder/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -241,6 +243,41 @@ func TestBestBid(t *testing.T) {
 		require.NotNil(t, got)
 		require.Equal(t, bidSourceP2P, src)
 		require.Equal(t, primitives.Gwei(1000), effective)
+	})
+
+	t.Run("no local takes a zero-value remote bid", func(t *testing.T) {
+		got, src, _ := bestBid(nil, nil, newBid(0, 0, p2pIdx), nil, nil)
+		require.NotNil(t, got)
+		require.Equal(t, bidSourceP2P, src)
+
+		win := &winningBuilderBid{bid: newBid(0, 0, builderIdx), entry: &ethpb.BuilderEntry{BuilderBoostFactor: 0}}
+		got, src, _ = bestBid(nil, nil, nil, win, nil)
+		require.NotNil(t, got)
+		require.Equal(t, bidSourceBuilderAPI, src)
+	})
+
+	t.Run("no local waives the p2p min bid", func(t *testing.T) {
+		cfg := &ethpb.BuilderConfig{MinBid: 2000, BuilderBoostFactor: 100}
+		got, src, _ := bestBid(nil, nil, newBid(1000, 0, p2pIdx), nil, cfg)
+		require.NotNil(t, got)
+		require.Equal(t, bidSourceP2P, src)
+	})
+
+	t.Run("no local still ranks remote bids", func(t *testing.T) {
+		win := &winningBuilderBid{bid: newBid(2000, 0, builderIdx), entry: &ethpb.BuilderEntry{BuilderBoostFactor: 100}}
+		got, src, _ := bestBid(nil, nil, newBid(1000, 0, p2pIdx), win, nil)
+		require.Equal(t, bidSourceBuilderAPI, src)
+		require.Equal(t, builderIdx, got.Message.BuilderIndex)
+
+		got, src, _ = bestBid(nil, nil, newBid(3000, 0, p2pIdx), win, nil)
+		require.Equal(t, bidSourceP2P, src)
+		require.Equal(t, p2pIdx, got.Message.BuilderIndex)
+	})
+
+	t.Run("no local and no remote bids", func(t *testing.T) {
+		got, src, _ := bestBid(nil, nil, nil, nil, nil)
+		require.IsNil(t, got)
+		require.Equal(t, bidSourceSelfBuild, src)
 	})
 }
 
@@ -546,6 +583,157 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 		if budget <= configured/2 || budget > configured {
 			t.Fatalf("builder context budget = %s, want (%s, %s]", budget, configured/2, configured)
 		}
+	})
+}
+
+// gatedBuilder reports the parent hash of each bid request on started and holds the request
+// until release is closed or its context ends.
+type gatedBuilder struct {
+	*builderTest.MockBuilderService
+	started chan [32]byte
+	release chan struct{}
+	ctxErr  chan error
+}
+
+func newGatedBuilder(bids ...beaconbuilder.PayloadBid) *gatedBuilder {
+	return &gatedBuilder{
+		MockBuilderService: &builderTest.MockBuilderService{PayloadBids: bids},
+		started:            make(chan [32]byte, 1),
+		release:            make(chan struct{}),
+		ctxErr:             make(chan error, 1),
+	}
+}
+
+func (b *gatedBuilder) GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash, parentRoot [32]byte, pubkey [48]byte, entries []*ethpb.BuilderEntry) ([]beaconbuilder.PayloadBid, error) {
+	b.started <- parentHash
+	select {
+	case <-b.release:
+		return b.MockBuilderService.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, entries)
+	case <-ctx.Done():
+		b.ctxErr <- ctx.Err()
+		return nil, ctx.Err()
+	}
+}
+
+func TestRequestBuilderBid(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	slot := primitives.Slot(100)
+	parentRoot := [32]byte{1, 2, 3}
+	blockHash := [32]byte{7, 7, 7}
+	parentBlockHash := [32]byte{9, 9, 9}
+	proposerPk := [48]byte{4, 5, 6}
+	const parentGasLimit = uint64(30_000_000)
+
+	head, err := util.NewBeaconStateGloas(func(st *ethpb.BeaconStateGloas) error {
+		st.Validators = []*ethpb.Validator{{PublicKey: proposerPk[:], WithdrawalCredentials: make([]byte, 32)}}
+		st.LatestExecutionPayloadBid.BlockHash = blockHash[:]
+		st.LatestExecutionPayloadBid.ParentBlockHash = parentBlockHash[:]
+		return nil
+	})
+	require.NoError(t, err)
+	sBlk, err := consensusblocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{
+		Block: &ethpb.BeaconBlockGloas{Slot: slot, ParentRoot: parentRoot[:], Body: &ethpb.BeaconBlockBodyGloas{}},
+	})
+	require.NoError(t, err)
+	blk := sBlk.Block()
+
+	entries := []*ethpb.BuilderEntry{{Url: []byte("http://builder")}}
+	builderCfg := &ethpb.BuilderConfig{Builders: entries}
+	bidOn := func(parentHash [32]byte) beaconbuilder.PayloadBid {
+		return beaconbuilder.PayloadBid{
+			Entry: &ethpb.BuilderEntry{Url: []byte("http://builder"), MaxExecutionPayment: math.MaxUint64, BuilderBoostFactor: 100},
+			Bid: &ethpb.SignedExecutionPayloadBid{
+				Message: &ethpb.ExecutionPayloadBid{
+					Slot:            slot,
+					ParentBlockRoot: parentRoot[:],
+					ParentBlockHash: parentHash[:],
+					BlockHash:       make([]byte, 32),
+					PrevRandao:      make([]byte, 32),
+					FeeRecipient:    make([]byte, 20),
+					BuilderIndex:    3,
+					Value:           1000,
+				},
+				Signature: make([]byte, 96),
+			},
+		}
+	}
+	newServer := func(b beaconbuilder.BlockBuilder) *Server {
+		return &Server{
+			BlockBuilder:             b,
+			ForkchoiceFetcher:        &chainMock.ChainService{ForkchoiceGasLimits: map[[32]byte]uint64{parentRoot: parentGasLimit}},
+			ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+			NewExecutionPayloadBidVerifier: func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
+				return &fakeBidVerifier{}
+			},
+		}
+	}
+
+	t.Run("nothing to request", func(t *testing.T) {
+		require.IsNil(t, (&Server{}).requestBuilderBid(t.Context(), blk, head, false, builderCfg))
+		require.IsNil(t, newServer(&builderTest.MockBuilderService{}).requestBuilderBid(t.Context(), blk, head, false, &ethpb.BuilderConfig{}))
+		var p *pendingBuilderBid
+		require.IsNil(t, p.wait())
+		p.abort()
+	})
+
+	t.Run("query is derived from the head state", func(t *testing.T) {
+		q, err := newServer(nil).newBuilderBidQuery(t.Context(), head, slot, parentRoot, 0, true, entries)
+		require.NoError(t, err)
+		require.Equal(t, slot, q.slot)
+		require.Equal(t, parentRoot, q.parentRoot)
+		require.Equal(t, blockHash, q.parentHash)
+		require.Equal(t, proposerPk, q.pubkey)
+		require.Equal(t, parentGasLimit, q.parentGasLimit)
+		require.Equal(t, parentGasLimit, q.targetGasLimit)
+		require.DeepEqual(t, params.BeaconConfig().DefaultFeeRecipient.Bytes(), q.feeRecipient)
+	})
+
+	for _, tc := range []struct {
+		name       string
+		parentFull bool
+		want       [32]byte
+	}{
+		{name: "full parent requests on the parent payload hash", parentFull: true, want: blockHash},
+		{name: "empty parent requests on the grandparent payload hash", parentFull: false, want: parentBlockHash},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			b := newGatedBuilder(bidOn(tc.want))
+			p := newServer(b).requestBuilderBid(t.Context(), blk, head, tc.parentFull, builderCfg)
+			require.NotNil(t, p)
+			select {
+			case got := <-b.started:
+				require.Equal(t, tc.want, got)
+			case <-time.After(5 * time.Second):
+				t.Fatal("builder bid was not requested in the background")
+			}
+			close(b.release)
+			win := p.wait()
+			require.NotNil(t, win)
+			require.Equal(t, primitives.BuilderIndex(3), win.bid.Message.BuilderIndex)
+		})
+	}
+
+	t.Run("abort cancels the in-flight request", func(t *testing.T) {
+		b := newGatedBuilder(bidOn(parentBlockHash))
+		p := newServer(b).requestBuilderBid(t.Context(), blk, head, false, builderCfg)
+		<-b.started
+		p.abort()
+		require.ErrorIs(t, <-b.ctxErr, context.Canceled)
+		require.IsNil(t, p.wait())
+		p.abort()
+	})
+
+	t.Run("query failure skips the builder", func(t *testing.T) {
+		b := newGatedBuilder(bidOn(parentBlockHash))
+		vs := newServer(b)
+		vs.ForkchoiceFetcher = &chainMock.ChainService{}
+		p := vs.requestBuilderBid(t.Context(), blk, head, false, builderCfg)
+		require.IsNil(t, p.wait())
+		require.Equal(t, 0, len(b.started))
 	})
 }
 
