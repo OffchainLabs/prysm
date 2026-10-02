@@ -270,7 +270,7 @@ func (s *Service) validateCommitteeIndexAndCount(
 		attEpoch := slots.ToEpoch(data.Slot)
 		postGloas := attEpoch >= params.BeaconConfig().GloasForkEpoch
 		if postGloas {
-			if result, err := s.validateGloasCommitteeIndex(data); result != pubsub.ValidationAccept {
+			if result, err := s.validateGloasCommitteeIndex(ctx, data); result != pubsub.ValidationAccept {
 				return 0, 0, result, err
 			}
 		} else {
@@ -370,7 +370,8 @@ func validateAttestingIndex(
 // [REJECT] attestation.data.index == 0 if block.slot == attestation.data.slot. (New in Gloas)
 // [REJECT] If attestation.data.index == 1, the execution payload for the block passes validation. (New in Gloas)
 // [IGNORE] When attestation.data.index == 1, the execution payload for the block has been seen. (New in Gloas)
-func (s *Service) validateGloasCommitteeIndex(data *eth.AttestationData) (pubsub.ValidationResult, error) {
+// [IGNORE] When attestation.data.index == 1, the execution payload for the block is not optimistic. (New in Gloas)
+func (s *Service) validateGloasCommitteeIndex(ctx context.Context, data *eth.AttestationData) (pubsub.ValidationResult, error) {
 	if data.CommitteeIndex >= 2 {
 		return pubsub.ValidationReject, errors.New("attestation data's committee index must be < 2")
 	}
@@ -394,6 +395,14 @@ func (s *Service) validateGloasCommitteeIndex(data *eth.AttestationData) (pubsub
 		if !s.cfg.chain.HasFullNode(blockRoot) {
 			go s.requestPayloadEnvelope(blockRoot)
 			return pubsub.ValidationIgnore, errors.New("execution payload for attested block has not been seen")
+		}
+		// [IGNORE] If index == 1, the execution payload for the block must not be optimistic.
+		optimistic, err := s.cfg.chain.IsOptimisticForRoot(ctx, blockRoot)
+		if err != nil {
+			return pubsub.ValidationIgnore, err
+		}
+		if optimistic {
+			return pubsub.ValidationIgnore, errors.New("execution payload for attested block is optimistic")
 		}
 	}
 
