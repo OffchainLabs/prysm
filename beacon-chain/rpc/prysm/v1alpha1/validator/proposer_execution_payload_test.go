@@ -277,7 +277,7 @@ func upgradedGloasState(t *testing.T, fuluBlockHash [32]byte) state.BeaconState 
 	wrapped, err := blocks.WrappedExecutionPayloadHeaderDeneb(headerProto)
 	require.NoError(t, err)
 	require.NoError(t, fuluState.SetLatestExecutionPayloadHeader(wrapped))
-	st, err := coregloas.UpgradeToGloas(fuluState)
+	st, err := coregloas.UpgradeToGloas(t.Context(), fuluState)
 	require.NoError(t, err)
 	return st
 }
