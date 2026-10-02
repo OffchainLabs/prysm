@@ -70,4 +70,8 @@ var (
 		Name: "data_column_prune_latency",
 		Help: "Latency of data column prune operations in milliseconds",
 	})
+	dataColumnDiskSize = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "data_column_disk_bytes",
+		Help: "Approximate number of bytes occupied by data columns in storage",
+	})
 )
