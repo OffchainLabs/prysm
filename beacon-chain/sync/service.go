@@ -215,6 +215,7 @@ type Service struct {
 	selfBuildSeenProposers               map[primitives.ValidatorIndex]struct{}
 	pendingPayloadAttestations           map[[32]byte][]*ethpb.PayloadAttestationMessage
 	pendingPayloadAttestationLock        sync.RWMutex
+	attestationBlockWaiter               *attestationBlockWaiter
 }
 
 // NewService initializes new regular sync service.
@@ -236,6 +237,12 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		pendingPayloadEnvelopes:    make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
 		selfBuildSeenProposers:     make(map[primitives.ValidatorIndex]struct{}),
 		pendingPayloadAttestations: make(map[[32]byte][]*ethpb.PayloadAttestationMessage),
+		attestationBlockWaiter: newAttestationBlockWaiter(
+			attestationBlockWaitTimeout,
+			maxConcurrentBlockWaiters,
+			maxConcurrentWaitersPerPeer,
+			maxConcurrentWaitersPerRoot,
+		),
 	}
 
 	for _, opt := range opts {
@@ -320,6 +327,7 @@ func (s *Service) Start() {
 	s.newExecutionPayloadEnvelopeVerifier = newPayloadVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
+	s.startAttestationBlockWaiter()
 
 	if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
 		go broadcaster.Start(&partialColumnCallbacks{service: s})
