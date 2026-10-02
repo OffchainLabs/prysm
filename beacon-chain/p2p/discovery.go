@@ -613,6 +613,11 @@ func (s *Service) createLocalNode(
 		localNode.Set(custodyGroupCountEntry)
 	}
 
+	// EIP-8025: advertise that this node participates in execution proof gossip.
+	if features.Get().EnableExecutionProofs {
+		localNode.Set(ExecutionProofAware(1))
+	}
+
 	if s.cfg != nil && s.cfg.HostAddress != "" {
 		hostIP := net.ParseIP(s.cfg.HostAddress)
 		if hostIP.To4() == nil && hostIP.To16() == nil {

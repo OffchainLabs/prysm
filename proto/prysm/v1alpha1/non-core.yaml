@@ -6,10 +6,16 @@ types:
   - name: "DataColumnSidecarsByRangeRequest"
   - name: "DepositSnapshot"
   - name: "ExecutionPayloadEnvelopesByRangeRequest"
+  # EIP-8025. ProofData is a ProgressiveList[Byte]; the envelope itself is a
+  # plain Container.
+  - name: "ExecutionProofEnvelope"
+    fields:
+      ProofData: {type: "ProgressiveByteList"}
   - name: "MetaDataV0"
   - name: "MetaDataV1"
   - name: "MetaDataV2"
   - name: "SignedBuilderBid"
+  - name: "SignedExecutionProofEnvelope"
   - name: "SignedValidatorRegistrationV1"
   - name: "ValidatorRegistrationV1"
   - name: "ValidatorIdentity"

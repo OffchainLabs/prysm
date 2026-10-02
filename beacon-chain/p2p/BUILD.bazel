@@ -11,6 +11,7 @@ go_library(
         "dial_relay_node.go",
         "discovery.go",
         "doc.go",
+        "execution_proof.go",
         "fork.go",
         "fork_watcher.go",
         "gossip_scoring_params.go",

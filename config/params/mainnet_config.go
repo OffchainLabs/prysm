@@ -40,6 +40,7 @@ var mainnetNetworkConfig = &NetworkConfig{
 	AttSubnetKey:               "attnets",
 	SyncCommsSubnetKey:         "syncnets",
 	CustodyGroupCountKey:       "cgc",
+	ExecutionProofKey:          "eproof",
 	MinimumPeersInSubnetSearch: 20,
 	ContractDeploymentBlock:    11184524, // Note: contract was deployed in block 11052984 but no transactions were sent until 11184524.
 	BootstrapNodes: []string{
@@ -202,6 +203,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	DomainProposerPreferences:         bytesutil.Uint32ToBytes4(0x0D000000),
 	DomainBuilderRequestAuth:          bytesutil.Uint32ToBytes4(0x0B000001),
 	DomainBuilderDeposit:              bytesutil.Uint32ToBytes4(0x0E000000),
+	DomainExecutionProof:              bytesutil.Uint32ToBytes4(0x0F000000),
 
 	// Prysm constants.
 	GenesisValidatorsRoot:          [32]byte{75, 54, 61, 185, 78, 40, 97, 32, 215, 110, 185, 5, 52, 15, 221, 78, 84, 191, 233, 240, 107, 243, 63, 246, 207, 90, 210, 127, 81, 27, 254, 149},
@@ -393,6 +395,12 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 
 	// Values related to the fast confirmation rule.
 	ConfirmationByzantineThreshold: 25,
+
+	// Optional execution proof values (EIP-8025). MAX_PROOF_SIZE is 4 MiB.
+	// STATELESS_INPUT_SCHEMA_ID encodes the Amsterdam protocol fork (0x15) and
+	// schema revision (0x01).
+	MaxProofSize:           4194304,
+	StatelessInputSchemaId: 0x1501,
 
 	BlobSchedule: []BlobScheduleEntry{
 		{

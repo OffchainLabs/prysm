@@ -143,6 +143,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.MaxBuilderConsecutiveMissedSlots,
 			flags.MaxBuilderEpochMissedSlots,
 			flags.MevRelayEndpoint,
+			flags.ProofNodeEndpoint,
 			flags.MinBuilderBid,
 			flags.MinBuilderDiff,
 			flags.BuilderHeaderTimeout,

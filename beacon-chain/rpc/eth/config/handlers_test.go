@@ -233,6 +233,11 @@ func TestGetSpec(t *testing.T) {
 	var dbd [4]byte
 	copy(dbd[:], []byte{'1', '0', '0', '2'})
 	config.DomainBuilderDeposit = dbd
+	var dep [4]byte
+	copy(dep[:], []byte{'1', '0', '0', '3'})
+	config.DomainExecutionProof = dep
+	config.MaxProofSize = 4194304
+	config.StatelessInputSchemaId = 0x1501
 	params.OverrideBeaconConfig(config)
 
 	request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/config/spec", nil)
@@ -245,7 +250,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 218, len(data))
+	assert.Equal(t, 221, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -469,6 +474,12 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "0x31303031", v)
 			case "DOMAIN_BUILDER_DEPOSIT":
 				assert.Equal(t, "0x31303032", v)
+			case "DOMAIN_EXECUTION_PROOF":
+				assert.Equal(t, "0x31303033", v)
+			case "MAX_PROOF_SIZE":
+				assert.Equal(t, "4194304", v)
+			case "STATELESS_INPUT_SCHEMA_ID":
+				assert.Equal(t, "5377", v)
 			case "DOMAIN_SYNC_COMMITTEE":
 				assert.Equal(t, "0x07000000", v)
 			case "DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF":

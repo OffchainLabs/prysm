@@ -12,10 +12,14 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/validator/client/optionalproofs"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/middleware"
 	"github.com/OffchainLabs/prysm/v7/async/event"
@@ -430,7 +434,79 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		return errors.Wrap(err, "could not initialize validator service")
 	}
 
-	return c.services.RegisterService(validatorService)
+	if err := c.services.RegisterService(validatorService); err != nil {
+		return err
+	}
+
+	return c.registerProverService(cliCtx, validatorService)
+}
+
+// registerProverService starts the EIP-8025 prover, which generates execution
+// proofs for revealed payloads and has the beacon node broadcast them.
+//
+// The role is optional and unrewarded, so it is off unless asked for.
+func (c *ValidatorClient) registerProverService(cliCtx *cli.Context, signer optionalproofs.Signer) error {
+	if !cliCtx.Bool(flags.EnableProverFlag.Name) {
+		return nil
+	}
+
+	proofNodeEndpoint := cliCtx.String(flags.ProofNodeEndpointFlag.Name)
+	if proofNodeEndpoint == "" {
+		return fmt.Errorf("--%s requires --%s to be set", flags.EnableProverFlag.Name, flags.ProofNodeEndpointFlag.Name)
+	}
+
+	// The prover reads payloads and submits proofs over the beacon REST API, so
+	// it needs a single beacon node to follow.
+	hosts := strings.Split(cliCtx.String(flags.BeaconRESTApiProviderFlag.Name), ",")
+	beaconApiEndpoint := strings.TrimSpace(hosts[0])
+	if beaconApiEndpoint == "" {
+		return fmt.Errorf("--%s requires --%s to be set", flags.EnableProverFlag.Name, flags.BeaconRESTApiProviderFlag.Name)
+	}
+	if len(hosts) > 1 {
+		log.Warnf("Several beacon nodes configured: the prover follows %s only", beaconApiEndpoint)
+	}
+
+	proofTypes, err := parseProofTypes(cliCtx.StringSlice(flags.ProofTypesFlag.Name))
+	if err != nil {
+		return err
+	}
+
+	proverService, err := optionalproofs.NewService(cliCtx.Context, &optionalproofs.Config{
+		BeaconApiEndpoint: beaconApiEndpoint,
+		ProofNodeEndpoint: proofNodeEndpoint,
+		ProofTypes:        proofTypes,
+		Signer:            signer,
+	})
+	if err != nil {
+		return errors.Wrap(err, "could not initialize prover service")
+	}
+
+	return c.services.RegisterService(proverService)
+}
+
+// parseProofTypes resolves proof type identifiers, which are given by their
+// numeric id rather than their name so that the flag matches the rest of the
+// EIP-8025 tooling.
+func parseProofTypes(ids []string) ([]ethpb.ProofType, error) {
+	proofTypes := make([]ethpb.ProofType, 0, len(ids))
+	for _, id := range ids {
+		for _, field := range strings.Split(id, ",") {
+			field = strings.TrimSpace(field)
+			if field == "" {
+				continue
+			}
+			parsed, err := strconv.ParseUint(field, 10, 8)
+			if err != nil {
+				return nil, fmt.Errorf("--%s: %q is not a proof type id: %w", flags.ProofTypesFlag.Name, field, err)
+			}
+			proofType := ethpb.ProofType(parsed)
+			if !proofType.Supported() {
+				return nil, fmt.Errorf("--%s: unknown proof type id %d", flags.ProofTypesFlag.Name, parsed)
+			}
+			proofTypes = append(proofTypes, proofType)
+		}
+	}
+	return proofTypes, nil
 }
 
 // statelessMode resolves the stateless setting for Gloas and later forks. Only the beacon node that

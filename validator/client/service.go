@@ -299,6 +299,19 @@ func (v *ValidatorService) RemoteSignerConfig() *remoteweb3signer.SetupConfig {
 	return v.web3SignerConfig
 }
 
+// SignExecutionProofEnvelope signs an EIP-8025 execution proof envelope with one
+// of the active validators this client manages.
+func (v *ValidatorService) SignExecutionProofEnvelope(
+	ctx context.Context,
+	envelope *ethpb.ExecutionProofEnvelope,
+	epoch primitives.Epoch,
+) ([]byte, primitives.ValidatorIndex, error) {
+	if v.validator == nil {
+		return nil, 0, errors.New("validator client is not ready")
+	}
+	return v.validator.SignExecutionProofEnvelope(ctx, envelope, epoch)
+}
+
 // ProposerSettings returns a deep copy of the underlying proposer settings in the validator
 func (v *ValidatorService) ProposerSettings() *proposer.Settings {
 	settings := v.validator.ProposerSettings()

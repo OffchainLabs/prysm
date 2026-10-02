@@ -51,6 +51,9 @@ func startNode(ctx *cli.Context) error {
 var appFlags = []cli.Flag{
 	flags.BeaconRPCProviderFlag,
 	flags.BeaconRESTApiProviderFlag,
+	flags.EnableProverFlag,
+	flags.ProofNodeEndpointFlag,
+	flags.ProofTypesFlag,
 	flags.BeaconRESTApiHeaders,
 	flags.CertFlag,
 	flags.GraffitiFlag,

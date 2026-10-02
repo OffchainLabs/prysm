@@ -106,6 +106,9 @@ var appHelpFlagGroups = []flagGroup{
 			flags.HTTPServerCorsDomain,
 			flags.GRPCHeadersFlag,
 			flags.BeaconRESTApiProviderFlag,
+			flags.EnableProverFlag,
+			flags.ProofNodeEndpointFlag,
+			flags.ProofTypesFlag,
 		},
 	},
 	{
