@@ -97,7 +97,7 @@ var loadEIP3076SpecTests = sync.OnceValues(func() ([]*eip3076TestCase, error) {
 func setupEIP3076SpecTests(t *testing.T) []*eip3076TestCase {
 	testCases, err := loadEIP3076SpecTests()
 	require.NoError(t, err)
-	require.NotEmpty(t, testCases, "no EIP-3076 spec test cases found")
+	require.Equal(t, true, len(testCases) > 0, "expected at least one EIP-3076 spec test case")
 	return testCases
 }
 
