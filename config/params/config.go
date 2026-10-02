@@ -860,6 +860,21 @@ func (b *BeaconChainConfig) SlotComponentDuration(bp primitives.BP) time.Duratio
 	return time.Duration(ms) * time.Millisecond
 }
 
+// ProposerReorgCutoffDuration returns the proposer reorg deadline (PROPOSER_REORG_CUTOFF_BPS)
+// as a duration from the start of the slot.
+func (b *BeaconChainConfig) ProposerReorgCutoffDuration() time.Duration {
+	return b.SlotComponentDuration(b.ProposerReorgCutoffBPS)
+}
+
+// ProposerReorgCutoffValid reports whether the cutoff produces a late tick within the slot.
+func (b *BeaconChainConfig) ProposerReorgCutoffValid() bool {
+	if b.ProposerReorgCutoffBPS == 0 || b.ProposerReorgCutoffBPS >= BasisPoints {
+		return false
+	}
+	cutoff := b.ProposerReorgCutoffDuration()
+	return cutoff > 0 && cutoff < b.SlotDuration()
+}
+
 // AttestationDueBPSAtSlot returns the attestation due time in basis points of the slot.
 func (b *BeaconChainConfig) AttestationDueBPSAtSlot(slot primitives.Slot) primitives.BP {
 	if primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch)) >= b.GloasForkEpoch {
