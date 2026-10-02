@@ -308,6 +308,11 @@ func (v *ValidatorService) ProposerSettings() *proposer.Settings {
 	return nil
 }
 
+// GenesisTime returns the chain's genesis time, zero until the chain has started.
+func (v *ValidatorService) GenesisTime() time.Time {
+	return v.validator.GenesisTime()
+}
+
 // UpdateProposerSettings atomically mutates the proposer settings on the
 // underlying validator; see iface.Validator.UpdateProposerSettings.
 func (v *ValidatorService) UpdateProposerSettings(ctx context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
