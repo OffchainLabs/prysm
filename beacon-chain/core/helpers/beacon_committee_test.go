@@ -73,6 +73,20 @@ func TestComputeCommittee_WithoutCache(t *testing.T) {
 	assert.DeepEqual(t, committee9, committees[start:end], "Committee has different shuffled indices")
 }
 
+func TestComputeCommittee_DoesNotRetainShuffledList(t *testing.T) {
+	const validators = 65536
+	indices := make([]primitives.ValidatorIndex, validators)
+	for i := range indices {
+		indices[i] = primitives.ValidatorIndex(i)
+	}
+	seed := [32]byte{'t', 'e', 's', 't'}
+
+	committee, err := helpers.ComputeCommittee(indices, seed, 0, 64)
+	require.NoError(t, err)
+	require.Equal(t, validators/64, len(committee))
+	require.Equal(t, len(committee), cap(committee))
+}
+
 func TestComputeCommittee_RegressionTest(t *testing.T) {
 	helpers.ClearCache()
 
