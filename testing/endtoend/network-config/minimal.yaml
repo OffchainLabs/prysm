@@ -13,8 +13,6 @@ participants:
       - "--tracing-endpoint=127.0.0.1:9150"
       - "--trace-sample-fraction=1.0"
     vc_image: "gcr.io/offchainlabs/prysm/validator:latest"
-    vc_extra_params:
-      - "--enable-doppelganger"
     count: 2
 
 network_params:
