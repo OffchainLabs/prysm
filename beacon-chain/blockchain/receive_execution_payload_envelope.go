@@ -158,6 +158,11 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		if err := s.cfg.ForkChoiceStore.SetOptimisticToValid(ctx, root); err != nil {
 			log.WithError(err).Error("Could not set optimistic to valid")
 		}
+
+		if err := s.refreshHeadOptimistic(); err != nil {
+			log.WithError(err).Error("Could not refresh head optimistic status")
+		}
+
 		s.cfg.ForkChoiceStore.Unlock()
 	}
 
@@ -208,12 +213,24 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 }
 
 func (s *Service) setHeadFull(root [32]byte) interfaces.ReadOnlySignedBeaconBlock {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+
 	s.headLock.Lock()
 	defer s.headLock.Unlock()
 	if s.head == nil || s.head.root != root {
 		return nil
 	}
 	s.head.full = true
+
+	optimistic, err := s.cfg.ForkChoiceStore.IsOptimistic(root)
+	if err != nil {
+		log.WithError(err).Error("Could not get optimistic status of full head")
+		optimistic = true
+	}
+
+	s.head.optimistic = optimistic
+
 	return s.head.block
 }
 

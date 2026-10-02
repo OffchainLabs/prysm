@@ -148,11 +148,31 @@ func (s *Store) setNodeAndParentValidated(ctx context.Context, pn *PayloadNode) 
 		// set the empty node also a as valid
 		en := s.emptyNodeByRoot[pn.node.root]
 		en.optimistic = false
+
+		s.setEmptyDescendantsValidated(en)
 	}
+
+	s.setEmptyDescendantsValidated(pn)
+
 	if pn.node.parent == nil {
 		return nil
 	}
 	return s.setNodeAndParentValidated(ctx, pn.node.parent)
+}
+
+// setEmptyDescendantsValidated sets the empty nodes of the children of pn, and recursively the empty nodes
+// built on top of them, as validated.
+func (s *Store) setEmptyDescendantsValidated(pn *PayloadNode) {
+	for _, child := range pn.children {
+		en := s.emptyNodeByRoot[child.root]
+		if en == nil || !en.optimistic {
+			continue
+		}
+
+		en.optimistic = false
+
+		s.setEmptyDescendantsValidated(en)
+	}
 }
 
 // fullParent returns the latest full node that this block builds on.
