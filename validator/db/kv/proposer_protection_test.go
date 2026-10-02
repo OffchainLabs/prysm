@@ -333,7 +333,7 @@ func Test_slashableProposalCheck_PreventsLowerThanMinProposal(t *testing.T) {
 	}
 	wsb, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	err = db.SlashableProposalCheck(t.Context(), pubkey, wsb, [32]byte{4}, false, nil)
+	err = db.SlashableProposalCheck(t.Context(), pubkey, wsb, [32]byte{4})
 	require.ErrorContains(t, "could not sign block with slot < lowest signed", err)
 
 	// We expect the same block with a slot equal to the lowest
@@ -348,14 +348,14 @@ func Test_slashableProposalCheck_PreventsLowerThanMinProposal(t *testing.T) {
 	}
 	wsb, err = blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	err = db.SlashableProposalCheck(ctx, pubkey, wsb, [32]byte{1}, false, nil)
+	err = db.SlashableProposalCheck(ctx, pubkey, wsb, [32]byte{1})
 	require.NoError(t, err)
 
 	// We expect the same block with a slot equal to the lowest
 	// signed slot to fail validation if signing roots are different.
 	wsb, err = blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	err = db.SlashableProposalCheck(ctx, pubkey, wsb, [32]byte{4}, false, nil)
+	err = db.SlashableProposalCheck(ctx, pubkey, wsb, [32]byte{4})
 	require.ErrorContains(t, "could not sign block with slot == lowest signed", err)
 
 	// We expect the same block with a slot > than the lowest
@@ -371,7 +371,7 @@ func Test_slashableProposalCheck_PreventsLowerThanMinProposal(t *testing.T) {
 
 	wsb, err = blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	err = db.SlashableProposalCheck(ctx, pubkey, wsb, [32]byte{3}, false, nil)
+	err = db.SlashableProposalCheck(ctx, pubkey, wsb, [32]byte{3})
 	require.NoError(t, err)
 }
 
@@ -406,12 +406,12 @@ func Test_slashableProposalCheck(t *testing.T) {
 	sBlock, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
 
-	err = db.SlashableProposalCheck(ctx, pubkey, sBlock, dummySigningRoot, false, nil)
+	err = db.SlashableProposalCheck(ctx, pubkey, sBlock, dummySigningRoot)
 	// We expect the same block sent out with the same root should not be slasahble.
 	require.NoError(t, err)
 
 	// We expect the same block sent out with a different signing root should be slashable.
-	err = db.SlashableProposalCheck(ctx, pubkey, sBlock, [32]byte{2}, false, nil)
+	err = db.SlashableProposalCheck(ctx, pubkey, sBlock, [32]byte{2})
 	require.ErrorContains(t, common.FailedBlockSignLocalErr, err)
 
 	// We save a proposal at slot 11 with a nil signing root.
@@ -423,7 +423,7 @@ func Test_slashableProposalCheck(t *testing.T) {
 
 	// We expect the same block sent out should return slashable error even
 	// if we had a nil signing root stored in the database.
-	err = db.SlashableProposalCheck(ctx, pubkey, sBlock, [32]byte{2}, false, nil)
+	err = db.SlashableProposalCheck(ctx, pubkey, sBlock, [32]byte{2})
 	require.ErrorContains(t, common.FailedBlockSignLocalErr, err)
 
 	// A block with a different slot for which we do not have a proposing history
@@ -431,7 +431,7 @@ func Test_slashableProposalCheck(t *testing.T) {
 	blk.Block.Slot = 9
 	sBlock, err = blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	err = db.SlashableProposalCheck(ctx, pubkey, sBlock, [32]byte{3}, false, nil)
+	err = db.SlashableProposalCheck(ctx, pubkey, sBlock, [32]byte{3})
 	require.NoError(t, err, "Expected allowed block not to throw error")
 }
 
@@ -449,6 +449,6 @@ func Test_slashableProposalCheck_RemoteProtection(t *testing.T) {
 	sBlock, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
 
-	err = db.SlashableProposalCheck(t.Context(), pubkey, sBlock, [32]byte{2}, false, nil)
+	err = db.SlashableProposalCheck(t.Context(), pubkey, sBlock, [32]byte{2})
 	require.NoError(t, err, "Expected allowed block not to throw error")
 }
