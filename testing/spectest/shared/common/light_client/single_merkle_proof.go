@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -40,6 +41,8 @@ func RunLightClientSingleMerkleProofTests(t *testing.T, config string, v int) {
 				folderPath := path.Join(testsFolderPath, folder.Name())
 				if testType == "BeaconState" {
 					runLightClientSingleMerkleProofTestBeaconState(t, folderPath, folder.Name(), v)
+				} else if testType == "BeaconBlockBody" && v >= version.Gloas {
+					runLightClientSingleMerkleProofTestBeaconBlockBodyGloas(t, folderPath)
 				} else if testType == "BeaconBlockBody" {
 					runLightClientSingleMerkleProofTestBeaconBlockBody(t, folderPath, v)
 				} else {
@@ -89,6 +92,11 @@ func runLightClientSingleMerkleProofTestBeaconState(t *testing.T, testFolderPath
 		beaconStateBase := &ethpb.BeaconStateFulu{}
 		require.NoError(t, beaconStateBase.UnmarshalSSZ(beaconStateSSZ), "Failed to unmarshal")
 		beaconState, err = state_native.InitializeFromProtoUnsafeFulu(beaconStateBase)
+		require.NoError(t, err)
+	case version.Gloas:
+		beaconStateBase := &ethpb.BeaconStateGloas{}
+		require.NoError(t, beaconStateBase.UnmarshalSSZ(beaconStateSSZ), "Failed to unmarshal")
+		beaconState, err = state_native.InitializeFromProtoUnsafeGloas(beaconStateBase)
 		require.NoError(t, err)
 	default:
 		t.Fatalf("Unsupported version: %d", v)
@@ -197,4 +205,43 @@ func runLightClientSingleMerkleProofTestBeaconBlockBody(t *testing.T, testFolder
 	require.DeepSSZEqual(t, executionPayloadRoot[:], leaf)
 
 	require.Equal(t, true, trie.VerifyMerkleProof(beaconBlockBodyRoot[:], executionPayloadRoot[:], proof.LeafIndex, branch))
+}
+
+// runLightClientSingleMerkleProofTestBeaconBlockBodyGloas checks Prysm's execution block hash proof against the vector.
+func runLightClientSingleMerkleProofTestBeaconBlockBodyGloas(t *testing.T, testFolderPath string) {
+	beaconBlockBodyFile, err := util.BazelFileBytes(path.Join(testFolderPath, "object.ssz_snappy"))
+	require.NoError(t, err)
+	beaconBlockBodySSZ, err := snappy.Decode(nil, beaconBlockBodyFile)
+	require.NoError(t, err, "Failed to decompress")
+	beaconBlockBody := &ethpb.BeaconBlockBodyGloas{}
+	require.NoError(t, beaconBlockBody.UnmarshalSSZ(beaconBlockBodySSZ), "Failed to unmarshal")
+	beaconBlockBodyRoot, err := beaconBlockBody.HashTreeRoot()
+	require.NoError(t, err)
+	block, err := blocks.NewBeaconBlock(&ethpb.BeaconBlockGloas{Body: beaconBlockBody})
+	require.NoError(t, err)
+
+	type Proof struct {
+		Leaf      string   `json:"leaf"`
+		LeafIndex uint64   `json:"leaf_index"`
+		Branch    []string `json:"branch"`
+	}
+	proofFile, err := util.BazelFileBytes(path.Join(testFolderPath, "proof.yaml"))
+	require.NoError(t, err)
+	var proof Proof
+	require.NoError(t, utils.UnmarshalYaml(proofFile, &proof))
+	leaf, err := hex.DecodeString(proof.Leaf[2:])
+	require.NoError(t, err)
+	var branch [][]byte
+	for _, b := range proof.Branch {
+		bBytes, err := hex.DecodeString(b[2:])
+		require.NoError(t, err)
+		branch = append(branch, bBytes)
+	}
+
+	parentBlockHash := beaconBlockBody.SignedExecutionPayloadBid.Message.ParentBlockHash
+	require.DeepSSZEqual(t, parentBlockHash, leaf)
+	actual, err := blocks.ExecutionBlockHashProof(t.Context(), block)
+	require.NoError(t, err)
+	require.DeepSSZEqual(t, branch, actual)
+	require.Equal(t, true, trie.VerifyMerkleProof(beaconBlockBodyRoot[:], parentBlockHash, proof.LeafIndex, branch))
 }
