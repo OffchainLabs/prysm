@@ -14,6 +14,8 @@ func TestNewQueryConfig(t *testing.T) {
 		cfg := newQueryConfig(nil)
 
 		require.Equal(t, false, cfg.race)
+		require.Equal(t, false, cfg.independentRepoll)
+		require.Equal(t, true, cfg.sszValidate == nil)
 		require.Equal(t, time.Duration(0), cfg.pollInterval)
 		require.Equal(t, true, cfg.deadline.IsZero())
 
@@ -85,6 +87,7 @@ func TestResolveOptions(t *testing.T) {
 	cfg := ResolveOptions()
 
 	require.Equal(t, false, cfg.Race)
+	require.Equal(t, false, cfg.IndependentRepoll)
 	require.Equal(t, time.Duration(0), cfg.PollInterval)
 	require.Equal(t, true, cfg.Deadline.IsZero())
 

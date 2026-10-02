@@ -20,9 +20,7 @@ import (
 )
 
 func TestReadFreshnessOptions(t *testing.T) {
-	t.Run("no hint yields no options", func(t *testing.T) {
-		// A ctx without a freshness hint yields no options: the read falls back
-		// to its default (first-success) behavior.
+	t.Run("no hint or deadline yields no options", func(t *testing.T) {
 		require.Equal(t, true, readFreshnessOptions(context.Background(), attestationMatcher) == nil)
 	})
 
@@ -135,9 +133,7 @@ func TestBlockFreshnessOptions(t *testing.T) {
 		}
 	}
 
-	t.Run("no hint yields no options", func(t *testing.T) {
-		// A ctx without a freshness hint yields no options: the read falls back
-		// to its default (first-success) behavior.
+	t.Run("no hint or deadline yields no options", func(t *testing.T) {
 		require.Equal(t, true, blockFreshnessOptions(context.Background(), decodeWithParent([32]byte{})) == nil)
 	})
 
@@ -224,49 +220,67 @@ func TestBlockFreshnessOptions(t *testing.T) {
 func TestPayloadAttestationFreshnessOptions(t *testing.T) {
 	octetHeader := http.Header{"Content-Type": {api.OctetStreamMediaType}}
 
-	t.Run("no hint yields no options", func(t *testing.T) {
-		// A ctx without a freshness hint yields no options: the read falls back
-		// to its default (first-success) behavior.
+	t.Run("no hint or deadline yields no options", func(t *testing.T) {
 		require.Equal(t, true, payloadAttestationFreshnessOptions(context.Background()) == nil)
 	})
 
-	t.Run("hint without deadline sets race and ssz-accept only", func(t *testing.T) {
-		ctx := iface.WithHint(context.Background(), headHint([32]byte{0xaa}, 10, true, time.Time{}))
-		cfg := rest.ResolveOptions(payloadAttestationFreshnessOptions(ctx)...)
+	for _, tt := range []struct {
+		name     string
+		deadline time.Time
+	}{
+		{name: "no due time"},
+		{name: "before due", deadline: time.Now().Add(time.Hour)},
+		{name: "at due", deadline: time.Now()},
+		{name: "after due", deadline: time.Now().Add(-time.Hour)},
+	} {
+		t.Run(tt.name+" leaves retries and deadline to caller", func(t *testing.T) {
+			ctx := iface.WithHint(context.Background(), headHint([32]byte{0xaa}, 10, true, tt.deadline))
+			cfg := rest.ResolveOptions(payloadAttestationFreshnessOptions(ctx)...)
 
-		// With a zero deadline we get race + ssz-accept but neither a deadline nor repolling.
-		require.Equal(t, true, cfg.Race)
-		require.NotNil(t, cfg.SSZAccept)
-		require.Equal(t, true, cfg.Deadline.IsZero())
-		require.Equal(t, time.Duration(0), cfg.PollInterval)
-	})
+			require.Equal(t, true, cfg.Race)
+			require.NotNil(t, cfg.SSZAccept)
+			require.Equal(t, true, cfg.Deadline.IsZero())
+			require.Equal(t, true, cfg.FallbackDeadline.IsZero())
+			require.Equal(t, time.Duration(0), cfg.PollInterval)
+			require.Equal(t, false, cfg.IndependentRepoll)
+		})
+	}
 
-	t.Run("hint with a deadline polls past that deadline", func(t *testing.T) {
-		deadline := time.Now().Add(time.Hour)
-		ctx := iface.WithHint(context.Background(), headHint([32]byte{0x01}, 10, true, deadline))
-		cfg := rest.ResolveOptions(payloadAttestationFreshnessOptions(ctx)...)
-
-		require.Equal(t, true, cfg.Race)
-		// The node holds non-final data until the hint deadline, so the read must
-		// outlive it or it gives up at the exact instant the data becomes servable.
-		require.Equal(t, deadline.Add(payloadAttestationDueGrace), cfg.Deadline)
-		require.Equal(t, true, cfg.Deadline.After(deadline))
-		// WithRepoll(0) falls back to the default poll interval.
-		require.NotEqual(t, time.Duration(0), cfg.PollInterval)
-	})
-
-	t.Run("a past deadline is floored so a lagging node still gets time", func(t *testing.T) {
-		// A deadline already in the past would leave no budget; it is raised to
-		// now + readFreshnessBudget.
-		ctx := iface.WithHint(context.Background(), headHint([32]byte{0x01}, 10, true, time.Now().Add(-time.Hour)))
-
-		before := time.Now()
-		cfg := rest.ResolveOptions(payloadAttestationFreshnessOptions(ctx)...)
-		after := time.Now()
-
-		require.Equal(t, true, cfg.Deadline.After(before.Add(readFreshnessBudget-time.Second)))
-		require.Equal(t, true, cfg.Deadline.Before(after.Add(readFreshnessBudget+time.Second)))
-	})
+	for _, tt := range []struct {
+		name         string
+		hintDeadline time.Time
+		withoutHint  bool
+		withoutLimit bool
+	}{
+		{name: "past hint deadline", hintDeadline: time.Now().Add(-time.Hour)},
+		{name: "future hint deadline", hintDeadline: time.Now().Add(time.Hour)},
+		{name: "no hint", withoutHint: true},
+		{name: "no caller deadline", withoutLimit: true},
+	} {
+		t.Run(tt.name+" respects caller retry policy", func(t *testing.T) {
+			ctx := context.Background()
+			deadline := time.Now().Add(time.Minute)
+			if !tt.withoutLimit {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithDeadline(ctx, deadline)
+				defer cancel()
+			}
+			if !tt.withoutHint {
+				ctx = iface.WithHint(ctx, headHint([32]byte{0xaa}, 10, true, tt.hintDeadline))
+			}
+			cfg := rest.ResolveOptions(payloadAttestationFreshnessOptions(ctx)...)
+			polling := !tt.withoutLimit
+			require.Equal(t, polling, cfg.IndependentRepoll)
+			require.Equal(t, true, cfg.FallbackDeadline.IsZero())
+			if polling {
+				require.Equal(t, deadline, cfg.Deadline)
+				require.Equal(t, 50*time.Millisecond, cfg.PollInterval)
+			} else {
+				require.Equal(t, true, cfg.Deadline.IsZero())
+				require.Equal(t, time.Duration(0), cfg.PollInterval)
+			}
+		})
+	}
 
 	t.Run("accept matches the announced head against an SSZ response", func(t *testing.T) {
 		want := [32]byte{0x11, 0x22, 0x33}
