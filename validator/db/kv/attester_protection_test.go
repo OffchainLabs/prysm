@@ -115,6 +115,31 @@ func TestStore_CheckSlashableAttestation_DoubleVote(t *testing.T) {
 	}
 }
 
+func TestStore_CheckSlashableAttestation_RepeatWithoutSigningRoot(t *testing.T) {
+	ctx := t.Context()
+	pubKeys := make([][fieldparams.BLSPubkeyLength]byte, 1)
+	validatorDB := setupDB(t, pubKeys)
+
+	// Save an attestation without signing root, as an import from an EIP-3076 interchange file would do.
+	err := validatorDB.SaveAttestationsForPubKey(ctx, pubKeys[0], [][]byte{nil}, []*ethpb.IndexedAttestation{createAttestation(2, 4)})
+	require.NoError(t, err)
+
+	// When signing, a repeat without signing root is a double vote.
+	slashingKind, err := validatorDB.CheckSlashableAttestation(ctx, pubKeys[0], nil, createAttestation(2, 4))
+	require.NotNil(t, err)
+	assert.Equal(t, DoubleVote, slashingKind)
+
+	// When importing, a repeat without signing root is not a double vote.
+	slashingKind, err = validatorDB.checkSlashableImportedAttestation(ctx, pubKeys[0], nil, createAttestation(2, 4))
+	require.NoError(t, err)
+	assert.Equal(t, NotSlashable, slashingKind)
+
+	// When importing, another source epoch for the same target epoch is still a double vote.
+	slashingKind, err = validatorDB.checkSlashableImportedAttestation(ctx, pubKeys[0], nil, createAttestation(3, 4))
+	require.NotNil(t, err)
+	assert.Equal(t, DoubleVote, slashingKind)
+}
+
 func TestStore_CheckSlashableAttestation_SurroundVote_MultipleTargetsPerSource(t *testing.T) {
 	ctx := t.Context()
 	numValidators := 1

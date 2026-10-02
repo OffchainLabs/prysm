@@ -357,9 +357,9 @@ func filterSlashablePubKeysFromAttestations(
 
 			indexedAtt := createAttestation(att.Source, att.Target)
 
-			// If slashable == NotSlashable and err != nil, then CheckSlashableAttestation failed.
+			// If slashable == NotSlashable and err != nil, then checkSlashableImportedAttestation failed.
 			// If slashable != NotSlashable, then err contains the reason why the attestation is slashable.
-			slashable, err := validatorDB.CheckSlashableAttestation(ctx, pubKey, att.SigningRoot, indexedAtt)
+			slashable, err := validatorDB.checkSlashableImportedAttestation(ctx, pubKey, att.SigningRoot, indexedAtt)
 			if err != nil && slashable == NotSlashable {
 				return nil, err
 			}

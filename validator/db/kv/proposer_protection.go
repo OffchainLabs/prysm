@@ -87,12 +87,11 @@ func (s *Store) ProposalHistoryForPubKey(ctx context.Context, publicKey [fieldpa
 		if valBucket == nil {
 			return nil
 		}
+
 		return valBucket.ForEach(func(slotKey, signingRootBytes []byte) error {
 			slot := bytesutil.BytesToSlotBigEndian(slotKey)
 			proposal := &common.Proposal{Slot: slot}
 
-			// Signing roots are optional, so a proposal without a signing root keeps it unknown,
-			// instead of being zero-filled into a specific, known signing root.
 			if len(signingRootBytes) != 0 {
 				proposal.SigningRoot = make([]byte, fieldparams.RootLength)
 				copy(proposal.SigningRoot, signingRootBytes)
@@ -102,6 +101,7 @@ func (s *Store) ProposalHistoryForPubKey(ctx context.Context, publicKey [fieldpa
 			return nil
 		})
 	})
+
 	return proposals, err
 }
 
