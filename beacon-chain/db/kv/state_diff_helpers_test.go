@@ -331,7 +331,7 @@ func TestGetBaseAndDiffChain_ForkTransitions(t *testing.T) {
 				first = base.Copy()
 				require.NoError(t, first.SetSlot(32+128))
 				var err error
-				middle, err = gloas.UpgradeToGloas(first.Copy())
+				middle, err = gloas.UpgradeToGloas(t.Context(), first.Copy())
 				require.NoError(t, err)
 				require.NoError(t, middle.SetSlot(32+192))
 				target = middle.Copy()
