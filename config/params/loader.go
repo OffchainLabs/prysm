@@ -107,6 +107,11 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 	if !hasConfigName {
 		conf.ConfigName = DevnetName
 	}
+	// SLOT_DURATION_MS is deprecated by EIP-8198, the schedule's genesis entry is the source of truth when it is absent.
+	if !hasSecondsPerSlot && !hasSlotDurationMs && len(conf.SlotDurationSchedule) > 0 {
+		conf.SlotDurationMilliseconds = conf.SlotDurationSchedule[0].SlotDurationMillis
+		hasSlotDurationMs = true
+	}
 	if err := reconcileSlotDuration(conf, hasSecondsPerSlot, hasSlotDurationMs); err != nil {
 		return nil, err
 	}
@@ -114,8 +119,28 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 	conf.SqrRootSlotsPerEpoch = primitives.Slot(math.IntegerSquareRoot(uint64(conf.SlotsPerEpoch)))
 	// Recompute the fork schedule
 	conf.InitializeForkSchedule()
+	if err := validateSlotDurationSchedule(conf); err != nil {
+		return nil, err
+	}
 	log.Debugf("Config file values: %+v", conf)
 	return conf, nil
+}
+
+func validateSlotDurationSchedule(conf *BeaconChainConfig) error {
+	s := conf.SlotDurationSchedule
+	if len(s) == 0 {
+		return nil
+	}
+	if err := s.Validate(conf.SlotsPerEpoch); err != nil {
+		return errors.Wrap(err, "invalid SLOT_DURATION_SCHEDULE")
+	}
+	if s[0].SlotDurationMillis != conf.SlotDurationMillis() {
+		return errors.Errorf("SLOT_DURATION_SCHEDULE entry at epoch 0 (%dms) does not match the configured slot duration (%dms)", s[0].SlotDurationMillis, conf.SlotDurationMillis())
+	}
+	if err := s.validateForkAlignment(conf); err != nil {
+		return errors.Wrap(err, "invalid SLOT_DURATION_SCHEDULE")
+	}
+	return nil
 }
 
 func UnmarshalConfigFile(path string, conf *BeaconChainConfig) (*BeaconChainConfig, error) {
@@ -324,6 +349,24 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 			lines = append(lines,
 				"  - EPOCH: "+strconv.FormatUint(uint64(entry.Epoch), 10),
 				"    GAS_LIMIT: "+strconv.FormatUint(entry.GasLimit, 10),
+			)
+		}
+	}
+
+	if len(cfg.SlotDurationSchedule) > 0 {
+		lines = append(lines, "SLOT_DURATION_SCHEDULE:")
+		for _, entry := range cfg.SlotDurationSchedule {
+			lines = append(lines,
+				"  - EPOCH: "+strconv.FormatUint(uint64(entry.Epoch), 10),
+				"    SLOT_DURATION_MS: "+strconv.FormatUint(entry.SlotDurationMillis, 10),
+				"    PROPOSER_REORG_CUTOFF_MS: "+strconv.FormatUint(entry.ProposerReorgCutoffMillis, 10),
+				"    ATTESTATION_DUE_MS: "+strconv.FormatUint(entry.AttestationDueMillis, 10),
+				"    AGGREGATE_DUE_MS: "+strconv.FormatUint(entry.AggregateDueMillis, 10),
+				"    SYNC_MESSAGE_DUE_MS: "+strconv.FormatUint(entry.SyncMessageDueMillis, 10),
+				"    CONTRIBUTION_DUE_MS: "+strconv.FormatUint(entry.ContributionDueMillis, 10),
+				"    PAYLOAD_DUE_MS: "+strconv.FormatUint(entry.PayloadDueMillis, 10),
+				"    PAYLOAD_ATTESTATION_DUE_MS: "+strconv.FormatUint(entry.PayloadAttestationDueMillis, 10),
+				"    INCLUSION_LIST_DUE_MS: "+strconv.FormatUint(entry.InclusionListDueMillis, 10),
 			)
 		}
 	}

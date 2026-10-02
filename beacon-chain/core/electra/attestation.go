@@ -65,7 +65,7 @@ func GetProposerRewardNumerator(
 			return 0, fmt.Errorf("index %d exceeds participation length %d", index, participation.Len())
 		}
 
-		br, err := altair.BaseRewardWithTotalBalance(st, primitives.ValidatorIndex(index), totalBalance)
+		br, err := altair.BaseRewardWithTotalBalance(st, primitives.ValidatorIndex(index), totalBalance, data.Target.Epoch)
 		if err != nil {
 			return 0, err
 		}

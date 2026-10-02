@@ -245,7 +245,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 218, len(data))
+	assert.Equal(t, 219, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -679,6 +679,13 @@ func TestGetSpec(t *testing.T) {
 				gasLimitSchedule, ok := v.([]any)
 				assert.Equal(t, true, ok)
 				assert.Equal(t, 0, len(gasLimitSchedule))
+			case "SLOT_DURATION_SCHEDULE":
+				slotDurationSchedule, ok := v.([]any)
+				assert.Equal(t, true, ok)
+				assert.Equal(t, 1, len(slotDurationSchedule))
+				entry, ok := slotDurationSchedule[0].(map[string]any)
+				assert.Equal(t, true, ok)
+				assert.Equal(t, "0", entry["EPOCH"])
 			case "FIELD_ELEMENTS_PER_CELL":
 				assert.Equal(t, "64", v) // From fieldparams.CellsPerBlob
 			case "FIELD_ELEMENTS_PER_EXT_BLOB":

@@ -38,7 +38,7 @@ func (g *Clock) GenesisValidatorsRoot() [32]byte {
 // CurrentSlot returns the current slot relative to the time.Time value that Clock embeds.
 func (g *Clock) CurrentSlot() types.Slot {
 	now := g.now()
-	return slots.Duration(g.t, now)
+	return slots.At(g.t, now)
 }
 
 // CurrentEpoch returns the current epoch relative to the time.Time value that Clock embeds.

@@ -4791,7 +4791,7 @@ func TestSubmitAfterDelay(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		called := make(chan struct{})
 		var hasDeadline bool
-		submitAfterDelay(func(ctx context.Context) {
+		submitAfterDelay(0, func(ctx context.Context) {
 			_, hasDeadline = ctx.Deadline()
 			close(called)
 		})

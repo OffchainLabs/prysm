@@ -253,12 +253,6 @@ func (v *validator) setHighestSlot(slot primitives.Slot) {
 	}
 }
 
-// attestationDueComponent returns the slot-component basis points for the
-// attestation due time.
-func attestationDueComponent(slot primitives.Slot) primitives.BP {
-	return params.BeaconConfig().AttestationDueBPSAtSlot(slot)
-}
-
 // waitUntilAttestationDueOrValidBlock waits until (a) or (b) whichever comes first:
 //
 //	(a) the validator has received a valid block that is the same slot as input slot
@@ -272,7 +266,7 @@ func (v *validator) waitUntilAttestationDueOrValidBlock(ctx context.Context, slo
 		return
 	}
 
-	finalTime, err := v.slotComponentDeadline(slot, attestationDueComponent(slot))
+	finalTime, err := v.slotComponentDeadline(slot, params.AttestationDue)
 	if err != nil {
 		log.WithError(err).WithField("slot", slot).Error("Slot overflows, unable to wait for attestation deadline")
 		return

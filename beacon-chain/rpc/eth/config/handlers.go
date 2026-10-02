@@ -182,6 +182,11 @@ func prepareConfigSpec() (map[string]any, error) {
 		data[tag] = convertValueForJSON(val, tag)
 	}
 
+	// Spec configs always carry the genesis schedule entry, Prysm's built-in configs leave the schedule empty.
+	if len(config.SlotDurationSchedule) == 0 {
+		data["SLOT_DURATION_SCHEDULE"] = convertValueForJSON(reflect.ValueOf(params.SlotSchedule{config.GenesisSlotScheduleEntry()}), "SLOT_DURATION_SCHEDULE")
+	}
+
 	// Add Fulu preset values. These are compile-time constants from fieldparams,
 	// not runtime configs, but are required by the /eth/v1/config/spec API.
 	data["NUMBER_OF_COLUMNS"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.NumberOfColumns)), "NUMBER_OF_COLUMNS")
@@ -214,6 +219,10 @@ func shouldSkip(tField reflect.StructField) bool {
 	}
 	if params.BeaconConfig().GloasForkEpoch == math.MaxUint64 &&
 		tField.Type == reflect.TypeOf(params.BeaconConfig().GasLimitSchedule) {
+		return true
+	}
+	if len(params.BeaconConfig().SlotDurationSchedule) == 0 &&
+		tField.Type == reflect.TypeOf(params.BeaconConfig().SlotDurationSchedule) {
 		return true
 	}
 	return false

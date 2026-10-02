@@ -483,7 +483,7 @@ func (v *validator) MaybeFetchNextDuties(ctx context.Context, slot primitives.Sl
 			cancel()
 			v.nextFetchInFlight.Store(false)
 		}()
-		v.waitUntilSlotComponent(fetchCtx, slot, nextDutiesFetchBPS)
+		v.waitUntilSlotFraction(fetchCtx, slot, nextDutiesFetchBPS)
 		if err := v.ensureNextEpochDuties(fetchCtx); err != nil {
 			log.WithError(err).Debug("Could not fetch next-epoch duties")
 		}

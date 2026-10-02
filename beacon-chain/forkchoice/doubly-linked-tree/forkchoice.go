@@ -144,7 +144,7 @@ func (f *ForkChoice) InsertNode(ctx context.Context, state state.BeaconState, ro
 	if features.Get().TrackEquivocations {
 		if slotStart, err := slots.StartTime(f.store.genesisTime, roblock.Block().Slot()); err == nil {
 			cfg := params.BeaconConfig()
-			deadline := slotStart.Add(cfg.SlotComponentDuration(cfg.EquivocationEarlyDueBPS))
+			deadline := slotStart.Add(cfg.SlotFractionAt(cfg.EquivocationEarlyDueBPS, roblock.Block().Slot()))
 			now := time.Now()
 			if !now.Before(slotStart) && now.Before(deadline) {
 				f.RecordBlockForEquivocation(roblock.Block().Slot(), roblock.Block().ProposerIndex(), roblock.Root())

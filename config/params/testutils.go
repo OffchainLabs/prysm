@@ -3,6 +3,7 @@ package params
 import (
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
 
@@ -73,4 +74,20 @@ func SetActiveTestCleanup(t *testing.T, cfg *BeaconChainConfig) {
 			t.Fatal(err)
 		}
 	})
+}
+
+// SlotScheduleEntryForTest fills an entry's deadlines at the Gloas fractions of the given duration.
+func SlotScheduleEntryForTest(epoch primitives.Epoch, durationMs uint64) SlotScheduleEntry {
+	return SlotScheduleEntry{
+		Epoch:                       epoch,
+		SlotDurationMillis:          durationMs,
+		ProposerReorgCutoffMillis:   durationMs / 6,
+		AttestationDueMillis:        durationMs / 4,
+		AggregateDueMillis:          durationMs / 2,
+		SyncMessageDueMillis:        durationMs / 4,
+		ContributionDueMillis:       durationMs / 2,
+		PayloadDueMillis:            durationMs / 2,
+		PayloadAttestationDueMillis: durationMs * 3 / 4,
+		InclusionListDueMillis:      durationMs * 2 / 3,
+	}
 }
