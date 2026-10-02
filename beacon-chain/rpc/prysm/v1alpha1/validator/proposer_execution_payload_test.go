@@ -9,6 +9,7 @@ import (
 
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	coregloas "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	powtesting "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -263,6 +264,70 @@ func TestServer_getParentBlockHash_Gloas_Empty(t *testing.T) {
 	got, err := vs.getParentBlockHash(context.Background(), st, 0, headRoot, false)
 	require.NoError(t, err)
 	require.DeepEqual(t, parentBlockHash[:], got)
+}
+
+func upgradedGloasState(t *testing.T, fuluBlockHash [32]byte) state.BeaconState {
+	t.Helper()
+	fuluState, _ := util.DeterministicGenesisStateFulu(t, 64)
+	header, err := fuluState.LatestExecutionPayloadHeader()
+	require.NoError(t, err)
+	headerProto, ok := header.Proto().(*pb.ExecutionPayloadHeaderDeneb)
+	require.Equal(t, true, ok)
+	headerProto.BlockHash = fuluBlockHash[:]
+	wrapped, err := blocks.WrappedExecutionPayloadHeaderDeneb(headerProto)
+	require.NoError(t, err)
+	require.NoError(t, fuluState.SetLatestExecutionPayloadHeader(wrapped))
+	st, err := coregloas.UpgradeToGloas(fuluState)
+	require.NoError(t, err)
+	return st
+}
+
+func TestServer_getParentBlockHash_GloasForkBoundary(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	fuluBlockHash := bytesutil.ToBytes32([]byte("fulu-block-hash"))
+	st := upgradedGloasState(t, fuluBlockHash)
+	slot := params.BeaconConfig().SlotsPerEpoch
+	vs := &Server{ForkchoiceFetcher: &chainMock.ChainService{BlockSlot: slot - 1}}
+	for _, parentFull := range []bool{true, false} {
+		got, err := vs.getParentBlockHash(t.Context(), st, slot, [32]byte{'a'}, parentFull)
+		require.NoError(t, err)
+		require.DeepEqual(t, fuluBlockHash[:], got)
+	}
+}
+
+func TestServer_getLocalPayloadFromEngine_GloasForkBoundaryCacheMiss(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	fuluBlockHash := bytesutil.ToBytes32([]byte("fulu-block-hash"))
+	st := upgradedGloasState(t, fuluBlockHash)
+	slot := params.BeaconConfig().SlotsPerEpoch
+
+	ed, err := blocks.NewWrappedExecutionData(emptyPayloadDeneb())
+	require.NoError(t, err)
+	engine := &powtesting.EngineClient{
+		PayloadIDBytes:       &pb.PayloadIDBytes{0x1},
+		ErrForkchoiceUpdated: errors.New("forkchoice updated on the wrong head"),
+		OverrideValidHash:    fuluBlockHash,
+		GetPayloadResponse:   &blocks.GetPayloadResponse{ExecutionData: ed},
+	}
+	vs := &Server{
+		ExecutionEngineCaller:    engine,
+		ForkchoiceFetcher:        &chainMock.ChainService{BlockSlot: slot - 1},
+		FinalizationFetcher:      &chainMock.ChainService{},
+		PayloadIDCache:           cache.NewPayloadIDCache(),
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+	}
+
+	_, err = vs.getLocalPayloadFromEngine(t.Context(), st, [32]byte{'a'}, slot, 0, true)
+	require.NoError(t, err)
+	require.NotNil(t, engine.FetchedAttributes)
 }
 
 func TestServer_applyParentExecutionPayloadToHead_PreGloas(t *testing.T) {

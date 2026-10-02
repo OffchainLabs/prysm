@@ -77,6 +77,52 @@ func TestSetP2PBidFallback_UsesCachedBid(t *testing.T) {
 	require.Equal(t, primitives.Gwei(1000), signedBid.Message.Value)
 }
 
+func TestSetP2PBidFallback_GloasForkBoundary(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	fuluBlockHash := bytesutil.ToBytes32([]byte("fulu-block-hash"))
+	parentRoot := bytesutil.ToBytes32([]byte("parent-root"))
+	slot := params.BeaconConfig().SlotsPerEpoch
+	st := upgradedGloasState(t, fuluBlockHash)
+
+	sBlk, err := consensusblocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{
+		Block: &ethpb.BeaconBlockGloas{
+			Slot:       slot,
+			ParentRoot: parentRoot[:],
+			Body:       &ethpb.BeaconBlockBodyGloas{},
+		},
+	})
+	require.NoError(t, err)
+
+	bidCache := cache.NewHighestExecutionPayloadBidCache()
+	bidCache.SetIfHigher(&ethpb.SignedExecutionPayloadBid{
+		Message: &ethpb.ExecutionPayloadBid{
+			Slot:                  slot,
+			ParentBlockHash:       fuluBlockHash[:],
+			ParentBlockRoot:       parentRoot[:],
+			BlockHash:             make([]byte, 32),
+			BuilderIndex:          7,
+			Value:                 1000,
+			FeeRecipient:          make([]byte, 20),
+			GasLimit:              30_000_000,
+			PrevRandao:            make([]byte, 32),
+			BlobKzgCommitments:    [][]byte{},
+			ExecutionRequestsRoot: make([]byte, 32),
+		},
+		Signature: make([]byte, 96),
+	})
+
+	vs := &Server{HighestBidCache: bidCache, ForkchoiceFetcher: &chainMock.ChainService{BlockSlot: slot - 1}}
+	require.NoError(t, vs.setP2PBidFallback(t.Context(), sBlk, st, true))
+
+	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
+	require.NoError(t, err)
+	require.Equal(t, primitives.BuilderIndex(7), signedBid.Message.BuilderIndex)
+}
+
 func TestSetP2PBidFallback_NoCachedBidErrors(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
