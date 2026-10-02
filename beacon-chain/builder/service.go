@@ -296,7 +296,9 @@ func (s *Service) GetExecutionPayloadBid(ctx context.Context, slot primitives.Sl
 			}
 			bid, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, proposerPubkey, e.GetAuth())
 			if err != nil {
-				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(url)).Warn("Could not get builder execution payload bid")
+				if !errors.Is(ctx.Err(), context.Canceled) {
+					log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(url)).Warn("Could not get builder execution payload bid")
+				}
 				return
 			}
 			if bid == nil {
