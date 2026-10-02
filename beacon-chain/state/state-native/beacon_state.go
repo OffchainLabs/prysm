@@ -83,6 +83,9 @@ type BeaconState struct {
 	payloadExpectedWithdrawals   []*enginev1.Withdrawal
 	ptcWindow                    []*ethpb.PTCs
 
+	// EIP-8148 fields, shipped as part of Gloas.
+	validatorSweepThresholdsMultiValue *MultiValueSweepThresholds
+
 	id                    uint64
 	lock                  sync.RWMutex
 	dirtyFields           map[types.FieldIndex]bool
@@ -148,6 +151,7 @@ type beaconStateMarshalable struct {
 	LatestBlockHash                     []byte                                  `json:"latest_block_hash" yaml:"latest_block_hash"`
 	PayloadExpectedWithdrawals          []*enginev1.Withdrawal                  `json:"payload_expected_withdrawals" yaml:"payload_expected_withdrawals"`
 	PtcWindow                           []*ethpb.PTCs                           `json:"ptc_window" yaml:"ptc_window"`
+	ValidatorSweepThresholds            []uint64                                `json:"validator_sweep_thresholds" yaml:"validator_sweep_thresholds"`
 }
 
 func (b *BeaconState) MarshalJSON() ([]byte, error) {
@@ -157,6 +161,7 @@ func (b *BeaconState) MarshalJSON() ([]byte, error) {
 	balances := b.balancesMultiValue.Value(b)
 	inactivityScores := b.inactivityScoresMultiValue.Value(b)
 	vals := b.validatorsMultiValue.Value(b)
+	sweepThresholds := b.validatorSweepThresholdsVal()
 
 	marshalable := &beaconStateMarshalable{
 		Version:                             b.version,
@@ -211,6 +216,7 @@ func (b *BeaconState) MarshalJSON() ([]byte, error) {
 		LatestBlockHash:                     b.latestBlockHash,
 		PayloadExpectedWithdrawals:          b.payloadExpectedWithdrawals,
 		PtcWindow:                           b.ptcWindow,
+		ValidatorSweepThresholds:            sweepThresholds,
 	}
 	return json.Marshal(marshalable)
 }

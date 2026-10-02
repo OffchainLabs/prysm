@@ -20,6 +20,8 @@ var (
 	bdrSize    = bdrExample.SizeSSZ()
 	berExample = &BuilderExitRequest{}
 	berSize    = berExample.SizeSSZ()
+	ssrExample = &SetSweepThresholdRequest{}
+	ssrSize    = ssrExample.SizeSSZ()
 )
 
 // emptyRequestsRootOnce merkleizes a zero-value gloas ExecutionRequests.
@@ -38,6 +40,7 @@ const (
 	ConsolidationRequestType
 	BuilderDepositRequestType
 	BuilderExitRequestType
+	SetSweepThresholdRequestType // EIP-8148
 )
 
 // ExecutionRequestConfig ensures that we don't mix up the execution request params
@@ -47,6 +50,7 @@ type ExecutionRequestLimits struct {
 	Consolidations  uint64
 	BuilderDeposits uint64
 	BuilderExits    uint64
+	SweepThresholds uint64
 }
 
 func (ebe *ExecutionBundleElectra) GetDecodedExecutionRequests(limits ExecutionRequestLimits) (*ExecutionRequests, error) {
@@ -138,6 +142,12 @@ func decodeExecutionRequestListGloas(raw [][]byte, limits ExecutionRequestLimits
 				return nil, err
 			}
 			requests.BuilderExits = bes
+		case SetSweepThresholdRequestType:
+			sts, err := unmarshalSweepThresholds(requestListInSSZBytes, limits.SweepThresholds)
+			if err != nil {
+				return nil, err
+			}
+			requests.SweepThresholds = sts
 		default:
 			return nil, errors.Errorf("unsupported request type %d", requestType)
 		}
@@ -198,6 +208,17 @@ func unmarshalBuilderExits(requestListInSSZBytes []byte, maxBuilderExits uint64)
 		return nil, fmt.Errorf("invalid builder exit requests SSZ size, requests should not be more than the max per payload, got %d max %d", len(requestListInSSZBytes), maxSSZsize)
 	}
 	return unmarshalItems(requestListInSSZBytes, berSize, func() *BuilderExitRequest { return &BuilderExitRequest{} })
+}
+
+func unmarshalSweepThresholds(requestListInSSZBytes []byte, maxSweepThresholds uint64) ([]*SetSweepThresholdRequest, error) {
+	if len(requestListInSSZBytes) < ssrSize {
+		return nil, fmt.Errorf("invalid set sweep threshold requests SSZ size, got %d expected at least %d", len(requestListInSSZBytes), ssrSize)
+	}
+	maxSSZsize := uint64(ssrSize) * maxSweepThresholds
+	if uint64(len(requestListInSSZBytes)) > maxSSZsize {
+		return nil, fmt.Errorf("invalid set sweep threshold requests SSZ size, requests should not be more than the max per payload, got %d max %d", len(requestListInSSZBytes), maxSSZsize)
+	}
+	return unmarshalItems(requestListInSSZBytes, ssrSize, func() *SetSweepThresholdRequest { return &SetSweepThresholdRequest{} })
 }
 
 func decodeExecutionRequest(req []byte) (typ uint8, data []byte, err error) {
@@ -299,6 +320,15 @@ func EncodeExecutionRequestsGloas(requests *ExecutionRequestsGloas) ([]hexutil.B
 		}
 		requestData := []byte{BuilderExitRequestType}
 		requestData = append(requestData, beBytes...)
+		requestsData = append(requestsData, requestData)
+	}
+	if len(requests.SweepThresholds) > 0 {
+		stBytes, err := marshalItems(requests.SweepThresholds)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to marshal set sweep threshold requests")
+		}
+		requestData := []byte{SetSweepThresholdRequestType}
+		requestData = append(requestData, stBytes...)
 		requestsData = append(requestsData, requestData)
 	}
 

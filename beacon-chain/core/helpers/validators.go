@@ -20,6 +20,20 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+// SweepThresholdCredentialOffset and SweepThresholdCredentialLength locate, inside `0x02`
+// compounding withdrawal credentials, the sweep threshold a validator asks for at deposit
+// time (EIP-8148). Those bytes hold the threshold in EFFECTIVE_BALANCE_INCREMENT units,
+// little-endian:
+//
+//	byte  0      COMPOUNDING_WITHDRAWAL_PREFIX (0x02)
+//	bytes 1..9   reserved
+//	bytes 10..11 threshold in EFFECTIVE_BALANCE_INCREMENT units, little-endian
+//	bytes 12..31 execution address
+const (
+	SweepThresholdCredentialOffset = 10
+	SweepThresholdCredentialLength = 2
+)
+
 var CommitteeCacheInProgressHit = promauto.NewCounter(prometheus.CounterOpts{
 	Name: "committee_cache_in_progress_hit",
 	Help: "The number of committee requests that are present in the cache.",
@@ -469,16 +483,67 @@ func IsFullyWithdrawableValidator(val state.ReadOnlyValidator, balance uint64, e
 // IsPartiallyWithdrawableValidator returns whether the validator is able to perform a
 // partial withdrawal. This function assumes that the caller has a lock on the state.
 // This method conditionally calls the fork appropriate implementation based on the epoch argument.
-func IsPartiallyWithdrawableValidator(val state.ReadOnlyValidator, balance uint64, epoch primitives.Epoch, fork int) bool {
+//
+// sweepThreshold is the validator's entry in state.validator_sweep_thresholds (EIP-8148) and is
+// only consulted from Gloas onwards. Pass 0 for earlier forks.
+//
+// https://github.com/ethereum/consensus-specs/blob/master/specs/_features/eip8148/beacon-chain.md#modified-is_partially_withdrawable_validator
+func IsPartiallyWithdrawableValidator(val state.ReadOnlyValidator, balance uint64, epoch primitives.Epoch, fork int, sweepThreshold uint64) bool {
 	if val == nil {
 		return false
 	}
 
-	if fork < version.Electra {
-		return isPartiallyWithdrawableValidatorCapella(val, balance, epoch)
+	if fork >= version.Gloas {
+		return isPartiallyWithdrawableValidatorEip8148(val, balance, sweepThreshold)
 	}
 
-	return isPartiallyWithdrawableValidatorElectra(val, balance, epoch)
+	if fork >= version.Electra {
+		return isPartiallyWithdrawableValidatorElectra(val, balance, epoch)
+	}
+
+	return isPartiallyWithdrawableValidatorCapella(val, balance, epoch)
+}
+
+func isPartiallyWithdrawableValidatorEip8148(val state.ReadOnlyValidator, balance, sweepThreshold uint64) bool {
+	effectiveSweepThreshold := EffectiveSweepThreshold(val, sweepThreshold)
+	hasEffectiveSweepThreshold := val.EffectiveBalance() >= effectiveSweepThreshold
+	hasExcessBalance := balance > effectiveSweepThreshold
+
+	return val.HasExecutionWithdrawalCredentials() && hasEffectiveSweepThreshold && hasExcessBalance
+}
+
+// EffectiveSweepThreshold returns the effective sweep threshold of a validator (EIP-8148).
+//
+// https://github.com/ethereum/consensus-specs/blob/master/specs/_features/eip8148/beacon-chain.md#new-get_effective_sweep_threshold
+func EffectiveSweepThreshold(val state.ReadOnlyValidator, sweepThreshold uint64) uint64 {
+	if sweepThreshold != 0 {
+		return sweepThreshold
+	}
+
+	return ValidatorMaxEffectiveBalance(val)
+}
+
+// InitialSweepThreshold returns the initial sweep threshold of a validator created with
+// withdrawalCredentials (EIP-8148). A threshold that is out of range is ignored rather than
+// rejected, and only compounding credentials carry one.
+//
+// https://github.com/ethereum/consensus-specs/blob/master/specs/_features/eip8148/beacon-chain.md#new-get_initial_sweep_threshold
+func InitialSweepThreshold(withdrawalCredentials []byte) uint64 {
+	cfg := params.BeaconConfig()
+	if len(withdrawalCredentials) != fieldparams.RootLength || withdrawalCredentials[0] != cfg.CompoundingWithdrawalPrefixByte {
+		return 0
+	}
+
+	start := SweepThresholdCredentialOffset
+	end := start + SweepThresholdCredentialLength
+	increments := binary.LittleEndian.Uint16(withdrawalCredentials[start:end])
+	threshold := uint64(increments) * cfg.EffectiveBalanceIncrement
+
+	if threshold < cfg.MinActivationBalance || threshold > cfg.MaxEffectiveBalanceElectra {
+		return cfg.MaxEffectiveBalanceElectra
+	}
+
+	return threshold
 }
 
 // isPartiallyWithdrawableValidatorElectra implements is_partially_withdrawable_validator in the

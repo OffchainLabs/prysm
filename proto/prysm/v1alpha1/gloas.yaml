@@ -38,6 +38,7 @@ types:
       Builders:                   {type: "ProgressiveList"}
       BuilderPendingWithdrawals:  {type: "ProgressiveList"}
       PayloadExpectedWithdrawals: {type: "ProgressiveList"}
+      ValidatorSweepThresholds:   {type: "ProgressiveList"}
   - name: "BlindedExecutionPayloadEnvelope"
   - name: "Builder"
   - name: "BuilderPendingPayment"

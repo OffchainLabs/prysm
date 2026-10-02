@@ -120,6 +120,10 @@ func ValidateExecutionRequestLengths(reqs *enginev1.ExecutionRequestsGloas) erro
 	if uint64(len(reqs.GetBuilderExits())) > cfg.MaxBuilderExitRequestsPerPayload {
 		return errors.Errorf("too many builder exit requests: %d > %d", len(reqs.GetBuilderExits()), cfg.MaxBuilderExitRequestsPerPayload)
 	}
+	// [New in EIP8148]
+	if uint64(len(reqs.GetSweepThresholds())) > cfg.MaxSetSweepThresholdRequestsPerPayload {
+		return errors.Errorf("too many set sweep threshold requests: %d > %d", len(reqs.GetSweepThresholds()), cfg.MaxSetSweepThresholdRequestsPerPayload)
+	}
 	return nil
 }
 
@@ -138,7 +142,16 @@ func processExecutionRequests(ctx context.Context, st state.BeaconState, rqs *en
 	if err := ProcessBuilderDepositRequests(ctx, st, rqs.BuilderDeposits); err != nil {
 		return errors.Wrap(err, "could not process builder deposit requests")
 	}
-	return ProcessBuilderExitRequests(ctx, st, rqs.BuilderExits)
+	if err := ProcessBuilderExitRequests(ctx, st, rqs.BuilderExits); err != nil {
+		return errors.Wrap(err, "could not process builder exit requests")
+	}
+
+	// [New in EIP8148]
+	if err := ProcessSetSweepThresholdRequests(ctx, st, rqs.SweepThresholds); err != nil {
+		return errors.Wrap(err, "could not process set sweep threshold requests")
+	}
+
+	return nil
 }
 
 // IsEmptyExecutionRequests returns true if the execution requests contain no entries.
@@ -147,5 +160,5 @@ func IsEmptyExecutionRequests(r *enginev1.ExecutionRequestsGloas) bool {
 		return true
 	}
 	return len(r.Deposits) == 0 && len(r.Withdrawals) == 0 && len(r.Consolidations) == 0 &&
-		len(r.BuilderDeposits) == 0 && len(r.BuilderExits) == 0
+		len(r.BuilderDeposits) == 0 && len(r.BuilderExits) == 0 && len(r.SweepThresholds) == 0
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
@@ -290,7 +291,17 @@ func switchToCompoundingValidator(st state.BeaconState, idx primitives.Validator
 	if err := st.UpdateValidatorAtIndex(idx, v); err != nil {
 		return err
 	}
-	return queueExcessActiveBalance(st, idx)
+	if err := queueExcessActiveBalance(st, idx); err != nil {
+		return fmt.Errorf("queue excess acive balance: %w", err)
+	}
+
+	// [New in EIP8148]
+	if st.Version() >= version.Gloas {
+		if err := st.SetValidatorSweepThresholdAtIndex(idx, params.BeaconConfig().MaxEffectiveBalanceElectra); err != nil {
+			return errors.Wrapf(err, "set validator sweep threshold at index %d", idx)
+		}
+	}
+	return nil
 }
 
 func queueExcessActiveBalance(st state.BeaconState, idx primitives.ValidatorIndex) error {

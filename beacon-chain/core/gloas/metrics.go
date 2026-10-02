@@ -24,4 +24,10 @@ var (
 			Help: "The number of processed builder exits.",
 		},
 	)
+	sweepThresholdsProcessedTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "sweep_thresholds_processed_total",
+			Help: "The number of accepted EIP-8148 set sweep threshold requests.",
+		},
+	)
 )

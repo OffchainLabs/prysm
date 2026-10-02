@@ -1052,7 +1052,7 @@ func TestIsPartiallyWithdrawableValidator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			v, err := state_native.NewValidator(tt.validator)
 			require.NoError(t, err)
-			assert.Equal(t, tt.want, helpers.IsPartiallyWithdrawableValidator(v, tt.balance, tt.epoch, tt.fork))
+			assert.Equal(t, tt.want, helpers.IsPartiallyWithdrawableValidator(v, tt.balance, tt.epoch, tt.fork, 0))
 		})
 	}
 }

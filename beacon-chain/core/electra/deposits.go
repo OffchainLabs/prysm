@@ -476,6 +476,9 @@ func ApplyPendingDeposit(ctx context.Context, st state.BeaconState, deposit *eth
 //	set_or_append_list(state.previous_epoch_participation, index, ParticipationFlags(0b0000_0000))
 //	set_or_append_list(state.current_epoch_participation, index, ParticipationFlags(0b0000_0000))
 //	set_or_append_list(state.inactivity_scores, index, uint64(0))
+//	# [New in EIP8148]
+//	threshold = get_initial_sweep_threshold(withdrawal_credentials)
+//	set_or_append_list(state.validator_sweep_thresholds, index, threshold)
 func AddValidatorToRegistry(beaconState state.BeaconState, pubKey []byte, withdrawalCredentials []byte, amount uint64) error {
 	val, err := GetValidatorFromDeposit(pubKey, withdrawalCredentials, amount)
 	if err != nil {
@@ -498,6 +501,14 @@ func AddValidatorToRegistry(beaconState state.BeaconState, pubKey []byte, withdr
 		}
 		if err := beaconState.AppendCurrentParticipationBits(0); err != nil {
 			return err
+		}
+	}
+
+	// [New in EIP8148]
+	if beaconState.Version() >= version.Gloas {
+		threshold := helpers.InitialSweepThreshold(withdrawalCredentials)
+		if err := beaconState.AppendValidatorSweepThreshold(threshold); err != nil {
+			return errors.Wrap(err, "append validator sweep threshold")
 		}
 	}
 	return nil

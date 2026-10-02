@@ -132,6 +132,8 @@ func (f FieldIndex) String() string {
 		return "payloadExpectedWithdrawals"
 	case PTCWindow:
 		return "ptcWindow"
+	case ValidatorSweepThresholds:
+		return "validatorSweepThresholds"
 	default:
 		return fmt.Sprintf("unknown field index number: %d", f)
 	}
@@ -233,6 +235,8 @@ func (f FieldIndex) RealPosition() int {
 		return 44
 	case PTCWindow:
 		return 45
+	case ValidatorSweepThresholds:
+		return 46
 	default:
 		return -1
 	}
@@ -307,6 +311,7 @@ const (
 	LatestBlockHash               // Gloas: EIP-7732
 	PayloadExpectedWithdrawals    // Gloas: EIP-7732
 	PTCWindow                     // Gloas: EIP-7732
+	ValidatorSweepThresholds      // Gloas: EIP-8148
 )
 
 // Enumerator keeps track of the number of states created since the node's start.

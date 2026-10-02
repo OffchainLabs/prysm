@@ -143,6 +143,7 @@ type stateDiff struct {
 	latestBlockHash                [fieldparams.RootLength]byte      // override.
 	payloadExpectedWithdrawals     []*enginev1.Withdrawal            // override.
 	ptcWindow                      []*ethpb.PTCs                     // override.
+	validatorSweepThresholds       []uint64                          // override. EIP-8148.
 }
 
 type hdiff struct {

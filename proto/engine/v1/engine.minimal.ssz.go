@@ -3656,12 +3656,13 @@ func (c *ExecutionRequests) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 }
 
 func (c *ExecutionRequestsGloas) SizeSSZ() int {
-	size := 20
+	size := 24
 	size += len(c.Deposits) * 192
 	size += len(c.Withdrawals) * 76
 	size += len(c.Consolidations) * 116
 	size += len(c.BuilderDeposits) * 184
 	size += len(c.BuilderExits) * 68
+	size += len(c.SweepThresholds) * 76
 	return size
 }
 
@@ -3672,7 +3673,7 @@ func (c *ExecutionRequestsGloas) MarshalSSZ() ([]byte, error) {
 
 func (c *ExecutionRequestsGloas) MarshalSSZTo(dst []byte) ([]byte, error) {
 	var err error
-	offset := 20
+	offset := 24
 
 	// Field 0: Deposits
 	dst = ssz.WriteOffset(dst, offset)
@@ -3693,6 +3694,10 @@ func (c *ExecutionRequestsGloas) MarshalSSZTo(dst []byte) ([]byte, error) {
 	// Field 4: BuilderExits
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(c.BuilderExits) * 68
+
+	// Field 5: SweepThresholds
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(c.SweepThresholds) * 76
 
 	// Field 0: Deposits
 	for _, o := range c.Deposits {
@@ -3728,18 +3733,25 @@ func (c *ExecutionRequestsGloas) MarshalSSZTo(dst []byte) ([]byte, error) {
 			return nil, fmt.Errorf("BuilderExits: %w", err)
 		}
 	}
+
+	// Field 5: SweepThresholds
+	for _, o := range c.SweepThresholds {
+		if dst, err = o.MarshalSSZTo(dst); err != nil {
+			return nil, fmt.Errorf("SweepThresholds: %w", err)
+		}
+	}
 	return dst, err
 }
 
 func (c *ExecutionRequestsGloas) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 20 {
+	if size < 24 {
 		return ssz.ErrSize
 	}
 
 	sszVarOffset0 := ssz.ReadOffset(buf[0:4]) // c.Deposits
-	if sszVarOffset0 != 20 {
+	if sszVarOffset0 != 24 {
 		return ssz.ErrInvalidVariableOffset
 	}
 	if sszVarOffset0 > size {
@@ -3761,11 +3773,16 @@ func (c *ExecutionRequestsGloas) UnmarshalSSZ(buf []byte) error {
 	if sszVarOffset4 > size || sszVarOffset4 < sszVarOffset3 {
 		return ssz.ErrOffset
 	}
+	sszVarOffset5 := ssz.ReadOffset(buf[20:24]) // c.SweepThresholds
+	if sszVarOffset5 > size || sszVarOffset5 < sszVarOffset4 {
+		return ssz.ErrOffset
+	}
 	sszSlice0 := buf[sszVarOffset0:sszVarOffset1] // c.Deposits
 	sszSlice1 := buf[sszVarOffset1:sszVarOffset2] // c.Withdrawals
 	sszSlice2 := buf[sszVarOffset2:sszVarOffset3] // c.Consolidations
 	sszSlice3 := buf[sszVarOffset3:sszVarOffset4] // c.BuilderDeposits
-	sszSlice4 := buf[sszVarOffset4:]              // c.BuilderExits
+	sszSlice4 := buf[sszVarOffset4:sszVarOffset5] // c.BuilderExits
+	sszSlice5 := buf[sszVarOffset5:]              // c.SweepThresholds
 
 	// Field 0: Deposits
 	{
@@ -3856,6 +3873,24 @@ func (c *ExecutionRequestsGloas) UnmarshalSSZ(buf []byte) error {
 			c.BuilderExits[i] = tmp
 		}
 	}
+
+	// Field 5: SweepThresholds
+	{
+		if len(sszSlice5)%76 != 0 {
+			return fmt.Errorf("misaligned bytes: c.SweepThresholds length is %d, which is not a multiple of 76: %w", len(sszSlice5), ssz.ErrIncorrectListSize)
+		}
+		numElem := len(sszSlice5) / 76
+		c.SweepThresholds = make([]*SetSweepThresholdRequest, numElem)
+		for i := 0; i < numElem; i++ {
+			var tmp *SetSweepThresholdRequest
+			tmp = new(SetSweepThresholdRequest)
+			tmpSlice := sszSlice5[i*76 : (1+i)*76]
+			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
+				return fmt.Errorf("SweepThresholds: %w", err)
+			}
+			c.SweepThresholds[i] = tmp
+		}
+	}
 	return err
 }
 
@@ -3867,7 +3902,7 @@ func (c *ExecutionRequestsGloas) HashTreeRootWith(hh *ssz.Hasher) error {
 	return c.ProgressiveHashTreeRootWith(hh)
 }
 
-var activeFieldsExecutionRequestsGloas = []byte{0b00011111}
+var activeFieldsExecutionRequestsGloas = []byte{0b00111111}
 
 func (c *ExecutionRequestsGloas) ProgressiveHashTreeRoot() ([32]byte, error) {
 	hh := ssz.DefaultHasherPool.Get()
@@ -3932,7 +3967,102 @@ func (c *ExecutionRequestsGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (er
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.BuilderExits)))
 	}
+	// Field 5: SweepThresholds
+	{
+		subIndx := hh.Index()
+		for _, o := range c.SweepThresholds {
+			if err := o.HashTreeRootWith(hh); err != nil {
+				return fmt.Errorf("SweepThresholds: %w", err)
+			}
+		}
+		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.SweepThresholds)))
+	}
 	hh.MerkleizeProgressiveWithActiveFields(indx, activeFieldsExecutionRequestsGloas)
+	return nil
+}
+
+func (c *SetSweepThresholdRequest) SizeSSZ() int {
+	size := 76
+
+	return size
+}
+
+func (c *SetSweepThresholdRequest) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *SetSweepThresholdRequest) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+
+	// Field 0: SourceAddress
+	if len(c.SourceAddress) != 20 {
+		return nil, ssz.ErrBytesLength
+	}
+	dst = append(dst, c.SourceAddress...)
+
+	// Field 1: ValidatorPubkey
+	if len(c.ValidatorPubkey) != 48 {
+		return nil, ssz.ErrBytesLength
+	}
+	dst = append(dst, c.ValidatorPubkey...)
+
+	// Field 2: Threshold
+	dst = binary.LittleEndian.AppendUint64(dst, c.Threshold)
+
+	return dst, err
+}
+
+func (c *SetSweepThresholdRequest) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 76 {
+		return ssz.ErrSize
+	}
+
+	sszSlice0 := buf[0:20]  // c.SourceAddress
+	sszSlice1 := buf[20:68] // c.ValidatorPubkey
+	sszSlice2 := buf[68:76] // c.Threshold
+
+	// Field 0: SourceAddress
+	c.SourceAddress = make([]byte, 0, 20)
+	c.SourceAddress = append(c.SourceAddress, sszSlice0...)
+
+	// Field 1: ValidatorPubkey
+	c.ValidatorPubkey = make([]byte, 0, 48)
+	c.ValidatorPubkey = append(c.ValidatorPubkey, sszSlice1...)
+
+	// Field 2: Threshold
+	c.Threshold = binary.LittleEndian.Uint64(sszSlice2)
+	return err
+}
+
+func (c *SetSweepThresholdRequest) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *SetSweepThresholdRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: SourceAddress
+	if len(c.SourceAddress) != 20 {
+		return ssz.ErrBytesLength
+	}
+	hh.PutBytes(c.SourceAddress)
+	// Field 1: ValidatorPubkey
+	if len(c.ValidatorPubkey) != 48 {
+		return ssz.ErrBytesLength
+	}
+	hh.PutBytes(c.ValidatorPubkey)
+	// Field 2: Threshold
+	hh.PutUint64(c.Threshold)
+	hh.Merkleize(indx)
 	return nil
 }
 

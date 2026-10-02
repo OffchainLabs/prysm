@@ -257,6 +257,8 @@ message SignedBeaconBlockGloas {
 //     MAX_WITHDRAWALS_PER_PAYLOAD]
 //     ptc_window:
 //     Vector[PTCs, (2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH]
+//     # [New in EIP8148]
+//     validator_sweep_thresholds: ProgressiveList[Gwei]
 message BeaconStateGloas {
   // Versioning [1001-2000]
   uint64 genesis_time = 1001;
@@ -388,6 +390,10 @@ message BeaconStateGloas {
       [ (ethereum.eth.ext.ssz_max) = "withdrawal.size" ];
   repeated PTCs ptc_window = 14008
       [ (ethereum.eth.ext.ssz_size) = "ptc_window.size" ];
+
+  // Fields introduced in EIP-8148, shipped as part of Gloas [15001-16000]
+  repeated uint64 validator_sweep_thresholds = 15001
+      [ (ethereum.eth.ext.ssz_max) = "1099511627776" ];
 }
 
 // PTCs represents the payload timeliness committee for a single slot.

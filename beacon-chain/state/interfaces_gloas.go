@@ -46,6 +46,11 @@ type writeOnlyGloasFields interface {
 	DequeueBuilderPendingWithdrawals(num uint64) error
 	SetNextWithdrawalBuilderIndex(idx primitives.BuilderIndex) error
 	OnboardBuildersFromPendingDeposits() error
+
+	// Custom sweep thresholds (EIP-8148).
+	SetValidatorSweepThresholds(thresholds []uint64) error
+	SetValidatorSweepThresholdAtIndex(idx primitives.ValidatorIndex, threshold uint64) error
+	AppendValidatorSweepThreshold(threshold uint64) error
 }
 
 type readOnlyGloasFields interface {
@@ -81,6 +86,10 @@ type readOnlyGloasFields interface {
 	ExpectedWithdrawalsGloas() (ExpectedWithdrawalsGloasResult, error)
 	PayloadExpectedWithdrawals() ([]*enginev1.Withdrawal, error)
 	WithdrawalsForPayload() ([]*enginev1.Withdrawal, error)
+
+	// Custom sweep thresholds (EIP-8148).
+	ValidatorSweepThresholds() ([]uint64, error)
+	ValidatorSweepThreshold(idx primitives.ValidatorIndex) (uint64, error)
 }
 
 // ExpectedWithdrawalsGloasResult bundles the expected withdrawals and related counters

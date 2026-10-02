@@ -341,6 +341,9 @@ type BeaconChainConfig struct {
 	MaxBuilderDepositRequestsPerPayload  uint64 `yaml:"MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD" spec:"true"`   // MaxBuilderDepositRequestsPerPayload is the maximum number of builder deposit requests in each payload (EIP-8282).
 	MaxBuilderExitRequestsPerPayload     uint64 `yaml:"MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD" spec:"true"`      // MaxBuilderExitRequestsPerPayload is the maximum number of builder exit requests in each payload (EIP-8282).
 
+	// Values introduced in EIP-8148 (custom sweep threshold), shipped as part of Gloas.
+	MaxSetSweepThresholdRequestsPerPayload uint64 `yaml:"MAX_SET_SWEEP_THRESHOLD_REQUESTS_PER_PAYLOAD" spec:"true"` // MaxSetSweepThresholdRequestsPerPayload is the maximum number of set sweep threshold requests in each payload (EIP-8148).
+
 	// Networking Specific Parameters
 	MaxPayloadSize                  uint64          `yaml:"MAX_PAYLOAD_SIZE" spec:"true"`                   // MAX_PAYLOAD_SIZE is the maximum allowed size of uncompressed payload in gossip messages and rpc chunks.
 	AttestationSubnetCount          uint64          `yaml:"ATTESTATION_SUBNET_COUNT" spec:"true"`           // AttestationSubnetCount is the number of attestation subnets used in the gossipsub protocol.
@@ -403,6 +406,7 @@ func (b *BeaconChainConfig) ExecutionRequestLimits() enginev1.ExecutionRequestLi
 		Consolidations:  b.MaxConsolidationsRequestsPerPayload,
 		BuilderDeposits: b.MaxBuilderDepositRequestsPerPayload,
 		BuilderExits:    b.MaxBuilderExitRequestsPerPayload,
+		SweepThresholds: b.MaxSetSweepThresholdRequestsPerPayload,
 	}
 }
 

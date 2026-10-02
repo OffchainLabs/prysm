@@ -582,6 +582,7 @@ func NewBeaconStateGloas(options ...func(state *ethpb.BeaconStateGloas) error) (
 		LatestBlockHash:              make([]byte, 32),
 		PayloadExpectedWithdrawals:   make([]*enginev1.Withdrawal, 0),
 		PtcWindow:                    ptcWindow,
+		ValidatorSweepThresholds:     make([]uint64, 0),
 	}
 
 	for _, opt := range options {
@@ -589,6 +590,13 @@ func NewBeaconStateGloas(options ...func(state *ethpb.BeaconStateGloas) error) (
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	// [New in EIP-8148] The sweep thresholds are kept in lockstep with the validator registry. An
+	// option may have injected validators, so pad the list to match instead of handing out a state
+	// the setters would reject.
+	for len(seed.ValidatorSweepThresholds) < len(seed.Validators) {
+		seed.ValidatorSweepThresholds = append(seed.ValidatorSweepThresholds, 0)
 	}
 
 	var st, err = state_native.InitializeFromProtoUnsafeGloas(seed)

@@ -113,6 +113,7 @@ var (
 		types.LatestExecutionPayloadBid,
 		types.PayloadExpectedWithdrawals,
 		types.PTCWindow,
+		types.ValidatorSweepThresholds, // EIP-8148, shipped as part of Gloas.
 	}
 
 	gloasProgressiveSchema *ProgressiveStateSchema
