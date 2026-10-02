@@ -34,6 +34,7 @@ var processPendingBlocksPeriod = slots.DivideSlotBy(3 /* times per slot */)
 const maxPeerRequest = 50
 const numOfTries = 5
 const maxBlocksPerSlot = 3
+const maxParentFetchesPerSlot = 4
 
 // processes pending blocks queue on every processPendingBlocksPeriod
 func (s *Service) processPendingBlocksQueue() {
@@ -363,6 +364,28 @@ func (s *Service) checkIfBlockIsBad(
 	}
 
 	return true, nil
+}
+
+func (s *Service) fetchMissingParent(root [32]byte) {
+	currentSlot := s.cfg.clock.CurrentSlot()
+
+	s.parentFetchLock.Lock()
+	if s.parentFetchRoots == nil || s.parentFetchSlot != currentSlot {
+		s.parentFetchSlot = currentSlot
+		s.parentFetchRoots = make(map[[32]byte]bool, maxParentFetchesPerSlot)
+	}
+	if s.parentFetchRoots[root] || len(s.parentFetchRoots) >= maxParentFetchesPerSlot {
+		s.parentFetchLock.Unlock()
+		return
+	}
+	s.parentFetchRoots[root] = true
+	s.parentFetchLock.Unlock()
+
+	go func() {
+		if err := s.sendBatchRootRequest(s.ctx, [][32]byte{root}, rand.NewGenerator()); err != nil {
+			log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Debug("Failed to send batch root request")
+		}
+	}()
 }
 
 func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, randGen *rand.Rand) error {
