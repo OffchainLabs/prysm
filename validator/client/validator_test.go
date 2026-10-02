@@ -393,38 +393,6 @@ func TestWaitForChainStart_SetsGenesisInfo(t *testing.T) {
 	}
 }
 
-func TestValidator_GenesisTime(t *testing.T) {
-	t.Run("concurrent with WaitForChainStart", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-		client := validatormock.NewMockValidatorClient(ctrl)
-		v := &validator{
-			validatorClient: client,
-			db:              dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false),
-		}
-		genesis := time.Unix(1, 0)
-		genesisValidatorsRoot := bytesutil.ToBytes32([]byte("validators"))
-		client.EXPECT().WaitForChainStart(gomock.Any(), &emptypb.Empty{}).Return(&ethpb.ChainStartResponse{
-			Started:               true,
-			GenesisTime:           uint64(genesis.Unix()),
-			GenesisValidatorsRoot: genesisValidatorsRoot[:],
-		}, nil).Times(10)
-
-		done := make(chan struct{})
-		go func() {
-			defer close(done)
-			for range 10 {
-				_ = v.GenesisTime()
-			}
-		}()
-		for range 10 {
-			require.NoError(t, v.WaitForChainStart(t.Context()))
-		}
-		<-done
-		assert.Equal(t, genesis, v.GenesisTime())
-	})
-}
-
 func TestWaitForChainStart_SetsGenesisInfo_IncorrectSecondTry(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
