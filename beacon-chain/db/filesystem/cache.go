@@ -104,6 +104,12 @@ func (s *blobStorageSummaryCache) ensure(ident blobIdent) error {
 	return nil
 }
 
+func (s *blobStorageSummaryCache) isEmpty() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.cache) == 0
+}
+
 func (s *blobStorageSummaryCache) get(key [32]byte) (BlobStorageSummary, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
