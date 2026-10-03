@@ -149,6 +149,13 @@ var appHelpFlagGroups = []flagGroup{
 			flags.BuilderBidTimeout,
 			flags.SuggestedFeeRecipient,
 			flags.DisableBuilderSSZ,
+			flags.BuilderAllowedFailures,
+			flags.BuilderCriticalFailures,
+			flags.BuilderBlacklistPeriod,
+			flags.BuilderCriticalBlacklistPeriod,
+			flags.BuilderRelayBlacklistPeriod,
+			flags.BuilderFailureBackOffPeriod,
+			flags.BuilderCriticalFailedBuilders,
 		},
 	},
 	{ // Flags relevant to syncing the beacon chain.
