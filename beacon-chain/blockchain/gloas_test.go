@@ -627,8 +627,8 @@ func TestShouldBuildOnFull(t *testing.T) {
 		service, root, blockSlot := setup(t, "ptc-late")
 		recordTestPayloadArrival(t, service, root, blockSlot, true)
 		setTestPTCVotes(service, root, false, false)
-		assertBuild(t, service, root, blockSlot+1, true, false, "ptc voted payload missing")
-		assertBuild(t, service, root, blockSlot+1, false, false, "ptc voted payload missing")
+		assertBuild(t, service, root, blockSlot+1, true, false, "ptc voted against payload")
+		assertBuild(t, service, root, blockSlot+1, false, false, "ptc voted against payload")
 	})
 
 	t.Run("ptc certification keeps even a late payload", func(t *testing.T) {
@@ -668,7 +668,15 @@ func TestShouldBuildOnFull(t *testing.T) {
 		service, root, blockSlot := setup(t, "late-unavailable")
 		recordTestPayloadArrival(t, service, root, blockSlot, false)
 		setTestPTCVotes(service, root, true, false)
-		assertBuild(t, service, root, blockSlot+1, true, false, "arrived late, betting on empty")
+		assertBuild(t, service, root, blockSlot+1, true, false, "ptc voted against payload")
+	})
+
+	t.Run("ptc data unavailable verdict reorgs an early payload", func(t *testing.T) {
+		service, root, blockSlot := setup(t, "early-unavailable")
+		recordTestPayloadArrival(t, service, root, blockSlot, true)
+		setTestPTCVotes(service, root, true, false)
+		assertBuild(t, service, root, blockSlot+1, true, false, "ptc voted against payload")
+		assertBuild(t, service, root, blockSlot+1, false, false, "ptc voted against payload")
 	})
 }
 
