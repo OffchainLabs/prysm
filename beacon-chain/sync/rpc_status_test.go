@@ -17,6 +17,7 @@ import (
 	testingDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
@@ -112,6 +113,8 @@ func TestStatusRPCHandler_Disconnects_OnForkVersionMismatch(t *testing.T) {
 	}
 
 	assert.Equal(t, 0, len(p1.BHost.Network().Peers()), "handler did not disconnect peer")
+	// The stored verdict grey-lists the wrong-fork peer, matching the outbound status path.
+	require.ErrorIs(t, p1.PeerScoring().IsPeerGreyListed(p2.BHost.ID()), peerscoring.ErrPeerGreyListed)
 }
 
 func TestStatusRPCHandler_ConnectsOnGenesis(t *testing.T) {
@@ -982,7 +985,7 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 
 	require.NoError(t, cw.SetClock(startup.NewClock(chain.Genesis, chain.ValidatorsRoot)))
 
-	assert.NoError(t, p1.Peers().Scorers().IsBadPeer(p2.PeerID()), "Peer is marked as bad")
+	assert.NoError(t, p1.PeerScoring().IsPeerGreyListed(p2.PeerID()), "Peer is marked as grey-listed")
 	p1.Connect(p2)
 
 	if util.WaitTimeout(&wg, time.Second) {
@@ -994,7 +997,7 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 	require.NoError(t, err, "Could not obtain peer connection state")
 	assert.Equal(t, peers.Disconnected, connectionState, "Expected peer to be disconnected")
 
-	assert.NotNil(t, p1.Peers().Scorers().IsBadPeer(p2.PeerID()), "Peer is not marked as bad")
+	assert.NotNil(t, p1.PeerScoring().IsPeerGreyListed(p2.PeerID()), "Peer is not marked as grey-listed")
 }
 
 func TestStatusRPC_ValidGenesisMessage(t *testing.T) {

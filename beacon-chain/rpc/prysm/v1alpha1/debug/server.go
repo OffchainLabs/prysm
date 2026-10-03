@@ -30,6 +30,7 @@ type Server struct {
 	HeadFetcher        blockchain.HeadFetcher
 	PeerManager        p2p.PeerManager
 	PeersFetcher       p2p.PeersProvider
+	PeerScoringFetcher p2p.PeerScoringProvider
 	ReplayerBuilder    stategen.ReplayerBuilder
 }
 

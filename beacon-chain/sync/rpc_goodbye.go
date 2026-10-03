@@ -72,24 +72,24 @@ func (s *Service) goodbyeRPCHandler(_ context.Context, msg any, stream libp2pcor
 	return nil
 }
 
-// disconnectBadPeer checks whether peer is considered bad by some scorer, and tries to disconnect
-// the peer, if that is the case. Additionally, disconnection reason is obtained from scorer.
-func (s *Service) disconnectBadPeer(ctx context.Context, id peer.ID, badPeerErr error) {
-	err := s.cfg.p2p.Peers().Scorers().ValidationError(id)
+// disconnectGreyListedPeer disconnects a grey-listed peer with a goodbye code derived
+// from the peer's stored status validation error.
+func (s *Service) disconnectGreyListedPeer(ctx context.Context, id peer.ID, greyListErr error) {
+	err := s.cfg.p2p.PeerScoring().ValidationError(id)
 	goodbyeCode := p2ptypes.ErrToGoodbyeCode(err)
 	if err == nil {
 		goodbyeCode = p2ptypes.GoodbyeCodeBanned
 	}
 	if err := s.sendGoodByeAndDisconnect(ctx, goodbyeCode, id); err != nil {
-		log.WithError(err).Debug("Error when disconnecting with bad peer")
+		log.WithError(err).Debug("Error when disconnecting with grey-listed peer")
 	}
 
-	log.WithError(badPeerErr).
+	log.WithError(greyListErr).
 		WithFields(logrus.Fields{
 			"peerID": id,
 			"agent":  agentString(id, s.cfg.p2p.Host()),
 		}).
-		Debug("Sent bad peer disconnection")
+		Debug("Sent grey-listed peer disconnection")
 }
 
 // A custom goodbye method that is used by our connection handler, in the

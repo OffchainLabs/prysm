@@ -29,6 +29,7 @@ go_library(
         "//beacon-chain/db/filesystem:go_default_library",
         "//beacon-chain/p2p:go_default_library",
         "//beacon-chain/p2p/peers:go_default_library",
+        "//beacon-chain/p2p/peerscoring:go_default_library",
         "//beacon-chain/startup:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//beacon-chain/sync:go_default_library",

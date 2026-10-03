@@ -8,7 +8,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	testp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -377,9 +377,7 @@ func TestCustodyGroupCountFromPeer(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create peers status.
-			peers := peers.NewStatus(t.Context(), &peers.StatusConfig{
-				ScorerParams: &scorers.Config{},
-			})
+			peers := peers.NewStatus(t.Context(), &peers.StatusConfig{})
 
 			// Set the metadata.
 			if tc.metadata != nil {
@@ -391,9 +389,10 @@ func TestCustodyGroupCountFromPeer(t *testing.T) {
 
 			// Create a new service.
 			service := &Service{
-				peers:    peers,
-				metaData: tc.metadata,
-				host:     testp2p.NewTestP2P(t).Host(),
+				peerScorer: peerscoring.NewScorer(),
+				peers:      peers,
+				metaData:   tc.metadata,
+				host:       testp2p.NewTestP2P(t).Host(),
 			}
 
 			// Retrieve the custody count from the remote peer.
@@ -444,17 +443,16 @@ func TestCustodyGroupCountFromPeerENR(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			peers := peers.NewStatus(context.Background(), &peers.StatusConfig{
-				ScorerParams: &scorers.Config{},
-			})
+			peers := peers.NewStatus(context.Background(), &peers.StatusConfig{})
 
 			if tc.record != nil {
 				peers.Add(tc.record, pid, nil, network.DirOutbound)
 			}
 
 			service := &Service{
-				peers: peers,
-				host:  testp2p.NewTestP2P(t).Host(),
+				peerScorer: peerscoring.NewScorer(),
+				peers:      peers,
+				host:       testp2p.NewTestP2P(t).Host(),
 			}
 
 			actual := service.custodyGroupCountFromPeerENR(pid)

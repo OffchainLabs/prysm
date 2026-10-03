@@ -438,7 +438,7 @@ func TestRegularSyncBeaconBlockSubscriber_ProcessPendingBlocks_2Chains(t *testin
 
 	p1.Peers().Add(new(enr.Record), p2.PeerID(), nil, network.DirOutbound)
 	p1.Peers().SetConnectionState(p2.PeerID(), peers.Connected)
-	p1.Peers().SetChainState(p2.PeerID(), &ethpb.StatusV2{})
+	setPeerStatus(p1.PeerScoring(), p2.PeerID(), &ethpb.StatusV2{})
 
 	b0 := util.NewBeaconBlock()
 	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
@@ -545,7 +545,7 @@ func TestRegularSyncBeaconBlockSubscriber_PruneOldPendingBlocks(t *testing.T) {
 
 	p1.Peers().Add(new(enr.Record), p1.PeerID(), nil, network.DirOutbound)
 	p1.Peers().SetConnectionState(p1.PeerID(), peers.Connected)
-	p1.Peers().SetChainState(p1.PeerID(), &ethpb.StatusV2{})
+	setPeerStatus(p1.PeerScoring(), p1.PeerID(), &ethpb.StatusV2{})
 
 	b0 := util.NewBeaconBlock()
 	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
@@ -653,7 +653,7 @@ func TestService_BatchRootRequest(t *testing.T) {
 
 	p1.Peers().Add(new(enr.Record), p2.PeerID(), nil, network.DirOutbound)
 	p1.Peers().SetConnectionState(p2.PeerID(), peers.Connected)
-	p1.Peers().SetChainState(p2.PeerID(), &ethpb.StatusV2{FinalizedEpoch: 2})
+	setPeerStatus(p1.PeerScoring(), p2.PeerID(), &ethpb.StatusV2{FinalizedEpoch: 2})
 
 	b0 := util.NewBeaconBlock()
 	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
@@ -1023,7 +1023,7 @@ func parentRequestService(t *testing.T, send func(context.Context, any) (network
 	pid := peer.ID("parent-peer")
 	p.Peers().Add(new(enr.Record), pid, nil, network.DirOutbound)
 	p.Peers().SetConnectionState(pid, peers.Connected)
-	p.Peers().SetChainState(pid, &ethpb.StatusV2{FinalizedEpoch: 1})
+	setPeerStatus(p.PeerScoring(), pid, &ethpb.StatusV2{FinalizedEpoch: 1})
 	s := NewService(t.Context(), WithP2P(p), WithDatabase(dbtest.SetupDB(t)),
 		WithChainService(&mock.ChainService{FinalizedCheckPoint: &ethpb.Checkpoint{}}))
 	t.Cleanup(s.cancel)
