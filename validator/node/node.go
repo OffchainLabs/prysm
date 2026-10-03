@@ -132,8 +132,10 @@ func (c *ValidatorClient) Start() {
 		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
 		defer signal.Stop(sigc)
 		<-sigc
+
 		log.Info("Got interrupt, shutting down...")
-		go c.Close()
+		c.shutdown(sigc)
+
 		for i := 10; i > 0; i-- {
 			<-sigc
 			if i > 1 {
@@ -145,6 +147,39 @@ func (c *ValidatorClient) Start() {
 
 	// Wait for stop channel to be closed.
 	<-stop
+}
+
+// shutdown closes the validator client. Unless disabled, it first waits for the moment in the slot
+// where a restart would not miss any rewarded duty. It returns early on another interrupt, which
+// closes the validator client immediately.
+func (c *ValidatorClient) shutdown(sigc <-chan os.Signal) {
+	if features.Get().DisableDutyAwareShutdown {
+		go c.Close()
+		return
+	}
+
+	ctx, cancel := context.WithCancel(c.ctx)
+	defer cancel()
+
+	go func() {
+		c.waitForDutyAwareShutdown(ctx)
+		c.Close()
+	}()
+
+	<-sigc
+	log.Info("Got interrupt, shutting down immediately...")
+}
+
+// waitForDutyAwareShutdown blocks until the validator client can be stopped and restarted
+// without missing any rewarded duty, or until the context is done.
+func (c *ValidatorClient) waitForDutyAwareShutdown(ctx context.Context) {
+	var vs *client.ValidatorService
+	if err := c.services.FetchService(&vs); err != nil {
+		log.WithError(err).Debug("Could not fetch validator service, stopping immediately")
+		return
+	}
+
+	vs.WaitForDutyAwareShutdown(ctx)
 }
 
 // Close handles graceful shutdown of the system.
