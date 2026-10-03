@@ -2,6 +2,7 @@ package blockchain
 
 import (
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
@@ -14,6 +15,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -262,4 +264,55 @@ func Test_setupForkchoiceTree_MissingHeadBlock(t *testing.T) {
 	require.NoError(t, service.setupForkchoiceTree(st))
 	require.LogsContain(t, hook, "starting with finalized block as head")
 	require.Equal(t, 1, service.cfg.ForkChoiceStore.NodeCount())
+}
+
+func Test_setupForkchoice_UnfinalizedOrigin(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	service, tr := minimalTestService(t)
+	ctx := tr.ctx
+
+	const originEpoch = primitives.Epoch(100)
+	const justifiedEpoch = primitives.Epoch(10)
+
+	originSlot, err := slots.EpochStart(originEpoch)
+	require.NoError(t, err)
+	currentSlot, err := slots.EpochStart(originEpoch + 2)
+	require.NoError(t, err)
+	service.genesisTime = time.Now().Add(-params.SlotsDuration(currentSlot, params.BeaconConfig()))
+
+	st, _ := util.DeterministicGenesisState(t, 64)
+	require.NoError(t, st.SetSlot(originSlot))
+	require.NoError(t, st.SetCurrentJustifiedCheckpoint(&ethpb.Checkpoint{
+		Epoch: justifiedEpoch,
+		Root:  bytesutil.PadTo([]byte("justified"), 32),
+	}))
+	require.NoError(t, st.SetFinalizedCheckpoint(&ethpb.Checkpoint{
+		Epoch: justifiedEpoch - 2,
+		Root:  bytesutil.PadTo([]byte("finalized"), 32),
+	}))
+
+	blk := util.NewBeaconBlock()
+	blk.Block.Slot = originSlot
+	wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	originRoot, err := blk.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	require.NoError(t, service.cfg.BeaconDB.SaveBlock(ctx, wsb))
+	require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, st, originRoot))
+	require.NoError(t, service.cfg.BeaconDB.SaveHeadBlockRoot(ctx, originRoot))
+	require.NoError(t, service.cfg.BeaconDB.SaveOriginCheckpointBlockRoot(ctx, originRoot))
+	require.NoError(t, service.cfg.BeaconDB.SaveJustifiedCheckpoint(ctx, &ethpb.Checkpoint{Epoch: justifiedEpoch, Root: originRoot[:]}))
+	require.NoError(t, service.cfg.BeaconDB.SaveFinalizedCheckpoint(ctx, &ethpb.Checkpoint{Epoch: originEpoch, Root: originRoot[:]}))
+	service.originBlockRoot = originRoot
+
+	require.NoError(t, service.setupForkchoice(st))
+
+	head, err := service.cfg.ForkChoiceStore.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, originRoot, head)
+
+	optimistic, err := service.cfg.ForkChoiceStore.IsOptimistic(originRoot)
+	require.NoError(t, err)
+	require.Equal(t, false, optimistic)
 }
