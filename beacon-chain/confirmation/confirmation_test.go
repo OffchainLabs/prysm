@@ -2,7 +2,9 @@ package confirmation
 
 import (
 	"context"
+	"sync"
 	"testing"
+	"testing/synctest"
 
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -686,4 +688,88 @@ func TestGetLatestConfirmed_RestartsToJustified(t *testing.T) {
 	// (rootFin slot 0 < rootJust slot 27, and epoch 0+1==1)
 	// Phase 3 may try to advance further, but with no support it stays at rootJust
 	require.Equal(t, rootJust, result)
+}
+
+// blockingLookupRecorder records every checkpoint lookup and holds the lookup for hold until release
+// is closed, so the test can observe that the prewarm runs on its own goroutine.
+type blockingLookupRecorder struct {
+	mockBalanceAccessor
+	hold           forkchoicetypes.Checkpoint
+	release        chan struct{}
+	currentRelease chan struct{}
+	mu             sync.Mutex
+	lookups        []forkchoicetypes.Checkpoint
+}
+
+func (m *blockingLookupRecorder) BalanceInfoByCheckpoint(_ context.Context, cp forkchoicetypes.Checkpoint) (*FFGStateInfo, error) {
+	m.mu.Lock()
+	m.lookups = append(m.lookups, cp)
+	m.mu.Unlock()
+	if cp == m.hold {
+		<-m.release
+	} else if m.currentRelease != nil {
+		<-m.currentRelease
+	}
+	return &FFGStateInfo{}, nil
+}
+
+// counts returns the number of lookups seen so far and how many of them were for cp.
+func (m *blockingLookupRecorder) counts(cp forkchoicetypes.Checkpoint) (total, ofCp int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, l := range m.lookups {
+		if l == cp {
+			ofCp++
+		}
+	}
+	return len(m.lookups), ofCp
+}
+
+func TestOnFastConfirmation_LastSlotPrewarmsNextOJC(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		spe := primitives.Slot(params.BeaconConfig().SlotsPerEpoch)
+		anchor := [32]byte{0x10}
+		head := [32]byte{1}
+		anchorCp := forkchoicetypes.Checkpoint{Epoch: 0, Root: anchor}
+		ujc := forkchoicetypes.Checkpoint{Epoch: 1, Root: head}
+
+		fc := &chainTestFC{
+			mockForkchoiceReader: mockForkchoiceReader{headRoot: head, ujc: &ujc},
+			parents:              map[[32]byte][32]byte{head: anchor},
+			slotsByRoot:          map[[32]byte]primitives.Slot{anchor: 0, head: 2*spe - 2},
+		}
+		balances := &blockingLookupRecorder{hold: ujc, release: make(chan struct{})}
+		defer close(balances.release)
+		fcr := New(fc, &mockCommitteeAccessor{}, balances, anchorCp)
+
+		// Mid-epoch slot: exactly one lookup, the synchronous one for the current OJC.
+		fcr.OnFastConfirmation(t.Context(), 2*spe-2)
+		synctest.Wait()
+		total, ofUJC := balances.counts(ujc)
+		require.Equal(t, 1, total)
+		require.Equal(t, 0, ofUJC)
+
+		// Hold the current lookup to verify prewarm waits for this run to finish using the accessor.
+		balances.currentRelease = make(chan struct{})
+		done := make(chan struct{})
+		go func() {
+			fcr.OnFastConfirmation(t.Context(), 2*spe-1)
+			close(done)
+		}()
+		synctest.Wait()
+		total, ofUJC = balances.counts(ujc)
+		require.Equal(t, 2, total)
+		require.Equal(t, 0, ofUJC)
+		close(balances.currentRelease)
+		synctest.Wait()
+		// The prewarm is still blocked, but the current run must have returned.
+		select {
+		case <-done:
+		default:
+			t.Fatal("OnFastConfirmation waited for the prewarm lookup instead of returning")
+		}
+		total, ofUJC = balances.counts(ujc)
+		require.Equal(t, 3, total)
+		require.Equal(t, 1, ofUJC)
+	})
 }
