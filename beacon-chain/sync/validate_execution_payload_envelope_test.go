@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"reflect"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -531,4 +532,198 @@ func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, buil
 		},
 		Signature: bytes.Repeat([]byte{0xAA}, 96),
 	}
+}
+
+// countingEnvelopeVerifier records how many times the expensive signature check ran. Verifying a
+// builder signature merkleizes the entire payload, so the count stands in for the work a peer can
+// make the node do.
+type countingEnvelopeVerifier struct {
+	mockExecutionPayloadEnvelopeVerifier
+	calls *int
+}
+
+func (c *countingEnvelopeVerifier) VerifySignature(_ context.Context, _ state.ReadOnlyBeaconState) error {
+	*c.calls++
+	return c.errSignature
+}
+
+type blockingEnvelopeVerifier struct {
+	mockExecutionPayloadEnvelopeVerifier
+	started chan<- struct{}
+	release <-chan struct{}
+}
+
+func (b *blockingEnvelopeVerifier) VerifySignature(_ context.Context, _ state.ReadOnlyBeaconState) error {
+	b.started <- struct{}{}
+	<-b.release
+	return b.errSignature
+}
+
+func TestValidateExecutionPayloadEnvelope_ParentBeaconBlockRootMismatch(t *testing.T) {
+	ctx := context.Background()
+	s, _, builderIdx, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+
+	sigCalls := 0
+	s.newExecutionPayloadEnvelopeVerifier = func(_ interfaces.ROSignedExecutionPayloadEnvelope, _ []verification.Requirement) verification.ExecutionPayloadEnvelopeVerifier {
+		return &countingEnvelopeVerifier{calls: &sigCalls}
+	}
+
+	env := testSignedExecutionPayloadEnvelope(t, 1, builderIdx, root, [32]byte{})
+	env.Message.ParentBeaconBlockRoot = bytes.Repeat([]byte{0xEE}, 32)
+	msg := envelopeToPubsub(t, s, s.cfg.p2p, env)
+
+	result, err := s.validateExecutionPayloadEnvelope(ctx, "attacker", msg)
+	require.NotNil(t, err)
+	require.Equal(t, pubsub.ValidationReject, result)
+	// The mismatch has to be caught before the payload is merkleized.
+	require.Equal(t, 0, sigCalls)
+}
+
+func TestValidateExecutionPayloadEnvelope_SignatureFailureBudgetIsPerPeer(t *testing.T) {
+	ctx := context.Background()
+	s, msg, _, _ := setupExecutionPayloadEnvelopeService(t, 1, 1)
+
+	sigCalls := 0
+	s.newExecutionPayloadEnvelopeVerifier = func(_ interfaces.ROSignedExecutionPayloadEnvelope, _ []verification.Requirement) verification.ExecutionPayloadEnvelopeVerifier {
+		return &countingEnvelopeVerifier{
+			mockExecutionPayloadEnvelopeVerifier: mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("wrong builder key")},
+			calls:                                &sigCalls,
+		}
+	}
+
+	// A peer gets a bounded number of wrong-key envelopes for a known root. Nothing records them
+	// as seen, so without a budget the peer could replay this indefinitely.
+	for i := 0; i < maxEnvelopeSigFailuresPerPeer; i++ {
+		result, err := s.validateExecutionPayloadEnvelope(ctx, "attacker", msg)
+		require.NotNil(t, err)
+		require.Equal(t, pubsub.ValidationReject, result)
+		require.Equal(t, i+1, sigCalls)
+	}
+
+	// Past the budget the envelope is dropped before the payload is merkleized.
+	result, err := s.validateExecutionPayloadEnvelope(ctx, "attacker", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.Equal(t, maxEnvelopeSigFailuresPerPeer, sigCalls)
+
+	// An honest peer still gets through, so one peer cannot censor another's envelope.
+	result, err = s.validateExecutionPayloadEnvelope(ctx, "honest", msg)
+	require.NotNil(t, err)
+	require.Equal(t, pubsub.ValidationReject, result)
+	require.Equal(t, maxEnvelopeSigFailuresPerPeer+1, sigCalls)
+}
+
+func TestValidateExecutionPayloadEnvelope_SignatureBudgetCountsInFlight(t *testing.T) {
+	ctx := context.Background()
+	s, msg, _, _ := setupExecutionPayloadEnvelopeService(t, 1, 1)
+	started := make(chan struct{}, 3)
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	releaseAll := func() { releaseOnce.Do(func() { close(release) }) }
+	defer releaseAll()
+	s.newExecutionPayloadEnvelopeVerifier = func(_ interfaces.ROSignedExecutionPayloadEnvelope, _ []verification.Requirement) verification.ExecutionPayloadEnvelopeVerifier {
+		return &blockingEnvelopeVerifier{
+			mockExecutionPayloadEnvelopeVerifier: mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("bad signature")},
+			started:                              started,
+			release:                              release,
+		}
+	}
+
+	type validation struct {
+		result pubsub.ValidationResult
+		err    error
+	}
+	validate := func() validation {
+		result, err := s.validateExecutionPayloadEnvelope(ctx, "attacker", msg)
+		return validation{result: result, err: err}
+	}
+	firstTwo := make(chan validation, maxEnvelopeSigFailuresPerPeer)
+	for i := 0; i < maxEnvelopeSigFailuresPerPeer; i++ {
+		go func() { firstTwo <- validate() }()
+	}
+	for i := 0; i < maxEnvelopeSigFailuresPerPeer; i++ {
+		select {
+		case <-started:
+		case <-time.After(5 * time.Second):
+			t.Fatal("signature verification did not start")
+		}
+	}
+
+	third := make(chan validation, 1)
+	go func() { third <- validate() }()
+	select {
+	case got := <-third:
+		require.NoError(t, got.err)
+		require.Equal(t, pubsub.ValidationIgnore, got.result)
+	case <-started:
+		t.Fatal("a third signature verification started while the peer budget was full")
+	case <-time.After(5 * time.Second):
+		t.Fatal("the third envelope was not ignored while signature checks were in flight")
+	}
+
+	releaseAll()
+	for i := 0; i < maxEnvelopeSigFailuresPerPeer; i++ {
+		got := <-firstTwo
+		require.NotNil(t, got.err)
+		require.Equal(t, pubsub.ValidationReject, got.result)
+	}
+}
+
+func TestValidateExecutionPayloadEnvelope_UnknownBlockFailuresDoNotBlockKnownBlock(t *testing.T) {
+	ctx := context.Background()
+	s, msg, builderIdx, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+	const peerID = "same-peer"
+	badVerifier := &mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("head state is on another branch")}
+	for i := 0; i < maxEnvelopeSigFailuresPerPeer; i++ {
+		unknownRoot := [32]byte{byte(i + 1)}
+		signed := testSignedExecutionPayloadEnvelope(t, s.cfg.clock.CurrentSlot(), builderIdx, unknownRoot, [32]byte{})
+		wrapped, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signed)
+		require.NoError(t, err)
+		env, err := wrapped.Envelope()
+		require.NoError(t, err)
+		result, err := s.queuePendingPayloadEnvelope(ctx, peerID, badVerifier, env, signed)
+		require.NotNil(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+	}
+
+	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{})
+	result, err := s.validateExecutionPayloadEnvelope(ctx, peerID, msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, result)
+	require.Equal(t, true, s.hasSeenPayloadEnvelope(root, builderIdx))
+}
+
+func TestQueuePendingPayloadEnvelope_SignatureFailureBudget(t *testing.T) {
+	ctx := context.Background()
+	s, _, builderIdx, _ := setupExecutionPayloadEnvelopeService(t, 1, 1)
+
+	sigCalls := 0
+	s.newExecutionPayloadEnvelopeVerifier = func(_ interfaces.ROSignedExecutionPayloadEnvelope, _ []verification.Requirement) verification.ExecutionPayloadEnvelopeVerifier {
+		return &countingEnvelopeVerifier{
+			mockExecutionPayloadEnvelopeVerifier: mockExecutionPayloadEnvelopeVerifier{
+				errBlockRootSeen: errors.New("not seen"),
+				errSignature:     errors.New("wrong builder key"),
+			},
+			calls: &sigCalls,
+		}
+	}
+
+	// An unknown block root never populates pendingPayloadEnvelopes when the signature fails, so
+	// the pending-root caps never trip and only the per-peer budget bounds the work.
+	currentSlot := s.cfg.clock.CurrentSlot()
+	for i := 0; i < maxEnvelopeSigFailuresPerPeer; i++ {
+		env := testSignedExecutionPayloadEnvelope(t, currentSlot, builderIdx, [32]byte{byte(i + 1)}, [32]byte{})
+		msg := envelopeToPubsub(t, s, s.cfg.p2p, env)
+		result, err := s.validateExecutionPayloadEnvelope(ctx, "attacker", msg)
+		require.NotNil(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+		require.Equal(t, i+1, sigCalls)
+	}
+
+	env := testSignedExecutionPayloadEnvelope(t, currentSlot, builderIdx, [32]byte{0xFF}, [32]byte{})
+	msg := envelopeToPubsub(t, s, s.cfg.p2p, env)
+	result, err := s.validateExecutionPayloadEnvelope(ctx, "attacker", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.Equal(t, maxEnvelopeSigFailuresPerPeer, sigCalls)
 }

@@ -67,7 +67,7 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	// [IGNORE] The envelope's block root envelope.block_root has been seen (via gossip or non-gossip sources)
 	// (a client MAY queue payload for processing once the block is retrieved).
 	if err := v.VerifyBlockRootSeen(func(root [32]byte) bool { return s.cfg.chain.HasBlock(ctx, root) }); err != nil {
-		return s.queuePendingPayloadEnvelope(ctx, v, env, signedEnvelope)
+		return s.queuePendingPayloadEnvelope(ctx, pid, v, env, signedEnvelope)
 	}
 	root := env.BeaconBlockRoot()
 	// [IGNORE] The node has not seen another valid SignedExecutionPayloadEnvelope for this block root from this builder.
@@ -137,15 +137,36 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 		return pubsub.ValidationReject, err
 	}
 
+	// [REJECT] envelope.parent_beacon_block_root == block.parent_root. The state transition
+	// enforces this, so an envelope failing it can never be imported. Checking it here costs a
+	// single root comparison and denies a peer a free field to vary when minting distinct
+	// messages for the same block root.
+	if env.ParentBeaconBlockRoot() != block.Block().ParentRoot() {
+		return pubsub.ValidationReject, errors.Errorf(
+			"envelope parent beacon block root does not match block parent root: envelope=%#x block=%#x",
+			env.ParentBeaconBlockRoot(), block.Block().ParentRoot())
+	}
+
+	// Reserve capacity before the payload is merkleized. Concurrent validations from the same
+	// peer count toward the limit even before their signatures fail.
+	budgetSlot, ok := s.reserveEnvelopeSigVerification(pid, envelopeSigKnownBlock)
+	if !ok {
+		log.WithField("peer", pid).Debug("Ignoring payload envelope, peer exhausted its signature verification budget")
+		return pubsub.ValidationIgnore, nil
+	}
+
 	// For self-build, the state is retrived via how we retrieve for beacon block optimization
 	// For builder index, the state is retrived via head state read only
 	st, err := s.blockVerifyingState(ctx, block)
 	if err != nil {
+		s.completeEnvelopeSigVerification(pid, envelopeSigKnownBlock, budgetSlot, false)
 		return pubsub.ValidationIgnore, err
 	}
 
 	// [REJECT] signed_execution_payload_envelope.signature is valid with respect to the builder's public key.
-	if err := v.VerifySignature(ctx, st); err != nil {
+	err = v.VerifySignature(ctx, st)
+	s.completeEnvelopeSigVerification(pid, envelopeSigKnownBlock, budgetSlot, err != nil)
+	if err != nil {
 		return pubsub.ValidationReject, err
 	}
 	s.setSeenPayloadEnvelope(root, env.BuilderIndex())
@@ -177,6 +198,7 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 // envelope for processing once the corresponding block arrives.
 func (s *Service) queuePendingPayloadEnvelope(
 	ctx context.Context,
+	pid peer.ID,
 	v verification.ExecutionPayloadEnvelopeVerifier,
 	env interfaces.ROExecutionPayloadEnvelope,
 	signedEnvelope *ethpb.SignedExecutionPayloadEnvelope,
@@ -240,9 +262,21 @@ func (s *Service) queuePendingPayloadEnvelope(
 			}
 			// Record only after a valid signature so a bad envelope cannot reserve the proposer's slot.
 			s.selfBuildSeenProposers[proposerIdx] = struct{}{}
-		} else if err := v.VerifySignature(ctx, st); err != nil {
-			// The envelope's block is unknown, so the head state used here may be on a different branch, do not penalize the peer.
-			return pubsub.ValidationIgnore, err
+		} else {
+			// A failed check does not add a pending root, so reserve capacity before hashing.
+			// This budget is separate from the known-block budget because the head state may be
+			// on a different branch from the envelope's block.
+			budgetSlot, ok := s.reserveEnvelopeSigVerification(pid, envelopeSigUnknownBlock)
+			if !ok {
+				log.WithField("peer", pid).Debug("Ignoring payload envelope, peer exhausted its pending signature verification budget")
+				return pubsub.ValidationIgnore, nil
+			}
+			err := v.VerifySignature(ctx, st)
+			s.completeEnvelopeSigVerification(pid, envelopeSigUnknownBlock, budgetSlot, err != nil)
+			if err != nil {
+				// The head state may be on a different branch, so do not penalize the peer.
+				return pubsub.ValidationIgnore, err
+			}
 		}
 	} else {
 		log.Debug("Ignoring payload envelope from self-build outside of the Lookahead window")
@@ -312,6 +346,57 @@ func (s *Service) executionPayloadEnvelopeSubscriber(ctx context.Context, msg pr
 		}()
 	}
 	return nil
+}
+
+type envelopeSigScope uint8
+
+const (
+	envelopeSigKnownBlock envelopeSigScope = iota
+	envelopeSigUnknownBlock
+)
+
+// Each count includes failed checks and checks still in flight. Successful checks release
+// their reservation. Keep unknown-block failures separate because they use the head state.
+type envelopeSigBudget [2]int
+
+func (s *Service) reserveEnvelopeSigVerification(pid peer.ID, scope envelopeSigScope) (primitives.Slot, bool) {
+	s.envelopeSigFailureLock.Lock()
+	defer s.envelopeSigFailureLock.Unlock()
+	s.rollEnvelopeSigFailures()
+	counts := s.envelopeSigFailures[pid]
+	if counts[scope] >= maxEnvelopeSigFailuresPerPeer {
+		return s.envelopeSigFailureSlot, false
+	}
+	counts[scope]++
+	s.envelopeSigFailures[pid] = counts
+	return s.envelopeSigFailureSlot, true
+}
+
+func (s *Service) completeEnvelopeSigVerification(pid peer.ID, scope envelopeSigScope, slot primitives.Slot, failed bool) {
+	s.envelopeSigFailureLock.Lock()
+	defer s.envelopeSigFailureLock.Unlock()
+	// A slot rollover discards outstanding reservations from the previous slot.
+	if failed || slot != s.envelopeSigFailureSlot {
+		return
+	}
+	counts := s.envelopeSigFailures[pid]
+	counts[scope]--
+	if counts[envelopeSigKnownBlock] == 0 && counts[envelopeSigUnknownBlock] == 0 {
+		delete(s.envelopeSigFailures, pid)
+		return
+	}
+	s.envelopeSigFailures[pid] = counts
+}
+
+// rollEnvelopeSigFailures hands every peer a fresh budget once the slot advances.
+// Callers must hold envelopeSigFailureLock.
+func (s *Service) rollEnvelopeSigFailures() {
+	slot := s.cfg.clock.CurrentSlot()
+	if s.envelopeSigFailures != nil && s.envelopeSigFailureSlot == slot {
+		return
+	}
+	s.envelopeSigFailureSlot = slot
+	s.envelopeSigFailures = make(map[peer.ID]envelopeSigBudget)
 }
 
 func (s *Service) hasSeenPayloadEnvelope(root [32]byte, builderIdx primitives.BuilderIndex) bool {
