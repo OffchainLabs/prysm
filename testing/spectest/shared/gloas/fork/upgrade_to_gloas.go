@@ -38,7 +38,7 @@ func RunUpgradeToGloas(t *testing.T, config string) {
 			}
 			preState, err := state_native.InitializeFromProtoFulu(preStateBase)
 			require.NoError(t, err)
-			postState, err := gloas.UpgradeToGloas(preState)
+			postState, err := gloas.UpgradeToGloas(t.Context(), preState)
 			require.NoError(t, err)
 			postStateFromFunction, err := state_native.ProtobufBeaconStateGloas(postState.ToProtoUnsafe())
 			require.NoError(t, err)

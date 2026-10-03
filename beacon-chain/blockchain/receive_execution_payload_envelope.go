@@ -169,12 +169,6 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	}
 
 	// execution_payload is emitted when an execution payload is successfully imported.
-	isOptimistic, err := s.cfg.ForkChoiceStore.IsOptimistic(root)
-	if err != nil {
-		log.WithError(err).Error("Could not get optimistic status of block root")
-		isOptimistic = false
-	}
-
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.ExecutionPayloadProcessed,
 		Data: &statefeed.ExecutionPayloadProcessedData{
@@ -182,7 +176,7 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 			BuilderIndex: envelope.BuilderIndex(),
 			BlockHash:    envelope.BlockHash(),
 			BlockRoot:    root,
-			Optimistic:   isOptimistic,
+			Optimistic:   !isValidPayload,
 		},
 	})
 

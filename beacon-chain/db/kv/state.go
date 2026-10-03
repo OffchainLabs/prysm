@@ -1055,6 +1055,10 @@ func (s *Store) getStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) 
 
 	st, err := s.stateByDiff(ctx, slot)
 	if err != nil {
+		if errors.Is(err, errSnapshotNotFound) {
+			// Let historical reads replay from older snapshots without relaxing startup validation.
+			return nil, fmt.Errorf("%w: %w", ErrNotFoundState, err)
+		}
 		return nil, err
 	}
 	if st == nil || st.IsNil() {
