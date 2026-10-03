@@ -69,7 +69,12 @@ func (s *Store) SaveOrigin(ctx context.Context, serState, serBlock []byte) error
 		return errors.Wrap(err, "save block")
 	}
 
-	if features.Get().EnableStateDiff {
+	if features.Get().EnableArchive && features.Get().EnableStateDiff {
+		// The checkpoint slot is generally not a tree boundary, so keep the origin state addressable by root.
+		if err := s.SaveHotStateSnapshot(ctx, state, blockRoot); err != nil {
+			return errors.Wrap(err, "save checkpoint origin state snapshot")
+		}
+	} else if features.Get().EnableStateDiff {
 		// initializeStateDiff will save the state, so we don't need to call SaveState here
 		if err := s.initializeStateDiff(state.Slot(), state); err != nil {
 			return errors.Wrap(err, "failed to initialize state diff")
