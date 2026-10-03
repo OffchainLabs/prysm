@@ -284,3 +284,52 @@ func TestLogAggregatedPerformance(t *testing.T) {
 		"validatorIndex=1"
 	require.LogsContain(t, hook, wanted)
 }
+
+func TestLogAggregatedPerformance_SkipsInvalidEntries(t *testing.T) {
+	hook := logTest.NewGlobal()
+
+	const runs = 32
+	for i := 0; i < runs; i++ {
+		hook.Reset()
+
+		validIndex := primitives.ValidatorIndex(100 + i)
+		latestPerformance := map[primitives.ValidatorIndex]ValidatorLatestPerformance{
+			validIndex: {
+				balance: 32000000000,
+			},
+		}
+		aggregatedPerformance := map[primitives.ValidatorIndex]ValidatorAggregatedPerformance{
+			validIndex: {
+				startEpoch:          0,
+				startBalance:        31700000000,
+				totalAttestedCount:  12,
+				totalRequestedCount: 15,
+				totalDistance:       14,
+				totalCorrectHead:    8,
+				totalCorrectSource:  11,
+				totalCorrectTarget:  12,
+			},
+		}
+
+		for j := 0; j < 20; j++ {
+			invalidIndex := primitives.ValidatorIndex(1000 + (i * 20) + j)
+			aggregatedPerformance[invalidIndex] = ValidatorAggregatedPerformance{}
+		}
+
+		s := &Service{
+			latestPerformance:     latestPerformance,
+			aggregatedPerformance: aggregatedPerformance,
+		}
+		s.logAggregatedPerformance()
+
+		logCount := 0
+		for _, entry := range hook.AllEntries() {
+			if entry.Message != "Aggregated performance since launch" {
+				continue
+			}
+			require.Equal(t, fmt.Sprintf("%d", validIndex), fmt.Sprintf("%v", entry.Data["validatorIndex"]))
+			logCount++
+		}
+		require.Equal(t, 1, logCount)
+	}
+}
