@@ -10,7 +10,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"google.golang.org/protobuf/proto"
 )
 
 func TestProcessSlashingsPrecompute_NotSlashedWithSlashedTrue(t *testing.T) {
@@ -122,7 +121,7 @@ func TestProcessSlashingsPrecompute_SlashedLess(t *testing.T) {
 			}
 			pBal := &precompute.Balance{ActiveCurrentEpoch: ab}
 
-			original := proto.Clone(tt.state)
+			original := tt.state.Copy()
 			state, err := state_native.InitializeFromProtoPhase0(tt.state)
 			require.NoError(t, err)
 			require.NoError(t, precompute.ProcessSlashingsPrecompute(state, pBal))
