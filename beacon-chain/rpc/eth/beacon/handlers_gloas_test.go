@@ -132,7 +132,7 @@ func TestGetExecutionPayloadEnvelope_AcceptsSlotID(t *testing.T) {
 				PrevRandao:    bytesutil.PadTo([]byte("randao"), 32),
 				BaseFeePerGas: bytesutil.PadTo([]byte{1}, 32),
 				BlockHash:     blockHash[:],
-				Transactions:  [][]byte{},
+				Transactions:  &enginev1.ProgressiveTransactionList{},
 				Withdrawals:   []*enginev1.Withdrawal{},
 				SlotNumber:    primitives.Slot(177),
 			},
@@ -212,7 +212,7 @@ func testSignedEnvelope() *ethpb.SignedExecutionPayloadEnvelope {
 				PrevRandao:    bytesutil.PadTo([]byte("randao"), 32),
 				BaseFeePerGas: bytesutil.PadTo([]byte{1}, 32),
 				BlockHash:     bytesutil.PadTo([]byte("blockhash"), 32),
-				Transactions:  [][]byte{},
+				Transactions:  &enginev1.ProgressiveTransactionList{},
 				Withdrawals:   []*enginev1.Withdrawal{},
 				SlotNumber:    primitives.Slot(100),
 			},
@@ -236,7 +236,7 @@ func TestPublishExecutionPayloadEnvelope_StatefulBareEnvelope_OK(t *testing.T) {
 	signed := testSignedEnvelope()
 
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelopeV2(
 		gomock.Any(), gomock.Any(),
 	).Return(&emptypb.Empty{}, nil)
 
@@ -312,7 +312,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_NoBlobs(t *testing.T)
 	require.NoError(t, err)
 
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelopeV2(
 		gomock.Any(), gomock.Any(),
 	).Return(&emptypb.Empty{}, nil)
 
@@ -372,7 +372,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_WithBlobs(t *testing.
 
 	ctrl := gomock.NewController(t)
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelopeV2(
 		gomock.Any(), gomock.Any(),
 	).Return(&emptypb.Empty{}, nil)
 
@@ -401,7 +401,7 @@ func TestPublishExecutionPayloadEnvelope_ServerError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelopeV2(
 		gomock.Any(), gomock.Any(),
 	).Return(nil, status.Error(codes.Internal, "broadcast failed"))
 
@@ -435,7 +435,7 @@ func TestPublishExecutionPayloadEnvelope_SSZ_StatefulBareEnvelope(t *testing.T) 
 	require.NoError(t, err)
 
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelopeV2(
 		gomock.Any(), gomock.Any(),
 	).Return(&emptypb.Empty{}, nil)
 
@@ -468,7 +468,7 @@ func TestPublishExecutionPayloadEnvelope_StatefulBareEnvelope_CacheMiss(t *testi
 	require.NoError(t, err)
 
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelopeV2(
 		gomock.Any(), gomock.Any(),
 	).Return(nil, status.Error(codes.FailedPrecondition,
 		"envelope without blob data was submitted but the beacon node has no cached blobs and KZG proofs"))
@@ -504,7 +504,7 @@ func TestPublishExecutionPayloadEnvelope_SSZ_Contents(t *testing.T) {
 	require.NoError(t, err)
 
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelopeV2(
 		gomock.Any(), gomock.Any(),
 	).Return(&emptypb.Empty{}, nil)
 
@@ -603,7 +603,7 @@ func TestPublishExecutionPayloadEnvelope_BroadcastValidation(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 			if tc.expectPublish {
-				v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+				v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelopeV2(
 					gomock.Any(), gomock.Any(),
 				).Return(&emptypb.Empty{}, nil)
 			}

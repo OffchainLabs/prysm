@@ -1973,10 +1973,10 @@ func (c *ExecutionPayloadDeneb) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 func (c *ExecutionPayloadGloas) SizeSSZ() int {
 	size := 540
 	size += len(c.ExtraData)
-	for _, o := range c.Transactions {
-		size += 4
-		size += len(o)
+	if c.Transactions == nil {
+		c.Transactions = new(ProgressiveTransactionList)
 	}
+	size += c.Transactions.SizeSSZ()
 	size += len(c.Withdrawals) * 44
 	size += len(c.BlockAccessList)
 	return size
@@ -2056,11 +2056,11 @@ func (c *ExecutionPayloadGloas) MarshalSSZTo(dst []byte) ([]byte, error) {
 	dst = append(dst, c.BlockHash...)
 
 	// Field 13: Transactions
-	dst = ssz.WriteOffset(dst, offset)
-	for _, o := range c.Transactions {
-		offset += 4
-		offset += len(o)
+	if c.Transactions == nil {
+		c.Transactions = new(ProgressiveTransactionList)
 	}
+	dst = ssz.WriteOffset(dst, offset)
+	offset += c.Transactions.SizeSSZ()
 
 	// Field 14: Withdrawals
 	dst = ssz.WriteOffset(dst, offset)
@@ -2088,15 +2088,8 @@ func (c *ExecutionPayloadGloas) MarshalSSZTo(dst []byte) ([]byte, error) {
 	dst = append(dst, c.ExtraData...)
 
 	// Field 13: Transactions
-	{
-		offset = 4 * len(c.Transactions)
-		for _, o := range c.Transactions {
-			dst = ssz.WriteOffset(dst, offset)
-			offset += len(o)
-		}
-	}
-	for _, o := range c.Transactions {
-		dst = append(dst, o...)
+	if dst, err = c.Transactions.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("Transactions: %w", err)
 	}
 
 	// Field 14: Withdrawals
@@ -2206,48 +2199,9 @@ func (c *ExecutionPayloadGloas) UnmarshalSSZ(buf []byte) error {
 	c.BlockHash = append(c.BlockHash, sszSlice12...)
 
 	// Field 13: Transactions
-	{
-		// empty lists are zero length, so make sure there is room for an offset
-		// before attempting to unmarshal it
-		if len(sszSlice13) > 3 {
-			startOffset := ssz.ReadOffset(sszSlice13[0:4])
-			if startOffset == 0 {
-				return fmt.Errorf("encountered invalid offset of 0 when decoding c.Transactions")
-			}
-			if startOffset%4 != 0 {
-				return fmt.Errorf("misaligned list bytes: when decoding c.Transactions, end-of-list offset is %d, which is not a multiple of 4 (offset size)", startOffset)
-			}
-			listLen := startOffset / 4
-			totalVarBytes := uint64(len(sszSlice13))
-			if totalVarBytes < startOffset {
-				return fmt.Errorf("list bytes too short to contain an offset when decoding c.Transactions")
-			}
-			c.Transactions = make([][]byte, listLen)
-			var tmpSlice []byte
-			for i := uint64(0); i < listLen; i++ {
-				var tmp []byte
-
-				endOffset := totalVarBytes
-				if i+1 != listLen {
-					endOffset = ssz.ReadOffset(sszSlice13[(i+1)*4 : (i+2)*4])
-					if totalVarBytes < endOffset {
-						return fmt.Errorf("offset %d points past the end of buffer when decoding c.Transactions", endOffset)
-					}
-				}
-				if endOffset < startOffset {
-					return fmt.Errorf("offset %d is not greater than start offset %d when decoding c.Transactions", endOffset, startOffset)
-				}
-				tmpSlice = sszSlice13[startOffset:endOffset]
-				tmp = append([]byte{}, tmpSlice...)
-				c.Transactions[i] = tmp
-				startOffset = endOffset
-			}
-		} else {
-			if len(sszSlice13) > 0 {
-				return fmt.Errorf("list bytes too short to contain an offset when decoding c.Transactions")
-			}
-			c.Transactions = make([][]byte, 0)
-		}
+	c.Transactions = new(ProgressiveTransactionList)
+	if err = c.Transactions.UnmarshalSSZ(sszSlice13); err != nil {
+		return fmt.Errorf("Transactions: %w", err)
 	}
 
 	// Field 14: Withdrawals
@@ -2368,16 +2322,8 @@ func (c *ExecutionPayloadGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err
 	}
 	hh.PutBytes(c.BlockHash)
 	// Field 13: Transactions
-	{
-		subIndx := hh.Index()
-		for _, o := range c.Transactions {
-			{
-				subIndx := hh.Index()
-				hh.AppendBytes32(o)
-				hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(o)))
-			}
-		}
-		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Transactions)))
+	if err := c.Transactions.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("Transactions: %w", err)
 	}
 	// Field 14: Withdrawals
 	{

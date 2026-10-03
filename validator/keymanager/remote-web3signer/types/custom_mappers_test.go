@@ -743,7 +743,7 @@ func TestMapExecutionPayloadGloas(t *testing.T) {
 				ExtraData:       []byte{0xab, 0xcd},
 				BaseFeePerGas:   baseFee,
 				BlockHash:       make([]byte, fieldparams.RootLength),
-				Transactions:    [][]byte{{0x01, 0x02}, {0x03}},
+				Transactions:    txList(t, []byte{0x01, 0x02}, []byte{0x03}),
 				Withdrawals:     []*enginev1.Withdrawal{{Index: 7, ValidatorIndex: 9, Address: make([]byte, fieldparams.FeeRecipientLength), Amount: 100}},
 				BlobGasUsed:     5,
 				ExcessBlobGas:   6,
@@ -963,4 +963,12 @@ func TestMapExecutionPayloadEnvelope(t *testing.T) {
 		require.NotNil(t, got.ExecutionRequests)
 		require.DeepEqual(t, hexutil.Bytes(envelope.ParentBeaconBlockRoot), got.ParentBeaconBlockRoot)
 	})
+}
+
+// txList builds a serialized transaction list from fixture transactions.
+func txList(t *testing.T, txs ...[]byte) *enginev1.ProgressiveTransactionList {
+	t.Helper()
+	l, err := enginev1.NewProgressiveTransactionList(txs)
+	require.NoError(t, err)
+	return l
 }

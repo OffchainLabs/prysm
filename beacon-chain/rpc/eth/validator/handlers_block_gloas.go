@@ -265,7 +265,7 @@ func (s *Server) ExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	resp, err := s.V1Alpha1Server.GetExecutionPayloadEnvelope(ctx, &eth.ExecutionPayloadEnvelopeRequest{
+	resp, err := s.V1Alpha1Server.GetExecutionPayloadEnvelopeV2(ctx, &eth.ExecutionPayloadEnvelopeRequest{
 		Slot: primitives.Slot(slot),
 	})
 	if err != nil {

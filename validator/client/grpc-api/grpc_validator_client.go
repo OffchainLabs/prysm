@@ -396,11 +396,11 @@ func (c *grpcValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, s
 	req := &ethpb.ExecutionPayloadEnvelopeRequest{
 		Slot: slot,
 	}
-	resp, err := c.getClient().GetExecutionPayloadEnvelope(ctx, req)
+	resp, err := c.getClient().GetExecutionPayloadEnvelopeV2(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(
 			client.ErrConnectionIssue,
-			errors.Wrap(err, "GetExecutionPayloadEnvelope").Error(),
+			errors.Wrap(err, "GetExecutionPayloadEnvelopeV2").Error(),
 		)
 	}
 	if resp.Envelope == nil {
@@ -434,7 +434,7 @@ func (c *grpcValidatorClient) PublishExecutionPayloadEnvelope(ctx context.Contex
 			},
 		}
 	}
-	return c.getClient().PublishExecutionPayloadEnvelope(ctx, generic)
+	return c.getClient().PublishExecutionPayloadEnvelopeV2(ctx, generic)
 }
 
 func (c *grpcValidatorClient) PayloadAttestationData(ctx context.Context, slot primitives.Slot) (*ethpb.PayloadAttestationData, error) {

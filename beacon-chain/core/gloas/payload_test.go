@@ -62,7 +62,7 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 		ExtraData:     []byte{},
 		BaseFeePerGas: bytes.Repeat([]byte{0x05}, 32),
 		BlockHash:     blockHash,
-		Transactions:  [][]byte{},
+		Transactions:  &enginev1.ProgressiveTransactionList{},
 		Withdrawals:   withdrawals,
 		BlobGasUsed:   0,
 		ExcessBlobGas: 0,
