@@ -65,6 +65,7 @@ func (s *Service) processPendingAttsForBlock(ctx context.Context, bRoot [32]byte
 	randGen := rand.NewGenerator()
 	// Delete the missing block root key from pending attestation queue so a node will not request for the block again.
 	s.pendingAttsLock.Lock()
+	s.numPendingAtts -= len(s.blkRootToPendingAtts[bRoot])
 	delete(s.blkRootToPendingAtts, bRoot)
 	pendingRoots := make([][32]byte, 0, len(s.blkRootToPendingAtts))
 	s.pendingQueueLock.RLock()
@@ -412,18 +413,15 @@ func (s *Service) savePending(root [32]byte, pending any, isEqual func(other any
 	s.pendingAttsLock.Lock()
 	defer s.pendingAttsLock.Unlock()
 
-	numOfPendingAtts := 0
-	for _, v := range s.blkRootToPendingAtts {
-		numOfPendingAtts += len(v)
-	}
 	// Exit early if we exceed the pending attestations limit.
-	if numOfPendingAtts >= pendingAttsLimit {
+	if s.numPendingAtts >= pendingAttsLimit {
 		return
 	}
 
 	_, ok := s.blkRootToPendingAtts[root]
 	if !ok {
 		pendingAttCount.Inc()
+		s.numPendingAtts++
 		s.blkRootToPendingAtts[root] = []any{pending}
 		return
 	}
@@ -435,6 +433,7 @@ func (s *Service) savePending(root [32]byte, pending any, isEqual func(other any
 	}
 
 	pendingAttCount.Inc()
+	s.numPendingAtts++
 	s.blkRootToPendingAtts[root] = append(s.blkRootToPendingAtts[root], pending)
 }
 
@@ -490,6 +489,7 @@ func (s *Service) validatePendingAtts(ctx context.Context, slot primitives.Slot)
 	defer s.pendingAttsLock.Unlock()
 
 	for bRoot, atts := range s.blkRootToPendingAtts {
+		numBefore := len(atts)
 		for i := len(atts) - 1; i >= 0; i-- {
 			var attSlot primitives.Slot
 			switch t := atts[i].(type) {
@@ -510,6 +510,7 @@ func (s *Service) validatePendingAtts(ctx context.Context, slot primitives.Slot)
 				atts = atts[:len(atts)-1]
 			}
 		}
+		s.numPendingAtts -= numBefore - len(atts)
 		s.blkRootToPendingAtts[bRoot] = atts
 
 		// If the pending attestations list of a given block root is empty,
