@@ -56,6 +56,9 @@ func (s *Service) detectProposerSlashings(
 		return nil, errors.Wrap(err, "could not check for double proposals on disk")
 	}
 
+	// Increment metric for DB-detected double proposals.
+	doubleProposalsTotal.Add(float64(len(databaseSlashings)))
+
 	// We save the safe proposals (with respect to the database) to our database.
 	// If some proposals in incomingProposals are slashable with respect to each other,
 	// we (arbitrarily) save the last one to the database.
