@@ -43,7 +43,16 @@ func stateInternal() (state.BeaconState, error) {
 		// If the state is not explicitly initialized, try to load embedded states if available.
 		name := params.BeaconConfig().ConfigName
 		if ed, ok := embeddedGenesisData[name]; ok {
-			return ed.embeddedState()
+			st, err := ed.embeddedState()
+			if err != nil {
+				return nil, errors.Wrap(err, "load embedded genesis state")
+			}
+			if !state.IsNil(st) {
+				ed.State = st
+				setPkgVar(ed, true)
+				return st, nil
+			}
+			return nil, ErrGenesisStateNotInitialized
 		}
 		return nil, ErrGenesisStateNotInitialized
 	}
@@ -57,6 +66,7 @@ func stateInternal() (state.BeaconState, error) {
 		}
 		if !state.IsNil(st) {
 			gd.State = st
+			setPkgVar(gd, true)
 			return gd.State, nil
 		}
 	}

@@ -1,0 +1,3 @@
+### Fixed
+
+- Cache embedded genesis state on first lazy load by writing it back to the package variable. This prevents repeated decompression/unmarshal on subsequent `State()` calls and ensures consistency between `State()`, `ValidatorsRoot()`, and `Time()` when using embedded genesis, including the uninitialized path. (#15673)
