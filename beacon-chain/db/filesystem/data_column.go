@@ -24,6 +24,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 	"golang.org/x/sync/errgroup"
 )
@@ -194,6 +195,7 @@ func (dcs *DataColumnStorage) WarmCache() {
 	}
 
 	// Iterate through periods
+	periodsProcessed := 0
 	for _, periodFileInfo := range periodFileInfos {
 		if !periodFileInfo.IsDir() {
 			continue
@@ -235,6 +237,13 @@ func (dcs *DataColumnStorage) WarmCache() {
 
 			highestStoredEpoch = max(highestStoredEpoch, epochHighest)
 		}
+
+		periodsProcessed++
+		log.WithFields(logrus.Fields{
+			"period":    periodPath,
+			"progress":  fmt.Sprintf("%d/%d", periodsProcessed, len(periodFileInfos)),
+			"elapsed":   time.Since(start),
+		}).Info("Data column filesystem cache warm-up in progress")
 	}
 
 	// Prune the cache and the filesystem
