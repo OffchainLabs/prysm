@@ -12,7 +12,7 @@ import (
 
 var errOrphanedOrigin = errors.New("checkpoint sync origin is not part of the finalized chain, resync required")
 
-const orphanedOriginStreakThreshold = 2
+const orphanedOriginStreakThreshold = 4
 
 // detectOrphanedOrigin reports when peers finalize a chain that excludes our checkpoint origin.
 func (s *Service) detectOrphanedOrigin(ctx context.Context) {
@@ -20,10 +20,13 @@ func (s *Service) detectOrphanedOrigin(ctx context.Context) {
 	if cp == nil || s.orphanedOriginStreak == nil {
 		return
 	}
-	if _, err := s.cfg.beaconDB.OriginCheckpointBlockRoot(ctx); err != nil {
+	ours := bytesutil.ToBytes32(cp.Root)
+	origin, err := s.cfg.beaconDB.OriginCheckpointBlockRoot(ctx)
+	if err != nil || origin != ours {
+		s.orphanedOriginStreak.Store(0)
+		originOrphanedSuspected.Set(0)
 		return
 	}
-	ours := bytesutil.ToBytes32(cp.Root)
 	conflicting := 0
 	for _, id := range s.cfg.p2p.Peers().Connected() {
 		cs, err := s.cfg.p2p.Peers().ChainState(id)
