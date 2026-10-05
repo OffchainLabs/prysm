@@ -2,6 +2,7 @@ package kv
 
 import (
 	"context"
+	"fmt"
 	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -71,6 +72,10 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 
 // stateByDiff retrieves the full state for a given slot.
 func (s *Store) stateByDiff(ctx context.Context, slot primitives.Slot) (state.BeaconState, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	offset := s.getOffset()
 	if uint64(slot) < offset {
 		return nil, ErrSlotBeforeOffset
@@ -90,6 +95,10 @@ func (s *Store) stateByDiff(ctx context.Context, slot primitives.Slot) (state.Be
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	return snapshot, nil
@@ -147,16 +156,10 @@ func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 func (s *Store) saveFullSnapshot(st state.ReadOnlyBeaconState) error {
 	slot := uint64(st.Slot())
 	key := makeKeyForStateDiffTree(0, slot)
-	stateBytes, err := st.MarshalSSZ()
+	compressed, err := encodeStateWithKey(st)
 	if err != nil {
-		return err
+		return fmt.Errorf("encode state with key: %w", err)
 	}
-	// add version key to value
-	enc, err := addKey(st.Version(), stateBytes)
-	if err != nil {
-		return err
-	}
-	compressed := snappy.Encode(nil, enc)
 
 	err = s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(stateDiffBucket)
@@ -231,6 +234,12 @@ func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffBytes, error) {
 }
 
 func (s *Store) getFullSnapshot(slot uint64) (state.BeaconState, error) {
+	if s.stateDiffCache != nil {
+		if anchor := s.stateDiffCache.getAnchor(0, withExactSlot(primitives.Slot(slot))); anchor != nil {
+			return anchor, nil
+		}
+	}
+
 	key := makeKeyForStateDiffTree(0, slot)
 	var compressed []byte
 

@@ -2,7 +2,6 @@ package execution
 
 import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
@@ -83,14 +82,6 @@ func WithDatabase(database db.HeadAccessDatabase) Option {
 func WithDepositCache(cache cache.DepositCache) Option {
 	return func(s *Service) error {
 		s.cfg.depositCache = cache
-		return nil
-	}
-}
-
-// WithStateNotifier for subscribing to state changes.
-func WithStateNotifier(notifier statefeed.Notifier) Option {
-	return func(s *Service) error {
-		s.cfg.stateNotifier = notifier
 		return nil
 	}
 }

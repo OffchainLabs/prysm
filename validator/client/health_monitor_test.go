@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -113,13 +114,35 @@ func TestHealthMonitor_PerformHealthCheck(t *testing.T) {
 		{
 			name:               "Max Fails Reached - Stays Unhealthy and Cancels",
 			initialIsHealthy:   false,
-			initialFails:       2, // One fail away from maxFails
+			initialFails:       1, // One fail away from maxFails
 			maxFails:           2,
 			ensureReadyReturns: false,
 			expectedIsHealthy:  false,
 			expectedFails:      2,
 			expectCancelCalled: true,
 			expectStatusUpdate: false, // Status was already false, no new update sent before cancel
+		},
+		{
+			name:               "Max Fails of One - Cancels on the First Failure",
+			initialIsHealthy:   true,
+			initialFails:       0,
+			maxFails:           1,
+			ensureReadyReturns: false,
+			expectedIsHealthy:  false,
+			expectedFails:      1,
+			expectCancelCalled: true,
+			expectStatusUpdate: false, // The monitor is shutting down, no update sent before cancel
+		},
+		{
+			name:               "One Fail Away From Max - Stays Alive",
+			initialIsHealthy:   false,
+			initialFails:       1,
+			maxFails:           3,
+			ensureReadyReturns: false,
+			expectedIsHealthy:  false,
+			expectedFails:      2,
+			expectCancelCalled: false,
+			expectStatusUpdate: false,
 		},
 		{
 			name:               "MaxFails is 0 - Remains Unhealthy, No Cancel",
@@ -188,6 +211,63 @@ func TestHealthMonitor_PerformHealthCheck(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestHealthMonitor_CancelsOnMaxConsecutiveFails checks that the monitor stops on the
+// maxFails-th consecutive failed health check rather than one check later, and that a
+// healthy check in between resets the count.
+func TestHealthMonitor_CancelsOnMaxConsecutiveFails(t *testing.T) {
+	newMonitor := func(t *testing.T, maxFails int, healthy *atomic.Bool) (*healthMonitor, *bool) {
+		var canceled bool
+		vc := healthTestClient(t)
+		vc.EXPECT().EnsureReady(gomock.Any()).DoAndReturn(func(context.Context) bool { return healthy.Load() }).AnyTimes()
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		monitor := &healthMonitor{
+			ctx:             ctx,
+			cancel:          func() { canceled = true; cancel() },
+			client:          vc,
+			maxFails:        maxFails,
+			healthyCh:       make(chan bool, 8), // buffered so status events never block a probe
+			healthEventFeed: new(event.Feed),
+		}
+		monitor.healthEventFeed.Subscribe(monitor.healthyCh)
+		return monitor, &canceled
+	}
+
+	for _, maxFails := range []int{1, 2, 3} {
+		t.Run(fmt.Sprintf("maxFails of %d cancels on failure %d", maxFails, maxFails), func(t *testing.T) {
+			var healthy atomic.Bool
+			monitor, canceled := newMonitor(t, maxFails, &healthy)
+
+			for i := 1; i <= maxFails; i++ {
+				monitor.performHealthCheck()
+				if i < maxFails {
+					require.False(t, *canceled, "canceled after %d of %d failed health checks", i, maxFails)
+				}
+			}
+			require.True(t, *canceled, "did not cancel after %d failed health checks", maxFails)
+			assert.Equal(t, maxFails, monitor.fails)
+		})
+	}
+
+	t.Run("a healthy check resets the count", func(t *testing.T) {
+		var healthy atomic.Bool
+		monitor, canceled := newMonitor(t, 3, &healthy)
+
+		monitor.performHealthCheck()
+		monitor.performHealthCheck()
+		healthy.Store(true)
+		monitor.performHealthCheck()
+		require.Equal(t, 0, monitor.fails)
+
+		healthy.Store(false)
+		monitor.performHealthCheck()
+		monitor.performHealthCheck()
+		require.False(t, *canceled, "canceled before reaching maxFails again")
+		monitor.performHealthCheck()
+		require.True(t, *canceled, "did not cancel on the third consecutive failure")
+	})
 }
 
 // TestHealthMonitor_HealthyChan_ReceivesUpdates tests channel behavior.

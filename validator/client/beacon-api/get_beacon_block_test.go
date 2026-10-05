@@ -332,7 +332,8 @@ func TestGetBeaconBlock_Phase0Valid(t *testing.T) {
 }
 
 func TestSSZCodecs_OrderAndCoverage(t *testing.T) {
-	versions := version.All()
+	// V3 only supports pre-Gloas forks; Gloas SSZ decoding is handled separately by V4.
+	versions := version.Before(version.Gloas)
 	require.NotEmpty(t, versions)
 
 	expected := make([]int, 0, len(versions))

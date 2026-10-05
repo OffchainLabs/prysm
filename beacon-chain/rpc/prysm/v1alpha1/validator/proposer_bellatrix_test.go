@@ -58,7 +58,6 @@ func TestServer_setExecutionData(t *testing.T) {
 	require.NoError(t, capellaTransitionState.SetFinalizedCheckpoint(&ethpb.Checkpoint{
 		Root: b2rCapella[:],
 	}))
-	require.NoError(t, beaconDB.SaveFeeRecipientsByValidatorIDs(t.Context(), []primitives.ValidatorIndex{0}, []common.Address{{}}))
 
 	denebTransitionState, _ := util.DeterministicGenesisStateDeneb(t, 1)
 	wrappedHeaderDeneb, err := blocks.WrappedExecutionPayloadHeaderDeneb(&v1.ExecutionPayloadHeaderDeneb{BlockNumber: 2})
@@ -82,6 +81,7 @@ func TestServer_setExecutionData(t *testing.T) {
 
 	ed, err := blocks.NewWrappedExecutionData(&v1.ExecutionPayloadCapella{BlockNumber: 1, Withdrawals: withdrawals})
 	require.NoError(t, err)
+	regCache := cache.NewRegistrationCache()
 	vs := &Server{
 		ExecutionEngineCaller: &powtesting.EngineClient{
 			GetPayloadResponse: &blocks.GetPayloadResponse{ExecutionData: ed},
@@ -91,7 +91,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		FinalizationFetcher:      &blockchainTest.ChainService{},
 		BeaconDB:                 beaconDB,
 		PayloadIDCache:           cache.NewPayloadIDCache(),
-		BlockBuilder:             &builderTest.MockBuilderService{HasConfigured: true, Cfg: &builderTest.Config{BeaconDB: beaconDB}},
+		BlockBuilder:             &builderTest.MockBuilderService{HasConfigured: true, RegistrationCache: regCache},
 		ForkchoiceFetcher:        &blockchainTest.ChainService{},
 		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 	}
@@ -115,12 +115,12 @@ func TestServer_setExecutionData(t *testing.T) {
 	t.Run("Builder configured. Builder Block has higher value. Incorrect withdrawals", func(t *testing.T) {
 		blk, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockCapella())
 		require.NoError(t, err)
-		require.NoError(t, vs.BeaconDB.SaveRegistrationsByValidatorIDs(ctx, []primitives.ValidatorIndex{blk.Block().ProposerIndex()},
-			[]*ethpb.ValidatorRegistrationV1{{
-				FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
-				Timestamp:    uint64(time.Now().Unix()),
-				GasLimit:     gasLimit,
-				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
+		regCache.UpdateIndexToRegisteredMap(ctx, map[primitives.ValidatorIndex]*ethpb.ValidatorRegistrationV1{blk.Block().ProposerIndex(): {
+			FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
+			Timestamp:    uint64(time.Now().Unix()),
+			GasLimit:     gasLimit,
+			Pubkey:       make([]byte, fieldparams.BLSPubkeyLength),
+		}})
 		ti, err := slots.StartTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
@@ -155,9 +155,9 @@ func TestServer_setExecutionData(t *testing.T) {
 			Signature: sk.Sign(sr[:]).Marshal(),
 		}
 		vs.BlockBuilder = &builderTest.MockBuilderService{
-			BidCapella:    sBid,
-			HasConfigured: true,
-			Cfg:           &builderTest.Config{BeaconDB: beaconDB},
+			RegistrationCache: regCache,
+			BidCapella:        sBid,
+			HasConfigured:     true,
 		}
 		wb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockCapella())
 		require.NoError(t, err)
@@ -184,12 +184,12 @@ func TestServer_setExecutionData(t *testing.T) {
 	t.Run("Builder configured. Builder Block has higher value. Correct withdrawals.", func(t *testing.T) {
 		blk, err := blocks.NewSignedBeaconBlock(util.NewBlindedBeaconBlockCapella())
 		require.NoError(t, err)
-		require.NoError(t, vs.BeaconDB.SaveRegistrationsByValidatorIDs(ctx, []primitives.ValidatorIndex{blk.Block().ProposerIndex()},
-			[]*ethpb.ValidatorRegistrationV1{{
-				FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
-				Timestamp:    uint64(time.Now().Unix()),
-				GasLimit:     gasLimit,
-				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
+		regCache.UpdateIndexToRegisteredMap(ctx, map[primitives.ValidatorIndex]*ethpb.ValidatorRegistrationV1{blk.Block().ProposerIndex(): {
+			FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
+			Timestamp:    uint64(time.Now().Unix()),
+			GasLimit:     gasLimit,
+			Pubkey:       make([]byte, fieldparams.BLSPubkeyLength),
+		}})
 		ti, err := slots.StartTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
@@ -227,9 +227,9 @@ func TestServer_setExecutionData(t *testing.T) {
 			Signature: sk.Sign(sr[:]).Marshal(),
 		}
 		vs.BlockBuilder = &builderTest.MockBuilderService{
-			BidCapella:    sBid,
-			HasConfigured: true,
-			Cfg:           &builderTest.Config{BeaconDB: beaconDB},
+			RegistrationCache: regCache,
+			BidCapella:        sBid,
+			HasConfigured:     true,
 		}
 		wb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockCapella())
 		require.NoError(t, err)
@@ -256,12 +256,12 @@ func TestServer_setExecutionData(t *testing.T) {
 	t.Run("Max builder boost factor should return builder", func(t *testing.T) {
 		blk, err := blocks.NewSignedBeaconBlock(util.NewBlindedBeaconBlockCapella())
 		require.NoError(t, err)
-		require.NoError(t, vs.BeaconDB.SaveRegistrationsByValidatorIDs(ctx, []primitives.ValidatorIndex{blk.Block().ProposerIndex()},
-			[]*ethpb.ValidatorRegistrationV1{{
-				FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
-				Timestamp:    uint64(time.Now().Unix()),
-				GasLimit:     gasLimit,
-				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
+		regCache.UpdateIndexToRegisteredMap(ctx, map[primitives.ValidatorIndex]*ethpb.ValidatorRegistrationV1{blk.Block().ProposerIndex(): {
+			FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
+			Timestamp:    uint64(time.Now().Unix()),
+			GasLimit:     gasLimit,
+			Pubkey:       make([]byte, fieldparams.BLSPubkeyLength),
+		}})
 		ti, err := slots.StartTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
@@ -298,9 +298,9 @@ func TestServer_setExecutionData(t *testing.T) {
 			Signature: sk.Sign(sr[:]).Marshal(),
 		}
 		vs.BlockBuilder = &builderTest.MockBuilderService{
-			BidCapella:    sBid,
-			HasConfigured: true,
-			Cfg:           &builderTest.Config{BeaconDB: beaconDB},
+			RegistrationCache: regCache,
+			BidCapella:        sBid,
+			HasConfigured:     true,
 		}
 		wb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockCapella())
 		require.NoError(t, err)
@@ -327,12 +327,12 @@ func TestServer_setExecutionData(t *testing.T) {
 	t.Run("Builder builder has higher value but forced to local payload with builder boost factor", func(t *testing.T) {
 		blk, err := blocks.NewSignedBeaconBlock(util.NewBlindedBeaconBlockCapella())
 		require.NoError(t, err)
-		require.NoError(t, vs.BeaconDB.SaveRegistrationsByValidatorIDs(ctx, []primitives.ValidatorIndex{blk.Block().ProposerIndex()},
-			[]*ethpb.ValidatorRegistrationV1{{
-				FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
-				Timestamp:    uint64(time.Now().Unix()),
-				GasLimit:     gasLimit,
-				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
+		regCache.UpdateIndexToRegisteredMap(ctx, map[primitives.ValidatorIndex]*ethpb.ValidatorRegistrationV1{blk.Block().ProposerIndex(): {
+			FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
+			Timestamp:    uint64(time.Now().Unix()),
+			GasLimit:     gasLimit,
+			Pubkey:       make([]byte, fieldparams.BLSPubkeyLength),
+		}})
 		ti, err := slots.StartTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
@@ -369,9 +369,9 @@ func TestServer_setExecutionData(t *testing.T) {
 			Signature: sk.Sign(sr[:]).Marshal(),
 		}
 		vs.BlockBuilder = &builderTest.MockBuilderService{
-			BidCapella:    sBid,
-			HasConfigured: true,
-			Cfg:           &builderTest.Config{BeaconDB: beaconDB},
+			RegistrationCache: regCache,
+			BidCapella:        sBid,
+			HasConfigured:     true,
 		}
 		wb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockCapella())
 		require.NoError(t, err)
@@ -479,9 +479,9 @@ func TestServer_setExecutionData(t *testing.T) {
 		blk, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockCapella())
 		require.NoError(t, err)
 		vs.BlockBuilder = &builderTest.MockBuilderService{
-			ErrGetHeader:  errors.New("fault"),
-			HasConfigured: true,
-			Cfg:           &builderTest.Config{BeaconDB: beaconDB},
+			RegistrationCache: regCache,
+			ErrGetHeader:      errors.New("fault"),
+			HasConfigured:     true,
 		}
 		ed, err := blocks.NewWrappedExecutionData(&v1.ExecutionPayloadCapella{BlockNumber: 4})
 		require.NoError(t, err)
@@ -509,7 +509,8 @@ func TestServer_setExecutionData(t *testing.T) {
 		blk.SetSlot(1)
 		require.NoError(t, err)
 		vs.BlockBuilder = &builderTest.MockBuilderService{
-			HasConfigured: false,
+			RegistrationCache: regCache,
+			HasConfigured:     false,
 		}
 		blobsBundle := &v1.BlobsBundle{
 			KzgCommitments: [][]byte{{1, 2, 3}},
@@ -581,16 +582,16 @@ func TestServer_setExecutionData(t *testing.T) {
 			Signature: sk.Sign(sr[:]).Marshal(),
 		}
 		vs.BlockBuilder = &builderTest.MockBuilderService{
-			BidDeneb:      sBid,
-			HasConfigured: true,
-			Cfg:           &builderTest.Config{BeaconDB: beaconDB},
+			RegistrationCache: regCache,
+			BidDeneb:          sBid,
+			HasConfigured:     true,
 		}
-		require.NoError(t, beaconDB.SaveRegistrationsByValidatorIDs(ctx, []primitives.ValidatorIndex{blk.Block().ProposerIndex()},
-			[]*ethpb.ValidatorRegistrationV1{{
-				FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
-				Timestamp:    uint64(time.Now().Unix()),
-				GasLimit:     gasLimit,
-				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
+		regCache.UpdateIndexToRegisteredMap(ctx, map[primitives.ValidatorIndex]*ethpb.ValidatorRegistrationV1{blk.Block().ProposerIndex(): {
+			FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
+			Timestamp:    uint64(time.Now().Unix()),
+			GasLimit:     gasLimit,
+			Pubkey:       make([]byte, fieldparams.BLSPubkeyLength),
+		}})
 
 		wb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockDeneb())
 		require.NoError(t, err)
@@ -706,16 +707,16 @@ func TestServer_setExecutionData(t *testing.T) {
 			Signature: sk.Sign(sr[:]).Marshal(),
 		}
 		vs.BlockBuilder = &builderTest.MockBuilderService{
-			BidElectra:    sBid,
-			HasConfigured: true,
-			Cfg:           &builderTest.Config{BeaconDB: beaconDB},
+			RegistrationCache: regCache,
+			BidElectra:        sBid,
+			HasConfigured:     true,
 		}
-		require.NoError(t, beaconDB.SaveRegistrationsByValidatorIDs(ctx, []primitives.ValidatorIndex{blk.Block().ProposerIndex()},
-			[]*ethpb.ValidatorRegistrationV1{{
-				FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
-				Timestamp:    uint64(time.Now().Unix()),
-				GasLimit:     gasLimit,
-				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
+		regCache.UpdateIndexToRegisteredMap(ctx, map[primitives.ValidatorIndex]*ethpb.ValidatorRegistrationV1{blk.Block().ProposerIndex(): {
+			FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
+			Timestamp:    uint64(time.Now().Unix()),
+			GasLimit:     gasLimit,
+			Pubkey:       make([]byte, fieldparams.BLSPubkeyLength),
+		}})
 		wb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockElectra())
 		require.NoError(t, err)
 		chain := &blockchainTest.ChainService{ForkChoiceStore: doublylinkedtree.New(), Genesis: time.Now(), Block: wb}

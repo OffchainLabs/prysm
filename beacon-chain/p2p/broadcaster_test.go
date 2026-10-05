@@ -360,7 +360,6 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		}),
 	}
 	go p.listenForNewNodes()
-	go p2.listenForNewNodes()
 
 	msg := util.HydrateAttestation(&ethpb.Attestation{AggregationBits: bitfield.NewBitlist(7)})
 	topic := AttestationSubnetTopicFormat
@@ -813,7 +812,7 @@ func (f *fakePartialColumnBroadcaster) Publish(_ context.Context, seq iter.Seq2[
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for topic, col := range seq {
-		f.published = append(f.published, publishedPartial{topic: topic, index: col.Index})
+		f.published = append(f.published, publishedPartial{topic: topic, index: col.Index()})
 	}
 	return f.err
 }

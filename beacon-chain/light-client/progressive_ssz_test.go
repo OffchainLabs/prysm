@@ -3,7 +3,6 @@ package light_client
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -18,20 +17,15 @@ func TestProgressiveExecutionPayloadSSZEnabled(t *testing.T) {
 
 	tests := []struct {
 		want    bool
-		enabled bool
 		payload interfaces.ExecutionData
 		name    string
 	}{
-		{name: "nil payload", enabled: true, want: false},
-		{name: "feature disabled", payload: gloasPayload, want: false},
-		{name: "non-Gloas payload", enabled: true, payload: denebPayload, want: false},
-		{name: "Gloas payload", enabled: true, payload: gloasPayload, want: true},
+		{name: "nil payload", want: false},
+		{name: "non-Gloas payload", payload: denebPayload, want: false},
+		{name: "Gloas payload", payload: gloasPayload, want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			reset := features.InitWithReset(&features.Flags{DisableProgressiveSSZ: !tt.enabled})
-			defer reset()
-
 			require.Equal(t, tt.want, progressiveExecutionPayloadSSZEnabled(tt.payload))
 		})
 	}

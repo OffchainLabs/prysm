@@ -83,7 +83,7 @@ func (p *PoolService) run() {
 func (p *PoolService) waitForChainInitialization() {
 	clock, err := p.cw.WaitForClock(p.ctx)
 	if err != nil {
-		log.WithError(err).Error("Could not receive chain start notification")
+		log.WithError(err).Error("Could not receive genesis clock")
 	}
 	p.clock = clock
 	log.WithField("genesisTime", clock.GenesisTime()).Info(

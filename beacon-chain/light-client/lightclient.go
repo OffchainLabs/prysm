@@ -7,7 +7,6 @@ import (
 	"reflect"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
@@ -525,7 +524,7 @@ func ComputeWithdrawalsRoot(payload interfaces.ExecutionData) ([]byte, error) {
 }
 
 func progressiveExecutionPayloadSSZEnabled(payload interfaces.ExecutionData) bool {
-	if payload == nil || !features.ProgressiveSSZEnabled(version.Gloas) {
+	if payload == nil {
 		return false
 	}
 	_, ok := payload.Proto().(*enginev1.ExecutionPayloadGloas)

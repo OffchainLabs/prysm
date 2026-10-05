@@ -77,6 +77,35 @@ func TestHeadTracker_Update(t *testing.T) {
 		head, _ = latestHead(h)
 		require.Equal(t, api.PayloadStatusEmpty, head.PayloadStatus)
 	})
+
+	t.Run("the same head upgrades from empty to full", func(t *testing.T) {
+		h := newHeadTracker()
+		require.NoError(t, h.update(42, hexRoot(0xab), api.PayloadStatusEmpty))
+		require.NoError(t, h.update(42, hexRoot(0xab), api.PayloadStatusFull))
+
+		head, _ := latestHead(h)
+		require.Equal(t, api.PayloadStatusFull, head.PayloadStatus)
+	})
+
+	t.Run("a lagging node does not downgrade the same head from full", func(t *testing.T) {
+		h := newHeadTracker()
+		require.NoError(t, h.update(42, hexRoot(0xab), api.PayloadStatusFull))
+		require.NoError(t, h.update(42, hexRoot(0xab), api.PayloadStatusEmpty))
+		require.NoError(t, h.update(42, hexRoot(0xab), api.PayloadStatusUnknown))
+
+		head, _ := latestHead(h)
+		require.Equal(t, api.PayloadStatusFull, head.PayloadStatus)
+	})
+
+	t.Run("a different head at the same slot overwrites a full head", func(t *testing.T) {
+		h := newHeadTracker()
+		require.NoError(t, h.update(42, hexRoot(0xab), api.PayloadStatusFull))
+		require.NoError(t, h.update(42, hexRoot(0xcd), api.PayloadStatusEmpty))
+
+		head, _ := latestHead(h)
+		require.Equal(t, byte(0xcd), head.Root[0])
+		require.Equal(t, api.PayloadStatusEmpty, head.PayloadStatus)
+	})
 }
 
 func TestWithHeadHint(t *testing.T) {

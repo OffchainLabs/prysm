@@ -89,6 +89,55 @@ func TestConfigureBuilderHeaderTimeout(t *testing.T) {
 	})
 }
 
+func TestConfigureBuilderBidTimeout(t *testing.T) {
+	newCliCtx := func(t *testing.T, timeout string) *cli.Context {
+		set := flag.NewFlagSet("test", 0)
+		set.Duration(flags.BuilderBidTimeout.Name, flags.BuilderBidTimeout.Value, "")
+		if timeout != "" {
+			require.NoError(t, set.Set(flags.BuilderBidTimeout.Name, timeout))
+		}
+		return cli.NewContext(&cli.App{}, set, nil)
+	}
+
+	t.Run("leaves the config untouched when unset", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		hook := logTest.NewGlobal()
+		c := params.BeaconConfig().Copy()
+		c.BuilderBidTimeout = 1234 * time.Millisecond
+		require.NoError(t, params.SetActive(c))
+
+		require.NoError(t, configureBuilderBidTimeout(newCliCtx(t, "")))
+
+		assert.Equal(t, 1234*time.Millisecond, params.BeaconConfig().BuilderBidTimeout)
+		assert.LogsDoNotContain(t, hook, "Overriding the builder API execution payload bid timeout")
+	})
+
+	for _, timeout := range []string{"0s", "-1ms"} {
+		t.Run("rejects "+timeout, func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+
+			err := configureBuilderBidTimeout(newCliCtx(t, timeout))
+
+			require.ErrorContains(t, fmt.Sprintf("--builder-bid-timeout must be greater than 0, got %s", timeout), err)
+			assert.Equal(t, params.BuilderBidTolerance, params.BeaconConfig().BuilderBidTimeout)
+		})
+	}
+
+	// Any positive value is accepted: there is no upper bound, and no relay endpoint is required.
+	t.Run("nominal", func(t *testing.T) {
+		const timeout = "900ms"
+		params.SetupTestConfigCleanup(t)
+		hook := logTest.NewGlobal()
+
+		require.NoError(t, configureBuilderBidTimeout(newCliCtx(t, timeout)))
+
+		expected, err := time.ParseDuration(timeout)
+		require.NoError(t, err)
+		assert.Equal(t, expected, params.BeaconConfig().BuilderBidTimeout)
+		assert.LogsContain(t, hook, "Overriding the builder API execution payload bid timeout")
+	})
+}
+
 func TestConfigureSlotsPerArchivedPoint(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 

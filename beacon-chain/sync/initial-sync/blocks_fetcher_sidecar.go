@@ -122,10 +122,14 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, r *fetchRequestRespon
 		return
 	}
 
-	// Attach columns to their in-batch block. Columns for an out-of-batch payload (the one the
-	// first block builds on) are carried separately to be persisted by the queue consumer.
+	// Attach columns to blocks still to be imported. Already-imported blocks are stripped before
+	// the per-block save loops, so their columns are carried with the out-of-batch ones.
+	headSlot := f.chain.HeadSlot()
 	for i := range r.bwb {
 		bwSc := &r.bwb[i]
+		if bwSc.Block.Block().Slot() <= headSlot {
+			continue
+		}
 		root := bwSc.Block.Root()
 		if columns, ok := verifiedRoDataColumnsByRoot[root]; ok {
 			bwSc.Columns = columns
