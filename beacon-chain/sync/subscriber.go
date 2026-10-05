@@ -887,6 +887,9 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 		}
 	}
 
+	// Sort candidates by ascending subnet count so we try to prune peers
+	// covering fewer subnets first, preserving multi-subnet peers that are
+	// more valuable for maintaining minimums across subnets.
 	candidates := slices.Clone(pids)
 	slices.SortStableFunc(candidates, func(a, b peer.ID) int {
 		return len(peerSubnets[a]) - len(peerSubnets[b])

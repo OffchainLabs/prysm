@@ -164,7 +164,8 @@ message DebugPeerResponse {
 
 // The Scoring related information of the particular peer.
 message ScoreInfo {
-  float overall_score = 1;
+  // Field 1 held overall_score; kept reserved so older clients never misread a reused field number.
+  reserved 1;
   // Amount of processed blocks provided by
   // the peer.
   uint64 processed_blocks = 2;

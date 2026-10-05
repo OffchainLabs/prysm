@@ -26,7 +26,7 @@ type StrikeSource int
 
 const (
 	Unknown StrikeSource = iota
-	// SourceDial reports outbound dial failures.
+	// SourceDial reports failures to reach a peer: outbound dials and RPC request streams that fail to open or send.
 	SourceDial
 	// SourceRPCStatus reports faults in the status RPC exchange, inbound or outbound.
 	SourceRPCStatus

@@ -135,7 +135,6 @@ func (ds *Server) getPeer(pid peer.ID) (*ethpb.DebugPeerResponse, error) {
 		unixTime = uint64(lastUpdated.Unix())
 	}
 	gScore, bPenalty, topicMaps := scoring.GossipData(pid)
-	// The composite overall_score is gone; the proto field is retained but left unset.
 	scoreInfo := &ethpb.ScoreInfo{
 		ProcessedBlocks:    peers.Scorers().BlockProviderScorer().ProcessedBlocks(pid),
 		BlockProviderScore: float32(peers.Scorers().BlockProviderScorer().Score(pid)),
