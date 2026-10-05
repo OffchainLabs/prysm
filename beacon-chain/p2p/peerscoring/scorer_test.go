@@ -135,14 +135,12 @@ func TestSetAgent(t *testing.T) {
 
 	s.SetAgent(testPid, "Lighthouse/v8.2.2/aarch64-macos")
 	require.Equal(t, "Lighthouse/v8.2.2/aarch64-macos", s.info[testPid].agent)
-	require.Equal(t, AgentTypeLighthouse, s.info[testPid].agentType)
 
-	// An empty agent keeps the recorded one; a new agent replaces it, even of unknown type.
+	// An empty agent keeps the recorded one; a new agent replaces it.
 	s.SetAgent(testPid, "")
 	require.Equal(t, "Lighthouse/v8.2.2/aarch64-macos", s.info[testPid].agent)
 	s.SetAgent(testPid, "hermes")
 	require.Equal(t, "hermes", s.info[testPid].agent)
-	require.Equal(t, AgentTypeUnknown, s.info[testPid].agentType)
 }
 
 func TestRecordStrikeTrimsHistory(t *testing.T) {

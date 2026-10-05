@@ -22,7 +22,7 @@ const agentUnknown = "unknown"
 // strikes (source, reason), rpc status incl. the chain validation error, the mirrored
 // gossip score with every recorded gossip rejection, and every firing grey-list verdict
 // with the time remaining. Optional: include_topic_scores=true adds the per-topic gossip
-// counters.
+// counters. Returns 404 when no peer store, scorer or rejection state exists for the peer.
 func (s *Server) GetPeerScoring(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "node.GetPeerScoring")
 	defer span.End()
@@ -35,6 +35,10 @@ func (s *Server) GetPeerScoring(w http.ResponseWriter, r *http.Request) {
 	topicScores, err := parseBoolFlag(r, "include_topic_scores")
 	if err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !s.isKnownPeer(pid) {
+		httputil.HandleError(w, "Peer not found", http.StatusNotFound)
 		return
 	}
 
@@ -251,7 +255,7 @@ func (s *Server) ListGossipRejections(w http.ResponseWriter, r *http.Request) {
 			PeerID:    rj.PeerID.String(),
 			Topic:     rj.Topic,
 			Agent:     rj.Agent,
-			AgentType: rj.AgentType,
+			AgentType: peerscoring.AgentTypeOf(rj.Agent),
 			Reason:    rj.Reason,
 			Timestamp: rj.At.UTC().Format(time.RFC3339Nano),
 		})
@@ -287,9 +291,9 @@ func (s *Server) GetGossipRejectionsSummary(w http.ResponseWriter, r *http.Reque
 			if key == "" {
 				key = agentUnknown
 			}
-			agentType = rj.AgentType
+			agentType = peerscoring.AgentTypeOf(rj.Agent)
 		case "agent_type":
-			key = rj.AgentType
+			key = peerscoring.AgentTypeOf(rj.Agent)
 		case "reason":
 			key = rj.Reason
 		case "peer":
@@ -340,6 +344,13 @@ func (s *Server) buildAllPeersDebug(topicScores bool) []*peerscoring.PeerScoring
 		all = append(all, peerscoring.BuildPeerDebug(pid, s.peerDebugOptions(pid, topicScores), scorer, rejections))
 	}
 	return all
+}
+
+func (s *Server) isKnownPeer(pid peer.ID) bool {
+	if _, err := s.PeersFetcher.Peers().ConnectionState(pid); err == nil {
+		return true
+	}
+	return s.PeerScoringFetcher.PeerScoring().IsTracked(pid) || s.GossipRejectionsFetcher.GossipRejections().IsTracked(pid)
 }
 
 // peerDebugOptions gathers the composite refusal verdict and peer registry facts for one peer.

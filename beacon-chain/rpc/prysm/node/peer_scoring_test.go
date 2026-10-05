@@ -157,6 +157,37 @@ func TestGetPeerScoringInvalidPeerID(t *testing.T) {
 	require.StringContains(t, "Could not decode peer id", e.Message)
 }
 
+func TestGetPeerScoringPeerNotFound(t *testing.T) {
+	pid, err := peer.Decode(scoringTestPeerID)
+	require.NoError(t, err)
+	addr, err := ma.NewMultiaddr("/ip4/10.0.0.1/tcp/13000")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name  string
+		setup func(tp *p2ptest.TestP2P)
+		code  int
+	}{
+		{name: "unknown peer", setup: func(*p2ptest.TestP2P) {}, code: http.StatusNotFound},
+		{name: "peer store only", setup: func(tp *p2ptest.TestP2P) { tp.Peers().Add(nil, pid, addr, corenet.DirInbound) }, code: http.StatusOK},
+		{name: "scorer only", setup: func(tp *p2ptest.TestP2P) { tp.PeerScoring().SetAgent(pid, "teku/v26.3.0") }, code: http.StatusOK},
+		{name: "rejections only", setup: func(tp *p2ptest.TestP2P) { tp.GossipRejections().Record(pid, "topic", "", nil) }, code: http.StatusOK},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, tp := newScoringServer(t)
+			tt.setup(tp)
+			writer := getScoring(t, s, "http://example.com/x", scoringTestPeerID)
+			require.Equal(t, tt.code, writer.Code)
+			if tt.code == http.StatusNotFound {
+				e := &httputil.DefaultJsonError{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+				require.StringContains(t, "Peer not found", e.Message)
+			}
+		})
+	}
+}
+
 func TestListPeersScoring(t *testing.T) {
 	s, tp := newScoringServer(t)
 	good := peer.ID("good")

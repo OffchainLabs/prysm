@@ -39,9 +39,7 @@ func TestGossipRejectionsRecordAndRead(t *testing.T) {
 	topicA := got.ByTopic["topic-a"]
 	require.Equal(t, 2, len(topicA))
 	require.Equal(t, "prysm/v7", topicA[0].Agent)
-	require.Equal(t, AgentTypePrysm, topicA[0].AgentType)
 	require.Equal(t, "lighthouse/v1", topicA[1].Agent)
-	require.Equal(t, AgentTypeLighthouse, topicA[1].AgentType)
 	require.Equal(t, "bad root", topicA[1].Reason)
 
 	all := s.All()

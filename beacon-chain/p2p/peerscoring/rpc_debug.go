@@ -220,13 +220,10 @@ type FlatRejection struct {
 // BuildPeerDebug assembles the debug model for one peer. rejections may be nil.
 func BuildPeerDebug(pid peer.ID, opts PeerDebugOptions, scorer *Scorer, rejections *GossipRejectionsStore) *PeerScoringDebug {
 	d := scorer.debugInfo(pid, opts.IncludeTopicScores)
-	switch {
-	case opts.Agent != "":
+	if opts.Agent != "" {
 		d.Agent = opts.Agent
-		d.AgentType = AgentTypeOf(opts.Agent)
-	case d.AgentType == "":
-		d.AgentType = AgentTypeUnknown
 	}
+	d.AgentType = AgentTypeOf(d.Agent)
 	d.ConnectionState = opts.ConnectionState
 	d.Direction = opts.Direction
 	if !opts.ConnectedAt.IsZero() {
@@ -336,7 +333,6 @@ func (s *Scorer) debugInfo(pid peer.ID, includeTopicScores bool) *PeerScoringDeb
 	}
 
 	d.Agent = pi.agent
-	d.AgentType = pi.agentType
 	d.Strikes.StandingCount = pi.strikeCount
 	for _, strike := range pi.strikes {
 		d.Strikes.History = append(d.Strikes.History, StrikeDebug{
@@ -399,6 +395,15 @@ func (s *Scorer) TrackedPeers() []peer.ID {
 	return pids
 }
 
+// IsTracked reports whether the scorer holds state for the peer.
+func (s *Scorer) IsTracked(pid peer.ID) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	_, ok := s.info[pid]
+	return ok
+}
+
 // debugRejections returns the peer's recorded rejections as debug entries, oldest first.
 func (s *GossipRejectionsStore) debugRejections(pid peer.ID) []GossipRejectionDebug {
 	s.mu.RLock()
@@ -406,7 +411,7 @@ func (s *GossipRejectionsStore) debugRejections(pid peer.ID) []GossipRejectionDe
 
 	out := make([]GossipRejectionDebug, 0, len(s.rejections[pid]))
 	for _, rj := range s.rejections[pid] {
-		out = append(out, GossipRejectionDebug{Topic: rj.Topic, Agent: rj.Agent, AgentType: rj.AgentType, Reason: rj.Reason, Timestamp: debugTime(rj.At)})
+		out = append(out, GossipRejectionDebug{Topic: rj.Topic, Agent: rj.Agent, AgentType: AgentTypeOf(rj.Agent), Reason: rj.Reason, Timestamp: debugTime(rj.At)})
 	}
 	return out
 }
@@ -421,6 +426,15 @@ func (s *GossipRejectionsStore) TrackedPeers() []peer.ID {
 		pids = append(pids, pid)
 	}
 	return pids
+}
+
+// IsTracked reports whether the peer has recorded rejections.
+func (s *GossipRejectionsStore) IsTracked(pid peer.ID) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	_, ok := s.rejections[pid]
+	return ok
 }
 
 // FlatRejections returns every recorded rejection tagged with its peer, oldest first per peer.

@@ -43,7 +43,7 @@ func TestBuildPeerDebugAgentType(t *testing.T) {
 	require.Equal(t, "Lighthouse/v8.2.2/aarch64-macos", d.Agent)
 	require.Equal(t, AgentTypeLighthouse, d.AgentType)
 
-	// Once libp2p forgets the agent, the recorded agent and agent type remain.
+	// Once libp2p forgets the agent, the recorded agent remains and is classified.
 	s.SetAgent(pid, "Grandine/2.0.5-70a5c7ea/x86_64-linux")
 	d = BuildPeerDebug(pid, PeerDebugOptions{}, s, nil)
 	require.Equal(t, "Grandine/2.0.5-70a5c7ea/x86_64-linux", d.Agent)
@@ -60,6 +60,24 @@ func TestBuildPeerDebugAgentType(t *testing.T) {
 	d = BuildPeerDebug(pid, PeerDebugOptions{}, s, rej)
 	require.Equal(t, 1, len(d.Gossip.Rejections))
 	require.Equal(t, AgentTypePrysm, d.Gossip.Rejections[0].AgentType)
+}
+
+func TestIsTracked(t *testing.T) {
+	s := NewScorer()
+	rej := NewGossipRejectionsStore()
+	pid := peer.ID("peer")
+	require.Equal(t, false, s.IsTracked(pid))
+	require.Equal(t, false, rej.IsTracked(pid))
+
+	s.RecordStrike(pid, SourceRPCPing, "timeout")
+	rej.Record(pid, "topic", "", errors.New("bad"))
+	require.Equal(t, true, s.IsTracked(pid))
+	require.Equal(t, true, rej.IsTracked(pid))
+
+	s.RemovePeers([]peer.ID{pid})
+	rej.RemovePeers([]peer.ID{pid})
+	require.Equal(t, false, s.IsTracked(pid))
+	require.Equal(t, false, rej.IsTracked(pid))
 }
 
 func TestBuildPeerDebugFullPicture(t *testing.T) {

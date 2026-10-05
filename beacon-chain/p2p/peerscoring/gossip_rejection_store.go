@@ -16,11 +16,10 @@ const (
 
 // GossipRejection is one gossip message rejected by our topic validators.
 type GossipRejection struct {
-	Topic     string
-	Agent     string
-	AgentType string
-	Reason    string
-	At        time.Time
+	Topic  string
+	Agent  string
+	Reason string
+	At     time.Time
 }
 
 // PeerGossipRejections groups a peer's recorded rejections by agent and by topic, oldest first.
@@ -74,7 +73,7 @@ func (s *GossipRejectionsStore) Record(pid peer.ID, topic, agent string, rejecti
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	entries := append(s.rejections[pid], GossipRejection{Topic: topic, Agent: agent, AgentType: AgentTypeOf(agent), Reason: reason, At: time.Now()})
+	entries := append(s.rejections[pid], GossipRejection{Topic: topic, Agent: agent, Reason: reason, At: time.Now()})
 	if excess := len(entries) - s.maxPerPeer; excess > 0 {
 		entries = append(entries[:0], entries[excess:]...)
 	}
