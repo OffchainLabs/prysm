@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -1230,4 +1231,56 @@ func wedgedWriterTestCase(t *testing.T, queueDepth func([]*feed.Event) int) {
 	case <-ctx.Done():
 		t.Fatalf("context canceled / timed out waiting to write all events, err=%v", ctx.Err())
 	}
+}
+
+// TestPayloadAttributesReader_DoesNotLeakGoroutine checks that the goroutine computing the
+// payload_attributes event exits even when its lazy reader never receives the result. That
+// happens when the stream shuts down with the reader still queued (eventStreamer.exit drains
+// the outbox without calling readers) or when the reader's context is done first.
+func TestPayloadAttributesReader_DoesNotLeakGoroutine(t *testing.T) {
+	const workerFrame = "events.(*Server).payloadAttributesReader.func1()"
+	countWorkers := func() int {
+		buf := make([]byte, 1<<20)
+		return strings.Count(string(buf[:runtime.Stack(buf, true)]), workerFrame)
+	}
+	waitForWorkers := func(t *testing.T, want int) {
+		var got int
+		for start := time.Now(); time.Since(start) < time.Second; time.Sleep(10 * time.Millisecond) {
+			if got = countWorkers(); got == want {
+				return
+			}
+		}
+		t.Fatalf("payloadAttributesReader worker goroutines still running: got %d, want %d", got, want)
+	}
+	newServer := func() *Server {
+		mockChainService := &mockChain.ChainService{Genesis: time.Now()}
+		return &Server{ChainInfoFetcher: mockChainService, HeadFetcher: mockChainService}
+	}
+	// A nil head block makes fillEventData fail immediately; the worker still sends its result.
+	ev := payloadattribute.EventData{ProposalSlot: 1}
+
+	t.Run("reader never invoked", func(t *testing.T) {
+		before := countWorkers()
+		s := newServer()
+		ctx, cancel := context.WithCancel(t.Context())
+		_, err := s.payloadAttributesReader(ctx, ev)
+		require.NoError(t, err)
+		// The stream shuts down and the queued reader is dropped without being called.
+		cancel()
+		waitForWorkers(t, before)
+	})
+
+	t.Run("reader invoked after context canceled", func(t *testing.T) {
+		before := countWorkers()
+		s := newServer()
+		for range 20 {
+			ctx, cancel := context.WithCancel(t.Context())
+			lr, err := s.payloadAttributesReader(ctx, ev)
+			require.NoError(t, err)
+			// The client disconnects before the reader is written out.
+			cancel()
+			require.Equal(t, nil, lr())
+		}
+		waitForWorkers(t, before)
+	})
 }

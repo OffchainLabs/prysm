@@ -957,7 +957,7 @@ func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribut
 		return nil, errors.Wrapf(errPayloadAttributeExpired, "proposal slot time %d", deadline.Unix())
 	}
 	ctx, cancel := context.WithDeadline(ctx, deadline)
-	edc := make(chan asyncPayloadAttrData)
+	edc := make(chan asyncPayloadAttrData, 1)
 	go func() {
 		d := asyncPayloadAttrData{}
 		defer func() {
