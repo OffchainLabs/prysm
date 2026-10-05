@@ -12,6 +12,7 @@ package validator_mock
 import (
 	context "context"
 	reflect "reflect"
+	time "time"
 
 	proposer "github.com/OffchainLabs/prysm/v7/config/proposer"
 	keymanager "github.com/OffchainLabs/prysm/v7/validator/keymanager"
@@ -55,6 +56,20 @@ func (m *MockValidatorService) DeleteGraffiti(ctx context.Context, pubKey [48]by
 func (mr *MockValidatorServiceMockRecorder) DeleteGraffiti(ctx, pubKey any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteGraffiti", reflect.TypeOf((*MockValidatorService)(nil).DeleteGraffiti), ctx, pubKey)
+}
+
+// GenesisTime mocks base method.
+func (m *MockValidatorService) GenesisTime() time.Time {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GenesisTime")
+	ret0, _ := ret[0].(time.Time)
+	return ret0
+}
+
+// GenesisTime indicates an expected call of GenesisTime.
+func (mr *MockValidatorServiceMockRecorder) GenesisTime() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenesisTime", reflect.TypeOf((*MockValidatorService)(nil).GenesisTime))
 }
 
 // Graffiti mocks base method.

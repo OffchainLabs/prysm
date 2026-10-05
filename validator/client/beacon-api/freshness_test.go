@@ -289,25 +289,63 @@ func TestPayloadAttestationFreshnessOptions(t *testing.T) {
 		require.Equal(t, true, cfg.SSZAccept(payloadAttestationSSZ(t, [32]byte{0x99}), octetHeader))
 		require.Equal(t, true, cfg.SSZAccept([]byte("garbage"), http.Header{}))
 	})
+
+	t.Run("accept requires the payload present when the head is announced full", func(t *testing.T) {
+		root := [32]byte{0x11}
+		jsonHeader := http.Header{"Content-Type": {"application/json"}}
+
+		ctx := iface.WithHint(context.Background(), headHintWithPayload(root, 10, true, time.Time{}, api.PayloadStatusFull))
+		cfg := rest.ResolveOptions(payloadAttestationFreshnessOptions(ctx)...)
+
+		// A node that saw the payload is preferred over a lagging one that did not.
+		require.Equal(t, true, cfg.SSZAccept(payloadAttestationSSZWithPresence(t, root, true), octetHeader))
+		require.Equal(t, false, cfg.SSZAccept(payloadAttestationSSZWithPresence(t, root, false), octetHeader))
+		require.Equal(t, true, cfg.SSZAccept(payloadAttestationJSON(root, true), jsonHeader))
+		require.Equal(t, false, cfg.SSZAccept(payloadAttestationJSON(root, false), jsonHeader))
+	})
+
+	t.Run("accept ignores the payload presence when the head is not announced full", func(t *testing.T) {
+		root := [32]byte{0x11}
+
+		ctx := iface.WithHint(context.Background(), headHintWithPayload(root, 10, true, time.Time{}, api.PayloadStatusEmpty))
+		cfg := rest.ResolveOptions(payloadAttestationFreshnessOptions(ctx)...)
+
+		require.Equal(t, true, cfg.SSZAccept(payloadAttestationSSZWithPresence(t, root, false), octetHeader))
+		require.Equal(t, true, cfg.SSZAccept(payloadAttestationSSZWithPresence(t, root, true), octetHeader))
+	})
 }
 
-func TestPayloadAttestationBeaconBlockRoot(t *testing.T) {
+func TestPayloadAttestationHead(t *testing.T) {
 	root := [32]byte{0x11, 0x22, 0x33}
+
+	t.Run("decodes an SSZ response", func(t *testing.T) {
+		octetHeader := http.Header{"Content-Type": {api.OctetStreamMediaType}}
+		got, present, ok := payloadAttestationHead(payloadAttestationSSZWithPresence(t, root, true), octetHeader)
+		require.Equal(t, true, ok)
+		require.Equal(t, root, got)
+		require.Equal(t, true, present)
+	})
 
 	t.Run("decodes a JSON response when the content type is not octet-stream", func(t *testing.T) {
 		for _, hdr := range []http.Header{
 			{},                                     // no content type
 			{"Content-Type": {"application/json"}}, // explicit JSON
 		} {
-			got, ok := payloadAttestationBeaconBlockRoot(attestationDataJSON(root), hdr)
+			got, present, ok := payloadAttestationHead(payloadAttestationJSON(root, true), hdr)
 			require.Equal(t, true, ok)
 			require.Equal(t, root, got)
+			require.Equal(t, true, present)
 		}
 	})
 
 	t.Run("rejects a JSON response whose root is not a valid 32-byte hex", func(t *testing.T) {
 		// Present and non-empty, but too short to decode into a 32-byte root.
-		_, ok := payloadAttestationBeaconBlockRoot([]byte(`{"data":{"beacon_block_root":"0x1234"}}`), http.Header{})
+		_, _, ok := payloadAttestationHead([]byte(`{"data":{"beacon_block_root":"0x1234"}}`), http.Header{})
+		require.Equal(t, false, ok)
+	})
+
+	t.Run("rejects a JSON response without data", func(t *testing.T) {
+		_, _, ok := payloadAttestationHead([]byte(`{}`), http.Header{})
 		require.Equal(t, false, ok)
 	})
 }
@@ -345,6 +383,19 @@ func payloadAttestationSSZ(t *testing.T, root [32]byte) []byte {
 	body, err := (&ethpb.PayloadAttestationData{BeaconBlockRoot: root[:]}).MarshalSSZ()
 	require.NoError(t, err)
 	return body
+}
+
+// payloadAttestationSSZWithPresence marshals a PayloadAttestationData whose
+// beacon_block_root is root and whose payload_present is present.
+func payloadAttestationSSZWithPresence(t *testing.T, root [32]byte, present bool) []byte {
+	body, err := (&ethpb.PayloadAttestationData{BeaconBlockRoot: root[:], PayloadPresent: present}).MarshalSSZ()
+	require.NoError(t, err)
+	return body
+}
+
+// payloadAttestationJSON builds a minimal payload attestation data JSON body.
+func payloadAttestationJSON(root [32]byte, present bool) []byte {
+	return []byte(fmt.Sprintf(`{"data":{"beacon_block_root":"%#x","payload_present":%t}}`, root, present))
 }
 
 // genericBlockWithParent returns a Phase0 GenericBeaconBlock whose parent root is root.

@@ -3634,6 +3634,35 @@ func TestProposer_GetParentHeadState(t *testing.T) {
 	})
 }
 
+func TestProposer_ParentFull(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	parentRoot := [32]byte{'p'}
+	gloasSlot := params.BeaconConfig().SlotsPerEpoch
+	tests := []struct {
+		name  string
+		chain *mock.ChainService
+		want  bool
+	}{
+		{name: "pre-Gloas head saved as empty", chain: &mock.ChainService{BlockSlot: gloasSlot - 1, Root: parentRoot[:]}, want: true},
+		{name: "pre-Gloas non-head forkchoice prefers empty", chain: &mock.ChainService{BlockSlot: gloasSlot - 1}, want: true},
+		{name: "Gloas head saved as empty", chain: &mock.ChainService{BlockSlot: gloasSlot, Root: parentRoot[:]}, want: false},
+		{name: "Gloas head saved as full", chain: &mock.ChainService{BlockSlot: gloasSlot, Root: parentRoot[:], Full: true}, want: true},
+		{name: "Gloas non-head forkchoice prefers empty", chain: &mock.ChainService{BlockSlot: gloasSlot}, want: false},
+		{name: "Gloas non-head forkchoice prefers full", chain: &mock.ChainService{BlockSlot: gloasSlot, ForkchoiceRoots: map[[32]byte]bool{parentRoot: true}}, want: true},
+		{name: "unknown parent falls back to forkchoice", chain: &mock.ChainService{RecentBlockSlotErr: errors.New("not found")}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vs := &Server{HeadFetcher: tt.chain, ForkchoiceFetcher: tt.chain}
+			require.Equal(t, tt.want, vs.parentFull(parentRoot))
+		})
+	}
+}
+
 func TestProposer_ElectraBlobsAndProofs(t *testing.T) {
 	electraContents := &ethpb.SignedBeaconBlockContentsElectra{Block: &ethpb.SignedBeaconBlockElectra{}}
 	electraContents.KzgProofs = make([][]byte, 10)
