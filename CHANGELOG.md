@@ -6,14 +6,18 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [v7.2.1](https://github.com/OffchainLabs/prysm/compare/v7.2.0...v7.2.1) - 2026-10-05
 
-This release adds the Sepolia `GAS_LIMIT_SCHEDULE` that v7.2.0 left out, so validators default to a 200M gas limit at the Sepolia Gloas fork (epoch 353024, October 6, 2026, 13:53:36 UTC). It also contains Gloas fixes. Sepolia operators should update before the fork. Hoodi and mainnet operators can update on their regular cadence.
+This release focuses on Gloas builder configuration in the validator client. If you are testing Gloas builders, update to this release so your builder auth configuration is read correctly: proposer settings files now take builder `auth_data` and `builder_pubkeys` as 0x-hex, matching the keymanager API, instead of base64.
+
+This release also adds the Sepolia `GAS_LIMIT_SCHEDULE`, so validators default to a 200M gas limit from the Sepolia Gloas fork (epoch 353024, October 6, 2026, 13:53:36 UTC). This needs no action. To use a different gas limit, set `gas_limit` in your proposer settings, set it through the keymanager API, or use `--suggested-gas-limit`.
 
 Release highlights:
 
-- Sepolia `GAS_LIMIT_SCHEDULE`: 200M gas limit at epoch 353024. [[PR]](https://github.com/OffchainLabs/prysm/pull/17609)
-- New validator client flags `--builder-urls`, `--builder-min-bid`, `--builder-boost-factor` and `--builder-max-execution-payment` configure Gloas builders for all validators. `--suggested-gas-limit` now also applies from Gloas on, where it overrides the gas limit schedule. [[PR]](https://github.com/OffchainLabs/prysm/pull/17519)
-- Partial data columns (cell-level PeerDAS dissemination) are on by default. `--disable-partial-data-columns` turns them off. `--partial-data-columns` is deprecated. [[PR]](https://github.com/OffchainLabs/prysm/pull/17545)
-- Proposer settings files now take builder `auth_data` and `builder_pubkeys` (renamed from `pubkeys`) as 0x-hex instead of base64. Review your proposer settings before updating. [[PR]](https://github.com/OffchainLabs/prysm/pull/17593)
+- Proposer settings files take builder `auth_data` and `builder_pubkeys` (renamed from `pubkeys`) as 0x-hex instead of base64, matching the keymanager API. Review your builder settings before updating. [[PR]](https://github.com/OffchainLabs/prysm/pull/17593)
+- The default builder `auth_data` is derived from the builder URL's hostname instead of the full URL, per builder-specs#168. Builder URLs without a hostname are rejected. [[PR]](https://github.com/OffchainLabs/prysm/pull/17511)
+- New validator client flags `--builder-urls`, `--builder-min-bid`, `--builder-boost-factor` and `--builder-max-execution-payment` configure Gloas builders for all validators. Builder auth data can be appended to a URL as a `#0x...` hex fragment. [[PR]](https://github.com/OffchainLabs/prysm/pull/17519)
+- `--builder-bid-timeout` on the beacon node sets how long to wait for builder bids. The default wait is now 600ms, up from 300ms. [[PR]](https://github.com/OffchainLabs/prysm/pull/17551)
+- Sepolia `GAS_LIMIT_SCHEDULE`: 200M gas limit at epoch 353024. `--suggested-gas-limit` now also applies from Gloas on, where it overrides the schedule. [[PR]](https://github.com/OffchainLabs/prysm/pull/17609) [[PR]](https://github.com/OffchainLabs/prysm/pull/17519)
+- Partial data columns (cell-level PeerDAS dissemination) are on by default. `--disable-partial-data-columns` turns them off. [[PR]](https://github.com/OffchainLabs/prysm/pull/17545)
 - Gloas fixes, including block production for the first Gloas block and historical state replay when hierarchical diffs are missing. See the Fixed section below.
 
 ### Added
