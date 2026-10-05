@@ -73,6 +73,11 @@ func (m MetadataV0) SizeSSZ() int {
 	return m.md.SizeSSZ()
 }
 
+// MaxSizeSSZ returns the fixed SSZ size of metadata V0.
+func (m MetadataV0) MaxSizeSSZ() int {
+	return m.SizeSSZ()
+}
+
 // UnmarshalSSZ unmarshals the provided byte buffer into
 // the underlying metadata object.
 func (m MetadataV0) UnmarshalSSZ(buf []byte) error {
@@ -167,6 +172,11 @@ func (m MetadataV1) SizeSSZ() int {
 	return m.md.SizeSSZ()
 }
 
+// MaxSizeSSZ returns the fixed SSZ size of metadata V1.
+func (m MetadataV1) MaxSizeSSZ() int {
+	return m.SizeSSZ()
+}
+
 // UnmarshalSSZ unmarshals the provided byte buffer into
 // the underlying metadata object.
 func (m MetadataV1) UnmarshalSSZ(buf []byte) error {
@@ -259,6 +269,11 @@ func (m MetadataV2) MarshalSSZTo(dst []byte) ([]byte, error) {
 // SizeSSZ returns the serialized size of the metadata object.
 func (m MetadataV2) SizeSSZ() int {
 	return m.md.SizeSSZ()
+}
+
+// MaxSizeSSZ returns the fixed SSZ size of metadata V2.
+func (m MetadataV2) MaxSizeSSZ() int {
+	return m.SizeSSZ()
 }
 
 // UnmarshalSSZ unmarshals the provided byte buffer into

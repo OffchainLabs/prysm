@@ -68,6 +68,11 @@ func (r *BeaconBlockByRootsReq) SizeSSZ() int {
 	return len(*r) * fieldparams.RootLength
 }
 
+// MaxSizeSSZ returns the maximum size of the type when SSZ-encoded.
+func (r *BeaconBlockByRootsReq) MaxSizeSSZ() int {
+	return int(params.BeaconConfig().MaxRequestBlocks) * fieldparams.RootLength
+}
+
 // UnmarshalSSZ unmarshals the provided bytes buffer into the
 // block by roots request object.
 func (r *BeaconBlockByRootsReq) UnmarshalSSZ(buf []byte) error {
@@ -117,6 +122,11 @@ func (m *ErrorMessage) SizeSSZ() int {
 	return len(*m)
 }
 
+// MaxSizeSSZ returns the maximum size of the type when SSZ-encoded.
+func (m *ErrorMessage) MaxSizeSSZ() int {
+	return maxErrorLength
+}
+
 // UnmarshalSSZ unmarshals the provided bytes buffer into the
 // error message object.
 func (m *ErrorMessage) UnmarshalSSZ(buf []byte) error {
@@ -140,6 +150,11 @@ var blobIdSize int
 // SizeSSZ returns the size of the serialized representation.
 func (b *BlobSidecarsByRootReq) SizeSSZ() int {
 	return len(*b) * blobIdSize
+}
+
+// MaxSizeSSZ returns the maximum size of the type when SSZ-encoded.
+func (b *BlobSidecarsByRootReq) MaxSizeSSZ() int {
+	return int(params.BeaconConfig().MaxRequestBlobSidecarsElectra) * blobIdSize
 }
 
 // MarshalSSZTo appends the serialized BlobSidecarsByRootReq value to the provided byte slice.
@@ -242,6 +257,11 @@ func (r *ExecutionPayloadEnvelopesByRootReq) MarshalSSZ() ([]byte, error) {
 // SizeSSZ returns the size of the serialized representation.
 func (r *ExecutionPayloadEnvelopesByRootReq) SizeSSZ() int {
 	return len(*r) * fieldparams.RootLength
+}
+
+// MaxSizeSSZ returns the maximum size of the type when SSZ-encoded.
+func (r *ExecutionPayloadEnvelopesByRootReq) MaxSizeSSZ() int {
+	return int(params.BeaconConfig().MaxRequestPayloads) * fieldparams.RootLength
 }
 
 // UnmarshalSSZ unmarshals the provided bytes buffer into the
@@ -389,6 +409,14 @@ func (d DataColumnsByRootIdentifiers) SizeSSZ() int {
 		size += (d)[i].SizeSSZ()
 	}
 	return size
+}
+
+// MaxSizeSSZ returns the maximum size of the type when SSZ-encoded.
+// Each identifier contributes its offset, a block root, the offset of its
+// column list, and at most NumberOfColumns column indices.
+func (d DataColumnsByRootIdentifiers) MaxSizeSSZ() int {
+	maxIdentifierSize := fieldparams.RootLength + bytesPerLengthOffset + fieldparams.NumberOfColumns*8
+	return int(params.BeaconConfig().MaxRequestBlocksDeneb) * (bytesPerLengthOffset + maxIdentifierSize)
 }
 
 func init() {

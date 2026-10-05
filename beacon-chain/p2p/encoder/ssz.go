@@ -107,18 +107,33 @@ func DecodeSnappy(msg []byte, maxSize uint64) ([]byte, error) {
 	return msg, nil
 }
 
+// MaxSizer is implemented by SSZ types that can report the maximum possible
+// size of their encoding. RPC message types implement it so that the length
+// prefix declared by a remote peer is validated against the expected type's
+// SSZ bounds before any payload buffer is allocated.
+type MaxSizer interface {
+	MaxSizeSSZ() int
+}
+
 // DecodeWithMaxLength the bytes from io.Reader to the protobuf message provided.
-// This checks that the decoded message isn't larger than the provided max limit.
+// Per the p2p spec, the declared length prefix must be within the size bounds of
+// the expected SSZ type or MaxPayloadSize, whichever is smaller.
 func (e SszNetworkEncoder) DecodeWithMaxLength(r io.Reader, to ssz.Unmarshaler) error {
 	msgLen, err := readVarint(r)
 	if err != nil {
 		return err
 	}
-	if msgLen > MaxPayloadSize {
+	maxLen := MaxPayloadSize
+	if sizer, ok := to.(MaxSizer); ok {
+		if typeMax := sizer.MaxSizeSSZ(); typeMax >= 0 && uint64(typeMax) < maxLen {
+			maxLen = uint64(typeMax)
+		}
+	}
+	if msgLen > maxLen {
 		return fmt.Errorf(
 			"remaining bytes %d goes over the provided max limit of %d",
 			msgLen,
-			MaxPayloadSize,
+			maxLen,
 		)
 	}
 	msgMax, err := e.MaxLength(msgLen)

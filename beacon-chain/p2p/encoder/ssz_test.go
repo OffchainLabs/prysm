@@ -17,6 +17,8 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/wrapper"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -646,6 +648,59 @@ func TestSszNetworkEncoder_DecodeWithMaxLength(t *testing.T) {
 	err = e.DecodeWithMaxLength(buf, decoded)
 	wanted := fmt.Sprintf("goes over the provided max limit of %d", maxPayloadSize)
 	assert.ErrorContains(t, wanted, err)
+}
+
+func TestSszNetworkEncoder_DecodeWithMaxLength_TypeBound(t *testing.T) {
+	e := &encoder.SszNetworkEncoder{}
+	params.SetupTestConfigCleanup(t)
+	encoder.MaxPayloadSize = params.BeaconConfig().MaxPayloadSize
+
+	// A length prefix above the type's maximum SSZ size is rejected even though
+	// it is within MaxPayloadSize. No payload bytes are written to the buffer:
+	// getting the limit error rather than an EOF proves the declared length is
+	// rejected before any payload is read.
+	buf := new(bytes.Buffer)
+	_, err := buf.Write(gogo.EncodeVarint(encoder.MaxPayloadSize))
+	require.NoError(t, err)
+	seq := new(primitives.SSZUint64)
+	err = e.DecodeWithMaxLength(buf, seq)
+	wanted := fmt.Sprintf("goes over the provided max limit of %d", seq.MaxSizeSSZ())
+	assert.ErrorContains(t, wanted, err)
+
+	// Same for a fixed-size proto message: one byte over its size is rejected.
+	buf.Reset()
+	st := new(ethpb.Status)
+	_, err = buf.Write(gogo.EncodeVarint(uint64(st.SizeSSZ() + 1)))
+	require.NoError(t, err)
+	err = e.DecodeWithMaxLength(buf, st)
+	wanted = fmt.Sprintf("goes over the provided max limit of %d", st.SizeSSZ())
+	assert.ErrorContains(t, wanted, err)
+
+	// Metadata responses use wrappers around the fixed-size proto messages.
+	for _, metadata := range []interface {
+		ssz.Unmarshaler
+		encoder.MaxSizer
+	}{
+		wrapper.WrappedMetadataV0(&ethpb.MetaDataV0{}),
+		wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}),
+		wrapper.WrappedMetadataV2(&ethpb.MetaDataV2{}),
+	} {
+		buf.Reset()
+		_, err = buf.Write(gogo.EncodeVarint(uint64(metadata.MaxSizeSSZ() + 1)))
+		require.NoError(t, err)
+		err = e.DecodeWithMaxLength(buf, metadata)
+		wanted = fmt.Sprintf("goes over the provided max limit of %d", metadata.MaxSizeSSZ())
+		assert.ErrorContains(t, wanted, err)
+	}
+
+	// A valid message for a bounded type still round-trips.
+	buf.Reset()
+	msg := primitives.SSZUint64(9001)
+	_, err = e.EncodeWithMaxLength(buf, &msg)
+	require.NoError(t, err)
+	decoded := new(primitives.SSZUint64)
+	require.NoError(t, e.DecodeWithMaxLength(buf, decoded))
+	assert.Equal(t, msg, *decoded)
 }
 
 func TestSszNetworkEncoder_DecodeWithMultipleFrames(t *testing.T) {
