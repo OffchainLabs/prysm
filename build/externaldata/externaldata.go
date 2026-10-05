@@ -153,7 +153,13 @@ func Names() []string {
 	return out
 }
 
-var onces sync.Map // name -> *sync.Once, so each archive is fetched at most once per process.
+type fetchCall struct {
+	once sync.Once
+	size int64
+	err  error
+}
+
+var onces sync.Map // name -> *fetchCall, so each archive is fetched at most once per process.
 
 // Fetch ensures the named archive is present in the test-data cache, downloading
 // and extracting it if needed.
@@ -168,14 +174,13 @@ func Fetch(name string) error {
 // fetchSized is Fetch plus the number of bytes downloaded (0 if the archive was
 // already cached), used by FetchAll to report totals.
 func fetchSized(name string) (int64, error) {
-	o, _ := onces.LoadOrStore(name, &sync.Once{})
-	var (
-		size int64
-		err  error
-	)
-
-	o.(*sync.Once).Do(func() { size, err = fetch(name) })
-	return size, err
+	call, _ := onces.LoadOrStore(name, &fetchCall{})
+	fc := call.(*fetchCall)
+	fc.once.Do(func() { fc.size, fc.err = fetch(name) })
+	if fc.err != nil {
+		onces.CompareAndDelete(name, fc)
+	}
+	return fc.size, fc.err
 }
 
 // FetchAll downloads every archive in the manifest (used by `make testdata`) and
