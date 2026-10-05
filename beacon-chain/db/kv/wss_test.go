@@ -225,3 +225,42 @@ func TestSaveOrigin_StateDiffNonEpochBoundarySlot(t *testing.T) {
 	require.NoError(t, err)
 	require.ErrorContains(t, "non epoch boundary offset", db.SaveOrigin(ctx, csb, cbb))
 }
+
+func TestSaveOrigin_NonBoundaryStateRoundsEpochUp(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.OverrideBeaconConfig(params.MainnetConfig())
+
+	ctx := t.Context()
+	db := setupDB(t)
+
+	// A state one slot before the boundary of epoch 2: its latest block is the checkpoint root
+	// for epoch 2, not epoch 1.
+	checkpointEpoch := primitives.Epoch(2)
+	boundarySlot, err := slots.EpochStart(checkpointEpoch)
+	require.NoError(t, err)
+
+	cst, err := util.NewBeaconState()
+	require.NoError(t, err)
+	require.NoError(t, cst.SetSlot(boundarySlot-1))
+
+	cb := util.NewBeaconBlock()
+	cb.Block.Slot = boundarySlot - 2
+	linkOriginBlock(t, cst, cb)
+	csb, err := cst.MarshalSSZ()
+	require.NoError(t, err)
+
+	scb, err := blocks.NewSignedBeaconBlock(cb)
+	require.NoError(t, err)
+	cbb, err := scb.MarshalSSZ()
+	require.NoError(t, err)
+
+	require.NoError(t, db.SaveOrigin(ctx, csb, cbb))
+
+	broot, err := scb.Block().HashTreeRoot()
+	require.NoError(t, err)
+
+	fcp, err := db.FinalizedCheckpoint(ctx)
+	require.NoError(t, err)
+	require.Equal(t, checkpointEpoch, fcp.Epoch)
+	require.DeepEqual(t, broot[:], fcp.Root)
+}

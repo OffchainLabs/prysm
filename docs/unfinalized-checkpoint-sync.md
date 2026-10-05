@@ -28,7 +28,9 @@ Pick an anchor epoch `E`. Two constraints apply:
   epoch, and peers reject a status message claiming finality more recent than
   that.
 - The state should sit on an epoch boundary slot, i.e. `E * SLOTS_PER_EPOCH`.
-  Prysm accepts an unaligned state but logs a warning.
+  Prysm accepts an unaligned state but logs a warning: it anchors at the next
+  epoch boundary, so if any block exists between the state's slot and that
+  boundary the node is syncing an invalid chain.
 
 Download the state at the start slot of `E`:
 

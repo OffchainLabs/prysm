@@ -105,7 +105,7 @@ func (s *Store) SaveOrigin(ctx context.Context, serState, serBlock []byte) error
 		return errors.Wrap(err, "save origin checkpoint block root")
 	}
 
-	// The origin is treated as finalized at the epoch of its state, not of its block.
+	// The origin block is the checkpoint root of the first epoch boundary at or after the state slot.
 	slotEpoch, err := state.Slot().SafeDivSlot(params.BeaconConfig().SlotsPerEpoch)
 	if err != nil {
 		return err
@@ -113,10 +113,11 @@ func (s *Store) SaveOrigin(ctx context.Context, serState, serBlock []byte) error
 	originEpoch := primitives.Epoch(slotEpoch)
 
 	if state.Slot()%params.BeaconConfig().SlotsPerEpoch != 0 {
+		originEpoch++
 		log.WithFields(logrus.Fields{
 			"slot":  state.Slot(),
 			"epoch": originEpoch,
-		}).Warn("Origin state is not at an epoch boundary")
+		}).Warn("Origin state is not at an epoch boundary.")
 	}
 
 	// The justified epoch stays truthful so imported blocks match forkchoice's voting source.
