@@ -33,6 +33,9 @@ participants:
   # checkpoint (served by the checkpointz additional service) instead of genesis.
   # Asserted by checkpoint-sync.yaml.
   - el_type: geth
+    # Full sync: geth snap sync fails on this short chain after a checkpoint-synced head.
+    el_extra_params:
+      - "--syncmode=full"
     cl_type: prysm
     cl_image: "gcr.io/offchainlabs/prysm/beacon-chain:latest"
     validator_count: 0
