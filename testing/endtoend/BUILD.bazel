@@ -297,10 +297,11 @@ go_test(
 go_test(
     name = "go_minimal_kurtosis_test",
     size = "large",
+    timeout = "eternal", # 3600s
     testonly = True,
     srcs = [
         "kurtosis_e2e_helper.go",
-        "kurtosis_e2e_test.go",
+        "minimal_kurtosis_e2e_test.go",
     ],
     args = ["-test.v"],
     data = [
