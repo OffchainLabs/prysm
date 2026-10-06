@@ -282,6 +282,15 @@ func TestValidateBuilderBid(t *testing.T) {
 		require.ErrorContains(t, "nil builder bid", vs.validateBuilderBid(head, nil, query, entry(1000)))
 	})
 
+	t.Run("block hash equal to parent block hash", func(t *testing.T) {
+		vs := &Server{NewExecutionPayloadBidVerifier: func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
+			return &fakeBidVerifier{}
+		}}
+		b := fullBid()
+		b.Message.BlockHash = parentHash[:]
+		require.ErrorContains(t, "bid block hash equals parent block hash", vs.validateBuilderBid(head, b, query, entry(1000)))
+	})
+
 	t.Run("payment above cap is accepted", func(t *testing.T) {
 		vs := &Server{NewExecutionPayloadBidVerifier: func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
 			return &fakeBidVerifier{}

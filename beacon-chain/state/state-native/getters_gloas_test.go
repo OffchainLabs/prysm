@@ -1118,6 +1118,30 @@ func TestPayloadCommitteeReadOnly(t *testing.T) {
 		require.Equal(t, primitives.ValidatorIndex(4), ptc[0]) // window[3] has marker 4
 	})
 
+	t.Run("rejects pre-gloas slot at the fork epoch", func(t *testing.T) {
+		st := &BeaconState{
+			version:   version.Gloas,
+			slot:      slotsPerEpoch * 2,
+			fork:      &ethpb.Fork{CurrentVersion: params.BeaconConfig().GloasForkVersion, Epoch: 2},
+			ptcWindow: testPTCWindow(t),
+		}
+		_, err := st.PayloadCommitteeReadOnly(slotsPerEpoch + 3)
+		require.ErrorContains(t, "precedes the gloas fork epoch", err)
+		_, err = st.PayloadCommitteeReadOnly(slotsPerEpoch * 2)
+		require.NoError(t, err)
+	})
+
+	t.Run("allows previous epoch once past the fork epoch", func(t *testing.T) {
+		st := &BeaconState{
+			version:   version.Gloas,
+			slot:      slotsPerEpoch * 2,
+			fork:      &ethpb.Fork{CurrentVersion: params.BeaconConfig().GloasForkVersion, Epoch: 1},
+			ptcWindow: testPTCWindow(t),
+		}
+		_, err := st.PayloadCommitteeReadOnly(slotsPerEpoch + 3)
+		require.NoError(t, err)
+	})
+
 	t.Run("error on nil ptc slot", func(t *testing.T) {
 		window := testPTCWindow(t)
 		window[slotsPerEpoch] = nil // nil out the first current-epoch slot

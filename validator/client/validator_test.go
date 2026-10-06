@@ -785,7 +785,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 						att := createAttestation(10, 12)
 						rt, err := att.Data.HashTreeRoot()
 						assert.NoError(t, err)
-						assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt, att))
+						assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt[:], att))
 						signedRoot := rt[:]
 						if isSlashingProtectionMinimal {
 							signedRoot = nil
@@ -820,7 +820,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 						att := createAttestation(10, 12)
 						rt, err := att.Data.HashTreeRoot()
 						assert.NoError(t, err)
-						assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt, att))
+						assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt[:], att))
 						if i%3 == 0 {
 							resp.Responses = append(resp.Responses, &ethpb.DoppelGangerResponse_ValidatorResponse{PublicKey: pkey[:], DuplicateExists: true})
 						}
@@ -861,7 +861,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 						att := createAttestation(10, 12)
 						rt, err := att.Data.HashTreeRoot()
 						assert.NoError(t, err)
-						assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt, att))
+						assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt[:], att))
 						if i%9 == 0 {
 							resp.Responses = append(resp.Responses, &ethpb.DoppelGangerResponse_ValidatorResponse{PublicKey: pkey[:], DuplicateExists: true})
 						}
@@ -902,7 +902,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 							att := createAttestation(10+primitives.Epoch(j), 12+primitives.Epoch(j))
 							rt, err := att.Data.HashTreeRoot()
 							assert.NoError(t, err)
-							assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt, att))
+							assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt[:], att))
 
 							signedRoot := rt[:]
 							if isSlashingProtectionMinimal {
@@ -982,13 +982,13 @@ func TestValidatorAttestationsAreOrdered(t *testing.T) {
 			att := createAttestation(10, 14)
 			rt, err := att.Data.HashTreeRoot()
 			assert.NoError(t, err)
-			assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), k, rt, att))
+			assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), k, rt[:], att))
 
 			att = createAttestation(6, 8)
 			rt, err = att.Data.HashTreeRoot()
 			assert.NoError(t, err)
 
-			err = db.SaveAttestationForPubKey(t.Context(), k, rt, att)
+			err = db.SaveAttestationForPubKey(t.Context(), k, rt[:], att)
 			if isSlashingProtectionMinimal {
 				assert.ErrorContains(t, "could not sign attestation with source lower than recorded source epoch", err)
 			} else {
@@ -999,7 +999,7 @@ func TestValidatorAttestationsAreOrdered(t *testing.T) {
 			rt, err = att.Data.HashTreeRoot()
 			assert.NoError(t, err)
 
-			err = db.SaveAttestationForPubKey(t.Context(), k, rt, att)
+			err = db.SaveAttestationForPubKey(t.Context(), k, rt[:], att)
 			if isSlashingProtectionMinimal {
 				assert.ErrorContains(t, "could not sign attestation with target lower than or equal to recorded target epoch", err)
 			} else {
@@ -1010,7 +1010,7 @@ func TestValidatorAttestationsAreOrdered(t *testing.T) {
 			rt, err = att.Data.HashTreeRoot()
 			assert.NoError(t, err)
 
-			err = db.SaveAttestationForPubKey(t.Context(), k, rt, att)
+			err = db.SaveAttestationForPubKey(t.Context(), k, rt[:], att)
 			if isSlashingProtectionMinimal {
 				assert.ErrorContains(t, "could not sign attestation with source lower than recorded source epoch", err)
 			} else {
@@ -4902,37 +4902,66 @@ func TestProcessEvent_HeadV2_PayloadStatus(t *testing.T) {
 func TestValidator_UpdateProposerSettings_Concurrency(t *testing.T) {
 	ctx := t.Context()
 	db := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false)
+	key := [fieldparams.BLSPubkeyLength]byte{1}
 	v := &validator{
 		db: db,
 		proposerSettings: &proposer.Settings{
 			Version: proposer.SchemaV1,
 			DefaultConfig: &proposer.Option{
-				BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 30_000_000},
+				BuilderConfig:  &proposer.BuilderConfig{Enabled: true, GasLimit: 30_000_000},
+				GraffitiConfig: &proposer.GraffitiConfig{Graffiti: "default"},
 			},
 		},
 	}
 
 	const writers = 16
-	errs := make(chan error, writers)
+	const readers = 4
+	errs := make(chan error, writers+readers)
+	start := make(chan struct{})
 	var wg sync.WaitGroup
 	for i := range writers {
-		key := [fieldparams.BLSPubkeyLength]byte{byte(i + 1)}
+		writerKey := [fieldparams.BLSPubkeyLength]byte{byte(i + 1)}
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
+			<-start
 			errs <- v.UpdateProposerSettings(ctx, func(ps *proposer.Settings) (*proposer.Settings, error) {
 				if ps == nil {
 					ps = &proposer.Settings{Version: proposer.SchemaV2}
 				}
-				ps.UpsertProposeOption(key).GasLimit = 1
+				ps.UpsertProposeOption(writerKey).GasLimit = 1
 				return ps, nil
 			})
 		}()
 		go func() {
 			defer wg.Done()
+			<-start
 			v.upgradeProposerSettingsToV2(ctx)
 		}()
 	}
+	for range readers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			for range 100 {
+				if v.ProposerSettings() == nil {
+					errs <- errors.New("proposer settings unexpectedly nil")
+					return
+				}
+				graffiti, err := v.Graffiti(ctx, key)
+				if err != nil {
+					errs <- err
+					return
+				}
+				if string(graffiti) != "default" {
+					errs <- fmt.Errorf("unexpected graffiti %q", graffiti)
+					return
+				}
+			}
+		}()
+	}
+	close(start)
 	wg.Wait()
 	close(errs)
 	for err := range errs {

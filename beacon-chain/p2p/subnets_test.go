@@ -537,7 +537,7 @@ func TestSubnetComputation(t *testing.T) {
 		retrievedSubnets, err := computeSubscribedSubnets(localNode.ID(), 1000)
 		require.NoError(t, err)
 		require.Equal(t, cfg.SubnetsPerNode, uint64(len(retrievedSubnets)))
-		require.Equal(t, retrievedSubnets[0]+1, retrievedSubnets[1])
+		require.Equal(t, (retrievedSubnets[0]+1)%cfg.AttestationSubnetCount, retrievedSubnets[1])
 	})
 
 	t.Run("subscribed to all", func(t *testing.T) {
