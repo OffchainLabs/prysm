@@ -2,6 +2,7 @@ package backfill
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
@@ -70,6 +71,26 @@ func (s *Store) status() *dbval.BackfillStatus {
 		OriginSlot:    s.bs.OriginSlot,
 		OriginRoot:    s.bs.OriginRoot,
 	}
+}
+
+// backfilledChild returns the lowest backfilled block when its parent is the given root, and nil otherwise.
+func (s *Store) backfilledChild(ctx context.Context, root [32]byte) (interfaces.ReadOnlyBeaconBlock, error) {
+	status := s.status()
+	if bytesutil.ToBytes32(status.LowParentRoot) != root {
+		return nil, nil
+	}
+
+	lowRoot := bytesutil.ToBytes32(status.LowRoot)
+	blk, err := s.store.Block(ctx, lowRoot)
+	if err != nil {
+		return nil, fmt.Errorf("block root=%#x: %w", lowRoot, err)
+	}
+
+	if err := blocks.BeaconBlockIsNil(blk); err != nil {
+		return nil, fmt.Errorf("block root=%#x: %w", lowRoot, err)
+	}
+
+	return blk.Block(), nil
 }
 
 // fillBack saves the slice of blocks and updates the BackfillStatus tracker to match the first block in the slice.

@@ -14,12 +14,14 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 )
 
 // Helper function to create a columnBatch for testing
@@ -40,6 +42,19 @@ func testToDownload(remaining peerdas.ColumnIndices, commitments [][]byte) *toDo
 
 // TestColumnBatchNeeded tests the needed() method of columnBatch
 func TestColumnBatchNeeded(t *testing.T) {
+	t.Run("undecided payload is not needed", func(t *testing.T) {
+		custodyGroups := peerdas.NewColumnIndicesFromSlice([]uint64{0, 1, 2})
+		undecided := testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0, 1}), nil)
+		undecided.undecidedPayload = true
+		toDownload := map[[32]byte]*toDownload{
+			[32]byte{0x01}: undecided,
+			[32]byte{0x02}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{2}), nil),
+		}
+
+		result := testColumnBatch(custodyGroups, toDownload).needed()
+		require.DeepEqual(t, []uint64{2}, result.ToSlice())
+	})
+
 	t.Run("empty batch conditions", func(t *testing.T) {
 		t.Run("empty batch returns empty indices", func(t *testing.T) {
 			custodyGroups := peerdas.NewColumnIndicesFromSlice([]uint64{0, 1, 2})
@@ -372,6 +387,23 @@ func TestBuildColumnBatch(t *testing.T) {
 		require.Equal(t, true, ok, "empty payload block should stay known")
 		require.Equal(t, true, td.emptyPayload)
 		require.Equal(t, 0, td.remaining.Count())
+		require.Equal(t, 0, cb.needed().Count())
+	})
+
+	t.Run("gloas last block payload is undecided", func(t *testing.T) {
+		p := p2ptest.NewTestP2P(t)
+		store := filesystem.NewEphemeralDataColumnStorage(t)
+
+		// The child of the last block is outside of the batch.
+		last := testGloasBlock(t, fuluSlot+1, [32]byte{}, [32]byte{'p'}, [32]byte{'l'}, 1)
+		cb, err := buildColumnBatch(t.Context(), fuluSlot+1, fuluSlot+2, verifiedROBlocks{last}, p, store, specNeeds)
+		require.NoError(t, err)
+		require.NotNil(t, cb)
+
+		td, ok := cb.toDownload[last.Root()]
+		require.Equal(t, true, ok)
+		require.Equal(t, true, td.undecidedPayload)
+		require.Equal(t, false, td.emptyPayload)
 		require.Equal(t, 0, cb.needed().Count())
 	})
 
@@ -1150,6 +1182,15 @@ func TestNeededSidecarsByColumn(t *testing.T) {
 			expectedCounts: map[uint64]int{},
 		},
 		{
+			name: "UndecidedPayloadNotCounted",
+			toDownload: map[[32]byte]*toDownload{
+				[32]byte{0x01}: {remaining: peerdas.NewColumnIndicesFromSlice([]uint64{0, 1}), undecidedPayload: true},
+				[32]byte{0x02}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{1}), nil),
+			},
+			peerHas:        peerdas.NewColumnIndicesFromSlice([]uint64{0, 1}),
+			expectedCounts: map[uint64]int{1: 1},
+		},
+		{
 			name: "EmptyPeer",
 			toDownload: map[[32]byte]*toDownload{
 				[32]byte{0x01}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0, 1}), nil),
@@ -1290,6 +1331,14 @@ func TestNeededSidecarCount(t *testing.T) {
 			name:       "EmptyBatch",
 			toDownload: make(map[[32]byte]*toDownload),
 			expected:   0,
+		},
+		{
+			name: "UndecidedPayloadNotCounted",
+			toDownload: map[[32]byte]*toDownload{
+				[32]byte{0x01}: {remaining: peerdas.NewColumnIndicesFromSlice([]uint64{0, 1}), undecidedPayload: true},
+				[32]byte{0x02}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{2}), nil),
+			},
+			expected: 1,
 		},
 		{
 			name: "SingleBlockEmpty",
@@ -1881,4 +1930,61 @@ func testBlockWithColumnSpan(t *testing.T, slot primitives.Slot, colSpan das.Nee
 		parent = blk.Root()
 	}
 	return res
+}
+
+func TestDecideLastPayload(t *testing.T) {
+	parentHash, lastHash := [32]byte{'p'}, [32]byte{'l'}
+	custody := peerdas.NewColumnIndicesFromSlice([]uint64{0, 1})
+
+	setup := func(t *testing.T) (*columnSync, blocks.ROBlock) {
+		last := testGloasBlock(t, 100, [32]byte{}, parentHash, lastHash, 1)
+		cs := &columnSync{columnBatch: testColumnBatch(custody, map[[32]byte]*toDownload{
+			last.Root(): {remaining: custody.Copy(), undecidedPayload: true},
+		})}
+		return cs, last
+	}
+	childOf := func(child interfaces.ReadOnlyBeaconBlock) childLookup {
+		return func(context.Context, [32]byte) (interfaces.ReadOnlyBeaconBlock, error) { return child, nil }
+	}
+
+	t.Run("unknown child keeps the payload undecided", func(t *testing.T) {
+		cs, last := setup(t)
+		require.NoError(t, cs.decideLastPayload(t.Context(), []blocks.ROBlock{last}, childOf(nil)))
+
+		td := cs.toDownload[last.Root()]
+		require.Equal(t, true, td.undecidedPayload)
+		require.Equal(t, 0, cs.needed().Count())
+	})
+
+	t.Run("child built on the payload makes it full", func(t *testing.T) {
+		cs, last := setup(t)
+		child := testGloasBlock(t, 101, last.Root(), lastHash, [32]byte{'c'}, 0)
+		require.NoError(t, cs.decideLastPayload(t.Context(), []blocks.ROBlock{last}, childOf(child.Block())))
+
+		td := cs.toDownload[last.Root()]
+		require.Equal(t, false, td.undecidedPayload)
+		require.Equal(t, false, td.emptyPayload)
+		require.DeepEqual(t, custody.ToMap(), cs.needed().ToMap())
+	})
+
+	t.Run("child not built on the payload makes it empty", func(t *testing.T) {
+		cs, last := setup(t)
+		child := testGloasBlock(t, 101, last.Root(), parentHash, [32]byte{'c'}, 0)
+		require.NoError(t, cs.decideLastPayload(t.Context(), []blocks.ROBlock{last}, childOf(child.Block())))
+
+		td := cs.toDownload[last.Root()]
+		require.Equal(t, false, td.undecidedPayload)
+		require.Equal(t, true, td.emptyPayload)
+		require.Equal(t, 0, td.remaining.Count())
+		require.Equal(t, true, cs.emptyPayloadRoots()[last.Root()])
+	})
+
+	t.Run("decided payload does not look up the child", func(t *testing.T) {
+		cs, last := setup(t)
+		cs.toDownload[last.Root()].undecidedPayload = false
+		failing := func(context.Context, [32]byte) (interfaces.ReadOnlyBeaconBlock, error) {
+			return nil, errors.New("unexpected child lookup")
+		}
+		require.NoError(t, cs.decideLastPayload(t.Context(), []blocks.ROBlock{last}, failing))
+	})
 }

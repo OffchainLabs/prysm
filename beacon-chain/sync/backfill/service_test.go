@@ -11,6 +11,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/proto/dbval"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -108,4 +110,55 @@ func testReadN(ctx context.Context, t *testing.T, c chan batch, n int, into []ba
 		}
 	}
 	return into
+}
+
+func TestDefaultBatchImporter(t *testing.T) {
+	_, fuluSlot := testDenebAndFuluSlots(t)
+	current := fuluSlot + 100
+	parentHash, lastHash := [32]byte{'p'}, [32]byte{'l'}
+
+	// setup returns a batch whose last block has blobs and an undecided payload, and a store
+	// whose lowest backfilled block is the child of that last block.
+	setup := func(t *testing.T, childParentHash [32]byte) (*Service, batch, *Store) {
+		last := testGloasBlock(t, fuluSlot+1, [32]byte{}, parentHash, lastHash, 1)
+		child := testGloasBlock(t, fuluSlot+2, last.Root(), childParentHash, [32]byte{'c'}, 0)
+		childRoot, lastRoot := child.Root(), last.Root()
+		su := &Store{
+			store: &mockBackfillDB{blocks: map[[32]byte]blocks.ROBlock{childRoot: child}},
+			bs: &dbval.BackfillStatus{
+				LowSlot:       uint64(child.Block().Slot()),
+				LowRoot:       childRoot[:],
+				LowParentRoot: lastRoot[:],
+			},
+		}
+
+		sn, err := das.NewSyncNeeds(func() primitives.Slot { return current }, nil, 0)
+		require.NoError(t, err)
+		p := p2ptest.NewTestP2P(t)
+		store := filesystem.NewEphemeralDataColumnStorage(t)
+		blks := []blocks.ROBlock{last}
+		cb, err := buildColumnBatch(t.Context(), last.Block().Slot(), child.Block().Slot(), blks, p, store, sn.Currently())
+		require.NoError(t, err)
+		require.Equal(t, true, cb.toDownload[lastRoot].undecidedPayload)
+
+		retain := func(primitives.Slot) bool { return true }
+		colStore := das.NewLazilyPersistentStoreColumn(store, nil, p.NodeID(), params.BeaconConfig().CustodyRequirement, nil, retain)
+		b := batch{blocks: blks, columns: &columnSync{columnBatch: cb, store: colStore}}
+		return &Service{syncNeeds: sn}, b, su
+	}
+
+	t.Run("empty payload of the last block is imported without columns", func(t *testing.T) {
+		s, b, su := setup(t, parentHash)
+		status, err := s.defaultBatchImporter(t.Context(), current, b, su)
+		require.NoError(t, err)
+		lastRoot := b.blocks[0].Root()
+		require.DeepEqual(t, lastRoot[:], status.LowRoot)
+	})
+
+	t.Run("full payload of the last block requires columns", func(t *testing.T) {
+		s, b, su := setup(t, lastHash)
+		_, err := s.defaultBatchImporter(t.Context(), current, b, su)
+		require.ErrorContains(t, "no sidecar in cache for block commitment", err)
+		require.Equal(t, false, b.columns.toDownload[b.blocks[0].Root()].undecidedPayload)
+	})
 }

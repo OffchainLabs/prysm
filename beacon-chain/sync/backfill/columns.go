@@ -41,11 +41,12 @@ type columnBatch struct {
 }
 
 type toDownload struct {
-	remaining      peerdas.ColumnIndices
-	commitments    [][]byte
-	slot           primitives.Slot
-	blockSignature [fieldparams.BLSSignatureLength]byte
-	emptyPayload   bool // On Gloas, true when the payload of the block was never revealed. False in all other cases.
+	remaining        peerdas.ColumnIndices
+	commitments      [][]byte
+	slot             primitives.Slot
+	blockSignature   [fieldparams.BLSSignatureLength]byte
+	emptyPayload     bool // On Gloas, true when the payload of the block was never revealed. False in all other cases.
+	undecidedPayload bool // On Gloas, true while the child of the block is unknown, so it is not yet known whether its payload was revealed.
 }
 
 func (cs *columnBatch) needed() peerdas.ColumnIndices {
@@ -56,6 +57,11 @@ func (cs *columnBatch) needed() peerdas.ColumnIndices {
 		if len(search) == 0 {
 			return ci
 		}
+
+		if v.undecidedPayload {
+			continue
+		}
+
 		for col := range search {
 			if v.remaining.Has(col) {
 				ci.Set(col)
@@ -85,6 +91,10 @@ func (cs *columnBatch) pruneExpired(needs das.CurrentNeeds, pruned map[[32]byte]
 func (cs *columnBatch) neededSidecarCount() int {
 	count := 0
 	for _, v := range cs.toDownload {
+		if v.undecidedPayload {
+			continue
+		}
+
 		count += v.remaining.Count()
 	}
 	return count
@@ -94,6 +104,10 @@ func (cs *columnBatch) neededSidecarCount() int {
 func (cs *columnBatch) neededSidecarsByColumn(peerHas peerdas.ColumnIndices) map[uint64]int {
 	need := make(map[uint64]int, len(peerHas))
 	for _, v := range cs.toDownload {
+		if v.undecidedPayload {
+			continue
+		}
+
 		for idx := range v.remaining {
 			if peerHas.Has(idx) {
 				need[idx]++
@@ -129,12 +143,55 @@ func newColumnSync(ctx context.Context, begin, end primitives.Slot, blks verifie
 	}
 
 	bisector := newColumnBisector(cfg.downscore)
-	return &columnSync{
+	cs := &columnSync{
 		columnBatch: cb,
 		current:     current,
 		store:       das.NewLazilyPersistentStoreColumn(cfg.colStore, cfg.newVC, p.NodeID(), cgc, bisector, shouldRetain),
 		bisector:    bisector,
-	}, nil
+	}
+
+	if cfg.backfilledChild != nil {
+		if err := cs.decideLastPayload(ctx, blks, cfg.backfilledChild); err != nil {
+			return nil, fmt.Errorf("decide last payload: %w", err)
+		}
+	}
+	return cs, nil
+}
+
+// decideLastPayload decides whether the payload of the last block is empty, when `childOf` knows its child.
+// The child of the last block is not in the batch, so it is only known once the batch above it is imported.
+func (cs *columnSync) decideLastPayload(ctx context.Context, blks []blocks.ROBlock, childOf childLookup) error {
+	if cs.columnBatch == nil || len(blks) == 0 {
+		return nil
+	}
+
+	last := blks[len(blks)-1]
+	td := cs.toDownload[last.Root()]
+	if td == nil || !td.undecidedPayload {
+		return nil
+	}
+
+	child, err := childOf(ctx, last.Root())
+	if err != nil {
+		return errors.Wrap(err, "child of last block")
+	}
+
+	if child == nil {
+		return nil
+	}
+
+	full, err := blocks.BlockBuiltOnParentPayload(last.Block(), child)
+	if err != nil {
+		return errors.Wrap(err, "block built on parent payload")
+	}
+
+	td.undecidedPayload = false
+	if !full {
+		td.emptyPayload = true
+		td.remaining = peerdas.ColumnIndices{}
+	}
+
+	return nil
 }
 
 // emptyPayloadRoots returns the roots of the blocks whose payload is empty.
@@ -315,8 +372,13 @@ func buildColumnBatch(ctx context.Context, begin, end primitives.Slot, blks veri
 			continue
 		}
 		// Adjacent blocks are parent linked by verify, so the direct child is at i+1 when present.
+		isGloas := b.Block().Version() >= version.Gloas
+		hasChild := i+1 < len(blks)
+
+		// The child of the last block is outside of the batch.
+		undecided := isGloas && !hasChild
 		full := true
-		if b.Block().Version() >= version.Gloas && i+1 < len(blks) {
+		if isGloas && hasChild {
 			full, err = blocks.BlockBuiltOnParentPayload(b.Block(), blks[i+1].Block())
 			if err != nil {
 				return nil, errors.Wrap(err, "block built on parent payload")
@@ -337,11 +399,12 @@ func buildColumnBatch(ctx context.Context, begin, end primitives.Slot, blks veri
 		}
 		summary.last = slot
 		summary.toDownload[b.Root()] = &toDownload{
-			remaining:      remaining,
-			commitments:    cmts,
-			slot:           slot,
-			blockSignature: b.Signature(),
-			emptyPayload:   !full,
+			remaining:        remaining,
+			commitments:      cmts,
+			slot:             slot,
+			blockSignature:   b.Signature(),
+			emptyPayload:     !full,
+			undecidedPayload: undecided,
 		}
 	}
 

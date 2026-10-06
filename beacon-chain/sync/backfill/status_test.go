@@ -253,3 +253,36 @@ func TestNewUpdater(t *testing.T) {
 	}
 
 }
+
+func TestBackfilledChild(t *testing.T) {
+	child := testGloasBlock(t, 101, [32]byte{'p'}, [32]byte{}, [32]byte{}, 0)
+	parentRoot := child.Block().ParentRoot()
+	childRoot := child.Root()
+	newStore := func(blks map[[32]byte]blocks.ROBlock) *Store {
+		return &Store{
+			store: &mockBackfillDB{blocks: blks},
+			bs:    &dbval.BackfillStatus{LowRoot: childRoot[:], LowParentRoot: parentRoot[:]},
+		}
+	}
+
+	t.Run("parent of the lowest backfilled block", func(t *testing.T) {
+		s := newStore(map[[32]byte]blocks.ROBlock{childRoot: child})
+		got, err := s.backfilledChild(t.Context(), parentRoot)
+		require.NoError(t, err)
+		require.NotNil(t, got)
+		require.Equal(t, child.Block().Slot(), got.Slot())
+	})
+
+	t.Run("other root", func(t *testing.T) {
+		s := newStore(map[[32]byte]blocks.ROBlock{childRoot: child})
+		got, err := s.backfilledChild(t.Context(), [32]byte{'x'})
+		require.NoError(t, err)
+		require.Equal(t, true, got == nil)
+	})
+
+	t.Run("lowest backfilled block missing from the db", func(t *testing.T) {
+		s := newStore(nil)
+		_, err := s.backfilledChild(t.Context(), parentRoot)
+		require.ErrorIs(t, err, db.ErrNotFound)
+	})
+}

@@ -227,6 +227,13 @@ func (s *Service) defaultBatchImporter(ctx context.Context, current primitives.S
 	// Other parts of the beacon node may use the same StatusUpdater instance
 	// via the coverage.AvailableBlocker interface to safely determine if a given slot has been backfilled.
 
+	// The batch above is now imported, so the child of the last block is known.
+	if b.columns != nil {
+		if err := b.columns.decideLastPayload(ctx, b.blocks, su.backfilledChild); err != nil {
+			return status, fmt.Errorf("decide last payload: %w", err)
+		}
+	}
+
 	checker := newCheckMultiplexer(s.syncNeeds.Currently(), b)
 	return su.fillBack(ctx, current, b.blocks, checker)
 }
@@ -308,11 +315,12 @@ func (s *Service) Start() {
 
 	if s.workerCfg == nil {
 		s.workerCfg = &workerCfg{
-			clock:        s.clock,
-			blobStore:    s.blobStore,
-			colStore:     s.dcStore,
-			downscore:    s.downscorePeer,
-			currentNeeds: s.syncNeeds.Currently,
+			clock:           s.clock,
+			blobStore:       s.blobStore,
+			colStore:        s.dcStore,
+			downscore:       s.downscorePeer,
+			currentNeeds:    s.syncNeeds.Currently,
+			backfilledChild: s.store.backfilledChild,
 		}
 
 		if err = initWorkerCfg(ctx, s.workerCfg, s.verifierWaiter, s.store); err != nil {
