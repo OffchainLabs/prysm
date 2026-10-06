@@ -359,6 +359,40 @@ func TestBuildColumnBatch(t *testing.T) {
 		nilIshColumnBatch(t, cb)
 	})
 
+	t.Run("gloas empty payload needs no columns", func(t *testing.T) {
+		p := p2ptest.NewTestP2P(t)
+		store := filesystem.NewEphemeralDataColumnStorage(t)
+
+		blks := testGloasEmptyPayloadBlocks(t, fuluSlot+1)
+		cb, err := buildColumnBatch(t.Context(), fuluSlot+1, fuluSlot+3, blks, p, store, specNeeds)
+		require.NoError(t, err)
+		require.NotNil(t, cb)
+
+		td, ok := cb.toDownload[blks[0].Root()]
+		require.Equal(t, true, ok, "empty payload block should stay known")
+		require.Equal(t, true, td.emptyPayload)
+		require.Equal(t, 0, td.remaining.Count())
+		require.Equal(t, 0, cb.needed().Count())
+	})
+
+	t.Run("gloas full payload needs columns", func(t *testing.T) {
+		p := p2ptest.NewTestP2P(t)
+		store := filesystem.NewEphemeralDataColumnStorage(t)
+
+		parentHash, fullHash := [32]byte{'p'}, [32]byte{'f'}
+		full := testGloasBlock(t, fuluSlot+1, [32]byte{}, parentHash, fullHash, 1)
+		// The child builds on the payload of `full`.
+		child := testGloasBlock(t, fuluSlot+2, full.Root(), fullHash, [32]byte{'c'}, 0)
+		cb, err := buildColumnBatch(t.Context(), fuluSlot+1, fuluSlot+3, verifiedROBlocks{full, child}, p, store, specNeeds)
+		require.NoError(t, err)
+		require.NotNil(t, cb)
+
+		td, ok := cb.toDownload[full.Root()]
+		require.Equal(t, true, ok)
+		require.Equal(t, false, td.emptyPayload)
+		require.Equal(t, cb.custodyGroups.Count(), td.remaining.Count())
+	})
+
 	t.Run("pre-Fulu batch end returns nil", func(t *testing.T) {
 		ctx := context.Background()
 		p := p2ptest.NewTestP2P(t)

@@ -45,6 +45,7 @@ type toDownload struct {
 	commitments    [][]byte
 	slot           primitives.Slot
 	blockSignature [fieldparams.BLSSignatureLength]byte
+	emptyPayload   bool // On Gloas, true when the payload of the block was never revealed. False in all other cases.
 }
 
 func (cs *columnBatch) needed() peerdas.ColumnIndices {
@@ -134,6 +135,21 @@ func newColumnSync(ctx context.Context, begin, end primitives.Slot, blks verifie
 		store:       das.NewLazilyPersistentStoreColumn(cfg.colStore, cfg.newVC, p.NodeID(), cgc, bisector, shouldRetain),
 		bisector:    bisector,
 	}, nil
+}
+
+// emptyPayloadRoots returns the roots of the blocks whose payload is empty.
+func (cs *columnSync) emptyPayloadRoots() map[[32]byte]bool {
+	empty := make(map[[32]byte]bool)
+	if cs.columnBatch == nil {
+		return empty
+	}
+
+	for root, td := range cs.columnBatch.toDownload {
+		if td.emptyPayload {
+			empty[root] = true
+		}
+	}
+	return empty
 }
 
 func (cs *columnSync) blockColumns(root [32]byte) *toDownload {
@@ -325,6 +341,7 @@ func buildColumnBatch(ctx context.Context, begin, end primitives.Slot, blks veri
 			commitments:    cmts,
 			slot:           slot,
 			blockSignature: b.Signature(),
+			emptyPayload:   !full,
 		}
 	}
 
