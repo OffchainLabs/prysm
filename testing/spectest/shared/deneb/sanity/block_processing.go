@@ -21,7 +21,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/golang/snappy"
-	"google.golang.org/protobuf/proto"
 )
 
 func init() {
@@ -97,9 +96,7 @@ func RunBlockProcessingTest(t *testing.T, config, folderPath string) {
 				require.NoError(t, postBeaconState.UnmarshalSSZ(postBeaconStateSSZ), "Failed to unmarshal")
 				pbState, err := state_native.ProtobufBeaconStateDeneb(beaconState.ToProtoUnsafe())
 				require.NoError(t, err)
-				if !proto.Equal(pbState, postBeaconState) {
-					t.Fatal("Post state does not match expected")
-				}
+				require.DeepSSZEqual(t, pbState, postBeaconState, "Post state does not match expected")
 			} else {
 				// Note: This doesn't test anything worthwhile. It essentially tests
 				// that *any* error has occurred, not any specific error.

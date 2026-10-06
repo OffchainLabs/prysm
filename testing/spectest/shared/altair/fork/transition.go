@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/golang/snappy"
-	"google.golang.org/protobuf/proto"
 )
 
 func init() {
@@ -127,9 +126,7 @@ func RunForkTransitionTest(t *testing.T, config string) {
 
 			pbState, err := state_native.ProtobufBeaconStateAltair(beaconState.ToProto())
 			require.NoError(t, err)
-			if !proto.Equal(pbState, postBeaconState) {
-				t.Fatal("Post state does not match expected")
-			}
+			require.DeepSSZEqual(t, postBeaconState, pbState, "Post state does not match expected")
 		})
 	}
 }

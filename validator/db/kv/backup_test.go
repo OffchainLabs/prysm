@@ -63,8 +63,8 @@ func TestStore_NestedBackup(t *testing.T) {
 		Signature: make([]byte, 96),
 	}
 	require.NoError(t, db.SaveGenesisValidatorsRoot(ctx, root[:]))
-	require.NoError(t, db.SaveAttestationForPubKey(t.Context(), keys[0], [32]byte{'C'}, idxAtt))
-	require.NoError(t, db.SaveAttestationForPubKey(t.Context(), keys[1], [32]byte{'C'}, idxAtt))
+	require.NoError(t, db.SaveAttestationForPubKey(t.Context(), keys[0], []byte{'C'}, idxAtt))
+	require.NoError(t, db.SaveAttestationForPubKey(t.Context(), keys[1], []byte{'C'}, idxAtt))
 	require.NoError(t, db.Backup(ctx, "", true))
 
 	backupsPath := filepath.Join(db.databasePath, backupsDirectoryName)

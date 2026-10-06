@@ -24,7 +24,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"google.golang.org/protobuf/proto"
 )
 
 type envelopeLookupDB struct {
@@ -356,28 +355,26 @@ func TestLoadBlocks_FirstBranch(t *testing.T) {
 		beaconDB: beaconDB,
 	}
 
-	roots, savedBlocks, err := tree1(t, beaconDB, bytesutil.PadTo([]byte{'A'}, 32))
+	roots, _, err := tree1(t, beaconDB, bytesutil.PadTo([]byte{'A'}, 32))
 	require.NoError(t, err)
 
 	filteredBlocks, err := s.loadBlocks(ctx, 0, 8, roots[len(roots)-1])
 	require.NoError(t, err)
 
-	wanted := []*ethpb.SignedBeaconBlock{
-		savedBlocks[0],
-		savedBlocks[1],
-		savedBlocks[2],
-		savedBlocks[4],
-		savedBlocks[6],
-		savedBlocks[8],
+	wanted := [][32]byte{
+		roots[0],
+		roots[1],
+		roots[2],
+		roots[4],
+		roots[6],
+		roots[8],
 	}
 	require.Equal(t, len(wanted), len(filteredBlocks))
 
-	for i, block := range wanted {
-		filteredBlocksPb, err := filteredBlocks[i].Proto()
+	for i, root := range wanted {
+		got, err := filteredBlocks[i].Block().HashTreeRoot()
 		require.NoError(t, err)
-		if !proto.Equal(block, filteredBlocksPb) {
-			t.Error("Did not get wanted blocks")
-		}
+		require.Equal(t, root, got, "Did not get wanted blocks")
 	}
 }
 
@@ -388,25 +385,23 @@ func TestLoadBlocks_SecondBranch(t *testing.T) {
 		beaconDB: beaconDB,
 	}
 
-	roots, savedBlocks, err := tree1(t, beaconDB, bytesutil.PadTo([]byte{'A'}, 32))
+	roots, _, err := tree1(t, beaconDB, bytesutil.PadTo([]byte{'A'}, 32))
 	require.NoError(t, err)
 
 	filteredBlocks, err := s.loadBlocks(ctx, 0, 5, roots[5])
 	require.NoError(t, err)
 
-	wanted := []*ethpb.SignedBeaconBlock{
-		savedBlocks[0],
-		savedBlocks[1],
-		savedBlocks[3],
-		savedBlocks[5],
+	wanted := [][32]byte{
+		roots[0],
+		roots[1],
+		roots[3],
+		roots[5],
 	}
 
-	for i, block := range wanted {
-		filteredBlocksPb, err := filteredBlocks[i].Proto()
+	for i, root := range wanted {
+		got, err := filteredBlocks[i].Block().HashTreeRoot()
 		require.NoError(t, err)
-		if !proto.Equal(block, filteredBlocksPb) {
-			t.Error("Did not get wanted blocks")
-		}
+		require.Equal(t, root, got, "Did not get wanted blocks")
 	}
 }
 
@@ -417,29 +412,27 @@ func TestLoadBlocks_ThirdBranch(t *testing.T) {
 		beaconDB: beaconDB,
 	}
 
-	roots, savedBlocks, err := tree1(t, beaconDB, bytesutil.PadTo([]byte{'A'}, 32))
+	roots, _, err := tree1(t, beaconDB, bytesutil.PadTo([]byte{'A'}, 32))
 	require.NoError(t, err)
 
 	filteredBlocks, err := s.loadBlocks(ctx, 0, 7, roots[7])
 	require.NoError(t, err)
 
-	wanted := []*ethpb.SignedBeaconBlock{
-		savedBlocks[0],
-		savedBlocks[1],
-		savedBlocks[2],
-		savedBlocks[4],
-		savedBlocks[6],
-		savedBlocks[7],
+	wanted := [][32]byte{
+		roots[0],
+		roots[1],
+		roots[2],
+		roots[4],
+		roots[6],
+		roots[7],
 	}
 
 	require.Equal(t, len(wanted), len(filteredBlocks))
 
-	for i, block := range wanted {
-		filteredBlocksPb, err := filteredBlocks[i].Proto()
+	for i, root := range wanted {
+		got, err := filteredBlocks[i].Block().HashTreeRoot()
 		require.NoError(t, err)
-		if !proto.Equal(block, filteredBlocksPb) {
-			t.Error("Did not get wanted blocks")
-		}
+		require.Equal(t, root, got, "Did not get wanted blocks")
 	}
 }
 
@@ -450,26 +443,24 @@ func TestLoadBlocks_SameSlots(t *testing.T) {
 		beaconDB: beaconDB,
 	}
 
-	roots, savedBlocks, err := tree2(t, beaconDB, bytesutil.PadTo([]byte{'A'}, 32))
+	roots, _, err := tree2(t, beaconDB, bytesutil.PadTo([]byte{'A'}, 32))
 	require.NoError(t, err)
 
 	filteredBlocks, err := s.loadBlocks(ctx, 0, 3, roots[6])
 	require.NoError(t, err)
 
-	wanted := []*ethpb.SignedBeaconBlock{
-		savedBlocks[0],
-		savedBlocks[1],
-		savedBlocks[5],
-		savedBlocks[6],
+	wanted := [][32]byte{
+		roots[0],
+		roots[1],
+		roots[5],
+		roots[6],
 	}
 	require.Equal(t, len(wanted), len(filteredBlocks))
 
-	for i, block := range wanted {
-		filteredBlocksPb, err := filteredBlocks[i].Proto()
+	for i, root := range wanted {
+		got, err := filteredBlocks[i].Block().HashTreeRoot()
 		require.NoError(t, err)
-		if !proto.Equal(block, filteredBlocksPb) {
-			t.Error("Did not get wanted blocks")
-		}
+		require.Equal(t, root, got, "Did not get wanted blocks")
 	}
 }
 
@@ -480,25 +471,23 @@ func TestLoadBlocks_SameEndSlots(t *testing.T) {
 		beaconDB: beaconDB,
 	}
 
-	roots, savedBlocks, err := tree3(t, beaconDB, bytesutil.PadTo([]byte{'A'}, 32))
+	roots, _, err := tree3(t, beaconDB, bytesutil.PadTo([]byte{'A'}, 32))
 	require.NoError(t, err)
 
 	filteredBlocks, err := s.loadBlocks(ctx, 0, 2, roots[2])
 	require.NoError(t, err)
 
-	wanted := []*ethpb.SignedBeaconBlock{
-		savedBlocks[0],
-		savedBlocks[1],
-		savedBlocks[2],
+	wanted := [][32]byte{
+		roots[0],
+		roots[1],
+		roots[2],
 	}
 	require.Equal(t, len(wanted), len(filteredBlocks))
 
-	for i, block := range wanted {
-		filteredBlocksPb, err := filteredBlocks[i].Proto()
+	for i, root := range wanted {
+		got, err := filteredBlocks[i].Block().HashTreeRoot()
 		require.NoError(t, err)
-		if !proto.Equal(block, filteredBlocksPb) {
-			t.Error("Did not get wanted blocks")
-		}
+		require.Equal(t, root, got, "Did not get wanted blocks")
 	}
 }
 
@@ -509,24 +498,22 @@ func TestLoadBlocks_SameEndSlotsWith2blocks(t *testing.T) {
 		beaconDB: beaconDB,
 	}
 
-	roots, savedBlocks, err := tree4(t, beaconDB, bytesutil.PadTo([]byte{'A'}, 32))
+	roots, _, err := tree4(t, beaconDB, bytesutil.PadTo([]byte{'A'}, 32))
 	require.NoError(t, err)
 
 	filteredBlocks, err := s.loadBlocks(ctx, 0, 2, roots[1])
 	require.NoError(t, err)
 
-	wanted := []*ethpb.SignedBeaconBlock{
-		savedBlocks[0],
-		savedBlocks[1],
+	wanted := [][32]byte{
+		roots[0],
+		roots[1],
 	}
 	require.Equal(t, len(wanted), len(filteredBlocks))
 
-	for i, block := range wanted {
-		filteredBlocksPb, err := filteredBlocks[i].Proto()
+	for i, root := range wanted {
+		got, err := filteredBlocks[i].Block().HashTreeRoot()
 		require.NoError(t, err)
-		if !proto.Equal(block, filteredBlocksPb) {
-			t.Error("Did not get wanted blocks")
-		}
+		require.Equal(t, root, got, "Did not get wanted blocks")
 	}
 }
 

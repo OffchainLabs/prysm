@@ -95,10 +95,18 @@ func attestationIndexFor(head iface.Head) (uint64, bool) {
 //   - WithRace: query every node concurrently.
 //   - WithAccept: among those responses, prefer the one matches reports as the
 //     announced head.
-//   - WithDeadline: bound the read by the hint deadline (floored by
-//     readFreshnessBudget so a lagging node still gets time to catch up).
+//   - WithFallbackDeadline: if a node has returned a usable but not accepted
+//     response, stop waiting for an accepted one at the hint deadline (floored
+//     by readFreshnessBudget so a lagging node still gets time to catch up),
+//     and use the usable response. Without any usable response, it has no
+//     effect: WithDeadline bounds the read.
+//   - WithDeadline: if no node has returned an accepted or usable response by
+//     the hint deadline, keep waiting for one until the caller's context
+//     deadline. Without a context deadline, the hint deadline bounds the read
+//     instead. An accepted response always ends the read immediately.
 //   - WithRepoll (UntilAccepted): keep re-polling every node until one
-//     reports the announced head or the deadline fires.
+//     reports the announced head, or until the fallback deadline (with a usable
+//     response in hand) or the deadline (without one) fires.
 func readFreshnessOptions(ctx context.Context, matches func(json.RawMessage, iface.Head) bool) []rest.QueryOption {
 	hint, ok := freshnessHint(ctx)
 	if !ok {
@@ -123,16 +131,25 @@ func readFreshnessOptions(ctx context.Context, matches func(json.RawMessage, ifa
 		return opts
 	}
 
-	deadline := hint.Deadline
-	if floor := time.Now().Add(readFreshnessBudget); deadline.Before(floor) {
-		deadline = floor
+	freshness := hint.Deadline
+	if floor := time.Now().Add(readFreshnessBudget); freshness.Before(floor) {
+		freshness = floor
 	}
 
 	// Keep re-polling every node until one reports the announced head or the
-	// deadline fires.
-	opts = append(opts, rest.WithDeadline(deadline), rest.WithRepoll(rest.UntilAccepted))
+	// freshness deadline fires.
+	opts = append(opts, rest.WithRepoll(rest.UntilAccepted))
 
-	return opts
+	// Without a caller deadline to wait on, the freshness deadline bounds the read.
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return append(opts, rest.WithDeadline(freshness))
+	}
+
+	// Past the freshness deadline, use the best response in hand, but keep waiting
+	// up to the caller's deadline if no node has answered yet: a slow answer beats
+	// no answer at all.
+	return append(opts, rest.WithDeadline(deadline), rest.WithFallbackDeadline(freshness))
 }
 
 // blockFreshnessOptions builds the read options that steer an SSZ block read
