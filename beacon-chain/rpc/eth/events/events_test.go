@@ -437,6 +437,57 @@ func TestStreamEvents_ProposerPreferencesWrappedWithVersion(t *testing.T) {
 	require.Equal(t, "7", got.Data.Message.ValidatorIndex)
 }
 
+func TestStreamEvents_BlockEventBuilderBid(t *testing.T) {
+	blockEvent := func(t *testing.T, b interfaces.ReadOnlySignedBeaconBlock) map[string]any {
+		s := &Server{}
+		topics, err := newTopicRequest([]string{BlockTopic})
+		require.NoError(t, err)
+		ev := &feed.Event{
+			Type: statefeed.BlockProcessed,
+			Data: &statefeed.BlockProcessedData{Slot: 10, SignedBlock: b},
+		}
+		lr, err := s.lazyReaderForEvent(t.Context(), ev, topics)
+		require.NoError(t, err)
+		out, err := io.ReadAll(lr())
+		require.NoError(t, err)
+		_, payload, found := strings.Cut(string(out), "data: ")
+		require.Equal(t, true, found)
+		var got map[string]any
+		require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(payload)), &got))
+		require.Equal(t, "10", got["slot"])
+		return got
+	}
+	gloasBlock := func(t *testing.T, builderIndex primitives.BuilderIndex, blockHash []byte) interfaces.ReadOnlySignedBeaconBlock {
+		sb := util.HydrateSignedBeaconBlockGloas(&eth.SignedBeaconBlockGloas{})
+		sb.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex = builderIndex
+		sb.Block.Body.SignedExecutionPayloadBid.Message.BlockHash = blockHash
+		b, err := blocks.NewSignedBeaconBlock(sb)
+		require.NoError(t, err)
+		return b
+	}
+
+	t.Run("pre-gloas omits builder fields", func(t *testing.T) {
+		b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockFulu(&eth.SignedBeaconBlockFulu{}))
+		require.NoError(t, err)
+		got := blockEvent(t, b)
+		_, ok := got["builder_index"]
+		require.Equal(t, false, ok)
+		_, ok = got["block_hash"]
+		require.Equal(t, false, ok)
+	})
+	t.Run("gloas includes builder fields", func(t *testing.T) {
+		hash := bytesutil.PadTo([]byte{0x76, 0x26}, fieldparams.RootLength)
+		got := blockEvent(t, gloasBlock(t, 42, hash))
+		require.Equal(t, "42", got["builder_index"])
+		require.Equal(t, fmt.Sprintf("%#x", hash), got["block_hash"])
+	})
+	t.Run("gloas self-build", func(t *testing.T) {
+		got := blockEvent(t, gloasBlock(t, params.BeaconConfig().BuilderIndexSelfBuild, make([]byte, fieldparams.RootLength)))
+		require.Equal(t, "18446744073709551615", got["builder_index"])
+		require.Equal(t, fmt.Sprintf("%#x", make([]byte, fieldparams.RootLength)), got["block_hash"])
+	})
+}
+
 func TestStreamEvents_GloasAttestation(t *testing.T) {
 	s := &Server{}
 	topics, err := newTopicRequest([]string{AttestationTopic})

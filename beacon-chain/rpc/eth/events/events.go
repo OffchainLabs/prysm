@@ -693,12 +693,23 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute block root for BlockProcessedData state feed event")
 		}
-		return func() io.Reader {
-			blk := &structs.BlockEvent{
-				Slot:                fmt.Sprintf("%d", v.Slot),
-				Block:               hexutil.Encode(blockRoot[:]),
-				ExecutionOptimistic: v.Optimistic,
+		blk := &structs.BlockEvent{
+			Slot:                fmt.Sprintf("%d", v.Slot),
+			Block:               hexutil.Encode(blockRoot[:]),
+			ExecutionOptimistic: v.Optimistic,
+		}
+		if v.SignedBlock.Version() >= version.Gloas {
+			bid, err := v.SignedBlock.Block().Body().SignedExecutionPayloadBid()
+			if err != nil {
+				return nil, errors.Wrap(err, "could not get execution payload bid for BlockProcessedData state feed event")
 			}
+			if bid == nil || bid.Message == nil {
+				return nil, errors.New("nil execution payload bid in BlockProcessedData state feed event")
+			}
+			blk.BuilderIndex = fmt.Sprintf("%d", bid.Message.BuilderIndex)
+			blk.BlockHash = hexutil.Encode(bid.Message.BlockHash)
+		}
+		return func() io.Reader {
 			return jsonMarshalReader(eventName, blk)
 		}, nil
 	case *operation.PayloadAttestationMessageReceivedData:

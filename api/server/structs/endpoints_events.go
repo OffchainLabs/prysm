@@ -35,6 +35,8 @@ type BlockEvent struct {
 	Slot                string `json:"slot"`
 	Block               string `json:"block"`
 	ExecutionOptimistic bool   `json:"execution_optimistic"`
+	BuilderIndex        string `json:"builder_index,omitempty"`
+	BlockHash           string `json:"block_hash,omitempty"`
 }
 
 type BlockGossipEvent struct {
