@@ -4,6 +4,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 )
 
+// Copy deep-copies the builder.
+func (builder *Builder) Copy() *Builder {
+	return CopyBuilder(builder)
+}
+
 // Copy creates a deep copy of ExecutionPayloadBid.
 func (header *ExecutionPayloadBid) Copy() *ExecutionPayloadBid {
 	if header == nil {
