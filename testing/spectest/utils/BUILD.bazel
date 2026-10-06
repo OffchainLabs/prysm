@@ -7,6 +7,7 @@ go_library(
         "config.go",
         "crypto_fake.go",  # keep
         "crypto_real.go",
+        "eip8148.go",
         "utils.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/testing/spectest/utils",

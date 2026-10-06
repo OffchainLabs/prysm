@@ -211,6 +211,14 @@ func (b *BeaconState) appendValidatorsSweepWithdrawals(withdrawalIndex uint64, w
 				return errors.Wrapf(err, "could not subtract balance %d with partial withdrawn balance %d", balance, partiallyWithdrawnBalance)
 			}
 		}
+		// [New in EIP8148]
+		var sweepThreshold uint64
+		if b.version >= version.Gloas {
+			sweepThreshold, err = b.validatorSweepThresholdAtIndex(validatorIndex)
+			if err != nil {
+				return errors.Wrapf(err, "could not retrieve sweep threshold at index %d", validatorIndex)
+			}
+		}
 		if helpers.IsFullyWithdrawableValidator(val, balance, epoch, b.version) {
 			ws = append(ws, &enginev1.Withdrawal{
 				Index:          withdrawalIndex,
@@ -219,12 +227,13 @@ func (b *BeaconState) appendValidatorsSweepWithdrawals(withdrawalIndex uint64, w
 				Amount:         balance,
 			})
 			withdrawalIndex++
-		} else if helpers.IsPartiallyWithdrawableValidator(val, balance, epoch, b.version) {
+		} else if helpers.IsPartiallyWithdrawableValidator(val, balance, epoch, b.version, sweepThreshold) {
 			ws = append(ws, &enginev1.Withdrawal{
 				Index:          withdrawalIndex,
 				ValidatorIndex: validatorIndex,
 				Address:        bytesutil.SafeCopyBytes(val.GetWithdrawalCredentials()[ETH1AddressOffset:]),
-				Amount:         balance - helpers.ValidatorMaxEffectiveBalance(val),
+				// [Modified in EIP8148] For a zero threshold this is exactly get_max_effective_balance.
+				Amount: balance - helpers.EffectiveSweepThreshold(val, sweepThreshold),
 			})
 			withdrawalIndex++
 		}

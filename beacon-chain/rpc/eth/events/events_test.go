@@ -854,6 +854,10 @@ func TestPayloadAttributesReader_ParentBlockNumber(t *testing.T) {
 			st := tc.getState()
 			v := &eth.Validator{ExitEpoch: math.MaxUint64, EffectiveBalance: params.BeaconConfig().MinActivationBalance, WithdrawalCredentials: make([]byte, 32)}
 			require.NoError(t, st.SetValidators([]*eth.Validator{v}))
+			if st.Version() >= version.Gloas {
+				// Sweep thresholds must stay in lockstep with the validator registry.
+				require.NoError(t, st.SetValidatorSweepThresholds([]uint64{0}))
+			}
 			require.NoError(t, st.SetBalances([]uint64{0}))
 			currentSlot := primitives.Slot(0)
 			require.NoError(t, st.SetSlot(currentSlot+1)) // avoid slot processing.

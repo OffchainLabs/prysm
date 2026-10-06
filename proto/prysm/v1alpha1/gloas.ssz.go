@@ -2105,7 +2105,7 @@ func (c *BeaconBlockGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 }
 
 func (c *BeaconStateGloas) SizeSSZ() int {
-	size := 3134845
+	size := 3134849
 	size += len(c.HistoricalRoots) * 32
 	size += len(c.Eth1DataVotes) * 72
 	size += len(c.Validators) * 121
@@ -2124,6 +2124,7 @@ func (c *BeaconStateGloas) SizeSSZ() int {
 	}
 	size += c.LatestExecutionPayloadBid.SizeSSZ()
 	size += len(c.PayloadExpectedWithdrawals) * 44
+	size += len(c.ValidatorSweepThresholds) * 8
 	return size
 }
 
@@ -2134,7 +2135,7 @@ func (c *BeaconStateGloas) MarshalSSZ() ([]byte, error) {
 
 func (c *BeaconStateGloas) MarshalSSZTo(dst []byte) ([]byte, error) {
 	var err error
-	offset := 3134845
+	offset := 3134849
 
 	// Field 0: GenesisTime
 	dst = binary.LittleEndian.AppendUint64(dst, c.GenesisTime)
@@ -2410,6 +2411,10 @@ func (c *BeaconStateGloas) MarshalSSZTo(dst []byte) ([]byte, error) {
 		}
 	}
 
+	// Field 46: ValidatorSweepThresholds
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(c.ValidatorSweepThresholds) * 8
+
 	// Field 7: HistoricalRoots
 	if len(c.HistoricalRoots) > 16777216 {
 		return nil, ssz.ErrListTooBig
@@ -2510,13 +2515,18 @@ func (c *BeaconStateGloas) MarshalSSZTo(dst []byte) ([]byte, error) {
 			return nil, fmt.Errorf("PayloadExpectedWithdrawals: %w", err)
 		}
 	}
+
+	// Field 46: ValidatorSweepThresholds
+	for _, o := range c.ValidatorSweepThresholds {
+		dst = binary.LittleEndian.AppendUint64(dst, o)
+	}
 	return dst, err
 }
 
 func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 3134845 {
+	if size < 3134849 {
 		return ssz.ErrSize
 	}
 
@@ -2553,7 +2563,7 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 	sszSlice45 := buf[2741629:3134845] // c.PtcWindow
 
 	sszVarOffset7 := ssz.ReadOffset(buf[524464:524468]) // c.HistoricalRoots
-	if sszVarOffset7 != 3134845 {
+	if sszVarOffset7 != 3134849 {
 		return ssz.ErrInvalidVariableOffset
 	}
 	if sszVarOffset7 > size {
@@ -2615,6 +2625,10 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 	if sszVarOffset44 > size || sszVarOffset44 < sszVarOffset43 {
 		return ssz.ErrOffset
 	}
+	sszVarOffset46 := ssz.ReadOffset(buf[3134845:3134849]) // c.ValidatorSweepThresholds
+	if sszVarOffset46 > size || sszVarOffset46 < sszVarOffset44 {
+		return ssz.ErrOffset
+	}
 	sszSlice7 := buf[sszVarOffset7:sszVarOffset9]    // c.HistoricalRoots
 	sszSlice9 := buf[sszVarOffset9:sszVarOffset11]   // c.Eth1DataVotes
 	sszSlice11 := buf[sszVarOffset11:sszVarOffset12] // c.Validators
@@ -2629,7 +2643,8 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 	sszSlice38 := buf[sszVarOffset38:sszVarOffset42] // c.Builders
 	sszSlice42 := buf[sszVarOffset42:sszVarOffset43] // c.BuilderPendingWithdrawals
 	sszSlice43 := buf[sszVarOffset43:sszVarOffset44] // c.LatestExecutionPayloadBid
-	sszSlice44 := buf[sszVarOffset44:]               // c.PayloadExpectedWithdrawals
+	sszSlice44 := buf[sszVarOffset44:sszVarOffset46] // c.PayloadExpectedWithdrawals
+	sszSlice46 := buf[sszVarOffset46:]               // c.ValidatorSweepThresholds
 
 	// Field 0: GenesisTime
 	c.GenesisTime = binary.LittleEndian.Uint64(sszSlice0)
@@ -3071,6 +3086,22 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 			c.PtcWindow[i] = tmp
 		}
 	}
+
+	// Field 46: ValidatorSweepThresholds
+	{
+		if len(sszSlice46)%8 != 0 {
+			return fmt.Errorf("misaligned bytes: c.ValidatorSweepThresholds length is %d, which is not a multiple of 8: %w", len(sszSlice46), ssz.ErrIncorrectListSize)
+		}
+		numElem := len(sszSlice46) / 8
+		c.ValidatorSweepThresholds = make([]uint64, numElem)
+		for i := 0; i < numElem; i++ {
+			var tmp uint64
+
+			tmpSlice := sszSlice46[i*8 : (1+i)*8]
+			tmp = binary.LittleEndian.Uint64(tmpSlice)
+			c.ValidatorSweepThresholds[i] = tmp
+		}
+	}
 	return err
 }
 
@@ -3082,7 +3113,7 @@ func (c *BeaconStateGloas) HashTreeRootWith(hh *ssz.Hasher) error {
 	return c.ProgressiveHashTreeRootWith(hh)
 }
 
-var activeFieldsBeaconStateGloas = []byte{0b11111111, 0b11111111, 0b11111111, 0b11111111, 0b11111111, 0b00111111}
+var activeFieldsBeaconStateGloas = []byte{0b11111111, 0b11111111, 0b11111111, 0b11111111, 0b11111111, 0b01111111}
 
 func (c *BeaconStateGloas) ProgressiveHashTreeRoot() ([32]byte, error) {
 	hh := ssz.DefaultHasherPool.Get()
@@ -3422,6 +3453,15 @@ func (c *BeaconStateGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err erro
 			}
 		}
 		hh.Merkleize(subIndx)
+	}
+	// Field 46: ValidatorSweepThresholds
+	{
+		subIndx := hh.Index()
+		for _, o := range c.ValidatorSweepThresholds {
+			hh.AppendUint64(o)
+		}
+		hh.FillUpTo32()
+		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.ValidatorSweepThresholds)))
 	}
 	hh.MerkleizeProgressiveWithActiveFields(indx, activeFieldsBeaconStateGloas)
 	return nil

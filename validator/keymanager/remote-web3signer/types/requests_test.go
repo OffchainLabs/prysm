@@ -539,7 +539,7 @@ func TestGetBlockV2BlindedSignRequest(t *testing.T) {
 				genesisValidatorsRoot: make([]byte, fieldparams.RootLength),
 			},
 			want: mock.BlockV2BlindedSignRequest(func(t *testing.T) []byte {
-				bytevalue, err := hexutil.Decode("0x97bb2344fda1add4bfe7382ce4700ad02dba5dfe18250215c1063f8967670966")
+				bytevalue, err := hexutil.Decode("0xf8aac73366616fc7ae477ffc6f8a8cf73563c7eced46166190138360ea223cf0")
 				require.NoError(t, err)
 				return bytevalue
 			}(t), "GLOAS"),

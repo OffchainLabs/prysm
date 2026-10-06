@@ -34,5 +34,7 @@ types:
       Consolidations: {type: "ProgressiveList"}
       BuilderDeposits: {type: "ProgressiveList"}
       BuilderExits: {type: "ProgressiveList"}
+      SweepThresholds: {type: "ProgressiveList"}
+  - name: "SetSweepThresholdRequest"
   - name: "Withdrawal"
   - name: "WithdrawalRequest"

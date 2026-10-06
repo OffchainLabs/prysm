@@ -2,12 +2,14 @@ package electra
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
 
 // SwitchToCompoundingValidator
@@ -19,6 +21,8 @@ import (
 //	validator = state.validators[index]
 //	validator.withdrawal_credentials = COMPOUNDING_WITHDRAWAL_PREFIX + validator.withdrawal_credentials[1:]
 //	queue_excess_active_balance(state, index)
+//	# [New in EIP8148]
+//	state.validator_sweep_thresholds[index] = MAX_EFFECTIVE_BALANCE_ELECTRA
 func SwitchToCompoundingValidator(s state.BeaconState, idx primitives.ValidatorIndex) error {
 	v, err := s.ValidatorAtIndex(idx)
 	if err != nil {
@@ -32,7 +36,15 @@ func SwitchToCompoundingValidator(s state.BeaconState, idx primitives.ValidatorI
 	if err := s.UpdateValidatorAtIndex(idx, v); err != nil {
 		return err
 	}
-	return QueueExcessActiveBalance(s, idx)
+	if err := QueueExcessActiveBalance(s, idx); err != nil {
+		return fmt.Errorf("queue excess active balance: %w", err)
+	}
+
+	// [New in EIP8148]
+	if s.Version() >= version.Gloas {
+		return s.SetValidatorSweepThresholdAtIndex(idx, params.BeaconConfig().MaxEffectiveBalanceElectra)
+	}
+	return nil
 }
 
 // QueueExcessActiveBalance queues validators with balances above the min activation balance and adds to pending deposit.

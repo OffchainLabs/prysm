@@ -3,9 +3,11 @@ package electra
 import (
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
 
 // ProcessEffectiveBalanceUpdates processes effective balance updates during epoch processing.
@@ -19,16 +21,18 @@ import (
 //	        HYSTERESIS_INCREMENT = uint64(EFFECTIVE_BALANCE_INCREMENT // HYSTERESIS_QUOTIENT)
 //	        DOWNWARD_THRESHOLD = HYSTERESIS_INCREMENT * HYSTERESIS_DOWNWARD_MULTIPLIER
 //	        UPWARD_THRESHOLD = HYSTERESIS_INCREMENT * HYSTERESIS_UPWARD_MULTIPLIER
-//	        EFFECTIVE_BALANCE_LIMIT = (
-//	            MAX_EFFECTIVE_BALANCE_EIP7251 if has_compounding_withdrawal_credential(validator)
-//	            else MIN_ACTIVATION_BALANCE
-//	        )
+//	        # [Modified in EIP8148]
+//	        sweep_threshold = state.validator_sweep_thresholds[index]
+//	        effective_sweep_threshold = get_effective_sweep_threshold(validator, sweep_threshold)
 //
 //	        if (
 //	            balance + DOWNWARD_THRESHOLD < validator.effective_balance
 //	            or validator.effective_balance + UPWARD_THRESHOLD < balance
 //	        ):
-//	            validator.effective_balance = min(balance - balance % EFFECTIVE_BALANCE_INCREMENT, EFFECTIVE_BALANCE_LIMIT)
+//	            # [Modified in EIP8148]
+//	            validator.effective_balance = min(
+//	                balance - balance % EFFECTIVE_BALANCE_INCREMENT, effective_sweep_threshold
+//	            )
 func ProcessEffectiveBalanceUpdates(st state.BeaconState) error {
 	effBalanceInc := params.BeaconConfig().EffectiveBalanceIncrement
 	hysteresisInc := effBalanceInc / params.BeaconConfig().HysteresisQuotient
@@ -37,6 +41,18 @@ func ProcessEffectiveBalanceUpdates(st state.BeaconState) error {
 
 	bals := st.Balances()
 
+	sweepThresholds := make([]uint64, len(bals))
+	if st.Version() >= version.Gloas {
+		var err error
+		sweepThresholds, err = st.ValidatorSweepThresholds()
+		if err != nil {
+			return fmt.Errorf("validator sweep thresholds: %w", err)
+		}
+		if len(sweepThresholds) != len(bals) {
+			return fmt.Errorf("sweep thresholds length does not match balances length %d != %d", len(sweepThresholds), len(bals))
+		}
+	}
+
 	// Update effective balances with hysteresis.
 	validatorFunc := func(idx int, val state.ReadOnlyValidator) (newVal *ethpb.Validator, err error) {
 		if idx >= len(bals) {
@@ -44,13 +60,11 @@ func ProcessEffectiveBalanceUpdates(st state.BeaconState) error {
 		}
 		balance := bals[idx]
 
-		effectiveBalanceLimit := params.BeaconConfig().MinActivationBalance
-		if val.HasCompoundingWithdrawalCredentials() {
-			effectiveBalanceLimit = params.BeaconConfig().MaxEffectiveBalanceElectra
-		}
+		// [Modified in EIP8148]
+		effectiveSweepThreshold := helpers.EffectiveSweepThreshold(val, sweepThresholds[idx])
 
 		if balance+downwardThreshold < val.EffectiveBalance() || val.EffectiveBalance()+upwardThreshold < balance {
-			effectiveBal := min(balance-balance%effBalanceInc, effectiveBalanceLimit)
+			effectiveBal := min(balance-balance%effBalanceInc, effectiveSweepThreshold)
 			if effectiveBal != val.EffectiveBalance() {
 				newVal = val.Copy()
 				newVal.EffectiveBalance = effectiveBal
