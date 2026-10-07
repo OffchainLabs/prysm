@@ -227,7 +227,7 @@ func TestBatchSequencer(t *testing.T) {
 	require.Equal(t, newMin, last.begin)
 	require.Equal(t, seq.seq[len(seq.seq)-2].begin, last.end)
 
-	// Mark first batch done again, this time check that sequence() gives errEndSequence.
+	// Mark first batch done again, this time check that sequence() returns a batchEndSequence batch.
 	first = seq.seq[0]
 	first.state = batchImportComplete
 	// update() with a complete state will cause the sequence to be extended with an additional batch
@@ -236,7 +236,6 @@ func TestBatchSequencer(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(endExp))
 	end := endExp[0]
-	//require.ErrorIs(t, err, errEndSequence)
 	require.Equal(t, batchEndSequence, end.state)
 }
 
@@ -800,6 +799,77 @@ func TestNumTodo(t *testing.T) {
 			_ = seq.numTodo()
 		})
 	}
+}
+
+func TestAllEnded(t *testing.T) {
+	t.Run("basic allEnded scenarios", func(t *testing.T) {
+		cases := []struct {
+			name   string
+			states []batchState
+			want   bool
+		}{
+			{name: "all ended", states: []batchState{batchEndSequence, batchEndSequence}, want: true},
+			{name: "fresh", states: []batchState{batchNil, batchNil}, want: false},
+			{name: "in flight", states: []batchState{batchSequenced, batchEndSequence}, want: false},
+			{name: "importable", states: []batchState{batchImportable, batchEndSequence}, want: false},
+			{name: "fatal", states: []batchState{batchErrFatal, batchEndSequence}, want: false},
+			{name: "one of three left", states: []batchState{batchEndSequence, batchSequenced, batchEndSequence}, want: false},
+		}
+		for _, c := range cases {
+			t.Run(c.name, func(t *testing.T) {
+				seq := &batchSequencer{seq: make([]batch, len(c.states))}
+				for i, st := range c.states {
+					seq.seq[i].state = st
+				}
+				require.Equal(t, c.want, seq.allEnded())
+			})
+		}
+	})
+
+	// Detailed scenario testing.
+	// Two batches remain above the floor: a = [floor+size, floor+2*size), b = [floor, floor+size).
+	const floor, size = 4037888, 32
+
+	start := func(t *testing.T) (*batchSequencer, batch, batch) {
+		seq := newBatchSequencer(2, floor+2*size, size, mockCurrentNeedsFunc(floor, floor+100*size))
+		got, err := seq.sequence()
+		require.NoError(t, err)
+		require.Equal(t, 2, len(got))
+		return seq, got[0], got[1]
+	}
+	sequenceOnce := func(t *testing.T, seq *batchSequencer) int {
+		got, err := seq.sequence()
+		require.NoError(t, err)
+		return len(got)
+	}
+	importAll := func(seq *batchSequencer) {
+		for _, ib := range seq.importable() {
+			seq.update(ib.withState(batchImportComplete))
+		}
+	}
+
+	t.Run("final batches import in one pass", func(t *testing.T) {
+		seq, a, b := start(t)
+		// b downloads first and waits for a, so one pass imports both.
+		seq.update(b.withState(batchImportable))
+		seq.update(a.withState(batchImportable))
+		importAll(seq)
+		// sequence() hands out only one batchEndSequence batch, but every slot has ended.
+		require.Equal(t, 1, sequenceOnce(t, seq))
+		require.Equal(t, true, seq.allEnded())
+	})
+
+	t.Run("final batches import in separate passes", func(t *testing.T) {
+		seq, a, b := start(t)
+		seq.update(a.withState(batchImportable))
+		importAll(seq)
+		sequenceOnce(t, seq)
+		require.Equal(t, false, seq.allEnded())
+		seq.update(b.withState(batchImportable))
+		importAll(seq)
+		sequenceOnce(t, seq)
+		require.Equal(t, true, seq.allEnded())
+	})
 }
 
 // TestBatcherRemaining tests the remaining() calculation logic
