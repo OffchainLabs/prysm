@@ -4949,3 +4949,198 @@ func TestGetProposerLookahead(t *testing.T) {
 		require.Equal(t, true, resp.Finalized)
 	})
 }
+
+func TestGetStatePTC(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
+	// State sits at epoch 2, so the PTC window covers epochs 1 through 3.
+	stateSlot := 2 * slotsPerEpoch
+	st, err := util.NewBeaconStateGloas(func(state *eth.BeaconStateGloas) error {
+		state.Slot = primitives.Slot(stateSlot)
+		// Mark each window entry with its own offset so tests can verify indexing.
+		for i := range state.PtcWindow {
+			state.PtcWindow[i].ValidatorIndices[0] = primitives.ValidatorIndex(i)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	chainService := &chainMock.ChainService{
+		Optimistic:     false,
+		FinalizedRoots: map[[32]byte]bool{},
+	}
+	server := &Server{
+		Stater: &testutil.MockStater{
+			BeaconState: st,
+		},
+		OptimisticModeFetcher: chainService,
+		FinalizationFetcher:   chainService,
+	}
+
+	newRequest := func(slotParam string) *http.Request {
+		target := "http://example.com/eth/v1/beacon/states/{state_id}/ptc"
+		if slotParam != "" {
+			target += "?slot=" + slotParam
+		}
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		req.SetPathValue("state_id", "head")
+		return req
+	}
+
+	errMessage := func(rec *httptest.ResponseRecorder) string {
+		var errResp struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &errResp))
+		return errResp.Message
+	}
+
+	okCases := []struct {
+		name          string
+		slotParam     string
+		wantSlot      uint64
+		wantWindowIdx uint64
+	}{
+		{
+			name:          "default slot",
+			wantSlot:      stateSlot,
+			wantWindowIdx: slotsPerEpoch, // current epoch starts at offset SLOTS_PER_EPOCH
+		},
+		{
+			name:          "previous epoch slot",
+			slotParam:     strconv.FormatUint(stateSlot-1, 10),
+			wantSlot:      stateSlot - 1,
+			wantWindowIdx: slotsPerEpoch - 1,
+		},
+		{
+			name:          "lookahead epoch slot",
+			slotParam:     strconv.FormatUint(3*slotsPerEpoch, 10),
+			wantSlot:      3 * slotsPerEpoch,
+			wantWindowIdx: 2 * slotsPerEpoch,
+		},
+	}
+	for _, tc := range okCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			rec.Body = new(bytes.Buffer)
+
+			server.GetStatePTC(rec, newRequest(tc.slotParam))
+			require.Equal(t, http.StatusOK, rec.Code)
+
+			var resp structs.GetStatePTCResponse
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+			require.Equal(t, false, resp.ExecutionOptimistic)
+			require.Equal(t, false, resp.Finalized)
+			require.Equal(t, strconv.FormatUint(tc.wantSlot, 10), resp.Data.Slot)
+			require.Equal(t, fieldparams.PTCSize, len(resp.Data.Validators))
+			require.Equal(t, strconv.FormatUint(tc.wantWindowIdx, 10), resp.Data.Validators[0])
+		})
+	}
+
+	t.Run("slot outside PTC window", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetStatePTC(rec, newRequest(strconv.FormatUint(4*slotsPerEpoch, 10)))
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Equal(t, true, strings.Contains(errMessage(rec), "outside the PTC window"))
+	})
+
+	t.Run("slot prior to gloas", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetStatePTC(rec, newRequest(strconv.FormatUint(slotsPerEpoch-1, 10)))
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Equal(t, "slot is prior to gloas", errMessage(rec))
+	})
+
+	t.Run("invalid slot param", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetStatePTC(rec, newRequest("foo"))
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	t.Run("pre-gloas state", func(t *testing.T) {
+		preGloasSt, err := util.NewBeaconStateFulu()
+		require.NoError(t, err)
+		preGloasServer := &Server{
+			Stater: &testutil.MockStater{
+				BeaconState: preGloasSt,
+			},
+			OptimisticModeFetcher: chainService,
+			FinalizationFetcher:   chainService,
+		}
+
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		preGloasServer.GetStatePTC(rec, newRequest(""))
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Equal(t, "state_id is prior to gloas", errMessage(rec))
+	})
+
+	t.Run("no state_id", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/ptc", nil)
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetStatePTC(rec, req)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Equal(t, "state_id is required in URL params", errMessage(rec))
+	})
+
+	t.Run("optimistic node", func(t *testing.T) {
+		optimisticChainService := &chainMock.ChainService{
+			Optimistic:     true,
+			FinalizedRoots: map[[32]byte]bool{},
+		}
+		optimisticServer := &Server{
+			Stater:                server.Stater,
+			OptimisticModeFetcher: optimisticChainService,
+			FinalizationFetcher:   optimisticChainService,
+		}
+
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		optimisticServer.GetStatePTC(rec, newRequest(""))
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var resp structs.GetStatePTCResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		require.Equal(t, true, resp.ExecutionOptimistic)
+	})
+
+	t.Run("finalized node", func(t *testing.T) {
+		blockRoot, err := helpers.BlockRootFromState(t.Context(), st)
+		require.NoError(t, err)
+
+		finalizedChainService := &chainMock.ChainService{
+			Optimistic:     false,
+			FinalizedRoots: map[[32]byte]bool{blockRoot: true},
+		}
+		finalizedServer := &Server{
+			Stater:                server.Stater,
+			OptimisticModeFetcher: finalizedChainService,
+			FinalizationFetcher:   finalizedChainService,
+		}
+
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		finalizedServer.GetStatePTC(rec, newRequest(""))
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var resp structs.GetStatePTCResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		require.Equal(t, true, resp.Finalized)
+	})
+}

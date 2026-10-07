@@ -301,6 +301,17 @@ type GetProposerLookaheadResponse struct {
 	Data                []string `json:"data"` // validator indexes
 }
 
+type GetStatePTCResponse struct {
+	ExecutionOptimistic bool      `json:"execution_optimistic"`
+	Finalized           bool      `json:"finalized"`
+	Data                *StatePTC `json:"data"`
+}
+
+type StatePTC struct {
+	Slot       string   `json:"slot"`
+	Validators []string `json:"validators"` // validator indexes in committee order, duplicates preserved
+}
+
 type GetBlobsResponse struct {
 	ExecutionOptimistic bool     `json:"execution_optimistic"`
 	Finalized           bool     `json:"finalized"`
