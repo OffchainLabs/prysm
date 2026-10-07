@@ -97,6 +97,16 @@ func TestServiceInit(t *testing.T) {
 	for i := remaining; i < remaining+nWorkers; i++ {
 		require.Equal(t, batchEndSequence, todo[i].state)
 	}
+
+	// Check the termination of the service after all batches have been processed.
+	done := make(chan error, 1)
+	go func() { done <- srv.WaitForCompletion() }()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("backfill did not complete after the last batch imported")
+	}
 }
 
 func testReadN(ctx context.Context, t *testing.T, c chan batch, n int, into []batch) []batch {
@@ -161,4 +171,59 @@ func TestDefaultBatchImporter(t *testing.T) {
 		require.ErrorContains(t, "no sidecar in cache for block commitment", err)
 		require.Equal(t, false, b.columns.toDownload[b.blocks[0].Root()].undecidedPayload)
 	})
+}
+
+// TestPrunerWaiterUnblockedOnFastEndgame is a regression test which #17282 describes:
+// Deadlock when waiting for backfill service completion.
+func TestPrunerWaiterUnblockedOnFastEndgame(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	defer cancel()
+	su, err := NewUpdater(ctx, &mockBackfillDB{})
+	require.NoError(t, err)
+
+	// Two workers is the default worker count.
+	const nWorkers, batchSize = 2, 32
+	low := uint64(1 + batchSize*nWorkers) // two batches of history: [33,65) and [1,33)
+	su.bs = &dbval.BackfillStatus{LowSlot: low}
+
+	cw := startup.NewClockSynchronizer()
+	clock := startup.NewClock(time.Now(), [32]byte{}, startup.WithSlotAsNow(primitives.Slot(low)+1))
+	require.NoError(t, cw.SetClock(clock))
+
+	sn, err := das.NewSyncNeeds(clock.CurrentSlot, nil, 0)
+	require.NoError(t, err)
+	p2pt := p2ptest.NewTestP2P(t)
+	pool := newP2PBatchWorkerPool(p2pt, nWorkers, sn.Currently)
+	srv, err := NewService(ctx, su, filesystem.NewEphemeralBlobStorage(t), filesystem.NewEphemeralDataColumnStorage(t),
+		cw, p2pt, &mockAssigner{}, WithBatchSize(batchSize), WithWorkerCount(nWorkers), WithEnableBackfill(true),
+		WithSyncNeedsWaiter(func() (das.SyncNeeds, error) { return sn, nil }))
+	require.NoError(t, err)
+
+	srv.pool = pool
+	srv.workerCfg = &workerCfg{clock: clock, currentNeeds: sn.Currently}
+	srv.batchImporter = func(context.Context, primitives.Slot, batch, *Store) (*dbval.BackfillStatus, error) {
+		return &dbval.BackfillStatus{}, nil
+	}
+
+	go srv.Start()
+
+	// finished builds the [begin, end) batch as a worker returns it.
+	finished := func(begin, end primitives.Slot) batch {
+		blk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, begin, 0)
+		return batch{begin: begin, end: end, state: batchImportable, seq: 10, blocks: verifiedROBlocks{blk}}
+	}
+
+	// Deliver the lower batch first.
+	pool.fromRouter <- finished(1, 33)
+	pool.fromRouter <- finished(33, 65)
+
+	// Block on WaitForCompletion exactly as the pruner does.
+	done := make(chan error, 1)
+	go func() { done <- srv.WaitForCompletion() }()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("WaitForCompletion did not return after backfill ran out of work; the pruner would wait forever")
+	}
 }
