@@ -37,7 +37,7 @@ func RunUpgradeToDeneb(t *testing.T, config string) {
 			require.NoError(t, err)
 			postState, err := deneb.UpgradeToDeneb(preState)
 			require.NoError(t, err)
-			postStateFromFunction, err := state_native.ProtobufBeaconStateDeneb(postState.ToProtoUnsafe())
+			postStateFromFunction, err := state_native.ContainerFrom[*ethpb.BeaconStateDeneb](postState.ToProtoUnsafe())
 			require.NoError(t, err)
 
 			postStateFile, err := util.BazelFileBytes(path.Join(folderPath, "post.ssz_snappy"))

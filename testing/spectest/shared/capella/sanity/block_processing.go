@@ -93,7 +93,7 @@ func RunBlockProcessingTest(t *testing.T, config, folderPath string) {
 
 				postBeaconState := &ethpb.BeaconStateCapella{}
 				require.NoError(t, postBeaconState.UnmarshalSSZ(postBeaconStateSSZ), "Failed to unmarshal")
-				pbState, err := state_native.ProtobufBeaconStateCapella(beaconState.ToProtoUnsafe())
+				pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateCapella](beaconState.ToProtoUnsafe())
 				require.NoError(t, err)
 				require.DeepSSZEqual(t, pbState, postBeaconState, "Post state does not match expected")
 			} else {

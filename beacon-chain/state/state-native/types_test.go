@@ -216,7 +216,7 @@ func TestForkManualCopy_OK(t *testing.T) {
 	}
 	require.NoError(t, a.SetFork(wantedFork))
 
-	pbState, err := statenative.ProtobufBeaconStatePhase0(a.ToProtoUnsafe())
+	pbState, err := statenative.ContainerFrom[*ethpb.BeaconState](a.ToProtoUnsafe())
 	require.NoError(t, err)
 	require.DeepEqual(t, pbState.Fork, wantedFork)
 }

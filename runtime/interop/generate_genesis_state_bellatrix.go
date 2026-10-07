@@ -54,7 +54,7 @@ func GenerateGenesisStateBellatrixFromDepositData(
 	if !ok {
 		return nil, nil, errors.New("unexpected BeaconState version")
 	}
-	pbState, err := statenative.ProtobufBeaconStateBellatrix(pbb)
+	pbState, err := statenative.ContainerFrom[*ethpb.BeaconStateBellatrix](pbb)
 	if err != nil {
 		return nil, nil, err
 	}
