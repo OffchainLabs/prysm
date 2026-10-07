@@ -1,14 +1,19 @@
-load("@prysm//tools/go:def.bzl", "go_library")
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
     srcs = [
         "bootstrap.go",
+        "bootstrap_gloas.go",
         "finality_update.go",
+        "finality_update_gloas.go",
         "header.go",
+        "header_gloas.go",
         "helpers.go",
         "optimistic_update.go",
+        "optimistic_update_gloas.go",
         "update.go",
+        "update_gloas.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/consensus-types/light-client",
     visibility = ["//visibility:public"],
@@ -23,6 +28,23 @@ go_library(
         "//proto/prysm/v1alpha1:go_default_library",
         "//runtime/version:go_default_library",
         "//time/slots:go_default_library",
+        "@org_golang_google_protobuf//proto:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["gloas_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//config/fieldparams:go_default_library",
+        "//consensus-types/interfaces:go_default_library",
+        "//consensus-types/primitives:go_default_library",
+        "//proto/engine/v1:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
+        "//runtime/version:go_default_library",
+        "//testing/require:go_default_library",
+        "@com_github_offchainlabs_methodical_ssz//ssz:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
     ],
 )

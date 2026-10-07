@@ -535,8 +535,8 @@ func (s *Service) updateSpans(
 	// slashings along the way.
 	slashings := map[[fieldparams.RootLength]byte]ethpb.AttSlashing{}
 
-	for _, attWrappers := range attWrapperByChunkIdx {
-		for _, attWrapper := range attWrappers {
+	for _, chunkIdx := range slices.Sorted(maps.Keys(attWrapperByChunkIdx)) {
+		for _, attWrapper := range attWrapperByChunkIdx[chunkIdx] {
 			for _, validatorIdx := range attWrapper.IndexedAttestation.GetAttestingIndices() {
 				validatorIndex := primitives.ValidatorIndex(validatorIdx)
 				computedValidatorChunkIdx := s.params.validatorChunkIndex(validatorIndex)
