@@ -34,7 +34,7 @@ func TestExecuteStateTransition_IncorrectSlot(t *testing.T) {
 	base := &ethpb.BeaconState{
 		Slot: 5,
 	}
-	beaconState, err := state_native.InitializeFromProtoPhase0(base)
+	beaconState, err := state_native.New(base)
 	require.NoError(t, err)
 	block := &ethpb.SignedBeaconBlock{
 		Block: &ethpb.BeaconBlock{
@@ -391,7 +391,7 @@ func TestProcessEpochPrecompute_CanProcess(t *testing.T) {
 			params.BeaconConfig().MinDepositAmount,
 		},
 	}
-	s, err := state_native.InitializeFromProtoPhase0(base)
+	s, err := state_native.New(base)
 	require.NoError(t, err)
 	newState, err := transition.ProcessEpochPrecompute(t.Context(), s)
 	require.NoError(t, err)
@@ -409,7 +409,7 @@ func TestProcessBlock_OverMaxProposerSlashings(t *testing.T) {
 	}
 	want := fmt.Sprintf("number of proposer slashings (%d) in block body exceeds allowed threshold of %d",
 		len(b.Block.Body.ProposerSlashings), params.BeaconConfig().MaxProposerSlashings)
-	s, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
+	s, err := state_native.NewUnsafe(&ethpb.BeaconState{})
 	require.NoError(t, err)
 	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
@@ -428,7 +428,7 @@ func TestProcessBlock_OverMaxAttesterSlashings(t *testing.T) {
 	}
 	want := fmt.Sprintf("number of attester slashings (%d) in block body exceeds allowed threshold of %d",
 		len(b.Block.Body.AttesterSlashings), params.BeaconConfig().MaxAttesterSlashings)
-	s, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
+	s, err := state_native.NewUnsafe(&ethpb.BeaconState{})
 	require.NoError(t, err)
 	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
@@ -447,7 +447,7 @@ func TestProcessBlock_OverMaxAttesterSlashingsElectra(t *testing.T) {
 	}
 	want := fmt.Sprintf("number of attester slashings (%d) in block body exceeds allowed threshold of %d",
 		len(b.Block.Body.AttesterSlashings), params.BeaconConfig().MaxAttesterSlashingsElectra)
-	s, err := state_native.InitializeFromProtoUnsafeElectra(&ethpb.BeaconStateElectra{})
+	s, err := state_native.NewUnsafe(&ethpb.BeaconStateElectra{})
 	require.NoError(t, err)
 	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
@@ -465,7 +465,7 @@ func TestProcessBlock_OverMaxAttestations(t *testing.T) {
 	}
 	want := fmt.Sprintf("number of attestations (%d) in block body exceeds allowed threshold of %d",
 		len(b.Block.Body.Attestations), params.BeaconConfig().MaxAttestations)
-	s, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
+	s, err := state_native.NewUnsafe(&ethpb.BeaconState{})
 	require.NoError(t, err)
 	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
@@ -483,7 +483,7 @@ func TestProcessBlock_OverMaxAttestationsElectra(t *testing.T) {
 	}
 	want := fmt.Sprintf("number of attestations (%d) in block body exceeds allowed threshold of %d",
 		len(b.Block.Body.Attestations), params.BeaconConfig().MaxAttestationsElectra)
-	s, err := state_native.InitializeFromProtoUnsafeElectra(&ethpb.BeaconStateElectra{})
+	s, err := state_native.NewUnsafe(&ethpb.BeaconStateElectra{})
 	require.NoError(t, err)
 	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
@@ -502,7 +502,7 @@ func TestProcessBlock_OverMaxVoluntaryExits(t *testing.T) {
 	}
 	want := fmt.Sprintf("number of voluntary exits (%d) in block body exceeds allowed threshold of %d",
 		len(b.Block.Body.VoluntaryExits), maxExits)
-	s, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
+	s, err := state_native.NewUnsafe(&ethpb.BeaconState{})
 	require.NoError(t, err)
 	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
@@ -515,7 +515,7 @@ func TestProcessBlock_IncorrectDeposits(t *testing.T) {
 		Eth1Data:         &ethpb.Eth1Data{DepositCount: 100},
 		Eth1DepositIndex: 98,
 	}
-	s, err := state_native.InitializeFromProtoPhase0(base)
+	s, err := state_native.New(base)
 	require.NoError(t, err)
 	b := &ethpb.SignedBeaconBlock{
 		Block: &ethpb.BeaconBlock{
@@ -550,7 +550,7 @@ func TestProcessBlock_NoEth1BridgeDepositsFromFulu(t *testing.T) {
 
 func TestProcessSlots_SameSlotAsParentState(t *testing.T) {
 	slot := primitives.Slot(2)
-	parentState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: slot})
+	parentState, err := state_native.New(&ethpb.BeaconState{Slot: slot})
 	require.NoError(t, err)
 
 	_, err = transition.ProcessSlots(t.Context(), parentState, slot)
@@ -559,7 +559,7 @@ func TestProcessSlots_SameSlotAsParentState(t *testing.T) {
 
 func TestProcessSlots_LowerSlotAsParentState(t *testing.T) {
 	slot := primitives.Slot(2)
-	parentState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: slot})
+	parentState, err := state_native.New(&ethpb.BeaconState{Slot: slot})
 	require.NoError(t, err)
 
 	_, err = transition.ProcessSlots(t.Context(), parentState, slot-1)

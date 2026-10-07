@@ -291,7 +291,7 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 		Attnets:   bytesutil.PadTo([]byte{'C', 'D'}, 8),
 	})
 
-	st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	st, err := state_native.New(&ethpb.BeaconState{
 		Slot: 5,
 	})
 	require.NoError(t, err)

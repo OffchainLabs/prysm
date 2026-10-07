@@ -23,7 +23,7 @@ func TestProcessEffectiveBalanceUpdates_SafeCopy(t *testing.T) {
 			params.BeaconConfig().MaxEffectiveBalanceElectra * 2,
 		},
 	}
-	st, err := state_native.InitializeFromProtoElectra(pb)
+	st, err := state_native.New(pb)
 	require.NoError(t, err)
 	copiedState := st.Copy()
 
@@ -60,7 +60,7 @@ func TestProcessEffectiveBalnceUpdates(t *testing.T) {
 						params.BeaconConfig().MaxEffectiveBalanceElectra * 2,
 					},
 				}
-				st, err := state_native.InitializeFromProtoElectra(pb)
+				st, err := state_native.New(pb)
 				require.NoError(t, err)
 				return st
 			}(),
@@ -84,7 +84,7 @@ func TestProcessEffectiveBalnceUpdates(t *testing.T) {
 						params.BeaconConfig().MaxEffectiveBalanceElectra,
 					},
 				}
-				st, err := state_native.InitializeFromProtoElectra(pb)
+				st, err := state_native.New(pb)
 				require.NoError(t, err)
 				return st
 			}(),
@@ -123,7 +123,7 @@ func TestProcessEffectiveBalnceUpdates(t *testing.T) {
 						params.BeaconConfig().MinActivationBalance + upwardThreshold - 1,   // within upward threshold
 					},
 				}
-				st, err := state_native.InitializeFromProtoElectra(pb)
+				st, err := state_native.New(pb)
 				require.NoError(t, err)
 				return st
 			}(),

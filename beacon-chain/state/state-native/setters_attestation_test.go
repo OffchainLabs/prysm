@@ -12,7 +12,7 @@ import (
 )
 
 func TestBeaconState_RotateAttestations(t *testing.T) {
-	st, err := InitializeFromProtoPhase0(&ethpb.BeaconState{
+	st, err := New(&ethpb.BeaconState{
 		Slot:                      1,
 		CurrentEpochAttestations:  []*ethpb.PendingAttestation{{Data: &ethpb.AttestationData{Slot: 456}}},
 		PreviousEpochAttestations: []*ethpb.PendingAttestation{{Data: &ethpb.AttestationData{Slot: 123}}},
@@ -41,7 +41,7 @@ func TestAppendBeyondIndicesLimit(t *testing.T) {
 	for i := range mockrandaoMixes {
 		mockrandaoMixes[i] = zeroHash[:]
 	}
-	st, err := InitializeFromProtoPhase0(&ethpb.BeaconState{
+	st, err := New(&ethpb.BeaconState{
 		Slot:                      1,
 		CurrentEpochAttestations:  []*ethpb.PendingAttestation{{Data: &ethpb.AttestationData{Slot: 456}}},
 		PreviousEpochAttestations: []*ethpb.PendingAttestation{{Data: &ethpb.AttestationData{Slot: 123}}},
@@ -75,7 +75,7 @@ func TestAppendBeyondIndicesLimit(t *testing.T) {
 }
 
 func BenchmarkAppendPreviousEpochAttestations(b *testing.B) {
-	st, err := InitializeFromProtoPhase0(&ethpb.BeaconState{})
+	st, err := New(&ethpb.BeaconState{})
 	require.NoError(b, err)
 
 	max := params.BeaconConfig().PreviousEpochAttestationsLength()

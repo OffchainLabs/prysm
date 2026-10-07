@@ -110,7 +110,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 			if err != nil {
 				return nil, err
 			}
-			genState, err := state_native.InitializeFromProtoUnsafePhase0(pbState)
+			genState, err := state_native.NewUnsafe(pbState)
 			if err != nil {
 				return nil, err
 			}
@@ -120,7 +120,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 			if err != nil {
 				return nil, err
 			}
-			genState, err := state_native.InitializeFromProtoUnsafeAltair(pbState)
+			genState, err := state_native.NewUnsafe(pbState)
 			if err != nil {
 				return nil, err
 			}
@@ -130,7 +130,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 			if err != nil {
 				return nil, err
 			}
-			genState, err := state_native.InitializeFromProtoUnsafeBellatrix(pbState)
+			genState, err := state_native.NewUnsafe(pbState)
 			if err != nil {
 				return nil, err
 			}
@@ -140,7 +140,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 			if err != nil {
 				return nil, err
 			}
-			genState, err := state_native.InitializeFromProtoUnsafeCapella(pbState)
+			genState, err := state_native.NewUnsafe(pbState)
 			if err != nil {
 				return nil, err
 			}
@@ -150,7 +150,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 			if err != nil {
 				return nil, err
 			}
-			genState, err := state_native.InitializeFromProtoUnsafeDeneb(pbState)
+			genState, err := state_native.NewUnsafe(pbState)
 			if err != nil {
 				return nil, err
 			}
@@ -160,7 +160,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 			if err != nil {
 				return nil, err
 			}
-			genState, err := state_native.InitializeFromProtoUnsafeElectra(pbState)
+			genState, err := state_native.NewUnsafe(pbState)
 			if err != nil {
 				return nil, err
 			}
@@ -170,7 +170,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 			if err != nil {
 				return nil, err
 			}
-			genState, err := state_native.InitializeFromProtoUnsafeFulu(pbState)
+			genState, err := state_native.NewUnsafe(pbState)
 			if err != nil {
 				return nil, err
 			}
@@ -180,7 +180,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 			if err != nil {
 				return nil, err
 			}
-			genState, err := state_native.InitializeFromProtoUnsafeGloas(pbState)
+			genState, err := state_native.NewUnsafe(pbState)
 			if err != nil {
 				return nil, err
 			}

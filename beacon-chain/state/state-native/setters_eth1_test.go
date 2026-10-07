@@ -10,7 +10,7 @@ import (
 )
 
 func BenchmarkAppendEth1DataVotes(b *testing.B) {
-	st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{})
+	st, err := state_native.New(&ethpb.BeaconState{})
 	require.NoError(b, err)
 
 	max := params.BeaconConfig().Eth1DataVotesLength()

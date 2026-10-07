@@ -31,7 +31,7 @@ func TestProcessDeposits_SameValidatorMultipleDepositsSameBlock(t *testing.T) {
 		},
 	}
 	balances := []uint64{0}
-	beaconState, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	beaconState, err := state_native.New(&ethpb.BeaconStateAltair{
 		Validators: registry,
 		Balances:   balances,
 		Eth1Data:   eth1Data,
@@ -59,7 +59,7 @@ func TestProcessDeposits_AddsNewValidatorDeposit(t *testing.T) {
 		},
 	}
 	balances := []uint64{0}
-	beaconState, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	beaconState, err := state_native.New(&ethpb.BeaconStateAltair{
 		Validators: registry,
 		Balances:   balances,
 		Eth1Data:   eth1Data,
@@ -117,7 +117,7 @@ func TestProcessDeposits_RepeatedDeposit_IncreasesValidatorBalance(t *testing.T)
 	balances := []uint64{0, 50}
 	root, err := depositTrie.HashTreeRoot()
 	require.NoError(t, err)
-	beaconState, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	beaconState, err := state_native.New(&ethpb.BeaconStateAltair{
 		Validators: registry,
 		Balances:   balances,
 		Eth1Data: &ethpb.Eth1Data{
@@ -145,7 +145,7 @@ func TestProcessDeposit_AddsNewValidatorDeposit(t *testing.T) {
 		},
 	}
 	balances := []uint64{0}
-	beaconState, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	beaconState, err := state_native.New(&ethpb.BeaconStateAltair{
 		Validators: registry,
 		Balances:   balances,
 		Eth1Data:   eth1Data,
@@ -188,7 +188,7 @@ func TestProcessDeposit_SkipsInvalidDeposit(t *testing.T) {
 		},
 	}
 	balances := []uint64{0}
-	beaconState, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	beaconState, err := state_native.New(&ethpb.BeaconStateAltair{
 		Validators: registry,
 		Balances:   balances,
 		Eth1Data:   eth1Data,
@@ -245,7 +245,7 @@ func TestPreGenesisDeposits_SkipInvalidDeposit(t *testing.T) {
 		},
 	}
 	balances := []uint64{0}
-	beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	beaconState, err := state_native.New(&ethpb.BeaconState{
 		Validators: registry,
 		Balances:   balances,
 		Eth1Data:   eth1Data,
@@ -323,7 +323,7 @@ func TestProcessDeposit_RepeatedDeposit_IncreasesValidatorBalance(t *testing.T) 
 	root, err := depositTrie.HashTreeRoot()
 	require.NoError(t, err)
 
-	beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	beaconState, err := state_native.New(&ethpb.BeaconState{
 		Validators: registry,
 		Balances:   balances,
 		Eth1Data: &ethpb.Eth1Data{
@@ -361,7 +361,7 @@ func TestProcessDeposits_MerkleBranchFailsVerification(t *testing.T) {
 			Deposits: []*ethpb.Deposit{deposit},
 		},
 	}
-	beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	beaconState, err := state_native.New(&ethpb.BeaconState{
 		Eth1Data: &ethpb.Eth1Data{
 			DepositRoot: []byte{0},
 			BlockHash:   []byte{1},

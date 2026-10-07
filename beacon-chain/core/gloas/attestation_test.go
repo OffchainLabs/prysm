@@ -26,7 +26,7 @@ func buildStateWithBlockRoots(t *testing.T, stateSlot primitives.Slot, roots map
 		BlockRoots: blockRoots,
 	}
 
-	state, err := state_native.InitializeFromProtoGloas(stProto)
+	state, err := state_native.New(stProto)
 	require.NoError(t, err)
 	return state.(*state_native.BeaconState)
 }
@@ -46,7 +46,7 @@ func buildStateWithAvailability(t *testing.T, stateSlot primitives.Slot, roots m
 		availability[idx/8] |= byte(1 << (idx % 8))
 	}
 
-	stIface, err := state_native.InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+	stIface, err := state_native.New(&ethpb.BeaconStateGloas{
 		Slot:                         stateSlot,
 		BlockRoots:                   blockRoots,
 		ExecutionPayloadAvailability: availability,
@@ -64,7 +64,7 @@ func buildStateWithAvailability(t *testing.T, stateSlot primitives.Slot, roots m
 
 func TestMatchingPayload(t *testing.T) {
 	t.Run("pre-gloas always true", func(t *testing.T) {
-		stIface, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+		stIface, err := state_native.New(&ethpb.BeaconStateElectra{})
 		require.NoError(t, err)
 
 		ok, err := MatchingPayload(stIface, [32]byte{}, 0, 0, 123)

@@ -1579,7 +1579,7 @@ func TestSubmitSignedBLSToExecutionChanges_Ok(t *testing.T) {
 	slot, err := slots.EpochStart(params.BeaconConfig().CapellaForkEpoch)
 	require.NoError(t, err)
 	spb.Slot = slot
-	st, err := state_native.InitializeFromProtoCapella(spb)
+	st, err := state_native.New(spb)
 	require.NoError(t, err)
 
 	signedChanges := make([]*structs.SignedBLSToExecutionChange, numValidators)
@@ -1677,7 +1677,7 @@ func TestSubmitSignedBLSToExecutionChanges_Bellatrix(t *testing.T) {
 	slot, err := slots.EpochStart(params.BeaconConfig().BellatrixForkEpoch)
 	require.NoError(t, err)
 	spb.Slot = slot
-	st, err := state_native.InitializeFromProtoBellatrix(spb)
+	st, err := state_native.New(spb)
 	require.NoError(t, err)
 
 	spc := &ethpbv1alpha1.BeaconStateCapella{
@@ -1691,7 +1691,7 @@ func TestSubmitSignedBLSToExecutionChanges_Bellatrix(t *testing.T) {
 	require.NoError(t, err)
 	spc.Slot = slot
 
-	stc, err := state_native.InitializeFromProtoCapella(spc)
+	stc, err := state_native.New(spc)
 	require.NoError(t, err)
 
 	signedChanges := make([]*structs.SignedBLSToExecutionChange, numValidators)
@@ -1791,7 +1791,7 @@ func TestSubmitSignedBLSToExecutionChanges_Failures(t *testing.T) {
 	slot, err := slots.EpochStart(params.BeaconConfig().CapellaForkEpoch)
 	require.NoError(t, err)
 	spb.Slot = slot
-	st, err := state_native.InitializeFromProtoCapella(spb)
+	st, err := state_native.New(spb)
 	require.NoError(t, err)
 
 	signedChanges := make([]*structs.SignedBLSToExecutionChange, numValidators)

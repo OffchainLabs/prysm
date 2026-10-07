@@ -16,7 +16,7 @@ func TestFuzzFinalUpdates_10000(t *testing.T) {
 
 	for i := range 10000 {
 		fuzzer.Fuzz(base)
-		s, err := state_native.InitializeFromProtoUnsafePhase0(base)
+		s, err := state_native.NewUnsafe(base)
 		require.NoError(t, err)
 		_, err = ProcessFinalUpdates(s)
 		_ = err

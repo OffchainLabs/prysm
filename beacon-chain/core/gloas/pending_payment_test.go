@@ -21,7 +21,7 @@ func TestBuilderQuorumThreshold(t *testing.T) {
 		{EffectiveBalance: cfg.MaxEffectiveBalance, ActivationEpoch: 0, ExitEpoch: 1},
 		{EffectiveBalance: cfg.MaxEffectiveBalance, ActivationEpoch: 0, ExitEpoch: 1},
 	}
-	st, err := state_native.InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{Validators: validators})
+	st, err := state_native.NewUnsafe(&ethpb.BeaconStateGloas{Validators: validators})
 	require.NoError(t, err)
 
 	got, err := builderQuorumThreshold(t.Context(), st)
@@ -55,7 +55,7 @@ func TestProcessBuilderPendingPayments(t *testing.T) {
 		{EffectiveBalance: cfg.MaxEffectiveBalance, ActivationEpoch: 0, ExitEpoch: 1},
 		{EffectiveBalance: cfg.MaxEffectiveBalance, ActivationEpoch: 0, ExitEpoch: 1},
 	}
-	pbSt, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Validators: validators})
+	pbSt, err := state_native.New(&ethpb.BeaconState{Validators: validators})
 	require.NoError(t, err)
 
 	total := uint64(len(validators)) * cfg.MaxEffectiveBalance

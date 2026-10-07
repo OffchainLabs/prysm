@@ -259,7 +259,7 @@ func progressiveRootFromScratch(t *testing.T, st *BeaconState) [32]byte {
 func newGloasStateForProgressiveSSZTests(t *testing.T) *BeaconState {
 	t.Helper()
 
-	st, err := InitializeFromProtoUnsafeGloas(gloasStateProtoForProgressiveSSZTests())
+	st, err := NewUnsafe(gloasStateProtoForProgressiveSSZTests())
 	require.NoError(t, err)
 
 	bs, ok := st.(*BeaconState)
@@ -272,7 +272,7 @@ func newFuluStateForProgressiveSSZTests(t *testing.T) *BeaconState {
 	t.Helper()
 
 	g := gloasStateProtoForProgressiveSSZTests()
-	st, err := InitializeFromProtoUnsafeFulu(&ethpb.BeaconStateFulu{
+	st, err := NewUnsafe(&ethpb.BeaconStateFulu{
 		BlockRoots:                  g.BlockRoots,
 		StateRoots:                  g.StateRoots,
 		Slashings:                   g.Slashings,

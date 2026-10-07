@@ -441,49 +441,49 @@ func decodeStateSnapshot(enc []byte) (state.BeaconState, error) {
 		if err := gloasState.UnmarshalSSZ(enc[len(gloasKey):]); err != nil {
 			return nil, err
 		}
-		return statenative.InitializeFromProtoUnsafeGloas(&gloasState)
+		return statenative.NewUnsafe(&gloasState)
 	case hasFuluKey(enc):
 		var fuluState ethpb.BeaconStateFulu
 		if err := fuluState.UnmarshalSSZ(enc[len(fuluKey):]); err != nil {
 			return nil, err
 		}
-		return statenative.InitializeFromProtoUnsafeFulu(&fuluState)
+		return statenative.NewUnsafe(&fuluState)
 	case HasElectraKey(enc):
 		var electraState ethpb.BeaconStateElectra
 		if err := electraState.UnmarshalSSZ(enc[len(ElectraKey):]); err != nil {
 			return nil, err
 		}
-		return statenative.InitializeFromProtoUnsafeElectra(&electraState)
+		return statenative.NewUnsafe(&electraState)
 	case hasDenebKey(enc):
 		var denebState ethpb.BeaconStateDeneb
 		if err := denebState.UnmarshalSSZ(enc[len(denebKey):]); err != nil {
 			return nil, err
 		}
-		return statenative.InitializeFromProtoUnsafeDeneb(&denebState)
+		return statenative.NewUnsafe(&denebState)
 	case hasCapellaKey(enc):
 		var capellaState ethpb.BeaconStateCapella
 		if err := capellaState.UnmarshalSSZ(enc[len(capellaKey):]); err != nil {
 			return nil, err
 		}
-		return statenative.InitializeFromProtoUnsafeCapella(&capellaState)
+		return statenative.NewUnsafe(&capellaState)
 	case hasBellatrixKey(enc):
 		var bellatrixState ethpb.BeaconStateBellatrix
 		if err := bellatrixState.UnmarshalSSZ(enc[len(bellatrixKey):]); err != nil {
 			return nil, err
 		}
-		return statenative.InitializeFromProtoUnsafeBellatrix(&bellatrixState)
+		return statenative.NewUnsafe(&bellatrixState)
 	case hasAltairKey(enc):
 		var altairState ethpb.BeaconStateAltair
 		if err := altairState.UnmarshalSSZ(enc[len(altairKey):]); err != nil {
 			return nil, err
 		}
-		return statenative.InitializeFromProtoUnsafeAltair(&altairState)
+		return statenative.NewUnsafe(&altairState)
 	case hasPhase0Key(enc):
 		var phase0State ethpb.BeaconState
 		if err := phase0State.UnmarshalSSZ(enc[len(phase0Key):]); err != nil {
 			return nil, err
 		}
-		return statenative.InitializeFromProtoUnsafePhase0(&phase0State)
+		return statenative.NewUnsafe(&phase0State)
 	default:
 		return nil, errors.New("unsupported fork")
 	}

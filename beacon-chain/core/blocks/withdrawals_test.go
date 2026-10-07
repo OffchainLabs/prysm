@@ -47,7 +47,7 @@ func TestProcessBLSToExecutionChange(t *testing.T) {
 				WithdrawalCredentials: digest[:],
 			},
 		}
-		st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		st, err := state_native.New(&ethpb.BeaconState{
 			Validators: registry,
 			Fork: &ethpb.Fork{
 				CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
@@ -93,7 +93,7 @@ func TestProcessBLSToExecutionChange(t *testing.T) {
 				WithdrawalCredentials: digest[:],
 			},
 		}
-		st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		st, err := state_native.New(&ethpb.BeaconState{
 			Validators: registry,
 			Fork: &ethpb.Fork{
 				CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
@@ -128,7 +128,7 @@ func TestProcessBLSToExecutionChange(t *testing.T) {
 		registry := []*ethpb.Validator{
 			nil,
 		}
-		st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		st, err := state_native.New(&ethpb.BeaconState{
 			Validators: registry,
 			Fork: &ethpb.Fork{
 				CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
@@ -170,7 +170,7 @@ func TestProcessBLSToExecutionChange(t *testing.T) {
 				WithdrawalCredentials: digest[:],
 			},
 		}
-		st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		st, err := state_native.New(&ethpb.BeaconState{
 			Validators: registry,
 			Fork: &ethpb.Fork{
 				CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
@@ -208,7 +208,7 @@ func TestProcessBLSToExecutionChange(t *testing.T) {
 				WithdrawalCredentials: params.BeaconConfig().ZeroHash[:],
 			},
 		}
-		st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		st, err := state_native.New(&ethpb.BeaconState{
 			Validators: registry,
 			Fork: &ethpb.Fork{
 				CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
@@ -251,7 +251,7 @@ func TestProcessBLSToExecutionChange(t *testing.T) {
 		}
 		registry[0].WithdrawalCredentials[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
 
-		st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		st, err := state_native.New(&ethpb.BeaconState{
 			Validators: registry,
 			Fork: &ethpb.Fork{
 				CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
@@ -653,7 +653,7 @@ func TestProcessBlindWithdrawals(t *testing.T) {
 			st.Balances[idx] = withdrawalAmount(idx)
 		}
 		st.Validators = validators
-		return state_native.InitializeFromProtoCapella(st)
+		return state_native.New(st)
 	}
 
 	for _, test := range tests {
@@ -1140,7 +1140,7 @@ func TestProcessWithdrawals(t *testing.T) {
 							NextWithdrawalValidatorIndex: test.Args.NextWithdrawalValidatorIndex,
 							NextWithdrawalIndex:          test.Args.NextWithdrawalIndex,
 						}
-						st, err = state_native.InitializeFromProtoUnsafeCapella(spb)
+						st, err = state_native.NewUnsafe(spb)
 						require.NoError(t, err)
 						p, err = consensusblocks.WrappedExecutionPayloadCapella(&enginev1.ExecutionPayloadCapella{Withdrawals: test.Args.Withdrawals})
 						require.NoError(t, err)
@@ -1151,7 +1151,7 @@ func TestProcessWithdrawals(t *testing.T) {
 							NextWithdrawalIndex:          test.Args.NextWithdrawalIndex,
 							PendingPartialWithdrawals:    test.Args.PendingPartialWithdrawals,
 						}
-						st, err = state_native.InitializeFromProtoUnsafeElectra(spb)
+						st, err = state_native.NewUnsafe(spb)
 						require.NoError(t, err)
 						p, err = consensusblocks.WrappedExecutionPayloadDeneb(&enginev1.ExecutionPayloadDeneb{Withdrawals: test.Args.Withdrawals})
 						require.NoError(t, err)
@@ -1214,7 +1214,7 @@ func TestProcessBLSToExecutionChanges(t *testing.T) {
 		blsChanges[i] = message
 	}
 	spb.Validators = validators
-	st, err := state_native.InitializeFromProtoCapella(spb)
+	st, err := state_native.New(spb)
 	require.NoError(t, err)
 
 	signedChanges := make([]*ethpb.SignedBLSToExecutionChange, numValidators)
@@ -1285,7 +1285,7 @@ func TestBLSChangesSignatureBatch(t *testing.T) {
 		blsChanges[i] = message
 	}
 	spb.Validators = validators
-	st, err := state_native.InitializeFromProtoCapella(spb)
+	st, err := state_native.New(spb)
 	require.NoError(t, err)
 
 	signedChanges := make([]*ethpb.SignedBLSToExecutionChange, numValidators)
@@ -1349,7 +1349,7 @@ func TestBLSChangesSignatureBatchWrongFork(t *testing.T) {
 		blsChanges[i] = message
 	}
 	spb.Validators = validators
-	st, err := state_native.InitializeFromProtoCapella(spb)
+	st, err := state_native.New(spb)
 	require.NoError(t, err)
 
 	signedChanges := make([]*ethpb.SignedBLSToExecutionChange, numValidators)
@@ -1422,7 +1422,7 @@ func TestBLSChangesSignatureBatchFromBellatrix(t *testing.T) {
 		blsChanges[i] = message
 	}
 	spb.Validators = validators
-	st, err := state_native.InitializeFromProtoBellatrix(spb)
+	st, err := state_native.New(spb)
 	require.NoError(t, err)
 
 	signedChanges := make([]*ethpb.SignedBLSToExecutionChange, numValidators)
@@ -1437,7 +1437,7 @@ func TestBLSChangesSignatureBatchFromBellatrix(t *testing.T) {
 	require.NoError(t, err)
 	spc.Slot = slot
 
-	stc, err := state_native.InitializeFromProtoCapella(spc)
+	stc, err := state_native.New(spc)
 	require.NoError(t, err)
 
 	for i, message := range blsChanges {

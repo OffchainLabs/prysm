@@ -11,7 +11,7 @@ import (
 )
 
 func BenchmarkAppendHistoricalRoots(b *testing.B) {
-	st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{})
+	st, err := state_native.New(&ethpb.BeaconState{})
 	require.NoError(b, err)
 
 	max := params.BeaconConfig().HistoricalRootsLimit
@@ -35,7 +35,7 @@ func BenchmarkAppendHistoricalRoots(b *testing.B) {
 }
 
 func BenchmarkAppendHistoricalSummaries(b *testing.B) {
-	st, err := state_native.InitializeFromProtoCapella(&ethpb.BeaconStateCapella{})
+	st, err := state_native.New(&ethpb.BeaconStateCapella{})
 	require.NoError(b, err)
 
 	max := params.BeaconConfig().HistoricalRootsLimit

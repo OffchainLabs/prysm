@@ -81,7 +81,7 @@ func TestBLSToExecChangesForInclusion(t *testing.T) {
 		blsChanges[i] = message
 	}
 	spb.Validators = validators
-	st, err := state_native.InitializeFromProtoCapella(spb)
+	st, err := state_native.New(spb)
 	require.NoError(t, err)
 
 	signedChanges := make([]*eth.SignedBLSToExecutionChange, numValidators)
