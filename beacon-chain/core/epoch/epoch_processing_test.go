@@ -19,7 +19,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"google.golang.org/protobuf/proto"
 )
 
 func TestProcessSlashings_NotSlashed(t *testing.T) {
@@ -105,7 +104,7 @@ func TestProcessSlashings_SlashedLess(t *testing.T) {
 
 	for i, tt := range tests {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			original := proto.Clone(tt.state)
+			original := tt.state.Copy()
 			s, err := state_native.InitializeFromProtoPhase0(tt.state)
 			require.NoError(t, err)
 			helpers.ClearCache()
@@ -502,7 +501,7 @@ func TestProcessSlashings_SlashedElectra(t *testing.T) {
 
 	for i, tt := range tests {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			original := proto.Clone(tt.state)
+			original := tt.state.Copy()
 			s, err := state_native.InitializeFromProtoElectra(tt.state)
 			require.NoError(t, err)
 			helpers.ClearCache()

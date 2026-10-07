@@ -38,6 +38,7 @@ type ValidatorService struct {
 	ctx                     context.Context
 	cancel                  context.CancelFunc
 	validator               *validator
+	dutyAwareShutdown       *dutyAwareShutdownTracker
 	db                      db.Database
 	conn                    *validatorHelpers.NodeConnection
 	wallet                  *wallet.Wallet
@@ -110,6 +111,7 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 		stateless:               cfg.Stateless,
 		closeClientFunc:         cfg.CloseClientFunc,
 		maxHealthChecks:         cfg.MaxHealthChecks,
+		dutyAwareShutdown:       newDutyAwareShutdownTracker(),
 	}
 
 	// Use pre-built connection if provided
@@ -227,6 +229,7 @@ func (v *ValidatorService) Start() {
 		eventsChannel:                make(chan *eventClient.Event, 1),
 		payloadAvailability:          newPayloadAvailability(),
 		head:                         newHeadTracker(),
+		dutyAwareShutdown:            v.dutyAwareShutdown,
 	}
 
 	if v.distributed {
@@ -306,6 +309,17 @@ func (v *ValidatorService) ProposerSettings() *proposer.Settings {
 		return settings.Clone()
 	}
 	return nil
+}
+
+// GenesisTime returns the chain's genesis time, zero until the chain has started.
+func (v *ValidatorService) GenesisTime() time.Time {
+	return v.validator.GenesisTime()
+}
+
+// WaitForDutyAwareShutdown blocks until the validator client can be stopped and restarted
+// without missing any rewarded duty, or until the context is done.
+func (v *ValidatorService) WaitForDutyAwareShutdown(ctx context.Context) {
+	v.dutyAwareShutdown.wait(ctx)
 }
 
 // UpdateProposerSettings atomically mutates the proposer settings on the

@@ -35,6 +35,8 @@ const (
 	RequireBuilderValid
 	RequirePayloadHashValid
 	RequireExecutionRequestsRootValid
+	RequireExecutionRequestsLimitsValid
+	RequireWithdrawalsLimitValid
 	RequireEnvelopeSlotAboveFinalized
 	RequireEnvelopeSlotMatchesBlock
 	RequireBuilderSignatureValid

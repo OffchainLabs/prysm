@@ -183,6 +183,9 @@ func (vs *Server) getParentStateFromReorgData(ctx context.Context, slot primitiv
 }
 
 func (vs *Server) parentFull(parentRoot [32]byte) bool {
+	if parentSlot, err := vs.ForkchoiceFetcher.RecentBlockSlot(parentRoot); err == nil && slots.ToEpoch(parentSlot) < params.BeaconConfig().GloasForkEpoch {
+		return true
+	}
 	root, full := vs.HeadFetcher.HeadRootAndFull()
 	if root == parentRoot {
 		return full
