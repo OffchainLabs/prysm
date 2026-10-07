@@ -2,14 +2,21 @@ package accounts
 
 import (
 	"bytes"
+	"flag"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path"
 	"path/filepath"
 	"sort"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/build/bazel"
+	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -17,6 +24,7 @@ import (
 	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
+	"github.com/urfave/cli/v2"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -398,4 +406,44 @@ func TestExitAccountsCli_WriteJSON_NoBroadcast(t *testing.T) {
 	exists, err := file.Exists(path.Join(out, "validator-exit-1.json"), file.Regular)
 	require.NoError(t, err, "could not check if exit file exists")
 	require.Equal(t, true, exists, "Expected file to exist")
+}
+
+func TestExitAccountsCli_Web3Signer_GenesisThroughFactory(t *testing.T) {
+	var hits atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		var body string
+		switch r.URL.Path {
+		case "/eth/v1/beacon/genesis":
+			body = `{"data":{"genesis_time":"1590832934","genesis_validators_root":` +
+				`"0x0102030405060708091011121314151617181920212223242526272829303132",` +
+				`"genesis_fork_version":"0x00000000"}}`
+		case "/eth/v1/config/deposit_contract":
+			body = `{"data":{"chain_id":"1","address":"0x00000000219ab540356cbb839cbe05303d7705fa"}}`
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", api.JsonMediaType)
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer srv.Close()
+
+	reset := features.InitWithReset(&features.Flags{EnableBeaconRESTApi: true})
+	defer reset()
+
+	app := cli.App{}
+	set := flag.NewFlagSet("test", 0)
+	set.String(flags.Web3SignerURLFlag.Name, "", "")
+	set.String(flags.BeaconRESTApiProviderFlag.Name, "", "")
+	set.String(flags.BeaconRPCProviderFlag.Name, "127.0.0.1:1", "") // dead: only REST can serve genesis
+	require.NoError(t, set.Set(flags.Web3SignerURLFlag.Name, "http://127.0.0.1:1"))
+	require.NoError(t, set.Set(flags.BeaconRESTApiProviderFlag.Name, srv.URL))
+
+	// Exit gets past genesis and then fails on the empty key set, no public keys being configured.
+	err := Exit(cli.NewContext(&app, set, nil), &bytes.Buffer{})
+	require.NotNil(t, err)
+	require.NotEqual(t, int64(0), hits.Load(), "genesis was not fetched through the client factory")
 }
