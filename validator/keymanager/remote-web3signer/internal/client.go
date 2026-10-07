@@ -191,12 +191,12 @@ func (client *ApiClient) doRequest(ctx context.Context, httpMethod, fullPath str
 // unmarshalResponse is a utility method for unmarshalling responses.
 func unmarshalResponse(responseBody io.ReadCloser, unmarshalledResponseObject any) error {
 	defer closeBody(responseBody)
-	if err := json.NewDecoder(responseBody).Decode(&unmarshalledResponseObject); err != nil {
+	if decodeErr := json.NewDecoder(responseBody).Decode(&unmarshalledResponseObject); decodeErr != nil {
 		body, err := io.ReadAll(responseBody)
 		if err != nil {
-			return errors.Wrap(err, "failed to read response body")
+			return errors.Wrapf(decodeErr, "invalid format, unable to read response body: %v", err)
 		}
-		return errors.Wrap(err, fmt.Sprintf("invalid format, unable to read response body: %v", string(body)))
+		return errors.Wrapf(decodeErr, "invalid format, unable to read response body: %v", string(body))
 	}
 	return nil
 }
