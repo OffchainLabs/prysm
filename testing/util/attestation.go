@@ -10,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -103,93 +102,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 	var err error
 	// Only calculate head state if its an attestation for the current slot or future slot.
 	if generateHeadState || slot == bState.Slot() {
-		var headState state.BeaconState
-		switch bState.Version() {
-		case version.Phase0:
-			pbState, err := state_native.ContainerFrom[*ethpb.BeaconState](bState.ToProto())
-			if err != nil {
-				return nil, err
-			}
-			genState, err := state_native.NewUnsafe(pbState)
-			if err != nil {
-				return nil, err
-			}
-			headState = genState
-		case version.Altair:
-			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateAltair](bState.ToProto())
-			if err != nil {
-				return nil, err
-			}
-			genState, err := state_native.NewUnsafe(pbState)
-			if err != nil {
-				return nil, err
-			}
-			headState = genState
-		case version.Bellatrix:
-			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateBellatrix](bState.ToProto())
-			if err != nil {
-				return nil, err
-			}
-			genState, err := state_native.NewUnsafe(pbState)
-			if err != nil {
-				return nil, err
-			}
-			headState = genState
-		case version.Capella:
-			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateCapella](bState.ToProto())
-			if err != nil {
-				return nil, err
-			}
-			genState, err := state_native.NewUnsafe(pbState)
-			if err != nil {
-				return nil, err
-			}
-			headState = genState
-		case version.Deneb:
-			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateDeneb](bState.ToProto())
-			if err != nil {
-				return nil, err
-			}
-			genState, err := state_native.NewUnsafe(pbState)
-			if err != nil {
-				return nil, err
-			}
-			headState = genState
-		case version.Electra:
-			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateElectra](bState.ToProto())
-			if err != nil {
-				return nil, err
-			}
-			genState, err := state_native.NewUnsafe(pbState)
-			if err != nil {
-				return nil, err
-			}
-			headState = genState
-		case version.Fulu:
-			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateFulu](bState.ToProto())
-			if err != nil {
-				return nil, err
-			}
-			genState, err := state_native.NewUnsafe(pbState)
-			if err != nil {
-				return nil, err
-			}
-			headState = genState
-		case version.Gloas:
-			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateGloas](bState.ToProto())
-			if err != nil {
-				return nil, err
-			}
-			genState, err := state_native.NewUnsafe(pbState)
-			if err != nil {
-				return nil, err
-			}
-			headState = genState
-		default:
-			return nil, fmt.Errorf("state version %s isn't supported", version.String(bState.Version()))
-		}
-
-		headState, err = transition.ProcessSlots(context.Background(), headState, slot+1)
+		headState, err := transition.ProcessSlots(context.Background(), bState.Copy(), slot+1)
 		if err != nil {
 			return nil, err
 		}
