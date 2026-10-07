@@ -11,6 +11,7 @@ import (
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
@@ -757,6 +758,43 @@ func TestSettings_TargetGasLimit(t *testing.T) {
 	})
 }
 
+func TestSettings_GasLimitAt(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 100
+	cfg.GasLimitSchedule = []params.GasLimitScheduleEntry{{Epoch: 100, GasLimit: 60_000_000}}
+	params.OverrideBeaconConfig(cfg)
+	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+
+	pubkey, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+	require.NoError(t, err)
+	pk := bytesutil.ToBytes48(pubkey)
+	builderOnly := &Settings{DefaultConfig: &Option{BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: 35_000_000}}}
+
+	tests := []struct {
+		name     string
+		settings *Settings
+		epoch    primitives.Epoch
+		want     validator.Uint64
+	}{
+		{name: "nil settings pre-gloas use the chain default", epoch: 99, want: chainDefault},
+		{name: "nil settings at gloas use the schedule", epoch: 100, want: 60_000_000},
+		{name: "builder gas limit applies pre-gloas", settings: builderOnly, epoch: 99, want: 35_000_000},
+		{name: "builder gas limit is ignored at gloas", settings: builderOnly, epoch: 100, want: 60_000_000},
+		{
+			name:     "operator value wins at gloas",
+			settings: &Settings{DefaultConfig: &Option{GasLimit: 50_000_000}},
+			epoch:    100,
+			want:     50_000_000,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, tt.settings.GasLimitAt(pk, tt.epoch))
+		})
+	}
+}
+
 func TestSettings_TargetGasLimit_Schedule(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -830,12 +868,12 @@ func TestSettingFromConsensus(t *testing.T) {
 			DefaultConfig: &validatorpb.ProposerOptionPayload{
 				Builder: &validatorpb.BuilderConfig{
 					Builders: []*validatorpb.BuilderEntry{
-						{Url: "https://b.example", AuthData: []byte("first")},
-						{Url: "https://b.example", AuthData: []byte("second")},
-						{Url: "https://b.example", AuthData: []byte("first")},
+						{Url: "https://b.example", AuthData: new(hexutil.Encode([]byte("first")))},
+						{Url: "https://b.example", AuthData: new(hexutil.Encode([]byte("second")))},
+						{Url: "https://b.example", AuthData: new(hexutil.Encode([]byte("first")))},
 						{Url: "https://other.example"},
-						{Url: "https://other.example", AuthData: []byte("other.example")},
-						{AuthData: []byte("url-less")},
+						{Url: "https://other.example", AuthData: new(hexutil.Encode([]byte("other.example")))},
+						{AuthData: new(hexutil.Encode([]byte("url-less")))},
 					},
 				},
 			},
@@ -860,8 +898,10 @@ func TestSettingFromConsensus(t *testing.T) {
 						{Url: "https://good.example"},
 						{Url: "not a url"},
 						{Url: "https://" + strings.Repeat("a", MaxBuilderURLSize)},
-						{Url: "https://badkey.example", Pubkeys: [][]byte{make([]byte, 47)}},
-						{Url: "https://badauth.example", AuthData: make([]byte, MaxAuthDataSize+1)},
+						{Url: "https://badkey.example", BuilderPubkeys: []string{hexutil.Encode(make([]byte, 47))}},
+						{Url: "https://badauth.example", AuthData: new(hexutil.Encode(make([]byte, MaxAuthDataSize+1)))},
+						{Url: "https://base64auth.example", AuthData: new("aGVsbG8=")},
+						{Url: "https://base64key.example", BuilderPubkeys: []string{"AAAA"}},
 					},
 				},
 			},

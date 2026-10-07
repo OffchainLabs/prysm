@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
@@ -730,19 +731,21 @@ func TestPublishExecutionPayloadEnvelope_GossipValidation(t *testing.T) {
 			expectedBody: "execution requests root does not match",
 		},
 		{
-			// JSON decoding bounds the request lists, so only an SSZ body reaches this check.
+			// JSON decoding bounds the request lists in ToConsensus, and SSZ decoding
+			// enforces the same limits in UnmarshalSSZ, so an oversized body is
+			// rejected before gossip validation and must still 400.
 			name:         "execution requests over limit",
 			signed:       oversizedRequests,
 			sszBody:      true,
 			blocker:      &testutil.MockBlocker{BlockToReturn: gloasBlockWithBid(t, envSlot, matchingBid(oversizedRequests))},
-			expectedBody: "too many builder deposit requests",
+			expectedBody: ssz.ErrListTooBig.Error(),
 		},
 		{
 			name:         "withdrawals over limit",
 			signed:       oversizedWithdrawals,
 			sszBody:      true,
 			blocker:      &testutil.MockBlocker{BlockToReturn: gloasBlockWithBid(t, envSlot, matchingBid(oversizedWithdrawals))},
-			expectedBody: "too many withdrawals",
+			expectedBody: ssz.ErrListTooBig.Error(),
 		},
 		{
 			// Bid-consistent envelope with a garbage signature must fail the final check.

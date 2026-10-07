@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1
 #
 # Cross-toolchain builder image
+# -----------------------------
+#
+# This docker file builds a cross-toolchain builder image that can be used to build binaries for multiple architectures.
 
 FROM golang:1.26-bookworm@sha256:1ecb7edf62a0408027bd5729dfd6b1b8766e578e8df93995b225dfd0944eb651 AS builder
 

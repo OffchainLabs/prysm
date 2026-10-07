@@ -49,6 +49,17 @@ func (h *headTracker) update(slot primitives.Slot, blockRoot string, payloadStat
 		return nil
 	}
 
+	// A beacon node announces a Gloas head twice: empty on block import, then full
+	// once its payload arrives. A lagging node's empty announcement must not undo
+	// the full status another node already reported for the same head.
+	if h.set &&
+		slot == h.head.Slot &&
+		root == h.head.Root &&
+		h.head.PayloadStatus == api.PayloadStatusFull &&
+		payloadStatus != api.PayloadStatusFull {
+		return nil
+	}
+
 	h.head, h.set = iface.Head{Root: root, Slot: slot, PayloadStatus: payloadStatus}, true
 
 	return nil

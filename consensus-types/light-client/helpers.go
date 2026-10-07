@@ -8,7 +8,7 @@ import (
 )
 
 type branchConstraint interface {
-	[4][fieldparams.RootLength]byte | [5][fieldparams.RootLength]byte | [6][fieldparams.RootLength]byte | [7][fieldparams.RootLength]byte
+	[4][fieldparams.RootLength]byte | [5][fieldparams.RootLength]byte | [6][fieldparams.RootLength]byte | [7][fieldparams.RootLength]byte | [9][fieldparams.RootLength]byte | [11][fieldparams.RootLength]byte
 }
 
 func createBranch[T branchConstraint](name string, input [][]byte, depth int) (T, error) {

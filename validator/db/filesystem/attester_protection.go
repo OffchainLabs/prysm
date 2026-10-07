@@ -110,7 +110,7 @@ func (s *Store) SlashableAttestationCheck(
 
 	// Check if the attestation is potentially slashable regarding EIP-3076 minimal conditions.
 	// If not, save the new attestation into the database.
-	if err := s.SaveAttestationForPubKey(ctx, pubKey, signingRoot32, indexedAtt); err != nil {
+	if err := s.SaveAttestationForPubKey(ctx, pubKey, signingRoot32[:], indexedAtt); err != nil {
 		if strings.Contains(err.Error(), "could not sign attestation") {
 			return errors.Wrap(err, failedAttLocalProtectionErr)
 		}
@@ -127,7 +127,7 @@ func (s *Store) SlashableAttestationCheck(
 func (s *Store) SaveAttestationForPubKey(
 	_ context.Context,
 	pubkey [fieldparams.BLSPubkeyLength]byte,
-	_ [32]byte,
+	_ []byte,
 	att ethpb.IndexedAtt,
 ) error {
 	// If there is no attestation, return on error.
