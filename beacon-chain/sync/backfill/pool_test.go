@@ -75,6 +75,9 @@ type mockPool struct {
 	finishedChan chan batch
 	finishedErr  chan error
 	todoChan     chan batch
+	// completeEntered, when non-nil, receives a signal each time complete() is
+	// entered, letting tests synchronize with the service runloop.
+	completeEntered chan struct{}
 }
 
 func (m *mockPool) spawn(_ context.Context, _ int, _ PeerAssigner, _ *workerCfg) {
@@ -85,6 +88,9 @@ func (m *mockPool) todo(b batch) {
 }
 
 func (m *mockPool) complete() (batch, error) {
+	if m.completeEntered != nil {
+		m.completeEntered <- struct{}{}
+	}
 	select {
 	case b := <-m.finishedChan:
 		return b, nil

@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/proto/dbval"
 	"github.com/OffchainLabs/prysm/v7/runtime"
+	"github.com/OffchainLabs/prysm/v7/runtime/jobs"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -47,9 +48,26 @@ type Service struct {
 	fuluStart       primitives.Slot
 	denebStart      primitives.Slot
 	progressLogger  *intervalLogger
+	job             *jobs.Tracker
 }
 
 const progressLogInterval = 60
+
+// JobID is the identifier under which the backfill service reports its status
+// and progress to the jobs API, ie GET /prysm/v1/node/jobs/backfill.
+const JobID = "backfill"
+
+// Phases reported by the backfill job as it moves through its lifecycle.
+const (
+	jobPhaseWaitingForClock    = "waiting for genesis clock"
+	jobPhaseWaitingForNeeds    = "waiting for sync needs"
+	jobPhaseWaitingForInitSync = "waiting for initial-sync"
+	jobPhaseBackfilling        = "backfilling"
+	jobPhaseComplete           = "complete"
+	jobPhaseDisabled           = "disabled"
+	jobPhaseGenesisSync        = "not required (node synced from genesis)"
+	jobPhaseNothingToDo        = "not required (minimum retention slot already backfilled)"
+)
 
 var _ runtime.Service = (*Service)(nil)
 
@@ -126,6 +144,19 @@ func WithSyncNeedsWaiter(f func() (das.SyncNeeds, error)) ServiceOption {
 	}
 }
 
+// WithJobRegistry registers the backfill job with the given registry, so that its
+// status and progress are reported through the jobs API.
+func WithJobRegistry(r *jobs.Registry) ServiceOption {
+	return func(s *Service) error {
+		t, err := r.Register(JobID)
+		if err != nil {
+			return err
+		}
+		s.job = t
+		return nil
+	}
+}
+
 // NewService initializes the backfill Service. Like all implementations of the Service interface,
 // the service won't begin its runloop until Start() is called.
 func NewService(ctx context.Context, su *Store, bStore *filesystem.BlobStorage, dcStore *filesystem.DataColumnStorage, cw startup.ClockWaiter, p p2p.P2P, pa PeerAssigner, opts ...ServiceOption) (*Service, error) {
@@ -157,9 +188,13 @@ func (s *Service) updateComplete() bool {
 	if err != nil {
 		if errors.Is(err, errEndSequence) {
 			log.WithField("backfillSlot", b.begin).Info("Backfill is complete")
+			s.job.SetPhase(jobPhaseComplete)
 			return true
 		}
 		log.WithError(err).Error("Service received unhandled error from worker pool")
+		// The pool returns the context error when the node is shutting down;
+		// record that as canceled rather than failed.
+		s.failOrCancelJob(err)
 		return true
 	}
 	s.batchSeq.update(b)
@@ -213,6 +248,7 @@ func (s *Service) logProgress() {
 	if origin > target && lowest <= origin && lowest >= target {
 		percent := float64(origin-lowest) / float64(origin-target) * 100
 		fields["completion"] = fmt.Sprintf("%.2f%%", percent)
+		s.job.SetProgress(uint64(origin-lowest), uint64(origin-target), "slots")
 	}
 
 	s.progressLogger.WithFields(fields).Info("Backfill in progress")
@@ -254,6 +290,7 @@ func (s *Service) scheduleTodos() {
 func (s *Service) Start() {
 	if !s.enabled {
 		log.Info("Service not enabled")
+		s.job.SetPhase(jobPhaseDisabled)
 		s.markComplete()
 		return
 	}
@@ -265,24 +302,31 @@ func (s *Service) Start() {
 
 	if s.store.isGenesisSync() {
 		log.Info("Node synced from genesis, shutting down backfill")
+		s.job.SetPhase(jobPhaseGenesisSync)
 		s.markComplete()
 		return
 	}
 
+	s.job.Start()
+	s.job.SetPhase(jobPhaseWaitingForClock)
 	clock, err := s.cw.WaitForClock(ctx)
 	if err != nil {
 		log.WithError(err).Error("Service failed to start while waiting for genesis data")
+		s.failOrCancelJob(err)
 		return
 	}
 	s.clock = clock
 
 	if s.syncNeedsWaiter == nil {
 		log.Error("Service missing sync needs waiter; cannot start")
+		s.job.Fail(errors.New("missing sync needs waiter"))
 		return
 	}
+	s.job.SetPhase(jobPhaseWaitingForNeeds)
 	syncNeeds, err := s.syncNeedsWaiter()
 	if err != nil {
 		log.WithError(err).Error("Service failed to start while waiting for sync needs")
+		s.failOrCancelJob(err)
 		return
 	}
 	s.syncNeeds = syncNeeds
@@ -294,17 +338,21 @@ func (s *Service) Start() {
 		log.WithField("minimumSlot", needs.Block.Begin).
 			WithField("backfillLowestSlot", status.LowSlot).
 			Info("Exiting backfill service; minimum block retention slot > lowest backfilled block")
+		s.job.SetPhase(jobPhaseNothingToDo)
 		s.markComplete()
 		return
 	}
 
 	if s.initSyncWaiter != nil {
 		log.Info("Service waiting for initial-sync to reach head before starting")
+		s.job.SetPhase(jobPhaseWaitingForInitSync)
 		if err := s.initSyncWaiter(); err != nil {
 			log.WithError(err).Error("Error waiting for init-sync to complete")
+			s.failOrCancelJob(err)
 			return
 		}
 	}
+	s.job.SetPhase(jobPhaseBackfilling)
 
 	if s.workerCfg == nil {
 		s.workerCfg = &workerCfg{
@@ -317,6 +365,7 @@ func (s *Service) Start() {
 
 		if err = initWorkerCfg(ctx, s.workerCfg, s.verifierWaiter, s.store); err != nil {
 			log.WithError(err).Error("Could not initialize blob verifier in backfill service")
+			s.failOrCancelJob(err)
 			return
 		}
 	}
@@ -329,6 +378,7 @@ func (s *Service) Start() {
 	s.batchSeq = newBatchSequencer(s.nWorkers, primitives.Slot(status.LowSlot), primitives.Slot(s.batchSize), s.syncNeeds.Currently)
 	if err = s.initBatches(); err != nil {
 		log.WithError(err).Error("Non-recoverable error in backfill service")
+		s.job.Fail(err)
 		return
 	}
 
@@ -341,6 +391,7 @@ func (s *Service) Start() {
 
 	for {
 		if ctx.Err() != nil {
+			s.job.Cancel()
 			return
 		}
 		if s.updateComplete() {
@@ -386,8 +437,22 @@ func newDataColumnVerifierFromInitializer(ini *verification.Initializer) verific
 }
 
 func (s *Service) markComplete() {
+	s.job.Complete()
 	close(s.complete)
 	log.Info("Marked as complete")
+}
+
+// failOrCancelJob records the terminal state of the backfill job, distinguishing
+// node shutdown from an actual failure. The service context is the discriminator:
+// every shutdown-driven cancellation roots at s.ctx, whereas the worker pool cancels
+// its own child context when it shuts down after an internal fatal error, so a
+// context.Canceled error alone does not imply the node is stopping.
+func (s *Service) failOrCancelJob(err error) {
+	if s.ctx.Err() != nil {
+		s.job.Cancel()
+		return
+	}
+	s.job.Fail(err)
 }
 
 func (s *Service) WaitForCompletion() error {
