@@ -141,11 +141,8 @@ func (t *dutyAwareShutdownTracker) wait(ctx context.Context) {
 
 	giveUp := time.After(t.maxWait)
 
-	// The slot for which the wait for rewarded duties was already logged, to log it only once.
-	var (
-		waitLogged     bool
-		waitLoggedSlot primitives.Slot
-	)
+	// False right after waiting for the start of the slot: the wait for its rewarded duties is already logged.
+	logWait := true
 
 	for {
 		active, genesis, hasRewardedDuty, stopped := t.state()
@@ -157,30 +154,9 @@ func (t *dutyAwareShutdownTracker) wait(ctx context.Context) {
 		slot := slots.CurrentSlot(genesis)
 		nextSlotStart := slots.UnsafeStartTime(genesis, slot+1)
 
-		// Wait for the rewarded duties of the current slot to be done.
 		slotHasRewardedDuty := hasRewardedDuty(slot)
-		if slotHasRewardedDuty {
-			done := t.doneChan(slot)
-			if !waitLogged || waitLoggedSlot != slot {
-				select {
-				case <-done:
-				default:
-					log.WithField("slot", slot).Info("Waiting for the rewarded duties of the slot to be done before shutting down. Interrupt again to shut down immediately")
-				}
-			}
-
-			select {
-			case <-done:
-			case <-stopped:
-				log.Debug(msgNoDutyInProgress)
-				return
-			case <-giveUp:
-				log.WithField("maxWait", t.maxWait).Warning(msgNoShutdownWindow)
-				return
-			case <-ctx.Done():
-				log.Info(msgShutdownInterrupted)
-				return
-			}
+		if slotHasRewardedDuty && !t.waitForRewardedDuties(ctx, stopped, giveUp, slot, logWait) {
+			return
 		}
 
 		// A restart started now must be ready before the start of the next slot,
@@ -188,6 +164,7 @@ func (t *dutyAwareShutdownTracker) wait(ctx context.Context) {
 		now := time.Now()
 		if !now.Before(nextSlotStart) {
 			// The duties ended after the end of the slot: check the new slot.
+			logWait = true
 			continue
 		}
 
@@ -213,24 +190,42 @@ func (t *dutyAwareShutdownTracker) wait(ctx context.Context) {
 		}
 
 		log.WithFields(fields).Info("Too late in the slot to restart before the next one, waiting for the rewarded duties of the next slot to be done before shutting down. Interrupt again to shut down immediately")
-		waitLogged, waitLoggedSlot = true, slot+1
-		if !t.sleep(ctx, stopped, giveUp, time.Until(nextSlotStart)) {
+		if !waitFor(ctx, time.After(time.Until(nextSlotStart)), stopped, giveUp, t.maxWait) {
 			return
 		}
+
+		logWait = false
 	}
 }
 
-// sleep waits for the duration and returns true, or returns false if the
+// waitForRewardedDuties blocks until the rewarded duties of the slot are done and returns true,
+// or returns false if the runner stops, the give up timer fires or the context is done.
+func (t *dutyAwareShutdownTracker) waitForRewardedDuties(ctx context.Context, stopped <-chan struct{}, giveUp <-chan time.Time, slot primitives.Slot, logWait bool) bool {
+	done := t.doneChan(slot)
+
+	if logWait {
+		select {
+		case <-done:
+			return true
+		default:
+			log.WithField("slot", slot).Info("Waiting for the rewarded duties of the slot to be done before shutting down. Interrupt again to shut down immediately")
+		}
+	}
+
+	return waitFor(ctx, done, stopped, giveUp, t.maxWait)
+}
+
+// waitFor blocks until `ready` receives and returns true, or returns false if the
 // runner stops, the give up timer fires or the context is done.
-func (t *dutyAwareShutdownTracker) sleep(ctx context.Context, stopped <-chan struct{}, giveUp <-chan time.Time, d time.Duration) bool {
+func waitFor[T any](ctx context.Context, ready <-chan T, stopped <-chan struct{}, giveUp <-chan time.Time, maxWait time.Duration) bool {
 	select {
-	case <-time.After(d):
+	case <-ready:
 		return true
 	case <-stopped:
 		log.Debug(msgNoDutyInProgress)
 		return false
 	case <-giveUp:
-		log.WithField("maxWait", t.maxWait).Warning(msgNoShutdownWindow)
+		log.WithField("maxWait", maxWait).Warning(msgNoShutdownWindow)
 		return false
 	case <-ctx.Done():
 		log.Info(msgShutdownInterrupted)
