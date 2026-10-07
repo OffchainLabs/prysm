@@ -511,7 +511,7 @@ func ComputeCommittee(
 		return nil, errors.New("index out of range")
 	}
 
-	// Save the shuffled indices in cache, this is only needed once per epoch or once per new committee index.
+	// UnshuffleList shuffles in place, so work on a copy to leave the caller's indices untouched.
 	shuffledIndices := make([]primitives.ValidatorIndex, len(indices))
 	copy(shuffledIndices, indices)
 	// UnshuffleList is used here as it is an optimized implementation created
@@ -522,7 +522,9 @@ func ComputeCommittee(
 		return nil, err
 	}
 
-	return shuffledList[start:end], nil
+	committee := make([]primitives.ValidatorIndex, end-start)
+	copy(committee, shuffledList[start:end])
+	return committee, nil
 }
 
 // InitializeProposerLookahead computes the list of the proposer indices for the next MIN_SEED_LOOKAHEAD + 1 epochs.
