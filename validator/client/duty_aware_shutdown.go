@@ -154,8 +154,7 @@ func (t *dutyAwareShutdownTracker) wait(ctx context.Context) {
 		slot := slots.CurrentSlot(genesis)
 		nextSlotStart := slots.UnsafeStartTime(genesis, slot+1)
 
-		slotHasRewardedDuty := hasRewardedDuty(slot)
-		if slotHasRewardedDuty && !t.waitForRewardedDuties(ctx, stopped, giveUp, slot, logWait) {
+		if hasRewardedDuty(slot) && !t.waitForRewardedDuties(ctx, stopped, giveUp, slot, logWait) {
 			return
 		}
 
@@ -169,27 +168,14 @@ func (t *dutyAwareShutdownTracker) wait(ctx context.Context) {
 		}
 
 		timeLeft := nextSlotStart.Sub(now).Round(time.Millisecond)
-		fields := logrus.Fields{
+		if timeLeft >= t.restartBudget || !hasRewardedDuty(slot+1) {
+			return
+		}
+
+		log.WithFields(logrus.Fields{
 			"slot":                   slot,
 			"timeLeftBeforeNextSlot": timeLeft,
-		}
-
-		if timeLeft >= t.restartBudget {
-			if slotHasRewardedDuty {
-				log.WithFields(fields).Debug("Rewarded duties of the slot done, shutting down")
-				return
-			}
-
-			log.WithFields(fields).Debug("No rewarded duty in the slot, shutting down")
-			return
-		}
-
-		if !hasRewardedDuty(slot + 1) {
-			log.WithFields(fields).Debug("No rewarded duty in the next slot, shutting down")
-			return
-		}
-
-		log.WithFields(fields).Info("Too late in the slot to restart before the next one, waiting for the rewarded duties of the next slot to be done before shutting down. Interrupt again to shut down immediately")
+		}).Info("Too late in the slot to restart before the next one, waiting for the rewarded duties of the next slot to be done before shutting down. Interrupt again to shut down immediately")
 		if !waitFor(ctx, time.After(time.Until(nextSlotStart)), stopped, giveUp, t.maxWait) {
 			return
 		}

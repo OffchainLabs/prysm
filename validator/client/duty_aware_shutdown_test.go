@@ -102,7 +102,6 @@ func TestDutyAwareShutdownTrackerWait(t *testing.T) {
 		require.Equal(t, slot, slots.At(genesis, at))
 		require.Equal(t, true, at.Before(slots.UnsafeStartTime(genesis, slot+1).Add(-testDutyAwareShutdownRestartBudget)))
 		require.LogsContain(t, hook, "Waiting for the rewarded duties of the slot")
-		require.LogsContain(t, hook, "Rewarded duties of the slot done, shutting down")
 	})
 
 	t.Run("already done", func(t *testing.T) {
@@ -163,11 +162,9 @@ func TestDutyAwareShutdownTrackerWait(t *testing.T) {
 		// The wait for the rewarded duties of the next slot is logged only once.
 		require.LogsContain(t, hook, "Too late in the slot to restart before the next one")
 		require.LogsDoNotContain(t, hook, "Waiting for the rewarded duties of the slot")
-		require.LogsContain(t, hook, "Rewarded duties of the slot done, shutting down")
 	})
 
 	t.Run("current slot without rewarded duty", func(t *testing.T) {
-		hook := logTest.NewGlobal()
 		tracker, genesis := setupDutyAwareShutdownTest(t, 50*time.Millisecond)
 		slot := slots.CurrentSlot(genesis)
 		tracker.start(genesis, func(s primitives.Slot) bool { return s != slot })
@@ -175,11 +172,9 @@ func TestDutyAwareShutdownTrackerWait(t *testing.T) {
 		// The slot is not marked as done.
 		at := receive(t, waitAsync(t.Context(), tracker))
 		require.Equal(t, slot, slots.At(genesis, at))
-		require.LogsContain(t, hook, "No rewarded duty in the slot, shutting down")
 	})
 
 	t.Run("requested after cutoff, next slot without rewarded duty", func(t *testing.T) {
-		hook := logTest.NewGlobal()
 		tracker, genesis := setupDutyAwareShutdownTest(t, testDutyAwareShutdownSlotDuration-testDutyAwareShutdownRestartBudget/2)
 		slot := slots.CurrentSlot(genesis)
 		tracker.start(genesis, func(s primitives.Slot) bool { return s != slot+1 })
@@ -187,7 +182,6 @@ func TestDutyAwareShutdownTrackerWait(t *testing.T) {
 
 		at := receive(t, waitAsync(t.Context(), tracker))
 		require.Equal(t, slot, slots.At(genesis, at))
-		require.LogsContain(t, hook, "No rewarded duty in the next slot, shutting down")
 	})
 
 	t.Run("give up", func(t *testing.T) {
