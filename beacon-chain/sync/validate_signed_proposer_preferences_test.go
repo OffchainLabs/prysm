@@ -268,6 +268,7 @@ func TestValidateSignedProposerPreferencesGossip_HappyPath(t *testing.T) {
 	require.Equal(t, true, ok)
 	require.DeepEqual(t, signedPreferences.Message.FeeRecipient, got.FeeRecipient[:])
 	require.Equal(t, signedPreferences.Message.TargetGasLimit, got.TargetGasLimit)
+	require.DeepEqual(t, signedPreferences.Signature, got.Signature[:])
 	validatorData, ok := msg.ValidatorData.(*ethpb.SignedProposerPreferences)
 	require.Equal(t, true, ok)
 	require.DeepEqual(t, signedPreferences, validatorData)

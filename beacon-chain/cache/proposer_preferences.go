@@ -1,12 +1,16 @@
 package cache
 
 import (
+	"cmp"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
 
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	gocache "github.com/patrickmn/go-cache"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -38,6 +42,7 @@ type ProposerPreference struct {
 	ValidatorIndex primitives.ValidatorIndex
 	FeeRecipient   primitives.ExecutionAddress
 	TargetGasLimit uint64
+	Signature      [fieldparams.BLSSignatureLength]byte
 }
 
 // FeeRecipientOrDefault returns the preference's FeeRecipient, or the
@@ -141,6 +146,38 @@ func (c *ProposerPreferencesCache) Has(dependentRoot [32]byte, slot primitives.S
 		}
 	}
 	return false
+}
+
+// Signed returns the signed preferences matching the optional slot and dependent root filters, ordered by slot ascending.
+func (c *ProposerPreferencesCache) Signed(slot *primitives.Slot, dependentRoot *[32]byte) []*ethpb.SignedProposerPreferences {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	result := make([]*ethpb.SignedProposerPreferences, 0)
+	for s, prefs := range c.preferences {
+		if slot != nil && s != *slot {
+			continue
+		}
+		for _, p := range prefs {
+			if dependentRoot != nil && p.DependentRoot != *dependentRoot {
+				continue
+			}
+			result = append(result, &ethpb.SignedProposerPreferences{
+				Message: &ethpb.ProposerPreferences{
+					DependentRoot:  p.DependentRoot[:],
+					ProposalSlot:   s,
+					ValidatorIndex: p.ValidatorIndex,
+					FeeRecipient:   p.FeeRecipient[:],
+					TargetGasLimit: p.TargetGasLimit,
+				},
+				Signature: p.Signature[:],
+			})
+		}
+	}
+	slices.SortStableFunc(result, func(a, b *ethpb.SignedProposerPreferences) int {
+		return cmp.Compare(a.Message.ProposalSlot, b.Message.ProposalSlot)
+	})
+	return result
 }
 
 // PruneBefore removes all signed preferences for slots before the provided slot.
