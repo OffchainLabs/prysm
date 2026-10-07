@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/mock"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/mock/gomock"
@@ -284,6 +285,116 @@ func TestGetVersion(t *testing.T) {
 				assert.ErrorContains(t, testCase.expectedError, err)
 			} else {
 				assert.DeepEqual(t, testCase.expectedResponse, version)
+			}
+		})
+	}
+}
+
+func TestGetPeers(t *testing.T) {
+	const peersEndpoint = "/eth/v1/node/peers"
+
+	testCases := []struct {
+		name                 string
+		restEndpointResponse structs.GetPeersResponse
+		restEndpointError    error
+		expectedResponse     *ethpb.Peers
+		expectedError        string
+	}{
+		{
+			name:              "fails to query REST endpoint",
+			restEndpointError: errors.New("foo error"),
+			expectedError:     "foo error",
+		},
+		{
+			name:                 "returns no peers",
+			restEndpointResponse: structs.GetPeersResponse{Data: []*structs.Peer{}},
+			expectedResponse:     &ethpb.Peers{Peers: []*ethpb.Peer{}},
+		},
+		{
+			name:                 "returns nil peer",
+			restEndpointResponse: structs.GetPeersResponse{Data: []*structs.Peer{nil}},
+			expectedError:        "peer at index 0 is nil",
+		},
+		{
+			name: "returns unknown direction",
+			restEndpointResponse: structs.GetPeersResponse{Data: []*structs.Peer{{
+				Direction: "sideways",
+				State:     "connected",
+			}}},
+			expectedError: "unknown peer direction `sideways`",
+		},
+		{
+			name: "returns unknown state",
+			restEndpointResponse: structs.GetPeersResponse{Data: []*structs.Peer{{
+				Direction: "inbound",
+				State:     "napping",
+			}}},
+			expectedError: "unknown connection state `napping`",
+		},
+		{
+			name: "returns peers",
+			restEndpointResponse: structs.GetPeersResponse{Data: []*structs.Peer{
+				{
+					PeerId:             "peer1",
+					Enr:                "enr1",
+					LastSeenP2PAddress: "address1",
+					State:              "connected",
+					Direction:          "inbound",
+				},
+				{
+					PeerId:             "peer2",
+					Enr:                "enr2",
+					LastSeenP2PAddress: "address2",
+					State:              "DISCONNECTING",
+					Direction:          "OutBound",
+				},
+			}},
+			expectedResponse: &ethpb.Peers{Peers: []*ethpb.Peer{
+				{
+					PeerId:          "peer1",
+					Enr:             "enr1",
+					Address:         "address1",
+					ConnectionState: ethpb.ConnectionState_CONNECTED,
+					Direction:       ethpb.PeerDirection_INBOUND,
+				},
+				{
+					PeerId:          "peer2",
+					Enr:             "enr2",
+					Address:         "address2",
+					ConnectionState: ethpb.ConnectionState_DISCONNECTING,
+					Direction:       ethpb.PeerDirection_OUTBOUND,
+				},
+			}},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			ctx := t.Context()
+
+			var peersResponse structs.GetPeersResponse
+			handler := mock.NewMockHandler(ctrl)
+			handler.EXPECT().Get(
+				gomock.Any(),
+				peersEndpoint,
+				&peersResponse,
+			).Return(
+				testCase.restEndpointError,
+			).SetArg(
+				2,
+				testCase.restEndpointResponse,
+			)
+
+			nodeClient := &beaconApiNodeClient{handler: handler}
+			peers, err := nodeClient.Peers(ctx, &emptypb.Empty{})
+
+			if testCase.expectedResponse == nil {
+				assert.ErrorContains(t, testCase.expectedError, err)
+			} else {
+				require.NoError(t, err)
+				assert.DeepEqual(t, testCase.expectedResponse, peers)
 			}
 		})
 	}
