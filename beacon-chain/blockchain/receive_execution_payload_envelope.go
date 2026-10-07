@@ -186,12 +186,24 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return nil
 	}
 
-	log.WithFields(logrus.Fields{
+	gasLimit, gasUsed := float64(execution.GasLimit()), float64(execution.GasUsed())
+
+	payloadGasLimit.Set(gasLimit)
+	payloadGasUsed.Set(gasUsed)
+
+	fields := logrus.Fields{
 		"slot":       envelope.Slot(),
 		"blockRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(root[:])),
 		"blockHash":  fmt.Sprintf("%#x", bytesutil.Trunc(execution.BlockHash())),
 		"parentHash": fmt.Sprintf("%#x", bytesutil.Trunc(execution.ParentHash())),
-	}).Info("Synced execution payload envelope")
+	}
+
+	if gasLimit > 0 {
+		fields["gasUtilized"] = fmt.Sprintf("%.2f%%", 100*gasUsed/gasLimit)
+	}
+
+	log.WithFields(fields).Info("Synced execution payload envelope")
+
 	return nil
 }
 

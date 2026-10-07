@@ -1254,9 +1254,8 @@ func (e *ExecutionRequestsGloas) ToConsensus() (*enginev1.ExecutionRequestsGloas
 		return nil, server.NewDecodeError(errNilValue, "ExecutionRequestsGloas")
 	}
 	var err error
-	if err = slice.VerifyMaxLength(e.Deposits, params.BeaconConfig().MaxDepositRequestsPerPayload); err != nil {
-		return nil, err
-	}
+	// Gloas has no MAX_DEPOSIT_REQUESTS_PER_PAYLOAD (consensus-specs #5436), so
+	// deposits are not length checked here.
 	depositRequests := make([]*enginev1.DepositRequest, len(e.Deposits))
 	for i, d := range e.Deposits {
 		depositRequests[i], err = d.ToConsensus()

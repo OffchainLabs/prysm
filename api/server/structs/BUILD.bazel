@@ -65,6 +65,7 @@ go_test(
         "//api:go_default_library",
         "//beacon-chain/core/feed/state:go_default_library",
         "//config/fieldparams:go_default_library",
+        "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//proto/engine/v1:go_default_library",

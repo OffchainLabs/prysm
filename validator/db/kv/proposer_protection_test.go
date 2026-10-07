@@ -101,6 +101,67 @@ func TestSaveProposalHistoryForPubKey_OK(t *testing.T) {
 	require.DeepEqual(t, want[0], proposalHistory[0])
 }
 
+func TestSaveProposalHistoryForPubKey_SigningRootNil(t *testing.T) {
+	pubkey := [fieldparams.BLSPubkeyLength]byte{3}
+	db := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubkey})
+
+	slot := primitives.Slot(2)
+
+	err := db.SaveProposalHistoryForSlot(t.Context(), pubkey, slot, nil)
+	require.NoError(t, err, "Saving proposal history failed: %v")
+	proposalHistory, err := db.ProposalHistoryForPubKey(t.Context(), pubkey)
+	require.NoError(t, err, "Failed to get proposal history")
+
+	require.Equal(t, 1, len(proposalHistory))
+
+	// The proposal has no signing root, which should not be read back as the all-zero signing root.
+	want := &common.Proposal{
+		Slot: slot,
+	}
+	require.DeepEqual(t, want, proposalHistory[0])
+}
+
+func TestSlashableProposalCheck_UnknownSigningRoot(t *testing.T) {
+	const (
+		lowestSlot = primitives.Slot(1)
+		slot       = primitives.Slot(2)
+	)
+
+	ctx := t.Context()
+	pubkey := [fieldparams.BLSPubkeyLength]byte{4}
+	db := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubkey})
+
+	// Save a proposal at a lower slot first, so EIP-3076 condition 2 does not mask condition 1,
+	// then save the proposal with an unknown signing root.
+	lowestSigningRoot := [fieldparams.RootLength]byte{1}
+	require.NoError(t, db.SaveProposalHistoryForSlot(ctx, pubkey, lowestSlot, lowestSigningRoot[:]))
+	require.NoError(t, db.SaveProposalHistoryForSlot(ctx, pubkey, slot, nil))
+
+	// The proposal exists, but without any signing root.
+	_, proposalExists, signingRootExists, err := db.ProposalHistoryForSlot(ctx, pubkey, slot)
+	require.NoError(t, err)
+	require.Equal(t, true, proposalExists, "the proposal should exist")
+	require.Equal(t, false, signingRootExists, "the proposal should have no signing root")
+
+	block := &ethpb.SignedBeaconBlock{
+		Block: &ethpb.BeaconBlock{
+			Slot: slot,
+			Body: &ethpb.BeaconBlockBody{},
+		},
+		Signature: params.BeaconConfig().EmptySignature[:],
+	}
+
+	signedBlock, err := blocks.NewSignedBeaconBlock(block)
+	require.NoError(t, err)
+
+	// EIP-3076 condition 1: a new block at the same slot is slashable, including with the all-zero
+	// signing root, which must not be mistaken for the unknown one stored in the database.
+	for _, signingRoot := range [][fieldparams.RootLength]byte{{1}, {}} {
+		err := db.SlashableProposalCheck(ctx, pubkey, signedBlock, signingRoot, false, nil)
+		require.ErrorContains(t, common.FailedBlockSignLocalErr, err)
+	}
+}
+
 func TestSaveProposalHistoryForSlot_Overwrites(t *testing.T) {
 	pubkey := [fieldparams.BLSPubkeyLength]byte{0}
 	tests := []struct {
