@@ -1101,8 +1101,8 @@ func filePath(root [fieldparams.RootLength]byte, epoch primitives.Epoch) string 
 // extractFileMetadata extracts the metadata from a file path.
 // If the path is not a leaf, it returns nil.
 func extractFileMetadata(path string) (*fileMetadata, error) {
-	// Use filepath.Separator to handle both Windows (\) and Unix (/) path separators
-	parts := strings.Split(path, string(filepath.Separator))
+	// Normalize native Windows separators while preserving the Unix-style paths produced by WarmCache.
+	parts := strings.Split(filepath.ToSlash(path), "/")
 	if len(parts) != 3 {
 		return nil, errors.Errorf("unexpected file %s", path)
 	}
