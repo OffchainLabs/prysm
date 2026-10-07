@@ -114,8 +114,8 @@ func (r *runner) run(ctx context.Context) {
 
 			// Refresh assignments at the epoch boundary.
 			if slots.IsEpochStart(slot) {
-				deadline = v.SlotDeadline(slot + params.BeaconConfig().SlotsPerEpoch - 1)
-				dutiesCtx, dutiesCancel := context.WithDeadline(ctx, deadline)
+				dutiesDeadline := v.SlotDeadline(slot + params.BeaconConfig().SlotsPerEpoch - 1)
+				dutiesCtx, dutiesCancel := context.WithDeadline(ctx, dutiesDeadline)
 				if err := v.UpdateDuties(dutiesCtx); err != nil {
 					handleAssignmentError(err, slot)
 					v.dutyAwareShutdown.markDone(slot)
