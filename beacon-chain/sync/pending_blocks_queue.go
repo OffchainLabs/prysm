@@ -311,7 +311,9 @@ func (s *Service) receiveAndBroadCastBlock(ctx context.Context, b interfaces.Rea
 		return err
 	}
 
-	if err := s.cfg.p2p.Broadcast(ctx, pb); err != nil {
+	// Use the block's own fork digest: a pending block resolved after a fork transition
+	// must not go out on the current fork's topic, where peers cannot decode it.
+	if err := s.cfg.p2p.BroadcastForEpoch(ctx, pb, slots.ToEpoch(blockSlot)); err != nil {
 		log.WithError(err).Debug("Could not broadcast block")
 		return err
 	}
@@ -398,6 +400,9 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 	pid := bestPeers[randomIndex]
 
 	for range numOfTries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		req := p2ptypes.BeaconBlockByRootsReq(roots)
 
 		// Get the current epoch.
@@ -426,11 +431,9 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 
 		// Optimistically request parent payload envelopes in parallel with the parent blocks.
 		var wg sync.WaitGroup
-		wg.Add(1)
-		go func(pid core.PeerID, roots p2ptypes.BeaconBlockByRootsReq) {
-			defer wg.Done()
-			s.fetchAndQueuePayloadEnvelopesForRoots(ctx, pid, roots)
-		}(pid, req)
+		wg.Go(func() {
+			s.fetchAndQueuePayloadEnvelopesForRoots(ctx, pid, req)
+		})
 
 		// Send the request to the peer.
 		if err := s.sendBeaconBlocksRequest(ctx, &req, pid); err != nil {
@@ -438,6 +441,9 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 			log.WithError(err).Debug("Could not send recent block request")
 		}
 		wg.Wait()
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 
 		// Filter out roots that are already seen in pending blocks.
 		newRoots := make([][32]byte, 0, rootCount)
@@ -504,6 +510,8 @@ func (s *Service) fetchAndQueuePayloadEnvelopesForRoots(
 		return
 	}
 
+	ctx, cancel := context.WithTimeout(ctx, respTimeout)
+	defer cancel()
 	envelopes, err := SendExecutionPayloadEnvelopesByRootRequest(ctx, s.cfg.clock, s.cfg.p2p, pid, s.ctxMap, &envelopeRoots)
 	if err != nil {
 		log.WithError(err).Debug("Could not request execution payload envelopes by root")

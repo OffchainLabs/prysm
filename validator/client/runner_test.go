@@ -83,6 +83,7 @@ func runnerTestValidator(t *testing.T, ctx context.Context) (*validator, *valida
 		submittedAggregates:          make(map[submittedAttKey]*submittedAtt),
 		attestedSlotsByKeyByEpoch:    make(map[primitives.Epoch]map[[fieldparams.BLSPubkeyLength]byte]primitives.Slot),
 		accountsChangedChannel:       make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
+		healthMonitor:                &healthMonitor{isHealthy: true},
 	}
 	v.aggSelector = testLocalSelector(t, v)
 	return v, vc, nc
@@ -146,7 +147,7 @@ func TestInitialize(t *testing.T) {
 		vc.EXPECT().PrepareBeaconProposer(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 		vc.EXPECT().DomainData(gomock.Any(), gomock.Any()).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).AnyTimes()
 
-		_, err := newRunner(ctx, v, &healthMonitor{isHealthy: true})
+		_, err := newRunner(ctx, v)
 		require.NoError(t, err) // duties failures are logged, not fatal
 		require.LogsContain(t, hook, "Failed to update assignments")
 	})
@@ -202,7 +203,7 @@ func TestRun_ExitsOnCancelledContext(t *testing.T) {
 	vc.EXPECT().DomainData(gomock.Any(), gomock.Any()).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).AnyTimes()
 	vc.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
-	r, err := newRunner(ctx, v, &healthMonitor{isHealthy: true})
+	r, err := newRunner(ctx, v)
 	require.NoError(t, err)
 
 	cancelled, cancel := context.WithCancel(ctx)
@@ -292,8 +293,9 @@ func delay(t testing.TB) {
 
 // assertValidContext, but only when the parent context is still valid. This is testing that mocked methods are called
 // and maintain a valid context while processing, except when the test is shutting down.
+// Only a canceled context is invalid: its deadline (the end of the slot) may legitimately be exceeded on a loaded machine.
 func assertValidContext(t testing.TB, parent, ctx context.Context) {
-	if ctx.Err() != nil && parent.Err() == nil && t.Context().Err() == nil {
+	if errors.Is(ctx.Err(), context.Canceled) && parent.Err() == nil && t.Context().Err() == nil {
 		t.Logf("stack: %s", debug.Stack())
 		t.Fatalf("Context is no longer valid during a mocked RPC call: %v", ctx.Err())
 	}
@@ -314,8 +316,10 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 	// to many other methods as well.
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	// We want to test that mocked methods are called with a live context, but only while the timed context is valid.
-	liveCtx := gomock.Cond(func(ctx context.Context) bool { return ctx.Err() == nil || timedCtx.Err() != nil })
+	// We want to test that mocked methods are called with a live (not canceled) context, but only while the timed context is valid.
+	liveCtx := gomock.Cond(func(ctx context.Context) bool {
+		return !errors.Is(ctx.Err(), context.Canceled) || timedCtx.Err() != nil
+	})
 	// Mocked client(s) setup.
 	vcm := validatormock.NewMockValidatorClient(ctrl)
 	vcm.EXPECT().ConnectionGeneration().Return(uint64(0)).AnyTimes()
@@ -486,10 +490,11 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 		submittedAtts:                make(map[submittedAttKey]*submittedAtt),
 		submittedAggregates:          make(map[submittedAttKey]*submittedAtt),
 		attestedSlotsByKeyByEpoch:    make(map[primitives.Epoch]map[[fieldparams.BLSPubkeyLength]byte]primitives.Slot),
+		healthMonitor:                &healthMonitor{isHealthy: true},
 	}
 	v.aggSelector = testLocalSelector(t, v)
 
-	r, err := newRunner(timedCtx, v, &healthMonitor{isHealthy: true})
+	r, err := newRunner(timedCtx, v)
 	require.NoError(t, err)
 	r.run(timedCtx)
 }

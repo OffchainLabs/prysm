@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -14,9 +13,6 @@ import (
 )
 
 func TestValidatorRegistryRootProgressive(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{})
-	defer reset()
-
 	pubkey := make([]byte, fieldparams.BLSPubkeyLength)
 	pubkey[0] = 1
 	withdrawCreds := make([]byte, 32)
@@ -49,9 +45,6 @@ func TestValidatorRegistryRootProgressive(t *testing.T) {
 }
 
 func TestUint64ListRootProgressive(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{})
-	defer reset()
-
 	vals := []uint64{1, 2, 3, 4, 5, 6, 7}
 
 	got, err := stateutil.Uint64ListRoot(version.Gloas, vals)
@@ -67,9 +60,6 @@ func TestUint64ListRootProgressive(t *testing.T) {
 }
 
 func TestParticipationBitsRootProgressive(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{})
-	defer reset()
-
 	bits := []byte{0x01, 0x02, 0x03, 0x04}
 
 	got, err := stateutil.ParticipationBitsRoot(version.Gloas, bits)
@@ -81,9 +71,6 @@ func TestParticipationBitsRootProgressive(t *testing.T) {
 }
 
 func TestBuildersRootProgressive(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{})
-	defer reset()
-
 	builders := []*ethpb.Builder{{
 		Pubkey:           make([]byte, fieldparams.BLSPubkeyLength),
 		Version:          []byte{1},
@@ -101,9 +88,6 @@ func TestBuildersRootProgressive(t *testing.T) {
 }
 
 func TestPendingRootsProgressive(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{})
-	defer reset()
-
 	pendingDeposits := []*ethpb.PendingDeposit{{
 		PublicKey:             make([]byte, fieldparams.BLSPubkeyLength),
 		WithdrawalCredentials: make([]byte, 32),
@@ -131,9 +115,6 @@ func TestPendingRootsProgressive(t *testing.T) {
 }
 
 func TestBuilderPendingWithdrawalsRootProgressive(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{})
-	defer reset()
-
 	withdrawals := []*ethpb.BuilderPendingWithdrawal{{
 		FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
 		Amount:       1,

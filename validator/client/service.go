@@ -38,6 +38,7 @@ type ValidatorService struct {
 	ctx                     context.Context
 	cancel                  context.CancelFunc
 	validator               *validator
+	dutyAwareShutdown       *dutyAwareShutdownTracker
 	db                      db.Database
 	conn                    *validatorHelpers.NodeConnection
 	wallet                  *wallet.Wallet
@@ -110,6 +111,7 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 		stateless:               cfg.Stateless,
 		closeClientFunc:         cfg.CloseClientFunc,
 		maxHealthChecks:         cfg.MaxHealthChecks,
+		dutyAwareShutdown:       newDutyAwareShutdownTracker(),
 	}
 
 	// Use pre-built connection if provided
@@ -184,8 +186,10 @@ func (v *ValidatorService) Start() {
 	}
 
 	validatorClient := NewValidatorClient(v.conn, iface.WithStateless(v.stateless))
+	hm := newHealthMonitor(v.ctx, v.cancel, v.maxHealthChecks, validatorClient)
 
 	v.validator = &validator{
+		healthMonitor:                hm,
 		slotFeed:                     new(event.Feed),
 		startBalances:                make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
 		prevEpochBalances:            make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
@@ -225,6 +229,7 @@ func (v *ValidatorService) Start() {
 		eventsChannel:                make(chan *eventClient.Event, 1),
 		payloadAvailability:          newPayloadAvailability(),
 		head:                         newHeadTracker(),
+		dutyAwareShutdown:            v.dutyAwareShutdown,
 	}
 
 	if v.distributed {
@@ -238,7 +243,6 @@ func (v *ValidatorService) Start() {
 		v.validator.aggSelector = selector
 	}
 
-	hm := newHealthMonitor(v.ctx, v.cancel, v.maxHealthChecks, v.validator)
 	hm.Start()
 	defer v.closeClientFunc()
 
@@ -257,7 +261,7 @@ func (v *ValidatorService) Start() {
 			log.Info("Starting validator runner")
 			runnerCtx, runnerCancel := context.WithCancel(v.ctx)
 
-			runner, err := newRunner(runnerCtx, v.validator, hm)
+			runner, err := newRunner(runnerCtx, v.validator)
 			if err != nil {
 				log.WithError(err).Error("Could not create validator runner")
 				runnerCancel() // Ensure context is cancelled
@@ -307,21 +311,21 @@ func (v *ValidatorService) ProposerSettings() *proposer.Settings {
 	return nil
 }
 
+// GenesisTime returns the chain's genesis time, zero until the chain has started.
+func (v *ValidatorService) GenesisTime() time.Time {
+	return v.validator.GenesisTime()
+}
+
+// WaitForDutyAwareShutdown blocks until the validator client can be stopped and restarted
+// without missing any rewarded duty, or until the context is done.
+func (v *ValidatorService) WaitForDutyAwareShutdown(ctx context.Context) {
+	v.dutyAwareShutdown.wait(ctx)
+}
+
 // UpdateProposerSettings atomically mutates the proposer settings on the
 // underlying validator; see iface.Validator.UpdateProposerSettings.
 func (v *ValidatorService) UpdateProposerSettings(ctx context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
 	return v.validator.UpdateProposerSettings(ctx, mutate)
-}
-
-// SetProposerSettings sets the proposer settings on the validator service as well as the underlying validator
-func (v *ValidatorService) SetProposerSettings(ctx context.Context, settings *proposer.Settings) error {
-	// validator service proposer settings is only used for pass through from node -> validator service -> validator.
-	// in memory use of proposer settings happens on validator.
-	v.proposerSettings = settings
-
-	// passes settings down to be updated in database and saved in memory.
-	// updates to validator proposer settings will be in the validator object and not validator service.
-	return v.validator.SetProposerSettings(ctx, settings)
 }
 
 // ConstructDialOptions constructs a list of grpc dial options

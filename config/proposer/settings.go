@@ -1,11 +1,14 @@
 package proposer
 
 import (
+	"encoding/binary"
 	"fmt"
+	"net/netip"
 	"net/url"
 	"slices"
 	"strings"
 	"sync/atomic"
+	"unicode"
 
 	"github.com/OffchainLabs/prysm/v7/config"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -26,13 +29,17 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 	if len(ps.ProposerConfig) != 0 {
 		settings.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*Option)
 		for key, optionPayload := range ps.ProposerConfig {
-			decodedKey, err := hexutil.Decode(key)
+			// Check whether key is well-formed.
+			decodedKey, err := bytesutil.DecodeHex48(key)
 			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("cannot decode public key %s", key))
+				return nil, fmt.Errorf("decode public key %s: %w", key, err)
 			}
-			if len(decodedKey) != fieldparams.BLSPubkeyLength {
-				return nil, fmt.Errorf("%v is not a bls public key", key)
+
+			// Check whether the payload is parsed as a non-nil value.
+			if optionPayload == nil {
+				continue
 			}
+
 			p := &Option{}
 			if optionPayload.Graffiti != nil {
 				p.GraffitiConfig = &GraffitiConfig{*optionPayload.Graffiti}
@@ -47,7 +54,7 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 				p.BuilderConfig = BuilderConfigFromConsensus(optionPayload.Builder)
 			}
 			p.GasLimit = optionPayload.GasLimit
-			settings.ProposeConfig[bytesutil.ToBytes48(decodedKey)] = p
+			settings.ProposeConfig[decodedKey] = p
 		}
 	}
 	if ps.DefaultConfig != nil {
@@ -143,15 +150,45 @@ type BuilderEntry struct {
 	MinBid              *validator.Uint64 `json:"min_bid,omitempty" yaml:"min_bid,omitempty"`
 	MaxExecutionPayment *validator.Uint64 `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"`
 	BuilderBoostFactor  *validator.Uint64 `json:"builder_boost_factor,omitempty" yaml:"builder_boost_factor,omitempty"`
+	decodeErr           error             // set when the source hex did not decode; Validate reports it
 }
 
-// EffectiveAuthData resolves omitted auth_data to the spec convention:
-// the UTF-8 bytes of the builder's URL.
+// EffectiveAuthData resolves omitted auth_data to the spec default.
 func (be *BuilderEntry) EffectiveAuthData() []byte {
 	if len(be.AuthData) != 0 {
 		return be.AuthData
 	}
-	return []byte(be.URL)
+	u, err := url.Parse(be.URL)
+	if err != nil {
+		return nil
+	}
+	host := strings.ToLower(u.Hostname())
+	addr, err := netip.ParseAddr(host)
+	if err != nil || addr.Is4() {
+		// a name or an IPv4 literal is used as-is
+		return []byte(host)
+	}
+	if addr.Is4In6() {
+		// IPv4-mapped IPv6 address. Hand-wired here to match with the spec.
+		// Go's netip renders these in mixed notation (::ffff:192.0.2.1)
+		// while spec wants ::ffff:c000:201 (hex groups only).
+		//
+		// Their 16 bytes are always shaped like this:
+		//
+		//	bytes   0 .. 9    10, 11   12, 13   14, 15
+		//	        00 x 10   ff ff    |<-- IPv4 4 bytes -->|
+		//	groups  g1..g5=0  g6=ffff  g7       g8
+		//
+		// so 192.0.2.1 (c0 00 02 01) gives g7=0xc000, g8=0x0201 -> "::ffff:c000:201".
+		b := addr.As16()
+		return fmt.Appendf(
+			nil,
+			"[::ffff:%x:%x]",
+			binary.BigEndian.Uint16(b[12:14]), // g7
+			binary.BigEndian.Uint16(b[14:16]), // g8
+		)
+	}
+	return []byte("[" + addr.String() + "]")
 }
 
 // Spec limits for builder configuration payloads.
@@ -165,14 +202,29 @@ const (
 // Validate checks the entry against the spec size and format limits. Every config source
 // must enforce it: an entry violating the limits cannot be encoded into a block request.
 func (be *BuilderEntry) Validate() error {
+	if be.decodeErr != nil {
+		return be.decodeErr
+	}
 	if be.URL == "" {
 		return errors.New("url is required")
 	}
 	if len(be.URL) > MaxBuilderURLSize {
 		return errors.Errorf("url exceeds %d bytes", MaxBuilderURLSize)
 	}
-	if u, err := url.Parse(be.URL); err != nil || u.Scheme == "" || u.Host == "" {
+	u, err := url.Parse(be.URL)
+	if err != nil || u.Scheme == "" || u.Host == "" {
 		return errors.New("url is not a valid URL")
+	}
+
+	// Check whether hostname is empty.
+	host := u.Hostname()
+	if host == "" {
+		return errors.New("url is missing a hostname")
+	}
+
+	// Check punycode: host must be ASCII.
+	if strings.IndexFunc(host, func(r rune) bool { return r > unicode.MaxASCII }) >= 0 {
+		return errors.New("url hostname must be ASCII; encode internationalized names as punycode")
 	}
 	if len(be.Pubkeys) > MaxBuilderPubkeys {
 		return errors.Errorf("builder_pubkeys exceeds %d keys", MaxBuilderPubkeys)
@@ -318,9 +370,9 @@ func (bc *BuilderConfig) IsEnabled() bool {
 	return bc != nil && bc.Enabled
 }
 
-// hasV2Content reports whether any v2 builder field is set; an explicit empty
-// builders list counts.
-func (bc *BuilderConfig) hasV2Content() bool {
+// hasGloasBuilderFields reports whether any Gloas builder field is set; an explicit
+// empty builders list counts.
+func (bc *BuilderConfig) hasGloasBuilderFields() bool {
 	return bc != nil && (bc.Builders != nil || bc.MinBid != nil || bc.BuilderBoostFactor != nil || bc.MaxExecutionPayment != nil)
 }
 
@@ -336,7 +388,7 @@ func (bc *BuilderConfig) registrationEnabled() (enabled, ok bool) {
 	case bc.Builders != nil:
 		// An explicit empty list means self-build everywhere: no mev-boost either.
 		return false, true
-	case !bc.hasV2Content():
+	case !bc.hasGloasBuilderFields():
 		// A pure-v1 config without enabled is the legacy wins-wholesale disable.
 		return false, true
 	default:
@@ -402,10 +454,20 @@ func BuilderConfigFromConsensus(from *validatorpb.BuilderConfig) *BuilderConfig 
 	return c
 }
 
+// builderEntryFromConsensus keeps an entry whose hex fails to decode, marked so sanitizeBuilders drops it.
 func builderEntryFromConsensus(from *validatorpb.BuilderEntry) *BuilderEntry {
 	if from == nil {
 		return nil
 	}
+	e, err := DecodeBuilderEntry(from)
+	if err != nil {
+		return &BuilderEntry{URL: from.Url, decodeErr: err}
+	}
+	return e
+}
+
+// DecodeBuilderEntry converts a payload entry, decoding its 0x-hex builder_pubkeys and auth_data.
+func DecodeBuilderEntry(from *validatorpb.BuilderEntry) (*BuilderEntry, error) {
 	e := &BuilderEntry{
 		URL:                 from.Url,
 		MinBid:              from.MinBid,
@@ -413,13 +475,23 @@ func builderEntryFromConsensus(from *validatorpb.BuilderEntry) *BuilderEntry {
 		BuilderBoostFactor:  from.BuilderBoostFactor,
 	}
 	// Treat empty as absent so bolt (nil) and filesystem (empty) round-trips agree.
-	if len(from.Pubkeys) != 0 {
-		e.Pubkeys = bytesutil.SafeCopy2dBytes(from.Pubkeys)
+	for i, raw := range from.BuilderPubkeys {
+		pk, err := hexutil.Decode(raw)
+		if err != nil {
+			return nil, errors.Wrapf(err, "decode builder_pubkeys[%d]", i)
+		}
+		e.Pubkeys = append(e.Pubkeys, pk)
 	}
-	if len(from.AuthData) != 0 {
-		e.AuthData = bytesutil.SafeCopyBytes(from.AuthData)
+	if from.AuthData != nil {
+		ad, err := hexutil.Decode(*from.AuthData)
+		if err != nil {
+			return nil, errors.Wrap(err, "decode auth_data")
+		}
+		if len(ad) != 0 {
+			e.AuthData = ad
+		}
 	}
-	return e
+	return e, nil
 }
 
 // Schema versions for proposer settings. SchemaV1Unset is the proto3 zero value
@@ -428,13 +500,16 @@ const (
 	SchemaV1Unset uint32 = 0
 	SchemaV1      uint32 = 1
 	SchemaV2      uint32 = 2
+
+	// The highest schema version currently supported.
+	MaxSchemaVersion = SchemaV2
 )
 
 // FreshSettingsVersion is the schema stamped on settings the keymanager APIs
 // create from nothing: v2 once the network schedules gloas, legacy before.
 func FreshSettingsVersion() uint32 {
 	if params.GloasEnabled() {
-		return SchemaV2
+		return MaxSchemaVersion
 	}
 	return SchemaV1Unset
 }
@@ -590,6 +665,7 @@ func (be *BuilderEntry) Clone() *BuilderEntry {
 		MinBid:              cloneUint64(be.MinBid),
 		MaxExecutionPayment: cloneUint64(be.MaxExecutionPayment),
 		BuilderBoostFactor:  cloneUint64(be.BuilderBoostFactor),
+		decodeErr:           be.decodeErr,
 	}
 }
 
@@ -636,18 +712,19 @@ func (be *BuilderEntry) toConsensus() *validatorpb.BuilderEntry {
 	if be == nil {
 		return nil
 	}
-	return &validatorpb.BuilderEntry{
+	e := &validatorpb.BuilderEntry{
 		Url:                 be.URL,
-		Pubkeys:             bytesutil.SafeCopy2dBytes(be.Pubkeys),
-		AuthData:            bytesutil.SafeCopyBytes(be.AuthData),
 		MinBid:              cloneUint64(be.MinBid),
 		MaxExecutionPayment: cloneUint64(be.MaxExecutionPayment),
 		BuilderBoostFactor:  cloneUint64(be.BuilderBoostFactor),
 	}
-}
-
-func (ps *Settings) isV2() bool {
-	return ps != nil && ps.Version == SchemaV2
+	for _, pk := range be.Pubkeys {
+		e.BuilderPubkeys = append(e.BuilderPubkeys, hexutil.Encode(pk))
+	}
+	if len(be.AuthData) != 0 {
+		e.AuthData = new(hexutil.Encode(be.AuthData))
+	}
+	return e
 }
 
 // WarnDeprecatedSchema logs a warning when legacy v1 builder content is loaded
@@ -698,7 +775,7 @@ func (ps *Settings) WarnUnsetMaxExecutionPayment() {
 		return
 	}
 	slices.Sort(maskedURLs)
-	log.WithField("builders", strings.Join(maskedURLs, ", ")).Warn("Builder entries have no max_execution_payment: their execution layer payment is ignored and only collateral-backed bid value counts toward bid selection. Set max_execution_payment to count it, noting such payments rest on the builder's promise to pay.")
+	log.WithField("builders", strings.Join(maskedURLs, ", ")).Warn("Builders have no max_execution_payment (default 0): execution payment is ignored, so these builders' bids may lose to the local payload.")
 }
 
 // HasLegacyBuilderContent reports whether any level carries v1 builder fields,
@@ -740,7 +817,7 @@ func (ps *Settings) UpgradeToV2() bool {
 		}
 		// A config left with no v2 content disappears entirely; an explicit
 		// empty builders list is v2 content and survives.
-		if !bc.hasV2Content() {
+		if !bc.hasGloasBuilderFields() {
 			opt.BuilderConfig = nil
 			scrubbed = true
 		}
@@ -749,8 +826,10 @@ func (ps *Settings) UpgradeToV2() bool {
 	for _, opt := range ps.ProposeConfig {
 		scrub(opt)
 	}
-	changed := scrubbed || ps.Version != SchemaV2
-	ps.Version = SchemaV2
+	changed := scrubbed || ps.Version < SchemaV2
+	if ps.Version < SchemaV2 {
+		ps.Version = SchemaV2
+	}
 	if scrubbed {
 		log.Warn("V1 builder settings, including gas limits, do not apply to gloas and were replaced with defaults; provide v2 proposer settings to configure builders")
 	}
@@ -760,14 +839,11 @@ func (ps *Settings) UpgradeToV2() bool {
 // TargetGasLimit resolves pubkey's proposer-preference gas limit at epoch: the
 // explicit operator value, else the EIP-8261 schedule, else the chain default.
 func (ps *Settings) TargetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch) validator.Uint64 {
-	scheduled, active := params.BeaconConfig().ScheduledGasLimit(epoch)
 	operator, ok := ps.operatorGasLimit(pubkey)
 	if !ok {
-		if active {
-			return validator.Uint64(scheduled)
-		}
-		return validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+		return scheduledOrDefaultGasLimit(epoch)
 	}
+	scheduled, active := params.BeaconConfig().ScheduledGasLimit(epoch)
 	if active && uint64(operator) > scheduled {
 		warnGasLimitExceedsSchedule(uint64(operator), scheduled, epoch)
 	}
@@ -775,6 +851,25 @@ func (ps *Settings) TargetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte, epo
 		warnGasLimitBelowSchedule(uint64(operator), scheduled, epoch)
 	}
 	return operator
+}
+
+// GasLimitAt returns the gas limit pubkey uses at epoch: TargetGasLimit's value
+// from gloas on (without its warnings), else the pre-gloas registration value.
+func (ps *Settings) GasLimitAt(pubkey [fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch) validator.Uint64 {
+	if epoch < params.BeaconConfig().GloasForkEpoch {
+		return ps.GasLimit(pubkey)
+	}
+	if operator, ok := ps.operatorGasLimit(pubkey); ok {
+		return operator
+	}
+	return scheduledOrDefaultGasLimit(epoch)
+}
+
+func scheduledOrDefaultGasLimit(epoch primitives.Epoch) validator.Uint64 {
+	if scheduled, active := params.BeaconConfig().ScheduledGasLimit(epoch); active {
+		return validator.Uint64(scheduled)
+	}
+	return validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
 }
 
 func (ps *Settings) operatorGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) (validator.Uint64, bool) {

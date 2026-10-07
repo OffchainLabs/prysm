@@ -1,0 +1,7 @@
+{
+  "proposer_config": {
+    "0xaa0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000": {
+      "fee_recipient": "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+    }
+  }
+}

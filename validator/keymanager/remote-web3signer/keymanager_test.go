@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/io/file"
@@ -237,6 +238,10 @@ func TestNewKeyManager_FileAndFlagsWithDifferentKeys(t *testing.T) {
 }
 
 func TestKeymanager_Sign(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = cfg.FuluForkEpoch + 1
+	params.OverrideBeaconConfig(cfg)
 	client := &MockClient{
 		Signature: "0xb3baa751d0a9132cfe93e4e3d5ff9075111100e3789dca219ade5a24d27e19d16b3353149da1833e9b691bb38634e8dc04469be7032132906c927d7e1a49b414730612877bc6b2810c8f202daf793d1ab0d6b5cb21d52f9e52e883859887a5d9",
 	}
@@ -348,6 +353,46 @@ func TestKeymanager_Sign(t *testing.T) {
 			name: "VALIDATOR_REGISTRATION",
 			args: args{
 				request: mock.GetMockSignRequest("VALIDATOR_REGISTRATION"),
+			},
+			want:    desiredSig,
+			wantErr: false,
+		},
+		{
+			name: "BLOCK_V2_GLOAS",
+			args: args{
+				request: mock.GetMockSignRequest("BLOCK_V2_GLOAS"),
+			},
+			want:    desiredSig,
+			wantErr: false,
+		},
+		{
+			name: "BUILDER_REQUEST_AUTH",
+			args: args{
+				request: mock.GetMockSignRequest("BUILDER_REQUEST_AUTH"),
+			},
+			want:    desiredSig,
+			wantErr: false,
+		},
+		{
+			name: "EXECUTION_PAYLOAD_ENVELOPE",
+			args: args{
+				request: mock.GetMockSignRequest("EXECUTION_PAYLOAD_ENVELOPE"),
+			},
+			want:    desiredSig,
+			wantErr: false,
+		},
+		{
+			name: "PAYLOAD_ATTESTATION_MESSAGE",
+			args: args{
+				request: mock.GetMockSignRequest("PAYLOAD_ATTESTATION_MESSAGE"),
+			},
+			want:    desiredSig,
+			wantErr: false,
+		},
+		{
+			name: "PROPOSER_PREFERENCES",
+			args: args{
+				request: mock.GetMockSignRequest("PROPOSER_PREFERENCES"),
 			},
 			want:    desiredSig,
 			wantErr: false,

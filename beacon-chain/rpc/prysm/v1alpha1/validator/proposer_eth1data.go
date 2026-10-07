@@ -73,7 +73,14 @@ func (vs *Server) eth1DataMajorityVote(ctx context.Context, beaconState state.Be
 
 	lastBlockDepositCount, lastBlockDepositRoot := vs.DepositFetcher.DepositsNumberAndRootAtHeight(ctx, lastBlockByLatestValidTime.Number)
 	if lastBlockDepositCount == 0 {
-		return vs.ChainStartFetcher.ChainStartEth1Data(), nil
+		genesisState, err := vs.BeaconDB.GenesisState(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get genesis state")
+		}
+		if genesisState == nil || genesisState.IsNil() {
+			return nil, errors.New("genesis state not initialized")
+		}
+		return genesisState.Eth1Data(), nil
 	}
 
 	if lastBlockDepositCount >= vs.HeadFetcher.HeadETH1Data().DepositCount {

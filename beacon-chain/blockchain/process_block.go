@@ -156,7 +156,7 @@ func (s *Service) getBatchPrestate(ctx context.Context, b consensusblocks.ROBloc
 		return blockPreState, false, nil // Returning false here is fine since there are no envelopes pre-Gloas
 	}
 	parentRoot := b.Block().ParentRoot()
-	full, err := consensusblocks.BlockBuiltOnEnvelope(envelopes[0], b)
+	full, err := consensusblocks.BlockBuiltOnParentEnvelope(envelopes[0], b)
 	if err != nil {
 		return nil, false, errors.Wrap(err, "could not check if block builds on envelope")
 	}
@@ -624,11 +624,19 @@ func (s *Service) handleBlockPayloadAttestations(ctx context.Context, blk interf
 	}
 	for _, att := range atts {
 		root := bytesutil.ToBytes32(att.Data.BeaconBlockRoot)
-		if !s.cfg.ForkChoiceStore.HasNode(root) {
+		rootSlot, err := s.cfg.ForkChoiceStore.Slot(root)
+		if err != nil || rootSlot != att.Data.Slot {
 			continue
 		}
-		for i := range committee {
+		voters := make(map[primitives.ValidatorIndex]struct{})
+		for i, idx := range committee {
 			if att.AggregationBits.BitAt(uint64(i)) {
+				voters[idx] = struct{}{}
+			}
+		}
+		// The spec writes a voter's vote to every PTC seat it holds, not only the seats whose bit is set.
+		for i, idx := range committee {
+			if _, ok := voters[idx]; ok {
 				s.cfg.ForkChoiceStore.SetPTCVote(root, uint64(i), att.Data.PayloadPresent, att.Data.BlobDataAvailable)
 			}
 		}

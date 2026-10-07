@@ -6,14 +6,12 @@ import (
 	"maps"
 	"math/bits"
 	"runtime"
-	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/fieldtrie"
 	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -25,122 +23,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
-	"google.golang.org/protobuf/proto"
-)
-
-var (
-	phase0Fields = []types.FieldIndex{
-		types.GenesisTime,
-		types.GenesisValidatorsRoot,
-		types.Slot,
-		types.Fork,
-		types.LatestBlockHeader,
-		types.BlockRoots,
-		types.StateRoots,
-		types.HistoricalRoots,
-		types.Eth1Data,
-		types.Eth1DataVotes,
-		types.Eth1DepositIndex,
-		types.Validators,
-		types.Balances,
-		types.RandaoMixes,
-		types.Slashings,
-		types.PreviousEpochAttestations,
-		types.CurrentEpochAttestations,
-		types.JustificationBits,
-		types.PreviousJustifiedCheckpoint,
-		types.CurrentJustifiedCheckpoint,
-		types.FinalizedCheckpoint,
-	}
-
-	altairFields = []types.FieldIndex{
-		types.GenesisTime,
-		types.GenesisValidatorsRoot,
-		types.Slot,
-		types.Fork,
-		types.LatestBlockHeader,
-		types.BlockRoots,
-		types.StateRoots,
-		types.HistoricalRoots,
-		types.Eth1Data,
-		types.Eth1DataVotes,
-		types.Eth1DepositIndex,
-		types.Validators,
-		types.Balances,
-		types.RandaoMixes,
-		types.Slashings,
-		types.PreviousEpochParticipationBits,
-		types.CurrentEpochParticipationBits,
-		types.JustificationBits,
-		types.PreviousJustifiedCheckpoint,
-		types.CurrentJustifiedCheckpoint,
-		types.FinalizedCheckpoint,
-		types.InactivityScores,
-		types.CurrentSyncCommittee,
-		types.NextSyncCommittee,
-	}
-
-	bellatrixFields = append(altairFields, types.LatestExecutionPayloadHeader)
-
-	withdrawalAndHistoricalSummaryFields = []types.FieldIndex{
-		types.NextWithdrawalIndex,
-		types.NextWithdrawalValidatorIndex,
-		types.HistoricalSummaries,
-	}
-
-	capellaFields = slices.Concat(
-		altairFields,
-		[]types.FieldIndex{types.LatestExecutionPayloadHeaderCapella},
-		withdrawalAndHistoricalSummaryFields,
-	)
-
-	denebFields = slices.Concat(
-		altairFields,
-		[]types.FieldIndex{types.LatestExecutionPayloadHeaderDeneb},
-		withdrawalAndHistoricalSummaryFields,
-	)
-
-	electraAdditionalFields = []types.FieldIndex{
-		types.DepositRequestsStartIndex,
-		types.DepositBalanceToConsume,
-		types.ExitBalanceToConsume,
-		types.EarliestExitEpoch,
-		types.ConsolidationBalanceToConsume,
-		types.EarliestConsolidationEpoch,
-		types.PendingDeposits,
-		types.PendingPartialWithdrawals,
-		types.PendingConsolidations,
-	}
-
-	electraFields = slices.Concat(
-		denebFields,
-		electraAdditionalFields,
-	)
-
-	fuluFields = append(
-		electraFields,
-		types.ProposerLookahead,
-	)
-
-	gloasAdditionalFields = []types.FieldIndex{
-		types.Builders,
-		types.NextWithdrawalBuilderIndex,
-		types.ExecutionPayloadAvailability,
-		types.BuilderPendingPayments,
-		types.BuilderPendingWithdrawals,
-		types.LatestExecutionPayloadBid,
-		types.PayloadExpectedWithdrawals,
-		types.PTCWindow,
-	}
-
-	gloasFields = slices.Concat(
-		altairFields,
-		[]types.FieldIndex{types.LatestBlockHash},
-		withdrawalAndHistoricalSummaryFields,
-		electraAdditionalFields,
-		[]types.FieldIndex{types.ProposerLookahead},
-		gloasAdditionalFields,
-	)
 )
 
 // promotionThresholdByField defines absolute overlay promotion thresholds
@@ -166,42 +48,42 @@ const (
 
 // InitializeFromProtoPhase0 the beacon state from a protobuf representation.
 func InitializeFromProtoPhase0(st *ethpb.BeaconState) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafePhase0(proto.Clone(st).(*ethpb.BeaconState))
+	return InitializeFromProtoUnsafePhase0(st.Copy())
 }
 
 // InitializeFromProtoAltair the beacon state from a protobuf representation.
 func InitializeFromProtoAltair(st *ethpb.BeaconStateAltair) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafeAltair(proto.Clone(st).(*ethpb.BeaconStateAltair))
+	return InitializeFromProtoUnsafeAltair(st.Copy())
 }
 
 // InitializeFromProtoBellatrix the beacon state from a protobuf representation.
 func InitializeFromProtoBellatrix(st *ethpb.BeaconStateBellatrix) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafeBellatrix(proto.Clone(st).(*ethpb.BeaconStateBellatrix))
+	return InitializeFromProtoUnsafeBellatrix(st.Copy())
 }
 
 // InitializeFromProtoCapella the beacon state from a protobuf representation.
 func InitializeFromProtoCapella(st *ethpb.BeaconStateCapella) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafeCapella(proto.Clone(st).(*ethpb.BeaconStateCapella))
+	return InitializeFromProtoUnsafeCapella(st.Copy())
 }
 
 // InitializeFromProtoDeneb the beacon state from a protobuf representation.
 func InitializeFromProtoDeneb(st *ethpb.BeaconStateDeneb) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafeDeneb(proto.Clone(st).(*ethpb.BeaconStateDeneb))
+	return InitializeFromProtoUnsafeDeneb(st.Copy())
 }
 
 // InitializeFromProtoElectra the beacon state from a protobuf representation.
 func InitializeFromProtoElectra(st *ethpb.BeaconStateElectra) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafeElectra(proto.Clone(st).(*ethpb.BeaconStateElectra))
+	return InitializeFromProtoUnsafeElectra(st.Copy())
 }
 
 // InitializeFromProtoFulu the beacon state from a protobuf representation.
 func InitializeFromProtoFulu(st *ethpb.BeaconStateFulu) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafeFulu(proto.Clone(st).(*ethpb.BeaconStateFulu))
+	return InitializeFromProtoUnsafeFulu(st.Copy())
 }
 
 // InitializeFromProtoGloas the beacon state from a protobuf representation.
 func InitializeFromProtoGloas(st *ethpb.BeaconStateGloas) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafeGloas(proto.Clone(st).(*ethpb.BeaconStateGloas))
+	return InitializeFromProtoUnsafeGloas(st.Copy())
 }
 
 // InitializeFromProtoUnsafePhase0 directly uses the beacon state protobuf fields
@@ -1100,7 +982,7 @@ func (b *BeaconState) HashTreeRoot(ctx context.Context) ([32]byte, error) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	if features.ProgressiveSSZEnabled(b.version) {
+	if b.version >= version.Gloas {
 		return b.progressiveHashTreeRoot(ctx)
 	}
 	b.progressiveMerkleTree = nil
@@ -1115,29 +997,19 @@ func (b *BeaconState) HashTreeRoot(ctx context.Context) ([32]byte, error) {
 }
 
 func (b *BeaconState) progressiveHashTreeRoot(ctx context.Context) ([32]byte, error) {
-	if b.version < version.Gloas {
-		return [32]byte{}, fmt.Errorf("progressive SSZ is not supported for version: %s", version.String(b.version))
+	schema, ok := ProgressiveStateSchemaForVersion(b.version)
+	if !ok {
+		return [32]byte{}, fmt.Errorf("unsupported version for progressive HTR: %s", version.String(b.version))
 	}
 
 	if err := b.initializeProgressiveMerkleTree(ctx); err != nil {
-		return [32]byte{}, err
+		return [32]byte{}, fmt.Errorf("initializeProgressiveMerkleTree: %w", err)
 	}
 	if err := b.recomputeProgressiveDirtyFields(ctx); err != nil {
-		return [32]byte{}, err
+		return [32]byte{}, fmt.Errorf("recomputeProgressiveDirtyFields: %w", err)
 	}
 
-	var activeFields []bool
-	switch b.version {
-	case version.Gloas:
-		activeFields = make([]bool, params.BeaconConfig().BeaconStateGloasFieldCount)
-		for i := range activeFields {
-			activeFields[i] = true
-		}
-	default:
-		return [32]byte{}, fmt.Errorf("unsupported version: %s", version.String(b.version))
-	}
-
-	root, err := ssz.MixInActiveFields(b.progressiveMerkleTree.Root(), activeFields)
+	root, err := ssz.MixInActiveFields(b.progressiveMerkleTree.Root(), schema.ActiveFields())
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("could not mix in progressive container active fields: %w", err)
 	}
@@ -1150,23 +1022,22 @@ func (b *BeaconState) progressiveHashTreeRoot(ctx context.Context) ([32]byte, er
 //
 // WARNING: Caller must acquire the mutex before using.
 func (b *BeaconState) initializeProgressiveMerkleTree(ctx context.Context) error {
+	schema, ok := ProgressiveStateSchemaForVersion(b.version)
+	if !ok {
+		return fmt.Errorf("unsupported version: %s", version.String(b.version))
+	}
+
 	if b.progressiveMerkleTree != nil {
 		return nil
 	}
 
-	var fieldRoots [][]byte
-	switch b.version {
-	case version.Gloas:
-		fieldRoots = make([][]byte, params.BeaconConfig().BeaconStateGloasFieldCount)
-		for _, field := range gloasFields {
-			root, err := b.rootSelector(ctx, field)
-			if err != nil {
-				return fmt.Errorf("could not compute progressive field %s: %w", field.String(), err)
-			}
-			fieldRoots[field.RealPosition()] = bytesutil.SafeCopyBytes(root[:])
+	fieldRoots := make([][]byte, len(schema.Fields()))
+	for fieldIndex, field := range schema.Fields() {
+		root, err := b.rootSelector(ctx, field)
+		if err != nil {
+			return fmt.Errorf("could not compute progressive field %s: %w", field.String(), err)
 		}
-	default:
-		return fmt.Errorf("unsupported version: %s", version.String(b.version))
+		fieldRoots[fieldIndex] = bytesutil.SafeCopyBytes(root[:])
 	}
 
 	b.progressiveMerkleTree = stateutil.MerkleizeProgressive(fieldRoots)
@@ -1179,12 +1050,21 @@ func (b *BeaconState) initializeProgressiveMerkleTree(ctx context.Context) error
 //
 // WARNING: Caller must acquire the mutex before using.
 func (b *BeaconState) recomputeProgressiveDirtyFields(ctx context.Context) error {
+	schema, ok := ProgressiveStateSchemaForVersion(b.version)
+	if !ok {
+		return fmt.Errorf("unsupported version: %s", version.String(b.version))
+	}
+
 	for field := range b.dirtyFields {
 		root, err := b.rootSelector(ctx, field)
 		if err != nil {
 			return err
 		}
-		if err := b.progressiveMerkleTree.RecomputeRoot(field.RealPosition(), root); err != nil {
+		fieldIndex, ok := schema.GetFieldIndex(field)
+		if !ok {
+			return fmt.Errorf("could not find field index for progressive field %s in %s", field.String(), version.String(b.version))
+		}
+		if err := b.progressiveMerkleTree.RecomputeRoot(fieldIndex, root); err != nil {
 			return fmt.Errorf("could not recompute progressive field %s: %w", field.String(), err)
 		}
 		delete(b.dirtyFields, field)
@@ -1391,7 +1271,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	_, span := trace.StartSpan(ctx, "beaconState.rootSelector")
 	defer span.End()
 	span.SetAttributes(trace.StringAttribute("field", field.String()))
-	progressiveSSZ := features.ProgressiveSSZEnabled(b.version)
+	progressiveSSZ := b.version >= version.Gloas
 
 	switch field {
 	case types.GenesisTime:

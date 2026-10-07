@@ -43,7 +43,10 @@ import (
 	dbTest "github.com/OffchainLabs/prysm/v7/validator/db/testing"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager/derived"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
+	constant "github.com/OffchainLabs/prysm/v7/validator/testing"
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -112,6 +115,7 @@ type mockKeymanager struct {
 	keys                [][fieldparams.BLSPubkeyLength]byte
 	fetchNoKeys         bool
 	accountsChangedFeed *event.Feed
+	lastSignReq         *validatorpb.SignRequest
 }
 
 var errMockKeyExists = errors.New("key already in mockKeymanager map")
@@ -140,6 +144,9 @@ func (m *mockKeymanager) FetchValidatingPublicKeys(_ context.Context) ([][fieldp
 }
 
 func (m *mockKeymanager) Sign(_ context.Context, req *validatorpb.SignRequest) (bls.Signature, error) {
+	m.lock.Lock()
+	m.lastSignReq = req
+	m.lock.Unlock()
 	var pubKey [fieldparams.BLSPubkeyLength]byte
 	copy(pubKey[:], req.PublicKey)
 	privKey, ok := m.keysMap[pubKey]
@@ -148,6 +155,12 @@ func (m *mockKeymanager) Sign(_ context.Context, req *validatorpb.SignRequest) (
 	}
 	sig := privKey.Sign(req.SigningRoot)
 	return sig, nil
+}
+
+func (m *mockKeymanager) lastSignRequest() *validatorpb.SignRequest {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	return m.lastSignReq
 }
 
 func (m *mockKeymanager) SubscribeAccountChanges(pubKeysChan chan [][fieldparams.BLSPubkeyLength]byte) event.Subscription {
@@ -175,6 +188,160 @@ func (*mockKeymanager) ListKeymanagerAccounts(
 func (*mockKeymanager) DeleteKeystores(context.Context, [][]byte,
 ) ([]*keymanager.KeyStatus, error) {
 	return nil, nil
+}
+
+type proposedPublicKeysLister interface {
+	ProposedPublicKeys(context.Context) ([][fieldparams.BLSPubkeyLength]byte, error)
+}
+
+func waitForProposedKeys(t *testing.T, valDB proposedPublicKeysLister, want ...[fieldparams.BLSPubkeyLength]byte) {
+	t.Helper()
+	var got [][fieldparams.BLSPubkeyLength]byte
+	var err error
+	for range 50 {
+		got, err = valDB.ProposedPublicKeys(context.Background())
+		require.NoError(t, err)
+		if slices.Equal(sortedKeys(got), sortedKeys(want)) {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("proposal buckets never matched: want %d keys, got %d", len(want), len(got))
+}
+
+func sortedKeys(keys [][fieldparams.BLSPubkeyLength]byte) [][fieldparams.BLSPubkeyLength]byte {
+	s := slices.Clone(keys)
+	sort.Slice(s, func(i, j int) bool { return bytes.Compare(s[i][:], s[j][:]) < 0 })
+	return s
+}
+
+func newLocalKeymanager(t *testing.T, ctx context.Context) *local.Keymanager {
+	local.ResetCaches()
+	w := wallet.New(&wallet.Config{
+		WalletDir:      t.TempDir(),
+		KeymanagerKind: keymanager.Local,
+		WalletPassword: "TestWalletPassword123!",
+	})
+	require.NoError(t, w.SaveWallet())
+	km, err := local.NewKeymanager(ctx, &local.SetupConfig{Wallet: w})
+	require.NoError(t, err)
+	return km
+}
+
+func TestRecheckKeys(t *testing.T) {
+	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
+		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
+			t.Run("startup keys get buckets synchronously", func(t *testing.T) {
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				km := newLocalKeymanager(t, ctx)
+				kp := randKeypair(t)
+				require.NoError(t, km.ImportKeypairs(ctx, [][]byte{kp.pri.Marshal()}, [][]byte{kp.pub[:]}))
+				valDB := dbTest.SetupDB(t, t.TempDir(), nil, isSlashingProtectionMinimal)
+
+				recheckKeys(ctx, valDB, km)
+				keys, err := valDB.ProposedPublicKeys(ctx)
+				require.NoError(t, err)
+				require.DeepEqual(t, [][fieldparams.BLSPubkeyLength]byte{kp.pub}, keys)
+			})
+
+			t.Run("runtime imports get buckets", func(t *testing.T) {
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				km := newLocalKeymanager(t, ctx)
+				valDB := dbTest.SetupDB(t, t.TempDir(), nil, isSlashingProtectionMinimal)
+
+				recheckKeys(ctx, valDB, km)
+				keys, err := valDB.ProposedPublicKeys(ctx)
+				require.NoError(t, err)
+				require.Equal(t, 0, len(keys))
+
+				// The subscription is live once recheckKeys returns, so one import must be caught.
+				kp := randKeypair(t)
+				require.NoError(t, km.ImportKeypairs(ctx, [][]byte{kp.pri.Marshal()}, [][]byte{kp.pub[:]}))
+				waitForProposedKeys(t, valDB, kp.pub)
+			})
+
+			t.Run("derived keymanager gets runtime buckets", func(t *testing.T) {
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				local.ResetCaches()
+				w := wallet.New(&wallet.Config{
+					WalletDir:      t.TempDir(),
+					KeymanagerKind: keymanager.Derived,
+					WalletPassword: "TestWalletPassword123!",
+				})
+				require.NoError(t, w.SaveWallet())
+				km, err := derived.NewKeymanager(ctx, &derived.SetupConfig{Wallet: w})
+				require.NoError(t, err)
+				valDB := dbTest.SetupDB(t, t.TempDir(), nil, isSlashingProtectionMinimal)
+
+				recheckKeys(ctx, valDB, km)
+				keys, err := valDB.ProposedPublicKeys(ctx)
+				require.NoError(t, err)
+				require.Equal(t, 0, len(keys))
+
+				require.NoError(t, km.RecoverAccountsFromMnemonic(ctx, constant.TestMnemonic, derived.DefaultMnemonicLanguage, "", 1))
+				recovered, err := km.FetchValidatingPublicKeys(ctx)
+				require.NoError(t, err)
+				require.Equal(t, 1, len(recovered))
+				waitForProposedKeys(t, valDB, recovered...)
+			})
+
+			t.Run("non-local keymanager gets startup and runtime buckets", func(t *testing.T) {
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				km := genMockKeymanager(t, 2)
+				valDB := dbTest.SetupDB(t, t.TempDir(), nil, isSlashingProtectionMinimal)
+
+				recheckKeys(ctx, valDB, km)
+				keys, err := valDB.ProposedPublicKeys(ctx)
+				require.NoError(t, err)
+				require.DeepEqual(t, sortedKeys(km.keys), sortedKeys(keys))
+
+				kp := randKeypair(t)
+				newKeys := append(slices.Clone(km.keys), kp.pub)
+				km.SimulateAccountChanges(newKeys)
+				waitForProposedKeys(t, valDB, newKeys...)
+			})
+		})
+	}
+}
+
+func TestRecheckValidatingKeysBucket(t *testing.T) {
+	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
+		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			valDB := dbTest.SetupDB(t, t.TempDir(), nil, isSlashingProtectionMinimal)
+
+			feed := new(event.Feed)
+			pubKeysChan := make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
+			sub := feed.Subscribe(pubKeysChan)
+			done := make(chan struct{})
+			go func() {
+				recheckValidatingKeysBucket(ctx, valDB, sub, pubKeysChan)
+				close(done)
+			}()
+
+			kpA, kpB := randKeypair(t), randKeypair(t)
+			require.Equal(t, 1, feed.Send([][fieldparams.BLSPubkeyLength]byte{kpA.pub}))
+			waitForProposedKeys(t, valDB, kpA.pub)
+			require.Equal(t, 1, feed.Send([][fieldparams.BLSPubkeyLength]byte{kpA.pub, kpB.pub}))
+			waitForProposedKeys(t, valDB, kpA.pub, kpB.pub)
+
+			cancel()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("goroutine did not exit on context cancellation")
+			}
+			// Cancellation must unsubscribe and close the channel.
+			require.Equal(t, 0, feed.Send([][fieldparams.BLSPubkeyLength]byte{randKeypair(t).pub}))
+			_, open := <-pubKeysChan
+			require.Equal(t, false, open)
+		})
+	}
 }
 
 func TestWaitForChainStart_SetsGenesisInfo(t *testing.T) {
@@ -618,7 +785,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 						att := createAttestation(10, 12)
 						rt, err := att.Data.HashTreeRoot()
 						assert.NoError(t, err)
-						assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt, att))
+						assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt[:], att))
 						signedRoot := rt[:]
 						if isSlashingProtectionMinimal {
 							signedRoot = nil
@@ -653,7 +820,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 						att := createAttestation(10, 12)
 						rt, err := att.Data.HashTreeRoot()
 						assert.NoError(t, err)
-						assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt, att))
+						assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt[:], att))
 						if i%3 == 0 {
 							resp.Responses = append(resp.Responses, &ethpb.DoppelGangerResponse_ValidatorResponse{PublicKey: pkey[:], DuplicateExists: true})
 						}
@@ -694,7 +861,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 						att := createAttestation(10, 12)
 						rt, err := att.Data.HashTreeRoot()
 						assert.NoError(t, err)
-						assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt, att))
+						assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt[:], att))
 						if i%9 == 0 {
 							resp.Responses = append(resp.Responses, &ethpb.DoppelGangerResponse_ValidatorResponse{PublicKey: pkey[:], DuplicateExists: true})
 						}
@@ -735,7 +902,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 							att := createAttestation(10+primitives.Epoch(j), 12+primitives.Epoch(j))
 							rt, err := att.Data.HashTreeRoot()
 							assert.NoError(t, err)
-							assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt, att))
+							assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), pkey, rt[:], att))
 
 							signedRoot := rt[:]
 							if isSlashingProtectionMinimal {
@@ -815,13 +982,13 @@ func TestValidatorAttestationsAreOrdered(t *testing.T) {
 			att := createAttestation(10, 14)
 			rt, err := att.Data.HashTreeRoot()
 			assert.NoError(t, err)
-			assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), k, rt, att))
+			assert.NoError(t, db.SaveAttestationForPubKey(t.Context(), k, rt[:], att))
 
 			att = createAttestation(6, 8)
 			rt, err = att.Data.HashTreeRoot()
 			assert.NoError(t, err)
 
-			err = db.SaveAttestationForPubKey(t.Context(), k, rt, att)
+			err = db.SaveAttestationForPubKey(t.Context(), k, rt[:], att)
 			if isSlashingProtectionMinimal {
 				assert.ErrorContains(t, "could not sign attestation with source lower than recorded source epoch", err)
 			} else {
@@ -832,7 +999,7 @@ func TestValidatorAttestationsAreOrdered(t *testing.T) {
 			rt, err = att.Data.HashTreeRoot()
 			assert.NoError(t, err)
 
-			err = db.SaveAttestationForPubKey(t.Context(), k, rt, att)
+			err = db.SaveAttestationForPubKey(t.Context(), k, rt[:], att)
 			if isSlashingProtectionMinimal {
 				assert.ErrorContains(t, "could not sign attestation with target lower than or equal to recorded target epoch", err)
 			} else {
@@ -843,7 +1010,7 @@ func TestValidatorAttestationsAreOrdered(t *testing.T) {
 			rt, err = att.Data.HashTreeRoot()
 			assert.NoError(t, err)
 
-			err = db.SaveAttestationForPubKey(t.Context(), k, rt, att)
+			err = db.SaveAttestationForPubKey(t.Context(), k, rt[:], att)
 			if isSlashingProtectionMinimal {
 				assert.ErrorContains(t, "could not sign attestation with source lower than recorded source epoch", err)
 			} else {
@@ -1236,17 +1403,19 @@ func TestValidator_PushSettings(t *testing.T) {
 							GasLimit: 40000000,
 						},
 					}
-					err = v.SetProposerSettings(t.Context(), &proposer.Settings{
-						ProposeConfig: config,
-						DefaultConfig: &proposer.Option{
-							FeeRecipientConfig: &proposer.FeeRecipientConfig{
-								FeeRecipient: common.HexToAddress(defaultFeeHex),
+					err = v.UpdateProposerSettings(t.Context(), func(*proposer.Settings) (*proposer.Settings, error) {
+						return &proposer.Settings{
+							ProposeConfig: config,
+							DefaultConfig: &proposer.Option{
+								FeeRecipientConfig: &proposer.FeeRecipientConfig{
+									FeeRecipient: common.HexToAddress(defaultFeeHex),
+								},
+								BuilderConfig: &proposer.BuilderConfig{
+									Enabled:  true,
+									GasLimit: 35000000,
+								},
 							},
-							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
-								GasLimit: 35000000,
-							},
-						},
+						}, nil
 					})
 					require.NoError(t, err)
 					client.EXPECT().SubmitValidatorRegistrations(
@@ -1322,17 +1491,19 @@ func TestValidator_PushSettings(t *testing.T) {
 							GasLimit: 40000000,
 						},
 					}
-					err = v.SetProposerSettings(t.Context(), &proposer.Settings{
-						ProposeConfig: config,
-						DefaultConfig: &proposer.Option{
-							FeeRecipientConfig: &proposer.FeeRecipientConfig{
-								FeeRecipient: common.HexToAddress(defaultFeeHex),
+					err = v.UpdateProposerSettings(t.Context(), func(*proposer.Settings) (*proposer.Settings, error) {
+						return &proposer.Settings{
+							ProposeConfig: config,
+							DefaultConfig: &proposer.Option{
+								FeeRecipientConfig: &proposer.FeeRecipientConfig{
+									FeeRecipient: common.HexToAddress(defaultFeeHex),
+								},
+								BuilderConfig: &proposer.BuilderConfig{
+									Enabled:  false,
+									GasLimit: 35000000,
+								},
 							},
-							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  false,
-								GasLimit: 35000000,
-							},
-						},
+						}, nil
 					})
 					require.NoError(t, err)
 					client.EXPECT().SubmitValidatorRegistrations(
@@ -1399,13 +1570,15 @@ func TestValidator_PushSettings(t *testing.T) {
 							FeeRecipient: common.HexToAddress("0x055Fb65722E7b2455043BFEBf6177F1D2e9738D9"),
 						},
 					}
-					err = v.SetProposerSettings(t.Context(), &proposer.Settings{
-						ProposeConfig: config,
-						DefaultConfig: &proposer.Option{
-							FeeRecipientConfig: &proposer.FeeRecipientConfig{
-								FeeRecipient: common.HexToAddress(defaultFeeHex),
+					err = v.UpdateProposerSettings(t.Context(), func(*proposer.Settings) (*proposer.Settings, error) {
+						return &proposer.Settings{
+							ProposeConfig: config,
+							DefaultConfig: &proposer.Option{
+								FeeRecipientConfig: &proposer.FeeRecipientConfig{
+									FeeRecipient: common.HexToAddress(defaultFeeHex),
+								},
 							},
-						},
+						}, nil
 					})
 					require.NoError(t, err)
 					return &v
@@ -1437,17 +1610,19 @@ func TestValidator_PushSettings(t *testing.T) {
 					require.NoError(t, err)
 					keys, err := km.FetchValidatingPublicKeys(ctx)
 					require.NoError(t, err)
-					err = v.SetProposerSettings(t.Context(), &proposer.Settings{
-						ProposeConfig: nil,
-						DefaultConfig: &proposer.Option{
-							FeeRecipientConfig: &proposer.FeeRecipientConfig{
-								FeeRecipient: common.HexToAddress(defaultFeeHex),
+					err = v.UpdateProposerSettings(t.Context(), func(*proposer.Settings) (*proposer.Settings, error) {
+						return &proposer.Settings{
+							ProposeConfig: nil,
+							DefaultConfig: &proposer.Option{
+								FeeRecipientConfig: &proposer.FeeRecipientConfig{
+									FeeRecipient: common.HexToAddress(defaultFeeHex),
+								},
+								BuilderConfig: &proposer.BuilderConfig{
+									Enabled:  true,
+									GasLimit: validatorType.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
+								},
 							},
-							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
-								GasLimit: validatorType.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
-							},
-						},
+						}, nil
 					})
 					require.NoError(t, err)
 					v.pubkeyToStatus[keys[0]] = &validatorStatus{
@@ -1498,17 +1673,19 @@ func TestValidator_PushSettings(t *testing.T) {
 						enableAPI:                    false,
 						km:                           genMockKeymanager(t, 1),
 					}
-					err = v.SetProposerSettings(t.Context(), &proposer.Settings{
-						ProposeConfig: nil,
-						DefaultConfig: &proposer.Option{
-							FeeRecipientConfig: &proposer.FeeRecipientConfig{
-								FeeRecipient: common.HexToAddress(defaultFeeHex),
+					err = v.UpdateProposerSettings(t.Context(), func(*proposer.Settings) (*proposer.Settings, error) {
+						return &proposer.Settings{
+							ProposeConfig: nil,
+							DefaultConfig: &proposer.Option{
+								FeeRecipientConfig: &proposer.FeeRecipientConfig{
+									FeeRecipient: common.HexToAddress(defaultFeeHex),
+								},
+								BuilderConfig: &proposer.BuilderConfig{
+									Enabled:  true,
+									GasLimit: 40000000,
+								},
 							},
-							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
-								GasLimit: 40000000,
-							},
-						},
+						}, nil
 					})
 					require.NoError(t, err)
 					km, err := v.Keymanager()
@@ -1590,13 +1767,15 @@ func TestValidator_PushSettings(t *testing.T) {
 							FeeRecipient: common.Address{},
 						},
 					}
-					err = v.SetProposerSettings(t.Context(), &proposer.Settings{
-						ProposeConfig: config,
-						DefaultConfig: &proposer.Option{
-							FeeRecipientConfig: &proposer.FeeRecipientConfig{
-								FeeRecipient: common.HexToAddress(defaultFeeHex),
+					err = v.UpdateProposerSettings(t.Context(), func(*proposer.Settings) (*proposer.Settings, error) {
+						return &proposer.Settings{
+							ProposeConfig: config,
+							DefaultConfig: &proposer.Option{
+								FeeRecipientConfig: &proposer.FeeRecipientConfig{
+									FeeRecipient: common.HexToAddress(defaultFeeHex),
+								},
 							},
-						},
+						}, nil
 					})
 					require.NoError(t, err)
 					return &v
@@ -1632,13 +1811,15 @@ func TestValidator_PushSettings(t *testing.T) {
 							PublicKeys: [][]byte{keys[0][:]},
 							Indices:    []primitives.ValidatorIndex{unknownIndex},
 						}, nil)
-					err = v.SetProposerSettings(t.Context(), &proposer.Settings{
-						ProposeConfig: config,
-						DefaultConfig: &proposer.Option{
-							FeeRecipientConfig: &proposer.FeeRecipientConfig{
-								FeeRecipient: common.HexToAddress(defaultFeeHex),
+					err = v.UpdateProposerSettings(t.Context(), func(*proposer.Settings) (*proposer.Settings, error) {
+						return &proposer.Settings{
+							ProposeConfig: config,
+							DefaultConfig: &proposer.Option{
+								FeeRecipientConfig: &proposer.FeeRecipientConfig{
+									FeeRecipient: common.HexToAddress(defaultFeeHex),
+								},
 							},
-						},
+						}, nil
 					})
 					require.NoError(t, err)
 					return &v
@@ -1684,17 +1865,19 @@ func TestValidator_PushSettings(t *testing.T) {
 							GasLimit: 40000000,
 						},
 					}
-					err = v.SetProposerSettings(t.Context(), &proposer.Settings{
-						ProposeConfig: config,
-						DefaultConfig: &proposer.Option{
-							FeeRecipientConfig: &proposer.FeeRecipientConfig{
-								FeeRecipient: common.HexToAddress(defaultFeeHex),
+					err = v.UpdateProposerSettings(t.Context(), func(*proposer.Settings) (*proposer.Settings, error) {
+						return &proposer.Settings{
+							ProposeConfig: config,
+							DefaultConfig: &proposer.Option{
+								FeeRecipientConfig: &proposer.FeeRecipientConfig{
+									FeeRecipient: common.HexToAddress(defaultFeeHex),
+								},
+								BuilderConfig: &proposer.BuilderConfig{
+									Enabled:  true,
+									GasLimit: 40000000,
+								},
 							},
-							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
-								GasLimit: 40000000,
-							},
-						},
+						}, nil
 					})
 					require.NoError(t, err)
 					client.EXPECT().PrepareBeaconProposer(gomock.Any(), &ethpb.PrepareBeaconProposerRequest{
@@ -3320,13 +3503,15 @@ func TestValidator_PushProposerSettings_SkipsBuilderRegistrationsPostGloas(t *te
 		}, nil).AnyTimes()
 
 	// Builder enabled — would normally trigger registrations pre-fork.
-	require.NoError(t, v.SetProposerSettings(ctx, &proposer.Settings{
-		DefaultConfig: &proposer.Option{
-			FeeRecipientConfig: &proposer.FeeRecipientConfig{
-				FeeRecipient: common.HexToAddress("0x046Fb65722E7b2455043BFEBf6177F1D2e9738D9"),
+	require.NoError(t, v.UpdateProposerSettings(ctx, func(*proposer.Settings) (*proposer.Settings, error) {
+		return &proposer.Settings{
+			DefaultConfig: &proposer.Option{
+				FeeRecipientConfig: &proposer.FeeRecipientConfig{
+					FeeRecipient: common.HexToAddress("0x046Fb65722E7b2455043BFEBf6177F1D2e9738D9"),
+				},
+				BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 40000000},
 			},
-			BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 40000000},
-		},
+		}, nil
 	}))
 
 	// slot 1 is post-Gloas (GloasForkEpoch == 0).
@@ -4717,37 +4902,66 @@ func TestProcessEvent_HeadV2_PayloadStatus(t *testing.T) {
 func TestValidator_UpdateProposerSettings_Concurrency(t *testing.T) {
 	ctx := t.Context()
 	db := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false)
+	key := [fieldparams.BLSPubkeyLength]byte{1}
 	v := &validator{
 		db: db,
 		proposerSettings: &proposer.Settings{
 			Version: proposer.SchemaV1,
 			DefaultConfig: &proposer.Option{
-				BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 30_000_000},
+				BuilderConfig:  &proposer.BuilderConfig{Enabled: true, GasLimit: 30_000_000},
+				GraffitiConfig: &proposer.GraffitiConfig{Graffiti: "default"},
 			},
 		},
 	}
 
 	const writers = 16
-	errs := make(chan error, writers)
+	const readers = 4
+	errs := make(chan error, writers+readers)
+	start := make(chan struct{})
 	var wg sync.WaitGroup
 	for i := range writers {
-		key := [fieldparams.BLSPubkeyLength]byte{byte(i + 1)}
+		writerKey := [fieldparams.BLSPubkeyLength]byte{byte(i + 1)}
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
+			<-start
 			errs <- v.UpdateProposerSettings(ctx, func(ps *proposer.Settings) (*proposer.Settings, error) {
 				if ps == nil {
 					ps = &proposer.Settings{Version: proposer.SchemaV2}
 				}
-				ps.UpsertProposeOption(key).GasLimit = 1
+				ps.UpsertProposeOption(writerKey).GasLimit = 1
 				return ps, nil
 			})
 		}()
 		go func() {
 			defer wg.Done()
+			<-start
 			v.upgradeProposerSettingsToV2(ctx)
 		}()
 	}
+	for range readers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			for range 100 {
+				if v.ProposerSettings() == nil {
+					errs <- errors.New("proposer settings unexpectedly nil")
+					return
+				}
+				graffiti, err := v.Graffiti(ctx, key)
+				if err != nil {
+					errs <- err
+					return
+				}
+				if string(graffiti) != "default" {
+					errs <- fmt.Errorf("unexpected graffiti %q", graffiti)
+					return
+				}
+			}
+		}()
+	}
+	close(start)
 	wg.Wait()
 	close(errs)
 	for err := range errs {

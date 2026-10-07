@@ -227,7 +227,7 @@ func TestGloasOperations_HappyPath(t *testing.T) {
 	// A plain Electra state is fine here because we exercise zero operations.
 	blk := newGloasBlock(t, emptyGloasBody())
 
-	_, err := transition.GloasOperations(context.Background(), st, blk)
+	_, err := transition.GloasOperations(context.Background(), st, blk, 0)
 	require.NoError(t, err)
 }
 
@@ -401,7 +401,7 @@ func TestGloasOperations_ProcessingErrors(t *testing.T) {
 
 			gloasBlk := newGloasBlock(t, body)
 
-			_, err := transition.GloasOperations(ctx, st, gloasBlk)
+			_, err := transition.GloasOperations(ctx, st, gloasBlk, 0)
 			require.NotNil(t, err, "expected an error but got nil")
 			require.ErrorContains(t, tc.errSubstr, err)
 			require.Equal(t, true, errors.Is(err, tc.errSentinel))

@@ -238,7 +238,11 @@ func (q *blocksQueue) loop() {
 						} else {
 							q.exitConditions.noRequiredPeersErrRetries++
 							log.Debug("Waiting for finalized peers")
-							time.Sleep(noRequiredPeersErrRefreshInterval)
+							select {
+							case <-q.ctx.Done():
+								return
+							case <-time.After(noRequiredPeersErrRefreshInterval):
+							}
 						}
 						continue
 					}

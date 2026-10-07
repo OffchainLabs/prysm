@@ -435,7 +435,15 @@ func TestValidateDataColumnsByRange(t *testing.T) {
 			startSlot:   0,
 			count:       10_000,
 			currentSlot: 400,
-			expected:    &rangeParams{start: 320, end: 400, size: 81},
+			expected:    &rangeParams{start: 320, end: 400, size: 64},
+			expectErr:   false,
+		},
+		{
+			name:        "large count",
+			startSlot:   0,
+			count:       math.MaxUint64,
+			currentSlot: 400,
+			expected:    &rangeParams{start: 320, end: 400, size: 64},
 			expectErr:   false,
 		},
 	}

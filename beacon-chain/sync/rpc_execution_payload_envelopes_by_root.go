@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v7/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
 )
@@ -57,18 +56,10 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 		return err
 	}
 
-	// Compute the oldest slot we'll allow a peer to request, based on the finalized epoch.
-	finalized := s.cfg.chain.FinalizedCheckpt()
-	minReqSlot, err := slots.EpochStart(finalized.Epoch)
-	if err != nil {
-		return errors.Wrapf(err, "could not compute start slot for finalized epoch %d", finalized.Epoch)
-	}
-
 	batchSize := flags.Get().BlockBatchLimit
 	var ticker *time.Ticker
 	if len(requestedRoots) > batchSize {
 		ticker = time.NewTicker(time.Second)
-		defer ticker.Stop()
 	}
 
 	defer closeStream(stream, log)
@@ -113,13 +104,6 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 				return err
 			}
 			if blindedEnvelope == nil || blindedEnvelope.Message == nil {
-				continue
-			}
-
-			// Silently skip envelopes older than the finalized epoch.
-			// The spec requires serving envelopes since the latest finalized epoch;
-			// pre-finalization envelopes are omitted from the response rather than erroring.
-			if blindedEnvelope.Message.Slot < minReqSlot {
 				continue
 			}
 

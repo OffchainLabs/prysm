@@ -17,6 +17,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
 	p2pTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -76,6 +79,9 @@ func startChainService(t testing.TB,
 		blockchain.WithStateGen(sg),
 		blockchain.WithStateNotifier(&mock.MockStateNotifier{}),
 		blockchain.WithAttestationPool(attestations.NewPool()),
+		blockchain.WithSlashingPool(slashings.NewPool()),
+		blockchain.WithExitPool(voluntaryexits.NewPool()),
+		blockchain.WithBLSToExecPool(blstoexec.NewPool()),
 		blockchain.WithDepositCache(depositCache),
 		blockchain.WithProposerPreferencesCache(cache.NewProposerPreferencesCache()),
 		blockchain.WithSubscribedValidatorsCache(cache.NewSubscribedValidatorsCache()),

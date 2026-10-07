@@ -393,17 +393,29 @@ func queryUntilAccepted[T any](
 	var (
 		zero     T
 		fallback *T
+		reported []error
 	)
+
+	// end returns the instant the read stops: the deadline, or the earlier
+	// fallback deadline once a usable response is in hand.
+	end := func() time.Time {
+		if fallback != nil && !cfg.fallbackDeadline.IsZero() && (cfg.deadline.IsZero() || cfg.fallbackDeadline.Before(cfg.deadline)) {
+			return cfg.fallbackDeadline
+		}
+
+		return cfg.deadline
+	}
 
 	for {
 		// If specified, set a deadline.
 		roundCtx, roundCancel := ctx, func() {}
-		if !cfg.deadline.IsZero() {
-			roundCtx, roundCancel = context.WithDeadline(ctx, cfg.deadline)
+		if deadline := end(); !deadline.IsZero() {
+			roundCtx, roundCancel = context.WithDeadline(ctx, deadline)
 		}
 
 		// Run a round of queries.
 		val, matched, ok, errs := round(roundCtx, handlers, cfg.fallbackDeadline, accept, fn)
+		deadlineCut := errors.Is(roundCtx.Err(), context.DeadlineExceeded)
 		roundCancel()
 
 		// If a match was found, return it immediately.
@@ -417,31 +429,55 @@ func queryUntilAccepted[T any](
 			fallback = &val
 		}
 
+		// A round the deadline cuts short reports only the cancellation; keep the last
+		// round that ran to completion.
+		if !deadlineCut {
+			reported = errs
+		}
+
+		// finish returns the best-effort fallback, else the nodes' last own answers,
+		// keeping the caller's cancellation in the chain when there is one.
+		finish := func() (T, bool, error) {
+			if fallback != nil {
+				return *fallback, false, nil
+			}
+
+			if reported == nil {
+				reported = errs
+			}
+
+			joined := errors.Join(reported...)
+			if ctx.Err() != nil {
+				return zero, false, errors.Join(joined, ctx.Err())
+			}
+
+			return zero, false, joined
+		}
+
 		// Stop after this round unless re-polling is enabled and there is still
-		// time left on the deadline. In UntilAny2xx mode a usable fallback
-		// also ends the re-polling.
-		repollExhausted := ctx.Err() != nil || cfg.pollInterval <= 0 || cfg.deadline.IsZero() || !time.Now().Before(cfg.deadline)
+		// time left on the deadline (or on the fallback deadline once a usable
+		// response is in hand). In UntilAny2xx mode a usable fallback also ends
+		// the re-polling.
+		repollExhausted := ctx.Err() != nil || cfg.pollInterval <= 0 || cfg.deadline.IsZero() || !time.Now().Before(end())
 		if cfg.repollMode == UntilAny2xx && fallback != nil {
 			repollExhausted = true
 		}
 
 		if repollExhausted {
-			if fallback != nil {
-				return *fallback, false, nil
-			}
-
-			return zero, false, errors.Join(errs...)
+			return finish()
 		}
 
 		// Wait for the poll interval to elapse.
 		select {
 		case <-ctx.Done():
-			if fallback != nil {
-				return *fallback, false, nil
-			}
-
-			return zero, false, ctx.Err()
+			return finish()
 		case <-time.After(cfg.pollInterval):
+		}
+
+		// Do not start a round the deadline would cut short: the completed rounds
+		// already hold the nodes' answers.
+		if !time.Now().Before(end()) {
+			return finish()
 		}
 	}
 }

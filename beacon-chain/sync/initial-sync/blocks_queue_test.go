@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
@@ -133,6 +134,46 @@ func TestBlocksQueue_InitStartStop(t *testing.T) {
 		assert.NoError(t, queue.start())
 		cancel()
 		assert.NoError(t, queue.stop())
+	})
+}
+
+func TestBlocksQueue_StopDuringPeerRetry(t *testing.T) {
+	mc, p2p, _ := initializeTestServices(t, nil, nil)
+	resetFlags := *flags.Get()
+	withPeers := resetFlags
+	withPeers.MinimumSyncPeers = 1
+	flags.Init(&withPeers)
+	t.Cleanup(func() { flags.Init(&resetFlags) })
+
+	synctest.Test(t, func(t *testing.T) {
+		queue := newBlocksQueue(t.Context(), &blocksQueueConfig{
+			chain:               mc,
+			p2p:                 p2p,
+			highestExpectedSlot: 128,
+			mode:                modeNonConstrained,
+		})
+		defer queue.cancel()
+		queue.smm.handlers[stateNew][eventTick] = func(m *stateMachine, _ any) (stateID, error) {
+			return m.state, errNoRequiredPeers
+		}
+		require.NoError(t, queue.start())
+		// Advance to the first tick, then let the queue block in its retry wait.
+		time.Sleep(pollingInterval)
+		synctest.Wait()
+		require.Equal(t, 1, queue.exitConditions.noRequiredPeersErrRetries)
+
+		assert.NoError(t, queue.stop())
+		synctest.Wait()
+		select {
+		case <-queue.quit:
+		default:
+			t.Fatal("queue did not finish shutdown")
+		}
+		_, open := <-queue.fetchedData
+		assert.Equal(t, false, open)
+		_, open = <-queue.blocksFetcher.fetchResponses
+		assert.Equal(t, false, open)
+		require.IsNil(t, queue.blocksFetcher.rateLimiter)
 	})
 }
 

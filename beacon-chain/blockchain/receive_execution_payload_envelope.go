@@ -169,12 +169,6 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	}
 
 	// execution_payload is emitted when an execution payload is successfully imported.
-	isOptimistic, err := s.cfg.ForkChoiceStore.IsOptimistic(root)
-	if err != nil {
-		log.WithError(err).Error("Could not get optimistic status of block root")
-		isOptimistic = false
-	}
-
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.ExecutionPayloadProcessed,
 		Data: &statefeed.ExecutionPayloadProcessedData{
@@ -182,7 +176,7 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 			BuilderIndex: envelope.BuilderIndex(),
 			BlockHash:    envelope.BlockHash(),
 			BlockRoot:    root,
-			Optimistic:   isOptimistic,
+			Optimistic:   !isValidPayload,
 		},
 	})
 
@@ -192,12 +186,24 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return nil
 	}
 
-	log.WithFields(logrus.Fields{
+	gasLimit, gasUsed := float64(execution.GasLimit()), float64(execution.GasUsed())
+
+	payloadGasLimit.Set(gasLimit)
+	payloadGasUsed.Set(gasUsed)
+
+	fields := logrus.Fields{
 		"slot":       envelope.Slot(),
 		"blockRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(root[:])),
 		"blockHash":  fmt.Sprintf("%#x", bytesutil.Trunc(execution.BlockHash())),
 		"parentHash": fmt.Sprintf("%#x", bytesutil.Trunc(execution.ParentHash())),
-	}).Info("Synced execution payload envelope")
+	}
+
+	if gasLimit > 0 {
+		fields["gasUtilized"] = fmt.Sprintf("%.2f%%", 100*gasUsed/gasLimit)
+	}
+
+	log.WithFields(fields).Info("Synced execution payload envelope")
+
 	return nil
 }
 
@@ -434,11 +440,11 @@ func (s *Service) notifyForkchoiceUpdateGloas(ctx context.Context, blockHash [32
 
 	s.cfg.ForkChoiceStore.RLock()
 	finalizedHash := s.cfg.ForkChoiceStore.FinalizedPayloadBlockHash()
-	justifiedHash := s.cfg.ForkChoiceStore.UnrealizedJustifiedPayloadBlockHash()
+	safeHash := s.safeBlockHash()
 	s.cfg.ForkChoiceStore.RUnlock()
 	fcs := &enginev1.ForkchoiceState{
 		HeadBlockHash:      blockHash[:],
-		SafeBlockHash:      justifiedHash[:],
+		SafeBlockHash:      safeHash[:],
 		FinalizedBlockHash: finalizedHash[:],
 	}
 	if attributes == nil {

@@ -3,6 +3,7 @@ package debug
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"math"
@@ -905,6 +906,106 @@ func TestDataColumnSidecars(t *testing.T) {
 		require.Equal(t, 1, len(data[0].KzgProofs))
 		require.Equal(t, hexutil.Encode(proof), data[0].KzgProofs[0])
 	})
+
+	t.Run("SSZ response uses list framing", func(t *testing.T) {
+		originalConfig := params.BeaconConfig()
+		defer func() { params.OverrideBeaconConfig(originalConfig) }()
+
+		config := params.BeaconConfig().Copy()
+		config.FuluForkEpoch = 0
+		config.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(config)
+
+		signedTestBlock := util.NewBeaconBlockGloas()
+		signedTestBlock.Block.Slot = 7
+		roBlock, err := blocks.NewSignedBeaconBlock(signedTestBlock)
+		require.NoError(t, err)
+
+		chainService := &blockchainmock.ChainService{}
+		currentSlot := primitives.Slot(7)
+		chainService.Slot = &currentSlot
+		chainService.OptimisticRoots = make(map[[32]byte]bool)
+		chainService.FinalizedRoots = make(map[[32]byte]bool)
+
+		sidecars := []blocks.VerifiedRODataColumn{testGloasDataColumn(t, 0), testGloasDataColumn(t, 1)}
+		mockBlocker := &testutil.MockBlocker{
+			DataColumnsFunc: func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
+				return sidecars, nil
+			},
+			BlockToReturn: roBlock,
+		}
+
+		s := &Server{
+			GenesisTimeFetcher:    chainService,
+			OptimisticModeFetcher: chainService,
+			FinalizationFetcher:   chainService,
+			Blocker:               mockBlocker,
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/debug/beacon/data_column_sidecars/head", nil)
+		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.SetPathValue("block_id", "head")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.DataColumnSidecars(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+		require.Equal(t, version.String(version.Gloas), writer.Header().Get(api.VersionHeader))
+
+		first, err := sidecars[0].MarshalSSZ()
+		require.NoError(t, err)
+		second, err := sidecars[1].MarshalSSZ()
+		require.NoError(t, err)
+		body := writer.Body.Bytes()
+		require.Equal(t, 8+len(first)+len(second), len(body))
+		assert.Equal(t, uint32(8), binary.LittleEndian.Uint32(body[0:4]))
+		assert.Equal(t, uint32(8+len(first)), binary.LittleEndian.Uint32(body[4:8]))
+		require.DeepEqual(t, first, body[8:8+len(first)])
+		require.DeepEqual(t, second, body[8+len(first):])
+	})
+
+	t.Run("SSZ response with no sidecars is empty", func(t *testing.T) {
+		originalConfig := params.BeaconConfig()
+		defer func() { params.OverrideBeaconConfig(originalConfig) }()
+
+		config := params.BeaconConfig().Copy()
+		config.FuluForkEpoch = 0
+		params.OverrideBeaconConfig(config)
+
+		signedTestBlock := util.NewBeaconBlock()
+		roBlock, err := blocks.NewSignedBeaconBlock(signedTestBlock)
+		require.NoError(t, err)
+
+		chainService := &blockchainmock.ChainService{}
+		currentSlot := primitives.Slot(0)
+		chainService.Slot = &currentSlot
+		chainService.OptimisticRoots = make(map[[32]byte]bool)
+		chainService.FinalizedRoots = make(map[[32]byte]bool)
+
+		mockBlocker := &testutil.MockBlocker{
+			DataColumnsFunc: func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
+				return []blocks.VerifiedRODataColumn{}, nil
+			},
+			BlockToReturn: roBlock,
+		}
+
+		s := &Server{
+			GenesisTimeFetcher:    chainService,
+			OptimisticModeFetcher: chainService,
+			FinalizationFetcher:   chainService,
+			Blocker:               mockBlocker,
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/debug/beacon/data_column_sidecars/head", nil)
+		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.SetPathValue("block_id", "head")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.DataColumnSidecars(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+		require.Equal(t, 0, writer.Body.Len())
+	})
 }
 
 func TestParseDataColumnIndices(t *testing.T) {
@@ -983,6 +1084,19 @@ func TestParseDataColumnIndices(t *testing.T) {
 	}
 }
 
+// testGloasDataColumn builds a minimal Gloas data column sidecar for SSZ framing assertions.
+func testGloasDataColumn(t *testing.T, index uint64) blocks.VerifiedRODataColumn {
+	roDc, err := blocks.NewRODataColumnGloas(&ethpb.DataColumnSidecarGloas{
+		Index:           index,
+		Column:          [][]byte{bytesutil.PadTo([]byte{byte(index)}, 2048)},
+		KzgProofs:       [][]byte{bytesutil.PadTo([]byte{0x33}, 48)},
+		Slot:            7,
+		BeaconBlockRoot: bytesutil.PadTo([]byte{0xab, 0xcd}, 32),
+	})
+	require.NoError(t, err)
+	return blocks.NewVerifiedRODataColumn(roDc)
+}
+
 func TestBuildDataColumnSidecarsSSZResponse(t *testing.T) {
 	t.Run("empty data columns", func(t *testing.T) {
 		result, err := buildDataColumnSidecarsSSZResponse([]blocks.VerifiedRODataColumn{})
@@ -990,8 +1104,19 @@ func TestBuildDataColumnSidecarsSSZResponse(t *testing.T) {
 		require.DeepEqual(t, []byte{}, result)
 	})
 
-	t.Run("get SSZ size", func(t *testing.T) {
-		size := (&ethpb.DataColumnSidecar{}).SizeSSZ()
-		assert.Equal(t, true, size > 0)
+	t.Run("list framing", func(t *testing.T) {
+		sidecars := []blocks.VerifiedRODataColumn{testGloasDataColumn(t, 0), testGloasDataColumn(t, 1)}
+		first, err := sidecars[0].MarshalSSZ()
+		require.NoError(t, err)
+		second, err := sidecars[1].MarshalSSZ()
+		require.NoError(t, err)
+
+		result, err := buildDataColumnSidecarsSSZResponse(sidecars)
+		require.NoError(t, err)
+		require.Equal(t, 8+len(first)+len(second), len(result))
+		assert.Equal(t, uint32(8), binary.LittleEndian.Uint32(result[0:4]))
+		assert.Equal(t, uint32(8+len(first)), binary.LittleEndian.Uint32(result[4:8]))
+		require.DeepEqual(t, first, result[8:8+len(first)])
+		require.DeepEqual(t, second, result[8+len(first):])
 	})
 }

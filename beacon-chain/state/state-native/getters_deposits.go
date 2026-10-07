@@ -31,6 +31,21 @@ func (b *BeaconState) PendingDeposits() ([]*ethpb.PendingDeposit, error) {
 	return b.pendingDepositsVal(), nil
 }
 
+// f must not retain or mutate the deposit it is given; the queue is not copied.
+func (b *BeaconState) ForEachPendingDeposit(f func(*ethpb.PendingDeposit) error) error {
+	if b.version < version.Electra {
+		return errNotSupported("ForEachPendingDeposit", b.version)
+	}
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+	for _, deposit := range b.pendingDeposits {
+		if err := f(deposit); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // IsPendingValidator checks the state's pending_deposits queue under RLock; the underlying
 // slice is not copied.
 func (b *BeaconState) IsPendingValidator(pubkey []byte) (bool, error) {

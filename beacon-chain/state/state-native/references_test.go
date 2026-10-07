@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -31,8 +32,10 @@ func TestStateReferenceSharing_Finalizer_Phase0(t *testing.T) {
 		_ = b
 	}()
 
-	runtime.GC() // Should run finalizer on object b
-	assert.Equal(t, uint(1), a.sharedFieldReferences[types.Slashings].Refs(), "Expected 1 shared reference to RANDAO mixes!")
+	require.Eventually(t, func() bool {
+		runtime.GC()
+		return a.sharedFieldReferences[types.Slashings].Refs() == 1
+	}, 5*time.Second, 10*time.Millisecond, "Expected 1 shared reference to RANDAO mixes!")
 
 	copied := a.Copy()
 	b, ok := copied.(*BeaconState)
@@ -60,8 +63,10 @@ func TestStateReferenceSharing_Finalizer_Altair(t *testing.T) {
 		_ = b
 	}()
 
-	runtime.GC() // Should run finalizer on object b
-	assert.Equal(t, uint(1), a.sharedFieldReferences[types.Slashings].Refs(), "Expected 1 shared reference to RANDAO mixes!")
+	require.Eventually(t, func() bool {
+		runtime.GC()
+		return a.sharedFieldReferences[types.Slashings].Refs() == 1
+	}, 5*time.Second, 10*time.Millisecond, "Expected 1 shared reference to RANDAO mixes!")
 
 	copied := a.Copy()
 	b, ok := copied.(*BeaconState)
@@ -89,8 +94,10 @@ func TestStateReferenceSharing_Finalizer_Bellatrix(t *testing.T) {
 		_ = b
 	}()
 
-	runtime.GC() // Should run finalizer on object b
-	assert.Equal(t, uint(1), a.sharedFieldReferences[types.Slashings].Refs(), "Expected 1 shared reference to RANDAO mixes!")
+	require.Eventually(t, func() bool {
+		runtime.GC()
+		return a.sharedFieldReferences[types.Slashings].Refs() == 1
+	}, 5*time.Second, 10*time.Millisecond, "Expected 1 shared reference to RANDAO mixes!")
 
 	copied := a.Copy()
 	b, ok := copied.(*BeaconState)
@@ -118,8 +125,10 @@ func TestStateReferenceSharing_Finalizer_Capella(t *testing.T) {
 		_ = b
 	}()
 
-	runtime.GC() // Should run finalizer on object b
-	assert.Equal(t, uint(1), a.sharedFieldReferences[types.Slashings].Refs(), "Expected 1 shared reference to RANDAO mixes!")
+	require.Eventually(t, func() bool {
+		runtime.GC()
+		return a.sharedFieldReferences[types.Slashings].Refs() == 1
+	}, 5*time.Second, 10*time.Millisecond, "Expected 1 shared reference to RANDAO mixes!")
 
 	copied := a.Copy()
 	b, ok := copied.(*BeaconState)
@@ -147,8 +156,10 @@ func TestStateReferenceSharing_Finalizer_Deneb(t *testing.T) {
 		_ = b
 	}()
 
-	runtime.GC() // Should run finalizer on object b
-	assert.Equal(t, uint(1), a.sharedFieldReferences[types.Slashings].Refs(), "Expected 1 shared reference to RANDAO mixes!")
+	require.Eventually(t, func() bool {
+		runtime.GC()
+		return a.sharedFieldReferences[types.Slashings].Refs() == 1
+	}, 5*time.Second, 10*time.Millisecond, "Expected 1 shared reference to RANDAO mixes!")
 
 	copied := a.Copy()
 	b, ok := copied.(*BeaconState)

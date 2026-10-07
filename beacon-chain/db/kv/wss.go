@@ -99,9 +99,12 @@ func (s *Store) SaveOrigin(ctx context.Context, serState, serBlock []byte) error
 		return errors.Wrap(err, "save origin checkpoint block root")
 	}
 
-	// rebuild the checkpoint from the block
-	// use it to mark the block as justified and finalized
-	slotEpoch, err := wblk.Block().Slot().SafeDivSlot(params.BeaconConfig().SlotsPerEpoch)
+	// Rebuild the checkpoint the node is syncing from and use it to mark the block as
+	// justified and finalized. The epoch must come from the state slot, not the block slot:
+	// the origin state sits at the checkpoint epoch's start slot (advanced through any empty
+	// slots), while the origin block sits in an earlier epoch whenever the first slot of the
+	// checkpoint epoch is empty.
+	slotEpoch, err := state.Slot().SafeDivSlot(params.BeaconConfig().SlotsPerEpoch)
 	if err != nil {
 		return err
 	}

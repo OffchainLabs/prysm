@@ -11,6 +11,7 @@ import (
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
@@ -757,6 +758,43 @@ func TestSettings_TargetGasLimit(t *testing.T) {
 	})
 }
 
+func TestSettings_GasLimitAt(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 100
+	cfg.GasLimitSchedule = []params.GasLimitScheduleEntry{{Epoch: 100, GasLimit: 60_000_000}}
+	params.OverrideBeaconConfig(cfg)
+	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+
+	pubkey, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+	require.NoError(t, err)
+	pk := bytesutil.ToBytes48(pubkey)
+	builderOnly := &Settings{DefaultConfig: &Option{BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: 35_000_000}}}
+
+	tests := []struct {
+		name     string
+		settings *Settings
+		epoch    primitives.Epoch
+		want     validator.Uint64
+	}{
+		{name: "nil settings pre-gloas use the chain default", epoch: 99, want: chainDefault},
+		{name: "nil settings at gloas use the schedule", epoch: 100, want: 60_000_000},
+		{name: "builder gas limit applies pre-gloas", settings: builderOnly, epoch: 99, want: 35_000_000},
+		{name: "builder gas limit is ignored at gloas", settings: builderOnly, epoch: 100, want: 60_000_000},
+		{
+			name:     "operator value wins at gloas",
+			settings: &Settings{DefaultConfig: &Option{GasLimit: 50_000_000}},
+			epoch:    100,
+			want:     50_000_000,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, tt.settings.GasLimitAt(pk, tt.epoch))
+		})
+	}
+}
+
 func TestSettings_TargetGasLimit_Schedule(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -823,19 +861,19 @@ func TestSettings_TargetGasLimit_Schedule(t *testing.T) {
 func TestSettingFromConsensus(t *testing.T) {
 	// Persisted payloads may predate url-required and (url, auth_data) uniqueness:
 	// url-less entries drop, (url, auth) duplicates keep the first, and an omitted
-	// auth_data compares as its derived value (the url's UTF-8 bytes).
+	// auth_data compares as its derived value (the url's hostname).
 	t.Run("dedups builders", func(t *testing.T) {
 		payload := &validatorpb.ProposerSettingsPayload{
 			Version: SchemaV2,
 			DefaultConfig: &validatorpb.ProposerOptionPayload{
 				Builder: &validatorpb.BuilderConfig{
 					Builders: []*validatorpb.BuilderEntry{
-						{Url: "https://b.example", AuthData: []byte("first")},
-						{Url: "https://b.example", AuthData: []byte("second")},
-						{Url: "https://b.example", AuthData: []byte("first")},
+						{Url: "https://b.example", AuthData: new(hexutil.Encode([]byte("first")))},
+						{Url: "https://b.example", AuthData: new(hexutil.Encode([]byte("second")))},
+						{Url: "https://b.example", AuthData: new(hexutil.Encode([]byte("first")))},
 						{Url: "https://other.example"},
-						{Url: "https://other.example", AuthData: []byte("https://other.example")},
-						{AuthData: []byte("url-less")},
+						{Url: "https://other.example", AuthData: new(hexutil.Encode([]byte("other.example")))},
+						{AuthData: new(hexutil.Encode([]byte("url-less")))},
 					},
 				},
 			},
@@ -860,8 +898,10 @@ func TestSettingFromConsensus(t *testing.T) {
 						{Url: "https://good.example"},
 						{Url: "not a url"},
 						{Url: "https://" + strings.Repeat("a", MaxBuilderURLSize)},
-						{Url: "https://badkey.example", Pubkeys: [][]byte{make([]byte, 47)}},
-						{Url: "https://badauth.example", AuthData: make([]byte, MaxAuthDataSize+1)},
+						{Url: "https://badkey.example", BuilderPubkeys: []string{hexutil.Encode(make([]byte, 47))}},
+						{Url: "https://badauth.example", AuthData: new(hexutil.Encode(make([]byte, MaxAuthDataSize+1)))},
+						{Url: "https://base64auth.example", AuthData: new("aGVsbG8=")},
+						{Url: "https://base64key.example", BuilderPubkeys: []string{"AAAA"}},
 					},
 				},
 			},
@@ -928,6 +968,27 @@ func TestSettingFromConsensus(t *testing.T) {
 		require.Equal(t, false, bc.Enabled)
 		require.NotNil(t, bc.MaxExecutionPayment)
 		require.Equal(t, validator.Uint64(0), *bc.MaxExecutionPayment)
+	})
+
+	t.Run("nil proposer_config entry is skipped", func(t *testing.T) {
+		nilKey := hexutil.MustDecode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+		liveKey := hexutil.MustDecode("0xb057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+
+		got, err := SettingFromConsensus(&validatorpb.ProposerSettingsPayload{
+			Version: SchemaV2,
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				hexutil.Encode(nilKey):  nil,
+				hexutil.Encode(liveKey): {FeeRecipient: "0x6e35733c5af9B61374A128e6F85f553aF09ff89A"},
+			},
+		})
+		require.NoError(t, err)
+
+		require.Equal(t, 1, len(got.ProposeConfig))
+		_, ok := got.ProposeConfig[bytesutil.ToBytes48(nilKey)]
+		require.Equal(t, false, ok)
+		live := got.ProposeConfig[bytesutil.ToBytes48(liveKey)]
+		require.NotNil(t, live)
+		require.Equal(t, common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"), live.FeeRecipientConfig.FeeRecipient)
 	})
 }
 
@@ -1232,4 +1293,62 @@ func TestUpgradeToV2_DropsBuilderContent(t *testing.T) {
 	// The pure-v1 per-key config is gone entirely.
 	require.IsNil(t, ps.ProposeConfig[key].BuilderConfig)
 	require.Equal(t, false, ps.UpgradeToV2())
+}
+
+func TestBuilderEntry_EffectiveAuthData(t *testing.T) {
+	t.Run("derives the spec (builder-specs) default from the url hostname", func(t *testing.T) {
+		cases := map[string]string{
+			"https://builder.example.com/":             "builder.example.com",
+			"HTTPS://Builder.Example.com:443/bids?x=1": "builder.example.com",
+			"https://builder.example.com:8080":         "builder.example.com",
+			"https://user:pw@builder.example.com/":     "builder.example.com",
+			"https://10.0.0.5:18550/eth/v1/builder":    "10.0.0.5",
+			"https://[0:0:0:0:0:0:0:1]:8443/":          "[::1]",
+			"https://[::ffff:192.0.2.1]/":              "[::ffff:c000:201]",
+		}
+		for u, want := range cases {
+			t.Run(u, func(t *testing.T) {
+				require.Equal(t, want, string((&BuilderEntry{URL: u}).EffectiveAuthData()))
+			})
+		}
+	})
+
+	t.Run("explicit auth_data wins untouched", func(t *testing.T) {
+		be := &BuilderEntry{URL: "https://builder.example.com/", AuthData: []byte("custom")}
+		require.DeepEqual(t, []byte("custom"), be.EffectiveAuthData())
+	})
+}
+
+func TestBuilderEntry_Validate_Hostname(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		wantErr string
+	}{
+		{
+			name:    "no hostname",
+			url:     "https://:8080",
+			wantErr: "url is missing a hostname",
+		},
+		{
+			name:    "non-ASCII hostname",
+			url:     "https://bü.example",
+			wantErr: "must be ASCII",
+		},
+		{
+			name: "valid punycode hostname",
+			url:  "https://xn--b-eha.example",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := (&BuilderEntry{URL: tt.url}).Validate()
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, tt.wantErr, err)
+		})
+	}
 }

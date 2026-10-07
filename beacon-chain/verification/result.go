@@ -63,6 +63,10 @@ func (r Requirement) String() string {
 		return "RequirePayloadHashValid"
 	case RequireExecutionRequestsRootValid:
 		return "RequireExecutionRequestsRootValid"
+	case RequireExecutionRequestsLimitsValid:
+		return "RequireExecutionRequestsLimitsValid"
+	case RequireWithdrawalsLimitValid:
+		return "RequireWithdrawalsLimitValid"
 	case RequireEnvelopeSlotAboveFinalized:
 		return "RequireEnvelopeSlotAboveFinalized"
 	case RequireEnvelopeSlotMatchesBlock:
@@ -93,6 +97,8 @@ func (r Requirement) String() string {
 		return "RequireBidParentBlockHashValid"
 	case RequireBidBuilderCanCover:
 		return "RequireBidBuilderCanCover"
+	case RequireBidBuilderNotExiting:
+		return "RequireBidBuilderNotExiting"
 	case RequireBidSignatureValid:
 		return "RequireBidSignatureValid"
 	case RequireBidSlotMatches:

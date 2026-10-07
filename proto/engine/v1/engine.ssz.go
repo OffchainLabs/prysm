@@ -2218,6 +2218,9 @@ func (c *ExecutionPayloadGloas) UnmarshalSSZ(buf []byte) error {
 				return fmt.Errorf("misaligned list bytes: when decoding c.Transactions, end-of-list offset is %d, which is not a multiple of 4 (offset size)", startOffset)
 			}
 			listLen := startOffset / 4
+			if listLen > 1048576 {
+				return fmt.Errorf("ssz-max exceeded: c.Transactions has %d elements, ssz-max is 1048576: %w", listLen, ssz.ErrListTooBig)
+			}
 			totalVarBytes := uint64(len(sszSlice13))
 			if totalVarBytes < startOffset {
 				return fmt.Errorf("list bytes too short to contain an offset when decoding c.Transactions")
@@ -2256,6 +2259,9 @@ func (c *ExecutionPayloadGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.Withdrawals length is %d, which is not a multiple of 44: %w", len(sszSlice14), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice14) / 44
+		if numElem > 16 {
+			return fmt.Errorf("ssz-max exceeded: c.Withdrawals has %d elements, ssz-max is 16: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.Withdrawals = make([]*Withdrawal, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *Withdrawal
@@ -3791,6 +3797,9 @@ func (c *ExecutionRequestsGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.Withdrawals length is %d, which is not a multiple of 76: %w", len(sszSlice1), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice1) / 76
+		if numElem > 16 {
+			return fmt.Errorf("ssz-max exceeded: c.Withdrawals has %d elements, ssz-max is 16: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.Withdrawals = make([]*WithdrawalRequest, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *WithdrawalRequest
@@ -3809,6 +3818,9 @@ func (c *ExecutionRequestsGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.Consolidations length is %d, which is not a multiple of 116: %w", len(sszSlice2), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice2) / 116
+		if numElem > 2 {
+			return fmt.Errorf("ssz-max exceeded: c.Consolidations has %d elements, ssz-max is 2: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.Consolidations = make([]*ConsolidationRequest, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *ConsolidationRequest
@@ -3827,6 +3839,9 @@ func (c *ExecutionRequestsGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.BuilderDeposits length is %d, which is not a multiple of 184: %w", len(sszSlice3), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice3) / 184
+		if numElem > 64 {
+			return fmt.Errorf("ssz-max exceeded: c.BuilderDeposits has %d elements, ssz-max is 64: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.BuilderDeposits = make([]*BuilderDepositRequest, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *BuilderDepositRequest
@@ -3845,6 +3860,9 @@ func (c *ExecutionRequestsGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.BuilderExits length is %d, which is not a multiple of 68: %w", len(sszSlice4), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice4) / 68
+		if numElem > 16 {
+			return fmt.Errorf("ssz-max exceeded: c.BuilderExits has %d elements, ssz-max is 16: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.BuilderExits = make([]*BuilderExitRequest, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *BuilderExitRequest

@@ -121,6 +121,38 @@ type ValidatorRegistrationSignRequest struct {
 	ValidatorRegistration *ValidatorRegistration `json:"validator_registration" validate:"required"`
 }
 
+// BuilderRequestAuthSignRequest is a request object for web3signer sign api type BUILDER_REQUEST_AUTH (gloas builder API).
+// Its domain is fork-independent (genesis fork version, zero genesis validators root), so no fork info.
+type BuilderRequestAuthSignRequest struct {
+	Type               string                       `json:"type" validate:"required"`
+	SigningRoot        hexutil.Bytes                `json:"signingRoot"`
+	BuilderRequestAuth *VersionedBuilderRequestAuth `json:"builder_request_auth" validate:"required"`
+}
+
+// ExecutionPayloadEnvelopeSignRequest is a request object for web3signer sign api type EXECUTION_PAYLOAD_ENVELOPE (gloas).
+type ExecutionPayloadEnvelopeSignRequest struct {
+	Type                     string                             `json:"type" validate:"required"`
+	ForkInfo                 *ForkInfo                          `json:"fork_info" validate:"required"`
+	SigningRoot              hexutil.Bytes                      `json:"signingRoot"`
+	ExecutionPayloadEnvelope *VersionedExecutionPayloadEnvelope `json:"execution_payload_envelope" validate:"required"`
+}
+
+// PayloadAttestationMessageSignRequest is a request object for web3signer sign api type PAYLOAD_ATTESTATION_MESSAGE (gloas).
+type PayloadAttestationMessageSignRequest struct {
+	Type                      string                           `json:"type" validate:"required"`
+	ForkInfo                  *ForkInfo                        `json:"fork_info" validate:"required"`
+	SigningRoot               hexutil.Bytes                    `json:"signingRoot"`
+	PayloadAttestationMessage *VersionedPayloadAttestationData `json:"payload_attestation_message" validate:"required"`
+}
+
+// ProposerPreferencesSignRequest is a request object for web3signer sign api type PROPOSER_PREFERENCES (gloas).
+type ProposerPreferencesSignRequest struct {
+	Type                string                        `json:"type" validate:"required"`
+	ForkInfo            *ForkInfo                     `json:"fork_info" validate:"required"`
+	SigningRoot         hexutil.Bytes                 `json:"signingRoot"`
+	ProposerPreferences *VersionedProposerPreferences `json:"proposer_preferences" validate:"required"`
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // sub properties of Sign Requests /////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -366,6 +398,139 @@ type ValidatorRegistration struct {
 	GasLimit     string        `json:"gas_limit" validate:"required"`     /* uint64 */
 	Timestamp    string        `json:"timestamp" validate:"required"`     /* uint64 */
 	Pubkey       hexutil.Bytes `json:"pubkey"  validate:"required"`       /* bls hexadecimal string */
+}
+
+// VersionedBuilderRequestAuth a sub property of BuilderRequestAuthSignRequest.
+type VersionedBuilderRequestAuth struct {
+	Version string              `json:"version" validate:"required"`
+	Data    *BuilderRequestAuth `json:"data" validate:"required"`
+}
+
+// BuilderRequestAuth a sub property of VersionedBuilderRequestAuth (gloas builder API).
+type BuilderRequestAuth struct {
+	Data hexutil.Bytes `json:"data"` /* ByteList[4096], carries the builder URL */
+	Slot string        `json:"slot"` /* uint64 */
+}
+
+// VersionedExecutionPayloadEnvelope a sub property of ExecutionPayloadEnvelopeSignRequest.
+type VersionedExecutionPayloadEnvelope struct {
+	Version string                    `json:"version" validate:"required"`
+	Data    *ExecutionPayloadEnvelope `json:"data" validate:"required"`
+}
+
+// ExecutionPayloadEnvelope a sub property of VersionedExecutionPayloadEnvelope (gloas).
+type ExecutionPayloadEnvelope struct {
+	Payload               *ExecutionPayloadGloas  `json:"payload"`
+	ExecutionRequests     *ExecutionRequestsGloas `json:"execution_requests"`
+	BuilderIndex          string                  `json:"builder_index"` /* uint64 */
+	BeaconBlockRoot       hexutil.Bytes           `json:"beacon_block_root"`
+	ParentBeaconBlockRoot hexutil.Bytes           `json:"parent_beacon_block_root"`
+}
+
+// ExecutionPayloadGloas is the gloas execution payload (deneb shape + block_access_list + slot_number).
+type ExecutionPayloadGloas struct {
+	ParentHash      hexutil.Bytes   `json:"parent_hash"`
+	FeeRecipient    hexutil.Bytes   `json:"fee_recipient"`
+	StateRoot       hexutil.Bytes   `json:"state_root"`
+	ReceiptsRoot    hexutil.Bytes   `json:"receipts_root"`
+	LogsBloom       hexutil.Bytes   `json:"logs_bloom"`
+	PrevRandao      hexutil.Bytes   `json:"prev_randao"`
+	BlockNumber     string          `json:"block_number"` /* uint64 */
+	GasLimit        string          `json:"gas_limit"`    /* uint64 */
+	GasUsed         string          `json:"gas_used"`     /* uint64 */
+	Timestamp       string          `json:"timestamp"`    /* uint64 */
+	ExtraData       hexutil.Bytes   `json:"extra_data"`
+	BaseFeePerGas   string          `json:"base_fee_per_gas"` /* uint256 decimal */
+	BlockHash       hexutil.Bytes   `json:"block_hash"`
+	Transactions    []hexutil.Bytes `json:"transactions"`
+	Withdrawals     []*Withdrawal   `json:"withdrawals"`
+	BlobGasUsed     string          `json:"blob_gas_used"`   /* uint64 */
+	ExcessBlobGas   string          `json:"excess_blob_gas"` /* uint64 */
+	BlockAccessList hexutil.Bytes   `json:"block_access_list"`
+	SlotNumber      string          `json:"slot_number"` /* uint64 */
+}
+
+// Withdrawal a sub property of ExecutionPayloadGloas.
+type Withdrawal struct {
+	Index          string        `json:"index"`           /* uint64 */
+	ValidatorIndex string        `json:"validator_index"` /* uint64 */
+	Address        hexutil.Bytes `json:"address"`
+	Amount         string        `json:"amount"` /* uint64 */
+}
+
+// ExecutionRequestsGloas a sub property of ExecutionPayloadEnvelope (gloas).
+type ExecutionRequestsGloas struct {
+	Deposits        []*DepositRequest        `json:"deposits"`
+	Withdrawals     []*WithdrawalRequest     `json:"withdrawals"`
+	Consolidations  []*ConsolidationRequest  `json:"consolidations"`
+	BuilderDeposits []*BuilderDepositRequest `json:"builder_deposits"`
+	BuilderExits    []*BuilderExitRequest    `json:"builder_exits"`
+}
+
+// DepositRequest a sub property of ExecutionRequests.
+type DepositRequest struct {
+	Pubkey                hexutil.Bytes `json:"pubkey"`
+	WithdrawalCredentials hexutil.Bytes `json:"withdrawal_credentials"`
+	Amount                string        `json:"amount"` /* uint64 */
+	Signature             hexutil.Bytes `json:"signature"`
+	Index                 string        `json:"index"` /* uint64 */
+}
+
+// WithdrawalRequest a sub property of ExecutionRequests.
+type WithdrawalRequest struct {
+	SourceAddress   hexutil.Bytes `json:"source_address"`
+	ValidatorPubkey hexutil.Bytes `json:"validator_pubkey"`
+	Amount          string        `json:"amount"` /* uint64 */
+}
+
+// ConsolidationRequest a sub property of ExecutionRequests.
+type ConsolidationRequest struct {
+	SourceAddress hexutil.Bytes `json:"source_address"`
+	SourcePubkey  hexutil.Bytes `json:"source_pubkey"`
+	TargetPubkey  hexutil.Bytes `json:"target_pubkey"`
+}
+
+// BuilderDepositRequest a sub property of ExecutionRequestsGloas.
+type BuilderDepositRequest struct {
+	Pubkey                hexutil.Bytes `json:"pubkey"`
+	WithdrawalCredentials hexutil.Bytes `json:"withdrawal_credentials"`
+	Amount                string        `json:"amount"` /* uint64 */
+	Signature             hexutil.Bytes `json:"signature"`
+}
+
+// BuilderExitRequest a sub property of ExecutionRequestsGloas.
+type BuilderExitRequest struct {
+	SourceAddress hexutil.Bytes `json:"source_address"`
+	Pubkey        hexutil.Bytes `json:"pubkey"`
+}
+
+// VersionedPayloadAttestationData a sub property of PayloadAttestationMessageSignRequest.
+type VersionedPayloadAttestationData struct {
+	Version string                  `json:"version" validate:"required"`
+	Data    *PayloadAttestationData `json:"data" validate:"required"`
+}
+
+// PayloadAttestationData a sub property of VersionedPayloadAttestationData (gloas).
+type PayloadAttestationData struct {
+	BeaconBlockRoot   hexutil.Bytes `json:"beacon_block_root"`
+	Slot              string        `json:"slot"` /* uint64 */
+	PayloadPresent    bool          `json:"payload_present"`
+	BlobDataAvailable bool          `json:"blob_data_available"`
+}
+
+// VersionedProposerPreferences a sub property of ProposerPreferencesSignRequest.
+type VersionedProposerPreferences struct {
+	Version string               `json:"version" validate:"required"`
+	Data    *ProposerPreferences `json:"data" validate:"required"`
+}
+
+// ProposerPreferences a sub property of VersionedProposerPreferences (gloas).
+type ProposerPreferences struct {
+	DependentRoot  hexutil.Bytes `json:"dependent_root"`
+	ProposalSlot   string        `json:"proposal_slot"`   /* uint64 */
+	ValidatorIndex string        `json:"validator_index"` /* uint64 */
+	FeeRecipient   hexutil.Bytes `json:"fee_recipient"`
+	TargetGasLimit string        `json:"target_gas_limit"` /* uint64 */
 }
 
 ////////////////////////////////////////////////////////////////////////////////

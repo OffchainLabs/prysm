@@ -48,6 +48,12 @@ func ContentTypeHandler(acceptedMediaTypes []string) Middleware {
 			}
 			contentType := r.Header.Get("Content-Type")
 			if contentType == "" {
+				// A request without a body does not need a Content-Type header, so that
+				// endpoints with an optional request body accept e.g. `curl -X POST <url>`.
+				if r.ContentLength == 0 {
+					next.ServeHTTP(w, r)
+					return
+				}
 				http.Error(w, "Content-Type header is missing", http.StatusUnsupportedMediaType)
 				return
 			}

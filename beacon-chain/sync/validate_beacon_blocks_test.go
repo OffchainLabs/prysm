@@ -2308,6 +2308,56 @@ func TestDetectAndBroadcastEquivocation(t *testing.T) {
 
 		require.Equal(t, 0, len(chainService.RecordedEquivocations))
 	})
+
+	t.Run("equivocation received before slot start not recorded when flag on", func(t *testing.T) {
+		resetFn := features.InitWithReset(&features.Flags{TrackEquivocations: true})
+		defer resetFn()
+
+		headBlock := util.NewBeaconBlock()
+		headBlock.Block.Slot = 1
+		headBlock.Block.ProposerIndex = 0
+		headBlock.Block.ParentRoot = bytesutil.PadTo([]byte("parent1"), 32)
+		sig1, err := signing.ComputeDomainAndSign(beaconState, 0, headBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+		require.NoError(t, err)
+		headBlock.Signature = sig1
+
+		newBlock := util.NewBeaconBlock()
+		newBlock.Block.Slot = 1
+		newBlock.Block.ProposerIndex = 0
+		newBlock.Block.ParentRoot = bytesutil.PadTo([]byte("parent2"), 32)
+		sig2, err := signing.ComputeDomainAndSign(beaconState, 0, newBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+		require.NoError(t, err)
+		newBlock.Signature = sig2
+
+		signedHeadBlock, err := blocks.NewSignedBeaconBlock(headBlock)
+		require.NoError(t, err)
+		signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
+		require.NoError(t, err)
+
+		genesis := time.Now()
+		chainService := &mock.ChainService{
+			State:   beaconState,
+			Genesis: genesis,
+			Block:   signedHeadBlock,
+		}
+
+		r := &Service{
+			cfg: &config{
+				p2p:          p,
+				chain:        chainService,
+				slashingPool: &slashingsmock.PoolMock{},
+				clock:        startup.NewClock(genesis, chainService.ValidatorsRoot),
+			},
+			seenBlockCache: lruwrpr.New(10),
+		}
+
+		slotStart, err := slots.StartTime(genesis, 1)
+		require.NoError(t, err)
+		earlyReceived := slotStart.Add(-time.Second)
+		require.NoError(t, r.detectAndBroadcastEquivocation(ctx, signedNewBlock, earlyReceived))
+
+		require.Equal(t, 0, len(chainService.RecordedEquivocations))
+	})
 }
 
 func TestBlockVerifyingState_SameEpochAsParent(t *testing.T) {

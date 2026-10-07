@@ -87,6 +87,10 @@ var (
 		Name:  "disable-attest-timely",
 		Usage: "Disable validator attesting timely after current block processes. See #8185 for more details.",
 	}
+	disableDutyAwareShutdown = &cli.BoolFlag{
+		Name:  "disable-duty-aware-shutdown",
+		Usage: "Stop the validator client immediately on SIGINT/SIGTERM, instead of waiting for the moment in the slot where a restart would not miss any rewarded duty.",
+	}
 	enableSlashingProtectionPruning = &cli.BoolFlag{
 		Name:  "enable-slashing-protection-history-pruning",
 		Usage: "Enables the pruning of the validator client's slashing protection database.",
@@ -155,11 +159,6 @@ var (
 		Name:  "disable-resource-manager",
 		Usage: "Disables running the libp2p resource manager.",
 	}
-	// DisableRegistrationCache a flag for disabling the validator registration cache and use db instead.
-	DisableRegistrationCache = &cli.BoolFlag{
-		Name:  "disable-registration-cache",
-		Usage: "Temporary flag for disabling the validator registration cache instead of using the DB. Note: registrations do not clear on restart while using the DB.",
-	}
 	// BlobSaveFsync enforces durable filesystem writes for use cases where blob availability is critical.
 	BlobSaveFsync = &cli.BoolFlag{
 		Name:  "blob-save-fsync",
@@ -178,14 +177,13 @@ var (
 		Name:  "enable-experimental-attestation-pool",
 		Usage: "Enables an experimental attestation pool design.",
 	}
+	enableFastConfirmation = &cli.BoolFlag{
+		Name:  "enable-fast-confirmation",
+		Usage: "Enables the fast confirmation rule (FCR) for rapid block confirmation under synchrony assumptions.",
+	}
 	EnableStateDiff = &cli.BoolFlag{
 		Name:  "enable-state-diff",
 		Usage: "Enables the experimental state diff feature.",
-	}
-	DisableProgressiveSSZ = &cli.BoolFlag{
-		Name:   "disable-progressive-ssz",
-		Usage:  "Disables progressive SSZ merkleization for Gloas consensus types. Gloas (EIP-7688) mandates it, so this is an escape hatch for debugging only.",
-		Hidden: true,
 	}
 	reorgLatePayloads = &cli.BoolFlag{
 		Name:   "reorg-late-payloads",
@@ -228,9 +226,9 @@ var (
 		Name:  "ignore-unviable-attestations",
 		Usage: "Ignores attestations whose target state is not viable with respect to the current head (avoid expensive state replay from lagging attesters).",
 	}
-	trackEquivocations = &cli.BoolFlag{
-		Name:  "track-equivocations",
-		Usage: "Records proposer equivocations observed on gossip and marks the slot in forkchoice if the equivocation arrives before the configured early deadline.",
+	disableTrackEquivocations = &cli.BoolFlag{
+		Name:  "disable-track-equivocations",
+		Usage: "Disables recording proposer equivocations observed on gossip into forkchoice.",
 	}
 	// submitBlacklistedBuilderBids lets a builder broadcast its own bids even while this node's
 	// circuit breaker has it blacklisted. Testing only: peers still ignore the bid on gossip.
@@ -255,6 +253,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	Mainnet,
 	dynamicKeyReloadDebounceInterval,
 	disableAttestTimely,
+	disableDutyAwareShutdown,
 	enableSlashingProtectionPruning,
 	EnableMinimalSlashingProtection,
 	enableDoppelGangerProtection,
@@ -284,7 +283,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	SaveFullExecutionPayloads,
 	enableStartupOptimistic,
 	ignoreUnviableAttestations,
-	trackEquivocations,
+	disableTrackEquivocations,
 	enableFullSSZDataLogging,
 	disableVerboseSigVerification,
 	enableProposerPreprocessing,
@@ -293,14 +292,13 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	aggregateSecondInterval,
 	aggregateThirdInterval,
 	disableResourceManager,
-	DisableRegistrationCache,
 	EnableLightClient,
 	BlobSaveFsync,
 	DisableQUIC,
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
+	enableFastConfirmation,
 	EnableStateDiff,
-	DisableProgressiveSSZ,
 	reorgLatePayloads,
 	forceHeadFlag,
 	blacklistRoots,

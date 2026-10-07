@@ -436,6 +436,135 @@ func TestExecutionPayloadEnvelopesByRangeRPCHandler(t *testing.T) {
 		assert.Equal(t, primitives.Slot(30), receivedSlots[1])
 	})
 
+	// The next two subtests exercise the head-root fallback: nothing is indexed above the
+	// requested range, so the successor lookup returns the chain tip itself. The tip's own
+	// envelope is served only when fork choice selects the tip's full payload variant.
+	runChainTipCase := func(t *testing.T, tipIsFull bool, wantSlots []primitives.Slot) {
+		beaconDB := testDB.SetupDB(t)
+		localP2P, remoteP2P := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+		protocolID := protocol.ID(topicFmt)
+
+		currentSlot := primitives.Slot(50)
+		clock := startup.NewClock(time.Now(), params.BeaconConfig().GenesisValidatorsRoot, startup.WithSlotAsNow(currentSlot))
+
+		// Payload hashes are distinct from block roots so the tip's own payload is only
+		// reachable through its bid's BlockHash, never through a descendant's ParentBlockHash.
+		payloadHash := func(sl primitives.Slot) [32]byte {
+			var h [32]byte
+			h[0] = 0xaa
+			h[1] = byte(sl)
+			return h
+		}
+
+		// Build blocks at slots 10, 20, 30 with nothing indexed above; slot 30 is the chain tip.
+		blockSlots := []primitives.Slot{10, 20, 30}
+		roots := make([][32]byte, len(blockSlots))
+		var prevRoot, prevHash [32]byte
+
+		for i, sl := range blockSlots {
+			h := payloadHash(sl)
+			blk := util.NewBeaconBlockGloas()
+			blk.Block.Slot = sl
+			copy(blk.Block.ParentRoot, prevRoot[:])
+			copy(blk.Block.Body.SignedExecutionPayloadBid.Message.ParentBlockHash, prevHash[:])
+			copy(blk.Block.Body.SignedExecutionPayloadBid.Message.BlockHash, h[:])
+			wsb := util.SaveBlock(t, ctx, beaconDB, blk)
+			htr, hErr := wsb.Block().HashTreeRoot()
+			require.NoError(t, hErr)
+			roots[i] = htr
+
+			env := testSignedEnvelope(sl, htr[:])
+			// Replace (not copy over) the payload block hash: the helper aliases it to BeaconBlockRoot.
+			env.Message.Payload.BlockHash = h[:]
+			copy(env.Message.Payload.ParentHash, prevHash[:])
+			require.NoError(t, beaconDB.SaveExecutionPayloadEnvelope(ctx, env))
+
+			prevRoot, prevHash = htr, h
+		}
+
+		headRoot := roots[len(roots)-1]
+		require.NoError(t, beaconDB.SaveStateSummary(ctx, &pb.StateSummary{Slot: blockSlots[len(blockSlots)-1], Root: headRoot[:]}))
+		require.NoError(t, beaconDB.SaveHeadBlockRoot(ctx, headRoot))
+
+		mockEngine := &mockExecution.EngineClient{
+			ExecutionPayloadByBlockHash: make(map[[32]byte]*engpb.ExecutionPayload, len(blockSlots)),
+			SlotByBlockHash:             make(map[[32]byte]primitives.Slot, len(blockSlots)),
+		}
+		for _, sl := range blockSlots {
+			h := payloadHash(sl)
+			mockEngine.ExecutionPayloadByBlockHash[h] = &engpb.ExecutionPayload{
+				ParentHash:    make([]byte, 32),
+				FeeRecipient:  make([]byte, 20),
+				StateRoot:     make([]byte, 32),
+				ReceiptsRoot:  make([]byte, 32),
+				LogsBloom:     make([]byte, 256),
+				PrevRandao:    make([]byte, 32),
+				BaseFeePerGas: make([]byte, 32),
+				BlockHash:     h[:],
+			}
+			mockEngine.SlotByBlockHash[h] = sl
+		}
+
+		chain := &chainMock.ChainService{}
+		if tipIsFull {
+			chain.ForkchoiceRoots = map[[32]byte]bool{headRoot: true}
+		}
+
+		svc := &Service{
+			cfg: &config{
+				p2p:                    localP2P,
+				beaconDB:               beaconDB,
+				chain:                  chain,
+				clock:                  clock,
+				executionReconstructor: mockEngine,
+			},
+			availableBlocker: mockBlocker{avail: true},
+			rateLimiter:      newRateLimiter(localP2P),
+		}
+
+		receivedSlots := make([]primitives.Slot, 0)
+		var wg sync.WaitGroup
+		wg.Add(1)
+		remoteP2P.BHost.SetStreamHandler(protocolID, func(stream network.Stream) {
+			defer wg.Done()
+			for {
+				env, readErr := readChunkedExecutionPayloadEnvelope(stream, remoteP2P.Encoding(), ctxMap)
+				if errors.Is(readErr, io.EOF) {
+					break
+				}
+				assert.NoError(t, readErr)
+				if env != nil {
+					receivedSlots = append(receivedSlots, primitives.Slot(env.Message.Payload.SlotNumber))
+				}
+			}
+		})
+
+		localP2P.Connect(remoteP2P)
+		stream, streamErr := localP2P.BHost.NewStream(ctx, remoteP2P.BHost.ID(), protocolID)
+		require.NoError(t, streamErr)
+
+		// Request slots 5-35; nothing is indexed above 35, so the successor lookup falls back to the tip at 30.
+		msg := &pb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: 5, Count: 31}
+		handlerErr := svc.executionPayloadEnvelopesByRangeRPCHandler(ctx, msg, stream)
+		require.NoError(t, handlerErr)
+
+		if util.WaitTimeout(&wg, 2*time.Second) {
+			t.Fatal("timed out waiting for remote stream handler")
+		}
+
+		require.Equal(t, len(wantSlots), len(receivedSlots))
+		for i, sl := range wantSlots {
+			assert.Equal(t, sl, receivedSlots[i])
+		}
+	}
+
+	t.Run("serves the tip envelope when fork choice holds the tip full", func(t *testing.T) {
+		runChainTipCase(t, true, []primitives.Slot{10, 20, 30})
+	})
+
+	t.Run("excludes the tip envelope when fork choice holds the tip empty", func(t *testing.T) {
+		runChainTipCase(t, false, []primitives.Slot{10, 20})
+	})
 }
 
 // ---------------------------------------------------------------------------

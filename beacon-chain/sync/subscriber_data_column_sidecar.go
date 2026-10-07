@@ -40,32 +40,18 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 		return fmt.Errorf("unexpected data column type: %T", msg)
 	}
 
-	if !sidecar.IsGloas() {
-		// Track useful full columns received via gossip (not previously seen)
+	if sidecar.IsGloas() {
+		usefulFullColumnsReceivedTotal.WithLabelValues(strconv.FormatUint(sidecar.Index(), 10)).Inc()
+		s.republishGloasColumnAsPartial(ctx, sidecar)
+	} else {
+		// Track useful full columns received via gossip (not previously seen).
 		proposerIndex, err := sidecar.ProposerIndex()
 		if err != nil {
 			return errors.Wrap(err, "proposer index")
 		}
-		if !s.hasSeenDataColumnIndex(sidecar.Slot(), proposerIndex, sidecar.Index()) && !sidecar.IsGloas() {
+		if !s.hasSeenDataColumnIndex(sidecar.Slot(), proposerIndex, sidecar.Index()) {
 			usefulFullColumnsReceivedTotal.WithLabelValues(strconv.FormatUint(sidecar.Index(), 10)).Inc()
-			// re-publish the full column on the partial column extension as we don't send full columns to peers
-			// who have explicitly requested for partial columns. This method is idempotent so this is fine.
-			if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
-				digest := s.currentForkDigest()
-				err := broadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
-					subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index())
-					topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
-					partialColumn, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(sidecar)
-					if err != nil {
-						log.WithError(err).Error("Failed to create partial data column from verified RO data column")
-						return
-					}
-					yield(topic, partialColumn)
-				})
-				if err != nil {
-					log.WithError(err).Error("Failed to publish partial column on getting data column sidecar")
-				}
-			}
+			s.publishColumnAsPartial(ctx, sidecar)
 		}
 	}
 
@@ -101,6 +87,60 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 	}
 
 	return nil
+}
+
+func (s *Service) publishColumnAsPartial(ctx context.Context, sidecar blocks.VerifiedRODataColumn) {
+	broadcaster := s.cfg.p2p.PartialColumnBroadcaster()
+	if broadcaster == nil {
+		return
+	}
+
+	digest := s.currentForkDigest()
+
+	if err := broadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
+		subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index())
+		topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
+		partialColumn, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(sidecar)
+		if err != nil {
+			log.WithError(err).Error("Failed to create partial data column from verified RO data column")
+			return
+		}
+		yield(topic, partialColumn)
+	}); err != nil {
+		log.WithError(err).Error("Failed to publish partial column on getting data column sidecar")
+	}
+}
+
+func (s *Service) republishGloasColumnAsPartial(ctx context.Context, sidecar blocks.VerifiedRODataColumn) {
+	if s.cfg.p2p.PartialColumnBroadcaster() == nil {
+		return
+	}
+
+	commitments, err := s.bidCommitmentsForRoot(ctx, sidecar.BlockRoot())
+	if err != nil {
+		log.WithError(err).Error("Failed to get bid commitments for gloas partial column republish")
+		return
+	}
+	sidecar.SetBidCommitments(commitments)
+
+	s.publishColumnAsPartial(ctx, sidecar)
+}
+
+// bidCommitmentsForRoot returns the bid KZG commitments for the block with the given root,
+// which must be present in the database.
+func (s *Service) bidCommitmentsForRoot(ctx context.Context, root [32]byte) ([][]byte, error) {
+	block, err := s.cfg.beaconDB.Block(ctx, root)
+	if err != nil {
+		return nil, errors.Wrap(err, "get block")
+	}
+	if block == nil || block.IsNil() {
+		return nil, errors.New("nil block")
+	}
+	commitments, err := block.Block().Body().BlobKzgCommitments()
+	if err != nil {
+		return nil, errors.Wrap(err, "blob kzg commitments")
+	}
+	return commitments, nil
 }
 
 func (s *Service) verifiedRODataColumnSubscriber(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {

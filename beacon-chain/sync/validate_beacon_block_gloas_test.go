@@ -38,10 +38,31 @@ func TestValidateExecutionPayloadBid_Accept(t *testing.T) {
 	wsb, err := blocks.NewSignedBeaconBlock(block)
 	require.NoError(t, err)
 
-	s := &Service{}
+	known := true
+	s := &Service{cfg: &config{chain: &mock.ChainService{HasPayloadBlockHashVal: &known}}}
 	res, err := s.validateExecutionPayloadBid(ctx, wsb.Block())
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationAccept, res)
+}
+
+func TestValidateExecutionPayloadBid_RejectUnknownParentBlockHash(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	ctx := context.Background()
+
+	parentRoot := bytesutil.PadTo([]byte{0x01}, fieldparams.RootLength)
+	block := util.NewBeaconBlockGloas()
+	block.Block.ParentRoot = parentRoot
+	block.Block.Body.SignedExecutionPayloadBid.Message.ParentBlockRoot = parentRoot
+	block.Block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments = nil
+
+	wsb, err := blocks.NewSignedBeaconBlock(block)
+	require.NoError(t, err)
+
+	unknown := false
+	s := &Service{cfg: &config{chain: &mock.ChainService{HasPayloadBlockHashVal: &unknown}}}
+	res, err := s.validateExecutionPayloadBid(ctx, wsb.Block())
+	require.ErrorContains(t, err, "bid does not build on the parent's execution head")
+	require.Equal(t, pubsub.ValidationReject, res)
 }
 
 func TestValidateExecutionPayloadBid_RejectParentRootMismatch(t *testing.T) {

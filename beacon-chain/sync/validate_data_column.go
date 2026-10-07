@@ -184,7 +184,6 @@ func (s *Service) validateDataColumnFulu(
 	// (a client MAY queue sidecars for processing once the parent block is retrieved).
 	if err := verifier.SidecarParentSeen(s.hasBadBlock); err != nil {
 		go func() {
-			customCtx := context.Background()
 			parentRoot, err := roDataColumn.ParentRoot()
 			if err != nil {
 				log.WithError(err).WithFields(logging.DataColumnFields(roDataColumn)).Debug("Failed to get parent root for batch root request")
@@ -192,7 +191,7 @@ func (s *Service) validateDataColumnFulu(
 			}
 			roots := [][fieldparams.RootLength]byte{parentRoot}
 			randGenerator := rand.NewGenerator()
-			if reqErr := s.sendBatchRootRequest(customCtx, roots, randGenerator); reqErr != nil {
+			if reqErr := s.sendBatchRootRequest(s.ctx, roots, randGenerator); reqErr != nil {
 				log.WithError(reqErr).WithFields(logging.DataColumnFields(roDataColumn)).Debug("Failed to send batch root request")
 			}
 		}()

@@ -5,8 +5,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/contracts/deposit"
@@ -123,6 +125,64 @@ func IsPendingValidator(pendingDeposits []*ethpb.PendingDeposit, pubkey []byte) 
 	return false, nil
 }
 
+// PendingValidatorIndex answers is_pending_validator without rescanning. Exact because the
+// accumulator only grows and validity is pure: true is permanent, invalid never becomes valid.
+type PendingValidatorIndex struct {
+	buckets map[[fieldparams.BLSPubkeyLength]byte]*pendingPubkeyBucket
+}
+
+type pendingPubkeyBucket struct {
+	deposits []*ethpb.PendingDeposit
+	scanned  int
+	hasValid bool
+}
+
+func NewPendingValidatorIndex() *PendingValidatorIndex {
+	return &PendingValidatorIndex{buckets: make(map[[fieldparams.BLSPubkeyLength]byte]*pendingPubkeyBucket)}
+}
+
+func (i *PendingValidatorIndex) Add(deposit *ethpb.PendingDeposit) {
+	if deposit == nil {
+		return
+	}
+	key := bytesutil.ToBytes48(deposit.PublicKey)
+	bucket, ok := i.buckets[key]
+	if !ok {
+		bucket = &pendingPubkeyBucket{}
+		i.buckets[key] = bucket
+	}
+	bucket.deposits = append(bucket.deposits, deposit)
+}
+
+func (i *PendingValidatorIndex) HasValid(pubkey []byte) (bool, error) {
+	bucket, ok := i.buckets[bytesutil.ToBytes48(pubkey)]
+	if !ok {
+		return false, nil
+	}
+	if bucket.hasValid {
+		return true, nil
+	}
+	for ; bucket.scanned < len(bucket.deposits); bucket.scanned++ {
+		deposit := bucket.deposits[bucket.scanned]
+		valid, err := IsValidDepositSignature(&ethpb.Deposit_Data{
+			PublicKey:             deposit.PublicKey,
+			WithdrawalCredentials: deposit.WithdrawalCredentials,
+			Amount:                deposit.Amount,
+			Signature:             deposit.Signature,
+		})
+		if err != nil {
+			log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Warn("Could not verify pending deposit signature")
+			continue
+		}
+		if valid {
+			bucket.hasValid = true
+			bucket.scanned++
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // IsValidDepositSignature returns whether deposit_data is valid
 // def is_valid_deposit_signature(pubkey: BLSPubkey, withdrawal_credentials: Bytes32, amount: uint64, signature: BLSSignature) -> bool:
 //
@@ -131,16 +191,26 @@ func IsPendingValidator(pendingDeposits []*ethpb.PendingDeposit, pubkey []byte) 
 //	signing_root = compute_signing_root(deposit_message, domain)
 //	return bls.Verify(pubkey, signing_root, signature)
 func IsValidDepositSignature(data *ethpb.Deposit_Data) (bool, error) {
+	key, keyErr := data.HashTreeRoot()
+	if keyErr == nil {
+		if valid, ok := cache.DepositSignature.Get(key); ok {
+			return valid, nil
+		}
+	}
 	domain, err := signing.ComputeDomain(params.BeaconConfig().DomainDeposit, nil, nil)
 	if err != nil {
 		return false, err
 	}
+	valid := true
 	if err := verifyDepositDataSigningRoot(data, domain); err != nil {
 		// Ignore this error as in the spec pseudo code.
 		log.WithError(err).Debug("Skipping deposit: could not verify deposit data signature")
-		return false, nil
+		valid = false
 	}
-	return true, nil
+	if keyErr == nil {
+		cache.DepositSignature.Put(key, valid)
+	}
+	return valid, nil
 }
 
 // BatchVerifyBuilderDepositRequestSignatures returns the indices of builder deposit

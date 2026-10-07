@@ -11,10 +11,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Go 1.25.1
+      - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.1'
+          go-version-file: 'go.mod'
 
       - name: Check log.go files
         run: ./hack/check-logs.sh

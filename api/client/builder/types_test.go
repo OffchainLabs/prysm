@@ -1775,7 +1775,7 @@ func TestErrorMessage_unexpectedStatusErr(t *testing.T) {
 					Body:       io.NopCloser(bytes.NewReader(r)),
 				}
 			}(),
-			wantMessage: "did not receive 200 response from API",
+			wantMessage: "unexpected status 205, expected [200]",
 		},
 		{
 			name: "415 plain-text body",

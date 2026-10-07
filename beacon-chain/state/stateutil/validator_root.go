@@ -3,11 +3,11 @@ package stateutil
 import (
 	"encoding/binary"
 
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
 
@@ -63,7 +63,7 @@ func ValidatorFieldRoots(validator *ethpb.Validator) ([][32]byte, error) {
 // Uint64ListRoot computes the HashTreeRoot Merkleization of a list of uint64
 // values for the supplied state version.
 func Uint64ListRoot(stateVersion int, vals []uint64) ([32]byte, error) {
-	if features.ProgressiveSSZEnabled(stateVersion) {
+	if stateVersion >= version.Gloas {
 		return uint64ListRootProgressive(vals)
 	}
 	return uint64ListRootWithRegistryLimit(vals)

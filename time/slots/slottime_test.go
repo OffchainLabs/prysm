@@ -107,6 +107,30 @@ func TestEpochEndSlot_OK(t *testing.T) {
 	}
 }
 
+func TestShufflingDependentSlot(t *testing.T) {
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	tests := []struct {
+		epoch primitives.Epoch
+		slot  primitives.Slot
+		error bool
+	}{
+		{epoch: 0, slot: 0},
+		{epoch: 1, slot: 0},
+		{epoch: 2, slot: slotsPerEpoch - 1},
+		{epoch: 10, slot: 9*slotsPerEpoch - 1},
+		{epoch: math.MaxUint64, slot: 0, error: true},
+	}
+	for _, tt := range tests {
+		ds, err := ShufflingDependentSlot(tt.epoch)
+		if tt.error {
+			require.ErrorIs(t, err, errOverflow)
+			continue
+		}
+		require.NoError(t, err)
+		assert.Equal(t, tt.slot, ds, "ShufflingDependentSlot(%d)", tt.epoch)
+	}
+}
+
 func TestIsEpochStart(t *testing.T) {
 	epochLength := params.BeaconConfig().SlotsPerEpoch
 

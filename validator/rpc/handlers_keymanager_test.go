@@ -861,11 +861,19 @@ func TestServer_GetGasLimit(t *testing.T) {
 	require.NoError(t, err2)
 
 	tests := []struct {
-		name   string
-		args   *proposer.Settings
-		pubkey [48]byte
-		want   uint64
+		name     string
+		args     *proposer.Settings
+		pubkey   [48]byte
+		schedule bool
+		want     uint64
 	}{
+		{
+			name:     "No proposerSetting at gloas uses the gas limit schedule",
+			args:     nil,
+			pubkey:   bytesutil.ToBytes48(byteval),
+			schedule: true,
+			want:     60_000_000,
+		},
 		{
 			name: "ProposerSetting for specific pubkey exists",
 			args: &proposer.Settings{
@@ -909,6 +917,14 @@ func TestServer_GetGasLimit(t *testing.T) {
 			vs := validatormock.NewMockValidatorService(gomock.NewController(t))
 			vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
 			vs.EXPECT().ProposerSettings().Return(tt.args).AnyTimes()
+			vs.EXPECT().GenesisTime().Return(time.Time{}).AnyTimes()
+			if tt.schedule {
+				params.SetupTestConfigCleanup(t)
+				cfg := params.BeaconConfig().Copy()
+				cfg.GloasForkEpoch = 0
+				cfg.GasLimitSchedule = []params.GasLimitScheduleEntry{{Epoch: 0, GasLimit: 60_000_000}}
+				params.OverrideBeaconConfig(cfg)
+			}
 			s := &Server{
 				validatorService: vs,
 			}
@@ -1317,6 +1333,7 @@ func TestServer_GasLimit_V2Schema(t *testing.T) {
 		vs := validatormock.NewMockValidatorService(gomock.NewController(t))
 		vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
 		vs.EXPECT().ProposerSettings().Return(settings).AnyTimes()
+		vs.EXPECT().GenesisTime().Return(time.Time{}).AnyTimes()
 		var written *proposer.Settings
 		vs.EXPECT().UpdateProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
 			next, err := mutate(settings.Clone())
@@ -2037,35 +2054,36 @@ func TestServer_Graffiti(t *testing.T) {
 		validatorService: vs,
 	}
 
-	var request struct {
-		Graffiti string `json:"graffiti"`
-	}
-	request.Graffiti = graffiti
-	var buf bytes.Buffer
-	err = json.NewEncoder(&buf).Encode(request)
-	require.NoError(t, err)
-	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/eth/v1/validator/{pubkey}/graffiti"), &buf)
-	req.SetPathValue("pubkey", pubkey)
-	w := httptest.NewRecorder()
-	w.Body = &bytes.Buffer{}
-	s.SetGraffiti(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
+	t.Run("set", func(t *testing.T) {
+		var buf bytes.Buffer
+		require.NoError(t, json.NewEncoder(&buf).Encode(struct {
+			Graffiti string `json:"graffiti"`
+		}{Graffiti: graffiti}))
+		req := httptest.NewRequest(http.MethodPost, "/eth/v1/validator/{pubkey}/graffiti", &buf)
+		req.SetPathValue("pubkey", pubkey)
+		w := httptest.NewRecorder()
+		s.SetGraffiti(w, req)
+		require.Equal(t, http.StatusAccepted, w.Code)
+	})
 
-	req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/eth/v1/validator/{pubkey}/graffiti"), nil)
-	req.SetPathValue("pubkey", pubkey)
-	w = httptest.NewRecorder()
-	w.Body = &bytes.Buffer{}
-	s.GetGraffiti(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
-	resp := &GetGraffitiResponse{}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), resp))
-	assert.Equal(t, resp.Data.Graffiti, request.Graffiti)
-	assert.Equal(t, resp.Data.Pubkey, pubkey)
+	t.Run("get", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/eth/v1/validator/{pubkey}/graffiti", nil)
+		req.SetPathValue("pubkey", pubkey)
+		w := httptest.NewRecorder()
+		s.GetGraffiti(w, req)
+		require.Equal(t, http.StatusOK, w.Code)
+		resp := &GetGraffitiResponse{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), resp))
+		require.Equal(t, graffiti, resp.Data.Graffiti)
+		require.Equal(t, pubkey, resp.Data.Pubkey)
+	})
 
-	req = httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/eth/v1/validator/{pubkey}/graffiti"), nil)
-	req.SetPathValue("pubkey", pubkey)
-	w = httptest.NewRecorder()
-	w.Body = &bytes.Buffer{}
-	s.DeleteGraffiti(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
+	t.Run("delete returns 204", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodDelete, "/eth/v1/validator/{pubkey}/graffiti", nil)
+		req.SetPathValue("pubkey", pubkey)
+		w := httptest.NewRecorder()
+		s.DeleteGraffiti(w, req)
+		require.Equal(t, http.StatusNoContent, w.Code)
+		require.Equal(t, 0, w.Body.Len())
+	})
 }

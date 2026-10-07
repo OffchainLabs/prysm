@@ -48,7 +48,7 @@ def _ssz_methodical_impl(ctx):
 
     # concat the stdlib with all the other json file paths and write to disk
     json_out = [stdlib] + all_json_files.keys()
-    all_pkg_list = ctx.actions.declare_file("methodical-pkg-list.json")
+    all_pkg_list = ctx.actions.declare_file(ctx.label.name + "-pkg-list.json")
     ctx.actions.write(all_pkg_list, content = json.encode(json_out))
     out_base = ctx.outputs.out.root.path
 
@@ -59,8 +59,11 @@ def _ssz_methodical_impl(ctx):
     # //build/gen writes. methodical emits no header on its own; both codegen
     # paths drive it through --go-build-constraint.
     go_build_constraint = "!minimal"
+    # Match genception's source filtering to the selected preset.
+    go_tags = ""
     if ctx.attr._network[BuildSettingInfo].value == "minimal":
         go_build_constraint = "minimal"
+        go_tags = "minimal"
 
     args = [
         "gen",
@@ -70,15 +73,18 @@ def _ssz_methodical_impl(ctx):
     ]
     if ctx.attr.override_package_name != "":
         args.append("--override-package-name=" + ctx.attr.override_package_name)
-    if ctx.attr._disable_progressive[BuildSettingInfo].value:
-        args.append("--disable-progressive")
 
     codegen_bins = [ctx.file.genception, ctx.file.methodical_tool]
     ctx.actions.run_shell(
         env = {
             "PACKAGE_JSON_INVENTORY": all_pkg_list.path,
             "PACKAGES_BASE": out_base,
+            "GOTAGS": go_tags,
             "GOCACHE": "./.gocache",
+            # Filter package sources for the target platform during cross-compilation.
+            "GOOS": go_ctx.env["GOOS"],
+            "GOARCH": go_ctx.env["GOARCH"],
+            "CGO_ENABLED": go_ctx.env["CGO_ENABLED"],
             "GOPACKAGESDRIVER": ctx.file.genception.path,
             "GOPACKAGESDRIVER_LOG_PATH": out_base + "/gopackagesdriver.log",
         },
@@ -109,13 +115,6 @@ ssz_methodical = rule(
         "override_package_name": attr.string(
             doc = "Override the name of the package the generated file is in (eg 'eth' for proto/prysm/v1alpha1)",
             mandatory = False,
-        ),
-        # Build-wide progressive-merkleization toggle. Defaults to the
-        # //tools:disable_progressive_merkleization bool_flag so a single
-        # `--//tools:disable_progressive_merkleization` flips every
-        # ssz_methodical target to --disable-progressive with no per-call edits.
-        "_disable_progressive": attr.label(
-            default = "//tools:disable_progressive_merkleization",
         ),
         # The //proto:network string_flag (mainnet|minimal) that ssz_proto_files
         # selects on. Read here to pick the //go:build constraint methodical
