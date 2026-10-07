@@ -92,6 +92,7 @@ type HeadFetcher interface {
 	HeadSlot() primitives.Slot
 	HeadRoot(ctx context.Context) ([]byte, error)
 	HeadRootAndFull() ([32]byte, bool)
+	HeadAndCanonicalNodeAtSlot(slot primitives.Slot) (headRoot [32]byte, headFull bool, canonicalRoot [32]byte, canonicalFull bool)
 	HeadBlock(ctx context.Context) (interfaces.ReadOnlySignedBeaconBlock, error)
 	HeadState(ctx context.Context) (state.BeaconState, error)
 	HeadStateReadOnly(ctx context.Context) (state.ReadOnlyBeaconState, error)
@@ -217,6 +218,14 @@ func (s *Service) HeadRootAndFull() ([32]byte, bool) {
 		return params.BeaconConfig().ZeroHash, false
 	}
 	return s.head.root, s.head.full
+}
+
+func (s *Service) HeadAndCanonicalNodeAtSlot(slot primitives.Slot) (headRoot [32]byte, headFull bool, canonicalRoot [32]byte, canonicalFull bool) {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	headRoot, headFull = s.HeadRootAndFull()
+	canonicalRoot, canonicalFull = s.cfg.ForkChoiceStore.CanonicalNodeAtSlot(slot)
+	return headRoot, headFull, canonicalRoot, canonicalFull
 }
 
 // HeadBlock returns the head block of the chain.
