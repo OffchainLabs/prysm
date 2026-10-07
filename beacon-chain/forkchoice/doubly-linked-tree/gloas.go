@@ -13,6 +13,7 @@ import (
 	forkchoice2 "github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
@@ -384,6 +385,22 @@ func (s *Store) nodeTreeDump(ctx context.Context, n *Node, nodes []*forkchoice2.
 	return nodes, nil
 }
 
+// checkpointForNode returns a zero root when it cannot be recovered from the in-memory fork choice store.
+func (s *Store) checkpointForNode(n *Node, epoch primitives.Epoch) *ethpb.Checkpoint {
+	var root [32]byte
+	if epoch > 0 {
+		switch {
+		case epoch == n.unrealizedJustified.Epoch:
+			root = n.unrealizedJustified.Root
+		case epoch == s.finalizedCheckpoint.Epoch:
+			root = s.finalizedCheckpoint.Root
+		default:
+			root, _ = s.targetRootForEpoch(n.root, epoch)
+		}
+	}
+	return &ethpb.Checkpoint{Epoch: epoch, Root: root[:]}
+}
+
 // nodeTreeDumpV2 appends to the given list one entry per (root, payload_status) tuple descending from n.
 func (s *Store) nodeTreeDumpV2(ctx context.Context, n *Node, nodes []*forkchoice2.NodeV2) ([]*forkchoice2.NodeV2, error) {
 	if ctx.Err() != nil {
@@ -416,8 +433,8 @@ func (s *Store) nodeTreeDumpV2(ctx context.Context, n *Node, nodes []*forkchoice
 		Timestamp:                en.timestamp,
 		ExecutionBlockHash:       parentHash[:],
 		Target:                   target[:],
-		JustifiedEpoch:           n.justifiedEpoch,
-		FinalizedEpoch:           n.finalizedEpoch,
+		JustifiedCheckpoint:      s.checkpointForNode(n, n.justifiedEpoch),
+		FinalizedCheckpoint:      s.checkpointForNode(n, n.finalizedEpoch),
 		UnrealizedJustifiedEpoch: n.unrealizedJustified.Epoch,
 		UnrealizedFinalizedEpoch: n.unrealizedFinalizedEpoch,
 	}

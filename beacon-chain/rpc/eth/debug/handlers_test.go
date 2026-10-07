@@ -638,10 +638,10 @@ func TestGetForkChoiceV2(t *testing.T) {
 	parentHash := [32]byte{'e'}
 	st, err := util.NewBeaconStateGloas()
 	require.NoError(t, err)
-	require.NoError(t, st.SetSlot(1))
 	require.NoError(t, st.SetFinalizedCheckpoint(&ethpb.Checkpoint{Epoch: 1}))
 	block := util.NewBeaconBlockGloas()
-	block.Block.Slot = 1
+	block.Block.Slot = params.BeaconConfig().SlotsPerEpoch * 2
+	require.NoError(t, st.SetSlot(block.Block.Slot))
 	block.Block.ParentRoot = parentRoot[:]
 	block.Block.Body.SignedExecutionPayloadBid.Message.ParentBlockHash = parentHash[:]
 	signed, err := blocks.NewSignedBeaconBlock(block)
@@ -671,9 +671,10 @@ func TestGetForkChoiceV2(t *testing.T) {
 	assert.Equal(t, hexutil.Encode(blockRoot[:]), empty.ParentRoot)
 	require.NotNil(t, empty.ParentPayloadStatus)
 	assert.Equal(t, "pending", *empty.ParentPayloadStatus)
+	zeroRoot := params.BeaconConfig().ZeroHash
 	for _, node := range resp.Data.ForkChoiceNodes {
-		assert.Equal(t, "0", node.JustifiedEpoch)
-		assert.Equal(t, "1", node.FinalizedEpoch)
+		assert.DeepEqual(t, &structs.Checkpoint{Epoch: "0", Root: hexutil.Encode(zeroRoot[:])}, node.JustifiedCheckpoint)
+		assert.DeepEqual(t, &structs.Checkpoint{Epoch: "1", Root: hexutil.Encode(zeroRoot[:])}, node.FinalizedCheckpoint)
 		assert.Equal(t, hexutil.Encode(parentHash[:]), node.ExecutionBlockHash)
 		assert.Equal(t, "1", node.PayloadAttesterCount)
 		assert.Equal(t, "1", node.PayloadAvailabilityYesCount)

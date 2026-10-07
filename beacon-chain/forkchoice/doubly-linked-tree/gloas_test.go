@@ -1716,6 +1716,8 @@ func TestForkChoiceDumpV2(t *testing.T) {
 	pe, err := prepareGloasForkchoicePayload(rootA)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertPayload(pe))
+	justifiedRoot := indexToHash(21)
+	f.store.emptyNodeByRoot[rootA].node.unrealizedJustified = forkchoicetypes.Checkpoint{Epoch: 2, Root: justifiedRoot}
 	f.store.emptyNodeByRoot[rootA].node.justifiedEpoch = 2
 	f.store.emptyNodeByRoot[rootA].node.finalizedEpoch = 1
 	f.store.emptyNodeByRoot[rootA].node.weight = 11
@@ -1752,12 +1754,12 @@ func TestForkChoiceDumpV2(t *testing.T) {
 		require.Equal(t, true, n.ParentPayloadStatus == nil)
 		assert.Equal(t, uint64(0), n.PayloadAttesterCount)
 	})
-	t.Run("node variants retain epochs and PTC counts", func(t *testing.T) {
+	t.Run("node variants retain checkpoints and PTC counts", func(t *testing.T) {
 		for _, status := range []forkchoice2.PayloadStatus{forkchoice2.PayloadStatusPending, forkchoice2.PayloadStatusEmpty, forkchoice2.PayloadStatusFull} {
 			n := byRoot[rootA][status]
 			require.NotNil(t, n, "%s", status)
-			assert.Equal(t, primitives.Epoch(2), n.JustifiedEpoch, "%s", status)
-			assert.Equal(t, primitives.Epoch(1), n.FinalizedEpoch, "%s", status)
+			assert.DeepEqual(t, &ethpb.Checkpoint{Epoch: 2, Root: justifiedRoot[:]}, n.JustifiedCheckpoint, "%s", status)
+			assert.DeepEqual(t, &ethpb.Checkpoint{Epoch: 1, Root: rootA[:]}, n.FinalizedCheckpoint, "%s", status)
 			assert.Equal(t, uint64(3), n.PayloadAttesterCount, "%s", status)
 			assert.Equal(t, uint64(2), n.PayloadAvailabilityYesCount, "%s", status)
 			assert.Equal(t, uint64(1), n.PayloadDataAvailabilityYesCount, "%s", status)
@@ -1798,6 +1800,8 @@ func TestForkChoiceDumpV2(t *testing.T) {
 		}
 	})
 	t.Run("pruning preserves parent root and execution hash", func(t *testing.T) {
+		f.store.emptyNodeByRoot[rootC].node.justifiedEpoch = 1
+		f.store.emptyNodeByRoot[rootC].node.finalizedEpoch = 1
 		f.store.finalizedCheckpoint.Root = rootC
 		require.NoError(t, f.store.prune(ctx))
 		dump, err := f.ForkChoiceDumpV2(ctx)
@@ -1808,6 +1812,8 @@ func TestForkChoiceDumpV2(t *testing.T) {
 		assert.Equal(t, true, n.ParentPayloadStatus == nil)
 		assert.DeepEqual(t, blockHashA[:], n.ExecutionBlockHash)
 		assert.Equal(t, forkchoice2.Valid, n.Validity)
+		assert.DeepEqual(t, &ethpb.Checkpoint{Epoch: 1, Root: zeroHash[:]}, n.JustifiedCheckpoint)
+		assert.DeepEqual(t, &ethpb.Checkpoint{Epoch: 1, Root: zeroHash[:]}, n.FinalizedCheckpoint)
 		assert.DeepEqual(t, rootC[:], dump.ForkChoiceNodes[1].ParentRoot)
 		assert.Equal(t, forkchoice2.PayloadStatusPending, *dump.ForkChoiceNodes[1].ParentPayloadStatus)
 	})

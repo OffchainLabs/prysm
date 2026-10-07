@@ -70,8 +70,8 @@ type NodeV2 struct {
 	Weight                          uint64
 	Balance                         uint64
 	ParentPayloadStatus             *PayloadStatus
-	JustifiedEpoch                  primitives.Epoch
-	FinalizedEpoch                  primitives.Epoch
+	JustifiedCheckpoint             *eth.Checkpoint
+	FinalizedCheckpoint             *eth.Checkpoint
 	UnrealizedJustifiedEpoch        primitives.Epoch
 	UnrealizedFinalizedEpoch        primitives.Epoch
 	PayloadAttesterCount            uint64

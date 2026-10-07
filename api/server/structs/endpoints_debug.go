@@ -74,8 +74,8 @@ type ForkChoiceNodeV2 struct {
 	PayloadStatus                   string                     `json:"payload_status"`
 	ParentRoot                      string                     `json:"parent_root"`
 	ParentPayloadStatus             *string                    `json:"parent_payload_status"`
-	JustifiedEpoch                  string                     `json:"justified_epoch"`
-	FinalizedEpoch                  string                     `json:"finalized_epoch"`
+	JustifiedCheckpoint             *Checkpoint                `json:"justified_checkpoint"`
+	FinalizedCheckpoint             *Checkpoint                `json:"finalized_checkpoint"`
 	Weight                          string                     `json:"weight"`
 	Validity                        string                     `json:"validity"`
 	ExecutionBlockHash              string                     `json:"execution_block_hash"`
