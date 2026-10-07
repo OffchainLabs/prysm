@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
-	"github.com/pkg/errors"
 )
 
 // ToProtoUnsafe returns the pointer value of the underlying
@@ -655,84 +654,4 @@ func ContainerFrom[T Container](v any) (T, error) {
 		return c, fmt.Errorf("input is %T, not %T", v, c)
 	}
 	return c, nil
-}
-
-// ProtobufBeaconStatePhase0 transforms an input into beacon state in the form of protobuf.
-// Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStatePhase0(s any) (*ethpb.BeaconState, error) {
-	pbState, ok := s.(*ethpb.BeaconState)
-	if !ok {
-		return nil, errors.New("input is not type ethpb.BeaconState")
-	}
-	return pbState, nil
-}
-
-// ProtobufBeaconStateAltair transforms an input into beacon state Altair in the form of protobuf.
-// Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStateAltair(s any) (*ethpb.BeaconStateAltair, error) {
-	pbState, ok := s.(*ethpb.BeaconStateAltair)
-	if !ok {
-		return nil, errors.New("input is not type pb.BeaconStateAltair")
-	}
-	return pbState, nil
-}
-
-// ProtobufBeaconStateBellatrix transforms an input into beacon state Bellatrix in the form of protobuf.
-// Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStateBellatrix(s any) (*ethpb.BeaconStateBellatrix, error) {
-	pbState, ok := s.(*ethpb.BeaconStateBellatrix)
-	if !ok {
-		return nil, errors.New("input is not type pb.BeaconStateBellatrix")
-	}
-	return pbState, nil
-}
-
-// ProtobufBeaconStateCapella transforms an input into beacon state Capella in the form of protobuf.
-// Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStateCapella(s any) (*ethpb.BeaconStateCapella, error) {
-	pbState, ok := s.(*ethpb.BeaconStateCapella)
-	if !ok {
-		return nil, errors.New("input is not type pb.BeaconStateCapella")
-	}
-	return pbState, nil
-}
-
-// ProtobufBeaconStateDeneb transforms an input into beacon state Deneb in the form of protobuf.
-// Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStateDeneb(s any) (*ethpb.BeaconStateDeneb, error) {
-	pbState, ok := s.(*ethpb.BeaconStateDeneb)
-	if !ok {
-		return nil, errors.New("input is not type pb.BeaconStateDeneb")
-	}
-	return pbState, nil
-}
-
-// ProtobufBeaconStateElectra transforms an input into beacon state Electra in the form of protobuf.
-// Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStateElectra(s any) (*ethpb.BeaconStateElectra, error) {
-	pbState, ok := s.(*ethpb.BeaconStateElectra)
-	if !ok {
-		return nil, errors.New("input is not type pb.BeaconStateElectra")
-	}
-	return pbState, nil
-}
-
-// ProtobufBeaconStateFulu transforms an input into beacon state Fulu in the form of protobuf.
-// Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStateFulu(s any) (*ethpb.BeaconStateFulu, error) {
-	pbState, ok := s.(*ethpb.BeaconStateFulu)
-	if !ok {
-		return nil, errors.New("input is not type pb.BeaconStateFulu")
-	}
-	return pbState, nil
-}
-
-// ProtobufBeaconStateGloas transforms an input into beacon state Gloas in the form of protobuf.
-// Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStateGloas(s any) (*ethpb.BeaconStateGloas, error) {
-	pbState, ok := s.(*ethpb.BeaconStateGloas)
-	if !ok {
-		return nil, errors.New("input is not type pb.BeaconStateGloas")
-	}
-	return pbState, nil
 }
