@@ -6,6 +6,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -16,418 +17,64 @@ import (
 	"github.com/golang/snappy"
 )
 
-func TestInitializeFromProto_Phase0(t *testing.T) {
-	testState, _ := util.DeterministicGenesisState(t, 64)
-	pbState, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
-	require.NoError(t, err)
-	type test struct {
-		name  string
-		state *ethpb.BeaconState
-		error string
-	}
-	initTests := []test{
-		{
-			name:  "nil state",
-			state: nil,
-			error: "received nil state",
-		},
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconState{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconState{},
-		},
-		{
-			name:  "full state",
-			state: pbState,
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.NewUnsafe(tt.state)
-			if tt.error != "" {
-				assert.ErrorContains(t, tt.error, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
+func TestNew(t *testing.T) {
+	t.Run("Phase0", func(t *testing.T) {
+		testNewFork(t, &ethpb.BeaconState{Slot: 4}, &ethpb.BeaconState{})
+	})
+	t.Run("Altair", func(t *testing.T) {
+		testNewFork(t, &ethpb.BeaconStateAltair{Slot: 4}, &ethpb.BeaconStateAltair{})
+	})
+	t.Run("Bellatrix", func(t *testing.T) {
+		testNewFork(t, &ethpb.BeaconStateBellatrix{Slot: 4}, &ethpb.BeaconStateBellatrix{})
+	})
+	t.Run("Capella", func(t *testing.T) {
+		testNewFork(t, &ethpb.BeaconStateCapella{Slot: 4}, &ethpb.BeaconStateCapella{})
+	})
+	t.Run("Deneb", func(t *testing.T) {
+		testNewFork(t, &ethpb.BeaconStateDeneb{Slot: 4}, &ethpb.BeaconStateDeneb{})
+	})
+	t.Run("Electra", func(t *testing.T) {
+		testNewFork(t, &ethpb.BeaconStateElectra{Slot: 4}, &ethpb.BeaconStateElectra{})
+	})
+	t.Run("Fulu", func(t *testing.T) {
+		testNewFork(t, &ethpb.BeaconStateFulu{Slot: 4}, &ethpb.BeaconStateFulu{})
+	})
+	t.Run("Gloas", func(t *testing.T) {
+		testNewFork(t, &ethpb.BeaconStateGloas{Slot: 4}, &ethpb.BeaconStateGloas{})
+	})
+	t.Run("Phase0 full state", func(t *testing.T) {
+		if fieldparams.Preset == "minimal" {
+			// DeterministicGenesisState sizes the state from the beacon config.
+			params.SetupTestConfigCleanup(t)
+			params.OverrideBeaconConfig(params.MinimalSpecConfig())
+		}
+		testState, _ := util.DeterministicGenesisState(t, 64)
+		full, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
+		require.NoError(t, err)
+		_, err = statenative.New(full)
+		require.NoError(t, err)
+		_, err = statenative.NewUnsafe(full)
+		require.NoError(t, err)
+	})
 }
 
-func TestInitializeFromProto_Altair(t *testing.T) {
-	type test struct {
-		name  string
-		state *ethpb.BeaconStateAltair
-		error string
+// testNewFork checks New and NewUnsafe on a nil container, on the empty
+// container empty, and on st, which has nil validators.
+func testNewFork[T statenative.Container](t *testing.T, st, empty T) {
+	ctors := map[string]func(T) (state.BeaconState, error){
+		"New":       statenative.New[T],
+		"NewUnsafe": statenative.NewUnsafe[T],
 	}
-	initTests := []test{
-		{
-			name:  "nil state",
-			state: nil,
-			error: "received nil state",
-		},
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconStateAltair{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconStateAltair{},
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.New(tt.state)
-			if tt.error != "" {
-				require.ErrorContains(t, tt.error, err)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestInitializeFromProto_Bellatrix(t *testing.T) {
-	type test struct {
-		name  string
-		state *ethpb.BeaconStateBellatrix
-		error string
-	}
-	initTests := []test{
-		{
-			name:  "nil state",
-			state: nil,
-			error: "received nil state",
-		},
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconStateBellatrix{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconStateBellatrix{},
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.New(tt.state)
-			if tt.error != "" {
-				require.ErrorContains(t, tt.error, err)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestInitializeFromProto_Capella(t *testing.T) {
-	type test struct {
-		name  string
-		state *ethpb.BeaconStateCapella
-		error string
-	}
-	initTests := []test{
-		{
-			name:  "nil state",
-			state: nil,
-			error: "received nil state",
-		},
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconStateCapella{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconStateCapella{},
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.New(tt.state)
-			if tt.error != "" {
-				require.ErrorContains(t, tt.error, err)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestInitializeFromProto_Deneb(t *testing.T) {
-	type test struct {
-		name  string
-		state *ethpb.BeaconStateDeneb
-		error string
-	}
-	initTests := []test{
-		{
-			name:  "nil state",
-			state: nil,
-			error: "received nil state",
-		},
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconStateDeneb{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconStateDeneb{},
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.New(tt.state)
-			if tt.error != "" {
-				require.ErrorContains(t, tt.error, err)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestInitializeFromProto_Electra(t *testing.T) {
-	type test struct {
-		name  string
-		state *ethpb.BeaconStateElectra
-		error string
-	}
-	initTests := []test{
-		{
-			name:  "nil state",
-			state: nil,
-			error: "received nil state",
-		},
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconStateElectra{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconStateElectra{},
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.New(tt.state)
-			if tt.error != "" {
-				require.ErrorContains(t, tt.error, err)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestInitializeFromProtoUnsafe_Phase0(t *testing.T) {
-	testState, _ := util.DeterministicGenesisState(t, 64)
-	pbState, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
-	require.NoError(t, err)
-	type test struct {
-		name  string
-		state *ethpb.BeaconState
-		error string
-	}
-	initTests := []test{
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconState{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconState{},
-		},
-		{
-			name:  "full state",
-			state: pbState,
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.NewUnsafe(tt.state)
-			if tt.error != "" {
-				assert.ErrorContains(t, tt.error, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestInitializeFromProtoUnsafe_Altair(t *testing.T) {
-	type test struct {
-		name  string
-		state *ethpb.BeaconStateAltair
-		error string
-	}
-	initTests := []test{
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconStateAltair{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconStateAltair{},
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.NewUnsafe(tt.state)
-			if tt.error != "" {
-				assert.ErrorContains(t, tt.error, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestInitializeFromProtoUnsafe_Bellatrix(t *testing.T) {
-	type test struct {
-		name  string
-		state *ethpb.BeaconStateBellatrix
-		error string
-	}
-	initTests := []test{
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconStateBellatrix{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconStateBellatrix{},
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.NewUnsafe(tt.state)
-			if tt.error != "" {
-				assert.ErrorContains(t, tt.error, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestInitializeFromProtoUnsafe_Capella(t *testing.T) {
-	type test struct {
-		name  string
-		state *ethpb.BeaconStateCapella
-		error string
-	}
-	initTests := []test{
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconStateCapella{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconStateCapella{},
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.NewUnsafe(tt.state)
-			if tt.error != "" {
-				assert.ErrorContains(t, tt.error, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestInitializeFromProtoUnsafe_Deneb(t *testing.T) {
-	type test struct {
-		name  string
-		state *ethpb.BeaconStateDeneb
-		error string
-	}
-	initTests := []test{
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconStateDeneb{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconStateDeneb{},
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.NewUnsafe(tt.state)
-			if tt.error != "" {
-				assert.ErrorContains(t, tt.error, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestInitializeFromProtoUnsafe_Electra(t *testing.T) {
-	type test struct {
-		name  string
-		state *ethpb.BeaconStateElectra
-		error string
-	}
-	initTests := []test{
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconStateElectra{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconStateElectra{},
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.NewUnsafe(tt.state)
-			if tt.error != "" {
-				assert.ErrorContains(t, tt.error, err)
-			} else {
-				assert.NoError(t, err)
-			}
+	for name, ctor := range ctors {
+		t.Run(name, func(t *testing.T) {
+			var nilState T
+			_, err := ctor(nilState)
+			require.ErrorContains(t, "received nil state", err)
+			_, err = ctor(empty)
+			require.NoError(t, err)
+			got, err := ctor(st)
+			require.NoError(t, err)
+			require.Equal(t, primitives.Slot(4), got.Slot())
 		})
 	}
 }
@@ -848,8 +495,8 @@ func TestBeaconChainCopy_Electra(t *testing.T) {
 	st, err := statenative.New(pb)
 	require.NoError(t, err)
 
-	// Sanity check that InitializeFromProtoElectra and ToProto works
-	require.DeepSSZEqual(t, pb, st.ToProto(), "InitializeFromProtoElectra does not match input proto")
+	// Sanity check that New and ToProto round-trip.
+	require.DeepSSZEqual(t, pb, st.ToProto(), "New does not match input container")
 
 	// Perform the copy and check that the copied state matches the original state.
 	st2 := st.Copy()
