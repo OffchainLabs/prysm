@@ -152,7 +152,11 @@ func (t *dutyAwareShutdownTracker) wait(ctx context.Context) {
 		}
 
 		slot := slots.CurrentSlot(genesis)
-		nextSlotStart := slots.UnsafeStartTime(genesis, slot+1)
+		nextSlotStart, err := slots.StartTime(genesis, slot+1)
+		if err != nil {
+			log.WithError(err).Warning("Could not compute the start time of the next slot, shutting down immediately")
+			return
+		}
 
 		if hasRewardedDuty(slot) && !t.waitForRewardedDuties(ctx, stopped, giveUp, slot, logWait) {
 			return

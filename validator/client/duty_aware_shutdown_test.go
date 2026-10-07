@@ -40,6 +40,14 @@ func setupDutyAwareShutdownTest(t *testing.T, offset time.Duration) (*dutyAwareS
 	return tracker, genesis
 }
 
+// slotStart returns the start time of the slot.
+func slotStart(t *testing.T, genesis time.Time, slot primitives.Slot) time.Time {
+	start, err := slots.StartTime(genesis, slot)
+	require.NoError(t, err)
+
+	return start
+}
+
 // everySlot reports a rewarded duty at every slot.
 func everySlot(primitives.Slot) bool { return true }
 
@@ -100,7 +108,7 @@ func TestDutyAwareShutdownTrackerWait(t *testing.T) {
 		at := receive(t, returned)
 
 		require.Equal(t, slot, slots.At(genesis, at))
-		require.Equal(t, true, at.Before(slots.UnsafeStartTime(genesis, slot+1).Add(-testDutyAwareShutdownRestartBudget)))
+		require.Equal(t, true, at.Before(slotStart(t, genesis, slot+1).Add(-testDutyAwareShutdownRestartBudget)))
 		require.LogsContain(t, hook, "Waiting for the rewarded duties of the slot")
 	})
 
@@ -122,7 +130,7 @@ func TestDutyAwareShutdownTrackerWait(t *testing.T) {
 		returned := waitAsync(t.Context(), tracker)
 
 		// The duties of the current slot are done after the cutoff.
-		cutoff := slots.UnsafeStartTime(genesis, slot+1).Add(-testDutyAwareShutdownRestartBudget)
+		cutoff := slotStart(t, genesis, slot+1).Add(-testDutyAwareShutdownRestartBudget)
 		time.Sleep(time.Until(cutoff.Add(testDutyAwareShutdownRestartBudget / 2)))
 		tracker.markDone(slot)
 
@@ -133,7 +141,7 @@ func TestDutyAwareShutdownTrackerWait(t *testing.T) {
 		}
 
 		// The duties of the next slot are done before the cutoff.
-		time.Sleep(time.Until(slots.UnsafeStartTime(genesis, slot+1).Add(50 * time.Millisecond)))
+		time.Sleep(time.Until(slotStart(t, genesis, slot+1).Add(50 * time.Millisecond)))
 		tracker.markDone(slot + 1)
 
 		at := receive(t, returned)
