@@ -632,6 +632,24 @@ func TestGetForkChoiceV2(t *testing.T) {
 	fRoot := [32]byte{'a'}
 	fc := &forkchoicetypes.Checkpoint{Epoch: 2, Root: fRoot}
 	require.NoError(t, store.UpdateFinalizedCheckpoint(fc))
+	blockRoot, parentRoot := [32]byte{'b'}, [32]byte{'p'}
+	parentHash := [32]byte{'e'}
+	justifiedRoot, finalizedRoot := [32]byte{'j'}, [32]byte{'f'}
+	st, err := util.NewBeaconStateGloas()
+	require.NoError(t, err)
+	require.NoError(t, st.SetSlot(1))
+	require.NoError(t, st.SetCurrentJustifiedCheckpoint(&ethpb.Checkpoint{Root: justifiedRoot[:]}))
+	require.NoError(t, st.SetFinalizedCheckpoint(&ethpb.Checkpoint{Epoch: 1, Root: finalizedRoot[:]}))
+	block := util.NewBeaconBlockGloas()
+	block.Block.Slot = 1
+	block.Block.ParentRoot = parentRoot[:]
+	block.Block.Body.SignedExecutionPayloadBid.Message.ParentBlockHash = parentHash[:]
+	signed, err := blocks.NewSignedBeaconBlock(block)
+	require.NoError(t, err)
+	roblock, err := blocks.NewROBlockWithRoot(signed, blockRoot)
+	require.NoError(t, err)
+	require.NoError(t, store.InsertNode(t.Context(), st, roblock))
+	store.SetPTCVote(blockRoot, 0, true, false)
 	s := &Server{ForkchoiceFetcher: &blockchainmock.ChainService{ForkChoiceStore: store}}
 
 	request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/debug/fork_choice", nil)
@@ -642,7 +660,26 @@ func TestGetForkChoiceV2(t *testing.T) {
 	require.Equal(t, http.StatusOK, writer.Code)
 	resp := &structs.GetForkChoiceDumpV2Response{}
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-	require.Equal(t, "2", resp.FinalizedCheckpoint.Epoch)
+	require.NotNil(t, resp.Data)
+	require.Equal(t, "2", resp.Data.FinalizedCheckpoint.Epoch)
+	require.Equal(t, 2, len(resp.Data.ForkChoiceNodes))
+	pending, empty := resp.Data.ForkChoiceNodes[0], resp.Data.ForkChoiceNodes[1]
+	assert.Equal(t, "pending", pending.PayloadStatus)
+	assert.Equal(t, hexutil.Encode(parentRoot[:]), pending.ParentRoot)
+	assert.Equal(t, true, pending.ParentPayloadStatus == nil)
+	assert.Equal(t, "empty", empty.PayloadStatus)
+	assert.Equal(t, hexutil.Encode(blockRoot[:]), empty.ParentRoot)
+	require.NotNil(t, empty.ParentPayloadStatus)
+	assert.Equal(t, "pending", *empty.ParentPayloadStatus)
+	for _, node := range resp.Data.ForkChoiceNodes {
+		assert.DeepEqual(t, &structs.Checkpoint{Epoch: "0", Root: hexutil.Encode(justifiedRoot[:])}, node.JustifiedCheckpoint)
+		assert.DeepEqual(t, &structs.Checkpoint{Epoch: "1", Root: hexutil.Encode(finalizedRoot[:])}, node.FinalizedCheckpoint)
+		assert.Equal(t, hexutil.Encode(parentHash[:]), node.ExecutionBlockHash)
+		assert.Equal(t, "1", node.PayloadAttesterCount)
+		assert.Equal(t, "1", node.PayloadAvailabilityYesCount)
+		assert.Equal(t, "0", node.PayloadDataAvailabilityYesCount)
+		require.NotNil(t, node.ExtraData)
+	}
 }
 
 func TestDataColumnSidecars(t *testing.T) {

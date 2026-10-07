@@ -53,6 +53,11 @@ type Store struct {
 // Node defines the individual block which includes its block parent, ancestor and how much weight accounted for it.
 // This is used as an array based stateful DAG for efficient fork choice look up.
 type Node struct {
+	version                     int
+	parentRoot                  [fieldparams.RootLength]byte
+	justifiedRoot               [fieldparams.RootLength]byte
+	finalizedRoot               [fieldparams.RootLength]byte
+	unrealizedFinalizedRoot     [fieldparams.RootLength]byte
 	slot                        primitives.Slot              // slot of the block converted to the node.
 	proposerIndex               primitives.ValidatorIndex    // proposer index of the block.
 	builderIndex                primitives.BuilderIndex      // builder index committed in the block's bid (Gloas only).

@@ -137,7 +137,7 @@ func (f *ForkChoice) InsertNode(ctx context.Context, state state.BeaconState, ro
 		return errInvalidNilCheckpoint
 	}
 	finalizedEpoch := fc.Epoch
-	pn, err := f.store.insert(ctx, roblock, justifiedEpoch, justifiedRoot, finalizedEpoch)
+	pn, err := f.store.insert(ctx, roblock, justifiedEpoch, justifiedRoot, finalizedEpoch, bytesutil.ToBytes32(fc.Root))
 	if err != nil {
 		return err
 	}
@@ -594,7 +594,8 @@ func (f *ForkChoice) InsertChain(ctx context.Context, chain []*forkchoicetypes.B
 	for _, bcp := range chain {
 		if _, err := f.store.insert(ctx,
 			bcp.Block,
-			bcp.JustifiedCheckpoint.Epoch, bytesutil.ToBytes32(bcp.JustifiedCheckpoint.Root), bcp.FinalizedCheckpoint.Epoch); err != nil {
+			bcp.JustifiedCheckpoint.Epoch, bytesutil.ToBytes32(bcp.JustifiedCheckpoint.Root),
+			bcp.FinalizedCheckpoint.Epoch, bytesutil.ToBytes32(bcp.FinalizedCheckpoint.Root)); err != nil {
 			return err
 		}
 		if bcp.HasPayload {

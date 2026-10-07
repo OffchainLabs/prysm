@@ -1701,77 +1701,114 @@ func TestPTCVotedEarlyAndAvailableAndLate(t *testing.T) {
 
 func TestForkChoiceDumpV2(t *testing.T) {
 	f := setupGloas(t, 0, 0)
+	f.SetGenesisTime(time.Now())
 	ctx := t.Context()
 	zeroHash := params.BeaconConfig().ZeroHash
+	require.NoError(t, f.SetOptimisticToValid(ctx, zeroHash))
 
-	rootA := indexToHash(1)
+	rootA, rootB, rootC := indexToHash(1), indexToHash(2), indexToHash(3)
 	blockHashA := indexToHash(100)
+	justifiedRoot, finalizedRoot := indexToHash(21), indexToHash(22)
 	st, blk, err := prepareGloasForkchoiceState(ctx, 1, rootA, zeroHash, blockHashA, zeroHash, 0, 0)
 	require.NoError(t, err)
+	require.NoError(t, st.SetCurrentJustifiedCheckpoint(&ethpb.Checkpoint{Root: justifiedRoot[:]}))
+	require.NoError(t, st.SetFinalizedCheckpoint(&ethpb.Checkpoint{Root: finalizedRoot[:]}))
 	require.NoError(t, f.InsertNode(ctx, st, blk))
-
 	pe, err := prepareGloasForkchoicePayload(rootA)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertPayload(pe))
+	f.store.emptyNodeByRoot[rootA].node.weight = 11
+	f.store.emptyNodeByRoot[rootA].weight = 12
+	f.store.fullNodeByRoot[rootA].weight = 13
 
-	rootB := indexToHash(2)
-	blockHashB := indexToHash(200)
-	st, blk, err = prepareGloasForkchoiceState(ctx, 2, rootB, zeroHash, blockHashB, zeroHash, 0, 0)
+	st, blk, err = prepareGloasForkchoiceState(ctx, 2, rootB, rootA, indexToHash(200), zeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+	st, blk, err = prepareGloasForkchoiceState(ctx, 2, rootC, rootA, indexToHash(300), blockHashA, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, blk))
 
 	f.SetPTCVote(rootA, 1, true, true)
 	f.SetPTCVote(rootA, 2, true, false)
-	f.SetPTCVote(rootA, 3, false, true)
-
+	f.SetPTCVote(rootA, 3, false, false)
 	dump, err := f.ForkChoiceDumpV2(ctx)
 	require.NoError(t, err)
+	require.Equal(t, 8, len(dump.ForkChoiceNodes))
 
 	byRoot := make(map[[32]byte]map[forkchoice2.PayloadStatus]*forkchoice2.NodeV2)
 	for _, n := range dump.ForkChoiceNodes {
-		var r [32]byte
-		copy(r[:], n.BlockRoot)
+		r := [32]byte(n.BlockRoot)
 		if byRoot[r] == nil {
 			byRoot[r] = make(map[forkchoice2.PayloadStatus]*forkchoice2.NodeV2)
 		}
 		byRoot[r][n.PayloadStatus] = n
 	}
 
-	t.Run("rootA has PENDING+EMPTY+FULL", func(t *testing.T) {
-		entries := byRoot[rootA]
-		require.NotNil(t, entries[forkchoice2.PayloadStatusPending])
-		require.NotNil(t, entries[forkchoice2.PayloadStatusEmpty])
-		require.NotNil(t, entries[forkchoice2.PayloadStatusFull])
+	t.Run("pre-Gloas block has one full node", func(t *testing.T) {
+		require.Equal(t, 1, len(byRoot[zeroHash]))
+		n := byRoot[zeroHash][forkchoice2.PayloadStatusFull]
+		require.NotNil(t, n)
+		require.Equal(t, true, n.ParentPayloadStatus == nil)
+		assert.Equal(t, uint64(0), n.PayloadAttesterCount)
 	})
-
-	t.Run("rootB has only PENDING+EMPTY", func(t *testing.T) {
-		entries := byRoot[rootB]
-		require.NotNil(t, entries[forkchoice2.PayloadStatusPending])
-		require.NotNil(t, entries[forkchoice2.PayloadStatusEmpty])
-		assert.Equal(t, true, entries[forkchoice2.PayloadStatusFull] == nil)
-	})
-
-	t.Run("PTC counts on PENDING only", func(t *testing.T) {
-		pending := byRoot[rootA][forkchoice2.PayloadStatusPending]
-		assert.Equal(t, uint64(3), pending.PayloadAttesterCount)
-		assert.Equal(t, uint64(2), pending.PayloadAvailabilityYesCount)
-		assert.Equal(t, uint64(2), pending.PayloadDataAvailabilityYesCount)
-
-		empty := byRoot[rootA][forkchoice2.PayloadStatusEmpty]
-		assert.Equal(t, uint64(0), empty.PayloadAttesterCount)
-		assert.Equal(t, uint64(0), empty.PayloadAvailabilityYesCount)
-		assert.Equal(t, uint64(0), empty.PayloadDataAvailabilityYesCount)
-
-		full := byRoot[rootA][forkchoice2.PayloadStatusFull]
-		assert.Equal(t, uint64(0), full.PayloadAttesterCount)
-	})
-
-	t.Run("parent root is consensus parent regardless of status", func(t *testing.T) {
+	t.Run("node variants retain checkpoints and PTC counts", func(t *testing.T) {
 		for _, status := range []forkchoice2.PayloadStatus{forkchoice2.PayloadStatusPending, forkchoice2.PayloadStatusEmpty, forkchoice2.PayloadStatusFull} {
-			entry := byRoot[rootA][status]
-			require.NotNil(t, entry)
-			assert.DeepEqual(t, zeroHash[:], entry.ParentRoot)
+			n := byRoot[rootA][status]
+			require.NotNil(t, n, "%s", status)
+			assert.DeepEqual(t, &ethpb.Checkpoint{Root: justifiedRoot[:]}, n.JustifiedCheckpoint, "%s", status)
+			assert.DeepEqual(t, &ethpb.Checkpoint{Root: finalizedRoot[:]}, n.FinalizedCheckpoint, "%s", status)
+			assert.Equal(t, uint64(3), n.PayloadAttesterCount, "%s", status)
+			assert.Equal(t, uint64(2), n.PayloadAvailabilityYesCount, "%s", status)
+			assert.Equal(t, uint64(1), n.PayloadDataAvailabilityYesCount, "%s", status)
 		}
+	})
+	t.Run("parents and execution status follow each variant", func(t *testing.T) {
+		for _, tc := range []struct {
+			root         [32]byte
+			status       forkchoice2.PayloadStatus
+			parentRoot   [32]byte
+			parentStatus forkchoice2.PayloadStatus
+			hash         [32]byte
+			validity     forkchoice2.NodeValidity
+			weight       uint64
+		}{
+			{rootA, forkchoice2.PayloadStatusPending, zeroHash, forkchoice2.PayloadStatusFull, zeroHash, forkchoice2.Valid, 11},
+			{rootA, forkchoice2.PayloadStatusEmpty, rootA, forkchoice2.PayloadStatusPending, zeroHash, forkchoice2.Valid, 12},
+			{rootA, forkchoice2.PayloadStatusFull, rootA, forkchoice2.PayloadStatusPending, blockHashA, forkchoice2.Optimistic, 13},
+			{rootB, forkchoice2.PayloadStatusPending, rootA, forkchoice2.PayloadStatusEmpty, zeroHash, forkchoice2.Valid, 0},
+			{rootC, forkchoice2.PayloadStatusPending, rootA, forkchoice2.PayloadStatusFull, blockHashA, forkchoice2.Optimistic, 0},
+		} {
+			n := byRoot[tc.root][tc.status]
+			require.NotNil(t, n)
+			require.NotNil(t, n.ParentPayloadStatus)
+			assert.DeepEqual(t, tc.parentRoot[:], n.ParentRoot, "%x/%s", tc.root, tc.status)
+			assert.Equal(t, tc.parentStatus, *n.ParentPayloadStatus, "%x/%s", tc.root, tc.status)
+			assert.DeepEqual(t, tc.hash[:], n.ExecutionBlockHash, "%x/%s", tc.root, tc.status)
+			assert.Equal(t, tc.validity, n.Validity, "%x/%s", tc.root, tc.status)
+			assert.Equal(t, tc.weight, n.Weight, "%x/%s", tc.root, tc.status)
+		}
+	})
+	t.Run("validity follows the included execution payload", func(t *testing.T) {
+		require.NoError(t, f.SetOptimisticToValid(ctx, rootA))
+		dump, err := f.ForkChoiceDumpV2(ctx)
+		require.NoError(t, err)
+		for _, node := range dump.ForkChoiceNodes {
+			assert.Equal(t, forkchoice2.Valid, node.Validity, "%x/%s", node.BlockRoot, node.PayloadStatus)
+		}
+	})
+	t.Run("pruning preserves parent root and execution hash", func(t *testing.T) {
+		f.store.finalizedCheckpoint.Root = rootC
+		require.NoError(t, f.store.prune(ctx))
+		dump, err := f.ForkChoiceDumpV2(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(dump.ForkChoiceNodes))
+		n := dump.ForkChoiceNodes[0]
+		assert.DeepEqual(t, rootA[:], n.ParentRoot)
+		assert.Equal(t, true, n.ParentPayloadStatus == nil)
+		assert.DeepEqual(t, blockHashA[:], n.ExecutionBlockHash)
+		assert.Equal(t, forkchoice2.Valid, n.Validity)
+		assert.DeepEqual(t, rootC[:], dump.ForkChoiceNodes[1].ParentRoot)
+		assert.Equal(t, forkchoice2.PayloadStatusPending, *dump.ForkChoiceNodes[1].ParentPayloadStatus)
 	})
 }
 

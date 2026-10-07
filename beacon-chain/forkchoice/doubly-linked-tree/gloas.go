@@ -13,6 +13,8 @@ import (
 	forkchoice2 "github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
@@ -389,79 +391,84 @@ func (s *Store) nodeTreeDumpV2(ctx context.Context, n *Node, nodes []*forkchoice
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	var parentRoot [32]byte
-	if n.parent != nil {
-		parentRoot = n.parent.node.root
-	}
-	target := [32]byte{}
+	var target [32]byte
 	if n.target != nil {
 		target = n.target.root
 	}
 	en := s.emptyNodeByRoot[n.root]
 	fn := s.fullNodeByRoot[n.root]
+	parentHash := s.parentHash(en)
 	optimistic := false
+	if parent := s.fullParent(en); parent != nil {
+		optimistic = parent.optimistic
+	}
+	entry := &forkchoice2.NodeV2{
+		PayloadStatus:            forkchoice2.PayloadStatusPending,
+		BlockRoot:                n.root[:],
+		ParentRoot:               n.parentRoot[:],
+		Slot:                     n.slot,
+		Weight:                   n.weight,
+		Balance:                  n.balance,
+		ExecutionOptimistic:      optimistic,
+		Timestamp:                en.timestamp,
+		ExecutionBlockHash:       parentHash[:],
+		Target:                   target[:],
+		JustifiedCheckpoint:      &ethpb.Checkpoint{Epoch: n.justifiedEpoch, Root: n.justifiedRoot[:]},
+		FinalizedCheckpoint:      &ethpb.Checkpoint{Epoch: n.finalizedEpoch, Root: n.finalizedRoot[:]},
+		UnrealizedJustifiedEpoch: n.unrealizedJustified.Epoch,
+		UnrealizedFinalizedEpoch: n.unrealizedFinalizedEpoch,
+	}
 	if n.parent != nil {
-		optimistic = n.parent.optimistic
-	}
-	if fn != nil {
-		optimistic = fn.optimistic
-	}
-
-	pending := &forkchoice2.NodeV2{
-		PayloadStatus:                   forkchoice2.PayloadStatusPending,
-		BlockRoot:                       n.root[:],
-		ParentRoot:                      parentRoot[:],
-		Slot:                            n.slot,
-		Weight:                          n.weight,
-		Balance:                         n.balance,
-		ExecutionOptimistic:             optimistic,
-		Timestamp:                       en.timestamp,
-		ExecutionBlockHash:              n.blockHash[:],
-		Target:                          target[:],
-		JustifiedEpoch:                  n.justifiedEpoch,
-		FinalizedEpoch:                  n.finalizedEpoch,
-		UnrealizedJustifiedEpoch:        n.unrealizedJustified.Epoch,
-		UnrealizedFinalizedEpoch:        n.unrealizedFinalizedEpoch,
-		PayloadAttesterCount:            n.payloadAttesters.Count(),
-		PayloadAvailabilityYesCount:     n.payloadAvailabilityVote.Count(),
-		PayloadDataAvailabilityYesCount: n.payloadDataAvailabilityVote.Count(),
-	}
-	if optimistic {
-		pending.Validity = forkchoice2.Optimistic
-	} else {
-		pending.Validity = forkchoice2.Valid
-	}
-	nodes = append(nodes, pending)
-
-	emptyEntry := &forkchoice2.NodeV2{
-		PayloadStatus:       forkchoice2.PayloadStatusEmpty,
-		BlockRoot:           n.root[:],
-		ParentRoot:          parentRoot[:],
-		Slot:                n.slot,
-		Weight:              en.weight,
-		Balance:             en.balance,
-		Validity:            pending.Validity,
-		ExecutionOptimistic: en.optimistic,
-		Timestamp:           en.timestamp,
-		ExecutionBlockHash:  n.blockHash[:],
-	}
-	nodes = append(nodes, emptyEntry)
-
-	if fn != nil {
-		fullEntry := &forkchoice2.NodeV2{
-			PayloadStatus:       forkchoice2.PayloadStatusFull,
-			BlockRoot:           n.root[:],
-			ParentRoot:          parentRoot[:],
-			Slot:                n.slot,
-			Weight:              fn.weight,
-			Balance:             fn.balance,
-			Validity:            pending.Validity,
-			ExecutionOptimistic: fn.optimistic,
-			Timestamp:           fn.timestamp,
-			ExecutionBlockHash:  n.blockHash[:],
-			GasLimit:            fn.gasLimit,
+		status := forkchoice2.PayloadStatusEmpty
+		if n.parent.full {
+			status = forkchoice2.PayloadStatusFull
 		}
-		nodes = append(nodes, fullEntry)
+		entry.ParentPayloadStatus = &status
+	}
+	if n.version < version.Gloas {
+		entry.PayloadStatus = forkchoice2.PayloadStatusFull
+		entry.ExecutionBlockHash = n.blockHash[:]
+		entry.ExecutionOptimistic = fn.optimistic
+		entry.Timestamp = fn.timestamp
+		entry.GasLimit = fn.gasLimit
+	} else {
+		entry.PayloadAttesterCount = n.payloadAttesters.Count()
+		entry.PayloadAvailabilityYesCount = n.payloadAvailabilityVote.Count()
+		entry.PayloadDataAvailabilityYesCount = n.payloadDataAvailabilityVote.Count()
+	}
+	if entry.ExecutionOptimistic {
+		entry.Validity = forkchoice2.Optimistic
+	} else {
+		entry.Validity = forkchoice2.Valid
+	}
+	nodes = append(nodes, entry)
+
+	if n.version >= version.Gloas {
+		pendingStatus := forkchoice2.PayloadStatusPending
+		emptyEntry := *entry
+		emptyEntry.PayloadStatus = forkchoice2.PayloadStatusEmpty
+		emptyEntry.ParentRoot = n.root[:]
+		emptyEntry.ParentPayloadStatus = &pendingStatus
+		emptyEntry.Weight = en.weight
+		emptyEntry.Balance = en.balance
+		nodes = append(nodes, &emptyEntry)
+
+		if fn != nil {
+			fullEntry := emptyEntry
+			fullEntry.PayloadStatus = forkchoice2.PayloadStatusFull
+			fullEntry.Weight = fn.weight
+			fullEntry.Balance = fn.balance
+			fullEntry.ExecutionOptimistic = fn.optimistic
+			fullEntry.Timestamp = fn.timestamp
+			fullEntry.ExecutionBlockHash = n.blockHash[:]
+			fullEntry.GasLimit = fn.gasLimit
+			if fn.optimistic {
+				fullEntry.Validity = forkchoice2.Optimistic
+			} else {
+				fullEntry.Validity = forkchoice2.Valid
+			}
+			nodes = append(nodes, &fullEntry)
+		}
 	}
 
 	var err error
