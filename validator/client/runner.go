@@ -326,12 +326,7 @@ func performRoles(slotCtx context.Context, allRoles map[[48]byte][]validatorRole
 // isRewardedRole returns true if performing the role earns rewards.
 // Aggregations, sync committee contributions and payload attestations do not.
 func isRewardedRole(role validatorRole) bool {
-	switch role {
-	case roleAttester, roleProposer, roleSyncCommittee:
-		return true
-	default:
-		return false
-	}
+	return role == roleAttester || role == roleProposer || role == roleSyncCommittee
 }
 
 func isConnectionError(err error) bool {
