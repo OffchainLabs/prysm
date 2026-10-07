@@ -37,6 +37,7 @@ type dutyAwareShutdownTracker struct {
 	genesis         time.Time
 	hasRewardedDuty func(primitives.Slot) bool
 	done            map[primitives.Slot]chan struct{}
+	stopped         chan struct{} // closed when the runner stops, recreated when it starts again
 	restartBudget   time.Duration
 	maxWait         time.Duration
 }
@@ -62,6 +63,7 @@ func (t *dutyAwareShutdownTracker) start(genesis time.Time, hasRewardedDuty func
 	t.active = true
 	t.genesis = genesis
 	t.hasRewardedDuty = hasRewardedDuty
+	t.stopped = make(chan struct{})
 }
 
 // stop records that the runner no longer performs duties, and wakes up any waiter.
@@ -73,14 +75,16 @@ func (t *dutyAwareShutdownTracker) stop() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	t.active = false
-	for slot, ch := range t.done {
-		closeIfOpen(ch)
-		delete(t.done, slot)
+	if !t.active {
+		return
 	}
+
+	t.active = false
+	close(t.stopped)
 }
 
 // markDone records that all rewarded duties of the slot are done.
+// It must be called at most once per slot, otherwise it panics.
 func (t *dutyAwareShutdownTracker) markDone(slot primitives.Slot) {
 	if t == nil {
 		return
@@ -89,7 +93,7 @@ func (t *dutyAwareShutdownTracker) markDone(slot primitives.Slot) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	closeIfOpen(t.doneChanLocked(slot))
+	close(t.doneChanLocked(slot))
 
 	// Prune old slots.
 	for s := range t.done {
@@ -118,11 +122,11 @@ func (t *dutyAwareShutdownTracker) doneChanLocked(slot primitives.Slot) chan str
 	return ch
 }
 
-func (t *dutyAwareShutdownTracker) state() (bool, time.Time, func(primitives.Slot) bool) {
+func (t *dutyAwareShutdownTracker) state() (bool, time.Time, func(primitives.Slot) bool, <-chan struct{}) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	return t.active, t.genesis, t.hasRewardedDuty
+	return t.active, t.genesis, t.hasRewardedDuty, t.stopped
 }
 
 // wait blocks until the validator client can be stopped without missing any rewarded duty:
@@ -144,7 +148,7 @@ func (t *dutyAwareShutdownTracker) wait(ctx context.Context) {
 	)
 
 	for {
-		active, genesis, hasRewardedDuty := t.state()
+		active, genesis, hasRewardedDuty, stopped := t.state()
 		if !active {
 			log.Debug(msgNoDutyInProgress)
 			return
@@ -167,16 +171,14 @@ func (t *dutyAwareShutdownTracker) wait(ctx context.Context) {
 
 			select {
 			case <-done:
+			case <-stopped:
+				log.Debug(msgNoDutyInProgress)
+				return
 			case <-giveUp:
 				log.WithField("maxWait", t.maxWait).Warning(msgNoShutdownWindow)
 				return
 			case <-ctx.Done():
 				log.Info(msgShutdownInterrupted)
-				return
-			}
-
-			if active, _, _ := t.state(); !active {
-				log.Debug(msgNoDutyInProgress)
 				return
 			}
 		}
@@ -212,35 +214,27 @@ func (t *dutyAwareShutdownTracker) wait(ctx context.Context) {
 
 		log.WithFields(fields).Info("Too late in the slot to restart before the next one, waiting for the rewarded duties of the next slot to be done before shutting down. Interrupt again to shut down immediately")
 		waitLogged, waitLoggedSlot = true, slot+1
-		if !t.sleep(ctx, giveUp, time.Until(nextSlotStart)) {
+		if !t.sleep(ctx, stopped, giveUp, time.Until(nextSlotStart)) {
 			return
 		}
 	}
 }
 
 // sleep waits for the duration and returns true, or returns false if the
-// give up timer fires or the context is done.
-func (t *dutyAwareShutdownTracker) sleep(ctx context.Context, giveUp <-chan time.Time, d time.Duration) bool {
+// runner stops, the give up timer fires or the context is done.
+func (t *dutyAwareShutdownTracker) sleep(ctx context.Context, stopped <-chan struct{}, giveUp <-chan time.Time, d time.Duration) bool {
 	select {
 	case <-time.After(d):
 		return true
+	case <-stopped:
+		log.Debug(msgNoDutyInProgress)
+		return false
 	case <-giveUp:
 		log.WithField("maxWait", t.maxWait).Warning(msgNoShutdownWindow)
 		return false
 	case <-ctx.Done():
 		log.Info(msgShutdownInterrupted)
 		return false
-	}
-}
-
-func closeIfOpen(ch chan struct{}) {
-	select {
-	case <-ch:
-		// Nothing is ever sent on this channel, so a receive succeeds right away
-		// only if the channel is closed (it then returns the zero value). Nothing to do.
-	default:
-		// A receive would block: the channel is still open.
-		close(ch)
 	}
 }
 
