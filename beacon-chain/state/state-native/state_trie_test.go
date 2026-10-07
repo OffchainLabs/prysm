@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -853,4 +854,42 @@ func TestBeaconChainCopy_Electra(t *testing.T) {
 	// Perform the copy and check that the copied state matches the original state.
 	st2 := st.Copy()
 	require.DeepSSZEqual(t, st.ToProto(), st2.ToProto(), "Copied state does not match original state")
+}
+
+func TestContainerFrom(t *testing.T) {
+	t.Run("matching type", func(t *testing.T) {
+		pb := &ethpb.BeaconStateAltair{Slot: 7}
+		got, err := statenative.ContainerFrom[*ethpb.BeaconStateAltair](any(pb))
+		require.NoError(t, err)
+		require.Equal(t, pb, got)
+	})
+	t.Run("other fork", func(t *testing.T) {
+		got, err := statenative.ContainerFrom[*ethpb.BeaconStateAltair](any(&ethpb.BeaconState{}))
+		require.ErrorContains(t, "input is *eth.BeaconState, not *eth.BeaconStateAltair", err)
+		require.Equal(t, (*ethpb.BeaconStateAltair)(nil), got)
+	})
+	t.Run("nil input", func(t *testing.T) {
+		_, err := statenative.ContainerFrom[*ethpb.BeaconState](nil)
+		require.ErrorContains(t, "input is <nil>", err)
+	})
+}
+
+func TestNew_CopiesInput(t *testing.T) {
+	newPB := func() *ethpb.BeaconStateDeneb {
+		return &ethpb.BeaconStateDeneb{Fork: &ethpb.Fork{Epoch: 1}}
+	}
+	t.Run("New copies", func(t *testing.T) {
+		pb := newPB()
+		st, err := statenative.New(pb)
+		require.NoError(t, err)
+		pb.Fork.Epoch = 2
+		require.Equal(t, primitives.Epoch(1), st.Fork().Epoch)
+	})
+	t.Run("NewUnsafe shares", func(t *testing.T) {
+		pb := newPB()
+		st, err := statenative.NewUnsafe(pb)
+		require.NoError(t, err)
+		pb.Fork.Epoch = 2
+		require.Equal(t, primitives.Epoch(2), st.Fork().Epoch)
+	})
 }

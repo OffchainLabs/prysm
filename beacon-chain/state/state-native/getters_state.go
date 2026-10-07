@@ -1,6 +1,8 @@
 package state_native
 
 import (
+	"fmt"
+
 	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -643,6 +645,16 @@ func (b *BeaconState) StateRootAtIndex(idx uint64) ([]byte, error) {
 		return nil, err
 	}
 	return r[:], nil
+}
+
+// ContainerFrom returns v as the state container type T, such as the result of
+// ToProto or ToProtoUnsafe. It returns an error if v is not a T.
+func ContainerFrom[T Container](v any) (T, error) {
+	c, ok := v.(T)
+	if !ok {
+		return c, fmt.Errorf("input is %T, not %T", v, c)
+	}
+	return c, nil
 }
 
 // ProtobufBeaconStatePhase0 transforms an input into beacon state in the form of protobuf.
