@@ -55,7 +55,7 @@ func GeneratePreminedGenesisStateFromDepositData(
 		return nil, nil, errors.Wrap(err, "could not generate genesis state")
 	}
 
-	pbState, err := statenative.ProtobufBeaconStatePhase0(beaconState.ToProtoUnsafe())
+	pbState, err := statenative.ContainerFrom[*ethpb.BeaconState](beaconState.ToProtoUnsafe())
 	if err != nil {
 		return nil, nil, err
 	}

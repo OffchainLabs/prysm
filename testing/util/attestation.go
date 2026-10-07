@@ -106,7 +106,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 		var headState state.BeaconState
 		switch bState.Version() {
 		case version.Phase0:
-			pbState, err := state_native.ProtobufBeaconStatePhase0(bState.ToProto())
+			pbState, err := state_native.ContainerFrom[*ethpb.BeaconState](bState.ToProto())
 			if err != nil {
 				return nil, err
 			}
@@ -116,7 +116,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 			}
 			headState = genState
 		case version.Altair:
-			pbState, err := state_native.ProtobufBeaconStateAltair(bState.ToProto())
+			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateAltair](bState.ToProto())
 			if err != nil {
 				return nil, err
 			}
@@ -126,7 +126,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 			}
 			headState = genState
 		case version.Bellatrix:
-			pbState, err := state_native.ProtobufBeaconStateBellatrix(bState.ToProto())
+			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateBellatrix](bState.ToProto())
 			if err != nil {
 				return nil, err
 			}
@@ -136,7 +136,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 			}
 			headState = genState
 		case version.Capella:
-			pbState, err := state_native.ProtobufBeaconStateCapella(bState.ToProto())
+			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateCapella](bState.ToProto())
 			if err != nil {
 				return nil, err
 			}
@@ -146,7 +146,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 			}
 			headState = genState
 		case version.Deneb:
-			pbState, err := state_native.ProtobufBeaconStateDeneb(bState.ToProto())
+			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateDeneb](bState.ToProto())
 			if err != nil {
 				return nil, err
 			}
@@ -156,7 +156,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 			}
 			headState = genState
 		case version.Electra:
-			pbState, err := state_native.ProtobufBeaconStateElectra(bState.ToProto())
+			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateElectra](bState.ToProto())
 			if err != nil {
 				return nil, err
 			}
@@ -166,7 +166,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 			}
 			headState = genState
 		case version.Fulu:
-			pbState, err := state_native.ProtobufBeaconStateFulu(bState.ToProto())
+			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateFulu](bState.ToProto())
 			if err != nil {
 				return nil, err
 			}
@@ -176,7 +176,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 			}
 			headState = genState
 		case version.Gloas:
-			pbState, err := state_native.ProtobufBeaconStateGloas(bState.ToProto())
+			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateGloas](bState.ToProto())
 			if err != nil {
 				return nil, err
 			}

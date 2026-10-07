@@ -33,9 +33,9 @@ func TestCheckpointStateCache_StateByCheckpoint(t *testing.T) {
 	s, err = cache.StateByCheckpoint(cp1)
 	require.NoError(t, err)
 
-	pbState1, err := state_native.ProtobufBeaconStatePhase0(s.ToProtoUnsafe())
+	pbState1, err := state_native.ContainerFrom[*ethpb.BeaconState](s.ToProtoUnsafe())
 	require.NoError(t, err)
-	pbstate, err := state_native.ProtobufBeaconStatePhase0(st.ToProtoUnsafe())
+	pbstate, err := state_native.ContainerFrom[*ethpb.BeaconState](st.ToProtoUnsafe())
 	require.NoError(t, err)
 	require.DeepSSZEqual(t, pbState1, pbstate, "incorrectly cached state")
 

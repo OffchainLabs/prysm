@@ -18,7 +18,7 @@ import (
 
 func TestInitializeFromProto_Phase0(t *testing.T) {
 	testState, _ := util.DeterministicGenesisState(t, 64)
-	pbState, err := statenative.ProtobufBeaconStatePhase0(testState.ToProtoUnsafe())
+	pbState, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
 	require.NoError(t, err)
 	type test struct {
 		name  string
@@ -241,7 +241,7 @@ func TestInitializeFromProto_Electra(t *testing.T) {
 
 func TestInitializeFromProtoUnsafe_Phase0(t *testing.T) {
 	testState, _ := util.DeterministicGenesisState(t, 64)
-	pbState, err := statenative.ProtobufBeaconStatePhase0(testState.ToProtoUnsafe())
+	pbState, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
 	require.NoError(t, err)
 	type test struct {
 		name  string
@@ -485,7 +485,7 @@ func TestBeaconState_HashTreeRoot(t *testing.T) {
 			if err == nil && tt.error != "" {
 				t.Errorf("Expected error, expected %v, received %v", tt.error, err)
 			}
-			pbState, err := statenative.ProtobufBeaconStatePhase0(testState.ToProtoUnsafe())
+			pbState, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
 			require.NoError(t, err)
 			genericHTR, err := pbState.HashTreeRoot()
 			if err == nil && tt.error != "" {
@@ -503,7 +503,7 @@ func TestBeaconState_HashTreeRoot(t *testing.T) {
 
 func BenchmarkBeaconState(b *testing.B) {
 	testState, _ := util.DeterministicGenesisState(b, 16000)
-	pbState, err := statenative.ProtobufBeaconStatePhase0(testState.ToProtoUnsafe())
+	pbState, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
 	require.NoError(b, err)
 
 	b.Run("Vectorized SHA256", func(b *testing.B) {
@@ -572,7 +572,7 @@ func TestBeaconState_HashTreeRoot_FieldTrie(t *testing.T) {
 			if err == nil && tt.error != "" {
 				t.Errorf("Expected error, expected %v, received %v", tt.error, err)
 			}
-			pbState, err := statenative.ProtobufBeaconStatePhase0(testState.ToProtoUnsafe())
+			pbState, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
 			require.NoError(t, err)
 			genericHTR, err := pbState.HashTreeRoot()
 			if err == nil && tt.error != "" {
@@ -603,7 +603,7 @@ func TestBeaconState_AppendValidator_DoesntMutateCopy(t *testing.T) {
 
 func TestBeaconState_ValidatorMutation_Phase0(t *testing.T) {
 	testState, _ := util.DeterministicGenesisState(t, 400)
-	pbState, err := statenative.ProtobufBeaconStatePhase0(testState.ToProtoUnsafe())
+	pbState, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
 	require.NoError(t, err)
 	testState, err = statenative.New(pbState)
 	require.NoError(t, err)
@@ -632,7 +632,7 @@ func TestBeaconState_ValidatorMutation_Phase0(t *testing.T) {
 
 	rt, err := testState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
-	pbState, err = statenative.ProtobufBeaconStatePhase0(testState.ToProtoUnsafe())
+	pbState, err = statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
 	require.NoError(t, err)
 
 	copiedTestState, err := statenative.New(pbState)
@@ -656,7 +656,7 @@ func TestBeaconState_ValidatorMutation_Phase0(t *testing.T) {
 
 	rt, err = newState1.HashTreeRoot(t.Context())
 	require.NoError(t, err)
-	pbState, err = statenative.ProtobufBeaconStatePhase0(newState1.ToProtoUnsafe())
+	pbState, err = statenative.ContainerFrom[*ethpb.BeaconState](newState1.ToProtoUnsafe())
 	require.NoError(t, err)
 
 	copiedTestState, err = statenative.New(pbState)
@@ -670,7 +670,7 @@ func TestBeaconState_ValidatorMutation_Phase0(t *testing.T) {
 
 func TestBeaconState_ValidatorMutation_Altair(t *testing.T) {
 	testState, _ := util.DeterministicGenesisStateAltair(t, 400)
-	pbState, err := statenative.ProtobufBeaconStateAltair(testState.ToProtoUnsafe())
+	pbState, err := statenative.ContainerFrom[*ethpb.BeaconStateAltair](testState.ToProtoUnsafe())
 	require.NoError(t, err)
 	testState, err = statenative.New(pbState)
 	require.NoError(t, err)
@@ -699,7 +699,7 @@ func TestBeaconState_ValidatorMutation_Altair(t *testing.T) {
 
 	rt, err := testState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
-	pbState, err = statenative.ProtobufBeaconStateAltair(testState.ToProtoUnsafe())
+	pbState, err = statenative.ContainerFrom[*ethpb.BeaconStateAltair](testState.ToProtoUnsafe())
 	require.NoError(t, err)
 
 	copiedTestState, err := statenative.New(pbState)
@@ -723,7 +723,7 @@ func TestBeaconState_ValidatorMutation_Altair(t *testing.T) {
 
 	rt, err = newState1.HashTreeRoot(t.Context())
 	require.NoError(t, err)
-	pbState, err = statenative.ProtobufBeaconStateAltair(newState1.ToProtoUnsafe())
+	pbState, err = statenative.ContainerFrom[*ethpb.BeaconStateAltair](newState1.ToProtoUnsafe())
 	require.NoError(t, err)
 
 	copiedTestState, err = statenative.New(pbState)
@@ -737,7 +737,7 @@ func TestBeaconState_ValidatorMutation_Altair(t *testing.T) {
 
 func TestBeaconState_ValidatorMutation_Bellatrix(t *testing.T) {
 	testState, _ := util.DeterministicGenesisStateBellatrix(t, 400)
-	pbState, err := statenative.ProtobufBeaconStateBellatrix(testState.ToProtoUnsafe())
+	pbState, err := statenative.ContainerFrom[*ethpb.BeaconStateBellatrix](testState.ToProtoUnsafe())
 	require.NoError(t, err)
 	testState, err = statenative.New(pbState)
 	require.NoError(t, err)
@@ -766,7 +766,7 @@ func TestBeaconState_ValidatorMutation_Bellatrix(t *testing.T) {
 
 	rt, err := testState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
-	pbState, err = statenative.ProtobufBeaconStateBellatrix(testState.ToProtoUnsafe())
+	pbState, err = statenative.ContainerFrom[*ethpb.BeaconStateBellatrix](testState.ToProtoUnsafe())
 	require.NoError(t, err)
 
 	copiedTestState, err := statenative.New(pbState)
@@ -790,7 +790,7 @@ func TestBeaconState_ValidatorMutation_Bellatrix(t *testing.T) {
 
 	rt, err = newState1.HashTreeRoot(t.Context())
 	require.NoError(t, err)
-	pbState, err = statenative.ProtobufBeaconStateBellatrix(newState1.ToProtoUnsafe())
+	pbState, err = statenative.ContainerFrom[*ethpb.BeaconStateBellatrix](newState1.ToProtoUnsafe())
 	require.NoError(t, err)
 
 	copiedTestState, err = statenative.New(pbState)

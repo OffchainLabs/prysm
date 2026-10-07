@@ -50,7 +50,7 @@ func RunSlotProcessingTests(t *testing.T, config string) {
 			postState, err := transition.ProcessSlots(context.Background(), beaconState, beaconState.Slot().Add(slotsCount))
 			require.NoError(t, err)
 
-			pbState, err := state_native.ProtobufBeaconStateElectra(postState.ToProto())
+			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateElectra](postState.ToProto())
 			require.NoError(t, err)
 			require.DeepSSZEqual(t, pbState, postBeaconState, "Did not receive expected post state")
 		})
