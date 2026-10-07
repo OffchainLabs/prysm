@@ -1,8 +1,2 @@
 # Automatically require code review from core-team.
 * @OffchainLabs/prysm
-
-# Starlark code owners
-*.bzl @prestonvanloon @kasey
-
-# Anyone on Prysm can approve dependency updates.
-deps.bzl @OffchainLabs/prysm

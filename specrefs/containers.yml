@@ -528,8 +528,8 @@
 
 - name: BeaconState#phase0
   sources:
-    - file: proto/prysm/v1alpha1/beacon_state.proto
-      search: message BeaconState {
+    - file: proto/prysm/v1alpha1/beacon_state_mainnet.go
+      search: type BeaconState struct {
   spec: |
     <spec ssz_object="BeaconState" fork="phase0" hash="12a06e56">
     class BeaconState(Container):
@@ -558,8 +558,8 @@
 
 - name: BeaconState#altair
   sources:
-    - file: proto/prysm/v1alpha1/beacon_state.proto
-      search: message BeaconStateAltair {
+    - file: proto/prysm/v1alpha1/beacon_state_mainnet.go
+      search: type BeaconStateAltair struct {
   spec: |
     <spec ssz_object="BeaconState" fork="altair" hash="e8fdd772">
     class BeaconState(Container):
@@ -596,8 +596,8 @@
 
 - name: BeaconState#bellatrix
   sources:
-    - file: proto/prysm/v1alpha1/beacon_state.proto
-      search: message BeaconStateBellatrix {
+    - file: proto/prysm/v1alpha1/beacon_state_mainnet.go
+      search: type BeaconStateBellatrix struct {
   spec: |
     <spec ssz_object="BeaconState" fork="bellatrix" hash="11a63238">
     class BeaconState(Container):
@@ -631,8 +631,8 @@
 
 - name: BeaconState#capella
   sources:
-    - file: proto/prysm/v1alpha1/beacon_state.proto
-      search: message BeaconStateCapella {
+    - file: proto/prysm/v1alpha1/beacon_state_mainnet.go
+      search: type BeaconStateCapella struct {
   spec: |
     <spec ssz_object="BeaconState" fork="capella" hash="c2303ee8">
     class BeaconState(Container):
@@ -672,8 +672,8 @@
 
 - name: BeaconState#deneb
   sources:
-    - file: proto/prysm/v1alpha1/beacon_state.proto
-      search: message BeaconStateDeneb {
+    - file: proto/prysm/v1alpha1/beacon_state_mainnet.go
+      search: type BeaconStateDeneb struct {
   spec: |
     <spec ssz_object="BeaconState" fork="deneb" hash="dbdea71f">
     class BeaconState(Container):
@@ -710,8 +710,8 @@
 
 - name: BeaconState#electra
   sources:
-    - file: proto/prysm/v1alpha1/beacon_state.proto
-      search: message BeaconStateElectra {
+    - file: proto/prysm/v1alpha1/beacon_state_mainnet.go
+      search: type BeaconStateElectra struct {
   spec: |
     <spec ssz_object="BeaconState" fork="electra" hash="aa3aa109">
     class BeaconState(Container):
@@ -765,8 +765,8 @@
 
 - name: BeaconState#fulu
   sources:
-    - file: proto/prysm/v1alpha1/beacon_state.proto
-      search: message BeaconStateFulu {
+    - file: proto/prysm/v1alpha1/beacon_state_mainnet.go
+      search: type BeaconStateFulu struct {
   spec: |
     <spec ssz_object="BeaconState" fork="fulu" hash="4b837a4f">
     class BeaconState(Container):
@@ -1505,8 +1505,8 @@
 
 - name: DepositMessage#phase0
   sources:
-    - file: proto/prysm/v1alpha1/beacon_state.proto
-      search: message DepositMessage {
+    - file: proto/prysm/v1alpha1/beacon_state_types.go
+      search: type DepositMessage struct {
   spec: |
     <spec ssz_object="DepositMessage" fork="phase0" hash="d6f4c2ef">
     class DepositMessage(Container):
@@ -2043,8 +2043,8 @@
 
 - name: ForkData#phase0
   sources:
-    - file: proto/prysm/v1alpha1/beacon_state.proto
-      search: message ForkData {
+    - file: proto/prysm/v1alpha1/beacon_state_types.go
+      search: type ForkData struct {
   spec: |
     <spec ssz_object="ForkData" fork="phase0" hash="8ed39352">
     class ForkData(Container):
@@ -2054,8 +2054,8 @@
 
 - name: HistoricalBatch#phase0
   sources:
-    - file: proto/prysm/v1alpha1/beacon_state.proto
-      search: message HistoricalBatch {
+    - file: proto/prysm/v1alpha1/beacon_state_mainnet.go
+      search: type HistoricalBatch struct {
   spec: |
     <spec ssz_object="HistoricalBatch" fork="phase0" hash="a39a75cd">
     class HistoricalBatch(Container):
@@ -2634,7 +2634,7 @@
 
 - name: PendingAttestation#phase0
   sources:
-    - file: proto/prysm/v1alpha1/beacon_state.proto
+    - file: proto/prysm/v1alpha1/attestation.proto
       search: message PendingAttestation {
   spec: |
     <spec ssz_object="PendingAttestation" fork="phase0" hash="e82bd1c2">
@@ -2762,8 +2762,8 @@
 
 - name: PowBlock#bellatrix
   sources:
-    - file: proto/prysm/v1alpha1/beacon_state.proto
-      search: message PowBlock {
+    - file: proto/prysm/v1alpha1/beacon_state_types.go
+      search: type PowBlock struct {
   spec: |
     <spec ssz_object="PowBlock" fork="bellatrix" hash="a3b91158">
     class PowBlock(Container):
@@ -3046,8 +3046,8 @@
 
 - name: SigningData#phase0
   sources:
-    - file: proto/prysm/v1alpha1/beacon_state.proto
-      search: message SigningData {
+    - file: proto/prysm/v1alpha1/beacon_state_types.go
+      search: type SigningData struct {
   spec: |
     <spec ssz_object="SigningData" fork="phase0" hash="c9a66f76">
     class SigningData(Container):
@@ -3107,7 +3107,7 @@
 
 - name: SyncAggregatorSelectionData#altair
   sources:
-    - file: proto/prysm/v1alpha1/beacon_state.proto
+    - file: proto/prysm/v1alpha1/sync_committee.proto
       search: message SyncAggregatorSelectionData {
   spec: |
     <spec ssz_object="SyncAggregatorSelectionData" fork="altair" hash="ea5dd5f9">

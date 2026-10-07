@@ -1,8 +1,10 @@
 # syntax=docker/dockerfile:1
 #
 # Cross-compile stage
-
-# Uses the latest prysm-cross-builder image to build the prysm binaries for all supported platforms.
+# -------------------
+#
+# This docker file hermetically and reproducibly cross builds all the prysm binaries for all supported platforms.
+# It uses the prysm-cross-builder image to build the binaries and then copies them to a scratch image for distribution.
 ARG BUILDER=prysm-cross-builder:latest
 
 FROM ${BUILDER} AS crossbuild

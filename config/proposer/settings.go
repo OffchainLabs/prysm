@@ -150,6 +150,7 @@ type BuilderEntry struct {
 	MinBid              *validator.Uint64 `json:"min_bid,omitempty" yaml:"min_bid,omitempty"`
 	MaxExecutionPayment *validator.Uint64 `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"`
 	BuilderBoostFactor  *validator.Uint64 `json:"builder_boost_factor,omitempty" yaml:"builder_boost_factor,omitempty"`
+	decodeErr           error             // set when the source hex did not decode; Validate reports it
 }
 
 // EffectiveAuthData resolves omitted auth_data to the spec default.
@@ -201,6 +202,9 @@ const (
 // Validate checks the entry against the spec size and format limits. Every config source
 // must enforce it: an entry violating the limits cannot be encoded into a block request.
 func (be *BuilderEntry) Validate() error {
+	if be.decodeErr != nil {
+		return be.decodeErr
+	}
 	if be.URL == "" {
 		return errors.New("url is required")
 	}
@@ -450,10 +454,20 @@ func BuilderConfigFromConsensus(from *validatorpb.BuilderConfig) *BuilderConfig 
 	return c
 }
 
+// builderEntryFromConsensus keeps an entry whose hex fails to decode, marked so sanitizeBuilders drops it.
 func builderEntryFromConsensus(from *validatorpb.BuilderEntry) *BuilderEntry {
 	if from == nil {
 		return nil
 	}
+	e, err := DecodeBuilderEntry(from)
+	if err != nil {
+		return &BuilderEntry{URL: from.Url, decodeErr: err}
+	}
+	return e
+}
+
+// DecodeBuilderEntry converts a payload entry, decoding its 0x-hex builder_pubkeys and auth_data.
+func DecodeBuilderEntry(from *validatorpb.BuilderEntry) (*BuilderEntry, error) {
 	e := &BuilderEntry{
 		URL:                 from.Url,
 		MinBid:              from.MinBid,
@@ -461,13 +475,23 @@ func builderEntryFromConsensus(from *validatorpb.BuilderEntry) *BuilderEntry {
 		BuilderBoostFactor:  from.BuilderBoostFactor,
 	}
 	// Treat empty as absent so bolt (nil) and filesystem (empty) round-trips agree.
-	if len(from.Pubkeys) != 0 {
-		e.Pubkeys = bytesutil.SafeCopy2dBytes(from.Pubkeys)
+	for i, raw := range from.BuilderPubkeys {
+		pk, err := hexutil.Decode(raw)
+		if err != nil {
+			return nil, errors.Wrapf(err, "decode builder_pubkeys[%d]", i)
+		}
+		e.Pubkeys = append(e.Pubkeys, pk)
 	}
-	if len(from.AuthData) != 0 {
-		e.AuthData = bytesutil.SafeCopyBytes(from.AuthData)
+	if from.AuthData != nil {
+		ad, err := hexutil.Decode(*from.AuthData)
+		if err != nil {
+			return nil, errors.Wrap(err, "decode auth_data")
+		}
+		if len(ad) != 0 {
+			e.AuthData = ad
+		}
 	}
-	return e
+	return e, nil
 }
 
 // Schema versions for proposer settings. SchemaV1Unset is the proto3 zero value
@@ -641,6 +665,7 @@ func (be *BuilderEntry) Clone() *BuilderEntry {
 		MinBid:              cloneUint64(be.MinBid),
 		MaxExecutionPayment: cloneUint64(be.MaxExecutionPayment),
 		BuilderBoostFactor:  cloneUint64(be.BuilderBoostFactor),
+		decodeErr:           be.decodeErr,
 	}
 }
 
@@ -687,14 +712,19 @@ func (be *BuilderEntry) toConsensus() *validatorpb.BuilderEntry {
 	if be == nil {
 		return nil
 	}
-	return &validatorpb.BuilderEntry{
+	e := &validatorpb.BuilderEntry{
 		Url:                 be.URL,
-		Pubkeys:             bytesutil.SafeCopy2dBytes(be.Pubkeys),
-		AuthData:            bytesutil.SafeCopyBytes(be.AuthData),
 		MinBid:              cloneUint64(be.MinBid),
 		MaxExecutionPayment: cloneUint64(be.MaxExecutionPayment),
 		BuilderBoostFactor:  cloneUint64(be.BuilderBoostFactor),
 	}
+	for _, pk := range be.Pubkeys {
+		e.BuilderPubkeys = append(e.BuilderPubkeys, hexutil.Encode(pk))
+	}
+	if len(be.AuthData) != 0 {
+		e.AuthData = new(hexutil.Encode(be.AuthData))
+	}
+	return e
 }
 
 // WarnDeprecatedSchema logs a warning when legacy v1 builder content is loaded
@@ -809,14 +839,11 @@ func (ps *Settings) UpgradeToV2() bool {
 // TargetGasLimit resolves pubkey's proposer-preference gas limit at epoch: the
 // explicit operator value, else the EIP-8261 schedule, else the chain default.
 func (ps *Settings) TargetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch) validator.Uint64 {
-	scheduled, active := params.BeaconConfig().ScheduledGasLimit(epoch)
 	operator, ok := ps.operatorGasLimit(pubkey)
 	if !ok {
-		if active {
-			return validator.Uint64(scheduled)
-		}
-		return validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+		return scheduledOrDefaultGasLimit(epoch)
 	}
+	scheduled, active := params.BeaconConfig().ScheduledGasLimit(epoch)
 	if active && uint64(operator) > scheduled {
 		warnGasLimitExceedsSchedule(uint64(operator), scheduled, epoch)
 	}
@@ -824,6 +851,25 @@ func (ps *Settings) TargetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte, epo
 		warnGasLimitBelowSchedule(uint64(operator), scheduled, epoch)
 	}
 	return operator
+}
+
+// GasLimitAt returns the gas limit pubkey uses at epoch: TargetGasLimit's value
+// from gloas on (without its warnings), else the pre-gloas registration value.
+func (ps *Settings) GasLimitAt(pubkey [fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch) validator.Uint64 {
+	if epoch < params.BeaconConfig().GloasForkEpoch {
+		return ps.GasLimit(pubkey)
+	}
+	if operator, ok := ps.operatorGasLimit(pubkey); ok {
+		return operator
+	}
+	return scheduledOrDefaultGasLimit(epoch)
+}
+
+func scheduledOrDefaultGasLimit(epoch primitives.Epoch) validator.Uint64 {
+	if scheduled, active := params.BeaconConfig().ScheduledGasLimit(epoch); active {
+		return validator.Uint64(scheduled)
+	}
+	return validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
 }
 
 func (ps *Settings) operatorGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) (validator.Uint64, bool) {

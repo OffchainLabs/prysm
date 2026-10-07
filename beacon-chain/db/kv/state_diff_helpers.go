@@ -490,16 +490,27 @@ func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.
 			continue
 		}
 		level := i + 1
-		if s.stateDiffCache != nil && !s.stateDiffCache.levelHasData(level) {
-			continue
-		}
+		// Every distinct ancestor is required, even if its cache level is empty.
 		diffChainItems = append(diffChainItems, diffItem{level: level, slot: diffSlot + offset})
 		lastSeenDiffRelSlot = diffSlot
 	}
 
-	baseSnapshot, err := s.getFullSnapshot(baseAnchorSlot)
-	if err != nil {
-		return nil, nil, err
+	var baseSnapshot state.BeaconState
+	// try to see if our cache has anything useful.
+	if s.stateDiffCache != nil {
+		for i := len(diffChainItems) - 1; i >= 0; i-- {
+			item := diffChainItems[i]
+			// Ignore stray cached anchors without making required ancestor diffs optional.
+			if !s.stateDiffCache.levelHasData(item.level) {
+				continue
+			}
+			cachedAnchor := s.stateDiffCache.getAnchor(item.level, withExactSlot(primitives.Slot(item.slot)))
+			if cachedAnchor != nil {
+				baseSnapshot = cachedAnchor
+				diffChainItems = diffChainItems[i+1:]
+				break
+			}
+		}
 	}
 
 	diffChain := make([]hdiff.HdiffBytes, 0, len(diffChainItems))
@@ -509,6 +520,14 @@ func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.
 			return nil, nil, err
 		}
 		diffChain = append(diffChain, diff)
+	}
+
+	if baseSnapshot == nil {
+		var err error
+		baseSnapshot, err = s.getFullSnapshot(baseAnchorSlot)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	return baseSnapshot, diffChain, nil

@@ -1,7 +1,9 @@
 package mvslice
 
 import (
+	"fmt"
 	"math/rand"
+	"sync"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -288,6 +290,126 @@ func TestAppend(t *testing.T) {
 	l, ok = s.cachedLengths[second.id]
 	assert.Equal(t, true, ok)
 	assert.Equal(t, 3, l)
+}
+
+func TestAppendAfterCopyAndDetach(t *testing.T) {
+	for _, shared := range [][]int{nil, {10, 20}} {
+		t.Run(fmt.Sprintf("shared=%d", len(shared)), func(t *testing.T) {
+			s := &Slice[int]{}
+			s.Init(shared)
+			a, b, c := &testObject{id: 1}, &testObject{id: 2}, &testObject{id: 3}
+			s.Append(a, 30)
+			s.Copy(a, b)
+			s.Append(a, 40)
+			s.Append(a, 50)
+			s.Append(b, 40)
+			s.Append(b, 60)
+			s.Copy(b, c)
+			s.Detach(b)
+			s.Append(c, 70)
+			s.Append(b, 80)
+			require.DeepEqual(t, append(append([]int{}, shared...), 30, 40, 50), s.Value(a))
+			require.DeepEqual(t, append(append([]int{}, shared...), 80), s.Value(b))
+			require.DeepEqual(t, append(append([]int{}, shared...), 30, 40, 60, 70), s.Value(c))
+			s.Detach(a)
+			s.Detach(b)
+			s.Detach(c)
+			// Reuse empty appended positions left by detached objects.
+			for i := range 8 {
+				s.Append(a, i)
+				require.Equal(t, len(shared)+i+1, s.Len(a))
+				got, err := s.At(a, uint64(len(shared)+i))
+				require.NoError(t, err)
+				require.Equal(t, i, got)
+			}
+		})
+	}
+}
+
+func TestAppendModel(t *testing.T) {
+	s := &Slice[int]{}
+	s.Init([]int{10, 20})
+	objects := make([]testObject, 8)
+	want := make([][]int, len(objects))
+	for i := range objects {
+		objects[i].id = uint64(i + 1)
+		want[i] = []int{10, 20}
+	}
+	rng := rand.New(rand.NewSource(42))
+	for step := range 2000 {
+		i := rng.Intn(len(objects))
+		switch rng.Intn(5) {
+		case 0:
+			s.Detach(&objects[i])
+			want[i] = []int{10, 20}
+		case 1:
+			j := (i + 1 + rng.Intn(len(objects)-1)) % len(objects)
+			s.Detach(&objects[i])
+			s.Copy(&objects[j], &objects[i])
+			want[i] = append([]int{}, want[j]...)
+		case 2:
+			index := rng.Intn(len(want[i]))
+			require.NoError(t, s.UpdateAt(&objects[i], uint64(index), step))
+			want[i][index] = step
+		default:
+			value := rng.Intn(4)
+			s.Append(&objects[i], value)
+			want[i] = append(want[i], value)
+		}
+		for j := range objects {
+			require.Equal(t, len(want[j]), s.Len(&objects[j]))
+			require.DeepEqual(t, want[j], s.Value(&objects[j]))
+		}
+	}
+}
+
+func TestAppendConcurrentCopies(t *testing.T) {
+	s := &Slice[int]{}
+	s.Init([]int{10, 20})
+	original := &testObject{id: 0}
+	s.Append(original, 30)
+	objects := make([]testObject, 8)
+	var wg sync.WaitGroup
+	for i := range objects {
+		objects[i].id = uint64(i + 1)
+		s.Copy(original, &objects[i])
+		wg.Go(func() {
+			for j := range 512 {
+				s.Append(&objects[i], j+int(objects[i].id)%2)
+			}
+		})
+	}
+	wg.Wait()
+	require.DeepEqual(t, []int{10, 20, 30}, s.Value(original))
+	for i := range objects {
+		want := []int{10, 20, 30}
+		for j := range 512 {
+			want = append(want, j+int(objects[i].id)%2)
+		}
+		require.Equal(t, len(want), s.Len(&objects[i]))
+		require.DeepEqual(t, want, s.Value(&objects[i]))
+	}
+}
+
+func BenchmarkAppendScaling(b *testing.B) {
+	for _, count := range []int{1000, 10000, 50000} {
+		b.Run(fmt.Sprintf("n=%d", count), func(b *testing.B) {
+			b.ReportAllocs()
+			for range b.N {
+				s := &Slice[[121]byte]{}
+				s.Init(nil)
+				obj := &testObject{id: 1}
+				for i := range count {
+					var value [121]byte
+					value[0] = byte(i)
+					s.Append(obj, value)
+				}
+				if s.Len(obj) != count {
+					b.Fatal("incorrect appended length")
+				}
+			}
+		})
+	}
 }
 
 func TestDetach(t *testing.T) {

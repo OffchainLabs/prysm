@@ -452,6 +452,9 @@ func (psl *SettingsLoader) loadFromFile(cliCtx *cli.Context, dbSettings *validat
 	if err := checkSchemaVersion(settingFromFile); err != nil {
 		return nil, err
 	}
+	if err := checkBuilderEncoding(settingFromFile); err != nil {
+		return nil, err
+	}
 	markExplicitEmptyBuilders(settingFromFile)
 	inferSchemaVersion(settingFromFile)
 	warnBuilderFlagsReplaced(cliCtx, settingFromFile, flags.ProposerSettingsFlag.Name)
@@ -469,6 +472,9 @@ func (psl *SettingsLoader) loadFromURL(cliCtx *cli.Context, dbSettings *validato
 		return nil, errors.Errorf("proposer settings is empty after unmarshalling from url specified by %s flag", flags.ProposerSettingsURLFlag.Name)
 	}
 	if err := checkSchemaVersion(settingFromURL); err != nil {
+		return nil, err
+	}
+	if err := checkBuilderEncoding(settingFromURL); err != nil {
 		return nil, err
 	}
 	markExplicitEmptyBuilders(settingFromURL)
@@ -571,6 +577,30 @@ func checkSchemaVersion(p *validatorpb.ProposerSettingsPayload) error {
 	for key, opt := range p.ProposerConfig {
 		if opt.GetBuilder().GetBuildersSet() {
 			return fmt.Errorf("proposer_config[%s].builder.builders_set is not a settings key; use \"builders\": []", key)
+		}
+	}
+	return nil
+}
+
+// checkBuilderEncoding rejects builder entries whose builder_pubkeys or auth_data is not 0x-hex.
+func checkBuilderEncoding(p *validatorpb.ProposerSettingsPayload) error {
+	check := func(where string, opt *validatorpb.ProposerOptionPayload) error {
+		for i, e := range opt.GetBuilder().GetBuilders() {
+			if e == nil {
+				continue
+			}
+			if _, err := proposer.DecodeBuilderEntry(e); err != nil {
+				return errors.Wrapf(err, "%s.builder.builders[%d]", where, i)
+			}
+		}
+		return nil
+	}
+	if err := check("default_config", p.DefaultConfig); err != nil {
+		return err
+	}
+	for key, opt := range p.ProposerConfig {
+		if err := check(fmt.Sprintf("proposer_config[%s]", key), opt); err != nil {
+			return err
 		}
 	}
 	return nil
