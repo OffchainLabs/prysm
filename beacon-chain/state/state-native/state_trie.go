@@ -46,6 +46,49 @@ const (
 	gloasSharedFieldRefCount     = 14 // Adds Builders + BuilderPendingWithdrawals + PTCWindow to the shared-ref set and LatestExecutionPayloadHeader is removed
 )
 
+// Container is the set of per-fork beacon state containers that New and
+// NewUnsafe accept.
+type Container interface {
+	*ethpb.BeaconState |
+		*ethpb.BeaconStateAltair |
+		*ethpb.BeaconStateBellatrix |
+		*ethpb.BeaconStateCapella |
+		*ethpb.BeaconStateDeneb |
+		*ethpb.BeaconStateElectra |
+		*ethpb.BeaconStateFulu |
+		*ethpb.BeaconStateGloas
+}
+
+// New returns a beacon state built from a deep copy of st.
+func New[T Container](st T) (state.BeaconState, error) {
+	return NewUnsafe(any(st).(interface{ Copy() T }).Copy())
+}
+
+// NewUnsafe returns a beacon state that takes ownership of the fields of st.
+// The caller must not use or modify st after the call.
+func NewUnsafe[T Container](st T) (state.BeaconState, error) {
+	switch st := any(st).(type) {
+	case *ethpb.BeaconState:
+		return InitializeFromProtoUnsafePhase0(st)
+	case *ethpb.BeaconStateAltair:
+		return InitializeFromProtoUnsafeAltair(st)
+	case *ethpb.BeaconStateBellatrix:
+		return InitializeFromProtoUnsafeBellatrix(st)
+	case *ethpb.BeaconStateCapella:
+		return InitializeFromProtoUnsafeCapella(st)
+	case *ethpb.BeaconStateDeneb:
+		return InitializeFromProtoUnsafeDeneb(st)
+	case *ethpb.BeaconStateElectra:
+		return InitializeFromProtoUnsafeElectra(st)
+	case *ethpb.BeaconStateFulu:
+		return InitializeFromProtoUnsafeFulu(st)
+	case *ethpb.BeaconStateGloas:
+		return InitializeFromProtoUnsafeGloas(st)
+	default:
+		return nil, fmt.Errorf("unsupported state container %T", st)
+	}
+}
+
 // InitializeFromProtoPhase0 the beacon state from a protobuf representation.
 func InitializeFromProtoPhase0(st *ethpb.BeaconState) (state.BeaconState, error) {
 	return InitializeFromProtoUnsafePhase0(st.Copy())
