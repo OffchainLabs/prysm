@@ -12,7 +12,7 @@ import (
 func TestEarliestConsolidationEpoch(t *testing.T) {
 	t.Run("electra returns expected value", func(t *testing.T) {
 		want := primitives.Epoch(10)
-		st, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{
+		st, err := state_native.New(&ethpb.BeaconStateElectra{
 			EarliestConsolidationEpoch: want,
 		})
 		require.NoError(t, err)
@@ -22,7 +22,7 @@ func TestEarliestConsolidationEpoch(t *testing.T) {
 	})
 
 	t.Run("earlier than electra returns error", func(t *testing.T) {
-		st, err := state_native.InitializeFromProtoDeneb(&ethpb.BeaconStateDeneb{})
+		st, err := state_native.New(&ethpb.BeaconStateDeneb{})
 		require.NoError(t, err)
 		_, err = st.EarliestConsolidationEpoch()
 		require.ErrorContains(t, "is not supported", err)
@@ -32,7 +32,7 @@ func TestEarliestConsolidationEpoch(t *testing.T) {
 func TestConsolidationBalanceToConsume(t *testing.T) {
 	t.Run("electra returns expected value", func(t *testing.T) {
 		want := primitives.Gwei(10)
-		st, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{
+		st, err := state_native.New(&ethpb.BeaconStateElectra{
 			ConsolidationBalanceToConsume: want,
 		})
 		require.NoError(t, err)
@@ -42,7 +42,7 @@ func TestConsolidationBalanceToConsume(t *testing.T) {
 	})
 
 	t.Run("earlier than electra returns error", func(t *testing.T) {
-		st, err := state_native.InitializeFromProtoDeneb(&ethpb.BeaconStateDeneb{})
+		st, err := state_native.New(&ethpb.BeaconStateDeneb{})
 		require.NoError(t, err)
 		_, err = st.ConsolidationBalanceToConsume()
 		require.ErrorContains(t, "is not supported", err)
@@ -69,7 +69,7 @@ func TestPendingConsolidations(t *testing.T) {
 				TargetIndex: 8,
 			},
 		}
-		st, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{
+		st, err := state_native.New(&ethpb.BeaconStateElectra{
 			PendingConsolidations: want,
 		})
 		require.NoError(t, err)
@@ -79,7 +79,7 @@ func TestPendingConsolidations(t *testing.T) {
 	})
 
 	t.Run("earlier than electra returns error", func(t *testing.T) {
-		st, err := state_native.InitializeFromProtoDeneb(&ethpb.BeaconStateDeneb{})
+		st, err := state_native.New(&ethpb.BeaconStateDeneb{})
 		require.NoError(t, err)
 		_, err = st.PendingConsolidations()
 		require.ErrorContains(t, "is not supported", err)
@@ -89,7 +89,7 @@ func TestPendingConsolidations(t *testing.T) {
 func TestNumPendingConsolidations(t *testing.T) {
 	t.Run("electra returns expected value", func(t *testing.T) {
 		want := uint64(4)
-		st, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{
+		st, err := state_native.New(&ethpb.BeaconStateElectra{
 			PendingConsolidations: []*ethpb.PendingConsolidation{
 				{
 					SourceIndex: 1,

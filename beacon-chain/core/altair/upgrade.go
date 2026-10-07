@@ -45,7 +45,7 @@ func ConvertToAltair(state state.BeaconState) (state.BeaconState, error) {
 		FinalizedCheckpoint:         state.FinalizedCheckpoint(),
 		InactivityScores:            make([]uint64, numValidators),
 	}
-	newState, err := state_native.InitializeFromProtoUnsafeAltair(s)
+	newState, err := state_native.NewUnsafe(s)
 	if err != nil {
 		return nil, err
 	}

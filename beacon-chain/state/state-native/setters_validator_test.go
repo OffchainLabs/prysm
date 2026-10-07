@@ -10,7 +10,7 @@ import (
 )
 
 func BenchmarkAppendBalance(b *testing.B) {
-	st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{})
+	st, err := state_native.New(&ethpb.BeaconState{})
 	require.NoError(b, err)
 
 	max := uint64(16777216)
@@ -27,7 +27,7 @@ func BenchmarkAppendBalance(b *testing.B) {
 }
 
 func BenchmarkAppendInactivityScore(b *testing.B) {
-	st, err := state_native.InitializeFromProtoCapella(&ethpb.BeaconStateCapella{})
+	st, err := state_native.New(&ethpb.BeaconStateCapella{})
 	require.NoError(b, err)
 
 	max := uint64(16777216)
@@ -61,7 +61,7 @@ func BenchmarkApplyToEveryValidator(b *testing.B) {
 			ActivationEpoch:       1,
 		}
 	}
-	st, err := state_native.InitializeFromProtoUnsafeDeneb(&ethpb.BeaconStateDeneb{Validators: vals})
+	st, err := state_native.NewUnsafe(&ethpb.BeaconStateDeneb{Validators: vals})
 	require.NoError(b, err)
 
 	b.ReportAllocs()

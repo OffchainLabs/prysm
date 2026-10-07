@@ -83,7 +83,7 @@ func TestExitsForInclusion(t *testing.T) {
 		exits[i] = message
 	}
 	spb.Validators = validators
-	st, err := state_native.InitializeFromProtoCapella(spb)
+	st, err := state_native.New(spb)
 	require.NoError(t, err)
 
 	signedExits := make([]*ethpb.SignedVoluntaryExit, numValidators)

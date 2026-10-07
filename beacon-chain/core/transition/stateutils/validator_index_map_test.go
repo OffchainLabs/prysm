@@ -24,7 +24,7 @@ func TestValidatorIndexMap_OK(t *testing.T) {
 			},
 		},
 	}
-	state, err := state_native.InitializeFromProtoPhase0(base)
+	state, err := state_native.New(base)
 	require.NoError(t, err)
 
 	tests := []struct {

@@ -49,7 +49,7 @@ func TestInitializeFromProto_Phase0(t *testing.T) {
 	}
 	for _, tt := range initTests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoUnsafePhase0(tt.state)
+			_, err := statenative.NewUnsafe(tt.state)
 			if tt.error != "" {
 				assert.ErrorContains(t, tt.error, err)
 			} else {
@@ -85,7 +85,7 @@ func TestInitializeFromProto_Altair(t *testing.T) {
 	}
 	for _, tt := range initTests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoAltair(tt.state)
+			_, err := statenative.New(tt.state)
 			if tt.error != "" {
 				require.ErrorContains(t, tt.error, err)
 			} else {
@@ -121,7 +121,7 @@ func TestInitializeFromProto_Bellatrix(t *testing.T) {
 	}
 	for _, tt := range initTests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoBellatrix(tt.state)
+			_, err := statenative.New(tt.state)
 			if tt.error != "" {
 				require.ErrorContains(t, tt.error, err)
 			} else {
@@ -157,7 +157,7 @@ func TestInitializeFromProto_Capella(t *testing.T) {
 	}
 	for _, tt := range initTests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoCapella(tt.state)
+			_, err := statenative.New(tt.state)
 			if tt.error != "" {
 				require.ErrorContains(t, tt.error, err)
 			} else {
@@ -193,7 +193,7 @@ func TestInitializeFromProto_Deneb(t *testing.T) {
 	}
 	for _, tt := range initTests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoDeneb(tt.state)
+			_, err := statenative.New(tt.state)
 			if tt.error != "" {
 				require.ErrorContains(t, tt.error, err)
 			} else {
@@ -229,7 +229,7 @@ func TestInitializeFromProto_Electra(t *testing.T) {
 	}
 	for _, tt := range initTests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoElectra(tt.state)
+			_, err := statenative.New(tt.state)
 			if tt.error != "" {
 				require.ErrorContains(t, tt.error, err)
 			} else {
@@ -267,7 +267,7 @@ func TestInitializeFromProtoUnsafe_Phase0(t *testing.T) {
 	}
 	for _, tt := range initTests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoUnsafePhase0(tt.state)
+			_, err := statenative.NewUnsafe(tt.state)
 			if tt.error != "" {
 				assert.ErrorContains(t, tt.error, err)
 			} else {
@@ -298,7 +298,7 @@ func TestInitializeFromProtoUnsafe_Altair(t *testing.T) {
 	}
 	for _, tt := range initTests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoUnsafeAltair(tt.state)
+			_, err := statenative.NewUnsafe(tt.state)
 			if tt.error != "" {
 				assert.ErrorContains(t, tt.error, err)
 			} else {
@@ -329,7 +329,7 @@ func TestInitializeFromProtoUnsafe_Bellatrix(t *testing.T) {
 	}
 	for _, tt := range initTests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoUnsafeBellatrix(tt.state)
+			_, err := statenative.NewUnsafe(tt.state)
 			if tt.error != "" {
 				assert.ErrorContains(t, tt.error, err)
 			} else {
@@ -360,7 +360,7 @@ func TestInitializeFromProtoUnsafe_Capella(t *testing.T) {
 	}
 	for _, tt := range initTests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoUnsafeCapella(tt.state)
+			_, err := statenative.NewUnsafe(tt.state)
 			if tt.error != "" {
 				assert.ErrorContains(t, tt.error, err)
 			} else {
@@ -391,7 +391,7 @@ func TestInitializeFromProtoUnsafe_Deneb(t *testing.T) {
 	}
 	for _, tt := range initTests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoUnsafeDeneb(tt.state)
+			_, err := statenative.NewUnsafe(tt.state)
 			if tt.error != "" {
 				assert.ErrorContains(t, tt.error, err)
 			} else {
@@ -422,7 +422,7 @@ func TestInitializeFromProtoUnsafe_Electra(t *testing.T) {
 	}
 	for _, tt := range initTests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoUnsafeElectra(tt.state)
+			_, err := statenative.NewUnsafe(tt.state)
 			if tt.error != "" {
 				assert.ErrorContains(t, tt.error, err)
 			} else {
@@ -507,7 +507,7 @@ func BenchmarkBeaconState(b *testing.B) {
 	require.NoError(b, err)
 
 	b.Run("Vectorized SHA256", func(b *testing.B) {
-		st, err := statenative.InitializeFromProtoUnsafePhase0(pbState)
+		st, err := statenative.NewUnsafe(pbState)
 		require.NoError(b, err)
 		_, err = st.HashTreeRoot(b.Context())
 		assert.NoError(b, err)
@@ -605,7 +605,7 @@ func TestBeaconState_ValidatorMutation_Phase0(t *testing.T) {
 	testState, _ := util.DeterministicGenesisState(t, 400)
 	pbState, err := statenative.ProtobufBeaconStatePhase0(testState.ToProtoUnsafe())
 	require.NoError(t, err)
-	testState, err = statenative.InitializeFromProtoPhase0(pbState)
+	testState, err = statenative.New(pbState)
 	require.NoError(t, err)
 
 	_, err = testState.HashTreeRoot(t.Context())
@@ -635,7 +635,7 @@ func TestBeaconState_ValidatorMutation_Phase0(t *testing.T) {
 	pbState, err = statenative.ProtobufBeaconStatePhase0(testState.ToProtoUnsafe())
 	require.NoError(t, err)
 
-	copiedTestState, err := statenative.InitializeFromProtoPhase0(pbState)
+	copiedTestState, err := statenative.New(pbState)
 	require.NoError(t, err)
 
 	rt2, err := copiedTestState.HashTreeRoot(t.Context())
@@ -659,7 +659,7 @@ func TestBeaconState_ValidatorMutation_Phase0(t *testing.T) {
 	pbState, err = statenative.ProtobufBeaconStatePhase0(newState1.ToProtoUnsafe())
 	require.NoError(t, err)
 
-	copiedTestState, err = statenative.InitializeFromProtoPhase0(pbState)
+	copiedTestState, err = statenative.New(pbState)
 	require.NoError(t, err)
 
 	rt2, err = copiedTestState.HashTreeRoot(t.Context())
@@ -672,7 +672,7 @@ func TestBeaconState_ValidatorMutation_Altair(t *testing.T) {
 	testState, _ := util.DeterministicGenesisStateAltair(t, 400)
 	pbState, err := statenative.ProtobufBeaconStateAltair(testState.ToProtoUnsafe())
 	require.NoError(t, err)
-	testState, err = statenative.InitializeFromProtoAltair(pbState)
+	testState, err = statenative.New(pbState)
 	require.NoError(t, err)
 
 	_, err = testState.HashTreeRoot(t.Context())
@@ -702,7 +702,7 @@ func TestBeaconState_ValidatorMutation_Altair(t *testing.T) {
 	pbState, err = statenative.ProtobufBeaconStateAltair(testState.ToProtoUnsafe())
 	require.NoError(t, err)
 
-	copiedTestState, err := statenative.InitializeFromProtoAltair(pbState)
+	copiedTestState, err := statenative.New(pbState)
 	require.NoError(t, err)
 
 	rt2, err := copiedTestState.HashTreeRoot(t.Context())
@@ -726,7 +726,7 @@ func TestBeaconState_ValidatorMutation_Altair(t *testing.T) {
 	pbState, err = statenative.ProtobufBeaconStateAltair(newState1.ToProtoUnsafe())
 	require.NoError(t, err)
 
-	copiedTestState, err = statenative.InitializeFromProtoAltair(pbState)
+	copiedTestState, err = statenative.New(pbState)
 	require.NoError(t, err)
 
 	rt2, err = copiedTestState.HashTreeRoot(t.Context())
@@ -739,7 +739,7 @@ func TestBeaconState_ValidatorMutation_Bellatrix(t *testing.T) {
 	testState, _ := util.DeterministicGenesisStateBellatrix(t, 400)
 	pbState, err := statenative.ProtobufBeaconStateBellatrix(testState.ToProtoUnsafe())
 	require.NoError(t, err)
-	testState, err = statenative.InitializeFromProtoBellatrix(pbState)
+	testState, err = statenative.New(pbState)
 	require.NoError(t, err)
 
 	_, err = testState.HashTreeRoot(t.Context())
@@ -769,7 +769,7 @@ func TestBeaconState_ValidatorMutation_Bellatrix(t *testing.T) {
 	pbState, err = statenative.ProtobufBeaconStateBellatrix(testState.ToProtoUnsafe())
 	require.NoError(t, err)
 
-	copiedTestState, err := statenative.InitializeFromProtoBellatrix(pbState)
+	copiedTestState, err := statenative.New(pbState)
 	require.NoError(t, err)
 
 	rt2, err := copiedTestState.HashTreeRoot(t.Context())
@@ -793,7 +793,7 @@ func TestBeaconState_ValidatorMutation_Bellatrix(t *testing.T) {
 	pbState, err = statenative.ProtobufBeaconStateBellatrix(newState1.ToProtoUnsafe())
 	require.NoError(t, err)
 
-	copiedTestState, err = statenative.InitializeFromProtoBellatrix(pbState)
+	copiedTestState, err = statenative.New(pbState)
 	require.NoError(t, err)
 
 	rt2, err = copiedTestState.HashTreeRoot(t.Context())
@@ -827,7 +827,7 @@ func TestBeaconState_InitializeInactivityScoresCorrectly_Deneb(t *testing.T) {
 	if !ok {
 		t.Error("not ok")
 	}
-	newSt, err := statenative.InitializeFromProtoUnsafeDeneb(copiedSt)
+	newSt, err := statenative.NewUnsafe(copiedSt)
 	require.NoError(t, err)
 
 	newRt, err := newSt.HashTreeRoot(t.Context())
@@ -845,7 +845,7 @@ func TestBeaconChainCopy_Electra(t *testing.T) {
 	require.NoError(t, err)
 	pb := &ethpb.BeaconStateElectra{}
 	require.NoError(t, pb.UnmarshalSSZ(serializedSSZ))
-	st, err := statenative.InitializeFromProtoElectra(pb)
+	st, err := statenative.New(pb)
 	require.NoError(t, err)
 
 	// Sanity check that InitializeFromProtoElectra and ToProto works

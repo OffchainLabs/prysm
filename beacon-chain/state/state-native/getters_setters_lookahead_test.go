@@ -14,7 +14,7 @@ func TestProposerLookahead(t *testing.T) {
 	t.Run("Fulu expected values", func(t *testing.T) {
 		lookahead := make([]primitives.ValidatorIndex, int(params.BeaconConfig().MinSeedLookahead+1)*int(params.BeaconConfig().SlotsPerEpoch))
 		want := make([]primitives.ValidatorIndex, int(params.BeaconConfig().MinSeedLookahead+1)*int(params.BeaconConfig().SlotsPerEpoch))
-		st, err := state_native.InitializeFromProtoFulu(&ethpb.BeaconStateFulu{
+		st, err := state_native.New(&ethpb.BeaconStateFulu{
 			ProposerLookahead: lookahead,
 		})
 		require.NoError(t, err)
@@ -28,13 +28,13 @@ func TestProposerLookahead(t *testing.T) {
 
 	t.Run("Fulu error on invalid size", func(t *testing.T) {
 		lookahead := make([]primitives.ValidatorIndex, int(params.BeaconConfig().MinSeedLookahead+1)*int(params.BeaconConfig().SlotsPerEpoch)+1)
-		st, err := state_native.InitializeFromProtoFulu(&ethpb.BeaconStateFulu{})
+		st, err := state_native.New(&ethpb.BeaconStateFulu{})
 		require.NoError(t, err)
 		require.ErrorContains(t, "invalid size for proposer lookahead", st.SetProposerLookahead(lookahead))
 	})
 
 	t.Run("earlier than electra returns error", func(t *testing.T) {
-		st, err := state_native.InitializeFromProtoDeneb(&ethpb.BeaconStateDeneb{})
+		st, err := state_native.New(&ethpb.BeaconStateDeneb{})
 		require.NoError(t, err)
 		_, err = st.ProposerLookahead()
 		require.ErrorContains(t, "is not supported", err)

@@ -21,7 +21,7 @@ func TestFuzzProcessDeposits_10000(t *testing.T) {
 		for i := range deposits {
 			fuzzer.Fuzz(deposits[i])
 		}
-		s, err := state_native.InitializeFromProtoUnsafeElectra(state)
+		s, err := state_native.NewUnsafe(state)
 		require.NoError(t, err)
 		r, err := electra.ProcessDeposits(ctx, s, deposits)
 		if err != nil && r != nil {
@@ -39,7 +39,7 @@ func TestFuzzProcessDeposit_10000(t *testing.T) {
 	for i := range 10000 {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(deposit)
-		s, err := state_native.InitializeFromProtoUnsafeElectra(state)
+		s, err := state_native.NewUnsafe(state)
 		require.NoError(t, err)
 		r, err := electra.ProcessDeposit(s, deposit, true)
 		if err != nil && r != nil {

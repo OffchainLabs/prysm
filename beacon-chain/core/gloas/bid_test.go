@@ -170,7 +170,7 @@ func buildGloasState(t *testing.T, slot primitives.Slot, proposerIdx primitives.
 		},
 	}
 
-	st, err := state_native.InitializeFromProtoGloas(stProto)
+	st, err := state_native.New(stProto)
 	require.NoError(t, err)
 	return st.(*state_native.BeaconState)
 }
@@ -365,7 +365,7 @@ func TestProcessExecutionPayloadBid_BuilderNotActive(t *testing.T) {
 	// Make builder inactive by setting withdrawable_epoch.
 	stateProto := state.ToProto().(*ethpb.BeaconStateGloas)
 	stateProto.Builders[int(builderIdx)].WithdrawableEpoch = 0
-	stateIface, err := state_native.InitializeFromProtoGloas(stateProto)
+	stateIface, err := state_native.New(stateProto)
 	require.NoError(t, err)
 	state = stateIface.(*state_native.BeaconState)
 
@@ -419,7 +419,7 @@ func TestProcessExecutionPayloadBid_CannotCoverBid(t *testing.T) {
 	stateProto.BuilderPendingPayments = []*ethpb.BuilderPendingPayment{
 		{Withdrawal: &ethpb.BuilderPendingWithdrawal{Amount: 20, BuilderIndex: builderIdx}},
 	}
-	stateIface, err := state_native.InitializeFromProtoGloas(stateProto)
+	stateIface, err := state_native.New(stateProto)
 	require.NoError(t, err)
 	state = stateIface.(*state_native.BeaconState)
 

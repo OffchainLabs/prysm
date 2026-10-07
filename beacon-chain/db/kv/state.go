@@ -610,7 +610,7 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 		if ok {
 			protoState.Validators = validatorEntries
 		}
-		return statenative.InitializeFromProtoUnsafeGloas(protoState)
+		return statenative.NewUnsafe(protoState)
 	case hasFuluKey(enc):
 		protoState := &ethpb.BeaconStateFulu{}
 		if err := protoState.UnmarshalSSZ(enc[len(fuluKey):]); err != nil {
@@ -623,7 +623,7 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 		if ok {
 			protoState.Validators = validatorEntries
 		}
-		return statenative.InitializeFromProtoUnsafeFulu(protoState)
+		return statenative.NewUnsafe(protoState)
 	case HasElectraKey(enc):
 		protoState := &ethpb.BeaconStateElectra{}
 		if err := protoState.UnmarshalSSZ(enc[len(ElectraKey):]); err != nil {
@@ -636,7 +636,7 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 		if ok {
 			protoState.Validators = validatorEntries
 		}
-		return statenative.InitializeFromProtoUnsafeElectra(protoState)
+		return statenative.NewUnsafe(protoState)
 	case hasDenebKey(enc):
 		protoState := &ethpb.BeaconStateDeneb{}
 		if err := protoState.UnmarshalSSZ(enc[len(denebKey):]); err != nil {
@@ -649,7 +649,7 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 		if ok {
 			protoState.Validators = validatorEntries
 		}
-		return statenative.InitializeFromProtoUnsafeDeneb(protoState)
+		return statenative.NewUnsafe(protoState)
 	case hasCapellaKey(enc):
 		// Marshal state bytes to capella beacon state.
 		protoState := &ethpb.BeaconStateCapella{}
@@ -663,7 +663,7 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 		if ok {
 			protoState.Validators = validatorEntries
 		}
-		return statenative.InitializeFromProtoUnsafeCapella(protoState)
+		return statenative.NewUnsafe(protoState)
 	case hasBellatrixKey(enc):
 		// Marshal state bytes to bellatrix beacon state.
 		protoState := &ethpb.BeaconStateBellatrix{}
@@ -677,7 +677,7 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 		if ok {
 			protoState.Validators = validatorEntries
 		}
-		return statenative.InitializeFromProtoUnsafeBellatrix(protoState)
+		return statenative.NewUnsafe(protoState)
 	case hasAltairKey(enc):
 		// Marshal state bytes to altair beacon state.
 		protoState := &ethpb.BeaconStateAltair{}
@@ -691,7 +691,7 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 		if ok {
 			protoState.Validators = validatorEntries
 		}
-		return statenative.InitializeFromProtoUnsafeAltair(protoState)
+		return statenative.NewUnsafe(protoState)
 	default:
 		// Marshal state bytes to phase 0 beacon state.
 		protoState := &ethpb.BeaconState{}
@@ -705,7 +705,7 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 		if ok {
 			protoState.Validators = validatorEntries
 		}
-		return statenative.InitializeFromProtoUnsafePhase0(protoState)
+		return statenative.NewUnsafe(protoState)
 	}
 }
 

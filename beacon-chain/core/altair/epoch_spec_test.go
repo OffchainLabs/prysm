@@ -101,7 +101,7 @@ func TestProcessSlashings_NotSlashed(t *testing.T) {
 		Balances:   []uint64{params.BeaconConfig().MaxEffectiveBalance},
 		Slashings:  []uint64{0, 1e9},
 	}
-	s, err := state_native.InitializeFromProtoAltair(base)
+	s, err := state_native.New(base)
 	require.NoError(t, err)
 	require.NoError(t, epoch.ProcessSlashings(t.Context(), s))
 	wanted := params.BeaconConfig().MaxEffectiveBalance
@@ -171,7 +171,7 @@ func TestProcessSlashings_SlashedLess(t *testing.T) {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			helpers.ClearCache()
 			original := tt.state.Copy()
-			s, err := state_native.InitializeFromProtoAltair(tt.state)
+			s, err := state_native.New(tt.state)
 			require.NoError(t, err)
 			require.NoError(t, epoch.ProcessSlashings(t.Context(), s))
 			assert.Equal(t, tt.want, s.Balances()[0], "ProcessSlashings({%v}) = newState; newState.Balances[0] = %d", original, s.Balances()[0])
@@ -186,7 +186,7 @@ func TestProcessSlashings_BadValue(t *testing.T) {
 		Balances:   []uint64{params.BeaconConfig().MaxEffectiveBalance},
 		Slashings:  []uint64{math.MaxUint64, 1e9},
 	}
-	s, err := state_native.InitializeFromProtoAltair(base)
+	s, err := state_native.New(base)
 	require.NoError(t, err)
 	require.ErrorContains(t, "addition overflows", epoch.ProcessSlashings(t.Context(), s))
 }

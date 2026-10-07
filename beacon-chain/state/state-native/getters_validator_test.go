@@ -18,7 +18,7 @@ import (
 
 func TestBeaconState_ValidatorAtIndexReadOnly_HandlesNilSlice_Phase0(t *testing.T) {
 	testtmpl.VerifyBeaconStateValidatorAtIndexReadOnlyHandlesNilSlice(t, func() (state.BeaconState, error) {
-		return statenative.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{
+		return statenative.NewUnsafe(&ethpb.BeaconState{
 			Validators: nil,
 		})
 	})
@@ -26,7 +26,7 @@ func TestBeaconState_ValidatorAtIndexReadOnly_HandlesNilSlice_Phase0(t *testing.
 
 func TestBeaconState_ValidatorAtIndexReadOnly_HandlesNilSlice_Altair(t *testing.T) {
 	testtmpl.VerifyBeaconStateValidatorAtIndexReadOnlyHandlesNilSlice(t, func() (state.BeaconState, error) {
-		return statenative.InitializeFromProtoUnsafeAltair(&ethpb.BeaconStateAltair{
+		return statenative.NewUnsafe(&ethpb.BeaconStateAltair{
 			Validators: nil,
 		})
 	})
@@ -34,7 +34,7 @@ func TestBeaconState_ValidatorAtIndexReadOnly_HandlesNilSlice_Altair(t *testing.
 
 func TestBeaconState_ValidatorAtIndexReadOnly_HandlesNilSlice_Bellatrix(t *testing.T) {
 	testtmpl.VerifyBeaconStateValidatorAtIndexReadOnlyHandlesNilSlice(t, func() (state.BeaconState, error) {
-		return statenative.InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{
+		return statenative.NewUnsafe(&ethpb.BeaconStateBellatrix{
 			Validators: nil,
 		})
 	})
@@ -42,7 +42,7 @@ func TestBeaconState_ValidatorAtIndexReadOnly_HandlesNilSlice_Bellatrix(t *testi
 
 func TestBeaconState_ValidatorAtIndexReadOnly_HandlesNilSlice_Capella(t *testing.T) {
 	testtmpl.VerifyBeaconStateValidatorAtIndexReadOnlyHandlesNilSlice(t, func() (state.BeaconState, error) {
-		return statenative.InitializeFromProtoUnsafeCapella(&ethpb.BeaconStateCapella{
+		return statenative.NewUnsafe(&ethpb.BeaconStateCapella{
 			Validators: nil,
 		})
 	})
@@ -50,7 +50,7 @@ func TestBeaconState_ValidatorAtIndexReadOnly_HandlesNilSlice_Capella(t *testing
 
 func TestBeaconState_ValidatorAtIndexReadOnly_HandlesNilSlice_Deneb(t *testing.T) {
 	testtmpl.VerifyBeaconStateValidatorAtIndexReadOnlyHandlesNilSlice(t, func() (state.BeaconState, error) {
-		return statenative.InitializeFromProtoUnsafeDeneb(&ethpb.BeaconStateDeneb{
+		return statenative.NewUnsafe(&ethpb.BeaconStateDeneb{
 			Validators: nil,
 		})
 	})
@@ -99,7 +99,7 @@ func TestPendingBalanceToWithdraw(t *testing.T) {
 			},
 		},
 	}
-	state, err := statenative.InitializeFromProtoUnsafeElectra(pb)
+	state, err := statenative.NewUnsafe(pb)
 	require.NoError(t, err)
 
 	ab, err := state.PendingBalanceToWithdraw(0)
@@ -143,7 +143,7 @@ func TestHasPendingBalanceToWithdraw(t *testing.T) {
 			},
 		},
 	}
-	state, err := statenative.InitializeFromProtoUnsafeElectra(pb)
+	state, err := statenative.NewUnsafe(pb)
 	require.NoError(t, err)
 
 	ok, err := state.HasPendingBalanceToWithdraw(1)
@@ -178,7 +178,7 @@ func BenchmarkValidatorsReadOnlySeq(b *testing.B) {
 			ActivationEpoch:       1,
 		}
 	}
-	st, err := statenative.InitializeFromProtoUnsafeDeneb(&ethpb.BeaconStateDeneb{Validators: vals})
+	st, err := statenative.NewUnsafe(&ethpb.BeaconStateDeneb{Validators: vals})
 	require.NoError(b, err)
 
 	b.ReportAllocs()
@@ -207,7 +207,7 @@ func BenchmarkValidatorsReadOnly(b *testing.B) {
 			ActivationEpoch:       1,
 		}
 	}
-	st, err := statenative.InitializeFromProtoUnsafeDeneb(&ethpb.BeaconStateDeneb{Validators: vals})
+	st, err := statenative.NewUnsafe(&ethpb.BeaconStateDeneb{Validators: vals})
 	require.NoError(b, err)
 
 	b.ReportAllocs()

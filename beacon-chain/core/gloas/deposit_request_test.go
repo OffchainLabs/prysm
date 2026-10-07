@@ -56,7 +56,7 @@ func TestProcessDepositRequest_QueuesPendingDeposit(t *testing.T) {
 func newGloasState(t *testing.T, validators []*ethpb.Validator, builders []*ethpb.Builder) state.BeaconState {
 	t.Helper()
 
-	st, err := state_native.InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+	st, err := state_native.New(&ethpb.BeaconStateGloas{
 		DepositRequestsStartIndex: params.BeaconConfig().UnsetDepositRequestsStartIndex,
 		Validators:                validators,
 		Balances:                  make([]uint64, len(validators)),

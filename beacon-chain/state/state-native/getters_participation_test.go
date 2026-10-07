@@ -27,7 +27,7 @@ func TestState_UnrealizedCheckpointBalances(t *testing.T) {
 		PreviousEpochParticipation: make([]byte, params.BeaconConfig().MinGenesisActiveValidatorCount),
 		Balances:                   balances,
 	}
-	state, err := InitializeFromProtoAltair(base)
+	state, err := New(base)
 	require.NoError(t, err)
 
 	// No one voted in the last two epochs
@@ -43,7 +43,7 @@ func TestState_UnrealizedCheckpointBalances(t *testing.T) {
 	base.PreviousEpochParticipation[0] = 0xFF
 	base.PreviousEpochParticipation[1] = 0xFF
 
-	state, err = InitializeFromProtoAltair(base)
+	state, err = New(base)
 	require.NoError(t, err)
 	active, previous, current, err = state.UnrealizedCheckpointBalances()
 	require.NoError(t, err)
@@ -53,7 +53,7 @@ func TestState_UnrealizedCheckpointBalances(t *testing.T) {
 
 	// Slash some validators
 	validators[0].Slashed = true
-	state, err = InitializeFromProtoAltair(base)
+	state, err = New(base)
 	require.NoError(t, err)
 	active, previous, current, err = state.UnrealizedCheckpointBalances()
 	require.NoError(t, err)

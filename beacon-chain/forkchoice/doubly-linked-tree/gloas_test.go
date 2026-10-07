@@ -85,7 +85,7 @@ func prepareGloasForkchoiceState(
 		ProposerLookahead:            make([]primitives.ValidatorIndex, 64),
 	}
 
-	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	st, err := state_native.NewUnsafe(base)
 	if err != nil {
 		return nil, blocks.ROBlock{}, err
 	}

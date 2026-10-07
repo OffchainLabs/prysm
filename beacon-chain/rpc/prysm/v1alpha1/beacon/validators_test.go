@@ -1332,7 +1332,7 @@ func TestServer_GetValidatorActiveSetChanges(t *testing.T) {
 }
 
 func TestServer_GetValidatorQueue_PendingActivation(t *testing.T) {
-	headState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	headState, err := state_native.New(&ethpb.BeaconState{
 		Validators: []*ethpb.Validator{
 			{
 				// Already activated, so not part of the activation queue. This makes
@@ -1437,7 +1437,7 @@ func TestServer_GetValidatorQueue_ExitedValidatorLeavesQueue(t *testing.T) {
 }
 
 func TestServer_GetValidatorQueue_PendingExit(t *testing.T) {
-	headState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	headState, err := state_native.New(&ethpb.BeaconState{
 		Validators: []*ethpb.Validator{
 			{
 				// Not exiting, so not part of the exit queue. This makes queue

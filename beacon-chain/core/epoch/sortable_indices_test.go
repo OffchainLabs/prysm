@@ -12,7 +12,7 @@ import (
 )
 
 func TestSortableIndices(t *testing.T) {
-	st, err := state_native.InitializeFromProtoPhase0(&eth.BeaconState{
+	st, err := state_native.New(&eth.BeaconState{
 		Validators: []*eth.Validator{
 			{ActivationEligibilityEpoch: 0},
 			{ActivationEligibilityEpoch: 5},

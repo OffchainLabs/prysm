@@ -33,7 +33,7 @@ func RunUpgradeToElectra(t *testing.T, config string) {
 			if err := preStateBase.UnmarshalSSZ(preStateSSZ); err != nil {
 				t.Fatalf("Failed to unmarshal: %v", err)
 			}
-			preState, err := state_native.InitializeFromProtoUnsafeDeneb(preStateBase)
+			preState, err := state_native.NewUnsafe(preStateBase)
 			require.NoError(t, err)
 			postState, err := electra.UpgradeToElectra(t.Context(), preState)
 			require.NoError(t, err)

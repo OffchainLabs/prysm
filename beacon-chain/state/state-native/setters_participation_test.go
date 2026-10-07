@@ -9,7 +9,7 @@ import (
 )
 
 func BenchmarkParticipationBits(b *testing.B) {
-	st, err := state_native.InitializeFromProtoCapella(&ethpb.BeaconStateCapella{})
+	st, err := state_native.New(&ethpb.BeaconStateCapella{})
 	require.NoError(b, err)
 
 	max := uint64(16777216)

@@ -47,7 +47,7 @@ func TestInitiateValidatorExit_AlreadyExited(t *testing.T) {
 	base := &ethpb.BeaconState{Validators: []*ethpb.Validator{{
 		ExitEpoch: exitEpoch},
 	}}
-	state, err := state_native.InitializeFromProtoPhase0(base)
+	state, err := state_native.New(base)
 	require.NoError(t, err)
 	exitInfo := &validators.ExitInfo{HighestExitEpoch: 199, Churn: 1}
 	newState, err := validators.InitiateValidatorExit(t.Context(), state, 0, exitInfo)
@@ -68,7 +68,7 @@ func TestInitiateValidatorExit_ProperExit(t *testing.T) {
 		{ExitEpoch: exitedEpoch + 2},
 		{ExitEpoch: params.BeaconConfig().FarFutureEpoch},
 	}}
-	state, err := state_native.InitializeFromProtoPhase0(base)
+	state, err := state_native.New(base)
 	require.NoError(t, err)
 	exitInfo := &validators.ExitInfo{HighestExitEpoch: exitedEpoch + 2, Churn: 1}
 	newState, err := validators.InitiateValidatorExit(t.Context(), state, idx, exitInfo)
@@ -90,7 +90,7 @@ func TestInitiateValidatorExit_ChurnOverflow(t *testing.T) {
 		{ExitEpoch: exitedEpoch + 2}, // overflow here
 		{ExitEpoch: params.BeaconConfig().FarFutureEpoch},
 	}}
-	state, err := state_native.InitializeFromProtoPhase0(base)
+	state, err := state_native.New(base)
 	require.NoError(t, err)
 	exitInfo := &validators.ExitInfo{HighestExitEpoch: exitedEpoch + 2, Churn: 4}
 	newState, err := validators.InitiateValidatorExit(t.Context(), state, idx, exitInfo)
@@ -114,7 +114,7 @@ func TestInitiateValidatorExit_WithdrawalOverflows(t *testing.T) {
 		{ExitEpoch: params.BeaconConfig().FarFutureEpoch - 1},
 		{EffectiveBalance: params.BeaconConfig().EjectionBalance, ExitEpoch: params.BeaconConfig().FarFutureEpoch},
 	}}
-	state, err := state_native.InitializeFromProtoPhase0(base)
+	state, err := state_native.New(base)
 	require.NoError(t, err)
 	exitInfo := &validators.ExitInfo{HighestExitEpoch: params.BeaconConfig().FarFutureEpoch - 1, Churn: 1}
 	_, err = validators.InitiateValidatorExit(t.Context(), state, 1, exitInfo)
@@ -145,7 +145,7 @@ func TestInitiateValidatorExit_ProperExit_Electra(t *testing.T) {
 			},
 		},
 	}
-	state, err := state_native.InitializeFromProtoElectra(base)
+	state, err := state_native.New(base)
 	require.NoError(t, err)
 
 	// Pre-check: Exit balance to consume should be zero.
@@ -189,7 +189,7 @@ func TestSlashValidator_OK(t *testing.T) {
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 		Balances:    balances,
 	}
-	state, err := state_native.InitializeFromProtoPhase0(base)
+	state, err := state_native.New(base)
 	require.NoError(t, err)
 
 	slashedIdx := primitives.ValidatorIndex(3)
@@ -243,7 +243,7 @@ func TestSlashValidator_Electra(t *testing.T) {
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 		Balances:    balances,
 	}
-	state, err := state_native.InitializeFromProtoElectra(base)
+	state, err := state_native.New(base)
 	require.NoError(t, err)
 
 	slashedIdx := primitives.ValidatorIndex(3)
@@ -344,7 +344,7 @@ func TestValidatorMaxExitEpochAndChurn(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		s, err := state_native.InitializeFromProtoPhase0(tt.state)
+		s, err := state_native.New(tt.state)
 		require.NoError(t, err)
 		exitInfo := validators.ExitInformation(s)
 		require.Equal(t, tt.wantedEpoch, exitInfo.HighestExitEpoch)

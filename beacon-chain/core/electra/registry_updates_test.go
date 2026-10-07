@@ -39,7 +39,7 @@ func TestProcessRegistryUpdates(t *testing.T) {
 					},
 					FinalizedCheckpoint: &eth.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 				}
-				st, err := state_native.InitializeFromProtoElectra(base)
+				st, err := state_native.New(base)
 				require.NoError(t, err)
 				return st
 			}(),
@@ -63,7 +63,7 @@ func TestProcessRegistryUpdates(t *testing.T) {
 						ActivationEpoch:            params.BeaconConfig().FarFutureEpoch,
 					})
 				}
-				st, err := state_native.InitializeFromProtoElectra(base)
+				st, err := state_native.New(base)
 				require.NoError(t, err)
 				return st
 			}(),
@@ -89,7 +89,7 @@ func TestProcessRegistryUpdates(t *testing.T) {
 						WithdrawableEpoch: params.BeaconConfig().FarFutureEpoch,
 					})
 				}
-				st, err := state_native.InitializeFromProtoElectra(base)
+				st, err := state_native.New(base)
 				require.NoError(t, err)
 				return st
 			}(),
@@ -115,7 +115,7 @@ func TestProcessRegistryUpdates(t *testing.T) {
 						WithdrawableEpoch: 20,
 					})
 				}
-				st, err := state_native.InitializeFromProtoElectra(base)
+				st, err := state_native.New(base)
 				require.NoError(t, err)
 				return st
 			}(),

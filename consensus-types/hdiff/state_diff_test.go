@@ -280,7 +280,7 @@ func getMainnetStates() (state.BeaconState, state.BeaconState, error) {
 	if err := sourceProto.UnmarshalSSZ(sourceBytes); err != nil {
 		return nil, nil, errors.Wrap(err, "failed to unmarshal source proto")
 	}
-	source, err := state_native.InitializeFromProtoDeneb(sourceProto)
+	source, err := state_native.New(sourceProto)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to initialize source state")
 	}
@@ -288,7 +288,7 @@ func getMainnetStates() (state.BeaconState, state.BeaconState, error) {
 	if err := targetProto.UnmarshalSSZ(targetBytes); err != nil {
 		return nil, nil, errors.Wrap(err, "failed to unmarshal target proto")
 	}
-	target, err := state_native.InitializeFromProtoElectra(targetProto)
+	target, err := state_native.New(targetProto)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to initialize target state")
 	}

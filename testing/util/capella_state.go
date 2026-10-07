@@ -82,7 +82,7 @@ func emptyGenesisStateCapella() (state.BeaconState, error) {
 
 		LatestExecutionPayloadHeader: &enginev1.ExecutionPayloadHeaderCapella{},
 	}
-	return state_native.InitializeFromProtoUnsafeCapella(st)
+	return state_native.NewUnsafe(st)
 }
 
 func buildGenesisBeaconStateCapella(genesisTime uint64, preState state.BeaconState, eth1Data *ethpb.Eth1Data) (state.BeaconState, error) {
@@ -251,5 +251,5 @@ func buildGenesisBeaconStateCapella(genesisTime uint64, preState state.BeaconSta
 		WithdrawalsRoot:  make([]byte, 32),
 	}
 
-	return state_native.InitializeFromProtoUnsafeCapella(st)
+	return state_native.NewUnsafe(st)
 }

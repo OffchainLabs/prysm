@@ -23,7 +23,7 @@ func TestLatestBlockHash(t *testing.T) {
 	})
 
 	t.Run("returns zero hash when unset", func(t *testing.T) {
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{})
+		st, err := New(&ethpb.BeaconStateGloas{})
 		require.NoError(t, err)
 
 		got, err := st.LatestBlockHash()
@@ -36,7 +36,7 @@ func TestLatestBlockHash(t *testing.T) {
 		var want [32]byte
 		copy(want[:], hashBytes)
 
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			LatestBlockHash: hashBytes,
 		})
 		require.NoError(t, err)
@@ -65,7 +65,7 @@ func TestIsAttestationSameSlot(t *testing.T) {
 			blockRoots[slot%cfg.SlotsPerHistoricalRoot] = root
 		}
 
-		stIface, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		stIface, err := New(&ethpb.BeaconStateGloas{
 			Slot:       stateSlot,
 			BlockRoots: blockRoots,
 		})
@@ -150,7 +150,7 @@ func TestBuilderPubkey(t *testing.T) {
 
 	t.Run("returns pubkey copy", func(t *testing.T) {
 		pubkey := bytes.Repeat([]byte{0xAA}, 48)
-		stIface, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		stIface, err := New(&ethpb.BeaconStateGloas{
 			Builders: []*ethpb.Builder{
 				{
 					Pubkey:            pubkey,
@@ -174,7 +174,7 @@ func TestBuilderPubkey(t *testing.T) {
 	})
 
 	t.Run("out of range returns error", func(t *testing.T) {
-		stIface, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		stIface, err := New(&ethpb.BeaconStateGloas{
 			Builders: []*ethpb.Builder{},
 		})
 		require.NoError(t, err)
@@ -187,7 +187,7 @@ func TestBuilderPubkey(t *testing.T) {
 
 func TestBuilderHelpers(t *testing.T) {
 	t.Run("is active builder", func(t *testing.T) {
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			Builders: []*ethpb.Builder{
 				{
 					Balance:           10,
@@ -214,7 +214,7 @@ func TestBuilderHelpers(t *testing.T) {
 			},
 			FinalizedCheckpoint: &ethpb.Checkpoint{Epoch: 2},
 		}
-		stInactive, err := InitializeFromProtoGloas(stProto)
+		stInactive, err := New(stProto)
 		require.NoError(t, err)
 
 		active, err = stInactive.IsActiveBuilder(0)
@@ -223,7 +223,7 @@ func TestBuilderHelpers(t *testing.T) {
 	})
 
 	t.Run("can builder cover bid", func(t *testing.T) {
-		stIface, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		stIface, err := New(&ethpb.BeaconStateGloas{
 			Builders: []*ethpb.Builder{
 				{
 					Balance:           primitives.Gwei(params.BeaconConfig().MinDepositAmount + 50),
@@ -253,7 +253,7 @@ func TestBuilderHelpers(t *testing.T) {
 }
 
 func TestBuilderPendingPayments_UnsupportedVersion(t *testing.T) {
-	stIface, err := InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+	stIface, err := New(&ethpb.BeaconStateElectra{})
 	require.NoError(t, err)
 	st := stIface.(*BeaconState)
 
@@ -272,7 +272,7 @@ func TestWithdrawalsMatchPayloadExpected(t *testing.T) {
 		withdrawals := []*enginev1.Withdrawal{
 			{Index: 0, ValidatorIndex: 1, Address: bytes.Repeat([]byte{0x01}, 20), Amount: 10},
 		}
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			PayloadExpectedWithdrawals: withdrawals,
 		})
 		require.NoError(t, err)
@@ -290,7 +290,7 @@ func TestWithdrawalsMatchPayloadExpected(t *testing.T) {
 			{Index: 0, ValidatorIndex: 1, Address: bytes.Repeat([]byte{0x01}, 20), Amount: 11},
 		}
 
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			PayloadExpectedWithdrawals: expected,
 		})
 		require.NoError(t, err)
@@ -303,7 +303,7 @@ func TestWithdrawalsMatchPayloadExpected(t *testing.T) {
 
 func TestBuilder(t *testing.T) {
 	t.Run("nil builders returns error", func(t *testing.T) {
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			Builders: nil,
 		})
 		require.NoError(t, err)
@@ -313,7 +313,7 @@ func TestBuilder(t *testing.T) {
 	})
 
 	t.Run("out of bounds returns error", func(t *testing.T) {
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			Builders: []*ethpb.Builder{{}},
 		})
 		require.NoError(t, err)
@@ -324,7 +324,7 @@ func TestBuilder(t *testing.T) {
 
 	t.Run("returns copy", func(t *testing.T) {
 		pubkey := bytes.Repeat([]byte{0xAA}, fieldparams.BLSPubkeyLength)
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			Builders: []*ethpb.Builder{
 				{
 					Pubkey:            pubkey,
@@ -352,7 +352,7 @@ func TestBuilder(t *testing.T) {
 
 func TestBuilderIndexByPubkey(t *testing.T) {
 	t.Run("not found returns false", func(t *testing.T) {
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			Builders: []*ethpb.Builder{
 				{Pubkey: bytes.Repeat([]byte{0x11}, fieldparams.BLSPubkeyLength)},
 			},
@@ -370,7 +370,7 @@ func TestBuilderIndexByPubkey(t *testing.T) {
 		wantIdx := primitives.BuilderIndex(1)
 		wantPkBytes := bytes.Repeat([]byte{0xAB}, fieldparams.BLSPubkeyLength)
 
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			Builders: []*ethpb.Builder{
 				nil,
 				{Pubkey: wantPkBytes},
@@ -386,7 +386,7 @@ func TestBuilderIndexByPubkey(t *testing.T) {
 	})
 
 	t.Run("AddBuilderFromDeposit populates map", func(t *testing.T) {
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{})
+		st, err := New(&ethpb.BeaconStateGloas{})
 		require.NoError(t, err)
 
 		var pk [fieldparams.BLSPubkeyLength]byte
@@ -401,7 +401,7 @@ func TestBuilderIndexByPubkey(t *testing.T) {
 
 	t.Run("reused slot evicts old pubkey", func(t *testing.T) {
 		oldPk := bytes.Repeat([]byte{0x11}, fieldparams.BLSPubkeyLength)
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			Builders: []*ethpb.Builder{
 				{
 					Pubkey:            oldPk,
@@ -430,7 +430,7 @@ func TestBuilderIndexByPubkey(t *testing.T) {
 	})
 
 	t.Run("SetBuilders rebuilds map", func(t *testing.T) {
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			Builders: []*ethpb.Builder{
 				{Pubkey: bytes.Repeat([]byte{0x11}, fieldparams.BLSPubkeyLength)},
 			},
@@ -453,7 +453,7 @@ func TestBuilderIndexByPubkey(t *testing.T) {
 
 	t.Run("UpdateBuilderAtIndex swaps pubkey mapping", func(t *testing.T) {
 		oldPk := bytes.Repeat([]byte{0x11}, fieldparams.BLSPubkeyLength)
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			Builders: []*ethpb.Builder{
 				{Pubkey: oldPk},
 			},
@@ -475,7 +475,7 @@ func TestBuilderIndexByPubkey(t *testing.T) {
 	})
 
 	t.Run("Copy yields independent maps", func(t *testing.T) {
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			Builders: []*ethpb.Builder{
 				{Pubkey: bytes.Repeat([]byte{0x55}, fieldparams.BLSPubkeyLength)},
 			},
@@ -502,7 +502,7 @@ func TestBuilderPendingPayment(t *testing.T) {
 		target := uint64(slotsPerEpoch + 1)
 		payments[target] = &ethpb.BuilderPendingPayment{Weight: 10}
 
-		st, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+		st, err := NewUnsafe(&ethpb.BeaconStateGloas{
 			BuilderPendingPayments: payments,
 		})
 		require.NoError(t, err)
@@ -519,7 +519,7 @@ func TestBuilderPendingPayment(t *testing.T) {
 	})
 
 	t.Run("unsupported version", func(t *testing.T) {
-		stIface, err := InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+		stIface, err := New(&ethpb.BeaconStateElectra{})
 		require.NoError(t, err)
 		st := stIface.(*BeaconState)
 
@@ -528,7 +528,7 @@ func TestBuilderPendingPayment(t *testing.T) {
 	})
 
 	t.Run("out of range", func(t *testing.T) {
-		stIface, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+		stIface, err := NewUnsafe(&ethpb.BeaconStateGloas{
 			BuilderPendingPayments: []*ethpb.BuilderPendingPayment{},
 		})
 		require.NoError(t, err)
@@ -540,7 +540,7 @@ func TestBuilderPendingPayment(t *testing.T) {
 
 func TestExecutionPayloadAvailability(t *testing.T) {
 	t.Run("unsupported version", func(t *testing.T) {
-		stIface, err := InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+		stIface, err := New(&ethpb.BeaconStateElectra{})
 		require.NoError(t, err)
 		st := stIface.(*BeaconState)
 
@@ -556,7 +556,7 @@ func TestExecutionPayloadAvailability(t *testing.T) {
 		slot := primitives.Slot(9) // byteIndex=1, bitIndex=1
 		availability[1] = 0b00000010
 
-		stIface, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+		stIface, err := NewUnsafe(&ethpb.BeaconStateGloas{
 			ExecutionPayloadAvailability: availability,
 		})
 		require.NoError(t, err)
@@ -822,7 +822,7 @@ func TestAppendBuildersSweepWithdrawals(t *testing.T) {
 
 func TestBuilderPendingWithdrawals(t *testing.T) {
 	t.Run("returns error before gloas", func(t *testing.T) {
-		stIface, err := InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+		stIface, err := New(&ethpb.BeaconStateElectra{})
 		require.NoError(t, err)
 		st := stIface.(*BeaconState)
 
@@ -834,7 +834,7 @@ func TestBuilderPendingWithdrawals(t *testing.T) {
 		original := []*ethpb.BuilderPendingWithdrawal{
 			{Amount: 10, BuilderIndex: 1},
 		}
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			BuilderPendingWithdrawals: original,
 		})
 		require.NoError(t, err)
@@ -857,7 +857,7 @@ func TestBuilderPendingWithdrawals(t *testing.T) {
 
 func TestBuildersGetter(t *testing.T) {
 	t.Run("returns error before gloas", func(t *testing.T) {
-		stIface, err := InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+		stIface, err := New(&ethpb.BeaconStateElectra{})
 		require.NoError(t, err)
 		st := stIface.(*BeaconState)
 
@@ -873,7 +873,7 @@ func TestBuildersGetter(t *testing.T) {
 			DepositEpoch:      3,
 			WithdrawableEpoch: 4,
 		}
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			Builders: []*ethpb.Builder{buildr},
 		})
 		require.NoError(t, err)
@@ -891,7 +891,7 @@ func TestBuildersGetter(t *testing.T) {
 
 func TestNextWithdrawalBuilderIndex(t *testing.T) {
 	t.Run("returns error before gloas", func(t *testing.T) {
-		stIface, err := InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+		stIface, err := New(&ethpb.BeaconStateElectra{})
 		require.NoError(t, err)
 		st := stIface.(*BeaconState)
 
@@ -900,7 +900,7 @@ func TestNextWithdrawalBuilderIndex(t *testing.T) {
 	})
 
 	t.Run("returns configured value", func(t *testing.T) {
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			NextWithdrawalBuilderIndex: 2,
 		})
 		require.NoError(t, err)
@@ -913,7 +913,7 @@ func TestNextWithdrawalBuilderIndex(t *testing.T) {
 
 func TestPayloadExpectedWithdrawals(t *testing.T) {
 	t.Run("returns error before gloas", func(t *testing.T) {
-		stIface, err := InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+		stIface, err := New(&ethpb.BeaconStateElectra{})
 		require.NoError(t, err)
 		st := stIface.(*BeaconState)
 
@@ -928,7 +928,7 @@ func TestPayloadExpectedWithdrawals(t *testing.T) {
 			Address:        bytes.Repeat([]byte{0x01}, 20),
 			Amount:         10,
 		}
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			PayloadExpectedWithdrawals: []*enginev1.Withdrawal{&original},
 		})
 		require.NoError(t, err)
@@ -956,7 +956,7 @@ func TestWithdrawalsForPayload(t *testing.T) {
 			{Index: 5, ValidatorIndex: 10, Address: bytes.Repeat([]byte{0x26}, 20), Amount: 100},
 		}
 		// Parent is empty: bid block hash differs from latest block hash.
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			LatestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
 				BlockHash: bytes.Repeat([]byte{0xAA}, 32),
 			},
@@ -977,7 +977,7 @@ func TestWithdrawalsForPayload(t *testing.T) {
 		}
 		// Parent is full: bid block hash == latest block hash.
 		// With no validators/pending withdrawals, fresh computation returns empty.
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			LatestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
 				BlockHash: hash,
 			},
@@ -995,7 +995,7 @@ func TestWithdrawalsForPayload(t *testing.T) {
 
 func TestExecutionPayloadAvailabilityVector(t *testing.T) {
 	t.Run("returns error before gloas", func(t *testing.T) {
-		stIface, err := InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+		stIface, err := New(&ethpb.BeaconStateElectra{})
 		require.NoError(t, err)
 		st := stIface.(*BeaconState)
 
@@ -1005,7 +1005,7 @@ func TestExecutionPayloadAvailabilityVector(t *testing.T) {
 
 	t.Run("returns copy", func(t *testing.T) {
 		availability := []byte{0xAA, 0xBB, 0xCC}
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			ExecutionPayloadAvailability: availability,
 		})
 		require.NoError(t, err)
@@ -1165,7 +1165,7 @@ func TestSetPTCWindow(t *testing.T) {
 	})
 
 	t.Run("rejects wrong size", func(t *testing.T) {
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			PtcWindow: testPTCWindow(t),
 		})
 		require.NoError(t, err)
@@ -1174,7 +1174,7 @@ func TestSetPTCWindow(t *testing.T) {
 	})
 
 	t.Run("sets and copies window", func(t *testing.T) {
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			PtcWindow: testPTCWindow(t),
 		})
 		require.NoError(t, err)
@@ -1206,7 +1206,7 @@ func TestRotatePTCWindow(t *testing.T) {
 	})
 
 	t.Run("rejects wrong new epoch size", func(t *testing.T) {
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			PtcWindow: testPTCWindow(t),
 		})
 		require.NoError(t, err)
@@ -1216,7 +1216,7 @@ func TestRotatePTCWindow(t *testing.T) {
 
 	t.Run("rotates window correctly", func(t *testing.T) {
 		origWindow := testPTCWindow(t)
-		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		st, err := New(&ethpb.BeaconStateGloas{
 			PtcWindow: origWindow,
 		})
 		require.NoError(t, err)

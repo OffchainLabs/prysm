@@ -48,7 +48,7 @@ func fcState(t *testing.T, slot primitives.Slot, root, parent [32]byte, jc, fc *
 		LatestExecutionPayloadHeader: &enginev1.ExecutionPayloadHeader{BlockHash: root[:]},
 		LatestBlockHeader:            &ethpb.BeaconBlockHeader{ParentRoot: parent[:]},
 	}
-	st, err := state_native.InitializeFromProtoBellatrix(base)
+	st, err := state_native.New(base)
 	require.NoError(t, err)
 	blk := &ethpb.SignedBeaconBlockBellatrix{
 		Block: &ethpb.BeaconBlockBellatrix{
