@@ -14,8 +14,6 @@ var (
 	checkpointBucket                        = []byte("check-point")
 	powchainBucket                          = []byte("powchain")
 	stateValidatorsBucket                   = []byte("state-validators")
-	feeRecipientBucket                      = []byte("fee-recipient")
-	registrationBucket                      = []byte("registration")
 	stateDiffBucket                         = []byte("state-diff")
 	hotStateSnapshotsBucket                 = []byte("hot-state-snapshots")
 	executionPayloadEnvelopesBucket         = []byte("execution-payload-envelopes")

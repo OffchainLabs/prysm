@@ -6,6 +6,7 @@ import (
 	"time"
 
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -194,7 +195,7 @@ func (s *Service) payloadIncluded(ctx context.Context, canonicalBlocks []blocks.
 	if i+1 < len(canonicalBlocks) {
 		successor = canonicalBlocks[i+1].Block()
 	} else {
-		successorBlock, err := s.canonicalSuccessorBlock(ctx, block.Block().Slot()+1)
+		successorBlock, _, err := s.canonicalSuccessorBlock(ctx, block.Block().Slot()+1)
 		if err != nil {
 			return false, errors.Wrap(err, "canonical successor block")
 		}
@@ -251,6 +252,8 @@ func validateDataColumnsByRange(request *pb.DataColumnSidecarsByRangeRequest, cu
 		return nil, errors.Wrap(p2ptypes.ErrInvalidRequest, "overflow end - start + 1")
 	}
 
-	rangeParameters := &rangeParams{start: startSlot, end: endSlot, size: uint64(size)}
+	batchSize := min(uint64(size), uint64(flags.Get().BlockBatchLimit))
+
+	rangeParameters := &rangeParams{start: startSlot, end: endSlot, size: batchSize}
 	return rangeParameters, nil
 }

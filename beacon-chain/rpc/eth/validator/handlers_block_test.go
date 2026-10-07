@@ -15,6 +15,7 @@ import (
 	rewardtesting "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/rewards/testing"
 	rpctesting "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared/testing"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -634,6 +635,25 @@ func TestProduceBlockV3(t *testing.T) {
 		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
 		require.Equal(t, "fulu", writer.Header().Get(api.VersionHeader))
 		require.Equal(t, "0", writer.Header().Get(api.ConsensusBlockValueHeader))
+	})
+	t.Run("rejected from gloas", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.GloasForkEpoch = 1
+		params.OverrideBeaconConfig(cfg)
+
+		slot := params.BeaconConfig().SlotsPerEpoch
+		server := &Server{
+			V1Alpha1Server: mock2.NewMockBeaconNodeValidatorServer(ctrl),
+			SyncChecker:    syncChecker,
+		}
+		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v3/validator/blocks/%d?randao_reveal=%s&graffiti=%s", slot, randao, graffiti), nil)
+		request.SetPathValue("slot", fmt.Sprintf("%d", slot))
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		server.ProduceBlockV3(writer, request)
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		assert.StringContains(t, "use v4", writer.Body.String())
 	})
 }
 

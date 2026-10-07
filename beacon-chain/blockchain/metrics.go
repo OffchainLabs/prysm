@@ -273,6 +273,14 @@ var (
 		Name: "beacon_goroutine_count",
 		Help: "Goroutine count sampled once per slot.",
 	}, []string{"kind"})
+	payloadGasLimit = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "beacon_payload_gas_limit",
+		Help: "Gas limit of the last received execution payload.",
+	})
+	payloadGasUsed = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "beacon_payload_gas_used",
+		Help: "Gas used by the last received execution payload.",
+	})
 )
 
 // reportSlotMetrics reports slot related metrics.

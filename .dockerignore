@@ -1,2 +1,4 @@
 bazel-*
 .git
+dist/
+third_party/testdata/

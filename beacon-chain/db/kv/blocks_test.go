@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"testing"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -19,8 +18,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/pkg/errors"
 	bolt "go.etcd.io/bbolt"
 	"google.golang.org/protobuf/proto"
 )
@@ -1339,104 +1336,6 @@ func TestStore_BlocksBySlot_BlockRootsBySlot(t *testing.T) {
 			assert.Equal(t, true, hasBlockRoots, "Expected no block roots")
 		})
 	}
-}
-
-func TestStore_FeeRecipientByValidatorID(t *testing.T) {
-	db := setupDB(t)
-	ctx := t.Context()
-	ids := []primitives.ValidatorIndex{0, 0, 0}
-	feeRecipients := []common.Address{{}, {}, {}, {}}
-	require.ErrorContains(t, "validatorIDs and feeRecipients must be the same length", db.SaveFeeRecipientsByValidatorIDs(ctx, ids, feeRecipients))
-
-	ids = []primitives.ValidatorIndex{0, 1, 2}
-	feeRecipients = []common.Address{{'a'}, {'b'}, {'c'}}
-	require.NoError(t, db.SaveFeeRecipientsByValidatorIDs(ctx, ids, feeRecipients))
-	f, err := db.FeeRecipientByValidatorID(ctx, 0)
-	require.NoError(t, err)
-	require.Equal(t, common.Address{'a'}, f)
-	f, err = db.FeeRecipientByValidatorID(ctx, 1)
-	require.NoError(t, err)
-	require.Equal(t, common.Address{'b'}, f)
-	f, err = db.FeeRecipientByValidatorID(ctx, 2)
-	require.NoError(t, err)
-	require.Equal(t, common.Address{'c'}, f)
-	_, err = db.FeeRecipientByValidatorID(ctx, 3)
-	want := errors.Wrap(ErrNotFoundFeeRecipient, "validator id 3")
-	require.Equal(t, want.Error(), err.Error())
-
-	regs := []*ethpb.ValidatorRegistrationV1{
-		{
-			FeeRecipient: bytesutil.PadTo([]byte("a"), 20),
-			GasLimit:     1,
-			Timestamp:    2,
-			Pubkey:       bytesutil.PadTo([]byte("b"), 48),
-		}}
-	require.NoError(t, db.SaveRegistrationsByValidatorIDs(ctx, []primitives.ValidatorIndex{3}, regs))
-	f, err = db.FeeRecipientByValidatorID(ctx, 3)
-	require.NoError(t, err)
-	require.Equal(t, common.Address{'a'}, f)
-
-	_, err = db.FeeRecipientByValidatorID(ctx, 4)
-	want = errors.Wrap(ErrNotFoundFeeRecipient, "validator id 4")
-	require.Equal(t, want.Error(), err.Error())
-}
-
-func TestStore_RegistrationsByValidatorID(t *testing.T) {
-	db := setupDB(t)
-	ctx := t.Context()
-	ids := []primitives.ValidatorIndex{0, 0, 0}
-	regs := []*ethpb.ValidatorRegistrationV1{{}, {}, {}, {}}
-	require.ErrorContains(t, "ids and registrations must be the same length", db.SaveRegistrationsByValidatorIDs(ctx, ids, regs))
-	timestamp := time.Now().Unix()
-	ids = []primitives.ValidatorIndex{0, 1, 2}
-	regs = []*ethpb.ValidatorRegistrationV1{
-		{
-			FeeRecipient: bytesutil.PadTo([]byte("a"), 20),
-			GasLimit:     1,
-			Timestamp:    uint64(timestamp),
-			Pubkey:       bytesutil.PadTo([]byte("b"), 48),
-		},
-		{
-			FeeRecipient: bytesutil.PadTo([]byte("c"), 20),
-			GasLimit:     3,
-			Timestamp:    uint64(timestamp),
-			Pubkey:       bytesutil.PadTo([]byte("d"), 48),
-		},
-		{
-			FeeRecipient: bytesutil.PadTo([]byte("e"), 20),
-			GasLimit:     5,
-			Timestamp:    uint64(timestamp),
-			Pubkey:       bytesutil.PadTo([]byte("f"), 48),
-		},
-	}
-	require.NoError(t, db.SaveRegistrationsByValidatorIDs(ctx, ids, regs))
-	f, err := db.RegistrationByValidatorID(ctx, 0)
-	require.NoError(t, err)
-	require.DeepEqual(t, &ethpb.ValidatorRegistrationV1{
-		FeeRecipient: bytesutil.PadTo([]byte("a"), 20),
-		GasLimit:     1,
-		Timestamp:    uint64(timestamp),
-		Pubkey:       bytesutil.PadTo([]byte("b"), 48),
-	}, f)
-	f, err = db.RegistrationByValidatorID(ctx, 1)
-	require.NoError(t, err)
-	require.DeepEqual(t, &ethpb.ValidatorRegistrationV1{
-		FeeRecipient: bytesutil.PadTo([]byte("c"), 20),
-		GasLimit:     3,
-		Timestamp:    uint64(timestamp),
-		Pubkey:       bytesutil.PadTo([]byte("d"), 48),
-	}, f)
-	f, err = db.RegistrationByValidatorID(ctx, 2)
-	require.NoError(t, err)
-	require.DeepEqual(t, &ethpb.ValidatorRegistrationV1{
-		FeeRecipient: bytesutil.PadTo([]byte("e"), 20),
-		GasLimit:     5,
-		Timestamp:    uint64(timestamp),
-		Pubkey:       bytesutil.PadTo([]byte("f"), 48),
-	}, f)
-	_, err = db.RegistrationByValidatorID(ctx, 3)
-	want := errors.Wrap(ErrNotFoundFeeRecipient, "validator id 3")
-	require.Equal(t, want.Error(), err.Error())
 }
 
 // Block creates a phase0 beacon block at the specified slot and saves it to the database.

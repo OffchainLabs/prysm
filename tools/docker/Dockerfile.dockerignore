@@ -1,0 +1,5 @@
+bazel-*
+.git
+third_party/testdata/
+dist/*.tar
+dist/*.deb

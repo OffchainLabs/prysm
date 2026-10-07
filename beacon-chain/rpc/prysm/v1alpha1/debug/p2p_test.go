@@ -17,13 +17,11 @@ func TestDebugServer_GetPeer(t *testing.T) {
 		PeersFetcher: peersProvider,
 		PeerManager:  &mockP2p.MockPeerManager{BHost: mP2P.BHost},
 	}
-	firstPeer := peersProvider.Peers().All()[0]
-
-	res, err := ds.GetPeer(t.Context(), &ethpb.PeerRequest{PeerId: firstPeer.String()})
+	res, err := ds.GetPeer(t.Context(), &ethpb.PeerRequest{PeerId: mockP2p.MockRawPeerId0})
 	require.NoError(t, err)
-	require.Equal(t, firstPeer.String(), res.PeerId, "Unexpected peer ID")
+	require.Equal(t, mockP2p.MockRawPeerId0, res.PeerId, "Unexpected peer ID")
 
-	assert.Equal(t, int(ethpb.PeerDirection_INBOUND), int(res.Direction), "Expected 1st peer to be an inbound connection")
+	assert.Equal(t, int(ethpb.PeerDirection_INBOUND), int(res.Direction), "Expected peer to be an inbound connection")
 	assert.Equal(t, ethpb.ConnectionState_CONNECTED, res.ConnectionState, "Expected peer to be connected")
 }
 

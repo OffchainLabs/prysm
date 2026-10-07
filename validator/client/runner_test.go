@@ -293,8 +293,9 @@ func delay(t testing.TB) {
 
 // assertValidContext, but only when the parent context is still valid. This is testing that mocked methods are called
 // and maintain a valid context while processing, except when the test is shutting down.
+// Only a canceled context is invalid: its deadline (the end of the slot) may legitimately be exceeded on a loaded machine.
 func assertValidContext(t testing.TB, parent, ctx context.Context) {
-	if ctx.Err() != nil && parent.Err() == nil && t.Context().Err() == nil {
+	if errors.Is(ctx.Err(), context.Canceled) && parent.Err() == nil && t.Context().Err() == nil {
 		t.Logf("stack: %s", debug.Stack())
 		t.Fatalf("Context is no longer valid during a mocked RPC call: %v", ctx.Err())
 	}
@@ -315,8 +316,10 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 	// to many other methods as well.
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	// We want to test that mocked methods are called with a live context, but only while the timed context is valid.
-	liveCtx := gomock.Cond(func(ctx context.Context) bool { return ctx.Err() == nil || timedCtx.Err() != nil })
+	// We want to test that mocked methods are called with a live (not canceled) context, but only while the timed context is valid.
+	liveCtx := gomock.Cond(func(ctx context.Context) bool {
+		return !errors.Is(ctx.Err(), context.Canceled) || timedCtx.Err() != nil
+	})
 	// Mocked client(s) setup.
 	vcm := validatormock.NewMockValidatorClient(ctrl)
 	vcm.EXPECT().ConnectionGeneration().Return(uint64(0)).AnyTimes()

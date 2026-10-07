@@ -1,6 +1,7 @@
 package attestations
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 	"testing"
@@ -228,9 +229,23 @@ func TestAggregateAndSaveForkChoiceAtts_Multiple(t *testing.T) {
 	wanted = append(wanted, att3...)
 
 	received := s.cfg.Pool.ForkchoiceAttestations()
-	sort.Slice(received, func(i, j int) bool {
-		return received[i].GetData().Slot < received[j].GetData().Slot
-	})
+
+	// Several attestations share a slot (atts2 aggregates into more than one), and the pool returns
+	// them in random order: sort both lists by slot, then aggregation bits.
+	bySlotAndBits := func(atts []ethpb.Att) func(i, j int) bool {
+		return func(i, j int) bool {
+			if atts[i].GetData().Slot != atts[j].GetData().Slot {
+				return atts[i].GetData().Slot < atts[j].GetData().Slot
+			}
+
+			return bytes.Compare(atts[i].GetAggregationBits(), atts[j].GetAggregationBits()) < 0
+		}
+	}
+
+	sort.Slice(wanted, bySlotAndBits(wanted))
+	sort.Slice(received, bySlotAndBits(received))
+	require.Equal(t, len(wanted), len(received))
+
 	for i, a := range wanted {
 		assert.Equal(t, true, proto.Equal(a, received[i]))
 	}

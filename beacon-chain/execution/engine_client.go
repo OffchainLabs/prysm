@@ -180,6 +180,11 @@ func (s *Service) ReconstructFullGloasExecutionPayloadsByHash(
 	}
 
 	for i, h := range requestHashes {
+		// Peers may ask for envelopes of orphaned blocks the execution client has already unwound.
+		if execBlocks[i] == nil || bodiesV2[i] == nil {
+			log.WithField("blockHash", fmt.Sprintf("%#x", h)).Debug("Execution client does not have block, skipping payload reconstruction")
+			continue
+		}
 		payload, err := gloasPayloadFromBlockAndBody(h, execBlocks[i], bodiesV2[i])
 		if err != nil {
 			return nil, err
@@ -345,10 +350,13 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error) {
 	root := populator.Root()
 
-	// Fetch cells and proofs from the execution client using the KZG commitments from the sidecar.
 	commitments, err := populator.Commitments()
 	if err != nil {
-		return nil, nil, wrapWithBlockRoot(err, root, "commitments")
+		return nil, nil, wrapWithBlockRoot(err, root, "populator commitments")
+	}
+	// A populator carrying zero commitments (e.g. a block with no blobs) has nothing to reconstruct.
+	if len(commitments) == 0 {
+		return nil, nil, nil
 	}
 	cp, err := s.fetchCellsAndProofsFromExecution(ctx, commitments)
 	if err != nil {
@@ -361,7 +369,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 
 	// Return early if the execution client returned nothing; otherwise we would
 	// build and broadcast empty partial columns.
-	if cp.Included == nil || cp.Included.Count() == 0 {
+	if cp.Included == nil || cp.Included.Count() == 0 || len(cp.CellsPerBlob) == 0 || len(cp.ProofsPerBlob) == 0 {
 		return nil, nil, nil
 	}
 
@@ -381,9 +389,13 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		// We trust the execution layer we are connected to, so we can upgrade the sidecar into a verified one.
 		verifiedROSidecars := upgradeSidecarsToVerifiedSidecars(roSidecars)
 
-		if s.partialColumnsEnabledForSlot(slot) {
-			for _, sidecar := range verifiedROSidecars {
-				pc, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(sidecar)
+		if s.partialColumnsSupported {
+			isGloas := slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch
+			for i := range verifiedROSidecars {
+				if isGloas {
+					verifiedROSidecars[i].SetBidCommitments(commitments)
+				}
+				pc, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(verifiedROSidecars[i])
 				if err != nil {
 					return nil, nil, wrapWithBlockRoot(err, populator.Root(), "partial column from verified ro data column")
 				}
@@ -399,7 +411,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		return verifiedROSidecars, partialColumns, nil
 	}
 
-	if s.partialColumnsEnabledForSlot(slot) {
+	if s.partialColumnsSupported {
 		partialColumns, err = peerdas.PartialColumns(cp.Included, cp.CellsPerBlob, cp.ProofsPerBlob, populator)
 		if err != nil {
 			return nil, nil, wrapWithBlockRoot(err, root, "construct partial columns")
@@ -422,11 +434,11 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 //     the block has no commitments, the EL already has every blob, or an error
 //     occurred.
 //   - whether the HasBlobs flow is supported: false when the engine lacks the
-//     HasBlobs capability or partial columns are disabled for the block's slot,
+//     HasBlobs capability or partial columns are disabled,
 //     in which case the other return values are always nil.
 //   - any error from querying the EL or building the partial columns.
 func (s *Service) ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.PartialDataColumn, bool, error) {
-	if !s.useHasBlobs() || !s.partialColumnsEnabledForSlot(populator.Slot()) {
+	if !s.useHasBlobs() || !s.partialColumnsSupported {
 		return nil, false, nil
 	}
 
@@ -544,12 +556,6 @@ func (s *Service) useHasBlobs() bool {
 // PartialColumnsSupported reports whether cell-level (partial) column dissemination is enabled.
 func (s *Service) PartialColumnsSupported() bool {
 	return s.partialColumnsSupported
-}
-
-// TODO: Partial Columns for Gloas.
-func (s *Service) partialColumnsEnabledForSlot(slot primitives.Slot) bool {
-	isGloas := slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch
-	return !isGloas && s.partialColumnsSupported
 }
 
 func versionedHashesFromCommitments(kzgCommitments [][]byte) []common.Hash {

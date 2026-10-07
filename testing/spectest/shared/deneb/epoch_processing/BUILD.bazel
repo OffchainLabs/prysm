@@ -32,6 +32,5 @@ go_library(
         "//testing/spectest/utils:go_default_library",
         "//testing/util:go_default_library",
         "@com_github_golang_snappy//:go_default_library",
-        "@org_golang_google_protobuf//proto:go_default_library",
     ],
 )

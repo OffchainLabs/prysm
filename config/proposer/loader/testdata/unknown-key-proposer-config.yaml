@@ -4,7 +4,7 @@ proposer_config:
     builder:
       builders:
         - url: 'https://a.example'
-          builder_pubkeys: ['AAAA']
+          pubkeys: ['0x00']
 default_config:
   fee_recipient: '0x6e35733c5af9B61374A128e6F85f553aF09ff89A'
 version: 2

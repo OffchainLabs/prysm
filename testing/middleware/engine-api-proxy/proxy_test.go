@@ -2,12 +2,12 @@ package proxy
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/common"
@@ -16,14 +16,37 @@ import (
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
+// freePort returns a TCP port on which nothing listens, as picked by the OS.
+func freePort(t *testing.T) int {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	port := l.Addr().(*net.TCPAddr).Port
+	require.NoError(t, l.Close())
+
+	return port
+}
+
+// waitForProxy waits until the proxy accepts connections.
+func waitForProxy(t *testing.T, proxy *Proxy) {
+	require.Eventually(t, func() bool {
+		conn, err := net.Dial("tcp", proxy.Address())
+		if err != nil {
+			return false
+		}
+
+		require.NoError(t, conn.Close())
+		return true
+	}, 5*time.Second, 10*time.Millisecond, "Proxy is not listening")
+}
+
 func TestProxy(t *testing.T) {
 	t.Run("fails to proxy if destination is down", func(t *testing.T) {
 		logger := logrus.New()
 		hook := logTest.NewLocal(logger)
 		ctx := t.Context()
-		r := rand.NewGenerator()
 		proxy, err := New(
-			WithPort(r.Intn(50000)),
+			WithPort(freePort(t)),
 			WithDestinationAddress("http://localhost:43239"), // Nothing running at destination server.
 			WithLogger(logger),
 		)
@@ -33,7 +56,7 @@ func TestProxy(t *testing.T) {
 				t.Log(err)
 			}
 		}()
-		time.Sleep(time.Millisecond * 100)
+		waitForProxy(t, proxy)
 
 		rpcClient, err := rpc.DialHTTP("http://" + proxy.Address())
 		require.NoError(t, err)
@@ -56,9 +79,8 @@ func TestProxy(t *testing.T) {
 		defer srv.Close()
 
 		// Destination address server responds to JSON-RPC requests.
-		r := rand.NewGenerator()
 		proxy, err := New(
-			WithPort(r.Intn(50000)),
+			WithPort(freePort(t)),
 			WithDestinationAddress(srv.URL),
 		)
 		require.NoError(t, err)
@@ -67,7 +89,7 @@ func TestProxy(t *testing.T) {
 				t.Log(err)
 			}
 		}()
-		time.Sleep(time.Millisecond * 100)
+		waitForProxy(t, proxy)
 
 		// Dials the proxy.
 		rpcClient, err := rpc.DialHTTP("http://" + proxy.Address())
@@ -95,9 +117,8 @@ func TestProxy_CustomInterceptors(t *testing.T) {
 		defer srv.Close()
 
 		// Destination address server responds to JSON-RPC requests.
-		r := rand.NewGenerator()
 		proxy, err := New(
-			WithPort(r.Intn(50000)),
+			WithPort(freePort(t)),
 			WithDestinationAddress(srv.URL),
 		)
 		require.NoError(t, err)
@@ -106,7 +127,7 @@ func TestProxy_CustomInterceptors(t *testing.T) {
 				t.Log(err)
 			}
 		}()
-		time.Sleep(time.Millisecond * 100)
+		waitForProxy(t, proxy)
 
 		method := "eth_syncing"
 
@@ -146,9 +167,8 @@ func TestProxy_CustomInterceptors(t *testing.T) {
 		defer srv.Close()
 
 		// Destination address server responds to JSON-RPC requests.
-		r := rand.NewGenerator()
 		proxy, err := New(
-			WithPort(r.Intn(50000)),
+			WithPort(freePort(t)),
 			WithDestinationAddress(srv.URL),
 		)
 		require.NoError(t, err)
@@ -157,7 +177,7 @@ func TestProxy_CustomInterceptors(t *testing.T) {
 				t.Log(err)
 			}
 		}()
-		time.Sleep(time.Millisecond * 100)
+		waitForProxy(t, proxy)
 
 		method := "engine_newPayloadV1"
 
@@ -213,9 +233,8 @@ func TestProxy_CustomInterceptors(t *testing.T) {
 		defer srv.Close()
 
 		// Destination address server responds to JSON-RPC requests.
-		r := rand.NewGenerator()
 		proxy, err := New(
-			WithPort(r.Intn(50000)),
+			WithPort(freePort(t)),
 			WithDestinationAddress(srv.URL),
 		)
 		require.NoError(t, err)
@@ -224,7 +243,7 @@ func TestProxy_CustomInterceptors(t *testing.T) {
 				t.Log(err)
 			}
 		}()
-		time.Sleep(time.Millisecond * 100)
+		waitForProxy(t, proxy)
 
 		method := "engine_newPayloadV1"
 

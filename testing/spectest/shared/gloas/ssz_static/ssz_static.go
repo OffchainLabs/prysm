@@ -8,7 +8,7 @@ import (
 
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	// enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
-	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -74,8 +74,12 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		t.Skip("Not a consensus type")
 	case "DataColumnSidecar":
 		obj = &ethpb.DataColumnSidecarGloas{}
-	case "SignedProposerPreferences", "ProposerPreferences", "PartialDataColumnGroupID":
+	case "SignedProposerPreferences", "ProposerPreferences":
 		t.Skip("p2p-only type; not part of the consensus state transition")
+	case "PartialDataColumnGroupID":
+		obj = &ethpb.PartialDataColumnGroupID{}
+	case "PartialDataColumnSidecar":
+		obj = &ethpb.PartialDataColumnSidecarGloas{}
 
 	// Standard types that also exist in gloas
 	case "ExecutionPayload":
@@ -146,8 +150,16 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.SyncAggregatorSelectionData{}
 	case "SyncCommittee":
 		obj = &ethpb.SyncCommittee{}
-	case "LightClientOptimisticUpdate", "LightClientFinalityUpdate", "LightClientBootstrap", "LightClientUpdate", "LightClientHeader":
-		t.Skip("Gloas light client types not yet implemented")
+	case "LightClientOptimisticUpdate":
+		obj = &ethpb.LightClientOptimisticUpdateGloas{}
+	case "LightClientFinalityUpdate":
+		obj = &ethpb.LightClientFinalityUpdateGloas{}
+	case "LightClientBootstrap":
+		obj = &ethpb.LightClientBootstrapGloas{}
+	case "LightClientUpdate":
+		obj = &ethpb.LightClientUpdateGloas{}
+	case "LightClientHeader":
+		obj = &ethpb.LightClientHeaderGloas{}
 	case "BlobIdentifier":
 		obj = &ethpb.BlobIdentifier{}
 	case "BlobSidecar":
@@ -184,7 +196,7 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.DataColumnsByRootIdentifier{}
 	case "MatrixEntry":
 		t.Skip("Unused type")
-	case "PartialDataColumnHeader", "PartialDataColumnPartsMetadata", "PartialDataColumnSidecar":
+	case "PartialDataColumnHeader", "PartialDataColumnPartsMetadata":
 		t.Skip("Not yet implemented")
 	default:
 		return nil, errors.New("type not found")
