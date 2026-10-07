@@ -89,12 +89,14 @@ type PayloadAttributesEvent struct {
 }
 
 type PayloadAttributesEventData struct {
-	ProposerIndex     string          `json:"proposer_index"`
-	ProposalSlot      string          `json:"proposal_slot"`
-	ParentBlockNumber string          `json:"parent_block_number,omitempty"` // Removed from gloas onwards.
-	ParentBlockRoot   string          `json:"parent_block_root"`
-	ParentBlockHash   string          `json:"parent_block_hash"`
-	PayloadAttributes json.RawMessage `json:"payload_attributes"`
+	ProposerIndex      string          `json:"proposer_index"`
+	ProposalSlot       string          `json:"proposal_slot"`
+	ParentBlockNumber  string          `json:"parent_block_number,omitempty"` // Removed from gloas onwards.
+	ParentBlockRoot    string          `json:"parent_block_root"`
+	ParentBlockHash    string          `json:"parent_block_hash"`
+	SafeBlockHash      string          `json:"safe_block_hash,omitempty"`      // Added from gloas onwards.
+	FinalizedBlockHash string          `json:"finalized_block_hash,omitempty"` // Added from gloas onwards.
+	PayloadAttributes  json.RawMessage `json:"payload_attributes"`
 }
 
 type PayloadAttributesV1 struct {

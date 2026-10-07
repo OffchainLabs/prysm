@@ -194,10 +194,22 @@ func (s *Service) firePayloadAttributesEvent(f event.SubscriberSender, block int
 	if !s.cfg.SyncChecker.Synced() {
 		return
 	}
+	s.cfg.ForkChoiceStore.RLock()
+	finalizedHash := s.cfg.ForkChoiceStore.FinalizedPayloadBlockHash()
+	safeHash := s.safeBlockHash()
+	s.cfg.ForkChoiceStore.RUnlock()
 	// Carry the attribute and parent block hash already sent to the engine so the SSE value matches it exactly; the handler fills the remaining scalar fields lazily.
 	f.Send(&feed.Event{
 		Type: statefeed.PayloadAttributes,
-		Data: payloadattribute.EventData{HeadBlock: block, HeadRoot: root, ProposalSlot: nextSlot, Attributer: attr, ParentBlockHash: parentBlockHash},
+		Data: payloadattribute.EventData{
+			HeadBlock:          block,
+			HeadRoot:           root,
+			ProposalSlot:       nextSlot,
+			Attributer:         attr,
+			ParentBlockHash:    parentBlockHash,
+			SafeBlockHash:      safeHash[:],
+			FinalizedBlockHash: finalizedHash[:],
+		},
 	})
 }
 

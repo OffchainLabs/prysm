@@ -909,8 +909,8 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 
 	ev.ProposerIndex = proposerIndex
 
-	// Real fire sites carry the exact hash sent to the engine's forkchoiceUpdated; only
-	// compute it here as a fallback when it wasn't provided.
+	// Real fire sites carry the exact hashes sent to the engine's forkchoiceUpdated; only
+	// compute them here as a fallback when they weren't provided.
 	if len(ev.ParentBlockHash) == 0 {
 		if ev.HeadBlock.Version() >= version.Gloas {
 			h, err := rost.LatestBlockHash()
@@ -926,6 +926,14 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 			ev.ParentBlockHash = payload.BlockHash()
 			ev.ParentBlockNumber = payload.BlockNumber()
 		}
+	}
+	if len(ev.SafeBlockHash) == 0 {
+		h := s.ChainInfoFetcher.UnrealizedJustifiedPayloadBlockHash()
+		ev.SafeBlockHash = h[:]
+	}
+	if len(ev.FinalizedBlockHash) == 0 {
+		h := s.ChainInfoFetcher.FinalizedBlockHash()
+		ev.FinalizedBlockHash = h[:]
 	}
 
 	if ev.Attributer != nil && !ev.Attributer.IsEmpty() {
@@ -983,9 +991,13 @@ func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribut
 			ParentBlockHash:   hexutil.Encode(ev.ParentBlockHash),
 			PayloadAttributes: attributesBytes,
 		}
-		// parent_block_number was removed from the payload_attributes event from gloas onwards.
+		// parent_block_number was removed from the payload_attributes event from gloas onwards,
+		// while safe_block_hash and finalized_block_hash were added.
 		if pv < version.Gloas {
 			attrData.ParentBlockNumber = strconv.FormatUint(ev.ParentBlockNumber, 10)
+		} else {
+			attrData.SafeBlockHash = hexutil.Encode(ev.SafeBlockHash)
+			attrData.FinalizedBlockHash = hexutil.Encode(ev.FinalizedBlockHash)
 		}
 		d.data, d.err = json.Marshal(attrData)
 		if d.err != nil {

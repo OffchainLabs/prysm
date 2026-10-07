@@ -897,6 +897,143 @@ func TestPayloadAttributesReader_ParentBlockNumber(t *testing.T) {
 	}
 }
 
+// TestPayloadAttributesReader_SafeFinalizedBlockHash verifies beacon-APIs #638: the
+// safe_block_hash and finalized_block_hash fields are present in the payload_attributes
+// event from gloas onwards and omitted before.
+func TestPayloadAttributesReader_SafeFinalizedBlockHash(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+
+	safeHash := [32]byte{0xaa}
+	finalizedHash := [32]byte{0xbb}
+
+	cases := []struct {
+		name          string
+		gloasEpoch    primitives.Epoch
+		getState      func() state.BeaconState
+		getBlock      func() interfaces.SignedBeaconBlock
+		provideHashes bool
+		wantPresent   bool
+		wantSafe      string
+		wantFinalized string
+	}{
+		{
+			name:       "pre-gloas proposal slot omits safe and finalized block hashes",
+			gloasEpoch: math.MaxUint64,
+			getState: func() state.BeaconState {
+				st, err := util.NewBeaconStateDeneb()
+				require.NoError(t, err)
+				return st
+			},
+			getBlock: func() interfaces.SignedBeaconBlock {
+				b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockDeneb(&eth.SignedBeaconBlockDeneb{}))
+				require.NoError(t, err)
+				return b
+			},
+			provideHashes: true,
+			wantPresent:   false,
+		},
+		{
+			name:       "gloas proposal slot includes hashes carried from the fire site",
+			gloasEpoch: 0,
+			getState: func() state.BeaconState {
+				st, err := util.NewBeaconStateGloas()
+				require.NoError(t, err)
+				return st
+			},
+			getBlock: func() interfaces.SignedBeaconBlock {
+				b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockGloas(&eth.SignedBeaconBlockGloas{}))
+				require.NoError(t, err)
+				return b
+			},
+			provideHashes: true,
+			wantPresent:   true,
+			wantSafe:      common.BytesToHash(safeHash[:]).Hex(),
+			wantFinalized: common.BytesToHash(finalizedHash[:]).Hex(),
+		},
+		{
+			name:       "gloas proposal slot falls back to forkchoice hashes when absent",
+			gloasEpoch: 0,
+			getState: func() state.BeaconState {
+				st, err := util.NewBeaconStateGloas()
+				require.NoError(t, err)
+				return st
+			},
+			getBlock: func() interfaces.SignedBeaconBlock {
+				b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockGloas(&eth.SignedBeaconBlockGloas{}))
+				require.NoError(t, err)
+				return b
+			},
+			provideHashes: false,
+			wantPresent:   true,
+			// The mock chain service returns zero hashes for both fallbacks.
+			wantSafe:      common.Hash{}.Hex(),
+			wantFinalized: common.Hash{}.Hex(),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := params.BeaconConfig().Copy()
+			cfg.GloasForkEpoch = tc.gloasEpoch
+			params.OverrideBeaconConfig(cfg)
+
+			st := tc.getState()
+			v := &eth.Validator{ExitEpoch: math.MaxUint64, EffectiveBalance: params.BeaconConfig().MinActivationBalance, WithdrawalCredentials: make([]byte, 32)}
+			require.NoError(t, st.SetValidators([]*eth.Validator{v}))
+			require.NoError(t, st.SetBalances([]uint64{0}))
+			currentSlot := primitives.Slot(0)
+			require.NoError(t, st.SetSlot(currentSlot+1)) // avoid slot processing.
+			genesis := time.Now()
+			require.NoError(t, st.SetGenesisTime(genesis))
+			b := tc.getBlock()
+			headRoot, err := b.Block().HashTreeRoot()
+			require.NoError(t, err)
+			stategen := mock.NewService()
+			stategen.AddStateForRoot(st, headRoot)
+			mockChainService := &mockChain.ChainService{Root: make([]byte, 32), State: st, Slot: &currentSlot, Genesis: genesis}
+			s := &Server{
+				HeadFetcher:              mockChainService,
+				ChainInfoFetcher:         mockChainService,
+				ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+				EventWriteTimeout:        testEventWriteTimeout,
+				StateGen:                 stategen,
+			}
+
+			ev := payloadattribute.EventData{
+				ProposalSlot: currentSlot + 1,
+				HeadBlock:    b,
+				HeadRoot:     headRoot,
+			}
+			if tc.provideHashes {
+				ev.SafeBlockHash = safeHash[:]
+				ev.FinalizedBlockHash = finalizedHash[:]
+			}
+			lr, err := s.payloadAttributesReader(t.Context(), ev)
+			require.NoError(t, err)
+			out, err := io.ReadAll(lr())
+			require.NoError(t, err)
+
+			_, payload, found := strings.Cut(string(out), "data: ")
+			require.Equal(t, true, found)
+			var got structs.PayloadAttributesEvent
+			require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(payload)), &got))
+
+			var data structs.PayloadAttributesEventData
+			require.NoError(t, json.Unmarshal(got.Data, &data))
+			if tc.wantPresent {
+				require.Equal(t, tc.wantSafe, data.SafeBlockHash)
+				require.Equal(t, tc.wantFinalized, data.FinalizedBlockHash)
+			} else {
+				fields := make(map[string]json.RawMessage)
+				require.NoError(t, json.Unmarshal(got.Data, &fields))
+				_, present := fields["safe_block_hash"]
+				require.Equal(t, false, present, "safe_block_hash must be omitted pre-gloas")
+				_, present = fields["finalized_block_hash"]
+				require.Equal(t, false, present, "finalized_block_hash must be omitted pre-gloas")
+			}
+		})
+	}
+}
+
 // TestStreamEvents_PayloadAttributesExpiredSlotNotLoggedAsError verifies that a payload
 // attributes event whose proposal slot has already started is skipped without an ERROR log.
 func TestStreamEvents_PayloadAttributesExpiredSlotNotLoggedAsError(t *testing.T) {
