@@ -628,18 +628,18 @@ func TestGetForkChoice(t *testing.T) {
 }
 
 func TestGetForkChoiceV2(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().GloasForkEpoch = 0
 	store := doublylinkedtree.New()
 	fRoot := [32]byte{'a'}
 	fc := &forkchoicetypes.Checkpoint{Epoch: 2, Root: fRoot}
 	require.NoError(t, store.UpdateFinalizedCheckpoint(fc))
 	blockRoot, parentRoot := [32]byte{'b'}, [32]byte{'p'}
 	parentHash := [32]byte{'e'}
-	justifiedRoot, finalizedRoot := [32]byte{'j'}, [32]byte{'f'}
 	st, err := util.NewBeaconStateGloas()
 	require.NoError(t, err)
 	require.NoError(t, st.SetSlot(1))
-	require.NoError(t, st.SetCurrentJustifiedCheckpoint(&ethpb.Checkpoint{Root: justifiedRoot[:]}))
-	require.NoError(t, st.SetFinalizedCheckpoint(&ethpb.Checkpoint{Epoch: 1, Root: finalizedRoot[:]}))
+	require.NoError(t, st.SetFinalizedCheckpoint(&ethpb.Checkpoint{Epoch: 1}))
 	block := util.NewBeaconBlockGloas()
 	block.Block.Slot = 1
 	block.Block.ParentRoot = parentRoot[:]
@@ -672,8 +672,8 @@ func TestGetForkChoiceV2(t *testing.T) {
 	require.NotNil(t, empty.ParentPayloadStatus)
 	assert.Equal(t, "pending", *empty.ParentPayloadStatus)
 	for _, node := range resp.Data.ForkChoiceNodes {
-		assert.DeepEqual(t, &structs.Checkpoint{Epoch: "0", Root: hexutil.Encode(justifiedRoot[:])}, node.JustifiedCheckpoint)
-		assert.DeepEqual(t, &structs.Checkpoint{Epoch: "1", Root: hexutil.Encode(finalizedRoot[:])}, node.FinalizedCheckpoint)
+		assert.Equal(t, "0", node.JustifiedEpoch)
+		assert.Equal(t, "1", node.FinalizedEpoch)
 		assert.Equal(t, hexutil.Encode(parentHash[:]), node.ExecutionBlockHash)
 		assert.Equal(t, "1", node.PayloadAttesterCount)
 		assert.Equal(t, "1", node.PayloadAvailabilityYesCount)

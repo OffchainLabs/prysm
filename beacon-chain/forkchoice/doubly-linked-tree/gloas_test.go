@@ -1701,30 +1701,31 @@ func TestPTCVotedEarlyAndAvailableAndLate(t *testing.T) {
 
 func TestForkChoiceDumpV2(t *testing.T) {
 	f := setupGloas(t, 0, 0)
+	params.BeaconConfig().GloasForkEpoch = 1
 	f.SetGenesisTime(time.Now())
+	gloasSlot := params.BeaconConfig().SlotsPerEpoch
 	ctx := t.Context()
 	zeroHash := params.BeaconConfig().ZeroHash
 	require.NoError(t, f.SetOptimisticToValid(ctx, zeroHash))
 
 	rootA, rootB, rootC := indexToHash(1), indexToHash(2), indexToHash(3)
 	blockHashA := indexToHash(100)
-	justifiedRoot, finalizedRoot := indexToHash(21), indexToHash(22)
-	st, blk, err := prepareGloasForkchoiceState(ctx, 1, rootA, zeroHash, blockHashA, zeroHash, 0, 0)
+	st, blk, err := prepareGloasForkchoiceState(ctx, gloasSlot, rootA, zeroHash, blockHashA, zeroHash, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, st.SetCurrentJustifiedCheckpoint(&ethpb.Checkpoint{Root: justifiedRoot[:]}))
-	require.NoError(t, st.SetFinalizedCheckpoint(&ethpb.Checkpoint{Root: finalizedRoot[:]}))
 	require.NoError(t, f.InsertNode(ctx, st, blk))
 	pe, err := prepareGloasForkchoicePayload(rootA)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertPayload(pe))
+	f.store.emptyNodeByRoot[rootA].node.justifiedEpoch = 2
+	f.store.emptyNodeByRoot[rootA].node.finalizedEpoch = 1
 	f.store.emptyNodeByRoot[rootA].node.weight = 11
 	f.store.emptyNodeByRoot[rootA].weight = 12
 	f.store.fullNodeByRoot[rootA].weight = 13
 
-	st, blk, err = prepareGloasForkchoiceState(ctx, 2, rootB, rootA, indexToHash(200), zeroHash, 0, 0)
+	st, blk, err = prepareGloasForkchoiceState(ctx, gloasSlot+1, rootB, rootA, indexToHash(200), zeroHash, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, blk))
-	st, blk, err = prepareGloasForkchoiceState(ctx, 2, rootC, rootA, indexToHash(300), blockHashA, 0, 0)
+	st, blk, err = prepareGloasForkchoiceState(ctx, gloasSlot+1, rootC, rootA, indexToHash(300), blockHashA, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, blk))
 
@@ -1751,12 +1752,12 @@ func TestForkChoiceDumpV2(t *testing.T) {
 		require.Equal(t, true, n.ParentPayloadStatus == nil)
 		assert.Equal(t, uint64(0), n.PayloadAttesterCount)
 	})
-	t.Run("node variants retain checkpoints and PTC counts", func(t *testing.T) {
+	t.Run("node variants retain epochs and PTC counts", func(t *testing.T) {
 		for _, status := range []forkchoice2.PayloadStatus{forkchoice2.PayloadStatusPending, forkchoice2.PayloadStatusEmpty, forkchoice2.PayloadStatusFull} {
 			n := byRoot[rootA][status]
 			require.NotNil(t, n, "%s", status)
-			assert.DeepEqual(t, &ethpb.Checkpoint{Root: justifiedRoot[:]}, n.JustifiedCheckpoint, "%s", status)
-			assert.DeepEqual(t, &ethpb.Checkpoint{Root: finalizedRoot[:]}, n.FinalizedCheckpoint, "%s", status)
+			assert.Equal(t, primitives.Epoch(2), n.JustifiedEpoch, "%s", status)
+			assert.Equal(t, primitives.Epoch(1), n.FinalizedEpoch, "%s", status)
 			assert.Equal(t, uint64(3), n.PayloadAttesterCount, "%s", status)
 			assert.Equal(t, uint64(2), n.PayloadAvailabilityYesCount, "%s", status)
 			assert.Equal(t, uint64(1), n.PayloadDataAvailabilityYesCount, "%s", status)

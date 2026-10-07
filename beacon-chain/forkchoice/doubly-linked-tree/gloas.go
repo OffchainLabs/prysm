@@ -13,8 +13,6 @@ import (
 	forkchoice2 "github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
@@ -391,6 +389,11 @@ func (s *Store) nodeTreeDumpV2(ctx context.Context, n *Node, nodes []*forkchoice
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+	parentRoot := s.finalizedDependentRoot
+	if n.parent != nil {
+		parentRoot = n.parent.node.root
+	}
+	isGloas := slots.ToEpoch(n.slot) >= params.BeaconConfig().GloasForkEpoch
 	var target [32]byte
 	if n.target != nil {
 		target = n.target.root
@@ -405,7 +408,7 @@ func (s *Store) nodeTreeDumpV2(ctx context.Context, n *Node, nodes []*forkchoice
 	entry := &forkchoice2.NodeV2{
 		PayloadStatus:            forkchoice2.PayloadStatusPending,
 		BlockRoot:                n.root[:],
-		ParentRoot:               n.parentRoot[:],
+		ParentRoot:               parentRoot[:],
 		Slot:                     n.slot,
 		Weight:                   n.weight,
 		Balance:                  n.balance,
@@ -413,8 +416,8 @@ func (s *Store) nodeTreeDumpV2(ctx context.Context, n *Node, nodes []*forkchoice
 		Timestamp:                en.timestamp,
 		ExecutionBlockHash:       parentHash[:],
 		Target:                   target[:],
-		JustifiedCheckpoint:      &ethpb.Checkpoint{Epoch: n.justifiedEpoch, Root: n.justifiedRoot[:]},
-		FinalizedCheckpoint:      &ethpb.Checkpoint{Epoch: n.finalizedEpoch, Root: n.finalizedRoot[:]},
+		JustifiedEpoch:           n.justifiedEpoch,
+		FinalizedEpoch:           n.finalizedEpoch,
 		UnrealizedJustifiedEpoch: n.unrealizedJustified.Epoch,
 		UnrealizedFinalizedEpoch: n.unrealizedFinalizedEpoch,
 	}
@@ -425,7 +428,7 @@ func (s *Store) nodeTreeDumpV2(ctx context.Context, n *Node, nodes []*forkchoice
 		}
 		entry.ParentPayloadStatus = &status
 	}
-	if n.version < version.Gloas {
+	if !isGloas {
 		entry.PayloadStatus = forkchoice2.PayloadStatusFull
 		entry.ExecutionBlockHash = n.blockHash[:]
 		entry.ExecutionOptimistic = fn.optimistic
@@ -443,7 +446,7 @@ func (s *Store) nodeTreeDumpV2(ctx context.Context, n *Node, nodes []*forkchoice
 	}
 	nodes = append(nodes, entry)
 
-	if n.version >= version.Gloas {
+	if isGloas {
 		pendingStatus := forkchoice2.PayloadStatusPending
 		emptyEntry := *entry
 		emptyEntry.PayloadStatus = forkchoice2.PayloadStatusEmpty
