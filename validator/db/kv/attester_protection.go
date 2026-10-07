@@ -3,7 +3,6 @@ package kv
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"fmt"
 	"sync"
 	"time"
@@ -17,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/slashings"
 	"github.com/OffchainLabs/prysm/v7/validator/db/common"
 	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -154,8 +152,6 @@ func (s *Store) SlashableAttestationCheck(
 	indexedAtt ethpb.IndexedAtt,
 	pubKey [fieldparams.BLSPubkeyLength]byte,
 	signingRoot32 [32]byte,
-	emitAccountMetrics bool,
-	validatorAttestFailVec *prometheus.CounterVec,
 ) error {
 	ctx, span := trace.StartSpan(ctx, "validator.postAttSignUpdate")
 	defer span.End()
@@ -195,12 +191,8 @@ func (s *Store) SlashableAttestationCheck(
 			lowestTargetEpoch,
 		)
 	}
-	fmtKey := "0x" + hex.EncodeToString(pubKey[:])
 	slashingKind, err := s.CheckSlashableAttestation(ctx, pubKey, signingRoot, indexedAtt)
 	if err != nil {
-		if emitAccountMetrics {
-			validatorAttestFailVec.WithLabelValues(fmtKey).Inc()
-		}
 		switch slashingKind {
 		case DoubleVote:
 			log.Warn("Attestation is slashable as it is a double vote")
