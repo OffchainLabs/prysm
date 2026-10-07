@@ -159,7 +159,6 @@ func (c *ValidatorClient) shutdown(sigc <-chan os.Signal) {
 	}
 
 	ctx, cancel := context.WithCancel(c.ctx)
-	defer cancel()
 
 	go func() {
 		c.waitForDutyAwareShutdown(ctx)
@@ -168,6 +167,7 @@ func (c *ValidatorClient) shutdown(sigc <-chan os.Signal) {
 
 	<-sigc
 	log.Info("Got interrupt, shutting down immediately...")
+	cancel()
 }
 
 // waitForDutyAwareShutdown blocks until the validator client can be stopped and restarted
