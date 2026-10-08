@@ -146,10 +146,9 @@ func TestValidatePayloadBlockConsistency(t *testing.T) {
 	// Block 2: parentRoot = b1.Root(), parentBlockHash = hash2 (different from hash1 => needs envelope)
 	b2 := makeGloasBlock(t, 12, b1.Root(), hash2)
 
-	// Envelopes: env0 has blockHash=hash1 (matches b1's parentBlockHash)
-	// env1 has blockHash=hash2 (matches b2's parentBlockHash)
-	env0 := makeEnvelope(t, 10, hash0, [32]byte{})
-	env1 := makeEnvelope(t, 11, hash1, hash0)
+	// env0 is the payload of b0's parent (root zero, hash0); env1 is b0's own payload (hash1).
+	env0 := makeEnvelope(t, 9, hash0, [32]byte{})
+	env1 := makeEnvelopeForRoot(t, 10, b0.Root(), hash1, hash0)
 
 	t.Run("consistent envelopes and blocks, envelope is first", func(t *testing.T) {
 		f := &blocksFetcher{}
@@ -183,7 +182,7 @@ func TestValidatePayloadBlockConsistency(t *testing.T) {
 	})
 
 	t.Run("extra envelopes truncated", func(t *testing.T) {
-		env2 := makeEnvelope(t, 12, hash2, hash1)
+		env2 := makeEnvelopeForRoot(t, 11, b1.Root(), hash2, hash1)
 		f := &blocksFetcher{}
 		// All blocks have the same parentBlockHash => no envelope transitions needed
 		sameHash := [32]byte{0x99}
@@ -221,4 +220,45 @@ func TestValidatePayloadBlockConsistency(t *testing.T) {
 		require.Equal(t, false, errors.Is(r.err, prysmsync.ErrInvalidFetchedData))
 	})
 
+	t.Run("envelope with matching hash but wrong root is rejected", func(t *testing.T) {
+		wrongRootEnv := makeEnvelopeForRoot(t, 10, [32]byte{0xee}, hash1, hash0)
+		f := &blocksFetcher{}
+		r := &fetchRequestResponse{
+			blocksFrom:   "peer1",
+			payloadsFrom: "peer1",
+			bwb: []blocks.BlockWithROSidecars{
+				{Block: b0},
+				{Block: b1},
+			},
+			envelopes: []interfaces.ROSignedExecutionPayloadEnvelope{env0, wrongRootEnv},
+		}
+		f.validatePayloadBlockConsistency(r)
+		require.ErrorContains(t, "envelope does not match block", r.err)
+		require.Equal(t, true, errors.Is(r.err, prysmsync.ErrInvalidFetchedData))
+	})
+
+	t.Run("grandparent envelope is not the parent payload when the parent is empty", func(t *testing.T) {
+		gpHash := [32]byte{0x40}
+		c0Hash := [32]byte{0x50}
+		// gp is full with payload gpHash. p is empty, so p and its child c0 both build on gpHash.
+		gp := makeGloasBlock(t, 8, [32]byte{}, [32]byte{0x01})
+		p := makeGloasBlock(t, 9, gp.Root(), gpHash)
+		c0 := makeGloasBlock(t, 10, p.Root(), gpHash)
+		c1 := makeGloasBlock(t, 11, c0.Root(), c0Hash)
+		gpEnv := makeEnvelopeForRoot(t, 8, gp.Root(), gpHash, [32]byte{0x01})
+		c0Env := makeEnvelopeForRoot(t, 10, c0.Root(), c0Hash, gpHash)
+		f := &blocksFetcher{}
+		r := &fetchRequestResponse{
+			blocksFrom:   "peer1",
+			payloadsFrom: "peer1",
+			bwb: []blocks.BlockWithROSidecars{
+				{Block: c0},
+				{Block: c1},
+			},
+			envelopes: []interfaces.ROSignedExecutionPayloadEnvelope{gpEnv, c0Env},
+		}
+		f.validatePayloadBlockConsistency(r)
+		require.ErrorContains(t, "envelope does not match block", r.err)
+		require.Equal(t, true, errors.Is(r.err, prysmsync.ErrInvalidFetchedData))
+	})
 }

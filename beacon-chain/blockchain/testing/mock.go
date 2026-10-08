@@ -406,6 +406,13 @@ func (s *ChainService) HeadRootAndFull() ([32]byte, bool) {
 	return bytesutil.ToBytes32(s.Root), s.Full
 }
 
+// HeadAndCanonicalNodeAtSlot mocks HeadAndCanonicalNodeAtSlot method in chain service.
+func (s *ChainService) HeadAndCanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool, [32]byte, bool) {
+	headRoot, headFull := s.HeadRootAndFull()
+	canonicalRoot, canonicalFull := s.CanonicalNodeAtSlot(slot)
+	return headRoot, headFull, canonicalRoot, canonicalFull
+}
+
 // HeadBlock mocks HeadBlock method in chain service.
 func (s *ChainService) HeadBlock(context.Context) (interfaces.ReadOnlySignedBeaconBlock, error) {
 	return s.Block, nil

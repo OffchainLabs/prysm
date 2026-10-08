@@ -775,7 +775,7 @@ func (ps *Settings) WarnUnsetMaxExecutionPayment() {
 		return
 	}
 	slices.Sort(maskedURLs)
-	log.WithField("builders", strings.Join(maskedURLs, ", ")).Warn("Builder entries have no max_execution_payment: their execution layer payment is ignored and only collateral-backed bid value counts toward bid selection. Set max_execution_payment to count it, noting such payments rest on the builder's promise to pay.")
+	log.WithField("builders", strings.Join(maskedURLs, ", ")).Warn("Builders have no max_execution_payment (default 0): execution payment is ignored, so these builders' bids may lose to the local payload.")
 }
 
 // HasLegacyBuilderContent reports whether any level carries v1 builder fields,
