@@ -15,6 +15,7 @@ go_library(
         "pending_consolidations.go",
         "pending_deposits.go",
         "proposer_lookahead.go",
+        "ptc_window.go",
         "randao_mixes_reset.go",
         "registry_updates.go",
         "rewards_and_penalties.go",

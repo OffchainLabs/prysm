@@ -15,6 +15,7 @@ go_test(
         "gloas__epoch_processing__pending_deposits_test.go",
         "gloas__epoch_processing__process_builder_pending_payments_test.go",
         "gloas__epoch_processing__proposer_lookahead_test.go",
+        "gloas__epoch_processing__ptc_window_test.go",
         "gloas__epoch_processing__randao_mixes_reset_test.go",
         "gloas__epoch_processing__registry_updates_test.go",
         "gloas__epoch_processing__rewards_and_penalties_test.go",
