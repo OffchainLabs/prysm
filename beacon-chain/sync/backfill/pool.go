@@ -41,14 +41,17 @@ func defaultNewWorker(p p2p.P2P) newWorker {
 const minReqInterval = time.Second
 
 type p2pBatchWorkerPool struct {
-	maxBatches     int
-	newWorker      newWorker
-	toWorkers      chan batch
-	fromWorkers    chan batch
-	toRouter       chan batch
-	fromRouter     chan batch
-	shutdownErr    chan error
-	endSeq         []batch
+	maxBatches  int
+	newWorker   newWorker
+	toWorkers   chan batch
+	fromWorkers chan batch
+	toRouter    chan batch
+	fromRouter  chan batch
+	shutdownErr chan error
+	endSeq      []batch
+	// outstanding counts real batches handed to todo() that complete() has not yet returned.
+	// Like endSeq it is only touched by the goroutine calling todo()/complete().
+	outstanding    int
 	ctx            context.Context
 	cancel         func()
 	earliest       primitives.Slot // earliest is the earliest slot a worker is processing
@@ -96,16 +99,26 @@ func (p *p2pBatchWorkerPool) todo(b batch) {
 		p.endSeq = append(p.endSeq, b)
 		return
 	}
+	p.outstanding++
 	p.toRouter <- b
 }
 
 func (p *p2pBatchWorkerPool) complete() (batch, error) {
-	if len(p.endSeq) == p.maxBatches {
+	// The batcher only hands out an end sequence sentinel on a scheduling pass where nothing
+	// real could be scheduled, so a sentinel with no outstanding batches means all work is
+	// done. Sentinels generate no channel traffic, so this must be checked before the select:
+	// the sentinel was appended by todo() on the same runloop turn, not delivered by a worker.
+	// Waiting for worker traffic here would deadlock, while completing with batches still
+	// outstanding would silently skip importing them.
+	if len(p.endSeq) > 0 && p.outstanding == 0 {
 		return p.endSeq[0], errEndSequence
 	}
 
 	select {
 	case b := <-p.fromRouter:
+		// Every fromRouter delivery is a real batch leaving the pool, either as importable
+		// work or expired and re-routed by processTodo.
+		p.outstanding--
 		return b, nil
 	case err := <-p.shutdownErr:
 		return batch{}, errors.Wrap(err, "fatal error from backfill worker pool")
@@ -188,7 +201,11 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 	for i, b := range todo {
 		needs := p.needs()
 		if b.expired(needs) {
-			p.endSeq = append(p.endSeq, b.withState(batchEndSequence))
+			// Hand expired batches back to the service goroutine instead of appending to
+			// endSeq here: endSeq is owned by the goroutine calling todo()/complete(), and
+			// the sequencer re-emits the expiry as an end sequence batch through todo() on
+			// a later scheduling pass.
+			p.fromRouter <- b.withState(batchEndSequence)
 			continue
 		}
 		excludePeers := busy
