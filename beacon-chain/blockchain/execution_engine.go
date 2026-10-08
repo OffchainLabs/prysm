@@ -178,7 +178,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 			"payloadID": fmt.Sprintf("%#x", bytesutil.Trunc(payloadID[:])),
 		}).Info("Forkchoice updated with payload attributes for proposal")
 		s.cfg.PayloadIDCache.Set(nextSlot, arg.headRoot, true, pId)
-		go s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), arg.headBlock, arg.headRoot, nextSlot, arg.attributes, nil)
+		go s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), arg.headBlock, arg.headRoot, nextSlot, arg.attributes, nil, fcs)
 	} else if hasAttr && payloadID == nil && !features.Get().PrepareAllPayloads {
 		log.WithFields(logrus.Fields{
 			"blockHash": fmt.Sprintf("%#x", headPayload.BlockHash()),
@@ -189,16 +189,12 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 	return payloadID, nil
 }
 
-func (s *Service) firePayloadAttributesEvent(f event.SubscriberSender, block interfaces.ReadOnlySignedBeaconBlock, root [32]byte, nextSlot primitives.Slot, attr payloadattribute.Attributer, parentBlockHash []byte) {
+func (s *Service) firePayloadAttributesEvent(f event.SubscriberSender, block interfaces.ReadOnlySignedBeaconBlock, root [32]byte, nextSlot primitives.Slot, attr payloadattribute.Attributer, parentBlockHash []byte, fcs *enginev1.ForkchoiceState) {
 	// If we're syncing a block in the past and init-sync is still running, we shouldn't fire this event.
 	if !s.cfg.SyncChecker.Synced() {
 		return
 	}
-	s.cfg.ForkChoiceStore.RLock()
-	finalizedHash := s.cfg.ForkChoiceStore.FinalizedPayloadBlockHash()
-	safeHash := s.safeBlockHash()
-	s.cfg.ForkChoiceStore.RUnlock()
-	// Carry the attribute and parent block hash already sent to the engine so the SSE value matches it exactly; the handler fills the remaining scalar fields lazily.
+	// Carry the hashes sent to the engine so the SSE value matches the payload ID.
 	f.Send(&feed.Event{
 		Type: statefeed.PayloadAttributes,
 		Data: payloadattribute.EventData{
@@ -207,8 +203,8 @@ func (s *Service) firePayloadAttributesEvent(f event.SubscriberSender, block int
 			ProposalSlot:       nextSlot,
 			Attributer:         attr,
 			ParentBlockHash:    parentBlockHash,
-			SafeBlockHash:      safeHash[:],
-			FinalizedBlockHash: finalizedHash[:],
+			SafeBlockHash:      fcs.SafeBlockHash,
+			FinalizedBlockHash: fcs.FinalizedBlockHash,
 		},
 	})
 }
