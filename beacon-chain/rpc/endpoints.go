@@ -964,6 +964,26 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
+			template: "/eth/v1/beacon/states/{state_id}/builder_pending_withdrawals",
+			name:     namespace + ".GetBuilderPendingWithdrawals",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetBuilderPendingWithdrawals,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/beacon/states/{state_id}/builder_pending_payments",
+			name:     namespace + ".GetBuilderPendingPayments",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetBuilderPendingPayments,
+			methods: []string{http.MethodGet},
+		},
+		{
 			template: "/eth/v1/beacon/states/{state_id}/builders",
 			name:     namespace + ".GetStateBuilders",
 			middleware: []middleware.Middleware{
