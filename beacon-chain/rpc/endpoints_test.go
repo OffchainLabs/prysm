@@ -33,6 +33,8 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/beacon/states/{state_id}/pending_partial_withdrawals": {http.MethodGet},
 		"/eth/v1/beacon/states/{state_id}/pending_consolidations":      {http.MethodGet},
 		"/eth/v1/beacon/states/{state_id}/proposer_lookahead":          {http.MethodGet},
+		"/eth/v1/beacon/states/{state_id}/builder_pending_withdrawals": {http.MethodGet},
+		"/eth/v1/beacon/states/{state_id}/builder_pending_payments":    {http.MethodGet},
 		"/eth/v1/beacon/states/{state_id}/builders":                    {http.MethodPost},
 		"/eth/v1/beacon/execution_payload_envelopes/{block_id}":        {http.MethodGet},
 		"/eth/v1/beacon/execution_payload_envelopes":                   {http.MethodPost},
