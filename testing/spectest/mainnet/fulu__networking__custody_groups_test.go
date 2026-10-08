@@ -7,9 +7,9 @@ import (
 )
 
 func TestMainnet_Fulu_Networking_CustodyGroups(t *testing.T) {
-	networking.RunCustodyGroupsTest(t, "mainnet")
+	networking.RunCustodyGroupsTest(t, "mainnet", "fulu")
 }
 
 func TestMainnet_Fulu_Networking_ComputeCustodyColumnsForCustodyGroup(t *testing.T) {
-	networking.RunComputeColumnsForCustodyGroupTest(t, "mainnet")
+	networking.RunComputeColumnsForCustodyGroupTest(t, "mainnet", "fulu")
 }
