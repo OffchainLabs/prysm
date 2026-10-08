@@ -658,7 +658,7 @@ func (s *Service) beaconEndpoints(
 			template: "/eth/v1/beacon/states/{state_id}/ptc",
 			name:     namespace + ".GetStatePTC",
 			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetStatePTC,

@@ -3,6 +3,7 @@ package beacon
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -5095,6 +5096,32 @@ func TestGetStatePTC(t *testing.T) {
 		server.GetStatePTC(rec, req)
 		require.Equal(t, http.StatusBadRequest, rec.Code)
 		require.Equal(t, "state_id is required in URL params", errMessage(rec))
+	})
+
+	t.Run("ssz response", func(t *testing.T) {
+		req := newRequest("")
+		req.Header.Set("Accept", api.OctetStreamMediaType)
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetStatePTC(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, api.OctetStreamMediaType, rec.Header().Get("Content-Type"))
+
+		sszData := rec.Body.Bytes()
+		require.Equal(t, 8+fieldparams.PTCSize*8, len(sszData))
+		require.Equal(t, stateSlot, binary.LittleEndian.Uint64(sszData[:8]))
+
+		// The SSZ payload must carry the same committee as the JSON response.
+		jsonRec := httptest.NewRecorder()
+		jsonRec.Body = new(bytes.Buffer)
+		server.GetStatePTC(jsonRec, newRequest(""))
+		require.Equal(t, http.StatusOK, jsonRec.Code)
+		var resp structs.GetStatePTCResponse
+		require.NoError(t, json.Unmarshal(jsonRec.Body.Bytes(), &resp))
+		for i, v := range resp.Data.Validators {
+			require.Equal(t, v, strconv.FormatUint(binary.LittleEndian.Uint64(sszData[8+i*8:16+i*8]), 10))
+		}
 	})
 
 	t.Run("optimistic node", func(t *testing.T) {

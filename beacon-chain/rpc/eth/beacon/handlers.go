@@ -3,6 +3,7 @@ package beacon
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -1779,6 +1780,7 @@ func (s *Server) GetProposerLookahead(w http.ResponseWriter, r *http.Request) {
 // GetStatePTC returns the payload timeliness committee for the requested slot from the state
 // with the given 'stateId'. The slot defaults to the state's slot and must be within the state's
 // PTC window. Should return 400 if the state or the requested slot is prior to Gloas.
+// Supports both JSON and SSZ responses based on Accept header.
 func (s *Server) GetStatePTC(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetStatePTC")
 	defer span.End()
@@ -1816,6 +1818,17 @@ func (s *Server) GetStatePTC(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		httputil.HandleError(w, "Could not get payload timeliness committee: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if httputil.RespondWithSsz(r) {
+		// The SSZ response is Container{slot: Slot, validators: Vector[ValidatorIndex, PTC_SIZE]};
+		// all fields are fixed-size, so it serializes to slot || validators.
+		sszData := make([]byte, 8+len(committee)*8)
+		binary.LittleEndian.PutUint64(sszData, uint64(slot))
+		for i, v := range committee {
+			binary.LittleEndian.PutUint64(sszData[8+i*8:], uint64(v))
+		}
+		httputil.WriteSsz(w, sszData)
 		return
 	}
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
