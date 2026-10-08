@@ -164,16 +164,22 @@ func logPayload(block interfaces.ReadOnlyBeaconBlock) error {
 	if err != nil {
 		return err
 	}
-	if payload.GasLimit() == 0 {
+
+	gasLimit, gasUsed := float64(payload.GasLimit()), float64(payload.GasUsed())
+	if gasLimit == 0 {
 		return errors.New("gas limit should not be 0")
 	}
-	gasUtilized := float64(payload.GasUsed()) / float64(payload.GasLimit())
+
+	payloadGasLimit.Set(gasLimit)
+	payloadGasUsed.Set(gasUsed)
+
 	fields := logrus.Fields{
 		"blockHash":   fmt.Sprintf("%#x", bytesutil.Trunc(payload.BlockHash())),
 		"parentHash":  fmt.Sprintf("%#x", bytesutil.Trunc(payload.ParentHash())),
 		"blockNumber": payload.BlockNumber(),
-		"gasUtilized": fmt.Sprintf("%.2f", gasUtilized),
+		"gasUtilized": fmt.Sprintf("%.2f%%", 100*gasUsed/gasLimit),
 	}
+
 	if block.Version() >= version.Capella {
 		withdrawals, err := payload.Withdrawals()
 		if err != nil {

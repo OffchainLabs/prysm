@@ -26,7 +26,8 @@
   "pkgfact": {
     "exclude_files": {
       "external/.*": "Third party code",
-      "rules_go_work-.*": "Third party code"
+      "rules_go_work-.*": "Third party code",
+      "testing/endtoend/geth_deps.go": "Only lists go-ethereum dependencies (not built by Bazel)"
     }
   },
   "stdmethods": {

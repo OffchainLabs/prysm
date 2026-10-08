@@ -59,6 +59,8 @@ func (fi *FileInitializer) Initialize(ctx context.Context, d db.Database) error 
 	if err != nil {
 		return errors.Wrapf(err, "error reading state file %s for checkpoint sync init", fi.blockPath)
 	}
+	// Unlike the API path, files may hold an unfinalized anchor, and the state alone cannot tell.
+	log.Warn("Checkpoint syncing from files. If this anchor is not finalized and is reorged out the node cannot recover and the database must be deleted")
 	return d.SaveOrigin(ctx, serState, serBlock)
 }
 
