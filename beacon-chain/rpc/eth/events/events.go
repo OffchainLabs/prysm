@@ -928,7 +928,7 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 		}
 	}
 	if len(ev.SafeBlockHash) == 0 {
-		h := s.ChainInfoFetcher.UnrealizedJustifiedPayloadBlockHash()
+		h := s.ChainInfoFetcher.SafeBlockHash()
 		ev.SafeBlockHash = h[:]
 	}
 	if len(ev.FinalizedBlockHash) == 0 {

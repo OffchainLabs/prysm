@@ -134,6 +134,7 @@ type FinalizationFetcher interface {
 	PreviousJustifiedCheckpt() *ethpb.Checkpoint
 	UnrealizedJustifiedPayloadBlockHash() [32]byte
 	FinalizedBlockHash() [32]byte
+	SafeBlockHash() [32]byte
 	InForkchoice([32]byte) bool
 	IsFinalized(ctx context.Context, blockRoot [32]byte) bool
 	ParentPayloadReady(interfaces.ReadOnlyBeaconBlock) bool

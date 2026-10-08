@@ -52,6 +52,13 @@ func TestFirePayloadAttributesEventUsesForkchoiceUpdateHashes(t *testing.T) {
 	require.Equal(t, true, ok)
 	require.DeepEqual(t, safeHash[:], data.SafeBlockHash)
 	require.DeepEqual(t, finalizedHash[:], data.FinalizedBlockHash)
+
+	// A nil forkchoice state must not panic and leaves the hashes empty for the SSE fallback.
+	s.firePayloadAttributesEvent(f, nil, [32]byte{}, 1, nil, nil, nil)
+	data, ok = (<-events).Data.(payloadattribute.EventData)
+	require.Equal(t, true, ok)
+	require.Equal(t, 0, len(data.SafeBlockHash))
+	require.Equal(t, 0, len(data.FinalizedBlockHash))
 }
 
 func Test_NotifyForkchoiceUpdate_GetPayloadAttrErrorCanContinue(t *testing.T) {

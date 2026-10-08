@@ -195,6 +195,7 @@ func (s *Service) firePayloadAttributesEvent(f event.SubscriberSender, block int
 		return
 	}
 	// Carry the hashes sent to the engine so the SSE value matches the payload ID.
+	// The getters tolerate a nil fcs; the SSE handler fills empty hashes from forkchoice.
 	f.Send(&feed.Event{
 		Type: statefeed.PayloadAttributes,
 		Data: payloadattribute.EventData{
@@ -203,8 +204,8 @@ func (s *Service) firePayloadAttributesEvent(f event.SubscriberSender, block int
 			ProposalSlot:       nextSlot,
 			Attributer:         attr,
 			ParentBlockHash:    parentBlockHash,
-			SafeBlockHash:      fcs.SafeBlockHash,
-			FinalizedBlockHash: fcs.FinalizedBlockHash,
+			SafeBlockHash:      fcs.GetSafeBlockHash(),
+			FinalizedBlockHash: fcs.GetFinalizedBlockHash(),
 		},
 	})
 }
