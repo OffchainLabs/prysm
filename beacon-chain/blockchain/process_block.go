@@ -436,13 +436,13 @@ func (s *Service) notifyEngineAndSaveData(
 			return nil, false, err
 		}
 		if i > 0 && jCheckpoints[i].Epoch > jCheckpoints[i-1].Epoch {
-			if err := s.cfg.BeaconDB.SaveJustifiedCheckpoint(ctx, jCheckpoints[i]); err != nil {
+			if err := s.cfg.BeaconDB.SaveJustifiedCheckpoint(ctx, s.checkpointWithStoredRoot(ctx, jCheckpoints[i])); err != nil {
 				tracing.AnnotateError(span, err)
 				return nil, false, err
 			}
 		}
 		if i > 0 && fCheckpoints[i].Epoch > fCheckpoints[i-1].Epoch {
-			if err := s.updateFinalized(ctx, fCheckpoints[i]); err != nil {
+			if err := s.updateFinalized(ctx, s.checkpointWithStoredRoot(ctx, fCheckpoints[i])); err != nil {
 				tracing.AnnotateError(span, err)
 				return nil, false, err
 			}
@@ -1225,7 +1225,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 		if full {
 			bh = bid.BlockHash()
 		}
-		id, err := s.notifyForkchoiceUpdateGloas(ctx, bh, attribute)
+		id, fcs, err := s.notifyForkchoiceUpdateGloas(ctx, bh, attribute)
 		if err != nil {
 			log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
 		}
@@ -1237,7 +1237,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 				"nextSlot":  currentSlot + 1,
 				"payloadID": fmt.Sprintf("%#x", bytesutil.Trunc(id[:])),
 			}).Info("Forkchoice updated with payload attributes for proposal")
-			s.firePayloadAttributesEventForHead(headRoot, currentSlot+1, attribute, bh[:])
+			s.firePayloadAttributesEventForHead(headRoot, currentSlot+1, attribute, bh[:], fcs)
 		}
 		return
 	}

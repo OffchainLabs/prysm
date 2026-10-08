@@ -87,6 +87,10 @@ var (
 		Name:  "disable-attest-timely",
 		Usage: "Disable validator attesting timely after current block processes. See #8185 for more details.",
 	}
+	disableDutyAwareShutdown = &cli.BoolFlag{
+		Name:  "disable-duty-aware-shutdown",
+		Usage: "Stop the validator client immediately on SIGINT/SIGTERM, instead of waiting for the moment in the slot where a restart would not miss any rewarded duty.",
+	}
 	enableSlashingProtectionPruning = &cli.BoolFlag{
 		Name:  "enable-slashing-protection-history-pruning",
 		Usage: "Enables the pruning of the validator client's slashing protection database.",
@@ -233,6 +237,10 @@ var (
 		Usage:  "Skips the builder circuit breaker check when submitting a signed execution payload bid, so a blacklisted builder still broadcasts its bid. For testing only.",
 		Hidden: true,
 	}
+	disableBuilderRelayCircuitBreaker = &cli.BoolFlag{
+		Name:  "disable-builder-relay-circuit-breaker",
+		Usage: "Stops the builder circuit breaker from tracking which builders each direct connection endpoint serves, so a failing builder no longer bans the endpoints serving it.",
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
@@ -249,6 +257,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	Mainnet,
 	dynamicKeyReloadDebounceInterval,
 	disableAttestTimely,
+	disableDutyAwareShutdown,
 	enableSlashingProtectionPruning,
 	EnableMinimalSlashingProtection,
 	enableDoppelGangerProtection,
@@ -299,6 +308,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	blacklistRoots,
 	enableHashtree,
 	submitBlacklistedBuilderBids,
+	disableBuilderRelayCircuitBreaker,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {

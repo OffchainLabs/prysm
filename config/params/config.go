@@ -285,6 +285,10 @@ type BeaconChainConfig struct {
 	BuilderFailureBackOffPeriod    primitives.Epoch // BuilderFailureBackOffPeriod is how many epochs without a failure reset a builder's failure counter.
 	BuilderCriticalFailedBuilders  uint64           // BuilderCriticalFailedBuilders is how many concurrently blacklisted builders force a fallback to self-building.
 	BuilderFailureWeightThreshold  uint64           // BuilderFailureWeightThreshold is the percentage of committee weight a block needs before its missing payload is charged to the builder.
+	BuilderRelayBlacklistPeriod    primitives.Epoch // BuilderRelayBlacklistPeriod caps how many epochs a direct connection endpoint stays banned for serving a builder that failed.
+	BuilderRelayAssociationTTL     primitives.Epoch // BuilderRelayAssociationTTL is how many epochs an unused endpoint to builder association is kept.
+	BuilderMaxTrackedRelays        uint64           // BuilderMaxTrackedRelays is how many direct connection endpoints the circuit breaker tracks.
+	BuilderMaxIndicesPerRelay      uint64           // BuilderMaxIndicesPerRelay is how many builder indices are tracked per endpoint, bounding the collateral ban.
 	BuilderBidTimeout              time.Duration    // BuilderBidTimeout is how long to wait for execution payload bids from the builder API before falling back to the P2P bid or a self-build.
 
 	// Execution engine timeout value

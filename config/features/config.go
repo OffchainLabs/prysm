@@ -52,6 +52,7 @@ type Flags struct {
 	EnableStateDiff                     bool // EnableStateDiff enables the experimental state diff feature for the beacon node.
 	ReorgLatePayloads                   bool // ReorgLatePayloads enables reorging late payloads in the beacon node.
 	SubmitBlacklistedBuilderBids        bool // SubmitBlacklistedBuilderBids skips the circuit breaker check when submitting a signed execution payload bid.
+	DisableBuilderRelayCircuitBreaker   bool // DisableBuilderRelayCircuitBreaker stops the circuit breaker from tracking and banning direct connection endpoints.
 
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
@@ -65,6 +66,7 @@ type Flags struct {
 
 	EnableSlashingProtectionPruning bool // Enable slashing protection pruning for the validator client.
 	EnableMinimalSlashingProtection bool // Enable minimal slashing protection database for the validator client.
+	DisableDutyAwareShutdown        bool // Disable postponing the validator client shutdown until a restart would not miss any rewarded duty.
 
 	SaveFullExecutionPayloads bool // Save full beacon blocks with execution payloads in the database.
 	EnableStartOptimistic     bool // EnableStartOptimistic treats every block as optimistic at startup.
@@ -311,6 +313,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(submitBlacklistedBuilderBids)
 		cfg.SubmitBlacklistedBuilderBids = true
 	}
+	if ctx.Bool(disableBuilderRelayCircuitBreaker.Name) {
+		logEnabled(disableBuilderRelayCircuitBreaker)
+		cfg.DisableBuilderRelayCircuitBreaker = true
+	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}
 	Init(cfg)
@@ -346,6 +352,10 @@ func ConfigureValidator(ctx *cli.Context) error {
 	if ctx.Bool(disableAttestTimely.Name) {
 		logEnabled(disableAttestTimely)
 		cfg.AttestTimely = false
+	}
+	if ctx.Bool(disableDutyAwareShutdown.Name) {
+		logEnabled(disableDutyAwareShutdown)
+		cfg.DisableDutyAwareShutdown = true
 	}
 	if ctx.Bool(enableSlashingProtectionPruning.Name) {
 		logEnabled(enableSlashingProtectionPruning)
