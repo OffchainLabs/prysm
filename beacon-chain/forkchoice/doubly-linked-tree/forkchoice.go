@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -140,6 +141,12 @@ func (f *ForkChoice) InsertNode(ctx context.Context, state state.BeaconState, ro
 	pn, err := f.store.insert(ctx, roblock, justifiedEpoch, justifiedRoot, finalizedEpoch)
 	if err != nil {
 		return err
+	}
+	if roblock.Version() >= version.Gloas && pn.node.builderIndex != params.BeaconConfig().BuilderIndexSelfBuild {
+		pk, err := state.BuilderPubkey(pn.node.builderIndex)
+		if err == nil {
+			pn.node.builderPubkey = &pk
+		}
 	}
 	if features.Get().TrackEquivocations {
 		if slotStart, err := slots.StartTime(f.store.genesisTime, roblock.Block().Slot()); err == nil {
@@ -592,10 +599,14 @@ func (f *ForkChoice) InsertChain(ctx context.Context, chain []*forkchoicetypes.B
 		return nil
 	}
 	for _, bcp := range chain {
-		if _, err := f.store.insert(ctx,
+		pn, err := f.store.insert(ctx,
 			bcp.Block,
-			bcp.JustifiedCheckpoint.Epoch, bytesutil.ToBytes32(bcp.JustifiedCheckpoint.Root), bcp.FinalizedCheckpoint.Epoch); err != nil {
+			bcp.JustifiedCheckpoint.Epoch, bytesutil.ToBytes32(bcp.JustifiedCheckpoint.Root), bcp.FinalizedCheckpoint.Epoch)
+		if err != nil {
 			return err
+		}
+		if bcp.BuilderPubkey != nil {
+			pn.node.builderPubkey = bcp.BuilderPubkey
 		}
 		if bcp.HasPayload {
 			root := bcp.Block.Root()

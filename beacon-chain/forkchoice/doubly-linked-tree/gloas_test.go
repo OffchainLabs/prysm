@@ -2511,3 +2511,74 @@ func TestUpdateNewFullNodeWeight_SkipsSlashed(t *testing.T) {
 		assert.Equal(t, uint64(200), fn.balance)
 	})
 }
+
+func TestBuilderPubkey(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+
+	insert := func(root [32]byte, slot primitives.Slot, builderIndex primitives.BuilderIndex) {
+		st, _, err := prepareGloasForkchoiceState(ctx, slot, root, params.BeaconConfig().ZeroHash, indexToHash(100), params.BeaconConfig().ZeroHash, 0, 0)
+		require.NoError(t, err)
+		require.NoError(t, st.AddBuilderFromDeposit([fieldparams.BLSPubkeyLength]byte{0xaa}, [32]byte{}, 1))
+		blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+			Block: &ethpb.BeaconBlockGloas{
+				Slot: slot,
+				Body: &ethpb.BeaconBlockBodyGloas{
+					SignedExecutionPayloadBid: util.HydrateSignedExecutionPayloadBid(&ethpb.SignedExecutionPayloadBid{
+						Message: &ethpb.ExecutionPayloadBid{BuilderIndex: builderIndex},
+					}),
+				},
+			},
+		})
+		signed, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		roblock, err := blocks.NewROBlockWithRoot(signed, root)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, st, roblock))
+	}
+
+	builderRoot := indexToHash(1)
+	insert(builderRoot, 1, 0)
+	pk, err := f.BuilderPubkey(builderRoot)
+	require.NoError(t, err)
+	require.NotNil(t, pk)
+	assert.Equal(t, [fieldparams.BLSPubkeyLength]byte{0xaa}, *pk)
+
+	selfBuildRoot := indexToHash(2)
+	insert(selfBuildRoot, 2, params.BeaconConfig().BuilderIndexSelfBuild)
+	pk, err = f.BuilderPubkey(selfBuildRoot)
+	require.NoError(t, err)
+	require.IsNil(t, pk)
+
+	_, err = f.BuilderPubkey(indexToHash(999))
+	require.ErrorContains(t, ErrNilNode.Error(), err)
+}
+
+func TestInsertChain_SetsBuilderPubkey(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+
+	root := indexToHash(1)
+	blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+		Block: &ethpb.BeaconBlockGloas{
+			Slot:       1,
+			ParentRoot: params.BeaconConfig().ZeroHash[:],
+		},
+	})
+	signed, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	roblock, err := blocks.NewROBlockWithRoot(signed, root)
+	require.NoError(t, err)
+
+	want := &[fieldparams.BLSPubkeyLength]byte{0xbb}
+	require.NoError(t, f.InsertChain(ctx, []*forkchoicetypes.BlockAndCheckpoints{{
+		Block:               roblock,
+		JustifiedCheckpoint: &ethpb.Checkpoint{},
+		FinalizedCheckpoint: &ethpb.Checkpoint{},
+		BuilderPubkey:       want,
+	}}))
+
+	pk, err := f.BuilderPubkey(root)
+	require.NoError(t, err)
+	assert.Equal(t, want, pk)
+}

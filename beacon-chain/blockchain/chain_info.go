@@ -49,6 +49,7 @@ type PayloadAvailabilityFetcher interface {
 type ForkchoiceFetcher interface {
 	Ancestor(context.Context, []byte, primitives.Slot) ([]byte, error)
 	BlockHash(root [32]byte) ([32]byte, error)
+	BuilderPubkey(root [32]byte) (*[fieldparams.BLSPubkeyLength]byte, error)
 	HasPayloadBlockHash(root, blockHash [32]byte) bool
 	GasLimit(root, blockHash [32]byte) (uint64, error)
 	CachedHeadRoot() [32]byte

@@ -264,6 +264,35 @@ func TestEnvelopeVerifier_VerifySignature_SelfBuild(t *testing.T) {
 	require.NoError(t, verifier.VerifySignature(t.Context(), st))
 }
 
+func TestEnvelopeVerifier_VerifySignatureWithPubkey(t *testing.T) {
+	slot := primitives.Slot(1)
+	root := bytesutil.ToBytes32(bytes.Repeat([]byte{0xAA}, 32))
+	blockHash := bytesutil.ToBytes32(bytes.Repeat([]byte{0xBB}, 32))
+	genesisValidatorsRoot := bytesutil.ToBytes32(bytes.Repeat([]byte{0x11}, 32))
+	env := testSignedExecutionPayloadEnvelope(t, slot, 0, root, blockHash)
+
+	sk, err := bls.RandKey()
+	require.NoError(t, err)
+	pubkey := bytesutil.ToBytes48(sk.PublicKey().Marshal())
+	fork, err := params.Fork(slots.ToEpoch(slot))
+	require.NoError(t, err)
+
+	sig := signEnvelope(t, sk, env.Message, fork, genesisValidatorsRoot[:], slot)
+	env.Signature = sig[:]
+	wrapped, err := blocks.WrappedROSignedExecutionPayloadEnvelope(env)
+	require.NoError(t, err)
+	verifier := &EnvelopeVerifier{results: newResults(RequireBuilderSignatureValid), e: wrapped}
+	require.NoError(t, verifier.VerifySignatureWithPubkey(pubkey, genesisValidatorsRoot))
+
+	sk2, err := bls.RandKey()
+	require.NoError(t, err)
+	verifier = &EnvelopeVerifier{results: newResults(RequireBuilderSignatureValid), e: wrapped}
+	require.ErrorIs(t, verifier.VerifySignatureWithPubkey(bytesutil.ToBytes48(sk2.PublicKey().Marshal()), genesisValidatorsRoot), signing.ErrSigFailedToVerify)
+
+	verifier = &EnvelopeVerifier{results: newResults(RequireBuilderSignatureValid), e: wrapped}
+	require.ErrorIs(t, verifier.VerifySignatureWithPubkey(pubkey, [32]byte{}), signing.ErrSigFailedToVerify)
+}
+
 func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, builderIdx primitives.BuilderIndex, root, blockHash [32]byte) *ethpb.SignedExecutionPayloadEnvelope {
 	t.Helper()
 

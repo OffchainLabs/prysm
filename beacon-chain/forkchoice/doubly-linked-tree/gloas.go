@@ -658,6 +658,15 @@ func (f *ForkChoice) BuilderIndex(root [32]byte) (primitives.BuilderIndex, error
 	return en.node.builderIndex, nil
 }
 
+// BuilderPubkey returns the pubkey of the builder committed in the given block's bid, nil for self-built blocks.
+func (f *ForkChoice) BuilderPubkey(root [32]byte) (*[fieldparams.BLSPubkeyLength]byte, error) {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return nil, errors.Wrap(ErrNilNode, "could not get builder pubkey for root")
+	}
+	return en.node.builderPubkey, nil
+}
+
 // BlockHash returns the hash committed in the given block
 func (f *ForkChoice) BlockHash(root [32]byte) ([32]byte, error) {
 	s := f.store
