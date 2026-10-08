@@ -152,6 +152,7 @@ type Service struct {
 	pendingQueueLock                     sync.RWMutex
 	chainStarted                         *atomic.Bool
 	validateBlockLock                    sync.RWMutex
+	validateEnvelopeLock                 sync.Mutex
 	rateLimiter                          *limiter
 	seenBlockLock                        sync.RWMutex
 	seenBlockCache                       *lru.Cache
