@@ -364,7 +364,6 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	return s.saveHeadNoDB(ctx, lastB, lastBR, preState, !isValidPayload)
 }
 
-// blockEnvelopes is indexed by block and holds only envelopes that onBlockBatch verified.
 func (s *Service) notifyEngineAndSaveData(
 	ctx context.Context,
 	blks []consensusblocks.ROBlock,

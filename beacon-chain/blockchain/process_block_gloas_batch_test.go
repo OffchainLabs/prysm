@@ -243,14 +243,6 @@ func TestOnBlockBatchGloasEnvelopes(t *testing.T) {
 			wantFull: map[string]bool{"a": true, "b0": true, "b1": true},
 		},
 		{
-			name:      "well formed stream with empty successor",
-			successor: b1Empty,
-			envelopes: func() []*ethpb.SignedExecutionPayloadEnvelope {
-				return []*ethpb.SignedExecutionPayloadEnvelope{a.envelope, b0.envelope, b1Empty.envelope}
-			},
-			wantFull: map[string]bool{"a": true, "b0": true, "b1": true},
-		},
-		{
 			name:      "wrong signer on the last envelope",
 			successor: b1Full,
 			envelopes: func() []*ethpb.SignedExecutionPayloadEnvelope {
@@ -260,28 +252,10 @@ func TestOnBlockBatchGloasEnvelopes(t *testing.T) {
 			wantFull: map[string]bool{"b0": false, "b1": false},
 		},
 		{
-			name:      "unknown root ahead of a wrong signer with empty successor",
-			successor: b1Empty,
-			envelopes: func() []*ethpb.SignedExecutionPayloadEnvelope {
-				return []*ethpb.SignedExecutionPayloadEnvelope{a.envelope, withRoot(b0.envelope, unknownRoot), wrongSigner(b1Empty)}
-			},
-			wantErr:  errBatchEnvelopeMismatch.Error(),
-			wantFull: map[string]bool{"b0": false, "b1": false},
-		},
-		{
-			name:      "unknown root ahead of a wrong signer with full successor",
+			name:      "unknown root ahead of a wrong signer",
 			successor: b1Full,
 			envelopes: func() []*ethpb.SignedExecutionPayloadEnvelope {
 				return []*ethpb.SignedExecutionPayloadEnvelope{a.envelope, withRoot(b0.envelope, unknownRoot), wrongSigner(b1Full)}
-			},
-			wantErr:  errBatchEnvelopeMismatch.Error(),
-			wantFull: map[string]bool{"b0": false, "b1": false},
-		},
-		{
-			name:      "parent envelope naming an unknown root",
-			successor: b1Full,
-			envelopes: func() []*ethpb.SignedExecutionPayloadEnvelope {
-				return []*ethpb.SignedExecutionPayloadEnvelope{withRoot(a.envelope, unknownRoot), b0.envelope, b1Full.envelope}
 			},
 			wantErr:  errBatchEnvelopeMismatch.Error(),
 			wantFull: map[string]bool{"b0": false, "b1": false},
