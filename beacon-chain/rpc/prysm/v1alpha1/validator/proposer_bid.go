@@ -114,6 +114,8 @@ type winningBuilderBid struct {
 
 // Returns a nil bid when the local self-build wins, bids compete by boosted
 // effective value with ties going local, the returned Gwei is unboosted.
+// A nil local means there is no self-build to fall back to: any remote bid beats
+// it and the P2P min bid is waived, since any bid beats missing the slot.
 func bestBid(
 	head state.BeaconState,
 	local *consensusblocks.GetPayloadResponse,
@@ -122,12 +124,15 @@ func bestBid(
 	builderConfig *ethpb.BuilderConfig,
 ) (*ethpb.SignedExecutionPayloadBid, bidSource, primitives.Gwei) {
 	var bestBid *ethpb.SignedExecutionPayloadBid
-	var bestEffective primitives.Gwei
-	bestBoosted := primitives.WeiToGwei(local.Bid)
+	var bestEffective, bestBoosted primitives.Gwei
+	if local != nil {
+		bestBoosted = primitives.WeiToGwei(local.Bid)
+	}
 	src := bidSourceSelfBuild
 
 	consider := func(bid *ethpb.SignedExecutionPayloadBid, effective primitives.Gwei, boostFactor uint64, from bidSource) {
-		if boosted := boostedBidValue(effective, boostFactor); boosted > bestBoosted {
+		boosted := boostedBidValue(effective, boostFactor)
+		if boosted > bestBoosted || (local == nil && bestBid == nil) {
 			bestBid, bestEffective, bestBoosted, src = bid, effective, boosted, from
 		}
 	}
@@ -138,7 +143,7 @@ func bestBid(
 			minBid, boostFactor = builderConfig.MinBid, builderConfig.BuilderBoostFactor
 		}
 		effective := effectiveBidValue(p2pBid, p2pExecutionPaymentCap(head, builderConfig, p2pBid))
-		if effective >= minBid {
+		if effective >= minBid || local == nil {
 			consider(p2pBid, effective, boostFactor, bidSourceP2P)
 		}
 	}
@@ -213,6 +218,98 @@ type builderBidQuery struct {
 	entries        []*ethpb.BuilderEntry
 }
 
+// newBuilderBidQuery derives the request context from the head state rather than the local payload,
+// so builder bids can be requested before the local payload is available.
+func (vs *Server) newBuilderBidQuery(
+	ctx context.Context,
+	head state.BeaconState,
+	slot primitives.Slot,
+	parentRoot [32]byte,
+	proposerIdx primitives.ValidatorIndex,
+	parentFull bool,
+	entries []*ethpb.BuilderEntry,
+) (*builderBidQuery, error) {
+	val, err := head.ValidatorAtIndexReadOnly(proposerIdx)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get proposer")
+	}
+	ph, err := vs.getParentBlockHash(ctx, head, slot, parentRoot, parentFull)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get parent block hash")
+	}
+	parentHash := bytesutil.ToBytes32(ph)
+	parentGasLimit, err := vs.ForkchoiceFetcher.GasLimit(parentRoot, parentHash)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get parent gas limit")
+	}
+	pref := vs.proposerPreferenceForProposal(ctx, head, slot, proposerIdx)
+	feeRecipient := pref.FeeRecipientOrDefault()
+	return &builderBidQuery{
+		slot:           slot,
+		parentRoot:     parentRoot,
+		parentHash:     parentHash,
+		pubkey:         val.PublicKey(),
+		feeRecipient:   feeRecipient[:],
+		parentGasLimit: parentGasLimit,
+		targetGasLimit: pref.GasLimitOr(parentGasLimit),
+		entries:        entries,
+	}, nil
+}
+
+// pendingBuilderBid is a builder-API bid request in flight alongside the local payload.
+// A nil request yields no bid.
+type pendingBuilderBid struct {
+	cancel context.CancelFunc
+	done   chan struct{}
+	win    *winningBuilderBid
+}
+
+// wait blocks until the request settles and returns its winning bid.
+func (p *pendingBuilderBid) wait() *winningBuilderBid {
+	if p == nil {
+		return nil
+	}
+	<-p.done
+	return p.win
+}
+
+// abort cancels the request and waits for it to unwind so nothing reads the head state afterwards.
+func (p *pendingBuilderBid) abort() {
+	if p == nil {
+		return
+	}
+	p.cancel()
+	<-p.done
+}
+
+// requestBuilderBid starts the builder-API bid request in the background so BuilderBidTimeout
+// runs alongside the local EL round trip instead of after it.
+func (vs *Server) requestBuilderBid(
+	ctx context.Context,
+	blk interfaces.ReadOnlyBeaconBlock,
+	head state.BeaconState,
+	parentFull bool,
+	builderConfig *ethpb.BuilderConfig,
+) *pendingBuilderBid {
+	entries := builderConfig.GetBuilders()
+	if vs.BlockBuilder == nil || len(entries) == 0 {
+		return nil
+	}
+	slot, parentRoot, proposerIdx := blk.Slot(), blk.ParentRoot(), blk.ProposerIndex()
+	ctx, cancel := context.WithCancel(ctx)
+	p := &pendingBuilderBid{cancel: cancel, done: make(chan struct{})}
+	go func() {
+		defer close(p.done)
+		q, err := vs.newBuilderBidQuery(ctx, head, slot, parentRoot, proposerIdx, parentFull, entries)
+		if err != nil {
+			log.WithError(err).Error("Could not build builder bid request")
+			return
+		}
+		p.win = vs.getBuilderExecutionPayloadBid(ctx, head, q)
+	}()
+	return p
+}
+
 func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.BeaconState, q *builderBidQuery) *winningBuilderBid {
 	if vs.BlockBuilder == nil || len(q.entries) == 0 {
 		return nil
@@ -224,7 +321,11 @@ func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.
 	}
 	ctx, cancel := context.WithTimeout(ctx, params.BeaconConfig().BuilderBidTimeout)
 	defer cancel()
+
 	bids, err := vs.BlockBuilder.GetExecutionPayloadBid(ctx, q.slot, q.parentHash, q.parentRoot, q.pubkey, entries)
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return nil
+	}
 	if err != nil {
 		builderGetPayloadMissCount.Inc()
 		log.WithError(err).Error("Could not get builder execution payload bid")
@@ -326,6 +427,9 @@ func (vs *Server) validateBuilderBid(head state.BeaconState, signed *ethpb.Signe
 		return errors.New("nil builder bid")
 	}
 	bid := signed.Message
+	if bytes.Equal(bid.BlockHash, bid.ParentBlockHash) {
+		return errors.New("bid block hash equals parent block hash")
+	}
 	if len(entry.BuilderPubkeys) > 0 {
 		pk, err := head.BuilderPubkey(bid.BuilderIndex)
 		if err != nil {
@@ -409,27 +513,44 @@ func (vs *Server) submitBlockToBuilder(block interfaces.ReadOnlySignedBeaconBloc
 	}
 }
 
-// setP2PBidFallback uses a cached P2P bid when the local EL self-build is unavailable.
-// The circuit breaker is deliberately not consulted here: with no local payload at all, a block
-// carrying a possibly-undelivered bid still beats missing the slot outright.
-func (vs *Server) setP2PBidFallback(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, parentFull bool) error {
-	if vs.HighestBidCache == nil {
-		return errors.New("highest bid cache is nil")
-	}
+// setRemoteBidFallback picks the better of the builder-API bid and the cached P2P bid when the
+// local EL self-build is unavailable. The circuit breaker is deliberately not consulted for the
+// P2P bid: with no local payload at all, a block carrying a possibly-undelivered bid still beats
+// missing the slot outright.
+func (vs *Server) setRemoteBidFallback(
+	ctx context.Context,
+	sBlk interfaces.SignedBeaconBlock,
+	head state.BeaconState,
+	parentFull bool,
+	builderWin *winningBuilderBid,
+	builderConfig *ethpb.BuilderConfig,
+) (bidSource, error) {
 	slot := sBlk.Block().Slot()
-	parentRoot := sBlk.Block().ParentRoot()
-	parentHash, err := vs.getParentBlockHash(ctx, head, slot, parentRoot, parentFull)
-	if err != nil {
-		return errors.Wrap(err, "could not get parent block hash")
+	var p2pBid *ethpb.SignedExecutionPayloadBid
+	if vs.HighestBidCache != nil {
+		parentRoot := sBlk.Block().ParentRoot()
+		parentHash, err := vs.getParentBlockHash(ctx, head, slot, parentRoot, parentFull)
+		if err != nil {
+			return bidSourceSelfBuild, errors.Wrap(err, "could not get parent block hash")
+		}
+		if cached, ok := vs.HighestBidCache.Get(slot, bytesutil.ToBytes32(parentHash), parentRoot); ok {
+			p2pBid = cached
+		}
 	}
-	cached, ok := vs.HighestBidCache.Get(slot, bytesutil.ToBytes32(parentHash), parentRoot)
-	if !ok {
-		return errors.New("no cached P2P bid available")
+	bid, src, effective := bestBid(head, nil, p2pBid, builderWin, builderConfig)
+	if bid == nil {
+		return bidSourceSelfBuild, errors.New("no builder or cached P2P bid available")
 	}
-	if err := sBlk.SetSignedExecutionPayloadBid(cached); err != nil {
-		return errors.Wrap(err, "could not set cached P2P execution payload bid")
+	if err := sBlk.SetSignedExecutionPayloadBid(bid); err != nil {
+		return bidSourceSelfBuild, errors.Wrap(err, "could not set fallback execution payload bid")
 	}
-	return nil
+	log.WithFields(logrus.Fields{
+		"slot":      slot,
+		"source":    src,
+		"builder":   bid.Message.BuilderIndex,
+		"valueGwei": uint64(effective),
+	}).Info("Chose fallback payload bid")
+	return src, nil
 }
 
 func (vs *Server) cachedP2PBid(sBlk interfaces.SignedBeaconBlock, local *consensusblocks.GetPayloadResponse) *ethpb.SignedExecutionPayloadBid {

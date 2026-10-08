@@ -217,6 +217,34 @@ func TestProcessPayloadAttestations_IndexedVerificationError(t *testing.T) {
 	require.ErrorContains(t, "validator 0", err)
 }
 
+func TestProcessPayloadAttestations_PreGloasSlot(t *testing.T) {
+	setupTestConfig(t)
+
+	sk, pk := newKey(t)
+	st := newTestState(t, []*eth.Validator{activeValidator(pk)}, 2)
+	require.NoError(t, st.SetFork(&eth.Fork{
+		PreviousVersion: params.BeaconConfig().FuluForkVersion,
+		CurrentVersion:  params.BeaconConfig().GloasForkVersion,
+		Epoch:           2,
+	}))
+	parentRoot := bytes.Repeat([]byte{0xaa}, 32)
+	require.NoError(t, st.SetLatestBlockHeader(&eth.BeaconBlockHeader{ParentRoot: parentRoot}))
+
+	attData := &eth.PayloadAttestationData{
+		BeaconBlockRoot: parentRoot,
+		Slot:            1,
+	}
+	att := &eth.PayloadAttestation{
+		Data:            attData,
+		AggregationBits: setBits(bitfield.NewBitvector512(), 0),
+		Signature:       signAttestation(t, st, attData, []common.SecretKey{sk}),
+	}
+	body := buildBody(t, att)
+
+	err := gloas.ProcessPayloadAttestations(t.Context(), st, body)
+	require.ErrorContains(t, "precedes the gloas fork epoch", err)
+}
+
 func newTestState(t *testing.T, vals []*eth.Validator, slot primitives.Slot) state.BeaconState {
 	t.Helper()
 
@@ -329,7 +357,7 @@ func signAttestation(t *testing.T, st state.ReadOnlyBeaconState, data *eth.Paylo
 
 func TestProcessPTCWindow(t *testing.T) {
 	fuluSt, _ := testutil.DeterministicGenesisStateFulu(t, 256)
-	st, err := gloas.UpgradeToGloas(fuluSt)
+	st, err := gloas.UpgradeToGloas(t.Context(), fuluSt)
 	require.NoError(t, err)
 
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
@@ -376,7 +404,7 @@ func TestProcessPTCWindow(t *testing.T) {
 // state, guarding against unintended behavioral drift.
 func TestProcessPTCWindow_GoldenVector(t *testing.T) {
 	fuluSt, _ := testutil.DeterministicGenesisStateFulu(t, 256)
-	st, err := gloas.UpgradeToGloas(fuluSt)
+	st, err := gloas.UpgradeToGloas(t.Context(), fuluSt)
 	require.NoError(t, err)
 	require.NoError(t, st.SetSlot(params.BeaconConfig().SlotsPerEpoch))
 	require.NoError(t, gloas.ProcessPTCWindow(t.Context(), st))
@@ -426,7 +454,7 @@ func (s *validatorLookupErrState) ValidatorAtIndexReadOnly(idx primitives.Valida
 // what's expected: we skipped SHA256 work, not memory traffic.
 func BenchmarkProcessPTCWindow(b *testing.B) {
 	fuluSt, _ := testutil.DeterministicGenesisStateFulu(b, 2048)
-	st, err := gloas.UpgradeToGloas(fuluSt)
+	st, err := gloas.UpgradeToGloas(b.Context(), fuluSt)
 	require.NoError(b, err)
 	require.NoError(b, st.SetSlot(params.BeaconConfig().SlotsPerEpoch))
 

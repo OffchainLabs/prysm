@@ -13,8 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/golang/snappy"
-	"github.com/google/go-cmp/cmp"
-	"google.golang.org/protobuf/testing/protocmp"
 )
 
 func TestInitializeFromProto_Phase0(t *testing.T) {
@@ -850,15 +848,9 @@ func TestBeaconChainCopy_Electra(t *testing.T) {
 	require.NoError(t, err)
 
 	// Sanity check that InitializeFromProtoElectra and ToProto works
-	if !cmp.Equal(st.ToProto(), pb, protocmp.Transform()) {
-		t.Log(cmp.Diff(st.ToProto(), pb, protocmp.Transform()))
-		t.Fatal("InitializeFromProtoElectra does not match input proto")
-	}
+	require.DeepSSZEqual(t, pb, st.ToProto(), "InitializeFromProtoElectra does not match input proto")
 
 	// Perform the copy and check that the copied state matches the original state.
 	st2 := st.Copy()
-	if !cmp.Equal(st.ToProto(), st2.ToProto(), protocmp.Transform()) {
-		t.Log(cmp.Diff(st.ToProto(), st2.ToProto(), protocmp.Transform()))
-		t.Fatal("Copied state does not match original state")
-	}
+	require.DeepSSZEqual(t, st.ToProto(), st2.ToProto(), "Copied state does not match original state")
 }

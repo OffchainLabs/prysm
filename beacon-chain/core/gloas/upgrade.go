@@ -117,12 +117,12 @@ import (
 //
 //	    return post
 //	</spec>
-func UpgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
+func UpgradeToGloas(ctx context.Context, beaconState state.BeaconState) (state.BeaconState, error) {
 	s, err := upgradeToGloas(beaconState)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not convert to gloas")
 	}
-	ptcWindow, err := initializePTCWindow(context.Background(), s)
+	ptcWindow, err := initializePTCWindow(ctx, s)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to initialize ptc window")
 	}

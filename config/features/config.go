@@ -66,6 +66,7 @@ type Flags struct {
 
 	EnableSlashingProtectionPruning bool // Enable slashing protection pruning for the validator client.
 	EnableMinimalSlashingProtection bool // Enable minimal slashing protection database for the validator client.
+	DisableDutyAwareShutdown        bool // Disable postponing the validator client shutdown until a restart would not miss any rewarded duty.
 
 	SaveFullExecutionPayloads bool // Save full beacon blocks with execution payloads in the database.
 	EnableStartOptimistic     bool // EnableStartOptimistic treats every block as optimistic at startup.
@@ -351,6 +352,10 @@ func ConfigureValidator(ctx *cli.Context) error {
 	if ctx.Bool(disableAttestTimely.Name) {
 		logEnabled(disableAttestTimely)
 		cfg.AttestTimely = false
+	}
+	if ctx.Bool(disableDutyAwareShutdown.Name) {
+		logEnabled(disableDutyAwareShutdown)
+		cfg.DisableDutyAwareShutdown = true
 	}
 	if ctx.Bool(enableSlashingProtectionPruning.Name) {
 		logEnabled(enableSlashingProtectionPruning)

@@ -62,7 +62,11 @@ func (v *ProposerPreferencesVerifier) VerifyCurrentOrNextEpoch() (err error) {
 		return fmt.Errorf("%w: proposal epoch %d, current epoch %d",
 			ErrProposerPreferencesNotCurrentOrNextEpoch, proposalEpoch, currentEpoch)
 	}
-	if msg.ProposalSlot <= currentSlot {
+	start, err := v.clock.SlotStart(msg.ProposalSlot)
+	if err != nil {
+		return err
+	}
+	if v.clock.Now().After(start.Add(params.BeaconConfig().MaximumGossipClockDisparityDuration())) {
 		return fmt.Errorf("%w: proposal slot %d <= current slot %d",
 			ErrProposerPreferencesSlotAlreadyPassed, msg.ProposalSlot, currentSlot)
 	}

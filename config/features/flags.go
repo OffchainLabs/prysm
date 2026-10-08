@@ -87,6 +87,10 @@ var (
 		Name:  "disable-attest-timely",
 		Usage: "Disable validator attesting timely after current block processes. See #8185 for more details.",
 	}
+	disableDutyAwareShutdown = &cli.BoolFlag{
+		Name:  "disable-duty-aware-shutdown",
+		Usage: "Stop the validator client immediately on SIGINT/SIGTERM, instead of waiting for the moment in the slot where a restart would not miss any rewarded duty.",
+	}
 	enableSlashingProtectionPruning = &cli.BoolFlag{
 		Name:  "enable-slashing-protection-history-pruning",
 		Usage: "Enables the pruning of the validator client's slashing protection database.",
@@ -253,6 +257,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	Mainnet,
 	dynamicKeyReloadDebounceInterval,
 	disableAttestTimely,
+	disableDutyAwareShutdown,
 	enableSlashingProtectionPruning,
 	EnableMinimalSlashingProtection,
 	enableDoppelGangerProtection,

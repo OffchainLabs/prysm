@@ -13,6 +13,9 @@ type LightClientSyncCommitteeBranch = [fieldparams.SyncCommitteeBranchDepth][fie
 type LightClientSyncCommitteeBranchElectra = [fieldparams.SyncCommitteeBranchDepthElectra][fieldparams.RootLength]byte
 type LightClientFinalityBranch = [fieldparams.FinalityBranchDepth][fieldparams.RootLength]byte
 type LightClientFinalityBranchElectra = [fieldparams.FinalityBranchDepthElectra][fieldparams.RootLength]byte
+type LightClientExecutionBranchGloas = [fieldparams.ExecutionBranchDepthGloas][fieldparams.RootLength]byte
+type LightClientSyncCommitteeBranchGloas = [fieldparams.SyncCommitteeBranchDepthGloas][fieldparams.RootLength]byte
+type LightClientFinalityBranchGloas = [fieldparams.FinalityBranchDepthGloas][fieldparams.RootLength]byte
 
 type LightClientHeader interface {
 	ssz.Marshaler
@@ -21,6 +24,8 @@ type LightClientHeader interface {
 	Beacon() *pb.BeaconBlockHeader
 	Execution() (ExecutionData, error)
 	ExecutionBranch() (LightClientExecutionBranch, error)
+	ExecutionBlockHash() ([fieldparams.RootLength]byte, error)
+	ExecutionBranchGloas() (LightClientExecutionBranchGloas, error)
 }
 
 type LightClientBootstrap interface {
@@ -33,6 +38,7 @@ type LightClientBootstrap interface {
 	SetCurrentSyncCommittee(sc *pb.SyncCommittee) error
 	CurrentSyncCommitteeBranch() (LightClientSyncCommitteeBranch, error)
 	CurrentSyncCommitteeBranchElectra() (LightClientSyncCommitteeBranchElectra, error)
+	CurrentSyncCommitteeBranchGloas() (LightClientSyncCommitteeBranchGloas, error)
 	SetCurrentSyncCommitteeBranch(branch [][]byte) error
 }
 
@@ -47,10 +53,12 @@ type LightClientUpdate interface {
 	NextSyncCommitteeBranch() (LightClientSyncCommitteeBranch, error)
 	SetNextSyncCommitteeBranch(branch [][]byte) error
 	NextSyncCommitteeBranchElectra() (LightClientSyncCommitteeBranchElectra, error)
+	NextSyncCommitteeBranchGloas() (LightClientSyncCommitteeBranchGloas, error)
 	FinalizedHeader() LightClientHeader
 	SetFinalizedHeader(header LightClientHeader) error
 	FinalityBranch() (LightClientFinalityBranch, error)
 	FinalityBranchElectra() (LightClientFinalityBranchElectra, error)
+	FinalityBranchGloas() (LightClientFinalityBranchGloas, error)
 	SetFinalityBranch(branch [][]byte) error
 	SyncAggregate() *pb.SyncAggregate
 	SetSyncAggregate(sa *pb.SyncAggregate)
@@ -68,6 +76,7 @@ type LightClientFinalityUpdate interface {
 	FinalizedHeader() LightClientHeader
 	FinalityBranch() (LightClientFinalityBranch, error)
 	FinalityBranchElectra() (LightClientFinalityBranchElectra, error)
+	FinalityBranchGloas() (LightClientFinalityBranchGloas, error)
 	SyncAggregate() *pb.SyncAggregate
 	SignatureSlot() primitives.Slot
 	IsNil() bool

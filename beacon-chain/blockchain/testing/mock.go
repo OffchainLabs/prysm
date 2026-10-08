@@ -58,6 +58,7 @@ type ChainService struct {
 	MockDataAvailable                    map[[32]byte]bool
 	MockDataAvailableErr                 error
 	ParentPayloadReadyVal                *bool
+	HasPayloadBlockHashVal               *bool
 	BlockSlot                            primitives.Slot
 	RecentBlockSlotErr                   error
 	OptimisticRoots                      map[[32]byte]bool
@@ -405,6 +406,13 @@ func (s *ChainService) HeadRootAndFull() ([32]byte, bool) {
 	return bytesutil.ToBytes32(s.Root), s.Full
 }
 
+// HeadAndCanonicalNodeAtSlot mocks HeadAndCanonicalNodeAtSlot method in chain service.
+func (s *ChainService) HeadAndCanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool, [32]byte, bool) {
+	headRoot, headFull := s.HeadRootAndFull()
+	canonicalRoot, canonicalFull := s.CanonicalNodeAtSlot(slot)
+	return headRoot, headFull, canonicalRoot, canonicalFull
+}
+
 // HeadBlock mocks HeadBlock method in chain service.
 func (s *ChainService) HeadBlock(context.Context) (interfaces.ReadOnlySignedBeaconBlock, error) {
 	return s.Block, nil
@@ -651,6 +659,9 @@ func (s *ChainService) BlockHash(root [32]byte) ([32]byte, error) {
 
 // HasPayloadBlockHash mocks the same method in the chain service.
 func (s *ChainService) HasPayloadBlockHash(root, blockHash [32]byte) bool {
+	if s.HasPayloadBlockHashVal != nil {
+		return *s.HasPayloadBlockHashVal
+	}
 	if s.ForkChoiceStore == nil {
 		return false
 	}
