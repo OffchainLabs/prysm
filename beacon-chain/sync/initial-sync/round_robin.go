@@ -164,7 +164,7 @@ func (s *Service) processFetchedData(ctx context.Context, data *blocksQueueFetch
 		return
 	}
 	// Use Batch Block Verify to process and verify batches directly.
-	count, err := s.processBatchedBlocks(ctx, data.bwb, data.envelopes, s.cfg.Chain.ReceiveBlockBatch)
+	count, err := s.processBatchedBlocks(ctx, data.bwb, data.envelopes, s.cfg.Chain.ReceiveBlockBatch, data.blocksFrom)
 	if err != nil {
 		log.WithError(err).Warn("Skip processing batched blocks")
 	}
@@ -184,6 +184,10 @@ func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQue
 
 	if len(bwb) == 0 {
 		return 0, nil
+	}
+	envelopes, err = s.ensureParentPayload(ctx, bwb[0].Block, envelopes, data.blocksFrom)
+	if err != nil {
+		return 0, err
 	}
 
 	// Separate blocks with blobs from blocks with data columns.
@@ -466,7 +470,7 @@ func envelopesForBlocks(
 	return nil
 }
 
-func (s *Service) processBatchedBlocks(ctx context.Context, bwb []blocks.BlockWithROSidecars, envelopes []interfaces.ROSignedExecutionPayloadEnvelope, bFunc batchBlockReceiverFn) (uint64, error) {
+func (s *Service) processBatchedBlocks(ctx context.Context, bwb []blocks.BlockWithROSidecars, envelopes []interfaces.ROSignedExecutionPayloadEnvelope, bFunc batchBlockReceiverFn, pid peer.ID) (uint64, error) {
 	if len(bwb) == 0 {
 		return 0, errors.New("0 blocks provided into method")
 	}
@@ -482,6 +486,10 @@ func (s *Service) processBatchedBlocks(ctx context.Context, bwb []blocks.BlockWi
 	if !s.cfg.Chain.HasBlock(ctx, firstBlock.Block().ParentRoot()) {
 		return 0, fmt.Errorf("%w: %#x (in processBatchedBlocks, slot=%d)",
 			errParentDoesNotExist, firstBlock.Block().ParentRoot(), firstBlock.Block().Slot())
+	}
+	envelopes, err = s.ensureParentPayload(ctx, firstBlock, envelopes, pid)
+	if err != nil {
+		return 0, err
 	}
 
 	firstFuluIndex, err := findFirstForkIndex(bwb, version.Fulu)
