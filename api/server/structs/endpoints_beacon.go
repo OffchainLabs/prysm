@@ -312,6 +312,20 @@ type StatePTC struct {
 	Validators []string `json:"validators"` // validator indexes in committee order, duplicates preserved
 }
 
+type GetBuilderPendingWithdrawalsResponse struct {
+	Version             string                      `json:"version"`
+	ExecutionOptimistic bool                        `json:"execution_optimistic"`
+	Finalized           bool                        `json:"finalized"`
+	Data                []*BuilderPendingWithdrawal `json:"data"`
+}
+
+type GetBuilderPendingPaymentsResponse struct {
+	Version             string                   `json:"version"`
+	ExecutionOptimistic bool                     `json:"execution_optimistic"`
+	Finalized           bool                     `json:"finalized"`
+	Data                []*BuilderPendingPayment `json:"data"`
+}
+
 type GetBlobsResponse struct {
 	ExecutionOptimistic bool     `json:"execution_optimistic"`
 	Finalized           bool     `json:"finalized"`

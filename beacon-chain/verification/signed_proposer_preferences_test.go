@@ -28,9 +28,14 @@ func TestProposerPreferencesVerifier_VerifyCurrentOrNextEpoch(t *testing.T) {
 	verifier = &ProposerPreferencesVerifier{sharedResources: &sharedResources{clock: testClockAtSlotForProposerPreferences(t, st.Slot())}, results: newResults(RequireProposerPreferencesCurrentOrNextEpoch), p: signed}
 	require.NoError(t, verifier.VerifyCurrentOrNextEpoch())
 
-	// Current slot (already passed) is rejected.
+	// Current slot at its start is still within MAXIMUM_GOSSIP_CLOCK_DISPARITY.
 	signed.Message.ProposalSlot = st.Slot()
 	verifier = &ProposerPreferencesVerifier{sharedResources: &sharedResources{clock: testClockAtSlotForProposerPreferences(t, st.Slot())}, results: newResults(RequireProposerPreferencesCurrentOrNextEpoch), p: signed}
+	require.NoError(t, verifier.VerifyCurrentOrNextEpoch())
+
+	// Current slot past the disparity allowance is rejected.
+	pastDisparity := params.BeaconConfig().MaximumGossipClockDisparityDuration() + time.Millisecond
+	verifier = &ProposerPreferencesVerifier{sharedResources: &sharedResources{clock: testClockAtSlotForProposerPreferences(t, st.Slot(), pastDisparity)}, results: newResults(RequireProposerPreferencesCurrentOrNextEpoch), p: signed}
 	require.ErrorIs(t, verifier.VerifyCurrentOrNextEpoch(), ErrProposerPreferencesSlotAlreadyPassed)
 
 	// Same-epoch future slot with more room.
@@ -42,7 +47,7 @@ func TestProposerPreferencesVerifier_VerifyCurrentOrNextEpoch(t *testing.T) {
 func TestProposerPreferencesVerifier_VerifyCurrentOrNextEpoch_UsesClockWhenStateLags(t *testing.T) {
 	_, _, signed := newSignedProposerPreferencesState(t, 31, 32, 0)
 	verifier := &ProposerPreferencesVerifier{
-		sharedResources: &sharedResources{clock: testClockAtSlotForProposerPreferences(t, 32)},
+		sharedResources: &sharedResources{clock: testClockAtSlotForProposerPreferences(t, 32, params.BeaconConfig().MaximumGossipClockDisparityDuration()+time.Millisecond)},
 		results:         newResults(RequireProposerPreferencesCurrentOrNextEpoch),
 		p:               signed,
 	}
@@ -163,11 +168,14 @@ func signProposerPreferencesWithConfigFork(t *testing.T, sk bls.SecretKey, prefe
 	return sig
 }
 
-func testClockAtSlotForProposerPreferences(t *testing.T, slot primitives.Slot) *startup.Clock {
+func testClockAtSlotForProposerPreferences(t *testing.T, slot primitives.Slot, offsets ...time.Duration) *startup.Clock {
 	t.Helper()
 
 	genesis := time.Unix(1_700_000_000, 0)
 	now, err := slots.StartTime(genesis, slot)
 	require.NoError(t, err)
+	for _, o := range offsets {
+		now = now.Add(o)
+	}
 	return startup.NewClock(genesis, [32]byte{}, startup.WithNower(func() time.Time { return now }))
 }

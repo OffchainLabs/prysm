@@ -97,6 +97,7 @@ type Service struct {
 	custodyInfoLock          sync.RWMutex // Lock access to custodyInfo
 	custodyInfoSet           chan struct{}
 	allForkDigests           map[[4]byte]struct{}
+	dataColumnBroadcastLog   dataColumnBroadcastLogger
 }
 
 type custodyInfo struct {

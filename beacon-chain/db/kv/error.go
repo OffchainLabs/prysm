@@ -32,6 +32,7 @@ var ErrStateDiffExponentMismatch = errors.New("state-diff exponents mismatch")
 // ErrStateDiffMissingSnapshot is returned when the offset snapshot is missing.
 var ErrStateDiffMissingSnapshot = errors.New("state-diff offset snapshot missing")
 
+var errOriginBlockMismatch = errors.New("origin block does not match the origin state latest block header")
 var errEmptyBlockSlice = errors.New("[]blocks.ROBlock is empty")
 var errIncorrectBlockParent = errors.New("unexpected missing or forked blocks in a []ROBlock")
 var errFinalizedChildNotFound = errors.New("unable to find finalized root descending from backfill batch")

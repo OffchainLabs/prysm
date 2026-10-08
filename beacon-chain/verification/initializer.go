@@ -60,6 +60,21 @@ type sharedResources struct {
 	sg    singleflight.Group
 }
 
+// Mirrors the spec's is_within_slot_range, allowing MAXIMUM_GOSSIP_CLOCK_DISPARITY on both ends.
+func (r *sharedResources) withinSlotRange(first, last primitives.Slot) (bool, error) {
+	start, err := r.clock.SlotStart(first)
+	if err != nil {
+		return false, err
+	}
+	end, err := r.clock.SlotStart(last + 1)
+	if err != nil {
+		return false, err
+	}
+	disparity := params.BeaconConfig().MaximumGossipClockDisparityDuration()
+	now := r.clock.Now()
+	return !now.Before(start.Add(-disparity)) && !now.After(end.Add(disparity)), nil
+}
+
 // Initializer is used to create different Verifiers.
 // Verifiers require access to stateful data structures, like caches,
 // and it is Initializer's job to provide access to those.
