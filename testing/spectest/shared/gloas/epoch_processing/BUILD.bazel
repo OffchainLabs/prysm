@@ -20,6 +20,7 @@ go_library(
         "rewards_and_penalties.go",
         "slashings.go",
         "slashings_reset.go",
+        "sync_committee_updates.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/gloas/epoch_processing",
     visibility = ["//visibility:public"],
