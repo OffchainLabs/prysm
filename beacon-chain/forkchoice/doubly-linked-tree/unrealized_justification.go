@@ -85,21 +85,23 @@ func (s *Store) pullTips(state state.BeaconState, node *Node, jc, fc *ethpb.Chec
 		uj, uf = jc, fc
 	}
 
+	ujRoot := s.clampCheckpointRoot(uj.Epoch, bytesutil.ToBytes32(uj.Root))
+
 	// Update store's unrealized checkpoints.
 	if uj.Epoch > s.unrealizedJustifiedCheckpoint.Epoch {
 		s.unrealizedJustifiedCheckpoint = &forkchoicetypes.Checkpoint{
-			Epoch: uj.Epoch, Root: bytesutil.ToBytes32(uj.Root),
+			Epoch: uj.Epoch, Root: ujRoot,
 		}
 	}
 	if uf.Epoch > s.unrealizedFinalizedCheckpoint.Epoch {
 		s.unrealizedFinalizedCheckpoint = &forkchoicetypes.Checkpoint{
-			Epoch: uf.Epoch, Root: bytesutil.ToBytes32(uf.Root),
+			Epoch: uf.Epoch, Root: s.clampCheckpointRoot(uf.Epoch, bytesutil.ToBytes32(uf.Root)),
 		}
 	}
 
 	// Update node's checkpoints.
 	node.unrealizedJustified.Epoch = uj.Epoch
-	node.unrealizedJustified.Root = bytesutil.ToBytes32(uj.Root)
+	node.unrealizedJustified.Root = ujRoot
 	node.unrealizedFinalizedEpoch = uf.Epoch
 	if stateEpoch < currentEpoch {
 		jc, fc = uj, uf
