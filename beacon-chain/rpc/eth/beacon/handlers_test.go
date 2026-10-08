@@ -24,6 +24,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
@@ -4947,5 +4948,125 @@ func TestGetProposerLookahead(t *testing.T) {
 		var resp structs.GetProposerLookaheadResponse
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 		require.Equal(t, true, resp.Finalized)
+	})
+}
+
+func TestGetProposerPreferences(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 8
+	params.OverrideBeaconConfig(cfg)
+
+	start := primitives.Slot(uint64(cfg.SlotsPerEpoch) * uint64(cfg.GloasForkEpoch))
+	rootA := [32]byte{0xaa}
+	rootB := [32]byte{0xbb}
+	prefCache := cache.NewProposerPreferencesCache()
+	// Inserted out of slot order to exercise the slot-ascending ordering.
+	entries := []struct {
+		slot primitives.Slot
+		pref cache.ProposerPreference
+	}{
+		{start + 2, cache.ProposerPreference{DependentRoot: rootA, ValidatorIndex: 3, FeeRecipient: primitives.ExecutionAddress{3}, TargetGasLimit: 30, Signature: [96]byte{3}}},
+		{start + 1, cache.ProposerPreference{DependentRoot: rootA, ValidatorIndex: 1, FeeRecipient: primitives.ExecutionAddress{1}, TargetGasLimit: 10, Signature: [96]byte{1}}},
+		{start + 1, cache.ProposerPreference{DependentRoot: rootB, ValidatorIndex: 2, FeeRecipient: primitives.ExecutionAddress{2}, TargetGasLimit: 20, Signature: [96]byte{2}}},
+	}
+	for _, e := range entries {
+		require.Equal(t, true, prefCache.Add(e.pref, e.slot))
+	}
+	signed := func(slot primitives.Slot, p cache.ProposerPreference) *eth.SignedProposerPreferences {
+		return &eth.SignedProposerPreferences{
+			Message: &eth.ProposerPreferences{
+				DependentRoot:  p.DependentRoot[:],
+				ProposalSlot:   slot,
+				ValidatorIndex: p.ValidatorIndex,
+				FeeRecipient:   p.FeeRecipient[:],
+				TargetGasLimit: p.TargetGasLimit,
+			},
+			Signature: p.Signature[:],
+		}
+	}
+	slot1RootA := signed(entries[1].slot, entries[1].pref)
+	slot1RootB := signed(entries[2].slot, entries[2].pref)
+	slot2RootA := signed(entries[0].slot, entries[0].pref)
+
+	currentSlot := start
+	server := &Server{
+		ProposerPreferencesCache: prefCache,
+		TimeFetcher:              &chainMock.ChainService{Slot: &currentSlot},
+	}
+
+	get := func(t *testing.T, query string, accept string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/proposer_preferences"+query, nil)
+		if accept != "" {
+			req.Header.Set("Accept", accept)
+		}
+		rec := httptest.NewRecorder()
+		server.GetProposerPreferences(rec, req)
+		return rec
+	}
+	getJSON := func(t *testing.T, query string) []*structs.SignedProposerPreferences {
+		rec := get(t, query, "")
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, "gloas", rec.Header().Get(api.VersionHeader))
+		var resp structs.GetProposerPreferencesResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		require.Equal(t, "gloas", resp.Version)
+		return resp.Data
+	}
+	toJSON := func(ps ...*eth.SignedProposerPreferences) []*structs.SignedProposerPreferences {
+		out := make([]*structs.SignedProposerPreferences, len(ps))
+		for i, p := range ps {
+			out[i] = structs.SignedProposerPreferencesFromConsensus(p)
+		}
+		return out
+	}
+
+	t.Run("no filter", func(t *testing.T) {
+		data := getJSON(t, "")
+		require.Equal(t, 3, len(data))
+		require.DeepEqual(t, toJSON(slot1RootA, slot1RootB, slot2RootA), data)
+		assert.Equal(t, hexutil.Encode(entries[1].pref.Signature[:]), data[0].Signature)
+	})
+	t.Run("slot filter", func(t *testing.T) {
+		require.DeepEqual(t, toJSON(slot1RootA, slot1RootB), getJSON(t, fmt.Sprintf("?slot=%d", start+1)))
+	})
+	t.Run("dependent_root filter", func(t *testing.T) {
+		require.DeepEqual(t, toJSON(slot1RootA, slot2RootA), getJSON(t, "?dependent_root="+hexutil.Encode(rootA[:])))
+	})
+	t.Run("slot and dependent_root filter", func(t *testing.T) {
+		require.DeepEqual(t, toJSON(slot1RootB), getJSON(t, fmt.Sprintf("?slot=%d&dependent_root=%s", start+1, hexutil.Encode(rootB[:]))))
+	})
+	t.Run("empty result", func(t *testing.T) {
+		data := getJSON(t, fmt.Sprintf("?slot=%d", start+5))
+		require.NotNil(t, data)
+		require.Equal(t, 0, len(data))
+	})
+	t.Run("bad slot", func(t *testing.T) {
+		rec := get(t, "?slot=abc", "")
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), e))
+		assert.Equal(t, http.StatusBadRequest, e.Code)
+		assert.StringContains(t, "slot", e.Message)
+	})
+	t.Run("bad dependent_root", func(t *testing.T) {
+		rec := get(t, "?dependent_root=0x1234", "")
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), e))
+		assert.Equal(t, http.StatusBadRequest, e.Code)
+		assert.StringContains(t, "dependent_root", e.Message)
+	})
+	t.Run("ssz response", func(t *testing.T) {
+		rec := get(t, "", api.OctetStreamMediaType)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, "gloas", rec.Header().Get(api.VersionHeader))
+		var want []byte
+		for _, p := range []*eth.SignedProposerPreferences{slot1RootA, slot1RootB, slot2RootA} {
+			b, err := p.MarshalSSZ()
+			require.NoError(t, err)
+			want = append(want, b...)
+		}
+		require.DeepEqual(t, want, rec.Body.Bytes())
 	})
 }

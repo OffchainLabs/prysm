@@ -32,6 +32,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -1774,6 +1775,57 @@ func (s *Server) GetProposerLookahead(w http.ResponseWriter, r *http.Request) {
 		}
 		httputil.WriteJson(w, resp)
 	}
+}
+
+// GetProposerPreferences returns the signed proposer preferences known by the node, filtered by the optional slot and dependent_root query params.
+// Supports both JSON and SSZ responses based on Accept header.
+func (s *Server) GetProposerPreferences(w http.ResponseWriter, r *http.Request) {
+	_, span := trace.StartSpan(r.Context(), "beacon.GetProposerPreferences")
+	defer span.End()
+
+	rawSlot, slot, ok := shared.UintFromQuery(w, r, "slot", false)
+	if !ok {
+		return
+	}
+	_, root, ok := shared.HexFromQuery(w, r, "dependent_root", fieldparams.RootLength, false)
+	if !ok {
+		return
+	}
+	var slotFilter *primitives.Slot
+	if rawSlot != "" {
+		sl := primitives.Slot(slot)
+		slotFilter = &sl
+	}
+	var rootFilter *[32]byte
+	if root != nil {
+		dr := bytesutil.ToBytes32(root)
+		rootFilter = &dr
+	}
+	prefs := s.ProposerPreferencesCache.Signed(slotFilter, rootFilter)
+
+	versionSlot := s.TimeFetcher.CurrentSlot()
+	if slotFilter != nil {
+		versionSlot = *slotFilter
+	}
+	if len(prefs) > 0 {
+		versionSlot = prefs[0].Message.ProposalSlot
+	}
+	v := version.String(slots.ToForkVersion(versionSlot))
+	w.Header().Set(api.VersionHeader, v)
+	if httputil.RespondWithSsz(r) {
+		sszData, err := serializeItems(prefs)
+		if err != nil {
+			httputil.HandleError(w, "Failed to serialize proposer preferences: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.WriteSsz(w, sszData)
+		return
+	}
+	data := make([]*structs.SignedProposerPreferences, len(prefs))
+	for i, p := range prefs {
+		data[i] = structs.SignedProposerPreferencesFromConsensus(p)
+	}
+	httputil.WriteJson(w, &structs.GetProposerPreferencesResponse{Version: v, Data: data})
 }
 
 // SerializeItems serializes a slice of items, each of which implements the MarshalSSZ method,
