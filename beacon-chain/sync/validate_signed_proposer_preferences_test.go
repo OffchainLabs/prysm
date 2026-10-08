@@ -253,6 +253,56 @@ func TestValidateSignedProposerPreferencesGossip_DependentRootOnOtherBranch(t *t
 	}
 }
 
+// TestValidateSignedProposerPreferencesGossip_SignatureBeforeBoundaryAdvance
+// pins the order of the two state-dependent checks when the proposal is two
+// epochs past the dependent state, the only case where the validator advances
+// the state across an epoch boundary. The signature must be verified against
+// the un-advanced state so a forged message is rejected without paying for the
+// epoch transition, and the proposal-slot check must still see the advanced
+// state when the signature is valid.
+func TestValidateSignedProposerPreferencesGossip_SignatureBeforeBoundaryAdvance(t *testing.T) {
+	// Head state is at slot 0 (epoch 0); a proposal in epoch 2 makes the
+	// validator advance to the epoch 1 boundary at slot 32 before the slot check.
+	const proposalSlot = primitives.Slot(64)
+	boundarySlot := primitives.Slot(params.BeaconConfig().SlotsPerEpoch)
+
+	t.Run("invalid signature is rejected before the state is advanced", func(t *testing.T) {
+		ctx := t.Context()
+		s, _, signedPreferences := setupSignedProposerPreferencesService(t)
+		newVerifier, verifier := capturingSignedProposerPreferencesVerifier(
+			mockSignedProposerPreferencesVerifier{errSignature: errors.New("bad signature")},
+		)
+		s.newSignedProposerPreferencesVerifier = newVerifier
+		signedPreferences.Message.ProposalSlot = proposalSlot
+		msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
+
+		result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
+		require.ErrorContains(t, "bad signature", err)
+		require.Equal(t, pubsub.ValidationReject, result)
+		require.Equal(t, primitives.Slot(0), verifier.signatureStateSlot, "signature must be checked against the un-advanced state")
+		require.Equal(t, false, verifier.proposalSlotCalled, "proposal slot check must not run after a signature failure")
+	})
+
+	t.Run("valid signature advances the state for the proposal slot check", func(t *testing.T) {
+		ctx := t.Context()
+		s, _, signedPreferences := setupSignedProposerPreferencesService(t)
+		// The empty test state cannot cross an epoch boundary; use a real genesis state.
+		headState, _ := util.DeterministicGenesisStateGloas(t, 64)
+		s.cfg.chain.(*mock.ChainService).State = headState
+		newVerifier, verifier := capturingSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
+		s.newSignedProposerPreferencesVerifier = newVerifier
+		signedPreferences.Message.ProposalSlot = proposalSlot
+		msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
+
+		result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationAccept, result)
+		require.Equal(t, primitives.Slot(0), verifier.signatureStateSlot, "signature must be checked against the un-advanced state")
+		require.Equal(t, true, verifier.proposalSlotCalled)
+		require.Equal(t, boundarySlot, verifier.proposalSlotStateSlot, "proposal slot must be checked against the boundary state")
+	})
+}
+
 func TestValidateSignedProposerPreferencesGossip_HappyPath(t *testing.T) {
 	ctx := context.Background()
 	s, msg, signedPreferences := setupSignedProposerPreferencesService(t)
@@ -278,7 +328,13 @@ type mockSignedProposerPreferencesVerifier struct {
 	errDependentRootSeen  error
 	errValidProposalSlot  error
 	errSignature          error
-	lastStateSlot         primitives.Slot
+
+	// Slot of the state each check received, so tests can assert which
+	// checks ran against the un-advanced state and which ran after the
+	// boundary advance.
+	signatureStateSlot    primitives.Slot
+	proposalSlotStateSlot primitives.Slot
+	proposalSlotCalled    bool
 }
 
 var _ verification.SignedProposerPreferencesVerifier = &mockSignedProposerPreferencesVerifier{}
@@ -292,15 +348,16 @@ func (m *mockSignedProposerPreferencesVerifier) VerifyDependentRootSeen(func([32
 }
 
 func (m *mockSignedProposerPreferencesVerifier) VerifyValidProposalSlot(st state.ReadOnlyBeaconState) error {
+	m.proposalSlotCalled = true
 	if st != nil {
-		m.lastStateSlot = st.Slot()
+		m.proposalSlotStateSlot = st.Slot()
 	}
 	return m.errValidProposalSlot
 }
 
 func (m *mockSignedProposerPreferencesVerifier) VerifySignature(st state.ReadOnlyBeaconState) error {
 	if st != nil {
-		m.lastStateSlot = st.Slot()
+		m.signatureStateSlot = st.Slot()
 	}
 	return m.errSignature
 }
@@ -312,6 +369,16 @@ func testNewSignedProposerPreferencesVerifier(m mockSignedProposerPreferencesVer
 		clone := m
 		return &clone
 	}
+}
+
+// capturingSignedProposerPreferencesVerifier returns a constructor that hands
+// the validator a single mock instance and also returns that instance, so the
+// test can inspect which checks ran and with which state after validation.
+func capturingSignedProposerPreferencesVerifier(m mockSignedProposerPreferencesVerifier) (verification.NewSignedProposerPreferencesVerifier, *mockSignedProposerPreferencesVerifier) {
+	captured := &m
+	return func(*ethpb.SignedProposerPreferences, []verification.Requirement) verification.SignedProposerPreferencesVerifier {
+		return captured
+	}, captured
 }
 
 // setupSignedProposerPreferencesService wires a sync Service with a real DB and
