@@ -244,10 +244,10 @@ var (
 		Name:  "disable-debug-rpc-endpoints",
 		Usage: "Disables the debug Beacon API namespace.",
 	}
-	// EnablePeerBuddy serves the PeerBuddy peer connectivity and scoring dashboard on the HTTP API port.
-	EnablePeerBuddy = &cli.BoolFlag{
-		Name:  "enable-peer-buddy",
-		Usage: "Serves PeerBuddy, the peer connectivity and scoring dashboard, at /peerbuddy/ on the HTTP API port.",
+	// EnableDoctorPeer serves the DoctorPeer peer connectivity and scoring dashboard on the HTTP API port.
+	EnableDoctorPeer = &cli.BoolFlag{
+		Name:  "enable-doctor-peer",
+		Usage: "Serves DoctorPeer, the peer connectivity and scoring dashboard, at /doctorpeer/ on the HTTP API port.",
 	}
 	// SubscribeToAllSubnets defines a flag to specify whether to subscribe to all possible attestation/sync subnets or not.
 	SubscribeToAllSubnets = &cli.BoolFlag{

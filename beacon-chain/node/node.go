@@ -1044,7 +1044,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		OperationNotifier:                b,
 		StateGen:                         b.stateGen,
 		EnableDebugRPCEndpoints:          enableDebugRPCEndpoints,
-		EnablePeerBuddy:                  b.cliCtx.Bool(flags.EnablePeerBuddy.Name),
+		EnableDoctorPeer:                 b.cliCtx.Bool(flags.EnableDoctorPeer.Name),
 		MaxMsgSize:                       maxMsgSize,
 		BlockBuilder:                     b.fetchBuilderService(),
 		Router:                           router,

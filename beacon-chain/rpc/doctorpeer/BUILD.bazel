@@ -6,9 +6,13 @@ go_library(
     embedsrcs = [
         "static/app.css",
         "static/app.js",
+        "static/fonts-license.txt",
         "static/index.html",
+        "static/plexmono-400.woff2",
+        "static/plexmono-500.woff2",
+        "static/plexsans.woff2",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/peerbuddy",
+    importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/doctorpeer",
     visibility = ["//visibility:public"],
 )
 

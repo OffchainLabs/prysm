@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/peerbuddy"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/doctorpeer"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 )
@@ -232,12 +232,12 @@ func Test_endpoints(t *testing.T) {
 	}
 }
 
-func Test_endpoints_peerBuddy(t *testing.T) {
+func Test_endpoints_doctorPeer(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
-		s := &Service{cfg: &Config{EnablePeerBuddy: enabled}}
+		s := &Service{cfg: &Config{EnableDoctorPeer: enabled}}
 		registered := false
 		for _, e := range s.endpoints(true, nil, nil, nil, nil, nil, nil) {
-			if e.template == peerbuddy.Path {
+			if e.template == doctorpeer.Path {
 				registered = true
 				assert.DeepEqual(t, []string{http.MethodGet}, e.methods)
 			}

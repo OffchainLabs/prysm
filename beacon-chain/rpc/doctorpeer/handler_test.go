@@ -1,4 +1,4 @@
-package peerbuddy
+package doctorpeer
 
 import (
 	"io"
@@ -33,7 +33,7 @@ func TestHandler(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, true, strings.HasPrefix(resp.Header.Get("Content-Type"), "text/html"))
 		assert.Equal(t, "no-cache", resp.Header.Get("Cache-Control"))
-		assert.Equal(t, true, strings.Contains(body, "PeerBuddy"))
+		assert.Equal(t, true, strings.Contains(body, "DoctorPeer"))
 	})
 
 	t.Run("script asset", func(t *testing.T) {
@@ -47,6 +47,14 @@ func TestHandler(t *testing.T) {
 		resp, _ := get(t, Path+"app.css")
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, true, strings.HasPrefix(resp.Header.Get("Content-Type"), "text/css"))
+	})
+
+	t.Run("font asset", func(t *testing.T) {
+		resp, body := get(t, Path+"plexsans.woff2")
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, "font/woff2", resp.Header.Get("Content-Type"))
+		assert.Equal(t, "max-age=86400", resp.Header.Get("Cache-Control"))
+		assert.Equal(t, true, len(body) > 0)
 	})
 
 	t.Run("missing asset", func(t *testing.T) {

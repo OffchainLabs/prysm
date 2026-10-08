@@ -1,6 +1,6 @@
-// Package peerbuddy serves PeerBuddy, the beacon node's peer connectivity and scoring dashboard.
+// Package doctorpeer serves DoctorPeer, the beacon node's peer connectivity and scoring dashboard.
 // The dashboard is a static page embedded in the binary that polls the node's own REST API.
-package peerbuddy
+package doctorpeer
 
 import (
 	"embed"
@@ -10,7 +10,7 @@ import (
 )
 
 // Path is the URL path the dashboard is served from; the trailing slash makes it a subtree route.
-const Path = "/peerbuddy/"
+const Path = "/doctorpeer/"
 
 //go:embed static
 var staticFiles embed.FS
@@ -32,8 +32,14 @@ func Handler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		// Assets are tiny and change with every release, so always revalidate.
-		w.Header().Set("Cache-Control", "no-cache")
+		if strings.HasSuffix(name, ".woff2") {
+			// Go's mime table has no woff2 entry, and fonts never change within a release.
+			w.Header().Set("Content-Type", "font/woff2")
+			w.Header().Set("Cache-Control", "max-age=86400")
+		} else {
+			// Assets are tiny and change with every release, so always revalidate.
+			w.Header().Set("Cache-Control", "no-cache")
+		}
 		http.ServeFileFS(w, r, staticFiles, file)
 	})
 }

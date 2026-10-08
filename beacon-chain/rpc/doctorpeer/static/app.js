@@ -1,10 +1,10 @@
-/* PeerBuddy — Prysm peer connectivity & scoring dashboard.
+/* DoctorPeer — Prysm peer connectivity & scoring dashboard.
  * Vanilla JS, no build step. Polls the beacon node's REST API every 10 seconds. */
 'use strict';
 (function () {
   // ------------------------------------------------------------------ constants
   const POLL_MS = 10000;
-  const LS = { url: 'peerbuddy.nodeUrl', theme: 'peerbuddy.theme', auto: 'peerbuddy.auto' };
+  const LS = { url: 'doctorpeer.nodeUrl', theme: 'doctorpeer.theme', auto: 'doctorpeer.auto' };
   const STATES = ['CONNECTED', 'CONNECTING', 'DISCONNECTING', 'DISCONNECTED'];
   const CLIENTS = ['prysm', 'lighthouse', 'teku', 'nimbus', 'lodestar', 'grandine', 'erigon/caplin', 'rust-libp2p', 'js-libp2p', 'unknown'];
   const CLIENT_VAR = {
@@ -250,7 +250,7 @@
     }
     state.agents = Array.from(byAgent.values());
     memo.key = '';
-    document.title = 'PeerBuddy · ' + peers.filter(p => p.connected).length + ' peers';
+    document.title = 'DoctorPeer · ' + peers.filter(p => p.connected).length + ' peers';
   }
 
   function enrichPeer(p, ctx) {
@@ -336,6 +336,8 @@
   const srcLabel = s => '<span class="src"><span class="sw" style="background:' + sourceColor(s) + '"></span>' + esc(s) + '</span>';
   const peerLink = (id, label) => '<span class="link" data-peer="' + attr(id) + '" title="' + attr(id) + '">' + esc(label || short(id)) + '</span>';
   const copyBtn = text => '<button class="copy" type="button" data-copy="' + attr(text) + '" title="Copy">⧉</button>';
+  // Small "i" that explains a concept on hover or focus; use sparingly, on the ideas a newcomer trips over.
+  const info = tip => '<span class="infodot" tabindex="0" data-tip="' + attr(tip) + '" aria-label="More information">i</span>';
   const peerCell = p => '<span class="peer-cell">' + dot(p.agentType) + '<span class="id" title="' + attr(p.id) + '">' + esc(p.short) + '</span>' +
     (p.agent ? '<span class="ag" title="' + attr(p.agent) + '">' + esc(p.agent) + '</span>' : '<span class="ag faint">unknown agent</span>') +
     (p.trusted ? badge('trusted', 'accent sm') : '') + '</span>';
@@ -344,14 +346,14 @@
   const liveCountdown = end => '<span data-live="countdown" data-end="' + end + '">' + fmtDur((end - Date.now()) / 1000) + '</span>';
 
   function tile(o) {
-    const tag = o.href ? 'a' : 'div';
-    return '<' + tag + ' class="tile ' + (o.cls || '') + (o.pick ? ' pick' : '') + (o.on ? ' on' : '') + '"' + (o.href ? ' href="' + attr(o.href) + '"' : '') +
-      (o.data ? ' ' + o.data : '') + '><div class="tile-l">' + o.label + '</div><div class="tile-v">' + o.value + (o.unit ? '<small>' + esc(o.unit) + '</small>' : '') + '</div>' +
+    const tag = o.href && !o.inert ? 'a' : 'div';
+    return '<' + tag + ' class="tile ' + (o.cls || '') + (o.pick ? ' pick' : '') + (o.on ? ' on' : '') + (o.inert ? ' inert' : '') + '"' + (tag === 'a' ? ' href="' + attr(o.href) + '"' : '') +
+      (o.data ? ' ' + o.data : '') + '><div class="tile-l">' + o.label + (o.info ? info(o.info) : '') + '</div><div class="tile-v">' + o.value + (o.unit ? '<small>' + esc(o.unit) + '</small>' : '') + '</div>' +
       '<div class="tile-s">' + (o.sub || []).filter(Boolean).map(s => '<span>' + s + '</span>').join('') + '</div></' + tag + '>';
   }
   function sec(title, body, o) {
     o = o || {};
-    return '<section class="sec' + (o.cls ? ' ' + o.cls : '') + '"><div class="sec-h"><h2>' + esc(title) + '</h2>' + (o.sub ? '<span class="sub">' + o.sub + '</span>' : '') +
+    return '<section class="sec' + (o.cls ? ' ' + o.cls : '') + '"' + (o.id ? ' id="sec-' + o.id + '"' : '') + '><div class="sec-h"><h2>' + esc(title) + (o.info ? info(o.info) : '') + '</h2>' + (o.sub ? '<span class="sub">' + o.sub + '</span>' : '') +
       (o.right ? '<span class="right">' + o.right + '</span>' : '') + '</div>' + body + '</section>';
   }
   function meter(p) {
@@ -400,9 +402,9 @@
     return '<span class="stack mini" style="width:' + w + 'px" data-tip="' + attr(keys.map(k => k + ': ' + bySource[k]).join('\n')) + '">' +
       keys.map(k => '<span style="width:' + (100 * bySource[k] / total) + '%;background:' + sourceColor(k) + '"></span>').join('') + '</span>';
   }
-  function th(label, key, sort, cls) {
+  function th(label, key, sort, cls, tip) {
     const on = sort.key === key;
-    return '<th class="sort ' + (cls || '') + (on ? ' on' : '') + '" data-sort="' + key + '">' + esc(label) + (on ? '<span class="ind">' + (sort.dir === 'asc' ? '▲' : '▼') + '</span>' : '') + '</th>';
+    return '<th class="sort ' + (cls || '') + (on ? ' on' : '') + '" data-sort="' + key + '"' + (tip ? ' data-tip="' + attr(tip) + '"' : '') + '>' + esc(label) + (tip ? info(tip) : '') + (on ? '<span class="ind">' + (sort.dir === 'asc' ? '▲' : '▼') + '</span>' : '') + '</th>';
   }
   function sortBy(rows, keyFn, dir) { const sign = dir === 'asc' ? 1 : -1; return rows.slice().sort((a, b) => sign * compare(keyFn(a), keyFn(b))); }
   function toggleSort(s, key, defaultDir) { if (s.key === key) s.dir = s.dir === 'asc' ? 'desc' : 'asc'; else { s.key = key; s.dir = defaultDir || 'desc'; } }
@@ -471,8 +473,8 @@
     const shown = limit ? rows.slice(0, limit) : rows;
     // The recovery column only earns its space when a grey-listed peer is on screen.
     const rec = shown.some(p => p.greyListed);
-    return '<div class="tbl-wrap"><table class="tbl" data-table="peers"><thead><tr>' + th('Peer', 'peer', sort) + th('State', 'state', sort) + th('Tenure', 'tenure', sort) + th('Strikes', 'strikes', sort) +
-      th('Grey list', 'grey', sort) + (rec ? th('Recovers in', 'recovery', sort) : '') + th('Head Δ', 'head', sort, 'num') + th('Gossip', 'gossip', sort, 'num') + th('Rej.', 'rejections', sort, 'num') + th('Last status', 'status', sort) +
+    return '<div class="tbl-wrap"><table class="tbl" data-table="peers"><thead><tr>' + th('Peer', 'peer', sort) + th('State', 'state', sort) + th('Tenure', 'tenure', sort, '', 'Time since the peer connected') + th('Strikes', 'strikes', sort, '', 'Standing strikes / grey-list threshold') +
+      th('Grey list', 'grey', sort, '', 'Which refusal aspects fire for the peer') + (rec ? th('Recovers in', 'recovery', sort, '', 'Estimated time until the node accepts the peer again') : '') + th('Head Δ', 'head', sort, 'num', 'Peer head slot minus our head slot, from its last validated status') + th('Gossip', 'gossip', sort, 'num', 'libp2p gossip score; grey-listed below ' + fmtNum(state.cfg.gossipThreshold)) + th('Rejections', 'rejections', sort, 'num', 'Gossip messages from the peer our validators rejected') + th('Last status', 'status', sort, '', 'Age of the last status exchange') +
       '</tr></thead><tbody>' + (shown.map(p => peerRow(p, rec)).join('') || '<tr><td colspan="10">' + emptyState(emptyMsg || 'No peers match', 'Widen the scope or reset the filters.') + '</td></tr>') + '</tbody></table>' +
       (rows.length > shown.length ? '<div class="tbl-foot"><span>Showing ' + shown.length + ' of ' + fmtNum(rows.length) + '</span><button class="btn sm" type="button" data-more="1">Show all</button></div>' : '') + '</div>';
   }
@@ -496,12 +498,12 @@
     const typeCounts = countBy(conn.map(p => p.agentType));
     const order = CLIENTS.filter(t => typeCounts.get(t)).sort((a, b) => typeCounts.get(b) - typeCounts.get(a));
     const sorted = conn.slice().sort((a, b) => order.indexOf(a.agentType) - order.indexOf(b.agentType) || (b.tenureSec || 0) - (a.tenureSec || 0));
-    const ticks = sorted.map(p => '<span class="tick' + (p.greyListed ? ' grey' : '') + (p.nearThreshold ? ' near' : '') + (p.direction === 'OUTBOUND' ? ' out' : '') + '" tabindex="0" style="background:' + clientColor(p.agentType) + '" data-peer="' + attr(p.id) + '" data-tip="' +
+    const ticks = sorted.map(p => '<span class="tick' + (p.greyListed ? ' grey' : '') + (p.nearThreshold ? ' near' : '') + (p.direction === 'OUTBOUND' ? ' out' : '') + '" tabindex="0" style="--tick:' + clientColor(p.agentType) + '" data-peer="' + attr(p.id) + '" data-tip="' +
       attr((p.agent || 'unknown agent') + '\n' + p.short + ' · ' + (p.direction === 'INBOUND' ? 'inbound' : p.direction === 'OUTBOUND' ? 'outbound' : 'direction unknown') + ' · ' + fmtDur(p.tenureSec) +
         '\nstrikes ' + p.standing + '/' + p.threshold + (p.greyListed ? ' · grey-listed (' + p.aspects.map(a => ASPECT_NAME[a]).join(', ') + ')' : p.nearThreshold ? ' · one strike from grey-listing' : '') +
         (p.headDelta != null ? '\nhead ' + (p.headDelta > 0 ? '+' : '') + p.headDelta + ' vs ours' : '')) + '"></span>').join('');
-    const legend = order.map(t => '<span class="item"><span class="key-tick" style="background:' + clientColor(t) + '"></span>' + esc(t) + ' <span class="n">' + typeCounts.get(t) + '</span></span>').join('') +
-      '<span class="item"><span class="key-tick grey"></span>grey-listed</span><span class="item"><span class="key-tick near"></span>one strike from the threshold</span><span class="item"><span class="key-tick out"></span>outbound (short tick)</span>';
+    const legend = order.map(t => '<span class="item"><span class="key-tick" style="--tick:' + clientColor(t) + '"></span>' + esc(t) + ' <span class="n">' + typeCounts.get(t) + '</span></span>').join('') +
+      '<span class="item"><span class="key-tick out" style="--tick:var(--ink-3)"></span>outbound (hollow)</span><span class="item"><span class="key-tick grey"></span>grey-listed</span><span class="item"><span class="key-tick near"></span>one strike from grey-listing</span>';
     return '<div class="strip-wrap"><div class="strip">' + ticks + '</div><div class="strip-legend">' + legend + '</div></div>';
   }
 
@@ -524,6 +526,7 @@
     renderScope();
     VIEW_IMPL[state.route.view].update($('#view'));
     applyCursor();
+    applyAnchor();
   }
   function renderNav() {
     $$('#nav a').forEach(a => a.classList.toggle('on', a.dataset.view === state.route.view || (state.route.view === 'peer' && a.dataset.view === 'peers')));
@@ -594,11 +597,11 @@
     const s = state.fetchedAt ? scoped() : null;
     bar.innerHTML =
       '<span class="scope-l">Scope</span>' +
-      '<label class="field" data-tip="Client type · connected / known"><span>Client</span><select class="select" data-scope="client"><option value="">All clients</option>' +
-      CLIENTS.filter(t => byType.get(t) || t === scope.client).map(t => { const c = byType.get(t) || { conn: 0, known: 0 }; return '<option value="' + attr(t) + '"' + (scope.client === t ? ' selected' : '') + '>' + esc(t) + ' · ' + c.conn + ' / ' + c.known + '</option>'; }).join('') + '</select></label>' +
-      '<div class="field"><span>Agent</span><div class="dd" id="agentDD"><button class="btn dd-btn" type="button" data-dd="toggle"><span class="trunc">' + esc(scope.agent || 'All agents') + '</span> ▾</button><div class="dd-menu" id="ddMenu" hidden></div></div></div>' +
-      '<div class="field"><span>Events in</span>' + seg(WINDOWS.map(w => [w[0], w[0] === 'all' ? 'all' : w[0]]), scope.window, 'win') + '</div>' +
-      (s ? '<span class="scope-note">' + (active ? fmtNum(s.connected.length) + ' connected · ' + fmtNum(s.peers.length) + ' known in scope' : 'Narrow every view to one client or agent') + '</span>' : '') +
+      '<label class="field"><span>Client' + info('Client type, derived from the agent string. The numbers are connected peers out of every peer of that type the node remembers.') + '</span><select class="select" data-scope="client"><option value="">All clients</option>' +
+      CLIENTS.filter(t => byType.get(t) || t === scope.client).map(t => { const c = byType.get(t) || { conn: 0, known: 0 }; return '<option value="' + attr(t) + '"' + (scope.client === t ? ' selected' : '') + '>' + esc(t) + ' · ' + c.conn + ' of ' + c.known + ' connected</option>'; }).join('') + '</select></label>' +
+      '<div class="field"><span>Agent' + info('The exact agent string a peer announces. One client type (say, Lighthouse) can have many agents: versions, builds, platforms.') + '</span><div class="dd" id="agentDD"><button class="btn dd-btn" type="button" data-dd="toggle"><span class="trunc">' + esc(scope.agent || 'All agents') + '</span> ▾</button><div class="dd-menu" id="ddMenu" hidden></div></div></div>' +
+      '<div class="field"><span>Window' + info('Applies to time-stamped events: strikes, gossip rejections and invalid statuses. Peer lists always show the current state.') + '</span>' + seg(WINDOWS.map(w => [w[0], w[0] === 'all' ? 'all' : 'last ' + w[0]]), scope.window, 'win') + '</div>' +
+      (s ? '<span class="scope-note">' + (active ? fmtNum(s.connected.length) + ' connected · ' + fmtNum(s.peers.length) + ' known in scope' : 'Filters every view') + '</span>' : '') +
       (active ? '<button class="btn ghost sm clear" type="button" data-scope-clear="1">Clear scope</button>' : '');
     if (state.dd.open) renderDD();
   }
@@ -614,7 +617,7 @@
     const list = items.map((it, i) => '<div class="dd-item' + (i === state.dd.cursor ? ' cursor' : '') + (scope.agent === it.a.agent ? ' on' : '') + '" data-dd-pick="' + attr(it.a.agent) + '">' + dot(it.a.agentType) + '<span class="trunc" title="' + attr(it.a.agent) + '">' + esc(it.a.agent) + '</span><span class="n">' + it.conn + ' / ' + it.known + '</span></div>').join('');
     const had = $('#ddSearch');
     menu.innerHTML = '<input class="input" id="ddSearch" placeholder="Filter agents… (' + fmtNum(items.length) + ')" value="' + attr(state.dd.q) + '" autocomplete="off">' +
-      '<div class="dd-list">' + (scope.agent ? '<div class="dd-item" data-dd-pick="">' + '<span class="trunc muted">All agents</span></div>' : '') + (list || '<div class="dd-empty">No agent matches</div>') + '</div>';
+      '<div class="dd-head"><span>Agent</span><span>connected / known</span></div><div class="dd-list">' + (scope.agent ? '<div class="dd-item" data-dd-pick="">' + '<span class="trunc muted">All agents</span></div>' : '') + (list || '<div class="dd-empty">No agent matches</div>') + '</div>';
     if (!had) { const inp = $('#ddSearch'); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
     else { const inp = $('#ddSearch'); const pos = state.dd.caret == null ? inp.value.length : state.dd.caret; inp.focus(); inp.setSelectionRange(pos, pos); }
     const c = $('.dd-item.cursor', menu); if (c) c.scrollIntoView({ block: 'nearest' });
@@ -668,49 +671,44 @@
     el.innerHTML =
       '<div class="hero"><div>' +
       '<div class="hero-num">' + fmtNum(conn.length) + '<small>connected peer' + (conn.length === 1 ? '' : 's') + (scope.client || scope.agent ? ' in scope' : '') + '</small></div>' +
-      '<div class="hero-sub"><span>' + fmtNum(inbound.length) + ' inbound · ' + fmtNum(outbound.length) + ' outbound</span><span>' + fmtNum(s.peers.length) + ' known</span>' +
+      '<div class="hero-sub"><span>' + fmtNum(inbound.length) + ' inbound · ' + fmtNum(outbound.length) + ' outbound</span><span>' + fmtNum(s.peers.length) + ' known' + info('Every peer the node remembers, connected or not. Disconnected peers stay in the store so their strikes and verdicts are not forgotten.') + '</span>' +
       (node.peerCount && toInt(node.peerCount.connecting) ? '<span>' + fmtNum(toInt(node.peerCount.connecting)) + ' connecting</span>' : '') +
-      '<span>median tenure ' + fmtDur(medianTenure(conn)) + '</span>' + (greyConn.length ? '<span class="badge bad">' + greyConn.length + ' grey-listed still connected</span>' : '') + '</div>' +
+      '<span>median tenure ' + fmtDur(medianTenure(conn)) + info('Half of the connected peers have been connected for longer than this.') + '</span>' + (greyConn.length ? '<span class="badge bad">' + greyConn.length + ' grey-listed still connected</span>' : '') + '</div>' +
       peerStrip(conn) + '</div>' +
       '<div class="hero-side">' +
       '<div class="row"><span class="k">Sync</span><span class="v">' + (node.isSyncing ? badge('syncing', 'warn') : badge('in sync', 'ok')) + (node.isOptimistic ? ' ' + badge('optimistic', 'warn') : '') + (node.elOffline ? ' ' + badge('EL offline', 'bad') : '') + (node.syncDistance ? ' <span class="muted">distance ' + node.syncDistance + '</span>' : '') + '</span></div>' +
       '<div class="row"><span class="k">Head</span><span class="v">slot ' + fmtNum(node.headSlot) + ' <span class="muted">· epoch ' + fmtNum(node.headSlot != null ? Math.floor(node.headSlot / spe) : null) + '</span></span></div>' +
       '<div class="row"><span class="k">Finalized</span><span class="v">epoch ' + fmtNum(node.finalizedEpoch) + '</span></div>' +
-      '<div class="row"><span class="k">Peers vs us</span><span class="v">' + atHead + ' current · ' + ahead + ' ahead · ' + behind + ' behind <span class="muted">of ' + withChain.length + ' with status</span></span></div>' +
-      '<div class="row"><span class="k">Scorer</span><span class="v">' + fmtNum(cfg.trackedPeers) + ' tracked · grey-list at ' + cfg.threshold + ' strikes · 1 forgiven / ' + esc(cfg.decay || '?') + '</span></div>' +
+      '<div class="row"><span class="k">Peers vs us' + info('Where peers\' heads sit relative to ours, from their last status exchange. Within one epoch counts as current because statuses refresh only every half epoch.') + '</span><span class="v">' + atHead + ' current · ' + ahead + ' ahead · ' + behind + ' behind <span class="muted">of ' + withChain.length + ' with status</span></span></div>' +
+      '<div class="row"><span class="k">Node</span><span class="v">' + esc(node.version || '–') + '</span></div>' +
       '</div></div>' +
 
       '<div class="tiles">' +
-      tile({ label: 'Grey-listed', value: fmtNum(grey.length), cls: grey.length ? 'bad' : 'good', href: hashFor('greylist', ''), sub: ASPECTS.filter(a => aspectCounts.get(a[0])).map(a => aspectCounts.get(a[0]) + ' ' + a[1].toLowerCase()).concat(grey.length ? [] : ['no peer refused']) }) +
-      tile({ label: 'Strikes, ' + winLabel(), value: fmtNum(strikes.length), cls: strikes.length ? 'warn' : '', href: hashFor('greylist', ''), sub: [topN(bySource, 1).map(([k, v]) => 'mostly ' + k + ' (' + v + ')')[0], plural(new Set(strikes.map(e => e.peer.id)).size, 'peer')] }) +
-      tile({ label: 'One strike from grey-listing', value: fmtNum(near.length), cls: near.length ? 'warn' : '', href: hashFor('greylist', ''), sub: [near.filter(p => p.connected).length + ' connected'] }) +
-      tile({ label: 'Gossip rejections, ' + winLabel(), value: fmtNum(rej.length), cls: rej.length ? 'info' : '', href: hashFor('gossip', ''), sub: [rej.length ? plural(rejPeers, 'peer') : 'nothing rejected', topN(countBy(rej.map(r => r.topicShort)), 1).map(([k, v]) => k + ' (' + v + ')')[0]] }) +
-      tile({ label: 'Invalid status, connected', value: fmtNum(errPeers.length), cls: errPeers.length ? 'warn' : '', href: hashFor('chain', ''), sub: [topN(countBy(errPeers.map(p => p.validationError)), 1).map(([k]) => k)[0] || 'every status validated'] }) +
+      tile({ label: 'Grey-listed', info: 'Peers the node refuses: it drops them and will not dial them until the verdict clears. A verdict comes from strikes, an invalid status, a low gossip score or IP colocation.', value: fmtNum(grey.length), cls: grey.length ? 'bad' : 'good', href: hashFor('greylist', '', { at: 'grey' }), inert: !grey.length, sub: ASPECTS.filter(a => aspectCounts.get(a[0])).map(a => aspectCounts.get(a[0]) + ' ' + a[1].toLowerCase()).concat(grey.length ? [] : ['no peer refused']) }) +
+      tile({ label: 'Strikes, ' + winLabel(), info: 'A strike is one recorded misbehaviour: a failed dial, a bad RPC request or response, invalid gossip, a rate-limit breach… ' + cfg.threshold + ' standing strikes grey-list a peer and one is forgiven every ' + (cfg.decay || '?') + '.', value: fmtNum(strikes.length), cls: strikes.length ? 'warn' : '', href: hashFor('greylist', '', { at: 'reasons' }), inert: !strikes.length, sub: [topN(bySource, 1).map(([k, v]) => 'mostly ' + k + ' (' + v + ')')[0], strikes.length ? plural(new Set(strikes.map(e => e.peer.id)).size, 'peer') : 'nothing recorded'] }) +
+      tile({ label: 'One strike from grey-listing', info: 'Peers whose standing strikes are one below the threshold. Their next strike before a decay tick refuses them.', value: fmtNum(near.length), cls: near.length ? 'warn' : '', href: hashFor('greylist', '', { at: 'near' }), inert: !near.length, sub: [near.length ? near.filter(p => p.connected).length + ' connected' : 'nobody is close'] }) +
+      tile({ label: 'Gossip rejections, ' + winLabel(), info: 'Gossip messages from peers that our topic validators rejected. Each one lowers the sender\'s libp2p gossip score, and that score grey-lists below ' + fmtNum(cfg.gossipThreshold) + '.', value: fmtNum(rej.length), cls: rej.length ? 'info' : '', href: hashFor('gossip', '', { at: 'feed' }), inert: !rej.length, sub: [rej.length ? plural(rejPeers, 'peer') : 'nothing rejected', topN(countBy(rej.map(r => r.topicShort)), 1).map(([k, v]) => k + ' (' + v + ')')[0]] }) +
+      tile({ label: 'Invalid status, connected', info: 'Connected peers whose last status exchange failed validation, for example a wrong fork digest or an unknown finalized root. An invalid status grey-lists the peer for ' + (cfg.statusTTL || '?') + '.', value: fmtNum(errPeers.length), cls: errPeers.length ? 'warn' : '', href: hashFor('chain', '', { at: 'invalid' }), inert: !errPeers.length, sub: [topN(countBy(errPeers.map(p => p.validationError)), 1).map(([k]) => k)[0] || 'every status validated'] }) +
       '</div>' +
 
       '<div class="grid-2"><div class="colstack">' +
-      sec('Connected peers by client', stack(clientItems, { data: 'client', head: 'client', valueHead: 'connected', cols: [{ h: 'known', get: i => fmtNum(i.known) }, { h: 'grey-listed', get: i => i.grey ? fmtNum(i.grey) : '<span class="faint">0</span>', cls: i => i.grey ? 'bad' : '' }, { h: 'median tenure', get: i => fmtDur(i.tenure) }] }), { sub: 'click a client to scope every view to it' }) +
-      sec('Strikes by source, ' + winLabel(), bars(topN(bySource, 12).map(([k, v]) => ({ label: k, key: k, value: v, color: sourceColor(k) })), { data: 'source', total: strikes.length, empty: 'No strikes in this window' }) +
-        '<div class="note">Strikes feed the standing count; ' + cfg.threshold + ' standing strikes grey-list a peer and one is forgiven every ' + esc(cfg.decay || '?') + '. The node retains the last ' + fmtNum(cfg.historySize) + ' per peer.</div>', { sub: 'click to list the peers' }) +
-      '</div><div class="colstack">' +
-      sec('Why peers are grey-listed', bars(ASPECTS.map(a => ({ label: a[1], key: a[0], value: aspectCounts.get(a[0]) || 0, color: { strikes: 'var(--bad)', peer_status: 'var(--warn)', gossip: 'var(--info)', bad_ip: 'var(--neutral-2)' }[a[0]] })), { data: 'aspect', max: Math.max(grey.length, 1), total: grey.length }) +
-        '<div class="note">' + plural(grey.length, 'peer') + ' refused' + (greyConn.length ? ', ' + greyConn.length + ' still connected and due to be dropped' : '') + '. A peer can fire several aspects.</div>' +
-        '<div class="sec-h" style="margin-top:14px"><h2>Top strike reasons, ' + esc(winLabel()) + '</h2></div>' +
-        bars(topReasons.map(([k, v]) => ({ label: k, key: k, value: v, color: sourceColor(k.split(' · ')[0]), tip: k })), { data: 'reason', tall: true, total: strikes.length, empty: 'No strikes in this window' }), { sub: 'click to list the peers' }) +
-      sec('Recent activity', feed.length ? '<div class="feed">' + feed.map(f => feedRow(f.at, f.html)).join('') + '</div>' : emptyState('Quiet', 'No strikes, rejections or invalid statuses in the ' + winLabel() + ' window.'), { sub: 'strikes, rejections and invalid statuses, newest first' }) +
-      '</div></div>' +
-
-      sec('This node', '<div class="grid-2" style="margin-bottom:0">' + kv([
-        ['Version', esc(node.version || '–')],
+      sec('Connected peers by client', stack(clientItems, { data: 'client', head: 'client', valueHead: 'connected', cols: [{ h: 'known', get: i => fmtNum(i.known) }, { h: 'grey-listed', get: i => i.grey ? fmtNum(i.grey) : '<span class="faint">0</span>', cls: i => i.grey ? 'bad' : '' }, { h: 'median tenure', get: i => fmtDur(i.tenure) }] }), { sub: 'click a client to scope every view to it', info: 'Client type is derived from the agent string, so several versions and builds of one client count together. Known includes disconnected peers.' }) +
+      sec('This node', kv([
         ['Peer ID', ident.peer_id ? '<span class="mono">' + esc(ident.peer_id) + '</span> ' + copyBtn(ident.peer_id) : '–'],
         ['Listening', listen ? '<span class="mono">' + esc(listen) + '</span>' : '–'],
         ['Metadata', 'seq ' + esc(md.seq_number || '–') + ' · attnets <span class="mono">' + esc(md.attnets || '–') + '</span>' + (md.syncnets ? ' · syncnets <span class="mono">' + esc(md.syncnets) + '</span>' : '') + (md.custody_group_count ? ' · custody groups ' + esc(md.custody_group_count) : '')],
-      ]) + kv([
-        ['Strikes', cfg.threshold + ' standing strikes grey-list · 1 forgiven every ' + esc(cfg.decay || '–') + ' · last ' + fmtNum(cfg.historySize) + ' retained'],
-        ['Peer status', 'a failed status validation grey-lists for ' + esc(cfg.statusTTL || '–')],
-        ['Gossip', 'grey-listed below score ' + fmtNum(cfg.gossipThreshold) + ' · last ' + fmtNum(cfg.maxRejections) + ' rejections kept per peer'],
-        ['Tracked', fmtNum(cfg.trackedPeers) + ' peers in the scorer · ' + fmtNum(state.peers.length) + ' listed · ' + fmtNum(cfg.peersWithRejections) + ' with rejections'],
-      ]) + '</div>');
+        ['Strike rules', cfg.threshold + ' standing strikes grey-list a peer · 1 forgiven every ' + esc(cfg.decay || '–') + ' · last ' + fmtNum(cfg.historySize) + ' kept per peer'],
+        ['Other rules', 'invalid status grey-lists for ' + esc(cfg.statusTTL || '–') + ' · gossip score grey-lists below ' + fmtNum(cfg.gossipThreshold) + ' · last ' + fmtNum(cfg.maxRejections) + ' rejections kept per peer'],
+        ['Scorer', fmtNum(cfg.trackedPeers) + ' peers tracked · ' + fmtNum(state.peers.length) + ' listed · ' + fmtNum(cfg.peersWithRejections) + ' with rejections'],
+      ])) +
+      '</div><div class="colstack">' +
+      sec('Why peers are grey-listed', bars(ASPECTS.map(a => ({ label: a[1], key: a[0], value: aspectCounts.get(a[0]) || 0, color: { strikes: 'var(--bad)', peer_status: 'var(--warn)', gossip: 'var(--info)', bad_ip: 'var(--neutral-2)' }[a[0]] })), { data: 'aspect', max: Math.max(grey.length, 1), total: grey.length }) +
+        '<div class="note">' + plural(grey.length, 'peer') + ' refused' + (greyConn.length ? ', ' + greyConn.length + ' still connected and due to be dropped' : '') + '. A peer can fire several aspects; click one to list its peers.</div>' +
+        '<div class="sec-h inner"><h2>Top strike reasons, ' + esc(winLabel()) + info('Source is the subsystem that struck: dial, an RPC handler, gossip validation, sync… The reason is that handler\'s own label.') + '</h2><span class="sub">click a reason to list the peers it struck</span></div>' +
+        bars(topReasons.map(([k, v]) => ({ label: k, key: k, value: v, color: sourceColor(k.split(' · ')[0]), tip: k })), { data: 'reason', tall: true, total: strikes.length, empty: 'No strikes in this window' }) +
+        '<div class="note">Strikes feed the standing count; ' + cfg.threshold + ' standing strikes grey-list a peer and one is forgiven every ' + esc(cfg.decay || '?') + '.</div>') +
+      '</div></div>' +
+      sec('Recent activity', feed.length ? '<div class="feed">' + feed.map(f => feedRow(f.at, f.html)).join('') + '</div>' : emptyState('Quiet', 'No strikes, rejections or invalid statuses in the ' + winLabel() + ' window.'), { sub: 'strikes, rejections and invalid statuses, newest first' });
   }
 
   // ------------------------------------------------------------------ peers
@@ -732,7 +730,7 @@
   }
   function mountPeers(el) {
     const f = state.filters.peers;
-    el.innerHTML =
+    el.innerHTML = '<section class="sec">' +
       '<div class="filters"><div id="peerPresets"></div>' +
       '<input class="input grow mono" data-f="filters.peers.q" data-search placeholder="Search peer id, agent, address…" value="' + attr(f.q) + '">' +
       '<span class="hint"><span><span class="kbd">↑</span> <span class="kbd">↓</span> move</span><span><span class="kbd">↵</span> open</span><span><span class="kbd">/</span> search</span></span></div>' +
@@ -741,7 +739,7 @@
       '<label class="field">Grey-list aspect<select class="select" data-f="filters.peers.aspect"><option value="">any</option>' + ASPECTS.map(a => '<option value="' + a[0] + '">' + a[1] + '</option>').join('') + '</select></label>' +
       '<label class="field">Strike source<select class="select" data-f="filters.peers.source"><option value="">any</option>' + SOURCES.map(s => '<option value="' + s + '">' + s + '</option>').join('') + '</select></label>' +
       '<button class="btn ghost sm" type="button" data-reset="peers">Reset</button></div>' +
-      '<div class="summary" id="peerSummary"></div><div id="peerTable"></div>';
+      '<div class="summary" id="peerSummary"></div><div id="peerTable"></div></section>';
   }
   function updatePeers(el) {
     if (!state.fetchedAt) { $('#peerTable', el).innerHTML = waiting(); return; }
@@ -778,7 +776,7 @@
       return { t, conn: conn.length, known: ps.length, grey: ps.filter(p => p.greyListed).length, strikes: state.strikeEvents.filter(e => ids.has(e.peer.id) && e.at >= since).length,
         rej: state.rejections.filter(r => r.agentType === t && r.at >= since).length, tenure: medianTenure(conn), agents: new Set(ps.map(p => p.agent || 'unknown')).size };
     }).sort((a, b) => b.conn - a.conn || b.known - a.known);
-    $('#clientTiles', el).innerHTML = types.map(x => tile({ label: dot(x.t) + esc(x.t), value: fmtNum(x.conn), unit: 'connected', pick: true, on: scope.client === x.t, data: 'data-client="' + attr(x.t) + '"',
+    $('#clientTiles', el).innerHTML = types.map(x => tile({ label: dot(x.t) + esc(x.t), info: 'Known counts every peer of this client the node remembers, connected or not; agents are the distinct agent strings seen.', value: fmtNum(x.conn), unit: 'connected', pick: true, on: scope.client === x.t, data: 'data-client="' + attr(x.t) + '"',
       sub: [x.known + ' known', plural(x.agents, 'agent'), x.grey ? '<span style="color:var(--bad)">' + x.grey + ' grey-listed</span>' : '', x.strikes ? x.strikes + ' strikes' : '', x.rej ? x.rej + ' rejections' : '', 'tenure ' + fmtDur(x.tenure)] })).join('') ||
       emptyState('No peers yet');
 
@@ -799,7 +797,7 @@
         tile({ label: 'Median tenure', value: fmtDur(st.tenure) }) +
         '</div>' +
         (topReasons.length || rejTopics.length ? '<div class="grid-2" style="margin:14px 0 0">' +
-          (topReasons.length ? sec('Strike reasons', bars(topReasons.map(([k, v]) => ({ label: k, value: v, color: sourceColor(k.split(' · ')[0]), tip: k })), { tall: true, total: st.strikes })) : '') +
+          (topReasons.length ? sec('Strike reasons', bars(topReasons.map(([k, v]) => ({ label: k, key: k, value: v, color: sourceColor(k.split(' · ')[0]), tip: k })), { data: 'reason', tall: true, total: st.strikes }), { sub: 'click to list the peers it struck' }) : '') +
           (rejTopics.length ? sec('Rejected gossip', bars(rejTopics.map(([k, v]) => ({ label: k, value: v, color: 'var(--info)', tip: k })), { tall: true, total: st.rejections })) : '') + '</div>' : '') +
         '</div>' +
         '<div class="filters">' + seg([['connected', 'Connected', a.peers.filter(p => p.connected).length], ['greylisted', 'Grey-listed', a.peers.filter(p => p.greyListed).length], ['all', 'All', a.peers.length]], f.preset, 'cpreset') +
@@ -811,7 +809,7 @@
     let rows = s.agents.map(a => ({ a, st: agentStats(a) })).filter(r => !q || r.a.agent.toLowerCase().includes(q));
     rows = sortBy(rows.map(r => Object.assign({ agent: r.a.agent, agentType: r.a.agentType }, r)), AGENT_SORT[sort.key] || AGENT_SORT.connected, sort.dir);
     const maxStrikes = Math.max.apply(null, rows.map(r => r.st.strikes).concat([1]));
-    $('#clientBody', el).innerHTML =
+    $('#clientBody', el).innerHTML = '<section class="sec">' +
       '<div class="filters"><input class="input grow" data-f="filters.clients.q" data-search placeholder="Search agent strings…" value="' + attr(f.q) + '">' +
       '<span class="summary" style="margin:0"><b>' + fmtNum(rows.length) + '</b> agents' + (scope.client ? ' running ' + esc(scope.client) : '') + '</span>' +
       '<span class="hint"><span><span class="kbd">↑</span> <span class="kbd">↓</span> move</span><span><span class="kbd">↵</span> open agent</span></span></div>' +
@@ -820,7 +818,7 @@
       (rows.map(r => '<tr class="row" data-nav data-agent="' + attr(r.agent) + '"><td class="agent" title="' + attr(r.agent) + '"><span class="mono" style="color:var(--ink)">' + esc(r.agent) + '</span></td><td>' + clientLabel(r.agentType) + '</td>' +
         '<td class="num">' + (r.st.connected || '<span class="faint">0</span>') + '</td><td class="num">' + r.st.known + '</td><td class="num">' + (r.st.grey ? '<span class="sbad">' + r.st.grey + '</span>' : '<span class="faint">0</span>') + '</td>' +
         '<td><span class="peer-cell">' + miniStack(Object.fromEntries(r.st.bySource), r.st.strikes, maxStrikes) + '<span class="num muted">' + (r.st.strikes || '') + '</span></span></td>' +
-        '<td class="num">' + (r.st.rejections || '<span class="faint">0</span>') + '</td><td class="num">' + fmtDur(r.st.tenure) + '</td></tr>').join('') || '<tr><td colspan="8">' + emptyState('No agents match') + '</td></tr>') + '</tbody></table></div>';
+        '<td class="num">' + (r.st.rejections || '<span class="faint">0</span>') + '</td><td class="num">' + fmtDur(r.st.tenure) + '</td></tr>').join('') || '<tr><td colspan="8">' + emptyState('No agents match') + '</td></tr>') + '</tbody></table></div></section>';
   }
 
   // ------------------------------------------------------------------ grey list
@@ -836,49 +834,63 @@
     const reasonKey = e => e.source + ' · ' + e.reason;
     const reasons = topN(countBy(s.strikes.map(reasonKey)), 14);
     const bySource = countBy(s.strikes.map(e => e.source));
-    const reasonPeers = f.reason ? new Set(s.strikes.filter(e => reasonKey(e) === f.reason).map(e => e.peer.id)) : null;
-    const matchReason = p => !reasonPeers || reasonPeers.has(p.id);
     const aspectLabel = { strikes: 'Refused for strikes', peer_status: 'Refused for peer status', gossip: 'Refused for gossip score', bad_ip: 'Refused for IP colocation' };
     const aspectRule = { strikes: cfg.threshold + ' standing strikes', peer_status: 'invalid status, ' + esc(cfg.statusTTL || '?') + ' TTL', gossip: 'score below ' + fmtNum(cfg.gossipThreshold), bad_ip: 'too many peers from one IP' };
     const aspectTone = { strikes: 'bad', peer_status: 'warn', gossip: 'info', bad_ip: '' };
+    const aspectInfo = {
+      strikes: 'Refused because standing strikes reached ' + cfg.threshold + '. Recovers as strikes decay, one every ' + (cfg.decay || '?') + '.',
+      peer_status: 'Refused because the last status exchange failed validation. Recovers when the verdict expires after ' + (cfg.statusTTL || '?') + '.',
+      gossip: 'Refused because libp2p\'s gossip score fell below ' + fmtNum(cfg.gossipThreshold) + '. Recovers as the score decays, so there is no time estimate.',
+      bad_ip: 'Refused because too many peers already share this IP. Clears when the others leave.',
+    };
 
     $('#greyTiles', el).innerHTML =
       tile({ label: 'Grey-listed now', value: fmtNum(grey.length), cls: grey.length ? 'bad' : 'good', pick: true, on: !f.aspect, data: 'data-gaspect=""', sub: [grey.filter(p => p.connected).length + ' still connected', exempt.length ? exempt.length + ' exempt (trusted)' : 'every aspect'] }) +
-      ASPECTS.map(a => tile({ label: aspectLabel[a[0]], value: fmtNum(aspectCounts.get(a[0]) || 0), pick: true, on: f.aspect === a[0], data: 'data-gaspect="' + a[0] + '"', cls: aspectCounts.get(a[0]) ? aspectTone[a[0]] : '', sub: [aspectRule[a[0]]] })).join('') +
+      ASPECTS.map(a => tile({ label: aspectLabel[a[0]], info: aspectInfo[a[0]], value: fmtNum(aspectCounts.get(a[0]) || 0), pick: true, on: f.aspect === a[0], data: 'data-gaspect="' + a[0] + '"', cls: aspectCounts.get(a[0]) ? aspectTone[a[0]] : '', sub: [aspectRule[a[0]]] })).join('') +
       tile({ label: 'One strike from grey-listing', value: fmtNum(near.length), cls: near.length ? 'warn' : '', sub: [near.filter(p => p.connected).length + ' connected', 'standing at ' + (cfg.threshold - 1) + ' of ' + cfg.threshold] });
 
-    let rows = grey.filter(p => (!f.aspect || p.aspects.includes(f.aspect)) && matchReason(p));
     const gs = state.sort.grey;
-    rows = sortBy(rows, GREY_SORT[gs.key] || GREY_SORT.recovery, gs.dir);
+    const rows = sortBy(grey.filter(p => !f.aspect || p.aspects.includes(f.aspect)), GREY_SORT[gs.key] || GREY_SORT.recovery, gs.dir);
     const ns = state.sort.near;
-    const nearRows = sortBy(near.filter(matchReason), NEAR_SORT[ns.key] || NEAR_SORT.strikes, ns.dir);
-    const reasonBanner = f.reason ? '<div class="summary"><span>Peers struck for <b class="mono">' + esc(f.reason) + '</b> in the ' + esc(winLabel()) + ' window</span><button class="btn ghost sm" type="button" data-greason="' + attr(f.reason) + '">Clear</button></div>' : '';
+    const nearRows = sortBy(near, NEAR_SORT[ns.key] || NEAR_SORT.strikes, ns.dir);
+
+    // "Peers struck for …": every peer hit by the picked reason (source · reason) or source, grey-listed or not.
+    const key = f.reason, keyIsSource = !!key && !key.includes(' · ');
+    const hits = key ? s.strikes.filter(e => keyIsSource ? e.source === key : reasonKey(e) === key) : [];
+    const byPeer = new Map();
+    for (const e of hits) { let r = byPeer.get(e.peer.id); if (!r) { r = { peer: e.peer, n: 0, last: 0 }; byPeer.set(e.peer.id, r); } r.n++; if (e.at > r.last) r.last = e.at; }
+    const struck = Array.from(byPeer.values()).sort((x, y) => y.n - x.n || y.last - x.last);
+    const struckSec = !key ? '' : sec('Peers struck for ' + key, struck.length ?
+      '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Peer</th><th>State</th><th class="num" data-tip="Strikes with this reason in the window">Hits</th><th>Last hit</th><th data-tip="Standing strikes / grey-list threshold">Standing</th><th>Grey list</th></tr></thead><tbody>' +
+        struck.map(r => '<tr class="row" data-nav data-peer="' + attr(r.peer.id) + '"><td>' + peerCell(r.peer) + '</td><td><span class="badges">' + stateBadge(r.peer.state) + dirBadge(r.peer.direction) + '</span></td><td class="num">' + r.n + '</td><td class="tight">' + liveAgo(r.last) + '</td><td>' + meter(r.peer) + '</td><td>' + greyCell(r.peer) + '</td></tr>').join('') + '</tbody></table></div>' :
+      emptyState('No strikes for this reason', 'Nothing in the ' + winLabel() + ' window matches; widen the window or pick another reason.'),
+      { sub: plural(struck.length, 'peer') + ' · ' + plural(hits.length, 'strike') + ' · ' + winLabel() + (keyIsSource ? ' · every reason from this source' : ''), right: '<button class="btn sm" type="button" data-greason="' + attr(key) + '">Clear</button>', id: 'struck' });
 
     $('#greyBody', el).innerHTML =
-      sec('Grey-listed peers', reasonBanner +
-        '<div class="tbl-wrap"><table class="tbl" data-table="grey"><thead><tr>' + th('Peer', 'peer', gs) + th('State', 'state', gs) + th('Aspect', 'aspect', gs) + th('Why', 'reason', gs) + th('Recovers in', 'recovery', gs) + th('Strikes', 'strikes', gs) + '</tr></thead><tbody>' +
+      sec('Grey-listed peers', '<div class="tbl-wrap"><table class="tbl" data-table="grey"><thead><tr>' + th('Peer', 'peer', gs) + th('State', 'state', gs) + th('Aspect', 'aspect', gs) + th('Why', 'reason', gs) + th('Recovers in', 'recovery', gs, '', 'Estimated time until the node accepts the peer again') + th('Strikes', 'strikes', gs, '', 'Standing strikes / grey-list threshold') + '</tr></thead><tbody>' +
         (rows.map(p => '<tr class="row" data-nav data-peer="' + attr(p.id) + '"><td>' + peerCell(p) + '</td><td><span class="badges">' + stateBadge(p.state) + dirBadge(p.direction) + '</span></td>' +
           '<td><span class="badges">' + p.aspects.map(a => aspectBadge(a)).join('') + '</span></td>' +
           '<td class="reason">' + p.aspects.map(a => esc(cleanVerdict(p.details[a]))).join('<br>') + '</td>' +
           '<td class="tight">' + recoveryCell(p) + '</td><td>' + meter(p) + '</td></tr>').join('') ||
-          '<tr><td colspan="6">' + emptyState(grey.length ? 'No grey-listed peer matches' : 'No peer is grey-listed', grey.length ? 'Pick another aspect or clear the reason filter.' : 'Nothing in scope is refused right now.') + '</td></tr>') +
-        '</tbody></table></div>', { sub: fmtNum(rows.length) + ' of ' + fmtNum(grey.length) + ' · the reason is the node\'s own verdict text' }) +
-      '<div class="grid-2">' +
-      sec('Strike reasons, ' + winLabel(), bars(reasons.map(([k, v]) => ({ label: k, key: k, value: v, color: sourceColor(k.split(' · ')[0]), tip: k, on: f.reason === k })), { data: 'greason', tall: true, total: s.strikes.length, empty: 'No strikes in this window' }) +
-        (bySource.size ? '<div class="sec-h" style="margin-top:16px"><h2>By source</h2></div>' + bars(topN(bySource, 12).map(([k, v]) => ({ label: k, value: v, color: sourceColor(k) })), { total: s.strikes.length }) : '') +
-        '<div class="note">Source is where the strike came from (dial, an RPC handler, gossip validation, sync…); the reason is that handler\'s own label. Click a reason to keep only the peers it hit.</div>', { sub: fmtNum(s.strikes.length) + ' strikes on ' + plural(new Set(s.strikes.map(e => e.peer.id)).size, 'peer') }) +
-      sec('One strike from grey-listing', '<div class="tbl-wrap"><table class="tbl compact" data-table="near"><thead><tr>' + th('Peer', 'peer', ns) + th('Strikes', 'strikes', ns) + th('Last strike', 'last', ns) + '</tr></thead><tbody>' +
+          '<tr><td colspan="6">' + emptyState(grey.length ? 'No grey-listed peer has this aspect' : 'No peer is grey-listed', grey.length ? 'Pick another aspect above.' : 'Nothing in scope is refused right now.') + '</td></tr>') +
+        '</tbody></table></div>', { sub: fmtNum(rows.length) + ' of ' + fmtNum(grey.length) + ' · the reason is the node\'s own verdict text', info: 'Recovers in is the node\'s own estimate: decays still needed for strikes, TTL left for peer status. Gossip-score and IP verdicts are not timed.', id: 'grey' }) +
+      sec('Strike reasons, ' + winLabel(), '<div class="grid-2" style="margin-bottom:0">' +
+        '<div>' + bars(reasons.map(([k, v]) => ({ label: k, key: k, value: v, color: sourceColor(k.split(' · ')[0]), tip: k, on: f.reason === k })), { data: 'greason', tall: true, total: s.strikes.length, empty: 'No strikes in this window' }) + '</div>' +
+        '<div>' + (bySource.size ? '<div class="sec-h" style="margin-top:0"><h2>By source</h2><span class="sub">click to list the peers</span></div>' + bars(topN(bySource, 12).map(([k, v]) => ({ label: k, key: k, value: v, color: sourceColor(k), on: f.reason === k })), { data: 'greason', total: s.strikes.length }) : '') +
+        '<div class="note">Source is where the strike came from (dial, an RPC handler, gossip validation, sync…); the reason is that handler\'s own label. Click a reason or a source to list every peer it hit.</div></div></div>',
+        { sub: fmtNum(s.strikes.length) + ' strikes on ' + plural(new Set(s.strikes.map(e => e.peer.id)).size, 'peer'), info: 'Source is the subsystem that struck: dial, an RPC handler, gossip validation, sync… The reason is that handler\'s own label. Click either to list every peer it hit.', id: 'reasons' }) +
+      struckSec +
+      sec('One strike from grey-listing', '<div class="tbl-wrap"><table class="tbl compact" data-table="near"><thead><tr>' + th('Peer', 'peer', ns) + th('Strikes', 'strikes', ns, '', 'Standing strikes / grey-list threshold') + th('Last strike', 'last', ns) + '</tr></thead><tbody>' +
         (nearRows.map(p => '<tr class="row" data-nav data-peer="' + attr(p.id) + '"><td><div class="peer-cell">' + peerCell(p) + '</div><div class="badges" style="margin-top:3px">' + stateBadge(p.state) + dirBadge(p.direction) + '</div></td><td>' + meter(p) + '</td><td class="reason" style="min-width:160px">' + lastStrikeCell(p) + '</td></tr>').join('') ||
           '<tr><td colspan="3">' + emptyState('Nobody is close', 'No peer in scope is within one strike of the threshold.') + '</td></tr>') + '</tbody></table></div>' +
-        '<div class="note">The next strike before a decay tick refuses these peers; a connected one is dropped at the following status round.</div>', { sub: fmtNum(nearRows.length) + ' peers' }) +
-      '</div>' +
+        '<div class="note">The next strike before a decay tick refuses these peers; a connected one is dropped at the following status round.</div>', { sub: fmtNum(nearRows.length) + ' peers · standing at ' + (cfg.threshold - 1) + ' of ' + cfg.threshold, info: 'The next strike before a decay tick refuses these peers. A connected one is then dropped at the following status round.', id: 'near' }) +
       sec('Scoring rules', '<div class="grid-2" style="margin-bottom:0">' + kv([
         ['Strikes', cfg.threshold + ' standing strikes grey-list a peer; one is forgiven every ' + esc(cfg.decay || '–') + '. Recovery is the decays still needed.'],
         ['Peer status', 'A status exchange that fails validation grey-lists the peer until the verdict expires after ' + esc(cfg.statusTTL || '–') + '.'],
       ]) + kv([
         ['Gossip score', 'libp2p\'s score grey-lists below ' + fmtNum(cfg.gossipThreshold) + '; it recovers as the score decays, so no time estimate is given.'],
         ['IP colocation', 'More than the allowed peers from one IP refuses the newcomers; clears when the others leave.'],
-      ]) + '</div><div class="note">Trusted peers are exempt from every verdict, and grey-listed peers are never forgotten by the peer store.</div>');
+      ]) + '</div><div class="note">Trusted peers are exempt from every verdict, and grey-listed peers are never forgotten by the peer store.</div>', { id: 'rules' });
   }
 
   // ------------------------------------------------------------------ gossip
@@ -894,7 +906,7 @@
     const peersAll = new Set(all.map(r => r.peerId)).size;
     const topTopic = topN(countBy(all.map(r => r.topicShort)), 1)[0], topReason = topN(countBy(all.map(r => r.reason)), 1)[0];
     $('#gossipTiles', el).innerHTML =
-      tile({ label: 'Rejections, ' + winLabel(), value: fmtNum(all.length), cls: all.length ? 'info' : '', sub: [plural(peersAll, 'peer'), 'last ' + fmtNum(cfg.maxRejections) + ' kept per peer'] }) +
+      tile({ label: 'Rejections, ' + winLabel(), info: 'Gossip messages a topic validator returned reject for. Kept for observability only; libp2p separately lowers the sender\'s gossip score for each invalid delivery.', value: fmtNum(all.length), cls: all.length ? 'info' : '', sub: [plural(peersAll, 'peer'), 'last ' + fmtNum(cfg.maxRejections) + ' kept per peer'] }) +
       tile({ label: 'Latest rejection', value: all.length ? liveAgo(all[0].at) : '<span class="faint">none</span>', sub: [all.length ? fmtTime(all[0].at) : ''] }) +
       tile({ label: 'Top topic', value: topTopic ? '<span style="font-size:16px">' + esc(topTopic[0]) + '</span>' : '<span class="faint">—</span>', sub: [topTopic ? plural(topTopic[1], 'rejection') : ''] }) +
       tile({ label: 'Top reason', value: topReason ? '<span style="font-size:14px;font-family:var(--mono)">' + esc(topReason[0].length > 60 ? topReason[0].slice(0, 58) + '…' : topReason[0]) + '</span>' : '<span class="faint">—</span>', sub: [topReason ? plural(topReason[1], 'rejection') : ''] });
@@ -918,13 +930,13 @@
       sec('Gossip score of connected peers', cols(scoreBuckets) +
         (lowest.length ? '<div class="sec-h" style="margin-top:16px"><h2>Lowest scores</h2></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Peer</th><th class="num">Score</th><th class="num">Behaviour penalty</th></tr></thead><tbody>' +
           lowest.map(p => '<tr class="row" data-peer="' + attr(p.id) + '"><td>' + peerCell(p) + '</td><td class="num">' + gossipCell(p.gossipScore) + '</td><td class="num">' + fmtScore(p.behaviourPenalty) + '</td></tr>').join('') + '</tbody></table></div>' :
-          '<div class="note">No connected peer has a negative score or a behaviour penalty.</div>'), { sub: 'mirrored from libp2p; grey-listed below ' + fmtNum(cfg.gossipThreshold) }) +
+          '<div class="note">No connected peer has a negative score or a behaviour penalty.</div>'), { sub: 'mirrored from libp2p; grey-listed below ' + fmtNum(cfg.gossipThreshold), info: 'libp2p\'s per-peer gossip score: positive for good mesh behaviour, negative after invalid messages or spam, decaying back over time. The behaviour penalty counts protocol misbehaviour such as broken promises.' }) +
       '</div>' +
       sec('Rejection feed', '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>When</th><th>Peer</th><th>Client</th><th>Topic</th><th>Reason</th></tr></thead><tbody>' +
         (shown.map(r => '<tr class="row" data-nav data-peer="' + attr(r.peerId) + '"><td class="tight" title="' + attr(fmtTime(r.at)) + '">' + liveAgo(r.at) + '</td><td>' + peerLink(r.peerId) + '</td><td><span class="peer-cell">' + dot(r.agentType) + '<span class="agent" title="' + attr(r.agent) + '">' + esc(r.agent || r.agentType) + '</span></span></td>' +
           '<td>' + badge(r.topicShort, 'sm', r.topic) + '</td><td class="reason" style="white-space:normal" title="' + attr(r.reason) + '">' + esc(r.reason) + '</td></tr>').join('') ||
           '<tr><td colspan="5">' + emptyState(all.length ? 'No rejection matches' : 'Nothing rejected', all.length ? 'Clear the search or the pick.' : 'No validator rejected a message from a peer in scope during the ' + winLabel() + ' window.') + '</td></tr>') + '</tbody></table>' +
-        (rows.length > shown.length ? '<div class="tbl-foot">Showing ' + shown.length + ' of ' + fmtNum(rows.length) + '</div>' : '') + '</div>', { sub: 'newest first' });
+        (rows.length > shown.length ? '<div class="tbl-foot">Showing ' + shown.length + ' of ' + fmtNum(rows.length) + '</div>' : '') + '</div>', { sub: 'newest first', id: 'feed' });
   }
 
   // ------------------------------------------------------------------ chain
@@ -946,18 +958,18 @@
     $('#chainTiles', el).innerHTML =
       tile({ label: 'Our head', value: fmtNum(node.headSlot), cls: node.isSyncing ? 'warn' : 'good', sub: ['epoch ' + fmtNum(node.headSlot != null ? Math.floor(node.headSlot / spe) : null), node.isSyncing ? badge('syncing', 'warn') : badge('in sync', 'ok'), node.isOptimistic ? badge('optimistic', 'warn') : '', node.elOffline ? badge('EL offline', 'bad') : ''] }) +
       tile({ label: 'Our finalized epoch', value: fmtNum(node.finalizedEpoch), sub: [node.finalizedRoot ? '<span class="mono">' + esc(node.finalizedRoot.slice(0, 14)) + '…</span>' : ''] }) +
-      tile({ label: "Peers' highest head", value: fmtNum(highestPeer || cfg.highestKnownHeadSlot), cls: highestPeer > (node.headSlot || 0) + 2 ? 'warn' : '', sub: [node.headSlot != null && highestPeer ? (highestPeer - node.headSlot > 0 ? '+' : '') + (highestPeer - node.headSlot) + ' slots vs ours' : '', 'scorer high-water ' + fmtNum(cfg.highestKnownHeadSlot)] }) +
+      tile({ label: "Peers' highest head", info: 'The highest head slot any connected peer reports now; the scorer\'s high-water mark is the highest it has ever seen.', value: fmtNum(highestPeer || cfg.highestKnownHeadSlot), cls: highestPeer > (node.headSlot || 0) + 2 ? 'warn' : '', sub: [node.headSlot != null && highestPeer ? (highestPeer - node.headSlot > 0 ? '+' : '') + (highestPeer - node.headSlot) + ' slots vs ours' : '', 'scorer high-water ' + fmtNum(cfg.highestKnownHeadSlot)] }) +
       tile({ label: 'Peers with a chain view', value: fmtNum(withChain.length), unit: 'of ' + conn.length + ' connected', sub: [buckets[1].value + ' current', behindCount + ' behind'] }) +
       tile({ label: 'Invalid statuses', value: fmtNum(errPeers.length), cls: errPeers.length ? 'warn' : '', sub: [errPeers.filter(p => p.connected).length + ' connected', 'verdicts expire after ' + esc(cfg.statusTTL || '–')] });
     $('#chainCards', el).innerHTML =
-      sec('Peer heads relative to ours', cols(buckets) + '<div class="note">Δ = peer head slot − our head slot, from the peer\'s last validated status (refreshed about twice per epoch).</div>', { sub: withChain.length + ' peers' }) +
+      sec('Peer heads relative to ours', cols(buckets) + '<div class="note">Δ = peer head slot − our head slot, from the peer\'s last validated status (refreshed about twice per epoch).</div>', { sub: withChain.length + ' peers', info: 'Within one epoch counts as current because a status can be half an epoch old. Peers far behind are syncing or stuck; peers ahead may mean we are the ones behind.' }) +
       sec('Finalized epoch agreement', bars(finCounts.map(([e, n]) => ({ label: 'epoch ' + fmtNum(e) + (e === node.finalizedEpoch ? ' (ours)' : ''), value: n, color: e === node.finalizedEpoch ? 'var(--good)' : e > (node.finalizedEpoch || 0) ? 'var(--info)' : 'var(--warn)' })), { total: withChain.length, empty: 'No peer statuses yet' }) +
         kv([
           ['Fork digest' + (digests.length > 1 ? 's' : ''), digests.length ? digests.map(([d, n]) => '<span class="mono">' + esc(d) + '</span> <span class="faint">' + n + '</span>').join(' · ') : '–'],
           ['Earliest slot', earliest.length ? 'back to ' + fmtNum(earliest[0]) + ' <span class="faint">(median ' + fmtNum(median(earliest)) + ')</span>' : '–'],
-        ]).replace('<dl class="kv">', '<dl class="kv" style="margin-top:12px">')) +
+        ]).replace('<dl class="kv">', '<dl class="kv" style="margin-top:12px">'), { info: 'How many peers report each finalized epoch. A peer behind ours is usually syncing; a different fork digest means another network or fork.' }) +
       sec('Invalid statuses', errPeers.length ? '<div class="feed">' + errPeers.slice(0, 10).map(p => feedRow(p.statusAt, dot(p.agentType) + peerLink(p.id) + stateBadge(p.state) + '<span class="reason">' + esc(p.validationError) + '</span>')).join('') + '</div>' +
-        (errPeers.length > 10 ? '<div class="note">' + (errPeers.length - 10) + ' more in the table below.</div>' : '') : emptyState('Every status validated', 'No peer in scope failed status validation.'), { sub: 'latest first' });
+        (errPeers.length > 10 ? '<div class="note">' + (errPeers.length - 10) + ' more in the table below.</div>' : '') : emptyState('Every status validated', 'No peer in scope failed status validation.'), { sub: 'latest first', id: 'invalid' });
     const q = f.q.trim().toLowerCase();
     let rows = s.peers.filter(p => p.chain && (!f.connectedOnly || p.connected) && (!q || p.id.toLowerCase().includes(q) || p.agent.toLowerCase().includes(q)));
     rows = sortBy(rows, CHAIN_SORT[sort.key] || CHAIN_SORT.headSlot, sort.dir);
@@ -1029,7 +1041,7 @@
       (d.error && !d.data ? '<div class="banner warn">Detail request failed: ' + esc(d.error) + '. Showing the list entry.</div>' : '') +
 
       '<div class="grid-2">' +
-      sec('Grey-list verdict', verdict + aspects + '<div style="margin:10px 0 4px">' + meter(p) + ' <span class="muted" style="font-size:12px;margin-left:6px">' + p.standing + ' standing · grey-listed at ' + p.threshold + ' · 1 forgiven every ' + esc(cfg.decay || '–') + '</span></div>') +
+      sec('Grey-list verdict', verdict + aspects + '<div style="margin:10px 0 4px">' + meter(p) + ' <span class="muted" style="font-size:12px;margin-left:6px">' + p.standing + ' standing · grey-listed at ' + p.threshold + ' · 1 forgiven every ' + esc(cfg.decay || '–') + '</span></div>', { info: 'Whether the node refuses this peer and why. Each aspect that fires is listed with its own recovery estimate.' }) +
       sec('Chain view', (p.validationError ? '<div class="verdict bad"><div class="vt">' + badge('validation failed', 'bad') + '</div><div class="vb reason">' + esc(p.validationError) + '</div></div>' : '') +
         (p.chain ? kv([
           ['Head', 'slot ' + fmtNum(p.headSlot) + ' <span class="muted">(' + deltaCell(p.headDelta) + ' vs ours ' + fmtNum(node.headSlot) + ')</span>'],
@@ -1039,11 +1051,11 @@
           ['Earliest slot', fmtNum(p.earliestSlot)],
           ['Fork digest', '<span class="mono">' + esc(p.chain.fork_digest) + '</span>'],
           ['Last status', p.status ? liveAgo(p.statusAt) + ' <span class="faint">' + esc(fmtTime(p.statusAt)) + '</span>' : 'never'],
-        ]) + (p.validationError ? '<div class="note">Shown is the last status that passed validation.</div>' : '') : emptyState(p.status ? 'No parseable status stored' : 'No status exchange yet')), { sub: p.status ? '' : 'no exchange yet' }) +
+        ]) + (p.validationError ? '<div class="note">Shown is the last status that passed validation.</div>' : '') : emptyState(p.status ? 'No parseable status stored' : 'No status exchange yet')), { sub: p.status ? '' : 'no exchange yet', info: 'What the peer reported in its last validated status exchange, compared with our own head and finalized epoch.' }) +
       '</div>' +
 
       sec('Strikes', history.length ? '<div class="timeline">' + history.map(h => '<div class="tl-row"><span class="tl-t">' + esc(fmtTime(h.at)) + '<small>' + liveAgo(h.at) + '</small></span><span>' + srcLabel(h.source) + '</span><span class="reason">' + esc(h.reason) + '</span></div>').join('') + '</div>' +
-        '<div class="note">' + history.length + ' retained of up to ' + fmtNum(cfg.historySize) + '; the standing count is what decay and grey-listing act on.</div>' : emptyState('No strikes recorded'), { sub: p.standing + ' standing · newest first' }) +
+        '<div class="note">' + history.length + ' retained of up to ' + fmtNum(cfg.historySize) + '; the standing count is what decay and grey-listing act on.</div>' : emptyState('No strikes recorded'), { sub: p.standing + ' standing · newest first', info: 'The retained history is capped; the standing count, which decays over time, is what grey-listing acts on.' }) +
 
       '<div class="grid-2">' +
       sec('Gossip', kv([['Score', gossipCell(p.gossipScore) + ' <span class="muted">grey-listed below ' + fmtNum(cfg.gossipThreshold) + '</span>'], ['Behaviour penalty', fmtScore(p.behaviourPenalty)]]) +
@@ -1074,15 +1086,16 @@
     try { param = decodeURIComponent(param); } catch (_) { /* keep raw */ }
     return { view, param, q: new URLSearchParams(qs) };
   }
-  function scopeQuery(sc) {
+  function scopeQuery(sc, extra) {
     const q = new URLSearchParams();
     if (sc.client) q.set('client', sc.client);
     if (sc.agent) q.set('agent', sc.agent);
     if (sc.window && sc.window !== '1h') q.set('window', sc.window);
+    for (const k of Object.keys(extra || {})) if (extra[k]) q.set(k, extra[k]);
     const s = q.toString();
     return s ? '?' + s : '';
   }
-  const hashFor = (view, param) => '#/' + view + (param ? '/' + encodeURIComponent(param) : '') + scopeQuery(scope);
+  const hashFor = (view, param, extra) => '#/' + view + (param ? '/' + encodeURIComponent(param) : '') + scopeQuery(scope, extra);
   const hashForScope = (patch, view) => '#/' + view + scopeQuery(Object.assign({}, scope, patch));
   function syncHash() { history.replaceState(null, '', hashFor(state.route.view, state.route.param)); }
   function onRoute() {
@@ -1092,11 +1105,20 @@
     scope.client = CLIENTS.includes(client) ? client : '';
     scope.agent = agent;
     scope.window = WINDOW_MS[win] != null ? win : '1h';
+    state.anchor = r.q.get('at') || '';
     memo.key = '';
     state.dd.open = false;
     render();
   }
-  const navigate = (view, param) => { location.hash = hashFor(view, param); };
+  const navigate = (view, param, extra) => { location.hash = hashFor(view, param, extra); };
+  // A tile or chart click lands on the section it counts, scrolled into view and flashed once.
+  function applyAnchor() {
+    const a = state.anchor; if (!a) return;
+    const el = document.getElementById('sec-' + a); if (!el) return;
+    state.anchor = '';
+    el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+  }
   function goBack() { if (history.length > 1 && state.cameFrom) history.back(); else navigate('peers', ''); }
 
   // ------------------------------------------------------------------ keyboard cursor
@@ -1193,11 +1215,18 @@
       if ((el = hit('[data-win]'))) { setScope({ window: el.dataset.win }); return; }
       if ((el = hit('[data-client]'))) { const c = el.dataset.client; const same = scope.client === c; setScope({ client: same ? '' : c, agent: same ? scope.agent : '' }); if (state.route.view !== 'clients') navigate('clients', ''); return; }
       if ((el = hit('[data-agent]'))) { setScope({ agent: el.dataset.agent }); return; }
-      if ((el = hit('[data-aspect]'))) { state.filters.greylist.aspect = el.dataset.aspect; navigate('greylist', ''); return; }
+      if ((el = hit('[data-aspect]'))) { state.filters.greylist.aspect = el.dataset.aspect; navigate('greylist', '', { at: 'grey' }); return; }
       if ((el = hit('[data-gaspect]'))) { state.filters.greylist.aspect = el.dataset.gaspect; VIEW_IMPL.greylist.update($('#view')); return; }
-      if ((el = hit('[data-greason]'))) { state.filters.greylist.reason = state.filters.greylist.reason === el.dataset.greason ? '' : el.dataset.greason; if (state.route.view !== 'greylist') navigate('greylist', ''); else VIEW_IMPL.greylist.update($('#view')); return; }
-      if ((el = hit('[data-reason]'))) { state.filters.greylist.reason = el.dataset.reason; state.filters.greylist.aspect = ''; navigate('greylist', ''); return; }
-      if ((el = hit('[data-source]'))) { const f = state.filters.peers; f.preset = 'all'; f.source = el.dataset.source; f.q = ''; f.aspect = ''; f.dir = ''; navigate('peers', ''); return; }
+      if ((el = hit('[data-greason]'))) {
+        const k = el.dataset.greason;
+        state.filters.greylist.reason = state.filters.greylist.reason === k ? '' : k;
+        if (state.route.view !== 'greylist') { navigate('greylist', '', { at: 'struck' }); return; }
+        VIEW_IMPL.greylist.update($('#view'));
+        if (state.filters.greylist.reason) { state.anchor = 'struck'; applyAnchor(); }
+        return;
+      }
+      if ((el = hit('[data-reason]'))) { state.filters.greylist.reason = el.dataset.reason; navigate('greylist', '', { at: 'struck' }); return; }
+      if ((el = hit('[data-source]'))) { state.filters.greylist.reason = el.dataset.source; navigate('greylist', '', { at: 'struck' }); return; }
       if ((el = hit('[data-gpick]'))) { state.filters.gossip.pick = state.filters.gossip.pick === el.dataset.gpick ? '' : el.dataset.gpick; VIEW_IMPL.gossip.update($('#view')); return; }
       if ((el = hit('[data-group]'))) { state.filters.gossip.groupBy = el.dataset.group; state.filters.gossip.pick = ''; VIEW_IMPL.gossip.update($('#view')); return; }
       if ((el = hit('[data-preset]'))) { state.filters.peers.preset = el.dataset.preset; state.filters.peers.peerLimit = 300; state.cursor = -1; VIEW_IMPL.peers.update($('#view')); return; }

@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/middleware"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/doctorpeer"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/beacon"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/blob"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/config"
@@ -16,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/rewards"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/validator"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/peerbuddy"
 	beaconprysm "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/beacon"
 	nodeprysm "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/node"
 	validatorv1alpha1 "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/v1alpha1/validator"
@@ -111,21 +111,21 @@ func (s *Service) endpoints(
 		endpoints = append(endpoints, s.removedDebugEndpoints()...)
 	}
 
-	if s.cfg.EnablePeerBuddy {
-		endpoints = append(endpoints, s.peerBuddyEndpoints()...)
+	if s.cfg.EnableDoctorPeer {
+		endpoints = append(endpoints, s.doctorPeerEndpoints()...)
 	}
 
 	return endpoints
 }
 
-// peerBuddyEndpoints serves the PeerBuddy dashboard; a subtree route, so the one template
+// doctorPeerEndpoints serves the DoctorPeer dashboard; a subtree route, so the one template
 // covers the index page and every asset beneath it.
-func (s *Service) peerBuddyEndpoints() []endpoint {
+func (s *Service) doctorPeerEndpoints() []endpoint {
 	return []endpoint{
 		{
-			template: peerbuddy.Path,
-			name:     "peerbuddy.Dashboard",
-			handler:  peerbuddy.Handler().ServeHTTP,
+			template: doctorpeer.Path,
+			name:     "doctorpeer.Dashboard",
+			handler:  doctorpeer.Handler().ServeHTTP,
 			methods:  []string{http.MethodGet},
 		},
 	}

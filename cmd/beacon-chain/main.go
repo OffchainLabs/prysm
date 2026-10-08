@@ -66,7 +66,7 @@ var appFlags = []cli.Flag{
 	flags.DataColumnBatchLimitBurstFactor,
 	flags.SlotsPerArchivedPoint,
 	flags.DisableDebugRPCEndpoints,
-	flags.EnablePeerBuddy,
+	flags.EnableDoctorPeer,
 	flags.SubscribeToAllSubnets,
 	flags.Supernode,
 	flags.SemiSupernode,
