@@ -153,6 +153,7 @@ type Service struct {
 	chainStarted                         *atomic.Bool
 	orphanedOriginStreak                 *atomic.Int64
 	validateBlockLock                    sync.RWMutex
+	validateEnvelopeLock                 sync.Mutex
 	rateLimiter                          *limiter
 	seenBlockLock                        sync.RWMutex
 	seenBlockCache                       *lru.Cache
