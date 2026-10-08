@@ -13,31 +13,71 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
 
-const (
-	finalizedRootIndex = uint64(105) // Precomputed value.
-)
+type lightClientGeneralizedIndices struct {
+	finalizedRoot        uint64
+	currentSyncCommittee uint64
+	nextSyncCommittee    uint64
+}
 
-// FinalizedRootGeneralizedIndex for the beacon state.
-func FinalizedRootGeneralizedIndex() uint64 {
-	return finalizedRootIndex
+// FinalizedRootGeneralizedIndexForVersion returns the finalized checkpoint root
+// generalized index for the given state version and SSZ mode.
+func FinalizedRootGeneralizedIndexForVersion(stateVersion int) (uint64, error) {
+	indices, err := lightClientGeneralizedIndicesForVersion(stateVersion)
+	if err != nil {
+		return 0, err
+	}
+	return indices.finalizedRoot, nil
+}
+
+// CurrentSyncCommitteeGeneralizedIndexForVersion returns the current sync
+// committee generalized index for the given state version and SSZ mode.
+func CurrentSyncCommitteeGeneralizedIndexForVersion(stateVersion int) (uint64, error) {
+	if stateVersion == version.Phase0 {
+		return 0, errNotSupported("CurrentSyncCommitteeGeneralizedIndex", stateVersion)
+	}
+	indices, err := lightClientGeneralizedIndicesForVersion(stateVersion)
+	if err != nil {
+		return 0, err
+	}
+	return indices.currentSyncCommittee, nil
+}
+
+// NextSyncCommitteeGeneralizedIndexForVersion returns the next sync committee
+// generalized index for the given state version and SSZ mode.
+func NextSyncCommitteeGeneralizedIndexForVersion(stateVersion int) (uint64, error) {
+	if stateVersion == version.Phase0 {
+		return 0, errNotSupported("NextSyncCommitteeGeneralizedIndex", stateVersion)
+	}
+	indices, err := lightClientGeneralizedIndicesForVersion(stateVersion)
+	if err != nil {
+		return 0, err
+	}
+	return indices.nextSyncCommittee, nil
+}
+
+func lightClientGeneralizedIndicesForVersion(stateVersion int) (lightClientGeneralizedIndices, error) {
+	switch stateVersion {
+	case version.Phase0:
+		return lightClientGeneralizedIndices{finalizedRoot: 105}, nil
+	case version.Altair, version.Bellatrix, version.Capella, version.Deneb:
+		return lightClientGeneralizedIndices{finalizedRoot: 105, currentSyncCommittee: 54, nextSyncCommittee: 55}, nil
+	case version.Electra, version.Fulu:
+		return lightClientGeneralizedIndices{finalizedRoot: 169, currentSyncCommittee: 86, nextSyncCommittee: 87}, nil
+	case version.Gloas:
+		return lightClientGeneralizedIndices{finalizedRoot: 735, currentSyncCommittee: 2945, nextSyncCommittee: 2946}, nil
+	default:
+		return lightClientGeneralizedIndices{}, errNotSupported("light client generalized indices", stateVersion)
+	}
 }
 
 // CurrentSyncCommitteeGeneralizedIndex for the beacon state.
 func (b *BeaconState) CurrentSyncCommitteeGeneralizedIndex() (uint64, error) {
-	if b.version == version.Phase0 {
-		return 0, errNotSupported("CurrentSyncCommitteeGeneralizedIndex", b.version)
-	}
-
-	return uint64(types.CurrentSyncCommittee.RealPosition()), nil
+	return CurrentSyncCommitteeGeneralizedIndexForVersion(b.version)
 }
 
 // NextSyncCommitteeGeneralizedIndex for the beacon state.
 func (b *BeaconState) NextSyncCommitteeGeneralizedIndex() (uint64, error) {
-	if b.version == version.Phase0 {
-		return 0, errNotSupported("NextSyncCommitteeGeneralizedIndex", b.version)
-	}
-
-	return uint64(types.NextSyncCommittee.RealPosition()), nil
+	return NextSyncCommitteeGeneralizedIndexForVersion(b.version)
 }
 
 // CurrentSyncCommitteeProof from the state's Merkle trie representation.

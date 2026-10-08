@@ -360,7 +360,6 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		}),
 	}
 	go p.listenForNewNodes()
-	go p2.listenForNewNodes()
 
 	msg := util.HydrateAttestation(&ethpb.Attestation{AggregationBits: bitfield.NewBitlist(7)})
 	topic := AttestationSubnetTopicFormat

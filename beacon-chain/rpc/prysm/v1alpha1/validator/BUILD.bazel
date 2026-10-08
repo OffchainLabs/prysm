@@ -151,6 +151,7 @@ common_deps = [
     "//beacon-chain/core/feed/block:go_default_library",
     "//beacon-chain/core/feed/operation:go_default_library",
     "//beacon-chain/core/feed/state:go_default_library",
+    "//beacon-chain/core/gloas:go_default_library",
     "//beacon-chain/core/helpers:go_default_library",
     "//beacon-chain/core/signing:go_default_library",
     "//beacon-chain/core/time:go_default_library",

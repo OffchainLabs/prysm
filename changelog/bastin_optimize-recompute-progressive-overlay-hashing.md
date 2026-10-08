@@ -1,3 +1,0 @@
-### Changed
-
-- optimize recomputeProgressiveOverlay hashing.

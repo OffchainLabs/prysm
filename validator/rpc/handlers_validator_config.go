@@ -93,7 +93,7 @@ func (s *Server) SetBuilderConfig(w http.ResponseWriter, r *http.Request) {
 		} else {
 			// Stamp the storage format only: semantics are fork-keyed, so writing
 			// builders never drops v1 content or changes other keys' behavior.
-			settings.Version = proposer.SchemaV2
+			settings.Version = proposer.MaxSchemaVersion
 		}
 		if settings.ProposeConfig == nil {
 			settings.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)

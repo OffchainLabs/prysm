@@ -56,9 +56,12 @@ type PayloadAttMsgVerifier struct {
 func (v *PayloadAttMsgVerifier) VerifyCurrentSlot() (err error) {
 	defer v.record(RequireCurrentSlot, &err)
 
-	currentSlot := v.clock.CurrentSlot()
-	if v.pa.Slot() != currentSlot {
-		return fmt.Errorf("%w: got %d want %d", ErrIncorrectPayloadAttSlot, v.pa.Slot(), currentSlot)
+	ok, err := v.withinSlotRange(v.pa.Slot(), v.pa.Slot())
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("%w: got %d want %d", ErrIncorrectPayloadAttSlot, v.pa.Slot(), v.clock.CurrentSlot())
 	}
 
 	return nil

@@ -80,7 +80,6 @@ func run(args []string) error {
 			}
 
 			if cache.Kinds[string(find)] == want {
-				fmt.Printf("==> gen %s (up to date, skipped)\n", find)
 				continue
 			}
 		}
@@ -101,13 +100,6 @@ func run(args []string) error {
 			return fmt.Errorf("store cache: %w", err)
 		}
 	}
-
-	abs, err := filepath.Abs(cacheFile)
-	if err != nil {
-		return fmt.Errorf("abs cache path: %w", err)
-	}
-
-	fmt.Printf("==> cache: %s\n", abs)
 
 	return nil
 }

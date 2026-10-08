@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/validator/client"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/derived"
@@ -703,11 +704,15 @@ func (s *Server) GetGasLimit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var epoch primitives.Epoch
+	if genesis := s.validatorService.GenesisTime(); !genesis.IsZero() {
+		epoch = slots.ToEpoch(slots.CurrentSlot(genesis))
+	}
 	settings := s.validatorService.ProposerSettings()
 	httputil.WriteJson(w, &GetGasLimitResponse{
 		Data: &GasLimitMetaData{
 			Pubkey:   rawPubkey,
-			GasLimit: fmt.Sprintf("%d", settings.GasLimit(bytesutil.ToBytes48(pubkey))),
+			GasLimit: fmt.Sprintf("%d", settings.GasLimitAt(bytesutil.ToBytes48(pubkey), epoch)),
 		},
 	})
 }

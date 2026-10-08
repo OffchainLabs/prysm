@@ -1248,4 +1248,93 @@ func TestQueryUntilAccepted(t *testing.T) {
 		assert.Equal(t, true, errors.Is(err, context.Canceled),
 			"cancellation must survive, got: "+err.Error())
 	})
+
+	// The fallback deadline only ends the wait for an accepted response: a node that
+	// has not answered at all by then still gets until the deadline to answer.
+	t.Run("node answering after the fallback deadline is still used", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			select {
+			case <-time.After(300 * time.Millisecond):
+			case <-r.Context().Done():
+				return
+			}
+			_, err := w.Write([]byte("late"))
+			require.NoError(t, err)
+		}))
+		t.Cleanup(srv.Close)
+
+		now := time.Now()
+		mh := multi(t, srv.URL)
+		body, _, err := mh.GetSSZ(
+			context.Background(),
+			"/x",
+			WithRace(),
+			WithSSZAccept(func([]byte, http.Header) bool { return false }),
+			WithDeadline(now.Add(5*time.Second)),
+			WithFallbackDeadline(now.Add(50*time.Millisecond)),
+			WithRepoll(UntilAccepted),
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "late", string(body))
+	})
+
+	// With a usable response in hand, re-polling for an accepted one stops at the
+	// fallback deadline rather than at the deadline.
+	t.Run("usable response in hand stops re-polling at the fallback deadline", func(t *testing.T) {
+		var hits atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			hits.Add(1)
+			_, err := w.Write([]byte("stale"))
+			require.NoError(t, err)
+		}))
+		t.Cleanup(srv.Close)
+
+		start := time.Now()
+		mh := multi(t, srv.URL)
+		body, _, err := mh.GetSSZ(
+			context.Background(),
+			"/x",
+			WithRace(),
+			WithSSZAccept(func([]byte, http.Header) bool { return false }),
+			WithDeadline(start.Add(5*time.Second)),
+			WithFallbackDeadline(start.Add(200*time.Millisecond)),
+			WithRepoll(UntilAccepted),
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "stale", string(body))
+		assert.Equal(t, true, hits.Load() > 1, "the read should have re-polled")
+		assert.Equal(t, true, time.Since(start) < 2*time.Second, "the read should have stopped at the fallback deadline")
+	})
+
+	// A round started with a usable response already in hand must not wait on a
+	// stalled node past the fallback deadline.
+	t.Run("later round does not outwait the fallback deadline", func(t *testing.T) {
+		var hits atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if hits.Add(1) == 1 {
+				_, err := w.Write([]byte("stale"))
+				require.NoError(t, err)
+				return
+			}
+			// Later requests stall until the client gives up on them.
+			<-r.Context().Done()
+		}))
+		t.Cleanup(srv.Close)
+
+		start := time.Now()
+		mh := multi(t, srv.URL)
+		body, _, err := mh.GetSSZ(
+			context.Background(),
+			"/x",
+			WithRace(),
+			WithSSZAccept(func([]byte, http.Header) bool { return false }),
+			WithDeadline(start.Add(5*time.Second)),
+			WithFallbackDeadline(start.Add(200*time.Millisecond)),
+			WithRepoll(UntilAccepted),
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "stale", string(body))
+		assert.Equal(t, int32(2), hits.Load(), "a second round should have started and been cut off")
+		assert.Equal(t, true, time.Since(start) < 2*time.Second, "the read should have stopped at the fallback deadline")
+	})
 }
