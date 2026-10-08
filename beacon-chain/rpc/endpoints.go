@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/rewards"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/validator"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/peerbuddy"
 	beaconprysm "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/beacon"
 	nodeprysm "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/node"
 	validatorv1alpha1 "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/v1alpha1/validator"
@@ -110,7 +111,24 @@ func (s *Service) endpoints(
 		endpoints = append(endpoints, s.removedDebugEndpoints()...)
 	}
 
+	if s.cfg.EnablePeerBuddy {
+		endpoints = append(endpoints, s.peerBuddyEndpoints()...)
+	}
+
 	return endpoints
+}
+
+// peerBuddyEndpoints serves the PeerBuddy dashboard; a subtree route, so the one template
+// covers the index page and every asset beneath it.
+func (s *Service) peerBuddyEndpoints() []endpoint {
+	return []endpoint{
+		{
+			template: peerbuddy.Path,
+			name:     "peerbuddy.Dashboard",
+			handler:  peerbuddy.Handler().ServeHTTP,
+			methods:  []string{http.MethodGet},
+		},
+	}
 }
 
 func (s *Service) rewardsEndpoints(blocker lookup.Blocker, stater lookup.Stater, rewardFetcher rewards.BlockRewardsFetcher) []endpoint {

@@ -6,6 +6,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/peerbuddy"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 )
@@ -228,5 +229,19 @@ func Test_endpoints(t *testing.T) {
 				return slices.Equal(expectedMethods, actualMethods)
 			}))
 		})
+	}
+}
+
+func Test_endpoints_peerBuddy(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		s := &Service{cfg: &Config{EnablePeerBuddy: enabled}}
+		registered := false
+		for _, e := range s.endpoints(true, nil, nil, nil, nil, nil, nil) {
+			if e.template == peerbuddy.Path {
+				registered = true
+				assert.DeepEqual(t, []string{http.MethodGet}, e.methods)
+			}
+		}
+		assert.Equal(t, enabled, registered, "enabled=%v", enabled)
 	}
 }
