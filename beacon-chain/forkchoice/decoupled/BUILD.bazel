@@ -1,0 +1,21 @@
+load("@prysm//tools/go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "confirmation.go",
+        "filter.go",
+        "ghost.go",
+        "head.go",
+        "insert.go",
+        "locks.go",
+        "schedule.go",
+        "tree.go",
+        "types.go",
+        "views.go",
+        "votes.go",
+    ],
+    importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/decoupled",
+    visibility = ["//visibility:public"],
+    deps = ["//consensus-types/primitives:go_default_library"],
+)

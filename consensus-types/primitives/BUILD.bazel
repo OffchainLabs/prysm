@@ -11,6 +11,7 @@ go_library(
         "domain.go",
         "epoch.go",
         "execution_address.go",
+        "height.go",
         "kzg.go",
         "payload_id.go",
         "slot.go",
