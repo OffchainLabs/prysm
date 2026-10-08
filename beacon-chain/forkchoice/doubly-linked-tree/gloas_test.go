@@ -2550,6 +2550,20 @@ func TestBuilderPubkey(t *testing.T) {
 	require.NoError(t, err)
 	require.IsNil(t, pk)
 
+	pe, err := prepareGloasForkchoicePayload(builderRoot)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+	pk, err = f.BuilderPubkey(builderRoot)
+	require.NoError(t, err)
+	require.IsNil(t, pk)
+
+	markedRoot := indexToHash(3)
+	insert(markedRoot, 3, 0)
+	f.MarkFullNode(markedRoot, 0)
+	pk, err = f.BuilderPubkey(markedRoot)
+	require.NoError(t, err)
+	require.IsNil(t, pk)
+
 	_, err = f.BuilderPubkey(indexToHash(999))
 	require.ErrorContains(t, ErrNilNode.Error(), err)
 }
@@ -2581,4 +2595,26 @@ func TestInsertChain_SetsBuilderPubkey(t *testing.T) {
 	pk, err := f.BuilderPubkey(root)
 	require.NoError(t, err)
 	assert.Equal(t, want, pk)
+
+	fullRoot := indexToHash(2)
+	blk = util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+		Block: &ethpb.BeaconBlockGloas{
+			Slot:       2,
+			ParentRoot: params.BeaconConfig().ZeroHash[:],
+		},
+	})
+	signed, err = blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	roblock, err = blocks.NewROBlockWithRoot(signed, fullRoot)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertChain(ctx, []*forkchoicetypes.BlockAndCheckpoints{{
+		Block:               roblock,
+		JustifiedCheckpoint: &ethpb.Checkpoint{},
+		FinalizedCheckpoint: &ethpb.Checkpoint{},
+		HasPayload:          true,
+		BuilderPubkey:       want,
+	}}))
+	pk, err = f.BuilderPubkey(fullRoot)
+	require.NoError(t, err)
+	require.IsNil(t, pk)
 }

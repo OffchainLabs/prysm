@@ -159,6 +159,17 @@ func TestValidateExecutionPayloadEnvelope_UnknownBuilderPubkey(t *testing.T) {
 	require.Equal(t, pubsub.ValidationIgnore, result)
 }
 
+func TestValidateExecutionPayloadEnvelope_FullNodeIgnored(t *testing.T) {
+	ctx := context.Background()
+	s, msg, _, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{})
+	s.cfg.chain.(*mock.ChainService).ForkchoiceRoots = map[[32]byte]bool{root: true}
+
+	result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+}
+
 func TestValidateExecutionPayloadEnvelope_BlockSeenButNotInDB_NoPanic(t *testing.T) {
 	ctx := context.Background()
 	s, msg, _, _ := newEnvelopeServiceForTest(t, 1, 1, false /* saveBlockToDB */)

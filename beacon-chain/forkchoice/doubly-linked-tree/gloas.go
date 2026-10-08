@@ -493,6 +493,7 @@ func (f *ForkChoice) MarkFullNode(root [32]byte, gasLimit uint64) {
 		gasLimit:   gasLimit,
 		children:   make([]*Node, 0),
 	}
+	en.node.builderPubkey = nil
 }
 
 // InsertPayload inserts a full node into forkchoice after the Gloas fork.
@@ -523,6 +524,7 @@ func (f *ForkChoice) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) err
 		children:   make([]*Node, 0),
 	}
 	s.fullNodeByRoot[root] = fn
+	en.node.builderPubkey = nil
 	payloadInsertedCount.Inc()
 	updatePayloadNodeMetrics(s)
 	f.updateNewFullNodeWeight(fn)

@@ -605,7 +605,7 @@ func (f *ForkChoice) InsertChain(ctx context.Context, chain []*forkchoicetypes.B
 		if err != nil {
 			return err
 		}
-		if bcp.BuilderPubkey != nil {
+		if bcp.BuilderPubkey != nil && !bcp.HasPayload {
 			pn.node.builderPubkey = bcp.BuilderPubkey
 		}
 		if bcp.HasPayload {

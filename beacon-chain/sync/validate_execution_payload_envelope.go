@@ -72,7 +72,7 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	}
 	root := env.BeaconBlockRoot()
 	// [IGNORE] The node has not seen another valid SignedExecutionPayloadEnvelope for this block root from this builder.
-	if s.hasSeenPayloadEnvelope(root, env.BuilderIndex()) {
+	if s.hasSeenPayloadEnvelope(root, env.BuilderIndex()) || s.cfg.chain.HasFullNode(root) {
 		return pubsub.ValidationIgnore, nil
 	}
 	finalized := s.cfg.chain.FinalizedCheckpt()
