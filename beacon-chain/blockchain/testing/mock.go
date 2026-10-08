@@ -407,10 +407,14 @@ func (s *ChainService) HeadRootAndFull() ([32]byte, bool) {
 }
 
 // HeadAndCanonicalNodeAtSlot mocks HeadAndCanonicalNodeAtSlot method in chain service.
-func (s *ChainService) HeadAndCanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool, [32]byte, bool) {
+func (s *ChainService) HeadAndCanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool, state.ReadOnlyBeaconState, [32]byte, bool) {
 	headRoot, headFull := s.HeadRootAndFull()
 	canonicalRoot, canonicalFull := s.CanonicalNodeAtSlot(slot)
-	return headRoot, headFull, canonicalRoot, canonicalFull
+	var headState state.ReadOnlyBeaconState
+	if s.HeadStateErr == nil && s.State != nil {
+		headState = s.State
+	}
+	return headRoot, headFull, headState, canonicalRoot, canonicalFull
 }
 
 // HeadBlock mocks HeadBlock method in chain service.

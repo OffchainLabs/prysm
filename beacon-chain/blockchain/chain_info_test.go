@@ -959,7 +959,7 @@ func TestService_HeadAndCanonicalNodeAtSlot_WaitsForImport(t *testing.T) {
 	done := make(chan snapshot, 1)
 	c.cfg.ForkChoiceStore.Lock()
 	go func() {
-		headRoot, _, canonicalRoot, _ := c.HeadAndCanonicalNodeAtSlot(101)
+		headRoot, _, _, canonicalRoot, _ := c.HeadAndCanonicalNodeAtSlot(101)
 		done <- snapshot{headRoot: headRoot, canonicalRoot: canonicalRoot}
 	}()
 	// Let the reader reach the lock first, so a read that skipped the lock would return the old head.
