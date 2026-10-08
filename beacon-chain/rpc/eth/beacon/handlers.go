@@ -3,6 +3,7 @@ package beacon
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -1886,6 +1887,85 @@ func (s *Server) GetBuilderPendingPayments(w http.ResponseWriter, r *http.Reques
 		}
 		httputil.WriteJson(w, resp)
 	}
+}
+
+// GetStatePTC returns the payload timeliness committee for the requested slot from the state
+// with the given 'stateId'. The slot defaults to the state's slot and must be within the state's
+// PTC window. Should return 400 if the state or the requested slot is prior to Gloas.
+// Supports both JSON and SSZ responses based on Accept header.
+func (s *Server) GetStatePTC(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.GetStatePTC")
+	defer span.End()
+
+	stateId := r.PathValue("state_id")
+	if stateId == "" {
+		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		return
+	}
+	rawSlot, slotUint, ok := shared.UintFromQuery(w, r, "slot", false)
+	if !ok {
+		return
+	}
+	st, err := s.Stater.State(ctx, []byte(stateId))
+	if err != nil {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st.Version() < version.Gloas {
+		httputil.HandleError(w, "state_id is prior to gloas", http.StatusBadRequest)
+		return
+	}
+	slot := st.Slot()
+	if rawSlot != "" {
+		slot = primitives.Slot(slotUint)
+	}
+	if params.GetNetworkScheduleEntry(slots.ToEpoch(slot)).VersionEnum < version.Gloas {
+		httputil.HandleError(w, "slot is prior to gloas", http.StatusBadRequest)
+		return
+	}
+	committee, err := st.PayloadCommitteeReadOnly(slot)
+	if err != nil {
+		if errors.Is(err, state.ErrNoPayloadCommitteeAvailable) {
+			httputil.HandleError(w, "Slot is outside the PTC window of the state: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		httputil.HandleError(w, "Could not get payload timeliness committee: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if httputil.RespondWithSsz(r) {
+		// The SSZ response is Container{slot: Slot, validators: Vector[ValidatorIndex, PTC_SIZE]};
+		// all fields are fixed-size, so it serializes to slot || validators.
+		sszData := make([]byte, 8+len(committee)*8)
+		binary.LittleEndian.PutUint64(sszData, uint64(slot))
+		for i, v := range committee {
+			binary.LittleEndian.PutUint64(sszData[8+i*8:], uint64(v))
+		}
+		httputil.WriteSsz(w, sszData)
+		return
+	}
+	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
+	if err != nil {
+		helpers.HandleIsOptimisticError(w, err)
+		return
+	}
+	blockRoot, err := helpers.BlockRootFromState(ctx, st)
+	if err != nil {
+		httputil.HandleError(w, "Could not calculate block root: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
+	validators := make([]string, len(committee))
+	for i, v := range committee {
+		validators[i] = strconv.FormatUint(uint64(v), 10)
+	}
+	httputil.WriteJson(w, &structs.GetStatePTCResponse{
+		ExecutionOptimistic: isOptimistic,
+		Finalized:           isFinalized,
+		Data: &structs.StatePTC{
+			Slot:       strconv.FormatUint(uint64(slot), 10),
+			Validators: validators,
+		},
+	})
 }
 
 // SerializeItems serializes a slice of items, each of which implements the MarshalSSZ method,
