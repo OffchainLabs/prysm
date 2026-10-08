@@ -170,6 +170,7 @@ var appFlags = []cli.Flag{
 	dasFlags.BlobRetentionEpochFlag,
 	flags.BatchVerifierLimit,
 	flags.StateDiffExponents,
+	flags.ArchiveOriginState,
 	flags.DisableEphemeralLogFile,
 	flags.DisablePartialDataColumns,
 	flags.DisableGraffitiClientAppend,

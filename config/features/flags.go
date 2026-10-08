@@ -185,6 +185,12 @@ var (
 		Name:  "enable-state-diff",
 		Usage: "Enables the experimental state diff feature.",
 	}
+	EnableArchive = &cli.BoolFlag{
+		Name: "enable-archive",
+		Usage: "Turns the node into an archive node: backfills blocks down to the archive origin state " +
+			"(see --archive-origin-state, genesis by default) and then regenerates every historical state " +
+			"into the state-diff tree. Implies --enable-state-diff and --enable-backfill.",
+	}
 	reorgLatePayloads = &cli.BoolFlag{
 		Name:   "reorg-late-payloads",
 		Usage:  "Enables reorging late payloads.",
@@ -303,6 +309,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	enableExperimentalAttestationPool,
 	enableFastConfirmation,
 	EnableStateDiff,
+	EnableArchive,
 	reorgLatePayloads,
 	forceHeadFlag,
 	blacklistRoots,

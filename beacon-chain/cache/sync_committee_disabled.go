@@ -11,6 +11,9 @@ import (
 type FakeSyncCommitteeCache struct {
 }
 
+// SyncCommitteeCache names the sync committee cache type under both build tags.
+type SyncCommitteeCache = FakeSyncCommitteeCache
+
 // NewSyncCommittee initializes and returns a new SyncCommitteeCache.
 func NewSyncCommittee() *FakeSyncCommitteeCache {
 	return &FakeSyncCommitteeCache{}
