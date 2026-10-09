@@ -17,6 +17,9 @@ type FakeCommitteeCache struct {
 	Sf singleflight.Group
 }
 
+// CommitteeCache names the committee cache type under both build tags.
+type CommitteeCache = FakeCommitteeCache
+
 // NewCommitteesCache creates a new committee cache for storing/accessing shuffled indices of a committee.
 func NewCommitteesCache() *FakeCommitteeCache {
 	return &FakeCommitteeCache{}

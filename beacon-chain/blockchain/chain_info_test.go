@@ -937,3 +937,41 @@ func TestCanWaitForGossipSidecars(t *testing.T) {
 		})
 	}
 }
+
+func TestService_HeadAndCanonicalNodeAtSlot_WaitsForImport(t *testing.T) {
+	ctx := t.Context()
+	c := testServiceWithDB(t)
+	ojc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
+	ofc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
+	st, roblock, err := prepareForkchoiceState(ctx, 0, [32]byte{}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
+	require.NoError(t, err)
+	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 100, [32]byte{'a'}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
+	require.NoError(t, err)
+	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
+	_, err = c.cfg.ForkChoiceStore.Head(ctx)
+	require.NoError(t, err)
+	c.head = &head{root: [32]byte{'a'}}
+	st, roblock, err = prepareForkchoiceState(ctx, 101, [32]byte{'b'}, [32]byte{'a'}, params.BeaconConfig().ZeroHash, ojc, ofc)
+	require.NoError(t, err)
+
+	type snapshot struct{ headRoot, canonicalRoot [32]byte }
+	done := make(chan snapshot, 1)
+	c.cfg.ForkChoiceStore.Lock()
+	go func() {
+		headRoot, _, canonicalRoot, _ := c.HeadAndCanonicalNodeAtSlot(101)
+		done <- snapshot{headRoot: headRoot, canonicalRoot: canonicalRoot}
+	}()
+	// Let the reader reach the lock first, so a read that skipped the lock would return the old head.
+	time.Sleep(20 * time.Millisecond)
+	insertErr := c.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock)
+	_, headErr := c.cfg.ForkChoiceStore.Head(ctx)
+	c.head = &head{root: [32]byte{'b'}}
+	c.cfg.ForkChoiceStore.Unlock()
+	require.NoError(t, insertErr)
+	require.NoError(t, headErr)
+
+	got := <-done
+	require.Equal(t, [32]byte{'b'}, got.headRoot)
+	require.Equal(t, [32]byte{'b'}, got.canonicalRoot)
+}

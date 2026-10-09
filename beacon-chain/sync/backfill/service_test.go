@@ -63,6 +63,7 @@ func TestServiceInit(t *testing.T) {
 		return das.NewSyncNeeds(
 			clock.CurrentSlot,
 			nil,
+			nil,
 			primitives.Epoch(0),
 		)
 	}
@@ -94,6 +95,37 @@ func TestServiceInit(t *testing.T) {
 	require.Equal(t, remaining+nWorkers, len(todo))
 	for i := remaining; i < remaining+nWorkers; i++ {
 		require.Equal(t, batchEndSequence, todo[i].state)
+	}
+}
+
+func TestServiceCompletesOnRestartAtPinnedFloor(t *testing.T) {
+	floor := primitives.Slot(1024)
+	for _, tc := range []struct {
+		name                  string
+		oldest, archiveOrigin *primitives.Slot
+	}{
+		{name: "archive origin", archiveOrigin: &floor},
+		{name: "backfill oldest slot", oldest: &floor},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+			defer cancel()
+			su, err := NewUpdater(ctx, &mockBackfillDB{status: &dbval.BackfillStatus{LowSlot: uint64(floor)}})
+			require.NoError(t, err)
+			cw := startup.NewClockSynchronizer()
+			clock := startup.NewClock(time.Now(), [32]byte{}, startup.WithSlotAsNow(floor+2_000_000))
+			require.NoError(t, cw.SetClock(clock))
+			snw := func() (das.SyncNeeds, error) {
+				return das.NewSyncNeeds(clock.CurrentSlot, tc.oldest, tc.archiveOrigin, 0)
+			}
+			srv, err := NewService(ctx, su, nil, nil, cw, nil, &mockAssigner{},
+				WithWorkerCount(2), WithEnableBackfill(true), WithSyncNeedsWaiter(snw))
+			require.NoError(t, err)
+			srv.pool = &mockPool{todoChan: make(chan batch, 2)}
+			srv.workerCfg = &workerCfg{}
+			go srv.Start()
+			require.NoError(t, srv.WaitForCompletion())
+		})
 	}
 }
 

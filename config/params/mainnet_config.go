@@ -315,6 +315,10 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BuilderFailureBackOffPeriod:    5,
 	BuilderCriticalFailedBuilders:  7,
 	BuilderFailureWeightThreshold:  60,
+	BuilderRelayBlacklistPeriod:    32,
+	BuilderRelayAssociationTTL:     64,
+	BuilderMaxTrackedRelays:        64,
+	BuilderMaxIndicesPerRelay:      16,
 	BuilderBidTimeout:              BuilderBidTolerance,
 
 	// Execution engine timeout value

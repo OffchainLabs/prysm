@@ -3,6 +3,7 @@ package beacon
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -4945,6 +4946,497 @@ func TestGetProposerLookahead(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code)
 
 		var resp structs.GetProposerLookaheadResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		require.Equal(t, true, resp.Finalized)
+	})
+}
+
+func TestGetBuilderPendingWithdrawals(t *testing.T) {
+	st, err := util.NewBeaconStateGloas()
+	require.NoError(t, err)
+	withdrawals := make([]*eth.BuilderPendingWithdrawal, 3)
+	for i := range withdrawals {
+		withdrawals[i] = &eth.BuilderPendingWithdrawal{
+			FeeRecipient: bytes.Repeat([]byte{byte(i + 1)}, 20),
+			Amount:       primitives.Gwei(100 * (i + 1)),
+			BuilderIndex: primitives.BuilderIndex(i),
+		}
+	}
+	require.NoError(t, st.SetBuilderPendingWithdrawals(withdrawals))
+
+	chainService := &chainMock.ChainService{FinalizedRoots: map[[32]byte]bool{}}
+	server := &Server{
+		Stater:                &testutil.MockStater{BeaconState: st},
+		OptimisticModeFetcher: chainService,
+		FinalizationFetcher:   chainService,
+	}
+	url := "http://example.com/eth/v1/beacon/states/{state_id}/builder_pending_withdrawals"
+
+	t.Run("json response", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+
+		server.GetBuilderPendingWithdrawals(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, "gloas", rec.Header().Get(api.VersionHeader))
+
+		var resp structs.GetBuilderPendingWithdrawalsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		require.Equal(t, "gloas", resp.Version)
+		require.Equal(t, false, resp.ExecutionOptimistic)
+		require.Equal(t, false, resp.Finalized)
+		require.DeepEqual(t, structs.BuilderPendingWithdrawalsFromConsensus(withdrawals), resp.Data)
+		require.Equal(t, "0x0101010101010101010101010101010101010101", resp.Data[0].FeeRecipient)
+		require.Equal(t, "300", resp.Data[2].Amount)
+		require.Equal(t, "2", resp.Data[2].BuilderIndex)
+	})
+
+	t.Run("ssz response", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		req.Header.Set("Accept", api.OctetStreamMediaType)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+
+		server.GetBuilderPendingWithdrawals(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, "gloas", rec.Header().Get(api.VersionHeader))
+
+		size := (&eth.BuilderPendingWithdrawal{}).SizeSSZ()
+		require.Equal(t, len(withdrawals)*size, rec.Body.Len())
+		for i, want := range withdrawals {
+			got := &eth.BuilderPendingWithdrawal{}
+			require.NoError(t, got.UnmarshalSSZ(rec.Body.Bytes()[i*size:(i+1)*size]))
+			require.DeepEqual(t, want, got)
+		}
+	})
+
+	t.Run("empty list", func(t *testing.T) {
+		emptySt, err := util.NewBeaconStateGloas()
+		require.NoError(t, err)
+		emptyServer := &Server{
+			Stater:                &testutil.MockStater{BeaconState: emptySt},
+			OptimisticModeFetcher: chainService,
+			FinalizationFetcher:   chainService,
+		}
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+
+		emptyServer.GetBuilderPendingWithdrawals(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.StringContains(t, `"data":[]`, rec.Body.String())
+	})
+
+	t.Run("pre gloas state", func(t *testing.T) {
+		fuluSt, _ := util.DeterministicGenesisStateFulu(t, 1)
+		fuluServer := &Server{
+			Stater:                &testutil.MockStater{BeaconState: fuluSt},
+			OptimisticModeFetcher: chainService,
+			FinalizationFetcher:   chainService,
+		}
+		for _, accept := range []string{api.JsonMediaType, api.OctetStreamMediaType} {
+			req := httptest.NewRequest(http.MethodGet, url, nil)
+			req.Header.Set("Accept", accept)
+			req.SetPathValue("state_id", "head")
+			rec := httptest.NewRecorder()
+
+			fuluServer.GetBuilderPendingWithdrawals(rec, req)
+			require.Equal(t, http.StatusBadRequest, rec.Code)
+			e := &httputil.DefaultJsonError{}
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), e))
+			require.Equal(t, "state_id is prior to gloas", e.Message)
+		}
+	})
+
+	t.Run("missing state_id", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		rec := httptest.NewRecorder()
+
+		server.GetBuilderPendingWithdrawals(rec, req)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), e))
+		require.Equal(t, "state_id is required in URL params", e.Message)
+	})
+
+	t.Run("state not found", func(t *testing.T) {
+		notFoundServer := &Server{Stater: &testutil.MockStater{CustomError: &lookup.StateNotFoundError{}}}
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		req.SetPathValue("state_id", "0x"+strings.Repeat("00", 32))
+		rec := httptest.NewRecorder()
+
+		notFoundServer.GetBuilderPendingWithdrawals(rec, req)
+		require.Equal(t, http.StatusNotFound, rec.Code)
+	})
+
+	t.Run("optimistic and finalized", func(t *testing.T) {
+		blockRoot, err := helpers.BlockRootFromState(t.Context(), st)
+		require.NoError(t, err)
+		flagsService := &chainMock.ChainService{Optimistic: true, FinalizedRoots: map[[32]byte]bool{blockRoot: true}}
+		flagsServer := &Server{
+			Stater:                server.Stater,
+			OptimisticModeFetcher: flagsService,
+			FinalizationFetcher:   flagsService,
+		}
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+
+		flagsServer.GetBuilderPendingWithdrawals(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+		var resp structs.GetBuilderPendingWithdrawalsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		require.Equal(t, true, resp.ExecutionOptimistic)
+		require.Equal(t, true, resp.Finalized)
+	})
+}
+
+func TestGetBuilderPendingPayments(t *testing.T) {
+	st, err := util.NewBeaconStateGloas()
+	require.NoError(t, err)
+	payments, err := st.BuilderPendingPayments()
+	require.NoError(t, err)
+	require.Equal(t, 2*int(params.BeaconConfig().SlotsPerEpoch), len(payments))
+	payments[5] = &eth.BuilderPendingPayment{
+		Weight: 42,
+		Withdrawal: &eth.BuilderPendingWithdrawal{
+			FeeRecipient: bytes.Repeat([]byte{0xab}, 20),
+			Amount:       1000,
+			BuilderIndex: 7,
+		},
+		ProposerIndex: 3,
+	}
+	require.NoError(t, st.SetBuilderPendingPayments(payments))
+
+	chainService := &chainMock.ChainService{FinalizedRoots: map[[32]byte]bool{}}
+	server := &Server{
+		Stater:                &testutil.MockStater{BeaconState: st},
+		OptimisticModeFetcher: chainService,
+		FinalizationFetcher:   chainService,
+	}
+	url := "http://example.com/eth/v1/beacon/states/{state_id}/builder_pending_payments"
+
+	t.Run("json response", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+
+		server.GetBuilderPendingPayments(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, "gloas", rec.Header().Get(api.VersionHeader))
+
+		var resp structs.GetBuilderPendingPaymentsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		require.Equal(t, "gloas", resp.Version)
+		require.Equal(t, false, resp.ExecutionOptimistic)
+		require.Equal(t, false, resp.Finalized)
+		require.DeepEqual(t, structs.BuilderPendingPaymentsFromConsensus(payments), resp.Data)
+		require.Equal(t, "42", resp.Data[5].Weight)
+		require.Equal(t, "3", resp.Data[5].ProposerIndex)
+		require.Equal(t, "1000", resp.Data[5].Withdrawal.Amount)
+		require.Equal(t, "7", resp.Data[5].Withdrawal.BuilderIndex)
+	})
+
+	t.Run("ssz response", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		req.Header.Set("Accept", api.OctetStreamMediaType)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+
+		server.GetBuilderPendingPayments(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, "gloas", rec.Header().Get(api.VersionHeader))
+
+		size := (&eth.BuilderPendingPayment{}).SizeSSZ()
+		require.Equal(t, len(payments)*size, rec.Body.Len())
+		for i, want := range payments {
+			got := &eth.BuilderPendingPayment{}
+			require.NoError(t, got.UnmarshalSSZ(rec.Body.Bytes()[i*size:(i+1)*size]))
+			require.DeepEqual(t, want, got)
+		}
+	})
+
+	t.Run("pre gloas state", func(t *testing.T) {
+		fuluSt, _ := util.DeterministicGenesisStateFulu(t, 1)
+		fuluServer := &Server{
+			Stater:                &testutil.MockStater{BeaconState: fuluSt},
+			OptimisticModeFetcher: chainService,
+			FinalizationFetcher:   chainService,
+		}
+		for _, accept := range []string{api.JsonMediaType, api.OctetStreamMediaType} {
+			req := httptest.NewRequest(http.MethodGet, url, nil)
+			req.Header.Set("Accept", accept)
+			req.SetPathValue("state_id", "head")
+			rec := httptest.NewRecorder()
+
+			fuluServer.GetBuilderPendingPayments(rec, req)
+			require.Equal(t, http.StatusBadRequest, rec.Code)
+			e := &httputil.DefaultJsonError{}
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), e))
+			require.Equal(t, "state_id is prior to gloas", e.Message)
+		}
+	})
+
+	t.Run("missing state_id", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		rec := httptest.NewRecorder()
+
+		server.GetBuilderPendingPayments(rec, req)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), e))
+		require.Equal(t, "state_id is required in URL params", e.Message)
+	})
+
+	t.Run("state not found", func(t *testing.T) {
+		notFoundServer := &Server{Stater: &testutil.MockStater{CustomError: &lookup.StateNotFoundError{}}}
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		req.SetPathValue("state_id", "0x"+strings.Repeat("00", 32))
+		rec := httptest.NewRecorder()
+
+		notFoundServer.GetBuilderPendingPayments(rec, req)
+		require.Equal(t, http.StatusNotFound, rec.Code)
+	})
+
+	t.Run("optimistic and finalized", func(t *testing.T) {
+		blockRoot, err := helpers.BlockRootFromState(t.Context(), st)
+		require.NoError(t, err)
+		flagsService := &chainMock.ChainService{Optimistic: true, FinalizedRoots: map[[32]byte]bool{blockRoot: true}}
+		flagsServer := &Server{
+			Stater:                server.Stater,
+			OptimisticModeFetcher: flagsService,
+			FinalizationFetcher:   flagsService,
+		}
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+
+		flagsServer.GetBuilderPendingPayments(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+		var resp structs.GetBuilderPendingPaymentsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		require.Equal(t, true, resp.ExecutionOptimistic)
+		require.Equal(t, true, resp.Finalized)
+	})
+}
+
+func TestGetStatePTC(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
+	// State sits at epoch 2, so the PTC window covers epochs 1 through 3.
+	stateSlot := 2 * slotsPerEpoch
+	st, err := util.NewBeaconStateGloas(func(state *eth.BeaconStateGloas) error {
+		state.Slot = primitives.Slot(stateSlot)
+		// Mark each window entry with its own offset so tests can verify indexing.
+		for i := range state.PtcWindow {
+			state.PtcWindow[i].ValidatorIndices[0] = primitives.ValidatorIndex(i)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	chainService := &chainMock.ChainService{
+		Optimistic:     false,
+		FinalizedRoots: map[[32]byte]bool{},
+	}
+	server := &Server{
+		Stater: &testutil.MockStater{
+			BeaconState: st,
+		},
+		OptimisticModeFetcher: chainService,
+		FinalizationFetcher:   chainService,
+	}
+
+	newRequest := func(slotParam string) *http.Request {
+		target := "http://example.com/eth/v1/beacon/states/{state_id}/ptc"
+		if slotParam != "" {
+			target += "?slot=" + slotParam
+		}
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		req.SetPathValue("state_id", "head")
+		return req
+	}
+
+	errMessage := func(rec *httptest.ResponseRecorder) string {
+		var errResp struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &errResp))
+		return errResp.Message
+	}
+
+	okCases := []struct {
+		name          string
+		slotParam     string
+		wantSlot      uint64
+		wantWindowIdx uint64
+	}{
+		{
+			name:          "default slot",
+			wantSlot:      stateSlot,
+			wantWindowIdx: slotsPerEpoch, // current epoch starts at offset SLOTS_PER_EPOCH
+		},
+		{
+			name:          "previous epoch slot",
+			slotParam:     strconv.FormatUint(stateSlot-1, 10),
+			wantSlot:      stateSlot - 1,
+			wantWindowIdx: slotsPerEpoch - 1,
+		},
+		{
+			name:          "lookahead epoch slot",
+			slotParam:     strconv.FormatUint(3*slotsPerEpoch, 10),
+			wantSlot:      3 * slotsPerEpoch,
+			wantWindowIdx: 2 * slotsPerEpoch,
+		},
+	}
+	for _, tc := range okCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			rec.Body = new(bytes.Buffer)
+
+			server.GetStatePTC(rec, newRequest(tc.slotParam))
+			require.Equal(t, http.StatusOK, rec.Code)
+
+			var resp structs.GetStatePTCResponse
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+			require.Equal(t, false, resp.ExecutionOptimistic)
+			require.Equal(t, false, resp.Finalized)
+			require.Equal(t, strconv.FormatUint(tc.wantSlot, 10), resp.Data.Slot)
+			require.Equal(t, fieldparams.PTCSize, len(resp.Data.Validators))
+			require.Equal(t, strconv.FormatUint(tc.wantWindowIdx, 10), resp.Data.Validators[0])
+		})
+	}
+
+	t.Run("slot outside PTC window", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetStatePTC(rec, newRequest(strconv.FormatUint(4*slotsPerEpoch, 10)))
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Equal(t, true, strings.Contains(errMessage(rec), "outside the PTC window"))
+	})
+
+	t.Run("slot prior to gloas", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetStatePTC(rec, newRequest(strconv.FormatUint(slotsPerEpoch-1, 10)))
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Equal(t, "slot is prior to gloas", errMessage(rec))
+	})
+
+	t.Run("invalid slot param", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetStatePTC(rec, newRequest("foo"))
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	t.Run("pre-gloas state", func(t *testing.T) {
+		preGloasSt, err := util.NewBeaconStateFulu()
+		require.NoError(t, err)
+		preGloasServer := &Server{
+			Stater: &testutil.MockStater{
+				BeaconState: preGloasSt,
+			},
+			OptimisticModeFetcher: chainService,
+			FinalizationFetcher:   chainService,
+		}
+
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		preGloasServer.GetStatePTC(rec, newRequest(""))
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Equal(t, "state_id is prior to gloas", errMessage(rec))
+	})
+
+	t.Run("no state_id", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/ptc", nil)
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetStatePTC(rec, req)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Equal(t, "state_id is required in URL params", errMessage(rec))
+	})
+
+	t.Run("ssz response", func(t *testing.T) {
+		req := newRequest("")
+		req.Header.Set("Accept", api.OctetStreamMediaType)
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetStatePTC(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, api.OctetStreamMediaType, rec.Header().Get("Content-Type"))
+
+		sszData := rec.Body.Bytes()
+		require.Equal(t, 8+fieldparams.PTCSize*8, len(sszData))
+		require.Equal(t, stateSlot, binary.LittleEndian.Uint64(sszData[:8]))
+
+		// The SSZ payload must carry the same committee as the JSON response.
+		jsonRec := httptest.NewRecorder()
+		jsonRec.Body = new(bytes.Buffer)
+		server.GetStatePTC(jsonRec, newRequest(""))
+		require.Equal(t, http.StatusOK, jsonRec.Code)
+		var resp structs.GetStatePTCResponse
+		require.NoError(t, json.Unmarshal(jsonRec.Body.Bytes(), &resp))
+		for i, v := range resp.Data.Validators {
+			require.Equal(t, v, strconv.FormatUint(binary.LittleEndian.Uint64(sszData[8+i*8:16+i*8]), 10))
+		}
+	})
+
+	t.Run("optimistic node", func(t *testing.T) {
+		optimisticChainService := &chainMock.ChainService{
+			Optimistic:     true,
+			FinalizedRoots: map[[32]byte]bool{},
+		}
+		optimisticServer := &Server{
+			Stater:                server.Stater,
+			OptimisticModeFetcher: optimisticChainService,
+			FinalizationFetcher:   optimisticChainService,
+		}
+
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		optimisticServer.GetStatePTC(rec, newRequest(""))
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var resp structs.GetStatePTCResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		require.Equal(t, true, resp.ExecutionOptimistic)
+	})
+
+	t.Run("finalized node", func(t *testing.T) {
+		blockRoot, err := helpers.BlockRootFromState(t.Context(), st)
+		require.NoError(t, err)
+
+		finalizedChainService := &chainMock.ChainService{
+			Optimistic:     false,
+			FinalizedRoots: map[[32]byte]bool{blockRoot: true},
+		}
+		finalizedServer := &Server{
+			Stater:                server.Stater,
+			OptimisticModeFetcher: finalizedChainService,
+			FinalizationFetcher:   finalizedChainService,
+		}
+
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		finalizedServer.GetStatePTC(rec, newRequest(""))
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var resp structs.GetStatePTCResponse
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 		require.Equal(t, true, resp.Finalized)
 	})

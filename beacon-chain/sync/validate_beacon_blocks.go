@@ -59,14 +59,14 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 	ctx, span := trace.StartSpan(ctx, "sync.validateBeaconBlockPubSub")
 	defer span.End()
 
+	s.validateBlockLock.Lock()
+	defer s.validateBlockLock.Unlock()
+
 	m, err := s.decodePubsubMessage(msg)
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return pubsub.ValidationReject, errors.Wrap(err, "Could not decode message")
 	}
-
-	s.validateBlockLock.Lock()
-	defer s.validateBlockLock.Unlock()
 
 	blk, ok := m.(interfaces.ReadOnlySignedBeaconBlock)
 	if !ok {

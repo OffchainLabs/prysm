@@ -487,6 +487,37 @@ func TestUpdateCommitteeCache_CanUpdateAcrossEpochs(t *testing.T) {
 	require.Equal(t, true, helpers.CommitteeCache().HasEntry(string(nextSeed[:])))
 }
 
+func TestUpdateCommitteeCache_IsolatedCaches(t *testing.T) {
+	helpers.ClearCache()
+
+	validators := make([]*ethpb.Validator, params.BeaconConfig().MinGenesisActiveValidatorCount)
+	for i := range validators {
+		validators[i] = &ethpb.Validator{
+			ExitEpoch:        params.BeaconConfig().FarFutureEpoch,
+			EffectiveBalance: 1,
+		}
+	}
+	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		Validators:  validators,
+		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
+	})
+	require.NoError(t, err)
+	ctx := helpers.WithIsolatedCaches(t.Context())
+	require.NoError(t, helpers.UpdateCommitteeCache(ctx, state, 0))
+
+	seed, err := helpers.Seed(state, 0, params.BeaconConfig().DomainBeaconAttester)
+	require.NoError(t, err)
+	require.Equal(t, false, helpers.CommitteeCache().HasEntry(string(seed[:])))
+
+	committee, err := helpers.BeaconCommitteeFromCache(ctx, state, 0, 1)
+	require.NoError(t, err)
+	require.Equal(t, params.BeaconConfig().TargetCommitteeSize, uint64(len(committee)))
+
+	committee, err = helpers.BeaconCommitteeFromCache(t.Context(), state, 0, 1)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(committee))
+}
+
 func BenchmarkComputeCommittee300000_WithPreCache(b *testing.B) {
 	validators := make([]*ethpb.Validator, 300000)
 	for i := range validators {

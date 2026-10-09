@@ -112,6 +112,7 @@ type validator struct {
 	eventsChannel                chan *eventClient.Event
 	payloadAvailability          *payloadAvailability
 	head                         *headTracker
+	dutyAwareShutdown            *dutyAwareShutdownTracker
 	pubkeyToStatus               map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus
 	pubkeyToStatusLock           sync.RWMutex // guards pubkeyToStatus; all readers go through statusCache
 	signedValidatorRegistrations map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
