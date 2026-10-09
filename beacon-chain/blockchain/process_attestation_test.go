@@ -450,6 +450,76 @@ func TestService_GetRecentPreState_Different(t *testing.T) {
 	require.IsNil(t, service.getRecentPreState(ctx, &ethpb.Checkpoint{}))
 }
 
+type recentPreStateBlock struct {
+	slot         primitives.Slot
+	root, parent byte
+}
+
+func setupRecentPreStateChain(t *testing.T, service *Service, chain []recentPreStateBlock, headRoot byte, headStateSlot primitives.Slot) {
+	ctx := t.Context()
+	cp0 := &ethpb.Checkpoint{Epoch: 0, Root: bytesutil.PadTo([]byte{chain[0].root}, fieldparams.RootLength)}
+	s, err := util.NewBeaconState()
+	require.NoError(t, err)
+	require.NoError(t, s.SetSlot(headStateSlot))
+	for _, b := range chain {
+		var parent [32]byte
+		if b.parent != 0 {
+			parent = [32]byte{b.parent}
+		}
+		st, blk, err := prepareForkchoiceState(ctx, b.slot, [32]byte{b.root}, parent, [32]byte{}, cp0, cp0)
+		require.NoError(t, err)
+		require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+		if b.root == headRoot {
+			service.head = &head{root: [32]byte{b.root}, block: blk, slot: b.slot, state: s}
+		}
+	}
+}
+
+func TestService_GetRecentPreState_PreviousEpochSameShuffling(t *testing.T) {
+	service, _ := minimalTestService(t)
+	// A(31) <- B(40) <- D(50) <- C(100), target {2, B}
+	setupRecentPreStateChain(t, service, []recentPreStateBlock{{31, 'A', 0}, {40, 'B', 'A'}, {50, 'D', 'B'}, {100, 'C', 'D'}}, 'C', 100)
+	recent := service.getRecentPreState(t.Context(), &ethpb.Checkpoint{Epoch: 2, Root: []byte{'B', 31: 0}})
+	require.NotNil(t, recent)
+	require.Equal(t, primitives.Slot(100), recent.Slot())
+}
+
+func TestService_GetRecentPreState_PreviousEpochDifferentShuffling(t *testing.T) {
+	service, _ := minimalTestService(t)
+	// A(30) <- S(31) <- B(40) <- C(100)
+	//      \--- V(40), target {2, V}
+	setupRecentPreStateChain(t, service, []recentPreStateBlock{{30, 'A', 0}, {31, 'S', 'A'}, {40, 'B', 'S'}, {100, 'C', 'B'}, {40, 'V', 'A'}}, 'C', 100)
+	require.IsNil(t, service.getRecentPreState(t.Context(), &ethpb.Checkpoint{Epoch: 2, Root: []byte{'V', 31: 0}}))
+}
+
+func TestService_GetRecentPreState_NextEpochNonHeadTarget(t *testing.T) {
+	service, _ := minimalTestService(t)
+	// A(31) <- B(40) <- H(50), target {2, B}
+	setupRecentPreStateChain(t, service, []recentPreStateBlock{{31, 'A', 0}, {40, 'B', 'A'}, {50, 'H', 'B'}}, 'H', 50)
+	recent := service.getRecentPreState(t.Context(), &ethpb.Checkpoint{Epoch: 2, Root: []byte{'B', 31: 0}})
+	require.NotNil(t, recent)
+	require.Equal(t, primitives.Slot(50), recent.Slot())
+}
+
+func TestService_GetRecentPreState_NextEpochNonHeadTargetForkBoundary(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.AltairForkEpoch = 2
+	params.OverrideBeaconConfig(cfg)
+
+	service, _ := minimalTestService(t)
+	setupRecentPreStateChain(t, service, []recentPreStateBlock{{31, 'A', 0}, {40, 'B', 'A'}, {50, 'H', 'B'}}, 'H', 50)
+	require.IsNil(t, service.getRecentPreState(t.Context(), &ethpb.Checkpoint{Epoch: 2, Root: []byte{'B', 31: 0}}))
+}
+
+func TestService_GetRecentPreState_NextEpochDifferentShuffling(t *testing.T) {
+	service, _ := minimalTestService(t)
+	// A(30) <- S(31) <- H(50)
+	//      \--- V(40), target {2, V}
+	setupRecentPreStateChain(t, service, []recentPreStateBlock{{30, 'A', 0}, {31, 'S', 'A'}, {50, 'H', 'S'}, {40, 'V', 'A'}}, 'H', 50)
+	require.IsNil(t, service.getRecentPreState(t.Context(), &ethpb.Checkpoint{Epoch: 2, Root: []byte{'V', 31: 0}}))
+}
+
 func TestService_GetAttPreState_Concurrency(t *testing.T) {
 	service, _ := minimalTestService(t)
 	ctx := t.Context()
