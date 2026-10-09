@@ -38,7 +38,7 @@ const (
 // once more at the payload attestation deadline when the first request fails before it.
 // It reports whether a second request was made.
 func (v *validator) payloadAttestationDataWithRetry(ctx context.Context, slot primitives.Slot) (*ethpb.PayloadAttestationData, bool, error) {
-	component := params.BeaconConfig().PayloadAttestationDueBPS
+	component := params.PayloadAttestationDue
 	// Sampled before the request so a response crossing the deadline still retries.
 	askedBeforeDeadline := v.beforeSlotComponent(slot, component)
 

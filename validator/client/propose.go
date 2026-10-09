@@ -80,7 +80,7 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		log.WithError(err).Warn("Could not get graffiti")
 	}
 
-	ctx, err = v.withHeadHint(ctx, slot, attestationDueComponent(slot))
+	ctx, err = v.withHeadHint(ctx, slot, params.AttestationDue)
 	if err != nil {
 		log.WithField("slot", slot).WithError(err).Error("Could not attach freshness hint")
 		if v.emitAccountMetrics {

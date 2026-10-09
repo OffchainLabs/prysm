@@ -646,7 +646,7 @@ func TestEpochParticipation(t *testing.T) {
 	for _, test := range tests {
 		b, err := helpers.TotalActiveBalance(t.Context(), beaconState)
 		require.NoError(t, err)
-		n, p, err := altair.EpochParticipation(beaconState, test.indices, test.epochParticipation, test.participatedFlags, b)
+		n, p, err := altair.EpochParticipation(beaconState, test.indices, test.epochParticipation, test.participatedFlags, b, 0)
 		require.NoError(t, err)
 		require.Equal(t, test.wantedNumerator, n)
 		require.DeepSSZEqual(t, test.wantedEpochParticipation, p)

@@ -2,7 +2,9 @@ package p2p
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	iface "github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
 	dbutil "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
@@ -79,16 +81,16 @@ func TestLoggingParameters(_ *testing.T) {
 	logGossipParameters("testing", nil)
 	logGossipParameters("testing", &pubsub.TopicScoreParams{})
 	// Test out actual gossip parameters.
-	logGossipParameters("testing", defaultBlockTopicParams())
-	p := defaultAggregateSubnetTopicParams(10000)
+	logGossipParameters("testing", defaultBlockTopicParams(oneEpochDuration()))
+	p := defaultAggregateSubnetTopicParams(oneEpochDuration(), 10000)
 	logGossipParameters("testing", p)
-	p = defaultAggregateTopicParams(10000)
+	p = defaultAggregateTopicParams(oneEpochDuration(), 10000)
 	logGossipParameters("testing", p)
-	logGossipParameters("testing", defaultAttesterSlashingTopicParams())
-	logGossipParameters("testing", defaultProposerSlashingTopicParams())
-	logGossipParameters("testing", defaultVoluntaryExitTopicParams())
-	logGossipParameters("testing", defaultLightClientOptimisticUpdateTopicParams())
-	logGossipParameters("testing", defaultLightClientFinalityUpdateTopicParams())
+	logGossipParameters("testing", defaultAttesterSlashingTopicParams(oneEpochDuration()))
+	logGossipParameters("testing", defaultProposerSlashingTopicParams(oneEpochDuration()))
+	logGossipParameters("testing", defaultVoluntaryExitTopicParams(oneEpochDuration()))
+	logGossipParameters("testing", defaultLightClientOptimisticUpdateTopicParams(oneEpochDuration()))
+	logGossipParameters("testing", defaultLightClientFinalityUpdateTopicParams(oneEpochDuration()))
 }
 
 type finalizedCheckpointDB struct {
@@ -101,4 +103,22 @@ func (f *finalizedCheckpointDB) FinalizedCheckpoint(ctx context.Context) (*ethpb
 		return f.finalized, nil
 	}
 	return f.ReadOnlyDatabaseWithSeqNum.FinalizedCheckpoint(ctx)
+}
+
+func TestTopicEpochDurationFollowsSchedule(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	cfg.SlotDurationSchedule = params.SlotSchedule{
+		params.SlotScheduleEntryForTest(0, 12000),
+		params.SlotScheduleEntryForTest(1, 6000),
+	}
+	cfg.InitializeForkSchedule()
+	params.OverrideBeaconConfig(cfg)
+
+	genesisTopic := fmt.Sprintf("/eth2/%x/beacon_block", params.ForkDigest(0))
+	gloasTopic := fmt.Sprintf("/eth2/%x/beacon_block", params.ForkDigest(1))
+	assert.Equal(t, 32*12*time.Second, topicEpochDuration(genesisTopic))
+	assert.Equal(t, 32*6*time.Second, topicEpochDuration(gloasTopic))
+	assert.Equal(t, oneEpochDuration(), topicEpochDuration("not a topic"))
 }
