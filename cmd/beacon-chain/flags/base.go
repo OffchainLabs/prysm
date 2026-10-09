@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/urfave/cli/v2"
 )
@@ -412,7 +413,7 @@ var (
 	ArchiveOriginState = &cli.PathFlag{
 		Name: "archive-origin-state",
 		Usage: "Path to an ssz-encoded beacon state at an epoch boundary slot, used as the oldest state an " +
-			"archive node will hold. Defaults to the genesis state. Requires --enable-archive.",
+			"archive node will hold. Defaults to the genesis state. Requires --" + features.EnableArchive.Name + ".",
 	}
 	// DisableEphemeralLogFile disables the 24 hour debug log file.
 	DisableEphemeralLogFile = &cli.BoolFlag{
