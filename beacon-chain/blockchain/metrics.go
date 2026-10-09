@@ -211,6 +211,23 @@ var (
 			Buckets: []float64{1, 5, 20, 100, 500, 1000},
 		},
 	)
+	executionProofArrivalDelay = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "execution_proof_arrival_delay_seconds",
+			Help:    "Time between the insertion of a payload in forkchoice and the import of a verified EIP-8025 execution proof of this type for it.",
+			Buckets: prometheus.ExponentialBuckets(0.25, 2, 12), // 250ms to 512s.
+		},
+		[]string{"proof_type"},
+	)
+	payloadProofValidationDelay = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name: "payload_proof_validation_delay_seconds",
+			Help: "Time between the insertion of a payload in forkchoice and the moment it is no longer optimistic, " +
+				"once validated by the EL and at least --min-execution-proofs execution proof types. " +
+				"Ancestors validated along with the payload are not counted.",
+			Buckets: prometheus.ExponentialBuckets(0.25, 2, 12), // 250ms to 512s.
+		},
+	)
 	reorgDistance = promauto.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "reorg_distance",

@@ -11,6 +11,7 @@ import (
 	forkchoice2 "github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // BalancesByRooter is a handler to obtain the effective balances of the state
@@ -74,6 +75,11 @@ type Getter interface {
 	UnrealizedJustification(root [32]byte) (*forkchoicetypes.Checkpoint, error)
 	VoteSnapshot(buf []forkchoicetypes.VoteData) []forkchoicetypes.VoteData
 	VotingSource(root [32]byte) (*forkchoicetypes.Checkpoint, error)
+	PayloadValidationStatus(root [fieldparams.RootLength]byte) (executionValid bool, proofTypes int)
+	PayloadInsertionTime(root [fieldparams.RootLength]byte) (time.Time, bool)
+	IsExecutionValid(root [fieldparams.RootLength]byte) bool
+	NewPayloadRequestRoot(root [fieldparams.RootLength]byte) ([fieldparams.RootLength]byte, bool)
+	HasExecutionProofType(root [fieldparams.RootLength]byte, proofType ethpb.ProofType) bool
 }
 
 type FastGetter interface {
@@ -129,4 +135,7 @@ type Setter interface {
 	RecordBlockForEquivocation(primitives.Slot, primitives.ValidatorIndex, [32]byte)
 	SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, blobDataAvailable bool)
 	MarkFullNode(root [32]byte, gasLimit uint64)
+	SetPayloadExecutionValid(root [fieldparams.RootLength]byte) error
+	SetNewPayloadRequestRoot(root, newPayloadRequestRoot [fieldparams.RootLength]byte) error
+	AddExecutionProofType(root [fieldparams.RootLength]byte, proofType ethpb.ProofType) error
 }

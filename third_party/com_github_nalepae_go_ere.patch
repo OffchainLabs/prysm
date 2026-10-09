@@ -1,0 +1,55 @@
+diff -urN a/BUILD.bazel b/BUILD.bazel
+--- a/BUILD.bazel	1969-12-31 18:00:00.000000000 -0600
++++ b/BUILD.bazel	2025-01-05 12:00:00.000000000 -0600
+@@ -0,0 +1,51 @@
++load("@io_bazel_rules_go//go:def.bzl", "go_library")
++
++# go-ere links a prebuilt static library through `#cgo LDFLAGS: ${SRCDIR}/lib/...` in link_<goos>_<goarch>.go, which
++# Bazel cannot see as an input. Those files are left out, and the library is linked through cdeps instead.
++go_library(
++    name = "go_default_library",
++    srcs = [
++        "doc.go",
++        "unsupported.go",
++        "verifier.go",
++    ],
++    cdeps = [":ere_verifier_c"],
++    cgo = True,
++    importpath = "github.com/nalepae/go-ere",
++    visibility = ["//visibility:public"],
++)
++
++cc_library(
++    name = "ere_verifier_c",
++    hdrs = ["include/ere_verifier.h"],
++    linkopts = select({
++        "@io_bazel_rules_go//go/platform:linux": [
++            "-lm",
++            "-lpthread",
++            "-ldl",
++        ],
++        "//conditions:default": [],
++    }),
++    strip_include_prefix = "include",
++    deps = select({
++        "@io_bazel_rules_go//go/platform:linux_amd64": [":ere_verifier_c_linux_amd64"],
++        "@io_bazel_rules_go//go/platform:linux_arm64": [":ere_verifier_c_linux_arm64"],
++        "@io_bazel_rules_go//go/platform:darwin_arm64": [":ere_verifier_c_darwin_arm64"],
++        "//conditions:default": [],
++    }),
++)
++
++cc_import(
++    name = "ere_verifier_c_linux_amd64",
++    static_library = "lib/linux_amd64/libere_verifier_c.a",
++)
++
++cc_import(
++    name = "ere_verifier_c_linux_arm64",
++    static_library = "lib/linux_arm64/libere_verifier_c.a",
++)
++
++cc_import(
++    name = "ere_verifier_c_darwin_arm64",
++    static_library = "lib/darwin_arm64/libere_verifier_c.a",
++)

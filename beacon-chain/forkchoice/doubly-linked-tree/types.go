@@ -9,6 +9,7 @@ import (
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // ForkChoice defines the overall fork choice store which includes all block nodes, validator's latest votes and balances.
@@ -75,6 +76,7 @@ type Node struct {
 type PayloadNode struct {
 	optimistic     bool      // whether the block has been fully validated or not
 	full           bool      // whether this node represents a payload present or not
+	executionValid bool      // EIP-8025, only set on full nodes: whether the EL validated the payload.
 	weight         uint64    // weight of this node: the total balance including children
 	balance        uint64    // the balance that voted for this node directly
 	gasLimit       uint64    // execution payload gas limit (only set on full nodes).
@@ -82,6 +84,10 @@ type PayloadNode struct {
 	node           *Node     // the consensus part of this full forkchoice node
 	timestamp      time.Time // The timestamp when the node was inserted.
 	children       []*Node   // the list of direct children of this Node
+
+	// EIP-8025, only set on full nodes.
+	newPayloadRequestRoot [fieldparams.RootLength]byte // identifies the payload for execution proofs, zero if unknown.
+	executionProofTypes   map[ethpb.ProofType]bool     // proof types with a verified execution proof for the payload.
 }
 
 type proposerSlotKey struct {

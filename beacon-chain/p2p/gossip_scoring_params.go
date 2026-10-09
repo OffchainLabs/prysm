@@ -156,6 +156,9 @@ func (s *Service) topicScoreParams(topic string) (*pubsub.TopicScoreParams, erro
 	case strings.Contains(topic, GossipSignedProposerPreferencesMessage):
 		// TODO: Revisit scoring params for signed proposer preferences gossip.
 		return defaultBlockTopicParams(), nil
+	case strings.Contains(topic, GossipExecutionProofMessage):
+		// TODO: Revisit scoring params for execution proof gossip.
+		return defaultBlockTopicParams(), nil
 	default:
 		return nil, errors.Errorf("unrecognized topic provided for parameter registration: %s", topic)
 	}

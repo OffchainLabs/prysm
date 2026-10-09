@@ -90,7 +90,8 @@ func (p subscribeParameters) logFields() logrus.Fields {
 
 // fullTopic is the fully qualified topic string, given to gossipsub.
 func (p subscribeParameters) fullTopic(subnet uint64, suffix string) string {
-	return fmt.Sprintf(p.topicFormat, p.nse.ForkDigest, subnet) + suffix
+	// TODO: Remove this hack
+	return p2p.SubnetTopic(p.topicFormat, p.nse.ForkDigest, subnet) + suffix
 }
 
 // subnetTracker keeps track of which subnets we are subscribed to, out of the set of
@@ -384,6 +385,24 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 				nse,
 			)
 		})
+
+		// Only execution proof-aware peers serve this topic, so it goes through the
+		// subnet machinery, as a single subnet, to search for such peers.
+		if features.Get().EnableExecutionProofs {
+			s.spawn(func() {
+				s.subscribeWithParameters(subscribeParameters{
+					topicFormat: p2p.ExecutionProofTopicFormat,
+					validate:    s.validateExecutionProof,
+					handle:      s.executionProofSubscriber,
+					nse:         nse,
+					// TODO: This is a hack: find a better way
+					// It's the first topic that's single and served by only some peers.
+					getSubnetsToJoin: func(primitives.Slot) map[uint64]bool {
+						return map[uint64]bool{0: true}
+					},
+				})
+			})
+		}
 	}
 	return true
 }
@@ -709,7 +728,8 @@ func (s *Service) logMinimumPeersPerSubnet(ctx context.Context, p subscribeParam
 			isSubnetWithMissingPeers := false
 			// Find new peers for wanted subnets if needed.
 			for index := range subnetsToFindPeersIndex {
-				topic := fmt.Sprintf(p.topicFormat, p.nse.ForkDigest, index)
+				// TODO: Remove this hack
+				topic := p2p.SubnetTopic(p.topicFormat, p.nse.ForkDigest, index)
 
 				// Check if we have enough peers in the subnet. Skip if we do.
 				if count := s.connectedPeersCount(topic); count < minimumPeersPerSubnet {
