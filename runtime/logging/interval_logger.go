@@ -1,4 +1,4 @@
-package backfill
+package logging
 
 import (
 	"sync"
@@ -8,10 +8,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// intervalLogger only logs once for each interval. It only customizes a single
+// IntervalLogger only logs once for each interval. It only customizes a single
 // instance of the entry/logger and should just be used to control the logging rate for
 // *one specific line of code*.
-type intervalLogger struct {
+type IntervalLogger struct {
 	*logrus.Entry
 	base    *logrus.Entry
 	mux     sync.Mutex
@@ -20,8 +20,8 @@ type intervalLogger struct {
 	now     func() time.Time
 }
 
-func newIntervalLogger(base *logrus.Entry, secondsBetweenLogs int64) *intervalLogger {
-	return &intervalLogger{
+func NewIntervalLogger(base *logrus.Entry, secondsBetweenLogs int64) *IntervalLogger {
+	return &IntervalLogger{
 		Entry:   base,
 		base:    base,
 		seconds: secondsBetweenLogs,
@@ -38,12 +38,12 @@ func intervalNumber(t time.Time, seconds int64) int64 {
 
 // intervalNumber is the integer division of the current unix timestamp
 // divided by the number of seconds per interval.
-func (l *intervalLogger) intervalNumber() int64 {
+func (l *IntervalLogger) intervalNumber() int64 {
 	return intervalNumber(l.now(), l.seconds)
 }
 
-func (l *intervalLogger) copy() *intervalLogger {
-	return &intervalLogger{
+func (l *IntervalLogger) copy() *IntervalLogger {
+	return &IntervalLogger{
 		Entry:   l.Entry,
 		base:    l.base,
 		seconds: l.seconds,
@@ -55,7 +55,7 @@ func (l *intervalLogger) copy() *intervalLogger {
 // Log overloads the Log() method of logrus.Entry, which is called under the hood
 // when a log-level specific method (like Info(), Warn(), Error()) is invoked.
 // By intercepting this call we can rate limit how often we log.
-func (l *intervalLogger) Log(level logrus.Level, args ...any) {
+func (l *IntervalLogger) Log(level logrus.Level, args ...any) {
 	n := l.intervalNumber()
 	// If Swap returns a different value that the current interval number, we haven't
 	// emitted a log yet this interval, so we can do so now.
@@ -66,48 +66,48 @@ func (l *intervalLogger) Log(level logrus.Level, args ...any) {
 	// don't persist across calls to Log()
 }
 
-func (l *intervalLogger) WithField(key string, value any) *intervalLogger {
+func (l *IntervalLogger) WithField(key string, value any) *IntervalLogger {
 	cp := l.copy()
 	cp.Entry = cp.Entry.WithField(key, value)
 	return cp
 }
 
-func (l *intervalLogger) WithFields(fields logrus.Fields) *intervalLogger {
+func (l *IntervalLogger) WithFields(fields logrus.Fields) *IntervalLogger {
 	cp := l.copy()
 	cp.Entry = cp.Entry.WithFields(fields)
 	return cp
 }
 
-func (l *intervalLogger) WithError(err error) *intervalLogger {
+func (l *IntervalLogger) WithError(err error) *IntervalLogger {
 	cp := l.copy()
 	cp.Entry = cp.Entry.WithError(err)
 	return cp
 }
 
-func (l *intervalLogger) Trace(args ...any) {
+func (l *IntervalLogger) Trace(args ...any) {
 	l.Log(logrus.TraceLevel, args...)
 }
 
-func (l *intervalLogger) Debug(args ...any) {
+func (l *IntervalLogger) Debug(args ...any) {
 	l.Log(logrus.DebugLevel, args...)
 }
 
-func (l *intervalLogger) Print(args ...any) {
+func (l *IntervalLogger) Print(args ...any) {
 	l.Info(args...)
 }
 
-func (l *intervalLogger) Info(args ...any) {
+func (l *IntervalLogger) Info(args ...any) {
 	l.Log(logrus.InfoLevel, args...)
 }
 
-func (l *intervalLogger) Warn(args ...any) {
+func (l *IntervalLogger) Warn(args ...any) {
 	l.Log(logrus.WarnLevel, args...)
 }
 
-func (l *intervalLogger) Warning(args ...any) {
+func (l *IntervalLogger) Warning(args ...any) {
 	l.Warn(args...)
 }
 
-func (l *intervalLogger) Error(args ...any) {
+func (l *IntervalLogger) Error(args ...any) {
 	l.Log(logrus.ErrorLevel, args...)
 }

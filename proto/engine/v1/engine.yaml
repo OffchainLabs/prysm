@@ -9,10 +9,13 @@ types:
   - name: "ExecutionPayload"
   - name: "ExecutionPayloadCapella"
   - name: "ExecutionPayloadDeneb"
+  # Transactions is a *ProgressiveTransactionList, a hand-written type that
+  # carries its own progressive merkleization (see transaction_list.go), so it
+  # needs no field override here and must not have one: the ProgressiveList
+  # override requires a slice-typed field.
   - name: "ExecutionPayloadGloas"
     progressive: {}
     fields:
-      Transactions:    {type: "ProgressiveList", element: {type: "ProgressiveByteList"}}
       Withdrawals:     {type: "ProgressiveList"}
       BlockAccessList: {type: "ProgressiveList"}
   - name: "ExecutionPayloadDenebAndBlobsBundle"

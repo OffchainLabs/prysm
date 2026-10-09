@@ -5,8 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
@@ -18,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/genesis"
@@ -29,6 +32,34 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 )
+
+func TestFirePayloadAttributesEventUsesForkchoiceUpdateHashes(t *testing.T) {
+	s := &Service{cfg: &config{SyncChecker: mockSyncChecker{synced: true}}}
+	f := new(event.Feed)
+	events := make(chan *feed.Event, 1)
+	sub := f.Subscribe(events)
+	defer sub.Unsubscribe()
+
+	safeHash := [32]byte{1}
+	finalizedHash := [32]byte{2}
+	fcs := &v1.ForkchoiceState{
+		SafeBlockHash:      safeHash[:],
+		FinalizedBlockHash: finalizedHash[:],
+	}
+	s.firePayloadAttributesEvent(f, nil, [32]byte{}, 1, nil, nil, fcs)
+
+	data, ok := (<-events).Data.(payloadattribute.EventData)
+	require.Equal(t, true, ok)
+	require.DeepEqual(t, safeHash[:], data.SafeBlockHash)
+	require.DeepEqual(t, finalizedHash[:], data.FinalizedBlockHash)
+
+	// A nil forkchoice state must not panic and leaves the hashes empty for the SSE fallback.
+	s.firePayloadAttributesEvent(f, nil, [32]byte{}, 1, nil, nil, nil)
+	data, ok = (<-events).Data.(payloadattribute.EventData)
+	require.Equal(t, true, ok)
+	require.Equal(t, 0, len(data.SafeBlockHash))
+	require.Equal(t, 0, len(data.FinalizedBlockHash))
+}
 
 func Test_NotifyForkchoiceUpdate_GetPayloadAttrErrorCanContinue(t *testing.T) {
 	service, tr := minimalTestService(t, WithPayloadIDCache(cache.NewPayloadIDCache()))

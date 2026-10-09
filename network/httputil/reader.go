@@ -22,7 +22,7 @@ func RespondWithSsz(req *http.Request) bool {
 	currentType, currentPriority := "", 0.0
 	for _, t := range types {
 		values := strings.Split(t, ";")
-		name := values[0]
+		name := strings.TrimSpace(values[0])
 		if name != api.JsonMediaType && name != api.OctetStreamMediaType {
 			continue
 		}

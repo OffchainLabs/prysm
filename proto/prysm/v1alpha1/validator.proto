@@ -512,6 +512,25 @@ service BeaconNodeValidator {
     };
   }
 
+  // GetExecutionPayloadEnvelopeV2 is GetExecutionPayloadEnvelope for validator
+  // clients that understand the ProgressiveTransactionList encoding of
+  // ExecutionPayloadGloas.transactions. The V1 method now fails with
+  // FAILED_PRECONDITION: an older client calling it would otherwise decode an
+  // empty transaction list and sign an envelope that cannot be executed.
+  rpc GetExecutionPayloadEnvelopeV2(ExecutionPayloadEnvelopeRequest)
+      returns (ExecutionPayloadEnvelopeResponse) {
+    option deprecated = true;
+  }
+
+  // PublishExecutionPayloadEnvelopeV2 is PublishExecutionPayloadEnvelope for
+  // validator clients that understand the ProgressiveTransactionList encoding
+  // of ExecutionPayloadGloas.transactions. The V1 method now fails with
+  // FAILED_PRECONDITION.
+  rpc PublishExecutionPayloadEnvelopeV2(GenericSignedExecutionPayloadEnvelope)
+      returns (google.protobuf.Empty) {
+    option deprecated = true;
+  }
+
   // PayloadAttestationData retrieves payload attestation data for the given slot.
   rpc PayloadAttestationData(PayloadAttestationDataRequest)
       returns (.ethereum.eth.v1alpha1.PayloadAttestationData) {

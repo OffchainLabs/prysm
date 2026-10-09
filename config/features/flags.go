@@ -183,7 +183,12 @@ var (
 	}
 	EnableStateDiff = &cli.BoolFlag{
 		Name:  "enable-state-diff",
-		Usage: "Enables the experimental state diff feature.",
+		Usage: "Enables the state diff feature.",
+	}
+	EnableArchive = &cli.BoolFlag{
+		Name: "enable-archive",
+		Usage: `Turns the node into an archive node: backfills blocks down to the archive origin state (see --archive-origin-state, genesis by default)
+		and then regenerates every historical state into the state-diff tree. (Implies --` + EnableStateDiff.Name + ` and --` + backfill.EnableExperimentalBackfill.Name + `.)`,
 	}
 	reorgLatePayloads = &cli.BoolFlag{
 		Name:   "reorg-late-payloads",
@@ -236,6 +241,10 @@ var (
 		Name:   "submit-blacklisted-builder-bids",
 		Usage:  "Skips the builder circuit breaker check when submitting a signed execution payload bid, so a blacklisted builder still broadcasts its bid. For testing only.",
 		Hidden: true,
+	}
+	disableBuilderRelayCircuitBreaker = &cli.BoolFlag{
+		Name:  "disable-builder-relay-circuit-breaker",
+		Usage: "Stops the builder circuit breaker from tracking which builders each direct connection endpoint serves, so a failing builder no longer bans the endpoints serving it.",
 	}
 )
 
@@ -299,11 +308,13 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	enableExperimentalAttestationPool,
 	enableFastConfirmation,
 	EnableStateDiff,
+	EnableArchive,
 	reorgLatePayloads,
 	forceHeadFlag,
 	blacklistRoots,
 	enableHashtree,
 	submitBlacklistedBuilderBids,
+	disableBuilderRelayCircuitBreaker,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {

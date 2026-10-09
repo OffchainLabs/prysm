@@ -820,7 +820,7 @@ func ExecutionPayloadEnvelopeProto() *eth.ExecutionPayloadEnvelope {
 			ExtraData:       []byte{},
 			BaseFeePerGas:   make([]byte, fieldparams.RootLength),
 			BlockHash:       make([]byte, fieldparams.RootLength),
-			Transactions:    [][]byte{},
+			Transactions:    &enginev1.ProgressiveTransactionList{},
 			Withdrawals:     []*enginev1.Withdrawal{},
 			BlobGasUsed:     0,
 			ExcessBlobGas:   0,

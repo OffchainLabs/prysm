@@ -2,12 +2,14 @@ package blockchain
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/io/logs"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/sirupsen/logrus"
@@ -24,9 +26,11 @@ func (s *Service) checkBuilderPayloadFailure(blk interfaces.ReadOnlyBeaconBlock,
 
 	// Upkeep runs on every block, not just on failures, so bans and gauges expire on time.
 	cb.Prune(epoch)
-	cb.DropInactiveBuilders(st.IsActiveBuilder)
+	cb.DropInactiveBuilders(epoch, st.IsActiveBuilder)
 	count := cb.BlacklistedCount(epoch)
 	builderBlacklistedCount.Set(float64(count))
+	builderRelaysBannedCount.Set(float64(cb.RelayBannedCount(epoch)))
+	builderCollateralBlacklistedCount.Set(float64(cb.CollateralBlacklistedCount(epoch)))
 	if !cb.SelfBuildOnly(epoch) {
 		builderSelfBuildOnly.Set(0)
 		return
@@ -81,15 +85,25 @@ func (s *Service) recordBuilderPayloadFailure(
 		return false
 	}
 
-	if !cb.RecordFailure(builderIndex, parentRoot, epoch) {
+	outcome := cb.RecordFailure(builderIndex, parentRoot, epoch)
+	if !outcome.Blacklisted {
 		entry.Debug("Builder not blacklisted for this failure")
 		return false
 	}
 	builderPayloadFailuresTotal.Inc()
-	log.WithFields(logrus.Fields{
+	fields := logrus.Fields{
 		"builderIndex": builderIndex,
 		"parentRoot":   fmt.Sprintf("%#x", parentRoot),
 		"parentSlot":   parentSlot,
-	}).Warn("Builder failed to reveal payload, blacklisting it")
+	}
+	if len(outcome.BannedRelays) > 0 {
+		masked := make([]string, len(outcome.BannedRelays))
+		for i, r := range outcome.BannedRelays {
+			masked[i] = logs.MaskCredentialsLogging(r)
+		}
+		fields["bannedRelays"] = strings.Join(masked, ",")
+		fields["collateralBuilders"] = outcome.Collateral
+	}
+	log.WithFields(fields).Warn("Builder failed to reveal payload, blacklisting it")
 	return true
 }

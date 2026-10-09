@@ -1,4 +1,4 @@
-package backfill
+package logging
 
 import (
 	"bytes"
@@ -71,7 +71,7 @@ func (c *mockClock) now() time.Time {
 	return c.t
 }
 
-func setupMockClock(il *intervalLogger) *mockClock {
+func setupMockClock(il *IntervalLogger) *mockClock {
 	// initialize now so that the time aligns with the start of the
 	// interval bucket. This ensures that adding less than an interval
 	// of time to the timestamp can never move into the next bucket.
@@ -87,7 +87,7 @@ func TestNewIntervalLogger(t *testing.T) {
 	base := logrus.NewEntry(logrus.New())
 	intSec := int64(10)
 
-	il := newIntervalLogger(base, intSec)
+	il := NewIntervalLogger(base, intSec)
 
 	require.NotNil(t, il)
 	require.Equal(t, intSec, il.seconds)
@@ -99,7 +99,7 @@ func TestNewIntervalLogger(t *testing.T) {
 func TestLogOncePerInterval(t *testing.T) {
 	entry, hook := entryWithHook()
 
-	il := newIntervalLogger(entry, 10)
+	il := NewIntervalLogger(entry, 10)
 	_ = setupMockClock(il) // use a fixed time to make sure no race is possible
 
 	// First log should call the underlying Log method
@@ -123,7 +123,7 @@ func TestLogAcrossIntervalBoundary(t *testing.T) {
 	iSec, iDur := intervalSecondsAndDuration(10)
 
 	entry, hook := entryWithHook()
-	il := newIntervalLogger(entry, iSec)
+	il := NewIntervalLogger(entry, iSec)
 	clock := setupMockClock(il)
 
 	il.Log(logrus.InfoLevel, "first interval")
@@ -139,7 +139,7 @@ func TestLogAcrossIntervalBoundary(t *testing.T) {
 func TestWithFieldChaining(t *testing.T) {
 	entry, hook := entryWithHook()
 	iSec, iDur := intervalSecondsAndDuration(10)
-	il := newIntervalLogger(entry, iSec)
+	il := NewIntervalLogger(entry, iSec)
 	clock := setupMockClock(il)
 
 	result := il.WithField("key1", "value1")
@@ -163,7 +163,7 @@ func TestWithFieldChaining(t *testing.T) {
 func TestWithFieldsChaining(t *testing.T) {
 	entry, hook := entryWithHook()
 	iSec, iDur := intervalSecondsAndDuration(10)
-	il := newIntervalLogger(entry, iSec)
+	il := NewIntervalLogger(entry, iSec)
 	clock := setupMockClock(il)
 
 	fields := logrus.Fields{
@@ -193,7 +193,7 @@ func TestWithFieldsChaining(t *testing.T) {
 func TestWithErrorChaining(t *testing.T) {
 	entry, hook := entryWithHook()
 	iSec, iDur := intervalSecondsAndDuration(10)
-	il := newIntervalLogger(entry, iSec)
+	il := NewIntervalLogger(entry, iSec)
 	clock := setupMockClock(il)
 
 	expected := errors.New("lowercase words")
@@ -220,7 +220,7 @@ func TestWithErrorChaining(t *testing.T) {
 // TestLogLevelMethods verifies all log level methods work and respect rate limiting
 func TestLogLevelMethods(t *testing.T) {
 	entry, hook := entryWithHook()
-	il := newIntervalLogger(entry, 10)
+	il := NewIntervalLogger(entry, 10)
 	_ = setupMockClock(il) // use a fixed time to make sure no race is possible
 
 	// First call from each level-specific method should succeed
@@ -250,7 +250,7 @@ func TestLogLevelMethods(t *testing.T) {
 // TestConcurrentLogging verifies multiple goroutines can safely call Log concurrently
 func TestConcurrentLogging(t *testing.T) {
 	entry, hook := entryWithHook()
-	il := newIntervalLogger(entry, 10)
+	il := NewIntervalLogger(entry, 10)
 	_ = setupMockClock(il) // use a fixed time to make sure no race is possible
 
 	var wg sync.WaitGroup
@@ -271,7 +271,7 @@ func TestConcurrentLogging(t *testing.T) {
 // TestZeroInterval verifies behavior with small interval (logs every second)
 func TestZeroInterval(t *testing.T) {
 	entry, hook := entryWithHook()
-	il := newIntervalLogger(entry, 1)
+	il := NewIntervalLogger(entry, 1)
 	clock := setupMockClock(il)
 
 	il.Log(logrus.InfoLevel, "first")
@@ -287,7 +287,7 @@ func TestZeroInterval(t *testing.T) {
 func TestCompleteLoggingFlow(t *testing.T) {
 	entry, hook := entryWithHook()
 	iSec, iDur := intervalSecondsAndDuration(10)
-	il := newIntervalLogger(entry, iSec)
+	il := NewIntervalLogger(entry, iSec)
 	clock := setupMockClock(il)
 
 	// Add field
@@ -312,7 +312,7 @@ func TestCompleteLoggingFlow(t *testing.T) {
 
 // TestAtomicSwapCorrectness verifies atomic swap works correctly
 func TestAtomicSwapCorrectness(t *testing.T) {
-	il := newIntervalLogger(logrus.NewEntry(logrus.New()), 10)
+	il := NewIntervalLogger(logrus.NewEntry(logrus.New()), 10)
 	_ = setupMockClock(il) // use a fixed time to make sure no race is possible
 
 	// Swap operation should return different value on first call
@@ -332,7 +332,7 @@ func TestLogMethodsWithClockAdvancement(t *testing.T) {
 	entry, hook := entryWithHook()
 
 	iSec, iDur := intervalSecondsAndDuration(10)
-	il := newIntervalLogger(entry, iSec)
+	il := NewIntervalLogger(entry, iSec)
 	clock := setupMockClock(il)
 
 	// First Error call should log
