@@ -512,6 +512,25 @@ service BeaconNodeValidator {
     };
   }
 
+  // GetExecutionPayloadEnvelopeV2 is GetExecutionPayloadEnvelope for validator
+  // clients that understand the ProgressiveTransactionList encoding of
+  // ExecutionPayloadGloas.transactions. The V1 method now fails with
+  // FAILED_PRECONDITION: an older client calling it would otherwise decode an
+  // empty transaction list and sign an envelope that cannot be executed.
+  rpc GetExecutionPayloadEnvelopeV2(ExecutionPayloadEnvelopeRequest)
+      returns (ExecutionPayloadEnvelopeResponse) {
+    option deprecated = true;
+  }
+
+  // PublishExecutionPayloadEnvelopeV2 is PublishExecutionPayloadEnvelope for
+  // validator clients that understand the ProgressiveTransactionList encoding
+  // of ExecutionPayloadGloas.transactions. The V1 method now fails with
+  // FAILED_PRECONDITION.
+  rpc PublishExecutionPayloadEnvelopeV2(GenericSignedExecutionPayloadEnvelope)
+      returns (google.protobuf.Empty) {
+    option deprecated = true;
+  }
+
   // PayloadAttestationData retrieves payload attestation data for the given slot.
   rpc PayloadAttestationData(PayloadAttestationDataRequest)
       returns (.ethereum.eth.v1alpha1.PayloadAttestationData) {
@@ -562,6 +581,12 @@ service BeaconNodeValidator {
       post : "/eth/v1alpha1/validator/execution_payload_bid"
       body : "*"
     };
+  }
+
+  // Streams payload and custody-data availability without waiting for execution validation.
+  rpc StreamExecutionPayloadAvailable(google.protobuf.Empty)
+      returns (stream StreamExecutionPayloadAvailableResponse) {
+    option deprecated = true;
   }
 }
 
@@ -1530,4 +1555,15 @@ message PayloadAttestationDataRequest {
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
   ];
+}
+
+// StreamExecutionPayloadAvailableResponse identifies an available payload and its beacon block.
+message StreamExecutionPayloadAvailableResponse {
+  option deprecated = true;
+
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  bytes block_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }

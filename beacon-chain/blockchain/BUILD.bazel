@@ -202,7 +202,6 @@ go_test(
         "//consensus-types/interfaces:go_default_library",
         "//consensus-types/payload-attribute:go_default_library",
         "//consensus-types/primitives:go_default_library",
-        "//container/trie:go_default_library",
         "//crypto/bls:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//genesis:go_default_library",

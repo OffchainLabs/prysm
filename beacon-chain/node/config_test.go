@@ -89,6 +89,55 @@ func TestConfigureBuilderHeaderTimeout(t *testing.T) {
 	})
 }
 
+func TestConfigureBuilderBidTimeout(t *testing.T) {
+	newCliCtx := func(t *testing.T, timeout string) *cli.Context {
+		set := flag.NewFlagSet("test", 0)
+		set.Duration(flags.BuilderBidTimeout.Name, flags.BuilderBidTimeout.Value, "")
+		if timeout != "" {
+			require.NoError(t, set.Set(flags.BuilderBidTimeout.Name, timeout))
+		}
+		return cli.NewContext(&cli.App{}, set, nil)
+	}
+
+	t.Run("leaves the config untouched when unset", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		hook := logTest.NewGlobal()
+		c := params.BeaconConfig().Copy()
+		c.BuilderBidTimeout = 1234 * time.Millisecond
+		require.NoError(t, params.SetActive(c))
+
+		require.NoError(t, configureBuilderBidTimeout(newCliCtx(t, "")))
+
+		assert.Equal(t, 1234*time.Millisecond, params.BeaconConfig().BuilderBidTimeout)
+		assert.LogsDoNotContain(t, hook, "Overriding the builder API execution payload bid timeout")
+	})
+
+	for _, timeout := range []string{"0s", "-1ms"} {
+		t.Run("rejects "+timeout, func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+
+			err := configureBuilderBidTimeout(newCliCtx(t, timeout))
+
+			require.ErrorContains(t, fmt.Sprintf("--builder-bid-timeout must be greater than 0, got %s", timeout), err)
+			assert.Equal(t, params.BuilderBidTolerance, params.BeaconConfig().BuilderBidTimeout)
+		})
+	}
+
+	// Any positive value is accepted: there is no upper bound, and no relay endpoint is required.
+	t.Run("nominal", func(t *testing.T) {
+		const timeout = "900ms"
+		params.SetupTestConfigCleanup(t)
+		hook := logTest.NewGlobal()
+
+		require.NoError(t, configureBuilderBidTimeout(newCliCtx(t, timeout)))
+
+		expected, err := time.ParseDuration(timeout)
+		require.NoError(t, err)
+		assert.Equal(t, expected, params.BeaconConfig().BuilderBidTimeout)
+		assert.LogsContain(t, hook, "Overriding the builder API execution payload bid timeout")
+	})
+}
+
 func TestConfigureSlotsPerArchivedPoint(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 
@@ -240,4 +289,69 @@ func TestAliasFlag(t *testing.T) {
 
 	// Check if the alias set the flag correctly
 	assert.NoError(t, err)
+}
+
+func TestConfigureGloasBuilderCircuitBreaker(t *testing.T) {
+	newCtx := func(t *testing.T, args ...string) *cli.Context {
+		app := cli.App{}
+		set := flag.NewFlagSet("test", 0)
+		set.Uint64(flags.BuilderAllowedFailures.Name, 0, "")
+		set.Uint64(flags.BuilderCriticalFailures.Name, 2, "")
+		set.Uint64(flags.BuilderBlacklistPeriod.Name, 1, "")
+		set.Uint64(flags.BuilderCriticalBlacklistPeriod.Name, 256, "")
+		set.Uint64(flags.BuilderRelayBlacklistPeriod.Name, 32, "")
+		set.Uint64(flags.BuilderFailureBackOffPeriod.Name, 5, "")
+		set.Uint64(flags.BuilderCriticalFailedBuilders.Name, 7, "")
+		require.NoError(t, set.Parse(args))
+		return cli.NewContext(&app, set, nil)
+	}
+
+	t.Run("no flags leaves defaults", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		before := params.BeaconConfig().BuilderBlacklistPeriod
+		require.NoError(t, configureGloasBuilderCircuitBreaker(newCtx(t)))
+		require.Equal(t, before, params.BeaconConfig().BuilderBlacklistPeriod)
+	})
+
+	t.Run("overrides apply", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		ctx := newCtx(t,
+			"--"+flags.BuilderAllowedFailures.Name+"=2",
+			"--"+flags.BuilderCriticalFailures.Name+"=4",
+			"--"+flags.BuilderBlacklistPeriod.Name+"=3",
+			"--"+flags.BuilderRelayBlacklistPeriod.Name+"=9",
+			"--"+flags.BuilderCriticalFailedBuilders.Name+"=5",
+		)
+		require.NoError(t, configureGloasBuilderCircuitBreaker(ctx))
+		cfg := params.BeaconConfig()
+		require.Equal(t, uint64(2), cfg.BuilderAllowedFailures)
+		require.Equal(t, uint64(4), cfg.BuilderCriticalFailures)
+		require.Equal(t, primitives.Epoch(3), cfg.BuilderBlacklistPeriod)
+		require.Equal(t, primitives.Epoch(9), cfg.BuilderRelayBlacklistPeriod)
+		require.Equal(t, uint64(5), cfg.BuilderCriticalFailedBuilders)
+	})
+
+	invalid := []struct {
+		name string
+		args []string
+	}{
+		{"zero blacklist period", []string{"--" + flags.BuilderBlacklistPeriod.Name + "=0"}},
+		{"unreachable critical ban", []string{
+			"--" + flags.BuilderAllowedFailures.Name + "=3",
+			"--" + flags.BuilderCriticalFailures.Name + "=3",
+		}},
+		{"critical shorter than first offense", []string{
+			"--" + flags.BuilderBlacklistPeriod.Name + "=10",
+			"--" + flags.BuilderCriticalBlacklistPeriod.Name + "=5",
+		}},
+		{"zero critical failed builders", []string{"--" + flags.BuilderCriticalFailedBuilders.Name + "=0"}},
+		{"zero relay period", []string{"--" + flags.BuilderRelayBlacklistPeriod.Name + "=0"}},
+		{"zero failure backoff period", []string{"--" + flags.BuilderFailureBackOffPeriod.Name + "=0"}},
+	}
+	for _, tt := range invalid {
+		t.Run(tt.name, func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			require.NotNil(t, configureGloasBuilderCircuitBreaker(newCtx(t, tt.args...)))
+		})
+	}
 }

@@ -169,7 +169,7 @@ func (s *Server) publishBareEnvelope(ctx context.Context, w http.ResponseWriter,
 	generic := &eth.GenericSignedExecutionPayloadEnvelope{
 		Envelope: &eth.GenericSignedExecutionPayloadEnvelope_SignedEnvelope{SignedEnvelope: signed},
 	}
-	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, generic); err != nil {
+	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelopeV2(ctx, generic); err != nil {
 		writeEnvelopePublishError(w, err)
 		return
 	}
@@ -245,7 +245,7 @@ func (s *Server) processEnvelopeContents(ctx context.Context, w http.ResponseWri
 			},
 		},
 	}
-	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, generic); err != nil {
+	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelopeV2(ctx, generic); err != nil {
 		writeEnvelopePublishError(w, err)
 		return
 	}
@@ -359,6 +359,14 @@ func (s *Server) validateEnvelopeGossip(ctx context.Context, w http.ResponseWrit
 		return false
 	}
 	if err := v.VerifyExecutionRequestsRoot(bid); err != nil {
+		httputil.HandleError(w, "gossip validation failed: "+err.Error(), http.StatusBadRequest)
+		return false
+	}
+	if err := v.VerifyExecutionRequestsLimits(); err != nil {
+		httputil.HandleError(w, "gossip validation failed: "+err.Error(), http.StatusBadRequest)
+		return false
+	}
+	if err := v.VerifyWithdrawalsLimit(); err != nil {
 		httputil.HandleError(w, "gossip validation failed: "+err.Error(), http.StatusBadRequest)
 		return false
 	}

@@ -2,6 +2,7 @@ package kv
 
 import (
 	"context"
+	"fmt"
 	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -55,6 +56,11 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 		return nil
 	}
 
+	// While an archive walk is filling the tree, only the walk may write: above its frontier there is no anchor.
+	if frontier, pending := s.archivePending(); pending && uint64(slot) > uint64(frontier)+deepestDiffSpan() {
+		return errors.Wrapf(ErrAboveArchiveFrontier, "slot %d is above the archive frontier %d", slot, frontier)
+	}
+
 	// Save full state if level is 0.
 	if lvl == 0 {
 		return s.saveFullSnapshot(st)
@@ -69,8 +75,17 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 	return s.saveHdiff(lvl, anchorState, st)
 }
 
+// StateBySlotFromDiffTree returns the state at the given slot from the tree; slot must be a saving point.
+func (s *Store) StateBySlotFromDiffTree(ctx context.Context, slot primitives.Slot) (state.BeaconState, error) {
+	return s.stateByDiff(ctx, slot)
+}
+
 // stateByDiff retrieves the full state for a given slot.
 func (s *Store) stateByDiff(ctx context.Context, slot primitives.Slot) (state.BeaconState, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	offset := s.getOffset()
 	if uint64(slot) < offset {
 		return nil, ErrSlotBeforeOffset
@@ -90,6 +105,10 @@ func (s *Store) stateByDiff(ctx context.Context, slot primitives.Slot) (state.Be
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	return snapshot, nil
@@ -147,16 +166,10 @@ func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 func (s *Store) saveFullSnapshot(st state.ReadOnlyBeaconState) error {
 	slot := uint64(st.Slot())
 	key := makeKeyForStateDiffTree(0, slot)
-	stateBytes, err := st.MarshalSSZ()
+	compressed, err := encodeStateWithKey(st)
 	if err != nil {
-		return err
+		return fmt.Errorf("encode state with key: %w", err)
 	}
-	// add version key to value
-	enc, err := addKey(st.Version(), stateBytes)
-	if err != nil {
-		return err
-	}
-	compressed := snappy.Encode(nil, enc)
 
 	err = s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(stateDiffBucket)
@@ -200,20 +213,30 @@ func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffBytes, error) {
 		}
 		buf := append(key, stateSuffix...)
 		rawStateDiff := bucket.Get(buf)
+		// Missing history permits replay, but present corrupt records must still fail.
+		if rawStateDiff == nil {
+			return errors.Wrapf(ErrNotFoundState, "state diff not found at level %d slot %d", lvl, slot)
+		}
 		if len(rawStateDiff) == 0 {
-			return errors.New("state diff not found")
+			return errors.Wrapf(ErrStateDiffCorrupted, "empty state diff at level %d slot %d", lvl, slot)
 		}
 		stateDiff = slices.Clone(rawStateDiff)
 		buf = append(key, validatorSuffix...)
 		rawValidatorDiff := bucket.Get(buf)
+		if rawValidatorDiff == nil {
+			return errors.Wrapf(ErrNotFoundState, "validator diff not found at level %d slot %d", lvl, slot)
+		}
 		if len(rawValidatorDiff) == 0 {
-			return errors.New("validator diff not found")
+			return errors.Wrapf(ErrStateDiffCorrupted, "empty validator diff at level %d slot %d", lvl, slot)
 		}
 		validatorDiff = slices.Clone(rawValidatorDiff)
 		buf = append(key, balancesSuffix...)
 		rawBalancesDiff := bucket.Get(buf)
+		if rawBalancesDiff == nil {
+			return errors.Wrapf(ErrNotFoundState, "balances diff not found at level %d slot %d", lvl, slot)
+		}
 		if len(rawBalancesDiff) == 0 {
-			return errors.New("balances diff not found")
+			return errors.Wrapf(ErrStateDiffCorrupted, "empty balances diff at level %d slot %d", lvl, slot)
 		}
 		balancesDiff = slices.Clone(rawBalancesDiff)
 		return nil
@@ -231,6 +254,12 @@ func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffBytes, error) {
 }
 
 func (s *Store) getFullSnapshot(slot uint64) (state.BeaconState, error) {
+	if s.stateDiffCache != nil {
+		if anchor := s.stateDiffCache.getAnchor(0, withExactSlot(primitives.Slot(slot))); anchor != nil {
+			return anchor, nil
+		}
+	}
+
 	key := makeKeyForStateDiffTree(0, slot)
 	var compressed []byte
 
@@ -241,7 +270,7 @@ func (s *Store) getFullSnapshot(slot uint64) (state.BeaconState, error) {
 		}
 		rawEnc := bucket.Get(key)
 		if rawEnc == nil {
-			return errSnapshotNotFound
+			return errors.Wrapf(errSnapshotNotFound, "level 0 slot %d", slot)
 		}
 		compressed = slices.Clone(rawEnc)
 		return nil

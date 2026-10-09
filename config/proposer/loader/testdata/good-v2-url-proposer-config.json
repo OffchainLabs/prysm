@@ -7,8 +7,8 @@
       "builders": [
         {
           "url": "https://builder-a.example",
-          "pubkeys": ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"],
-          "auth_data": "aGVsbG8=",
+          "builder_pubkeys": ["0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"],
+          "auth_data": "0x68656c6c6f",
           "min_bid": "1"
         }
       ]

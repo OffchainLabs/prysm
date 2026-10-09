@@ -1,10 +1,9 @@
 package helpers_test
 
 import (
-	"math/rand"
+	"slices"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -290,7 +289,7 @@ func TestCurrentEpochSyncSubcommitteeIndices_UsingCommittee(t *testing.T) {
 	require.DeepEqual(t, []primitives.CommitteeIndex{0}, index)
 
 	// Test that cache was able to fill on miss.
-	time.Sleep(100 * time.Millisecond)
+	helpers.WaitForSyncCommitteeCacheFills()
 	index, err = helpers.SyncCommitteeCache().CurrentPeriodIndexPosition(root, 0)
 	require.NoError(t, err)
 	require.DeepEqual(t, []primitives.CommitteeIndex{0}, index)
@@ -419,14 +418,14 @@ func TestUpdateSyncCommitteeCache_BadSlot(t *testing.T) {
 		Slot: 1,
 	})
 	require.NoError(t, err)
-	err = helpers.UpdateSyncCommitteeCache(state)
+	err = helpers.UpdateSyncCommitteeCache(t.Context(), state)
 	require.ErrorContains(t, "not at the end of the epoch to update cache", err)
 
 	state, err = state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
 		Slot: params.BeaconConfig().SlotsPerEpoch - 1,
 	})
 	require.NoError(t, err)
-	err = helpers.UpdateSyncCommitteeCache(state)
+	err = helpers.UpdateSyncCommitteeCache(t.Context(), state)
 	require.ErrorContains(t, "not at sync committee period boundary to update cache", err)
 }
 
@@ -438,7 +437,7 @@ func TestUpdateSyncCommitteeCache_BadRoot(t *testing.T) {
 		LatestBlockHeader: &ethpb.BeaconBlockHeader{StateRoot: params.BeaconConfig().ZeroHash[:]},
 	})
 	require.NoError(t, err)
-	err = helpers.UpdateSyncCommitteeCache(state)
+	err = helpers.UpdateSyncCommitteeCache(t.Context(), state)
 	require.ErrorContains(t, "zero hash state root can't be used to update cache", err)
 }
 
@@ -477,9 +476,8 @@ func TestIsCurrentEpochSyncCommittee_SameBlockRoot(t *testing.T) {
 	assert.NoError(t, state.SetSlot(primitives.Slot(wantedSlot)))
 	syncCommittee, err = state.CurrentSyncCommittee()
 	assert.NoError(t, err)
-	rand.Shuffle(len(syncCommittee.Pubkeys), func(i, j int) {
-		syncCommittee.Pubkeys[i], syncCommittee.Pubkeys[j] = syncCommittee.Pubkeys[j], syncCommittee.Pubkeys[i]
-	})
+	// Reverse rather than shuffle: a shuffle may leave validator 200 at the same position.
+	slices.Reverse(syncCommittee.Pubkeys)
 	require.NoError(t, state.SetCurrentSyncCommittee(syncCommittee))
 	newIdxs, err := helpers.CurrentPeriodSyncSubcommitteeIndices(state, 200)
 	require.NoError(t, err)

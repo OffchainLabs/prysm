@@ -8,7 +8,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/client/builder"
 	beaconbuilder "github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -19,11 +18,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
-
-// Config defines a config struct for dependencies into the service.
-type Config struct {
-	BeaconDB db.HeadAccessDatabase
-}
 
 // MockBuilderService to mock builder.
 type MockBuilderService struct {
@@ -48,10 +42,17 @@ type MockBuilderService struct {
 	ErrSubmitSignedBeaconBlock    error
 	ErrSubmitBuilderPreferences   error
 	ErrSubmitBuilderPrefsByURL    map[string]error
-	Cfg                           *Config
 
 	mu                   sync.Mutex
 	SubmittedPreferences []string
+	requestedEntries     []string
+}
+
+// RequestedBidUrls returns the entry urls the last bid request was made for.
+func (s *MockBuilderService) RequestedBidUrls() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.requestedEntries...)
 }
 
 // SubmittedPreferenceUrls returns the urls preferences were submitted to.
@@ -120,15 +121,12 @@ func (s *MockBuilderService) GetHeader(_ context.Context, slot primitives.Slot, 
 	return w, s.ErrGetHeader
 }
 
-// RegistrationByValidatorID returns either the values from the cache or db.
-func (s *MockBuilderService) RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error) {
-	if s.RegistrationCache != nil {
-		return s.RegistrationCache.RegistrationByIndex(id)
+// RegistrationByValidatorID returns the value from the mock registration cache.
+func (s *MockBuilderService) RegistrationByValidatorID(_ context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error) {
+	if s.RegistrationCache == nil {
+		return nil, cache.ErrNotFoundRegistration
 	}
-	if s.Cfg.BeaconDB != nil {
-		return s.Cfg.BeaconDB.RegistrationByValidatorID(ctx, id)
-	}
-	return nil, cache.ErrNotFoundRegistration
+	return s.RegistrationCache.RegistrationByIndex(id)
 }
 
 // RegisterValidator for mocking.
@@ -168,7 +166,13 @@ func (s *MockBuilderService) SubmitBlindedBlockPostFulu(_ context.Context, _ int
 }
 
 // GetExecutionPayloadBid for mocking.
-func (s *MockBuilderService) GetExecutionPayloadBid(_ context.Context, _ primitives.Slot, _, _ [32]byte, _ [48]byte, _ []*ethpb.BuilderEntry) ([]beaconbuilder.PayloadBid, error) {
+func (s *MockBuilderService) GetExecutionPayloadBid(_ context.Context, _ primitives.Slot, _, _ [32]byte, _ [48]byte, entries []*ethpb.BuilderEntry) ([]beaconbuilder.PayloadBid, error) {
+	s.mu.Lock()
+	s.requestedEntries = s.requestedEntries[:0]
+	for _, e := range entries {
+		s.requestedEntries = append(s.requestedEntries, string(e.GetUrl()))
+	}
+	s.mu.Unlock()
 	if s.PayloadBids != nil {
 		return s.PayloadBids, s.ErrGetExecutionPayloadBid
 	}

@@ -134,6 +134,10 @@ func (e *EngineClient) ReconstructFullGloasExecutionPayloadsByHash(
 	for i := range blockHashes {
 		blockHash := blockHashes[i]
 		if p, ok := e.ExecutionPayloadByBlockHash[blockHash]; ok {
+			txs, err := pb.NewProgressiveTransactionList(p.Transactions)
+			if err != nil {
+				return nil, err
+			}
 			payloads[blockHash] = &pb.ExecutionPayloadGloas{
 				ParentHash:    p.ParentHash,
 				FeeRecipient:  p.FeeRecipient,
@@ -148,7 +152,7 @@ func (e *EngineClient) ReconstructFullGloasExecutionPayloadsByHash(
 				ExtraData:     p.ExtraData,
 				BaseFeePerGas: p.BaseFeePerGas,
 				BlockHash:     p.BlockHash,
-				Transactions:  p.Transactions,
+				Transactions:  txs,
 				Withdrawals:   []*pb.Withdrawal{},
 				SlotNumber:    e.SlotByBlockHash[blockHash],
 			}
@@ -194,7 +198,10 @@ func (e *EngineClient) ReconstructExecutionPayloadEnvelope(
 	if !ok {
 		return nil, errors.New("execution payload not found for block hash")
 	}
-	p := payloadToPayloadGloas(payload)
+	p, err := payloadToPayloadGloas(payload)
+	if err != nil {
+		return nil, err
+	}
 	p.SlotNumber = envelope.Message.Slot
 	return &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
@@ -207,7 +214,11 @@ func (e *EngineClient) ReconstructExecutionPayloadEnvelope(
 	}, nil
 }
 
-func payloadToPayloadGloas(p *pb.ExecutionPayload) *pb.ExecutionPayloadGloas {
+func payloadToPayloadGloas(p *pb.ExecutionPayload) (*pb.ExecutionPayloadGloas, error) {
+	txs, err := pb.NewProgressiveTransactionList(p.Transactions)
+	if err != nil {
+		return nil, err
+	}
 	return &pb.ExecutionPayloadGloas{
 		ParentHash:    p.ParentHash,
 		FeeRecipient:  p.FeeRecipient,
@@ -222,8 +233,8 @@ func payloadToPayloadGloas(p *pb.ExecutionPayload) *pb.ExecutionPayloadGloas {
 		ExtraData:     p.ExtraData,
 		BaseFeePerGas: p.BaseFeePerGas,
 		BlockHash:     p.BlockHash,
-		Transactions:  p.Transactions,
-	}
+		Transactions:  txs,
+	}, nil
 }
 
 // GetTerminalBlockHash --

@@ -151,7 +151,9 @@ type Service struct {
 	pendingAttsLock                      sync.RWMutex
 	pendingQueueLock                     sync.RWMutex
 	chainStarted                         *atomic.Bool
+	orphanedOriginStreak                 *atomic.Int64
 	validateBlockLock                    sync.RWMutex
+	validateEnvelopeLock                 sync.Mutex
 	rateLimiter                          *limiter
 	seenBlockLock                        sync.RWMutex
 	seenBlockCache                       *lru.Cache
@@ -211,7 +213,8 @@ type Service struct {
 	pendingPayloadEnvelopes              map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope
 	pendingEnvelopeLock                  sync.RWMutex
 	selfBuildSigFailures                 int
-	selfBuildSigFailSlot                 primitives.Slot
+	selfBuildSlot                        primitives.Slot
+	selfBuildSeenProposers               map[primitives.ValidatorIndex]struct{}
 	pendingPayloadAttestations           map[[32]byte][]*ethpb.PayloadAttestationMessage
 	pendingPayloadAttestationLock        sync.RWMutex
 }
@@ -223,6 +226,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		ctx:                        ctx,
 		cancel:                     cancel,
 		chainStarted:               &atomic.Bool{},
+		orphanedOriginStreak:       &atomic.Int64{},
 		cfg:                        &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
 		slotToPendingBlocks:        gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
 		seenPendingBlocks:          make(map[[32]byte]bool),
@@ -233,6 +237,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		payloadAttestationCache:    &cache.PayloadAttestationCache{},
 		proposerPreferencesCache:   cache.NewProposerPreferencesCache(),
 		pendingPayloadEnvelopes:    make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
+		selfBuildSeenProposers:     make(map[primitives.ValidatorIndex]struct{}),
 		pendingPayloadAttestations: make(map[[32]byte][]*ethpb.PayloadAttestationMessage),
 	}
 
@@ -398,6 +403,9 @@ func (s *Service) Stop() error {
 
 // Status of the currently running regular sync service.
 func (s *Service) Status() error {
+	if s.orphanedOriginStreak != nil && s.orphanedOriginStreak.Load() >= orphanedOriginStreakThreshold {
+		return errOrphanedOrigin
+	}
 	// If our head slot is on a previous epoch and our peers are reporting their head block are
 	// in the most recent epoch, then we might be out of sync.
 	if headEpoch := slots.ToEpoch(s.cfg.chain.HeadSlot()); headEpoch+1 < slots.ToEpoch(s.cfg.clock.CurrentSlot()) &&
@@ -487,6 +495,25 @@ func (c *partialColumnCallbacks) PartialVerifierFromTrustedColumn(col *blocks.Pa
 	return c.service.partialVerifierFromTrustedColumn(c.service.ctx, col)
 }
 
+// ValidateGloasGroupID validates a Gloas partial-column group ID against local block state.
+// https://github.com/ethereum/consensus-specs/blob/master/specs/gloas/partial-columns/p2p-interface.md#the-gossip-domain-gossipsub
+func (c *partialColumnCallbacks) ValidateGloasGroupID(slot primitives.Slot, root [32]byte) pubsub.ValidationResult {
+	// [IGNORE] The group ID's block has been seen (via gossip or non-gossip sources)
+	if c.service.cfg.chain == nil || !c.service.cfg.chain.HasBlock(c.service.ctx, root) {
+		return pubsub.ValidationIgnore
+	}
+
+	blockSlot, err := c.service.cfg.chain.RecentBlockSlot(root)
+	if err != nil {
+		return pubsub.ValidationIgnore
+	}
+	// [REJECT] The group ID's slot matches the slot of the block
+	if blockSlot != slot {
+		return pubsub.ValidationReject
+	}
+	return pubsub.ValidationAccept
+}
+
 // ValidateColumn verifies the KZG proofs for the given cells.
 func (c *partialColumnCallbacks) ValidateColumn(cellsToVerify []blocks.CellProofBundle) error {
 	return peerdas.VerifyDataColumnsCellsKZGProofs(cellsToVerify)
@@ -497,25 +524,32 @@ func (c *partialColumnCallbacks) HandleColumn(topic string, col blocks.VerifiedR
 	ctx, cancel := context.WithTimeout(c.service.ctx, pubsubMessageTimeout)
 	defer cancel()
 
-	slot := col.Slot()
-	proposerIndex, err := col.ProposerIndex()
-	if err != nil {
-		log.WithError(err).Error("Failed to get proposer index from data column")
-		return
-	}
 	commitments, err := col.KzgCommitments()
 	if err != nil {
 		log.WithError(err).Error("Failed to get KZG commitments from data column")
 		return
 	}
-	if c.service.hasSeenDataColumnIndex(slot, proposerIndex, col.Index()) {
-		return
-	}
-
-	c.service.setSeenDataColumnIndex(slot, proposerIndex, col.Index())
 	if len(commitments) == 0 {
 		return
 	}
+
+	if col.IsGloas() {
+		if c.service.hasSeenDataColumnRootIndex(col.BlockRoot(), col.Index()) {
+			return
+		}
+		c.service.setSeenDataColumnRootIndex(col.BlockRoot(), col.Index(), col.Slot())
+	} else {
+		proposerIndex, err := col.ProposerIndex()
+		if err != nil {
+			log.WithError(err).Error("Failed to get proposer index from data column")
+			return
+		}
+		if c.service.hasSeenDataColumnIndex(col.Slot(), proposerIndex, col.Index()) {
+			return
+		}
+		c.service.setSeenDataColumnIndex(col.Slot(), proposerIndex, col.Index())
+	}
+
 	// This column was completed from a partial message.
 	partialMessageColumnCompletionsTotal.WithLabelValues(strconv.FormatUint(col.Index(), 10)).Inc()
 	if err := c.service.verifiedRODataColumnSubscriber(ctx, col); err != nil {

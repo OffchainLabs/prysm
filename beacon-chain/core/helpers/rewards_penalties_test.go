@@ -315,7 +315,7 @@ func TestUpdateTotalActiveBalanceCache(t *testing.T) {
 
 	// Test updating cache with a specific total
 	testTotal := uint64(95 * 1e9) // 32 + 32 + 31 = 95
-	err = helpers.UpdateTotalActiveBalanceCache(state, testTotal)
+	err = helpers.UpdateTotalActiveBalanceCache(t.Context(), state, testTotal)
 	require.NoError(t, err)
 
 	// Verify the cache was updated by retrieving the total active balance
@@ -323,4 +323,26 @@ func TestUpdateTotalActiveBalanceCache(t *testing.T) {
 	cachedTotal, err := helpers.TotalActiveBalance(t.Context(), state)
 	require.NoError(t, err)
 	assert.Equal(t, testTotal, cachedTotal, "Cache should return the updated total")
+}
+
+func TestUpdateTotalActiveBalanceCache_IsolatedCaches(t *testing.T) {
+	helpers.ClearCache()
+
+	validators := []*ethpb.Validator{
+		{EffectiveBalance: 32 * 1e9, ExitEpoch: params.BeaconConfig().FarFutureEpoch},
+		{EffectiveBalance: 31 * 1e9, ExitEpoch: params.BeaconConfig().FarFutureEpoch},
+	}
+	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Validators: validators})
+	require.NoError(t, err)
+
+	ctx := helpers.WithIsolatedCaches(t.Context())
+	require.NoError(t, helpers.UpdateTotalActiveBalanceCache(ctx, state, 1e9))
+
+	total, err := helpers.TotalActiveBalance(ctx, state)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(1e9), total)
+
+	total, err = helpers.TotalActiveBalance(t.Context(), state)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(63*1e9), total)
 }

@@ -16,9 +16,6 @@ var ErrNotFoundOriginBlockRoot = errors.Wrap(ErrNotFound, "OriginBlockRoot")
 // ErrNotFoundGenesisBlockRoot means no genesis block root was found, indicating the db was not initialized with genesis
 var ErrNotFoundGenesisBlockRoot = errors.Wrap(ErrNotFound, "OriginGenesisRoot")
 
-// ErrNotFoundFeeRecipient is a not found error specifically for the fee recipient getter
-var ErrNotFoundFeeRecipient = errors.Wrap(ErrNotFound, "fee recipient")
-
 // ErrNotFoundMetadataSeqNum is a not found error specifically for the metadata sequence number getter
 var ErrNotFoundMetadataSeqNum = errors.Wrap(ErrNotFound, "metadata sequence number")
 
@@ -35,6 +32,7 @@ var ErrStateDiffExponentMismatch = errors.New("state-diff exponents mismatch")
 // ErrStateDiffMissingSnapshot is returned when the offset snapshot is missing.
 var ErrStateDiffMissingSnapshot = errors.New("state-diff offset snapshot missing")
 
+var errOriginBlockMismatch = errors.New("origin block does not match the origin state latest block header")
 var errEmptyBlockSlice = errors.New("[]blocks.ROBlock is empty")
 var errIncorrectBlockParent = errors.New("unexpected missing or forked blocks in a []ROBlock")
 var errFinalizedChildNotFound = errors.New("unable to find finalized root descending from backfill batch")

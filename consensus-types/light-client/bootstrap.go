@@ -25,6 +25,8 @@ func NewWrappedBootstrap(m proto.Message) (interfaces.LightClientBootstrap, erro
 		return NewWrappedBootstrapDeneb(t)
 	case *pb.LightClientBootstrapElectra:
 		return NewWrappedBootstrapElectra(t)
+	case *pb.LightClientBootstrapGloas:
+		return NewWrappedBootstrapGloas(t)
 	default:
 		return nil, fmt.Errorf("cannot construct light client bootstrap from type %T", t)
 	}
@@ -448,4 +450,20 @@ func (h *bootstrapElectra) SetCurrentSyncCommitteeBranch(branch [][]byte) error 
 
 func (h *bootstrapElectra) CurrentSyncCommitteeBranchElectra() (interfaces.LightClientSyncCommitteeBranchElectra, error) {
 	return h.currentSyncCommitteeBranch, nil
+}
+
+func (h *bootstrapAltair) CurrentSyncCommitteeBranchGloas() (interfaces.LightClientSyncCommitteeBranchGloas, error) {
+	return interfaces.LightClientSyncCommitteeBranchGloas{}, consensustypes.ErrNotSupported("CurrentSyncCommitteeBranchGloas", version.Altair)
+}
+
+func (h *bootstrapCapella) CurrentSyncCommitteeBranchGloas() (interfaces.LightClientSyncCommitteeBranchGloas, error) {
+	return interfaces.LightClientSyncCommitteeBranchGloas{}, consensustypes.ErrNotSupported("CurrentSyncCommitteeBranchGloas", version.Capella)
+}
+
+func (h *bootstrapDeneb) CurrentSyncCommitteeBranchGloas() (interfaces.LightClientSyncCommitteeBranchGloas, error) {
+	return interfaces.LightClientSyncCommitteeBranchGloas{}, consensustypes.ErrNotSupported("CurrentSyncCommitteeBranchGloas", version.Deneb)
+}
+
+func (h *bootstrapElectra) CurrentSyncCommitteeBranchGloas() (interfaces.LightClientSyncCommitteeBranchGloas, error) {
+	return interfaces.LightClientSyncCommitteeBranchGloas{}, consensustypes.ErrNotSupported("CurrentSyncCommitteeBranchGloas", version.Electra)
 }

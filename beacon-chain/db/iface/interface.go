@@ -44,6 +44,8 @@ type ReadOnlyDatabase interface {
 	StateSummary(ctx context.Context, blockRoot [32]byte) (*ethpb.StateSummary, error)
 	HasStateSummary(ctx context.Context, blockRoot [32]byte) bool
 	HighestSlotStatesBelow(ctx context.Context, slot primitives.Slot) ([]state.ReadOnlyBeaconState, error)
+	SlotInDiffTree(primitives.Slot) (uint64, int, error)
+	StateBySlotFromDiffTree(ctx context.Context, slot primitives.Slot) (state.BeaconState, error)
 	// Checkpoint operations.
 	JustifiedCheckpoint(ctx context.Context) (*ethpb.Checkpoint, error)
 	FinalizedCheckpoint(ctx context.Context) (*ethpb.Checkpoint, error)
@@ -56,9 +58,6 @@ type ReadOnlyDatabase interface {
 	DepositContractAddress(ctx context.Context) ([]byte, error)
 	// ExecutionChainData operations.
 	ExecutionChainData(ctx context.Context) (*ethpb.ETH1ChainData, error)
-	// Fee recipients operations.
-	FeeRecipientByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (common.Address, error)
-	RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error)
 	// Light client operations
 	LightClientUpdates(ctx context.Context, startPeriod, endPeriod uint64) (map[uint64]interfaces.LightClientUpdate, error)
 	LightClientUpdate(ctx context.Context, period uint64) (interfaces.LightClientUpdate, error)
@@ -103,7 +102,6 @@ type NoHeadAccessDatabase interface {
 	DeleteStates(ctx context.Context, blockRoots [][32]byte) error
 	SaveStateSummary(ctx context.Context, summary *ethpb.StateSummary) error
 	SaveStateSummaries(ctx context.Context, summaries []*ethpb.StateSummary) error
-	SlotInDiffTree(primitives.Slot) (uint64, int, error)
 	// Checkpoint operations.
 	SaveJustifiedCheckpoint(ctx context.Context, checkpoint *ethpb.Checkpoint) error
 	SaveFinalizedCheckpoint(ctx context.Context, checkpoint *ethpb.Checkpoint) error
@@ -114,9 +112,6 @@ type NoHeadAccessDatabase interface {
 	SaveExecutionChainData(ctx context.Context, data *ethpb.ETH1ChainData) error
 	// Run any required database migrations.
 	RunMigrations(ctx context.Context) error
-	// Fee recipients operations.
-	SaveFeeRecipientsByValidatorIDs(ctx context.Context, ids []primitives.ValidatorIndex, addrs []common.Address) error
-	SaveRegistrationsByValidatorIDs(ctx context.Context, ids []primitives.ValidatorIndex, regs []*ethpb.ValidatorRegistrationV1) error
 	// light client operations
 	SaveLightClientUpdate(ctx context.Context, period uint64, update interfaces.LightClientUpdate) error
 	SaveLightClientBootstrap(ctx context.Context, blockRoot []byte, bootstrap interfaces.LightClientBootstrap) error

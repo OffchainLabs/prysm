@@ -156,7 +156,7 @@ func (s *Service) getBatchPrestate(ctx context.Context, b consensusblocks.ROBloc
 		return blockPreState, false, nil // Returning false here is fine since there are no envelopes pre-Gloas
 	}
 	parentRoot := b.Block().ParentRoot()
-	full, err := consensusblocks.BlockBuiltOnEnvelope(envelopes[0], b)
+	full, err := consensusblocks.BlockBuiltOnParentEnvelope(envelopes[0], b)
 	if err != nil {
 		return nil, false, errors.Wrap(err, "could not check if block builds on envelope")
 	}
@@ -436,13 +436,13 @@ func (s *Service) notifyEngineAndSaveData(
 			return nil, false, err
 		}
 		if i > 0 && jCheckpoints[i].Epoch > jCheckpoints[i-1].Epoch {
-			if err := s.cfg.BeaconDB.SaveJustifiedCheckpoint(ctx, jCheckpoints[i]); err != nil {
+			if err := s.cfg.BeaconDB.SaveJustifiedCheckpoint(ctx, s.checkpointWithStoredRoot(ctx, jCheckpoints[i])); err != nil {
 				tracing.AnnotateError(span, err)
 				return nil, false, err
 			}
 		}
 		if i > 0 && fCheckpoints[i].Epoch > fCheckpoints[i-1].Epoch {
-			if err := s.updateFinalized(ctx, fCheckpoints[i]); err != nil {
+			if err := s.updateFinalized(ctx, s.checkpointWithStoredRoot(ctx, fCheckpoints[i])); err != nil {
 				tracing.AnnotateError(span, err)
 				return nil, false, err
 			}
@@ -624,11 +624,19 @@ func (s *Service) handleBlockPayloadAttestations(ctx context.Context, blk interf
 	}
 	for _, att := range atts {
 		root := bytesutil.ToBytes32(att.Data.BeaconBlockRoot)
-		if !s.cfg.ForkChoiceStore.HasNode(root) {
+		rootSlot, err := s.cfg.ForkChoiceStore.Slot(root)
+		if err != nil || rootSlot != att.Data.Slot {
 			continue
 		}
-		for i := range committee {
+		voters := make(map[primitives.ValidatorIndex]struct{})
+		for i, idx := range committee {
 			if att.AggregationBits.BitAt(uint64(i)) {
+				voters[idx] = struct{}{}
+			}
+		}
+		// The spec writes a voter's vote to every PTC seat it holds, not only the seats whose bit is set.
+		for i, idx := range committee {
+			if _, ok := voters[idx]; ok {
 				s.cfg.ForkChoiceStore.SetPTCVote(root, uint64(i), att.Data.PayloadPresent, att.Data.BlobDataAvailable)
 			}
 		}
@@ -1217,7 +1225,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 		if full {
 			bh = bid.BlockHash()
 		}
-		id, err := s.notifyForkchoiceUpdateGloas(ctx, bh, attribute)
+		id, fcs, err := s.notifyForkchoiceUpdateGloas(ctx, bh, attribute)
 		if err != nil {
 			log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
 		}
@@ -1229,7 +1237,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 				"nextSlot":  currentSlot + 1,
 				"payloadID": fmt.Sprintf("%#x", bytesutil.Trunc(id[:])),
 			}).Info("Forkchoice updated with payload attributes for proposal")
-			s.firePayloadAttributesEventForHead(headRoot, currentSlot+1, attribute, bh[:])
+			s.firePayloadAttributesEventForHead(headRoot, currentSlot+1, attribute, bh[:], fcs)
 		}
 		return
 	}

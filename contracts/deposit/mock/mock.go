@@ -1,10 +1,12 @@
 package mock
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
 	"strings"
+	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/contracts/deposit"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -57,13 +59,59 @@ func Setup() (*TestAccount, error) {
 	genesis[addr] = types.Account{Balance: startingBalance}
 	backend := simulated.NewBackend(genesis, simulated.WithBlockGasLimit(210000000000))
 
-	contractAddr, _, contract, err := DeployDepositContract(txOpts, backend.Client())
+	contractAddr, _, contract, err := DeployDepositContract(txOpts, &nonceTrackingClient{Client: backend.Client()})
 	if err != nil {
 		return nil, err
 	}
 	backend.Commit()
 
 	return &TestAccount{addr, contractAddr, contract, backend, txOpts}, nil
+}
+
+// nonceTrackingClient tracks the next nonce of each sender locally.
+// The simulated backend adds transactions to its pool asynchronously, so right after a transaction
+// is sent, PendingNonceAt may still return its nonce. The next transaction would then reuse this
+// nonce and be rejected with "replacement transaction underpriced".
+type nonceTrackingClient struct {
+	simulated.Client
+
+	mu        sync.Mutex
+	nextNonce map[common.Address]uint64
+}
+
+// PendingNonceAt returns the highest of the pool pending nonce and the locally tracked nonce.
+func (c *nonceTrackingClient) PendingNonceAt(ctx context.Context, account common.Address) (uint64, error) {
+	nonce, err := c.Client.PendingNonceAt(ctx, account)
+	if err != nil {
+		return 0, fmt.Errorf("pending nonce at: %w", err)
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return max(nonce, c.nextNonce[account]), nil
+}
+
+// SendTransaction sends the transaction and records the next nonce of its sender.
+func (c *nonceTrackingClient) SendTransaction(ctx context.Context, tx *types.Transaction) error {
+	if err := c.Client.SendTransaction(ctx, tx); err != nil {
+		return fmt.Errorf("send transaction: %w", err)
+	}
+
+	sender, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
+	if err != nil {
+		return fmt.Errorf("sender: %w", err)
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.nextNonce == nil {
+		c.nextNonce = make(map[common.Address]uint64)
+	}
+
+	c.nextNonce[sender] = max(c.nextNonce[sender], tx.Nonce()+1)
+	return nil
 }
 
 // Amount32Eth returns 32Eth(in wei) in terms of the big.Int type.

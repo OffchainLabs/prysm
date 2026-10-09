@@ -17,6 +17,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/io/logs"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
 	iface "github.com/OffchainLabs/prysm/v7/validator/client/iface"
@@ -32,6 +33,7 @@ type ValidatorService interface {
 	Keymanager() (keymanager.IKeymanager, error)
 	RemoteSignerConfig() *remoteweb3signer.SetupConfig
 	ProposerSettings() *proposer.Settings
+	GenesisTime() time.Time
 	UpdateProposerSettings(ctx context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error
 	Graffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error)
 	SetGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, graffiti []byte) error
@@ -192,7 +194,9 @@ func (s *Server) InitializeRoutesWithWebHandler() error {
 		}
 		if features.Get().EnableWeb {
 			web.Handler(w, r)
+			return
 		}
+		httputil.HandleError(w, "Not found", http.StatusNotFound)
 	})
 	return nil
 }

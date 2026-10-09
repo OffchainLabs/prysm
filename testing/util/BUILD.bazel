@@ -32,6 +32,7 @@ go_library(
         "state.go",
         "sync_aggregate.go",
         "sync_committee.go",
+        "transactions.go",
         "wait_timeout.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/testing/util",

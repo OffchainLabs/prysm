@@ -14,10 +14,9 @@ var (
 	checkpointBucket                        = []byte("check-point")
 	powchainBucket                          = []byte("powchain")
 	stateValidatorsBucket                   = []byte("state-validators")
-	feeRecipientBucket                      = []byte("fee-recipient")
-	registrationBucket                      = []byte("registration")
 	stateDiffBucket                         = []byte("state-diff")
 	hotStateSnapshotsBucket                 = []byte("hot-state-snapshots")
+	archiveResumeSnapshotsBucket            = []byte("archive-resume-snapshots")
 	executionPayloadEnvelopesBucket         = []byte("execution-payload-envelopes")
 	executionPayloadEnvelopeBlockHashBucket = []byte("execution-payload-envelope-block-hash-index")
 
@@ -70,6 +69,9 @@ var (
 	originCheckpointBlockRootKey = []byte("origin-checkpoint-block-root")
 	// tracking data about an ongoing backfill
 	backfillStatusKey = []byte("backfill-status")
+	// tracking data about an ongoing archive state regeneration; lives in stateDiffBucket alongside
+	// offsetKey/exponentsKey, which is collision-free because tree keys are always 16 or 18 bytes.
+	archiveStatusKey = []byte("archive-status")
 
 	// Deprecated: This index key was migrated in PR 6461. Do not use, except for migrations.
 	lastArchivedIndexKey = []byte("last-archived")

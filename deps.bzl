@@ -2028,8 +2028,8 @@ def prysm_deps():
         patches = [
             "//third_party:com_github_libp2p_go_libp2p_pubsub-cloneof.patch",
         ],
-        sum = "h1:SNdvB6V0eYMXLRR95n+4vpxJKbFsbHhgjPdDiTpGoo0=",
-        version = "v0.17.0",
+        sum = "h1:xTIqlwk0okgZxHrPjtht8RvzknYQ4CeqGawKm7arYbM=",
+        version = "v0.18.0",
     )
     go_repository(
         name = "com_github_libp2p_go_libp2p_testing",
@@ -2496,14 +2496,14 @@ def prysm_deps():
         importpath = "github.com/OffchainLabs/hashtree",
         patch_args = ["-p1"],
         patches = ["//third_party:com_github_offchainlabs_hashtree.patch"],
-        sum = "h1:nM8dBAQZzHLzzM14FaAHXnHTAXZIst69v5xWuS48y/c=",
-        version = "v0.2.3",
+        sum = "h1:AsOLM1faXwAHARO5Cg1Qu3hPOLKpQBUJ+4ap+0ZKEGU=",
+        version = "v0.2.6",
     )
     go_repository(
         name = "com_github_offchainlabs_methodical_ssz",
         importpath = "github.com/OffchainLabs/methodical-ssz",
-        sum = "h1:X7Rtbyy16t/ruqtADWyYg8GSfJlO9gfXyxmHpB3oYvQ=",
-        version = "v0.0.0-20260703104215-9be4f5c6a334",
+        sum = "h1:q2P6JoM3yPvqR0YNH8DJyx2zZAYKCrvLw0+Ja1A6/k4=",
+        version = "v0.0.0-20260825194644-932cc7380128",
     )
     go_repository(
         name = "com_github_oklog_oklog",

@@ -269,3 +269,46 @@ func TestForkChoice_GetProposerHead_EpochBoundary(t *testing.T) {
 
 	require.Equal(t, parentRoot, f.GetProposerHead())
 }
+
+func TestForkChoice_GetProposerHead_ReorgCutoffScalesWithSlotDuration(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.SecondsPerSlot = 6
+	cfg.SlotDurationMilliseconds = 6000
+	params.OverrideBeaconConfig(cfg)
+	f := setup(0, 0)
+	numValidators := uint64(640)
+	f.justifiedBalances = make([]uint64, numValidators)
+	for i := range f.justifiedBalances {
+		f.justifiedBalances[i] = uint64(10)
+		f.store.committeeWeight += uint64(10)
+	}
+	f.store.committeeWeight /= uint64(params.BeaconConfig().SlotsPerEpoch)
+	ctx := t.Context()
+
+	parentRoot := [32]byte{'a'}
+	driftGenesisTime(f, 1, 0)
+	st, blk, err := prepareForkchoiceState(ctx, 1, parentRoot, [32]byte{}, [32]byte{'A'}, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+	attesters := make([]uint64, numValidators-64)
+	for i := range attesters {
+		attesters[i] = uint64(i + 64)
+	}
+	f.ProcessAttestation(ctx, attesters, blk.Root(), 1, true)
+
+	driftGenesisTime(f, 3, 500*time.Millisecond)
+	childRoot := [32]byte{'b'}
+	st, blk, err = prepareForkchoiceState(ctx, 2, childRoot, parentRoot, [32]byte{'B'}, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+	headRoot, err := f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, childRoot, headRoot)
+
+	f.store.genesisTime = time.Now().Add(-3*params.BeaconConfig().SlotDuration() - 500*time.Millisecond)
+	require.Equal(t, parentRoot, f.GetProposerHead())
+
+	f.store.genesisTime = time.Now().Add(-3*params.BeaconConfig().SlotDuration() - 1500*time.Millisecond)
+	require.Equal(t, childRoot, f.GetProposerHead())
+}

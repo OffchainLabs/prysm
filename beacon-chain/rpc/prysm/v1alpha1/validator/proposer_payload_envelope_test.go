@@ -14,6 +14,7 @@ import (
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -105,7 +106,7 @@ func TestExtractExecutionPayloadGloas_Nil(t *testing.T) {
 
 func TestGetExecutionPayloadEnvelopeRPC_NilRequest(t *testing.T) {
 	vs := &Server{}
-	_, err := vs.GetExecutionPayloadEnvelope(t.Context(), nil)
+	_, err := vs.GetExecutionPayloadEnvelopeV2(t.Context(), nil)
 	require.ErrorContains(t, "request cannot be nil", err)
 }
 
@@ -116,7 +117,7 @@ func TestGetExecutionPayloadEnvelopeRPC_PreFork(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	vs := &Server{}
-	_, err := vs.GetExecutionPayloadEnvelope(t.Context(), &ethpb.ExecutionPayloadEnvelopeRequest{
+	_, err := vs.GetExecutionPayloadEnvelopeV2(t.Context(), &ethpb.ExecutionPayloadEnvelopeRequest{
 		Slot: 0, // epoch 0, before GloasForkEpoch 10
 	})
 	require.ErrorContains(t, "not supported before Gloas fork", err)
@@ -124,10 +125,10 @@ func TestGetExecutionPayloadEnvelopeRPC_PreFork(t *testing.T) {
 
 func TestPublishExecutionPayloadEnvelope_NilRequest(t *testing.T) {
 	vs := &Server{}
-	_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), nil)
+	_, err := vs.PublishExecutionPayloadEnvelopeV2(t.Context(), nil)
 	require.ErrorContains(t, "must set contents or signed_envelope", err)
 
-	_, err = vs.PublishExecutionPayloadEnvelope(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{
+	_, err = vs.PublishExecutionPayloadEnvelopeV2(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{
 		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_Contents{
 			Contents: &ethpb.SignedExecutionPayloadEnvelopeContents{SignedExecutionPayloadEnvelope: &ethpb.SignedExecutionPayloadEnvelope{}},
 		},
@@ -142,7 +143,7 @@ func TestPublishExecutionPayloadEnvelope_PreFork(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	vs := &Server{}
-	_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{
+	_, err := vs.PublishExecutionPayloadEnvelopeV2(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{
 		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_Contents{
 			Contents: &ethpb.SignedExecutionPayloadEnvelopeContents{
 				SignedExecutionPayloadEnvelope: &ethpb.SignedExecutionPayloadEnvelope{
@@ -194,7 +195,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_RejectsBadProofs(t *t
 	}
 
 	vs := &Server{}
-	_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{
+	_, err := vs.PublishExecutionPayloadEnvelopeV2(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{
 		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_Contents{
 			Contents: &ethpb.SignedExecutionPayloadEnvelopeContents{
 				SignedExecutionPayloadEnvelope: signed,
@@ -204,6 +205,56 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_RejectsBadProofs(t *t
 		},
 	})
 	require.ErrorContains(t, "kzg verification failed", err)
+}
+
+// Stateless (builder) publish must build partial columns from the supplied blobs when partial
+// columns are supported, mirroring the self-build arm — otherwise builder envelopes broadcast full
+// columns but zero partials.
+func TestSidecarsFromContents_BuildsPartialColumns(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+	require.NoError(t, kzg.Start())
+
+	blobCount := 2
+	rawBlobs := make([]kzg.Blob, blobCount)
+	for i := range rawBlobs {
+		rawBlobs[i] = kzg.Blob{uint8(i + 1)}
+	}
+	_, proofsPerBlob := util.GenerateCellsAndProofs(t, rawBlobs)
+
+	flatBlobs := make([][]byte, blobCount)
+	for i, b := range rawBlobs {
+		flatBlobs[i] = b[:]
+	}
+	flatProofs := make([][]byte, 0, blobCount*fieldparams.NumberOfColumns)
+	for _, proofs := range proofsPerBlob {
+		for _, p := range proofs {
+			flatProofs = append(flatProofs, p[:])
+		}
+	}
+
+	var blockRoot [32]byte
+
+	// Partial columns enabled: one fully-included partial per full sidecar, with a Gloas group id.
+	vs := &Server{ExecutionEngineCaller: &mockExecution.EngineClient{PartialColumnsSupportedFlag: true}}
+	sidecars, partials, err := vs.sidecarsFromContents(flatBlobs, flatProofs, 1, blockRoot)
+	require.NoError(t, err)
+	require.Equal(t, fieldparams.NumberOfColumns, len(sidecars))
+	require.Equal(t, len(sidecars), len(partials))
+	for i := range partials {
+		require.Equal(t, true, partials[i].IsComplete())
+		// Gloas partial-column group ids are versioned with a 0x01 prefix byte.
+		require.Equal(t, byte(0x01), partials[i].GroupID()[0])
+	}
+
+	// Partial columns disabled: full sidecars only, no partials.
+	vsOff := &Server{ExecutionEngineCaller: &mockExecution.EngineClient{PartialColumnsSupportedFlag: false}}
+	sidecarsOff, partialsOff, err := vsOff.sidecarsFromContents(flatBlobs, flatProofs, 1, blockRoot)
+	require.NoError(t, err)
+	require.Equal(t, fieldparams.NumberOfColumns, len(sidecarsOff))
+	require.Equal(t, 0, len(partialsOff))
 }
 
 func TestGetExecutionPayloadEnvelopeRPC_Success(t *testing.T) {
@@ -233,7 +284,7 @@ func TestGetExecutionPayloadEnvelopeRPC_Success(t *testing.T) {
 	vs := &Server{ExecutionPayloadEnvelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
 	vs.ExecutionPayloadEnvelopeCache.Set(&cache.ExecutionPayloadContents{Envelope: envelope})
 
-	resp, err := vs.GetExecutionPayloadEnvelope(t.Context(), &ethpb.ExecutionPayloadEnvelopeRequest{
+	resp, err := vs.GetExecutionPayloadEnvelopeV2(t.Context(), &ethpb.ExecutionPayloadEnvelopeRequest{
 		Slot: 1,
 	})
 	require.NoError(t, err)
@@ -261,7 +312,7 @@ func TestPublishExecutionPayloadEnvelope_SignedEnvelopeArm(t *testing.T) {
 
 	t.Run("cache miss", func(t *testing.T) {
 		vs := &Server{ExecutionPayloadEnvelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
-		_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), statefulReq)
+		_, err := vs.PublishExecutionPayloadEnvelopeV2(t.Context(), statefulReq)
 		require.ErrorContains(t, "no cached blobs and KZG proofs", err)
 		require.Equal(t, codes.FailedPrecondition, status.Code(err))
 	})
@@ -271,7 +322,7 @@ func TestPublishExecutionPayloadEnvelope_SignedEnvelopeArm(t *testing.T) {
 		tampered.BuilderIndex = envelope.BuilderIndex + 1
 		vs := &Server{ExecutionPayloadEnvelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
 		vs.ExecutionPayloadEnvelopeCache.Set(&cache.ExecutionPayloadContents{Envelope: tampered})
-		_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), statefulReq)
+		_, err := vs.PublishExecutionPayloadEnvelopeV2(t.Context(), statefulReq)
 		require.ErrorContains(t, "does not match submitted envelope", err)
 		require.Equal(t, codes.InvalidArgument, status.Code(err))
 	})
@@ -286,7 +337,7 @@ func TestPublishExecutionPayloadEnvelope_SignedEnvelopeArm(t *testing.T) {
 			ExecutionPayloadEnvelopeCache:    cache.NewExecutionPayloadEnvelopeCache(),
 		}
 		vs.ExecutionPayloadEnvelopeCache.Set(&cache.ExecutionPayloadContents{Envelope: envelope})
-		resp, err := vs.PublishExecutionPayloadEnvelope(t.Context(), statefulReq)
+		resp, err := vs.PublishExecutionPayloadEnvelopeV2(t.Context(), statefulReq)
 		require.NoError(t, err)
 		require.NotNil(t, resp)
 		require.Equal(t, true, broadcaster.BroadcastCalled.Load())
@@ -331,7 +382,7 @@ func TestPublishExecutionPayloadEnvelope_Success(t *testing.T) {
 		Signature: make([]byte, 96),
 	}
 
-	resp, err := vs.PublishExecutionPayloadEnvelope(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{
+	resp, err := vs.PublishExecutionPayloadEnvelopeV2(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{
 		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_Contents{
 			Contents: &ethpb.SignedExecutionPayloadEnvelopeContents{SignedExecutionPayloadEnvelope: req},
 		},
@@ -379,7 +430,7 @@ func TestPublishExecutionPayloadEnvelope_ImportFailureDoesNotFailPublish(t *test
 		Signature: make([]byte, 96),
 	}
 
-	resp, err := vs.PublishExecutionPayloadEnvelope(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{
+	resp, err := vs.PublishExecutionPayloadEnvelopeV2(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{
 		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_Contents{
 			Contents: &ethpb.SignedExecutionPayloadEnvelopeContents{SignedExecutionPayloadEnvelope: req},
 		},
@@ -441,7 +492,7 @@ func TestPublishExecutionPayloadEnvelope_ContentsArmCachedColumns(t *testing.T) 
 		other.BuilderIndex = envelope.BuilderIndex + 1
 		vs, envReceiver, chain := newServer(t, other)
 
-		_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), contentsReq(nil, nil))
+		_, err := vs.PublishExecutionPayloadEnvelopeV2(t.Context(), contentsReq(nil, nil))
 		require.NoError(t, err)
 		// Sidecars are received before the envelope import, so the count is final here.
 		waitForEnvelopeImport(t, envReceiver)
@@ -457,7 +508,7 @@ func TestPublishExecutionPayloadEnvelope_ContentsArmCachedColumns(t *testing.T) 
 		for i := range badProofs {
 			badProofs[i] = bytes.Repeat([]byte{0xff}, 48)
 		}
-		_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), contentsReq([][]byte{blob[:]}, badProofs))
+		_, err := vs.PublishExecutionPayloadEnvelopeV2(t.Context(), contentsReq([][]byte{blob[:]}, badProofs))
 		require.NoError(t, err)
 		waitForEnvelopeImport(t, envReceiver)
 		require.Equal(t, fieldparams.NumberOfColumns, len(chain.DataColumns))
@@ -507,4 +558,12 @@ func waitForEnvelopeImport(t *testing.T, m *mockExecutionPayloadEnvelopeReceiver
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for background envelope import")
 	}
+}
+
+func TestExecutionPayloadEnvelopeV1_RejectsOlderValidatorClients(t *testing.T) {
+	vs := &Server{}
+	_, err := vs.GetExecutionPayloadEnvelope(t.Context(), &ethpb.ExecutionPayloadEnvelopeRequest{Slot: 1})
+	require.ErrorContains(t, "validator client is too old", err)
+	_, err = vs.PublishExecutionPayloadEnvelope(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{})
+	require.ErrorContains(t, "validator client is too old", err)
 }

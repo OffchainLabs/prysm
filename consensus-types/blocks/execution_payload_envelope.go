@@ -217,11 +217,15 @@ func BlockBuiltOnParentPayload(parent, child interfaces.ReadOnlyBeaconBlock) (bo
 	return bytes.Equal(childBid.Message.ParentBlockHash, parentBid.Message.BlockHash), nil
 }
 
-// BlockBuiltOnEnvelope checks if the block's parent hash matches the envelope's execution block hash.
-func BlockBuiltOnEnvelope(env interfaces.ROSignedExecutionPayloadEnvelope, blk ROBlock) (bool, error) {
+// BlockBuiltOnParentEnvelope reports whether env is the payload of blk's parent block and blk builds on it.
+// The root check matters when the parent was empty: an ancestor's payload then matches blk's parent hash.
+func BlockBuiltOnParentEnvelope(env interfaces.ROSignedExecutionPayloadEnvelope, blk ROBlock) (bool, error) {
 	msg, err := env.Envelope()
 	if err != nil {
 		return false, err
+	}
+	if msg.BeaconBlockRoot() != blk.Block().ParentRoot() {
+		return false, nil
 	}
 	ex, err := msg.Execution()
 	if err != nil {

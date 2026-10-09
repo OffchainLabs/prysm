@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	dbutil "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	beaconstate "github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -52,7 +53,10 @@ func TestGetDutiesV2_OK(t *testing.T) {
 	chain := &mockChain.ChainService{
 		State: bs, Root: genesisRoot[:], Genesis: time.Now(),
 	}
+	db := dbutil.SetupDB(t)
+	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), genesisRoot))
 	vs := &Server{
+		BeaconDB:          db,
 		HeadFetcher:       chain,
 		TimeFetcher:       chain,
 		ForkchoiceFetcher: chain,
@@ -148,7 +152,10 @@ func TestGetDutiesV2_NextEpochProposerSlots(t *testing.T) {
 			chain := &mockChain.ChainService{
 				State: bs, Root: genesisRoot[:], Genesis: time.Now(),
 			}
+			db := dbutil.SetupDB(t)
+			require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), genesisRoot))
 			vs := &Server{
+				BeaconDB:          db,
 				HeadFetcher:       chain,
 				TimeFetcher:       chain,
 				ForkchoiceFetcher: chain,
@@ -205,7 +212,7 @@ func TestGetAltairDutiesV2_SyncCommitteeOK(t *testing.T) {
 		indices[i] = uint64(i)
 	}
 	require.NoError(t, bs.SetSlot(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(params.BeaconConfig().EpochsPerSyncCommitteePeriod)-1))
-	require.NoError(t, helpers.UpdateSyncCommitteeCache(bs))
+	require.NoError(t, helpers.UpdateSyncCommitteeCache(t.Context(), bs))
 
 	pubkeysAs48ByteType := make([][fieldparams.BLSPubkeyLength]byte, len(pubKeys))
 	for i, pk := range pubKeys {
@@ -310,7 +317,7 @@ func TestGetBellatrixDutiesV2_SyncCommitteeOK(t *testing.T) {
 		indices[i] = uint64(i)
 	}
 	require.NoError(t, bs.SetSlot(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(params.BeaconConfig().EpochsPerSyncCommitteePeriod)-1))
-	require.NoError(t, helpers.UpdateSyncCommitteeCache(bs))
+	require.NoError(t, helpers.UpdateSyncCommitteeCache(t.Context(), bs))
 
 	bs, err = execution.UpgradeToBellatrix(bs)
 	require.NoError(t, err)
@@ -409,7 +416,7 @@ func TestGetAltairDutiesV2_UnknownPubkey(t *testing.T) {
 	require.NoError(t, err, "Could not get signing root")
 
 	require.NoError(t, bs.SetSlot(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(params.BeaconConfig().EpochsPerSyncCommitteePeriod)-1))
-	require.NoError(t, helpers.UpdateSyncCommitteeCache(bs))
+	require.NoError(t, helpers.UpdateSyncCommitteeCache(t.Context(), bs))
 
 	slot := uint64(params.BeaconConfig().SlotsPerEpoch) * uint64(params.BeaconConfig().EpochsPerSyncCommitteePeriod) * params.BeaconConfig().SecondsPerSlot
 	chain := &mockChain.ChainService{
@@ -468,7 +475,10 @@ func TestGetDutiesV2_StateAdvancement(t *testing.T) {
 		Slot:  &currentSlot,
 	}
 
+	db := dbutil.SetupDB(t)
+	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), [32]byte{1}))
 	vs := &Server{
+		BeaconDB:          db,
 		HeadFetcher:       chain,
 		TimeFetcher:       chain,
 		ForkchoiceFetcher: chain,
@@ -523,7 +533,10 @@ func TestGetDutiesV2_CurrentEpoch_ShouldNotFail(t *testing.T) {
 	chain := &mockChain.ChainService{
 		State: bState, Root: genesisRoot[:], Genesis: time.Now(),
 	}
+	db := dbutil.SetupDB(t)
+	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), genesisRoot))
 	vs := &Server{
+		BeaconDB:          db,
 		HeadFetcher:       chain,
 		ForkchoiceFetcher: chain,
 		TimeFetcher:       chain,
@@ -564,7 +577,10 @@ func TestGetDutiesV2_MultipleKeys_OK(t *testing.T) {
 	chain := &mockChain.ChainService{
 		State: bs, Root: genesisRoot[:], Genesis: time.Now(),
 	}
+	db := dbutil.SetupDB(t)
+	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), genesisRoot))
 	vs := &Server{
+		BeaconDB:          db,
 		HeadFetcher:       chain,
 		ForkchoiceFetcher: chain,
 		TimeFetcher:       chain,
@@ -619,12 +635,17 @@ func TestGetDutiesV2_NextSyncCommitteePeriod(t *testing.T) {
 		Epoch:      boundaryEpoch + 1,
 	}
 
-	genesisRoot := [32]byte{}
+	genesisRoot := [32]byte{1}
+	currentSlot := st.Slot()
 	chain := &mockChain.ChainService{
 		State: st,
 		Root:  genesisRoot[:],
+		Slot:  &currentSlot,
 	}
+	db := dbutil.SetupDB(t)
+	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), genesisRoot))
 	vs := &Server{
+		BeaconDB:          db,
 		HeadFetcher:       chain,
 		TimeFetcher:       chain,
 		ForkchoiceFetcher: chain,
@@ -801,7 +822,10 @@ func TestGetDutiesV2_PTC_OK(t *testing.T) {
 	chain := &mockChain.ChainService{
 		State: st, Root: genesisRoot[:], Genesis: time.Now(),
 	}
+	db := dbutil.SetupDB(t)
+	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), genesisRoot))
 	vs := &Server{
+		BeaconDB:          db,
 		HeadFetcher:       chain,
 		TimeFetcher:       chain,
 		ForkchoiceFetcher: chain,
@@ -876,7 +900,10 @@ func TestGetDutiesV2_PTC_ForkBoundary(t *testing.T) {
 	chain := &mockChain.ChainService{
 		State: st, Root: genesisRoot[:], Genesis: time.Now(),
 	}
+	db := dbutil.SetupDB(t)
+	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), genesisRoot))
 	vs := &Server{
+		BeaconDB:          db,
 		HeadFetcher:       chain,
 		TimeFetcher:       chain,
 		ForkchoiceFetcher: chain,

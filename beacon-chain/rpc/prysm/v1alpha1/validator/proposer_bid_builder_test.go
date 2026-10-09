@@ -3,14 +3,19 @@
 package validator
 
 import (
+	"context"
 	"math"
 	"math/big"
 	"testing"
+	"time"
 
+	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	beaconbuilder "github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	builderTest "github.com/OffchainLabs/prysm/v7/beacon-chain/builder/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -18,6 +23,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
@@ -239,6 +245,41 @@ func TestBestBid(t *testing.T) {
 		require.Equal(t, bidSourceP2P, src)
 		require.Equal(t, primitives.Gwei(1000), effective)
 	})
+
+	t.Run("no local takes a zero-value remote bid", func(t *testing.T) {
+		got, src, _ := bestBid(nil, nil, newBid(0, 0, p2pIdx), nil, nil)
+		require.NotNil(t, got)
+		require.Equal(t, bidSourceP2P, src)
+
+		win := &winningBuilderBid{bid: newBid(0, 0, builderIdx), entry: &ethpb.BuilderEntry{BuilderBoostFactor: 0}}
+		got, src, _ = bestBid(nil, nil, nil, win, nil)
+		require.NotNil(t, got)
+		require.Equal(t, bidSourceBuilderAPI, src)
+	})
+
+	t.Run("no local waives the p2p min bid", func(t *testing.T) {
+		cfg := &ethpb.BuilderConfig{MinBid: 2000, BuilderBoostFactor: 100}
+		got, src, _ := bestBid(nil, nil, newBid(1000, 0, p2pIdx), nil, cfg)
+		require.NotNil(t, got)
+		require.Equal(t, bidSourceP2P, src)
+	})
+
+	t.Run("no local still ranks remote bids", func(t *testing.T) {
+		win := &winningBuilderBid{bid: newBid(2000, 0, builderIdx), entry: &ethpb.BuilderEntry{BuilderBoostFactor: 100}}
+		got, src, _ := bestBid(nil, nil, newBid(1000, 0, p2pIdx), win, nil)
+		require.Equal(t, bidSourceBuilderAPI, src)
+		require.Equal(t, builderIdx, got.Message.BuilderIndex)
+
+		got, src, _ = bestBid(nil, nil, newBid(3000, 0, p2pIdx), win, nil)
+		require.Equal(t, bidSourceP2P, src)
+		require.Equal(t, p2pIdx, got.Message.BuilderIndex)
+	})
+
+	t.Run("no local and no remote bids", func(t *testing.T) {
+		got, src, _ := bestBid(nil, nil, nil, nil, nil)
+		require.IsNil(t, got)
+		require.Equal(t, bidSourceSelfBuild, src)
+	})
 }
 
 func TestValidateBuilderBid(t *testing.T) {
@@ -277,6 +318,15 @@ func TestValidateBuilderBid(t *testing.T) {
 	t.Run("nil bid", func(t *testing.T) {
 		vs := &Server{}
 		require.ErrorContains(t, "nil builder bid", vs.validateBuilderBid(head, nil, query, entry(1000)))
+	})
+
+	t.Run("block hash equal to parent block hash", func(t *testing.T) {
+		vs := &Server{NewExecutionPayloadBidVerifier: func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
+			return &fakeBidVerifier{}
+		}}
+		b := fullBid()
+		b.Message.BlockHash = parentHash[:]
+		require.ErrorContains(t, "bid block hash equals parent block hash", vs.validateBuilderBid(head, b, query, entry(1000)))
 	})
 
 	t.Run("payment above cap is accepted", func(t *testing.T) {
@@ -352,6 +402,23 @@ func TestValidateBuilderBid(t *testing.T) {
 		err := vs.validateBuilderBid(head, fullBid(), query, entry(1000))
 		require.ErrorContains(t, "gas limit incompatible", err)
 	})
+}
+
+// deadlineCapturingBuilder reports the context budget it was handed instead of returning
+// bids, so the deadline getBuilderExecutionPayloadBid installs is directly observable.
+type deadlineCapturingBuilder struct {
+	*builderTest.MockBuilderService
+	budget chan time.Duration
+}
+
+func (b *deadlineCapturingBuilder) GetExecutionPayloadBid(ctx context.Context, _ primitives.Slot, _, _ [32]byte, _ [48]byte, _ []*ethpb.BuilderEntry) ([]beaconbuilder.PayloadBid, error) {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		b.budget <- 0
+		return nil, errors.New("no deadline set on the builder bid context")
+	}
+	b.budget <- time.Until(deadline)
+	return nil, errors.New("stop")
 }
 
 func TestGetBuilderExecutionPayloadBid(t *testing.T) {
@@ -491,12 +558,239 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 		require.IsNil(t, vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries)))
 	})
 
+	t.Run("learns which builders an endpoint serves", func(t *testing.T) {
+		cb := cache.NewBuilderCircuitBreaker()
+		vs := &Server{
+			BlockBuilder:                   &builderTest.MockBuilderService{PayloadBids: []beaconbuilder.PayloadBid{bid(1, 500), bid(2, 1500)}},
+			NewExecutionPayloadBidVerifier: passAll,
+			BuilderCircuitBreaker:          cb,
+		}
+		require.NotNil(t, vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries)))
+
+		// Charging builder 2 must ban the endpoint and, through it, builder 1.
+		epoch := slots.ToEpoch(slot)
+		out := cb.RecordFailure(2, [32]byte{0xaa}, epoch)
+		require.Equal(t, true, out.Blacklisted)
+		require.Equal(t, 1, len(out.BannedRelays))
+		require.Equal(t, true, cb.RelayBanned("http://builder", epoch))
+		require.Equal(t, true, cb.Blacklisted(1, epoch))
+	})
+
+	t.Run("does not learn from a bid replayed by two endpoints", func(t *testing.T) {
+		replayed := bid(1, 500)
+		other := bid(1, 500)
+		other.Entry = &ethpb.BuilderEntry{Url: []byte("http://other"), MaxExecutionPayment: math.MaxUint64, BuilderBoostFactor: 100}
+		cb := cache.NewBuilderCircuitBreaker()
+		vs := &Server{
+			BlockBuilder:                   &builderTest.MockBuilderService{PayloadBids: []beaconbuilder.PayloadBid{replayed, other}},
+			NewExecutionPayloadBidVerifier: passAll,
+			BuilderCircuitBreaker:          cb,
+		}
+		require.NotNil(t, vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries)))
+
+		epoch := slots.ToEpoch(slot)
+		require.Equal(t, 0, len(cb.RecordFailure(1, [32]byte{0xbb}, epoch).BannedRelays))
+		require.Equal(t, false, cb.RelayBanned("http://builder", epoch))
+		require.Equal(t, false, cb.RelayBanned("http://other", epoch))
+	})
+
+	t.Run("banned endpoints are never contacted", func(t *testing.T) {
+		cb := cache.NewBuilderCircuitBreaker()
+		epoch := slots.ToEpoch(slot)
+		cb.ObserveRelayBid("http://banned", 7, epoch)
+		require.Equal(t, true, cb.RecordFailure(7, [32]byte{0xcc}, epoch).Blacklisted)
+
+		mock := &builderTest.MockBuilderService{PayloadBids: []beaconbuilder.PayloadBid{bid(1, 500)}}
+		vs := &Server{BlockBuilder: mock, NewExecutionPayloadBidVerifier: passAll, BuilderCircuitBreaker: cb}
+		two := []*ethpb.BuilderEntry{{Url: []byte("http://banned")}, {Url: []byte("http://builder")}}
+		require.NotNil(t, vs.getBuilderExecutionPayloadBid(t.Context(), head, query(two)))
+		require.DeepEqual(t, []string{"http://builder"}, mock.RequestedBidUrls())
+
+		// With every endpoint banned, no request is made at all.
+		mock2 := &builderTest.MockBuilderService{PayloadBids: []beaconbuilder.PayloadBid{bid(1, 500)}}
+		vs.BlockBuilder = mock2
+		onlyBanned := []*ethpb.BuilderEntry{{Url: []byte("http://banned")}}
+		require.IsNil(t, vs.getBuilderExecutionPayloadBid(t.Context(), head, query(onlyBanned)))
+		require.Equal(t, 0, len(mock2.RequestedBidUrls()))
+	})
+
 	t.Run("nil on builder error", func(t *testing.T) {
 		vs := &Server{
 			BlockBuilder:                   &builderTest.MockBuilderService{ErrGetExecutionPayloadBid: errors.New("boom")},
 			NewExecutionPayloadBidVerifier: passAll,
 		}
 		require.IsNil(t, vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries)))
+	})
+
+	t.Run("bounds the builder call at BuilderBidTimeout", func(t *testing.T) {
+		const configured = 150 * time.Millisecond
+		params.SetupTestConfigCleanup(t)
+		c := params.BeaconConfig().Copy()
+		c.BuilderBidTimeout = configured
+		require.NoError(t, params.SetActive(c))
+
+		b := &deadlineCapturingBuilder{MockBuilderService: &builderTest.MockBuilderService{}, budget: make(chan time.Duration, 1)}
+		vs := &Server{BlockBuilder: b, NewExecutionPayloadBidVerifier: passAll}
+
+		require.IsNil(t, vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries)))
+
+		// A budget of the full default would mean the config was ignored; a budget of 0
+		// would mean no deadline was installed at all.
+		budget := <-b.budget
+		if budget <= configured/2 || budget > configured {
+			t.Fatalf("builder context budget = %s, want (%s, %s]", budget, configured/2, configured)
+		}
+	})
+}
+
+// gatedBuilder reports the parent hash of each bid request on started and holds the request
+// until release is closed or its context ends.
+type gatedBuilder struct {
+	*builderTest.MockBuilderService
+	started chan [32]byte
+	release chan struct{}
+	ctxErr  chan error
+}
+
+func newGatedBuilder(bids ...beaconbuilder.PayloadBid) *gatedBuilder {
+	return &gatedBuilder{
+		MockBuilderService: &builderTest.MockBuilderService{PayloadBids: bids},
+		started:            make(chan [32]byte, 1),
+		release:            make(chan struct{}),
+		ctxErr:             make(chan error, 1),
+	}
+}
+
+func (b *gatedBuilder) GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash, parentRoot [32]byte, pubkey [48]byte, entries []*ethpb.BuilderEntry) ([]beaconbuilder.PayloadBid, error) {
+	b.started <- parentHash
+	select {
+	case <-b.release:
+		return b.MockBuilderService.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, entries)
+	case <-ctx.Done():
+		b.ctxErr <- ctx.Err()
+		return nil, ctx.Err()
+	}
+}
+
+func TestRequestBuilderBid(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	slot := primitives.Slot(100)
+	parentRoot := [32]byte{1, 2, 3}
+	blockHash := [32]byte{7, 7, 7}
+	parentBlockHash := [32]byte{9, 9, 9}
+	proposerPk := [48]byte{4, 5, 6}
+	const parentGasLimit = uint64(30_000_000)
+
+	head, err := util.NewBeaconStateGloas(func(st *ethpb.BeaconStateGloas) error {
+		st.Validators = []*ethpb.Validator{{PublicKey: proposerPk[:], WithdrawalCredentials: make([]byte, 32)}}
+		st.LatestExecutionPayloadBid.BlockHash = blockHash[:]
+		st.LatestExecutionPayloadBid.ParentBlockHash = parentBlockHash[:]
+		return nil
+	})
+	require.NoError(t, err)
+	sBlk, err := consensusblocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{
+		Block: &ethpb.BeaconBlockGloas{Slot: slot, ParentRoot: parentRoot[:], Body: &ethpb.BeaconBlockBodyGloas{}},
+	})
+	require.NoError(t, err)
+	blk := sBlk.Block()
+
+	entries := []*ethpb.BuilderEntry{{Url: []byte("http://builder")}}
+	builderCfg := &ethpb.BuilderConfig{Builders: entries}
+	bidOn := func(parentHash [32]byte) beaconbuilder.PayloadBid {
+		return beaconbuilder.PayloadBid{
+			Entry: &ethpb.BuilderEntry{Url: []byte("http://builder"), MaxExecutionPayment: math.MaxUint64, BuilderBoostFactor: 100},
+			Bid: &ethpb.SignedExecutionPayloadBid{
+				Message: &ethpb.ExecutionPayloadBid{
+					Slot:            slot,
+					ParentBlockRoot: parentRoot[:],
+					ParentBlockHash: parentHash[:],
+					BlockHash:       make([]byte, 32),
+					PrevRandao:      make([]byte, 32),
+					FeeRecipient:    make([]byte, 20),
+					BuilderIndex:    3,
+					Value:           1000,
+				},
+				Signature: make([]byte, 96),
+			},
+		}
+	}
+	newServer := func(b beaconbuilder.BlockBuilder) *Server {
+		return &Server{
+			BlockBuilder:             b,
+			ForkchoiceFetcher:        &chainMock.ChainService{ForkchoiceGasLimits: map[[32]byte]uint64{parentRoot: parentGasLimit}},
+			ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+			NewExecutionPayloadBidVerifier: func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
+				return &fakeBidVerifier{}
+			},
+		}
+	}
+
+	t.Run("nothing to request", func(t *testing.T) {
+		require.IsNil(t, (&Server{}).requestBuilderBid(t.Context(), blk, head, false, builderCfg))
+		require.IsNil(t, newServer(&builderTest.MockBuilderService{}).requestBuilderBid(t.Context(), blk, head, false, &ethpb.BuilderConfig{}))
+		var p *pendingBuilderBid
+		require.IsNil(t, p.wait())
+		p.abort()
+	})
+
+	t.Run("query is derived from the head state", func(t *testing.T) {
+		q, err := newServer(nil).newBuilderBidQuery(t.Context(), head, slot, parentRoot, 0, true, entries)
+		require.NoError(t, err)
+		require.Equal(t, slot, q.slot)
+		require.Equal(t, parentRoot, q.parentRoot)
+		require.Equal(t, blockHash, q.parentHash)
+		require.Equal(t, proposerPk, q.pubkey)
+		require.Equal(t, parentGasLimit, q.parentGasLimit)
+		require.Equal(t, parentGasLimit, q.targetGasLimit)
+		require.DeepEqual(t, params.BeaconConfig().DefaultFeeRecipient.Bytes(), q.feeRecipient)
+	})
+
+	for _, tc := range []struct {
+		name       string
+		parentFull bool
+		want       [32]byte
+	}{
+		{name: "full parent requests on the parent payload hash", parentFull: true, want: blockHash},
+		{name: "empty parent requests on the grandparent payload hash", parentFull: false, want: parentBlockHash},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			b := newGatedBuilder(bidOn(tc.want))
+			p := newServer(b).requestBuilderBid(t.Context(), blk, head, tc.parentFull, builderCfg)
+			require.NotNil(t, p)
+			select {
+			case got := <-b.started:
+				require.Equal(t, tc.want, got)
+			case <-time.After(5 * time.Second):
+				t.Fatal("builder bid was not requested in the background")
+			}
+			close(b.release)
+			win := p.wait()
+			require.NotNil(t, win)
+			require.Equal(t, primitives.BuilderIndex(3), win.bid.Message.BuilderIndex)
+		})
+	}
+
+	t.Run("abort cancels the in-flight request", func(t *testing.T) {
+		b := newGatedBuilder(bidOn(parentBlockHash))
+		p := newServer(b).requestBuilderBid(t.Context(), blk, head, false, builderCfg)
+		<-b.started
+		p.abort()
+		require.ErrorIs(t, <-b.ctxErr, context.Canceled)
+		require.IsNil(t, p.wait())
+		p.abort()
+	})
+
+	t.Run("query failure skips the builder", func(t *testing.T) {
+		b := newGatedBuilder(bidOn(parentBlockHash))
+		vs := newServer(b)
+		vs.ForkchoiceFetcher = &chainMock.ChainService{}
+		p := vs.requestBuilderBid(t.Context(), blk, head, false, builderCfg)
+		require.IsNil(t, p.wait())
+		require.Equal(t, 0, len(b.started))
 	})
 }
 

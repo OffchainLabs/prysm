@@ -201,22 +201,31 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 		nextValidatorAssignments = append(nextValidatorAssignments, nextDuty)
 	}
 
-	// Dependent roots for fork choice
-	currDependentRoot, err := vs.ForkchoiceFetcher.DependentRoot(currentEpoch)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
+	stateEpoch := slots.ToEpoch(s.Slot())
+	var currDependentRoot []byte
+	if currentEpoch > stateEpoch {
+		// A lagging state's latest block also covers subsequent empty slots.
+		currDependentRoot, err = vs.HeadFetcher.HeadRoot(ctx)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not get head block root: %v", err)
+		}
+	} else {
+		currDependentRoot, err = vs.attestationDependentRoot(ctx, s, currentEpoch.Add(1))
+		if err != nil {
+			return nil, err
+		}
 	}
 	prevDependentRoot := currDependentRoot
-	if currDependentRoot != [32]byte{} && currentEpoch > 0 {
-		prevDependentRoot, err = vs.ForkchoiceFetcher.DependentRoot(currentEpoch - 1)
+	if currentEpoch <= stateEpoch.Add(1) {
+		prevDependentRoot, err = vs.attestationDependentRoot(ctx, s, currentEpoch)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not get previous dependent root: %v", err)
+			return nil, err
 		}
 	}
 
 	return &ethpb.DutiesV2Response{
-		PreviousDutyDependentRoot: prevDependentRoot[:],
-		CurrentDutyDependentRoot:  currDependentRoot[:],
+		PreviousDutyDependentRoot: prevDependentRoot,
+		CurrentDutyDependentRoot:  currDependentRoot,
 		CurrentEpochDuties:        validatorAssignments,
 		NextEpochDuties:           nextValidatorAssignments,
 	}, nil

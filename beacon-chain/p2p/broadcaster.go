@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -24,7 +23,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -431,18 +429,28 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 	if s.partialColumnBroadcaster != nil {
 		for i := range partialColumns {
 			pc := &partialColumns[i]
-			topic, wrappedSubIdx, subnet := columnToTopic(pc.Index, forkDigest)
-			item, ok := itemsByIndex[pc.Index]
+			topic, wrappedSubIdx, subnet := columnToTopic(pc.Index(), forkDigest)
+			item, ok := itemsByIndex[pc.Index()]
 			if !ok {
 				item = &columnBroadcastItem{
-					index:         pc.Index,
+					index:         pc.Index(),
 					topic:         topic,
 					wrappedSubIdx: wrappedSubIdx,
 					subnet:        subnet,
 				}
-				itemsByIndex[pc.Index] = item
+				itemsByIndex[pc.Index()] = item
 			}
 			item.partialColumn = pc
+		}
+	}
+
+	// Join every column topic before any publish below. The batch path joins lazily,
+	// and a partial publish that runs before the topic is joined finds no local topic
+	// state in the router.
+	suffix := s.Encoding().ProtocolSuffix()
+	for _, item := range itemsByIndex {
+		if _, err := s.JoinTopic(item.topic + suffix); err != nil {
+			log.WithError(err).WithField("topic", item.topic).Error("Cannot join data column topic")
 		}
 	}
 
@@ -585,14 +593,6 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 		return
 	}
 
-	type logInfo struct {
-		durationMin time.Duration
-		durationMax time.Duration
-		indices     []uint64
-	}
-
-	logInfoPerRoot := make(map[[fieldparams.RootLength]byte]*logInfo, 1)
-
 	timings.Range(func(key any, value any) bool {
 		rootAndIndex, ok := key.(rootAndIndex)
 		if !ok {
@@ -618,31 +618,9 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 			return true
 		}
 
-		info, ok := logInfoPerRoot[rootAndIndex.root]
-		if !ok {
-			logInfoPerRoot[rootAndIndex.root] = &logInfo{durationMin: duration, durationMax: duration, indices: []uint64{rootAndIndex.index}}
-			return true
-		}
-
-		info.durationMin = min(info.durationMin, duration)
-		info.durationMax = max(info.durationMax, duration)
-		info.indices = append(info.indices, rootAndIndex.index)
-
+		s.dataColumnBroadcastLog.record(rootAndIndex.root, slot, rootAndIndex.index, duration)
 		return true
 	})
-
-	for root, info := range logInfoPerRoot {
-		slices.Sort(info.indices)
-
-		log.WithFields(logrus.Fields{
-			"root":                  fmt.Sprintf("%#x", root),
-			"slot":                  slotPerRoot[root],
-			"count":                 len(info.indices),
-			"indices":               slice.PrettySlice(info.indices),
-			"timeSinceSlotStartMin": info.durationMin,
-			"timeSinceSlotStartMax": info.durationMax,
-		}).Debug("Broadcasted data column sidecars")
-	}
 }
 
 func columnToTopic(dcIndex uint64, forkDigest [fieldparams.VersionLength]byte) (topic string, wrappedSubIdx uint64, subnet uint64) {

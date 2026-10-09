@@ -1,0 +1,18 @@
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["len.go"],
+    importpath = "github.com/OffchainLabs/prysm/v7/internal/valid",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "go_default_test",
+    size = "small",
+    srcs = ["len_test.go"],
+    deps = [
+        ":go_default_library",
+        "//testing/require:go_default_library",
+    ],
+)

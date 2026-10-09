@@ -25,6 +25,7 @@ import (
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/internal/valid"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -80,7 +81,7 @@ func (reconstructionRPCClient) Close() {}
 
 func (c reconstructionRPCClient) BatchCall(elems []rpc.BatchElem) error {
 	for i := range elems {
-		*elems[i].Result.(*pb.ExecutionBlock) = *c.block
+		*elems[i].Result.(**pb.ExecutionBlock) = c.block
 	}
 	return nil
 }
@@ -2663,23 +2664,6 @@ func TestConstructPartialDataColumnSidecarsFromHasBlobs(t *testing.T) {
 			require.Equal(t, true, requests.BitAt(2))
 		}
 	})
-
-	// Keep this subtest last: it overrides the Gloas fork epoch and relies on
-	// SetupTestConfigCleanup to restore the config after the test.
-	t.Run("Gloas-epoch block is gated off and reports unsupported", func(t *testing.T) {
-		gloasCfg := params.BeaconConfig().Copy()
-		gloasCfg.GloasForkEpoch = 0
-		params.OverrideBeaconConfig(gloasCfg)
-
-		client := &Service{
-			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}},
-			partialColumnsSupported: true,
-		}
-		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
-		require.NoError(t, err)
-		require.Equal(t, false, supported)
-		require.Equal(t, 0, len(cols))
-	})
 }
 
 func TestConstructDataColumnSidecars_PartialColumns(t *testing.T) {
@@ -2986,7 +2970,7 @@ func TestGloasPayloadFromBlockAndBody(t *testing.T) {
 		payload, err := gloasPayloadFromBlockAndBody(hash, newBlock([]byte{0x01}), body)
 		require.NoError(t, err)
 		require.DeepEqual(t, []byte(bodyBal), payload.BlockAccessList)
-		require.Equal(t, 1, len(payload.Transactions))
+		require.Equal(t, 1, valid.Len(payload.Transactions))
 	})
 	t.Run("nil body errors", func(t *testing.T) {
 		_, err := gloasPayloadFromBlockAndBody(hash, newBlock([]byte{0x01}), nil)
@@ -3025,4 +3009,54 @@ func TestExecutionBlock_MarshalUnmarshalJSON_BlockAccessList(t *testing.T) {
 	decoded := &pb.ExecutionBlock{}
 	require.NoError(t, decoded.UnmarshalJSON(enc))
 	require.DeepEqual(t, []byte(bal), []byte(decoded.BlockAccessList))
+}
+
+func TestExecutionBlocksByHashes_NullResultIsNil(t *testing.T) {
+	want, ok := fixtures()["ExecutionBlock"].(*pb.ExecutionBlock)
+	require.Equal(t, true, ok)
+	known := common.BytesToHash([]byte("known"))
+	missing := common.BytesToHash([]byte("missing"))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			require.NoError(t, r.Body.Close())
+		}()
+		var reqs []struct {
+			ID     json.RawMessage   `json:"id"`
+			Params []json.RawMessage `json:"params"`
+		}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&reqs))
+		resps := make([]map[string]any, 0, len(reqs))
+		for _, req := range reqs {
+			var result any
+			if strings.Contains(string(req.Params[0]), known.Hex()) {
+				result = want
+			}
+			resps = append(resps, map[string]any{"jsonrpc": "2.0", "id": req.ID, "result": result})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(resps))
+	}))
+	defer srv.Close()
+
+	rpcClient, err := rpc.DialHTTP(srv.URL)
+	require.NoError(t, err)
+	defer rpcClient.Close()
+	service := &Service{}
+	service.rpcClient = rpcClient
+
+	blks, err := service.ExecutionBlocksByHashes(t.Context(), []common.Hash{missing, known}, false)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(blks))
+	require.IsNil(t, blks[0])
+	require.DeepEqual(t, want, blks[1])
+}
+
+func TestReconstructFullGloasExecutionPayloadsByHash_SkipsMissingBlock(t *testing.T) {
+	hash := common.BytesToHash([]byte("missing"))
+	service := &Service{}
+	service.rpcClient = reconstructionRPCClient{body: &pb.ExecutionPayloadBodyV2{}}
+
+	payloads, err := service.ReconstructFullGloasExecutionPayloadsByHash(t.Context(), [][32]byte{hash})
+	require.NoError(t, err)
+	require.Equal(t, 0, len(payloads))
 }

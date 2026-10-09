@@ -51,6 +51,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "checkpoint_clamp_test.go",
         "ffg_update_test.go",
         "forkchoice_test.go",
         "gloas_test.go",
@@ -66,6 +67,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//beacon-chain/core/transition:go_default_library",
         "//beacon-chain/forkchoice:go_default_library",
         "//beacon-chain/forkchoice/types:go_default_library",
         "//beacon-chain/state:go_default_library",
