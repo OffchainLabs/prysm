@@ -245,7 +245,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 218, len(data))
+	assert.Equal(t, 216, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -703,10 +703,6 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.MaxSignedAggregateAndProofSize), 10), v)
 			case "MAX_ATTESTER_SLASHING_SIZE":
 				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.MaxAttesterSlashingSize), 10), v)
-			case "MAX_DATA_COLUMN_SIDECAR_SIZE":
-				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.MaxDataColumnSidecarSize), 10), v)
-			case "MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE":
-				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.MaxPartialDataColumnSidecarSize), 10), v)
 			case "MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE":
 				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.MaxSignedExecutionPayloadBidSize), 10), v)
 			default:
