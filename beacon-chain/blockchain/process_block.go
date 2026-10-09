@@ -238,6 +238,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	fCheckpoints := make([]*ethpb.Checkpoint, len(blks))
 	preVersionAndHeaders := make([]*versionAndHeader, len(blks))
 	postVersionAndHeaders := make([]*versionAndHeader, len(blks))
+	builderPubkeys := make([]*[fieldparams.BLSPubkeyLength]byte, len(blks))
 	var set *bls.SignatureBatch
 	boundaries := make(map[[32]byte]state.BeaconState)
 	for i, b := range blks {
@@ -256,6 +257,19 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		set, preState, err = transition.ExecuteStateTransitionNoVerifyAnySig(ctx, preState, b)
 		if err != nil {
 			return invalidBlock{error: err}
+		}
+		if b.Version() >= version.Gloas {
+			sbid, err := b.Block().Body().SignedExecutionPayloadBid()
+			if err != nil {
+				return err
+			}
+			if idx := sbid.Message.BuilderIndex; idx != params.BeaconConfig().BuilderIndexSelfBuild {
+				pk, err := preState.BuilderPubkey(idx)
+				if err != nil {
+					return err
+				}
+				builderPubkeys[i] = &pk
+			}
 		}
 		sig := b.Signature()
 		root := b.Root()
@@ -323,6 +337,9 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	pendingNodes, isValidPayload, err := s.notifyEngineAndSaveData(ctx, blks, envelopes, avs, preVersionAndHeaders, postVersionAndHeaders, jCheckpoints, fCheckpoints)
 	if err != nil {
 		return err
+	}
+	for i, n := range pendingNodes {
+		n.BuilderPubkey = builderPubkeys[i]
 	}
 	// Save boundary states that will be useful for forkchoice
 	for r, st := range boundaries {

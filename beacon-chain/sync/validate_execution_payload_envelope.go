@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -74,7 +75,7 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	}
 	root := env.BeaconBlockRoot()
 	// [IGNORE] The node has not seen another valid SignedExecutionPayloadEnvelope for this block root from this builder.
-	if s.hasSeenPayloadEnvelope(root, env.BuilderIndex()) {
+	if s.hasSeenPayloadEnvelope(root, env.BuilderIndex()) || s.cfg.chain.HasFullNode(root) {
 		return pubsub.ValidationIgnore, nil
 	}
 	finalized := s.cfg.chain.FinalizedCheckpt()
@@ -140,15 +141,28 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 		return pubsub.ValidationReject, err
 	}
 
-	// For self-build, the state is retrived via how we retrieve for beacon block optimization
-	// For builder index, the state is retrived via head state read only
-	st, err := s.blockVerifyingState(ctx, block)
-	if err != nil {
-		return pubsub.ValidationIgnore, err
+	var pubkey [fieldparams.BLSPubkeyLength]byte
+	if env.BuilderIndex() == params.BeaconConfig().BuilderIndexSelfBuild {
+		pubkey, err = s.cfg.chain.HeadValidatorIndexToPublicKey(ctx, block.Block().ProposerIndex())
+		if err != nil {
+			return pubsub.ValidationIgnore, err
+		}
+	} else {
+		pk, err := s.cfg.chain.BuilderPubkey(root)
+		if err != nil {
+			return pubsub.ValidationIgnore, err
+		}
+		if pk == nil {
+			return pubsub.ValidationIgnore, errors.New("unknown builder pubkey")
+		}
+		pubkey = *pk
+	}
+	if pubkey == [fieldparams.BLSPubkeyLength]byte{} {
+		return pubsub.ValidationIgnore, errors.New("unknown pubkey")
 	}
 
 	// [REJECT] signed_execution_payload_envelope.signature is valid with respect to the builder's public key.
-	if err := v.VerifySignature(ctx, st); err != nil {
+	if err := v.VerifySignatureWithPubkey(pubkey, s.cfg.clock.GenesisValidatorsRoot()); err != nil {
 		return pubsub.ValidationReject, err
 	}
 	s.setSeenPayloadEnvelope(root, env.BuilderIndex())

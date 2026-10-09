@@ -493,6 +493,7 @@ func (f *ForkChoice) MarkFullNode(root [32]byte, gasLimit uint64) {
 		gasLimit:   gasLimit,
 		children:   make([]*Node, 0),
 	}
+	en.node.builderPubkey = nil
 }
 
 // InsertPayload inserts a full node into forkchoice after the Gloas fork.
@@ -523,6 +524,7 @@ func (f *ForkChoice) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) err
 		children:   make([]*Node, 0),
 	}
 	s.fullNodeByRoot[root] = fn
+	en.node.builderPubkey = nil
 	payloadInsertedCount.Inc()
 	updatePayloadNodeMetrics(s)
 	f.updateNewFullNodeWeight(fn)
@@ -656,6 +658,15 @@ func (f *ForkChoice) BuilderIndex(root [32]byte) (primitives.BuilderIndex, error
 		return 0, errors.Wrap(ErrNilNode, "could not get builder index for root")
 	}
 	return en.node.builderIndex, nil
+}
+
+// BuilderPubkey returns the pubkey of the builder committed in the given block's bid, nil for self-built blocks.
+func (f *ForkChoice) BuilderPubkey(root [32]byte) (*[fieldparams.BLSPubkeyLength]byte, error) {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return nil, errors.Wrap(ErrNilNode, "could not get builder pubkey for root")
+	}
+	return en.node.builderPubkey, nil
 }
 
 // BlockHash returns the hash committed in the given block
