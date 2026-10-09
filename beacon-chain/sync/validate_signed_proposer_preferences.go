@@ -141,9 +141,25 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 		stateRoot = dependentRoot[:]
 	}
 	stateEpoch := slots.ToEpoch(st.Slot())
+	if proposalEpoch > stateEpoch.AddEpoch(2) {
+		return pubsub.ValidationIgnore, errors.Errorf("state epoch %d cannot verify proposal epoch %d", stateEpoch, proposalEpoch)
+	}
+
+	// [REJECT] signed_proposer_preferences.signature is valid with respect to the
+	// validator's public key.
+	//
+	// The signature needs only the validator's public key and the genesis
+	// validators root, neither of which changes when slots are advanced, so it
+	// is checked against the un-advanced state. A forged message is rejected
+	// here before it can trigger the epoch transition below, and it is never
+	// cached, so this is the only place that bounds the work it can cause.
+	if err := v.VerifySignature(st); err != nil {
+		return pubsub.ValidationReject, err
+	}
 
 	// Sole permitted slot advance: up to the lookahead epoch boundary, which bounds
-	// the work a single message can cause.
+	// the work a single message can cause. Only a message with a valid signature
+	// reaches this point.
 	if proposalEpoch == stateEpoch.AddEpoch(2) {
 		boundarySlot, err := slots.EpochStart(dependentEpoch)
 		if err != nil {
@@ -153,20 +169,12 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 		if err != nil {
 			return pubsub.ValidationIgnore, errors.Wrap(err, "advance state to boundary")
 		}
-	} else if proposalEpoch > stateEpoch.AddEpoch(1) {
-		return pubsub.ValidationIgnore, errors.Errorf("state epoch %d cannot verify proposal epoch %d", stateEpoch, proposalEpoch)
 	}
 
 	// [REJECT] is_valid_proposal_slot(state, preferences) returns True, where state
 	// is the checkpoint state at the epoch compute_epoch_at_slot(proposal_slot) - 1
 	// and the root preferences.dependent_root.
 	if err := v.VerifyValidProposalSlot(st); err != nil {
-		return pubsub.ValidationReject, err
-	}
-
-	// [REJECT] signed_proposer_preferences.signature is valid with respect to the
-	// validator's public key.
-	if err := v.VerifySignature(st); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
