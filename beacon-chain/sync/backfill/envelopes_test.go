@@ -79,11 +79,14 @@ func makeEnvChain(t *testing.T, cfg envChainCfg) *envChain {
 	prevRoot := [32]byte{}
 	prevEffHash := testEnvHash("genesis-el", 0)
 	for i := 0; i < cfg.n; i++ {
-		bh := testEnvHash("block-hash", i)
 		blk := util.NewBeaconBlockGloas()
 		blk.Block.Slot = cfg.start + primitives.Slot(i)
 		blk.Block.ProposerIndex = primitives.ValidatorIndex(i)
 		blk.Block.ParentRoot = bytesutil.SafeCopyBytes(prevRoot[:])
+		// Bids commit to the hash the fixture payload's contents actually produce.
+		payload := testGloasPayload(blk.Block.Slot, nil, bytesutil.SafeCopyBytes(prevEffHash[:]))
+		bh, err := executionBlockHashGloas(payload, &enginev1.ExecutionRequestsGloas{}, prevRoot)
+		require.NoError(t, err)
 		bid := blk.Block.Body.SignedExecutionPayloadBid.Message
 		bid.Slot = blk.Block.Slot
 		bid.BuilderIndex = params.BeaconConfig().BuilderIndexSelfBuild
@@ -152,44 +155,23 @@ func (c *envChain) envelope(t *testing.T, i int, signer bls.SecretKey) *ethpb.Si
 	return &ethpb.SignedExecutionPayloadEnvelope{Message: msg, Signature: signer.Sign(sr[:]).Marshal()}
 }
 
-func (c *envChain) reconPayloads(t *testing.T, idx ...int) map[[32]byte]*enginev1.ExecutionPayloadGloas {
+// resign re-signs a tampered envelope for block i so tests reach the stages past the signature.
+func (c *envChain) resign(t *testing.T, env *ethpb.SignedExecutionPayloadEnvelope, i int) {
 	t.Helper()
-	out := make(map[[32]byte]*enginev1.ExecutionPayloadGloas)
-	for _, i := range idx {
-		b := c.blks[i]
-		bid, err := b.Block().Body().SignedExecutionPayloadBid()
-		require.NoError(t, err)
-		out[bytesutil.ToBytes32(bid.Message.BlockHash)] = testGloasPayload(b.Block().Slot(), bid.Message.BlockHash, bid.Message.ParentBlockHash)
+	b := c.blks[i]
+	bid, err := b.Block().Body().SignedExecutionPayloadBid()
+	require.NoError(t, err)
+	var signer bls.SecretKey
+	if bid.Message.BuilderIndex == params.BeaconConfig().BuilderIndexSelfBuild {
+		signer = c.sks[b.Block().ProposerIndex()]
+	} else {
+		signer = c.builderSks[bid.Message.BuilderIndex]
 	}
-	return out
-}
-
-type mockReconstructor struct {
-	payloads map[[32]byte]*enginev1.ExecutionPayloadGloas
-	err      error
-	// failBatched mimics the real engine client, whose batched call fails as a whole when any
-	// one requested body is unavailable; single-hash calls still succeed.
-	failBatched bool
-	calls       int
-}
-
-func (m *mockReconstructor) ReconstructFullGloasExecutionPayloadsByHash(_ context.Context, hashes [][32]byte) (map[[32]byte]*enginev1.ExecutionPayloadGloas, error) {
-	m.calls++
-	if m.err != nil {
-		return nil, m.err
-	}
-	out := make(map[[32]byte]*enginev1.ExecutionPayloadGloas, len(hashes))
-	for _, h := range hashes {
-		p, ok := m.payloads[h]
-		if !ok {
-			if m.failBatched && len(hashes) > 1 {
-				return nil, errors.New("payload bodies unavailable")
-			}
-			continue
-		}
-		out[h] = p
-	}
-	return out, nil
+	dom, err := c.domain.forEpoch(slots.ToEpoch(b.Block().Slot()))
+	require.NoError(t, err)
+	sr, err := signing.ComputeSigningRoot(env.Message, dom)
+	require.NoError(t, err)
+	env.Signature = signer.Sign(sr[:]).Marshal()
 }
 
 type downscoreRecorder struct {
@@ -224,13 +206,12 @@ func wideEnvWindow() das.CurrentNeeds {
 	return das.CurrentNeeds{Env: das.NeedSpan{Begin: 1, End: primitives.Slot(1 << 40)}}
 }
 
-func testEnvSyncCfg(t *testing.T, c *envChain, recon EnvelopeReconstructor, ds *downscoreRecorder) *envelopeSyncCfg {
+func testEnvSyncCfg(t *testing.T, c *envChain, ds *downscoreRecorder) *envelopeSyncCfg {
 	t.Helper()
 	v, err := newEnvelopeVerifier(c.vr, c.keys, c.builders)
 	require.NoError(t, err)
 	return &envelopeSyncCfg{
 		verifier:      v,
-		reconstructor: recon,
 		hasEnvelope:   func(context.Context, [32]byte) bool { return false },
 		currentNeeds:  wideEnvWindow,
 		downscore:     ds.fn,
@@ -247,7 +228,7 @@ func TestEnvelopeExpectations(t *testing.T) {
 		// Blocks 0 and 2 revealed (committed by children 1 and 3), block 1 withheld.
 		// Block 3 is the batch tail with an unclassified child.
 		c := makeEnvChain(t, envChainCfg{start: 10, n: 4, withheld: map[int]bool{1: true}})
-		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, &mockReconstructor{}, &downscoreRecorder{}))
+		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, &downscoreRecorder{}))
 		require.NoError(t, err)
 		require.Equal(t, 3, es.unresolved())
 		require.NotNil(t, es.pending[10])
@@ -260,7 +241,7 @@ func TestEnvelopeExpectations(t *testing.T) {
 	})
 	t.Run("already stored slots expect nothing", func(t *testing.T) {
 		c := makeEnvChain(t, envChainCfg{start: 10, n: 3})
-		cfg := testEnvSyncCfg(t, c, &mockReconstructor{}, &downscoreRecorder{})
+		cfg := testEnvSyncCfg(t, c, &downscoreRecorder{})
 		stored := c.blks[0].Root()
 		cfg.hasEnvelope = func(_ context.Context, root [32]byte) bool { return root == stored }
 		es, err := newEnvelopeSync(ctx, c.blks, cfg)
@@ -270,7 +251,7 @@ func TestEnvelopeExpectations(t *testing.T) {
 	})
 	t.Run("slots outside the Env window expect nothing", func(t *testing.T) {
 		c := makeEnvChain(t, envChainCfg{start: 10, n: 3})
-		cfg := testEnvSyncCfg(t, c, &mockReconstructor{}, &downscoreRecorder{})
+		cfg := testEnvSyncCfg(t, c, &downscoreRecorder{})
 		cfg.currentNeeds = func() das.CurrentNeeds { return das.CurrentNeeds{Env: das.NeedSpan{Begin: 12, End: 100}} }
 		es, err := newEnvelopeSync(ctx, c.blks, cfg)
 		require.NoError(t, err)
@@ -280,14 +261,14 @@ func TestEnvelopeExpectations(t *testing.T) {
 	t.Run("pre-Gloas blocks expect nothing", func(t *testing.T) {
 		blks, _, _, _ := testBlocksWithKeys(t, 3, 0, make([]byte, 32))
 		c := makeEnvChain(t, envChainCfg{start: 10, n: 1})
-		es, err := newEnvelopeSync(ctx, blks, testEnvSyncCfg(t, c, &mockReconstructor{}, &downscoreRecorder{}))
+		es, err := newEnvelopeSync(ctx, blks, testEnvSyncCfg(t, c, &downscoreRecorder{}))
 		require.NoError(t, err)
 		require.Equal(t, 0, es.unresolved())
 	})
 	t.Run("fullness classification works without column or blob work", func(t *testing.T) {
 		// Blob-less Gloas blocks with empty Blob/Col windows still produce expectations.
 		c := makeEnvChain(t, envChainCfg{start: 10, n: 3})
-		cfg := testEnvSyncCfg(t, c, &mockReconstructor{}, &downscoreRecorder{})
+		cfg := testEnvSyncCfg(t, c, &downscoreRecorder{})
 		cfg.currentNeeds = func() das.CurrentNeeds {
 			return das.CurrentNeeds{Env: das.NeedSpan{Begin: 1, End: 1 << 40}} // Blob and Col spans empty
 		}
@@ -307,7 +288,7 @@ func TestEnvelopeExpectationsUnverifiable(t *testing.T) {
 		c := makeEnvChain(t, envChainCfg{start: 100, n: 4, builderAt: func(int) primitives.BuilderIndex { return 0 }})
 		c.builders[0].DepositEpoch = slots.ToEpoch(100) + 1
 		batch, child := c.blks[:3], c.blks[3]
-		cfg := testEnvSyncCfg(t, c, &mockReconstructor{}, &downscoreRecorder{})
+		cfg := testEnvSyncCfg(t, c, &downscoreRecorder{})
 		es, err := newEnvelopeSync(ctx, batch, cfg)
 		require.NoError(t, err)
 		require.Equal(t, 0, es.unresolved())
@@ -327,7 +308,7 @@ func TestEnvelopeExpectationsUnverifiable(t *testing.T) {
 	})
 	t.Run("missing builder index is unverifiable", func(t *testing.T) {
 		c := makeEnvChain(t, envChainCfg{start: 100, n: 2, builderAt: func(int) primitives.BuilderIndex { return 99 }})
-		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, &mockReconstructor{}, &downscoreRecorder{}))
+		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, &downscoreRecorder{}))
 		require.NoError(t, err)
 		require.Equal(t, 0, es.unresolved())
 		require.Equal(t, 1, len(es.skips[envSkipSigUnverifiable]))
@@ -344,8 +325,7 @@ func TestEnvelopeExpectationsUnverifiable(t *testing.T) {
 			return primitives.BuilderIndex(params.BeaconConfig().BuilderIndexSelfBuild)
 		}})
 		batch, child := c.blks[:3], c.blks[3]
-		recon := &mockReconstructor{payloads: c.reconPayloads(t, 0, 1)}
-		es, err := newEnvelopeSync(ctx, batch, testEnvSyncCfg(t, c, recon, &downscoreRecorder{}))
+		es, err := newEnvelopeSync(ctx, batch, testEnvSyncCfg(t, c, &downscoreRecorder{}))
 		require.NoError(t, err)
 		require.NotNil(t, es.tail)
 		mdb := &mockBackfillDB{}
@@ -357,7 +337,7 @@ func TestEnvelopeExpectationsUnverifiable(t *testing.T) {
 	t.Run("builder deposited strictly before envelope epoch is verifiable", func(t *testing.T) {
 		c := makeEnvChain(t, envChainCfg{start: 100, n: 2, builderAt: func(int) primitives.BuilderIndex { return 1 }})
 		c.builders[1].DepositEpoch = slots.ToEpoch(100) - 1
-		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, &mockReconstructor{}, &downscoreRecorder{}))
+		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, &downscoreRecorder{}))
 		require.NoError(t, err)
 		require.Equal(t, 2, es.unresolved())
 	})
@@ -366,7 +346,7 @@ func TestEnvelopeExpectationsUnverifiable(t *testing.T) {
 		// deposit_epoch == envelope_epoch occupant could be a later reuse of the index.
 		c := makeEnvChain(t, envChainCfg{start: 100, n: 2, builderAt: func(int) primitives.BuilderIndex { return 1 }})
 		c.builders[1].DepositEpoch = slots.ToEpoch(100)
-		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, &mockReconstructor{}, &downscoreRecorder{}))
+		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, &downscoreRecorder{}))
 		require.NoError(t, err)
 		require.Equal(t, 0, es.unresolved())
 		require.Equal(t, 1, len(es.skips[envSkipSigUnverifiable]))
@@ -378,7 +358,7 @@ func TestEnvelopeTailClassificationAtBuild(t *testing.T) {
 	t.Run("boundary child says revealed - tail becomes required", func(t *testing.T) {
 		c := makeEnvChain(t, envChainCfg{start: 10, n: 4})
 		batch, child := c.blks[:3], c.blks[3]
-		cfg := testEnvSyncCfg(t, c, &mockReconstructor{}, &downscoreRecorder{})
+		cfg := testEnvSyncCfg(t, c, &downscoreRecorder{})
 		cfg.boundaryChild = func(context.Context, [32]byte) (interfaces.ReadOnlyBeaconBlock, error) {
 			return child.Block(), nil
 		}
@@ -391,7 +371,7 @@ func TestEnvelopeTailClassificationAtBuild(t *testing.T) {
 	t.Run("boundary child says withheld - tail expects nothing", func(t *testing.T) {
 		c := makeEnvChain(t, envChainCfg{start: 10, n: 4, withheld: map[int]bool{2: true}})
 		batch, child := c.blks[:3], c.blks[3]
-		cfg := testEnvSyncCfg(t, c, &mockReconstructor{}, &downscoreRecorder{})
+		cfg := testEnvSyncCfg(t, c, &downscoreRecorder{})
 		cfg.boundaryChild = func(context.Context, [32]byte) (interfaces.ReadOnlyBeaconBlock, error) {
 			return child.Block(), nil
 		}
@@ -402,7 +382,7 @@ func TestEnvelopeTailClassificationAtBuild(t *testing.T) {
 	})
 	t.Run("boundary child unavailable - classification deferred", func(t *testing.T) {
 		c := makeEnvChain(t, envChainCfg{start: 10, n: 3})
-		cfg := testEnvSyncCfg(t, c, &mockReconstructor{}, &downscoreRecorder{})
+		cfg := testEnvSyncCfg(t, c, &downscoreRecorder{})
 		cfg.boundaryChild = func(context.Context, [32]byte) (interfaces.ReadOnlyBeaconBlock, error) {
 			return nil, nil
 		}
@@ -418,9 +398,8 @@ func TestEnvelopeFetchAndVerify(t *testing.T) {
 	ctx := t.Context()
 	t.Run("self-build verifies with the historical proposer key", func(t *testing.T) {
 		c := makeEnvChain(t, envChainCfg{start: 10, n: 3})
-		recon := &mockReconstructor{payloads: c.reconPayloads(t, 0, 1, 2)}
 		ds := &downscoreRecorder{}
-		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, recon, ds))
+		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, ds))
 		require.NoError(t, err)
 		require.Equal(t, 3, es.unresolved())
 		f := &scriptedFetcher{responses: [][]*ethpb.SignedExecutionPayloadEnvelope{{
@@ -440,9 +419,8 @@ func TestEnvelopeFetchAndVerify(t *testing.T) {
 		// The signer stands in for the snapshot state's latest proposer: verification must use
 		// the historical block's proposer key, so any other key must fail.
 		c := makeEnvChain(t, envChainCfg{start: 10, n: 2})
-		recon := &mockReconstructor{payloads: c.reconPayloads(t, 0, 1)}
 		ds := &downscoreRecorder{}
-		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, recon, ds))
+		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, ds))
 		require.NoError(t, err)
 		f := &scriptedFetcher{responses: [][]*ethpb.SignedExecutionPayloadEnvelope{
 			{c.envelope(t, 0, c.sks[1])}, // wrong signer
@@ -457,9 +435,8 @@ func TestEnvelopeFetchAndVerify(t *testing.T) {
 	})
 	t.Run("registry builder key verifies", func(t *testing.T) {
 		c := makeEnvChain(t, envChainCfg{start: 100, n: 2, builderAt: func(int) primitives.BuilderIndex { return 2 }})
-		recon := &mockReconstructor{payloads: c.reconPayloads(t, 0, 1)}
 		ds := &downscoreRecorder{}
-		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, recon, ds))
+		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, ds))
 		require.NoError(t, err)
 		f := &scriptedFetcher{responses: [][]*ethpb.SignedExecutionPayloadEnvelope{{
 			c.envelope(t, 0, nil), c.envelope(t, 1, nil),
@@ -472,9 +449,8 @@ func TestEnvelopeFetchAndVerify(t *testing.T) {
 	t.Run("builder domain lookup uses the fork schedule", func(t *testing.T) {
 		// An envelope signed over the proposer domain must fail against the builder domain.
 		c := makeEnvChain(t, envChainCfg{start: 10, n: 2})
-		recon := &mockReconstructor{payloads: c.reconPayloads(t, 0, 1)}
 		ds := &downscoreRecorder{}
-		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, recon, ds))
+		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, ds))
 		require.NoError(t, err)
 		env := c.envelope(t, 0, nil)
 		wrongDc, err := newDomainCache(c.vr, params.BeaconConfig().DomainBeaconProposer)
@@ -491,9 +467,8 @@ func TestEnvelopeFetchAndVerify(t *testing.T) {
 	})
 	t.Run("bid binding mismatch is a peer offense", func(t *testing.T) {
 		c := makeEnvChain(t, envChainCfg{start: 10, n: 2})
-		recon := &mockReconstructor{payloads: c.reconPayloads(t, 0, 1)}
 		ds := &downscoreRecorder{}
-		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, recon, ds))
+		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, ds))
 		require.NoError(t, err)
 		env := c.envelope(t, 0, nil)
 		env.Message.Payload.BlockHash = bytesutil.PadTo([]byte("tampered"), 32)
@@ -503,68 +478,40 @@ func TestEnvelopeFetchAndVerify(t *testing.T) {
 		require.NotNil(t, es.pending[10])
 		require.Equal(t, 0, len(es.held))
 	})
-	t.Run("EL reconstruction failure skips the slot and is not a peer offense", func(t *testing.T) {
-		c := makeEnvChain(t, envChainCfg{start: 10, n: 3})
-		recon := &mockReconstructor{err: errors.New("EL down")}
-		ds := &downscoreRecorder{}
-		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, recon, ds))
-		require.NoError(t, err)
-		f := &scriptedFetcher{responses: [][]*ethpb.SignedExecutionPayloadEnvelope{{
-			c.envelope(t, 0, nil), c.envelope(t, 1, nil),
-		}}}
-		es.fetchPass(ctx, "peer-a", f.fetch)
-		// Bounded local retries of the batched call, then one isolation call per hash.
-		require.Equal(t, envelopeLocalRetries+2, recon.calls)
-		require.Equal(t, 2, len(es.skips[envSkipELFailed]))
-		require.Equal(t, 0, len(ds.calls))
-		// The tail (slot 12) got no envelope and no skip; it awaits import-time classification.
-		require.IsNil(t, es.pending[10])
-		require.IsNil(t, es.pending[11])
-		require.NotNil(t, es.tail)
-	})
-	t.Run("one unavailable EL body does not discard the rest of the page", func(t *testing.T) {
-		c := makeEnvChain(t, envChainCfg{start: 10, n: 4})
-		// The body for slot 11 is unavailable; the real engine client fails the whole batched
-		// call in that case, so the fallback must reconstruct the others individually.
-		recon := &mockReconstructor{payloads: c.reconPayloads(t, 0, 2, 3), failBatched: true}
-		ds := &downscoreRecorder{}
-		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, recon, ds))
-		require.NoError(t, err)
-		f := &scriptedFetcher{responses: [][]*ethpb.SignedExecutionPayloadEnvelope{{
-			c.envelope(t, 0, nil), c.envelope(t, 1, nil), c.envelope(t, 2, nil), c.envelope(t, 3, nil),
-		}}}
-		es.fetchPass(ctx, "peer-a", f.fetch)
-		// Bounded batched retries plus one isolation call per hash.
-		require.Equal(t, envelopeLocalRetries+4, recon.calls)
-		require.NotNil(t, es.held[10])
-		require.IsNil(t, es.held[11])
-		require.NotNil(t, es.held[12])
-		require.NotNil(t, es.held[13])
-		require.Equal(t, 1, len(es.skips[envSkipELFailed]))
-		require.Equal(t, primitives.Slot(11), es.skips[envSkipELFailed][0])
-		require.Equal(t, 0, len(ds.calls))
-	})
-	t.Run("EL payload HTR mismatch after successful reconstruction is a peer offense", func(t *testing.T) {
+	t.Run("payload content that does not hash to the bid block hash is a peer offense", func(t *testing.T) {
 		c := makeEnvChain(t, envChainCfg{start: 10, n: 2})
-		payloads := c.reconPayloads(t, 0, 1)
-		for _, p := range payloads {
-			p.GasUsed++ // EL disagrees with the fetched payload bytes
-		}
-		recon := &mockReconstructor{payloads: payloads}
 		ds := &downscoreRecorder{}
-		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, recon, ds))
+		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, ds))
 		require.NoError(t, err)
-		f := &scriptedFetcher{responses: [][]*ethpb.SignedExecutionPayloadEnvelope{{c.envelope(t, 0, nil)}}}
+		env := c.envelope(t, 0, nil)
+		// gas_used is not individually bound and the envelope is re-signed, so only the local
+		// block hash check can catch the change.
+		env.Message.Payload.GasUsed++
+		c.resign(t, env, 0)
+		f := &scriptedFetcher{responses: [][]*ethpb.SignedExecutionPayloadEnvelope{{env}}}
 		es.fetchPass(ctx, "peer-a", f.fetch)
 		require.Equal(t, 1, len(ds.calls))
 		require.NotNil(t, es.pending[10]) // retryable from another peer
-		require.Equal(t, 0, len(es.skips[envSkipELFailed]))
+		require.Equal(t, 0, len(es.held))
+	})
+	t.Run("undecodable transaction bytes are a peer offense", func(t *testing.T) {
+		c := makeEnvChain(t, envChainCfg{start: 10, n: 2})
+		ds := &downscoreRecorder{}
+		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, ds))
+		require.NoError(t, err)
+		env := c.envelope(t, 0, nil)
+		env.Message.Payload.Transactions = [][]byte{{0xde, 0xad, 0xbe, 0xef}}
+		c.resign(t, env, 0)
+		f := &scriptedFetcher{responses: [][]*ethpb.SignedExecutionPayloadEnvelope{{env}}}
+		es.fetchPass(ctx, "peer-a", f.fetch)
+		require.Equal(t, 1, len(ds.calls))
+		require.NotNil(t, es.pending[10]) // retryable from another peer
+		require.Equal(t, 0, len(es.held))
 	})
 	t.Run("peer exhaustion takes a terminal skip after bounded attempts", func(t *testing.T) {
 		c := makeEnvChain(t, envChainCfg{start: 10, n: 3})
-		recon := &mockReconstructor{payloads: c.reconPayloads(t, 0, 1, 2)}
 		ds := &downscoreRecorder{}
-		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, recon, ds))
+		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, ds))
 		require.NoError(t, err)
 		f := &scriptedFetcher{} // always returns empty responses, which are protocol-legal
 		for i := 0; i < envelopeMaxPageAttempts; i++ {
@@ -579,8 +526,7 @@ func TestEnvelopeFetchAndVerify(t *testing.T) {
 	})
 	t.Run("elapsed budget expires a page", func(t *testing.T) {
 		c := makeEnvChain(t, envChainCfg{start: 10, n: 2})
-		recon := &mockReconstructor{payloads: c.reconPayloads(t, 0, 1)}
-		cfg := testEnvSyncCfg(t, c, recon, &downscoreRecorder{})
+		cfg := testEnvSyncCfg(t, c, &downscoreRecorder{})
 		cfg.attemptBudget = time.Millisecond
 		es, err := newEnvelopeSync(ctx, c.blks, cfg)
 		require.NoError(t, err)
@@ -596,9 +542,8 @@ func TestEnvelopeFetchAndVerify(t *testing.T) {
 	})
 	t.Run("unexpected slots in the response are ignored", func(t *testing.T) {
 		c := makeEnvChain(t, envChainCfg{start: 10, n: 3, withheld: map[int]bool{1: true}})
-		recon := &mockReconstructor{payloads: c.reconPayloads(t, 0, 1, 2)}
 		ds := &downscoreRecorder{}
-		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, recon, ds))
+		es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, ds))
 		require.NoError(t, err)
 		// Slot 11 is withheld and expects nothing, but a malicious peer serves a leaked envelope.
 		f := &scriptedFetcher{responses: [][]*ethpb.SignedExecutionPayloadEnvelope{{
@@ -640,8 +585,7 @@ func TestEnvelopeFinalizeTailClassification(t *testing.T) {
 		batch, child := c.blks[:3], c.blks[3]
 		mdb := &mockBackfillDB{}
 		st := testFinalizeStore(t, mdb, batch[len(batch)-1], child)
-		recon := &mockReconstructor{payloads: c.reconPayloads(t, 0, 1, 2)}
-		es, err := newEnvelopeSync(ctx, batch, testEnvSyncCfg(t, c, recon, &downscoreRecorder{}))
+		es, err := newEnvelopeSync(ctx, batch, testEnvSyncCfg(t, c, &downscoreRecorder{}))
 		require.NoError(t, err)
 		require.NotNil(t, es.tail)
 		return c, st, mdb, es
@@ -711,8 +655,7 @@ func TestFillBackEnvelopeOutcomes(t *testing.T) {
 		batch, child := c.blks[:3], c.blks[3]
 		mdb := &mockBackfillDB{}
 		st := testFinalizeStore(t, mdb, batch[len(batch)-1], child)
-		recon := &mockReconstructor{payloads: c.reconPayloads(t, 0, 1, 2)}
-		es, err := newEnvelopeSync(ctx, batch, testEnvSyncCfg(t, c, recon, &downscoreRecorder{}))
+		es, err := newEnvelopeSync(ctx, batch, testEnvSyncCfg(t, c, &downscoreRecorder{}))
 		require.NoError(t, err)
 		f := &scriptedFetcher{responses: [][]*ethpb.SignedExecutionPayloadEnvelope{{
 			c.envelope(t, 0, nil), c.envelope(t, 1, nil), c.envelope(t, 2, nil),
@@ -769,8 +712,7 @@ func TestFillBackEnvelopeOutcomes(t *testing.T) {
 func TestBatchTransitionEnvelopes(t *testing.T) {
 	ctx := t.Context()
 	c := makeEnvChain(t, envChainCfg{start: 10, n: 2})
-	recon := &mockReconstructor{payloads: c.reconPayloads(t, 0, 1)}
-	es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, recon, &downscoreRecorder{}))
+	es, err := newEnvelopeSync(ctx, c.blks, testEnvSyncCfg(t, c, &downscoreRecorder{}))
 	require.NoError(t, err)
 	require.Equal(t, 2, es.unresolved())
 
@@ -798,9 +740,8 @@ func TestBatchTransitionEnvelopes(t *testing.T) {
 	require.Equal(t, batchImportable, nb.state)
 }
 
-// Regression tests for three review findings on this branch: a panic on the setup-error retry
-// path, EL failures on an unclassified tail being reported as peer droughts, and skip counters
-// being published before the batch was durable.
+// Regression tests for review findings on this branch: a panic on the setup-error retry path,
+// and skip counters being published before the batch was durable.
 
 func TestEnvelopeSetupErrorLeavesBatchRetryable(t *testing.T) {
 	c := makeEnvChain(t, envChainCfg{start: 10, n: 2})
@@ -816,62 +757,19 @@ func TestEnvelopeSetupErrorLeavesBatchRetryable(t *testing.T) {
 	require.Equal(t, batchImportable, b.state)
 }
 
-func TestEnvelopeTailELFailureReportsELFailed(t *testing.T) {
-	ctx := t.Context()
-	// Blocks 0..2 are the batch, block 3 is the boundary child; the tail (index 2) is revealed,
-	// so it expects an envelope, but the EL cannot reconstruct its payload.
-	setup := func(t *testing.T, reconIdx ...int) (*envChain, *Store, *envelopeSync) {
-		c := makeEnvChain(t, envChainCfg{start: 10, n: 4})
-		bat, child := c.blks[:3], c.blks[3]
-		st := testFinalizeStore(t, &mockBackfillDB{}, bat[len(bat)-1], child)
-		recon := &mockReconstructor{payloads: c.reconPayloads(t, reconIdx...)}
-		es, err := newEnvelopeSync(ctx, bat, testEnvSyncCfg(t, c, recon, &downscoreRecorder{}))
-		require.NoError(t, err)
-		require.NotNil(t, es.tail)
-		return c, st, es
-	}
-	resp := func(c *envChain, t *testing.T) *scriptedFetcher {
-		return &scriptedFetcher{responses: [][]*ethpb.SignedExecutionPayloadEnvelope{{
-			c.envelope(t, 0, nil), c.envelope(t, 1, nil), c.envelope(t, 2, nil),
-		}}}
-	}
-
-	t.Run("unclassified tail records el_failed, not peer_exhausted", func(t *testing.T) {
-		c, st, es := setup(t, 0, 1) // tail's payload missing from the EL
-		f := resp(c, t)
-		es.fetchPass(ctx, "peer-a", f.fetch)
-		es.finalize(ctx, st.store, bytesutil.ToBytes32(st.status().LowRoot))
-		require.Equal(t, 1, len(es.skips[envSkipELFailed]))
-		require.Equal(t, primitives.Slot(12), es.skips[envSkipELFailed][0])
-		require.Equal(t, 0, len(es.skips[envSkipPeerExhausted]))
-	})
-
-	t.Run("a later successful attempt clears the deferred el_failed", func(t *testing.T) {
-		c, st, es := setup(t, 0, 1)
-		es.fetchPass(ctx, "peer-a", resp(c, t).fetch)
-		// The EL recovers before the next attempt.
-		es.cfg.reconstructor = &mockReconstructor{payloads: c.reconPayloads(t, 0, 1, 2)}
-		es.fetchPass(ctx, "peer-b", resp(c, t).fetch)
-		es.finalize(ctx, st.store, bytesutil.ToBytes32(st.status().LowRoot))
-		require.Equal(t, 0, len(es.skips[envSkipELFailed]))
-		require.NotNil(t, es.held[12])
-	})
-}
-
 func TestEnvelopeSkipsPublishedOnlyAfterImport(t *testing.T) {
 	ctx := t.Context()
 	setup := func(t *testing.T) (*envChain, *Store, *envelopeSync) {
 		c := makeEnvChain(t, envChainCfg{start: 10, n: 4})
 		bat, child := c.blks[:3], c.blks[3]
 		st := testFinalizeStore(t, &mockBackfillDB{}, bat[len(bat)-1], child)
-		// No payloads at all: every slot takes an el_failed skip.
-		recon := &mockReconstructor{payloads: c.reconPayloads(t)}
-		es, err := newEnvelopeSync(ctx, bat, testEnvSyncCfg(t, c, recon, &downscoreRecorder{}))
+		es, err := newEnvelopeSync(ctx, bat, testEnvSyncCfg(t, c, &downscoreRecorder{}))
 		require.NoError(t, err)
-		f := &scriptedFetcher{responses: [][]*ethpb.SignedExecutionPayloadEnvelope{{
-			c.envelope(t, 0, nil), c.envelope(t, 1, nil), c.envelope(t, 2, nil),
-		}}}
-		es.fetchPass(ctx, "peer-a", f.fetch)
+		// Exhaust every page with empty responses: all three slots become terminal skips.
+		f := &scriptedFetcher{}
+		for i := 0; i < envelopeMaxPageAttempts; i++ {
+			es.fetchPass(ctx, "peer-a", f.fetch)
+		}
 		return c, st, es
 	}
 
@@ -888,8 +786,7 @@ func TestEnvelopeSkipsPublishedOnlyAfterImport(t *testing.T) {
 		_, err := st.fillBack(ctx, 20, c.blks[:3], &das.MockAvailabilityStore{}, es)
 		require.NoError(t, err)
 		require.Equal(t, true, es.published)
-		// All three slots, including the tail, are attributed to the EL rather than the peer.
-		require.Equal(t, 3, len(es.skips[envSkipELFailed]))
+		require.Equal(t, 3, len(es.skips[envSkipPeerExhausted]))
 		// Idempotent: a second call must not double-count the same gaps.
 		es.publishSkips()
 		require.Equal(t, true, es.published)

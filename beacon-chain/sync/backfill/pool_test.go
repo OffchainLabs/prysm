@@ -543,8 +543,7 @@ func TestProcessTodoExpiresEnvelopesWithoutPeers(t *testing.T) {
 	pool := newP2PBatchWorkerPool(p2ptest.NewTestP2P(t), 2, mockCurrentNeedsFunc(0, 1<<32))
 
 	c := makeEnvChain(t, envChainCfg{start: 10, n: 3})
-	recon := &mockReconstructor{payloads: c.reconPayloads(t, 0, 1, 2)}
-	cfg := testEnvSyncCfg(t, c, recon, &downscoreRecorder{})
+	cfg := testEnvSyncCfg(t, c, &downscoreRecorder{})
 	es, err := newEnvelopeSync(ctx, c.blks, cfg)
 	require.NoError(t, err)
 	b := batch{begin: 10, end: 13, blocks: c.blks, columns: &columnSync{}, envelopes: es, state: batchSyncEnvelopes}
@@ -582,8 +581,7 @@ func TestProcessTodoExpiresEnvelopesWithoutPeers(t *testing.T) {
 // assignment without mutating the shared busy set.
 func TestEnvelopeRetryExclusions(t *testing.T) {
 	c := makeEnvChain(t, envChainCfg{start: 10, n: 2})
-	recon := &mockReconstructor{payloads: c.reconPayloads(t, 0, 1)}
-	es, err := newEnvelopeSync(t.Context(), c.blks, testEnvSyncCfg(t, c, recon, &downscoreRecorder{}))
+	es, err := newEnvelopeSync(t.Context(), c.blks, testEnvSyncCfg(t, c, &downscoreRecorder{}))
 	require.NoError(t, err)
 
 	busy := map[peer.ID]bool{"busy-peer": true}

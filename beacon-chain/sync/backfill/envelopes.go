@@ -19,7 +19,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -32,7 +31,6 @@ import (
 // never retried after the batch completes, and are counted once the batch is durable.
 const (
 	envSkipSigUnverifiable = "sig_unverifiable"
-	envSkipELFailed        = "el_failed"
 	envSkipPeerExhausted   = "peer_exhausted"
 	envSkipTailUnresolved  = "tail_unresolved"
 	envSkipDBFailed        = "db_failed"
@@ -43,8 +41,8 @@ const (
 	envelopePageSize = primitives.Slot(16)
 	// envelopeMaxPageAttempts caps the total RPC attempts for an unresolved page.
 	envelopeMaxPageAttempts = 3
-	// envelopeLocalRetries caps local (non-network) retries: EL reconstruction calls,
-	// the boundary child lookup, and envelope db writes.
+	// envelopeLocalRetries caps local (non-network) retries: the boundary child lookup and
+	// envelope db writes.
 	envelopeLocalRetries = 3
 )
 
@@ -53,12 +51,6 @@ var (
 	// envelopeSkipLogger rate limits the per-batch summary of skipped envelope slots.
 	envelopeSkipLogger = newIntervalLogger(log, 30)
 )
-
-// EnvelopeReconstructor reconstructs full Gloas execution payloads from the execution client,
-// keyed by execution block hash. It is satisfied by execution.Reconstructor.
-type EnvelopeReconstructor interface {
-	ReconstructFullGloasExecutionPayloadsByHash(ctx context.Context, blockHashes [][32]byte) (map[[32]byte]*enginev1.ExecutionPayloadGloas, error)
-}
 
 // envelopeFetcher requests execution payload envelopes by range from the given peer. fetchPass
 // takes one as a parameter so tests can supply responses without a p2p stack.
@@ -226,7 +218,6 @@ type envelopeSync struct {
 
 type envelopeSyncCfg struct {
 	verifier      *envelopeVerifier
-	reconstructor EnvelopeReconstructor
 	hasEnvelope   func(ctx context.Context, root [32]byte) bool
 	boundaryChild func(ctx context.Context, tailRoot [32]byte) (interfaces.ReadOnlyBeaconBlock, error)
 	currentNeeds  func() das.CurrentNeeds
@@ -259,7 +250,7 @@ func (cfg *envelopeSyncCfg) applyDefaults() {
 // if the boundary child is already imported it is classified immediately, otherwise
 // classification is deferred to import time.
 func newEnvelopeSync(ctx context.Context, vbs verifiedROBlocks, cfg *envelopeSyncCfg) (*envelopeSync, error) {
-	if cfg == nil || cfg.verifier == nil || cfg.reconstructor == nil || cfg.hasEnvelope == nil {
+	if cfg == nil || cfg.verifier == nil || cfg.hasEnvelope == nil {
 		return nil, nil
 	}
 	cfg.applyDefaults()
@@ -386,18 +377,6 @@ func (es *envelopeSync) unresolved() int {
 	return len(es.pending)
 }
 
-// elFailed records an EL cross-check failure, which is never a peer offense. A required slot
-// takes the terminal skip immediately. The batch tail may still be unclassified, and a withheld
-// tail must stay silent, so its reason is deferred to import-time classification rather than
-// dropped — otherwise an expired tail is reported as a peer drought instead of an EL failure.
-func (es *envelopeSync) elFailed(exp *envelopeExpectation, slot primitives.Slot) {
-	if exp.required {
-		es.skip(slot, envSkipELFailed)
-		return
-	}
-	exp.skipReason = envSkipELFailed
-}
-
 // skip records a terminal skip for the slot: the envelope stays absent and is never retried
 // after the batch completes. The counter is emitted later, by publishSkips.
 func (es *envelopeSync) skip(slot primitives.Slot, reason string) {
@@ -489,7 +468,7 @@ func (es *envelopeSync) fetchPass(ctx context.Context, pid peer.ID, fetch envelo
 			continue
 		}
 		envelopeDownloadCount.Add(float64(len(envs)))
-		es.processResponse(ctx, pid, envs)
+		es.processResponse(pid, envs)
 	}
 	es.expireExhaustedPages()
 }
@@ -531,9 +510,9 @@ func (es *envelopeSync) expireExhaustedPages() {
 }
 
 // processResponse runs the staged verification over the envelopes we actually expect:
-// block/bid binding, one aggregate BLS verification for the page, then the EL content
-// cross-check. Verified envelopes are blinded and held for persistence at import time.
-func (es *envelopeSync) processResponse(ctx context.Context, pid peer.ID, envs []*ethpb.SignedExecutionPayloadEnvelope) {
+// block/bid binding, one aggregate BLS verification for the page, then a local block hash
+// check against the bid. Verified envelopes are blinded and held for persistence at import.
+func (es *envelopeSync) processResponse(pid peer.ID, envs []*ethpb.SignedExecutionPayloadEnvelope) {
 	type candidate struct {
 		env  *ethpb.SignedExecutionPayloadEnvelope
 		exp  *envelopeExpectation
@@ -583,85 +562,24 @@ func (es *envelopeSync) processResponse(ctx context.Context, pid peer.ID, envs [
 		return
 	}
 
-	hashes := make([][32]byte, 0, len(cands))
 	for _, c := range cands {
-		hashes = append(hashes, bytesutil.ToBytes32(c.exp.bid.BlockHash))
-	}
-	payloads, err := es.reconstructWithRetries(ctx, hashes)
-	if err != nil {
-		// The batched engine call fails as a whole when any single body is unavailable, so a
-		// batch-level error must not discard every otherwise-reconstructable envelope in the
-		// page: isolate the failure by falling back to per-hash reconstruction.
-		payloads = es.reconstructIndividually(ctx, hashes)
-	}
-	for _, c := range cands {
-		recon := payloads[bytesutil.ToBytes32(c.exp.bid.BlockHash)]
-		if recon == nil {
-			es.elFailed(c.exp, c.slot)
+		parentRoot := c.exp.block.Block().ParentRoot()
+		computed, err := executionBlockHashGloas(c.env.Message.Payload, c.env.Message.ExecutionRequests, parentRoot)
+		if err != nil {
+			// The committed payload is decodable by construction, so this is a peer offense;
+			// the slot stays unresolved for a retry from another peer, as does a mismatch below.
+			es.cfg.downscore(pid, "undecodable ExecutionPayloadEnvelope payload", errors.Wrap(errInvalidEnvelopeResponse, err.Error()))
 			continue
 		}
-		fetchedRoot, htrErr := c.env.Message.Payload.HashTreeRoot()
-		if htrErr != nil {
-			es.elFailed(c.exp, c.slot)
-			continue
-		}
-		reconRoot, htrErr := recon.HashTreeRoot()
-		if htrErr != nil {
-			es.elFailed(c.exp, c.slot)
-			continue
-		}
-		if fetchedRoot != reconRoot {
-			// The reconstruction succeeded, so the peer served payload bytes that do not match
-			// the proposer-committed block hash. That is a peer offense; leave the slot
-			// unresolved so it can be retried from another peer.
-			es.cfg.downscore(pid, "envelope payload does not match EL reconstruction", errors.Wrapf(errInvalidEnvelopeResponse,
-				"payload htr=%#x, reconstructed htr=%#x", fetchedRoot, reconRoot))
+		if computed != bytesutil.ToBytes32(c.exp.bid.BlockHash) {
+			es.cfg.downscore(pid, "envelope payload does not match bid block hash", errors.Wrapf(errInvalidEnvelopeResponse,
+				"computed block hash=%#x, bid block hash=%#x", computed, c.exp.bid.BlockHash))
 			continue
 		}
 		delete(es.pending, c.slot)
-		// A later attempt resolved the slot, so drop any EL failure deferred by an earlier one;
-		// finalize prefers a deferred reason over a held envelope.
-		c.exp.skipReason = ""
 		es.held[c.slot] = kv.BlindEnvelope(c.env)
 		envelopeVerifiedCount.Inc()
 	}
-}
-
-// reconstructIndividually reconstructs each payload with its own engine call, so that hashes the
-// EL cannot serve resolve to missing entries instead of failing the entire set. It is only used
-// after the batched call (with its bounded retries) has failed, so each hash gets one attempt.
-func (es *envelopeSync) reconstructIndividually(ctx context.Context, hashes [][32]byte) map[[32]byte]*enginev1.ExecutionPayloadGloas {
-	out := make(map[[32]byte]*enginev1.ExecutionPayloadGloas, len(hashes))
-	for _, h := range hashes {
-		if ctx.Err() != nil {
-			return out
-		}
-		payloads, err := es.cfg.reconstructor.ReconstructFullGloasExecutionPayloadsByHash(ctx, [][32]byte{h})
-		if err != nil {
-			continue
-		}
-		out[h] = payloads[h]
-	}
-	return out
-}
-
-func (es *envelopeSync) reconstructWithRetries(ctx context.Context, hashes [][32]byte) (map[[32]byte]*enginev1.ExecutionPayloadGloas, error) {
-	var lastErr error
-	for i := 0; i < envelopeLocalRetries; i++ {
-		if i > 0 {
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(es.cfg.localDelay):
-			}
-		}
-		payloads, err := es.cfg.reconstructor.ReconstructFullGloasExecutionPayloadsByHash(ctx, hashes)
-		if err == nil {
-			return payloads, nil
-		}
-		lastErr = err
-	}
-	return nil, lastErr
 }
 
 // finalize runs at import time, after the batch has been connected to the already-imported chain

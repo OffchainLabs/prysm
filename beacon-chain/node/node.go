@@ -1190,16 +1190,7 @@ func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
 
 func (b *BeaconNode) RegisterBackfillService(cliCtx *cli.Context, bfs *backfill.Store) error {
 	pa := peers.NewAssigner(b.fetchP2P().Peers(), b.forkChoicer)
-	// The execution service is registered after the backfill service, so hand backfill a lazy
-	// provider that resolves the reconstructor once the backfill runloop starts.
-	opts := append(b.BackfillOpts, backfill.WithEnvelopeReconstructor(func() (backfill.EnvelopeReconstructor, error) {
-		var web3Service *execution.Service
-		if err := b.services.FetchService(&web3Service); err != nil {
-			return nil, err
-		}
-		return web3Service, nil
-	}))
-	bf, err := backfill.NewService(cliCtx.Context, bfs, b.BlobStorage, b.DataColumnStorage, b.ClockWaiter, b.fetchP2P(), pa, opts...)
+	bf, err := backfill.NewService(cliCtx.Context, bfs, b.BlobStorage, b.DataColumnStorage, b.ClockWaiter, b.fetchP2P(), pa, b.BackfillOpts...)
 	if err != nil {
 		return errors.Wrap(err, "error initializing backfill service")
 	}

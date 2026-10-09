@@ -34,18 +34,15 @@ type workerCfg struct {
 	currentNeeds func() das.CurrentNeeds
 	store        *Store
 	envVerifier  *envelopeVerifier
-	// envReconstructor enables the envelope backfill stage; when nil the stage is skipped.
-	envReconstructor EnvelopeReconstructor
 }
 
 // envelopeSyncCfg assembles the per-batch envelope sync configuration from the worker config.
 func (cfg *workerCfg) envelopeSyncCfg() *envelopeSyncCfg {
-	if cfg.envVerifier == nil || cfg.envReconstructor == nil || cfg.store == nil {
+	if cfg.envVerifier == nil || cfg.store == nil {
 		return nil
 	}
 	return &envelopeSyncCfg{
 		verifier:      cfg.envVerifier,
-		reconstructor: cfg.envReconstructor,
 		hasEnvelope:   cfg.store.hasEnvelope,
 		boundaryChild: cfg.store.boundaryChild,
 		currentNeeds:  cfg.currentNeeds,

@@ -47,7 +47,6 @@ type Service struct {
 	fuluStart       primitives.Slot
 	denebStart      primitives.Slot
 	progressLogger  *intervalLogger
-	envReconWaiter  func() (EnvelopeReconstructor, error)
 }
 
 const progressLogInterval = 60
@@ -122,18 +121,6 @@ func WithSyncNeedsWaiter(f func() (das.SyncNeeds, error)) ServiceOption {
 	return func(s *Service) error {
 		if f != nil {
 			s.syncNeedsWaiter = f
-		}
-		return nil
-	}
-}
-
-// WithEnvelopeReconstructor provides the execution payload reconstructor used by the envelope
-// backfill stage. It is a lazy provider because the execution service is registered after the
-// backfill service; it is resolved once when the backfill runloop starts.
-func WithEnvelopeReconstructor(f func() (EnvelopeReconstructor, error)) ServiceOption {
-	return func(s *Service) error {
-		if f != nil {
-			s.envReconWaiter = f
 		}
 		return nil
 	}
@@ -333,16 +320,6 @@ func (s *Service) Start() {
 			return
 		}
 
-		if s.envReconWaiter != nil {
-			recon, err := s.envReconWaiter()
-			if err != nil {
-				// Envelope backfill is best-effort; block backfill must not be blocked by
-				// execution service wiring problems.
-				log.WithError(err).Error("Could not resolve execution reconstructor; envelope backfill disabled")
-			} else {
-				s.workerCfg.envReconstructor = recon
-			}
-		}
 	}
 
 	// Allow tests to inject a mock pool.
