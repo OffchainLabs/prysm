@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/common"
@@ -586,6 +587,42 @@ func TestExecutionRequestsGloasFromConsensus_HappyPath(t *testing.T) {
 	require.Equal(t, 1, len(result.BuilderExits))
 	require.Equal(t, hexutil.Encode(fillByteSlice(20, 0xc1)), result.BuilderExits[0].SourceAddress)
 	require.Equal(t, hexutil.Encode(fillByteSlice(48, 0xd1)), result.BuilderExits[0].Pubkey)
+}
+
+// overElectraDepositCap returns one more JSON deposit request than the Electra
+// MAX_DEPOSIT_REQUESTS_PER_PAYLOAD allows.
+func overElectraDepositCap() []*DepositRequest {
+	deposits := make([]*DepositRequest, params.BeaconConfig().MaxDepositRequestsPerPayload+1)
+	for i := range deposits {
+		deposits[i] = &DepositRequest{
+			Pubkey:                hexutil.Encode(fillByteSlice(48, 0xb1)),
+			WithdrawalCredentials: hexutil.Encode(fillByteSlice(32, 0xa1)),
+			Amount:                "32000000000",
+			Signature:             hexutil.Encode(fillByteSlice(96, 0xf1)),
+			Index:                 fmt.Sprintf("%d", i),
+		}
+	}
+	return deposits
+}
+
+// Electra bounds deposit requests by MAX_DEPOSIT_REQUESTS_PER_PAYLOAD.
+func TestExecutionRequests_ToConsensus_RejectsOverCapDeposits(t *testing.T) {
+	execReq := &ExecutionRequests{Deposits: overElectraDepositCap()}
+
+	_, err := execReq.ToConsensus()
+	require.ErrorContains(t, "exceeds max of", err)
+}
+
+// Gloas removed MAX_DEPOSIT_REQUESTS_PER_PAYLOAD (consensus-specs #5436), so the
+// Electra cap must not apply to the gloas type.
+func TestExecutionRequestsGloas_ToConsensus_NoDepositCap(t *testing.T) {
+	deposits := overElectraDepositCap()
+	execReq := &ExecutionRequestsGloas{Deposits: deposits}
+
+	result, err := execReq.ToConsensus()
+	require.NoError(t, err)
+	require.Equal(t, len(deposits), len(result.Deposits))
+	require.Equal(t, uint64(len(deposits)-1), result.Deposits[len(deposits)-1].Index)
 }
 
 func TestExecutionRequestsGloas_ToConsensus_HappyPath(t *testing.T) {

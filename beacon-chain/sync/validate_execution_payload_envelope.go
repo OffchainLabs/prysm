@@ -42,6 +42,9 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 		return pubsub.ValidationReject, p2p.ErrInvalidTopic
 	}
 
+	s.validateEnvelopeLock.Lock()
+	defer s.validateEnvelopeLock.Unlock()
+
 	m, err := s.decodePubsubMessage(msg)
 	if err != nil {
 		tracing.AnnotateError(span, err)

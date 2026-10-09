@@ -114,7 +114,7 @@ func (db *ValidatorDBMock) SlashableAttestationCheck(
 }
 
 func (db *ValidatorDBMock) SaveAttestationForPubKey(
-	ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, signingRoot [fieldparams.RootLength]byte, att ethpb.IndexedAtt,
+	ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, signingRoot []byte, att ethpb.IndexedAtt,
 ) error {
 	panic("not implemented")
 }

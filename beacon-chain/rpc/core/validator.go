@@ -529,12 +529,10 @@ func (s *Service) GetAttestationData(
 		return nil, &RpcError{Reason: Unavailable, Err: errOptimisticMode}
 	}
 
-	headRoot, err := s.HeadFetcher.HeadRoot(ctx)
-	if err != nil {
-		return nil, &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get head root")}
-	}
+	currentHeadRoot, currentHeadFull, fcRoot, isPayloadFull := s.HeadFetcher.HeadAndCanonicalNodeAtSlot(req.Slot)
+	headRoot := currentHeadRoot[:]
 	targetEpoch := slots.ToEpoch(req.Slot)
-	targetRoot, err := s.HeadFetcher.TargetRootForEpoch(bytesutil.ToBytes32(headRoot), targetEpoch)
+	targetRoot, err := s.HeadFetcher.TargetRootForEpoch(currentHeadRoot, targetEpoch)
 	if err != nil {
 		return nil, &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get target root")}
 	}
@@ -550,16 +548,11 @@ func (s *Service) GetAttestationData(
 		}
 	}
 	justifiedCheckpoint := headState.CurrentJustifiedCheckpoint()
-	var isPayloadFull bool
-	if slots.ToEpoch(req.Slot) >= params.BeaconConfig().GloasForkEpoch {
-		fcRoot, full := s.ChainInfoFetcher.CanonicalNodeAtSlot(req.Slot)
-		if fcRoot != bytesutil.ToBytes32(headRoot) {
-			log.WithFields(logrus.Fields{
-				"fcRoot":   hexutil.Encode(fcRoot[:]),
-				"headRoot": hexutil.Encode(headRoot),
-			}).Error("Forkchoice head root does not match head root")
-		}
-		isPayloadFull = full
+	if slots.ToEpoch(req.Slot) >= params.BeaconConfig().GloasForkEpoch && fcRoot != currentHeadRoot {
+		log.WithFields(logrus.Fields{
+			"fcRoot":   hexutil.Encode(fcRoot[:]),
+			"headRoot": hexutil.Encode(headRoot),
+		}).Error("Forkchoice head root does not match head root")
 	}
 
 	if err = s.AttestationCache.Put(&cache.AttestationConsensusData{

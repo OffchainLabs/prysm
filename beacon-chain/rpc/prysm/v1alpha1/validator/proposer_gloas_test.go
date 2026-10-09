@@ -19,7 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
-func TestSetP2PBidFallback_UsesCachedBid(t *testing.T) {
+func TestSetRemoteBidFallback(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.GloasForkEpoch = 0
@@ -37,47 +37,96 @@ func TestSetP2PBidFallback_UsesCachedBid(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	sBlk, err := consensusblocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{
-		Block: &ethpb.BeaconBlockGloas{
-			Slot:       slot,
-			ParentRoot: parentRoot[:],
-			Body:       &ethpb.BeaconBlockBodyGloas{},
-		},
-	})
-	require.NoError(t, err)
-
-	p2pBid := &ethpb.SignedExecutionPayloadBid{
-		Message: &ethpb.ExecutionPayloadBid{
-			Slot:                  slot,
-			ParentBlockHash:       parentBlockHash[:],
-			ParentBlockRoot:       parentRoot[:],
-			BlockHash:             make([]byte, 32),
-			BuilderIndex:          7,
-			Value:                 1000,
-			ExecutionPayment:      500,
-			FeeRecipient:          make([]byte, 20),
-			GasLimit:              30_000_000,
-			PrevRandao:            make([]byte, 32),
-			BlobKzgCommitments:    [][]byte{},
-			ExecutionRequestsRoot: make([]byte, 32),
-		},
-		Signature: make([]byte, 96),
+	newBlock := func(t *testing.T) interfaces.SignedBeaconBlock {
+		sBlk, err := consensusblocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{
+			Block: &ethpb.BeaconBlockGloas{
+				Slot:       slot,
+				ParentRoot: parentRoot[:],
+				Body:       &ethpb.BeaconBlockBodyGloas{},
+			},
+		})
+		require.NoError(t, err)
+		return sBlk
 	}
-	bidCache := cache.NewHighestExecutionPayloadBidCache()
-	bidCache.SetIfHigher(p2pBid)
+	newRemoteBid := func(builderIndex primitives.BuilderIndex, value primitives.Gwei) *ethpb.SignedExecutionPayloadBid {
+		return &ethpb.SignedExecutionPayloadBid{
+			Message: &ethpb.ExecutionPayloadBid{
+				Slot:                  slot,
+				ParentBlockHash:       parentBlockHash[:],
+				ParentBlockRoot:       parentRoot[:],
+				BlockHash:             make([]byte, 32),
+				BuilderIndex:          builderIndex,
+				Value:                 value,
+				FeeRecipient:          make([]byte, 20),
+				GasLimit:              30_000_000,
+				PrevRandao:            make([]byte, 32),
+				BlobKzgCommitments:    [][]byte{},
+				ExecutionRequestsRoot: make([]byte, 32),
+			},
+			Signature: make([]byte, 96),
+		}
+	}
+	newServer := func(p2pBid *ethpb.SignedExecutionPayloadBid) *Server {
+		bidCache := cache.NewHighestExecutionPayloadBidCache()
+		if p2pBid != nil {
+			bidCache.SetIfHigher(p2pBid)
+		}
+		return &Server{HighestBidCache: bidCache, ForkchoiceFetcher: &chainMock.ChainService{}}
+	}
+	builderWin := func(value primitives.Gwei) *winningBuilderBid {
+		return &winningBuilderBid{
+			bid:   newRemoteBid(9, value),
+			entry: &ethpb.BuilderEntry{Url: []byte("http://builder"), MaxExecutionPayment: math.MaxUint64, BuilderBoostFactor: 100},
+		}
+	}
 
-	vs := &Server{HighestBidCache: bidCache, ForkchoiceFetcher: &chainMock.ChainService{}}
+	tests := []struct {
+		name       string
+		p2p        *ethpb.SignedExecutionPayloadBid
+		builder    *winningBuilderBid
+		wantSrc    bidSource
+		wantIdx    primitives.BuilderIndex
+		wantErrStr string
+	}{
+		{name: "cached p2p bid only", p2p: newRemoteBid(7, 1000), wantSrc: bidSourceP2P, wantIdx: 7},
+		{name: "builder bid only", builder: builderWin(1000), wantSrc: bidSourceBuilderAPI, wantIdx: 9},
+		{name: "builder bid beats p2p", p2p: newRemoteBid(7, 1000), builder: builderWin(2000), wantSrc: bidSourceBuilderAPI, wantIdx: 9},
+		{name: "p2p bid beats builder", p2p: newRemoteBid(7, 3000), builder: builderWin(2000), wantSrc: bidSourceP2P, wantIdx: 7},
+		{name: "no remote bids", wantErrStr: "no builder or cached P2P bid"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sBlk := newBlock(t)
+			src, err := newServer(tt.p2p).setRemoteBidFallback(context.Background(), sBlk, st, false, tt.builder, nil)
+			if tt.wantErrStr != "" {
+				require.ErrorContains(t, tt.wantErrStr, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.wantSrc, src)
+			signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
+			require.NoError(t, err)
+			require.NotNil(t, signedBid)
+			require.Equal(t, tt.wantIdx, signedBid.Message.BuilderIndex)
+		})
+	}
 
-	require.NoError(t, vs.setP2PBidFallback(context.Background(), sBlk, st, false))
+	t.Run("p2p bid is looked up on the state-derived parent hash", func(t *testing.T) {
+		sBlk := newBlock(t)
+		_, err := newServer(newRemoteBid(7, 1000)).setRemoteBidFallback(context.Background(), sBlk, st, true, nil, nil)
+		require.ErrorContains(t, "no builder or cached P2P bid", err)
+	})
 
-	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
-	require.NoError(t, err)
-	require.NotNil(t, signedBid)
-	require.Equal(t, primitives.BuilderIndex(7), signedBid.Message.BuilderIndex)
-	require.Equal(t, primitives.Gwei(1000), signedBid.Message.Value)
+	t.Run("nil bid cache still uses the builder bid", func(t *testing.T) {
+		sBlk := newBlock(t)
+		vs := &Server{ForkchoiceFetcher: &chainMock.ChainService{}}
+		src, err := vs.setRemoteBidFallback(context.Background(), sBlk, st, false, builderWin(1000), nil)
+		require.NoError(t, err)
+		require.Equal(t, bidSourceBuilderAPI, src)
+	})
 }
 
-func TestSetP2PBidFallback_GloasForkBoundary(t *testing.T) {
+func TestSetRemoteBidFallback_GloasForkBoundary(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.GloasForkEpoch = 1
@@ -116,40 +165,13 @@ func TestSetP2PBidFallback_GloasForkBoundary(t *testing.T) {
 	})
 
 	vs := &Server{HighestBidCache: bidCache, ForkchoiceFetcher: &chainMock.ChainService{BlockSlot: slot - 1}}
-	require.NoError(t, vs.setP2PBidFallback(t.Context(), sBlk, st, true))
+	src, err := vs.setRemoteBidFallback(t.Context(), sBlk, st, true, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, bidSourceP2P, src)
 
 	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
 	require.NoError(t, err)
 	require.Equal(t, primitives.BuilderIndex(7), signedBid.Message.BuilderIndex)
-}
-
-func TestSetP2PBidFallback_NoCachedBidErrors(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.GloasForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
-
-	parentRoot := bytesutil.ToBytes32([]byte("parent-root"))
-	parentBlockHash := bytesutil.ToBytes32([]byte("parent-block-hash"))
-	st, err := util.NewBeaconStateGloas(func(state *ethpb.BeaconStateGloas) error {
-		state.LatestExecutionPayloadBid.ParentBlockHash = parentBlockHash[:]
-		return nil
-	})
-	require.NoError(t, err)
-
-	sBlk, err := consensusblocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{
-		Block: &ethpb.BeaconBlockGloas{
-			Slot:       primitives.Slot(100),
-			ParentRoot: parentRoot[:],
-			Body:       &ethpb.BeaconBlockBodyGloas{},
-		},
-	})
-	require.NoError(t, err)
-
-	vs := &Server{HighestBidCache: cache.NewHighestExecutionPayloadBidCache(), ForkchoiceFetcher: &chainMock.ChainService{}}
-
-	err = vs.setP2PBidFallback(context.Background(), sBlk, st, false)
-	require.ErrorContains(t, "no cached P2P bid", err)
 }
 
 func TestGloasPayloadValue(t *testing.T) {

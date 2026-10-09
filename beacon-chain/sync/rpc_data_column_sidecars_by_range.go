@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -252,6 +253,8 @@ func validateDataColumnsByRange(request *pb.DataColumnSidecarsByRangeRequest, cu
 		return nil, errors.Wrap(p2ptypes.ErrInvalidRequest, "overflow end - start + 1")
 	}
 
-	rangeParameters := &rangeParams{start: startSlot, end: endSlot, size: uint64(size)}
+	batchSize := min(uint64(size), uint64(flags.Get().BlockBatchLimit))
+
+	rangeParameters := &rangeParams{start: startSlot, end: endSlot, size: batchSize}
 	return rangeParameters, nil
 }

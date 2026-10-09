@@ -61,7 +61,6 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 	var ticker *time.Ticker
 	if len(requestedRoots) > batchSize {
 		ticker = time.NewTicker(time.Second)
-		defer ticker.Stop()
 	}
 
 	defer closeStream(stream, log)

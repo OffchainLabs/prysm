@@ -76,7 +76,6 @@ func (s *Service) beaconBlocksByRangeRPCHandler(ctx context.Context, msg any, st
 
 	// Ticker to stagger out large requests.
 	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
 	batcher, err := newBlockRangeBatcher(rp, s.cfg.beaconDB, s.rateLimiter, s.cfg.chain.IsCanonical, ticker)
 	if err != nil {
 		log.WithError(err).Info("Error in BlocksByRange batch")
