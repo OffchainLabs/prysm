@@ -74,6 +74,9 @@ func (*mockEnvelopeVerifier) VerifyWithdrawalsLimit() error        { return nil 
 func (m *mockEnvelopeVerifier) VerifySignature(_ context.Context, _ state.ReadOnlyBeaconState) error {
 	return m.errSignature
 }
+func (m *mockEnvelopeVerifier) VerifySignatureWithPubkey(_ [fieldparams.BLSPubkeyLength]byte, _ [32]byte) error {
+	return m.errSignature
+}
 func (*mockEnvelopeVerifier) SatisfyRequirement(_ verification.Requirement) {}
 
 func gloasBlockWithBid(t *testing.T, slot primitives.Slot, bid *ethpb.SignedExecutionPayloadBid) interfaces.ReadOnlySignedBeaconBlock {

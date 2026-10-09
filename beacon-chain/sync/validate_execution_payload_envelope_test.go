@@ -21,6 +21,7 @@ import (
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -145,6 +146,28 @@ func TestValidateExecutionPayloadEnvelope_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, result, pubsub.ValidationAccept)
 	require.Equal(t, true, s.hasSeenPayloadEnvelope(root, builderIdx))
+}
+
+func TestValidateExecutionPayloadEnvelope_UnknownBuilderPubkey(t *testing.T) {
+	ctx := context.Background()
+	s, msg, _, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{})
+	s.cfg.chain.(*mock.ChainService).BuilderPubkeys[root] = nil
+
+	result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
+	require.ErrorContains(t, "unknown builder pubkey", err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+}
+
+func TestValidateExecutionPayloadEnvelope_FullNodeIgnored(t *testing.T) {
+	ctx := context.Background()
+	s, msg, _, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{})
+	s.cfg.chain.(*mock.ChainService).ForkchoiceRoots = map[[32]byte]bool{root: true}
+
+	result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
 }
 
 func TestValidateExecutionPayloadEnvelope_BlockSeenButNotInDB_NoPanic(t *testing.T) {
@@ -274,6 +297,10 @@ func (m *mockExecutionPayloadEnvelopeVerifier) VerifySignature(_ context.Context
 	return m.errSignature
 }
 
+func (m *mockExecutionPayloadEnvelopeVerifier) VerifySignatureWithPubkey(_ [fieldparams.BLSPubkeyLength]byte, _ [32]byte) error {
+	return m.errSignature
+}
+
 func (*mockExecutionPayloadEnvelopeVerifier) SatisfyRequirement(_ verification.Requirement) {}
 
 // recordingEnvelopeVerifier tracks which requirements the validator exercises.
@@ -328,6 +355,11 @@ func (r *recordingEnvelopeVerifier) VerifyWithdrawalsLimit() error {
 }
 
 func (r *recordingEnvelopeVerifier) VerifySignature(_ context.Context, _ state.ReadOnlyBeaconState) error {
+	r.recorded[verification.RequireBuilderSignatureValid] = true
+	return nil
+}
+
+func (r *recordingEnvelopeVerifier) VerifySignatureWithPubkey(_ [fieldparams.BLSPubkeyLength]byte, _ [32]byte) error {
 	r.recorded[verification.RequireBuilderSignatureValid] = true
 	return nil
 }
@@ -407,6 +439,7 @@ func newEnvelopeServiceForTest(t *testing.T, envelopeSlot, blockSlot primitives.
 	require.NoError(t, err)
 	require.NoError(t, db.SaveState(ctx, state, root))
 	chainService.State = state
+	chainService.BuilderPubkeys = map[[32]byte]*[fieldparams.BLSPubkeyLength]byte{root: {0x01}}
 
 	blockHash := bytesutil.ToBytes32(bid.Message.BlockHash)
 	env := testSignedExecutionPayloadEnvelope(t, envelopeSlot, primitives.BuilderIndex(bid.Message.BuilderIndex), root, blockHash)
