@@ -54,6 +54,7 @@ var (
 	errSidecarIndicesUnordered  = errors.Wrap(errSidecarRPCValidation, "sidecar indices not in ascending order")
 	errSidecarSlotNotRequested  = errors.Wrap(errSidecarRPCValidation, "sidecar slot not in range")
 	errSidecarIndexNotRequested = errors.Wrap(errSidecarRPCValidation, "sidecar index not requested")
+	errSidecarDuplicated        = errors.Wrap(errSidecarRPCValidation, "sidecar already received")
 	errSidecarIndexTooLarge     = errors.Wrap(errSidecarRPCValidation, "sidecar index out of range")
 	errSidecarTooManyCells      = errors.Wrap(errSidecarRPCValidation, "sidecar carries more cells/commitments/proofs than allowed for the slot")
 )
@@ -606,22 +607,24 @@ func isSidecarSlotRequested(request *ethpb.DataColumnSidecarsByRangeRequest) (Da
 // areSidecarsOrdered enforces the p2p spec rule:
 // "The following data column sidecars, where they exist, MUST be sent in (slot, column_index) order."
 // via https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#datacolumnsidecarsbyrange-v1
+// The order is strict: a response covers a single chain, so a (slot, column_index) pair identifies at most
+// one sidecar and a repeated pair is a duplicate.
 func areSidecarsOrdered() DataColumnResponseValidation {
 	var prevSlot primitives.Slot
 	var prevIdx uint64
+	var hasPrev bool
 
 	return func(sidecar blocks.RODataColumn) error {
-		if sidecar.Slot() < prevSlot {
-			return errors.Wrapf(errSidecarSlotsUnordered, "got=%d, want>=%d", sidecar.Slot(), prevSlot)
+		slot, idx := sidecar.Slot(), sidecar.Index()
+		if hasPrev {
+			if slot < prevSlot {
+				return errors.Wrapf(errSidecarSlotsUnordered, "got=%d, want>=%d", slot, prevSlot)
+			}
+			if slot == prevSlot && idx <= prevIdx {
+				return errors.Wrapf(errSidecarIndicesUnordered, "got=%d, want>%d", idx, prevIdx)
+			}
 		}
-		if sidecar.Slot() > prevSlot {
-			prevIdx = 0               // reset index tracking for new slot
-			prevSlot = sidecar.Slot() // move slot tracking to new slot
-		}
-		if sidecar.Index() < prevIdx {
-			return errors.Wrapf(errSidecarIndicesUnordered, "got=%d, want>=%d", sidecar.Index(), prevIdx)
-		}
-		prevIdx = sidecar.Index()
+		prevSlot, prevIdx, hasPrev = slot, idx, true
 		return nil
 	}
 }
@@ -706,9 +709,11 @@ func SendDataColumnSidecarsByRootRequest(p DataColumnSidecarsParams, peer goPeer
 	// Read the data column sidecars from the stream.
 	roDataColumns := make([]blocks.RODataColumn, 0, count)
 
+	vfs := []DataColumnResponseValidation{isSidecarIndexRootRequested(identifiers), isSidecarSizeValid()}
+
 	// Read the data column sidecars from the stream.
 	for range count {
-		roDataColumn, err := readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap, isSidecarIndexRootRequested(identifiers), isSidecarSizeValid())
+		roDataColumn, err := readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap, vfs...)
 		if errors.Is(err, io.EOF) {
 			if p.DownscorePeerOnRPCFault && len(roDataColumns) == 0 {
 				downscorePeer(p.P2P, peer, "noReturnedSidecar")
@@ -753,7 +758,7 @@ func isSidecarIndexRootRequested(request p2ptypes.DataColumnsByRootIdentifiers) 
 		}
 
 		for _, column := range sidecar.Columns {
-			columnsIndexFromRoot[blockRoot][column] = true
+			columnsIndexFromRoot[blockRoot][column] = false
 		}
 	}
 
@@ -765,10 +770,16 @@ func isSidecarIndexRootRequested(request p2ptypes.DataColumnsByRootIdentifiers) 
 			return errors.Errorf("root %#x returned by peer but not requested", root)
 		}
 
-		if !indices[index] {
+		received, ok := indices[index]
+		if !ok {
 			return errors.Errorf("index %d for root %#x returned by peer but not requested", index, root)
 		}
 
+		if received {
+			return errors.Wrapf(errSidecarDuplicated, "root=%#x, index=%d", root, index)
+		}
+
+		indices[index] = true
 		return nil
 	}
 }
