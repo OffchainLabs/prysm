@@ -12,7 +12,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"google.golang.org/protobuf/proto"
 )
 
 func TestCheckpointStateCache_StateByCheckpoint(t *testing.T) {
@@ -38,9 +37,7 @@ func TestCheckpointStateCache_StateByCheckpoint(t *testing.T) {
 	require.NoError(t, err)
 	pbstate, err := state_native.ProtobufBeaconStatePhase0(st.ToProtoUnsafe())
 	require.NoError(t, err)
-	if !proto.Equal(pbState1, pbstate) {
-		t.Error("incorrectly cached state")
-	}
+	require.DeepSSZEqual(t, pbState1, pbstate, "incorrectly cached state")
 
 	cp2 := &ethpb.Checkpoint{Epoch: 2, Root: bytesutil.PadTo([]byte{'B'}, 32)}
 	st2, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{

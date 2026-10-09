@@ -1,6 +1,7 @@
 package kv
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -22,6 +23,17 @@ import (
 
 // SlashingKind used for helpful information upon detection.
 type SlashingKind int
+
+// emptySigningRootRepeat tells whether an attestation without signing root is a double vote when the database
+// only holds, without signing root, its source epoch for its target epoch.
+type emptySigningRootRepeat int
+
+const (
+	// rejectEmptySigningRootRepeat considers such an attestation as a double vote.
+	rejectEmptySigningRootRepeat emptySigningRootRepeat = iota
+	// allowEmptySigningRootRepeat considers such an attestation as a repeat, and therefore not as a double vote.
+	allowEmptySigningRootRepeat
+)
 
 // AttestationRecordSaveRequest includes the attestation record to save along
 // with the appropriate call context.
@@ -200,7 +212,7 @@ func (s *Store) SlashableAttestationCheck(
 		return errors.Wrap(err, failedAttLocalProtectionErr)
 	}
 
-	if err := s.SaveAttestationForPubKey(ctx, pubKey, signingRoot32, indexedAtt); err != nil {
+	if err := s.SaveAttestationForPubKey(ctx, pubKey, signingRoot32[:], indexedAtt); err != nil {
 		return errors.Wrap(err, "could not save attestation history for validator public key")
 	}
 
@@ -211,6 +223,21 @@ func (s *Store) SlashableAttestationCheck(
 // not a double vote for a validator public key nor a surround vote.
 func (s *Store) CheckSlashableAttestation(
 	ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, signingRoot []byte, att ethpb.IndexedAtt,
+) (SlashingKind, error) {
+	return s.checkSlashableAttestation(ctx, pubKey, signingRoot, att, rejectEmptySigningRootRepeat)
+}
+
+// checkSlashableImportedAttestation is the same as CheckSlashableAttestation, but allows an attestation without
+// signing root to repeat the one stored without signing root in the database (see checkDoubleVote).
+// It must only be used for attestations imported from an EIP-3076 interchange file, never when signing.
+func (s *Store) checkSlashableImportedAttestation(
+	ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, signingRoot []byte, att ethpb.IndexedAtt,
+) (SlashingKind, error) {
+	return s.checkSlashableAttestation(ctx, pubKey, signingRoot, att, allowEmptySigningRootRepeat)
+}
+
+func (s *Store) checkSlashableAttestation(
+	ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, signingRoot []byte, att ethpb.IndexedAtt, emptyRootRepeat emptySigningRootRepeat,
 ) (SlashingKind, error) {
 	ctx, span := trace.StartSpan(ctx, "Validator.CheckSlashableAttestation")
 	defer span.End()
@@ -225,28 +252,22 @@ func (s *Store) CheckSlashableAttestation(
 			return nil
 		}
 
-		// First we check for double votes.
-		signingRootsBucket := pkBucket.Bucket(attestationSigningRootsBucket)
-		if signingRootsBucket != nil {
-			targetEpochBytes := bytesutil.EpochToBytesBigEndian(att.GetData().Target.Epoch)
-			existingSigningRoot := signingRootsBucket.Get(targetEpochBytes)
-
-			// If a signing root exists in the database, and if this database signing root is empty => We consider the new attestation as a double vote.
-			// If a signing root exists in the database, and if this database signing differs from the signing root of the new attestation => We consider the new attestation as a double vote.
-			if existingSigningRoot != nil && (len(existingSigningRoot) == 0 || slashings.SigningRootsDiffer(existingSigningRoot, signingRoot)) {
-				slashKind = DoubleVote
-				return fmt.Errorf(doubleVoteMessage, att.GetData().Target.Epoch, existingSigningRoot)
-			}
-		}
-
 		sourceEpochsBucket := pkBucket.Bucket(attestationSourceEpochsBucket)
 		targetEpochsBucket := pkBucket.Bucket(attestationTargetEpochsBucket)
+
+		var err error
+
+		// Is this attestation a double vote?
+		slashKind, err = s.checkDoubleVote(pkBucket.Bucket(attestationSigningRootsBucket), targetEpochsBucket, signingRoot, att, emptyRootRepeat)
+		if err != nil {
+			return err
+		}
+
 		if sourceEpochsBucket == nil {
 			return nil
 		}
 
 		// Is this attestation surrounding any other?
-		var err error
 		slashKind, err = s.checkSurroundingVote(sourceEpochsBucket, att)
 		if err != nil {
 			return err
@@ -265,6 +286,52 @@ func (s *Store) CheckSlashableAttestation(
 
 	tracing.AnnotateError(span, err)
 	return slashKind, err
+}
+
+// checkDoubleVote returns DoubleVote and an error if a signing root is stored in the database for the attestation's
+// target epoch, and this signing root is empty or differs from the new attestation's one. If emptyRootRepeat is
+// allowEmptySigningRootRepeat, an attestation without signing root is not a double vote if the database only holds,
+// without signing root, its source epoch for this target epoch (signing roots are optional in EIP-3076).
+func (*Store) checkDoubleVote(
+	signingRootsBucket, targetEpochsBucket *bolt.Bucket,
+	signingRoot []byte,
+	att ethpb.IndexedAtt,
+	emptyRootRepeat emptySigningRootRepeat,
+) (SlashingKind, error) {
+	// The signing roots bucket is created when the first attestation is saved for this public key.
+	// If it does not exist, there is no attestation to double vote against.
+	if signingRootsBucket == nil {
+		return NotSlashable, nil
+	}
+
+	targetEpoch := att.GetData().Target.Epoch
+	targetEpochBytes := bytesutil.EpochToBytesBigEndian(targetEpoch)
+
+	existingSigningRoot := signingRootsBucket.Get(targetEpochBytes)
+
+	// No attestation is stored for this target epoch, or the stored one has the same (non-empty) signing root:
+	// this is not a double vote. Note that an empty stored signing root always differs from the incoming one.
+	if existingSigningRoot == nil || !slashings.SigningRootsDiffer(existingSigningRoot, signingRoot) {
+		return NotSlashable, nil
+	}
+
+	doubleVoteErr := fmt.Errorf(doubleVoteMessage, targetEpoch, existingSigningRoot)
+
+	// Unless allowed, and unless neither the stored nor the incoming attestation has a signing root, this is a double vote.
+	if emptyRootRepeat == rejectEmptySigningRootRepeat || len(existingSigningRoot) != 0 || len(signingRoot) != 0 || targetEpochsBucket == nil {
+		return DoubleVote, doubleVoteErr
+	}
+
+	// Unless the database only holds the incoming source epoch (possibly several times) for this target epoch, this is a double vote.
+	existingSourceEpochs := targetEpochsBucket.Get(targetEpochBytes)
+	sourceEpochBytes := bytesutil.EpochToBytesBigEndian(att.GetData().Source.Epoch)
+	if len(existingSourceEpochs) == 0 ||
+		!bytes.Equal(existingSourceEpochs, bytes.Repeat(sourceEpochBytes, len(existingSourceEpochs)/len(sourceEpochBytes))) {
+		return DoubleVote, doubleVoteErr
+	}
+
+	// This is a repeat of the stored attestation, not a double vote.
+	return NotSlashable, nil
 }
 
 // Iterate from the back of the bucket since we are looking for target_epoch > att.target_epoch
@@ -375,7 +442,7 @@ func (s *Store) SaveAttestationsForPubKey(
 // SaveAttestationForPubKey saves an attestation for a validator public
 // key for local validator slashing protection.
 func (s *Store) SaveAttestationForPubKey(
-	ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, signingRoot [fieldparams.RootLength]byte, att ethpb.IndexedAtt,
+	ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, signingRoot []byte, att ethpb.IndexedAtt,
 ) error {
 	ctx, span := trace.StartSpan(ctx, "Validator.SaveAttestationForPubKey")
 	defer span.End()
@@ -385,7 +452,7 @@ func (s *Store) SaveAttestationForPubKey(
 			PubKey:      pubKey,
 			Source:      att.GetData().Source.Epoch,
 			Target:      att.GetData().Target.Epoch,
-			SigningRoot: signingRoot[:],
+			SigningRoot: signingRoot,
 		},
 	}
 

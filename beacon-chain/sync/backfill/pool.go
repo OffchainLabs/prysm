@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/runtime/logging"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -54,7 +55,7 @@ type p2pBatchWorkerPool struct {
 	earliest       primitives.Slot // earliest is the earliest slot a worker is processing
 	peerCache      *sync.DASPeerCache
 	p2p            p2p.P2P
-	peerFailLogger *intervalLogger
+	peerFailLogger *logging.IntervalLogger
 	needs          func() das.CurrentNeeds
 }
 
@@ -72,7 +73,7 @@ func newP2PBatchWorkerPool(p p2p.P2P, maxBatches int, needs func() das.CurrentNe
 		shutdownErr:    make(chan error),
 		peerCache:      sync.NewDASPeerCache(p),
 		p2p:            p,
-		peerFailLogger: newIntervalLogger(log, 5),
+		peerFailLogger: logging.NewIntervalLogger(log, 5),
 		earliest:       primitives.Slot(math.MaxUint64),
 		needs:          needs,
 	}
@@ -110,7 +111,7 @@ func (p *p2pBatchWorkerPool) complete() (batch, error) {
 	case err := <-p.shutdownErr:
 		return batch{}, errors.Wrap(err, "fatal error from backfill worker pool")
 	case <-p.ctx.Done():
-		log.WithError(p.ctx.Err()).Info("p2pBatchWorkerPool context canceled, shutting down")
+		log.WithError(p.ctx.Err()).Info("Backfill worker pool context canceled, shutting down")
 		return batch{}, p.ctx.Err()
 	}
 }
@@ -142,7 +143,7 @@ func (p *p2pBatchWorkerPool) batchRouter(pa PeerAssigner) {
 			todo = append(todo, b)
 			sortBatchDesc(todo)
 		case <-p.ctx.Done():
-			log.WithError(p.ctx.Err()).Info("p2pBatchWorkerPool context canceled, shutting down")
+			log.WithError(p.ctx.Err()).Info("Backfill worker pool context canceled, shutting down")
 			p.shutdown(p.ctx.Err())
 			return
 		}

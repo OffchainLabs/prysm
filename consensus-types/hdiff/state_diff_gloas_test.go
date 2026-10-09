@@ -19,7 +19,7 @@ import (
 
 func gloasState(t testing.TB, numValidators uint64) (state.BeaconState, error) {
 	fuluState, _ := util.DeterministicGenesisStateFulu(t, numValidators)
-	return gloas.UpgradeToGloas(fuluState)
+	return gloas.UpgradeToGloas(t.Context(), fuluState)
 }
 
 func requireEqualState(t testing.TB, expected, actual state.BeaconState) {
@@ -244,7 +244,7 @@ func TestGloasCrossForkDiff(t *testing.T) {
 	// Test Fulu → Gloas cross-fork diff via updateToVersion.
 	fuluSource, _ := util.DeterministicGenesisStateFulu(t, 64)
 
-	gloasTarget, err := gloas.UpgradeToGloas(fuluSource.Copy())
+	gloasTarget, err := gloas.UpgradeToGloas(t.Context(), fuluSource.Copy())
 	require.NoError(t, err)
 	require.NoError(t, gloasTarget.SetSlot(fuluSource.Slot()+1))
 
@@ -280,7 +280,7 @@ func TestGloasCrossForkDiffOnboardsBuilderDeposit(t *testing.T) {
 		Slot:                  0,
 	}}))
 
-	gloasTarget, err := gloas.UpgradeToGloas(fuluSource.Copy())
+	gloasTarget, err := gloas.UpgradeToGloas(t.Context(), fuluSource.Copy())
 	require.NoError(t, err)
 	require.NoError(t, gloasTarget.SetSlot(fuluSource.Slot()+1))
 

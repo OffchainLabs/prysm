@@ -92,8 +92,16 @@ func (v *BidVerifier) VerifyCurrentOrNextSlot() (err error) {
 	if err != nil {
 		return errors.Wrap(err, "failed to get bid")
 	}
-	currentSlot := v.clock.CurrentSlot()
-	if bid.Slot() != currentSlot && bid.Slot() != currentSlot+1 {
+	first := bid.Slot()
+	if first > 0 {
+		first--
+	}
+	ok, err := v.withinSlotRange(first, bid.Slot())
+	if err != nil {
+		return err
+	}
+	if !ok {
+		currentSlot := v.clock.CurrentSlot()
 		return fmt.Errorf("%w: got %d want %d or %d", ErrBidSlotNotCurrentOrNext, bid.Slot(), currentSlot, currentSlot+1)
 	}
 	return nil

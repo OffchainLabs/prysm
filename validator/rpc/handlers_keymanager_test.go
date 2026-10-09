@@ -861,11 +861,19 @@ func TestServer_GetGasLimit(t *testing.T) {
 	require.NoError(t, err2)
 
 	tests := []struct {
-		name   string
-		args   *proposer.Settings
-		pubkey [48]byte
-		want   uint64
+		name     string
+		args     *proposer.Settings
+		pubkey   [48]byte
+		schedule bool
+		want     uint64
 	}{
+		{
+			name:     "No proposerSetting at gloas uses the gas limit schedule",
+			args:     nil,
+			pubkey:   bytesutil.ToBytes48(byteval),
+			schedule: true,
+			want:     60_000_000,
+		},
 		{
 			name: "ProposerSetting for specific pubkey exists",
 			args: &proposer.Settings{
@@ -909,6 +917,14 @@ func TestServer_GetGasLimit(t *testing.T) {
 			vs := validatormock.NewMockValidatorService(gomock.NewController(t))
 			vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
 			vs.EXPECT().ProposerSettings().Return(tt.args).AnyTimes()
+			vs.EXPECT().GenesisTime().Return(time.Time{}).AnyTimes()
+			if tt.schedule {
+				params.SetupTestConfigCleanup(t)
+				cfg := params.BeaconConfig().Copy()
+				cfg.GloasForkEpoch = 0
+				cfg.GasLimitSchedule = []params.GasLimitScheduleEntry{{Epoch: 0, GasLimit: 60_000_000}}
+				params.OverrideBeaconConfig(cfg)
+			}
 			s := &Server{
 				validatorService: vs,
 			}
@@ -1317,6 +1333,7 @@ func TestServer_GasLimit_V2Schema(t *testing.T) {
 		vs := validatormock.NewMockValidatorService(gomock.NewController(t))
 		vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
 		vs.EXPECT().ProposerSettings().Return(settings).AnyTimes()
+		vs.EXPECT().GenesisTime().Return(time.Time{}).AnyTimes()
 		var written *proposer.Settings
 		vs.EXPECT().UpdateProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
 			next, err := mutate(settings.Clone())

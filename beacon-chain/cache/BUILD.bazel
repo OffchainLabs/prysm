@@ -44,6 +44,7 @@ go_library(
         "//beacon-chain/operations/attestations/attmap:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//cache/lru:go_default_library",
+        "//config/features:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/primitives:go_default_library",
@@ -118,6 +119,5 @@ go_test(
         "@com_github_patrickmn_go_cache//:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
-        "@org_golang_google_protobuf//proto:go_default_library",
     ],
 )

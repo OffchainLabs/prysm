@@ -95,3 +95,15 @@ message SyncCommitteeContribution {
   // Signature by the validator(s) over the block root of `slot`.
   bytes signature = 5 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
+
+// SyncAggregatorSelectionData is used to sign over and then check whether the
+// aggregator is selected within a subcommittee.
+message SyncAggregatorSelectionData {
+  // Slot of this signing data.
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  // Subcommittee index of this signing data.
+  uint64 subcommittee_index = 2;
+}

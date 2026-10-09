@@ -99,6 +99,10 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 		}
 	}
 
+	if ctx.IsSet(ArchiveOriginState.Name) && !features.Get().EnableArchive {
+		return fmt.Errorf("--%s requires --enable-archive", ArchiveOriginState.Name)
+	}
+
 	cfg.BlockBatchLimit = ctx.Int(BlockBatchLimit.Name)
 	cfg.BlockBatchLimitBurstFactor = ctx.Int(BlockBatchLimitBurstFactor.Name)
 	cfg.BlobBatchLimit = ctx.Int(BlobBatchLimit.Name)
