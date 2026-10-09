@@ -93,6 +93,7 @@ type Config struct {
 	BlockReceiver                    blockchain.BlockReceiver
 	PayloadAttestationReceiver       blockchain.PayloadAttestationReceiver
 	ExecutionPayloadEnvelopeReceiver blockchain.ExecutionPayloadEnvelopeReceiver
+	ExecutionProofReceiver           blockchain.ExecutionProofReceiver
 	BlobReceiver                     blockchain.BlobReceiver
 	DataColumnReceiver               blockchain.DataColumnReceiver
 	ExecutionChainService            execution.Chain

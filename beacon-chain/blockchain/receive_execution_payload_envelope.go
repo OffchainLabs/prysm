@@ -141,6 +141,13 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		},
 	})
 
+	// EIP-8025: derive the new payload request root while the full payload is
+	// still in hand.
+	requestRoot, err := newPayloadRequestRoot(envelope, blockState)
+	if err != nil {
+		log.WithError(err).WithField("blockRoot", fmt.Sprintf("%#x", root)).Warning("Could not derive the new payload request root")
+	}
+
 	// Join EL validation group after firing availability event.
 	if err := elGroup.Wait(); err != nil {
 		if dErr := s.cfg.BeaconDB.DeleteExecutionPayloadEnvelope(ctx, root); dErr != nil {
@@ -153,18 +160,31 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return errors.Wrap(err, "could not insert payload into forkchoice")
 	}
 
-	if isValidPayload {
+	// With EIP-8025, the payload is valid only once both the EL and enough execution proofs validated it.
+	isValid := func() bool {
 		s.cfg.ForkChoiceStore.Lock()
-		if err := s.cfg.ForkChoiceStore.SetOptimisticToValid(ctx, root); err != nil {
-			log.WithError(err).Error("Could not set optimistic to valid")
+		defer s.cfg.ForkChoiceStore.Unlock()
+
+		if requestRoot != nil {
+			if err := s.cfg.ForkChoiceStore.SetNewPayloadRequestRoot(root, *requestRoot); err != nil {
+				log.WithError(err).Error("Could not record execution proof identifier for payload")
+			}
 		}
 
-		if err := s.refreshHeadOptimistic(); err != nil {
-			log.WithError(err).Error("Could not refresh head optimistic status")
+		if isValidPayload {
+			if err := s.markPayloadExecutionValid(ctx, root); err != nil {
+				log.WithError(err).Error("Could not mark payload as validated by the EL")
+			}
 		}
 
-		s.cfg.ForkChoiceStore.Unlock()
-	}
+		optimistic, err := s.cfg.ForkChoiceStore.IsOptimistic(root)
+		if err != nil {
+			log.WithError(err).Error("Could not get optimistic status of payload")
+			return false
+		}
+
+		return !optimistic
+	}()
 
 	// A revealed payload clears any recorded failure for this builder.
 	s.cfg.BuilderCircuitBreaker.RecordSuccess(envelope.BuilderIndex())
@@ -181,7 +201,7 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 			BuilderIndex: envelope.BuilderIndex(),
 			BlockHash:    envelope.BlockHash(),
 			BlockRoot:    root,
-			Optimistic:   !isValidPayload,
+			Optimistic:   !isValid,
 		},
 	})
 
@@ -207,7 +227,12 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		fields["gasUtilized"] = fmt.Sprintf("%.2f%%", 100*gasUsed/gasLimit)
 	}
 
-	log.WithFields(fields).Info("Synced execution payload envelope")
+	message := "Synced execution payload envelope"
+	if !isValid {
+		message = "Synced optimistic execution payload envelope"
+	}
+
+	log.WithFields(fields).Info(message)
 
 	return nil
 }

@@ -31,6 +31,28 @@ var (
 		Value: "",
 	}
 
+	// ProofEngineConfig overrides the built-in verification keys of the EIP-8025
+	// execution proofs.
+	ProofEngineConfig = &cli.StringFlag{
+		Name:  "proof-engine-config",
+		Usage: `A JSON file of the EIP-8025 proof types to verify and their program verification keys, replacing the built-in ones: {"execution_proofs":[{"proof_type":1,"program_vk":"0x..."}]}. Only used with --zkvm.`,
+		Value: "",
+	}
+
+	// MinExecutionProofs sets how many distinct verified execution proof types a
+	// Gloas payload needs, on top of an EL validation, to no longer be optimistic.
+	MinExecutionProofs = &cli.Uint64Flag{
+		Name:  "min-execution-proofs",
+		Usage: "The number of distinct verified EIP-8025 execution proof types a payload needs, on top of an execution client validation, to no longer be optimistic. Only used with --zkvm.",
+		Value: 1,
+	}
+
+	// MockExecutionProofs accepts the mock proofs of zkboost's mock zkVMs, for devnets.
+	MockExecutionProofs = &cli.BoolFlag{
+		Name:  "zkvm-mock-proofs",
+		Usage: "DEVNETS ONLY. Accepts the EIP-8025 mock proofs of zkboost's mock zkVMs (an SSZ MockProof) without verifying them cryptographically, but still checks their public values. For each one, a built-in genuine proof of the same type is verified and its result discarded, so that the node spends the cost of a real verification. Only used with --zkvm.",
+	}
+
 	// DisableBuilderSSZ turns off SSZ encoding for Builder APIs, falling back to JSON.
 	DisableBuilderSSZ = &cli.BoolFlag{
 		Name:  "disable-builder-ssz",
