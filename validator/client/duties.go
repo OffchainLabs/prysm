@@ -152,6 +152,7 @@ func (v *validator) updateDutiesCombined(ctx context.Context, epoch primitives.E
 
 	var data dutyStoreData
 	data.setFromContainer(resp)
+	data.epoch = epoch
 	data.missingNext = missingNextPtc
 	v.duties.write(data)
 

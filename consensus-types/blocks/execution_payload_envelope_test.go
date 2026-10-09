@@ -167,29 +167,6 @@ func signedEnvelopeFor(t *testing.T, beaconBlockRoot, blockHash [32]byte) interf
 	return signed
 }
 
-func TestBlockBuiltOnEnvelope(t *testing.T) {
-	blockHash, parentRoot := [32]byte{0xaa}, [32]byte{0x01}
-
-	for _, test := range []struct {
-		name          string
-		envRoot       [32]byte
-		blkParentHash [32]byte
-		wantBuiltOn   bool
-	}{
-		{name: "matching execution parent hash returns true", envRoot: parentRoot, blkParentHash: blockHash, wantBuiltOn: true},
-		{name: "ancestor root with matching execution hash returns true", envRoot: [32]byte{0x02}, blkParentHash: blockHash, wantBuiltOn: true},
-		{name: "different execution parent hash returns false", envRoot: parentRoot, blkParentHash: [32]byte{0xbb}},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			env := signedEnvelopeFor(t, test.envRoot, blockHash)
-			blk := gloasBlockWithBid(t, parentRoot, test.blkParentHash)
-			builtOn, err := blocks.BlockBuiltOnEnvelope(env, blk)
-			require.NoError(t, err)
-			require.Equal(t, test.wantBuiltOn, builtOn)
-		})
-	}
-}
-
 func TestBlockBuiltOnParentEnvelope(t *testing.T) {
 	blockHash, parentRoot := [32]byte{0xaa}, [32]byte{0x01}
 
