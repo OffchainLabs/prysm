@@ -2,7 +2,6 @@ package validator
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
@@ -13,7 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -88,11 +86,6 @@ func (vs *Server) SubmitPayloadAttestation(
 		},
 	})
 
-	log.WithFields(logrus.Fields{
-		"slot":           msg.Data.Slot,
-		"blockRoot":      fmt.Sprintf("%#x", msg.Data.BeaconBlockRoot),
-		"validatorIndex": msg.ValidatorIndex,
-	}).Debug("Submitted payload attestation message")
 	return &emptypb.Empty{}, nil
 }
 

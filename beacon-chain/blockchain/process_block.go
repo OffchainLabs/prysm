@@ -349,7 +349,34 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	if err := s.cfg.ForkChoiceStore.InsertChain(ctx, pendingNodes); err != nil {
 		return errors.Wrap(err, "could not insert batch to forkchoice")
 	}
+
 	// Set their optimistic status
+	if features.Get().EnableExecutionProofs && lastB.Version() >= version.Gloas {
+		// EIP-8025: the payloads are valid only once both the EL and enough execution proofs validated them, or once
+		// they are finalized.
+		if isValidPayload && len(envelopes) > 0 {
+			env, err := envelopes[len(envelopes)-1].Envelope()
+			if err != nil {
+				return fmt.Errorf("envelope: %w", err)
+			}
+
+			if err := s.markPayloadExecutionValid(ctx, env.BeaconBlockRoot()); err != nil {
+				return errors.Wrap(err, "could not mark payload as validated by the EL")
+			}
+		}
+
+		optimistic, err := s.cfg.ForkChoiceStore.IsOptimistic(lastBR)
+		if err != nil {
+			return errors.Wrap(err, "could not get optimistic status of last block in batch")
+		}
+
+		if err := s.saveHeadNoDB(ctx, lastB, lastBR, preState, optimistic); err != nil {
+			return errors.Wrap(err, "could not save head")
+		}
+
+		return nil
+	}
+
 	if isValidPayload {
 		if err := s.cfg.ForkChoiceStore.SetOptimisticToValid(ctx, lastBR); err != nil {
 			return errors.Wrap(err, "could not set optimistic block to valid")

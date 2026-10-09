@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "doc.go",
         "errors.go",
+        "execution_proof.go",
         "forkchoice.go",
         "gloas.go",
         "log.go",
@@ -52,6 +53,7 @@ go_test(
     name = "go_default_test",
     srcs = [
         "checkpoint_clamp_test.go",
+        "execution_proof_test.go",
         "ffg_update_test.go",
         "forkchoice_test.go",
         "gloas_test.go",

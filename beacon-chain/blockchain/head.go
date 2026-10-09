@@ -52,7 +52,7 @@ type head struct {
 	state      state.BeaconState                    // current head state.
 	slot       primitives.Slot                      // the head block slot number
 	full       bool                                 // whether the head's execution payload has been delivered (post-Gloas)
-	optimistic bool                                 // optimistic status when saved head
+	optimistic bool                                 // optimistic status of the head
 }
 
 // This saves head info to the local service cache, it also saves the
@@ -242,6 +242,26 @@ func (s *Service) setHead(newHead *head) error {
 		slot:       newHead.slot,
 		full:       newHead.full,
 	}
+	return nil
+}
+
+// refreshHeadOptimistic updates the optimistic status of the head from forkchoice.
+// Caller of the method MUST acquire a lock on forkchoice.
+func (s *Service) refreshHeadOptimistic() error {
+	s.headLock.Lock()
+	defer s.headLock.Unlock()
+
+	if s.head == nil {
+		return nil
+	}
+
+	optimistic, err := s.cfg.ForkChoiceStore.IsOptimistic(s.head.root)
+	if err != nil {
+		return errors.Wrap(err, "head optimistic status")
+	}
+
+	s.head.optimistic = optimistic
+
 	return nil
 }
 

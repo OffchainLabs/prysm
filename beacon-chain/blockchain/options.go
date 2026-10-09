@@ -89,6 +89,23 @@ func WithProposerPreferencesCache(c *cache.ProposerPreferencesCache) Option {
 	}
 }
 
+// WithMinExecutionProofs sets the number of distinct verified proof types needed,
+// with an EL validation, before a Gloas payload is no longer optimistic (EIP-8025).
+func WithMinExecutionProofs(n uint64) Option {
+	return func(s *Service) error {
+		s.cfg.MinExecutionProofs = n
+		return nil
+	}
+}
+
+// WithExecutionProofVerifier sets the verifier of EIP-8025 execution proofs.
+func WithExecutionProofVerifier(v ExecutionProofVerifier) Option {
+	return func(s *Service) error {
+		s.cfg.ExecutionProofVerifier = v
+		return nil
+	}
+}
+
 // WithBuilderCircuitBreaker sets the tracker of builders that failed to reveal their payload.
 func WithBuilderCircuitBreaker(c *cache.BuilderCircuitBreaker) Option {
 	return func(s *Service) error {

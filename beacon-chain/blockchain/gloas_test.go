@@ -768,6 +768,78 @@ func TestSetHeadFull(t *testing.T) {
 	require.Equal(t, true, service.head.full)
 }
 
+func TestHeadOptimisticStatus_RefreshedOnValidation(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.BellatrixForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	service, _ := setupGloasService(t, &mockExecution.EngineClient{})
+	service.SetGenesisTime(time.Now())
+	ctx := t.Context()
+
+	// A has a revealed payload, and B builds on (A, full).
+	rootA := bytesutil.ToBytes32([]byte("A"))
+	baseA, blkA := testGloasState(t, 1, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash)
+	insertGloasBlock(t, service, baseA, blkA, rootA)
+	envA, err := blocks.WrappedROExecutionPayloadEnvelope(&ethpb.ExecutionPayloadEnvelope{
+		BeaconBlockRoot:       rootA[:],
+		ParentBeaconBlockRoot: make([]byte, 32),
+		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: make([]byte, 32), ParentHash: make([]byte, 32)},
+	})
+	require.NoError(t, err)
+	require.NoError(t, service.InsertPayload(envA))
+
+	rootB := bytesutil.ToBytes32([]byte("B"))
+	baseB, blkB := testGloasState(t, 2, rootA, bytesutil.ToBytes32([]byte("hashB")))
+	insertGloasBlock(t, service, baseB, blkB, rootB)
+
+	signedB, err := blocks.NewSignedBeaconBlock(blkB)
+	require.NoError(t, err)
+	stB, err := state_native.InitializeFromProtoUnsafeGloas(baseB)
+	require.NoError(t, err)
+
+	signedA, err := blocks.NewSignedBeaconBlock(blkA)
+	require.NoError(t, err)
+	stA, err := state_native.InitializeFromProtoUnsafeGloas(baseA)
+	require.NoError(t, err)
+	service.head = &head{root: rootA, block: signedA, state: stA, slot: 1}
+
+	service.cfg.ForkChoiceStore.Lock()
+	require.NoError(t, service.saveHead(ctx, rootB, signedB, stB, false))
+	service.cfg.ForkChoiceStore.Unlock()
+	require.Equal(t, true, service.head.optimistic)
+
+	// Validating the payload of A validates the head block B, but not its own payload.
+	service.cfg.ForkChoiceStore.Lock()
+	require.NoError(t, service.cfg.ForkChoiceStore.SetOptimisticToValid(ctx, rootA))
+	require.NoError(t, service.refreshHeadOptimistic())
+	service.cfg.ForkChoiceStore.Unlock()
+	require.Equal(t, false, service.head.optimistic)
+
+	// Once the payload of B is received and the head is full, its optimistic status includes this not yet validated payload.
+	envB, err := blocks.WrappedROExecutionPayloadEnvelope(&ethpb.ExecutionPayloadEnvelope{
+		BeaconBlockRoot:       rootB[:],
+		ParentBeaconBlockRoot: rootA[:],
+		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: []byte("hashB"), ParentHash: make([]byte, 32)},
+	})
+	require.NoError(t, err)
+	require.NoError(t, service.InsertPayload(envB))
+	require.NotNil(t, service.setHeadFull(rootB))
+	require.Equal(t, true, service.head.optimistic)
+
+	optimistic, err := service.IsOptimistic(ctx)
+	require.NoError(t, err)
+	require.Equal(t, true, optimistic)
+
+	// Validating the payload of B validates the full head.
+	service.cfg.ForkChoiceStore.Lock()
+	require.NoError(t, service.cfg.ForkChoiceStore.SetOptimisticToValid(ctx, rootB))
+	require.NoError(t, service.refreshHeadOptimistic())
+	service.cfg.ForkChoiceStore.Unlock()
+	require.Equal(t, false, service.head.optimistic)
+}
+
 func TestPostPayloadTasks_BetsAgainstLatePayload(t *testing.T) {
 	logHook := logTest.NewGlobal()
 	service, _ := setupGloasService(t, &mockExecution.EngineClient{})

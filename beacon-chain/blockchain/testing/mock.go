@@ -100,6 +100,9 @@ type ChainService struct {
 	BlocksReceived              []interfaces.ReadOnlySignedBeaconBlock
 	Blobs                       []blocks.VerifiedROBlob
 	DataColumns                 []blocks.VerifiedRODataColumn
+	ExecutionProofTypes         map[[32]byte]map[ethpb.ProofType]bool
+	CheckExecutionProofErr      error
+	VerifyExecutionProofErr     error
 	SyncCommitteeDomain         []byte
 }
 
@@ -993,6 +996,36 @@ func (c *ChainService) PtcLookupState(_ context.Context, _ [32]byte, _ primitive
 func (c *ChainService) ReceiveExecutionPayloadEnvelope(ctx context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) error {
 	_, c.ReceivePayloadEnvelopeCtxHadDeadline = ctx.Deadline()
 	return c.ReceivePayloadEnvelopeErr
+}
+
+// CheckExecutionProofEnvelope implements the same method in the chain service.
+func (c *ChainService) CheckExecutionProofEnvelope(context.Context, blocks.ROSignedExecutionProofEnvelope) ([32]byte, error) {
+	return [32]byte{}, c.CheckExecutionProofErr
+}
+
+// VerifyExecutionProof implements the same method in the chain service.
+func (c *ChainService) VerifyExecutionProof(context.Context, [32]byte, blocks.ROSignedExecutionProofEnvelope) error {
+	return c.VerifyExecutionProofErr
+}
+
+// HasExecutionProofType implements the same method in the chain service.
+func (c *ChainService) HasExecutionProofType(root [32]byte, proofType ethpb.ProofType) bool {
+	return c.ExecutionProofTypes[root][proofType]
+}
+
+// ReceiveExecutionProof implements the same method in the chain service.
+func (c *ChainService) ReceiveExecutionProof(_ context.Context, root [32]byte, proofType ethpb.ProofType) error {
+	if c.ExecutionProofTypes[root][proofType] {
+		return forkchoice.ErrExecutionProofTypeKnown
+	}
+	if c.ExecutionProofTypes == nil {
+		c.ExecutionProofTypes = make(map[[32]byte]map[ethpb.ProofType]bool)
+	}
+	if c.ExecutionProofTypes[root] == nil {
+		c.ExecutionProofTypes[root] = make(map[ethpb.ProofType]bool)
+	}
+	c.ExecutionProofTypes[root][proofType] = true
+	return nil
 }
 
 // BuiltOnFullParent mocks the same method in the chain service.

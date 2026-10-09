@@ -85,6 +85,21 @@ func TestConfigureBeaconConfig_ReorgLatePayloads(t *testing.T) {
 	assert.Equal(t, true, Get().ReorgLatePayloads)
 }
 
+func TestConfigureBeaconConfig_ExecutionProofs(t *testing.T) {
+	for _, name := range []string{"zkvm", "proof-engine"} {
+		t.Run(name, func(t *testing.T) {
+			defer Init(&Flags{})
+			app := cli.App{Flags: []cli.Flag{EnableExecutionProofsFlag}}
+			set := flag.NewFlagSet("test", 0)
+			require.NoError(t, EnableExecutionProofsFlag.Apply(set))
+			require.NoError(t, set.Parse([]string{"--" + name}))
+			context := cli.NewContext(&app, set, nil)
+			require.NoError(t, ConfigureBeaconChain(context))
+			assert.Equal(t, true, Get().EnableExecutionProofs)
+		})
+	}
+}
+
 func TestValidateNetworkFlags(t *testing.T) {
 	// Define the test cases
 	tests := []struct {

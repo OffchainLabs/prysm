@@ -1,0 +1,65 @@
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "engine.go",
+        "keys.go",
+        "metrics.go",
+        "mock.go",
+        "verifier_ere.go",
+        "verifier_stub.go",
+    ],
+    embedsrcs = [
+        "mockproofs/stateless-validator-ethrex-openvm-v2.1.0-preview.proof",
+        "mockproofs/stateless-validator-ethrex-sp1-v6.4.0.proof",
+        "mockproofs/stateless-validator-ethrex-zisk-v1.1.0-alpha.proof",
+    ],
+    importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/proofengine",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//config/fieldparams:go_default_library",
+        "//config/params:go_default_library",
+        "//encoding/bytesutil:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
+        "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
+        "@com_github_prometheus_client_golang//prometheus:go_default_library",
+        "@com_github_prometheus_client_golang//prometheus/promauto:go_default_library",
+    ] + select({
+        "@io_bazel_rules_go//go/platform:android_amd64": [
+            "@com_github_nalepae_go_ere//:go_default_library",
+        ],
+        "@io_bazel_rules_go//go/platform:android_arm64": [
+            "@com_github_nalepae_go_ere//:go_default_library",
+        ],
+        "@io_bazel_rules_go//go/platform:darwin_arm64": [
+            "@com_github_nalepae_go_ere//:go_default_library",
+        ],
+        "@io_bazel_rules_go//go/platform:ios_arm64": [
+            "@com_github_nalepae_go_ere//:go_default_library",
+        ],
+        "@io_bazel_rules_go//go/platform:linux_amd64": [
+            "@com_github_nalepae_go_ere//:go_default_library",
+        ],
+        "@io_bazel_rules_go//go/platform:linux_arm64": [
+            "@com_github_nalepae_go_ere//:go_default_library",
+        ],
+        "//conditions:default": [],
+    }),
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "engine_test.go",
+        "verifier_ere_test.go",
+    ],
+    data = glob(["testdata/**"]),
+    embed = [":go_default_library"],
+    deps = [
+        "//config/params:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
+        "//testing/require:go_default_library",
+        "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
+    ],
+)

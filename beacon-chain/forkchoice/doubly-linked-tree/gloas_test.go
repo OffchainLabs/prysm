@@ -2511,3 +2511,54 @@ func TestUpdateNewFullNodeWeight_SkipsSlashed(t *testing.T) {
 		assert.Equal(t, uint64(200), fn.balance)
 	})
 }
+
+func TestSetOptimisticToValid_PropagatesToEmptyDescendants(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+
+	// A builds on genesis.
+	rootA, blockHashA := indexToHash(1), indexToHash(100)
+	st, roblock, err := prepareGloasForkchoiceState(ctx, 1, rootA, params.BeaconConfig().ZeroHash, blockHashA, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	pe, err := prepareGloasForkchoicePayload(rootA)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	// B builds on (A, full), and its payload is revealed.
+	rootB, blockHashB := indexToHash(2), indexToHash(200)
+	st, roblock, err = prepareGloasForkchoiceState(ctx, 2, rootB, rootA, blockHashB, blockHashA, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	pe, err = prepareGloasForkchoicePayload(rootB)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	// C builds on (B, empty).
+	rootC, blockHashC := indexToHash(3), indexToHash(300)
+	st, roblock, err = prepareGloasForkchoiceState(ctx, 3, rootC, rootB, blockHashC, blockHashA, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	require.Equal(t, f.store.emptyNodeByRoot[rootB], f.store.emptyNodeByRoot[rootC].node.parent)
+
+	// Everything is optimistic before any validation.
+	for _, root := range [][32]byte{rootA, rootB, rootC} {
+		require.Equal(t, true, f.store.emptyNodeByRoot[root].optimistic)
+	}
+
+	// Validating the payload of A validates the blocks built on top of it, but not the payload of B.
+	require.NoError(t, f.SetOptimisticToValid(ctx, rootA))
+
+	require.Equal(t, false, f.store.fullNodeByRoot[rootA].optimistic)
+	require.Equal(t, false, f.store.emptyNodeByRoot[rootA].optimistic)
+	require.Equal(t, false, f.store.emptyNodeByRoot[rootB].optimistic)
+	require.Equal(t, true, f.store.fullNodeByRoot[rootB].optimistic)
+	require.Equal(t, false, f.store.emptyNodeByRoot[rootC].optimistic)
+
+	// A block inserted after the validation inherits the validated status.
+	rootD, blockHashD := indexToHash(4), indexToHash(400)
+	st, roblock, err = prepareGloasForkchoiceState(ctx, 4, rootD, rootA, blockHashD, blockHashA, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	require.Equal(t, false, f.store.emptyNodeByRoot[rootD].optimistic)
+}

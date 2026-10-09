@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/events"
 	lightclient "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/node"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/prover"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/rewards"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/validator"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
@@ -100,6 +101,8 @@ func (s *Service) endpoints(
 	endpoints = append(endpoints, s.prysmNodeEndpoints()...)
 	endpoints = append(endpoints, s.prysmValidatorEndpoints(stater, coreService)...)
 	endpoints = append(endpoints, s.removedEndpoints()...)
+
+	endpoints = append(endpoints, s.proverEndpoints()...)
 
 	if features.Get().EnableLightClient {
 		endpoints = append(endpoints, s.lightClientEndpoints()...)
@@ -1346,6 +1349,27 @@ func (s *Service) prysmBeaconEndpoints(
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.QueryBeaconBlock,
+			methods: []string{http.MethodPost},
+		},
+	}
+}
+
+// proverEndpoints serves the EIP-8025 execution proof submission. It answers 501 unless --zkvm is set.
+func (s *Service) proverEndpoints() []endpoint {
+	server := &prover.Server{
+		Broadcaster:            s.cfg.Broadcaster,
+		ExecutionProofReceiver: s.cfg.ExecutionProofReceiver,
+	}
+
+	const namespace = "prover"
+	return []endpoint{
+		{
+			template: "/eth/v1/beacon/execution_proofs",
+			name:     namespace + ".SubmitExecutionProofs",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+			},
+			handler: server.SubmitExecutionProofs,
 			methods: []string{http.MethodPost},
 		},
 	}

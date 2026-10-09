@@ -6,10 +6,14 @@ types:
   - name: "DataColumnSidecarsByRangeRequest"
   - name: "DepositSnapshot"
   - name: "ExecutionPayloadEnvelopesByRangeRequest"
+  # EIP-8025. ProofData is the bounded ByteList[MAX_PROOF_SIZE] of consensus-specs PR #5593, which zkboost and Lighthouse
+  # sign, not the ProgressiveList[Byte] of consensus-specs master.
+  - name: "ExecutionProofEnvelope"
   - name: "MetaDataV0"
   - name: "MetaDataV1"
   - name: "MetaDataV2"
   - name: "SignedBuilderBid"
+  - name: "SignedExecutionProofEnvelope"
   - name: "SignedValidatorRegistrationV1"
   - name: "ValidatorRegistrationV1"
   - name: "ValidatorIdentity"
