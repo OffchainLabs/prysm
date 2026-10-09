@@ -258,7 +258,7 @@ func TestSyncNeedsInitialize(t *testing.T) {
 			if tc.current == nil {
 				tc.current = currentFunc
 			}
-			result, err := NewSyncNeeds(tc.current, tc.oldestSlotFlagPtr, tc.blobRetentionFlag)
+			result, err := NewSyncNeeds(tc.current, tc.oldestSlotFlagPtr, nil, tc.blobRetentionFlag)
 			require.NoError(t, err)
 
 			// Check retention calculations
@@ -707,7 +707,7 @@ func TestSyncNeedsCurrentlyEnv(t *testing.T) {
 	t.Run("young network saturates at slot 1", func(t *testing.T) {
 		overrideGloas(t, 0)
 		current := primitives.Slot(10) // well inside the retention window
-		sn, err := NewSyncNeeds(func() primitives.Slot { return current }, nil, 0)
+		sn, err := NewSyncNeeds(func() primitives.Slot { return current }, nil, nil, 0)
 		require.NoError(t, err)
 		cn := sn.Currently()
 		// Begin = max(gloasStart=0, syncEpochOffset floor) = max(0, 1) = 1.
@@ -721,7 +721,7 @@ func TestSyncNeedsCurrentlyEnv(t *testing.T) {
 		overrideGloas(t, 0)
 		// A mid-epoch current slot: the floor must match block-retention arithmetic exactly.
 		current := slots.UnsafeEpochStart(minBlockEpochs+5) + 7
-		sn, err := NewSyncNeeds(func() primitives.Slot { return current }, nil, 0)
+		sn, err := NewSyncNeeds(func() primitives.Slot { return current }, nil, nil, 0)
 		require.NoError(t, err)
 		cn := sn.Currently()
 		require.Equal(t, syncEpochOffset(current, minBlockEpochs), cn.Env.Begin)
@@ -732,7 +732,7 @@ func TestSyncNeedsCurrentlyEnv(t *testing.T) {
 		gloasEpoch := primitives.Epoch(100)
 		overrideGloas(t, gloasEpoch)
 		current := slots.UnsafeEpochStart(gloasEpoch + 2)
-		sn, err := NewSyncNeeds(func() primitives.Slot { return current }, nil, 0)
+		sn, err := NewSyncNeeds(func() primitives.Slot { return current }, nil, nil, 0)
 		require.NoError(t, err)
 		cn := sn.Currently()
 		require.Equal(t, slots.UnsafeEpochStart(gloasEpoch), cn.Env.Begin)
@@ -744,7 +744,7 @@ func TestSyncNeedsCurrentlyEnv(t *testing.T) {
 		overrideGloas(t, 0)
 		current := slots.UnsafeEpochStart(minBlockEpochs + 10)
 		oldest := primitives.Slot(1)
-		sn, err := NewSyncNeeds(func() primitives.Slot { return current }, &oldest, 0)
+		sn, err := NewSyncNeeds(func() primitives.Slot { return current }, &oldest, nil, 0)
 		require.NoError(t, err)
 		cn := sn.Currently()
 		require.Equal(t, oldest, cn.Block.Begin) // block span honors the archival flag
@@ -755,10 +755,46 @@ func TestSyncNeedsCurrentlyEnv(t *testing.T) {
 	t.Run("unscheduled gloas fork yields an empty window", func(t *testing.T) {
 		overrideGloas(t, primitives.Epoch(math.MaxUint64))
 		current := slots.UnsafeEpochStart(minBlockEpochs + 10)
-		sn, err := NewSyncNeeds(func() primitives.Slot { return current }, nil, 0)
+		sn, err := NewSyncNeeds(func() primitives.Slot { return current }, nil, nil, 0)
 		require.NoError(t, err)
 		cn := sn.Currently()
 		require.Equal(t, false, cn.Env.At(current-1))
 		require.Equal(t, false, cn.Env.At(1))
 	})
+}
+
+// The archive origin is a hard floor, unlike --backfill-oldest-slot.
+func TestSyncNeeds_ArchiveOriginTakesPrecedence(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	current := func() primitives.Slot { return 10 * slotsPerEpoch }
+
+	archiveOrigin := primitives.Slot(2 * slotsPerEpoch)
+	oldest := primitives.Slot(5 * slotsPerEpoch)
+
+	// On a young chain the spec minimum collapses to slot 1, so --backfill-oldest-slot alone is ignored.
+	withoutArchive, err := NewSyncNeeds(current, &oldest, nil, 0)
+	require.NoError(t, err)
+	require.IsNil(t, withoutArchive.validOldestSlotPtr)
+	require.Equal(t, primitives.Slot(1), withoutArchive.Currently().Block.Begin)
+
+	// The archive origin is honored regardless, and outranks the flag.
+	sn, err := NewSyncNeeds(current, &oldest, &archiveOrigin, 0)
+	require.NoError(t, err)
+	needs := sn.Currently()
+	require.Equal(t, archiveOrigin, needs.Block.Begin)
+	require.Equal(t, current(), needs.Block.End)
+	require.Equal(t, false, needs.Block.At(archiveOrigin-1))
+	require.Equal(t, true, needs.Block.At(archiveOrigin))
+}
+
+// Slot 0 must never be requested: the genesis block has no valid proposer signature.
+func TestSyncNeeds_ArchiveOriginAtGenesisClampsToSlotOne(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	current := func() primitives.Slot { return 10 * params.BeaconConfig().SlotsPerEpoch }
+	origin := primitives.Slot(0)
+
+	sn, err := NewSyncNeeds(current, nil, &origin, 0)
+	require.NoError(t, err)
+	require.Equal(t, primitives.Slot(1), sn.Currently().Block.Begin)
 }

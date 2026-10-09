@@ -257,7 +257,7 @@ func TestGetSyncCommitteeDuties_OK(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, bs.SetCurrentSyncCommittee(syncCommittee))
 	require.NoError(t, bs.SetSlot(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(params.BeaconConfig().EpochsPerSyncCommitteePeriod)-1))
-	require.NoError(t, helpers.UpdateSyncCommitteeCache(bs))
+	require.NoError(t, helpers.UpdateSyncCommitteeCache(t.Context(), bs))
 
 	slot := uint64(params.BeaconConfig().SlotsPerEpoch) * uint64(params.BeaconConfig().EpochsPerSyncCommitteePeriod) * params.BeaconConfig().SecondsPerSlot
 	genesisRoot := [32]byte{}

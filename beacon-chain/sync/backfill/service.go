@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/proto/dbval"
 	"github.com/OffchainLabs/prysm/v7/runtime"
+	"github.com/OffchainLabs/prysm/v7/runtime/logging"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -46,7 +47,7 @@ type Service struct {
 	workerCfg       *workerCfg
 	fuluStart       primitives.Slot
 	denebStart      primitives.Slot
-	progressLogger  *intervalLogger
+	progressLogger  *logging.IntervalLogger
 }
 
 const progressLogInterval = 60
@@ -289,11 +290,12 @@ func (s *Service) Start() {
 
 	status := s.store.status()
 	needs := s.syncNeeds.Currently()
+	lowSlot := primitives.Slot(status.LowSlot)
 	// Exit early if there aren't going to be any batches to backfill.
-	if !needs.Block.At(primitives.Slot(status.LowSlot)) {
+	if !needs.Block.At(lowSlot) || lowSlot <= needs.Block.Begin {
 		log.WithField("minimumSlot", needs.Block.Begin).
 			WithField("backfillLowestSlot", status.LowSlot).
-			Info("Exiting backfill service; minimum block retention slot > lowest backfilled block")
+			Info("Exiting backfill service; minimum block retention slot >= lowest backfilled block")
 		s.markComplete()
 		return
 	}
@@ -338,7 +340,7 @@ func (s *Service) Start() {
 		"targetSlot":           needs.Block.Begin,
 	}).Info("Starting backfill")
 
-	s.progressLogger = newIntervalLogger(log, progressLogInterval)
+	s.progressLogger = logging.NewIntervalLogger(log, progressLogInterval)
 
 	for {
 		if ctx.Err() != nil {

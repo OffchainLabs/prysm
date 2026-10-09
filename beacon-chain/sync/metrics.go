@@ -28,6 +28,12 @@ var (
 			Help: "The number of peers subscribed to topics that a host node is also subscribed to.",
 		}, []string{"topic"},
 	)
+	originOrphanedSuspected = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "sync_origin_orphaned_suspected",
+			Help: "Set to 1 when peers have finalized a chain that does not contain our checkpoint sync origin.",
+		},
+	)
 	messageReceivedCounter = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "p2p_message_received_total",

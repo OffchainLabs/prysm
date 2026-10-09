@@ -20,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/logging"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -49,7 +50,7 @@ const (
 var (
 	errInvalidEnvelopeResponse = errors.New("invalid execution payload envelope response")
 	// envelopeSkipLogger rate limits the per-batch summary of skipped envelope slots.
-	envelopeSkipLogger = newIntervalLogger(log, 30)
+	envelopeSkipLogger = logging.NewIntervalLogger(log, 30)
 )
 
 // envelopeFetcher requests execution payload envelopes by range from the given peer. fetchPass
