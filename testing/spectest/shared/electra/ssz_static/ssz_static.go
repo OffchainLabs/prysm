@@ -150,6 +150,8 @@ func UnmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &enginev1.ConsolidationRequest{}
 	case "ExecutionRequests":
 		obj = &enginev1.ExecutionRequests{}
+	case "NewPayloadRequest":
+		t.Skip("Not a consensus type")
 	default:
 		return nil, errors.New("type not found")
 	}

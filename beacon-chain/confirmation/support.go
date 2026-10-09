@@ -135,11 +135,11 @@ func (s *SupportMap) Accumulate(fc ForkchoiceReader) {
 	}
 }
 
-// BlockSupportBetweenSlots implements get_block_support_between_slots.
+// BlockSupportBetweenSlots implements get_node_support_between_slots.
 // The spec sums over a participant set union, so a validator sitting in committees
 // of several slots in the range counts once.
 //
-//	<spec fn="get_block_support_between_slots" fork="phase0">
+//	<spec fn="get_node_support_between_slots" fork="phase0">
 //
 //	participants = set()
 //	for slot in range(start_slot, end_slot + 1):

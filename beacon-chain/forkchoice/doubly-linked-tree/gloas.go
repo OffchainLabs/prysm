@@ -258,8 +258,25 @@ func (s *Store) updateBestDescendantConsensusNode(ctx context.Context, n *Node, 
 	if err := s.updateBestDescendantPayloadNode(ctx, fn, justifiedEpoch, finalizedEpoch, currentEpoch); err != nil {
 		return err
 	}
-	n.bestDescendant = s.choosePayloadContent(n).bestDescendant
+	// Only viable variants compete for head, get_filtered_node_tree in v1.7.0-beta.3+.
+	emptyViable := en.leadsToViableHead(justifiedEpoch, currentEpoch)
+	fullViable := fn.leadsToViableHead(justifiedEpoch, currentEpoch)
+	switch {
+	case emptyViable && !fullViable:
+		n.bestDescendant = en.bestDescendant
+	case fullViable && !emptyViable:
+		n.bestDescendant = fn.bestDescendant
+	default:
+		n.bestDescendant = s.choosePayloadContent(n).bestDescendant
+	}
 	return nil
+}
+
+func (pn *PayloadNode) leadsToViableHead(justifiedEpoch, currentEpoch primitives.Epoch) bool {
+	if pn.bestDescendant != nil {
+		return true
+	}
+	return len(pn.children) == 0 && pn.node.viableForHead(justifiedEpoch, currentEpoch)
 }
 
 func (s *Store) currentSlot() primitives.Slot {

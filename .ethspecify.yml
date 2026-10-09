@@ -1,4 +1,4 @@
-version: v1.7.0-beta.0
+version: v1.7.0-beta.4
 style: full
 
 specrefs:
@@ -102,6 +102,7 @@ exceptions:
     - InclusionList#heze
     - SignedExecutionPayloadBid#heze
     - SignedInclusionList#heze
+    - BeaconBlockBody#heze
     # capella
     - LightClientBootstrap#capella
     - LightClientFinalityUpdate#capella
@@ -257,6 +258,8 @@ exceptions:
     - WithdrawalRequests#gloas
     - Withdrawals#capella
     - Withdrawals#gloas
+    # deneb
+    - VersionedHashes#deneb
   dataclasses:
     # phase0
     - FastConfirmationStore#phase0
@@ -293,6 +296,7 @@ exceptions:
     - InclusionListStore#heze
     - PayloadAttributes#heze
     - Store#heze
+    - Seen#heze
 
     - InclusionListEntry#heze
   functions:
@@ -309,7 +313,6 @@ exceptions:
     - get_ancestor_roots#phase0
     - get_block_epoch#phase0
     - get_block_slot#phase0
-    - get_block_support_between_slots#phase0
     - get_checkpoint_for_block#phase0
     - get_current_balance_source#phase0
     - get_current_target#phase0
@@ -353,7 +356,6 @@ exceptions:
     - calculate_committee_fraction#phase0
     - compute_fork_version#phase0
     - compute_pulled_up_tip#phase0
-    - filter_block_tree#phase0
     - get_aggregate_and_proof#phase0
     - get_aggregate_due_ms#phase0
     - get_attestation_component_deltas#phase0
@@ -365,7 +367,6 @@ exceptions:
     - get_eligible_validator_indices#phase0
     - get_epoch_signature#phase0
     - get_eth1_vote#phase0
-    - get_filtered_block_tree#phase0
     - get_forkchoice_store#phase0
     - get_matching_head_attestations#phase0
     - get_matching_source_attestations#phase0
@@ -402,6 +403,17 @@ exceptions:
     - is_future_epoch#phase0
     - sha256#phase0
     - uint_to_bytes#phase0
+    - block_should_be_finalized#phase0
+    - compute_shuffling_lookahead_start_slot#phase0
+    - compute_slot_at_time#phase0
+    - compute_slot_at_time_ms#phase0
+    - filter_node_tree#phase0
+    - get_filtered_node_tree#phase0
+    - get_node_support_between_slots#phase0
+    - get_restart_resilient_confirmed_root#phase0
+    - get_time_into_slot_ms#phase0
+    - milliseconds_to_seconds#phase0
+    - saturating_sub#phase0
     # altair
     - compute_merkle_proof#altair
     - compute_sync_committee_period_at_slot#altair
@@ -643,7 +655,10 @@ exceptions:
     - upgrade_lc_optimistic_update_to_gloas#gloas
     - upgrade_lc_store_to_gloas#gloas
     - upgrade_lc_update_to_gloas#gloas
-    - compute_shuffling_dependent_epoch#gloas
+    - compute_max_data_column_sidecar_size#gloas
+    - compute_max_partial_data_column_sidecar_size#gloas
+    - compute_min_epochs_for_block_requests#gloas
+    - get_filtered_node_tree#gloas
     # heze
     - on_execution_payload_envelope#heze
     - compute_fork_version#heze
@@ -664,6 +679,13 @@ exceptions:
     - should_extend_payload#heze
     - upgrade_to_heze#heze
     - get_inclusion_list_due_ms#heze
+    - apply_pending_deposit#heze
+    - process_block#heze
+    - process_epoch#heze
+    - process_operations#heze
+    - validate_execution_payload_bid_gossip#heze
+    - validate_inclusion_list_gossip#heze
+    - verify_block_body_operation_limits#heze
 
     # gloas (EIP-8282)
     - get_execution_requests#gloas
@@ -699,8 +721,6 @@ exceptions:
     # gloas
     - MAX_ATTESTER_SLASHING_SIZE#gloas
     - MAX_BUILDERS_PER_WITHDRAWALS_SWEEP#gloas
-    - MAX_DATA_COLUMN_SIDECAR_SIZE#gloas
-    - MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE#gloas
     - MAX_PAYLOAD_ATTESTATIONS#gloas
     - MAX_SIGNED_AGGREGATE_AND_PROOF_SIZE#gloas
     - MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE#gloas

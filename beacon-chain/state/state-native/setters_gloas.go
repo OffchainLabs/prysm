@@ -701,13 +701,13 @@ func decreaseBalanceWithVal(currBalance, delta primitives.Gwei) primitives.Gwei 
 // OnboardBuildersFromPendingDeposits applies any pending builder deposits at the fork.
 // It mutates the state and prunes pending deposits accordingly.
 //
-//	<spec fn="onboard_builders_from_pending_deposits" fork="gloas" hash="49853afd">
+//	<spec fn="onboard_builders_from_pending_deposits" fork="gloas" hash="e09a82dc">
 //	def onboard_builders_from_pending_deposits(state: BeaconState) -> None:
 //	    """
 //	    Applies any pending deposit for builders, effectively
 //	    onboarding builders at the fork.
 //	    """
-//	    validator_pubkeys = [v.pubkey for v in state.validators]
+//	    validator_pubkeys = [validator.pubkey for validator in state.validators]
 //
 //	    pending_deposits = PendingDeposits()
 //	    for deposit in state.pending_deposits:
@@ -719,7 +719,7 @@ func decreaseBalanceWithVal(currBalance, delta primitives.Gwei) primitives.Gwei 
 //	        # Note that applying a deposit below can mutate the state and
 //	        # may add a builder to the registry. For this reason, the list
 //	        # of builder pubkeys must be recomputed each iteration.
-//	        builder_pubkeys = [b.pubkey for b in state.builders]
+//	        builder_pubkeys = [builder.pubkey for builder in state.builders]
 //
 //	        # Deposits for non-builders stay in the pending queue. If there is a
 //	        # valid pending deposit for a new validator with this pubkey, keep this
