@@ -31,7 +31,7 @@ type PeerGossipRejections struct {
 // GossipRejectionsStore records gossip messages our topic validators rejected, per peer, to debug
 // which peers send invalid messages on which topics and why. It is pure observability: nothing
 // here feeds scoring or grey-listing. Only the most recent maxPerPeer rejections are retained per
-// peer, and the p2p service removes peers pruned from the peer store.
+// peer, and the p2p service removes peers the peer store no longer holds.
 type GossipRejectionsStore struct {
 	mu         sync.RWMutex
 	maxPerPeer int

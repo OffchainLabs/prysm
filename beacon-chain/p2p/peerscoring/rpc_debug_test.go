@@ -338,6 +338,7 @@ func TestBuildScoringConfig(t *testing.T) {
 
 	c := BuildScoringConfig(s, rej)
 	require.Equal(t, 7, c.StrikeGreyListThreshold)
+	require.Equal(t, 35, c.MaxStandingStrikes)
 	require.Equal(t, defaultStrikeHistorySize, c.StrikeHistorySize)
 	require.Equal(t, "30m0s", c.DecayInterval)
 	require.Equal(t, defaultGossipGreyListThreshold, c.GossipGreyListThreshold)

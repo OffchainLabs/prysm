@@ -521,6 +521,7 @@ func TestGetPeerScoringConfig(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 	require.NotNil(t, resp.Data)
 	assert.Equal(t, 5, resp.Data.StrikeGreyListThreshold)
+	assert.Equal(t, 25, resp.Data.MaxStandingStrikes)
 	assert.Equal(t, -16000, resp.Data.GossipGreyListThreshold)
 	assert.Equal(t, "123", resp.Data.OurHeadSlot)
 	assert.Equal(t, 100, resp.Data.MaxGossipRejectionsPerPeer)

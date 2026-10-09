@@ -22,6 +22,7 @@ import (
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	noise "github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/multiformats/go-multiaddr"
@@ -403,4 +404,20 @@ func TestService_connectWithPeer(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPruneGossipRejections(t *testing.T) {
+	s := &Service{
+		peers:            peers.NewStatus(t.Context(), &peers.StatusConfig{PeerLimit: 30}),
+		gossipRejections: peerscoring.NewGossipRejectionsStore(),
+	}
+	known, unknown := peer.ID("known"), peer.ID("unknown")
+	s.peers.Add(nil, known, nil, network.DirInbound)
+	s.gossipRejections.Record(known, "topic", "agent", nil)
+	// A late rejection for a peer the store never held, or already pruned.
+	s.gossipRejections.Record(unknown, "topic", "agent", nil)
+
+	s.pruneGossipRejections()
+	require.Equal(t, true, s.gossipRejections.IsTracked(known))
+	require.Equal(t, false, s.gossipRejections.IsTracked(unknown))
 }

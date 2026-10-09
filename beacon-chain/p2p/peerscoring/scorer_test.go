@@ -67,6 +67,7 @@ func TestNewScorer(t *testing.T) {
 		strikeHistorySize:       defaultStrikeHistorySize,
 		gossipGreyListThreshold: defaultGossipGreyListThreshold,
 		statusGreyListTTL:       defaultStatusGreyListTTL,
+		memoryUsageInterval:     defaultMemoryUsageInterval,
 	}
 	require.Equal(t, want, *s.params)
 	require.NotNil(t, s.info)
@@ -92,6 +93,7 @@ func TestNewScorerOptions(t *testing.T) {
 		{"strike greylist threshold", WithStrikeGreyListThreshold(9), func(p *scoringParams) { p.strikeGreyListThreshold = 9 }},
 		{"strike history size", WithStrikeHistorySize(7), func(p *scoringParams) { p.strikeHistorySize = 7 }},
 		{"decay interval", WithDecayInterval(time.Minute), func(p *scoringParams) { p.decayInterval = time.Minute }},
+		{"memory usage interval", WithMemoryUsageInterval(time.Minute), func(p *scoringParams) { p.memoryUsageInterval = time.Minute }},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -156,6 +158,18 @@ func TestRecordStrikeTrimsHistory(t *testing.T) {
 	require.Equal(t, "strike-3", history[0].Reason)
 	require.Equal(t, "strike-4", history[1].Reason)
 	require.Equal(t, "strike-5", history[2].Reason)
+}
+
+func TestRecordStrikeCapsStandingCount(t *testing.T) {
+	s := NewScorer(WithStrikeGreyListThreshold(3))
+	for i := 1; i <= 20; i++ {
+		require.Equal(t, min(i, 15), s.RecordStrike(testPid, Unknown, fmt.Sprintf("strike-%d", i)))
+	}
+
+	// The standing count stops at five times the threshold, bounding the grey-listing; history still records every strike.
+	require.Equal(t, 15, s.StrikeCount(testPid))
+	require.Equal(t, 20, len(s.info[testPid].strikes))
+	require.Equal(t, 13*time.Hour, s.TimeToWhiteListing(testPid))
 }
 
 func TestRemovePeers(t *testing.T) {

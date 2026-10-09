@@ -90,8 +90,8 @@ type GreyListDetailsDebug struct {
 
 // StrikesDebug is a peer's standing strike count and recent strike history.
 type StrikesDebug struct {
-	// StandingCount is the decayed strike count grey-listing is judged by; the history below
-	// is a bounded record and can hold fewer entries.
+	// StandingCount is the decayed strike count grey-listing is judged by, capped at
+	// max_standing_strikes; the history below is a bounded record and can hold fewer entries.
 	StandingCount     int           `json:"standing_count"`
 	GreyListThreshold int           `json:"grey_list_threshold"`
 	History           []StrikeDebug `json:"history"`
@@ -180,6 +180,7 @@ type AgentScoringDebug struct {
 // ScoringConfigDebug is the scoring configuration plus the node-side scoring context.
 type ScoringConfigDebug struct {
 	StrikeGreyListThreshold    int    `json:"strike_grey_list_threshold"`
+	MaxStandingStrikes         int    `json:"max_standing_strikes"`
 	StrikeHistorySize          int    `json:"strike_history_size"`
 	DecayInterval              string `json:"decay_interval"`
 	GossipGreyListThreshold    int    `json:"gossip_grey_list_threshold"`
@@ -189,6 +190,8 @@ type ScoringConfigDebug struct {
 	HighestKnownHeadSlot       string `json:"highest_known_head_slot"`
 	TrackedPeerCount           int    `json:"tracked_peer_count"`
 	PeersWithGossipRejections  int    `json:"peers_with_gossip_rejections"`
+	// MemoryUsage is the latest periodic estimate of the scoring state's memory; nil before the first.
+	MemoryUsage *MemoryUsage `json:"memory_usage,omitempty"`
 }
 
 // PeerDebugOptions carries the caller-supplied context BuildPeerDebug cannot derive itself:
@@ -260,6 +263,7 @@ func BuildScoringConfig(scorer *Scorer, rejections *GossipRejectionsStore) *Scor
 	scorer.mu.RLock()
 	c := &ScoringConfigDebug{
 		StrikeGreyListThreshold: scorer.params.strikeGreyListThreshold,
+		MaxStandingStrikes:      scorer.params.maxStandingStrikes(),
 		StrikeHistorySize:       scorer.params.strikeHistorySize,
 		DecayInterval:           scorer.params.decayInterval.String(),
 		GossipGreyListThreshold: scorer.params.gossipGreyListThreshold,
@@ -267,6 +271,7 @@ func BuildScoringConfig(scorer *Scorer, rejections *GossipRejectionsStore) *Scor
 		OurHeadSlot:             strconv.FormatUint(uint64(scorer.ourHeadSlot), 10),
 		HighestKnownHeadSlot:    strconv.FormatUint(uint64(scorer.highestKnownHeadSlot), 10),
 		TrackedPeerCount:        len(scorer.info),
+		MemoryUsage:             scorer.memoryUsage.Load(),
 	}
 	scorer.mu.RUnlock()
 

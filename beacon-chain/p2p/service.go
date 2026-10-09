@@ -201,6 +201,7 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 	go s.peerScorer.Start(ctx)
 
 	s.gossipRejections = peerscoring.NewGossipRejectionsStore()
+	go s.peerScorer.TrackMemoryUsage(ctx, s.gossipRejections)
 
 	s.peers = peers.NewStatus(ctx, &peers.StatusConfig{
 		PeerLimit:             int(s.cfg.MaxPeers),
@@ -288,9 +289,8 @@ func (s *Service) Start() {
 		ensurePeerConnections(s.ctx, s.host, s.peers, relayNodes...)
 	})
 	async.RunEvery(s.ctx, 30*time.Minute, func() {
-		// Peers pruned from the store are also dropped from the gossip rejections store.
-		prunedPeers := s.peers.Prune()
-		s.gossipRejections.RemovePeers(prunedPeers)
+		s.peers.Prune()
+		s.pruneGossipRejections()
 	})
 	async.RunEvery(s.ctx, time.Duration(params.BeaconConfig().RespTimeout)*time.Second, s.updateMetrics)
 	async.RunEvery(s.ctx, refreshRate, s.RefreshPersistentSubnets)
@@ -423,6 +423,16 @@ func (s *Service) PeerScoring() *peerscoring.Scorer {
 // GossipRejections returns the store of gossip messages our validators rejected.
 func (s *Service) GossipRejections() *peerscoring.GossipRejectionsStore {
 	return s.gossipRejections
+}
+
+func (s *Service) pruneGossipRejections() {
+	var unknown []peer.ID
+	for _, pid := range s.gossipRejections.TrackedPeers() {
+		if _, err := s.peers.ConnectionState(pid); err != nil {
+			unknown = append(unknown, pid)
+		}
+	}
+	s.gossipRejections.RemovePeers(unknown)
 }
 
 // IsPeerGreyListed returns why the peer must be refused: grey-listed by peer scoring, or

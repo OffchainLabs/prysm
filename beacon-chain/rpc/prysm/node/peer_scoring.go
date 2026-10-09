@@ -185,7 +185,8 @@ func (s *Server) ListScoringAgents(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetPeerScoringConfig returns the scoring configuration (thresholds, decay, history size)
-// plus the node-side scoring context (our head slot, highest known head slot, peer counts).
+// plus the node-side scoring context (our head slot, highest known head slot, peer counts,
+// latest memory usage estimate).
 func (s *Server) GetPeerScoringConfig(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "node.GetPeerScoringConfig")
 	defer span.End()

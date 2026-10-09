@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -130,7 +131,13 @@ const (
 	// every wrong-network peer would be retained forever; it mirrors the
 	// GoodbyeCodeWrongNetwork dial backoff (sync/rpc_goodbye.go).
 	defaultStatusGreyListTTL = 24 * time.Hour
+	// defaultMemoryUsageInterval is how often the scoring state's memory is measured and logged.
+	defaultMemoryUsageInterval = 15 * time.Minute
 )
+
+// maxStandingStrikesFactor caps standing strikes at this multiple of the grey-list threshold, so
+// strikes landing after a peer is grey-listed extend its grey-listing (and retention) by a bounded time.
+const maxStandingStrikesFactor = 5
 
 // Option configures a Scorer.
 type Option func(*Scorer)
@@ -170,12 +177,25 @@ func WithStatusGreyListTTL(ttl time.Duration) Option {
 	}
 }
 
+// WithMemoryUsageInterval sets how often TrackMemoryUsage measures the scoring state.
+func WithMemoryUsageInterval(interval time.Duration) Option {
+	return func(s *Scorer) {
+		s.params.memoryUsageInterval = interval
+	}
+}
+
 type scoringParams struct {
 	decayInterval           time.Duration
 	strikeGreyListThreshold int
 	strikeHistorySize       int
 	gossipGreyListThreshold int
 	statusGreyListTTL       time.Duration
+	memoryUsageInterval     time.Duration
+}
+
+// maxStandingStrikes is the cap on a peer's standing strike count.
+func (p *scoringParams) maxStandingStrikes() int {
+	return maxStandingStrikesFactor * p.strikeGreyListThreshold
 }
 
 // Scorer aggregates per-aspect grey-listers into a composite greylist verdict.
@@ -187,6 +207,9 @@ type Scorer struct {
 	ourHeadSlot          primitives.Slot
 	highestKnownHeadSlot primitives.Slot
 	info                 map[peer.ID]*PeerScoringInfo
+
+	// memoryUsage is the latest TrackMemoryUsage measurement; nil before the first one.
+	memoryUsage atomic.Pointer[MemoryUsage]
 }
 
 // NewScorer creates a Scorer with production defaults, overridable via opts.
@@ -198,6 +221,7 @@ func NewScorer(opts ...Option) *Scorer {
 			strikeHistorySize:       defaultStrikeHistorySize,
 			gossipGreyListThreshold: defaultGossipGreyListThreshold,
 			statusGreyListTTL:       defaultStatusGreyListTTL,
+			memoryUsageInterval:     defaultMemoryUsageInterval,
 		},
 		greyListers: []GreyLister{strikesScorer{}, rpcStatusScorer{}, gossipScorer{}},
 		info:        make(map[peer.ID]*PeerScoringInfo),
@@ -209,7 +233,7 @@ func NewScorer(opts ...Option) *Scorer {
 }
 
 // RecordStrike adds one strike against the peer, tagged with its source and reason,
-// logs the downscore event, and returns the standing (un-decayed) strike count.
+// logs the downscore event, and returns the standing strike count, capped at maxStandingStrikes.
 func (s *Scorer) RecordStrike(pid peer.ID, source StrikeSource, reason string) int {
 	if pid == "" {
 		return 0
@@ -217,7 +241,7 @@ func (s *Scorer) RecordStrike(pid peer.ID, source StrikeSource, reason string) i
 	strikesTotal.WithLabelValues(source.String()).Inc()
 	s.mu.Lock()
 	pi := s.getPeerScoringInfo(pid)
-	pi.strikeCount++
+	pi.strikeCount = min(pi.strikeCount+1, s.params.maxStandingStrikes())
 	pi.strikes = append(pi.strikes, Strike{Source: source, Reason: reason, at: time.Now()})
 	if excess := len(pi.strikes) - s.params.strikeHistorySize; excess > 0 {
 		pi.strikes = append(pi.strikes[:0], pi.strikes[excess:]...)
