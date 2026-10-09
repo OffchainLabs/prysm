@@ -73,7 +73,7 @@ func (m MetadataV0) SizeSSZ() int {
 	return m.md.SizeSSZ()
 }
 
-// MaxSizeSSZ returns the fixed SSZ size of metadata V0.
+// MaxSizeSSZ returns the fixed SSZ size.
 func (m MetadataV0) MaxSizeSSZ() int {
 	return m.SizeSSZ()
 }
@@ -172,7 +172,7 @@ func (m MetadataV1) SizeSSZ() int {
 	return m.md.SizeSSZ()
 }
 
-// MaxSizeSSZ returns the fixed SSZ size of metadata V1.
+// MaxSizeSSZ returns the fixed SSZ size.
 func (m MetadataV1) MaxSizeSSZ() int {
 	return m.SizeSSZ()
 }
@@ -271,7 +271,7 @@ func (m MetadataV2) SizeSSZ() int {
 	return m.md.SizeSSZ()
 }
 
-// MaxSizeSSZ returns the fixed SSZ size of metadata V2.
+// MaxSizeSSZ returns the fixed SSZ size.
 func (m MetadataV2) MaxSizeSSZ() int {
 	return m.SizeSSZ()
 }

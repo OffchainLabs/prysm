@@ -620,10 +620,7 @@ func TestSszNetworkEncoder_DecodeWithMaxLength_TypeBound(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	encoder.MaxPayloadSize = params.BeaconConfig().MaxPayloadSize
 
-	// A length prefix above the type's maximum SSZ size is rejected even though
-	// it is within MaxPayloadSize. No payload bytes are written to the buffer:
-	// getting the limit error rather than an EOF proves the declared length is
-	// rejected before any payload is read.
+	// A limit error without payload bytes confirms rejection before reading.
 	buf := new(bytes.Buffer)
 	_, err := buf.Write(gogo.EncodeVarint(encoder.MaxPayloadSize))
 	require.NoError(t, err)
@@ -632,7 +629,6 @@ func TestSszNetworkEncoder_DecodeWithMaxLength_TypeBound(t *testing.T) {
 	wanted := fmt.Sprintf("goes over the provided max limit of %d", seq.MaxSizeSSZ())
 	assert.ErrorContains(t, wanted, err)
 
-	// Same for a fixed-size proto message: one byte over its size is rejected.
 	buf.Reset()
 	st := new(ethpb.Status)
 	_, err = buf.Write(gogo.EncodeVarint(uint64(st.SizeSSZ() + 1)))
@@ -641,7 +637,6 @@ func TestSszNetworkEncoder_DecodeWithMaxLength_TypeBound(t *testing.T) {
 	wanted = fmt.Sprintf("goes over the provided max limit of %d", st.SizeSSZ())
 	assert.ErrorContains(t, wanted, err)
 
-	// Metadata responses use wrappers around the fixed-size proto messages.
 	for _, metadata := range []interface {
 		ssz.Unmarshaler
 		encoder.MaxSizer
@@ -658,7 +653,6 @@ func TestSszNetworkEncoder_DecodeWithMaxLength_TypeBound(t *testing.T) {
 		assert.ErrorContains(t, wanted, err)
 	}
 
-	// A valid message for a bounded type still round-trips.
 	buf.Reset()
 	msg := primitives.SSZUint64(9001)
 	_, err = e.EncodeWithMaxLength(buf, &msg)

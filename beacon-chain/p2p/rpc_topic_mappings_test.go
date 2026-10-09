@@ -18,11 +18,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
-// Every decodable RPC request type must report its maximum SSZ size so that the
-// encoder can validate a peer's declared length prefix against the type's bounds
-// before allocating the receive buffer. Without this, a peer can declare lengths
-// up to MaxPayloadSize on small-bodied topics such as ping and force the node to
-// reserve that memory for every open stream.
 func TestRPCTopicMappingsDeclareMaxRequestSize(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	for topic, base := range RPCTopicMappings {
@@ -30,8 +25,7 @@ func TestRPCTopicMappingsDeclareMaxRequestSize(t *testing.T) {
 		if typ.Kind() == reflect.Pointer {
 			typ = typ.Elem()
 		}
-		// Topics without a decodable request type never reach DecodeWithMaxLength,
-		// see registerRPC in beacon-chain/sync/rpc.go.
+		// Topics without a decodable request never reach DecodeWithMaxLength.
 		msg, ok := reflect.New(typ).Interface().(ssz.Unmarshaler)
 		if !ok {
 			continue

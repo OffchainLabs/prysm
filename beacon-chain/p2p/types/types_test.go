@@ -394,9 +394,6 @@ func TestDataColumnSidecarsByRootReq_MarshalUnmarshal(t *testing.T) {
 	require.DeepEqual(t, req, unmarshalled)
 }
 
-// MaxSizeSSZ must equal the marshaled size of a maximally populated value so
-// that the length-prefix bound enforced by the encoder can never reject a
-// request its UnmarshalSSZ would accept.
 func TestMaxSizeSSZMatchesMaxMarshaledSize(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()

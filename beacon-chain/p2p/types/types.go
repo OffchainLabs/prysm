@@ -68,7 +68,7 @@ func (r *BeaconBlockByRootsReq) SizeSSZ() int {
 	return len(*r) * fieldparams.RootLength
 }
 
-// MaxSizeSSZ returns the maximum size of the type when SSZ-encoded.
+// MaxSizeSSZ returns the maximum SSZ-encoded size.
 func (r *BeaconBlockByRootsReq) MaxSizeSSZ() int {
 	return int(params.BeaconConfig().MaxRequestBlocks) * fieldparams.RootLength
 }
@@ -122,7 +122,7 @@ func (m *ErrorMessage) SizeSSZ() int {
 	return len(*m)
 }
 
-// MaxSizeSSZ returns the maximum size of the type when SSZ-encoded.
+// MaxSizeSSZ returns the maximum SSZ-encoded size.
 func (m *ErrorMessage) MaxSizeSSZ() int {
 	return maxErrorLength
 }
@@ -152,7 +152,7 @@ func (b *BlobSidecarsByRootReq) SizeSSZ() int {
 	return len(*b) * blobIdSize
 }
 
-// MaxSizeSSZ returns the maximum size of the type when SSZ-encoded.
+// MaxSizeSSZ returns the maximum SSZ-encoded size.
 func (b *BlobSidecarsByRootReq) MaxSizeSSZ() int {
 	return int(params.BeaconConfig().MaxRequestBlobSidecarsElectra) * blobIdSize
 }
@@ -259,7 +259,7 @@ func (r *ExecutionPayloadEnvelopesByRootReq) SizeSSZ() int {
 	return len(*r) * fieldparams.RootLength
 }
 
-// MaxSizeSSZ returns the maximum size of the type when SSZ-encoded.
+// MaxSizeSSZ returns the maximum SSZ-encoded size.
 func (r *ExecutionPayloadEnvelopesByRootReq) MaxSizeSSZ() int {
 	return int(params.BeaconConfig().MaxRequestPayloads) * fieldparams.RootLength
 }
@@ -411,9 +411,7 @@ func (d DataColumnsByRootIdentifiers) SizeSSZ() int {
 	return size
 }
 
-// MaxSizeSSZ returns the maximum size of the type when SSZ-encoded.
-// Each identifier contributes its offset, a block root, the offset of its
-// column list, and at most NumberOfColumns column indices.
+// MaxSizeSSZ bounds each identifier's columns by NumberOfColumns.
 func (d DataColumnsByRootIdentifiers) MaxSizeSSZ() int {
 	maxIdentifierSize := fieldparams.RootLength + bytesPerLengthOffset + fieldparams.NumberOfColumns*8
 	return int(params.BeaconConfig().MaxRequestBlocksDeneb) * (bytesPerLengthOffset + maxIdentifierSize)

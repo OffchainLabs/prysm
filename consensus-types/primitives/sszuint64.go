@@ -32,7 +32,7 @@ func (s *SSZUint64) SizeSSZ() int {
 	return 8
 }
 
-// MaxSizeSSZ returns the maximum size of the type when SSZ-encoded.
+// MaxSizeSSZ returns the maximum SSZ-encoded size.
 func (s *SSZUint64) MaxSizeSSZ() int {
 	return s.SizeSSZ()
 }
