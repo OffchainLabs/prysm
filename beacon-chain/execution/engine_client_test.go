@@ -25,6 +25,7 @@ import (
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/internal/valid"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -2969,7 +2970,7 @@ func TestGloasPayloadFromBlockAndBody(t *testing.T) {
 		payload, err := gloasPayloadFromBlockAndBody(hash, newBlock([]byte{0x01}), body)
 		require.NoError(t, err)
 		require.DeepEqual(t, []byte(bodyBal), payload.BlockAccessList)
-		require.Equal(t, 1, len(payload.Transactions))
+		require.Equal(t, 1, valid.Len(payload.Transactions))
 	})
 	t.Run("nil body errors", func(t *testing.T) {
 		_, err := gloasPayloadFromBlockAndBody(hash, newBlock([]byte{0x01}), nil)

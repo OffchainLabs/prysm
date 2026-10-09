@@ -30,7 +30,7 @@ func validExecutionPayloadEnvelope() *ethpb.ExecutionPayloadEnvelope {
 		Timestamp:     4,
 		BaseFeePerGas: bytes.Repeat([]byte{0x07}, 32),
 		BlockHash:     bytes.Repeat([]byte{0x08}, 32),
-		Transactions:  [][]byte{},
+		Transactions:  &enginev1.ProgressiveTransactionList{},
 		Withdrawals:   []*enginev1.Withdrawal{},
 		BlobGasUsed:   0,
 		ExcessBlobGas: 0,
