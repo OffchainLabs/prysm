@@ -1,6 +1,7 @@
 package validators_test
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -275,6 +276,58 @@ func TestSlashValidator_Electra(t *testing.T) {
 	v, err = state.ValidatorAtIndex(slashedIdx)
 	require.NoError(t, err)
 	assert.Equal(t, maxBalance-(v.EffectiveBalance/params.BeaconConfig().MinSlashingPenaltyQuotientElectra), bal, "Did not get expected balance for slashed validator")
+}
+
+func TestSlashValidator_GloasClearsBuilderPendingPayments(t *testing.T) {
+	helpers.ClearCache()
+	validatorCount := 100
+	registry := make([]*ethpb.Validator, 0, validatorCount)
+	balances := make([]uint64, 0, validatorCount)
+	for range validatorCount {
+		registry = append(registry, &ethpb.Validator{
+			ActivationEpoch:  0,
+			ExitEpoch:        params.BeaconConfig().FarFutureEpoch,
+			EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance,
+		})
+		balances = append(balances, params.BeaconConfig().MaxEffectiveBalance)
+	}
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	payments := make([]*ethpb.BuilderPendingPayment, 2*slotsPerEpoch)
+	for i := range payments {
+		payments[i] = &ethpb.BuilderPendingPayment{Withdrawal: &ethpb.BuilderPendingWithdrawal{FeeRecipient: make([]byte, 20)}}
+	}
+	slashedIdx := primitives.ValidatorIndex(3)
+	payment := func(proposer primitives.ValidatorIndex) *ethpb.BuilderPendingPayment {
+		return &ethpb.BuilderPendingPayment{
+			Withdrawal:    &ethpb.BuilderPendingWithdrawal{FeeRecipient: bytes.Repeat([]byte{0x02}, 20), Amount: 5},
+			ProposerIndex: proposer,
+		}
+	}
+	payments[2] = payment(slashedIdx)
+	payments[slotsPerEpoch+7] = payment(slashedIdx)
+	payments[9] = payment(7)
+
+	state, err := state_native.InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		Validators:             registry,
+		Slashings:              make([]uint64, params.BeaconConfig().EpochsPerSlashingsVector),
+		RandaoMixes:            make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
+		Balances:               balances,
+		ProposerLookahead:      make([]primitives.ValidatorIndex, 2*slotsPerEpoch),
+		BuilderPendingPayments: payments,
+	})
+	require.NoError(t, err)
+
+	_, err = validators.SlashValidator(t.Context(), state, slashedIdx, validators.ExitInformation(state))
+	require.NoError(t, err)
+
+	got, err := state.BuilderPendingPayments()
+	require.NoError(t, err)
+	for _, i := range []uint64{2, uint64(slotsPerEpoch) + 7} {
+		assert.Equal(t, primitives.Gwei(0), got[i].Withdrawal.Amount)
+		assert.Equal(t, primitives.ValidatorIndex(0), got[i].ProposerIndex)
+	}
+	assert.Equal(t, primitives.Gwei(5), got[9].Withdrawal.Amount)
+	assert.Equal(t, primitives.ValidatorIndex(7), got[9].ProposerIndex)
 }
 
 func TestValidatorMaxExitEpochAndChurn(t *testing.T) {

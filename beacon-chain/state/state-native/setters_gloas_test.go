@@ -190,6 +190,47 @@ func TestClearBuilderPendingPayment(t *testing.T) {
 	})
 }
 
+func TestClearBuilderPendingPaymentsForProposer(t *testing.T) {
+	t.Run("previous fork returns expected error", func(t *testing.T) {
+		st := &BeaconState{version: version.Fulu}
+		err := st.ClearBuilderPendingPaymentsForProposer(0)
+		require.ErrorContains(t, "is not supported", err)
+	})
+
+	payment := func(proposer primitives.ValidatorIndex) *ethpb.BuilderPendingPayment {
+		return &ethpb.BuilderPendingPayment{
+			Weight:        2,
+			Withdrawal:    &ethpb.BuilderPendingWithdrawal{Amount: 99, BuilderIndex: 1, FeeRecipient: bytes.Repeat([]byte{0x02}, 20)},
+			ProposerIndex: proposer,
+		}
+	}
+
+	t.Run("clears only the proposer's payments and marks dirty", func(t *testing.T) {
+		st := &BeaconState{
+			version:                version.Gloas,
+			dirtyFields:            make(map[types.FieldIndex]bool),
+			builderPendingPayments: []*ethpb.BuilderPendingPayment{payment(3), emptyBuilderPendingPayment, payment(7), payment(3)},
+		}
+
+		require.NoError(t, st.ClearBuilderPendingPaymentsForProposer(3))
+		require.DeepEqual(t, emptyBuilderPendingPayment, st.builderPendingPayments[0])
+		require.DeepEqual(t, emptyBuilderPendingPayment, st.builderPendingPayments[3])
+		require.Equal(t, primitives.ValidatorIndex(7), st.builderPendingPayments[2].ProposerIndex)
+		require.Equal(t, true, st.dirtyFields[types.BuilderPendingPayments])
+	})
+
+	t.Run("empty payments do not match proposer zero", func(t *testing.T) {
+		st := &BeaconState{
+			version:                version.Gloas,
+			dirtyFields:            make(map[types.FieldIndex]bool),
+			builderPendingPayments: []*ethpb.BuilderPendingPayment{emptyBuilderPendingPayment, payment(7)},
+		}
+
+		require.NoError(t, st.ClearBuilderPendingPaymentsForProposer(0))
+		require.Equal(t, false, st.dirtyFields[types.BuilderPendingPayments])
+	})
+}
+
 func TestUpdatePendingPaymentWeight(t *testing.T) {
 	cfg := params.BeaconConfig()
 	slotsPerEpoch := cfg.SlotsPerEpoch

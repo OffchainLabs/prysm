@@ -1,6 +1,7 @@
 package blocks_test
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
@@ -273,6 +274,50 @@ func TestProcessAttesterSlashings_AppliesCorrectStatus(t *testing.T) {
 			require.Equal(t, uint64(32000000000), newState.Balances()[2])
 		})
 	}
+}
+
+func TestProcessAttesterSlashings_GloasClearsBuilderPendingPayments(t *testing.T) {
+	st, keys := util.DeterministicGenesisStateGloas(t, 100)
+	for _, vv := range st.Validators() {
+		vv.WithdrawableEpoch = primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)
+	}
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	payment := func(proposer primitives.ValidatorIndex) *ethpb.BuilderPendingPayment {
+		return &ethpb.BuilderPendingPayment{
+			Withdrawal:    &ethpb.BuilderPendingWithdrawal{FeeRecipient: bytes.Repeat([]byte{0x02}, 20), Amount: 5},
+			ProposerIndex: proposer,
+		}
+	}
+	require.NoError(t, st.SetBuilderPendingPayment(2, payment(1)))
+	require.NoError(t, st.SetBuilderPendingPayment(slotsPerEpoch+7, payment(1)))
+	require.NoError(t, st.SetBuilderPendingPayment(9, payment(5)))
+
+	att1 := util.HydrateIndexedAttestationElectra(&ethpb.IndexedAttestationElectra{
+		Data:             &ethpb.AttestationData{Source: &ethpb.Checkpoint{Epoch: 1}},
+		AttestingIndices: []uint64{0, 1},
+	})
+	att2 := util.HydrateIndexedAttestationElectra(&ethpb.IndexedAttestationElectra{AttestingIndices: []uint64{0, 1}})
+	domain, err := signing.Domain(st.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, st.GenesisValidatorsRoot())
+	require.NoError(t, err)
+	for _, att := range []*ethpb.IndexedAttestationElectra{att1, att2} {
+		signingRoot, err := signing.ComputeSigningRoot(att.Data, domain)
+		require.NoError(t, err)
+		att.Signature = bls.AggregateSignatures([]bls.Signature{keys[0].Sign(signingRoot[:]), keys[1].Sign(signingRoot[:])}).Marshal()
+	}
+	require.NoError(t, st.SetSlot(2*slotsPerEpoch))
+
+	slashing := &ethpb.AttesterSlashingElectra{Attestation_1: att1, Attestation_2: att2}
+	newState, err := blocks.ProcessAttesterSlashings(t.Context(), st, []ethpb.AttSlashing{slashing}, v.ExitInformation(st))
+	require.NoError(t, err)
+
+	got, err := newState.BuilderPendingPayments()
+	require.NoError(t, err)
+	for _, i := range []primitives.Slot{2, slotsPerEpoch + 7} {
+		require.Equal(t, primitives.Gwei(0), got[i].Withdrawal.Amount)
+		require.Equal(t, primitives.ValidatorIndex(0), got[i].ProposerIndex)
+	}
+	require.Equal(t, primitives.Gwei(5), got[9].Withdrawal.Amount)
+	require.Equal(t, primitives.ValidatorIndex(5), got[9].ProposerIndex)
 }
 
 func TestProcessAttesterSlashing_ExitEpochGetsUpdated(t *testing.T) {

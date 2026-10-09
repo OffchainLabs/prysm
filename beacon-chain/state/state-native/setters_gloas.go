@@ -1,6 +1,7 @@
 package state_native
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 
@@ -143,6 +144,37 @@ func (b *BeaconState) ClearBuilderPendingPayment(index primitives.Slot) error {
 
 	b.markFieldAsDirty(types.BuilderPendingPayments)
 	return nil
+}
+
+// ClearBuilderPendingPaymentsForProposer empties every pending payment recorded for proposerIdx.
+func (b *BeaconState) ClearBuilderPendingPaymentsForProposer(proposerIdx primitives.ValidatorIndex) error {
+	if b.version < version.Gloas {
+		return errNotSupported("ClearBuilderPendingPaymentsForProposer", b.version)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	cleared := false
+	for i, payment := range b.builderPendingPayments {
+		if payment == nil || payment.ProposerIndex != proposerIdx || isEmptyBuilderPendingPayment(payment) {
+			continue
+		}
+		b.builderPendingPayments[i] = emptyBuilderPendingPayment
+		cleared = true
+	}
+	if cleared {
+		b.markFieldAsDirty(types.BuilderPendingPayments)
+	}
+	return nil
+}
+
+func isEmptyBuilderPendingPayment(p *ethpb.BuilderPendingPayment) bool {
+	if p.Weight != 0 || p.ProposerIndex != 0 || p.Withdrawal == nil {
+		return false
+	}
+	w := p.Withdrawal
+	return w.Amount == 0 && w.BuilderIndex == 0 && bytes.Equal(w.FeeRecipient, emptyBuilderPendingPayment.Withdrawal.FeeRecipient)
 }
 
 func (b *BeaconState) QueueBuilderPaymentForSlot(parentSlot primitives.Slot) error {
