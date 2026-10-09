@@ -176,10 +176,15 @@ func TestContainerRootProgressive(t *testing.T) {
 	got, err := ssz.ContainerRootProgressive(fieldRoots, activeFields)
 	require.NoError(t, err)
 
-	body := ssz.MerkleizeProgressiveChunks(fieldRoots)
+	body := ssz.MerkleizeProgressiveChunks([][32]byte{
+		fieldRoots[0],
+		{},
+		fieldRoots[1],
+	})
 	expected, err := ssz.MixInActiveFields(body, activeFields)
 	require.NoError(t, err)
 	require.Equal(t, expected, got)
+	require.Equal(t, "3a6584864e28437da67deac288c46c9b60cee55880b19b12cfe68a7d1d5bc491", fmt.Sprintf("%x", got))
 }
 
 func TestContainerRootProgressive_EmptyActiveFields(t *testing.T) {
