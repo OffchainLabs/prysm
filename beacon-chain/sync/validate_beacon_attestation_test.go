@@ -696,6 +696,7 @@ func Test_validateGloasCommitteeIndex(t *testing.T) {
 		blockSlot       primitives.Slot
 		hasFullNode     bool
 		hasBadPayload   bool
+		optimistic      bool
 		wantResult      pubsub.ValidationResult
 		wantErr         string
 	}{
@@ -742,6 +743,16 @@ func Test_validateGloasCommitteeIndex(t *testing.T) {
 			wantErr:         "execution payload for attested block has not been seen",
 		},
 		{
+			name:            "committee index 1 different-slot with optimistic full node should ignore",
+			committeeIndex:  1,
+			attestationSlot: 10,
+			blockSlot:       9,
+			hasFullNode:     true,
+			optimistic:      true,
+			wantResult:      pubsub.ValidationIgnore,
+			wantErr:         "execution payload for attested block is optimistic",
+		},
+		{
 			name:            "committee index 1 different-slot with full node should accept",
 			committeeIndex:  1,
 			attestationSlot: 10,
@@ -760,6 +771,9 @@ func Test_validateGloasCommitteeIndex(t *testing.T) {
 			}
 			if tt.hasFullNode {
 				mc.ForkchoiceRoots = map[[32]byte]bool{blockRoot32: true}
+			}
+			if tt.optimistic {
+				mc.OptimisticRoots = map[[32]byte]bool{blockRoot32: true}
 			}
 			s := &Service{
 				ctx: t.Context(),
@@ -780,7 +794,7 @@ func Test_validateGloasCommitteeIndex(t *testing.T) {
 				BeaconBlockRoot: blockRoot,
 			}
 
-			result, err := s.validateGloasCommitteeIndex(data)
+			result, err := s.validateGloasCommitteeIndex(t.Context(), data)
 
 			require.Equal(t, tt.wantResult, result)
 			if tt.wantErr != "" {
