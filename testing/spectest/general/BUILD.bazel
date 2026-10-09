@@ -3,7 +3,10 @@ load("@prysm//tools/go:def.bzl", "go_test")
 go_test(
     name = "go_default_test",
     srcs = [
+        "deneb__kzg__blob_to_kzg_commitment_test.go",
+        "deneb__kzg__compute_blob_kzg_proof_test.go",
         "deneb__kzg__verify_blob_kzg_proof_batch_test.go",
+        "deneb__kzg__verify_blob_kzg_proof_test.go",
         "fulu__kzg__compute_cells_and_kzg_proofs_test.go",
         "fulu__kzg__compute_cells_test.go",
         "fulu__kzg__recover_cells_and_kzg_proofs_test.go",
