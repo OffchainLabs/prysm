@@ -55,7 +55,7 @@ func TestProcessBuilderPendingPayments(t *testing.T) {
 		{EffectiveBalance: cfg.MaxEffectiveBalance, ActivationEpoch: 0, ExitEpoch: 1},
 		{EffectiveBalance: cfg.MaxEffectiveBalance, ActivationEpoch: 0, ExitEpoch: 1},
 	}
-	pbSt, err := state_native.New(&ethpb.BeaconState{Validators: validators})
+	beaconState, err := state_native.New(&ethpb.BeaconState{Validators: validators})
 	require.NoError(t, err)
 
 	total := uint64(len(validators)) * cfg.MaxEffectiveBalance
@@ -65,7 +65,7 @@ func TestProcessBuilderPendingPayments(t *testing.T) {
 
 	t.Run("append qualifying withdrawals", func(t *testing.T) {
 		payments := buildPayments(primitives.Gwei(quorum+1), primitives.Gwei(quorum+2))
-		st := &testProcessState{BeaconState: pbSt, payments: payments}
+		st := &testProcessState{BeaconState: beaconState, payments: payments}
 
 		require.NoError(t, ProcessBuilderPendingPayments(t.Context(), st))
 		require.Equal(t, 2, len(st.withdrawals))
@@ -82,7 +82,7 @@ func TestProcessBuilderPendingPayments(t *testing.T) {
 
 	t.Run("no withdrawals when below quorum", func(t *testing.T) {
 		payments := buildPayments(primitives.Gwei(quorum - 1))
-		st := &testProcessState{BeaconState: pbSt, payments: payments}
+		st := &testProcessState{BeaconState: beaconState, payments: payments}
 
 		require.NoError(t, ProcessBuilderPendingPayments(t.Context(), st))
 		require.Equal(t, 0, len(st.withdrawals))

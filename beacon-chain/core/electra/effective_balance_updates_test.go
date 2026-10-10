@@ -12,7 +12,7 @@ import (
 )
 
 func TestProcessEffectiveBalanceUpdates_SafeCopy(t *testing.T) {
-	pb := &eth.BeaconStateElectra{
+	container := &eth.BeaconStateElectra{
 		Validators: []*eth.Validator{
 			{
 				EffectiveBalance:      params.BeaconConfig().MinActivationBalance,
@@ -23,7 +23,7 @@ func TestProcessEffectiveBalanceUpdates_SafeCopy(t *testing.T) {
 			params.BeaconConfig().MaxEffectiveBalanceElectra * 2,
 		},
 	}
-	st, err := state_native.New(pb)
+	st, err := state_native.New(container)
 	require.NoError(t, err)
 	copiedState := st.Copy()
 
@@ -49,7 +49,7 @@ func TestProcessEffectiveBalnceUpdates(t *testing.T) {
 		{
 			name: "validator with compounding withdrawal credentials updates effective balance",
 			state: func() state.BeaconState {
-				pb := &eth.BeaconStateElectra{
+				container := &eth.BeaconStateElectra{
 					Validators: []*eth.Validator{
 						{
 							EffectiveBalance:      params.BeaconConfig().MinActivationBalance,
@@ -60,7 +60,7 @@ func TestProcessEffectiveBalnceUpdates(t *testing.T) {
 						params.BeaconConfig().MaxEffectiveBalanceElectra * 2,
 					},
 				}
-				st, err := state_native.New(pb)
+				st, err := state_native.New(container)
 				require.NoError(t, err)
 				return st
 			}(),
@@ -73,7 +73,7 @@ func TestProcessEffectiveBalnceUpdates(t *testing.T) {
 		{
 			name: "validator without compounding withdrawal credentials updates effective balance",
 			state: func() state.BeaconState {
-				pb := &eth.BeaconStateElectra{
+				container := &eth.BeaconStateElectra{
 					Validators: []*eth.Validator{
 						{
 							EffectiveBalance:      params.BeaconConfig().MinActivationBalance / 2,
@@ -84,7 +84,7 @@ func TestProcessEffectiveBalnceUpdates(t *testing.T) {
 						params.BeaconConfig().MaxEffectiveBalanceElectra,
 					},
 				}
-				st, err := state_native.New(pb)
+				st, err := state_native.New(container)
 				require.NoError(t, err)
 				return st
 			}(),
@@ -97,7 +97,7 @@ func TestProcessEffectiveBalnceUpdates(t *testing.T) {
 		{
 			name: "validator effective balance moves only when outside of threshold",
 			state: func() state.BeaconState {
-				pb := &eth.BeaconStateElectra{
+				container := &eth.BeaconStateElectra{
 					Validators: []*eth.Validator{
 						{
 							EffectiveBalance:      params.BeaconConfig().MinActivationBalance,
@@ -123,7 +123,7 @@ func TestProcessEffectiveBalnceUpdates(t *testing.T) {
 						params.BeaconConfig().MinActivationBalance + upwardThreshold - 1,   // within upward threshold
 					},
 				}
-				st, err := state_native.New(pb)
+				st, err := state_native.New(container)
 				require.NoError(t, err)
 				return st
 			}(),

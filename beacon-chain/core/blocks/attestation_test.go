@@ -335,7 +335,7 @@ func TestVerifyAttestationNoVerifySignature_GloasCommitteeIndexLimit(t *testing.
 	checkpointRoot := bytes.Repeat([]byte{0xAA}, fieldparams.RootLength)
 	justified := &ethpb.Checkpoint{Epoch: 0, Root: checkpointRoot}
 
-	gloasStateProto := &ethpb.BeaconStateGloas{
+	container := &ethpb.BeaconStateGloas{
 		Slot:                         stateSlot,
 		GenesisValidatorsRoot:        bytes.Repeat([]byte{0x11}, fieldparams.RootLength),
 		BlockRoots:                   blockRoots,
@@ -359,7 +359,7 @@ func TestVerifyAttestationNoVerifySignature_GloasCommitteeIndexLimit(t *testing.
 		},
 	}
 
-	beaconState, err := state_native.New(gloasStateProto)
+	beaconState, err := state_native.New(container)
 	require.NoError(t, err)
 
 	committeeBits := bitfield.NewBitvector64()

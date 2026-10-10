@@ -49,9 +49,9 @@ func GenerateGenesisStateBellatrixFromDepositData(
 		return nil, nil, errors.Wrap(err, "could not generate genesis state")
 	}
 	bsi := beaconState.ToContainerUnsafe()
-	pbb, ok := bsi.(*ethpb.BeaconStateBellatrix)
+	container, ok := bsi.(*ethpb.BeaconStateBellatrix)
 	if !ok {
 		return nil, nil, errors.New("unexpected BeaconState version")
 	}
-	return pbb, deposits, nil
+	return container, deposits, nil
 }

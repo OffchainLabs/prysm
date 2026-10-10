@@ -129,7 +129,7 @@ func setPendingPayment(t *testing.T, st state.BeaconState, index int, amount uin
 func getPendingPayment(t *testing.T, st state.BeaconState, index int) *eth.BuilderPendingPayment {
 	t.Helper()
 
-	stateProto := st.ToContainerUnsafe().(*eth.BeaconStateGloas)
+	container := st.ToContainerUnsafe().(*eth.BeaconStateGloas)
 
-	return stateProto.BuilderPendingPayments[index]
+	return container.BuilderPendingPayments[index]
 }

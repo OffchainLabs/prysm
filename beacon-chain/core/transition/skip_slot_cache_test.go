@@ -20,9 +20,9 @@ func TestSkipSlotCache_OK(t *testing.T) {
 	transition.SkipSlotCache.Enable()
 	defer transition.SkipSlotCache.Disable()
 	bState, privs := util.DeterministicGenesisState(t, params.MinimalSpecConfig().MinGenesisActiveValidatorCount)
-	pbState, err := state_native.ContainerFrom[*ethpb.BeaconState](bState.ToContainer())
+	container, err := state_native.ContainerFrom[*ethpb.BeaconState](bState.ToContainer())
 	require.NoError(t, err)
-	originalState, err := state_native.New(pbState)
+	originalState, err := state_native.New(container)
 	require.NoError(t, err)
 
 	blkCfg := util.DefaultBlockGenConfig()
@@ -47,9 +47,9 @@ func TestSkipSlotCache_OK(t *testing.T) {
 
 func TestSkipSlotCache_ConcurrentMixup(t *testing.T) {
 	bState, privs := util.DeterministicGenesisState(t, params.MinimalSpecConfig().MinGenesisActiveValidatorCount)
-	pbState, err := state_native.ContainerFrom[*ethpb.BeaconState](bState.ToContainer())
+	container, err := state_native.ContainerFrom[*ethpb.BeaconState](bState.ToContainer())
 	require.NoError(t, err)
-	originalState, err := state_native.New(pbState)
+	originalState, err := state_native.New(container)
 	require.NoError(t, err)
 
 	blkCfg := util.DefaultBlockGenConfig()

@@ -32,16 +32,16 @@ func FuzzPhase0StateHashTreeRoot(f *testing.F) {
 			// Perform a XOR on the byte of the selected index.
 			stateSSZ[num] ^= diffBuffer[i+8]
 		}
-		pbState := &ethpb.BeaconState{}
-		err := pbState.UnmarshalSSZ(stateSSZ)
+		container := &ethpb.BeaconState{}
+		err := container.UnmarshalSSZ(stateSSZ)
 		if err != nil {
 			return
 		}
-		nativeState, err := native.New(pbState)
+		nativeState, err := native.New(container)
 		assert.NoError(t, err)
 
 		slotsToTransition %= 100
-		stateObj, err := native.NewUnsafe(pbState)
+		stateObj, err := native.NewUnsafe(container)
 		assert.NoError(t, err)
 		for stateObj.Slot() < primitives.Slot(slotsToTransition) {
 			stateObj, err = coreState.ProcessSlots(t.Context(), stateObj, stateObj.Slot()+1)
@@ -101,18 +101,18 @@ func FuzzAltairStateHashTreeRoot(f *testing.F) {
 			// Perform a XOR on the byte of the selected index.
 			stateSSZ[num] ^= diffBuffer[i+8]
 		}
-		pbState := &ethpb.BeaconStateAltair{}
-		err := pbState.UnmarshalSSZ(stateSSZ)
+		container := &ethpb.BeaconStateAltair{}
+		err := container.UnmarshalSSZ(stateSSZ)
 		if err != nil {
 			return
 		}
-		nativeState, err := native.New(pbState)
+		nativeState, err := native.New(container)
 		if err != nil {
 			return
 		}
 
 		slotsToTransition %= 100
-		stateObj, err := native.NewUnsafe(pbState)
+		stateObj, err := native.NewUnsafe(container)
 		assert.NoError(t, err)
 		for stateObj.Slot() < primitives.Slot(slotsToTransition) {
 			stateObj, err = coreState.ProcessSlots(t.Context(), stateObj, stateObj.Slot()+1)
@@ -171,18 +171,18 @@ func FuzzBellatrixStateHashTreeRoot(f *testing.F) {
 			// Perform a XOR on the byte of the selected index.
 			stateSSZ[num] ^= diffBuffer[i+8]
 		}
-		pbState := &ethpb.BeaconStateBellatrix{}
-		err := pbState.UnmarshalSSZ(stateSSZ)
+		container := &ethpb.BeaconStateBellatrix{}
+		err := container.UnmarshalSSZ(stateSSZ)
 		if err != nil {
 			return
 		}
-		nativeState, err := native.New(pbState)
+		nativeState, err := native.New(container)
 		if err != nil {
 			return
 		}
 
 		slotsToTransition %= 100
-		stateObj, err := native.NewUnsafe(pbState)
+		stateObj, err := native.NewUnsafe(container)
 		assert.NoError(t, err)
 		for stateObj.Slot() < primitives.Slot(slotsToTransition) {
 			stateObj, err = coreState.ProcessSlots(t.Context(), stateObj, stateObj.Slot()+1)
@@ -241,18 +241,18 @@ func FuzzCapellaStateHashTreeRoot(f *testing.F) {
 			// Perform a XOR on the byte of the selected index.
 			stateSSZ[num] ^= diffBuffer[i+8]
 		}
-		pbState := &ethpb.BeaconStateCapella{}
-		err := pbState.UnmarshalSSZ(stateSSZ)
+		container := &ethpb.BeaconStateCapella{}
+		err := container.UnmarshalSSZ(stateSSZ)
 		if err != nil {
 			return
 		}
-		nativeState, err := native.New(pbState)
+		nativeState, err := native.New(container)
 		if err != nil {
 			return
 		}
 
 		slotsToTransition %= 100
-		stateObj, err := native.NewUnsafe(pbState)
+		stateObj, err := native.NewUnsafe(container)
 		assert.NoError(t, err)
 		for stateObj.Slot() < primitives.Slot(slotsToTransition) {
 			stateObj, err = coreState.ProcessSlots(t.Context(), stateObj, stateObj.Slot()+1)
@@ -311,18 +311,18 @@ func FuzzDenebStateHashTreeRoot(f *testing.F) {
 			// Perform a XOR on the byte of the selected index.
 			stateSSZ[num] ^= diffBuffer[i+8]
 		}
-		pbState := &ethpb.BeaconStateDeneb{}
-		err := pbState.UnmarshalSSZ(stateSSZ)
+		container := &ethpb.BeaconStateDeneb{}
+		err := container.UnmarshalSSZ(stateSSZ)
 		if err != nil {
 			return
 		}
-		nativeState, err := native.New(pbState)
+		nativeState, err := native.New(container)
 		if err != nil {
 			return
 		}
 
 		slotsToTransition %= 100
-		stateObj, err := native.NewUnsafe(pbState)
+		stateObj, err := native.NewUnsafe(container)
 		assert.NoError(t, err)
 		for stateObj.Slot() < primitives.Slot(slotsToTransition) {
 			stateObj, err = coreState.ProcessSlots(t.Context(), stateObj, stateObj.Slot()+1)
