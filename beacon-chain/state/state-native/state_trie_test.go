@@ -2,6 +2,7 @@ package state_native_test
 
 import (
 	"bytes"
+	"reflect"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -539,4 +540,54 @@ func TestNew_CopiesInput(t *testing.T) {
 		pb.Fork.Epoch = 2
 		require.Equal(t, primitives.Epoch(2), st.Fork().Epoch)
 	})
+}
+
+func TestToContainer(t *testing.T) {
+	t.Run("Phase0", func(t *testing.T) { testToContainer(t, &ethpb.BeaconState{}) })
+	t.Run("Altair", func(t *testing.T) { testToContainer(t, &ethpb.BeaconStateAltair{}) })
+	t.Run("Bellatrix", func(t *testing.T) { testToContainer(t, &ethpb.BeaconStateBellatrix{}) })
+	t.Run("Capella", func(t *testing.T) { testToContainer(t, &ethpb.BeaconStateCapella{}) })
+	t.Run("Deneb", func(t *testing.T) { testToContainer(t, &ethpb.BeaconStateDeneb{}) })
+	t.Run("Electra", func(t *testing.T) { testToContainer(t, &ethpb.BeaconStateElectra{}) })
+	t.Run("Fulu", func(t *testing.T) { testToContainer(t, &ethpb.BeaconStateFulu{}) })
+	t.Run("Gloas", func(t *testing.T) { testToContainer(t, &ethpb.BeaconStateGloas{}) })
+}
+
+// testToContainer checks that writes through the ToContainer result do not
+// reach the state, and that the same write through ToContainerUnsafe does.
+// Every fork has the fields it writes, so it reaches them by reflection.
+func testToContainer[T statenative.Container](t *testing.T, input T) {
+	field := func(c T, name string) reflect.Value { return reflect.ValueOf(c).Elem().FieldByName(name) }
+	field(input, "Fork").Set(reflect.ValueOf(&ethpb.Fork{Epoch: 1}))
+	field(input, "LatestBlockHeader").Set(reflect.ValueOf(&ethpb.BeaconBlockHeader{Slot: 1}))
+	field(input, "Eth1Data").Set(reflect.ValueOf(&ethpb.Eth1Data{DepositCount: 1}))
+	field(input, "Validators").Set(reflect.ValueOf([]*ethpb.Validator{{EffectiveBalance: 1}}))
+	field(input, "Balances").Set(reflect.ValueOf([]uint64{1}))
+	st, err := statenative.New(input)
+	require.NoError(t, err)
+
+	c, err := statenative.ContainerFrom[T](st.ToContainer())
+	require.NoError(t, err)
+	field(c, "Fork").Interface().(*ethpb.Fork).Epoch = 99
+	field(c, "LatestBlockHeader").Interface().(*ethpb.BeaconBlockHeader).Slot = 99
+	field(c, "Eth1Data").Interface().(*ethpb.Eth1Data).DepositCount = 99
+	field(c, "Validators").Interface().([]*ethpb.Validator)[0].EffectiveBalance = 99
+	field(c, "Balances").Interface().([]uint64)[0] = 99
+
+	require.Equal(t, primitives.Epoch(1), st.Fork().Epoch)
+	require.Equal(t, primitives.Slot(1), st.LatestBlockHeader().Slot)
+	require.Equal(t, uint64(1), st.Eth1Data().DepositCount)
+	v, err := st.ValidatorAtIndexReadOnly(0)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), v.EffectiveBalance())
+	b, err := st.BalanceAtIndex(0)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), b)
+
+	// Control: ToContainerUnsafe may share fields with the state, so the same
+	// write reaches it. This shows that the checks above can detect aliasing.
+	c, err = statenative.ContainerFrom[T](st.ToContainerUnsafe())
+	require.NoError(t, err)
+	field(c, "Fork").Interface().(*ethpb.Fork).Epoch = 99
+	require.Equal(t, primitives.Epoch(99), st.Fork().Epoch)
 }
