@@ -54,7 +54,7 @@ func FuzzPhase0StateHashTreeRoot(f *testing.F) {
 		}
 		assert.NoError(t, err)
 		// Perform a cold HTR calculation by initializing a new state.
-		innerState, ok := stateObj.ToProtoUnsafe().(*ethpb.BeaconState)
+		innerState, ok := stateObj.ToContainerUnsafe().(*ethpb.BeaconState)
 		assert.Equal(t, true, ok, "inner state is a not a beacon state proto")
 		newState, err := native.NewUnsafe(innerState)
 		assert.NoError(t, err)
@@ -125,7 +125,7 @@ func FuzzAltairStateHashTreeRoot(f *testing.F) {
 		}
 		assert.NoError(t, err)
 		// Perform a cold HTR calculation by initializing a new state.
-		innerState, ok := stateObj.ToProtoUnsafe().(*ethpb.BeaconStateAltair)
+		innerState, ok := stateObj.ToContainerUnsafe().(*ethpb.BeaconStateAltair)
 		assert.Equal(t, true, ok, "inner state is a not a beacon state altair proto")
 		newState, err := native.NewUnsafe(innerState)
 		assert.NoError(t, err)
@@ -195,7 +195,7 @@ func FuzzBellatrixStateHashTreeRoot(f *testing.F) {
 		}
 		assert.NoError(t, err)
 		// Perform a cold HTR calculation by initializing a new state.
-		innerState, ok := stateObj.ToProtoUnsafe().(*ethpb.BeaconStateBellatrix)
+		innerState, ok := stateObj.ToContainerUnsafe().(*ethpb.BeaconStateBellatrix)
 		assert.Equal(t, true, ok, "inner state is a not a beacon state bellatrix proto")
 		newState, err := native.NewUnsafe(innerState)
 		assert.NoError(t, err)
@@ -265,7 +265,7 @@ func FuzzCapellaStateHashTreeRoot(f *testing.F) {
 		}
 		assert.NoError(t, err)
 		// Perform a cold HTR calculation by initializing a new state.
-		innerState, ok := stateObj.ToProtoUnsafe().(*ethpb.BeaconStateCapella)
+		innerState, ok := stateObj.ToContainerUnsafe().(*ethpb.BeaconStateCapella)
 		assert.Equal(t, true, ok, "inner state is a not a beacon state capella proto")
 		newState, err := native.NewUnsafe(innerState)
 		assert.NoError(t, err)
@@ -335,7 +335,7 @@ func FuzzDenebStateHashTreeRoot(f *testing.F) {
 		}
 		assert.NoError(t, err)
 		// Perform a cold HTR calculation by initializing a new state.
-		innerState, ok := stateObj.ToProtoUnsafe().(*ethpb.BeaconStateDeneb)
+		innerState, ok := stateObj.ToContainerUnsafe().(*ethpb.BeaconStateDeneb)
 		assert.Equal(t, true, ok, "inner state is a not a beacon state deneb proto")
 		newState, err := native.NewUnsafe(innerState)
 		assert.NoError(t, err)

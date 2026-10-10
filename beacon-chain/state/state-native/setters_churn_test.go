@@ -33,7 +33,7 @@ func TestExitEpochAndUpdateChurn_SpectestCase(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, primitives.Epoch(262), ee)
 
-	p := s.ToProto()
+	p := s.ToContainer()
 	pb, ok := p.(*eth.BeaconStateElectra)
 	if !ok {
 		t.Fatal("wrong proto")
@@ -77,7 +77,7 @@ func TestExitEpochAndUpdateChurn(t *testing.T) {
 		wantExitEpoch := helpers.ActivationExitEpoch(epoch)
 		require.Equal(t, wantExitEpoch, ee)
 
-		p := st.ToProto()
+		p := st.ToContainer()
 		pb, ok := p.(*eth.BeaconStateElectra)
 		if !ok {
 			t.Fatal("wrong proto")
@@ -113,7 +113,7 @@ func TestExitEpochAndUpdateChurn(t *testing.T) {
 		wantExitEpoch := helpers.ActivationExitEpoch(epoch) + 1
 		require.Equal(t, wantExitEpoch, ee)
 
-		p := st.ToProto()
+		p := st.ToContainer()
 		pb, ok := p.(*eth.BeaconStateElectra)
 		if !ok {
 			t.Fatal("wrong proto")
@@ -146,7 +146,7 @@ func TestExitEpochAndUpdateChurn(t *testing.T) {
 		wantExitEpoch := epoch + 10_000
 		require.Equal(t, wantExitEpoch, ee)
 
-		p := st.ToProto()
+		p := st.ToContainer()
 		pb, ok := p.(*eth.BeaconStateElectra)
 		if !ok {
 			t.Fatal("wrong proto")
@@ -181,7 +181,7 @@ func TestExitEpochAndUpdateChurn(t *testing.T) {
 		wantExitEpoch := epoch + 10_000 + 1
 		require.Equal(t, wantExitEpoch, ee)
 
-		p := st.ToProto()
+		p := st.ToContainer()
 		pb, ok := p.(*eth.BeaconStateElectra)
 		if !ok {
 			t.Fatal("wrong proto")

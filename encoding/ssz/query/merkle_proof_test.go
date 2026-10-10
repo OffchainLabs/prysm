@@ -113,7 +113,7 @@ func TestProve_BeaconState(t *testing.T) {
 	st, _ := util.DeterministicGenesisState(t, 16)
 	require.NoError(t, st.SetSlot(primitives.Slot(42)))
 
-	sszObj, ok := st.ToProtoUnsafe().(query.SSZObject)
+	sszObj, ok := st.ToContainerUnsafe().(query.SSZObject)
 	require.Equal(t, true, ok, "state proto does not implement query.SSZObject")
 
 	tests := []string{

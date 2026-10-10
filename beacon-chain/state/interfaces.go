@@ -66,8 +66,8 @@ type ReadOnlyBeaconState interface {
 	ReadOnlyConsolidations
 	ReadOnlyProposerLookahead
 	readOnlyGloasFields
-	ToProtoUnsafe() any
-	ToProto() any
+	ToContainerUnsafe() any
+	ToContainer() any
 	Copy() BeaconState
 	GenesisTime() time.Time
 	GenesisValidatorsRoot() []byte

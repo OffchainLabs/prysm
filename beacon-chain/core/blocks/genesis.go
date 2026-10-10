@@ -44,7 +44,7 @@ func NewGenesisBlockForState(ctx context.Context, st state.BeaconState) (interfa
 	if err != nil {
 		return nil, err
 	}
-	ps := st.ToProto()
+	ps := st.ToContainer()
 	switch ps.(type) {
 	case *ethpb.BeaconState:
 		return blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlock{

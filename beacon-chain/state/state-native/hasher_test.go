@@ -45,7 +45,7 @@ func TestComputeFieldRootsWithHasher_Phase0(t *testing.T) {
 
 	nativeState, ok := beaconState.(*statenative.BeaconState)
 	require.Equal(t, true, ok)
-	protoState, ok := nativeState.ToProtoUnsafe().(*ethpb.BeaconState)
+	protoState, ok := nativeState.ToContainerUnsafe().(*ethpb.BeaconState)
 	require.Equal(t, true, ok)
 
 	initState, err := statenative.New(protoState)
@@ -112,7 +112,7 @@ func TestComputeFieldRootsWithHasher_Altair(t *testing.T) {
 
 	nativeState, ok := beaconState.(*statenative.BeaconState)
 	require.Equal(t, true, ok)
-	protoState, ok := nativeState.ToProtoUnsafe().(*ethpb.BeaconStateAltair)
+	protoState, ok := nativeState.ToContainerUnsafe().(*ethpb.BeaconStateAltair)
 	require.Equal(t, true, ok)
 	initState, err := statenative.New(protoState)
 	require.NoError(t, err)
@@ -185,7 +185,7 @@ func TestComputeFieldRootsWithHasher_Bellatrix(t *testing.T) {
 
 	nativeState, ok := beaconState.(*statenative.BeaconState)
 	require.Equal(t, true, ok)
-	protoState, ok := nativeState.ToProtoUnsafe().(*ethpb.BeaconStateBellatrix)
+	protoState, ok := nativeState.ToContainerUnsafe().(*ethpb.BeaconStateBellatrix)
 	require.Equal(t, true, ok)
 	initState, err := statenative.New(protoState)
 	require.NoError(t, err)
@@ -265,7 +265,7 @@ func TestComputeFieldRootsWithHasher_Capella(t *testing.T) {
 
 	nativeState, ok := beaconState.(*statenative.BeaconState)
 	require.Equal(t, true, ok)
-	protoState, ok := nativeState.ToProtoUnsafe().(*ethpb.BeaconStateCapella)
+	protoState, ok := nativeState.ToContainerUnsafe().(*ethpb.BeaconStateCapella)
 	require.Equal(t, true, ok)
 	initState, err := statenative.New(protoState)
 	require.NoError(t, err)

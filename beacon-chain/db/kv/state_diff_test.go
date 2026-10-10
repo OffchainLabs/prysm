@@ -514,7 +514,7 @@ func TestStateDiff_PopulateStateDiffCacheFromDB_AnchorSlot(t *testing.T) {
 	require.Equal(t, offset, cache.anchors[0].slot)
 	got := cache.getAnchor(0, withExactSlot(offset))
 	require.NotNil(t, got)
-	require.DeepSSZEqual(t, st.ToProto(), got.ToProto())
+	require.DeepSSZEqual(t, st.ToContainer(), got.ToContainer())
 	require.IsNil(t, cache.getAnchor(0, withExactSlot(0)))
 	require.IsNil(t, cache.getAnchor(0, withExactSlot(offset+1)))
 }
@@ -799,13 +799,13 @@ func TestStateDiff_GetFullSnapshot(t *testing.T) {
 			got, err := db.getFullSnapshot(uint64(snapshotSlot))
 			require.NoError(t, err)
 			require.Equal(t, tt.wantDBRead, db.db.Stats().TxN > before)
-			require.DeepSSZEqual(t, st.ToProto(), got.ToProto())
+			require.DeepSSZEqual(t, st.ToContainer(), got.ToContainer())
 
 			// Mutating the returned state must not affect subsequent reads.
 			require.NoError(t, got.SetSlot(snapshotSlot+1))
 			got, err = db.getFullSnapshot(uint64(snapshotSlot))
 			require.NoError(t, err)
-			require.DeepSSZEqual(t, st.ToProto(), got.ToProto())
+			require.DeepSSZEqual(t, st.ToContainer(), got.ToContainer())
 		})
 	}
 }
@@ -867,14 +867,14 @@ func TestStateDiff_GetAnchorState_ExactSlot(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, got)
 			require.Equal(t, tt.wantDBRead, db.db.Stats().TxN > before)
-			require.DeepSSZEqual(t, st.ToProto(), got.ToProto())
+			require.DeepSSZEqual(t, st.ToContainer(), got.ToContainer())
 			require.Equal(t, anchorSlot, db.stateDiffCache.anchors[1].slot)
 
 			before = db.db.Stats().TxN
 			got, err = db.getAnchorState(t.Context(), uint64(offset), 2, anchorSlot+32)
 			require.NoError(t, err)
 			require.Equal(t, before, db.db.Stats().TxN)
-			require.DeepSSZEqual(t, st.ToProto(), got.ToProto())
+			require.DeepSSZEqual(t, st.ToContainer(), got.ToContainer())
 		})
 	}
 }
@@ -1217,10 +1217,10 @@ type blockingMarshalBeaconState struct {
 	release chan struct{}
 }
 
-func (s *blockingMarshalBeaconState) ToProto() any {
+func (s *blockingMarshalBeaconState) ToContainer() any {
 	close(s.started)
 	<-s.release
-	return s.ReadOnlyBeaconState.ToProto()
+	return s.ReadOnlyBeaconState.ToContainer()
 }
 
 func TestStateDiffCache_AnchorAccess(t *testing.T) {
@@ -1306,7 +1306,7 @@ func TestStateDiffCache_AnchorAccess(t *testing.T) {
 		require.IsNil(t, cache.getAnchor(0, withExactSlot(96)))
 		got = cache.getAnchor(0, withExactSlot(128))
 		require.NotNil(t, got)
-		require.DeepSSZEqual(t, st.ToProto(), got.ToProto())
+		require.DeepSSZEqual(t, st.ToContainer(), got.ToContainer())
 	})
 
 	for _, clear := range []struct {

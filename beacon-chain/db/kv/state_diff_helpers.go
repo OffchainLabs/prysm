@@ -427,7 +427,7 @@ func encodeProtoWithKey(v int, pb ssz.Marshaler) ([]byte, error) {
 
 // encodeStateWithKey is encodeProtoWithKey for a native state.
 func encodeStateWithKey(st state.ReadOnlyBeaconState) ([]byte, error) {
-	pb, ok := st.ToProto().(ssz.Marshaler)
+	pb, ok := st.ToContainer().(ssz.Marshaler)
 	if !ok {
 		return nil, errors.New("state does not marshal to ssz")
 	}

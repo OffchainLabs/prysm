@@ -117,7 +117,7 @@ func BenchmarkHashTreeRootState_FullState(b *testing.B) {
 func BenchmarkMarshalState_FullState(b *testing.B) {
 	beaconState, err := benchmark.PreGenstateFullEpochs()
 	require.NoError(b, err)
-	natState, err := state_native.ContainerFrom[*ethpb.BeaconState](beaconState.ToProtoUnsafe())
+	natState, err := state_native.ContainerFrom[*ethpb.BeaconState](beaconState.ToContainerUnsafe())
 	require.NoError(b, err)
 	b.Run("Fast_SSZ_Marshal", func(b *testing.B) {
 		b.ResetTimer()
@@ -132,7 +132,7 @@ func BenchmarkMarshalState_FullState(b *testing.B) {
 func BenchmarkUnmarshalState_FullState(b *testing.B) {
 	beaconState, err := benchmark.PreGenstateFullEpochs()
 	require.NoError(b, err)
-	natState, err := state_native.ContainerFrom[*ethpb.BeaconState](beaconState.ToProtoUnsafe())
+	natState, err := state_native.ContainerFrom[*ethpb.BeaconState](beaconState.ToContainerUnsafe())
 	require.NoError(b, err)
 	sszObject, err := natState.MarshalSSZ()
 	require.NoError(b, err)

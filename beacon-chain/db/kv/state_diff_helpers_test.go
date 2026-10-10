@@ -127,7 +127,7 @@ func TestGetBaseAndDiffChain_CachedAncestors(t *testing.T) {
 					require.NoError(t, err)
 					require.Equal(t, tt.wantReads, db.db.Stats().TxN-before)
 					require.Equal(t, offset+tt.wantBase, base.Slot())
-					require.DeepSSZEqual(t, states[tt.wantBase].ToProto(), base.ToProto())
+					require.DeepSSZEqual(t, states[tt.wantBase].ToContainer(), base.ToContainer())
 					require.Equal(t, len(tt.wantDiffs), len(chain))
 					for i, rel := range tt.wantDiffs {
 						require.DeepEqual(t, storedDiffs[rel], chain[i])
@@ -507,7 +507,7 @@ func assertStateDiffRead(t *testing.T, want, got state.BeaconState) {
 func TestEncodeStateWithKey(t *testing.T) {
 	st, err := util.NewBeaconStateElectra()
 	require.NoError(t, err)
-	pb, ok := st.ToProtoUnsafe().(ssz.Marshaler)
+	pb, ok := st.ToContainerUnsafe().(ssz.Marshaler)
 	require.Equal(t, true, ok)
 
 	t.Run("marshals into the prefixed buffer", func(t *testing.T) {
@@ -601,7 +601,7 @@ func TestStateKeyByVersion_AllVersions(t *testing.T) {
 func BenchmarkEncodeProtoWithKey(b *testing.B) {
 	st, err := util.NewBeaconStateElectra()
 	require.NoError(b, err)
-	pb := st.ToProtoUnsafe().(ssz.Marshaler)
+	pb := st.ToContainerUnsafe().(ssz.Marshaler)
 
 	b.Run("append-copy", func(b *testing.B) {
 		b.ReportAllocs()

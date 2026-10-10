@@ -28,7 +28,7 @@ func TestProcessSlot_GloasClearsNextPayloadAvailability(t *testing.T) {
 	_, err := ProcessSlot(context.Background(), st)
 	require.NoError(t, err)
 
-	post := st.ToProto().(*ethpb.BeaconStateGloas)
+	post := st.ToContainer().(*ethpb.BeaconStateGloas)
 	require.Equal(t, byte(0xFF)&^bitMask, post.ExecutionPayloadAvailability[byteIdx])
 }
 
@@ -41,7 +41,7 @@ func TestProcessSlot_GloasClearsNextPayloadAvailability_Wrap(t *testing.T) {
 	_, err := ProcessSlot(context.Background(), st)
 	require.NoError(t, err)
 
-	post := st.ToProto().(*ethpb.BeaconStateGloas)
+	post := st.ToContainer().(*ethpb.BeaconStateGloas)
 	require.Equal(t, byte(0xFE), post.ExecutionPayloadAvailability[0])
 }
 

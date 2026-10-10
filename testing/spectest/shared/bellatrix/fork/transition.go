@@ -120,7 +120,7 @@ func RunForkTransitionTest(t *testing.T, config string) {
 			postBeaconState := &ethpb.BeaconStateBellatrix{}
 			require.NoError(t, postBeaconState.UnmarshalSSZ(postBeaconStateSSZ), "Failed to unmarshal")
 
-			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateBellatrix](beaconState.ToProto())
+			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateBellatrix](beaconState.ToContainer())
 			require.NoError(t, err)
 			require.DeepSSZEqual(t, pbState, postBeaconState)
 		})

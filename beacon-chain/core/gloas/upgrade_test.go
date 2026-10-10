@@ -73,7 +73,7 @@ func TestUpgradeToGloas_Basic(t *testing.T) {
 	require.NoError(t, err)
 	require.DeepSSZEqual(t, blockHash, latestBlockHash[:])
 
-	pbState, ok := mSt.ToProtoUnsafe().(*ethpb.BeaconStateGloas)
+	pbState, ok := mSt.ToContainerUnsafe().(*ethpb.BeaconStateGloas)
 	require.Equal(t, true, ok)
 
 	expectedAvailLen := int((params.BeaconConfig().SlotsPerHistoricalRoot + 7) / 8)
@@ -122,7 +122,7 @@ func TestUpgradeToGloas_OnboardsBuilderDeposit(t *testing.T) {
 	mSt, err := gloas.UpgradeToGloas(t.Context(), st)
 	require.NoError(t, err)
 
-	pbState, ok := mSt.ToProtoUnsafe().(*ethpb.BeaconStateGloas)
+	pbState, ok := mSt.ToContainerUnsafe().(*ethpb.BeaconStateGloas)
 	require.Equal(t, true, ok)
 
 	require.Equal(t, 0, len(pbState.PendingDeposits))

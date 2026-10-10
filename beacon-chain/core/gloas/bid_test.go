@@ -248,7 +248,7 @@ func TestProcessExecutionPayloadBid_SelfBuildSuccess(t *testing.T) {
 
 	require.NoError(t, ProcessExecutionPayloadBid(state, block))
 
-	stateProto, ok := state.ToProto().(*ethpb.BeaconStateGloas)
+	stateProto, ok := state.ToContainer().(*ethpb.BeaconStateGloas)
 	require.Equal(t, true, ok)
 	slotIndex := params.BeaconConfig().SlotsPerEpoch + (slot % params.BeaconConfig().SlotsPerEpoch)
 	require.Equal(t, primitives.Gwei(0), stateProto.BuilderPendingPayments[slotIndex].Withdrawal.Amount)
@@ -339,7 +339,7 @@ func TestProcessExecutionPayloadBid_PendingPaymentAndCacheBid(t *testing.T) {
 
 	require.NoError(t, ProcessExecutionPayloadBid(state, block))
 
-	stateProto, ok := state.ToProto().(*ethpb.BeaconStateGloas)
+	stateProto, ok := state.ToContainer().(*ethpb.BeaconStateGloas)
 	require.Equal(t, true, ok)
 	slotIndex := params.BeaconConfig().SlotsPerEpoch + (slot % params.BeaconConfig().SlotsPerEpoch)
 	require.Equal(t, primitives.Gwei(500_000), stateProto.BuilderPendingPayments[slotIndex].Withdrawal.Amount)
@@ -363,7 +363,7 @@ func TestProcessExecutionPayloadBid_BuilderNotActive(t *testing.T) {
 
 	state := buildGloasState(t, slot, proposerIdx, builderIdx, params.BeaconConfig().MinDepositAmount+1000, randao, latestHash, pubKey)
 	// Make builder inactive by setting withdrawable_epoch.
-	stateProto := state.ToProto().(*ethpb.BeaconStateGloas)
+	stateProto := state.ToContainer().(*ethpb.BeaconStateGloas)
 	stateProto.Builders[int(builderIdx)].WithdrawableEpoch = 0
 	stateIface, err := state_native.New(stateProto)
 	require.NoError(t, err)
@@ -411,7 +411,7 @@ func TestProcessExecutionPayloadBid_CannotCoverBid(t *testing.T) {
 	copy(pubKey[:], sk.PublicKey().Marshal())
 
 	state := buildGloasState(t, slot, proposerIdx, builderIdx, params.BeaconConfig().MinDepositAmount+10, randao, latestHash, pubKey)
-	stateProto := state.ToProto().(*ethpb.BeaconStateGloas)
+	stateProto := state.ToContainer().(*ethpb.BeaconStateGloas)
 	// Add pending balances to push below required balance.
 	stateProto.BuilderPendingWithdrawals = []*ethpb.BuilderPendingWithdrawal{
 		{Amount: 15, BuilderIndex: builderIdx},
