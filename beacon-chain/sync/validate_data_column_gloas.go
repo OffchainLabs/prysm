@@ -48,6 +48,11 @@ func (s *Service) validateDataColumnGloas(
 	// data_column_sidecar_{subnet_id}
 	// [Modified in Gloas:EIP7732]
 	//
+	// # [IGNORE] This is the first sidecar seen for this block root and column index
+	if s.hasSeenDataColumnRootIndex(roDataColumn.BlockRoot(), roDataColumn.Index()) {
+		return blocks.VerifiedRODataColumn{}, ignoreValidation(errors.New("data column sidecar already seen for block root"))
+	}
+
 	// [IGNORE] A valid block for the sidecar's slot has been seen (via gossip or non-gossip sources).
 	// If not yet seen, a client MUST queue the sidecar for deferred validation and possible processing once
 	// the block is received or retrieved.
@@ -99,16 +104,6 @@ func (s *Service) validateDataColumnGloas(
 	if err := verifier.VerifyDataColumnSidecarKzgProofsGloas(); err != nil {
 		return blocks.VerifiedRODataColumn{}, errors.Wrap(err, "gloas data column validation")
 	}
-
-	// [IGNORE] The sidecar is the first sidecar for the tuple
-	// (sidecar.beacon_block_root, sidecar.index) with valid kzg proof.
-	//
-	// Note: If the sidecar fails deferred validation, its forwarding peers MUST be downscored
-	// retroactively. If validation succeeds, the client MUST re-broadcast the sidecar.
-	if s.hasSeenDataColumnRootIndex(roDataColumn.BlockRoot(), roDataColumn.Index()) {
-		return blocks.VerifiedRODataColumn{}, ignoreValidation(errors.New("data column sidecar already seen for block root"))
-	}
-	verifier.SatisfyRequirement(verification.RequireNotSeenGloas)
 
 	verifiedRODataColumn, err := verifier.VerifiedRODataColumn()
 	if err != nil {
