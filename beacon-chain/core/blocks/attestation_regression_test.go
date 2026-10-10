@@ -32,11 +32,11 @@ func TestProcessAttestationNoVerifySignature_BeaconFuzzIssue78(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	spb := &ethpb.BeaconState{}
-	if err := spb.UnmarshalSSZ(stateData); err != nil {
+	container := &ethpb.BeaconState{}
+	if err := container.UnmarshalSSZ(stateData); err != nil {
 		t.Fatal(err)
 	}
-	st, err := state_native.NewUnsafe(spb)
+	st, err := state_native.NewUnsafe(container)
 	if err != nil {
 		t.Fatal(err)
 	}

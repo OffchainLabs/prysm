@@ -40,16 +40,16 @@ func TestNextWithdrawalIndex(t *testing.T) {
 
 func TestNextWithdrawalValidatorIndex(t *testing.T) {
 	t.Run("ok for deneb", func(t *testing.T) {
-		pb := &ethpb.BeaconStateDeneb{NextWithdrawalValidatorIndex: 123}
-		s, err := state_native.New(pb)
+		container := &ethpb.BeaconStateDeneb{NextWithdrawalValidatorIndex: 123}
+		s, err := state_native.New(container)
 		require.NoError(t, err)
 		i, err := s.NextWithdrawalValidatorIndex()
 		require.NoError(t, err)
 		assert.Equal(t, primitives.ValidatorIndex(123), i)
 	})
 	t.Run("ok", func(t *testing.T) {
-		pb := &ethpb.BeaconStateCapella{NextWithdrawalValidatorIndex: 123}
-		s, err := state_native.New(pb)
+		container := &ethpb.BeaconStateCapella{NextWithdrawalValidatorIndex: 123}
+		s, err := state_native.New(container)
 		require.NoError(t, err)
 		i, err := s.NextWithdrawalValidatorIndex()
 		require.NoError(t, err)
@@ -339,9 +339,9 @@ func TestExpectedWithdrawals(t *testing.T) {
 		require.NoError(t, err)
 		serializedSSZ, err := snappy.Decode(nil /* dst */, serializedBytes)
 		require.NoError(t, err)
-		pb := &ethpb.BeaconStateElectra{}
-		require.NoError(t, pb.UnmarshalSSZ(serializedSSZ))
-		s, err := state_native.New(pb)
+		container := &ethpb.BeaconStateElectra{}
+		require.NoError(t, container.UnmarshalSSZ(serializedSSZ))
+		s, err := state_native.New(container)
 		require.NoError(t, err)
 		expected, partialWithdrawalsCount, err := s.ExpectedWithdrawals()
 		require.NoError(t, err)
@@ -356,9 +356,9 @@ func TestExpectedWithdrawals(t *testing.T) {
 		require.NoError(t, err)
 		serializedSSZ, err := snappy.Decode(nil /* dst */, serializedBytes)
 		require.NoError(t, err)
-		pb := &ethpb.BeaconStateElectra{}
-		require.NoError(t, pb.UnmarshalSSZ(serializedSSZ))
-		s, err := state_native.New(pb)
+		container := &ethpb.BeaconStateElectra{}
+		require.NoError(t, container.UnmarshalSSZ(serializedSSZ))
+		s, err := state_native.New(container)
 		require.NoError(t, err)
 		p, err := s.PendingPartialWithdrawals()
 		require.NoError(t, err)

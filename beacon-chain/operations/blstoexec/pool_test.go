@@ -43,7 +43,7 @@ func TestPendingBLSToExecChanges(t *testing.T) {
 }
 
 func TestBLSToExecChangesForInclusion(t *testing.T) {
-	spb := &eth.BeaconStateCapella{
+	container := &eth.BeaconStateCapella{
 		Fork: &eth.Fork{
 			CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
 			PreviousVersion: params.BeaconConfig().GenesisForkVersion,
@@ -52,7 +52,7 @@ func TestBLSToExecChangesForInclusion(t *testing.T) {
 	numValidators := 2 * params.BeaconConfig().MaxBlsToExecutionChanges
 	validators := make([]*eth.Validator, numValidators)
 	blsChanges := make([]*eth.BLSToExecutionChange, numValidators)
-	spb.Balances = make([]uint64, numValidators)
+	container.Balances = make([]uint64, numValidators)
 	privKeys := make([]common.SecretKey, numValidators)
 	maxEffectiveBalance := params.BeaconConfig().MaxEffectiveBalance
 	executionAddress := []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13}
@@ -80,8 +80,8 @@ func TestBLSToExecChangesForInclusion(t *testing.T) {
 		validators[i] = v
 		blsChanges[i] = message
 	}
-	spb.Validators = validators
-	st, err := state_native.New(spb)
+	container.Validators = validators
+	st, err := state_native.New(container)
 	require.NoError(t, err)
 
 	signedChanges := make([]*eth.SignedBLSToExecutionChange, numValidators)

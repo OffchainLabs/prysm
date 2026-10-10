@@ -163,7 +163,7 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 		genesisTime = payload.Timestamp - slotSeconds
 	}
 
-	stProto := &ethpb.BeaconStateGloas{
+	container := &ethpb.BeaconStateGloas{
 		Slot:                  slot,
 		GenesisTime:           genesisTime,
 		GenesisValidatorsRoot: genesisRoot,
@@ -188,7 +188,7 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 		Builders:                     builders,
 	}
 
-	st, err := state_native.New(stProto)
+	st, err := state_native.New(container)
 	require.NoError(t, err)
 
 	epoch := slots.ToEpoch(slot)
@@ -282,11 +282,11 @@ func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 		require.NoError(t, err)
 		proposerPk := proposerSk.PublicKey().Marshal()
 
-		stPb, ok := fixture.state.ToContainerUnsafe().(*ethpb.BeaconStateGloas)
+		container, ok := fixture.state.ToContainerUnsafe().(*ethpb.BeaconStateGloas)
 		require.Equal(t, true, ok)
-		stPb = stPb.Copy()
-		stPb.Validators[0].PublicKey = proposerPk
-		st, err := state_native.NewUnsafe(stPb)
+		container = container.Copy()
+		container.Validators[0].PublicKey = proposerPk
+		st, err := state_native.NewUnsafe(container)
 		require.NoError(t, err)
 
 		msg := proto.Clone(fixture.signedProto.Message).(*ethpb.ExecutionPayloadEnvelope)
@@ -322,11 +322,11 @@ func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 			require.NoError(t, err)
 			proposerPk := proposerSk.PublicKey().Marshal()
 
-			stPb, ok := fixture.state.ToContainerUnsafe().(*ethpb.BeaconStateGloas)
+			container, ok := fixture.state.ToContainerUnsafe().(*ethpb.BeaconStateGloas)
 			require.Equal(t, true, ok)
-			stPb = stPb.Copy()
-			stPb.Validators[0].PublicKey = proposerPk
-			st, err := state_native.NewUnsafe(stPb)
+			container = container.Copy()
+			container.Validators[0].PublicKey = proposerPk
+			st, err := state_native.NewUnsafe(container)
 			require.NoError(t, err)
 
 			msg := proto.Clone(fixture.signedProto.Message).(*ethpb.ExecutionPayloadEnvelope)

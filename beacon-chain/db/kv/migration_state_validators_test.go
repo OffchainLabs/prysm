@@ -91,10 +91,10 @@ func Test_migrateStateValidators(t *testing.T) {
 					assert.NoError(t, hashErr)
 					individualHashes = append(individualHashes, hash[:])
 				}
-				pbState, err := state_native.ContainerFrom[*v1alpha1.BeaconState](st.ToContainerUnsafe())
+				container, err := state_native.ContainerFrom[*v1alpha1.BeaconState](st.ToContainerUnsafe())
 				assert.NoError(t, err)
 				validatorsFoundCount := 0
-				for _, val := range pbState.Validators {
+				for _, val := range container.Validators {
 					hash, hashErr := val.HashTreeRoot()
 					assert.NoError(t, hashErr)
 					found := false
@@ -150,10 +150,10 @@ func Test_migrateStateValidators(t *testing.T) {
 				}
 
 				// check if all the validators that were in the state, are stored properly in the validator bucket
-				pbState, err := state_native.ContainerFrom[*v1alpha1.BeaconState](rcvdState.ToContainerUnsafe())
+				container, err := state_native.ContainerFrom[*v1alpha1.BeaconState](rcvdState.ToContainerUnsafe())
 				assert.NoError(t, err)
 				validatorsFoundCount := 0
-				for _, val := range pbState.Validators {
+				for _, val := range container.Validators {
 					hash, hashErr := val.HashTreeRoot()
 					assert.NoError(t, hashErr)
 					found := false
@@ -253,10 +253,10 @@ func Test_migrateAltairStateValidators(t *testing.T) {
 				}
 
 				// check if all the validators that were in the state, are stored properly in the validator bucket
-				pbState, err := state_native.ContainerFrom[*v1alpha1.BeaconStateAltair](rcvdState.ToContainerUnsafe())
+				container, err := state_native.ContainerFrom[*v1alpha1.BeaconStateAltair](rcvdState.ToContainerUnsafe())
 				assert.NoError(t, err)
 				validatorsFoundCount := 0
-				for _, val := range pbState.Validators {
+				for _, val := range container.Validators {
 					hash, hashErr := val.HashTreeRoot()
 					assert.NoError(t, hashErr)
 					found := false
@@ -360,10 +360,10 @@ func Test_migrateBellatrixStateValidators(t *testing.T) {
 				}
 
 				// check if all the validators that were in the state, are stored properly in the validator bucket
-				pbState, err := state_native.ContainerFrom[*v1alpha1.BeaconStateBellatrix](rcvdState.ToContainerUnsafe())
+				container, err := state_native.ContainerFrom[*v1alpha1.BeaconStateBellatrix](rcvdState.ToContainerUnsafe())
 				assert.NoError(t, err)
 				validatorsFoundCount := 0
-				for _, val := range pbState.Validators {
+				for _, val := range container.Validators {
 					hash, hashErr := val.HashTreeRoot()
 					assert.NoError(t, hashErr)
 					found := false
@@ -467,10 +467,10 @@ func Test_migrateCapellaStateValidators(t *testing.T) {
 				}
 
 				// check if all the validators that were in the state, are stored properly in the validator bucket
-				pbState, err := state_native.ContainerFrom[*v1alpha1.BeaconStateCapella](rcvdState.ToContainerUnsafe())
+				container, err := state_native.ContainerFrom[*v1alpha1.BeaconStateCapella](rcvdState.ToContainerUnsafe())
 				assert.NoError(t, err)
 				validatorsFoundCount := 0
-				for _, val := range pbState.Validators {
+				for _, val := range container.Validators {
 					hash, hashErr := val.HashTreeRoot()
 					assert.NoError(t, hashErr)
 					found := false

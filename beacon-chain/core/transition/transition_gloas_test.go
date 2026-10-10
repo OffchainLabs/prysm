@@ -64,7 +64,7 @@ func newGloasState(t *testing.T, slot primitives.Slot, availability []byte) stat
 	t.Helper()
 
 	cfg := params.BeaconConfig()
-	protoState := &ethpb.BeaconStateGloas{
+	container := &ethpb.BeaconStateGloas{
 		Slot:                         slot,
 		LatestBlockHeader:            testBeaconBlockHeader(),
 		BlockRoots:                   make([][]byte, cfg.SlotsPerHistoricalRoot),
@@ -95,18 +95,18 @@ func newGloasState(t *testing.T, slot primitives.Slot, availability []byte) stat
 		NextSyncCommittee:           &ethpb.SyncCommittee{},
 	}
 
-	for i := range protoState.BlockRoots {
-		protoState.BlockRoots[i] = make([]byte, 32)
+	for i := range container.BlockRoots {
+		container.BlockRoots[i] = make([]byte, 32)
 	}
-	for i := range protoState.StateRoots {
-		protoState.StateRoots[i] = make([]byte, 32)
+	for i := range container.StateRoots {
+		container.StateRoots[i] = make([]byte, 32)
 	}
-	for i := range protoState.RandaoMixes {
-		protoState.RandaoMixes[i] = make([]byte, 32)
+	for i := range container.RandaoMixes {
+		container.RandaoMixes[i] = make([]byte, 32)
 	}
 
-	for i := range protoState.BuilderPendingPayments {
-		protoState.BuilderPendingPayments[i] = &ethpb.BuilderPendingPayment{
+	for i := range container.BuilderPendingPayments {
+		container.BuilderPendingPayments[i] = &ethpb.BuilderPendingPayment{
 			Withdrawal: &ethpb.BuilderPendingWithdrawal{
 				FeeRecipient: make([]byte, 20),
 			},
@@ -118,16 +118,16 @@ func newGloasState(t *testing.T, slot primitives.Slot, availability []byte) stat
 		pubkeys[i] = make([]byte, fieldparams.BLSPubkeyLength)
 	}
 	aggPubkey := make([]byte, fieldparams.BLSPubkeyLength)
-	protoState.CurrentSyncCommittee = &ethpb.SyncCommittee{
+	container.CurrentSyncCommittee = &ethpb.SyncCommittee{
 		Pubkeys:         pubkeys,
 		AggregatePubkey: aggPubkey,
 	}
-	protoState.NextSyncCommittee = &ethpb.SyncCommittee{
+	container.NextSyncCommittee = &ethpb.SyncCommittee{
 		Pubkeys:         pubkeys,
 		AggregatePubkey: aggPubkey,
 	}
 
-	st, err := state_native.New(protoState)
+	st, err := state_native.New(container)
 	require.NoError(t, err)
 	require.Equal(t, version.Gloas, st.Version())
 	return st

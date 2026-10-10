@@ -216,7 +216,7 @@ func TestForkManualCopy_OK(t *testing.T) {
 	}
 	require.NoError(t, a.SetFork(wantedFork))
 
-	pbState, err := statenative.ContainerFrom[*ethpb.BeaconState](a.ToContainerUnsafe())
+	container, err := statenative.ContainerFrom[*ethpb.BeaconState](a.ToContainerUnsafe())
 	require.NoError(t, err)
-	require.DeepEqual(t, pbState.Fork, wantedFork)
+	require.DeepEqual(t, container.Fork, wantedFork)
 }

@@ -29,9 +29,9 @@ func TestProcessPendingConsolidations(t *testing.T) {
 		{
 			name: "no pending consolidations",
 			state: func() state.BeaconState {
-				pb := &eth.BeaconStateElectra{}
+				container := &eth.BeaconStateElectra{}
 
-				st, err := state_native.NewUnsafe(pb)
+				st, err := state_native.NewUnsafe(container)
 				require.NoError(t, err)
 				return st
 			}(),
@@ -40,7 +40,7 @@ func TestProcessPendingConsolidations(t *testing.T) {
 		{
 			name: "processes pending consolidation successfully",
 			state: func() state.BeaconState {
-				pb := &eth.BeaconStateElectra{
+				container := &eth.BeaconStateElectra{
 					Validators: []*eth.Validator{
 						{
 							WithdrawalCredentials: []byte{0x01, 0xFF},
@@ -62,7 +62,7 @@ func TestProcessPendingConsolidations(t *testing.T) {
 					},
 				}
 
-				st, err := state_native.NewUnsafe(pb)
+				st, err := state_native.NewUnsafe(container)
 				require.NoError(t, err)
 				return st
 			}(),
@@ -90,7 +90,7 @@ func TestProcessPendingConsolidations(t *testing.T) {
 		{
 			name: "stop processing when a source val withdrawable epoch is in the future",
 			state: func() state.BeaconState {
-				pb := &eth.BeaconStateElectra{
+				container := &eth.BeaconStateElectra{
 					Validators: []*eth.Validator{
 						{
 							WithdrawalCredentials: []byte{0x01, 0xFF},
@@ -112,7 +112,7 @@ func TestProcessPendingConsolidations(t *testing.T) {
 					},
 				}
 
-				st, err := state_native.NewUnsafe(pb)
+				st, err := state_native.NewUnsafe(container)
 				require.NoError(t, err)
 				return st
 			}(),
@@ -135,7 +135,7 @@ func TestProcessPendingConsolidations(t *testing.T) {
 		{
 			name: "slashed validator is not consolidated",
 			state: func() state.BeaconState {
-				pb := &eth.BeaconStateElectra{
+				container := &eth.BeaconStateElectra{
 					Validators: []*eth.Validator{
 						{
 							WithdrawalCredentials: []byte{0x01, 0xFF},
@@ -168,7 +168,7 @@ func TestProcessPendingConsolidations(t *testing.T) {
 					},
 				}
 
-				st, err := state_native.NewUnsafe(pb)
+				st, err := state_native.NewUnsafe(container)
 				require.NoError(t, err)
 				return st
 			}(),

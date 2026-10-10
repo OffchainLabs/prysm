@@ -1094,11 +1094,11 @@ func TestBeaconProposerIndexAtSlotFulu(t *testing.T) {
 	lookahead[0] = 15
 	lookahead[1] = 16
 	lookahead[34] = 42
-	pbState := ethpb.BeaconStateFulu{
+	container := ethpb.BeaconStateFulu{
 		Slot:              100,
 		ProposerLookahead: lookahead,
 	}
-	st, err := state_native.New(&pbState)
+	st, err := state_native.New(&container)
 	require.NoError(t, err)
 	idx, err := helpers.BeaconProposerIndexAtSlot(t.Context(), st, 96)
 	require.NoError(t, err)
