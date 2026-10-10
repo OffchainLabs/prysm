@@ -106,7 +106,7 @@ func newGloasStateWithPayments(t *testing.T, slot primitives.Slot) state.BeaconS
 		}
 	}
 
-	st, err := state_native.InitializeFromProtoUnsafeGloas(&eth.BeaconStateGloas{
+	st, err := state_native.NewUnsafe(&eth.BeaconStateGloas{
 		Slot:                   slot,
 		BuilderPendingPayments: payments,
 	})

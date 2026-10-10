@@ -14,7 +14,7 @@ import (
 )
 
 func TestSwitchToCompoundingValidator(t *testing.T) {
-	s, err := state_native.InitializeFromProtoElectra(&eth.BeaconStateElectra{
+	s, err := state_native.New(&eth.BeaconStateElectra{
 		Validators: []*eth.Validator{
 			{
 				WithdrawalCredentials: []byte{0x01, 0xFF}, // Has withdrawal credentials
@@ -55,7 +55,7 @@ func TestSwitchToCompoundingValidator(t *testing.T) {
 }
 
 func TestQueueEntireBalanceAndResetValidator(t *testing.T) {
-	s, err := state_native.InitializeFromProtoElectra(&eth.BeaconStateElectra{
+	s, err := state_native.New(&eth.BeaconStateElectra{
 		Validators: []*eth.Validator{
 			{
 				EffectiveBalance:           params.BeaconConfig().MinActivationBalance + 100_000,

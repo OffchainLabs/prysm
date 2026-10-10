@@ -42,7 +42,7 @@ func RunFinalityTest(t *testing.T, config string) {
 			require.NoError(t, err, "Failed to decompress")
 			beaconStateBase := &ethpb.BeaconState{}
 			require.NoError(t, beaconStateBase.UnmarshalSSZ(preBeaconStateSSZ), "Failed to unmarshal")
-			beaconState, err := state_native.InitializeFromProtoUnsafePhase0(beaconStateBase)
+			beaconState, err := state_native.NewUnsafe(beaconStateBase)
 			require.NoError(t, err)
 
 			file, err := util.BazelFileBytes(testsFolderPath, folder.Name(), "meta.yaml")
@@ -75,7 +75,7 @@ func RunFinalityTest(t *testing.T, config string) {
 			require.NoError(t, err, "Failed to decompress")
 			postBeaconState := &ethpb.BeaconState{}
 			require.NoError(t, postBeaconState.UnmarshalSSZ(postBeaconStateSSZ), "Failed to unmarshal")
-			pbState, err := state_native.ProtobufBeaconStatePhase0(beaconState.ToProtoUnsafe())
+			pbState, err := state_native.ContainerFrom[*ethpb.BeaconState](beaconState.ToProtoUnsafe())
 			require.NoError(t, err)
 			require.DeepSSZEqual(t, pbState, postBeaconState, "Post state does not match expected")
 		})

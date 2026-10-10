@@ -31,7 +31,7 @@ func TestProcessPendingConsolidations(t *testing.T) {
 			state: func() state.BeaconState {
 				pb := &eth.BeaconStateElectra{}
 
-				st, err := state_native.InitializeFromProtoUnsafeElectra(pb)
+				st, err := state_native.NewUnsafe(pb)
 				require.NoError(t, err)
 				return st
 			}(),
@@ -62,7 +62,7 @@ func TestProcessPendingConsolidations(t *testing.T) {
 					},
 				}
 
-				st, err := state_native.InitializeFromProtoUnsafeElectra(pb)
+				st, err := state_native.NewUnsafe(pb)
 				require.NoError(t, err)
 				return st
 			}(),
@@ -112,7 +112,7 @@ func TestProcessPendingConsolidations(t *testing.T) {
 					},
 				}
 
-				st, err := state_native.InitializeFromProtoUnsafeElectra(pb)
+				st, err := state_native.NewUnsafe(pb)
 				require.NoError(t, err)
 				return st
 			}(),
@@ -168,7 +168,7 @@ func TestProcessPendingConsolidations(t *testing.T) {
 					},
 				}
 
-				st, err := state_native.InitializeFromProtoUnsafeElectra(pb)
+				st, err := state_native.NewUnsafe(pb)
 				require.NoError(t, err)
 				return st
 			}(),

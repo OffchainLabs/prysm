@@ -10,7 +10,7 @@ import (
 )
 
 func TestAppendPendingDeposit(t *testing.T) {
-	s, err := state_native.InitializeFromProtoElectra(&eth.BeaconStateElectra{})
+	s, err := state_native.New(&eth.BeaconStateElectra{})
 	require.NoError(t, err)
 	pbd, err := s.PendingDeposits()
 	require.NoError(t, err)
@@ -50,13 +50,13 @@ func TestAppendPendingDeposit(t *testing.T) {
 	require.Equal(t, uint64(3), d[1].Amount)
 
 	// Fails for versions older than electra
-	s, err = state_native.InitializeFromProtoDeneb(&eth.BeaconStateDeneb{})
+	s, err = state_native.New(&eth.BeaconStateDeneb{})
 	require.NoError(t, err)
 	require.ErrorContains(t, "not supported", s.AppendPendingDeposit(&eth.PendingDeposit{}))
 }
 
 func TestSetPendingDeposits(t *testing.T) {
-	s, err := state_native.InitializeFromProtoElectra(&eth.BeaconStateElectra{})
+	s, err := state_native.New(&eth.BeaconStateElectra{})
 	require.NoError(t, err)
 	pbd, err := s.PendingDeposits()
 	require.NoError(t, err)
@@ -67,13 +67,13 @@ func TestSetPendingDeposits(t *testing.T) {
 	require.Equal(t, 3, len(pbd))
 
 	// Fails for versions older than electra
-	s, err = state_native.InitializeFromProtoDeneb(&eth.BeaconStateDeneb{})
+	s, err = state_native.New(&eth.BeaconStateDeneb{})
 	require.NoError(t, err)
 	require.ErrorContains(t, "not supported", s.SetPendingDeposits([]*eth.PendingDeposit{{}, {}, {}}))
 }
 
 func TestSetDepositBalanceToConsume(t *testing.T) {
-	s, err := state_native.InitializeFromProtoElectra(&eth.BeaconStateElectra{})
+	s, err := state_native.New(&eth.BeaconStateElectra{})
 	require.NoError(t, err)
 	require.NoError(t, s.SetDepositBalanceToConsume(10))
 	dbtc, err := s.DepositBalanceToConsume()
@@ -81,7 +81,7 @@ func TestSetDepositBalanceToConsume(t *testing.T) {
 	require.Equal(t, primitives.Gwei(10), dbtc)
 
 	// Fails for versions older than electra
-	s, err = state_native.InitializeFromProtoDeneb(&eth.BeaconStateDeneb{})
+	s, err = state_native.New(&eth.BeaconStateDeneb{})
 	require.NoError(t, err)
 	require.ErrorContains(t, "not supported", s.SetDepositBalanceToConsume(10))
 }

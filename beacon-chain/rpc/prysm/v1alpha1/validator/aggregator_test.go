@@ -33,7 +33,7 @@ import (
 func TestSubmitAggregateAndProof_Syncing(t *testing.T) {
 	ctx := t.Context()
 
-	s, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
+	s, err := state_native.NewUnsafe(&ethpb.BeaconState{})
 	require.NoError(t, err)
 
 	aggregatorServer := &Server{
@@ -50,7 +50,7 @@ func TestSubmitAggregateAndProof_Syncing(t *testing.T) {
 func TestSubmitAggregateAndProof_CantFindValidatorIndex(t *testing.T) {
 	ctx := t.Context()
 
-	s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	s, err := state_native.New(&ethpb.BeaconState{
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 	})
 	require.NoError(t, err)
@@ -73,7 +73,7 @@ func TestSubmitAggregateAndProof_CantFindValidatorIndex(t *testing.T) {
 func TestSubmitAggregateAndProof_IsAggregatorAndNoAtts(t *testing.T) {
 	ctx := t.Context()
 
-	s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	s, err := state_native.New(&ethpb.BeaconState{
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 		Validators: []*ethpb.Validator{
 			{PublicKey: pubKey(0), ExitEpoch: params.BeaconConfig().FarFutureEpoch},

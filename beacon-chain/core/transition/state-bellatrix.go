@@ -224,7 +224,7 @@ func OptimizedGenesisBeaconStateBellatrix(genesisTime uint64, preState state.Bea
 		BodyRoot:   bodyRoot[:],
 	}
 
-	ist, err := state_native.InitializeFromProtoUnsafeBellatrix(st)
+	ist, err := state_native.NewUnsafe(st)
 	if err != nil {
 		return nil, err
 	}
@@ -276,5 +276,5 @@ func EmptyGenesisStateBellatrix() (state.BeaconState, error) {
 		},
 	}
 
-	return state_native.InitializeFromProtoUnsafeBellatrix(st)
+	return state_native.NewUnsafe(st)
 }

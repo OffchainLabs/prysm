@@ -25,7 +25,7 @@ func TestBalanceCache_AddGetBalance(t *testing.T) {
 	raw := &ethpb.BeaconState{
 		BlockRoots: blockRoots,
 	}
-	st, err := state_native.InitializeFromProtoPhase0(raw)
+	st, err := state_native.New(raw)
 	require.NoError(t, err)
 
 	cc := cache.NewEffectiveBalanceCache()
@@ -69,7 +69,7 @@ func TestBalanceCache_BalanceKey(t *testing.T) {
 	raw := &ethpb.BeaconState{
 		BlockRoots: blockRoots,
 	}
-	st, err := state_native.InitializeFromProtoPhase0(raw)
+	st, err := state_native.New(raw)
 	require.NoError(t, err)
 	require.NoError(t, st.SetSlot(primitives.Slot(math.MaxUint64)))
 

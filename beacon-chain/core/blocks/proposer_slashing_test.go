@@ -118,7 +118,7 @@ func TestProcessProposerSlashings_ValidatorNotSlashable(t *testing.T) {
 		},
 	}
 
-	beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	beaconState, err := state_native.New(&ethpb.BeaconState{
 		Validators: registry,
 		Slot:       currentSlot,
 	})

@@ -188,7 +188,7 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 		Builders:                     builders,
 	}
 
-	st, err := state_native.InitializeFromProtoGloas(stProto)
+	st, err := state_native.New(stProto)
 	require.NoError(t, err)
 
 	epoch := slots.ToEpoch(slot)
@@ -286,7 +286,7 @@ func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 		require.Equal(t, true, ok)
 		stPb = stPb.Copy()
 		stPb.Validators[0].PublicKey = proposerPk
-		st, err := state_native.InitializeFromProtoUnsafeGloas(stPb)
+		st, err := state_native.NewUnsafe(stPb)
 		require.NoError(t, err)
 
 		msg := proto.Clone(fixture.signedProto.Message).(*ethpb.ExecutionPayloadEnvelope)
@@ -326,7 +326,7 @@ func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 			require.Equal(t, true, ok)
 			stPb = stPb.Copy()
 			stPb.Validators[0].PublicKey = proposerPk
-			st, err := state_native.InitializeFromProtoUnsafeGloas(stPb)
+			st, err := state_native.NewUnsafe(stPb)
 			require.NoError(t, err)
 
 			msg := proto.Clone(fixture.signedProto.Message).(*ethpb.ExecutionPayloadEnvelope)

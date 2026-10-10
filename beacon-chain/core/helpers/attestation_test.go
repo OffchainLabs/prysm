@@ -64,7 +64,7 @@ func TestAttestation_ComputeSubnetForAttestation(t *testing.T) {
 		}
 	}
 
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators:  validators,
 		Slot:        200,
 		BlockRoots:  make([][]byte, params.BeaconConfig().SlotsPerHistoricalRoot),

@@ -47,7 +47,7 @@ func TestProcessAttesterSlashings_DataNotSlashable(t *testing.T) {
 
 	currentSlot := primitives.Slot(0)
 
-	beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	beaconState, err := state_native.New(&ethpb.BeaconState{
 		Validators: []*ethpb.Validator{{}},
 		Slot:       currentSlot,
 	})
@@ -69,7 +69,7 @@ func TestProcessAttesterSlashings_DataNotSlashable(t *testing.T) {
 func TestProcessAttesterSlashings_IndexedAttestationFailedToVerify(t *testing.T) {
 	currentSlot := primitives.Slot(0)
 
-	beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	beaconState, err := state_native.New(&ethpb.BeaconState{
 		Validators: []*ethpb.Validator{{}},
 		Slot:       currentSlot,
 	})

@@ -6,7 +6,9 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -15,418 +17,64 @@ import (
 	"github.com/golang/snappy"
 )
 
-func TestInitializeFromProto_Phase0(t *testing.T) {
-	testState, _ := util.DeterministicGenesisState(t, 64)
-	pbState, err := statenative.ProtobufBeaconStatePhase0(testState.ToProtoUnsafe())
-	require.NoError(t, err)
-	type test struct {
-		name  string
-		state *ethpb.BeaconState
-		error string
-	}
-	initTests := []test{
-		{
-			name:  "nil state",
-			state: nil,
-			error: "received nil state",
-		},
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconState{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconState{},
-		},
-		{
-			name:  "full state",
-			state: pbState,
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoUnsafePhase0(tt.state)
-			if tt.error != "" {
-				assert.ErrorContains(t, tt.error, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
+func TestNew(t *testing.T) {
+	t.Run("Phase0", func(t *testing.T) {
+		testNewFork(t, &ethpb.BeaconState{Slot: 4}, &ethpb.BeaconState{})
+	})
+	t.Run("Altair", func(t *testing.T) {
+		testNewFork(t, &ethpb.BeaconStateAltair{Slot: 4}, &ethpb.BeaconStateAltair{})
+	})
+	t.Run("Bellatrix", func(t *testing.T) {
+		testNewFork(t, &ethpb.BeaconStateBellatrix{Slot: 4}, &ethpb.BeaconStateBellatrix{})
+	})
+	t.Run("Capella", func(t *testing.T) {
+		testNewFork(t, &ethpb.BeaconStateCapella{Slot: 4}, &ethpb.BeaconStateCapella{})
+	})
+	t.Run("Deneb", func(t *testing.T) {
+		testNewFork(t, &ethpb.BeaconStateDeneb{Slot: 4}, &ethpb.BeaconStateDeneb{})
+	})
+	t.Run("Electra", func(t *testing.T) {
+		testNewFork(t, &ethpb.BeaconStateElectra{Slot: 4}, &ethpb.BeaconStateElectra{})
+	})
+	t.Run("Fulu", func(t *testing.T) {
+		testNewFork(t, &ethpb.BeaconStateFulu{Slot: 4}, &ethpb.BeaconStateFulu{})
+	})
+	t.Run("Gloas", func(t *testing.T) {
+		testNewFork(t, &ethpb.BeaconStateGloas{Slot: 4}, &ethpb.BeaconStateGloas{})
+	})
+	t.Run("Phase0 full state", func(t *testing.T) {
+		if fieldparams.Preset == "minimal" {
+			// DeterministicGenesisState sizes the state from the beacon config.
+			params.SetupTestConfigCleanup(t)
+			params.OverrideBeaconConfig(params.MinimalSpecConfig())
+		}
+		testState, _ := util.DeterministicGenesisState(t, 64)
+		full, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
+		require.NoError(t, err)
+		_, err = statenative.New(full)
+		require.NoError(t, err)
+		_, err = statenative.NewUnsafe(full)
+		require.NoError(t, err)
+	})
 }
 
-func TestInitializeFromProto_Altair(t *testing.T) {
-	type test struct {
-		name  string
-		state *ethpb.BeaconStateAltair
-		error string
+// testNewFork checks New and NewUnsafe on a nil container, on the empty
+// container empty, and on st, which has nil validators.
+func testNewFork[T statenative.Container](t *testing.T, st, empty T) {
+	ctors := map[string]func(T) (state.BeaconState, error){
+		"New":       statenative.New[T],
+		"NewUnsafe": statenative.NewUnsafe[T],
 	}
-	initTests := []test{
-		{
-			name:  "nil state",
-			state: nil,
-			error: "received nil state",
-		},
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconStateAltair{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconStateAltair{},
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoAltair(tt.state)
-			if tt.error != "" {
-				require.ErrorContains(t, tt.error, err)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestInitializeFromProto_Bellatrix(t *testing.T) {
-	type test struct {
-		name  string
-		state *ethpb.BeaconStateBellatrix
-		error string
-	}
-	initTests := []test{
-		{
-			name:  "nil state",
-			state: nil,
-			error: "received nil state",
-		},
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconStateBellatrix{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconStateBellatrix{},
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoBellatrix(tt.state)
-			if tt.error != "" {
-				require.ErrorContains(t, tt.error, err)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestInitializeFromProto_Capella(t *testing.T) {
-	type test struct {
-		name  string
-		state *ethpb.BeaconStateCapella
-		error string
-	}
-	initTests := []test{
-		{
-			name:  "nil state",
-			state: nil,
-			error: "received nil state",
-		},
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconStateCapella{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconStateCapella{},
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoCapella(tt.state)
-			if tt.error != "" {
-				require.ErrorContains(t, tt.error, err)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestInitializeFromProto_Deneb(t *testing.T) {
-	type test struct {
-		name  string
-		state *ethpb.BeaconStateDeneb
-		error string
-	}
-	initTests := []test{
-		{
-			name:  "nil state",
-			state: nil,
-			error: "received nil state",
-		},
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconStateDeneb{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconStateDeneb{},
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoDeneb(tt.state)
-			if tt.error != "" {
-				require.ErrorContains(t, tt.error, err)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestInitializeFromProto_Electra(t *testing.T) {
-	type test struct {
-		name  string
-		state *ethpb.BeaconStateElectra
-		error string
-	}
-	initTests := []test{
-		{
-			name:  "nil state",
-			state: nil,
-			error: "received nil state",
-		},
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconStateElectra{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconStateElectra{},
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoElectra(tt.state)
-			if tt.error != "" {
-				require.ErrorContains(t, tt.error, err)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestInitializeFromProtoUnsafe_Phase0(t *testing.T) {
-	testState, _ := util.DeterministicGenesisState(t, 64)
-	pbState, err := statenative.ProtobufBeaconStatePhase0(testState.ToProtoUnsafe())
-	require.NoError(t, err)
-	type test struct {
-		name  string
-		state *ethpb.BeaconState
-		error string
-	}
-	initTests := []test{
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconState{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconState{},
-		},
-		{
-			name:  "full state",
-			state: pbState,
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoUnsafePhase0(tt.state)
-			if tt.error != "" {
-				assert.ErrorContains(t, tt.error, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestInitializeFromProtoUnsafe_Altair(t *testing.T) {
-	type test struct {
-		name  string
-		state *ethpb.BeaconStateAltair
-		error string
-	}
-	initTests := []test{
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconStateAltair{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconStateAltair{},
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoUnsafeAltair(tt.state)
-			if tt.error != "" {
-				assert.ErrorContains(t, tt.error, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestInitializeFromProtoUnsafe_Bellatrix(t *testing.T) {
-	type test struct {
-		name  string
-		state *ethpb.BeaconStateBellatrix
-		error string
-	}
-	initTests := []test{
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconStateBellatrix{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconStateBellatrix{},
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoUnsafeBellatrix(tt.state)
-			if tt.error != "" {
-				assert.ErrorContains(t, tt.error, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestInitializeFromProtoUnsafe_Capella(t *testing.T) {
-	type test struct {
-		name  string
-		state *ethpb.BeaconStateCapella
-		error string
-	}
-	initTests := []test{
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconStateCapella{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconStateCapella{},
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoUnsafeCapella(tt.state)
-			if tt.error != "" {
-				assert.ErrorContains(t, tt.error, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestInitializeFromProtoUnsafe_Deneb(t *testing.T) {
-	type test struct {
-		name  string
-		state *ethpb.BeaconStateDeneb
-		error string
-	}
-	initTests := []test{
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconStateDeneb{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconStateDeneb{},
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoUnsafeDeneb(tt.state)
-			if tt.error != "" {
-				assert.ErrorContains(t, tt.error, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestInitializeFromProtoUnsafe_Electra(t *testing.T) {
-	type test struct {
-		name  string
-		state *ethpb.BeaconStateElectra
-		error string
-	}
-	initTests := []test{
-		{
-			name: "nil validators",
-			state: &ethpb.BeaconStateElectra{
-				Slot:       4,
-				Validators: nil,
-			},
-		},
-		{
-			name:  "empty state",
-			state: &ethpb.BeaconStateElectra{},
-		},
-	}
-	for _, tt := range initTests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := statenative.InitializeFromProtoUnsafeElectra(tt.state)
-			if tt.error != "" {
-				assert.ErrorContains(t, tt.error, err)
-			} else {
-				assert.NoError(t, err)
-			}
+	for name, ctor := range ctors {
+		t.Run(name, func(t *testing.T) {
+			var nilState T
+			_, err := ctor(nilState)
+			require.ErrorContains(t, "received nil state", err)
+			_, err = ctor(empty)
+			require.NoError(t, err)
+			got, err := ctor(st)
+			require.NoError(t, err)
+			require.Equal(t, primitives.Slot(4), got.Slot())
 		})
 	}
 }
@@ -484,7 +132,7 @@ func TestBeaconState_HashTreeRoot(t *testing.T) {
 			if err == nil && tt.error != "" {
 				t.Errorf("Expected error, expected %v, received %v", tt.error, err)
 			}
-			pbState, err := statenative.ProtobufBeaconStatePhase0(testState.ToProtoUnsafe())
+			pbState, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
 			require.NoError(t, err)
 			genericHTR, err := pbState.HashTreeRoot()
 			if err == nil && tt.error != "" {
@@ -502,11 +150,11 @@ func TestBeaconState_HashTreeRoot(t *testing.T) {
 
 func BenchmarkBeaconState(b *testing.B) {
 	testState, _ := util.DeterministicGenesisState(b, 16000)
-	pbState, err := statenative.ProtobufBeaconStatePhase0(testState.ToProtoUnsafe())
+	pbState, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
 	require.NoError(b, err)
 
 	b.Run("Vectorized SHA256", func(b *testing.B) {
-		st, err := statenative.InitializeFromProtoUnsafePhase0(pbState)
+		st, err := statenative.NewUnsafe(pbState)
 		require.NoError(b, err)
 		_, err = st.HashTreeRoot(b.Context())
 		assert.NoError(b, err)
@@ -571,7 +219,7 @@ func TestBeaconState_HashTreeRoot_FieldTrie(t *testing.T) {
 			if err == nil && tt.error != "" {
 				t.Errorf("Expected error, expected %v, received %v", tt.error, err)
 			}
-			pbState, err := statenative.ProtobufBeaconStatePhase0(testState.ToProtoUnsafe())
+			pbState, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
 			require.NoError(t, err)
 			genericHTR, err := pbState.HashTreeRoot()
 			if err == nil && tt.error != "" {
@@ -602,9 +250,9 @@ func TestBeaconState_AppendValidator_DoesntMutateCopy(t *testing.T) {
 
 func TestBeaconState_ValidatorMutation_Phase0(t *testing.T) {
 	testState, _ := util.DeterministicGenesisState(t, 400)
-	pbState, err := statenative.ProtobufBeaconStatePhase0(testState.ToProtoUnsafe())
+	pbState, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
 	require.NoError(t, err)
-	testState, err = statenative.InitializeFromProtoPhase0(pbState)
+	testState, err = statenative.New(pbState)
 	require.NoError(t, err)
 
 	_, err = testState.HashTreeRoot(t.Context())
@@ -631,10 +279,10 @@ func TestBeaconState_ValidatorMutation_Phase0(t *testing.T) {
 
 	rt, err := testState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
-	pbState, err = statenative.ProtobufBeaconStatePhase0(testState.ToProtoUnsafe())
+	pbState, err = statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
 	require.NoError(t, err)
 
-	copiedTestState, err := statenative.InitializeFromProtoPhase0(pbState)
+	copiedTestState, err := statenative.New(pbState)
 	require.NoError(t, err)
 
 	rt2, err := copiedTestState.HashTreeRoot(t.Context())
@@ -655,10 +303,10 @@ func TestBeaconState_ValidatorMutation_Phase0(t *testing.T) {
 
 	rt, err = newState1.HashTreeRoot(t.Context())
 	require.NoError(t, err)
-	pbState, err = statenative.ProtobufBeaconStatePhase0(newState1.ToProtoUnsafe())
+	pbState, err = statenative.ContainerFrom[*ethpb.BeaconState](newState1.ToProtoUnsafe())
 	require.NoError(t, err)
 
-	copiedTestState, err = statenative.InitializeFromProtoPhase0(pbState)
+	copiedTestState, err = statenative.New(pbState)
 	require.NoError(t, err)
 
 	rt2, err = copiedTestState.HashTreeRoot(t.Context())
@@ -669,9 +317,9 @@ func TestBeaconState_ValidatorMutation_Phase0(t *testing.T) {
 
 func TestBeaconState_ValidatorMutation_Altair(t *testing.T) {
 	testState, _ := util.DeterministicGenesisStateAltair(t, 400)
-	pbState, err := statenative.ProtobufBeaconStateAltair(testState.ToProtoUnsafe())
+	pbState, err := statenative.ContainerFrom[*ethpb.BeaconStateAltair](testState.ToProtoUnsafe())
 	require.NoError(t, err)
-	testState, err = statenative.InitializeFromProtoAltair(pbState)
+	testState, err = statenative.New(pbState)
 	require.NoError(t, err)
 
 	_, err = testState.HashTreeRoot(t.Context())
@@ -698,10 +346,10 @@ func TestBeaconState_ValidatorMutation_Altair(t *testing.T) {
 
 	rt, err := testState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
-	pbState, err = statenative.ProtobufBeaconStateAltair(testState.ToProtoUnsafe())
+	pbState, err = statenative.ContainerFrom[*ethpb.BeaconStateAltair](testState.ToProtoUnsafe())
 	require.NoError(t, err)
 
-	copiedTestState, err := statenative.InitializeFromProtoAltair(pbState)
+	copiedTestState, err := statenative.New(pbState)
 	require.NoError(t, err)
 
 	rt2, err := copiedTestState.HashTreeRoot(t.Context())
@@ -722,10 +370,10 @@ func TestBeaconState_ValidatorMutation_Altair(t *testing.T) {
 
 	rt, err = newState1.HashTreeRoot(t.Context())
 	require.NoError(t, err)
-	pbState, err = statenative.ProtobufBeaconStateAltair(newState1.ToProtoUnsafe())
+	pbState, err = statenative.ContainerFrom[*ethpb.BeaconStateAltair](newState1.ToProtoUnsafe())
 	require.NoError(t, err)
 
-	copiedTestState, err = statenative.InitializeFromProtoAltair(pbState)
+	copiedTestState, err = statenative.New(pbState)
 	require.NoError(t, err)
 
 	rt2, err = copiedTestState.HashTreeRoot(t.Context())
@@ -736,9 +384,9 @@ func TestBeaconState_ValidatorMutation_Altair(t *testing.T) {
 
 func TestBeaconState_ValidatorMutation_Bellatrix(t *testing.T) {
 	testState, _ := util.DeterministicGenesisStateBellatrix(t, 400)
-	pbState, err := statenative.ProtobufBeaconStateBellatrix(testState.ToProtoUnsafe())
+	pbState, err := statenative.ContainerFrom[*ethpb.BeaconStateBellatrix](testState.ToProtoUnsafe())
 	require.NoError(t, err)
-	testState, err = statenative.InitializeFromProtoBellatrix(pbState)
+	testState, err = statenative.New(pbState)
 	require.NoError(t, err)
 
 	_, err = testState.HashTreeRoot(t.Context())
@@ -765,10 +413,10 @@ func TestBeaconState_ValidatorMutation_Bellatrix(t *testing.T) {
 
 	rt, err := testState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
-	pbState, err = statenative.ProtobufBeaconStateBellatrix(testState.ToProtoUnsafe())
+	pbState, err = statenative.ContainerFrom[*ethpb.BeaconStateBellatrix](testState.ToProtoUnsafe())
 	require.NoError(t, err)
 
-	copiedTestState, err := statenative.InitializeFromProtoBellatrix(pbState)
+	copiedTestState, err := statenative.New(pbState)
 	require.NoError(t, err)
 
 	rt2, err := copiedTestState.HashTreeRoot(t.Context())
@@ -789,10 +437,10 @@ func TestBeaconState_ValidatorMutation_Bellatrix(t *testing.T) {
 
 	rt, err = newState1.HashTreeRoot(t.Context())
 	require.NoError(t, err)
-	pbState, err = statenative.ProtobufBeaconStateBellatrix(newState1.ToProtoUnsafe())
+	pbState, err = statenative.ContainerFrom[*ethpb.BeaconStateBellatrix](newState1.ToProtoUnsafe())
 	require.NoError(t, err)
 
-	copiedTestState, err = statenative.InitializeFromProtoBellatrix(pbState)
+	copiedTestState, err = statenative.New(pbState)
 	require.NoError(t, err)
 
 	rt2, err = copiedTestState.HashTreeRoot(t.Context())
@@ -826,7 +474,7 @@ func TestBeaconState_InitializeInactivityScoresCorrectly_Deneb(t *testing.T) {
 	if !ok {
 		t.Error("not ok")
 	}
-	newSt, err := statenative.InitializeFromProtoUnsafeDeneb(copiedSt)
+	newSt, err := statenative.NewUnsafe(copiedSt)
 	require.NoError(t, err)
 
 	newRt, err := newSt.HashTreeRoot(t.Context())
@@ -844,13 +492,51 @@ func TestBeaconChainCopy_Electra(t *testing.T) {
 	require.NoError(t, err)
 	pb := &ethpb.BeaconStateElectra{}
 	require.NoError(t, pb.UnmarshalSSZ(serializedSSZ))
-	st, err := statenative.InitializeFromProtoElectra(pb)
+	st, err := statenative.New(pb)
 	require.NoError(t, err)
 
-	// Sanity check that InitializeFromProtoElectra and ToProto works
-	require.DeepSSZEqual(t, pb, st.ToProto(), "InitializeFromProtoElectra does not match input proto")
+	// Sanity check that New and ToProto round-trip.
+	require.DeepSSZEqual(t, pb, st.ToProto(), "New does not match input container")
 
 	// Perform the copy and check that the copied state matches the original state.
 	st2 := st.Copy()
 	require.DeepSSZEqual(t, st.ToProto(), st2.ToProto(), "Copied state does not match original state")
+}
+
+func TestContainerFrom(t *testing.T) {
+	t.Run("matching type", func(t *testing.T) {
+		pb := &ethpb.BeaconStateAltair{Slot: 7}
+		got, err := statenative.ContainerFrom[*ethpb.BeaconStateAltair](any(pb))
+		require.NoError(t, err)
+		require.Equal(t, pb, got)
+	})
+	t.Run("other fork", func(t *testing.T) {
+		got, err := statenative.ContainerFrom[*ethpb.BeaconStateAltair](any(&ethpb.BeaconState{}))
+		require.ErrorContains(t, "input is *eth.BeaconState, not *eth.BeaconStateAltair", err)
+		require.Equal(t, (*ethpb.BeaconStateAltair)(nil), got)
+	})
+	t.Run("nil input", func(t *testing.T) {
+		_, err := statenative.ContainerFrom[*ethpb.BeaconState](nil)
+		require.ErrorContains(t, "input is <nil>", err)
+	})
+}
+
+func TestNew_CopiesInput(t *testing.T) {
+	newPB := func() *ethpb.BeaconStateDeneb {
+		return &ethpb.BeaconStateDeneb{Fork: &ethpb.Fork{Epoch: 1}}
+	}
+	t.Run("New copies", func(t *testing.T) {
+		pb := newPB()
+		st, err := statenative.New(pb)
+		require.NoError(t, err)
+		pb.Fork.Epoch = 2
+		require.Equal(t, primitives.Epoch(1), st.Fork().Epoch)
+	})
+	t.Run("NewUnsafe shares", func(t *testing.T) {
+		pb := newPB()
+		st, err := statenative.NewUnsafe(pb)
+		require.NoError(t, err)
+		pb.Fork.Epoch = 2
+		require.Equal(t, primitives.Epoch(2), st.Fork().Epoch)
+	})
 }

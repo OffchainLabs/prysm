@@ -10,7 +10,7 @@ import (
 )
 
 func TestAppendPendingConsolidation(t *testing.T) {
-	s, err := state_native.InitializeFromProtoElectra(&eth.BeaconStateElectra{})
+	s, err := state_native.New(&eth.BeaconStateElectra{})
 	require.NoError(t, err)
 	num, err := s.NumPendingConsolidations()
 	require.NoError(t, err)
@@ -36,13 +36,13 @@ func TestAppendPendingConsolidation(t *testing.T) {
 	require.Equal(t, primitives.ValidatorIndex(3), pc[1].SourceIndex)
 
 	// Fails for versions older than electra
-	s, err = state_native.InitializeFromProtoDeneb(&eth.BeaconStateDeneb{})
+	s, err = state_native.New(&eth.BeaconStateDeneb{})
 	require.NoError(t, err)
 	require.ErrorContains(t, "not supported", s.AppendPendingConsolidation(&eth.PendingConsolidation{}))
 }
 
 func TestSetPendingConsolidations(t *testing.T) {
-	s, err := state_native.InitializeFromProtoElectra(&eth.BeaconStateElectra{})
+	s, err := state_native.New(&eth.BeaconStateElectra{})
 	require.NoError(t, err)
 	num, err := s.NumPendingConsolidations()
 	require.NoError(t, err)
@@ -53,13 +53,13 @@ func TestSetPendingConsolidations(t *testing.T) {
 	require.Equal(t, uint64(3), num)
 
 	// Fails for versions older than electra
-	s, err = state_native.InitializeFromProtoDeneb(&eth.BeaconStateDeneb{})
+	s, err = state_native.New(&eth.BeaconStateDeneb{})
 	require.NoError(t, err)
 	require.ErrorContains(t, "not supported", s.SetPendingConsolidations([]*eth.PendingConsolidation{{}, {}, {}}))
 }
 
 func TestSetEarliestConsolidationEpoch(t *testing.T) {
-	s, err := state_native.InitializeFromProtoElectra(&eth.BeaconStateElectra{})
+	s, err := state_native.New(&eth.BeaconStateElectra{})
 	require.NoError(t, err)
 	ece, err := s.EarliestConsolidationEpoch()
 	require.NoError(t, err)
@@ -70,13 +70,13 @@ func TestSetEarliestConsolidationEpoch(t *testing.T) {
 	require.Equal(t, primitives.Epoch(10), ece)
 
 	// Fails for versions older than electra
-	s, err = state_native.InitializeFromProtoDeneb(&eth.BeaconStateDeneb{})
+	s, err = state_native.New(&eth.BeaconStateDeneb{})
 	require.NoError(t, err)
 	require.ErrorContains(t, "not supported", s.SetEarliestConsolidationEpoch(10))
 }
 
 func TestSetConsolidationBalanceToConsume(t *testing.T) {
-	s, err := state_native.InitializeFromProtoElectra(&eth.BeaconStateElectra{})
+	s, err := state_native.New(&eth.BeaconStateElectra{})
 	require.NoError(t, err)
 	require.NoError(t, s.SetConsolidationBalanceToConsume(10))
 	cbtc, err := s.ConsolidationBalanceToConsume()
@@ -84,7 +84,7 @@ func TestSetConsolidationBalanceToConsume(t *testing.T) {
 	require.Equal(t, primitives.Gwei(10), cbtc)
 
 	// Fails for versions older than electra
-	s, err = state_native.InitializeFromProtoDeneb(&eth.BeaconStateDeneb{})
+	s, err = state_native.New(&eth.BeaconStateDeneb{})
 	require.NoError(t, err)
 	require.ErrorContains(t, "not supported", s.SetConsolidationBalanceToConsume(10))
 }

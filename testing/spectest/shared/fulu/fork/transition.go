@@ -83,7 +83,7 @@ func RunForkTransitionTest(t *testing.T, config string) {
 			require.NoError(t, err, "Failed to decompress")
 			beaconStateBase := &ethpb.BeaconStateElectra{}
 			require.NoError(t, beaconStateBase.UnmarshalSSZ(preBeaconStateSSZ), "Failed to unmarshal")
-			beaconState, err := state_native.InitializeFromProtoUnsafeElectra(beaconStateBase)
+			beaconState, err := state_native.NewUnsafe(beaconStateBase)
 			require.NoError(t, err)
 
 			bc := params.BeaconConfig().Copy()
@@ -117,7 +117,7 @@ func RunForkTransitionTest(t *testing.T, config string) {
 			postBeaconState := &ethpb.BeaconStateFulu{}
 			require.NoError(t, postBeaconState.UnmarshalSSZ(postBeaconStateSSZ), "Failed to unmarshal")
 
-			pbState, err := state_native.ProtobufBeaconStateFulu(beaconState.ToProto())
+			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateFulu](beaconState.ToProto())
 			require.NoError(t, err)
 			require.DeepEqual(t, postBeaconState, pbState, "Did not get expected post state")
 		})

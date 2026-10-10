@@ -55,7 +55,7 @@ func TestProcessConsolidationRequests(t *testing.T) {
 			name: "nil request",
 			state: func() state.BeaconState {
 				st := &eth.BeaconStateElectra{}
-				s, err := state_native.InitializeFromProtoElectra(st)
+				s, err := state_native.New(st)
 				require.NoError(t, err)
 				return s
 			}(),
@@ -85,7 +85,7 @@ func TestProcessConsolidationRequests(t *testing.T) {
 						Amount: 100,
 					},
 				}
-				s, err := state_native.InitializeFromProtoElectra(st)
+				s, err := state_native.New(st)
 				require.NoError(t, err)
 				return s
 			}(),
@@ -189,7 +189,7 @@ func TestProcessConsolidationRequests(t *testing.T) {
 					Validators:            createValidatorsWithTotalActiveBalance(32000000000000000), // 32M ETH
 					PendingConsolidations: make([]*eth.PendingConsolidation, params.BeaconConfig().PendingConsolidationsLimit),
 				}
-				s, err := state_native.InitializeFromProtoElectra(st)
+				s, err := state_native.New(st)
 				require.NoError(t, err)
 				return s
 			}(),
@@ -222,7 +222,7 @@ func TestProcessConsolidationRequests(t *testing.T) {
 					Validators:            createValidatorsWithTotalActiveBalance(32000000000000000), // 32M ETH
 					PendingConsolidations: make([]*eth.PendingConsolidation, params.BeaconConfig().PendingConsolidationsLimit-1),
 				}
-				s, err := state_native.InitializeFromProtoElectra(st)
+				s, err := state_native.New(st)
 				require.NoError(t, err)
 				return s
 			}(),
@@ -268,7 +268,7 @@ func TestProcessConsolidationRequests(t *testing.T) {
 				}
 				// To allow compounding consolidation requests.
 				st.Validators[3].WithdrawalCredentials[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
-				s, err := state_native.InitializeFromProtoElectra(st)
+				s, err := state_native.New(st)
 				require.NoError(t, err)
 				return s
 			}(),

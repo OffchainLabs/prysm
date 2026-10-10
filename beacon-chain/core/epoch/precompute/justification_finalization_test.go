@@ -38,7 +38,7 @@ func TestProcessJustificationAndFinalizationPreCompute_ConsecutiveEpochs(t *test
 		Balances:            []uint64{a, a, a, a}, // validator total balance should be 128000000000
 		BlockRoots:          blockRoots,
 	}
-	state, err := state_native.InitializeFromProtoPhase0(base)
+	state, err := state_native.New(base)
 	require.NoError(t, err)
 	attestedBalance := 4 * uint64(e) * 3 / 2
 	b := &precompute.Balance{PrevEpochTargetAttested: attestedBalance}
@@ -75,7 +75,7 @@ func TestProcessJustificationAndFinalizationPreCompute_JustifyCurrentEpoch(t *te
 		Balances:            []uint64{a, a, a, a}, // validator total balance should be 128000000000
 		BlockRoots:          blockRoots,
 	}
-	state, err := state_native.InitializeFromProtoPhase0(base)
+	state, err := state_native.New(base)
 	require.NoError(t, err)
 	attestedBalance := 4 * uint64(e) * 3 / 2
 	b := &precompute.Balance{PrevEpochTargetAttested: attestedBalance}
@@ -111,7 +111,7 @@ func TestProcessJustificationAndFinalizationPreCompute_JustifyPrevEpoch(t *testi
 		Balances:          []uint64{a, a, a, a}, // validator total balance should be 128000000000
 		BlockRoots:        blockRoots, FinalizedCheckpoint: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 	}
-	state, err := state_native.InitializeFromProtoPhase0(base)
+	state, err := state_native.New(base)
 	require.NoError(t, err)
 	attestedBalance := 4 * uint64(e) * 3 / 2
 	b := &precompute.Balance{PrevEpochTargetAttested: attestedBalance}
@@ -235,7 +235,7 @@ func TestUnrealizedCheckpoints(t *testing.T) {
 				base.JustificationBits.SetBitAt(2, true)
 			}
 
-			state, err := state_native.InitializeFromProtoAltair(base)
+			state, err := state_native.New(base)
 			require.NoError(t, err)
 
 			_, _, err = altair.InitializePrecomputeValidators(t.Context(), state)
@@ -250,7 +250,7 @@ func TestUnrealizedCheckpoints(t *testing.T) {
 }
 
 func Test_ComputeCheckpoints_CantUpdateToLower(t *testing.T) {
-	st, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	st, err := state_native.New(&ethpb.BeaconStateAltair{
 		Slot: params.BeaconConfig().SlotsPerEpoch * 2,
 		CurrentJustifiedCheckpoint: &ethpb.Checkpoint{
 			Epoch: 2,

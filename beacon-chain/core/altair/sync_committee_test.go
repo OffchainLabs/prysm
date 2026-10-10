@@ -31,11 +31,11 @@ func TestSyncCommitteeIndices_CanGet(t *testing.T) {
 		var err error
 		switch vers {
 		case version.Altair:
-			st, err = state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+			st, err = state_native.New(&ethpb.BeaconStateAltair{
 				RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 			})
 		case version.Electra:
-			st, err = state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{
+			st, err = state_native.New(&ethpb.BeaconStateElectra{
 				RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 			})
 		default:
@@ -119,7 +119,7 @@ func TestSyncCommitteeIndices_DifferentPeriods(t *testing.T) {
 				EffectiveBalance: params.BeaconConfig().MinDepositAmount,
 			}
 		}
-		st, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+		st, err := state_native.New(&ethpb.BeaconStateAltair{
 			Validators:  validators,
 			RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 		})
@@ -156,7 +156,7 @@ func TestSyncCommittee_CanGet(t *testing.T) {
 				PublicKey:        blsKey.PublicKey().Marshal(),
 			}
 		}
-		st, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+		st, err := state_native.New(&ethpb.BeaconStateAltair{
 			Validators:  validators,
 			RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 		})
@@ -403,7 +403,7 @@ func getState(t *testing.T, count uint64) state.BeaconState {
 			PublicKey:        blsKey.PublicKey().Marshal(),
 		}
 	}
-	st, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	st, err := state_native.New(&ethpb.BeaconStateAltair{
 		Validators:  validators,
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 	})

@@ -123,7 +123,7 @@ func createTestGenesisState(t *testing.T, numValidators uint64, slot primitives.
 		pb.RandaoMixes[i] = make([]byte, 32)
 	}
 
-	st, err := state_native.InitializeFromProtoUnsafePhase0(pb)
+	st, err := state_native.NewUnsafe(pb)
 	require.NoError(t, err)
 	return st
 }
