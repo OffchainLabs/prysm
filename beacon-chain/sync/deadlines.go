@@ -4,13 +4,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/sirupsen/logrus"
 )
 
 var defaultReadDuration = ttfbTimeout
-var defaultWriteDuration = params.BeaconConfig().RespTimeoutDuration() // RESP_TIMEOUT
+var defaultWriteDuration = respTimeout
 
 // SetRPCStreamDeadlines sets read and write deadlines for libp2p-based connection streams.
 func SetRPCStreamDeadlines(stream network.Stream) {
