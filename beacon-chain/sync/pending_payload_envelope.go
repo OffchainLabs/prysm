@@ -14,6 +14,11 @@ const (
 	maxPendingPayloadRoots    = 128
 	maxPendingBuildersPerRoot = 2
 	maxSelfBuildSigFailures   = 3
+	// maxEnvelopeSigFailuresPerPeer caps failed and in-flight envelope signature checks for
+	// each peer and block-availability path within a slot. Unknown blocks use the head state,
+	// which may be on a different branch, so their failures must not exhaust the budget for
+	// envelopes whose blocks are known.
+	maxEnvelopeSigFailuresPerPeer = 2
 )
 
 // processPendingPayloadEnvelopeQueue sweeps the pending envelope map at

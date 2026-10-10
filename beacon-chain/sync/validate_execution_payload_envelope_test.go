@@ -565,3 +565,172 @@ func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, buil
 		Signature: bytes.Repeat([]byte{0xAA}, 96),
 	}
 }
+
+// countingEnvelopeVerifier records how many times the expensive signature check ran. Verifying a
+// builder signature merkleizes the entire payload, so the count stands in for the work a peer can
+// make the node do.
+type countingEnvelopeVerifier struct {
+	mockExecutionPayloadEnvelopeVerifier
+	calls *int
+}
+
+func (c *countingEnvelopeVerifier) VerifySignature(_ context.Context, _ state.ReadOnlyBeaconState) error {
+	*c.calls++
+	return c.errSignature
+}
+
+func (c *countingEnvelopeVerifier) VerifySignatureWithPubkey(_ [fieldparams.BLSPubkeyLength]byte, _ [32]byte) error {
+	*c.calls++
+	return c.errSignature
+}
+
+func TestValidateExecutionPayloadEnvelope_ParentBeaconBlockRootMismatch(t *testing.T) {
+	ctx := context.Background()
+	s, _, builderIdx, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+
+	sigCalls := 0
+	s.newExecutionPayloadEnvelopeVerifier = func(_ interfaces.ROSignedExecutionPayloadEnvelope, _ []verification.Requirement) verification.ExecutionPayloadEnvelopeVerifier {
+		return &countingEnvelopeVerifier{calls: &sigCalls}
+	}
+
+	env := testSignedExecutionPayloadEnvelope(t, 1, builderIdx, root, [32]byte{})
+	env.Message.ParentBeaconBlockRoot = bytes.Repeat([]byte{0xEE}, 32)
+	msg := envelopeToPubsub(t, s, s.cfg.p2p, env)
+
+	result, err := s.validateExecutionPayloadEnvelope(ctx, "attacker", msg)
+	require.NotNil(t, err)
+	require.Equal(t, pubsub.ValidationReject, result)
+	// The mismatch has to be caught before the payload is merkleized.
+	require.Equal(t, 0, sigCalls)
+}
+
+func TestValidateExecutionPayloadEnvelope_SignatureFailureBudgetIsPerPeer(t *testing.T) {
+	ctx := context.Background()
+	s, msg, _, _ := setupExecutionPayloadEnvelopeService(t, 1, 1)
+
+	sigCalls := 0
+	s.newExecutionPayloadEnvelopeVerifier = func(_ interfaces.ROSignedExecutionPayloadEnvelope, _ []verification.Requirement) verification.ExecutionPayloadEnvelopeVerifier {
+		return &countingEnvelopeVerifier{
+			mockExecutionPayloadEnvelopeVerifier: mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("wrong builder key")},
+			calls:                                &sigCalls,
+		}
+	}
+
+	// A peer gets a bounded number of wrong-key envelopes for a known root. Nothing records them
+	// as seen, so without a budget the peer could replay this indefinitely.
+	for i := 0; i < maxEnvelopeSigFailuresPerPeer; i++ {
+		result, err := s.validateExecutionPayloadEnvelope(ctx, "attacker", msg)
+		require.NotNil(t, err)
+		require.Equal(t, pubsub.ValidationReject, result)
+		require.Equal(t, i+1, sigCalls)
+	}
+
+	// Past the budget the envelope is dropped before the payload is merkleized.
+	result, err := s.validateExecutionPayloadEnvelope(ctx, "attacker", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.Equal(t, maxEnvelopeSigFailuresPerPeer, sigCalls)
+
+	// An honest peer still gets through, so one peer cannot censor another's envelope.
+	result, err = s.validateExecutionPayloadEnvelope(ctx, "honest", msg)
+	require.NotNil(t, err)
+	require.Equal(t, pubsub.ValidationReject, result)
+	require.Equal(t, maxEnvelopeSigFailuresPerPeer+1, sigCalls)
+}
+
+// Gossip validation serializes envelopes under validateEnvelopeLock, so the in-flight
+// accounting is exercised at the helper level: a reservation consumes budget until its check
+// completes, successful checks hand the reservation back, and failed ones keep it consumed
+// for the rest of the slot.
+func TestEnvelopeSigVerificationBudget_CountsInFlight(t *testing.T) {
+	chainService := &mock.ChainService{
+		Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
+	}
+	s := &Service{cfg: &config{clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}}
+	const pid = "attacker"
+
+	reservations := make([]primitives.Slot, 0, maxEnvelopeSigFailuresPerPeer)
+	for i := 0; i < maxEnvelopeSigFailuresPerPeer; i++ {
+		budgetSlot, ok := s.reserveEnvelopeSigVerification(pid, envelopeSigKnownBlock)
+		require.Equal(t, true, ok)
+		reservations = append(reservations, budgetSlot)
+	}
+	// With the budget held by in-flight checks, the next envelope is dropped before any work.
+	_, ok := s.reserveEnvelopeSigVerification(pid, envelopeSigKnownBlock)
+	require.Equal(t, false, ok)
+
+	// One peer's exhausted budget does not affect another peer.
+	honestSlot, ok := s.reserveEnvelopeSigVerification("honest", envelopeSigKnownBlock)
+	require.Equal(t, true, ok)
+	s.completeEnvelopeSigVerification("honest", envelopeSigKnownBlock, honestSlot, false)
+
+	// A successful check releases its reservation.
+	s.completeEnvelopeSigVerification(pid, envelopeSigKnownBlock, reservations[0], false)
+	budgetSlot, ok := s.reserveEnvelopeSigVerification(pid, envelopeSigKnownBlock)
+	require.Equal(t, true, ok)
+
+	// Failed checks keep their reservation, so the budget stays exhausted.
+	s.completeEnvelopeSigVerification(pid, envelopeSigKnownBlock, budgetSlot, true)
+	s.completeEnvelopeSigVerification(pid, envelopeSigKnownBlock, reservations[1], true)
+	_, ok = s.reserveEnvelopeSigVerification(pid, envelopeSigKnownBlock)
+	require.Equal(t, false, ok)
+}
+
+func TestValidateExecutionPayloadEnvelope_UnknownBlockFailuresDoNotBlockKnownBlock(t *testing.T) {
+	ctx := context.Background()
+	s, msg, builderIdx, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+	const peerID = "same-peer"
+	badVerifier := &mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("head state is on another branch")}
+	for i := 0; i < maxEnvelopeSigFailuresPerPeer; i++ {
+		unknownRoot := [32]byte{byte(i + 1)}
+		signed := testSignedExecutionPayloadEnvelope(t, s.cfg.clock.CurrentSlot(), builderIdx, unknownRoot, [32]byte{})
+		wrapped, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signed)
+		require.NoError(t, err)
+		env, err := wrapped.Envelope()
+		require.NoError(t, err)
+		result, err := s.queuePendingPayloadEnvelope(ctx, peerID, badVerifier, env, signed)
+		require.NotNil(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+	}
+
+	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{})
+	result, err := s.validateExecutionPayloadEnvelope(ctx, peerID, msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, result)
+	require.Equal(t, true, s.hasSeenPayloadEnvelope(root, builderIdx))
+}
+
+func TestQueuePendingPayloadEnvelope_SignatureFailureBudget(t *testing.T) {
+	ctx := context.Background()
+	s, _, builderIdx, _ := setupExecutionPayloadEnvelopeService(t, 1, 1)
+
+	sigCalls := 0
+	s.newExecutionPayloadEnvelopeVerifier = func(_ interfaces.ROSignedExecutionPayloadEnvelope, _ []verification.Requirement) verification.ExecutionPayloadEnvelopeVerifier {
+		return &countingEnvelopeVerifier{
+			mockExecutionPayloadEnvelopeVerifier: mockExecutionPayloadEnvelopeVerifier{
+				errBlockRootSeen: errors.New("not seen"),
+				errSignature:     errors.New("wrong builder key"),
+			},
+			calls: &sigCalls,
+		}
+	}
+
+	// An unknown block root never populates pendingPayloadEnvelopes when the signature fails, so
+	// the pending-root caps never trip and only the per-peer budget bounds the work.
+	currentSlot := s.cfg.clock.CurrentSlot()
+	for i := 0; i < maxEnvelopeSigFailuresPerPeer; i++ {
+		env := testSignedExecutionPayloadEnvelope(t, currentSlot, builderIdx, [32]byte{byte(i + 1)}, [32]byte{})
+		msg := envelopeToPubsub(t, s, s.cfg.p2p, env)
+		result, err := s.validateExecutionPayloadEnvelope(ctx, "attacker", msg)
+		require.NotNil(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+		require.Equal(t, i+1, sigCalls)
+	}
+
+	env := testSignedExecutionPayloadEnvelope(t, currentSlot, builderIdx, [32]byte{0xFF}, [32]byte{})
+	msg := envelopeToPubsub(t, s, s.cfg.p2p, env)
+	result, err := s.validateExecutionPayloadEnvelope(ctx, "attacker", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.Equal(t, maxEnvelopeSigFailuresPerPeer, sigCalls)
+}

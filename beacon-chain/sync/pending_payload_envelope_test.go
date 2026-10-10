@@ -330,7 +330,7 @@ func TestQueuePendingPayloadEnvelope_SelfBuildIgnoredOutsideLookahead(t *testing
 	// Signature verification would fail, but self-build outside the lookahead
 	// should skip it and return Ignore without queuing.
 	v := &mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("bad signature")}
-	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
+	result, err := s.queuePendingPayloadEnvelope(ctx, "test-peer", v, env, signedEnv)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
 	require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
@@ -350,14 +350,14 @@ func TestQueuePendingPayloadEnvelope_SelfBuildInLookaheadVerifiesSignature(t *te
 
 	// Self-build in the same epoch (lookahead) verifies the signature but ignores failures.
 	v := &mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("bad signature")}
-	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
+	result, err := s.queuePendingPayloadEnvelope(ctx, "test-peer", v, env, signedEnv)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
 	require.Equal(t, 1, s.selfBuildSigFailures)
 
 	// After maxSelfBuildSigFailures, skip the signature check entirely and queue the envelope.
 	s.selfBuildSigFailures = maxSelfBuildSigFailures
-	result, err = s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
+	result, err = s.queuePendingPayloadEnvelope(ctx, "test-peer", v, env, signedEnv)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
 	require.Equal(t, maxSelfBuildSigFailures, s.selfBuildSigFailures)
@@ -381,7 +381,7 @@ func TestQueuePendingPayloadEnvelope_SelfBuildSigFailuresResetPerSlot(t *testing
 	s.selfBuildSlot = currentSlot - 1
 
 	v := &mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("bad signature")}
-	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
+	result, err := s.queuePendingPayloadEnvelope(ctx, "test-peer", v, env, signedEnv)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
 	require.Equal(t, 1, s.selfBuildSigFailures)
@@ -405,7 +405,7 @@ func queueSelfBuildEnvelope(t *testing.T, ctx context.Context, s *Service, v *mo
 	require.NoError(t, err)
 	env, err := e.Envelope()
 	require.NoError(t, err)
-	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
+	result, err := s.queuePendingPayloadEnvelope(ctx, "test-peer", v, env, signedEnv)
 	require.NoError(t, err)
 	return result
 }
@@ -485,7 +485,7 @@ func TestQueuePendingPayloadEnvelope_IgnoreBadSignature(t *testing.T) {
 	require.NoError(t, err)
 
 	v := &mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("bad signature")}
-	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
+	result, err := s.queuePendingPayloadEnvelope(ctx, "test-peer", v, env, signedEnv)
 	require.NotNil(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
 	require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
@@ -503,7 +503,7 @@ func TestQueuePendingPayloadEnvelope_QueuesNewRoot(t *testing.T) {
 	require.NoError(t, err)
 
 	v := &mockExecutionPayloadEnvelopeVerifier{}
-	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
+	result, err := s.queuePendingPayloadEnvelope(ctx, "test-peer", v, env, signedEnv)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
 	require.Equal(t, 1, len(s.pendingPayloadEnvelopes))
@@ -526,7 +526,7 @@ func TestQueuePendingPayloadEnvelope_DoesNotOverwrite(t *testing.T) {
 	require.NoError(t, err)
 
 	v := &mockExecutionPayloadEnvelopeVerifier{}
-	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, second)
+	result, err := s.queuePendingPayloadEnvelope(ctx, "test-peer", v, env, second)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
 	require.Equal(t, 1, len(s.pendingPayloadEnvelopes[root]))
@@ -549,7 +549,7 @@ func TestQueuePendingPayloadEnvelope_PrunesMalformedExistingEnvelope(t *testing.
 	require.NoError(t, err)
 
 	v := &mockExecutionPayloadEnvelopeVerifier{}
-	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, next)
+	result, err := s.queuePendingPayloadEnvelope(ctx, "test-peer", v, env, next)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
 	require.Equal(t, 1, len(s.pendingPayloadEnvelopes[root]))
@@ -579,7 +579,7 @@ func TestQueuePendingPayloadEnvelope_RootCountBound(t *testing.T) {
 	require.NoError(t, err)
 
 	v := &mockExecutionPayloadEnvelopeVerifier{}
-	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
+	result, err := s.queuePendingPayloadEnvelope(ctx, "test-peer", v, env, signedEnv)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
 	_, ok := s.pendingPayloadEnvelopes[newRoot]
@@ -609,7 +609,7 @@ func TestQueuePendingPayloadEnvelope_SelfBuildBypassesRootBound(t *testing.T) {
 	require.NoError(t, err)
 
 	v := &mockExecutionPayloadEnvelopeVerifier{}
-	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
+	result, err := s.queuePendingPayloadEnvelope(ctx, "test-peer", v, env, signedEnv)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
 	_, ok := s.pendingPayloadEnvelopes[newRoot]
@@ -629,7 +629,7 @@ func TestQueuePendingPayloadEnvelope_PerRootBuilderBound(t *testing.T) {
 		wrapped, err := e.Envelope()
 		require.NoError(t, err)
 		v := &mockExecutionPayloadEnvelopeVerifier{}
-		result, err := s.queuePendingPayloadEnvelope(ctx, v, wrapped, env)
+		result, err := s.queuePendingPayloadEnvelope(ctx, "test-peer", v, wrapped, env)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, result)
 	}
@@ -643,7 +643,7 @@ func TestQueuePendingPayloadEnvelope_PerRootBuilderBound(t *testing.T) {
 	require.NoError(t, err)
 
 	v := &mockExecutionPayloadEnvelopeVerifier{}
-	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, third)
+	result, err := s.queuePendingPayloadEnvelope(ctx, "test-peer", v, env, third)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
 	require.Equal(t, int(maxPendingBuildersPerRoot), len(s.pendingPayloadEnvelopes[root]))
@@ -663,7 +663,7 @@ func TestQueuePendingPayloadEnvelope_SelfBuildBypassesPerRootBound(t *testing.T)
 		wrapped, err := e.Envelope()
 		require.NoError(t, err)
 		v := &mockExecutionPayloadEnvelopeVerifier{}
-		_, _ = s.queuePendingPayloadEnvelope(ctx, v, wrapped, env)
+		_, _ = s.queuePendingPayloadEnvelope(ctx, "test-peer", v, wrapped, env)
 	}
 
 	// Self-build should be accepted as the 3rd builder.
@@ -674,7 +674,7 @@ func TestQueuePendingPayloadEnvelope_SelfBuildBypassesPerRootBound(t *testing.T)
 	require.NoError(t, err)
 
 	v := &mockExecutionPayloadEnvelopeVerifier{}
-	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, selfEnv)
+	result, err := s.queuePendingPayloadEnvelope(ctx, "test-peer", v, env, selfEnv)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
 	require.Equal(t, int(maxPendingBuildersPerRoot)+1, len(s.pendingPayloadEnvelopes[root]))
