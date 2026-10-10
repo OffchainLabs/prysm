@@ -586,12 +586,14 @@ func (b *BeaconState) appendBuildersSweepWithdrawals(withdrawalIndex uint64, wit
 		if builder == nil {
 			return withdrawalIndex, 0, fmt.Errorf("builder at index %d is nil", builderIndex)
 		}
-		if builder.WithdrawableEpoch <= epoch && builder.Balance > 0 {
+		// Subtracts this payload's earlier withdrawals for the builder, get_builder_balance_after_withdrawals in v1.7.0-beta.3+.
+		balance := builderBalanceAfterWithdrawals(builder, builderIndex.ToValidatorIndex(), ws)
+		if builder.WithdrawableEpoch <= epoch && balance > 0 {
 			ws = append(ws, &enginev1.Withdrawal{
 				Index:          withdrawalIndex,
 				ValidatorIndex: builderIndex.ToValidatorIndex(),
 				Address:        builder.ExecutionAddress,
-				Amount:         uint64(builder.Balance),
+				Amount:         balance,
 			})
 			withdrawalIndex++
 		}
@@ -601,6 +603,19 @@ func (b *BeaconState) appendBuildersSweepWithdrawals(withdrawalIndex uint64, wit
 
 	*withdrawals = ws
 	return withdrawalIndex, builderIndex, nil
+}
+
+func builderBalanceAfterWithdrawals(builder *ethpb.Builder, validatorIndex primitives.ValidatorIndex, withdrawals []*enginev1.Withdrawal) uint64 {
+	withdrawn := uint64(0)
+	for _, w := range withdrawals {
+		if w != nil && w.ValidatorIndex == validatorIndex {
+			withdrawn += w.Amount
+		}
+	}
+	if withdrawn >= uint64(builder.Balance) {
+		return 0
+	}
+	return uint64(builder.Balance) - withdrawn
 }
 
 // Builders returns a copy of the builders registry.
