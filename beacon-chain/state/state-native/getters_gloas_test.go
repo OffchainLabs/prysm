@@ -204,7 +204,7 @@ func TestBuilderHelpers(t *testing.T) {
 		require.Equal(t, true, active)
 
 		// Not active when withdrawable epoch is set.
-		stProto := &ethpb.BeaconStateGloas{
+		container := &ethpb.BeaconStateGloas{
 			Builders: []*ethpb.Builder{
 				{
 					Balance:           10,
@@ -214,7 +214,7 @@ func TestBuilderHelpers(t *testing.T) {
 			},
 			FinalizedCheckpoint: &ethpb.Checkpoint{Epoch: 2},
 		}
-		stInactive, err := New(stProto)
+		stInactive, err := New(container)
 		require.NoError(t, err)
 
 		active, err = stInactive.IsActiveBuilder(0)

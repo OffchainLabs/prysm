@@ -523,7 +523,7 @@ func TestEncodeStateWithKey(t *testing.T) {
 	t.Run("allocates only the buffer and the snappy output", func(t *testing.T) {
 		// Ensures memory allocations are as expected.
 		allocs := testing.AllocsPerRun(5, func() {
-			if _, err := encodeProtoWithKey(version.Electra, pb); err != nil {
+			if _, err := encodeContainerWithKey(version.Electra, pb); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -598,7 +598,7 @@ func TestStateKeyByVersion_AllVersions(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodeProtoWithKey(b *testing.B) {
+func BenchmarkEncodeContainerWithKey(b *testing.B) {
 	st, err := util.NewBeaconStateElectra()
 	require.NoError(b, err)
 	pb := st.ToContainerUnsafe().(ssz.Marshaler)
@@ -614,7 +614,7 @@ func BenchmarkEncodeProtoWithKey(b *testing.B) {
 	b.Run("marshal-into-key", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			_, err := encodeProtoWithKey(version.Electra, pb)
+			_, err := encodeContainerWithKey(version.Electra, pb)
 			require.NoError(b, err)
 		}
 	})

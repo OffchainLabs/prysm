@@ -315,7 +315,7 @@ func (s *Store) processPhase0(ctx context.Context, pbState *ethpb.BeaconState, r
 func (s *Store) processAltair(ctx context.Context, pbState *ethpb.BeaconStateAltair, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
-	encodedState, err := encodeProtoWithKey(version.Altair, pbState)
+	encodedState, err := encodeContainerWithKey(version.Altair, pbState)
 	if err != nil {
 		return err
 	}
@@ -332,7 +332,7 @@ func (s *Store) processAltair(ctx context.Context, pbState *ethpb.BeaconStateAlt
 func (s *Store) processBellatrix(ctx context.Context, pbState *ethpb.BeaconStateBellatrix, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
-	encodedState, err := encodeProtoWithKey(version.Bellatrix, pbState)
+	encodedState, err := encodeContainerWithKey(version.Bellatrix, pbState)
 	if err != nil {
 		return err
 	}
@@ -349,7 +349,7 @@ func (s *Store) processBellatrix(ctx context.Context, pbState *ethpb.BeaconState
 func (s *Store) processCapella(ctx context.Context, pbState *ethpb.BeaconStateCapella, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
-	encodedState, err := encodeProtoWithKey(version.Capella, pbState)
+	encodedState, err := encodeContainerWithKey(version.Capella, pbState)
 	if err != nil {
 		return err
 	}
@@ -366,7 +366,7 @@ func (s *Store) processCapella(ctx context.Context, pbState *ethpb.BeaconStateCa
 func (s *Store) processDeneb(ctx context.Context, pbState *ethpb.BeaconStateDeneb, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
-	encodedState, err := encodeProtoWithKey(version.Deneb, pbState)
+	encodedState, err := encodeContainerWithKey(version.Deneb, pbState)
 	if err != nil {
 		return err
 	}
@@ -383,7 +383,7 @@ func (s *Store) processDeneb(ctx context.Context, pbState *ethpb.BeaconStateDene
 func (s *Store) processElectra(ctx context.Context, pbState *ethpb.BeaconStateElectra, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
-	encodedState, err := encodeProtoWithKey(version.Electra, pbState)
+	encodedState, err := encodeContainerWithKey(version.Electra, pbState)
 	if err != nil {
 		return err
 	}
@@ -400,7 +400,7 @@ func (s *Store) processElectra(ctx context.Context, pbState *ethpb.BeaconStateEl
 func (s *Store) processFulu(ctx context.Context, pbState *ethpb.BeaconStateFulu, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
-	encodedState, err := encodeProtoWithKey(version.Fulu, pbState)
+	encodedState, err := encodeContainerWithKey(version.Fulu, pbState)
 	if err != nil {
 		return err
 	}
@@ -417,7 +417,7 @@ func (s *Store) processFulu(ctx context.Context, pbState *ethpb.BeaconStateFulu,
 func (s *Store) processGloas(ctx context.Context, pbState *ethpb.BeaconStateGloas, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
-	encodedState, err := encodeProtoWithKey(version.Gloas, pbState)
+	encodedState, err := encodeContainerWithKey(version.Gloas, pbState)
 	if err != nil {
 		return err
 	}
@@ -589,7 +589,7 @@ func (s *Store) DeleteStates(ctx context.Context, blockRoots [][32]byte) error {
 	return nil
 }
 
-// unmarshal state from marshaled proto state bytes to versioned state struct type.
+// unmarshal state from marshaled SSZ state bytes to versioned state struct type.
 func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries []*ethpb.Validator) (state.BeaconState, error) {
 	var err error
 	enc, err = snappy.Decode(nil, enc)
@@ -723,7 +723,7 @@ func marshalState(st state.ReadOnlyBeaconState) ([]byte, error) {
 		}
 		return snappy.Encode(nil, raw), nil
 	}
-	return encodeProtoWithKey(st.Version(), pb)
+	return encodeContainerWithKey(st.Version(), pb)
 }
 
 // Retrieve the validator entries for a given block root. These entries are stored in a
