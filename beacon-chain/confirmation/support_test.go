@@ -168,24 +168,24 @@ func TestSupportMap_Build(t *testing.T) {
 
 	// --- BlockSupportBetweenSlots (direct votes) ---
 	// Slot 1: validator 0 (100) votes root1, validator 1 (200) votes root2
-	require.Equal(t, uint64(100), sm.BlockSupportBetweenSlots(root1, 1, 1))
-	require.Equal(t, uint64(200), sm.BlockSupportBetweenSlots(root2, 1, 1))
+	require.Equal(t, uint64(100), sm.NodeSupportBetweenSlots(root1, 0, false, 1, 1))
+	require.Equal(t, uint64(200), sm.NodeSupportBetweenSlots(root2, 0, false, 1, 1))
 
 	// Slot 2: validator 2 (300) votes root3, validator 3 (400) votes root1
-	require.Equal(t, uint64(400), sm.BlockSupportBetweenSlots(root1, 2, 2))
-	require.Equal(t, uint64(300), sm.BlockSupportBetweenSlots(root3, 2, 2))
+	require.Equal(t, uint64(400), sm.NodeSupportBetweenSlots(root1, 0, false, 2, 2))
+	require.Equal(t, uint64(300), sm.NodeSupportBetweenSlots(root3, 0, false, 2, 2))
 
 	// Slot 3: validator 4 (500) votes root3
-	require.Equal(t, uint64(500), sm.BlockSupportBetweenSlots(root3, 3, 3))
+	require.Equal(t, uint64(500), sm.NodeSupportBetweenSlots(root3, 0, false, 3, 3))
 
 	// Range: slots 1-2 for root1 = 100 + 400 = 500
-	require.Equal(t, uint64(500), sm.BlockSupportBetweenSlots(root1, 1, 2))
+	require.Equal(t, uint64(500), sm.NodeSupportBetweenSlots(root1, 0, false, 1, 2))
 
 	// Range: slots 2-3 for root3 = 300 + 500 = 800
-	require.Equal(t, uint64(800), sm.BlockSupportBetweenSlots(root3, 2, 3))
+	require.Equal(t, uint64(800), sm.NodeSupportBetweenSlots(root3, 0, false, 2, 3))
 
 	// No support for root0 in any slot
-	require.Equal(t, uint64(0), sm.BlockSupportBetweenSlots(root0, 1, 3))
+	require.Equal(t, uint64(0), sm.NodeSupportBetweenSlots(root0, 0, false, 1, 3))
 
 	// --- AttestationScore (ancestor-based LMD) ---
 	// Votes: root1 gets 100+400=500, root2 gets 200, root3 gets 300+500=800
@@ -234,7 +234,7 @@ func TestSupportMap_Equivocation(t *testing.T) {
 	sm.Accumulate(fc)
 
 	// Validator 1 (200) is equivocating: excluded from support
-	require.Equal(t, uint64(400), sm.BlockSupportBetweenSlots(root1, 1, 1)) // 100 + 300
+	require.Equal(t, uint64(400), sm.NodeSupportBetweenSlots(root1, 0, false, 1, 1)) // 100 + 300
 	require.Equal(t, uint64(400), sm.AttestationScore(root1))
 
 	// ... but counted by the equivocation score in its assigned slot only.
@@ -252,7 +252,7 @@ func TestSupportMap_Equivocation(t *testing.T) {
 // TestSupportMap_EmptySlots tests that querying slots with no committees returns 0.
 func TestSupportMap_EmptySlots(t *testing.T) {
 	sm := NewSupportMap()
-	require.Equal(t, uint64(0), sm.BlockSupportBetweenSlots([32]byte{1}, 5, 10))
+	require.Equal(t, uint64(0), sm.NodeSupportBetweenSlots([32]byte{1}, 0, false, 5, 10))
 	require.Equal(t, uint64(0), sm.AttestationScore([32]byte{1}))
 	require.Equal(t, uint64(0), sm.EquivocationScore(5, 10))
 }

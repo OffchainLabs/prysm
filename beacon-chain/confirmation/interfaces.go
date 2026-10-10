@@ -16,6 +16,8 @@ type ForkchoiceReader interface {
 	UnrealizedJustifiedCheckpoint() *forkchoicetypes.Checkpoint
 	Slot(root [32]byte) (primitives.Slot, error)
 	ParentRoot(root [32]byte) ([32]byte, error)
+	ParentHash(root [32]byte) [32]byte
+	BlockHash(root [32]byte) ([32]byte, error)
 	IsOptimistic(root [32]byte) (bool, error)
 	AncestorRoot(ctx context.Context, root [32]byte, slot primitives.Slot) ([32]byte, error)
 	AncestorRoots(root [32]byte, terminalRoot [32]byte) ([][32]byte, error)

@@ -305,7 +305,7 @@ func selectByBalanceFill(
 
 // validIndexedPayloadAttestation verifies the signature of an indexed payload attestation.
 //
-//	<spec fn="is_valid_indexed_payload_attestation" fork="gloas" hash="37b2500a">
+//	<spec fn="is_valid_indexed_payload_attestation" fork="gloas" hash="dd1e5a76">
 //	def is_valid_indexed_payload_attestation(
 //	    state: BeaconState, attestation: IndexedPayloadAttestation
 //	) -> bool:
@@ -319,7 +319,7 @@ func selectByBalanceFill(
 //	        return False
 //
 //	    # Verify aggregate signature
-//	    pubkeys = [state.validators[i].pubkey for i in indices]
+//	    pubkeys = [state.validators[index].pubkey for index in indices]
 //	    domain = get_domain(state, DOMAIN_PTC_ATTESTER, compute_epoch_at_slot(attestation.data.slot))
 //	    signing_root = compute_signing_root(attestation.data, domain)
 //	    return bls.FastAggregateVerify(pubkeys, signing_root, attestation.signature)
