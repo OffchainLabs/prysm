@@ -49,7 +49,8 @@ type (
 		LocalNode() *enode.LocalNode
 	}
 
-	quicProtocol uint16
+	quicProtocol  uint16
+	quic6Protocol uint16
 
 	listenerWrapper struct {
 		mu              sync.RWMutex
@@ -62,6 +63,7 @@ type (
 )
 
 const quickProtocolEnrKey = "quic"
+const quic6ProtocolEnrKey = "quic6"
 
 const (
 	udp4 udpVersion = iota
@@ -75,6 +77,9 @@ const (
 
 // quicProtocol is the "quic" key, which holds the QUIC port of the node.
 func (quicProtocol) ENRKey() string { return quickProtocolEnrKey }
+
+// quic6Protocol is the "quic6" key, which holds the IPv6 QUIC port of the node.
+func (quic6Protocol) ENRKey() string { return quic6ProtocolEnrKey }
 
 func newListener(listenerCreator func() (*discover.UDPv5, error)) (*listenerWrapper, error) {
 	rawListener, err := listenerCreator()
@@ -927,26 +932,72 @@ func retrieveMultiAddrsFromNode(node *enode.Node) ([]ma.Multiaddr, error) {
 }
 
 // getPort retrieves the port for a given node and protocol, as well as a boolean
-// indicating whether the port was found, and an error
+// indicating whether the port was found, and an error.
+//
+// The port entry must match the address family of the node's selected IP:
+// for an IPv6 endpoint the "tcp6"/"udp6"/"quic6" entry takes precedence,
+// falling back to the IPv4 entry when no IPv6-specific entry is present.
+// This mirrors go-ethereum's enode.Node port selection. Reading only the
+// IPv4 entries makes IPv6-only peers (which advertise no "tcp" entry at
+// all) undialable, and dials dual-stack peers on the wrong port whenever
+// their IPv6 port differs from their IPv4 port.
 func getPort(node *enode.Node, protocol internetProtocol) (uint, bool, error) {
 	var (
 		port uint
 		err  error
 	)
 
+	ipv6 := node.IP() != nil && node.IP().To4() == nil
+
 	switch protocol {
 	case tcp:
-		var entry enr.TCP
-		err = node.Load(&entry)
-		port = uint(entry)
+		if ipv6 {
+			var entry6 enr.TCP6
+			err = node.Load(&entry6)
+			if enr.IsNotFound(err) {
+				var entry enr.TCP
+				err = node.Load(&entry)
+				port = uint(entry)
+			} else {
+				port = uint(entry6)
+			}
+		} else {
+			var entry enr.TCP
+			err = node.Load(&entry)
+			port = uint(entry)
+		}
 	case udp:
-		var entry enr.UDP
-		err = node.Load(&entry)
-		port = uint(entry)
+		if ipv6 {
+			var entry6 enr.UDP6
+			err = node.Load(&entry6)
+			if enr.IsNotFound(err) {
+				var entry enr.UDP
+				err = node.Load(&entry)
+				port = uint(entry)
+			} else {
+				port = uint(entry6)
+			}
+		} else {
+			var entry enr.UDP
+			err = node.Load(&entry)
+			port = uint(entry)
+		}
 	case quic:
-		var entry quicProtocol
-		err = node.Load(&entry)
-		port = uint(entry)
+		if ipv6 {
+			var entry6 quic6Protocol
+			err = node.Load(&entry6)
+			if enr.IsNotFound(err) {
+				var entry quicProtocol
+				err = node.Load(&entry)
+				port = uint(entry)
+			} else {
+				port = uint(entry6)
+			}
+		} else {
+			var entry quicProtocol
+			err = node.Load(&entry)
+			port = uint(entry)
+		}
 	default:
 		return 0, false, errors.Errorf("invalid protocol: %v", protocol)
 	}
@@ -982,14 +1033,30 @@ func convertToUdpMultiAddr(node *enode.Node) ([]ma.Multiaddr, error) {
 	var ip4 enr.IPv4
 	var ip6 enr.IPv6
 	if node.Load(&ip4) == nil {
-		address, ipErr := multiAddressBuilderWithID(net.IP(ip4), udp, uint(node.UDP()), id)
+		// Pair the IPv4 address with the "udp" entry; node.UDP() alone
+		// resolves against the node's selected family and can return the
+		// "udp6" port when the node prefers its IPv6 endpoint.
+		port := uint(node.UDP())
+		var udp4 enr.UDP
+		if node.Load(&udp4) == nil {
+			port = uint(udp4)
+		}
+		address, ipErr := multiAddressBuilderWithID(net.IP(ip4), udp, port, id)
 		if ipErr != nil {
 			return nil, errors.Wrap(ipErr, "could not build IPv4 address")
 		}
 		addresses = append(addresses, address)
 	}
 	if node.Load(&ip6) == nil {
-		address, ipErr := multiAddressBuilderWithID(net.IP(ip6), udp, uint(node.UDP()), id)
+		// Pair the IPv6 address with the "udp6" entry when present,
+		// falling back to node.UDP() (the "udp" entry for an IPv6
+		// endpoint without a "udp6" entry).
+		port := uint(node.UDP())
+		var udp6 enr.UDP6
+		if node.Load(&udp6) == nil {
+			port = uint(udp6)
+		}
+		address, ipErr := multiAddressBuilderWithID(net.IP(ip6), udp, port, id)
 		if ipErr != nil {
 			return nil, errors.Wrap(ipErr, "could not build IPv6 address")
 		}
