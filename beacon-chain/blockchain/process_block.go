@@ -215,11 +215,24 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	sigSet := bls.NewSet()
 	if applied {
 		eidx = 1
-		envSigSet, err := gloas.ExecutionPayloadEnvelopeSignatureBatch(preState, envelopes[0])
+		envSigSet, err := gloas.VerifyExecutionPayloadEnvelopeWithDeferredSig(ctx, preState, envelopes[0])
 		if err != nil {
 			return err
 		}
 		sigSet.Join(envSigSet)
+		parentBid, err := preState.LatestExecutionPayloadBid()
+		if err != nil {
+			return err
+		}
+		if len(parentBid.BlobKzgCommitments()) > 0 {
+			available, err := s.dataColumnsAvailableNow(ctx, parentRoot, parentBid.Slot())
+			if err != nil {
+				return errors.Wrap(err, "could not check parent payload data availability")
+			}
+			if !available {
+				return errors.Errorf("data columns unavailable for parent execution payload envelope slot %d root %#x", parentBid.Slot(), parentRoot)
+			}
+		}
 	}
 	if eidx < len(envelopes) {
 		env, err := envelopes[eidx].Envelope()
