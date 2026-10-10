@@ -276,19 +276,19 @@ func getMainnetStates() (state.BeaconState, state.BeaconState, error) {
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to read target file")
 	}
-	sourceProto := &ethpb.BeaconStateDeneb{}
-	if err := sourceProto.UnmarshalSSZ(sourceBytes); err != nil {
+	sourceContainer := &ethpb.BeaconStateDeneb{}
+	if err := sourceContainer.UnmarshalSSZ(sourceBytes); err != nil {
 		return nil, nil, errors.Wrap(err, "failed to unmarshal source proto")
 	}
-	source, err := state_native.New(sourceProto)
+	source, err := state_native.New(sourceContainer)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to initialize source state")
 	}
-	targetProto := &ethpb.BeaconStateElectra{}
-	if err := targetProto.UnmarshalSSZ(targetBytes); err != nil {
+	targetContainer := &ethpb.BeaconStateElectra{}
+	if err := targetContainer.UnmarshalSSZ(targetBytes); err != nil {
 		return nil, nil, errors.Wrap(err, "failed to unmarshal target proto")
 	}
-	target, err := state_native.New(targetProto)
+	target, err := state_native.New(targetContainer)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to initialize target state")
 	}

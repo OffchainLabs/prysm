@@ -21,12 +21,12 @@ func buildStateWithBlockRoots(t *testing.T, stateSlot primitives.Slot, roots map
 		blockRoots[slot%cfg.SlotsPerHistoricalRoot] = root
 	}
 
-	stProto := &ethpb.BeaconStateGloas{
+	container := &ethpb.BeaconStateGloas{
 		Slot:       stateSlot,
 		BlockRoots: blockRoots,
 	}
 
-	state, err := state_native.New(stProto)
+	state, err := state_native.New(container)
 	require.NoError(t, err)
 	return state.(*state_native.BeaconState)
 }

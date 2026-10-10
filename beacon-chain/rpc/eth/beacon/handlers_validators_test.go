@@ -1296,7 +1296,7 @@ func TestGetValidatorIdentities(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	st := genesisState.ToProtoUnsafe().(*eth.BeaconState)
+	st := genesisState.ToContainerUnsafe().(*eth.BeaconState)
 
 	t.Run("json", func(t *testing.T) {
 		t.Run("get all", func(t *testing.T) {

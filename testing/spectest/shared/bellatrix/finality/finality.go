@@ -75,9 +75,9 @@ func RunFinalityTest(t *testing.T, config string) {
 			require.NoError(t, err, "Failed to decompress")
 			postBeaconState := &ethpb.BeaconStateBellatrix{}
 			require.NoError(t, postBeaconState.UnmarshalSSZ(postBeaconStateSSZ), "Failed to unmarshal")
-			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateBellatrix](beaconState.ToProtoUnsafe())
+			container, err := state_native.ContainerFrom[*ethpb.BeaconStateBellatrix](beaconState.ToContainerUnsafe())
 			require.NoError(t, err)
-			require.DeepSSZEqual(t, pbState, postBeaconState, "Post state does not match expected")
+			require.DeepSSZEqual(t, container, postBeaconState, "Post state does not match expected")
 		})
 	}
 }

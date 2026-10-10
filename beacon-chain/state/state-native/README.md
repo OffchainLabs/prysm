@@ -8,7 +8,7 @@ Note: Whenever only the name of a file is provided, it's assumed to be in the `/
 - Add a getter and a setter for the field, either to existing `getter_XXX.go`/`setter_XXX.go` files or create new ones if the field doesn't fit anywhere.
 Add the new getter and setter to `/beacon-chain/state/interfaces.go`.
 - Update state hashing in `hasher.go`.
-- Update the `ToProtoUnsafe()` and `ToProto()` functions in `getters_state.go`.
+- Update the `ToContainerUnsafe()` and `ToContainer()` functions in `getters_state.go`.
 - If the field is a multi-value slice, update `multi_value_slices.go`.
 - Update `spec_parameters.go`.
 - Update `state_trie.go`:

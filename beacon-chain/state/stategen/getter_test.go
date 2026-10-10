@@ -34,7 +34,7 @@ func TestStateByRoot_GenesisState(t *testing.T) {
 	require.NoError(t, service.beaconDB.SaveGenesisBlockRoot(ctx, bRoot))
 	loadedState, err := service.StateByRoot(ctx, params.BeaconConfig().ZeroHash) // Zero hash is genesis state root.
 	require.NoError(t, err)
-	require.DeepSSZEqual(t, loadedState.ToProtoUnsafe(), beaconState.ToProtoUnsafe())
+	require.DeepSSZEqual(t, loadedState.ToContainerUnsafe(), beaconState.ToContainerUnsafe())
 }
 
 func TestStateByRoot_ColdState(t *testing.T) {
@@ -64,7 +64,7 @@ func TestStateByRoot_ColdState(t *testing.T) {
 	require.NoError(t, service.beaconDB.SaveGenesisBlockRoot(ctx, bRoot))
 	loadedState, err := service.StateByRoot(ctx, bRoot)
 	require.NoError(t, err)
-	require.DeepSSZEqual(t, loadedState.ToProtoUnsafe(), beaconState.ToProtoUnsafe())
+	require.DeepSSZEqual(t, loadedState.ToContainerUnsafe(), beaconState.ToContainerUnsafe())
 
 	bal, err := service.ActiveNonSlashedBalancesByRoot(ctx, bRoot)
 	require.NoError(t, err)
@@ -87,7 +87,7 @@ func TestStateByRootIfCachedNoCopy_HotState(t *testing.T) {
 	service.hotStateCache.put(r, beaconState)
 
 	loadedState := service.StateByRootIfCachedNoCopy(r)
-	require.DeepSSZEqual(t, loadedState.ToProtoUnsafe(), beaconState.ToProtoUnsafe())
+	require.DeepSSZEqual(t, loadedState.ToContainerUnsafe(), beaconState.ToContainerUnsafe())
 }
 
 func TestStateByRootIfCachedNoCopy_ColdState(t *testing.T) {
@@ -545,7 +545,7 @@ func TestLoadStateByRoot(t *testing.T) {
 			lbrG, err := got.LatestBlockHeader().HashTreeRoot()
 			require.NoError(t, err)
 			require.Equal(t, lbrE, lbrG)
-			require.DeepSSZEqual(t, expect.ToProtoUnsafe(), got.ToProtoUnsafe())
+			require.DeepSSZEqual(t, expect.ToContainerUnsafe(), got.ToContainerUnsafe())
 		})
 	}
 }

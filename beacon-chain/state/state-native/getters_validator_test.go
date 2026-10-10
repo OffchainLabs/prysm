@@ -86,7 +86,7 @@ func TestEffectiveBalanceAtIndex(t *testing.T) {
 }
 
 func TestPendingBalanceToWithdraw(t *testing.T) {
-	pb := &ethpb.BeaconStateElectra{
+	container := &ethpb.BeaconStateElectra{
 		PendingPartialWithdrawals: []*ethpb.PendingPartialWithdrawal{
 			{
 				Amount: 100,
@@ -99,7 +99,7 @@ func TestPendingBalanceToWithdraw(t *testing.T) {
 			},
 		},
 	}
-	state, err := statenative.NewUnsafe(pb)
+	state, err := statenative.NewUnsafe(container)
 	require.NoError(t, err)
 
 	ab, err := state.PendingBalanceToWithdraw(0)
@@ -123,7 +123,7 @@ func TestAggregateKeyFromIndices(t *testing.T) {
 }
 
 func TestHasPendingBalanceToWithdraw(t *testing.T) {
-	pb := &ethpb.BeaconStateElectra{
+	container := &ethpb.BeaconStateElectra{
 		PendingPartialWithdrawals: []*ethpb.PendingPartialWithdrawal{
 			{
 				Amount: 100,
@@ -143,7 +143,7 @@ func TestHasPendingBalanceToWithdraw(t *testing.T) {
 			},
 		},
 	}
-	state, err := statenative.NewUnsafe(pb)
+	state, err := statenative.NewUnsafe(container)
 	require.NoError(t, err)
 
 	ok, err := state.HasPendingBalanceToWithdraw(1)

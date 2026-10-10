@@ -15,14 +15,14 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
-func TestBeaconState_ProtoBeaconStateCompatibility(t *testing.T) {
+func TestBeaconState_ContainerCompatibility(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	ctx := t.Context()
 	genesis := setupGenesisState(t, 64)
 	customState, err := statenative.New(genesis)
 	require.NoError(t, err)
 	cloned := genesis.Copy()
-	custom := customState.ToProto()
+	custom := customState.ToContainer()
 	assert.DeepSSZEqual(t, cloned, custom)
 
 	r1, err := customState.HashTreeRoot(ctx)
@@ -136,7 +136,7 @@ func BenchmarkStateClone_Manual(b *testing.B) {
 	require.NoError(b, err)
 
 	for b.Loop() {
-		_ = st.ToProto()
+		_ = st.ToContainer()
 	}
 }
 
@@ -216,7 +216,7 @@ func TestForkManualCopy_OK(t *testing.T) {
 	}
 	require.NoError(t, a.SetFork(wantedFork))
 
-	pbState, err := statenative.ContainerFrom[*ethpb.BeaconState](a.ToProtoUnsafe())
+	container, err := statenative.ContainerFrom[*ethpb.BeaconState](a.ToContainerUnsafe())
 	require.NoError(t, err)
-	require.DeepEqual(t, pbState.Fork, wantedFork)
+	require.DeepEqual(t, container.Fork, wantedFork)
 }

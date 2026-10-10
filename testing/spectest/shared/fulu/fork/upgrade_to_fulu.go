@@ -37,7 +37,7 @@ func RunUpgradeToFulu(t *testing.T, config string) {
 			require.NoError(t, err)
 			postState, err := fulu.UpgradeToFulu(t.Context(), preState)
 			require.NoError(t, err)
-			postStateFromFunction, err := state_native.ContainerFrom[*ethpb.BeaconStateFulu](postState.ToProtoUnsafe())
+			postStateFromFunction, err := state_native.ContainerFrom[*ethpb.BeaconStateFulu](postState.ToContainerUnsafe())
 			require.NoError(t, err)
 
 			postStateFile, err := util.BazelFileBytes(path.Join(folderPath, "post.ssz_snappy"))

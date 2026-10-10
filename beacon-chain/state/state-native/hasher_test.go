@@ -45,10 +45,10 @@ func TestComputeFieldRootsWithHasher_Phase0(t *testing.T) {
 
 	nativeState, ok := beaconState.(*statenative.BeaconState)
 	require.Equal(t, true, ok)
-	protoState, ok := nativeState.ToProtoUnsafe().(*ethpb.BeaconState)
+	container, ok := nativeState.ToContainerUnsafe().(*ethpb.BeaconState)
 	require.Equal(t, true, ok)
 
-	initState, err := statenative.New(protoState)
+	initState, err := statenative.New(container)
 	require.NoError(t, err)
 	s, ok := initState.(*statenative.BeaconState)
 	require.Equal(t, true, ok)
@@ -112,9 +112,9 @@ func TestComputeFieldRootsWithHasher_Altair(t *testing.T) {
 
 	nativeState, ok := beaconState.(*statenative.BeaconState)
 	require.Equal(t, true, ok)
-	protoState, ok := nativeState.ToProtoUnsafe().(*ethpb.BeaconStateAltair)
+	container, ok := nativeState.ToContainerUnsafe().(*ethpb.BeaconStateAltair)
 	require.Equal(t, true, ok)
-	initState, err := statenative.New(protoState)
+	initState, err := statenative.New(container)
 	require.NoError(t, err)
 	s, ok := initState.(*statenative.BeaconState)
 	require.Equal(t, true, ok)
@@ -185,9 +185,9 @@ func TestComputeFieldRootsWithHasher_Bellatrix(t *testing.T) {
 
 	nativeState, ok := beaconState.(*statenative.BeaconState)
 	require.Equal(t, true, ok)
-	protoState, ok := nativeState.ToProtoUnsafe().(*ethpb.BeaconStateBellatrix)
+	container, ok := nativeState.ToContainerUnsafe().(*ethpb.BeaconStateBellatrix)
 	require.Equal(t, true, ok)
-	initState, err := statenative.New(protoState)
+	initState, err := statenative.New(container)
 	require.NoError(t, err)
 	s, ok := initState.(*statenative.BeaconState)
 	require.Equal(t, true, ok)
@@ -265,9 +265,9 @@ func TestComputeFieldRootsWithHasher_Capella(t *testing.T) {
 
 	nativeState, ok := beaconState.(*statenative.BeaconState)
 	require.Equal(t, true, ok)
-	protoState, ok := nativeState.ToProtoUnsafe().(*ethpb.BeaconStateCapella)
+	container, ok := nativeState.ToContainerUnsafe().(*ethpb.BeaconStateCapella)
 	require.Equal(t, true, ok)
-	initState, err := statenative.New(protoState)
+	initState, err := statenative.New(container)
 	require.NoError(t, err)
 	s, ok := initState.(*statenative.BeaconState)
 	require.Equal(t, true, ok)

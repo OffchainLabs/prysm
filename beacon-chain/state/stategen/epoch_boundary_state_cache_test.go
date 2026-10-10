@@ -35,7 +35,7 @@ func TestEpochBoundaryStateCache_CanSaveAndDelete(t *testing.T) {
 	got, exists, err = e.getByBlockRoot([32]byte{'a'})
 	require.NoError(t, err)
 	assert.Equal(t, true, exists, "Should exist")
-	assert.DeepSSZEqual(t, s.ToProtoUnsafe(), got.state.ToProtoUnsafe(), "Should have the same state")
+	assert.DeepSSZEqual(t, s.ToContainerUnsafe(), got.state.ToContainerUnsafe(), "Should have the same state")
 
 	got, exists, err = e.getBySlot(2)
 	require.NoError(t, err)
@@ -45,7 +45,7 @@ func TestEpochBoundaryStateCache_CanSaveAndDelete(t *testing.T) {
 	got, exists, err = e.getBySlot(1)
 	require.NoError(t, err)
 	assert.Equal(t, true, exists, "Should exist")
-	assert.DeepSSZEqual(t, s.ToProtoUnsafe(), got.state.ToProtoUnsafe(), "Should have the same state")
+	assert.DeepSSZEqual(t, s.ToContainerUnsafe(), got.state.ToContainerUnsafe(), "Should have the same state")
 
 	require.NoError(t, e.delete(r))
 	got, exists, err = e.getByBlockRoot([32]byte{'b'})
