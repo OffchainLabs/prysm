@@ -169,7 +169,7 @@ func (s *Server) publishBareEnvelope(ctx context.Context, w http.ResponseWriter,
 	generic := &eth.GenericSignedExecutionPayloadEnvelope{
 		Envelope: &eth.GenericSignedExecutionPayloadEnvelope_SignedEnvelope{SignedEnvelope: signed},
 	}
-	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, generic); err != nil {
+	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelopeV2(ctx, generic); err != nil {
 		writeEnvelopePublishError(w, err)
 		return
 	}
@@ -245,7 +245,7 @@ func (s *Server) processEnvelopeContents(ctx context.Context, w http.ResponseWri
 			},
 		},
 	}
-	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, generic); err != nil {
+	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelopeV2(ctx, generic); err != nil {
 		writeEnvelopePublishError(w, err)
 		return
 	}

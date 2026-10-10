@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -141,6 +142,12 @@ func (f *ForkChoice) InsertNode(ctx context.Context, state state.BeaconState, ro
 	if err != nil {
 		return err
 	}
+	if roblock.Version() >= version.Gloas && pn.node.builderIndex != params.BeaconConfig().BuilderIndexSelfBuild {
+		pk, err := state.BuilderPubkey(pn.node.builderIndex)
+		if err == nil {
+			pn.node.builderPubkey = &pk
+		}
+	}
 	if features.Get().TrackEquivocations {
 		if slotStart, err := slots.StartTime(f.store.genesisTime, roblock.Block().Slot()); err == nil {
 			cfg := params.BeaconConfig()
@@ -166,7 +173,7 @@ func (f *ForkChoice) InsertNode(ctx context.Context, state state.BeaconState, ro
 func (f *ForkChoice) updateCheckpoints(ctx context.Context, jc, fc *ethpb.Checkpoint) error {
 	if jc.Epoch > f.store.justifiedCheckpoint.Epoch {
 		f.store.prevJustifiedCheckpoint = f.store.justifiedCheckpoint
-		jcRoot := bytesutil.ToBytes32(jc.Root)
+		jcRoot := f.store.clampCheckpointRoot(jc.Epoch, bytesutil.ToBytes32(jc.Root))
 		f.store.justifiedCheckpoint = &forkchoicetypes.Checkpoint{Epoch: jc.Epoch, Root: jcRoot}
 		if err := f.updateJustifiedBalances(ctx, jcRoot); err != nil {
 			return errors.Wrap(err, "could not update justified balances")
@@ -178,7 +185,7 @@ func (f *ForkChoice) updateCheckpoints(ctx context.Context, jc, fc *ethpb.Checkp
 	}
 	f.store.finalizedCheckpoint = &forkchoicetypes.Checkpoint{
 		Epoch: fc.Epoch,
-		Root:  bytesutil.ToBytes32(fc.Root),
+		Root:  f.store.clampCheckpointRoot(fc.Epoch, bytesutil.ToBytes32(fc.Root)),
 	}
 	return f.store.prune(ctx)
 }
@@ -592,10 +599,14 @@ func (f *ForkChoice) InsertChain(ctx context.Context, chain []*forkchoicetypes.B
 		return nil
 	}
 	for _, bcp := range chain {
-		if _, err := f.store.insert(ctx,
+		pn, err := f.store.insert(ctx,
 			bcp.Block,
-			bcp.JustifiedCheckpoint.Epoch, bytesutil.ToBytes32(bcp.JustifiedCheckpoint.Root), bcp.FinalizedCheckpoint.Epoch); err != nil {
+			bcp.JustifiedCheckpoint.Epoch, bytesutil.ToBytes32(bcp.JustifiedCheckpoint.Root), bcp.FinalizedCheckpoint.Epoch)
+		if err != nil {
 			return err
+		}
+		if bcp.BuilderPubkey != nil && !bcp.HasPayload {
+			pn.node.builderPubkey = bcp.BuilderPubkey
 		}
 		if bcp.HasPayload {
 			root := bcp.Block.Root()
@@ -628,11 +639,6 @@ func (f *ForkChoice) InsertChain(ctx context.Context, chain []*forkchoicetypes.B
 // SetGenesisTime sets the genesisTime tracked by forkchoice
 func (f *ForkChoice) SetGenesisTime(genesis time.Time) {
 	f.store.genesisTime = genesis.Truncate(time.Second) // Genesis time has a precision of 1 second.
-}
-
-// SetOriginRoot sets the genesis block root
-func (f *ForkChoice) SetOriginRoot(root [32]byte) {
-	f.store.originRoot = root
 }
 
 // CachedHeadRoot returns the last cached head root
@@ -793,7 +799,14 @@ func (f *ForkChoice) PayloadWeights(root [32]byte) (emptyWeight, fullWeight uint
 func (f *ForkChoice) updateJustifiedBalances(ctx context.Context, root [32]byte) error {
 	balances, err := f.balancesByRoot(ctx, root)
 	if err != nil {
-		return errors.Wrap(err, "could not get justified balances")
+		if f.store.treeRootNode == nil || f.store.treeRootNode.root == root {
+			return errors.Wrap(err, "could not get justified balances")
+		}
+		log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Warn("Falling back to forkchoice root for justified balances")
+		balances, err = f.balancesByRoot(ctx, f.store.treeRootNode.root)
+		if err != nil {
+			return errors.Wrap(err, "could not get justified balances")
+		}
 	}
 	f.justifiedBalances = balances
 	f.store.committeeWeight = 0

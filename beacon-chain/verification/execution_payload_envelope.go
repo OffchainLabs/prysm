@@ -8,10 +8,12 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
@@ -28,6 +30,7 @@ type ExecutionPayloadEnvelopeVerifier interface {
 	VerifyExecutionRequestsLimits() error
 	VerifyWithdrawalsLimit() error
 	VerifySignature(context.Context, state.ReadOnlyBeaconState) error
+	VerifySignatureWithPubkey(pubkey [fieldparams.BLSPubkeyLength]byte, genesisValidatorsRoot [32]byte) error
 	SatisfyRequirement(Requirement)
 }
 
@@ -232,6 +235,27 @@ func (v *EnvelopeVerifier) VerifySignature(ctx context.Context, st state.ReadOnl
 	return nil
 }
 
+// VerifySignatureWithPubkey verifies the envelope signature against the given pubkey, with the
+// domain computed from the fork schedule at the envelope's epoch.
+func (v *EnvelopeVerifier) VerifySignatureWithPubkey(pubkey [fieldparams.BLSPubkeyLength]byte, genesisValidatorsRoot [32]byte) (err error) {
+	defer v.record(RequireBuilderSignatureValid, &err)
+
+	env, err := v.e.Envelope()
+	if err != nil {
+		return errors.Wrap(err, "failed to get envelope")
+	}
+	epoch := slots.ToEpoch(env.Slot())
+	fork, err := params.Fork(epoch)
+	if err != nil {
+		return errors.Wrap(err, "failed to get fork")
+	}
+	err = verifyPayloadEnvelopeSignature(v.e, pubkey[:], fork, epoch, genesisValidatorsRoot[:])
+	if err != nil {
+		return errors.Wrapf(err, "signature validation failed: root=%#x slot=%d builder=%d", env.BeaconBlockRoot(), env.Slot(), env.BuilderIndex())
+	}
+	return nil
+}
+
 // SatisfyRequirement allows the caller to manually mark a requirement as satisfied.
 func (v *EnvelopeVerifier) SatisfyRequirement(req Requirement) {
 	v.record(req, nil)
@@ -271,6 +295,10 @@ func validatePayloadEnvelopeSignature(ctx context.Context, st state.ReadOnlyBeac
 		}
 		pubkey = builderPubkey[:]
 	}
+	return verifyPayloadEnvelopeSignature(e, pubkey, st.Fork(), slots.ToEpoch(st.Slot()), st.GenesisValidatorsRoot())
+}
+
+func verifyPayloadEnvelopeSignature(e interfaces.ROSignedExecutionPayloadEnvelope, pubkey []byte, fork *ethpb.Fork, epoch primitives.Epoch, genesisValidatorsRoot []byte) error {
 	pub, err := bls.PublicKeyFromBytes(pubkey)
 	if err != nil {
 		return errors.Wrap(err, "invalid public key")
@@ -280,8 +308,7 @@ func validatePayloadEnvelopeSignature(ctx context.Context, st state.ReadOnlyBeac
 	if err != nil {
 		return errors.Wrap(err, "invalid signature format")
 	}
-	currentEpoch := slots.ToEpoch(st.Slot())
-	domain, err := signing.Domain(st.Fork(), currentEpoch, params.BeaconConfig().DomainBeaconBuilder, st.GenesisValidatorsRoot())
+	domain, err := signing.Domain(fork, epoch, params.BeaconConfig().DomainBeaconBuilder, genesisValidatorsRoot)
 	if err != nil {
 		return errors.Wrap(err, "failed to compute signing domain")
 	}

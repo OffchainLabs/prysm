@@ -237,7 +237,7 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 		log.WithError(err).Error("Could not get latest block hash")
 		return
 	}
-	pid, err := s.notifyForkchoiceUpdateGloas(ctx, bh, attr)
+	pid, fcs, err := s.notifyForkchoiceUpdateGloas(ctx, bh, attr)
 	if err != nil {
 		log.WithError(err).Error("Could not notify forkchoice update")
 		return
@@ -249,11 +249,11 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 	var pId [8]byte
 	copy(pId[:], pid[:])
 	s.cfg.PayloadIDCache.Set(currentSlot+1, hr, false, pId)
-	s.firePayloadAttributesEventForHead(hr, currentSlot+1, attr, bh[:])
+	s.firePayloadAttributesEventForHead(hr, currentSlot+1, attr, bh[:], fcs)
 }
 
 func (s *Service) fcuFromReorgData(headBlock interfaces.ReadOnlySignedBeaconBlock, hr [32]byte, hash [32]byte, full bool, attr payloadattribute.Attributer, proposingSlot primitives.Slot) {
-	pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, hash, attr)
+	pid, fcs, err := s.notifyForkchoiceUpdateGloas(s.ctx, hash, attr)
 	if err != nil {
 		log.WithError(err).Error("Could not update forkchoice with engine")
 	}
@@ -268,11 +268,11 @@ func (s *Service) fcuFromReorgData(headBlock interfaces.ReadOnlySignedBeaconBloc
 	s.cfg.PayloadIDCache.Set(proposingSlot, hr, full, pId)
 
 	if !attr.IsEmpty() {
-		s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, hr, proposingSlot, attr, hash[:])
+		s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, hr, proposingSlot, attr, hash[:], fcs)
 	}
 }
 
-func (s *Service) firePayloadAttributesEventForHead(headRoot [32]byte, proposingSlot primitives.Slot, attr payloadattribute.Attributer, parentBlockHash []byte) {
+func (s *Service) firePayloadAttributesEventForHead(headRoot [32]byte, proposingSlot primitives.Slot, attr payloadattribute.Attributer, parentBlockHash []byte, fcs *enginev1.ForkchoiceState) {
 	s.headLock.RLock()
 	var headBlock interfaces.ReadOnlySignedBeaconBlock
 	if s.head != nil && s.head.root == headRoot {
@@ -282,7 +282,7 @@ func (s *Service) firePayloadAttributesEventForHead(headRoot [32]byte, proposing
 	if headBlock == nil {
 		return
 	}
-	s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, headRoot, proposingSlot, attr, parentBlockHash)
+	s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, headRoot, proposingSlot, attr, parentBlockHash, fcs)
 }
 
 // This saves head and prunes atts from the pool only if the head is new and if we are either

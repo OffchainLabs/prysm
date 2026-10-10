@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"reflect"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -22,6 +21,7 @@ import (
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -146,6 +146,28 @@ func TestValidateExecutionPayloadEnvelope_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, result, pubsub.ValidationAccept)
 	require.Equal(t, true, s.hasSeenPayloadEnvelope(root, builderIdx))
+}
+
+func TestValidateExecutionPayloadEnvelope_UnknownBuilderPubkey(t *testing.T) {
+	ctx := context.Background()
+	s, msg, _, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{})
+	s.cfg.chain.(*mock.ChainService).BuilderPubkeys[root] = nil
+
+	result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
+	require.ErrorContains(t, "unknown builder pubkey", err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+}
+
+func TestValidateExecutionPayloadEnvelope_FullNodeIgnored(t *testing.T) {
+	ctx := context.Background()
+	s, msg, _, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{})
+	s.cfg.chain.(*mock.ChainService).ForkchoiceRoots = map[[32]byte]bool{root: true}
+
+	result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
 }
 
 func TestValidateExecutionPayloadEnvelope_BlockSeenButNotInDB_NoPanic(t *testing.T) {
@@ -275,6 +297,10 @@ func (m *mockExecutionPayloadEnvelopeVerifier) VerifySignature(_ context.Context
 	return m.errSignature
 }
 
+func (m *mockExecutionPayloadEnvelopeVerifier) VerifySignatureWithPubkey(_ [fieldparams.BLSPubkeyLength]byte, _ [32]byte) error {
+	return m.errSignature
+}
+
 func (*mockExecutionPayloadEnvelopeVerifier) SatisfyRequirement(_ verification.Requirement) {}
 
 // recordingEnvelopeVerifier tracks which requirements the validator exercises.
@@ -329,6 +355,11 @@ func (r *recordingEnvelopeVerifier) VerifyWithdrawalsLimit() error {
 }
 
 func (r *recordingEnvelopeVerifier) VerifySignature(_ context.Context, _ state.ReadOnlyBeaconState) error {
+	r.recorded[verification.RequireBuilderSignatureValid] = true
+	return nil
+}
+
+func (r *recordingEnvelopeVerifier) VerifySignatureWithPubkey(_ [fieldparams.BLSPubkeyLength]byte, _ [32]byte) error {
 	r.recorded[verification.RequireBuilderSignatureValid] = true
 	return nil
 }
@@ -408,6 +439,7 @@ func newEnvelopeServiceForTest(t *testing.T, envelopeSlot, blockSlot primitives.
 	require.NoError(t, err)
 	require.NoError(t, db.SaveState(ctx, state, root))
 	chainService.State = state
+	chainService.BuilderPubkeys = map[[32]byte]*[fieldparams.BLSPubkeyLength]byte{root: {0x01}}
 
 	blockHash := bytesutil.ToBytes32(bid.Message.BlockHash)
 	env := testSignedExecutionPayloadEnvelope(t, envelopeSlot, primitives.BuilderIndex(bid.Message.BuilderIndex), root, blockHash)
@@ -513,7 +545,7 @@ func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, buil
 		Timestamp:     4,
 		BaseFeePerGas: bytes.Repeat([]byte{0x07}, 32),
 		BlockHash:     blockHash[:],
-		Transactions:  [][]byte{},
+		Transactions:  &enginev1.ProgressiveTransactionList{},
 		Withdrawals:   []*enginev1.Withdrawal{},
 		BlobGasUsed:   0,
 		ExcessBlobGas: 0,
@@ -547,16 +579,9 @@ func (c *countingEnvelopeVerifier) VerifySignature(_ context.Context, _ state.Re
 	return c.errSignature
 }
 
-type blockingEnvelopeVerifier struct {
-	mockExecutionPayloadEnvelopeVerifier
-	started chan<- struct{}
-	release <-chan struct{}
-}
-
-func (b *blockingEnvelopeVerifier) VerifySignature(_ context.Context, _ state.ReadOnlyBeaconState) error {
-	b.started <- struct{}{}
-	<-b.release
-	return b.errSignature
+func (c *countingEnvelopeVerifier) VerifySignatureWithPubkey(_ [fieldparams.BLSPubkeyLength]byte, _ [32]byte) error {
+	*c.calls++
+	return c.errSignature
 }
 
 func TestValidateExecutionPayloadEnvelope_ParentBeaconBlockRootMismatch(t *testing.T) {
@@ -613,60 +638,42 @@ func TestValidateExecutionPayloadEnvelope_SignatureFailureBudgetIsPerPeer(t *tes
 	require.Equal(t, maxEnvelopeSigFailuresPerPeer+1, sigCalls)
 }
 
-func TestValidateExecutionPayloadEnvelope_SignatureBudgetCountsInFlight(t *testing.T) {
-	ctx := context.Background()
-	s, msg, _, _ := setupExecutionPayloadEnvelopeService(t, 1, 1)
-	started := make(chan struct{}, 3)
-	release := make(chan struct{})
-	var releaseOnce sync.Once
-	releaseAll := func() { releaseOnce.Do(func() { close(release) }) }
-	defer releaseAll()
-	s.newExecutionPayloadEnvelopeVerifier = func(_ interfaces.ROSignedExecutionPayloadEnvelope, _ []verification.Requirement) verification.ExecutionPayloadEnvelopeVerifier {
-		return &blockingEnvelopeVerifier{
-			mockExecutionPayloadEnvelopeVerifier: mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("bad signature")},
-			started:                              started,
-			release:                              release,
-		}
+// Gossip validation serializes envelopes under validateEnvelopeLock, so the in-flight
+// accounting is exercised at the helper level: a reservation consumes budget until its check
+// completes, successful checks hand the reservation back, and failed ones keep it consumed
+// for the rest of the slot.
+func TestEnvelopeSigVerificationBudget_CountsInFlight(t *testing.T) {
+	chainService := &mock.ChainService{
+		Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
 	}
+	s := &Service{cfg: &config{clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}}
+	const pid = "attacker"
 
-	type validation struct {
-		result pubsub.ValidationResult
-		err    error
-	}
-	validate := func() validation {
-		result, err := s.validateExecutionPayloadEnvelope(ctx, "attacker", msg)
-		return validation{result: result, err: err}
-	}
-	firstTwo := make(chan validation, maxEnvelopeSigFailuresPerPeer)
+	reservations := make([]primitives.Slot, 0, maxEnvelopeSigFailuresPerPeer)
 	for i := 0; i < maxEnvelopeSigFailuresPerPeer; i++ {
-		go func() { firstTwo <- validate() }()
+		budgetSlot, ok := s.reserveEnvelopeSigVerification(pid, envelopeSigKnownBlock)
+		require.Equal(t, true, ok)
+		reservations = append(reservations, budgetSlot)
 	}
-	for i := 0; i < maxEnvelopeSigFailuresPerPeer; i++ {
-		select {
-		case <-started:
-		case <-time.After(5 * time.Second):
-			t.Fatal("signature verification did not start")
-		}
-	}
+	// With the budget held by in-flight checks, the next envelope is dropped before any work.
+	_, ok := s.reserveEnvelopeSigVerification(pid, envelopeSigKnownBlock)
+	require.Equal(t, false, ok)
 
-	third := make(chan validation, 1)
-	go func() { third <- validate() }()
-	select {
-	case got := <-third:
-		require.NoError(t, got.err)
-		require.Equal(t, pubsub.ValidationIgnore, got.result)
-	case <-started:
-		t.Fatal("a third signature verification started while the peer budget was full")
-	case <-time.After(5 * time.Second):
-		t.Fatal("the third envelope was not ignored while signature checks were in flight")
-	}
+	// One peer's exhausted budget does not affect another peer.
+	honestSlot, ok := s.reserveEnvelopeSigVerification("honest", envelopeSigKnownBlock)
+	require.Equal(t, true, ok)
+	s.completeEnvelopeSigVerification("honest", envelopeSigKnownBlock, honestSlot, false)
 
-	releaseAll()
-	for i := 0; i < maxEnvelopeSigFailuresPerPeer; i++ {
-		got := <-firstTwo
-		require.NotNil(t, got.err)
-		require.Equal(t, pubsub.ValidationReject, got.result)
-	}
+	// A successful check releases its reservation.
+	s.completeEnvelopeSigVerification(pid, envelopeSigKnownBlock, reservations[0], false)
+	budgetSlot, ok := s.reserveEnvelopeSigVerification(pid, envelopeSigKnownBlock)
+	require.Equal(t, true, ok)
+
+	// Failed checks keep their reservation, so the budget stays exhausted.
+	s.completeEnvelopeSigVerification(pid, envelopeSigKnownBlock, budgetSlot, true)
+	s.completeEnvelopeSigVerification(pid, envelopeSigKnownBlock, reservations[1], true)
+	_, ok = s.reserveEnvelopeSigVerification(pid, envelopeSigKnownBlock)
+	require.Equal(t, false, ok)
 }
 
 func TestValidateExecutionPayloadEnvelope_UnknownBlockFailuresDoNotBlockKnownBlock(t *testing.T) {

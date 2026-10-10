@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
@@ -73,6 +74,9 @@ func (*mockEnvelopeVerifier) VerifyWithdrawalsLimit() error        { return nil 
 func (m *mockEnvelopeVerifier) VerifySignature(_ context.Context, _ state.ReadOnlyBeaconState) error {
 	return m.errSignature
 }
+func (m *mockEnvelopeVerifier) VerifySignatureWithPubkey(_ [fieldparams.BLSPubkeyLength]byte, _ [32]byte) error {
+	return m.errSignature
+}
 func (*mockEnvelopeVerifier) SatisfyRequirement(_ verification.Requirement) {}
 
 func gloasBlockWithBid(t *testing.T, slot primitives.Slot, bid *ethpb.SignedExecutionPayloadBid) interfaces.ReadOnlySignedBeaconBlock {
@@ -132,7 +136,7 @@ func TestGetExecutionPayloadEnvelope_AcceptsSlotID(t *testing.T) {
 				PrevRandao:    bytesutil.PadTo([]byte("randao"), 32),
 				BaseFeePerGas: bytesutil.PadTo([]byte{1}, 32),
 				BlockHash:     blockHash[:],
-				Transactions:  [][]byte{},
+				Transactions:  &enginev1.ProgressiveTransactionList{},
 				Withdrawals:   []*enginev1.Withdrawal{},
 				SlotNumber:    primitives.Slot(177),
 			},
@@ -212,7 +216,7 @@ func testSignedEnvelope() *ethpb.SignedExecutionPayloadEnvelope {
 				PrevRandao:    bytesutil.PadTo([]byte("randao"), 32),
 				BaseFeePerGas: bytesutil.PadTo([]byte{1}, 32),
 				BlockHash:     bytesutil.PadTo([]byte("blockhash"), 32),
-				Transactions:  [][]byte{},
+				Transactions:  &enginev1.ProgressiveTransactionList{},
 				Withdrawals:   []*enginev1.Withdrawal{},
 				SlotNumber:    primitives.Slot(100),
 			},
@@ -236,7 +240,7 @@ func TestPublishExecutionPayloadEnvelope_StatefulBareEnvelope_OK(t *testing.T) {
 	signed := testSignedEnvelope()
 
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelopeV2(
 		gomock.Any(), gomock.Any(),
 	).Return(&emptypb.Empty{}, nil)
 
@@ -312,7 +316,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_NoBlobs(t *testing.T)
 	require.NoError(t, err)
 
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelopeV2(
 		gomock.Any(), gomock.Any(),
 	).Return(&emptypb.Empty{}, nil)
 
@@ -372,7 +376,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_WithBlobs(t *testing.
 
 	ctrl := gomock.NewController(t)
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelopeV2(
 		gomock.Any(), gomock.Any(),
 	).Return(&emptypb.Empty{}, nil)
 
@@ -401,7 +405,7 @@ func TestPublishExecutionPayloadEnvelope_ServerError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelopeV2(
 		gomock.Any(), gomock.Any(),
 	).Return(nil, status.Error(codes.Internal, "broadcast failed"))
 
@@ -435,7 +439,7 @@ func TestPublishExecutionPayloadEnvelope_SSZ_StatefulBareEnvelope(t *testing.T) 
 	require.NoError(t, err)
 
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelopeV2(
 		gomock.Any(), gomock.Any(),
 	).Return(&emptypb.Empty{}, nil)
 
@@ -468,7 +472,7 @@ func TestPublishExecutionPayloadEnvelope_StatefulBareEnvelope_CacheMiss(t *testi
 	require.NoError(t, err)
 
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelopeV2(
 		gomock.Any(), gomock.Any(),
 	).Return(nil, status.Error(codes.FailedPrecondition,
 		"envelope without blob data was submitted but the beacon node has no cached blobs and KZG proofs"))
@@ -504,7 +508,7 @@ func TestPublishExecutionPayloadEnvelope_SSZ_Contents(t *testing.T) {
 	require.NoError(t, err)
 
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelopeV2(
 		gomock.Any(), gomock.Any(),
 	).Return(&emptypb.Empty{}, nil)
 
@@ -603,7 +607,7 @@ func TestPublishExecutionPayloadEnvelope_BroadcastValidation(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 			if tc.expectPublish {
-				v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+				v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelopeV2(
 					gomock.Any(), gomock.Any(),
 				).Return(&emptypb.Empty{}, nil)
 			}
@@ -730,19 +734,21 @@ func TestPublishExecutionPayloadEnvelope_GossipValidation(t *testing.T) {
 			expectedBody: "execution requests root does not match",
 		},
 		{
-			// JSON decoding bounds the request lists, so only an SSZ body reaches this check.
+			// JSON decoding bounds the request lists in ToConsensus, and SSZ decoding
+			// enforces the same limits in UnmarshalSSZ, so an oversized body is
+			// rejected before gossip validation and must still 400.
 			name:         "execution requests over limit",
 			signed:       oversizedRequests,
 			sszBody:      true,
 			blocker:      &testutil.MockBlocker{BlockToReturn: gloasBlockWithBid(t, envSlot, matchingBid(oversizedRequests))},
-			expectedBody: "too many builder deposit requests",
+			expectedBody: ssz.ErrListTooBig.Error(),
 		},
 		{
 			name:         "withdrawals over limit",
 			signed:       oversizedWithdrawals,
 			sszBody:      true,
 			blocker:      &testutil.MockBlocker{BlockToReturn: gloasBlockWithBid(t, envSlot, matchingBid(oversizedWithdrawals))},
-			expectedBody: "too many withdrawals",
+			expectedBody: ssz.ErrListTooBig.Error(),
 		},
 		{
 			// Bid-consistent envelope with a garbage signature must fail the final check.

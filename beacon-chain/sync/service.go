@@ -151,7 +151,9 @@ type Service struct {
 	pendingAttsLock                      sync.RWMutex
 	pendingQueueLock                     sync.RWMutex
 	chainStarted                         *atomic.Bool
+	orphanedOriginStreak                 *atomic.Int64
 	validateBlockLock                    sync.RWMutex
+	validateEnvelopeLock                 sync.Mutex
 	rateLimiter                          *limiter
 	seenBlockLock                        sync.RWMutex
 	seenBlockCache                       *lru.Cache
@@ -227,6 +229,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		ctx:                        ctx,
 		cancel:                     cancel,
 		chainStarted:               &atomic.Bool{},
+		orphanedOriginStreak:       &atomic.Int64{},
 		cfg:                        &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
 		slotToPendingBlocks:        gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
 		seenPendingBlocks:          make(map[[32]byte]bool),
@@ -404,6 +407,9 @@ func (s *Service) Stop() error {
 
 // Status of the currently running regular sync service.
 func (s *Service) Status() error {
+	if s.orphanedOriginStreak != nil && s.orphanedOriginStreak.Load() >= orphanedOriginStreakThreshold {
+		return errOrphanedOrigin
+	}
 	// If our head slot is on a previous epoch and our peers are reporting their head block are
 	// in the most recent epoch, then we might be out of sync.
 	if headEpoch := slots.ToEpoch(s.cfg.chain.HeadSlot()); headEpoch+1 < slots.ToEpoch(s.cfg.clock.CurrentSlot()) &&

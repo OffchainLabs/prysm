@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"testing"
 
+	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -163,8 +164,10 @@ func TestEnvelopeVerifier_VerifyExecutionRequestsLimits(t *testing.T) {
 		})
 	}
 
-	// SSZ decoding does not bound the request lists, so the check must hold post-decode.
-	t.Run("enforced on decoded envelope", func(t *testing.T) {
+	// SSZ decoding enforces the request list limits on untrusted input, so an
+	// oversized envelope never reaches the verifier. The cases above cover the
+	// post-decode check for envelopes assembled in process.
+	t.Run("rejected at decode", func(t *testing.T) {
 		env := testSignedExecutionPayloadEnvelope(t, 1, 1, root, blockHash)
 		for range cfg.MaxBuilderDepositRequestsPerPayload + 1 {
 			env.Message.ExecutionRequests.BuilderDeposits = append(env.Message.ExecutionRequests.BuilderDeposits, &enginev1.BuilderDepositRequest{
@@ -176,12 +179,7 @@ func TestEnvelopeVerifier_VerifyExecutionRequestsLimits(t *testing.T) {
 		encoded, err := env.MarshalSSZ()
 		require.NoError(t, err)
 		decoded := &ethpb.SignedExecutionPayloadEnvelope{}
-		require.NoError(t, decoded.UnmarshalSSZ(encoded))
-		require.Equal(t, cfg.MaxBuilderDepositRequestsPerPayload+1, uint64(len(decoded.Message.ExecutionRequests.BuilderDeposits)))
-		wrapped, err := blocks.WrappedROSignedExecutionPayloadEnvelope(decoded)
-		require.NoError(t, err)
-		verifier := NewEnvelopeVerifier(wrapped, GossipExecutionPayloadEnvelopeRequirements)
-		require.ErrorContains(t, "too many builder deposit requests", verifier.VerifyExecutionRequestsLimits())
+		require.ErrorIs(t, decoded.UnmarshalSSZ(encoded), ssz.ErrListTooBig)
 	})
 }
 
@@ -266,6 +264,35 @@ func TestEnvelopeVerifier_VerifySignature_SelfBuild(t *testing.T) {
 	require.NoError(t, verifier.VerifySignature(t.Context(), st))
 }
 
+func TestEnvelopeVerifier_VerifySignatureWithPubkey(t *testing.T) {
+	slot := primitives.Slot(1)
+	root := bytesutil.ToBytes32(bytes.Repeat([]byte{0xAA}, 32))
+	blockHash := bytesutil.ToBytes32(bytes.Repeat([]byte{0xBB}, 32))
+	genesisValidatorsRoot := bytesutil.ToBytes32(bytes.Repeat([]byte{0x11}, 32))
+	env := testSignedExecutionPayloadEnvelope(t, slot, 0, root, blockHash)
+
+	sk, err := bls.RandKey()
+	require.NoError(t, err)
+	pubkey := bytesutil.ToBytes48(sk.PublicKey().Marshal())
+	fork, err := params.Fork(slots.ToEpoch(slot))
+	require.NoError(t, err)
+
+	sig := signEnvelope(t, sk, env.Message, fork, genesisValidatorsRoot[:], slot)
+	env.Signature = sig[:]
+	wrapped, err := blocks.WrappedROSignedExecutionPayloadEnvelope(env)
+	require.NoError(t, err)
+	verifier := &EnvelopeVerifier{results: newResults(RequireBuilderSignatureValid), e: wrapped}
+	require.NoError(t, verifier.VerifySignatureWithPubkey(pubkey, genesisValidatorsRoot))
+
+	sk2, err := bls.RandKey()
+	require.NoError(t, err)
+	verifier = &EnvelopeVerifier{results: newResults(RequireBuilderSignatureValid), e: wrapped}
+	require.ErrorIs(t, verifier.VerifySignatureWithPubkey(bytesutil.ToBytes48(sk2.PublicKey().Marshal()), genesisValidatorsRoot), signing.ErrSigFailedToVerify)
+
+	verifier = &EnvelopeVerifier{results: newResults(RequireBuilderSignatureValid), e: wrapped}
+	require.ErrorIs(t, verifier.VerifySignatureWithPubkey(pubkey, [32]byte{}), signing.ErrSigFailedToVerify)
+}
+
 func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, builderIdx primitives.BuilderIndex, root, blockHash [32]byte) *ethpb.SignedExecutionPayloadEnvelope {
 	t.Helper()
 
@@ -282,7 +309,7 @@ func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, buil
 		Timestamp:     4,
 		BaseFeePerGas: bytes.Repeat([]byte{0x07}, 32),
 		BlockHash:     blockHash[:],
-		Transactions:  [][]byte{},
+		Transactions:  &enginev1.ProgressiveTransactionList{},
 		Withdrawals:   []*enginev1.Withdrawal{},
 		BlobGasUsed:   0,
 		ExcessBlobGas: 0,

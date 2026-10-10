@@ -186,12 +186,24 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return nil
 	}
 
-	log.WithFields(logrus.Fields{
+	gasLimit, gasUsed := float64(execution.GasLimit()), float64(execution.GasUsed())
+
+	payloadGasLimit.Set(gasLimit)
+	payloadGasUsed.Set(gasUsed)
+
+	fields := logrus.Fields{
 		"slot":       envelope.Slot(),
 		"blockRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(root[:])),
 		"blockHash":  fmt.Sprintf("%#x", bytesutil.Trunc(execution.BlockHash())),
 		"parentHash": fmt.Sprintf("%#x", bytesutil.Trunc(execution.ParentHash())),
-	}).Info("Synced execution payload envelope")
+	}
+
+	if gasLimit > 0 {
+		fields["gasUtilized"] = fmt.Sprintf("%.2f%%", 100*gasUsed/gasLimit)
+	}
+
+	log.WithFields(fields).Info("Synced execution payload envelope")
+
 	return nil
 }
 
@@ -239,7 +251,7 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 	blockHash := bytesutil.ToBytes32(payload.BlockHash())
 	attr := s.getPayloadAttribute(ctx, st, proposingSlot, root[:], true)
 	go func() {
-		pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, attr)
+		pid, fcs, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, attr)
 		if err != nil {
 			log.WithError(err).Error("Could not notify forkchoice update")
 			return
@@ -248,7 +260,7 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 			var pId [8]byte
 			copy(pId[:], pid[:])
 			s.cfg.PayloadIDCache.Set(proposingSlot, root, true, pId)
-			s.firePayloadAttributesEventForHead(root, proposingSlot, attr, blockHash[:])
+			s.firePayloadAttributesEventForHead(root, proposingSlot, attr, blockHash[:], fcs)
 		}
 	}()
 	return nil
@@ -422,7 +434,7 @@ func (s *Service) DataAvailable(ctx context.Context, root [32]byte, slot primiti
 
 // notifyForkchoiceUpdateGloas takes the block hash directly because Gloas
 // blocks don't carry an execution payload in the body.
-func (s *Service) notifyForkchoiceUpdateGloas(ctx context.Context, blockHash [32]byte, attributes payloadattribute.Attributer) (*enginev1.PayloadIDBytes, error) {
+func (s *Service) notifyForkchoiceUpdateGloas(ctx context.Context, blockHash [32]byte, attributes payloadattribute.Attributer) (*enginev1.PayloadIDBytes, *enginev1.ForkchoiceState, error) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.notifyForkchoiceUpdateGloas")
 	defer span.End()
 
@@ -441,7 +453,7 @@ func (s *Service) notifyForkchoiceUpdateGloas(ctx context.Context, blockHash [32
 
 	payloadID, lastValidHash, err := s.cfg.ExecutionEngineCaller.ForkchoiceUpdated(ctx, fcs, attributes)
 	if err == nil {
-		return payloadID, nil
+		return payloadID, fcs, nil
 	}
 
 	switch {
@@ -450,16 +462,16 @@ func (s *Service) notifyForkchoiceUpdateGloas(ctx context.Context, blockHash [32
 			"headBlockHash":             fmt.Sprintf("%#x", bytesutil.Trunc(blockHash[:])),
 			"finalizedPayloadBlockHash": fmt.Sprintf("%#x", bytesutil.Trunc(finalizedHash[:])),
 		}).Info("Called forkchoice updated with optimistic block (Gloas)")
-		return payloadID, nil
+		return payloadID, fcs, nil
 	case errors.Is(err, execution.ErrInvalidPayloadStatus):
 		if len(lastValidHash) == 0 {
 			lastValidHash = defaultLatestValidHash
 		}
-		return nil, invalidBlock{
+		return nil, nil, invalidBlock{
 			error:         ErrInvalidPayload,
 			lastValidHash: bytesutil.ToBytes32(lastValidHash),
 		}
 	default:
-		return nil, errors.WithMessage(ErrUndefinedExecutionEngineError, err.Error())
+		return nil, nil, errors.WithMessage(ErrUndefinedExecutionEngineError, err.Error())
 	}
 }

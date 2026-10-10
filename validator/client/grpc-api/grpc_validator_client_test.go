@@ -363,7 +363,7 @@ func TestGetExecutionPayloadEnvelope(t *testing.T) {
 			name: "cache miss fetches envelope from the beacon node",
 			root: matchingRoot,
 			prepare: func(_ *grpcValidatorClient, client *mock2.MockBeaconNodeValidatorClient) {
-				client.EXPECT().GetExecutionPayloadEnvelope(gomock.Any(), &eth.ExecutionPayloadEnvelopeRequest{Slot: slot}).Return(
+				client.EXPECT().GetExecutionPayloadEnvelopeV2(gomock.Any(), &eth.ExecutionPayloadEnvelopeRequest{Slot: slot}).Return(
 					&eth.ExecutionPayloadEnvelopeResponse{Envelope: cachedEnvelope}, nil)
 			},
 		},
@@ -371,7 +371,7 @@ func TestGetExecutionPayloadEnvelope(t *testing.T) {
 			name: "cache miss with mismatched root errors",
 			root: requestedRoot,
 			prepare: func(_ *grpcValidatorClient, client *mock2.MockBeaconNodeValidatorClient) {
-				client.EXPECT().GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).Return(
+				client.EXPECT().GetExecutionPayloadEnvelopeV2(gomock.Any(), gomock.Any()).Return(
 					&eth.ExecutionPayloadEnvelopeResponse{Envelope: cachedEnvelope}, nil)
 			},
 			wantErr: "execution payload envelope beacon_block_root does not match",
@@ -411,7 +411,7 @@ func TestPublishExecutionPayloadEnvelope_ArmSelection(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		client := mock2.NewMockBeaconNodeValidatorClient(ctrl)
-		client.EXPECT().PublishExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).DoAndReturn(
+		client.EXPECT().PublishExecutionPayloadEnvelopeV2(gomock.Any(), gomock.Any()).DoAndReturn(
 			func(_ context.Context, in *eth.GenericSignedExecutionPayloadEnvelope, _ ...grpc.CallOption) (*emptypb.Empty, error) {
 				require.NotNil(t, in.GetContents())
 				require.Equal(t, 1, len(in.GetContents().Blobs))
@@ -427,7 +427,7 @@ func TestPublishExecutionPayloadEnvelope_ArmSelection(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		client := mock2.NewMockBeaconNodeValidatorClient(ctrl)
-		client.EXPECT().PublishExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).DoAndReturn(
+		client.EXPECT().PublishExecutionPayloadEnvelopeV2(gomock.Any(), gomock.Any()).DoAndReturn(
 			func(_ context.Context, in *eth.GenericSignedExecutionPayloadEnvelope, _ ...grpc.CallOption) (*emptypb.Empty, error) {
 				require.IsNil(t, in.GetContents())
 				require.NotNil(t, in.GetSignedEnvelope())

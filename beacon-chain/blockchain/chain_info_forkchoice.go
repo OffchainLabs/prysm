@@ -6,6 +6,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/confirmation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -55,6 +56,13 @@ func (s *Service) BlockHash(root [32]byte) ([32]byte, error) {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.cfg.ForkChoiceStore.BlockHash(root)
+}
+
+// BuilderPubkey returns the pubkey of the builder committed in the given block's bid, nil for self-built blocks.
+func (s *Service) BuilderPubkey(root [32]byte) (*[fieldparams.BLSPubkeyLength]byte, error) {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.BuilderPubkey(root)
 }
 
 // HasPayloadBlockHash reports whether blockHash is an available payload parent at root.

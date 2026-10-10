@@ -62,7 +62,7 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 		ExtraData:     []byte{},
 		BaseFeePerGas: bytes.Repeat([]byte{0x05}, 32),
 		BlockHash:     blockHash,
-		Transactions:  [][]byte{},
+		Transactions:  &enginev1.ProgressiveTransactionList{},
 		Withdrawals:   withdrawals,
 		BlobGasUsed:   0,
 		ExcessBlobGas: 0,
@@ -284,7 +284,7 @@ func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 
 		stPb, ok := fixture.state.ToProtoUnsafe().(*ethpb.BeaconStateGloas)
 		require.Equal(t, true, ok)
-		stPb = proto.Clone(stPb).(*ethpb.BeaconStateGloas)
+		stPb = stPb.Copy()
 		stPb.Validators[0].PublicKey = proposerPk
 		st, err := state_native.InitializeFromProtoUnsafeGloas(stPb)
 		require.NoError(t, err)
@@ -324,7 +324,7 @@ func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 
 			stPb, ok := fixture.state.ToProtoUnsafe().(*ethpb.BeaconStateGloas)
 			require.Equal(t, true, ok)
-			stPb = proto.Clone(stPb).(*ethpb.BeaconStateGloas)
+			stPb = stPb.Copy()
 			stPb.Validators[0].PublicKey = proposerPk
 			st, err := state_native.InitializeFromProtoUnsafeGloas(stPb)
 			require.NoError(t, err)

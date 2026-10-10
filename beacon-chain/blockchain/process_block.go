@@ -238,6 +238,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	fCheckpoints := make([]*ethpb.Checkpoint, len(blks))
 	preVersionAndHeaders := make([]*versionAndHeader, len(blks))
 	postVersionAndHeaders := make([]*versionAndHeader, len(blks))
+	builderPubkeys := make([]*[fieldparams.BLSPubkeyLength]byte, len(blks))
 	var set *bls.SignatureBatch
 	boundaries := make(map[[32]byte]state.BeaconState)
 	for i, b := range blks {
@@ -256,6 +257,19 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		set, preState, err = transition.ExecuteStateTransitionNoVerifyAnySig(ctx, preState, b)
 		if err != nil {
 			return invalidBlock{error: err}
+		}
+		if b.Version() >= version.Gloas {
+			sbid, err := b.Block().Body().SignedExecutionPayloadBid()
+			if err != nil {
+				return err
+			}
+			if idx := sbid.Message.BuilderIndex; idx != params.BeaconConfig().BuilderIndexSelfBuild {
+				pk, err := preState.BuilderPubkey(idx)
+				if err != nil {
+					return err
+				}
+				builderPubkeys[i] = &pk
+			}
 		}
 		sig := b.Signature()
 		root := b.Root()
@@ -323,6 +337,9 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	pendingNodes, isValidPayload, err := s.notifyEngineAndSaveData(ctx, blks, envelopes, avs, preVersionAndHeaders, postVersionAndHeaders, jCheckpoints, fCheckpoints)
 	if err != nil {
 		return err
+	}
+	for i, n := range pendingNodes {
+		n.BuilderPubkey = builderPubkeys[i]
 	}
 	// Save boundary states that will be useful for forkchoice
 	for r, st := range boundaries {
@@ -436,13 +453,13 @@ func (s *Service) notifyEngineAndSaveData(
 			return nil, false, err
 		}
 		if i > 0 && jCheckpoints[i].Epoch > jCheckpoints[i-1].Epoch {
-			if err := s.cfg.BeaconDB.SaveJustifiedCheckpoint(ctx, jCheckpoints[i]); err != nil {
+			if err := s.cfg.BeaconDB.SaveJustifiedCheckpoint(ctx, s.checkpointWithStoredRoot(ctx, jCheckpoints[i])); err != nil {
 				tracing.AnnotateError(span, err)
 				return nil, false, err
 			}
 		}
 		if i > 0 && fCheckpoints[i].Epoch > fCheckpoints[i-1].Epoch {
-			if err := s.updateFinalized(ctx, fCheckpoints[i]); err != nil {
+			if err := s.updateFinalized(ctx, s.checkpointWithStoredRoot(ctx, fCheckpoints[i])); err != nil {
 				tracing.AnnotateError(span, err)
 				return nil, false, err
 			}
@@ -1225,7 +1242,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 		if full {
 			bh = bid.BlockHash()
 		}
-		id, err := s.notifyForkchoiceUpdateGloas(ctx, bh, attribute)
+		id, fcs, err := s.notifyForkchoiceUpdateGloas(ctx, bh, attribute)
 		if err != nil {
 			log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
 		}
@@ -1237,7 +1254,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 				"nextSlot":  currentSlot + 1,
 				"payloadID": fmt.Sprintf("%#x", bytesutil.Trunc(id[:])),
 			}).Info("Forkchoice updated with payload attributes for proposal")
-			s.firePayloadAttributesEventForHead(headRoot, currentSlot+1, attribute, bh[:])
+			s.firePayloadAttributesEventForHead(headRoot, currentSlot+1, attribute, bh[:], fcs)
 		}
 		return
 	}

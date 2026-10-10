@@ -64,6 +64,7 @@ go_library(
         "fulu.go",
         "gloas.go",
         "json_marshal_unmarshal.go",
+        "transaction_list.go",
         ":methodical_engine",  # keep
     ],
     embed = [
@@ -77,6 +78,7 @@ go_library(
         "//encoding/bytesutil:go_default_library",
         "//proto/eth/ext:go_default_library",
         "//runtime/version:go_default_library",
+        "//internal/valid:go_default_library",
         "@com_github_ethereum_go_ethereum//common:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_ethereum_go_ethereum//core/types:go_default_library",
@@ -115,6 +117,7 @@ go_test(
         "execution_engine_fuzz_test.go",
         "export_test.go",
         "json_marshal_unmarshal_test.go",
+        "transaction_list_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
@@ -122,7 +125,9 @@ go_test(
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//encoding/bytesutil:go_default_library",
+        "//proto/prysm/wrappers:go_default_library",
         "//testing/require:go_default_library",
+        "@com_github_offchainlabs_methodical_ssz//ssz:go_default_library",
         "@com_github_ethereum_go_ethereum//common:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_ethereum_go_ethereum//core/types:go_default_library",

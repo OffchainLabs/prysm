@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -42,6 +43,9 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 		return pubsub.ValidationReject, p2p.ErrInvalidTopic
 	}
 
+	s.validateEnvelopeLock.Lock()
+	defer s.validateEnvelopeLock.Unlock()
+
 	m, err := s.decodePubsubMessage(msg)
 	if err != nil {
 		tracing.AnnotateError(span, err)
@@ -71,7 +75,7 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	}
 	root := env.BeaconBlockRoot()
 	// [IGNORE] The node has not seen another valid SignedExecutionPayloadEnvelope for this block root from this builder.
-	if s.hasSeenPayloadEnvelope(root, env.BuilderIndex()) {
+	if s.hasSeenPayloadEnvelope(root, env.BuilderIndex()) || s.cfg.chain.HasFullNode(root) {
 		return pubsub.ValidationIgnore, nil
 	}
 	finalized := s.cfg.chain.FinalizedCheckpt()
@@ -147,6 +151,26 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 			env.ParentBeaconBlockRoot(), block.Block().ParentRoot())
 	}
 
+	var pubkey [fieldparams.BLSPubkeyLength]byte
+	if env.BuilderIndex() == params.BeaconConfig().BuilderIndexSelfBuild {
+		pubkey, err = s.cfg.chain.HeadValidatorIndexToPublicKey(ctx, block.Block().ProposerIndex())
+		if err != nil {
+			return pubsub.ValidationIgnore, err
+		}
+	} else {
+		pk, err := s.cfg.chain.BuilderPubkey(root)
+		if err != nil {
+			return pubsub.ValidationIgnore, err
+		}
+		if pk == nil {
+			return pubsub.ValidationIgnore, errors.New("unknown builder pubkey")
+		}
+		pubkey = *pk
+	}
+	if pubkey == [fieldparams.BLSPubkeyLength]byte{} {
+		return pubsub.ValidationIgnore, errors.New("unknown pubkey")
+	}
+
 	// Reserve capacity before the payload is merkleized. Concurrent validations from the same
 	// peer count toward the limit even before their signatures fail.
 	budgetSlot, ok := s.reserveEnvelopeSigVerification(pid, envelopeSigKnownBlock)
@@ -155,16 +179,8 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 		return pubsub.ValidationIgnore, nil
 	}
 
-	// For self-build, the state is retrived via how we retrieve for beacon block optimization
-	// For builder index, the state is retrived via head state read only
-	st, err := s.blockVerifyingState(ctx, block)
-	if err != nil {
-		s.completeEnvelopeSigVerification(pid, envelopeSigKnownBlock, budgetSlot, false)
-		return pubsub.ValidationIgnore, err
-	}
-
 	// [REJECT] signed_execution_payload_envelope.signature is valid with respect to the builder's public key.
-	err = v.VerifySignature(ctx, st)
+	err = v.VerifySignatureWithPubkey(pubkey, s.cfg.clock.GenesisValidatorsRoot())
 	s.completeEnvelopeSigVerification(pid, envelopeSigKnownBlock, budgetSlot, err != nil)
 	if err != nil {
 		return pubsub.ValidationReject, err

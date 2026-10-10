@@ -212,7 +212,7 @@ func TestGetAltairDutiesV2_SyncCommitteeOK(t *testing.T) {
 		indices[i] = uint64(i)
 	}
 	require.NoError(t, bs.SetSlot(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(params.BeaconConfig().EpochsPerSyncCommitteePeriod)-1))
-	require.NoError(t, helpers.UpdateSyncCommitteeCache(bs))
+	require.NoError(t, helpers.UpdateSyncCommitteeCache(t.Context(), bs))
 
 	pubkeysAs48ByteType := make([][fieldparams.BLSPubkeyLength]byte, len(pubKeys))
 	for i, pk := range pubKeys {
@@ -317,7 +317,7 @@ func TestGetBellatrixDutiesV2_SyncCommitteeOK(t *testing.T) {
 		indices[i] = uint64(i)
 	}
 	require.NoError(t, bs.SetSlot(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(params.BeaconConfig().EpochsPerSyncCommitteePeriod)-1))
-	require.NoError(t, helpers.UpdateSyncCommitteeCache(bs))
+	require.NoError(t, helpers.UpdateSyncCommitteeCache(t.Context(), bs))
 
 	bs, err = execution.UpgradeToBellatrix(bs)
 	require.NoError(t, err)
@@ -416,7 +416,7 @@ func TestGetAltairDutiesV2_UnknownPubkey(t *testing.T) {
 	require.NoError(t, err, "Could not get signing root")
 
 	require.NoError(t, bs.SetSlot(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(params.BeaconConfig().EpochsPerSyncCommitteePeriod)-1))
-	require.NoError(t, helpers.UpdateSyncCommitteeCache(bs))
+	require.NoError(t, helpers.UpdateSyncCommitteeCache(t.Context(), bs))
 
 	slot := uint64(params.BeaconConfig().SlotsPerEpoch) * uint64(params.BeaconConfig().EpochsPerSyncCommitteePeriod) * params.BeaconConfig().SecondsPerSlot
 	chain := &mockChain.ChainService{

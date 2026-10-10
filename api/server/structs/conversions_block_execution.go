@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/internal/valid"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -994,9 +995,9 @@ func ExecutionPayloadGloasFromConsensus(payload *enginev1.ExecutionPayloadGloas)
 	if err != nil {
 		return nil, err
 	}
-	transactions := make([]string, len(payload.Transactions))
-	for i, tx := range payload.Transactions {
-		transactions[i] = hexutil.Encode(tx)
+	transactions := make([]string, valid.Len(payload.Transactions))
+	for i := range transactions {
+		transactions[i] = hexutil.Encode(payload.Transactions.Get(i))
 	}
 
 	return &ExecutionPayloadGloas{
@@ -1137,6 +1138,10 @@ func (e *ExecutionPayloadGloas) ToConsensus() (*enginev1.ExecutionPayloadGloas, 
 	if err != nil {
 		return nil, server.NewDecodeError(err, "SlotNumber")
 	}
+	txList, err := enginev1.NewProgressiveTransactionList(txs)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Transactions")
+	}
 	return &enginev1.ExecutionPayloadGloas{
 		ParentHash:      payloadParentHash,
 		FeeRecipient:    payloadFeeRecipient,
@@ -1151,7 +1156,7 @@ func (e *ExecutionPayloadGloas) ToConsensus() (*enginev1.ExecutionPayloadGloas, 
 		ExtraData:       payloadExtraData,
 		BaseFeePerGas:   payloadBaseFeePerGas,
 		BlockHash:       payloadBlockHash,
-		Transactions:    txs,
+		Transactions:    txList,
 		Withdrawals:     withdrawals,
 		BlobGasUsed:     payloadBlobGasUsed,
 		ExcessBlobGas:   payloadExcessBlobGas,
@@ -1249,9 +1254,8 @@ func (e *ExecutionRequestsGloas) ToConsensus() (*enginev1.ExecutionRequestsGloas
 		return nil, server.NewDecodeError(errNilValue, "ExecutionRequestsGloas")
 	}
 	var err error
-	if err = slice.VerifyMaxLength(e.Deposits, params.BeaconConfig().MaxDepositRequestsPerPayload); err != nil {
-		return nil, err
-	}
+	// Gloas has no MAX_DEPOSIT_REQUESTS_PER_PAYLOAD (consensus-specs #5436), so
+	// deposits are not length checked here.
 	depositRequests := make([]*enginev1.DepositRequest, len(e.Deposits))
 	for i, d := range e.Deposits {
 		depositRequests[i], err = d.ToConsensus()

@@ -28,4 +28,5 @@ type BlockAndCheckpoints struct {
 	JustifiedCheckpoint *ethpb.Checkpoint
 	FinalizedCheckpoint *ethpb.Checkpoint
 	HasPayload          bool
+	BuilderPubkey       *[fieldparams.BLSPubkeyLength]byte
 }
