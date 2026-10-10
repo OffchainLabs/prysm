@@ -13,9 +13,10 @@ var errMissingAvailabilityChecker = errors.Wrap(errUnrecoverable, "batch is miss
 var errUnsafeRange = errors.Wrap(errUnrecoverable, "invalid slice indices")
 
 type checkMultiplexer struct {
-	blobCheck    das.AvailabilityChecker
-	colCheck     das.AvailabilityChecker
-	currentNeeds das.CurrentNeeds
+	blobCheck         das.AvailabilityChecker
+	colCheck          das.AvailabilityChecker
+	currentNeeds      das.CurrentNeeds
+	emptyPayloadRoots map[[32]byte]bool
 }
 
 // Persist implements das.AvailabilityStore.
@@ -30,6 +31,7 @@ func newCheckMultiplexer(needs das.CurrentNeeds, b batch) *checkMultiplexer {
 	}
 	if b.columns != nil && b.columns.store != nil {
 		s.colCheck = b.columns.store
+		s.emptyPayloadRoots = b.columns.emptyPayloadRoots()
 	}
 
 	return s
@@ -86,6 +88,11 @@ func (m *checkMultiplexer) divideByChecker(blks []blocks.ROBlock) (daGroups, err
 			continue
 		}
 		if m.currentNeeds.Col.At(slot) {
+			// A Gloas block with an empty payload has no columns to check.
+			if m.emptyPayloadRoots[blk.Root()] {
+				continue
+			}
+
 			needs.cols = append(needs.cols, blk)
 			continue
 		}
