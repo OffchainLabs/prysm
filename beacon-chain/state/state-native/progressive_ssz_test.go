@@ -259,7 +259,7 @@ func progressiveRootFromScratch(t *testing.T, st *BeaconState) [32]byte {
 func newGloasStateForProgressiveSSZTests(t *testing.T) *BeaconState {
 	t.Helper()
 
-	st, err := NewUnsafe(gloasStateProtoForProgressiveSSZTests())
+	st, err := NewUnsafe(gloasContainerForProgressiveSSZTests())
 	require.NoError(t, err)
 
 	bs, ok := st.(*BeaconState)
@@ -271,7 +271,7 @@ func newGloasStateForProgressiveSSZTests(t *testing.T) *BeaconState {
 func newFuluStateForProgressiveSSZTests(t *testing.T) *BeaconState {
 	t.Helper()
 
-	g := gloasStateProtoForProgressiveSSZTests()
+	g := gloasContainerForProgressiveSSZTests()
 	st, err := NewUnsafe(&ethpb.BeaconStateFulu{
 		BlockRoots:                  g.BlockRoots,
 		StateRoots:                  g.StateRoots,
@@ -317,7 +317,7 @@ func newFuluStateForProgressiveSSZTests(t *testing.T) *BeaconState {
 	return bs
 }
 
-func gloasStateProtoForProgressiveSSZTests() *ethpb.BeaconStateGloas {
+func gloasContainerForProgressiveSSZTests() *ethpb.BeaconStateGloas {
 	pubkeys := make([][]byte, 512)
 	for i := range pubkeys {
 		pubkeys[i] = make([]byte, fieldparams.BLSPubkeyLength)

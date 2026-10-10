@@ -114,7 +114,7 @@ func TestProve_BeaconState(t *testing.T) {
 	require.NoError(t, st.SetSlot(primitives.Slot(42)))
 
 	sszObj, ok := st.ToContainerUnsafe().(query.SSZObject)
-	require.Equal(t, true, ok, "state proto does not implement query.SSZObject")
+	require.Equal(t, true, ok, "state container does not implement query.SSZObject")
 
 	tests := []string{
 		".slot",

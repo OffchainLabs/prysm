@@ -223,7 +223,7 @@ func TestSaveStatesEfficient_AllVersions(t *testing.T) {
 			savedSt, err := db.State(t.Context(), r)
 			require.NoError(t, err)
 
-			// Compare SSZ encodings rather than the proto structs because DeepSSZEqual
+			// Compare SSZ encodings rather than the state containers because DeepSSZEqual
 			// does not handle some Gloas primitive types (e.g. BuilderIndex).
 			stSSZ, err := st.MarshalSSZ()
 			require.NoError(t, err)

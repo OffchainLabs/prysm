@@ -726,7 +726,7 @@ func buildGloasStateForPaymentWeightTest(
 
 	execPayloadAvailability := make([]byte, cfg.SlotsPerHistoricalRoot/8)
 
-	stProto := &ethpb.BeaconStateGloas{
+	container := &ethpb.BeaconStateGloas{
 		Slot:                         stateSlot,
 		GenesisValidatorsRoot:        bytes.Repeat([]byte{0x33}, 32),
 		BlockRoots:                   blockRoots,
@@ -745,9 +745,9 @@ func buildGloasStateForPaymentWeightTest(
 		},
 	}
 
-	statePb, err := New(stProto)
+	st, err := New(container)
 	require.NoError(t, err)
-	return statePb.(*BeaconState)
+	return st.(*BeaconState)
 }
 
 func newGloasStateWithAvailability(t *testing.T, availability []byte) *BeaconState {

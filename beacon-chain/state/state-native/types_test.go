@@ -15,7 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
-func TestBeaconState_ProtoBeaconStateCompatibility(t *testing.T) {
+func TestBeaconState_ContainerCompatibility(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	ctx := t.Context()
 	genesis := setupGenesisState(t, 64)

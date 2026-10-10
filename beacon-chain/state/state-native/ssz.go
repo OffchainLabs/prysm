@@ -5,12 +5,12 @@ import (
 	"github.com/pkg/errors"
 )
 
-var errAssertionFailed = errors.New("failed to convert interface to proto state")
+var errAssertionFailed = errors.New("failed to convert interface to state container")
 
 func (b *BeaconState) MarshalSSZ() ([]byte, error) {
-	proto := b.ToContainer()
+	c := b.ToContainer()
 
-	s, ok := proto.(ssz.Marshaler)
+	s, ok := c.(ssz.Marshaler)
 	if !ok {
 		return nil, errAssertionFailed
 	}
