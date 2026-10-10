@@ -127,25 +127,6 @@ func (b *BeaconState) SetExecutionPayloadBid(h interfaces.ROExecutionPayloadBid)
 	return nil
 }
 
-// ClearBuilderPendingPayment clears a builder pending payment at the specified index.
-func (b *BeaconState) ClearBuilderPendingPayment(index primitives.Slot) error {
-	if b.version < version.Gloas {
-		return errNotSupported("ClearBuilderPendingPayment", b.version)
-	}
-
-	b.lock.Lock()
-	defer b.lock.Unlock()
-
-	if uint64(index) >= uint64(len(b.builderPendingPayments)) {
-		return fmt.Errorf("builder pending payments index %d out of range (len=%d)", index, len(b.builderPendingPayments))
-	}
-
-	b.builderPendingPayments[index] = emptyBuilderPendingPayment
-
-	b.markFieldAsDirty(types.BuilderPendingPayments)
-	return nil
-}
-
 // ClearBuilderPendingPaymentsForProposer empties every pending payment recorded for proposerIdx.
 func (b *BeaconState) ClearBuilderPendingPaymentsForProposer(proposerIdx primitives.ValidatorIndex) error {
 	if b.version < version.Gloas {
