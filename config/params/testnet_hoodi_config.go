@@ -46,6 +46,7 @@ func HoodiConfig() *BeaconChainConfig {
 	cfg.ElectraForkVersion = []byte{0x60, 0x00, 0x09, 0x10}
 	cfg.FuluForkEpoch = 50688 // 2025-10-28 18:53:12 UTC
 	cfg.FuluForkVersion = []byte{0x70, 0x00, 0x09, 0x10}
+	cfg.GloasForkEpoch = 132352 // 2026-10-26 17:42:48 UTC
 	cfg.GloasForkVersion = []byte{0x80, 0x00, 0x09, 0x10}
 	cfg.TerminalTotalDifficulty = "0"
 	cfg.DepositContractAddress = "0x00000000219ab540356cBB839Cbe05303d7705Fa"
@@ -57,6 +58,12 @@ func HoodiConfig() *BeaconChainConfig {
 		{
 			MaxBlobsPerBlock: 21,
 			Epoch:            54016, // 2025-11-12 13:52:24 UTC
+		},
+	}
+	cfg.GasLimitSchedule = []GasLimitScheduleEntry{
+		{
+			GasLimit: 200_000_000,
+			Epoch:    132352, // 2026-10-26 17:42:48 UTC
 		},
 	}
 	cfg.DefaultBuilderGasLimit = uint64(60000000)
