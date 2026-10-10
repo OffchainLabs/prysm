@@ -256,28 +256,34 @@ func (s *Server) GetForkChoiceV2(w http.ResponseWriter, r *http.Request) {
 		switch n.PayloadStatus {
 		case forkchoice2.PayloadStatusPending:
 			extra.Target = fmt.Sprintf("%#x", n.Target)
-			extra.JustifiedEpoch = fmt.Sprintf("%d", n.JustifiedEpoch)
-			extra.FinalizedEpoch = fmt.Sprintf("%d", n.FinalizedEpoch)
 			extra.UnrealizedJustifiedEpoch = fmt.Sprintf("%d", n.UnrealizedJustifiedEpoch)
 			extra.UnrealizedFinalizedEpoch = fmt.Sprintf("%d", n.UnrealizedFinalizedEpoch)
-			extra.PayloadAttesterCount = fmt.Sprintf("%d", n.PayloadAttesterCount)
-			extra.PayloadAvailabilityYesCount = fmt.Sprintf("%d", n.PayloadAvailabilityYesCount)
-			extra.PayloadDataAvailabilityYesCount = fmt.Sprintf("%d", n.PayloadDataAvailabilityYesCount)
 		case forkchoice2.PayloadStatusFull:
 			extra.GasLimit = fmt.Sprintf("%d", n.GasLimit)
 		}
+		var parentPayloadStatus *string
+		if n.ParentPayloadStatus != nil {
+			status := n.ParentPayloadStatus.String()
+			parentPayloadStatus = &status
+		}
 		nodes[i] = &structs.ForkChoiceNodeV2{
-			PayloadStatus:      n.PayloadStatus.String(),
-			Slot:               fmt.Sprintf("%d", n.Slot),
-			BlockRoot:          hexutil.Encode(n.BlockRoot),
-			ParentRoot:         hexutil.Encode(n.ParentRoot),
-			Weight:             fmt.Sprintf("%d", n.Weight),
-			Validity:           n.Validity.String(),
-			ExecutionBlockHash: hexutil.Encode(n.ExecutionBlockHash),
-			ExtraData:          extra,
+			Slot:                            fmt.Sprintf("%d", n.Slot),
+			BlockRoot:                       hexutil.Encode(n.BlockRoot),
+			PayloadStatus:                   n.PayloadStatus.String(),
+			ParentRoot:                      hexutil.Encode(n.ParentRoot),
+			ParentPayloadStatus:             parentPayloadStatus,
+			JustifiedCheckpoint:             structs.CheckpointFromConsensus(n.JustifiedCheckpoint),
+			FinalizedCheckpoint:             structs.CheckpointFromConsensus(n.FinalizedCheckpoint),
+			Weight:                          fmt.Sprintf("%d", n.Weight),
+			Validity:                        n.Validity.String(),
+			ExecutionBlockHash:              hexutil.Encode(n.ExecutionBlockHash),
+			PayloadAttesterCount:            fmt.Sprintf("%d", n.PayloadAttesterCount),
+			PayloadAvailabilityYesCount:     fmt.Sprintf("%d", n.PayloadAvailabilityYesCount),
+			PayloadDataAvailabilityYesCount: fmt.Sprintf("%d", n.PayloadDataAvailabilityYesCount),
+			ExtraData:                       extra,
 		}
 	}
-	resp := &structs.GetForkChoiceDumpV2Response{
+	resp := &structs.GetForkChoiceDumpV2Response{Data: &structs.ForkChoiceDumpV2{
 		JustifiedCheckpoint: structs.CheckpointFromConsensus(dump.JustifiedCheckpoint),
 		FinalizedCheckpoint: structs.CheckpointFromConsensus(dump.FinalizedCheckpoint),
 		ForkChoiceNodes:     nodes,
@@ -288,7 +294,7 @@ func (s *Server) GetForkChoiceV2(w http.ResponseWriter, r *http.Request) {
 			PreviousProposerBoostRoot:     hexutil.Encode(dump.PreviousProposerBoostRoot),
 			HeadRoot:                      hexutil.Encode(dump.HeadRoot),
 		},
-	}
+	}}
 	httputil.WriteJson(w, resp)
 }
 
