@@ -84,12 +84,12 @@ func ApplyParentExecutionPayload(
 		return err
 	}
 
-	if err := processExecutionRequests(ctx, st, reqs); err != nil {
-		return errors.Wrap(err, "could not process parent execution requests")
-	}
-
 	if err := st.QueueBuilderPaymentForSlot(parentSlot); err != nil {
 		return errors.Wrap(err, "could not queue builder payment")
+	}
+
+	if err := processExecutionRequests(ctx, st, reqs); err != nil {
+		return errors.Wrap(err, "could not process parent execution requests")
 	}
 
 	if err := st.SetExecutionPayloadAvailability(parentSlot, true); err != nil {
