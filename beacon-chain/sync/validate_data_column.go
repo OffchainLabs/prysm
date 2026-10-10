@@ -12,7 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/container/slice"
@@ -85,7 +84,8 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	}
 
 	var verifiedRODataColumn blocks.VerifiedRODataColumn
-	if slots.ToEpoch(roDataColumn.Slot()) >= params.BeaconConfig().GloasForkEpoch {
+	// The previous fork's topics stay subscribed for an epoch, so the claimed slot cannot pick the verifier.
+	if roDataColumn.IsGloas() {
 		verifiedRODataColumn, err = s.validateDataColumnGloas(ctx, pid, msg, roDataColumn, dataColumnSidecarSubTopic)
 		if err != nil {
 			return validationResultFromError(err), baseValidationErr(err)

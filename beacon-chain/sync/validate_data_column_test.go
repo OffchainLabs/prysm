@@ -10,6 +10,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
@@ -221,6 +222,21 @@ func TestValidateDataColumn(t *testing.T) {
 		result, err := service.validateDataColumn(ctx, "aDummyPID", message)
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, result)
+	})
+
+	t.Run("fulu sidecar claiming gloas slot takes fulu path", func(t *testing.T) {
+		gloasCfg := params.BeaconConfig().Copy()
+		gloasCfg.GloasForkEpoch = 1
+		params.OverrideBeaconConfig(gloasCfg)
+		t.Cleanup(func() { params.OverrideBeaconConfig(cfg) })
+
+		gloasSlotMsg, ok := proto.Clone(dataColumnSidecarMsg).(*ethpb.DataColumnSidecar)
+		require.Equal(t, true, ok)
+		gloasSlotMsg.SignedBlockHeader.Header.Slot = params.BeaconConfig().SlotsPerEpoch
+		service, message := serviceAndMessage(t, testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{ErrValidProposerSignature: genericError}), gloasSlotMsg)
+		result, err := service.validateDataColumn(ctx, "aDummyPID", message)
+		require.ErrorIs(t, err, genericError)
+		require.Equal(t, pubsub.ValidationReject, result)
 	})
 }
 
