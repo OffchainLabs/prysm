@@ -329,7 +329,7 @@ func (s *Service) shouldBuildOnFullLocked(root [32]byte, proposingSlot primitive
 		return true, ""
 	}
 	if s.cfg.ForkChoiceStore.PTCVotedLate(root) {
-		return false, "ptc voted payload missing"
+		return false, "ptc voted against payload"
 	}
 	if s.cfg.ForkChoiceStore.PTCVotedEarlyAndAvailable(root) {
 		return true, ""
