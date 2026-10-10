@@ -54,7 +54,7 @@ func TestService_getHeadStateAndBlock(t *testing.T) {
 
 	gotState, err := service.cfg.BeaconDB.State(t.Context(), r)
 	require.NoError(t, err)
-	require.DeepEqual(t, st.ToProto(), gotState.ToProto())
+	require.DeepEqual(t, st.ToContainer(), gotState.ToContainer())
 
 	gotBlk, err := service.cfg.BeaconDB.Block(t.Context(), r)
 	require.NoError(t, err)

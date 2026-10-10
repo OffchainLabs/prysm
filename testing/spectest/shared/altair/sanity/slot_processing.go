@@ -53,7 +53,7 @@ func RunSlotProcessingTests(t *testing.T, config string) {
 			postState, err := transition.ProcessSlots(context.Background(), beaconState, beaconState.Slot().Add(slotsCount))
 			require.NoError(t, err)
 
-			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateAltair](postState.ToProto())
+			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateAltair](postState.ToContainer())
 			require.NoError(t, err)
 			require.DeepSSZEqual(t, postBeaconState, pbState, "Post state does not match expected. Diff between states")
 		})

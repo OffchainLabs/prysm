@@ -418,7 +418,7 @@ func reportEpochMetrics(ctx context.Context, postState, headState state.BeaconSt
 			return err
 		}
 	} else {
-		return errors.Errorf("invalid state type provided: %T", headState.ToProtoUnsafe())
+		return errors.Errorf("invalid state type provided: %T", headState.ToContainerUnsafe())
 	}
 
 	prevEpochActiveBalances.Set(float64(b.ActivePrevEpoch))

@@ -20,7 +20,7 @@ func TestSkipSlotCache_OK(t *testing.T) {
 	transition.SkipSlotCache.Enable()
 	defer transition.SkipSlotCache.Disable()
 	bState, privs := util.DeterministicGenesisState(t, params.MinimalSpecConfig().MinGenesisActiveValidatorCount)
-	pbState, err := state_native.ContainerFrom[*ethpb.BeaconState](bState.ToProto())
+	pbState, err := state_native.ContainerFrom[*ethpb.BeaconState](bState.ToContainer())
 	require.NoError(t, err)
 	originalState, err := state_native.New(pbState)
 	require.NoError(t, err)
@@ -42,12 +42,12 @@ func TestSkipSlotCache_OK(t *testing.T) {
 	bState, err = transition.ExecuteStateTransition(t.Context(), bState, wsb)
 	require.NoError(t, err, "Could not process state transition")
 
-	assert.DeepEqual(t, originalState.ToProto(), bState.ToProto(), "Skipped slots cache leads to different states")
+	assert.DeepEqual(t, originalState.ToContainer(), bState.ToContainer(), "Skipped slots cache leads to different states")
 }
 
 func TestSkipSlotCache_ConcurrentMixup(t *testing.T) {
 	bState, privs := util.DeterministicGenesisState(t, params.MinimalSpecConfig().MinGenesisActiveValidatorCount)
-	pbState, err := state_native.ContainerFrom[*ethpb.BeaconState](bState.ToProto())
+	pbState, err := state_native.ContainerFrom[*ethpb.BeaconState](bState.ToContainer())
 	require.NoError(t, err)
 	originalState, err := state_native.New(pbState)
 	require.NoError(t, err)

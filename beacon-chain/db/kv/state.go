@@ -250,7 +250,7 @@ func (s *Store) saveStatesEfficientInternal(ctx context.Context, tx *bolt.Tx, bl
 		// validator entries.To bring the gap closer, we empty the validators
 		// just before Put() and repopulate that state with original validators.
 		// look at issue https://github.com/prysmaticlabs/prysm/issues/9262.
-		switch rawType := states[i].ToProtoUnsafe().(type) {
+		switch rawType := states[i].ToContainerUnsafe().(type) {
 		case *ethpb.BeaconState:
 			if err := s.processPhase0(ctx, rawType, rt[:], bucket, valIdxBkt, validatorKeys[i]); err != nil {
 				return err
@@ -711,7 +711,7 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 
 // marshal versioned state from struct type down to bytes.
 func marshalState(st state.ReadOnlyBeaconState) ([]byte, error) {
-	pb, ok := st.ToProtoUnsafe().(ssz.Marshaler)
+	pb, ok := st.ToContainerUnsafe().(ssz.Marshaler)
 	if !ok {
 		return nil, errors.New("non valid inner state")
 	}

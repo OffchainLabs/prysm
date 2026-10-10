@@ -62,7 +62,7 @@ func TestMigrateToCold_HappyPath(t *testing.T) {
 
 	gotState, err := service.beaconDB.State(ctx, fRoot)
 	require.NoError(t, err)
-	assert.DeepSSZEqual(t, beaconState.ToProtoUnsafe(), gotState.ToProtoUnsafe(), "Did not save state")
+	assert.DeepSSZEqual(t, beaconState.ToContainerUnsafe(), gotState.ToContainerUnsafe(), "Did not save state")
 	gotRoot := service.beaconDB.ArchivedPointRoot(ctx, stateSlot/service.slotsPerArchivedPoint)
 	assert.Equal(t, fRoot, gotRoot, "Did not save archived root")
 	lastIndex, err := service.beaconDB.LastArchivedSlot(ctx)
@@ -573,7 +573,7 @@ func TestMigrateToColdHdiff_BoundaryCacheMiss_UseTargetSlotRoot(t *testing.T) {
 	// State by the slot-96 root should remain reconstructible after migration.
 	got96, err := beaconDB.State(ctx, r96)
 	require.NoError(t, err)
-	assert.DeepSSZEqual(t, s96.ToProtoUnsafe(), got96.ToProtoUnsafe(), "slot 96 state mismatch")
+	assert.DeepSSZEqual(t, s96.ToContainerUnsafe(), got96.ToContainerUnsafe(), "slot 96 state mismatch")
 }
 
 // TestMigrateToColdHdiff_NoOpWhenFinalizedSlotNotAdvanced verifies that

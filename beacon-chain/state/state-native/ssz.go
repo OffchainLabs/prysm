@@ -8,7 +8,7 @@ import (
 var errAssertionFailed = errors.New("failed to convert interface to proto state")
 
 func (b *BeaconState) MarshalSSZ() ([]byte, error) {
-	proto := b.ToProto()
+	proto := b.ToContainer()
 
 	s, ok := proto.(ssz.Marshaler)
 	if !ok {

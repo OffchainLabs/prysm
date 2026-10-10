@@ -57,7 +57,7 @@ func RunEpochOperationTest(
 			t.Fatalf("Failed to unmarshal: %v", err)
 		}
 
-		pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateBellatrix](beaconState.ToProtoUnsafe())
+		pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateBellatrix](beaconState.ToContainerUnsafe())
 		require.NoError(t, err)
 		require.DeepSSZEqual(t, pbState, postBeaconState, "Post state does not match expected")
 	} else {
