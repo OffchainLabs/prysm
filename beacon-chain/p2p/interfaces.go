@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -35,6 +36,9 @@ type (
 		PeerManager
 		ConnectionHandler
 		PeersProvider
+		PeerScoringProvider
+		PeerGreyLister
+		GossipRejectionsProvider
 		MetadataProvider
 		CustodyManager
 	}
@@ -121,6 +125,22 @@ type (
 	// PeersProvider abstracts obtaining our current list of known peers status.
 	PeersProvider interface {
 		Peers() *peers.Status
+	}
+
+	// PeerScoringProvider abstracts access to peer scoring.
+	PeerScoringProvider interface {
+		PeerScoring() *peerscoring.Scorer
+	}
+
+	// PeerGreyLister exposes the composite grey-list verdict for a peer.
+	PeerGreyLister interface {
+		IsPeerGreyListed(pid peer.ID) error
+	}
+
+	// GossipRejectionsProvider abstracts access to the store of gossip messages our
+	// validators rejected.
+	GossipRejectionsProvider interface {
+		GossipRejections() *peerscoring.GossipRejectionsStore
 	}
 
 	// MetadataProvider returns the metadata related information for the local peer.

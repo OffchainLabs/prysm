@@ -1,0 +1,560 @@
+package peerscoring
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/sirupsen/logrus"
+)
+
+var (
+	// ErrPeerUnknown is returned when the scorer holds no record for a peer.
+	ErrPeerUnknown = errors.New("peer unknown")
+	// ErrNoPeerStatus is returned when a known peer has not completed a status exchange yet.
+	ErrNoPeerStatus = errors.New("no chain status for peer")
+	// ErrPeerGreyListed reports that a peer is grey-listed and must be refused.
+	ErrPeerGreyListed = errors.New("peer is grey-listed")
+)
+
+// StrikeSource identifies the call site that recorded a strike.
+type StrikeSource int
+
+const (
+	Unknown StrikeSource = iota
+	// SourceDial reports failures to reach a peer: outbound dials and RPC request streams that fail to open or send.
+	SourceDial
+	// SourceRPCStatus reports faults in the status RPC exchange, inbound or outbound.
+	SourceRPCStatus
+	// SourceRPCPing reports faults in the ping RPC exchange.
+	SourceRPCPing
+	// SourceRPCMetadata reports faults in the metadata RPC exchange.
+	SourceRPCMetadata
+	// SourceRPCRequest reports malformed or excessive inbound RPC requests.
+	SourceRPCRequest
+	// SourceRPCResponse reports invalid or unreadable outbound RPC responses served to us.
+	SourceRPCResponse
+	// SourceRateLimit reports rate-limit violations.
+	SourceRateLimit
+	// SourceGossip reports invalid gossip messages attributed during processing.
+	SourceGossip
+	// SourceSync reports invalid data discovered by initial sync pipelines.
+	SourceSync
+	// SourceBackfill reports invalid data discovered by backfill.
+	SourceBackfill
+	// SourceDAS reports invalid data column sidecars pinpointed by DAS verification.
+	SourceDAS
+)
+
+// String returns the source's log-friendly name.
+func (s StrikeSource) String() string {
+	switch s {
+	case SourceDial:
+		return "dial"
+	case SourceRPCStatus:
+		return "rpc-status"
+	case SourceRPCPing:
+		return "rpc-ping"
+	case SourceRPCMetadata:
+		return "rpc-metadata"
+	case SourceRPCRequest:
+		return "rpc-request"
+	case SourceRPCResponse:
+		return "rpc-response"
+	case SourceRateLimit:
+		return "rate-limit"
+	case SourceGossip:
+		return "gossip"
+	case SourceSync:
+		return "sync"
+	case SourceBackfill:
+		return "backfill"
+	case SourceDAS:
+		return "das"
+	default:
+		return "unknown"
+	}
+}
+
+// Strike is a single recorded misbehaviour, kept with its origin for observability.
+type Strike struct {
+	Source StrikeSource
+	Reason string
+	at     time.Time
+}
+
+// RpcStatus is a peer's last status exchange together with our validation verdict on it.
+type RpcStatus struct {
+	// chainState is the last advertised view that passed validation.
+	chainState *pb.StatusV2
+	// lastUpdated is when chainState was stored; a rejected exchange does not advance it.
+	lastUpdated time.Time
+	// validationError is the verdict on the most recent exchange.
+	validationError error
+	// verdictAt is when the most recent exchange was recorded.
+	verdictAt time.Time
+}
+
+// PeerScoringInfo holds all per-peer state the scorers judge a peer by.
+type PeerScoringInfo struct {
+	// strikeCount is the standing strike count: incremented per strike, decremented by decay.
+	strikeCount int
+	// strikes is the most recent strike history, capped at strikeHistorySize.
+	strikes []Strike
+
+	rpcStatus *RpcStatus
+
+	gossipScore      float64
+	behaviourPenalty float64
+	topicScores      map[string]*pb.TopicScoreSnapshot
+
+	// agent outlives libp2p's peerstore, which forgets a peer's agent shortly after disconnection.
+	agent string
+}
+
+// Defaults mirror the production wiring of the legacy scorers service.
+const (
+	defaultDecayInterval           = time.Hour
+	defaultStrikeGreyListThreshold = 5
+	// defaultGossipGreyListThreshold mirrors the PeerScoreThresholds.GraylistThreshold prysm hands
+	// to gossipsub (gossip_scoring_params.go); pubsub exports no constant for it, so it is restated here.
+	defaultGossipGreyListThreshold = -16000
+	// defaultStrikeHistorySize caps how many recent strikes are retained per peer.
+	defaultStrikeHistorySize = 25
+	// defaultStatusGreyListTTL bounds how long a terminal status verdict greylists a peer.
+	// A refused peer can never re-exchange status to clear the verdict, so without an expiry
+	// every wrong-network peer would be retained forever; it mirrors the
+	// GoodbyeCodeWrongNetwork dial backoff (sync/rpc_goodbye.go).
+	defaultStatusGreyListTTL = 24 * time.Hour
+	// defaultMemoryUsageInterval is how often the scoring state's memory is measured and logged.
+	defaultMemoryUsageInterval = 15 * time.Minute
+)
+
+// maxStandingStrikesFactor caps standing strikes at this multiple of the grey-list threshold, so
+// strikes landing after a peer is grey-listed extend its grey-listing (and retention) by a bounded time.
+const maxStandingStrikesFactor = 5
+
+// Option configures a Scorer.
+type Option func(*Scorer)
+
+// WithGossipGreyListThreshold sets the gossip score below which a peer is greylisted.
+func WithGossipGreyListThreshold(threshold int) Option {
+	return func(s *Scorer) {
+		s.params.gossipGreyListThreshold = threshold
+	}
+}
+
+// WithStrikeGreyListThreshold sets how many strikes greylist a peer.
+func WithStrikeGreyListThreshold(threshold int) Option {
+	return func(s *Scorer) {
+		s.params.strikeGreyListThreshold = threshold
+	}
+}
+
+// WithDecayInterval sets how often one strike per peer is forgiven.
+func WithDecayInterval(decayInterval time.Duration) Option {
+	return func(s *Scorer) {
+		s.params.decayInterval = decayInterval
+	}
+}
+
+// WithStrikeHistorySize sets how many recent strikes are retained per peer.
+func WithStrikeHistorySize(n int) Option {
+	return func(s *Scorer) {
+		s.params.strikeHistorySize = n
+	}
+}
+
+// WithStatusGreyListTTL sets how long a terminal status verdict greylists a peer.
+func WithStatusGreyListTTL(ttl time.Duration) Option {
+	return func(s *Scorer) {
+		s.params.statusGreyListTTL = ttl
+	}
+}
+
+// WithMemoryUsageInterval sets how often TrackMemoryUsage measures the scoring state.
+func WithMemoryUsageInterval(interval time.Duration) Option {
+	return func(s *Scorer) {
+		s.params.memoryUsageInterval = interval
+	}
+}
+
+type scoringParams struct {
+	decayInterval           time.Duration
+	strikeGreyListThreshold int
+	strikeHistorySize       int
+	gossipGreyListThreshold int
+	statusGreyListTTL       time.Duration
+	memoryUsageInterval     time.Duration
+}
+
+// maxStandingStrikes is the cap on a peer's standing strike count.
+func (p *scoringParams) maxStandingStrikes() int {
+	return maxStandingStrikesFactor * p.strikeGreyListThreshold
+}
+
+// Scorer aggregates per-aspect grey-listers into a composite greylist verdict.
+type Scorer struct {
+	params      *scoringParams
+	greyListers []GreyLister
+
+	mu                   sync.RWMutex
+	ourHeadSlot          primitives.Slot
+	highestKnownHeadSlot primitives.Slot
+	info                 map[peer.ID]*PeerScoringInfo
+
+	// memoryUsage is the latest TrackMemoryUsage measurement; nil before the first one.
+	memoryUsage atomic.Pointer[MemoryUsage]
+}
+
+// NewScorer creates a Scorer with production defaults, overridable via opts.
+func NewScorer(opts ...Option) *Scorer {
+	s := &Scorer{
+		params: &scoringParams{
+			decayInterval:           defaultDecayInterval,
+			strikeGreyListThreshold: defaultStrikeGreyListThreshold,
+			strikeHistorySize:       defaultStrikeHistorySize,
+			gossipGreyListThreshold: defaultGossipGreyListThreshold,
+			statusGreyListTTL:       defaultStatusGreyListTTL,
+			memoryUsageInterval:     defaultMemoryUsageInterval,
+		},
+		greyListers: []GreyLister{strikesScorer{}, rpcStatusScorer{}, gossipScorer{}},
+		info:        make(map[peer.ID]*PeerScoringInfo),
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+// RecordStrike adds one strike against the peer, tagged with its source and reason,
+// logs the downscore event, and returns the standing strike count, capped at maxStandingStrikes.
+func (s *Scorer) RecordStrike(pid peer.ID, source StrikeSource, reason string) int {
+	if pid == "" {
+		return 0
+	}
+	strikesTotal.WithLabelValues(source.String()).Inc()
+	s.mu.Lock()
+	pi := s.getPeerScoringInfo(pid)
+	pi.strikeCount = min(pi.strikeCount+1, s.params.maxStandingStrikes())
+	pi.strikes = append(pi.strikes, Strike{Source: source, Reason: reason, at: time.Now()})
+	if excess := len(pi.strikes) - s.params.strikeHistorySize; excess > 0 {
+		pi.strikes = append(pi.strikes[:0], pi.strikes[excess:]...)
+	}
+	count := pi.strikeCount
+	s.mu.Unlock()
+
+	log.WithFields(logrus.Fields{"peerID": pid, "source": source, "reason": reason, "strikes": count}).Debug("Downscore peer")
+	return count
+}
+
+// StrikeCount returns the peer's standing (un-decayed) strike count.
+func (s *Scorer) StrikeCount(pid peer.ID) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	pi, ok := s.info[pid]
+	if !ok {
+		return 0
+	}
+	return pi.strikeCount
+}
+
+// RemovePeers drops all scoring state for the given peers. Grey-listed peers are retained:
+// the scorer is the node's only memory of who misbehaved.
+func (s *Scorer) RemovePeers(pids []peer.ID) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, pid := range pids {
+		if si, ok := s.snapshot(pid); ok && s.isGreyListed(pid, si) == nil {
+			delete(s.info, pid)
+		}
+	}
+}
+
+// SetPeerStatus stores the peer's latest status exchange and our validation verdict on it.
+// A status that failed validation only records the verdict: the last chain state that
+// passed validation is kept so consumers never read a view we already rejected.
+func (s *Scorer) SetPeerStatus(pid peer.ID, chainState *pb.StatusV2, validationError error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	pi := s.getPeerScoringInfo(pid)
+	now := time.Now()
+	status := &RpcStatus{validationError: validationError, verdictAt: now}
+	if validationError != nil {
+		if pi.rpcStatus != nil {
+			status.chainState = pi.rpcStatus.chainState
+			status.lastUpdated = pi.rpcStatus.lastUpdated
+		}
+		pi.rpcStatus = status
+		return
+	}
+	status.chainState = chainState
+	status.lastUpdated = now
+	pi.rpcStatus = status
+	if chainState != nil && chainState.HeadSlot > s.highestKnownHeadSlot {
+		s.highestKnownHeadSlot = chainState.HeadSlot
+	}
+}
+
+// PeerStatus returns the chain status the peer advertised in its last status exchange.
+func (s *Scorer) PeerStatus(pid peer.ID) (*pb.StatusV2, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	pi, ok := s.info[pid]
+	if !ok {
+		return nil, ErrPeerUnknown
+	}
+	if pi.rpcStatus == nil || pi.rpcStatus.chainState == nil {
+		return nil, ErrNoPeerStatus
+	}
+	return pi.rpcStatus.chainState, nil
+}
+
+// ChainStateLastUpdated returns when the peer's chain state last passed validation; zero if never.
+func (s *Scorer) ChainStateLastUpdated(pid peer.ID) time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	pi, ok := s.info[pid]
+	if !ok || pi.rpcStatus == nil {
+		return time.Time{}
+	}
+	return pi.rpcStatus.lastUpdated
+}
+
+// ValidationError returns the validation verdict stored with the peer's last status, if any.
+func (s *Scorer) ValidationError(pid peer.ID) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	pi, ok := s.info[pid]
+	if !ok || pi.rpcStatus == nil {
+		return nil
+	}
+	return pi.rpcStatus.validationError
+}
+
+// SetGossipScore mirrors the peer's latest libp2p gossip score, behaviour penalty and topic snapshots.
+func (s *Scorer) SetGossipScore(pid peer.ID, gScore, bPenalty float64, topicScores map[string]*pb.TopicScoreSnapshot) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	pi := s.getPeerScoringInfo(pid)
+	pi.gossipScore = gScore
+	pi.behaviourPenalty = bPenalty
+	pi.topicScores = topicScores
+}
+
+// SetAgent records the peer's agent string; an empty agent keeps the recorded one.
+func (s *Scorer) SetAgent(pid peer.ID, agent string) {
+	if pid == "" || agent == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	pi := s.getPeerScoringInfo(pid)
+	pi.agent = agent
+}
+
+// GossipScoreUpdate carries one peer's snapshot from the libp2p score inspector.
+type GossipScoreUpdate struct {
+	Score            float64
+	BehaviourPenalty float64
+	TopicScores      map[string]*pb.TopicScoreSnapshot
+}
+
+// ReconcileGossipScores makes the gossip mirror match a full inspector report: reported peers
+// are updated; peers absent from it were purged by libp2p (its retention expired), so their
+// gossip state is cleared — lifting any gossip grey-listing — and entries left with no other
+// scoring state are dropped.
+func (s *Scorer) ReconcileGossipScores(updates map[peer.ID]GossipScoreUpdate) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for pid, u := range updates {
+		pi := s.getPeerScoringInfo(pid)
+		pi.gossipScore = u.Score
+		pi.behaviourPenalty = u.BehaviourPenalty
+		pi.topicScores = u.TopicScores
+	}
+	for pid, pi := range s.info {
+		if _, ok := updates[pid]; ok {
+			continue
+		}
+		pi.gossipScore = 0
+		pi.behaviourPenalty = 0
+		pi.topicScores = nil
+		if pi.strikeCount == 0 && len(pi.strikes) == 0 && pi.rpcStatus == nil {
+			delete(s.info, pid)
+		}
+	}
+}
+
+// GossipData returns the mirrored gossip score, behaviour penalty and per-topic snapshots.
+func (s *Scorer) GossipData(pid peer.ID) (float64, float64, map[string]*pb.TopicScoreSnapshot) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	pi, ok := s.info[pid]
+	if !ok {
+		return 0, 0, nil
+	}
+	return pi.gossipScore, pi.behaviourPenalty, pi.topicScores
+}
+
+// SetHeadSlot updates our own head slot, the baseline for status scoring.
+func (s *Scorer) SetHeadSlot(slot primitives.Slot) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.ourHeadSlot = slot
+}
+
+// HighestHeadSlot returns the highest head slot any tracked peer has advertised in a status that passed validation.
+func (s *Scorer) HighestHeadSlot() primitives.Slot {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var highest primitives.Slot
+	for _, pi := range s.info {
+		if pi.rpcStatus != nil && pi.rpcStatus.validationError == nil && pi.rpcStatus.chainState != nil && pi.rpcStatus.chainState.HeadSlot > highest {
+			highest = pi.rpcStatus.chainState.HeadSlot
+		}
+	}
+	return highest
+}
+
+// IsPeerGreyListed returns nil when no registered scorer greylists the peer, or an error
+// wrapping ErrPeerGreyListed describing which aspect greylists it and why.
+func (s *Scorer) IsPeerGreyListed(pid peer.ID) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	si, ok := s.snapshot(pid)
+	if !ok {
+		return nil
+	}
+	return s.isGreyListed(pid, si)
+}
+
+// TimeToWhiteListing estimates how long until the scoring aspects stop grey-listing the peer;
+// 0 when none does or when recovery is not time based.
+func (s *Scorer) TimeToWhiteListing(pid peer.ID) time.Duration {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	si, ok := s.snapshot(pid)
+	if !ok {
+		return 0
+	}
+	var longest time.Duration
+	for _, greyLister := range s.greyListers {
+		if d := greyLister.TimeToWhiteListing(pid, si); d > longest {
+			longest = d
+		}
+	}
+	return longest
+}
+
+// GreyListedPeers returns every peer currently grey-listed by any scorer.
+func (s *Scorer) GreyListedPeers() []peer.ID {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	greyListed := make([]peer.ID, 0)
+	for pid := range s.info {
+		if si, ok := s.snapshot(pid); ok && s.isGreyListed(pid, si) != nil {
+			greyListed = append(greyListed, pid)
+		}
+	}
+	return greyListed
+}
+
+// Aspect names for per-aspect grey-list verdicts in the debug API.
+// AspectBadIP is the IP-colocation refusal source, judged by the p2p service outside the scorer.
+const (
+	AspectStrikes    = "strikes"
+	AspectPeerStatus = "peer_status"
+	AspectGossip     = "gossip"
+	AspectBadIP      = "bad_ip"
+)
+
+// TrackedPeerCount returns how many peers the scorer currently holds scoring state for.
+func (s *Scorer) TrackedPeerCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return len(s.info)
+}
+
+// isGreyListed returns the first grey-list verdict, or nil; callers must hold s.mu.
+func (s *Scorer) isGreyListed(pid peer.ID, si *scoringInfo) error {
+	for _, greyLister := range s.greyListers {
+		if err := greyLister.IsPeerGreyListed(pid, si); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// verdictsByAspect returns every firing grey-lister's verdict keyed by aspect, empty if
+// none; callers must hold s.mu.
+func (s *Scorer) verdictsByAspect(pid peer.ID, si *scoringInfo) map[string]error {
+	verdicts := make(map[string]error)
+	for _, greyLister := range s.greyListers {
+		if err := greyLister.IsPeerGreyListed(pid, si); err != nil {
+			verdicts[greyLister.Aspect()] = err
+		}
+	}
+	return verdicts
+}
+
+// snapshot bundles a known peer's state for the grey-listers; callers must hold s.mu.
+func (s *Scorer) snapshot(pid peer.ID) (*scoringInfo, bool) {
+	pi, ok := s.info[pid]
+	if !ok {
+		return nil, false
+	}
+	return &scoringInfo{params: s.params, peerInfo: pi}, true
+}
+
+// getPeerScoringInfo returns the peer's info, creating it if absent; callers must hold s.mu.
+func (s *Scorer) getPeerScoringInfo(pid peer.ID) *PeerScoringInfo {
+	pi, ok := s.info[pid]
+	if !ok {
+		pi = &PeerScoringInfo{}
+		s.info[pid] = pi
+	}
+	return pi
+}
+
+// Start runs the strike decay loop until ctx is canceled.
+func (s *Scorer) Start(ctx context.Context) {
+	ticker := time.NewTicker(s.params.decayInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			s.mu.Lock()
+			for _, pi := range s.info {
+				if pi.strikeCount > 0 {
+					pi.strikeCount--
+				}
+			}
+			s.mu.Unlock()
+		case <-ctx.Done():
+			return
+		}
+	}
+}

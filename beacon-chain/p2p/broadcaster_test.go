@@ -18,7 +18,7 @@ import (
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -171,9 +171,8 @@ func TestService_BroadcastAttestation(t *testing.T) {
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
-		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
-			ScorerParams: &scorers.Config{},
-		}),
+		peerScorer:            peerscoring.NewScorer(),
+		peers:                 peers.NewStatus(t.Context(), &peers.StatusConfig{}),
 	}
 
 	msg := util.HydrateAttestation(&ethpb.Attestation{AggregationBits: bitfield.NewBitlist(7)})
@@ -339,9 +338,8 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
-		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
-			ScorerParams: &scorers.Config{},
-		}),
+		peerScorer:            peerscoring.NewScorer(),
+		peers:                 peers.NewStatus(t.Context(), &peers.StatusConfig{}),
 	}
 
 	p2 := &Service{
@@ -355,9 +353,8 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
-		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
-			ScorerParams: &scorers.Config{},
-		}),
+		peerScorer:            peerscoring.NewScorer(),
+		peers:                 peers.NewStatus(t.Context(), &peers.StatusConfig{}),
 	}
 	go p.listenForNewNodes()
 
@@ -424,9 +421,8 @@ func TestService_BroadcastSyncCommittee(t *testing.T) {
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
-		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
-			ScorerParams: &scorers.Config{},
-		}),
+		peerScorer:            peerscoring.NewScorer(),
+		peers:                 peers.NewStatus(t.Context(), &peers.StatusConfig{}),
 	}
 
 	msg := util.HydrateSyncCommittee(&ethpb.SyncCommitteeMessage{})
@@ -490,9 +486,8 @@ func TestService_BroadcastBlob(t *testing.T) {
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
-		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
-			ScorerParams: &scorers.Config{},
-		}),
+		peerScorer:            peerscoring.NewScorer(),
+		peers:                 peers.NewStatus(t.Context(), &peers.StatusConfig{}),
 	}
 
 	header := util.HydrateSignedBeaconHeader(&ethpb.SignedBeaconBlockHeader{})
@@ -569,9 +564,8 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
-		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
-			ScorerParams: &scorers.Config{},
-		}),
+		peerScorer:            peerscoring.NewScorer(),
+		peers:                 peers.NewStatus(t.Context(), &peers.StatusConfig{}),
 	}
 
 	msg, err := util.MockOptimisticUpdate()
@@ -646,9 +640,8 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
-		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
-			ScorerParams: &scorers.Config{},
-		}),
+		peerScorer:            peerscoring.NewScorer(),
+		peers:                 peers.NewStatus(t.Context(), &peers.StatusConfig{}),
 	}
 
 	msg, err := util.MockFinalityUpdate()
@@ -750,7 +743,8 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
-		peers:                 peers.NewStatus(ctx, &peers.StatusConfig{ScorerParams: &scorers.Config{}}),
+		peerScorer:            peerscoring.NewScorer(),
+		peers:                 peers.NewStatus(ctx, &peers.StatusConfig{}),
 		custodyInfo:           &custodyInfo{},
 		custodyInfoSet:        custodyInfoSet,
 	}
@@ -871,7 +865,8 @@ func TestService_BroadcastDataColumnPartialWithPeers(t *testing.T) {
 		genesisValidatorsRoot:    bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:              make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:          sync.Mutex{},
-		peers:                    peers.NewStatus(ctx, &peers.StatusConfig{ScorerParams: &scorers.Config{}}),
+		peerScorer:               peerscoring.NewScorer(),
+		peers:                    peers.NewStatus(ctx, &peers.StatusConfig{}),
 		partialColumnBroadcaster: fake,
 	}
 
@@ -924,7 +919,8 @@ func TestService_BroadcastDataColumnPartialWithoutPeers(t *testing.T) {
 		genesisValidatorsRoot:    bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:              make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:          sync.Mutex{},
-		peers:                    peers.NewStatus(ctx, &peers.StatusConfig{ScorerParams: &scorers.Config{}}),
+		peerScorer:               peerscoring.NewScorer(),
+		peers:                    peers.NewStatus(ctx, &peers.StatusConfig{}),
 		partialColumnBroadcaster: fake,
 		// dv5Listener is nil, so FindAndDialPeersWithSubnets returns immediately without discovery.
 	}
@@ -1065,7 +1061,8 @@ func TestService_BroadcastDataColumnRoundRobin(t *testing.T) {
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
-		peers:                 peers.NewStatus(ctx, &peers.StatusConfig{ScorerParams: &scorers.Config{}}),
+		peerScorer:            peerscoring.NewScorer(),
+		peers:                 peers.NewStatus(ctx, &peers.StatusConfig{}),
 		custodyInfo:           &custodyInfo{},
 		custodyInfoSet:        custodyInfoSet,
 	}

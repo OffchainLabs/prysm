@@ -13,7 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -46,8 +46,11 @@ const (
 	// we stop after this spent time.
 	batchPeriod = 2 * time.Second
 
-	// maxBadResponses is the maximum number of bad responses from a peer before we stop talking to it.
-	maxBadResponses = 5
+	// maxStrikes is the maximum number of strikes against a peer before we stop talking to it.
+	maxStrikes = 5
+
+	// trustedPeerConnTag protects trusted peers' connections from connection-manager trimming.
+	trustedPeerConnTag = "trusted-peer"
 )
 
 var (
@@ -73,6 +76,8 @@ type Service struct {
 	cancel                   context.CancelFunc
 	cfg                      *Config
 	peers                    *peers.Status
+	peerScorer               *peerscoring.Scorer
+	gossipRejections         *peerscoring.GossipRejectionsStore
 	addrFilter               *multiaddr.Filters
 	ipLimiter                *leakybucket.Collector
 	privKey                  *ecdsa.PrivateKey
@@ -190,14 +195,28 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 
 	s.pubsub = gs
 
+	s.peerScorer = peerscoring.NewScorer(
+		peerscoring.WithStrikeGreyListThreshold(maxStrikes),
+		peerscoring.WithDecayInterval(time.Hour),
+	)
+	go s.peerScorer.Start(ctx)
+
+	s.gossipRejections = peerscoring.NewGossipRejectionsStore()
+	go s.peerScorer.TrackMemoryUsage(ctx, s.gossipRejections)
+
 	s.peers = peers.NewStatus(ctx, &peers.StatusConfig{
 		PeerLimit:             int(s.cfg.MaxPeers),
 		IPColocationWhitelist: s.cfg.IPColocationWhitelist,
-		ScorerParams: &scorers.Config{
-			BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
-				Threshold:     maxBadResponses,
-				DecayInterval: time.Hour,
-			},
+		Scoring:               s.peerScorer,
+		OnTrustedPeerAdded: func(pid peer.ID) {
+			if s.host != nil {
+				s.host.ConnManager().Protect(pid, trustedPeerConnTag)
+			}
+		},
+		OnTrustedPeerRemoved: func(pid peer.ID) {
+			if s.host != nil {
+				s.host.ConnManager().Unprotect(pid, trustedPeerConnTag)
+			}
 		},
 	})
 
@@ -270,7 +289,10 @@ func (s *Service) Start() {
 	async.RunEvery(s.ctx, params.BeaconConfig().TtfbTimeoutDuration(), func() {
 		ensurePeerConnections(s.ctx, s.host, s.peers, relayNodes...)
 	})
-	async.RunEvery(s.ctx, 30*time.Minute, s.Peers().Prune)
+	async.RunEvery(s.ctx, 30*time.Minute, func() {
+		s.peers.Prune()
+		s.pruneGossipRejections()
+	})
 	async.RunEvery(s.ctx, time.Duration(params.BeaconConfig().RespTimeout)*time.Second, s.updateMetrics)
 	async.RunEvery(s.ctx, refreshRate, s.RefreshPersistentSubnets)
 	async.RunEvery(s.ctx, 1*time.Minute, func() {
@@ -392,6 +414,32 @@ func (s *Service) Connect(pi peer.AddrInfo) error {
 // Peers returns the peer status interface.
 func (s *Service) Peers() *peers.Status {
 	return s.peers
+}
+
+// PeerScoring returns the peer scoring and grey-listing service.
+func (s *Service) PeerScoring() *peerscoring.Scorer {
+	return s.peerScorer
+}
+
+// GossipRejections returns the store of gossip messages our validators rejected.
+func (s *Service) GossipRejections() *peerscoring.GossipRejectionsStore {
+	return s.gossipRejections
+}
+
+func (s *Service) pruneGossipRejections() {
+	var unknown []peer.ID
+	for _, pid := range s.gossipRejections.TrackedPeers() {
+		if _, err := s.peers.ConnectionState(pid); err != nil {
+			unknown = append(unknown, pid)
+		}
+	}
+	s.gossipRejections.RemovePeers(unknown)
+}
+
+// IsPeerGreyListed returns why the peer must be refused: grey-listed by peer scoring, or
+// from an IP exceeding the colocation limit. Trusted peers are never refused.
+func (s *Service) IsPeerGreyListed(pid peer.ID) error {
+	return s.peers.IsPeerGreyListed(pid)
 }
 
 // ENR returns the local node's current ENR.
@@ -528,15 +576,15 @@ func (s *Service) connectWithPeer(ctx context.Context, info peer.AddrInfo) error
 		return nil
 	}
 
-	if err := s.Peers().IsBad(info.ID); err != nil {
-		return errors.Wrap(err, "bad peer")
+	if err := s.IsPeerGreyListed(info.ID); err != nil {
+		return errors.Wrap(err, "grey-listed peer")
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, maxDialTimeout)
 	defer cancel()
 
 	if err := s.host.Connect(ctx, info); err != nil {
-		s.downscorePeer(info.ID, "connectionError")
+		s.peerScorer.RecordStrike(info.ID, peerscoring.SourceDial, "connectionError")
 		return errors.Wrap(err, "peer connect")
 	}
 	return nil
@@ -567,9 +615,4 @@ func (s *Service) connectToBootnodes() error {
 // required for discovery and pubsub validation.
 func (s *Service) isInitialized() bool {
 	return !s.genesisTime.IsZero() && len(s.genesisValidatorsRoot) == 32
-}
-
-func (s *Service) downscorePeer(peerID peer.ID, reason string) {
-	newScore := s.Peers().Scorers().BadResponsesScorer().Increment(peerID)
-	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }

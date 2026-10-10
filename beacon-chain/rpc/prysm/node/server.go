@@ -13,6 +13,9 @@ type Server struct {
 	OptimisticModeFetcher     blockchain.OptimisticModeFetcher
 	BeaconDB                  db.ReadOnlyDatabase
 	PeersFetcher              p2p.PeersProvider
+	PeerScoringFetcher        p2p.PeerScoringProvider
+	PeerGreyLister            p2p.PeerGreyLister
+	GossipRejectionsFetcher   p2p.GossipRejectionsProvider
 	PeerManager               p2p.PeerManager
 	MetadataProvider          p2p.MetadataProvider
 	CustodyManager            p2p.CustodyManager
