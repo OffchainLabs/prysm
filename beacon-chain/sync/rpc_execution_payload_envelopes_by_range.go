@@ -41,11 +41,6 @@ func (s *Service) executionPayloadEnvelopesByRangeRPCHandler(ctx context.Context
 		recordResult(executionPayloadEnvelopeRPCResultInvalid)
 		return errors.New("message is not type *pb.ExecutionPayloadEnvelopesByRangeRequest")
 	}
-	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
-		recordResult(executionPayloadEnvelopeRPCResultRateLimited)
-		return err
-	}
-
 	remotePeer := stream.Conn().RemotePeer()
 
 	log.WithFields(logrus.Fields{
@@ -60,6 +55,11 @@ func (s *Service) executionPayloadEnvelopesByRangeRPCHandler(ctx context.Context
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		s.downscorePeer(remotePeer, "executionPayloadEnvelopesByRangeRPCHandlerValidationError")
 		tracing.AnnotateError(span, err)
+		return err
+	}
+	// Charged up front for the whole range, the whole range is reconstructed from the EL before any chunk is written.
+	if err := s.rateLimiter.validateRequest(stream, rp.size); err != nil {
+		recordResult(executionPayloadEnvelopeRPCResultRateLimited)
 		return err
 	}
 	available := s.validateRangeAvailability(rp)

@@ -18,9 +18,11 @@ import (
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
 	engpb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -223,6 +225,45 @@ func TestExecutionPayloadEnvelopesByRangeRPCHandler(t *testing.T) {
 		msg := &pb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: 10, Count: 0}
 		handlerErr := svc.executionPayloadEnvelopesByRangeRPCHandler(ctx, msg, stream)
 		require.NotNil(t, handlerErr)
+
+		if util.WaitTimeout(&wg, 2*time.Second) {
+			t.Fatal("timed out waiting for remote stream handler")
+		}
+	})
+
+	t.Run("count above remaining budget is rate limited before reconstruction", func(t *testing.T) {
+		slot := primitives.Slot(200)
+		localP2P, remoteP2P := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+		protocolID := protocol.ID(topicFmt)
+
+		clock := startup.NewClock(time.Now(), params.BeaconConfig().GenesisValidatorsRoot, startup.WithSlotAsNow(slot))
+		svc := &Service{
+			cfg: &config{
+				p2p:   localP2P,
+				chain: &chainMock.ChainService{Slot: &slot},
+				clock: clock,
+			},
+			availableBlocker: mockBlocker{avail: true},
+			rateLimiter:      newRateLimiter(localP2P),
+		}
+		svc.rateLimiter.limiterMap[topicFmt] = leakybucket.NewCollector(0.000001, 64, time.Second, false)
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		remoteP2P.BHost.SetStreamHandler(protocolID, func(stream network.Stream) {
+			defer wg.Done()
+			code, _, readErr := readStatusCodeNoDeadline(stream, localP2P.Encoding())
+			assert.NoError(t, readErr)
+			assert.Equal(t, responseCodeInvalidRequest, code)
+		})
+
+		localP2P.Connect(remoteP2P)
+		stream, streamErr := localP2P.BHost.NewStream(ctx, remoteP2P.BHost.ID(), protocolID)
+		require.NoError(t, streamErr)
+
+		msg := &pb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: 10, Count: 128}
+		handlerErr := svc.executionPayloadEnvelopesByRangeRPCHandler(ctx, msg, stream)
+		require.ErrorIs(t, handlerErr, p2ptypes.ErrRateLimited)
 
 		if util.WaitTimeout(&wg, 2*time.Second) {
 			t.Fatal("timed out waiting for remote stream handler")
