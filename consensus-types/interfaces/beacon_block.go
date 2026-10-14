@@ -1,6 +1,7 @@
 package interfaces
 
 import (
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/methodical-ssz/ssz"
 	field_params "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -72,6 +73,9 @@ type ReadOnlyBeaconBlockBody interface {
 	PayloadAttestations() ([]*ethpb.PayloadAttestation, error)
 	SignedExecutionPayloadBid() (*ethpb.SignedExecutionPayloadBid, error)
 	ParentExecutionRequests() (*enginev1.ExecutionRequestsGloas, error)
+	AttestationsDecoupled() ([]*ethpb.IndexedAttestationDecoupled, error)
+	AvailableAttestations() ([]*ethpb.AvailableAttestation, error)
+	SupportVotes() (bitfield.Bitlist, error)
 }
 
 type SignedBeaconBlock interface {

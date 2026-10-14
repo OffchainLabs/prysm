@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	b "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/decoupled"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
@@ -364,6 +365,18 @@ func ProcessOperationsNoVerifyAttsSigs(
 		state, err := gloasOperations(ctx, state, beaconBlock, parentSlot)
 		if err != nil {
 			return nil, fmt.Errorf("gloas operations: %w", err)
+		}
+		if blockVersion >= version.Decoupled {
+			atts, err := beaconBlock.Body().AttestationsDecoupled()
+			if err != nil {
+				return nil, err
+			}
+			if err := decoupled.ProcessAttestations(state, atts); err != nil {
+				return nil, fmt.Errorf("decoupled attestations: %w", err)
+			}
+			if err := decoupled.ProcessHeightEvents(state); err != nil {
+				return nil, fmt.Errorf("decoupled height events: %w", err)
+			}
 		}
 
 		return state, nil

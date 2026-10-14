@@ -34,6 +34,8 @@ const (
 	mainnetFuluForkEpoch = 411392 // December 3, 2025, 09:49:11pm UTC
 	// Gloas Fork Epoch for mainnet config
 	mainnetGloasForkEpoch = math.MaxUint64
+	// Decoupled Fork Epoch for mainnet config
+	mainnetDecoupledForkEpoch = math.MaxUint64
 )
 
 var mainnetNetworkConfig = &NetworkConfig{
@@ -227,6 +229,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BeaconStateElectraFieldCount:   37,
 	BeaconStateFuluFieldCount:      38,
 	BeaconStateGloasFieldCount:     46,
+	BeaconStateDecoupledFieldCount: 55,
 
 	// Slasher related values.
 	WeakSubjectivityPeriod:          54000,
@@ -237,22 +240,25 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	SafetyDecay: 10,
 
 	// Fork related values.
-	GenesisEpoch:         genesisForkEpoch,
-	GenesisForkVersion:   []byte{0, 0, 0, 0},
-	AltairForkVersion:    []byte{1, 0, 0, 0},
-	AltairForkEpoch:      mainnetAltairForkEpoch,
-	BellatrixForkVersion: []byte{2, 0, 0, 0},
-	BellatrixForkEpoch:   mainnetBellatrixForkEpoch,
-	CapellaForkVersion:   []byte{3, 0, 0, 0},
-	CapellaForkEpoch:     mainnetCapellaForkEpoch,
-	DenebForkVersion:     []byte{4, 0, 0, 0},
-	DenebForkEpoch:       mainnetDenebForkEpoch,
-	ElectraForkVersion:   []byte{5, 0, 0, 0},
-	ElectraForkEpoch:     mainnetElectraForkEpoch,
-	FuluForkVersion:      []byte{6, 0, 0, 0},
-	FuluForkEpoch:        mainnetFuluForkEpoch,
-	GloasForkVersion:     []byte{7, 0, 0, 0},
-	GloasForkEpoch:       mainnetGloasForkEpoch,
+	GenesisEpoch:          genesisForkEpoch,
+	GenesisForkVersion:    []byte{0, 0, 0, 0},
+	AltairForkVersion:     []byte{1, 0, 0, 0},
+	AltairForkEpoch:       mainnetAltairForkEpoch,
+	BellatrixForkVersion:  []byte{2, 0, 0, 0},
+	BellatrixForkEpoch:    mainnetBellatrixForkEpoch,
+	CapellaForkVersion:    []byte{3, 0, 0, 0},
+	CapellaForkEpoch:      mainnetCapellaForkEpoch,
+	DenebForkVersion:      []byte{4, 0, 0, 0},
+	DenebForkEpoch:        mainnetDenebForkEpoch,
+	ElectraForkVersion:    []byte{5, 0, 0, 0},
+	ElectraForkEpoch:      mainnetElectraForkEpoch,
+	FuluForkVersion:       []byte{6, 0, 0, 0},
+	FuluForkEpoch:         mainnetFuluForkEpoch,
+	GloasForkVersion:      []byte{7, 0, 0, 0},
+	GloasForkEpoch:        mainnetGloasForkEpoch,
+	DecoupledForkVersion:  []byte{16, 0, 0, 0},
+	DecoupledForkEpoch:    mainnetDecoupledForkEpoch,
+	DecoupledTimeoutDelay: 4,
 
 	// New values introduced in Altair hard fork 1.
 	// Participation flag indices.
@@ -427,6 +433,7 @@ func FillTestVersions(c *BeaconChainConfig, b byte) {
 	c.ElectraForkVersion = make([]byte, fieldparams.VersionLength)
 	c.FuluForkVersion = make([]byte, fieldparams.VersionLength)
 	c.GloasForkVersion = make([]byte, fieldparams.VersionLength)
+	c.DecoupledForkVersion = make([]byte, fieldparams.VersionLength)
 
 	c.GenesisForkVersion[fieldparams.VersionLength-1] = b
 	c.AltairForkVersion[fieldparams.VersionLength-1] = b
@@ -436,6 +443,7 @@ func FillTestVersions(c *BeaconChainConfig, b byte) {
 	c.ElectraForkVersion[fieldparams.VersionLength-1] = b
 	c.FuluForkVersion[fieldparams.VersionLength-1] = b
 	c.GloasForkVersion[fieldparams.VersionLength-1] = b
+	c.DecoupledForkVersion[fieldparams.VersionLength-1] = b
 
 	c.GenesisForkVersion[0] = 0
 	c.AltairForkVersion[0] = 1
@@ -445,4 +453,5 @@ func FillTestVersions(c *BeaconChainConfig, b byte) {
 	c.ElectraForkVersion[0] = 5
 	c.FuluForkVersion[0] = 6
 	c.GloasForkVersion[0] = 7
+	c.DecoupledForkVersion[0] = 16
 }

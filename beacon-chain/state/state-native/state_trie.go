@@ -44,6 +44,7 @@ const (
 	electraSharedFieldRefCount   = 10
 	fuluSharedFieldRefCount      = 11
 	gloasSharedFieldRefCount     = 14 // Adds Builders + BuilderPendingWithdrawals + PTCWindow to the shared-ref set and LatestExecutionPayloadHeader is removed
+	decoupledSharedFieldRefCount = 14 // The Decoupled fields are replaced whole by their setters, never shared by reference
 )
 
 // InitializeFromProtoPhase0 the beacon state from a protobuf representation.
@@ -804,6 +805,130 @@ func InitializeFromProtoUnsafeGloas(st *ethpb.BeaconStateGloas) (state.BeaconSta
 	return b, nil
 }
 
+func InitializeFromProtoDecoupled(st *ethpb.BeaconStateDecoupled) (state.BeaconState, error) {
+	return InitializeFromProtoUnsafeDecoupled(st.Copy())
+}
+
+func InitializeFromProtoUnsafeDecoupled(st *ethpb.BeaconStateDecoupled) (state.BeaconState, error) {
+	if st == nil {
+		return nil, errors.New("received nil state")
+	}
+
+	hRoots := customtypes.HistoricalRoots(make([][32]byte, len(st.HistoricalRoots)))
+	for i, r := range st.HistoricalRoots {
+		hRoots[i] = bytesutil.ToBytes32(r)
+	}
+
+	proposerLookahead := make([]primitives.ValidatorIndex, len(st.ProposerLookahead))
+	for i, v := range st.ProposerLookahead {
+		proposerLookahead[i] = primitives.ValidatorIndex(v)
+	}
+
+	fieldCount := params.BeaconConfig().BeaconStateDecoupledFieldCount
+	b := &BeaconState{
+		version:                       version.Decoupled,
+		genesisTime:                   st.GenesisTime,
+		genesisValidatorsRoot:         bytesutil.ToBytes32(st.GenesisValidatorsRoot),
+		slot:                          st.Slot,
+		fork:                          st.Fork,
+		latestBlockHeader:             st.LatestBlockHeader,
+		historicalRoots:               hRoots,
+		eth1Data:                      st.Eth1Data,
+		eth1DataVotes:                 st.Eth1DataVotes,
+		eth1DepositIndex:              st.Eth1DepositIndex,
+		slashings:                     st.Slashings,
+		previousEpochParticipation:    st.PreviousEpochParticipation,
+		currentEpochParticipation:     st.CurrentEpochParticipation,
+		justificationBits:             st.JustificationBits,
+		previousJustifiedCheckpoint:   st.PreviousJustifiedCheckpoint,
+		currentJustifiedCheckpoint:    st.CurrentJustifiedCheckpoint,
+		finalizedCheckpoint:           st.FinalizedCheckpoint,
+		currentSyncCommittee:          st.CurrentSyncCommittee,
+		nextSyncCommittee:             st.NextSyncCommittee,
+		nextWithdrawalIndex:           st.NextWithdrawalIndex,
+		nextWithdrawalValidatorIndex:  st.NextWithdrawalValidatorIndex,
+		historicalSummaries:           st.HistoricalSummaries,
+		depositRequestsStartIndex:     st.DepositRequestsStartIndex,
+		depositBalanceToConsume:       st.DepositBalanceToConsume,
+		exitBalanceToConsume:          st.ExitBalanceToConsume,
+		earliestExitEpoch:             st.EarliestExitEpoch,
+		consolidationBalanceToConsume: st.ConsolidationBalanceToConsume,
+		earliestConsolidationEpoch:    st.EarliestConsolidationEpoch,
+		pendingDeposits:               st.PendingDeposits,
+		pendingPartialWithdrawals:     st.PendingPartialWithdrawals,
+		pendingConsolidations:         st.PendingConsolidations,
+		proposerLookahead:             proposerLookahead,
+		latestExecutionPayloadBid:     st.LatestExecutionPayloadBid,
+		builders:                      st.Builders,
+		nextWithdrawalBuilderIndex:    st.NextWithdrawalBuilderIndex,
+		executionPayloadAvailability:  st.ExecutionPayloadAvailability,
+		builderPendingPayments:        st.BuilderPendingPayments,
+		builderPendingWithdrawals:     st.BuilderPendingWithdrawals,
+		latestBlockHash:               st.LatestBlockHash,
+		payloadExpectedWithdrawals:    st.PayloadExpectedWithdrawals,
+		ptcWindow:                     st.PtcWindow,
+		height:                        st.Height,
+		entry:                         st.Entry,
+		targetParticipation:           st.TargetParticipation,
+		progress:                      st.Progress,
+		justifiedHeight:               st.JustifiedHeight,
+		justified:                     st.Justified,
+		finalizedHeight:               st.FinalizedHeight,
+		finalized:                     st.Finalized,
+		pendingFinality:               st.PendingFinality,
+		dirtyFields:                   make(map[types.FieldIndex]bool, fieldCount),
+		dirtyIndices:                  make(map[types.FieldIndex][]uint64, fieldCount),
+		stateFieldLeaves:              make(map[types.FieldIndex]*fieldtrie.FieldTrie, len(fieldMap)),
+		rebuildTrie:                   make(map[types.FieldIndex]bool, fieldCount),
+		valMapHandler:                 stateutil.NewValMapHandler(st.Validators),
+		builderIdxMap:                 newBuilderIdxMap(st.Builders),
+	}
+
+	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
+	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
+	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
+	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
+	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
+	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
+	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, decoupledSharedFieldRefCount)
+
+	for _, f := range decoupledFields {
+		b.dirtyFields[f] = true
+		b.rebuildTrie[f] = true
+		b.dirtyIndices[f] = []uint64{}
+		dt, ok := fieldMap[f]
+		if !ok {
+			continue
+		}
+		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0, promotionThresholdByField[f])
+		if err != nil {
+			return nil, err
+		}
+		b.stateFieldLeaves[f] = trie
+	}
+
+	// Initialize field reference tracking for shared data.
+	b.sharedFieldReferences[types.HistoricalRoots] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.Eth1DataVotes] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.Slashings] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.PreviousEpochParticipationBits] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.CurrentEpochParticipationBits] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.HistoricalSummaries] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.PendingDeposits] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.PendingPartialWithdrawals] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.PendingConsolidations] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.ProposerLookahead] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)                  // New in Gloas.
+	b.sharedFieldReferences[types.BuilderPendingWithdrawals] = stateutil.NewRef(1) // New in Gloas.
+	b.sharedFieldReferences[types.PTCWindow] = stateutil.NewRef(1)                 // New in Gloas.
+
+	state.Count.Inc()
+	// Finalizer runs when dst is being destroyed in garbage collection.
+	runtime.SetFinalizer(b, finalizerCleanup)
+
+	return b, nil
+}
+
 // Copy returns a deep copy of the beacon state.
 func (b *BeaconState) Copy() state.BeaconState {
 	b.lock.RLock()
@@ -827,6 +952,8 @@ func (b *BeaconState) Copy() state.BeaconState {
 		fieldCount = params.BeaconConfig().BeaconStateFuluFieldCount
 	case version.Gloas:
 		fieldCount = params.BeaconConfig().BeaconStateGloasFieldCount
+	case version.Decoupled:
+		fieldCount = params.BeaconConfig().BeaconStateDecoupledFieldCount
 	}
 
 	dst := &BeaconState{
@@ -890,6 +1017,15 @@ func (b *BeaconState) Copy() state.BeaconState {
 		builderPendingWithdrawals:           b.builderPendingWithdrawalsVal(),
 		latestBlockHash:                     b.latestBlockHashVal(),
 		payloadExpectedWithdrawals:          b.payloadExpectedWithdrawalsVal(),
+		height:                              b.height,
+		entry:                               b.entry.Copy(),
+		targetParticipation:                 b.targetParticipation,
+		progress:                            b.progress,
+		justifiedHeight:                     b.justifiedHeight,
+		justified:                           b.justified.Copy(),
+		finalizedHeight:                     b.finalizedHeight,
+		finalized:                           b.finalized.Copy(),
+		pendingFinality:                     b.pendingFinality,
 
 		id: types.Enumerator.Inc(),
 
@@ -930,6 +1066,8 @@ func (b *BeaconState) Copy() state.BeaconState {
 		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, fuluSharedFieldRefCount)
 	case version.Gloas:
 		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, gloasSharedFieldRefCount)
+	case version.Decoupled:
+		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, decoupledSharedFieldRefCount)
 	}
 
 	for field, ref := range b.sharedFieldReferences {
@@ -1417,6 +1555,24 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 		return stateutil.PayloadExpectedWithdrawalsRoot(b.version, b.payloadExpectedWithdrawals)
 	case types.PTCWindow:
 		return stateutil.PTCWindowRoot(b.ptcWindow)
+	case types.Height:
+		return ssz.Uint64Root(uint64(b.height)), nil
+	case types.Entry:
+		return b.entry.HashTreeRoot()
+	case types.TargetParticipation:
+		return stateutil.ProgressiveBitlistRoot(b.targetParticipation)
+	case types.Progress:
+		return stateutil.ProgressiveBitlistRoot(b.progress)
+	case types.JustifiedHeight:
+		return ssz.Uint64Root(uint64(b.justifiedHeight)), nil
+	case types.Justified:
+		return b.justified.HashTreeRoot()
+	case types.FinalizedHeight:
+		return ssz.Uint64Root(uint64(b.finalizedHeight)), nil
+	case types.Finalized:
+		return b.finalized.HashTreeRoot()
+	case types.PendingFinality:
+		return ssz.SliceRoot(b.pendingFinality, fieldparams.MaxPendingFinality)
 	}
 	return [32]byte{}, errors.New("invalid field index provided")
 }

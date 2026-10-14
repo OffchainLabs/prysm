@@ -132,6 +132,24 @@ func (f FieldIndex) String() string {
 		return "payloadExpectedWithdrawals"
 	case PTCWindow:
 		return "ptcWindow"
+	case Height:
+		return "height"
+	case Entry:
+		return "entry"
+	case TargetParticipation:
+		return "targetParticipation"
+	case Progress:
+		return "progress"
+	case JustifiedHeight:
+		return "justifiedHeight"
+	case Justified:
+		return "justified"
+	case FinalizedHeight:
+		return "finalizedHeight"
+	case Finalized:
+		return "finalized"
+	case PendingFinality:
+		return "pendingFinality"
 	default:
 		return fmt.Sprintf("unknown field index number: %d", f)
 	}
@@ -233,6 +251,24 @@ func (f FieldIndex) RealPosition() int {
 		return 44
 	case PTCWindow:
 		return 45
+	case Height:
+		return 46
+	case Entry:
+		return 47
+	case TargetParticipation:
+		return 48
+	case Progress:
+		return 49
+	case JustifiedHeight:
+		return 50
+	case Justified:
+		return 51
+	case FinalizedHeight:
+		return 52
+	case Finalized:
+		return 53
+	case PendingFinality:
+		return 54
 	default:
 		return -1
 	}
@@ -307,6 +343,15 @@ const (
 	LatestBlockHash               // Gloas: EIP-7732
 	PayloadExpectedWithdrawals    // Gloas: EIP-7732
 	PTCWindow                     // Gloas: EIP-7732
+	Height                        // Decoupled
+	Entry                         // Decoupled
+	TargetParticipation           // Decoupled
+	Progress                      // Decoupled
+	JustifiedHeight               // Decoupled
+	Justified                     // Decoupled
+	FinalizedHeight               // Decoupled
+	Finalized                     // Decoupled
+	PendingFinality               // Decoupled
 )
 
 // Enumerator keeps track of the number of states created since the node's start.

@@ -3,6 +3,7 @@ package state_native
 import (
 	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
@@ -307,6 +308,65 @@ func (b *BeaconState) ToProtoUnsafe() any {
 			PayloadExpectedWithdrawals:    b.payloadExpectedWithdrawals,
 			PtcWindow:                     b.ptcWindow,
 		}
+	case version.Decoupled:
+
+		return &ethpb.BeaconStateDecoupled{
+			GenesisTime:                   b.genesisTime,
+			GenesisValidatorsRoot:         gvrCopy[:],
+			Slot:                          b.slot,
+			Fork:                          b.fork,
+			LatestBlockHeader:             b.latestBlockHeader,
+			BlockRoots:                    br,
+			StateRoots:                    sr,
+			HistoricalRoots:               b.historicalRoots.Slice(),
+			Eth1Data:                      b.eth1Data,
+			Eth1DataVotes:                 b.eth1DataVotes,
+			Eth1DepositIndex:              b.eth1DepositIndex,
+			Validators:                    vals,
+			Balances:                      bals,
+			RandaoMixes:                   rm,
+			Slashings:                     b.slashings,
+			PreviousEpochParticipation:    b.previousEpochParticipation,
+			CurrentEpochParticipation:     b.currentEpochParticipation,
+			JustificationBits:             b.justificationBits,
+			PreviousJustifiedCheckpoint:   b.previousJustifiedCheckpoint,
+			CurrentJustifiedCheckpoint:    b.currentJustifiedCheckpoint,
+			FinalizedCheckpoint:           b.finalizedCheckpoint,
+			InactivityScores:              inactivityScores,
+			CurrentSyncCommittee:          b.currentSyncCommittee,
+			NextSyncCommittee:             b.nextSyncCommittee,
+			LatestExecutionPayloadBid:     b.latestExecutionPayloadBid,
+			NextWithdrawalIndex:           b.nextWithdrawalIndex,
+			NextWithdrawalValidatorIndex:  b.nextWithdrawalValidatorIndex,
+			HistoricalSummaries:           b.historicalSummaries,
+			DepositRequestsStartIndex:     b.depositRequestsStartIndex,
+			DepositBalanceToConsume:       b.depositBalanceToConsume,
+			ExitBalanceToConsume:          b.exitBalanceToConsume,
+			EarliestExitEpoch:             b.earliestExitEpoch,
+			ConsolidationBalanceToConsume: b.consolidationBalanceToConsume,
+			EarliestConsolidationEpoch:    b.earliestConsolidationEpoch,
+			PendingDeposits:               b.pendingDeposits,
+			PendingPartialWithdrawals:     b.pendingPartialWithdrawals,
+			PendingConsolidations:         b.pendingConsolidations,
+			ProposerLookahead:             b.proposerLookahead,
+			ExecutionPayloadAvailability:  b.executionPayloadAvailability,
+			Builders:                      b.builders,
+			NextWithdrawalBuilderIndex:    b.nextWithdrawalBuilderIndex,
+			BuilderPendingPayments:        b.builderPendingPayments,
+			BuilderPendingWithdrawals:     b.builderPendingWithdrawals,
+			LatestBlockHash:               b.latestBlockHash,
+			PayloadExpectedWithdrawals:    b.payloadExpectedWithdrawals,
+			PtcWindow:                     b.ptcWindow,
+			Height:                        b.height,
+			Entry:                         b.entry,
+			TargetParticipation:           b.targetParticipation,
+			Progress:                      b.progress,
+			JustifiedHeight:               b.justifiedHeight,
+			Justified:                     b.justified,
+			FinalizedHeight:               b.finalizedHeight,
+			Finalized:                     b.finalized,
+			PendingFinality:               b.pendingFinality,
+		}
 	default:
 		return nil
 	}
@@ -605,6 +665,65 @@ func (b *BeaconState) ToProto() any {
 			PayloadExpectedWithdrawals:    b.payloadExpectedWithdrawalsVal(),
 			PtcWindow:                     b.ptcWindowVal(),
 		}
+	case version.Decoupled:
+
+		return &ethpb.BeaconStateDecoupled{
+			GenesisTime:                   b.genesisTime,
+			GenesisValidatorsRoot:         gvrCopy[:],
+			Slot:                          b.slot,
+			Fork:                          b.forkVal(),
+			LatestBlockHeader:             b.latestBlockHeaderVal(),
+			BlockRoots:                    br,
+			StateRoots:                    sr,
+			HistoricalRoots:               b.historicalRoots.Slice(),
+			Eth1Data:                      b.eth1DataVal(),
+			Eth1DataVotes:                 b.eth1DataVotesVal(),
+			Eth1DepositIndex:              b.eth1DepositIndex,
+			Validators:                    b.validatorsVal(),
+			Balances:                      b.balancesVal(),
+			RandaoMixes:                   rm,
+			Slashings:                     b.slashingsVal(),
+			PreviousEpochParticipation:    b.previousEpochParticipationVal(),
+			CurrentEpochParticipation:     b.currentEpochParticipationVal(),
+			JustificationBits:             b.justificationBitsVal(),
+			PreviousJustifiedCheckpoint:   b.previousJustifiedCheckpointVal(),
+			CurrentJustifiedCheckpoint:    b.currentJustifiedCheckpointVal(),
+			FinalizedCheckpoint:           b.finalizedCheckpointVal(),
+			InactivityScores:              b.inactivityScoresVal(),
+			CurrentSyncCommittee:          b.currentSyncCommitteeVal(),
+			NextSyncCommittee:             b.nextSyncCommitteeVal(),
+			LatestExecutionPayloadBid:     b.latestExecutionPayloadBid.Copy(),
+			NextWithdrawalIndex:           b.nextWithdrawalIndex,
+			NextWithdrawalValidatorIndex:  b.nextWithdrawalValidatorIndex,
+			HistoricalSummaries:           b.historicalSummariesVal(),
+			DepositRequestsStartIndex:     b.depositRequestsStartIndex,
+			DepositBalanceToConsume:       b.depositBalanceToConsume,
+			ExitBalanceToConsume:          b.exitBalanceToConsume,
+			EarliestExitEpoch:             b.earliestExitEpoch,
+			ConsolidationBalanceToConsume: b.consolidationBalanceToConsume,
+			EarliestConsolidationEpoch:    b.earliestConsolidationEpoch,
+			PendingDeposits:               b.pendingDepositsVal(),
+			PendingPartialWithdrawals:     b.pendingPartialWithdrawalsVal(),
+			PendingConsolidations:         b.pendingConsolidationsVal(),
+			ProposerLookahead:             b.proposerLookaheadVal(),
+			ExecutionPayloadAvailability:  b.executionPayloadAvailabilityVal(),
+			Builders:                      b.buildersVal(),
+			NextWithdrawalBuilderIndex:    b.nextWithdrawalBuilderIndex,
+			BuilderPendingPayments:        b.builderPendingPaymentsVal(),
+			BuilderPendingWithdrawals:     b.builderPendingWithdrawalsVal(),
+			LatestBlockHash:               b.latestBlockHashVal(),
+			PayloadExpectedWithdrawals:    b.payloadExpectedWithdrawalsVal(),
+			PtcWindow:                     b.ptcWindowVal(),
+			Height:                        b.height,
+			Entry:                         b.entry.Copy(),
+			TargetParticipation:           bytesutil.SafeCopyBytes(b.targetParticipation),
+			Progress:                      bytesutil.SafeCopyBytes(b.progress),
+			JustifiedHeight:               b.justifiedHeight,
+			Justified:                     b.justified.Copy(),
+			FinalizedHeight:               b.finalizedHeight,
+			Finalized:                     b.finalized.Copy(),
+			PendingFinality:               ethpb.CopySlice(b.pendingFinality),
+		}
 	default:
 		return nil
 	}
@@ -721,6 +840,14 @@ func ProtobufBeaconStateGloas(s any) (*ethpb.BeaconStateGloas, error) {
 	pbState, ok := s.(*ethpb.BeaconStateGloas)
 	if !ok {
 		return nil, errors.New("input is not type pb.BeaconStateGloas")
+	}
+	return pbState, nil
+}
+
+func ProtobufBeaconStateDecoupled(s any) (*ethpb.BeaconStateDecoupled, error) {
+	pbState, ok := s.(*ethpb.BeaconStateDecoupled)
+	if !ok {
+		return nil, errors.New("input is not type pb.BeaconStateDecoupled")
 	}
 	return pbState, nil
 }

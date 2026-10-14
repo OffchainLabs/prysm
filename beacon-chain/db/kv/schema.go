@@ -62,6 +62,7 @@ var (
 	fuluKey                    = []byte("fulu")
 	fuluBlindKey               = []byte("blind-fulu")
 	gloasKey                   = []byte("gloas")
+	decoupledKey               = []byte("decoupled")
 	// No gloasBlindKey needed - Gloas blocks are never blinded (no execution payload in block body).
 
 	// block root included in the beacon state used by weak subjectivity initial sync

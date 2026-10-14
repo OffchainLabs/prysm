@@ -110,6 +110,14 @@ ssz_methodical(
 )
 
 ssz_methodical(
+    name = "methodical_decoupled",
+    deps = [":beacon_state_go"],
+    config_file = "decoupled.yaml",
+    override_package_name = "eth",
+    out = "decoupled.ssz.go",
+)
+
+ssz_methodical(
     name = "methodical_non_core",
     deps = [":go_proto"],
     config_file = "non-core.yaml",
@@ -169,6 +177,7 @@ go_library(
         "beacon_block.go",
         "beacon_state.go",
         "cloners.go",
+        "decoupled.go",
         "eip_7521.go",
         "gloas.go",
         "log.go",
@@ -179,6 +188,7 @@ go_library(
         ":methodical_altair", # keep
         ":methodical_bellatrix", # keep
         ":methodical_capella", # keep
+        ":methodical_decoupled", # keep
         ":methodical_deneb", # keep
         ":methodical_electra", # keep
         ":methodical_fulu", # keep
@@ -228,6 +238,7 @@ ssz_proto_files(
         "beacon_core_types.proto",
         "blobs.proto",
         "data_columns.proto",
+        "decoupled.proto",
         "gloas.proto",
 	"gloas_builder_api.proto",
         "light_client.proto",

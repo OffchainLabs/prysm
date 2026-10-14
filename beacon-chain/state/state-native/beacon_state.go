@@ -83,6 +83,17 @@ type BeaconState struct {
 	payloadExpectedWithdrawals   []*enginev1.Withdrawal
 	ptcWindow                    []*ethpb.PTCs
 
+	// Decoupled fields
+	height              primitives.Height
+	entry               *ethpb.CheckpointDecoupled
+	targetParticipation bitfield.Bitlist
+	progress            bitfield.Bitlist
+	justifiedHeight     primitives.Height
+	justified           *ethpb.CheckpointDecoupled
+	finalizedHeight     primitives.Height
+	finalized           *ethpb.CheckpointDecoupled
+	pendingFinality     []*ethpb.PendingFinality
+
 	id                    uint64
 	lock                  sync.RWMutex
 	dirtyFields           map[types.FieldIndex]bool
@@ -148,6 +159,15 @@ type beaconStateMarshalable struct {
 	LatestBlockHash                     []byte                                  `json:"latest_block_hash" yaml:"latest_block_hash"`
 	PayloadExpectedWithdrawals          []*enginev1.Withdrawal                  `json:"payload_expected_withdrawals" yaml:"payload_expected_withdrawals"`
 	PtcWindow                           []*ethpb.PTCs                           `json:"ptc_window" yaml:"ptc_window"`
+	Height                              primitives.Height                       `json:"height" yaml:"height"`
+	Entry                               *ethpb.CheckpointDecoupled              `json:"entry" yaml:"entry"`
+	TargetParticipation                 bitfield.Bitlist                        `json:"target_participation" yaml:"target_participation"`
+	Progress                            bitfield.Bitlist                        `json:"progress" yaml:"progress"`
+	JustifiedHeight                     primitives.Height                       `json:"justified_height" yaml:"justified_height"`
+	Justified                           *ethpb.CheckpointDecoupled              `json:"justified" yaml:"justified"`
+	FinalizedHeight                     primitives.Height                       `json:"finalized_height" yaml:"finalized_height"`
+	Finalized                           *ethpb.CheckpointDecoupled              `json:"finalized" yaml:"finalized"`
+	PendingFinality                     []*ethpb.PendingFinality                `json:"pending_finality" yaml:"pending_finality"`
 }
 
 func (b *BeaconState) MarshalJSON() ([]byte, error) {
@@ -211,6 +231,15 @@ func (b *BeaconState) MarshalJSON() ([]byte, error) {
 		LatestBlockHash:                     b.latestBlockHash,
 		PayloadExpectedWithdrawals:          b.payloadExpectedWithdrawals,
 		PtcWindow:                           b.ptcWindow,
+		Height:                              b.height,
+		Entry:                               b.entry,
+		TargetParticipation:                 b.targetParticipation,
+		Progress:                            b.progress,
+		JustifiedHeight:                     b.justifiedHeight,
+		Justified:                           b.justified,
+		FinalizedHeight:                     b.finalizedHeight,
+		Finalized:                           b.finalized,
+		PendingFinality:                     b.pendingFinality,
 	}
 	return json.Marshal(marshalable)
 }

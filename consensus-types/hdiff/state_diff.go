@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/methodical-ssz/ssz"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/capella"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/decoupled"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/deneb"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/execution"
@@ -143,6 +144,16 @@ type stateDiff struct {
 	latestBlockHash                [fieldparams.RootLength]byte      // override.
 	payloadExpectedWithdrawals     []*enginev1.Withdrawal            // override.
 	ptcWindow                      []*ethpb.PTCs                     // override.
+	// Decoupled
+	height              primitives.Height
+	entry               *ethpb.CheckpointDecoupled
+	targetParticipation []byte
+	progress            []byte
+	justifiedHeight     primitives.Height
+	justified           *ethpb.CheckpointDecoupled
+	finalizedHeight     primitives.Height
+	finalized           *ethpb.CheckpointDecoupled
+	pendingFinality     []*ethpb.PendingFinality
 }
 
 type hdiff struct {
@@ -908,6 +919,11 @@ func newStateDiff(input []byte) (*stateDiff, error) {
 			return nil, err
 		}
 	}
+	if ret.targetVersion >= version.Decoupled {
+		if err := ret.readDecoupledFields(&data); err != nil {
+			return nil, err
+		}
+	}
 	if len(data) > 0 {
 		return nil, errors.Errorf("data is too large, exceeded by %d bytes", len(data))
 	}
@@ -1090,6 +1106,9 @@ func (s *stateDiff) serializedSize() int {
 	}
 	if s.targetVersion >= version.Gloas {
 		size += serializedGloasFieldsSize(s)
+	}
+	if s.targetVersion >= version.Decoupled {
+		size += serializedDecoupledFieldsSize(s)
 	}
 	return size
 }
@@ -1311,6 +1330,9 @@ func (s *stateDiff) serialize() []byte {
 	}
 	if s.targetVersion >= version.Gloas {
 		ret = serializeGloasFields(ret, s)
+	}
+	if s.targetVersion >= version.Decoupled {
+		ret = serializeDecoupledFields(ret, s)
 	}
 	return ret
 }
@@ -1636,6 +1658,13 @@ func diffToState(source, target state.ReadOnlyBeaconState) (*stateDiff, error) {
 	}
 
 	if err := diffGloasFields(ret, source, target); err != nil {
+		return nil, err
+	}
+	if target.Version() < version.Decoupled {
+		return ret, nil
+	}
+
+	if err := diffDecoupledFields(ret, target); err != nil {
 		return nil, err
 	}
 
@@ -2204,6 +2233,12 @@ func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDi
 	if err := applyGloasFields(source, diff); err != nil {
 		return nil, errors.Wrap(err, "failed to apply Gloas fields")
 	}
+	if diff.targetVersion < version.Decoupled {
+		return source, nil
+	}
+	if err := applyDecoupledFields(source, diff); err != nil {
+		return nil, errors.Wrap(err, "failed to apply Decoupled fields")
+	}
 	return source, nil
 }
 
@@ -2400,6 +2435,8 @@ func updateToVersion(ctx context.Context, source state.BeaconState, target int) 
 		ret, err = fulu.ConvertToFulu(source)
 	case version.Fulu:
 		ret, err = gloas.UpgradeToGloas(ctx, source)
+	case version.Gloas:
+		ret, err = decoupled.UpgradeToDecoupled(source)
 	default:
 		return nil, errors.Errorf("unsupported version %s", version.String(source.Version()))
 	}

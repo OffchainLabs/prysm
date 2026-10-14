@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/capella"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/decoupled"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/deneb"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
 	e "github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch"
@@ -143,6 +144,11 @@ func ProcessSlot(ctx context.Context, state state.BeaconState) (state.BeaconStat
 		prevBlockRoot,
 	); err != nil {
 		return nil, err
+	}
+	if state.Version() >= version.Decoupled {
+		if err := decoupled.FillEntryRoot(state, prevBlockRoot); err != nil {
+			return nil, err
+		}
 	}
 
 	// <spec fn="process_slot" fork="gloas" lines="11-13" hash="2b894194">
@@ -335,7 +341,11 @@ func ProcessEpoch(ctx context.Context, state state.BeaconState) (state.BeaconSta
 
 	var err error
 	if time.CanProcessEpoch(state) {
-		if state.Version() >= version.Gloas {
+		if state.Version() >= version.Decoupled {
+			if err = decoupled.ProcessEpoch(ctx, state); err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("could not process %s epoch", version.String(state.Version())))
+			}
+		} else if state.Version() >= version.Gloas {
 			if err = processEpochGloas(ctx, state); err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("could not process %s epoch", version.String(state.Version())))
 			}
@@ -427,6 +437,15 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 
 	if time.CanUpgradeToGloas(slot) {
 		state, err = gloas.UpgradeToGloas(ctx, state)
+		if err != nil {
+			tracing.AnnotateError(span, err)
+			return nil, err
+		}
+		upgraded = true
+	}
+
+	if time.CanUpgradeToDecoupled(slot) {
+		state, err = decoupled.UpgradeToDecoupled(state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
 			return nil, err

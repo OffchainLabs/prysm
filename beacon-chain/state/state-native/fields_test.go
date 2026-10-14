@@ -170,7 +170,7 @@ func TestNewProgressiveStateFieldsSchema(t *testing.T) {
 }
 
 func TestProgressiveStateSchemaForVersion_Unsupported(t *testing.T) {
-	schema, ok := ProgressiveStateSchemaForVersion(version.Gloas + 1)
+	schema, ok := ProgressiveStateSchemaForVersion(version.Decoupled + 1)
 	require.Equal(t, false, ok)
 	require.IsNil(t, schema)
 }

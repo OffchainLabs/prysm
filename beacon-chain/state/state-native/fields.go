@@ -115,8 +115,22 @@ var (
 		types.PTCWindow,
 	}
 
-	gloasProgressiveSchema *ProgressiveStateSchema
-	gloasFields            []types.FieldIndex
+	decoupledAdditionalFields = []types.FieldIndex{
+		types.Height,
+		types.Entry,
+		types.TargetParticipation,
+		types.Progress,
+		types.JustifiedHeight,
+		types.Justified,
+		types.FinalizedHeight,
+		types.Finalized,
+		types.PendingFinality,
+	}
+
+	gloasProgressiveSchema     *ProgressiveStateSchema
+	gloasFields                []types.FieldIndex
+	decoupledProgressiveSchema *ProgressiveStateSchema
+	decoupledFields            []types.FieldIndex
 )
 
 func init() {
@@ -137,12 +151,32 @@ func init() {
 		panic(err)
 	}
 	gloasFields = gloasProgressiveSchema.fields
+
+	decoupledProgressiveSchema, err = newProgressiveStateFieldsSchema(
+		slices.Concat(
+			altairFields,
+			[]types.FieldIndex{types.LatestBlockHash},
+			withdrawalAndHistoricalSummaryFields,
+			electraAdditionalFields,
+			[]types.FieldIndex{types.ProposerLookahead},
+			gloasAdditionalFields,
+			decoupledAdditionalFields,
+		),
+		nil,
+		params.BeaconConfig().BeaconStateDecoupledFieldCount,
+	)
+	if err != nil {
+		panic(err)
+	}
+	decoupledFields = decoupledProgressiveSchema.fields
 }
 
 func ProgressiveStateSchemaForVersion(v int) (*ProgressiveStateSchema, bool) {
 	switch v {
 	case version.Gloas:
 		return gloasProgressiveSchema, true
+	case version.Decoupled:
+		return decoupledProgressiveSchema, true
 	default:
 		return nil, false
 	}

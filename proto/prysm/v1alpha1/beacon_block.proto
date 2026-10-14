@@ -20,6 +20,7 @@ import "proto/prysm/v1alpha1/attestation.proto";
 import "proto/prysm/v1alpha1/withdrawals.proto";
 import "proto/prysm/v1alpha1/beacon_core_types.proto";
 import "proto/prysm/v1alpha1/gloas.proto";
+import "proto/prysm/v1alpha1/decoupled.proto";
 import "proto/engine/v1/execution_engine.proto";
 import "proto/engine/v1/electra.proto";
 
@@ -75,6 +76,8 @@ message GenericSignedBeaconBlock {
     SignedBlindedBeaconBlockFulu blinded_fulu = 12;
 
     SignedBeaconBlockGloas gloas = 13;
+
+    SignedBeaconBlockDecoupled decoupled = 15;
   }
   bool is_blinded = 100;
   reserved 101; // Deprecated fields
@@ -125,6 +128,8 @@ message GenericBeaconBlock {
     // Returned when eager_payload_state_root (stateless) is requested so the
     // validator client has the envelope + blob data without a second fetch.
     BeaconBlockContentsGloas gloas_contents = 14;
+
+    BeaconBlockDecoupled decoupled = 15;
   }
   bool is_blinded = 100;
   string payload_value = 101;

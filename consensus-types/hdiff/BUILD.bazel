@@ -6,6 +6,7 @@ go_library(
         "log.go",
         "snappy.go",
         "state_diff.go",
+        "state_diff_decoupled.go",
         "state_diff_gloas.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/consensus-types/hdiff",
@@ -13,6 +14,7 @@ go_library(
     deps = [
         "//beacon-chain/core/altair:go_default_library",
         "//beacon-chain/core/capella:go_default_library",
+        "//beacon-chain/core/decoupled:go_default_library",
         "//beacon-chain/core/deneb:go_default_library",
         "//beacon-chain/core/electra:go_default_library",
         "//beacon-chain/core/execution:go_default_library",

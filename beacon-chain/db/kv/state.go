@@ -283,6 +283,10 @@ func (s *Store) saveStatesEfficientInternal(ctx context.Context, tx *bolt.Tx, bl
 			if err := s.processGloas(ctx, rawType, rt[:], bucket, valIdxBkt, validatorKeys[i]); err != nil {
 				return err
 			}
+		case *ethpb.BeaconStateDecoupled:
+			if err := s.processDecoupled(ctx, rawType, rt[:], bucket, valIdxBkt, validatorKeys[i]); err != nil {
+				return err
+			}
 		default:
 			return errors.New("invalid state type")
 		}
@@ -418,6 +422,23 @@ func (s *Store) processGloas(ctx context.Context, pbState *ethpb.BeaconStateGloa
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
 	encodedState, err := encodeProtoWithKey(version.Gloas, pbState)
+	if err != nil {
+		return err
+	}
+	if err := bucket.Put(rootHash, encodedState); err != nil {
+		return err
+	}
+	pbState.Validators = valEntries
+	if err := valIdxBkt.Put(rootHash, validatorKey); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Store) processDecoupled(ctx context.Context, pbState *ethpb.BeaconStateDecoupled, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
+	valEntries := pbState.Validators
+	pbState.Validators = make([]*ethpb.Validator, 0)
+	encodedState, err := encodeProtoWithKey(version.Decoupled, pbState)
 	if err != nil {
 		return err
 	}
@@ -593,6 +614,19 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 	}
 
 	switch {
+	case hasDecoupledKey(enc):
+		protoState := &ethpb.BeaconStateDecoupled{}
+		if err := protoState.UnmarshalSSZ(enc[len(decoupledKey):]); err != nil {
+			return nil, errors.Wrap(err, "failed to unmarshal encoding for Decoupled")
+		}
+		ok, err := s.isStateValidatorMigrationOver()
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			protoState.Validators = validatorEntries
+		}
+		return statenative.InitializeFromProtoUnsafeDecoupled(protoState)
 	case hasGloasKey(enc):
 		protoState := &ethpb.BeaconStateGloas{}
 		if err := protoState.UnmarshalSSZ(enc[len(gloasKey):]); err != nil {

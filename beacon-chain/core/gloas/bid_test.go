@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
+
 	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
 	"google.golang.org/protobuf/proto"
 
@@ -55,6 +57,15 @@ func (s stubBlockBody) SignedExecutionPayloadBid() (*ethpb.SignedExecutionPayloa
 	return s.signedBid, nil
 }
 func (s stubBlockBody) ParentExecutionRequests() (*enginev1.ExecutionRequestsGloas, error) {
+	return nil, nil
+}
+func (s stubBlockBody) AttestationsDecoupled() ([]*ethpb.IndexedAttestationDecoupled, error) {
+	return nil, nil
+}
+func (s stubBlockBody) AvailableAttestations() ([]*ethpb.AvailableAttestation, error) {
+	return nil, nil
+}
+func (s stubBlockBody) SupportVotes() (bitfield.Bitlist, error) {
 	return nil, nil
 }
 func (s stubBlockBody) MarshalSSZ() ([]byte, error)         { return nil, nil }

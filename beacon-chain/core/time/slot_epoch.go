@@ -117,6 +117,10 @@ func CanUpgradeToGloas(slot primitives.Slot) bool {
 	return epochStart && gloasEpoch
 }
 
+func CanUpgradeToDecoupled(slot primitives.Slot) bool {
+	return slots.IsEpochStart(slot) && slots.ToEpoch(slot) == params.BeaconConfig().DecoupledForkEpoch
+}
+
 // CanProcessEpoch checks the eligibility to process epoch.
 // The epoch can be processed at the end of the last slot of every epoch.
 //
