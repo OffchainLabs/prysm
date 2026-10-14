@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	f "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/decoupled"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -54,6 +55,7 @@ type ForkchoiceFetcher interface {
 	CachedHeadRoot() [32]byte
 	GetProposerHead() [32]byte
 	ProposerParent(primitives.Slot) ([32]byte, error)
+	DecoupledProposal(primitives.Slot) ([32]byte, []decoupled.Vote, []decoupled.Vote, bool)
 	SetForkChoiceGenesisTime(time.Time)
 	UpdateHead(context.Context, primitives.Slot)
 	HighestReceivedBlockSlot() primitives.Slot

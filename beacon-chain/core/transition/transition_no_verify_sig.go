@@ -367,6 +367,17 @@ func ProcessOperationsNoVerifyAttsSigs(
 			return nil, fmt.Errorf("gloas operations: %w", err)
 		}
 		if blockVersion >= version.Decoupled {
+			votes, err := beaconBlock.Body().AvailableAttestations()
+			if err != nil {
+				return nil, err
+			}
+			support, err := beaconBlock.Body().SupportVotes()
+			if err != nil {
+				return nil, err
+			}
+			if err := decoupled.ValidateAvailableAttestations(state, beaconBlock.Slot(), votes, support); err != nil {
+				return nil, fmt.Errorf("decoupled available attestations: %w", err)
+			}
 			atts, err := beaconBlock.Body().AttestationsDecoupled()
 			if err != nil {
 				return nil, err

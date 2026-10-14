@@ -98,6 +98,23 @@ func (s *Service) commitDecoupled(ctx context.Context, blocks []decoupled.Block)
 	}
 }
 
+// Spec: the fg_on_block tail, every included row joins the pool for other branches, and rows below the accepted finalized height leave with it.
+func (s *Service) poolDecoupledAttestations(blocks ...consensusblocks.ROBlock) {
+	pool := s.cfg.DecoupledFGPool
+	if pool == nil {
+		return
+	}
+	for _, b := range blocks {
+		if atts, err := b.Block().Body().AttestationsDecoupled(); err == nil {
+			pool.InsertAggregates(atts)
+		}
+	}
+	s.decoupledLock.Lock()
+	finalized := s.decoupledStore.FinalizedHeight()
+	s.decoupledLock.Unlock()
+	pool.Prune(finalized)
+}
+
 // Spec: Store.init at F with its own slot and target, the accepted finalization pair seeds J, the genesis σ when F predates the fork.
 // TODO(DC): K_s is the registry at creation, it does not follow registry growth.
 // TODO(DC): sampled committees need a per-slot denominator with seat multiplicity, not only a container swap.
@@ -289,6 +306,9 @@ func (s *Service) spawnDecoupledTicker() {
 			case <-s.ctx.Done():
 				return
 			case t := <-ticker.C():
+				if t.Interval == 0 && s.cfg.DecoupledVotePool != nil {
+					s.cfg.DecoupledVotePool.Prune(t.Slot)
+				}
 				if s.tickDecoupled(t.Slot, t.Interval) && t.Interval > 0 {
 					s.UpdateHead(s.ctx, t.Slot+1)
 				}

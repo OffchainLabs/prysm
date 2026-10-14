@@ -22,6 +22,7 @@ import (
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	decoupledpool "github.com/OffchainLabs/prysm/v7/beacon-chain/operations/decoupled"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
@@ -104,6 +105,8 @@ type Config struct {
 	AttestationDataCache             *cache.AttestationDataCache
 	AttestationsPool                 attestations.Pool
 	PayloadAttestationPool           payloadattestation.PoolManager
+	DecoupledFGPool                  *decoupledpool.FGPool
+	DecoupledVotePool                *decoupledpool.VotePool
 	ExitPool                         voluntaryexits.PoolManager
 	SlashingsPool                    slashings.PoolManager
 	SyncCommitteeObjectPool          synccommittee.Pool
@@ -252,6 +255,8 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		P2P:                              s.cfg.Broadcaster,
 		BlockReceiver:                    s.cfg.BlockReceiver,
 		PayloadAttestationPool:           s.cfg.PayloadAttestationPool,
+		DecoupledFGPool:                  s.cfg.DecoupledFGPool,
+		DecoupledVotePool:                s.cfg.DecoupledVotePool,
 		PayloadAttestationReceiver:       s.cfg.PayloadAttestationReceiver,
 		ExecutionPayloadEnvelopeReceiver: s.cfg.ExecutionPayloadEnvelopeReceiver,
 		BlobReceiver:                     s.cfg.BlobReceiver,

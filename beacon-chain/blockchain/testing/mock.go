@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/decoupled"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -768,6 +769,10 @@ func (s *ChainService) GetProposerHead() [32]byte {
 
 func (s *ChainService) ProposerParent(primitives.Slot) ([32]byte, error) {
 	return s.GetProposerHead(), nil
+}
+
+func (s *ChainService) DecoupledProposal(primitives.Slot) ([32]byte, []decoupled.Vote, []decoupled.Vote, bool) {
+	return [32]byte{}, nil, nil, false
 }
 
 // SetForkChoiceGenesisTime mocks the same method in the chain service

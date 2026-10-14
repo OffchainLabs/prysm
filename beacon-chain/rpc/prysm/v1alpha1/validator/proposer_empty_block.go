@@ -16,6 +16,11 @@ func getEmptyBlock(slot primitives.Slot) (interfaces.SignedBeaconBlock, error) {
 	var err error
 	epoch := slots.ToEpoch(slot)
 	switch {
+	case epoch >= params.BeaconConfig().DecoupledForkEpoch:
+		sBlk, err = blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockDecoupled{Block: &ethpb.BeaconBlockDecoupled{Body: &ethpb.BeaconBlockBodyDecoupled{}}})
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not initialize block for proposal: %v", err)
+		}
 	case epoch >= params.BeaconConfig().GloasForkEpoch:
 		sBlk, err = blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{Block: &ethpb.BeaconBlockGloas{Body: &ethpb.BeaconBlockBodyGloas{}}})
 		if err != nil {

@@ -97,6 +97,7 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	}
 	if prepared != nil {
 		s.commitDecoupled(ctx, prepared)
+		s.poolDecoupledAttestations(cfg.roblock)
 	}
 	if err := s.handleBlockAttestations(ctx, cfg.roblock.Block(), cfg.postState); err != nil {
 		return errors.Wrap(err, "could not handle block's attestations")
@@ -406,6 +407,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	}
 	if prepared != nil {
 		s.commitDecoupled(ctx, prepared)
+		s.poolDecoupledAttestations(blks...)
 		if err := s.persistDecoupledCheckpoints(ctx); err != nil {
 			return errors.Wrap(err, "could not persist decoupled checkpoints")
 		}

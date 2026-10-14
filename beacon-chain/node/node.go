@@ -39,6 +39,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/node/registration"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	decoupledpool "github.com/OffchainLabs/prysm/v7/beacon-chain/operations/decoupled"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
@@ -99,6 +100,8 @@ type BeaconNode struct {
 	attestationDataCache      *cache.AttestationDataCache
 	attestationPool           attestations.Pool
 	payloadAttestationPool    payloadattestation.PoolManager
+	decoupledFGPool           *decoupledpool.FGPool
+	decoupledVotePool         *decoupledpool.VotePool
 	exitPool                  voluntaryexits.PoolManager
 	slashingsPool             slashings.PoolManager
 	syncCommitteePool         synccommittee.Pool
@@ -167,6 +170,8 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		attestationDataCache:      cache.NewAttestationDataCache(),
 		attestationPool:           attestations.NewPool(),
 		payloadAttestationPool:    payloadattestation.NewPool(),
+		decoupledFGPool:           decoupledpool.NewFGPool(),
+		decoupledVotePool:         decoupledpool.NewVotePool(),
 		exitPool:                  voluntaryexits.NewPool(),
 		slashingsPool:             slashings.NewPool(),
 		syncCommitteePool:         synccommittee.NewPool(),
@@ -772,6 +777,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithExecutionEngineCaller(web3Service),
 		blockchain.WithAttestationCache(b.attestationCache),
 		blockchain.WithAttestationPool(b.attestationPool),
+		blockchain.WithDecoupledPools(b.decoupledFGPool, b.decoupledVotePool),
 		blockchain.WithExitPool(b.exitPool),
 		blockchain.WithSlashingPool(b.slashingsPool),
 		blockchain.WithBLSToExecPool(b.blsToExecPool),
@@ -1027,6 +1033,8 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		AttestationDataCache:             b.attestationDataCache,
 		AttestationsPool:                 b.attestationPool,
 		PayloadAttestationPool:           b.payloadAttestationPool,
+		DecoupledFGPool:                  b.decoupledFGPool,
+		DecoupledVotePool:                b.decoupledVotePool,
 		ExitPool:                         b.exitPool,
 		SlashingsPool:                    b.slashingsPool,
 		BLSChangesPool:                   b.blsToExecPool,

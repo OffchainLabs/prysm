@@ -23,6 +23,7 @@ import (
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	decoupledpool "github.com/OffchainLabs/prysm/v7/beacon-chain/operations/decoupled"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -95,6 +96,8 @@ type config struct {
 	BuilderCircuitBreaker     *cache.BuilderCircuitBreaker
 	AttestationCache          *cache.AttestationCache
 	AttPool                   attestations.Pool
+	DecoupledFGPool           *decoupledpool.FGPool
+	DecoupledVotePool         *decoupledpool.VotePool
 	ExitPool                  voluntaryexits.PoolManager
 	SlashingPool              slashings.PoolManager
 	BLSToExecPool             blstoexec.PoolManager

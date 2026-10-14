@@ -15,8 +15,7 @@ message AvailableAttestationData {
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
   ];
-  bool payload_present = 2;
-  bytes beacon_block_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes beacon_block_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
 // Spec: aggregated AC votes (validator, slot, head). K_s is every validator, so bit i is validator i.
@@ -53,9 +52,10 @@ message AttestationDataDecoupled {
   bytes finality_target = 5 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
+// Every validator may sign one row, so the index list is bounded by the registry in the transition, not by a committee size.
 message IndexedAttestationDecoupled {
   repeated uint64 attesting_indices = 1
-      [ (ethereum.eth.ext.ssz_max) = "max_attesting_indices.size" ];
+      [ (ethereum.eth.ext.ssz_max) = "1099511627776" ];
   AttestationDataDecoupled data = 2;
   bytes signature = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
@@ -73,7 +73,7 @@ message PendingFinality {
   ];
 }
 
-// Spec: the Gloas body plus B.attestations, B.votes and B.support_votes. Bit i of support_votes marks available_attestations[i].
+// Spec: the Gloas body plus B.attestations, B.votes and B.support_votes. Bit i of support_votes marks available_attestations[i]. The list limits are decoding bounds, the transition caps both lists from the validator count.
 message BeaconBlockBodyDecoupled {
   bytes randao_reveal = 1 [ (ethereum.eth.ext.ssz_size) = "96" ];
   Eth1Data eth1_data = 2;
@@ -83,7 +83,7 @@ message BeaconBlockBodyDecoupled {
   repeated AttesterSlashingGloas attester_slashings = 5
       [ (ethereum.eth.ext.ssz_max) = "1" ];
   repeated IndexedAttestationDecoupled attestations = 6
-      [ (ethereum.eth.ext.ssz_max) = "8" ];
+      [ (ethereum.eth.ext.ssz_max) = "1099511627776" ];
   repeated Deposit deposits = 7 [ (ethereum.eth.ext.ssz_max) = "16" ];
   repeated SignedVoluntaryExit voluntary_exits = 8
       [ (ethereum.eth.ext.ssz_max) = "16" ];
@@ -95,9 +95,9 @@ message BeaconBlockBodyDecoupled {
       [ (ethereum.eth.ext.ssz_max) = "payload_attestation.size" ];
   ethereum.engine.v1.ExecutionRequestsGloas parent_execution_requests = 13;
   repeated AvailableAttestation available_attestations = 14
-      [ (ethereum.eth.ext.ssz_max) = "available_attestation.size" ];
+      [ (ethereum.eth.ext.ssz_max) = "1099511627776" ];
   bytes support_votes = 15 [
-    (ethereum.eth.ext.ssz_max) = "available_attestation.size",
+    (ethereum.eth.ext.ssz_max) = "1099511627776",
     (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
   ];
 }

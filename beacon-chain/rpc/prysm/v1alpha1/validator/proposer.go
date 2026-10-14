@@ -222,17 +222,25 @@ func (vs *Server) setPreGloasConsensusFields(ctx context.Context, sBlk interface
 	}
 	sBlk.SetEth1Data(eth1Data)
 
-	deposits, atts, err := vs.packDepositsAndAttestations(ctx, head, sBlk.Block().Slot(), eth1Data) // TODO: split attestations and deposits
-	if err != nil {
-		sBlk.SetDeposits([]*ethpb.Deposit{})
-		if err := sBlk.SetAttestations([]ethpb.Att{}); err != nil {
-			log.WithError(err).Error("Could not set attestations on block")
+	if sBlk.Version() >= version.Decoupled { // the Decoupled body has no legacy attestation list
+		deposits, err := vs.deposits(ctx, head, eth1Data)
+		if err != nil {
+			log.WithError(err).Error("Could not pack deposits")
 		}
-		log.WithError(err).Error("Could not pack deposits and attestations")
-	} else {
 		sBlk.SetDeposits(deposits)
-		if err := sBlk.SetAttestations(atts); err != nil {
-			log.WithError(err).Error("Could not set attestations on block")
+	} else {
+		deposits, atts, err := vs.packDepositsAndAttestations(ctx, head, sBlk.Block().Slot(), eth1Data) // TODO: split attestations and deposits
+		if err != nil {
+			sBlk.SetDeposits([]*ethpb.Deposit{})
+			if err := sBlk.SetAttestations([]ethpb.Att{}); err != nil {
+				log.WithError(err).Error("Could not set attestations on block")
+			}
+			log.WithError(err).Error("Could not pack deposits and attestations")
+		} else {
+			sBlk.SetDeposits(deposits)
+			if err := sBlk.SetAttestations(atts); err != nil {
+				log.WithError(err).Error("Could not set attestations on block")
+			}
 		}
 	}
 

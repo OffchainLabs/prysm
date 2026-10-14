@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -18,6 +19,9 @@ import (
 // buildBlockGloas builds a Gloas (ePBS) block, whose body carries an execution payload bid
 // rather than the payload itself. The payload is revealed separately via the envelope.
 func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipBuilder, parentFull, eagerPayloadStateRoot bool, builderConfig *ethpb.BuilderConfig) (*ethpb.GenericBeaconBlock, error) {
+	if eagerPayloadStateRoot && sBlk.Version() >= version.Decoupled { // TODO(DC): no contents container to bundle the envelope into yet
+		return nil, status.Error(codes.Unimplemented, "Eager payload state root is not supported for decoupled blocks")
+	}
 	if parentFull {
 		if err := vs.applyParentExecutionPayloadToHead(ctx, head, sBlk.Block().ParentRoot()); err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not apply parent execution payload: %v", err)
@@ -25,6 +29,7 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 	}
 
 	var wg sync.WaitGroup
+	var decoupledErr error
 	wg.Go(func() {
 		vs.setPreGloasConsensusFields(ctx, sBlk, head)
 		if err := sBlk.SetPayloadAttestations(vs.getPayloadAttestations(ctx, head, sBlk.Block().ParentRoot())); err != nil {
@@ -32,6 +37,9 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 		}
 		if err := vs.setParentExecutionRequests(ctx, sBlk, head, parentFull); err != nil {
 			log.WithError(err).Error("Could not set parent execution requests")
+		}
+		if sBlk.Version() >= version.Decoupled {
+			decoupledErr = vs.setDecoupledFields(sBlk, head)
 		}
 	})
 
@@ -76,6 +84,9 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 	selfBuilt := src == bidSourceSelfBuild
 
 	wg.Wait()
+	if decoupledErr != nil {
+		return nil, status.Errorf(codes.Internal, "Could not set decoupled fields: %v", decoupledErr)
+	}
 
 	sr, _, err := vs.computePostBlockStateAndRoot(ctx, sBlk)
 	if err != nil {

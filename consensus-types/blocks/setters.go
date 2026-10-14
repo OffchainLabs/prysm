@@ -3,6 +3,7 @@ package blocks
 import (
 	"fmt"
 
+	"github.com/OffchainLabs/go-bitfield"
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -105,6 +106,9 @@ func (b *SignedBeaconBlock) SetAttesterSlashings(slashings []eth.AttSlashing) er
 // SetAttestations sets the attestations in the block.
 // This function is not thread safe, it is only used during block creation.
 func (b *SignedBeaconBlock) SetAttestations(atts []eth.Att) error {
+	if b.version >= version.Decoupled {
+		return consensus_types.ErrNotSupported("SetAttestations", b.version)
+	}
 	if b.version >= version.Gloas {
 		blockAtts := make([]*eth.AttestationGloas, 0, len(atts))
 		for _, att := range atts {
@@ -227,5 +231,29 @@ func (b *SignedBeaconBlock) SetSignedExecutionPayloadBid(header *eth.SignedExecu
 		return consensus_types.ErrNotSupported("SetSignedExecutionPayloadBid", b.version)
 	}
 	b.block.body.signedExecutionPayloadBid = header
+	return nil
+}
+
+func (b *SignedBeaconBlock) SetAttestationsDecoupled(atts []*eth.IndexedAttestationDecoupled) error {
+	if b.version < version.Decoupled {
+		return consensus_types.ErrNotSupported("SetAttestationsDecoupled", b.version)
+	}
+	b.block.body.attestationsDecoupled = atts
+	return nil
+}
+
+func (b *SignedBeaconBlock) SetAvailableAttestations(atts []*eth.AvailableAttestation) error {
+	if b.version < version.Decoupled {
+		return consensus_types.ErrNotSupported("SetAvailableAttestations", b.version)
+	}
+	b.block.body.availableAttestations = atts
+	return nil
+}
+
+func (b *SignedBeaconBlock) SetSupportVotes(votes bitfield.Bitlist) error {
+	if b.version < version.Decoupled {
+		return consensus_types.ErrNotSupported("SetSupportVotes", b.version)
+	}
+	b.block.body.supportVotes = votes
 	return nil
 }

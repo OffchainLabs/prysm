@@ -13,6 +13,7 @@ import (
 	lightclient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	decoupledpool "github.com/OffchainLabs/prysm/v7/beacon-chain/operations/decoupled"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -118,6 +119,14 @@ func WithAttestationCache(c *cache.AttestationCache) Option {
 func WithAttestationPool(p attestations.Pool) Option {
 	return func(s *Service) error {
 		s.cfg.AttPool = p
+		return nil
+	}
+}
+
+// WithDecoupledPools for the FG inclusion pool fed by imported blocks and the AC vote pool, both pruned on the clock.
+func WithDecoupledPools(fg *decoupledpool.FGPool, votes *decoupledpool.VotePool) Option {
+	return func(s *Service) error {
+		s.cfg.DecoupledFGPool, s.cfg.DecoupledVotePool = fg, votes
 		return nil
 	}
 }

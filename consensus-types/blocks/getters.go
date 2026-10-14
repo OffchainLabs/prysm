@@ -1262,6 +1262,9 @@ func (b *BeaconBlockBody) AttesterSlashings() []eth.AttSlashing {
 // Attestations returns the stored attestations in the block.
 func (b *BeaconBlockBody) Attestations() []eth.Att {
 	var atts []eth.Att
+	if b.version >= version.Decoupled {
+		return nil
+	}
 	if b.version >= version.Gloas {
 		if b.attestationsGloas == nil {
 			return nil

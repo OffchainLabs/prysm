@@ -20,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	decoupledpool "github.com/OffchainLabs/prysm/v7/beacon-chain/operations/decoupled"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
@@ -70,6 +71,8 @@ type Server struct {
 	AttestationCache                 *cache.AttestationCache
 	AttPool                          attestations.Pool
 	PayloadAttestationPool           payloadattestation.PoolManager
+	DecoupledFGPool                  *decoupledpool.FGPool
+	DecoupledVotePool                *decoupledpool.VotePool
 	SlashingsPool                    slashings.PoolManager
 	ExitPool                         voluntaryexits.PoolManager
 	SyncCommitteePool                synccommittee.Pool

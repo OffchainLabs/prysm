@@ -43,7 +43,6 @@ func (a *AvailableAttestationData) Copy() *AvailableAttestationData {
 	}
 	return &AvailableAttestationData{
 		Slot:            a.Slot,
-		PayloadPresent:  a.PayloadPresent,
 		BeaconBlockRoot: bytesutil.SafeCopyBytes(a.BeaconBlockRoot),
 	}
 }

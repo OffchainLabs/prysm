@@ -12,7 +12,7 @@ import (
 )
 
 func (c *AvailableAttestationData) SizeSSZ() int {
-	size := 41
+	size := 40
 
 	return size
 }
@@ -30,14 +30,7 @@ func (c *AvailableAttestationData) MarshalSSZTo(dst []byte) ([]byte, error) {
 		return nil, fmt.Errorf("Slot: %w", err)
 	}
 
-	// Field 1: PayloadPresent
-	if c.PayloadPresent {
-		dst = append(dst, 1)
-	} else {
-		dst = append(dst, 0)
-	}
-
-	// Field 2: BeaconBlockRoot
+	// Field 1: BeaconBlockRoot
 	if len(c.BeaconBlockRoot) != 32 {
 		return nil, ssz.ErrBytesLength
 	}
@@ -49,32 +42,21 @@ func (c *AvailableAttestationData) MarshalSSZTo(dst []byte) ([]byte, error) {
 func (c *AvailableAttestationData) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size != 41 {
+	if size != 40 {
 		return ssz.ErrSize
 	}
 
 	sszSlice0 := buf[0:8]  // c.Slot
-	sszSlice1 := buf[8:9]  // c.PayloadPresent
-	sszSlice2 := buf[9:41] // c.BeaconBlockRoot
+	sszSlice1 := buf[8:40] // c.BeaconBlockRoot
 
 	// Field 0: Slot
 	if err = c.Slot.UnmarshalSSZ(sszSlice0); err != nil {
 		return fmt.Errorf("Slot: %w", err)
 	}
 
-	// Field 1: PayloadPresent
-	if sszSlice1[0] > 1 {
-		return ssz.ErrInvalidSerialization
-	}
-	if sszSlice1[0] == 1 {
-		c.PayloadPresent = true
-	} else {
-		c.PayloadPresent = false
-	}
-
-	// Field 2: BeaconBlockRoot
+	// Field 1: BeaconBlockRoot
 	c.BeaconBlockRoot = make([]byte, 0, 32)
-	c.BeaconBlockRoot = append(c.BeaconBlockRoot, sszSlice2...)
+	c.BeaconBlockRoot = append(c.BeaconBlockRoot, sszSlice1...)
 	return err
 }
 
@@ -95,9 +77,7 @@ func (c *AvailableAttestationData) HashTreeRootWith(hh *ssz.Hasher) (err error) 
 	if err := c.Slot.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("Slot: %w", err)
 	}
-	// Field 1: PayloadPresent
-	hh.PutBool(c.PayloadPresent)
-	// Field 2: BeaconBlockRoot
+	// Field 1: BeaconBlockRoot
 	if len(c.BeaconBlockRoot) != 32 {
 		return ssz.ErrBytesLength
 	}
@@ -107,7 +87,7 @@ func (c *AvailableAttestationData) HashTreeRootWith(hh *ssz.Hasher) (err error) 
 }
 
 func (c *AvailableAttestation) SizeSSZ() int {
-	size := 141
+	size := 140
 	size += len(c.AggregationBits)
 	return size
 }
@@ -119,7 +99,7 @@ func (c *AvailableAttestation) MarshalSSZ() ([]byte, error) {
 
 func (c *AvailableAttestation) MarshalSSZTo(dst []byte) ([]byte, error) {
 	var err error
-	offset := 141
+	offset := 140
 
 	// Field 0: AggregationBits
 	dst = ssz.WriteOffset(dst, offset)
@@ -147,15 +127,15 @@ func (c *AvailableAttestation) MarshalSSZTo(dst []byte) ([]byte, error) {
 func (c *AvailableAttestation) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 141 {
+	if size < 140 {
 		return ssz.ErrSize
 	}
 
-	sszSlice1 := buf[4:45]   // c.Data
-	sszSlice2 := buf[45:141] // c.Signature
+	sszSlice1 := buf[4:44]   // c.Data
+	sszSlice2 := buf[44:140] // c.Signature
 
 	sszVarOffset0 := ssz.ReadOffset(buf[0:4]) // c.AggregationBits
-	if sszVarOffset0 != 141 {
+	if sszVarOffset0 != 140 {
 		return ssz.ErrInvalidVariableOffset
 	}
 	if sszVarOffset0 > size {
@@ -478,8 +458,8 @@ func (c *IndexedAttestationDecoupled) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.AttestingIndices length is %d, which is not a multiple of 8: %w", len(sszSlice0), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice0) / 8
-		if numElem > 131072 {
-			return fmt.Errorf("ssz-max exceeded: c.AttestingIndices has %d elements, ssz-max is 131072: %w", numElem, ssz.ErrListTooBig)
+		if numElem > 1099511627776 {
+			return fmt.Errorf("ssz-max exceeded: c.AttestingIndices has %d elements, ssz-max is 1099511627776: %w", numElem, ssz.ErrListTooBig)
 		}
 		c.AttestingIndices = make([]uint64, numElem)
 		for i := 0; i < numElem; i++ {
@@ -2637,8 +2617,8 @@ func (c *BeaconBlockBodyDecoupled) UnmarshalSSZ(buf []byte) error {
 				return fmt.Errorf("misaligned list bytes: when decoding c.Attestations, end-of-list offset is %d, which is not a multiple of 4 (offset size)", startOffset)
 			}
 			listLen := startOffset / 4
-			if listLen > 8 {
-				return fmt.Errorf("ssz-max exceeded: c.Attestations has %d elements, ssz-max is 8: %w", listLen, ssz.ErrListTooBig)
+			if listLen > 1099511627776 {
+				return fmt.Errorf("ssz-max exceeded: c.Attestations has %d elements, ssz-max is 1099511627776: %w", listLen, ssz.ErrListTooBig)
 			}
 			totalVarBytes := uint64(len(sszSlice5))
 			if totalVarBytes < startOffset {
@@ -2789,8 +2769,8 @@ func (c *BeaconBlockBodyDecoupled) UnmarshalSSZ(buf []byte) error {
 				return fmt.Errorf("misaligned list bytes: when decoding c.AvailableAttestations, end-of-list offset is %d, which is not a multiple of 4 (offset size)", startOffset)
 			}
 			listLen := startOffset / 4
-			if listLen > 8 {
-				return fmt.Errorf("ssz-max exceeded: c.AvailableAttestations has %d elements, ssz-max is 8: %w", listLen, ssz.ErrListTooBig)
+			if listLen > 1099511627776 {
+				return fmt.Errorf("ssz-max exceeded: c.AvailableAttestations has %d elements, ssz-max is 1099511627776: %w", listLen, ssz.ErrListTooBig)
 			}
 			totalVarBytes := uint64(len(sszSlice13))
 			if totalVarBytes < startOffset {
@@ -2827,7 +2807,7 @@ func (c *BeaconBlockBodyDecoupled) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field 14: SupportVotes
-	if err = ssz.ValidateBitlist(sszSlice14, 8); err != nil {
+	if err = ssz.ValidateBitlist(sszSlice14, 1099511627776); err != nil {
 		return fmt.Errorf("SupportVotes: %w", err)
 	}
 	c.SupportVotes = append([]byte{}, go_bitfield.Bitlist(sszSlice14)...)

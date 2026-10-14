@@ -23,6 +23,7 @@ go_library(
         "//beacon-chain/das:go_default_library",
         "//beacon-chain/db:go_default_library",
         "//beacon-chain/forkchoice:go_default_library",
+        "//beacon-chain/forkchoice/decoupled:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
         "//config/fieldparams:go_default_library",
