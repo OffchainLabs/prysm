@@ -184,23 +184,15 @@ func (s *Service) prepareDecoupledBlock(ctx context.Context, st state.BeaconStat
 	if err != nil {
 		return nil, err
 	}
-	f, err := st.Finalized()
-	if err != nil {
-		return nil, err
-	}
-	fh, err := st.FinalizedHeight()
-	if err != nil {
-		return nil, err
-	}
-	return s.prepareDecoupled(ctx, decoupled.Pair{Height: fh, Root: bytesutil.ToBytes32(f.Root)}, uint64(st.NumValidators()), b)
+	return s.prepareDecoupled(ctx, b.FG.Finalized, uint64(st.NumValidators()), b)
 }
 
-// Spec: ac_on_block after fg_on_block. Everything fallible happens here, the lookups for the missing ancestors, with no engine mutation beyond creating it, so an import that fails afterwards leaves the engine as it was. finalized is the accepted pair from the first block's post-state, so the engine never starts above the blocks it is about to insert. The caller holds the legacy fork choice lock.
-func (s *Service) prepareDecoupled(ctx context.Context, finalized decoupled.Pair, validators uint64, blocks ...decoupled.Block) ([]decoupled.Block, error) {
+// Spec: ac_on_block after fg_on_block. Everything fallible happens here, the lookups for the missing ancestors, with no engine mutation beyond creating it, so an import that fails afterwards leaves the engine as it was. claimed is the finalized pair of the first block's post-state. The caller holds the legacy fork choice lock.
+func (s *Service) prepareDecoupled(ctx context.Context, claimed decoupled.Pair, validators uint64, blocks ...decoupled.Block) ([]decoupled.Block, error) {
 	s.decoupledLock.Lock()
 	defer s.decoupledLock.Unlock()
 	if s.decoupledStore == nil {
-		if err := s.startDecoupled(ctx, finalized, validators, prysmTime.Now()); err != nil {
+		if err := s.startDecoupled(ctx, claimed, validators, prysmTime.Now()); err != nil {
 			return nil, err
 		}
 	}
@@ -257,11 +249,31 @@ func (s *Service) poolDecoupledAttestations(blocks ...consensusblocks.ROBlock) {
 // Spec: Store.init at F with its own slot and target, the accepted finalization pair seeds J, the genesis σ when F predates the fork.
 // TODO(DC): K_s is the registry at creation, it does not follow registry growth.
 // TODO(DC): sampled committees need a per-slot denominator with seat multiplicity, not only a container swap.
-func (s *Service) startDecoupled(ctx context.Context, finalized decoupled.Pair, validators uint64, now time.Time) error {
-	root := s.ensureRootNotZeros(finalized.Root)
+func (s *Service) startDecoupled(ctx context.Context, claimed decoupled.Pair, validators uint64, now time.Time) error {
+	// The later of two finalizations by slot. At activation the legacy store still holds the last Gloas checkpoint it applied before external mode, while the upgraded state carries the final Gloas advancement, after a restart the database's F is the latest and the re-imported block claims an older pair. The claimed pair is exact, a post-fork legacy F is the entry of its own state height.
+	root := s.ensureRootNotZeros(s.cfg.ForkChoiceStore.FinalizedCheckpoint().Root)
 	blk, err := s.getBlock(ctx, root)
 	if err != nil {
 		return errors.Wrapf(err, "could not get finalized block %#x", root)
+	}
+	finalized := decoupled.Pair{Root: root}
+	if blk.Version() >= version.Decoupled {
+		fst, err := s.cfg.StateGen.StateByRoot(ctx, root)
+		if err != nil {
+			return errors.Wrapf(err, "could not get finalized state %#x", root)
+		}
+		if finalized.Height, err = fst.Height(); err != nil {
+			return err
+		}
+	}
+	if c := s.ensureRootNotZeros(claimed.Root); c != root {
+		cblk, err := s.getBlock(ctx, c)
+		if err != nil {
+			return errors.Wrapf(err, "could not get claimed finalized block %#x", c)
+		}
+		if cblk.Block().Slot() > blk.Block().Slot() {
+			root, blk, finalized = c, cblk, decoupled.Pair{Height: claimed.Height, Root: c}
+		}
 	}
 	anchor := decoupled.Block{Root: root, Slot: blk.Block().Slot(), FG: decoupled.FGSummary{Target: decoupled.Pair{Height: 1, Root: root}}}
 	if blk.Version() >= version.Decoupled {
@@ -273,7 +285,9 @@ func (s *Service) startDecoupled(ctx context.Context, finalized decoupled.Pair, 
 			return err
 		}
 	}
-	anchor.FG.Finalized = decoupled.Pair{Height: finalized.Height, Root: root}
+	anchor.FG.Finalized = finalized
+	// TODO(DC): locks with their deadlines and latest_confirmed are not persisted, a restarted node comes back unlocked. Persist them and attach them as their blocks re-import.
+	// TODO(DC): the FG pool is not persisted, singles received since the last block are lost at restart.
 	cfg := params.BeaconConfig()
 	if cfg.DecoupledSlotsPerRound < 2 {
 		return errors.New("decoupled slots per round must be at least 2")
@@ -441,6 +455,7 @@ func decoupledVotes(body interfaces.ReadOnlyBeaconBlockBody) (votes, support []d
 }
 
 // Spec: ac_on_tick at Δ and 2Δ, with the pool pruned at slot start. Wall time drives the engine, the label only picks the pruning point, so an overdue label changes nothing. The head is published after each tick since unlocking at Δ can move the anchor.
+// TODO(DC): observation loss is not detected, a machine sleep or a stalled process keeps acting on a stale view until the next process restart.
 func (s *Service) spawnDecoupledTicker() {
 	go func() {
 		if _, err := s.clockWaiter.WaitForClock(s.ctx); err != nil {

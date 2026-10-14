@@ -268,7 +268,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	var set *bls.SignatureBatch
 	boundaries := make(map[[32]byte]state.BeaconState)
 	var decoupledBlocks []decoupled.Block
-	var decoupledFinalized decoupled.Pair
+	var decoupledClaimed decoupled.Pair
 	var decoupledValidators uint64
 	for i, b := range blks {
 		if features.BlacklistedBlock(b.Root()) {
@@ -293,15 +293,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 				return err
 			}
 			if len(decoupledBlocks) == 0 {
-				f, err := preState.Finalized()
-				if err != nil {
-					return err
-				}
-				fh, err := preState.FinalizedHeight()
-				if err != nil {
-					return err
-				}
-				decoupledFinalized, decoupledValidators = decoupled.Pair{Height: fh, Root: bytesutil.ToBytes32(f.Root)}, uint64(preState.NumValidators())
+				decoupledClaimed, decoupledValidators = db.FG.Finalized, uint64(preState.NumValidators())
 			}
 			decoupledBlocks = append(decoupledBlocks, db)
 		}
@@ -398,7 +390,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	if len(decoupledBlocks) > 0 {
 		s.cfg.ForkChoiceStore.SetExternalCheckpoints()
 		var err error
-		if prepared, err = s.prepareDecoupled(ctx, decoupledFinalized, decoupledValidators, decoupledBlocks...); err != nil {
+		if prepared, err = s.prepareDecoupled(ctx, decoupledClaimed, decoupledValidators, decoupledBlocks...); err != nil {
 			return errors.Wrap(err, "could not prepare batch for the decoupled fork choice")
 		}
 	}
