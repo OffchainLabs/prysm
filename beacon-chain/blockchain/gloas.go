@@ -224,7 +224,7 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 		log.WithError(err).Error("Failed to get head state")
 		return
 	}
-	if !s.inRegularSync() {
+	if !s.inRegularSync() || s.decoupledActive() {
 		return
 	}
 	attr := s.getLatePayloadAttribute(ctx, st, currentSlot+1, r)

@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"slices"
@@ -324,7 +325,7 @@ func (s *Service) updateFinalized(ctx context.Context, cp *ethpb.Checkpoint) err
 	if err != nil {
 		return err
 	}
-	if cp.Epoch <= currentFinalized.Epoch {
+	if cp.Epoch < currentFinalized.Epoch || (cp.Epoch == currentFinalized.Epoch && bytes.Equal(cp.Root, currentFinalized.Root)) {
 		return nil
 	}
 

@@ -259,6 +259,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	DecoupledForkVersion:  []byte{16, 0, 0, 0},
 	DecoupledForkEpoch:    mainnetDecoupledForkEpoch,
 	DecoupledTimeoutDelay: 4,
+	DecoupledLockStreak:   2,
 
 	// New values introduced in Altair hard fork 1.
 	// Participation flag indices.

@@ -30,6 +30,22 @@ var (
 		Name: "beacon_clock_time_slot",
 		Help: "The current slot based on the genesis time and current clock",
 	})
+	decoupledHeadSlot = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "decoupled_head_slot",
+		Help: "Slot of the decoupled fork choice head",
+	})
+	decoupledConfirmedSlot = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "decoupled_confirmed_slot",
+		Help: "Slot of the decoupled fork choice confirmed block",
+	})
+	decoupledJustifiedHeight = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "decoupled_justified_height",
+		Help: "Justified height accepted by the decoupled fork choice",
+	})
+	decoupledFinalizedHeight = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "decoupled_finalized_height",
+		Help: "Finalized height accepted by the decoupled fork choice",
+	})
 
 	headFinalizedEpoch = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "head_finalized_epoch",

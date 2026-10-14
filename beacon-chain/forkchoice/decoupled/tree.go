@@ -2,13 +2,14 @@ package decoupled
 
 import (
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
-// Spec: Store.init and ac_restart. Genesis carries the initial chain state, so h_max starts at 1. now is the restart time the joined rule is measured from.
-func New(cfg Config, genesis time.Time, genesisRoot [32]byte, now time.Time) (*Store, error) {
+// Spec: Store.init and ac_restart. The root is F with its own slot and target, its Finalized pair is the accepted finalization and seeds J, the genesis σ has target height 1 and F at height 0. now is the restart time the joined rule is measured from.
+func New(cfg Config, genesis time.Time, root Block, now time.Time) (*Store, error) {
 	if cfg.Delta <= 0 {
 		return nil, errors.New("delta must be positive")
 	}
@@ -18,25 +19,20 @@ func New(cfg Config, genesis time.Time, genesisRoot [32]byte, now time.Time) (*S
 	if cfg.CommitteeSize == 0 {
 		return nil, errors.New("committee size must be positive")
 	}
-	g := &Node{
-		Root: genesisRoot,
-		FG: FGSummary{
-			Target:    Pair{Height: 1, Root: genesisRoot},
-			Justified: Pair{Root: genesisRoot},
-			Finalized: Pair{Root: genesisRoot},
-		},
-	}
+	g := &Node{Root: root.Root, Slot: root.Slot, FG: root.FG}
 	return &Store{
 		cfg:             cfg,
 		genesis:         genesis,
-		genesisRoot:     genesisRoot,
+		genesisRoot:     root.Root,
 		restartTime:     now,
 		root:            g,
-		nodes:           map[[32]byte]*Node{genesisRoot: g},
-		bySlot:          map[primitives.Slot][]*Node{0: {g}},
+		nodes:           map[[32]byte]*Node{root.Root: g},
+		bySlot:          map[primitives.Slot][]*Node{root.Slot: {g}},
 		finalized:       g,
 		justified:       g,
-		hMax:            1,
+		hJ:              root.FG.Finalized.Height,
+		hF:              root.FG.Finalized.Height,
+		hMax:            root.FG.Target.Height,
 		pool:            make(map[primitives.Slot]*bucket),
 		saved:           make(map[primitives.Slot]*Node),
 		latestConfirmed: g,
@@ -112,4 +108,49 @@ func (st *Store) prune() {
 		stack = append(stack, n.Children...)
 	}
 	st.nodes, st.bySlot = kept, bySlot
+}
+
+// Blocks the execution layer invalidated leave the tree with their subtrees. F cannot leave. h_max, J and h_j are rebuilt from the survivors with J seeded at F, since F's own state names an older justification and the removed blocks may have carried the evidence.
+func (st *Store) Remove(roots [][32]byte) error {
+	for _, r := range roots {
+		n := st.nodes[r]
+		if n == nil {
+			continue
+		}
+		if n == st.finalized {
+			return errors.New("cannot remove the finalized block")
+		}
+		if p := n.Parent; p != nil {
+			p.Children = slices.DeleteFunc(p.Children, func(c *Node) bool { return c == n })
+		}
+		st.drop(n)
+	}
+	st.justified, st.hJ, st.hMax = st.finalized, st.hF, st.finalized.FG.Target.Height
+	for _, n := range st.nodes {
+		st.hMax = max(st.hMax, n.FG.Target.Height)
+		if j := st.nodes[n.FG.Justified.Root]; j != nil && (Pair{Height: st.hJ, Root: st.justified.Root}).less(n.FG.Justified) {
+			st.justified, st.hJ = j, n.FG.Justified.Height
+		}
+	}
+	return nil
+}
+
+func (st *Store) drop(n *Node) {
+	delete(st.nodes, n.Root)
+	st.bySlot[n.Slot] = slices.DeleteFunc(st.bySlot[n.Slot], func(c *Node) bool { return c == n })
+	for _, c := range n.Children {
+		st.drop(c)
+	}
+}
+
+// The block of the chain through root at the greatest slot not above slot, false when root is unknown or the chain leaves the tree above slot.
+func (st *Store) AncestorAtSlot(root [32]byte, slot primitives.Slot) ([32]byte, bool) {
+	n := st.nodes[root]
+	for n != nil && n.Slot > slot {
+		n = n.Parent
+	}
+	if n == nil {
+		return [32]byte{}, false
+	}
+	return n.Root, true
 }

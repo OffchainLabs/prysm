@@ -42,6 +42,7 @@ type HeadRetriever interface {
 	FullHead(context.Context) ([32]byte, [32]byte, bool, error)
 	GetProposerHead() [32]byte
 	CachedHeadRoot() [32]byte
+	PayloadContentDecoupled([32]byte) ([32]byte, bool, error)
 }
 
 // BlockProcessor processes the block that's used for accounting fork choice.
@@ -122,6 +123,8 @@ type Setter interface {
 	SetOptimisticToInvalid(context.Context, [32]byte, [32]byte, [32]byte, [32]byte) ([][32]byte, error)
 	UpdateJustifiedCheckpoint(context.Context, *forkchoicetypes.Checkpoint) error
 	UpdateFinalizedCheckpoint(*forkchoicetypes.Checkpoint) error
+	SetExternalCheckpoints()
+	SetCheckpointsByRoot(context.Context, *forkchoicetypes.Checkpoint, *forkchoicetypes.Checkpoint) error
 	SetGenesisTime(time.Time)
 	NewSlot(context.Context, primitives.Slot) error
 	SetBalancesByRooter(BalancesByRooter)

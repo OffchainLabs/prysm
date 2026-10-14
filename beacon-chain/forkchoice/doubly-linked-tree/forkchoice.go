@@ -151,6 +151,9 @@ func (f *ForkChoice) InsertNode(ctx context.Context, state state.BeaconState, ro
 			}
 		}
 	}
+	if f.store.externalCheckpoints {
+		return nil
+	}
 	jc, fc = f.store.pullTips(state, pn.node, jc, fc)
 	if err := f.updateCheckpoints(ctx, jc, fc); err != nil {
 		_, remErr := f.store.removeNode(ctx, pn)
@@ -160,6 +163,23 @@ func (f *ForkChoice) InsertNode(ctx context.Context, state state.BeaconState, ro
 		return errors.Wrap(err, "could not update checkpoints")
 	}
 	return nil
+}
+
+// Spec: the Decoupled engine's accepted J and F replace the state checkpoint rule, so a same epoch advance moves the root and prunes.
+func (f *ForkChoice) SetExternalCheckpoints() {
+	f.store.externalCheckpoints = true
+}
+
+func (f *ForkChoice) SetCheckpointsByRoot(ctx context.Context, jc, fc *forkchoicetypes.Checkpoint) error {
+	if jc.Root != f.store.justifiedCheckpoint.Root {
+		f.store.prevJustifiedCheckpoint = f.store.justifiedCheckpoint
+		f.store.justifiedCheckpoint = jc
+	}
+	if fc.Root == f.store.finalizedCheckpoint.Root {
+		return nil
+	}
+	f.store.finalizedCheckpoint = fc
+	return f.store.prune(ctx)
 }
 
 // updateCheckpoints update the checkpoints when inserting a new node.
@@ -617,6 +637,9 @@ func (f *ForkChoice) InsertChain(ctx context.Context, chain []*forkchoicetypes.B
 					children:   make([]*Node, 0),
 				}
 			}
+		}
+		if f.store.externalCheckpoints {
+			continue
 		}
 		if err := f.updateCheckpoints(ctx, bcp.JustifiedCheckpoint, bcp.FinalizedCheckpoint); err != nil {
 			return err

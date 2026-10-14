@@ -276,6 +276,7 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		fmt.Sprintf("GLOAS_FORK_EPOCH: %d", cfg.GloasForkEpoch),
 		fmt.Sprintf("DECOUPLED_FORK_EPOCH: %d", cfg.DecoupledForkEpoch),
 		fmt.Sprintf("DECOUPLED_TIMEOUT_DELAY: %d", cfg.DecoupledTimeoutDelay),
+		fmt.Sprintf("DECOUPLED_LOCK_STREAK: %d", cfg.DecoupledLockStreak),
 		fmt.Sprintf("EPOCHS_PER_SUBNET_SUBSCRIPTION: %d", cfg.EpochsPerSubnetSubscription),
 		fmt.Sprintf("ATTESTATION_SUBNET_EXTRA_BITS: %d", cfg.AttestationSubnetExtraBits),
 		fmt.Sprintf("ATTESTATION_SUBNET_PREFIX_BITS: %d", cfg.AttestationSubnetPrefixBits),

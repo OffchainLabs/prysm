@@ -32,6 +32,7 @@ type ReadOnlyDatabase interface {
 	GenesisBlock(ctx context.Context) (interfaces.ReadOnlySignedBeaconBlock, error)
 	GenesisBlockRoot(ctx context.Context) ([32]byte, error)
 	IsFinalizedBlock(ctx context.Context, blockRoot [32]byte) bool
+	IsFinalizedAncestor(ctx context.Context, blockRoot [32]byte) bool
 	FinalizedChildBlock(ctx context.Context, blockRoot [32]byte) (interfaces.ReadOnlySignedBeaconBlock, error)
 	HighestRootsBelowSlot(ctx context.Context, slot primitives.Slot) (primitives.Slot, [][32]byte, error)
 	LowestRootsAtOrAboveSlot(ctx context.Context, slot primitives.Slot) (primitives.Slot, [][32]byte, error)

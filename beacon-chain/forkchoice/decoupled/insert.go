@@ -60,7 +60,7 @@ func (st *Store) updateFinality(n *Node) {
 	}
 	f := st.nodes[n.FG.Finalized.Root]
 	if f != nil && f != st.finalized && isAncestor(f, st.justified) && st.hasViableDescendant(f) {
-		st.finalized = f
+		st.finalized, st.hF = f, n.FG.Finalized.Height
 		st.prune()
 	}
 }
@@ -68,4 +68,5 @@ func (st *Store) updateFinality(n *Node) {
 func (st *Store) Finalized() *Node                   { return st.finalized }
 func (st *Store) Justified() *Node                   { return st.justified }
 func (st *Store) JustifiedHeight() primitives.Height { return st.hJ }
+func (st *Store) FinalizedHeight() primitives.Height { return st.hF }
 func (st *Store) MaxHeight() primitives.Height       { return st.hMax }

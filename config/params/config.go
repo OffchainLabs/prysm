@@ -217,6 +217,7 @@ type BeaconChainConfig struct {
 	DecoupledForkVersion  []byte           `yaml:"DECOUPLED_FORK_VERSION" spec:"true"` // DecoupledForkVersion is used to represent the fork version for decoupled.
 	DecoupledForkEpoch    primitives.Epoch `yaml:"DECOUPLED_FORK_EPOCH" spec:"true"`   // DecoupledForkEpoch is used to represent the assigned fork epoch for decoupled.
 	DecoupledTimeoutDelay primitives.Slot  `yaml:"DECOUPLED_TIMEOUT_DELAY"`            // DecoupledTimeoutDelay is the paper's δ_t, slots after the entry before a progress quorum alone advances the height.
+	DecoupledLockStreak   uint64           `yaml:"DECOUPLED_LOCK_STREAK"`              // DecoupledLockStreak is the paper's k, consecutive confirmations for a slow lock and the lock lifetime in slots.
 
 	ForkVersionSchedule map[[fieldparams.VersionLength]byte]primitives.Epoch // Schedule of fork epochs by version.
 	ForkVersionNames    map[[fieldparams.VersionLength]byte]string           // Human-readable names of fork versions.

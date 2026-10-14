@@ -19,11 +19,11 @@ message AvailableAttestationData {
   bytes beacon_block_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
-// Spec: an aggregated AC vote, the (validator, slot, head) triples of one committee seat set.
+// Spec: aggregated AC votes (validator, slot, head). K_s is every validator, so bit i is validator i.
 message AvailableAttestation {
   bytes aggregation_bits = 1 [
-    (ethereum.eth.ext.ssz_size) = "available_committee.size",
-    (ethereum.eth.ext.cast_type) = "available_committee.type"
+    (ethereum.eth.ext.ssz_max) = "1099511627776",
+    (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
   ];
   AvailableAttestationData data = 2;
   bytes signature = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];

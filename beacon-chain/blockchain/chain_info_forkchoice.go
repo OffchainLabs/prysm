@@ -17,6 +17,11 @@ import (
 
 // CachedHeadRoot returns the corresponding value from Forkchoice
 func (s *Service) CachedHeadRoot() [32]byte {
+	if s.decoupledActive() {
+		s.headLock.RLock()
+		defer s.headLock.RUnlock()
+		return s.headRoot()
+	}
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.cfg.ForkChoiceStore.CachedHeadRoot()
@@ -90,6 +95,10 @@ func (s *Service) HasFullNode(root [32]byte) bool {
 func (s *Service) FullBeatsEmpty(root [32]byte) bool {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
+	if s.decoupledActive() {
+		_, full, err := s.cfg.ForkChoiceStore.PayloadContentDecoupled(root)
+		return err == nil && full
+	}
 	return s.cfg.ForkChoiceStore.FullBeatsEmpty(root)
 }
 
@@ -210,6 +219,9 @@ func (s *Service) hashForGenesisBlock(ctx context.Context, root [32]byte) ([]byt
 func (s *Service) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool) {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
+	if s.decoupledActive() {
+		return s.decoupledCanonicalAtSlot(s.ctx, slot)
+	}
 	return s.cfg.ForkChoiceStore.CanonicalNodeAtSlot(slot)
 }
 

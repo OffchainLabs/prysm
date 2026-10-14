@@ -766,6 +766,10 @@ func (s *ChainService) GetProposerHead() [32]byte {
 	return [32]byte{}
 }
 
+func (s *ChainService) ProposerParent(primitives.Slot) ([32]byte, error) {
+	return s.GetProposerHead(), nil
+}
+
 // SetForkChoiceGenesisTime mocks the same method in the chain service
 func (s *ChainService) SetForkChoiceGenesisTime(timestamp time.Time) {
 	if s.ForkChoiceStore != nil {

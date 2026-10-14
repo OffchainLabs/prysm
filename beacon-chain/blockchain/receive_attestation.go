@@ -126,10 +126,13 @@ func (s *Service) spawnProcessAttestationsRoutine() {
 // notifyFastConfirmation emits a fast_confirmation event after every run of the fast
 // confirmation rule regardless of whether the confirmed block changed.
 func (s *Service) notifyFastConfirmation(currentSlot primitives.Slot) {
-	if s.fcr == nil {
-		return
+	root, ok := s.DecoupledConfirmed()
+	if !ok {
+		if s.fcr == nil {
+			return
+		}
+		root = s.fcr.ConfirmedRoot()
 	}
-	root := s.fcr.ConfirmedRoot()
 
 	s.cfg.ForkChoiceStore.RLock()
 	slot, err := s.cfg.ForkChoiceStore.Slot(root)
@@ -166,6 +169,10 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 	s.processAttestations(ctx, disparity)
 
 	processAttsElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
+	if s.decoupledActive() {
+		s.publishDecoupledHead(ctx, proposingSlot)
+		return
+	}
 
 	start = time.Now()
 	newHeadRoot, headHash, full, err := s.cfg.ForkChoiceStore.FullHead(ctx)

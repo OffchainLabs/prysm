@@ -53,6 +53,7 @@ type ForkchoiceFetcher interface {
 	GasLimit(root, blockHash [32]byte) (uint64, error)
 	CachedHeadRoot() [32]byte
 	GetProposerHead() [32]byte
+	ProposerParent(primitives.Slot) ([32]byte, error)
 	SetForkChoiceGenesisTime(time.Time)
 	UpdateHead(context.Context, primitives.Slot)
 	HighestReceivedBlockSlot() primitives.Slot
@@ -224,6 +225,10 @@ func (s *Service) HeadAndCanonicalNodeAtSlot(slot primitives.Slot) (headRoot [32
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	headRoot, headFull = s.HeadRootAndFull()
+	if s.decoupledActive() {
+		canonicalRoot, canonicalFull = s.decoupledCanonicalAtSlot(s.ctx, slot)
+		return headRoot, headFull, canonicalRoot, canonicalFull
+	}
 	canonicalRoot, canonicalFull = s.cfg.ForkChoiceStore.CanonicalNodeAtSlot(slot)
 	return headRoot, headFull, canonicalRoot, canonicalFull
 }
@@ -350,6 +355,9 @@ func (s *Service) CurrentFork() *ethpb.Fork {
 
 // IsCanonical returns true if the input block root is part of the canonical chain.
 func (s *Service) IsCanonical(ctx context.Context, blockRoot [32]byte) (bool, error) {
+	if s.decoupledActive() {
+		return s.decoupledIsCanonical(ctx, blockRoot)
+	}
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	// If the block has not been finalized, check fork choice store to see if the block is canonical
@@ -435,6 +443,9 @@ func (s *Service) IsFinalized(ctx context.Context, root [32]byte) bool {
 	// finalized.
 	if s.cfg.ForkChoiceStore.HasNode(root) {
 		return false
+	}
+	if s.decoupledActive() {
+		return s.cfg.BeaconDB.IsFinalizedAncestor(ctx, root)
 	}
 	return s.cfg.BeaconDB.IsFinalizedBlock(ctx, root)
 }

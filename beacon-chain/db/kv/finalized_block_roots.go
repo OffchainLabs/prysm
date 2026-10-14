@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -137,20 +138,22 @@ func (s *Store) updateFinalizedBlockRoots(ctx context.Context, tx *bolt.Tx, chec
 		root = pr[:]
 	}
 
-	// Upsert blocks from the current finalized epoch.
-	roots, err := s.BlockRoots(ctx, filters.NewFilter().SetStartEpoch(checkpoint.Epoch).SetEndEpoch(checkpoint.Epoch+1))
-	if err != nil {
-		tracing.AnnotateError(span, err)
-		return err
-	}
-	for _, root := range roots {
-		root := root[:]
-		if bytes.Equal(root, checkpoint.Root) || bkt.Get(root) != nil {
-			continue
-		}
-		if err := bkt.Put(root, containerFinalizedButNotCanonical); err != nil {
+	// Upsert blocks from the current finalized epoch. Decoupled finalizes mid epoch, so finality there is the walked ancestry only.
+	if checkpoint.Epoch < params.BeaconConfig().DecoupledForkEpoch {
+		roots, err := s.BlockRoots(ctx, filters.NewFilter().SetStartEpoch(checkpoint.Epoch).SetEndEpoch(checkpoint.Epoch+1))
+		if err != nil {
 			tracing.AnnotateError(span, err)
 			return err
+		}
+		for _, root := range roots {
+			root := root[:]
+			if bytes.Equal(root, checkpoint.Root) || bkt.Get(root) != nil {
+				continue
+			}
+			if err := bkt.Put(root, containerFinalizedButNotCanonical); err != nil {
+				tracing.AnnotateError(span, err)
+				return err
+			}
 		}
 	}
 
@@ -295,4 +298,25 @@ func (s *Store) FinalizedChildBlock(ctx context.Context, blockRoot [32]byte) (in
 	})
 	tracing.AnnotateError(span, err)
 	return blk, err
+}
+
+// Finality by ancestry only, the whole-epoch markers of the legacy index are not finality once a block mid epoch can be finalized.
+func (s *Store) IsFinalizedAncestor(ctx context.Context, blockRoot [32]byte) bool {
+	_, span := trace.StartSpan(ctx, "BeaconDB.IsFinalizedAncestor")
+	defer span.End()
+
+	var exists bool
+	err := s.db.View(func(tx *bolt.Tx) error {
+		entry := tx.Bucket(finalizedBlockRootsIndexBucket).Get(blockRoot[:])
+		exists = entry != nil && !bytes.Equal(entry, containerFinalizedButNotCanonical)
+		if !exists {
+			genRoot := tx.Bucket(blocksBucket).Get(genesisBlockRootKey)
+			exists = bytesutil.ToBytes32(genRoot) == blockRoot
+		}
+		return nil
+	})
+	if err != nil {
+		tracing.AnnotateError(span, err)
+	}
+	return exists
 }

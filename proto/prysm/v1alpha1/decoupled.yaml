@@ -2,6 +2,8 @@ package: "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 types:
   - name: "AvailableAttestationData"
   - name: "AvailableAttestation"
+    fields:
+      AggregationBits: {type: "ProgressiveBitlist"}
   - name: "CheckpointDecoupled"
   - name: "AttestationDataDecoupled"
   - name: "IndexedAttestationDecoupled"

@@ -107,8 +107,8 @@ func (c *AvailableAttestationData) HashTreeRootWith(hh *ssz.Hasher) (err error) 
 }
 
 func (c *AvailableAttestation) SizeSSZ() int {
-	size := 201
-
+	size := 141
+	size += len(c.AggregationBits)
 	return size
 }
 
@@ -119,12 +119,11 @@ func (c *AvailableAttestation) MarshalSSZ() ([]byte, error) {
 
 func (c *AvailableAttestation) MarshalSSZTo(dst []byte) ([]byte, error) {
 	var err error
+	offset := 141
 
 	// Field 0: AggregationBits
-	if len([]byte(c.AggregationBits)) != 64 {
-		return nil, ssz.ErrBytesLength
-	}
-	dst = append(dst, []byte(c.AggregationBits)...)
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(c.AggregationBits)
 
 	// Field 1: Data
 	if c.Data == nil {
@@ -140,23 +139,35 @@ func (c *AvailableAttestation) MarshalSSZTo(dst []byte) ([]byte, error) {
 	}
 	dst = append(dst, c.Signature...)
 
+	// Field 0: AggregationBits
+	dst = append(dst, c.AggregationBits...)
 	return dst, err
 }
 
 func (c *AvailableAttestation) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size != 201 {
+	if size < 141 {
 		return ssz.ErrSize
 	}
 
-	sszSlice0 := buf[0:64]    // c.AggregationBits
-	sszSlice1 := buf[64:105]  // c.Data
-	sszSlice2 := buf[105:201] // c.Signature
+	sszSlice1 := buf[4:45]   // c.Data
+	sszSlice2 := buf[45:141] // c.Signature
+
+	sszVarOffset0 := ssz.ReadOffset(buf[0:4]) // c.AggregationBits
+	if sszVarOffset0 != 141 {
+		return ssz.ErrInvalidVariableOffset
+	}
+	if sszVarOffset0 > size {
+		return ssz.ErrOffset
+	}
+	sszSlice0 := buf[sszVarOffset0:] // c.AggregationBits
 
 	// Field 0: AggregationBits
-	c.AggregationBits = make([]byte, 0, 64)
-	c.AggregationBits = append(c.AggregationBits, go_bitfield.Bitvector512(sszSlice0)...)
+	if err = ssz.ValidateBitlist(sszSlice0, 1099511627776); err != nil {
+		return fmt.Errorf("AggregationBits: %w", err)
+	}
+	c.AggregationBits = append([]byte{}, go_bitfield.Bitlist(sszSlice0)...)
 
 	// Field 1: Data
 	c.Data = new(AvailableAttestationData)
@@ -184,10 +195,10 @@ func (c *AvailableAttestation) HashTreeRoot() ([32]byte, error) {
 func (c *AvailableAttestation) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 	// Field 0: AggregationBits
-	if len([]byte(c.AggregationBits)) != 64 {
-		return ssz.ErrBytesLength
+	if len(c.AggregationBits) == 0 {
+		return ssz.ErrEmptyBitlist
 	}
-	hh.PutBytes([]byte(c.AggregationBits))
+	hh.PutProgressiveBitlist(c.AggregationBits)
 	// Field 1: Data
 	if err := c.Data.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("Data: %w", err)
@@ -2261,7 +2272,10 @@ func (c *BeaconBlockBodyDecoupled) SizeSSZ() int {
 		c.ParentExecutionRequests = new(v1.ExecutionRequestsGloas)
 	}
 	size += c.ParentExecutionRequests.SizeSSZ()
-	size += len(c.AvailableAttestations) * 201
+	for _, o := range c.AvailableAttestations {
+		size += 4
+		size += o.SizeSSZ()
+	}
 	size += len(c.SupportVotes)
 	return size
 }
@@ -2353,7 +2367,10 @@ func (c *BeaconBlockBodyDecoupled) MarshalSSZTo(dst []byte) ([]byte, error) {
 
 	// Field 13: AvailableAttestations
 	dst = ssz.WriteOffset(dst, offset)
-	offset += len(c.AvailableAttestations) * 201
+	for _, o := range c.AvailableAttestations {
+		offset += 4
+		offset += o.SizeSSZ()
+	}
 
 	// Field 14: SupportVotes
 	dst = ssz.WriteOffset(dst, offset)
@@ -2433,6 +2450,13 @@ func (c *BeaconBlockBodyDecoupled) MarshalSSZTo(dst []byte) ([]byte, error) {
 	}
 
 	// Field 13: AvailableAttestations
+	{
+		offset = 4 * len(c.AvailableAttestations)
+		for _, o := range c.AvailableAttestations {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += o.SizeSSZ()
+		}
+	}
 	for _, o := range c.AvailableAttestations {
 		if dst, err = o.MarshalSSZTo(dst); err != nil {
 			return nil, fmt.Errorf("AvailableAttestations: %w", err)
@@ -2754,22 +2778,51 @@ func (c *BeaconBlockBodyDecoupled) UnmarshalSSZ(buf []byte) error {
 
 	// Field 13: AvailableAttestations
 	{
-		if len(sszSlice13)%201 != 0 {
-			return fmt.Errorf("misaligned bytes: c.AvailableAttestations length is %d, which is not a multiple of 201: %w", len(sszSlice13), ssz.ErrIncorrectListSize)
-		}
-		numElem := len(sszSlice13) / 201
-		if numElem > 8 {
-			return fmt.Errorf("ssz-max exceeded: c.AvailableAttestations has %d elements, ssz-max is 8: %w", numElem, ssz.ErrListTooBig)
-		}
-		c.AvailableAttestations = make([]*AvailableAttestation, numElem)
-		for i := 0; i < numElem; i++ {
-			var tmp *AvailableAttestation
-			tmp = new(AvailableAttestation)
-			tmpSlice := sszSlice13[i*201 : (1+i)*201]
-			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
-				return fmt.Errorf("AvailableAttestations: %w", err)
+		// empty lists are zero length, so make sure there is room for an offset
+		// before attempting to unmarshal it
+		if len(sszSlice13) > 3 {
+			startOffset := ssz.ReadOffset(sszSlice13[0:4])
+			if startOffset == 0 {
+				return fmt.Errorf("encountered invalid offset of 0 when decoding c.AvailableAttestations")
 			}
-			c.AvailableAttestations[i] = tmp
+			if startOffset%4 != 0 {
+				return fmt.Errorf("misaligned list bytes: when decoding c.AvailableAttestations, end-of-list offset is %d, which is not a multiple of 4 (offset size)", startOffset)
+			}
+			listLen := startOffset / 4
+			if listLen > 8 {
+				return fmt.Errorf("ssz-max exceeded: c.AvailableAttestations has %d elements, ssz-max is 8: %w", listLen, ssz.ErrListTooBig)
+			}
+			totalVarBytes := uint64(len(sszSlice13))
+			if totalVarBytes < startOffset {
+				return fmt.Errorf("list bytes too short to contain an offset when decoding c.AvailableAttestations")
+			}
+			c.AvailableAttestations = make([]*AvailableAttestation, listLen)
+			var tmpSlice []byte
+			for i := uint64(0); i < listLen; i++ {
+				var tmp *AvailableAttestation
+				tmp = new(AvailableAttestation)
+				endOffset := totalVarBytes
+				if i+1 != listLen {
+					endOffset = ssz.ReadOffset(sszSlice13[(i+1)*4 : (i+2)*4])
+					if totalVarBytes < endOffset {
+						return fmt.Errorf("offset %d points past the end of buffer when decoding c.AvailableAttestations", endOffset)
+					}
+				}
+				if endOffset < startOffset {
+					return fmt.Errorf("offset %d is not greater than start offset %d when decoding c.AvailableAttestations", endOffset, startOffset)
+				}
+				tmpSlice = sszSlice13[startOffset:endOffset]
+				if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
+					return fmt.Errorf("AvailableAttestations: %w", err)
+				}
+				c.AvailableAttestations[i] = tmp
+				startOffset = endOffset
+			}
+		} else {
+			if len(sszSlice13) > 0 {
+				return fmt.Errorf("list bytes too short to contain an offset when decoding c.AvailableAttestations")
+			}
+			c.AvailableAttestations = make([]*AvailableAttestation, 0)
 		}
 	}
 

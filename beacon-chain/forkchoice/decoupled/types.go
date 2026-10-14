@@ -73,6 +73,7 @@ type Store struct {
 	finalized        *Node
 	justified        *Node
 	hJ               primitives.Height
+	hF               primitives.Height
 	hMax             primitives.Height
 	pool             map[primitives.Slot]*bucket
 	saved            map[primitives.Slot]*Node

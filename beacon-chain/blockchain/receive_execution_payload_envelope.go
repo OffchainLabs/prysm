@@ -438,6 +438,13 @@ func (s *Service) notifyForkchoiceUpdateGloas(ctx context.Context, blockHash [32
 	ctx, span := trace.StartSpan(ctx, "blockChain.notifyForkchoiceUpdateGloas")
 	defer span.End()
 
+	// In regular sync every update is the engine's own snapshot, a caller's earlier head hash could pair with newer checkpoints. Initial sync keeps its batch head updates.
+	if s.inRegularSync() && s.decoupledActive() {
+		s.cfg.ForkChoiceStore.Lock()
+		defer s.cfg.ForkChoiceStore.Unlock()
+		s.publishDecoupledHead(ctx, s.CurrentSlot()+1)
+		return nil, nil
+	}
 	s.cfg.ForkChoiceStore.RLock()
 	finalizedHash := s.cfg.ForkChoiceStore.FinalizedPayloadBlockHash()
 	safeHash := s.safeBlockHash()
@@ -447,31 +454,37 @@ func (s *Service) notifyForkchoiceUpdateGloas(ctx context.Context, blockHash [32
 		SafeBlockHash:      safeHash[:],
 		FinalizedBlockHash: finalizedHash[:],
 	}
+	pid, _, err := s.forkchoiceUpdatedGloas(ctx, fcs, attributes)
+	return pid, err
+}
+
+// syncing reports an accepted but unverified update, a payload build asked for then is not known to have started.
+func (s *Service) forkchoiceUpdatedGloas(ctx context.Context, fcs *enginev1.ForkchoiceState, attributes payloadattribute.Attributer) (*enginev1.PayloadIDBytes, bool, error) {
 	if attributes == nil {
 		attributes = payloadattribute.EmptyWithVersion(version.Gloas)
 	}
 
 	payloadID, lastValidHash, err := s.cfg.ExecutionEngineCaller.ForkchoiceUpdated(ctx, fcs, attributes)
 	if err == nil {
-		return payloadID, nil
+		return payloadID, false, nil
 	}
 
 	switch {
 	case errors.Is(err, execution.ErrAcceptedSyncingPayloadStatus):
 		log.WithFields(logrus.Fields{
-			"headBlockHash":             fmt.Sprintf("%#x", bytesutil.Trunc(blockHash[:])),
-			"finalizedPayloadBlockHash": fmt.Sprintf("%#x", bytesutil.Trunc(finalizedHash[:])),
+			"headBlockHash":             fmt.Sprintf("%#x", bytesutil.Trunc(fcs.HeadBlockHash)),
+			"finalizedPayloadBlockHash": fmt.Sprintf("%#x", bytesutil.Trunc(fcs.FinalizedBlockHash)),
 		}).Info("Called forkchoice updated with optimistic block (Gloas)")
-		return payloadID, nil
+		return payloadID, true, nil
 	case errors.Is(err, execution.ErrInvalidPayloadStatus):
 		if len(lastValidHash) == 0 {
 			lastValidHash = defaultLatestValidHash
 		}
-		return nil, invalidBlock{
+		return nil, false, invalidBlock{
 			error:         ErrInvalidPayload,
 			lastValidHash: bytesutil.ToBytes32(lastValidHash),
 		}
 	default:
-		return nil, errors.WithMessage(ErrUndefinedExecutionEngineError, err.Error())
+		return nil, false, errors.WithMessage(ErrUndefinedExecutionEngineError, err.Error())
 	}
 }

@@ -198,7 +198,10 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 	oldHeadRoot := vs.ForkchoiceFetcher.CachedHeadRoot()
 	vs.ForkchoiceFetcher.UpdateHead(ctx, vs.TimeFetcher.CurrentSlot())
 	headRoot := vs.ForkchoiceFetcher.CachedHeadRoot()
-	parentRoot := vs.ForkchoiceFetcher.GetProposerHead()
+	parentRoot, err := vs.ForkchoiceFetcher.ProposerParent(slot)
+	if err != nil {
+		return nil, [32]byte{}, false, status.Errorf(codes.Unavailable, "Validator is not ready to propose: %v", err)
+	}
 	head, err := vs.getParentStateFromReorgData(ctx, slot, oldHeadRoot, parentRoot, headRoot)
 	return head, parentRoot, vs.parentFull(parentRoot), err
 }

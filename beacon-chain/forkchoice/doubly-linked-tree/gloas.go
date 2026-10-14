@@ -305,6 +305,23 @@ func ptcVotedLate(n *Node) bool {
 	return attesters-payloadPresent > fieldparams.PTCSize/2
 }
 
+// The Decoupled engine picks the beacon root, only the timing and PTC rules pick full or empty, LMD weights carry no attestations after the fork.
+func (f *ForkChoice) PayloadContentDecoupled(root [32]byte) ([32]byte, bool, error) {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil {
+		return [32]byte{}, false, ErrNilNode
+	}
+	n := en.node
+	pn := en
+	if fn := f.store.fullNodeByRoot[root]; fn != nil && !ptcVotedLate(n) && (n.slot+1 != f.store.currentSlot() || f.store.shouldExtendPayload(fn)) {
+		pn = fn
+	}
+	if pn.full {
+		return n.blockHash, true, nil
+	}
+	return f.store.parentHash(pn), false, nil
+}
+
 // choosePayloadContent chooses between empty or full for the passed consensus node.
 func (s *Store) choosePayloadContent(n *Node) *PayloadNode {
 	if n == nil {

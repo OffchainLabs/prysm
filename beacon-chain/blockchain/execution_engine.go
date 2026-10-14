@@ -114,6 +114,10 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 				log.WithError(err).Error("Could not remove invalid block and state")
 				return nil, nil
 			}
+			if err := s.removeDecoupled(ctx, invalidRoots); err != nil {
+				log.WithError(err).Error("Could not remove invalid blocks from the decoupled fork choice")
+				return nil, nil
+			}
 
 			r, _, full, err := s.cfg.ForkChoiceStore.FullHead(ctx)
 			if err != nil {
@@ -290,6 +294,9 @@ func (s *Service) pruneInvalidBlock(ctx context.Context, root, parentRoot, paren
 		return err
 	}
 	if err := s.removeInvalidBlockAndState(ctx, invalidRoots); err != nil {
+		return err
+	}
+	if err := s.removeDecoupled(ctx, invalidRoots); err != nil {
 		return err
 	}
 	log.WithFields(logrus.Fields{

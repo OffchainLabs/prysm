@@ -586,6 +586,16 @@ func (s *Service) validateStateTransition(ctx context.Context, preState state.Be
 // incoming block has updated it on forkchoice.
 func (s *Service) updateJustificationOnBlock(ctx context.Context, preState, postState state.BeaconState, preJustifiedEpoch primitives.Epoch) error {
 	justified := s.cfg.ForkChoiceStore.JustifiedCheckpoint()
+	if postState.Version() >= version.Decoupled {
+		saved, err := s.cfg.BeaconDB.JustifiedCheckpoint(ctx)
+		if err != nil {
+			return err
+		}
+		if bytes.Equal(saved.Root, justified.Root[:]) {
+			return nil
+		}
+		return s.cfg.BeaconDB.SaveJustifiedCheckpoint(ctx, &ethpb.Checkpoint{Epoch: justified.Epoch, Root: justified.Root[:]})
+	}
 	preStateJustifiedEpoch := preState.CurrentJustifiedCheckpoint().Epoch
 	postStateJustifiedEpoch := postState.CurrentJustifiedCheckpoint().Epoch
 	if justified.Epoch > preJustifiedEpoch || (justified.Epoch == postStateJustifiedEpoch && justified.Epoch > preStateJustifiedEpoch) {
@@ -601,6 +611,18 @@ func (s *Service) updateJustificationOnBlock(ctx context.Context, preState, post
 // updateFinalizationOnBlock performs some duties when the incoming block
 // changes the finalized checkpoint. It returns true when this has happened.
 func (s *Service) updateFinalizationOnBlock(ctx context.Context, preState, postState state.BeaconState, preFinalizedEpoch primitives.Epoch) (bool, error) {
+	// The engine finalizes by root and mid epoch, so the Decoupled era compares roots.
+	if postState.Version() >= version.Decoupled {
+		finalized := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
+		saved, err := s.cfg.BeaconDB.FinalizedCheckpoint(ctx)
+		if err != nil {
+			return false, err
+		}
+		if bytes.Equal(saved.Root, finalized.Root[:]) {
+			return false, nil
+		}
+		return true, s.updateFinalized(ctx, &ethpb.Checkpoint{Epoch: finalized.Epoch, Root: finalized.Root[:]})
+	}
 	preStateFinalizedEpoch := preState.FinalizedCheckpoint().Epoch
 	postStateFinalizedEpoch := postState.FinalizedCheckpoint().Epoch
 	finalized := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
@@ -623,7 +645,11 @@ func (s *Service) sendNewFinalizedEvent(ctx context.Context, postState state.Bea
 	}
 	s.headLock.RUnlock()
 
-	blk, err := s.cfg.BeaconDB.Block(ctx, bytesutil.ToBytes32(postState.FinalizedCheckpoint().Root))
+	finalized := postState.FinalizedCheckpoint()
+	if postState.Version() >= version.Decoupled {
+		finalized = s.FinalizedCheckpt()
+	}
+	blk, err := s.cfg.BeaconDB.Block(ctx, bytesutil.ToBytes32(finalized.Root))
 	if err != nil {
 		log.WithError(err).Debug("Could not retrieve block for finalized checkpoint root. Finalized event will not be emitted")
 		return
@@ -637,8 +663,8 @@ func (s *Service) sendNewFinalizedEvent(ctx context.Context, postState state.Bea
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.FinalizedCheckpoint,
 		Data: &statefeed.FinalizedCheckpointData{
-			Epoch:               postState.FinalizedCheckpoint().Epoch,
-			Block:               bytesutil.ToBytes32(postState.FinalizedCheckpoint().Root),
+			Epoch:               finalized.Epoch,
+			Block:               bytesutil.ToBytes32(finalized.Root),
 			State:               stateRoot,
 			ExecutionOptimistic: isValidPayload,
 		},

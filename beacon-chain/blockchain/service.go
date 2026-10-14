@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	f "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/decoupled"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
@@ -75,6 +76,12 @@ type Service struct {
 	payloadArrivals                *payloadArrivals
 	goroutineCounter               *goroutineCounter
 	fcr                            *confirmation.FastConfirmationRule
+	decoupledStore                 *decoupled.Store
+	decoupledLock                  sync.Mutex
+	decoupledHead                  [32]byte
+	decoupledProposal              decoupledProposal
+	decoupledFCU                   decoupledFCU
+	decoupledFCULock               sync.Mutex
 }
 
 // config options for the service.
@@ -224,6 +231,7 @@ func (s *Service) Start() {
 	}
 	s.InitFastConfirmation()
 	s.spawnProcessAttestationsRoutine()
+	s.spawnDecoupledTicker()
 	go s.runLateBlockTasks()
 	go s.runLatePayloadTasks()
 	go s.runGloasDepositWarmup()
@@ -465,6 +473,9 @@ func (s *Service) SafeBlockHash() [32]byte {
 
 // safeBlockHash prefers the FCR confirmed root over unrealized justified when the feature is on.
 func (s *Service) safeBlockHash() [32]byte {
+	if root, ok := s.DecoupledConfirmed(); ok {
+		return s.cfg.ForkChoiceStore.ConfirmedPayloadBlockHash(root)
+	}
 	if s.fcr != nil {
 		root := s.fcr.ConfirmedRoot()
 		// A pruned confirmed root falls back to unrealized justified.

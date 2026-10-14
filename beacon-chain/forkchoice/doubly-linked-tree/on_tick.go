@@ -34,7 +34,7 @@ func (f *ForkChoice) NewSlot(ctx context.Context, slot primitives.Slot) error {
 	f.store.proposerBoostRoot = [32]byte{}
 
 	// Return if it's not a new epoch.
-	if !slots.IsEpochStart(slot) {
+	if !slots.IsEpochStart(slot) || f.store.externalCheckpoints {
 		return nil
 	}
 
