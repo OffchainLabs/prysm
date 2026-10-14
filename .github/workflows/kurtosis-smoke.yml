@@ -3,12 +3,6 @@ name: Kurtosis smoke
 on:
   push:
     branches: [develop]
-  pull_request:
-    # TEMP for PR testing.
-    paths:
-      - .github/workflows/kurtosis-smoke.yml
-      - .github/kurtosis-smoke.yaml
-      - .github/kurtosis-smoke.Dockerfile
   workflow_dispatch:
 
 concurrency:
