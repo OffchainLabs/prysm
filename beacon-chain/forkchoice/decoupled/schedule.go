@@ -59,6 +59,24 @@ func (st *Store) OnTick(now time.Time) {
 	}
 }
 
+// Spec: ac_restart. Every retained block is restamped at now and its carried votes replayed in parent order into fresh pools, saved confirmations and the fast set are cleared, locks keep their deadlines and the confirmation record stays. Observation counts from now.
+func (st *Store) Restart(now time.Time) {
+	st.restartTime = now
+	st.pool = make(map[primitives.Slot]*bucket)
+	st.saved = make(map[primitives.Slot]*Node)
+	st.fastConfirmed = st.fastConfirmed[:0]
+	stack := []*Node{st.root}
+	for len(stack) > 0 {
+		n := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		n.processed = now
+		for _, v := range n.BlockVotes {
+			st.addVote(v, now)
+		}
+		stack = append(stack, n.Children...)
+	}
+}
+
 // Slot s-1 is still read by the slot-s vote and by the slot-(s-1) confirmation, older slots are not. Saved confirmations stay for the slow lock test.
 func (st *Store) NewSlot(slot primitives.Slot) {
 	for k := range st.pool {

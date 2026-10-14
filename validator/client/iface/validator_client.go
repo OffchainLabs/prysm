@@ -170,4 +170,8 @@ type ValidatorClient interface {
 	PublishExecutionPayloadEnvelope(ctx context.Context, in *ethpb.SignedExecutionPayloadEnvelope) (*empty.Empty, error)
 	PayloadAttestationData(ctx context.Context, slot primitives.Slot) (*ethpb.PayloadAttestationData, error)
 	SubmitPayloadAttestation(ctx context.Context, in *ethpb.PayloadAttestationMessage) (*empty.Empty, error)
+	AvailableAttestationData(ctx context.Context, slot primitives.Slot) (*ethpb.AvailableAttestationData, error)
+	SubmitAvailableAttestation(ctx context.Context, in *ethpb.AvailableAttestationMessage) (*empty.Empty, error)
+	FinalityAttestationData(ctx context.Context, slot primitives.Slot) (*ethpb.FinalityAttestationData, error)
+	SubmitFinalityAttestation(ctx context.Context, in *ethpb.FinalityAttestationMessage) (*empty.Empty, error)
 }

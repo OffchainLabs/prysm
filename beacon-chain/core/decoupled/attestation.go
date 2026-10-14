@@ -142,8 +142,8 @@ func ProcessAttestations(st state.BeaconState, atts []*ethpb.IndexedAttestationD
 		return err
 	}
 	for _, a := range atts {
-		if a.Data == nil {
-			return errNilAttestationData
+		if err := ValidateFinalityShape(a.Data); err != nil {
+			return err
 		}
 		if !p.Valid(a.Data) {
 			return fmt.Errorf("attestation for height %d is not includable at height %d", a.Data.Height, p.height)

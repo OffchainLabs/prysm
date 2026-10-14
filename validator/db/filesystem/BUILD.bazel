@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "attester_protection.go",
         "db.go",
+        "decoupled.go",
         "genesis.go",
         "graffiti.go",
         "import.go",

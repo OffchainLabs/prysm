@@ -6,6 +6,7 @@ go_library(
         "attester_protection.go",
         "backup.go",
         "db.go",
+        "decoupled.go",
         "deprecated_attester_protection.go",
         "eip_blacklisted_keys.go",
         "genesis.go",

@@ -12,6 +12,7 @@ import (
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	decoupledpool "github.com/OffchainLabs/prysm/v7/beacon-chain/operations/decoupled"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
@@ -232,6 +233,13 @@ func WithSubscribedValidatorsCache(c *cache.SubscribedValidatorsCache) Option {
 func WithPayloadAttestationPool(pool payloadattestation.PoolManager) Option {
 	return func(s *Service) error {
 		s.cfg.payloadAttestationPool = pool
+		return nil
+	}
+}
+
+func WithDecoupledPools(fg *decoupledpool.FGPool, votes *decoupledpool.VotePool) Option {
+	return func(s *Service) error {
+		s.cfg.decoupledFGPool, s.cfg.decoupledVotePool = fg, votes
 		return nil
 	}
 }

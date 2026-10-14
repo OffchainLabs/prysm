@@ -226,6 +226,15 @@ func processBlockForProposing(ctx context.Context, st state.BeaconState, signed 
 	if !valid {
 		return nil, ErrBLSToExecutionChangesSignatureInvalid
 	}
+	if set.DecoupledSignatures != nil {
+		valid, err = set.DecoupledSignatures.Verify()
+		if err != nil {
+			return nil, err
+		}
+		if !valid {
+			return nil, ErrDecoupledSignaturesInvalid
+		}
+	}
 	// We should not reach this point as one of the above signatures must have failed.
 	return st, nil
 }
@@ -235,6 +244,7 @@ type BlockSignatureBatches struct {
 	RandaoSignatures      *bls.SignatureBatch
 	AttestationSignatures *bls.SignatureBatch
 	BLSChangeSignatures   *bls.SignatureBatch
+	DecoupledSignatures   *bls.SignatureBatch
 }
 
 // Batch returns the batch of signature batches in the BlockSignatureBatches.
@@ -248,6 +258,9 @@ func (b BlockSignatureBatches) Batch() *bls.SignatureBatch {
 	}
 	if b.BLSChangeSignatures != nil {
 		sigs.Join(b.BLSChangeSignatures)
+	}
+	if b.DecoupledSignatures != nil {
+		sigs.Join(b.DecoupledSignatures)
 	}
 	return sigs
 }
@@ -310,6 +323,13 @@ func ProcessBlockNoVerifyAnySig(
 			return set, nil, errors.Wrap(err, "could not get BLSToExecutionChanges signatures")
 		}
 		set.BLSChangeSignatures = cSet
+	}
+	if blk.Version() >= version.Decoupled {
+		dSet, err := decoupled.SignatureBatch(st, signed.Block().Body())
+		if err != nil {
+			return set, nil, errors.Wrap(err, "could not get decoupled attestation signatures")
+		}
+		set.DecoupledSignatures = dSet
 	}
 	return set, st, nil
 }

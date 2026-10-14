@@ -84,6 +84,26 @@ func (mr *MockBeaconNodeValidatorClientMockRecorder) AssignValidatorToSubnet(ctx
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssignValidatorToSubnet", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).AssignValidatorToSubnet), varargs...)
 }
 
+// AvailableAttestationData mocks base method.
+func (m *MockBeaconNodeValidatorClient) AvailableAttestationData(ctx context.Context, in *eth.DecoupledAttestationDataRequest, opts ...grpc.CallOption) (*eth.AvailableAttestationData, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, in}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "AvailableAttestationData", varargs...)
+	ret0, _ := ret[0].(*eth.AvailableAttestationData)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AvailableAttestationData indicates an expected call of AvailableAttestationData.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) AvailableAttestationData(ctx, in any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, in}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AvailableAttestationData", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).AvailableAttestationData), varargs...)
+}
+
 // CheckDoppelGanger mocks base method.
 func (m *MockBeaconNodeValidatorClient) CheckDoppelGanger(ctx context.Context, in *eth.DoppelGangerRequest, opts ...grpc.CallOption) (*eth.DoppelGangerResponse, error) {
 	m.ctrl.T.Helper()
@@ -122,6 +142,26 @@ func (mr *MockBeaconNodeValidatorClientMockRecorder) DomainData(ctx, in any, opt
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, in}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DomainData", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).DomainData), varargs...)
+}
+
+// FinalityAttestationData mocks base method.
+func (m *MockBeaconNodeValidatorClient) FinalityAttestationData(ctx context.Context, in *eth.DecoupledAttestationDataRequest, opts ...grpc.CallOption) (*eth.FinalityAttestationData, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, in}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "FinalityAttestationData", varargs...)
+	ret0, _ := ret[0].(*eth.FinalityAttestationData)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FinalityAttestationData indicates an expected call of FinalityAttestationData.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) FinalityAttestationData(ctx, in any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, in}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinalityAttestationData", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).FinalityAttestationData), varargs...)
 }
 
 // GetAttestationData mocks base method.
@@ -644,6 +684,26 @@ func (mr *MockBeaconNodeValidatorClientMockRecorder) SubmitAggregateSelectionPro
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAggregateSelectionProofElectra", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).SubmitAggregateSelectionProofElectra), varargs...)
 }
 
+// SubmitAvailableAttestation mocks base method.
+func (m *MockBeaconNodeValidatorClient) SubmitAvailableAttestation(ctx context.Context, in *eth.AvailableAttestationMessage, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, in}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SubmitAvailableAttestation", varargs...)
+	ret0, _ := ret[0].(*emptypb.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitAvailableAttestation indicates an expected call of SubmitAvailableAttestation.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) SubmitAvailableAttestation(ctx, in any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, in}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAvailableAttestation", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).SubmitAvailableAttestation), varargs...)
+}
+
 // SubmitBuilderPreferences mocks base method.
 func (m *MockBeaconNodeValidatorClient) SubmitBuilderPreferences(ctx context.Context, in *eth.SubmitBuilderPreferencesRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	m.ctrl.T.Helper()
@@ -662,6 +722,26 @@ func (mr *MockBeaconNodeValidatorClientMockRecorder) SubmitBuilderPreferences(ct
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, in}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitBuilderPreferences", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).SubmitBuilderPreferences), varargs...)
+}
+
+// SubmitFinalityAttestation mocks base method.
+func (m *MockBeaconNodeValidatorClient) SubmitFinalityAttestation(ctx context.Context, in *eth.FinalityAttestationMessage, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, in}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SubmitFinalityAttestation", varargs...)
+	ret0, _ := ret[0].(*emptypb.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitFinalityAttestation indicates an expected call of SubmitFinalityAttestation.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) SubmitFinalityAttestation(ctx, in any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, in}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitFinalityAttestation", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).SubmitFinalityAttestation), varargs...)
 }
 
 // SubmitPayloadAttestation mocks base method.

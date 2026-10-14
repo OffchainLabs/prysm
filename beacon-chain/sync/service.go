@@ -25,6 +25,7 @@ import (
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	decoupledpool "github.com/OffchainLabs/prysm/v7/beacon-chain/operations/decoupled"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
@@ -117,6 +118,8 @@ type config struct {
 	dataColumnStorage       *filesystem.DataColumnStorage
 	batchVerifierLimit      int
 	payloadAttestationPool  payloadattestation.PoolManager
+	decoupledFGPool         *decoupledpool.FGPool
+	decoupledVotePool       *decoupledpool.VotePool
 }
 
 // This defines the interface for interacting with block chain service
@@ -130,6 +133,7 @@ type blockchainService interface {
 	blockchain.ForkFetcher
 	blockchain.AttestationReceiver
 	blockchain.PayloadAttestationReceiver
+	blockchain.DecoupledReceiver
 	blockchain.TimeFetcher
 	blockchain.GenesisFetcher
 	blockchain.CanonicalFetcher

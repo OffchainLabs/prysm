@@ -41,6 +41,144 @@ type decoupledFCU struct {
 	attr                  payloadattribute.Attributer
 }
 
+// The duty reads captured at their scheduled instants, the vote head at Δ and the FG source at the action time, so an RPC never recomputes them under later locks.
+type decoupledDuty struct {
+	voteSlot     primitives.Slot
+	vote         [32]byte
+	voteOK       bool
+	actionSlot   primitives.Slot
+	source, head [32]byte
+	finality     *ethpb.FinalityAttestationData
+}
+
+type DecoupledReceiver interface {
+	ReceiveAvailableAttestation(context.Context, *ethpb.AvailableAttestationMessage) error
+}
+
+// Spec: Figure 2's order. Every entry runs the phases scheduled between the last entry and now at their own instants, the slot start prune, the Δ tick then the vote read, the 2Δ tick then the source read, and ticks to now last. Stamps are exact, so a phase run late gives its scheduled result and a read sees the state its own tick left, never a later lock. Nothing is captured before the restart at sync. The caller holds decoupledLock and the store exists.
+func (s *Service) decoupledAdvance(now time.Time) {
+	store := s.decoupledStore
+	cfg := params.BeaconConfig()
+	slotDuration, delta := cfg.SlotDuration(), cfg.SlotDuration()/4
+	slotAt := func(t time.Time) primitives.Slot {
+		if t.Before(s.genesisTime) {
+			return 0
+		}
+		return primitives.Slot(t.Sub(s.genesisTime) / slotDuration)
+	}
+	from := s.decoupledProcessed
+	for sl := slotAt(from); sl <= slotAt(now); sl++ {
+		start := s.genesisTime.Add(time.Duration(sl) * slotDuration)
+		for phase, t := range [3]time.Time{start, start.Add(delta), start.Add(2 * delta)} {
+			if !t.After(from) || t.After(now) {
+				continue
+			}
+			switch phase {
+			case 0:
+				store.NewSlot(sl)
+			case 1:
+				store.OnTick(t)
+				if s.decoupledSynced {
+					n := store.VoteHead(sl, t)
+					s.decoupledDuty.voteSlot, s.decoupledDuty.voteOK = sl, n != nil
+					if n != nil {
+						s.decoupledDuty.vote = n.Root
+					}
+				}
+			case 2:
+				store.OnTick(t)
+				if s.decoupledSynced && cfg.DecoupledActionSlot(sl) {
+					source, head := store.Source(t)
+					d := &s.decoupledDuty
+					d.actionSlot, d.finality = sl, decoupledFinalityData(source, head)
+					if d.finality != nil {
+						d.source, d.head = source.Root, head.Root
+					}
+				}
+			}
+		}
+	}
+	store.OnTick(now)
+	s.decoupledProcessed = now
+}
+
+// Spec: fg_attest's inputs, (h_c, T_c) from the source state and (h_j, J, h_F) from the head state, read from the engine summaries. Nil when there is no source.
+func decoupledFinalityData(source, head *decoupled.Node) *ethpb.FinalityAttestationData {
+	if source == nil || head == nil {
+		return nil
+	}
+	return &ethpb.FinalityAttestationData{
+		Height:          source.FG.Target.Height,
+		Entry:           bytesutil.SafeCopyBytes(source.FG.Target.Root[:]),
+		JustifiedHeight: head.FG.Justified.Height,
+		Justified:       bytesutil.SafeCopyBytes(head.FG.Justified.Root[:]),
+		FinalizedHeight: head.FG.Finalized.Height,
+	}
+}
+
+// Spec: ac_restart at live observation. The ticker calls it once the node is synced, before that no duty decision is captured and no proposal is offered, so nothing is served from the engine the sync built.
+func (s *Service) restartDecoupled() {
+	s.decoupledLock.Lock()
+	defer s.decoupledLock.Unlock()
+	s.decoupledSynced = true
+	if s.decoupledStore == nil {
+		return
+	}
+	now := prysmTime.Now()
+	s.decoupledStore.Restart(now)
+	s.decoupledProcessed = now
+	s.decoupledProposal, s.decoupledDuty = decoupledProposal{}, decoupledDuty{}
+}
+
+// Spec: on_ac_message, the engine stamps the vote on receipt, the pool keeps the signed copy for the next proposer.
+func (s *Service) ReceiveAvailableAttestation(_ context.Context, m *ethpb.AvailableAttestationMessage) error {
+	if m == nil || m.Data == nil {
+		return errors.New("nil available attestation")
+	}
+	root := bytesutil.ToBytes32(m.Data.BeaconBlockRoot)
+	s.decoupledLock.Lock()
+	if s.decoupledStore != nil {
+		now := prysmTime.Now()
+		s.decoupledAdvance(now)
+		s.decoupledStore.ProcessVote([]primitives.ValidatorIndex{m.ValidatorIndex}, root, m.Data.Slot, now)
+	}
+	s.decoupledLock.Unlock()
+	if s.cfg.DecoupledVotePool != nil {
+		s.cfg.DecoupledVotePool.Insert(m.ValidatorIndex, m.Data.Slot, root, m.Signature)
+	}
+	return nil
+}
+
+// The vote head captured at the slot's Δ, false for any other slot or when the node is unjoined.
+func (s *Service) DecoupledVote(slot primitives.Slot) ([32]byte, bool) {
+	s.decoupledLock.Lock()
+	defer s.decoupledLock.Unlock()
+	if s.decoupledStore == nil {
+		return [32]byte{}, false
+	}
+	s.decoupledAdvance(prysmTime.Now())
+	d := s.decoupledDuty
+	if d.voteSlot != slot || !d.voteOK {
+		return [32]byte{}, false
+	}
+	return d.vote, true
+}
+
+// The FG inputs captured at the slot's action time, false for any other slot or when there is no source.
+func (s *Service) DecoupledFinalityData(slot primitives.Slot) (*ethpb.FinalityAttestationData, bool) {
+	s.decoupledLock.Lock()
+	defer s.decoupledLock.Unlock()
+	if s.decoupledStore == nil {
+		return nil, false
+	}
+	s.decoupledAdvance(prysmTime.Now())
+	d := s.decoupledDuty
+	if d.actionSlot != slot || d.finality == nil {
+		return nil, false
+	}
+	return d.finality, true
+}
+
 func (s *Service) prepareDecoupledBlock(ctx context.Context, st state.BeaconState, roblock consensusblocks.ROBlock) ([]decoupled.Block, error) {
 	b, err := decoupledBlock(st, roblock)
 	if err != nil {
@@ -88,6 +226,7 @@ func (s *Service) commitDecoupled(ctx context.Context, blocks []decoupled.Block)
 	s.decoupledLock.Lock()
 	defer s.decoupledLock.Unlock()
 	now := prysmTime.Now()
+	s.decoupledAdvance(now)
 	for _, b := range blocks {
 		if err := s.decoupledStore.InsertNode(b, now); err != nil {
 			log.WithError(err).WithField("root", fmt.Sprintf("%#x", b.Root)).Fatal("Decoupled fork choice rejected a prepared block")
@@ -136,11 +275,15 @@ func (s *Service) startDecoupled(ctx context.Context, finalized decoupled.Pair, 
 	}
 	anchor.FG.Finalized = decoupled.Pair{Height: finalized.Height, Root: root}
 	cfg := params.BeaconConfig()
+	if cfg.DecoupledSlotsPerRound < 2 {
+		return errors.New("decoupled slots per round must be at least 2")
+	}
 	store, err := decoupled.New(decoupled.Config{Delta: cfg.SlotDuration() / 4, LockStreak: cfg.DecoupledLockStreak, CommitteeSize: validators}, s.genesisTime, anchor, now)
 	if err != nil {
 		return err
 	}
 	s.decoupledStore = store
+	s.decoupledProcessed = now
 	s.cfg.ForkChoiceStore.SetExternalCheckpoints()
 	return nil
 }
@@ -198,13 +341,23 @@ func (s *Service) missingDecoupledAncestors(ctx context.Context, root [32]byte, 
 func (s *Service) removeDecoupled(ctx context.Context, roots [][32]byte) error {
 	s.decoupledLock.Lock()
 	defer s.decoupledLock.Unlock()
-	if s.decoupledStore == nil {
+	store := s.decoupledStore
+	if store == nil {
 		return nil
 	}
-	if err := s.decoupledStore.Remove(roots); err != nil {
+	// Due phases read the tree as it stood at their instant, so they run before the removal. A captured duty whose block left the tree is withdrawn.
+	s.decoupledAdvance(prysmTime.Now())
+	if err := store.Remove(roots); err != nil {
 		log.WithError(err).Fatal("Decoupled fork choice lost its finalized block")
 	}
 	s.decoupledProposal = decoupledProposal{}
+	d := &s.decoupledDuty
+	if d.voteOK && !store.HasNode(d.vote) {
+		d.voteOK = false
+	}
+	if d.finality != nil && (!store.HasNode(d.source) || !store.HasNode(d.head)) {
+		d.finality = nil
+	}
 	return s.syncDecoupledCheckpoints(ctx)
 }
 
@@ -298,6 +451,7 @@ func (s *Service) spawnDecoupledTicker() {
 			log.WithError(err).Error("Could not wait to sync")
 			return
 		}
+		s.restartDecoupled()
 		delta := params.BeaconConfig().SlotDuration() / 4
 		ticker := slots.NewSlotTickerWithIntervals(s.genesisTime, []time.Duration{0, delta, 2 * delta})
 		defer ticker.Done()
@@ -328,10 +482,7 @@ func (s *Service) tickDecoupled(slot primitives.Slot, interval int) bool {
 		return false
 	}
 	now := prysmTime.Now()
-	if interval == 0 {
-		store.NewSlot(slot)
-	}
-	store.OnTick(now)
+	s.decoupledAdvance(now)
 	if interval != 2 {
 		s.decoupledLock.Unlock()
 		return true
@@ -380,7 +531,7 @@ func (s *Service) decoupledRead(read func(*decoupled.Store, time.Time) *decouple
 		return [32]byte{}, false
 	}
 	now := prysmTime.Now()
-	s.decoupledStore.OnTick(now)
+	s.decoupledAdvance(now)
 	n := read(s.decoupledStore, now)
 	if n == nil {
 		return [32]byte{}, false
@@ -396,21 +547,22 @@ func (s *Service) decoupledSnapshot() (head, confirmed, finalized [32]byte, ok b
 		return
 	}
 	now := prysmTime.Now()
-	s.decoupledStore.OnTick(now)
+	s.decoupledAdvance(now)
 	return s.decoupledStore.Head(now).Root, s.decoupledStore.Confirmed(now).Root, s.decoupledStore.Finalized().Root, true
 }
 
+// No proposal before the restart at sync, the engine built during sync has not observed anything.
 func (s *Service) DecoupledProposal(slot primitives.Slot) (parent [32]byte, votes, support []decoupled.Vote, ok bool) {
 	s.decoupledLock.Lock()
 	defer s.decoupledLock.Unlock()
-	if s.decoupledStore == nil {
+	if s.decoupledStore == nil || !s.decoupledSynced {
 		return
 	}
 	if m := s.decoupledProposal; m.ok && m.slot == slot {
 		return m.parent, m.votes, m.support, true
 	}
 	now := prysmTime.Now()
-	s.decoupledStore.OnTick(now)
+	s.decoupledAdvance(now)
 	p, v, sp := s.decoupledStore.Proposal(slot, now)
 	if p == nil {
 		return

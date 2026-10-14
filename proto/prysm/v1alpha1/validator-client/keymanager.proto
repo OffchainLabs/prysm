@@ -5,6 +5,7 @@ import "proto/eth/ext/options.proto";
 import "proto/prysm/v1alpha1/attestation.proto";
 import "proto/prysm/v1alpha1/beacon_block.proto";
 import "proto/prysm/v1alpha1/beacon_core_types.proto";
+import "proto/prysm/v1alpha1/decoupled.proto";
 import "proto/prysm/v1alpha1/gloas.proto";
 import "proto/prysm/v1alpha1/gloas_builder_api.proto";
 import "proto/prysm/v1alpha1/sync_committee.proto";
@@ -88,6 +89,11 @@ message SignRequest {
     ethereum.eth.v1alpha1.PayloadAttestationData payload_attestation_data = 125;
     ethereum.eth.v1alpha1.ProposerPreferences proposer_preference = 126;
     ethereum.eth.v1alpha1.BuilderRequestAuth builder_request_auth = 127;
+
+    // Decoupled objects.
+    ethereum.eth.v1alpha1.BeaconBlockDecoupled block_decoupled = 128;
+    ethereum.eth.v1alpha1.AvailableAttestationData available_attestation_data = 129;
+    ethereum.eth.v1alpha1.AttestationDataDecoupled attestation_data_decoupled = 130;
   }
 
   reserved 4, 5; // Reserving old, deleted fields.

@@ -31,6 +31,8 @@ var gossipTopicMappings = map[string]func() proto.Message{
 	ExecutionPayloadEnvelopeTopicFormat:       func() proto.Message { return &ethpb.SignedExecutionPayloadEnvelope{} },
 	ExecutionPayloadBidTopicFormat:            func() proto.Message { return &ethpb.SignedExecutionPayloadBid{} },
 	SignedProposerPreferencesTopicFormat:      func() proto.Message { return &ethpb.SignedProposerPreferences{} },
+	AvailableAttestationTopicFormat:           func() proto.Message { return &ethpb.AvailableAttestationMessage{} },
+	FinalityAttestationTopicFormat:            func() proto.Message { return &ethpb.FinalityAttestationMessage{} },
 }
 
 // GossipTopicMappings is a function to return the assigned data type
@@ -38,6 +40,9 @@ var gossipTopicMappings = map[string]func() proto.Message{
 func GossipTopicMappings(topic string, epoch primitives.Epoch) proto.Message {
 	switch topic {
 	case BlockSubnetTopicFormat:
+		if epoch >= params.BeaconConfig().DecoupledForkEpoch {
+			return &ethpb.SignedBeaconBlockDecoupled{}
+		}
 		if epoch >= params.BeaconConfig().GloasForkEpoch {
 			return &ethpb.SignedBeaconBlockGloas{}
 		}
@@ -166,4 +171,9 @@ func init() {
 	GossipTypeMapping[reflect.TypeFor[*ethpb.PayloadAttestationMessage]()] = PayloadAttestationMessageTopicFormat
 	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedExecutionPayloadBid]()] = ExecutionPayloadBidTopicFormat
 	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedProposerPreferences]()] = SignedProposerPreferencesTopicFormat
+
+	// Decoupled objects.
+	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlockDecoupled]()] = BlockSubnetTopicFormat
+	GossipTypeMapping[reflect.TypeFor[*ethpb.AvailableAttestationMessage]()] = AvailableAttestationTopicFormat
+	GossipTypeMapping[reflect.TypeFor[*ethpb.FinalityAttestationMessage]()] = FinalityAttestationTopicFormat
 }

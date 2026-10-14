@@ -899,6 +899,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithLightClientStore(b.lcStore),
 		regularsync.WithBatchVerifierLimit(b.cliCtx.Int(flags.BatchVerifierLimit.Name)),
 		regularsync.WithPayloadAttestationPool(b.payloadAttestationPool),
+		regularsync.WithDecoupledPools(b.decoupledFGPool, b.decoupledVotePool),
 	)
 	return b.services.RegisterService(rs)
 }
@@ -1022,6 +1023,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		FinalizationFetcher:              chainService,
 		BlockReceiver:                    chainService,
 		PayloadAttestationReceiver:       chainService,
+		DecoupledReceiver:                chainService,
 		ExecutionPayloadEnvelopeReceiver: chainService,
 		BlobReceiver:                     chainService,
 		DataColumnReceiver:               chainService,

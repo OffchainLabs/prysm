@@ -41,7 +41,18 @@ var (
 	// ProposerSettings stores the encoded proposer settings file
 	proposerSettingsBucket = []byte("proposer-settings-bucket")
 	proposerSettingsKey    = []byte("proposer-settings")
+
+	// Decoupled duties, the FG signing record Λ and the AC vote reservations.
+	finalityKeysBucket    = []byte("finality-keys-bucket")
+	finalityHistoryBucket = []byte("finality-history-bucket")
+	availableVotesBucket  = []byte("available-votes-bucket")
 )
+
+// Decoupled:
+// ----------
+// finality-keys-bucket --> <pubkey> --> 1 settled, 2 last row pending submission
+// finality-history-bucket --> <pubkey> --> <sequence> --> <ssz attestation data>
+// available-votes-bucket --> <pubkey> --> <slot> --> <head root>
 
 // Attestations:
 // -------------

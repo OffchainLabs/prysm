@@ -56,6 +56,8 @@ type ForkchoiceFetcher interface {
 	GetProposerHead() [32]byte
 	ProposerParent(primitives.Slot) ([32]byte, error)
 	DecoupledProposal(primitives.Slot) ([32]byte, []decoupled.Vote, []decoupled.Vote, bool)
+	DecoupledVote(primitives.Slot) ([32]byte, bool)
+	DecoupledFinalityData(primitives.Slot) (*ethpb.FinalityAttestationData, bool)
 	SetForkChoiceGenesisTime(time.Time)
 	UpdateHead(context.Context, primitives.Slot)
 	HighestReceivedBlockSlot() primitives.Slot

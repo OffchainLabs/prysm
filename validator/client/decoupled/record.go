@@ -98,6 +98,9 @@ func (r *Record) heightPair(a *Attestation, src Source) bool {
 	return true
 }
 
+// Rebuilds Λ from the rows this key signed, in the order they were signed.
+func (r *Record) Restore(a Attestation) { r.record(a) }
+
 // Spec: record_attestation, the only writer of Λ.
 func (r *Record) record(a Attestation) {
 	if r.named[a.Height] == nil {

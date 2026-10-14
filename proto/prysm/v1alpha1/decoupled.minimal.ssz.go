@@ -86,6 +86,194 @@ func (c *AvailableAttestationData) HashTreeRootWith(hh *ssz.Hasher) (err error) 
 	return nil
 }
 
+func (c *AvailableAttestationMessage) SizeSSZ() int {
+	size := 144
+
+	return size
+}
+
+func (c *AvailableAttestationMessage) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *AvailableAttestationMessage) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+
+	// Field 0: ValidatorIndex
+	if dst, err = c.ValidatorIndex.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("ValidatorIndex: %w", err)
+	}
+
+	// Field 1: Data
+	if c.Data == nil {
+		c.Data = new(AvailableAttestationData)
+	}
+	if dst, err = c.Data.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("Data: %w", err)
+	}
+
+	// Field 2: Signature
+	if len(c.Signature) != 96 {
+		return nil, ssz.ErrBytesLength
+	}
+	dst = append(dst, c.Signature...)
+
+	return dst, err
+}
+
+func (c *AvailableAttestationMessage) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 144 {
+		return ssz.ErrSize
+	}
+
+	sszSlice0 := buf[0:8]    // c.ValidatorIndex
+	sszSlice1 := buf[8:48]   // c.Data
+	sszSlice2 := buf[48:144] // c.Signature
+
+	// Field 0: ValidatorIndex
+	if err = c.ValidatorIndex.UnmarshalSSZ(sszSlice0); err != nil {
+		return fmt.Errorf("ValidatorIndex: %w", err)
+	}
+
+	// Field 1: Data
+	c.Data = new(AvailableAttestationData)
+	if err = c.Data.UnmarshalSSZ(sszSlice1); err != nil {
+		return fmt.Errorf("Data: %w", err)
+	}
+
+	// Field 2: Signature
+	c.Signature = make([]byte, 0, 96)
+	c.Signature = append(c.Signature, sszSlice2...)
+	return err
+}
+
+func (c *AvailableAttestationMessage) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *AvailableAttestationMessage) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: ValidatorIndex
+	if err := c.ValidatorIndex.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("ValidatorIndex: %w", err)
+	}
+	// Field 1: Data
+	if err := c.Data.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("Data: %w", err)
+	}
+	// Field 2: Signature
+	if len(c.Signature) != 96 {
+		return ssz.ErrBytesLength
+	}
+	hh.PutBytes(c.Signature)
+	hh.Merkleize(indx)
+	return nil
+}
+
+func (c *FinalityAttestationMessage) SizeSSZ() int {
+	size := 185
+
+	return size
+}
+
+func (c *FinalityAttestationMessage) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *FinalityAttestationMessage) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+
+	// Field 0: ValidatorIndex
+	if dst, err = c.ValidatorIndex.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("ValidatorIndex: %w", err)
+	}
+
+	// Field 1: Data
+	if c.Data == nil {
+		c.Data = new(AttestationDataDecoupled)
+	}
+	if dst, err = c.Data.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("Data: %w", err)
+	}
+
+	// Field 2: Signature
+	if len(c.Signature) != 96 {
+		return nil, ssz.ErrBytesLength
+	}
+	dst = append(dst, c.Signature...)
+
+	return dst, err
+}
+
+func (c *FinalityAttestationMessage) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 185 {
+		return ssz.ErrSize
+	}
+
+	sszSlice0 := buf[0:8]    // c.ValidatorIndex
+	sszSlice1 := buf[8:89]   // c.Data
+	sszSlice2 := buf[89:185] // c.Signature
+
+	// Field 0: ValidatorIndex
+	if err = c.ValidatorIndex.UnmarshalSSZ(sszSlice0); err != nil {
+		return fmt.Errorf("ValidatorIndex: %w", err)
+	}
+
+	// Field 1: Data
+	c.Data = new(AttestationDataDecoupled)
+	if err = c.Data.UnmarshalSSZ(sszSlice1); err != nil {
+		return fmt.Errorf("Data: %w", err)
+	}
+
+	// Field 2: Signature
+	c.Signature = make([]byte, 0, 96)
+	c.Signature = append(c.Signature, sszSlice2...)
+	return err
+}
+
+func (c *FinalityAttestationMessage) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *FinalityAttestationMessage) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: ValidatorIndex
+	if err := c.ValidatorIndex.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("ValidatorIndex: %w", err)
+	}
+	// Field 1: Data
+	if err := c.Data.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("Data: %w", err)
+	}
+	// Field 2: Signature
+	if len(c.Signature) != 96 {
+		return ssz.ErrBytesLength
+	}
+	hh.PutBytes(c.Signature)
+	hh.Merkleize(indx)
+	return nil
+}
+
 func (c *AvailableAttestation) SizeSSZ() int {
 	size := 140
 	size += len(c.AggregationBits)

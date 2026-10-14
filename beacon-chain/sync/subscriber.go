@@ -347,6 +347,15 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 		})
 	}
 
+	if params.BeaconConfig().DecoupledForkEpoch <= nse.Epoch {
+		s.spawn(func() {
+			s.subscribe(p2p.AvailableAttestationTopicFormat, s.validateAvailableAttestation, s.availableAttestationSubscriber, nse)
+		})
+		s.spawn(func() {
+			s.subscribe(p2p.FinalityAttestationTopicFormat, s.validateFinalityAttestation, s.finalityAttestationSubscriber, nse)
+		})
+	}
+
 	// New gossip topic in Gloas.
 	if params.BeaconConfig().GloasForkEpoch <= nse.Epoch {
 		s.spawn(func() {

@@ -18,4 +18,8 @@ const (
 	roleSyncCommitteeAggregator
 	// rolePTCMember means the validator should submit a payload attestation.
 	rolePTCMember
+	// roleAvailableVoter means the validator should submit a Decoupled AC vote.
+	roleAvailableVoter
+	// roleFinalityAttester means the validator should submit a Decoupled FG attestation.
+	roleFinalityAttester
 )

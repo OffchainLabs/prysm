@@ -775,6 +775,18 @@ func (s *ChainService) DecoupledProposal(primitives.Slot) ([32]byte, []decoupled
 	return [32]byte{}, nil, nil, false
 }
 
+func (s *ChainService) DecoupledVote(primitives.Slot) ([32]byte, bool) {
+	return [32]byte{}, false
+}
+
+func (s *ChainService) DecoupledFinalityData(primitives.Slot) (*ethpb.FinalityAttestationData, bool) {
+	return nil, false
+}
+
+func (s *ChainService) ReceiveAvailableAttestation(context.Context, *ethpb.AvailableAttestationMessage) error {
+	return nil
+}
+
 // SetForkChoiceGenesisTime mocks the same method in the chain service
 func (s *ChainService) SetForkChoiceGenesisTime(timestamp time.Time) {
 	if s.ForkChoiceStore != nil {

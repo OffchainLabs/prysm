@@ -288,6 +288,10 @@ func performRoles(slotCtx context.Context, allRoles map[[48]byte][]validatorRole
 					v.SubmitSignedContributionAndProof(slotCtx, slot, pubKey)
 				case rolePTCMember:
 					v.SubmitPayloadAttestation(slotCtx, slot, pubKey)
+				case roleAvailableVoter:
+					v.SubmitAvailableAttestation(slotCtx, slot, pubKey)
+				case roleFinalityAttester:
+					v.SubmitFinalityAttestation(slotCtx, slot, pubKey)
 				case roleUnknown:
 					log.WithField("pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:]))).Trace("No active roles, doing nothing")
 				default:

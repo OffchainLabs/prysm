@@ -28,6 +28,42 @@ message AvailableAttestation {
   bytes signature = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
 
+// Spec: one validator's AC vote (validator, slot, head) on the wire.
+message AvailableAttestationMessage {
+  uint64 validator_index = 1 [ (ethereum.eth.ext.cast_type) =
+                                   "github.com/OffchainLabs/prysm/v7/"
+                                   "consensus-types/primitives.ValidatorIndex" ];
+  AvailableAttestationData data = 2;
+  bytes signature = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// Spec: one validator's FG attestation on the wire. No slot, a row stays reusable across rounds.
+message FinalityAttestationMessage {
+  uint64 validator_index = 1 [ (ethereum.eth.ext.cast_type) =
+                                   "github.com/OffchainLabs/prysm/v7/"
+                                   "consensus-types/primitives.ValidatorIndex" ];
+  AttestationDataDecoupled data = 2;
+  bytes signature = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// Spec: the inputs of create_attestation, (h_c, T_c) from the source and (h_j, J, h_F) from the head, captured at the round's action time.
+message FinalityAttestationData {
+  uint64 height = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Height"
+  ];
+  bytes entry = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 justified_height = 3 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Height"
+  ];
+  bytes justified = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 finalized_height = 5 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Height"
+  ];
+}
+
 // Spec: a block reference. The paper names blocks directly, Prysm keeps the slot beside the root.
 message CheckpointDecoupled {
   uint64 slot = 1 [

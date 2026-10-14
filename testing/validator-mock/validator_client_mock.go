@@ -105,6 +105,21 @@ func (mr *MockValidatorClientMockRecorder) AttesterDuties(ctx, epoch, validatorI
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AttesterDuties", reflect.TypeOf((*MockValidatorClient)(nil).AttesterDuties), ctx, epoch, validatorIndices)
 }
 
+// AvailableAttestationData mocks base method.
+func (m *MockValidatorClient) AvailableAttestationData(ctx context.Context, slot primitives.Slot) (*eth.AvailableAttestationData, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AvailableAttestationData", ctx, slot)
+	ret0, _ := ret[0].(*eth.AvailableAttestationData)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AvailableAttestationData indicates an expected call of AvailableAttestationData.
+func (mr *MockValidatorClientMockRecorder) AvailableAttestationData(ctx, slot any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AvailableAttestationData", reflect.TypeOf((*MockValidatorClient)(nil).AvailableAttestationData), ctx, slot)
+}
+
 // BeaconBlock mocks base method.
 func (m *MockValidatorClient) BeaconBlock(ctx context.Context, in *eth.BlockRequest) (*eth.GenericBeaconBlock, error) {
 	m.ctrl.T.Helper()
@@ -205,6 +220,21 @@ func (m *MockValidatorClient) EventStreamIsRunning() bool {
 func (mr *MockValidatorClientMockRecorder) EventStreamIsRunning() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EventStreamIsRunning", reflect.TypeOf((*MockValidatorClient)(nil).EventStreamIsRunning))
+}
+
+// FinalityAttestationData mocks base method.
+func (m *MockValidatorClient) FinalityAttestationData(ctx context.Context, slot primitives.Slot) (*eth.FinalityAttestationData, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FinalityAttestationData", ctx, slot)
+	ret0, _ := ret[0].(*eth.FinalityAttestationData)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FinalityAttestationData indicates an expected call of FinalityAttestationData.
+func (mr *MockValidatorClientMockRecorder) FinalityAttestationData(ctx, slot any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinalityAttestationData", reflect.TypeOf((*MockValidatorClient)(nil).FinalityAttestationData), ctx, slot)
 }
 
 // GetExecutionPayloadEnvelope mocks base method.
@@ -428,6 +458,21 @@ func (mr *MockValidatorClientMockRecorder) SubmitAggregateSelectionProofElectra(
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAggregateSelectionProofElectra", reflect.TypeOf((*MockValidatorClient)(nil).SubmitAggregateSelectionProofElectra), ctx, in, arg2, arg3)
 }
 
+// SubmitAvailableAttestation mocks base method.
+func (m *MockValidatorClient) SubmitAvailableAttestation(ctx context.Context, in *eth.AvailableAttestationMessage) (*empty.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitAvailableAttestation", ctx, in)
+	ret0, _ := ret[0].(*empty.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitAvailableAttestation indicates an expected call of SubmitAvailableAttestation.
+func (mr *MockValidatorClientMockRecorder) SubmitAvailableAttestation(ctx, in any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAvailableAttestation", reflect.TypeOf((*MockValidatorClient)(nil).SubmitAvailableAttestation), ctx, in)
+}
+
 // SubmitBuilderPreferences mocks base method.
 func (m *MockValidatorClient) SubmitBuilderPreferences(ctx context.Context, in *eth.SubmitBuilderPreferencesRequest) (*empty.Empty, error) {
 	m.ctrl.T.Helper()
@@ -441,6 +486,21 @@ func (m *MockValidatorClient) SubmitBuilderPreferences(ctx context.Context, in *
 func (mr *MockValidatorClientMockRecorder) SubmitBuilderPreferences(ctx, in any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitBuilderPreferences", reflect.TypeOf((*MockValidatorClient)(nil).SubmitBuilderPreferences), ctx, in)
+}
+
+// SubmitFinalityAttestation mocks base method.
+func (m *MockValidatorClient) SubmitFinalityAttestation(ctx context.Context, in *eth.FinalityAttestationMessage) (*empty.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitFinalityAttestation", ctx, in)
+	ret0, _ := ret[0].(*empty.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitFinalityAttestation indicates an expected call of SubmitFinalityAttestation.
+func (mr *MockValidatorClientMockRecorder) SubmitFinalityAttestation(ctx, in any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitFinalityAttestation", reflect.TypeOf((*MockValidatorClient)(nil).SubmitFinalityAttestation), ctx, in)
 }
 
 // SubmitPayloadAttestation mocks base method.

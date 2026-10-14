@@ -17,14 +17,20 @@ type voteKey struct {
 	root      [32]byte
 }
 
+type voterKey struct {
+	slot      primitives.Slot
+	validator primitives.ValidatorIndex
+}
+
 // Spec: the signed AC messages of the current and previous slot, the proposer aggregates the engine's snapshot from them by root.
 type VotePool struct {
-	lock  sync.Mutex
-	votes map[voteKey][]byte
+	lock   sync.Mutex
+	votes  map[voteKey][]byte
+	counts map[voterKey]int
 }
 
 func NewVotePool() *VotePool {
-	return &VotePool{votes: make(map[voteKey][]byte)}
+	return &VotePool{votes: make(map[voteKey][]byte), counts: make(map[voterKey]int)}
 }
 
 func (p *VotePool) Insert(validator primitives.ValidatorIndex, slot primitives.Slot, root [32]byte, sig []byte) {
@@ -33,7 +39,18 @@ func (p *VotePool) Insert(validator primitives.ValidatorIndex, slot primitives.S
 	k := voteKey{slot: slot, validator: validator, root: root}
 	if _, ok := p.votes[k]; !ok {
 		p.votes[k] = bytesutil.SafeCopyBytes(sig)
+		p.counts[voterKey{slot: slot, validator: validator}]++
 	}
+}
+
+// Spec: the gossip IGNORE rules, a repeat and a third distinct vote by one validator in a slot. Two distinct votes travel so every node sees the equivocation.
+func (p *VotePool) Seen(validator primitives.ValidatorIndex, slot primitives.Slot, root [32]byte) bool {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	if _, ok := p.votes[voteKey{slot: slot, validator: validator, root: root}]; ok {
+		return true
+	}
+	return p.counts[voterKey{slot: slot, validator: validator}] >= 2
 }
 
 // Spec: B.votes. One aggregate per root over exactly the validators the engine returned, bit i is validator i.
@@ -68,6 +85,11 @@ func (p *VotePool) Prune(current primitives.Slot) {
 	for k := range p.votes {
 		if k.slot+1 < current {
 			delete(p.votes, k)
+		}
+	}
+	for k := range p.counts {
+		if k.slot+1 < current {
+			delete(p.counts, k)
 		}
 	}
 }

@@ -6,6 +6,7 @@ var (
 	ErrAttestationsSignatureInvalid          = errors.New("attestations signature invalid")
 	ErrRandaoSignatureInvalid                = errors.New("randao signature invalid")
 	ErrBLSToExecutionChangesSignatureInvalid = errors.New("BLS to execution changes signature invalid")
+	ErrDecoupledSignaturesInvalid            = errors.New("decoupled attestation signatures invalid")
 	ErrProcessWithdrawalsFailed              = errors.New("process withdrawals failed")
 	ErrProcessRandaoFailed                   = errors.New("process randao failed")
 	ErrProcessEth1DataFailed                 = errors.New("process eth1 data failed")

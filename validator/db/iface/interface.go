@@ -82,4 +82,11 @@ type ValidatorDB interface {
 
 	// EIP-3076 slashing protection related methods
 	ImportStandardProtectionJSON(ctx context.Context, r io.Reader) error
+
+	// Decoupled duties, the FG signing record and the AC vote reservation.
+	FinalityHistory(ctx context.Context, publicKey [fieldparams.BLSPubkeyLength]byte) (history []*ethpb.AttestationDataDecoupled, pending, known bool, err error)
+	MarkFinalityKey(ctx context.Context, publicKey [fieldparams.BLSPubkeyLength]byte) error
+	SaveFinalityAttestation(ctx context.Context, publicKey [fieldparams.BLSPubkeyLength]byte, data *ethpb.AttestationDataDecoupled) error
+	MarkFinalitySubmitted(ctx context.Context, publicKey [fieldparams.BLSPubkeyLength]byte, data *ethpb.AttestationDataDecoupled) error
+	ReserveAvailableVote(ctx context.Context, publicKey [fieldparams.BLSPubkeyLength]byte, slot primitives.Slot, root [32]byte) error
 }

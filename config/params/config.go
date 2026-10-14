@@ -166,6 +166,8 @@ type BeaconChainConfig struct {
 	DomainProposerPreferences         [4]byte `yaml:"DOMAIN_PROPOSER_PREFERENCES" spec:"true"`           // DomainProposerPreferences defines the BLS signature domain for proposer preferences.
 	DomainBuilderRequestAuth          [4]byte `yaml:"DOMAIN_BUILDER_REQUEST_AUTH" spec:"true"`           // DomainBuilderRequestAuth defines the BLS signature domain for builder bid request authentication.
 	DomainBuilderDeposit              [4]byte `yaml:"DOMAIN_BUILDER_DEPOSIT" spec:"true"`                // DomainBuilderDeposit defines the BLS signature domain for builder deposit requests (EIP-8282).
+	DomainAvailableAttestation        [4]byte `yaml:"DOMAIN_AVAILABLE_ATTESTATION"`                      // DomainAvailableAttestation defines the BLS signature domain for Decoupled AC votes.
+	DomainFinalityAttestation         [4]byte `yaml:"DOMAIN_FINALITY_ATTESTATION"`                       // DomainFinalityAttestation defines the BLS signature domain for Decoupled FG attestations, pinned to the Decoupled fork version.
 
 	// Prysm constants.
 	GenesisValidatorsRoot          [32]byte        // GenesisValidatorsRoot is the root hash of the genesis validators.
@@ -199,25 +201,26 @@ type BeaconChainConfig struct {
 	SlashingProtectionPruningEpochs primitives.Epoch // SlashingProtectionPruningEpochs defines a period after which all prior epochs are pruned in the validator database.
 
 	// Fork-related values.
-	GenesisForkVersion    []byte           `yaml:"GENESIS_FORK_VERSION" spec:"true"`   // GenesisForkVersion is used to track fork version between state transitions.
-	AltairForkVersion     []byte           `yaml:"ALTAIR_FORK_VERSION" spec:"true"`    // AltairForkVersion is used to represent the fork version for altair.
-	AltairForkEpoch       primitives.Epoch `yaml:"ALTAIR_FORK_EPOCH" spec:"true"`      // AltairForkEpoch is used to represent the assigned fork epoch for altair.
-	BellatrixForkVersion  []byte           `yaml:"BELLATRIX_FORK_VERSION" spec:"true"` // BellatrixForkVersion is used to represent the fork version for bellatrix.
-	BellatrixForkEpoch    primitives.Epoch `yaml:"BELLATRIX_FORK_EPOCH" spec:"true"`   // BellatrixForkEpoch is used to represent the assigned fork epoch for bellatrix.
-	CapellaForkVersion    []byte           `yaml:"CAPELLA_FORK_VERSION" spec:"true"`   // CapellaForkVersion is used to represent the fork version for capella.
-	CapellaForkEpoch      primitives.Epoch `yaml:"CAPELLA_FORK_EPOCH" spec:"true"`     // CapellaForkEpoch is used to represent the assigned fork epoch for capella.
-	DenebForkVersion      []byte           `yaml:"DENEB_FORK_VERSION" spec:"true"`     // DenebForkVersion is used to represent the fork version for deneb.
-	DenebForkEpoch        primitives.Epoch `yaml:"DENEB_FORK_EPOCH" spec:"true"`       // DenebForkEpoch is used to represent the assigned fork epoch for deneb.
-	ElectraForkVersion    []byte           `yaml:"ELECTRA_FORK_VERSION" spec:"true"`   // ElectraForkVersion is used to represent the fork version for electra.
-	ElectraForkEpoch      primitives.Epoch `yaml:"ELECTRA_FORK_EPOCH" spec:"true"`     // ElectraForkEpoch is used to represent the assigned fork epoch for electra.
-	FuluForkVersion       []byte           `yaml:"FULU_FORK_VERSION" spec:"true"`      // FuluForkVersion is used to represent the fork version for fulu.
-	FuluForkEpoch         primitives.Epoch `yaml:"FULU_FORK_EPOCH" spec:"true"`        // FuluForkEpoch is used to represent the assigned fork epoch for fulu.
-	GloasForkVersion      []byte           `yaml:"GLOAS_FORK_VERSION" spec:"true"`     // GloasForkVersion is used to represent the fork version for gloas.
-	GloasForkEpoch        primitives.Epoch `yaml:"GLOAS_FORK_EPOCH" spec:"true"`       // GloasForkEpoch is used to represent the assigned fork epoch for gloas.
-	DecoupledForkVersion  []byte           `yaml:"DECOUPLED_FORK_VERSION" spec:"true"` // DecoupledForkVersion is used to represent the fork version for decoupled.
-	DecoupledForkEpoch    primitives.Epoch `yaml:"DECOUPLED_FORK_EPOCH" spec:"true"`   // DecoupledForkEpoch is used to represent the assigned fork epoch for decoupled.
-	DecoupledTimeoutDelay primitives.Slot  `yaml:"DECOUPLED_TIMEOUT_DELAY"`            // DecoupledTimeoutDelay is the paper's δ_t, slots after the entry before a progress quorum alone advances the height.
-	DecoupledLockStreak   uint64           `yaml:"DECOUPLED_LOCK_STREAK"`              // DecoupledLockStreak is the paper's k, consecutive confirmations for a slow lock and the lock lifetime in slots.
+	GenesisForkVersion     []byte           `yaml:"GENESIS_FORK_VERSION" spec:"true"`   // GenesisForkVersion is used to track fork version between state transitions.
+	AltairForkVersion      []byte           `yaml:"ALTAIR_FORK_VERSION" spec:"true"`    // AltairForkVersion is used to represent the fork version for altair.
+	AltairForkEpoch        primitives.Epoch `yaml:"ALTAIR_FORK_EPOCH" spec:"true"`      // AltairForkEpoch is used to represent the assigned fork epoch for altair.
+	BellatrixForkVersion   []byte           `yaml:"BELLATRIX_FORK_VERSION" spec:"true"` // BellatrixForkVersion is used to represent the fork version for bellatrix.
+	BellatrixForkEpoch     primitives.Epoch `yaml:"BELLATRIX_FORK_EPOCH" spec:"true"`   // BellatrixForkEpoch is used to represent the assigned fork epoch for bellatrix.
+	CapellaForkVersion     []byte           `yaml:"CAPELLA_FORK_VERSION" spec:"true"`   // CapellaForkVersion is used to represent the fork version for capella.
+	CapellaForkEpoch       primitives.Epoch `yaml:"CAPELLA_FORK_EPOCH" spec:"true"`     // CapellaForkEpoch is used to represent the assigned fork epoch for capella.
+	DenebForkVersion       []byte           `yaml:"DENEB_FORK_VERSION" spec:"true"`     // DenebForkVersion is used to represent the fork version for deneb.
+	DenebForkEpoch         primitives.Epoch `yaml:"DENEB_FORK_EPOCH" spec:"true"`       // DenebForkEpoch is used to represent the assigned fork epoch for deneb.
+	ElectraForkVersion     []byte           `yaml:"ELECTRA_FORK_VERSION" spec:"true"`   // ElectraForkVersion is used to represent the fork version for electra.
+	ElectraForkEpoch       primitives.Epoch `yaml:"ELECTRA_FORK_EPOCH" spec:"true"`     // ElectraForkEpoch is used to represent the assigned fork epoch for electra.
+	FuluForkVersion        []byte           `yaml:"FULU_FORK_VERSION" spec:"true"`      // FuluForkVersion is used to represent the fork version for fulu.
+	FuluForkEpoch          primitives.Epoch `yaml:"FULU_FORK_EPOCH" spec:"true"`        // FuluForkEpoch is used to represent the assigned fork epoch for fulu.
+	GloasForkVersion       []byte           `yaml:"GLOAS_FORK_VERSION" spec:"true"`     // GloasForkVersion is used to represent the fork version for gloas.
+	GloasForkEpoch         primitives.Epoch `yaml:"GLOAS_FORK_EPOCH" spec:"true"`       // GloasForkEpoch is used to represent the assigned fork epoch for gloas.
+	DecoupledForkVersion   []byte           `yaml:"DECOUPLED_FORK_VERSION" spec:"true"` // DecoupledForkVersion is used to represent the fork version for decoupled.
+	DecoupledForkEpoch     primitives.Epoch `yaml:"DECOUPLED_FORK_EPOCH" spec:"true"`   // DecoupledForkEpoch is used to represent the assigned fork epoch for decoupled.
+	DecoupledTimeoutDelay  primitives.Slot  `yaml:"DECOUPLED_TIMEOUT_DELAY"`            // DecoupledTimeoutDelay is the paper's δ_t, slots after the entry before a progress quorum alone advances the height.
+	DecoupledLockStreak    uint64           `yaml:"DECOUPLED_LOCK_STREAK"`              // DecoupledLockStreak is the paper's k, consecutive confirmations for a slow lock and the lock lifetime in slots.
+	DecoupledSlotsPerRound uint64           `yaml:"DECOUPLED_SLOTS_PER_ROUND"`          // DecoupledSlotsPerRound is the paper's R, the FG action fires 2Δ into the second slot of each round.
 
 	ForkVersionSchedule map[[fieldparams.VersionLength]byte]primitives.Epoch // Schedule of fork epochs by version.
 	ForkVersionNames    map[[fieldparams.VersionLength]byte]string           // Human-readable names of fork versions.
@@ -824,6 +827,14 @@ func GloasEnabled() bool {
 // DecoupledEnabled centralizes the check to determine if code paths that are specific to Decoupled should be allowed to execute.
 func DecoupledEnabled() bool {
 	return BeaconConfig().DecoupledForkEpoch < math.MaxUint64
+}
+
+// Spec: fg_action at round_start + 6Δ, the second slot of each round at 2Δ, rounds counted from the fork slot.
+func (b *BeaconChainConfig) DecoupledActionSlot(slot primitives.Slot) bool {
+	if b.DecoupledSlotsPerRound == 0 || primitives.Epoch(uint64(slot)/uint64(b.SlotsPerEpoch)) < b.DecoupledForkEpoch {
+		return false
+	}
+	return (uint64(slot)-uint64(b.DecoupledForkEpoch)*uint64(b.SlotsPerEpoch))%b.DecoupledSlotsPerRound == 1
 }
 
 // WithinDAPeriod checks if the block epoch is within the data availability retention period.

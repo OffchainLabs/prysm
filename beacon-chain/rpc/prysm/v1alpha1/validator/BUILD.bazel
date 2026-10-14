@@ -10,6 +10,7 @@ go_library(
         "blocks.go",
         "builder_preferences.go",
         "construct_generic_block.go",
+        "decoupled.go",
         "duties.go",
         "duties_v2.go",
         "duties_v3.go",

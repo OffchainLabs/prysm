@@ -54,6 +54,10 @@ const (
 	GossipExecutionPayloadBidMessage = "execution_payload_bid"
 	// GossipSignedProposerPreferencesMessage is the name for the proposer preferences message type.
 	GossipSignedProposerPreferencesMessage = "proposer_preferences"
+	// GossipAvailableAttestationMessage is the name for the Decoupled AC vote message type.
+	GossipAvailableAttestationMessage = "available_attestation"
+	// GossipFinalityAttestationMessage is the name for the Decoupled FG attestation message type.
+	GossipFinalityAttestationMessage = "finality_attestation"
 
 	// Topic Formats
 	//
@@ -91,6 +95,10 @@ const (
 	ExecutionPayloadBidTopicFormat = GossipProtocolAndDigest + GossipExecutionPayloadBidMessage
 	// SignedProposerPreferencesTopicFormat is the topic format for signed proposer preferences.
 	SignedProposerPreferencesTopicFormat = GossipProtocolAndDigest + GossipSignedProposerPreferencesMessage
+	// AvailableAttestationTopicFormat is the topic format for Decoupled AC votes.
+	AvailableAttestationTopicFormat = GossipProtocolAndDigest + GossipAvailableAttestationMessage
+	// FinalityAttestationTopicFormat is the topic format for Decoupled FG attestations.
+	FinalityAttestationTopicFormat = GossipProtocolAndDigest + GossipFinalityAttestationMessage
 )
 
 // topic is a struct representing a single gossipsub topic.
@@ -158,6 +166,7 @@ func (s *Service) allTopics() []topic {
 	// bellatrix: no special topics; electra: blobs topics handled all together
 	genesis, altair, capella := cfg.GenesisEpoch, cfg.AltairForkEpoch, cfg.CapellaForkEpoch
 	deneb, fulu, gloas, future := cfg.DenebForkEpoch, cfg.FuluForkEpoch, cfg.GloasForkEpoch, cfg.FarFutureEpoch
+	decoupled := cfg.DecoupledForkEpoch
 	// Templates are starter topics - they have a placeholder digest and the subnet is set to the maximum value
 	// for the subnet (see how this is used in allSubnetsBelow). These are not directly returned by the method,
 	// they are copied and modified for each digest where they apply based on the start and end epochs.
@@ -178,6 +187,8 @@ func (s *Service) allTopics() []topic {
 		newTopic(gloas, future, empty, GossipExecutionPayloadEnvelopeMessage),
 		newTopic(gloas, future, empty, GossipExecutionPayloadBidMessage),
 		newTopic(gloas, future, empty, GossipSignedProposerPreferencesMessage),
+		newTopic(decoupled, future, empty, GossipAvailableAttestationMessage),
+		newTopic(decoupled, future, empty, GossipFinalityAttestationMessage),
 	}
 	last := params.GetNetworkScheduleEntry(genesis)
 	schedule := []params.NetworkScheduleEntry{last}

@@ -1196,7 +1196,7 @@ func (b *BeaconBlock) AsSignRequestObject() (validatorpb.SignRequestObject, erro
 	case version.Gloas:
 		return &validatorpb.SignRequest_BlockGloas{BlockGloas: pb.(*eth.BeaconBlockGloas)}, nil
 	case version.Decoupled:
-		return nil, consensus_types.ErrNotSupported("AsSignRequestObject", b.version)
+		return &validatorpb.SignRequest_BlockDecoupled{BlockDecoupled: pb.(*eth.BeaconBlockDecoupled)}, nil
 	default:
 		return nil, errIncorrectBlockVersion
 	}

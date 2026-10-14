@@ -81,6 +81,9 @@ type Service struct {
 	decoupledLock                  sync.Mutex
 	decoupledHead                  [32]byte
 	decoupledProposal              decoupledProposal
+	decoupledDuty                  decoupledDuty
+	decoupledProcessed             time.Time
+	decoupledSynced                bool
 	decoupledFCU                   decoupledFCU
 	decoupledFCULock               sync.Mutex
 }

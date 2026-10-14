@@ -78,6 +78,7 @@ type validator struct {
 	attestedSlotsLock            sync.RWMutex
 	cachedAttestationDataLock    sync.RWMutex
 	builderRequestAuthsLock      sync.Mutex
+	finalitySigningLock          sync.Mutex
 	domainDataLock               sync.RWMutex
 	cachedAttestationData        *ethpb.AttestationData
 	graffitiOrderedIndex         uint64
@@ -483,6 +484,8 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		rolesAt              = make(map[[fieldparams.BLSPubkeyLength]byte][]validatorRole)
 		syncCommitteePubkeys [][fieldparams.BLSPubkeyLength]byte
 	)
+	// Spec: legacy attestations stop at the Decoupled fork, every validator votes each slot and attests in each round's action slot.
+	decoupledEra := slots.ToEpoch(slot) >= params.BeaconConfig().DecoupledForkEpoch
 
 	for pk, duty := range snap.currentDuties() {
 		var roles []validatorRole
@@ -503,7 +506,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 			}
 		}
 
-		if duty.AttesterSlot == slot {
+		if duty.AttesterSlot == slot && !decoupledEra {
 			roles = append(roles, roleAttester)
 
 			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, slot, pk)
@@ -538,6 +541,13 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 
 		if slices.Contains(snap.ptcSlots(duty.ValidatorIndex), slot) {
 			roles = append(roles, rolePTCMember)
+		}
+
+		if decoupledEra {
+			roles = append(roles, roleAvailableVoter)
+			if params.BeaconConfig().DecoupledActionSlot(slot) {
+				roles = append(roles, roleFinalityAttester)
+			}
 		}
 
 		if len(roles) == 0 {

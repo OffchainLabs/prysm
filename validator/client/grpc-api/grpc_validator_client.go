@@ -451,3 +451,20 @@ func (c *grpcValidatorClient) PayloadAttestationData(ctx context.Context, slot p
 func (c *grpcValidatorClient) SubmitPayloadAttestation(ctx context.Context, in *ethpb.PayloadAttestationMessage) (*empty.Empty, error) {
 	return c.getClient().SubmitPayloadAttestation(ctx, in)
 }
+
+// TODO(DC): a validator clock slightly ahead asks before the beacon node captures the decision and gets Unavailable, tell that apart from an empty capture and wait for it.
+func (c *grpcValidatorClient) AvailableAttestationData(ctx context.Context, slot primitives.Slot) (*ethpb.AvailableAttestationData, error) {
+	return c.getClient().AvailableAttestationData(ctx, &ethpb.DecoupledAttestationDataRequest{Slot: slot}, grpcretry.WithMax(0))
+}
+
+func (c *grpcValidatorClient) SubmitAvailableAttestation(ctx context.Context, in *ethpb.AvailableAttestationMessage) (*empty.Empty, error) {
+	return c.getClient().SubmitAvailableAttestation(ctx, in)
+}
+
+func (c *grpcValidatorClient) FinalityAttestationData(ctx context.Context, slot primitives.Slot) (*ethpb.FinalityAttestationData, error) {
+	return c.getClient().FinalityAttestationData(ctx, &ethpb.DecoupledAttestationDataRequest{Slot: slot}, grpcretry.WithMax(0))
+}
+
+func (c *grpcValidatorClient) SubmitFinalityAttestation(ctx context.Context, in *ethpb.FinalityAttestationMessage) (*empty.Empty, error) {
+	return c.getClient().SubmitFinalityAttestation(ctx, in)
+}
