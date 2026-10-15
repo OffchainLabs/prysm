@@ -10,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -211,10 +210,15 @@ func BlockBuiltOnParentPayload(parent, child interfaces.ReadOnlyBeaconBlock) (bo
 	if err != nil {
 		return false, err
 	}
-	if parentBid == nil || parentBid.Message == nil || childBid == nil || childBid.Message == nil {
-		return false, errors.New("nil execution payload bid")
+	parentPayloadBid, err := parentBid.Bid()
+	if err != nil {
+		return false, err
 	}
-	return bytes.Equal(childBid.Message.ParentBlockHash, parentBid.Message.BlockHash), nil
+	childPayloadBid, err := childBid.Bid()
+	if err != nil {
+		return false, err
+	}
+	return childPayloadBid.ParentBlockHash() == parentPayloadBid.BlockHash(), nil
 }
 
 // BlockBuiltOnParentEnvelope reports whether env is the payload of blk's parent block and blk builds on it.

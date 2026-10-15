@@ -451,3 +451,20 @@ func (c *grpcValidatorClient) PayloadAttestationData(ctx context.Context, slot p
 func (c *grpcValidatorClient) SubmitPayloadAttestation(ctx context.Context, in *ethpb.PayloadAttestationMessage) (*empty.Empty, error) {
 	return c.getClient().SubmitPayloadAttestation(ctx, in)
 }
+
+var errInclusionListsNotSupported = errors.New("inclusion lists are not supported over gRPC, use the beacon API")
+
+// ProduceInclusionList is not supported over gRPC. Inclusion lists use the beacon API only.
+func (*grpcValidatorClient) ProduceInclusionList(context.Context, primitives.Slot) ([][]byte, error) {
+	return nil, errInclusionListsNotSupported
+}
+
+// SubmitInclusionList is not supported over gRPC. Inclusion lists use the beacon API only.
+func (*grpcValidatorClient) SubmitInclusionList(context.Context, *ethpb.SignedInclusionList) error {
+	return errInclusionListsNotSupported
+}
+
+// InclusionListDuties is not supported over gRPC. Inclusion lists use the beacon API only.
+func (*grpcValidatorClient) InclusionListDuties(context.Context, primitives.Epoch, []primitives.ValidatorIndex) (*iface.InclusionListDutiesResponse, error) {
+	return nil, errInclusionListsNotSupported
+}

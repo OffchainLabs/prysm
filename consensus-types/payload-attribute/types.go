@@ -1,6 +1,7 @@
 package payloadattribute
 
 import (
+	"github.com/OffchainLabs/go-bitfield"
 	field_params "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -23,6 +24,7 @@ type data struct {
 	parentBeaconBlockRoot []byte
 	slotNumber            uint64
 	targetGasLimit        uint64
+	inclusionListTxs      [][]byte
 }
 
 var (
@@ -44,6 +46,8 @@ func New(i any) (Attributer, error) {
 		return initPayloadAttributeFromV3(a)
 	case *enginev1.PayloadAttributesV4:
 		return initPayloadAttributeFromV4(a)
+	case *enginev1.PayloadAttributesV5:
+		return initPayloadAttributeFromV5(a)
 	default:
 		return nil, errors.Wrapf(errUnsupportedPayloadAttribute, "unable to create payload attribute from type %T", i)
 	}
@@ -115,6 +119,24 @@ func initPayloadAttributeFromV4(a *enginev1.PayloadAttributesV4) (Attributer, er
 	}, nil
 }
 
+func initPayloadAttributeFromV5(a *enginev1.PayloadAttributesV5) (Attributer, error) {
+	if a == nil {
+		return nil, errNilPayloadAttribute
+	}
+
+	return &data{
+		version:               version.Heze,
+		prevRandao:            a.PrevRandao,
+		timeStamp:             a.Timestamp,
+		suggestedFeeRecipient: a.SuggestedFeeRecipient,
+		withdrawals:           a.Withdrawals,
+		parentBeaconBlockRoot: a.ParentBeaconBlockRoot,
+		slotNumber:            a.SlotNumber,
+		targetGasLimit:        a.TargetGasLimit,
+		inclusionListTxs:      a.InclusionListTransactions,
+	}, nil
+}
+
 // EventData holds the values for a PayloadAttributes event.
 type EventData struct {
 	ProposerIndex      primitives.ValidatorIndex
@@ -126,4 +148,5 @@ type EventData struct {
 	Attributer         Attributer
 	HeadBlock          interfaces.ReadOnlySignedBeaconBlock
 	HeadRoot           [field_params.RootLength]byte
+	InclusionListBits  bitfield.Bitvector16 // Set from Heze
 }

@@ -438,3 +438,33 @@ func TestMaxSizeSSZMatchesMaxMarshaledSize(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(b), rangeReq.MaxSizeSSZ())
 }
+
+func TestInclusionListsByIndicesReq_SSZ(t *testing.T) {
+	req := &InclusionListsByIndicesReq{Slot: 0x0102030405060708, DependentRoot: [32]byte{0xaa, 31: 0xbb}, Indices: [2]byte{0x01, 0x80}}
+
+	t.Run("size and layout", func(t *testing.T) {
+		require.Equal(t, 42, req.SizeSSZ())
+		require.Equal(t, 42, req.MaxSizeSSZ())
+		enc, err := req.MarshalSSZ()
+		require.NoError(t, err)
+		require.Equal(t, 42, len(enc))
+		require.DeepEqual(t, []byte{0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01}, enc[:8])
+		require.DeepEqual(t, req.DependentRoot[:], enc[8:40])
+		require.DeepEqual(t, []byte{0x01, 0x80}, enc[40:])
+	})
+	t.Run("round trip", func(t *testing.T) {
+		enc, err := req.MarshalSSZTo([]byte{0xff})
+		require.NoError(t, err)
+		require.Equal(t, byte(0xff), enc[0])
+		got := &InclusionListsByIndicesReq{}
+		require.NoError(t, got.UnmarshalSSZ(enc[1:]))
+		require.DeepEqual(t, req, got)
+	})
+	t.Run("wrong size", func(t *testing.T) {
+		enc, err := req.MarshalSSZ()
+		require.NoError(t, err)
+		got := &InclusionListsByIndicesReq{}
+		require.ErrorIs(t, got.UnmarshalSSZ(enc[:41]), ErrIncorrectByteSize)
+		require.ErrorIs(t, got.UnmarshalSSZ(append(enc, 0)), ErrIncorrectByteSize)
+	})
+}

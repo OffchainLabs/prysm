@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
@@ -30,6 +31,7 @@ type testExecutionPayloadBid struct {
 	slot               primitives.Slot
 	value              primitives.Gwei
 	executionPayment   primitives.Gwei
+	inclusionListBits  []byte
 }
 
 func (t testExecutionPayloadBid) ParentBlockHash() [32]byte { return t.parentBlockHash }
@@ -49,9 +51,10 @@ func (t testExecutionPayloadBid) BlobKzgCommitments() [][]byte { return t.blobKz
 func (t testExecutionPayloadBid) BlobKzgCommitmentCount() uint64 {
 	return uint64(len(t.blobKzgCommitments))
 }
-func (t testExecutionPayloadBid) FeeRecipient() [20]byte          { return t.feeRecipient }
-func (t testExecutionPayloadBid) ExecutionRequestsRoot() [32]byte { return [32]byte{} }
-func (t testExecutionPayloadBid) IsNil() bool                     { return false }
+func (t testExecutionPayloadBid) FeeRecipient() [20]byte                  { return t.feeRecipient }
+func (t testExecutionPayloadBid) ExecutionRequestsRoot() [32]byte         { return [32]byte{} }
+func (t testExecutionPayloadBid) InclusionListBits() bitfield.Bitvector16 { return t.inclusionListBits }
+func (t testExecutionPayloadBid) IsNil() bool                             { return false }
 
 func TestSetExecutionPayloadBid(t *testing.T) {
 	t.Run("previous fork returns expected error", func(t *testing.T) {
@@ -103,6 +106,62 @@ func TestSetExecutionPayloadBid(t *testing.T) {
 		require.Equal(t, primitives.Gwei(11), st.latestExecutionPayloadBid.Value)
 		require.Equal(t, primitives.Gwei(22), st.latestExecutionPayloadBid.ExecutionPayment)
 		require.Equal(t, true, st.dirtyFields[types.LatestExecutionPayloadBid])
+	})
+
+	t.Run("heze rejects bid without inclusion list bits", func(t *testing.T) {
+		st := &BeaconState{version: version.Heze, dirtyFields: make(map[types.FieldIndex]bool)}
+		err := st.SetExecutionPayloadBid(testExecutionPayloadBid{})
+		require.ErrorContains(t, "invalid inclusion list bits length 0", err)
+		require.IsNil(t, st.latestExecutionPayloadBidHeze)
+		require.Equal(t, false, st.dirtyFields[types.LatestExecutionPayloadBid])
+	})
+
+	t.Run("heze stores inclusion list bits and marks dirty", func(t *testing.T) {
+		st := &BeaconState{version: version.Heze, dirtyFields: make(map[types.FieldIndex]bool)}
+		require.NoError(t, st.SetExecutionPayloadBid(testExecutionPayloadBid{value: 5, inclusionListBits: []byte{0x01, 0x80}}))
+		require.NotNil(t, st.latestExecutionPayloadBidHeze)
+		require.IsNil(t, st.latestExecutionPayloadBid)
+		require.DeepEqual(t, bitfield.Bitvector16{0x01, 0x80}, st.latestExecutionPayloadBidHeze.InclusionListBits)
+		require.Equal(t, primitives.Gwei(5), st.latestExecutionPayloadBidHeze.Value)
+		require.Equal(t, true, st.dirtyFields[types.LatestExecutionPayloadBid])
+	})
+}
+
+func TestQueueBuilderPaymentForSlot_Heze(t *testing.T) {
+	newState := func(bid *ethpb.ExecutionPayloadBidHeze) *BeaconState {
+		return &BeaconState{
+			version:                       version.Heze,
+			slot:                          3 * params.BeaconConfig().SlotsPerEpoch,
+			latestExecutionPayloadBidHeze: bid,
+			dirtyFields:                   make(map[types.FieldIndex]bool),
+			sharedFieldReferences: map[types.FieldIndex]*stateutil.Reference{
+				types.BuilderPendingWithdrawals: stateutil.NewRef(1),
+			},
+		}
+	}
+
+	t.Run("nil bid queues nothing", func(t *testing.T) {
+		st := newState(nil)
+		require.NoError(t, st.QueueBuilderPaymentForSlot(0))
+		require.Equal(t, 0, len(st.builderPendingWithdrawals))
+	})
+
+	t.Run("zero value queues nothing", func(t *testing.T) {
+		st := newState(&ethpb.ExecutionPayloadBidHeze{BuilderIndex: 3})
+		require.NoError(t, st.QueueBuilderPaymentForSlot(0))
+		require.Equal(t, 0, len(st.builderPendingWithdrawals))
+	})
+
+	t.Run("queues the heze bid value", func(t *testing.T) {
+		feeRecipient := bytes.Repeat([]byte{0x44}, 20)
+		st := newState(&ethpb.ExecutionPayloadBidHeze{Value: 9, BuilderIndex: 3, FeeRecipient: feeRecipient})
+		require.NoError(t, st.QueueBuilderPaymentForSlot(0))
+		require.DeepEqual(t, []*ethpb.BuilderPendingWithdrawal{{
+			FeeRecipient: feeRecipient,
+			Amount:       9,
+			BuilderIndex: 3,
+		}}, st.builderPendingWithdrawals)
+		require.Equal(t, true, st.dirtyFields[types.BuilderPendingWithdrawals])
 	})
 }
 

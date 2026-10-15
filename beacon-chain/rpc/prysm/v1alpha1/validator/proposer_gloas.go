@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -99,6 +100,11 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 
 	// Eager (stateless) self-build: bundle envelope + blobs inline; stateful publishes from the cache.
 	if eagerPayloadStateRoot && envelope != nil {
+		// TODO(heze): bundle Heze blocks when a Heze block contents type exists; until then Heze publishes from the cache.
+		// Revisit this for stateless VC support.
+		if sBlk.Version() > version.Gloas {
+			return blk, nil
+		}
 		var blobs, kzgProofs [][]byte
 		if local.BlobsBundler != nil {
 			blobs = local.BlobsBundler.GetBlobs()
@@ -123,10 +129,14 @@ func (vs *Server) gloasPayloadValue(sBlk interfaces.SignedBeaconBlock, local *co
 		}
 		return local.Bid
 	}
-	bid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
-	if err != nil || bid == nil || bid.Message == nil {
+	sbid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
+	if err != nil {
 		return primitives.ZeroWei()
 	}
-	value := new(big.Int).SetUint64(uint64(bid.Message.Value))
+	bid, err := sbid.Bid()
+	if err != nil {
+		return primitives.ZeroWei()
+	}
+	value := new(big.Int).SetUint64(uint64(bid.Value()))
 	return value.Mul(value, big.NewInt(1e9))
 }

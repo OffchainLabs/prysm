@@ -68,7 +68,7 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return err
 	}
 
-	var isValidPayload bool
+	var isValidPayload, ilSatisfied bool
 
 	// EL Validation runs separately from consensus validation in different errgroup.
 	elCtx, cancelEL := context.WithCancel(ctx)
@@ -77,7 +77,7 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	var elGroup errgroup.Group
 	elGroup.Go(func() error {
 		var elErr error
-		isValidPayload, elErr = s.validateExecutionOnEnvelope(elCtx, blockState, envelope)
+		isValidPayload, ilSatisfied, elErr = s.validateExecutionOnEnvelope(elCtx, blockState, envelope)
 		return elErr
 	})
 
@@ -149,7 +149,7 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return err
 	}
 
-	if err := s.InsertPayload(envelope); err != nil {
+	if err := s.InsertPayloadWithInclusionList(envelope, ilSatisfied); err != nil {
 		return errors.Wrap(err, "could not insert payload into forkchoice")
 	}
 
@@ -251,7 +251,7 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 	blockHash := bytesutil.ToBytes32(payload.BlockHash())
 	attr := s.getPayloadAttribute(ctx, st, proposingSlot, root[:], true)
 	go func() {
-		pid, fcs, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, attr)
+		pid, fcs, err := s.notifyForkchoiceUpdateGloas(s.ctx, root, blockHash, attr)
 		if err != nil {
 			log.WithError(err).Error("Could not notify forkchoice update")
 			return
@@ -294,11 +294,35 @@ func (s *Service) callNewPayload(
 	parentRoot common.Hash,
 	requests *enginev1.ExecutionRequestsGloas,
 	slot primitives.Slot,
-) (bool, error) {
-	_, err := s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &parentRoot, requests)
+	ilTxs [][]byte,
+) (bool, bool, error) {
+	var (
+		err         error
+		ilSatisfied *bool
+	)
+
+	isHeze := slots.ToEpoch(slot) >= params.BeaconConfig().HezeForkEpoch
+	if isHeze {
+		if ilTxs == nil {
+			ilTxs = [][]byte{}
+		}
+		_, ilSatisfied, err = s.cfg.ExecutionEngineCaller.NewPayloadWithInclusionList(ctx, payload, versionedHashes, &parentRoot, requests, ilTxs)
+	} else {
+		_, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &parentRoot, requests)
+	}
 	if err == nil {
 		newPayloadValidNodeCount.Inc()
-		return true, nil
+		if !isHeze {
+			// Always return true for inclusion list satisfaction before Heze.
+			return true, true, nil
+		}
+		// A VALID status without inclusionListSatisfied breaks engine_newPayloadV6.
+		// Treat the payload as satisfied, because blocking it would only hurt liveness.
+		if ilSatisfied == nil {
+			log.WithField("slot", slot).Warn("Execution engine returned VALID without inclusionListSatisfied, recording the payload as satisfied")
+			return true, true, nil
+		}
+		return true, *ilSatisfied, nil
 	}
 	if errors.Is(err, execution.ErrAcceptedSyncingPayloadStatus) {
 		newPayloadOptimisticNodeCount.Inc()
@@ -306,13 +330,13 @@ func (s *Service) callNewPayload(
 			"slot":             slot,
 			"payloadBlockHash": fmt.Sprintf("%#x", bytesutil.Trunc(payload.BlockHash())),
 		}).Info("Called new payload with optimistic envelope")
-		return false, nil
+		return false, true, nil
 	}
 	if errors.Is(err, execution.ErrInvalidPayloadStatus) {
 		newPayloadInvalidNodeCount.Inc()
-		return false, invalidBlock{error: ErrInvalidPayload}
+		return false, false, invalidBlock{error: ErrInvalidPayload}
 	}
-	return false, errors.WithMessage(ErrUndefinedExecutionEngineError, err.Error())
+	return false, false, errors.WithMessage(ErrUndefinedExecutionEngineError, err.Error())
 }
 
 func (s *Service) notifyNewEnvelopeFromBlock(ctx context.Context, b blocks.ROBlock, envelope interfaces.ROExecutionPayloadEnvelope) (bool, error) {
@@ -327,25 +351,32 @@ func (s *Service) notifyNewEnvelopeFromBlock(ctx context.Context, b blocks.ROBlo
 	if err != nil {
 		return false, errors.Wrap(err, "could not get signed execution payload bid from block")
 	}
-	versionedHashes := make([]common.Hash, len(sbid.Message.BlobKzgCommitments))
-	for i, c := range sbid.Message.BlobKzgCommitments {
+	bid, err := sbid.Bid()
+	if err != nil {
+		return false, errors.Wrap(err, "could not get execution payload bid from block")
+	}
+	commitments := bid.BlobKzgCommitments()
+	versionedHashes := make([]common.Hash, len(commitments))
+	for i, c := range commitments {
 		versionedHashes[i] = primitives.ConvertKzgCommitmentToVersionedHash(c)
 	}
-	return s.callNewPayload(ctx, payload, versionedHashes, common.Hash(envelope.ParentBeaconBlockRoot()), envelope.ExecutionRequests(), envelope.Slot())
+	isValid, _, err := s.callNewPayload(ctx, payload, versionedHashes, common.Hash(envelope.ParentBeaconBlockRoot()), envelope.ExecutionRequests(), envelope.Slot(), nil)
+	return isValid, err
 }
 
-// The returned boolean indicates whether the payload was valid or if it was accepted as syncing (optimistic).
-func (s *Service) notifyNewEnvelope(ctx context.Context, st state.BeaconState, envelope interfaces.ROExecutionPayloadEnvelope) (bool, error) {
+// The returned booleans are the payload validity (false when accepted as syncing)
+// and the inclusion list satisfaction to record. The engine client only reads ilTxs.
+func (s *Service) notifyNewEnvelope(ctx context.Context, st state.BeaconState, envelope interfaces.ROExecutionPayloadEnvelope, ilTxs [][]byte) (bool, bool, error) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.notifyNewEnvelope")
 	defer span.End()
 
 	payload, err := envelope.Execution()
 	if err != nil {
-		return false, errors.Wrap(err, "could not get execution payload from envelope")
+		return false, false, errors.Wrap(err, "could not get execution payload from envelope")
 	}
 	latestBid, err := st.LatestExecutionPayloadBid()
 	if err != nil {
-		return false, errors.Wrap(err, "could not get latest execution payload bid")
+		return false, false, errors.Wrap(err, "could not get latest execution payload bid")
 	}
 	var versionedHashes []common.Hash
 	if latestBid != nil {
@@ -355,26 +386,34 @@ func (s *Service) notifyNewEnvelope(ctx context.Context, st state.BeaconState, e
 			versionedHashes[i] = primitives.ConvertKzgCommitmentToVersionedHash(c)
 		}
 	}
-	return s.callNewPayload(ctx, payload, versionedHashes, common.Hash(envelope.ParentBeaconBlockRoot()), envelope.ExecutionRequests(), envelope.Slot())
+	return s.callNewPayload(ctx, payload, versionedHashes, common.Hash(envelope.ParentBeaconBlockRoot()), envelope.ExecutionRequests(), envelope.Slot(), ilTxs)
 }
 
-func (s *Service) validateExecutionOnEnvelope(ctx context.Context, st state.BeaconState, envelope interfaces.ROExecutionPayloadEnvelope) (bool, error) {
-	isValid, err := s.notifyNewEnvelope(ctx, st, envelope)
+// validateExecutionOnEnvelope validates the execution payload on the given envelope,
+// and returns two boolean values indicating whether the payload is valid and whether the inclusion list is satisfied.
+// This should run without the forkchoice lock.
+func (s *Service) validateExecutionOnEnvelope(ctx context.Context, st state.BeaconState, envelope interfaces.ROExecutionPayloadEnvelope) (bool, bool, error) {
+	var ilTxs [][]byte
+	if slots.ToEpoch(envelope.Slot()) >= params.BeaconConfig().HezeForkEpoch {
+		ilTxs = s.inclusionListTransactions(envelope.BeaconBlockRoot(), envelope.Slot())
+	}
+
+	isValid, ilSatisfied, err := s.notifyNewEnvelope(ctx, st, envelope, ilTxs)
 	if err == nil {
-		return isValid, nil
+		return isValid, ilSatisfied, nil
 	}
 
 	blockRoot := envelope.BeaconBlockRoot()
 	parentRoot := bytesutil.ToBytes32(st.LatestBlockHeader().ParentRoot)
 	payload, payloadErr := envelope.Execution()
 	if payloadErr != nil {
-		return false, errors.Wrap(payloadErr, "could not get execution payload from envelope")
+		return false, false, errors.Wrap(payloadErr, "could not get execution payload from envelope")
 	}
 	parentHash := bytesutil.ToBytes32(payload.ParentHash())
 
 	s.cfg.ForkChoiceStore.Lock()
 	defer s.cfg.ForkChoiceStore.Unlock()
-	return false, s.handleInvalidExecutionError(ctx, err, blockRoot, parentRoot, parentHash)
+	return false, false, s.handleInvalidExecutionError(ctx, err, blockRoot, parentRoot, parentHash)
 }
 
 func (s *Service) savePostPayload(ctx context.Context, signed interfaces.ROSignedExecutionPayloadEnvelope) error {
@@ -429,18 +468,24 @@ func (s *Service) DataAvailable(ctx context.Context, root [32]byte, slot primiti
 	if err != nil {
 		return false, errors.Wrap(err, "could not get signed execution payload bid from block")
 	}
-	return len(sbid.GetMessage().GetBlobKzgCommitments()) == 0, nil
+	bid, err := sbid.Bid()
+	if err != nil {
+		return false, errors.Wrap(err, "could not get execution payload bid from block")
+	}
+	return bid.BlobKzgCommitmentCount() == 0, nil
 }
 
 // notifyForkchoiceUpdateGloas takes the block hash directly because Gloas
 // blocks don't carry an execution payload in the body.
-func (s *Service) notifyForkchoiceUpdateGloas(ctx context.Context, blockHash [32]byte, attributes payloadattribute.Attributer) (*enginev1.PayloadIDBytes, *enginev1.ForkchoiceState, error) {
+// headRoot locates the payload of blockHash in forkchoice.
+func (s *Service) notifyForkchoiceUpdateGloas(ctx context.Context, headRoot, blockHash [32]byte, attributes payloadattribute.Attributer) (*enginev1.PayloadIDBytes, *enginev1.ForkchoiceState, error) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.notifyForkchoiceUpdateGloas")
 	defer span.End()
 
 	s.cfg.ForkChoiceStore.RLock()
 	finalizedHash := s.cfg.ForkChoiceStore.FinalizedPayloadBlockHash()
 	safeHash := s.safeBlockHash()
+	headSlot, headSlotErr := s.cfg.ForkChoiceStore.Slot(headRoot)
 	s.cfg.ForkChoiceStore.RUnlock()
 	fcs := &enginev1.ForkchoiceState{
 		HeadBlockHash:      blockHash[:],
@@ -448,11 +493,18 @@ func (s *Service) notifyForkchoiceUpdateGloas(ctx context.Context, blockHash [32
 		FinalizedBlockHash: finalizedHash[:],
 	}
 	if attributes == nil {
-		attributes = payloadattribute.EmptyWithVersion(version.Gloas)
+		v := version.Gloas
+		if headSlotErr == nil && slots.ToEpoch(headSlot) >= params.BeaconConfig().HezeForkEpoch {
+			v = version.Heze
+		}
+		attributes = payloadattribute.EmptyWithVersion(v)
 	}
 
-	payloadID, lastValidHash, err := s.cfg.ExecutionEngineCaller.ForkchoiceUpdated(ctx, fcs, attributes)
+	payloadID, lastValidHash, ilSatisfied, err := s.cfg.ExecutionEngineCaller.ForkchoiceUpdated(ctx, fcs, attributes)
 	if err == nil {
+		if ilSatisfied != nil {
+			s.recordForkchoiceInclusionListSatisfaction(headRoot, blockHash, *ilSatisfied)
+		}
 		return payloadID, fcs, nil
 	}
 

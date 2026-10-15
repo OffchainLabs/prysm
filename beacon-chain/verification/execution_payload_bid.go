@@ -96,7 +96,7 @@ func (v *BidVerifier) VerifyCurrentOrNextSlot() (err error) {
 	if first > 0 {
 		first--
 	}
-	ok, err := v.withinSlotRange(first, bid.Slot())
+	ok, err := v.clock.WithinSlotRange(first, bid.Slot())
 	if err != nil {
 		return err
 	}

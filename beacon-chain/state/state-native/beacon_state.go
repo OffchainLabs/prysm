@@ -83,6 +83,10 @@ type BeaconState struct {
 	payloadExpectedWithdrawals   []*enginev1.Withdrawal
 	ptcWindow                    []*ethpb.PTCs
 
+	// Heze fields
+	// TODO(heze): Revisit payload bid handling for Heze. Do we need an interface?
+	latestExecutionPayloadBidHeze *ethpb.ExecutionPayloadBidHeze // Replaces latestExecutionPayloadBid from Heze.
+
 	id                    uint64
 	lock                  sync.RWMutex
 	dirtyFields           map[types.FieldIndex]bool
@@ -140,6 +144,7 @@ type beaconStateMarshalable struct {
 	PendingConsolidations               []*ethpb.PendingConsolidation           `json:"pending_consolidations" yaml:"pending_consolidations"`
 	ProposerLookahead                   []primitives.ValidatorIndex             `json:"proposer_look_ahead" yaml:"proposer_look_ahead"`
 	LatestExecutionPayloadBid           *ethpb.ExecutionPayloadBid              `json:"latest_execution_payload_bid" yaml:"latest_execution_payload_bid"`
+	LatestExecutionPayloadBidHeze       *ethpb.ExecutionPayloadBidHeze          `json:"latest_execution_payload_bid_heze" yaml:"latest_execution_payload_bid_heze"`
 	Builders                            []*ethpb.Builder                        `json:"builders" yaml:"builders"`
 	NextWithdrawalBuilderIndex          primitives.BuilderIndex                 `json:"next_withdrawal_builder_index" yaml:"next_withdrawal_builder_index"`
 	ExecutionPayloadAvailability        []byte                                  `json:"execution_payload_availability" yaml:"execution_payload_availability"`
@@ -203,6 +208,7 @@ func (b *BeaconState) MarshalJSON() ([]byte, error) {
 		PendingConsolidations:               b.pendingConsolidations,
 		ProposerLookahead:                   b.proposerLookahead,
 		LatestExecutionPayloadBid:           b.latestExecutionPayloadBid,
+		LatestExecutionPayloadBidHeze:       b.latestExecutionPayloadBidHeze,
 		Builders:                            b.builders,
 		NextWithdrawalBuilderIndex:          b.nextWithdrawalBuilderIndex,
 		ExecutionPayloadAvailability:        b.executionPayloadAvailability,

@@ -1,0 +1,11 @@
+package heze
+
+import (
+	"testing"
+
+	"github.com/OffchainLabs/prysm/v7/testing/spectest/shared/heze/sanity"
+)
+
+func TestMinimal_Heze_Sanity_Blocks(t *testing.T) {
+	sanity.RunBlockProcessingTest(t, "minimal", "sanity/blocks/pyspec_tests")
+}

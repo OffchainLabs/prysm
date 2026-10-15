@@ -79,6 +79,40 @@ func TestRegisterSubscriptions_Idempotent(t *testing.T) {
 	require.NoError(t, s.ensureRegistrationsForEpoch(fulu))
 }
 
+func TestRegisterSubscriptions_HezeInclusionListTopic(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
+	fulu := params.BeaconConfig().ElectraForkEpoch + 4096*2
+	params.BeaconConfig().FuluForkEpoch = fulu
+	params.BeaconConfig().GloasForkEpoch = fulu + 1
+	params.BeaconConfig().HezeForkEpoch = fulu + 2
+	params.BeaconConfig().InitializeForkSchedule()
+
+	for _, tc := range []struct {
+		name  string
+		epoch primitives.Epoch
+		want  bool
+	}{
+		{name: "Gloas digest", epoch: fulu + 1, want: false},
+		{name: "Heze digest", epoch: fulu + 2, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := testForkWatcherService(t, tc.epoch-1)
+			wg := attachSpawner(s)
+			require.Equal(t, true, s.registerSubscribers(params.GetNetworkScheduleEntry(tc.epoch)))
+			done := make(chan struct{})
+			go func() { wg.Wait(); close(done) }()
+			select {
+			case <-time.After(5 * time.Second):
+				t.Fatal("timed out waiting for subscriptions to be registered")
+			case <-done:
+			}
+			topic := fmt.Sprintf(p2p.InclusionListTopicFormat, params.ForkDigest(tc.epoch)) + s.cfg.p2p.Encoding().ProtocolSuffix()
+			require.Equal(t, tc.want, s.subHandler.topicExists(topic))
+		})
+	}
+}
+
 func TestService_CheckForNextEpochFork(t *testing.T) {
 	closedChan := make(chan struct{})
 	close(closedChan)

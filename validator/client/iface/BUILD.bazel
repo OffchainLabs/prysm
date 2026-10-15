@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "chain_client.go",
         "freshness.go",
+        "inclusion_list.go",
         "node_client.go",
         "options.go",
         "validator_client.go",

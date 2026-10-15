@@ -2,6 +2,7 @@ package payloadattribute
 
 import (
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
@@ -125,6 +126,37 @@ func (a *data) PbV4() (*enginev1.PayloadAttributesV4, error) {
 		SlotNumber:            a.slotNumber,
 		TargetGasLimit:        a.targetGasLimit,
 	}, nil
+}
+
+// PbV5 returns the payload attribute in version 5 (Bogota/Heze).
+func (a *data) PbV5() (*enginev1.PayloadAttributesV5, error) {
+	if a == nil {
+		return nil, errNilPayloadAttribute
+	}
+	if a.version < version.Heze {
+		return nil, consensus_types.ErrNotSupported("PbV5", a.version)
+	}
+	if a.timeStamp == 0 && len(a.prevRandao) == 0 && len(a.parentBeaconBlockRoot) == 0 {
+		return nil, nil
+	}
+	return &enginev1.PayloadAttributesV5{
+		Timestamp:                 a.timeStamp,
+		PrevRandao:                a.prevRandao,
+		SuggestedFeeRecipient:     a.suggestedFeeRecipient,
+		Withdrawals:               a.withdrawals,
+		ParentBeaconBlockRoot:     a.parentBeaconBlockRoot,
+		SlotNumber:                a.slotNumber,
+		TargetGasLimit:            a.targetGasLimit,
+		InclusionListTransactions: a.InclusionListTransactions(),
+	}, nil
+}
+
+// InclusionListTransactions returns a copy of the inclusion list transactions of the payload attribute.
+func (a *data) InclusionListTransactions() [][]byte {
+	if a == nil {
+		return nil
+	}
+	return bytesutil.SafeCopy2dBytes(a.inclusionListTxs)
 }
 
 // IsEmpty returns whether the given payload attribute is empty

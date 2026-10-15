@@ -137,7 +137,7 @@ func TestClient_IPC(t *testing.T) {
 		require.Equal(t, true, ok)
 		p, err := payloadattribute.New(&pb.PayloadAttributes{})
 		require.NoError(t, err)
-		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, &pb.ForkchoiceState{}, p)
+		payloadID, validHash, _, err := srv.ForkchoiceUpdated(ctx, &pb.ForkchoiceState{}, p)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.Status.LatestValidHash, validHash)
 		require.DeepEqual(t, want.PayloadId, payloadID)
@@ -147,7 +147,7 @@ func TestClient_IPC(t *testing.T) {
 		require.Equal(t, true, ok)
 		p, err := payloadattribute.New(&pb.PayloadAttributesV2{})
 		require.NoError(t, err)
-		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, &pb.ForkchoiceState{}, p)
+		payloadID, validHash, _, err := srv.ForkchoiceUpdated(ctx, &pb.ForkchoiceState{}, p)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.Status.LatestValidHash, validHash)
 		require.DeepEqual(t, want.PayloadId, payloadID)
@@ -503,7 +503,7 @@ func TestClient_HTTP(t *testing.T) {
 		srv := forkchoiceUpdateSetup(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, _, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.Status.LatestValidHash, validHash)
 		require.DeepEqual(t, want.PayloadId, payloadID)
@@ -527,7 +527,7 @@ func TestClient_HTTP(t *testing.T) {
 		srv := forkchoiceUpdateSetupV2(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, _, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.Status.LatestValidHash, validHash)
 		require.DeepEqual(t, want.PayloadId, payloadID)
@@ -550,7 +550,7 @@ func TestClient_HTTP(t *testing.T) {
 		client := forkchoiceUpdateSetup(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, _, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p)
 		require.ErrorIs(t, err, ErrAcceptedSyncingPayloadStatus)
 		require.DeepEqual(t, (*pb.PayloadIDBytes)(nil), payloadID)
 		require.DeepEqual(t, []byte(nil), validHash)
@@ -574,7 +574,7 @@ func TestClient_HTTP(t *testing.T) {
 		srv := forkchoiceUpdateSetupV2(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, _, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p)
 		require.ErrorIs(t, err, ErrAcceptedSyncingPayloadStatus)
 		require.DeepEqual(t, (*pb.PayloadIDBytes)(nil), payloadID)
 		require.DeepEqual(t, []byte(nil), validHash)
@@ -597,7 +597,7 @@ func TestClient_HTTP(t *testing.T) {
 		client := forkchoiceUpdateSetup(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, _, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p)
 		require.ErrorIs(t, err, ErrInvalidPayloadStatus)
 		require.DeepEqual(t, (*pb.PayloadIDBytes)(nil), payloadID)
 		require.DeepEqual(t, want.Status.LatestValidHash, validHash)
@@ -620,7 +620,7 @@ func TestClient_HTTP(t *testing.T) {
 		client := forkchoiceUpdateSetup(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, _, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p)
 		require.ErrorIs(t, err, ErrUnknownPayloadStatus)
 		require.DeepEqual(t, (*pb.PayloadIDBytes)(nil), payloadID)
 		require.DeepEqual(t, []byte(nil), validHash)
@@ -2359,6 +2359,7 @@ func Test_ExchangeCapabilities_StableAcrossCalls(t *testing.T) {
 	cfg.ElectraForkEpoch = 0
 	cfg.FuluForkEpoch = 0
 	cfg.GloasForkEpoch = 0
+	cfg.HezeForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 
 	// Capture the engine method list the EL receives on each call.
@@ -2411,6 +2412,9 @@ func Test_ExchangeCapabilities_StableAcrossCalls(t *testing.T) {
 	for _, m := range requested[1] {
 		require.Equal(t, false, seen[m], "duplicate engine method requested: %s", m)
 		seen[m] = true
+	}
+	for _, m := range []string{NewPayloadMethodV6, ForkchoiceUpdatedMethodV5, GetInclusionListV1} {
+		require.Equal(t, true, seen[m], "missing Heze engine method: %s", m)
 	}
 }
 

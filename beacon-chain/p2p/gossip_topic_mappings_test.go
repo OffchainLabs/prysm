@@ -33,6 +33,7 @@ func TestGossipTopicMappings_CorrectType(t *testing.T) {
 	electraForkEpoch := primitives.Epoch(500)
 	fuluForkEpoch := primitives.Epoch(550)
 	gloasForkEpoch := primitives.Epoch(600)
+	hezeForkEpoch := primitives.Epoch(700)
 
 	bCfg.AltairForkEpoch = altairForkEpoch
 	bCfg.BellatrixForkEpoch = bellatrixForkEpoch
@@ -41,6 +42,7 @@ func TestGossipTopicMappings_CorrectType(t *testing.T) {
 	bCfg.ElectraForkEpoch = electraForkEpoch
 	bCfg.GloasForkEpoch = gloasForkEpoch
 	bCfg.FuluForkEpoch = fuluForkEpoch
+	bCfg.HezeForkEpoch = hezeForkEpoch
 	bCfg.ForkVersionSchedule[bytesutil.ToBytes4(bCfg.AltairForkVersion)] = primitives.Epoch(100)
 	bCfg.ForkVersionSchedule[bytesutil.ToBytes4(bCfg.BellatrixForkVersion)] = primitives.Epoch(200)
 	bCfg.ForkVersionSchedule[bytesutil.ToBytes4(bCfg.CapellaForkVersion)] = primitives.Epoch(300)
@@ -185,4 +187,14 @@ func TestGossipTopicMappings_CorrectType(t *testing.T) {
 	_, ok = pMessage.(*ethpb.SignedProposerPreferences)
 	assert.Equal(t, true, ok)
 	assert.Equal(t, SignedProposerPreferencesTopicFormat, GossipTypeMapping[reflect.TypeFor[*ethpb.SignedProposerPreferences]()])
+
+	// Heze Fork
+	pMessage = GossipTopicMappings(ExecutionPayloadBidTopicFormat, hezeForkEpoch)
+	_, ok = pMessage.(*ethpb.SignedExecutionPayloadBidHeze)
+	assert.Equal(t, true, ok)
+	assert.Equal(t, ExecutionPayloadBidTopicFormat, GossipTypeMapping[reflect.TypeFor[*ethpb.SignedExecutionPayloadBidHeze]()])
+	pMessage = GossipTopicMappings(InclusionListTopicFormat, hezeForkEpoch)
+	_, ok = pMessage.(*ethpb.SignedInclusionList)
+	assert.Equal(t, true, ok)
+	assert.Equal(t, InclusionListTopicFormat, GossipTypeMapping[reflect.TypeFor[*ethpb.SignedInclusionList]()])
 }

@@ -56,6 +56,7 @@ const (
 	confirmedPayloadBlockHashCalled
 	payloadWeightsCalled
 	hasPayloadBlockHashCalled
+	isPayloadInclusionListSatisfiedCalled
 )
 
 func _discard(t *testing.T, e error) {
@@ -78,6 +79,7 @@ func TestROLocking(t *testing.T) {
 			call: hasFullNodeCalled,
 			cb:   func(g FastGetter) { g.HasFullNode([32]byte{}) },
 		},
+
 		{
 			name: "isFullNodeCalled",
 			call: isFullNodeCalled,
@@ -237,6 +239,11 @@ func TestROLocking(t *testing.T) {
 			name: "parentHashCalled",
 			call: parentHashCalled,
 			cb:   func(g FastGetter) { g.ParentHash([32]byte{}) },
+		},
+		{
+			name: "isPayloadInclusionListSatisfiedCalled",
+			call: isPayloadInclusionListSatisfiedCalled,
+			cb:   func(g FastGetter) { g.IsPayloadInclusionListSatisfied([32]byte{}) },
 		},
 	}
 	for _, c := range cases {
@@ -466,4 +473,9 @@ func (ro *mockROForkchoice) ConfirmedPayloadBlockHash(_ [32]byte) [32]byte {
 func (ro *mockROForkchoice) CanonicalNodeAtSlot(_ primitives.Slot) ([32]byte, bool) {
 	ro.calls = append(ro.calls, canonicalNodeAtSlotCalled)
 	return [32]byte{}, false
+}
+
+func (ro *mockROForkchoice) IsPayloadInclusionListSatisfied(_ [32]byte) bool {
+	ro.calls = append(ro.calls, isPayloadInclusionListSatisfiedCalled)
+	return false
 }

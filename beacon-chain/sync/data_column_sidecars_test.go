@@ -22,6 +22,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/wrapper"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -1222,7 +1223,7 @@ func TestComputeTotalCount(t *testing.T) {
 
 func TestVerifyByRootDataColumnSidecars_SeedsGloasBidCommitments(t *testing.T) {
 	root := [fieldparams.RootLength]byte{1}
-	commitments := [][]byte{{0xaa}, {0xbb}}
+	commitments := [][]byte{bytesutil.PadTo([]byte{0xaa}, fieldparams.BLSPubkeyLength), bytesutil.PadTo([]byte{0xbb}, fieldparams.BLSPubkeyLength)}
 
 	// Gloas block whose bid carries the commitments.
 	pb := util.NewBeaconBlockGloas()

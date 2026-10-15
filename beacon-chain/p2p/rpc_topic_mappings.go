@@ -73,6 +73,9 @@ const (
 
 	// ExecutionPayloadEnvelopesByRangeName is the name for the ExecutionPayloadEnvelopesByRange v1 message topic.
 	ExecutionPayloadEnvelopesByRangeName = "/execution_payload_envelopes_by_range"
+
+	// InclusionListsByIndicesName is the name for the InclusionListsByIndices v1 message topic.
+	InclusionListsByIndicesName = "/inclusion_lists_by_indices"
 )
 
 const (
@@ -119,6 +122,9 @@ const (
 	// in the slot range [start_slot, start_slot + count). New in Gloas.
 	// /eth2/beacon_chain/req/execution_payload_envelopes_by_range/1/
 	RPCExecutionPayloadEnvelopesByRangeTopicV1 = protocolPrefix + ExecutionPayloadEnvelopesByRangeName + SchemaVersionV1
+	// RPCInclusionListsByIndicesTopicV1 is a topic for requesting inclusion lists by inclusion list committee positions.
+	// /eth2/beacon_chain/req/inclusion_lists_by_indices/1/ - New in Heze.
+	RPCInclusionListsByIndicesTopicV1 = protocolPrefix + InclusionListsByIndicesName + SchemaVersionV1
 
 	// V2 RPC Topics
 	// RPCStatusTopicV2 defines the v1 topic for the status rpc method.
@@ -189,6 +195,9 @@ var (
 
 		// ExecutionPayloadEnvelopesByRoot v1 Message
 		RPCExecutionPayloadEnvelopesByRootTopicV1: new(p2ptypes.ExecutionPayloadEnvelopesByRootReq),
+
+		// InclusionListsByIndices v1 Message
+		RPCInclusionListsByIndicesTopicV1: new(p2ptypes.InclusionListsByIndicesReq),
 	}
 
 	// Maps all registered protocol prefixes.
@@ -214,6 +223,7 @@ var (
 		DataColumnSidecarsByRangeName:        true,
 		ExecutionPayloadEnvelopesByRootName:  true,
 		ExecutionPayloadEnvelopesByRangeName: true,
+		InclusionListsByIndicesName:          true,
 	}
 
 	// Maps all the RPC messages which are to updated in altair.

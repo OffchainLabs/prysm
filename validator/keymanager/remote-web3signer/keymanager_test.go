@@ -799,3 +799,10 @@ func encodeKeys(keys []pubkey) []string {
 	}
 	return encoded
 }
+
+func TestGetSignRequestJson_InclusionListNotSupported(t *testing.T) {
+	_, err := getSignRequestJson(t.Context(), nil, &validatorpb.SignRequest{
+		Object: &validatorpb.SignRequest_InclusionList{},
+	}, bytesutil.PadTo([]byte{0x01}, 32))
+	require.ErrorContains(t, "does not support inclusion list signing", err)
+}

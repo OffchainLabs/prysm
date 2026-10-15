@@ -13,12 +13,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen/mock"
@@ -435,6 +437,51 @@ func TestStreamEvents_ProposerPreferencesWrappedWithVersion(t *testing.T) {
 	require.Equal(t, "gloas", got.Version)
 	require.NotNil(t, got.Data)
 	require.Equal(t, "7", got.Data.Message.ValidatorIndex)
+}
+
+func TestStreamEvents_ExecutionPayloadBidHeze(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	cfg.HezeForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	s := &Server{}
+	topics, err := newTopicRequest([]string{ExecutionPayloadBidTopic})
+	require.NoError(t, err)
+	ev := &feed.Event{
+		Type: operation.ExecutionPayloadBidReceived,
+		Data: &operation.ExecutionPayloadBidHezeReceivedData{
+			Bid: &eth.SignedExecutionPayloadBidHeze{
+				Message: &eth.ExecutionPayloadBidHeze{
+					ParentBlockHash:       make([]byte, fieldparams.RootLength),
+					ParentBlockRoot:       make([]byte, fieldparams.RootLength),
+					BlockHash:             make([]byte, fieldparams.RootLength),
+					PrevRandao:            make([]byte, fieldparams.RootLength),
+					FeeRecipient:          make([]byte, 20),
+					Slot:                  32,
+					BuilderIndex:          7,
+					ExecutionRequestsRoot: make([]byte, fieldparams.RootLength),
+					InclusionListBits:     bitfield.Bitvector16{0x05, 0x80},
+				},
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+		},
+	}
+	require.Equal(t, ExecutionPayloadBidTopic, topicForEvent(ev))
+	lr, err := s.lazyReaderForEvent(t.Context(), ev, topics)
+	require.NoError(t, err)
+	out, err := io.ReadAll(lr())
+	require.NoError(t, err)
+
+	_, payload, found := strings.Cut(string(out), "data: ")
+	require.Equal(t, true, found)
+	var got structs.ExecutionPayloadBidHezeEvent
+	require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(payload)), &got))
+	require.Equal(t, "heze", got.Version)
+	require.NotNil(t, got.Data)
+	require.Equal(t, "7", got.Data.Message.BuilderIndex)
+	require.Equal(t, "0x0580", got.Data.Message.InclusionListBits)
 }
 
 func TestStreamEvents_BlockEventBuilderBid(t *testing.T) {
@@ -1418,4 +1465,210 @@ func wedgedWriterTestCase(t *testing.T, queueDepth func([]*feed.Event) int) {
 	case <-ctx.Done():
 		t.Fatalf("context canceled / timed out waiting to write all events, err=%v", ctx.Err())
 	}
+}
+
+func TestStreamEvents_InclusionList(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	cfg.HezeForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	txs, err := enginev1.NewProgressiveTransactionList([][]byte{{0x02, 0x01}, {0xf8, 0x02}})
+	require.NoError(t, err)
+	signed := &eth.SignedInclusionList{
+		Message: &eth.InclusionList{
+			Slot:           10,
+			ValidatorIndex: 123,
+			DependentRoot:  bytesutil.PadTo([]byte{0xcf}, fieldparams.RootLength),
+			Transactions:   txs,
+		},
+		Signature: bytesutil.PadTo([]byte{0x1b}, fieldparams.BLSSignatureLength),
+	}
+	s := &Server{}
+	topics, err := newTopicRequest([]string{InclusionListTopic})
+	require.NoError(t, err)
+	ev := &feed.Event{
+		Type: operation.InclusionListReceived,
+		Data: &operation.InclusionListReceivedData{SignedInclusionList: signed},
+	}
+	require.Equal(t, InclusionListTopic, topicForEvent(ev))
+	lr, err := s.lazyReaderForEvent(t.Context(), ev, topics)
+	require.NoError(t, err)
+	out, err := io.ReadAll(lr())
+	require.NoError(t, err)
+
+	want := `event: inclusion_list
+data: {"version":"heze","data":{"message":{"slot":"10","validator_index":"123","dependent_root":"0xcf00000000000000000000000000000000000000000000000000000000000000","transactions":["0x0201","0xf802"]},"signature":"0x1b` + strings.Repeat("00", fieldparams.BLSSignatureLength-1) + `"}}`
+	require.Equal(t, want, strings.TrimSpace(string(out)))
+
+	_, err = s.lazyReaderForEvent(t.Context(), &feed.Event{Type: operation.InclusionListReceived, Data: &operation.InclusionListReceivedData{}}, topics)
+	require.ErrorContains(t, "inclusion list is nil", err)
+}
+
+func TestPayloadAttributesReader_InclusionListBits(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	dependentRoot := [32]byte{0xdd}
+
+	newSigned := func(idx primitives.ValidatorIndex, root [32]byte) *eth.SignedInclusionList {
+		txs, err := enginev1.NewProgressiveTransactionList([][]byte{{0x02}})
+		require.NoError(t, err)
+		return &eth.SignedInclusionList{
+			Message:   &eth.InclusionList{Slot: 0, ValidatorIndex: idx, DependentRoot: root[:], Transactions: txs},
+			Signature: make([]byte, fieldparams.BLSSignatureLength),
+		}
+	}
+
+	cases := []struct {
+		name        string
+		hezeEpoch   primitives.Epoch
+		store       func(*cache.InclusionListStore, primitives.ValidatorIndex)
+		wantVersion string
+		wantBits    string
+	}{
+		{
+			name:        "gloas proposal slot omits the bits",
+			hezeEpoch:   math.MaxUint64,
+			store:       func(*cache.InclusionListStore, primitives.ValidatorIndex) {},
+			wantVersion: "gloas",
+		},
+		{
+			name:        "heze proposal slot without lists",
+			hezeEpoch:   0,
+			store:       func(*cache.InclusionListStore, primitives.ValidatorIndex) {},
+			wantVersion: "heze",
+			wantBits:    "0x0000",
+		},
+		{
+			name:      "heze proposal slot with a timely list",
+			hezeEpoch: 0,
+			store: func(s *cache.InclusionListStore, member primitives.ValidatorIndex) {
+				s.Process(newSigned(member, dependentRoot), true)
+			},
+			wantVersion: "heze",
+			wantBits:    "0xffff",
+		},
+		{
+			name:      "late list is not counted",
+			hezeEpoch: 0,
+			store: func(s *cache.InclusionListStore, member primitives.ValidatorIndex) {
+				s.Process(newSigned(member, dependentRoot), false)
+			},
+			wantVersion: "heze",
+			wantBits:    "0x0000",
+		},
+		{
+			name:      "list for another dependent root is not counted",
+			hezeEpoch: 0,
+			store: func(s *cache.InclusionListStore, member primitives.ValidatorIndex) {
+				s.Process(newSigned(member, [32]byte{0xee}), true)
+			},
+			wantVersion: "heze",
+			wantBits:    "0x0000",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := params.BeaconConfig().Copy()
+			cfg.GloasForkEpoch = 0
+			cfg.HezeForkEpoch = tc.hezeEpoch
+			params.OverrideBeaconConfig(cfg)
+
+			helpers.ClearCache()
+			// One validator per slot, so the committee of slot 0 is 16 copies of one validator.
+			st, _ := util.DeterministicGenesisStateGloas(t, uint64(params.BeaconConfig().SlotsPerEpoch))
+			currentSlot := primitives.Slot(0)
+			require.NoError(t, st.SetSlot(currentSlot+1))
+			beaconCommittee, err := helpers.BeaconCommitteeFromState(t.Context(), st, 0, 0)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(beaconCommittee))
+			genesis := time.Now()
+			require.NoError(t, st.SetGenesisTime(genesis))
+			b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockGloas(&eth.SignedBeaconBlockGloas{}))
+			require.NoError(t, err)
+			headRoot, err := b.Block().HashTreeRoot()
+			require.NoError(t, err)
+			stategen := mock.NewService()
+			stategen.AddStateForRoot(st, headRoot)
+
+			var gotRoot [32]byte
+			var gotEpoch primitives.Epoch
+			ilStore := cache.NewInclusionListStore()
+			tc.store(ilStore, beaconCommittee[0])
+			mockChainService := &mockChain.ChainService{
+				Root: make([]byte, 32), State: st, Slot: &currentSlot, Genesis: genesis, ILStore: ilStore,
+				DependentRootCB: func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+					gotRoot, gotEpoch = root, epoch
+					return dependentRoot, nil
+				},
+			}
+			s := &Server{
+				HeadFetcher:              mockChainService,
+				ChainInfoFetcher:         mockChainService,
+				ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+				EventWriteTimeout:        testEventWriteTimeout,
+				StateGen:                 stategen,
+			}
+
+			ev := payloadattribute.EventData{ProposalSlot: currentSlot + 1, HeadBlock: b, HeadRoot: headRoot}
+			lr, err := s.payloadAttributesReader(t.Context(), ev)
+			require.NoError(t, err)
+			r := lr()
+			require.NotNil(t, r)
+			out, err := io.ReadAll(r)
+			require.NoError(t, err)
+
+			_, payload, found := strings.Cut(string(out), "data: ")
+			require.Equal(t, true, found)
+			var got structs.PayloadAttributesEvent
+			require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(payload)), &got))
+			require.Equal(t, tc.wantVersion, got.Version)
+			fields := make(map[string]json.RawMessage)
+			require.NoError(t, json.Unmarshal(got.Data, &fields))
+			raw, present := fields["inclusion_list_bits"]
+			if tc.wantBits == "" {
+				require.Equal(t, false, present, "inclusion_list_bits must be omitted before heze")
+				return
+			}
+			require.Equal(t, true, present)
+			require.Equal(t, `"`+tc.wantBits+`"`, string(raw))
+			require.Equal(t, headRoot, gotRoot)
+			require.Equal(t, primitives.Epoch(0), gotEpoch)
+		})
+	}
+}
+
+func TestInclusionListBits_DependentEpoch(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	cfg.HezeForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	spe := params.BeaconConfig().SlotsPerEpoch
+	st, _ := util.DeterministicGenesisStateGloas(t, uint64(spe))
+	require.NoError(t, st.SetSlot(2*spe))
+	parentRoot := [32]byte{0xab}
+	var gotEpoch primitives.Epoch
+	calls := 0
+	chain := &mockChain.ChainService{DependentRootCB: func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+		require.Equal(t, parentRoot, root)
+		gotEpoch = epoch
+		calls++
+		return [32]byte{}, nil
+	}}
+	s := &Server{ChainInfoFetcher: chain}
+
+	// The list slot is in epoch 2, so the Prysm dependent epoch is 2 - MIN_SEED_LOOKAHEAD.
+	bits, err := s.inclusionListBits(t.Context(), st, parentRoot, 2*spe+1)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(bits))
+	require.Equal(t, 1, calls)
+	require.Equal(t, primitives.Epoch(2)-params.BeaconConfig().MinSeedLookahead, gotEpoch)
+
+	// The first Heze slot has its list slot before Heze, so no list and no lookup.
+	bits, err = s.inclusionListBits(t.Context(), st, parentRoot, spe)
+	require.NoError(t, err)
+	require.DeepEqual(t, bitfield.NewBitvector16(), bits)
+	require.Equal(t, 1, calls)
 }

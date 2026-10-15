@@ -55,6 +55,7 @@ go_test(
         "ffg_update_test.go",
         "forkchoice_test.go",
         "gloas_test.go",
+        "inclusion_list_test.go",
         "no_vote_test.go",
         "node_test.go",
         "on_tick_test.go",

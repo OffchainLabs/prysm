@@ -68,6 +68,13 @@ var (
 			Buckets: prometheus.DefBuckets,
 		},
 	)
+	getInclusionListLatency = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "get_inclusion_list_v1_latency_milliseconds",
+			Help:    "Captures RPC latency for getInclusionListV1 in milliseconds",
+			Buckets: []float64{25, 50, 100, 200, 500, 1000, 2000, 4000},
+		},
+	)
 	errParseCount = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "execution_parse_error_count",
 		Help: "The number of errors that occurred while parsing execution payload",
@@ -111,5 +118,9 @@ var (
 	errRequestTooLargeCount = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "execution_payload_bodies_count",
 		Help: "The number of requested payload bodies is too large",
+	})
+	errUnsupportedForkCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "execution_unsupported_fork_count",
+		Help: "The number of errors that occurred due to an unsupported fork",
 	})
 )

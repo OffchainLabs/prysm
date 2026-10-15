@@ -474,14 +474,15 @@ func (s *Service) parentPayloadGasLimit(ctx context.Context, parentRoot [32]byte
 		return 0, errors.Wrap(err, "could not get parent block")
 	}
 	if parent.Block().Version() >= version.Gloas {
-		bid, err := parent.Block().Body().SignedExecutionPayloadBid()
+		signedBid, err := parent.Block().Body().SignedExecutionPayloadBid()
 		if err != nil {
 			return 0, errors.Wrap(err, "could not get signed execution payload bid")
 		}
-		if bid == nil || bid.Message == nil {
-			return 0, errors.New("nil execution payload bid")
+		bid, err := signedBid.Bid()
+		if err != nil {
+			return 0, errors.Wrap(err, "could not get execution payload bid")
 		}
-		return bid.Message.GasLimit, nil
+		return bid.GasLimit(), nil
 	}
 	payload, err := parent.Block().Body().Execution()
 	if err != nil {

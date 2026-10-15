@@ -3,6 +3,7 @@ package startup
 import (
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	types "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
@@ -54,6 +55,22 @@ func (g *Clock) SlotStart(slot types.Slot) (time.Time, error) {
 // Now provides a value for time.Now() that can be overridden in tests.
 func (g *Clock) Now() time.Time {
 	return g.now()
+}
+
+// WithinSlotRange reports whether now is between the start of first and the end of last,
+// with MAXIMUM_GOSSIP_CLOCK_DISPARITY on both ends, as in the spec's is_within_slot_range.
+func (g *Clock) WithinSlotRange(first, last types.Slot) (bool, error) {
+	start, err := g.SlotStart(first)
+	if err != nil {
+		return false, err
+	}
+	end, err := g.SlotStart(last + 1)
+	if err != nil {
+		return false, err
+	}
+	disparity := params.BeaconConfig().MaximumGossipClockDisparityDuration()
+	now := g.now()
+	return !now.Before(start.Add(-disparity)) && !now.After(end.Add(disparity)), nil
 }
 
 // ClockOpt is a functional option to change the behavior of a clock value made by NewClock.

@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -24,6 +25,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
 func gloasEnvelopeFixture(t *testing.T, blockRoot [32]byte) (*ethpb.BeaconStateGloas, *ethpb.SignedBeaconBlockGloas, *ethpb.SignedExecutionPayloadEnvelope) {
@@ -336,4 +338,199 @@ func countStateEventsByType(ch chan *feed.Event) map[feed.EventType]int {
 			return got
 		}
 	}
+}
+
+func TestCallNewPayload_HezeDispatch(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	cfg.HezeForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	payload, err := blocks.WrappedExecutionPayloadGloas(&enginev1.ExecutionPayloadGloas{BlockHash: make([]byte, 32)})
+	require.NoError(t, err)
+	hezeSlot := primitives.Slot(cfg.SlotsPerEpoch)
+	notSatisfied := false
+
+	for _, tc := range []struct {
+		name   string
+		slot   primitives.Slot
+		wantV6 bool
+	}{
+		{name: "Gloas slot uses NewPayload", slot: hezeSlot - 1},
+		{name: "Heze slot uses NewPayloadWithInclusionList", slot: hezeSlot, wantV6: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			engine := &mockExecution.EngineClient{InclusionListSatisfied: &notSatisfied}
+			s := &Service{cfg: &config{ExecutionEngineCaller: engine}}
+			valid, ilSatisfied, err := s.callNewPayload(t.Context(), payload, nil, [32]byte{}, &enginev1.ExecutionRequestsGloas{}, tc.slot, nil)
+			require.NoError(t, err)
+			require.Equal(t, true, valid)
+			require.Equal(t, !tc.wantV6, ilSatisfied)
+			require.Equal(t, tc.wantV6, engine.RecordedInclusionListTxs != nil)
+			if tc.wantV6 {
+				require.Equal(t, 0, len(engine.RecordedInclusionListTxs))
+			}
+		})
+	}
+}
+
+// receiveHezeEnvelope imports the fixture envelope at slot 5 with Heze active and one timely and one late inclusion list for slot 4.
+func receiveHezeEnvelope(t *testing.T, engine *mockExecution.EngineClient) (*Service, [32]byte, [32]byte) {
+	setHezeAtGenesis(t)
+	s, _ := setupGloasService(t, engine)
+	blockRoot := bytesutil.ToBytes32([]byte("envelope-root"))
+	base, blk, signedProto := gloasEnvelopeFixture(t, blockRoot)
+	insertGloasBlock(t, s, base, blk, blockRoot)
+
+	// The IL slot is in epoch 0, so its dependent root is the origin block root.
+	for i, tx := range []string{"timely-tx", "late-tx"} {
+		il := &ethpb.InclusionList{Slot: 4, ValidatorIndex: primitives.ValidatorIndex(i), DependentRoot: s.originBlockRoot[:], Transactions: ilTransactions(t, []byte(tx))}
+		s.InclusionListStore().Process(&ethpb.SignedInclusionList{Message: il, Signature: make([]byte, 96)}, i == 0)
+	}
+	signed, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedProto)
+	require.NoError(t, err)
+	require.NoError(t, s.ReceiveExecutionPayloadEnvelope(t.Context(), signed))
+	require.DeepEqual(t, [][]byte{[]byte("timely-tx")}, engine.RecordedInclusionListTxs)
+	return s, blockRoot, bytesutil.ToBytes32(signedProto.Message.Payload.BlockHash)
+}
+
+func TestReceiveExecutionPayloadEnvelope_InclusionListSatisfaction(t *testing.T) {
+	satisfied, unsatisfied := true, false
+	tests := []struct {
+		name           string
+		engine         *mockExecution.EngineClient
+		want           bool
+		wantOptimistic bool
+		wantWarning    bool
+	}{
+		{name: "VALID and satisfied", engine: &mockExecution.EngineClient{InclusionListSatisfied: &satisfied}, want: true},
+		{name: "VALID and not satisfied", engine: &mockExecution.EngineClient{InclusionListSatisfied: &unsatisfied}, want: false},
+		{name: "VALID without the flag is satisfied", engine: &mockExecution.EngineClient{}, want: true, wantWarning: true},
+		{name: "SYNCING is satisfied", engine: &mockExecution.EngineClient{ErrNewPayload: execution.ErrAcceptedSyncingPayloadStatus}, want: true, wantOptimistic: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hook := logTest.NewGlobal()
+			s, root, _ := receiveHezeEnvelope(t, tt.engine)
+			s.cfg.ForkChoiceStore.RLock()
+			got := s.cfg.ForkChoiceStore.IsPayloadInclusionListSatisfied(root)
+			optimistic, err := s.cfg.ForkChoiceStore.IsOptimistic(root)
+			s.cfg.ForkChoiceStore.RUnlock()
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+			require.Equal(t, tt.wantOptimistic, optimistic)
+			if tt.wantWarning {
+				require.LogsContain(t, hook, "without inclusionListSatisfied")
+			} else {
+				require.LogsDoNotContain(t, hook, "without inclusionListSatisfied")
+			}
+		})
+	}
+}
+
+func TestNotifyForkchoiceUpdateGloas_InclusionListSatisfaction(t *testing.T) {
+	satisfied, unsatisfied := true, false
+	isSatisfied := func(s *Service, root [32]byte) bool {
+		s.cfg.ForkChoiceStore.RLock()
+		defer s.cfg.ForkChoiceStore.RUnlock()
+		return s.cfg.ForkChoiceStore.IsPayloadInclusionListSatisfied(root)
+	}
+	t.Run("VALID and false records an optimistic payload as not satisfied", func(t *testing.T) {
+		engine := &mockExecution.EngineClient{ErrNewPayload: execution.ErrAcceptedSyncingPayloadStatus}
+		s, root, hash := receiveHezeEnvelope(t, engine)
+		require.Equal(t, true, isSatisfied(s, root))
+		engine.ForkchoiceInclusionListSatisfied = &unsatisfied
+		_, _, err := s.notifyForkchoiceUpdateGloas(t.Context(), root, hash, payloadattribute.EmptyWithVersion(version.Heze))
+		require.NoError(t, err)
+		require.Equal(t, false, isSatisfied(s, root))
+	})
+	t.Run("VALID and false on an empty child head records the optimistic parent payload", func(t *testing.T) {
+		engine := &mockExecution.EngineClient{ErrNewPayload: execution.ErrAcceptedSyncingPayloadStatus}
+		s, root, hash := receiveHezeEnvelope(t, engine)
+		// The child is an empty node: its own payload is not revealed, so the forkchoice update carries the parent payload hash.
+		childRoot := bytesutil.ToBytes32([]byte("empty-child-root"))
+		childBase, childBlk := testGloasState(t, 6, root, bytesutil.ToBytes32([]byte("child-hash")))
+		insertGloasBlock(t, s, childBase, childBlk, childRoot)
+		engine.ForkchoiceInclusionListSatisfied = &unsatisfied
+		_, _, err := s.notifyForkchoiceUpdateGloas(t.Context(), childRoot, hash, payloadattribute.EmptyWithVersion(version.Heze))
+		require.NoError(t, err)
+		require.Equal(t, false, isSatisfied(s, root))
+	})
+	t.Run("a VALID payload keeps its newPayload flag", func(t *testing.T) {
+		engine := &mockExecution.EngineClient{InclusionListSatisfied: &satisfied}
+		s, root, hash := receiveHezeEnvelope(t, engine)
+		engine.ForkchoiceInclusionListSatisfied = &unsatisfied
+		_, _, err := s.notifyForkchoiceUpdateGloas(t.Context(), root, hash, payloadattribute.EmptyWithVersion(version.Heze))
+		require.NoError(t, err)
+		require.Equal(t, true, isSatisfied(s, root))
+	})
+	t.Run("another head hash leaves the payload unchanged", func(t *testing.T) {
+		engine := &mockExecution.EngineClient{ErrNewPayload: execution.ErrAcceptedSyncingPayloadStatus}
+		s, root, _ := receiveHezeEnvelope(t, engine)
+		engine.ForkchoiceInclusionListSatisfied = &unsatisfied
+		_, _, err := s.notifyForkchoiceUpdateGloas(t.Context(), root, [32]byte{'x'}, payloadattribute.EmptyWithVersion(version.Heze))
+		require.NoError(t, err)
+		require.Equal(t, true, isSatisfied(s, root))
+	})
+	t.Run("a null flag leaves the payload unchanged", func(t *testing.T) {
+		engine := &mockExecution.EngineClient{ErrNewPayload: execution.ErrAcceptedSyncingPayloadStatus}
+		s, root, hash := receiveHezeEnvelope(t, engine)
+		_, _, err := s.notifyForkchoiceUpdateGloas(t.Context(), root, hash, payloadattribute.EmptyWithVersion(version.Heze))
+		require.NoError(t, err)
+		require.Equal(t, true, isSatisfied(s, root))
+	})
+}
+
+func TestNotifyNewEnvelopeFromBlock_HezeUnderForkchoiceLock(t *testing.T) {
+	setHezeAtGenesis(t)
+	engine := &mockExecution.EngineClient{}
+	s, _ := setupGloasService(t, engine)
+	slot := 2*params.BeaconConfig().SlotsPerEpoch + 1
+	blockRoot := bytesutil.ToBytes32([]byte("batch-root"))
+	blockHash := bytesutil.ToBytes32([]byte("batch-hash"))
+	_, blk := testGloasState(t, slot, [32]byte{}, blockHash)
+	signed, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	roblock, err := blocks.NewROBlockWithRoot(signed, blockRoot)
+	require.NoError(t, err)
+	env := testSignedEnvelope(t, blockRoot, slot, blockHash[:]).Message
+	env.Payload.SlotNumber = slot
+	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
+	require.NoError(t, err)
+	require.Equal(t, slot, envelope.Slot())
+
+	// The batch import path holds the forkchoice write lock, so it must not read the inclusion list dependent root.
+	s.cfg.ForkChoiceStore.Lock()
+	defer s.cfg.ForkChoiceStore.Unlock()
+	done := make(chan error, 1)
+	go func() {
+		_, err := s.notifyNewEnvelopeFromBlock(t.Context(), roblock, envelope)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("notifyNewEnvelopeFromBlock blocked on the forkchoice lock")
+	}
+	require.NotNil(t, engine.RecordedInclusionListTxs)
+	require.Equal(t, 0, len(engine.RecordedInclusionListTxs))
+}
+
+func TestNotifyForkchoiceUpdateGloas_NilAttributesVersion(t *testing.T) {
+	t.Run("Gloas head sends Gloas attributes", func(t *testing.T) {
+		engine := &mockExecution.EngineClient{}
+		s, _ := setupGloasService(t, engine)
+		_, _, err := s.notifyForkchoiceUpdateGloas(t.Context(), [32]byte{}, [32]byte{'h'}, nil)
+		require.NoError(t, err)
+		require.Equal(t, version.Gloas, engine.FetchedAttributes.Version())
+	})
+	t.Run("Heze head sends Heze attributes", func(t *testing.T) {
+		engine := &mockExecution.EngineClient{}
+		s, root, hash := receiveHezeEnvelope(t, engine)
+		_, _, err := s.notifyForkchoiceUpdateGloas(t.Context(), root, hash, nil)
+		require.NoError(t, err)
+		require.Equal(t, version.Heze, engine.FetchedAttributes.Version())
+	})
 }

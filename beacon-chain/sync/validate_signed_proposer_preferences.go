@@ -4,13 +4,10 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -19,20 +16,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 )
-
-func (s *Service) isValidDependentRoot(root [32]byte, epoch primitives.Epoch) bool {
-	tips, _ := s.cfg.chain.ChainHeads()
-	for _, tip := range tips {
-		if tip == root {
-			continue
-		}
-		depRoot, err := s.cfg.chain.DependentRootForEpoch(tip, epoch)
-		if err == nil && depRoot == root {
-			return true
-		}
-	}
-	return false
-}
 
 func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
 	if pid == s.cfg.p2p.PeerID() {
@@ -94,10 +77,7 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 	}
 
 	proposalEpoch := slots.ToEpoch(slot)
-	dependentEpoch := proposalEpoch
-	if dependentEpoch > 0 {
-		dependentEpoch--
-	}
+	dependentEpoch := slots.ShufflingLookaheadEpoch(proposalEpoch)
 
 	// [REJECT] the dependent block is not after compute_shuffling_dependent_slot(proposal_epoch).
 	dependentSlot, err := slots.ShufflingDependentSlot(proposalEpoch)
@@ -112,37 +92,11 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 		return pubsub.ValidationReject, errors.Errorf("dependent block slot %d is after shuffling dependent slot %d", blockSlot, dependentSlot)
 	}
 
-	headRoot, err := s.cfg.chain.HeadRoot(ctx)
+	// [IGNORE] is_valid_dependent_root(store, preferences.dependent_root, lookahead_epoch).
+	// The state comes from the head state or a cached dependent state, never from a regeneration.
+	st, err := s.cfg.chain.DependentState(ctx, dependentRoot, dependentEpoch)
 	if err != nil {
-		return pubsub.ValidationIgnore, errors.Wrap(err, "head root")
-	}
-	headDependentRoot, err := s.cfg.chain.DependentRootForEpoch(bytesutil.ToBytes32(headRoot), dependentEpoch)
-	if err != nil {
-		return pubsub.ValidationIgnore, errors.Wrap(err, "head dependent root")
-	}
-
-	var st state.ReadOnlyBeaconState
-	stateRoot := headRoot
-	if headDependentRoot == dependentRoot {
-		st, err = s.cfg.chain.HeadStateReadOnly(ctx)
-		if err != nil {
-			return pubsub.ValidationIgnore, errors.Wrap(err, "head state")
-		}
-	} else {
-		// [IGNORE] is_valid_dependent_root(store, preferences.dependent_root, lookahead_epoch).
-		if !s.isValidDependentRoot(dependentRoot, dependentEpoch) {
-			return pubsub.ValidationIgnore, errors.Errorf("dependent_root %#x is not a possible dependent block", dependentRoot)
-		}
-		// Off the head branch the lookahead comes from the dependent block's own state, never from a regeneration.
-		st = s.cfg.stateGen.StateByRootIfCachedNoCopy(dependentRoot)
-		if st == nil {
-			return pubsub.ValidationIgnore, errors.Errorf("state for dependent_root %#x is not cached", dependentRoot)
-		}
-		stateRoot = dependentRoot[:]
-	}
-	stateEpoch := slots.ToEpoch(st.Slot())
-	if proposalEpoch > stateEpoch.AddEpoch(2) {
-		return pubsub.ValidationIgnore, errors.Errorf("state epoch %d cannot verify proposal epoch %d", stateEpoch, proposalEpoch)
+		return pubsub.ValidationIgnore, errors.Wrap(err, "dependent state")
 	}
 
 	// [REJECT] signed_proposer_preferences.signature is valid with respect to the
@@ -160,15 +114,9 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 	// Sole permitted slot advance: up to the lookahead epoch boundary, which bounds
 	// the work a single message can cause. Only a message with a valid signature
 	// reaches this point.
-	if proposalEpoch == stateEpoch.AddEpoch(2) {
-		boundarySlot, err := slots.EpochStart(dependentEpoch)
-		if err != nil {
-			return pubsub.ValidationIgnore, errors.Wrap(err, "compute boundary slot")
-		}
-		st, err = transition.ProcessSlotsIfNeeded(ctx, st, stateRoot, boundarySlot)
-		if err != nil {
-			return pubsub.ValidationIgnore, errors.Wrap(err, "advance state to boundary")
-		}
+	st, err = s.cfg.chain.LookaheadState(ctx, dependentRoot, dependentEpoch)
+	if err != nil {
+		return pubsub.ValidationIgnore, errors.Wrap(err, "lookahead state")
 	}
 
 	// [REJECT] is_valid_proposal_slot(state, preferences) returns True, where state

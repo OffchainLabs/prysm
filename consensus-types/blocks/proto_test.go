@@ -1827,7 +1827,7 @@ func TestInitSignedBlockFromProtoGloas(t *testing.T) {
 						Signature:       []byte{0x01},
 					},
 				},
-				SignedExecutionPayloadBid: &eth.SignedExecutionPayloadBid{Signature: []byte{0x02}},
+				SignedExecutionPayloadBid: hydrateBeaconBlockBodyGloas().SignedExecutionPayloadBid,
 			},
 		},
 		Signature: []byte{0x03},
@@ -1844,7 +1844,11 @@ func TestInitSignedBlockFromProtoGloas(t *testing.T) {
 
 	gotBid, err := sb.Block().Body().SignedExecutionPayloadBid()
 	require.NoError(t, err)
-	require.DeepEqual(t, pb.Block.Body.SignedExecutionPayloadBid, gotBid)
+	wantRoot, err := pb.Block.Body.SignedExecutionPayloadBid.HashTreeRoot()
+	require.NoError(t, err)
+	gotRoot, err := gotBid.HashTreeRoot()
+	require.NoError(t, err)
+	require.Equal(t, wantRoot, gotRoot)
 }
 
 func getFields() fields {

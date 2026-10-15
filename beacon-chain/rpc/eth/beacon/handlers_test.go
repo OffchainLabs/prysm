@@ -63,6 +63,23 @@ func fillGloasBlockTestData(b *eth.SignedBeaconBlockGloas, numPayloadAttestation
 	b.Block.Body.PayloadAttestations = util.GenerateTestPayloadAttestations(numPayloadAttestations, slot)
 }
 
+// newHezeTestBlock returns a Heze block with non-zero inclusion list bits.
+func newHezeTestBlock() *eth.SignedBeaconBlockHeze {
+	b := util.NewBeaconBlockHeze()
+	b.Block.Slot = 123
+	b.Block.Body.SignedExecutionPayloadBid.Message.Slot = 123
+	b.Block.Body.SignedExecutionPayloadBid.Message.InclusionListBits = []byte{0x01, 0x80}
+	return b
+}
+
+func sameHezeBlock(t *testing.T, want, got *eth.SignedBeaconBlockHeze) bool {
+	wantRoot, err := want.HashTreeRoot()
+	require.NoError(t, err)
+	gotRoot, err := got.HashTreeRoot()
+	require.NoError(t, err)
+	return wantRoot == gotRoot
+}
+
 func fillDBTestBlocks(ctx context.Context, t *testing.T, beaconDB db.Database) (*eth.SignedBeaconBlock, []*eth.BeaconBlockContainer) {
 	parentRoot := [32]byte{1, 2, 3}
 	genBlk := util.NewBeaconBlock()
@@ -392,6 +409,34 @@ func TestGetBlockV2(t *testing.T) {
 			assert.Equal(t, true, att.Data.BlobDataAvailable)
 		}
 	})
+	t.Run("heze", func(t *testing.T) {
+		b := newHezeTestBlock()
+		sb, err := blocks.NewSignedBeaconBlock(b)
+		require.NoError(t, err)
+		mockChainService := &chainMock.ChainService{FinalizedRoots: map[[32]byte]bool{}}
+		s := &Server{
+			OptimisticModeFetcher: mockChainService,
+			FinalizationFetcher:   mockChainService,
+			Blocker:               &testutil.MockBlocker{BlockToReturn: sb},
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}", nil)
+		request.SetPathValue("block_id", "head")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetBlockV2(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetBlockV2Response{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		assert.Equal(t, version.String(version.Heze), resp.Version)
+		sbb := &structs.SignedBeaconBlockHeze{Message: &structs.BeaconBlockHeze{}}
+		require.NoError(t, json.Unmarshal(resp.Data.Message, sbb.Message))
+		sbb.Signature = resp.Data.Signature
+		blk, err := sbb.ToConsensus()
+		require.NoError(t, err)
+		assert.DeepEqual(t, b, blk)
+	})
 	t.Run("execution optimistic", func(t *testing.T) {
 		b := util.NewBeaconBlockBellatrix()
 		sb, err := blocks.NewSignedBeaconBlock(b)
@@ -661,6 +706,25 @@ func TestGetBlockSSZV2(t *testing.T) {
 		require.NotNil(t, decoded.Block.Body.SignedExecutionPayloadBid)
 		assert.Equal(t, primitives.Slot(123), decoded.Block.Body.SignedExecutionPayloadBid.Message.Slot)
 		require.Equal(t, 2, len(decoded.Block.Body.PayloadAttestations))
+	})
+	t.Run("heze", func(t *testing.T) {
+		b := newHezeTestBlock()
+		sb, err := blocks.NewSignedBeaconBlock(b)
+		require.NoError(t, err)
+		s := &Server{Blocker: &testutil.MockBlocker{BlockToReturn: sb}}
+
+		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}", nil)
+		request.SetPathValue("block_id", "head")
+		request.Header.Set("Accept", api.OctetStreamMediaType)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetBlockV2(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+		assert.Equal(t, version.String(version.Heze), writer.Header().Get(api.VersionHeader))
+		sszExpected, err := b.MarshalSSZ()
+		require.NoError(t, err)
+		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
 	})
 }
 
@@ -1431,6 +1495,24 @@ func TestVersionHeaderFromRequest(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, version.String(version.Gloas), versionHead)
 	})
+	t.Run("Heze block returns heze header", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 8
+		cfg.HezeForkEpoch = 9
+		params.OverrideBeaconConfig(cfg)
+
+		slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
+		for _, tc := range []struct {
+			epoch uint64
+			want  string
+		}{{8, version.String(version.Gloas)}, {9, version.String(version.Heze)}} {
+			block := []byte(fmt.Sprintf(`{"message":{"slot":"%d"}}`, tc.epoch*slotsPerEpoch))
+			versionHead, err := versionHeaderFromRequest(block)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, versionHead)
+		}
+	})
 
 	t.Run("Fulu block contents returns fulu header", func(t *testing.T) {
 		cfg := params.BeaconConfig().Copy()
@@ -1604,6 +1686,30 @@ func TestVersionHeaderFromRequest(t *testing.T) {
 
 func TestPublishBlockV2(t *testing.T) {
 	ctrl := gomock.NewController(t)
+	t.Run("Heze", func(t *testing.T) {
+		b := newHezeTestBlock()
+		blkJSON, err := structs.SignedBeaconBlockHezeFromConsensus(b)
+		require.NoError(t, err)
+		body, err := json.Marshal(blkJSON)
+		require.NoError(t, err)
+
+		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
+			got, ok := req.Block.(*eth.GenericSignedBeaconBlock_Heze)
+			return ok && sameHezeBlock(t, b, got.Heze)
+		}))
+		server := &Server{
+			V1Alpha1ValidatorServer: v1alpha1Server,
+			SyncChecker:             &mockSync.Sync{IsSyncing: false},
+		}
+
+		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(body))
+		request.Header.Set(api.VersionHeader, version.String(version.Heze))
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		server.PublishBlockV2(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+	})
 	t.Run("Gloas builder url header is forwarded", func(t *testing.T) {
 		b := util.NewBeaconBlockGloas()
 		fillGloasBlockTestData(b, 1)
@@ -1856,6 +1962,28 @@ func TestPublishBlockV2(t *testing.T) {
 
 func TestPublishBlockV2SSZ(t *testing.T) {
 	ctrl := gomock.NewController(t)
+	t.Run("Heze", func(t *testing.T) {
+		b := newHezeTestBlock()
+		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
+			got, ok := req.Block.(*eth.GenericSignedBeaconBlock_Heze)
+			return ok && sameHezeBlock(t, b, got.Heze)
+		}))
+		server := &Server{
+			V1Alpha1ValidatorServer: v1alpha1Server,
+			SyncChecker:             &mockSync.Sync{IsSyncing: false},
+		}
+
+		ssz, err := b.MarshalSSZ()
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
+		request.Header.Set("Content-Type", api.OctetStreamMediaType)
+		request.Header.Set(api.VersionHeader, version.String(version.Heze))
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		server.PublishBlockV2(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+	})
 	t.Run("Gloas builder url header is forwarded", func(t *testing.T) {
 		b := util.NewBeaconBlockGloas()
 		fillGloasBlockTestData(b, 1)

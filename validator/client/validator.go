@@ -540,6 +540,10 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 			roles = append(roles, rolePTCMember)
 		}
 
+		if slices.Contains(duty.InclusionListSlots, slot) {
+			roles = append(roles, roleInclusionListCommittee)
+		}
+
 		if len(roles) == 0 {
 			roles = append(roles, roleUnknown)
 		}

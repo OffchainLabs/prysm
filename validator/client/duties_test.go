@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"iter"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -1540,4 +1543,218 @@ func activeStatusFor(kp keypair) map[pubkey]*validatorStatus {
 	return map[pubkey]*validatorStatus{
 		kp.pub: {publicKey: kp.pub[:], status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}},
 	}
+}
+
+func TestInclusionListDuties(t *testing.T) {
+	epoch := primitives.Epoch(5)
+	spe := params.BeaconConfig().SlotsPerEpoch
+	root := bytesutil.PadTo([]byte{0xaa}, fieldparams.RootLength)
+	other := bytesutil.PadTo([]byte{0xbb}, fieldparams.RootLength)
+	ilSlot := func(e primitives.Epoch) primitives.Slot { return primitives.Slot(e)*spe + 9 }
+
+	setup := func(t *testing.T, hezeEpoch primitives.Epoch) (*validator, *validatormock.MockValidatorClient, keypair) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.AltairForkEpoch = 0
+		cfg.FuluForkEpoch = 0
+		cfg.GloasForkEpoch = 0
+		cfg.HezeForkEpoch = hezeEpoch
+		params.OverrideBeaconConfig(cfg)
+
+		client := validatormock.NewMockValidatorClient(gomock.NewController(t))
+		keys := randKeypair(t)
+		v := &validator{
+			validatorClient: client,
+			duties:          &dutyStore{},
+			pubkeyToStatus: map[pubkey]*validatorStatus{
+				keys.pub: {publicKey: keys.pub[:], status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}, index: 42},
+			},
+		}
+		v.aggSelector = &stubAggregatorSelector{proofs: map[pubkey][]byte{keys.pub: []byte("proof")}}
+		return v, client, keys
+	}
+	// expectSpine arms the four non-IL duty fetches of e with dependent root r.
+	expectSpine := func(client *validatormock.MockValidatorClient, keys keypair, e primitives.Epoch, r []byte) {
+		client.EXPECT().AttesterDuties(gomock.Any(), e, gomock.Any()).Return(&ethpb.AttesterDutiesResponse{
+			DependentRoot: r,
+			Duties: []*ethpb.AttesterDuty{{
+				Pubkey: keys.pub[:], ValidatorIndex: 42,
+				Slot: primitives.Slot(e)*spe + 3, CommitteeIndex: 1, CommitteeLength: 64, CommitteesAtSlot: 4,
+			}},
+		}, nil)
+		client.EXPECT().ProposerDuties(gomock.Any(), e).Return(&ethpb.ProposerDutiesResponse{DependentRoot: r}, nil)
+		client.EXPECT().SyncCommitteeDuties(gomock.Any(), e, gomock.Any()).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil)
+		client.EXPECT().PTCDuties(gomock.Any(), e, gomock.Any()).Return(&ethpb.PTCDutiesResponse{DependentRoot: r}, nil)
+	}
+	ilResp := func(keys keypair, e primitives.Epoch, r []byte) *iface.InclusionListDutiesResponse {
+		return &iface.InclusionListDutiesResponse{
+			DependentRoot: r,
+			Duties:        []*iface.InclusionListDuty{{Pubkey: keys.pub[:], ValidatorIndex: 42, Slot: ilSlot(e)}},
+		}
+	}
+	// expectResubscribe arms one SubscribeCommitteeSubnets call and waits for it at cleanup.
+	expectResubscribe := func(t *testing.T, client *validatormock.MockValidatorClient) {
+		var wg sync.WaitGroup
+		wg.Add(1)
+		client.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(context.Context, *ethpb.CommitteeSubnetsSubscribeRequest) (*emptypb.Empty, error) {
+				wg.Done()
+				return &emptypb.Empty{}, nil
+			})
+		t.Cleanup(func() { util.WaitTimeout(&wg, 2*time.Second) })
+	}
+	// requireSlots compares slot lists without DeepEqual, which panics on a mismatch.
+	requireSlots := func(t *testing.T, want, got []primitives.Slot) {
+		require.Equal(t, true, slices.Equal(want, got), fmt.Sprintf("want slots %v, got %v", want, got))
+	}
+	// ilSlotsOf returns the inclusion list slots of validator 42 in duties.
+	ilSlotsOf := func(duties iter.Seq2[pubkey, *ethpb.ValidatorDuty]) []primitives.Slot {
+		for _, d := range duties {
+			if d.ValidatorIndex == 42 {
+				return d.InclusionListSlots
+			}
+		}
+		return nil
+	}
+	// seedCurrent writes current duties with a current-epoch inclusion list duty, the given next-epoch
+	// inclusion list slots, and the given next-epoch missing mask.
+	seedCurrent := func(v *validator, keys keypair, missing missingNextDuties, nextIL []primitives.Slot) {
+		var data dutyStoreData
+		data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+			CurrDependentRoot: root,
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{{
+				PublicKey: keys.pub[:], ValidatorIndex: 42,
+				AttesterSlot: primitives.Slot(epoch)*spe + 3, Status: ethpb.ValidatorStatus_ACTIVE,
+				InclusionListSlots: []primitives.Slot{ilSlot(epoch)},
+			}},
+			NextEpochDuties: []*ethpb.ValidatorDuty{{
+				PublicKey: keys.pub[:], ValidatorIndex: 42,
+				AttesterSlot: primitives.Slot(epoch+1)*spe + 3, Status: ethpb.ValidatorStatus_ACTIVE,
+				InclusionListSlots: nextIL,
+			}},
+		})
+		data.epoch = epoch
+		data.indices = []primitives.ValidatorIndex{42}
+		data.missingNext = missing
+		v.duties.write(data)
+	}
+
+	t.Run("current epoch fetch sets the duty and the role", func(t *testing.T) {
+		v, client, keys := setup(t, 0)
+		expectSpine(client, keys, epoch, root)
+		client.EXPECT().InclusionListDuties(gomock.Any(), epoch, []primitives.ValidatorIndex{42}).Return(ilResp(keys, epoch, root), nil)
+
+		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, []primitives.ValidatorIndex{42}))
+
+		snap := v.duties.snapshot()
+		requireSlots(t, []primitives.Slot{ilSlot(epoch)}, ilSlotsOf(snap.currentDuties()))
+		// The inclusion list duties share the attester dependent root.
+		assert.DeepEqual(t, root, snap.prevDependentRoot())
+		assert.Equal(t, missingNextAll, snap.missingNext())
+
+		roles, err := v.RolesAt(t.Context(), ilSlot(epoch))
+		require.NoError(t, err)
+		assert.DeepEqual(t, []validatorRole{roleInclusionListCommittee}, roles[keys.pub])
+		roles, err = v.RolesAt(t.Context(), ilSlot(epoch)+1)
+		require.NoError(t, err)
+		assert.DeepEqual(t, []validatorRole{roleUnknown}, roles[keys.pub])
+
+		// A key quarantined by a reload gets no inclusion list duty.
+		v.doppelGanger.trackReload([]pubkey{keys.pub}, epoch)
+		roles, err = v.RolesAt(t.Context(), ilSlot(epoch))
+		require.NoError(t, err)
+		_, ok := roles[keys.pub]
+		assert.Equal(t, false, ok)
+	})
+
+	t.Run("pre-Heze clears the mask without a request", func(t *testing.T) {
+		v, client, keys := setup(t, epoch+2)
+		seedCurrent(v, keys, missingNextAll, nil)
+		// No InclusionListDuties expectation: a request fails the test.
+		expectSpine(client, keys, epoch+1, root)
+		expectResubscribe(t, client)
+
+		require.NoError(t, v.ensureNextEpochDuties(t.Context()))
+		assert.Equal(t, missingNextDuties(0), v.duties.snapshot().missingNext())
+	})
+
+	t.Run("next epoch rebuild is promoted to current", func(t *testing.T) {
+		v, client, keys := setup(t, 0)
+		seedCurrent(v, keys, missingNextAll, nil)
+		expectSpine(client, keys, epoch+1, root)
+		client.EXPECT().InclusionListDuties(gomock.Any(), epoch+1, gomock.Any()).Return(ilResp(keys, epoch+1, root), nil)
+		expectResubscribe(t, client)
+
+		require.NoError(t, v.ensureNextEpochDuties(t.Context()))
+		assert.Equal(t, missingNextDuties(0), v.duties.snapshot().missingNext())
+		// The rebuild keeps the current-epoch inclusion list duties.
+		requireSlots(t, []primitives.Slot{ilSlot(epoch)}, ilSlotsOf(v.duties.snapshot().currentDuties()))
+
+		// Promotion makes no request.
+		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch+1, []primitives.ValidatorIndex{42}))
+		requireSlots(t, []primitives.Slot{ilSlot(epoch + 1)}, ilSlotsOf(v.duties.snapshot().currentDuties()))
+	})
+
+	t.Run("next epoch failure flags the type missing", func(t *testing.T) {
+		v, client, keys := setup(t, 0)
+		seedCurrent(v, keys, missingNextAll, nil)
+		expectSpine(client, keys, epoch+1, root)
+		client.EXPECT().InclusionListDuties(gomock.Any(), epoch+1, gomock.Any()).Return(nil, errors.New("il down"))
+		expectResubscribe(t, client)
+
+		require.NoError(t, v.ensureNextEpochDuties(t.Context()))
+		assert.Equal(t, missingNextInclusionList, v.duties.snapshot().missingNext())
+		assert.Equal(t, false, v.duties.canPromote(epoch+1, []primitives.ValidatorIndex{42}))
+	})
+
+	t.Run("divergent dependent root is dropped", func(t *testing.T) {
+		v, client, keys := setup(t, 0)
+		seedCurrent(v, keys, missingNextAll, nil)
+		expectSpine(client, keys, epoch+1, root)
+		client.EXPECT().InclusionListDuties(gomock.Any(), epoch+1, gomock.Any()).Return(ilResp(keys, epoch+1, other), nil)
+		expectResubscribe(t, client)
+
+		require.NoError(t, v.ensureNextEpochDuties(t.Context()))
+		snap := v.duties.snapshot()
+		assert.Equal(t, missingNextInclusionList, snap.missingNext())
+		assert.Equal(t, 0, len(ilSlotsOf(snap.nextDuties())))
+	})
+
+	t.Run("overlay refetches only the inclusion list duties", func(t *testing.T) {
+		v, client, keys := setup(t, 0)
+		seedCurrent(v, keys, missingNextInclusionList, nil)
+		client.EXPECT().InclusionListDuties(gomock.Any(), epoch+1, gomock.Any()).Return(ilResp(keys, epoch+1, root), nil)
+		expectResubscribe(t, client)
+
+		require.NoError(t, v.ensureNextEpochDuties(t.Context()))
+		snap := v.duties.snapshot()
+		assert.Equal(t, missingNextDuties(0), snap.missingNext())
+		requireSlots(t, []primitives.Slot{ilSlot(epoch + 1)}, ilSlotsOf(snap.nextDuties()))
+		// The overlay keeps the current-epoch inclusion list duties.
+		requireSlots(t, []primitives.Slot{ilSlot(epoch)}, ilSlotsOf(snap.currentDuties()))
+	})
+
+	t.Run("overlay of other duties keeps the next inclusion list duties", func(t *testing.T) {
+		v, client, keys := setup(t, 0)
+		seedCurrent(v, keys, missingNextPtc, []primitives.Slot{ilSlot(epoch + 1)})
+		// No InclusionListDuties expectation: the cached duties need no request.
+		client.EXPECT().PTCDuties(gomock.Any(), epoch+1, gomock.Any()).Return(&ethpb.PTCDutiesResponse{DependentRoot: root}, nil)
+		expectResubscribe(t, client)
+
+		require.NoError(t, v.ensureNextEpochDuties(t.Context()))
+		snap := v.duties.snapshot()
+		assert.Equal(t, missingNextDuties(0), snap.missingNext())
+		requireSlots(t, []primitives.Slot{ilSlot(epoch + 1)}, ilSlotsOf(snap.nextDuties()))
+	})
+
+	t.Run("missing mask is fork gated", func(t *testing.T) {
+		setup(t, epoch+2)
+		att := &ethpb.AttesterDutiesResponse{}
+		prop := &ethpb.ProposerDutiesResponse{}
+		sc := &ethpb.SyncCommitteeDutiesResponse{}
+		ptc := &ethpb.PTCDutiesResponse{}
+		assert.Equal(t, missingNextDuties(0), missingNextMask(epoch+1, att, prop, sc, ptc, nil))
+		assert.Equal(t, missingNextInclusionList, missingNextMask(epoch+2, att, prop, sc, ptc, nil))
+		assert.Equal(t, "inclusion_list", missingNextInclusionList.String())
+	})
 }

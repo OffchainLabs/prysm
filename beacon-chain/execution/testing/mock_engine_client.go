@@ -23,33 +23,38 @@ import (
 
 // EngineClient --
 type EngineClient struct {
-	NewPayloadResp              []byte
-	PayloadIDBytes              *pb.PayloadIDBytes
-	ForkChoiceUpdatedResp       []byte
-	ExecutionBlock              *pb.ExecutionBlock
-	Err                         error
-	ErrLatestExecBlock          error
-	ErrExecBlockByHash          error
-	ErrForkchoiceUpdated        error
-	ErrNewPayload               error
-	ExecutionPayloadByBlockHash map[[32]byte]*pb.ExecutionPayload
-	SlotByBlockHash             map[[32]byte]primitives.Slot
-	BlockByHashMap              map[[32]byte]*pb.ExecutionBlock
-	NumReconstructedPayloads    uint64
-	TerminalBlockHash           []byte
-	TerminalBlockHashExists     bool
-	PartialColumnsSupportedFlag bool
-	OverrideValidHash           [32]byte
-	GetPayloadResponse          *blocks.GetPayloadResponse
-	ErrGetPayload               error
-	BlobSidecars                []blocks.VerifiedROBlob
-	ErrorBlobSidecars           error
-	DataColumnSidecars          []blocks.VerifiedRODataColumn
-	ErrorDataColumnSidecars     error
-	HasBlobsPartialColumns      []blocks.PartialDataColumn
-	ClientVersion               []*structs.ClientVersionV1
-	ErrorClientVersion          error
-	FetchedAttributes           payloadattribute.Attributer
+	NewPayloadResp                   []byte
+	PayloadIDBytes                   *pb.PayloadIDBytes
+	ForkChoiceUpdatedResp            []byte
+	ExecutionBlock                   *pb.ExecutionBlock
+	Err                              error
+	ErrLatestExecBlock               error
+	ErrExecBlockByHash               error
+	ErrForkchoiceUpdated             error
+	ErrNewPayload                    error
+	ExecutionPayloadByBlockHash      map[[32]byte]*pb.ExecutionPayload
+	SlotByBlockHash                  map[[32]byte]primitives.Slot
+	BlockByHashMap                   map[[32]byte]*pb.ExecutionBlock
+	NumReconstructedPayloads         uint64
+	TerminalBlockHash                []byte
+	TerminalBlockHashExists          bool
+	PartialColumnsSupportedFlag      bool
+	OverrideValidHash                [32]byte
+	GetPayloadResponse               *blocks.GetPayloadResponse
+	ErrGetPayload                    error
+	BlobSidecars                     []blocks.VerifiedROBlob
+	ErrorBlobSidecars                error
+	DataColumnSidecars               []blocks.VerifiedRODataColumn
+	ErrorDataColumnSidecars          error
+	HasBlobsPartialColumns           []blocks.PartialDataColumn
+	ClientVersion                    []*structs.ClientVersionV1
+	ErrorClientVersion               error
+	FetchedAttributes                payloadattribute.Attributer
+	InclusionListSatisfied           *bool
+	RecordedInclusionListTxs         [][]byte
+	InclusionList                    [][]byte
+	ErrGetInclusionList              error
+	ForkchoiceInclusionListSatisfied *bool
 }
 
 // PartialColumnsSupported --
@@ -62,15 +67,32 @@ func (e *EngineClient) NewPayload(_ context.Context, _ interfaces.ExecutionData,
 	return e.NewPayloadResp, e.ErrNewPayload
 }
 
+// NewPayloadWithInclusionList --
+func (e *EngineClient) NewPayloadWithInclusionList(_ context.Context, _ interfaces.ExecutionData, _ []common.Hash, _ *common.Hash, _ pb.ExecutionRequester, txs [][]byte) ([]byte, *bool, error) {
+	e.RecordedInclusionListTxs = txs
+	if e.ErrNewPayload != nil {
+		return e.NewPayloadResp, nil, e.ErrNewPayload
+	}
+	return e.NewPayloadResp, e.InclusionListSatisfied, nil
+}
+
+// GetInclusionList --
+func (e *EngineClient) GetInclusionList(_ context.Context) ([][]byte, error) {
+	return e.InclusionList, e.ErrGetInclusionList
+}
+
 // ForkchoiceUpdated --
 func (e *EngineClient) ForkchoiceUpdated(
 	_ context.Context, fcs *pb.ForkchoiceState, attr payloadattribute.Attributer,
-) (*pb.PayloadIDBytes, []byte, error) {
+) (*pb.PayloadIDBytes, []byte, *bool, error) {
 	e.FetchedAttributes = attr
 	if e.OverrideValidHash != [32]byte{} && bytesutil.ToBytes32(fcs.HeadBlockHash) == e.OverrideValidHash {
-		return e.PayloadIDBytes, e.ForkChoiceUpdatedResp, nil
+		return e.PayloadIDBytes, e.ForkChoiceUpdatedResp, e.ForkchoiceInclusionListSatisfied, nil
 	}
-	return e.PayloadIDBytes, e.ForkChoiceUpdatedResp, e.ErrForkchoiceUpdated
+	if e.ErrForkchoiceUpdated != nil {
+		return e.PayloadIDBytes, e.ForkChoiceUpdatedResp, nil, e.ErrForkchoiceUpdated
+	}
+	return e.PayloadIDBytes, e.ForkChoiceUpdatedResp, e.ForkchoiceInclusionListSatisfied, nil
 }
 
 // GetPayload --

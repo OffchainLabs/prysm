@@ -455,14 +455,15 @@ func (s *BidReconstructionSource) ProposerIndex() (primitives.ValidatorIndex, er
 
 // Commitments returns the blob KZG commitments from the execution payload bid
 func (s *BidReconstructionSource) Commitments() ([][]byte, error) {
-	bid, err := s.Block().Body().SignedExecutionPayloadBid()
+	signedBid, err := s.Block().Body().SignedExecutionPayloadBid()
 	if err != nil {
 		return nil, errors.Wrap(err, "signed execution payload bid")
 	}
-	if bid == nil || bid.Message == nil {
-		return nil, errors.New("nil execution payload bid or bid message")
+	bid, err := signedBid.Bid()
+	if err != nil {
+		return nil, errors.Wrap(err, "execution payload bid")
 	}
-	return bid.Message.BlobKzgCommitments, nil
+	return bid.BlobKzgCommitments(), nil
 }
 
 // Type returns the type of the source

@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -34,21 +33,26 @@ func (s *Service) IsBidCompatibleWithHead(bid interfaces.ROExecutionPayloadBid) 
 	headState := s.head.state
 	s.headLock.RUnlock()
 
-	headBid, err := headBlock.Body().SignedExecutionPayloadBid()
-	if err != nil || headBid.Message == nil {
+	headSignedBid, err := headBlock.Body().SignedExecutionPayloadBid()
+	if err != nil {
+		log.WithError(err).Debug("Could not get head bid to check bid compatibility")
+		return false
+	}
+	headBid, err := headSignedBid.Bid()
+	if err != nil {
 		log.WithError(err).Debug("Could not get head bid to check bid compatibility")
 		return false
 	}
 
 	buildsOnParentBlock := bid.ParentBlockRoot() == headBlock.ParentRoot()
-	buildsOnParentPayload := bid.ParentBlockHash() == bytesutil.ToBytes32(headBid.Message.ParentBlockHash)
+	buildsOnParentPayload := bid.ParentBlockHash() == headBid.ParentBlockHash()
 	if buildsOnParentBlock && buildsOnParentPayload {
 		return true
 	}
 	if bid.ParentBlockRoot() != headRoot {
 		return false
 	}
-	buildsOnHeadPayload := bid.ParentBlockHash() == bytesutil.ToBytes32(headBid.Message.BlockHash)
+	buildsOnHeadPayload := bid.ParentBlockHash() == headBid.BlockHash()
 	if buildFull, _ := s.shouldBuildOnFull(headState, headRoot, bid.Slot()); buildFull {
 		return buildsOnHeadPayload
 	}
@@ -146,7 +150,7 @@ func (s *Service) computePayloadWithdrawals(ctx context.Context, st state.Beacon
 	return result.Withdrawals, nil
 }
 
-// This is a Gloas version of getPayloadAttribute that avoids all the clutter that was originally due to the proposer Index.
+// This is a post-Gloas version of getPayloadAttribute that avoids all the clutter that was originally due to the proposer Index.
 // It is guaranteed to be called for the current slot + 1 and the head state to have been advanced to at least the current epoch.
 func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnlyBeaconState, slot primitives.Slot, headRoot []byte) payloadattribute.Attributer {
 	emptyAttri := payloadattribute.EmptyWithVersion(st.Version())
@@ -186,20 +190,11 @@ func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnly
 	feeRecipient := val.FeeRecipientOrDefault()
 	parentGasLimit := helpers.ParentTargetGasLimit(st)
 
-	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV4{
-		Timestamp:             uint64(t.Unix()),
-		PrevRandao:            prevRando,
-		SuggestedFeeRecipient: feeRecipient[:],
-		Withdrawals:           withdrawals,
-		ParentBeaconBlockRoot: headRoot,
-		SlotNumber:            uint64(slot),
-		TargetGasLimit:        val.GasLimitOr(parentGasLimit),
-	})
-	if err != nil {
-		log.WithError(err).Error("Could not get payload attribute")
-		return emptyAttri
+	if st.Version() >= version.Heze {
+		ilTxs := s.proposalInclusionListTransactions(ctx, st, slot)
+		return payloadAttributesHeze(uint64(t.Unix()), prevRando, feeRecipient[:], headRoot, withdrawals, slot, val.GasLimitOr(parentGasLimit), ilTxs)
 	}
-	return attr
+	return payloadAttributesGloas(uint64(t.Unix()), prevRando, feeRecipient[:], headRoot, withdrawals, slot, val.GasLimitOr(parentGasLimit))
 }
 
 // latePayloadTasks sends an FCU when no payload arrived for the current slot's block.
@@ -237,7 +232,7 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 		log.WithError(err).Error("Could not get latest block hash")
 		return
 	}
-	pid, fcs, err := s.notifyForkchoiceUpdateGloas(ctx, bh, attr)
+	pid, fcs, err := s.notifyForkchoiceUpdateGloas(ctx, hr, bh, attr)
 	if err != nil {
 		log.WithError(err).Error("Could not notify forkchoice update")
 		return
@@ -253,7 +248,7 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 }
 
 func (s *Service) fcuFromReorgData(headBlock interfaces.ReadOnlySignedBeaconBlock, hr [32]byte, hash [32]byte, full bool, attr payloadattribute.Attributer, proposingSlot primitives.Slot) {
-	pid, fcs, err := s.notifyForkchoiceUpdateGloas(s.ctx, hash, attr)
+	pid, fcs, err := s.notifyForkchoiceUpdateGloas(s.ctx, hr, hash, attr)
 	if err != nil {
 		log.WithError(err).Error("Could not update forkchoice with engine")
 	}

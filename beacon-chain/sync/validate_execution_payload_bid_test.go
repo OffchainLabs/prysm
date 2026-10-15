@@ -8,8 +8,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -247,7 +252,7 @@ func TestValidateExecutionPayloadBidGossip_LowerOrEqualBidIgnored(t *testing.T) 
 	s, msg, signedBid := setupExecutionPayloadBidService(t)
 	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
 
-	s.setHighestExecutionPayloadBid(signedBid)
+	require.Equal(t, true, s.highestExecutionPayloadBidCache.SetIfHigher(mustWrapBid(t, signedBid)))
 
 	var err error
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
@@ -263,7 +268,7 @@ func TestValidateExecutionPayloadBidGossip_LowerBidIgnoredStillMarksTupleSeen(t 
 
 	higherBid := proto.Clone(signedBid).(*ethpb.SignedExecutionPayloadBid)
 	higherBid.Message.Value = signedBid.Message.Value + 1
-	s.setHighestExecutionPayloadBid(higherBid)
+	require.Equal(t, true, s.highestExecutionPayloadBidCache.SetIfHigher(mustWrapBid(t, higherBid)))
 
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
 	require.NoError(t, err)
@@ -290,7 +295,7 @@ func TestValidateExecutionPayloadBidGossip_HigherBidAccepted(t *testing.T) {
 	require.NoError(t, err)
 	lowerBid := proto.Clone(signedBid).(*ethpb.SignedExecutionPayloadBid)
 	lowerBid.Message.Value = bid.Value() - 1
-	s.setHighestExecutionPayloadBid(lowerBid)
+	require.Equal(t, true, s.highestExecutionPayloadBidCache.SetIfHigher(mustWrapBid(t, lowerBid)))
 
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
 	require.NoError(t, err)
@@ -402,17 +407,36 @@ func TestExecutionPayloadBidSubscriber_WrongMessage(t *testing.T) {
 }
 
 func TestExecutionPayloadBidSubscriber_HappyPath(t *testing.T) {
-	s := &Service{
-		cfg:                             &config{operationNotifier: &mock.MockOperationNotifier{}},
-		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
+	gloasBid := util.GenerateTestSignedExecutionPayloadBid(1)
+	hezeBid := hezeBidFromGloas(util.GenerateTestSignedExecutionPayloadBid(1))
+	for _, tc := range []struct {
+		name      string
+		msg       proto.Message
+		wrapped   interfaces.ROSignedExecutionPayloadBid
+		eventData any
+	}{
+		{name: "gloas", msg: gloasBid, wrapped: mustWrapBid(t, gloasBid), eventData: &opfeed.ExecutionPayloadBidReceivedData{Bid: gloasBid}},
+		{name: "heze", msg: hezeBid, wrapped: mustWrapBidHeze(t, hezeBid), eventData: &opfeed.ExecutionPayloadBidHezeReceivedData{Bid: hezeBid}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			notifier := &mock.MockOperationNotifier{}
+			s := &Service{
+				cfg:                             &config{operationNotifier: notifier},
+				highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
+			}
+			events := make(chan *feed.Event, 1)
+			sub := notifier.OperationFeed().Subscribe(events)
+			defer sub.Unsubscribe()
+
+			require.NoError(t, s.executionPayloadBidSubscriber(t.Context(), tc.msg))
+			bid, err := tc.wrapped.Bid()
+			require.NoError(t, err)
+			got, ok := s.highestExecutionPayloadBidCache.Get(bid.Slot(), bid.ParentBlockHash(), bid.ParentBlockRoot())
+			require.Equal(t, true, ok)
+			require.DeepEqual(t, tc.wrapped, got)
+			require.DeepEqual(t, tc.eventData, (<-events).Data)
+		})
 	}
-	signedBid := util.GenerateTestSignedExecutionPayloadBid(1)
-	err := s.executionPayloadBidSubscriber(context.Background(), signedBid)
-	require.NoError(t, err)
-	bid := mustBid(t, signedBid)
-	got, ok := s.highestExecutionPayloadBidCache.Get(bid.Slot(), bid.ParentBlockHash(), bid.ParentBlockRoot())
-	require.Equal(t, true, ok)
-	require.DeepEqual(t, signedBid, got)
 }
 
 // TestProposerDependentRoot_DelegatesToForkchoice asserts that the helper
@@ -474,6 +498,194 @@ func TestExecutionPayloadBidSubscriber_NilMessage(t *testing.T) {
 	}
 	err := s.executionPayloadBidSubscriber(context.Background(), &ethpb.SignedExecutionPayloadBid{})
 	require.ErrorIs(t, errNilMessage, err)
+	err = s.executionPayloadBidSubscriber(context.Background(), &ethpb.SignedExecutionPayloadBidHeze{})
+	require.ErrorIs(t, errNilMessage, err)
+}
+
+// setupExecutionPayloadBidServiceHeze returns the bid service with Heze at hezeEpoch and a next-slot state with validators.
+func setupExecutionPayloadBidServiceHeze(t *testing.T, hezeEpoch primitives.Epoch) (*Service, *ethpb.SignedExecutionPayloadBidHeze) {
+	t.Helper()
+	s, _, gloasBid := setupExecutionPayloadBidService(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.HezeForkEpoch = hezeEpoch
+	params.OverrideBeaconConfig(cfg)
+	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
+
+	st, _ := util.DeterministicGenesisStateGloas(t, 64)
+	chain, ok := s.cfg.chain.(*mock.ChainService)
+	require.Equal(t, true, ok)
+	require.NoError(t, transition.UpdateNextSlotCache(t.Context(), chain.Root, st))
+	return s, hezeBidFromGloas(gloasBid)
+}
+
+func hezeBidFromGloas(g *ethpb.SignedExecutionPayloadBid) *ethpb.SignedExecutionPayloadBidHeze {
+	m := g.Message
+	return &ethpb.SignedExecutionPayloadBidHeze{
+		Message: &ethpb.ExecutionPayloadBidHeze{
+			ParentBlockHash:       m.ParentBlockHash,
+			ParentBlockRoot:       m.ParentBlockRoot,
+			BlockHash:             m.BlockHash,
+			PrevRandao:            m.PrevRandao,
+			FeeRecipient:          m.FeeRecipient,
+			GasLimit:              m.GasLimit,
+			BuilderIndex:          m.BuilderIndex,
+			Slot:                  m.Slot,
+			Value:                 m.Value,
+			ExecutionPayment:      m.ExecutionPayment,
+			BlobKzgCommitments:    m.BlobKzgCommitments,
+			ExecutionRequestsRoot: m.ExecutionRequestsRoot,
+			InclusionListBits:     bitfield.NewBitvector16(),
+		},
+		Signature: g.Signature,
+	}
+}
+
+func bidToPubsubAtEpoch(t *testing.T, s *Service, bid ssz.Marshaler, epoch primitives.Epoch) *pubsub.Message {
+	t.Helper()
+	buf := new(bytes.Buffer)
+	_, err := s.cfg.p2p.Encoding().EncodeGossip(buf, bid)
+	require.NoError(t, err)
+	topic := s.addDigestToTopic(p2p.ExecutionPayloadBidTopicFormat, params.ForkDigest(epoch))
+	return &pubsub.Message{Message: &pb.Message{Data: buf.Bytes(), Topic: &topic}}
+}
+
+// storeTimelyInclusionList stores a timely list from the first inclusion list committee member of slot 0 and returns the bits the store reports.
+func storeTimelyInclusionList(t *testing.T, s *Service) bitfield.Bitvector16 {
+	return storeInclusionList(t, s, true)
+}
+
+// storeInclusionList stores a list from the first inclusion list committee member of slot 0 and returns the bits of every stored list.
+func storeInclusionList(t *testing.T, s *Service, timely bool) bitfield.Bitvector16 {
+	t.Helper()
+	chain, ok := s.cfg.chain.(*mock.ChainService)
+	require.Equal(t, true, ok)
+	st := transition.NextSlotStateReadOnly(chain.Root, 1)
+	require.NotNil(t, st)
+	committee, err := helpers.InclusionListCommittee(t.Context(), st, 0)
+	require.NoError(t, err)
+	txs, err := enginev1.NewProgressiveTransactionList([][]byte{{0x02}})
+	require.NoError(t, err)
+	store := chain.InclusionListStore()
+	store.Process(&ethpb.SignedInclusionList{
+		Message: &ethpb.InclusionList{
+			Slot:           0,
+			ValidatorIndex: committee[0],
+			DependentRoot:  chain.TargetRoot[:],
+			Transactions:   txs,
+		},
+		Signature: make([]byte, 96),
+	}, timely)
+	bits := store.Bits(committee, 0, chain.TargetRoot, false)
+	require.NotEqual(t, uint64(0), bits.Count())
+	return bits
+}
+
+func TestValidateExecutionPayloadBidGossip_Heze(t *testing.T) {
+	t.Run("accepted with empty store", func(t *testing.T) {
+		s, bid := setupExecutionPayloadBidServiceHeze(t, 0)
+		msg := bidToPubsubAtEpoch(t, s, bid, 0)
+
+		result, err := s.validateExecutionPayloadBidGossip(t.Context(), "", msg)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationAccept, result)
+		got, ok := msg.ValidatorData.(*ethpb.SignedExecutionPayloadBidHeze)
+		require.Equal(t, true, ok)
+		require.DeepEqual(t, bid, got)
+	})
+	t.Run("bits not inclusive is ignored", func(t *testing.T) {
+		s, bid := setupExecutionPayloadBidServiceHeze(t, 0)
+		storeTimelyInclusionList(t, s)
+		msg := bidToPubsubAtEpoch(t, s, bid, 0)
+
+		result, err := s.validateExecutionPayloadBidGossip(t.Context(), "", msg)
+		require.ErrorContains(t, "not inclusive", err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+		// An ignored bid is not marked as seen, so an inclusive bid from the same builder can follow.
+		b, err := blocks.WrappedROSignedExecutionPayloadBidHeze(bid)
+		require.NoError(t, err)
+		ro, err := b.Bid()
+		require.NoError(t, err)
+		require.Equal(t, false, s.hasSeenExecutionPayloadBid(executionPayloadBidTupleKey(ro)))
+	})
+	t.Run("inclusive bits are accepted", func(t *testing.T) {
+		s, bid := setupExecutionPayloadBidServiceHeze(t, 0)
+		bid.Message.InclusionListBits = storeTimelyInclusionList(t, s)
+		msg := bidToPubsubAtEpoch(t, s, bid, 0)
+
+		result, err := s.validateExecutionPayloadBidGossip(t.Context(), "", msg)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationAccept, result)
+	})
+	t.Run("an untimely list is not required in the bits", func(t *testing.T) {
+		s, bid := setupExecutionPayloadBidServiceHeze(t, 0)
+		storeInclusionList(t, s, false)
+		msg := bidToPubsubAtEpoch(t, s, bid, 0)
+
+		result, err := s.validateExecutionPayloadBidGossip(t.Context(), "", msg)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationAccept, result)
+	})
+	t.Run("bits check runs before the signature check", func(t *testing.T) {
+		s, bid := setupExecutionPayloadBidServiceHeze(t, 0)
+		s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{errSignature: errors.New("bad signature")})
+		storeTimelyInclusionList(t, s)
+
+		result, err := s.validateExecutionPayloadBidGossip(t.Context(), "", bidToPubsubAtEpoch(t, s, bid, 0))
+		require.ErrorContains(t, "not inclusive", err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+	})
+	t.Run("lower Heze bid than the cached Heze bid is ignored", func(t *testing.T) {
+		s, bid := setupExecutionPayloadBidServiceHeze(t, 0)
+		higher := proto.Clone(bid).(*ethpb.SignedExecutionPayloadBidHeze)
+		higher.Message.Value = bid.Message.Value + 1
+		require.Equal(t, true, s.highestExecutionPayloadBidCache.SetIfHigher(mustWrapBidHeze(t, higher)))
+
+		result, err := s.validateExecutionPayloadBidGossip(t.Context(), "", bidToPubsubAtEpoch(t, s, bid, 0))
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+	})
+	t.Run("Gloas bid for a Heze slot is rejected", func(t *testing.T) {
+		s, bid := setupExecutionPayloadBidServiceHeze(t, 1)
+		gloasBid := util.GenerateTestSignedExecutionPayloadBid(bid.Message.Slot + params.BeaconConfig().SlotsPerEpoch)
+		// The Gloas digest decodes a Gloas bid.
+		result, err := s.validateExecutionPayloadBidGossip(t.Context(), "", bidToPubsubAtEpoch(t, s, gloasBid, 0))
+		require.ErrorIs(t, err, errWrongMessage)
+		require.Equal(t, pubsub.ValidationReject, result)
+	})
+	t.Run("Heze bid for a Gloas slot is rejected", func(t *testing.T) {
+		s, bid := setupExecutionPayloadBidServiceHeze(t, 1)
+		// The Heze digest decodes a Heze bid, but bid.slot 1 is before the Heze fork.
+		result, err := s.validateExecutionPayloadBidGossip(t.Context(), "", bidToPubsubAtEpoch(t, s, bid, 1))
+		require.ErrorIs(t, err, errWrongMessage)
+		require.Equal(t, pubsub.ValidationReject, result)
+	})
+	t.Run("Heze bid at the first Heze slot is accepted", func(t *testing.T) {
+		s, bid := setupExecutionPayloadBidServiceHeze(t, 1)
+		// The inclusion lists of bid.slot - 1 are in a Gloas slot, so there is no committee to check.
+		bid.Message.Slot = params.BeaconConfig().SlotsPerEpoch
+		chain, ok := s.cfg.chain.(*mock.ChainService)
+		require.Equal(t, true, ok)
+		st, _ := util.DeterministicGenesisStateGloas(t, 64)
+		require.NoError(t, st.SetDepositRequestsStartIndex(st.Eth1DepositIndex()))
+		require.NoError(t, st.SetSlot(bid.Message.Slot-1))
+		require.NoError(t, transition.UpdateNextSlotCache(t.Context(), chain.Root, st))
+		require.Equal(t, true, s.proposerPreferencesCache.Add(cache.ProposerPreference{
+			DependentRoot:  chain.TargetRoot,
+			FeeRecipient:   bytesutil.ToBytes20(bid.Message.FeeRecipient),
+			TargetGasLimit: bid.Message.GasLimit,
+		}, bid.Message.Slot))
+		result, err := s.validateExecutionPayloadBidGossip(t.Context(), "", bidToPubsubAtEpoch(t, s, bid, 1))
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationAccept, result)
+	})
+	t.Run("Gloas bid before Heze is accepted", func(t *testing.T) {
+		s, bid := setupExecutionPayloadBidServiceHeze(t, 1)
+		// The bid.slot - 1 inclusion lists are before Heze, so the bits check does not compute a committee.
+		gloasMsg := bidToPubsubAtEpoch(t, s, util.GenerateTestSignedExecutionPayloadBid(bid.Message.Slot), 0)
+		result, err := s.validateExecutionPayloadBidGossip(t.Context(), "", gloasMsg)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationAccept, result)
+	})
 }
 
 type mockExecutionPayloadBidVerifier struct {
@@ -648,9 +860,23 @@ func executionPayloadBidToPubsub(t *testing.T, s *Service, p p2p.P2P, bid *ethpb
 func mustBid(t *testing.T, signedBid *ethpb.SignedExecutionPayloadBid) interfaces.ROExecutionPayloadBid {
 	t.Helper()
 
-	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signedBid)
-	require.NoError(t, err)
-	bid, err := wrapped.Bid()
+	bid, err := mustWrapBid(t, signedBid).Bid()
 	require.NoError(t, err)
 	return bid
+}
+
+func mustWrapBid(t *testing.T, signedBid *ethpb.SignedExecutionPayloadBid) interfaces.ROSignedExecutionPayloadBid {
+	t.Helper()
+
+	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signedBid)
+	require.NoError(t, err)
+	return wrapped
+}
+
+func mustWrapBidHeze(t *testing.T, signedBid *ethpb.SignedExecutionPayloadBidHeze) interfaces.ROSignedExecutionPayloadBid {
+	t.Helper()
+
+	wrapped, err := blocks.WrappedROSignedExecutionPayloadBidHeze(signedBid)
+	require.NoError(t, err)
+	return wrapped
 }

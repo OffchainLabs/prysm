@@ -5,6 +5,7 @@ package blocks
 import (
 	"context"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -198,6 +199,11 @@ func NewGenesisBlockForState(ctx context.Context, st state.BeaconState) (interfa
 			Block:     gloasGenesisBlock(root, gs.LatestExecutionPayloadBid),
 			Signature: params.BeaconConfig().EmptySignature[:],
 		})
+	case *ethpb.BeaconStateHeze:
+		return blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockHeze{
+			Block:     hezeGenesisBlock(root, ps.(*ethpb.BeaconStateHeze).LatestExecutionPayloadBid),
+			Signature: params.BeaconConfig().EmptySignature[:],
+		})
 	default:
 		return nil, ErrUnrecognizedState
 	}
@@ -245,6 +251,38 @@ func gloasGenesisBlock(root [fieldparams.RootLength]byte, latestBid *ethpb.Execu
 				Deposits:       make([]*enginev1.DepositRequest, 0),
 				Consolidations: make([]*enginev1.ConsolidationRequest, 0),
 			},
+		},
+	}
+}
+
+func hezeGenesisBlock(root [fieldparams.RootLength]byte, latestBid *ethpb.ExecutionPayloadBidHeze) *ethpb.BeaconBlockHeze {
+	bidMessage := latestBid.Copy()
+	if bidMessage == nil {
+		bidMessage = &ethpb.ExecutionPayloadBidHeze{
+			ParentBlockHash:       make([]byte, 32),
+			ParentBlockRoot:       make([]byte, 32),
+			BlockHash:             make([]byte, 32),
+			PrevRandao:            make([]byte, 32),
+			FeeRecipient:          make([]byte, 20),
+			BlobKzgCommitments:    make([][]byte, 0),
+			ExecutionRequestsRoot: make([]byte, 32),
+			InclusionListBits:     bitfield.NewBitvector16(),
+		}
+	}
+	gloasBody := gloasGenesisBlock(root, nil).Body
+	return &ethpb.BeaconBlockHeze{
+		ParentRoot: params.BeaconConfig().ZeroHash[:],
+		StateRoot:  root[:],
+		Body: &ethpb.BeaconBlockBodyHeze{
+			RandaoReveal:  gloasBody.RandaoReveal,
+			Graffiti:      gloasBody.Graffiti,
+			SyncAggregate: gloasBody.SyncAggregate,
+			SignedExecutionPayloadBid: &ethpb.SignedExecutionPayloadBidHeze{
+				Message:   bidMessage,
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+			PayloadAttestations:     gloasBody.PayloadAttestations,
+			ParentExecutionRequests: gloasBody.ParentExecutionRequests,
 		},
 	}
 }

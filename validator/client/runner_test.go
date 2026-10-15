@@ -503,9 +503,11 @@ func TestPerformRolesDispatch(t *testing.T) {
 	cfg := params.BeaconConfig()
 	cfg.ElectraForkEpoch = 1
 	cfg.GloasForkEpoch = 2
+	cfg.HezeForkEpoch = 3
 	params.SetActiveTestCleanup(t, cfg)
 
 	stop := errors.New("stop after dispatch")
+	ilSlot := cfg.SlotsPerEpoch.Mul(uint64(cfg.HezeForkEpoch))
 	tests := []struct {
 		name   string
 		role   validatorRole
@@ -560,6 +562,20 @@ func TestPerformRolesDispatch(t *testing.T) {
 			slot: cfg.SlotsPerEpoch.Mul(uint64(cfg.GloasForkEpoch)),
 			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
 				m.validatorClient.EXPECT().PayloadAttestationData(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
+			},
+		},
+		{
+			name: "inclusion list committee",
+			role: roleInclusionListCommittee,
+			slot: ilSlot,
+			expect: func(v *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
+				d := v.duties.snapshot().d
+				for _, duty := range d.currentDuties {
+					duty.InclusionListSlots = []primitives.Slot{ilSlot}
+				}
+				d.prevDependentRoot = make([]byte, fieldparams.RootLength)
+				v.duties.write(d)
+				m.validatorClient.EXPECT().ProduceInclusionList(gomock.Any(), ilSlot).Return(nil, stop).Times(1)
 			},
 		},
 		{

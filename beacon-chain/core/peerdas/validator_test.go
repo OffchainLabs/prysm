@@ -537,7 +537,7 @@ func TestBidReconstructionSource_Commitments(t *testing.T) {
 					b.Block.Body.SignedExecutionPayloadBid = nil
 				}, true)
 			},
-			wantErr: "nil execution payload bid or bid message",
+			wantErr: "attempted to wrap nil object",
 		},
 		{
 			name: "nil bid message",
@@ -546,7 +546,7 @@ func TestBidReconstructionSource_Commitments(t *testing.T) {
 					b.Block.Body.SignedExecutionPayloadBid.Message = nil
 				}, true)
 			},
-			wantErr: "nil execution payload bid or bid message",
+			wantErr: "attempted to wrap nil object",
 		},
 		{
 			name: "non-gloas block is unsupported",

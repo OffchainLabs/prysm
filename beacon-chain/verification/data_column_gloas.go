@@ -144,11 +144,7 @@ func (v *ROGloasDataColumnVerifier) blobKzgCommitments() ([][]byte, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "read signed execution payload bid")
 	}
-	wrappedBid, err := blocks.WrappedROSignedExecutionPayloadBid(signedBid)
-	if err != nil {
-		return nil, errors.Wrap(err, "wrap signed execution payload bid")
-	}
-	bid, err := wrappedBid.Bid()
+	bid, err := signedBid.Bid()
 	if err != nil {
 		return nil, errors.Wrap(err, "read execution payload bid")
 	}

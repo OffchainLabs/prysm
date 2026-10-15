@@ -85,13 +85,15 @@ func logStateTransitionData(b interfaces.ReadOnlyBeaconBlock) error {
 		signedBid, err := b.Body().SignedExecutionPayloadBid()
 		if err != nil {
 			log.WithError(err).Error("Failed to get signed execution payload bid")
+		} else if bid, err := signedBid.Bid(); err != nil {
+			log.WithError(err).Error("Failed to get execution payload bid")
 		} else {
-			bid := signedBid.Message
+			blockHash, parentHash := bid.BlockHash(), bid.ParentBlockHash()
 			log = log.WithFields(logrus.Fields{
-				"blobKzgCommitmentCount": len(bid.BlobKzgCommitments),
-				"payloadHash":            fmt.Sprintf("%#x", bytesutil.Trunc(bid.BlockHash)),
-				"parentHash":             fmt.Sprintf("%#x", bytesutil.Trunc(bid.ParentBlockHash)),
-				"builderIndex":           logs.BuilderIndexLabel(bid.BuilderIndex),
+				"blobKzgCommitmentCount": bid.BlobKzgCommitmentCount(),
+				"payloadHash":            fmt.Sprintf("%#x", bytesutil.Trunc(blockHash[:])),
+				"parentHash":             fmt.Sprintf("%#x", bytesutil.Trunc(parentHash[:])),
+				"builderIndex":           logs.BuilderIndexLabel(bid.BuilderIndex()),
 			})
 		}
 	}
@@ -137,10 +139,11 @@ func logBlockSyncStatus(block interfaces.ReadOnlyBeaconBlock, blockRoot [32]byte
 		signedBid, err := block.Body().SignedExecutionPayloadBid()
 		if err != nil {
 			log.WithError(err).Error("Failed to get signed execution payload bid for logging")
-		} else if signedBid != nil && signedBid.Message != nil {
-			moreFields["blockHash"] = fmt.Sprintf("%#x", bytesutil.Trunc(signedBid.Message.BlockHash))
-			moreFields["parentHash"] = fmt.Sprintf("%#x", bytesutil.Trunc(signedBid.Message.ParentBlockHash))
-			moreFields["builderIndex"] = logs.BuilderIndexLabel(signedBid.Message.BuilderIndex)
+		} else if bid, err := signedBid.Bid(); err == nil {
+			blockHash, parentHash := bid.BlockHash(), bid.ParentBlockHash()
+			moreFields["blockHash"] = fmt.Sprintf("%#x", bytesutil.Trunc(blockHash[:]))
+			moreFields["parentHash"] = fmt.Sprintf("%#x", bytesutil.Trunc(parentHash[:]))
+			moreFields["builderIndex"] = logs.BuilderIndexLabel(bid.BuilderIndex())
 		}
 	}
 

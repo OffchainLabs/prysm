@@ -89,6 +89,14 @@ func WithProposerPreferencesCache(c *cache.ProposerPreferencesCache) Option {
 	}
 }
 
+// WithInclusionListStore sets the inclusion list store that fork choice, gossip, and the API share.
+func WithInclusionListStore(c *cache.InclusionListStore) Option {
+	return func(s *Service) error {
+		s.cfg.InclusionListStore = c
+		return nil
+	}
+}
+
 // WithBuilderCircuitBreaker sets the tracker of builders that failed to reveal their payload.
 func WithBuilderCircuitBreaker(c *cache.BuilderCircuitBreaker) Option {
 	return func(s *Service) error {

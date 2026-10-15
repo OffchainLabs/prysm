@@ -385,6 +385,18 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 			)
 		})
 	}
+
+	// New gossip topic in Heze.
+	if params.BeaconConfig().HezeForkEpoch <= nse.Epoch {
+		s.spawn(func() {
+			s.subscribe(
+				p2p.InclusionListTopicFormat,
+				s.validateInclusionListGossip,
+				s.inclusionListSubscriber,
+				nse,
+			)
+		})
+	}
 	return true
 }
 

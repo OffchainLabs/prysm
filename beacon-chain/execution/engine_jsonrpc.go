@@ -17,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
@@ -56,6 +57,12 @@ var (
 		GetPayloadBodiesByHashV2,
 		GetPayloadBodiesByRangeV2,
 	}
+
+	hezeEngineEndpoints = []string{
+		NewPayloadMethodV6,
+		ForkchoiceUpdatedMethodV5,
+		GetInclusionListV1,
+	}
 )
 
 const (
@@ -68,6 +75,8 @@ const (
 	NewPayloadMethodV4 = "engine_newPayloadV4"
 	// NewPayloadMethodV5 is the engine_newPayloadVX method added at Gloas.
 	NewPayloadMethodV5 = "engine_newPayloadV5"
+	// NewPayloadMethodV6 is the engine_newPayloadVX method added at Heze.
+	NewPayloadMethodV6 = "engine_newPayloadV6"
 	// ForkchoiceUpdatedMethod v1 request string for JSON-RPC.
 	ForkchoiceUpdatedMethod = "engine_forkchoiceUpdatedV1"
 	// ForkchoiceUpdatedMethodV2 v2 request string for JSON-RPC.
@@ -88,6 +97,10 @@ const (
 	GetPayloadMethodV6 = "engine_getPayloadV6"
 	// ForkchoiceUpdatedMethodV4 is the forkchoice updated method added for gloas/amsterdam.
 	ForkchoiceUpdatedMethodV4 = "engine_forkchoiceUpdatedV4"
+	// ForkchoiceUpdatedMethodV5 is the forkchoice updated method added for heze/bogota.
+	ForkchoiceUpdatedMethodV5 = "engine_forkchoiceUpdatedV5"
+	// GetInclusionListV1 is the JSON-RPC method that returns the execution client's inclusion list.
+	GetInclusionListV1 = "engine_getInclusionListV1"
 	// BlockByHashMethod request string for JSON-RPC.
 	BlockByHashMethod = "eth_getBlockByHash"
 	// BlockByNumberMethod request string for JSON-RPC.
@@ -170,6 +183,57 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 	default:
 		return nil, errors.New("unknown execution data type")
 	}
+	return newPayloadStatusResult(result, parentBlockRoot)
+}
+
+// NewPayloadWithInclusionList calls engine_newPayloadV6 for a Heze payload.
+// The returned inclusionListSatisfied is nil unless the status is VALID and the EL set it.
+func (s *Service) NewPayloadWithInclusionList(
+	ctx context.Context,
+	payload interfaces.ExecutionData,
+	versionedHashes []common.Hash,
+	parentBlockRoot *common.Hash,
+	executionRequests pb.ExecutionRequester,
+	inclusionListTransactions [][]byte,
+) ([]byte, *bool, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.NewPayloadWithInclusionList")
+	defer span.End()
+	defer func(start time.Time) {
+		newPayloadLatency.Observe(float64(time.Since(start).Milliseconds()))
+	}(time.Now())
+
+	d := time.Now().Add(time.Duration(params.BeaconConfig().ExecutionEngineTimeoutValue) * time.Second)
+	ctx, cancel := context.WithDeadline(ctx, d)
+	defer cancel()
+
+	payloadPb, ok := payload.Proto().(*pb.ExecutionPayloadGloas)
+	if !ok {
+		return nil, nil, errors.Errorf("unexpected execution data type %T for %s", payload.Proto(), NewPayloadMethodV6)
+	}
+	if executionRequests == nil {
+		return nil, nil, errors.New("nil execution requests")
+	}
+	flattenedRequests, err := executionRequests.FlattenRequests()
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to encode execution requests")
+	}
+	ilTxs := make([]hexutil.Bytes, len(inclusionListTransactions))
+	for i, tx := range inclusionListTransactions {
+		ilTxs[i] = tx
+	}
+	result := &pb.PayloadStatus{}
+	if err := s.rpcClient.CallContext(ctx, result, NewPayloadMethodV6, payloadPb, versionedHashes, parentBlockRoot, flattenedRequests, ilTxs); err != nil {
+		return nil, nil, handleRPCError(err)
+	}
+	lvh, err := newPayloadStatusResult(result, parentBlockRoot)
+	if err != nil || result.Status != pb.PayloadStatus_VALID {
+		return lvh, nil, err
+	}
+	return lvh, result.InclusionListSatisfied, nil
+}
+
+// newPayloadStatusResult maps a newPayload status to the latest valid hash and an error.
+func newPayloadStatusResult(result *pb.PayloadStatus, parentBlockRoot *common.Hash) ([]byte, error) {
 	if result.ValidationError != "" {
 		log.WithField("status", result.Status.String()).
 			WithField("parentRoot", fmt.Sprintf("%#x", parentBlockRoot)).
@@ -198,10 +262,11 @@ type ForkchoiceUpdatedResponse struct {
 	ValidationError string             `json:"validationError"`
 }
 
-// ForkchoiceUpdated calls the engine_forkchoiceUpdatedV1 method via JSON-RPC.
+// ForkchoiceUpdated calls the engine_forkchoiceUpdated method via JSON-RPC.
+// The flag is the inclusionListSatisfied value of a VALID response, nil otherwise.
 func (s *Service) ForkchoiceUpdated(
 	ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer,
-) (*pb.PayloadIDBytes, []byte, error) {
+) (*pb.PayloadIDBytes, []byte, *bool, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ForkchoiceUpdated")
 	defer span.End()
 	start := time.Now()
@@ -215,51 +280,60 @@ func (s *Service) ForkchoiceUpdated(
 	result := &ForkchoiceUpdatedResponse{}
 
 	if attrs == nil {
-		return nil, nil, errors.New("nil payload attributer")
+		return nil, nil, nil, errors.New("nil payload attributer")
 	}
 	switch attrs.Version() {
 	case version.Bellatrix:
 		a, err := attrs.PbV1()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethod, state, a)
 		if err != nil {
-			return nil, nil, handleRPCError(err)
+			return nil, nil, nil, handleRPCError(err)
 		}
 	case version.Capella:
 		a, err := attrs.PbV2()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethodV2, state, a)
 		if err != nil {
-			return nil, nil, handleRPCError(err)
+			return nil, nil, nil, handleRPCError(err)
 		}
 	case version.Deneb, version.Electra, version.Fulu:
 		a, err := attrs.PbV3()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethodV3, state, a)
 		if err != nil {
-			return nil, nil, handleRPCError(err)
+			return nil, nil, nil, handleRPCError(err)
 		}
 	case version.Gloas:
 		a, err := attrs.PbV4()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethodV4, state, a)
 		if err != nil {
-			return nil, nil, handleRPCError(err)
+			return nil, nil, nil, handleRPCError(err)
+		}
+	case version.Heze:
+		a, err := attrs.PbV5()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethodV5, state, a)
+		if err != nil {
+			return nil, nil, nil, handleRPCError(err)
 		}
 	default:
-		return nil, nil, fmt.Errorf("unknown payload attribute version: %v", attrs.Version())
+		return nil, nil, nil, fmt.Errorf("unknown payload attribute version: %v", attrs.Version())
 	}
 
 	if result.Status == nil {
-		return nil, nil, ErrNilResponse
+		return nil, nil, nil, ErrNilResponse
 	}
 	if result.ValidationError != "" {
 		log.WithError(errors.New(result.ValidationError)).Error("Got a validation error in forkChoiceUpdated")
@@ -267,13 +341,13 @@ func (s *Service) ForkchoiceUpdated(
 	resp := result.Status
 	switch resp.Status {
 	case pb.PayloadStatus_SYNCING:
-		return nil, nil, ErrAcceptedSyncingPayloadStatus
+		return nil, nil, nil, ErrAcceptedSyncingPayloadStatus
 	case pb.PayloadStatus_INVALID:
-		return nil, resp.LatestValidHash, ErrInvalidPayloadStatus
+		return nil, resp.LatestValidHash, nil, ErrInvalidPayloadStatus
 	case pb.PayloadStatus_VALID:
-		return result.PayloadId, resp.LatestValidHash, nil
+		return result.PayloadId, resp.LatestValidHash, resp.InclusionListSatisfied, nil
 	default:
-		return nil, nil, ErrUnknownPayloadStatus
+		return nil, nil, nil, ErrUnknownPayloadStatus
 	}
 }
 
@@ -329,6 +403,38 @@ func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte, slot primit
 	return res, nil
 }
 
+// GetInclusionList calls engine_getInclusionListV1 and returns the transactions as the EL sent them.
+// It rejects a result with an empty transaction or with more than MAX_TRANSACTIONS_BYTES_PER_INCLUSION_LIST bytes.
+func (s *Service) GetInclusionList(ctx context.Context) ([][]byte, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetInclusionList")
+	defer span.End()
+	defer func(start time.Time) {
+		getInclusionListLatency.Observe(float64(time.Since(start).Milliseconds()))
+	}(time.Now())
+
+	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(defaultEngineTimeout))
+	defer cancel()
+
+	var result []hexutil.Bytes
+	if err := s.rpcClient.CallContext(ctx, &result, GetInclusionListV1); err != nil {
+		return nil, handleRPCError(err)
+	}
+	maxBytes := params.BeaconConfig().MaxTransactionsBytesPerInclusionList
+	var total uint64
+	txs := make([][]byte, len(result))
+	for i, tx := range result {
+		if len(tx) == 0 {
+			return nil, errors.Errorf("inclusion list transaction %d is empty", i)
+		}
+		total += uint64(len(tx))
+		if total > maxBytes {
+			return nil, errors.Errorf("inclusion list transactions exceed %d bytes", maxBytes)
+		}
+		txs[i] = tx
+	}
+	return txs, nil
+}
+
 func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ExchangeCapabilities")
 	defer span.End()
@@ -343,6 +449,9 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	if params.GloasEnabled() {
 		capacity += len(gloasEngineEndpoints)
 	}
+	if params.HezeEnabled() {
+		capacity += len(hezeEngineEndpoints)
+	}
 
 	endpoints := make([]string, 0, capacity)
 	endpoints = append(endpoints, supportedEngineEndpoints...)
@@ -354,6 +463,9 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	}
 	if params.GloasEnabled() {
 		endpoints = append(endpoints, gloasEngineEndpoints...)
+	}
+	if params.HezeEnabled() {
+		endpoints = append(endpoints, hezeEngineEndpoints...)
 	}
 
 	elSupportedEndpointsSlice := make([]string, 0, len(endpoints))

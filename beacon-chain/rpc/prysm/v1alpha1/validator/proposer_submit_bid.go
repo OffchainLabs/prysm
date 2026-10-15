@@ -41,6 +41,13 @@ func (vs *Server) SubmitSignedExecutionPayloadBid(
 			"execution payload bids are not supported before Gloas fork (slot %d)", req.Message.Slot)
 	}
 
+	// TODO(heze): accept Heze bids. Peers reject a Gloas bid for a Heze slot.
+	// Revisit this when external builder submits Heze bids.
+	if slots.ToEpoch(req.Message.Slot) >= params.BeaconConfig().HezeForkEpoch {
+		return nil, status.Errorf(codes.InvalidArgument,
+			"Gloas execution payload bids are not valid at or after the Heze fork (slot %d)", req.Message.Slot)
+	}
+
 	if !features.Get().SubmitBlacklistedBuilderBids &&
 		vs.BuilderCircuitBreaker.Blacklisted(req.Message.BuilderIndex, slots.ToEpoch(req.Message.Slot)) {
 		return nil, status.Errorf(codes.FailedPrecondition, "builder %d is blacklisted by the circuit breaker", req.Message.BuilderIndex)
@@ -50,8 +57,12 @@ func (vs *Server) SubmitSignedExecutionPayloadBid(
 		return nil, err
 	}
 
+	ro, err := consensusblocks.WrappedROSignedExecutionPayloadBid(req)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "could not wrap signed bid: %v", err)
+	}
 	// Self-published gossip is not looped back, so record the bid here for this node's own proposer.
-	vs.HighestBidCache.SetIfHigher(req)
+	vs.HighestBidCache.SetIfHigher(ro)
 
 	if err := vs.P2P.Broadcast(ctx, req); err != nil {
 		return nil, status.Errorf(codes.Internal, "could not broadcast signed execution payload bid: %v", err)

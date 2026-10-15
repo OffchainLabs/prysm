@@ -89,7 +89,7 @@ func Test_SignedBeaconBlock_Copy(t *testing.T) {
 
 	t.Run("gloas deep copy", func(t *testing.T) {
 		payload := []*eth.PayloadAttestation{{Signature: []byte{0x01}}}
-		payloadBid := &eth.SignedExecutionPayloadBid{Signature: []byte{0x02}}
+		payloadBid := hydrateBeaconBlockBodyGloas().SignedExecutionPayloadBid
 		sb := &SignedBeaconBlock{
 			version: version.Gloas,
 			block: &BeaconBlock{
@@ -119,10 +119,10 @@ func Test_SignedBeaconBlock_Copy(t *testing.T) {
 
 		bid, err := cp.Block().Body().SignedExecutionPayloadBid()
 		require.NoError(t, err)
-		require.DeepEqual(t, payloadBid, bid)
-		origBidSig := bid.Signature[0]
+		require.DeepEqual(t, payloadBid, cp.block.body.signedExecutionPayloadBid)
+		origBidSig := bid.Signature()[0]
 		payloadBid.Signature[0] ^= 0xFF
-		require.Equal(t, origBidSig, bid.Signature[0])
+		require.Equal(t, origBidSig, bid.Signature()[0])
 	})
 }
 
@@ -441,15 +441,17 @@ func Test_BeaconBlockBody_SignedExecutionPayloadBid(t *testing.T) {
 	})
 
 	t.Run("gloas returns bid", func(t *testing.T) {
-		bid := &eth.SignedExecutionPayloadBid{Signature: []byte{0xFF}}
+		bid := hydrateBeaconBlockBodyGloas().SignedExecutionPayloadBid
+		ro, err := WrappedROSignedExecutionPayloadBid(bid)
+		require.NoError(t, err)
 		sb := &SignedBeaconBlock{
 			version: version.Gloas,
 			block:   &BeaconBlock{version: version.Gloas, body: &BeaconBlockBody{version: version.Gloas}},
 		}
-		require.NoError(t, sb.SetSignedExecutionPayloadBid(bid))
-		got, err := sb.Block().Body().SignedExecutionPayloadBid()
+		require.NoError(t, sb.SetSignedExecutionPayloadBid(ro))
+		_, err = sb.Block().Body().SignedExecutionPayloadBid()
 		require.NoError(t, err)
-		require.DeepEqual(t, bid, got)
+		require.DeepEqual(t, bid, sb.block.body.signedExecutionPayloadBid)
 	})
 }
 
@@ -467,16 +469,18 @@ func Test_BeaconBlockBody_BlobKzgCommitments(t *testing.T) {
 			name: "gloas returns commitments from bid",
 			body: &BeaconBlockBody{
 				version: version.Gloas,
-				signedExecutionPayloadBid: &eth.SignedExecutionPayloadBid{
-					Message: &eth.ExecutionPayloadBid{BlobKzgCommitments: commitments},
-				},
+				signedExecutionPayloadBid: func() *eth.SignedExecutionPayloadBid {
+					bid := hydrateBeaconBlockBodyGloas().SignedExecutionPayloadBid
+					bid.Message.BlobKzgCommitments = commitments
+					return bid
+				}(),
 			},
 			want: commitments,
 		},
 		{
-			name:       "gloas nil signed bid",
-			body:       &BeaconBlockBody{version: version.Gloas, signedExecutionPayloadBid: nil},
-			wantErrMsg: "nil execution payload bid or bid message",
+			name:    "gloas nil signed bid",
+			body:    &BeaconBlockBody{version: version.Gloas, signedExecutionPayloadBid: nil},
+			wantErr: consensus_types.ErrNilObjectWrapped,
 		},
 		{
 			name: "gloas nil bid message",
@@ -484,7 +488,7 @@ func Test_BeaconBlockBody_BlobKzgCommitments(t *testing.T) {
 				version:                   version.Gloas,
 				signedExecutionPayloadBid: &eth.SignedExecutionPayloadBid{Message: nil},
 			},
-			wantErrMsg: "nil execution payload bid or bid message",
+			wantErr: consensus_types.ErrNilObjectWrapped,
 		},
 		{
 			name: "deneb returns commitments",
@@ -743,6 +747,31 @@ func hydrateBeaconBlockBodyCapella() *eth.BeaconBlockBodyCapella {
 			Transactions:  make([][]byte, 0),
 			Withdrawals:   make([]*pb.Withdrawal, 0),
 		},
+	}
+}
+
+func hydrateBeaconBlockBodyHeze() *eth.BeaconBlockBodyHeze {
+	g := hydrateBeaconBlockBodyGloas()
+	bid := g.SignedExecutionPayloadBid.Message
+	return &eth.BeaconBlockBodyHeze{
+		RandaoReveal:  g.RandaoReveal,
+		Graffiti:      g.Graffiti,
+		SyncAggregate: g.SyncAggregate,
+		SignedExecutionPayloadBid: &eth.SignedExecutionPayloadBidHeze{
+			Message: &eth.ExecutionPayloadBidHeze{
+				ParentBlockHash:       bid.ParentBlockHash,
+				ParentBlockRoot:       bid.ParentBlockRoot,
+				BlockHash:             bid.BlockHash,
+				PrevRandao:            bid.PrevRandao,
+				FeeRecipient:          bid.FeeRecipient,
+				BlobKzgCommitments:    bid.BlobKzgCommitments,
+				ExecutionRequestsRoot: bid.ExecutionRequestsRoot,
+				InclusionListBits:     []byte{0x01, 0x80},
+			},
+			Signature: g.SignedExecutionPayloadBid.Signature,
+		},
+		ParentExecutionRequests: g.ParentExecutionRequests,
+		PayloadAttestations:     g.PayloadAttestations,
 	}
 }
 

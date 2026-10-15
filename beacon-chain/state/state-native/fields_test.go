@@ -28,6 +28,26 @@ func TestGloasProgressiveStateSchema(t *testing.T) {
 	}
 }
 
+func TestHezeProgressiveStateSchema(t *testing.T) {
+	schema, ok := ProgressiveStateSchemaForVersion(version.Heze)
+	require.Equal(t, true, ok)
+	require.Equal(t, params.BeaconConfig().BeaconStateHezeFieldCount, len(schema.fields))
+	require.Equal(t, params.BeaconConfig().BeaconStateGloasFieldCount, len(schema.activeFields))
+	require.DeepEqual(t, hezeFields, schema.fields)
+
+	// Spec: active_fields(width=46, gaps=(8, 9, 10, 28)).
+	gaps := map[int]bool{8: true, 9: true, 10: true, 28: true}
+	for i, active := range schema.activeFields {
+		require.Equal(t, !gaps[i], active, "unexpected active flag at position %d", i)
+	}
+	for _, field := range schema.fields {
+		require.Equal(t, false, gaps[field.RealPosition()], "removed field %s should be inactive", field.String())
+		index, found := schema.GetFieldIndex(field)
+		require.Equal(t, true, found)
+		require.Equal(t, field.RealPosition(), index, "field %s should keep its Gloas position", field.String())
+	}
+}
+
 func TestNewProgressiveStateFieldsSchema(t *testing.T) {
 	t.Run("MaximumFields", func(t *testing.T) {
 		allFields := make([]types.FieldIndex, ssz.MaxProgressiveActiveFields)
@@ -76,8 +96,8 @@ func TestNewProgressiveStateFieldsSchema(t *testing.T) {
 			{field: types.GenesisTime, index: 0, found: true},
 			{field: types.Slot, index: 0, found: false},
 			{field: types.Validators, index: 0, found: false},
-			{field: types.Balances, index: 1, found: true},
-			{field: types.PTCWindow, index: 2, found: true},
+			{field: types.Balances, index: 3, found: true},
+			{field: types.PTCWindow, index: 4, found: true},
 		}
 		for _, tt := range tests {
 			t.Run(tt.field.String(), func(t *testing.T) {
@@ -170,7 +190,7 @@ func TestNewProgressiveStateFieldsSchema(t *testing.T) {
 }
 
 func TestProgressiveStateSchemaForVersion_Unsupported(t *testing.T) {
-	schema, ok := ProgressiveStateSchemaForVersion(version.Gloas + 1)
+	schema, ok := ProgressiveStateSchemaForVersion(version.Heze + 1)
 	require.Equal(t, false, ok)
 	require.IsNil(t, schema)
 }

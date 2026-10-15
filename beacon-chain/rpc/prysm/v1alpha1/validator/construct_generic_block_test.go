@@ -24,6 +24,20 @@ func TestConstructGenericBeaconBlock(t *testing.T) {
 		require.ErrorContains(t, "block cannot be nil", err)
 	})
 
+	t.Run("heze block", func(t *testing.T) {
+		eb := util.NewBeaconBlockHeze()
+		b, err := blocks.NewSignedBeaconBlock(eb)
+		require.NoError(t, err)
+		r1, err := eb.Block.HashTreeRoot()
+		require.NoError(t, err)
+		result, err := vs.constructGenericBeaconBlock(b, nil, primitives.ZeroWei())
+		require.NoError(t, err)
+		require.NotNil(t, result.GetHeze())
+		r2, err := result.GetHeze().HashTreeRoot()
+		require.NoError(t, err)
+		require.Equal(t, r1, r2)
+	})
+
 	// Test for Fulu version
 	t.Run("fulu block", func(t *testing.T) {
 		eb := util.NewBeaconBlockFulu()

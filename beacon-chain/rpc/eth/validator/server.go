@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
@@ -41,4 +42,6 @@ type Server struct {
 	SubscribedValidatorsCache *cache.SubscribedValidatorsCache
 	PayloadIDCache            *cache.PayloadIDCache
 	PayloadAttestationPool    payloadattestation.PoolManager
+	InclusionListReceiver     blockchain.InclusionListReceiver
+	ExecutionEngineCaller     execution.EngineCaller
 }

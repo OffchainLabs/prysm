@@ -117,6 +117,9 @@ var (
 
 	gloasProgressiveSchema *ProgressiveStateSchema
 	gloasFields            []types.FieldIndex
+
+	hezeProgressiveSchema *ProgressiveStateSchema
+	hezeFields            []types.FieldIndex
 )
 
 func init() {
@@ -137,12 +140,32 @@ func init() {
 		panic(err)
 	}
 	gloasFields = gloasProgressiveSchema.fields
+
+	// Heze keeps the Gloas field positions and deactivates the fields removed by EIP-8015.
+	hezeProgressiveSchema, err = newProgressiveStateFieldsSchema(
+		slices.Concat(
+			altairFields,
+			[]types.FieldIndex{types.LatestBlockHash},
+			withdrawalAndHistoricalSummaryFields,
+			electraAdditionalFields,
+			[]types.FieldIndex{types.ProposerLookahead},
+			gloasAdditionalFields,
+		),
+		[]types.FieldIndex{types.Eth1Data, types.Eth1DataVotes, types.Eth1DepositIndex, types.DepositRequestsStartIndex},
+		params.BeaconConfig().BeaconStateHezeFieldCount,
+	)
+	if err != nil {
+		panic(err)
+	}
+	hezeFields = hezeProgressiveSchema.fields
 }
 
 func ProgressiveStateSchemaForVersion(v int) (*ProgressiveStateSchema, bool) {
 	switch v {
 	case version.Gloas:
 		return gloasProgressiveSchema, true
+	case version.Heze:
+		return hezeProgressiveSchema, true
 	default:
 		return nil, false
 	}
@@ -152,9 +175,10 @@ type ProgressiveStateSchema struct {
 	// activeFields uses stable, append-only field positions and retains false
 	// entries for fields removed in later forks.
 	activeFields []bool
-	// fields and fieldIndex describe the dense, active field roots used by the
-	// progressive Merkle tree for this fork.
-	fields     []types.FieldIndex
+	// fields lists the active fields of this fork.
+	fields []types.FieldIndex
+	// fieldIndex maps each active field to its position in activeFields, which is also its leaf in the
+	// progressive Merkle tree: inactive positions are zero leaves.
 	fieldIndex map[types.FieldIndex]int
 }
 
@@ -189,13 +213,13 @@ func newProgressiveStateFieldsSchema(allFields []types.FieldIndex, inactiveField
 	fieldIndex := make(map[types.FieldIndex]int, len(allFields)-len(inactiveFields))
 	activeFields := make([]bool, 0, len(allFields))
 
-	for _, field := range allFields {
+	for i, field := range allFields {
 		if _, isInactive := inactive[field]; isInactive {
 			activeFields = append(activeFields, false)
 			continue
 		}
 		fields = append(fields, field)
-		fieldIndex[field] = len(fields) - 1
+		fieldIndex[field] = i
 		activeFields = append(activeFields, true)
 	}
 

@@ -99,6 +99,7 @@ type PayloadAttributesEventData struct {
 	SafeBlockHash      string          `json:"safe_block_hash,omitempty"`      // Added from gloas onwards.
 	FinalizedBlockHash string          `json:"finalized_block_hash,omitempty"` // Added from gloas onwards.
 	PayloadAttributes  json.RawMessage `json:"payload_attributes"`
+	InclusionListBits  string          `json:"inclusion_list_bits,omitempty"` // Added from heze onwards.
 }
 
 type PayloadAttributesV1 struct {
@@ -148,6 +149,11 @@ type ProposerPreferencesEvent struct {
 type ExecutionPayloadBidEvent struct {
 	Version string                     `json:"version"`
 	Data    *SignedExecutionPayloadBid `json:"data"`
+}
+
+type ExecutionPayloadBidHezeEvent struct {
+	Version string                         `json:"version"`
+	Data    *SignedExecutionPayloadBidHeze `json:"data"`
 }
 
 type PayloadAttestationMessageEvent struct {

@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/heze"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
@@ -26,9 +27,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/genesis"
 	v1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 )
@@ -1095,4 +1098,62 @@ func TestKZGCommitmentToVersionedHashes(t *testing.T) {
 	require.Equal(t, 2, len(vhs))
 	require.Equal(t, vhs[0].String(), vh0)
 	require.Equal(t, vhs[1].String(), vh1)
+}
+
+func TestPayloadAttributesHeze(t *testing.T) {
+	slot := primitives.Slot(9)
+	attr := payloadAttributesHeze(1, make([]byte, 32), make([]byte, 20), make([]byte, 32), nil, slot, 2, nil)
+	require.Equal(t, version.Heze, attr.Version())
+	v5, err := attr.PbV5()
+	require.NoError(t, err)
+	require.Equal(t, uint64(slot), v5.SlotNumber)
+	require.Equal(t, uint64(2), v5.TargetGasLimit)
+	require.NotNil(t, v5.InclusionListTransactions)
+	require.Equal(t, 0, len(v5.InclusionListTransactions))
+
+	withTxs, err := payloadAttributesHeze(1, make([]byte, 32), make([]byte, 20), make([]byte, 32), nil, slot, 2, [][]byte{[]byte("tx")}).PbV5()
+	require.NoError(t, err)
+	require.DeepEqual(t, [][]byte{[]byte("tx")}, withTxs.InclusionListTransactions)
+}
+
+func Test_GetPayloadAttribute_HezeInclusionListTransactions(t *testing.T) {
+	setHezeAtGenesis(t)
+	gloasSt, _ := util.DeterministicGenesisStateGloas(t, 64)
+	require.NoError(t, gloasSt.SetDepositRequestsStartIndex(gloasSt.Eth1DepositIndex()))
+	st, err := heze.UpgradeToHeze(gloasSt)
+	require.NoError(t, err)
+	slot := 2*params.BeaconConfig().SlotsPerEpoch + 1
+	require.NoError(t, st.SetSlot(slot))
+	// The dependent root of slot - 1 is the block root at the last slot of epoch 0.
+	dependentRoot := [32]byte{'d'}
+	dependentSlot, err := slots.ShufflingDependentSlot(slots.ToEpoch(slot - 1))
+	require.NoError(t, err)
+	require.NoError(t, st.UpdateBlockRootAtIndex(uint64(dependentSlot%params.BeaconConfig().SlotsPerHistoricalRoot), dependentRoot))
+
+	service, tr := minimalTestService(t)
+	ctx := tr.ctx
+	for i, l := range []struct {
+		tx     string
+		root   [32]byte
+		timely bool
+	}{
+		{tx: "timely-tx", root: dependentRoot, timely: true},
+		{tx: "late-tx", root: dependentRoot, timely: false},
+		{tx: "other-root-tx", root: [32]byte{'o'}, timely: true},
+	} {
+		il := &ethpb.InclusionList{Slot: slot - 1, ValidatorIndex: primitives.ValidatorIndex(i), DependentRoot: l.root[:], Transactions: ilTransactions(t, []byte(l.tx))}
+		service.InclusionListStore().Process(&ethpb.SignedInclusionList{Message: il, Signature: make([]byte, 96)}, l.timely)
+	}
+	proposerIdx, err := helpers.BeaconProposerIndexAtSlot(ctx, st, slot)
+	require.NoError(t, err)
+	service.cfg.SubscribedValidatorsCache.Add(proposerIdx)
+
+	attr := service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], false)
+	require.Equal(t, false, attr.IsEmpty())
+	require.Equal(t, version.Heze, attr.Version())
+	v5, err := attr.PbV5()
+	require.NoError(t, err)
+	// The proposer uses only_timely=False, so the late list counts and the list of another dependent root does not.
+	require.DeepEqual(t, [][]byte{[]byte("timely-tx"), []byte("late-tx")}, v5.InclusionListTransactions)
+	require.DeepEqual(t, [][]byte{}, service.proposalInclusionListTransactions(ctx, st, 0))
 }

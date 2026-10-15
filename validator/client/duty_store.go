@@ -31,6 +31,7 @@ func cloneValidatorDuty(d *ethpb.ValidatorDuty) *ethpb.ValidatorDuty {
 		ValidatorIndex:          d.ValidatorIndex,
 		IsSyncCommittee:         d.IsSyncCommittee,
 		PtcSlots:                slices.Clone(d.PtcSlots),
+		InclusionListSlots:      slices.Clone(d.InclusionListSlots),
 	}
 }
 

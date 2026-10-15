@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/fulu"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/heze"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -434,6 +435,15 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 		upgraded = true
 	}
 
+	if time.CanUpgradeToHeze(slot) {
+		state, err = heze.UpgradeToHeze(state)
+		if err != nil {
+			tracing.AnnotateError(span, err)
+			return nil, err
+		}
+		upgraded = true
+	}
+
 	if upgraded {
 		log.WithField("version", version.String(state.Version())).Info("Upgraded state to")
 	}
@@ -514,6 +524,11 @@ func VerifyOperationLengths(_ context.Context, state state.BeaconState, b interf
 				fieldparams.MaxPayloadAttestations,
 			)
 		}
+	}
+
+	// Heze removes the deposits field from the block body and the eth1 data from the state (EIP-8015).
+	if state.Version() >= version.Heze {
+		return state, nil
 	}
 
 	eth1Data := state.Eth1Data()

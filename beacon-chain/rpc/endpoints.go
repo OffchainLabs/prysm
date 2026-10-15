@@ -225,6 +225,8 @@ func (s *Service) validatorEndpoints(
 		PayloadAttestationPool:    s.cfg.PayloadAttestationPool,
 		CoreService:               coreService,
 		BlockRewardFetcher:        rewardFetcher,
+		InclusionListReceiver:     s.cfg.InclusionListReceiver,
+		ExecutionEngineCaller:     s.cfg.ExecutionEngineCaller,
 	}
 
 	const namespace = "validator"
@@ -368,6 +370,17 @@ func (s *Service) validatorEndpoints(
 			methods: []string{http.MethodPost},
 		},
 		{
+			template: "/eth/v1/validator/duties/inclusion_list/{epoch}",
+			name:     namespace + ".GetInclusionListDuties",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetInclusionListDuties,
+			methods: []string{http.MethodPost},
+		},
+		{
 			template: "/eth/v1/validator/prepare_beacon_proposer",
 			name:     namespace + ".PrepareBeaconProposer",
 			middleware: []middleware.Middleware{
@@ -459,6 +472,27 @@ func (s *Service) validatorEndpoints(
 			},
 			handler: server.GetPayloadAttestationData,
 			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/validator/inclusion_list",
+			name:     namespace + ".ProduceInclusionList",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.ProduceInclusionList,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/validator/inclusion_list",
+			name:     namespace + ".PublishInclusionList",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.PublishInclusionList,
+			methods: []string{http.MethodPost},
 		},
 		{
 			template: "/eth/v1/validator/execution_payload_envelopes/{slot}/{beacon_block_root}",

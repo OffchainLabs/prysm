@@ -7,8 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -126,66 +128,6 @@ func TestValidateSignedProposerPreferencesGossip_AlreadySeen(t *testing.T) {
 	require.Equal(t, pubsub.ValidationIgnore, result)
 }
 
-// TestValidateSignedProposerPreferencesGossip_HeadTooStale exercises the branch
-// that returns when the proposal is more than one epoch ahead of the head state
-// (and not the +2 boundary edge case). With head state at epoch 0 and proposal
-// in epoch 3 the validator must ignore — proposer_lookahead cannot cover it.
-func TestValidateSignedProposerPreferencesGossip_HeadTooStale(t *testing.T) {
-	ctx := context.Background()
-	s, _, signedPreferences := setupSignedProposerPreferencesService(t)
-	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
-	signedPreferences.Message.ProposalSlot = primitives.Slot(96)
-	msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
-
-	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
-	require.ErrorContains(t, "cannot verify", err)
-	require.Equal(t, pubsub.ValidationIgnore, result)
-}
-
-func TestValidateSignedProposerPreferencesGossip_DependentRootMismatchSkipsStateLoad(t *testing.T) {
-	ctx := context.Background()
-	s, _, signedPreferences := setupSignedProposerPreferencesService(t)
-	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
-	msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
-
-	chainService := s.cfg.chain.(*mock.ChainService)
-	chainService.HeadStateErr = errors.New("head state should not load")
-	chainService.DependentRootCB = func(_ [32]byte, epoch primitives.Epoch) ([32]byte, error) {
-		require.Equal(t, primitives.Epoch(0), epoch)
-		return [32]byte{0xbb}, nil
-	}
-
-	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
-	require.ErrorContains(t, "dependent_root", err)
-	require.Equal(t, pubsub.ValidationIgnore, result)
-}
-
-func TestValidateSignedProposerPreferencesGossip_EpochPlus2DependentRootMismatch(t *testing.T) {
-	ctx := context.Background()
-	s, _, signedPreferences := setupSignedProposerPreferencesService(t)
-	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
-	signedPreferences.Message.ProposalSlot = primitives.Slot(64)
-	msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
-
-	var called bool
-	var gotRoot [32]byte
-	var gotEpoch primitives.Epoch
-	expectedRoot := [32]byte{0xaa}
-	s.cfg.chain.(*mock.ChainService).DependentRootCB = func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
-		if !called {
-			called, gotRoot, gotEpoch = true, root, epoch
-		}
-		return expectedRoot, nil
-	}
-
-	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
-	require.ErrorContains(t, "dependent_root", err)
-	require.Equal(t, pubsub.ValidationIgnore, result)
-	require.Equal(t, true, called)
-	require.Equal(t, [32]byte{}, gotRoot)
-	require.Equal(t, primitives.Epoch(1), gotEpoch)
-}
-
 func TestValidateSignedProposerPreferencesGossip_PreGloasProposalEpoch(t *testing.T) {
 	ctx := context.Background()
 	s, msg, _ := setupSignedProposerPreferencesService(t)
@@ -211,44 +153,43 @@ func TestValidateSignedProposerPreferencesGossip_DependentBlockAfterShufflingSlo
 	require.Equal(t, pubsub.ValidationReject, result)
 }
 
-func TestValidateSignedProposerPreferencesGossip_DependentRootOnOtherBranch(t *testing.T) {
+func TestValidateSignedProposerPreferencesGossip_LookaheadState(t *testing.T) {
+	t.Run("asks for the epoch before the proposal epoch", func(t *testing.T) {
+		s, _, signedPreferences := setupSignedProposerPreferencesService(t)
+		s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
+		signedPreferences.Message.ProposalSlot = primitives.Slot(64)
+		msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
+		chainService := s.cfg.chain.(*mock.ChainService)
+		var gotRoot [32]byte
+		var gotEpoch primitives.Epoch
+		chainService.LookaheadStateCB = func(root [32]byte, epoch primitives.Epoch) (state.ReadOnlyBeaconState, error) {
+			gotRoot, gotEpoch = root, epoch
+			return chainService.State, nil
+		}
+
+		result, err := s.validateSignedProposerPreferencesGossip(t.Context(), "", msg)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationAccept, result)
+		require.Equal(t, bytesutil.ToBytes32(signedPreferences.Message.DependentRoot), gotRoot)
+		require.Equal(t, primitives.Epoch(1), gotEpoch)
+	})
 	for _, tc := range []struct {
-		name       string
-		hasChild   bool
-		cached     bool
-		wantResult pubsub.ValidationResult
-		wantError  string
+		name string
+		err  error
 	}{
-		{name: "non-head leaf", cached: true, wantResult: pubsub.ValidationIgnore, wantError: "not a possible dependent block"},
-		{name: "child across boundary without cached state", hasChild: true, wantResult: pubsub.ValidationIgnore, wantError: "is not cached"},
-		{name: "child across boundary with cached state", hasChild: true, cached: true, wantResult: pubsub.ValidationAccept},
+		{name: "not a possible dependent block", err: blockchain.ErrInvalidDependentRoot},
+		{name: "dependent state not available", err: blockchain.ErrDependentStateUnavailable},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx := t.Context()
-			s, _, signedPreferences := setupSignedProposerPreferencesService(t)
-			chainService := s.cfg.chain.(*mock.ChainService)
-			chainService.HeadStateErr = errors.New("head state should not load")
-			tips, _ := chainService.ChainHeads()
-			dependentRoot := tips[0]
-			signedPreferences.Message.DependentRoot = dependentRoot[:]
-			msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
-			chainService.DependentRootCB = func(root [32]byte, _ primitives.Epoch) ([32]byte, error) {
-				if root == dependentRoot || (tc.hasChild && root == tips[1]) {
-					return dependentRoot, nil
-				}
-				return [32]byte{0xbb}, nil
-			}
-			if tc.cached {
-				require.NoError(t, s.cfg.stateGen.SaveState(ctx, dependentRoot, chainService.State))
+			s, msg, _ := setupSignedProposerPreferencesService(t)
+			s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
+			s.cfg.chain.(*mock.ChainService).LookaheadStateCB = func([32]byte, primitives.Epoch) (state.ReadOnlyBeaconState, error) {
+				return nil, tc.err
 			}
 
-			result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
-			if tc.wantError != "" {
-				require.ErrorContains(t, tc.wantError, err)
-			} else {
-				require.NoError(t, err)
-			}
-			require.Equal(t, tc.wantResult, result)
+			result, err := s.validateSignedProposerPreferencesGossip(t.Context(), "", msg)
+			require.ErrorIs(t, err, tc.err)
+			require.Equal(t, pubsub.ValidationIgnore, result)
 		})
 	}
 }
@@ -288,7 +229,12 @@ func TestValidateSignedProposerPreferencesGossip_SignatureBeforeBoundaryAdvance(
 		s, _, signedPreferences := setupSignedProposerPreferencesService(t)
 		// The empty test state cannot cross an epoch boundary; use a real genesis state.
 		headState, _ := util.DeterministicGenesisStateGloas(t, 64)
-		s.cfg.chain.(*mock.ChainService).State = headState
+		chainService := s.cfg.chain.(*mock.ChainService)
+		chainService.State = headState
+		// The chain service advances the dependent state to the lookahead epoch boundary.
+		chainService.LookaheadStateCB = func([32]byte, primitives.Epoch) (state.ReadOnlyBeaconState, error) {
+			return transition.ProcessSlots(ctx, headState.Copy(), boundarySlot)
+		}
 		newVerifier, verifier := capturingSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
 		s.newSignedProposerPreferencesVerifier = newVerifier
 		signedPreferences.Message.ProposalSlot = proposalSlot

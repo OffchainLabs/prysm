@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/confirmation"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -13,7 +14,15 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
+)
+
+var (
+	// ErrInvalidDependentRoot is returned when a root is not a possible dependent block, as in is_valid_dependent_root.
+	ErrInvalidDependentRoot = errors.New("dependent block is not a possible dependent block")
+	// ErrDependentStateUnavailable is returned when no head or cached state can give the lookahead committees cheaply.
+	ErrDependentStateUnavailable = errors.New("dependent state is not available")
 )
 
 // CachedHeadRoot returns the corresponding value from Forkchoice
@@ -122,6 +131,18 @@ func (s *Service) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) error 
 	return s.cfg.ForkChoiceStore.InsertPayload(pe)
 }
 
+// InsertPayloadWithInclusionList is a self-locked wrapper that inserts the payload and records its inclusion list satisfaction.
+func (s *Service) InsertPayloadWithInclusionList(pe interfaces.ROExecutionPayloadEnvelope, ilSatisfied bool) error {
+	s.cfg.ForkChoiceStore.Lock()
+	defer s.cfg.ForkChoiceStore.Unlock()
+	if err := s.cfg.ForkChoiceStore.InsertPayload(pe); err != nil {
+		return err
+	}
+
+	// Note: Pre-Heze fork, this setter has no effect as inclusion list satisfaction is not tracked.
+	return s.cfg.ForkChoiceStore.SetPayloadInclusionListSatisfied(pe.BeaconBlockRoot(), ilSatisfied)
+}
+
 // ForkChoiceDump returns the corresponding value from forkchoice
 func (s *Service) ForkChoiceDump(ctx context.Context) (*forkchoice.Dump, error) {
 	s.cfg.ForkChoiceStore.RLock()
@@ -161,6 +182,77 @@ func (s *Service) ChainHeads() ([][32]byte, []primitives.Slot) {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.cfg.ForkChoiceStore.Tips()
+}
+
+// isValidDependentRoot reports whether root is the head or the dependent root for dependentEpoch of another chain tip, as in is_valid_dependent_root.
+func (s *Service) isValidDependentRoot(root [32]byte, dependentEpoch primitives.Epoch) bool {
+	if headRoot, _ := s.HeadRootAndFull(); headRoot == root {
+		return true
+	}
+	tips, _ := s.ChainHeads()
+	for _, tip := range tips {
+		if tip == root {
+			continue
+		}
+		depRoot, err := s.DependentRootForEpoch(tip, dependentEpoch)
+		if err == nil && depRoot == root {
+			return true
+		}
+	}
+	return false
+}
+
+// LookaheadState returns a state with the committees for dependentEpoch on the branch of dependentRoot,
+// advanced to the start of dependentEpoch.
+func (s *Service) LookaheadState(ctx context.Context, dependentRoot [32]byte, dependentEpoch primitives.Epoch) (state.ReadOnlyBeaconState, error) {
+	st, stateRoot, err := s.dependentState(ctx, dependentRoot, dependentEpoch)
+	if err != nil {
+		return nil, err
+	}
+	lookaheadStart, err := slots.EpochStart(dependentEpoch)
+	if err != nil {
+		return nil, errors.Wrap(err, "lookahead start slot")
+	}
+	st, err = transition.ProcessSlotsIfNeeded(ctx, st, stateRoot[:], lookaheadStart)
+	if err != nil {
+		return nil, errors.Wrap(err, "process slots to the lookahead start slot")
+	}
+	return st, nil
+}
+
+// DependentState returns the state that LookaheadState starts from, before any slot processing.
+// A caller can check a signature against it before it pays for the slot processing.
+func (s *Service) DependentState(ctx context.Context, dependentRoot [32]byte, dependentEpoch primitives.Epoch) (state.ReadOnlyBeaconState, error) {
+	st, _, err := s.dependentState(ctx, dependentRoot, dependentEpoch)
+	return st, err
+}
+
+// dependentState returns the head state or the cached state of dependentRoot, and its root. It does no regeneration.
+func (s *Service) dependentState(ctx context.Context, dependentRoot [32]byte, dependentEpoch primitives.Epoch) (state.ReadOnlyBeaconState, [32]byte, error) {
+	headRoot, _ := s.HeadRootAndFull()
+	headDependentRoot, err := s.DependentRootForEpoch(headRoot, dependentEpoch)
+
+	var st state.ReadOnlyBeaconState
+	stateRoot := headRoot
+	if err == nil && headDependentRoot == dependentRoot {
+		st, err = s.HeadStateReadOnly(ctx)
+		if err != nil {
+			return nil, [32]byte{}, errors.Wrap(err, "head state")
+		}
+	} else {
+		if !s.isValidDependentRoot(dependentRoot, dependentEpoch) {
+			return nil, [32]byte{}, errors.Wrapf(ErrInvalidDependentRoot, "%#x", dependentRoot)
+		}
+		st = s.cfg.StateGen.StateByRootIfCachedNoCopy(dependentRoot)
+		stateRoot = dependentRoot
+	}
+	if st == nil || st.IsNil() {
+		return nil, [32]byte{}, errors.Wrapf(ErrDependentStateUnavailable, "%#x", dependentRoot)
+	}
+	if stateEpoch := slots.ToEpoch(st.Slot()); stateEpoch+1 < dependentEpoch {
+		return nil, [32]byte{}, errors.Wrapf(ErrDependentStateUnavailable, "state epoch %d is more than one epoch before lookahead epoch %d", stateEpoch, dependentEpoch)
+	}
+	return st, stateRoot, nil
 }
 
 // UnrealizedJustifiedPayloadBlockHash returns unrealized justified payload block hash from forkchoice.
