@@ -1360,6 +1360,7 @@ func (s *Service) proverEndpoints() []endpoint {
 	server := &prover.Server{
 		Broadcaster:            s.cfg.Broadcaster,
 		ExecutionProofReceiver: s.cfg.ExecutionProofReceiver,
+		OperationNotifier:      s.cfg.OperationNotifier,
 	}
 
 	const namespace = "prover"

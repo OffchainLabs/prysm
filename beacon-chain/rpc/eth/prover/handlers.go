@@ -9,6 +9,8 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api/server"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -145,6 +147,11 @@ func (s *Server) submitExecutionProof(ctx context.Context, signed *ethpb.SignedE
 	if err != nil {
 		return internal("could not receive execution proof: %w", err)
 	}
+
+	s.OperationNotifier.OperationFeed().Send(&feed.Event{
+		Type: opfeed.ExecutionProofReceived,
+		Data: &opfeed.ExecutionProofReceivedData{Proof: signed},
+	})
 
 	if err := s.Broadcaster.Broadcast(ctx, signed); err != nil {
 		return internal("could not broadcast execution proof: %w", err)

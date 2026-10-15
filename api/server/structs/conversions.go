@@ -693,6 +693,22 @@ func ExitFromConsensus(e *eth.VoluntaryExit) *VoluntaryExit {
 	}
 }
 
+func SignedExecutionProofEnvelopeFromConsensus(e *eth.SignedExecutionProofEnvelope) *SignedExecutionProofEnvelope {
+	return &SignedExecutionProofEnvelope{
+		Message:        ExecutionProofEnvelopeFromConsensus(e.Message),
+		ValidatorIndex: fmt.Sprintf("%d", e.ValidatorIndex),
+		Signature:      hexutil.Encode(e.Signature),
+	}
+}
+
+func ExecutionProofEnvelopeFromConsensus(e *eth.ExecutionProofEnvelope) *ExecutionProofEnvelope {
+	return &ExecutionProofEnvelope{
+		ProofData:       hexutil.Encode(e.ProofData),
+		ProofType:       fmt.Sprintf("%d", e.ProofType[0]),
+		BeaconBlockRoot: hexutil.Encode(e.BeaconBlockRoot),
+	}
+}
+
 func (m *SyncCommitteeMessage) ToConsensus() (*eth.SyncCommitteeMessage, error) {
 	slot, err := strconv.ParseUint(m.Slot, 10, 64)
 	if err != nil {

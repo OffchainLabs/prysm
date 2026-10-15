@@ -6,7 +6,8 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
-
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/dustin/go-humanize"
@@ -41,6 +42,11 @@ func (s *Service) executionProofSubscriber(ctx context.Context, msg proto.Messag
 	if err != nil {
 		return fmt.Errorf("receive execution proof: %w", err)
 	}
+
+	s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
+		Type: opfeed.ExecutionProofReceived,
+		Data: &opfeed.ExecutionProofReceivedData{Proof: proof.SignedExecutionProofEnvelope},
+	})
 
 	return nil
 }

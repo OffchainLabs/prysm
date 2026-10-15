@@ -95,6 +95,8 @@ const (
 	PayloadAttestationMessageTopic = "payload_attestation_message"
 	// ProposerPreferencesTopic represents a new signed proposer preferences event topic.
 	ProposerPreferencesTopic = "proposer_preferences"
+	// ExecutionProofTopic represents a new EIP-8025 execution proof, verified and imported from gossip or API.
+	ExecutionProofTopic = "execution_proof"
 )
 
 var (
@@ -133,6 +135,7 @@ var opsFeedEventTopics = map[feed.EventType]string{
 	operation.ProposerPreferencesReceived:       ProposerPreferencesTopic,
 	operation.ExecutionPayloadGossipReceived:    ExecutionPayloadGossipTopic,
 	operation.ExecutionPayloadBidReceived:       ExecutionPayloadBidTopic,
+	operation.ExecutionProofReceived:            ExecutionProofTopic,
 }
 
 var stateFeedEventTopics = map[feed.EventType]string{
@@ -507,6 +510,8 @@ func topicForEvent(event *feed.Event) string {
 		return ProposerPreferencesTopic
 	case *operation.ExecutionPayloadBidReceivedData:
 		return ExecutionPayloadBidTopic
+	case *operation.ExecutionProofReceivedData:
+		return ExecutionProofTopic
 	case *statefeed.ExecutionPayloadAvailableData:
 		return ExecutionPayloadAvailableTopic
 	case *statefeed.ExecutionPayloadProcessedData:
@@ -733,6 +738,10 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 				Version: version.String(params.GetNetworkScheduleEntry(epoch).VersionEnum),
 				Data:    structs.SignedExecutionPayloadBidFromConsensus(v.Bid),
 			})
+		}, nil
+	case *operation.ExecutionProofReceivedData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, structs.SignedExecutionProofEnvelopeFromConsensus(v.Proof))
 		}, nil
 	case *statefeed.ExecutionPayloadAvailableData:
 		return func() io.Reader {

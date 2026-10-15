@@ -12,6 +12,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -48,15 +50,30 @@ func TestSubmitExecutionProofs(t *testing.T) {
 		return ssz.MarshalVariableList(elements...)
 	}
 
-	submit := func(t *testing.T, chain *mockChain.ChainService, body []byte, contentType string) (*httptest.ResponseRecorder, *mockp2p.MockBroadcaster) {
+	// submit also returns the proofs of the execution proof events sent on the operation feed.
+	submit := func(t *testing.T, chain *mockChain.ChainService, body []byte, contentType string) (*httptest.ResponseRecorder, *mockp2p.MockBroadcaster, []*ethpb.SignedExecutionProofEnvelope) {
 		broadcaster := &mockp2p.MockBroadcaster{}
-		server := &Server{Broadcaster: broadcaster, ExecutionProofReceiver: chain}
+		notifier := &mockChain.MockOperationNotifier{}
+		server := &Server{Broadcaster: broadcaster, ExecutionProofReceiver: chain, OperationNotifier: notifier}
+
+		events := make(chan *feed.Event, 16)
+		sub := notifier.OperationFeed().Subscribe(events)
+		defer sub.Unsubscribe()
 
 		req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_proofs", bytes.NewReader(body))
 		req.Header.Set("Content-Type", contentType)
 		w := httptest.NewRecorder()
 		server.SubmitExecutionProofs(w, req)
-		return w, broadcaster
+
+		proofs := make([]*ethpb.SignedExecutionProofEnvelope, 0, len(events))
+		for len(events) > 0 {
+			event := <-events
+			require.Equal(t, feed.EventType(opfeed.ExecutionProofReceived), event.Type)
+			data, ok := event.Data.(*opfeed.ExecutionProofReceivedData)
+			require.Equal(t, true, ok)
+			proofs = append(proofs, data.Proof)
+		}
+		return w, broadcaster, proofs
 	}
 
 	failures := func(t *testing.T, w *httptest.ResponseRecorder) []*server.IndexedError {
@@ -65,27 +82,31 @@ func TestSubmitExecutionProofs(t *testing.T) {
 		return container.Failures
 	}
 
-	t.Run("ssz proofs are imported and broadcast", func(t *testing.T) {
+	t.Run("ssz proofs are imported, broadcast and notified", func(t *testing.T) {
 		chain := &mockChain.ChainService{}
-		body := sszBody(t, envelope(proofType, []byte{0x01}), envelope(ethpb.ProofTypeEthrexZisk, []byte{0x02, 0x03}))
-		w, broadcaster := submit(t, chain, body, api.OctetStreamMediaType)
+		first, second := envelope(proofType, []byte{0x01}), envelope(ethpb.ProofTypeEthrexZisk, []byte{0x02, 0x03})
+		w, broadcaster, proofs := submit(t, chain, sszBody(t, first, second), api.OctetStreamMediaType)
+		require.Equal(t, 2, len(proofs))
+		require.DeepEqual(t, first, proofs[0])
+		require.DeepEqual(t, second, proofs[1])
 		require.Equal(t, http.StatusOK, w.Code)
 		require.Equal(t, true, chain.ExecutionProofTypes[blockRoot][proofType])
 		require.Equal(t, true, chain.ExecutionProofTypes[blockRoot][ethpb.ProofTypeEthrexZisk])
 		require.Equal(t, 2, len(broadcaster.BroadcastMessages))
 	})
 
-	t.Run("known proof type is not broadcast again", func(t *testing.T) {
+	t.Run("known proof type is neither broadcast nor notified again", func(t *testing.T) {
 		chain := &mockChain.ChainService{ExecutionProofTypes: map[[32]byte]map[ethpb.ProofType]bool{blockRoot: {proofType: true}}}
-		w, broadcaster := submit(t, chain, sszBody(t, envelope(proofType, []byte{0x01})), api.OctetStreamMediaType)
+		w, broadcaster, proofs := submit(t, chain, sszBody(t, envelope(proofType, []byte{0x01})), api.OctetStreamMediaType)
 		require.Equal(t, http.StatusOK, w.Code)
 		require.Equal(t, false, broadcaster.BroadcastCalled.Load())
+		require.Equal(t, 0, len(proofs))
 	})
 
 	t.Run("invalid proof does not prevent the others", func(t *testing.T) {
 		chain := &mockChain.ChainService{}
 		body := sszBody(t, envelope(proofType, nil), envelope(ethpb.ProofTypeEthrexZisk, []byte{0x01}))
-		w, broadcaster := submit(t, chain, body, api.OctetStreamMediaType)
+		w, broadcaster, _ := submit(t, chain, body, api.OctetStreamMediaType)
 		require.Equal(t, http.StatusBadRequest, w.Code)
 		f := failures(t, w)
 		require.Equal(t, 1, len(f))
@@ -96,7 +117,7 @@ func TestSubmitExecutionProofs(t *testing.T) {
 	})
 
 	t.Run("unsupported proof type", func(t *testing.T) {
-		w, _ := submit(t, &mockChain.ChainService{}, sszBody(t, envelope(ethpb.ProofType(0), []byte{0x01})), api.OctetStreamMediaType)
+		w, _, _ := submit(t, &mockChain.ChainService{}, sszBody(t, envelope(ethpb.ProofType(0), []byte{0x01})), api.OctetStreamMediaType)
 		require.Equal(t, http.StatusBadRequest, w.Code)
 	})
 
@@ -114,24 +135,25 @@ func TestSubmitExecutionProofs(t *testing.T) {
 		{name: "verification failure", verifyErr: errors.New("engine failure"), status: http.StatusInternalServerError},
 	}
 	for _, tc := range cases {
-		t.Run(tc.name+" is neither imported nor broadcast", func(t *testing.T) {
+		t.Run(tc.name+" is neither imported, broadcast nor notified", func(t *testing.T) {
 			chain := &mockChain.ChainService{CheckExecutionProofErr: tc.checkErr, VerifyExecutionProofErr: tc.verifyErr}
-			w, broadcaster := submit(t, chain, sszBody(t, envelope(proofType, []byte{0x01})), api.OctetStreamMediaType)
+			w, broadcaster, proofs := submit(t, chain, sszBody(t, envelope(proofType, []byte{0x01})), api.OctetStreamMediaType)
 			require.Equal(t, tc.status, w.Code)
 			require.Equal(t, 1, len(failures(t, w)))
 			require.Equal(t, false, chain.ExecutionProofTypes[blockRoot][proofType])
 			require.Equal(t, false, broadcaster.BroadcastCalled.Load())
+			require.Equal(t, 0, len(proofs))
 		})
 	}
 
 	t.Run("json body", func(t *testing.T) {
-		w, broadcaster := submit(t, &mockChain.ChainService{}, []byte("[]"), api.JsonMediaType)
+		w, broadcaster, _ := submit(t, &mockChain.ChainService{}, []byte("[]"), api.JsonMediaType)
 		require.Equal(t, http.StatusUnsupportedMediaType, w.Code)
 		require.Equal(t, false, broadcaster.BroadcastCalled.Load())
 	})
 
 	t.Run("malformed ssz", func(t *testing.T) {
-		w, _ := submit(t, &mockChain.ChainService{}, []byte{0x01, 0x02, 0x03, 0x04}, api.OctetStreamMediaType)
+		w, _, _ := submit(t, &mockChain.ChainService{}, []byte{0x01, 0x02, 0x03, 0x04}, api.OctetStreamMediaType)
 		require.Equal(t, http.StatusBadRequest, w.Code)
 	})
 
@@ -142,7 +164,7 @@ func TestSubmitExecutionProofs(t *testing.T) {
 		for i := range 5 {
 			envelopes = append(envelopes, envelope(proofTypes[i%len(proofTypes)], []byte{byte(i + 1)}))
 		}
-		w, broadcaster := submit(t, chain, sszBody(t, envelopes...), api.OctetStreamMediaType)
+		w, broadcaster, _ := submit(t, chain, sszBody(t, envelopes...), api.OctetStreamMediaType)
 		require.Equal(t, http.StatusOK, w.Code)
 		require.Equal(t, 2, len(broadcaster.BroadcastMessages))
 	})
@@ -151,7 +173,7 @@ func TestSubmitExecutionProofs(t *testing.T) {
 		resetCfg := features.InitWithReset(&features.Flags{})
 		defer resetCfg()
 
-		w, _ := submit(t, &mockChain.ChainService{}, sszBody(t, envelope(proofType, []byte{0x01})), api.OctetStreamMediaType)
+		w, _, _ := submit(t, &mockChain.ChainService{}, sszBody(t, envelope(proofType, []byte{0x01})), api.OctetStreamMediaType)
 		require.Equal(t, http.StatusNotImplemented, w.Code)
 	})
 }
