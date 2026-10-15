@@ -18,6 +18,8 @@ import (
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	builderTest "github.com/OffchainLabs/prysm/v7/beacon-chain/builder/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	dbutil "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
@@ -621,7 +623,7 @@ func TestSubmitAggregateAndProofsV2(t *testing.T) {
 	slot := primitives.Slot(0)
 	mock := &mockChain.ChainService{Slot: &slot, Genesis: time.Now().Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)}
 	s := &Server{
-		CoreService: &core.Service{GenesisTimeFetcher: mock},
+		CoreService: &core.Service{GenesisTimeFetcher: mock, OperationNotifier: &mockChain.MockOperationNotifier{}},
 		TimeFetcher: mock,
 	}
 
@@ -680,9 +682,18 @@ func TestSubmitAggregateAndProofsV2(t *testing.T) {
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
+		opChannel := make(chan *feed.Event, 2)
+		opSub := s.CoreService.OperationNotifier.OperationFeed().Subscribe(opChannel)
+		defer opSub.Unsubscribe()
+
 		s.SubmitAggregateAndProofsV2(writer, request)
 		assert.Equal(t, http.StatusOK, writer.Code)
 		assert.Equal(t, 2, len(broadcaster.BroadcastMessages))
+		require.Equal(t, 2, len(opChannel))
+		for range 2 {
+			e := <-opChannel
+			assert.Equal(t, feed.EventType(operation.AggregatedAttReceived), e.Type)
+		}
 	})
 	t.Run("multiple-pre-electra", func(t *testing.T) {
 		broadcaster := &p2pmock.MockBroadcaster{}

@@ -396,6 +396,14 @@ func (s *Service) SubmitSignedAggregateSelectionProof(
 		return &RpcError{Err: server.NewBroadcastFailedError("SignedAggregateAttAndProof", err), Reason: Internal}
 	}
 
+	// Gossip validation accepts self-published messages before it sends this event.
+	s.OperationNotifier.OperationFeed().Send(&feed.Event{
+		Type: opfeed.AggregatedAttReceived,
+		Data: &opfeed.AggregatedAttReceivedData{
+			Attestation: attAndProof,
+		},
+	})
+
 	if logrus.GetLevel() >= logrus.DebugLevel {
 		var fields logrus.Fields
 		if agg.Version() >= version.Electra {
