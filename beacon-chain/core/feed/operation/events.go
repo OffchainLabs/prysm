@@ -59,6 +59,9 @@ const (
 
 	// ExecutionPayloadBidReceived is sent after a signed execution payload bid is received from gossip or rpc.
 	ExecutionPayloadBidReceived = 16
+
+	// InclusionListReceived is sent after a signed inclusion list passes the inclusion list gossip rules, from gossip or the API.
+	InclusionListReceived = 17
 )
 
 // UnAggregatedAttReceivedData is the data sent with UnaggregatedAttReceived events.
@@ -146,7 +149,17 @@ type ProposerPreferencesReceivedData struct {
 	Data *ethpb.SignedProposerPreferences
 }
 
+// ExecutionPayloadBidHezeReceivedData is the data sent with ExecutionPayloadBidReceived events for Heze bids.
+type ExecutionPayloadBidHezeReceivedData struct {
+	Bid *ethpb.SignedExecutionPayloadBidHeze
+}
+
 // ExecutionPayloadBidReceivedData is the data sent with ExecutionPayloadBidReceived events.
 type ExecutionPayloadBidReceivedData struct {
 	Bid *ethpb.SignedExecutionPayloadBid
+}
+
+// InclusionListReceivedData is the data sent with InclusionListReceived events.
+type InclusionListReceivedData struct {
+	SignedInclusionList *ethpb.SignedInclusionList
 }

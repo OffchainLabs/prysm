@@ -236,6 +236,21 @@ func (mr *MockValidatorClientMockRecorder) Host() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Host", reflect.TypeOf((*MockValidatorClient)(nil).Host))
 }
 
+// InclusionListDuties mocks base method.
+func (m *MockValidatorClient) InclusionListDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*iface.InclusionListDutiesResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InclusionListDuties", ctx, epoch, validatorIndices)
+	ret0, _ := ret[0].(*iface.InclusionListDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// InclusionListDuties indicates an expected call of InclusionListDuties.
+func (mr *MockValidatorClientMockRecorder) InclusionListDuties(ctx, epoch, validatorIndices any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InclusionListDuties", reflect.TypeOf((*MockValidatorClient)(nil).InclusionListDuties), ctx, epoch, validatorIndices)
+}
+
 // MultipleValidatorStatus mocks base method.
 func (m *MockValidatorClient) MultipleValidatorStatus(ctx context.Context, in *eth.MultipleValidatorStatusRequest) (*eth.MultipleValidatorStatusResponse, error) {
 	m.ctrl.T.Helper()
@@ -294,6 +309,21 @@ func (m *MockValidatorClient) PrepareBeaconProposer(ctx context.Context, in *eth
 func (mr *MockValidatorClientMockRecorder) PrepareBeaconProposer(ctx, in any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareBeaconProposer", reflect.TypeOf((*MockValidatorClient)(nil).PrepareBeaconProposer), ctx, in)
+}
+
+// ProduceInclusionList mocks base method.
+func (m *MockValidatorClient) ProduceInclusionList(ctx context.Context, slot primitives.Slot) ([][]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ProduceInclusionList", ctx, slot)
+	ret0, _ := ret[0].([][]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ProduceInclusionList indicates an expected call of ProduceInclusionList.
+func (mr *MockValidatorClientMockRecorder) ProduceInclusionList(ctx, slot any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProduceInclusionList", reflect.TypeOf((*MockValidatorClient)(nil).ProduceInclusionList), ctx, slot)
 }
 
 // ProposeAttestation mocks base method.
@@ -441,6 +471,20 @@ func (m *MockValidatorClient) SubmitBuilderPreferences(ctx context.Context, in *
 func (mr *MockValidatorClientMockRecorder) SubmitBuilderPreferences(ctx, in any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitBuilderPreferences", reflect.TypeOf((*MockValidatorClient)(nil).SubmitBuilderPreferences), ctx, in)
+}
+
+// SubmitInclusionList mocks base method.
+func (m *MockValidatorClient) SubmitInclusionList(ctx context.Context, in *eth.SignedInclusionList) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitInclusionList", ctx, in)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SubmitInclusionList indicates an expected call of SubmitInclusionList.
+func (mr *MockValidatorClientMockRecorder) SubmitInclusionList(ctx, in any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitInclusionList", reflect.TypeOf((*MockValidatorClient)(nil).SubmitInclusionList), ctx, in)
 }
 
 // SubmitPayloadAttestation mocks base method.

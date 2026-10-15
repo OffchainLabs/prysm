@@ -538,3 +538,16 @@ func TestRegisterValidatorService_DistributedFlag(t *testing.T) {
 		})
 	}
 }
+
+func TestRegisterValidatorService_HezeRequiresRESTApi(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.HezeForkEpoch = 10
+	params.OverrideBeaconConfig(cfg)
+	resetCfg := features.InitWithReset(&features.Flags{EnableBeaconRESTApi: false})
+	defer resetCfg()
+
+	cliCtx := cli.NewContext(&cli.App{}, flag.NewFlagSet("test", 0), nil)
+	err := (&ValidatorClient{}).registerValidatorService(cliCtx)
+	require.ErrorContains(t, "--enable-beacon-rest-api is required", err)
+}

@@ -74,8 +74,10 @@ type Node struct {
 
 // PayloadNode defines a full Forkchoice node after the Gloas fork, with the payload status either empty of full
 type PayloadNode struct {
-	optimistic     bool      // whether the block has been fully validated or not
-	full           bool      // whether this node represents a payload present or not
+	optimistic               bool // whether the block has been fully validated or not
+	full                     bool // whether this node represents a payload present or not
+	inclusionListUnsatisfied bool // set only for a Heze payload that the engine reported as not satisfying the inclusion list constraints
+
 	weight         uint64    // weight of this node: the total balance including children
 	balance        uint64    // the balance that voted for this node directly
 	gasLimit       uint64    // execution payload gas limit (only set on full nodes).

@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
@@ -95,6 +96,8 @@ const (
 	PayloadAttestationMessageTopic = "payload_attestation_message"
 	// ProposerPreferencesTopic represents a new signed proposer preferences event topic.
 	ProposerPreferencesTopic = "proposer_preferences"
+	// InclusionListTopic represents a signed inclusion list that passes the inclusion list gossip rules.
+	InclusionListTopic = "inclusion_list"
 )
 
 var (
@@ -133,6 +136,7 @@ var opsFeedEventTopics = map[feed.EventType]string{
 	operation.ProposerPreferencesReceived:       ProposerPreferencesTopic,
 	operation.ExecutionPayloadGossipReceived:    ExecutionPayloadGossipTopic,
 	operation.ExecutionPayloadBidReceived:       ExecutionPayloadBidTopic,
+	operation.InclusionListReceived:             InclusionListTopic,
 }
 
 var stateFeedEventTopics = map[feed.EventType]string{
@@ -507,6 +511,8 @@ func topicForEvent(event *feed.Event) string {
 		return ProposerPreferencesTopic
 	case *operation.ExecutionPayloadBidReceivedData:
 		return ExecutionPayloadBidTopic
+	case *operation.ExecutionPayloadBidHezeReceivedData:
+		return ExecutionPayloadBidTopic
 	case *statefeed.ExecutionPayloadAvailableData:
 		return ExecutionPayloadAvailableTopic
 	case *statefeed.ExecutionPayloadProcessedData:
@@ -515,6 +521,8 @@ func topicForEvent(event *feed.Event) string {
 		return FastConfirmationTopic
 	case *operation.ExecutionPayloadGossipReceivedData:
 		return ExecutionPayloadGossipTopic
+	case *operation.InclusionListReceivedData:
+		return InclusionListTopic
 	default:
 		return InvalidTopic
 	}
@@ -699,15 +707,17 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 			ExecutionOptimistic: v.Optimistic,
 		}
 		if v.SignedBlock.Version() >= version.Gloas {
-			bid, err := v.SignedBlock.Block().Body().SignedExecutionPayloadBid()
+			sbid, err := v.SignedBlock.Block().Body().SignedExecutionPayloadBid()
 			if err != nil {
 				return nil, errors.Wrap(err, "could not get execution payload bid for BlockProcessedData state feed event")
 			}
-			if bid == nil || bid.Message == nil {
-				return nil, errors.New("nil execution payload bid in BlockProcessedData state feed event")
+			bid, err := sbid.Bid()
+			if err != nil {
+				return nil, errors.Wrap(err, "nil execution payload bid in BlockProcessedData state feed event")
 			}
-			blk.BuilderIndex = fmt.Sprintf("%d", bid.Message.BuilderIndex)
-			blk.BlockHash = hexutil.Encode(bid.Message.BlockHash)
+			blockHash := bid.BlockHash()
+			blk.BuilderIndex = fmt.Sprintf("%d", bid.BuilderIndex())
+			blk.BlockHash = hexutil.Encode(blockHash[:])
 		}
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, blk)
@@ -726,6 +736,14 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 			return jsonMarshalReader(eventName, &structs.ProposerPreferencesEvent{
 				Version: version.String(params.GetNetworkScheduleEntry(epoch).VersionEnum),
 				Data:    structs.SignedProposerPreferencesFromConsensus(v.Data),
+			})
+		}, nil
+	case *operation.ExecutionPayloadBidHezeReceivedData:
+		return func() io.Reader {
+			epoch := slots.ToEpoch(v.Bid.Message.Slot)
+			return jsonMarshalReader(eventName, &structs.ExecutionPayloadBidHezeEvent{
+				Version: version.String(params.GetNetworkScheduleEntry(epoch).VersionEnum),
+				Data:    structs.SignedExecutionPayloadBidHezeFromConsensus(v.Bid),
 			})
 		}, nil
 	case *operation.ExecutionPayloadBidReceivedData:
@@ -768,6 +786,17 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 				BuilderIndex: fmt.Sprintf("%d", v.BuilderIndex),
 				BlockHash:    hexutil.Encode(v.BlockHash[:]),
 				BlockRoot:    hexutil.Encode(v.BlockRoot[:]),
+			})
+		}, nil
+	case *operation.InclusionListReceivedData:
+		if v.SignedInclusionList == nil || v.SignedInclusionList.Message == nil {
+			return nil, errors.New("inclusion list is nil")
+		}
+		return func() io.Reader {
+			epoch := slots.ToEpoch(v.SignedInclusionList.Message.Slot)
+			return jsonMarshalReader(eventName, &structs.InclusionListEvent{
+				Version: version.String(params.GetNetworkScheduleEntry(epoch).VersionEnum),
+				Data:    structs.SignedInclusionListFromConsensus(v.SignedInclusionList),
 			})
 		}, nil
 	default:
@@ -946,6 +975,13 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 		h := s.ChainInfoFetcher.FinalizedBlockHash()
 		ev.FinalizedBlockHash = h[:]
 	}
+	if pse >= params.BeaconConfig().HezeForkEpoch && ev.InclusionListBits == nil {
+		bits, err := s.inclusionListBits(ctx, rost, ev.HeadRoot, ev.ProposalSlot)
+		if err != nil {
+			return ev, errors.Wrap(err, "could not compute inclusion list bits")
+		}
+		ev.InclusionListBits = bits
+	}
 
 	if ev.Attributer != nil && !ev.Attributer.IsEmpty() {
 		return ev, nil
@@ -1010,6 +1046,9 @@ func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribut
 			attrData.SafeBlockHash = hexutil.Encode(ev.SafeBlockHash)
 			attrData.FinalizedBlockHash = hexutil.Encode(ev.FinalizedBlockHash)
 		}
+		if pv >= version.Heze {
+			attrData.InclusionListBits = hexutil.Encode(ev.InclusionListBits)
+		}
 		d.data, d.err = json.Marshal(attrData)
 		if d.err != nil {
 			d.err = errors.Wrap(d.err, "errors marshaling payload attributes event data to json")
@@ -1032,6 +1071,29 @@ func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribut
 			})
 		}
 	}, nil
+}
+
+// inclusionListBits returns the timely inclusion list bits for proposalSlot - 1, as a builder sets them on its bid.
+func (s *Server) inclusionListBits(ctx context.Context, st state.ReadOnlyBeaconState, parentRoot [32]byte, proposalSlot primitives.Slot) (bitfield.Bitvector16, error) {
+	bits := bitfield.NewBitvector16()
+	if proposalSlot == 0 {
+		return bits, nil
+	}
+	ilSlot := proposalSlot - 1
+	ilEpoch := slots.ToEpoch(ilSlot)
+	if ilEpoch < params.BeaconConfig().HezeForkEpoch {
+		return bits, nil
+	}
+	committee, err := helpers.InclusionListCommittee(ctx, st, ilSlot)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get inclusion list committee")
+	}
+	// The dependent root is get_shuffling_dependent_root for the inclusion list epoch.
+	dependentRoot, err := s.ChainInfoFetcher.DependentRootForEpoch(parentRoot, slots.ShufflingLookaheadEpoch(ilEpoch))
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get dependent root")
+	}
+	return s.ChainInfoFetcher.InclusionListStore().Bits(committee, ilSlot, dependentRoot, true), nil
 }
 
 func marshalAttributes(attr payloadattribute.Attributer) ([]byte, error) {

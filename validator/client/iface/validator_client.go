@@ -170,4 +170,9 @@ type ValidatorClient interface {
 	PublishExecutionPayloadEnvelope(ctx context.Context, in *ethpb.SignedExecutionPayloadEnvelope) (*empty.Empty, error)
 	PayloadAttestationData(ctx context.Context, slot primitives.Slot) (*ethpb.PayloadAttestationData, error)
 	SubmitPayloadAttestation(ctx context.Context, in *ethpb.PayloadAttestationMessage) (*empty.Empty, error)
+
+	// Heze
+	ProduceInclusionList(ctx context.Context, slot primitives.Slot) ([][]byte, error)
+	SubmitInclusionList(ctx context.Context, in *ethpb.SignedInclusionList) error
+	InclusionListDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*InclusionListDutiesResponse, error)
 }

@@ -68,15 +68,26 @@ func (vs *Server) setExecutionPayloadBid(
 	}
 
 	if !selfBuildOnly {
-		p2pBid := vs.cachedP2PBid(sBlk, local)
+		slot := sBlk.Block().Slot()
+		p2pBid := vs.cachedP2PBid(ctx, head, slot, bytesutil.ToBytes32(local.ExecutionData.ParentHash()), sBlk.Block().ParentRoot())
+		if p2pBid != nil {
+			// The bid may have been cached before the builder was blacklisted.
+			if msg, err := p2pBid.Bid(); err != nil || vs.BuilderCircuitBreaker.Blacklisted(msg.BuilderIndex(), slots.ToEpoch(slot)) {
+				p2pBid = nil
+			}
+		}
 		if bestBid, src, effective := bestBid(head, local, p2pBid, builderWin, builderConfig); bestBid != nil {
+			msg, err := bestBid.Bid()
+			if err != nil {
+				return bidSourceSelfBuild, errors.Wrap(err, "could not get remote execution payload bid")
+			}
 			if err := sBlk.SetSignedExecutionPayloadBid(bestBid); err != nil {
 				return bidSourceSelfBuild, errors.Wrap(err, "could not set remote execution payload bid")
 			}
 			log.WithFields(logrus.Fields{
 				"slot":      sBlk.Block().Slot(),
 				"source":    src,
-				"builder":   bestBid.Message.BuilderIndex,
+				"builder":   msg.BuilderIndex(),
 				"valueGwei": uint64(effective),
 			}).Info("Chose payload bid")
 			return src, nil
@@ -89,12 +100,11 @@ func (vs *Server) setExecutionPayloadBid(
 		return bidSourceSelfBuild, errors.Wrap(err, "could not create execution payload bid")
 	}
 
-	// Per spec, self-build bids must use G2 point-at-infinity as the signature.
-	signedBid := &ethpb.SignedExecutionPayloadBid{
-		Message:   bid,
-		Signature: common.InfiniteSignature[:],
+	ro, err := vs.signedSelfBuildBid(ctx, head, bid)
+	if err != nil {
+		return bidSourceSelfBuild, errors.Wrap(err, "could not wrap signed execution payload bid")
 	}
-	if err := sBlk.SetSignedExecutionPayloadBid(signedBid); err != nil {
+	if err := sBlk.SetSignedExecutionPayloadBid(ro); err != nil {
 		return bidSourceSelfBuild, errors.Wrap(err, "could not set signed execution payload bid")
 	}
 
@@ -108,7 +118,7 @@ func (vs *Server) setExecutionPayloadBid(
 
 // winningBuilderBid pairs the best builder-API bid with the entry whose limits it was selected under.
 type winningBuilderBid struct {
-	bid   *ethpb.SignedExecutionPayloadBid
+	bid   interfaces.ROSignedExecutionPayloadBid
 	entry *ethpb.BuilderEntry
 }
 
@@ -119,18 +129,18 @@ type winningBuilderBid struct {
 func bestBid(
 	head state.BeaconState,
 	local *consensusblocks.GetPayloadResponse,
-	p2pBid *ethpb.SignedExecutionPayloadBid,
+	p2pBid interfaces.ROSignedExecutionPayloadBid,
 	builderWin *winningBuilderBid,
 	builderConfig *ethpb.BuilderConfig,
-) (*ethpb.SignedExecutionPayloadBid, bidSource, primitives.Gwei) {
-	var bestBid *ethpb.SignedExecutionPayloadBid
+) (interfaces.ROSignedExecutionPayloadBid, bidSource, primitives.Gwei) {
+	var bestBid interfaces.ROSignedExecutionPayloadBid
 	var bestEffective, bestBoosted primitives.Gwei
 	if local != nil {
 		bestBoosted = primitives.WeiToGwei(local.Bid)
 	}
 	src := bidSourceSelfBuild
 
-	consider := func(bid *ethpb.SignedExecutionPayloadBid, effective primitives.Gwei, boostFactor uint64, from bidSource) {
+	consider := func(bid interfaces.ROSignedExecutionPayloadBid, effective primitives.Gwei, boostFactor uint64, from bidSource) {
 		boosted := boostedBidValue(effective, boostFactor)
 		if boosted > bestBoosted || (local == nil && bestBid == nil) {
 			bestBid, bestEffective, bestBoosted, src = bid, effective, boosted, from
@@ -156,13 +166,18 @@ func bestBid(
 }
 
 // The proposer's total take, the execution payment counts only up to the proposer's max preference.
-func effectiveBidValue(bid *ethpb.SignedExecutionPayloadBid, maxExecutionPayment uint64) primitives.Gwei {
-	payment := bid.Message.ExecutionPayment
+// A malformed bid has zero value.
+func effectiveBidValue(bid interfaces.ROSignedExecutionPayloadBid, maxExecutionPayment uint64) primitives.Gwei {
+	msg, err := bid.Bid()
+	if err != nil {
+		return 0
+	}
+	payment := msg.ExecutionPayment()
 	if uint64(payment) > maxExecutionPayment {
 		payment = primitives.Gwei(maxExecutionPayment)
 	}
-	sum := bid.Message.Value + payment
-	if sum < bid.Message.Value {
+	sum := msg.Value() + payment
+	if sum < msg.Value() {
 		return primitives.Gwei(math.MaxUint64)
 	}
 	return sum
@@ -177,8 +192,12 @@ func boostedBidValue(v primitives.Gwei, factor uint64) primitives.Gwei {
 	return primitives.Gwei(q)
 }
 
-func p2pExecutionPaymentCap(head state.BeaconState, builderConfig *ethpb.BuilderConfig, bid *ethpb.SignedExecutionPayloadBid) uint64 {
-	if bid == nil || bid.Message == nil || builderConfig == nil {
+func p2pExecutionPaymentCap(head state.BeaconState, builderConfig *ethpb.BuilderConfig, bid interfaces.ROSignedExecutionPayloadBid) uint64 {
+	if bid == nil || builderConfig == nil {
+		return 0
+	}
+	msg, err := bid.Bid()
+	if err != nil {
 		return 0
 	}
 	var keyed []*ethpb.BuilderEntry
@@ -190,7 +209,7 @@ func p2pExecutionPaymentCap(head state.BeaconState, builderConfig *ethpb.Builder
 	if len(keyed) == 0 {
 		return 0
 	}
-	pk, err := head.BuilderPubkey(bid.Message.BuilderIndex)
+	pk, err := head.BuilderPubkey(msg.BuilderIndex())
 	if err != nil {
 		return 0
 	}
@@ -291,6 +310,11 @@ func (vs *Server) requestBuilderBid(
 	parentFull bool,
 	builderConfig *ethpb.BuilderConfig,
 ) *pendingBuilderBid {
+	// TODO(heze): builder API bid with inclusion_list_bits. The builder API returns Gloas bids, which a Heze block cannot carry.
+	if slots.ToEpoch(blk.Slot()) >= params.BeaconConfig().HezeForkEpoch {
+		return nil
+	}
+
 	entries := builderConfig.GetBuilders()
 	if vs.BlockBuilder == nil || len(entries) == 0 {
 		return nil
@@ -351,12 +375,17 @@ func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.
 			bidLog = append(bidLog, fmt.Sprintf("%s(builder=%d discarded: %v)", logs.MaskCredentialsLogging(url), pb.Bid.Message.BuilderIndex, err))
 			continue
 		}
+		ro, err := consensusblocks.WrappedROSignedExecutionPayloadBid(pb.Bid)
+		if err != nil {
+			bidLog = append(bidLog, fmt.Sprintf("%s(builder=%d discarded: %v)", logs.MaskCredentialsLogging(url), pb.Bid.Message.BuilderIndex, err))
+			continue
+		}
 		// The signature proves the builder authored the bid, not that this endpoint serves it, so
 		// a bid offered verbatim by several endpoints teaches us nothing.
 		if !replayed[bytesutil.ToBytes96(pb.Bid.Signature)] {
 			vs.BuilderCircuitBreaker.ObserveRelayBid(url, pb.Bid.Message.BuilderIndex, epoch)
 		}
-		effective := effectiveBidValue(pb.Bid, uint64(pb.Entry.MaxExecutionPayment))
+		effective := effectiveBidValue(ro, uint64(pb.Entry.MaxExecutionPayment))
 		if effective < pb.Entry.MinBid {
 			bidLog = append(bidLog, fmt.Sprintf("%s(builder=%d discarded: effective %d below min bid %d)", logs.MaskCredentialsLogging(url), pb.Bid.Message.BuilderIndex, effective, pb.Entry.MinBid))
 			continue
@@ -365,7 +394,7 @@ func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.
 		bidLog = append(bidLog, fmt.Sprintf("%s(builder=%d value=%d payment=%d effective=%d boosted=%d)",
 			logs.MaskCredentialsLogging(url), pb.Bid.Message.BuilderIndex, pb.Bid.Message.Value, pb.Bid.Message.ExecutionPayment, effective, boosted))
 		if best == nil || boosted > bestBoosted {
-			best, bestBoosted = &winningBuilderBid{bid: pb.Bid, entry: pb.Entry}, boosted
+			best, bestBoosted = &winningBuilderBid{bid: ro, entry: pb.Entry}, boosted
 		}
 	}
 
@@ -526,20 +555,22 @@ func (vs *Server) setRemoteBidFallback(
 	builderConfig *ethpb.BuilderConfig,
 ) (bidSource, error) {
 	slot := sBlk.Block().Slot()
-	var p2pBid *ethpb.SignedExecutionPayloadBid
+	var p2pBid interfaces.ROSignedExecutionPayloadBid
 	if vs.HighestBidCache != nil {
 		parentRoot := sBlk.Block().ParentRoot()
 		parentHash, err := vs.getParentBlockHash(ctx, head, slot, parentRoot, parentFull)
 		if err != nil {
 			return bidSourceSelfBuild, errors.Wrap(err, "could not get parent block hash")
 		}
-		if cached, ok := vs.HighestBidCache.Get(slot, bytesutil.ToBytes32(parentHash), parentRoot); ok {
-			p2pBid = cached
-		}
+		p2pBid = vs.cachedP2PBid(ctx, head, slot, bytesutil.ToBytes32(parentHash), parentRoot)
 	}
 	bid, src, effective := bestBid(head, nil, p2pBid, builderWin, builderConfig)
 	if bid == nil {
 		return bidSourceSelfBuild, errors.New("no builder or cached P2P bid available")
+	}
+	msg, err := bid.Bid()
+	if err != nil {
+		return bidSourceSelfBuild, errors.Wrap(err, "could not get fallback execution payload bid")
 	}
 	if err := sBlk.SetSignedExecutionPayloadBid(bid); err != nil {
 		return bidSourceSelfBuild, errors.Wrap(err, "could not set fallback execution payload bid")
@@ -547,27 +578,76 @@ func (vs *Server) setRemoteBidFallback(
 	log.WithFields(logrus.Fields{
 		"slot":      slot,
 		"source":    src,
-		"builder":   bid.Message.BuilderIndex,
+		"builder":   msg.BuilderIndex(),
 		"valueGwei": uint64(effective),
 	}).Info("Chose fallback payload bid")
 	return src, nil
 }
 
-func (vs *Server) cachedP2PBid(sBlk interfaces.SignedBeaconBlock, local *consensusblocks.GetPayloadResponse) *ethpb.SignedExecutionPayloadBid {
+// cachedP2PBid returns the cached P2P bid. At Heze it skips a bid whose inclusion list bits do not include the local view.
+func (vs *Server) cachedP2PBid(ctx context.Context, head state.ReadOnlyBeaconState, slot primitives.Slot, parentHash, parentRoot [32]byte) interfaces.ROSignedExecutionPayloadBid {
 	if vs.HighestBidCache == nil {
 		return nil
 	}
-	var parentHash [32]byte
-	copy(parentHash[:], local.ExecutionData.ParentHash())
-	cached, ok := vs.HighestBidCache.Get(sBlk.Block().Slot(), parentHash, sBlk.Block().ParentRoot())
+	cached, ok := vs.HighestBidCache.Get(slot, parentHash, parentRoot)
 	if !ok {
 		return nil
 	}
-	// The bid may have been cached before the builder was blacklisted.
-	if vs.BuilderCircuitBreaker.Blacklisted(cached.Message.BuilderIndex, slots.ToEpoch(sBlk.Block().Slot())) {
+	if slots.ToEpoch(slot) < params.BeaconConfig().HezeForkEpoch {
+		return cached
+	}
+
+	msg, err := cached.Bid()
+	if err != nil {
+		return nil
+	}
+	fields := logrus.Fields{"slot": slot, "builder": msg.BuilderIndex()}
+	// A Heze block can only carry a Heze bid, which has the inclusion list bits.
+	bits := msg.InclusionListBits()
+	if bits == nil {
+		log.WithFields(fields).Info("Skipping the cached P2P bid because it is not a Heze bid")
+		return nil
+	}
+	ils, err := helpers.NewProposalInclusionLists(ctx, vs.BeaconDB, vs.ForkchoiceFetcher.InclusionListStore(), head, slot)
+	inclusive := false
+	if err == nil {
+		inclusive, err = ils.IsBitsInclusive(ctx, bits)
+	}
+	if err != nil {
+		log.WithError(err).WithFields(fields).Error("Could not check the inclusion list bits of the cached P2P bid, skipping the bid")
+		return nil
+	}
+	if !inclusive {
+		log.WithFields(fields).Info("Skipping the cached P2P bid because its inclusion list bits do not include the local inclusion list view")
 		return nil
 	}
 	return cached
+}
+
+// signedSelfBuildBid signs the self-build bid with the G2 point at infinity; at Heze it is a Heze bid with the local inclusion list bits.
+func (vs *Server) signedSelfBuildBid(ctx context.Context, head state.ReadOnlyBeaconState, bid *ethpb.ExecutionPayloadBid) (interfaces.ROSignedExecutionPayloadBid, error) {
+	if slots.ToEpoch(bid.Slot) < params.BeaconConfig().HezeForkEpoch {
+		return consensusblocks.WrappedROSignedExecutionPayloadBid(&ethpb.SignedExecutionPayloadBid{
+			Message:   bid,
+			Signature: common.InfiniteSignature[:],
+		})
+	}
+	ils, err := helpers.NewProposalInclusionLists(ctx, vs.BeaconDB, vs.ForkchoiceFetcher.InclusionListStore(), head, bid.Slot)
+	if err != nil {
+		return nil, err
+	}
+	bits, err := ils.Bits(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ro, err := consensusblocks.WrappedROExecutionPayloadBid(bid)
+	if err != nil {
+		return nil, err
+	}
+	return consensusblocks.WrappedROSignedExecutionPayloadBidHeze(&ethpb.SignedExecutionPayloadBidHeze{
+		Message:   consensusblocks.ExecutionPayloadBidHezeProto(ro, bits),
+		Signature: common.InfiniteSignature[:],
+	})
 }
 
 // createSelfBuildExecutionPayloadBid creates an ExecutionPayloadBid for self-building,

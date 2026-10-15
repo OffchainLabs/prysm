@@ -615,6 +615,24 @@ func TestLatestBlockHashMatchesBidBlockHash(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, false, got)
 	})
+
+	t.Run("heze reads the heze bid", func(t *testing.T) {
+		hash := bytes.Repeat([]byte{0xAB}, 32)
+		st := &BeaconState{version: version.Heze, latestBlockHash: hash}
+		got, err := st.LatestBlockHashMatchesBidBlockHash()
+		require.NoError(t, err)
+		require.Equal(t, false, got)
+
+		st.latestExecutionPayloadBidHeze = &ethpb.ExecutionPayloadBidHeze{BlockHash: hash}
+		got, err = st.LatestBlockHashMatchesBidBlockHash()
+		require.NoError(t, err)
+		require.Equal(t, true, got)
+
+		st.latestExecutionPayloadBidHeze.BlockHash = bytes.Repeat([]byte{0xCD}, 32)
+		got, err = st.LatestBlockHashMatchesBidBlockHash()
+		require.NoError(t, err)
+		require.Equal(t, false, got)
+	})
 }
 
 func TestAppendBuilderWithdrawals(t *testing.T) {

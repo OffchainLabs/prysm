@@ -85,7 +85,7 @@ func TestSubmitSignedExecutionPayloadBid_OK(t *testing.T) {
 
 	cached, ok := bidCache.Get(1, [32]byte{}, parentRoot)
 	require.Equal(t, true, ok)
-	require.Equal(t, req, cached)
+	require.DeepEqual(t, wrapBid(t, req), cached)
 }
 
 func TestSubmitSignedExecutionPayloadBid_Blacklisted(t *testing.T) {
@@ -222,6 +222,23 @@ func TestSubmitSignedExecutionPayloadBid_Syncing(t *testing.T) {
 	}
 	_, err := vs.SubmitSignedExecutionPayloadBid(t.Context(), req)
 	require.ErrorContains(t, "Syncing", err)
+}
+
+func TestSubmitSignedExecutionPayloadBid_HezeSlot(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	cfg.HezeForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	vs := &Server{
+		SyncChecker: &mockSync.Sync{IsSyncing: false},
+	}
+	req := &ethpb.SignedExecutionPayloadBid{
+		Message: &ethpb.ExecutionPayloadBid{Slot: params.BeaconConfig().SlotsPerEpoch},
+	}
+	_, err := vs.SubmitSignedExecutionPayloadBid(t.Context(), req)
+	require.ErrorContains(t, "not valid at or after the Heze fork", err)
 }
 
 func TestSubmitSignedExecutionPayloadBid_PreGloas(t *testing.T) {

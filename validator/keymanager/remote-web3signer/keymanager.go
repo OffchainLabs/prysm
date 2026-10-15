@@ -270,6 +270,9 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 		return handleProposerPreferences(ctx, ver, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BuilderRequestAuth:
 		return handleBuilderRequestAuth(ctx, ver, validator, request)
+	case *validatorpb.SignRequest_InclusionList:
+		// TODO(heze): web3signer INCLUSION_LIST type
+		return nil, errors.New("web3signer does not support inclusion list signing")
 	// We do not support "DEPOSIT" type.
 	/*
 		case *validatorpb.:

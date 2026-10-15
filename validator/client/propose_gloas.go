@@ -73,14 +73,15 @@ func (v *validator) proposeSelfBuildEnvelope(
 		return nil
 	}
 
-	bid, err := blk.Block().Body().SignedExecutionPayloadBid()
+	signedBid, err := blk.Block().Body().SignedExecutionPayloadBid()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "no execution payload bid found in block body")
 	}
-	if bid == nil || bid.Message == nil {
-		return errors.New("no execution payload bid found in block body")
+	bid, err := signedBid.Bid()
+	if err != nil {
+		return errors.Wrap(err, "no execution payload bid found in block body")
 	}
-	if bid.Message.BuilderIndex != params.BeaconConfig().BuilderIndexSelfBuild {
+	if bid.BuilderIndex() != params.BeaconConfig().BuilderIndexSelfBuild {
 		// only used for self build
 		return nil
 	}

@@ -239,6 +239,14 @@ var (
 		},
 		[]string{"result"},
 	)
+	validatorInclusionListSubmissionTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "validator",
+			Name:      "inclusion_list_submission_total",
+			Help:      "The number of inclusion list submissions by result in the validator client.",
+		},
+		[]string{"result"},
+	)
 )
 
 // LogValidatorGainsAndLosses logs important metrics related to this validator client's

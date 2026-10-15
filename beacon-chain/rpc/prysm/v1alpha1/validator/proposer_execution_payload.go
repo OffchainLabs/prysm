@@ -139,6 +139,29 @@ func (vs *Server) getLocalPayloadFromEngine(
 	}
 	var attr payloadattribute.Attributer
 	switch {
+	case slots.ToEpoch(slot) >= params.BeaconConfig().HezeForkEpoch:
+		withdrawals, err := vs.computePayloadWithdrawals(st, parentFull)
+		if err != nil {
+			return nil, err
+		}
+		parentGasLimit := helpers.ParentTargetGasLimit(st)
+		ils, err := helpers.NewProposalInclusionLists(ctx, vs.BeaconDB, vs.ForkchoiceFetcher.InclusionListStore(), st, slot)
+		if err != nil {
+			return nil, err
+		}
+		attr, err = payloadattribute.New(&enginev1.PayloadAttributesV5{
+			Timestamp:                 uint64(t.Unix()),
+			PrevRandao:                random,
+			SuggestedFeeRecipient:     val.FeeRecipient[:],
+			Withdrawals:               withdrawals,
+			ParentBeaconBlockRoot:     parentRoot[:],
+			SlotNumber:                uint64(slot),
+			TargetGasLimit:            val.GasLimitOr(parentGasLimit),
+			InclusionListTransactions: ils.Transactions(),
+		})
+		if err != nil {
+			return nil, err
+		}
 	case st.Version() >= version.Gloas:
 		withdrawals, err := vs.computePayloadWithdrawals(st, parentFull)
 		if err != nil {
@@ -198,7 +221,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 	default:
 		return nil, errors.New("unknown beacon state version")
 	}
-	payloadID, _, err := vs.ExecutionEngineCaller.ForkchoiceUpdated(ctx, f, attr)
+	payloadID, _, _, err := vs.ExecutionEngineCaller.ForkchoiceUpdated(ctx, f, attr)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not prepare payload")
 	}

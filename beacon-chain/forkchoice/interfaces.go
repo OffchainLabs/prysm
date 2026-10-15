@@ -115,6 +115,7 @@ type FastGetter interface {
 	GasLimit(root, blockHash [32]byte) (uint64, error)
 	CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool)
 	ConfirmedPayloadBlockHash(root [32]byte) [32]byte
+	IsPayloadInclusionListSatisfied([32]byte) bool
 }
 
 // Setter allows to set forkchoice information
@@ -130,4 +131,5 @@ type Setter interface {
 	RecordBlockForEquivocation(primitives.Slot, primitives.ValidatorIndex, [32]byte)
 	SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, blobDataAvailable bool)
 	MarkFullNode(root [32]byte, gasLimit uint64)
+	SetPayloadInclusionListSatisfied(root [32]byte, satisfied bool) error
 }

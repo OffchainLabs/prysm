@@ -18,4 +18,6 @@ const (
 	roleSyncCommitteeAggregator
 	// rolePTCMember means the validator should submit a payload attestation.
 	rolePTCMember
+	// roleInclusionListCommittee means the validator should submit an inclusion list.
+	roleInclusionListCommittee
 )

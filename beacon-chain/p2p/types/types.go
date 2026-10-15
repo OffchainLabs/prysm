@@ -13,6 +13,7 @@ import (
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
@@ -415,6 +416,56 @@ func (d DataColumnsByRootIdentifiers) SizeSSZ() int {
 func (d DataColumnsByRootIdentifiers) MaxSizeSSZ() int {
 	maxIdentifierSize := fieldparams.RootLength + bytesPerLengthOffset + fieldparams.NumberOfColumns*8
 	return int(params.BeaconConfig().MaxRequestBlocksDeneb) * (bytesPerLengthOffset + maxIdentifierSize)
+}
+
+// ====================================
+// InclusionListsByIndicesReq section
+// ====================================
+
+// inclusionListsByIndicesReqSize is the fixed SSZ size of the request: slot, dependent root and a 16-bit vector.
+const inclusionListsByIndicesReqSize = 8 + fieldparams.RootLength + 2
+
+var _ ssz.Marshaler = (*InclusionListsByIndicesReq)(nil)
+var _ ssz.Unmarshaler = (*InclusionListsByIndicesReq)(nil)
+
+// InclusionListsByIndicesReq is the InclusionListsByIndices v1 request. Indices is a Bitvector16 over the inclusion list committee positions.
+type InclusionListsByIndicesReq struct {
+	Slot          primitives.Slot
+	DependentRoot [fieldparams.RootLength]byte
+	Indices       [2]byte
+}
+
+// MarshalSSZTo appends the SSZ encoding of the request to dst.
+func (r *InclusionListsByIndicesReq) MarshalSSZTo(dst []byte) ([]byte, error) {
+	dst = binary.LittleEndian.AppendUint64(dst, uint64(r.Slot))
+	dst = append(dst, r.DependentRoot[:]...)
+	return append(dst, r.Indices[:]...), nil
+}
+
+// MarshalSSZ returns the SSZ encoding of the request.
+func (r *InclusionListsByIndicesReq) MarshalSSZ() ([]byte, error) {
+	return r.MarshalSSZTo(make([]byte, 0, inclusionListsByIndicesReqSize))
+}
+
+// SizeSSZ returns the fixed SSZ size of the request.
+func (r *InclusionListsByIndicesReq) SizeSSZ() int {
+	return inclusionListsByIndicesReqSize
+}
+
+// MaxSizeSSZ returns the maximum SSZ-encoded size, which is the fixed size.
+func (r *InclusionListsByIndicesReq) MaxSizeSSZ() int {
+	return inclusionListsByIndicesReqSize
+}
+
+// UnmarshalSSZ decodes the request from buf, which must have the fixed size.
+func (r *InclusionListsByIndicesReq) UnmarshalSSZ(buf []byte) error {
+	if len(buf) != inclusionListsByIndicesReqSize {
+		return errors.Wrapf(ErrIncorrectByteSize, "expected %d bytes but received %d", inclusionListsByIndicesReqSize, len(buf))
+	}
+	r.Slot = primitives.Slot(binary.LittleEndian.Uint64(buf[:8]))
+	copy(r.DependentRoot[:], buf[8:8+fieldparams.RootLength])
+	copy(r.Indices[:], buf[8+fieldparams.RootLength:])
+	return nil
 }
 
 func init() {

@@ -248,3 +248,78 @@ func TestFindValidatorIndexInCommittee(t *testing.T) {
 	// Not found returns 0.
 	assert.Equal(t, uint64(0), findValidatorIndexInCommittee(committee, 99))
 }
+
+func TestInclusionListDuties(t *testing.T) {
+	setup := func(t *testing.T, hezeEpoch primitives.Epoch) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		cfg.HezeForkEpoch = hezeEpoch
+		params.OverrideBeaconConfig(cfg)
+		helpers.ClearCache()
+	}
+	numVals := uint64(params.BeaconConfig().SlotsPerEpoch) * 8
+	s := &Service{}
+
+	t.Run("matches the spec assignment for every validator", func(t *testing.T) {
+		setup(t, 0)
+		st, _ := util.DeterministicGenesisStateGloas(t, numVals)
+		indices := make([]primitives.ValidatorIndex, numVals)
+		for i := range indices {
+			indices[i] = primitives.ValidatorIndex(i)
+		}
+		for _, epoch := range []primitives.Epoch{0, 1} {
+			duties, rpcErr := s.InclusionListDuties(t.Context(), st, epoch, indices)
+			require.Equal(t, (*RpcError)(nil), rpcErr)
+			got := make(map[primitives.ValidatorIndex]primitives.Slot, len(duties))
+			for _, d := range duties {
+				_, dup := got[d.ValidatorIndex]
+				require.Equal(t, false, dup, "validator %d has two duties", d.ValidatorIndex)
+				got[d.ValidatorIndex] = d.Slot
+				assert.Equal(t, st.PubkeyAtIndex(d.ValidatorIndex), d.Pubkey)
+			}
+			want := make(map[primitives.ValidatorIndex]primitives.Slot)
+			for _, idx := range indices {
+				slot, ok, err := helpers.InclusionListCommitteeAssignment(t.Context(), st, epoch, idx)
+				require.NoError(t, err)
+				if ok {
+					want[idx] = slot
+				}
+			}
+			require.NotEqual(t, 0, len(want))
+			require.DeepEqual(t, want, got)
+		}
+	})
+	t.Run("duplicate indices give one duty", func(t *testing.T) {
+		setup(t, 0)
+		st, _ := util.DeterministicGenesisStateGloas(t, numVals)
+		committee, err := helpers.InclusionListCommittee(t.Context(), st, 0)
+		require.NoError(t, err)
+		idx := committee[0]
+		duties, rpcErr := s.InclusionListDuties(t.Context(), st, 0, []primitives.ValidatorIndex{idx, idx})
+		require.Equal(t, (*RpcError)(nil), rpcErr)
+		require.Equal(t, 1, len(duties))
+		assert.Equal(t, primitives.Slot(0), duties[0].Slot)
+	})
+	t.Run("invalid index", func(t *testing.T) {
+		setup(t, 0)
+		st, _ := util.DeterministicGenesisStateGloas(t, numVals)
+		_, rpcErr := s.InclusionListDuties(t.Context(), st, 0, []primitives.ValidatorIndex{primitives.ValidatorIndex(numVals)})
+		require.NotNil(t, rpcErr)
+		assert.Equal(t, ErrorReason(BadRequest), rpcErr.Reason)
+	})
+	t.Run("epoch too far after the state", func(t *testing.T) {
+		setup(t, 0)
+		st, _ := util.DeterministicGenesisStateGloas(t, numVals)
+		_, rpcErr := s.InclusionListDuties(t.Context(), st, 2, []primitives.ValidatorIndex{0})
+		require.NotNil(t, rpcErr)
+		assert.Equal(t, ErrorReason(BadRequest), rpcErr.Reason)
+	})
+	t.Run("pre-Heze epoch is empty", func(t *testing.T) {
+		setup(t, 1)
+		st, _ := util.DeterministicGenesisStateGloas(t, numVals)
+		duties, rpcErr := s.InclusionListDuties(t.Context(), st, 0, []primitives.ValidatorIndex{0, 1})
+		require.Equal(t, (*RpcError)(nil), rpcErr)
+		assert.Equal(t, 0, len(duties))
+	})
+}

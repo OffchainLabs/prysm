@@ -1,7 +1,6 @@
 package gloas
 
 import (
-	"bytes"
 	"context"
 
 	requests "github.com/OffchainLabs/prysm/v7/beacon-chain/core/requests"
@@ -26,7 +25,10 @@ func ProcessParentExecutionPayload(ctx context.Context, st state.BeaconState, bl
 	if err != nil {
 		return errors.Wrap(err, "could not get signed execution payload bid")
 	}
-	bid := signedBid.Message
+	bid, err := signedBid.Bid()
+	if err != nil {
+		return errors.Wrap(err, "could not get execution payload bid")
+	}
 
 	parentBid, err := st.LatestExecutionPayloadBid()
 	if err != nil {
@@ -39,7 +41,7 @@ func ProcessParentExecutionPayload(ctx context.Context, st state.BeaconState, bl
 	}
 
 	parentBidBlockHash := parentBid.BlockHash()
-	isParentFull := bytes.Equal(bid.ParentBlockHash, parentBidBlockHash[:])
+	isParentFull := bid.ParentBlockHash() == parentBidBlockHash
 
 	if !isParentFull {
 		if !IsEmptyExecutionRequests(parentExecutionRequests) {

@@ -52,10 +52,12 @@ type Reconstructor interface {
 // execution node's engine service via JSON-RPC.
 type EngineCaller interface {
 	NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests pb.ExecutionRequester) ([]byte, error)
+	NewPayloadWithInclusionList(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests pb.ExecutionRequester, inclusionListTransactions [][]byte) ([]byte, *bool, error)
 	ForkchoiceUpdated(
 		ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer,
-	) (*pb.PayloadIDBytes, []byte, error)
+	) (*pb.PayloadIDBytes, []byte, *bool, error)
 	GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error)
+	GetInclusionList(ctx context.Context) ([][]byte, error)
 	ExecutionBlockByHash(ctx context.Context, hash common.Hash, withTxs bool) (*pb.ExecutionBlock, error)
 	GetTerminalBlockHash(ctx context.Context, transitionTime uint64) ([]byte, bool, error)
 	GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error)

@@ -47,3 +47,32 @@ func testInterval(nSlots primitives.Slot) (time.Time, time.Time) {
 	startTime := time.Unix(int64(start), 0)
 	return startTime, startTime.Add(endOffset)
 }
+
+func TestClock_WithinSlotRange(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	disparity := params.BeaconConfig().MaximumGossipClockDisparityDuration()
+	slotDuration := params.BeaconConfig().SlotDuration()
+	genesis := time.Unix(1_000_000, 0)
+	slot5 := genesis.Add(5 * slotDuration)
+	tests := []struct {
+		name        string
+		now         time.Time
+		first, last primitives.Slot
+		want        bool
+	}{
+		{name: "inside the slot", now: slot5.Add(time.Second), first: 5, last: 5, want: true},
+		{name: "early within the disparity", now: slot5.Add(-disparity), first: 5, last: 5, want: true},
+		{name: "early past the disparity", now: slot5.Add(-disparity - time.Millisecond), first: 5, last: 5, want: false},
+		{name: "late within the disparity", now: slot5.Add(slotDuration + disparity), first: 5, last: 5, want: true},
+		{name: "late past the disparity", now: slot5.Add(slotDuration + disparity + time.Millisecond), first: 5, last: 5, want: false},
+		{name: "inside a two-slot range", now: slot5.Add(slotDuration + time.Second), first: 5, last: 6, want: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			clock := NewClock(genesis, [32]byte{}, WithTimeAsNow(tc.now))
+			got, err := clock.WithinSlotRange(tc.first, tc.last)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}

@@ -52,6 +52,13 @@ type PTCDutyResult struct {
 	Slot           primitives.Slot
 }
 
+// InclusionListDutyResult is a transport-agnostic representation of an inclusion list committee duty.
+type InclusionListDutyResult struct {
+	Pubkey         [fieldparams.BLSPubkeyLength]byte
+	ValidatorIndex primitives.ValidatorIndex
+	Slot           primitives.Slot
+}
+
 // AttesterDuties computes attester duties for the requested validators at the given epoch.
 // The caller is responsible for providing a state that is adequate for the requested epoch.
 func (s *Service) AttesterDuties(ctx context.Context, st state.ReadOnlyBeaconState, epoch primitives.Epoch, indices []primitives.ValidatorIndex) ([]*AttesterDutyResult, *RpcError) {
@@ -234,6 +241,58 @@ func (s *Service) PTCDuties(ctx context.Context, st state.ReadOnlyBeaconState, e
 		}
 	}
 
+	return duties, nil
+}
+
+// InclusionListDuties computes inclusion list committee duties for the requested validators at the given epoch.
+func (s *Service) InclusionListDuties(ctx context.Context, st state.ReadOnlyBeaconState, epoch primitives.Epoch, indices []primitives.ValidatorIndex) ([]*InclusionListDutyResult, *RpcError) {
+	ctx, span := trace.StartSpan(ctx, "coreService.InclusionListDuties")
+	defer span.End()
+
+	if len(indices) == 0 || epoch < params.BeaconConfig().HezeForkEpoch {
+		return []*InclusionListDutyResult{}, nil
+	}
+	if epoch > slots.ToEpoch(st.Slot())+1 {
+		return nil, &RpcError{Err: errors.Errorf("epoch %d is more than one epoch after the state epoch", epoch), Reason: BadRequest}
+	}
+
+	requested := make(map[primitives.ValidatorIndex]bool, len(indices))
+	var zeroPubkey [fieldparams.BLSPubkeyLength]byte
+	for _, idx := range indices {
+		pubkey := st.PubkeyAtIndex(idx)
+		if bytes.Equal(pubkey[:], zeroPubkey[:]) {
+			return nil, &RpcError{Err: errors.Errorf("Invalid validator index %d", idx), Reason: BadRequest}
+		}
+		requested[idx] = true
+	}
+
+	startSlot, err := slots.EpochStart(epoch)
+	if err != nil {
+		return nil, &RpcError{Err: err, Reason: Internal}
+	}
+	// One committee per slot for all validators gives the same result as one assignment call per validator.
+	duties := make([]*InclusionListDutyResult, 0, len(requested))
+	assigned := make(map[primitives.ValidatorIndex]bool, len(requested))
+	for slot := startSlot; slot < startSlot+params.BeaconConfig().SlotsPerEpoch; slot++ {
+		if ctx.Err() != nil {
+			return nil, &RpcError{Err: ctx.Err(), Reason: Internal}
+		}
+		committee, err := helpers.InclusionListCommittee(ctx, st, slot)
+		if err != nil {
+			return nil, &RpcError{Err: errors.Wrapf(err, "could not get inclusion list committee for slot %d", slot), Reason: Internal}
+		}
+		for _, idx := range committee {
+			if !requested[idx] || assigned[idx] {
+				continue
+			}
+			assigned[idx] = true
+			duties = append(duties, &InclusionListDutyResult{
+				Pubkey:         st.PubkeyAtIndex(idx),
+				ValidatorIndex: idx,
+				Slot:           slot,
+			})
+		}
+	}
 	return duties, nil
 }
 

@@ -1,0 +1,10 @@
+load("@prysm//tools/go:def.bzl", "go_test")
+
+go_test(
+    name = "go_default_test",
+    size = "large",
+    srcs = ["heze__ssz_static__ssz_static_test.go"],
+    data = ["@consensus_spec_tests//:test_data"],
+    tags = ["spectest"],
+    deps = ["//testing/spectest/shared/heze/ssz_static:go_default_library"],
+)

@@ -55,6 +55,61 @@ func TestJsonMarshalUnmarshal(t *testing.T) {
 		require.DeepEqual(t, hash, payloadPb.LatestValidHash)
 		require.DeepEqual(t, "failed validation", payloadPb.ValidationError)
 	})
+	t.Run("payload status inclusion list satisfied", func(t *testing.T) {
+		yes, no := true, false
+		for _, tc := range []struct {
+			name string
+			val  *bool
+			wire string
+		}{
+			{name: "true", val: &yes, wire: `true`},
+			{name: "false", val: &no, wire: `false`},
+			{name: "null", val: nil, wire: `null`},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				enc, err := json.Marshal(&enginev1.PayloadStatus{Status: enginev1.PayloadStatus_VALID, InclusionListSatisfied: tc.val})
+				require.NoError(t, err)
+				require.StringContains(t, `"inclusionListSatisfied":`+tc.wire, string(enc))
+				dec := &enginev1.PayloadStatus{}
+				require.NoError(t, json.Unmarshal(enc, dec))
+				require.DeepEqual(t, tc.val, dec.InclusionListSatisfied)
+			})
+		}
+		t.Run("absent", func(t *testing.T) {
+			dec := &enginev1.PayloadStatus{}
+			require.NoError(t, json.Unmarshal([]byte(`{"status":"VALID","latestValidHash":null,"validationError":null}`), dec))
+			require.Equal(t, enginev1.PayloadStatus_VALID, dec.Status)
+			require.Equal(t, true, dec.InclusionListSatisfied == nil)
+		})
+	})
+	t.Run("payload attributes V5", func(t *testing.T) {
+		random := bytesutil.PadTo([]byte("random"), fieldparams.RootLength)
+		feeRecipient := bytesutil.PadTo([]byte("feeRecipient"), fieldparams.FeeRecipientLength)
+		root := bytesutil.PadTo([]byte("root"), fieldparams.RootLength)
+		attrs := &enginev1.PayloadAttributesV5{
+			Timestamp:                 1,
+			PrevRandao:                random,
+			SuggestedFeeRecipient:     feeRecipient,
+			Withdrawals:               []*enginev1.Withdrawal{{Index: 1, ValidatorIndex: 2, Address: feeRecipient, Amount: 3}},
+			ParentBeaconBlockRoot:     root,
+			SlotNumber:                4,
+			TargetGasLimit:            5,
+			InclusionListTransactions: [][]byte{{0x01, 0x02}, {0x03}},
+		}
+		enc, err := json.Marshal(attrs)
+		require.NoError(t, err)
+		require.StringContains(t, `"inclusionListTransactions":["0x0102","0x03"]`, string(enc))
+		dec := &enginev1.PayloadAttributesV5{}
+		require.NoError(t, json.Unmarshal(enc, dec))
+		require.DeepEqual(t, attrs, dec)
+
+		t.Run("empty list is an array", func(t *testing.T) {
+			enc, err := json.Marshal(&enginev1.PayloadAttributesV5{})
+			require.NoError(t, err)
+			require.StringContains(t, `"inclusionListTransactions":[]`, string(enc))
+			require.StringContains(t, `"withdrawals":[]`, string(enc))
+		})
+	})
 	t.Run("forkchoice state", func(t *testing.T) {
 		head := bytesutil.PadTo([]byte("head"), fieldparams.RootLength)
 		safe := bytesutil.PadTo([]byte("safe"), fieldparams.RootLength)

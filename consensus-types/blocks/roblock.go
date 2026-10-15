@@ -26,7 +26,11 @@ func (b ROBlock) ParentHash() ([32]byte, error) {
 	if err != nil {
 		return [32]byte{}, err
 	}
-	return [32]byte(s.Message.ParentBlockHash), nil
+	bid, err := s.Bid()
+	if err != nil {
+		return [32]byte{}, err
+	}
+	return bid.ParentBlockHash(), nil
 }
 
 // RootSlice returns a slice of the value returned by Root(). This is convenient because slicing the result of a func

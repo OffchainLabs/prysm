@@ -95,6 +95,8 @@ func extractValidDataTypeFromTopic(topic string, digest []byte, clock *startup.C
 		return extractDataTypeFromTypeMap(types.LightClientFinalityUpdateMap, digest, clock)
 	case p2p.DataColumnSubnetTopicFormat:
 		return extractDataTypeFromTypeMap(types.DataColumnSidecarMap, digest, clock)
+	case p2p.ExecutionPayloadBidTopicFormat:
+		return extractDataTypeFromTypeMap(types.ExecutionPayloadBidMap, digest, clock)
 	}
 	return nil, nil
 }

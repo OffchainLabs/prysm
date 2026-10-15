@@ -5,9 +5,12 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -45,11 +48,10 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 		return pubsub.ValidationReject, err
 	}
 
-	signedBid, ok := m.(*ethpb.SignedExecutionPayloadBid)
-	if !ok {
-		return pubsub.ValidationReject, errWrongMessage
+	signedBid, b, err := wrapGossipExecutionPayloadBid(m)
+	if errors.Is(err, errWrongMessage) {
+		return pubsub.ValidationReject, err
 	}
-	b, err := blocks.WrappedROSignedExecutionPayloadBid(signedBid)
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
@@ -120,6 +122,14 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifyPrevRandao(st); err != nil {
 		return pubsub.ValidationReject, err
 	}
+	// [IGNORE] the bid's inclusion list bits are inclusive of the timely inclusion lists of bid.slot - 1 (Heze).
+	inclusive, err := s.isInclusionListBitsInclusive(ctx, st, bid)
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	if !inclusive {
+		return pubsub.ValidationIgnore, errors.New("bid inclusion list bits are not inclusive")
+	}
 	if err := v.VerifySignature(st); err != nil {
 		return pubsub.ValidationReject, err
 	}
@@ -174,19 +184,54 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 }
 
 func (s *Service) executionPayloadBidSubscriber(_ context.Context, msg proto.Message) error {
-	signedBid, ok := msg.(*ethpb.SignedExecutionPayloadBid)
-	if !ok {
+	var (
+		b    interfaces.ROSignedExecutionPayloadBid
+		data any
+		err  error
+	)
+
+	switch signedBid := msg.(type) {
+	case *ethpb.SignedExecutionPayloadBid:
+		if signedBid.Message == nil {
+			return errNilMessage
+		}
+		b, err = blocks.WrappedROSignedExecutionPayloadBid(signedBid)
+		data = &opfeed.ExecutionPayloadBidReceivedData{Bid: signedBid}
+	case *ethpb.SignedExecutionPayloadBidHeze:
+		if signedBid.Message == nil {
+			return errNilMessage
+		}
+		b, err = blocks.WrappedROSignedExecutionPayloadBidHeze(signedBid)
+		data = &opfeed.ExecutionPayloadBidHezeReceivedData{Bid: signedBid}
+	default:
 		return errWrongMessage
 	}
-	if signedBid.Message == nil {
-		return errNilMessage
+	if err != nil {
+		return err
 	}
-	s.setHighestExecutionPayloadBid(signedBid)
+	s.highestExecutionPayloadBidCache.SetIfHigher(b)
 	s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
 		Type: opfeed.ExecutionPayloadBidReceived,
-		Data: &opfeed.ExecutionPayloadBidReceivedData{Bid: signedBid},
+		Data: data,
 	})
 	return nil
+}
+
+// isInclusionListBitsInclusive runs is_inclusion_list_bits_inclusive for the inclusion lists of bid.slot - 1. It is true before Heze.
+func (s *Service) isInclusionListBitsInclusive(ctx context.Context, st state.ReadOnlyBeaconState, bid interfaces.ROExecutionPayloadBid) (bool, error) {
+	if bid.Slot() == 0 || slots.ToEpoch(bid.Slot()-1) < params.BeaconConfig().HezeForkEpoch {
+		return true, nil
+	}
+	ilSlot := bid.Slot() - 1
+	committee, err := helpers.InclusionListCommittee(ctx, st, ilSlot)
+	if err != nil {
+		return false, errors.Wrap(err, "inclusion list committee")
+	}
+	dependentRoot, err := s.proposerDependentRoot(bid.ParentBlockRoot(), ilSlot)
+	if err != nil {
+		return false, err
+	}
+	return s.cfg.chain.InclusionListStore().IsBitsInclusive(committee, ilSlot, dependentRoot, bid.InclusionListBits(), true), nil
 }
 
 func executionPayloadBidTupleKey(bid interfaces.ROExecutionPayloadBid) string {
@@ -222,13 +267,30 @@ func (s *Service) proposerDependentRoot(parentBlockRoot [32]byte, slot primitive
 }
 
 func (s *Service) isHighestExecutionPayloadBid(bid interfaces.ROExecutionPayloadBid) bool {
-	cached, ok := s.highestExecutionPayloadBidCache.Get(bid.Slot(), bid.ParentBlockHash(), bid.ParentBlockRoot())
+	cached, ok := s.highestExecutionPayloadBidCache.HighestValue(bid.Slot(), bid.ParentBlockHash(), bid.ParentBlockRoot())
 	if !ok {
 		return true
 	}
-	return bid.Value() > cached.Message.Value
+	return bid.Value() > cached
 }
 
-func (s *Service) setHighestExecutionPayloadBid(signedBid *ethpb.SignedExecutionPayloadBid) {
-	s.highestExecutionPayloadBidCache.SetIfHigher(signedBid)
+// wrapGossipExecutionPayloadBid wraps a decoded bid.
+func wrapGossipExecutionPayloadBid(m any) (proto.Message, interfaces.ROSignedExecutionPayloadBid, error) {
+	hezeEpoch := params.BeaconConfig().HezeForkEpoch
+	switch signedBid := m.(type) {
+	case *ethpb.SignedExecutionPayloadBid:
+		if signedBid.Message != nil && slots.ToEpoch(signedBid.Message.Slot) >= hezeEpoch {
+			return nil, nil, errors.Wrap(errWrongMessage, "Gloas bid for a slot at or after the Heze fork")
+		}
+		b, err := blocks.WrappedROSignedExecutionPayloadBid(signedBid)
+		return signedBid, b, err
+	case *ethpb.SignedExecutionPayloadBidHeze:
+		if signedBid.Message != nil && slots.ToEpoch(signedBid.Message.Slot) < hezeEpoch {
+			return nil, nil, errors.Wrap(errWrongMessage, "Heze bid for a slot before the Heze fork")
+		}
+		b, err := blocks.WrappedROSignedExecutionPayloadBidHeze(signedBid)
+		return signedBid, b, err
+	default:
+		return nil, nil, errWrongMessage
+	}
 }

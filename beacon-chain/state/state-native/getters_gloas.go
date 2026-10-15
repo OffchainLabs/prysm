@@ -266,6 +266,13 @@ func (b *BeaconState) LatestExecutionPayloadBid() (interfaces.ROExecutionPayload
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
+	if b.version >= version.Heze {
+		if b.latestExecutionPayloadBidHeze == nil {
+			return nil, nil
+		}
+		return blocks.WrappedROExecutionPayloadBidHeze(b.latestExecutionPayloadBidHeze.Copy())
+	}
+
 	if b.latestExecutionPayloadBid == nil {
 		return nil, nil
 	}
@@ -316,6 +323,13 @@ func (b *BeaconState) LatestBlockHashMatchesBidBlockHash() (bool, error) {
 
 	b.lock.RLock()
 	defer b.lock.RUnlock()
+
+	if b.version >= version.Heze {
+		if b.latestExecutionPayloadBidHeze == nil {
+			return false, nil
+		}
+		return bytes.Equal(b.latestExecutionPayloadBidHeze.BlockHash, b.latestBlockHash), nil
+	}
 
 	if b.latestExecutionPayloadBid == nil {
 		return false, nil

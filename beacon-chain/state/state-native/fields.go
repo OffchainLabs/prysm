@@ -117,6 +117,9 @@ var (
 
 	gloasProgressiveSchema *ProgressiveStateSchema
 	gloasFields            []types.FieldIndex
+
+	hezeProgressiveSchema *ProgressiveStateSchema
+	hezeFields            []types.FieldIndex
 )
 
 func init() {
@@ -137,12 +140,32 @@ func init() {
 		panic(err)
 	}
 	gloasFields = gloasProgressiveSchema.fields
+
+	// TODO(heze): Heze keeps the Gloas fields until EIP-8015 removes the eth1 fields; only the bid type changes.
+	hezeProgressiveSchema, err = newProgressiveStateFieldsSchema(
+		slices.Concat(
+			altairFields,
+			[]types.FieldIndex{types.LatestBlockHash},
+			withdrawalAndHistoricalSummaryFields,
+			electraAdditionalFields,
+			[]types.FieldIndex{types.ProposerLookahead},
+			gloasAdditionalFields,
+		),
+		nil,
+		params.BeaconConfig().BeaconStateHezeFieldCount,
+	)
+	if err != nil {
+		panic(err)
+	}
+	hezeFields = hezeProgressiveSchema.fields
 }
 
 func ProgressiveStateSchemaForVersion(v int) (*ProgressiveStateSchema, bool) {
 	switch v {
 	case version.Gloas:
 		return gloasProgressiveSchema, true
+	case version.Heze:
+		return hezeProgressiveSchema, true
 	default:
 		return nil, false
 	}

@@ -48,8 +48,8 @@ func TestLightClientGeneralizedIndicesForVersion(t *testing.T) {
 			tests = append(tests, test{name: version.String(v), version: v, finalized: 105, current: 54, next: 55, committees: true})
 		case version.Electra, version.Fulu:
 			tests = append(tests, test{name: version.String(v), version: v, finalized: 169, current: 86, next: 87, committees: true})
-		case version.Gloas:
-			tests = append(tests, test{name: "gloas", version: v, finalized: 735, current: 2945, next: 2946, committees: true})
+		case version.Gloas, version.Heze:
+			tests = append(tests, test{name: version.String(v), version: v, finalized: 735, current: 2945, next: 2946, committees: true})
 		default:
 			t.Fatalf("unsupported version: %d", v)
 		}

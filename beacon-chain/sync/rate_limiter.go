@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
 )
 
@@ -106,6 +107,10 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 	envelopeCollector := leakybucket.NewCollector(allowedBlocksPerSecond, allowedBlocksBurst, blockBucketPeriod, false)
 	topicMap[addEncoding(p2p.RPCExecutionPayloadEnvelopesByRootTopicV1)] = envelopeCollector
 	topicMap[addEncoding(p2p.RPCExecutionPayloadEnvelopesByRangeTopicV1)] = envelopeCollector
+
+	// InclusionListsByIndicesV1: one full request of MAX_REQUEST_INCLUSION_LIST lists per second, burst of two full requests.
+	maxInclusionLists := params.BeaconConfig().MaxRequestInclusionList
+	topicMap[addEncoding(p2p.RPCInclusionListsByIndicesTopicV1)] = leakybucket.NewCollector(float64(maxInclusionLists), int64(2*maxInclusionLists), leakyBucketPeriod, false)
 
 	// General topic for all rpc requests.
 	topicMap[rpcLimiterTopic] = leakybucket.NewCollector(10, defaultBurstLimit*4, leakyBucketPeriod, false /* deleteEmptyBuckets */)

@@ -84,6 +84,7 @@ type config struct {
 	DepositCache              cache.DepositCache
 	PayloadIDCache            *cache.PayloadIDCache
 	ProposerPreferencesCache  *cache.ProposerPreferencesCache
+	InclusionListStore        *cache.InclusionListStore
 	SubscribedValidatorsCache *cache.SubscribedValidatorsCache
 	BuilderCircuitBreaker     *cache.BuilderCircuitBreaker
 	AttestationCache          *cache.AttestationCache
@@ -207,6 +208,9 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 	}
 	if srv.clockSetter == nil {
 		return nil, ErrMissingClockSetter
+	}
+	if srv.cfg.InclusionListStore == nil {
+		srv.cfg.InclusionListStore = cache.NewInclusionListStore()
 	}
 	srv.wsVerifier, err = NewWeakSubjectivityVerifier(srv.cfg.WeakSubjectivityCheckpt, srv.cfg.BeaconDB)
 	if err != nil {

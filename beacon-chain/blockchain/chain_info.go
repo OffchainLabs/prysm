@@ -5,6 +5,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	f "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
@@ -74,6 +75,9 @@ type ForkchoiceFetcher interface {
 	CanonicalNodeAtSlot(primitives.Slot) ([32]byte, bool)
 	ShouldIgnoreData(parentRoot [32]byte, dataSlot primitives.Slot) bool
 	RecordBlockForEquivocation(primitives.Slot, primitives.ValidatorIndex, [32]byte)
+	InclusionListStore() *cache.InclusionListStore
+	LookaheadState(ctx context.Context, dependentRoot [32]byte, dependentEpoch primitives.Epoch) (state.ReadOnlyBeaconState, error)
+	DependentState(ctx context.Context, dependentRoot [32]byte, dependentEpoch primitives.Epoch) (state.ReadOnlyBeaconState, error)
 }
 
 // TimeFetcher retrieves the Ethereum consensus data that's related to time.
@@ -464,15 +468,19 @@ func (s *Service) builtOnFullParentInForkchoice(blk interfaces.ReadOnlyBeaconBlo
 	if blk.Version() < version.Gloas {
 		return true
 	}
-	bid, err := blk.Body().SignedExecutionPayloadBid()
-	if err != nil || bid == nil || bid.Message == nil {
+	sbid, err := blk.Body().SignedExecutionPayloadBid()
+	if err != nil {
+		return false
+	}
+	bid, err := sbid.Bid()
+	if err != nil {
 		return false
 	}
 	blockHash, err := s.cfg.ForkChoiceStore.BlockHash(blk.ParentRoot())
 	if err != nil {
 		return false
 	}
-	return [32]byte(bid.Message.ParentBlockHash) == blockHash
+	return bid.ParentBlockHash() == blockHash
 }
 
 // BuiltOnFullParent returns true if the block's bid builds on its parent's committed payload.

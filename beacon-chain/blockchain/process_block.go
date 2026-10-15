@@ -135,9 +135,9 @@ func getStateVersionAndPayload(st state.BeaconState) (int, interfaces.ExecutionD
 	var preStateHeader interfaces.ExecutionData
 	var err error
 	preStateVersion := st.Version()
-	switch preStateVersion {
-	case version.Phase0, version.Altair, version.Gloas:
-	default:
+
+	// Only Bellatrix through Fulu states carry a latest execution payload header.
+	if preStateVersion >= version.Bellatrix && preStateVersion < version.Gloas {
 		preStateHeader, err = st.LatestExecutionPayloadHeader()
 		if err != nil {
 			return 0, nil, err
@@ -173,7 +173,7 @@ func (s *Service) getBatchPrestate(ctx context.Context, b consensusblocks.ROBloc
 		if err != nil {
 			return nil, false, err
 		}
-		if _, err := s.notifyNewEnvelope(ctx, blockPreState, env); err != nil {
+		if _, _, err := s.notifyNewEnvelope(ctx, blockPreState, env, nil); err != nil {
 			return nil, false, err
 		}
 	}
@@ -265,7 +265,11 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 			if err != nil {
 				return err
 			}
-			if idx := sbid.Message.BuilderIndex; idx != params.BeaconConfig().BuilderIndexSelfBuild {
+			bid, err := sbid.Bid()
+			if err != nil {
+				return err
+			}
+			if idx := bid.BuilderIndex(); idx != params.BeaconConfig().BuilderIndexSelfBuild {
 				pk, err := preState.BuilderPubkey(idx)
 				if err != nil {
 					return err
@@ -1240,7 +1244,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 		if full {
 			bh = bid.BlockHash()
 		}
-		id, fcs, err := s.notifyForkchoiceUpdateGloas(ctx, bh, attribute)
+		id, fcs, err := s.notifyForkchoiceUpdateGloas(ctx, headRoot, bh, attribute)
 		if err != nil {
 			log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
 		}

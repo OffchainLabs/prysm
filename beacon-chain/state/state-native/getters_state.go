@@ -307,6 +307,56 @@ func (b *BeaconState) ToProtoUnsafe() any {
 			PayloadExpectedWithdrawals:    b.payloadExpectedWithdrawals,
 			PtcWindow:                     b.ptcWindow,
 		}
+	case version.Heze:
+
+		return &ethpb.BeaconStateHeze{
+			GenesisTime:                   b.genesisTime,
+			GenesisValidatorsRoot:         gvrCopy[:],
+			Slot:                          b.slot,
+			Fork:                          b.fork,
+			LatestBlockHeader:             b.latestBlockHeader,
+			BlockRoots:                    br,
+			StateRoots:                    sr,
+			HistoricalRoots:               b.historicalRoots.Slice(),
+			Eth1Data:                      b.eth1Data,
+			Eth1DataVotes:                 b.eth1DataVotes,
+			Eth1DepositIndex:              b.eth1DepositIndex,
+			Validators:                    vals,
+			Balances:                      bals,
+			RandaoMixes:                   rm,
+			Slashings:                     b.slashings,
+			PreviousEpochParticipation:    b.previousEpochParticipation,
+			CurrentEpochParticipation:     b.currentEpochParticipation,
+			JustificationBits:             b.justificationBits,
+			PreviousJustifiedCheckpoint:   b.previousJustifiedCheckpoint,
+			CurrentJustifiedCheckpoint:    b.currentJustifiedCheckpoint,
+			FinalizedCheckpoint:           b.finalizedCheckpoint,
+			InactivityScores:              inactivityScores,
+			CurrentSyncCommittee:          b.currentSyncCommittee,
+			NextSyncCommittee:             b.nextSyncCommittee,
+			LatestExecutionPayloadBid:     b.latestExecutionPayloadBidHeze,
+			NextWithdrawalIndex:           b.nextWithdrawalIndex,
+			NextWithdrawalValidatorIndex:  b.nextWithdrawalValidatorIndex,
+			HistoricalSummaries:           b.historicalSummaries,
+			DepositRequestsStartIndex:     b.depositRequestsStartIndex,
+			DepositBalanceToConsume:       b.depositBalanceToConsume,
+			ExitBalanceToConsume:          b.exitBalanceToConsume,
+			EarliestExitEpoch:             b.earliestExitEpoch,
+			ConsolidationBalanceToConsume: b.consolidationBalanceToConsume,
+			EarliestConsolidationEpoch:    b.earliestConsolidationEpoch,
+			PendingDeposits:               b.pendingDeposits,
+			PendingPartialWithdrawals:     b.pendingPartialWithdrawals,
+			PendingConsolidations:         b.pendingConsolidations,
+			ProposerLookahead:             b.proposerLookahead,
+			ExecutionPayloadAvailability:  b.executionPayloadAvailability,
+			Builders:                      b.builders,
+			NextWithdrawalBuilderIndex:    b.nextWithdrawalBuilderIndex,
+			BuilderPendingPayments:        b.builderPendingPayments,
+			BuilderPendingWithdrawals:     b.builderPendingWithdrawals,
+			LatestBlockHash:               b.latestBlockHash,
+			PayloadExpectedWithdrawals:    b.payloadExpectedWithdrawals,
+			PtcWindow:                     b.ptcWindow,
+		}
 	default:
 		return nil
 	}
@@ -605,6 +655,56 @@ func (b *BeaconState) ToProto() any {
 			PayloadExpectedWithdrawals:    b.payloadExpectedWithdrawalsVal(),
 			PtcWindow:                     b.ptcWindowVal(),
 		}
+	case version.Heze:
+
+		return &ethpb.BeaconStateHeze{
+			GenesisTime:                   b.genesisTime,
+			GenesisValidatorsRoot:         gvrCopy[:],
+			Slot:                          b.slot,
+			Fork:                          b.forkVal(),
+			LatestBlockHeader:             b.latestBlockHeaderVal(),
+			BlockRoots:                    br,
+			StateRoots:                    sr,
+			HistoricalRoots:               b.historicalRoots.Slice(),
+			Eth1Data:                      b.eth1DataVal(),
+			Eth1DataVotes:                 b.eth1DataVotesVal(),
+			Eth1DepositIndex:              b.eth1DepositIndex,
+			Validators:                    b.validatorsVal(),
+			Balances:                      b.balancesVal(),
+			RandaoMixes:                   rm,
+			Slashings:                     b.slashingsVal(),
+			PreviousEpochParticipation:    b.previousEpochParticipationVal(),
+			CurrentEpochParticipation:     b.currentEpochParticipationVal(),
+			JustificationBits:             b.justificationBitsVal(),
+			PreviousJustifiedCheckpoint:   b.previousJustifiedCheckpointVal(),
+			CurrentJustifiedCheckpoint:    b.currentJustifiedCheckpointVal(),
+			FinalizedCheckpoint:           b.finalizedCheckpointVal(),
+			InactivityScores:              b.inactivityScoresVal(),
+			CurrentSyncCommittee:          b.currentSyncCommitteeVal(),
+			NextSyncCommittee:             b.nextSyncCommitteeVal(),
+			LatestExecutionPayloadBid:     b.latestExecutionPayloadBidHeze.Copy(),
+			NextWithdrawalIndex:           b.nextWithdrawalIndex,
+			NextWithdrawalValidatorIndex:  b.nextWithdrawalValidatorIndex,
+			HistoricalSummaries:           b.historicalSummariesVal(),
+			DepositRequestsStartIndex:     b.depositRequestsStartIndex,
+			DepositBalanceToConsume:       b.depositBalanceToConsume,
+			ExitBalanceToConsume:          b.exitBalanceToConsume,
+			EarliestExitEpoch:             b.earliestExitEpoch,
+			ConsolidationBalanceToConsume: b.consolidationBalanceToConsume,
+			EarliestConsolidationEpoch:    b.earliestConsolidationEpoch,
+			PendingDeposits:               b.pendingDepositsVal(),
+			PendingPartialWithdrawals:     b.pendingPartialWithdrawalsVal(),
+			PendingConsolidations:         b.pendingConsolidationsVal(),
+			ProposerLookahead:             b.proposerLookaheadVal(),
+			ExecutionPayloadAvailability:  b.executionPayloadAvailabilityVal(),
+			Builders:                      b.buildersVal(),
+			NextWithdrawalBuilderIndex:    b.nextWithdrawalBuilderIndex,
+			BuilderPendingPayments:        b.builderPendingPaymentsVal(),
+			BuilderPendingWithdrawals:     b.builderPendingWithdrawalsVal(),
+			LatestBlockHash:               b.latestBlockHashVal(),
+			PayloadExpectedWithdrawals:    b.payloadExpectedWithdrawalsVal(),
+			PtcWindow:                     b.ptcWindowVal(),
+		}
 	default:
 		return nil
 	}
@@ -721,6 +821,16 @@ func ProtobufBeaconStateGloas(s any) (*ethpb.BeaconStateGloas, error) {
 	pbState, ok := s.(*ethpb.BeaconStateGloas)
 	if !ok {
 		return nil, errors.New("input is not type pb.BeaconStateGloas")
+	}
+	return pbState, nil
+}
+
+// ProtobufBeaconStateHeze transforms an input into beacon state Heze in the form of protobuf.
+// Error is returned if the input is not type protobuf beacon state.
+func ProtobufBeaconStateHeze(s any) (*ethpb.BeaconStateHeze, error) {
+	pbState, ok := s.(*ethpb.BeaconStateHeze)
+	if !ok {
+		return nil, errors.New("input is not type pb.BeaconStateHeze")
 	}
 	return pbState, nil
 }

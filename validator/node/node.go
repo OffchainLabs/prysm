@@ -410,6 +410,12 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		return errors.New("--distributed requires --enable-beacon-rest-api")
 	}
 
+	// The gRPC client does not support inclusion lists, so the Heze duties need the beacon REST API.
+	// TODO(heze): This gate will be removed once gRPC is fully replaced by the REST API.
+	if params.HezeEnabled() && !features.Get().EnableBeaconRESTApi {
+		return errors.New("the Heze fork is scheduled, so --enable-beacon-rest-api is required: inclusion list duties are not supported over gRPC")
+	}
+
 	var err error
 
 	// Configure graffiti.

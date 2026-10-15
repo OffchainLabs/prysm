@@ -72,14 +72,36 @@ func (v *fakeBidVerifier) VerifyBuilderCanCoverBid(state.ReadOnlyBeaconState) er
 func (v *fakeBidVerifier) VerifySignature(state.ReadOnlyBeaconState) error { return v.sigErr }
 func (v *fakeBidVerifier) SatisfyRequirement(verification.Requirement)     {}
 
-func newBid(value, payment primitives.Gwei, builderIndex primitives.BuilderIndex) *ethpb.SignedExecutionPayloadBid {
-	return &ethpb.SignedExecutionPayloadBid{
+func newBid(t *testing.T, value, payment primitives.Gwei, builderIndex primitives.BuilderIndex) interfaces.ROSignedExecutionPayloadBid {
+	return wrapBid(t, &ethpb.SignedExecutionPayloadBid{
 		Message: &ethpb.ExecutionPayloadBid{
+			ParentBlockHash:  make([]byte, 32),
+			ParentBlockRoot:  make([]byte, 32),
+			BlockHash:        make([]byte, 32),
+			PrevRandao:       make([]byte, 32),
+			FeeRecipient:     make([]byte, 20),
 			Value:            value,
 			ExecutionPayment: payment,
 			BuilderIndex:     builderIndex,
 		},
-	}
+		Signature: make([]byte, 96),
+	})
+}
+
+// wrapBid wraps a signed Gloas bid.
+func wrapBid(t *testing.T, pb *ethpb.SignedExecutionPayloadBid) interfaces.ROSignedExecutionPayloadBid {
+	t.Helper()
+	ro, err := consensusblocks.WrappedROSignedExecutionPayloadBid(pb)
+	require.NoError(t, err)
+	return ro
+}
+
+// bidMessage returns the message of a wrapped bid.
+func bidMessage(t *testing.T, b interfaces.ROSignedExecutionPayloadBid) interfaces.ROExecutionPayloadBid {
+	t.Helper()
+	msg, err := b.Bid()
+	require.NoError(t, err)
+	return msg
 }
 
 // localWithGwei builds a self-build candidate whose value is g Gwei.
@@ -105,7 +127,7 @@ func TestEffectiveBidValue(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.want, effectiveBidValue(newBid(tt.value, tt.payment, 0), tt.maxPayment))
+			require.Equal(t, tt.want, effectiveBidValue(newBid(t, tt.value, tt.payment, 0), tt.maxPayment))
 		})
 	}
 }
@@ -118,23 +140,23 @@ func TestBestBid(t *testing.T) {
 	tests := []struct {
 		name       string
 		local      *consensusblocks.GetPayloadResponse
-		p2p        *ethpb.SignedExecutionPayloadBid
-		builder    *ethpb.SignedExecutionPayloadBid
+		p2p        interfaces.ROSignedExecutionPayloadBid
+		builder    interfaces.ROSignedExecutionPayloadBid
 		maxPayment uint64
 		wantSrc    bidSource
 		wantNil    bool
 	}{
 		{name: "no remote bids", local: localWithGwei(100), wantSrc: bidSourceSelfBuild, wantNil: true},
-		{name: "p2p beats local", local: localWithGwei(0), p2p: newBid(1000, 0, p2pIdx), wantSrc: bidSourceP2P},
-		{name: "p2p below local", local: localWithGwei(2000), p2p: newBid(1000, 0, p2pIdx), wantSrc: bidSourceSelfBuild, wantNil: true},
-		{name: "builder beats local", local: localWithGwei(0), builder: newBid(1000, 0, builderIdx), maxPayment: 1000, wantSrc: bidSourceBuilderAPI},
-		{name: "builder below local", local: localWithGwei(2000), builder: newBid(1000, 0, builderIdx), maxPayment: 1000, wantSrc: bidSourceSelfBuild, wantNil: true},
-		{name: "builder beats p2p", local: localWithGwei(0), p2p: newBid(1000, 0, p2pIdx), builder: newBid(2000, 0, builderIdx), maxPayment: 1000, wantSrc: bidSourceBuilderAPI},
-		{name: "p2p beats builder", local: localWithGwei(0), p2p: newBid(2000, 0, p2pIdx), builder: newBid(1000, 0, builderIdx), maxPayment: 1000, wantSrc: bidSourceP2P},
-		{name: "tie prefers p2p", local: localWithGwei(0), p2p: newBid(1000, 0, p2pIdx), builder: newBid(1000, 0, builderIdx), maxPayment: 1000, wantSrc: bidSourceP2P},
-		{name: "payment cap keeps local ahead", local: localWithGwei(100), builder: newBid(50, 100, builderIdx), maxPayment: 40, wantSrc: bidSourceSelfBuild, wantNil: true},
-		{name: "payment within cap wins", local: localWithGwei(100), builder: newBid(50, 100, builderIdx), maxPayment: 60, wantSrc: bidSourceBuilderAPI},
-		{name: "saturated bid still beats local", local: localWithGwei(100), builder: newBid(math.MaxUint64-5, 100, builderIdx), maxPayment: math.MaxUint64, wantSrc: bidSourceBuilderAPI},
+		{name: "p2p beats local", local: localWithGwei(0), p2p: newBid(t, 1000, 0, p2pIdx), wantSrc: bidSourceP2P},
+		{name: "p2p below local", local: localWithGwei(2000), p2p: newBid(t, 1000, 0, p2pIdx), wantSrc: bidSourceSelfBuild, wantNil: true},
+		{name: "builder beats local", local: localWithGwei(0), builder: newBid(t, 1000, 0, builderIdx), maxPayment: 1000, wantSrc: bidSourceBuilderAPI},
+		{name: "builder below local", local: localWithGwei(2000), builder: newBid(t, 1000, 0, builderIdx), maxPayment: 1000, wantSrc: bidSourceSelfBuild, wantNil: true},
+		{name: "builder beats p2p", local: localWithGwei(0), p2p: newBid(t, 1000, 0, p2pIdx), builder: newBid(t, 2000, 0, builderIdx), maxPayment: 1000, wantSrc: bidSourceBuilderAPI},
+		{name: "p2p beats builder", local: localWithGwei(0), p2p: newBid(t, 2000, 0, p2pIdx), builder: newBid(t, 1000, 0, builderIdx), maxPayment: 1000, wantSrc: bidSourceP2P},
+		{name: "tie prefers p2p", local: localWithGwei(0), p2p: newBid(t, 1000, 0, p2pIdx), builder: newBid(t, 1000, 0, builderIdx), maxPayment: 1000, wantSrc: bidSourceP2P},
+		{name: "payment cap keeps local ahead", local: localWithGwei(100), builder: newBid(t, 50, 100, builderIdx), maxPayment: 40, wantSrc: bidSourceSelfBuild, wantNil: true},
+		{name: "payment within cap wins", local: localWithGwei(100), builder: newBid(t, 50, 100, builderIdx), maxPayment: 60, wantSrc: bidSourceBuilderAPI},
+		{name: "saturated bid still beats local", local: localWithGwei(100), builder: newBid(t, math.MaxUint64-5, 100, builderIdx), maxPayment: math.MaxUint64, wantSrc: bidSourceBuilderAPI},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -156,13 +178,13 @@ func TestBestBid(t *testing.T) {
 			if tt.wantSrc == bidSourceP2P {
 				wantIdx = p2pIdx
 			}
-			require.Equal(t, wantIdx, got.Message.BuilderIndex)
+			require.Equal(t, wantIdx, bidMessage(t, got).BuilderIndex())
 		})
 	}
 
 	t.Run("boost factor zero prefers local", func(t *testing.T) {
 		win := &winningBuilderBid{
-			bid:   newBid(1000, 0, builderIdx),
+			bid:   newBid(t, 1000, 0, builderIdx),
 			entry: &ethpb.BuilderEntry{MaxExecutionPayment: 1000, BuilderBoostFactor: 0},
 		}
 		got, src, _ := bestBid(nil, localWithGwei(1), nil, win, nil)
@@ -172,7 +194,7 @@ func TestBestBid(t *testing.T) {
 
 	t.Run("boost factor lifts a lower bid over local", func(t *testing.T) {
 		win := &winningBuilderBid{
-			bid:   newBid(600, 0, builderIdx),
+			bid:   newBid(t, 600, 0, builderIdx),
 			entry: &ethpb.BuilderEntry{MaxExecutionPayment: 0, BuilderBoostFactor: 200},
 		}
 		got, src, _ := bestBid(nil, localWithGwei(1000), nil, win, nil)
@@ -183,7 +205,7 @@ func TestBestBid(t *testing.T) {
 	t.Run("boost keeps full precision below 100 gwei granularity", func(t *testing.T) {
 		// 199 * 50 / 100 = 99, beats local 75, no truncation before the multiply.
 		win := &winningBuilderBid{
-			bid:   newBid(199, 0, builderIdx),
+			bid:   newBid(t, 199, 0, builderIdx),
 			entry: &ethpb.BuilderEntry{MaxExecutionPayment: 0, BuilderBoostFactor: 50},
 		}
 		got, src, _ := bestBid(nil, localWithGwei(75), nil, win, nil)
@@ -193,7 +215,7 @@ func TestBestBid(t *testing.T) {
 
 	t.Run("max boost prefers a sub-100-gwei bid over local", func(t *testing.T) {
 		win := &winningBuilderBid{
-			bid:   newBid(99, 0, builderIdx),
+			bid:   newBid(t, 99, 0, builderIdx),
 			entry: &ethpb.BuilderEntry{MaxExecutionPayment: 0, BuilderBoostFactor: math.MaxUint64},
 		}
 		got, src, _ := bestBid(nil, localWithGwei(1), nil, win, nil)
@@ -203,7 +225,7 @@ func TestBestBid(t *testing.T) {
 
 	t.Run("saturating boost does not overflow", func(t *testing.T) {
 		win := &winningBuilderBid{
-			bid:   newBid(math.MaxUint64, 0, builderIdx),
+			bid:   newBid(t, math.MaxUint64, 0, builderIdx),
 			entry: &ethpb.BuilderEntry{MaxExecutionPayment: 0, BuilderBoostFactor: math.MaxUint64},
 		}
 		got, src, _ := bestBid(nil, localWithGwei(1000), nil, win, nil)
@@ -213,14 +235,14 @@ func TestBestBid(t *testing.T) {
 
 	t.Run("p2p bid below config min bid is rejected", func(t *testing.T) {
 		cfg := &ethpb.BuilderConfig{MinBid: 2000, BuilderBoostFactor: 100}
-		got, src, _ := bestBid(nil, localWithGwei(0), newBid(1000, 0, p2pIdx), nil, cfg)
+		got, src, _ := bestBid(nil, localWithGwei(0), newBid(t, 1000, 0, p2pIdx), nil, cfg)
 		require.IsNil(t, got)
 		require.Equal(t, bidSourceSelfBuild, src)
 	})
 
 	t.Run("p2p boost from config applies", func(t *testing.T) {
 		cfg := &ethpb.BuilderConfig{MinBid: 0, BuilderBoostFactor: 0}
-		got, src, _ := bestBid(nil, localWithGwei(1), newBid(1000, 0, p2pIdx), nil, cfg)
+		got, src, _ := bestBid(nil, localWithGwei(1), newBid(t, 1000, 0, p2pIdx), nil, cfg)
 		require.IsNil(t, got)
 		require.Equal(t, bidSourceSelfBuild, src)
 	})
@@ -231,7 +253,7 @@ func TestBestBid(t *testing.T) {
 		var builderPk [48]byte
 		builderPk[0] = 0xaa
 		require.NoError(t, head.SetBuilders([]*ethpb.Builder{{Pubkey: builderPk[:]}}))
-		p2p := newBid(100, 900, 0)
+		p2p := newBid(t, 100, 900, 0)
 
 		// No entry names the key, so the payment counts for nothing.
 		cfg := &ethpb.BuilderConfig{BuilderBoostFactor: 100}
@@ -247,11 +269,11 @@ func TestBestBid(t *testing.T) {
 	})
 
 	t.Run("no local takes a zero-value remote bid", func(t *testing.T) {
-		got, src, _ := bestBid(nil, nil, newBid(0, 0, p2pIdx), nil, nil)
+		got, src, _ := bestBid(nil, nil, newBid(t, 0, 0, p2pIdx), nil, nil)
 		require.NotNil(t, got)
 		require.Equal(t, bidSourceP2P, src)
 
-		win := &winningBuilderBid{bid: newBid(0, 0, builderIdx), entry: &ethpb.BuilderEntry{BuilderBoostFactor: 0}}
+		win := &winningBuilderBid{bid: newBid(t, 0, 0, builderIdx), entry: &ethpb.BuilderEntry{BuilderBoostFactor: 0}}
 		got, src, _ = bestBid(nil, nil, nil, win, nil)
 		require.NotNil(t, got)
 		require.Equal(t, bidSourceBuilderAPI, src)
@@ -259,20 +281,20 @@ func TestBestBid(t *testing.T) {
 
 	t.Run("no local waives the p2p min bid", func(t *testing.T) {
 		cfg := &ethpb.BuilderConfig{MinBid: 2000, BuilderBoostFactor: 100}
-		got, src, _ := bestBid(nil, nil, newBid(1000, 0, p2pIdx), nil, cfg)
+		got, src, _ := bestBid(nil, nil, newBid(t, 1000, 0, p2pIdx), nil, cfg)
 		require.NotNil(t, got)
 		require.Equal(t, bidSourceP2P, src)
 	})
 
 	t.Run("no local still ranks remote bids", func(t *testing.T) {
-		win := &winningBuilderBid{bid: newBid(2000, 0, builderIdx), entry: &ethpb.BuilderEntry{BuilderBoostFactor: 100}}
-		got, src, _ := bestBid(nil, nil, newBid(1000, 0, p2pIdx), win, nil)
+		win := &winningBuilderBid{bid: newBid(t, 2000, 0, builderIdx), entry: &ethpb.BuilderEntry{BuilderBoostFactor: 100}}
+		got, src, _ := bestBid(nil, nil, newBid(t, 1000, 0, p2pIdx), win, nil)
 		require.Equal(t, bidSourceBuilderAPI, src)
-		require.Equal(t, builderIdx, got.Message.BuilderIndex)
+		require.Equal(t, builderIdx, bidMessage(t, got).BuilderIndex())
 
-		got, src, _ = bestBid(nil, nil, newBid(3000, 0, p2pIdx), win, nil)
+		got, src, _ = bestBid(nil, nil, newBid(t, 3000, 0, p2pIdx), win, nil)
 		require.Equal(t, bidSourceP2P, src)
-		require.Equal(t, p2pIdx, got.Message.BuilderIndex)
+		require.Equal(t, p2pIdx, bidMessage(t, got).BuilderIndex())
 	})
 
 	t.Run("no local and no remote bids", func(t *testing.T) {
@@ -478,7 +500,7 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 		}
 		got := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
 		require.NotNil(t, got)
-		require.Equal(t, primitives.BuilderIndex(2), got.bid.Message.BuilderIndex)
+		require.Equal(t, primitives.BuilderIndex(2), bidMessage(t, got.bid).BuilderIndex())
 		require.Equal(t, "http://builder", string(got.entry.GetUrl()))
 	})
 
@@ -493,7 +515,7 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 		// Raw total 10500 loses to 700 because only 100 of the payment counts.
 		got := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
 		require.NotNil(t, got)
-		require.Equal(t, primitives.BuilderIndex(2), got.bid.Message.BuilderIndex)
+		require.Equal(t, primitives.BuilderIndex(2), bidMessage(t, got.bid).BuilderIndex())
 	})
 
 	t.Run("over-cap bid wins at its capped value with payment unmodified", func(t *testing.T) {
@@ -507,8 +529,8 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 		// Capped effective 600 beats 550; the winning bid keeps its raw payment.
 		got := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
 		require.NotNil(t, got)
-		require.Equal(t, primitives.BuilderIndex(1), got.bid.Message.BuilderIndex)
-		require.Equal(t, primitives.Gwei(10_000), got.bid.Message.ExecutionPayment)
+		require.Equal(t, primitives.BuilderIndex(1), bidMessage(t, got.bid).BuilderIndex())
+		require.Equal(t, primitives.Gwei(10_000), bidMessage(t, got.bid).ExecutionPayment())
 	})
 
 	t.Run("discards invalid bids", func(t *testing.T) {
@@ -525,7 +547,7 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 		}
 		got := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
 		require.NotNil(t, got)
-		require.Equal(t, primitives.BuilderIndex(1), got.bid.Message.BuilderIndex)
+		require.Equal(t, primitives.BuilderIndex(1), bidMessage(t, got.bid).BuilderIndex())
 	})
 
 	t.Run("discards blacklisted builders", func(t *testing.T) {
@@ -536,7 +558,7 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 		}
 		got := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
 		require.NotNil(t, got)
-		require.Equal(t, primitives.BuilderIndex(1), got.bid.Message.BuilderIndex)
+		require.Equal(t, primitives.BuilderIndex(1), bidMessage(t, got.bid).BuilderIndex())
 	})
 
 	t.Run("nil when all blacklisted", func(t *testing.T) {
@@ -770,7 +792,7 @@ func TestRequestBuilderBid(t *testing.T) {
 			close(b.release)
 			win := p.wait()
 			require.NotNil(t, win)
-			require.Equal(t, primitives.BuilderIndex(3), win.bid.Message.BuilderIndex)
+			require.Equal(t, primitives.BuilderIndex(3), bidMessage(t, win.bid).BuilderIndex())
 		})
 	}
 
@@ -849,13 +871,15 @@ func TestSetExecutionPayloadBid_PrefersBuilderBid(t *testing.T) {
 
 	// No P2P cache, so the Builder-API bid is the only remote candidate.
 	vs := &Server{}
-	win := &winningBuilderBid{bid: builderBid, entry: &ethpb.BuilderEntry{Url: []byte("http://builder"), MaxExecutionPayment: 1000, BuilderBoostFactor: 100}}
+	win := &winningBuilderBid{bid: wrapBid(t, builderBid), entry: &ethpb.BuilderEntry{Url: []byte("http://builder"), MaxExecutionPayment: 1000, BuilderBoostFactor: 100}}
 	src, err := vs.setExecutionPayloadBid(t.Context(), sBlk, nil, local, win, nil, false)
 	require.NoError(t, err)
 	require.Equal(t, bidSourceBuilderAPI, src)
 
 	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
 	require.NoError(t, err)
-	require.Equal(t, primitives.BuilderIndex(7), signedBid.Message.BuilderIndex)
-	require.Equal(t, primitives.Gwei(1000), signedBid.Message.Value)
+	bid, err := signedBid.Bid()
+	require.NoError(t, err)
+	require.Equal(t, primitives.BuilderIndex(7), bid.BuilderIndex())
+	require.Equal(t, primitives.Gwei(1000), bid.Value())
 }

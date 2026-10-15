@@ -14,6 +14,7 @@ go_library(
     ],
     deps = [
         "//async/event:go_default_library",
+        "//beacon-chain/cache:go_default_library",
         "//beacon-chain/core/epoch/precompute:go_default_library",
         "//beacon-chain/core/feed:go_default_library",
         "//beacon-chain/core/feed/block:go_default_library",

@@ -340,12 +340,7 @@ func (s *Server) validateEnvelopeGossip(ctx context.Context, w http.ResponseWrit
 		httputil.HandleError(w, "gossip validation failed: block has no execution payload bid: "+err.Error(), http.StatusBadRequest)
 		return false
 	}
-	wrappedBid, err := consensusblocks.WrappedROSignedExecutionPayloadBid(signedBid)
-	if err != nil {
-		httputil.HandleError(w, "could not wrap signed bid: "+err.Error(), http.StatusInternalServerError)
-		return false
-	}
-	bid, err := wrappedBid.Bid()
+	bid, err := signedBid.Bid()
 	if err != nil {
 		httputil.HandleError(w, "could not get bid: "+err.Error(), http.StatusInternalServerError)
 		return false

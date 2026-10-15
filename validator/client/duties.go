@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/metadata"
@@ -211,11 +212,12 @@ const (
 	missingNextSync
 	missingNextPtc
 	missingNextAttester
+	missingNextInclusionList
 )
 
 // missingNextAll marks every next-epoch type missing. promoteDuties is only
-// reached post-Gloas, so all four apply and no fork gating is needed.
-const missingNextAll = missingNextProposer | missingNextSync | missingNextPtc | missingNextAttester
+// reached post-Gloas; inclusion lists are pre-Heze filled by fetchDutyResponses.
+const missingNextAll = missingNextProposer | missingNextSync | missingNextPtc | missingNextAttester | missingNextInclusionList
 
 func (m missingNextDuties) String() string {
 	if m == 0 {
@@ -233,6 +235,9 @@ func (m missingNextDuties) String() string {
 	}
 	if m&missingNextAttester != 0 {
 		parts = append(parts, "attester")
+	}
+	if m&missingNextInclusionList != 0 {
+		parts = append(parts, "inclusion_list")
 	}
 	return strings.Join(parts, "|")
 }
@@ -309,7 +314,7 @@ func (v *validator) promoteDuties() dutiesFetchResult {
 }
 
 // missingNextMask flags next-epoch duty types missing post-fetch (fork-gated).
-func missingNextMask(nextEpoch primitives.Epoch, att *ethpb.AttesterDutiesResponse, prop *ethpb.ProposerDutiesResponse, sync *ethpb.SyncCommitteeDutiesResponse, ptc *ethpb.PTCDutiesResponse) missingNextDuties {
+func missingNextMask(nextEpoch primitives.Epoch, att *ethpb.AttesterDutiesResponse, prop *ethpb.ProposerDutiesResponse, sync *ethpb.SyncCommitteeDutiesResponse, ptc *ethpb.PTCDutiesResponse, il *iface.InclusionListDutiesResponse) missingNextDuties {
 	var m missingNextDuties
 	if att == nil {
 		m |= missingNextAttester
@@ -323,6 +328,9 @@ func missingNextMask(nextEpoch primitives.Epoch, att *ethpb.AttesterDutiesRespon
 	if ptc == nil && nextEpoch >= params.BeaconConfig().GloasForkEpoch {
 		m |= missingNextPtc
 	}
+	if il == nil && nextEpoch >= params.BeaconConfig().HezeForkEpoch {
+		m |= missingNextInclusionList
+	}
 	return m
 }
 
@@ -333,8 +341,9 @@ type dutyResponses struct {
 	prop *ethpb.ProposerDutiesResponse
 	sync *ethpb.SyncCommitteeDutiesResponse
 	ptc  *ethpb.PTCDutiesResponse
+	il   *iface.InclusionListDutiesResponse
 
-	attErr, propErr, syncErr, ptcErr error
+	attErr, propErr, syncErr, ptcErr, ilErr error
 }
 
 // fetchDutyResponses requests the duty types flagged in wanted, in parallel.
@@ -352,6 +361,14 @@ func (v *validator) fetchDutyResponses(ctx context.Context, epoch primitives.Epo
 	}
 	if wanted&missingNextPtc != 0 {
 		wg.Go(func() { r.ptc, r.ptcErr = v.validatorClient.PTCDuties(ctx, epoch, indices) })
+	}
+	if wanted&missingNextInclusionList != 0 {
+		if epoch < params.BeaconConfig().HezeForkEpoch {
+			// Known empty before Heze, so the mask clears without a request.
+			r.il = &iface.InclusionListDutiesResponse{}
+		} else {
+			wg.Go(func() { r.il, r.ilErr = v.validatorClient.InclusionListDuties(ctx, epoch, indices) })
+		}
 	}
 	wg.Wait()
 	return r
@@ -375,17 +392,20 @@ func (v *validator) fetchAllDuties(ctx context.Context, epoch primitives.Epoch, 
 	if r.ptcErr != nil {
 		log.WithError(r.ptcErr).Warn("Error getting PTC duties")
 	}
+	if r.ilErr != nil {
+		log.WithError(r.ilErr).Warn("Error getting inclusion list duties")
+	}
 
 	if r.att != nil {
 		res.prevDepRoot = r.att.DependentRoot
 	}
-	res.currentDuties = v.assembleDuties(r.att, r.prop, r.sync, r.ptc)
+	res.currentDuties = v.assembleDuties(r.att, r.prop, r.sync, r.ptc, r.il)
 	// Next epoch left for the mid-epoch fetch; currDepRoot stays nil until then.
 	res.missingNext = missingNextAll
 	return res, nil
 }
 
-// assembleDuties stitches together the four per-duty-type API responses for
+// assembleDuties stitches together the per-duty-type API responses for
 // a single epoch into a slice of ValidatorDuty entries, one per attester
 // assignment.
 func (v *validator) assembleDuties(
@@ -393,6 +413,7 @@ func (v *validator) assembleDuties(
 	prop *ethpb.ProposerDutiesResponse,
 	sync *ethpb.SyncCommitteeDutiesResponse,
 	ptc *ethpb.PTCDutiesResponse,
+	il *iface.InclusionListDutiesResponse,
 ) []*ethpb.ValidatorDuty {
 	proposerSlots := make(map[primitives.ValidatorIndex][]primitives.Slot)
 	if prop != nil {
@@ -404,6 +425,12 @@ func (v *validator) assembleDuties(
 	if ptc != nil {
 		for _, d := range ptc.Duties {
 			ptcSlots[d.ValidatorIndex] = append(ptcSlots[d.ValidatorIndex], d.Slot)
+		}
+	}
+	ilSlots := make(map[primitives.ValidatorIndex][]primitives.Slot)
+	if il != nil {
+		for _, d := range il.Duties {
+			ilSlots[d.ValidatorIndex] = append(ilSlots[d.ValidatorIndex], d.Slot)
 		}
 	}
 	syncSet := make(map[primitives.ValidatorIndex]bool)
@@ -428,6 +455,7 @@ func (v *validator) assembleDuties(
 			ProposerSlots:           proposerSlots[d.ValidatorIndex],
 			IsSyncCommittee:         syncSet[d.ValidatorIndex],
 			PtcSlots:                ptcSlots[d.ValidatorIndex],
+			InclusionListSlots:      ilSlots[d.ValidatorIndex],
 			Status:                  v.statusForPubkey(d.Pubkey),
 		})
 	}
@@ -444,10 +472,10 @@ func (v *validator) statusForPubkey(pk []byte) ethpb.ValidatorStatus {
 }
 
 // fetchNextEpochDuties fetches the wanted next-epoch duty types, dropping
-// proposer/PTC responses that diverge from the attester dependent root attRoot.
+// proposer/PTC/inclusion list responses that diverge from the attester dependent root attRoot.
 func (v *validator) fetchNextEpochDuties(ctx context.Context, nextEpoch primitives.Epoch, indices []primitives.ValidatorIndex, wanted missingNextDuties, attRoot []byte) dutyResponses {
 	r := v.fetchDutyResponses(ctx, nextEpoch, indices, wanted)
-	for _, e := range []error{r.attErr, r.propErr, r.syncErr, r.ptcErr} {
+	for _, e := range []error{r.attErr, r.propErr, r.syncErr, r.ptcErr, r.ilErr} {
 		if e != nil {
 			log.WithError(e).Debug("Could not get a next epoch duty")
 		}
@@ -458,6 +486,7 @@ func (v *validator) fetchNextEpochDuties(ctx context.Context, nextEpoch primitiv
 	if len(attRoot) != 0 {
 		r.prop = dropIfDivergent(r.prop, attRoot, "proposer")
 		r.ptc = dropIfDivergent(r.ptc, attRoot, "ptc")
+		r.il = dropIfDivergent(r.il, attRoot, "inclusion_list")
 	}
 	return r
 }
@@ -523,8 +552,8 @@ func (v *validator) ensureNextEpochDuties(ctx context.Context) error {
 		if r.att == nil || len(r.att.Duties) == 0 {
 			return nil
 		}
-		next = v.assembleDuties(r.att, r.prop, r.sync, r.ptc)
-		newMissing = missingNextMask(nextEpoch, r.att, r.prop, r.sync, r.ptc)
+		next = v.assembleDuties(r.att, r.prop, r.sync, r.ptc, r.il)
+		newMissing = missingNextMask(nextEpoch, r.att, r.prop, r.sync, r.ptc, r.il)
 		currDepRoot = r.att.DependentRoot
 	} else {
 		// Spine intact: re-fetch only the missing types and overlay them, leaving
@@ -534,7 +563,7 @@ func (v *validator) ensureNextEpochDuties(ctx context.Context) error {
 		for _, d := range snap.nextDuties() {
 			existing = append(existing, d)
 		}
-		next = overlayNextDuties(existing, r.prop, r.sync, r.ptc)
+		next = overlayNextDuties(existing, r.prop, r.sync, r.ptc, r.il)
 		newMissing = missing
 		if r.prop != nil {
 			newMissing &^= missingNextProposer
@@ -544,6 +573,9 @@ func (v *validator) ensureNextEpochDuties(ctx context.Context) error {
 		}
 		if r.ptc != nil {
 			newMissing &^= missingNextPtc
+		}
+		if r.il != nil {
+			newMissing &^= missingNextInclusionList
 		}
 	}
 	if newMissing == missing { // no progress; avoid needless re-subscribe / proof re-sign
@@ -583,12 +615,13 @@ func (v *validator) emitNextEpochMetrics(next []*ethpb.ValidatorDuty) {
 }
 
 // overlayNextDuties clones existing next-epoch duties, overlaying re-fetched
-// proposer/sync/PTC responses; a nil response leaves that field untouched.
+// proposer/sync/PTC/inclusion list responses; a nil response leaves that field untouched.
 func overlayNextDuties(
 	existing []*ethpb.ValidatorDuty,
 	prop *ethpb.ProposerDutiesResponse,
 	sync *ethpb.SyncCommitteeDutiesResponse,
 	ptc *ethpb.PTCDutiesResponse,
+	il *iface.InclusionListDutiesResponse,
 ) []*ethpb.ValidatorDuty {
 	var proposerSlots map[primitives.ValidatorIndex][]primitives.Slot
 	if prop != nil {
@@ -602,6 +635,13 @@ func overlayNextDuties(
 		ptcSlots = make(map[primitives.ValidatorIndex][]primitives.Slot)
 		for _, d := range ptc.Duties {
 			ptcSlots[d.ValidatorIndex] = append(ptcSlots[d.ValidatorIndex], d.Slot)
+		}
+	}
+	var ilSlots map[primitives.ValidatorIndex][]primitives.Slot
+	if il != nil {
+		ilSlots = make(map[primitives.ValidatorIndex][]primitives.Slot)
+		for _, d := range il.Duties {
+			ilSlots[d.ValidatorIndex] = append(ilSlots[d.ValidatorIndex], d.Slot)
 		}
 	}
 	var syncSet map[primitives.ValidatorIndex]bool
@@ -622,6 +662,9 @@ func overlayNextDuties(
 		}
 		if ptc != nil {
 			nd.PtcSlots = ptcSlots[d.ValidatorIndex]
+		}
+		if il != nil {
+			nd.InclusionListSlots = ilSlots[d.ValidatorIndex]
 		}
 		out = append(out, nd)
 	}
@@ -659,7 +702,8 @@ func (v *validator) logDuties(slot primitives.Slot) {
 	attesterKeys := make([][]string, params.BeaconConfig().SlotsPerEpoch)
 	proposerKeys := make([]string, params.BeaconConfig().SlotsPerEpoch)
 	ptcKeys := make([][]string, params.BeaconConfig().SlotsPerEpoch)
-	var totalProposingKeys, totalAttestingKeys, totalPTCKeys uint64
+	ilKeys := make([][]string, params.BeaconConfig().SlotsPerEpoch)
+	var totalProposingKeys, totalAttestingKeys, totalPTCKeys, totalILKeys uint64
 
 	for _, duty := range snap.currentDuties() {
 		pk := fmt.Sprintf("%#x", duty.PublicKey)
@@ -698,6 +742,17 @@ func (v *validator) logDuties(slot primitives.Slot) {
 			ptcKeys[ptcSlotInEpoch] = append(ptcKeys[ptcSlotInEpoch], truncatedPubkey)
 			totalPTCKeys++
 		}
+		for _, ilSlot := range duty.InclusionListSlots {
+			if ilSlot < epochStartSlot || ilSlot >= epochStartSlot+params.BeaconConfig().SlotsPerEpoch {
+				log.WithFields(logrus.Fields{
+					"duty": duty,
+					"slot": ilSlot,
+				}).Warn("Invalid inclusion list slot")
+				continue
+			}
+			ilKeys[ilSlot-epochStartSlot] = append(ilKeys[ilSlot-epochStartSlot], truncatedPubkey)
+			totalILKeys++
+		}
 
 		for _, proposerSlot := range duty.ProposerSlots {
 			proposerSlotInEpoch := proposerSlot - epochStartSlot
@@ -722,13 +777,15 @@ func (v *validator) logDuties(slot primitives.Slot) {
 		"proposerCount": totalProposingKeys,
 		"attesterCount": totalAttestingKeys,
 		"ptcCount":      totalPTCKeys,
+		"ilCount":       totalILKeys,
 	}).Infof("Schedule for epoch %d", slots.ToEpoch(slot))
 
 	for i := primitives.Slot(0); i < params.BeaconConfig().SlotsPerEpoch; i++ {
 		isProposer := proposerKeys[i] != ""
 		isAttester := len(attesterKeys[i]) > 0
 		isPTCMember := len(ptcKeys[i]) > 0
-		if !isProposer && !isAttester && !isPTCMember {
+		isILMember := len(ilKeys[i]) > 0
+		if !isProposer && !isAttester && !isPTCMember && !isILMember {
 			continue
 		}
 		startTime, err := slots.StartTime(v.genesisTime, epochStartSlot+i)
@@ -753,6 +810,12 @@ func (v *validator) logDuties(slot primitives.Slot) {
 			slotLog = slotLog.WithFields(logrus.Fields{
 				"ptcCount":   len(ptcKeys[i]),
 				"ptcPubkeys": ptcKeys[i],
+			})
+		}
+		if isILMember {
+			slotLog = slotLog.WithFields(logrus.Fields{
+				"ilCount":   len(ilKeys[i]),
+				"ilPubkeys": ilKeys[i],
 			})
 		}
 		if durationTillDuty > 0 {

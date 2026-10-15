@@ -278,9 +278,10 @@ func TestNotifyNewEnvelope_Valid(t *testing.T) {
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
 
-	isValid, err := s.notifyNewEnvelope(ctx, st, envelope)
+	isValid, ilSatisfied, err := s.notifyNewEnvelope(ctx, st, envelope, nil)
 	require.NoError(t, err)
 	require.Equal(t, true, isValid)
+	require.Equal(t, true, ilSatisfied)
 }
 
 func TestNotifyNewEnvelope_Syncing(t *testing.T) {
@@ -306,9 +307,10 @@ func TestNotifyNewEnvelope_Syncing(t *testing.T) {
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
 
-	isValid, err := s.notifyNewEnvelope(ctx, st, envelope)
+	isValid, ilSatisfied, err := s.notifyNewEnvelope(ctx, st, envelope, nil)
 	require.NoError(t, err)
 	require.Equal(t, false, isValid)
+	require.Equal(t, true, ilSatisfied)
 }
 
 func TestNotifyNewEnvelope_Invalid(t *testing.T) {
@@ -334,7 +336,7 @@ func TestNotifyNewEnvelope_Invalid(t *testing.T) {
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
 
-	_, err = s.notifyNewEnvelope(ctx, st, envelope)
+	_, _, err = s.notifyNewEnvelope(ctx, st, envelope, nil)
 	require.Equal(t, true, IsInvalidBlock(err))
 }
 
@@ -346,7 +348,7 @@ func TestNotifyForkchoiceUpdateGloas_Valid(t *testing.T) {
 	blockHash := bytesutil.ToBytes32([]byte("hash1"))
 	attr := payloadattribute.EmptyWithVersion(version.Gloas)
 
-	retPid, _, err := s.notifyForkchoiceUpdateGloas(ctx, blockHash, attr)
+	retPid, _, err := s.notifyForkchoiceUpdateGloas(ctx, [32]byte{}, blockHash, attr)
 	require.NoError(t, err)
 	require.DeepEqual(t, pid, retPid)
 }
@@ -358,7 +360,7 @@ func TestNotifyForkchoiceUpdateGloas_Syncing(t *testing.T) {
 	ctx := t.Context()
 
 	blockHash := bytesutil.ToBytes32([]byte("hash1"))
-	_, _, err := s.notifyForkchoiceUpdateGloas(ctx, blockHash, nil)
+	_, _, err := s.notifyForkchoiceUpdateGloas(ctx, [32]byte{}, blockHash, nil)
 	require.NoError(t, err)
 }
 
@@ -369,7 +371,7 @@ func TestNotifyForkchoiceUpdateGloas_Invalid(t *testing.T) {
 	ctx := t.Context()
 
 	blockHash := bytesutil.ToBytes32([]byte("hash1"))
-	_, _, err := s.notifyForkchoiceUpdateGloas(ctx, blockHash, nil)
+	_, _, err := s.notifyForkchoiceUpdateGloas(ctx, [32]byte{}, blockHash, nil)
 	require.Equal(t, true, IsInvalidBlock(err))
 }
 
@@ -378,7 +380,7 @@ func TestNotifyForkchoiceUpdateGloas_NilAttributes(t *testing.T) {
 	ctx := t.Context()
 
 	blockHash := bytesutil.ToBytes32([]byte("hash1"))
-	_, _, err := s.notifyForkchoiceUpdateGloas(ctx, blockHash, nil)
+	_, _, err := s.notifyForkchoiceUpdateGloas(ctx, [32]byte{}, blockHash, nil)
 	require.NoError(t, err)
 }
 
@@ -389,7 +391,7 @@ func TestNotifyForkchoiceUpdateGloas_UndefinedError(t *testing.T) {
 	ctx := t.Context()
 
 	blockHash := bytesutil.ToBytes32([]byte("hash1"))
-	_, _, err := s.notifyForkchoiceUpdateGloas(ctx, blockHash, nil)
+	_, _, err := s.notifyForkchoiceUpdateGloas(ctx, [32]byte{}, blockHash, nil)
 	require.ErrorIs(t, err, ErrUndefinedExecutionEngineError)
 }
 
@@ -491,9 +493,10 @@ func TestValidateExecutionOnEnvelope_Valid(t *testing.T) {
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
 
-	isValid, err := s.validateExecutionOnEnvelope(ctx, st, envelope)
+	isValid, ilSatisfied, err := s.validateExecutionOnEnvelope(ctx, st, envelope)
 	require.NoError(t, err)
 	require.Equal(t, true, isValid)
+	require.Equal(t, true, ilSatisfied)
 }
 
 func TestPostPayloadTasks_NotHead(t *testing.T) {

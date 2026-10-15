@@ -83,6 +83,8 @@ func (b *SignedBeaconBlock) Copy() (interfaces.SignedBeaconBlock, error) {
 		return initSignedBlockFromProtoFulu(pb.(*eth.SignedBeaconBlockFulu).Copy())
 	case version.Gloas:
 		return initSignedBlockFromProtoGloas(eth.CopySignedBeaconBlockGloas(pb.(*eth.SignedBeaconBlockGloas)))
+	case version.Heze:
+		return initSignedBlockFromProtoHeze(eth.CopySignedBeaconBlockHeze(pb.(*eth.SignedBeaconBlockHeze)))
 	default:
 		return nil, errIncorrectBlockVersion
 	}
@@ -163,6 +165,10 @@ func (b *SignedBeaconBlock) PbGenericBlock() (*eth.GenericSignedBeaconBlock, err
 	case version.Gloas:
 		return &eth.GenericSignedBeaconBlock{
 			Block: &eth.GenericSignedBeaconBlock_Gloas{Gloas: pb.(*eth.SignedBeaconBlockGloas)},
+		}, nil
+	case version.Heze:
+		return &eth.GenericSignedBeaconBlock{
+			Block: &eth.GenericSignedBeaconBlock_Heze{Heze: pb.(*eth.SignedBeaconBlockHeze)},
 		}, nil
 	default:
 		return nil, errIncorrectBlockVersion
@@ -446,6 +452,8 @@ func (b *SignedBeaconBlock) MarshalSSZ() ([]byte, error) {
 		return pb.(*eth.SignedBeaconBlockFulu).MarshalSSZ()
 	case version.Gloas:
 		return pb.(*eth.SignedBeaconBlockGloas).MarshalSSZ()
+	case version.Heze:
+		return pb.(*eth.SignedBeaconBlockHeze).MarshalSSZ()
 	default:
 		return []byte{}, errIncorrectBlockVersion
 	}
@@ -490,6 +498,8 @@ func (b *SignedBeaconBlock) MarshalSSZTo(dst []byte) ([]byte, error) {
 		return pb.(*eth.SignedBeaconBlockFulu).MarshalSSZTo(dst)
 	case version.Gloas:
 		return pb.(*eth.SignedBeaconBlockGloas).MarshalSSZTo(dst)
+	case version.Heze:
+		return pb.(*eth.SignedBeaconBlockHeze).MarshalSSZTo(dst)
 	default:
 		return []byte{}, errIncorrectBlockVersion
 	}
@@ -539,6 +549,8 @@ func (b *SignedBeaconBlock) SizeSSZ() int {
 		return pb.(*eth.SignedBeaconBlockFulu).SizeSSZ()
 	case version.Gloas:
 		return pb.(*eth.SignedBeaconBlockGloas).SizeSSZ()
+	case version.Heze:
+		return pb.(*eth.SignedBeaconBlockHeze).SizeSSZ()
 	default:
 		panic(incorrectBlockVersion)
 	}
@@ -689,6 +701,16 @@ func (b *SignedBeaconBlock) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
+	case version.Heze:
+		pb := &eth.SignedBeaconBlockHeze{}
+		err := pb.UnmarshalSSZ(buf)
+		if err != nil {
+			return err
+		}
+		newBlock, err = initSignedBlockFromProtoHeze(pb)
+		if err != nil {
+			return err
+		}
 	default:
 		return errIncorrectBlockVersion
 	}
@@ -775,6 +797,9 @@ func (b *BeaconBlock) HashTreeRoot() ([field_params.RootLength]byte, error) {
 	case version.Gloas:
 		return pb.(*eth.BeaconBlockGloas).HashTreeRoot()
 
+	case version.Heze:
+		return pb.(*eth.BeaconBlockHeze).HashTreeRoot()
+
 	default:
 		return [field_params.RootLength]byte{}, errIncorrectBlockVersion
 	}
@@ -818,6 +843,8 @@ func (b *BeaconBlock) HashTreeRootWith(h *ssz.Hasher) error {
 		return pb.(*eth.BeaconBlockElectra).HashTreeRootWith(h)
 	case version.Gloas:
 		return pb.(*eth.BeaconBlockGloas).HashTreeRootWith(h)
+	case version.Heze:
+		return pb.(*eth.BeaconBlockHeze).HashTreeRootWith(h)
 	default:
 		return errIncorrectBlockVersion
 	}
@@ -862,6 +889,8 @@ func (b *BeaconBlock) MarshalSSZ() ([]byte, error) {
 		return pb.(*eth.BeaconBlockElectra).MarshalSSZ()
 	case version.Gloas:
 		return pb.(*eth.BeaconBlockGloas).MarshalSSZ()
+	case version.Heze:
+		return pb.(*eth.BeaconBlockHeze).MarshalSSZ()
 	default:
 		return []byte{}, errIncorrectBlockVersion
 	}
@@ -906,6 +935,8 @@ func (b *BeaconBlock) MarshalSSZTo(dst []byte) ([]byte, error) {
 		return pb.(*eth.BeaconBlockElectra).MarshalSSZTo(dst)
 	case version.Gloas:
 		return pb.(*eth.BeaconBlockGloas).MarshalSSZTo(dst)
+	case version.Heze:
+		return pb.(*eth.BeaconBlockHeze).MarshalSSZTo(dst)
 	default:
 		return []byte{}, errIncorrectBlockVersion
 	}
@@ -955,6 +986,8 @@ func (b *BeaconBlock) SizeSSZ() int {
 		return pb.(*eth.BeaconBlockElectra).SizeSSZ()
 	case version.Gloas:
 		return pb.(*eth.BeaconBlockGloas).SizeSSZ()
+	case version.Heze:
+		return pb.(*eth.BeaconBlockHeze).SizeSSZ()
 	default:
 		panic(incorrectBodyVersion)
 	}
@@ -1105,6 +1138,16 @@ func (b *BeaconBlock) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
+	case version.Heze:
+		pb := &eth.BeaconBlockHeze{}
+		if err := pb.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+		var err error
+		newBlock, err = initBlockFromProtoHeze(pb)
+		if err != nil {
+			return err
+		}
 	default:
 		return errIncorrectBlockVersion
 	}
@@ -1150,6 +1193,8 @@ func (b *BeaconBlock) AsSignRequestObject() (validatorpb.SignRequestObject, erro
 		return &validatorpb.SignRequest_BlockFulu{BlockFulu: pb.(*eth.BeaconBlockElectra)}, nil
 	case version.Gloas:
 		return &validatorpb.SignRequest_BlockGloas{BlockGloas: pb.(*eth.BeaconBlockGloas)}, nil
+	case version.Heze:
+		return &validatorpb.SignRequest_BlockHeze{BlockHeze: pb.(*eth.BeaconBlockHeze)}, nil
 	default:
 		return nil, errIncorrectBlockVersion
 	}
@@ -1286,10 +1331,11 @@ func (b *BeaconBlockBody) BlobKzgCommitments() ([][]byte, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get signed execution payload bid")
 		}
-		if signedBid == nil || signedBid.Message == nil {
-			return nil, errors.New("nil execution payload bid or bid message")
+		bid, err := signedBid.Bid()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get execution payload bid")
 		}
-		return signedBid.Message.BlobKzgCommitments, nil
+		return bid.BlobKzgCommitments(), nil
 	}
 	if b.version >= version.Deneb {
 		return b.blobKzgCommitments, nil
@@ -1316,10 +1362,13 @@ func (b *BeaconBlockBody) PayloadAttestations() ([]*eth.PayloadAttestation, erro
 	return nil, consensus_types.ErrNotSupported("PayloadAttestations", b.version)
 }
 
-// SignedExecutionPayloadBid returns the signed execution payload header in the block.
-func (b *BeaconBlockBody) SignedExecutionPayloadBid() (*eth.SignedExecutionPayloadBid, error) {
+// SignedExecutionPayloadBid returns the signed execution payload bid in the block.
+func (b *BeaconBlockBody) SignedExecutionPayloadBid() (interfaces.ROSignedExecutionPayloadBid, error) {
+	if b.version >= version.Heze {
+		return WrappedROSignedExecutionPayloadBidHeze(b.signedExecutionPayloadBidHeze)
+	}
 	if b.version >= version.Gloas {
-		return b.signedExecutionPayloadBid, nil
+		return WrappedROSignedExecutionPayloadBid(b.signedExecutionPayloadBid)
 	}
 	return nil, consensus_types.ErrNotSupported("SignedExecutionPayloadBid", b.version)
 }
@@ -1375,6 +1424,8 @@ func (b *BeaconBlockBody) HashTreeRoot() ([field_params.RootLength]byte, error) 
 		return pb.(*eth.BeaconBlockBodyElectra).HashTreeRoot()
 	case version.Gloas:
 		return pb.(*eth.BeaconBlockBodyGloas).HashTreeRoot()
+	case version.Heze:
+		return pb.(*eth.BeaconBlockBodyHeze).HashTreeRoot()
 	default:
 		return [field_params.RootLength]byte{}, errIncorrectBodyVersion
 	}

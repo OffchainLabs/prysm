@@ -2,6 +2,7 @@ package validator
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -115,6 +116,11 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 	case *eth.GenericBeaconBlock_Gloas:
 		block = b.Gloas
 		includePayload = false
+	case *eth.GenericBeaconBlock_Heze:
+		// TODO(heze): return Heze block contents with the envelope. Until then the payload is revealed separately.
+		// Revisit for the next version of ProduceBlock when Heze support is added.
+		s.writeHezeBlockV4(ctx, w, r, b.Heze, v1alpha1resp.PayloadValue)
+		return
 	default:
 		httputil.HandleError(w, fmt.Sprintf("expected Gloas block, got %T", v1alpha1resp.Block), http.StatusInternalServerError)
 		return
@@ -195,6 +201,49 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 	}
 	httputil.WriteJson(w, &structs.ProduceBlockV4Response{
 		Version:                  version.String(version.Gloas),
+		ExecutionPayloadValue:    executionPayloadValue,
+		ConsensusBlockValue:      consensusBlockValue,
+		ExecutionPayloadIncluded: false,
+		Data:                     jsonBytes,
+	})
+}
+
+// writeHezeBlockV4 writes a Heze block without its execution payload.
+func (s *Server) writeHezeBlockV4(ctx context.Context, w http.ResponseWriter, r *http.Request, block *eth.BeaconBlockHeze, executionPayloadValue string) {
+	consensusBlockValue, httpError := getConsensusBlockValue(ctx, s.BlockRewardFetcher, block)
+	if httpError != nil {
+		log.WithError(httpError).Debug("Failed to get consensus block value")
+		consensusBlockValue = "0"
+	}
+	if executionPayloadValue == "" {
+		executionPayloadValue = "0"
+	}
+	w.Header().Set(api.VersionHeader, version.String(version.Heze))
+	w.Header().Set(api.ExecutionPayloadValueHeader, executionPayloadValue)
+	w.Header().Set(api.ConsensusBlockValueHeader, consensusBlockValue)
+	w.Header().Set(api.ExecutionPayloadIncludedHeader, "false")
+
+	if httputil.RespondWithSsz(r) {
+		sszResp, err := block.MarshalSSZ()
+		if err != nil {
+			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.WriteSsz(w, sszResp)
+		return
+	}
+	structBlock, err := structs.BeaconBlockHezeFromConsensus(block)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	jsonBytes, err := json.Marshal(structBlock)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	httputil.WriteJson(w, &structs.ProduceBlockV4Response{
+		Version:                  version.String(version.Heze),
 		ExecutionPayloadValue:    executionPayloadValue,
 		ConsensusBlockValue:      consensusBlockValue,
 		ExecutionPayloadIncluded: false,

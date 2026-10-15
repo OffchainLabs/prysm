@@ -787,10 +787,68 @@ func (p *PayloadAttributesV4) UnmarshalJSON(enc []byte) error {
 	return nil
 }
 
+type payloadAttributesV5JSON struct {
+	Timestamp                 hexutil.Uint64  `json:"timestamp"`
+	PrevRandao                hexutil.Bytes   `json:"prevRandao"`
+	SuggestedFeeRecipient     hexutil.Bytes   `json:"suggestedFeeRecipient"`
+	Withdrawals               []*Withdrawal   `json:"withdrawals"`
+	ParentBeaconBlockRoot     hexutil.Bytes   `json:"parentBeaconBlockRoot"`
+	SlotNumber                hexutil.Uint64  `json:"slotNumber"`
+	TargetGasLimit            hexutil.Uint64  `json:"targetGasLimit"`
+	InclusionListTransactions []hexutil.Bytes `json:"inclusionListTransactions"`
+}
+
+func (p *PayloadAttributesV5) MarshalJSON() ([]byte, error) {
+	withdrawals := p.Withdrawals
+	if withdrawals == nil {
+		withdrawals = make([]*Withdrawal, 0)
+	}
+	ilTxs := make([]hexutil.Bytes, len(p.InclusionListTransactions))
+	for i, tx := range p.InclusionListTransactions {
+		ilTxs[i] = tx
+	}
+
+	return json.Marshal(payloadAttributesV5JSON{
+		Timestamp:                 hexutil.Uint64(p.Timestamp),
+		PrevRandao:                p.PrevRandao,
+		SuggestedFeeRecipient:     p.SuggestedFeeRecipient,
+		Withdrawals:               withdrawals,
+		ParentBeaconBlockRoot:     p.ParentBeaconBlockRoot,
+		SlotNumber:                hexutil.Uint64(p.SlotNumber),
+		TargetGasLimit:            hexutil.Uint64(p.TargetGasLimit),
+		InclusionListTransactions: ilTxs,
+	})
+}
+
+func (p *PayloadAttributesV5) UnmarshalJSON(enc []byte) error {
+	dec := payloadAttributesV5JSON{}
+	if err := json.Unmarshal(enc, &dec); err != nil {
+		return err
+	}
+	*p = PayloadAttributesV5{}
+	p.Timestamp = uint64(dec.Timestamp)
+	p.PrevRandao = dec.PrevRandao
+	p.SuggestedFeeRecipient = dec.SuggestedFeeRecipient
+	withdrawals := dec.Withdrawals
+	if withdrawals == nil {
+		withdrawals = make([]*Withdrawal, 0)
+	}
+	p.Withdrawals = withdrawals
+	p.ParentBeaconBlockRoot = dec.ParentBeaconBlockRoot
+	p.SlotNumber = uint64(dec.SlotNumber)
+	p.TargetGasLimit = uint64(dec.TargetGasLimit)
+	p.InclusionListTransactions = make([][]byte, len(dec.InclusionListTransactions))
+	for i, tx := range dec.InclusionListTransactions {
+		p.InclusionListTransactions[i] = tx
+	}
+	return nil
+}
+
 type payloadStatusJSON struct {
-	LatestValidHash *common.Hash `json:"latestValidHash"`
-	Status          string       `json:"status"`
-	ValidationError *string      `json:"validationError"`
+	LatestValidHash        *common.Hash `json:"latestValidHash"`
+	Status                 string       `json:"status"`
+	ValidationError        *string      `json:"validationError"`
+	InclusionListSatisfied *bool        `json:"inclusionListSatisfied"`
 }
 
 // MarshalJSON --
@@ -801,9 +859,10 @@ func (p *PayloadStatus) MarshalJSON() ([]byte, error) {
 		latestHash = &hash
 	}
 	return json.Marshal(payloadStatusJSON{
-		LatestValidHash: latestHash,
-		Status:          p.Status.String(),
-		ValidationError: &p.ValidationError,
+		LatestValidHash:        latestHash,
+		Status:                 p.Status.String(),
+		ValidationError:        &p.ValidationError,
+		InclusionListSatisfied: p.InclusionListSatisfied,
 	})
 }
 
@@ -821,6 +880,7 @@ func (p *PayloadStatus) UnmarshalJSON(enc []byte) error {
 	if dec.ValidationError != nil {
 		p.ValidationError = *dec.ValidationError
 	}
+	p.InclusionListSatisfied = dec.InclusionListSatisfied
 	return nil
 }
 

@@ -270,6 +270,8 @@ func SignedBeaconBlockMessageJsoner(block interfaces.ReadOnlySignedBeaconBlock) 
 		return SignedBeaconBlockFuluFromConsensus(pbStruct)
 	case *eth.SignedBeaconBlockGloas:
 		return SignedBeaconBlockGloasFromConsensus(pbStruct)
+	case *eth.SignedBeaconBlockHeze:
+		return SignedBeaconBlockHezeFromConsensus(pbStruct)
 	default:
 		return nil, ErrUnsupportedConversion
 	}

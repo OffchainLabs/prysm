@@ -262,6 +262,13 @@ var (
 		},
 		[]string{"rpc", "result"},
 	)
+	hezeInclusionListsByIndicesRPCRequestsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "heze_inclusion_lists_by_indices_rpc_requests_total",
+			Help: "Count InclusionListsByIndices RPC requests by outcome.",
+		},
+		[]string{"result"},
+	)
 
 	// Data column sidecar validation, beacon metrics specs
 	dataColumnSidecarVerificationRequestsCounter = promauto.NewCounter(prometheus.CounterOpts{

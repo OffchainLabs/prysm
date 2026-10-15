@@ -11,9 +11,11 @@ type Attributer interface {
 	SuggestedFeeRecipient() []byte
 	Withdrawals() ([]*enginev1.Withdrawal, error)
 	ParentBeaconBlockRoot() ([]byte, error)
+	InclusionListTransactions() [][]byte
 	PbV1() (*enginev1.PayloadAttributes, error)
 	PbV2() (*enginev1.PayloadAttributesV2, error)
 	PbV3() (*enginev1.PayloadAttributesV3, error)
 	PbV4() (*enginev1.PayloadAttributesV4, error)
+	PbV5() (*enginev1.PayloadAttributesV5, error)
 	IsEmpty() bool
 }

@@ -1094,12 +1094,23 @@ func Test_getStateVersionAndPayload(t *testing.T) {
 				BlockNumber: 1,
 			},
 		},
+		{
+			name: "gloas state",
+			st: func() state.BeaconState {
+				s, _ := util.DeterministicGenesisStateGloas(t, 64)
+				return s
+			}(),
+			version: version.Gloas,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ver, header, err := getStateVersionAndPayload(tt.st)
 			require.NoError(t, err)
 			require.Equal(t, tt.version, ver)
+			if tt.version >= version.Gloas {
+				require.IsNil(t, header)
+			}
 			if header != nil {
 				protoHeader, ok := header.Proto().(*enginev1.ExecutionPayloadHeader)
 				require.Equal(t, true, ok)

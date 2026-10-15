@@ -1,7 +1,6 @@
 package initialsync
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 
@@ -27,7 +26,10 @@ func checkAllBlocksBuildOnEmpty(blks []blocks.BlockWithROSidecars) error {
 	if err != nil {
 		return errors.Wrap(err, "get execution payload bid from block")
 	}
-	firstBid := s.Message
+	firstBid, err := s.Bid()
+	if err != nil {
+		return errors.Wrap(err, "get execution payload bid from block")
+	}
 	for i := 1; i < len(blks); i++ {
 		next := blks[i].Block
 		if next.ReadOnlySignedBeaconBlock == nil {
@@ -40,7 +42,11 @@ func checkAllBlocksBuildOnEmpty(blks []blocks.BlockWithROSidecars) error {
 		if err != nil {
 			return errors.Wrap(err, "get execution payload bid from block")
 		}
-		if !bytes.Equal(nextSignedBid.Message.ParentBlockHash, firstBid.ParentBlockHash) {
+		nextBid, err := nextSignedBid.Bid()
+		if err != nil {
+			return errors.Wrap(err, "get execution payload bid from block")
+		}
+		if nextBid.ParentBlockHash() != firstBid.ParentBlockHash() {
 			return fmt.Errorf("block with root %#x does not build on top of the empty block", next.Root())
 		}
 		b = next
@@ -53,9 +59,13 @@ func checkAllBlocksBuildOnEmpty(blks []blocks.BlockWithROSidecars) error {
 // not consistent.
 func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse) {
 	if len(r.envelopes) == 0 {
-		// Only downscore with bad payload if the same peer provided available blocks
-		if err := checkAllBlocksBuildOnEmpty(r.bwb); err != nil && r.blocksFrom == r.payloadsFrom {
-			f.downscorePeer(r.blocksFrom, errors.Wrap(prysmsync.ErrInvalidFetchedData, err.Error()))
+		// Blocks that build on payloads need envelopes, so fail the request and let the queue fetch the batch again.
+		if err := checkAllBlocksBuildOnEmpty(r.bwb); err != nil {
+			if r.blocksFrom == r.payloadsFrom {
+				r.err = errors.Wrap(prysmsync.ErrInvalidFetchedData, err.Error())
+			} else {
+				r.err = errors.Wrap(err, "no envelopes for blocks that build on payloads")
+			}
 		}
 		return
 	}

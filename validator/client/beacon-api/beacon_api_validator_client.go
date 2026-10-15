@@ -456,3 +456,31 @@ func (c *beaconApiValidatorClient) SubmitPayloadAttestation(ctx context.Context,
 		return new(empty.Empty), c.submitPayloadAttestation(ctx, msg)
 	})
 }
+
+func (c *beaconApiValidatorClient) ProduceInclusionList(ctx context.Context, slot primitives.Slot) ([][]byte, error) {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.ProduceInclusionList")
+	defer span.End()
+
+	return wrapInMetrics[[][]byte]("ProduceInclusionList", func() ([][]byte, error) {
+		return c.produceInclusionList(ctx, slot)
+	})
+}
+
+func (c *beaconApiValidatorClient) SubmitInclusionList(ctx context.Context, in *ethpb.SignedInclusionList) error {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.SubmitInclusionList")
+	defer span.End()
+
+	_, err := wrapInMetrics[*empty.Empty]("SubmitInclusionList", func() (*empty.Empty, error) {
+		return new(empty.Empty), c.submitInclusionList(ctx, in)
+	})
+	return err
+}
+
+func (c *beaconApiValidatorClient) InclusionListDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*iface.InclusionListDutiesResponse, error) {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.InclusionListDuties")
+	defer span.End()
+
+	return wrapInMetrics[*iface.InclusionListDutiesResponse]("InclusionListDuties", func() (*iface.InclusionListDutiesResponse, error) {
+		return c.inclusionListDuties(ctx, epoch, validatorIndices)
+	})
+}

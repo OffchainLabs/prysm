@@ -72,4 +72,25 @@ func TestAllTopics(t *testing.T) {
 		_, ok := tops[e]
 		require.Equal(t, false, ok)
 	}
+
+	t.Run("inclusion list from Heze", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.MainnetConfig()
+		cfg.FuluForkEpoch = cfg.ElectraForkEpoch + 10
+		cfg.GloasForkEpoch = cfg.FuluForkEpoch + 10
+		cfg.HezeForkEpoch = cfg.GloasForkEpoch + 10
+		params.OverrideBeaconConfig(cfg)
+		tops := map[string]struct{}{}
+		for _, top := range s.allTopicStrings() {
+			tops[top] = struct{}{}
+		}
+		hezeDigest := params.ForkDigest(cfg.HezeForkEpoch)
+		gloasDigest := params.ForkDigest(cfg.GloasForkEpoch)
+		require.NotEqual(t, hezeDigest, gloasDigest)
+
+		_, ok := tops["/eth2/"+hex.EncodeToString(hezeDigest[:])+"/inclusion_list/ssz_snappy"]
+		require.Equal(t, true, ok)
+		_, ok = tops["/eth2/"+hex.EncodeToString(gloasDigest[:])+"/inclusion_list/ssz_snappy"]
+		require.Equal(t, false, ok)
+	})
 }

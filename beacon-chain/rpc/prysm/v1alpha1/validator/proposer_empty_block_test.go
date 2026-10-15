@@ -22,6 +22,8 @@ func Test_getEmptyBlock(t *testing.T) {
 	config.DenebForkEpoch = 4
 	config.ElectraForkEpoch = 5
 	config.FuluForkEpoch = 6
+	config.GloasForkEpoch = 7
+	config.HezeForkEpoch = 8
 	params.OverrideBeaconConfig(config)
 
 	tests := []struct {
@@ -79,6 +81,24 @@ func Test_getEmptyBlock(t *testing.T) {
 			slot: primitives.Slot(params.BeaconConfig().FuluForkEpoch) * params.BeaconConfig().SlotsPerEpoch,
 			want: func() interfaces.ReadOnlySignedBeaconBlock {
 				b, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockFulu{Block: &ethpb.BeaconBlockElectra{Body: &ethpb.BeaconBlockBodyElectra{}}})
+				require.NoError(t, err)
+				return b
+			},
+		},
+		{
+			name: "gloas",
+			slot: primitives.Slot(params.BeaconConfig().GloasForkEpoch) * params.BeaconConfig().SlotsPerEpoch,
+			want: func() interfaces.ReadOnlySignedBeaconBlock {
+				b, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{Block: &ethpb.BeaconBlockGloas{Body: &ethpb.BeaconBlockBodyGloas{}}})
+				require.NoError(t, err)
+				return b
+			},
+		},
+		{
+			name: "heze",
+			slot: primitives.Slot(params.BeaconConfig().HezeForkEpoch) * params.BeaconConfig().SlotsPerEpoch,
+			want: func() interfaces.ReadOnlySignedBeaconBlock {
+				b, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockHeze{Block: &ethpb.BeaconBlockHeze{Body: &ethpb.BeaconBlockBodyHeze{}}})
 				require.NoError(t, err)
 				return b
 			},

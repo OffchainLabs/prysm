@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common"
@@ -328,6 +329,40 @@ func TestServer_getLocalPayloadFromEngine_GloasForkBoundaryCacheMiss(t *testing.
 	_, err = vs.getLocalPayloadFromEngine(t.Context(), st, [32]byte{'a'}, slot, 0, true)
 	require.NoError(t, err)
 	require.NotNil(t, engine.FetchedAttributes)
+}
+
+func TestServer_getLocalPayloadFromEngine_HezeInclusionListTransactions(t *testing.T) {
+	p := newHezeProposal(t)
+	p.addList(t, p.committee[0], p.dependentRoot, true)
+	p.addList(t, p.committee[1], p.dependentRoot, false)
+	p.addList(t, p.committee[2], [32]byte{'o'}, true)
+	p.chain.BlockSlot = p.slot - 1
+
+	ed, err := blocks.NewWrappedExecutionData(emptyPayloadDeneb())
+	require.NoError(t, err)
+	engine := &powtesting.EngineClient{
+		PayloadIDBytes:     &pb.PayloadIDBytes{0x1},
+		GetPayloadResponse: &blocks.GetPayloadResponse{ExecutionData: ed},
+	}
+	vs := &Server{
+		ExecutionEngineCaller:    engine,
+		ForkchoiceFetcher:        p.chain,
+		FinalizationFetcher:      &chainMock.ChainService{},
+		PayloadIDCache:           cache.NewPayloadIDCache(),
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+	}
+
+	_, err = vs.getLocalPayloadFromEngine(t.Context(), p.head, p.parentRoot, p.slot, 0, false)
+	require.NoError(t, err)
+	require.Equal(t, version.Heze, engine.FetchedAttributes.Version())
+	v5, err := engine.FetchedAttributes.PbV5()
+	require.NoError(t, err)
+	// only_timely=False keeps the late list, and the list of another dependent root is not used.
+	want := [][]byte{{byte(p.committee[0]), 1}, {byte(p.committee[1]), 1}}
+	if p.committee[1] < p.committee[0] {
+		want[0], want[1] = want[1], want[0]
+	}
+	require.DeepEqual(t, want, v5.InclusionListTransactions)
 }
 
 func TestServer_applyParentExecutionPayloadToHead_PreGloas(t *testing.T) {

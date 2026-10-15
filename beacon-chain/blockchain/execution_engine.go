@@ -83,7 +83,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 	if arg.attributes == nil {
 		arg.attributes = payloadattribute.EmptyWithVersion(headBlk.Version())
 	}
-	payloadID, lastValidHash, err := s.cfg.ExecutionEngineCaller.ForkchoiceUpdated(ctx, fcs, arg.attributes)
+	payloadID, lastValidHash, _, err := s.cfg.ExecutionEngineCaller.ForkchoiceUpdated(ctx, fcs, arg.attributes)
 	if err != nil {
 		switch {
 		case errors.Is(err, execution.ErrAcceptedSyncingPayloadStatus):
@@ -379,6 +379,15 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 
 	v := st.Version()
 	switch {
+	case v >= version.Heze:
+		withdrawals, err := s.computePayloadWithdrawals(ctx, st, bytesutil.ToBytes32(headRoot), headFull)
+		if err != nil {
+			log.WithError(err).Error("Could not get withdrawals for payload attribute")
+			return emptyAttri
+		}
+		parentGasLimit := helpers.ParentTargetGasLimit(st)
+		ilTxs := s.proposalInclusionListTransactions(ctx, st, slot)
+		return payloadAttributesHeze(uint64(t.Unix()), prevRando, feeRecipient[:], headRoot, withdrawals, slot, pref.GasLimitOr(parentGasLimit), ilTxs)
 	case v >= version.Gloas:
 		withdrawals, err := s.computePayloadWithdrawals(ctx, st, bytesutil.ToBytes32(headRoot), headFull)
 		if err != nil {
@@ -412,6 +421,27 @@ func payloadAttributesGloas(timestamp uint64, prevRandao, feeRecipient, parentBe
 	if err != nil {
 		log.WithError(err).Error("Could not get payload attribute")
 		return payloadattribute.EmptyWithVersion(version.Gloas)
+	}
+	return attr
+}
+
+func payloadAttributesHeze(timestamp uint64, prevRandao, feeRecipient, parentBeaconBlockRoot []byte, withdrawals []*enginev1.Withdrawal, slot primitives.Slot, targetGasLimit uint64, ilTxs [][]byte) payloadattribute.Attributer {
+	if ilTxs == nil {
+		ilTxs = [][]byte{}
+	}
+	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV5{
+		Timestamp:                 timestamp,
+		PrevRandao:                prevRandao,
+		SuggestedFeeRecipient:     feeRecipient,
+		Withdrawals:               withdrawals,
+		ParentBeaconBlockRoot:     parentBeaconBlockRoot,
+		SlotNumber:                uint64(slot),
+		TargetGasLimit:            targetGasLimit,
+		InclusionListTransactions: ilTxs,
+	})
+	if err != nil {
+		log.WithError(err).Error("Could not get payload attribute")
+		return payloadattribute.EmptyWithVersion(version.Heze)
 	}
 	return attr
 }

@@ -266,17 +266,17 @@ func logProposedBlock(log *logrus.Entry, blk interfaces.SignedBeaconBlock, blkRo
 		if err != nil {
 			return errors.Wrap(err, "failed to get execution payload bid")
 		}
-		if bid != nil && bid.Message != nil {
-			msg := bid.Message
+		if msg, err := bid.Bid(); err == nil {
+			blockHash, parentHash := msg.BlockHash(), msg.ParentBlockHash()
 			log = log.WithFields(logrus.Fields{
-				"builderIndex": logs.BuilderIndexLabel(msg.BuilderIndex),
-				"bidValue":     msg.Value,
-				"blockHash":    fmt.Sprintf("%#x", bytesutil.Trunc(msg.BlockHash)),
-				"parentHash":   fmt.Sprintf("%#x", bytesutil.Trunc(msg.ParentBlockHash)),
-				"gasLimit":     msg.GasLimit,
+				"builderIndex": logs.BuilderIndexLabel(msg.BuilderIndex()),
+				"bidValue":     msg.Value(),
+				"blockHash":    fmt.Sprintf("%#x", bytesutil.Trunc(blockHash[:])),
+				"parentHash":   fmt.Sprintf("%#x", bytesutil.Trunc(parentHash[:])),
+				"gasLimit":     msg.GasLimit(),
 			})
-			if len(msg.BlobKzgCommitments) != 0 {
-				log = log.WithField("kzgCommitmentCount", len(msg.BlobKzgCommitments))
+			if n := msg.BlobKzgCommitmentCount(); n != 0 {
+				log = log.WithField("kzgCommitmentCount", n)
 			}
 		}
 		payloadAtts, err := blk.Block().Body().PayloadAttestations()

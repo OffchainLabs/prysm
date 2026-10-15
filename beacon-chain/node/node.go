@@ -105,6 +105,7 @@ type BeaconNode struct {
 	blsToExecPool             blstoexec.PoolManager
 	depositCache              cache.DepositCache
 	proposerPreferencesCache  *cache.ProposerPreferencesCache
+	inclusionListStore        *cache.InclusionListStore
 	subscribedValidatorsCache *cache.SubscribedValidatorsCache
 	builderCircuitBreaker     *cache.BuilderCircuitBreaker
 	payloadIDCache            *cache.PayloadIDCache
@@ -176,6 +177,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		syncCommitteePool:         synccommittee.NewPool(),
 		blsToExecPool:             blstoexec.NewPool(),
 		proposerPreferencesCache:  cache.NewProposerPreferencesCache(),
+		inclusionListStore:        cache.NewInclusionListStore(),
 		subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
 		builderCircuitBreaker:     cache.NewBuilderCircuitBreaker(),
 		payloadIDCache:            cache.NewPayloadIDCache(),
@@ -814,6 +816,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithBlobStorage(b.BlobStorage),
 		blockchain.WithDataColumnStorage(b.DataColumnStorage),
 		blockchain.WithProposerPreferencesCache(b.proposerPreferencesCache),
+		blockchain.WithInclusionListStore(b.inclusionListStore),
 		blockchain.WithSubscribedValidatorsCache(b.subscribedValidatorsCache),
 		blockchain.WithBuilderCircuitBreaker(b.builderCircuitBreaker),
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
@@ -1045,6 +1048,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		BlockReceiver:                    chainService,
 		PayloadAttestationReceiver:       chainService,
 		ExecutionPayloadEnvelopeReceiver: chainService,
+		InclusionListReceiver:            chainService,
 		BlobReceiver:                     chainService,
 		DataColumnReceiver:               chainService,
 		AttestationReceiver:              chainService,

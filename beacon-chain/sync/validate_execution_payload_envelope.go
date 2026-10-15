@@ -112,11 +112,7 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-	wrappedBid, err := blocks.WrappedROSignedExecutionPayloadBid(signedBid)
-	if err != nil {
-		return pubsub.ValidationIgnore, err
-	}
-	bid, err := wrappedBid.Bid()
+	bid, err := signedBid.Bid()
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
