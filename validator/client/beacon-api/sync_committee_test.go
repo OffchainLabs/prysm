@@ -2,12 +2,17 @@ package beacon_api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api/apiutil"
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -249,6 +254,231 @@ func TestGetSyncCommitteeContribution(t *testing.T) {
 			assert.DeepEqual(t, expectedResponse, actualResponse)
 		})
 	}
+}
+
+func TestGetSyncCommitteeContribution_UsesSubmittedSyncMessageRoot(t *testing.T) {
+	const (
+		aggregatorRoot = "0x719d4f66a5f25c35d93718821aacb342194391034b11cf0a5822cc249178a274"
+		otherRoot      = "0x5ecf3bff35e39d5f75476d42950d549f81fa93038c46b6652ae89ae1f7ad834f"
+		headRoot       = "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
+		syncPoolPath   = "/eth/v1/beacon/pool/sync_committees"
+	)
+	pubkey := make([]byte, 48)
+	decode := func(root string) []byte {
+		b, err := hexutil.Decode(root)
+		require.NoError(t, err)
+		return b
+	}
+	contributionPath := func(root string, slot int) string {
+		return fmt.Sprintf("/eth/v1/validator/sync_committee_contribution?beacon_block_root=%s&slot=%d&subcommittee_index=1", root, slot)
+	}
+	expectContribution := func(handler *mock.MockHandler, root string, slot int) {
+		data := &structs.SyncCommitteeContribution{
+			Slot:              strconv.Itoa(slot),
+			BeaconBlockRoot:   root,
+			SubcommitteeIndex: "1",
+			AggregationBits:   "0x01",
+			Signature:         "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505",
+		}
+		handler.EXPECT().Get(gomock.Any(), contributionPath(root, slot), &structs.ProduceSyncCommitteeContributionResponse{}).
+			SetArg(2, structs.ProduceSyncCommitteeContributionResponse{Data: data}).Return(nil).Times(1)
+	}
+	expectHead := func(handler *mock.MockHandler) {
+		handler.EXPECT().Get(gomock.Any(), "/eth/v1/beacon/blocks/head/root", &structs.BlockRootResponse{}).
+			SetArg(2, structs.BlockRootResponse{Data: &structs.BlockRoot{Root: headRoot}}).Return(nil).Times(1)
+	}
+	expectIndex := func(ctrl *gomock.Controller, resp *structs.GetValidatorsResponse) *mock.MockStateValidatorsProvider {
+		provider := mock.NewMockStateValidatorsProvider(ctrl)
+		provider.EXPECT().StateValidators(gomock.Any(), []string{hexutil.Encode(pubkey)}, nil, nil).Return(resp, nil).Times(1)
+		return provider
+	}
+	expectSyncing := func(handler *mock.MockHandler, optimistic bool) {
+		handler.EXPECT().Get(gomock.Any(), "/eth/v1/node/syncing", &structs.SyncStatusResponse{}, gomock.Any(), gomock.Any()).
+			SetArg(2, structs.SyncStatusResponse{Data: &structs.SyncStatusResponseData{IsOptimistic: optimistic}}).Return(nil).Times(1)
+	}
+	aggregatorIndex := &structs.GetValidatorsResponse{Data: []*structs.ValidatorContainer{{Index: "7"}}}
+
+	t.Run("keys that signed different roots use the aggregator's own root", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		handler := mock.NewMockHandler(ctrl)
+		handler.EXPECT().Post(gomock.Any(), syncPoolPath, nil, gomock.Any(), nil).Return(nil).Times(2)
+		expectSyncing(handler, false)
+		expectContribution(handler, aggregatorRoot, 2)
+
+		validatorClient := &beaconApiValidatorClient{handler: handler, stateValidatorsProvider: expectIndex(ctrl, aggregatorIndex)}
+		require.NoError(t, validatorClient.submitSyncMessage(t.Context(), &ethpb.SyncCommitteeMessage{Slot: 2, ValidatorIndex: 7, BlockRoot: decode(aggregatorRoot)}))
+		require.NoError(t, validatorClient.submitSyncMessage(t.Context(), &ethpb.SyncCommitteeMessage{Slot: 2, ValidatorIndex: 8, BlockRoot: decode(otherRoot)}))
+		contribution, err := validatorClient.syncCommitteeContribution(t.Context(), &ethpb.SyncCommitteeContributionRequest{Slot: 2, PublicKey: pubkey, SubnetId: 1})
+		require.NoError(t, err)
+		assert.DeepEqual(t, decode(aggregatorRoot), contribution.BlockRoot)
+	})
+
+	t.Run("keys that signed one root use it without the index lookup", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		handler := mock.NewMockHandler(ctrl)
+		handler.EXPECT().Post(gomock.Any(), syncPoolPath, nil, gomock.Any(), nil).Return(nil).Times(2)
+		expectSyncing(handler, false)
+		expectContribution(handler, aggregatorRoot, 2)
+
+		validatorClient := &beaconApiValidatorClient{handler: handler, stateValidatorsProvider: mock.NewMockStateValidatorsProvider(ctrl)}
+		require.NoError(t, validatorClient.submitSyncMessage(t.Context(), &ethpb.SyncCommitteeMessage{Slot: 2, ValidatorIndex: 7, BlockRoot: decode(aggregatorRoot)}))
+		require.NoError(t, validatorClient.submitSyncMessage(t.Context(), &ethpb.SyncCommitteeMessage{Slot: 2, ValidatorIndex: 8, BlockRoot: decode(aggregatorRoot)}))
+		contribution, err := validatorClient.syncCommitteeContribution(t.Context(), &ethpb.SyncCommitteeContributionRequest{Slot: 2, PublicKey: pubkey, SubnetId: 1})
+		require.NoError(t, err)
+		assert.DeepEqual(t, decode(aggregatorRoot), contribution.BlockRoot)
+	})
+
+	t.Run("optimistic node is refused before the root is used", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		handler := mock.NewMockHandler(ctrl)
+		handler.EXPECT().Post(gomock.Any(), syncPoolPath, nil, gomock.Any(), nil).Return(nil).Times(1)
+		expectSyncing(handler, true)
+
+		validatorClient := &beaconApiValidatorClient{handler: handler, stateValidatorsProvider: mock.NewMockStateValidatorsProvider(ctrl)}
+		require.NoError(t, validatorClient.submitSyncMessage(t.Context(), &ethpb.SyncCommitteeMessage{Slot: 2, ValidatorIndex: 7, BlockRoot: decode(aggregatorRoot)}))
+		_, err := validatorClient.syncCommitteeContribution(t.Context(), &ethpb.SyncCommitteeContributionRequest{Slot: 2, PublicKey: pubkey, SubnetId: 1})
+		require.ErrorContains(t, "optimistic", err)
+	})
+
+	t.Run("aggregator without a sync message in a slot with different roots falls back to the head", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		handler := mock.NewMockHandler(ctrl)
+		handler.EXPECT().Post(gomock.Any(), syncPoolPath, nil, gomock.Any(), nil).Return(nil).Times(2)
+		expectSyncing(handler, false)
+		expectHead(handler)
+		expectContribution(handler, headRoot, 2)
+
+		validatorClient := &beaconApiValidatorClient{handler: handler, stateValidatorsProvider: expectIndex(ctrl, aggregatorIndex)}
+		require.NoError(t, validatorClient.submitSyncMessage(t.Context(), &ethpb.SyncCommitteeMessage{Slot: 2, ValidatorIndex: 8, BlockRoot: decode(otherRoot)}))
+		require.NoError(t, validatorClient.submitSyncMessage(t.Context(), &ethpb.SyncCommitteeMessage{Slot: 2, ValidatorIndex: 9, BlockRoot: decode(aggregatorRoot)}))
+		_, err := validatorClient.syncCommitteeContribution(t.Context(), &ethpb.SyncCommitteeContributionRequest{Slot: 2, PublicKey: pubkey, SubnetId: 1})
+		require.NoError(t, err)
+	})
+
+	t.Run("failed submission is still recorded", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		handler := mock.NewMockHandler(ctrl)
+		handler.EXPECT().Post(gomock.Any(), syncPoolPath, nil, gomock.Any(), nil).Return(errors.New("bad request")).Times(1)
+		expectSyncing(handler, false)
+		expectContribution(handler, aggregatorRoot, 2)
+
+		validatorClient := &beaconApiValidatorClient{handler: handler, stateValidatorsProvider: mock.NewMockStateValidatorsProvider(ctrl)}
+		require.ErrorContains(t, "bad request", validatorClient.submitSyncMessage(t.Context(), &ethpb.SyncCommitteeMessage{Slot: 2, ValidatorIndex: 7, BlockRoot: decode(aggregatorRoot)}))
+		contribution, err := validatorClient.syncCommitteeContribution(t.Context(), &ethpb.SyncCommitteeContributionRequest{Slot: 2, PublicKey: pubkey, SubnetId: 1})
+		require.NoError(t, err)
+		assert.DeepEqual(t, decode(aggregatorRoot), contribution.BlockRoot)
+	})
+
+	t.Run("root is recorded before the POST returns", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		handler := mock.NewMockHandler(ctrl)
+		posted, release := make(chan struct{}), make(chan struct{})
+		handler.EXPECT().Post(gomock.Any(), syncPoolPath, nil, gomock.Any(), nil).DoAndReturn(
+			func(context.Context, string, map[string]string, *bytes.Buffer, any) error {
+				close(posted)
+				<-release
+				return nil
+			}).Times(1)
+		expectSyncing(handler, false)
+		expectContribution(handler, aggregatorRoot, 2)
+
+		validatorClient := &beaconApiValidatorClient{handler: handler, stateValidatorsProvider: mock.NewMockStateValidatorsProvider(ctrl)}
+		submitted := make(chan error)
+		go func() {
+			submitted <- validatorClient.submitSyncMessage(t.Context(), &ethpb.SyncCommitteeMessage{Slot: 2, ValidatorIndex: 7, BlockRoot: decode(aggregatorRoot)})
+		}()
+		<-posted
+		contribution, err := validatorClient.syncCommitteeContribution(t.Context(), &ethpb.SyncCommitteeContributionRequest{Slot: 2, PublicKey: pubkey, SubnetId: 1})
+		close(release)
+		require.NoError(t, <-submitted)
+		require.NoError(t, err)
+		assert.DeepEqual(t, decode(aggregatorRoot), contribution.BlockRoot)
+	})
+
+	t.Run("slot without sync messages falls back to the head", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		handler := mock.NewMockHandler(ctrl)
+		handler.EXPECT().Post(gomock.Any(), syncPoolPath, nil, gomock.Any(), nil).Return(nil).Times(1)
+		expectHead(handler)
+		expectContribution(handler, headRoot, 3)
+
+		validatorClient := &beaconApiValidatorClient{handler: handler}
+		require.NoError(t, validatorClient.submitSyncMessage(t.Context(), &ethpb.SyncCommitteeMessage{Slot: 2, ValidatorIndex: 7, BlockRoot: decode(aggregatorRoot)}))
+		_, err := validatorClient.syncCommitteeContribution(t.Context(), &ethpb.SyncCommitteeContributionRequest{Slot: 3, PublicKey: pubkey, SubnetId: 1})
+		require.NoError(t, err)
+	})
+}
+
+// TestGetSyncCommitteeContribution_ChecksTheContributionHost runs one optimistic and one validated host.
+// An optimistic host returns 503 for the contribution, so the contribution GET moves to the validated host.
+func TestGetSyncCommitteeContribution_ChecksTheContributionHost(t *testing.T) {
+	root, err := hexutil.Decode("0x719d4f66a5f25c35d93718821aacb342194391034b11cf0a5822cc249178a274")
+	require.NoError(t, err)
+	otherRoot, err := hexutil.Decode("0x5ecf3bff35e39d5f75476d42950d549f81fa93038c46b6652ae89ae1f7ad834f")
+	require.NoError(t, err)
+	pubkey := make([]byte, 48)
+	newHost := func(t *testing.T, optimistic bool, release <-chan struct{}) *httptest.Server {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var body any
+			switch r.URL.Path {
+			case "/eth/v1/beacon/pool/sync_committees":
+				return
+			case "/eth/v1/node/syncing":
+				body = structs.SyncStatusResponse{Data: &structs.SyncStatusResponseData{IsOptimistic: optimistic}}
+			case "/eth/v1/beacon/states/head/validators":
+				if !optimistic {
+					<-release
+				}
+				body = structs.GetValidatorsResponse{ExecutionOptimistic: optimistic, Data: []*structs.ValidatorContainer{{Index: "7"}}}
+			case "/eth/v1/validator/sync_committee_contribution":
+				if optimistic {
+					http.Error(w, "optimistic", http.StatusServiceUnavailable)
+					return
+				}
+				body = structs.ProduceSyncCommitteeContributionResponse{Data: &structs.SyncCommitteeContribution{
+					Slot:              "2",
+					BeaconBlockRoot:   r.URL.Query().Get("beacon_block_root"),
+					SubcommitteeIndex: "1",
+					AggregationBits:   "0x01",
+					Signature:         "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505",
+				}}
+			default:
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(body))
+		}))
+		t.Cleanup(server.Close)
+		return server
+	}
+	contribute := func(t *testing.T, hosts string, messages ...*ethpb.SyncCommitteeMessage) {
+		provider, err := rest.NewRestConnectionProvider(hosts)
+		require.NoError(t, err)
+		handler := provider.Handler()
+		validatorClient := &beaconApiValidatorClient{handler: handler, stateValidatorsProvider: beaconApiStateValidatorsProvider{handler: handler}}
+		for _, m := range messages {
+			require.NoError(t, validatorClient.submitSyncMessage(t.Context(), m))
+		}
+		contribution, err := validatorClient.syncCommitteeContribution(t.Context(), &ethpb.SyncCommitteeContributionRequest{Slot: 2, PublicKey: pubkey, SubnetId: 1})
+		require.NoError(t, err)
+		assert.DeepEqual(t, root, contribution.BlockRoot)
+	}
+
+	t.Run("optimistic second host answers the index POST first", func(t *testing.T) {
+		// release unblocks the validated host's index POST after the test, so the optimistic host always answers it first.
+		release := make(chan struct{})
+		validated, optimistic := newHost(t, false, release), newHost(t, true, release)
+		t.Cleanup(func() { close(release) })
+		contribute(t, validated.URL+","+optimistic.URL,
+			&ethpb.SyncCommitteeMessage{Slot: 2, ValidatorIndex: 7, BlockRoot: root},
+			&ethpb.SyncCommitteeMessage{Slot: 2, ValidatorIndex: 8, BlockRoot: otherRoot})
+	})
+
+	t.Run("optimistic first host does not stop the validated second host", func(t *testing.T) {
+		optimistic, validated := newHost(t, true, nil), newHost(t, false, nil)
+		contribute(t, optimistic.URL+","+validated.URL, &ethpb.SyncCommitteeMessage{Slot: 2, ValidatorIndex: 7, BlockRoot: root})
+	})
 }
 
 func TestGetSyncSubCommitteeIndex(t *testing.T) {
