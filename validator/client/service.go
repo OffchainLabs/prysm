@@ -219,6 +219,8 @@ func (v *ValidatorService) Start() {
 		submittedSyncMessages:        make(map[slotRootKey][]uint64),
 		submittedSyncContributions:   make(map[slotRootKey]*submittedSyncContribution),
 		submittedPayloadAtts:         make(map[submittedPayloadAttKey][]uint64),
+		submittedAvailableVotes:      make(map[slotRootKey][]uint64),
+		submittedFinalityAtts:        make(map[submittedFinalityAttKey][]uint64),
 		logValidatorPerformance:      v.logValidatorPerformance,
 		emitAccountMetrics:           v.emitAccountMetrics,
 		enableAPI:                    v.enableAPI,

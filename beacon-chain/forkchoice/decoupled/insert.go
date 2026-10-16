@@ -70,3 +70,21 @@ func (st *Store) Justified() *Node                   { return st.justified }
 func (st *Store) JustifiedHeight() primitives.Height { return st.hJ }
 func (st *Store) FinalizedHeight() primitives.Height { return st.hF }
 func (st *Store) MaxHeight() primitives.Height       { return st.hMax }
+func (st *Store) CommitteeSize() uint64              { return st.cfg.CommitteeSize }
+func (st *Store) Joined(slot primitives.Slot) bool   { return st.joined(slot) }
+
+// Distinct validators whose vote for the slot the pool holds.
+func (st *Store) Voters(slot primitives.Slot) int {
+	if b := st.pool[slot]; b != nil {
+		return len(b.votesBy)
+	}
+	return 0
+}
+
+func (st *Store) Locks() []Lock {
+	out := make([]Lock, 0, len(st.locks))
+	for _, l := range st.locks {
+		out = append(out, Lock{Root: l.block.Root, Slot: l.block.Slot, Deadline: l.deadline})
+	}
+	return out
+}

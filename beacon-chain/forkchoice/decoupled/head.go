@@ -11,7 +11,7 @@ import (
 func (st *Store) selectHead(in func(*Node) bool, v view, voteSlot primitives.Slot, now time.Time) *Node {
 	fr := st.frame()
 	counts := st.countSupport(v, voteSlot)
-	return ghost(st.anchor(fr, now), st.viableTree(fr, in), counts.score, fr.eligible(counts, st.slotAt(now)))
+	return ghost(st.anchor(fr, now), st.viableTree(fr, in), counts.score, fr.eligible(counts, st.slotAt(now), st.cfg.ForkSlot))
 }
 
 // Spec: ac_proposal. The parent and both vote lists come from one evaluation of the previous slot's held votes. A nil parent means no proposal.

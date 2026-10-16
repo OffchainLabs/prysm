@@ -122,7 +122,7 @@ func SignatureBatch(st state.ReadOnlyBeaconState, body interfaces.ReadOnlyBeacon
 	for _, a := range atts {
 		indices := make([]int, len(a.AttestingIndices))
 		for i, v := range a.AttestingIndices {
-			indices[i] = int(v)
+			indices[i] = int(v) // lint:ignore uintcast -- validator indices fit in int.
 		}
 		if err := addAggregate(set, st, indices, a.Data, a.Signature, domain, "finality attestation"); err != nil {
 			return nil, err

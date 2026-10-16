@@ -7,6 +7,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/decoupled"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -58,6 +59,7 @@ type DecoupledReceiver interface {
 // Spec: Figure 2's order. Every entry runs the phases scheduled between the last entry and now at their own instants, the slot start prune, the Δ tick then the vote read, the 2Δ tick then the source read, and ticks to now last. Stamps are exact, so a phase run late gives its scheduled result and a read sees the state its own tick left, never a later lock. Nothing is captured before the restart at sync. The caller holds decoupledLock and the store exists.
 func (s *Service) decoupledAdvance(now time.Time) {
 	store := s.decoupledStore
+	locks := store.Locks()
 	cfg := params.BeaconConfig()
 	slotDuration, delta := cfg.SlotDuration(), cfg.SlotDuration()/4
 	slotAt := func(t time.Time) primitives.Slot {
@@ -76,6 +78,10 @@ func (s *Service) decoupledAdvance(now time.Time) {
 			switch phase {
 			case 0:
 				store.NewSlot(sl)
+				if s.decoupledSynced && !s.decoupledJoined && store.Joined(sl) {
+					s.decoupledJoined = true
+					log.WithField("slot", sl).Info("Joined the decoupled fork choice")
+				}
 			case 1:
 				store.OnTick(t)
 				if s.decoupledSynced {
@@ -100,6 +106,54 @@ func (s *Service) decoupledAdvance(now time.Time) {
 	}
 	store.OnTick(now)
 	s.decoupledProcessed = now
+	logDecoupledLocks(locks, store.Locks())
+}
+
+// A release is routine expiry, a lock moved by unlock shows as released and acquired with one deadline.
+func logDecoupledLocks(before, after []decoupled.Lock) {
+	for _, l := range after {
+		if !slices.Contains(before, l) {
+			log.WithFields(logrus.Fields{"block": blockRef(l.Root, l.Slot), "deadline": l.Deadline.Format(time.RFC3339)}).Info("Decoupled lock acquired")
+		}
+	}
+	for _, l := range before {
+		if !slices.Contains(after, l) {
+			log.WithFields(logrus.Fields{"block": blockRef(l.Root, l.Slot), "deadline": l.Deadline.Format(time.RFC3339)}).Debug("Decoupled lock released")
+		}
+	}
+}
+
+// The σ transitions the block's state took, read from the summaries so regen and replay stay quiet.
+func logDecoupledFG(parent *decoupled.Node, b decoupled.Block) {
+	if parent == nil {
+		return
+	}
+	if b.FG.Target.Height > parent.FG.Target.Height {
+		reason := "progress quorum"
+		if b.FG.Justified.Height > parent.FG.Justified.Height {
+			reason = "target quorum"
+		}
+		log.WithFields(logrus.Fields{"slot": b.Slot, "height": b.FG.Target.Height, "entry": rootRef(b.FG.Target.Root), "reason": reason}).Info("Decoupled height advanced")
+	}
+	if b.FG.Justified.Height > parent.FG.Justified.Height {
+		log.WithFields(logrus.Fields{"slot": b.Slot, "height": b.FG.Justified.Height, "root": rootRef(b.FG.Justified.Root)}).Info("Decoupled height justified")
+	}
+	if b.FG.Finalized.Height > parent.FG.Finalized.Height {
+		log.WithFields(logrus.Fields{"slot": b.Slot, "height": b.FG.Finalized.Height, "root": rootRef(b.FG.Finalized.Root)}).Info("Decoupled height finalized")
+	}
+}
+
+func rootRef(root [32]byte) string { return fmt.Sprintf("%#x", bytesutil.Trunc(root[:])) }
+
+func blockRef(root [32]byte, slot primitives.Slot) string {
+	return fmt.Sprintf("%s@%d", rootRef(root), slot)
+}
+
+func nodeRef(n *decoupled.Node) string {
+	if n == nil {
+		return "none"
+	}
+	return blockRef(n.Root, n.Slot)
 }
 
 // Spec: fg_attest's inputs, (h_c, T_c) from the source state and (h_j, J, h_F) from the head state, read from the engine summaries. Nil when there is no source.
@@ -120,7 +174,7 @@ func decoupledFinalityData(source, head *decoupled.Node) *ethpb.FinalityAttestat
 func (s *Service) restartDecoupled() {
 	s.decoupledLock.Lock()
 	defer s.decoupledLock.Unlock()
-	s.decoupledSynced = true
+	s.decoupledSynced, s.decoupledJoined = true, false
 	if s.decoupledStore == nil {
 		return
 	}
@@ -128,6 +182,7 @@ func (s *Service) restartDecoupled() {
 	s.decoupledStore.Restart(now)
 	s.decoupledProcessed = now
 	s.decoupledProposal, s.decoupledDuty = decoupledProposal{}, decoupledDuty{}
+	log.WithField("slot", s.CurrentSlot()).Info("Restarted the decoupled fork choice at sync")
 }
 
 // Spec: on_ac_message, the engine stamps the vote on receipt, the pool keeps the signed copy for the next proposer.
@@ -223,6 +278,9 @@ func (s *Service) commitDecoupled(ctx context.Context, blocks []decoupled.Block)
 		if err := s.decoupledStore.InsertNode(b, now); err != nil {
 			log.WithError(err).WithField("root", fmt.Sprintf("%#x", b.Root)).Fatal("Decoupled fork choice rejected a prepared block")
 		}
+		if s.inRegularSync() {
+			logDecoupledFG(s.decoupledStore.Node(b.Parent), b)
+		}
 	}
 	if err := s.syncDecoupledCheckpoints(ctx); err != nil {
 		log.WithError(err).Fatal("Legacy fork choice could not follow the decoupled checkpoints")
@@ -292,7 +350,11 @@ func (s *Service) startDecoupled(ctx context.Context, claimed decoupled.Pair, va
 	if cfg.DecoupledSlotsPerRound < 2 {
 		return errors.New("decoupled slots per round must be at least 2")
 	}
-	store, err := decoupled.New(decoupled.Config{Delta: cfg.SlotDuration() / 4, LockStreak: cfg.DecoupledLockStreak, CommitteeSize: validators}, s.genesisTime, anchor, now)
+	forkSlot, err := slots.EpochStart(cfg.DecoupledForkEpoch)
+	if err != nil {
+		return err
+	}
+	store, err := decoupled.New(decoupled.Config{Delta: cfg.SlotDuration() / 4, LockStreak: cfg.DecoupledLockStreak, CommitteeSize: validators, ForkSlot: forkSlot}, s.genesisTime, anchor, now)
 	if err != nil {
 		return err
 	}
@@ -454,6 +516,59 @@ func decoupledVotes(body interfaces.ReadOnlyBeaconBlockBody) (votes, support []d
 	return votes, support, nil
 }
 
+// The first decoupled proposal needs an engine before any decoupled block exists, so the last pre-fork slot's 2Δ starts one from the legacy head with the canonical pre-fork chain as its nodes. AC messages begin at the fork, so a node synced by then has observed all of them since that slot's start and joins at the fork, a later activation observes a full slot first.
+func (s *Service) activateDecoupled(ctx context.Context, slot primitives.Slot) error {
+	cfg := params.BeaconConfig()
+	forkSlot, err := slots.EpochStart(cfg.DecoupledForkEpoch)
+	if err != nil || slot+1 < forkSlot || s.decoupledActive() {
+		return nil
+	}
+	headRoot, err := s.HeadRoot(ctx)
+	if err != nil {
+		return err
+	}
+	headState, err := s.HeadState(ctx)
+	if err != nil {
+		return err
+	}
+	// The anchor is the fork state's F, which the fork slot's epoch transition can still move.
+	st, err := transition.ProcessSlotsUsingNextSlotCache(ctx, headState, headRoot, forkSlot)
+	if err != nil {
+		return err
+	}
+	finalized, err := st.Finalized()
+	if err != nil {
+		return err
+	}
+	restart := prysmTime.Now()
+	if slot+1 == forkSlot {
+		restart = s.genesisTime.Add(time.Duration(slot) * cfg.SlotDuration())
+	}
+	s.cfg.ForkChoiceStore.Lock()
+	defer s.cfg.ForkChoiceStore.Unlock()
+	s.decoupledLock.Lock()
+	defer s.decoupledLock.Unlock()
+	if s.decoupledStore != nil {
+		return nil
+	}
+	s.cfg.ForkChoiceStore.SetExternalCheckpoints()
+	if err := s.startDecoupled(ctx, decoupled.Pair{Root: bytesutil.ToBytes32(finalized.Root)}, uint64(st.NumValidators()), restart); err != nil {
+		return err
+	}
+	chain, err := s.missingDecoupledAncestors(ctx, bytesutil.ToBytes32(headRoot), nil)
+	if err != nil {
+		return err
+	}
+	now := prysmTime.Now()
+	for _, b := range chain {
+		if err := s.decoupledStore.InsertNode(b, now); err != nil {
+			log.WithError(err).WithField("root", fmt.Sprintf("%#x", b.Root)).Fatal("Decoupled fork choice rejected a pre-fork block")
+		}
+	}
+	log.WithFields(logrus.Fields{"head": rootRef(bytesutil.ToBytes32(headRoot)), "finalized": rootRef(bytesutil.ToBytes32(finalized.Root)), "blocks": len(chain)}).Info("Started the decoupled fork choice at the fork")
+	return s.syncDecoupledCheckpoints(ctx)
+}
+
 // Spec: ac_on_tick at Δ and 2Δ, with the pool pruned at slot start. Wall time drives the engine, the label only picks the pruning point, so an overdue label changes nothing. The head is published after each tick since unlocking at Δ can move the anchor.
 // TODO(DC): observation loss is not detected, a machine sleep or a stalled process keeps acting on a stale view until the next process restart.
 func (s *Service) spawnDecoupledTicker() {
@@ -477,6 +592,11 @@ func (s *Service) spawnDecoupledTicker() {
 			case t := <-ticker.C():
 				if t.Interval == 0 && s.cfg.DecoupledVotePool != nil {
 					s.cfg.DecoupledVotePool.Prune(t.Slot)
+				}
+				if t.Interval == 2 {
+					if err := s.activateDecoupled(s.ctx, t.Slot); err != nil {
+						log.WithError(err).Error("Could not start the decoupled fork choice at the fork")
+					}
 				}
 				if s.tickDecoupled(t.Slot, t.Interval) && t.Interval > 0 {
 					s.UpdateHead(s.ctx, t.Slot+1)
@@ -504,11 +624,40 @@ func (s *Service) tickDecoupled(slot primitives.Slot, interval int) bool {
 	}
 	head, confirmed := store.Head(now), store.Confirmed(now)
 	justified, finalized := store.JustifiedHeight(), store.FinalizedHeight()
+	source, _ := store.Source(now)
+	voters, committee, locks := 0, store.CommitteeSize(), len(store.Locks())
+	if slot > 0 {
+		voters = store.Voters(slot - 1)
+	}
+	prev := s.decoupledHead
+	reorg := prev != [32]byte{} && prev != head.Root && !store.IsAncestor(prev, head.Root)
 	s.decoupledLock.Unlock()
 	decoupledHeadSlot.Set(float64(head.Slot))
 	decoupledConfirmedSlot.Set(float64(confirmed.Slot))
 	decoupledJustifiedHeight.Set(float64(justified))
 	decoupledFinalizedHeight.Set(float64(finalized))
+	log.WithFields(logrus.Fields{
+		"slot":      slot,
+		"head":      nodeRef(head),
+		"confirmed": nodeRef(confirmed),
+		"votes":     fmt.Sprintf("%d/%d", voters, committee),
+		"height":    head.FG.Target.Height,
+		"justified": justified,
+		"finalized": finalized,
+		"source":    nodeRef(source),
+		"locks":     locks,
+	}).Info("Decoupled slot summary")
+	if reorg {
+		log.WithFields(logrus.Fields{"slot": slot, "old": rootRef(prev), "new": nodeRef(head)}).Info("Decoupled head reorg")
+	}
+	if ok := source != nil; ok != s.decoupledSourceOK {
+		s.decoupledSourceOK = ok
+		if ok {
+			log.WithFields(logrus.Fields{"slot": slot, "source": nodeRef(source)}).Info("Source available")
+		} else {
+			log.WithField("slot", slot).Info("Source lost")
+		}
+	}
 	if head.Root == s.decoupledHead {
 		return true
 	}
@@ -593,6 +742,7 @@ func (s *Service) ProposerParent(slot primitives.Slot) ([32]byte, error) {
 	}
 	parent, _, _, ok := s.DecoupledProposal(slot)
 	if !ok {
+		log.WithField("slot", slot).Warn("Skipped the proposal, the decoupled fork choice has not joined")
 		return [32]byte{}, errDecoupledUnjoined
 	}
 	return parent, nil

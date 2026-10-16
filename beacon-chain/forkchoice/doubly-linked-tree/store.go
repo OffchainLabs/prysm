@@ -308,6 +308,10 @@ func (s *Store) prune(ctx context.Context) error {
 	fn.parent = nil
 	s.treeRootNode = fn
 	s.treeRootParentHash = treeRootParentHash
+	// With external checkpoints the head is not recomputed here, so a pruned head falls back to the root.
+	if s.headNode == nil || s.emptyNodeByRoot[s.headNode.root] == nil {
+		s.headNode = fn
+	}
 
 	prunedCount.Inc()
 	// Prune all children of the finalized checkpoint block that are incompatible with it

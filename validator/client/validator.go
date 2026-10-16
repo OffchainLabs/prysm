@@ -101,6 +101,8 @@ type validator struct {
 	submittedSyncMessages        map[slotRootKey][]uint64
 	submittedSyncContributions   map[slotRootKey]*submittedSyncContribution
 	submittedPayloadAtts         map[submittedPayloadAttKey][]uint64
+	submittedAvailableVotes      map[slotRootKey][]uint64
+	submittedFinalityAtts        map[submittedFinalityAttKey][]uint64
 	validatorsRegBatchSize       int
 	duties                       *dutyStore
 	healthMonitor                *healthMonitor

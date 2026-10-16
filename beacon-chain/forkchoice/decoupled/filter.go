@@ -82,9 +82,9 @@ func (st *Store) viableTree(fr frame, in func(*Node) bool) func(*Node) bool {
 
 func everyNode(*Node) bool { return true }
 
-// Spec: goldfish_eligible. The majority gate applies only once the walk stands on a viable head, and a current-slot block is always eligible.
-func (fr frame) eligible(c *supportCounts, current primitives.Slot) func(*Node) bool {
+// Spec: goldfish_eligible. The majority gate applies only once the walk stands on a viable head, and a current-slot block is always eligible. Pre-fork blocks had no votes to win, so they pass too.
+func (fr frame) eligible(c *supportCounts, current, fork primitives.Slot) func(*Node) bool {
 	return func(b *Node) bool {
-		return b.Parent == nil || !fr.viableHead(b.Parent) || b.Slot == current || c.hasMajority(b)
+		return b.Parent == nil || !fr.viableHead(b.Parent) || b.Slot == current || b.Slot < fork || c.hasMajority(b)
 	}
 }

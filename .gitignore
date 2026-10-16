@@ -63,3 +63,6 @@ CLAUDE.local.md
 third_party/testdata
 # methodical generated tests, which include large fixtures
 testing/spectest/methodical
+
+# Local planning notes
+docs/superpowers/

@@ -196,6 +196,56 @@ func (v *validator) saveSubmittedPayloadAtt(data *ethpb.PayloadAttestationData, 
 	v.submittedPayloadAtts[key] = append(v.submittedPayloadAtts[key], uint64(idx))
 }
 
+type submittedFinalityAttKey struct {
+	height         primitives.Height
+	target         [32]byte
+	timeout        bool
+	finalityHeight primitives.Height
+}
+
+func (v *validator) saveSubmittedAvailableVote(data *ethpb.AvailableAttestationData, idx primitives.ValidatorIndex) {
+	v.submissionLogsLock.Lock()
+	defer v.submissionLogsLock.Unlock()
+	key := slotRootKey{slot: data.Slot}
+	copy(key.blockRoot[:], data.BeaconBlockRoot)
+	v.submittedAvailableVotes[key] = append(v.submittedAvailableVotes[key], uint64(idx))
+}
+
+func (v *validator) saveSubmittedFinalityAtt(row *ethpb.AttestationDataDecoupled, idx primitives.ValidatorIndex) {
+	v.submissionLogsLock.Lock()
+	defer v.submissionLogsLock.Unlock()
+	key := submittedFinalityAttKey{height: row.Height, timeout: row.Timeout, finalityHeight: row.FinalityHeight}
+	copy(key.target[:], row.Target)
+	v.submittedFinalityAtts[key] = append(v.submittedFinalityAtts[key], uint64(idx))
+}
+
+func (v *validator) logSubmittedDecoupled(slot primitives.Slot) {
+	for key, indices := range v.submittedAvailableVotes {
+		slices.Sort(indices)
+		log.WithFields(logrus.Fields{
+			"slot":             slot,
+			"voteSlot":         key.slot,
+			"head":             fmt.Sprintf("%#x", bytesutil.Trunc(key.blockRoot[:])),
+			"validatorIndices": slice.PrettySlice(indices),
+			"votes":            len(indices),
+		}).Info("Submitted available attestations")
+	}
+	for key, indices := range v.submittedFinalityAtts {
+		slices.Sort(indices)
+		log.WithFields(logrus.Fields{
+			"slot":             slot,
+			"height":           key.height,
+			"target":           fmt.Sprintf("%#x", bytesutil.Trunc(key.target[:])),
+			"timeout":          key.timeout,
+			"finalityHeight":   key.finalityHeight,
+			"validatorIndices": slice.PrettySlice(indices),
+			"attestations":     len(indices),
+		}).Info("Submitted finality attestations")
+	}
+	v.submittedAvailableVotes = make(map[slotRootKey][]uint64)
+	v.submittedFinalityAtts = make(map[submittedFinalityAttKey][]uint64)
+}
+
 // LogSubmissions logs info about all successful submissions the validator client made this slot.
 // Note: This method holds the lock for the entire duration of logging.
 func (v *validator) LogSubmissions(slot primitives.Slot) {
@@ -206,6 +256,7 @@ func (v *validator) LogSubmissions(slot primitives.Slot) {
 	v.logSubmittedPayloadAttestations(slot)
 	v.logSubmittedSyncCommitteeMessages(slot)
 	v.logSubmittedSyncCommitteeContributions(slot)
+	v.logSubmittedDecoupled(slot)
 }
 
 // logSubmittedAtts logs info about submitted attestations.
@@ -289,7 +340,7 @@ func (v *validator) logSubmittedSyncCommitteeMessages(slot primitives.Slot) {
 			"blockRoot":        fmt.Sprintf("%#x", bytesutil.Trunc(key.blockRoot[:])),
 			"validatorIndices": slice.PrettySlice(indices),
 			"messages":         len(indices),
-		}).Info("Submitted sync committee messages")
+		}).Debug("Submitted sync committee messages")
 	}
 
 	v.submittedSyncMessages = make(map[slotRootKey][]uint64)
@@ -314,7 +365,7 @@ func (v *validator) logSubmittedSyncCommitteeContributions(slot primitives.Slot)
 			"totalBits":         totalBits,
 			"aggregatorIndices": slice.PrettySlice(entry.aggregatorIndices),
 			"contributions":     len(entry.aggregatorIndices),
-		}).Info("Submitted sync committee contributions and proofs")
+		}).Debug("Submitted sync committee contributions and proofs")
 	}
 
 	v.submittedSyncContributions = make(map[slotRootKey]*submittedSyncContribution)

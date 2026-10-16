@@ -111,7 +111,7 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.GloasForkVersion = []byte{7, 0, 0, 1}
 	minimalConfig.GloasForkEpoch = minimalConfig.FarFutureEpoch
 	minimalConfig.DecoupledForkVersion = []byte{16, 0, 0, 1}
-	minimalConfig.DecoupledForkEpoch = minimalConfig.FarFutureEpoch
+	minimalConfig.DecoupledForkEpoch = 3 // DEVNET ONLY, do not commit
 
 	minimalConfig.SyncCommitteeSize = 32
 	minimalConfig.InactivityScoreBias = 4

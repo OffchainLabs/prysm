@@ -49,7 +49,7 @@ func (v *validator) SubmitAvailableAttestation(ctx context.Context, slot primiti
 		log.WithField("slot", slot).WithError(err).Error("Could not submit available attestation")
 		return
 	}
-	log.WithFields(logrus.Fields{"slot": slot, "head": bytesutil.Trunc(data.BeaconBlockRoot), "validatorIndex": idx}).Debug("Submitted available attestation")
+	v.saveSubmittedAvailableVote(data, idx)
 }
 
 var errFinalityPending = errors.New("a finality attestation is still pending submission")
@@ -87,7 +87,8 @@ func (v *validator) SubmitFinalityAttestation(ctx context.Context, slot primitiv
 }
 
 func (v *validator) submitFinalityAttestation(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte, row *ethpb.AttestationDataDecoupled, resent bool) bool {
-	if err := v.sendFinalityAttestation(ctx, slot, pubKey, row); err != nil {
+	idx, err := v.sendFinalityAttestation(ctx, slot, pubKey, row)
+	if err != nil {
 		log.WithField("slot", slot).WithError(err).Error("Could not submit finality attestation, it is kept for the next duty")
 		return false
 	}
@@ -95,7 +96,10 @@ func (v *validator) submitFinalityAttestation(ctx context.Context, slot primitiv
 		log.WithField("slot", slot).WithError(err).Error("Could not mark finality attestation submitted")
 		return false
 	}
-	log.WithFields(logrus.Fields{"slot": slot, "height": row.Height, "timeout": row.Timeout, "finalityHeight": row.FinalityHeight, "resent": resent}).Debug("Submitted finality attestation")
+	if resent {
+		log.WithFields(logrus.Fields{"slot": slot, "height": row.Height}).Info("Resent a pending finality attestation")
+	}
+	v.saveSubmittedFinalityAtt(row, idx)
 	return true
 }
 
@@ -154,14 +158,14 @@ func (v *validator) decideFinalityAttestation(ctx context.Context, pubKey [field
 	return row, nil
 }
 
-func (v *validator) sendFinalityAttestation(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte, row *ethpb.AttestationDataDecoupled) error {
+func (v *validator) sendFinalityAttestation(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte, row *ethpb.AttestationDataDecoupled) (primitives.ValidatorIndex, error) {
 	req := &validatorpb.SignRequest{Object: &validatorpb.SignRequest_AttestationDataDecoupled{AttestationDataDecoupled: row}, SigningSlot: slot}
 	sig, idx, err := v.signDecoupled(ctx, pubKey, params.BeaconConfig().DecoupledForkEpoch, params.BeaconConfig().DomainFinalityAttestation, row, req)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	_, err = v.validatorClient.SubmitFinalityAttestation(ctx, &ethpb.FinalityAttestationMessage{ValidatorIndex: idx, Data: row, Signature: sig})
-	return err
+	return idx, err
 }
 
 // The FG domain is asked at the fork epoch, which pins it to the Decoupled fork version.

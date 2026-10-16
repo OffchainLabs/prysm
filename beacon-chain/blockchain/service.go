@@ -71,6 +71,9 @@ type Service struct {
 	blobStorage                    *filesystem.BlobStorage
 	dataColumnStorage              *filesystem.DataColumnStorage
 	slasherEnabled                 bool
+	decoupledSynced                bool
+	decoupledJoined                bool
+	decoupledSourceOK              bool
 	lcStore                        *lightClient.Store
 	startWaitingDataColumnSidecars chan bool // for testing purposes only
 	syncCommitteeHeadState         *cache.SyncCommitteeHeadStateCache
@@ -83,7 +86,6 @@ type Service struct {
 	decoupledProposal              decoupledProposal
 	decoupledDuty                  decoupledDuty
 	decoupledProcessed             time.Time
-	decoupledSynced                bool
 	decoupledFCU                   decoupledFCU
 	decoupledFCULock               sync.Mutex
 }

@@ -873,7 +873,8 @@ func (s *Store) dependentRootForEpoch(root [32]byte, epoch primitives.Epoch) ([3
 	}
 	en, ok := s.emptyNodeByRoot[tr]
 	if !ok || en == nil {
-		return [32]byte{}, ErrNilNode
+		// A target pruned by a finalization inside its epoch sits at or before the tree root.
+		return s.finalizedDependentRoot, nil
 	}
 	if slots.ToEpoch(en.node.slot) >= epoch {
 		if en.node.parent != nil {
@@ -910,16 +911,17 @@ func (s *Store) targetRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]b
 	if epoch == nodeEpoch {
 		return targetRoot, nil
 	}
+	// A finalization inside the epoch prunes targets, an epoch at or before the tree root resolves to the root, whose saved dependent root every node shares.
 	targetNode, ok := s.emptyNodeByRoot[targetRoot]
 	if !ok || targetNode == nil {
-		return [32]byte{}, ErrNilNode
+		return s.treeRootNode.root, nil
 	}
 	// If slot 0 was not missed we consider a previous block to go back at least one epoch
 	if nodeEpoch == slots.ToEpoch(targetNode.node.slot) {
-		targetNode = targetNode.node.parent
-		if targetNode == nil {
-			return [32]byte{}, ErrNilNode
+		if targetNode.node.parent == nil {
+			return targetNode.node.root, nil
 		}
+		targetNode = targetNode.node.parent
 	}
 	return s.targetRootForEpoch(targetNode.node.root, epoch)
 }

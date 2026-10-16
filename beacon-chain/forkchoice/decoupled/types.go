@@ -6,11 +6,12 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
-// Spec: Δ, k and |K_s|. The slot is 4Δ.
+// Spec: Δ, k and |K_s|. The slot is 4Δ. ForkSlot is the first slot with votes, blocks before it were chosen by the legacy fork choice.
 type Config struct {
 	Delta         time.Duration
 	LockStreak    uint64
 	CommitteeSize uint64
+	ForkSlot      primitives.Slot
 }
 
 // Spec: GoldfishVote (val_index, slot, head).
@@ -57,6 +58,12 @@ type bucket struct {
 type lock struct {
 	block    *Node
 	deadline time.Time
+}
+
+type Lock struct {
+	Root     [32]byte
+	Slot     primitives.Slot
+	Deadline time.Time
 }
 
 // Spec: the FG store Σ and the AC state A, the SG fields are gone.

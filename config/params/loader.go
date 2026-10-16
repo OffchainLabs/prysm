@@ -1,6 +1,7 @@
 package params
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -112,6 +113,9 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 	}
 	// recompute SqrRootSlotsPerEpoch constant to handle non-standard values of SlotsPerEpoch
 	conf.SqrRootSlotsPerEpoch = primitives.Slot(math.IntegerSquareRoot(uint64(conf.SlotsPerEpoch)))
+	if !bytes.Contains(yamlFile, []byte("DECOUPLED_FORK_VERSION")) && len(conf.GloasForkVersion) == 4 {
+		conf.DecoupledForkVersion = append([]byte{0x10}, conf.GloasForkVersion[1:]...)
+	}
 	// Recompute the fork schedule
 	conf.InitializeForkSchedule()
 	log.Debugf("Config file values: %+v", conf)

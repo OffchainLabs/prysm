@@ -440,6 +440,10 @@ func (s *Service) validateStatusMessage(ctx context.Context, genericMsg any) err
 	if maxEpoch > 2 {
 		maxFinalizedEpoch = maxEpoch - 2
 	}
+	// The decoupled finality gadget finalizes inside the current epoch.
+	if maxEpoch >= params.BeaconConfig().DecoupledForkEpoch {
+		maxFinalizedEpoch = maxEpoch
+	}
 	if msg.FinalizedEpoch > maxFinalizedEpoch {
 		return p2ptypes.ErrInvalidEpoch
 	}
