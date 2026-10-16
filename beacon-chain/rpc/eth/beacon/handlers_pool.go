@@ -522,6 +522,14 @@ func (s *Server) SubmitVoluntaryExit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.VoluntaryExitsPool.InsertVoluntaryExit(exit)
+
+	s.OperationNotifier.OperationFeed().Send(&feed.Event{
+		Type: operation.ExitReceived,
+		Data: &operation.ExitReceivedData{
+			Exit: exit,
+		},
+	})
+
 	if err = s.Broadcaster.Broadcast(ctx, exit); err != nil {
 		httputil.HandleError(w, "Could not broadcast exit: "+err.Error(), http.StatusInternalServerError)
 		return
