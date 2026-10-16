@@ -244,6 +244,7 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 		v := validator{
 			validatorClient:        validatorClient,
 			km:                     km,
+			genesisTime:            time.Unix(1, 0),
 			chainClient:            chainClient,
 			pubkeyToStatus:         make(map[[48]byte]*validatorStatus),
 			accountsChangedChannel: ch,

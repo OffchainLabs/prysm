@@ -2,11 +2,13 @@
 package slots
 
 import (
+	"sync/atomic"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
+	"github.com/sirupsen/logrus"
 )
 
 // The Ticker interface defines a type which can expose a
@@ -92,44 +94,39 @@ func NewSlotTicker(genesisTime time.Time, slotDuration time.Duration) *SlotTicke
 	return ticker
 }
 
-// NewSlotTickerWithOffset starts and returns a SlotTicker instance that allows a offset of time from genesis,
-// entering a offset greater than the slot duration is not allowed.
-// This method will panic if genesis time is zero, the slot duration is not positive, or the offset
-// exceeds the slot duration.
-// lint:nopanic -- Communicated panic in godoc commentary.
-func NewSlotTickerWithOffset(genesisTime time.Time, offset, slotDuration time.Duration) *SlotTicker {
-	if genesisTime.Unix() == 0 {
-		panic("zero genesis time")
-	}
-	if slotDuration <= 0 {
-		panic("non-positive slot duration")
-	}
-	if offset > slotDuration {
-		panic("invalid ticker offset")
-	}
-	ticker := &SlotTicker{
-		c:    make(chan primitives.Slot),
-		done: make(chan struct{}),
-	}
-	ticker.start(genesisTime.Add(offset), slotDuration, prysmTime.Since, prysmTime.Until, time.After)
-	return ticker
-}
-
 func (s *SlotTicker) start(
 	genesisTime time.Time,
 	d time.Duration,
 	since, until func(time.Time) time.Duration,
 	after func(time.Duration) <-chan time.Time) {
 
+	cfg := params.BeaconConfig()
+	schedule, slotsPerEpoch := cfg.SlotDurations(), cfg.SlotsPerEpoch
+	// The passed duration keeps working for callers with non-config slot times, the derived slot durations win when a fork changes the slot duration.
+	hasChange := len(schedule) > 1
+	durationAt := func(slot primitives.Slot) time.Duration {
+		if !hasChange {
+			return d
+		}
+		return cfg.SlotDurationAt(slot)
+	}
+
 	go func() {
 		sinceGenesis := since(genesisTime)
 
 		var nextTickTime time.Time
 		var slot primitives.Slot
-		if sinceGenesis < d {
+		if sinceGenesis < durationAt(0) {
 			// Handle when the current time is before the genesis time.
 			nextTickTime = genesisTime
 			slot = 0
+		} else if hasChange {
+			slot = schedule.SlotAt(genesisTime, genesisTime.Add(sinceGenesis), slotsPerEpoch) + 1
+			sg, err := cfg.SinceGenesis(slot)
+			if err != nil {
+				panic(err) // lint:nopanic -- Unreachable for validated slot durations and a present-day slot.
+			}
+			nextTickTime = genesisTime.Add(sg)
 		} else {
 			nextTick := sinceGenesis.Truncate(d) + d
 			nextTickTime = genesisTime.Add(nextTick)
@@ -140,9 +137,10 @@ func (s *SlotTicker) start(
 			waitTime := until(nextTickTime)
 			select {
 			case <-after(waitTime):
+				maybeLogSlotDurationChange(slot)
 				s.c <- slot
+				nextTickTime = nextTickTime.Add(durationAt(slot))
 				slot++
-				nextTickTime = nextTickTime.Add(d)
 			case <-s.done:
 				return
 			}
@@ -150,66 +148,119 @@ func (s *SlotTicker) start(
 	}()
 }
 
-// startWithIntervals starts a ticker that emits a tick every slot at the
-// prescribed intervals. The caller is responsible to make these intervals increasing and
-// less than secondsPerSlot
-func (s *SlotIntervalTicker) startWithIntervals(
-	genesisTime time.Time,
-	until func(time.Time) time.Duration,
-	after func(time.Duration) <-chan time.Time,
-	intervals []time.Duration) {
-	go func() {
-		slot := CurrentSlot(genesisTime)
-		slot++
-		interval := 0
-		nextTickTime := UnsafeStartTime(genesisTime, slot).Add(intervals[0])
+// IntervalFunc resolves an offset from the start of the given slot, letting deadlines scale with the slot's duration.
+type IntervalFunc func(primitives.Slot) time.Duration
 
-		for {
-			waitTime := until(nextTickTime)
-			select {
-			case <-after(waitTime):
-				s.c <- SlotInterval{Slot: slot, Interval: interval}
-				interval++
-				if interval == len(intervals) {
-					interval = 0
-					slot++
-				}
-				nextTickTime = UnsafeStartTime(genesisTime, slot).Add(intervals[interval])
-			case <-s.done:
-				return
-			}
-		}
-	}()
+// ComponentInterval returns an IntervalFunc resolving the given slot component's deadline per slot.
+func ComponentInterval(c params.SlotComponent) IntervalFunc {
+	return func(slot primitives.Slot) time.Duration {
+		return params.BeaconConfig().SlotComponentDurationAt(c, slot)
+	}
 }
 
-// NewSlotTickerWithIntervals starts and returns a SlotTicker instance that allows
-// several offsets of time from genesis,
-// Caller is responsible to input the intervals in increasing order and none bigger or equal than
-// SecondsPerSlot
-// This method will panic if genesis time is zero, intervals is 0 length, or offsets are invalid.
+// FixedInterval returns an IntervalFunc with a constant offset regardless of slot duration.
+func FixedInterval(d time.Duration) IntervalFunc {
+	return func(primitives.Slot) time.Duration {
+		return d
+	}
+}
+
+// NewSlotTickerWithIntervalFuncs starts and returns a SlotIntervalTicker that ticks at
+// per-slot offsets resolved by the given interval funcs. The caller is responsible to
+// keep the resolved intervals increasing and less than the slot duration.
+// This method will panic if genesis time is zero or intervals is 0 length.
 // lint:nopanic -- Communicated panic in godoc commentary.
-func NewSlotTickerWithIntervals(genesisTime time.Time, intervals []time.Duration) *SlotIntervalTicker {
+func NewSlotTickerWithIntervalFuncs(genesisTime time.Time, intervals []IntervalFunc) *SlotIntervalTicker {
 	if genesisTime.Unix() == 0 {
 		panic("zero genesis time")
 	}
 	if len(intervals) == 0 {
 		panic("at least one interval has to be entered")
 	}
-	slotDuration := params.BeaconConfig().SlotDuration()
-	lastOffset := time.Duration(0)
-	for _, offset := range intervals {
-		if offset < lastOffset {
-			panic("invalid decreasing offsets")
-		}
-		if offset >= slotDuration {
-			panic("invalid ticker offset")
-		}
-		lastOffset = offset
-	}
 	ticker := &SlotIntervalTicker{
 		c:    make(chan SlotInterval),
 		done: make(chan struct{}),
 	}
-	ticker.startWithIntervals(genesisTime, prysmTime.Until, time.After, intervals)
+
+	go tickIntervals(genesisTime, intervals, ticker.done, func(si SlotInterval) { ticker.c <- si })
+
 	return ticker
+}
+
+// NewSlotTickerWithOffsetFunc starts and returns a SlotTicker that ticks once per slot at a
+// per-slot offset resolved by the given func. The caller is responsible to keep the resolved
+// offset smaller than the slot duration.
+// This method will panic if genesis time is zero.
+// lint:nopanic -- Communicated panic in godoc commentary.
+func NewSlotTickerWithOffsetFunc(genesisTime time.Time, offset IntervalFunc) *SlotTicker {
+	if genesisTime.Unix() == 0 {
+		panic("zero genesis time")
+	}
+	ticker := &SlotTicker{
+		c:    make(chan primitives.Slot),
+		done: make(chan struct{}),
+	}
+
+	go tickIntervals(genesisTime, []IntervalFunc{offset}, ticker.done, func(si SlotInterval) { ticker.c <- si.Slot })
+
+	return ticker
+}
+
+// Deduplicates across the many tickers in a process so each boundary is announced once.
+var lastLoggedDurationChange atomic.Uint64
+
+func maybeLogSlotDurationChange(slot primitives.Slot) {
+	if slot == 0 {
+		return
+	}
+	cfg := params.BeaconConfig()
+	if !cfg.HasSlotDurationChange() {
+		return
+	}
+	prev, cur := cfg.SlotDurationAt(slot-1), cfg.SlotDurationAt(slot)
+	if prev == cur {
+		return
+	}
+	last := lastLoggedDurationChange.Load()
+	if last == uint64(slot) || !lastLoggedDurationChange.CompareAndSwap(last, uint64(slot)) {
+		return
+	}
+	log.WithFields(logrus.Fields{
+		"slot":             slot,
+		"epoch":            ToEpoch(slot),
+		"previousDuration": prev,
+		"newDuration":      cur,
+	}).Info("Slot duration changed")
+}
+
+// tickIntervals calls emit at each interval of every slot until done fires. It starts with
+// the first interval of the current slot that is not in the past, so a ticker started
+// mid-slot still gets the remaining ticks of that slot.
+func tickIntervals(genesisTime time.Time, intervals []IntervalFunc, done <-chan struct{}, emit func(SlotInterval)) {
+	tickTime := func(slot primitives.Slot, interval int) time.Time {
+		return UnsafeStartTime(genesisTime, slot).Add(intervals[interval](slot))
+	}
+
+	slot, interval := CurrentSlot(genesisTime), 0
+	advance := func() {
+		interval++
+		if interval == len(intervals) {
+			interval = 0
+			slot++
+		}
+	}
+
+	for prysmTime.Until(tickTime(slot, interval)) < 0 {
+		advance()
+	}
+
+	for {
+		select {
+		case <-time.After(prysmTime.Until(tickTime(slot, interval))):
+			emit(SlotInterval{Slot: slot, Interval: interval})
+			advance()
+		case <-done:
+			return
+		}
+	}
 }

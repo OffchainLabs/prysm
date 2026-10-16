@@ -313,7 +313,7 @@ func (s *Service) BroadcastLightClientOptimisticUpdate(ctx context.Context, upda
 		return err
 	}
 	timeSinceSlotStart := time.Since(slotStart)
-	expectedDelay := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS)
+	expectedDelay := params.BeaconConfig().SlotComponentDurationAt(params.SyncMessageDue, update.SignatureSlot())
 	if timeSinceSlotStart < expectedDelay {
 		waitDuration := expectedDelay - timeSinceSlotStart
 		<-time.After(waitDuration)
@@ -347,7 +347,7 @@ func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, update
 		return err
 	}
 	timeSinceSlotStart := time.Since(slotStart)
-	expectedDelay := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS)
+	expectedDelay := params.BeaconConfig().SlotComponentDurationAt(params.SyncMessageDue, update.SignatureSlot())
 	if timeSinceSlotStart < expectedDelay {
 		waitDuration := expectedDelay - timeSinceSlotStart
 		<-time.After(waitDuration)

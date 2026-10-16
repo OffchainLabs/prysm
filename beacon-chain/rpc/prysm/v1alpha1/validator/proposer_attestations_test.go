@@ -781,6 +781,96 @@ func TestSelectByMarginalReward(t *testing.T) {
 	})
 }
 
+func TestNewAttCandidates(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("prices base rewards at each attestation's target epoch", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.ElectraForkEpoch = 1
+		cfg.HezeForkEpoch = 1
+		params.OverrideBeaconConfig(cfg)
+
+		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+		require.NotEqual(t, params.BeaconConfig().SlotDurationMillisAtEpoch(0), params.BeaconConfig().SlotDurationMillisAtEpoch(1))
+
+		key, err := blst.RandKey()
+		require.NoError(t, err)
+		sig := key.Sign([]byte{'X'})
+
+		st, _ := util.DeterministicGenesisStateElectra(t, 192)
+		require.NoError(t, st.SetSlot(slotsPerEpoch+1))
+
+		// slotAgg returns an aggregate over every committee of the given slot, and its attesters.
+		slotAgg := func(slot primitives.Slot, target primitives.Epoch) (*ethpb.AttestationElectra, map[primitives.ValidatorIndex]bool) {
+			committees, err := helpers.BeaconCommittees(ctx, st, slot)
+			require.NoError(t, err)
+
+			committeeBits := primitives.NewAttestationCommitteeBits()
+			attesters := make(map[primitives.ValidatorIndex]bool)
+			for i, committee := range committees {
+				committeeBits.SetBitAt(uint64(i), true)
+				for _, index := range committee {
+					attesters[index] = true
+				}
+			}
+
+			aggregationBits := bitfield.NewBitlist(uint64(len(attesters)))
+			for i := range uint64(len(attesters)) {
+				aggregationBits.SetBitAt(i, true)
+			}
+
+			att := &ethpb.AttestationElectra{
+				AggregationBits: aggregationBits,
+				CommitteeBits:   committeeBits,
+				Data: util.HydrateAttestationData(&ethpb.AttestationData{
+					Slot:   slot,
+					Target: &ethpb.Checkpoint{Epoch: target},
+				}),
+				Signature: sig.Marshal(),
+			}
+
+			return att, attesters
+		}
+
+		// The current epoch attestation comes first, so its rewards would be cached first.
+		current, currentAttesters := slotAgg(slotsPerEpoch, 1)
+
+		// Find a previous epoch slot sharing an attester with the current epoch attestation.
+		var previous *ethpb.AttestationElectra
+		for slot := range slotsPerEpoch {
+			att, attesters := slotAgg(slot, 0)
+			for index := range attesters {
+				if currentAttesters[index] {
+					previous = att
+					break
+				}
+			}
+			if previous != nil {
+				break
+			}
+		}
+		require.NotNil(t, previous)
+
+		totalBalance, err := helpers.TotalActiveBalance(ctx, st)
+		require.NoError(t, err)
+
+		candidates, err := newAttCandidates(ctx, st, proposerAtts{current, previous}, totalBalance)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(candidates))
+
+		for _, c := range candidates {
+			target := c.att.GetData().Target.Epoch
+			require.Equal(t, len(c.attestingIndices), len(c.baseRewards))
+			for i, index := range c.attestingIndices {
+				expected, err := altair.BaseRewardWithTotalBalance(st, primitives.ValidatorIndex(index), totalBalance, target)
+				require.NoError(t, err)
+				require.Equal(t, expected, c.baseRewards[i], "validator %d, target epoch %d", index, target)
+			}
+		}
+	})
+}
+
 func sliceCast(atts []*ethpb.AttestationElectra) []ethpb.Att {
 	res := make([]ethpb.Att, len(atts))
 	for i, att := range atts {

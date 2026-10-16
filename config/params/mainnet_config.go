@@ -108,6 +108,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	MinAttestationInclusionDelay:     1,
 	SecondsPerSlot:                   12,
 	SlotDurationMilliseconds:         12000,
+	SlotDurationMillisHeze:           10000,
 	SlotsPerEpoch:                    32,
 	SqrRootSlotsPerEpoch:             5,
 	MinSeedLookahead:                 1,
@@ -370,6 +371,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	NumberOfCustodyGroups:                 128,
 	CustodyRequirement:                    4,
 	MinEpochsForDataColumnSidecarsRequest: 4096,
+	MinBlobDataRetentionMillis:            1_572_864_000,
 	ValidatorCustodyRequirement:           8,
 	BalancePerAdditionalCustodyGroup:      32_000_000_000,
 

@@ -300,7 +300,7 @@ func TestNode_TimeStampsChecks(t *testing.T) {
 	require.Equal(t, false, late)
 
 	// very late block
-	driftGenesisTime(f, 3, ProcessAttestationsThreshold+time.Second)
+	driftGenesisTime(f, 3, ProcessAttestationsThreshold(3)+time.Second)
 	root = [32]byte{'c'}
 	state, blk, err = prepareForkchoiceState(ctx, 3, root, [32]byte{'b'}, [32]byte{'C'}, 0, 0)
 	require.NoError(t, err)

@@ -114,6 +114,11 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 	conf.SqrRootSlotsPerEpoch = primitives.Slot(math.IntegerSquareRoot(uint64(conf.SlotsPerEpoch)))
 	// Recompute the fork schedule
 	conf.InitializeForkSchedule()
+
+	if err := conf.validateSlotDurations(); err != nil {
+		return nil, fmt.Errorf("validate slot durations: %w", err)
+	}
+
 	log.Debugf("Config file values: %+v", conf)
 	return conf, nil
 }
@@ -275,6 +280,8 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		fmt.Sprintf("GLOAS_FORK_EPOCH: %d", cfg.GloasForkEpoch),
 		fmt.Sprintf("HEZE_FORK_VERSION: %#x", cfg.HezeForkVersion),
 		fmt.Sprintf("HEZE_FORK_EPOCH: %d", cfg.HezeForkEpoch),
+		fmt.Sprintf("SLOT_DURATION_MS_HEZE: %d", cfg.SlotDurationMillisHeze),
+		fmt.Sprintf("MIN_BLOB_DATA_RETENTION_MS: %d", cfg.MinBlobDataRetentionMillis),
 		fmt.Sprintf("EPOCHS_PER_SUBNET_SUBSCRIPTION: %d", cfg.EpochsPerSubnetSubscription),
 		fmt.Sprintf("ATTESTATION_SUBNET_EXTRA_BITS: %d", cfg.AttestationSubnetExtraBits),
 		fmt.Sprintf("ATTESTATION_SUBNET_PREFIX_BITS: %d", cfg.AttestationSubnetPrefixBits),
