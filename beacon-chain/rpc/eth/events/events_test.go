@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -453,40 +454,67 @@ func TestStreamEvents_ProposerPreferencesWrappedWithVersion(t *testing.T) {
 }
 
 func TestStreamEvents_ExecutionProof(t *testing.T) {
-	s := &Server{}
-	topics, err := newTopicRequest([]string{ExecutionProofTopic})
-	require.NoError(t, err)
-	blockRoot := bytesutil.PadTo([]byte{'r'}, fieldparams.RootLength)
-	ev := &feed.Event{
-		Type: operation.ExecutionProofReceived,
-		Data: &operation.ExecutionProofReceivedData{
-			Proof: &eth.SignedExecutionProofEnvelope{
-				Message: &eth.ExecutionProofEnvelope{
-					ProofData:       []byte{0xab, 0xcd},
-					ProofType:       []byte{byte(eth.ProofTypeEthrexZisk)},
-					BeaconBlockRoot: blockRoot,
-				},
-				ValidatorIndex: 7,
-				Signature:      make([]byte, fieldparams.BLSSignatureLength),
-			},
-		},
-	}
-	lr, err := s.lazyReaderForEvent(t.Context(), ev, topics)
-	require.NoError(t, err)
-	out, err := io.ReadAll(lr())
-	require.NoError(t, err)
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
 
-	name, payload, found := strings.Cut(string(out), "\ndata: ")
-	require.Equal(t, true, found)
-	require.Equal(t, "event: "+ExecutionProofTopic, name)
-	var got structs.SignedExecutionProofEnvelope
-	require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(payload)), &got))
-	require.Equal(t, "7", got.ValidatorIndex)
-	require.Equal(t, hexutil.Encode(make([]byte, fieldparams.BLSSignatureLength)), got.Signature)
-	require.NotNil(t, got.Message)
-	require.Equal(t, "0xabcd", got.Message.ProofData)
-	require.Equal(t, fmt.Sprintf("%d", eth.ProofTypeEthrexZisk), got.Message.ProofType)
-	require.Equal(t, hexutil.Encode(blockRoot), got.Message.BeaconBlockRoot)
+	t.Run("wrapped with block fork version", func(t *testing.T) {
+		s := &Server{ChainInfoFetcher: &mockChain.ChainService{BlockSlot: params.BeaconConfig().SlotsPerEpoch}}
+		topics, err := newTopicRequest([]string{ExecutionProofTopic})
+		require.NoError(t, err)
+		blockRoot := bytesutil.PadTo([]byte{'r'}, fieldparams.RootLength)
+		ev := &feed.Event{
+			Type: operation.ExecutionProofReceived,
+			Data: &operation.ExecutionProofReceivedData{
+				Proof: &eth.SignedExecutionProofEnvelope{
+					Message: &eth.ExecutionProofEnvelope{
+						ProofData:       []byte{0xab, 0xcd},
+						ProofType:       []byte{byte(eth.ProofTypeEthrexZisk)},
+						BeaconBlockRoot: blockRoot,
+					},
+					ValidatorIndex: 7,
+					Signature:      make([]byte, fieldparams.BLSSignatureLength),
+				},
+			},
+		}
+		lr, err := s.lazyReaderForEvent(t.Context(), ev, topics)
+		require.NoError(t, err)
+		out, err := io.ReadAll(lr())
+		require.NoError(t, err)
+
+		name, payload, found := strings.Cut(string(out), "\ndata: ")
+		require.Equal(t, true, found)
+		require.Equal(t, "event: "+ExecutionProofTopic, name)
+		var wrapped structs.ExecutionProofEvent
+		require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(payload)), &wrapped))
+		require.Equal(t, "gloas", wrapped.Version)
+		got := wrapped.Data
+		require.NotNil(t, got)
+		require.Equal(t, "7", got.ValidatorIndex)
+		require.Equal(t, hexutil.Encode(make([]byte, fieldparams.BLSSignatureLength)), got.Signature)
+		require.NotNil(t, got.Message)
+		require.Equal(t, "0xabcd", got.Message.ProofData)
+		require.Equal(t, fmt.Sprintf("%d", eth.ProofTypeEthrexZisk), got.Message.ProofType)
+		require.Equal(t, hexutil.Encode(blockRoot), got.Message.BeaconBlockRoot)
+	})
+
+	t.Run("unknown block", func(t *testing.T) {
+		s := &Server{ChainInfoFetcher: &mockChain.ChainService{RecentBlockSlotErr: errors.New("unknown block")}}
+		topics, err := newTopicRequest([]string{ExecutionProofTopic})
+		require.NoError(t, err)
+		ev := &feed.Event{
+			Type: operation.ExecutionProofReceived,
+			Data: &operation.ExecutionProofReceivedData{
+				Proof: &eth.SignedExecutionProofEnvelope{
+					Message: &eth.ExecutionProofEnvelope{BeaconBlockRoot: make([]byte, fieldparams.RootLength)},
+				},
+			},
+		}
+		_, err = s.lazyReaderForEvent(t.Context(), ev, topics)
+		require.ErrorContains(t, "unknown block", err)
+	})
 }
 
 func TestStreamEvents_BlockEventBuilderBid(t *testing.T) {
@@ -612,6 +640,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 		s := &Server{
 			StateNotifier:     &mockChain.SimpleNotifier{Feed: stn},
 			OperationNotifier: &mockChain.SimpleNotifier{Feed: opn},
+			ChainInfoFetcher:  &mockChain.ChainService{},
 			EventWriteTimeout: testEventWriteTimeout,
 		}
 
@@ -1530,6 +1559,7 @@ func wedgedWriterTestCase(t *testing.T, queueDepth func([]*feed.Event) int) {
 		EventWriteTimeout: 10 * time.Millisecond,
 		StateNotifier:     &mockChain.SimpleNotifier{Feed: stn},
 		OperationNotifier: &mockChain.SimpleNotifier{Feed: opn},
+		ChainInfoFetcher:  &mockChain.ChainService{},
 		EventFeedDepth:    queueDepth(events),
 	}
 

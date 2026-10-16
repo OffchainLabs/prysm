@@ -24,6 +24,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	engine "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -740,8 +741,17 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 			})
 		}, nil
 	case *operation.ExecutionProofReceivedData:
+		blockRoot := bytesutil.ToBytes32(v.Proof.Message.BeaconBlockRoot)
+		slot, err := s.ChainInfoFetcher.RecentBlockSlot(blockRoot)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get block slot for ExecutionProofReceived operation feed event")
+		}
 		return func() io.Reader {
-			return jsonMarshalReader(eventName, structs.SignedExecutionProofEnvelopeFromConsensus(v.Proof))
+			epoch := slots.ToEpoch(slot)
+			return jsonMarshalReader(eventName, &structs.ExecutionProofEvent{
+				Version: version.String(params.GetNetworkScheduleEntry(epoch).VersionEnum),
+				Data:    structs.SignedExecutionProofEnvelopeFromConsensus(v.Proof),
+			})
 		}, nil
 	case *statefeed.ExecutionPayloadAvailableData:
 		return func() io.Reader {
