@@ -19,22 +19,20 @@ func TestSlotComponentDeadline(t *testing.T) {
 	cfg := params.BeaconConfig()
 	v := &validator{genesisTime: time.Unix(1700000000, 0)}
 	slot := primitives.Slot(5)
-	component := cfg.AttestationDueBPS
 
-	got, err := v.slotComponentDeadline(slot, component)
+	got, err := v.slotComponentDeadline(slot, params.AttestationDue)
 	require.NoError(t, err)
 
 	startTime, err := slots.StartTime(v.genesisTime, slot)
 	require.NoError(t, err)
-	expected := startTime.Add(cfg.SlotComponentDuration(component))
+	expected := startTime.Add(cfg.SlotComponentDuration(cfg.AttestationDueBPS))
 
 	require.Equal(t, expected, got)
 }
 
 func TestBeforeSlotComponent(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig()
-	component := cfg.PayloadAttestationDueBPS
+	component := params.PayloadAttestationDue
 
 	t.Run("deadline still ahead", func(t *testing.T) {
 		v := &validator{genesisTime: time.Now()}
@@ -55,26 +53,25 @@ func TestBeforeSlotComponent(t *testing.T) {
 func TestSlotComponentSpanName(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 
-	cfg := params.BeaconConfig()
 	v := &validator{}
 	tests := []struct {
 		name      string
-		component primitives.BP
+		component params.SlotComponent
 		expected  string
 	}{
 		{
 			name:      "attestation",
-			component: cfg.AttestationDueBPS,
+			component: params.AttestationDue,
 			expected:  "validator.waitAttestationWindow",
 		},
 		{
 			name:      "aggregate",
-			component: cfg.AggregateDueBPS,
+			component: params.AggregateDue,
 			expected:  "validator.waitAggregateWindow",
 		},
 		{
 			name:      "default",
-			component: cfg.AttestationDueBPS + 7,
+			component: params.SlotComponent(200),
 			expected:  "validator.waitSlotComponent",
 		},
 	}
@@ -97,7 +94,7 @@ func TestWaitUntilSlotComponent_ContextCancelReturnsImmediately(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		v.waitUntilSlotComponent(ctx, 1, cfg.AttestationDueBPS)
+		v.waitUntilSlotComponent(ctx, 1, params.AttestationDue)
 		close(done)
 	}()
 

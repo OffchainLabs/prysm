@@ -148,7 +148,7 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 		if err != nil {
 			return err
 		}
-		churnLimit := helpers.ConsolidationChurnLimitForVersion(st.Version(), primitives.Gwei(activeBal))
+		churnLimit := helpers.ConsolidationChurnLimitForVersion(st.Version(), primitives.Gwei(activeBal), slots.ToEpoch(st.Slot()))
 		if churnLimit <= primitives.Gwei(params.BeaconConfig().MinActivationBalance) {
 			continue
 		}
@@ -331,7 +331,7 @@ func computeConsolidationEpochAndUpdateChurn(ctx context.Context, st state.Beaco
 	if err != nil {
 		return 0, err
 	}
-	perEpochConsolidationChurn := helpers.ConsolidationChurnLimitForVersion(st.Version(), primitives.Gwei(activeBal))
+	perEpochConsolidationChurn := helpers.ConsolidationChurnLimitForVersion(st.Version(), primitives.Gwei(activeBal), slots.ToEpoch(st.Slot()))
 
 	var consolidationBalanceToConsume primitives.Gwei
 	if earliestEpoch < earliestConsolidationEpoch {

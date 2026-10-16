@@ -77,6 +77,7 @@ type BeaconChainConfig struct {
 	MinAttestationInclusionDelay     primitives.Slot  `yaml:"MIN_ATTESTATION_INCLUSION_DELAY" spec:"true"` // MinAttestationInclusionDelay defines how many slots validator has to wait to include attestation for beacon block.
 	SecondsPerSlot                   uint64           `yaml:"SECONDS_PER_SLOT" spec:"true"`                // Deprecated: use SlotDuration() or SlotDurationMillis() instead.
 	SlotDurationMilliseconds         uint64           `yaml:"SLOT_DURATION_MS" spec:"true"`                // SlotDurationMilliseconds is the slot time expressed in milliseconds.
+	SlotDurationMillisHeze           uint64           `yaml:"SLOT_DURATION_MS_HEZE" spec:"true"`           // SlotDurationMillisHeze is the slot time from the Heze fork epoch, expressed in milliseconds (EIP-8198).
 	SlotsPerEpoch                    primitives.Slot  `yaml:"SLOTS_PER_EPOCH" spec:"true"`                 // SlotsPerEpoch is the number of slots in an epoch.
 	SqrRootSlotsPerEpoch             primitives.Slot  // SqrRootSlotsPerEpoch is a hard coded value where we take the square root of `SlotsPerEpoch` and round down.
 	MinSeedLookahead                 primitives.Epoch `yaml:"MIN_SEED_LOOKAHEAD" spec:"true"`                  // MinSeedLookahead is the duration of randao look ahead seed.
@@ -333,6 +334,7 @@ type BeaconChainConfig struct {
 	NumberOfCustodyGroups                 uint64           `yaml:"NUMBER_OF_CUSTODY_GROUPS" spec:"true"`                     // NumberOfCustodyGroups available for nodes to custody.
 	CustodyRequirement                    uint64           `yaml:"CUSTODY_REQUIREMENT" spec:"true"`                          // CustodyRequirement is minimum number of custody groups an honest node custodies and serves samples from.
 	MinEpochsForDataColumnSidecarsRequest primitives.Epoch `yaml:"MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS" spec:"true"` // MinEpochsForDataColumnSidecarsRequest is the minimum number of epochs the node will keep the data columns for.
+	MinBlobDataRetentionMillis            uint64           `yaml:"MIN_BLOB_DATA_RETENTION_MS" spec:"true"`                   // MinBlobDataRetentionMillis replaces MinEpochsForDataColumnSidecarsRequest from Heze, as a wall-clock duration (EIP-8198).
 	DataColumnSidecarSubnetCount          uint64           `yaml:"DATA_COLUMN_SIDECAR_SUBNET_COUNT" spec:"true"`             // DataColumnSidecarSubnetCount is the number of data column sidecar subnets used in the gossipsub protocol
 	MaxRequestDataColumnSidecars          uint64           `yaml:"MAX_REQUEST_DATA_COLUMN_SIDECARS" spec:"true"`             // MaxRequestDataColumnSidecars is the maximum number of data column sidecars in a single request
 	ValidatorCustodyRequirement           uint64           `yaml:"VALIDATOR_CUSTODY_REQUIREMENT" spec:"true"`                // ValidatorCustodyRequirement is the minimum number of custody groups an honest node with validators attached custodies and serves samples from
@@ -825,11 +827,12 @@ func GloasEnabled() bool {
 
 // WithinDAPeriod checks if the block epoch is within the data availability retention period.
 func WithinDAPeriod(block, current primitives.Epoch) bool {
-	if block >= BeaconConfig().FuluForkEpoch {
-		return block+BeaconConfig().MinEpochsForDataColumnSidecarsRequest >= current
+	cfg := BeaconConfig()
+	if block >= cfg.FuluForkEpoch {
+		return block >= cfg.BlobDataRetentionStartEpoch(current, cfg.MinEpochsForDataColumnSidecarsRequest)
 	}
 
-	return block+BeaconConfig().MinEpochsForBlobsSidecarsRequest >= current
+	return block+cfg.MinEpochsForBlobsSidecarsRequest >= current
 }
 
 // EpochsDuration returns the time duration of the given number of epochs.
@@ -869,12 +872,4 @@ func (b *BeaconChainConfig) SlotDurationMillis() uint64 {
 func (b *BeaconChainConfig) SlotComponentDuration(bp primitives.BP) time.Duration {
 	ms := uint64(bp) * b.SlotDurationMillis() / uint64(BasisPoints)
 	return time.Duration(ms) * time.Millisecond
-}
-
-// AttestationDueBPSAtSlot returns the attestation due time in basis points of the slot.
-func (b *BeaconChainConfig) AttestationDueBPSAtSlot(slot primitives.Slot) primitives.BP {
-	if primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch)) >= b.GloasForkEpoch {
-		return b.AttestationDueBPSGloas
-	}
-	return b.AttestationDueBPS
 }

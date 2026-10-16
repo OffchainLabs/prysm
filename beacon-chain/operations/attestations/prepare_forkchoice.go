@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
@@ -31,7 +32,13 @@ func (s *Service) prepareForkChoiceAtts() {
 			break
 		}
 	}
-	ticker := slots.NewSlotTickerWithIntervals(s.genesisTime, intervals[:])
+
+	intervalFuncs := make([]slots.IntervalFunc, 0, len(intervals))
+	for _, interval := range intervals {
+		intervalFuncs = append(intervalFuncs, scaledToSlotDuration(interval))
+	}
+
+	ticker := slots.NewSlotTickerWithIntervalFuncs(s.genesisTime, intervalFuncs)
 	for {
 		select {
 		case slotInterval := <-ticker.C():
@@ -159,4 +166,13 @@ func (s *Service) seen(att ethpb.Att) (bool, error) {
 
 	s.forkChoiceProcessedAtts.Add(id, incomingBits)
 	return false, nil
+}
+
+// scaledToSlotDuration returns an interval func resolving the given offset, tuned for the genesis slot duration,
+// to the same fraction of each slot's actual duration.
+func scaledToSlotDuration(offset time.Duration) slots.IntervalFunc {
+	bp := primitives.BP(offset * time.Duration(params.BasisPoints) / params.BeaconConfig().SlotDuration())
+	return func(slot primitives.Slot) time.Duration {
+		return params.BeaconConfig().SlotFractionAt(bp, slot)
+	}
 }

@@ -51,7 +51,6 @@ var placeholderFields = []string{
 	"KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH", // Configured in proto/ssz_proto_library.bzl
 	"MAX_REQUEST_INCLUSION_LIST",
 	"MAX_TRANSACTIONS_BYTES_PER_INCLUSION_LIST",
-	"MIN_BLOB_DATA_RETENTION_MS",
 	"MIN_SLOTS_FOR_INCLUSION_LISTS_REQUESTS",
 	"NUMBER_OF_COLUMNS", // Configured as a constant in config/fieldparams/mainnet.go
 	"SLOT_DURATION_MS_EIP8198",

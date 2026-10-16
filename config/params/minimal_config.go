@@ -36,6 +36,8 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	// Time parameters
 	minimalConfig.SecondsPerSlot = 6
 	minimalConfig.SlotDurationMilliseconds = 6000
+	minimalConfig.SlotDurationMillisHeze = 5000
+	minimalConfig.MinBlobDataRetentionMillis = 196_608_000
 	minimalConfig.AttestationDueBPSGloas = 2500
 	minimalConfig.AggregateDueBPSGloas = 5000
 	minimalConfig.SyncMessageDueBPSGloas = 2500

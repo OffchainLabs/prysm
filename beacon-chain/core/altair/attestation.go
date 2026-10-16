@@ -134,7 +134,7 @@ func SetParticipationAndRewardProposer(
 	var stateErr error
 	if targetEpoch == currentEpoch {
 		stateErr = beaconState.ModifyCurrentParticipationBits(func(val []byte) ([]byte, error) {
-			propRewardNum, epochParticipation, err := EpochParticipation(beaconState, indices, val, participatedFlags, totalBalance)
+			propRewardNum, epochParticipation, err := EpochParticipation(beaconState, indices, val, participatedFlags, totalBalance, targetEpoch)
 			if err != nil {
 				return nil, err
 			}
@@ -143,7 +143,7 @@ func SetParticipationAndRewardProposer(
 		})
 	} else {
 		stateErr = beaconState.ModifyPreviousParticipationBits(func(val []byte) ([]byte, error) {
-			propRewardNum, epochParticipation, err := EpochParticipation(beaconState, indices, val, participatedFlags, totalBalance)
+			propRewardNum, epochParticipation, err := EpochParticipation(beaconState, indices, val, participatedFlags, totalBalance, targetEpoch)
 			if err != nil {
 				return nil, err
 			}
@@ -179,16 +179,8 @@ func AddValidatorFlag(flag, flagPosition uint8) (uint8, error) {
 }
 
 // EpochParticipation sets and returns the proposer reward numerator and epoch participation.
-//
-// Spec code:
-//
-//	proposer_reward_numerator = 0
-//	for index in get_attesting_indices(state, data, attestation.aggregation_bits):
-//	    for flag_index, weight in enumerate(PARTICIPATION_FLAG_WEIGHTS):
-//	        if flag_index in participation_flag_indices and not has_flag(epoch_participation[index], flag_index):
-//	            epoch_participation[index] = add_flag(epoch_participation[index], flag_index)
-//	            proposer_reward_numerator += get_base_reward(state, index) * weight
-func EpochParticipation(beaconState state.ReadOnlyBeaconState, indices []uint64, epochParticipation []byte, participatedFlags map[uint8]bool, totalBalance uint64) (uint64, []byte, error) {
+// https://github.com/ethereum/consensus-specs/blob/master/specs/heze/beacon-chain.md#modified-process_attestation
+func EpochParticipation(beaconState state.ReadOnlyBeaconState, indices []uint64, epochParticipation []byte, participatedFlags map[uint8]bool, totalBalance uint64, targetEpoch primitives.Epoch) (uint64, []byte, error) {
 	cfg := params.BeaconConfig()
 	sourceFlagIndex := cfg.TimelySourceFlagIndex
 	targetFlagIndex := cfg.TimelyTargetFlagIndex
@@ -198,7 +190,7 @@ func EpochParticipation(beaconState state.ReadOnlyBeaconState, indices []uint64,
 		if index >= uint64(len(epochParticipation)) {
 			return 0, nil, fmt.Errorf("index %d exceeds participation length %d", index, len(epochParticipation))
 		}
-		br, err := BaseRewardWithTotalBalance(beaconState, primitives.ValidatorIndex(index), totalBalance)
+		br, err := BaseRewardWithTotalBalance(beaconState, primitives.ValidatorIndex(index), totalBalance, targetEpoch)
 		if err != nil {
 			return 0, nil, err
 		}

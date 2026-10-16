@@ -839,21 +839,15 @@ func (s *Service) runLateBlockTasks() {
 		return
 	}
 
-	cfg := params.BeaconConfig()
-	attDueBPS := cfg.AttestationDueBPSAtSlot(s.CurrentSlot())
-	attThreshold := cfg.SlotComponentDuration(attDueBPS)
-	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SlotDuration())
+	ticker := slots.NewSlotTickerWithOffsetFunc(s.genesisTime, slots.ComponentInterval(params.AttestationDue))
+	defer ticker.Done()
+
 	for {
 		select {
 		case slot := <-ticker.C():
-			if attDueBPS != cfg.AttestationDueBPSGloas && slots.ToEpoch(slot) >= cfg.GloasForkEpoch {
-				ticker.Done()
-				attDueBPS = cfg.AttestationDueBPSGloas
-				attThreshold = cfg.SlotComponentDuration(attDueBPS)
-				ticker = slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SlotDuration())
-			}
 			s.goroutineCounter.sample(slot)
 			s.lateBlockTasks(s.ctx)
+
 		case <-s.ctx.Done():
 			log.Debug("Context closed, exiting routine")
 			return

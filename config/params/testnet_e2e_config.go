@@ -41,6 +41,8 @@ func E2EMainnetTestConfig() *BeaconChainConfig {
 	// Time parameters.
 	e2eConfig.SecondsPerSlot = 6
 	e2eConfig.SlotDurationMilliseconds = 6000
+	e2eConfig.SlotDurationMillisHeze = 5000
+	e2eConfig.MinBlobDataRetentionMillis = 786_432_000 // MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS at 6s slots.
 	e2eConfig.SqrRootSlotsPerEpoch = 5
 	e2eConfig.SecondsPerETH1Block = 2
 	e2eConfig.ShardCommitteePeriod = 4

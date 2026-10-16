@@ -2,6 +2,7 @@ package altair
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -11,54 +12,49 @@ import (
 	"github.com/pkg/errors"
 )
 
-// BaseReward takes state and validator index and calculate
-// individual validator's base reward.
-//
-// Spec code:
-//
-//	def get_base_reward(state: BeaconState, index: ValidatorIndex) -> Gwei:
-//	  """
-//	  Return the base reward for the validator defined by ``index`` with respect to the current ``state``.
-//
-//	  Note: An optimally performing validator can earn one base reward per epoch over a long time horizon.
-//	  This takes into account both per-epoch (e.g. attestation) and intermittent duties (e.g. block proposal
-//	  and sync committees).
-//	  """
-//	  increments = state.validators[index].effective_balance // EFFECTIVE_BALANCE_INCREMENT
-//	  return Gwei(increments * get_base_reward_per_increment(state))
-func BaseReward(ctx context.Context, s state.ReadOnlyBeaconState, index primitives.ValidatorIndex) (uint64, error) {
+// BaseReward returns the base reward of the validator at the given index, priced at the slot duration in effect at the given epoch.
+// https://github.com/ethereum/consensus-specs/blob/master/specs/heze/beacon-chain.md#modified-get_base_reward
+func BaseReward(ctx context.Context, s state.ReadOnlyBeaconState, index primitives.ValidatorIndex, epoch primitives.Epoch) (uint64, error) {
 	totalBalance, err := helpers.TotalActiveBalance(ctx, s)
 	if err != nil {
-		return 0, errors.Wrap(err, "could not calculate active balance")
+		return 0, fmt.Errorf("total active balance: %w", err)
 	}
-	return BaseRewardWithTotalBalance(s, index, totalBalance)
+
+	baseReward, err := BaseRewardWithTotalBalance(s, index, totalBalance, epoch)
+	if err != nil {
+		return 0, fmt.Errorf("base reward with total balance: %w", err)
+	}
+
+	return baseReward, nil
 }
 
-// BaseRewardWithTotalBalance calculates the base reward with the provided total balance.
-func BaseRewardWithTotalBalance(s state.ReadOnlyBeaconState, index primitives.ValidatorIndex, totalBalance uint64) (uint64, error) {
+// BaseRewardWithTotalBalance is BaseReward with the total active balance provided by the caller.
+func BaseRewardWithTotalBalance(s state.ReadOnlyBeaconState, index primitives.ValidatorIndex, totalBalance uint64, epoch primitives.Epoch) (uint64, error) {
 	val, err := s.ValidatorAtIndexReadOnly(index)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("validator at index read only: %w", err)
 	}
+
 	cfg := params.BeaconConfig()
 	increments := val.EffectiveBalance() / cfg.EffectiveBalanceIncrement
-	baseRewardPerInc, err := BaseRewardPerIncrement(totalBalance)
+
+	baseRewardPerInc, err := BaseRewardPerIncrement(totalBalance, epoch)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("base reward per increment: %w", err)
 	}
+
 	return increments * baseRewardPerInc, nil
 }
 
-// BaseRewardPerIncrement of the beacon state
-//
-// Spec code:
-// def get_base_reward_per_increment(state: BeaconState) -> Gwei:
-//
-//	return Gwei(EFFECTIVE_BALANCE_INCREMENT * BASE_REWARD_FACTOR // integer_squareroot(get_total_active_balance(state)))
-func BaseRewardPerIncrement(activeBalance uint64) (uint64, error) {
+// BaseRewardPerIncrement returns the base reward per increment, priced at the slot duration in
+// effect at “epoch“.
+// https://github.com/ethereum/consensus-specs/blob/master/specs/heze/beacon-chain.md#modified-get_base_reward_per_increment
+func BaseRewardPerIncrement(activeBalance uint64, epoch primitives.Epoch) (uint64, error) {
 	if activeBalance == 0 {
 		return 0, errors.New("active balance can't be 0")
 	}
+
 	cfg := params.BeaconConfig()
-	return cfg.EffectiveBalanceIncrement * cfg.BaseRewardFactor / math.CachedSquareRoot(activeBalance), nil
+	scaled := cfg.EffectiveBalanceIncrement * cfg.BaseRewardFactor * cfg.SlotDurationMillisAtEpoch(epoch) / cfg.SlotDurationMillisAtEpoch(cfg.GenesisEpoch)
+	return scaled / math.CachedSquareRoot(activeBalance), nil
 }
