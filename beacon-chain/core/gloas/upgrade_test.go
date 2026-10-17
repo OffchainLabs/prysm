@@ -73,22 +73,22 @@ func TestUpgradeToGloas_Basic(t *testing.T) {
 	require.NoError(t, err)
 	require.DeepSSZEqual(t, blockHash, latestBlockHash[:])
 
-	pbState, ok := mSt.ToProtoUnsafe().(*ethpb.BeaconStateGloas)
+	container, ok := mSt.ToContainerUnsafe().(*ethpb.BeaconStateGloas)
 	require.Equal(t, true, ok)
 
 	expectedAvailLen := int((params.BeaconConfig().SlotsPerHistoricalRoot + 7) / 8)
-	require.Equal(t, expectedAvailLen, len(pbState.ExecutionPayloadAvailability))
-	for _, b := range pbState.ExecutionPayloadAvailability {
+	require.Equal(t, expectedAvailLen, len(container.ExecutionPayloadAvailability))
+	for _, b := range container.ExecutionPayloadAvailability {
 		require.Equal(t, byte(0xff), b)
 	}
 
-	require.Equal(t, 0, len(pbState.Builders))
-	require.Equal(t, primitives.BuilderIndex(0), pbState.NextWithdrawalBuilderIndex)
-	require.Equal(t, 0, len(pbState.BuilderPendingWithdrawals))
-	require.Equal(t, 0, len(pbState.PayloadExpectedWithdrawals))
+	require.Equal(t, 0, len(container.Builders))
+	require.Equal(t, primitives.BuilderIndex(0), container.NextWithdrawalBuilderIndex)
+	require.Equal(t, 0, len(container.BuilderPendingWithdrawals))
+	require.Equal(t, 0, len(container.PayloadExpectedWithdrawals))
 
-	require.Equal(t, int(params.BeaconConfig().SlotsPerEpoch*2), len(pbState.BuilderPendingPayments))
-	for _, payment := range pbState.BuilderPendingPayments {
+	require.Equal(t, int(params.BeaconConfig().SlotsPerEpoch*2), len(container.BuilderPendingPayments))
+	for _, payment := range container.BuilderPendingPayments {
 		require.NotNil(t, payment)
 		require.NotNil(t, payment.Withdrawal)
 		require.Equal(t, fieldparams.FeeRecipientLength, len(payment.Withdrawal.FeeRecipient))
@@ -122,13 +122,13 @@ func TestUpgradeToGloas_OnboardsBuilderDeposit(t *testing.T) {
 	mSt, err := gloas.UpgradeToGloas(t.Context(), st)
 	require.NoError(t, err)
 
-	pbState, ok := mSt.ToProtoUnsafe().(*ethpb.BeaconStateGloas)
+	container, ok := mSt.ToContainerUnsafe().(*ethpb.BeaconStateGloas)
 	require.Equal(t, true, ok)
 
-	require.Equal(t, 0, len(pbState.PendingDeposits))
-	require.Equal(t, 1, len(pbState.Builders))
+	require.Equal(t, 0, len(container.PendingDeposits))
+	require.Equal(t, 1, len(container.Builders))
 
-	builder := pbState.Builders[0]
+	builder := container.Builders[0]
 	require.DeepSSZEqual(t, sk.PublicKey().Marshal(), builder.Pubkey)
 	require.DeepSSZEqual(t, builderCreds[12:], builder.ExecutionAddress)
 	require.Equal(t, primitives.Gwei(amount), builder.Balance)

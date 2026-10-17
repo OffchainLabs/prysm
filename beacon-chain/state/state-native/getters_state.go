@@ -9,9 +9,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
 
-// ToProtoUnsafe returns the pointer value of the underlying
-// beacon state proto object, bypassing immutability. Use with care.
-func (b *BeaconState) ToProtoUnsafe() any {
+// ToContainerUnsafe returns the state container for the fork of b. The
+// container shares its fields with b, bypassing immutability. Use with care.
+func (b *BeaconState) ToContainerUnsafe() any {
 	if b == nil {
 		return nil
 	}
@@ -313,8 +313,8 @@ func (b *BeaconState) ToProtoUnsafe() any {
 	}
 }
 
-// ToProto the beacon state into a protobuf for usage.
-func (b *BeaconState) ToProto() any {
+// ToContainer returns a copy of b as the state container for its fork.
+func (b *BeaconState) ToContainer() any {
 	if b == nil {
 		return nil
 	}
@@ -647,7 +647,7 @@ func (b *BeaconState) StateRootAtIndex(idx uint64) ([]byte, error) {
 }
 
 // ContainerFrom returns v as the state container type T, such as the result of
-// ToProto or ToProtoUnsafe. It returns an error if v is not a T.
+// ToContainer or ToContainerUnsafe. It returns an error if v is not a T.
 func ContainerFrom[T Container](v any) (T, error) {
 	c, ok := v.(T)
 	if !ok {

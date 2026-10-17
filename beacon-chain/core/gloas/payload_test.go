@@ -163,7 +163,7 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 		genesisTime = payload.Timestamp - slotSeconds
 	}
 
-	stProto := &ethpb.BeaconStateGloas{
+	container := &ethpb.BeaconStateGloas{
 		Slot:                  slot,
 		GenesisTime:           genesisTime,
 		GenesisValidatorsRoot: genesisRoot,
@@ -188,7 +188,7 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 		Builders:                     builders,
 	}
 
-	st, err := state_native.New(stProto)
+	st, err := state_native.New(container)
 	require.NoError(t, err)
 
 	epoch := slots.ToEpoch(slot)
@@ -255,21 +255,21 @@ func TestVerifyExecutionPayloadEnvelope_AdvancedCheckpointState(t *testing.T) {
 			fixture := buildPayloadFixture(t, test.mutate)
 			require.NoError(t, fixture.state.SetSlot(params.BeaconConfig().SlotsPerEpoch))
 			require.NoError(t, fixture.state.SetGenesisTime(time.Unix(int64(100-5*params.BeaconConfig().SecondsPerSlot), 0)))
-			before := fixture.state.Copy().ToProto()
+			before := fixture.state.Copy().ToContainer()
 			err := VerifyExecutionPayloadEnvelope(t.Context(), fixture.state, fixture.signed)
 			if test.wantErr != "" {
 				require.ErrorContains(t, test.wantErr, err)
 			} else {
 				require.NoError(t, err)
 			}
-			require.DeepEqual(t, before, fixture.state.ToProto())
+			require.DeepEqual(t, before, fixture.state.ToContainer())
 			_, err = VerifyExecutionPayloadEnvelopeWithDeferredSig(t.Context(), fixture.state, fixture.signed)
 			if test.wantErr != "" {
 				require.ErrorContains(t, test.wantErr, err)
 			} else {
 				require.NoError(t, err)
 			}
-			require.DeepEqual(t, before, fixture.state.ToProto())
+			require.DeepEqual(t, before, fixture.state.ToContainer())
 		})
 	}
 }
@@ -282,11 +282,11 @@ func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 		require.NoError(t, err)
 		proposerPk := proposerSk.PublicKey().Marshal()
 
-		stPb, ok := fixture.state.ToProtoUnsafe().(*ethpb.BeaconStateGloas)
+		container, ok := fixture.state.ToContainerUnsafe().(*ethpb.BeaconStateGloas)
 		require.Equal(t, true, ok)
-		stPb = stPb.Copy()
-		stPb.Validators[0].PublicKey = proposerPk
-		st, err := state_native.NewUnsafe(stPb)
+		container = container.Copy()
+		container.Validators[0].PublicKey = proposerPk
+		st, err := state_native.NewUnsafe(container)
 		require.NoError(t, err)
 
 		msg := proto.Clone(fixture.signedProto.Message).(*ethpb.ExecutionPayloadEnvelope)
@@ -322,11 +322,11 @@ func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 			require.NoError(t, err)
 			proposerPk := proposerSk.PublicKey().Marshal()
 
-			stPb, ok := fixture.state.ToProtoUnsafe().(*ethpb.BeaconStateGloas)
+			container, ok := fixture.state.ToContainerUnsafe().(*ethpb.BeaconStateGloas)
 			require.Equal(t, true, ok)
-			stPb = stPb.Copy()
-			stPb.Validators[0].PublicKey = proposerPk
-			st, err := state_native.NewUnsafe(stPb)
+			container = container.Copy()
+			container.Validators[0].PublicKey = proposerPk
+			st, err := state_native.NewUnsafe(container)
 			require.NoError(t, err)
 
 			msg := proto.Clone(fixture.signedProto.Message).(*ethpb.ExecutionPayloadEnvelope)

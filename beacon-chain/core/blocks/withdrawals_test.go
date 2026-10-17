@@ -671,12 +671,12 @@ func TestProcessBlindWithdrawals(t *testing.T) {
 			}
 			slot, err := slots.EpochStart(currentEpoch)
 			require.NoError(t, err)
-			spb := &ethpb.BeaconStateCapella{
+			container := &ethpb.BeaconStateCapella{
 				Slot:                         slot,
 				NextWithdrawalValidatorIndex: test.Args.NextWithdrawalValidatorIndex,
 				NextWithdrawalIndex:          test.Args.NextWithdrawalIndex,
 			}
-			st, err := prepareValidators(spb, test.Args)
+			st, err := prepareValidators(container, test.Args)
 			require.NoError(t, err)
 			wdRoot, err := wrappers.WithdrawalSliceRoot(test.Args.Withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 			require.NoError(t, err)
@@ -1135,23 +1135,23 @@ func TestProcessWithdrawals(t *testing.T) {
 					var p interfaces.ExecutionData
 					switch fork {
 					case version.Capella:
-						spb := &ethpb.BeaconStateCapella{
+						container := &ethpb.BeaconStateCapella{
 							Slot:                         slot,
 							NextWithdrawalValidatorIndex: test.Args.NextWithdrawalValidatorIndex,
 							NextWithdrawalIndex:          test.Args.NextWithdrawalIndex,
 						}
-						st, err = state_native.NewUnsafe(spb)
+						st, err = state_native.NewUnsafe(container)
 						require.NoError(t, err)
 						p, err = consensusblocks.WrappedExecutionPayloadCapella(&enginev1.ExecutionPayloadCapella{Withdrawals: test.Args.Withdrawals})
 						require.NoError(t, err)
 					case version.Electra:
-						spb := &ethpb.BeaconStateElectra{
+						container := &ethpb.BeaconStateElectra{
 							Slot:                         slot,
 							NextWithdrawalValidatorIndex: test.Args.NextWithdrawalValidatorIndex,
 							NextWithdrawalIndex:          test.Args.NextWithdrawalIndex,
 							PendingPartialWithdrawals:    test.Args.PendingPartialWithdrawals,
 						}
-						st, err = state_native.NewUnsafe(spb)
+						st, err = state_native.NewUnsafe(container)
 						require.NoError(t, err)
 						p, err = consensusblocks.WrappedExecutionPayloadDeneb(&enginev1.ExecutionPayloadDeneb{Withdrawals: test.Args.Withdrawals})
 						require.NoError(t, err)
@@ -1176,7 +1176,7 @@ func TestProcessWithdrawals(t *testing.T) {
 }
 
 func TestProcessBLSToExecutionChanges(t *testing.T) {
-	spb := &ethpb.BeaconStateCapella{
+	container := &ethpb.BeaconStateCapella{
 		Fork: &ethpb.Fork{
 			CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
 			PreviousVersion: params.BeaconConfig().GenesisForkVersion,
@@ -1185,7 +1185,7 @@ func TestProcessBLSToExecutionChanges(t *testing.T) {
 	numValidators := 10
 	validators := make([]*ethpb.Validator, numValidators)
 	blsChanges := make([]*ethpb.BLSToExecutionChange, numValidators)
-	spb.Balances = make([]uint64, numValidators)
+	container.Balances = make([]uint64, numValidators)
 	privKeys := make([]common.SecretKey, numValidators)
 	maxEffectiveBalance := params.BeaconConfig().MaxEffectiveBalance
 	executionAddress := []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13}
@@ -1213,8 +1213,8 @@ func TestProcessBLSToExecutionChanges(t *testing.T) {
 		validators[i] = v
 		blsChanges[i] = message
 	}
-	spb.Validators = validators
-	st, err := state_native.New(spb)
+	container.Validators = validators
+	st, err := state_native.New(container)
 	require.NoError(t, err)
 
 	signedChanges := make([]*ethpb.SignedBLSToExecutionChange, numValidators)
@@ -1247,7 +1247,7 @@ func TestProcessBLSToExecutionChanges(t *testing.T) {
 }
 
 func TestBLSChangesSignatureBatch(t *testing.T) {
-	spb := &ethpb.BeaconStateCapella{
+	container := &ethpb.BeaconStateCapella{
 		Fork: &ethpb.Fork{
 			CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
 			PreviousVersion: params.BeaconConfig().GenesisForkVersion,
@@ -1256,7 +1256,7 @@ func TestBLSChangesSignatureBatch(t *testing.T) {
 	numValidators := 10
 	validators := make([]*ethpb.Validator, numValidators)
 	blsChanges := make([]*ethpb.BLSToExecutionChange, numValidators)
-	spb.Balances = make([]uint64, numValidators)
+	container.Balances = make([]uint64, numValidators)
 	privKeys := make([]common.SecretKey, numValidators)
 	maxEffectiveBalance := params.BeaconConfig().MaxEffectiveBalance
 	executionAddress := []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13}
@@ -1284,8 +1284,8 @@ func TestBLSChangesSignatureBatch(t *testing.T) {
 		validators[i] = v
 		blsChanges[i] = message
 	}
-	spb.Validators = validators
-	st, err := state_native.New(spb)
+	container.Validators = validators
+	st, err := state_native.New(container)
 	require.NoError(t, err)
 
 	signedChanges := make([]*ethpb.SignedBLSToExecutionChange, numValidators)
@@ -1310,7 +1310,7 @@ func TestBLSChangesSignatureBatch(t *testing.T) {
 }
 
 func TestBLSChangesSignatureBatchWrongFork(t *testing.T) {
-	spb := &ethpb.BeaconStateCapella{
+	container := &ethpb.BeaconStateCapella{
 		Fork: &ethpb.Fork{
 			CurrentVersion:  params.BeaconConfig().CapellaForkVersion,
 			PreviousVersion: params.BeaconConfig().BellatrixForkVersion,
@@ -1320,7 +1320,7 @@ func TestBLSChangesSignatureBatchWrongFork(t *testing.T) {
 	numValidators := 10
 	validators := make([]*ethpb.Validator, numValidators)
 	blsChanges := make([]*ethpb.BLSToExecutionChange, numValidators)
-	spb.Balances = make([]uint64, numValidators)
+	container.Balances = make([]uint64, numValidators)
 	privKeys := make([]common.SecretKey, numValidators)
 	maxEffectiveBalance := params.BeaconConfig().MaxEffectiveBalance
 	executionAddress := []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13}
@@ -1348,8 +1348,8 @@ func TestBLSChangesSignatureBatchWrongFork(t *testing.T) {
 		validators[i] = v
 		blsChanges[i] = message
 	}
-	spb.Validators = validators
-	st, err := state_native.New(spb)
+	container.Validators = validators
+	st, err := state_native.New(container)
 	require.NoError(t, err)
 
 	signedChanges := make([]*ethpb.SignedBLSToExecutionChange, numValidators)
@@ -1379,7 +1379,7 @@ func TestBLSChangesSignatureBatchFromBellatrix(t *testing.T) {
 	cfg.CapellaForkEpoch = cfg.BellatrixForkEpoch.AddEpoch(2)
 	params.OverrideBeaconConfig(cfg)
 
-	spb := &ethpb.BeaconStateBellatrix{
+	container := &ethpb.BeaconStateBellatrix{
 		Fork: &ethpb.Fork{
 			CurrentVersion:  params.BeaconConfig().BellatrixForkVersion,
 			PreviousVersion: params.BeaconConfig().AltairForkVersion,
@@ -1389,10 +1389,10 @@ func TestBLSChangesSignatureBatchFromBellatrix(t *testing.T) {
 	numValidators := 10
 	validators := make([]*ethpb.Validator, numValidators)
 	blsChanges := make([]*ethpb.BLSToExecutionChange, numValidators)
-	spb.Balances = make([]uint64, numValidators)
+	container.Balances = make([]uint64, numValidators)
 	slot, err := slots.EpochStart(params.BeaconConfig().BellatrixForkEpoch)
 	require.NoError(t, err)
-	spb.Slot = slot
+	container.Slot = slot
 
 	privKeys := make([]common.SecretKey, numValidators)
 	maxEffectiveBalance := params.BeaconConfig().MaxEffectiveBalance
@@ -1421,8 +1421,8 @@ func TestBLSChangesSignatureBatchFromBellatrix(t *testing.T) {
 		validators[i] = v
 		blsChanges[i] = message
 	}
-	spb.Validators = validators
-	st, err := state_native.New(spb)
+	container.Validators = validators
+	st, err := state_native.New(container)
 	require.NoError(t, err)
 
 	signedChanges := make([]*ethpb.SignedBLSToExecutionChange, numValidators)

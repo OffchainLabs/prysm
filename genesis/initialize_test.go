@@ -69,7 +69,7 @@ func createTestGenesisState(t *testing.T, numValidators uint64, slot primitives.
 	require.NoError(t, err)
 
 	// Create a minimal beacon state directly
-	pb := &ethpb.BeaconState{
+	container := &ethpb.BeaconState{
 		Slot:                  slot,
 		GenesisTime:           uint64(time.Unix(2000000000, 0).Unix()), // Use a different time than mainnet
 		GenesisValidatorsRoot: []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
@@ -99,7 +99,7 @@ func createTestGenesisState(t *testing.T, numValidators uint64, slot primitives.
 
 	// Initialize validators and balances
 	for i := range numValidators {
-		pb.Validators[i] = &ethpb.Validator{
+		container.Validators[i] = &ethpb.Validator{
 			PublicKey:                  deposits[i].Data.PublicKey,
 			WithdrawalCredentials:      deposits[i].Data.WithdrawalCredentials,
 			EffectiveBalance:           params.BeaconConfig().MaxEffectiveBalance,
@@ -109,21 +109,21 @@ func createTestGenesisState(t *testing.T, numValidators uint64, slot primitives.
 			ExitEpoch:                  params.BeaconConfig().FarFutureEpoch,
 			WithdrawableEpoch:          params.BeaconConfig().FarFutureEpoch,
 		}
-		pb.Balances[i] = params.BeaconConfig().MaxEffectiveBalance
+		container.Balances[i] = params.BeaconConfig().MaxEffectiveBalance
 	}
 
 	// Initialize arrays with proper sizes
-	for i := 0; i < len(pb.BlockRoots); i++ {
-		pb.BlockRoots[i] = make([]byte, 32)
+	for i := 0; i < len(container.BlockRoots); i++ {
+		container.BlockRoots[i] = make([]byte, 32)
 	}
-	for i := 0; i < len(pb.StateRoots); i++ {
-		pb.StateRoots[i] = make([]byte, 32)
+	for i := 0; i < len(container.StateRoots); i++ {
+		container.StateRoots[i] = make([]byte, 32)
 	}
-	for i := 0; i < len(pb.RandaoMixes); i++ {
-		pb.RandaoMixes[i] = make([]byte, 32)
+	for i := 0; i < len(container.RandaoMixes); i++ {
+		container.RandaoMixes[i] = make([]byte, 32)
 	}
 
-	st, err := state_native.NewUnsafe(pb)
+	st, err := state_native.NewUnsafe(container)
 	require.NoError(t, err)
 	return st
 }

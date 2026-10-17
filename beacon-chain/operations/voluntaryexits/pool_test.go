@@ -44,14 +44,14 @@ func TestPendingExits(t *testing.T) {
 }
 
 func TestExitsForInclusion(t *testing.T) {
-	spb := &ethpb.BeaconStateCapella{
+	container := &ethpb.BeaconStateCapella{
 		Fork: &ethpb.Fork{
 			CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
 			PreviousVersion: params.BeaconConfig().GenesisForkVersion,
 		},
 	}
 	stateSlot := types.Slot(uint64(params.BeaconConfig().ShardCommitteePeriod) * uint64(params.BeaconConfig().SlotsPerEpoch))
-	spb.Slot = stateSlot
+	container.Slot = stateSlot
 	numValidators := 2 * params.BeaconConfig().MaxVoluntaryExits
 	validators := make([]*ethpb.Validator, numValidators)
 	exits := make([]*ethpb.VoluntaryExit, numValidators)
@@ -82,8 +82,8 @@ func TestExitsForInclusion(t *testing.T) {
 		validators[i] = v
 		exits[i] = message
 	}
-	spb.Validators = validators
-	st, err := state_native.New(spb)
+	container.Validators = validators
+	st, err := state_native.New(container)
 	require.NoError(t, err)
 
 	signedExits := make([]*ethpb.SignedVoluntaryExit, numValidators)

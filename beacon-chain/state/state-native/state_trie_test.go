@@ -2,6 +2,7 @@ package state_native_test
 
 import (
 	"bytes"
+	"reflect"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -49,7 +50,7 @@ func TestNew(t *testing.T) {
 			params.OverrideBeaconConfig(params.MinimalSpecConfig())
 		}
 		testState, _ := util.DeterministicGenesisState(t, 64)
-		full, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
+		full, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToContainerUnsafe())
 		require.NoError(t, err)
 		_, err = statenative.New(full)
 		require.NoError(t, err)
@@ -132,9 +133,9 @@ func TestBeaconState_HashTreeRoot(t *testing.T) {
 			if err == nil && tt.error != "" {
 				t.Errorf("Expected error, expected %v, received %v", tt.error, err)
 			}
-			pbState, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
+			container, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToContainerUnsafe())
 			require.NoError(t, err)
-			genericHTR, err := pbState.HashTreeRoot()
+			genericHTR, err := container.HashTreeRoot()
 			if err == nil && tt.error != "" {
 				t.Errorf("Expected error, expected %v, received %v", tt.error, err)
 			}
@@ -150,18 +151,18 @@ func TestBeaconState_HashTreeRoot(t *testing.T) {
 
 func BenchmarkBeaconState(b *testing.B) {
 	testState, _ := util.DeterministicGenesisState(b, 16000)
-	pbState, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
+	container, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToContainerUnsafe())
 	require.NoError(b, err)
 
 	b.Run("Vectorized SHA256", func(b *testing.B) {
-		st, err := statenative.NewUnsafe(pbState)
+		st, err := statenative.NewUnsafe(container)
 		require.NoError(b, err)
 		_, err = st.HashTreeRoot(b.Context())
 		assert.NoError(b, err)
 	})
 
 	b.Run("Current SHA256", func(b *testing.B) {
-		_, err := pbState.HashTreeRoot()
+		_, err := container.HashTreeRoot()
 		require.NoError(b, err)
 	})
 }
@@ -219,9 +220,9 @@ func TestBeaconState_HashTreeRoot_FieldTrie(t *testing.T) {
 			if err == nil && tt.error != "" {
 				t.Errorf("Expected error, expected %v, received %v", tt.error, err)
 			}
-			pbState, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
+			container, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToContainerUnsafe())
 			require.NoError(t, err)
-			genericHTR, err := pbState.HashTreeRoot()
+			genericHTR, err := container.HashTreeRoot()
 			if err == nil && tt.error != "" {
 				t.Errorf("Expected error, expected %v, received %v", tt.error, err)
 			}
@@ -250,9 +251,9 @@ func TestBeaconState_AppendValidator_DoesntMutateCopy(t *testing.T) {
 
 func TestBeaconState_ValidatorMutation_Phase0(t *testing.T) {
 	testState, _ := util.DeterministicGenesisState(t, 400)
-	pbState, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
+	container, err := statenative.ContainerFrom[*ethpb.BeaconState](testState.ToContainerUnsafe())
 	require.NoError(t, err)
-	testState, err = statenative.New(pbState)
+	testState, err = statenative.New(container)
 	require.NoError(t, err)
 
 	_, err = testState.HashTreeRoot(t.Context())
@@ -279,10 +280,10 @@ func TestBeaconState_ValidatorMutation_Phase0(t *testing.T) {
 
 	rt, err := testState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
-	pbState, err = statenative.ContainerFrom[*ethpb.BeaconState](testState.ToProtoUnsafe())
+	container, err = statenative.ContainerFrom[*ethpb.BeaconState](testState.ToContainerUnsafe())
 	require.NoError(t, err)
 
-	copiedTestState, err := statenative.New(pbState)
+	copiedTestState, err := statenative.New(container)
 	require.NoError(t, err)
 
 	rt2, err := copiedTestState.HashTreeRoot(t.Context())
@@ -303,10 +304,10 @@ func TestBeaconState_ValidatorMutation_Phase0(t *testing.T) {
 
 	rt, err = newState1.HashTreeRoot(t.Context())
 	require.NoError(t, err)
-	pbState, err = statenative.ContainerFrom[*ethpb.BeaconState](newState1.ToProtoUnsafe())
+	container, err = statenative.ContainerFrom[*ethpb.BeaconState](newState1.ToContainerUnsafe())
 	require.NoError(t, err)
 
-	copiedTestState, err = statenative.New(pbState)
+	copiedTestState, err = statenative.New(container)
 	require.NoError(t, err)
 
 	rt2, err = copiedTestState.HashTreeRoot(t.Context())
@@ -317,9 +318,9 @@ func TestBeaconState_ValidatorMutation_Phase0(t *testing.T) {
 
 func TestBeaconState_ValidatorMutation_Altair(t *testing.T) {
 	testState, _ := util.DeterministicGenesisStateAltair(t, 400)
-	pbState, err := statenative.ContainerFrom[*ethpb.BeaconStateAltair](testState.ToProtoUnsafe())
+	container, err := statenative.ContainerFrom[*ethpb.BeaconStateAltair](testState.ToContainerUnsafe())
 	require.NoError(t, err)
-	testState, err = statenative.New(pbState)
+	testState, err = statenative.New(container)
 	require.NoError(t, err)
 
 	_, err = testState.HashTreeRoot(t.Context())
@@ -346,10 +347,10 @@ func TestBeaconState_ValidatorMutation_Altair(t *testing.T) {
 
 	rt, err := testState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
-	pbState, err = statenative.ContainerFrom[*ethpb.BeaconStateAltair](testState.ToProtoUnsafe())
+	container, err = statenative.ContainerFrom[*ethpb.BeaconStateAltair](testState.ToContainerUnsafe())
 	require.NoError(t, err)
 
-	copiedTestState, err := statenative.New(pbState)
+	copiedTestState, err := statenative.New(container)
 	require.NoError(t, err)
 
 	rt2, err := copiedTestState.HashTreeRoot(t.Context())
@@ -370,10 +371,10 @@ func TestBeaconState_ValidatorMutation_Altair(t *testing.T) {
 
 	rt, err = newState1.HashTreeRoot(t.Context())
 	require.NoError(t, err)
-	pbState, err = statenative.ContainerFrom[*ethpb.BeaconStateAltair](newState1.ToProtoUnsafe())
+	container, err = statenative.ContainerFrom[*ethpb.BeaconStateAltair](newState1.ToContainerUnsafe())
 	require.NoError(t, err)
 
-	copiedTestState, err = statenative.New(pbState)
+	copiedTestState, err = statenative.New(container)
 	require.NoError(t, err)
 
 	rt2, err = copiedTestState.HashTreeRoot(t.Context())
@@ -384,9 +385,9 @@ func TestBeaconState_ValidatorMutation_Altair(t *testing.T) {
 
 func TestBeaconState_ValidatorMutation_Bellatrix(t *testing.T) {
 	testState, _ := util.DeterministicGenesisStateBellatrix(t, 400)
-	pbState, err := statenative.ContainerFrom[*ethpb.BeaconStateBellatrix](testState.ToProtoUnsafe())
+	container, err := statenative.ContainerFrom[*ethpb.BeaconStateBellatrix](testState.ToContainerUnsafe())
 	require.NoError(t, err)
-	testState, err = statenative.New(pbState)
+	testState, err = statenative.New(container)
 	require.NoError(t, err)
 
 	_, err = testState.HashTreeRoot(t.Context())
@@ -413,10 +414,10 @@ func TestBeaconState_ValidatorMutation_Bellatrix(t *testing.T) {
 
 	rt, err := testState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
-	pbState, err = statenative.ContainerFrom[*ethpb.BeaconStateBellatrix](testState.ToProtoUnsafe())
+	container, err = statenative.ContainerFrom[*ethpb.BeaconStateBellatrix](testState.ToContainerUnsafe())
 	require.NoError(t, err)
 
-	copiedTestState, err := statenative.New(pbState)
+	copiedTestState, err := statenative.New(container)
 	require.NoError(t, err)
 
 	rt2, err := copiedTestState.HashTreeRoot(t.Context())
@@ -437,10 +438,10 @@ func TestBeaconState_ValidatorMutation_Bellatrix(t *testing.T) {
 
 	rt, err = newState1.HashTreeRoot(t.Context())
 	require.NoError(t, err)
-	pbState, err = statenative.ContainerFrom[*ethpb.BeaconStateBellatrix](newState1.ToProtoUnsafe())
+	container, err = statenative.ContainerFrom[*ethpb.BeaconStateBellatrix](newState1.ToContainerUnsafe())
 	require.NoError(t, err)
 
-	copiedTestState, err = statenative.New(pbState)
+	copiedTestState, err = statenative.New(container)
 	require.NoError(t, err)
 
 	rt2, err = copiedTestState.HashTreeRoot(t.Context())
@@ -470,7 +471,7 @@ func TestBeaconState_InitializeInactivityScoresCorrectly_Deneb(t *testing.T) {
 	rt, err := st.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 
-	copiedSt, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateDeneb)
+	copiedSt, ok := st.ToContainerUnsafe().(*ethpb.BeaconStateDeneb)
 	if !ok {
 		t.Error("not ok")
 	}
@@ -490,25 +491,25 @@ func TestBeaconChainCopy_Electra(t *testing.T) {
 	require.NoError(t, err)
 	serializedSSZ, err := snappy.Decode(nil /* dst */, serializedBytes)
 	require.NoError(t, err)
-	pb := &ethpb.BeaconStateElectra{}
-	require.NoError(t, pb.UnmarshalSSZ(serializedSSZ))
-	st, err := statenative.New(pb)
+	container := &ethpb.BeaconStateElectra{}
+	require.NoError(t, container.UnmarshalSSZ(serializedSSZ))
+	st, err := statenative.New(container)
 	require.NoError(t, err)
 
-	// Sanity check that New and ToProto round-trip.
-	require.DeepSSZEqual(t, pb, st.ToProto(), "New does not match input container")
+	// Sanity check that New and ToContainer round-trip.
+	require.DeepSSZEqual(t, container, st.ToContainer(), "New does not match input container")
 
 	// Perform the copy and check that the copied state matches the original state.
 	st2 := st.Copy()
-	require.DeepSSZEqual(t, st.ToProto(), st2.ToProto(), "Copied state does not match original state")
+	require.DeepSSZEqual(t, st.ToContainer(), st2.ToContainer(), "Copied state does not match original state")
 }
 
 func TestContainerFrom(t *testing.T) {
 	t.Run("matching type", func(t *testing.T) {
-		pb := &ethpb.BeaconStateAltair{Slot: 7}
-		got, err := statenative.ContainerFrom[*ethpb.BeaconStateAltair](any(pb))
+		container := &ethpb.BeaconStateAltair{Slot: 7}
+		got, err := statenative.ContainerFrom[*ethpb.BeaconStateAltair](any(container))
 		require.NoError(t, err)
-		require.Equal(t, pb, got)
+		require.Equal(t, container, got)
 	})
 	t.Run("other fork", func(t *testing.T) {
 		got, err := statenative.ContainerFrom[*ethpb.BeaconStateAltair](any(&ethpb.BeaconState{}))
@@ -539,4 +540,54 @@ func TestNew_CopiesInput(t *testing.T) {
 		pb.Fork.Epoch = 2
 		require.Equal(t, primitives.Epoch(2), st.Fork().Epoch)
 	})
+}
+
+func TestToContainer(t *testing.T) {
+	t.Run("Phase0", func(t *testing.T) { testToContainer(t, &ethpb.BeaconState{}) })
+	t.Run("Altair", func(t *testing.T) { testToContainer(t, &ethpb.BeaconStateAltair{}) })
+	t.Run("Bellatrix", func(t *testing.T) { testToContainer(t, &ethpb.BeaconStateBellatrix{}) })
+	t.Run("Capella", func(t *testing.T) { testToContainer(t, &ethpb.BeaconStateCapella{}) })
+	t.Run("Deneb", func(t *testing.T) { testToContainer(t, &ethpb.BeaconStateDeneb{}) })
+	t.Run("Electra", func(t *testing.T) { testToContainer(t, &ethpb.BeaconStateElectra{}) })
+	t.Run("Fulu", func(t *testing.T) { testToContainer(t, &ethpb.BeaconStateFulu{}) })
+	t.Run("Gloas", func(t *testing.T) { testToContainer(t, &ethpb.BeaconStateGloas{}) })
+}
+
+// testToContainer checks that writes through the ToContainer result do not
+// reach the state, and that the same write through ToContainerUnsafe does.
+// Every fork has the fields it writes, so it reaches them by reflection.
+func testToContainer[T statenative.Container](t *testing.T, input T) {
+	field := func(c T, name string) reflect.Value { return reflect.ValueOf(c).Elem().FieldByName(name) }
+	field(input, "Fork").Set(reflect.ValueOf(&ethpb.Fork{Epoch: 1}))
+	field(input, "LatestBlockHeader").Set(reflect.ValueOf(&ethpb.BeaconBlockHeader{Slot: 1}))
+	field(input, "Eth1Data").Set(reflect.ValueOf(&ethpb.Eth1Data{DepositCount: 1}))
+	field(input, "Validators").Set(reflect.ValueOf([]*ethpb.Validator{{EffectiveBalance: 1}}))
+	field(input, "Balances").Set(reflect.ValueOf([]uint64{1}))
+	st, err := statenative.New(input)
+	require.NoError(t, err)
+
+	c, err := statenative.ContainerFrom[T](st.ToContainer())
+	require.NoError(t, err)
+	field(c, "Fork").Interface().(*ethpb.Fork).Epoch = 99
+	field(c, "LatestBlockHeader").Interface().(*ethpb.BeaconBlockHeader).Slot = 99
+	field(c, "Eth1Data").Interface().(*ethpb.Eth1Data).DepositCount = 99
+	field(c, "Validators").Interface().([]*ethpb.Validator)[0].EffectiveBalance = 99
+	field(c, "Balances").Interface().([]uint64)[0] = 99
+
+	require.Equal(t, primitives.Epoch(1), st.Fork().Epoch)
+	require.Equal(t, primitives.Slot(1), st.LatestBlockHeader().Slot)
+	require.Equal(t, uint64(1), st.Eth1Data().DepositCount)
+	v, err := st.ValidatorAtIndexReadOnly(0)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), v.EffectiveBalance())
+	b, err := st.BalanceAtIndex(0)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), b)
+
+	// Control: ToContainerUnsafe may share fields with the state, so the same
+	// write reaches it. This shows that the checks above can detect aliasing.
+	c, err = statenative.ContainerFrom[T](st.ToContainerUnsafe())
+	require.NoError(t, err)
+	field(c, "Fork").Interface().(*ethpb.Fork).Epoch = 99
+	require.Equal(t, primitives.Epoch(99), st.Fork().Epoch)
 }

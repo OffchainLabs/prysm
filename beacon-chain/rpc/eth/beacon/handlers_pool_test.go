@@ -1559,7 +1559,7 @@ func TestSubmitSignedBLSToExecutionChanges_Ok(t *testing.T) {
 	c.CapellaForkEpoch = c.BellatrixForkEpoch.Add(2)
 	params.OverrideBeaconConfig(c)
 
-	spb := &ethpbv1alpha1.BeaconStateCapella{
+	container := &ethpbv1alpha1.BeaconStateCapella{
 		Fork: &ethpbv1alpha1.Fork{
 			CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
 			PreviousVersion: params.BeaconConfig().GenesisForkVersion,
@@ -1569,7 +1569,7 @@ func TestSubmitSignedBLSToExecutionChanges_Ok(t *testing.T) {
 	numValidators := 10
 	validators := make([]*ethpbv1alpha1.Validator, numValidators)
 	blsChanges := make([]*ethpbv1alpha1.BLSToExecutionChange, numValidators)
-	spb.Balances = make([]uint64, numValidators)
+	container.Balances = make([]uint64, numValidators)
 	privKeys := make([]common.SecretKey, numValidators)
 	maxEffectiveBalance := params.BeaconConfig().MaxEffectiveBalance
 	executionAddress := []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13}
@@ -1597,11 +1597,11 @@ func TestSubmitSignedBLSToExecutionChanges_Ok(t *testing.T) {
 		validators[i] = v
 		blsChanges[i] = message
 	}
-	spb.Validators = validators
+	container.Validators = validators
 	slot, err := slots.EpochStart(params.BeaconConfig().CapellaForkEpoch)
 	require.NoError(t, err)
-	spb.Slot = slot
-	st, err := state_native.New(spb)
+	container.Slot = slot
+	st, err := state_native.New(container)
 	require.NoError(t, err)
 
 	signedChanges := make([]*structs.SignedBLSToExecutionChange, numValidators)
@@ -1657,7 +1657,7 @@ func TestSubmitSignedBLSToExecutionChanges_Bellatrix(t *testing.T) {
 	c.CapellaForkEpoch = c.BellatrixForkEpoch.Add(2)
 	params.OverrideBeaconConfig(c)
 
-	spb := &ethpbv1alpha1.BeaconStateBellatrix{
+	container := &ethpbv1alpha1.BeaconStateBellatrix{
 		Fork: &ethpbv1alpha1.Fork{
 			CurrentVersion:  params.BeaconConfig().BellatrixForkVersion,
 			PreviousVersion: params.BeaconConfig().AltairForkVersion,
@@ -1667,7 +1667,7 @@ func TestSubmitSignedBLSToExecutionChanges_Bellatrix(t *testing.T) {
 	numValidators := 10
 	validators := make([]*ethpbv1alpha1.Validator, numValidators)
 	blsChanges := make([]*ethpbv1alpha1.BLSToExecutionChange, numValidators)
-	spb.Balances = make([]uint64, numValidators)
+	container.Balances = make([]uint64, numValidators)
 	privKeys := make([]common.SecretKey, numValidators)
 	maxEffectiveBalance := params.BeaconConfig().MaxEffectiveBalance
 	executionAddress := []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13}
@@ -1695,11 +1695,11 @@ func TestSubmitSignedBLSToExecutionChanges_Bellatrix(t *testing.T) {
 		validators[i] = v
 		blsChanges[i] = message
 	}
-	spb.Validators = validators
+	container.Validators = validators
 	slot, err := slots.EpochStart(params.BeaconConfig().BellatrixForkEpoch)
 	require.NoError(t, err)
-	spb.Slot = slot
-	st, err := state_native.New(spb)
+	container.Slot = slot
+	st, err := state_native.New(container)
 	require.NoError(t, err)
 
 	spc := &ethpbv1alpha1.BeaconStateCapella{
@@ -1771,7 +1771,7 @@ func TestSubmitSignedBLSToExecutionChanges_Failures(t *testing.T) {
 	c.CapellaForkEpoch = c.BellatrixForkEpoch.Add(2)
 	params.OverrideBeaconConfig(c)
 
-	spb := &ethpbv1alpha1.BeaconStateCapella{
+	container := &ethpbv1alpha1.BeaconStateCapella{
 		Fork: &ethpbv1alpha1.Fork{
 			CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
 			PreviousVersion: params.BeaconConfig().GenesisForkVersion,
@@ -1781,7 +1781,7 @@ func TestSubmitSignedBLSToExecutionChanges_Failures(t *testing.T) {
 	numValidators := 10
 	validators := make([]*ethpbv1alpha1.Validator, numValidators)
 	blsChanges := make([]*ethpbv1alpha1.BLSToExecutionChange, numValidators)
-	spb.Balances = make([]uint64, numValidators)
+	container.Balances = make([]uint64, numValidators)
 	privKeys := make([]common.SecretKey, numValidators)
 	maxEffectiveBalance := params.BeaconConfig().MaxEffectiveBalance
 	executionAddress := []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13}
@@ -1809,11 +1809,11 @@ func TestSubmitSignedBLSToExecutionChanges_Failures(t *testing.T) {
 		validators[i] = v
 		blsChanges[i] = message
 	}
-	spb.Validators = validators
+	container.Validators = validators
 	slot, err := slots.EpochStart(params.BeaconConfig().CapellaForkEpoch)
 	require.NoError(t, err)
-	spb.Slot = slot
-	st, err := state_native.New(spb)
+	container.Slot = slot
+	st, err := state_native.New(container)
 	require.NoError(t, err)
 
 	signedChanges := make([]*structs.SignedBLSToExecutionChange, numValidators)

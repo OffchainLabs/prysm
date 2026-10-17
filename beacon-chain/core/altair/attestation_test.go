@@ -979,7 +979,7 @@ func buildGloasStateForFlags(t *testing.T, stateSlot, slot primitives.Slot, targ
 	checkpointRoot := bytes.Repeat([]byte{0xDD}, fieldparams.RootLength)
 	justified := &ethpb.Checkpoint{Root: checkpointRoot}
 
-	stProto := &ethpb.BeaconStateGloas{
+	container := &ethpb.BeaconStateGloas{
 		Slot:                         stateSlot,
 		GenesisValidatorsRoot:        bytes.Repeat([]byte{0x11}, fieldparams.RootLength),
 		BlockRoots:                   blockRoots,
@@ -1003,7 +1003,7 @@ func buildGloasStateForFlags(t *testing.T, stateSlot, slot primitives.Slot, targ
 		},
 	}
 
-	beaconState, err := state_native.New(stProto)
+	beaconState, err := state_native.New(container)
 	require.NoError(t, err)
 	return beaconState
 }

@@ -408,30 +408,30 @@ func (s *Store) anchorStateDiff(slot primitives.Slot, initialState state.ReadOnl
 	return nil
 }
 
-// encodeProtoWithKey returns snappy(versionKey || ssz(pb)), marshaling straight into the prefixed buffer.
-func encodeProtoWithKey(v int, pb ssz.Marshaler) ([]byte, error) {
+// encodeContainerWithKey returns snappy(versionKey || ssz(c)), marshaling straight into the prefixed buffer.
+func encodeContainerWithKey(v int, c ssz.Marshaler) ([]byte, error) {
 	key, ok := stateKeyByVersion[v]
 	if !ok {
 		return nil, fmt.Errorf("unsupported fork %s", version.String(v))
 	}
 
 	// Allocate a buffer with enough capacity as the size can be derived.
-	buf := make([]byte, len(key), len(key)+pb.SizeSSZ())
+	buf := make([]byte, len(key), len(key)+c.SizeSSZ())
 	copy(buf, key)
-	buf, err := pb.MarshalSSZTo(buf)
+	buf, err := c.MarshalSSZTo(buf)
 	if err != nil {
 		return nil, fmt.Errorf("marshal SSZ to buffer: %w", err)
 	}
 	return snappy.Encode(nil, buf), nil
 }
 
-// encodeStateWithKey is encodeProtoWithKey for a native state.
+// encodeStateWithKey is encodeContainerWithKey for a native state.
 func encodeStateWithKey(st state.ReadOnlyBeaconState) ([]byte, error) {
-	pb, ok := st.ToProto().(ssz.Marshaler)
+	c, ok := st.ToContainer().(ssz.Marshaler)
 	if !ok {
 		return nil, errors.New("state does not marshal to ssz")
 	}
-	return encodeProtoWithKey(st.Version(), pb)
+	return encodeContainerWithKey(st.Version(), c)
 }
 
 func decodeStateSnapshot(enc []byte) (state.BeaconState, error) {
