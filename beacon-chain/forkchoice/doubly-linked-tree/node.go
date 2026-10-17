@@ -8,9 +8,13 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
-// ProcessAttestationsThreshold is the amount of time after which we
-// process attestations for the current slot
-const ProcessAttestationsThreshold = 10 * time.Second
+// ProcessAttestationsThreshold returns the time into the slot after which we
+// process attestations for the current slot: the proposer reorg cutoff measured
+// from the end of the slot rather than the start, so that the reorg decision at
+// the next slot's cutoff sees the counted attestations.
+func ProcessAttestationsThreshold() time.Duration {
+	return params.BeaconConfig().SlotDuration() - params.BeaconConfig().ProposerReorgCutoffDuration()
+}
 
 // viableForHead returns true if the node is viable to head.
 // Any node with different finalized or justified epoch than
@@ -50,5 +54,5 @@ func (n *PayloadNode) arrivedEarly(genesis time.Time) (bool, error) {
 // slot will have secs = 10 below.
 func (n *PayloadNode) arrivedAfterOrphanCheck(genesis time.Time) (bool, error) {
 	secs, err := slots.SinceSlotStart(n.node.slot, genesis, n.timestamp.Truncate(time.Second)) // Truncate such that 10.00001 seconds will have a value of 10.
-	return secs >= ProcessAttestationsThreshold, err
+	return secs >= ProcessAttestationsThreshold(), err
 }
