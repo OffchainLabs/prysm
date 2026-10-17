@@ -4,10 +4,13 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/fallback"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/golang/protobuf/ptypes/empty"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -34,15 +37,25 @@ func (c *grpcNodeClient) Peers(ctx context.Context, in *empty.Empty) (*ethpb.Pee
 	return c.getClient().ListPeers(ctx, in)
 }
 
-func (c *grpcNodeClient) IsReady(ctx context.Context) bool {
-	// GetHealth returns 200 OK only if node is synced and not optimistic.
-	// otherwise it will throw an error
+// ReadyStatus reports whether the current beacon node can serve validator duties.
+// GetHealth succeeds only if the node is synced and not optimistic; otherwise its
+// error message tells why.
+func (c *grpcNodeClient) ReadyStatus(ctx context.Context) fallback.NodeStatus {
 	_, err := c.getClient().GetHealth(ctx, &ethpb.HealthRequest{})
-	if err != nil {
-		log.WithError(err).WithField("url", api.RedactEndpoint(c.conn.GetGrpcConnectionProvider().CurrentHost())).Debug("Node is not ready")
-		return false
+	if err == nil {
+		return fallback.NodeReady
 	}
-	return true
+	log.WithError(err).WithField("url", api.RedactEndpoint(c.conn.GetGrpcConnectionProvider().CurrentHost())).Debug("Node is not ready")
+
+	if s, ok := status.FromError(err); ok && s.Code() == codes.Unavailable {
+		switch s.Message() {
+		case api.HealthSyncingReason:
+			return fallback.NodeSyncing
+		case api.HealthOptimisticReason:
+			return fallback.NodeOptimistic
+		}
+	}
+	return fallback.NodeUnavailable
 }
 
 // NewNodeClient creates a new gRPC node client that supports
