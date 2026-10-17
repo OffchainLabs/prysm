@@ -999,6 +999,18 @@ func TestSendDataColumnSidecarsByRangeRequest(t *testing.T) {
 				{Slot: 1, Index: 2},
 			},
 		},
+		{
+			name: "duplicated (slot, index)",
+			slotIndices: []slotIndex{
+				{Slot: 0, Index: 1},
+				{Slot: 0, Index: 2},
+				{Slot: 0, Index: 2}, // Duplicate, displacing {Slot: 0, Index: 3}
+				{Slot: 1, Index: 1},
+				{Slot: 1, Index: 2},
+				{Slot: 1, Index: 3},
+			},
+			expectedError: errSidecarIndicesUnordered,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1063,6 +1075,92 @@ func TestSendDataColumnSidecarsByRangeRequest(t *testing.T) {
 			require.Equal(t, len(expected), len(actual))
 			for i := range expected {
 				require.DeepSSZEqual(t, expected[i], actual[i].DataColumnSidecar())
+			}
+		})
+	}
+}
+
+func TestAreSidecarsOrdered(t *testing.T) {
+	type slotIndex struct {
+		Slot  primitives.Slot
+		Index uint64
+	}
+
+	createSidecar := func(slotIndex slotIndex) blocks.RODataColumn {
+		const count = 4
+		kzgCommitmentsInclusionProof := make([][]byte, 0, count)
+		for range count {
+			kzgCommitmentsInclusionProof = append(kzgCommitmentsInclusionProof, make([]byte, 32))
+		}
+
+		sidecarPb := &ethpb.DataColumnSidecar{
+			Index: slotIndex.Index,
+			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					Slot:       slotIndex.Slot,
+					ParentRoot: make([]byte, fieldparams.RootLength),
+					StateRoot:  make([]byte, fieldparams.RootLength),
+					BodyRoot:   make([]byte, fieldparams.RootLength),
+				},
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+			KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
+		}
+
+		sidecar, err := blocks.NewRODataColumn(sidecarPb)
+		require.NoError(t, err)
+
+		return sidecar
+	}
+
+	testCases := []struct {
+		name          string
+		slotIndices   []slotIndex
+		expectedError error // Expected for the last sidecar only.
+	}{
+		{
+			name:        "first sidecar at slot 0, index 0",
+			slotIndices: []slotIndex{{Slot: 0, Index: 0}},
+		},
+		{
+			name:        "strictly ascending",
+			slotIndices: []slotIndex{{Slot: 0, Index: 0}, {Slot: 0, Index: 5}, {Slot: 1, Index: 0}, {Slot: 1, Index: 3}, {Slot: 4, Index: 1}},
+		},
+		{
+			name:          "duplicated (slot, index)",
+			slotIndices:   []slotIndex{{Slot: 1, Index: 2}, {Slot: 1, Index: 3}, {Slot: 1, Index: 3}},
+			expectedError: errSidecarIndicesUnordered,
+		},
+		{
+			name:          "duplicated first sidecar at slot 0, index 0",
+			slotIndices:   []slotIndex{{Slot: 0, Index: 0}, {Slot: 0, Index: 0}},
+			expectedError: errSidecarIndicesUnordered,
+		},
+		{
+			name:          "descending index",
+			slotIndices:   []slotIndex{{Slot: 1, Index: 3}, {Slot: 1, Index: 2}},
+			expectedError: errSidecarIndicesUnordered,
+		},
+		{
+			name:          "descending slot",
+			slotIndices:   []slotIndex{{Slot: 2, Index: 0}, {Slot: 1, Index: 5}},
+			expectedError: errSidecarSlotsUnordered,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			validator := areSidecarsOrdered()
+
+			last := len(tc.slotIndices) - 1
+			for i, slotIndex := range tc.slotIndices {
+				err := validator(createSidecar(slotIndex))
+				if i == last && tc.expectedError != nil {
+					require.ErrorIs(t, err, tc.expectedError)
+					continue
+				}
+
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -1301,6 +1399,7 @@ func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 			Index: rootIndex.Index,
 			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
 				Header: &ethpb.BeaconBlockHeader{
+					Slot:       rootIndex.Slot,
 					ParentRoot: make([]byte, fieldparams.RootLength),
 					StateRoot:  make([]byte, fieldparams.RootLength),
 					BodyRoot:   make([]byte, fieldparams.RootLength),
@@ -1354,6 +1453,18 @@ func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 				{Slot: 2, Index: 1},
 				{Slot: 2, Index: 2},
 			},
+		},
+		{
+			name: "duplicated (root, index)",
+			slotIndices: []slotIndex{
+				{Slot: 1, Index: 1},
+				{Slot: 1, Index: 2},
+				{Slot: 1, Index: 2}, // Duplicate, displacing {Slot: 1, Index: 3}
+				{Slot: 2, Index: 1},
+				{Slot: 2, Index: 2},
+				{Slot: 2, Index: 3},
+			},
+			expectedError: errSidecarDuplicated,
 		},
 	}
 
