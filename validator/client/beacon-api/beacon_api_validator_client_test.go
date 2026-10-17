@@ -687,3 +687,46 @@ func TestBeaconApiValidatorClient_StartEventStream_FallsBackToHead(t *testing.T)
 func TestBeaconApiValidatorClient_ConnectionGeneration(t *testing.T) {
 	assert.Equal(t, uint64(0), (&beaconApiValidatorClient{}).ConnectionGeneration())
 }
+
+func TestSignedRoots(t *testing.T) {
+	t.Run("keeps the two latest slots", func(t *testing.T) {
+		var s signedRoots
+		s.set(1, 0, []byte{1})
+		s.set(2, 0, []byte{2})
+		s.set(3, 0, []byte{3})
+		_, ok := s.get(1, 0)
+		assert.Equal(t, false, ok)
+		root, ok := s.get(2, 0)
+		assert.Equal(t, true, ok)
+		assert.DeepEqual(t, []byte{2}, root)
+		_, ok = s.get(3, 0)
+		assert.Equal(t, true, ok)
+	})
+
+	t.Run("keys are separate within a slot", func(t *testing.T) {
+		var s signedRoots
+		s.set(5, 1, []byte{1})
+		s.set(5, 2, []byte{2})
+		root, ok := s.get(5, 1)
+		assert.Equal(t, true, ok)
+		assert.DeepEqual(t, []byte{1}, root)
+		_, ok = s.get(5, 3)
+		assert.Equal(t, false, ok)
+	})
+
+	t.Run("ignores a late write for a pruned slot", func(t *testing.T) {
+		var s signedRoots
+		s.set(10, 0, []byte{10})
+		s.set(11, 0, []byte{11})
+		s.set(12, 0, []byte{12})
+		s.set(10, 1, []byte{10})
+		s.set(11, 1, []byte{11})
+		_, ok := s.get(10, 1)
+		assert.Equal(t, false, ok)
+		root, ok := s.get(11, 1)
+		assert.Equal(t, true, ok)
+		assert.DeepEqual(t, []byte{11}, root)
+		_, ok = s.get(12, 0)
+		assert.Equal(t, true, ok)
+	})
+}

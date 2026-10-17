@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -352,4 +353,110 @@ func TestSubmitAggregateSelectionProofElectra(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSubmitAggregateSelectionProof_UsesSubmittedAttestationData(t *testing.T) {
+	const (
+		syncingEndpoint              = "/eth/v1/node/syncing"
+		aggregateAttestationEndpoint = "/eth/v2/validator/aggregate_attestation"
+		slot                         = primitives.Slot(123)
+		committee                    = primitives.CommitteeIndex(7)
+	)
+	// attestationData builds the signed data: before Electra the index is the committee, in Gloas it is the payload status.
+	attestationData := func(t *testing.T, index uint64) *ethpb.AttestationData {
+		data, err := generateValidAttestation(uint64(slot), index).Data.ToConsensus()
+		require.NoError(t, err)
+		return data
+	}
+
+	// expectAggregation fails the test on any attestation_data call, so the aggregate must use the submitted root.
+	expectAggregation := func(t *testing.T, handler *mock.MockHandler, postErr error, signed *ethpb.AttestationData, aggregate any) {
+		signedRoot, err := signed.HashTreeRoot()
+		require.NoError(t, err)
+		handler.EXPECT().Post(gomock.Any(), "/eth/v2/beacon/pool/attestations", gomock.Any(), gomock.Any(), nil).Return(postErr).Times(1)
+		handler.EXPECT().Get(gomock.Any(), syncingEndpoint, &structs.SyncStatusResponse{}).
+			SetArg(2, structs.SyncStatusResponse{Data: &structs.SyncStatusResponseData{}}).Return(nil).Times(1)
+		aggregateJSON, err := json.Marshal(aggregate)
+		require.NoError(t, err)
+		handler.EXPECT().Get(
+			gomock.Any(),
+			fmt.Sprintf("%s?attestation_data_root=%s&committee_index=%d&slot=%d", aggregateAttestationEndpoint, hexutil.Encode(signedRoot[:]), committee, slot),
+			&structs.AggregateAttestationResponse{},
+		).SetArg(2, structs.AggregateAttestationResponse{Data: aggregateJSON}).Return(nil).Times(1)
+	}
+
+	// runPhase0 submits an Attestation, whose data index is the committee.
+	runPhase0 := func(t *testing.T, postErr error) {
+		ctrl := gomock.NewController(t)
+		handler := mock.NewMockHandler(ctrl)
+		signed := attestationData(t, uint64(committee))
+		att := &ethpb.Attestation{AggregationBits: testhelpers.FillByteSlice(4, 74), Data: signed, Signature: testhelpers.FillByteSlice(96, 82)}
+		expectAggregation(t, handler, postErr, signed, jsonifyAttestation(att))
+
+		validatorClient := &beaconApiValidatorClient{handler: handler}
+		_, err := validatorClient.proposeAttestation(t.Context(), att)
+		require.Equal(t, postErr, err)
+		resp, err := validatorClient.submitAggregateSelectionProof(t.Context(), &ethpb.AggregateSelectionRequest{Slot: slot, CommitteeIndex: committee, SlotSignature: testhelpers.FillByteSlice(96, 1)}, 0, 1)
+		require.NoError(t, err)
+		assert.DeepEqual(t, signed, resp.AggregateAndProof.Aggregate.Data)
+	}
+
+	// runSingle submits a SingleAttestation whose data index differs from the committee id, so a memo keyed by the data index misses.
+	runSingle := func(t *testing.T, postErr error, signed *ethpb.AttestationData) {
+		ctrl := gomock.NewController(t)
+		handler := mock.NewMockHandler(ctrl)
+		single := &ethpb.SingleAttestation{CommitteeId: committee, AttesterIndex: 1, Data: signed, Signature: testhelpers.FillByteSlice(96, 82)}
+		aggregate := &ethpb.AttestationElectra{
+			AggregationBits: testhelpers.FillByteSlice(4, 74),
+			Data:            signed,
+			Signature:       testhelpers.FillByteSlice(96, 82),
+			CommitteeBits:   testhelpers.FillByteSlice(8, 83),
+		}
+		expectAggregation(t, handler, postErr, signed, jsonifyAttestationElectra(aggregate))
+
+		validatorClient := &beaconApiValidatorClient{handler: handler}
+		_, err := validatorClient.proposeAttestationElectra(t.Context(), single)
+		require.Equal(t, postErr, err)
+		resp, err := validatorClient.submitAggregateSelectionProofElectra(t.Context(), &ethpb.AggregateSelectionRequest{Slot: slot, CommitteeIndex: committee, SlotSignature: testhelpers.FillByteSlice(96, 1)}, 0, 1)
+		require.NoError(t, err)
+		assert.DeepEqual(t, signed, resp.AggregateAndProof.Aggregate.Data)
+	}
+
+	// The validator signed the data before the POST, so a refused submission must not change the aggregate root.
+	submissions := []struct {
+		name    string
+		postErr error
+	}{
+		{name: "accepted"},
+		{name: "refused", postErr: errors.New("bad request")},
+	}
+
+	t.Run("phase0", func(t *testing.T) {
+		for _, submission := range submissions {
+			t.Run(submission.name, func(t *testing.T) {
+				runPhase0(t, submission.postErr)
+			})
+		}
+	})
+
+	t.Run("electra", func(t *testing.T) {
+		for _, submission := range submissions {
+			t.Run(submission.name, func(t *testing.T) {
+				runSingle(t, submission.postErr, attestationData(t, 0))
+			})
+		}
+	})
+
+	t.Run("gloas", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+		for _, submission := range submissions {
+			t.Run(submission.name, func(t *testing.T) {
+				// In Gloas the data index is the payload status.
+				runSingle(t, submission.postErr, attestationData(t, 1))
+			})
+		}
+	})
 }
