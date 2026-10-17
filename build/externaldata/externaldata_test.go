@@ -13,6 +13,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -96,6 +98,114 @@ func TestNames(t *testing.T) {
 
 func TestFetchUnknownViaWrapper(t *testing.T) {
 	require.ErrorContains(t, "unknown archive", Fetch("unknown_archive_for_wrapper_test"))
+}
+
+func TestFetchSizedRetriesAfterFailure(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "go.mod"), []byte("module test\n"), 0o600))
+	t.Chdir(root)
+	onces.Delete(BLSSpecTests)
+	t.Cleanup(func() { onces.Delete(BLSSpecTests) })
+
+	data := makeTarGz(t, []tarEntry{{name: "aggregate/retry.yaml", body: "ok"}})
+	updateArchiveHash(t, BLSSpecTests, data)
+
+	orig := httpDownload
+	t.Cleanup(func() { httpDownload = orig })
+	var downloads atomic.Int32
+	httpDownload = func(string) ([]byte, error) {
+		if downloads.Add(1) == 1 {
+			return nil, fmt.Errorf("temporary download failure")
+		}
+		return data, nil
+	}
+
+	_, err := fetchSized(BLSSpecTests)
+	require.ErrorContains(t, "temporary download failure", err)
+	size, err := fetchSized(BLSSpecTests)
+	require.NoError(t, err)
+	require.Equal(t, int64(len(data)), size)
+	require.Equal(t, int32(2), downloads.Load())
+}
+
+func TestFetchSizedConcurrentFailureReturnsErrorToWaiters(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "go.mod"), []byte("module test\n"), 0o600))
+	t.Chdir(root)
+	onces.Delete(BLSSpecTests)
+	t.Cleanup(func() { onces.Delete(BLSSpecTests) })
+
+	orig := httpDownload
+	t.Cleanup(func() { httpDownload = orig })
+	enteredDownload := make(chan struct{})
+	releaseDownload := make(chan struct{})
+	var blockOnce sync.Once
+	httpDownload = func(string) ([]byte, error) {
+		blockOnce.Do(func() {
+			close(enteredDownload)
+			<-releaseDownload
+		})
+		return nil, fmt.Errorf("temporary download failure")
+	}
+
+	const callers = 8
+	started := make(chan struct{}, callers)
+	errs := make(chan error, callers)
+	for range callers {
+		go func() {
+			started <- struct{}{}
+			_, err := fetchSized(BLSSpecTests)
+			errs <- err
+		}()
+	}
+	for range callers {
+		<-started
+	}
+	<-enteredDownload
+	close(releaseDownload)
+
+	for range callers {
+		require.NotNil(t, <-errs, "concurrent fetch returned a nil error")
+	}
+}
+
+func TestFetchSizedSuccessfulFetchRunsOnce(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "go.mod"), []byte("module test\n"), 0o600))
+	t.Chdir(root)
+	onces.Delete(BLSSpecTests)
+	t.Cleanup(func() { onces.Delete(BLSSpecTests) })
+
+	data := makeTarGz(t, []tarEntry{{name: "aggregate/once.yaml", body: "ok"}})
+	updateArchiveHash(t, BLSSpecTests, data)
+	orig := httpDownload
+	t.Cleanup(func() { httpDownload = orig })
+	var downloads atomic.Int32
+	httpDownload = func(string) ([]byte, error) {
+		downloads.Add(1)
+		return data, nil
+	}
+
+	for range 2 {
+		size, err := fetchSized(BLSSpecTests)
+		require.NoError(t, err)
+		require.Equal(t, int64(len(data)), size)
+	}
+	require.Equal(t, int32(1), downloads.Load())
+}
+
+func updateArchiveHash(t *testing.T, name string, data []byte) {
+	t.Helper()
+	m := manifest()
+	for i := range m {
+		if m[i].name == name {
+			orig := m[i].sha256
+			m[i].sha256 = fmt.Sprintf("%x", sha256.Sum256(data))
+			t.Cleanup(func() { m[i].sha256 = orig })
+			return
+		}
+	}
+	t.Fatalf("archive %q not found", name)
 }
 
 func TestFetchAllCached(t *testing.T) {
