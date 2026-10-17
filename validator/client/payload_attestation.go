@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -24,8 +25,8 @@ import (
 )
 
 const (
-	payloadAttestationRetryWindow   = 500 * time.Millisecond
-	payloadAttestationRetryInterval = 50 * time.Millisecond
+	payloadAttestationReadGrace    = 500 * time.Millisecond
+	payloadAttestationPollInterval = 50 * time.Millisecond
 )
 
 // Result labels for validatorPayloadAttestationSubmissionTotal.
@@ -39,43 +40,44 @@ const (
 	payloadAttestationRecovered = "recovered"
 )
 
-// payloadAttestationDataWithRetry requests the payload attestation data for slot and,
-// if that fails, polls again from the payload attestation deadline for a short window.
-// It reports whether a retry was made.
+// gRPC and REST share this read budget.
 func (v *validator) payloadAttestationDataWithRetry(ctx context.Context, slot primitives.Slot) (*ethpb.PayloadAttestationData, bool, error) {
-	data, err := v.validatorClient.PayloadAttestationData(ctx, slot)
-	if err == nil {
-		return data, false, nil
+	deadline, err := v.slotComponentDeadline(slot, params.BeaconConfig().PayloadAttestationDueBPS)
+	if err != nil {
+		return nil, false, err
 	}
-
-	log.WithField("slot", slot).WithError(err).
-		Debug("Payload attestation data not final yet, polling from the deadline")
-
-	v.waitUntilSlotComponent(ctx, slot, params.BeaconConfig().PayloadAttestationDueBPS)
-	// waitUntilSlotComponent returns silently on cancellation, so check before retrying.
-	if ctx.Err() != nil {
-		return nil, true, errors.Wrap(err, "context canceled while waiting for the payload attestation deadline")
+	if now := time.Now(); deadline.Before(now) {
+		deadline = now
 	}
-	// The beacon node's clock may trail ours, so keep asking briefly past the deadline.
-	retryCtx, cancel := context.WithTimeout(ctx, payloadAttestationRetryWindow)
+	readCtx, cancel := context.WithDeadline(ctx, deadline.Add(payloadAttestationReadGrace))
 	defer cancel()
-	for {
-		data, retryErr := v.validatorClient.PayloadAttestationData(retryCtx, slot)
-		if retryErr == nil {
-			return data, true, nil
+
+	var lastErr error
+	attempts := 0
+	for readCtx.Err() == nil {
+		attempts++
+		data, err := v.validatorClient.PayloadAttestationData(readCtx, slot)
+		if ctx.Err() != nil {
+			return nil, attempts > 1, stderrors.Join(lastErr, err, ctx.Err())
 		}
-		if retryCtx.Err() == nil {
-			err = retryErr
+		if err == nil {
+			return data, attempts > 1, nil
+		}
+		if readCtx.Err() == nil || lastErr == nil {
+			lastErr = err
 		}
 		select {
-		case <-retryCtx.Done():
-			if ctx.Err() != nil {
-				return nil, true, errors.Wrap(err, "context canceled while retrying payload attestation data")
-			}
-			return nil, true, err
-		case <-time.After(payloadAttestationRetryInterval):
+		case <-readCtx.Done():
+		case <-time.After(payloadAttestationPollInterval):
 		}
 	}
+	if ctx.Err() != nil {
+		return nil, attempts > 1, stderrors.Join(lastErr, ctx.Err())
+	}
+	if lastErr == nil {
+		lastErr = readCtx.Err()
+	}
+	return nil, attempts > 1, lastErr
 }
 
 // payloadAttestationRetryOutcome labels the result of a retried request.

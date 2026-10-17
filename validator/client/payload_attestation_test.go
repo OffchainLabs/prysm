@@ -138,13 +138,15 @@ func TestSubmitPayloadAttestation_RetriesAtDeadlineAfterUnavailable(t *testing.T
 					Times(1),
 				m.validatorClient.EXPECT().
 					PayloadAttestationData(gomock.Any(), primitives.Slot(1)).
-					Return(&ethpb.PayloadAttestationData{
-						BeaconBlockRoot:   blockRoot,
-						Slot:              1,
-						PayloadPresent:    false,
-						BlobDataAvailable: true,
-					}, nil).
-					Times(1),
+					DoAndReturn(func(ctx context.Context, _ primitives.Slot) (*ethpb.PayloadAttestationData, error) {
+						validator.waitUntilSlotComponent(ctx, 1, params.BeaconConfig().PayloadAttestationDueBPS)
+						return &ethpb.PayloadAttestationData{
+							BeaconBlockRoot:   blockRoot,
+							Slot:              1,
+							PayloadPresent:    false,
+							BlobDataAvailable: true,
+						}, nil
+					}).Times(1),
 			)
 
 			m.validatorClient.EXPECT().
@@ -346,6 +348,168 @@ func TestSubmitPayloadAttestation_RetryAbortsOnContextCancel(t *testing.T) {
 	require.LogsDoNotContain(t, hook, "Submitted new payload attestation")
 }
 
+func TestPayloadAttestationDataWithRetry_Recovery(t *testing.T) {
+	for _, tt := range []struct {
+		name          string
+		dueIn         time.Duration
+		responseDelay time.Duration
+		err           error
+	}{
+		{"before due", time.Second, 0, unavailableErr()},
+		{"at due", 0, 0, unavailableErr()},
+		{"after due", -time.Second, 0, unavailableErr()},
+		{"response crosses due", 100 * time.Millisecond, 110 * time.Millisecond, unavailableErr()},
+		{"rest unavailable", -time.Second, 0, &httputil.DefaultJsonError{Code: http.StatusServiceUnavailable}},
+		{"no block", -time.Second, 0, status.Error(codes.NotFound, "no block")},
+		{"other failure", -time.Second, 0, errors.New("request failed")},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			v, m, key, finish := setup(t, false)
+			defer finish()
+			ptcRetrySetup(t, v, key)
+			cfg := params.BeaconConfig()
+			due := time.Now().Add(tt.dueIn)
+			v.genesisTime = due.Add(-cfg.SlotDuration()).Add(-cfg.SlotComponentDuration(cfg.PayloadAttestationDueBPS))
+			want := &ethpb.PayloadAttestationData{Slot: 1, PayloadPresent: true, BlobDataAvailable: true}
+			var cutoff, firstAttempt time.Time
+			calls := 0
+			start := time.Now()
+			m.validatorClient.EXPECT().PayloadAttestationData(gomock.Any(), primitives.Slot(1)).
+				DoAndReturn(func(ctx context.Context, _ primitives.Slot) (*ethpb.PayloadAttestationData, error) {
+					deadline, ok := ctx.Deadline()
+					require.Equal(t, true, ok)
+					calls++
+					if calls == 1 {
+						cutoff, firstAttempt = deadline, time.Now()
+						if due.After(start) {
+							require.Equal(t, true, cutoff.Equal(due.Add(500*time.Millisecond)))
+						} else {
+							require.Equal(t, true, !cutoff.Before(start.Add(500*time.Millisecond)))
+							require.Equal(t, true, !cutoff.After(firstAttempt.Add(500*time.Millisecond)))
+						}
+						time.Sleep(tt.responseDelay)
+						return nil, tt.err
+					}
+					require.Equal(t, true, cutoff.Equal(deadline), "retries must share one cutoff")
+					require.Equal(t, true, time.Since(firstAttempt) >= 50*time.Millisecond)
+					if tt.name == "before due" {
+						require.Equal(t, true, time.Now().Before(due))
+					}
+					if calls < 3 {
+						return nil, tt.err
+					}
+					return want, nil
+				}).Times(3)
+
+			got, retried, err := v.payloadAttestationDataWithRetry(t.Context(), 1)
+			require.NoError(t, err)
+			require.Equal(t, true, retried)
+			require.DeepEqual(t, want, got)
+		})
+	}
+}
+
+func TestPayloadAttestationDataWithRetry_CallerCancellation(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		before   bool
+		deadline bool
+	}{
+		{name: "already cancelled", before: true},
+		{name: "cancelled after failure"},
+		{name: "parent deadline", deadline: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			v, m, key, finish := setup(t, false)
+			defer finish()
+			ptcRetrySetup(t, v, key)
+			ctx, cancel := context.WithCancel(t.Context())
+			if tt.deadline {
+				cancel()
+				ctx, cancel = context.WithTimeout(t.Context(), 25*time.Millisecond)
+			}
+			defer cancel()
+			if tt.before {
+				cancel()
+			} else {
+				m.validatorClient.EXPECT().PayloadAttestationData(gomock.Any(), primitives.Slot(1)).
+					DoAndReturn(func(readCtx context.Context, _ primitives.Slot) (*ethpb.PayloadAttestationData, error) {
+						if tt.deadline {
+							want, _ := ctx.Deadline()
+							got, _ := readCtx.Deadline()
+							require.Equal(t, true, want.Equal(got))
+						} else {
+							cancel()
+						}
+						return nil, unavailableErr()
+					})
+			}
+
+			got, retried, err := v.payloadAttestationDataWithRetry(ctx, 1)
+			require.ErrorIs(t, err, ctx.Err())
+			require.Equal(t, true, got == nil)
+			require.Equal(t, false, retried)
+		})
+	}
+}
+
+func TestSubmitPayloadAttestation_DataReadPublicationDeadline(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		remaining time.Duration
+		publish   bool
+	}{
+		{"read expires with live slot", 2 * time.Second, true},
+		{"slot expires with response", 300 * time.Millisecond, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			v, m, key, finish := setup(t, false)
+			defer finish()
+			ptcRetrySetup(t, v, key)
+			cfg := params.BeaconConfig().Copy()
+			cfg.SlotDurationMilliseconds = 12000
+			params.OverrideBeaconConfig(cfg)
+			v.genesisTime = time.Now().Add(-2 * cfg.SlotDuration()).Add(tt.remaining)
+			ctx, cancel := context.WithDeadline(t.Context(), v.SlotDeadline(1))
+			defer cancel()
+			parentDeadline, _ := ctx.Deadline()
+			want := &ethpb.PayloadAttestationData{Slot: 1, BeaconBlockRoot: bytesutil.PadTo([]byte{'a'}, 32)}
+			var readCtx context.Context
+			m.validatorClient.EXPECT().PayloadAttestationData(gomock.Any(), primitives.Slot(1)).
+				DoAndReturn(func(ctx context.Context, _ primitives.Slot) (*ethpb.PayloadAttestationData, error) {
+					readCtx = ctx
+					<-ctx.Done()
+					return want, nil
+				})
+			if tt.publish {
+				m.validatorClient.EXPECT().DomainData(gomock.Any(), gomock.Any()).
+					DoAndReturn(func(ctx context.Context, _ *ethpb.DomainRequest) (*ethpb.DomainResponse, error) {
+						require.ErrorIs(t, readCtx.Err(), context.DeadlineExceeded)
+						require.NoError(t, ctx.Err())
+						deadline, _ := ctx.Deadline()
+						require.Equal(t, true, parentDeadline.Equal(deadline))
+						return &ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil
+					})
+				m.validatorClient.EXPECT().SubmitPayloadAttestation(gomock.Any(), gomock.Any()).
+					DoAndReturn(func(ctx context.Context, msg *ethpb.PayloadAttestationMessage) (*emptypb.Empty, error) {
+						require.NoError(t, ctx.Err())
+						require.DeepEqual(t, want, msg.Data)
+						require.Equal(t, 96, len(msg.Signature))
+						return &emptypb.Empty{}, nil
+					})
+			}
+
+			v.SubmitPayloadAttestation(ctx, 1, bytesutil.ToBytes48(key.PublicKey().Marshal()))
+			require.Equal(t, tt.publish, v.km.(*mockKeymanager).lastSignRequest() != nil)
+			if tt.publish {
+				require.NoError(t, ctx.Err())
+			} else {
+				require.ErrorIs(t, ctx.Err(), context.DeadlineExceeded)
+			}
+		})
+	}
+}
+
 func TestPayloadAttestationDataFailure(t *testing.T) {
 	// The wrap chain a beacon API multi-node read actually produces.
 	restErr := func(code int) error {
@@ -369,6 +533,16 @@ func TestPayloadAttestationDataFailure(t *testing.T) {
 		{
 			name:     "wrapped grpc not found",
 			err:      errors.Wrap(status.Error(codes.NotFound, "no block"), "PayloadAttestationData"),
+			expected: payloadAttestationSkippedNoBlock,
+		},
+		{
+			name:     "grpc unavailable joined with cancellation",
+			err:      stderrors.Join(unavailableErr(), context.Canceled),
+			expected: payloadAttestationSkippedUnavailable,
+		},
+		{
+			name:     "grpc not found joined with deadline",
+			err:      stderrors.Join(status.Error(codes.NotFound, "no block"), context.DeadlineExceeded),
 			expected: payloadAttestationSkippedNoBlock,
 		},
 		{

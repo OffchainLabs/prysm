@@ -118,6 +118,20 @@ func (m *multiHandler) GetSSZ(ctx context.Context, endpoint string, opts ...Quer
 // predicate, deadlines, and re-polling all come from cfg — and returns the winning
 // response's body and headers.
 func (m *multiHandler) querySSZ(ctx context.Context, cfg queryConfig, fn queryFunc[sszResult]) ([]byte, http.Header, error) {
+	if cfg.sszValidate != nil {
+		query := fn
+		fn = func(ctx context.Context, h *handler) (sszResult, error) {
+			res, err := query(ctx, h)
+			if err != nil {
+				return res, err
+			}
+			if err := cfg.sszValidate(res.body, res.header); err != nil {
+				return sszResult{}, fmt.Errorf("validate response: %w", err)
+			}
+			return res, nil
+		}
+	}
+
 	// Adapt the config's (body, header) predicate to the sszResult the rounds produce.
 	accept := func(r sszResult) bool { return cfg.sszAccept(r.body, r.header) }
 
@@ -387,6 +401,10 @@ func queryUntilAccepted[T any](
 	round queryRound[T],
 	fn queryFunc[T],
 ) (T, bool, error) {
+	if cfg.independentRepoll && cfg.pollInterval > 0 && !cfg.deadline.IsZero() {
+		return queryIndependentlyUntilAccepted(ctx, handlers, cfg, accept, fn)
+	}
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 

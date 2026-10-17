@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/api"
@@ -18,12 +19,14 @@ const payloadAttestationsEndpoint = "/eth/v1/beacon/pool/payload_attestations"
 
 func (c *beaconApiValidatorClient) payloadAttestationData(ctx context.Context, slot primitives.Slot) (*ethpb.PayloadAttestationData, error) {
 	endpoint := fmt.Sprintf("/eth/v1/validator/payload_attestation_data?slot=%d", slot)
-	// Prefer SSZ; GetSSZ negotiates and the server may answer JSON, which we decode below.
-	// Freshness options steer the read toward a node that already imported the announced head.
 	data, header, err := c.handler.GetSSZ(ctx, endpoint, payloadAttestationFreshnessOptions(ctx)...)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get execution payload attestation data")
 	}
+	return decodePayloadAttestationData(data, header)
+}
+
+func decodePayloadAttestationData(data []byte, header http.Header) (*ethpb.PayloadAttestationData, error) {
 	if strings.Contains(header.Get("Content-Type"), api.OctetStreamMediaType) {
 		d := &ethpb.PayloadAttestationData{}
 		if err := d.UnmarshalSSZ(data); err != nil {
