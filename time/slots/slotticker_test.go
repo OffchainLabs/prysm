@@ -175,21 +175,71 @@ func TestGetSlotTickerWitIntervals(t *testing.T) {
 }
 
 func TestSlotTickerWithIntervalsInputValidation(t *testing.T) {
-	var genesisTime time.Time
 	offset := params.BeaconConfig().SlotDuration() / 3
-	intervals := make([]time.Duration, 0)
-	panicCall := func() {
+	genesisTime := time.Now()
+
+	// A zero genesis time is rejected on its own merit, so the interval list must be
+	// valid here. Otherwise the empty interval list would be what triggers the panic
+	// and this assertion would not cover the condition it claims to cover.
+	require.PanicsWithValue(t, "zero genesis time", func() {
+		NewSlotTickerWithIntervals(time.Time{}, []time.Duration{offset})
+	})
+	require.PanicsWithValue(t, "at least one interval has to be entered", func() {
+		NewSlotTickerWithIntervals(genesisTime, nil)
+	})
+	require.PanicsWithValue(t, "at least one interval has to be entered", func() {
+		NewSlotTickerWithIntervals(genesisTime, []time.Duration{})
+	})
+	require.PanicsWithValue(t, "invalid decreasing offsets", func() {
+		NewSlotTickerWithIntervals(genesisTime, []time.Duration{2 * offset, offset})
+	})
+	require.PanicsWithValue(t, "invalid ticker offset", func() {
+		NewSlotTickerWithIntervals(genesisTime, []time.Duration{offset, 4 * offset})
+	})
+	require.PanicsWithValue(t, "invalid ticker offset", func() {
+		NewSlotTickerWithIntervals(genesisTime, []time.Duration{4 * offset, offset})
+	})
+	require.NotPanics(t, func() {
+		NewSlotTickerWithIntervals(genesisTime, []time.Duration{offset, 2 * offset})
+	})
+}
+
+// TestSlotTickerZeroGenesisTime asserts that a zero time.Time is rejected by every
+// constructor. time.Time{} is not time.Unix(0, 0): the former is January 1, year 1
+// and its Unix() value is -62135596800, so a `Unix() == 0` check lets it through.
+func TestSlotTickerZeroGenesisTime(t *testing.T) {
+	slotDuration := 4 * time.Second
+	offset := slotDuration / 2
+	intervals := []time.Duration{offset}
+
+	require.PanicsWithValue(t, "zero genesis time", func() {
+		NewSlotTicker(time.Time{}, slotDuration)
+	})
+	require.PanicsWithValue(t, "zero genesis time", func() {
+		NewSlotTickerWithOffset(time.Time{}, offset, slotDuration)
+	})
+	require.PanicsWithValue(t, "zero genesis time", func() {
+		NewSlotTickerWithIntervals(time.Time{}, intervals)
+	})
+}
+
+// TestSlotTickerUnixEpochGenesisTime asserts that the Unix epoch is a legitimate,
+// non-zero genesis time and is accepted by every constructor.
+func TestSlotTickerUnixEpochGenesisTime(t *testing.T) {
+	genesisTime := time.Unix(0, 0)
+	require.False(t, genesisTime.IsZero())
+
+	slotDuration := 4 * time.Second
+	offset := slotDuration / 2
+	intervals := []time.Duration{offset}
+
+	require.NotPanics(t, func() {
+		NewSlotTicker(genesisTime, slotDuration)
+	})
+	require.NotPanics(t, func() {
+		NewSlotTickerWithOffset(genesisTime, offset, slotDuration)
+	})
+	require.NotPanics(t, func() {
 		NewSlotTickerWithIntervals(genesisTime, intervals)
-	}
-	require.Panics(t, panicCall, "zero genesis time")
-	genesisTime = time.Now()
-	require.Panics(t, panicCall, "at least one interval has to be entered")
-	intervals = []time.Duration{2 * offset, offset}
-	require.Panics(t, panicCall, "invalid decreasing offsets")
-	intervals = []time.Duration{offset, 4 * offset}
-	require.Panics(t, panicCall, "invalid ticker offset")
-	intervals = []time.Duration{4 * offset, offset}
-	require.Panics(t, panicCall, "invalid ticker offset")
-	intervals = []time.Duration{offset, 2 * offset}
-	require.NotPanics(t, panicCall)
+	})
 }

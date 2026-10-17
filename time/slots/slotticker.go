@@ -98,7 +98,7 @@ func NewSlotTicker(genesisTime time.Time, slotDuration time.Duration) *SlotTicke
 // exceeds the slot duration.
 // lint:nopanic -- Communicated panic in godoc commentary.
 func NewSlotTickerWithOffset(genesisTime time.Time, offset, slotDuration time.Duration) *SlotTicker {
-	if genesisTime.Unix() == 0 {
+	if genesisTime.IsZero() {
 		panic("zero genesis time")
 	}
 	if slotDuration <= 0 {
@@ -189,7 +189,7 @@ func (s *SlotIntervalTicker) startWithIntervals(
 // This method will panic if genesis time is zero, intervals is 0 length, or offsets are invalid.
 // lint:nopanic -- Communicated panic in godoc commentary.
 func NewSlotTickerWithIntervals(genesisTime time.Time, intervals []time.Duration) *SlotIntervalTicker {
-	if genesisTime.Unix() == 0 {
+	if genesisTime.IsZero() {
 		panic("zero genesis time")
 	}
 	if len(intervals) == 0 {
