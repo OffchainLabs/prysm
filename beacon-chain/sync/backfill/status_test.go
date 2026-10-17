@@ -7,15 +7,19 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	blocktest "github.com/OffchainLabs/prysm/v7/consensus-types/blocks/testing"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/proto/dbval"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 )
 
 var errEmptyMockDBMethod = errors.New("uninitialized mock db method called")
@@ -26,10 +30,12 @@ type mockBackfillDB struct {
 	block                     func(ctx context.Context, blockRoot [32]byte) (interfaces.ReadOnlySignedBeaconBlock, error)
 	saveBackfillStatus        func(ctx context.Context, status *dbval.BackfillStatus) error
 	backfillStatus            func(context.Context) (*dbval.BackfillStatus, error)
+	saveBlindedEnvelope       func(ctx context.Context, env *ethpb.SignedBlindedExecutionPayloadEnvelope) (iface.EnvelopeSaveOutcome, error)
 	status                    *dbval.BackfillStatus
 	err                       error
 	states                    map[[32]byte]state.BeaconState
 	blocks                    map[[32]byte]blocks.ROBlock
+	envelopes                 map[[32]byte]*ethpb.SignedBlindedExecutionPayloadEnvelope
 }
 
 var _ BeaconDB = &mockBackfillDB{}
@@ -89,6 +95,30 @@ func (d *mockBackfillDB) BackfillFinalizedIndex(ctx context.Context, blocks []bl
 	return nil
 }
 
+func (d *mockBackfillDB) HasExecutionPayloadEnvelope(_ context.Context, blockRoot [32]byte) bool {
+	_, ok := d.envelopes[blockRoot]
+	return ok
+}
+
+func (d *mockBackfillDB) SaveBlindedExecutionPayloadEnvelope(ctx context.Context, env *ethpb.SignedBlindedExecutionPayloadEnvelope) (iface.EnvelopeSaveOutcome, error) {
+	if d.saveBlindedEnvelope != nil {
+		return d.saveBlindedEnvelope(ctx, env)
+	}
+	if d.envelopes == nil {
+		d.envelopes = make(map[[32]byte]*ethpb.SignedBlindedExecutionPayloadEnvelope)
+	}
+	root := bytesutil.ToBytes32(env.Message.BeaconBlockRoot)
+	existing, ok := d.envelopes[root]
+	if !ok {
+		d.envelopes[root] = env
+		return iface.EnvelopeSaveInserted, nil
+	}
+	if proto.Equal(existing, env) {
+		return iface.EnvelopeSaveByteIdentical, nil
+	}
+	return iface.EnvelopeSaveConflict, nil
+}
+
 func TestSlotCovered(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -138,7 +168,7 @@ func TestStatusUpdater_FillBack(t *testing.T) {
 	require.NoError(t, err)
 	s := &Store{bs: &dbval.BackfillStatus{LowSlot: 100, LowParentRoot: rob.RootSlice()}, store: mdb}
 	require.Equal(t, false, s.AvailableBlock(95))
-	_, err = s.fillBack(ctx, 0, []blocks.ROBlock{rob}, &das.MockAvailabilityStore{})
+	_, err = s.fillBack(ctx, 0, []blocks.ROBlock{rob}, &das.MockAvailabilityStore{}, nil)
 	require.NoError(t, err)
 	require.Equal(t, true, s.AvailableBlock(95))
 }

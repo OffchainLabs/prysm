@@ -13,6 +13,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 )
@@ -32,6 +34,22 @@ type workerCfg struct {
 	downscore       peerDownscorer
 	currentNeeds    func() das.CurrentNeeds
 	backfilledChild childLookup // returns the child of the given block root, when it is already backfilled.
+	store           *Store
+	envVerifier     *envelopeVerifier
+}
+
+// envelopeSyncCfg assembles the per-batch envelope sync configuration from the worker config.
+func (cfg *workerCfg) envelopeSyncCfg() *envelopeSyncCfg {
+	if cfg.envVerifier == nil || cfg.store == nil {
+		return nil
+	}
+	return &envelopeSyncCfg{
+		verifier:      cfg.envVerifier,
+		hasEnvelope:   cfg.store.hasEnvelope,
+		boundaryChild: cfg.store.backfilledChild,
+		currentNeeds:  cfg.currentNeeds,
+		downscore:     cfg.downscore,
+	}
 }
 
 // childLookup returns the child of the block with the given root, or nil when it is unknown.
@@ -59,7 +77,23 @@ func initWorkerCfg(ctx context.Context, cfg *workerCfg, vw InitializerWaiter, st
 	if err != nil {
 		return errors.Wrapf(err, "newBackfillVerifier failed")
 	}
+	// The builder registry snapshot only exists on Gloas+ origin states. A pre-Gloas origin
+	// implies every backfilled slot is pre-Gloas, so no envelope is ever expected and the
+	// envelope verifier's registry stays empty.
+	var builders []*eth.Builder
+	if cps.Version() >= version.Gloas {
+		builders, err = cps.Builders()
+		if err != nil {
+			return errors.Wrap(err, "unable to retrieve builder registry from the origin state")
+		}
+	}
+	ev, err := newEnvelopeVerifier(vr, keys, builders)
+	if err != nil {
+		return errors.Wrap(err, "newEnvelopeVerifier failed")
+	}
 	cfg.verifier = v
+	cfg.envVerifier = ev
+	cfg.store = store
 	cfg.ctxMap = cm
 	cfg.newVB = newBlobVerifierFromInitializer(vi)
 	cfg.newVC = newDataColumnVerifierFromInitializer(vi)
@@ -102,6 +136,8 @@ func (w *p2pWorker) run(ctx context.Context) {
 				b = w.handleBlobs(ctx, b)
 			case batchSyncColumns:
 				b = w.handleColumns(ctx, b)
+			case batchSyncEnvelopes:
+				b = w.handleEnvelopes(ctx, b)
 			case batchImportable:
 				// This state indicates the batch got all the way to be imported and failed,
 				// so we need clear out the blocks to go all the way back to the start of the process.
@@ -166,13 +202,34 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	if err != nil {
 		return b.withRetryableError(err)
 	}
+	es, err := newEnvelopeSync(ctx, verified, w.cfg.envelopeSyncCfg())
+	if err != nil {
+		return b.withRetryableError(err)
+	}
 
-	// Update the batch with the verified blocks, blob sync, and column sync
+	// Update the batch with the verified blocks, blob sync, column sync, and envelope sync
 	// before transitioning to the next state. Note that if we experience any failures
-	// in newBlobSync or newColumnSync, we'll start the whole batch from scratch for simplicity.
+	// in newBlobSync, newColumnSync, or newEnvelopeSync, we'll start the whole batch from
+	// scratch for simplicity.
 	b.blocks = verified
 	b.blobs = bs
 	b.columns = cs
+	b.envelopes = es
+	return b.transitionToNext()
+}
+
+// handleEnvelopes runs one fetch pass of the envelope sync stage against the assigned peer.
+// All failure modes end in an explicit skip or a bounded retry inside the envelope sync, so the
+// batch never errors here; it either stays in batchSyncEnvelopes (and is reassigned, preferring
+// a different peer) or proceeds toward import.
+func (w *p2pWorker) handleEnvelopes(ctx context.Context, b batch) batch {
+	if b.envelopes == nil {
+		return b.transitionToNext()
+	}
+	fetch := func(ctx context.Context, pid peer.ID, req *eth.ExecutionPayloadEnvelopesByRangeRequest) ([]*eth.SignedExecutionPayloadEnvelope, error) {
+		return sync.SendExecutionPayloadEnvelopesByRangeRequest(ctx, w.cfg.clock, w.p2p, pid, w.cfg.ctxMap, req)
+	}
+	b.envelopes.fetchPass(ctx, b.assignedPeer, fetch)
 	return b.transitionToNext()
 }
 

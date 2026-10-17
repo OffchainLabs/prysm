@@ -7,12 +7,14 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/proto/dbval"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
 
@@ -96,7 +98,9 @@ func (s *Store) backfilledChild(ctx context.Context, root [32]byte) (interfaces.
 // fillBack saves the slice of blocks and updates the BackfillStatus tracker to match the first block in the slice.
 // This method assumes that the block slice has been fully validated and sorted in slot order by the calling function.
 // It also performs the blob and/or data column availability check, which will persist blobs/DCs to disk once verified.
-func (s *Store) fillBack(ctx context.Context, current primitives.Slot, blocks []blocks.ROBlock, store das.AvailabilityChecker) (*dbval.BackfillStatus, error) {
+// Verified execution payload envelopes held by envs are persisted in blinded form before the block writes; envelope
+// outcomes never fail the batch, so the block import below always proceeds with its existing error behavior.
+func (s *Store) fillBack(ctx context.Context, current primitives.Slot, blocks []blocks.ROBlock, store das.AvailabilityChecker, envs *envelopeSync) (*dbval.BackfillStatus, error) {
 	status := s.status()
 	if len(blocks) == 0 {
 		return status, nil
@@ -109,6 +113,10 @@ func (s *Store) fillBack(ctx context.Context, current primitives.Slot, blocks []
 		return nil, errors.Wrapf(errBatchDisconnected, "prev parent_root=%#x, root=%#x, prev slot=%d, slot=%d",
 			status.LowParentRoot, highest.Root(), status.LowSlot, highest.Block().Slot())
 	}
+
+	// The check above guarantees the block behind status.LowRoot is the child of the batch tail,
+	// which finalize uses to classify the tail slot's payload fullness.
+	envs.finalize(ctx, s.store, bytesutil.ToBytes32(status.LowRoot))
 
 	if err := store.IsDataAvailable(ctx, current, blocks...); err != nil {
 		return nil, errors.Wrap(err, "IsDataAvailable")
@@ -130,7 +138,12 @@ func (s *Store) fillBack(ctx context.Context, current primitives.Slot, blocks []
 	status.LowSlot = uint64(lowest.Block().Slot())
 	status.LowRoot = lowest.RootSlice()
 	status.LowParentRoot = pr[:]
-	return status, s.saveStatus(ctx, status)
+	if err := s.saveStatus(ctx, status); err != nil {
+		return status, err
+	}
+	// The batch is durable from here, so the envelope skips it recorded are now real gaps.
+	envs.publishSkips()
+	return status, nil
 }
 
 // recoverLegacy will check to see if the db is from a legacy checkpoint sync, and either build a new BackfillStatus
@@ -189,6 +202,11 @@ func (s *Store) originState(ctx context.Context) (state.BeaconState, error) {
 	return s.store.StateOrError(ctx, bytesutil.ToBytes32(s.status().OriginRoot))
 }
 
+// hasEnvelope reports whether an execution payload envelope is already stored for the block root.
+func (s *Store) hasEnvelope(ctx context.Context, blockRoot [32]byte) bool {
+	return s.store.HasExecutionPayloadEnvelope(ctx, blockRoot)
+}
+
 // BeaconDB describes the set of DB methods that the StatusUpdater type needs to function.
 type BeaconDB interface {
 	SaveBackfillStatus(context.Context, *dbval.BackfillStatus) error
@@ -198,4 +216,6 @@ type BeaconDB interface {
 	Block(context.Context, [32]byte) (interfaces.ReadOnlySignedBeaconBlock, error)
 	SaveROBlocks(ctx context.Context, blks []blocks.ROBlock, cache bool) error
 	StateOrError(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)
+	HasExecutionPayloadEnvelope(ctx context.Context, blockRoot [32]byte) bool
+	SaveBlindedExecutionPayloadEnvelope(ctx context.Context, envelope *ethpb.SignedBlindedExecutionPayloadEnvelope) (iface.EnvelopeSaveOutcome, error)
 }

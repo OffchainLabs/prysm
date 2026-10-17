@@ -236,7 +236,7 @@ func (s *Service) defaultBatchImporter(ctx context.Context, current primitives.S
 	}
 
 	checker := newCheckMultiplexer(s.syncNeeds.Currently(), b)
-	return su.fillBack(ctx, current, b.blocks, checker)
+	return su.fillBack(ctx, current, b.blocks, checker, b.envelopes)
 }
 
 func (s *Service) scheduleTodos() {
@@ -329,6 +329,7 @@ func (s *Service) Start() {
 			log.WithError(err).Error("Could not initialize blob verifier in backfill service")
 			return
 		}
+
 	}
 
 	// Allow tests to inject a mock pool.
