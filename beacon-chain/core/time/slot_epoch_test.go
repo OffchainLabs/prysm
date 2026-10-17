@@ -199,44 +199,40 @@ func TestCanUpgradeTo(t *testing.T) {
 	cfg := params.BeaconConfig()
 
 	outerTestCases := []struct {
-		name        string
-		forkEpoch   *primitives.Epoch
-		upgradeFunc func(primitives.Slot) bool
+		name      string
+		forkEpoch *primitives.Epoch
 	}{
 		{
-			name:        "Altair",
-			forkEpoch:   &cfg.AltairForkEpoch,
-			upgradeFunc: time.CanUpgradeToAltair,
+			name:      "Altair",
+			forkEpoch: &cfg.AltairForkEpoch,
 		},
 		{
-			name:        "Bellatrix",
-			forkEpoch:   &cfg.BellatrixForkEpoch,
-			upgradeFunc: time.CanUpgradeToBellatrix,
+			name:      "Bellatrix",
+			forkEpoch: &cfg.BellatrixForkEpoch,
 		},
 		{
-			name:        "Capella",
-			forkEpoch:   &cfg.CapellaForkEpoch,
-			upgradeFunc: time.CanUpgradeToCapella,
+			name:      "Capella",
+			forkEpoch: &cfg.CapellaForkEpoch,
 		},
 		{
-			name:        "Deneb",
-			forkEpoch:   &cfg.DenebForkEpoch,
-			upgradeFunc: time.CanUpgradeToDeneb,
+			name:      "Deneb",
+			forkEpoch: &cfg.DenebForkEpoch,
 		},
 		{
-			name:        "Electra",
-			forkEpoch:   &cfg.ElectraForkEpoch,
-			upgradeFunc: time.CanUpgradeToElectra,
+			name:      "Electra",
+			forkEpoch: &cfg.ElectraForkEpoch,
 		},
 		{
-			name:        "Fulu",
-			forkEpoch:   &cfg.FuluForkEpoch,
-			upgradeFunc: time.CanUpgradeToFulu,
+			name:      "Fulu",
+			forkEpoch: &cfg.FuluForkEpoch,
 		},
 		{
-			name:        "Gloas",
-			forkEpoch:   &cfg.GloasForkEpoch,
-			upgradeFunc: time.CanUpgradeToGloas,
+			name:      "Gloas",
+			forkEpoch: &cfg.GloasForkEpoch,
+		},
+		{
+			name:      "Heze",
+			forkEpoch: &cfg.HezeForkEpoch,
 		},
 	}
 
@@ -269,8 +265,8 @@ func TestCanUpgradeTo(t *testing.T) {
 
 		for _, itc := range innerTestCases {
 			t.Run(fmt.Sprintf("%s-%s", otc.name, itc.name), func(t *testing.T) {
-				if got := otc.upgradeFunc(itc.slot); got != itc.want {
-					t.Errorf("CanUpgradeTo%s() = %v, want %v", otc.name, got, itc.want)
+				if got := time.CanUpgradeTo(itc.slot, *otc.forkEpoch); got != itc.want {
+					t.Errorf("CanUpgradeTo(%s) = %v, want %v", otc.name, got, itc.want)
 				}
 			})
 		}

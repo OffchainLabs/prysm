@@ -52,6 +52,7 @@ var (
 		version.Electra:   ElectraKey,
 		version.Fulu:      fuluKey,
 		version.Gloas:     gloasKey,
+		version.Heze:      hezeKey,
 	}
 )
 
@@ -436,52 +437,58 @@ func encodeStateWithKey(st state.ReadOnlyBeaconState) ([]byte, error) {
 
 func decodeStateSnapshot(enc []byte) (state.BeaconState, error) {
 	switch {
+	case hasHezeKey(enc):
+		var hezeState ethpb.BeaconStateHeze
+		if err := hezeState.UnmarshalSSZ(enc[len(hezeKey):]); err != nil {
+			return nil, fmt.Errorf("unmarshal Heze state: %w", err)
+		}
+		return statenative.InitializeFromProtoUnsafeHeze(&hezeState)
 	case hasGloasKey(enc):
 		var gloasState ethpb.BeaconStateGloas
 		if err := gloasState.UnmarshalSSZ(enc[len(gloasKey):]); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unmarshal Gloas state: %w", err)
 		}
 		return statenative.InitializeFromProtoUnsafeGloas(&gloasState)
 	case hasFuluKey(enc):
 		var fuluState ethpb.BeaconStateFulu
 		if err := fuluState.UnmarshalSSZ(enc[len(fuluKey):]); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unmarshal Fulu state: %w", err)
 		}
 		return statenative.InitializeFromProtoUnsafeFulu(&fuluState)
 	case HasElectraKey(enc):
 		var electraState ethpb.BeaconStateElectra
 		if err := electraState.UnmarshalSSZ(enc[len(ElectraKey):]); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unmarshal Electra state: %w", err)
 		}
 		return statenative.InitializeFromProtoUnsafeElectra(&electraState)
 	case hasDenebKey(enc):
 		var denebState ethpb.BeaconStateDeneb
 		if err := denebState.UnmarshalSSZ(enc[len(denebKey):]); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unmarshal Deneb state: %w", err)
 		}
 		return statenative.InitializeFromProtoUnsafeDeneb(&denebState)
 	case hasCapellaKey(enc):
 		var capellaState ethpb.BeaconStateCapella
 		if err := capellaState.UnmarshalSSZ(enc[len(capellaKey):]); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unmarshal Capella state: %w", err)
 		}
 		return statenative.InitializeFromProtoUnsafeCapella(&capellaState)
 	case hasBellatrixKey(enc):
 		var bellatrixState ethpb.BeaconStateBellatrix
 		if err := bellatrixState.UnmarshalSSZ(enc[len(bellatrixKey):]); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unmarshal Bellatrix state: %w", err)
 		}
 		return statenative.InitializeFromProtoUnsafeBellatrix(&bellatrixState)
 	case hasAltairKey(enc):
 		var altairState ethpb.BeaconStateAltair
 		if err := altairState.UnmarshalSSZ(enc[len(altairKey):]); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unmarshal Altair state: %w", err)
 		}
 		return statenative.InitializeFromProtoUnsafeAltair(&altairState)
 	case hasPhase0Key(enc):
 		var phase0State ethpb.BeaconState
 		if err := phase0State.UnmarshalSSZ(enc[len(phase0Key):]); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unmarshal Phase0 state: %w", err)
 		}
 		return statenative.InitializeFromProtoUnsafePhase0(&phase0State)
 	default:

@@ -746,6 +746,19 @@ func hydrateBeaconBlockBodyCapella() *eth.BeaconBlockBodyCapella {
 	}
 }
 
+func hydrateBeaconBlockBodyHeze() *eth.BeaconBlockBodyHeze {
+	g := hydrateBeaconBlockBodyGloas()
+	return &eth.BeaconBlockBodyHeze{
+		RandaoReveal:              g.RandaoReveal,
+		Eth1Data:                  g.Eth1Data,
+		Graffiti:                  g.Graffiti,
+		SyncAggregate:             g.SyncAggregate,
+		SignedExecutionPayloadBid: g.SignedExecutionPayloadBid,
+		ParentExecutionRequests:   g.ParentExecutionRequests,
+		PayloadAttestations:       g.PayloadAttestations,
+	}
+}
+
 func hydrateBeaconBlockBodyGloas() *eth.BeaconBlockBodyGloas {
 	bits := bitfield.NewBitvector512()
 	bits.SetBitAt(0, true)

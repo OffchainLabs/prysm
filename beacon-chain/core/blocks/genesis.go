@@ -198,6 +198,11 @@ func NewGenesisBlockForState(ctx context.Context, st state.BeaconState) (interfa
 			Block:     gloasGenesisBlock(root, gs.LatestExecutionPayloadBid),
 			Signature: params.BeaconConfig().EmptySignature[:],
 		})
+	case *ethpb.BeaconStateHeze:
+		return blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockHeze{
+			Block:     hezeGenesisBlock(root, ps.(*ethpb.BeaconStateHeze).LatestExecutionPayloadBid),
+			Signature: params.BeaconConfig().EmptySignature[:],
+		})
 	default:
 		return nil, ErrUnrecognizedState
 	}
@@ -245,6 +250,24 @@ func gloasGenesisBlock(root [fieldparams.RootLength]byte, latestBid *ethpb.Execu
 				Deposits:       make([]*enginev1.DepositRequest, 0),
 				Consolidations: make([]*enginev1.ConsolidationRequest, 0),
 			},
+		},
+	}
+}
+
+// hezeGenesisBlock is gloasGenesisBlock for a Heze state.
+func hezeGenesisBlock(root [fieldparams.RootLength]byte, latestBid *ethpb.ExecutionPayloadBid) *ethpb.BeaconBlockHeze {
+	g := gloasGenesisBlock(root, latestBid)
+	return &ethpb.BeaconBlockHeze{
+		ParentRoot: g.ParentRoot,
+		StateRoot:  g.StateRoot,
+		Body: &ethpb.BeaconBlockBodyHeze{
+			RandaoReveal:              g.Body.RandaoReveal,
+			Eth1Data:                  g.Body.Eth1Data,
+			Graffiti:                  g.Body.Graffiti,
+			SyncAggregate:             g.Body.SyncAggregate,
+			SignedExecutionPayloadBid: g.Body.SignedExecutionPayloadBid,
+			PayloadAttestations:       g.Body.PayloadAttestations,
+			ParentExecutionRequests:   g.Body.ParentExecutionRequests,
 		},
 	}
 }

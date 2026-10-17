@@ -485,6 +485,15 @@ func GetMockSignRequest(t string) *validatorpb.SignRequest {
 				BlockGloas: util.HydrateBeaconBlockGloas(&eth.BeaconBlockGloas{}),
 			},
 		}
+	case "BLOCK_V2_HEZE":
+		return &validatorpb.SignRequest{
+			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),
+			SigningRoot:     make([]byte, fieldparams.RootLength),
+			SignatureDomain: make([]byte, 4),
+			Object: &validatorpb.SignRequest_BlockHeze{
+				BlockHeze: util.HydrateBeaconBlockHeze(&eth.BeaconBlockHeze{}),
+			},
+		}
 	case "BUILDER_REQUEST_AUTH":
 		return &validatorpb.SignRequest{
 			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),

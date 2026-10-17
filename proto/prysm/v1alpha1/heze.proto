@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package ethereum.eth.v1alpha1;
+
+import "proto/engine/v1/gloas.proto";
+import "proto/eth/ext/options.proto";
+import "proto/prysm/v1alpha1/attestation.proto";
+import "proto/prysm/v1alpha1/withdrawals.proto";
+import "proto/prysm/v1alpha1/beacon_core_types.proto";
+import "proto/prysm/v1alpha1/gloas.proto";
+
+option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
+
+// =============================================================================
+// Heze Fork Specification
+// =============================================================================
+// This file implements the Heze fork of the Ethereum consensus specification
+// Reference:
+// https://github.com/ethereum/consensus-specs/blob/master/specs/heze/beacon-chain.md
+
+// BeaconBlockHeze represents a beacon block in the Heze fork.
+message BeaconBlockHeze {
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  uint64 proposer_index = 2 [ (ethereum.eth.ext.cast_type) =
+                                  "github.com/OffchainLabs/prysm/v7/"
+                                  "consensus-types/primitives.ValidatorIndex" ];
+  bytes parent_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes state_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  BeaconBlockBodyHeze body = 5;
+}
+
+// BeaconBlockBodyHeze represents the body of a beacon block in the Heze fork.
+message BeaconBlockBodyHeze {
+  bytes randao_reveal = 1 [ (ethereum.eth.ext.ssz_size) = "96" ];
+  Eth1Data eth1_data = 2;
+  bytes graffiti = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  repeated ProposerSlashing proposer_slashings = 4
+      [ (ethereum.eth.ext.ssz_max) = "16" ];
+  repeated AttesterSlashingGloas attester_slashings = 5
+      [ (ethereum.eth.ext.ssz_max) = "1" ];
+  repeated AttestationGloas attestations = 6
+      [ (ethereum.eth.ext.ssz_max) = "8" ];
+  repeated Deposit deposits = 7 [ (ethereum.eth.ext.ssz_max) = "16" ];
+  repeated SignedVoluntaryExit voluntary_exits = 8
+      [ (ethereum.eth.ext.ssz_max) = "16" ];
+  SyncAggregate sync_aggregate = 9;
+  repeated SignedBLSToExecutionChange bls_to_execution_changes = 10
+      [ (ethereum.eth.ext.ssz_max) = "16" ];
+  SignedExecutionPayloadBid signed_execution_payload_bid = 11;
+  repeated PayloadAttestation payload_attestations = 12
+      [ (ethereum.eth.ext.ssz_max) = "payload_attestation.size" ];
+  ethereum.engine.v1.ExecutionRequestsGloas parent_execution_requests = 13;
+}
+
+// SignedBeaconBlockHeze represents a signed beacon block in the Heze fork.
+message SignedBeaconBlockHeze {
+  BeaconBlockHeze block = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// BeaconBlockContentsHeze bundles a Heze beacon block with the execution
+// payload envelope and associated blob data. This is used for block production
+// when include_payload=true.
+message BeaconBlockContentsHeze {
+  BeaconBlockHeze block = 1;
+  ExecutionPayloadEnvelope execution_payload_envelope = 2;
+  repeated bytes kzg_proofs = 3 [
+    (ethereum.eth.ext.ssz_size) = "?,48",
+    (ethereum.eth.ext.ssz_max) = "max_cell_proofs_length.size"
+  ];
+  repeated bytes blobs = 4 [
+    (ethereum.eth.ext.ssz_size) = "?,blob.size",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
+}

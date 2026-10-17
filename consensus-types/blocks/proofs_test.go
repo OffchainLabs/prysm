@@ -187,6 +187,29 @@ func TestComputeBlockBodyFieldRoots_Gloas_ProgressiveSSZGate(t *testing.T) {
 	require.DeepEqual(t, expectedBodyRoot, computedBodyRoot)
 }
 
+func TestComputeBlockBodyFieldRoots_Heze(t *testing.T) {
+	i, err := NewBeaconBlockBody(hydrateBeaconBlockBodyHeze())
+	require.NoError(t, err)
+	b, ok := i.(*BeaconBlockBody)
+	require.Equal(t, true, ok)
+
+	roots, err := ComputeBlockBodyFieldRoots(t.Context(), b)
+	require.NoError(t, err)
+	require.Equal(t, 13, len(roots))
+
+	rootChunks := make([][32]byte, len(roots))
+	activeFields := make([]bool, len(roots))
+	for i := range roots {
+		copy(rootChunks[i][:], roots[i])
+		activeFields[i] = true
+	}
+	computedBodyRoot, err := ssz.ContainerRootProgressive(rootChunks, activeFields)
+	require.NoError(t, err)
+	expectedBodyRoot, err := b.HashTreeRoot()
+	require.NoError(t, err)
+	require.DeepEqual(t, expectedBodyRoot, computedBodyRoot)
+}
+
 func TestPayloadProof(t *testing.T) {
 	t.Run("pre-Gloas", func(t *testing.T) {
 		body := hydrateBeaconBlockBodyBellatrix()
@@ -276,6 +299,22 @@ func TestExecutionBlockHashProof(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, true, trie.VerifyMerkleProof(
 			bodyRoot[:], signedBid.Message.ParentBlockHash, 2856, proof,
+		))
+	})
+
+	t.Run("proves Heze parent block hash", func(t *testing.T) {
+		body := hydrateBeaconBlockBodyHeze()
+		body.SignedExecutionPayloadBid.Message.ParentBlockHash[0] = 0x42
+		block, err := NewBeaconBlock(&eth.BeaconBlockHeze{Body: body})
+		require.NoError(t, err)
+
+		proof, err := ExecutionBlockHashProof(t.Context(), block)
+		require.NoError(t, err)
+		require.Equal(t, 11, len(proof))
+		bodyRoot, err := block.Body().HashTreeRoot()
+		require.NoError(t, err)
+		require.Equal(t, true, trie.VerifyMerkleProof(
+			bodyRoot[:], body.SignedExecutionPayloadBid.Message.ParentBlockHash, 2856, proof,
 		))
 	})
 

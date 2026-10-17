@@ -10,6 +10,7 @@ go_library(
         "conversions_block.go",
         "conversions_block_execution.go",
         "conversions_block_gloas.go",
+        "conversions_block_heze.go",
         "conversions_gloas.go",
         "conversions_lightclient.go",
         "conversions_state.go",
@@ -22,6 +23,7 @@ go_library(
         "endpoints_node.go",
         "endpoints_rewards.go",
         "endpoints_validator.go",
+        "heze.go",
         "other.go",
         "state.go",
     ],
@@ -57,6 +59,7 @@ go_test(
     srcs = [
         "conversions_block_execution_test.go",
         "conversions_block_gloas_test.go",
+        "conversions_block_heze_test.go",
         "conversions_gloas_test.go",
         "conversions_test.go",
     ],

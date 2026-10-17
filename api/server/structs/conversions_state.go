@@ -1197,3 +1197,15 @@ func BeaconStateGloasFromConsensus(st beaconState.BeaconState) (*BeaconStateGloa
 		PtcWindow:                     PTCWindowFromConsensus(ptcWindow),
 	}, nil
 }
+
+// ----------------------------------------------------------------------------
+// Heze
+// ----------------------------------------------------------------------------
+
+func BeaconStateHezeFromConsensus(st beaconState.BeaconState) (*BeaconStateHeze, error) {
+	s, err := BeaconStateGloasFromConsensus(st)
+	if err != nil {
+		return nil, fmt.Errorf("convert Heze state: %w", err)
+	}
+	return (*BeaconStateHeze)(s), nil
+}
