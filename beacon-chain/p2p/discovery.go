@@ -927,36 +927,25 @@ func retrieveMultiAddrsFromNode(node *enode.Node) ([]ma.Multiaddr, error) {
 }
 
 // getPort retrieves the port for a given node and protocol, as well as a boolean
-// indicating whether the port was found, and an error
+// indicating whether the port was found, and an error. On an IPv6 endpoint the
+// IPv6-specific keys ("tcp6", "udp6", "quic6") take precedence over the generic ones.
 func getPort(node *enode.Node, protocol internetProtocol) (uint, bool, error) {
-	var (
-		port uint
-		err  error
-	)
+	var port uint
 
 	switch protocol {
 	case tcp:
-		var entry enr.TCP
-		err = node.Load(&entry)
-		port = uint(entry)
+		// node.TCP()/node.UDP() already resolve the "*6" keys against node.IP().
+		port = uint(node.TCP())
 	case udp:
-		var entry enr.UDP
-		err = node.Load(&entry)
-		port = uint(entry)
+		port = uint(node.UDP())
 	case quic:
-		var entry quicProtocol
-		err = node.Load(&entry)
-		port = uint(entry)
+		quicPort, ok, err := getQUICPort(node)
+		if err != nil || !ok {
+			return 0, false, err
+		}
+		port = quicPort
 	default:
 		return 0, false, errors.Errorf("invalid protocol: %v", protocol)
-	}
-
-	if enr.IsNotFound(err) {
-		return port, false, nil
-	}
-
-	if err != nil {
-		return 0, false, errors.Wrap(err, "could not get port")
 	}
 
 	// A zero port is not a usable endpoint; treat it as absent so callers do not build /tcp/0 dial addresses.
@@ -965,6 +954,32 @@ func getPort(node *enode.Node, protocol internetProtocol) (uint, bool, error) {
 	}
 
 	return port, true, nil
+}
+
+// getQUICPort retrieves the QUIC port from the node's ENR: "quic6" first on an IPv6
+// endpoint, falling back to "quic", mirroring go-ethereum's "tcp6"/"tcp" handling.
+func getQUICPort(node *enode.Node) (uint, bool, error) {
+	if ip := node.IPAddr(); ip.Is6() && !ip.Is4In6() {
+		var quic6Entry enr.QUIC6
+		err := node.Load(&quic6Entry)
+		if err == nil {
+			return uint(quic6Entry), true, nil
+		}
+		if !enr.IsNotFound(err) {
+			return 0, false, errors.Wrap(err, "could not get quic6 port")
+		}
+	}
+
+	var quicEntry enr.QUIC
+	err := node.Load(&quicEntry)
+	if enr.IsNotFound(err) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, errors.Wrap(err, "could not get quic port")
+	}
+
+	return uint(quicEntry), true, nil
 }
 
 func convertToUdpMultiAddr(node *enode.Node) ([]ma.Multiaddr, error) {
