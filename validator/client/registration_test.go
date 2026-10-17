@@ -225,7 +225,6 @@ func TestValidator_SignValidatorRegistrationRequest(t *testing.T) {
 					v := validator{
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
-						enableAPI:                    false,
 						genesisTime:                  time.Unix(0, 0),
 					}
 					v.signedValidatorRegistrations[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())] = &ethpb.SignedValidatorRegistrationV1{
@@ -253,7 +252,6 @@ func TestValidator_SignValidatorRegistrationRequest(t *testing.T) {
 					v := validator{
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
-						enableAPI:                    false,
 						genesisTime:                  time.Unix(0, 0),
 					}
 					v.signedValidatorRegistrations[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())] = &ethpb.SignedValidatorRegistrationV1{
@@ -281,7 +279,6 @@ func TestValidator_SignValidatorRegistrationRequest(t *testing.T) {
 					v := validator{
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
-						enableAPI:                    false,
 						genesisTime:                  time.Unix(0, 0),
 					}
 					v.signedValidatorRegistrations[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())] = &ethpb.SignedValidatorRegistrationV1{
@@ -309,7 +306,6 @@ func TestValidator_SignValidatorRegistrationRequest(t *testing.T) {
 					v := validator{
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
-						enableAPI:                    false,
 						genesisTime:                  time.Unix(0, 0),
 					}
 					return &v

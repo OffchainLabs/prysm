@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/url"
 	"strconv"
 
@@ -15,10 +14,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+const stateValidatorsEndpoint = "/eth/v1/beacon/states/head/validators"
+
 type StateValidatorsProvider interface {
 	StateValidators(context.Context, []string, []primitives.ValidatorIndex, []string) (*structs.GetValidatorsResponse, error)
-	StateValidatorsForSlot(context.Context, primitives.Slot, []string, []primitives.ValidatorIndex, []string) (*structs.GetValidatorsResponse, error)
-	StateValidatorsForHead(context.Context, []string, []primitives.ValidatorIndex, []string) (*structs.GetValidatorsResponse, error)
 }
 
 type beaconApiStateValidatorsProvider struct {
@@ -32,28 +31,7 @@ func (c beaconApiStateValidatorsProvider) StateValidators(
 	statuses []string,
 ) (*structs.GetValidatorsResponse, error) {
 	stringIndices := convertValidatorIndicesToStrings(indexes)
-	return c.getStateValidatorsHelper(ctx, "/eth/v1/beacon/states/head/validators", append(stringIndices, stringPubkeys...), statuses)
-}
-
-func (c beaconApiStateValidatorsProvider) StateValidatorsForSlot(
-	ctx context.Context,
-	slot primitives.Slot,
-	stringPubkeys []string,
-	indices []primitives.ValidatorIndex,
-	statuses []string,
-) (*structs.GetValidatorsResponse, error) {
-	stringIndices := convertValidatorIndicesToStrings(indices)
-	return c.getStateValidatorsHelper(ctx, fmt.Sprintf("/eth/v1/beacon/states/%d/validators", slot), append(stringIndices, stringPubkeys...), statuses)
-}
-
-func (c beaconApiStateValidatorsProvider) StateValidatorsForHead(
-	ctx context.Context,
-	stringPubkeys []string,
-	indices []primitives.ValidatorIndex,
-	statuses []string,
-) (*structs.GetValidatorsResponse, error) {
-	stringIndices := convertValidatorIndicesToStrings(indices)
-	return c.getStateValidatorsHelper(ctx, "/eth/v1/beacon/states/head/validators", append(stringIndices, stringPubkeys...), statuses)
+	return c.getStateValidatorsHelper(ctx, append(stringIndices, stringPubkeys...), statuses)
 }
 
 func convertValidatorIndicesToStrings(indices []primitives.ValidatorIndex) []string {
@@ -70,7 +48,6 @@ func convertValidatorIndicesToStrings(indices []primitives.ValidatorIndex) []str
 
 func (c beaconApiStateValidatorsProvider) getStateValidatorsHelper(
 	ctx context.Context,
-	endpoint string,
 	vals []string,
 	statuses []string,
 ) (*structs.GetValidatorsResponse, error) {
@@ -94,7 +71,7 @@ func (c beaconApiStateValidatorsProvider) getStateValidatorsHelper(
 	}
 	stateValidatorsJson := &structs.GetValidatorsResponse{}
 	// First try POST endpoint to check whether it is supported by the beacon node.
-	if err = c.handler.Post(ctx, endpoint, nil, bytes.NewBuffer(reqBytes), stateValidatorsJson); err == nil {
+	if err = c.handler.Post(ctx, stateValidatorsEndpoint, nil, bytes.NewBuffer(reqBytes), stateValidatorsJson); err == nil {
 		if stateValidatorsJson.Data == nil {
 			return nil, errors.New("stateValidatorsJson.Data is nil")
 		}
@@ -114,7 +91,7 @@ func (c beaconApiStateValidatorsProvider) getStateValidatorsHelper(
 		queryParams.Add("status", st)
 	}
 
-	query := apiutil.BuildURL(endpoint, queryParams)
+	query := apiutil.BuildURL(stateValidatorsEndpoint, queryParams)
 
 	err = c.handler.Get(ctx, query, stateValidatorsJson)
 	if err != nil {

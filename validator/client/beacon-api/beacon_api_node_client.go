@@ -21,7 +21,6 @@ var (
 )
 
 type beaconApiNodeClient struct {
-	fallbackClient  iface.NodeClient
 	handler         rest.Handler
 	genesisProvider GenesisProvider
 }
@@ -80,30 +79,6 @@ func (c *beaconApiNodeClient) Genesis(ctx context.Context, _ *empty.Empty) (*eth
 	}, nil
 }
 
-func (c *beaconApiNodeClient) Version(ctx context.Context, _ *empty.Empty) (*ethpb.Version, error) {
-	var versionResponse structs.GetVersionResponse
-	if err := c.handler.Get(ctx, "/eth/v1/node/version", &versionResponse); err != nil {
-		return nil, err
-	}
-
-	if versionResponse.Data == nil || versionResponse.Data.Version == "" {
-		return nil, errors.New("empty version response")
-	}
-
-	return &ethpb.Version{
-		Version: versionResponse.Data.Version,
-	}, nil
-}
-
-func (c *beaconApiNodeClient) Peers(ctx context.Context, in *empty.Empty) (*ethpb.Peers, error) {
-	if c.fallbackClient != nil {
-		return c.fallbackClient.Peers(ctx, in)
-	}
-
-	// TODO: Implement me
-	return nil, errors.New("beaconApiNodeClient.Peers is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiNodeClientWithFallback.")
-}
-
 // IsReady returns true only if the node is fully synced (200 OK).
 // A 206 Partial Content response indicates the node is syncing and not ready.
 func (c *beaconApiNodeClient) IsReady(ctx context.Context) bool {
@@ -117,12 +92,10 @@ func (c *beaconApiNodeClient) IsReady(ctx context.Context) bool {
 	return statusCode == http.StatusOK
 }
 
-func NewNodeClientWithFallback(provider rest.RestConnectionProvider, fallbackClient iface.NodeClient) iface.NodeClient {
+func NewNodeClient(provider rest.RestConnectionProvider) iface.NodeClient {
 	handler := provider.Handler()
-	b := &beaconApiNodeClient{
+	return &beaconApiNodeClient{
 		handler:         handler,
-		fallbackClient:  fallbackClient,
 		genesisProvider: &beaconApiGenesisProvider{handler: handler},
 	}
-	return b
 }

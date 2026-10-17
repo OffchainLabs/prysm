@@ -17,14 +17,6 @@ func (c *grpcChainClient) ChainHead(ctx context.Context, in *empty.Empty) (*ethp
 	return c.getClient().GetChainHead(ctx, in)
 }
 
-func (c *grpcChainClient) ValidatorBalances(ctx context.Context, in *ethpb.ListValidatorBalancesRequest) (*ethpb.ValidatorBalances, error) {
-	return c.getClient().ListValidatorBalances(ctx, in)
-}
-
-func (c *grpcChainClient) Validators(ctx context.Context, in *ethpb.ListValidatorsRequest) (*ethpb.Validators, error) {
-	return c.getClient().ListValidators(ctx, in)
-}
-
 func (c *grpcChainClient) ValidatorPerformance(ctx context.Context, in *ethpb.ValidatorPerformanceRequest) (*ethpb.ValidatorPerformanceResponse, error) {
 	return c.getClient().GetValidatorPerformance(ctx, in)
 }
