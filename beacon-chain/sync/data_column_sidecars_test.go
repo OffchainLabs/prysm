@@ -1128,6 +1128,55 @@ func TestComputeIndicesByRootByPeer(t *testing.T) {
 	}
 }
 
+func TestComputeIndicesByRootByPeer_PeerWithoutChainState(t *testing.T) {
+	peerIdStrs := []string{
+		"16Uiu2HAm3k5Npu6EaYWxiEvzsdLseEkjVyoVhvbxWEuyqdBgBBbq", // Custodies 89, 94, 97 & 122
+		"16Uiu2HAmTwQPAwzTr6hTgBmKNecCfH6kP3Kbzxj36ZRyyQ46L6gf", // Custodies 1, 11, 37 & 86, no chain state
+		"16Uiu2HAmMDB5uUePTpN7737m78ehePfWPtBL9qMGdH8kCygjzNA8", // Custodies 2, 37, 38 & 68
+	}
+
+	headSlotByPeer := map[string]primitives.Slot{
+		"16Uiu2HAm3k5Npu6EaYWxiEvzsdLseEkjVyoVhvbxWEuyqdBgBBbq": 89,
+		"16Uiu2HAmMDB5uUePTpN7737m78ehePfWPtBL9qMGdH8kCygjzNA8": 12,
+	}
+
+	p2p := testp2p.NewTestP2P(t)
+	peers := p2p.Peers()
+
+	peerIDs := make([]peer.ID, 0, len(peerIdStrs))
+	peerIDsMap := make(map[peer.ID]bool, len(peerIdStrs))
+	for _, peerIdStr := range peerIdStrs {
+		peerID, err := peer.Decode(peerIdStr)
+		require.NoError(t, err)
+
+		if headSlot, ok := headSlotByPeer[peerIdStr]; ok {
+			peers.SetChainState(peerID, &ethpb.StatusV2{HeadSlot: headSlot})
+		}
+
+		peerIDs = append(peerIDs, peerID)
+		peerIDsMap[peerID] = true
+	}
+
+	slotByBlockRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
+		[fieldparams.RootLength]byte{2}: 10,
+		[fieldparams.RootLength]byte{4}: 50,
+	}
+
+	indicesByBlockRoot := map[[fieldparams.RootLength]byte]map[uint64]bool{
+		[fieldparams.RootLength]byte{2}: {1: true, 37: true},
+		[fieldparams.RootLength]byte{4}: {89: true, 122: true},
+	}
+
+	actual, err := computeIndicesByRootByPeer(p2p, slotByBlockRoot, indicesByBlockRoot, peerIDsMap)
+	require.NoError(t, err)
+
+	expected := map[peer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool{
+		peerIDs[0]: {[fieldparams.RootLength]byte{4}: {89: true, 122: true}},
+		peerIDs[2]: {[fieldparams.RootLength]byte{2}: {37: true}},
+	}
+	require.DeepEqual(t, expected, actual)
+}
+
 func TestRandomPeer(t *testing.T) {
 	// Fixed seed.
 	const seed = 43

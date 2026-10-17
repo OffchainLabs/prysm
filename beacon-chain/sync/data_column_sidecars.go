@@ -1088,13 +1088,6 @@ func computeIndicesByRootByPeer(
 			continue
 		}
 
-		for column := range dasInfo.CustodyColumns {
-			if _, exists := peersByIndex[column]; !exists {
-				peersByIndex[column] = make(map[goPeer.ID]bool)
-			}
-			peersByIndex[column][peer] = true
-		}
-
 		// Compute the head slot for each peer
 		peerChainState, err := p2p.Peers().ChainState(peer)
 		if err != nil {
@@ -1111,6 +1104,13 @@ func computeIndicesByRootByPeer(
 		// We add an epoch to take into account the fact the real head slot of the peer
 		// is higher than our view of it.
 		headSlotByPeer[peer] = peerChainState.HeadSlot + slotsPerEpoch
+
+		for column := range dasInfo.CustodyColumns {
+			if _, exists := peersByIndex[column]; !exists {
+				peersByIndex[column] = make(map[goPeer.ID]bool)
+			}
+			peersByIndex[column][peer] = true
+		}
 	}
 
 	// For each block root and its indices, find suitable peers
