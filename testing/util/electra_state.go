@@ -127,12 +127,6 @@ func buildGenesisBeaconStateElectra(ctx context.Context, genesisTime uint64, pre
 	}
 
 	zeroHash := params.BeaconConfig().ZeroHash[:]
-
-	activeIndexRoots := make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector)
-	for i := range activeIndexRoots {
-		activeIndexRoots[i] = zeroHash
-	}
-
 	blockRoots := make([][]byte, params.BeaconConfig().SlotsPerHistoricalRoot)
 	for i := range blockRoots {
 		blockRoots[i] = zeroHash
