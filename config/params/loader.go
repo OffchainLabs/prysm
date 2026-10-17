@@ -114,6 +114,10 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 	conf.SqrRootSlotsPerEpoch = primitives.Slot(math.IntegerSquareRoot(uint64(conf.SlotsPerEpoch)))
 	// Recompute the fork schedule
 	conf.InitializeForkSchedule()
+	if !conf.ProposerReorgCutoffValid() {
+		log.WithField("proposerReorgCutoffBPS", conf.ProposerReorgCutoffBPS).
+			Warn("PROPOSER_REORG_CUTOFF_BPS cannot produce a cutoff within the slot, proposer reorgs are disabled")
+	}
 	log.Debugf("Config file values: %+v", conf)
 	return conf, nil
 }
