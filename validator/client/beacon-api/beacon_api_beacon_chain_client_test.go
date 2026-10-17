@@ -579,6 +579,419 @@ func TestListValidators(t *testing.T) {
 	})
 }
 
+func TestListValidatorBalances(t *testing.T) {
+	const blockHeaderEndpoint = "/eth/v1/beacon/headers/head"
+
+	t.Run("invalid token", func(t *testing.T) {
+		ctx := t.Context()
+
+		beaconChainClient := beaconApiChainClient{}
+		_, err := beaconChainClient.ValidatorBalances(ctx, &ethpb.ListValidatorBalancesRequest{
+			PageToken: "foo",
+		})
+		assert.ErrorContains(t, "failed to parse page token `foo`", err)
+	})
+
+	t.Run("query filter epoch overflow", func(t *testing.T) {
+		ctx := t.Context()
+
+		beaconChainClient := beaconApiChainClient{}
+		_, err := beaconChainClient.ValidatorBalances(ctx, &ethpb.ListValidatorBalancesRequest{
+			QueryFilter: &ethpb.ListValidatorBalancesRequest_Epoch{
+				Epoch: math.MaxUint64,
+			},
+		})
+		assert.ErrorContains(t, fmt.Sprintf("failed to get first slot for epoch `%d`", uint64(math.MaxUint64)), err)
+	})
+
+	t.Run("fails to get validators for epoch filter", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		ctx := t.Context()
+
+		stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
+		stateValidatorsProvider.EXPECT().StateValidatorsForSlot(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(
+			nil,
+			errors.New("foo error"),
+		)
+
+		beaconChainClient := beaconApiChainClient{stateValidatorsProvider: stateValidatorsProvider}
+		_, err := beaconChainClient.ValidatorBalances(ctx, &ethpb.ListValidatorBalancesRequest{
+			QueryFilter: &ethpb.ListValidatorBalancesRequest_Epoch{
+				Epoch: 0,
+			},
+		})
+		assert.ErrorContains(t, "failed to get state validators for slot `0`: foo error", err)
+	})
+
+	t.Run("fails to get validators for genesis filter", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		ctx := t.Context()
+
+		stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
+		stateValidatorsProvider.EXPECT().StateValidatorsForSlot(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(
+			nil,
+			errors.New("bar error"),
+		)
+
+		beaconChainClient := beaconApiChainClient{stateValidatorsProvider: stateValidatorsProvider}
+		_, err := beaconChainClient.ValidatorBalances(ctx, &ethpb.ListValidatorBalancesRequest{
+			QueryFilter: &ethpb.ListValidatorBalancesRequest_Genesis{},
+		})
+		assert.ErrorContains(t, "failed to get genesis state validators: bar error", err)
+	})
+
+	t.Run("fails to get validators for nil filter", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		ctx := t.Context()
+
+		stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
+		stateValidatorsProvider.EXPECT().StateValidatorsForHead(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(
+			nil,
+			errors.New("foo error"),
+		)
+
+		beaconChainClient := beaconApiChainClient{stateValidatorsProvider: stateValidatorsProvider}
+		_, err := beaconChainClient.ValidatorBalances(ctx, &ethpb.ListValidatorBalancesRequest{
+			QueryFilter: nil,
+		})
+		assert.ErrorContains(t, "failed to get head state validators: foo error", err)
+	})
+
+	t.Run("fails to get latest block header for nil filter", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		ctx := t.Context()
+
+		stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
+		stateValidatorsProvider.EXPECT().StateValidatorsForHead(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(
+			nil,
+			nil,
+		)
+
+		handler := mock.NewMockHandler(ctrl)
+		handler.EXPECT().Get(gomock.Any(), blockHeaderEndpoint, gomock.Any()).Return(errors.New("bar error"))
+
+		beaconChainClient := beaconApiChainClient{
+			stateValidatorsProvider: stateValidatorsProvider,
+			handler:                 handler,
+		}
+		_, err := beaconChainClient.ValidatorBalances(ctx, &ethpb.ListValidatorBalancesRequest{
+			QueryFilter: nil,
+		})
+		assert.ErrorContains(t, "bar error", err)
+	})
+
+	t.Run("fails to read state validators response", func(t *testing.T) {
+		generateValidStateValidatorsResponse := func() *structs.GetValidatorsResponse {
+			return &structs.GetValidatorsResponse{
+				Data: []*structs.ValidatorContainer{
+					{
+						Index:   "1",
+						Balance: "2",
+						Status:  "active_ongoing",
+						Validator: &structs.Validator{
+							Pubkey: hexutil.Encode([]byte{3}),
+						},
+					},
+				},
+			}
+		}
+
+		testCases := []struct {
+			name                            string
+			generateStateValidatorsResponse func() *structs.GetValidatorsResponse
+			expectedError                   string
+		}{
+			{
+				name: "nil validator",
+				generateStateValidatorsResponse: func() *structs.GetValidatorsResponse {
+					validatorsResponse := generateValidStateValidatorsResponse()
+					validatorsResponse.Data[0].Validator = nil
+					return validatorsResponse
+				},
+				expectedError: "state validator at index `0` is nil",
+			},
+			{
+				name: "invalid pubkey",
+				generateStateValidatorsResponse: func() *structs.GetValidatorsResponse {
+					validatorsResponse := generateValidStateValidatorsResponse()
+					validatorsResponse.Data[0].Validator.Pubkey = "foo"
+					return validatorsResponse
+				},
+				expectedError: "failed to decode validator pubkey `foo`",
+			},
+			{
+				name: "invalid validator index",
+				generateStateValidatorsResponse: func() *structs.GetValidatorsResponse {
+					validatorsResponse := generateValidStateValidatorsResponse()
+					validatorsResponse.Data[0].Index = "bar"
+					return validatorsResponse
+				},
+				expectedError: "failed to parse validator index `bar`",
+			},
+			{
+				name: "invalid balance",
+				generateStateValidatorsResponse: func() *structs.GetValidatorsResponse {
+					validatorsResponse := generateValidStateValidatorsResponse()
+					validatorsResponse.Data[0].Balance = "foo"
+					return validatorsResponse
+				},
+				expectedError: "failed to parse validator balance `foo`",
+			},
+		}
+
+		for _, testCase := range testCases {
+			t.Run(testCase.name, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+				ctx := t.Context()
+
+				stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
+				stateValidatorsProvider.EXPECT().StateValidatorsForSlot(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(
+					testCase.generateStateValidatorsResponse(),
+					nil,
+				)
+
+				beaconChainClient := beaconApiChainClient{stateValidatorsProvider: stateValidatorsProvider}
+				_, err := beaconChainClient.ValidatorBalances(ctx, &ethpb.ListValidatorBalancesRequest{
+					QueryFilter: &ethpb.ListValidatorBalancesRequest_Genesis{},
+				})
+				assert.ErrorContains(t, testCase.expectedError, err)
+			})
+		}
+	})
+
+	t.Run("correctly returns the expected balances", func(t *testing.T) {
+		generateValidStateValidatorsResponse := func() *structs.GetValidatorsResponse {
+			return &structs.GetValidatorsResponse{
+				Data: []*structs.ValidatorContainer{
+					{
+						Index:   "1",
+						Balance: "2",
+						Status:  "active_ongoing",
+						Validator: &structs.Validator{
+							Pubkey: hexutil.Encode([]byte{3}),
+						},
+					},
+					{
+						Index:   "4",
+						Balance: "5",
+						Status:  "withdrawal_done",
+						Validator: &structs.Validator{
+							Pubkey: hexutil.Encode([]byte{6}),
+						},
+					},
+					{
+						Index:   "7",
+						Balance: "8",
+						Status:  "foo",
+						Validator: &structs.Validator{
+							Pubkey: hexutil.Encode([]byte{9}),
+						},
+					},
+				},
+			}
+		}
+
+		testCases := []struct {
+			name                                string
+			generateJsonStateValidatorsResponse func() *structs.GetValidatorsResponse
+			generateProtoBalancesResponse       func() *ethpb.ValidatorBalances
+			pageSize                            int32
+			pageToken                           string
+		}{
+			{
+				name: "page size 0",
+				generateJsonStateValidatorsResponse: func() *structs.GetValidatorsResponse {
+					validValidatorsResponse := generateValidStateValidatorsResponse()
+
+					// Generate more than 250 validators, but expect only 250 to be returned
+					validators := make([]*structs.ValidatorContainer, 267)
+					for idx := range validators {
+						validators[idx] = validValidatorsResponse.Data[0]
+					}
+
+					return &structs.GetValidatorsResponse{Data: validators}
+				},
+				generateProtoBalancesResponse: func() *ethpb.ValidatorBalances {
+					balances := make([]*ethpb.ValidatorBalances_Balance, 250)
+					for idx := range balances {
+						balances[idx] = &ethpb.ValidatorBalances_Balance{
+							PublicKey: []byte{3},
+							Index:     1,
+							Balance:   2,
+							Status:    "ACTIVE",
+						}
+					}
+
+					return &ethpb.ValidatorBalances{
+						Balances:      balances,
+						TotalSize:     267,
+						Epoch:         0,
+						NextPageToken: "1",
+					}
+				},
+				pageSize:  0,
+				pageToken: "",
+			},
+			{
+				name:                                "pageSize==2 and pageToken==0",
+				generateJsonStateValidatorsResponse: generateValidStateValidatorsResponse,
+				generateProtoBalancesResponse: func() *ethpb.ValidatorBalances {
+					return &ethpb.ValidatorBalances{
+						Balances: []*ethpb.ValidatorBalances_Balance{
+							{
+								PublicKey: []byte{3},
+								Index:     1,
+								Balance:   2,
+								Status:    "ACTIVE",
+							},
+							{
+								PublicKey: []byte{6},
+								Index:     4,
+								Balance:   5,
+								Status:    "EXITED",
+							},
+						},
+						TotalSize:     3,
+						Epoch:         0,
+						NextPageToken: "1",
+					}
+				},
+				pageSize:  2,
+				pageToken: "0",
+			},
+			{
+				name:                                "pageSize==2 and pageToken==1 with unknown status",
+				generateJsonStateValidatorsResponse: generateValidStateValidatorsResponse,
+				generateProtoBalancesResponse: func() *ethpb.ValidatorBalances {
+					return &ethpb.ValidatorBalances{
+						Balances: []*ethpb.ValidatorBalances_Balance{
+							{
+								PublicKey: []byte{9},
+								Index:     7,
+								Balance:   8,
+								Status:    "UNKNOWN_STATUS",
+							},
+						},
+						TotalSize:     3,
+						Epoch:         0,
+						NextPageToken: "",
+					}
+				},
+				pageSize:  2,
+				pageToken: "1",
+			},
+			{
+				name:                                "pageSize==2 and pageToken==2",
+				generateJsonStateValidatorsResponse: generateValidStateValidatorsResponse,
+				generateProtoBalancesResponse: func() *ethpb.ValidatorBalances {
+					return &ethpb.ValidatorBalances{
+						Balances:      []*ethpb.ValidatorBalances_Balance{},
+						TotalSize:     3,
+						Epoch:         0,
+						NextPageToken: "",
+					}
+				},
+				pageSize:  2,
+				pageToken: "2",
+			},
+		}
+
+		for _, testCase := range testCases {
+			t.Run(testCase.name, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+				ctx := t.Context()
+
+				stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
+				stateValidatorsProvider.EXPECT().StateValidatorsForSlot(gomock.Any(), primitives.Slot(0), make([]string, 0), []primitives.ValidatorIndex{}, nil).Return(
+					testCase.generateJsonStateValidatorsResponse(),
+					nil,
+				)
+
+				beaconChainClient := beaconApiChainClient{stateValidatorsProvider: stateValidatorsProvider}
+				balances, err := beaconChainClient.ValidatorBalances(ctx, &ethpb.ListValidatorBalancesRequest{
+					QueryFilter: &ethpb.ListValidatorBalancesRequest_Genesis{},
+					PublicKeys:  [][]byte{},
+					Indices:     []primitives.ValidatorIndex{},
+					PageSize:    testCase.pageSize,
+					PageToken:   testCase.pageToken,
+				})
+				require.NoError(t, err)
+				require.NotNil(t, balances)
+
+				assert.DeepEqual(t, testCase.generateProtoBalancesResponse(), balances)
+			})
+		}
+	})
+
+	t.Run("correctly returns balances for the head epoch", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		ctx := t.Context()
+
+		stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
+		stateValidatorsProvider.EXPECT().StateValidatorsForHead(gomock.Any(), []string{hexutil.Encode([]byte{3})}, nil, nil).Return(
+			&structs.GetValidatorsResponse{
+				Data: []*structs.ValidatorContainer{
+					{
+						Index:   "1",
+						Balance: "2",
+						Status:  "active_exiting",
+						Validator: &structs.Validator{
+							Pubkey: hexutil.Encode([]byte{3}),
+						},
+					},
+				},
+			},
+			nil,
+		)
+
+		headSlot, err := slots.EpochStart(3)
+		require.NoError(t, err)
+
+		handler := mock.NewMockHandler(ctrl)
+		handler.EXPECT().Get(gomock.Any(), blockHeaderEndpoint, gomock.Any()).Return(nil).SetArg(
+			2,
+			structs.GetBlockHeaderResponse{
+				Data: &structs.SignedBeaconBlockHeaderContainer{
+					Header: &structs.SignedBeaconBlockHeader{
+						Message: &structs.BeaconBlockHeader{
+							Slot: strconv.FormatUint(uint64(headSlot), 10),
+						},
+					},
+				},
+			},
+		)
+
+		beaconChainClient := beaconApiChainClient{
+			stateValidatorsProvider: stateValidatorsProvider,
+			handler:                 handler,
+		}
+		balances, err := beaconChainClient.ValidatorBalances(ctx, &ethpb.ListValidatorBalancesRequest{
+			PublicKeys: [][]byte{{3}},
+		})
+		require.NoError(t, err)
+		assert.DeepEqual(t, &ethpb.ValidatorBalances{
+			Epoch: 3,
+			Balances: []*ethpb.ValidatorBalances_Balance{
+				{
+					PublicKey: []byte{3},
+					Index:     1,
+					Balance:   2,
+					Status:    "EXITING",
+				},
+			},
+			TotalSize:     1,
+			NextPageToken: "",
+		}, balances)
+	})
+}
+
 func TestGetChainHead(t *testing.T) {
 	const finalityCheckpointsEndpoint = "/eth/v1/beacon/states/head/finality_checkpoints"
 	const headBlockHeadersEndpoint = "/eth/v1/beacon/headers/head"
