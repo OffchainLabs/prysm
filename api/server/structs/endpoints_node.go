@@ -46,11 +46,15 @@ type GetPeersResponse struct {
 }
 
 type Peer struct {
-	PeerId             string `json:"peer_id"`
-	Enr                string `json:"enr"`
-	LastSeenP2PAddress string `json:"last_seen_p2p_address"`
-	State              string `json:"state"`
-	Direction          string `json:"direction"`
+	PeerId             string   `json:"peer_id"`
+	Enr                string   `json:"enr"`
+	LastSeenP2PAddress string   `json:"last_seen_p2p_address"`
+	State              string   `json:"state"`
+	Direction          string   `json:"direction"`
+	AgentVersion       string   `json:"agent_version,omitempty"`
+	Score              *float64 `json:"score,omitempty"`
+	DisconnectReason   string   `json:"disconnect_reason,omitempty"`
+	DownscoreReasons   []string `json:"downscore_reasons,omitempty"`
 }
 
 type GetPeerCountResponse struct {
