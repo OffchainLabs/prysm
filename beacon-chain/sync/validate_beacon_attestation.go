@@ -108,13 +108,15 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		if s.hasSeenUnaggregatedAtt(attKey) {
 			return pubsub.ValidationIgnore, nil
 		}
-		// Reject an attestation if it references an invalid block.
-		if s.hasBadBlock(bytesutil.ToBytes32(data.BeaconBlockRoot)) ||
-			s.hasBadBlock(bytesutil.ToBytes32(data.Target.Root)) ||
-			s.hasBadBlock(bytesutil.ToBytes32(data.Source.Root)) {
-			attBadBlockCount.Inc()
-			return pubsub.ValidationReject, wrapAttestationError(errors.New("attestation data references bad block root"), att)
-		}
+	}
+	// Reject an attestation if it references an invalid block. This is not gated on
+	// the slasher: the network layer must still reject and penalize the peer even when
+	// attestations are also being routed to the slasher for inspection.
+	if s.hasBadBlock(bytesutil.ToBytes32(data.BeaconBlockRoot)) ||
+		s.hasBadBlock(bytesutil.ToBytes32(data.Target.Root)) ||
+		s.hasBadBlock(bytesutil.ToBytes32(data.Source.Root)) {
+		attBadBlockCount.Inc()
+		return pubsub.ValidationReject, wrapAttestationError(errors.New("attestation data references bad block root"), att)
 	}
 
 	// Verify the block being voted and the processed state is in beaconDB and the block has passed validation if it's in the beaconDB.
