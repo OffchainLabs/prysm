@@ -40,7 +40,7 @@ func (acm *CLIManager) Exit(ctx context.Context) error {
 		return nil
 	}
 
-	validatorClient, nodeClient, err := acm.prepareBeaconClients(ctx)
+	validatorClient, nodeClient, err := acm.PrepareBeaconClients(ctx)
 	if err != nil {
 		return err
 	}
