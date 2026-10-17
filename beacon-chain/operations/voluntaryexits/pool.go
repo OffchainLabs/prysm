@@ -10,8 +10,15 @@ import (
 	doublylinkedlist "github.com/OffchainLabs/prysm/v7/container/doubly-linked-list"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/sirupsen/logrus"
 )
+
+var beaconPendingExits = promauto.NewGauge(prometheus.GaugeOpts{
+	Name: "beacon_pending_exits",
+	Help: "Number of pending voluntary exits in local operation pool",
+})
 
 // PoolManager maintains pending and seen voluntary exits.
 // This pool is used by proposers to insert voluntary exits into new blocks.
@@ -130,6 +137,8 @@ func (p *Pool) InsertVoluntaryExit(exit *ethpb.SignedVoluntaryExit) {
 
 	p.pending.Append(doublylinkedlist.NewNode(exit))
 	p.m[exit.Exit.ValidatorIndex] = p.pending.Last()
+
+	beaconPendingExits.Set(float64(len(p.m)))
 }
 
 // MarkIncluded is used when an exit has been included in a beacon block. Every block seen by this
@@ -145,4 +154,6 @@ func (p *Pool) MarkIncluded(exit *ethpb.SignedVoluntaryExit) {
 
 	delete(p.m, exit.Exit.ValidatorIndex)
 	p.pending.Remove(node)
+
+	beaconPendingExits.Set(float64(len(p.m)))
 }
