@@ -1320,3 +1320,133 @@ func TestGetPort_ZeroPortTreatedAsAbsent(t *testing.T) {
 	require.Equal(t, false, ok)
 	require.Equal(t, uint(0), port)
 }
+
+// buildNodeWithENREntries returns an enode.Node whose record carries exactly
+// the given ENR entries, built the same way options_test builds IPv6 nodes.
+func buildNodeWithENREntries(t *testing.T, entries ...enr.Entry) *enode.Node {
+	_, privKey := createAddrAndPrivKey(t)
+	db, err := enode.OpenDB("")
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	localNode := enode.NewLocalNode(db, privKey)
+	for _, entry := range entries {
+		localNode.Set(entry)
+	}
+	return localNode.Node()
+}
+
+func TestGetPort_IPv6OnlyPeer(t *testing.T) {
+	// An IPv6-only peer advertises ip6 + tcp6/udp6/quic6 and no IPv4
+	// entries at all. Every protocol must resolve its port.
+	node := buildNodeWithENREntries(t,
+		enr.IPv6(net.ParseIP("2001:db8::2")),
+		enr.TCP6(30324),
+		enr.UDP6(30325),
+		quic6Protocol(30326),
+	)
+	require.Equal(t, true, node.IP() != nil && node.IP().To4() == nil)
+
+	port, ok, err := getPort(node, tcp)
+	require.NoError(t, err)
+	require.Equal(t, true, ok)
+	require.Equal(t, uint(30324), port)
+
+	port, ok, err = getPort(node, udp)
+	require.NoError(t, err)
+	require.Equal(t, true, ok)
+	require.Equal(t, uint(30325), port)
+
+	port, ok, err = getPort(node, quic)
+	require.NoError(t, err)
+	require.Equal(t, true, ok)
+	require.Equal(t, uint(30326), port)
+}
+
+func TestGetPort_DualStackPrefersIPv6Ports(t *testing.T) {
+	// The reporter's wrong-port case from #17613: the peer's IPv6
+	// endpoint is selected (global v6 over private v4), so the dial
+	// port must come from tcp6, not tcp.
+	node := buildNodeWithENREntries(t,
+		enr.IPv4(net.ParseIP("192.168.77.2")),
+		enr.TCP(30304),
+		enr.IPv6(net.ParseIP("2001:db8::2")),
+		enr.TCP6(30324),
+	)
+	require.Equal(t, "2001:db8::2", node.IP().String())
+
+	port, ok, err := getPort(node, tcp)
+	require.NoError(t, err)
+	require.Equal(t, true, ok)
+	require.Equal(t, uint(30324), port)
+}
+
+func TestGetPort_IPv6FallsBackToIPv4Entries(t *testing.T) {
+	// A peer with an IPv6 endpoint but only IPv4 port entries keeps
+	// working: the v4 entries are the fallback, as in go-ethereum.
+	node := buildNodeWithENREntries(t,
+		enr.IPv6(net.ParseIP("2001:db8::2")),
+		enr.TCP(30304),
+		enr.UDP(30305),
+		quicProtocol(30306),
+	)
+
+	port, ok, err := getPort(node, tcp)
+	require.NoError(t, err)
+	require.Equal(t, true, ok)
+	require.Equal(t, uint(30304), port)
+
+	port, ok, err = getPort(node, udp)
+	require.NoError(t, err)
+	require.Equal(t, true, ok)
+	require.Equal(t, uint(30305), port)
+
+	port, ok, err = getPort(node, quic)
+	require.NoError(t, err)
+	require.Equal(t, true, ok)
+	require.Equal(t, uint(30306), port)
+}
+
+func TestGetPort_IPv4IgnoresIPv6Entries(t *testing.T) {
+	// An IPv4 endpoint must never be paired with an IPv6 port entry.
+	node := buildNodeWithENREntries(t,
+		enr.IPv4(net.ParseIP("192.0.2.1")),
+		enr.TCP(30304),
+		enr.TCP6(30324),
+	)
+	require.Equal(t, "192.0.2.1", node.IP().String())
+
+	port, ok, err := getPort(node, tcp)
+	require.NoError(t, err)
+	require.Equal(t, true, ok)
+	require.Equal(t, uint(30304), port)
+}
+
+func TestRetrieveMultiAddrsFromNode_IPv6OnlyPeer(t *testing.T) {
+	node := buildNodeWithENREntries(t,
+		enr.IPv6(net.ParseIP("2001:db8::2")),
+		enr.TCP6(30324),
+	)
+
+	addrs, err := retrieveMultiAddrsFromNode(node)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(addrs))
+	require.Equal(t, true, strings.HasPrefix(addrs[0].String(), "/ip6/2001:db8::2/tcp/30324/"))
+}
+
+func TestConvertToUdpMultiAddr_PairsPortsByFamily(t *testing.T) {
+	node := buildNodeWithENREntries(t,
+		enr.IPv4(net.ParseIP("192.168.77.2")),
+		enr.UDP(9000),
+		enr.IPv6(net.ParseIP("2001:db8::2")),
+		enr.UDP6(9001),
+	)
+
+	addrs, err := convertToUdpMultiAddr(node)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(addrs))
+
+	strs := []string{addrs[0].String(), addrs[1].String()}
+	require.Equal(t, true, strings.HasPrefix(strs[0], "/ip4/192.168.77.2/udp/9000/"))
+	require.Equal(t, true, strings.HasPrefix(strs[1], "/ip6/2001:db8::2/udp/9001/"))
+}
