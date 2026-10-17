@@ -101,8 +101,7 @@ func ByteSliceRootProgressive(slice []byte) ([32]byte, error) {
 	return MixInLength(bytesRoot, length[:]), nil
 }
 
-// ContainerRootProgressive computes the progressive container root:
-// mix_in_active_fields(merkleize_progressive(fieldRoots), activeFields).
+// ContainerRootProgressive computes a progressive container root, preserving inactive positions as zero chunks.
 func ContainerRootProgressive(fieldRoots [][32]byte, activeFields []bool) ([32]byte, error) {
 	if len(activeFields) == 0 {
 		return [32]byte{}, errors.New("active fields cannot be empty")
@@ -123,7 +122,16 @@ func ContainerRootProgressive(fieldRoots [][32]byte, activeFields []bool) ([32]b
 		return [32]byte{}, fmt.Errorf("active fields count %d does not match field roots count %d", activeCount, len(fieldRoots))
 	}
 
-	body := MerkleizeProgressiveChunks(fieldRoots)
+	positionedFieldRoots := make([][32]byte, len(activeFields))
+	fieldRootIndex := 0
+	for position, active := range activeFields {
+		if active {
+			positionedFieldRoots[position] = fieldRoots[fieldRootIndex]
+			fieldRootIndex++
+		}
+	}
+
+	body := MerkleizeProgressiveChunks(positionedFieldRoots)
 	return MixInActiveFields(body, activeFields)
 }
 
