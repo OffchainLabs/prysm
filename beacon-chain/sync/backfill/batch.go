@@ -121,7 +121,7 @@ func (b batch) logFields() logrus.Fields {
 // replaces returns true if `r` is a version of `b` that has been updated by a worker,
 // meaning it should replace `b` in the batch sequencing queue.
 func (b batch) replaces(r batch) bool {
-	if r.state == batchImportComplete {
+	if r.state == batchImportComplete || r.state == batchEndSequence {
 		return false
 	}
 	if b.begin != r.begin {

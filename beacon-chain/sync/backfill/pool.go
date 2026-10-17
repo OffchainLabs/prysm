@@ -49,7 +49,6 @@ type p2pBatchWorkerPool struct {
 	toRouter       chan batch
 	fromRouter     chan batch
 	shutdownErr    chan error
-	endSeq         []batch
 	ctx            context.Context
 	cancel         func()
 	earliest       primitives.Slot // earliest is the earliest slot a worker is processing
@@ -88,23 +87,14 @@ func (p *p2pBatchWorkerPool) spawn(ctx context.Context, n int, a PeerAssigner, c
 }
 
 func (p *p2pBatchWorkerPool) todo(b batch) {
-	// Intercept batchEndSequence batches so workers can remain unaware of this state.
-	// Workers don't know what to do with batchEndSequence batches. They are a signal to the pool that the batcher
-	// has stopped producing things for the workers to do and the pool is close to winding down. See complete()
-	// to understand how the pool manages the state where all workers are idle
-	// and all incoming batches signal end of sequence.
+	// Early return when the batch has reached the end of its sequence.
 	if b.state == batchEndSequence {
-		p.endSeq = append(p.endSeq, b)
 		return
 	}
 	p.toRouter <- b
 }
 
 func (p *p2pBatchWorkerPool) complete() (batch, error) {
-	if len(p.endSeq) == p.maxBatches {
-		return p.endSeq[0], errEndSequence
-	}
-
 	select {
 	case b := <-p.fromRouter:
 		return b, nil
@@ -189,7 +179,8 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 	for i, b := range todo {
 		needs := p.needs()
 		if b.expired(needs) {
-			p.endSeq = append(p.endSeq, b.withState(batchEndSequence))
+			// Hand the batch back so the sequencer marks its slot as batchEndSequence.
+			p.fromRouter <- b.withState(batchEndSequence)
 			continue
 		}
 		excludePeers := busy
