@@ -550,12 +550,22 @@ func TestPublishExecutionPayloadEnvelope_BroadcastValidation(t *testing.T) {
 		headState         state.BeaconState
 		headStateErr      error
 		canonicalAtEnvSlt *[32]byte // nil → CanonicalNodeAtSlot returns a zero root
+		blocker           *testutil.MockBlocker
 		expectPublish     bool
 		expectedStatus    int
 		expectedBody      string
 	}{
 		{name: "default (gossip)", query: "", headRoot: envRoot, expectPublish: true, expectedStatus: http.StatusOK},
 		{name: "explicit gossip", query: "?broadcast_validation=gossip", headRoot: envRoot, expectPublish: true, expectedStatus: http.StatusOK},
+		{name: "gossip envRoot not head", query: "?broadcast_validation=gossip", headRoot: otherRoot, expectPublish: true, expectedStatus: http.StatusOK},
+		{
+			name:           "gossip unknown block broadcasts",
+			query:          "?broadcast_validation=gossip",
+			headRoot:       otherRoot,
+			blocker:        &testutil.MockBlocker{ErrorToReturn: lookup.NewBlockNotFoundError("missing")},
+			expectPublish:  true,
+			expectedStatus: http.StatusOK,
+		},
 		{
 			name:           "consensus envRoot not head",
 			query:          "?broadcast_validation=consensus",
@@ -630,6 +640,9 @@ func TestPublishExecutionPayloadEnvelope_BroadcastValidation(t *testing.T) {
 				FinalizationFetcher:     chainSvc,
 			}
 			wireEnvelopeGossipDeps(t, s)
+			if tc.blocker != nil {
+				s.Blocker = tc.blocker
+			}
 			req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope"+tc.query, bytes.NewReader(body))
 			req.Header.Set(api.VersionHeader, version.String(version.Gloas))
 			req.Header.Set(api.BlobDataIncludedHeader, "false")
@@ -690,20 +703,8 @@ func TestPublishExecutionPayloadEnvelope_GossipValidation(t *testing.T) {
 		signed       *ethpb.SignedExecutionPayloadEnvelope // defaults to the shared envelope
 		sszBody      bool                                  // bare-envelope SSZ body instead of JSON contents
 		blocker      *testutil.MockBlocker
-		headRoot     [32]byte // defaults to envRoot when zero
 		expectedBody string
 	}{
-		{
-			name:         "unknown block root",
-			blocker:      &testutil.MockBlocker{ErrorToReturn: lookup.NewBlockNotFoundError("missing")},
-			expectedBody: "envelope beacon block root is unknown",
-		},
-		{
-			name:         "envelope block root not head",
-			blocker:      &testutil.MockBlocker{BlockToReturn: gloasBlockWithBid(t, envSlot, matchingBid(signed))},
-			headRoot:     bytesutil.ToBytes32(bytesutil.PadTo([]byte("other-head"), 32)),
-			expectedBody: "is not canonical head",
-		},
 		{
 			name:         "slot mismatch",
 			blocker:      &testutil.MockBlocker{BlockToReturn: gloasBlockWithBid(t, envSlot.Add(1), util.GenerateTestSignedExecutionPayloadBid(envSlot))},
@@ -776,11 +777,7 @@ func TestPublishExecutionPayloadEnvelope_GossipValidation(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			headRoot := tc.headRoot
-			if headRoot == ([32]byte{}) {
-				headRoot = envRoot
-			}
-			chainSvc := &chainMock.ChainService{Root: headRoot[:], State: headState}
+			chainSvc := &chainMock.ChainService{Root: envRoot[:], State: headState}
 			s := &Server{
 				Blocker:                 tc.blocker,
 				HeadFetcher:             chainSvc,

@@ -257,7 +257,7 @@ func (s *Server) processEnvelopeContents(ctx context.Context, w http.ResponseWri
 // Writes the HTTP error and returns false on failure: 400 for validation
 // failures, 500 for internal errors.
 //   - gossip (default): the REJECT-class gossip checks (slot, bid consistency,
-//     builder signature) against the envelope's beacon block.
+//     builder signature) against the envelope's beacon block, skipped if the block is unknown.
 //   - consensus: full envelope consensus checks against the head state. Submission
 //     path requires envRoot to equal head.
 //   - consensus_and_equivocation: consensus + reject if a different beacon
@@ -326,8 +326,8 @@ func (s *Server) validateEnvelopeGossip(ctx context.Context, w http.ResponseWrit
 
 	blk, err := s.Blocker.Block(ctx, signed.Message.BeaconBlockRoot)
 	if err != nil || blk == nil {
-		httputil.HandleError(w, "gossip validation failed: envelope beacon block root is unknown", http.StatusBadRequest)
-		return false
+		// Builders may reveal before this node sees the block, and peers queue such envelopes.
+		return true
 	}
 	// VerifyBlockRootValid is skipped: the bad-block cache is sync-only and a bad root can't be canonical.
 	if err := v.VerifySlotMatchesBlock(blk.Block().Slot()); err != nil {
@@ -371,22 +371,7 @@ func (s *Server) validateEnvelopeGossip(ctx context.Context, w http.ResponseWrit
 		return false
 	}
 
-	// VerifySignature needs the state at the envelope's block. We only have head state on
-	// hand, so require the envelope to be for the canonical head rather than replaying state.
-	headRoot, err := s.HeadFetcher.HeadRoot(ctx)
-	if err != nil {
-		httputil.HandleError(w, "could not get head root: "+err.Error(), http.StatusInternalServerError)
-		return false
-	}
-	if !bytes.Equal(headRoot, signed.Message.BeaconBlockRoot) {
-		httputil.HandleError(w, "gossip validation failed: envelope beacon block root is not canonical head", http.StatusBadRequest)
-		return false
-	}
-	// Read-only head state is the cheapest option (no copy). It only goes wrong on a long fork
-	// where head diverges from the envelope's validator index position — an edge case we don't
-	// support. Replaying the block's state would be correct but expensive; this endpoint is
-	// trusted (attackers can't reach it, worst case is a self-inflicted DoS), so the cheap path
-	// is fine for now. Worth revisiting — replay could also return a read-only state to skip the copy.
+	// Head state matches sync gossip validation, the builder registry rarely differs from the envelope's block state.
 	st, err := s.HeadFetcher.HeadStateReadOnly(ctx)
 	if err != nil {
 		httputil.HandleError(w, "could not get head state: "+err.Error(), http.StatusInternalServerError)
