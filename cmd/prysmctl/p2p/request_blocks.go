@@ -110,6 +110,10 @@ func cliActionRequestBlocks(cliCtx *cli.Context) error {
 		if err := params.SetActive(params.HoodiConfig()); err != nil {
 			log.Fatal(err)
 		}
+	case params.EphemeryName:
+		if err := params.SetActive(params.EphemeryConfig()); err != nil {
+			log.Fatal(err)
+		}
 	case params.MainnetName:
 		// Do nothing
 	default:
