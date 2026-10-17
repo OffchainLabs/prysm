@@ -684,6 +684,28 @@ func TestService_CacheBlockHeaders(t *testing.T) {
 	assert.Equal(t, 5, rClient.numOfCalls)
 }
 
+// TestService_CacheBlockHeaders_TimeoutDoesNotSkipRange reproduces a correctness
+// bug where a client timeout shrinks batchSize below the current starting block.
+// The original loop stepped the cursor forward by the shrunk batchSize after the
+// failed request, so the [start, start+reducedBatchSize) prefix was never fetched
+// and the function returned nil while leaving a gap in the cached range.
+func TestService_CacheBlockHeaders_TimeoutDoesNotSkipRange(t *testing.T) {
+	rClient := &slowRPCClient{limit: 1000}
+	s := &Service{
+		cfg:         &config{eth1HeaderReqLimit: 1001},
+		rpcClient:   rClient,
+		headerCache: newHeaderCache(),
+	}
+	// start (1) is smaller than the reduced batch size (500) produced by the first
+	// timeout, which is the branch the old implementation skipped.
+	require.NoError(t, s.cacheBlockHeaders(1, 2000))
+	for h := uint64(1); h < 2000; h++ {
+		ok, _, err := s.headerCache.HeaderInfoByHeight(new(big.Int).SetUint64(h))
+		require.NoError(t, err)
+		assert.Equal(t, true, ok, "expected header for block %d to be cached after timeout retry", h)
+	}
+}
+
 func TestService_FollowBlock(t *testing.T) {
 	followTime := params.BeaconConfig().Eth1FollowDistance * params.BeaconConfig().SecondsPerETH1Block
 	followTime += 10000
