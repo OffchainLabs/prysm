@@ -481,7 +481,7 @@ func TestService_processBlockBatch(t *testing.T) {
 			return nil
 		}
 		// Process block normally.
-		count, err := s.processBatchedBlocks(ctx, batch, nil, cbnormal)
+		count, err := s.processBatchedBlocks(ctx, batch, nil, cbnormal, "")
 		assert.NoError(t, err)
 		require.Equal(t, uint64(len(batch)), count)
 
@@ -490,7 +490,7 @@ func TestService_processBlockBatch(t *testing.T) {
 		}
 
 		// Duplicate processing should trigger error.
-		count, err = s.processBatchedBlocks(ctx, batch, nil, cbnil)
+		count, err = s.processBatchedBlocks(ctx, batch, nil, cbnil, "")
 		assert.ErrorContains(t, "block is already processed", err)
 		require.Equal(t, uint64(0), count)
 
@@ -504,13 +504,13 @@ func TestService_processBlockBatch(t *testing.T) {
 		}
 
 		// Bad batch should fail because it is non linear
-		count, err = s.processBatchedBlocks(ctx, badBatch2, nil, cbnil)
+		count, err = s.processBatchedBlocks(ctx, badBatch2, nil, cbnil, "")
 		expectedSubErr := "expected linear block list"
 		assert.ErrorContains(t, expectedSubErr, err)
 		require.Equal(t, uint64(0), count)
 
 		// Continue normal processing, should proceed w/o errors.
-		count, err = s.processBatchedBlocks(ctx, batch2, nil, cbnormal)
+		count, err = s.processBatchedBlocks(ctx, batch2, nil, cbnormal, "")
 		assert.NoError(t, err)
 		assert.Equal(t, primitives.Slot(19), s.cfg.Chain.HeadSlot(), "Unexpected head slot")
 		require.Equal(t, uint64(len(batch2)), count)
@@ -563,14 +563,14 @@ func TestService_processBatchedBlocksReturnsFilteredCount(t *testing.T) {
 	cb := func(ctx context.Context, blks []blocks.ROBlock, _ []interfaces.ROSignedExecutionPayloadEnvelope, avs das.AvailabilityChecker) error {
 		return s.cfg.Chain.ReceiveBlockBatch(ctx, blks, nil, avs)
 	}
-	count, err := s.processBatchedBlocks(ctx, allBlocks[:5], nil, cb)
+	count, err := s.processBatchedBlocks(ctx, allBlocks[:5], nil, cb, "")
 	require.NoError(t, err)
 	require.Equal(t, uint64(5), count)
 	require.Equal(t, primitives.Slot(5), s.cfg.Chain.HeadSlot())
 
 	// Now process the full batch (slots 1–9). Slots 1–5 are already processed,
 	// so only slots 6–9 should be counted.
-	count, err = s.processBatchedBlocks(ctx, allBlocks, nil, cb)
+	count, err = s.processBatchedBlocks(ctx, allBlocks, nil, cb, "")
 	require.NoError(t, err)
 	require.Equal(t, uint64(4), count, "count should reflect only unprocessed blocks, not the entire batch")
 }
@@ -1042,11 +1042,15 @@ func TestService_ProcessFetchedData(t *testing.T) {
 			child := makeGloasBlock(t, originSlot+1, originRoot, originHash)
 			envelope := makeEnvelopeForRoot(t, originSlot, originRoot, originHash, ancestorHash)
 			require.NoError(t, beaconDB.SaveBlock(ctx, origin))
-			column, err := blocks.NewRODataColumnGloas(&eth.DataColumnSidecarGloas{
-				Column: [][]byte{make([]byte, 2048)}, KzgProofs: [][]byte{make([]byte, fieldparams.KzgCommitmentSize)},
-				Slot: originSlot, BeaconBlockRoot: originRoot[:],
-			})
-			require.NoError(t, err)
+			columns := make([]blocks.VerifiedRODataColumn, fieldparams.NumberOfColumns)
+			for i := range columns {
+				column, err := blocks.NewRODataColumnGloas(&eth.DataColumnSidecarGloas{
+					Index: uint64(i), Column: [][]byte{make([]byte, 2048)}, KzgProofs: [][]byte{make([]byte, fieldparams.KzgCommitmentSize)},
+					Slot: originSlot, BeaconBlockRoot: originRoot[:],
+				})
+				require.NoError(t, err)
+				columns[i] = blocks.NewVerifiedRODataColumn(column)
+			}
 			st, err := util.NewBeaconStateGloas()
 			require.NoError(t, err)
 			require.NoError(t, st.SetSlot(originSlot))
@@ -1057,7 +1061,7 @@ func TestService_ProcessFetchedData(t *testing.T) {
 			assertStored := func() {
 				stored, err := storage.Get(originRoot, nil)
 				require.NoError(t, err)
-				require.Equal(t, 1, len(stored))
+				require.Equal(t, len(columns), len(stored))
 				require.Equal(t, true, stored[0].IsGloas())
 				require.Equal(t, originRoot, stored[0].BlockRoot())
 			}
@@ -1078,12 +1082,13 @@ func TestService_ProcessFetchedData(t *testing.T) {
 			service := &Service{
 				cfg:         &Config{Chain: chain, DB: beaconDB, P2P: p2pt.NewTestP2P(t), DataColumnStorage: storage},
 				genesisTime: makeGenesisTime(originSlot * 2),
+				clock:       startup.NewClock(makeGenesisTime(originSlot*2), params.BeaconConfig().GenesisValidatorsRoot),
 				counter:     ratecounter.NewRateCounter(counterSeconds * time.Second),
 			}
 			data := &blocksQueueFetchedData{
 				bwb:           []blocks.BlockWithROSidecars{{Block: origin}, {Block: child}},
 				envelopes:     []interfaces.ROSignedExecutionPayloadEnvelope{envelope},
-				columnsToSave: []blocks.VerifiedRODataColumn{blocks.NewVerifiedRODataColumn(column)},
+				columnsToSave: columns,
 			}
 			require.Equal(t, uint64(0), storage.Summary(originRoot).Count())
 			if mode == "regular" {
