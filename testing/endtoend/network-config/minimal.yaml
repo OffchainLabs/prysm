@@ -14,7 +14,6 @@ participants:
       - "--trace-sample-fraction=1.0"
     vc_image: "gcr.io/offchainlabs/prysm/validator:latest"
     vc_extra_params:
-      - "--enable-doppelganger"
       - "--graffiti-file=/config/graffiti.yaml"
     vc_extra_mounts:
       "/config": "graffiti.yaml"
