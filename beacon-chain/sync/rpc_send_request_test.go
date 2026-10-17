@@ -192,6 +192,36 @@ func TestSendRequest_SendBeaconBlocksByRangeRequest(t *testing.T) {
 		assert.Equal(t, 0, len(blocks))
 	})
 
+	t.Run("extra data after requested count", func(t *testing.T) {
+		p1 := p2ptest.NewTestP2P(t)
+		p2 := p2ptest.NewTestP2P(t)
+		p1.Connect(p2)
+		p2.SetStreamHandler(pcl, func(stream network.Stream) {
+			defer func() {
+				assert.NoError(t, stream.Close())
+			}()
+			req := &ethpb.BeaconBlocksByRangeRequest{}
+			assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+			for i := req.StartSlot; i < req.StartSlot.Add(req.Count); i++ {
+				wsb, err := blocks.NewSignedBeaconBlock(knownBlocks[i])
+				require.NoError(t, err)
+				require.NoError(t, WriteBlockChunk(stream, startup.NewClock(time.Now(), [32]byte{}), p2.Encoding(), wsb))
+			}
+			// A lone success code byte is not a decodable block.
+			_, err := stream.Write([]byte{responseCodeSuccess})
+			assert.NoError(t, err)
+		})
+
+		req := &ethpb.BeaconBlocksByRangeRequest{
+			StartSlot: 20,
+			Count:     4,
+			Step:      1,
+		}
+		blocks, err := SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
+		require.ErrorIs(t, err, ErrInvalidFetchedData)
+		assert.Equal(t, 0, len(blocks))
+	})
+
 	t.Run("process custom error", func(t *testing.T) {
 		p1 := p2ptest.NewTestP2P(t)
 		p2 := p2ptest.NewTestP2P(t)
