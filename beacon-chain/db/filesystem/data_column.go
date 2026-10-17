@@ -341,6 +341,10 @@ func (dcs *DataColumnStorage) processFile(filePath string) (primitives.Epoch, er
 		return 0, errors.Wrap(err, "cache set")
 	}
 
+	// Update the disk size metric
+	dataColumnDiskSize.Add(float64(metadata.fileSize))
+
+
 	return fileMetadata.epoch, nil
 }
 
@@ -405,6 +409,13 @@ func (dcs *DataColumnStorage) Save(dataColumnSidecars []blocks.VerifiedRODataCol
 		// Set data columns in the cache.
 		if err := dcs.cache.set(dataColumnsIdent); err != nil {
 			return errors.Wrap(err, "cache set")
+		}
+
+		// Update disk size metric based on file size
+		filePath := filePath(root, epoch)
+		fileInfo, err := dcs.fs.Stat(filePath)
+		if err == nil {
+        dataColumnDiskSize.Add(float64(fileInfo.Size()))
 		}
 
 		// Notify the data column feed.
@@ -578,10 +589,22 @@ func (dcs *DataColumnStorage) Remove(blockRoot [fieldparams.RootLength]byte) err
 	// Remove the data column sidecars from the cache.
 	dcs.cache.evict(blockRoot)
 
-	// Remove the data column sidecars file.
+	// Get file size before removing
 	filePath := filePath(blockRoot, summary.epoch)
+	fileInfo, err := dcs.fs.Stat(filePath)
+	var fileSize int64
+	if err == nil {
+			fileSize = fileInfo.Size()
+	}
+
+	// Remove the data column sidecars file.
 	if err := dcs.fs.Remove(filePath); err != nil {
-		return errors.Wrap(err, "remove")
+			return errors.Wrap(err, "remove")
+	}
+
+	// Update disk size metric
+	if fileSize > 0 {
+			dataColumnDiskSize.Sub(float64(fileSize))
 	}
 
 	return nil
@@ -598,6 +621,9 @@ func (dcs *DataColumnStorage) Clear() error {
 	}
 
 	dcs.cache.clear()
+
+	// Reset disk size metric
+	dataColumnDiskSize.Set(0)
 
 	for _, dir := range dirs {
 		if err := dcs.fs.RemoveAll(dir); err != nil {
