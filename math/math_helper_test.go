@@ -3,6 +3,7 @@ package math_test
 import (
 	"fmt"
 	stdmath "math"
+	"math/big"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/math"
@@ -472,6 +473,45 @@ func TestAddInt(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("AddInt() = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+func TestIsValidUint256(t *testing.T) {
+	tests := []struct {
+		name string
+		bi   *big.Int
+		want bool
+	}{
+		{
+			name: "nil",
+			bi:   nil,
+			want: false,
+		},
+		{
+			name: "negative",
+			bi:   big.NewInt(-1),
+			want: false,
+		},
+		{
+			name: "zero",
+			bi:   big.NewInt(0),
+			want: true,
+		},
+		{
+			name: "max uint256",
+			bi:   new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1)),
+			want: true,
+		},
+		{
+			name: "max uint256 plus one",
+			bi:   new(big.Int).Lsh(big.NewInt(1), 256),
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, math.IsValidUint256(tt.bi))
 		})
 	}
 }
