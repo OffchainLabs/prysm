@@ -1,0 +1,19 @@
+# ethereum-package args for .github/workflows/kurtosis-smoke.yml.
+participants:
+  - el_type: geth
+    cl_type: prysm
+    # Built from the commit under test by the workflow.
+    cl_image: prysm-beacon-chain:ci
+    vc_image: prysm-validator:ci
+    count: 2
+
+network_params:
+  preset: mainnet
+  seconds_per_slot: 6
+
+additional_services:
+  - assertoor
+
+assertoor_params:
+  run_stability_check: true
+  run_block_proposal_check: true
