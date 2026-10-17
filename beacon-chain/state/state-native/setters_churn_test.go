@@ -23,7 +23,7 @@ func TestExitEpochAndUpdateChurn_SpectestCase(t *testing.T) {
 	require.NoError(t, err)
 	pb := &eth.BeaconStateElectra{}
 	require.NoError(t, pb.UnmarshalSSZ(serializedSSZ))
-	s, err := state_native.InitializeFromProtoElectra(pb)
+	s, err := state_native.New(pb)
 	require.NoError(t, err)
 
 	val, err := s.ValidatorAtIndex(0)
@@ -42,7 +42,7 @@ func TestExitEpochAndUpdateChurn_SpectestCase(t *testing.T) {
 	require.Equal(t, primitives.Epoch(262), pb.EarliestExitEpoch)
 
 	// Fails for versions older than electra
-	s, err = state_native.InitializeFromProtoDeneb(&eth.BeaconStateDeneb{})
+	s, err = state_native.New(&eth.BeaconStateDeneb{})
 	require.NoError(t, err)
 	_, err = s.ExitEpochAndUpdateChurn(t.Context(), 10)
 	require.ErrorContains(t, "not supported", err)
@@ -52,7 +52,7 @@ func TestExitEpochAndUpdateChurn(t *testing.T) {
 	slot := primitives.Slot(10_000_000)
 	epoch := slots.ToEpoch(slot)
 	t.Run("state earliest exit epoch is old", func(t *testing.T) {
-		st, err := state_native.InitializeFromProtoElectra(&eth.BeaconStateElectra{
+		st, err := state_native.New(&eth.BeaconStateElectra{
 			Slot: slot,
 			Validators: []*eth.Validator{
 				{
@@ -87,7 +87,7 @@ func TestExitEpochAndUpdateChurn(t *testing.T) {
 	})
 
 	t.Run("state exit bal to consume is less than activation exit churn limit", func(t *testing.T) {
-		st, err := state_native.InitializeFromProtoElectra(&eth.BeaconStateElectra{
+		st, err := state_native.New(&eth.BeaconStateElectra{
 			Slot: slot,
 			Validators: []*eth.Validator{
 				{
@@ -123,7 +123,7 @@ func TestExitEpochAndUpdateChurn(t *testing.T) {
 	})
 
 	t.Run("state earliest exit epoch is in the future and exit balance is less than state", func(t *testing.T) {
-		st, err := state_native.InitializeFromProtoElectra(&eth.BeaconStateElectra{
+		st, err := state_native.New(&eth.BeaconStateElectra{
 			Slot: slot,
 			Validators: []*eth.Validator{
 				{
@@ -156,7 +156,7 @@ func TestExitEpochAndUpdateChurn(t *testing.T) {
 	})
 
 	t.Run("state earliest exit epoch is in the future and exit balance exceeds state", func(t *testing.T) {
-		st, err := state_native.InitializeFromProtoElectra(&eth.BeaconStateElectra{
+		st, err := state_native.New(&eth.BeaconStateElectra{
 			Slot: slot,
 			Validators: []*eth.Validator{
 				{
@@ -191,7 +191,7 @@ func TestExitEpochAndUpdateChurn(t *testing.T) {
 	})
 
 	t.Run("earlier than electra returns error", func(t *testing.T) {
-		st, err := state_native.InitializeFromProtoDeneb(&eth.BeaconStateDeneb{})
+		st, err := state_native.New(&eth.BeaconStateDeneb{})
 		require.NoError(t, err)
 		_, err = st.ExitEpochAndUpdateChurn(t.Context(), 0)
 		require.ErrorContains(t, "is not supported", err)

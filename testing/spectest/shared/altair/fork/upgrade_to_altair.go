@@ -37,11 +37,11 @@ func RunUpgradeToAltair(t *testing.T, config string) {
 			if err := preStateBase.UnmarshalSSZ(preStateSSZ); err != nil {
 				t.Fatalf("Failed to unmarshal: %v", err)
 			}
-			preState, err := state_native.InitializeFromProtoUnsafePhase0(preStateBase)
+			preState, err := state_native.NewUnsafe(preStateBase)
 			require.NoError(t, err)
 			postState, err := altair.UpgradeToAltair(context.Background(), preState)
 			require.NoError(t, err)
-			postStateFromFunction, err := state_native.ProtobufBeaconStateAltair(postState.ToProtoUnsafe())
+			postStateFromFunction, err := state_native.ContainerFrom[*ethpb.BeaconStateAltair](postState.ToProtoUnsafe())
 			require.NoError(t, err)
 
 			postStateFile, err := util.BazelFileBytes(path.Join(folderPath, "post.ssz_snappy"))

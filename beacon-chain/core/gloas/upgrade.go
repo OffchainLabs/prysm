@@ -349,5 +349,5 @@ func upgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 		LatestBlockHash:               payloadHeader.BlockHash(),
 		PayloadExpectedWithdrawals:    []*enginev1.Withdrawal{},
 	}
-	return state_native.InitializeFromProtoUnsafeGloas(s)
+	return state_native.NewUnsafe(s)
 }

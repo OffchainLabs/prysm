@@ -96,9 +96,9 @@ func TestGenesisState_HashEquality(t *testing.T) {
 	state, err := transition.GenesisBeaconState(t.Context(), deposits, 0, &ethpb.Eth1Data{BlockHash: make([]byte, 32)})
 	require.NoError(t, err)
 
-	pbState1, err := state_native.ProtobufBeaconStatePhase0(state1.ToProto())
+	pbState1, err := state_native.ContainerFrom[*ethpb.BeaconState](state1.ToProto())
 	require.NoError(t, err)
-	pbstate, err := state_native.ProtobufBeaconStatePhase0(state.ToProto())
+	pbstate, err := state_native.ContainerFrom[*ethpb.BeaconState](state.ToProto())
 	require.NoError(t, err)
 
 	root1, err1 := pbState1.HashTreeRoot()

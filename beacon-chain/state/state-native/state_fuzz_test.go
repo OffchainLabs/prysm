@@ -37,11 +37,11 @@ func FuzzPhase0StateHashTreeRoot(f *testing.F) {
 		if err != nil {
 			return
 		}
-		nativeState, err := native.InitializeFromProtoPhase0(pbState)
+		nativeState, err := native.New(pbState)
 		assert.NoError(t, err)
 
 		slotsToTransition %= 100
-		stateObj, err := native.InitializeFromProtoUnsafePhase0(pbState)
+		stateObj, err := native.NewUnsafe(pbState)
 		assert.NoError(t, err)
 		for stateObj.Slot() < primitives.Slot(slotsToTransition) {
 			stateObj, err = coreState.ProcessSlots(t.Context(), stateObj, stateObj.Slot()+1)
@@ -56,7 +56,7 @@ func FuzzPhase0StateHashTreeRoot(f *testing.F) {
 		// Perform a cold HTR calculation by initializing a new state.
 		innerState, ok := stateObj.ToProtoUnsafe().(*ethpb.BeaconState)
 		assert.Equal(t, true, ok, "inner state is a not a beacon state proto")
-		newState, err := native.InitializeFromProtoUnsafePhase0(innerState)
+		newState, err := native.NewUnsafe(innerState)
 		assert.NoError(t, err)
 
 		newRt, newErr := newState.HashTreeRoot(t.Context())
@@ -106,13 +106,13 @@ func FuzzAltairStateHashTreeRoot(f *testing.F) {
 		if err != nil {
 			return
 		}
-		nativeState, err := native.InitializeFromProtoAltair(pbState)
+		nativeState, err := native.New(pbState)
 		if err != nil {
 			return
 		}
 
 		slotsToTransition %= 100
-		stateObj, err := native.InitializeFromProtoUnsafeAltair(pbState)
+		stateObj, err := native.NewUnsafe(pbState)
 		assert.NoError(t, err)
 		for stateObj.Slot() < primitives.Slot(slotsToTransition) {
 			stateObj, err = coreState.ProcessSlots(t.Context(), stateObj, stateObj.Slot()+1)
@@ -127,7 +127,7 @@ func FuzzAltairStateHashTreeRoot(f *testing.F) {
 		// Perform a cold HTR calculation by initializing a new state.
 		innerState, ok := stateObj.ToProtoUnsafe().(*ethpb.BeaconStateAltair)
 		assert.Equal(t, true, ok, "inner state is a not a beacon state altair proto")
-		newState, err := native.InitializeFromProtoUnsafeAltair(innerState)
+		newState, err := native.NewUnsafe(innerState)
 		assert.NoError(t, err)
 
 		newRt, newErr := newState.HashTreeRoot(t.Context())
@@ -176,13 +176,13 @@ func FuzzBellatrixStateHashTreeRoot(f *testing.F) {
 		if err != nil {
 			return
 		}
-		nativeState, err := native.InitializeFromProtoBellatrix(pbState)
+		nativeState, err := native.New(pbState)
 		if err != nil {
 			return
 		}
 
 		slotsToTransition %= 100
-		stateObj, err := native.InitializeFromProtoUnsafeBellatrix(pbState)
+		stateObj, err := native.NewUnsafe(pbState)
 		assert.NoError(t, err)
 		for stateObj.Slot() < primitives.Slot(slotsToTransition) {
 			stateObj, err = coreState.ProcessSlots(t.Context(), stateObj, stateObj.Slot()+1)
@@ -197,7 +197,7 @@ func FuzzBellatrixStateHashTreeRoot(f *testing.F) {
 		// Perform a cold HTR calculation by initializing a new state.
 		innerState, ok := stateObj.ToProtoUnsafe().(*ethpb.BeaconStateBellatrix)
 		assert.Equal(t, true, ok, "inner state is a not a beacon state bellatrix proto")
-		newState, err := native.InitializeFromProtoUnsafeBellatrix(innerState)
+		newState, err := native.NewUnsafe(innerState)
 		assert.NoError(t, err)
 
 		newRt, newErr := newState.HashTreeRoot(t.Context())
@@ -246,13 +246,13 @@ func FuzzCapellaStateHashTreeRoot(f *testing.F) {
 		if err != nil {
 			return
 		}
-		nativeState, err := native.InitializeFromProtoCapella(pbState)
+		nativeState, err := native.New(pbState)
 		if err != nil {
 			return
 		}
 
 		slotsToTransition %= 100
-		stateObj, err := native.InitializeFromProtoUnsafeCapella(pbState)
+		stateObj, err := native.NewUnsafe(pbState)
 		assert.NoError(t, err)
 		for stateObj.Slot() < primitives.Slot(slotsToTransition) {
 			stateObj, err = coreState.ProcessSlots(t.Context(), stateObj, stateObj.Slot()+1)
@@ -267,7 +267,7 @@ func FuzzCapellaStateHashTreeRoot(f *testing.F) {
 		// Perform a cold HTR calculation by initializing a new state.
 		innerState, ok := stateObj.ToProtoUnsafe().(*ethpb.BeaconStateCapella)
 		assert.Equal(t, true, ok, "inner state is a not a beacon state capella proto")
-		newState, err := native.InitializeFromProtoUnsafeCapella(innerState)
+		newState, err := native.NewUnsafe(innerState)
 		assert.NoError(t, err)
 
 		newRt, newErr := newState.HashTreeRoot(t.Context())
@@ -316,13 +316,13 @@ func FuzzDenebStateHashTreeRoot(f *testing.F) {
 		if err != nil {
 			return
 		}
-		nativeState, err := native.InitializeFromProtoDeneb(pbState)
+		nativeState, err := native.New(pbState)
 		if err != nil {
 			return
 		}
 
 		slotsToTransition %= 100
-		stateObj, err := native.InitializeFromProtoUnsafeDeneb(pbState)
+		stateObj, err := native.NewUnsafe(pbState)
 		assert.NoError(t, err)
 		for stateObj.Slot() < primitives.Slot(slotsToTransition) {
 			stateObj, err = coreState.ProcessSlots(t.Context(), stateObj, stateObj.Slot()+1)
@@ -337,7 +337,7 @@ func FuzzDenebStateHashTreeRoot(f *testing.F) {
 		// Perform a cold HTR calculation by initializing a new state.
 		innerState, ok := stateObj.ToProtoUnsafe().(*ethpb.BeaconStateDeneb)
 		assert.Equal(t, true, ok, "inner state is a not a beacon state deneb proto")
-		newState, err := native.InitializeFromProtoUnsafeDeneb(innerState)
+		newState, err := native.NewUnsafe(innerState)
 		assert.NoError(t, err)
 
 		newRt, newErr := newState.HashTreeRoot(t.Context())

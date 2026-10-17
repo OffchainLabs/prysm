@@ -18,7 +18,7 @@ func TestCheckpointStateCache_StateByCheckpoint(t *testing.T) {
 	cache := cache.NewCheckpointStateCache()
 
 	cp1 := &ethpb.Checkpoint{Epoch: 1, Root: bytesutil.PadTo([]byte{'A'}, 32)}
-	st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	st, err := state_native.New(&ethpb.BeaconState{
 		GenesisValidatorsRoot: params.BeaconConfig().ZeroHash[:],
 		Slot:                  64,
 	})
@@ -33,14 +33,14 @@ func TestCheckpointStateCache_StateByCheckpoint(t *testing.T) {
 	s, err = cache.StateByCheckpoint(cp1)
 	require.NoError(t, err)
 
-	pbState1, err := state_native.ProtobufBeaconStatePhase0(s.ToProtoUnsafe())
+	pbState1, err := state_native.ContainerFrom[*ethpb.BeaconState](s.ToProtoUnsafe())
 	require.NoError(t, err)
-	pbstate, err := state_native.ProtobufBeaconStatePhase0(st.ToProtoUnsafe())
+	pbstate, err := state_native.ContainerFrom[*ethpb.BeaconState](st.ToProtoUnsafe())
 	require.NoError(t, err)
 	require.DeepSSZEqual(t, pbState1, pbstate, "incorrectly cached state")
 
 	cp2 := &ethpb.Checkpoint{Epoch: 2, Root: bytesutil.PadTo([]byte{'B'}, 32)}
-	st2, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	st2, err := state_native.New(&ethpb.BeaconState{
 		Slot: 128,
 	})
 	require.NoError(t, err)
@@ -57,7 +57,7 @@ func TestCheckpointStateCache_StateByCheckpoint(t *testing.T) {
 
 func TestCheckpointStateCache_MaxSize(t *testing.T) {
 	c := cache.NewCheckpointStateCache()
-	st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	st, err := state_native.New(&ethpb.BeaconState{
 		Slot: 0,
 	})
 	require.NoError(t, err)
@@ -74,7 +74,7 @@ func TestCheckpointStateCache_EvictFinalized_FinalizedEntry(t *testing.T) {
 	c := cache.NewCheckpointStateCache()
 
 	cp := &ethpb.Checkpoint{Epoch: 1, Root: bytesutil.PadTo([]byte{'A'}, 32)}
-	st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 32})
+	st, err := state_native.New(&ethpb.BeaconState{Slot: 32})
 	require.NoError(t, err)
 	require.NoError(t, c.AddCheckpointState(cp, st))
 
@@ -90,7 +90,7 @@ func TestCheckpointStateCache_EvictFinalized_NotFinalizedEntry(t *testing.T) {
 	c := cache.NewCheckpointStateCache()
 
 	cp := &ethpb.Checkpoint{Epoch: 5, Root: bytesutil.PadTo([]byte{'A'}, 32)}
-	st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 160})
+	st, err := state_native.New(&ethpb.BeaconState{Slot: 160})
 	require.NoError(t, err)
 	require.NoError(t, c.AddCheckpointState(cp, st))
 
@@ -106,15 +106,15 @@ func TestCheckpointStateCache_EvictFinalized_Mixed(t *testing.T) {
 	c := cache.NewCheckpointStateCache()
 
 	cp1 := &ethpb.Checkpoint{Epoch: 1, Root: bytesutil.PadTo([]byte{'A'}, 32)}
-	st1, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 32})
+	st1, err := state_native.New(&ethpb.BeaconState{Slot: 32})
 	require.NoError(t, err)
 
 	cp2 := &ethpb.Checkpoint{Epoch: 2, Root: bytesutil.PadTo([]byte{'B'}, 32)}
-	st2, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 64})
+	st2, err := state_native.New(&ethpb.BeaconState{Slot: 64})
 	require.NoError(t, err)
 
 	cp5 := &ethpb.Checkpoint{Epoch: 5, Root: bytesutil.PadTo([]byte{'C'}, 32)}
-	st5, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 160})
+	st5, err := state_native.New(&ethpb.BeaconState{Slot: 160})
 	require.NoError(t, err)
 
 	require.NoError(t, c.AddCheckpointState(cp1, st1))

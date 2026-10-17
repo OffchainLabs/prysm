@@ -33,11 +33,11 @@ func RunUpgradeToGloas(t *testing.T, config string) {
 			if err := preStateBase.UnmarshalSSZ(preStateSSZ); err != nil {
 				t.Fatalf("Failed to unmarshal: %v", err)
 			}
-			preState, err := state_native.InitializeFromProtoFulu(preStateBase)
+			preState, err := state_native.New(preStateBase)
 			require.NoError(t, err)
 			postState, err := gloas.UpgradeToGloas(t.Context(), preState)
 			require.NoError(t, err)
-			postStateFromFunction, err := state_native.ProtobufBeaconStateGloas(postState.ToProtoUnsafe())
+			postStateFromFunction, err := state_native.ContainerFrom[*ethpb.BeaconStateGloas](postState.ToProtoUnsafe())
 			require.NoError(t, err)
 
 			postStateFile, err := util.BazelFileBytes(path.Join(folderPath, "post.ssz_snappy"))

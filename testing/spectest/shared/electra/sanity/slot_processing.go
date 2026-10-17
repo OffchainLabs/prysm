@@ -32,7 +32,7 @@ func RunSlotProcessingTests(t *testing.T, config string) {
 			require.NoError(t, err, "Failed to decompress")
 			base := &ethpb.BeaconStateElectra{}
 			require.NoError(t, base.UnmarshalSSZ(preBeaconStateSSZ), "Failed to unmarshal")
-			beaconState, err := state_native.InitializeFromProtoUnsafeElectra(base)
+			beaconState, err := state_native.NewUnsafe(base)
 			require.NoError(t, err)
 
 			file, err := util.BazelFileBytes(testsFolderPath, folder.Name(), "slots.yaml")
@@ -50,7 +50,7 @@ func RunSlotProcessingTests(t *testing.T, config string) {
 			postState, err := transition.ProcessSlots(context.Background(), beaconState, beaconState.Slot().Add(slotsCount))
 			require.NoError(t, err)
 
-			pbState, err := state_native.ProtobufBeaconStateElectra(postState.ToProto())
+			pbState, err := state_native.ContainerFrom[*ethpb.BeaconStateElectra](postState.ToProto())
 			require.NoError(t, err)
 			require.DeepSSZEqual(t, pbState, postBeaconState, "Did not receive expected post state")
 		})

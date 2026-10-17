@@ -442,7 +442,7 @@ func prepareForkchoiceState(
 	}
 
 	base.BlockRoots[0] = append(base.BlockRoots[0], blockRoot[:]...)
-	st, err := state_native.InitializeFromProtoBellatrix(base)
+	st, err := state_native.New(base)
 	if err != nil {
 		return nil, blocks.ROBlock{}, err
 	}

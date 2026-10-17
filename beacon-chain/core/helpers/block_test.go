@@ -73,7 +73,7 @@ func TestBlockRootAtSlot_CorrectBlockRoot(t *testing.T) {
 			helpers.ClearCache()
 
 			s.Slot = tt.stateSlot
-			state, err := state_native.InitializeFromProtoPhase0(s)
+			state, err := state_native.New(s)
 			require.NoError(t, err)
 			wantedSlot := tt.slot
 			result, err := helpers.BlockRootAtSlot(state, wantedSlot)
@@ -125,7 +125,7 @@ func TestBlockRootAtSlot_OutOfBounds(t *testing.T) {
 		helpers.ClearCache()
 
 		state.Slot = tt.stateSlot
-		s, err := state_native.InitializeFromProtoPhase0(state)
+		s, err := state_native.New(state)
 		require.NoError(t, err)
 		_, err = helpers.BlockRootAtSlot(s, tt.slot)
 		assert.ErrorContains(t, tt.expectedErr, err)
@@ -134,19 +134,19 @@ func TestBlockRootAtSlot_OutOfBounds(t *testing.T) {
 
 func TestParentTargetGasLimit(t *testing.T) {
 	t.Run("pre-Gloas state returns default builder gas limit", func(t *testing.T) {
-		s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 1})
+		s, err := state_native.New(&ethpb.BeaconState{Slot: 1})
 		require.NoError(t, err)
 		assert.Equal(t, params.BeaconConfig().DefaultBuilderGasLimit, helpers.ParentTargetGasLimit(s))
 	})
 
 	t.Run("Gloas state with no bid returns default builder gas limit", func(t *testing.T) {
-		s, err := state_native.InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{})
+		s, err := state_native.NewUnsafe(&ethpb.BeaconStateGloas{})
 		require.NoError(t, err)
 		assert.Equal(t, params.BeaconConfig().DefaultBuilderGasLimit, helpers.ParentTargetGasLimit(s))
 	})
 
 	t.Run("Gloas state with bid returns bid's gas limit", func(t *testing.T) {
-		s, err := state_native.InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+		s, err := state_native.NewUnsafe(&ethpb.BeaconStateGloas{
 			LatestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
 				ParentBlockHash: make([]byte, 32),
 				ParentBlockRoot: make([]byte, 32),
@@ -168,7 +168,7 @@ func TestProposerDependentRootOrGenesis(t *testing.T) {
 
 	t.Run("epoch < 2 returns genesis block root from db", func(t *testing.T) {
 		db := &fakeGenesisRootReader{root: genesisRoot}
-		s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 1})
+		s, err := state_native.New(&ethpb.BeaconState{Slot: 1})
 		require.NoError(t, err)
 
 		got, err := helpers.ProposerDependentRootOrGenesis(ctx, db, s, primitives.Slot(slotsPerEpoch-1))
@@ -177,7 +177,7 @@ func TestProposerDependentRootOrGenesis(t *testing.T) {
 	})
 
 	t.Run("epoch < 2 with nil db errors", func(t *testing.T) {
-		s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 1})
+		s, err := state_native.New(&ethpb.BeaconState{Slot: 1})
 		require.NoError(t, err)
 
 		_, err = helpers.ProposerDependentRootOrGenesis(ctx, nil, s, primitives.Slot(slotsPerEpoch-1))
@@ -187,7 +187,7 @@ func TestProposerDependentRootOrGenesis(t *testing.T) {
 	t.Run("epoch < 2 propagates db error", func(t *testing.T) {
 		dbErr := fmt.Errorf("bolt closed")
 		db := &fakeGenesisRootReader{err: dbErr}
-		s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 1})
+		s, err := state_native.New(&ethpb.BeaconState{Slot: 1})
 		require.NoError(t, err)
 
 		_, err = helpers.ProposerDependentRootOrGenesis(ctx, db, s, primitives.Slot(slotsPerEpoch-1))
@@ -200,7 +200,7 @@ func TestProposerDependentRootOrGenesis(t *testing.T) {
 		for i := uint64(0); i < uint64(params.BeaconConfig().SlotsPerHistoricalRoot); i++ {
 			blockRoots = append(blockRoots, []byte{byte(i)})
 		}
-		s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		s, err := state_native.New(&ethpb.BeaconState{
 			BlockRoots: blockRoots,
 			Slot:       primitives.Slot(3 * slotsPerEpoch),
 		})

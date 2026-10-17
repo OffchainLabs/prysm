@@ -326,7 +326,7 @@ func TestRotateBuilderPendingPayments(t *testing.T) {
 		}
 	}
 
-	statePb, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+	statePb, err := NewUnsafe(&ethpb.BeaconStateGloas{
 		BuilderPendingPayments: payments,
 	})
 	require.NoError(t, err)
@@ -594,7 +594,7 @@ func TestAppendBuilderPendingWithdrawal_CopyOnWrite(t *testing.T) {
 		Amount:       1,
 		BuilderIndex: 2,
 	}
-	statePb, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+	statePb, err := NewUnsafe(&ethpb.BeaconStateGloas{
 		BuilderPendingWithdrawals: []*ethpb.BuilderPendingWithdrawal{wd},
 	})
 	require.NoError(t, err)
@@ -745,7 +745,7 @@ func buildGloasStateForPaymentWeightTest(
 		},
 	}
 
-	statePb, err := InitializeFromProtoGloas(stProto)
+	statePb, err := New(stProto)
 	require.NoError(t, err)
 	return statePb.(*BeaconState)
 }
@@ -753,7 +753,7 @@ func buildGloasStateForPaymentWeightTest(
 func newGloasStateWithAvailability(t *testing.T, availability []byte) *BeaconState {
 	t.Helper()
 
-	st, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+	st, err := NewUnsafe(&ethpb.BeaconStateGloas{
 		ExecutionPayloadAvailability: availability,
 	})
 	require.NoError(t, err)
@@ -878,7 +878,7 @@ func TestIncreaseBuilderBalance(t *testing.T) {
 
 func TestIncreaseBuilderBalance_CopyOnWrite(t *testing.T) {
 	orig := &ethpb.Builder{Balance: 10}
-	statePb, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+	statePb, err := NewUnsafe(&ethpb.BeaconStateGloas{
 		Builders: []*ethpb.Builder{orig},
 	})
 	require.NoError(t, err)
@@ -977,7 +977,7 @@ func TestAddBuilderFromDeposit_CopyOnWrite(t *testing.T) {
 	copy(wc[:], bytes.Repeat([]byte{0xBB}, 32))
 	wc[0] = 0x42 // version byte
 
-	statePb, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+	statePb, err := NewUnsafe(&ethpb.BeaconStateGloas{
 		Slot: 0,
 		Builders: []*ethpb.Builder{
 			{
@@ -1147,7 +1147,7 @@ func newGloasState(
 	slot primitives.Slot,
 ) *BeaconState {
 	t.Helper()
-	statePb, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+	statePb, err := NewUnsafe(&ethpb.BeaconStateGloas{
 		Slot:            slot,
 		Validators:      validators,
 		Builders:        builders,

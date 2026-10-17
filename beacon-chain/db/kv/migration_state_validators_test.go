@@ -91,7 +91,7 @@ func Test_migrateStateValidators(t *testing.T) {
 					assert.NoError(t, hashErr)
 					individualHashes = append(individualHashes, hash[:])
 				}
-				pbState, err := state_native.ProtobufBeaconStatePhase0(st.ToProtoUnsafe())
+				pbState, err := state_native.ContainerFrom[*v1alpha1.BeaconState](st.ToProtoUnsafe())
 				assert.NoError(t, err)
 				validatorsFoundCount := 0
 				for _, val := range pbState.Validators {
@@ -150,7 +150,7 @@ func Test_migrateStateValidators(t *testing.T) {
 				}
 
 				// check if all the validators that were in the state, are stored properly in the validator bucket
-				pbState, err := state_native.ProtobufBeaconStatePhase0(rcvdState.ToProtoUnsafe())
+				pbState, err := state_native.ContainerFrom[*v1alpha1.BeaconState](rcvdState.ToProtoUnsafe())
 				assert.NoError(t, err)
 				validatorsFoundCount := 0
 				for _, val := range pbState.Validators {
@@ -253,7 +253,7 @@ func Test_migrateAltairStateValidators(t *testing.T) {
 				}
 
 				// check if all the validators that were in the state, are stored properly in the validator bucket
-				pbState, err := state_native.ProtobufBeaconStateAltair(rcvdState.ToProtoUnsafe())
+				pbState, err := state_native.ContainerFrom[*v1alpha1.BeaconStateAltair](rcvdState.ToProtoUnsafe())
 				assert.NoError(t, err)
 				validatorsFoundCount := 0
 				for _, val := range pbState.Validators {
@@ -360,7 +360,7 @@ func Test_migrateBellatrixStateValidators(t *testing.T) {
 				}
 
 				// check if all the validators that were in the state, are stored properly in the validator bucket
-				pbState, err := state_native.ProtobufBeaconStateBellatrix(rcvdState.ToProtoUnsafe())
+				pbState, err := state_native.ContainerFrom[*v1alpha1.BeaconStateBellatrix](rcvdState.ToProtoUnsafe())
 				assert.NoError(t, err)
 				validatorsFoundCount := 0
 				for _, val := range pbState.Validators {
@@ -467,7 +467,7 @@ func Test_migrateCapellaStateValidators(t *testing.T) {
 				}
 
 				// check if all the validators that were in the state, are stored properly in the validator bucket
-				pbState, err := state_native.ProtobufBeaconStateCapella(rcvdState.ToProtoUnsafe())
+				pbState, err := state_native.ContainerFrom[*v1alpha1.BeaconStateCapella](rcvdState.ToProtoUnsafe())
 				assert.NoError(t, err)
 				validatorsFoundCount := 0
 				for _, val := range pbState.Validators {

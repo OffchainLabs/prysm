@@ -127,7 +127,7 @@ func newGloasState(t *testing.T, slot primitives.Slot, availability []byte) stat
 		AggregatePubkey: aggPubkey,
 	}
 
-	st, err := state_native.InitializeFromProtoGloas(protoState)
+	st, err := state_native.New(protoState)
 	require.NoError(t, err)
 	require.Equal(t, version.Gloas, st.Version())
 	return st

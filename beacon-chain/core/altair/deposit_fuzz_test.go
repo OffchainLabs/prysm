@@ -21,7 +21,7 @@ func TestFuzzProcessDeposits_10000(t *testing.T) {
 		for i := range deposits {
 			fuzzer.Fuzz(deposits[i])
 		}
-		s, err := state_native.InitializeFromProtoUnsafeAltair(state)
+		s, err := state_native.NewUnsafe(state)
 		require.NoError(t, err)
 		r, err := altair.ProcessDeposits(ctx, s, deposits)
 		if err != nil && r != nil {
@@ -40,7 +40,7 @@ func TestFuzzProcessPreGenesisDeposit_10000(t *testing.T) {
 	for i := range 10000 {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(deposit)
-		s, err := state_native.InitializeFromProtoUnsafeAltair(state)
+		s, err := state_native.NewUnsafe(state)
 		require.NoError(t, err)
 		r, err := altair.ProcessPreGenesisDeposits(ctx, s, []*ethpb.Deposit{deposit})
 		if err != nil && r != nil {
@@ -59,7 +59,7 @@ func TestFuzzProcessPreGenesisDeposit_Phase0_10000(t *testing.T) {
 	for i := range 10000 {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(deposit)
-		s, err := state_native.InitializeFromProtoUnsafePhase0(state)
+		s, err := state_native.NewUnsafe(state)
 		require.NoError(t, err)
 		r, err := altair.ProcessPreGenesisDeposits(ctx, s, []*ethpb.Deposit{deposit})
 		if err != nil && r != nil {
@@ -77,7 +77,7 @@ func TestFuzzProcessDeposit_Phase0_10000(t *testing.T) {
 	for i := range 10000 {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(deposit)
-		s, err := state_native.InitializeFromProtoUnsafePhase0(state)
+		s, err := state_native.NewUnsafe(state)
 		require.NoError(t, err)
 		r, err := altair.ProcessDeposit(s, deposit, true)
 		if err != nil && r != nil {
@@ -95,7 +95,7 @@ func TestFuzzProcessDeposit_10000(t *testing.T) {
 	for i := range 10000 {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(deposit)
-		s, err := state_native.InitializeFromProtoUnsafeAltair(state)
+		s, err := state_native.NewUnsafe(state)
 		require.NoError(t, err)
 		r, err := altair.ProcessDeposit(s, deposit, true)
 		if err != nil && r != nil {

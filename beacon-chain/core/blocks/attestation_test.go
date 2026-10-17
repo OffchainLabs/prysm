@@ -359,7 +359,7 @@ func TestVerifyAttestationNoVerifySignature_GloasCommitteeIndexLimit(t *testing.
 		},
 	}
 
-	beaconState, err := state_native.InitializeFromProtoGloas(gloasStateProto)
+	beaconState, err := state_native.New(gloasStateProto)
 	require.NoError(t, err)
 
 	committeeBits := bitfield.NewBitvector64()
@@ -393,7 +393,7 @@ func TestConvertToIndexed_OK(t *testing.T) {
 		}
 	}
 
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Slot:        5,
 		Validators:  validators,
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
@@ -451,7 +451,7 @@ func TestVerifyIndexedAttestation_OK(t *testing.T) {
 		}
 	}
 
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Slot:       5,
 		Validators: validators,
 		Fork: &ethpb.Fork{
@@ -539,7 +539,7 @@ func TestValidateIndexedAttestation_AboveMaxLength(t *testing.T) {
 	}
 
 	want := "validator indices count exceeds MAX_VALIDATORS_PER_COMMITTEE"
-	st, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
+	st, err := state_native.NewUnsafe(&ethpb.BeaconState{})
 	require.NoError(t, err)
 	err = blocks.VerifyIndexedAttestation(t.Context(), st, indexedAtt1)
 	assert.ErrorContains(t, want, err)
