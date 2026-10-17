@@ -4,6 +4,114 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [v7.3.0](https://github.com/OffchainLabs/prysm/compare/v7.2.1...v7.3.0) - 2026-10-16
+
+This release schedules the Gloas fork on Hoodi at epoch 132352 (2026-10-26 17:42:48 UTC), with a 200M gas limit from the fork. Hoodi operators must update their beacon nodes and validator clients before then.
+
+On networks that have forked into Gloas, beacon nodes and validator clients must be upgraded together. The V1 `GetExecutionPayloadEnvelope` and `PublishExecutionPayloadEnvelope` gRPC endpoints now return `FAILED_PRECONDITION`, so an older validator client cannot sign envelopes against this beacon node. Pre-Gloas networks are unaffected.
+
+This release also includes fixes that apply to mainnet. We recommend that mainnet operators update their beacon nodes to this release.
+
+Release highlights:
+
+- Gloas fork on Hoodi at epoch 132352, with a 200M gas limit schedule entry. [[PR]](https://github.com/OffchainLabs/prysm/pull/17650)
+- Validator client duty-aware shutdown: on SIGINT/SIGTERM the validator client waits up to 8 seconds for the current slot's rewarded duties to finish. A second interrupt stops immediately. `--disable-duty-aware-shutdown` turns it off. [[PR]](https://github.com/OffchainLabs/prysm/pull/17616)
+- `--enable-archive` runs the beacon node as an archive node. It backfills blocks to `--archive-origin-state` (genesis by default) and regenerates every historical state. [[PR]](https://github.com/OffchainLabs/prysm/pull/17292)
+- Checkpoint sync from an unfinalized checkpoint. [[PR]](https://github.com/OffchainLabs/prysm/pull/17559)
+- Gloas builder circuit breaker per direct connection endpoint, with new `--builder-*` failure and blacklist flags. [[PR]](https://github.com/OffchainLabs/prysm/pull/17540)
+- New Beacon API endpoints for Gloas: `ptc`, `proposer_preferences`, `builder_pending_withdrawals` and `builder_pending_payments`. See the Added section below.
+- P2P fixes. See the Fixed section below.
+- `--dev`, `--holesky`, the terminal total difficulty and block hash override flags, and several flag aliases are deprecated. They still work. [[PR]](https://github.com/OffchainLabs/prysm/pull/17686)
+- Consensus spec v1.7.0-beta.4. [[PR]](https://github.com/OffchainLabs/prysm/pull/17664)
+
+### Added
+
+- Add `beacon_payload_gas_limit` and `beacon_payload_gas_used` metrics, set from each received execution payload (block body before Gloas, payload envelope from Gloas). [[PR]](https://github.com/OffchainLabs/prysm/pull/17634)
+- Log the gas utilization in the `Synced execution payload envelope` log. [[PR]](https://github.com/OffchainLabs/prysm/pull/17634)
+- Validator client: duty-aware shutdown. On SIGINT/SIGTERM, postpone the shutdown until the rewarded duties (attestation, sync committee message, block proposal) of the current slot are done, and either at least 3 seconds are left before the next slot or the next slot has no rewarded duty, so that a quick restart does not miss any rewarded duty. The shutdown is postponed by at most 8 seconds. A second interrupt stops immediately. Use `--disable-duty-aware-shutdown` to opt out. [[PR]](https://github.com/OffchainLabs/prysm/pull/17616)
+- Broadcast a pending block on the fork digest of its own slot instead of the current fork's, so a block resolved from the pending queue after a fork transition is not sent on a topic where peers cannot decode it. [[PR]](https://github.com/OffchainLabs/prysm/pull/17543)
+- Support for checkpoint syncing from an unfinalized checkpoint. [[PR]](https://github.com/OffchainLabs/prysm/pull/17559)
+- Added `GET /eth/v1/beacon/states/{state_id}/builder_pending_withdrawals` and `GET /eth/v1/beacon/states/{state_id}/builder_pending_payments` Beacon API endpoints for Gloas states ([beacon-APIs#655](https://github.com/ethereum/beacon-APIs/pull/655)). [[PR]](https://github.com/OffchainLabs/prysm/pull/17627)
+- Gloas builder circuit breaker now tracks which builder indices each direct connection endpoint serves. [[PR]](https://github.com/OffchainLabs/prysm/pull/17540)
+- New beacon flags `--builder-allowed-failures`, `--builder-critical-failures`, `--builder-blacklist-period`, `--builder-critical-blacklist-period`, `--builder-relay-blacklist-period`, `--builder-failure-backoff-period` and `--builder-critical-failed-builders`. [[PR]](https://github.com/OffchainLabs/prysm/pull/17540)
+- New `--disable-builder-relay-circuit-breaker` flag to turn endpoint tracking off, and `builder_relays_banned_count` / `builder_collateral_blacklisted_count` metrics. [[PR]](https://github.com/OffchainLabs/prysm/pull/17540)
+- From Gloas onwards, the SSE `block` event includes `builder_index` and `block_hash` from the block's execution payload bid, per beacon-APIs#641. [[PR]](https://github.com/OffchainLabs/prysm/pull/17628)
+- Add `safe_block_hash` and `finalized_block_hash` to the `payload_attributes` SSE event from Gloas onwards, per [beacon-APIs #638](https://github.com/ethereum/beacon-APIs/pull/638). [[PR]](https://github.com/OffchainLabs/prysm/pull/17640)
+- Add `GET /eth/v1/beacon/states/{state_id}/ptc` endpoint returning the payload timeliness committee for a slot, with JSON and SSZ responses, per [beacon-APIs #657](https://github.com/ethereum/beacon-APIs/pull/657). [[PR]](https://github.com/OffchainLabs/prysm/pull/17641)
+- `--enable-archive` turns the node into an archive node: it backfills blocks down to `--archive-origin-state` (genesis by default) and regenerates every historical state into the state-diff tree. Implies `--enable-state-diff` and `--enable-backfill`. [[PR]](https://github.com/OffchainLabs/prysm/pull/17292)
+- Custom types for more compact representation (marshaled ssz byte slice) of ExecutionPayload.Transactions. [[PR]](https://github.com/OffchainLabs/prysm/pull/17584)
+- `GetExecutionPayloadEnvelopeV2` and `PublishExecutionPayloadEnvelopeV2` gRPC endpoints using these new types. [[PR]](https://github.com/OffchainLabs/prysm/pull/17584)
+- Schedule the Gloas fork on Hoodi at epoch 132352 (2026-10-26 17:42:48 UTC) with a 200M gas limit schedule entry. [[PR]](https://github.com/OffchainLabs/prysm/pull/17650)
+- Add `HEZE_FORK_VERSION` and `HEZE_FORK_EPOCH` config placeholders for the Heze fork, set to far-future on all networks, so upcoming Heze features (EIP-7805, EIP-8015, EIP-8365) can be gated on the fork epoch. [[PR]](https://github.com/OffchainLabs/prysm/pull/17678)
+- Added `GET /eth/v1/beacon/proposer_preferences` Beacon API endpoint to retrieve known signed proposer preferences ([beacon-APIs#659](https://github.com/ethereum/beacon-APIs/pull/659)). [[PR]](https://github.com/OffchainLabs/prysm/pull/17638)
+
+### Changed
+
+- `BeaconState*` (Phase0 through Gloas), `HistoricalBatch`, `SigningData`, `ForkData`, `DepositMessage` and `PowBlock` in `proto/prysm/v1alpha1` are now hand-written SSZ structs and no longer implement `proto.Message`. Use `.Copy()` and `equality.DeepEqual` instead of `proto.Clone` and `proto.Equal`. On-disk and wire formats are unchanged. [[PR]](https://github.com/OffchainLabs/prysm/pull/17535)
+- `StateSummary`, `PendingAttestation` and `SyncAggregatorSelectionData` moved out of the deleted `beacon_state.proto` into `beacon_core_types.proto`, `attestation.proto` and `sync_committee.proto` (same Go package, field numbers and wire format). [[PR]](https://github.com/OffchainLabs/prysm/pull/17535)
+- Request Gloas builder-API execution payload bids in parallel with the local payload. [[PR]](https://github.com/OffchainLabs/prysm/pull/17607)
+- Fall back to the best of the builder-API bid and the cached P2P bid when the local payload is unavailable during a Gloas proposal. [[PR]](https://github.com/OffchainLabs/prysm/pull/17607)
+- Align `data_column_sidecars_by_range` batch sizing with the blocks and blob sidecars by range handlers. [[PR]](https://github.com/OffchainLabs/prysm/pull/17631)
+- Reworded the validator client warning for builders with no `max_execution_payment` to state the default of 0 and that their bids may lose to the local payload. [[PR]](https://github.com/OffchainLabs/prysm/pull/17630)
+- Consolidate the Gloas envelope-matching helpers into `BlockBuiltOnParentEnvelope`. The initial-sync fetcher consistency check now also requires the envelope's beacon block root to equal the block's parent root. [[PR]](https://github.com/OffchainLabs/prysm/pull/17541)
+- Replace the per-call `Broadcasted data column sidecars` debug log with a `Broadcasted data column sidecars summary` log, aggregated per block root and emitted once no column was broadcast for this root during 100 ms. [[PR]](https://github.com/OffchainLabs/prysm/pull/17642)
+- Decode gossiped beacon blocks under the block validation lock. [[PR]](https://github.com/OffchainLabs/prysm/pull/17647)
+- Decode gossiped execution payload envelopes under a validation lock. [[PR]](https://github.com/OffchainLabs/prysm/pull/17647)
+- Remove the experimental status of the `--enable-state-diff` flag. [[PR]](https://github.com/OffchainLabs/prysm/pull/17657)
+- `ExecutionPayloadGloas.transactions` is now a `ProgressiveTransactionList` under a new protobuf field tag; tag 14 is reserved. Any external code that imports ExecutionPayload and interacts with the Transactions field expecting a [][]byte will need to be updated. [[PR]](https://github.com/OffchainLabs/prysm/pull/17584)
+- Note: Validator clients and beacon nodes must be upgraded together on networks that have forked into Gloas networks; pre-Gloas networks are unaffected. The V1 `GetExecutionPayloadEnvelope` and `PublishExecutionPayloadEnvelope` gRPC endpoints now return `FAILED_PRECONDITION`. A validator client that still calls them predates the new encoding and would otherwise sign envelopes with an empty transaction list. [[PR]](https://github.com/OffchainLabs/prysm/pull/17584)
+- Remove the `MAX_DATA_COLUMN_SIDECAR_SIZE` and `MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE` presets dropped by the spec. [[PR]](https://github.com/OffchainLabs/prysm/pull/17532)
+- Prettify `--help`. [[PR]](https://github.com/OffchainLabs/prysm/pull/17689)
+- Bump consensus spec to v1.7.0-beta.4. [[PR]](https://github.com/OffchainLabs/prysm/pull/17664)
+- Doppelganger: Remove the `enable-doppelganger` feature flag warning, log the startup check at info level, and log its duration when done. [[PR]](https://github.com/OffchainLabs/prysm/pull/17696)
+- Update gossip payload envelope signature verification. [[PR]](https://github.com/OffchainLabs/prysm/pull/17652)
+
+### Deprecated
+
+- Deprecate the `--dev` beacon node flag. It still works, and is now listed in the deprecated section of the help. [[PR]](https://github.com/OffchainLabs/prysm/pull/17686)
+- Deprecate the beacon node flag aliases `--subscribe-all-data-subnets`, `--enable-experimental-backfill`, `--extend-blob-retention-epoch` and `--max-goroutines`. They still work, and are now listed in the deprecated section of the help. [[PR]](https://github.com/OffchainLabs/prysm/pull/17686)
+- Deprecate the `--holesky` flag, as the Holesky testnet has been shut down. It still works, and is now listed in the deprecated section of the beacon node and validator client help. [[PR]](https://github.com/OffchainLabs/prysm/pull/17686)
+- Deprecate the `--terminal-total-difficulty-override`, `--terminal-block-hash-override` and `--terminal-block-hash-epoch-override` flags, as the merge is complete. They still work, and are now listed in the deprecated section of the help. [[PR]](https://github.com/OffchainLabs/prysm/pull/17686)
+
+### Removed
+
+- `proto/prysm/v1alpha1/beacon_state.proto` and the unused `CheckPtInfo` message. [[PR]](https://github.com/OffchainLabs/prysm/pull/17535)
+- Removed the `tools/beacon-fuzz` state map generator. It only existed to package beacon states for the Fuzzit service, which shut down in 2020, and nothing in the repository used it. [[PR]](https://github.com/OffchainLabs/prysm/pull/17582)
+- Removed the `tools/unencrypted-keys-gen` and `tools/interop/convert-keys` interop key tools. The validator no longer accepts the unencrypted keys JSON they produced, and the interop keymanager was removed in #17164. [[PR]](https://github.com/OffchainLabs/prysm/pull/17583)
+
+### Fixed
+
+- REST validator client: no longer drop an attestation or a sync committee message when no beacon node answers before the attestation due time. A slow answer is now used instead of no answer at all. [[PR]](https://github.com/OffchainLabs/prysm/pull/17620)
+- Do not treat a missing signing root as the all-zero signing root when converting a minimal slashing protection database into a complete one, or when exporting proposal history. [#17516](https://github.com/OffchainLabs/prysm/issues/17516). [[PR]](https://github.com/OffchainLabs/prysm/pull/17522)
+- Do not blacklist a public key when an EIP-3076 interchange file lists the same attestation twice without a signing root, or when the same file is imported twice. [#17516](https://github.com/OffchainLabs/prysm/issues/17516). [[PR]](https://github.com/OffchainLabs/prysm/pull/17522)
+- Apply the `MAXIMUM_GOSSIP_CLOCK_DISPARITY` allowance to Gloas payload attestation, bid, and proposer preferences gossip slot checks. [[PR]](https://github.com/OffchainLabs/prysm/pull/17576)
+- Fix `GetAttestationData` returning the pre-import head root with the post-import payload bit when a request arrives during block import. [[PR]](https://github.com/OffchainLabs/prysm/pull/17633)
+- Validator client: at the first slot of an epoch, the duties of the slot used the deadline of the last slot of the epoch instead of the deadline of the slot. [[PR]](https://github.com/OffchainLabs/prysm/pull/17637)
+- Checkpoint sync no longer makes justified == finalized. [[PR]](https://github.com/OffchainLabs/prysm/pull/17559)
+- `SaveOrigin` now verifies that the origin block matches the origin state's `latest_block_header` rather than trusting the pair. [[PR]](https://github.com/OffchainLabs/prysm/pull/17559)
+- Trim whitespace when parsing `Accept` header media types for SSZ responses, so types listed after a comma and space (e.g. `application/json;q=0, application/octet-stream`) are no longer ignored. [[PR]](https://github.com/OffchainLabs/prysm/pull/17651)
+- Update execution payload envelopes by-range request handling. [[PR]](https://github.com/OffchainLabs/prysm/pull/17655)
+- Settle the builder payment before processing the parent execution requests. [[PR]](https://github.com/OffchainLabs/prysm/pull/17661)
+- Backfill no longer gets stuck on a Gloas block whose payload is empty: data availability is not checked for columns that were never downloaded. [[PR]](https://github.com/OffchainLabs/prysm/pull/17632)
+- Backfill no longer gets stuck when the last block of a batch is a Gloas block with an empty payload: whether its payload was revealed is now decided once its child is known. [[PR]](https://github.com/OffchainLabs/prysm/pull/17632)
+- Clear every pending builder payment of a slashed proposer from both slashing paths. [[PR]](https://github.com/OffchainLabs/prysm/pull/17662)
+- Stop emitting a `chain_reorg` event, log and metrics when a post-Gloas head is re-saved for the same block root because its payload status flipped between empty and full. [[PR]](https://github.com/OffchainLabs/prysm/pull/17534)
+- Use the target epoch's shuffling dependent root to decide whether the head state can validate an attestation, so previous-epoch and next-epoch attestations on a compatible branch no longer fall back to state regeneration. [[PR]](https://github.com/OffchainLabs/prysm/pull/17649)
+- Read the head state under the same lock as the head root in `GetAttestationData`. [[PR]](https://github.com/OffchainLabs/prysm/pull/17654)
+- Build on the empty payload when the PTC majority votes the parent's blob data unavailable. [[PR]](https://github.com/OffchainLabs/prysm/pull/17537)
+- Update data column sidecar gossip validation. [[PR]](https://github.com/OffchainLabs/prysm/pull/17653)
+- Update `proposer_preferences` gossip validation. [[PR]](https://github.com/OffchainLabs/prysm/pull/17656)
+- Update RPC request size checks. [[PR]](https://github.com/OffchainLabs/prysm/pull/17660)
+- Fix existing data column files not being indexed by the warm cache on Windows. [[PR]](https://github.com/OffchainLabs/prysm/pull/17615)
+- Update partial data column header validation. [[PR]](https://github.com/OffchainLabs/prysm/pull/17685)
+- Subtract same-payload withdrawals from the builder balance in the builders sweep. [[PR]](https://github.com/OffchainLabs/prysm/pull/17663)
+- Enforce LMD/FFG vote consistency for block and pool attestations before applying them to fork choice. [[PR]](https://github.com/OffchainLabs/prysm/pull/17539)
+- Initial sync now marks a Gloas block's payload as present only after it verifies that block's payload envelope. A batch with an envelope that matches none of its blocks is rejected. [[PR]](https://github.com/OffchainLabs/prysm/pull/17566)
+- REST validator client: pad or truncate the block graffiti to 32 bytes. Before, graffiti from proposer settings or the keymanager API that was not 32 bytes caused a 400 and a missed proposal. [[PR]](https://github.com/OffchainLabs/prysm/pull/17693)
+- Reject graffiti longer than 32 bytes in the keymanager API `POST /eth/v1/validator/{pubkey}/graffiti` with status 400. Before, the value was stored and then truncated or rejected at proposal time. [[PR]](https://github.com/OffchainLabs/prysm/pull/17695)
+- REST validator client: request sync committee duties for the epoch of `slot + 1`, so that the last slot of a sync committee period uses the next committee, the same as gRPC. [[PR]](https://github.com/OffchainLabs/prysm/pull/17699)
+- Validator client over the REST API now signs voluntary exits with the Capella fork version after Deneb (EIP-7044). Before, the beacon node rejected these exits with "signature did not verify". [[PR]](https://github.com/OffchainLabs/prysm/pull/17692)
+
 ## [v7.2.1](https://github.com/OffchainLabs/prysm/compare/v7.2.0...v7.2.1) - 2026-10-05
 
 This release focuses on Gloas builder configuration in the validator client. If you are testing Gloas builders, update to this release so your builder auth configuration is read correctly: proposer settings files now take builder `auth_data` and `builder_pubkeys` as 0x-hex, matching the keymanager API, instead of base64.
