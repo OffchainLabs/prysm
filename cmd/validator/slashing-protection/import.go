@@ -2,6 +2,7 @@ package historycmd
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"path/filepath"
 
@@ -22,16 +23,12 @@ import (
 //
 // Steps:
 // 1. Parse a path to the validator's datadir from the CLI context.
-// 2. Open the validator database.
-// 3. Read the JSON file from user input.
+// 2. Read the JSON file from user input.
+// 3. Open the validator database, creating it if none exists yet.
 // 4. Call the function which actually imports the data from
 // the standard slashing protection JSON file into our database.
 func importSlashingProtectionJSON(cliCtx *cli.Context) error {
-	var (
-		valDB iface.ValidatorDB
-		found bool
-		err   error
-	)
+	var err error
 
 	// Check if a minimal database is requested
 	isDatabaseMinimal := cliCtx.Bool(features.EnableMinimalSlashingProtection.Name)
@@ -45,37 +42,35 @@ func importSlashingProtectionJSON(cliCtx *cli.Context) error {
 		}
 	}
 
-	// Ensure that the database is found under the specified directory or its subdirectories
-	var matchPath string
-	if isDatabaseMinimal {
-		found, matchPath, err = file.RecursiveDirFind(filesystem.DatabaseDirName, dataDir)
-	} else {
-		found, matchPath, err = file.RecursiveFileFind(kv.ProtectionDbFileName, dataDir)
+	// Get the path to the slashing protection JSON file from the CLI context.
+	protectionFilePath, err := userprompt.InputDirectory(cliCtx, userprompt.SlashingProtectionJSONPromptText, flags.SlashingProtectionJSONFileFlag)
+	if err != nil {
+		return fmt.Errorf("input directory: %w", err)
 	}
 
+	if protectionFilePath == "" {
+		return fmt.Errorf(
+			"no path to a slashing protection file specified, please retry or you can also specify it with the %s flag",
+			flags.SlashingProtectionJSONFileFlag.Name,
+		)
+	}
+
+	// Read the JSON file from user input.
+	enc, err := file.ReadFileAsBytes(protectionFilePath)
+	if err != nil {
+		return fmt.Errorf("read file as bytes: %w", err)
+	}
+
+	// Look for an existing database under the specified directory or its subdirectories.
+	found, matchPath, err := findDatabase(dataDir, isDatabaseMinimal)
 	if err != nil {
 		return errors.Wrapf(err, "error finding validator database at path %s", dataDir)
 	}
-	if !found {
-		databaseFileDir := kv.ProtectionDbFileName
-		if isDatabaseMinimal {
-			databaseFileDir = filesystem.DatabaseDirName
-		}
-		return fmt.Errorf("%s (validator database) was not found at path %s, so nothing to import", databaseFileDir, dataDir)
-	}
-	if !isDatabaseMinimal {
-		matchPath = filepath.Dir(matchPath) // strip the file name
-	}
-	dataDir = matchPath
-	log.Infof("Found validator database at path %s", dataDir)
+
+	dataDir = databaseDir(dataDir, matchPath, found, isDatabaseMinimal)
 
 	// Open the validator database.
-	if isDatabaseMinimal {
-		valDB, err = filesystem.NewStore(dataDir, nil)
-	} else {
-		valDB, err = kv.NewKVStore(cliCtx.Context, dataDir, nil)
-	}
-
+	valDB, err := openDatabase(cliCtx.Context, dataDir, isDatabaseMinimal)
 	if err != nil {
 		return errors.Wrapf(err, "could not access validator database at path: %s", dataDir)
 	}
@@ -86,25 +81,6 @@ func importSlashingProtectionJSON(cliCtx *cli.Context) error {
 			log.WithError(err).Errorf("Could not close validator DB")
 		}
 	}()
-
-	// Get the path to the slashing protection JSON file from the CLI context.
-	protectionFilePath, err := userprompt.InputDirectory(cliCtx, userprompt.SlashingProtectionJSONPromptText, flags.SlashingProtectionJSONFileFlag)
-	if err != nil {
-		return errors.Wrap(err, "could not get slashing protection json file")
-	}
-	if protectionFilePath == "" {
-		return fmt.Errorf(
-			"no path to a slashing_protection.json file specified, please retry or "+
-				"you can also specify it with the %s flag",
-			flags.SlashingProtectionJSONFileFlag.Name,
-		)
-	}
-
-	// Read the JSON file from user input.
-	enc, err := file.ReadFileAsBytes(protectionFilePath)
-	if err != nil {
-		return err
-	}
 
 	// Import the data from the standard slashing protection JSON file into our database.
 	log.Infof("Starting import of slashing protection file %s", protectionFilePath)
@@ -117,4 +93,54 @@ func importSlashingProtectionJSON(cliCtx *cli.Context) error {
 	log.Infof("Slashing protection JSON successfully imported into %s", dataDir)
 
 	return nil
+}
+
+// findDatabase looks for an existing validator database under dataDir or its subdirectories.
+// It returns whether one was found and its path. A missing dataDir means no database.
+func findDatabase(dataDir string, isDatabaseMinimal bool) (bool, string, error) {
+	dataDirExists, err := file.Exists(dataDir, file.Directory)
+	if err != nil {
+		return false, "", fmt.Errorf("file exists: %w", err)
+	}
+
+	if !dataDirExists {
+		return false, "", nil
+	}
+
+	if isDatabaseMinimal {
+		return file.RecursiveDirFind(filesystem.DatabaseDirName, dataDir)
+	}
+
+	return file.RecursiveFileFind(kv.ProtectionDbFileName, dataDir)
+}
+
+// databaseDir returns the directory to open the validator database from: the one of the found
+// database, or dataDir if none was found, so the new database is created where the validator client will look for it.
+func databaseDir(dataDir, matchPath string, found, isDatabaseMinimal bool) string {
+	if !found {
+		// No database yet, typically on a new machine.
+		databasePath := filepath.Join(dataDir, kv.ProtectionDbFileName)
+		if isDatabaseMinimal {
+			databasePath = filepath.Join(dataDir, filesystem.DatabaseDirName)
+		}
+
+		log.Infof("No validator database found under %s, creating a new one at %s", dataDir, databasePath)
+		return dataDir
+	}
+
+	if !isDatabaseMinimal {
+		matchPath = filepath.Dir(matchPath) // strip the file name
+	}
+
+	log.Infof("Found validator database at path %s", matchPath)
+	return matchPath
+}
+
+// openDatabase opens the validator database from dataDir, creating it if it doesn't exist yet.
+func openDatabase(ctx context.Context, dataDir string, isDatabaseMinimal bool) (iface.ValidatorDB, error) {
+	if isDatabaseMinimal {
+		return filesystem.NewStore(dataDir, nil)
+	}
+
+	return kv.NewKVStore(ctx, dataDir, nil)
 }
