@@ -33,6 +33,7 @@ go_test(
     srcs = [
         "embedded_test.go",
         "initialize_test.go",
+        "providers_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
