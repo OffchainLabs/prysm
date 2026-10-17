@@ -424,6 +424,10 @@ func newEnvelopeServiceForTest(t *testing.T, envelopeSlot, blockSlot primitives.
 	}
 
 	bid := util.GenerateTestSignedExecutionPayloadBid(blockSlot)
+	requests := &enginev1.ExecutionRequestsGloas{Deposits: []*enginev1.DepositRequest{}}
+	requestsRoot, err := requests.HashTreeRoot()
+	require.NoError(t, err)
+	bid.Message.ExecutionRequestsRoot = requestsRoot[:]
 	sb := util.NewBeaconBlockGloas()
 	sb.Block.Slot = blockSlot
 	sb.Block.Body.SignedExecutionPayloadBid = bid
@@ -443,6 +447,7 @@ func newEnvelopeServiceForTest(t *testing.T, envelopeSlot, blockSlot primitives.
 
 	blockHash := bytesutil.ToBytes32(bid.Message.BlockHash)
 	env := testSignedExecutionPayloadEnvelope(t, envelopeSlot, primitives.BuilderIndex(bid.Message.BuilderIndex), root, blockHash)
+	env.Message.ExecutionRequests = requests
 	msg := envelopeToPubsub(t, s, p, env)
 
 	return s, msg, primitives.BuilderIndex(bid.Message.BuilderIndex), root
@@ -564,4 +569,23 @@ func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, buil
 		},
 		Signature: bytes.Repeat([]byte{0xAA}, 96),
 	}
+}
+
+func TestValidateExecutionPayloadEnvelope_ParentRootMismatchDoesNotTakeSeenSlot(t *testing.T) {
+	ctx := context.Background()
+	s, msg, builderIdx, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{})
+
+	env := testSignedExecutionPayloadEnvelope(t, 1, builderIdx, root, [32]byte{})
+	env.Message.ParentBeaconBlockRoot = bytes.Repeat([]byte{0xEE}, 32)
+	result, err := s.validateExecutionPayloadEnvelope(ctx, "peer", envelopeToPubsub(t, s, s.cfg.p2p, env))
+	require.NotNil(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.Equal(t, false, s.hasSeenPayloadEnvelope(root, builderIdx))
+
+	// The builder's correct envelope for the same block is still accepted.
+	result, err = s.validateExecutionPayloadEnvelope(ctx, "peer", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, result)
+	require.Equal(t, true, s.hasSeenPayloadEnvelope(root, builderIdx))
 }
