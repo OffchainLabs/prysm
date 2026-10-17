@@ -570,6 +570,16 @@ func BlockToLightClientHeader(
 			Execution:       payloadHeader,
 			ExecutionBranch: payloadProof,
 		}
+	case version.Gloas:
+		blockHash, proof, err := makeExecutionAndProofGloas(ctx, block)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not make execution block hash and proof")
+		}
+		m = &pb.LightClientHeaderGloas{
+			Beacon:             beacon,
+			ExecutionBlockHash: blockHash,
+			ExecutionBranch:    proof,
+		}
 	default:
 		return nil, fmt.Errorf("unsupported attested block version %s", version.String(attestedBlockVersion))
 	}
