@@ -59,6 +59,10 @@ const (
 
 	// ExecutionPayloadBidReceived is sent after a signed execution payload bid is received from gossip or rpc.
 	ExecutionPayloadBidReceived = 16
+
+	// ExecutionProofReceived is sent after a new EIP-8025 execution proof is verified and imported, whether it
+	// came from gossip or from the API.
+	ExecutionProofReceived = 17
 )
 
 // UnAggregatedAttReceivedData is the data sent with UnaggregatedAttReceived events.
@@ -149,4 +153,9 @@ type ProposerPreferencesReceivedData struct {
 // ExecutionPayloadBidReceivedData is the data sent with ExecutionPayloadBidReceived events.
 type ExecutionPayloadBidReceivedData struct {
 	Bid *ethpb.SignedExecutionPayloadBid
+}
+
+// ExecutionProofReceivedData is the data sent with ExecutionProofReceived events.
+type ExecutionProofReceivedData struct {
+	Proof *ethpb.SignedExecutionProofEnvelope
 }

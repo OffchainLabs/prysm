@@ -31,6 +31,7 @@ var gossipTopicMappings = map[string]func() proto.Message{
 	ExecutionPayloadEnvelopeTopicFormat:       func() proto.Message { return &ethpb.SignedExecutionPayloadEnvelope{} },
 	ExecutionPayloadBidTopicFormat:            func() proto.Message { return &ethpb.SignedExecutionPayloadBid{} },
 	SignedProposerPreferencesTopicFormat:      func() proto.Message { return &ethpb.SignedProposerPreferences{} },
+	ExecutionProofTopicFormat:                 func() proto.Message { return &ethpb.SignedExecutionProofEnvelope{} },
 }
 
 // GossipTopicMappings is a function to return the assigned data type
@@ -166,4 +167,7 @@ func init() {
 	GossipTypeMapping[reflect.TypeFor[*ethpb.PayloadAttestationMessage]()] = PayloadAttestationMessageTopicFormat
 	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedExecutionPayloadBid]()] = ExecutionPayloadBidTopicFormat
 	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedProposerPreferences]()] = SignedProposerPreferencesTopicFormat
+
+	// EIP-8025 execution proofs.
+	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedExecutionProofEnvelope]()] = ExecutionProofTopicFormat
 }

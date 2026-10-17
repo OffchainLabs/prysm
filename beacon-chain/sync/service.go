@@ -67,6 +67,7 @@ const (
 	seenBlockSize               = 1000
 	seenPayloadEnvelopeSize     = 1000
 	seenExecutionPayloadBidSize = 1000
+	seenExecutionProofSize      = 1000
 	seenDataColumnSize          = seenBlockSize * 128 // Each block can have max 128 data columns.
 	seenUnaggregatedAttSize     = 20000
 	seenAggregatedAttSize       = 16384
@@ -125,6 +126,7 @@ type blockchainService interface {
 	blockchain.BlobReceiver
 	blockchain.DataColumnReceiver
 	blockchain.ExecutionPayloadEnvelopeReceiver
+	blockchain.ExecutionProofReceiver
 	blockchain.HeadFetcher
 	blockchain.FinalizationFetcher
 	blockchain.ForkFetcher
@@ -159,6 +161,8 @@ type Service struct {
 	seenBlockCache                       *lru.Cache
 	seenPayloadEnvelopeCache             *lru.Cache
 	seenExecutionPayloadBidCache         *slotAwareCache
+	seenExecutionProofCache              *lru.Cache
+	seenExecutionProofProverCache        *lru.Cache
 	highestExecutionPayloadBidCache      *cache.HighestExecutionPayloadBidCache
 	seenBlobLock                         sync.RWMutex
 	seenBlobCache                        *lru.Cache
@@ -427,6 +431,8 @@ func (s *Service) initCaches() {
 	s.seenBlockCache = lruwrpr.New(seenBlockSize)
 	s.seenPayloadEnvelopeCache = lruwrpr.New(seenPayloadEnvelopeSize)
 	s.seenExecutionPayloadBidCache = newSlotAwareCache(seenExecutionPayloadBidSize)
+	s.seenExecutionProofCache = lruwrpr.New(seenExecutionProofSize)
+	s.seenExecutionProofProverCache = lruwrpr.New(seenExecutionProofSize)
 	s.highestExecutionPayloadBidCache = cache.NewHighestExecutionPayloadBidCache()
 	s.seenBlobCache = lruwrpr.New(seenBlockSize * params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra)
 	s.seenDataColumnCache = newSlotAwareCache(seenDataColumnSize)

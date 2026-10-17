@@ -21,8 +21,12 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
   -ldflags "-X github.com/OffchainLabs/prysm/v7/runtime/version.gitTag=$TAG" \
   -o "/out/$BIN" "./cmd/$BIN"
 
-FROM gcr.io/distroless/cc-debian12
+# The debug variant ships a busybox shell, which Kurtosis' ethereum-package needs to start the beacon node.
+FROM gcr.io/distroless/cc-debian12:debug
 ARG BIN=beacon-chain
 LABEL org.opencontainers.image.source="https://github.com/OffchainLabs/prysm"
-COPY --from=build /out/${BIN} /entrypoint
+# Kurtosis' ethereum-package runs the beacon node as /beacon-chain, like the `make dist` images.
+COPY --from=build /out/${BIN} /${BIN}
+SHELL ["/busybox/sh", "-c"]
+RUN ln -s "/${BIN}" /entrypoint
 ENTRYPOINT ["/entrypoint"]
