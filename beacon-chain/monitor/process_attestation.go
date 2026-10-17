@@ -207,7 +207,7 @@ func (s *Service) processUnaggregatedAttestation(ctx context.Context, att ethpb.
 	}
 }
 
-// processUnaggregatedAttestation logs when the beacon node observes an aggregated attestation from tracked validator.
+// processAggregatedAttestation logs when the beacon node observes an aggregated attestation from tracked validator.
 func (s *Service) processAggregatedAttestation(ctx context.Context, att ethpb.AggregateAttAndProof) {
 	s.Lock()
 	defer s.Unlock()
