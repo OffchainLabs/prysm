@@ -201,6 +201,12 @@ func SendBeaconBlocksByRootRequest(
 	stop := context.AfterFunc(ctx, func() { _ = stream.Reset() })
 	defer stop()
 
+	// Build a set of requested roots so each response block can be validated.
+	requestedRoots := make(map[[32]byte]bool, len(*req))
+	for _, root := range *req {
+		requestedRoots[root] = true
+	}
+
 	// Augment block processing function, if non-nil block processor is provided.
 	blocks := make([]interfaces.ReadOnlySignedBeaconBlock, 0, len(*req))
 	process := func(block interfaces.ReadOnlySignedBeaconBlock) error {
@@ -223,6 +229,14 @@ func SendBeaconBlocksByRootRequest(
 		}
 		if err != nil {
 			return nil, err
+		}
+
+		blkRoot, err := blk.Block().HashTreeRoot()
+		if err != nil {
+			return nil, err
+		}
+		if !requestedRoots[blkRoot] {
+			return nil, errors.Wrapf(ErrInvalidFetchedData, "received unrequested block with root %#x", blkRoot)
 		}
 
 		if err := process(blk); err != nil {
