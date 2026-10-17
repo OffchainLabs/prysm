@@ -69,8 +69,9 @@ type NodeV2 struct {
 	Slot                            primitives.Slot
 	Weight                          uint64
 	Balance                         uint64
-	JustifiedEpoch                  primitives.Epoch
-	FinalizedEpoch                  primitives.Epoch
+	ParentPayloadStatus             *PayloadStatus
+	JustifiedCheckpoint             *eth.Checkpoint
+	FinalizedCheckpoint             *eth.Checkpoint
 	UnrealizedJustifiedEpoch        primitives.Epoch
 	UnrealizedFinalizedEpoch        primitives.Epoch
 	PayloadAttesterCount            uint64
