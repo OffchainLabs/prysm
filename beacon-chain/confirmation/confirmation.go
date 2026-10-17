@@ -164,6 +164,14 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 		return
 	}
 
+	// Prewarm the next OJC after this run releases its forkchoice lock.
+	if slots.IsEpochStart(currentSlot + 1) {
+		nextOJC := f.previousEpochGreatestUnrealizedCheckpoint
+		defer func() {
+			go func() { _, _ = f.balances.BalanceInfoByCheckpoint(ctx, nextOJC) }()
+		}()
+	}
+
 	// Checkpoint state loads can replay from disk, keep them off the forkchoice lock.
 	info, err := f.balances.BalanceInfoByCheckpoint(ctx, f.currentEpochObservedJustifiedCheckpoint)
 	if err != nil {
