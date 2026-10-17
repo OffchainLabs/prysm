@@ -19,6 +19,7 @@ import (
 )
 
 // clampCheckpointRoot maps a checkpoint at or below the tree root onto the tree root.
+// A genesis store carries the zero-root checkpoints of the genesis state, so they map onto the tree root.
 func (s *Store) clampCheckpointRoot(epoch primitives.Epoch, root [32]byte) [32]byte {
 	if s.treeRootNode == nil {
 		return root
