@@ -133,12 +133,13 @@ func (s *Service) shouldOverrideFCU(newHeadRoot [32]byte, proposingSlot primitiv
 		if err != nil {
 			log.WithError(err).Error("Could not compute seconds since slot start")
 		}
-		if sss >= doublylinkedtree.ProcessAttestationsThreshold {
+		threshold := doublylinkedtree.ProcessAttestationsThreshold(currentSlot)
+		if sss >= threshold {
 			log.WithFields(logrus.Fields{
 				"root":           fmt.Sprintf("%#x", newHeadRoot),
 				"weight":         headWeight,
 				"sinceSlotStart": sss,
-				"threshold":      doublylinkedtree.ProcessAttestationsThreshold,
+				"threshold":      threshold,
 			}).Info("Attempted late block reorg aborted due to attestations after threshold")
 			lateBlockFailedAttemptFirstThreshold.Inc()
 		}

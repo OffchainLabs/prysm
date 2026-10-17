@@ -63,7 +63,7 @@ func (s *Service) runGloasDepositWarmup() {
 	}
 	// Starts after the aggregate deadline so the budget does not overlap an attestation or
 	// aggregate deadline.
-	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, cfg.SlotComponentDuration(cfg.AggregateDueBPS), cfg.SlotDuration())
+	ticker := slots.NewSlotTickerWithOffsetFunc(s.genesisTime, slots.ComponentInterval(params.AggregateDue))
 	defer ticker.Done()
 	for {
 		select {

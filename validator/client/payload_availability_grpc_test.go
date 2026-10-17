@@ -83,7 +83,7 @@ func TestPayloadAvailability_GRPCReleasesPTCWaiter(t *testing.T) {
 		genesisTime:         time.Now().Add(time.Hour),
 		payloadAvailability: newPayloadAvailability(),
 	}
-	deadline, err := v.slotComponentDeadline(slot, params.BeaconConfig().PayloadAttestationDueBPS)
+	deadline, err := v.slotComponentDeadline(slot, params.PayloadAttestationDue)
 	require.NoError(t, err)
 	waiterDone := make(chan struct{})
 	go func() {

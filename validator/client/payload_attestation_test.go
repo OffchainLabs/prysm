@@ -205,7 +205,7 @@ func TestPayloadAttestationDataWithRetry_ResponseCrossesDeadline(t *testing.T) {
 	// Start the slot after mock setup to preserve the pre-deadline window.
 	cfg := params.BeaconConfig()
 	v.genesisTime = time.Now().Add(-cfg.SlotDuration())
-	deadline, err := v.slotComponentDeadline(slot, cfg.PayloadAttestationDueBPS)
+	deadline, err := v.slotComponentDeadline(slot, params.PayloadAttestationDue)
 	require.NoError(t, err)
 
 	got, retried, err := v.payloadAttestationDataWithRetry(t.Context(), slot)

@@ -1,0 +1,36 @@
+participants:
+  - el_type: geth
+    cl_type: prysm
+    cl_image: gcr.io/offchainlabs/prysm/beacon-chain:latest
+    vc_image: gcr.io/offchainlabs/prysm/validator:latest
+    count: 2
+network_params:
+  preset: minimal
+  electra_fork_epoch: 0
+  fulu_fork_epoch: 2
+  gloas_fork_epoch: 3
+  seconds_per_slot: 12
+  slot_duration_ms: 12000
+  # The duration change must land on a fork epoch at or after Gloas, here Gloas itself (epoch 3).
+  slot_duration_schedule:
+    - epoch: 0
+      slot_duration_ms: 12000
+      proposer_reorg_cutoff_ms: 2000
+      attestation_due_ms: 3000
+      aggregate_due_ms: 6000
+      sync_message_due_ms: 3000
+      contribution_due_ms: 6000
+      payload_due_ms: 6000
+      payload_attestation_due_ms: 9000
+      inclusion_list_due_ms: 8000
+    - epoch: 3
+      slot_duration_ms: 6000
+      proposer_reorg_cutoff_ms: 1000
+      attestation_due_ms: 1500
+      aggregate_due_ms: 3000
+      sync_message_due_ms: 1500
+      contribution_due_ms: 3000
+      payload_due_ms: 3000
+      payload_attestation_due_ms: 4500
+      inclusion_list_due_ms: 4000
+additional_services: []

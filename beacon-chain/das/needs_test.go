@@ -408,7 +408,7 @@ func TestSyncNeedsCurrently(t *testing.T) {
 			expectBlockEnd:   3000,
 			expectBlobBegin:  max(syncEpochOffset(3000, 10), denebSlot),
 			expectBlobEnd:    fuluSlot,
-			expectColBegin:   max(syncEpochOffset(3000, 10), fuluSlot),
+			expectColBegin:   max(columnRetentionStart(3000, 10), fuluSlot),
 			expectColEnd:     3000,
 		},
 		{
@@ -450,7 +450,7 @@ func TestSyncNeedsCurrently(t *testing.T) {
 			expectBlockEnd:   5000,
 			expectBlobBegin:  max(syncEpochOffset(5000, 1), denebSlot),
 			expectBlobEnd:    fuluSlot,
-			expectColBegin:   max(syncEpochOffset(5000, 2), fuluSlot),
+			expectColBegin:   max(columnRetentionStart(5000, 2), fuluSlot),
 			expectColEnd:     5000,
 		},
 		{
@@ -464,7 +464,7 @@ func TestSyncNeedsCurrently(t *testing.T) {
 			expectBlockEnd:   10000,
 			expectBlobBegin:  max(syncEpochOffset(10000, 100), denebSlot),
 			expectBlobEnd:    fuluSlot,
-			expectColBegin:   max(syncEpochOffset(10000, 100), fuluSlot),
+			expectColBegin:   max(columnRetentionStart(10000, 100), fuluSlot),
 			expectColEnd:     10000,
 		},
 		{
@@ -478,7 +478,7 @@ func TestSyncNeedsCurrently(t *testing.T) {
 			expectBlockEnd:   8000,
 			expectBlobBegin:  max(syncEpochOffset(8000, 10), denebSlot),
 			expectBlobEnd:    fuluSlot,
-			expectColBegin:   max(syncEpochOffset(8000, 10), fuluSlot),
+			expectColBegin:   max(columnRetentionStart(8000, 10), fuluSlot),
 			expectColEnd:     8000,
 		},
 		{
@@ -492,7 +492,7 @@ func TestSyncNeedsCurrently(t *testing.T) {
 			expectBlockEnd:   primitives.Slot(2000 + 5*slotsPerEpoch),
 			expectBlobBegin:  max(syncEpochOffset(primitives.Slot(2000+5*slotsPerEpoch), 5), denebSlot),
 			expectBlobEnd:    fuluSlot,
-			expectColBegin:   max(syncEpochOffset(primitives.Slot(2000+5*slotsPerEpoch), 5), fuluSlot),
+			expectColBegin:   max(columnRetentionStart(primitives.Slot(2000+5*slotsPerEpoch), 5), fuluSlot),
 			expectColEnd:     primitives.Slot(2000 + 5*slotsPerEpoch),
 		},
 		{

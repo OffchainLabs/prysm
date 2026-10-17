@@ -270,7 +270,10 @@ func AttestationsDelta(beaconState state.BeaconState, bal *precompute.Balance, v
 	finalizedEpoch := beaconState.FinalizedCheckpointEpoch()
 	increment := cfg.EffectiveBalanceIncrement
 	factor := cfg.BaseRewardFactor
-	baseRewardMultiplier := increment * factor / math.CachedSquareRoot(bal.ActiveCurrentEpoch)
+	// Deltas pay for the previous epoch, so they are priced at its slot duration (EIP-8198).
+	slotDurationMs := cfg.SlotDurationMillisAtEpoch(prevEpoch)
+	baseDurationMs := cfg.SlotDurationMillis()
+	baseRewardMultiplier := increment * factor * slotDurationMs / baseDurationMs / math.CachedSquareRoot(bal.ActiveCurrentEpoch)
 	leak := helpers.IsInInactivityLeak(prevEpoch, finalizedEpoch)
 
 	// Modified in Altair and Bellatrix.
@@ -279,7 +282,8 @@ func AttestationsDelta(beaconState state.BeaconState, bal *precompute.Balance, v
 	if err != nil {
 		return nil, err
 	}
-	inactivityDenominator := bias * inactivityPenaltyQuotient
+	// The leak scales with the square of the epoch duration so the cumulative penalty over a fixed wall-clock leak is unchanged.
+	inactivityDenominator := bias * inactivityPenaltyQuotient * (baseDurationMs * baseDurationMs) / (slotDurationMs * slotDurationMs)
 
 	for i := range vals {
 		attDeltas[i], err = attestationDelta(bal, &vals[i], baseRewardMultiplier, inactivityDenominator, leak)

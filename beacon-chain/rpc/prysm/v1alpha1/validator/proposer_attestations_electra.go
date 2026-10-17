@@ -278,7 +278,7 @@ func newAttCandidates(ctx context.Context, st state.ReadOnlyBeaconState, atts pr
 			continue
 		}
 
-		indices, rewards, err := uncoveredRewards(st, indices, participation, flagMask, totalBalance, baseRewards)
+		indices, rewards, err := uncoveredRewards(st, indices, participation, flagMask, totalBalance, data.Target.Epoch, baseRewards)
 		if err != nil {
 			log.WithFields(attestationFields(att)).WithError(err).Debug("Could not resolve base rewards for attesting indices")
 			continue
@@ -306,6 +306,7 @@ func uncoveredRewards(
 	participation []byte,
 	flagMask uint8,
 	totalBalance uint64,
+	epoch primitives.Epoch,
 	cache map[uint64]uint64,
 ) ([]uint64, []uint64, error) {
 	uncovered := make([]uint64, 0, len(indices))
@@ -320,7 +321,7 @@ func uncoveredRewards(
 		reward, ok := cache[index]
 		if !ok {
 			var err error
-			reward, err = altair.BaseRewardWithTotalBalance(st, primitives.ValidatorIndex(index), totalBalance)
+			reward, err = altair.BaseRewardWithTotalBalance(st, primitives.ValidatorIndex(index), totalBalance, epoch)
 			if err != nil {
 				return nil, nil, errors.Wrap(err, "could not get base reward")
 			}
