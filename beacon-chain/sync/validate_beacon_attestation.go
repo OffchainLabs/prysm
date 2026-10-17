@@ -36,6 +36,7 @@ import (
 // - The attestation is unaggregated -- that is, it has exactly one participating validator (len(get_attesting_indices(state, attestation.data, attestation.aggregation_bits)) == 1).
 // - attestation.data.slot is within the last ATTESTATION_PROPAGATION_SLOT_RANGE slots (attestation.data.slot + ATTESTATION_PROPAGATION_SLOT_RANGE >= current_slot >= attestation.data.slot).
 // - The signature of attestation is valid.
+// - Validation may briefly wait when the referenced block and state are the only missing dependencies.
 func (s *Service) validateCommitteeIndexBeaconAttestation(
 	ctx context.Context,
 	pid peer.ID,
@@ -117,25 +118,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		}
 	}
 
-	// Verify the block being voted and the processed state is in beaconDB and the block has passed validation if it's in the beaconDB.
 	blockRoot := bytesutil.ToBytes32(data.BeaconBlockRoot)
-	if !s.hasBlockAndState(ctx, blockRoot) {
-		// Block not yet available - save attestation to pending queue for later processing
-		// when the block arrives. Return ValidationIgnore so gossip doesn't potentially penalize the peer.
-		s.savePendingAtt(att)
-		return pubsub.ValidationIgnore, nil
-	}
-	// Block exists - verify it's in forkchoice (i.e., it's a descendant of the finalized checkpoint)
-	if !s.cfg.chain.InForkchoice(blockRoot) {
-		tracing.AnnotateError(span, blockchain.ErrNotDescendantOfFinalized)
-		return pubsub.ValidationIgnore, blockchain.ErrNotDescendantOfFinalized
-	}
-	if err = s.cfg.chain.VerifyLmdFfgConsistency(ctx, att); err != nil {
-		tracing.AnnotateError(span, err)
-		attBadLmdConsistencyCount.Inc()
-		return pubsub.ValidationReject, wrapAttestationError(err, att)
-	}
-
 	preState, err := s.cfg.chain.AttestationTargetState(ctx, data.Target)
 	if err != nil {
 		tracing.AnnotateError(span, err)
@@ -191,6 +174,21 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	validationRes, err = s.validateUnaggregatedAttWithState(ctx, attForValidation, preState)
 	if validationRes != pubsub.ValidationAccept {
 		return validationRes, wrapAttestationError(err, att)
+	}
+
+	// After non-block checks pass, wait briefly or preserve the pending plus ValidationIgnore fallback.
+	if !s.waitForAttestationBlock(ctx, pid, blockRoot) {
+		s.savePendingAtt(att)
+		return pubsub.ValidationIgnore, nil
+	}
+	if !s.cfg.chain.InForkchoice(blockRoot) {
+		tracing.AnnotateError(span, blockchain.ErrNotDescendantOfFinalized)
+		return pubsub.ValidationIgnore, blockchain.ErrNotDescendantOfFinalized
+	}
+	if err = s.cfg.chain.VerifyLmdFfgConsistency(ctx, att); err != nil {
+		tracing.AnnotateError(span, err)
+		attBadLmdConsistencyCount.Inc()
+		return pubsub.ValidationReject, wrapAttestationError(err, att)
 	}
 
 	if s.slasherEnabled {
