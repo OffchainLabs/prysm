@@ -137,7 +137,7 @@ func UpgradeToGloas(ctx context.Context, beaconState state.BeaconState) (state.B
 
 // initializePTCWindow builds the initial PTC window for the Gloas fork upgrade.
 //
-//	<spec fn="initialize_ptc_window" fork="gloas" hash="88530cbd">
+//	<spec fn="initialize_ptc_window" fork="gloas" hash="a02bea8d">
 //	def initialize_ptc_window(
 //	    state: BeaconState,
 //	) -> PayloadTimelinessCommitteeWindow:
@@ -155,7 +155,7 @@ func UpgradeToGloas(ctx context.Context, beaconState state.BeaconState) (state.B
 //	    for e in range(1 + MIN_SEED_LOOKAHEAD):
 //	        epoch = current_epoch + e
 //	        start_slot = compute_start_slot_at_epoch(epoch)
-//	        ptcs += [compute_ptc(state, start_slot + i) for i in range(SLOTS_PER_EPOCH)]
+//	        ptcs += [compute_ptc(state, start_slot + index) for index in range(SLOTS_PER_EPOCH)]
 //
 //	    return PayloadTimelinessCommitteeWindow(data=empty_previous_epoch + ptcs)
 //	</spec>

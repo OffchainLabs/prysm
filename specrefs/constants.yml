@@ -28,22 +28,22 @@
       search: BLSWithdrawalPrefixByte\s+.*yaml:"BLS_WITHDRAWAL_PREFIX"
       regex: true
   spec: |
-    <spec constant_var="BLS_WITHDRAWAL_PREFIX" fork="phase0" hash="4153ae92">
-    BLS_WITHDRAWAL_PREFIX: Bytes1 = '0x00'
+    <spec constant_var="BLS_WITHDRAWAL_PREFIX" fork="phase0" hash="7c9a33eb">
+    BLS_WITHDRAWAL_PREFIX: Bytes1 = "0x00"
     </spec>
 
 - name: BUILDER_DEPOSIT_REQUEST_TYPE#gloas
   sources: []
   spec: |
-    <spec constant_var="BUILDER_DEPOSIT_REQUEST_TYPE" fork="gloas" hash="08333b0e">
-    BUILDER_DEPOSIT_REQUEST_TYPE: Bytes1 = '0x03'
+    <spec constant_var="BUILDER_DEPOSIT_REQUEST_TYPE" fork="gloas" hash="5120ab9a">
+    BUILDER_DEPOSIT_REQUEST_TYPE: Bytes1 = "0x03"
     </spec>
 
 - name: BUILDER_EXIT_REQUEST_TYPE#gloas
   sources: []
   spec: |
-    <spec constant_var="BUILDER_EXIT_REQUEST_TYPE" fork="gloas" hash="cf4cdfb6">
-    BUILDER_EXIT_REQUEST_TYPE: Bytes1 = '0x04'
+    <spec constant_var="BUILDER_EXIT_REQUEST_TYPE" fork="gloas" hash="56bfbe0d">
+    BUILDER_EXIT_REQUEST_TYPE: Bytes1 = "0x04"
     </spec>
 
 - name: BUILDER_INDEX_FLAG#gloas
@@ -77,8 +77,8 @@
 - name: BUILDER_WITHDRAWAL_PREFIX#gloas
   sources: []
   spec: |
-    <spec constant_var="BUILDER_WITHDRAWAL_PREFIX" fork="gloas" hash="d3243a75">
-    BUILDER_WITHDRAWAL_PREFIX: Bytes1 = '0xB0'
+    <spec constant_var="BUILDER_WITHDRAWAL_PREFIX" fork="gloas" hash="0449a031">
+    BUILDER_WITHDRAWAL_PREFIX: Bytes1 = "0xB0"
     </spec>
 
 - name: BYTES_PER_FIELD_ELEMENT#deneb
@@ -101,8 +101,8 @@
       search: CompoundingWithdrawalPrefixByte\s+.*yaml:"COMPOUNDING_WITHDRAWAL_PREFIX"
       regex: true
   spec: |
-    <spec constant_var="COMPOUNDING_WITHDRAWAL_PREFIX" fork="electra" hash="e52fdfea">
-    COMPOUNDING_WITHDRAWAL_PREFIX: Bytes1 = '0x02'
+    <spec constant_var="COMPOUNDING_WITHDRAWAL_PREFIX" fork="electra" hash="cb4a6802">
+    COMPOUNDING_WITHDRAWAL_PREFIX: Bytes1 = "0x02"
     </spec>
 
 - name: CONSOLIDATION_REQUEST_TYPE#electra
@@ -111,8 +111,8 @@
       search: ConsolidationRequestType\s*$
       regex: true
   spec: |
-    <spec constant_var="CONSOLIDATION_REQUEST_TYPE" fork="electra" hash="4d01eb44">
-    CONSOLIDATION_REQUEST_TYPE: Bytes1 = '0x02'
+    <spec constant_var="CONSOLIDATION_REQUEST_TYPE" fork="electra" hash="6acee2fa">
+    CONSOLIDATION_REQUEST_TYPE: Bytes1 = "0x02"
     </spec>
 
 - name: DEPOSIT_CONTRACT_TREE_DEPTH#phase0
@@ -131,8 +131,8 @@
       search: DepositRequestType\s*=\s*iota
       regex: true
   spec: |
-    <spec constant_var="DEPOSIT_REQUEST_TYPE" fork="electra" hash="54ca462e">
-    DEPOSIT_REQUEST_TYPE: Bytes1 = '0x00'
+    <spec constant_var="DEPOSIT_REQUEST_TYPE" fork="electra" hash="d0bac3c7">
+    DEPOSIT_REQUEST_TYPE: Bytes1 = "0x00"
     </spec>
 
 - name: DOMAIN_AGGREGATE_AND_PROOF#phase0
@@ -141,8 +141,8 @@
       search: DomainAggregateAndProof\s+.*yaml:"DOMAIN_AGGREGATE_AND_PROOF"
       regex: true
   spec: |
-    <spec constant_var="DOMAIN_AGGREGATE_AND_PROOF" fork="phase0" hash="9f7a43fb">
-    DOMAIN_AGGREGATE_AND_PROOF: DomainType = '0x06000000'
+    <spec constant_var="DOMAIN_AGGREGATE_AND_PROOF" fork="phase0" hash="a1abe2c8">
+    DOMAIN_AGGREGATE_AND_PROOF: DomainType = "0x06000000"
     </spec>
 
 - name: DOMAIN_APPLICATION_MASK#phase0
@@ -151,8 +151,8 @@
       search: DomainApplicationMask\s+.*yaml:"DOMAIN_APPLICATION_MASK"
       regex: true
   spec: |
-    <spec constant_var="DOMAIN_APPLICATION_MASK" fork="phase0" hash="82d95c51">
-    DOMAIN_APPLICATION_MASK: DomainType = '0x00000001'
+    <spec constant_var="DOMAIN_APPLICATION_MASK" fork="phase0" hash="8830e4b8">
+    DOMAIN_APPLICATION_MASK: DomainType = "0x00000001"
     </spec>
 
 - name: DOMAIN_BEACON_ATTESTER#phase0
@@ -161,15 +161,15 @@
       search: DomainBeaconAttester\s+.*yaml:"DOMAIN_BEACON_ATTESTER"
       regex: true
   spec: |
-    <spec constant_var="DOMAIN_BEACON_ATTESTER" fork="phase0" hash="511529c3">
-    DOMAIN_BEACON_ATTESTER: DomainType = '0x01000000'
+    <spec constant_var="DOMAIN_BEACON_ATTESTER" fork="phase0" hash="3a157d4b">
+    DOMAIN_BEACON_ATTESTER: DomainType = "0x01000000"
     </spec>
 
 - name: DOMAIN_BEACON_BUILDER#gloas
   sources: []
   spec: |
-    <spec constant_var="DOMAIN_BEACON_BUILDER" fork="gloas" hash="76709e39">
-    DOMAIN_BEACON_BUILDER: DomainType = '0x0B000000'
+    <spec constant_var="DOMAIN_BEACON_BUILDER" fork="gloas" hash="fd984f32">
+    DOMAIN_BEACON_BUILDER: DomainType = "0x0B000000"
     </spec>
 
 - name: DOMAIN_BEACON_PROPOSER#phase0
@@ -178,8 +178,8 @@
       search: DomainBeaconProposer\s+.*yaml:"DOMAIN_BEACON_PROPOSER"
       regex: true
   spec: |
-    <spec constant_var="DOMAIN_BEACON_PROPOSER" fork="phase0" hash="c6ec551e">
-    DOMAIN_BEACON_PROPOSER: DomainType = '0x00000000'
+    <spec constant_var="DOMAIN_BEACON_PROPOSER" fork="phase0" hash="173d9685">
+    DOMAIN_BEACON_PROPOSER: DomainType = "0x00000000"
     </spec>
 
 - name: DOMAIN_BLS_TO_EXECUTION_CHANGE#capella
@@ -188,15 +188,15 @@
       search: DomainBLSToExecutionChange\s+.*yaml:"DOMAIN_BLS_TO_EXECUTION_CHANGE"
       regex: true
   spec: |
-    <spec constant_var="DOMAIN_BLS_TO_EXECUTION_CHANGE" fork="capella" hash="08a623ec">
-    DOMAIN_BLS_TO_EXECUTION_CHANGE: DomainType = '0x0A000000'
+    <spec constant_var="DOMAIN_BLS_TO_EXECUTION_CHANGE" fork="capella" hash="732725f5">
+    DOMAIN_BLS_TO_EXECUTION_CHANGE: DomainType = "0x0A000000"
     </spec>
 
 - name: DOMAIN_BUILDER_DEPOSIT#gloas
   sources: []
   spec: |
-    <spec constant_var="DOMAIN_BUILDER_DEPOSIT" fork="gloas" hash="e0a71135">
-    DOMAIN_BUILDER_DEPOSIT: DomainType = '0x0E000000'
+    <spec constant_var="DOMAIN_BUILDER_DEPOSIT" fork="gloas" hash="90ae3101">
+    DOMAIN_BUILDER_DEPOSIT: DomainType = "0x0E000000"
     </spec>
 
 - name: DOMAIN_CONTRIBUTION_AND_PROOF#altair
@@ -205,8 +205,8 @@
       search: DomainContributionAndProof\s+.*yaml:"DOMAIN_CONTRIBUTION_AND_PROOF"
       regex: true
   spec: |
-    <spec constant_var="DOMAIN_CONTRIBUTION_AND_PROOF" fork="altair" hash="67dcb5cb">
-    DOMAIN_CONTRIBUTION_AND_PROOF: DomainType = '0x09000000'
+    <spec constant_var="DOMAIN_CONTRIBUTION_AND_PROOF" fork="altair" hash="6a832022">
+    DOMAIN_CONTRIBUTION_AND_PROOF: DomainType = "0x09000000"
     </spec>
 
 - name: DOMAIN_DEPOSIT#phase0
@@ -215,15 +215,15 @@
       search: DomainDeposit\s+.*yaml:"DOMAIN_DEPOSIT"
       regex: true
   spec: |
-    <spec constant_var="DOMAIN_DEPOSIT" fork="phase0" hash="eab99f9f">
-    DOMAIN_DEPOSIT: DomainType = '0x03000000'
+    <spec constant_var="DOMAIN_DEPOSIT" fork="phase0" hash="062bb506">
+    DOMAIN_DEPOSIT: DomainType = "0x03000000"
     </spec>
 
 - name: DOMAIN_INCLUSION_LIST_COMMITTEE#heze
   sources: []
   spec: |
-    <spec constant_var="DOMAIN_INCLUSION_LIST_COMMITTEE" fork="heze" hash="01403930">
-    DOMAIN_INCLUSION_LIST_COMMITTEE: DomainType = '0x10000000'
+    <spec constant_var="DOMAIN_INCLUSION_LIST_COMMITTEE" fork="heze" hash="8346e582">
+    DOMAIN_INCLUSION_LIST_COMMITTEE: DomainType = "0x10000000"
     </spec>
 
 - name: DOMAIN_PROPOSER_PREFERENCES#gloas
@@ -232,15 +232,15 @@
       search: DomainProposerPreferences\s+.*yaml:"DOMAIN_PROPOSER_PREFERENCES"
       regex: true
   spec: |
-    <spec constant_var="DOMAIN_PROPOSER_PREFERENCES" fork="gloas" hash="9377ecfb">
-    DOMAIN_PROPOSER_PREFERENCES: DomainType = '0x0D000000'
+    <spec constant_var="DOMAIN_PROPOSER_PREFERENCES" fork="gloas" hash="d0123101">
+    DOMAIN_PROPOSER_PREFERENCES: DomainType = "0x0D000000"
     </spec>
 
 - name: DOMAIN_PTC_ATTESTER#gloas
   sources: []
   spec: |
-    <spec constant_var="DOMAIN_PTC_ATTESTER" fork="gloas" hash="4feba202">
-    DOMAIN_PTC_ATTESTER: DomainType = '0x0C000000'
+    <spec constant_var="DOMAIN_PTC_ATTESTER" fork="gloas" hash="1aa341b3">
+    DOMAIN_PTC_ATTESTER: DomainType = "0x0C000000"
     </spec>
 
 - name: DOMAIN_RANDAO#phase0
@@ -249,8 +249,8 @@
       search: DomainRandao\s+.*yaml:"DOMAIN_RANDAO"
       regex: true
   spec: |
-    <spec constant_var="DOMAIN_RANDAO" fork="phase0" hash="1bf33286">
-    DOMAIN_RANDAO: DomainType = '0x02000000'
+    <spec constant_var="DOMAIN_RANDAO" fork="phase0" hash="eb3afc67">
+    DOMAIN_RANDAO: DomainType = "0x02000000"
     </spec>
 
 - name: DOMAIN_SELECTION_PROOF#phase0
@@ -259,8 +259,8 @@
       search: DomainSelectionProof\s+.*yaml:"DOMAIN_SELECTION_PROOF"
       regex: true
   spec: |
-    <spec constant_var="DOMAIN_SELECTION_PROOF" fork="phase0" hash="5443c8b0">
-    DOMAIN_SELECTION_PROOF: DomainType = '0x05000000'
+    <spec constant_var="DOMAIN_SELECTION_PROOF" fork="phase0" hash="644604a3">
+    DOMAIN_SELECTION_PROOF: DomainType = "0x05000000"
     </spec>
 
 - name: DOMAIN_SYNC_COMMITTEE#altair
@@ -269,8 +269,8 @@
       search: DomainSyncCommittee\s+.*yaml:"DOMAIN_SYNC_COMMITTEE"
       regex: true
   spec: |
-    <spec constant_var="DOMAIN_SYNC_COMMITTEE" fork="altair" hash="26073f5d">
-    DOMAIN_SYNC_COMMITTEE: DomainType = '0x07000000'
+    <spec constant_var="DOMAIN_SYNC_COMMITTEE" fork="altair" hash="55668865">
+    DOMAIN_SYNC_COMMITTEE: DomainType = "0x07000000"
     </spec>
 
 - name: DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF#altair
@@ -279,8 +279,8 @@
       search: DomainSyncCommitteeSelectionProof\s+.*yaml:"DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF"
       regex: true
   spec: |
-    <spec constant_var="DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF" fork="altair" hash="f7e4d78c">
-    DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF: DomainType = '0x08000000'
+    <spec constant_var="DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF" fork="altair" hash="a04f6722">
+    DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF: DomainType = "0x08000000"
     </spec>
 
 - name: DOMAIN_VOLUNTARY_EXIT#phase0
@@ -289,8 +289,8 @@
       search: DomainVoluntaryExit\s+.*yaml:"DOMAIN_VOLUNTARY_EXIT"
       regex: true
   spec: |
-    <spec constant_var="DOMAIN_VOLUNTARY_EXIT" fork="phase0" hash="6abf51b5">
-    DOMAIN_VOLUNTARY_EXIT: DomainType = '0x04000000'
+    <spec constant_var="DOMAIN_VOLUNTARY_EXIT" fork="phase0" hash="7ec64e17">
+    DOMAIN_VOLUNTARY_EXIT: DomainType = "0x04000000"
     </spec>
 
 - name: EMPTY_BLOCK_HASH#bellatrix
@@ -303,8 +303,8 @@
 - name: ENDIANNESS#phase0
   sources: []
   spec: |
-    <spec constant_var="ENDIANNESS" fork="phase0" hash="76922bbc">
-    ENDIANNESS = 'little'
+    <spec constant_var="ENDIANNESS" fork="phase0" hash="bd3143ef">
+    ENDIANNESS = "little"
     </spec>
 
 - name: ETH1_ADDRESS_WITHDRAWAL_PREFIX#phase0
@@ -313,8 +313,8 @@
       search: ETH1AddressWithdrawalPrefixByte\s+.*yaml:"ETH1_ADDRESS_WITHDRAWAL_PREFIX"
       regex: true
   spec: |
-    <spec constant_var="ETH1_ADDRESS_WITHDRAWAL_PREFIX" fork="phase0" hash="faffaf83">
-    ETH1_ADDRESS_WITHDRAWAL_PREFIX: Bytes1 = '0x01'
+    <spec constant_var="ETH1_ADDRESS_WITHDRAWAL_PREFIX" fork="phase0" hash="c8123ce5">
+    ETH1_ADDRESS_WITHDRAWAL_PREFIX: Bytes1 = "0x01"
     </spec>
 
 - name: ETH_TO_GWEI#phase0
@@ -353,8 +353,8 @@
       search: InfiniteSignature\s*=
       regex: true
   spec: |
-    <spec constant_var="G2_POINT_AT_INFINITY" fork="altair" hash="55ddc9fd">
-    G2_POINT_AT_INFINITY: BLSSignature = b'\xc0' + b'\x00' * 95
+    <spec constant_var="G2_POINT_AT_INFINITY" fork="altair" hash="3820970f">
+    G2_POINT_AT_INFINITY: BLSSignature = b"\xc0" + b"\x00" * 95
     </spec>
 
 - name: GENESIS_EPOCH#phase0
@@ -648,8 +648,8 @@
       search: blobCommitmentVersionKZG\s+uint8\s+=\s+0x01
       regex: true
   spec: |
-    <spec constant_var="VERSIONED_HASH_VERSION_KZG" fork="deneb" hash="fc402ca2">
-    VERSIONED_HASH_VERSION_KZG: Bytes1 = '0x01'
+    <spec constant_var="VERSIONED_HASH_VERSION_KZG" fork="deneb" hash="21d86f8b">
+    VERSIONED_HASH_VERSION_KZG: Bytes1 = "0x01"
     </spec>
 
 - name: WEIGHT_DENOMINATOR#altair
@@ -668,6 +668,6 @@
       search: WithdrawalRequestType\s*$
       regex: true
   spec: |
-    <spec constant_var="WITHDRAWAL_REQUEST_TYPE" fork="electra" hash="e8e70397">
-    WITHDRAWAL_REQUEST_TYPE: Bytes1 = '0x01'
+    <spec constant_var="WITHDRAWAL_REQUEST_TYPE" fork="electra" hash="8f2dd062">
+    WITHDRAWAL_REQUEST_TYPE: Bytes1 = "0x01"
     </spec>

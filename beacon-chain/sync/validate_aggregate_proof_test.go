@@ -822,3 +822,55 @@ func Test_SetAggregatorIndexEpochSeen(t *testing.T) {
 	second := r.setAggregatorIndexEpochSeen(epoch, aggIndex)
 	require.Equal(t, false, second)
 }
+
+func TestValidateAggregatedAtt_GloasPayloadNotSeen_IgnoresWithoutFetch(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	beaconState, _ := util.DeterministicGenesisStateGloas(t, 64)
+
+	blockRoot := bytesutil.PadTo([]byte("blockroot"), 32)
+	cb := primitives.NewAttestationCommitteeBits()
+	cb.SetBitAt(0, true)
+	aggBits := bitfield.NewBitlist(1)
+	aggBits.SetBitAt(0, true)
+	att := &ethpb.AttestationElectra{
+		Data: &ethpb.AttestationData{
+			Slot:            10,
+			CommitteeIndex:  1, // payload-present vote
+			BeaconBlockRoot: blockRoot,
+			Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+			Target:          &ethpb.Checkpoint{Root: blockRoot},
+		},
+		AggregationBits: aggBits,
+		CommitteeBits:   cb,
+		// Garbage signature: the attack relies on it never being checked before the Ignore.
+		Signature: make([]byte, fieldparams.BLSSignatureLength),
+	}
+	signed := &ethpb.SignedAggregateAttestationAndProofElectra{
+		Message: &ethpb.AggregateAttestationAndProofElectra{
+			Aggregate:      att,
+			SelectionProof: make([]byte, fieldparams.BLSSignatureLength),
+		},
+		Signature: make([]byte, fieldparams.BLSSignatureLength),
+	}
+
+	// p2p and beaconDB are deliberately nil: if a fetch is ever reintroduced on this path,
+	// requestPayloadEnvelope's peer lookup panics instead of the regression passing silently.
+	s := &Service{
+		ctx: t.Context(),
+		cfg: &config{
+			chain: &mock.ChainService{
+				State:     beaconState,
+				BlockSlot: 9, // attested block is from an earlier slot, so index 1 is legal
+			},
+		},
+		badPayloadCache: lruwrpr.New(10),
+	}
+
+	res, err := s.validateAggregatedAtt(t.Context(), signed)
+	require.Equal(t, pubsub.ValidationIgnore, res)
+	require.ErrorContains(t, "execution payload for attested block has not been seen", err)
+}

@@ -1938,6 +1938,72 @@ func TestGetAttestationData(t *testing.T) {
 		require.NoError(t, att.UnmarshalSSZ(writer.Body.Bytes()))
 	})
 
+	t.Run("committeeIndex omitted before gloas", func(t *testing.T) {
+		for _, tc := range []struct {
+			name         string
+			electraEpoch primitives.Epoch
+		}{
+			{name: "phase0", electraEpoch: params.BeaconConfig().FarFutureEpoch},
+			{name: "fulu", electraEpoch: 0},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				params.SetupTestConfigCleanup(t)
+				cfg := params.BeaconConfig()
+				cfg.ElectraForkEpoch = tc.electraEpoch
+				cfg.FuluForkEpoch = tc.electraEpoch
+				params.OverrideBeaconConfig(cfg)
+
+				block := util.NewBeaconBlock()
+				block.Block.Slot = 3*params.BeaconConfig().SlotsPerEpoch + 1
+				justifiedBlock := util.NewBeaconBlock()
+				justifiedBlock.Block.Slot = 2 * params.BeaconConfig().SlotsPerEpoch
+				blockRoot, err := block.Block.HashTreeRoot()
+				require.NoError(t, err)
+				justifiedRoot, err := justifiedBlock.Block.HashTreeRoot()
+				require.NoError(t, err)
+				slot := 3*params.BeaconConfig().SlotsPerEpoch + 1
+				beaconState, err := util.NewBeaconState()
+				require.NoError(t, err)
+				require.NoError(t, beaconState.SetSlot(slot))
+				justifiedCheckpoint := &ethpbalpha.Checkpoint{Epoch: 2, Root: justifiedRoot[:]}
+				require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
+				offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+				chain := &mockChain.ChainService{
+					Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+					Root:                       blockRoot[:],
+					CurrentJustifiedCheckPoint: justifiedCheckpoint,
+					TargetRoot:                 blockRoot,
+					State:                      beaconState,
+				}
+				s := &Server{
+					SyncChecker:           &mockSync.Sync{IsSyncing: false},
+					HeadFetcher:           chain,
+					TimeFetcher:           chain,
+					OptimisticModeFetcher: chain,
+					CoreService: &core.Service{
+						HeadFetcher:           chain,
+						GenesisTimeFetcher:    chain,
+						FinalizedFetcher:      chain,
+						AttestationCache:      cache.NewAttestationDataCache(),
+						OptimisticModeFetcher: chain,
+					},
+				}
+
+				request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://example.com?slot=%d", slot), nil)
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.GetAttestationData(writer, request)
+
+				require.Equal(t, http.StatusOK, writer.Code, writer.Body.String())
+				resp := &structs.GetAttestationDataResponse{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+				assert.Equal(t, "0", resp.Data.CommitteeIndex)
+				assert.Equal(t, hexutil.Encode(blockRoot[:]), resp.Data.BeaconBlockRoot)
+			})
+		}
+	})
+
 	t.Run("committeeIndex omitted after gloas", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig()

@@ -390,9 +390,7 @@ func (s *Service) validateGloasCommitteeIndex(data *eth.AttestationData) (pubsub
 			return pubsub.ValidationReject, errors.New("execution payload for attested block is invalid")
 		}
 		// [IGNORE] If index == 1, the execution payload for the block must have been seen.
-		// Request the payload envelope if not yet available.
 		if !s.cfg.chain.HasFullNode(blockRoot) {
-			go s.requestPayloadEnvelope(blockRoot)
 			return pubsub.ValidationIgnore, errors.New("execution payload for attested block has not been seen")
 		}
 	}

@@ -728,13 +728,11 @@ func (s *Server) GetAttestationData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isPostGloas := slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch
-
 	_, slot, ok := shared.UintFromQuery(w, r, "slot", true)
 	if !ok {
 		return
 	}
-	_, committeeIndex, ok := shared.UintFromQuery(w, r, "committee_index", !isPostGloas)
+	_, committeeIndex, ok := shared.UintFromQuery(w, r, "committee_index", false)
 	if !ok {
 		return
 	}

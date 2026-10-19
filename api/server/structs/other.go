@@ -284,10 +284,6 @@ type BuilderPendingWithdrawal struct {
 	BuilderIndex string `json:"builder_index"`
 }
 
-type PTCs struct {
-	ValidatorIndices []string `json:"validator_indices"`
-}
-
 type ProposerPreferences struct {
 	DependentRoot  string `json:"dependent_root"`
 	ProposalSlot   string `json:"proposal_slot"`

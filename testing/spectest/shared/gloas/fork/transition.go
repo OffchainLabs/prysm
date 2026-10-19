@@ -3,11 +3,13 @@ package fork
 import (
 	"context"
 	"fmt"
+	"path"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/build/bazel"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	types "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -103,14 +105,28 @@ func RunForkTransitionTest(t *testing.T, config string) {
 				require.Equal(t, true, ok)
 			}
 
+			var transitionErr error
 			for _, b := range postforkBlocks {
 				wsb, err := blocks.NewSignedBeaconBlock(b)
 				require.NoError(t, err)
 				st, err := transition.ExecuteStateTransition(ctx, beaconState, wsb)
-				require.NoError(t, err)
+				if err != nil {
+					transitionErr = err
+					break
+				}
 				beaconState, ok = st.(*state_native.BeaconState)
 				require.Equal(t, true, ok)
 			}
+
+			// A missing post state means the transition must be rejected.
+			if _, err := bazel.Runfile(path.Join(testsFolderPath, folder.Name(), "post.ssz_snappy")); err != nil {
+				require.ErrorContains(t, "could not locate file", err)
+				if transitionErr == nil {
+					t.Fatal("expected the transition to fail")
+				}
+				return
+			}
+			require.NoError(t, transitionErr)
 
 			postBeaconStateFile, err := util.BazelFileBytes(testsFolderPath, folder.Name(), "post.ssz_snappy")
 			require.NoError(t, err)

@@ -70,7 +70,7 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.SignedExecutionPayloadEnvelope{}
 	case "ForkChoiceNode":
 		t.Skip("Not a consensus type")
-	case "IndexedPayloadAttestation":
+	case "IndexedPayloadAttestation", "NewPayloadRequest":
 		t.Skip("Not a consensus type")
 	case "DataColumnSidecar":
 		obj = &ethpb.DataColumnSidecarGloas{}

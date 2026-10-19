@@ -374,7 +374,6 @@ func ConfigureValidator(ctx *cli.Context) error {
 		cfg.EnableMinimalSlashingProtection = true
 	}
 	if ctx.Bool(enableDoppelGangerProtection.Name) {
-		logEnabled(enableDoppelGangerProtection)
 		cfg.EnableDoppelGanger = true
 	}
 	if ctx.Bool(EnableBeaconRESTApi.Name) || ctx.IsSet(validatorflags.BeaconRESTApiProviderFlag.Name) {

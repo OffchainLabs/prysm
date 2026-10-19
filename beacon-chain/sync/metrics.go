@@ -202,6 +202,12 @@ var (
 			Help: "The number of blob sidecars that were dropped due to missing parent block",
 		},
 	)
+	missingParentDataColumnSidecarCount = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "gossip_missing_parent_data_column_sidecar_total",
+			Help: "The number of data column sidecars that were ignored because their parent block is unknown",
+		},
+	)
 
 	blobRecoveredFromELTotal = promauto.NewCounter(
 		prometheus.CounterOpts{

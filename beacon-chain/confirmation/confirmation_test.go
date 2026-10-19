@@ -43,6 +43,10 @@ func (m *mockForkchoiceReader) Slot(_ [32]byte) (primitives.Slot, error) { retur
 func (m *mockForkchoiceReader) ParentRoot(_ [32]byte) ([32]byte, error) {
 	return [32]byte{}, nil
 }
+func (m *mockForkchoiceReader) ParentHash(_ [32]byte) [32]byte { return [32]byte{} }
+func (m *mockForkchoiceReader) BlockHash(_ [32]byte) ([32]byte, error) {
+	return [32]byte{}, nil
+}
 func (m *mockForkchoiceReader) IsOptimistic(_ [32]byte) (bool, error) { return false, nil }
 func (m *mockForkchoiceReader) AncestorRoot(_ context.Context, _ [32]byte, _ primitives.Slot) ([32]byte, error) {
 	return [32]byte{}, nil

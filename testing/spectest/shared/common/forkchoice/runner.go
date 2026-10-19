@@ -75,6 +75,7 @@ func runTest(t *testing.T, config string, fork int, basePath string, fcr bool) {
 			"on_payload_attestation_message_current_slot_and_signature": "signature and current-slot checks live in gossip validation",
 			"on_payload_attestation_message_unknown_block_root":         "unknown block root check lives in gossip validation",
 			"on_payload_attestation_message_slot_mismatch":              "block slot match check lives in gossip validation",
+			"get_head_prunes_childless_unviable_full_variant":           "consensus-specs#5509 viable payload variant filtering pending review",
 		}
 		for _, folder := range testFolders {
 			if reason, ok := skipTests[folder.Name()]; ok {

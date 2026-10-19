@@ -134,6 +134,8 @@ func UnmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.BLSToExecutionChange{}
 	case "SignedBLSToExecutionChange":
 		obj = &ethpb.SignedBLSToExecutionChange{}
+	case "NewPayloadRequest":
+		t.Skip("Not a consensus type")
 	default:
 		return nil, errors.New("type not found")
 	}

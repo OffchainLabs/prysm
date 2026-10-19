@@ -16,6 +16,7 @@ import (
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
@@ -23,9 +24,14 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/protocol"
 )
 
 func TestValidateDataColumn(t *testing.T) {
@@ -224,6 +230,21 @@ func TestValidateDataColumn(t *testing.T) {
 		require.Equal(t, pubsub.ValidationIgnore, result)
 	})
 
+	t.Run("unknown parent is ignored without a parent request", func(t *testing.T) {
+		// A zero parent root reads as "being synced" to the chain mock, which would hide a fan-out.
+		unknownParentMsg, ok := proto.Clone(dataColumnSidecarMsg).(*ethpb.DataColumnSidecar)
+		require.Equal(t, true, ok)
+		unknownParentMsg.SignedBlockHeader.Header.ParentRoot = bytesutil.PadTo([]byte("unknown parent"), fieldparams.RootLength)
+		service, message := serviceAndMessage(t, testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{ErrSidecarParentSeen: genericError}), unknownParentMsg)
+		service.cfg.chain.(*mock.ChainService).FinalizedCheckPoint = &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, fieldparams.RootLength)}
+		asked := blocksByRootProbe(t, service.cfg.p2p.(*p2ptest.TestP2P), service.cfg.clock)
+
+		result, err := service.validateDataColumn(ctx, "aDummyPID", message)
+		require.ErrorIs(t, err, genericError)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+		requireNoBlocksByRootRequest(t, asked)
+	})
+
 	t.Run("fulu sidecar claiming gloas slot takes fulu path", func(t *testing.T) {
 		gloasCfg := params.BeaconConfig().Copy()
 		gloasCfg.GloasForkEpoch = 1
@@ -238,6 +259,36 @@ func TestValidateDataColumn(t *testing.T) {
 		require.ErrorIs(t, err, genericError)
 		require.Equal(t, pubsub.ValidationReject, result)
 	})
+}
+
+// blocksByRootProbe connects a peer eligible for parent requests and reports any blocks-by-root stream it receives.
+func blocksByRootProbe(t *testing.T, us *p2ptest.TestP2P, clock *startup.Clock) chan struct{} {
+	probe := p2ptest.NewTestP2P(t)
+	us.Connect(probe)
+	us.Peers().Add(new(enr.Record), probe.PeerID(), nil, network.DirOutbound)
+	us.Peers().SetConnectionState(probe.PeerID(), peers.Connected)
+	us.Peers().SetChainState(probe.PeerID(), &ethpb.StatusV2{FinalizedEpoch: 1, HeadSlot: 1})
+
+	topic, err := p2p.TopicFromMessage(p2p.BeaconBlocksByRootsMessageName, slots.ToEpoch(clock.CurrentSlot()))
+	require.NoError(t, err)
+	asked := make(chan struct{}, 1)
+	probe.BHost.SetStreamHandler(protocol.ID(topic+us.Encoding().ProtocolSuffix()), func(stream network.Stream) {
+		select {
+		case asked <- struct{}{}:
+		default:
+		}
+		_ = stream.Close()
+	})
+	return asked
+}
+
+// requireNoBlocksByRootRequest fails if the probe peer was asked for blocks within a settle window.
+func requireNoBlocksByRootRequest(t *testing.T, asked chan struct{}) {
+	select {
+	case <-asked:
+		t.Fatal("a sidecar with an unknown parent must not trigger a blocks-by-root request")
+	case <-time.After(500 * time.Millisecond):
+	}
 }
 
 func testNewDataColumnSidecarsVerifier(verifier verification.MockDataColumnsVerifier) verification.NewDataColumnsVerifier {

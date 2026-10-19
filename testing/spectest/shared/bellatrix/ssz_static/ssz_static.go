@@ -120,6 +120,8 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.LightClientUpdateAltair{}
 	case "PowBlock":
 		obj = &ethpb.PowBlock{}
+	case "NewPayloadRequest":
+		t.Skip("Not a consensus type")
 	default:
 		return nil, errors.New("type not found")
 	}

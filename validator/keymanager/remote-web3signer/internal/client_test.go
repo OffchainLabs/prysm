@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 
@@ -79,61 +80,63 @@ func TestClient_Sign_HappyPath_Jsontype(t *testing.T) {
 	assert.EqualValues(t, "0xb3baa751d0a9132cfe93e4e3d5ff9075111100e3789dca219ade5a24d27e19d16b3353149da1833e9b691bb38634e8dc04469be7032132906c927d7e1a49b414730612877bc6b2810c8f202daf793d1ab0d6b5cb21d52f9e52e883859887a5d9", fmt.Sprintf("%#x", resp.Marshal()))
 }
 
-func TestClient_Sign_500(t *testing.T) {
-	jsonSig := `0xb3baa751d0a9132cfe93e4e3d5ff9075111100e3789dca219ade5a24d27e19d16b3353149da1833e9b691bb38634e8dc04469be7032132906c927d7e1a49b414730612877bc6b2810c8f202daf793d1ab0d6b5cb21d52f9e52e883859887a5d9`
-	// create a new reader with that JSON
-	r := io.NopCloser(bytes.NewReader([]byte(jsonSig)))
-	mock := &mockTransport{mockResponse: &http.Response{
-		StatusCode: 500,
-		Body:       r,
-	}}
-	u, err := url.Parse("example.com")
-	assert.NoError(t, err)
-	cl := internal.ApiClient{BaseURL: u, RestClient: &http.Client{Transport: mock}}
-	jsonRequest, err := json.Marshal(`{message: "hello"}`)
-	assert.NoError(t, err)
-	resp, err := cl.Sign(t.Context(), "a2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820", jsonRequest)
-	assert.NotNil(t, err)
-	assert.Nil(t, resp)
+func TestClient_Sign_ErrorStatus(t *testing.T) {
+	tests := []struct {
+		status  int
+		wantErr string
+	}{
+		{status: http.StatusBadRequest, wantErr: "bad request format"},
+		{status: http.StatusNotFound, wantErr: "public key not found"},
+		{status: http.StatusPreconditionFailed, wantErr: "signing operation failed due to slashing protection rules"},
+		{status: http.StatusInternalServerError, wantErr: "internal Web3Signer server error"},
+	}
+	for _, tt := range tests {
+		t.Run(http.StatusText(tt.status), func(t *testing.T) {
+			// A real server and transport consume the request body, which the mock transport does not.
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, err := io.Copy(io.Discard, r.Body)
+				assert.NoError(t, err)
+				w.WriteHeader(tt.status)
+				_, err = w.Write([]byte("error"))
+				assert.NoError(t, err)
+			}))
+			defer srv.Close()
+			cl, err := internal.NewApiClient(srv.URL)
+			require.NoError(t, err)
 
+			resp, err := cl.Sign(t.Context(), "0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820", bytes.Repeat([]byte("a"), 644))
+			require.ErrorContains(t, tt.wantErr, err)
+			require.IsNil(t, resp)
+		})
+	}
 }
 
-func TestClient_Sign_412(t *testing.T) {
-	jsonSig := `0xb3baa751d0a9132cfe93e4e3d5ff9075111100e3789dca219ade5a24d27e19d16b3353149da1833e9b691bb38634e8dc04469be7032132906c927d7e1a49b414730612877bc6b2810c8f202daf793d1ab0d6b5cb21d52f9e52e883859887a5d9`
-	// create a new reader with that JSON
-	r := io.NopCloser(bytes.NewReader([]byte(jsonSig)))
-	mock := &mockTransport{mockResponse: &http.Response{
-		StatusCode: 412,
-		Body:       r,
-	}}
-	u, err := url.Parse("example.com")
-	assert.NoError(t, err)
-	cl := internal.ApiClient{BaseURL: u, RestClient: &http.Client{Transport: mock}}
-	jsonRequest, err := json.Marshal(`{message: "hello"}`)
-	assert.NoError(t, err)
-	resp, err := cl.Sign(t.Context(), "a2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820", jsonRequest)
-	assert.NotNil(t, err)
-	assert.Nil(t, resp)
-
+// failingBody is a response body whose reads fail and which records whether it was closed.
+type failingBody struct {
+	closed bool
 }
 
-func TestClient_Sign_400(t *testing.T) {
-	jsonSig := `0xb3baa751d0a9132cfe93e4e3d5ff9075111100e3789dca219ade5a24d27e19d16b3353149da1833e9b691bb38634e8dc04469be7032132906c927d7e1a49b414730612877bc6b2810c8f202daf793d1ab0d6b5cb21d52f9e52e883859887a5d9`
-	// create a new reader with that JSON
-	r := io.NopCloser(bytes.NewReader([]byte(jsonSig)))
+func (b *failingBody) Read([]byte) (int, error) { return 0, io.ErrUnexpectedEOF }
+
+func (b *failingBody) Close() error {
+	b.closed = true
+	return nil
+}
+
+func TestClient_Sign_ResponseDumpFailure(t *testing.T) {
+	body := &failingBody{}
 	mock := &mockTransport{mockResponse: &http.Response{
-		StatusCode: 400,
-		Body:       r,
+		StatusCode: http.StatusPreconditionFailed,
+		Body:       body,
 	}}
 	u, err := url.Parse("example.com")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	cl := internal.ApiClient{BaseURL: u, RestClient: &http.Client{Transport: mock}}
-	jsonRequest, err := json.Marshal(`{message: "hello"}`)
-	assert.NoError(t, err)
-	resp, err := cl.Sign(t.Context(), "a2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820", jsonRequest)
-	assert.NotNil(t, err)
-	assert.Nil(t, resp)
 
+	resp, err := cl.Sign(t.Context(), "0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820", []byte("{}"))
+	require.ErrorContains(t, "signing operation failed due to slashing protection rules", err)
+	require.IsNil(t, resp)
+	require.Equal(t, true, body.closed, "response body was not closed after the dump failed")
 }
 
 func TestClient_GetPublicKeys_HappyPath(t *testing.T) {

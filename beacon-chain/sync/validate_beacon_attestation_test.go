@@ -761,12 +761,11 @@ func Test_validateGloasCommitteeIndex(t *testing.T) {
 			if tt.hasFullNode {
 				mc.ForkchoiceRoots = map[[32]byte]bool{blockRoot32: true}
 			}
+
 			s := &Service{
 				ctx: t.Context(),
 				cfg: &config{
-					chain:    mc,
-					p2p:      p2ptest.NewTestP2P(t),
-					beaconDB: dbtest.SetupDB(t),
+					chain: mc,
 				},
 				badPayloadCache: lruwrpr.New(10),
 			}

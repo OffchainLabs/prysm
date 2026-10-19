@@ -84,7 +84,7 @@ clean:
 VET         := $(CURDIR)/.cache/prysm-vet
 VET_DEVELOP := ./beacon-chain/blockchain ./config/params
 VET_MINIMAL := ./beacon-chain/rpc/prysm/v1alpha1/beacon ./beacon-chain/rpc/prysm/v1alpha1/validator \
-	./config/fieldparams ./testing/endtoend ./testing/spectest/minimal ./testing/spectest/minimal/gloas
+	./config/fieldparams ./testing/endtoend ./testing/spectest/minimal ./testing/spectest/minimal/gloas ./testing/spectest/minimal/heze
 
 # The lint passes: default tags, develop, minimal.
 LINT_MAINNET = $(GO) vet -vettool=$(VET) ./...

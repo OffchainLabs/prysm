@@ -458,12 +458,12 @@ func (b *BeaconState) ExpectedWithdrawalsGloas() (state.ExpectedWithdrawalsGloas
 // appendBuilderWithdrawals returns builder pending withdrawals, the updated withdrawal index,
 // and the processed count.
 //
-//	<spec fn="get_builder_withdrawals" fork="gloas" hash="f8aade6a">
+//	<spec fn="get_builder_withdrawals" fork="gloas" hash="e920ef37">
 //	def get_builder_withdrawals(
 //	    state: BeaconState,
 //	    withdrawal_index: WithdrawalIndex,
 //	    prior_withdrawals: Sequence[Withdrawal],
-//	) -> Tuple[Sequence[Withdrawal], WithdrawalIndex, Uint64]:
+//	) -> tuple[Sequence[Withdrawal], WithdrawalIndex, Uint64]:
 //	    withdrawals_limit = MAX_WITHDRAWALS_PER_PAYLOAD - 1
 //	    assert len(prior_withdrawals) <= withdrawals_limit
 //
@@ -520,12 +520,12 @@ func (b *BeaconState) appendBuilderWithdrawals(withdrawalIndex uint64, withdrawa
 // appendBuildersSweepWithdrawals returns builder sweep withdrawals, the updated withdrawal index,
 // and the processed count.
 //
-//	<spec fn="get_builders_sweep_withdrawals" fork="gloas" hash="2363c4b1">
+//	<spec fn="get_builders_sweep_withdrawals" fork="gloas" hash="d23af7b7">
 //	def get_builders_sweep_withdrawals(
 //	    state: BeaconState,
 //	    withdrawal_index: WithdrawalIndex,
 //	    prior_withdrawals: Sequence[Withdrawal],
-//	) -> Tuple[Sequence[Withdrawal], WithdrawalIndex, Uint64]:
+//	) -> tuple[Sequence[Withdrawal], WithdrawalIndex, Uint64]:
 //	    epoch = get_current_epoch(state)
 //	    builders_limit = min(len(state.builders), MAX_BUILDERS_PER_WITHDRAWALS_SWEEP)
 //	    withdrawals_limit = MAX_WITHDRAWALS_PER_PAYLOAD - 1
@@ -541,13 +541,14 @@ func (b *BeaconState) appendBuilderWithdrawals(withdrawalIndex uint64, withdrawa
 //	            break
 //
 //	        builder = state.builders[builder_index]
-//	        if builder.withdrawable_epoch <= epoch and builder.balance > 0:
+//	        balance = get_builder_balance_after_withdrawals(state, builder_index, all_withdrawals)
+//	        if builder.withdrawable_epoch <= epoch and balance > 0:
 //	            withdrawals.append(
 //	                Withdrawal(
 //	                    index=withdrawal_index,
 //	                    validator_index=convert_builder_index_to_validator_index(builder_index),
 //	                    address=builder.execution_address,
-//	                    amount=builder.balance,
+//	                    amount=balance,
 //	                )
 //	            )
 //	            withdrawal_index += 1
@@ -586,12 +587,14 @@ func (b *BeaconState) appendBuildersSweepWithdrawals(withdrawalIndex uint64, wit
 		if builder == nil {
 			return withdrawalIndex, 0, fmt.Errorf("builder at index %d is nil", builderIndex)
 		}
-		if builder.WithdrawableEpoch <= epoch && builder.Balance > 0 {
+		// Subtracts this payload's earlier withdrawals for the builder, get_builder_balance_after_withdrawals in v1.7.0-beta.3+.
+		balance := builderBalanceAfterWithdrawals(builder, builderIndex.ToValidatorIndex(), ws)
+		if builder.WithdrawableEpoch <= epoch && balance > 0 {
 			ws = append(ws, &enginev1.Withdrawal{
 				Index:          withdrawalIndex,
 				ValidatorIndex: builderIndex.ToValidatorIndex(),
 				Address:        builder.ExecutionAddress,
-				Amount:         uint64(builder.Balance),
+				Amount:         balance,
 			})
 			withdrawalIndex++
 		}
@@ -601,6 +604,19 @@ func (b *BeaconState) appendBuildersSweepWithdrawals(withdrawalIndex uint64, wit
 
 	*withdrawals = ws
 	return withdrawalIndex, builderIndex, nil
+}
+
+func builderBalanceAfterWithdrawals(builder *ethpb.Builder, validatorIndex primitives.ValidatorIndex, withdrawals []*enginev1.Withdrawal) uint64 {
+	withdrawn := uint64(0)
+	for _, w := range withdrawals {
+		if w != nil && w.ValidatorIndex == validatorIndex {
+			withdrawn += w.Amount
+		}
+	}
+	if withdrawn >= uint64(builder.Balance) {
+		return 0
+	}
+	return uint64(builder.Balance) - withdrawn
 }
 
 // Builders returns a copy of the builders registry.
@@ -692,12 +708,13 @@ func (b *BeaconState) NextWithdrawalBuilderIndex() (primitives.BuilderIndex, err
 // PayloadCommitteeReadOnly returns the payload timeliness committee for a given slot
 // by looking up the cached PTC window in state.
 //
-//	<spec fn="get_ptc" fork="gloas" hash="c166207e">
+//	<spec fn="get_ptc" fork="gloas" hash="66143783">
 //	def get_ptc(state: BeaconState, slot: Slot) -> PayloadTimelinessCommittee:
 //	    """
 //	    Get the payload timeliness committee for the given ``slot``.
 //	    """
 //	    epoch = compute_epoch_at_slot(slot)
+//	    assert epoch >= GLOAS_FORK_EPOCH
 //	    state_epoch = get_current_epoch(state)
 //	    if epoch < state_epoch:
 //	        assert epoch + 1 == state_epoch

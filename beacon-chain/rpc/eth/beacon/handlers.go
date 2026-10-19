@@ -84,7 +84,9 @@ func versionHeaderFromRequest(body []byte) (string, error) {
 		return "", errors.Wrap(err, "unable to peek slot from block")
 	}
 	ce := slots.ToEpoch(sp.Block.Slot)
-	if ce >= params.BeaconConfig().GloasForkEpoch {
+	if ce >= params.BeaconConfig().HezeForkEpoch {
+		return version.String(version.Heze), nil
+	} else if ce >= params.BeaconConfig().GloasForkEpoch {
 		return version.String(version.Gloas), nil
 	} else if ce >= params.BeaconConfig().FuluForkEpoch {
 		return version.String(version.Fulu), nil
@@ -678,6 +680,7 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 }
 
 var sszDecoders = map[string]blockDecoder{
+	version.String(version.Heze):      decodeHezeSSZ,
 	version.String(version.Gloas):     decodeGloasSSZ,
 	version.String(version.Fulu):      decodeFuluSSZ,
 	version.String(version.Electra):   decodeElectraSSZ,
@@ -694,6 +697,18 @@ func decodeSSZToGenericBlock(versionHeader string, body []byte) (*eth.GenericSig
 		return decoder(body)
 	}
 	return nil, errors.New("body does not represent a valid block type")
+}
+
+func decodeHezeSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	hezeBlock := &eth.SignedBeaconBlockHeze{}
+	if err := hezeBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(
+			version.String(version.Heze), err,
+		)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Heze{Heze: hezeBlock},
+	}, nil
 }
 
 func decodeGloasSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
@@ -848,6 +863,7 @@ func (s *Server) publishBlock(ctx context.Context, w http.ResponseWriter, r *htt
 }
 
 var jsonDecoders = map[string]blockDecoder{
+	version.String(version.Heze):      decodeHezeJSON,
 	version.String(version.Gloas):     decodeGloasJSON,
 	version.String(version.Fulu):      decodeFuluJSON,
 	version.String(version.Electra):   decodeElectraJSON,
@@ -864,6 +880,13 @@ func decodeJSONToGenericBlock(versionHeader string, body []byte) (*eth.GenericSi
 		return decoder(body)
 	}
 	return nil, fmt.Errorf("body does not represent a valid block type")
+}
+
+func decodeHezeJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBeaconBlockHeze](
+		body,
+		version.String(version.Heze),
+	)
 }
 
 func decodeGloasJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
