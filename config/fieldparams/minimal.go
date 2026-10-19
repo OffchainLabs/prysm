@@ -42,6 +42,8 @@ const (
 	SyncCommitteeBranchDepthElectra       = 6                 // SyncCommitteeBranchDepthElectra defines the number of leaves in a merkle proof of a sync committee.
 	FinalityBranchDepth                   = 6                 // FinalityBranchDepth defines the number of leaves in a merkle proof of the finalized checkpoint root.
 	FinalityBranchDepthElectra            = 7                 // FinalityBranchDepthElectra defines the number of leaves in a merkle proof of the finalized checkpoint root.
+	SyncAggregateBranchDepth              = 4                 // SyncAggregateBranchDepth defines the number of leaves in a merkle proof of a block body's sync aggregate.
+	SyncAggregateBranchDepthGloas         = 8                 // SyncAggregateBranchDepthGloas is the sync aggregate proof depth.
 	PendingDepositsLimit                  = 134217728         // Maximum number of pending balance deposits in the beacon state.
 	PendingPartialWithdrawalsLimit        = 64                // Maximum number of pending partial withdrawals in the beacon state.
 	PendingConsolidationsLimit            = 64                // Maximum number of pending consolidations in the beacon state.
