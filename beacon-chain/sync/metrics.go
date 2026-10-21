@@ -273,10 +273,10 @@ var (
 	payloadEnvelopeUsableDelaySeconds = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "sync_payload_envelope_usable_delay_seconds",
-			Help:    "Time from slot start until the full execution payload envelope is locally available, by transport (gossip = monolithic message, chunks = EIP-8411 reconstruction).",
+			Help:    "Time from slot start until the full execution payload envelope is locally available, by transport (gossip = monolithic message, chunks = EIP-8411 reconstruction) and envelope size class.",
 			Buckets: prometheus.DefBuckets,
 		},
-		[]string{"transport"},
+		[]string{"transport", "size_class"},
 	)
 	payloadEnvelopeSizeBytes = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -286,6 +286,26 @@ var (
 		},
 		[]string{"transport"},
 	)
+)
+
+// envelopeSizeClass buckets an envelope's SSZ size for the usable-delay
+// metric's size_class label.
+func envelopeSizeClass(n int) string {
+	switch {
+	case n < 64*1024:
+		return "lt64k"
+	case n < 256*1024:
+		return "lt256k"
+	case n < 1024*1024:
+		return "lt1m"
+	case n < 4*1024*1024:
+		return "lt4m"
+	default:
+		return "gte4m"
+	}
+}
+
+var (
 	syncPayloadEnvelopeByRangeServedTotal = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "sync_payload_envelope_by_range_served_total",

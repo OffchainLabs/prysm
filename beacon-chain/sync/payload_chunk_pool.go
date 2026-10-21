@@ -197,10 +197,11 @@ func (s *Service) importReconstructedEnvelope(ctx context.Context, slot primitiv
 		}).Warn("Builder committed to undecodable payload chunk bytes")
 		return
 	}
+	envelopeSize := envelope.SizeSSZ()
 	if startTime, startErr := slots.StartTime(s.cfg.clock.GenesisTime(), slot); startErr == nil {
-		payloadEnvelopeUsableDelaySeconds.WithLabelValues("chunks").Observe(prysmTime.Now().Sub(startTime).Seconds())
+		payloadEnvelopeUsableDelaySeconds.WithLabelValues("chunks", envelopeSizeClass(envelopeSize)).Observe(prysmTime.Now().Sub(startTime).Seconds())
 	}
-	payloadEnvelopeSizeBytes.WithLabelValues("chunks").Observe(float64(envelope.SizeSSZ()))
+	payloadEnvelopeSizeBytes.WithLabelValues("chunks").Observe(float64(envelopeSize))
 
 	// Prefer the authenticated block binding over the unauthenticated hint. The
 	// hint can be forged or zero, so only an authoritative routing marks the
