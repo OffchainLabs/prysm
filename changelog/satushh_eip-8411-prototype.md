@@ -5,6 +5,7 @@
 - `GetExecutionPayloadEnvelopeV3`/`PublishExecutionPayloadEnvelopeV3` validator RPCs and `SignRequest` arm `execution_payload_envelope_heze` for the Heze envelope flow; the REST envelope endpoints serve and publish the Heze container for Heze slots via the `heze` version header, with the beacon block root carried out of band.
 - Envelope by-root/by-range req/resp serve the slot's fork-correct wire container with per-slot fork-digest context bytes; initial-sync batches never mix Gloas and Heze envelope protocols.
 - Metrics `sync_payload_chunk_arrival_delay_seconds`, `sync_payload_chunk_reconstruction_seconds`, `sync_payload_chunk_received_total`, and `sync_payload_chunk_reconstruction_total`.
+- Metrics `sync_payload_envelope_usable_delay_seconds` and `sync_payload_envelope_size_bytes`, labeled by `transport` (`gossip` for the monolithic envelope message, `chunks` for EIP-8411 reconstruction), measuring slot start to full local envelope availability and the envelope size at that point.
 
 ### Changed
 

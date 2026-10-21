@@ -270,6 +270,22 @@ var (
 		},
 		[]string{"result"},
 	)
+	payloadEnvelopeUsableDelaySeconds = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "sync_payload_envelope_usable_delay_seconds",
+			Help:    "Time from slot start until the full execution payload envelope is locally available, by transport (gossip = monolithic message, chunks = EIP-8411 reconstruction).",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"transport"},
+	)
+	payloadEnvelopeSizeBytes = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "sync_payload_envelope_size_bytes",
+			Help:    "SSZ size of the execution payload envelope at local availability, by transport.",
+			Buckets: prometheus.ExponentialBuckets(32768, 2, 10),
+		},
+		[]string{"transport"},
+	)
 	syncPayloadEnvelopeByRangeServedTotal = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "sync_payload_envelope_by_range_served_total",

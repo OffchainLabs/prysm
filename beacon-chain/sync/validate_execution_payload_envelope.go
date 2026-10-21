@@ -166,9 +166,11 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	startTime, err := slots.StartTime(s.cfg.clock.GenesisTime(), env.Slot())
 	if err == nil {
 		syncExecutionPayloadEnvelopeArrivalDelaySeconds.Observe(receivedTime.Sub(startTime).Seconds())
+		payloadEnvelopeUsableDelaySeconds.WithLabelValues("gossip").Observe(prysmTime.Now().Sub(startTime).Seconds())
 	} else {
 		log.WithError(err).WithField("slot", env.Slot()).Debug("Could not compute execution payload envelope slot start time")
 	}
+	payloadEnvelopeSizeBytes.WithLabelValues("gossip").Observe(float64(signedEnvelope.Message.SizeSSZ()))
 
 	// execution_payload_gossip fires once the envelope passes gossip validation.
 	if s.cfg.operationNotifier != nil {
