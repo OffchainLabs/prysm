@@ -4,15 +4,18 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -287,6 +290,18 @@ var (
 		[]string{"transport"},
 	)
 )
+
+// logEnvelopeUsable emits one parseable line per locally available execution
+// payload envelope, carrying the exact size and delay rather than a bucketed
+// approximation, so devnet runs can be analysed as a size-vs-delay scatter.
+func logEnvelopeUsable(transport string, slot primitives.Slot, sizeBytes int, delay time.Duration) {
+	log.WithFields(logrus.Fields{
+		"transport": transport,
+		"slot":      slot,
+		"sizeBytes": sizeBytes,
+		"delayMs":   delay.Milliseconds(),
+	}).Info("Payload envelope usable")
+}
 
 // envelopeSizeClass buckets an envelope's SSZ size for the usable-delay
 // metric's size_class label.

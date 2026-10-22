@@ -199,7 +199,9 @@ func (s *Service) importReconstructedEnvelope(ctx context.Context, slot primitiv
 	}
 	envelopeSize := envelope.SizeSSZ()
 	if startTime, startErr := slots.StartTime(s.cfg.clock.GenesisTime(), slot); startErr == nil {
-		payloadEnvelopeUsableDelaySeconds.WithLabelValues("chunks", envelopeSizeClass(envelopeSize)).Observe(prysmTime.Now().Sub(startTime).Seconds())
+		delay := prysmTime.Now().Sub(startTime)
+		payloadEnvelopeUsableDelaySeconds.WithLabelValues("chunks", envelopeSizeClass(envelopeSize)).Observe(delay.Seconds())
+		logEnvelopeUsable("chunks", slot, envelopeSize, delay)
 	}
 	payloadEnvelopeSizeBytes.WithLabelValues("chunks").Observe(float64(envelopeSize))
 

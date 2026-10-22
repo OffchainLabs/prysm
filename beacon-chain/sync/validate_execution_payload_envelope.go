@@ -167,7 +167,9 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	startTime, err := slots.StartTime(s.cfg.clock.GenesisTime(), env.Slot())
 	if err == nil {
 		syncExecutionPayloadEnvelopeArrivalDelaySeconds.Observe(receivedTime.Sub(startTime).Seconds())
-		payloadEnvelopeUsableDelaySeconds.WithLabelValues("gossip", envelopeSizeClass(envelopeSize)).Observe(prysmTime.Now().Sub(startTime).Seconds())
+		delay := prysmTime.Now().Sub(startTime)
+		payloadEnvelopeUsableDelaySeconds.WithLabelValues("gossip", envelopeSizeClass(envelopeSize)).Observe(delay.Seconds())
+		logEnvelopeUsable("gossip", env.Slot(), envelopeSize, delay)
 	} else {
 		log.WithError(err).WithField("slot", env.Slot()).Debug("Could not compute execution payload envelope slot start time")
 	}
