@@ -245,10 +245,10 @@ func InitializeDataMaps() {
 			return lightclientConsensusTypes.NewEmptyOptimisticUpdateDeneb(), nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().GloasForkVersion): func() (interfaces.LightClientOptimisticUpdate, error) {
-			return lightclientConsensusTypes.NewEmptyOptimisticUpdateDeneb(), nil
+			return lightclientConsensusTypes.NewEmptyOptimisticUpdateGloas(), nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().HezeForkVersion): func() (interfaces.LightClientOptimisticUpdate, error) {
-			return lightclientConsensusTypes.NewEmptyOptimisticUpdateDeneb(), nil
+			return lightclientConsensusTypes.NewEmptyOptimisticUpdateGloas(), nil
 		},
 	}
 
@@ -273,10 +273,10 @@ func InitializeDataMaps() {
 			return lightclientConsensusTypes.NewEmptyFinalityUpdateElectra(), nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().GloasForkVersion): func() (interfaces.LightClientFinalityUpdate, error) {
-			return lightclientConsensusTypes.NewEmptyFinalityUpdateElectra(), nil
+			return lightclientConsensusTypes.NewEmptyFinalityUpdateGloas(), nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().HezeForkVersion): func() (interfaces.LightClientFinalityUpdate, error) {
-			return lightclientConsensusTypes.NewEmptyFinalityUpdateElectra(), nil
+			return lightclientConsensusTypes.NewEmptyFinalityUpdateGloas(), nil
 		},
 	}
 
