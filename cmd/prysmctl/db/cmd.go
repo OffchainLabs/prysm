@@ -10,6 +10,7 @@ var Commands = []*cli.Command{
 			queryCmd,
 			bucketsCmd,
 			spanCmd,
+			lightClientEpochDataCmd,
 		},
 	},
 }
