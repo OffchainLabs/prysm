@@ -2405,6 +2405,9 @@ func updateToVersion(ctx context.Context, source state.BeaconState, target int) 
 	case version.Fulu:
 		ret, err = gloas.UpgradeToGloas(ctx, source)
 	case version.Gloas:
+		if err := source.SetDepositRequestsStartIndex(source.Eth1DepositIndex()); err != nil {
+			return nil, errors.Wrap(err, "failed to align deposit requests start index")
+		}
 		ret, err = heze.UpgradeToHeze(source)
 	default:
 		return nil, errors.Errorf("unsupported version %s", version.String(source.Version()))

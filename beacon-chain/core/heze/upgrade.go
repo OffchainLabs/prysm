@@ -16,6 +16,10 @@ func UpgradeToHeze(beaconState state.BeaconState) (state.BeaconState, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "could not convert state to Gloas protobuf")
 	}
+	// Check that the old deposit mechanism has been disabled (EIP-8015).
+	if pre.Eth1DepositIndex != pre.DepositRequestsStartIndex {
+		return nil, errors.Errorf("eth1 deposit index %d does not equal deposit requests start index %d", pre.Eth1DepositIndex, pre.DepositRequestsStartIndex)
+	}
 	bid := pre.LatestExecutionPayloadBid
 	if bid == nil {
 		return nil, errors.New("nil latest execution payload bid")

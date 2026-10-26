@@ -20,6 +20,7 @@ func TestUpgradeToHeze(t *testing.T) {
 			s.Slot = 64
 			s.Fork.CurrentVersion = params.BeaconConfig().GloasForkVersion
 			s.Eth1DepositIndex = 7
+			s.DepositRequestsStartIndex = 7
 			s.LatestExecutionPayloadBid.BlockHash[0] = 0xaa
 			s.LatestExecutionPayloadBid.Value = 9
 			s.LatestExecutionPayloadBid.ExecutionPayment = 13
@@ -80,5 +81,16 @@ func TestUpgradeToHeze(t *testing.T) {
 		require.NoError(t, err)
 		_, err = heze.UpgradeToHeze(pre)
 		require.ErrorContains(t, "nil latest execution payload bid", err)
+	})
+
+	t.Run("rejects an active eth1 deposit mechanism", func(t *testing.T) {
+		pre, err := util.NewBeaconStateGloas(func(s *ethpb.BeaconStateGloas) error {
+			s.Eth1DepositIndex = 3
+			s.DepositRequestsStartIndex = 7
+			return nil
+		})
+		require.NoError(t, err)
+		_, err = heze.UpgradeToHeze(pre)
+		require.ErrorContains(t, "eth1 deposit index 3 does not equal deposit requests start index 7", err)
 	})
 }
