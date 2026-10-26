@@ -1,12 +1,13 @@
 package: "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 types:
   - name: "BeaconBlockBodyHeze"
-    progressive: {}
+    progressive:
+      # EIP-8015: eth1_data and deposits
+      inactive_indices: [1, 6]
     fields:
       ProposerSlashings:     {type: "ProgressiveList"}
       AttesterSlashings:     {type: "ProgressiveList"}
       Attestations:          {type: "ProgressiveList"}
-      Deposits:              {type: "ProgressiveList"}
       VoluntaryExits:        {type: "ProgressiveList"}
       BlsToExecutionChanges: {type: "ProgressiveList"}
       PayloadAttestations:   {type: "ProgressiveList"}

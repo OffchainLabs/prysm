@@ -134,26 +134,41 @@ message BeaconBlockHeze {
 }
 
 // BeaconBlockBodyHeze represents the body of a beacon block in the Heze fork.
+// Removed fields: eth1_data, deposits (EIP-8015).
+//
+// Spec:
+// class BeaconBlockBody(ProgressiveContainer):
+//     ACTIVE_FIELDS = active_fields(width=13, gaps=(1, 6))
+//
+//     randao_reveal: BLSSignature
+//     graffiti: Bytes32
+//     proposer_slashings: ProposerSlashings
+//     attester_slashings: AttesterSlashings
+//     attestations: Attestations
+//     voluntary_exits: VoluntaryExits
+//     sync_aggregate: SyncAggregate
+//     bls_to_execution_changes: BLSToExecutionChanges
+//     signed_execution_payload_bid: SignedExecutionPayloadBid
+//     payload_attestations: PayloadAttestations
+//     parent_execution_requests: ExecutionRequests
 message BeaconBlockBodyHeze {
   bytes randao_reveal = 1 [ (ethereum.eth.ext.ssz_size) = "96" ];
-  Eth1Data eth1_data = 2;
-  bytes graffiti = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
-  repeated ProposerSlashing proposer_slashings = 4
+  bytes graffiti = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  repeated ProposerSlashing proposer_slashings = 3
       [ (ethereum.eth.ext.ssz_max) = "16" ];
-  repeated AttesterSlashingGloas attester_slashings = 5
+  repeated AttesterSlashingGloas attester_slashings = 4
       [ (ethereum.eth.ext.ssz_max) = "1" ];
-  repeated AttestationGloas attestations = 6
+  repeated AttestationGloas attestations = 5
       [ (ethereum.eth.ext.ssz_max) = "8" ];
-  repeated Deposit deposits = 7 [ (ethereum.eth.ext.ssz_max) = "16" ];
-  repeated SignedVoluntaryExit voluntary_exits = 8
+  repeated SignedVoluntaryExit voluntary_exits = 6
       [ (ethereum.eth.ext.ssz_max) = "16" ];
-  SyncAggregate sync_aggregate = 9;
-  repeated SignedBLSToExecutionChange bls_to_execution_changes = 10
+  SyncAggregate sync_aggregate = 7;
+  repeated SignedBLSToExecutionChange bls_to_execution_changes = 8
       [ (ethereum.eth.ext.ssz_max) = "16" ];
-  SignedExecutionPayloadBidHeze signed_execution_payload_bid = 11;
-  repeated PayloadAttestation payload_attestations = 12
+  SignedExecutionPayloadBidHeze signed_execution_payload_bid = 9;
+  repeated PayloadAttestation payload_attestations = 10
       [ (ethereum.eth.ext.ssz_max) = "payload_attestation.size" ];
-  ethereum.engine.v1.ExecutionRequestsGloas parent_execution_requests = 13;
+  ethereum.engine.v1.ExecutionRequestsGloas parent_execution_requests = 11;
 }
 
 // SignedBeaconBlockHeze represents a signed beacon block in the Heze fork.

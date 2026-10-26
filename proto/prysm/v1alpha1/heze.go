@@ -69,12 +69,10 @@ func copyBeaconBlockBodyHeze(body *BeaconBlockBodyHeze) *BeaconBlockBodyHeze {
 	}
 	copied := &BeaconBlockBodyHeze{
 		RandaoReveal:              bytesutil.SafeCopyBytes(body.RandaoReveal),
-		Eth1Data:                  body.Eth1Data.Copy(),
 		Graffiti:                  bytesutil.SafeCopyBytes(body.Graffiti),
 		ProposerSlashings:         CopySlice(body.ProposerSlashings),
 		AttesterSlashings:         CopySlice(body.AttesterSlashings),
 		Attestations:              CopySlice(body.Attestations),
-		Deposits:                  CopySlice(body.Deposits),
 		VoluntaryExits:            CopySlice(body.VoluntaryExits),
 		BlsToExecutionChanges:     CopySlice(body.BlsToExecutionChanges),
 		SignedExecutionPayloadBid: body.SignedExecutionPayloadBid.Copy(),
