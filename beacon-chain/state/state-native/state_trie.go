@@ -1147,12 +1147,17 @@ func (b *BeaconState) initializeProgressiveMerkleTree(ctx context.Context) error
 		return nil
 	}
 
-	fieldRoots := make([][]byte, len(schema.Fields()))
-	for fieldIndex, field := range schema.Fields() {
+	// Inactive positions stay zero leaves so that active fields keep stable generalized indices.
+	fieldRoots := make([][]byte, len(schema.ActiveFields()))
+	for i := range fieldRoots {
+		fieldRoots[i] = make([]byte, 32)
+	}
+	for _, field := range schema.Fields() {
 		root, err := b.rootSelector(ctx, field)
 		if err != nil {
 			return fmt.Errorf("could not compute progressive field %s: %w", field.String(), err)
 		}
+		fieldIndex, _ := schema.GetFieldIndex(field)
 		fieldRoots[fieldIndex] = bytesutil.SafeCopyBytes(root[:])
 	}
 
