@@ -44,7 +44,7 @@ var (
 	MinExecutionProofs = &cli.Uint64Flag{
 		Name:  "min-execution-proofs",
 		Usage: "The number of distinct verified EIP-8025 execution proof types a payload needs, on top of an execution client validation, to no longer be optimistic. Only used with --zkvm.",
-		Value: 1,
+		Value: 2,
 	}
 
 	// MockExecutionProofs accepts the mock proofs of zkboost's mock zkVMs, for devnets.

@@ -5,19 +5,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-// verificationResult is the outcome of a zkVM verification, as the result label of verificationDuration.
-type verificationResult string
-
-const (
-	verificationValid   verificationResult = "valid"
-	verificationInvalid verificationResult = "invalid"
-)
-
 var verificationDuration = promauto.NewHistogramVec(
 	prometheus.HistogramOpts{
-		Name:    "execution_proof_verification_seconds",
-		Help:    "Time to verify an EIP-8025 execution proof with the zkVM verifier.",
-		Buckets: prometheus.ExponentialBuckets(0.005, 2, 14), // 5ms to ~41s.
+		Name:    "execution_proof_verification_milliseconds",
+		Help:    "Time to verify an EIP-8025 execution proof with the zkVM verifier, for proofs that pass verification.",
+		Buckets: prometheus.LinearBuckets(10, 10, 10), // 10ms to 100ms.
 	},
-	[]string{"proof_type", "result"},
+	[]string{"proof_type"},
 )

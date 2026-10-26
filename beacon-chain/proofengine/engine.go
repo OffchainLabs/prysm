@@ -161,15 +161,12 @@ func (e *Engine) Verify(ctx context.Context, proofType ethpb.ProofType, proofDat
 
 	start := time.Now()
 	publicValues, err := verifier.publicValues(proofData)
-	result := verificationValid
-	if err != nil {
-		result = verificationInvalid
-	}
-	verificationDuration.WithLabelValues(proofType.String(), string(result)).Observe(time.Since(start).Seconds())
-
+	elapsed := time.Since(start)
 	if err != nil {
 		return fmt.Errorf("verify %s proof: %w", proofType, err)
 	}
+
+	verificationDuration.WithLabelValues(proofType.String()).Observe(float64(elapsed) / float64(time.Millisecond))
 
 	// A valid proof of another payload, or of a failed validation, must not validate this payload.
 	if !publicValuesMatch(verifier.kind, publicValues, publicInput) {
