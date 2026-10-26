@@ -211,21 +211,16 @@ var (
 			Buckets: []float64{1, 5, 20, 100, 500, 1000},
 		},
 	)
-	executionProofArrivalDelay = promauto.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "execution_proof_arrival_delay_seconds",
-			Help:    "Time between the insertion of a payload in forkchoice and the import of a verified EIP-8025 execution proof of this type for it.",
-			Buckets: prometheus.ExponentialBuckets(0.25, 2, 12), // 250ms to 512s.
+	payloadSyncedSinceSlotStart = promauto.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "payload_synced_since_slot_start_seconds",
+			Help: "Time between the start of the slot of a payload and the end of its processing, in regular sync.",
 		},
-		[]string{"proof_type"},
 	)
-	payloadProofValidationDelay = promauto.NewHistogram(
-		prometheus.HistogramOpts{
-			Name: "payload_proof_validation_delay_seconds",
-			Help: "Time between the insertion of a payload in forkchoice and the moment it is no longer optimistic, " +
-				"once validated by the EL and at least --min-execution-proofs execution proof types. " +
-				"Ancestors validated along with the payload are not counted.",
-			Buckets: prometheus.ExponentialBuckets(0.25, 2, 12), // 250ms to 512s.
+	payloadProofValidatedSinceSlotStart = promauto.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "payload_proof_validated_since_slot_start_seconds",
+			Help: "Time between the start of the slot of a payload and its validation by the EL and execution proofs, in regular sync.",
 		},
 	)
 	reorgDistance = promauto.NewHistogram(

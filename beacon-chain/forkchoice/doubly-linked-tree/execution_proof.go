@@ -2,7 +2,6 @@ package doublylinkedtree
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -64,17 +63,6 @@ func (f *ForkChoice) PayloadValidationStatus(root [fieldparams.RootLength]byte) 
 	}
 
 	return fn.executionValid, len(fn.executionProofTypes)
-}
-
-// PayloadInsertionTime returns when the payload of the beacon block was inserted in forkchoice.
-// The caller MUST hold at least the forkchoice read lock.
-func (f *ForkChoice) PayloadInsertionTime(root [fieldparams.RootLength]byte) (time.Time, bool) {
-	fn := f.store.fullNodeByRoot[root]
-	if fn == nil {
-		return time.Time{}, false
-	}
-
-	return fn.timestamp, true
 }
 
 // SetNewPayloadRequestRoot records the EIP-8025 new payload request root of the payload of the beacon block,

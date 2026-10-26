@@ -2,7 +2,6 @@ package doublylinkedtree
 
 import (
 	"testing"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -81,23 +80,6 @@ func TestIsExecutionValid(t *testing.T) {
 	t.Run("unknown block", func(t *testing.T) {
 		f, _, _ := setupExecutionProofForkchoice(t)
 		require.Equal(t, false, f.IsExecutionValid(indexToHash(99)))
-	})
-}
-
-func TestPayloadInsertionTime(t *testing.T) {
-	t.Run("full node", func(t *testing.T) {
-		before := time.Now()
-		f, full, _ := setupExecutionProofForkchoice(t)
-		insertedAt, ok := f.PayloadInsertionTime(full)
-		require.Equal(t, true, ok)
-		require.Equal(t, false, insertedAt.Before(before))
-		require.Equal(t, false, insertedAt.After(time.Now()))
-	})
-
-	t.Run("no full node", func(t *testing.T) {
-		f, _, empty := setupExecutionProofForkchoice(t)
-		_, ok := f.PayloadInsertionTime(empty)
-		require.Equal(t, false, ok)
 	})
 }
 

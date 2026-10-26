@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 )
 
@@ -166,10 +167,6 @@ func (s *Service) ReceiveExecutionProof(ctx context.Context, root [fieldparams.R
 		return fmt.Errorf("add execution proof type: %w", err)
 	}
 
-	if insertedAt, ok := s.cfg.ForkChoiceStore.PayloadInsertionTime(root); ok {
-		executionProofArrivalDelay.WithLabelValues(proofType.String()).Observe(time.Since(insertedAt).Seconds())
-	}
-
 	if err := s.setPayloadValidIfReady(ctx, root); err != nil {
 		return fmt.Errorf("set payload valid if ready: %w", err)
 	}
@@ -221,15 +218,44 @@ func (s *Service) setPayloadValidIfReady(ctx context.Context, root [fieldparams.
 	// Record and log only the transition from optimistic to valid, not the later proofs of an already valid payload. Without
 	// EIP-8025, the payload is validated at import, which the envelope log already reports.
 	if wasOptimistic && s.cfg.MinExecutionProofs > 0 {
-		if insertedAt, ok := s.cfg.ForkChoiceStore.PayloadInsertionTime(root); ok {
-			payloadProofValidationDelay.Observe(time.Since(insertedAt).Seconds())
-		}
-
-		log.WithFields(logrus.Fields{
+		fields := logrus.Fields{
 			"blockRoot":      fmt.Sprintf("%#x", bytesutil.Trunc(root[:])),
 			"proofTypeCount": proofTypes,
-		}).Info("Payload validated by the EL and execution proofs")
+		}
+
+		if since, err := s.sinceSlotStart(root); err == nil {
+			fields["sinceSlotStart"] = since
+			s.observeInRegularSync(payloadProofValidatedSinceSlotStart, since)
+		}
+
+		log.WithFields(fields).Info("Payload validated by the EL and execution proofs")
 	}
 
 	return nil
+}
+
+// sinceSlotStart returns the time elapsed since the start of the slot of the beacon block.
+// Caller of the method MUST acquire at least a read lock on forkchoice.
+func (s *Service) sinceSlotStart(root [fieldparams.RootLength]byte) (time.Duration, error) {
+	slot, err := s.cfg.ForkChoiceStore.Slot(root)
+	if err != nil {
+		return 0, fmt.Errorf("slot: %w", err)
+	}
+
+	since, err := slots.SinceSlotStart(slot, s.genesisTime, time.Now())
+	if err != nil {
+		return 0, fmt.Errorf("since slot start: %w", err)
+	}
+
+	return since, nil
+}
+
+// observeInRegularSync records the time elapsed since a slot start, in regular sync only: during initial sync, the
+// slots are long gone.
+func (s *Service) observeInRegularSync(observer prometheus.Observer, since time.Duration) {
+	if !s.inRegularSync() {
+		return
+	}
+
+	observer.Observe(since.Seconds())
 }

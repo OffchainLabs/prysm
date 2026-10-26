@@ -76,7 +76,6 @@ type Getter interface {
 	VoteSnapshot(buf []forkchoicetypes.VoteData) []forkchoicetypes.VoteData
 	VotingSource(root [32]byte) (*forkchoicetypes.Checkpoint, error)
 	PayloadValidationStatus(root [fieldparams.RootLength]byte) (executionValid bool, proofTypes int)
-	PayloadInsertionTime(root [fieldparams.RootLength]byte) (time.Time, bool)
 	IsExecutionValid(root [fieldparams.RootLength]byte) bool
 	NewPayloadRequestRoot(root [fieldparams.RootLength]byte) ([fieldparams.RootLength]byte, bool)
 	HasExecutionProofType(root [fieldparams.RootLength]byte, proofType ethpb.ProofType) bool

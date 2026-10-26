@@ -3,6 +3,7 @@ package blockchain
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
@@ -16,6 +17,7 @@ import (
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -275,5 +277,25 @@ func TestVerifyExecutionProof(t *testing.T) {
 	t.Run("no verifier", func(t *testing.T) {
 		service := &Service{cfg: &config{}}
 		require.ErrorIs(t, service.VerifyExecutionProof(ctx, requestRoot, proof), errNoExecutionProofVerifier)
+	})
+}
+
+func TestSinceSlotStart(t *testing.T) {
+	t.Run("known block", func(t *testing.T) {
+		service, rootA, _ := setupExecutionProofService(t, 1)
+
+		since, err := service.sinceSlotStart(rootA)
+		require.NoError(t, err)
+
+		slotStart, err := slots.StartTime(service.genesisTime, 1)
+		require.NoError(t, err)
+		require.Equal(t, true, since > 0 && since <= time.Since(slotStart))
+	})
+
+	t.Run("unknown block", func(t *testing.T) {
+		service, _, _ := setupExecutionProofService(t, 1)
+
+		_, err := service.sinceSlotStart([32]byte{0xff})
+		require.ErrorContains(t, "slot", err)
 	})
 }

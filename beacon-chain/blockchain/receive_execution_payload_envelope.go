@@ -227,6 +227,11 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		fields["gasUtilized"] = fmt.Sprintf("%.2f%%", 100*gasUsed/gasLimit)
 	}
 
+	if since, err := slots.SinceSlotStart(envelope.Slot(), s.genesisTime, time.Now()); err == nil {
+		fields["sinceSlotStart"] = since
+		s.observeInRegularSync(payloadSyncedSinceSlotStart, since)
+	}
+
 	message := "Synced execution payload envelope"
 	if !isValid {
 		message = "Synced optimistic execution payload envelope"
