@@ -55,6 +55,42 @@ func TestJsonMarshalUnmarshal(t *testing.T) {
 		require.DeepEqual(t, hash, payloadPb.LatestValidHash)
 		require.DeepEqual(t, "failed validation", payloadPb.ValidationError)
 	})
+	t.Run("payload status v2", func(t *testing.T) {
+		hash := bytesutil.PadTo([]byte("hash"), fieldparams.RootLength)
+		yes, no := true, false
+		for _, tc := range []struct {
+			name string
+			val  *bool
+			wire string
+		}{
+			{name: "true", val: &yes, wire: `true`},
+			{name: "false", val: &no, wire: `false`},
+			{name: "null", val: nil, wire: `null`},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				enc, err := json.Marshal(&enginev1.PayloadStatusV2{
+					Status:                 enginev1.PayloadStatus_VALID,
+					LatestValidHash:        hash,
+					ValidationError:        "failed validation",
+					InclusionListSatisfied: tc.val,
+				})
+				require.NoError(t, err)
+				require.StringContains(t, `"inclusionListSatisfied":`+tc.wire, string(enc))
+				dec := &enginev1.PayloadStatusV2{}
+				require.NoError(t, json.Unmarshal(enc, dec))
+				require.Equal(t, enginev1.PayloadStatus_VALID, dec.Status)
+				require.DeepEqual(t, hash, dec.LatestValidHash)
+				require.Equal(t, "failed validation", dec.ValidationError)
+				require.DeepEqual(t, tc.val, dec.InclusionListSatisfied)
+			})
+		}
+		t.Run("absent", func(t *testing.T) {
+			dec := &enginev1.PayloadStatusV2{}
+			require.NoError(t, json.Unmarshal([]byte(`{"status":"VALID","latestValidHash":null,"validationError":null}`), dec))
+			require.Equal(t, enginev1.PayloadStatus_VALID, dec.Status)
+			require.Equal(t, true, dec.InclusionListSatisfied == nil)
+		})
+	})
 	t.Run("forkchoice state", func(t *testing.T) {
 		head := bytesutil.PadTo([]byte("head"), fieldparams.RootLength)
 		safe := bytesutil.PadTo([]byte("safe"), fieldparams.RootLength)

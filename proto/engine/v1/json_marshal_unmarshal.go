@@ -824,6 +824,46 @@ func (p *PayloadStatus) UnmarshalJSON(enc []byte) error {
 	return nil
 }
 
+type payloadStatusV2JSON struct {
+	payloadStatusJSON
+	InclusionListSatisfied *bool `json:"inclusionListSatisfied"`
+}
+
+// MarshalJSON --
+func (p *PayloadStatusV2) MarshalJSON() ([]byte, error) {
+	var latestHash *common.Hash
+	if p.LatestValidHash != nil {
+		hash := common.Hash(bytesutil.ToBytes32(p.LatestValidHash))
+		latestHash = &hash
+	}
+	return json.Marshal(payloadStatusV2JSON{
+		payloadStatusJSON: payloadStatusJSON{
+			LatestValidHash: latestHash,
+			Status:          p.Status.String(),
+			ValidationError: &p.ValidationError,
+		},
+		InclusionListSatisfied: p.InclusionListSatisfied,
+	})
+}
+
+// UnmarshalJSON --
+func (p *PayloadStatusV2) UnmarshalJSON(enc []byte) error {
+	dec := payloadStatusV2JSON{}
+	if err := json.Unmarshal(enc, &dec); err != nil {
+		return err
+	}
+	*p = PayloadStatusV2{}
+	if dec.LatestValidHash != nil {
+		p.LatestValidHash = dec.LatestValidHash[:]
+	}
+	p.Status = PayloadStatus_Status(PayloadStatus_Status_value[dec.Status])
+	if dec.ValidationError != nil {
+		p.ValidationError = *dec.ValidationError
+	}
+	p.InclusionListSatisfied = dec.InclusionListSatisfied
+	return nil
+}
+
 type forkchoiceStateJSON struct {
 	HeadBlockHash      hexutil.Bytes `json:"headBlockHash"`
 	SafeBlockHash      hexutil.Bytes `json:"safeBlockHash"`

@@ -17,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
@@ -68,6 +69,8 @@ const (
 	NewPayloadMethodV4 = "engine_newPayloadV4"
 	// NewPayloadMethodV5 is the engine_newPayloadVX method added at Gloas.
 	NewPayloadMethodV5 = "engine_newPayloadV5"
+	// NewPayloadMethodV6 is the engine_newPayloadVX method added at Heze.
+	NewPayloadMethodV6 = "engine_newPayloadV6"
 	// ForkchoiceUpdatedMethod v1 request string for JSON-RPC.
 	ForkchoiceUpdatedMethod = "engine_forkchoiceUpdatedV1"
 	// ForkchoiceUpdatedMethodV2 v2 request string for JSON-RPC.
@@ -176,17 +179,81 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 			WithError(errors.New(result.ValidationError)).
 			Error("Got a validation error in newPayload")
 	}
-	switch result.Status {
+	return newPayloadStatusResult(result.Status, result.LatestValidHash)
+}
+
+// NewPayloadWithInclusionList calls engine_newPayloadV6 for a Heze payload.
+//
+// The returned inclusionListSatisfied tells whether the payload satisfied the inclusion list.
+// It comes from the inclusionListSatisfied field of the EL response:
+//   - VALID with the field set: the field value.
+//   - VALID with the field null or absent: nil. The EL broke the spec, which requires the field on VALID.
+//     This method does not resolve that case. The caller decides how to treat it.
+//   - Any other status: nil.
+func (s *Service) NewPayloadWithInclusionList(
+	ctx context.Context,
+	payload interfaces.ExecutionData,
+	versionedHashes []common.Hash,
+	parentBlockRoot *common.Hash,
+	executionRequests pb.ExecutionRequester,
+	inclusionListTransactions [][]byte,
+) ([]byte, *bool /* inclusionListSatisfied */, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.NewPayloadWithInclusionList")
+	defer span.End()
+	defer func(start time.Time) {
+		newPayloadLatency.Observe(float64(time.Since(start).Milliseconds()))
+	}(time.Now())
+
+	d := time.Now().Add(time.Duration(params.BeaconConfig().ExecutionEngineTimeoutValue) * time.Second)
+	ctx, cancel := context.WithDeadline(ctx, d)
+	defer cancel()
+
+	// Payload type should be the Gloas version for newPayloadV6.
+	payloadPb, ok := payload.Proto().(*pb.ExecutionPayloadGloas)
+	if !ok {
+		return nil, nil, errors.Errorf("unexpected execution data type %T for %s", payload.Proto(), NewPayloadMethodV6)
+	}
+	if executionRequests == nil {
+		return nil, nil, errors.New("nil execution requests")
+	}
+	flattenedRequests, err := executionRequests.FlattenRequests()
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to encode execution requests")
+	}
+	ilTxs := make([]hexutil.Bytes, len(inclusionListTransactions))
+	for i, tx := range inclusionListTransactions {
+		ilTxs[i] = tx
+	}
+	result := &pb.PayloadStatusV2{}
+	if err := s.rpcClient.CallContext(ctx, result, NewPayloadMethodV6, payloadPb, versionedHashes, parentBlockRoot, flattenedRequests, ilTxs); err != nil {
+		return nil, nil, handleRPCError(err)
+	}
+	if result.ValidationError != "" {
+		log.WithField("status", result.Status.String()).
+			WithField("parentRoot", fmt.Sprintf("%#x", parentBlockRoot)).
+			WithError(errors.New(result.ValidationError)).
+			Error("Got a validation error in newPayload")
+	}
+	lvh, err := newPayloadStatusResult(result.Status, result.LatestValidHash)
+	if err != nil {
+		return lvh, nil, err
+	}
+	return lvh, result.InclusionListSatisfied, nil
+}
+
+// newPayloadStatusResult maps a newPayload status to the latest valid hash and an error.
+func newPayloadStatusResult(status pb.PayloadStatus_Status, latestValidHash []byte) ([]byte, error) {
+	switch status {
 	case pb.PayloadStatus_INVALID_BLOCK_HASH:
 		return nil, ErrInvalidBlockHashPayloadStatus
 	case pb.PayloadStatus_ACCEPTED, pb.PayloadStatus_SYNCING:
 		return nil, ErrAcceptedSyncingPayloadStatus
 	case pb.PayloadStatus_INVALID:
-		return result.LatestValidHash, ErrInvalidPayloadStatus
+		return latestValidHash, ErrInvalidPayloadStatus
 	case pb.PayloadStatus_VALID:
-		return result.LatestValidHash, nil
+		return latestValidHash, nil
 	default:
-		return nil, errors.Wrapf(ErrUnknownPayloadStatus, "unknown payload status: %s", result.Status.String())
+		return nil, errors.Wrapf(ErrUnknownPayloadStatus, "unknown payload status: %s", status.String())
 	}
 }
 

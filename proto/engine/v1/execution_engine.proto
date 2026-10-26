@@ -256,6 +256,16 @@ message PayloadStatus {
   }
 }
 
+// PayloadStatusV2 is the Engine API PayloadStatusV2 (Bogota).
+message PayloadStatusV2 {
+  PayloadStatus.Status status = 1;
+  bytes latest_valid_hash = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  string validation_error = 3;
+  // The field is optional because false is a real answer, so
+  // unset (nil in Go) must stay distinct from false.
+  optional bool inclusion_list_satisfied = 4;
+}
+
 message ForkchoiceState {
   bytes head_block_hash = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
   bytes safe_block_hash = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
