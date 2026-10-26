@@ -44,7 +44,7 @@ const (
 	electraSharedFieldRefCount   = 10
 	fuluSharedFieldRefCount      = 11
 	gloasSharedFieldRefCount     = 13 // Fulu 11 + Builders, BuilderPendingWithdrawals, PTCWindow - LatestExecutionPayloadHeaderDeneb
-	hezeSharedFieldRefCount      = 13
+	hezeSharedFieldRefCount      = 12 // Gloas set minus Eth1DataVotes (EIP-8015)
 )
 
 // Container is the set of per-fork beacon state containers that New and
@@ -828,9 +828,6 @@ func newHeze(st *ethpb.BeaconStateHeze) (state.BeaconState, error) {
 		fork:                          st.Fork,
 		latestBlockHeader:             st.LatestBlockHeader,
 		historicalRoots:               hRoots,
-		eth1Data:                      st.Eth1Data,
-		eth1DataVotes:                 st.Eth1DataVotes,
-		eth1DepositIndex:              st.Eth1DepositIndex,
 		slashings:                     st.Slashings,
 		previousEpochParticipation:    st.PreviousEpochParticipation,
 		currentEpochParticipation:     st.CurrentEpochParticipation,
@@ -843,7 +840,6 @@ func newHeze(st *ethpb.BeaconStateHeze) (state.BeaconState, error) {
 		nextWithdrawalIndex:           st.NextWithdrawalIndex,
 		nextWithdrawalValidatorIndex:  st.NextWithdrawalValidatorIndex,
 		historicalSummaries:           st.HistoricalSummaries,
-		depositRequestsStartIndex:     st.DepositRequestsStartIndex,
 		depositBalanceToConsume:       st.DepositBalanceToConsume,
 		exitBalanceToConsume:          st.ExitBalanceToConsume,
 		earliestExitEpoch:             st.EarliestExitEpoch,
@@ -895,7 +891,6 @@ func newHeze(st *ethpb.BeaconStateHeze) (state.BeaconState, error) {
 
 	// Initialize field reference tracking for shared data.
 	b.sharedFieldReferences[types.HistoricalRoots] = stateutil.NewRef(1)
-	b.sharedFieldReferences[types.Eth1DataVotes] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.Slashings] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PreviousEpochParticipationBits] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.CurrentEpochParticipationBits] = stateutil.NewRef(1)
@@ -904,9 +899,9 @@ func newHeze(st *ethpb.BeaconStateHeze) (state.BeaconState, error) {
 	b.sharedFieldReferences[types.PendingPartialWithdrawals] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PendingConsolidations] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.ProposerLookahead] = stateutil.NewRef(1)
-	b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)                  // New in Gloas.
-	b.sharedFieldReferences[types.BuilderPendingWithdrawals] = stateutil.NewRef(1) // New in Gloas.
-	b.sharedFieldReferences[types.PTCWindow] = stateutil.NewRef(1)                 // New in Gloas.
+	b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.BuilderPendingWithdrawals] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.PTCWindow] = stateutil.NewRef(1)
 
 	state.Count.Inc()
 	// Finalizer runs when dst is being destroyed in garbage collection.

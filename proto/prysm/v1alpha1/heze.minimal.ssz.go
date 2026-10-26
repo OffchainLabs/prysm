@@ -916,9 +916,8 @@ func (c *BeaconBlockHeze) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 }
 
 func (c *BeaconStateHeze) SizeSSZ() int {
-	size := 14405
+	size := 14313
 	size += len(c.HistoricalRoots) * 32
-	size += len(c.Eth1DataVotes) * 72
 	size += len(c.Validators) * 121
 	size += len(c.Balances) * 8
 	size += len(c.PreviousEpochParticipation)
@@ -945,7 +944,7 @@ func (c *BeaconStateHeze) MarshalSSZ() ([]byte, error) {
 
 func (c *BeaconStateHeze) MarshalSSZTo(dst []byte) ([]byte, error) {
 	var err error
-	offset := 14405
+	offset := 14313
 
 	// Field 0: GenesisTime
 	dst = binary.LittleEndian.AppendUint64(dst, c.GenesisTime)
@@ -1003,30 +1002,15 @@ func (c *BeaconStateHeze) MarshalSSZTo(dst []byte) ([]byte, error) {
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(c.HistoricalRoots) * 32
 
-	// Field 8: Eth1Data
-	if c.Eth1Data == nil {
-		c.Eth1Data = new(Eth1Data)
-	}
-	if dst, err = c.Eth1Data.MarshalSSZTo(dst); err != nil {
-		return nil, fmt.Errorf("Eth1Data: %w", err)
-	}
-
-	// Field 9: Eth1DataVotes
-	dst = ssz.WriteOffset(dst, offset)
-	offset += len(c.Eth1DataVotes) * 72
-
-	// Field 10: Eth1DepositIndex
-	dst = binary.LittleEndian.AppendUint64(dst, c.Eth1DepositIndex)
-
-	// Field 11: Validators
+	// Field 8: Validators
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(c.Validators) * 121
 
-	// Field 12: Balances
+	// Field 9: Balances
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(c.Balances) * 8
 
-	// Field 13: RandaoMixes
+	// Field 10: RandaoMixes
 	if len(c.RandaoMixes) != 64 {
 		return nil, ssz.ErrBytesLength
 	}
@@ -1037,7 +1021,7 @@ func (c *BeaconStateHeze) MarshalSSZTo(dst []byte) ([]byte, error) {
 		dst = append(dst, o...)
 	}
 
-	// Field 14: Slashings
+	// Field 11: Slashings
 	if len(c.Slashings) != 64 {
 		return nil, ssz.ErrBytesLength
 	}
@@ -1045,21 +1029,21 @@ func (c *BeaconStateHeze) MarshalSSZTo(dst []byte) ([]byte, error) {
 		dst = binary.LittleEndian.AppendUint64(dst, o)
 	}
 
-	// Field 15: PreviousEpochParticipation
+	// Field 12: PreviousEpochParticipation
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(c.PreviousEpochParticipation)
 
-	// Field 16: CurrentEpochParticipation
+	// Field 13: CurrentEpochParticipation
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(c.CurrentEpochParticipation)
 
-	// Field 17: JustificationBits
+	// Field 14: JustificationBits
 	if len([]byte(c.JustificationBits)) != 1 {
 		return nil, ssz.ErrBytesLength
 	}
 	dst = append(dst, []byte(c.JustificationBits)...)
 
-	// Field 18: PreviousJustifiedCheckpoint
+	// Field 15: PreviousJustifiedCheckpoint
 	if c.PreviousJustifiedCheckpoint == nil {
 		c.PreviousJustifiedCheckpoint = new(Checkpoint)
 	}
@@ -1067,7 +1051,7 @@ func (c *BeaconStateHeze) MarshalSSZTo(dst []byte) ([]byte, error) {
 		return nil, fmt.Errorf("PreviousJustifiedCheckpoint: %w", err)
 	}
 
-	// Field 19: CurrentJustifiedCheckpoint
+	// Field 16: CurrentJustifiedCheckpoint
 	if c.CurrentJustifiedCheckpoint == nil {
 		c.CurrentJustifiedCheckpoint = new(Checkpoint)
 	}
@@ -1075,7 +1059,7 @@ func (c *BeaconStateHeze) MarshalSSZTo(dst []byte) ([]byte, error) {
 		return nil, fmt.Errorf("CurrentJustifiedCheckpoint: %w", err)
 	}
 
-	// Field 20: FinalizedCheckpoint
+	// Field 17: FinalizedCheckpoint
 	if c.FinalizedCheckpoint == nil {
 		c.FinalizedCheckpoint = new(Checkpoint)
 	}
@@ -1083,11 +1067,11 @@ func (c *BeaconStateHeze) MarshalSSZTo(dst []byte) ([]byte, error) {
 		return nil, fmt.Errorf("FinalizedCheckpoint: %w", err)
 	}
 
-	// Field 21: InactivityScores
+	// Field 18: InactivityScores
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(c.InactivityScores) * 8
 
-	// Field 22: CurrentSyncCommittee
+	// Field 19: CurrentSyncCommittee
 	if c.CurrentSyncCommittee == nil {
 		c.CurrentSyncCommittee = new(SyncCommittee)
 	}
@@ -1095,7 +1079,7 @@ func (c *BeaconStateHeze) MarshalSSZTo(dst []byte) ([]byte, error) {
 		return nil, fmt.Errorf("CurrentSyncCommittee: %w", err)
 	}
 
-	// Field 23: NextSyncCommittee
+	// Field 20: NextSyncCommittee
 	if c.NextSyncCommittee == nil {
 		c.NextSyncCommittee = new(SyncCommittee)
 	}
@@ -1103,65 +1087,62 @@ func (c *BeaconStateHeze) MarshalSSZTo(dst []byte) ([]byte, error) {
 		return nil, fmt.Errorf("NextSyncCommittee: %w", err)
 	}
 
-	// Field 24: LatestBlockHash
+	// Field 21: LatestBlockHash
 	if len(c.LatestBlockHash) != 32 {
 		return nil, ssz.ErrBytesLength
 	}
 	dst = append(dst, c.LatestBlockHash...)
 
-	// Field 25: NextWithdrawalIndex
+	// Field 22: NextWithdrawalIndex
 	dst = binary.LittleEndian.AppendUint64(dst, c.NextWithdrawalIndex)
 
-	// Field 26: NextWithdrawalValidatorIndex
+	// Field 23: NextWithdrawalValidatorIndex
 	if dst, err = c.NextWithdrawalValidatorIndex.MarshalSSZTo(dst); err != nil {
 		return nil, fmt.Errorf("NextWithdrawalValidatorIndex: %w", err)
 	}
 
-	// Field 27: HistoricalSummaries
+	// Field 24: HistoricalSummaries
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(c.HistoricalSummaries) * 64
 
-	// Field 28: DepositRequestsStartIndex
-	dst = binary.LittleEndian.AppendUint64(dst, c.DepositRequestsStartIndex)
-
-	// Field 29: DepositBalanceToConsume
+	// Field 25: DepositBalanceToConsume
 	if dst, err = c.DepositBalanceToConsume.MarshalSSZTo(dst); err != nil {
 		return nil, fmt.Errorf("DepositBalanceToConsume: %w", err)
 	}
 
-	// Field 30: ExitBalanceToConsume
+	// Field 26: ExitBalanceToConsume
 	if dst, err = c.ExitBalanceToConsume.MarshalSSZTo(dst); err != nil {
 		return nil, fmt.Errorf("ExitBalanceToConsume: %w", err)
 	}
 
-	// Field 31: EarliestExitEpoch
+	// Field 27: EarliestExitEpoch
 	if dst, err = c.EarliestExitEpoch.MarshalSSZTo(dst); err != nil {
 		return nil, fmt.Errorf("EarliestExitEpoch: %w", err)
 	}
 
-	// Field 32: ConsolidationBalanceToConsume
+	// Field 28: ConsolidationBalanceToConsume
 	if dst, err = c.ConsolidationBalanceToConsume.MarshalSSZTo(dst); err != nil {
 		return nil, fmt.Errorf("ConsolidationBalanceToConsume: %w", err)
 	}
 
-	// Field 33: EarliestConsolidationEpoch
+	// Field 29: EarliestConsolidationEpoch
 	if dst, err = c.EarliestConsolidationEpoch.MarshalSSZTo(dst); err != nil {
 		return nil, fmt.Errorf("EarliestConsolidationEpoch: %w", err)
 	}
 
-	// Field 34: PendingDeposits
+	// Field 30: PendingDeposits
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(c.PendingDeposits) * 192
 
-	// Field 35: PendingPartialWithdrawals
+	// Field 31: PendingPartialWithdrawals
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(c.PendingPartialWithdrawals) * 24
 
-	// Field 36: PendingConsolidations
+	// Field 32: PendingConsolidations
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(c.PendingConsolidations) * 16
 
-	// Field 37: ProposerLookahead
+	// Field 33: ProposerLookahead
 	if len(c.ProposerLookahead) != 16 {
 		return nil, ssz.ErrBytesLength
 	}
@@ -1171,22 +1152,22 @@ func (c *BeaconStateHeze) MarshalSSZTo(dst []byte) ([]byte, error) {
 		}
 	}
 
-	// Field 38: Builders
+	// Field 34: Builders
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(c.Builders) * 93
 
-	// Field 39: NextWithdrawalBuilderIndex
+	// Field 35: NextWithdrawalBuilderIndex
 	if dst, err = c.NextWithdrawalBuilderIndex.MarshalSSZTo(dst); err != nil {
 		return nil, fmt.Errorf("NextWithdrawalBuilderIndex: %w", err)
 	}
 
-	// Field 40: ExecutionPayloadAvailability
+	// Field 36: ExecutionPayloadAvailability
 	if len(c.ExecutionPayloadAvailability) != 8 {
 		return nil, ssz.ErrBytesLength
 	}
 	dst = append(dst, c.ExecutionPayloadAvailability...)
 
-	// Field 41: BuilderPendingPayments
+	// Field 37: BuilderPendingPayments
 	if len(c.BuilderPendingPayments) != 16 {
 		return nil, ssz.ErrBytesLength
 	}
@@ -1196,22 +1177,22 @@ func (c *BeaconStateHeze) MarshalSSZTo(dst []byte) ([]byte, error) {
 		}
 	}
 
-	// Field 42: BuilderPendingWithdrawals
+	// Field 38: BuilderPendingWithdrawals
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(c.BuilderPendingWithdrawals) * 36
 
-	// Field 43: LatestExecutionPayloadBid
+	// Field 39: LatestExecutionPayloadBid
 	if c.LatestExecutionPayloadBid == nil {
 		c.LatestExecutionPayloadBid = new(ExecutionPayloadBidHeze)
 	}
 	dst = ssz.WriteOffset(dst, offset)
 	offset += c.LatestExecutionPayloadBid.SizeSSZ()
 
-	// Field 44: PayloadExpectedWithdrawals
+	// Field 40: PayloadExpectedWithdrawals
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(c.PayloadExpectedWithdrawals) * 44
 
-	// Field 45: PtcWindow
+	// Field 41: PtcWindow
 	if len(c.PtcWindow) != 24 {
 		return nil, ssz.ErrBytesLength
 	}
@@ -1232,40 +1213,30 @@ func (c *BeaconStateHeze) MarshalSSZTo(dst []byte) ([]byte, error) {
 		dst = append(dst, o...)
 	}
 
-	// Field 9: Eth1DataVotes
-	if len(c.Eth1DataVotes) > 32 {
-		return nil, ssz.ErrListTooBig
-	}
-	for _, o := range c.Eth1DataVotes {
-		if dst, err = o.MarshalSSZTo(dst); err != nil {
-			return nil, fmt.Errorf("Eth1DataVotes: %w", err)
-		}
-	}
-
-	// Field 11: Validators
+	// Field 8: Validators
 	for _, o := range c.Validators {
 		if dst, err = o.MarshalSSZTo(dst); err != nil {
 			return nil, fmt.Errorf("Validators: %w", err)
 		}
 	}
 
-	// Field 12: Balances
+	// Field 9: Balances
 	for _, o := range c.Balances {
 		dst = binary.LittleEndian.AppendUint64(dst, o)
 	}
 
-	// Field 15: PreviousEpochParticipation
+	// Field 12: PreviousEpochParticipation
 	dst = append(dst, c.PreviousEpochParticipation...)
 
-	// Field 16: CurrentEpochParticipation
+	// Field 13: CurrentEpochParticipation
 	dst = append(dst, c.CurrentEpochParticipation...)
 
-	// Field 21: InactivityScores
+	// Field 18: InactivityScores
 	for _, o := range c.InactivityScores {
 		dst = binary.LittleEndian.AppendUint64(dst, o)
 	}
 
-	// Field 27: HistoricalSummaries
+	// Field 24: HistoricalSummaries
 	if len(c.HistoricalSummaries) > 16777216 {
 		return nil, ssz.ErrListTooBig
 	}
@@ -1275,47 +1246,47 @@ func (c *BeaconStateHeze) MarshalSSZTo(dst []byte) ([]byte, error) {
 		}
 	}
 
-	// Field 34: PendingDeposits
+	// Field 30: PendingDeposits
 	for _, o := range c.PendingDeposits {
 		if dst, err = o.MarshalSSZTo(dst); err != nil {
 			return nil, fmt.Errorf("PendingDeposits: %w", err)
 		}
 	}
 
-	// Field 35: PendingPartialWithdrawals
+	// Field 31: PendingPartialWithdrawals
 	for _, o := range c.PendingPartialWithdrawals {
 		if dst, err = o.MarshalSSZTo(dst); err != nil {
 			return nil, fmt.Errorf("PendingPartialWithdrawals: %w", err)
 		}
 	}
 
-	// Field 36: PendingConsolidations
+	// Field 32: PendingConsolidations
 	for _, o := range c.PendingConsolidations {
 		if dst, err = o.MarshalSSZTo(dst); err != nil {
 			return nil, fmt.Errorf("PendingConsolidations: %w", err)
 		}
 	}
 
-	// Field 38: Builders
+	// Field 34: Builders
 	for _, o := range c.Builders {
 		if dst, err = o.MarshalSSZTo(dst); err != nil {
 			return nil, fmt.Errorf("Builders: %w", err)
 		}
 	}
 
-	// Field 42: BuilderPendingWithdrawals
+	// Field 38: BuilderPendingWithdrawals
 	for _, o := range c.BuilderPendingWithdrawals {
 		if dst, err = o.MarshalSSZTo(dst); err != nil {
 			return nil, fmt.Errorf("BuilderPendingWithdrawals: %w", err)
 		}
 	}
 
-	// Field 43: LatestExecutionPayloadBid
+	// Field 39: LatestExecutionPayloadBid
 	if dst, err = c.LatestExecutionPayloadBid.MarshalSSZTo(dst); err != nil {
 		return nil, fmt.Errorf("LatestExecutionPayloadBid: %w", err)
 	}
 
-	// Field 44: PayloadExpectedWithdrawals
+	// Field 40: PayloadExpectedWithdrawals
 	for _, o := range c.PayloadExpectedWithdrawals {
 		if dst, err = o.MarshalSSZTo(dst); err != nil {
 			return nil, fmt.Errorf("PayloadExpectedWithdrawals: %w", err)
@@ -1327,7 +1298,7 @@ func (c *BeaconStateHeze) MarshalSSZTo(dst []byte) ([]byte, error) {
 func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 14405 {
+	if size < 14313 {
 		return ssz.ErrSize
 	}
 
@@ -1338,109 +1309,101 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 	sszSlice4 := buf[64:176]       // c.LatestBlockHeader
 	sszSlice5 := buf[176:2224]     // c.BlockRoots
 	sszSlice6 := buf[2224:4272]    // c.StateRoots
-	sszSlice8 := buf[4276:4348]    // c.Eth1Data
-	sszSlice10 := buf[4352:4360]   // c.Eth1DepositIndex
-	sszSlice13 := buf[4368:6416]   // c.RandaoMixes
-	sszSlice14 := buf[6416:6928]   // c.Slashings
-	sszSlice17 := buf[6936:6937]   // c.JustificationBits
-	sszSlice18 := buf[6937:6977]   // c.PreviousJustifiedCheckpoint
-	sszSlice19 := buf[6977:7017]   // c.CurrentJustifiedCheckpoint
-	sszSlice20 := buf[7017:7057]   // c.FinalizedCheckpoint
-	sszSlice22 := buf[7061:8645]   // c.CurrentSyncCommittee
-	sszSlice23 := buf[8645:10229]  // c.NextSyncCommittee
-	sszSlice24 := buf[10229:10261] // c.LatestBlockHash
-	sszSlice25 := buf[10261:10269] // c.NextWithdrawalIndex
-	sszSlice26 := buf[10269:10277] // c.NextWithdrawalValidatorIndex
-	sszSlice28 := buf[10281:10289] // c.DepositRequestsStartIndex
-	sszSlice29 := buf[10289:10297] // c.DepositBalanceToConsume
-	sszSlice30 := buf[10297:10305] // c.ExitBalanceToConsume
-	sszSlice31 := buf[10305:10313] // c.EarliestExitEpoch
-	sszSlice32 := buf[10313:10321] // c.ConsolidationBalanceToConsume
-	sszSlice33 := buf[10321:10329] // c.EarliestConsolidationEpoch
-	sszSlice37 := buf[10341:10469] // c.ProposerLookahead
-	sszSlice39 := buf[10473:10481] // c.NextWithdrawalBuilderIndex
-	sszSlice40 := buf[10481:10489] // c.ExecutionPayloadAvailability
-	sszSlice41 := buf[10489:11321] // c.BuilderPendingPayments
-	sszSlice45 := buf[11333:14405] // c.PtcWindow
+	sszSlice10 := buf[4284:6332]   // c.RandaoMixes
+	sszSlice11 := buf[6332:6844]   // c.Slashings
+	sszSlice14 := buf[6852:6853]   // c.JustificationBits
+	sszSlice15 := buf[6853:6893]   // c.PreviousJustifiedCheckpoint
+	sszSlice16 := buf[6893:6933]   // c.CurrentJustifiedCheckpoint
+	sszSlice17 := buf[6933:6973]   // c.FinalizedCheckpoint
+	sszSlice19 := buf[6977:8561]   // c.CurrentSyncCommittee
+	sszSlice20 := buf[8561:10145]  // c.NextSyncCommittee
+	sszSlice21 := buf[10145:10177] // c.LatestBlockHash
+	sszSlice22 := buf[10177:10185] // c.NextWithdrawalIndex
+	sszSlice23 := buf[10185:10193] // c.NextWithdrawalValidatorIndex
+	sszSlice25 := buf[10197:10205] // c.DepositBalanceToConsume
+	sszSlice26 := buf[10205:10213] // c.ExitBalanceToConsume
+	sszSlice27 := buf[10213:10221] // c.EarliestExitEpoch
+	sszSlice28 := buf[10221:10229] // c.ConsolidationBalanceToConsume
+	sszSlice29 := buf[10229:10237] // c.EarliestConsolidationEpoch
+	sszSlice33 := buf[10249:10377] // c.ProposerLookahead
+	sszSlice35 := buf[10381:10389] // c.NextWithdrawalBuilderIndex
+	sszSlice36 := buf[10389:10397] // c.ExecutionPayloadAvailability
+	sszSlice37 := buf[10397:11229] // c.BuilderPendingPayments
+	sszSlice41 := buf[11241:14313] // c.PtcWindow
 
 	sszVarOffset7 := ssz.ReadOffset(buf[4272:4276]) // c.HistoricalRoots
-	if sszVarOffset7 != 14405 {
+	if sszVarOffset7 != 14313 {
 		return ssz.ErrInvalidVariableOffset
 	}
 	if sszVarOffset7 > size {
 		return ssz.ErrOffset
 	}
-	sszVarOffset9 := ssz.ReadOffset(buf[4348:4352]) // c.Eth1DataVotes
-	if sszVarOffset9 > size || sszVarOffset9 < sszVarOffset7 {
+	sszVarOffset8 := ssz.ReadOffset(buf[4276:4280]) // c.Validators
+	if sszVarOffset8 > size || sszVarOffset8 < sszVarOffset7 {
 		return ssz.ErrOffset
 	}
-	sszVarOffset11 := ssz.ReadOffset(buf[4360:4364]) // c.Validators
-	if sszVarOffset11 > size || sszVarOffset11 < sszVarOffset9 {
+	sszVarOffset9 := ssz.ReadOffset(buf[4280:4284]) // c.Balances
+	if sszVarOffset9 > size || sszVarOffset9 < sszVarOffset8 {
 		return ssz.ErrOffset
 	}
-	sszVarOffset12 := ssz.ReadOffset(buf[4364:4368]) // c.Balances
-	if sszVarOffset12 > size || sszVarOffset12 < sszVarOffset11 {
+	sszVarOffset12 := ssz.ReadOffset(buf[6844:6848]) // c.PreviousEpochParticipation
+	if sszVarOffset12 > size || sszVarOffset12 < sszVarOffset9 {
 		return ssz.ErrOffset
 	}
-	sszVarOffset15 := ssz.ReadOffset(buf[6928:6932]) // c.PreviousEpochParticipation
-	if sszVarOffset15 > size || sszVarOffset15 < sszVarOffset12 {
+	sszVarOffset13 := ssz.ReadOffset(buf[6848:6852]) // c.CurrentEpochParticipation
+	if sszVarOffset13 > size || sszVarOffset13 < sszVarOffset12 {
 		return ssz.ErrOffset
 	}
-	sszVarOffset16 := ssz.ReadOffset(buf[6932:6936]) // c.CurrentEpochParticipation
-	if sszVarOffset16 > size || sszVarOffset16 < sszVarOffset15 {
+	sszVarOffset18 := ssz.ReadOffset(buf[6973:6977]) // c.InactivityScores
+	if sszVarOffset18 > size || sszVarOffset18 < sszVarOffset13 {
 		return ssz.ErrOffset
 	}
-	sszVarOffset21 := ssz.ReadOffset(buf[7057:7061]) // c.InactivityScores
-	if sszVarOffset21 > size || sszVarOffset21 < sszVarOffset16 {
+	sszVarOffset24 := ssz.ReadOffset(buf[10193:10197]) // c.HistoricalSummaries
+	if sszVarOffset24 > size || sszVarOffset24 < sszVarOffset18 {
 		return ssz.ErrOffset
 	}
-	sszVarOffset27 := ssz.ReadOffset(buf[10277:10281]) // c.HistoricalSummaries
-	if sszVarOffset27 > size || sszVarOffset27 < sszVarOffset21 {
+	sszVarOffset30 := ssz.ReadOffset(buf[10237:10241]) // c.PendingDeposits
+	if sszVarOffset30 > size || sszVarOffset30 < sszVarOffset24 {
 		return ssz.ErrOffset
 	}
-	sszVarOffset34 := ssz.ReadOffset(buf[10329:10333]) // c.PendingDeposits
-	if sszVarOffset34 > size || sszVarOffset34 < sszVarOffset27 {
+	sszVarOffset31 := ssz.ReadOffset(buf[10241:10245]) // c.PendingPartialWithdrawals
+	if sszVarOffset31 > size || sszVarOffset31 < sszVarOffset30 {
 		return ssz.ErrOffset
 	}
-	sszVarOffset35 := ssz.ReadOffset(buf[10333:10337]) // c.PendingPartialWithdrawals
-	if sszVarOffset35 > size || sszVarOffset35 < sszVarOffset34 {
+	sszVarOffset32 := ssz.ReadOffset(buf[10245:10249]) // c.PendingConsolidations
+	if sszVarOffset32 > size || sszVarOffset32 < sszVarOffset31 {
 		return ssz.ErrOffset
 	}
-	sszVarOffset36 := ssz.ReadOffset(buf[10337:10341]) // c.PendingConsolidations
-	if sszVarOffset36 > size || sszVarOffset36 < sszVarOffset35 {
+	sszVarOffset34 := ssz.ReadOffset(buf[10377:10381]) // c.Builders
+	if sszVarOffset34 > size || sszVarOffset34 < sszVarOffset32 {
 		return ssz.ErrOffset
 	}
-	sszVarOffset38 := ssz.ReadOffset(buf[10469:10473]) // c.Builders
-	if sszVarOffset38 > size || sszVarOffset38 < sszVarOffset36 {
+	sszVarOffset38 := ssz.ReadOffset(buf[11229:11233]) // c.BuilderPendingWithdrawals
+	if sszVarOffset38 > size || sszVarOffset38 < sszVarOffset34 {
 		return ssz.ErrOffset
 	}
-	sszVarOffset42 := ssz.ReadOffset(buf[11321:11325]) // c.BuilderPendingWithdrawals
-	if sszVarOffset42 > size || sszVarOffset42 < sszVarOffset38 {
+	sszVarOffset39 := ssz.ReadOffset(buf[11233:11237]) // c.LatestExecutionPayloadBid
+	if sszVarOffset39 > size || sszVarOffset39 < sszVarOffset38 {
 		return ssz.ErrOffset
 	}
-	sszVarOffset43 := ssz.ReadOffset(buf[11325:11329]) // c.LatestExecutionPayloadBid
-	if sszVarOffset43 > size || sszVarOffset43 < sszVarOffset42 {
+	sszVarOffset40 := ssz.ReadOffset(buf[11237:11241]) // c.PayloadExpectedWithdrawals
+	if sszVarOffset40 > size || sszVarOffset40 < sszVarOffset39 {
 		return ssz.ErrOffset
 	}
-	sszVarOffset44 := ssz.ReadOffset(buf[11329:11333]) // c.PayloadExpectedWithdrawals
-	if sszVarOffset44 > size || sszVarOffset44 < sszVarOffset43 {
-		return ssz.ErrOffset
-	}
-	sszSlice7 := buf[sszVarOffset7:sszVarOffset9]    // c.HistoricalRoots
-	sszSlice9 := buf[sszVarOffset9:sszVarOffset11]   // c.Eth1DataVotes
-	sszSlice11 := buf[sszVarOffset11:sszVarOffset12] // c.Validators
-	sszSlice12 := buf[sszVarOffset12:sszVarOffset15] // c.Balances
-	sszSlice15 := buf[sszVarOffset15:sszVarOffset16] // c.PreviousEpochParticipation
-	sszSlice16 := buf[sszVarOffset16:sszVarOffset21] // c.CurrentEpochParticipation
-	sszSlice21 := buf[sszVarOffset21:sszVarOffset27] // c.InactivityScores
-	sszSlice27 := buf[sszVarOffset27:sszVarOffset34] // c.HistoricalSummaries
-	sszSlice34 := buf[sszVarOffset34:sszVarOffset35] // c.PendingDeposits
-	sszSlice35 := buf[sszVarOffset35:sszVarOffset36] // c.PendingPartialWithdrawals
-	sszSlice36 := buf[sszVarOffset36:sszVarOffset38] // c.PendingConsolidations
-	sszSlice38 := buf[sszVarOffset38:sszVarOffset42] // c.Builders
-	sszSlice42 := buf[sszVarOffset42:sszVarOffset43] // c.BuilderPendingWithdrawals
-	sszSlice43 := buf[sszVarOffset43:sszVarOffset44] // c.LatestExecutionPayloadBid
-	sszSlice44 := buf[sszVarOffset44:]               // c.PayloadExpectedWithdrawals
+	sszSlice7 := buf[sszVarOffset7:sszVarOffset8]    // c.HistoricalRoots
+	sszSlice8 := buf[sszVarOffset8:sszVarOffset9]    // c.Validators
+	sszSlice9 := buf[sszVarOffset9:sszVarOffset12]   // c.Balances
+	sszSlice12 := buf[sszVarOffset12:sszVarOffset13] // c.PreviousEpochParticipation
+	sszSlice13 := buf[sszVarOffset13:sszVarOffset18] // c.CurrentEpochParticipation
+	sszSlice18 := buf[sszVarOffset18:sszVarOffset24] // c.InactivityScores
+	sszSlice24 := buf[sszVarOffset24:sszVarOffset30] // c.HistoricalSummaries
+	sszSlice30 := buf[sszVarOffset30:sszVarOffset31] // c.PendingDeposits
+	sszSlice31 := buf[sszVarOffset31:sszVarOffset32] // c.PendingPartialWithdrawals
+	sszSlice32 := buf[sszVarOffset32:sszVarOffset34] // c.PendingConsolidations
+	sszSlice34 := buf[sszVarOffset34:sszVarOffset38] // c.Builders
+	sszSlice38 := buf[sszVarOffset38:sszVarOffset39] // c.BuilderPendingWithdrawals
+	sszSlice39 := buf[sszVarOffset39:sszVarOffset40] // c.LatestExecutionPayloadBid
+	sszSlice40 := buf[sszVarOffset40:]               // c.PayloadExpectedWithdrawals
 
 	// Field 0: GenesisTime
 	c.GenesisTime = binary.LittleEndian.Uint64(sszSlice0)
@@ -1512,42 +1475,12 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 		}
 	}
 
-	// Field 8: Eth1Data
-	c.Eth1Data = new(Eth1Data)
-	if err = c.Eth1Data.UnmarshalSSZ(sszSlice8); err != nil {
-		return fmt.Errorf("Eth1Data: %w", err)
-	}
-
-	// Field 9: Eth1DataVotes
+	// Field 8: Validators
 	{
-		if len(sszSlice9)%72 != 0 {
-			return fmt.Errorf("misaligned bytes: c.Eth1DataVotes length is %d, which is not a multiple of 72: %w", len(sszSlice9), ssz.ErrIncorrectListSize)
+		if len(sszSlice8)%121 != 0 {
+			return fmt.Errorf("misaligned bytes: c.Validators length is %d, which is not a multiple of 121: %w", len(sszSlice8), ssz.ErrIncorrectListSize)
 		}
-		numElem := len(sszSlice9) / 72
-		if numElem > 32 {
-			return fmt.Errorf("ssz-max exceeded: c.Eth1DataVotes has %d elements, ssz-max is 32: %w", numElem, ssz.ErrListTooBig)
-		}
-		c.Eth1DataVotes = make([]*Eth1Data, numElem)
-		for i := 0; i < numElem; i++ {
-			var tmp *Eth1Data
-			tmp = new(Eth1Data)
-			tmpSlice := sszSlice9[i*72 : (1+i)*72]
-			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
-				return fmt.Errorf("Eth1DataVotes: %w", err)
-			}
-			c.Eth1DataVotes[i] = tmp
-		}
-	}
-
-	// Field 10: Eth1DepositIndex
-	c.Eth1DepositIndex = binary.LittleEndian.Uint64(sszSlice10)
-
-	// Field 11: Validators
-	{
-		if len(sszSlice11)%121 != 0 {
-			return fmt.Errorf("misaligned bytes: c.Validators length is %d, which is not a multiple of 121: %w", len(sszSlice11), ssz.ErrIncorrectListSize)
-		}
-		numElem := len(sszSlice11) / 121
+		numElem := len(sszSlice8) / 121
 		if numElem > 1099511627776 {
 			return fmt.Errorf("ssz-max exceeded: c.Validators has %d elements, ssz-max is 1099511627776: %w", numElem, ssz.ErrListTooBig)
 		}
@@ -1555,7 +1488,7 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 		for i := 0; i < numElem; i++ {
 			var tmp *Validator
 			tmp = new(Validator)
-			tmpSlice := sszSlice11[i*121 : (1+i)*121]
+			tmpSlice := sszSlice8[i*121 : (1+i)*121]
 			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
 				return fmt.Errorf("Validators: %w", err)
 			}
@@ -1563,12 +1496,12 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 		}
 	}
 
-	// Field 12: Balances
+	// Field 9: Balances
 	{
-		if len(sszSlice12)%8 != 0 {
-			return fmt.Errorf("misaligned bytes: c.Balances length is %d, which is not a multiple of 8: %w", len(sszSlice12), ssz.ErrIncorrectListSize)
+		if len(sszSlice9)%8 != 0 {
+			return fmt.Errorf("misaligned bytes: c.Balances length is %d, which is not a multiple of 8: %w", len(sszSlice9), ssz.ErrIncorrectListSize)
 		}
-		numElem := len(sszSlice12) / 8
+		numElem := len(sszSlice9) / 8
 		if numElem > 1099511627776 {
 			return fmt.Errorf("ssz-max exceeded: c.Balances has %d elements, ssz-max is 1099511627776: %w", numElem, ssz.ErrListTooBig)
 		}
@@ -1576,71 +1509,71 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 		for i := 0; i < numElem; i++ {
 			var tmp uint64
 
-			tmpSlice := sszSlice12[i*8 : (1+i)*8]
+			tmpSlice := sszSlice9[i*8 : (1+i)*8]
 			tmp = binary.LittleEndian.Uint64(tmpSlice)
 			c.Balances[i] = tmp
 		}
 	}
 
-	// Field 13: RandaoMixes
+	// Field 10: RandaoMixes
 	{
 		c.RandaoMixes = make([][]byte, 64)
 		for i := 0; i < 64; i++ {
 			var tmp []byte
 
-			tmpSlice := sszSlice13[i*32 : (1+i)*32]
+			tmpSlice := sszSlice10[i*32 : (1+i)*32]
 			tmp = make([]byte, 0, 32)
 			tmp = append(tmp, tmpSlice...)
 			c.RandaoMixes[i] = tmp
 		}
 	}
 
-	// Field 14: Slashings
+	// Field 11: Slashings
 	{
 		c.Slashings = make([]uint64, 64)
 		for i := 0; i < 64; i++ {
 			var tmp uint64
 
-			tmpSlice := sszSlice14[i*8 : (1+i)*8]
+			tmpSlice := sszSlice11[i*8 : (1+i)*8]
 			tmp = binary.LittleEndian.Uint64(tmpSlice)
 			c.Slashings[i] = tmp
 		}
 	}
 
-	// Field 15: PreviousEpochParticipation
-	c.PreviousEpochParticipation = append([]byte{}, sszSlice15...)
+	// Field 12: PreviousEpochParticipation
+	c.PreviousEpochParticipation = append([]byte{}, sszSlice12...)
 
-	// Field 16: CurrentEpochParticipation
-	c.CurrentEpochParticipation = append([]byte{}, sszSlice16...)
+	// Field 13: CurrentEpochParticipation
+	c.CurrentEpochParticipation = append([]byte{}, sszSlice13...)
 
-	// Field 17: JustificationBits
+	// Field 14: JustificationBits
 	c.JustificationBits = make([]byte, 0, 1)
-	c.JustificationBits = append(c.JustificationBits, go_bitfield.Bitvector4(sszSlice17)...)
+	c.JustificationBits = append(c.JustificationBits, go_bitfield.Bitvector4(sszSlice14)...)
 
-	// Field 18: PreviousJustifiedCheckpoint
+	// Field 15: PreviousJustifiedCheckpoint
 	c.PreviousJustifiedCheckpoint = new(Checkpoint)
-	if err = c.PreviousJustifiedCheckpoint.UnmarshalSSZ(sszSlice18); err != nil {
+	if err = c.PreviousJustifiedCheckpoint.UnmarshalSSZ(sszSlice15); err != nil {
 		return fmt.Errorf("PreviousJustifiedCheckpoint: %w", err)
 	}
 
-	// Field 19: CurrentJustifiedCheckpoint
+	// Field 16: CurrentJustifiedCheckpoint
 	c.CurrentJustifiedCheckpoint = new(Checkpoint)
-	if err = c.CurrentJustifiedCheckpoint.UnmarshalSSZ(sszSlice19); err != nil {
+	if err = c.CurrentJustifiedCheckpoint.UnmarshalSSZ(sszSlice16); err != nil {
 		return fmt.Errorf("CurrentJustifiedCheckpoint: %w", err)
 	}
 
-	// Field 20: FinalizedCheckpoint
+	// Field 17: FinalizedCheckpoint
 	c.FinalizedCheckpoint = new(Checkpoint)
-	if err = c.FinalizedCheckpoint.UnmarshalSSZ(sszSlice20); err != nil {
+	if err = c.FinalizedCheckpoint.UnmarshalSSZ(sszSlice17); err != nil {
 		return fmt.Errorf("FinalizedCheckpoint: %w", err)
 	}
 
-	// Field 21: InactivityScores
+	// Field 18: InactivityScores
 	{
-		if len(sszSlice21)%8 != 0 {
-			return fmt.Errorf("misaligned bytes: c.InactivityScores length is %d, which is not a multiple of 8: %w", len(sszSlice21), ssz.ErrIncorrectListSize)
+		if len(sszSlice18)%8 != 0 {
+			return fmt.Errorf("misaligned bytes: c.InactivityScores length is %d, which is not a multiple of 8: %w", len(sszSlice18), ssz.ErrIncorrectListSize)
 		}
-		numElem := len(sszSlice21) / 8
+		numElem := len(sszSlice18) / 8
 		if numElem > 1099511627776 {
 			return fmt.Errorf("ssz-max exceeded: c.InactivityScores has %d elements, ssz-max is 1099511627776: %w", numElem, ssz.ErrListTooBig)
 		}
@@ -1648,42 +1581,42 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 		for i := 0; i < numElem; i++ {
 			var tmp uint64
 
-			tmpSlice := sszSlice21[i*8 : (1+i)*8]
+			tmpSlice := sszSlice18[i*8 : (1+i)*8]
 			tmp = binary.LittleEndian.Uint64(tmpSlice)
 			c.InactivityScores[i] = tmp
 		}
 	}
 
-	// Field 22: CurrentSyncCommittee
+	// Field 19: CurrentSyncCommittee
 	c.CurrentSyncCommittee = new(SyncCommittee)
-	if err = c.CurrentSyncCommittee.UnmarshalSSZ(sszSlice22); err != nil {
+	if err = c.CurrentSyncCommittee.UnmarshalSSZ(sszSlice19); err != nil {
 		return fmt.Errorf("CurrentSyncCommittee: %w", err)
 	}
 
-	// Field 23: NextSyncCommittee
+	// Field 20: NextSyncCommittee
 	c.NextSyncCommittee = new(SyncCommittee)
-	if err = c.NextSyncCommittee.UnmarshalSSZ(sszSlice23); err != nil {
+	if err = c.NextSyncCommittee.UnmarshalSSZ(sszSlice20); err != nil {
 		return fmt.Errorf("NextSyncCommittee: %w", err)
 	}
 
-	// Field 24: LatestBlockHash
+	// Field 21: LatestBlockHash
 	c.LatestBlockHash = make([]byte, 0, 32)
-	c.LatestBlockHash = append(c.LatestBlockHash, sszSlice24...)
+	c.LatestBlockHash = append(c.LatestBlockHash, sszSlice21...)
 
-	// Field 25: NextWithdrawalIndex
-	c.NextWithdrawalIndex = binary.LittleEndian.Uint64(sszSlice25)
+	// Field 22: NextWithdrawalIndex
+	c.NextWithdrawalIndex = binary.LittleEndian.Uint64(sszSlice22)
 
-	// Field 26: NextWithdrawalValidatorIndex
-	if err = c.NextWithdrawalValidatorIndex.UnmarshalSSZ(sszSlice26); err != nil {
+	// Field 23: NextWithdrawalValidatorIndex
+	if err = c.NextWithdrawalValidatorIndex.UnmarshalSSZ(sszSlice23); err != nil {
 		return fmt.Errorf("NextWithdrawalValidatorIndex: %w", err)
 	}
 
-	// Field 27: HistoricalSummaries
+	// Field 24: HistoricalSummaries
 	{
-		if len(sszSlice27)%64 != 0 {
-			return fmt.Errorf("misaligned bytes: c.HistoricalSummaries length is %d, which is not a multiple of 64: %w", len(sszSlice27), ssz.ErrIncorrectListSize)
+		if len(sszSlice24)%64 != 0 {
+			return fmt.Errorf("misaligned bytes: c.HistoricalSummaries length is %d, which is not a multiple of 64: %w", len(sszSlice24), ssz.ErrIncorrectListSize)
 		}
-		numElem := len(sszSlice27) / 64
+		numElem := len(sszSlice24) / 64
 		if numElem > 16777216 {
 			return fmt.Errorf("ssz-max exceeded: c.HistoricalSummaries has %d elements, ssz-max is 16777216: %w", numElem, ssz.ErrListTooBig)
 		}
@@ -1691,7 +1624,7 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 		for i := 0; i < numElem; i++ {
 			var tmp *HistoricalSummary
 			tmp = new(HistoricalSummary)
-			tmpSlice := sszSlice27[i*64 : (1+i)*64]
+			tmpSlice := sszSlice24[i*64 : (1+i)*64]
 			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
 				return fmt.Errorf("HistoricalSummaries: %w", err)
 			}
@@ -1699,40 +1632,37 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 		}
 	}
 
-	// Field 28: DepositRequestsStartIndex
-	c.DepositRequestsStartIndex = binary.LittleEndian.Uint64(sszSlice28)
-
-	// Field 29: DepositBalanceToConsume
-	if err = c.DepositBalanceToConsume.UnmarshalSSZ(sszSlice29); err != nil {
+	// Field 25: DepositBalanceToConsume
+	if err = c.DepositBalanceToConsume.UnmarshalSSZ(sszSlice25); err != nil {
 		return fmt.Errorf("DepositBalanceToConsume: %w", err)
 	}
 
-	// Field 30: ExitBalanceToConsume
-	if err = c.ExitBalanceToConsume.UnmarshalSSZ(sszSlice30); err != nil {
+	// Field 26: ExitBalanceToConsume
+	if err = c.ExitBalanceToConsume.UnmarshalSSZ(sszSlice26); err != nil {
 		return fmt.Errorf("ExitBalanceToConsume: %w", err)
 	}
 
-	// Field 31: EarliestExitEpoch
-	if err = c.EarliestExitEpoch.UnmarshalSSZ(sszSlice31); err != nil {
+	// Field 27: EarliestExitEpoch
+	if err = c.EarliestExitEpoch.UnmarshalSSZ(sszSlice27); err != nil {
 		return fmt.Errorf("EarliestExitEpoch: %w", err)
 	}
 
-	// Field 32: ConsolidationBalanceToConsume
-	if err = c.ConsolidationBalanceToConsume.UnmarshalSSZ(sszSlice32); err != nil {
+	// Field 28: ConsolidationBalanceToConsume
+	if err = c.ConsolidationBalanceToConsume.UnmarshalSSZ(sszSlice28); err != nil {
 		return fmt.Errorf("ConsolidationBalanceToConsume: %w", err)
 	}
 
-	// Field 33: EarliestConsolidationEpoch
-	if err = c.EarliestConsolidationEpoch.UnmarshalSSZ(sszSlice33); err != nil {
+	// Field 29: EarliestConsolidationEpoch
+	if err = c.EarliestConsolidationEpoch.UnmarshalSSZ(sszSlice29); err != nil {
 		return fmt.Errorf("EarliestConsolidationEpoch: %w", err)
 	}
 
-	// Field 34: PendingDeposits
+	// Field 30: PendingDeposits
 	{
-		if len(sszSlice34)%192 != 0 {
-			return fmt.Errorf("misaligned bytes: c.PendingDeposits length is %d, which is not a multiple of 192: %w", len(sszSlice34), ssz.ErrIncorrectListSize)
+		if len(sszSlice30)%192 != 0 {
+			return fmt.Errorf("misaligned bytes: c.PendingDeposits length is %d, which is not a multiple of 192: %w", len(sszSlice30), ssz.ErrIncorrectListSize)
 		}
-		numElem := len(sszSlice34) / 192
+		numElem := len(sszSlice30) / 192
 		if numElem > 134217728 {
 			return fmt.Errorf("ssz-max exceeded: c.PendingDeposits has %d elements, ssz-max is 134217728: %w", numElem, ssz.ErrListTooBig)
 		}
@@ -1740,7 +1670,7 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 		for i := 0; i < numElem; i++ {
 			var tmp *PendingDeposit
 			tmp = new(PendingDeposit)
-			tmpSlice := sszSlice34[i*192 : (1+i)*192]
+			tmpSlice := sszSlice30[i*192 : (1+i)*192]
 			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
 				return fmt.Errorf("PendingDeposits: %w", err)
 			}
@@ -1748,12 +1678,12 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 		}
 	}
 
-	// Field 35: PendingPartialWithdrawals
+	// Field 31: PendingPartialWithdrawals
 	{
-		if len(sszSlice35)%24 != 0 {
-			return fmt.Errorf("misaligned bytes: c.PendingPartialWithdrawals length is %d, which is not a multiple of 24: %w", len(sszSlice35), ssz.ErrIncorrectListSize)
+		if len(sszSlice31)%24 != 0 {
+			return fmt.Errorf("misaligned bytes: c.PendingPartialWithdrawals length is %d, which is not a multiple of 24: %w", len(sszSlice31), ssz.ErrIncorrectListSize)
 		}
-		numElem := len(sszSlice35) / 24
+		numElem := len(sszSlice31) / 24
 		if numElem > 64 {
 			return fmt.Errorf("ssz-max exceeded: c.PendingPartialWithdrawals has %d elements, ssz-max is 64: %w", numElem, ssz.ErrListTooBig)
 		}
@@ -1761,7 +1691,7 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 		for i := 0; i < numElem; i++ {
 			var tmp *PendingPartialWithdrawal
 			tmp = new(PendingPartialWithdrawal)
-			tmpSlice := sszSlice35[i*24 : (1+i)*24]
+			tmpSlice := sszSlice31[i*24 : (1+i)*24]
 			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
 				return fmt.Errorf("PendingPartialWithdrawals: %w", err)
 			}
@@ -1769,12 +1699,12 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 		}
 	}
 
-	// Field 36: PendingConsolidations
+	// Field 32: PendingConsolidations
 	{
-		if len(sszSlice36)%16 != 0 {
-			return fmt.Errorf("misaligned bytes: c.PendingConsolidations length is %d, which is not a multiple of 16: %w", len(sszSlice36), ssz.ErrIncorrectListSize)
+		if len(sszSlice32)%16 != 0 {
+			return fmt.Errorf("misaligned bytes: c.PendingConsolidations length is %d, which is not a multiple of 16: %w", len(sszSlice32), ssz.ErrIncorrectListSize)
 		}
-		numElem := len(sszSlice36) / 16
+		numElem := len(sszSlice32) / 16
 		if numElem > 64 {
 			return fmt.Errorf("ssz-max exceeded: c.PendingConsolidations has %d elements, ssz-max is 64: %w", numElem, ssz.ErrListTooBig)
 		}
@@ -1782,7 +1712,7 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 		for i := 0; i < numElem; i++ {
 			var tmp *PendingConsolidation
 			tmp = new(PendingConsolidation)
-			tmpSlice := sszSlice36[i*16 : (1+i)*16]
+			tmpSlice := sszSlice32[i*16 : (1+i)*16]
 			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
 				return fmt.Errorf("PendingConsolidations: %w", err)
 			}
@@ -1790,13 +1720,13 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 		}
 	}
 
-	// Field 37: ProposerLookahead
+	// Field 33: ProposerLookahead
 	{
 		c.ProposerLookahead = make([]primitives.ValidatorIndex, 16)
 		for i := 0; i < 16; i++ {
 			var tmp primitives.ValidatorIndex
 
-			tmpSlice := sszSlice37[i*8 : (1+i)*8]
+			tmpSlice := sszSlice33[i*8 : (1+i)*8]
 			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
 				return fmt.Errorf("ProposerLookahead: %w", err)
 			}
@@ -1804,12 +1734,12 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 		}
 	}
 
-	// Field 38: Builders
+	// Field 34: Builders
 	{
-		if len(sszSlice38)%93 != 0 {
-			return fmt.Errorf("misaligned bytes: c.Builders length is %d, which is not a multiple of 93: %w", len(sszSlice38), ssz.ErrIncorrectListSize)
+		if len(sszSlice34)%93 != 0 {
+			return fmt.Errorf("misaligned bytes: c.Builders length is %d, which is not a multiple of 93: %w", len(sszSlice34), ssz.ErrIncorrectListSize)
 		}
-		numElem := len(sszSlice38) / 93
+		numElem := len(sszSlice34) / 93
 		if numElem > 1099511627776 {
 			return fmt.Errorf("ssz-max exceeded: c.Builders has %d elements, ssz-max is 1099511627776: %w", numElem, ssz.ErrListTooBig)
 		}
@@ -1817,7 +1747,7 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 		for i := 0; i < numElem; i++ {
 			var tmp *Builder
 			tmp = new(Builder)
-			tmpSlice := sszSlice38[i*93 : (1+i)*93]
+			tmpSlice := sszSlice34[i*93 : (1+i)*93]
 			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
 				return fmt.Errorf("Builders: %w", err)
 			}
@@ -1825,22 +1755,22 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 		}
 	}
 
-	// Field 39: NextWithdrawalBuilderIndex
-	if err = c.NextWithdrawalBuilderIndex.UnmarshalSSZ(sszSlice39); err != nil {
+	// Field 35: NextWithdrawalBuilderIndex
+	if err = c.NextWithdrawalBuilderIndex.UnmarshalSSZ(sszSlice35); err != nil {
 		return fmt.Errorf("NextWithdrawalBuilderIndex: %w", err)
 	}
 
-	// Field 40: ExecutionPayloadAvailability
+	// Field 36: ExecutionPayloadAvailability
 	c.ExecutionPayloadAvailability = make([]byte, 0, 8)
-	c.ExecutionPayloadAvailability = append(c.ExecutionPayloadAvailability, sszSlice40...)
+	c.ExecutionPayloadAvailability = append(c.ExecutionPayloadAvailability, sszSlice36...)
 
-	// Field 41: BuilderPendingPayments
+	// Field 37: BuilderPendingPayments
 	{
 		c.BuilderPendingPayments = make([]*BuilderPendingPayment, 16)
 		for i := 0; i < 16; i++ {
 			var tmp *BuilderPendingPayment
 			tmp = new(BuilderPendingPayment)
-			tmpSlice := sszSlice41[i*52 : (1+i)*52]
+			tmpSlice := sszSlice37[i*52 : (1+i)*52]
 			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
 				return fmt.Errorf("BuilderPendingPayments: %w", err)
 			}
@@ -1848,12 +1778,12 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 		}
 	}
 
-	// Field 42: BuilderPendingWithdrawals
+	// Field 38: BuilderPendingWithdrawals
 	{
-		if len(sszSlice42)%36 != 0 {
-			return fmt.Errorf("misaligned bytes: c.BuilderPendingWithdrawals length is %d, which is not a multiple of 36: %w", len(sszSlice42), ssz.ErrIncorrectListSize)
+		if len(sszSlice38)%36 != 0 {
+			return fmt.Errorf("misaligned bytes: c.BuilderPendingWithdrawals length is %d, which is not a multiple of 36: %w", len(sszSlice38), ssz.ErrIncorrectListSize)
 		}
-		numElem := len(sszSlice42) / 36
+		numElem := len(sszSlice38) / 36
 		if numElem > 1048576 {
 			return fmt.Errorf("ssz-max exceeded: c.BuilderPendingWithdrawals has %d elements, ssz-max is 1048576: %w", numElem, ssz.ErrListTooBig)
 		}
@@ -1861,7 +1791,7 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 		for i := 0; i < numElem; i++ {
 			var tmp *BuilderPendingWithdrawal
 			tmp = new(BuilderPendingWithdrawal)
-			tmpSlice := sszSlice42[i*36 : (1+i)*36]
+			tmpSlice := sszSlice38[i*36 : (1+i)*36]
 			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
 				return fmt.Errorf("BuilderPendingWithdrawals: %w", err)
 			}
@@ -1869,18 +1799,18 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 		}
 	}
 
-	// Field 43: LatestExecutionPayloadBid
+	// Field 39: LatestExecutionPayloadBid
 	c.LatestExecutionPayloadBid = new(ExecutionPayloadBidHeze)
-	if err = c.LatestExecutionPayloadBid.UnmarshalSSZ(sszSlice43); err != nil {
+	if err = c.LatestExecutionPayloadBid.UnmarshalSSZ(sszSlice39); err != nil {
 		return fmt.Errorf("LatestExecutionPayloadBid: %w", err)
 	}
 
-	// Field 44: PayloadExpectedWithdrawals
+	// Field 40: PayloadExpectedWithdrawals
 	{
-		if len(sszSlice44)%44 != 0 {
-			return fmt.Errorf("misaligned bytes: c.PayloadExpectedWithdrawals length is %d, which is not a multiple of 44: %w", len(sszSlice44), ssz.ErrIncorrectListSize)
+		if len(sszSlice40)%44 != 0 {
+			return fmt.Errorf("misaligned bytes: c.PayloadExpectedWithdrawals length is %d, which is not a multiple of 44: %w", len(sszSlice40), ssz.ErrIncorrectListSize)
 		}
-		numElem := len(sszSlice44) / 44
+		numElem := len(sszSlice40) / 44
 		if numElem > 4 {
 			return fmt.Errorf("ssz-max exceeded: c.PayloadExpectedWithdrawals has %d elements, ssz-max is 4: %w", numElem, ssz.ErrListTooBig)
 		}
@@ -1888,7 +1818,7 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 		for i := 0; i < numElem; i++ {
 			var tmp *v1.Withdrawal
 			tmp = new(v1.Withdrawal)
-			tmpSlice := sszSlice44[i*44 : (1+i)*44]
+			tmpSlice := sszSlice40[i*44 : (1+i)*44]
 			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
 				return fmt.Errorf("PayloadExpectedWithdrawals: %w", err)
 			}
@@ -1896,13 +1826,13 @@ func (c *BeaconStateHeze) UnmarshalSSZ(buf []byte) error {
 		}
 	}
 
-	// Field 45: PtcWindow
+	// Field 41: PtcWindow
 	{
 		c.PtcWindow = make([]*PTCs, 24)
 		for i := 0; i < 24; i++ {
 			var tmp *PTCs
 			tmp = new(PTCs)
-			tmpSlice := sszSlice45[i*128 : (1+i)*128]
+			tmpSlice := sszSlice41[i*128 : (1+i)*128]
 			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
 				return fmt.Errorf("PtcWindow: %w", err)
 			}
@@ -1920,7 +1850,7 @@ func (c *BeaconStateHeze) HashTreeRootWith(hh *ssz.Hasher) error {
 	return c.ProgressiveHashTreeRootWith(hh)
 }
 
-var activeFieldsBeaconStateHeze = []byte{0b11111111, 0b11111111, 0b11111111, 0b11111111, 0b11111111, 0b00111111}
+var activeFieldsBeaconStateHeze = []byte{0b11111111, 0b11111000, 0b11111111, 0b11101111, 0b11111111, 0b00111111}
 
 func (c *BeaconStateHeze) ProgressiveHashTreeRoot() ([32]byte, error) {
 	hh := ssz.DefaultHasherPool.Get()
@@ -1996,25 +1926,12 @@ func (c *BeaconStateHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error
 		}
 		hh.MerkleizeWithMixin(subIndx, uint64(len(c.HistoricalRoots)), 16777216)
 	}
-	// Position 8: Eth1Data
-	if err := c.Eth1Data.HashTreeRootWith(hh); err != nil {
-		return fmt.Errorf("Eth1Data: %w", err)
-	}
-	// Position 9: Eth1DataVotes
-	{
-		if len(c.Eth1DataVotes) > 32 {
-			return ssz.ErrListTooBig
-		}
-		subIndx := hh.Index()
-		for _, o := range c.Eth1DataVotes {
-			if err := o.HashTreeRootWith(hh); err != nil {
-				return fmt.Errorf("Eth1DataVotes: %w", err)
-			}
-		}
-		hh.MerkleizeWithMixin(subIndx, uint64(len(c.Eth1DataVotes)), 32)
-	}
-	// Position 10: Eth1DepositIndex
-	hh.PutUint64(c.Eth1DepositIndex)
+	// Position 8: inactive (zero chunk)
+	hh.PutBool(false)
+	// Position 9: inactive (zero chunk)
+	hh.PutBool(false)
+	// Position 10: inactive (zero chunk)
+	hh.PutBool(false)
 	// Position 11: Validators
 	{
 		subIndx := hh.Index()
@@ -2129,8 +2046,8 @@ func (c *BeaconStateHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error
 		}
 		hh.MerkleizeWithMixin(subIndx, uint64(len(c.HistoricalSummaries)), 16777216)
 	}
-	// Position 28: DepositRequestsStartIndex
-	hh.PutUint64(c.DepositRequestsStartIndex)
+	// Position 28: inactive (zero chunk)
+	hh.PutBool(false)
 	// Position 29: DepositBalanceToConsume
 	if err := c.DepositBalanceToConsume.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("DepositBalanceToConsume: %w", err)

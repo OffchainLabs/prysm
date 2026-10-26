@@ -43,8 +43,6 @@ func TestUpgradeToHeze(t *testing.T) {
 			Epoch:           time.CurrentEpoch(pre),
 		}, got.Fork)
 		require.Equal(t, container.Slot, got.Slot)
-		require.Equal(t, container.Eth1DepositIndex, got.Eth1DepositIndex)
-		require.DeepEqual(t, container.Eth1Data, got.Eth1Data)
 		require.DeepEqual(t, container.LatestBlockHash, got.LatestBlockHash)
 		require.DeepEqual(t, container.PtcWindow, got.PtcWindow)
 

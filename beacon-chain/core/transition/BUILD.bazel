@@ -70,6 +70,7 @@ go_test(
         "electra_test.go",
         "exports_test.go",
         "gloas_operations_test.go",
+        "heze_operations_test.go",
         "skip_slot_cache_test.go",
         "state_fuzz_test.go",
         "state_test.go",

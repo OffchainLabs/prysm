@@ -2080,16 +2080,19 @@ func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDi
 	if err := applyHistoricalRootsDiff(source, diff); err != nil {
 		return nil, errors.Wrap(err, "failed to apply historical roots diff")
 	}
-	if diff.eth1Data != nil {
-		if err := source.SetEth1Data(diff.eth1Data); err != nil {
-			return nil, errors.Wrap(err, "failed to set eth1 data")
+	// Heze removes the eth1 fields (EIP-8015).
+	if diff.targetVersion < version.Heze {
+		if diff.eth1Data != nil {
+			if err := source.SetEth1Data(diff.eth1Data); err != nil {
+				return nil, errors.Wrap(err, "failed to set eth1 data")
+			}
 		}
-	}
-	if err := applyEth1DataVotesDiff(source, diff); err != nil {
-		return nil, errors.Wrap(err, "failed to apply eth1 data votes diff")
-	}
-	if err := source.SetEth1DepositIndex(diff.eth1DepositIndex); err != nil {
-		return nil, errors.Wrap(err, "failed to set eth1 deposit index")
+		if err := applyEth1DataVotesDiff(source, diff); err != nil {
+			return nil, errors.Wrap(err, "failed to apply eth1 data votes diff")
+		}
+		if err := source.SetEth1DepositIndex(diff.eth1DepositIndex); err != nil {
+			return nil, errors.Wrap(err, "failed to set eth1 deposit index")
+		}
 	}
 	if err := applyRandaoMixesDiff(source, diff); err != nil {
 		return nil, errors.Wrap(err, "failed to apply randao mixes diff")
@@ -2169,8 +2172,11 @@ func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDi
 	if diff.targetVersion < version.Electra {
 		return source, nil
 	}
-	if err := source.SetDepositRequestsStartIndex(diff.depositRequestsStartIndex); err != nil {
-		return nil, errors.Wrap(err, "failed to set deposit requests start index")
+	// Heze removes the deposit requests start index (EIP-8015).
+	if diff.targetVersion < version.Heze {
+		if err := source.SetDepositRequestsStartIndex(diff.depositRequestsStartIndex); err != nil {
+			return nil, errors.Wrap(err, "failed to set deposit requests start index")
+		}
 	}
 	if err := source.SetDepositBalanceToConsume(diff.depositBalanceToConsume); err != nil {
 		return nil, errors.Wrap(err, "failed to set deposit balance to consume")

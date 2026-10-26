@@ -6,6 +6,8 @@ import (
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -281,5 +283,54 @@ func TestBeaconStateMerkleProofs_Gloas(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, false, trie.VerifyMerkleProof(htr[:], finalizedRoot, gIndex, proof))
 		require.Equal(t, true, trie.VerifyMerkleProof(newRoot[:], finalizedRoot, gIndex, proof))
+	})
+}
+
+func TestBeaconStateMerkleProofs_Heze(t *testing.T) {
+	ctx := t.Context()
+	heze, err := util.NewBeaconStateHeze()
+	require.NoError(t, err)
+	require.Equal(t, version.Heze, heze.Version())
+	require.NoError(t, heze.SetFinalizedCheckpoint(&ethpb.Checkpoint{Epoch: 3, Root: bytesutil.PadTo([]byte{0xaa}, 32)}))
+	htr, err := heze.HashTreeRoot(ctx)
+	require.NoError(t, err)
+
+	t.Run("current sync committee", func(t *testing.T) {
+		committee, err := heze.CurrentSyncCommittee()
+		require.NoError(t, err)
+		committeeRoot, err := committee.HashTreeRoot()
+		require.NoError(t, err)
+		proof, err := heze.CurrentSyncCommitteeProof(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 11, len(proof))
+		gIndex, err := statenative.CurrentSyncCommitteeGeneralizedIndexForVersion(heze.Version())
+		require.NoError(t, err)
+		require.Equal(t, uint64(2945), gIndex)
+		require.Equal(t, true, trie.VerifyMerkleProof(htr[:], committeeRoot[:], gIndex, proof))
+	})
+
+	t.Run("next sync committee", func(t *testing.T) {
+		committee, err := heze.NextSyncCommittee()
+		require.NoError(t, err)
+		committeeRoot, err := committee.HashTreeRoot()
+		require.NoError(t, err)
+		proof, err := heze.NextSyncCommitteeProof(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 11, len(proof))
+		gIndex, err := statenative.NextSyncCommitteeGeneralizedIndexForVersion(heze.Version())
+		require.NoError(t, err)
+		require.Equal(t, uint64(2946), gIndex)
+		require.Equal(t, true, trie.VerifyMerkleProof(htr[:], committeeRoot[:], gIndex, proof))
+	})
+
+	t.Run("finalized root", func(t *testing.T) {
+		finalizedRoot := heze.FinalizedCheckpoint().Root
+		proof, err := heze.FinalizedRootProof(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 9, len(proof))
+		gIndex, err := statenative.FinalizedRootGeneralizedIndexForVersion(heze.Version())
+		require.NoError(t, err)
+		require.Equal(t, uint64(735), gIndex)
+		require.Equal(t, true, trie.VerifyMerkleProof(htr[:], finalizedRoot, gIndex, proof))
 	})
 }

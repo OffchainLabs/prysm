@@ -4,10 +4,15 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
 
 // SetEth1Data for the beacon state.
 func (b *BeaconState) SetEth1Data(val *ethpb.Eth1Data) error {
+	if b.version >= version.Heze {
+		return errNotSupported("SetEth1Data", b.version)
+	}
+
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
@@ -19,6 +24,10 @@ func (b *BeaconState) SetEth1Data(val *ethpb.Eth1Data) error {
 // SetEth1DataVotes for the beacon state. Updates the entire
 // list to a new value by overwriting the previous one.
 func (b *BeaconState) SetEth1DataVotes(val []*ethpb.Eth1Data) error {
+	if b.version >= version.Heze {
+		return errNotSupported("SetEth1DataVotes", b.version)
+	}
+
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
@@ -33,6 +42,10 @@ func (b *BeaconState) SetEth1DataVotes(val []*ethpb.Eth1Data) error {
 
 // SetEth1DepositIndex for the beacon state.
 func (b *BeaconState) SetEth1DepositIndex(val uint64) error {
+	if b.version >= version.Heze {
+		return errNotSupported("SetEth1DepositIndex", b.version)
+	}
+
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
@@ -44,6 +57,10 @@ func (b *BeaconState) SetEth1DepositIndex(val uint64) error {
 // AppendEth1DataVotes for the beacon state. Appends the new value
 // to the end of list.
 func (b *BeaconState) AppendEth1DataVotes(val *ethpb.Eth1Data) error {
+	if b.version >= version.Heze {
+		return errNotSupported("AppendEth1DataVotes", b.version)
+	}
+
 	b.lock.Lock()
 	defer b.lock.Unlock()
 

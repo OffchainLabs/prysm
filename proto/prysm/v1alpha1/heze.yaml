@@ -14,7 +14,9 @@ types:
   - name: "BeaconBlockContentsHeze"
   - name: "BeaconBlockHeze"
   - name: "BeaconStateHeze"
-    progressive: {}
+    progressive:
+      # EIP-8015: eth1_data, eth1_data_votes, eth1_deposit_index and deposit_requests_start_index
+      inactive_indices: [8, 9, 10, 28]
     fields:
       Validators:                 {type: "ProgressiveList"}
       Balances:                   {type: "ProgressiveList"}
