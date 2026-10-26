@@ -5,7 +5,7 @@ go 1.26.10
 require (
 	github.com/OffchainLabs/go-bitfield v0.0.0-20260504143531-5cbb6d0f5f2e
 	github.com/OffchainLabs/hashtree v0.2.6
-	github.com/OffchainLabs/methodical-ssz v0.0.0-20260825194644-932cc7380128
+	github.com/OffchainLabs/methodical-ssz v0.0.0-20261026091435-c3f77ce44447
 	github.com/aristanetworks/goarista v0.0.0-20200805130819-fd197cf57d96
 	github.com/bazelbuild/buildtools v0.0.0-20260528135316-84fa6c32aee6
 	github.com/bazelbuild/rules_go v0.23.2
