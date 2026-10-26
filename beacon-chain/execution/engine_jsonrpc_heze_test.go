@@ -9,7 +9,9 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -131,5 +133,57 @@ func TestNewPayloadWithInclusionList(t *testing.T) {
 		withdrawal := "0x01" + strings.Repeat("11", 20) + strings.Repeat("22", 48) + "0500000000000000"
 		consolidation := "0x02" + strings.Repeat("33", 20) + strings.Repeat("44", 48) + strings.Repeat("55", 48)
 		require.Equal(t, `["`+withdrawal+`","`+consolidation+`"]`, string(got.Params[3]))
+	})
+}
+
+func TestForkchoiceUpdated_Heze(t *testing.T) {
+	fcs := &pb.ForkchoiceState{HeadBlockHash: make([]byte, 32), SafeBlockHash: make([]byte, 32), FinalizedBlockHash: make([]byte, 32)}
+	lvh := common.Hash{'a'}
+	result := map[string]any{
+		"payloadStatus": map[string]any{"status": "VALID", "latestValidHash": lvh, "validationError": nil, "inclusionListSatisfied": true},
+		"payloadId":     "0x0000000000000001",
+	}
+	v5 := &pb.PayloadAttributesV5{
+		Timestamp:                 1,
+		PrevRandao:                make([]byte, 32),
+		SuggestedFeeRecipient:     make([]byte, 20),
+		Withdrawals:               []*pb.Withdrawal{},
+		ParentBeaconBlockRoot:     make([]byte, 32),
+		SlotNumber:                2,
+		TargetGasLimit:            3,
+		InclusionListTransactions: [][]byte{{0x01}},
+	}
+
+	t.Run("Heze attributes use V5", func(t *testing.T) {
+		var got capturedRPC
+		s := hezeEngineService(t, result, 0, &got)
+		attrs, err := payloadattribute.New(v5)
+		require.NoError(t, err)
+		id, gotLVH, err := s.ForkchoiceUpdated(t.Context(), fcs, attrs)
+		require.NoError(t, err)
+		require.DeepEqual(t, &pb.PayloadIDBytes{0, 0, 0, 0, 0, 0, 0, 1}, id)
+		require.DeepEqual(t, lvh[:], gotLVH)
+		require.Equal(t, ForkchoiceUpdatedMethodV5, got.Method)
+		require.Equal(t, 2, len(got.Params))
+		onWire := &pb.PayloadAttributesV5{}
+		require.NoError(t, json.Unmarshal(got.Params[1], onWire))
+		require.DeepEqual(t, v5, onWire)
+	})
+	t.Run("Gloas attributes still use V4", func(t *testing.T) {
+		var got capturedRPC
+		s := hezeEngineService(t, result, 0, &got)
+		attrs, err := payloadattribute.New(&pb.PayloadAttributesV4{Timestamp: 1, PrevRandao: make([]byte, 32), ParentBeaconBlockRoot: make([]byte, 32)})
+		require.NoError(t, err)
+		_, _, err = s.ForkchoiceUpdated(t.Context(), fcs, attrs)
+		require.NoError(t, err)
+		require.Equal(t, ForkchoiceUpdatedMethodV4, got.Method)
+	})
+	t.Run("unsupported fork", func(t *testing.T) {
+		var got capturedRPC
+		s := hezeEngineService(t, nil, -38005, &got)
+		_, _, err := s.ForkchoiceUpdated(t.Context(), fcs, payloadattribute.EmptyWithVersion(version.Heze))
+		require.ErrorIs(t, err, ErrUnsupportedFork)
+		require.Equal(t, ForkchoiceUpdatedMethodV5, got.Method)
+		require.Equal(t, `null`, string(got.Params[1]))
 	})
 }

@@ -91,6 +91,34 @@ func TestJsonMarshalUnmarshal(t *testing.T) {
 			require.Equal(t, true, dec.InclusionListSatisfied == nil)
 		})
 	})
+	t.Run("payload attributes V5", func(t *testing.T) {
+		random := bytesutil.PadTo([]byte("random"), fieldparams.RootLength)
+		feeRecipient := bytesutil.PadTo([]byte("feeRecipient"), fieldparams.FeeRecipientLength)
+		root := bytesutil.PadTo([]byte("root"), fieldparams.RootLength)
+		attrs := &enginev1.PayloadAttributesV5{
+			Timestamp:                 1,
+			PrevRandao:                random,
+			SuggestedFeeRecipient:     feeRecipient,
+			Withdrawals:               []*enginev1.Withdrawal{{Index: 1, ValidatorIndex: 2, Address: feeRecipient, Amount: 3}},
+			ParentBeaconBlockRoot:     root,
+			SlotNumber:                4,
+			TargetGasLimit:            5,
+			InclusionListTransactions: [][]byte{{0x01, 0x02}, {0x03}},
+		}
+		enc, err := json.Marshal(attrs)
+		require.NoError(t, err)
+		require.StringContains(t, `"inclusionListTransactions":["0x0102","0x03"]`, string(enc))
+		dec := &enginev1.PayloadAttributesV5{}
+		require.NoError(t, json.Unmarshal(enc, dec))
+		require.DeepEqual(t, attrs, dec)
+
+		t.Run("empty list is an array", func(t *testing.T) {
+			enc, err := json.Marshal(&enginev1.PayloadAttributesV5{})
+			require.NoError(t, err)
+			require.StringContains(t, `"inclusionListTransactions":[]`, string(enc))
+			require.StringContains(t, `"withdrawals":[]`, string(enc))
+		})
+	})
 	t.Run("forkchoice state", func(t *testing.T) {
 		head := bytesutil.PadTo([]byte("head"), fieldparams.RootLength)
 		safe := bytesutil.PadTo([]byte("safe"), fieldparams.RootLength)

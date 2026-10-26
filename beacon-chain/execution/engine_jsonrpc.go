@@ -91,6 +91,8 @@ const (
 	GetPayloadMethodV6 = "engine_getPayloadV6"
 	// ForkchoiceUpdatedMethodV4 is the forkchoice updated method added for gloas/amsterdam.
 	ForkchoiceUpdatedMethodV4 = "engine_forkchoiceUpdatedV4"
+	// ForkchoiceUpdatedMethodV5 is the forkchoice updated method added for heze/bogota.
+	ForkchoiceUpdatedMethodV5 = "engine_forkchoiceUpdatedV5"
 	// BlockByHashMethod request string for JSON-RPC.
 	BlockByHashMethod = "eth_getBlockByHash"
 	// BlockByNumberMethod request string for JSON-RPC.
@@ -312,12 +314,21 @@ func (s *Service) ForkchoiceUpdated(
 		if err != nil {
 			return nil, nil, handleRPCError(err)
 		}
-	case version.Gloas, version.Heze:
+	case version.Gloas:
 		a, err := attrs.PbV4()
 		if err != nil {
 			return nil, nil, err
 		}
 		err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethodV4, state, a)
+		if err != nil {
+			return nil, nil, handleRPCError(err)
+		}
+	case version.Heze:
+		a, err := attrs.PbV5()
+		if err != nil {
+			return nil, nil, err
+		}
+		err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethodV5, state, a)
 		if err != nil {
 			return nil, nil, handleRPCError(err)
 		}

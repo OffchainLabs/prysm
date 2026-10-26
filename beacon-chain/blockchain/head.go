@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -216,7 +217,7 @@ func (s *Service) saveHeadNoDB(ctx context.Context, b interfaces.ReadOnlySignedB
 		}
 		parentHash := bid.ParentBlockHash()
 		go func() {
-			if _, _, err := s.notifyForkchoiceUpdateGloas(s.ctx, parentHash, nil); err != nil {
+			if _, _, err := s.notifyForkchoiceUpdateGloas(s.ctx, parentHash, payloadattribute.EmptyWithVersion(b.Version())); err != nil {
 				log.WithError(err).Error("Could not notify forkchoice update after batch import")
 			}
 		}()

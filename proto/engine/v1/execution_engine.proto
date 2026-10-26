@@ -242,6 +242,18 @@ message PayloadAttributesV4 {
   uint64 target_gas_limit = 7;
 }
 
+message PayloadAttributesV5 {
+  uint64 timestamp = 1;
+  bytes prev_randao = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes suggested_fee_recipient = 3 [ (ethereum.eth.ext.ssz_size) = "20" ];
+  repeated Withdrawal withdrawals = 4
+      [ (ethereum.eth.ext.ssz_max) = "withdrawal.size" ];
+  bytes parent_beacon_block_root = 5 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 slot_number = 6;
+  uint64 target_gas_limit = 7;
+  repeated bytes inclusion_list_transactions = 8;
+}
+
 message PayloadStatus {
   Status status = 1;
   bytes latest_valid_hash = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
