@@ -41,8 +41,8 @@ func TestNewROSignedExecutionProofEnvelope(t *testing.T) {
 	})
 
 	t.Run("unsupported proof type", func(t *testing.T) {
-		// The specification supports proof types 1, 2 and 3 only.
-		for _, proofType := range []ethpb.ProofType{0, 4} {
+		// Prysm supports proof types 1 to 7 only.
+		for _, proofType := range []ethpb.ProofType{0, 8} {
 			_, err := NewROSignedExecutionProofEnvelope(envelope(proofType, []byte{0x01}))
 			require.ErrorIs(t, err, errUnsupportedExecutionProofType)
 		}

@@ -27,7 +27,8 @@ import (
 // verification, through the very verifier and verification key the node uses. The stand-ins are genuine proofs of
 // another block (the fixtures of zkboost v0.11.1, crates/server/src/proof/zkvm/mock), so their result says nothing
 // about the payload, hence it is discarded. They are verified once when the engine starts, so that a verification
-// key that does not match them fails at startup rather than going unnoticed.
+// key that does not match them fails at startup rather than going unnoticed. A proof type without a stand-in (Zesu,
+// for which zkboost has no fixture) still accepts mock proofs, but without spending the cost of a verification.
 
 //go:embed mockproofs/*.proof
 var standInProofFiles embed.FS
@@ -37,6 +38,9 @@ var standInProofNames = map[ethpb.ProofType]string{
 	ethpb.ProofTypeEthrexOpenVM: "stateless-validator-ethrex-openvm-v2.1.0-preview.proof",
 	ethpb.ProofTypeEthrexSP1:    "stateless-validator-ethrex-sp1-v6.4.0.proof",
 	ethpb.ProofTypeEthrexZisk:   "stateless-validator-ethrex-zisk-v1.1.0-alpha.proof",
+	ethpb.ProofTypeRethOpenVM:   "stateless-validator-reth-openvm-v2.1.0-preview.proof",
+	ethpb.ProofTypeRethSP1:      "stateless-validator-reth-sp1-v6.4.0.proof",
+	ethpb.ProofTypeRethZisk:     "stateless-validator-reth-zisk-v1.1.0-alpha.proof",
 }
 
 // standInProofs returns the stand-in proof of every proof type.
@@ -54,13 +58,18 @@ func standInProofs() (map[ethpb.ProofType][]byte, error) {
 	return proofs, nil
 }
 
-// enableMockProofs makes the engine accept mock proofs, with these stand-in proofs. Every proof type the engine
-// verifies needs a stand-in, which must verify with the verification key of its proof type.
+// enableMockProofs makes the engine accept mock proofs, with these stand-in proofs. A stand-in must verify with the
+// verification key of its proof type. A proof type without a stand-in accepts mock proofs without spending the cost
+// of a verification.
 func (e *Engine) enableMockProofs(standIns map[ethpb.ProofType][]byte) error {
 	for proofType, verifier := range e.verifiers {
+		verifier.mock = true
+
 		standIn, ok := standIns[proofType]
 		if !ok {
-			return fmt.Errorf("no stand-in proof for %s", proofType)
+			log.WithField("proofType", proofType).Warn("No stand-in proof: mock proofs of this type are accepted without spending the cost of a verification")
+			e.verifiers[proofType] = verifier
+			continue
 		}
 
 		if _, err := verifier.zkVM.verify(standIn); err != nil {

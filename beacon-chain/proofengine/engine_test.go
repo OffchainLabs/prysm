@@ -245,8 +245,14 @@ func TestEngine_Verify(t *testing.T) {
 	})
 
 	t.Run("mock mode without a stand-in", func(t *testing.T) {
-		engine := newTestEngine(t, fakeVerifier{publicValues: publicInput})
-		require.ErrorContains(t, "no stand-in proof", engine.enableMockProofs(nil))
+		var proofs [][]byte
+		engine := newTestEngine(t, recordingVerifier{proofs: &proofs})
+		require.NoError(t, engine.enableMockProofs(nil))
+
+		require.NoError(t, engine.Verify(ctx, ethpb.ProofTypeEthrexSP1, mockProof(publicInput), publicInput))
+		require.ErrorIs(t, engine.Verify(ctx, ethpb.ProofTypeEthrexSP1, mockProof(PublicInput([32]byte{0x01})), publicInput), ErrProofInvalid)
+		// Without a stand-in, nothing is verified.
+		require.Equal(t, 0, len(proofs))
 	})
 
 	t.Run("mock mode with a stand-in that does not verify", func(t *testing.T) {

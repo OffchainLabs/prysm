@@ -54,11 +54,11 @@ func (k zkVMKind) String() string {
 // zkVMKindOf returns the zkVM a proof type is proven with.
 func zkVMKindOf(proofType ethpb.ProofType) (zkVMKind, error) {
 	switch proofType {
-	case ethpb.ProofTypeEthrexOpenVM:
+	case ethpb.ProofTypeEthrexOpenVM, ethpb.ProofTypeRethOpenVM:
 		return zkVMOpenVM, nil
-	case ethpb.ProofTypeEthrexSP1:
+	case ethpb.ProofTypeEthrexSP1, ethpb.ProofTypeRethSP1:
 		return zkVMSP1, nil
-	case ethpb.ProofTypeEthrexZisk:
+	case ethpb.ProofTypeEthrexZisk, ethpb.ProofTypeRethZisk, ethpb.ProofTypeZesuZisk:
 		return zkVMZisk, nil
 	default:
 		return 0, fmt.Errorf("%w: %s", ErrUnsupportedProofType, proofType)
@@ -76,7 +76,8 @@ type zkVMVerifier interface {
 type typeVerifier struct {
 	zkVM    zkVMVerifier
 	kind    zkVMKind
-	standIn []byte // standIn is a genuine proof of this proof type, verified in place of each mock proof. It is only set in mock mode.
+	mock    bool   // mock is set in mock mode: mock proofs are accepted.
+	standIn []byte // standIn is a genuine proof of this proof type, verified in place of each mock proof. It is only set in mock mode, if any.
 }
 
 // Engine verifies execution proofs. It is safe for concurrent use.
@@ -181,12 +182,14 @@ func (e *Engine) Verify(ctx context.Context, proofType ethpb.ProofType, proofDat
 // publicValues verifies a proof and returns the public values it commits to. It returns an error wrapping
 // ErrProofInvalid if the proof is malformed or fails verification.
 func (v typeVerifier) publicValues(proofData []byte) ([]byte, error) {
-	if v.standIn != nil {
+	if v.mock {
 		if mockPublicValues, ok := decodeMockProof(proofData); ok {
 			// Mock mode, devnets only: a mock proof cannot be verified. Spend the cost of a real verification on
-			// the stand-in proof and discard its result, which says nothing about this payload. The public values
-			// come from the mock proof, and are checked by the caller. See mock.go.
-			_, _ = v.zkVM.verify(v.standIn)
+			// the stand-in proof, if any, and discard its result, which says nothing about this payload. The public
+			// values come from the mock proof, and are checked by the caller. See mock.go.
+			if v.standIn != nil {
+				_, _ = v.zkVM.verify(v.standIn)
+			}
 			return mockPublicValues, nil
 		}
 	}

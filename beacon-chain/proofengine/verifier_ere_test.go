@@ -60,10 +60,7 @@ func TestEreVerifier_Verify(t *testing.T) {
 		require.NoError(t, err)
 
 		// A genuine SP1 proof of the Reth guest, from the same zkboost fixtures.
-		proof, err := os.ReadFile(filepath.Join("testdata", "stateless-validator-reth-sp1-v6.4.0.proof"))
-		require.NoError(t, err)
-
-		_, err = verifier.verify(proof)
+		_, err = verifier.verify(readFixtureProof(t, ethpb.ProofTypeRethSP1))
 		require.ErrorIs(t, err, ErrProofInvalid)
 	})
 }
@@ -124,6 +121,10 @@ func TestNew(t *testing.T) {
 			// Real proofs are still verified.
 			require.NoError(t, engine.Verify(ctx, proofType, readFixtureProof(t, proofType), publicInput))
 		}
+
+		// Zesu has no stand-in, but still accepts mock proofs.
+		require.NoError(t, engine.Verify(ctx, ethpb.ProofTypeZesuZisk, mockProof(publicInput), publicInput))
+		require.ErrorIs(t, engine.Verify(ctx, ethpb.ProofTypeZesuZisk, mockProof(PublicInput([32]byte{0x01})), publicInput), ErrProofInvalid)
 	})
 
 	t.Run("mock proofs disabled", func(t *testing.T) {

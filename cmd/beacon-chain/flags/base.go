@@ -50,7 +50,7 @@ var (
 	// MockExecutionProofs accepts the mock proofs of zkboost's mock zkVMs, for devnets.
 	MockExecutionProofs = &cli.BoolFlag{
 		Name:  "zkvm-mock-proofs",
-		Usage: "DEVNETS ONLY. Accepts the EIP-8025 mock proofs of zkboost's mock zkVMs (an SSZ MockProof) without verifying them cryptographically, but still checks their public values. For each one, a built-in genuine proof of the same type is verified and its result discarded, so that the node spends the cost of a real verification. Only used with --zkvm.",
+		Usage: "DEVNETS ONLY. Accepts the EIP-8025 mock proofs of zkboost's mock zkVMs (an SSZ MockProof) without verifying them cryptographically, but still checks their public values. For each one, a built-in genuine proof of the same type is verified and its result discarded, so that the node spends the cost of a real verification (except for zesu-zisk, which has no such proof). Only used with --zkvm.",
 	}
 
 	// DisableBuilderSSZ turns off SSZ encoding for Builder APIs, falling back to JSON.
