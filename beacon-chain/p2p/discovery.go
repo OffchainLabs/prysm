@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"fmt"
 	"math"
 	"net"
 	"sync"
@@ -1002,6 +1003,25 @@ func convertToUdpMultiAddr(node *enode.Node) ([]ma.Multiaddr, error) {
 	}
 
 	return addresses, nil
+}
+
+// parsePeerIDs decodes the given peer IDs, ignoring empty entries.
+func parsePeerIDs(ids []string) (map[peer.ID]bool, error) {
+	pids := make(map[peer.ID]bool, len(ids))
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+
+		pid, err := peer.Decode(id)
+		if err != nil {
+			return nil, fmt.Errorf("decode peer ID %s: %w", id, err)
+		}
+
+		pids[pid] = true
+	}
+
+	return pids, nil
 }
 
 func peerIdsFromMultiAddrs(addrs []ma.Multiaddr) []peer.ID {

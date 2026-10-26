@@ -150,6 +150,7 @@ go_test(
         "subnets_test.go",
         "topics_test.go",
         "utils_test.go",
+        "watch_peers_test.go",
     ],
     data = glob(["testdata/**"]),
     embed = [":go_default_library"],

@@ -1320,3 +1320,21 @@ func TestGetPort_ZeroPortTreatedAsAbsent(t *testing.T) {
 	require.Equal(t, false, ok)
 	require.Equal(t, uint(0), port)
 }
+
+func TestParsePeerIDs(t *testing.T) {
+	const id = "16Uiu2HAmQxANYUvxH9bdN71jbHrGgTKE6ngtwR8R1yPBPmmNEnEc"
+
+	t.Run("valid", func(t *testing.T) {
+		pids, err := parsePeerIDs([]string{id, "", id})
+		require.NoError(t, err)
+
+		expected, err := peer.Decode(id)
+		require.NoError(t, err)
+		require.DeepEqual(t, map[peer.ID]bool{expected: true}, pids)
+	})
+
+	t.Run("invalid", func(t *testing.T) {
+		_, err := parsePeerIDs([]string{id, "not-a-peer-id"})
+		require.ErrorContains(t, "decode peer ID not-a-peer-id", err)
+	})
+}

@@ -116,6 +116,7 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.PubsubQueueSize,
 			cmd.RelayNode,
 			cmd.StaticPeers,
+			cmd.TrustedPeerIDs,
 			flags.BlobBatchLimit,
 			flags.BlobBatchLimitBurstFactor,
 			flags.DataColumnBatchLimit,

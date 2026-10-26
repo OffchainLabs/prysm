@@ -94,6 +94,12 @@ var (
 			"This peer is recognized as a trusted peer." +
 			"Accepts enode, multiaddr, and enr formats.",
 	}
+	// TrustedPeerIDs specifies a set of peer IDs to trust without connecting to them.
+	TrustedPeerIDs = &cli.StringSliceFlag{
+		Name: "trusted-peer-id",
+		Usage: "Trust the peer with this peer ID, this flag may be used multiple times. " +
+			"A trusted peer is never pruned nor banned, and may connect even if the inbound peer limit is reached.",
+	}
 	// BootstrapNode tells the beacon node which bootstrap node to connect to
 	BootstrapNode = &cli.StringSliceFlag{
 		Name: "bootstrap-node",

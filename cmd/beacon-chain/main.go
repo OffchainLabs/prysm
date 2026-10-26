@@ -108,6 +108,7 @@ var appFlags = []cli.Flag{
 	cmd.BootstrapNode,
 	cmd.NoDiscovery,
 	cmd.StaticPeers,
+	cmd.TrustedPeerIDs,
 	cmd.RelayNode,
 	cmd.P2PUDPPort,
 	cmd.P2PQUICPort,
