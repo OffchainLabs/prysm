@@ -26,6 +26,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/genesis"
 	v1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -1095,4 +1096,16 @@ func TestKZGCommitmentToVersionedHashes(t *testing.T) {
 	require.Equal(t, 2, len(vhs))
 	require.Equal(t, vhs[0].String(), vh0)
 	require.Equal(t, vhs[1].String(), vh1)
+}
+
+func TestPayloadAttributesHeze(t *testing.T) {
+	slot := primitives.Slot(9)
+	attr := payloadAttributesHeze(1, make([]byte, 32), make([]byte, 20), make([]byte, 32), nil, slot, 2)
+	require.Equal(t, version.Heze, attr.Version())
+	v5, err := attr.PbV5()
+	require.NoError(t, err)
+	require.Equal(t, uint64(slot), v5.SlotNumber)
+	require.Equal(t, uint64(2), v5.TargetGasLimit)
+	require.NotNil(t, v5.InclusionListTransactions)
+	require.Equal(t, 0, len(v5.InclusionListTransactions))
 }
