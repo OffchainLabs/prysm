@@ -184,6 +184,7 @@ func FuzzPropertyResourceBounds(f *testing.F) {
 
 // PropertyTestDiffSize verifies that diffs are smaller than full states for typical cases
 func FuzzPropertyDiffEfficiency(f *testing.F) {
+	base, _ := util.DeterministicGenesisStateElectra(f, 64)
 	f.Fuzz(func(t *testing.T, slotDelta uint64, numChanges uint8) {
 		if slotDelta > 100 {
 			slotDelta = slotDelta % 100
@@ -193,7 +194,7 @@ func FuzzPropertyDiffEfficiency(f *testing.F) {
 		}
 
 		// Create states with small differences
-		source, _ := util.DeterministicGenesisStateElectra(t, 64)
+		source := base.Copy()
 		target := source.Copy()
 
 		_ = target.SetSlot(source.Slot() + primitives.Slot(slotDelta))
@@ -327,8 +328,10 @@ func FuzzPropertyBalanceConservation(f *testing.F) {
 
 // PropertyTestMonotonicSlot verifies slot only increases
 func FuzzPropertyMonotonicSlot(f *testing.F) {
+	base, _ := util.DeterministicGenesisStateElectra(f, 16)
 	f.Fuzz(func(t *testing.T, slotDelta uint64) {
-		source, _ := util.DeterministicGenesisStateElectra(t, 16)
+		// ApplyDiff mutates source, so copy to keep base unchanged across execs
+		source := base.Copy()
 		target := source.Copy()
 
 		targetSlot := source.Slot() + primitives.Slot(slotDelta)
