@@ -57,6 +57,11 @@ var (
 		GetPayloadBodiesByHashV2,
 		GetPayloadBodiesByRangeV2,
 	}
+
+	hezeEngineEndpoints = []string{
+		NewPayloadMethodV6,
+		ForkchoiceUpdatedMethodV5,
+	}
 )
 
 const (
@@ -421,6 +426,9 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	if params.GloasEnabled() {
 		capacity += len(gloasEngineEndpoints)
 	}
+	if params.HezeEnabled() {
+		capacity += len(hezeEngineEndpoints)
+	}
 
 	endpoints := make([]string, 0, capacity)
 	endpoints = append(endpoints, supportedEngineEndpoints...)
@@ -432,6 +440,9 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	}
 	if params.GloasEnabled() {
 		endpoints = append(endpoints, gloasEngineEndpoints...)
+	}
+	if params.HezeEnabled() {
+		endpoints = append(endpoints, hezeEngineEndpoints...)
 	}
 
 	elSupportedEndpointsSlice := make([]string, 0, len(endpoints))
