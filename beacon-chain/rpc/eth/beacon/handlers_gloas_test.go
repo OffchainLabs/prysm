@@ -71,6 +71,7 @@ func (m *mockEnvelopeVerifier) VerifyExecutionRequestsRoot(_ interfaces.ROExecut
 }
 func (*mockEnvelopeVerifier) VerifyExecutionRequestsLimits() error { return nil }
 func (*mockEnvelopeVerifier) VerifyWithdrawalsLimit() error        { return nil }
+func (*mockEnvelopeVerifier) VerifyExecutionBlockHash() error      { return nil }
 func (m *mockEnvelopeVerifier) VerifySignature(_ context.Context, _ state.ReadOnlyBeaconState) error {
 	return m.errSignature
 }

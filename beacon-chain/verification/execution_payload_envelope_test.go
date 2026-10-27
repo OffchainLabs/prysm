@@ -6,6 +6,7 @@ import (
 
 	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/blockhash"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -202,6 +203,38 @@ func TestEnvelopeVerifier_VerifyWithdrawalsLimit(t *testing.T) {
 
 	t.Run("over limit", func(t *testing.T) {
 		require.ErrorIs(t, newVerifier(t, make([]*enginev1.Withdrawal, limit+1)).VerifyWithdrawalsLimit(), ErrTooManyWithdrawals)
+	})
+}
+
+func TestEnvelopeVerifier_VerifyExecutionBlockHash(t *testing.T) {
+	root := bytesutil.ToBytes32(bytes.Repeat([]byte{0xAA}, 32))
+	env := testSignedExecutionPayloadEnvelope(t, 1, 1, root, [32]byte{})
+	wrapped, err := blocks.WrappedROSignedExecutionPayloadEnvelope(env)
+	require.NoError(t, err)
+	e, err := wrapped.Envelope()
+	require.NoError(t, err)
+	payload, err := e.Execution()
+	require.NoError(t, err)
+	parentRoot := e.ParentBeaconBlockRoot()
+	h, err := blockhash.Compute(payload, &parentRoot, e.ExecutionRequests())
+	require.NoError(t, err)
+
+	t.Run("match", func(t *testing.T) {
+		env.Message.Payload.BlockHash = h[:]
+		wrapped, err := blocks.WrappedROSignedExecutionPayloadEnvelope(env)
+		require.NoError(t, err)
+		v := &EnvelopeVerifier{results: newResults(RequireExecutionBlockHashValid), e: wrapped}
+		require.NoError(t, v.VerifyExecutionBlockHash())
+	})
+
+	t.Run("mismatch", func(t *testing.T) {
+		env.Message.Payload.BlockHash = bytes.Repeat([]byte{0xBB}, 32)
+		wrapped, err := blocks.WrappedROSignedExecutionPayloadEnvelope(env)
+		require.NoError(t, err)
+		v := &EnvelopeVerifier{results: newResults(RequireExecutionBlockHashValid), e: wrapped}
+		err = v.VerifyExecutionBlockHash()
+		require.ErrorIs(t, err, ErrEnvelopeExecutionBlockHash)
+		require.ErrorIs(t, err, blockhash.ErrMismatch)
 	})
 }
 

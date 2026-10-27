@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/blockhash"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -29,6 +30,7 @@ type ExecutionPayloadEnvelopeVerifier interface {
 	VerifyExecutionRequestsRoot(interfaces.ROExecutionPayloadBid) error
 	VerifyExecutionRequestsLimits() error
 	VerifyWithdrawalsLimit() error
+	VerifyExecutionBlockHash() error
 	VerifySignature(context.Context, state.ReadOnlyBeaconState) error
 	VerifySignatureWithPubkey(pubkey [fieldparams.BLSPubkeyLength]byte, genesisValidatorsRoot [32]byte) error
 	SatisfyRequirement(Requirement)
@@ -50,6 +52,7 @@ var ExecutionPayloadEnvelopeGossipRequirements = []Requirement{
 	RequireExecutionRequestsRootValid,
 	RequireExecutionRequestsLimitsValid,
 	RequireWithdrawalsLimitValid,
+	RequireExecutionBlockHashValid,
 	RequireBuilderSignatureValid,
 }
 
@@ -65,6 +68,7 @@ var (
 	ErrIncorrectEnvelopeBlockHash     = errors.New("block hash does not match committed header")
 	ErrIncorrectExecutionRequestsRoot = errors.New("execution requests root does not match committed bid")
 	ErrTooManyWithdrawals             = errors.New("too many withdrawals in payload")
+	ErrEnvelopeExecutionBlockHash     = errors.New("computed execution block hash does not match payload")
 )
 
 var _ ExecutionPayloadEnvelopeVerifier = &EnvelopeVerifier{}
@@ -216,6 +220,27 @@ func (v *EnvelopeVerifier) VerifyWithdrawalsLimit() (err error) {
 	limit := params.BeaconConfig().MaxWithdrawalsPerPayload
 	if uint64(len(withdrawals)) > limit {
 		return fmt.Errorf("%w: %d > %d", ErrTooManyWithdrawals, len(withdrawals), limit)
+	}
+	return nil
+}
+
+// VerifyExecutionBlockHash checks that the payload block hash matches the one computed from the payload contents.
+func (v *EnvelopeVerifier) VerifyExecutionBlockHash() (err error) {
+	defer v.record(RequireExecutionBlockHashValid, &err)
+	env, err := v.e.Envelope()
+	if err != nil {
+		return errors.Wrap(err, "failed to get envelope")
+	}
+	if env.IsBlinded() {
+		return nil
+	}
+	payload, err := env.Execution()
+	if err != nil {
+		return errors.Wrap(err, "failed to get execution payload")
+	}
+	root := env.ParentBeaconBlockRoot()
+	if err := blockhash.Verify(payload, &root, env.ExecutionRequests()); err != nil {
+		return fmt.Errorf("%w: %w", ErrEnvelopeExecutionBlockHash, err)
 	}
 	return nil
 }
