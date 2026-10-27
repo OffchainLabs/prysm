@@ -3898,9 +3898,9 @@ func TestGetPTCDuties_ForkBoundary(t *testing.T) {
 	gloasSt, err := transition.ProcessSlots(t.Context(), fuluSt.Copy(), 2*spe)
 	require.NoError(t, err)
 	require.Equal(t, version.Gloas, gloasSt.Version())
-	// The dependent root of the fork epoch is the block root at start(fork epoch - 1) - 1.
+	// The dependent root of the fork epoch is the block root at start(fork epoch) - 1.
 	dependentRoot := [32]byte{4, 5, 6}
-	require.NoError(t, gloasSt.UpdateBlockRootAtIndex(uint64(spe-1), dependentRoot))
+	require.NoError(t, gloasSt.UpdateBlockRootAtIndex(uint64(2*spe-1), dependentRoot))
 
 	genesisRoot := [32]byte{1, 2, 3}
 	db := dbutil.SetupDB(t)

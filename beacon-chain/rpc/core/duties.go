@@ -315,3 +315,18 @@ func ProposalDependentRootV2(s state.ReadOnlyBeaconState, epoch primitives.Epoch
 	}
 	return ProposalDependentRoot(s, epoch)
 }
+
+// PTCDependentRoot returns the dependent root for PTC duties at the given epoch,
+// or nil on underflow, in which case callers must use the genesis block root.
+func PTCDependentRoot(s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]byte, error) {
+	if epoch == params.BeaconConfig().GloasForkEpoch {
+		if epoch == 0 {
+			return nil, nil
+		}
+		return ProposalDependentRoot(s, epoch)
+	}
+	if epoch <= 1 {
+		return nil, nil
+	}
+	return AttestationDependentRoot(s, epoch)
+}
