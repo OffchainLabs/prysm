@@ -130,6 +130,7 @@ go_test(
         "setters_payload_header_test.go",
         "setters_validator_test.go",
         "setters_withdrawal_test.go",
+        "shared_field_ref_count_test.go",
         "state_fuzz_test.go",
         "state_test.go",
         "state_trie_test.go",

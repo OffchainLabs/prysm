@@ -2,13 +2,16 @@ package main
 
 import (
 	"os"
+	"regexp"
 
+	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/cmd/prysmctl/checkpointsync"
 	"github.com/OffchainLabs/prysm/v7/cmd/prysmctl/db"
 	"github.com/OffchainLabs/prysm/v7/cmd/prysmctl/p2p"
 	"github.com/OffchainLabs/prysm/v7/cmd/prysmctl/testnet"
 	"github.com/OffchainLabs/prysm/v7/cmd/prysmctl/validator"
 	"github.com/OffchainLabs/prysm/v7/cmd/prysmctl/weaksubjectivity"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/urfave/cli/v2"
 )
 
@@ -16,6 +19,10 @@ var prysmctlCommands []*cli.Command
 
 func main() {
 	app := &cli.App{
+		Name:     "prysmctl",
+		Usage:    "Prysm command-line utilities",
+		Version:  version.Version(),
+		Authors:  cmd.Authors,
 		Commands: prysmctlCommands,
 	}
 	err := app.Run(os.Args)
@@ -25,10 +32,20 @@ func main() {
 }
 
 func init() {
+	cli.AppHelpTemplate = withoutUsage(cli.AppHelpTemplate)
+	cmd.EnableHelpColors()
+
 	prysmctlCommands = append(prysmctlCommands, checkpointsync.Commands...)
 	prysmctlCommands = append(prysmctlCommands, db.Commands...)
 	prysmctlCommands = append(prysmctlCommands, p2p.Commands...)
 	prysmctlCommands = append(prysmctlCommands, testnet.Commands...)
 	prysmctlCommands = append(prysmctlCommands, weaksubjectivity.Commands...)
 	prysmctlCommands = append(prysmctlCommands, validator.Commands...)
+}
+
+var usageSectionRegex = regexp.MustCompile(`(?s)\n\nUSAGE:\n.*?(\{\{if \.Version\}\})`)
+
+// withoutUsage removes the USAGE section from the default urfave/cli app help template.
+func withoutUsage(tmpl string) string {
+	return usageSectionRegex.ReplaceAllString(tmpl, "$1")
 }

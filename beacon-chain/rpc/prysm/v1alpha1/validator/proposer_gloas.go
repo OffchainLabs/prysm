@@ -2,6 +2,7 @@ package validator
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"sync"
 
@@ -104,14 +105,35 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 			blobs = local.BlobsBundler.GetBlobs()
 			kzgProofs = local.BlobsBundler.GetProofs()
 		}
+		if err := bundleBlockContents(blk, envelope, kzgProofs, blobs); err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not bundle block contents: %v", err)
+		}
+	}
+	return blk, nil
+}
+
+// bundleBlockContents replaces the bare block in blk with the block contents that carry the
+// execution payload envelope and blob data.
+func bundleBlockContents(blk *ethpb.GenericBeaconBlock, envelope *ethpb.ExecutionPayloadEnvelope, kzgProofs, blobs [][]byte) error {
+	switch b := blk.Block.(type) {
+	case *ethpb.GenericBeaconBlock_Gloas:
 		blk.Block = &ethpb.GenericBeaconBlock_GloasContents{GloasContents: &ethpb.BeaconBlockContentsGloas{
-			Block:                    blk.GetGloas(),
+			Block:                    b.Gloas,
 			ExecutionPayloadEnvelope: envelope,
 			KzgProofs:                kzgProofs,
 			Blobs:                    blobs,
 		}}
+	case *ethpb.GenericBeaconBlock_Heze:
+		blk.Block = &ethpb.GenericBeaconBlock_HezeContents{HezeContents: &ethpb.BeaconBlockContentsHeze{
+			Block:                    b.Heze,
+			ExecutionPayloadEnvelope: envelope,
+			KzgProofs:                kzgProofs,
+			Blobs:                    blobs,
+		}}
+	default:
+		return fmt.Errorf("unexpected block type %T", blk.Block)
 	}
-	return blk, nil
+	return nil
 }
 
 // gloasPayloadValue is the local payload value when self-building, or the bid
@@ -123,10 +145,10 @@ func (vs *Server) gloasPayloadValue(sBlk interfaces.SignedBeaconBlock, local *co
 		}
 		return local.Bid
 	}
-	bid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
-	if err != nil || bid == nil || bid.Message == nil {
+	bid, err := sBlk.Block().Body().ExecutionPayloadBid()
+	if err != nil {
 		return primitives.ZeroWei()
 	}
-	value := new(big.Int).SetUint64(uint64(bid.Message.Value))
+	value := new(big.Int).SetUint64(uint64(bid.Value()))
 	return value.Mul(value, big.NewInt(1e9))
 }

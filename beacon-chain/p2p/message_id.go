@@ -3,7 +3,6 @@ package p2p
 import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/math"
@@ -22,7 +21,7 @@ import (
 //	Otherwise, set `message-id` to the first 20 bytes of the `SHA256` hash of
 //	the concatenation of `MESSAGE_DOMAIN_INVALID_SNAPPY` with the raw message data,
 //	i.e. `SHA256(MESSAGE_DOMAIN_INVALID_SNAPPY + message.data)[:20]`.
-func MsgID(genesisValidatorsRoot []byte, pmsg *pubsubpb.Message) string {
+func MsgID(pmsg *pubsubpb.Message) string {
 	if pmsg == nil || pmsg.Data == nil || pmsg.Topic == nil {
 		// Impossible condition that should
 		// never be hit.
@@ -47,7 +46,7 @@ func MsgID(genesisValidatorsRoot []byte, pmsg *pubsubpb.Message) string {
 		return bytesutil.UnsafeCastToString(msg)
 	}
 	if fEpoch >= params.BeaconConfig().AltairForkEpoch {
-		return postAltairMsgID(pmsg, fEpoch)
+		return postAltairMsgID(pmsg)
 	}
 	decodedData, err := encoder.DecodeSnappy(pmsg.Data, params.BeaconConfig().MaxPayloadSize)
 	if err != nil {
@@ -71,7 +70,7 @@ func MsgID(genesisValidatorsRoot []byte, pmsg *pubsubpb.Message) string {
 // + message.topic + snappy_decompress(message.data))[:20]. Otherwise, set message-id to the first 20 bytes of the SHA256 hash of the concatenation
 // of the following data: MESSAGE_DOMAIN_INVALID_SNAPPY, the length of the topic byte string (encoded as little-endian uint64),
 // the topic byte string, and the raw message data: i.e. SHA256(MESSAGE_DOMAIN_INVALID_SNAPPY + uint_to_bytes(uint64(len(message.topic))) + message.topic + message.data)[:20].
-func postAltairMsgID(pmsg *pubsubpb.Message, fEpoch primitives.Epoch) string {
+func postAltairMsgID(pmsg *pubsubpb.Message) string {
 	topic := *pmsg.Topic
 	topicLen := len(topic)
 	topicLenBytes := bytesutil.Uint64ToBytesLittleEndian(uint64(topicLen)) // topicLen cannot be negative

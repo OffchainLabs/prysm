@@ -653,3 +653,75 @@ func TestProduceBlockV4_Post(t *testing.T) {
 		require.Equal(t, uint64(100), captured.BuilderConfig.BuilderBoostFactor)
 	})
 }
+
+func TestProduceBlockV4_Heze(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	cfg.HezeForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	hezeContents := func() *eth.GenericBeaconBlock {
+		return &eth.GenericBeaconBlock{Block: &eth.GenericBeaconBlock_HezeContents{HezeContents: &eth.BeaconBlockContentsHeze{
+			Block:                    util.NewBeaconBlockHeze().Block,
+			ExecutionPayloadEnvelope: testEnvelope(),
+		}}}
+	}
+	produce := func(t *testing.T, blk *eth.GenericBeaconBlock, ssz bool) *httptest.ResponseRecorder {
+		ctrl := gomock.NewController(t)
+		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+		v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).Return(blk, nil)
+		server := &Server{
+			V1Alpha1Server:        v1alpha1Server,
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			OptimisticModeFetcher: &blockchainTesting.ChainService{},
+			BlockRewardFetcher:    &rewardtesting.MockBlockRewardFetcher{Rewards: &structs.BlockRewards{Total: "10"}},
+		}
+		request := produceV4Request(t, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s&include_payload=true", testRandao, testGraffiti))
+		request.SetPathValue("slot", "1")
+		if ssz {
+			request.Header.Set("Accept", api.OctetStreamMediaType)
+		}
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		server.ProduceBlockV4(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+		require.Equal(t, "heze", writer.Header().Get(api.VersionHeader))
+		return writer
+	}
+
+	t.Run("contents json", func(t *testing.T) {
+		writer := produce(t, hezeContents(), false)
+		require.Equal(t, "true", writer.Header().Get(api.ExecutionPayloadIncludedHeader))
+		var resp structs.ProduceBlockV4Response
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
+		require.Equal(t, "heze", resp.Version)
+		require.Equal(t, true, resp.ExecutionPayloadIncluded)
+		var contents structs.BlockContentsHeze
+		require.NoError(t, json.Unmarshal(resp.Data, &contents))
+		require.NotNil(t, contents.Block)
+		require.NotNil(t, contents.ExecutionPayloadEnvelope)
+	})
+	t.Run("contents ssz", func(t *testing.T) {
+		blk := hezeContents()
+		writer := produce(t, blk, true)
+		require.Equal(t, "true", writer.Header().Get(api.ExecutionPayloadIncludedHeader))
+		want, err := blk.GetHezeContents().MarshalSSZ()
+		require.NoError(t, err)
+		require.DeepEqual(t, want, writer.Body.Bytes())
+	})
+	t.Run("builder bid block carries the builder url", func(t *testing.T) {
+		blk := &eth.GenericBeaconBlock{
+			Block:      &eth.GenericBeaconBlock_Heze{Heze: util.NewBeaconBlockHeze().Block},
+			BuilderUrl: "http://builder.example",
+		}
+		writer := produce(t, blk, false)
+		require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadIncludedHeader))
+		require.Equal(t, "http://builder.example", writer.Header().Get(api.BuilderUrlHeader))
+		var resp structs.ProduceBlockV4Response
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
+		require.Equal(t, false, resp.ExecutionPayloadIncluded)
+		var block structs.BeaconBlockHeze
+		require.NoError(t, json.Unmarshal(resp.Data, &block))
+	})
+}

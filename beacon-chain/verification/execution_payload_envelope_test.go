@@ -339,9 +339,7 @@ func testExecutionPayloadBid(t *testing.T, slot primitives.Slot, builderIdx prim
 
 	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)
 	require.NoError(t, err)
-	bid, err := wrapped.Bid()
-	require.NoError(t, err)
-	return bid
+	return wrapped.Bid()
 }
 
 func newGloasState(

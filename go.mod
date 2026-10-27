@@ -1,6 +1,6 @@
 module github.com/OffchainLabs/prysm/v7
 
-go 1.26.5
+go 1.26.10
 
 require (
 	github.com/OffchainLabs/go-bitfield v0.0.0-20260504143531-5cbb6d0f5f2e
@@ -45,9 +45,9 @@ require (
 	github.com/kisielk/errcheck v1.8.0
 	github.com/kr/pretty v0.3.1
 	github.com/kurtosis-tech/kurtosis/api/golang v1.20.0
-	github.com/libp2p/go-libp2p v0.50.0
+	github.com/libp2p/go-libp2p v0.51.0
 	github.com/libp2p/go-libp2p-mplex v0.11.0
-	github.com/libp2p/go-libp2p-pubsub v0.18.0
+	github.com/libp2p/go-libp2p-pubsub v0.19.0
 	github.com/libp2p/go-mplex v0.7.0
 	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/manifoldco/promptui v0.7.0
@@ -93,6 +93,7 @@ require (
 	go.uber.org/mock v0.6.0
 	golang.org/x/crypto v0.54.0
 	golang.org/x/sync v0.22.0
+	golang.org/x/term v0.45.0
 	golang.org/x/tools v0.48.0
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1
 	google.golang.org/grpc v1.81.1
@@ -249,7 +250,7 @@ require (
 	github.com/prometheus/procfs v0.21.1 // indirect
 	github.com/prysmaticlabs/protoc-gen-go-cast v0.0.0-20230228205207-28762a7b9294 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
-	github.com/quic-go/quic-go v0.62.0 // indirect
+	github.com/quic-go/quic-go v0.64.1 // indirect
 	github.com/quic-go/webtransport-go v0.13.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
@@ -282,7 +283,6 @@ require (
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260717140457-bdb89881bb75 // indirect
-	golang.org/x/term v0.45.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect

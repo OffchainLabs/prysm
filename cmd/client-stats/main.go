@@ -36,9 +36,10 @@ func init() {
 func main() {
 	app := cli.App{}
 	app.Name = "client-stats"
-	app.Usage = "daemon to scrape client-stats from prometheus and ship to a remote endpoint"
+	app.Usage = "Ethereum client stats collector"
 	app.Action = run
 	app.Version = version.Version()
+	app.Authors = cmd.Authors
 
 	app.Flags = appFlags
 

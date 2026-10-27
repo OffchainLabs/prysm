@@ -97,38 +97,20 @@ func SendBeaconBlocksByRangeRequest(
 	}
 	var prevSlot primitives.Slot
 	for i := uint64(0); ; i++ {
+		// The response MUST contain no more than `count` blocks, and no more than
+		// MAX_REQUEST_BLOCKS blocks.
+		currentEpoch := slots.ToEpoch(tor.CurrentSlot())
+		maxBlocks := params.MaxRequestBlock(currentEpoch)
+		if i >= req.Count || i >= maxBlocks {
+			break
+		}
 		isFirstChunk := i == 0
 		blk, err := ReadChunkedBlock(stream, tor, p2pProvider, isFirstChunk)
 		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
-			return nil, err
-		}
-		// The response MUST contain no more than `count` blocks, and no more than
-		// MAX_REQUEST_BLOCKS blocks.
-		currentEpoch := slots.ToEpoch(tor.CurrentSlot())
-		maxBlocks := params.MaxRequestBlock(currentEpoch)
-		if i >= req.Count {
-			log.WithFields(logrus.Fields{
-				"blockIndex":     i,
-				"requestedCount": req.Count,
-				"blockSlot":      blk.Block().Slot(),
-				"peer":           pid,
-				"reason":         "exceeded requested count",
-			}).Debug("Peer returned invalid data: too many blocks")
-			return nil, ErrInvalidFetchedData
-		}
-		if i >= maxBlocks {
-			log.WithFields(logrus.Fields{
-				"blockIndex":   i,
-				"maxBlocks":    maxBlocks,
-				"currentEpoch": currentEpoch,
-				"blockSlot":    blk.Block().Slot(),
-				"peer":         pid,
-				"reason":       "exceeded MAX_REQUEST_BLOCKS",
-			}).Debug("Peer returned invalid data: exceeded protocol limit")
-			return nil, ErrInvalidFetchedData
+			return nil, errors.Wrapf(err, "read block chunk %d", i)
 		}
 		// Returned blocks MUST be in the slot range [start_slot, start_slot + count * step).
 		endSlot := req.StartSlot.Add(req.Count * req.Step)
@@ -829,6 +811,13 @@ func readChunkedDataColumnSidecar(
 	}
 	if err != nil {
 		return nil, errors.Wrap(err, "new read only data column")
+	}
+
+	if slotVersion := slots.ToForkVersion(roDataColumn.Slot()); slotVersion != msgVersion {
+		return nil, errors.Errorf(
+			"context bytes version %s does not match sidecar slot %d fork %s",
+			version.String(msgVersion), roDataColumn.Slot(), version.String(slotVersion),
+		)
 	}
 
 	// Run validation functions.

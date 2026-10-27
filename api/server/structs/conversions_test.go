@@ -647,3 +647,153 @@ func TestBeaconStateGloasFromConsensus(t *testing.T) {
 	require.Equal(t, hexutil.Encode(bytes.Repeat([]byte{0x26}, 20)), got.PayloadExpectedWithdrawals[0].ExecutionAddress)
 	require.Equal(t, "10", got.PayloadExpectedWithdrawals[0].Amount)
 }
+
+func TestBeaconStateHezeFromConsensus(t *testing.T) {
+	st, err := util.NewBeaconStateHeze(func(s *eth.BeaconStateHeze) error {
+		s.LatestExecutionPayloadBid.InclusionListBits = []byte{0x01, 0x80}
+		return nil
+	})
+	require.NoError(t, err)
+
+	got, err := BeaconStateHezeFromConsensus(st)
+	require.NoError(t, err)
+	require.Equal(t, "0x0180", got.LatestExecutionPayloadBid.InclusionListBits)
+}
+
+func TestBeaconBlock_ToConsensus_NilListElements(t *testing.T) {
+	tests := []struct {
+		name    string
+		field   string
+		convert func(t *testing.T) error
+	}{
+		{name: "phase0 nil Deposits element", field: "Body.Deposits.[0]", convert: func(t *testing.T) error {
+			b := SignedBeaconBlockPhase0FromConsensus(util.NewBeaconBlock()).Message
+			b.Body.Deposits = []*Deposit{nil}
+			_, err := b.ToConsensus()
+			return err
+		}},
+		{name: "altair nil Deposits element", field: "Body.Deposits.[0]", convert: func(t *testing.T) error {
+			b := SignedBeaconBlockAltairFromConsensus(util.NewBeaconBlockAltair()).Message
+			b.Body.Deposits = []*Deposit{nil}
+			_, err := b.ToConsensus()
+			return err
+		}},
+		{name: "bellatrix nil Deposits element", field: "Body.Deposits.[0]", convert: func(t *testing.T) error {
+			s, err := SignedBeaconBlockBellatrixFromConsensus(util.NewBeaconBlockBellatrix())
+			require.NoError(t, err)
+			b := s.Message
+			b.Body.Deposits = []*Deposit{nil}
+			_, err = b.ToConsensus()
+			return err
+		}},
+		{name: "blinded bellatrix nil Deposits element", field: "Body.Deposits.[0]", convert: func(t *testing.T) error {
+			s, err := SignedBlindedBeaconBlockBellatrixFromConsensus(util.NewBlindedBeaconBlockBellatrix())
+			require.NoError(t, err)
+			b := s.Message
+			b.Body.Deposits = []*Deposit{nil}
+			_, err = b.ToConsensus()
+			return err
+		}},
+		{name: "capella nil Deposits element", field: "Body.Deposits.[0]", convert: func(t *testing.T) error {
+			s, err := SignedBeaconBlockCapellaFromConsensus(util.NewBeaconBlockCapella())
+			require.NoError(t, err)
+			b := s.Message
+			b.Body.Deposits = []*Deposit{nil}
+			_, err = b.ToConsensus()
+			return err
+		}},
+		{name: "capella nil Withdrawals element", field: "Body.ExecutionPayload.ExecutionPayload.Withdrawals[0]", convert: func(t *testing.T) error {
+			s, err := SignedBeaconBlockCapellaFromConsensus(util.NewBeaconBlockCapella())
+			require.NoError(t, err)
+			b := s.Message
+			b.Body.ExecutionPayload.Withdrawals = []*Withdrawal{nil}
+			_, err = b.ToConsensus()
+			return err
+		}},
+		{name: "blinded capella nil Deposits element", field: "Body.Deposits.[0]", convert: func(t *testing.T) error {
+			s, err := SignedBlindedBeaconBlockCapellaFromConsensus(util.NewBlindedBeaconBlockCapella())
+			require.NoError(t, err)
+			b := s.Message
+			b.Body.Deposits = []*Deposit{nil}
+			_, err = b.ToConsensus()
+			return err
+		}},
+		{name: "deneb nil Deposits element", field: "Body.Deposits.[0]", convert: func(t *testing.T) error {
+			s, err := SignedBeaconBlockDenebFromConsensus(util.NewBeaconBlockDeneb())
+			require.NoError(t, err)
+			b := s.Message
+			b.Body.Deposits = []*Deposit{nil}
+			_, err = b.ToConsensus()
+			return err
+		}},
+		{name: "deneb nil Withdrawals element", field: "Body.ExecutionPayload.ExecutionPayload.Withdrawals[0]", convert: func(t *testing.T) error {
+			s, err := SignedBeaconBlockDenebFromConsensus(util.NewBeaconBlockDeneb())
+			require.NoError(t, err)
+			b := s.Message
+			b.Body.ExecutionPayload.Withdrawals = []*Withdrawal{nil}
+			_, err = b.ToConsensus()
+			return err
+		}},
+		{name: "blinded deneb nil Deposits element", field: "Body.Deposits.[0]", convert: func(t *testing.T) error {
+			s, err := SignedBlindedBeaconBlockDenebFromConsensus(util.NewBlindedBeaconBlockDeneb())
+			require.NoError(t, err)
+			b := s.Message
+			b.Body.Deposits = []*Deposit{nil}
+			_, err = b.ToConsensus()
+			return err
+		}},
+		{name: "electra nil Deposits element", field: "Body.Deposits.[0]", convert: func(t *testing.T) error {
+			s, err := SignedBeaconBlockElectraFromConsensus(util.NewBeaconBlockElectra())
+			require.NoError(t, err)
+			b := s.Message
+			b.Body.Deposits = []*Deposit{nil}
+			_, err = b.ToConsensus()
+			return err
+		}},
+		{name: "electra nil Withdrawals element", field: "Body.ExecutionPayload.ExecutionPayload.Withdrawals[0]", convert: func(t *testing.T) error {
+			s, err := SignedBeaconBlockElectraFromConsensus(util.NewBeaconBlockElectra())
+			require.NoError(t, err)
+			b := s.Message
+			b.Body.ExecutionPayload.Withdrawals = []*Withdrawal{nil}
+			_, err = b.ToConsensus()
+			return err
+		}},
+		{name: "blinded electra nil Deposits element", field: "Body.Deposits.[0]", convert: func(t *testing.T) error {
+			s, err := SignedBlindedBeaconBlockElectraFromConsensus(util.NewBlindedBeaconBlockElectra())
+			require.NoError(t, err)
+			b := s.Message
+			b.Body.Deposits = []*Deposit{nil}
+			_, err = b.ToConsensus()
+			return err
+		}},
+		{name: "fulu nil Deposits element", field: "Body.Deposits.[0]", convert: func(t *testing.T) error {
+			s, err := SignedBeaconBlockFuluFromConsensus(util.NewBeaconBlockFulu())
+			require.NoError(t, err)
+			b := s.Message
+			b.Body.Deposits = []*Deposit{nil}
+			_, err = b.ToConsensus()
+			return err
+		}},
+		{name: "fulu nil Withdrawals element", field: "Body.ExecutionPayload.ExecutionPayload.Withdrawals[0]", convert: func(t *testing.T) error {
+			s, err := SignedBeaconBlockFuluFromConsensus(util.NewBeaconBlockFulu())
+			require.NoError(t, err)
+			b := s.Message
+			b.Body.ExecutionPayload.Withdrawals = []*Withdrawal{nil}
+			_, err = b.ToConsensus()
+			return err
+		}},
+		{name: "blinded fulu nil Deposits element", field: "Body.Deposits.[0]", convert: func(t *testing.T) error {
+			s, err := SignedBlindedBeaconBlockFuluFromConsensus(util.NewBlindedBeaconBlockFulu())
+			require.NoError(t, err)
+			b := s.Message
+			b.Body.Deposits = []*Deposit{nil}
+			_, err = b.ToConsensus()
+			return err
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.ErrorContains(t, "could not decode "+tt.field+": "+errNilValue.Error(), tt.convert(t))
+		})
+	}
+}

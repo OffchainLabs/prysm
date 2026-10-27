@@ -29,7 +29,8 @@ var (
 		Name:  "mainnet",
 		Usage: "Runs on Ethereum main network. This is the default and can be omitted.",
 	}
-	devModeFlag = &cli.BoolFlag{
+	// DevModeFlag enables the development mode flags.
+	DevModeFlag = &cli.BoolFlag{
 		Name:  "dev",
 		Usage: "Enables experimental features still in development. These features may not be stable.",
 	}
@@ -278,7 +279,7 @@ var E2EValidatorFlags = []string{
 
 // BeaconChainFlags contains a list of all the feature flags that apply to the beacon-chain client.
 var BeaconChainFlags = combinedFlags([]cli.Flag{
-	devModeFlag,
+	DevModeFlag,
 	saveInvalidBlockTempFlag,
 	saveInvalidBlobTempFlag,
 	disableGRPCConnectionLogging,

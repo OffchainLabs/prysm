@@ -3,10 +3,12 @@ package hdiff
 import (
 	"encoding/binary"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/helpers"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -35,32 +37,8 @@ type builderDiff struct {
 // diffGloasFields populates the Gloas-specific fields of the stateDiff.
 func diffGloasFields(diff *stateDiff, source, target state.ReadOnlyBeaconState) error {
 	// latestExecutionPayloadBid (override, always non-nil for valid Gloas states).
-	bid, err := target.LatestExecutionPayloadBid()
-	if err != nil {
-		return errors.Wrap(err, "failed to get latest execution payload bid")
-	}
-	if bid == nil || bid.IsNil() {
-		return errors.New("target Gloas state has nil execution payload bid")
-	}
-	parentBlockHash := bid.ParentBlockHash()
-	parentBlockRoot := bid.ParentBlockRoot()
-	blockHash := bid.BlockHash()
-	prevRandao := bid.PrevRandao()
-	feeRecipient := bid.FeeRecipient()
-	executionRequestsRoot := bid.ExecutionRequestsRoot()
-	diff.latestExecutionPayloadBid = &ethpb.ExecutionPayloadBid{
-		ParentBlockHash:       parentBlockHash[:],
-		ParentBlockRoot:       parentBlockRoot[:],
-		BlockHash:             blockHash[:],
-		PrevRandao:            prevRandao[:],
-		GasLimit:              bid.GasLimit(),
-		BuilderIndex:          bid.BuilderIndex(),
-		Slot:                  bid.Slot(),
-		Value:                 bid.Value(),
-		ExecutionPayment:      bid.ExecutionPayment(),
-		BlobKzgCommitments:    bid.BlobKzgCommitments(),
-		FeeRecipient:          feeRecipient[:],
-		ExecutionRequestsRoot: executionRequestsRoot[:],
+	if err := diffLatestExecutionPayloadBid(diff, target); err != nil {
+		return err
 	}
 
 	// builders (sparse diff: only changed entries).
@@ -110,6 +88,57 @@ func diffGloasFields(diff *stateDiff, source, target state.ReadOnlyBeaconState) 
 		return errors.Wrap(err, "failed to get ptc window")
 	}
 
+	return nil
+}
+
+// diffLatestExecutionPayloadBid copies the target's latest execution payload bid into the fork-specific diff field.
+func diffLatestExecutionPayloadBid(diff *stateDiff, target state.ReadOnlyBeaconState) error {
+	bid, err := target.LatestExecutionPayloadBid()
+	if err != nil {
+		return errors.Wrap(err, "failed to get latest execution payload bid")
+	}
+	if bid == nil || bid.IsNil() {
+		return errors.New("target Gloas state has nil execution payload bid")
+	}
+	parentBlockHash := bid.ParentBlockHash()
+	parentBlockRoot := bid.ParentBlockRoot()
+	blockHash := bid.BlockHash()
+	prevRandao := bid.PrevRandao()
+	feeRecipient := bid.FeeRecipient()
+	executionRequestsRoot := bid.ExecutionRequestsRoot()
+	if target.Version() >= version.Heze {
+		diff.latestExecutionPayloadBidHeze = &ethpb.ExecutionPayloadBidHeze{
+			ParentBlockHash:       parentBlockHash[:],
+			ParentBlockRoot:       parentBlockRoot[:],
+			BlockHash:             blockHash[:],
+			PrevRandao:            prevRandao[:],
+			GasLimit:              bid.GasLimit(),
+			BuilderIndex:          bid.BuilderIndex(),
+			Slot:                  bid.Slot(),
+			Value:                 bid.Value(),
+			ExecutionPayment:      bid.ExecutionPayment(),
+			BlobKzgCommitments:    bid.BlobKzgCommitments(),
+			FeeRecipient:          feeRecipient[:],
+			ExecutionRequestsRoot: executionRequestsRoot[:],
+			InclusionListBits:     bid.InclusionListBits(),
+		}
+		return nil
+	}
+
+	diff.latestExecutionPayloadBid = &ethpb.ExecutionPayloadBid{
+		ParentBlockHash:       parentBlockHash[:],
+		ParentBlockRoot:       parentBlockRoot[:],
+		BlockHash:             blockHash[:],
+		PrevRandao:            prevRandao[:],
+		GasLimit:              bid.GasLimit(),
+		BuilderIndex:          bid.BuilderIndex(),
+		Slot:                  bid.Slot(),
+		Value:                 bid.Value(),
+		ExecutionPayment:      bid.ExecutionPayment(),
+		BlobKzgCommitments:    bid.BlobKzgCommitments(),
+		FeeRecipient:          feeRecipient[:],
+		ExecutionRequestsRoot: executionRequestsRoot[:],
+	}
 	return nil
 }
 
@@ -169,8 +198,24 @@ func diffBuilderPendingWithdrawals(diff *stateDiff, source, target state.ReadOnl
 	return nil
 }
 
+// executionPayloadBidSSZ returns the fork-specific latest execution payload bid of the diff.
+func (s *stateDiff) executionPayloadBidSSZ() ssz.Marshaler {
+	if s.targetVersion >= version.Heze {
+		return s.latestExecutionPayloadBidHeze
+	}
+	return s.latestExecutionPayloadBid
+}
+
+// wrappedExecutionPayloadBid returns the fork-specific latest execution payload bid of the diff, wrapped.
+func (s *stateDiff) wrappedExecutionPayloadBid() (interfaces.ROExecutionPayloadBid, error) {
+	if s.targetVersion >= version.Heze {
+		return blocks.WrappedROExecutionPayloadBidHeze(s.latestExecutionPayloadBidHeze)
+	}
+	return blocks.WrappedROExecutionPayloadBid(s.latestExecutionPayloadBid)
+}
+
 func serializedGloasFieldsSize(s *stateDiff) int {
-	size := 8 + s.latestExecutionPayloadBid.SizeSSZ()
+	size := 8 + s.executionPayloadBidSSZ().SizeSSZ()
 	size += 8 // builderDiffs length.
 	for _, diff := range s.builderDiffs {
 		size += 4 + diff.builder.SizeSSZ()
@@ -198,9 +243,9 @@ func serializedGloasFieldsSize(s *stateDiff) int {
 // serializeGloasFields appends the Gloas-specific fields to the serialized stateDiff.
 func serializeGloasFields(ret []byte, s *stateDiff) []byte {
 	// latestExecutionPayloadBid (override, always non-nil).
-	ret = binary.LittleEndian.AppendUint64(ret, uint64(s.latestExecutionPayloadBid.SizeSSZ()))
+	ret = binary.LittleEndian.AppendUint64(ret, uint64(s.executionPayloadBidSSZ().SizeSSZ()))
 	var err error
-	ret, err = s.latestExecutionPayloadBid.MarshalSSZTo(ret)
+	ret, err = s.executionPayloadBidSSZ().MarshalSSZTo(ret)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to marshal latestExecutionPayloadBid")
 		return nil
@@ -282,9 +327,16 @@ func (ret *stateDiff) readGloasFields(data *[]byte) error {
 	if len(*data) < bidLength {
 		return errors.Wrap(errDataSmall, "latestExecutionPayloadBid data")
 	}
-	ret.latestExecutionPayloadBid = &ethpb.ExecutionPayloadBid{}
-	if err := ret.latestExecutionPayloadBid.UnmarshalSSZ((*data)[:bidLength]); err != nil {
-		return errors.Wrap(err, "failed to unmarshal latestExecutionPayloadBid")
+	if ret.targetVersion >= version.Heze {
+		ret.latestExecutionPayloadBidHeze = &ethpb.ExecutionPayloadBidHeze{}
+		if err := ret.latestExecutionPayloadBidHeze.UnmarshalSSZ((*data)[:bidLength]); err != nil {
+			return errors.Wrap(err, "failed to unmarshal latestExecutionPayloadBid")
+		}
+	} else {
+		ret.latestExecutionPayloadBid = &ethpb.ExecutionPayloadBid{}
+		if err := ret.latestExecutionPayloadBid.UnmarshalSSZ((*data)[:bidLength]); err != nil {
+			return errors.Wrap(err, "failed to unmarshal latestExecutionPayloadBid")
+		}
 	}
 	*data = (*data)[bidLength:]
 
@@ -418,7 +470,7 @@ func (ret *stateDiff) readGloasFields(data *[]byte) error {
 // applyGloasFields applies the Gloas-specific fields from the diff to the source state.
 func applyGloasFields(source state.BeaconState, diff *stateDiff) error {
 	// latestExecutionPayloadBid (override, always non-nil).
-	bid, err := blocks.WrappedROExecutionPayloadBid(diff.latestExecutionPayloadBid)
+	bid, err := diff.wrappedExecutionPayloadBid()
 	if err != nil {
 		return errors.Wrap(err, "failed to wrap execution payload bid")
 	}

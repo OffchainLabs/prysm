@@ -62,4 +62,11 @@ const (
 	MaxSignedAggregateAndProofSize   = 16829   // MaxSignedAggregateAndProofSize is the maximum size of a signed aggregate and proof, ~16 KiB.
 	MaxAttesterSlashingSize          = 2097616 // MaxAttesterSlashingSize is the maximum size of an attester slashing, ~2 MiB.
 	MaxSignedExecutionPayloadBidSize = 196932  // MaxSignedExecutionPayloadBidSize is the maximum size of a signed execution payload bid, ~192 KiB.
+
+	// Introduced in Heze network upgrade.
+	InclusionListCommitteeSize = 16 // InclusionListCommitteeSize is the size of the inclusion list committee.
+
+	// Type-specific SSZ bounds, introduced in Heze network upgrade.
+	MaxSignedExecutionPayloadBidSizeHeze = 196934 // MaxSignedExecutionPayloadBidSizeHeze is the maximum size of a signed execution payload bid, ~192 KiB.
+	MaxSignedInclusionListSize           = 41112  // MaxSignedInclusionListSize is the maximum size of a signed inclusion list, ~40 KiB.
 )

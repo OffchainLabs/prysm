@@ -13,7 +13,9 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -70,6 +72,10 @@ func gloasBidClient(t *testing.T, status int, contentType string, body []byte) *
 }
 
 func TestClient_GetExecutionPayloadBid(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	ctx := t.Context()
 	slot := primitives.Slot(123)
 	var parentHash, parentRoot [32]byte
@@ -168,6 +174,23 @@ func TestClient_GetExecutionPayloadBid(t *testing.T) {
 		require.NotNil(t, got)
 	})
 
+	t.Run("heze slot sends heze consensus version", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.HezeForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+		hc := &http.Client{
+			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				require.NoError(t, r.Body.Close())
+				require.Equal(t, "heze", r.Header.Get(api.VersionHeader))
+				return &http.Response{StatusCode: http.StatusNoContent, Header: http.Header{}, Body: io.NopCloser(bytes.NewReader(nil)), Request: r}, nil
+			}),
+		}
+		c := &Client{hc: hc, baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"}}
+		_, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, testBuilderRequestAuth())
+		require.NoError(t, err)
+	})
+
 	t.Run("unexpected content type errors with status and body", func(t *testing.T) {
 		html := []byte("<!doctype html><html><head><title>Buildoor</title></head></html>")
 		c := gloasBidClient(t, http.StatusOK, "text/html; charset=utf-8", html)
@@ -262,6 +285,27 @@ func TestClient_SubmitSignedBeaconBlock_SSZFallback(t *testing.T) {
 	require.NoError(t, c.SubmitSignedBeaconBlock(ctx, sb))
 	require.Equal(t, 2, reqCount)
 	require.Equal(t, true, c.sszRejected.Load())
+}
+
+func TestJSONSignedBeaconBlock(t *testing.T) {
+	gloas, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockGloas())
+	require.NoError(t, err)
+	heze, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockHeze())
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		name string
+		sb   interfaces.ReadOnlySignedBeaconBlock
+		into any
+	}{
+		{name: "gloas", sb: gloas, into: &structs.SignedBeaconBlockGloas{}},
+		{name: "heze", sb: heze, into: &structs.SignedBeaconBlockHeze{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body, err := jsonSignedBeaconBlock(tc.sb)
+			require.NoError(t, err)
+			require.NoError(t, json.Unmarshal(body, tc.into))
+		})
+	}
 }
 
 func TestClient_SubmitBuilderPreferences_SSZFallback(t *testing.T) {

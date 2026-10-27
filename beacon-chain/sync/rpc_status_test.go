@@ -291,7 +291,7 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 		Attnets:   bytesutil.PadTo([]byte{'C', 'D'}, 8),
 	})
 
-	st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	st, err := state_native.New(&ethpb.BeaconState{
 		Slot: 5,
 	})
 	require.NoError(t, err)
@@ -983,6 +983,8 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 	})
 
 	require.NoError(t, cw.SetClock(startup.NewClock(chain.Genesis, chain.ValidatorsRoot)))
+	// Start sets cfg.clock in a goroutine; connecting earlier makes the handshake read a nil clock.
+	require.Eventually(t, r.chainStarted.Load, 5*time.Second, 10*time.Millisecond)
 
 	assert.NoError(t, p1.Peers().Scorers().IsBadPeer(p2.PeerID()), "Peer is marked as bad")
 	p1.Connect(p2)

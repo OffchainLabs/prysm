@@ -323,12 +323,12 @@ func (s *Service) notifyNewEnvelopeFromBlock(ctx context.Context, b blocks.ROBlo
 	if err != nil {
 		return false, errors.Wrap(err, "could not get execution payload from envelope")
 	}
-	sbid, err := b.Block().Body().SignedExecutionPayloadBid()
+	commitments, err := b.Block().Body().BlobKzgCommitments()
 	if err != nil {
-		return false, errors.Wrap(err, "could not get signed execution payload bid from block")
+		return false, errors.Wrap(err, "could not get blob kzg commitments from block")
 	}
-	versionedHashes := make([]common.Hash, len(sbid.Message.BlobKzgCommitments))
-	for i, c := range sbid.Message.BlobKzgCommitments {
+	versionedHashes := make([]common.Hash, len(commitments))
+	for i, c := range commitments {
 		versionedHashes[i] = primitives.ConvertKzgCommitmentToVersionedHash(c)
 	}
 	return s.callNewPayload(ctx, payload, versionedHashes, common.Hash(envelope.ParentBeaconBlockRoot()), envelope.ExecutionRequests(), envelope.Slot())
@@ -425,11 +425,11 @@ func (s *Service) DataAvailable(ctx context.Context, root [32]byte, slot primiti
 			return false, errors.Wrap(err, "could not get block")
 		}
 	}
-	sbid, err := b.Block().Body().SignedExecutionPayloadBid()
+	bid, err := b.Block().Body().ExecutionPayloadBid()
 	if err != nil {
-		return false, errors.Wrap(err, "could not get signed execution payload bid from block")
+		return false, errors.Wrap(err, "could not get execution payload bid from block")
 	}
-	return len(sbid.GetMessage().GetBlobKzgCommitments()) == 0, nil
+	return bid.BlobKzgCommitmentCount() == 0, nil
 }
 
 // notifyForkchoiceUpdateGloas takes the block hash directly because Gloas

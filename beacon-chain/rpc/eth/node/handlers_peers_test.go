@@ -57,6 +57,28 @@ func TestGetPeer(t *testing.T) {
 		assert.Equal(t, "inbound", resp.Data.Direction)
 	})
 
+	t.Run("No ENR", func(t *testing.T) {
+		noEnrId := libp2ptest.GeneratePeerIDs(1)[0]
+		noEnrRawId := noEnrId.String()
+		peerFetcher.Peers().Add(nil, noEnrId, p2pMultiAddr, network.DirOutbound)
+		peerFetcher.Peers().SetConnectionState(noEnrId, peers.Connected)
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/node/peers/{peer_id}", nil)
+		request.SetPathValue("peer_id", noEnrRawId)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetPeer(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetPeerResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		assert.Equal(t, noEnrRawId, resp.Data.PeerId)
+		assert.Equal(t, "", resp.Data.Enr)
+		assert.Equal(t, p2pAddr, resp.Data.LastSeenP2PAddress)
+		assert.Equal(t, "connected", resp.Data.State)
+		assert.Equal(t, "outbound", resp.Data.Direction)
+	})
+
 	t.Run("Invalid ID", func(t *testing.T) {
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/node/peers/{peer_id}", nil)
 		request.SetPathValue("peer_id", "foo")

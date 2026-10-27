@@ -10,9 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/userprompt"
-	"github.com/OffchainLabs/prysm/v7/validator/db/filesystem"
-	"github.com/OffchainLabs/prysm/v7/validator/db/iface"
-	"github.com/OffchainLabs/prysm/v7/validator/db/kv"
 	slashingprotection "github.com/OffchainLabs/prysm/v7/validator/slashing-protection-history"
 	"github.com/OffchainLabs/prysm/v7/validator/slashing-protection-history/format"
 	"github.com/pkg/errors"
@@ -34,11 +31,7 @@ const (
 // the validator's db into an EIP standard slashing protection format
 // 4. Format and save the JSON file to a user's specified output directory.
 func exportSlashingProtectionJSON(cliCtx *cli.Context) error {
-	var (
-		validatorDB iface.ValidatorDB
-		found       bool
-		err         error
-	)
+	var err error
 
 	log.Info(
 		"This command exports your validator's attestation and proposal history into " +
@@ -46,7 +39,7 @@ func exportSlashingProtectionJSON(cliCtx *cli.Context) error {
 	)
 
 	// Check if a minimal database is requested
-	isDatabaseMinimal := cliCtx.Bool(features.EnableMinimalSlashingProtection.Name)
+	db := newDatabase(cliCtx.Bool(features.EnableMinimalSlashingProtection.Name))
 
 	// Read the data directory from the CLI context.
 	dataDir := cliCtx.String(cmd.DataDirFlag.Name)
@@ -58,38 +51,20 @@ func exportSlashingProtectionJSON(cliCtx *cli.Context) error {
 	}
 
 	// Ensure that the database is found under the specified dir or its subdirectories
-	var matchPath string
-	if isDatabaseMinimal {
-		found, matchPath, err = file.RecursiveDirFind(filesystem.DatabaseDirName, dataDir)
-	} else {
-		found, matchPath, err = file.RecursiveFileFind(kv.ProtectionDbFileName, dataDir)
-	}
-
+	found, dbDir, err := db.find(dataDir)
 	if err != nil {
 		return errors.Wrapf(err, "error finding validator database at path %s", dataDir)
 	}
 
 	if !found {
-		databaseFileDir := kv.ProtectionDbFileName
-		if isDatabaseMinimal {
-			databaseFileDir = filesystem.DatabaseDirName
-		}
-		return fmt.Errorf("%s (validator database) was not found at path %s, so nothing to export", databaseFileDir, dataDir)
-	} else {
-		if !isDatabaseMinimal {
-			matchPath = filepath.Dir(matchPath) // strip the file name
-		}
-		dataDir = matchPath
-		log.Infof("Found validator database at path %s", dataDir)
+		return fmt.Errorf("%s (validator database) was not found at path %s, so nothing to export", db.name, dataDir)
 	}
+
+	dataDir = dbDir
+	log.WithField("path", dataDir).Info("Found validator database")
 
 	// Open the validator database.
-	if isDatabaseMinimal {
-		validatorDB, err = filesystem.NewStore(dataDir, nil)
-	} else {
-		validatorDB, err = kv.NewKVStore(cliCtx.Context, dataDir, nil)
-	}
-
+	validatorDB, err := db.open(cliCtx.Context, dataDir)
 	if err != nil {
 		return errors.Wrapf(err, "could not access validator database at path %s", dataDir)
 	}

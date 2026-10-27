@@ -292,15 +292,16 @@ func TestValidateBuilderBid(t *testing.T) {
 	fullBid := func() *ethpb.SignedExecutionPayloadBid {
 		return &ethpb.SignedExecutionPayloadBid{
 			Message: &ethpb.ExecutionPayloadBid{
-				Slot:             slot,
-				ParentBlockRoot:  parentRoot[:],
-				ParentBlockHash:  parentHash[:],
-				BlockHash:        make([]byte, 32),
-				PrevRandao:       make([]byte, 32),
-				FeeRecipient:     make([]byte, 20),
-				Value:            1000,
-				ExecutionPayment: 100,
-				BuilderIndex:     3,
+				Slot:                  slot,
+				ParentBlockRoot:       parentRoot[:],
+				ParentBlockHash:       parentHash[:],
+				BlockHash:             make([]byte, 32),
+				PrevRandao:            make([]byte, 32),
+				FeeRecipient:          make([]byte, 20),
+				ExecutionRequestsRoot: make([]byte, 32),
+				Value:                 1000,
+				ExecutionPayment:      100,
+				BuilderIndex:          3,
 			},
 			Signature: make([]byte, 96),
 		}
@@ -435,14 +436,15 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 			Entry: &ethpb.BuilderEntry{Url: []byte("http://builder"), MaxExecutionPayment: math.MaxUint64, BuilderBoostFactor: 100},
 			Bid: &ethpb.SignedExecutionPayloadBid{
 				Message: &ethpb.ExecutionPayloadBid{
-					Slot:            slot,
-					ParentBlockRoot: parentRoot[:],
-					ParentBlockHash: parentHash[:],
-					BlockHash:       make([]byte, 32),
-					PrevRandao:      make([]byte, 32),
-					FeeRecipient:    make([]byte, 20),
-					BuilderIndex:    builderIndex,
-					Value:           value,
+					Slot:                  slot,
+					ParentBlockRoot:       parentRoot[:],
+					ParentBlockHash:       parentHash[:],
+					BlockHash:             make([]byte, 32),
+					PrevRandao:            make([]byte, 32),
+					FeeRecipient:          make([]byte, 20),
+					ExecutionRequestsRoot: make([]byte, 32),
+					BuilderIndex:          builderIndex,
+					Value:                 value,
 				},
 				Signature: make([]byte, 96),
 			},
@@ -515,9 +517,7 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 		vs := &Server{
 			BlockBuilder: &builderTest.MockBuilderService{PayloadBids: []beaconbuilder.PayloadBid{bid(1, 500), bid(2, 1500)}},
 			NewExecutionPayloadBidVerifier: func(b interfaces.ROSignedExecutionPayloadBid, _ []verification.Requirement) verification.ExecutionPayloadBidVerifier {
-				wrapped, err := b.Bid()
-				require.NoError(t, err)
-				if wrapped.BuilderIndex() == 2 {
+				if b.Bid().BuilderIndex() == 2 {
 					return &fakeBidVerifier{activeErr: errors.New("not active")}
 				}
 				return &fakeBidVerifier{}
@@ -705,14 +705,15 @@ func TestRequestBuilderBid(t *testing.T) {
 			Entry: &ethpb.BuilderEntry{Url: []byte("http://builder"), MaxExecutionPayment: math.MaxUint64, BuilderBoostFactor: 100},
 			Bid: &ethpb.SignedExecutionPayloadBid{
 				Message: &ethpb.ExecutionPayloadBid{
-					Slot:            slot,
-					ParentBlockRoot: parentRoot[:],
-					ParentBlockHash: parentHash[:],
-					BlockHash:       make([]byte, 32),
-					PrevRandao:      make([]byte, 32),
-					FeeRecipient:    make([]byte, 20),
-					BuilderIndex:    3,
-					Value:           1000,
+					Slot:                  slot,
+					ParentBlockRoot:       parentRoot[:],
+					ParentBlockHash:       parentHash[:],
+					BlockHash:             make([]byte, 32),
+					PrevRandao:            make([]byte, 32),
+					FeeRecipient:          make([]byte, 20),
+					ExecutionRequestsRoot: make([]byte, 32),
+					BuilderIndex:          3,
+					Value:                 1000,
 				},
 				Signature: make([]byte, 96),
 			},
@@ -856,6 +857,7 @@ func TestSetExecutionPayloadBid_PrefersBuilderBid(t *testing.T) {
 
 	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
 	require.NoError(t, err)
-	require.Equal(t, primitives.BuilderIndex(7), signedBid.Message.BuilderIndex)
-	require.Equal(t, primitives.Gwei(1000), signedBid.Message.Value)
+	bid := signedBid.Bid()
+	require.Equal(t, primitives.BuilderIndex(7), bid.BuilderIndex())
+	require.Equal(t, primitives.Gwei(1000), bid.Value())
 }

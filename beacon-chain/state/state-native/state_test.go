@@ -37,7 +37,7 @@ func TestBeaconState_NoDeadlock_Phase0(t *testing.T) {
 			WithdrawableEpoch:          1,
 		})
 	}
-	newState, err := InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{
+	newState, err := NewUnsafe(&ethpb.BeaconState{
 		Validators: vals,
 	})
 	assert.NoError(t, err)
@@ -89,7 +89,7 @@ func TestBeaconState_NoDeadlock_Altair(t *testing.T) {
 			WithdrawableEpoch:          1,
 		})
 	}
-	st, err := InitializeFromProtoUnsafeAltair(&ethpb.BeaconStateAltair{
+	st, err := NewUnsafe(&ethpb.BeaconStateAltair{
 		Validators: vals,
 	})
 	assert.NoError(t, err)
@@ -141,7 +141,7 @@ func TestBeaconState_NoDeadlock_Bellatrix(t *testing.T) {
 			WithdrawableEpoch:          1,
 		})
 	}
-	st, err := InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{
+	st, err := NewUnsafe(&ethpb.BeaconStateBellatrix{
 		Validators: vals,
 	})
 	assert.NoError(t, err)
@@ -193,7 +193,7 @@ func TestBeaconState_NoDeadlock_Capella(t *testing.T) {
 			WithdrawableEpoch:          1,
 		})
 	}
-	st, err := InitializeFromProtoUnsafeCapella(&ethpb.BeaconStateCapella{
+	st, err := NewUnsafe(&ethpb.BeaconStateCapella{
 		Validators: vals,
 	})
 	assert.NoError(t, err)
@@ -245,7 +245,7 @@ func TestBeaconState_NoDeadlock_Deneb(t *testing.T) {
 			WithdrawableEpoch:          1,
 		})
 	}
-	st, err := InitializeFromProtoUnsafeDeneb(&ethpb.BeaconStateDeneb{
+	st, err := NewUnsafe(&ethpb.BeaconStateDeneb{
 		Validators: vals,
 	})
 	assert.NoError(t, err)
@@ -303,7 +303,7 @@ func TestBeaconState_AppendBalanceWithTrie(t *testing.T) {
 }
 
 func TestBeaconState_ModifyPreviousParticipationBits(t *testing.T) {
-	st, err := InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
+	st, err := NewUnsafe(&ethpb.BeaconState{})
 	assert.NoError(t, err)
 	assert.ErrorContains(t, "ModifyPreviousParticipationBits is not supported", st.ModifyPreviousParticipationBits(func(val []byte) ([]byte, error) {
 		return nil, nil
@@ -311,7 +311,7 @@ func TestBeaconState_ModifyPreviousParticipationBits(t *testing.T) {
 }
 
 func TestBeaconState_ModifyCurrentParticipationBits(t *testing.T) {
-	st, err := InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
+	st, err := NewUnsafe(&ethpb.BeaconState{})
 	assert.NoError(t, err)
 	assert.ErrorContains(t, "ModifyCurrentParticipationBits is not supported", st.ModifyCurrentParticipationBits(func(val []byte) ([]byte, error) {
 		return nil, nil
@@ -373,7 +373,7 @@ func generateState(t *testing.T) state.BeaconState {
 	for i := range mockrandaoMixes {
 		mockrandaoMixes[i] = zeroHash[:]
 	}
-	newState, err := InitializeFromProtoPhase0(&ethpb.BeaconState{
+	newState, err := New(&ethpb.BeaconState{
 		Slot:                  1,
 		GenesisValidatorsRoot: make([]byte, 32),
 		Fork: &ethpb.Fork{

@@ -34,6 +34,8 @@ const (
 	mainnetFuluForkEpoch = 411392 // December 3, 2025, 09:49:11pm UTC
 	// Gloas Fork Epoch for mainnet config
 	mainnetGloasForkEpoch = math.MaxUint64
+	// Heze Fork Epoch for mainnet config
+	mainnetHezeForkEpoch = math.MaxUint64
 )
 
 var mainnetNetworkConfig = &NetworkConfig{
@@ -202,6 +204,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	DomainProposerPreferences:         bytesutil.Uint32ToBytes4(0x0D000000),
 	DomainBuilderRequestAuth:          bytesutil.Uint32ToBytes4(0x0B000001),
 	DomainBuilderDeposit:              bytesutil.Uint32ToBytes4(0x0E000000),
+	DomainInclusionListCommittee:      bytesutil.Uint32ToBytes4(0x10000000),
 
 	// Prysm constants.
 	GenesisValidatorsRoot:          [32]byte{75, 54, 61, 185, 78, 40, 97, 32, 215, 110, 185, 5, 52, 15, 221, 78, 84, 191, 233, 240, 107, 243, 63, 246, 207, 90, 210, 127, 81, 27, 254, 149},
@@ -227,6 +230,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BeaconStateElectraFieldCount:   37,
 	BeaconStateFuluFieldCount:      38,
 	BeaconStateGloasFieldCount:     46,
+	BeaconStateHezeFieldCount:      46,
 
 	// Slasher related values.
 	WeakSubjectivityPeriod:          54000,
@@ -253,6 +257,8 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	FuluForkEpoch:        mainnetFuluForkEpoch,
 	GloasForkVersion:     []byte{7, 0, 0, 0},
 	GloasForkEpoch:       mainnetGloasForkEpoch,
+	HezeForkVersion:      []byte{8, 0, 0, 0},
+	HezeForkEpoch:        mainnetHezeForkEpoch,
 
 	// New values introduced in Altair hard fork 1.
 	// Participation flag indices.
@@ -378,6 +384,12 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	MaxBuilderDepositRequestsPerPayload:  64, // 2**6 (= 64)
 	MaxBuilderExitRequestsPerPayload:     16, // 2**4 (= 16)
 
+	// Values related to heze
+	InclusionListDueBPS:                  primitives.BP(6667),
+	MaxRequestInclusionList:              16,
+	MinSlotsForInclusionListsRequests:    1,
+	MaxTransactionsBytesPerInclusionList: 8192,
+
 	// Values related to networking parameters.
 	MaxPayloadSize:                  10 * 1 << 20, // 10 MiB
 	AttestationSubnetCount:          64,
@@ -431,6 +443,7 @@ func FillTestVersions(c *BeaconChainConfig, b byte) {
 	c.ElectraForkVersion = make([]byte, fieldparams.VersionLength)
 	c.FuluForkVersion = make([]byte, fieldparams.VersionLength)
 	c.GloasForkVersion = make([]byte, fieldparams.VersionLength)
+	c.HezeForkVersion = make([]byte, fieldparams.VersionLength)
 
 	c.GenesisForkVersion[fieldparams.VersionLength-1] = b
 	c.AltairForkVersion[fieldparams.VersionLength-1] = b
@@ -440,6 +453,7 @@ func FillTestVersions(c *BeaconChainConfig, b byte) {
 	c.ElectraForkVersion[fieldparams.VersionLength-1] = b
 	c.FuluForkVersion[fieldparams.VersionLength-1] = b
 	c.GloasForkVersion[fieldparams.VersionLength-1] = b
+	c.HezeForkVersion[fieldparams.VersionLength-1] = b
 
 	c.GenesisForkVersion[0] = 0
 	c.AltairForkVersion[0] = 1
@@ -449,4 +463,5 @@ func FillTestVersions(c *BeaconChainConfig, b byte) {
 	c.ElectraForkVersion[0] = 5
 	c.FuluForkVersion[0] = 6
 	c.GloasForkVersion[0] = 7
+	c.HezeForkVersion[0] = 8
 }

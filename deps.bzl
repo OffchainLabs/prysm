@@ -2003,8 +2003,8 @@ def prysm_deps():
         ],
         build_file_proto_mode = "disable_global",
         importpath = "github.com/libp2p/go-libp2p",
-        sum = "h1:A0tBP6mr6GV7l5ip2Q04a/IxPqVYYaCiif5s8JuXkN4=",
-        version = "v0.50.0",
+        sum = "h1:wdoCh62SvoLW/k/YVbnlkhb4kOQvfoCbiU7s9J7+Fls=",
+        version = "v0.51.0",
     )
     go_repository(
         name = "com_github_libp2p_go_libp2p_asn_util",
@@ -2028,8 +2028,8 @@ def prysm_deps():
         patches = [
             "//third_party:com_github_libp2p_go_libp2p_pubsub-cloneof.patch",
         ],
-        sum = "h1:xTIqlwk0okgZxHrPjtht8RvzknYQ4CeqGawKm7arYbM=",
-        version = "v0.18.0",
+        sum = "h1:9eyitBeXjW09XyDQF+EYL6RGRJ50Df1G9aTjB3XOMQQ=",
+        version = "v0.19.0",
     )
     go_repository(
         name = "com_github_libp2p_go_libp2p_testing",
@@ -2698,12 +2698,6 @@ def prysm_deps():
         version = "v1.5.10",
     )
     go_repository(
-        name = "com_github_pion_dtls_v2",
-        importpath = "github.com/pion/dtls/v2",
-        sum = "h1:KP7H5/c1EiVAAKUmXyCzPiQe5+bCJrpOeKg/L05dunk=",
-        version = "v2.2.12",
-    )
-    go_repository(
         name = "com_github_pion_dtls_v3",
         importpath = "github.com/pion/dtls/v3",
         sum = "h1:gqEdOUXLtCGW+afsBLO0LtDD8GnuBBjEy6HRtyofZTc=",
@@ -2770,22 +2764,10 @@ def prysm_deps():
         version = "v3.0.6",
     )
     go_repository(
-        name = "com_github_pion_stun",
-        importpath = "github.com/pion/stun",
-        sum = "h1:8lp6YejULeHBF8NmV8e2787BogQhduZugh5PdhDyyN4=",
-        version = "v0.6.1",
-    )
-    go_repository(
         name = "com_github_pion_stun_v3",
         importpath = "github.com/pion/stun/v3",
         sum = "h1:86IhD8wFn6IDW4b1/0QzoQS+f5PeA8OHHRn8UZW5ErY=",
         version = "v3.1.2",
-    )
-    go_repository(
-        name = "com_github_pion_transport_v2",
-        importpath = "github.com/pion/transport/v2",
-        sum = "h1:ucLBLE8nuxiHfvkFKnkDQRYWYfp8ejf4YBOPfaQpw6Q=",
-        version = "v2.2.10",
     )
     go_repository(
         name = "com_github_pion_transport_v3",
@@ -2953,8 +2935,8 @@ def prysm_deps():
             "gazelle:exclude tools.go",
         ],
         importpath = "github.com/quic-go/quic-go",
-        sum = "h1:ZHDjCk5OacATwGvs8PWE97CTvX7AqZiVoW7++ZOXTf8=",
-        version = "v0.62.0",
+        sum = "h1:BCNTP+6x6++OPKrGST2FR3f1tycx8O3QOA3QQv09g70=",
+        version = "v0.64.1",
     )
     go_repository(
         name = "com_github_quic_go_webtransport_go",

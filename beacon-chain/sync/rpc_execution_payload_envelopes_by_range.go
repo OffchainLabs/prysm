@@ -120,7 +120,7 @@ func (s *Service) streamCanonicalEnvelopes(ctx context.Context, rp rangeParams, 
 	if successorBlock == nil {
 		return nil
 	}
-	bid, err := successorBlock.Block().Body().SignedExecutionPayloadBid()
+	bid, err := successorBlock.Block().Body().ExecutionPayloadBid()
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 		return errors.Wrap(err, "could not get bid from successor block")
@@ -128,9 +128,9 @@ func (s *Service) streamCanonicalEnvelopes(ctx context.Context, rp rangeParams, 
 	// A successor at or below rp.end is the head-root fallback: the chain tip itself, with no
 	// descendant committing to its payload. Start the walk from the tip's own payload when fork
 	// choice selects its full variant, otherwise from the payload the tip builds on.
-	blockHash := bytesutil.ToBytes32(bid.Message.ParentBlockHash)
+	blockHash := bid.ParentBlockHash()
 	if successorBlock.Block().Slot() <= rp.end && s.cfg.chain.FullBeatsEmpty(successorRoot) {
-		blockHash = bytesutil.ToBytes32(bid.Message.BlockHash)
+		blockHash = bid.BlockHash()
 	}
 
 	wQuota := params.BeaconConfig().MaxRequestPayloads

@@ -19,7 +19,6 @@ package event
 import (
 	"context"
 	"errors"
-	"runtime"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -117,15 +116,22 @@ func TestResubscribeAbort(t *testing.T) {
 
 func TestResubscribeNonBlocking(t *testing.T) {
 	done := make(chan struct{})
+	defer close(done)
 	sub := Resubscribe(0, func(ctx context.Context) (Subscription, error) {
 		<-done
 		return nil, nil
 	})
 
-	resub, ok := sub.(*resubscribeSub)
-	require.Equal(t, true, ok)
-	currNum := runtime.NumGoroutine()
-	resub.unsub <- struct{}{}
-	done <- struct{}{}
-	require.Equal(t, currNum-1, runtime.NumGoroutine())
+	unsubscribed := make(chan struct{})
+	go func() {
+		sub.Unsubscribe()
+		close(unsubscribed)
+	}()
+	select {
+	case <-unsubscribed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Unsubscribe blocked while the subscribe function was still pending")
+	}
+	_, open := <-sub.Err()
+	require.Equal(t, false, open)
 }

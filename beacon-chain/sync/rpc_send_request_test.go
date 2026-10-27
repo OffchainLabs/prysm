@@ -188,8 +188,41 @@ func TestSendRequest_SendBeaconBlocksByRangeRequest(t *testing.T) {
 			params.OverrideBeaconConfig(cfg)
 			return nil
 		})
-		assert.ErrorContains(t, ErrInvalidFetchedData.Error(), err)
-		assert.Equal(t, 0, len(blocks))
+		require.NoError(t, err)
+		assert.Equal(t, 3, len(blocks))
+	})
+
+	t.Run("extra data after requested count", func(t *testing.T) {
+		p1 := p2ptest.NewTestP2P(t)
+		p2 := p2ptest.NewTestP2P(t)
+		p1.Connect(p2)
+		p2.SetStreamHandler(pcl, func(stream network.Stream) {
+			defer func() {
+				assert.NoError(t, stream.Close())
+			}()
+			req := &ethpb.BeaconBlocksByRangeRequest{}
+			assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+			for i := req.StartSlot; i < req.StartSlot.Add(req.Count); i++ {
+				wsb, err := blocks.NewSignedBeaconBlock(knownBlocks[i])
+				require.NoError(t, err)
+				require.NoError(t, WriteBlockChunk(stream, startup.NewClock(time.Now(), [32]byte{}), p2.Encoding(), wsb))
+			}
+			// A lone success code byte is not a decodable block.
+			_, err := stream.Write([]byte{responseCodeSuccess})
+			assert.NoError(t, err)
+		})
+
+		req := &ethpb.BeaconBlocksByRangeRequest{
+			StartSlot: 20,
+			Count:     4,
+			Step:      1,
+		}
+		blocks, err := SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
+		require.NoError(t, err)
+		require.Equal(t, 4, len(blocks))
+		for i, blk := range blocks {
+			assert.Equal(t, primitives.Slot(20+i), blk.Block().Slot())
+		}
 	})
 
 	t.Run("process custom error", func(t *testing.T) {
@@ -1496,6 +1529,13 @@ func TestIsSidecarIndexRootRequested(t *testing.T) {
 }
 
 func TestReadChunkedDataColumnSidecar(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+	gloasSlot := params.BeaconConfig().SlotsPerEpoch
+
 	t.Run("non nil status code", func(t *testing.T) {
 		const reason = "a dummy reason"
 
@@ -1703,6 +1743,7 @@ func TestReadChunkedDataColumnSidecar(t *testing.T) {
 
 		expected := &ethpb.DataColumnSidecarGloas{
 			Index:           7,
+			Slot:            gloasSlot,
 			Column:          [][]byte{make([]byte, 2048)},
 			KzgProofs:       [][]byte{make([]byte, 48)},
 			BeaconBlockRoot: make([]byte, fieldparams.RootLength),
@@ -1731,6 +1772,46 @@ func TestReadChunkedDataColumnSidecar(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = p1.Encoding().EncodeWithMaxLength(stream, expected)
+		require.NoError(t, err)
+
+		if util.WaitTimeout(&wg, time.Minute) {
+			t.Fatal("Did not receive stream within 1 sec")
+		}
+	})
+
+	t.Run("context bytes do not match sidecar slot", func(t *testing.T) {
+		p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+
+		// A Fulu-slot sidecar sent in the Gloas encoding under the Gloas context.
+		sidecar := &ethpb.DataColumnSidecarGloas{
+			Index:           7,
+			Slot:            0,
+			Column:          [][]byte{make([]byte, 2048)},
+			KzgProofs:       [][]byte{make([]byte, 48)},
+			BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+		}
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		p2.SetStreamHandler(p2p.RPCDataColumnSidecarsByRootTopicV1, func(stream network.Stream) {
+			defer wg.Done()
+
+			_, err := readChunkedDataColumnSidecar(stream, p2, ContextByteVersions{[4]byte{1, 2, 3, 4}: version.Gloas})
+			require.ErrorContains(t, "context bytes version gloas does not match sidecar slot 0 fork fulu", err)
+		})
+
+		p1.Connect(p2)
+
+		stream, err := p1.BHost.NewStream(t.Context(), p2.PeerID(), p2p.RPCDataColumnSidecarsByRootTopicV1)
+		require.NoError(t, err)
+
+		_, err = stream.Write([]byte{responseCodeSuccess})
+		require.NoError(t, err)
+
+		err = writeContextToStream([]byte{1, 2, 3, 4}, stream)
+		require.NoError(t, err)
+
+		_, err = p1.Encoding().EncodeWithMaxLength(stream, sidecar)
 		require.NoError(t, err)
 
 		if util.WaitTimeout(&wg, time.Minute) {

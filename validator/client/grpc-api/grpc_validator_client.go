@@ -213,15 +213,22 @@ func (c *grpcValidatorClient) BeaconBlock(ctx context.Context, in *ethpb.BlockRe
 	}
 	// Stateless self-build: cache the bundled envelope + blobs for the publisher and hand the
 	// proposer the block alone, matching the non-stateless response shape.
-	contents, ok := resp.GetBlock().(*ethpb.GenericBeaconBlock_GloasContents)
-	if !ok {
+	switch b := resp.GetBlock().(type) {
+	case *ethpb.GenericBeaconBlock_GloasContents:
+		gc := b.GloasContents
+		if c.stateless && gc.GetExecutionPayloadEnvelope() != nil {
+			c.envelopeCache.Add(in.Slot, gc.ExecutionPayloadEnvelope, gc.Blobs, gc.KzgProofs)
+		}
+		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: gc.Block}}, nil
+	case *ethpb.GenericBeaconBlock_HezeContents:
+		hc := b.HezeContents
+		if c.stateless && hc.GetExecutionPayloadEnvelope() != nil {
+			c.envelopeCache.Add(in.Slot, hc.ExecutionPayloadEnvelope, hc.Blobs, hc.KzgProofs)
+		}
+		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Heze{Heze: hc.Block}}, nil
+	default:
 		return resp, nil
 	}
-	gc := contents.GloasContents
-	if c.stateless && gc.GetExecutionPayloadEnvelope() != nil {
-		c.envelopeCache.Add(in.Slot, gc.ExecutionPayloadEnvelope, gc.Blobs, gc.KzgProofs)
-	}
-	return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: gc.Block}}, nil
 }
 
 func (c *grpcValidatorClient) SyncCommitteeContribution(ctx context.Context, in *ethpb.SyncCommitteeContributionRequest) (*ethpb.SyncCommitteeContribution, error) {

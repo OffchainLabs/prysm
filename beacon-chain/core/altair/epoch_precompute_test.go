@@ -16,7 +16,7 @@ import (
 
 func TestInitializeEpochValidators_Ok(t *testing.T) {
 	ffe := params.BeaconConfig().FarFutureEpoch
-	s, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	s, err := state_native.New(&ethpb.BeaconStateAltair{
 		Slot: params.BeaconConfig().SlotsPerEpoch,
 		// Validator 0 is slashed
 		// Validator 1 is withdrawable
@@ -64,7 +64,7 @@ func TestInitializeEpochValidators_Ok(t *testing.T) {
 
 func TestInitializeEpochValidators_Overflow(t *testing.T) {
 	ffe := params.BeaconConfig().FarFutureEpoch
-	s, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	s, err := state_native.New(&ethpb.BeaconStateAltair{
 		Slot: params.BeaconConfig().SlotsPerEpoch,
 		Validators: []*ethpb.Validator{
 			{WithdrawableEpoch: ffe, ExitEpoch: ffe, EffectiveBalance: math.MaxUint64},
@@ -78,7 +78,7 @@ func TestInitializeEpochValidators_Overflow(t *testing.T) {
 }
 
 func TestInitializeEpochValidators_BadState(t *testing.T) {
-	s, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	s, err := state_native.New(&ethpb.BeaconStateAltair{
 		Validators:       []*ethpb.Validator{{}},
 		InactivityScores: []uint64{},
 	})
@@ -148,7 +148,7 @@ func TestProcessEpochParticipation_InactiveValidator(t *testing.T) {
 		}
 		return b
 	}
-	st, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	st, err := state_native.New(&ethpb.BeaconStateAltair{
 		Slot: 2 * params.BeaconConfig().SlotsPerEpoch,
 		Validators: []*ethpb.Validator{
 			{EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance},                                                  // Inactive
@@ -487,7 +487,7 @@ func testState() (state.BeaconState, error) {
 		}
 		return b
 	}
-	return state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	return state_native.New(&ethpb.BeaconStateAltair{
 		Slot: 2 * params.BeaconConfig().SlotsPerEpoch,
 		Validators: []*ethpb.Validator{
 			{EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance, ExitEpoch: params.BeaconConfig().FarFutureEpoch},
@@ -524,7 +524,7 @@ func testStateBellatrix() (state.BeaconState, error) {
 		}
 		return b
 	}
-	return state_native.InitializeFromProtoBellatrix(&ethpb.BeaconStateBellatrix{
+	return state_native.New(&ethpb.BeaconStateBellatrix{
 		Slot: 2 * params.BeaconConfig().SlotsPerEpoch,
 		Validators: []*ethpb.Validator{
 			{EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance, ExitEpoch: params.BeaconConfig().FarFutureEpoch},

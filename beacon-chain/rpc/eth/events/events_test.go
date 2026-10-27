@@ -1085,6 +1085,115 @@ func TestPayloadAttributesReader_SafeFinalizedBlockHash(t *testing.T) {
 	}
 }
 
+// TestPayloadAttributesReader_PayloadAttributesV4 verifies that the payload_attributes event
+// carries PayloadAttributesV4 (slot_number, target_gas_limit) from gloas onwards.
+func TestPayloadAttributesReader_PayloadAttributesV4(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+
+	const parentGasLimit uint64 = 40_000_000
+	cases := []struct {
+		name       string
+		gloasEpoch primitives.Epoch
+		getState   func() state.BeaconState
+		getBlock   func() interfaces.SignedBeaconBlock
+		wantV4     bool
+	}{
+		{
+			name:       "pre-gloas proposal slot emits PayloadAttributesV3",
+			gloasEpoch: math.MaxUint64,
+			getState: func() state.BeaconState {
+				st, err := util.NewBeaconStateDeneb()
+				require.NoError(t, err)
+				return st
+			},
+			getBlock: func() interfaces.SignedBeaconBlock {
+				b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockDeneb(&eth.SignedBeaconBlockDeneb{}))
+				require.NoError(t, err)
+				return b
+			},
+		},
+		{
+			name:       "gloas proposal slot emits PayloadAttributesV4",
+			gloasEpoch: 0,
+			getState: func() state.BeaconState {
+				st, err := util.NewBeaconStateGloas(func(s *eth.BeaconStateGloas) error {
+					s.LatestExecutionPayloadBid.GasLimit = parentGasLimit
+					return nil
+				})
+				require.NoError(t, err)
+				return st
+			},
+			getBlock: func() interfaces.SignedBeaconBlock {
+				b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockGloas(&eth.SignedBeaconBlockGloas{}))
+				require.NoError(t, err)
+				return b
+			},
+			wantV4: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := params.BeaconConfig().Copy()
+			cfg.GloasForkEpoch = tc.gloasEpoch
+			params.OverrideBeaconConfig(cfg)
+
+			st := tc.getState()
+			v := &eth.Validator{ExitEpoch: math.MaxUint64, EffectiveBalance: params.BeaconConfig().MinActivationBalance, WithdrawalCredentials: make([]byte, 32)}
+			require.NoError(t, st.SetValidators([]*eth.Validator{v}))
+			require.NoError(t, st.SetBalances([]uint64{0}))
+			currentSlot := primitives.Slot(0)
+			require.NoError(t, st.SetSlot(currentSlot+1)) // avoid slot processing.
+			genesis := time.Now()
+			require.NoError(t, st.SetGenesisTime(genesis))
+			b := tc.getBlock()
+			headRoot, err := b.Block().HashTreeRoot()
+			require.NoError(t, err)
+			stategen := mock.NewService()
+			stategen.AddStateForRoot(st, headRoot)
+			mockChainService := &mockChain.ChainService{Root: make([]byte, 32), State: st, Slot: &currentSlot, Genesis: genesis}
+			s := &Server{
+				HeadFetcher:              mockChainService,
+				ChainInfoFetcher:         mockChainService,
+				ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+				BeaconDB:                 dbtest.SetupDB(t),
+				EventWriteTimeout:        testEventWriteTimeout,
+				StateGen:                 stategen,
+			}
+
+			ev := payloadattribute.EventData{
+				ProposalSlot: currentSlot + 1,
+				HeadBlock:    b,
+				HeadRoot:     headRoot,
+			}
+			lr, err := s.payloadAttributesReader(t.Context(), ev)
+			require.NoError(t, err)
+			out, err := io.ReadAll(lr())
+			require.NoError(t, err)
+
+			_, payload, found := strings.Cut(string(out), "data: ")
+			require.Equal(t, true, found)
+			var got structs.PayloadAttributesEvent
+			require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(payload)), &got))
+			var data structs.PayloadAttributesEventData
+			require.NoError(t, json.Unmarshal(got.Data, &data))
+
+			fields := make(map[string]json.RawMessage)
+			require.NoError(t, json.Unmarshal(data.PayloadAttributes, &fields))
+			if tc.wantV4 {
+				require.Equal(t, "gloas", got.Version)
+				require.Equal(t, `"1"`, string(fields["slot_number"]))
+				require.Equal(t, `"40000000"`, string(fields["target_gas_limit"]))
+				require.Equal(t, `"`+common.BytesToHash(headRoot[:]).Hex()+`"`, string(fields["parent_beacon_block_root"]))
+			} else {
+				_, present := fields["slot_number"]
+				require.Equal(t, false, present, "slot_number must be omitted pre-gloas")
+				_, present = fields["target_gas_limit"]
+				require.Equal(t, false, present, "target_gas_limit must be omitted pre-gloas")
+			}
+		})
+	}
+}
+
 // TestStreamEvents_PayloadAttributesExpiredSlotNotLoggedAsError verifies that a payload
 // attributes event whose proposal slot has already started is skipped without an ERROR log.
 func TestStreamEvents_PayloadAttributesExpiredSlotNotLoggedAsError(t *testing.T) {

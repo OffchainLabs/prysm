@@ -42,6 +42,9 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 	}
 
 	switch v {
+	case version.Gloas:
+		slot = primitives.Slot(config.GloasForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+		return createGloasLightClientUpdate(slot)
 	case version.Altair:
 		slot = primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
 		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
@@ -189,7 +192,7 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 	update, err := createDefaultLightClientUpdate(slot, st)
 	require.NoError(t, err)
 	update.SetSignatureSlot(slot - 1)
-	syncCommitteeBits := make([]byte, 64)
+	syncCommitteeBits := make([]byte, fieldparams.SyncAggregateSyncCommitteeBytesLength)
 	syncCommitteeSignature := make([]byte, 96)
 	update.SetSyncAggregate(&pb.SyncAggregate{
 		SyncCommitteeBits:      syncCommitteeBits,
@@ -211,15 +214,12 @@ func TestStore_LightClientUpdate_CanSaveRetrieve(t *testing.T) {
 	cfg.DenebForkEpoch = 3
 	cfg.ElectraForkEpoch = 4
 	cfg.FuluForkEpoch = 5
+	cfg.GloasForkEpoch = 6
 	params.OverrideBeaconConfig(cfg)
 
 	db := setupDB(t)
 	ctx := t.Context()
 	for _, testVersion := range version.All()[1:] {
-		if testVersion == version.Gloas {
-			// TODO(16027): Unskip light client tests for Gloas
-			continue
-		}
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			update, err := createUpdate(t, testVersion)
 			require.NoError(t, err)
@@ -564,6 +564,8 @@ func TestStore_LightClientBootstrap_CanSaveRetrieve(t *testing.T) {
 	cfg.CapellaForkEpoch = 2
 	cfg.DenebForkEpoch = 3
 	cfg.ElectraForkEpoch = 4
+	cfg.FuluForkEpoch = 5
+	cfg.GloasForkEpoch = 6
 	cfg.EpochsPerSyncCommitteePeriod = 1
 	params.OverrideBeaconConfig(cfg)
 
@@ -576,10 +578,6 @@ func TestStore_LightClientBootstrap_CanSaveRetrieve(t *testing.T) {
 		require.IsNil(t, retrievedBootstrap)
 	})
 	for _, testVersion := range version.All()[1:] {
-		if testVersion == version.Gloas {
-			// TODO(16027): Unskip light client tests for Gloas
-			continue
-		}
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			bootstrap, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().VersionToForkEpochMap()[testVersion]) * uint64(params.BeaconConfig().SlotsPerEpoch)))
 			require.NoError(t, err)
@@ -596,7 +594,13 @@ func TestStore_LightClientBootstrap_CanSaveRetrieve(t *testing.T) {
 			require.NoError(t, err)
 			require.DeepEqual(t, bootstrap.Header(), retrievedBootstrap.Header(), "retrieved bootstrap header does not match saved bootstrap header")
 			require.DeepEqual(t, bootstrap.CurrentSyncCommittee(), retrievedBootstrap.CurrentSyncCommittee(), "retrieved bootstrap sync committee does not match saved bootstrap sync committee")
-			if testVersion >= version.Electra {
+			if testVersion >= version.Gloas {
+				savedBranch, err := bootstrap.CurrentSyncCommitteeBranchGloas()
+				require.NoError(t, err)
+				retrievedBranch, err := retrievedBootstrap.CurrentSyncCommitteeBranchGloas()
+				require.NoError(t, err)
+				require.DeepEqual(t, savedBranch, retrievedBranch, "retrieved bootstrap sync committee branch does not match saved bootstrap sync committee branch")
+			} else if testVersion >= version.Electra {
 				savedBranch, err := bootstrap.CurrentSyncCommitteeBranchElectra()
 				require.NoError(t, err)
 				retrievedBranch, err := retrievedBootstrap.CurrentSyncCommitteeBranchElectra()
@@ -737,6 +741,13 @@ func TestStore_LightClientBootstrap_MultipleBootstrapsWithDifferentSyncCommittee
 
 func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.LightClientBootstrap, error) {
 	currentEpoch := slots.ToEpoch(currentSlot)
+	if currentEpoch >= params.BeaconConfig().GloasForkEpoch {
+		return light_client.NewWrappedBootstrap(&pb.LightClientBootstrapGloas{
+			Header:                     createGloasLightClientHeader(currentSlot),
+			CurrentSyncCommittee:       createEmptySyncCommittee(),
+			CurrentSyncCommitteeBranch: lightClientTestRoots(fieldparams.SyncCommitteeBranchDepthGloas),
+		})
+	}
 	syncCommitteeSize := params.BeaconConfig().SyncCommitteeSize
 	pubKeys := make([][]byte, syncCommitteeSize)
 	for i := range syncCommitteeSize {

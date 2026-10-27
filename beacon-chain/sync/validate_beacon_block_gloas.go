@@ -24,17 +24,9 @@ func (s *Service) validateExecutionPayloadBid(ctx context.Context, blk interface
 	if blk.Version() < version.Gloas {
 		return pubsub.ValidationAccept, nil
 	}
-	signedBid, err := blk.Body().SignedExecutionPayloadBid()
+	bid, err := blk.Body().ExecutionPayloadBid()
 	if err != nil {
 		return pubsub.ValidationIgnore, errors.Wrap(err, "unable to read bid from block")
-	}
-	wrappedBid, err := consensusblocks.WrappedROSignedExecutionPayloadBid(signedBid)
-	if err != nil {
-		return pubsub.ValidationIgnore, errors.Wrap(err, "unable to wrap signed execution payload bid")
-	}
-	bid, err := wrappedBid.Bid()
-	if err != nil {
-		return pubsub.ValidationIgnore, errors.Wrap(err, "unable to read bid from signed execution payload bid")
 	}
 
 	if bid.ParentBlockRoot() != blk.ParentRoot() {

@@ -48,6 +48,7 @@ func SepoliaConfig() *BeaconChainConfig {
 	cfg.FuluForkVersion = []byte{0x90, 0x00, 0x00, 0x75}
 	cfg.GloasForkEpoch = 353024 // 2026-10-06 13:53:36 UTC
 	cfg.GloasForkVersion = []byte{0x90, 0x00, 0x00, 0x76}
+	cfg.HezeForkVersion = []byte{0x90, 0x00, 0x00, 0x77}
 	cfg.TerminalTotalDifficulty = "17000000000000000"
 	cfg.DepositContractAddress = "0x7f02C3E3c98b133055B8B348B2Ac625669Ed295D"
 	cfg.DefaultBuilderGasLimit = uint64(60000000)

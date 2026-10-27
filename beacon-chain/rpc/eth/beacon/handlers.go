@@ -33,6 +33,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -83,7 +84,9 @@ func versionHeaderFromRequest(body []byte) (string, error) {
 		return "", errors.Wrap(err, "unable to peek slot from block")
 	}
 	ce := slots.ToEpoch(sp.Block.Slot)
-	if ce >= params.BeaconConfig().GloasForkEpoch {
+	if ce >= params.BeaconConfig().HezeForkEpoch {
+		return version.String(version.Heze), nil
+	} else if ce >= params.BeaconConfig().GloasForkEpoch {
 		return version.String(version.Gloas), nil
 	} else if ce >= params.BeaconConfig().FuluForkEpoch {
 		return version.String(version.Fulu), nil
@@ -677,6 +680,7 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 }
 
 var sszDecoders = map[string]blockDecoder{
+	version.String(version.Heze):      decodeHezeSSZ,
 	version.String(version.Gloas):     decodeGloasSSZ,
 	version.String(version.Fulu):      decodeFuluSSZ,
 	version.String(version.Electra):   decodeElectraSSZ,
@@ -693,6 +697,18 @@ func decodeSSZToGenericBlock(versionHeader string, body []byte) (*eth.GenericSig
 		return decoder(body)
 	}
 	return nil, errors.New("body does not represent a valid block type")
+}
+
+func decodeHezeSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	hezeBlock := &eth.SignedBeaconBlockHeze{}
+	if err := hezeBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(
+			version.String(version.Heze), err,
+		)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Heze{Heze: hezeBlock},
+	}, nil
 }
 
 func decodeGloasSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
@@ -847,6 +863,7 @@ func (s *Server) publishBlock(ctx context.Context, w http.ResponseWriter, r *htt
 }
 
 var jsonDecoders = map[string]blockDecoder{
+	version.String(version.Heze):      decodeHezeJSON,
 	version.String(version.Gloas):     decodeGloasJSON,
 	version.String(version.Fulu):      decodeFuluJSON,
 	version.String(version.Electra):   decodeElectraJSON,
@@ -863,6 +880,13 @@ func decodeJSONToGenericBlock(versionHeader string, body []byte) (*eth.GenericSi
 		return decoder(body)
 	}
 	return nil, fmt.Errorf("body does not represent a valid block type")
+}
+
+func decodeHezeJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBeaconBlockHeze](
+		body,
+		version.String(version.Heze),
+	)
 }
 
 func decodeGloasJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
@@ -1966,6 +1990,57 @@ func (s *Server) GetStatePTC(w http.ResponseWriter, r *http.Request) {
 			Validators: validators,
 		},
 	})
+}
+
+// GetProposerPreferences returns the signed proposer preferences known by the node, filtered by the optional slot and dependent_root query params.
+// Supports both JSON and SSZ responses based on Accept header.
+func (s *Server) GetProposerPreferences(w http.ResponseWriter, r *http.Request) {
+	_, span := trace.StartSpan(r.Context(), "beacon.GetProposerPreferences")
+	defer span.End()
+
+	rawSlot, slot, ok := shared.UintFromQuery(w, r, "slot", false)
+	if !ok {
+		return
+	}
+	_, root, ok := shared.HexFromQuery(w, r, "dependent_root", fieldparams.RootLength, false)
+	if !ok {
+		return
+	}
+	var slotFilter *primitives.Slot
+	if rawSlot != "" {
+		sl := primitives.Slot(slot)
+		slotFilter = &sl
+	}
+	var rootFilter *[32]byte
+	if root != nil {
+		dr := bytesutil.ToBytes32(root)
+		rootFilter = &dr
+	}
+	prefs := s.ProposerPreferencesCache.Signed(slotFilter, rootFilter)
+
+	versionSlot := s.TimeFetcher.CurrentSlot()
+	if slotFilter != nil {
+		versionSlot = *slotFilter
+	}
+	if len(prefs) > 0 {
+		versionSlot = prefs[0].Message.ProposalSlot
+	}
+	v := version.String(slots.ToForkVersion(versionSlot))
+	w.Header().Set(api.VersionHeader, v)
+	if httputil.RespondWithSsz(r) {
+		sszData, err := serializeItems(prefs)
+		if err != nil {
+			httputil.HandleError(w, "Failed to serialize proposer preferences: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.WriteSsz(w, sszData)
+		return
+	}
+	data := make([]*structs.SignedProposerPreferences, len(prefs))
+	for i, p := range prefs {
+		data[i] = structs.SignedProposerPreferencesFromConsensus(p)
+	}
+	httputil.WriteJson(w, &structs.GetProposerPreferencesResponse{Version: v, Data: data})
 }
 
 // SerializeItems serializes a slice of items, each of which implements the MarshalSSZ method,

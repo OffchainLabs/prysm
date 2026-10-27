@@ -111,7 +111,7 @@ func createUpdate(t *testing.T, ssz []byte, v int) interfaces.LightClientUpdate 
 		update, err := lightclienttypes.NewWrappedUpdateDeneb(updateBase)
 		require.NoError(t, err)
 		return update
-	case version.Electra:
+	case version.Electra, version.Fulu:
 		updateBase := &ethpb.LightClientUpdateElectra{}
 		require.NoError(t, updateBase.UnmarshalSSZ(ssz), "Failed to unmarshal")
 		update, err := lightclienttypes.NewWrappedUpdateElectra(updateBase)

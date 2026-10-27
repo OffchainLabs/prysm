@@ -326,6 +326,11 @@ type GetBuilderPendingPaymentsResponse struct {
 	Data                []*BuilderPendingPayment `json:"data"`
 }
 
+type GetProposerPreferencesResponse struct {
+	Version string                       `json:"version"`
+	Data    []*SignedProposerPreferences `json:"data"`
+}
+
 type GetBlobsResponse struct {
 	ExecutionOptimistic bool     `json:"execution_optimistic"`
 	Finalized           bool     `json:"finalized"`

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -535,6 +536,59 @@ func TestRegisterValidatorService_DistributedFlag(t *testing.T) {
 
 			require.NotNil(t, err)
 			require.ErrorContains(t, tt.wantErrMsg, err)
+		})
+	}
+}
+
+func TestAuthTokenPath(t *testing.T) {
+	walletDir := t.TempDir()
+	tokenFile := filepath.Join(t.TempDir(), "token")
+	defaultWalletDir := filepath.Join(flags.DefaultValidatorDir(), flags.WalletDefaultDirName)
+
+	tests := []struct {
+		name      string
+		walletDir string
+		tokenFile string
+		want      string
+	}{
+		{
+			name: "no flags",
+			want: filepath.Join(defaultWalletDir, api.AuthTokenFileName),
+		},
+		{
+			name:      "wallet dir only",
+			walletDir: walletDir,
+			want:      filepath.Join(walletDir, api.AuthTokenFileName),
+		},
+		{
+			name:      "token file only",
+			tokenFile: tokenFile,
+			want:      tokenFile,
+		},
+		{
+			name:      "wallet dir and token file",
+			walletDir: walletDir,
+			tokenFile: tokenFile,
+			want:      tokenFile,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Use the real flag definitions, so their default values apply.
+			app := cli.App{}
+			set := flag.NewFlagSet("test", 0)
+			require.NoError(t, flags.WalletDirFlag.Apply(set))
+			require.NoError(t, flags.AuthTokenPathFlag.Apply(set))
+			if tt.walletDir != "" {
+				require.NoError(t, set.Set(flags.WalletDirFlag.Name, tt.walletDir))
+			}
+			if tt.tokenFile != "" {
+				require.NoError(t, set.Set(flags.AuthTokenPathFlag.Name, tt.tokenFile))
+			}
+			cliCtx := cli.NewContext(&app, set, nil)
+
+			require.Equal(t, tt.want, authTokenPath(cliCtx))
 		})
 	}
 }

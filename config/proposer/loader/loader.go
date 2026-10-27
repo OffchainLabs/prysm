@@ -533,7 +533,7 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 	if merged.Version < proposer.SchemaV2 {
 		return mergeLegacyProposerSettings(merged, loaded, db, builderConfig, gasLimitOnly)
 	}
-	return mergeCurrentProposerSettings(merged, loaded, db, builderConfig, builderFlagsSet)
+	return mergeCurrentProposerSettings(merged, loaded, db, builderConfig, gasLimitOnly, builderFlagsSet)
 }
 
 // hasGloasBuilderFields reports whether a payload builder configures the Gloas builder API; an explicit empty list counts.
@@ -701,7 +701,7 @@ func mergeLegacyProposerSettings(merged, loaded, db *validatorpb.ProposerSetting
 	return merged
 }
 
-func mergeCurrentProposerSettings(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, builderFlagsSet bool) *validatorpb.ProposerSettingsPayload {
+func mergeCurrentProposerSettings(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64, builderFlagsSet bool) *validatorpb.ProposerSettingsPayload {
 	// Builder flags are per-run: a run without them drops the v2 builder fields an
 	// earlier flag run persisted in default_config. Legacy fields follow their own flags.
 	if db != nil && db.DefaultConfig != nil && !builderFlagsSet {
@@ -714,6 +714,18 @@ func mergeCurrentProposerSettings(merged, loaded, db *validatorpb.ProposerSettin
 		merged.DefaultConfig = loaded.DefaultConfig
 	}
 	merged.ProposerConfig = selectProposerConfig(db, loaded)
+
+	if gasLimitOnly != nil {
+		if merged.DefaultConfig == nil {
+			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{}
+		}
+		merged.DefaultConfig.GasLimit = *gasLimitOnly
+		for _, option := range merged.ProposerConfig {
+			if option != nil {
+				option.GasLimit = *gasLimitOnly
+			}
+		}
+	}
 
 	if builderFlagsSet && merged.DefaultConfig != nil && len(merged.DefaultConfig.Builder.GetBuilders()) > 0 {
 		enableLegacyPerKeyBuilders(merged)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -60,6 +61,10 @@ func TestWrappedROExecutionPayloadBid(t *testing.T) {
 				name:   "fee recipient",
 				mutate: func(b *ethpb.ExecutionPayloadBid) { b.FeeRecipient = []byte{0x06} },
 			},
+			{
+				name:   "execution requests root",
+				mutate: func(b *ethpb.ExecutionPayloadBid) { b.ExecutionRequestsRoot = []byte{0x07} },
+			},
 		}
 
 		for _, tc := range testCases {
@@ -112,9 +117,7 @@ func TestWrappedROSignedExecutionPayloadBid(t *testing.T) {
 		wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)
 		require.NoError(t, err)
 
-		bid, err := wrapped.Bid()
-		require.NoError(t, err)
-		require.Equal(t, primitives.Gwei(8), bid.ExecutionPayment())
+		require.Equal(t, primitives.Gwei(8), wrapped.Bid().ExecutionPayment())
 
 		gotSig := wrapped.Signature()
 		assert.DeepEqual(t, [96]byte(sig), gotSig)
@@ -125,5 +128,86 @@ func TestWrappedROSignedExecutionPayloadBid(t *testing.T) {
 		gotRoot, err := wrapped.SigningRoot(domain)
 		require.NoError(t, err)
 		require.Equal(t, wantRoot, gotRoot)
+
+		wantHTR, err := signed.HashTreeRoot()
+		require.NoError(t, err)
+		gotHTR, err := wrapped.HashTreeRoot()
+		require.NoError(t, err)
+		require.Equal(t, wantHTR, gotHTR)
+	})
+}
+
+func validExecutionPayloadBidHeze() *ethpb.ExecutionPayloadBidHeze {
+	g := validExecutionPayloadBid()
+	return &ethpb.ExecutionPayloadBidHeze{
+		ParentBlockHash:       g.ParentBlockHash,
+		ParentBlockRoot:       g.ParentBlockRoot,
+		BlockHash:             g.BlockHash,
+		PrevRandao:            g.PrevRandao,
+		GasLimit:              g.GasLimit,
+		BuilderIndex:          g.BuilderIndex,
+		Slot:                  g.Slot,
+		Value:                 g.Value,
+		ExecutionPayment:      g.ExecutionPayment,
+		BlobKzgCommitments:    g.BlobKzgCommitments,
+		FeeRecipient:          g.FeeRecipient,
+		ExecutionRequestsRoot: g.ExecutionRequestsRoot,
+		InclusionListBits:     []byte{0x05, 0x80},
+	}
+}
+
+func TestWrappedROSignedExecutionPayloadBidHeze(t *testing.T) {
+	t.Run("returns error for invalid inclusion list bits length", func(t *testing.T) {
+		bid := validExecutionPayloadBidHeze()
+		bid.InclusionListBits = []byte{0x01}
+		_, err := blocks.WrappedROSignedExecutionPayloadBidHeze(&ethpb.SignedExecutionPayloadBidHeze{
+			Message:   bid,
+			Signature: bytes.Repeat([]byte{0xAB}, 96),
+		})
+		require.Equal(t, consensus_types.ErrNilObjectWrapped, err)
+	})
+
+	t.Run("returns error for nil message", func(t *testing.T) {
+		_, err := blocks.WrappedROSignedExecutionPayloadBidHeze(&ethpb.SignedExecutionPayloadBidHeze{Signature: bytes.Repeat([]byte{0xAB}, 96)})
+		require.Equal(t, consensus_types.ErrNilObjectWrapped, err)
+	})
+
+	t.Run("hashes and signs the Heze bid", func(t *testing.T) {
+		signed := &ethpb.SignedExecutionPayloadBidHeze{
+			Message:   validExecutionPayloadBidHeze(),
+			Signature: bytes.Repeat([]byte{0xAB}, 96),
+		}
+		wrapped, err := blocks.WrappedROSignedExecutionPayloadBidHeze(signed)
+		require.NoError(t, err)
+
+		bid := wrapped.Bid()
+		assert.DeepEqual(t, bitfield.Bitvector16{0x05, 0x80}, bid.InclusionListBits())
+		require.Equal(t, primitives.Gwei(8), bid.ExecutionPayment())
+
+		wantRoot, err := signed.HashTreeRoot()
+		require.NoError(t, err)
+		gotRoot, err := wrapped.HashTreeRoot()
+		require.NoError(t, err)
+		require.Equal(t, wantRoot, gotRoot)
+
+		domain := bytes.Repeat([]byte{0xCC}, 32)
+		wantSigningRoot, err := signing.ComputeSigningRoot(signed.Message, domain)
+		require.NoError(t, err)
+		gotSigningRoot, err := wrapped.SigningRoot(domain)
+		require.NoError(t, err)
+		require.Equal(t, wantSigningRoot, gotSigningRoot)
+
+		// The 13-field Heze bid must not hash like its 12-field Gloas projection.
+		gloasRoot, err := validExecutionPayloadBid().HashTreeRoot()
+		require.NoError(t, err)
+		hezeRoot, err := signed.Message.HashTreeRoot()
+		require.NoError(t, err)
+		require.NotEqual(t, gloasRoot, hezeRoot)
+	})
+
+	t.Run("Gloas bid has no inclusion list bits", func(t *testing.T) {
+		bid, err := blocks.WrappedROExecutionPayloadBid(validExecutionPayloadBid())
+		require.NoError(t, err)
+		require.IsNil(t, bid.InclusionListBits())
 	})
 }

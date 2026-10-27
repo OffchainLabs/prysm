@@ -13,7 +13,7 @@ import (
 )
 
 func TestProcessSlashingsPrecompute_NotSlashedWithSlashedTrue(t *testing.T) {
-	s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	s, err := state_native.New(&ethpb.BeaconState{
 		Slot:       0,
 		Validators: []*ethpb.Validator{{Slashed: true}},
 		Balances:   []uint64{params.BeaconConfig().MaxEffectiveBalance},
@@ -28,7 +28,7 @@ func TestProcessSlashingsPrecompute_NotSlashedWithSlashedTrue(t *testing.T) {
 }
 
 func TestProcessSlashingsPrecompute_NotSlashedWithSlashedFalse(t *testing.T) {
-	s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	s, err := state_native.New(&ethpb.BeaconState{
 		Slot:       0,
 		Validators: []*ethpb.Validator{{}},
 		Balances:   []uint64{params.BeaconConfig().MaxEffectiveBalance},
@@ -122,7 +122,7 @@ func TestProcessSlashingsPrecompute_SlashedLess(t *testing.T) {
 			pBal := &precompute.Balance{ActiveCurrentEpoch: ab}
 
 			original := tt.state.Copy()
-			state, err := state_native.InitializeFromProtoPhase0(tt.state)
+			state, err := state_native.New(tt.state)
 			require.NoError(t, err)
 			require.NoError(t, precompute.ProcessSlashingsPrecompute(state, pBal))
 			assert.Equal(t, tt.want, state.Balances()[0], "ProcessSlashings({%v}) = newState; newState.Balances[0] = %d; wanted %d", original, state.Balances()[0])

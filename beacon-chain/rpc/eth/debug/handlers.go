@@ -127,6 +127,19 @@ func (s *Server) getBeaconStateV2(ctx context.Context, w http.ResponseWriter, id
 			httputil.HandleError(w, errMsgStateFromConsensus+": "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+	case version.Heze:
+		if strings.ToLower(string(id)) == "head" {
+			st, err = s.Stater.State(ctx, []byte(strconv.FormatUint(uint64(s.HeadFetcher.HeadSlot()), 10)))
+			if err != nil {
+				shared.WriteStateFetchError(w, err)
+				return
+			}
+		}
+		respSt, err = structs.BeaconStateHezeFromConsensus(st)
+		if err != nil {
+			httputil.HandleError(w, errMsgStateFromConsensus+": "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 	default:
 		httputil.HandleError(w, "Unsupported state version", http.StatusInternalServerError)
 		return

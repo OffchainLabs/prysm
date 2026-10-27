@@ -303,186 +303,94 @@ func GetSyncCommitteeContributionAndProofSignRequest(request *validatorpb.SignRe
 }
 
 // GetBlockV2BlindedSignRequest maps the request for signing types (GetBlockV2 id defined by the remote signer interface and not the beacon APIs)
-// Supports Bellatrix, Capella, Deneb
 func GetBlockV2BlindedSignRequest(request *validatorpb.SignRequest, genesisValidatorsRoot []byte) (*BlockV2BlindedSignRequest, error) {
 	if request == nil {
 		return nil, errors.New("nil sign request provided")
 	}
-	var b interfaces.ReadOnlyBeaconBlock
-	var version string
-	switch request.Object.(type) {
-	case *validatorpb.SignRequest_BlindedBlockBellatrix:
-		version = "BELLATRIX"
-		blindedBlockBellatrix, ok := request.Object.(*validatorpb.SignRequest_BlindedBlockBellatrix)
-		if !ok {
-			return nil, errors.New("failed to cast request object to blinded block bellatrix")
-		}
-		if blindedBlockBellatrix == nil {
-			return nil, errors.New("invalid sign request - blinded bellatrix block is nil")
-		}
-		beaconBlock, err := blocks.NewBeaconBlock(blindedBlockBellatrix.BlindedBlockBellatrix)
-		if err != nil {
-			return nil, err
-		}
-		b = beaconBlock
+	var pb any
+	var ver int
+	switch o := request.Object.(type) {
 	case *validatorpb.SignRequest_BlockBellatrix:
-		version = "BELLATRIX"
-		blockBellatrix, ok := request.Object.(*validatorpb.SignRequest_BlockBellatrix)
-		if !ok {
-			return nil, errors.New("failed to cast request object to bellatrix block")
-		}
-
-		if blockBellatrix == nil {
+		if o == nil {
 			return nil, errors.New("invalid sign request: bellatrix block is nil")
 		}
-		beaconBlock, err := blocks.NewBeaconBlock(blockBellatrix.BlockBellatrix)
-		if err != nil {
-			return nil, err
+		pb, ver = o.BlockBellatrix, version.Bellatrix
+	case *validatorpb.SignRequest_BlindedBlockBellatrix:
+		if o == nil {
+			return nil, errors.New("invalid sign request - blinded bellatrix block is nil")
 		}
-		b = beaconBlock
+		pb, ver = o.BlindedBlockBellatrix, version.Bellatrix
 	case *validatorpb.SignRequest_BlockCapella:
-		version = "CAPELLA"
-		blockCapella, ok := request.Object.(*validatorpb.SignRequest_BlockCapella)
-		if !ok {
-			return nil, errors.New("failed to cast request object to capella block")
-		}
-		if blockCapella == nil {
+		if o == nil {
 			return nil, errors.New("invalid sign request: capella block is nil")
 		}
-		beaconBlock, err := blocks.NewBeaconBlock(blockCapella.BlockCapella)
-		if err != nil {
-			return nil, err
-		}
-		b = beaconBlock
+		pb, ver = o.BlockCapella, version.Capella
 	case *validatorpb.SignRequest_BlindedBlockCapella:
-		version = "CAPELLA"
-		blindedBlockCapella, ok := request.Object.(*validatorpb.SignRequest_BlindedBlockCapella)
-		if !ok {
-			return nil, errors.New("failed to cast request object to blinded capella block")
-		}
-		if blindedBlockCapella == nil {
+		if o == nil {
 			return nil, errors.New("invalid sign request: blinded capella block is nil")
 		}
-		beaconBlock, err := blocks.NewBeaconBlock(blindedBlockCapella.BlindedBlockCapella)
-		if err != nil {
-			return nil, err
-		}
-		b = beaconBlock
+		pb, ver = o.BlindedBlockCapella, version.Capella
 	case *validatorpb.SignRequest_BlockDeneb:
-		version = "DENEB"
-		blockDeneb, ok := request.Object.(*validatorpb.SignRequest_BlockDeneb)
-		if !ok {
-			return nil, errors.New("failed to cast request object to deneb block")
-		}
-		if blockDeneb == nil {
+		if o == nil {
 			return nil, errors.New("invalid sign request: deneb block is nil")
 		}
-		beaconBlock, err := blocks.NewBeaconBlock(blockDeneb.BlockDeneb)
-		if err != nil {
-			return nil, err
-		}
-		b = beaconBlock
+		pb, ver = o.BlockDeneb, version.Deneb
 	case *validatorpb.SignRequest_BlindedBlockDeneb:
-		version = "DENEB"
-		blindedBlockDeneb, ok := request.Object.(*validatorpb.SignRequest_BlindedBlockDeneb)
-		if !ok {
-			return nil, errors.New("failed to cast request object to blinded deneb block")
-		}
-		if blindedBlockDeneb == nil {
+		if o == nil {
 			return nil, errors.New("invalid sign request: blinded deneb block is nil")
 		}
-		beaconBlock, err := blocks.NewBeaconBlock(blindedBlockDeneb.BlindedBlockDeneb)
-		if err != nil {
-			return nil, err
-		}
-		b = beaconBlock
+		pb, ver = o.BlindedBlockDeneb, version.Deneb
 	case *validatorpb.SignRequest_BlockElectra:
-		version = "ELECTRA"
-		blockElectra, ok := request.Object.(*validatorpb.SignRequest_BlockElectra)
-		if !ok {
-			return nil, errors.New("failed to cast request object to electra block")
-		}
-		if blockElectra == nil {
+		if o == nil {
 			return nil, errors.New("invalid sign request: electra block is nil")
 		}
-		beaconBlock, err := blocks.NewBeaconBlock(blockElectra.BlockElectra)
-		if err != nil {
-			return nil, err
-		}
-		b = beaconBlock
+		pb, ver = o.BlockElectra, version.Electra
 	case *validatorpb.SignRequest_BlindedBlockElectra:
-		version = "ELECTRA"
-		blindedBlockElectra, ok := request.Object.(*validatorpb.SignRequest_BlindedBlockElectra)
-		if !ok {
-			return nil, errors.New("failed to cast request object to blinded electra block")
-		}
-		if blindedBlockElectra == nil {
+		if o == nil {
 			return nil, errors.New("invalid sign request: blinded electra block is nil")
 		}
-		beaconBlock, err := blocks.NewBeaconBlock(blindedBlockElectra.BlindedBlockElectra)
-		if err != nil {
-			return nil, err
-		}
-		b = beaconBlock
+		pb, ver = o.BlindedBlockElectra, version.Electra
 	case *validatorpb.SignRequest_BlockFulu:
-		version = "FULU"
-		block, ok := request.Object.(*validatorpb.SignRequest_BlockFulu)
-		if !ok {
-			return nil, errors.New("failed to cast request object to fulu block")
-		}
-		if block == nil {
+		if o == nil {
 			return nil, errors.New("invalid sign request: fulu block is nil")
 		}
-		beaconBlock, err := blocks.NewBeaconBlock(block.BlockFulu)
-		if err != nil {
-			return nil, err
-		}
-		b = beaconBlock
+		pb, ver = o.BlockFulu, version.Fulu
 	case *validatorpb.SignRequest_BlindedBlockFulu:
-		version = "FULU"
-		blindedBlock, ok := request.Object.(*validatorpb.SignRequest_BlindedBlockFulu)
-		if !ok {
-			return nil, errors.New("failed to cast request object to blinded fulu block")
-		}
-		if blindedBlock == nil {
+		if o == nil {
 			return nil, errors.New("invalid sign request: blinded fulu block is nil")
 		}
-		beaconBlock, err := blocks.NewBeaconBlock(blindedBlock.BlindedBlockFulu)
-		if err != nil {
-			return nil, err
-		}
-		b = beaconBlock
+		pb, ver = o.BlindedBlockFulu, version.Fulu
 	case *validatorpb.SignRequest_BlockGloas:
-		version = "GLOAS"
-		block, ok := request.Object.(*validatorpb.SignRequest_BlockGloas)
-		if !ok {
-			return nil, errors.New("failed to cast request object to gloas block")
-		}
-		if block == nil {
+		if o == nil {
 			return nil, errors.New("invalid sign request: gloas block is nil")
 		}
-		beaconBlock, err := blocks.NewBeaconBlock(block.BlockGloas)
-		if err != nil {
-			return nil, err
+		pb, ver = o.BlockGloas, version.Gloas
+	case *validatorpb.SignRequest_BlockHeze:
+		if o == nil {
+			return nil, errors.New("invalid sign request: heze block is nil")
 		}
-		b = beaconBlock
+		pb, ver = o.BlockHeze, version.Heze
 	default:
 		return nil, errors.New("invalid sign request - invalid object type")
 	}
+	b, err := blocks.NewBeaconBlock(pb)
+	if err != nil {
+		return nil, fmt.Errorf("initialize %s block: %w", version.String(ver), err)
+	}
 	fork, err := MapForkInfo(request.SigningSlot, genesisValidatorsRoot)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("map %s block fork info: %w", version.String(ver), err)
 	}
 	beaconBlockHeader, err := interfaces.BeaconBlockHeaderFromBlockInterface(b)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create %s block header: %w", version.String(ver), err)
 	}
 	return &BlockV2BlindedSignRequest{
 		Type:        "BLOCK_V2",
 		ForkInfo:    fork,
 		SigningRoot: request.SigningRoot,
 		BeaconBlock: &BeaconBlockV2Blinded{
-			Version: version,
+			Version: strings.ToUpper(version.String(ver)),
 			BlockHeader: &BeaconBlockHeader{
 				Slot:          fmt.Sprint(beaconBlockHeader.Slot),
 				ProposerIndex: fmt.Sprint(beaconBlockHeader.ProposerIndex),

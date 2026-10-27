@@ -62,7 +62,7 @@ func TestApplyParentExecutionPayload_SettlesPaymentBeforeBuilderExit(t *testing.
 	cfg := params.BeaconConfig()
 	addr := bytes.Repeat([]byte{0x44}, 20)
 	builder, _ := activeBuilder(t, addr)
-	st, err := state_native.InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+	st, err := state_native.New(&ethpb.BeaconStateGloas{
 		Slot:                         2 * cfg.SlotsPerEpoch,
 		DepositRequestsStartIndex:    cfg.UnsetDepositRequestsStartIndex,
 		ExecutionPayloadAvailability: make([]byte, cfg.SlotsPerHistoricalRoot/8),

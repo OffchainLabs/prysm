@@ -25,6 +25,7 @@ go_library(
         "fulu_state.go",
         "gloas_state.go",
         "helpers.go",
+        "heze.go",
         "lightclient.go",
         "logging.go",
         "merge.go",
