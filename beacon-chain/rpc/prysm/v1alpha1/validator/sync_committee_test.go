@@ -9,6 +9,7 @@ import (
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
@@ -64,26 +65,77 @@ func TestGetSyncMessageBlockRoot_Optimistic(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestSubmitSyncMessage_OK(t *testing.T) {
-	st, _ := util.DeterministicGenesisStateAltair(t, 10)
-	server := &Server{
-		CoreService: &core.Service{
-			SyncCommitteePool: synccommittee.NewStore(),
-			P2P:               &mockp2p.MockBroadcaster{},
-			HeadFetcher: &mock.ChainService{
-				State: st,
+func TestSubmitSyncMessage(t *testing.T) {
+	st, keys := util.DeterministicGenesisStateAltair(t, 10)
+	domain := bytesutil.PadTo([]byte{0x07}, 32)
+	root := bytesutil.PadTo([]byte("root"), 32)
+	sszRoot := primitives.SSZBytes(root)
+	signingRoot, err := signing.ComputeSigningRoot(&sszRoot, domain)
+	require.NoError(t, err)
+	newServer := func() *Server {
+		chainService := &mock.ChainService{
+			State: st,
+			// Genesis one slot ago makes slot 1 the current slot.
+			Genesis:              time.Now().Add(-params.BeaconConfig().SlotDuration()),
+			PublicKey:            bytesutil.ToBytes48(keys[2].PublicKey().Marshal()),
+			SyncCommitteeIndices: []primitives.CommitteeIndex{0},
+			SyncCommitteeDomain:  domain,
+		}
+		return &Server{
+			CoreService: &core.Service{
+				SyncCommitteePool:  synccommittee.NewStore(),
+				P2P:                &mockp2p.MockBroadcaster{},
+				HeadFetcher:        chainService,
+				GenesisTimeFetcher: chainService,
 			},
-		},
+		}
 	}
-	msg := &ethpb.SyncCommitteeMessage{
-		Slot:           1,
-		ValidatorIndex: 2,
-	}
-	_, err := server.SubmitSyncMessage(t.Context(), msg)
-	require.NoError(t, err)
-	savedMsgs, err := server.CoreService.SyncCommitteePool.SyncCommitteeMessages(1)
-	require.NoError(t, err)
-	require.DeepEqual(t, []*ethpb.SyncCommitteeMessage{msg}, savedMsgs)
+
+	t.Run("valid", func(t *testing.T) {
+		server := newServer()
+		msg := &ethpb.SyncCommitteeMessage{
+			Slot:           1,
+			BlockRoot:      root,
+			ValidatorIndex: 2,
+			Signature:      keys[2].Sign(signingRoot[:]).Marshal(),
+		}
+		_, err := server.SubmitSyncMessage(t.Context(), msg)
+		require.NoError(t, err)
+		savedMsgs, err := server.CoreService.SyncCommitteePool.SyncCommitteeMessages(1)
+		require.NoError(t, err)
+		require.DeepEqual(t, []*ethpb.SyncCommitteeMessage{msg}, savedMsgs)
+	})
+	t.Run("invalid signature", func(t *testing.T) {
+		server := newServer()
+		msg := &ethpb.SyncCommitteeMessage{
+			Slot:           1,
+			BlockRoot:      root,
+			ValidatorIndex: 2,
+			Signature:      keys[3].Sign(signingRoot[:]).Marshal(),
+		}
+		_, err := server.SubmitSyncMessage(t.Context(), msg)
+		require.ErrorContains(t, "invalid sync committee message signature", err)
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+		savedMsgs, err := server.CoreService.SyncCommitteePool.SyncCommitteeMessages(1)
+		require.NoError(t, err)
+		assert.Equal(t, 0, len(savedMsgs))
+	})
+	t.Run("short block root", func(t *testing.T) {
+		server := newServer()
+		// root ends in 0x00, so the signature over root also verifies for root[:31] without a length check.
+		msg := &ethpb.SyncCommitteeMessage{
+			Slot:           1,
+			BlockRoot:      root[:31],
+			ValidatorIndex: 2,
+			Signature:      keys[2].Sign(signingRoot[:]).Marshal(),
+		}
+		_, err := server.SubmitSyncMessage(t.Context(), msg)
+		require.ErrorContains(t, "block root must be 32 bytes", err)
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+		savedMsgs, err := server.CoreService.SyncCommitteePool.SyncCommitteeMessages(1)
+		require.NoError(t, err)
+		assert.Equal(t, 0, len(savedMsgs))
+	})
 }
 
 func TestGetSyncSubcommitteeIndex_Ok(t *testing.T) {
@@ -131,10 +183,8 @@ func TestGetSyncCommitteeContribution_FiltersDuplicates(t *testing.T) {
 		BlockRoot:      make([]byte, 32),
 		Signature:      sig,
 	}
-	_, err = server.SubmitSyncMessage(t.Context(), msg)
-	require.NoError(t, err)
-	_, err = server.SubmitSyncMessage(t.Context(), msg)
-	require.NoError(t, err)
+	require.NoError(t, syncCommitteePool.SaveSyncCommitteeMessage(msg))
+	require.NoError(t, syncCommitteePool.SaveSyncCommitteeMessage(msg))
 	val, err := st.ValidatorAtIndex(2)
 	require.NoError(t, err)
 
@@ -173,13 +223,12 @@ func TestGetSyncCommitteeContribution_UsesAggregatorRootNotHead(t *testing.T) {
 	secKey, err := bls.RandKey()
 	require.NoError(t, err)
 	sig := secKey.Sign([]byte{'A'}).Marshal()
-	_, err = server.SubmitSyncMessage(t.Context(), &ethpb.SyncCommitteeMessage{
+	require.NoError(t, syncCommitteePool.SaveSyncCommitteeMessage(&ethpb.SyncCommitteeMessage{
 		Slot:           1,
 		ValidatorIndex: 0,
 		BlockRoot:      votedRoot,
 		Signature:      sig,
-	})
-	require.NoError(t, err)
+	}))
 
 	val, err := st.ValidatorAtIndex(0)
 	require.NoError(t, err)

@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
@@ -624,9 +625,37 @@ func (s *Service) SubmitSyncMessage(ctx context.Context, msg *ethpb.SyncCommitte
 
 	errs, ctx := errgroup.WithContext(ctx)
 
+	// Validate the message like the sync_committee_{subnet_id} gossip validator does, so that an
+	// invalid message is not broadcast. Already seen messages are not rejected.
+	if err := altair.ValidateSyncMessageTime(
+		msg.Slot,
+		s.GenesisTimeFetcher.GenesisTime(),
+		params.BeaconConfig().MaximumGossipClockDisparityDuration(),
+	); err != nil {
+		return &RpcError{Reason: BadRequest, Err: errors.Wrap(err, "invalid sync committee message slot")}
+	}
+	pubKey, err := s.HeadFetcher.HeadValidatorIndexToPublicKey(ctx, msg.ValidatorIndex)
+	if err != nil {
+		return &RpcError{Reason: BadRequest, Err: errors.Wrap(err, "could not get validator public key")}
+	}
 	headSyncCommitteeIndices, err := s.HeadFetcher.HeadSyncCommitteeIndices(ctx, msg.ValidatorIndex, msg.Slot)
 	if err != nil {
 		return &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get head sync committee indices")}
+	}
+	if len(headSyncCommitteeIndices) == 0 {
+		return &RpcError{Reason: BadRequest, Err: fmt.Errorf("validator %d is not in the current sync committee", msg.ValidatorIndex)}
+	}
+	domain, err := s.HeadFetcher.HeadSyncCommitteeDomain(ctx, msg.Slot)
+	if err != nil {
+		return &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get sync committee domain")}
+	}
+	// SSZBytes right-pads a short root, so check the length before the signature.
+	if len(msg.BlockRoot) != fieldparams.RootLength {
+		return &RpcError{Reason: BadRequest, Err: fmt.Errorf("block root must be %d bytes, got %d", fieldparams.RootLength, len(msg.BlockRoot))}
+	}
+	blockRoot := primitives.SSZBytes(msg.BlockRoot)
+	if err := signing.VerifySigningRoot(&blockRoot, pubKey[:], msg.Signature, domain); err != nil {
+		return &RpcError{Reason: BadRequest, Err: errors.Wrap(err, "invalid sync committee message signature")}
 	}
 	// Broadcasting and saving message into the pool in parallel. As one fail should not affect another.
 	// This broadcasts for all subnets.

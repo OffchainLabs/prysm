@@ -33,6 +33,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
@@ -1351,99 +1352,168 @@ func TestSubmitVoluntaryExit(t *testing.T) {
 	})
 }
 
-func TestSubmitSyncCommitteeSignatures(t *testing.T) {
-	st, _ := util.DeterministicGenesisStateAltair(t, 10)
+// syncMsgHeadFetcher returns the public key of the requested validator index from the head state.
+type syncMsgHeadFetcher struct {
+	*blockchainmock.ChainService
+}
 
-	t.Run("single", func(t *testing.T) {
+func (c syncMsgHeadFetcher) HeadValidatorIndexToPublicKey(_ context.Context, idx primitives.ValidatorIndex) ([fieldparams.BLSPubkeyLength]byte, error) {
+	v, err := c.State.ValidatorAtIndexReadOnly(idx)
+	if err != nil {
+		return [fieldparams.BLSPubkeyLength]byte{}, err
+	}
+	return v.PublicKey(), nil
+}
+
+func TestSubmitSyncCommitteeSignatures(t *testing.T) {
+	st, keys := util.DeterministicGenesisStateAltair(t, 10)
+	domain := bytesutil.PadTo([]byte{0x07}, 32)
+	root := bytesutil.PadTo([]byte("root"), 32)
+
+	signedMsg := func(t *testing.T, slot primitives.Slot, idx primitives.ValidatorIndex, sk common.SecretKey) *structs.SyncCommitteeMessage {
+		sszRoot := primitives.SSZBytes(root)
+		signingRoot, err := signing.ComputeSigningRoot(&sszRoot, domain)
+		require.NoError(t, err)
+		return &structs.SyncCommitteeMessage{
+			Slot:            fmt.Sprintf("%d", slot),
+			BeaconBlockRoot: hexutil.Encode(root),
+			ValidatorIndex:  fmt.Sprintf("%d", idx),
+			Signature:       hexutil.Encode(sk.Sign(signingRoot[:]).Marshal()),
+		}
+	}
+	setup := func(committeeIndices []primitives.CommitteeIndex) (*Server, *p2pMock.MockBroadcaster) {
 		broadcaster := &p2pMock.MockBroadcaster{}
 		chainService := &blockchainmock.ChainService{
-			State:                st,
-			SyncCommitteeIndices: []primitives.CommitteeIndex{0},
+			State: st,
+			// Genesis one slot ago makes slot 1 the current slot.
+			Genesis:              time.Now().Add(-params.BeaconConfig().SlotDuration()),
+			SyncCommitteeIndices: committeeIndices,
+			SyncCommitteeDomain:  domain,
 		}
-		s := &Server{
+		return &Server{
 			HeadFetcher:           chainService,
 			TimeFetcher:           chainService,
 			OptimisticModeFetcher: chainService,
 			SyncChecker:           &mockSync.Sync{IsSyncing: false},
 			CoreService: &core.Service{
-				SyncCommitteePool: synccommittee.NewStore(),
-				P2P:               broadcaster,
-				HeadFetcher:       chainService,
+				SyncCommitteePool:  synccommittee.NewStore(),
+				P2P:                broadcaster,
+				HeadFetcher:        syncMsgHeadFetcher{chainService},
+				GenesisTimeFetcher: chainService,
 			},
-		}
-
-		var body bytes.Buffer
-		_, err := body.WriteString(singleSyncCommitteeMsg)
+		}, broadcaster
+	}
+	submit := func(t *testing.T, s *Server, msgs ...*structs.SyncCommitteeMessage) *httptest.ResponseRecorder {
+		body, err := json.Marshal(msgs)
 		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+		request := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewReader(body))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
-
 		s.SubmitSyncCommitteeSignatures(writer, request)
+		return writer
+	}
+
+	t.Run("valid", func(t *testing.T) {
+		s, broadcaster := setup([]primitives.CommitteeIndex{0})
+		writer := submit(t, s, signedMsg(t, 1, 1, keys[1]))
 		assert.Equal(t, http.StatusOK, writer.Code)
-		require.NoError(t, err)
 		msgsInPool, err := s.CoreService.SyncCommitteePool.SyncCommitteeMessages(1)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(msgsInPool))
 		assert.Equal(t, primitives.Slot(1), msgsInPool[0].Slot)
-		assert.Equal(t, "0xbacd20f09da907734434f052bd4c9503aa16bab1960e89ea20610d08d064481c", hexutil.Encode(msgsInPool[0].BlockRoot))
 		assert.Equal(t, primitives.ValidatorIndex(1), msgsInPool[0].ValidatorIndex)
-		assert.Equal(t, "0xb591bd4ca7d745b6e027879645d7c014fecb8c58631af070f7607acc0c1c948a5102a33267f0e4ba41a85b254b07df91185274375b2e6436e37e81d2fd46cb3751f5a6c86efb7499c1796c0c17e122a54ac067bb0f5ff41f3241659cceb0c21c", hexutil.Encode(msgsInPool[0].Signature))
 		assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
 	})
-	t.Run("multiple", func(t *testing.T) {
-		broadcaster := &p2pMock.MockBroadcaster{}
-		chainService := &blockchainmock.ChainService{
-			State:                st,
-			SyncCommitteeIndices: []primitives.CommitteeIndex{0},
-		}
-		s := &Server{
-			HeadFetcher:           chainService,
-			TimeFetcher:           chainService,
-			OptimisticModeFetcher: chainService,
-			SyncChecker:           &mockSync.Sync{IsSyncing: false},
-			CoreService: &core.Service{
-				SyncCommitteePool: synccommittee.NewStore(),
-				P2P:               broadcaster,
-				HeadFetcher:       chainService,
-			},
-		}
-
-		var body bytes.Buffer
-		_, err := body.WriteString(multipleSyncCommitteeMsg)
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.SubmitSyncCommitteeSignatures(writer, request)
+	t.Run("multiple valid", func(t *testing.T) {
+		s, broadcaster := setup([]primitives.CommitteeIndex{0})
+		writer := submit(t, s, signedMsg(t, 1, 1, keys[1]), signedMsg(t, 1, 2, keys[2]))
 		assert.Equal(t, http.StatusOK, writer.Code)
+		msgsInPool, err := s.CoreService.SyncCommitteePool.SyncCommitteeMessages(1)
 		require.NoError(t, err)
+		assert.Equal(t, 2, len(msgsInPool))
+		assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
+	})
+	t.Run("duplicate", func(t *testing.T) {
+		s, _ := setup([]primitives.CommitteeIndex{0})
+		msg := signedMsg(t, 1, 1, keys[1])
+		assert.Equal(t, http.StatusOK, submit(t, s, msg).Code)
+		assert.Equal(t, http.StatusOK, submit(t, s, msg).Code)
+	})
+	t.Run("valid and invalid", func(t *testing.T) {
+		s, broadcaster := setup([]primitives.CommitteeIndex{0})
+		writer := submit(t, s, signedMsg(t, 1, 0, keys[0]), signedMsg(t, 1, 1, keys[2]))
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		e := &server.IndexedErrorContainer{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		require.Equal(t, 1, len(e.Failures))
+		assert.Equal(t, 1, e.Failures[0].Index)
 		msgsInPool, err := s.CoreService.SyncCommitteePool.SyncCommitteeMessages(1)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(msgsInPool))
-		msgsInPool, err = s.CoreService.SyncCommitteePool.SyncCommitteeMessages(2)
-		require.NoError(t, err)
-		require.Equal(t, 1, len(msgsInPool))
+		assert.Equal(t, primitives.ValidatorIndex(0), msgsInPool[0].ValidatorIndex)
 		assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
 	})
-	t.Run("invalid", func(t *testing.T) {
-		broadcaster := &p2pMock.MockBroadcaster{}
-		chainService := &blockchainmock.ChainService{
-			State: st,
-		}
-		s := &Server{
-			HeadFetcher:           chainService,
-			TimeFetcher:           chainService,
-			OptimisticModeFetcher: chainService,
-			SyncChecker:           &mockSync.Sync{IsSyncing: false},
-			CoreService: &core.Service{
-				SyncCommitteePool: synccommittee.NewStore(),
-				P2P:               broadcaster,
-				HeadFetcher:       chainService,
-			},
-		}
 
+	infinitySig := signedMsg(t, 1, 1, keys[1])
+	infinitySig.Signature = "0xc0" + strings.Repeat("0", 190)
+	invalidCases := []struct {
+		name             string
+		committeeIndices []primitives.CommitteeIndex
+		msg              *structs.SyncCommitteeMessage
+		wantErr          string
+	}{
+		{
+			name:             "wrong key signature",
+			committeeIndices: []primitives.CommitteeIndex{0},
+			msg:              signedMsg(t, 1, 1, keys[2]),
+			wantErr:          "invalid sync committee message signature",
+		},
+		{
+			name:             "infinity signature",
+			committeeIndices: []primitives.CommitteeIndex{0},
+			msg:              infinitySig,
+			wantErr:          "invalid sync committee message signature",
+		},
+		{
+			name:             "validator index out of range",
+			committeeIndices: []primitives.CommitteeIndex{0},
+			msg:              signedMsg(t, 1, 100, keys[1]),
+			wantErr:          "could not get validator public key",
+		},
+		{
+			name:             "not in sync committee",
+			committeeIndices: nil,
+			msg:              signedMsg(t, 1, 1, keys[1]),
+			wantErr:          "validator 1 is not in the current sync committee",
+		},
+		{
+			name:             "slot not current",
+			committeeIndices: []primitives.CommitteeIndex{0},
+			msg:              signedMsg(t, 3, 1, keys[1]),
+			wantErr:          "invalid sync committee message slot",
+		},
+	}
+	for _, tc := range invalidCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, broadcaster := setup(tc.committeeIndices)
+			writer := submit(t, s, tc.msg)
+			assert.Equal(t, http.StatusBadRequest, writer.Code)
+			e := &server.IndexedErrorContainer{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+			assert.Equal(t, http.StatusBadRequest, e.Code)
+			require.Equal(t, 1, len(e.Failures))
+			assert.Equal(t, 0, e.Failures[0].Index)
+			assert.StringContains(t, tc.wantErr, e.Failures[0].Message)
+			m, err := tc.msg.ToConsensus()
+			require.NoError(t, err)
+			msgsInPool, err := s.CoreService.SyncCommitteePool.SyncCommitteeMessages(m.Slot)
+			require.NoError(t, err)
+			assert.Equal(t, 0, len(msgsInPool))
+			assert.Equal(t, false, broadcaster.BroadcastCalled.Load())
+		})
+	}
+	t.Run("invalid", func(t *testing.T) {
+		s, broadcaster := setup(nil)
 		var body bytes.Buffer
 		_, err := body.WriteString(invalidSyncCommitteeMsg)
 		require.NoError(t, err)
@@ -1453,7 +1523,6 @@ func TestSubmitSyncCommitteeSignatures(t *testing.T) {
 
 		s.SubmitSyncCommitteeSignatures(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		require.NoError(t, err)
 		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusBadRequest, e.Code)
@@ -2713,20 +2782,6 @@ var (
     "beacon_block_root": "0xbacd20f09da907734434f052bd4c9503aa16bab1960e89ea20610d08d064481c",
     "validator_index": "1",
     "signature": "0xb591bd4ca7d745b6e027879645d7c014fecb8c58631af070f7607acc0c1c948a5102a33267f0e4ba41a85b254b07df91185274375b2e6436e37e81d2fd46cb3751f5a6c86efb7499c1796c0c17e122a54ac067bb0f5ff41f3241659cceb0c21c"
-  }
-]`
-	multipleSyncCommitteeMsg = `[
-  {
-    "slot": "1",
-    "beacon_block_root": "0xbacd20f09da907734434f052bd4c9503aa16bab1960e89ea20610d08d064481c",
-    "validator_index": "1",
-    "signature": "0xb591bd4ca7d745b6e027879645d7c014fecb8c58631af070f7607acc0c1c948a5102a33267f0e4ba41a85b254b07df91185274375b2e6436e37e81d2fd46cb3751f5a6c86efb7499c1796c0c17e122a54ac067bb0f5ff41f3241659cceb0c21c"
-  },
-  {
-    "slot": "2",
-    "beacon_block_root": "0x2757f6fd8590925cd000a86a3e543f98a93eae23781783a33e34504729a8ad0c",
-    "validator_index": "1",
-    "signature": "0x99dfe11b6c8b306d2c72eb891926d37922d226ea8e1e7484d6c30fab746494f192b0daa3e40c13f1e335b35238f3362c113455a329b1fab0bc500bc47f643786f49e151d5b5052afb51af57ba5aa34a6051dc90ee4de83a26eb54a895061d89a"
   }
 ]`
 	// signature is invalid
