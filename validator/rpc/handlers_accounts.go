@@ -25,6 +25,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // ListAccounts allows retrieval of validating keys and their petnames
@@ -257,9 +258,14 @@ func (s *Server) VoluntaryExit(w http.ResponseWriter, r *http.Request) {
 		}
 		pubKeys[i] = byteskey
 	}
+	genesisResponse, err := s.nodeClient.Genesis(ctx, &emptypb.Empty{})
+	if err != nil {
+		httputil.HandleError(w, errors.Wrap(err, "Could not get genesis").Error(), http.StatusInternalServerError)
+		return
+	}
 	cfg := accounts.PerformExitCfg{
 		ValidatorClient:  s.beaconNodeValidatorClient,
-		NodeClient:       s.nodeClient,
+		GenesisTime:      genesisResponse.GenesisTime,
 		Keymanager:       km,
 		RawPubKeys:       pubKeys,
 		FormattedPubKeys: req.PublicKeys,
