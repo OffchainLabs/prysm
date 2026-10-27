@@ -32,58 +32,142 @@ func TestNewDataColumnStorage(t *testing.T) {
 }
 
 func TestWarmCache(t *testing.T) {
-	storage, err := NewDataColumnStorage(
-		t.Context(),
-		WithDataColumnBasePath(t.TempDir()),
-		WithDataColumnRetentionEpochs(10_000),
-	)
-	require.NoError(t, err)
+	t.Run("full walk", func(t *testing.T) {
+		storage, err := NewDataColumnStorage(
+			t.Context(),
+			WithDataColumnBasePath(t.TempDir()),
+			WithDataColumnRetentionEpochs(10_000),
+		)
+		require.NoError(t, err)
 
-	_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
-		t,
-		[]util.DataColumnParam{
-			{Slot: 33, Index: 2, Column: [][]byte{{1}, {2}, {3}}},      // Period 0 - Epoch 1
-			{Slot: 33, Index: 4, Column: [][]byte{{2}, {3}, {4}}},      // Period 0 - Epoch 1
-			{Slot: 128_002, Index: 2, Column: [][]byte{{1}, {2}, {3}}}, // Period 0 - Epoch 4000
-			{Slot: 128_002, Index: 4, Column: [][]byte{{2}, {3}, {4}}}, // Period 0 - Epoch 4000
-			{Slot: 128_003, Index: 1, Column: [][]byte{{1}, {2}, {3}}}, // Period 0 - Epoch 4000
-			{Slot: 128_003, Index: 3, Column: [][]byte{{2}, {3}, {4}}}, // Period 0 - Epoch 4000
-			{Slot: 128_034, Index: 2, Column: [][]byte{{1}, {2}, {3}}}, // Period 0 - Epoch 4001
-			{Slot: 128_034, Index: 4, Column: [][]byte{{2}, {3}, {4}}}, // Period 0 - Epoch 4001
-			{Slot: 131_138, Index: 2, Column: [][]byte{{1}, {2}, {3}}}, // Period 1 - Epoch 4098
-			{Slot: 131_138, Index: 1, Column: [][]byte{{1}, {2}, {3}}}, // Period 1 - Epoch 4098
-			{Slot: 131_168, Index: 0, Column: [][]byte{{1}, {2}, {3}}}, // Period 1 - Epoch 4099
-		},
-	)
+		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			[]util.DataColumnParam{
+				{Slot: 33, Index: 2, Column: [][]byte{{1}, {2}, {3}}},      // Period 0 - Epoch 1
+				{Slot: 33, Index: 4, Column: [][]byte{{2}, {3}, {4}}},      // Period 0 - Epoch 1
+				{Slot: 128_002, Index: 2, Column: [][]byte{{1}, {2}, {3}}}, // Period 0 - Epoch 4000
+				{Slot: 128_002, Index: 4, Column: [][]byte{{2}, {3}, {4}}}, // Period 0 - Epoch 4000
+				{Slot: 128_003, Index: 1, Column: [][]byte{{1}, {2}, {3}}}, // Period 0 - Epoch 4000
+				{Slot: 128_003, Index: 3, Column: [][]byte{{2}, {3}, {4}}}, // Period 0 - Epoch 4000
+				{Slot: 128_034, Index: 2, Column: [][]byte{{1}, {2}, {3}}}, // Period 0 - Epoch 4001
+				{Slot: 128_034, Index: 4, Column: [][]byte{{2}, {3}, {4}}}, // Period 0 - Epoch 4001
+				{Slot: 131_138, Index: 2, Column: [][]byte{{1}, {2}, {3}}}, // Period 1 - Epoch 4098
+				{Slot: 131_138, Index: 1, Column: [][]byte{{1}, {2}, {3}}}, // Period 1 - Epoch 4098
+				{Slot: 131_168, Index: 0, Column: [][]byte{{1}, {2}, {3}}}, // Period 1 - Epoch 4099
+			},
+		)
 
-	err = storage.Save(verifiedRoDataColumnSidecars)
-	require.NoError(t, err)
+		err = storage.Save(verifiedRoDataColumnSidecars)
+		require.NoError(t, err)
 
-	storage.retentionEpochs = 4_096
+		storage.retentionEpochs = 4_096
 
-	storage.WarmCache()
-	require.Equal(t, primitives.Epoch(4_000), storage.cache.lowestCachedEpoch)
-	require.Equal(t, 5, len(storage.cache.cache))
+		storage.WarmCache()
+		require.Equal(t, primitives.Epoch(4_000), storage.cache.lowestCachedEpoch)
+		require.Equal(t, 5, len(storage.cache.cache))
 
-	summary, ok := storage.cache.get(verifiedRoDataColumnSidecars[2].BlockRoot())
-	require.Equal(t, true, ok)
-	require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_000, mask: [fieldparams.NumberOfColumns]bool{false, false, true, false, true}}, summary)
+		summary, ok := storage.cache.get(verifiedRoDataColumnSidecars[2].BlockRoot())
+		require.Equal(t, true, ok)
+		require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_000, mask: [fieldparams.NumberOfColumns]bool{false, false, true, false, true}}, summary)
 
-	summary, ok = storage.cache.get(verifiedRoDataColumnSidecars[4].BlockRoot())
-	require.Equal(t, true, ok)
-	require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_000, mask: [fieldparams.NumberOfColumns]bool{false, true, false, true}}, summary)
+		summary, ok = storage.cache.get(verifiedRoDataColumnSidecars[4].BlockRoot())
+		require.Equal(t, true, ok)
+		require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_000, mask: [fieldparams.NumberOfColumns]bool{false, true, false, true}}, summary)
 
-	summary, ok = storage.cache.get(verifiedRoDataColumnSidecars[6].BlockRoot())
-	require.Equal(t, true, ok)
-	require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_001, mask: [fieldparams.NumberOfColumns]bool{false, false, true, false, true}}, summary)
+		summary, ok = storage.cache.get(verifiedRoDataColumnSidecars[6].BlockRoot())
+		require.Equal(t, true, ok)
+		require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_001, mask: [fieldparams.NumberOfColumns]bool{false, false, true, false, true}}, summary)
 
-	summary, ok = storage.cache.get(verifiedRoDataColumnSidecars[8].BlockRoot())
-	require.Equal(t, true, ok)
-	require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_098, mask: [fieldparams.NumberOfColumns]bool{false, true, true}}, summary)
+		summary, ok = storage.cache.get(verifiedRoDataColumnSidecars[8].BlockRoot())
+		require.Equal(t, true, ok)
+		require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_098, mask: [fieldparams.NumberOfColumns]bool{false, true, true}}, summary)
 
-	summary, ok = storage.cache.get(verifiedRoDataColumnSidecars[10].BlockRoot())
-	require.Equal(t, true, ok)
-	require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_099, mask: [fieldparams.NumberOfColumns]bool{true}}, summary)
+		summary, ok = storage.cache.get(verifiedRoDataColumnSidecars[10].BlockRoot())
+		require.Equal(t, true, ok)
+		require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_099, mask: [fieldparams.NumberOfColumns]bool{true}}, summary)
+	})
+
+	t.Run("graceful restart", func(t *testing.T) {
+		dir := t.TempDir()
+		storage, verifiedRoDataColumnSidecars := newSnapshotTestStorage(t, dir)
+		require.NoError(t, storage.Close())
+
+		restarted, err := NewDataColumnStorage(t.Context(), WithDataColumnBasePath(dir), WithDataColumnRetentionEpochs(10_000))
+		require.NoError(t, err)
+		restarted.WarmCache()
+
+		requireSameCache(t, storage.cache, restarted.cache)
+
+		dataColumnSidecars, err := restarted.Get(verifiedRoDataColumnSidecars[0].BlockRoot(), nil)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(dataColumnSidecars))
+	})
+
+	t.Run("restart after a non graceful shutdown", func(t *testing.T) {
+		dir := t.TempDir()
+		storage, _ := newSnapshotTestStorage(t, dir)
+		require.NoError(t, storage.Close())
+
+		// The first restart consumes the snapshot, then the node crashes (no Close).
+		restarted, err := NewDataColumnStorage(t.Context(), WithDataColumnBasePath(dir), WithDataColumnRetentionEpochs(10_000))
+		require.NoError(t, err)
+		restarted.WarmCache()
+
+		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			[]util.DataColumnParam{{Slot: 131_200, Index: 5, Column: [][]byte{{1}, {2}, {3}}}}, // Period 1 - Epoch 4100
+		)
+		require.NoError(t, restarted.Save(verifiedRoDataColumnSidecars))
+
+		// The second restart walks the filesystem, and sees the data column sidecar saved after the first restart.
+		restartedAgain, err := NewDataColumnStorage(t.Context(), WithDataColumnBasePath(dir), WithDataColumnRetentionEpochs(10_000))
+		require.NoError(t, err)
+		restartedAgain.WarmCache()
+
+		requireSameCache(t, restarted.cache, restartedAgain.cache)
+		require.Equal(t, true, restartedAgain.Summary(verifiedRoDataColumnSidecars[0].BlockRoot()).HasIndex(5))
+	})
+
+	t.Run("file not processed", func(t *testing.T) {
+		dir := t.TempDir()
+		storage, err := NewDataColumnStorage(t.Context(), WithDataColumnBasePath(dir), WithDataColumnRetentionEpochs(10_000))
+		require.NoError(t, err)
+
+		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			[]util.DataColumnParam{{Slot: 33, Index: 2, Column: [][]byte{{1}, {2}, {3}}}}, // Period 0 - Epoch 1
+		)
+		require.NoError(t, storage.Save(verifiedRoDataColumnSidecars))
+
+		// A file whose name cannot be parsed fails to be processed.
+		require.NoError(t, afero.WriteFile(storage.fs, "0/1/invalid.sszs", []byte{}, 0600))
+
+		storage.WarmCache()
+
+		// The other file is still processed, but the cache is incomplete so no snapshot is written.
+		require.Equal(t, true, storage.Summary(verifiedRoDataColumnSidecars[0].BlockRoot()).HasIndex(2))
+		require.Equal(t, false, storage.warmed)
+		require.NoError(t, storage.Close())
+
+		exists, err := afero.Exists(storage.fs, snapshotFileName)
+		require.NoError(t, err)
+		require.Equal(t, false, exists)
+	})
+
+	t.Run("snapshot with lower retention is pruned", func(t *testing.T) {
+		dir := t.TempDir()
+		storage, verifiedRoDataColumnSidecars := newSnapshotTestStorage(t, dir)
+		require.NoError(t, storage.Close())
+
+		restarted, err := NewDataColumnStorage(t.Context(), WithDataColumnBasePath(dir), WithDataColumnRetentionEpochs(4_096))
+		require.NoError(t, err)
+		restarted.WarmCache()
+
+		// Epoch 1 is pruned, epochs 4000 and 4098 are kept.
+		require.Equal(t, 2, len(restarted.cache.cache))
+		require.Equal(t, uint64(0), restarted.Summary(verifiedRoDataColumnSidecars[0].BlockRoot()).Count())
+		require.Equal(t, uint64(2), restarted.Summary(verifiedRoDataColumnSidecars[2].BlockRoot()).Count())
+	})
 }
 
 func TestSaveDataColumnsSidecars(t *testing.T) {
@@ -589,6 +673,18 @@ func TestPrune(t *testing.T) {
 		require.NoError(t, err)
 
 		dataColumnStorage.prune()
+	})
+	t.Run("non directory entries are skipped", func(t *testing.T) {
+		storage, _ := newSnapshotTestStorage(t, t.TempDir())
+		require.NoError(t, afero.WriteFile(storage.fs, snapshotFileName, []byte{1}, snapshotFilePermissions))
+
+		storage.retentionEpochs = 4_096
+		storage.prune()
+
+		exists, err := afero.Exists(storage.fs, snapshotFileName)
+		require.NoError(t, err)
+		require.Equal(t, true, exists)
+		require.Equal(t, 2, len(storage.cache.cache))
 	})
 	t.Run("nominal", func(t *testing.T) {
 		var compareSlices = func(left, right []string) bool {

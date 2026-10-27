@@ -101,4 +101,34 @@ log(70,256,480) / log(2) ~= 26.07
 
 The maximum size of an SSZ encoded data column can be 2**32 bits = 536,879,912 bytes,
 which left a room of 536,879,912 bytes - 8,782,060 bytes ~= 503 mega bytes to store the extra data needed by SSZ encoding (which is more than enough.)
+
+Cache snapshot
+--------------
+Warming the cache requires reading the header of every data column sidecars file, which can take dozens of minutes
+for a large storage with a cold disk cache.
+To avoid this, the content of the cache is written to `data-columns/cache.snapshot` at graceful shutdown.
+At startup, if this file exists, the cache is loaded from it instead of walking the whole storage,
+and the file is immediately deleted.
+
+- The first 8 bytes are the magic `PRYSMDCS`, identifying the file.
+- The next 2 bytes represent the version of the file structure. We set it to 0x0001.
+- The next 8 bytes represent the count of entries (block roots) in the file.
+- Then, each entry is 56 bytes long:
+  - The block root (32 bytes).
+  - The epoch of the block (8 bytes).
+  - The stored data column indices (16 bytes), as a 128 bits bitfield:
+    Data column with index `i` is stored if the bit `i % 8` of the byte `i / 8` is set.
+- The last 4 bytes are the CRC32 (IEEE) of everything above.
+
+|-------------------------|---------------------------------------------------------------------------|
+|       Byte offset       |                                Description                                |
+|-------------------------|---------------------------------------------------------------------------|
+|                       0 | magic (8 bytes) | version (2 bytes) | count (8 bytes)                     |
+|            18 +  0 * 56 | block root (32 bytes) | epoch (8 bytes) | indices (16 bytes)              |
+|            18 +  1 * 56 | block root (32 bytes) | epoch (8 bytes) | indices (16 bytes)              |
+|            18 +  2 * 56 | block root (32 bytes) | epoch (8 bytes) | indices (16 bytes)              |
+|                     ... |                                    ...                                    |
+|   18 + (count - 1) * 56 | block root (32 bytes) | epoch (8 bytes) | indices (16 bytes)              |
+|   18 +  count      * 56 | crc32 (4 bytes)                                                           |
+|-------------------------|---------------------------------------------------------------------------|
 */
