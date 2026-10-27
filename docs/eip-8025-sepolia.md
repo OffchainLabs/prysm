@@ -1,19 +1,33 @@
 # EIP-8025 on Sepolia
 
-Use the `ethpandaops/prysm-beacon-chain:optional-proofs` image, and add these flags to your usual beacon node command.
+Use the `ethpandaops/prysm-beacon-chain:optional-proofs` Docker image, and add these flags to your usual beacon node command.
 
-## Verifier
+To run a Prysm beacon node and an execution client with Docker Compose, follow [this guide](https://prysm-doc.vercel.app/docs/setup/run-with-docker-compose/).
+
+## Running a verifier node
 
 ```
 --sepolia
 --zkvm
 --p2p-host-ip=${P2P_HOST_IP}
 --trusted-peer-id=16Uiu2HAmQxANYUvxH9bdN71jbHrGgTKE6ngtwR8R1yPBPmmNEnEc
+--min-execution-proofs=2
 ```
 
+### Mandatory
+
+- `--sepolia`: runs on Sepolia.
 - `--zkvm`: enables proof verification.
-- `--p2p-host-ip`: your public IP. The Sepolia prover cannot accept inbound connections, so it must connect to you. Your P2P ports must be open.
-- `--trusted-peer-id`: the prover. Never disconnected by your node (not strictly needed).
+
+### Recommended: help the prover connect to you
+
+Not strictly needed, but the single Sepolia prover currently running cannot accept inbound connections: you only get its proofs if it connects to you, or through other peers relaying them. At the moment, very few peers are subscribed to execution proofs, so relaying is unlikely.
+
+- `--p2p-host-ip`: your public IP, so the prover can dial you. Your P2P ports must be open.
+- `--trusted-peer-id`: the peer ID of the prover, `16Uiu2HAmQxANYUvxH9bdN71jbHrGgTKE6ngtwR8R1yPBPmmNEnEc`. Your node never disconnects it, and accepts it even if your peer slots are full.
+
+### Tuning
+
 - `--min-execution-proofs` (default `2`): number of distinct proof types needed, on top of the EL validation, for a payload to no longer be optimistic. `0` follows the spec (proofs never required).
 
 Expected logs (`DEBUG` lines need `--verbosity=debug`):
@@ -30,7 +44,11 @@ Expected logs (`DEBUG` lines need `--verbosity=debug`):
 3. Second proof, of another type, received and verified.
 4. `--min-execution-proofs` reached: payload no longer optimistic.
 
-## Prover
+Expected metrics, from the "Execution proofs" tab of [this Grafana dashboard](https://github.com/nalepae/infra/blob/master/beacon-node-dashboard.json):
+
+![Execution proofs dashboard](https://github.com/user-attachments/assets/abe2a2b6-a2bc-44f1-a175-4711d5810e32)
+
+## Running a prover node
 
 ```
 --sepolia
@@ -73,3 +91,7 @@ Working if you see:
 ```
 INFO prover: Broadcast execution proof blockRoot=0xedb3d11063f5 proofSize=262 kB proofType=ethrex-sp1 prover=243 slot=43
 ```
+
+## Hack / build from source
+
+The code lives on the [`optional-proofs`](https://github.com/OffchainLabs/prysm/tree/optional-proofs) branch ([PR #17690](https://github.com/OffchainLabs/prysm/pull/17690)). To build it, follow the [developer guide](https://prysm-doc.vercel.app/docs/developers/).
