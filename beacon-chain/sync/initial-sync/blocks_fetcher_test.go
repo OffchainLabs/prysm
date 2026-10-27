@@ -954,6 +954,9 @@ func TestBlocksFetcher_requestBlocksDownscoreOnInvalidData(t *testing.T) {
 	require.ErrorIs(t, err, peerdata.ErrPeerUnknown)
 	assert.Equal(t, -1, scoreBeforeRequest)
 
+	// The peer must advertise an earliest available slot low enough to be requested.
+	p1.Peers().SetChainState(p2.PeerID(), &ethpb.StatusV2{})
+
 	// Use fetchBlocksFromPeer which includes the downscoring logic
 	r := &fetchRequestResponse{start: 100, count: 64}
 	fetcher.fetchBlocksFromPeer(ctx, r, []peer.ID{p2.PeerID()})
@@ -963,6 +966,61 @@ func TestBlocksFetcher_requestBlocksDownscoreOnInvalidData(t *testing.T) {
 	scoreAfterRequest, err := p1.Peers().Scorers().BadResponsesScorer().Count(p2.PeerID())
 	assert.NoError(t, err)
 	assert.Equal(t, 1, scoreAfterRequest)
+}
+
+func TestBlocksFetcher_fetchBlocksFromPeerEarliestAvailableSlot(t *testing.T) {
+	const start = primitives.Slot(100)
+
+	topic := p2p.RPCBlocksByRangeTopicV1
+
+	for _, tt := range []struct {
+		name                  string
+		earliestAvailableSlot primitives.Slot
+		requested             bool
+	}{
+		{name: "earliest available slot above start", earliestAvailableSlot: start + 1, requested: false},
+		{name: "earliest available slot equal to start", earliestAvailableSlot: start, requested: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
+			p1.Peers().SetChainState(p2.PeerID(), &ethpb.StatusV2{EarliestAvailableSlot: tt.earliestAvailableSlot})
+
+			protocol := libp2pcore.ProtocolID(topic + p1.Encoding().ProtocolSuffix())
+
+			fetcher := newBlocksFetcher(t.Context(), &blocksFetcherConfig{
+				p2p:   p1,
+				chain: &mock.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}},
+			})
+			fetcher.rateLimiter = leakybucket.NewCollector(0.000001, 640, 1*time.Second, false)
+
+			requested := false
+			p2.BHost.SetStreamHandler(protocol, func(stream network.Stream) {
+				requested = true
+				blk := util.NewBeaconBlock()
+				blk.Block.Slot = start
+				tor := startup.NewClock(time.Now(), [32]byte{})
+				wsb, err := blocks.NewSignedBeaconBlock(blk)
+				require.NoError(t, err)
+				assert.NoError(t, beaconsync.WriteBlockChunk(stream, tor, p1.Encoding(), wsb))
+				assert.NoError(t, stream.Close())
+			})
+
+			r := &fetchRequestResponse{start: start, count: 64}
+			fetcher.fetchBlocksFromPeer(t.Context(), r, []peer.ID{p2.PeerID()})
+			require.Equal(t, tt.requested, requested)
+
+			if !tt.requested {
+				require.ErrorIs(t, r.err, errNoPeersAvailable)
+				return
+			}
+
+			require.NoError(t, r.err)
+			require.Equal(t, p2.PeerID(), r.blocksFrom)
+			require.Equal(t, 1, len(r.bwb))
+		})
+	}
 }
 
 func TestTimeToWait(t *testing.T) {

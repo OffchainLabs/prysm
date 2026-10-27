@@ -9,6 +9,8 @@ import (
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -125,4 +127,28 @@ func TestTodoInterceptsBatchEndSequence(t *testing.T) {
 			require.Equal(t, tc.expectedToRouter, len(pool.toRouter))
 		})
 	}
+}
+
+func TestExcludeUnavailable(t *testing.T) {
+	const begin = primitives.Slot(100)
+
+	status := p2ptest.NewTestP2P(t).Peers()
+	available, unavailable := peer.ID("available"), peer.ID("unavailable")
+	status.SetChainState(available, &ethpb.StatusV2{EarliestAvailableSlot: begin})
+	status.SetChainState(unavailable, &ethpb.StatusV2{EarliestAvailableSlot: begin + 1})
+
+	t.Run("all available", func(t *testing.T) {
+		exclude := map[peer.ID]bool{"busy": true}
+		actual := excludeUnavailable(status, []peer.ID{available}, exclude, begin)
+		require.DeepEqual(t, map[peer.ID]bool{"busy": true}, actual)
+	})
+
+	t.Run("some unavailable", func(t *testing.T) {
+		exclude := map[peer.ID]bool{"busy": true}
+		actual := excludeUnavailable(status, []peer.ID{available, unavailable}, exclude, begin)
+		require.DeepEqual(t, map[peer.ID]bool{"busy": true, unavailable: true}, actual)
+
+		// The input map must not be modified.
+		require.DeepEqual(t, map[peer.ID]bool{"busy": true}, exclude)
+	})
 }

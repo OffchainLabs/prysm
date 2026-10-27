@@ -203,6 +203,7 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 			}
 		}
 
+		excludePeers = excludeUnavailable(p.p2p.Peers(), notBusy, excludePeers, b.begin)
 		pid, cols, err := b.selectPeer(picker, excludePeers)
 		if err != nil {
 			p.peerFailLogger.WithField("notBusy", len(notBusy)).WithError(err).WithFields(b.logFields()).Debug("Failed to select peer for batch")
@@ -224,6 +225,30 @@ func busyCopy(busy map[peer.ID]bool) map[peer.ID]bool {
 	busyCp := make(map[peer.ID]bool, len(busy))
 	maps.Copy(busyCp, busy)
 	return busyCp
+}
+
+// excludeUnavailable returns `exclude` extended with the peers of `candidates` whose advertised
+// earliest available slot is higher than `begin`.
+// `exclude` is copied before being extended, and returned unchanged if there is nothing to add.
+func excludeUnavailable(status *peers.Status, candidates []peer.ID, exclude map[peer.ID]bool, begin primitives.Slot) map[peer.ID]bool {
+	available := status.FilterByEarliestAvailableSlot(candidates, begin)
+	if len(available) == len(candidates) {
+		return exclude
+	}
+
+	isAvailable := make(map[peer.ID]bool, len(available))
+	for _, pid := range available {
+		isAvailable[pid] = true
+	}
+
+	extended := busyCopy(exclude)
+	for _, pid := range candidates {
+		if !isAvailable[pid] {
+			extended[pid] = true
+		}
+	}
+
+	return extended
 }
 
 func highestEpoch(batches []batch) primitives.Epoch {

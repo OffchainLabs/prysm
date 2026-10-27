@@ -1178,6 +1178,51 @@ func TestComputeIndicesByRootByPeer_PeerWithoutChainState(t *testing.T) {
 	require.DeepEqual(t, expected, actual)
 }
 
+func TestComputeIndicesByRootByPeer_EarliestAvailableSlot(t *testing.T) {
+	peerIdStrs := []string{
+		"16Uiu2HAm3k5Npu6EaYWxiEvzsdLseEkjVyoVhvbxWEuyqdBgBBbq", // Custodies 89, 94, 97 & 122, earliest available slot after the block
+		"16Uiu2HAmMDB5uUePTpN7737m78ehePfWPtBL9qMGdH8kCygjzNA8", // Custodies 2, 37, 38 & 68, earliest available slot equal to the block slot
+	}
+
+	chainStateByPeer := map[string]*ethpb.StatusV2{
+		"16Uiu2HAm3k5Npu6EaYWxiEvzsdLseEkjVyoVhvbxWEuyqdBgBBbq": {HeadSlot: 89, EarliestAvailableSlot: 51},
+		"16Uiu2HAmMDB5uUePTpN7737m78ehePfWPtBL9qMGdH8kCygjzNA8": {HeadSlot: 12, EarliestAvailableSlot: 10},
+	}
+
+	p2p := testp2p.NewTestP2P(t)
+	peers := p2p.Peers()
+
+	peerIDs := make([]peer.ID, 0, len(peerIdStrs))
+	peerIDsMap := make(map[peer.ID]bool, len(peerIdStrs))
+	for _, peerIdStr := range peerIdStrs {
+		peerID, err := peer.Decode(peerIdStr)
+		require.NoError(t, err)
+
+		peers.SetChainState(peerID, chainStateByPeer[peerIdStr])
+
+		peerIDs = append(peerIDs, peerID)
+		peerIDsMap[peerID] = true
+	}
+
+	slotByBlockRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
+		[fieldparams.RootLength]byte{2}: 10,
+		[fieldparams.RootLength]byte{4}: 50,
+	}
+
+	indicesByBlockRoot := map[[fieldparams.RootLength]byte]map[uint64]bool{
+		[fieldparams.RootLength]byte{2}: {37: true},
+		[fieldparams.RootLength]byte{4}: {89: true, 122: true},
+	}
+
+	actual, err := computeIndicesByRootByPeer(p2p, slotByBlockRoot, indicesByBlockRoot, peerIDsMap)
+	require.NoError(t, err)
+
+	expected := map[peer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool{
+		peerIDs[1]: {[fieldparams.RootLength]byte{2}: {37: true}},
+	}
+	require.DeepEqual(t, expected, actual)
+}
+
 func TestRandomPeer(t *testing.T) {
 	// Fixed seed.
 	const seed = 43

@@ -393,14 +393,16 @@ func (f *blocksFetcher) fetchBlobsFromPeer(ctx context.Context, bwb []blocks.Blo
 	if req == nil {
 		return "", nil
 	}
-	peers = f.filterPeers(ctx, peers, peersPercentagePerRequest)
+	peers = f.filterPeers(ctx, peers, req.StartSlot, peersPercentagePerRequest)
+	// The initial peer is only used if it is able to serve the request.
+	initialPeer := f.p2p.Peers().FilterByEarliestAvailableSlot([]peer.ID{pid}, req.StartSlot)
 	// We dial the initial peer first to ensure that we get the desired set of blobs.
-	peers = append([]peer.ID{pid}, peers...)
+	peers = append(initialPeer, peers...)
 	peers = f.hasSufficientBandwidth(peers, req.Count)
 	// We append the best peers to the front so that higher capacity
 	// peers are dialed first. If all of them fail, we fallback to the
 	// initial peer we wanted to request blobs from.
-	peers = append(peers, pid)
+	peers = append(peers, initialPeer...)
 	for i := 0; i < len(peers); i++ {
 		p := peers[i]
 		blobs, err := f.requestBlobs(ctx, req, p)

@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -75,12 +76,15 @@ func (f *blocksFetcher) waitForMinimumPeers(ctx context.Context) ([]peer.ID, err
 	}
 }
 
-// filterPeers returns transformed list of peers, weight sorted by scores and capacity remaining.
+// filterPeers returns transformed list of peers able to serve a by range request starting at `start`,
+// weight sorted by scores and capacity remaining.
 // List can be further constrained using peersPercentage, where only percentage of peers are returned.
-func (f *blocksFetcher) filterPeers(ctx context.Context, peers []peer.ID, peersPercentage float64) []peer.ID {
+func (f *blocksFetcher) filterPeers(ctx context.Context, peers []peer.ID, start primitives.Slot, peersPercentage float64) []peer.ID {
 	_, span := trace.StartSpan(ctx, "initialsync.filterPeers")
 	defer span.End()
 
+	// Drop peers unable to serve the request before trimming, so they do not take the place of peers that can.
+	peers = f.peersServingFrom(peers, start)
 	if len(peers) == 0 {
 		return peers
 	}
@@ -104,6 +108,20 @@ func (f *blocksFetcher) filterPeers(ctx context.Context, peers []peer.ID, peersP
 	})
 
 	return trimPeers(peers, peersPercentage)
+}
+
+// peersServingFrom returns, in the same order, the peers able to serve a by range request starting at `start`,
+// according to their advertised earliest available slot.
+func (f *blocksFetcher) peersServingFrom(peers []peer.ID, start primitives.Slot) []peer.ID {
+	filtered := f.p2p.Peers().FilterByEarliestAvailableSlot(peers, start)
+	if len(peers) > 0 && len(filtered) == 0 {
+		log.WithFields(logrus.Fields{
+			"startSlot": start,
+			"peers":     len(peers),
+		}).Debug("No peer advertises an earliest available slot low enough to serve the request")
+	}
+
+	return filtered
 }
 
 // trimPeers limits peer list, returning only specified percentage of peers.
