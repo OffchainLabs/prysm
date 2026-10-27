@@ -31,9 +31,11 @@ type protectionPersistence struct {
 func defaultProtectionPersistence() protectionPersistence {
 	return protectionPersistence{
 		createTemp: func(dir, pattern string) (protectionFile, error) { return os.CreateTemp(dir, pattern) },
-		openDir:    func(path string) (protectionFile, error) { return os.Open(path) },
-		rename:     os.Rename,
-		remove:     os.Remove,
+		openDir: func(path string) (protectionFile, error) {
+			return os.Open(path) // #nosec G304 -- path is derived from the configured database directory and opened only for directory synchronization.
+		},
+		rename: os.Rename,
+		remove: os.Remove,
 	}
 }
 
