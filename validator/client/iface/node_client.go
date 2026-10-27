@@ -3,6 +3,7 @@ package iface
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/api/fallback"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/golang/protobuf/ptypes/empty"
 )
@@ -12,5 +13,5 @@ type NodeClient interface {
 	Genesis(ctx context.Context, in *empty.Empty) (*ethpb.Genesis, error)
 	Version(ctx context.Context, in *empty.Empty) (*ethpb.Version, error)
 	Peers(ctx context.Context, in *empty.Empty) (*ethpb.Peers, error)
-	IsReady(ctx context.Context) bool
+	ReadyStatus(ctx context.Context) fallback.NodeStatus
 }

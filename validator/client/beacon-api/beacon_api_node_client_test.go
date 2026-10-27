@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/api/fallback"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -289,39 +290,58 @@ func TestGetVersion(t *testing.T) {
 	}
 }
 
-func TestIsReady(t *testing.T) {
-	const healthEndpoint = "/eth/v1/node/health"
+func TestReadyStatus(t *testing.T) {
+	const (
+		healthEndpoint  = "/eth/v1/node/health"
+		syncingEndpoint = "/eth/v1/node/syncing"
+	)
 
 	testCases := []struct {
 		name           string
 		statusCode     int
 		err            error
-		expectedResult bool
+		syncing        *structs.SyncStatusResponseData // nil means /eth/v1/node/syncing is not queried
+		syncingErr     error
+		expectedStatus fallback.NodeStatus
 	}{
 		{
-			name:           "returns true for 200 OK (fully synced)",
+			name:           "ready for 200 OK",
 			statusCode:     http.StatusOK,
-			expectedResult: true,
+			expectedStatus: fallback.NodeReady,
 		},
 		{
-			name:           "returns false for 206 Partial Content (syncing)",
+			name:           "syncing for 206 Partial Content while syncing",
 			statusCode:     http.StatusPartialContent,
-			expectedResult: false,
+			syncing:        &structs.SyncStatusResponseData{IsSyncing: true, IsOptimistic: true},
+			expectedStatus: fallback.NodeSyncing,
 		},
 		{
-			name:           "returns false for 503 Service Unavailable",
+			name:           "optimistic for 206 Partial Content while synced but optimistic",
+			statusCode:     http.StatusPartialContent,
+			syncing:        &structs.SyncStatusResponseData{IsSyncing: false, IsOptimistic: true},
+			expectedStatus: fallback.NodeOptimistic,
+		},
+		{
+			name:           "syncing for 206 Partial Content when sync status fails",
+			statusCode:     http.StatusPartialContent,
+			syncing:        &structs.SyncStatusResponseData{},
+			syncingErr:     errors.New("request failed"),
+			expectedStatus: fallback.NodeSyncing,
+		},
+		{
+			name:           "unavailable for 503 Service Unavailable",
 			statusCode:     http.StatusServiceUnavailable,
-			expectedResult: false,
+			expectedStatus: fallback.NodeUnavailable,
 		},
 		{
-			name:           "returns false for 500 Internal Server Error",
+			name:           "unavailable for 500 Internal Server Error",
 			statusCode:     http.StatusInternalServerError,
-			expectedResult: false,
+			expectedStatus: fallback.NodeUnavailable,
 		},
 		{
-			name:           "returns false on error",
+			name:           "unavailable on error",
 			err:            errors.New("request failed"),
-			expectedResult: false,
+			expectedStatus: fallback.NodeUnavailable,
 		},
 	}
 
@@ -337,11 +357,19 @@ func TestIsReady(t *testing.T) {
 				healthEndpoint,
 			).Return(tc.statusCode, tc.err)
 			handler.EXPECT().Host().Return("http://localhost:3500").AnyTimes()
+			if tc.syncing != nil {
+				handler.EXPECT().Get(
+					gomock.Any(),
+					syncingEndpoint,
+					&structs.SyncStatusResponse{},
+				).SetArg(
+					2,
+					structs.SyncStatusResponse{Data: tc.syncing},
+				).Return(tc.syncingErr)
+			}
 
 			nodeClient := &beaconApiNodeClient{handler: handler}
-			result := nodeClient.IsReady(ctx)
-
-			assert.Equal(t, tc.expectedResult, result)
+			assert.Equal(t, tc.expectedStatus, nodeClient.ReadyStatus(ctx))
 		})
 	}
 }

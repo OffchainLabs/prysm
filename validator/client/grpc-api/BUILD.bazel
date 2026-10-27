@@ -50,7 +50,9 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//api:go_default_library",
         "//api/client/event:go_default_library",
+        "//api/fallback:go_default_library",
         "//api/grpc:go_default_library",
         "//api/server/structs:go_default_library",
         "//consensus-types/primitives:go_default_library",

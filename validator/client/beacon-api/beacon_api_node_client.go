@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/fallback"
 	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -104,17 +105,38 @@ func (c *beaconApiNodeClient) Peers(ctx context.Context, in *empty.Empty) (*ethp
 	return nil, errors.New("beaconApiNodeClient.Peers is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiNodeClientWithFallback.")
 }
 
-// IsReady returns true only if the node is fully synced (200 OK).
-// A 206 Partial Content response indicates the node is syncing and not ready.
-func (c *beaconApiNodeClient) IsReady(ctx context.Context) bool {
+// ReadyStatus reports whether the beacon node can serve validator duties.
+// Only 200 OK means the node is synced and not optimistic. 206 Partial Content
+// means syncing or optimistic, which /eth/v1/node/syncing tells apart.
+func (c *beaconApiNodeClient) ReadyStatus(ctx context.Context) fallback.NodeStatus {
 	statusCode, err := c.handler.GetStatusCode(ctx, "/eth/v1/node/health")
 	if err != nil {
-		log.WithError(err).WithField("url", api.RedactEndpointList(c.handler.Host())).Error("failed to get health of node")
-		return false
+		log.WithError(err).WithField("url", api.RedactEndpointList(c.handler.Host())).Debug("Failed to get health of node")
+		return fallback.NodeUnavailable
 	}
-	// Only 200 OK means the node is fully synced and ready.
-	// 206 Partial Content means syncing, 503 means unavailable.
-	return statusCode == http.StatusOK
+
+	switch statusCode {
+	case http.StatusOK:
+		return fallback.NodeReady
+	case http.StatusPartialContent:
+		return c.syncingStatus(ctx)
+	default:
+		return fallback.NodeUnavailable
+	}
+}
+
+// syncingStatus tells whether a node that is not ready is syncing or optimistic.
+func (c *beaconApiNodeClient) syncingStatus(ctx context.Context) fallback.NodeStatus {
+	resp := structs.SyncStatusResponse{}
+	if err := c.handler.Get(ctx, "/eth/v1/node/syncing", &resp); err != nil || resp.Data == nil {
+		return fallback.NodeSyncing
+	}
+
+	if !resp.Data.IsSyncing && resp.Data.IsOptimistic {
+		return fallback.NodeOptimistic
+	}
+
+	return fallback.NodeSyncing
 }
 
 func NewNodeClientWithFallback(provider rest.RestConnectionProvider, fallbackClient iface.NodeClient) iface.NodeClient {
