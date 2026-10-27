@@ -223,6 +223,10 @@ func (s *Service) setPayloadValidIfReady(ctx context.Context, root [fieldparams.
 			"proofTypeCount": proofTypes,
 		}
 
+		if slot, err := s.cfg.ForkChoiceStore.Slot(root); err == nil {
+			fields["slot"] = slot
+		}
+
 		if since, err := s.sinceSlotStart(root); err == nil {
 			fields["sinceSlotStart"] = since
 			s.observeInRegularSync(payloadProofValidatedSinceSlotStart, since)
