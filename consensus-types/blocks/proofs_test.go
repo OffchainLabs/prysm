@@ -3,7 +3,6 @@ package blocks
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
@@ -327,9 +326,6 @@ func TestExecutionBlockHashProof(t *testing.T) {
 	}
 
 	t.Run("proves Gloas parent block hash", func(t *testing.T) {
-		reset := features.InitWithReset(&features.Flags{})
-		defer reset()
-
 		block := newGloasBlock(t)
 		proof, err := ExecutionBlockHashProof(t.Context(), block)
 		require.NoError(t, err)
@@ -366,8 +362,6 @@ func TestExecutionBlockHashProof(t *testing.T) {
 	})
 
 	t.Run("rejects missing bid", func(t *testing.T) {
-		reset := features.InitWithReset(&features.Flags{})
-		defer reset()
 		block := newGloasBlock(t)
 		block.body.signedExecutionPayloadBid = nil
 		_, err := ExecutionBlockHashProof(t.Context(), block)
@@ -375,8 +369,6 @@ func TestExecutionBlockHashProof(t *testing.T) {
 	})
 
 	t.Run("rejects invalid bid field", func(t *testing.T) {
-		reset := features.InitWithReset(&features.Flags{})
-		defer reset()
 		block := newGloasBlock(t)
 		block.body.signedExecutionPayloadBid.Message.ParentBlockHash = nil
 		_, err := ExecutionBlockHashProof(t.Context(), block)
@@ -384,8 +376,6 @@ func TestExecutionBlockHashProof(t *testing.T) {
 	})
 
 	t.Run("rejects invalid execution requests root", func(t *testing.T) {
-		reset := features.InitWithReset(&features.Flags{})
-		defer reset()
 		block := newGloasBlock(t)
 		block.body.signedExecutionPayloadBid.Message.ExecutionRequestsRoot = []byte{0x01}
 		_, err := ExecutionBlockHashProof(t.Context(), block)
@@ -393,8 +383,6 @@ func TestExecutionBlockHashProof(t *testing.T) {
 	})
 
 	t.Run("rejects invalid commitment", func(t *testing.T) {
-		reset := features.InitWithReset(&features.Flags{})
-		defer reset()
 		block := newGloasBlock(t)
 		block.body.signedExecutionPayloadBid.Message.BlobKzgCommitments[0] = nil
 		_, err := ExecutionBlockHashProof(t.Context(), block)
@@ -402,8 +390,6 @@ func TestExecutionBlockHashProof(t *testing.T) {
 	})
 
 	t.Run("rejects invalid signature", func(t *testing.T) {
-		reset := features.InitWithReset(&features.Flags{})
-		defer reset()
 		block := newGloasBlock(t)
 		block.body.signedExecutionPayloadBid.Signature = nil
 		_, err := ExecutionBlockHashProof(t.Context(), block)

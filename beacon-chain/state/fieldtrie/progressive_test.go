@@ -7,7 +7,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
@@ -15,17 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
-// progressiveRootsEnabled turns on progressive merkleization so the
-// stateutil reference helpers return the progressive form.
-func progressiveRootsEnabled(t *testing.T) {
-	t.Helper()
-	reset := features.InitWithReset(&features.Flags{})
-	t.Cleanup(reset)
-}
-
 func TestProgressiveFieldTrie(t *testing.T) {
-	progressiveRootsEnabled(t)
-
 	t.Run("build", func(t *testing.T) {
 		t.Run("nil elements", func(t *testing.T) {
 			data, err := buildProgressiveTrie(types.Validators, nil)
@@ -408,7 +397,6 @@ func TestProgressiveFieldTrie(t *testing.T) {
 }
 
 func TestProgressiveOverlayReads(t *testing.T) {
-	progressiveRootsEnabled(t)
 	validators := progressiveTestValidators(6)
 	base := newProgressiveTestFieldTrie(t, types.Validators, types.CompositeArray, validators)
 	overlay := base.fork()

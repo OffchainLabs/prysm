@@ -101,9 +101,6 @@ func TestConfigureGlobalFlags_SupernodeMutualExclusivity(t *testing.T) {
 
 // --archive-origin-state only means something in archive mode; a silent no-op would be a footgun.
 func TestConfigureGlobalFlags_ArchiveOriginStateRequiresArchive(t *testing.T) {
-	resetCfg := features.InitWithReset(&features.Flags{})
-	defer resetCfg()
-
 	app := cli.NewApp()
 	set := flag.NewFlagSet("test", 0)
 	set.String(ArchiveOriginState.Name, "", "")
