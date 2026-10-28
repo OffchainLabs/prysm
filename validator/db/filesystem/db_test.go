@@ -29,12 +29,23 @@ func getPubKeys(t *testing.T, count int) [][fieldparams.BLSPubkeyLength]byte {
 }
 
 func TestStore_NewStore(t *testing.T) {
-	// Create some pubkeys.
-	pubkeys := getPubKeys(t, 5)
+	t.Run("success", func(t *testing.T) {
+		pubkeys := getPubKeys(t, 5)
+		_, err := NewStore(t.TempDir(), &Config{PubKeys: pubkeys})
+		require.NoError(t, err, "NewStore should not return an error")
+	})
 
-	// Just check `NewStore` does not return an error.
-	_, err := NewStore(t.TempDir(), &Config{PubKeys: pubkeys})
-	require.NoError(t, err, "NewStore should not return an error")
+	t.Run("initialization error", func(t *testing.T) {
+		blocker := path.Join(t.TempDir(), "blocked-parent")
+		const contents = "existing regular file\n"
+		require.NoError(t, os.WriteFile(blocker, []byte(contents), 0o600))
+
+		s, err := NewStore(blocker, &Config{PubKeys: getPubKeys(t, 1)})
+		require.ErrorContains(t, "could not create directory", err)
+		require.IsNil(t, s)
+		requireProtectionBytes(t, blocker, contents)
+	})
+
 }
 
 func TestStore_Close(t *testing.T) {
