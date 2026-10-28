@@ -1,6 +1,7 @@
 package types
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -10,6 +11,39 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
+
+func TestInitializeDataMaps_LightClientForks(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	InitializeDataMaps()
+	cfg := params.BeaconConfig()
+	for _, tt := range []struct {
+		name                 string
+		fork                 []byte
+		optimistic, finality any
+	}{
+		{"altair", cfg.AltairForkVersion, &ethpb.LightClientOptimisticUpdateAltair{}, &ethpb.LightClientFinalityUpdateAltair{}},
+		{"bellatrix", cfg.BellatrixForkVersion, &ethpb.LightClientOptimisticUpdateAltair{}, &ethpb.LightClientFinalityUpdateAltair{}},
+		{"capella", cfg.CapellaForkVersion, &ethpb.LightClientOptimisticUpdateCapella{}, &ethpb.LightClientFinalityUpdateCapella{}},
+		{"deneb", cfg.DenebForkVersion, &ethpb.LightClientOptimisticUpdateDeneb{}, &ethpb.LightClientFinalityUpdateDeneb{}},
+		{"electra", cfg.ElectraForkVersion, &ethpb.LightClientOptimisticUpdateDeneb{}, &ethpb.LightClientFinalityUpdateElectra{}},
+		{"fulu", cfg.FuluForkVersion, &ethpb.LightClientOptimisticUpdateDeneb{}, &ethpb.LightClientFinalityUpdateElectra{}},
+		{"gloas", cfg.GloasForkVersion, &ethpb.LightClientOptimisticUpdateGloas{}, &ethpb.LightClientFinalityUpdateGloas{}},
+		{"heze", cfg.HezeForkVersion, &ethpb.LightClientOptimisticUpdateGloas{}, &ethpb.LightClientFinalityUpdateGloas{}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			optimisticFactory, ok := LightClientOptimisticUpdateMap[bytesutil.ToBytes4(tt.fork)]
+			require.Equal(t, true, ok)
+			optimistic, err := optimisticFactory()
+			require.NoError(t, err)
+			require.Equal(t, reflect.TypeOf(tt.optimistic), reflect.TypeOf(optimistic.Proto()))
+			finalityFactory, ok := LightClientFinalityUpdateMap[bytesutil.ToBytes4(tt.fork)]
+			require.Equal(t, true, ok)
+			finality, err := finalityFactory()
+			require.NoError(t, err)
+			require.Equal(t, reflect.TypeOf(tt.finality), reflect.TypeOf(finality.Proto()))
+		})
+	}
+}
 
 func TestInitializeDataMaps(t *testing.T) {
 	params.SetupTestConfigCleanup(t)

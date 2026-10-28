@@ -2264,45 +2264,45 @@ func (c *ExecutionPayloadGloas) ProgressiveHashTreeRoot() ([32]byte, error) {
 
 func (c *ExecutionPayloadGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
-	// Field 0: ParentHash
+	// Position 0: ParentHash
 	if len(c.ParentHash) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.ParentHash)
-	// Field 1: FeeRecipient
+	// Position 1: FeeRecipient
 	if len(c.FeeRecipient) != 20 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.FeeRecipient)
-	// Field 2: StateRoot
+	// Position 2: StateRoot
 	if len(c.StateRoot) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.StateRoot)
-	// Field 3: ReceiptsRoot
+	// Position 3: ReceiptsRoot
 	if len(c.ReceiptsRoot) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.ReceiptsRoot)
-	// Field 4: LogsBloom
+	// Position 4: LogsBloom
 	if len(c.LogsBloom) != 256 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.LogsBloom)
-	// Field 5: PrevRandao
+	// Position 5: PrevRandao
 	if len(c.PrevRandao) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.PrevRandao)
-	// Field 6: BlockNumber
+	// Position 6: BlockNumber
 	hh.PutUint64(c.BlockNumber)
-	// Field 7: GasLimit
+	// Position 7: GasLimit
 	hh.PutUint64(c.GasLimit)
-	// Field 8: GasUsed
+	// Position 8: GasUsed
 	hh.PutUint64(c.GasUsed)
-	// Field 9: Timestamp
+	// Position 9: Timestamp
 	hh.PutUint64(c.Timestamp)
-	// Field 10: ExtraData
+	// Position 10: ExtraData
 
 	{
 		if len(c.ExtraData) > 32 {
@@ -2314,21 +2314,21 @@ func (c *ExecutionPayloadGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err
 		hh.MerkleizeWithMixin(subIndx, numItems, (32*1+31)/32)
 	}
 
-	// Field 11: BaseFeePerGas
+	// Position 11: BaseFeePerGas
 	if len(c.BaseFeePerGas) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.BaseFeePerGas)
-	// Field 12: BlockHash
+	// Position 12: BlockHash
 	if len(c.BlockHash) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.BlockHash)
-	// Field 13: Transactions
+	// Position 13: Transactions
 	if err := c.Transactions.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("Transactions: %w", err)
 	}
-	// Field 14: Withdrawals
+	// Position 14: Withdrawals
 	{
 		subIndx := hh.Index()
 		for _, o := range c.Withdrawals {
@@ -2338,17 +2338,17 @@ func (c *ExecutionPayloadGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Withdrawals)))
 	}
-	// Field 15: BlobGasUsed
+	// Position 15: BlobGasUsed
 	hh.PutUint64(c.BlobGasUsed)
-	// Field 16: ExcessBlobGas
+	// Position 16: ExcessBlobGas
 	hh.PutUint64(c.ExcessBlobGas)
-	// Field 17: BlockAccessList
+	// Position 17: BlockAccessList
 	{
 		subIndx := hh.Index()
 		hh.AppendBytes32(c.BlockAccessList)
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.BlockAccessList)))
 	}
-	// Field 18: SlotNumber
+	// Position 18: SlotNumber
 	if err := c.SlotNumber.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("SlotNumber: %w", err)
 	}
@@ -3843,7 +3843,7 @@ func (c *ExecutionRequestsGloas) ProgressiveHashTreeRoot() ([32]byte, error) {
 
 func (c *ExecutionRequestsGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
-	// Field 0: Deposits
+	// Position 0: Deposits
 	{
 		subIndx := hh.Index()
 		for _, o := range c.Deposits {
@@ -3853,7 +3853,7 @@ func (c *ExecutionRequestsGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (er
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Deposits)))
 	}
-	// Field 1: Withdrawals
+	// Position 1: Withdrawals
 	{
 		subIndx := hh.Index()
 		for _, o := range c.Withdrawals {
@@ -3863,7 +3863,7 @@ func (c *ExecutionRequestsGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (er
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Withdrawals)))
 	}
-	// Field 2: Consolidations
+	// Position 2: Consolidations
 	{
 		subIndx := hh.Index()
 		for _, o := range c.Consolidations {
@@ -3873,7 +3873,7 @@ func (c *ExecutionRequestsGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (er
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Consolidations)))
 	}
-	// Field 3: BuilderDeposits
+	// Position 3: BuilderDeposits
 	{
 		subIndx := hh.Index()
 		for _, o := range c.BuilderDeposits {
@@ -3883,7 +3883,7 @@ func (c *ExecutionRequestsGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (er
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.BuilderDeposits)))
 	}
-	// Field 4: BuilderExits
+	// Position 4: BuilderExits
 	{
 		subIndx := hh.Index()
 		for _, o := range c.BuilderExits {
