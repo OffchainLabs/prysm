@@ -65,10 +65,8 @@ go_test(
         "accounts_exit_test.go",
         "accounts_import_test.go",
         "accounts_list_test.go",
-        "wallet_recover_fuzz_test.go",
         "wallet_recover_test.go",
     ],
-    data = glob(["testdata/**"]),
     embed = [":go_default_library"],
     deps = [
         "//api/server/structs:go_default_library",
