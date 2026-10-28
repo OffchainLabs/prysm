@@ -561,7 +561,6 @@ func (s *Server) SubmitSyncCommitteeSignatures(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	var validMessages []*eth.SyncCommitteeMessage
 	var msgFailures []*server.IndexedError
 	for i, sourceMsg := range req.Data {
 		msg, err := sourceMsg.ToConsensus()
@@ -572,11 +571,14 @@ func (s *Server) SubmitSyncCommitteeSignatures(w http.ResponseWriter, r *http.Re
 			})
 			continue
 		}
-		validMessages = append(validMessages, msg)
-	}
-
-	for _, msg := range validMessages {
 		if rpcerr := s.CoreService.SubmitSyncMessage(ctx, msg); rpcerr != nil {
+			if rpcerr.Reason == core.BadRequest {
+				msgFailures = append(msgFailures, &server.IndexedError{
+					Index:   i,
+					Message: rpcerr.Err.Error(),
+				})
+				continue
+			}
 			httputil.HandleError(w, "Could not submit message: "+rpcerr.Err.Error(), core.ErrorReasonToHTTP(rpcerr.Reason))
 			return
 		}
