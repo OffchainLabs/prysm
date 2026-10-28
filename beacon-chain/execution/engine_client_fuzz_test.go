@@ -3,296 +3,156 @@ package execution_test
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"math/big"
-	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
-	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/beacon/engine"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/pkg/errors"
 )
 
 func FuzzForkChoiceResponse(f *testing.F) {
-	valHash := common.Hash([32]byte{0xFF, 0x01})
-	payloadID := engine.PayloadID([8]byte{0x01, 0xFF, 0xAA, 0x00, 0xEE, 0xFE, 0x00, 0x00})
-	valErr := "asjajshjahsaj"
-	seed := &engine.ForkChoiceResponse{
-		PayloadStatus: engine.PayloadStatusV1{
-			Status:          "INVALID_TERMINAL_BLOCK",
-			LatestValidHash: &valHash,
-			ValidationError: &valErr,
-		},
-		PayloadID: &payloadID,
-	}
-	output, err := json.Marshal(seed)
-	assert.NoError(f, err)
-	f.Add(output)
+	f.Add([]byte(`{"payloadStatus":{"status":"VALID","latestValidHash":"0x0707070707070707070707070707070707070707070707070707070707070707","validationError":null},"payloadId":"0x0102030405060708"}`))
+	f.Add([]byte(`{"payloadStatus":{"status":"INVALID","latestValidHash":"0x0808080808080808080808080808080808080808080808080808080808080808","validationError":"bad block"},"payloadId":null}`))
+	f.Add([]byte(`{"payloadStatus":{"status":"SYNCING","latestValidHash":null,"validationError":null},"payloadId":null}`))
+	// Prysm-only top-level field with the wrong type: only Prysm rejects it.
+	f.Add([]byte(`{"validationError":0}`))
 	f.Fuzz(func(t *testing.T, jsonBlob []byte) {
 		gethResp := &engine.ForkChoiceResponse{}
 		prysmResp := &execution.ForkchoiceUpdatedResponse{}
 		gethErr := json.Unmarshal(jsonBlob, gethResp)
 		prysmErr := json.Unmarshal(jsonBlob, prysmResp)
-		assert.Equal(t, gethErr != nil, prysmErr != nil, fmt.Sprintf("geth and prysm unmarshaller return inconsistent errors. %v and %v", gethErr, prysmErr))
+		if (gethErr == nil) != (prysmErr == nil) {
+			// Only a field one side lacks may decide acceptance: Prysm's top-level validationError
+			// string, or geth's payloadStatus.witness.
+			oneSided := hasJSONKey(jsonBlob, "", "validationError") || hasJSONKey(jsonBlob, "payloadStatus", "witness")
+			require.Equal(t, true, oneSided, "geth and prysm unmarshaller return inconsistent errors. %v and %v", gethErr, prysmErr)
+			return
+		}
 		// Nothing to marshal if we have an error.
 		if gethErr != nil {
 			return
 		}
-		gethBlob, gethErr := json.Marshal(gethResp)
-		prysmBlob, prysmErr := json.Marshal(prysmResp)
-		assert.Equal(t, gethErr != nil, prysmErr != nil, "geth and prysm unmarshaller return inconsistent errors")
+		gethBlob, err := json.Marshal(gethResp)
+		require.NoError(t, err)
+		prysmBlob, err := json.Marshal(prysmResp)
+		require.NoError(t, err)
 		newGethResp := &engine.ForkChoiceResponse{}
-		newGethErr := json.Unmarshal(prysmBlob, newGethResp)
-		assert.NoError(t, newGethErr)
-		if newGethResp.PayloadStatus.Status == "UNKNOWN" {
-			return
-		}
-
+		require.NoError(t, json.Unmarshal(prysmBlob, newGethResp))
 		newGethResp2 := &engine.ForkChoiceResponse{}
-		newGethErr = json.Unmarshal(gethBlob, newGethResp2)
-		assert.NoError(t, newGethErr)
+		require.NoError(t, json.Unmarshal(gethBlob, newGethResp2))
 
-		assert.DeepEqual(t, newGethResp.PayloadID, newGethResp2.PayloadID)
-		assert.DeepEqual(t, newGethResp.PayloadStatus.Status, newGethResp2.PayloadStatus.Status)
-		assert.DeepEqual(t, newGethResp.PayloadStatus.LatestValidHash, newGethResp2.PayloadStatus.LatestValidHash)
-		isNilOrEmpty := newGethResp.PayloadStatus.ValidationError == nil || (*newGethResp.PayloadStatus.ValidationError == "")
-		isNilOrEmpty2 := newGethResp2.PayloadStatus.ValidationError == nil || (*newGethResp2.PayloadStatus.ValidationError == "")
-		assert.DeepEqual(t, isNilOrEmpty, isNilOrEmpty2)
-		if !isNilOrEmpty {
-			assert.DeepEqual(t, *newGethResp.PayloadStatus.ValidationError, *newGethResp2.PayloadStatus.ValidationError)
+		// Prysm maps a status it does not know to UNKNOWN, and has no status without a payloadStatus
+		// object. Those are the only allowed status differences.
+		if _, known := pb.PayloadStatus_Status_value[newGethResp2.PayloadStatus.Status]; !known {
+			want := "UNKNOWN"
+			if prysmResp.Status == nil {
+				want = ""
+			}
+			require.Equal(t, want, newGethResp.PayloadStatus.Status)
+			newGethResp.PayloadStatus.Status = newGethResp2.PayloadStatus.Status
 		}
+		require.Equal(t, newGethResp2.PayloadStatus.Status, newGethResp.PayloadStatus.Status)
+		require.Equal(t, fmt.Sprintf("%v", newGethResp2.PayloadID), fmt.Sprintf("%v", newGethResp.PayloadID))
+		require.Equal(t, fmt.Sprintf("%v", newGethResp2.PayloadStatus.LatestValidHash), fmt.Sprintf("%v", newGethResp.PayloadStatus.LatestValidHash))
+		// Prysm stores a missing validation error as "".
+		validationError := func(s *string) string {
+			if s == nil {
+				return ""
+			}
+			return *s
+		}
+		require.Equal(t, validationError(newGethResp2.PayloadStatus.ValidationError), validationError(newGethResp.PayloadStatus.ValidationError))
 	})
 }
 
 func FuzzExecutionPayload(f *testing.F) {
-	logsBloom := [256]byte{'j', 'u', 'n', 'k'}
-	execData := &engine.ExecutionPayloadEnvelope{
-		ExecutionPayload: &engine.ExecutableData{
-			ParentHash:    common.Hash([32]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01}),
-			FeeRecipient:  common.Address([20]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF}),
-			StateRoot:     common.Hash([32]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01}),
-			ReceiptsRoot:  common.Hash([32]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01}),
-			LogsBloom:     logsBloom[:],
-			Random:        common.Hash([32]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01}),
-			Number:        math.MaxUint64,
-			GasLimit:      math.MaxUint64,
-			GasUsed:       math.MaxUint64,
-			Timestamp:     100,
-			ExtraData:     []byte{},
-			BaseFeePerGas: big.NewInt(math.MaxInt),
-			BlockHash:     common.Hash([32]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01}),
-			Transactions:  [][]byte{{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01}, {0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01}, {0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01}, {0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01}},
-			Withdrawals:   []*types.Withdrawal{},
-		},
-		BlockValue: nil,
-	}
-	output, err := json.Marshal(execData)
-	assert.NoError(f, err)
-	f.Add(output)
+	// A Capella engine_getPayloadV2 response that both decoders accept.
+	seed := `{"executionPayload":{` +
+		`"parentHash":"0x0101010101010101010101010101010101010101010101010101010101010101",` +
+		`"feeRecipient":"0x0202020202020202020202020202020202020202",` +
+		`"stateRoot":"0x0303030303030303030303030303030303030303030303030303030303030303",` +
+		`"receiptsRoot":"0x0404040404040404040404040404040404040404040404040404040404040404",` +
+		`"logsBloom":"0x` + strings.Repeat("00", 256) + `",` +
+		`"prevRandao":"0x0505050505050505050505050505050505050505050505050505050505050505",` +
+		`"blockNumber":"0x1","gasLimit":"0x1c9c380","gasUsed":"0x5208","timestamp":"0x64",` +
+		`"extraData":"0x","baseFeePerGas":"0x7",` +
+		`"blockHash":"0x0606060606060606060606060606060606060606060606060606060606060606",` +
+		`"transactions":["0x02"],` +
+		`"withdrawals":[{"index":"0x1","validatorIndex":"0x2","address":"0x0909090909090909090909090909090909090909","amount":"0x3"}]},` +
+		`"blockValue":"0x1bc16d674ec80000"}`
+	f.Add([]byte(seed))
+	// A later-fork field with the wrong type: only geth rejects it.
+	f.Add([]byte(strings.Replace(seed, `"blockValue"`, `"shouldOverrideBuilder":"invalid","blockValue"`, 1)))
 	f.Fuzz(func(t *testing.T, jsonBlob []byte) {
 		gethResp := &engine.ExecutionPayloadEnvelope{}
 		prysmResp := &pb.ExecutionPayloadCapellaWithValue{}
 		gethErr := json.Unmarshal(jsonBlob, gethResp)
 		prysmErr := json.Unmarshal(jsonBlob, prysmResp)
-		assert.Equal(t, gethErr != nil, prysmErr != nil, fmt.Sprintf("geth and prysm unmarshaller return inconsistent errors. %v and %v", gethErr, prysmErr))
-		// Nothing to marshal if we have an error.
+		// Prysm may reject what geth accepts (it requires every withdrawal field).
+		if prysmErr != nil {
+			return
+		}
 		if gethErr != nil {
+			// geth also parses fields of later forks, which a Capella response ignores. Only those may
+			// make geth reject what Prysm accepts.
+			laterFork := hasJSONKey(jsonBlob, "", "blobsBundle", "executionRequests", "shouldOverrideBuilder", "witness") ||
+				hasJSONKey(jsonBlob, "executionPayload", "blobGasUsed", "excessBlobGas", "slotNumber", "blockAccessList")
+			require.Equal(t, true, laterFork, "prysm accepted an input that geth rejects: %v", gethErr)
 			return
 		}
-		gethBlob, gethErr := json.Marshal(gethResp)
-		prysmBlob, prysmErr := json.Marshal(prysmResp)
-		assert.Equal(t, gethErr != nil, prysmErr != nil, "geth and prysm unmarshaller return inconsistent errors")
-		newGethResp := &engine.ExecutionPayloadEnvelope{}
-		newGethErr := json.Unmarshal(prysmBlob, newGethResp)
-		assert.NoError(t, newGethErr)
-		newGethResp2 := &engine.ExecutionPayloadEnvelope{}
-		newGethErr = json.Unmarshal(gethBlob, newGethResp2)
-		assert.NoError(t, newGethErr)
 
-		assert.DeepEqual(t, newGethResp, newGethResp2)
+		// The response type has no MarshalJSON, so encode Prysm's decoded payload and value in the
+		// response layout and decode that with geth.
+		value := new(big.Int).SetBytes(bytesutil.ReverseByteOrder(prysmResp.Value))
+		prysmBlob, err := json.Marshal(struct {
+			ExecutionPayload *pb.ExecutionPayloadCapella `json:"executionPayload"`
+			BlockValue       *hexutil.Big                `json:"blockValue"`
+		}{prysmResp.Payload, (*hexutil.Big)(value)})
+		require.NoError(t, err)
+		fromPrysm := &engine.ExecutionPayloadEnvelope{}
+		require.NoError(t, json.Unmarshal(prysmBlob, fromPrysm))
+
+		// A Capella payload drops fields of later forks and turns missing withdrawals into an empty list.
+		p := gethResp.ExecutionPayload
+		p.BlobGasUsed, p.ExcessBlobGas, p.SlotNumber, p.BlockAccessList = nil, nil, nil, nil
+		if p.Withdrawals == nil {
+			p.Withdrawals = []*types.Withdrawal{}
+		}
+		gethResp.BlobsBundle, gethResp.Requests, gethResp.Override, gethResp.Witness = nil, nil, false, nil
+		gethJSON, err := json.Marshal(gethResp)
+		require.NoError(t, err)
+		prysmJSON, err := json.Marshal(fromPrysm)
+		require.NoError(t, err)
+		require.Equal(t, string(gethJSON), string(prysmJSON))
 	})
 }
 
-func FuzzExecutionBlock(f *testing.F) {
-	f.Skip("Is skipped until false positive rate can be resolved.")
-	logsBloom := [256]byte{'j', 'u', 'n', 'k'}
-	addr := common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87")
-	innerData := &types.DynamicFeeTx{
-		ChainID:   big.NewInt(math.MaxInt),
-		Nonce:     math.MaxUint64,
-		GasTipCap: big.NewInt(math.MaxInt),
-		GasFeeCap: big.NewInt(math.MaxInt),
-		Gas:       math.MaxUint64,
-		To:        &addr,
-		Value:     big.NewInt(math.MaxInt),
-		Data:      []byte{'r', 'a', 'n', 'd', 'o', 'm'},
-
-		// Signature values
-		V: big.NewInt(0),
-		R: big.NewInt(math.MaxInt),
-		S: big.NewInt(math.MaxInt),
-	}
-	tx := types.NewTx(innerData)
-	execBlock := &pb.ExecutionBlock{
-		Header: types.Header{
-			ParentHash:  common.Hash([32]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01}),
-			Root:        common.Hash([32]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01}),
-			ReceiptHash: common.Hash([32]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01}),
-			Bloom:       types.Bloom(logsBloom),
-			Number:      big.NewInt(math.MaxInt),
-			GasLimit:    math.MaxUint64,
-			GasUsed:     math.MaxUint64,
-			Time:        100,
-			Extra:       nil,
-			BaseFee:     big.NewInt(math.MaxInt),
-			Difficulty:  big.NewInt(math.MaxInt),
-		},
-		Hash:            common.Hash([32]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01}),
-		TotalDifficulty: "999999999999999999999999999999999999999",
-		Transactions:    []*types.Transaction{tx, tx},
-	}
-	output, err := json.Marshal(execBlock)
-	assert.NoError(f, err)
-
-	f.Add(output)
-
-	f.Fuzz(func(t *testing.T, jsonBlob []byte) {
-		gethResp := make(map[string]any)
-		prysmResp := &pb.ExecutionBlock{}
-		gethErr := json.Unmarshal(jsonBlob, &gethResp)
-		prysmErr := json.Unmarshal(jsonBlob, prysmResp)
-		// Nothing to marshal if we have an error.
-		if gethErr != nil || prysmErr != nil {
-			return
-		}
-		// Exit early if fuzzer is inserting bogus hashes in.
-		if isBogusTransactionHash(prysmResp, gethResp) {
-			return
-		}
-		// Exit early if fuzzer provides bogus fields.
-		valid, err := jsonFieldsAreValid(prysmResp, gethResp)
-		assert.NoError(t, err)
-		if !valid {
-			return
-		}
-		assert.NoError(t, validateBlockConsistency(prysmResp, gethResp))
-
-		gethBlob, gethErr := json.Marshal(gethResp)
-		prysmBlob, prysmErr := json.Marshal(prysmResp)
-		assert.Equal(t, gethErr != nil, prysmErr != nil, "geth and prysm unmarshaller return inconsistent errors")
-		newGethResp := make(map[string]any)
-		newGethErr := json.Unmarshal(prysmBlob, &newGethResp)
-		assert.NoError(t, newGethErr)
-		newGethResp2 := make(map[string]any)
-		newGethErr = json.Unmarshal(gethBlob, &newGethResp2)
-		assert.NoError(t, newGethErr)
-
-		assert.DeepEqual(t, newGethResp, newGethResp2)
-		compareHeaders(t, jsonBlob)
-	})
-}
-
-func isBogusTransactionHash(blk *pb.ExecutionBlock, jsonMap map[string]any) bool {
-	if blk.Transactions == nil {
+// hasJSONKey reports whether the JSON object in blob has a key that encoding/json would match to one
+// of names, which it does case-insensitively. With parent set, it looks in the objects under the
+// top-level keys that match parent.
+func hasJSONKey(blob []byte, parent string, names ...string) bool {
+	var obj map[string]json.RawMessage
+	if json.Unmarshal(blob, &obj) != nil {
 		return false
 	}
-
-	for i, tx := range blk.Transactions {
-		jsonTx, ok := jsonMap["transactions"].([]any)[i].(map[string]any)
-		if !ok {
-			return true
+	for k, v := range obj {
+		if parent != "" {
+			if strings.EqualFold(k, parent) && hasJSONKey(v, "", names...) {
+				return true
+			}
+			continue
 		}
-		// Fuzzer removed hash field.
-		if _, ok := jsonTx["hash"]; !ok {
-			return true
-		}
-		if tx.Hash().String() != jsonTx["hash"].(string) {
-			return true
+		for _, name := range names {
+			if strings.EqualFold(k, name) {
+				return true
+			}
 		}
 	}
 	return false
-}
-
-func compareHeaders(t *testing.T, jsonBlob []byte) {
-	gethResp := &types.Header{}
-	prysmResp := &pb.ExecutionBlock{}
-	gethErr := json.Unmarshal(jsonBlob, gethResp)
-	prysmErr := json.Unmarshal(jsonBlob, prysmResp)
-	assert.Equal(t, gethErr != nil, prysmErr != nil, fmt.Sprintf("geth and prysm unmarshaller return inconsistent errors. %v and %v", gethErr, prysmErr))
-	// Nothing to marshal if we have an error.
-	if gethErr != nil {
-		return
-	}
-
-	gethBlob, gethErr := json.Marshal(gethResp)
-	prysmBlob, prysmErr := json.Marshal(prysmResp.Header)
-	assert.Equal(t, gethErr != nil, prysmErr != nil, "geth and prysm unmarshaller return inconsistent errors")
-	newGethResp := &types.Header{}
-	newGethErr := json.Unmarshal(prysmBlob, newGethResp)
-	assert.NoError(t, newGethErr)
-	newGethResp2 := &types.Header{}
-	newGethErr = json.Unmarshal(gethBlob, newGethResp2)
-	assert.NoError(t, newGethErr)
-
-	assert.DeepEqual(t, newGethResp, newGethResp2)
-}
-
-func validateBlockConsistency(execBlock *pb.ExecutionBlock, jsonMap map[string]any) error {
-	blockVal := reflect.ValueOf(execBlock).Elem()
-	bType := reflect.TypeFor[pb.ExecutionBlock]()
-
-	fieldnum := bType.NumField()
-
-	for i := range fieldnum {
-		field := bType.Field(i)
-		fName := field.Tag.Get("json")
-		if field.Name == "Header" {
-			continue
-		}
-		if fName == "" {
-			return errors.Errorf("Field %s had no json tag", field.Name)
-		}
-		fVal, ok := jsonMap[fName]
-		if !ok {
-			return errors.Errorf("%s doesn't exist in json map for field %s", fName, field.Name)
-		}
-		jsonVal := fVal
-		bVal := blockVal.Field(i).Interface()
-		if field.Name == "Hash" {
-			jsonVal = common.HexToHash(jsonVal.(string))
-		}
-		if field.Name == "Transactions" {
-			continue
-		}
-		if !reflect.DeepEqual(jsonVal, bVal) {
-			return errors.Errorf("fields don't match, %v and %v are not equal for field %s", jsonVal, bVal, field.Name)
-		}
-	}
-	return nil
-}
-
-func jsonFieldsAreValid(execBlock *pb.ExecutionBlock, jsonMap map[string]any) (bool, error) {
-	bType := reflect.TypeFor[pb.ExecutionBlock]()
-
-	fieldnum := bType.NumField()
-
-	for i := range fieldnum {
-		field := bType.Field(i)
-		fName := field.Tag.Get("json")
-		if field.Name == "Header" {
-			continue
-		}
-		if fName == "" {
-			return false, errors.Errorf("Field %s had no json tag", field.Name)
-		}
-		_, ok := jsonMap[fName]
-		if !ok {
-			return false, nil
-		}
-	}
-	return true, nil
 }
