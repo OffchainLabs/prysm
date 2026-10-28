@@ -2,6 +2,7 @@ package validator
 
 import (
 	"context"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -183,6 +184,13 @@ func (vs *Server) GetPTCDuties(ctx context.Context, req *ethpb.PTCDutiesRequest)
 		return nil, status.Errorf(codes.InvalidArgument, "Request epoch %d can not be greater than next epoch %d", req.Epoch, nextEpoch)
 	}
 
+	if req.Epoch == params.BeaconConfig().GloasForkEpoch && currentEpoch < req.Epoch {
+		forkStart, err := slots.StartTime(vs.TimeFetcher.GenesisTime(), slots.UnsafeEpochStart(req.Epoch))
+		if err != nil || time.Until(forkStart) > params.BeaconConfig().MaximumGossipClockDisparityDuration() {
+			return nil, status.Errorf(codes.InvalidArgument, "PTC duties for the Gloas fork epoch %d are not available until the fork", req.Epoch)
+		}
+	}
+
 	s, err := vs.stateForEpoch(ctx, req.Epoch)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get state for epoch: %v", err)
@@ -193,9 +201,16 @@ func (vs *Server) GetPTCDuties(ctx context.Context, req *ethpb.PTCDutiesRequest)
 		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
 	}
 
-	dependentRoot, err := vs.attestationDependentRoot(ctx, s, req.Epoch)
+	dependentRoot, err := core.PTCDependentRoot(s, req.Epoch)
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
+	}
+	if dependentRoot == nil {
+		r, err := vs.BeaconDB.GenesisBlockRoot(ctx)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not get genesis block root: %v", err)
+		}
+		dependentRoot = r[:]
 	}
 
 	optimistic, err := vs.OptimisticModeFetcher.IsOptimistic(ctx)
