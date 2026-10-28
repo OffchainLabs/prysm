@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/urfave/cli/v2"
@@ -142,8 +141,7 @@ var (
 	// AuthTokenPathFlag defines the path to the auth token used to secure the validator api.
 	AuthTokenPathFlag = &cli.StringFlag{
 		Name:    "keymanager-token-file",
-		Usage:   "Path to auth token file used for validator apis.",
-		Value:   filepath.Join(filepath.Join(DefaultValidatorDir(), WalletDefaultDirName), api.AuthTokenFileName),
+		Usage:   "Path to auth token file used for validator apis. Defaults to auth-token in the wallet directory.",
 		Aliases: []string{"validator-api-bearer-file"},
 	}
 	// WalletDirFlag defines the path to a wallet directory for Prysm accounts.

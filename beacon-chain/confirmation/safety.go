@@ -1,6 +1,8 @@
 package confirmation
 
 import (
+	"fmt"
+
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
@@ -68,8 +70,9 @@ func GetAdversarialWeight(
 //	parent_block = store.blocks[block.parent_root]
 //	if parent_block.slot + 1 == block.slot:
 //	    return Gwei(0)
-//	parent_support_in_empty_slots = get_block_support_between_slots(
-//	    store, balance_source, block.parent_root,
+//	parent_node = get_ancestor(store, get_node_for_root(block_root), parent_block.slot)
+//	parent_support_in_empty_slots = get_node_support_between_slots(
+//	    store, balance_source, parent_node,
 //	    parent_block.slot + 1, block.slot - 1)
 //	adversarial_weight = compute_adversarial_weight(
 //	    store, balance_source, parent_block.slot + 1, block.slot - 1)
@@ -107,7 +110,13 @@ func ComputeEmptySlotSupportDiscount(
 	emptyStart := parentSlot + 1
 	emptyEnd := blockSlot - 1
 
-	parentSupport := support.BlockSupportBetweenSlots(parentRoot, emptyStart, emptyEnd)
+	parentBlockHash, err := fc.BlockHash(parentRoot)
+	if err != nil {
+		log.WithError(err).WithField("parentRoot", fmt.Sprintf("%#x", parentRoot)).Debug("Could not get parent block hash for empty slot support discount")
+		return 0
+	}
+	parentFull := fc.ParentHash(blockRoot) == parentBlockHash
+	parentSupport := support.NodeSupportBetweenSlots(parentRoot, parentSlot, parentFull, emptyStart, emptyEnd)
 	equivScore := equivScorer(emptyStart, emptyEnd)
 	adversarial := ComputeAdversarialWeight(totalActiveBalance, equivScore, emptyStart, emptyEnd)
 

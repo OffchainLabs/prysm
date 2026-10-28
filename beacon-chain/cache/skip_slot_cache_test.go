@@ -23,7 +23,7 @@ func TestSkipSlotCache_RoundTrip(t *testing.T) {
 
 	require.NoError(t, c.MarkInProgress(r))
 
-	s, err = state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	s, err = state_native.New(&ethpb.BeaconState{
 		Slot: 10,
 	})
 	require.NoError(t, err)
@@ -33,7 +33,7 @@ func TestSkipSlotCache_RoundTrip(t *testing.T) {
 
 	res, err := c.Get(ctx, r)
 	require.NoError(t, err)
-	assert.DeepEqual(t, res.ToProto(), s.ToProto(), "Expected equal protos to return from cache")
+	assert.DeepEqual(t, res.ToContainer(), s.ToContainer(), "Expected equal states to return from cache")
 }
 
 func TestSkipSlotCache_DisabledAndEnabled(t *testing.T) {

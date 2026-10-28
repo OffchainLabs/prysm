@@ -122,6 +122,16 @@ type PayloadAttributesV3 struct {
 	ParentBeaconBlockRoot string        `json:"parent_beacon_block_root"`
 }
 
+type PayloadAttributesV4 struct {
+	Timestamp             string        `json:"timestamp"`
+	PrevRandao            string        `json:"prev_randao"`
+	SuggestedFeeRecipient string        `json:"suggested_fee_recipient"`
+	Withdrawals           []*Withdrawal `json:"withdrawals"`
+	ParentBeaconBlockRoot string        `json:"parent_beacon_block_root"`
+	SlotNumber            string        `json:"slot_number"`
+	TargetGasLimit        string        `json:"target_gas_limit"`
+}
+
 type BlobSidecarEvent struct {
 	BlockRoot     string `json:"block_root"`
 	Index         string `json:"index"`

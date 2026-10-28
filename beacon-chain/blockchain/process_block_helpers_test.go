@@ -25,7 +25,7 @@ func TestSaveHeadIfNeeded_NotNewHead_NoOp(t *testing.T) {
 	headRoot := bytesutil.ToBytes32([]byte("headroot"))
 	blockHash := bytesutil.ToBytes32([]byte("hash1"))
 	base, blk := testGloasState(t, 1, params.BeaconConfig().ZeroHash, blockHash)
-	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	st, err := state_native.NewUnsafe(base)
 	require.NoError(t, err)
 	signed, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)

@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -522,6 +523,14 @@ func (s *Server) SubmitVoluntaryExit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.VoluntaryExitsPool.InsertVoluntaryExit(exit)
+
+	s.OperationNotifier.OperationFeed().Send(&feed.Event{
+		Type: operation.ExitReceived,
+		Data: &operation.ExitReceivedData{
+			Exit: exit,
+		},
+	})
+
 	if err = s.Broadcaster.Broadcast(ctx, exit); err != nil {
 		httputil.HandleError(w, "Could not broadcast exit: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -986,13 +995,6 @@ func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Reques
 		if consensusMsg == nil {
 			continue
 		}
-		if _, err := bls.SignatureFromBytes(consensusMsg.Signature); err != nil {
-			failures = append(failures, &server.IndexedError{
-				Index:   i,
-				Message: "Incorrect payload attestation signature: " + err.Error(),
-			})
-			continue
-		}
 		if consensusMsg.Data.Slot != currentSlot {
 			failures = append(failures, &server.IndexedError{
 				Index:   i,
@@ -1015,6 +1017,13 @@ func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Reques
 			failures = append(failures, &server.IndexedError{
 				Index:   i,
 				Message: "Could not determine PTC committee index: " + err.Error(),
+			})
+			continue
+		}
+		if err := verification.VerifyPayloadAttestationMessageSignature(st, consensusMsg); err != nil {
+			failures = append(failures, &server.IndexedError{
+				Index:   i,
+				Message: "Incorrect payload attestation signature: " + err.Error(),
 			})
 			continue
 		}

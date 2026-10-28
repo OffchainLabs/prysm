@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -73,8 +74,7 @@ func TestSetSelfBuildExecutionPayloadBid(t *testing.T) {
 	require.Equal(t, bidSourceSelfBuild, src)
 
 	// Verify the signed bid was set on the block.
-	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
-	require.NoError(t, err)
+	signedBid := signedBidProto(t, sBlk)
 	require.NotNil(t, signedBid)
 	require.NotNil(t, signedBid.Message)
 
@@ -140,8 +140,7 @@ func TestSetSelfBuildExecutionPayloadBid_BlobCommitments(t *testing.T) {
 	_, err = vs.setExecutionPayloadBid(t.Context(), sBlk, nil, local, nil, nil, true)
 	require.NoError(t, err)
 
-	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
-	require.NoError(t, err)
+	signedBid := signedBidProto(t, sBlk)
 	require.NotNil(t, signedBid.Message)
 
 	// Verify blob KZG commitments are set on the bid (not empty).
@@ -231,8 +230,7 @@ func TestSetExecutionPayloadBid_PrefersP2PBid(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, bidSourceP2P, src)
 
-	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
-	require.NoError(t, err)
+	signedBid := signedBidProto(t, sBlk)
 	require.NotNil(t, signedBid)
 
 	// Should use the P2P bid, not the self-build bid.
@@ -305,8 +303,7 @@ func TestSetExecutionPayloadBid_IgnoresBlacklistedP2PBid(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, bidSourceSelfBuild, src)
 
-	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
-	require.NoError(t, err)
+	signedBid := signedBidProto(t, sBlk)
 	require.Equal(t, params.BeaconConfig().BuilderIndexSelfBuild, signedBid.Message.BuilderIndex)
 }
 
@@ -374,8 +371,7 @@ func TestSetExecutionPayloadBid_PrefersLocalWhenHigherValue(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, bidSourceSelfBuild, src)
 
-	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
-	require.NoError(t, err)
+	signedBid := signedBidProto(t, sBlk)
 	require.NotNil(t, signedBid)
 
 	// Local value is higher, so self-build should be used.
@@ -447,8 +443,7 @@ func TestSetExecutionPayloadBid_SelfBuildOnlyIgnoresCache(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, bidSourceSelfBuild, src)
 
-	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
-	require.NoError(t, err)
+	signedBid := signedBidProto(t, sBlk)
 	require.NotNil(t, signedBid)
 
 	// selfBuildOnly forces self-build even when P2P bid is higher.
@@ -499,12 +494,99 @@ func TestSetExecutionPayloadBid_FallsBackToSelfBuildWhenNoCachedBid(t *testing.T
 	require.NoError(t, err)
 	require.Equal(t, bidSourceSelfBuild, src)
 
-	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
-	require.NoError(t, err)
+	signedBid := signedBidProto(t, sBlk)
 	require.NotNil(t, signedBid)
 
 	// Should fall back to self-build.
 	require.Equal(t, params.BeaconConfig().BuilderIndexSelfBuild, signedBid.Message.BuilderIndex)
 	require.Equal(t, primitives.Gwei(0), signedBid.Message.Value)
 	require.DeepEqual(t, common.InfiniteSignature[:], signedBid.Signature)
+}
+
+// signedBidProto returns the signed execution payload bid protobuf of a Gloas block.
+func signedBidProto(t *testing.T, blk interfaces.ReadOnlySignedBeaconBlock) *ethpb.SignedExecutionPayloadBid {
+	pb, err := blk.Block().Body().Proto()
+	require.NoError(t, err)
+	body, ok := pb.(*ethpb.BeaconBlockBodyGloas)
+	require.Equal(t, true, ok)
+	return body.SignedExecutionPayloadBid
+}
+
+// A Heze block cannot carry a Gloas-signed remote bid, so it self-builds a Heze bid even when a
+// higher P2P bid is cached, and the remote-only fallback refuses.
+func TestSetExecutionPayloadBid_Heze(t *testing.T) {
+	parentHash := [32]byte{10, 20, 30}
+	parentRoot := [32]byte{1, 2, 3}
+	slot := primitives.Slot(100)
+
+	newBlock := func(t *testing.T) interfaces.SignedBeaconBlock {
+		sBlk, err := consensusblocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockHeze{
+			Block: &ethpb.BeaconBlockHeze{
+				Slot:       slot,
+				ParentRoot: parentRoot[:],
+				Body:       &ethpb.BeaconBlockBodyHeze{},
+			},
+		})
+		require.NoError(t, err)
+		return sBlk
+	}
+
+	bidCache := cache.NewHighestExecutionPayloadBidCache()
+	bidCache.SetIfHigher(&ethpb.SignedExecutionPayloadBid{
+		Message: &ethpb.ExecutionPayloadBid{
+			Slot:                  slot,
+			ParentBlockHash:       parentHash[:],
+			ParentBlockRoot:       parentRoot[:],
+			BlockHash:             make([]byte, 32),
+			BuilderIndex:          5,
+			Value:                 1000,
+			FeeRecipient:          make([]byte, 20),
+			PrevRandao:            make([]byte, 32),
+			BlobKzgCommitments:    [][]byte{},
+			ExecutionRequestsRoot: make([]byte, 32),
+		},
+		Signature: make([]byte, 96),
+	})
+	vs := &Server{HighestBidCache: bidCache}
+
+	t.Run("self-build", func(t *testing.T) {
+		ed, err := consensusblocks.WrappedExecutionPayloadDeneb(&enginev1.ExecutionPayloadDeneb{
+			ParentHash:    parentHash[:],
+			FeeRecipient:  make([]byte, 20),
+			StateRoot:     make([]byte, 32),
+			ReceiptsRoot:  make([]byte, 32),
+			LogsBloom:     make([]byte, 256),
+			PrevRandao:    make([]byte, 32),
+			BaseFeePerGas: make([]byte, 32),
+			BlockHash:     make([]byte, 32),
+			ExtraData:     make([]byte, 0),
+		})
+		require.NoError(t, err)
+		local := &consensusblocks.GetPayloadResponse{
+			ExecutionData:          ed,
+			Bid:                    big.NewInt(0),
+			BlobsBundler:           &enginev1.BlobsBundle{},
+			ExecutionRequestsGloas: &enginev1.ExecutionRequestsGloas{},
+		}
+
+		sBlk := newBlock(t)
+		src, err := vs.setExecutionPayloadBid(t.Context(), sBlk, nil, local, nil, nil, false)
+		require.NoError(t, err)
+		require.Equal(t, bidSourceSelfBuild, src)
+
+		signed, err := sBlk.Block().Body().SignedExecutionPayloadBid()
+		require.NoError(t, err)
+		sig := signed.Signature()
+		require.DeepEqual(t, common.InfiniteSignature[:], sig[:])
+		bid := signed.Bid()
+		require.Equal(t, params.BeaconConfig().BuilderIndexSelfBuild, bid.BuilderIndex())
+		require.Equal(t, parentRoot, bid.ParentBlockRoot())
+		require.Equal(t, uint64(16), bid.InclusionListBits().Len())
+		require.Equal(t, uint64(0), bid.InclusionListBits().Count())
+	})
+
+	t.Run("remote fallback", func(t *testing.T) {
+		_, err := vs.setRemoteBidFallback(t.Context(), newBlock(t), nil, false, nil, nil)
+		require.ErrorContains(t, "not supported for Heze", err)
+	})
 }

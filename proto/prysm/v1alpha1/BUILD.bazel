@@ -110,6 +110,14 @@ ssz_methodical(
 )
 
 ssz_methodical(
+    name = "methodical_heze",
+    deps = [":beacon_state_go"],
+    config_file = "heze.yaml",
+    override_package_name = "eth",
+    out = "heze.ssz.go",
+)
+
+ssz_methodical(
     name = "methodical_non_core",
     deps = [":go_proto"],
     config_file = "non-core.yaml",
@@ -171,7 +179,9 @@ go_library(
         "cloners.go",
         "eip_7521.go",
         "gloas.go",
+        "heze.go",
         "log.go",
+        "p2p_messages.go",
         "sync_committee_mainnet.go",
         "sync_committee_minimal.go",  # keep
         "payload_attestation_mainnet.go",
@@ -183,6 +193,7 @@ go_library(
         ":methodical_electra", # keep
         ":methodical_fulu", # keep
         ":methodical_gloas", # keep
+        ":methodical_heze", # keep
         ":methodical_non_core", # keep
         ":methodical_phase0", # keep
         "validator.go",
@@ -191,6 +202,7 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1",
     visibility = ["//visibility:public"],
     deps = [
+        "//config/fieldparams:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//math:go_default_library",
         "//proto/engine/v1:go_default_library",
@@ -230,6 +242,7 @@ ssz_proto_files(
         "data_columns.proto",
         "gloas.proto",
 	"gloas_builder_api.proto",
+        "heze.proto",
         "light_client.proto",
         "partial_data_columns.proto",
         "sync_committee.proto",

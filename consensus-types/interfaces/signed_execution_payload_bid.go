@@ -1,14 +1,16 @@
 package interfaces
 
 import (
+	"github.com/OffchainLabs/go-bitfield"
 	field_params "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
 type ROSignedExecutionPayloadBid interface {
-	Bid() (ROExecutionPayloadBid, error)
+	Bid() ROExecutionPayloadBid
 	Signature() [field_params.BLSSignatureLength]byte
 	SigningRoot([]byte) ([32]byte, error)
+	HashTreeRoot() ([32]byte, error)
 	IsNil() bool
 }
 
@@ -26,5 +28,6 @@ type ROExecutionPayloadBid interface {
 	BlobKzgCommitmentCount() uint64
 	FeeRecipient() [20]byte
 	ExecutionRequestsRoot() [32]byte
+	InclusionListBits() bitfield.Bitvector16
 	IsNil() bool
 }

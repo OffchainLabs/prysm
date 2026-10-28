@@ -188,6 +188,16 @@ func decodeLightClientBootstrap(enc []byte) (interfaces.LightClientBootstrap, []
 		}
 		m = bootstrap
 		syncCommitteeHash = enc[len(fuluKey) : len(fuluKey)+32]
+	case hasGloasKey(enc):
+		if len(enc) < len(gloasKey)+32 {
+			return nil, nil, errors.New("Gloas light client bootstrap is missing sync committee hash")
+		}
+		bootstrap := &ethpb.LightClientBootstrapGloas{}
+		if err := bootstrap.UnmarshalSSZ(enc[len(gloasKey)+32:]); err != nil {
+			return nil, nil, errors.Wrap(err, "could not unmarshal Gloas light client bootstrap")
+		}
+		m = bootstrap
+		syncCommitteeHash = enc[len(gloasKey) : len(gloasKey)+32]
 	default:
 		return nil, nil, errors.New("decoding of saved light client bootstrap is unsupported")
 	}
@@ -309,6 +319,12 @@ func decodeLightClientUpdate(enc []byte) (interfaces.LightClientUpdate, error) {
 			return nil, errors.Wrap(err, "could not unmarshal Fulu light client update")
 		}
 		m = update
+	case hasGloasKey(enc):
+		update := &ethpb.LightClientUpdateGloas{}
+		if err := update.UnmarshalSSZ(enc[len(gloasKey):]); err != nil {
+			return nil, errors.Wrap(err, "could not unmarshal Gloas light client update")
+		}
+		m = update
 	default:
 		return nil, errors.New("decoding of saved light client update is unsupported")
 	}
@@ -317,6 +333,8 @@ func decodeLightClientUpdate(enc []byte) (interfaces.LightClientUpdate, error) {
 
 func keyForLightClientUpdate(v int) ([]byte, error) {
 	switch v {
+	case version.Gloas:
+		return gloasKey, nil
 	case version.Fulu:
 		return fuluKey, nil
 	case version.Electra:

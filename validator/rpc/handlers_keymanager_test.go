@@ -2066,6 +2066,35 @@ func TestServer_Graffiti(t *testing.T) {
 		require.Equal(t, http.StatusAccepted, w.Code)
 	})
 
+	t.Run("set 32 bytes", func(t *testing.T) {
+		maxGraffiti := strings.Repeat("a", 30) + "é"
+		vs.EXPECT().SetGraffiti(gomock.Any(), key, []byte(maxGraffiti)).Return(nil)
+		var buf bytes.Buffer
+		require.NoError(t, json.NewEncoder(&buf).Encode(struct {
+			Graffiti string `json:"graffiti"`
+		}{Graffiti: maxGraffiti}))
+		req := httptest.NewRequest(http.MethodPost, "/eth/v1/validator/{pubkey}/graffiti", &buf)
+		req.SetPathValue("pubkey", pubkey)
+		w := httptest.NewRecorder()
+		s.SetGraffiti(w, req)
+		require.Equal(t, http.StatusAccepted, w.Code)
+	})
+
+	t.Run("set 33 bytes returns 400", func(t *testing.T) {
+		// 32 characters but 33 bytes: the limit counts UTF-8 bytes.
+		tooLong := strings.Repeat("a", 31) + "é"
+		var buf bytes.Buffer
+		require.NoError(t, json.NewEncoder(&buf).Encode(struct {
+			Graffiti string `json:"graffiti"`
+		}{Graffiti: tooLong}))
+		req := httptest.NewRequest(http.MethodPost, "/eth/v1/validator/{pubkey}/graffiti", &buf)
+		req.SetPathValue("pubkey", pubkey)
+		w := httptest.NewRecorder()
+		s.SetGraffiti(w, req)
+		require.Equal(t, http.StatusBadRequest, w.Code)
+		require.StringContains(t, "32 bytes", w.Body.String())
+	})
+
 	t.Run("get", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/eth/v1/validator/{pubkey}/graffiti", nil)
 		req.SetPathValue("pubkey", pubkey)

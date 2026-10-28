@@ -693,6 +693,26 @@ func TestCurrentNeedsIntegration(t *testing.T) {
 	}
 }
 
+// TestNewSyncNeedsUnscheduledForks covers configs that leave later forks at the far-future
+// epoch, like the e2e config: the fork slots must clamp instead of overflowing.
+func TestNewSyncNeedsUnscheduledForks(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = math.MaxUint64
+	cfg.GloasForkEpoch = math.MaxUint64
+	params.OverrideBeaconConfig(cfg)
+
+	current := primitives.Slot(10_000_000) // well past the mainnet Deneb fork slot
+	sn, err := NewSyncNeeds(func() primitives.Slot { return current }, nil, nil, 0)
+	require.NoError(t, err)
+	cn := sn.Currently()
+	// Neither fork is reachable, so no slot needs columns or envelopes.
+	require.Equal(t, false, cn.Col.At(current))
+	require.Equal(t, false, cn.Env.At(current))
+	// Blobs are still needed inside the retention window because the blob era never ended.
+	require.Equal(t, true, cn.Blob.At(current))
+}
+
 // TestSyncNeedsCurrentlyEnv tests the Env span used by envelope backfill.
 func TestSyncNeedsCurrentlyEnv(t *testing.T) {
 	params.SetupTestConfigCleanup(t)

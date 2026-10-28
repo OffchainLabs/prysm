@@ -130,9 +130,8 @@ func executeStateTransitionStateGen(
 		}
 	}
 	if signed.Block().Version() >= version.Gloas {
-		signedBid, bidErr := signed.Block().Body().SignedExecutionPayloadBid()
-		if bidErr == nil && signedBid != nil && signedBid.Message != nil && len(signedBid.Message.ParentBlockHash) == 32 {
-			fields["bidParentBlockHash"] = fmt.Sprintf("%#x", [32]byte(signedBid.Message.ParentBlockHash))
+		if bid, bidErr := signed.Block().Body().ExecutionPayloadBid(); bidErr == nil {
+			fields["bidParentBlockHash"] = fmt.Sprintf("%#x", bid.ParentBlockHash())
 		}
 	}
 	log.WithError(err).WithFields(fields).Debug("Failed to process block during stategen replay")

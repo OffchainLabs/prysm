@@ -34,7 +34,7 @@ import (
 )
 
 func TestService_StatusZeroEpoch(t *testing.T) {
-	bState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 0})
+	bState, err := state_native.New(&ethpb.BeaconState{Slot: 0})
 	require.NoError(t, err)
 	chain := &mockChain.ChainService{
 		Genesis: time.Now(),

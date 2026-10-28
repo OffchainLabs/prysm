@@ -110,42 +110,30 @@ func makeEnvChain(t *testing.T, cfg envChainCfg) *envChain {
 	return c
 }
 
-func testGloasPayload(slot primitives.Slot, blockHash, parentHash []byte) *enginev1.ExecutionPayloadGloas {
-	return &enginev1.ExecutionPayloadGloas{
-		ParentHash:    parentHash,
-		FeeRecipient:  make([]byte, 20),
-		StateRoot:     make([]byte, 32),
-		ReceiptsRoot:  make([]byte, 32),
-		LogsBloom:     make([]byte, 256),
-		PrevRandao:    make([]byte, 32),
-		BlockNumber:   uint64(slot),
-		BaseFeePerGas: make([]byte, 32),
-		BlockHash:     blockHash,
-		SlotNumber:    slot,
-	}
-}
-
 // envelope builds a signed envelope for block i, signed by signer over the builder domain for
 // the block's epoch. Passing a nil signer selects the correct signer for the bid's builder index.
 func (c *envChain) envelope(t *testing.T, i int, signer bls.SecretKey) *ethpb.SignedExecutionPayloadEnvelope {
 	t.Helper()
 	b := c.blks[i]
-	bid, err := b.Block().Body().SignedExecutionPayloadBid()
+	sb, err := b.Block().Body().SignedExecutionPayloadBid()
 	require.NoError(t, err)
+	bid := sb.Bid()
 	root := b.Root()
 	parentRoot := b.Block().ParentRoot()
+	blockHash := bid.BlockHash()
+	parentBlockHash := bid.ParentBlockHash()
 	msg := &ethpb.ExecutionPayloadEnvelope{
-		Payload:               testGloasPayload(b.Block().Slot(), bid.Message.BlockHash, bid.Message.ParentBlockHash),
+		Payload:               testGloasPayload(b.Block().Slot(), blockHash[:], parentBlockHash[:]),
 		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
-		BuilderIndex:          bid.Message.BuilderIndex,
+		BuilderIndex:          bid.BuilderIndex(),
 		BeaconBlockRoot:       root[:],
 		ParentBeaconBlockRoot: parentRoot[:],
 	}
 	if signer == nil {
-		if bid.Message.BuilderIndex == params.BeaconConfig().BuilderIndexSelfBuild {
+		if bid.BuilderIndex() == params.BeaconConfig().BuilderIndexSelfBuild {
 			signer = c.sks[b.Block().ProposerIndex()]
 		} else {
-			signer = c.builderSks[bid.Message.BuilderIndex]
+			signer = c.builderSks[bid.BuilderIndex()]
 		}
 	}
 	dom, err := c.domain.forEpoch(slots.ToEpoch(b.Block().Slot()))
@@ -159,13 +147,14 @@ func (c *envChain) envelope(t *testing.T, i int, signer bls.SecretKey) *ethpb.Si
 func (c *envChain) resign(t *testing.T, env *ethpb.SignedExecutionPayloadEnvelope, i int) {
 	t.Helper()
 	b := c.blks[i]
-	bid, err := b.Block().Body().SignedExecutionPayloadBid()
+	sb, err := b.Block().Body().SignedExecutionPayloadBid()
 	require.NoError(t, err)
+	bid := sb.Bid()
 	var signer bls.SecretKey
-	if bid.Message.BuilderIndex == params.BeaconConfig().BuilderIndexSelfBuild {
+	if bid.BuilderIndex() == params.BeaconConfig().BuilderIndexSelfBuild {
 		signer = c.sks[b.Block().ProposerIndex()]
 	} else {
-		signer = c.builderSks[bid.Message.BuilderIndex]
+		signer = c.builderSks[bid.BuilderIndex()]
 	}
 	dom, err := c.domain.forEpoch(slots.ToEpoch(b.Block().Slot()))
 	require.NoError(t, err)
@@ -410,9 +399,10 @@ func TestEnvelopeFetchAndVerify(t *testing.T) {
 		require.Equal(t, 3, len(es.held))
 		require.Equal(t, 0, len(ds.calls))
 		// Held envelopes are blinded: the payload is reduced to its block hash.
-		bid, err := c.blks[0].Block().Body().SignedExecutionPayloadBid()
+		sb, err := c.blks[0].Block().Body().SignedExecutionPayloadBid()
 		require.NoError(t, err)
-		require.DeepEqual(t, bid.Message.BlockHash, es.held[10].Message.BlockHash)
+		blockHash := sb.Bid().BlockHash()
+		require.DeepEqual(t, blockHash[:], es.held[10].Message.BlockHash)
 		require.Equal(t, primitives.Slot(10), es.held[10].Message.Slot)
 	})
 	t.Run("self-build signed by a different validator key fails and rotates", func(t *testing.T) {

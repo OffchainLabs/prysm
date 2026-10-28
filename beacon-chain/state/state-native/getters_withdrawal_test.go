@@ -17,21 +17,21 @@ import (
 
 func TestNextWithdrawalIndex(t *testing.T) {
 	t.Run("ok for deneb", func(t *testing.T) {
-		s, err := state_native.InitializeFromProtoDeneb(&ethpb.BeaconStateDeneb{NextWithdrawalIndex: 123})
+		s, err := state_native.New(&ethpb.BeaconStateDeneb{NextWithdrawalIndex: 123})
 		require.NoError(t, err)
 		i, err := s.NextWithdrawalIndex()
 		require.NoError(t, err)
 		assert.Equal(t, uint64(123), i)
 	})
 	t.Run("ok", func(t *testing.T) {
-		s, err := state_native.InitializeFromProtoCapella(&ethpb.BeaconStateCapella{NextWithdrawalIndex: 123})
+		s, err := state_native.New(&ethpb.BeaconStateCapella{NextWithdrawalIndex: 123})
 		require.NoError(t, err)
 		i, err := s.NextWithdrawalIndex()
 		require.NoError(t, err)
 		assert.Equal(t, uint64(123), i)
 	})
 	t.Run("version before Capella not supported", func(t *testing.T) {
-		s, err := state_native.InitializeFromProtoBellatrix(&ethpb.BeaconStateBellatrix{})
+		s, err := state_native.New(&ethpb.BeaconStateBellatrix{})
 		require.NoError(t, err)
 		_, err = s.NextWithdrawalIndex()
 		assert.ErrorContains(t, "NextWithdrawalIndex is not supported", err)
@@ -40,23 +40,23 @@ func TestNextWithdrawalIndex(t *testing.T) {
 
 func TestNextWithdrawalValidatorIndex(t *testing.T) {
 	t.Run("ok for deneb", func(t *testing.T) {
-		pb := &ethpb.BeaconStateDeneb{NextWithdrawalValidatorIndex: 123}
-		s, err := state_native.InitializeFromProtoDeneb(pb)
+		container := &ethpb.BeaconStateDeneb{NextWithdrawalValidatorIndex: 123}
+		s, err := state_native.New(container)
 		require.NoError(t, err)
 		i, err := s.NextWithdrawalValidatorIndex()
 		require.NoError(t, err)
 		assert.Equal(t, primitives.ValidatorIndex(123), i)
 	})
 	t.Run("ok", func(t *testing.T) {
-		pb := &ethpb.BeaconStateCapella{NextWithdrawalValidatorIndex: 123}
-		s, err := state_native.InitializeFromProtoCapella(pb)
+		container := &ethpb.BeaconStateCapella{NextWithdrawalValidatorIndex: 123}
+		s, err := state_native.New(container)
 		require.NoError(t, err)
 		i, err := s.NextWithdrawalValidatorIndex()
 		require.NoError(t, err)
 		assert.Equal(t, primitives.ValidatorIndex(123), i)
 	})
 	t.Run("version before Capella not supported", func(t *testing.T) {
-		s, err := state_native.InitializeFromProtoBellatrix(&ethpb.BeaconStateBellatrix{})
+		s, err := state_native.New(&ethpb.BeaconStateBellatrix{})
 		require.NoError(t, err)
 		_, err = s.NextWithdrawalValidatorIndex()
 		assert.ErrorContains(t, "NextWithdrawalValidatorIndex is not supported", err)
@@ -339,9 +339,9 @@ func TestExpectedWithdrawals(t *testing.T) {
 		require.NoError(t, err)
 		serializedSSZ, err := snappy.Decode(nil /* dst */, serializedBytes)
 		require.NoError(t, err)
-		pb := &ethpb.BeaconStateElectra{}
-		require.NoError(t, pb.UnmarshalSSZ(serializedSSZ))
-		s, err := state_native.InitializeFromProtoElectra(pb)
+		container := &ethpb.BeaconStateElectra{}
+		require.NoError(t, container.UnmarshalSSZ(serializedSSZ))
+		s, err := state_native.New(container)
 		require.NoError(t, err)
 		expected, partialWithdrawalsCount, err := s.ExpectedWithdrawals()
 		require.NoError(t, err)
@@ -356,9 +356,9 @@ func TestExpectedWithdrawals(t *testing.T) {
 		require.NoError(t, err)
 		serializedSSZ, err := snappy.Decode(nil /* dst */, serializedBytes)
 		require.NoError(t, err)
-		pb := &ethpb.BeaconStateElectra{}
-		require.NoError(t, pb.UnmarshalSSZ(serializedSSZ))
-		s, err := state_native.InitializeFromProtoElectra(pb)
+		container := &ethpb.BeaconStateElectra{}
+		require.NoError(t, container.UnmarshalSSZ(serializedSSZ))
+		s, err := state_native.New(container)
 		require.NoError(t, err)
 		p, err := s.PendingPartialWithdrawals()
 		require.NoError(t, err)
@@ -418,7 +418,7 @@ func TestExpectedWithdrawals(t *testing.T) {
 }
 
 func TestExpectedWithdrawals_underflow_electra(t *testing.T) {
-	s, err := state_native.InitializeFromProtoUnsafeElectra(&ethpb.BeaconStateElectra{})
+	s, err := state_native.NewUnsafe(&ethpb.BeaconStateElectra{})
 	require.NoError(t, err)
 	vals := make([]*ethpb.Validator, 1)
 	balances := make([]uint64, 1)

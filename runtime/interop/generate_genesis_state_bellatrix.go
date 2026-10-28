@@ -6,7 +6,6 @@ import (
 	"context"
 
 	coreState "github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
-	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -49,14 +48,10 @@ func GenerateGenesisStateBellatrixFromDepositData(
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not generate genesis state")
 	}
-	bsi := beaconState.ToProtoUnsafe()
-	pbb, ok := bsi.(*ethpb.BeaconStateBellatrix)
+	bsi := beaconState.ToContainerUnsafe()
+	container, ok := bsi.(*ethpb.BeaconStateBellatrix)
 	if !ok {
 		return nil, nil, errors.New("unexpected BeaconState version")
 	}
-	pbState, err := statenative.ProtobufBeaconStateBellatrix(pbb)
-	if err != nil {
-		return nil, nil, err
-	}
-	return pbState, deposits, nil
+	return container, deposits, nil
 }

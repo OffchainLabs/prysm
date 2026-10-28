@@ -72,16 +72,17 @@ type BeaconState struct {
 	proposerLookahead             []primitives.ValidatorIndex       // proposer_look_ahead: List[uint64, (MIN_LOOKAHEAD + 1)*SLOTS_PER_EPOCH]
 
 	// Gloas fields
-	latestExecutionPayloadBid    *ethpb.ExecutionPayloadBid
-	builders                     []*ethpb.Builder
-	builderIdxMap                map[[fieldparams.BLSPubkeyLength]byte]primitives.BuilderIndex
-	nextWithdrawalBuilderIndex   primitives.BuilderIndex
-	executionPayloadAvailability []byte
-	builderPendingPayments       []*ethpb.BuilderPendingPayment
-	builderPendingWithdrawals    []*ethpb.BuilderPendingWithdrawal
-	latestBlockHash              []byte
-	payloadExpectedWithdrawals   []*enginev1.Withdrawal
-	ptcWindow                    []*ethpb.PTCs
+	latestExecutionPayloadBid     *ethpb.ExecutionPayloadBid
+	latestExecutionPayloadBidHeze *ethpb.ExecutionPayloadBidHeze
+	builders                      []*ethpb.Builder
+	builderIdxMap                 map[[fieldparams.BLSPubkeyLength]byte]primitives.BuilderIndex
+	nextWithdrawalBuilderIndex    primitives.BuilderIndex
+	executionPayloadAvailability  []byte
+	builderPendingPayments        []*ethpb.BuilderPendingPayment
+	builderPendingWithdrawals     []*ethpb.BuilderPendingWithdrawal
+	latestBlockHash               []byte
+	payloadExpectedWithdrawals    []*enginev1.Withdrawal
+	ptcWindow                     []*ethpb.PTCs
 
 	id                    uint64
 	lock                  sync.RWMutex
@@ -140,6 +141,7 @@ type beaconStateMarshalable struct {
 	PendingConsolidations               []*ethpb.PendingConsolidation           `json:"pending_consolidations" yaml:"pending_consolidations"`
 	ProposerLookahead                   []primitives.ValidatorIndex             `json:"proposer_look_ahead" yaml:"proposer_look_ahead"`
 	LatestExecutionPayloadBid           *ethpb.ExecutionPayloadBid              `json:"latest_execution_payload_bid" yaml:"latest_execution_payload_bid"`
+	LatestExecutionPayloadBidHeze       *ethpb.ExecutionPayloadBidHeze          `json:"latest_execution_payload_bid_heze" yaml:"latest_execution_payload_bid_heze"`
 	Builders                            []*ethpb.Builder                        `json:"builders" yaml:"builders"`
 	NextWithdrawalBuilderIndex          primitives.BuilderIndex                 `json:"next_withdrawal_builder_index" yaml:"next_withdrawal_builder_index"`
 	ExecutionPayloadAvailability        []byte                                  `json:"execution_payload_availability" yaml:"execution_payload_availability"`
@@ -203,6 +205,7 @@ func (b *BeaconState) MarshalJSON() ([]byte, error) {
 		PendingConsolidations:               b.pendingConsolidations,
 		ProposerLookahead:                   b.proposerLookahead,
 		LatestExecutionPayloadBid:           b.latestExecutionPayloadBid,
+		LatestExecutionPayloadBidHeze:       b.latestExecutionPayloadBidHeze,
 		Builders:                            b.builders,
 		NextWithdrawalBuilderIndex:          b.nextWithdrawalBuilderIndex,
 		ExecutionPayloadAvailability:        b.executionPayloadAvailability,

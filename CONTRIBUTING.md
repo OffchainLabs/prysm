@@ -1,219 +1,83 @@
-# Contribution Guidelines
+# Contributing to Prysm
 
-Note: The latest and most up-to-date documentation can be found on our [docs portal](https://docs.prylabs.network/docs/contribute/contribution-guidelines).
+Questions? Reach us on [Discord](https://discord.gg/qEZK94mFXP).
 
-Excited by our work and want to get involved in building out our sharding releases? Or maybe you haven't learned as much about the Ethereum protocol but are a savvy developer? 
+## Workflow
 
-You can explore our [Open Issues](https://github.com/OffchainLabs/prysm/issues) in-the works for our different releases. Feel free to fork our repo and start creating PR’s after assigning yourself to an issue of interest. We are always chatting on [Discord](https://discord.gg/qEZK94mFXP) drop us a line there if you want to get more involved or have any questions on our implementation!
+> [!IMPORTANT]
+> **Every pull request must fix an issue assigned to its author.** Pull requests from external contributors that don't meet this rule are closed automatically.
 
-> [!IMPORTANT] 
-> Please, **do not send pull requests for trivial changes**, such as typos, these will be rejected. These types of pull requests incur a cost to reviewers and do not provide much value to the project. If you are unsure, please open an issue first to discuss the change.
+1. **Open an issue** describing the bug or feature, or find an [existing one](https://github.com/OffchainLabs/prysm/issues).
+2. **Wait to be assigned.** Comment on the issue to say you want to work on it. Once the approach is agreed upon, a maintainer assigns it to you.
+3. **Open a pull request** against `develop` that references the issue it fixes in its description.
 
-## Contribution Steps
+## Development
 
-**1. Set up Prysm following the instructions in README.md.**
+### Install Bazel
 
-**2. Fork the Prysm repo.**
+Install [Bazelisk](https://github.com/bazelbuild/bazelisk), which downloads the Bazel version pinned in [`.bazelversion`](.bazelversion):
 
-Sign in to your GitHub account or create a new account if you do not have one already. Then navigate your browser to https://github.com/OffchainLabs/prysm/. In the upper right hand corner of the page, click “fork”. This will create a copy of the Prysm repo in your account.
+```sh
+# macOS
+brew install bazelisk
 
-**3. Create a local clone of Prysm.**
+# Linux (amd64)
+curl -L https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-amd64 -o /usr/local/bin/bazel
+chmod +x /usr/local/bin/bazel
 
-```
-$ mkdir -p $GOPATH/src/github.com/OffchainLabs
-$ cd $GOPATH/src/github.com/OffchainLabs
-$ git clone https://github.com/OffchainLabs/prysm.git
-$ cd $GOPATH/src/github.com/OffchainLabs/prysm
-```
-
-**4. Link your local clone to the fork on your GitHub repo.**
-
-```
-$ git remote add myprysmrepo https://github.com/<your_github_user_name>/prysm.git
+# Linux (arm64)
+curl -L https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-arm64 -o /usr/local/bin/bazel
+chmod +x /usr/local/bin/bazel
 ```
 
-**5. Link your local clone to the Prysmatic Labs repo so that you can easily fetch future changes to the Prysmatic Labs repo.**
+Verify the installation with `bazel version`.
 
-```
-$ git remote add prysm https://github.com/OffchainLabs/prysm.git
-$ git remote -v (you should see myrepo and prysm in the list of remotes)
-```
+### Run the beacon node and the validator client
 
-**6. Find an issue to work on.**
+List the beacon node flags:
 
-Check out open issues at https://github.com/OffchainLabs/prysm/issues and pick one. Leave a comment to let the development team know that you would like to work on it. Or examine the code for areas that can be improved and leave a comment to the development team to ask if they would like you to work on it.
-
-**7. Create a local branch with a name that clearly identifies what you will be working on.**
-
-```
-$ git checkout -b feature-in-progress-branch
+```sh
+bazel run //cmd/beacon-chain -- --help
 ```
 
-**8. Make improvements to the code.**
+List the validator client flags:
 
-Each time you work on the code be sure that you are working on the branch that you have created as opposed to your local copy of the Prysmatic Labs repo. Keeping your changes segregated in this branch will make it easier to merge your changes into the repo later.
-
-```
-$ git checkout feature-in-progress-branch
+```sh
+bazel run //cmd/validator -- --help
 ```
 
-**9. Test your changes.**
+### Run tests
 
-Changes that only affect a single file can be tested with
+```sh
+# All tests in a package
+bazel test //beacon-chain/blockchain:go_default_test
 
-```
-$ go test <file_you_are_working_on>
-```
+# A specific test
+bazel test //beacon-chain/blockchain:go_default_test --test_filter='^TestStore_OnBlockBatch$'
 
-**10. Stage the file or files that you want to commit.**
+# With the minimal preset
+bazel test //beacon-chain/blockchain:go_default_test --config=minimal
 
-```
-$ git add --all
-```
-
-This command stages all the files that you have changed. You can add individual files by specifying the file name or names and eliminating the “-- all”.
-
-**11. Commit the file or files.**
-
-```
-$ git commit  -m “Message to explain what the commit covers”
+# All tests
+bazel test //...
 ```
 
-You can use the –amend flag to include previous commits that have not yet been pushed to an upstream repo to the current commit.
+Add `--test_output=errors` to print the logs of failing tests.
 
-**12. Fetch any changes that have occurred in the Prysmatic Labs Prysm repo since you started work.**
+## Changelog
 
-```
-$ git fetch prysm
-```
+Each pull request must add a changelog fragment file in the [`changelog`](changelog) directory, named `<github username>_<branch name>.md`. Its format is described in the [unclog README](https://github.com/OffchainLabs/unclog?tab=readme-ov-file#what-is-a-changelog-fragment).
 
-**13. Pull latest version of Prysm.**
 
-```
-$ git pull origin master
-```
+## Pull request checklist
 
-If there are conflicts between your edits and those made by others since you started work Git will ask you to resolve them. To find out which files have conflicts run ...
+Before opening a pull request, make sure that:
 
-```
-$ git status
-```
+- [ ] The PR fixes an issue assigned to me, and the issue is referenced in the description.
+- [ ] The description explains what the PR does and why, with enough context for reviewers.
+- [ ] New features and bug fixes come with tests, written like the existing ones.
+- [ ] I tested my changes and described how in the description (if applicable).
+- [ ] The PR includes a [changelog fragment](#changelog).
+- [ ] I signed the Contributor License Agreement (CLA). 
 
-Open those files one at a time, and you will see lines inserted by Git that identify the conflicts:
 
-```
-<<<<<< HEAD
-Other developers’ version of the conflicting code
-======
-Your version of the conflicting code
-'>>>>> Your Commit
-```
-
-The code from the Prysm repo is inserted between <<< and === while the change you have made is inserted between === and >>>>. Remove everything between <<<< and >>> and replace it with code that resolves the conflict. Repeat the process for all files listed by git status that have conflicts.
-
-**14. Push your changes to your fork of the Prysm repo.**
-
-Use git push to move your changes to your fork of the repo.
-
-```
-$ git push myrepo feature-in-progress-branch
-```
-
-**15. Check to be sure your fork of the Prysm repo contains your feature branch with the latest edits.**
-
-Navigate to your fork of the repo on GitHub. On the upper left where the current branch is listed, change the branch to your feature-in-progress-branch. Open the files that you have worked on and check to make sure they include your changes.
-
-**16. Add an entry to CHANGELOG.md.**
-
-All PRs must must include a changelog fragment file in the `changelog` directory. If your change is not user-facing or should not be mentioned in the changelog for some other reason, you may use the `Ignored` changelog section in your fragment's header to satisfy this requirement without altering the final release changelog. See the [Maintaining CHANGELOG.md](#maintaining-changelogmd) section for more information.
-
-**17. Create a pull request.**
-
-Navigate your browser to https://github.com/OffchainLabs/prysm and click on the new pull request button. In the “base” box on the left, leave the default selection “base develop”, the branch that you want your changes to be applied to. In the “compare” box on the right, select feature-in-progress-branch, the branch containing the changes you want to apply. You will then be asked to answer a few questions about your pull request. After you complete the questionnaire, the pull request will appear in the list of pull requests at https://github.com/OffchainLabs/prysm/pulls. Ensure that you have added an entry to CHANGELOG.md if your PR is a user-facing change. See the [Maintaining CHANGELOG.md](#maintaining-changelogmd) section for more information.
-
-**18. Respond to comments by Core Contributors.**
-
-Core Contributors may ask questions and request that you make edits. If you set notifications at the top of the page to “not watching,” you will still be notified by email whenever someone comments on the page of a pull request you have created. If you are asked to modify your pull request, repeat steps 8 through 15, then leave a comment to notify the Core Contributors that the pull request is ready for further review.
-
-**19. If the number of commits becomes excessive, you may be asked to squash your commits.**
-
- You can do this with an interactive rebase. Start by running the following command to determine the commit that is the base of your branch...
-
-```
-$ git merge-base feature-in-progress-branch prysm/master
-```
-
-**20. The previous command will return a commit-hash that you should use in the following command.**
-
-```
-$ git rebase -i commit-hash
-```
-
-Your text editor will open with a file that lists the commits in your branch with the word pick in front of each branch such as the following …
-
-```
-pick 	hash	do some work
-pick 	hash 	fix a bug
-pick 	hash 	add a feature
-```
-
-Replace the word pick with the word “squash” for every line but the first, so you end with ….
-
-```
-pick    hash	do some work
-squash  hash 	fix a bug
-squash  hash 	add a feature
-```
-
-Save and close the file, then a commit command will appear in the terminal that squashes the smaller commits into one. Check to be sure the commit message accurately reflects your changes and then hit enter to execute it.
-
-**21. Update your pull request with the following command.**
-
-```
-$ git push myrepo feature-in-progress-branch -f
-```
-
-**22.  Finally, again leave a comment to the Core Contributors on the pull request to let them know that the pull request has been updated.**
-
-## Maintaining CHANGELOG.md
-
-This project follows the changelog guidelines from [keepachangelog.com](https://keepachangelog.com/en/1.1.0/). In order to minimize conflicts and workflow headaches, we chose to implement a changelog management
-strategy that uses changelog "fragment" files, managed by our changelog management tool called `unclog`. Each PR must include a new changelog fragment file in the `changelog` directory, as specified by unclog's
-[README.md](https://github.com/OffchainLabs/unclog?tab=readme-ov-file#what-is-a-changelog-fragment). As the `unclog` README suggests in the [Best Practices](https://github.com/OffchainLabs/unclog?tab=readme-ov-file#best-practices) section, 
-the standard naming convention for your PR's fragment file, to avoid conflicting with another fragment file, is `changelog/<github user name>_<PR branch name>.md`.
-
-### Releasing
-
-When a new release is made, the "Unreleased" section should be moved to a new section with the release version and the current date. Then a new "Unreleased" section is made at the top of the file with the categories listed above.
-
-## Contributor Responsibilities
-
-We consider two types of contributions to our repo and categorize them as follows:
-
-### Part-Time Contributors
-
-Anyone can become a part-time contributor and help out on implementing Ethereum consensus. The responsibilities of a part-time contributor include:
-
--   Engaging in Gitter conversations, asking the questions on how to begin contributing to the project
--   Opening up GitHub issues to express interest in code to implement
--   Opening up PRs referencing any open issue in the repo. PRs should include:
-    -   Detailed context of what would be required for merge
-    -   Tests that are consistent with how other tests are written in our implementation
--   Proper labels, milestones, and projects (see other closed PRs for reference)
--   Follow up on open PRs
-    -   Have an estimated timeframe to completion and let the core contributors know if a PR will take longer than expected
-
-### Core Contributors
-
-Core contributors are remote contractors of Prysmatic Labs, LLC. and are considered critical team members of our organization. Core devs have all the responsibilities of part-time contributors plus the majority of the following:
-
--   Stay up to date on the latest beacon chain specification
--   Monitor GitHub issues and PR’s to make sure owner, labels, descriptions are correct
--   Formulate independent ideas, suggest new work to do, point out improvements to existing approaches
--   Participate in code review, ensure code quality is excellent, and ensure high code coverage
--   Help with social media presence, write bi-weekly development update
--   Represent Prysmatic Labs at events to help spread the word on scalability research and solutions
-
-We love working with people that are autonomous, bring independent thoughts to the team, and are excited for their work! We believe in a merit-based approach to becoming a core contributor, and any part-time contributor that puts in the time, work, and drive can become a core member of our team.
-
-![eth](https://steemitimages.com/DQmV1NASyCJYusDjY1WCvpoWiXh32HyumQHFQhY8zYZ6WDH/source.gif)

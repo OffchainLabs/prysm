@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"sync"
@@ -9,6 +10,8 @@ import (
 
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	p2pmock "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	mockstategen "github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen/mock"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -21,6 +24,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestRegisterSyncSubnetProto(t *testing.T) {
@@ -74,10 +78,21 @@ func pubKey(i uint64) []byte {
 	return pubKey
 }
 
+type failingBroadcaster struct {
+	p2pmock.MockBroadcaster
+}
+
+func (*failingBroadcaster) Broadcast(context.Context, proto.Message) error {
+	return errors.New("broadcast failed")
+}
+
 func TestService_SubmitSignedAggregateSelectionProof(t *testing.T) {
 	slot := primitives.Slot(0)
 	mock := &mockChain.ChainService{Slot: &slot, Genesis: time.Now().Add(-75 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)}
-	s := &Service{GenesisTimeFetcher: mock}
+	s := &Service{GenesisTimeFetcher: mock, OperationNotifier: &mockChain.MockOperationNotifier{}}
+	opChannel := make(chan *feed.Event, 1)
+	opSub := s.OperationNotifier.OperationFeed().Subscribe(opChannel)
+	defer opSub.Unsubscribe()
 	var err error
 	t.Run("Happy path electra", func(t *testing.T) {
 		slot, err = slots.EpochEnd(params.BeaconConfig().ElectraForkEpoch)
@@ -112,8 +127,22 @@ func TestService_SubmitSignedAggregateSelectionProof(t *testing.T) {
 			Signature: fakeSig,
 		}
 		rpcError := s.SubmitSignedAggregateSelectionProof(t.Context(), agg)
-		t.Log(rpcError)
-		assert.Equal(t, true, rpcError == nil)
+		require.Equal(t, true, rpcError == nil)
+
+		require.Equal(t, 1, len(opChannel))
+		e := <-opChannel
+		require.Equal(t, feed.EventType(opfeed.AggregatedAttReceived), e.Type)
+		data, ok := e.Data.(*opfeed.AggregatedAttReceivedData)
+		require.Equal(t, true, ok)
+		assert.DeepEqual(t, agg.Message, data.Attestation)
+
+		t.Run("broadcast failure", func(t *testing.T) {
+			s.Broadcaster = &failingBroadcaster{}
+			rpcError := s.SubmitSignedAggregateSelectionProof(t.Context(), agg)
+			require.NotNil(t, rpcError)
+			assert.Equal(t, ErrorReason(Internal), rpcError.Reason)
+			assert.Equal(t, 0, len(opChannel))
+		})
 	})
 
 	t.Run("Phase 0 post electra", func(t *testing.T) {
@@ -129,6 +158,7 @@ func TestService_SubmitSignedAggregateSelectionProof(t *testing.T) {
 		}
 		rpcError := s.SubmitSignedAggregateSelectionProof(t.Context(), agg)
 		assert.ErrorContains(t, "old aggregate and proof", rpcError.Err)
+		assert.Equal(t, 0, len(opChannel))
 	})
 
 	t.Run("electra agg pre electra", func(t *testing.T) {
@@ -143,6 +173,7 @@ func TestService_SubmitSignedAggregateSelectionProof(t *testing.T) {
 		}
 		rpcError := s.SubmitSignedAggregateSelectionProof(t.Context(), agg)
 		assert.ErrorContains(t, "electra aggregate and proof not supported yet", rpcError.Err)
+		assert.Equal(t, 0, len(opChannel))
 	})
 }
 

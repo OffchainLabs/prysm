@@ -595,6 +595,19 @@ func testCurrentSlot(t testing.TB, slot primitives.Slot) {
 }
 
 func TestToForkVersion(t *testing.T) {
+	t.Run("Heze fork version", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		config := params.BeaconConfig()
+		config.HezeForkEpoch = 200
+		params.OverrideBeaconConfig(config)
+
+		slot, err := EpochStart(params.BeaconConfig().HezeForkEpoch)
+		require.NoError(t, err)
+
+		result := ToForkVersion(slot)
+		require.Equal(t, version.Heze, result)
+	})
+
 	t.Run("Gloas fork version", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		config := params.BeaconConfig()

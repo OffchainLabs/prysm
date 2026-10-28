@@ -132,7 +132,7 @@ func ConvertToElectra(beaconState state.BeaconState) (state.BeaconState, error) 
 	}
 
 	// need to cast the beaconState to use in helper functions
-	post, err := state_native.InitializeFromProtoUnsafeElectra(s)
+	post, err := state_native.NewUnsafe(s)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to initialize post electra beaconState")
 	}

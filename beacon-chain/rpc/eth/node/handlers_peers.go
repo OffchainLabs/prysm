@@ -43,10 +43,14 @@ func (s *Server) GetPeer(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not obtain ENR: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	serializedEnr, err := p2p.SerializeENR(enr)
-	if err != nil {
-		httputil.HandleError(w, "Could not obtain ENR: "+err.Error(), http.StatusInternalServerError)
-		return
+	// Peers added from a multiaddr only (e.g. static peers) have no ENR.
+	var serializedEnr string
+	if enr != nil {
+		serializedEnr, err = p2p.SerializeENR(enr)
+		if err != nil {
+			httputil.HandleError(w, "Could not obtain ENR: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 	p2pAddress, err := peerStatus.Address(id)
 	if err != nil {
@@ -75,16 +79,18 @@ func (s *Server) GetPeer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := &structs.GetPeerResponse{
-		Data: &structs.Peer{
-			PeerId:             rawId,
-			Enr:                "enr:" + serializedEnr,
-			LastSeenP2PAddress: p2pAddress.String(),
-			State:              strings.ToLower(v1ConnState.String()),
-			Direction:          strings.ToLower(v1PeerDirection.String()),
-		},
+	p := &structs.Peer{
+		PeerId:    rawId,
+		State:     strings.ToLower(v1ConnState.String()),
+		Direction: strings.ToLower(v1PeerDirection.String()),
 	}
-	httputil.WriteJson(w, resp)
+	if p2pAddress != nil {
+		p.LastSeenP2PAddress = p2pAddress.String()
+	}
+	if serializedEnr != "" {
+		p.Enr = "enr:" + serializedEnr
+	}
+	httputil.WriteJson(w, &structs.GetPeerResponse{Data: p})
 }
 
 // GetPeers retrieves data about the node's network peers.

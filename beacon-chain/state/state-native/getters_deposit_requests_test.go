@@ -17,7 +17,7 @@ func TestDepositRequestsStartIndex(t *testing.T) {
 	})
 	t.Run("electra returns expected value", func(t *testing.T) {
 		want := uint64(2)
-		dState, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{DepositRequestsStartIndex: want})
+		dState, err := state_native.New(&ethpb.BeaconStateElectra{DepositRequestsStartIndex: want})
 		require.NoError(t, err)
 		got, err := dState.DepositRequestsStartIndex()
 		require.NoError(t, err)

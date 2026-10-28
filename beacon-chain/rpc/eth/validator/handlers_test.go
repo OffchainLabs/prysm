@@ -18,6 +18,8 @@ import (
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	builderTest "github.com/OffchainLabs/prysm/v7/beacon-chain/builder/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	dbutil "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
@@ -621,7 +623,7 @@ func TestSubmitAggregateAndProofsV2(t *testing.T) {
 	slot := primitives.Slot(0)
 	mock := &mockChain.ChainService{Slot: &slot, Genesis: time.Now().Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)}
 	s := &Server{
-		CoreService: &core.Service{GenesisTimeFetcher: mock},
+		CoreService: &core.Service{GenesisTimeFetcher: mock, OperationNotifier: &mockChain.MockOperationNotifier{}},
 		TimeFetcher: mock,
 	}
 
@@ -680,9 +682,18 @@ func TestSubmitAggregateAndProofsV2(t *testing.T) {
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
+		opChannel := make(chan *feed.Event, 2)
+		opSub := s.CoreService.OperationNotifier.OperationFeed().Subscribe(opChannel)
+		defer opSub.Unsubscribe()
+
 		s.SubmitAggregateAndProofsV2(writer, request)
 		assert.Equal(t, http.StatusOK, writer.Code)
 		assert.Equal(t, 2, len(broadcaster.BroadcastMessages))
+		require.Equal(t, 2, len(opChannel))
+		for range 2 {
+			e := <-opChannel
+			assert.Equal(t, feed.EventType(operation.AggregatedAttReceived), e.Type)
+		}
 	})
 	t.Run("multiple-pre-electra", func(t *testing.T) {
 		broadcaster := &p2pmock.MockBroadcaster{}
@@ -1936,6 +1947,72 @@ func TestGetAttestationData(t *testing.T) {
 		assert.DeepSSZEqual(t, expectedAttDataSSZ, writer.Body.Bytes())
 		var att ethpbalpha.AttestationData
 		require.NoError(t, att.UnmarshalSSZ(writer.Body.Bytes()))
+	})
+
+	t.Run("committeeIndex omitted before gloas", func(t *testing.T) {
+		for _, tc := range []struct {
+			name         string
+			electraEpoch primitives.Epoch
+		}{
+			{name: "phase0", electraEpoch: params.BeaconConfig().FarFutureEpoch},
+			{name: "fulu", electraEpoch: 0},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				params.SetupTestConfigCleanup(t)
+				cfg := params.BeaconConfig()
+				cfg.ElectraForkEpoch = tc.electraEpoch
+				cfg.FuluForkEpoch = tc.electraEpoch
+				params.OverrideBeaconConfig(cfg)
+
+				block := util.NewBeaconBlock()
+				block.Block.Slot = 3*params.BeaconConfig().SlotsPerEpoch + 1
+				justifiedBlock := util.NewBeaconBlock()
+				justifiedBlock.Block.Slot = 2 * params.BeaconConfig().SlotsPerEpoch
+				blockRoot, err := block.Block.HashTreeRoot()
+				require.NoError(t, err)
+				justifiedRoot, err := justifiedBlock.Block.HashTreeRoot()
+				require.NoError(t, err)
+				slot := 3*params.BeaconConfig().SlotsPerEpoch + 1
+				beaconState, err := util.NewBeaconState()
+				require.NoError(t, err)
+				require.NoError(t, beaconState.SetSlot(slot))
+				justifiedCheckpoint := &ethpbalpha.Checkpoint{Epoch: 2, Root: justifiedRoot[:]}
+				require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
+				offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+				chain := &mockChain.ChainService{
+					Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+					Root:                       blockRoot[:],
+					CurrentJustifiedCheckPoint: justifiedCheckpoint,
+					TargetRoot:                 blockRoot,
+					State:                      beaconState,
+				}
+				s := &Server{
+					SyncChecker:           &mockSync.Sync{IsSyncing: false},
+					HeadFetcher:           chain,
+					TimeFetcher:           chain,
+					OptimisticModeFetcher: chain,
+					CoreService: &core.Service{
+						HeadFetcher:           chain,
+						GenesisTimeFetcher:    chain,
+						FinalizedFetcher:      chain,
+						AttestationCache:      cache.NewAttestationDataCache(),
+						OptimisticModeFetcher: chain,
+					},
+				}
+
+				request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://example.com?slot=%d", slot), nil)
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.GetAttestationData(writer, request)
+
+				require.Equal(t, http.StatusOK, writer.Code, writer.Body.String())
+				resp := &structs.GetAttestationDataResponse{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+				assert.Equal(t, "0", resp.Data.CommitteeIndex)
+				assert.Equal(t, hexutil.Encode(blockRoot[:]), resp.Data.BeaconBlockRoot)
+			})
+		}
 	})
 
 	t.Run("committeeIndex omitted after gloas", func(t *testing.T) {
@@ -3805,61 +3882,84 @@ func TestGetPTCDuties(t *testing.T) {
 	})
 }
 
-// TestGetPTCDuties_ForkBoundary verifies that requesting PTC duties for the
-// first GloAS epoch while the state is still Fulu returns empty data instead of
-// crashing or returning wrong committee assignments.
+// TestGetPTCDuties_ForkBoundary verifies the Gloas fork epoch PTC is served only from the post-upgrade state.
 func TestGetPTCDuties_ForkBoundary(t *testing.T) {
 	helpers.ClearCache()
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()
-	cfg.GloasForkEpoch = 1 // Epoch 0 = Fulu, epoch 1 = GloAS.
+	cfg.GloasForkEpoch = 2 // Epochs 0-1 = Fulu, epoch 2 = Gloas.
 	params.OverrideBeaconConfig(cfg)
+	spe := params.BeaconConfig().SlotsPerEpoch
 
-	slot := primitives.Slot(0)
 	genesisTime := time.Now()
 	numVals := uint64(fieldparams.PTCSize * 2)
-	st, _ := util.DeterministicGenesisStateFulu(t, numVals)
-	require.NoError(t, st.SetGenesisTime(genesisTime))
-	require.NoError(t, helpers.UpdateCommitteeCache(t.Context(), st, 0))
+	fuluSt, _ := util.DeterministicGenesisStateFulu(t, numVals)
+	require.NoError(t, fuluSt.SetGenesisTime(genesisTime))
+	gloasSt, err := transition.ProcessSlots(t.Context(), fuluSt.Copy(), 2*spe)
+	require.NoError(t, err)
+	require.Equal(t, version.Gloas, gloasSt.Version())
+	// The dependent root of the fork epoch is the block root at start(fork epoch - 1) - 1.
+	dependentRoot := [32]byte{4, 5, 6}
+	require.NoError(t, gloasSt.UpdateBlockRootAtIndex(uint64(spe-1), dependentRoot))
 
 	genesisRoot := [32]byte{1, 2, 3}
 	db := dbutil.SetupDB(t)
 	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), genesisRoot))
 
-	mockChainService := &mockChain.ChainService{Genesis: genesisTime, State: st, Slot: &slot}
-	s := &Server{
-		Stater:                &testutil.MockStater{BeaconState: st},
-		SyncChecker:           &mockSync.Sync{IsSyncing: false},
-		TimeFetcher:           mockChainService,
-		HeadFetcher:           mockChainService,
-		OptimisticModeFetcher: mockChainService,
-		BeaconDB:              db,
+	var indices []string
+	for i := range numVals {
+		indices = append(indices, strconv.FormatUint(i, 10))
 	}
+	indicesJSON, err := json.Marshal(indices)
+	require.NoError(t, err)
 
-	t.Run("next epoch at GloAS boundary returns empty on Fulu state", func(t *testing.T) {
-		// Request PTC duties for epoch 1 (GloasForkEpoch). The handler accepts
-		// this as a next-epoch request but the state is Fulu — PTC data must be empty.
-		var indices []string
-		for i := range numVals {
-			indices = append(indices, strconv.FormatUint(i, 10))
+	newServer := func(genesis time.Time, slot primitives.Slot) *Server {
+		mockChainService := &mockChain.ChainService{Genesis: genesis, Slot: &slot}
+		return &Server{
+			Stater:                &testutil.MockStater{StatesByEpoch: map[primitives.Epoch]state.BeaconState{1: fuluSt, 2: gloasSt}},
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			TimeFetcher:           mockChainService,
+			HeadFetcher:           mockChainService,
+			OptimisticModeFetcher: mockChainService,
+			BeaconDB:              db,
 		}
-		indicesJSON, err := json.Marshal(indices)
-		require.NoError(t, err)
-
-		request := httptest.NewRequest(http.MethodPost,
+	}
+	request := func(s *Server) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost,
 			"http://www.example.com/eth/v1/validator/duties/ptc/{epoch}",
 			bytes.NewReader(indicesJSON))
-		request.SetPathValue("epoch", "1")
+		req.SetPathValue("epoch", "2")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
+		s.GetPTCDuties(writer, req)
+		return writer
+	}
 
-		s.GetPTCDuties(writer, request)
-		require.Equal(t, http.StatusOK, writer.Code,
-			"endpoint must not error at the fork boundary")
+	t.Run("fork epoch requested before the fork is rejected", func(t *testing.T) {
+		writer := request(newServer(genesisTime, spe))
+		require.Equal(t, http.StatusBadRequest, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.StringContains(t, "not available until the fork", e.Message)
+	})
+
+	t.Run("fork epoch requested within clock disparity of the fork returns duties", func(t *testing.T) {
+		genesis := time.Now().Add(-params.EpochsDuration(2, params.BeaconConfig()) + 200*time.Millisecond)
+		writer := request(newServer(genesis, 2*spe-1))
+		require.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.GetPTCDutiesResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		assert.Equal(t, 0, len(resp.Data),
-			"PTC duties must be empty when state is Fulu and requested epoch is GloAS")
+		assert.NotEqual(t, 0, len(resp.Data))
+		assert.Equal(t, hexutil.Encode(dependentRoot[:]), resp.DependentRoot)
+	})
+
+	t.Run("fork epoch requested at the fork returns duties", func(t *testing.T) {
+		writer := request(newServer(genesisTime, 2*spe))
+		require.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetPTCDutiesResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		assert.NotEqual(t, 0, len(resp.Data))
+		assert.Equal(t, hexutil.Encode(dependentRoot[:]), resp.DependentRoot)
 	})
 }
 

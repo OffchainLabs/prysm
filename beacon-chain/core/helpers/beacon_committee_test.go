@@ -39,7 +39,7 @@ func TestComputeCommittee_WithoutCache(t *testing.T) {
 		}
 	}
 
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators:  validators,
 		Slot:        200,
 		BlockRoots:  make([][]byte, params.BeaconConfig().SlotsPerHistoricalRoot),
@@ -107,7 +107,7 @@ func TestCommitteeAssignments_CannotRetrieveFutureEpoch(t *testing.T) {
 	helpers.ClearCache()
 
 	epoch := primitives.Epoch(1)
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Slot: 0, // Epoch 0.
 	})
 	require.NoError(t, err)
@@ -132,7 +132,7 @@ func TestCommitteeAssignments_NoProposerForSlot0(t *testing.T) {
 			ExitEpoch:       params.BeaconConfig().FarFutureEpoch,
 		}
 	}
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators:  validators,
 		Slot:        2 * params.BeaconConfig().SlotsPerEpoch, // epoch 2
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
@@ -164,7 +164,7 @@ func TestCommitteeAssignments_CanRetrieve(t *testing.T) {
 		validatorIndices[i] = primitives.ValidatorIndex(i)
 	}
 
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators:  validators,
 		Slot:        2 * params.BeaconConfig().SlotsPerEpoch, // epoch 2
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
@@ -246,7 +246,7 @@ func TestCommitteeAssignments_CannotRetrieveFuture(t *testing.T) {
 		}
 	}
 
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators:  validators,
 		Slot:        2 * params.BeaconConfig().SlotsPerEpoch, // epoch 2
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
@@ -272,7 +272,7 @@ func TestCommitteeAssignments_CannotRetrieveOlderThanSlotsPerHistoricalRoot(t *t
 		}
 	}
 
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators:  validators,
 		Slot:        params.BeaconConfig().SlotsPerHistoricalRoot + 1,
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
@@ -293,7 +293,7 @@ func TestCommitteeAssignments_EverySlotHasMin1Proposer(t *testing.T) {
 			ExitEpoch:       params.BeaconConfig().FarFutureEpoch,
 		}
 	}
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators:  validators,
 		Slot:        2 * params.BeaconConfig().SlotsPerEpoch, // epoch 2
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
@@ -329,7 +329,7 @@ func TestVerifyAttestationBitfieldLengths_OK(t *testing.T) {
 		}
 	}
 
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators:  validators,
 		RandaoMixes: activeRoots,
 	})
@@ -436,7 +436,7 @@ func TestUpdateCommitteeCache_CanUpdate(t *testing.T) {
 		}
 		indices[i] = i
 	}
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators:  validators,
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 	})
@@ -466,7 +466,7 @@ func TestUpdateCommitteeCache_CanUpdateAcrossEpochs(t *testing.T) {
 		}
 		indices[i] = i
 	}
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators:  validators,
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 	})
@@ -497,7 +497,7 @@ func TestUpdateCommitteeCache_IsolatedCaches(t *testing.T) {
 			EffectiveBalance: 1,
 		}
 	}
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators:  validators,
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 	})
@@ -525,7 +525,7 @@ func BenchmarkComputeCommittee300000_WithPreCache(b *testing.B) {
 			ExitEpoch: params.BeaconConfig().FarFutureEpoch,
 		}
 	}
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators:  validators,
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 	})
@@ -558,7 +558,7 @@ func BenchmarkComputeCommittee3000000_WithPreCache(b *testing.B) {
 			ExitEpoch: params.BeaconConfig().FarFutureEpoch,
 		}
 	}
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators:  validators,
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 	})
@@ -591,7 +591,7 @@ func BenchmarkComputeCommittee128000_WithOutPreCache(b *testing.B) {
 			ExitEpoch: params.BeaconConfig().FarFutureEpoch,
 		}
 	}
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators:  validators,
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 	})
@@ -626,7 +626,7 @@ func BenchmarkComputeCommittee1000000_WithOutCache(b *testing.B) {
 			ExitEpoch: params.BeaconConfig().FarFutureEpoch,
 		}
 	}
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators:  validators,
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 	})
@@ -661,7 +661,7 @@ func BenchmarkComputeCommittee4000000_WithOutCache(b *testing.B) {
 			ExitEpoch: params.BeaconConfig().FarFutureEpoch,
 		}
 	}
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators:  validators,
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 	})
@@ -690,6 +690,8 @@ func BenchmarkComputeCommittee4000000_WithOutCache(b *testing.B) {
 }
 
 func TestBeaconCommitteeFromState_UpdateCacheForPreviousEpoch(t *testing.T) {
+	helpers.ClearCache()
+	t.Cleanup(helpers.ClearCache)
 	committeeSize := uint64(16)
 	validators := make([]*ethpb.Validator, params.BeaconConfig().SlotsPerEpoch.Mul(committeeSize))
 	for i := range validators {
@@ -698,7 +700,7 @@ func TestBeaconCommitteeFromState_UpdateCacheForPreviousEpoch(t *testing.T) {
 		}
 	}
 
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Slot:        params.BeaconConfig().SlotsPerEpoch,
 		Validators:  validators,
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
@@ -706,6 +708,8 @@ func TestBeaconCommitteeFromState_UpdateCacheForPreviousEpoch(t *testing.T) {
 	require.NoError(t, err)
 	_, err = helpers.BeaconCommitteeFromState(t.Context(), state, 1 /* previous epoch */, 0)
 	require.NoError(t, err)
+	// The committee cache is filled in the background.
+	helpers.CommitteeCache().Wg.Wait()
 
 	// Verify previous epoch is cached
 	seed, err := helpers.Seed(state, 0, params.BeaconConfig().DomainBeaconAttester)
@@ -723,7 +727,7 @@ func TestPrecomputeProposerIndices_Ok(t *testing.T) {
 		}
 	}
 
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators:  validators,
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 	})
@@ -758,6 +762,7 @@ func TestCommitteeIndices(t *testing.T) {
 }
 
 func TestAttestationCommitteesFromState(t *testing.T) {
+	helpers.ClearCache()
 	ctx := t.Context()
 
 	validators := make([]*ethpb.Validator, params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().TargetCommitteeSize))
@@ -767,7 +772,7 @@ func TestAttestationCommitteesFromState(t *testing.T) {
 		}
 	}
 
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators:  validators,
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 	})
@@ -803,7 +808,7 @@ func TestAttestationCommitteesFromCache(t *testing.T) {
 		}
 	}
 
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators:  validators,
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 	})

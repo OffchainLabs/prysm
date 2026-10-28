@@ -228,7 +228,7 @@ func TestReceiveExecutionPayloadEnvelope_EmitsHeadV2Event(t *testing.T) {
 
 		headBlock, err := blocks.NewSignedBeaconBlock(blk)
 		require.NoError(t, err)
-		headState, err := state_native.InitializeFromProtoUnsafeGloas(base)
+		headState, err := state_native.NewUnsafe(base)
 		require.NoError(t, err)
 		s.head = &head{
 			root:  blockRoot,

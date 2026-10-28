@@ -79,7 +79,7 @@ func newEnvelopeVerifier(vr []byte, keys [][fieldparams.BLSPubkeyLength]byte, bu
 // must bind to and the key its signature must verify against.
 type envelopeExpectation struct {
 	block  blocks.ROBlock
-	bid    *ethpb.ExecutionPayloadBid
+	bid    interfaces.ROExecutionPayloadBid
 	pubkey bls.PublicKey
 	// required is false only for the batch-tail slot while its payload fullness is still
 	// unclassified; it is resolved via the boundary child at import time.
@@ -101,19 +101,19 @@ func (v *envelopeVerifier) expectation(b blocks.ROBlock) (*envelopeExpectation, 
 	if err != nil {
 		return nil, "", errors.Wrap(err, "signed execution payload bid")
 	}
-	if sb == nil || sb.Message == nil {
+	if sb == nil || sb.IsNil() {
 		return nil, "", errors.New("nil execution payload bid in verified block")
 	}
-	bid := sb.Message
+	bid := sb.Bid()
 	var key []byte
-	if bid.BuilderIndex == params.BeaconConfig().BuilderIndexSelfBuild {
+	if bid.BuilderIndex() == params.BeaconConfig().BuilderIndexSelfBuild {
 		pidx := b.Block().ProposerIndex()
 		if uint64(pidx) >= uint64(len(v.keys)) {
 			return nil, envSkipSigUnverifiable, nil
 		}
 		key = v.keys[pidx][:]
 	} else {
-		idx := uint64(bid.BuilderIndex)
+		idx := uint64(bid.BuilderIndex())
 		if idx >= uint64(len(v.builders)) || v.builders[idx] == nil {
 			return nil, envSkipSigUnverifiable, nil
 		}
@@ -169,21 +169,21 @@ func bindEnvelope(env *ethpb.SignedExecutionPayloadEnvelope, exp *envelopeExpect
 	if primitives.Slot(m.Payload.SlotNumber) != exp.block.Block().Slot() {
 		return errors.Wrapf(errInvalidEnvelopeResponse, "payload slot=%d does not match block slot=%d", m.Payload.SlotNumber, exp.block.Block().Slot())
 	}
-	if m.BuilderIndex != exp.bid.BuilderIndex {
-		return errors.Wrapf(errInvalidEnvelopeResponse, "builder_index=%d does not match bid builder_index=%d", m.BuilderIndex, exp.bid.BuilderIndex)
+	if m.BuilderIndex != exp.bid.BuilderIndex() {
+		return errors.Wrapf(errInvalidEnvelopeResponse, "builder_index=%d does not match bid builder_index=%d", m.BuilderIndex, exp.bid.BuilderIndex())
 	}
-	if !bytes.Equal(m.Payload.BlockHash, exp.bid.BlockHash) {
-		return errors.Wrapf(errInvalidEnvelopeResponse, "payload block_hash=%#x does not match bid block_hash=%#x", m.Payload.BlockHash, exp.bid.BlockHash)
+	if bytesutil.ToBytes32(m.Payload.BlockHash) != exp.bid.BlockHash() {
+		return errors.Wrapf(errInvalidEnvelopeResponse, "payload block_hash=%#x does not match bid block_hash=%#x", m.Payload.BlockHash, exp.bid.BlockHash())
 	}
-	if !bytes.Equal(m.Payload.ParentHash, exp.bid.ParentBlockHash) {
-		return errors.Wrapf(errInvalidEnvelopeResponse, "payload parent_hash=%#x does not match bid parent_block_hash=%#x", m.Payload.ParentHash, exp.bid.ParentBlockHash)
+	if bytesutil.ToBytes32(m.Payload.ParentHash) != exp.bid.ParentBlockHash() {
+		return errors.Wrapf(errInvalidEnvelopeResponse, "payload parent_hash=%#x does not match bid parent_block_hash=%#x", m.Payload.ParentHash, exp.bid.ParentBlockHash())
 	}
 	reqRoot, err := m.ExecutionRequests.HashTreeRoot()
 	if err != nil {
 		return errors.Wrapf(errInvalidEnvelopeResponse, "execution_requests hash tree root: %v", err)
 	}
-	if !bytes.Equal(reqRoot[:], exp.bid.ExecutionRequestsRoot) {
-		return errors.Wrapf(errInvalidEnvelopeResponse, "execution_requests root=%#x does not match bid execution_requests_root=%#x", reqRoot, exp.bid.ExecutionRequestsRoot)
+	if reqRoot != exp.bid.ExecutionRequestsRoot() {
+		return errors.Wrapf(errInvalidEnvelopeResponse, "execution_requests root=%#x does not match bid execution_requests_root=%#x", reqRoot, exp.bid.ExecutionRequestsRoot())
 	}
 	return nil
 }
@@ -572,9 +572,9 @@ func (es *envelopeSync) processResponse(pid peer.ID, envs []*ethpb.SignedExecuti
 			es.cfg.downscore(pid, "undecodable ExecutionPayloadEnvelope payload", errors.Wrap(errInvalidEnvelopeResponse, err.Error()))
 			continue
 		}
-		if computed != bytesutil.ToBytes32(c.exp.bid.BlockHash) {
+		if computed != c.exp.bid.BlockHash() {
 			es.cfg.downscore(pid, "envelope payload does not match bid block hash", errors.Wrapf(errInvalidEnvelopeResponse,
-				"computed block hash=%#x, bid block hash=%#x", computed, c.exp.bid.BlockHash))
+				"computed block hash=%#x, bid block hash=%#x", computed, c.exp.bid.BlockHash()))
 			continue
 		}
 		delete(es.pending, c.slot)

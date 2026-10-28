@@ -92,7 +92,7 @@ func TestVerifyDeposit_MerkleBranchFailsVerification(t *testing.T) {
 	require.NoError(t, err, "Could not generate proof")
 
 	deposit.Proof = proof
-	beaconState, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	beaconState, err := state_native.New(&ethpb.BeaconStateAltair{
 		Eth1Data: &ethpb.Eth1Data{
 			DepositRoot: []byte{0},
 			BlockHash:   []byte{1},

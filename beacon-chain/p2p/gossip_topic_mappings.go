@@ -38,6 +38,9 @@ var gossipTopicMappings = map[string]func() proto.Message{
 func GossipTopicMappings(topic string, epoch primitives.Epoch) proto.Message {
 	switch topic {
 	case BlockSubnetTopicFormat:
+		if epoch >= params.BeaconConfig().HezeForkEpoch {
+			return &ethpb.SignedBeaconBlockHeze{}
+		}
 		if epoch >= params.BeaconConfig().GloasForkEpoch {
 			return &ethpb.SignedBeaconBlockGloas{}
 		}
@@ -79,6 +82,9 @@ func GossipTopicMappings(topic string, epoch primitives.Epoch) proto.Message {
 		}
 		return gossipMessage(topic)
 	case LightClientOptimisticUpdateTopicFormat:
+		if epoch >= params.BeaconConfig().GloasForkEpoch {
+			return &ethpb.LightClientOptimisticUpdateGloas{}
+		}
 		if epoch >= params.BeaconConfig().DenebForkEpoch {
 			return &ethpb.LightClientOptimisticUpdateDeneb{}
 		}
@@ -87,6 +93,9 @@ func GossipTopicMappings(topic string, epoch primitives.Epoch) proto.Message {
 		}
 		return gossipMessage(topic)
 	case LightClientFinalityUpdateTopicFormat:
+		if epoch >= params.BeaconConfig().GloasForkEpoch {
+			return &ethpb.LightClientFinalityUpdateGloas{}
+		}
 		if epoch >= params.BeaconConfig().ElectraForkEpoch {
 			return &ethpb.LightClientFinalityUpdateElectra{}
 		}
@@ -161,6 +170,11 @@ func init() {
 	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlockGloas]()] = BlockSubnetTopicFormat
 	GossipTypeMapping[reflect.TypeFor[*ethpb.DataColumnSidecarGloas]()] = DataColumnSubnetTopicFormat
 	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedAggregateAttestationAndProofGloas]()] = AggregateAndProofSubnetTopicFormat
+	GossipTypeMapping[reflect.TypeFor[*ethpb.LightClientOptimisticUpdateGloas]()] = LightClientOptimisticUpdateTopicFormat
+	GossipTypeMapping[reflect.TypeFor[*ethpb.LightClientFinalityUpdateGloas]()] = LightClientFinalityUpdateTopicFormat
+
+	// Specially handle Heze objects.
+	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlockHeze]()] = BlockSubnetTopicFormat
 
 	// Payload attestation messages.
 	GossipTypeMapping[reflect.TypeFor[*ethpb.PayloadAttestationMessage]()] = PayloadAttestationMessageTopicFormat

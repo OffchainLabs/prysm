@@ -22,11 +22,11 @@ func (b ROBlock) Root() [32]byte {
 
 // ParentHash returns the parent hash of a beacon block post-Gloas
 func (b ROBlock) ParentHash() ([32]byte, error) {
-	s, err := b.Block().Body().SignedExecutionPayloadBid()
+	bid, err := b.Block().Body().ExecutionPayloadBid()
 	if err != nil {
 		return [32]byte{}, err
 	}
-	return [32]byte(s.Message.ParentBlockHash), nil
+	return bid.ParentBlockHash(), nil
 }
 
 // RootSlice returns a slice of the value returned by Root(). This is convenient because slicing the result of a func

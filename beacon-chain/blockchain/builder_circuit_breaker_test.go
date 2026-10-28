@@ -66,7 +66,7 @@ func builderRegistryState(t *testing.T, count int) state.BeaconState {
 		}
 	}
 	base.Builders = builders
-	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	st, err := state_native.NewUnsafe(base)
 	require.NoError(t, err)
 	return st
 }
@@ -214,7 +214,7 @@ func TestInsertRejectsBuildsOnFullChildWithoutPayload(t *testing.T) {
 
 	childHash := bytesutil.ToBytes32([]byte("childhash"))
 	base, _ := testGloasState(t, 2, parentRoot, childHash)
-	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	st, err := state_native.NewUnsafe(base)
 	require.NoError(t, err)
 	// The child commits to the parent's own block hash, so it claims to build on full.
 	blk := gloasBlockWithBid(t, 2, parentRoot, childHash, parentHash, 3)

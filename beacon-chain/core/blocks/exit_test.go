@@ -34,7 +34,7 @@ func TestProcessVoluntaryExits_NotActiveLongEnoughToExit(t *testing.T) {
 			ExitEpoch: params.BeaconConfig().FarFutureEpoch,
 		},
 	}
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators: registry,
 		Slot:       10,
 	})
@@ -64,7 +64,7 @@ func TestProcessVoluntaryExits_ExitAlreadySubmitted(t *testing.T) {
 			ExitEpoch: 10,
 		},
 	}
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators: registry,
 		Slot:       0,
 	})
@@ -96,7 +96,7 @@ func TestProcessVoluntaryExits_AppliesCorrectStatus(t *testing.T) {
 			ActivationEpoch: 0,
 		},
 	}
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Validators: registry,
 		Fork: &ethpb.Fork{
 			CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
@@ -163,7 +163,7 @@ func TestVerifyExitAndSignature(t *testing.T) {
 					GenesisValidatorsRoot: genesisRoot[:],
 				}
 
-				s, err := state_native.InitializeFromProtoUnsafePhase0(st)
+				s, err := state_native.NewUnsafe(st)
 				if err != nil {
 					return nil, nil, nil, err
 				}
@@ -258,7 +258,7 @@ func TestVerifyExitAndSignature(t *testing.T) {
 					},
 				}
 				bs, keys := util.DeterministicGenesisState(t, 1)
-				bs, err := state_native.InitializeFromProtoUnsafeDeneb(&ethpb.BeaconStateDeneb{
+				bs, err := state_native.NewUnsafe(&ethpb.BeaconStateDeneb{
 					GenesisValidatorsRoot: bs.GenesisValidatorsRoot(),
 					Fork:                  fork,
 					Slot:                  denebSlot,
@@ -297,7 +297,7 @@ func TestVerifyExitAndSignature(t *testing.T) {
 				electraSlot, err := slots.EpochStart(params.BeaconConfig().ElectraForkEpoch)
 				require.NoError(t, err)
 				bs, keys := util.DeterministicGenesisState(t, 1)
-				bs, err = state_native.InitializeFromProtoUnsafeElectra(&ethpb.BeaconStateElectra{
+				bs, err = state_native.NewUnsafe(&ethpb.BeaconStateElectra{
 					GenesisValidatorsRoot: bs.GenesisValidatorsRoot(),
 					Fork:                  fork,
 					Slot:                  electraSlot,

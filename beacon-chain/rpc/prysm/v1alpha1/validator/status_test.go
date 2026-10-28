@@ -51,7 +51,7 @@ func TestValidatorStatus_DepositedEth1(t *testing.T) {
 			0: uint64(height),
 		},
 	}
-	stateObj, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
+	stateObj, err := state_native.NewUnsafe(&ethpb.BeaconState{})
 	require.NoError(t, err)
 	vs := &Server{
 		DepositFetcher: depositCache,
@@ -93,7 +93,7 @@ func TestValidatorStatus_Deposited(t *testing.T) {
 			0: uint64(height),
 		},
 	}
-	stateObj, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
+	stateObj, err := state_native.NewUnsafe(&ethpb.BeaconState{})
 	require.NoError(t, err)
 	vs := &Server{
 		DepositFetcher: depositCache,
@@ -138,7 +138,7 @@ func TestValidatorStatus_PartiallyDeposited(t *testing.T) {
 			0: uint64(height),
 		},
 	}
-	stateObj, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{
+	stateObj, err := state_native.NewUnsafe(&ethpb.BeaconState{
 		Validators: []*ethpb.Validator{
 			{
 				PublicKey:                  pubKey1,
@@ -193,7 +193,7 @@ func TestValidatorStatus_Pending_MultipleDeposits(t *testing.T) {
 			0: uint64(height),
 		},
 	}
-	stateObj, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{
+	stateObj, err := state_native.NewUnsafe(&ethpb.BeaconState{
 		Validators: []*ethpb.Validator{
 			{
 				PublicKey:                  pubKey1,
@@ -305,7 +305,7 @@ func TestValidatorStatus_Exiting(t *testing.T) {
 			ExitEpoch:         exitEpoch,
 			WithdrawableEpoch: withdrawableEpoch},
 		}}
-	stateObj, err := state_native.InitializeFromProtoUnsafePhase0(st)
+	stateObj, err := state_native.NewUnsafe(st)
 	require.NoError(t, err)
 	depData := &ethpb.Deposit_Data{
 		PublicKey:             pubKey,
@@ -363,7 +363,7 @@ func TestValidatorStatus_Slashing(t *testing.T) {
 			PublicKey:         pubKey,
 			WithdrawableEpoch: epoch + 1},
 		}}
-	stateObj, err := state_native.InitializeFromProtoUnsafePhase0(st)
+	stateObj, err := state_native.NewUnsafe(st)
 	require.NoError(t, err)
 	depData := &ethpb.Deposit_Data{
 		PublicKey:             pubKey,
@@ -464,7 +464,7 @@ func TestValidatorStatus_UnknownStatus(t *testing.T) {
 	depositCache, err := depositsnapshot.New()
 	require.NoError(t, err)
 
-	stateObj, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{
+	stateObj, err := state_native.NewUnsafe(&ethpb.BeaconState{
 		Slot: 0,
 	})
 	require.NoError(t, err)
@@ -489,7 +489,7 @@ func TestActivationStatus_OK(t *testing.T) {
 	deposits, _, err := util.DeterministicDepositsAndKeys(4)
 	require.NoError(t, err)
 	pubKeys := [][]byte{deposits[0].Data.PublicKey, deposits[1].Data.PublicKey, deposits[2].Data.PublicKey, deposits[3].Data.PublicKey}
-	stateObj, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{
+	stateObj, err := state_native.NewUnsafe(&ethpb.BeaconState{
 		Slot: 4000,
 		Validators: []*ethpb.Validator{
 			{
@@ -707,7 +707,7 @@ func TestMultipleValidatorStatus_Pubkeys(t *testing.T) {
 		deposits[4].Data.PublicKey,
 		deposits[5].Data.PublicKey,
 	}
-	stateObj, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{
+	stateObj, err := state_native.NewUnsafe(&ethpb.BeaconState{
 		Slot: 4000,
 		Validators: []*ethpb.Validator{
 			{
@@ -846,7 +846,7 @@ func TestMultipleValidatorStatus_Indices(t *testing.T) {
 			},
 		},
 	}
-	stateObj, err := state_native.InitializeFromProtoUnsafePhase0(beaconState)
+	stateObj, err := state_native.NewUnsafe(beaconState)
 	require.NoError(t, err)
 	block := util.NewBeaconBlock()
 	genesisRoot, err := block.Block.HashTreeRoot()
@@ -920,7 +920,7 @@ func TestValidatorStatus_Invalid(t *testing.T) {
 			0: uint64(height),
 		},
 	}
-	stateObj, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
+	stateObj, err := state_native.NewUnsafe(&ethpb.BeaconState{})
 	require.NoError(t, err)
 	vs := &Server{
 		DepositFetcher: depositCache,

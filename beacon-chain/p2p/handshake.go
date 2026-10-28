@@ -25,6 +25,8 @@ const (
 	timeForStatus = 10 * time.Second
 )
 
+var untrackedConnCloseDelay = timeForStatus
+
 func peerMultiaddrString(conn network.Conn) string {
 	remoteMultiaddr := conn.RemoteMultiaddr().String()
 	remotePeerID := conn.RemotePeer().String()
@@ -119,6 +121,14 @@ func (s *Service) AddConnectionHandler(reqFunc, goodByeFunc func(ctx context.Con
 			if direction == network.DirOutbound {
 				if err := s.wasDisconnectedTooRecently(remotePeer); err != nil {
 					log.WithError(err).Debug("Skipping connection handler")
+					time.AfterFunc(untrackedConnCloseDelay, func() {
+						if conn.IsClosed() || s.peers.IsActive(remotePeer) {
+							return
+						}
+						if err := conn.Close(); err != nil {
+							log.WithError(err).Debug("Could not close untracked connection")
+						}
+					})
 					return
 				}
 			}

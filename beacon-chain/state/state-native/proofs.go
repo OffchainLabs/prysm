@@ -63,7 +63,7 @@ func lightClientGeneralizedIndicesForVersion(stateVersion int) (lightClientGener
 		return lightClientGeneralizedIndices{finalizedRoot: 105, currentSyncCommittee: 54, nextSyncCommittee: 55}, nil
 	case version.Electra, version.Fulu:
 		return lightClientGeneralizedIndices{finalizedRoot: 169, currentSyncCommittee: 86, nextSyncCommittee: 87}, nil
-	case version.Gloas:
+	case version.Gloas, version.Heze:
 		return lightClientGeneralizedIndices{finalizedRoot: 735, currentSyncCommittee: 2945, nextSyncCommittee: 2946}, nil
 	default:
 		return lightClientGeneralizedIndices{}, errNotSupported("light client generalized indices", stateVersion)
@@ -208,8 +208,8 @@ func (b *BeaconState) validateFieldIndex(f types.FieldIndex) error {
 		if f.RealPosition() > params.BeaconConfig().BeaconStateFuluFieldCount-1 {
 			return errNotSupported(f.String(), b.version)
 		}
-	case version.Gloas:
-		schema, ok := ProgressiveStateSchemaForVersion(version.Gloas)
+	case version.Gloas, version.Heze:
+		schema, ok := ProgressiveStateSchemaForVersion(b.version)
 		if !ok {
 			return fmt.Errorf("progressive state schema not found for version %v", b.version)
 		}

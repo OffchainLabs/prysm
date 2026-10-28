@@ -38,21 +38,19 @@ var placeholderFields = []string{
 	"EIP7928_FORK_VERSION",
 	"EIP8025_FORK_EPOCH",
 	"EIP8025_FORK_VERSION",
+	"EIP8198_FORK_EPOCH",
+	"EIP8198_FORK_VERSION",
 	"EIP8321_FORK_EPOCH",
 	"EIP8321_FORK_VERSION",
 	"EPOCHS_PER_SHUFFLING_PHASE",
-	"FIELD_ELEMENTS_PER_CELL",     // Configured as a constant in config/fieldparams/mainnet.go
-	"FIELD_ELEMENTS_PER_EXT_BLOB", // Configured in proto/ssz_proto_library.bzl
-	"HEZE_FORK_EPOCH",
-	"HEZE_FORK_VERSION",
-	"INCLUSION_LIST_COMMITTEE_SIZE",
-	"INCLUSION_LIST_DUE_BPS",
+	"FIELD_ELEMENTS_PER_CELL",       // Configured as a constant in config/fieldparams/mainnet.go
+	"FIELD_ELEMENTS_PER_EXT_BLOB",   // Configured in proto/ssz_proto_library.bzl
+	"INCLUSION_LIST_COMMITTEE_SIZE", // Configured as a constant in config/fieldparams/mainnet.go
 	"INCLUSION_LIST_SUBMISSION_DEADLINE",
 	"KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH", // Configured in proto/ssz_proto_library.bzl
-	"MAX_REQUEST_INCLUSION_LIST",
-	"MAX_TRANSACTIONS_BYTES_PER_INCLUSION_LIST",
-	"MIN_SLOTS_FOR_INCLUSION_LISTS_REQUESTS",
+	"MIN_BLOB_DATA_RETENTION_MS",
 	"NUMBER_OF_COLUMNS", // Configured as a constant in config/fieldparams/mainnet.go
+	"SLOT_DURATION_MS_EIP8198",
 	"TARGET_NUMBER_OF_PEERS",
 	"UPDATE_TIMEOUT",
 	"WHISK_EPOCHS_PER_SHUFFLING_PHASE",
@@ -173,6 +171,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	assert.Equal(t, expected.ElectraForkEpoch, actual.ElectraForkEpoch, "%s: ElectraForkEpoch", name)
 	assert.Equal(t, expected.FuluForkEpoch, actual.FuluForkEpoch, "%s: FuluForkEpoch", name)
 	assert.Equal(t, expected.GloasForkEpoch, actual.GloasForkEpoch, "%s: GloasForkEpoch", name)
+	assert.Equal(t, expected.HezeForkEpoch, actual.HezeForkEpoch, "%s: HezeForkEpoch", name)
 	assert.Equal(t, expected.SqrRootSlotsPerEpoch, actual.SqrRootSlotsPerEpoch, "%s: SqrRootSlotsPerEpoch", name)
 	assert.DeepEqual(t, expected.GenesisForkVersion, actual.GenesisForkVersion, "%s: GenesisForkVersion", name)
 	assert.DeepEqual(t, expected.AltairForkVersion, actual.AltairForkVersion, "%s: AltairForkVersion", name)
@@ -182,6 +181,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	assert.DeepEqual(t, expected.ElectraForkVersion, actual.ElectraForkVersion, "%s: ElectraForkVersion", name)
 	assert.DeepEqual(t, expected.FuluForkVersion, actual.FuluForkVersion, "%s: FuluForkVersion", name)
 	assert.DeepEqual(t, expected.GloasForkVersion, actual.GloasForkVersion, "%s: GloasForkVersion", name)
+	assert.DeepEqual(t, expected.HezeForkVersion, actual.HezeForkVersion, "%s: HezeForkVersion", name)
 
 	assertYamlFieldsMatch(t, name, fields, expected, actual)
 }

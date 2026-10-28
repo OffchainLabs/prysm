@@ -90,6 +90,8 @@ func FromForkVersion(cv [fieldparams.VersionLength]byte) (*VersionedUnmarshaler,
 		fork = version.Fulu
 	case bytesutil.ToBytes4(cfg.GloasForkVersion):
 		fork = version.Gloas
+	case bytesutil.ToBytes4(cfg.HezeForkVersion):
+		fork = version.Heze
 	default:
 		return nil, errors.Wrapf(ErrForkNotFound, "version=%#x", cv)
 	}
@@ -111,7 +113,7 @@ func (cf *VersionedUnmarshaler) UnmarshalBeaconState(marshaled []byte) (s state.
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to unmarshal state, detected fork=%s", forkName)
 		}
-		s, err = state_native.InitializeFromProtoUnsafePhase0(st)
+		s, err = state_native.NewUnsafe(st)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to init state trie from state, detected fork=%s", forkName)
 		}
@@ -121,7 +123,7 @@ func (cf *VersionedUnmarshaler) UnmarshalBeaconState(marshaled []byte) (s state.
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to unmarshal state, detected fork=%s", forkName)
 		}
-		s, err = state_native.InitializeFromProtoUnsafeAltair(st)
+		s, err = state_native.NewUnsafe(st)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to init state trie from state, detected fork=%s", forkName)
 		}
@@ -131,7 +133,7 @@ func (cf *VersionedUnmarshaler) UnmarshalBeaconState(marshaled []byte) (s state.
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to unmarshal state, detected fork=%s", forkName)
 		}
-		s, err = state_native.InitializeFromProtoUnsafeBellatrix(st)
+		s, err = state_native.NewUnsafe(st)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to init state trie from state, detected fork=%s", forkName)
 		}
@@ -141,7 +143,7 @@ func (cf *VersionedUnmarshaler) UnmarshalBeaconState(marshaled []byte) (s state.
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to unmarshal state, detected fork=%s", forkName)
 		}
-		s, err = state_native.InitializeFromProtoUnsafeCapella(st)
+		s, err = state_native.NewUnsafe(st)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to init state trie from state, detected fork=%s", forkName)
 		}
@@ -151,7 +153,7 @@ func (cf *VersionedUnmarshaler) UnmarshalBeaconState(marshaled []byte) (s state.
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to unmarshal state, detected fork=%s", forkName)
 		}
-		s, err = state_native.InitializeFromProtoUnsafeDeneb(st)
+		s, err = state_native.NewUnsafe(st)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to init state trie from state, detected fork=%s", forkName)
 		}
@@ -161,7 +163,7 @@ func (cf *VersionedUnmarshaler) UnmarshalBeaconState(marshaled []byte) (s state.
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to unmarshal state, detected fork=%s", forkName)
 		}
-		s, err = state_native.InitializeFromProtoUnsafeElectra(st)
+		s, err = state_native.NewUnsafe(st)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to init state trie from state, detected fork=%s", forkName)
 		}
@@ -171,7 +173,7 @@ func (cf *VersionedUnmarshaler) UnmarshalBeaconState(marshaled []byte) (s state.
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to unmarshal state, detected fork=%s", forkName)
 		}
-		s, err = state_native.InitializeFromProtoUnsafeFulu(st)
+		s, err = state_native.NewUnsafe(st)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to init state trie from state, detected fork=%s", forkName)
 		}
@@ -183,7 +185,19 @@ func (cf *VersionedUnmarshaler) UnmarshalBeaconState(marshaled []byte) (s state.
 			return nil, errors.Wrapf(err, "failed to unmarshal state, detected fork=%s", forkName)
 		}
 
-		s, err = state_native.InitializeFromProtoUnsafeGloas(st)
+		s, err = state_native.NewUnsafe(st)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to init state trie from state, detected fork=%s", forkName)
+		}
+	case version.Heze:
+		st := &ethpb.BeaconStateHeze{}
+
+		err = st.UnmarshalSSZ(marshaled)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to unmarshal state, detected fork=%s", forkName)
+		}
+
+		s, err = state_native.NewUnsafe(st)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to init state trie from state, detected fork=%s", forkName)
 		}
@@ -241,6 +255,8 @@ func (cf *VersionedUnmarshaler) UnmarshalBeaconBlock(marshaled []byte) (interfac
 		blk = &ethpb.SignedBeaconBlockFulu{}
 	case version.Gloas:
 		blk = &ethpb.SignedBeaconBlockGloas{}
+	case version.Heze:
+		blk = &ethpb.SignedBeaconBlockHeze{}
 	default:
 		forkName := version.String(cf.Fork)
 		return nil, fmt.Errorf("unable to initialize ReadOnlyBeaconBlock for fork version=%s at slot=%d", forkName, slot)
@@ -282,6 +298,8 @@ func (cf *VersionedUnmarshaler) UnmarshalBlindedBeaconBlock(marshaled []byte) (i
 		blk = &ethpb.SignedBlindedBeaconBlockFulu{}
 	case version.Gloas:
 		blk = &ethpb.SignedBeaconBlockGloas{}
+	case version.Heze:
+		blk = &ethpb.SignedBeaconBlockHeze{}
 	default:
 		forkName := version.String(cf.Fork)
 		return nil, fmt.Errorf("unable to initialize ReadOnlyBeaconBlock for fork version=%s at slot=%d", forkName, slot)

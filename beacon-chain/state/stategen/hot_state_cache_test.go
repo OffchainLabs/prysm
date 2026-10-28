@@ -17,7 +17,7 @@ func TestHotStateCache_RoundTrip(t *testing.T) {
 	assert.Equal(t, state.BeaconState(nil), s)
 	assert.Equal(t, false, c.has(root), "Empty cache has an object")
 
-	s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	s, err := state_native.New(&ethpb.BeaconState{
 		Slot: 10,
 	})
 	require.NoError(t, err)
@@ -27,7 +27,7 @@ func TestHotStateCache_RoundTrip(t *testing.T) {
 
 	res := c.get(root)
 	assert.NotNil(t, s)
-	assert.DeepEqual(t, res.ToProto(), s.ToProto(), "Expected equal protos to return from cache")
+	assert.DeepEqual(t, res.ToContainer(), s.ToContainer(), "Expected equal states to return from cache")
 
 	c.delete(root)
 	assert.Equal(t, false, c.has(root), "Cache not supposed to have the object")

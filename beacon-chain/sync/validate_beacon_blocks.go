@@ -77,6 +77,10 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		return pubsub.ValidationReject, errors.New("block.Block is nil")
 	}
 
+	if blk.Version() >= version.Gloas && len(blk.Block().Body().Deposits()) != 0 {
+		return pubsub.ValidationReject, errors.New("block must not contain deposits")
+	}
+
 	// Broadcast the block on a feed to notify other services in the beacon node
 	// of a received block (even if it does not process correctly through a state transition).
 	s.cfg.blockNotifier.BlockFeed().Send(&feed.Event{

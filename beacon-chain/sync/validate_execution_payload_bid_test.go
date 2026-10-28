@@ -286,10 +286,8 @@ func TestValidateExecutionPayloadBidGossip_HigherBidAccepted(t *testing.T) {
 
 	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signedBid)
 	require.NoError(t, err)
-	bid, err := wrapped.Bid()
-	require.NoError(t, err)
 	lowerBid := proto.Clone(signedBid).(*ethpb.SignedExecutionPayloadBid)
-	lowerBid.Message.Value = bid.Value() - 1
+	lowerBid.Message.Value = wrapped.Bid().Value() - 1
 	s.setHighestExecutionPayloadBid(lowerBid)
 
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
@@ -650,7 +648,5 @@ func mustBid(t *testing.T, signedBid *ethpb.SignedExecutionPayloadBid) interface
 
 	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signedBid)
 	require.NoError(t, err)
-	bid, err := wrapped.Bid()
-	require.NoError(t, err)
-	return bid
+	return wrapped.Bid()
 }

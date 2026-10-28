@@ -270,6 +270,8 @@ func SignedBeaconBlockMessageJsoner(block interfaces.ReadOnlySignedBeaconBlock) 
 		return SignedBeaconBlockFuluFromConsensus(pbStruct)
 	case *eth.SignedBeaconBlockGloas:
 		return SignedBeaconBlockGloasFromConsensus(pbStruct)
+	case *eth.SignedBeaconBlockHeze:
+		return SignedBeaconBlockHezeFromConsensus(pbStruct)
 	default:
 		return nil, ErrUnsupportedConversion
 	}
@@ -805,7 +807,7 @@ func BeaconBlockBellatrixFromConsensus(b *eth.BeaconBlockBellatrix) (*BeaconBloc
 func SignedBeaconBlockBellatrixFromConsensus(b *eth.SignedBeaconBlockBellatrix) (*SignedBeaconBlockBellatrix, error) {
 	block, err := BeaconBlockBellatrixFromConsensus(b.Block)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("convert Bellatrix block: %w", err)
 	}
 	return &SignedBeaconBlockBellatrix{
 		Message:   block,
@@ -1187,7 +1189,7 @@ func BeaconBlockCapellaFromConsensus(b *eth.BeaconBlockCapella) (*BeaconBlockCap
 func SignedBeaconBlockCapellaFromConsensus(b *eth.SignedBeaconBlockCapella) (*SignedBeaconBlockCapella, error) {
 	block, err := BeaconBlockCapellaFromConsensus(b.Block)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("convert Capella block: %w", err)
 	}
 	return &SignedBeaconBlockCapella{
 		Message:   block,
@@ -1629,7 +1631,7 @@ func BeaconBlockContentsDenebFromConsensus(b *eth.BeaconBlockContentsDeneb) (*Be
 func SignedBeaconBlockContentsDenebFromConsensus(b *eth.SignedBeaconBlockContentsDeneb) (*SignedBeaconBlockContentsDeneb, error) {
 	block, err := SignedBeaconBlockDenebFromConsensus(b.Block)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("convert signed Deneb block: %w", err)
 	}
 
 	proofs := make([]string, len(b.KzgProofs))
@@ -1732,7 +1734,7 @@ func BeaconBlockDenebFromConsensus(b *eth.BeaconBlockDeneb) (*BeaconBlockDeneb, 
 func SignedBeaconBlockDenebFromConsensus(b *eth.SignedBeaconBlockDeneb) (*SignedBeaconBlockDeneb, error) {
 	block, err := BeaconBlockDenebFromConsensus(b.Block)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("convert Deneb block: %w", err)
 	}
 	return &SignedBeaconBlockDeneb{
 		Message:   block,
@@ -2258,7 +2260,7 @@ func (b *BlindedBeaconBlockElectra) ToGeneric() (*eth.GenericBeaconBlock, error)
 func SignedBeaconBlockContentsElectraFromConsensus(b *eth.SignedBeaconBlockContentsElectra) (*SignedBeaconBlockContentsElectra, error) {
 	block, err := SignedBeaconBlockElectraFromConsensus(b.Block)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("convert signed Electra block: %w", err)
 	}
 
 	proofs := make([]string, len(b.KzgProofs))
@@ -2384,7 +2386,7 @@ func BeaconBlockElectraFromConsensus(b *eth.BeaconBlockElectra) (*BeaconBlockEle
 func SignedBeaconBlockElectraFromConsensus(b *eth.SignedBeaconBlockElectra) (*SignedBeaconBlockElectra, error) {
 	block, err := BeaconBlockElectraFromConsensus(b.Block)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("convert Electra block: %w", err)
 	}
 	return &SignedBeaconBlockElectra{
 		Message:   block,
@@ -2810,7 +2812,7 @@ func BeaconBlockContentsFuluFromConsensus(b *eth.BeaconBlockContentsFulu) (*Beac
 func SignedBeaconBlockContentsFuluFromConsensus(b *eth.SignedBeaconBlockContentsFulu) (*SignedBeaconBlockContentsFulu, error) {
 	block, err := SignedBeaconBlockFuluFromConsensus(b.Block)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("convert signed Fulu block: %w", err)
 	}
 
 	proofs := make([]string, len(b.KzgProofs))
@@ -2880,7 +2882,7 @@ func SignedBlindedBeaconBlockFuluFromConsensus(b *eth.SignedBlindedBeaconBlockFu
 func SignedBeaconBlockFuluFromConsensus(b *eth.SignedBeaconBlockFulu) (*SignedBeaconBlockFulu, error) {
 	block, err := BeaconBlockFuluFromConsensus(b.Block)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("convert Fulu block: %w", err)
 	}
 	return &SignedBeaconBlockFulu{
 		Message:   block,
@@ -2895,7 +2897,7 @@ func SignedBeaconBlockFuluFromConsensus(b *eth.SignedBeaconBlockFulu) (*SignedBe
 func SignedBeaconBlockGloasFromConsensus(b *eth.SignedBeaconBlockGloas) (*SignedBeaconBlockGloas, error) {
 	block, err := BeaconBlockGloasFromConsensus(b.Block)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("convert Gloas block: %w", err)
 	}
 	return &SignedBeaconBlockGloas{
 		Message:   block,
@@ -2991,7 +2993,7 @@ func (b *SignedBeaconBlockGloas) ToGeneric() (*eth.GenericSignedBeaconBlock, err
 	}
 	signed, err := b.ToConsensus()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("convert block to consensus: %w", err)
 	}
 	return &eth.GenericSignedBeaconBlock{
 		Block: &eth.GenericSignedBeaconBlock_Gloas{Gloas: signed},
@@ -3066,6 +3068,15 @@ func (b *BeaconBlockGloas) ToConsensus() (*eth.BeaconBlockGloas, error) {
 func (b *BeaconBlockBodyGloas) ToConsensus() (*eth.BeaconBlockBodyGloas, error) {
 	if b == nil {
 		return nil, errNilValue
+	}
+	if b.Eth1Data == nil {
+		return nil, server.NewDecodeError(errNilValue, "Eth1Data")
+	}
+	if b.SyncAggregate == nil {
+		return nil, server.NewDecodeError(errNilValue, "SyncAggregate")
+	}
+	if b.SignedExecutionPayloadBid == nil {
+		return nil, server.NewDecodeError(errNilValue, "SignedExecutionPayloadBid")
 	}
 
 	randaoReveal, err := bytesutil.DecodeHexWithLength(b.RandaoReveal, fieldparams.BLSSignatureLength)

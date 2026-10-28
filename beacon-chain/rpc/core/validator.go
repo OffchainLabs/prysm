@@ -396,6 +396,14 @@ func (s *Service) SubmitSignedAggregateSelectionProof(
 		return &RpcError{Err: server.NewBroadcastFailedError("SignedAggregateAttAndProof", err), Reason: Internal}
 	}
 
+	// Gossip validation accepts self-published messages before it sends this event.
+	s.OperationNotifier.OperationFeed().Send(&feed.Event{
+		Type: opfeed.AggregatedAttReceived,
+		Data: &opfeed.AggregatedAttReceivedData{
+			Attestation: attAndProof,
+		},
+	})
+
 	if logrus.GetLevel() >= logrus.DebugLevel {
 		var fields logrus.Fields
 		if agg.Version() >= version.Electra {
@@ -529,7 +537,7 @@ func (s *Service) GetAttestationData(
 		return nil, &RpcError{Reason: Unavailable, Err: errOptimisticMode}
 	}
 
-	currentHeadRoot, currentHeadFull, fcRoot, isPayloadFull := s.HeadFetcher.HeadAndCanonicalNodeAtSlot(req.Slot)
+	currentHeadRoot, currentHeadFull, headState, fcRoot, isPayloadFull := s.HeadFetcher.HeadAndCanonicalNodeAtSlot(req.Slot)
 	headRoot := currentHeadRoot[:]
 	targetEpoch := slots.ToEpoch(req.Slot)
 	targetRoot, err := s.HeadFetcher.TargetRootForEpoch(currentHeadRoot, targetEpoch)
@@ -537,9 +545,11 @@ func (s *Service) GetAttestationData(
 		return nil, &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get target root")}
 	}
 
-	headState, err := s.HeadFetcher.HeadStateReadOnly(ctx)
-	if err != nil {
-		return nil, &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get head state")}
+	if headState == nil {
+		headState, err = s.HeadFetcher.HeadStateReadOnly(ctx)
+		if err != nil {
+			return nil, &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get head state")}
+		}
 	}
 	if coreTime.CurrentEpoch(headState) < slots.ToEpoch(req.Slot) { // Ensure justified checkpoint safety by processing head state across the boundary.
 		headState, err = transition.ProcessSlotsIfNeeded(ctx, headState, headRoot, req.Slot)

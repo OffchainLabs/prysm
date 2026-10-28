@@ -94,12 +94,6 @@ func buildGenesisBeaconState(genesisTime uint64, preState state.BeaconState, eth
 	}
 
 	zeroHash := params.BeaconConfig().ZeroHash[:]
-
-	activeIndexRoots := make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector)
-	for i := range activeIndexRoots {
-		activeIndexRoots[i] = zeroHash
-	}
-
 	blockRoots := make([][]byte, params.BeaconConfig().SlotsPerHistoricalRoot)
 	for i := range blockRoots {
 		blockRoots[i] = zeroHash
@@ -214,7 +208,7 @@ func buildGenesisBeaconState(genesisTime uint64, preState state.BeaconState, eth
 		AggregatePubkey: bytesutil.PadTo([]byte{}, params.BeaconConfig().BLSPubkeyLength),
 	}
 
-	return state_native.InitializeFromProtoUnsafeAltair(st)
+	return state_native.NewUnsafe(st)
 }
 
 func emptyGenesisState() (state.BeaconState, error) {
@@ -241,7 +235,7 @@ func emptyGenesisState() (state.BeaconState, error) {
 		Eth1DataVotes:    []*ethpb.Eth1Data{},
 		Eth1DepositIndex: 0,
 	}
-	return state_native.InitializeFromProtoUnsafeAltair(st)
+	return state_native.NewUnsafe(st)
 }
 
 // NewBeaconBlockAltair creates a beacon block with minimum marshalable fields.
