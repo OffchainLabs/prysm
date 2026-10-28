@@ -54,15 +54,10 @@ func NewSyncNeeds(current CurrentSlotter, oldestSlotFlagPtr, archiveOriginSlot *
 	if err != nil {
 		return SyncNeeds{}, errors.Wrap(err, "deneb fork slot")
 	}
-	fulu, err := slots.EpochStart(params.BeaconConfig().FuluForkEpoch)
-	if err != nil {
-		return SyncNeeds{}, errors.Wrap(err, "fulu fork slot")
-	}
-	gloasBoundary := min(params.BeaconConfig().GloasForkEpoch, slots.MaxSafeEpoch())
-	gloas, err := slots.EpochStart(gloasBoundary)
-	if err != nil {
-		return SyncNeeds{}, errors.Wrap(err, "gloas fork slot")
-	}
+	// Fulu and Gloas may still be unscheduled (a far-future epoch) on some networks,
+	// so their fork slots are clamped rather than treated as overflow errors.
+	fulu := slots.SafeEpochStartOrMax(params.BeaconConfig().FuluForkEpoch)
+	gloas := slots.SafeEpochStartOrMax(params.BeaconConfig().GloasForkEpoch)
 	sn := SyncNeeds{
 		current:           func() primitives.Slot { return current() },
 		deneb:             deneb,
