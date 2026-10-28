@@ -3,7 +3,6 @@ package ssz_test
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
@@ -37,8 +36,6 @@ func maxByteLists[T ~[]byte]() []T {
 }
 
 func BenchmarkSliceRoot_MaxByteLists(b *testing.B) {
-	reset := features.InitWithReset(&features.Flags{})
-	defer reset()
 	lists := maxByteLists[byteList]()
 	b.ResetTimer()
 	for b.Loop() {
@@ -48,8 +45,6 @@ func BenchmarkSliceRoot_MaxByteLists(b *testing.B) {
 }
 
 func BenchmarkSliceRootProgressive_MaxByteLists(b *testing.B) {
-	reset := features.InitWithReset(&features.Flags{})
-	defer reset()
 	lists := maxByteLists[progressiveByteList]()
 	b.ResetTimer()
 	for b.Loop() {
