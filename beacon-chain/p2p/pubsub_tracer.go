@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"sync"
+	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -175,6 +176,9 @@ func (g *gossipTracer) RecvRPC(rpc *pubsub.RPC) {
 func (g *gossipTracer) SendRPC(rpc *pubsub.RPC, p peer.ID) {
 	g.setMetricFromRPC(send, pubsubRPCSubSent, pubsubRPCPubSent, pubsubRPCPubSentSize, pubsubRPCSent, rpc)
 }
+
+// SendRPCCompleted .
+func (g *gossipTracer) SendRPCCompleted(rpc *pubsub.RPC, p peer.ID, writeDuration time.Duration) {}
 
 // DropRPC .
 func (g *gossipTracer) DropRPC(rpc *pubsub.RPC, p peer.ID) {

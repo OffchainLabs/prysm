@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -23,7 +23,11 @@ func init() {
 }
 
 func TestLifecycle(t *testing.T) {
-	port := 1000 + rand.Intn(1000)
+	// Reserve a free, unprivileged port from the OS, then release it for the service.
+	l, err := net.Listen("tcp", "localhost:0")
+	require.NoError(t, err)
+	port := l.Addr().(*net.TCPAddr).Port
+	require.NoError(t, l.Close())
 	prometheusService := NewService(t.Context(), fmt.Sprintf(":%d", port), nil)
 	prometheusService.Start()
 	// Actively wait until the service responds on /metrics (faster and less flaky than a fixed sleep)

@@ -55,7 +55,7 @@ func TestSetNextWithdrawalValidatorIndex_Deneb(t *testing.T) {
 }
 
 func TestDequeuePendingWithdrawals(t *testing.T) {
-	s, err := InitializeFromProtoElectra(&eth.BeaconStateElectra{
+	s, err := New(&eth.BeaconStateElectra{
 		PendingPartialWithdrawals: []*eth.PendingPartialWithdrawal{
 			{},
 			{},
@@ -89,14 +89,14 @@ func TestDequeuePendingWithdrawals(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint64(0), num)
 
-	s, err = InitializeFromProtoDeneb(&eth.BeaconStateDeneb{})
+	s, err = New(&eth.BeaconStateDeneb{})
 	require.NoError(t, err)
 
 	require.ErrorContains(t, "is not supported", s.DequeuePendingPartialWithdrawals(0))
 }
 
 func TestAppendPendingWithdrawals(t *testing.T) {
-	s, err := InitializeFromProtoElectra(&eth.BeaconStateElectra{
+	s, err := New(&eth.BeaconStateElectra{
 		PendingPartialWithdrawals: []*eth.PendingPartialWithdrawal{
 			{},
 			{},
@@ -127,7 +127,7 @@ func TestAppendPendingWithdrawals(t *testing.T) {
 
 	require.ErrorContains(t, "cannot append nil pending partial withdrawal", s.AppendPendingPartialWithdrawal(nil))
 
-	s, err = InitializeFromProtoDeneb(&eth.BeaconStateDeneb{})
+	s, err = New(&eth.BeaconStateDeneb{})
 	require.NoError(t, err)
 
 	require.ErrorContains(t, "is not supported", s.AppendPendingPartialWithdrawal(nil))

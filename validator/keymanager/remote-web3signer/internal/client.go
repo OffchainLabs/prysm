@@ -136,7 +136,6 @@ func (client *ApiClient) GetServerStatus(ctx context.Context) (string, error) {
 
 // doRequest is a utility method for requests.
 func (client *ApiClient) doRequest(ctx context.Context, httpMethod, fullPath string, body io.Reader) (*http.Response, error) {
-	var requestDump []byte
 	ctx, span := trace.StartSpan(ctx, "remote_web3signer.Client.doRequest")
 	defer span.End()
 	span.SetAttributes(
@@ -162,19 +161,21 @@ func (client *ApiClient) doRequest(ctx context.Context, httpMethod, fullPath str
 		signRequestDurationSeconds.WithLabelValues(req.Method, strconv.Itoa(resp.StatusCode)).Observe(duration.Seconds())
 	}
 	if resp.StatusCode != http.StatusOK {
-		requestDump, err = httputil.DumpRequestOut(req, true)
-		if err != nil {
-			return nil, err
+		fields := logrus.Fields{"status": resp.StatusCode}
+		// The client has already consumed req.Body, so dump the request without it.
+		if requestDump, err := httputil.DumpRequestOut(req, false); err != nil {
+			fields["requestDumpError"] = err
+		} else {
+			fields["request"] = string(requestDump)
 		}
-		responseDump, err := httputil.DumpResponse(resp, true)
-		if err != nil {
-			return nil, err
+		// On success, DumpResponse replaces resp.Body with an in-memory copy and closes the original.
+		if responseDump, err := httputil.DumpResponse(resp, true); err != nil {
+			closeBody(resp.Body)
+			fields["responseDumpError"] = err
+		} else {
+			fields["response"] = string(responseDump)
 		}
-		log.WithFields(logrus.Fields{
-			"status":   resp.StatusCode,
-			"request":  string(requestDump),
-			"response": string(responseDump),
-		}).Error("Web3signer request failed")
+		log.WithFields(fields).Error("Web3signer request failed")
 	}
 	if resp.StatusCode == http.StatusInternalServerError {
 		err = fmt.Errorf("internal Web3Signer server error, Signing Request URL: %v Status: %v", fullPath, resp.StatusCode)

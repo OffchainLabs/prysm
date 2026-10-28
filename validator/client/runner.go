@@ -26,6 +26,8 @@ var backOffPeriod = 10 * time.Second
 // runner encapsulates the main validator routine.
 type runner struct {
 	validator *validator
+	// duties tracks the in-flight slot duties, which may outlive run.
+	duties sync.WaitGroup
 }
 
 // newRunner creates a new runner instance and performs all necessary initialization.
@@ -162,6 +164,7 @@ func (r *runner) run(ctx context.Context) {
 			// performRoles calls span.End()
 			rolesCtx, _ := context.WithDeadline(ctx, deadline) //nolint:govet
 			performRoles(rolesCtx, allRoles, v, slot, &wg, span)
+			r.duties.Go(wg.Wait)
 		case e := <-v.EventsChan():
 			v.ProcessEvent(ctx, e)
 		case currentKeys := <-v.AccountsChangedChan(): // should be less of a priority than next slot

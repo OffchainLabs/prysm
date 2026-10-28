@@ -678,7 +678,7 @@ func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T)
 			},
 		},
 		{
-			name: "too many blocks",
+			name: "more blocks than requested",
 			req: &ethpb.BeaconBlocksByRangeRequest{
 				StartSlot: 100,
 				Step:      1,
@@ -698,9 +698,9 @@ func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T)
 				}
 			},
 			validate: func(req *ethpb.BeaconBlocksByRangeRequest, blocks []interfaces.ReadOnlySignedBeaconBlock) {
-				assert.Equal(t, 0, len(blocks))
+				assert.Equal(t, 64, len(blocks))
+				assert.Equal(t, primitives.Slot(163), blocks[len(blocks)-1].Block().Slot())
 			},
-			wantedErr: beaconsync.ErrInvalidFetchedData.Error(),
 		},
 		{
 			name: "not in a consecutive order",

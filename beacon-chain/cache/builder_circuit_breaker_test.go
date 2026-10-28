@@ -506,6 +506,27 @@ func TestBuilderCircuitBreaker_DropInactiveUnlinksRecordlessMembers(t *testing.T
 	require.NoError(t, c.checkRelayInvariants())
 }
 
+func TestBuilderCircuitBreaker_DropInactiveKeepsLinksObservedDuringCheck(t *testing.T) {
+	relayTestConfig(t)
+	c := NewBuilderCircuitBreaker()
+	c.ObserveRelayBid("https://a.io", 2, 10)
+	c.ObserveRelayBid("https://b.io", 2, 10)
+	c.ObserveRelayBid("https://c.io", 2, 10)
+
+	c.DropInactiveBuilders(11, func(idx primitives.BuilderIndex) (bool, error) {
+		c.ObserveRelayBid("https://b.io", 2, 11)
+		c.ObserveRelayBid("https://d.io", 2, 11)
+		return false, nil
+	})
+
+	c.lock.RLock()
+	require.Equal(t, "https://b.io,https://d.io", strings.Join(c.relaysByIndex[2], ","))
+	_, ok := c.relays["https://a.io"]
+	require.Equal(t, false, ok)
+	c.lock.RUnlock()
+	require.NoError(t, c.checkRelayInvariants())
+}
+
 func TestBuilderCircuitBreaker_RelayCapEvictsUnbannedOnly(t *testing.T) {
 	relayTestConfig(t)
 	cfg := params.BeaconConfig().Copy()

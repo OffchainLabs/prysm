@@ -153,6 +153,14 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 			}
 			return json.Marshal(signedBlock)
 		})
+	case *ethpb.GenericSignedBeaconBlock_Heze:
+		res, err = buildBlockResult("heze", false, blockType.Heze, blockType.Heze.Block, func() ([]byte, error) {
+			signedBlock, err := structs.SignedBeaconBlockHezeFromConsensus(blockType.Heze)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to convert heze beacon block")
+			}
+			return json.Marshal(signedBlock)
+		})
 	default:
 		return nil, errors.Errorf("unsupported block type %T", in.Block)
 	}

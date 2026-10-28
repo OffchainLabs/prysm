@@ -305,8 +305,9 @@ func main() {
 	// note other instances of ctx in this func are *cli.Context.
 	rctx, cancel := context.WithCancel(context.Background())
 	app := cli.App{
-		Name:  "beacon-chain",
-		Usage: "this is a beacon chain implementation for Ethereum",
+		Name:    "beacon-chain",
+		Usage:   "Ethereum beacon node",
+		Authors: cmd.Authors,
 		Action: func(ctx *cli.Context) error {
 			if err := startNode(ctx, cancel); err != nil {
 				log.Fatal(err.Error())

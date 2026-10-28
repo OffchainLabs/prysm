@@ -181,7 +181,7 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	warnDeprecationUpcoming(ctx)
 	complainOnDeprecatedFlags(ctx)
 	cfg := &Flags{}
-	if ctx.Bool(devModeFlag.Name) {
+	if ctx.Bool(DevModeFlag.Name) {
 		enableDevModeFlags(ctx)
 	}
 	if err := configureTestnet(ctx); err != nil {
@@ -374,7 +374,6 @@ func ConfigureValidator(ctx *cli.Context) error {
 		cfg.EnableMinimalSlashingProtection = true
 	}
 	if ctx.Bool(enableDoppelGangerProtection.Name) {
-		logEnabled(enableDoppelGangerProtection)
 		cfg.EnableDoppelGanger = true
 	}
 	if ctx.Bool(EnableBeaconRESTApi.Name) || ctx.IsSet(validatorflags.BeaconRESTApiProviderFlag.Name) {

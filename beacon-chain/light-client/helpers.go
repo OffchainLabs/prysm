@@ -19,8 +19,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.LightClientBootstrap, error) {
-	currentEpoch := slots.ToEpoch(currentSlot)
+func createDefaultLightClientBootstrap(blockSlot primitives.Slot) (interfaces.LightClientBootstrap, error) {
+	blockEpoch := slots.ToEpoch(blockSlot)
 	syncCommitteeSize := params.BeaconConfig().SyncCommitteeSize
 	pubKeys := make([][]byte, syncCommitteeSize)
 	for i := range syncCommitteeSize {
@@ -32,7 +32,9 @@ func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.
 	}
 
 	var currentSyncCommitteeBranch [][]byte
-	if currentEpoch >= params.BeaconConfig().ElectraForkEpoch {
+	if blockEpoch >= params.BeaconConfig().GloasForkEpoch {
+		currentSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepthGloas)
+	} else if blockEpoch >= params.BeaconConfig().ElectraForkEpoch {
 		currentSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepthElectra)
 	} else {
 		currentSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepth)
@@ -47,7 +49,7 @@ func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.
 	}
 
 	var m proto.Message
-	if currentEpoch < params.BeaconConfig().CapellaForkEpoch {
+	if blockEpoch < params.BeaconConfig().CapellaForkEpoch {
 		m = &pb.LightClientBootstrapAltair{
 			Header: &pb.LightClientHeaderAltair{
 				Beacon: &pb.BeaconBlockHeader{},
@@ -55,7 +57,7 @@ func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.
 			CurrentSyncCommittee:       currentSyncCommittee,
 			CurrentSyncCommitteeBranch: currentSyncCommitteeBranch,
 		}
-	} else if currentEpoch < params.BeaconConfig().DenebForkEpoch {
+	} else if blockEpoch < params.BeaconConfig().DenebForkEpoch {
 		m = &pb.LightClientBootstrapCapella{
 			Header: &pb.LightClientHeaderCapella{
 				Beacon:          &pb.BeaconBlockHeader{},
@@ -65,7 +67,7 @@ func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.
 			CurrentSyncCommittee:       currentSyncCommittee,
 			CurrentSyncCommitteeBranch: currentSyncCommitteeBranch,
 		}
-	} else if currentEpoch < params.BeaconConfig().ElectraForkEpoch {
+	} else if blockEpoch < params.BeaconConfig().ElectraForkEpoch {
 		m = &pb.LightClientBootstrapDeneb{
 			Header: &pb.LightClientHeaderDeneb{
 				Beacon:          &pb.BeaconBlockHeader{},
@@ -75,7 +77,7 @@ func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.
 			CurrentSyncCommittee:       currentSyncCommittee,
 			CurrentSyncCommitteeBranch: currentSyncCommitteeBranch,
 		}
-	} else {
+	} else if blockEpoch < params.BeaconConfig().GloasForkEpoch {
 		m = &pb.LightClientBootstrapElectra{
 			Header: &pb.LightClientHeaderDeneb{
 				Beacon:          &pb.BeaconBlockHeader{},
@@ -85,9 +87,28 @@ func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.
 			CurrentSyncCommittee:       currentSyncCommittee,
 			CurrentSyncCommitteeBranch: currentSyncCommitteeBranch,
 		}
+	} else {
+		m = &pb.LightClientBootstrapGloas{
+			Header:                     emptyLightClientHeaderGloas(0),
+			CurrentSyncCommittee:       currentSyncCommittee,
+			CurrentSyncCommitteeBranch: currentSyncCommitteeBranch,
+		}
 	}
 
 	return light_client.NewWrappedBootstrap(m)
+}
+
+func emptyLightClientHeaderGloas(slot primitives.Slot) *pb.LightClientHeaderGloas {
+	return &pb.LightClientHeaderGloas{
+		Beacon: &pb.BeaconBlockHeader{
+			Slot:       slot,
+			ParentRoot: make([]byte, fieldparams.RootLength),
+			StateRoot:  make([]byte, fieldparams.RootLength),
+			BodyRoot:   make([]byte, fieldparams.RootLength),
+		},
+		ExecutionBlockHash: make([]byte, fieldparams.RootLength),
+		ExecutionBranch:    emptyGloasExecutionProof(),
+	}
 }
 
 func makeExecutionAndProofDeneb(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) (*enginev1.ExecutionPayloadHeaderDeneb, [][]byte, error) {

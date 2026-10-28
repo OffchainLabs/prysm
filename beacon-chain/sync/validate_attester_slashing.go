@@ -53,7 +53,7 @@ func (s *Service) validateAttesterSlashing(ctx context.Context, pid peer.ID, msg
 		return pubsub.ValidationIgnore, nil
 	}
 
-	headState, err := s.cfg.chain.HeadState(ctx)
+	headState, err := s.cfg.chain.HeadStateReadOnly(ctx)
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}

@@ -252,7 +252,9 @@ func CreateDefaultLightClientUpdate(attestedBlock interfaces.ReadOnlySignedBeaco
 	}
 
 	var nextSyncCommitteeBranch [][]byte
-	if attestedBlock.Version() >= version.Electra {
+	if attestedBlock.Version() >= version.Gloas {
+		nextSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepthGloas)
+	} else if attestedBlock.Version() >= version.Electra {
 		nextSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepthElectra)
 	} else {
 		nextSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepth)
@@ -267,7 +269,9 @@ func CreateDefaultLightClientUpdate(attestedBlock interfaces.ReadOnlySignedBeaco
 	}
 
 	var finalityBranch [][]byte
-	if attestedBlock.Version() >= version.Electra {
+	if attestedBlock.Version() >= version.Gloas {
+		finalityBranch = make([][]byte, fieldparams.FinalityBranchDepthGloas)
+	} else if attestedBlock.Version() >= version.Electra {
 		finalityBranch = make([][]byte, fieldparams.FinalityBranchDepthElectra)
 	} else {
 		finalityBranch = make([][]byte, fieldparams.FinalityBranchDepth)
@@ -470,6 +474,18 @@ func CreateDefaultLightClientUpdate(attestedBlock interfaces.ReadOnlySignedBeaco
 				SyncCommitteeSignature: make([]byte, 96),
 			},
 		}
+	case version.Gloas:
+		m = &pb.LightClientUpdateGloas{
+			AttestedHeader:          emptyLightClientHeaderGloas(attestedBlock.Block().Slot()),
+			NextSyncCommittee:       nextSyncCommittee,
+			NextSyncCommitteeBranch: nextSyncCommitteeBranch,
+			FinalizedHeader:         emptyLightClientHeaderGloas(0),
+			FinalityBranch:          finalityBranch,
+			SyncAggregate: &pb.SyncAggregate{
+				SyncCommitteeBits:      make([]byte, fieldparams.SyncAggregateSyncCommitteeBytesLength),
+				SyncCommitteeSignature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+		}
 	default:
 		return nil, errors.Errorf("unsupported beacon chain version %s", version.String(attestedBlock.Version()))
 	}
@@ -570,6 +586,16 @@ func BlockToLightClientHeader(
 			Execution:       payloadHeader,
 			ExecutionBranch: payloadProof,
 		}
+	case version.Gloas:
+		blockHash, proof, err := makeExecutionAndProofGloas(ctx, block)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not make execution block hash and proof")
+		}
+		m = &pb.LightClientHeaderGloas{
+			Beacon:             beacon,
+			ExecutionBlockHash: blockHash,
+			ExecutionBranch:    proof,
+		}
 	default:
 		return nil, fmt.Errorf("unsupported attested block version %s", version.String(attestedBlockVersion))
 	}
@@ -578,6 +604,13 @@ func BlockToLightClientHeader(
 }
 
 func HasRelevantSyncCommittee(update interfaces.LightClientUpdate) (bool, error) {
+	if update.Version() >= version.Gloas {
+		branch, err := update.NextSyncCommitteeBranchGloas()
+		if err != nil {
+			return false, err
+		}
+		return branch != (interfaces.LightClientSyncCommitteeBranchGloas{}), nil
+	}
 	if update.Version() >= version.Electra {
 		branch, err := update.NextSyncCommitteeBranchElectra()
 		if err != nil {
@@ -593,6 +626,13 @@ func HasRelevantSyncCommittee(update interfaces.LightClientUpdate) (bool, error)
 }
 
 func HasFinality(update interfaces.LightClientUpdate) (bool, error) {
+	if update.Version() >= version.Gloas {
+		branch, err := update.FinalityBranchGloas()
+		if err != nil {
+			return false, err
+		}
+		return branch != (interfaces.LightClientFinalityBranchGloas{}), nil
+	}
 	if update.Version() >= version.Electra {
 		b, err := update.FinalityBranchElectra()
 		if err != nil {
@@ -692,7 +732,7 @@ func IsBetterUpdate(newUpdate, oldUpdate interfaces.LightClientUpdate) (bool, er
 
 func NewLightClientBootstrapFromBeaconState(
 	ctx context.Context,
-	currentSlot primitives.Slot,
+	_ primitives.Slot, // Retained for caller compatibility; the historical state determines the fork.
 	state state.BeaconState,
 	block interfaces.ReadOnlySignedBeaconBlock,
 ) (interfaces.LightClientBootstrap, error) {
@@ -727,7 +767,7 @@ func NewLightClientBootstrapFromBeaconState(
 		return nil, fmt.Errorf("latest block header root %#x not equal to block root %#x", latestBlockHeaderRoot, beaconBlockRoot)
 	}
 
-	bootstrap, err := createDefaultLightClientBootstrap(currentSlot)
+	bootstrap, err := createDefaultLightClientBootstrap(state.Slot())
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create default light client bootstrap")
 	}

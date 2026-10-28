@@ -36,6 +36,7 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/beacon/states/{state_id}/proposer_lookahead":          {http.MethodGet},
 		"/eth/v1/beacon/states/{state_id}/builder_pending_withdrawals": {http.MethodGet},
 		"/eth/v1/beacon/states/{state_id}/builder_pending_payments":    {http.MethodGet},
+		"/eth/v1/beacon/proposer_preferences":                          {http.MethodGet},
 		"/eth/v1/beacon/states/{state_id}/builders":                    {http.MethodPost},
 		"/eth/v1/beacon/execution_payload_envelopes/{block_id}":        {http.MethodGet},
 		"/eth/v1/beacon/execution_payload_envelopes":                   {http.MethodPost},
@@ -128,7 +129,6 @@ func Test_endpoints(t *testing.T) {
 
 	prysmBeaconRoutes := map[string][]string{
 		"/prysm/v1/beacon/weak_subjectivity":                 {http.MethodGet},
-		"/eth/v1/beacon/states/{state_id}/validator_count":   {http.MethodGet},
 		"/prysm/v1/beacon/states/{state_id}/validator_count": {http.MethodGet},
 		"/prysm/v1/beacon/chain_head":                        {http.MethodGet},
 		"/prysm/v1/beacon/blobs":                             {http.MethodPost},

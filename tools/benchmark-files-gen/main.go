@@ -242,5 +242,5 @@ func genesisBeaconState() (state.BeaconState, error) {
 	if err := genesisState.UnmarshalSSZ(beaconBytes); err != nil {
 		return nil, errors.Wrap(err, "cannot unmarshal genesis state file")
 	}
-	return state_native.InitializeFromProtoUnsafePhase0(genesisState)
+	return state_native.NewUnsafe(genesisState)
 }

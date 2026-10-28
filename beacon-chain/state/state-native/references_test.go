@@ -19,7 +19,7 @@ import (
 func TestStateReferenceSharing_Finalizer_Phase0(t *testing.T) {
 	// This test showcases the logic on the Slashings field with the GC finalizer.
 
-	s, err := InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{Slashings: []uint64{10, 30, 40}})
+	s, err := NewUnsafe(&ethpb.BeaconState{Slashings: []uint64{10, 30, 40}})
 	require.NoError(t, err)
 	a, ok := s.(*BeaconState)
 	require.Equal(t, true, ok)
@@ -50,7 +50,7 @@ func TestStateReferenceSharing_Finalizer_Phase0(t *testing.T) {
 func TestStateReferenceSharing_Finalizer_Altair(t *testing.T) {
 	// This test showcases the logic on the Slashings field with the GC finalizer.
 
-	s, err := InitializeFromProtoUnsafeAltair(&ethpb.BeaconStateAltair{Slashings: []uint64{10, 30, 40}})
+	s, err := NewUnsafe(&ethpb.BeaconStateAltair{Slashings: []uint64{10, 30, 40}})
 	require.NoError(t, err)
 	a, ok := s.(*BeaconState)
 	require.Equal(t, true, ok)
@@ -81,7 +81,7 @@ func TestStateReferenceSharing_Finalizer_Altair(t *testing.T) {
 func TestStateReferenceSharing_Finalizer_Bellatrix(t *testing.T) {
 	// This test showcases the logic on the Slashings field with the GC finalizer.
 
-	s, err := InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{Slashings: []uint64{10, 30, 40}})
+	s, err := NewUnsafe(&ethpb.BeaconStateBellatrix{Slashings: []uint64{10, 30, 40}})
 	require.NoError(t, err)
 	a, ok := s.(*BeaconState)
 	require.Equal(t, true, ok)
@@ -112,7 +112,7 @@ func TestStateReferenceSharing_Finalizer_Bellatrix(t *testing.T) {
 func TestStateReferenceSharing_Finalizer_Capella(t *testing.T) {
 	// This test showcases the logic on the Slashings field with the GC finalizer.
 
-	s, err := InitializeFromProtoUnsafeCapella(&ethpb.BeaconStateCapella{Slashings: []uint64{10, 30, 40}})
+	s, err := NewUnsafe(&ethpb.BeaconStateCapella{Slashings: []uint64{10, 30, 40}})
 	require.NoError(t, err)
 	a, ok := s.(*BeaconState)
 	require.Equal(t, true, ok)
@@ -143,7 +143,7 @@ func TestStateReferenceSharing_Finalizer_Capella(t *testing.T) {
 func TestStateReferenceSharing_Finalizer_Deneb(t *testing.T) {
 	// This test showcases the logic on the Slashings field with the GC finalizer.
 
-	s, err := InitializeFromProtoUnsafeDeneb(&ethpb.BeaconStateDeneb{Slashings: []uint64{10, 30, 40}})
+	s, err := NewUnsafe(&ethpb.BeaconStateDeneb{Slashings: []uint64{10, 30, 40}})
 	require.NoError(t, err)
 	a, ok := s.(*BeaconState)
 	require.Equal(t, true, ok)
@@ -173,7 +173,7 @@ func TestStateReferenceSharing_Finalizer_Deneb(t *testing.T) {
 
 func TestStateReferenceCopy_NoUnexpectedSlashingsMutation_Phase0(t *testing.T) {
 	val1, val2 := uint64(10), uint64(20)
-	s, err := InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{
+	s, err := NewUnsafe(&ethpb.BeaconState{
 		Slashings: []uint64{val1},
 	})
 	require.NoError(t, err)
@@ -215,7 +215,7 @@ func TestStateReferenceCopy_NoUnexpectedSlashingsMutation_Phase0(t *testing.T) {
 
 func TestStateReferenceCopy_NoUnexpectedSlashingMutation_Altair(t *testing.T) {
 	val1, val2 := uint64(10), uint64(20)
-	s, err := InitializeFromProtoUnsafeAltair(&ethpb.BeaconStateAltair{
+	s, err := NewUnsafe(&ethpb.BeaconStateAltair{
 		Slashings: []uint64{val1},
 	})
 	require.NoError(t, err)
@@ -257,7 +257,7 @@ func TestStateReferenceCopy_NoUnexpectedSlashingMutation_Altair(t *testing.T) {
 
 func TestStateReferenceCopy_NoUnexpectedSlashingMutation_Bellatrix(t *testing.T) {
 	val1, val2 := uint64(10), uint64(20)
-	s, err := InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{
+	s, err := NewUnsafe(&ethpb.BeaconStateBellatrix{
 		Slashings: []uint64{val1},
 	})
 	require.NoError(t, err)
@@ -299,7 +299,7 @@ func TestStateReferenceCopy_NoUnexpectedSlashingMutation_Bellatrix(t *testing.T)
 
 func TestStateReferenceCopy_NoUnexpectedSlashingMutation_Capella(t *testing.T) {
 	val1, val2 := uint64(10), uint64(20)
-	s, err := InitializeFromProtoUnsafeCapella(&ethpb.BeaconStateCapella{
+	s, err := NewUnsafe(&ethpb.BeaconStateCapella{
 		Slashings: []uint64{val1},
 	})
 	require.NoError(t, err)
@@ -341,7 +341,7 @@ func TestStateReferenceCopy_NoUnexpectedSlashingMutation_Capella(t *testing.T) {
 
 func TestStateReferenceCopy_NoUnexpectedSlashingMutation_Deneb(t *testing.T) {
 	val1, val2 := uint64(10), uint64(20)
-	s, err := InitializeFromProtoUnsafeDeneb(&ethpb.BeaconStateDeneb{
+	s, err := NewUnsafe(&ethpb.BeaconStateDeneb{
 		Slashings: []uint64{val1},
 	})
 	require.NoError(t, err)
@@ -401,7 +401,7 @@ func TestStateReferenceCopy_NoUnexpectedAttestationsMutation(t *testing.T) {
 		}
 	}
 
-	s, err := InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
+	s, err := NewUnsafe(&ethpb.BeaconState{})
 	require.NoError(t, err)
 	a, ok := s.(*BeaconState)
 	require.Equal(t, true, ok)
@@ -547,7 +547,7 @@ func TestStateReferenceCopy_NoUnexpectedAttestationsMutation(t *testing.T) {
 }
 
 func TestValidatorReferences_RemainsConsistent_Phase0(t *testing.T) {
-	s, err := InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{
+	s, err := NewUnsafe(&ethpb.BeaconState{
 		Validators: []*ethpb.Validator{
 			{PublicKey: []byte{'A'}},
 			{PublicKey: []byte{'B'}},
@@ -581,7 +581,7 @@ func TestValidatorReferences_RemainsConsistent_Phase0(t *testing.T) {
 }
 
 func TestValidatorReferences_RemainsConsistent_Altair(t *testing.T) {
-	s, err := InitializeFromProtoUnsafeAltair(&ethpb.BeaconStateAltair{
+	s, err := NewUnsafe(&ethpb.BeaconStateAltair{
 		Validators: []*ethpb.Validator{
 			{PublicKey: []byte{'A'}},
 			{PublicKey: []byte{'B'}},
@@ -615,7 +615,7 @@ func TestValidatorReferences_RemainsConsistent_Altair(t *testing.T) {
 }
 
 func TestValidatorReferences_RemainsConsistent_Capella(t *testing.T) {
-	s, err := InitializeFromProtoUnsafeCapella(&ethpb.BeaconStateCapella{
+	s, err := NewUnsafe(&ethpb.BeaconStateCapella{
 		Validators: []*ethpb.Validator{
 			{PublicKey: []byte{'A'}},
 			{PublicKey: []byte{'B'}},
@@ -649,7 +649,7 @@ func TestValidatorReferences_RemainsConsistent_Capella(t *testing.T) {
 }
 
 func TestValidatorReferences_RemainsConsistent_Deneb(t *testing.T) {
-	s, err := InitializeFromProtoUnsafeDeneb(&ethpb.BeaconStateDeneb{
+	s, err := NewUnsafe(&ethpb.BeaconStateDeneb{
 		Validators: []*ethpb.Validator{
 			{PublicKey: []byte{'A'}},
 			{PublicKey: []byte{'B'}},
@@ -683,7 +683,7 @@ func TestValidatorReferences_RemainsConsistent_Deneb(t *testing.T) {
 }
 
 func TestValidatorReferences_RemainsConsistent_Bellatrix(t *testing.T) {
-	s, err := InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{
+	s, err := NewUnsafe(&ethpb.BeaconStateBellatrix{
 		Validators: []*ethpb.Validator{
 			{PublicKey: []byte{'A'}},
 			{PublicKey: []byte{'B'}},
@@ -717,7 +717,7 @@ func TestValidatorReferences_RemainsConsistent_Bellatrix(t *testing.T) {
 }
 
 func TestValidatorReferences_ApplyValidator_BalancesRead(t *testing.T) {
-	s, err := InitializeFromProtoUnsafeAltair(&ethpb.BeaconStateAltair{
+	s, err := NewUnsafe(&ethpb.BeaconStateAltair{
 		Validators: []*ethpb.Validator{
 			{PublicKey: []byte{'A'}},
 			{PublicKey: []byte{'B'}},

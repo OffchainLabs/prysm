@@ -271,6 +271,20 @@ func TestBeaconBlock(t *testing.T) {
 		},
 	}
 	blockOnlyResp := &eth.GenericBeaconBlock{Block: &eth.GenericBeaconBlock_Gloas{Gloas: gloasBlock}}
+	hezeBlock := util.NewBeaconBlockHeze().Block
+	hezeContentsResp := &eth.GenericBeaconBlock{
+		Block: &eth.GenericBeaconBlock_HezeContents{
+			HezeContents: &eth.BeaconBlockContentsHeze{
+				Block: hezeBlock,
+				ExecutionPayloadEnvelope: &eth.ExecutionPayloadEnvelope{
+					Payload:         &enginev1.ExecutionPayloadGloas{SlotNumber: slot},
+					BeaconBlockRoot: blockRoot[:],
+				},
+				Blobs:     [][]byte{[]byte("blob")},
+				KzgProofs: [][]byte{[]byte("proof")},
+			},
+		},
+	}
 
 	tests := []struct {
 		name      string
@@ -289,6 +303,22 @@ func TestBeaconBlock(t *testing.T) {
 				require.Equal(t, true, ok)
 				require.Equal(t, gloasBlock, gloas.Gloas)
 				// The publisher's envelope + blobs were cached under the request slot.
+				cachedEnv, blobs, proofs := vc.envelopeCache.Peek(slot)
+				require.NotNil(t, cachedEnv)
+				require.Equal(t, slot, cachedEnv.Payload.SlotNumber)
+				require.Equal(t, 1, len(blobs))
+				require.Equal(t, 1, len(proofs))
+			},
+		},
+		{
+			name:      "stateless heze contents are cached and unwrapped to a block-only response",
+			stateless: true,
+			resp:      hezeContentsResp,
+			verify: func(t *testing.T, vc *grpcValidatorClient, got *eth.GenericBeaconBlock, err error) {
+				require.NoError(t, err)
+				heze, ok := got.GetBlock().(*eth.GenericBeaconBlock_Heze)
+				require.Equal(t, true, ok)
+				require.Equal(t, hezeBlock, heze.Heze)
 				cachedEnv, blobs, proofs := vc.envelopeCache.Peek(slot)
 				require.NotNil(t, cachedEnv)
 				require.Equal(t, slot, cachedEnv.Payload.SlotNumber)

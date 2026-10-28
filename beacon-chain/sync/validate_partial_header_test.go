@@ -9,6 +9,7 @@ import (
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -100,6 +101,13 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 	unavailableParentSlotErr := errors.Wrap(verification.ErrSidecarParentUnknown, "slot lookup failed")
 	invalidVerifierErr := errors.Wrap(verification.ErrInvalid, "invalid verification")
 
+	const maxBlobs = 2
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: maxBlobs}}
+	params.OverrideBeaconConfig(cfg)
+
 	db := dbtest.SetupDB(t)
 
 	// chainWithParent returns a mock chain where HasBlock returns true for the zero parent root.
@@ -143,6 +151,20 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 			col:        buildPartialColumn(t, 0, nil),
 			wantErr:    errHeaderEmptyCommitments,
 			wantResult: pubsub.ValidationReject,
+		},
+		{
+			name:       "more commitments than max blobs is reject",
+			col:        buildPartialColumn(t, maxBlobs+1, nil),
+			wantErr:    errHeaderTooManyCommitments,
+			wantResult: pubsub.ValidationReject,
+		},
+		{
+			name:         "max blobs commitments is accepted",
+			col:          buildPartialColumn(t, maxBlobs, nil),
+			chain:        chainWithParent(),
+			verifier:     verification.MockDataColumnsVerifier{},
+			wantResult:   pubsub.ValidationAccept,
+			expectResult: true,
 		},
 		{
 			name:         "not from future slot is ignore",

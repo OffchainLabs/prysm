@@ -42,7 +42,7 @@ func TestGenerateGenesisStateBellatrix(t *testing.T) {
 	require.NoError(t, err)
 	g.Eth1Data.DepositRoot = dr[:]
 	g.Eth1Data.BlockHash = make([]byte, 32)
-	st, err := state_native.InitializeFromProtoUnsafeBellatrix(g)
+	st, err := state_native.NewUnsafe(g)
 	require.NoError(t, err)
 	_, err = st.MarshalSSZ()
 	require.NoError(t, err)

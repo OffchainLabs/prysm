@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/fulu"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/heze"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -143,6 +144,9 @@ type stateDiff struct {
 	latestBlockHash                [fieldparams.RootLength]byte      // override.
 	payloadExpectedWithdrawals     []*enginev1.Withdrawal            // override.
 	ptcWindow                      []*ethpb.PTCs                     // override.
+
+	// Heze
+	latestExecutionPayloadBidHeze *ethpb.ExecutionPayloadBidHeze // override, replaces latestExecutionPayloadBid from Heze.
 }
 
 type hdiff struct {
@@ -2400,6 +2404,8 @@ func updateToVersion(ctx context.Context, source state.BeaconState, target int) 
 		ret, err = fulu.ConvertToFulu(source)
 	case version.Fulu:
 		ret, err = gloas.UpgradeToGloas(ctx, source)
+	case version.Gloas:
+		ret, err = heze.UpgradeToHeze(source)
 	default:
 		return nil, errors.Errorf("unsupported version %s", version.String(source.Version()))
 	}

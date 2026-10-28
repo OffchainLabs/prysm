@@ -82,7 +82,7 @@ func prepareGloasForkchoiceState(
 		ProposerLookahead:            make([]primitives.ValidatorIndex, 64),
 	}
 
-	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	st, err := state_native.NewUnsafe(base)
 	if err != nil {
 		return nil, blocks.ROBlock{}, err
 	}
@@ -207,7 +207,7 @@ func setupGloasService(t *testing.T, engineClient *mockExecution.EngineClient) (
 func insertGloasBlock(t *testing.T, s *Service, base *ethpb.BeaconStateGloas, blk *ethpb.SignedBeaconBlockGloas, blockRoot [32]byte) {
 	t.Helper()
 	ctx := t.Context()
-	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	st, err := state_native.NewUnsafe(base)
 	require.NoError(t, err)
 	signed, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
@@ -266,7 +266,7 @@ func TestNotifyNewEnvelope_Valid(t *testing.T) {
 	blockHash := bytesutil.ToBytes32([]byte("hash1"))
 
 	base, _ := testGloasState(t, 1, parentRoot, blockHash)
-	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	st, err := state_native.NewUnsafe(base)
 	require.NoError(t, err)
 
 	env := &ethpb.ExecutionPayloadEnvelope{
@@ -294,7 +294,7 @@ func TestNotifyNewEnvelope_Syncing(t *testing.T) {
 	blockHash := bytesutil.ToBytes32([]byte("hash1"))
 
 	base, _ := testGloasState(t, 1, parentRoot, blockHash)
-	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	st, err := state_native.NewUnsafe(base)
 	require.NoError(t, err)
 
 	env := &ethpb.ExecutionPayloadEnvelope{
@@ -322,7 +322,7 @@ func TestNotifyNewEnvelope_Invalid(t *testing.T) {
 	blockHash := bytesutil.ToBytes32([]byte("hash1"))
 
 	base, _ := testGloasState(t, 1, parentRoot, blockHash)
-	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	st, err := state_native.NewUnsafe(base)
 	require.NoError(t, err)
 
 	env := &ethpb.ExecutionPayloadEnvelope{
@@ -479,7 +479,7 @@ func TestValidateExecutionOnEnvelope_Valid(t *testing.T) {
 	blockHash := bytesutil.ToBytes32([]byte("hash1"))
 
 	base, _ := testGloasState(t, 1, parentRoot, blockHash)
-	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	st, err := state_native.NewUnsafe(base)
 	require.NoError(t, err)
 
 	env := &ethpb.ExecutionPayloadEnvelope{
@@ -505,7 +505,7 @@ func TestPostPayloadTasks_NotHead(t *testing.T) {
 	blockHash := bytesutil.ToBytes32([]byte("hash1"))
 
 	base, _ := testGloasState(t, 1, params.BeaconConfig().ZeroHash, blockHash)
-	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	st, err := state_native.NewUnsafe(base)
 	require.NoError(t, err)
 
 	env := &ethpb.ExecutionPayloadEnvelope{
@@ -528,10 +528,10 @@ func TestPostPayloadTasks_DoesNotMutateHead(t *testing.T) {
 	blockHash := bytesutil.ToBytes32([]byte("hash1"))
 
 	base, blk := testGloasState(t, 1, params.BeaconConfig().ZeroHash, blockHash)
-	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	st, err := state_native.NewUnsafe(base)
 	require.NoError(t, err)
 	oldBase, _ := testGloasState(t, 0, params.BeaconConfig().ZeroHash, blockHash)
-	oldSt, err := state_native.InitializeFromProtoUnsafeGloas(oldBase)
+	oldSt, err := state_native.NewUnsafe(oldBase)
 	require.NoError(t, err)
 	signed, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
@@ -627,8 +627,8 @@ func TestShouldBuildOnFull(t *testing.T) {
 		service, root, blockSlot := setup(t, "ptc-late")
 		recordTestPayloadArrival(t, service, root, blockSlot, true)
 		setTestPTCVotes(service, root, false, false)
-		assertBuild(t, service, root, blockSlot+1, true, false, "ptc voted payload missing")
-		assertBuild(t, service, root, blockSlot+1, false, false, "ptc voted payload missing")
+		assertBuild(t, service, root, blockSlot+1, true, false, "ptc voted against payload")
+		assertBuild(t, service, root, blockSlot+1, false, false, "ptc voted against payload")
 	})
 
 	t.Run("ptc certification keeps even a late payload", func(t *testing.T) {
@@ -668,7 +668,15 @@ func TestShouldBuildOnFull(t *testing.T) {
 		service, root, blockSlot := setup(t, "late-unavailable")
 		recordTestPayloadArrival(t, service, root, blockSlot, false)
 		setTestPTCVotes(service, root, true, false)
-		assertBuild(t, service, root, blockSlot+1, true, false, "arrived late, betting on empty")
+		assertBuild(t, service, root, blockSlot+1, true, false, "ptc voted against payload")
+	})
+
+	t.Run("ptc data unavailable verdict reorgs an early payload", func(t *testing.T) {
+		service, root, blockSlot := setup(t, "early-unavailable")
+		recordTestPayloadArrival(t, service, root, blockSlot, true)
+		setTestPTCVotes(service, root, true, false)
+		assertBuild(t, service, root, blockSlot+1, true, false, "ptc voted against payload")
+		assertBuild(t, service, root, blockSlot+1, false, false, "ptc voted against payload")
 	})
 }
 
@@ -683,9 +691,7 @@ func testROBid(t *testing.T, slot primitives.Slot, parentRoot, parentHash [32]by
 	})
 	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)
 	require.NoError(t, err)
-	bid, err := wrapped.Bid()
-	require.NoError(t, err)
-	return bid
+	return wrapped.Bid()
 }
 
 func TestIsBidCompatibleWithHead(t *testing.T) {
@@ -700,7 +706,7 @@ func TestIsBidCompatibleWithHead(t *testing.T) {
 		base, blk := testGloasState(t, headSlot, headParentRoot, headBlockHash)
 		blk.Block.Body.SignedExecutionPayloadBid.Message.ParentBlockHash = headParentHash[:]
 		insertGloasBlock(t, service, base, blk, headRoot)
-		st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+		st, err := state_native.NewUnsafe(base)
 		require.NoError(t, err)
 		signed, err := blocks.NewSignedBeaconBlock(blk)
 		require.NoError(t, err)
@@ -780,7 +786,7 @@ func TestPostPayloadTasks_BetsAgainstLatePayload(t *testing.T) {
 	blockSlot := service.CurrentSlot()
 
 	base, blk := testGloasState(t, blockSlot, params.BeaconConfig().ZeroHash, blockHash)
-	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	st, err := state_native.NewUnsafe(base)
 	require.NoError(t, err)
 	signed, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
@@ -813,7 +819,7 @@ func TestLatePayloadTasks_ReturnsEarlyWhenBlockLate(t *testing.T) {
 	blockHash := bytesutil.ToBytes32([]byte("hash1"))
 	base, _ := testGloasState(t, 1, params.BeaconConfig().ZeroHash, blockHash)
 	base.LatestBlockHash = blockHash[:]
-	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	st, err := state_native.NewUnsafe(base)
 	require.NoError(t, err)
 
 	headRoot := bytesutil.ToBytes32([]byte("headroot"))
@@ -845,7 +851,7 @@ func TestLatePayloadTasks_SendsFCU(t *testing.T) {
 	blockHash := bytesutil.ToBytes32([]byte("hash1"))
 	base, blk := testGloasState(t, 1, params.BeaconConfig().ZeroHash, blockHash)
 	base.LatestBlockHash = blockHash[:]
-	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	st, err := state_native.NewUnsafe(base)
 	require.NoError(t, err)
 
 	signed, err := blocks.NewSignedBeaconBlock(blk)
@@ -884,7 +890,7 @@ func TestLatePayloadTasks_SendsFCUWhilePayloadSyncing(t *testing.T) {
 	blockHash := bytesutil.ToBytes32([]byte("hash1"))
 	base, blk := testGloasState(t, 1, params.BeaconConfig().ZeroHash, blockHash)
 	base.LatestBlockHash = blockHash[:]
-	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	st, err := state_native.NewUnsafe(base)
 	require.NoError(t, err)
 
 	signed, err := blocks.NewSignedBeaconBlock(blk)
@@ -924,7 +930,7 @@ func TestLateBlockTasks_GloasFCU(t *testing.T) {
 	blockHash := bytesutil.ToBytes32([]byte("hash1"))
 	base, blk := testGloasState(t, 1, params.BeaconConfig().ZeroHash, blockHash)
 	base.LatestBlockHash = blockHash[:]
-	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	st, err := state_native.NewUnsafe(base)
 	require.NoError(t, err)
 
 	headRoot := bytesutil.ToBytes32([]byte("headroot"))
@@ -972,7 +978,7 @@ func TestLateBlockTasks_GloasForkBoundary_PreforkBidUsesHeadRoot(t *testing.T) {
 	base.LatestBlockHash = blockHash[:]
 	// bid.Slot is 0 (pre-fork epoch).
 
-	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	st, err := state_native.NewUnsafe(base)
 	require.NoError(t, err)
 
 	headRoot := bytesutil.ToBytes32([]byte("headroot"))

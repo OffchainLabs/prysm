@@ -93,7 +93,7 @@ type HeadFetcher interface {
 	HeadSlot() primitives.Slot
 	HeadRoot(ctx context.Context) ([]byte, error)
 	HeadRootAndFull() ([32]byte, bool)
-	HeadAndCanonicalNodeAtSlot(slot primitives.Slot) (headRoot [32]byte, headFull bool, canonicalRoot [32]byte, canonicalFull bool)
+	HeadAndCanonicalNodeAtSlot(slot primitives.Slot) (headRoot [32]byte, headFull bool, headState state.ReadOnlyBeaconState, canonicalRoot [32]byte, canonicalFull bool)
 	HeadBlock(ctx context.Context) (interfaces.ReadOnlySignedBeaconBlock, error)
 	HeadState(ctx context.Context) (state.BeaconState, error)
 	HeadStateReadOnly(ctx context.Context) (state.ReadOnlyBeaconState, error)
@@ -222,12 +222,21 @@ func (s *Service) HeadRootAndFull() ([32]byte, bool) {
 	return s.head.root, s.head.full
 }
 
-func (s *Service) HeadAndCanonicalNodeAtSlot(slot primitives.Slot) (headRoot [32]byte, headFull bool, canonicalRoot [32]byte, canonicalFull bool) {
+// headState is nil when the head state is not cached, callers then fall back to HeadStateReadOnly.
+func (s *Service) HeadAndCanonicalNodeAtSlot(slot primitives.Slot) (headRoot [32]byte, headFull bool, headState state.ReadOnlyBeaconState, canonicalRoot [32]byte, canonicalFull bool) {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
-	headRoot, headFull = s.HeadRootAndFull()
+	s.headLock.RLock()
+	headRoot = params.BeaconConfig().ZeroHash
+	if s.head != nil {
+		headRoot, headFull = s.head.root, s.head.full
+	}
+	if s.hasHeadState() {
+		headState = s.head.state
+	}
+	s.headLock.RUnlock()
 	canonicalRoot, canonicalFull = s.cfg.ForkChoiceStore.CanonicalNodeAtSlot(slot)
-	return headRoot, headFull, canonicalRoot, canonicalFull
+	return headRoot, headFull, headState, canonicalRoot, canonicalFull
 }
 
 // HeadBlock returns the head block of the chain.
@@ -455,15 +464,15 @@ func (s *Service) builtOnFullParentInForkchoice(blk interfaces.ReadOnlyBeaconBlo
 	if blk.Version() < version.Gloas {
 		return true
 	}
-	bid, err := blk.Body().SignedExecutionPayloadBid()
-	if err != nil || bid == nil || bid.Message == nil {
+	bid, err := blk.Body().ExecutionPayloadBid()
+	if err != nil {
 		return false
 	}
 	blockHash, err := s.cfg.ForkChoiceStore.BlockHash(blk.ParentRoot())
 	if err != nil {
 		return false
 	}
-	return [32]byte(bid.Message.ParentBlockHash) == blockHash
+	return bid.ParentBlockHash() == blockHash
 }
 
 // BuiltOnFullParent returns true if the block's bid builds on its parent's committed payload.

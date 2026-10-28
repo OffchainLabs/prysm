@@ -161,3 +161,26 @@ func TestProposerPreferences_ToConsensus_BadTargetGasLimit(t *testing.T) {
 	_, err := p.ToConsensus()
 	require.ErrorContains(t, "TargetGasLimit", err)
 }
+
+func TestBeaconBlockBodyGloas_ToConsensus_NilFields(t *testing.T) {
+	tests := []struct {
+		name  string
+		field string
+		clear func(b *BeaconBlockBodyGloas)
+	}{
+		{name: "nil Eth1Data", field: "Eth1Data", clear: func(b *BeaconBlockBodyGloas) { b.Eth1Data = nil }},
+		{name: "nil SyncAggregate", field: "SyncAggregate", clear: func(b *BeaconBlockBodyGloas) { b.SyncAggregate = nil }},
+		{name: "nil SignedExecutionPayloadBid", field: "SignedExecutionPayloadBid", clear: func(b *BeaconBlockBodyGloas) { b.SignedExecutionPayloadBid = nil }},
+		{name: "nil Deposits element", field: "Deposits.[0]", clear: func(b *BeaconBlockBodyGloas) { b.Deposits = []*Deposit{nil} }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			blk, err := SignedBeaconBlockGloasFromConsensus(util.NewBeaconBlockGloas())
+			require.NoError(t, err)
+			body := blk.Message.Body
+			tt.clear(body)
+			_, err = body.ToConsensus()
+			require.ErrorContains(t, "could not decode "+tt.field+": "+errNilValue.Error(), err)
+		})
+	}
+}
