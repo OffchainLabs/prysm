@@ -447,37 +447,3 @@ func FuzzDiffToBalances(f *testing.F) {
 		}
 	})
 }
-
-// FuzzValidatorsEqual tests validator comparison
-func FuzzValidatorsEqual(f *testing.F) {
-	base, _ := util.DeterministicGenesisStateElectra(f, 2)
-	f.Fuzz(func(t *testing.T, data []byte) {
-		// Create two validators and fuzz their fields
-		if len(data) < 16 {
-			return
-		}
-
-		source := base.Copy()
-		validators := source.Validators()
-		if len(validators) < 2 {
-			return
-		}
-
-		val1 := validators[0]
-		val2 := validators[1]
-
-		// Modify validator fields based on fuzz data
-		if len(data) > 0 && data[0]%2 == 0 {
-			val2.EffectiveBalance = val1.EffectiveBalance + uint64(data[0])
-		}
-		if len(data) > 1 && data[1]%2 == 0 {
-			val2.Slashed = !val1.Slashed
-		}
-
-		// Create ReadOnlyValidator wrappers if needed
-		// Since validatorsEqual expects ReadOnlyValidator interface,
-		// we'll skip this test for now as it requires state wrapper implementation
-		_ = val1
-		_ = val2
-	})
-}
