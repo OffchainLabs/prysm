@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -164,6 +165,75 @@ func TestService_RejectInboundPeersBeyondLimit(t *testing.T) {
 	if valid {
 		t.Errorf("Expected multiaddress with ip %s to be rejected as it exceeds the inbound limit", ip)
 	}
+
+	// With trusted peers given by peer ID only, the limit is checked by InterceptSecured instead.
+	s.trustedPeerIDs = map[peer.ID]bool{"trusted": true}
+	valid = s.InterceptAccept(&maEndpoints{raddr: multiAddress})
+	if !valid {
+		t.Errorf("Expected multiaddress with ip %s to be accepted as a trusted peer may connect beyond the inbound limit", ip)
+	}
+}
+
+func TestService_InterceptSecured(t *testing.T) {
+	const limit = 20
+
+	multiAddress, err := ma.NewMultiaddr("/ip4/212.67.10.122/tcp/3000")
+	require.NoError(t, err)
+
+	newService := func(t *testing.T, atLimit bool, trustedPeerIDs ...peer.ID) *Service {
+		s := &Service{
+			peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
+				PeerLimit:    limit,
+				ScorerParams: &scorers.Config{},
+			}),
+			host:           mockp2p.NewTestP2P(t).BHost,
+			cfg:            &Config{MaxPeers: limit},
+			trustedPeerIDs: make(map[peer.ID]bool, len(trustedPeerIDs)),
+		}
+
+		for _, pid := range trustedPeerIDs {
+			s.trustedPeerIDs[pid] = true
+		}
+		s.peers.SetTrustedPeers(trustedPeerIDs)
+
+		if atLimit {
+			inboundLimit := int(float64(limit)*peers.InboundRatio) + highWatermarkBuffer
+			for range inboundLimit {
+				addPeer(t, s.peers, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED), false)
+			}
+		}
+
+		return s
+	}
+
+	trusted := peer.ID("trusted")
+	untrusted := peer.ID("untrusted")
+
+	t.Run("outbound at limit", func(t *testing.T) {
+		s := newService(t, true, trusted)
+		require.Equal(t, true, s.InterceptSecured(network.DirOutbound, untrusted, &maEndpoints{raddr: multiAddress}))
+	})
+
+	t.Run("no trusted peer ID at limit", func(t *testing.T) {
+		// InterceptAccept already checked the limit.
+		s := newService(t, true)
+		require.Equal(t, true, s.InterceptSecured(network.DirInbound, untrusted, &maEndpoints{raddr: multiAddress}))
+	})
+
+	t.Run("untrusted below limit", func(t *testing.T) {
+		s := newService(t, false, trusted)
+		require.Equal(t, true, s.InterceptSecured(network.DirInbound, untrusted, &maEndpoints{raddr: multiAddress}))
+	})
+
+	t.Run("untrusted at limit", func(t *testing.T) {
+		s := newService(t, true, trusted)
+		require.Equal(t, false, s.InterceptSecured(network.DirInbound, untrusted, &maEndpoints{raddr: multiAddress}))
+	})
+
+	t.Run("trusted at limit", func(t *testing.T) {
+		s := newService(t, true, trusted)
+		require.Equal(t, true, s.InterceptSecured(network.DirInbound, trusted, &maEndpoints{raddr: multiAddress}))
+	})
 }
 
 func TestPeer_BelowMaxLimit(t *testing.T) {

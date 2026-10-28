@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"fmt"
 	"math"
 	"net"
 	"sync"
@@ -613,6 +614,11 @@ func (s *Service) createLocalNode(
 		localNode.Set(custodyGroupCountEntry)
 	}
 
+	// EIP-8025: advertise that this node participates in execution proof gossip.
+	if features.Get().EnableExecutionProofs {
+		localNode.Set(ExecutionProofAware(1))
+	}
+
 	if s.cfg != nil && s.cfg.HostAddress != "" {
 		hostIP := net.ParseIP(s.cfg.HostAddress)
 		if hostIP.To4() == nil && hostIP.To16() == nil {
@@ -997,6 +1003,25 @@ func convertToUdpMultiAddr(node *enode.Node) ([]ma.Multiaddr, error) {
 	}
 
 	return addresses, nil
+}
+
+// parsePeerIDs decodes the given peer IDs, ignoring empty entries.
+func parsePeerIDs(ids []string) (map[peer.ID]bool, error) {
+	pids := make(map[peer.ID]bool, len(ids))
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+
+		pid, err := peer.Decode(id)
+		if err != nil {
+			return nil, fmt.Errorf("decode peer ID %s: %w", id, err)
+		}
+
+		pids[pid] = true
+	}
+
+	return pids, nil
 }
 
 func peerIdsFromMultiAddrs(addrs []ma.Multiaddr) []peer.ID {

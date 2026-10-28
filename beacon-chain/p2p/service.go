@@ -6,6 +6,7 @@ package p2p
 import (
 	"context"
 	"crypto/ecdsa"
+	"fmt"
 	"sync"
 	"time"
 
@@ -98,6 +99,7 @@ type Service struct {
 	custodyInfoSet           chan struct{}
 	allForkDigests           map[[4]byte]struct{}
 	dataColumnBroadcastLog   dataColumnBroadcastLogger
+	trustedPeerIDs           map[peer.ID]bool // Trusted peers given by peer ID only, never dialed. Read-only after NewService.
 }
 
 type custodyInfo struct {
@@ -133,6 +135,11 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 		return nil, err
 	}
 
+	trustedPeerIDs, err := parsePeerIDs(cfg.TrustedPeerIDs)
+	if err != nil {
+		return nil, fmt.Errorf("parse trusted peer IDs: %w", err)
+	}
+
 	ipLimiter := leakybucket.NewCollector(ipLimit, ipBurst, 30*time.Second, true /* deleteEmptyBuckets */)
 
 	s := &Service{
@@ -148,6 +155,7 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		peerDisconnectionTime: cache.New(1*time.Second, 1*time.Minute),
 		custodyInfoSet:        make(chan struct{}),
+		trustedPeerIDs:        trustedPeerIDs,
 	}
 
 	if cfg.PartialDataColumns {
@@ -201,6 +209,17 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 		},
 	})
 
+	// Trusted peers given by peer ID only are known before they connect.
+	trustedPeerIDsList := make([]peer.ID, 0, len(trustedPeerIDs))
+	for pid := range trustedPeerIDs {
+		trustedPeerIDsList = append(trustedPeerIDsList, pid)
+	}
+	s.peers.SetTrustedPeers(trustedPeerIDsList)
+
+	if len(trustedPeerIDsList) > 0 {
+		log.WithField("peerIDs", trustedPeerIDsList).Info("Trusted peers given by peer ID")
+	}
+
 	// Initialize Data maps.
 	types.InitializeDataMaps()
 
@@ -252,6 +271,12 @@ func (s *Service) Start() {
 
 	s.started = true
 
+	// Trusted peers given by peer ID only are not reconnected to, unless they are static peers as well.
+	notToReconnect := make(map[peer.ID]bool, len(s.trustedPeerIDs))
+	for pid := range s.trustedPeerIDs {
+		notToReconnect[pid] = true
+	}
+
 	if len(s.cfg.StaticPeers) > 0 {
 		addrs, err := PeersFromStringAddrs(s.cfg.StaticPeers)
 		if err != nil {
@@ -261,6 +286,10 @@ func (s *Service) Start() {
 		pids := peerIdsFromMultiAddrs(addrs)
 		s.peers.SetTrustedPeers(pids)
 		s.connectWithAllTrustedPeers(addrs)
+
+		for _, pid := range pids {
+			delete(notToReconnect, pid)
+		}
 	}
 	// Initialize metadata according to the
 	// current epoch.
@@ -268,7 +297,7 @@ func (s *Service) Start() {
 
 	// Periodic functions.
 	async.RunEvery(s.ctx, params.BeaconConfig().TtfbTimeoutDuration(), func() {
-		ensurePeerConnections(s.ctx, s.host, s.peers, relayNodes...)
+		ensurePeerConnections(s.ctx, s.host, s.peers, notToReconnect, relayNodes...)
 	})
 	async.RunEvery(s.ctx, 30*time.Minute, s.Peers().Prune)
 	async.RunEvery(s.ctx, time.Duration(params.BeaconConfig().RespTimeout)*time.Second, s.updateMetrics)

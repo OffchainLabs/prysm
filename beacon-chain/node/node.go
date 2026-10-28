@@ -45,6 +45,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/proofengine"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/slasher"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
@@ -105,6 +106,7 @@ type BeaconNode struct {
 	blsToExecPool             blstoexec.PoolManager
 	depositCache              cache.DepositCache
 	proposerPreferencesCache  *cache.ProposerPreferencesCache
+	proofEngine               *proofengine.Engine
 	subscribedValidatorsCache *cache.SubscribedValidatorsCache
 	builderCircuitBreaker     *cache.BuilderCircuitBreaker
 	payloadIDCache            *cache.PayloadIDCache
@@ -192,6 +194,22 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		if err := opt(beacon); err != nil {
 			return nil, err
 		}
+	}
+
+	// EIP-8025: an execution proof-aware node verifies the proofs it receives,
+	// otherwise it could only ever ignore them.
+	if features.Get().EnableExecutionProofs {
+		mockProofs := cliCtx.Bool(flags.MockExecutionProofs.Name)
+		proofEngine, err := proofengine.New(cliCtx.String(flags.ProofEngineConfig.Name), mockProofs)
+		if err != nil {
+			return nil, fmt.Errorf("--%s: could not create proof engine: %w", features.EnableExecutionProofsFlag.Name, err)
+		}
+
+		if mockProofs {
+			log.Warnf("Accepting mock execution proofs without verifying them cryptographically (--%s). Use on devnets only", flags.MockExecutionProofs.Name)
+		}
+
+		beacon.proofEngine = proofEngine
 	}
 
 	dbClearer := newDbClearer(cliCtx)
@@ -712,6 +730,7 @@ func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 	svc, err := p2p.NewService(b.ctx, &p2p.Config{
 		NoDiscovery:           cliCtx.Bool(cmd.NoDiscovery.Name),
 		StaticPeers:           slice.SplitCommaSeparated(cliCtx.StringSlice(cmd.StaticPeers.Name)),
+		TrustedPeerIDs:        slice.SplitCommaSeparated(cliCtx.StringSlice(cmd.TrustedPeerIDs.Name)),
 		Discv5BootStrapAddrs:  p2p.ParseBootStrapAddrs(bootstrapNodeAddrs),
 		RelayNodeAddr:         cliCtx.String(cmd.RelayNode.Name),
 		DataDir:               dataDir,
@@ -821,6 +840,13 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithSlasherEnabled(b.slasherEnabled),
 		blockchain.WithLightClientStore(b.lcStore),
 	)
+
+	if features.Get().EnableExecutionProofs {
+		opts = append(opts,
+			blockchain.WithMinExecutionProofs(b.cliCtx.Uint64(flags.MinExecutionProofs.Name)),
+			blockchain.WithExecutionProofVerifier(b.proofEngine),
+		)
+	}
 
 	blockchainService, err := blockchain.NewService(b.ctx, opts...)
 	if err != nil {
@@ -1076,6 +1102,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		BlobStorage:                      b.BlobStorage,
 		DataColumnStorage:                b.DataColumnStorage,
 		ProposerPreferencesCache:         b.proposerPreferencesCache,
+		ExecutionProofReceiver:           chainService,
 		SubscribedValidatorsCache:        b.subscribedValidatorsCache,
 		BuilderCircuitBreaker:            b.builderCircuitBreaker,
 		HighestBidCache:                  regularSyncService.HighestExecutionPayloadBidCache(),

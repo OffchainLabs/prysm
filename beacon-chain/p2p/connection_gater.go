@@ -52,7 +52,10 @@ func (s *Service) InterceptAccept(n network.ConnMultiaddrs) (allow bool) {
 			"reason": "exceeded dial limit"}).Trace("Not accepting inbound dial from ip address")
 		return false
 	}
-	if s.isPeerAtLimit(inbound) {
+
+	// The peer ID is not known yet. If some trusted peers are given by peer ID only, InterceptSecured checks
+	// the limit instead, once the peer ID is known.
+	if len(s.trustedPeerIDs) == 0 && s.isPeerAtLimit(inbound) {
 		log.WithFields(logrus.Fields{"peer": n.RemoteMultiaddr(),
 			"reason": "at peer limit"}).Trace("Not accepting inbound dial")
 		return false
@@ -62,7 +65,19 @@ func (s *Service) InterceptAccept(n network.ConnMultiaddrs) (allow bool) {
 
 // InterceptSecured tests whether a given connection, now authenticated,
 // is allowed.
-func (*Service) InterceptSecured(_ network.Direction, _ peer.ID, _ network.ConnMultiaddrs) (allow bool) {
+func (s *Service) InterceptSecured(direction network.Direction, pid peer.ID, n network.ConnMultiaddrs) (allow bool) {
+	// Trusted peers may connect even if we are at the inbound peer limit.
+	// Without any trusted peer given by peer ID only, InterceptAccept already checked the limit.
+	if direction != network.DirInbound || len(s.trustedPeerIDs) == 0 {
+		return true
+	}
+
+	if s.isPeerAtLimit(inbound) && !s.peers.IsTrustedPeers(pid) {
+		log.WithFields(logrus.Fields{"peer": n.RemoteMultiaddr(), "peerID": pid,
+			"reason": "at peer limit"}).Trace("Not accepting inbound connection")
+		return false
+	}
+
 	return true
 }
 

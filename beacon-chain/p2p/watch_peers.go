@@ -10,8 +10,8 @@ import (
 )
 
 // ensurePeerConnections will attempt to reestablish connection to the peers
-// if there are currently no connections to that peer.
-func ensurePeerConnections(ctx context.Context, h host.Host, peers *peers.Status, relayNodes ...string) {
+// if there are currently no connections to that peer. Trusted peers in notToReconnect are skipped.
+func ensurePeerConnections(ctx context.Context, h host.Host, peers *peers.Status, notToReconnect map[peer.ID]bool, relayNodes ...string) {
 	// every time reset peersToWatch, add RelayNodes and trust peers
 	var peersToWatch []*peer.AddrInfo
 
@@ -31,6 +31,10 @@ func ensurePeerConnections(ctx context.Context, h host.Host, peers *peers.Status
 	// add trusted peers
 	trustedPeers := peers.GetTrustedPeers()
 	for _, trustedPeer := range trustedPeers {
+		if notToReconnect[trustedPeer] {
+			continue
+		}
+
 		maddr, err := peers.Address(trustedPeer)
 
 		// avoid invalid trusted peers

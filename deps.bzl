@@ -2419,6 +2419,15 @@ def prysm_deps():
         version = "v0.0.0-20140419014527-cca7078d478f",
     )
     go_repository(
+        name = "com_github_nalepae_go_ere",
+        build_file_generation = "off",
+        importpath = "github.com/nalepae/go-ere",
+        patch_args = ["-p1"],
+        patches = ["//third_party:com_github_nalepae_go_ere.patch"],
+        sum = "h1:bm9HetrL3v3YcEmcLt5M33+JmZQ3Y08WqBcltfu/0HM=",
+        version = "v0.0.0-20261007145732-a3c852ba23fc",
+    )
+    go_repository(
         name = "com_github_naoina_go_stringutil",
         importpath = "github.com/naoina/go-stringutil",
         sum = "h1:rCUeRUHjBjGTSHl0VC00jUPLz8/F9dDzYI70Hzifhks=",
