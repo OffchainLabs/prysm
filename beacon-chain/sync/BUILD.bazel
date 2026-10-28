@@ -254,6 +254,7 @@ go_test(
         "validate_sync_contribution_proof_test.go",
         "validate_voluntary_exit_test.go",
     ],
+    data = glob(["testdata/**"]),
     embed = [":go_default_library"],
     shard_count = 4,
     deps = [
