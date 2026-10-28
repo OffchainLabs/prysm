@@ -1,12 +1,19 @@
 package sync
 
 import (
+	"context"
+	"iter"
+	"sync"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
@@ -101,4 +108,83 @@ func TestProcessDataColumnSidecarsFromReconstruction_GloasSkipsProposerIndex(t *
 	v := blocks.NewVerifiedRODataColumn(gdc)
 
 	require.NoError(t, s.processDataColumnSidecarsFromReconstruction(t.Context(), v))
+}
+
+// recordingPartialBroadcaster records how many data columns the chain had received at each Publish call.
+type recordingPartialBroadcaster struct {
+	partialdatacolumnbroadcaster.Broadcaster
+	received  func() int
+	published chan struct{}
+
+	mu                sync.Mutex
+	receivedAtPublish []int
+}
+
+func newRecordingPartialBroadcaster(received func() int) *recordingPartialBroadcaster {
+	return &recordingPartialBroadcaster{received: received, published: make(chan struct{}, 1024)}
+}
+
+func (b *recordingPartialBroadcaster) Publish(_ context.Context, topicsAndColumns iter.Seq2[string, blocks.PartialDataColumn]) error {
+	for range topicsAndColumns {
+	}
+	b.mu.Lock()
+	b.receivedAtPublish = append(b.receivedAtPublish, b.received())
+	b.mu.Unlock()
+	b.published <- struct{}{}
+	return nil
+}
+
+func (b *recordingPartialBroadcaster) counts() []int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return append([]int(nil), b.receivedAtPublish...)
+}
+
+func TestDataColumnSubscriber_ReceivesBeforePartialPublish(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.CapellaForkEpoch = 0
+	cfg.DenebForkEpoch = 0
+	cfg.ElectraForkEpoch = 0
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+	require.NoError(t, kzg.Start())
+
+	_, _, sidecars := util.GenerateTestFuluBlockWithSidecars(t, 1)
+	chainService := &chainMock.ChainService{}
+	p2p := mockp2p.NewTestP2P(t)
+	broadcaster := newRecordingPartialBroadcaster(func() int { return len(chainService.DataColumns) })
+	p2p.SetPartialColumnBroadcaster(broadcaster)
+	_, _, err := p2p.UpdateCustodyInfo(0, params.BeaconConfig().CustodyRequirement)
+	require.NoError(t, err)
+
+	s := &Service{
+		cfg: &config{
+			p2p:                    p2p,
+			chain:                  chainService,
+			clock:                  startup.NewClock(time.Now(), [32]byte{}),
+			dataColumnStorage:      filesystem.NewEphemeralDataColumnStorage(t),
+			executionReconstructor: &mockExecution.EngineClient{},
+			operationNotifier:      &chainMock.MockOperationNotifier{},
+		},
+		seenDataColumnCache: newSlotAwareCache(1),
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		done <- s.dataColumnSubscriber(ctx, sidecars[0].DataColumnSidecar())
+	}()
+
+	// The execution path retries until every sampled column is seen, so stop it once a partial is published.
+	<-broadcaster.published
+	cancel()
+	require.NoError(t, <-done)
+
+	counts := broadcaster.counts()
+	require.NotEqual(t, 0, len(counts))
+	for _, received := range counts {
+		require.Equal(t, 1, received, "partial published before the column was received")
+	}
 }

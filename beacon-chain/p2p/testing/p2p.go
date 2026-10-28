@@ -278,6 +278,11 @@ func (p *TestP2P) EnablePartialColumnBroadcaster() {
 	p.partialBroadcaster = partialdatacolumnbroadcaster.NewBroadcaster(context.Background(), logrus.StandardLogger())
 }
 
+// SetPartialColumnBroadcaster sets the partial column broadcaster.
+func (p *TestP2P) SetPartialColumnBroadcaster(b partialdatacolumnbroadcaster.Broadcaster) {
+	p.partialBroadcaster = b
+}
+
 // SetStreamHandler for RPC.
 func (p *TestP2P) SetStreamHandler(topic string, handler network.StreamHandler) {
 	p.BHost.SetStreamHandler(protocol.ID(topic), handler)
