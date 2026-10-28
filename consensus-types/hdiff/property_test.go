@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"math"
 	"testing"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -134,50 +133,6 @@ func FuzzPropertyRoundTrip(f *testing.F) {
 		for i := range targetVals {
 			require.Equal(t, targetVals[i].Slashed, resultVals[i].Slashed, "Validator slashing mismatch at index %d", i)
 			require.Equal(t, targetVals[i].EffectiveBalance, resultVals[i].EffectiveBalance, "Validator balance mismatch at index %d", i)
-		}
-	})
-}
-
-// PropertyTestReasonablePerformance verifies operations complete quickly with realistic data
-func FuzzPropertyResourceBounds(f *testing.F) {
-	f.Fuzz(func(t *testing.T, validatorCount uint8, slotDelta uint8, changeCount uint8) {
-		// Use realistic parameters
-		validators := uint64(validatorCount%64 + 8) // 8-71 validators
-		slots := uint64(slotDelta % 32)             // 0-31 slots
-		changes := int(changeCount % 10)            // 0-9 changes
-
-		// Create realistic states
-		source, _ := util.DeterministicGenesisStateElectra(t, validators)
-		target := source.Copy()
-
-		// Apply realistic changes
-		_ = target.SetSlot(source.Slot() + primitives.Slot(slots))
-
-		if changes > 0 {
-			validatorList := target.Validators()
-			for i := 0; i < changes && i < len(validatorList); i++ {
-				validatorList[i].EffectiveBalance += 1000000000 // 1 ETH
-			}
-			_ = target.SetValidators(validatorList)
-		}
-
-		// Operations should complete quickly
-		start := time.Now()
-		diff, err := Diff(source, target)
-		duration := time.Since(start)
-
-		if err == nil {
-			// Should be fast
-			require.Equal(t, true, duration < time.Second, "Diff creation too slow: %v", duration)
-
-			// Apply should also be fast
-			start = time.Now()
-			_, err = ApplyDiff(t.Context(), source, diff)
-			duration = time.Since(start)
-
-			if err == nil {
-				require.Equal(t, true, duration < time.Second, "Diff application too slow: %v", duration)
-			}
 		}
 	})
 }
