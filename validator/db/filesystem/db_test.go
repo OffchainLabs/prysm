@@ -46,6 +46,49 @@ func TestStore_NewStore(t *testing.T) {
 		requireProtectionBytes(t, blocker, contents)
 	})
 
+	t.Run("historical layout", func(t *testing.T) {
+		pubkey := [fieldparams.BLSPubkeyLength]byte{1}
+		for _, tt := range []struct {
+			name   string
+			config *Config
+		}{
+			{"without initialization", nil},
+			{"with initialization", &Config{PubKeys: [][fieldparams.BLSPubkeyLength]byte{pubkey}}},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				directory := t.TempDir()
+				// Seed the historical layout independently of store path constants and helpers.
+				historyDir := path.Join(directory, "validator-client-data", "slashing-protection")
+				require.NoError(t, os.MkdirAll(historyDir, 0o700))
+				filename := path.Join(historyDir, fmt.Sprintf("0x%x.yaml", pubkey))
+				const history = "lastSignedAttestationSourceEpoch: 3\nlatestSignedBlockSlot: 12\nlastSignedAttestationTargetEpoch: 4\n"
+				require.NoError(t, os.WriteFile(filename, []byte(history), 0o600))
+				slot, target := uint64(12), uint64(4)
+				want := &ValidatorSlashingProtection{
+					LatestSignedBlockSlot:            &slot,
+					LastSignedAttestationSourceEpoch: 3,
+					LastSignedAttestationTargetEpoch: &target,
+				}
+
+				s, err := NewStore(directory, tt.config)
+				require.NoError(t, err)
+				actual, err := s.validatorSlashingProtection(pubkey)
+				require.NoError(t, err)
+				require.NotNil(t, actual)
+				require.DeepEqual(t, *want, *actual)
+				requireProtectionBytes(t, filename, history)
+				require.NoError(t, s.Close())
+
+				reopened, err := NewStore(directory, nil)
+				require.NoError(t, err)
+				actual, err = reopened.validatorSlashingProtection(pubkey)
+				require.NoError(t, err)
+				require.NotNil(t, actual)
+				require.DeepEqual(t, *want, *actual)
+				requireProtectionBytes(t, filename, history)
+			})
+		}
+	})
 }
 
 func TestStore_Close(t *testing.T) {
