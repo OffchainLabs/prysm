@@ -27,71 +27,6 @@ var snappyBombSeed = [][]byte{
 	[]byte("p"),
 }
 
-// FuzzNewHdiff tests parsing variations of realistic diffs
-func FuzzNewHdiff(f *testing.F) {
-	// Add seed corpus with various valid diffs from realistic scenarios
-	sizes := []uint64{8, 16, 32}
-	for _, size := range sizes {
-		source, _ := util.DeterministicGenesisStateElectra(f, size)
-
-		// Create various realistic target states
-		scenarios := []string{"slot_change", "balance_change", "validator_change", "multiple_changes"}
-		for _, scenario := range scenarios {
-			target := source.Copy()
-
-			switch scenario {
-			case "slot_change":
-				_ = target.SetSlot(source.Slot() + 1)
-			case "balance_change":
-				balances := target.Balances()
-				if len(balances) > 0 {
-					balances[0] += 1000000000
-					_ = target.SetBalances(balances)
-				}
-			case "validator_change":
-				validators := target.Validators()
-				if len(validators) > 0 {
-					validators[0].EffectiveBalance += 1000000000
-					_ = target.SetValidators(validators)
-				}
-			case "multiple_changes":
-				_ = target.SetSlot(source.Slot() + 5)
-				balances := target.Balances()
-				validators := target.Validators()
-				if len(balances) > 0 && len(validators) > 0 {
-					balances[0] += 2000000000
-					validators[0].EffectiveBalance += 1000000000
-					_ = target.SetBalances(balances)
-					_ = target.SetValidators(validators)
-				}
-			}
-
-			validDiff, err := Diff(source, target)
-			if err == nil {
-				f.Add(validDiff.StateDiff, validDiff.ValidatorDiffs, validDiff.BalancesDiff)
-			}
-		}
-	}
-	f.Add(snappyBombSeed[0], snappyBombSeed[1], snappyBombSeed[2])
-
-	f.Fuzz(func(t *testing.T, stateDiff, validatorDiffs, balancesDiff []byte) {
-		// Limit input sizes to reasonable bounds
-		if len(stateDiff) > maxFuzzStateDiffSize || len(validatorDiffs) > 5000 || len(balancesDiff) > 5000 {
-			return
-		}
-
-		input := HdiffBytes{
-			StateDiff:      stateDiff,
-			ValidatorDiffs: validatorDiffs,
-			BalancesDiff:   balancesDiff,
-		}
-
-		// Test parsing - should not panic even with corrupted but bounded data
-		_, err := newHdiff(input)
-		_ = err // Expected to fail with corrupted data
-	})
-}
-
 // FuzzNewStateDiff tests the newStateDiff function with valid random state diffs
 func FuzzNewStateDiff(f *testing.F) {
 	f.Fuzz(func(t *testing.T, validatorCount uint8, slotDelta uint64, balanceData []byte, validatorData []byte) {
@@ -292,6 +227,17 @@ func FuzzApplyDiff(f *testing.F) {
 				validators := target.Validators()
 				if len(validators) > 0 {
 					validators[0].EffectiveBalance += 1000000000
+					_ = target.SetValidators(validators)
+				}
+			},
+			func() { // Multiple changes
+				_ = target.SetSlot(source.Slot() + 5)
+				balances := target.Balances()
+				validators := target.Validators()
+				if len(balances) > 0 && len(validators) > 0 {
+					balances[0] += 2000000000
+					validators[0].EffectiveBalance += 1000000000
+					_ = target.SetBalances(balances)
 					_ = target.SetValidators(validators)
 				}
 			},
