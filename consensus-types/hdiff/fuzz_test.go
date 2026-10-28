@@ -3,8 +3,7 @@ package hdiff
 import (
 	"context"
 	"encoding/binary"
-	"strconv"
-	"strings"
+	"slices"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -296,113 +295,60 @@ func FuzzReadPendingAttestation(f *testing.F) {
 	})
 }
 
-// FuzzKmpIndex tests the KMP algorithm implementation
+// FuzzKmpIndex checks computeLPS and kmpIndex against naive definitions, on the layout the
+// diff code builds: target, a nil separator, then source.
 func FuzzKmpIndex(f *testing.F) {
-	// Test with integer pointers to match the actual usage
-	f.Add("1,2,3", "4,5,6")
-	f.Add("1,2,3", "1,2,3")
-	f.Add("", "1,2,3")
-	f.Add("1,1,1", "2,2,2")
+	// Source tail [2 3] is the target head: index 1.
+	f.Add([]byte{2, 3, 0}, []byte{1, 2, 3})
+	// Repeated values make computeLPS fall back to a shorter prefix.
+	f.Add([]byte{1, 1, 2}, []byte{1, 1, 1, 1, 2})
 
-	f.Fuzz(func(t *testing.T, sourceStr string, targetStr string) {
-		// Parse comma-separated strings into int slices
-		var source, target []int
-		if sourceStr != "" {
-			for s := range strings.SplitSeq(sourceStr, ",") {
-				if val, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
-					source = append(source, val)
-				}
-			}
+	equals := func(a, b *int) bool {
+		if a == nil || b == nil {
+			return a == b
 		}
-		if targetStr != "" {
-			for s := range strings.SplitSeq(targetStr, ",") {
-				if val, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
-					target = append(target, val)
-				}
-			}
+		return *a == *b
+	}
+	// One element per byte, values mod 4 so that overlaps are common, at most 64 elements.
+	toPtrs := func(data []byte) []*int {
+		data = data[:min(len(data), 64)]
+		ptrs := make([]*int, len(data))
+		for i, b := range data {
+			v := int(b % 4)
+			ptrs[i] = &v
 		}
+		return ptrs
+	}
 
-		// Maintain the precondition: concatenate target with source
-		// This matches how kmpIndex is actually called in production
-		combined := make([]int, len(target)+len(source))
-		copy(combined, target)
-		copy(combined[len(target):], source)
+	f.Fuzz(func(t *testing.T, targetData, sourceData []byte) {
+		target := toPtrs(targetData)
+		source := toPtrs(sourceData)
+		combined := append(append(append([]*int{}, target...), nil), source...)
 
-		// Convert to pointer slices as used in actual code
-		combinedPtrs := make([]*int, len(combined))
+		// lps[i] is the longest proper prefix of combined[:i+1] that is also its suffix.
+		lps := computeLPS(combined, equals)
+		require.Equal(t, len(combined), len(lps))
 		for i := range combined {
-			val := combined[i]
-			combinedPtrs[i] = &val
-		}
-
-		integerEquals := func(a, b *int) bool {
-			if a == nil && b == nil {
-				return true
-			}
-			if a == nil || b == nil {
-				return false
-			}
-			return *a == *b
-		}
-
-		result := kmpIndex(len(source), combinedPtrs, integerEquals)
-
-		// Basic sanity check: result should be in [0, len(source)]
-		if result < 0 || result > len(source) {
-			t.Errorf("kmpIndex returned invalid result: %d for source length=%d", result, len(source))
-		}
-	})
-}
-
-// FuzzComputeLPS tests the LPS computation for KMP
-func FuzzComputeLPS(f *testing.F) {
-	// Add seed cases
-	f.Add("1,2,1")
-	f.Add("1,1,1")
-	f.Add("1,2,3,4")
-	f.Add("")
-
-	f.Fuzz(func(t *testing.T, patternStr string) {
-		// Parse comma-separated string into int slice
-		var pattern []int
-		if patternStr != "" {
-			for s := range strings.SplitSeq(patternStr, ",") {
-				if val, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
-					pattern = append(pattern, val)
+			want := 0
+			for l := i; l > 0; l-- {
+				if slices.EqualFunc(combined[:l], combined[i+1-l:i+1], equals) {
+					want = l
+					break
 				}
 			}
+			require.Equal(t, want, lps[i], "lps[%d]", i)
 		}
 
-		// Convert to pointer slice
-		patternPtrs := make([]*int, len(pattern))
-		for i := range pattern {
-			val := pattern[i]
-			patternPtrs[i] = &val
-		}
-
-		integerEquals := func(a, b *int) bool {
-			if a == nil && b == nil {
-				return true
-			}
-			if a == nil || b == nil {
-				return false
-			}
-			return *a == *b
-		}
-
-		result := computeLPS(patternPtrs, integerEquals)
-
-		// Verify result length matches input
-		if len(result) != len(pattern) {
-			t.Errorf("computeLPS returned wrong length: got %d, expected %d", len(result), len(pattern))
-		}
-
-		// Verify all LPS values are non-negative and within bounds
-		for i, lps := range result {
-			if lps < 0 || lps > i {
-				t.Errorf("Invalid LPS value at index %d: %d", i, lps)
+		// Naive: The index is the smallest k such that source[k:] is a prefix of target.
+		want := len(source)
+		for k := range source {
+			n := len(source) - k
+			if n <= len(target) && slices.EqualFunc(source[k:], target[:n], equals) {
+				want = k
+				break
 			}
 		}
+		require.Equal(t, want, kmpIndex(len(source), combined, equals))
 	})
 }
 
