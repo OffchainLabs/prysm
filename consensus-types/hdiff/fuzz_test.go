@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
@@ -405,45 +406,44 @@ func FuzzComputeLPS(f *testing.F) {
 	})
 }
 
-// FuzzDiffToBalances tests balance diff computation
+// FuzzDiffToBalances checks that each diff entry adds back to the target balance, modulo 2^64.
 func FuzzDiffToBalances(f *testing.F) {
-	base, _ := util.DeterministicGenesisStateElectra(f, 1)
+	source, _ := util.DeterministicGenesisStateElectra(f, 1)
+	target := source.Copy()
+
+	// Balance decreases: source [10], target [3].
+	f.Add([]byte("\x0a\x00\x00\x00\x00\x00\x00\x00"), []byte("\x03\x00\x00\x00\x00\x00\x00\x00"))
+	// Target appends a balance: source [1], target [1 2].
+	f.Add([]byte("\x01\x00\x00\x00\x00\x00\x00\x00"), []byte("\x01\x00\x00\x00\x00\x00\x00\x00\x02\x00\x00\x00\x00\x00\x00\x00"))
+
+	// 8 bytes per balance, at most 100 balances.
+	toBalances := func(data []byte) []uint64 {
+		balances := make([]uint64, 0, min(len(data)/8, 100))
+		for i := 0; i+8 <= len(data) && len(balances) < 100; i += 8 {
+			balances = append(balances, binary.LittleEndian.Uint64(data[i:i+8]))
+		}
+		return balances
+	}
+
 	f.Fuzz(func(t *testing.T, sourceData, targetData []byte) {
-		// Convert byte data to balance arrays
-		var sourceBalances, targetBalances []uint64
+		sourceBalances := toBalances(sourceData)
+		targetBalances := toBalances(targetData)
+		require.NoError(t, source.SetBalances(sourceBalances))
+		require.NoError(t, target.SetBalances(targetBalances))
 
-		// Parse source balances (8 bytes per uint64)
-		for i := 0; i+7 < len(sourceData) && len(sourceBalances) < 100; i += 8 {
-			balance := binary.LittleEndian.Uint64(sourceData[i : i+8])
-			sourceBalances = append(sourceBalances, balance)
+		diff, err := diffToBalances(source, target)
+		if len(targetBalances) < len(sourceBalances) {
+			require.ErrorContains(t, "less than source", err)
+			return
 		}
-
-		// Parse target balances
-		for i := 0; i+7 < len(targetData) && len(targetBalances) < 100; i += 8 {
-			balance := binary.LittleEndian.Uint64(targetData[i : i+8])
-			targetBalances = append(targetBalances, balance)
-		}
-
-		// Create states with the provided balances
-		source := base.Copy()
-		target := base.Copy()
-
-		if len(sourceBalances) > 0 {
-			_ = source.SetBalances(sourceBalances)
-		}
-		if len(targetBalances) > 0 {
-			_ = target.SetBalances(targetBalances)
-		}
-
-		result, err := diffToBalances(source, target)
-
-		// If no error, verify result consistency
-		if err == nil && len(result) > 0 {
-			// Result length should match target length
-			if len(result) != len(target.Balances()) {
-				t.Errorf("diffToBalances result length mismatch: got %d, expected %d",
-					len(result), len(target.Balances()))
+		require.NoError(t, err)
+		require.Equal(t, len(targetBalances), len(diff))
+		for i, want := range targetBalances {
+			var s uint64
+			if i < len(sourceBalances) {
+				s = sourceBalances[i]
 			}
+			require.Equal(t, want, s+uint64(diff[i]), "balance %d", i)
 		}
 	})
 }
