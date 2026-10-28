@@ -911,6 +911,56 @@ func TestApplyDiff_WithSignificantValidatorGrowth(t *testing.T) {
 	}
 }
 
+func TestApplyDiff_RejectsOutOfRangeIndices(t *testing.T) {
+	electraSource := func(t *testing.T) state.BeaconState {
+		st, _ := util.DeterministicGenesisStateElectra(t, 8)
+		return st
+	}
+	gloasSource := func(t *testing.T) state.BeaconState {
+		st, err := gloasState(t, 64)
+		require.NoError(t, err)
+		return st
+	}
+	newBuilder := func() *ethpb.Builder {
+		return &ethpb.Builder{Pubkey: make([]byte, 48), Version: []byte{0}, ExecutionAddress: make([]byte, 20)}
+	}
+	for _, tc := range []struct {
+		name    string
+		source  func(*testing.T) state.BeaconState
+		mutate  func(*stateDiff)
+		wantErr string
+	}{
+		{"pending_deposits_max", electraSource, func(s *stateDiff) { s.pendingDepositIndex = math.MaxUint64 }, "pending deposit index"},
+		{"pending_deposits_plus_one", electraSource, func(s *stateDiff) { s.pendingDepositIndex = 1 }, "pending deposit index"},
+		{"pending_partial_withdrawals_max", electraSource, func(s *stateDiff) { s.pendingPartialWithdrawalsIndex = math.MaxUint64 }, "pending partial withdrawals index"},
+		{"pending_partial_withdrawals_plus_one", electraSource, func(s *stateDiff) { s.pendingPartialWithdrawalsIndex = 1 }, "pending partial withdrawals index"},
+		{"pending_consolidations_max", electraSource, func(s *stateDiff) { s.pendingConsolidationsIndex = math.MaxUint64 }, "pending consolidations index"},
+		{"pending_consolidations_plus_one", electraSource, func(s *stateDiff) { s.pendingConsolidationsIndex = 1 }, "pending consolidations index"},
+		{"builder_pending_withdrawals_max", gloasSource, func(s *stateDiff) { s.builderPendingWithdrawalsIndex = math.MaxUint64 }, "builder pending withdrawals index"},
+		{"builder_pending_withdrawals_plus_one", gloasSource, func(s *stateDiff) { s.builderPendingWithdrawalsIndex = 1 }, "builder pending withdrawals index"},
+		{"builder_index_max", gloasSource, func(s *stateDiff) {
+			s.builderDiffs = []builderDiff{{index: math.MaxUint32, builder: newBuilder()}}
+		}, "builder index"},
+		{"builder_index_plus_one", gloasSource, func(s *stateDiff) {
+			s.builderDiffs = []builderDiff{{index: 1, builder: newBuilder()}}
+		}, "builder index"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source := tc.source(t)
+			target := source.Copy()
+			require.NoError(t, target.SetSlot(source.Slot()+1))
+			h, err := diffInternal(source, target)
+			require.NoError(t, err)
+			tc.mutate(h.stateDiff)
+			diff, err := h.serialize()
+			require.NoError(t, err)
+			_, err = ApplyDiff(t.Context(), source, diff)
+			require.ErrorContains(t, tc.wantErr, err)
+			require.ErrorContains(t, "exceeds source length", err)
+		})
+	}
+}
+
 // Test_diffToBalances tests balance diff computation
 func Test_diffToBalances(t *testing.T) {
 	source, _ := util.DeterministicGenesisStateElectra(t, 32)
