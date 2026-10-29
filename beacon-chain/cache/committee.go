@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/container/slice"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	mathutil "github.com/OffchainLabs/prysm/v7/math"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	lru "github.com/hashicorp/golang-lru"
@@ -123,14 +124,9 @@ func (c *CommitteeCache) Committee(ctx context.Context, slot primitives.Slot, se
 		return nil, ErrNotCommittee
 	}
 
-	committeeCountPerSlot := uint64(1)
-	if item.CommitteeCount/uint64(params.BeaconConfig().SlotsPerEpoch) > 1 {
-		committeeCountPerSlot = item.CommitteeCount / uint64(params.BeaconConfig().SlotsPerEpoch)
-	}
-
-	indexOffSet, err := mathutil.Add64(uint64(index), uint64(slot.ModSlot(params.BeaconConfig().SlotsPerEpoch).Mul(committeeCountPerSlot)))
+	indexOffSet, err := committeeOffset(item, slot, index)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("committee offset: %w", err)
 	}
 	start, end := startEndIndices(item, indexOffSet)
 
@@ -139,6 +135,33 @@ func (c *CommitteeCache) Committee(ctx context.Context, slot primitives.Slot, se
 	}
 
 	return item.ShuffledIndices[start:end], nil
+}
+
+// CommitteeAggregatePubkey returns the aggregate public key of the committee at slot and index,
+// or nil if the committee or its aggregate is not cached yet. Callers must not mutate the key.
+func (c *CommitteeCache) CommitteeAggregatePubkey(slot primitives.Slot, seed [32]byte, index primitives.CommitteeIndex) (bls.PublicKey, error) {
+	obj, exists := c.CommitteeCache.Get(key(seed))
+	if !exists {
+		return nil, nil
+	}
+	item, ok := obj.(*Committees)
+	if !ok {
+		return nil, ErrNotCommittee
+	}
+
+	keys := item.aggregatePubkeys.Load()
+	if keys == nil {
+		return nil, nil
+	}
+	indexOffSet, err := committeeOffset(item, slot, index)
+	if err != nil {
+		return nil, fmt.Errorf("committee offset: %w", err)
+	}
+
+	if indexOffSet >= uint64(len(*keys)) {
+		return nil, errors.New("requested index out of bound")
+	}
+	return (*keys)[indexOffSet], nil
 }
 
 // AddCommitteeShuffledList adds Committee shuffled list object to the cache. T
@@ -223,4 +246,13 @@ func startEndIndices(c *Committees, index uint64) (uint64, uint64) {
 // https://github.com/ethereum/consensus-specs/blob/v0.9.3/specs/core/0_beacon-chain.md#get_seed
 func key(seed [32]byte) string {
 	return string(seed[:])
+}
+
+// committeeOffset returns the position of the committee at slot and index among all committees of the epoch.
+func committeeOffset(item *Committees, slot primitives.Slot, index primitives.CommitteeIndex) (uint64, error) {
+	committeeCountPerSlot := uint64(1)
+	if item.CommitteeCount/uint64(params.BeaconConfig().SlotsPerEpoch) > 1 {
+		committeeCountPerSlot = item.CommitteeCount / uint64(params.BeaconConfig().SlotsPerEpoch)
+	}
+	return mathutil.Add64(uint64(index), uint64(slot.ModSlot(params.BeaconConfig().SlotsPerEpoch).Mul(committeeCountPerSlot)))
 }

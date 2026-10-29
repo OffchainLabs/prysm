@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	"github.com/pkg/errors"
 )
@@ -47,8 +46,8 @@ func PublicKeyFromBytes(pubKey []byte) (common.PublicKey, error) {
 }
 
 func publicKeyFromBytes(pubKey []byte, cacheCopy bool) (common.PublicKey, error) {
-	if len(pubKey) != params.BeaconConfig().BLSPubkeyLength {
-		return nil, fmt.Errorf("public key must be %d bytes", params.BeaconConfig().BLSPubkeyLength)
+	if len(pubKey) != fieldparams.BLSPubkeyLength {
+		return nil, fmt.Errorf("public key must be %d bytes", fieldparams.BLSPubkeyLength)
 	}
 	newKey := (*[fieldparams.BLSPubkeyLength]byte)(pubKey)
 	if cv, ok := pubkeyCache.pubkey(*newKey); ok {
