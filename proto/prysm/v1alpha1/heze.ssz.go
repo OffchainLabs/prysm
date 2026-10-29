@@ -2745,16 +2745,16 @@ func (c *ExecutionPayloadEnvelopeHeze) MarshalSSZTo(dst []byte) ([]byte, error) 
 	dst = ssz.WriteOffset(dst, offset)
 	offset += c.ExecutionRequests.SizeSSZ()
 
-	// Field 2: BuilderIndex
-	if dst, err = c.BuilderIndex.MarshalSSZTo(dst); err != nil {
-		return nil, fmt.Errorf("BuilderIndex: %w", err)
-	}
-
-	// Field 3: ParentBeaconBlockRoot
+	// Field 2: ParentBeaconBlockRoot
 	if len(c.ParentBeaconBlockRoot) != 32 {
 		return nil, ssz.ErrBytesLength
 	}
 	dst = append(dst, c.ParentBeaconBlockRoot...)
+
+	// Field 3: BuilderIndex
+	if dst, err = c.BuilderIndex.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("BuilderIndex: %w", err)
+	}
 
 	// Field 0: Payload
 	if dst, err = c.Payload.MarshalSSZTo(dst); err != nil {
@@ -2775,8 +2775,8 @@ func (c *ExecutionPayloadEnvelopeHeze) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrSize
 	}
 
-	sszSlice2 := buf[8:16]  // c.BuilderIndex
-	sszSlice3 := buf[16:48] // c.ParentBeaconBlockRoot
+	sszSlice2 := buf[8:40]  // c.ParentBeaconBlockRoot
+	sszSlice3 := buf[40:48] // c.BuilderIndex
 
 	sszVarOffset0 := ssz.ReadOffset(buf[0:4]) // c.Payload
 	if sszVarOffset0 != 48 {
@@ -2804,14 +2804,14 @@ func (c *ExecutionPayloadEnvelopeHeze) UnmarshalSSZ(buf []byte) error {
 		return fmt.Errorf("ExecutionRequests: %w", err)
 	}
 
-	// Field 2: BuilderIndex
-	if err = c.BuilderIndex.UnmarshalSSZ(sszSlice2); err != nil {
+	// Field 2: ParentBeaconBlockRoot
+	c.ParentBeaconBlockRoot = make([]byte, 0, 32)
+	c.ParentBeaconBlockRoot = append(c.ParentBeaconBlockRoot, sszSlice2...)
+
+	// Field 3: BuilderIndex
+	if err = c.BuilderIndex.UnmarshalSSZ(sszSlice3); err != nil {
 		return fmt.Errorf("BuilderIndex: %w", err)
 	}
-
-	// Field 3: ParentBeaconBlockRoot
-	c.ParentBeaconBlockRoot = make([]byte, 0, 32)
-	c.ParentBeaconBlockRoot = append(c.ParentBeaconBlockRoot, sszSlice3...)
 	return err
 }
 
@@ -2846,15 +2846,15 @@ func (c *ExecutionPayloadEnvelopeHeze) ProgressiveHashTreeRootWith(hh *ssz.Hashe
 	if err := c.ExecutionRequests.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("ExecutionRequests: %w", err)
 	}
-	// Field 2: BuilderIndex
-	if err := c.BuilderIndex.HashTreeRootWith(hh); err != nil {
-		return fmt.Errorf("BuilderIndex: %w", err)
-	}
-	// Field 3: ParentBeaconBlockRoot
+	// Field 2: ParentBeaconBlockRoot
 	if len(c.ParentBeaconBlockRoot) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.ParentBeaconBlockRoot)
+	// Field 3: BuilderIndex
+	if err := c.BuilderIndex.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("BuilderIndex: %w", err)
+	}
 	hh.MerkleizeProgressiveWithActiveFields(indx, activeFieldsExecutionPayloadEnvelopeHeze)
 	return nil
 }

@@ -197,6 +197,15 @@ func (s *Service) drainPendingPayloadChunks(slot primitives.Slot, chunksRoot [32
 			}
 			s.setSeenPayloadChunk(c.Slot, chunksRoot, c.Index)
 			s.acceptVerifiedPayloadChunk(s.ctx, c)
+			// EIP-8411 requires a chunk that passes validation to be forwarded
+			// immediately. A buffered chunk was returned as ValidationIgnore,
+			// so libp2p never relayed it; now that the commitment is known and
+			// the chunk has passed, this node is the only path onward for its
+			// peers. Without this the set reconstructs locally while downstream
+			// receivers starve.
+			if err := s.cfg.p2p.Broadcast(s.ctx, c); err != nil {
+				log.WithError(err).Debug("Could not forward drained payload chunk")
+			}
 		}
 	}
 

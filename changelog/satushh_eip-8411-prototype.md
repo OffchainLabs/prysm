@@ -15,3 +15,8 @@
 ### Removed
 
 - The `execution_payload` gossip topic retires at `HezeForkEpoch` (Gloas keeps it; its validator and subscriber are unchanged pre-Heze).
+
+### Fixed
+
+- Order `parent_beacon_block_root` before `builder_index` in `ExecutionPayloadEnvelopeHeze` to match the EIP-8411 container definition. The previous order changed the SSZ serialization and therefore `payload_chunks_root`, so chunks would not have interoperated with other clients.
+- Forward a buffered payload chunk once its bid commitment becomes known. Chunks arriving before their commitment are returned as `ValidationIgnore`, so libp2p never relays them; the drain path previously fed them only into the local reconstruction pool, leaving peers that depend on this node without the chunk.
