@@ -121,6 +121,10 @@ func (m *engineMock) NewPayload(context.Context, interfaces.ExecutionData, []com
 	return m.latestValidHash, m.payloadStatus
 }
 
+func (m *engineMock) NewPayloadWithInclusionList(context.Context, interfaces.ExecutionData, []common.Hash, *common.Hash, pb.ExecutionRequester, [][]byte) ([]byte, *bool, error) {
+	return m.latestValidHash, nil, m.payloadStatus
+}
+
 func (m *engineMock) ForkchoiceUpdatedV2(context.Context, *pb.ForkchoiceState, payloadattribute.Attributer) (*pb.PayloadIDBytes, []byte, error) {
 	return nil, m.latestValidHash, m.payloadStatus
 }
