@@ -68,6 +68,12 @@ func (s *Service) validateVoluntaryExit(ctx context.Context, pid peer.ID, msg *p
 		return pubsub.ValidationIgnore, err
 	}
 	if err := blocks.VerifyExitAndSignature(val, headState, exit); err != nil {
+		// Head-state-dependent conditions are IGNORE in the spec, so peers on a different head are not penalized.
+		if errors.Is(err, blocks.ErrExitAlreadyInitiated) ||
+			errors.Is(err, blocks.ErrExitEpochInFuture) ||
+			errors.Is(err, blocks.ErrPendingBalanceToWithdraw) {
+			return pubsub.ValidationIgnore, err
+		}
 		return pubsub.ValidationReject, err
 	}
 
