@@ -70,6 +70,7 @@ go_test(
         "proposer_slashing_regression_test.go",
         "proposer_slashing_test.go",
         "randao_test.go",
+        "signature_bench_test.go",
         "signature_test.go",
         "withdrawals_test.go",
     ],
