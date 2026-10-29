@@ -141,3 +141,11 @@ func AggregateMultiplePubkeys(pubkeys []common.PublicKey) common.PublicKey {
 	agg.Aggregate(mulP1, false)
 	return &PublicKey{p: agg.ToAffine()}
 }
+
+// SubtractPublicKey returns p - sub as a new key. It undoes the aggregation of sub into p.
+func SubtractPublicKey(p, sub common.PublicKey) common.PublicKey {
+	var acc blstPoint
+	acc.FromAffine(p.(*PublicKey).p)
+	acc.SubAssign(sub.(*PublicKey).p)
+	return &PublicKey{p: acc.ToAffine()}
+}
