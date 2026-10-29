@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -25,11 +26,17 @@ import (
 
 // FakeP2P stack
 type FakeP2P struct {
+	peers *peers.Status
 }
 
-// NewFuzzTestP2P - Create a new fake p2p stack.
-func NewFuzzTestP2P() *FakeP2P {
-	return &FakeP2P{}
+// NewFuzzTestP2P - Create a new fake p2p stack. The peer scorer goroutine stops when ctx is done.
+func NewFuzzTestP2P(ctx context.Context) *FakeP2P {
+	return &FakeP2P{
+		peers: peers.NewStatus(ctx, &peers.StatusConfig{
+			PeerLimit:    30,
+			ScorerParams: &scorers.Config{},
+		}),
+	}
 }
 
 // Encoding -- fake.
@@ -90,8 +97,8 @@ func (*FakeP2P) Metadata() metadata.Metadata {
 }
 
 // Peers -- fake.
-func (*FakeP2P) Peers() *peers.Status {
-	return nil
+func (p *FakeP2P) Peers() *peers.Status {
+	return p.peers
 }
 
 // PublishToTopic -- fake.

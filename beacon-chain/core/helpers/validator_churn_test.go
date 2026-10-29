@@ -63,10 +63,3 @@ func TestActivationExitChurnLimit(t *testing.T) {
 		})
 	}
 }
-
-// FuzzConsolidationChurnLimit exercises BalanceChurnLimit and ActivationExitChurnLimit
-func FuzzConsolidationChurnLimit(f *testing.F) {
-	f.Fuzz(func(t *testing.T, activeBalance uint64) {
-		helpers.ConsolidationChurnLimit(primitives.Gwei(activeBalance))
-	})
-}

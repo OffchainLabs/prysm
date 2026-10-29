@@ -1,5 +1,3 @@
-//go:build go1.18
-
 package sync
 
 import (
@@ -30,9 +28,10 @@ import (
 )
 
 func FuzzValidateBeaconBlockPubSub_Phase0(f *testing.F) {
-	db := dbtest.SetupDB(f)
-	p := p2ptest.NewFuzzTestP2P()
 	ctx := f.Context()
+
+	db := dbtest.SetupDB(f)
+	p := p2ptest.NewFuzzTestP2P(ctx)
 	beaconState, privKeys := util.DeterministicGenesisState(f, 100)
 	parentBlock := util.NewBeaconBlock()
 	util.SaveBlock(f, ctx, db, parentBlock)
@@ -84,7 +83,7 @@ func FuzzValidateBeaconBlockPubSub_Phase0(f *testing.F) {
 
 	f.Add("junk", []byte("junk"), buf.Bytes(), []byte(topic))
 	f.Fuzz(func(t *testing.T, pid string, from, data, topic []byte) {
-		r.cfg.p2p = p2ptest.NewFuzzTestP2P()
+		r.cfg.p2p = p2ptest.NewFuzzTestP2P(t.Context())
 		r.rateLimiter = newRateLimiter(r.cfg.p2p)
 		cService := &mock.ChainService{
 			Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot*10000000), 0),
@@ -112,9 +111,10 @@ func FuzzValidateBeaconBlockPubSub_Phase0(f *testing.F) {
 }
 
 func FuzzValidateBeaconBlockPubSub_Altair(f *testing.F) {
-	db := dbtest.SetupDB(f)
-	p := p2ptest.NewFuzzTestP2P()
 	ctx := f.Context()
+
+	db := dbtest.SetupDB(f)
+	p := p2ptest.NewFuzzTestP2P(ctx)
 	beaconState, privKeys := util.DeterministicGenesisStateAltair(f, 100)
 	parentBlock := util.NewBeaconBlockAltair()
 	util.SaveBlock(f, ctx, db, parentBlock)
@@ -167,7 +167,7 @@ func FuzzValidateBeaconBlockPubSub_Altair(f *testing.F) {
 
 	f.Add("junk", []byte("junk"), buf.Bytes(), []byte(topic))
 	f.Fuzz(func(t *testing.T, pid string, from, data, topic []byte) {
-		r.cfg.p2p = p2ptest.NewFuzzTestP2P()
+		r.cfg.p2p = p2ptest.NewFuzzTestP2P(t.Context())
 		r.rateLimiter = newRateLimiter(r.cfg.p2p)
 		cService := &mock.ChainService{
 			Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot*10000000), 0),
@@ -195,9 +195,10 @@ func FuzzValidateBeaconBlockPubSub_Altair(f *testing.F) {
 }
 
 func FuzzValidateBeaconBlockPubSub_Bellatrix(f *testing.F) {
-	db := dbtest.SetupDB(f)
-	p := p2ptest.NewFuzzTestP2P()
 	ctx := f.Context()
+
+	db := dbtest.SetupDB(f)
+	p := p2ptest.NewFuzzTestP2P(ctx)
 	beaconState, privKeys := util.DeterministicGenesisStateBellatrix(f, 100)
 	parentBlock := util.NewBeaconBlockBellatrix()
 	util.SaveBlock(f, ctx, db, parentBlock)
@@ -250,7 +251,7 @@ func FuzzValidateBeaconBlockPubSub_Bellatrix(f *testing.F) {
 
 	f.Add("junk", []byte("junk"), buf.Bytes(), []byte(topic))
 	f.Fuzz(func(t *testing.T, pid string, from, data, topic []byte) {
-		r.cfg.p2p = p2ptest.NewFuzzTestP2P()
+		r.cfg.p2p = p2ptest.NewFuzzTestP2P(t.Context())
 		r.rateLimiter = newRateLimiter(r.cfg.p2p)
 		cService := &mock.ChainService{
 			Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot*10000000), 0),

@@ -23,9 +23,9 @@ func (c *FakeBalanceCache) AddTotalEffectiveBalance(st state.ReadOnlyBeaconState
 	return nil
 }
 
-// Get returns the current epoch's effective balance for state `st` in cache.
+// Get always reports a miss, so callers compute the balance instead of using 0.
 func (c *FakeBalanceCache) Get(st state.ReadOnlyBeaconState) (uint64, error) {
-	return 0, nil
+	return 0, ErrNotFound
 }
 
 // Clear is a stub.
