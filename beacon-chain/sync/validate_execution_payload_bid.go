@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
@@ -178,7 +179,11 @@ func (s *Service) executionPayloadBidSubscriber(_ context.Context, msg proto.Mes
 	if signedBid.Message == nil {
 		return errNilMessage
 	}
-	s.setHighestExecutionPayloadBid(signedBid)
+	b, err := blocks.WrappedROSignedExecutionPayloadBid(signedBid)
+	if err != nil {
+		return fmt.Errorf("wrapping signed execution payload bid: %w", err)
+	}
+	s.highestExecutionPayloadBidCache.SetIfHigher(b)
 	s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
 		Type: opfeed.ExecutionPayloadBidReceived,
 		Data: &opfeed.ExecutionPayloadBidReceivedData{Bid: signedBid},
@@ -223,9 +228,5 @@ func (s *Service) isHighestExecutionPayloadBid(bid interfaces.ROExecutionPayload
 	if !ok {
 		return true
 	}
-	return bid.Value() > cached.Message.Value
-}
-
-func (s *Service) setHighestExecutionPayloadBid(signedBid *ethpb.SignedExecutionPayloadBid) {
-	s.highestExecutionPayloadBidCache.SetIfHigher(signedBid)
+	return bid.Value() > cached.Bid().Value()
 }
