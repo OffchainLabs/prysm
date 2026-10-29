@@ -12,11 +12,14 @@ go_library(
         "migration.go",
         "proposer_protection.go",
         "proposer_settings.go",
+        "protection_decode.go",
+        "protection_persistence.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/validator/db/filesystem",
     visibility = ["//visibility:public"],
     deps = [
         "//config/fieldparams:go_default_library",
+        "//config/params:go_default_library",
         "//config/proposer:go_default_library",
         "//consensus-types/interfaces:go_default_library",
         "//consensus-types/primitives:go_default_library",
@@ -47,6 +50,7 @@ go_test(
         "migration_test.go",
         "proposer_protection_test.go",
         "proposer_settings_test.go",
+        "protection_persistence_test.go",
     ],
     embed = [":go_default_library"],
     deps = [

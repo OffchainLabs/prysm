@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"os"
 	"testing"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -337,4 +338,85 @@ func Test_slashableProposalCheck_RemoteProtection(t *testing.T) {
 
 	err = s.SlashableProposalCheck(t.Context(), pubkey, sBlock, [32]byte{2}, false, nil)
 	require.NoError(t, err, "Expected allowed block not to throw error")
+}
+
+func TestStore_SlashableProposalCheck_InvalidRecords(t *testing.T) {
+	pubkey := getPubKeys(t, 1)[0]
+	block, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlock{
+		Block:     &ethpb.BeaconBlock{Slot: 20, Body: &ethpb.BeaconBlockBody{}},
+		Signature: params.BeaconConfig().EmptySignature[:],
+	})
+	require.NoError(t, err)
+	for _, tt := range invalidProtectionRecords() {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := NewStore(t.TempDir(), nil)
+			require.NoError(t, err)
+			filename := writeProtectionFixture(t, s, pubkey, tt.data)
+			err = s.SlashableProposalCheck(t.Context(), pubkey, block, [32]byte{}, false, nil)
+			require.ErrorContains(t, "could not get validator slashing protection", err)
+			require.ErrorContains(t, filename, err)
+			requireProtectionBytes(t, filename, tt.data)
+		})
+	}
+}
+func TestStore_SlashableProposalCheck_ValidRecords(t *testing.T) {
+	pubkey := getPubKeys(t, 1)[0]
+	block, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlock{
+		Block:     &ethpb.BeaconBlock{Slot: 20, Body: &ethpb.BeaconBlockBody{}},
+		Signature: params.BeaconConfig().EmptySignature[:],
+	})
+	require.NoError(t, err)
+	for _, tt := range []struct{ name, data string }{
+		{"missing", ""},
+		{"fresh", "lastSignedAttestationSourceEpoch: 0\n"},
+		{"history", "lastSignedAttestationSourceEpoch: 3\nlastSignedAttestationTargetEpoch: 4\nlatestSignedBlockSlot: 12\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := NewStore(t.TempDir(), nil)
+			require.NoError(t, err)
+			if tt.name != "missing" {
+				writeProtectionFixture(t, s, pubkey, tt.data)
+			}
+			require.NoError(t, s.SlashableProposalCheck(t.Context(), pubkey, block, [32]byte{}, false, nil))
+			reopened, err := NewStore(s.DatabasePath(), nil)
+			require.NoError(t, err)
+			actual, err := reopened.validatorSlashingProtection(pubkey)
+			require.NoError(t, err)
+			require.Equal(t, uint64(20), *actual.LatestSignedBlockSlot)
+			if tt.name == "history" {
+				require.Equal(t, uint64(3), actual.LastSignedAttestationSourceEpoch)
+				require.Equal(t, uint64(4), *actual.LastSignedAttestationTargetEpoch)
+			}
+			before, err := os.ReadFile(reopened.pubkeySlashingProtectionFilePath(pubkey))
+			require.NoError(t, err)
+			err = reopened.SlashableProposalCheck(t.Context(), pubkey, block, [32]byte{}, false, nil)
+			require.ErrorContains(t, common.FailedBlockSignLocalErr, err)
+			after, err := reopened.validatorSlashingProtection(pubkey)
+			require.NoError(t, err)
+			require.DeepEqual(t, actual, after, "refused duty must not change watermarks")
+			requireProtectionBytes(t, reopened.pubkeySlashingProtectionFilePath(pubkey), string(before))
+		})
+	}
+}
+
+func TestStore_SlashableProposalCheck_UnsupportedPlatform(t *testing.T) {
+	if protectionDurabilitySupported() == nil {
+		t.Skip("requires a platform without supported durable protection writes")
+	}
+	directory := t.TempDir()
+	s, err := NewStore(directory, nil)
+	require.NoError(t, err)
+	pubkey := getPubKeys(t, 1)[0]
+	block, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlock{
+		Block:     &ethpb.BeaconBlock{Slot: 20, Body: &ethpb.BeaconBlockBody{}},
+		Signature: params.BeaconConfig().EmptySignature[:],
+	})
+	require.NoError(t, err)
+	err = s.SlashableProposalCheck(t.Context(), pubkey, block, [32]byte{}, false, nil)
+	require.ErrorContains(t, "durable slashing protection writes are unsupported", err)
+	_, err = os.Stat(s.pubkeySlashingProtectionFilePath(pubkey))
+	require.Equal(t, true, os.IsNotExist(err), "must not create a protection record")
+	entries, err := os.ReadDir(directory)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(entries), "must not create database directories or temporary files")
 }
