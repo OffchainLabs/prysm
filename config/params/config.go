@@ -29,6 +29,10 @@ const BuilderProposalDelayTolerance = 1 * time.Second
 // bids from the builder API before falling back to the P2P bid or a self-build.
 const BuilderBidTolerance = 600 * time.Millisecond
 
+// BuilderBidWindow bounds, from slot start, how long the proposer keeps requesting builder-API bids.
+// Proposing later than this risks the block being reorged.
+const BuilderBidWindow = 2500 * time.Millisecond
+
 // BeaconChainConfig contains constant configs for node to participate in beacon chain.
 type BeaconChainConfig struct {
 	// Constants (non-configurable)
@@ -294,6 +298,8 @@ type BeaconChainConfig struct {
 	BuilderMaxTrackedRelays        uint64           // BuilderMaxTrackedRelays is how many direct connection endpoints the circuit breaker tracks.
 	BuilderMaxIndicesPerRelay      uint64           // BuilderMaxIndicesPerRelay is how many builder indices are tracked per endpoint, bounding the collateral ban.
 	BuilderBidTimeout              time.Duration    // BuilderBidTimeout is how long to wait for execution payload bids from the builder API before falling back to the P2P bid or a self-build.
+	BuilderBidDelay                time.Duration    // BuilderBidDelay is how long after slot start the proposer sends its first builder-API bid request.
+	BuilderBidRequests             uint64           // BuilderBidRequests is how many builder-API bid requests the proposer sends per proposal, each bounded by BuilderBidTimeout.
 
 	// Execution engine timeout value
 	ExecutionEngineTimeoutValue uint64 // ExecutionEngineTimeoutValue defines the seconds to wait before timing out engine endpoints with execution payload execution semantics (newPayload, forkchoiceUpdated).

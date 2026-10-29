@@ -25,6 +25,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 )
 
 // fakeBidVerifier implements verification.ExecutionPayloadBidVerifier with per-method
@@ -406,7 +407,7 @@ func TestValidateBuilderBid(t *testing.T) {
 }
 
 // deadlineCapturingBuilder reports the context budget it was handed instead of returning
-// bids, so the deadline getBuilderExecutionPayloadBid installs is directly observable.
+// bids, so the deadline requestBuilderBid installs is directly observable.
 type deadlineCapturingBuilder struct {
 	*builderTest.MockBuilderService
 	budget chan time.Duration
@@ -622,25 +623,6 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 		require.IsNil(t, vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries)))
 	})
 
-	t.Run("bounds the builder call at BuilderBidTimeout", func(t *testing.T) {
-		const configured = 150 * time.Millisecond
-		params.SetupTestConfigCleanup(t)
-		c := params.BeaconConfig().Copy()
-		c.BuilderBidTimeout = configured
-		require.NoError(t, params.SetActive(c))
-
-		b := &deadlineCapturingBuilder{MockBuilderService: &builderTest.MockBuilderService{}, budget: make(chan time.Duration, 1)}
-		vs := &Server{BlockBuilder: b, NewExecutionPayloadBidVerifier: passAll}
-
-		require.IsNil(t, vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries)))
-
-		// A budget of the full default would mean the config was ignored; a budget of 0
-		// would mean no deadline was installed at all.
-		budget := <-b.budget
-		if budget <= configured/2 || budget > configured {
-			t.Fatalf("builder context budget = %s, want (%s, %s]", budget, configured/2, configured)
-		}
-	})
 }
 
 // gatedBuilder reports the parent hash of each bid request on started and holds the request
@@ -722,6 +704,7 @@ func TestRequestBuilderBid(t *testing.T) {
 	newServer := func(b beaconbuilder.BlockBuilder) *Server {
 		return &Server{
 			BlockBuilder:             b,
+			TimeFetcher:              &chainMock.ChainService{Genesis: time.Now().Add(-time.Duration(uint64(slot)*params.BeaconConfig().SlotDurationMillis()) * time.Millisecond)},
 			ForkchoiceFetcher:        &chainMock.ChainService{ForkchoiceGasLimits: map[[32]byte]uint64{parentRoot: parentGasLimit}},
 			ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 			NewExecutionPayloadBidVerifier: func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
@@ -785,6 +768,54 @@ func TestRequestBuilderBid(t *testing.T) {
 		p.abort()
 	})
 
+	t.Run("bounds each round at BuilderBidTimeout", func(t *testing.T) {
+		const configured = 150 * time.Millisecond
+		params.SetupTestConfigCleanup(t)
+		c := params.BeaconConfig().Copy()
+		c.GloasForkEpoch = 0
+		c.BuilderBidTimeout = configured
+		require.NoError(t, params.SetActive(c))
+
+		b := &deadlineCapturingBuilder{MockBuilderService: &builderTest.MockBuilderService{}, budget: make(chan time.Duration, 1)}
+		require.IsNil(t, newServer(b).requestBuilderBid(t.Context(), blk, head, false, builderCfg).wait())
+
+		budget := <-b.budget
+		if budget <= configured/2 || budget > configured {
+			t.Fatalf("builder context budget = %s, want (%s, %s]", budget, configured/2, configured)
+		}
+	})
+
+	t.Run("keeps the highest bid across rounds", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		c := params.BeaconConfig().Copy()
+		c.GloasForkEpoch = 0
+		c.BuilderBidTimeout = 20 * time.Millisecond
+		c.BuilderBidRequests = 3
+		require.NoError(t, params.SetActive(c))
+
+		b := &sequenceBuilder{bid: bidOn(parentBlockHash), values: []primitives.Gwei{1000, 3000, 2000}}
+		win := newServer(b).requestBuilderBid(t.Context(), blk, head, false, builderCfg).wait()
+		require.NotNil(t, win)
+		require.Equal(t, primitives.Gwei(3000), win.bid.Message.Value)
+		require.Equal(t, 3, b.calls)
+	})
+
+	t.Run("abort stops the remaining rounds", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		c := params.BeaconConfig().Copy()
+		c.GloasForkEpoch = 0
+		c.BuilderBidTimeout = 500 * time.Millisecond
+		c.BuilderBidRequests = 3
+		require.NoError(t, params.SetActive(c))
+
+		b := newGatedBuilder(bidOn(parentBlockHash))
+		p := newServer(b).requestBuilderBid(t.Context(), blk, head, false, builderCfg)
+		<-b.started
+		p.abort()
+		require.ErrorIs(t, <-b.ctxErr, context.Canceled)
+		require.Equal(t, 0, len(b.started))
+	})
+
 	t.Run("query failure skips the builder", func(t *testing.T) {
 		b := newGatedBuilder(bidOn(parentBlockHash))
 		vs := newServer(b)
@@ -793,6 +824,50 @@ func TestRequestBuilderBid(t *testing.T) {
 		require.IsNil(t, p.wait())
 		require.Equal(t, 0, len(b.started))
 	})
+}
+
+// sequenceBuilder returns bid with the next value on each call.
+type sequenceBuilder struct {
+	*builderTest.MockBuilderService
+	bid    beaconbuilder.PayloadBid
+	values []primitives.Gwei
+	calls  int
+}
+
+func (b *sequenceBuilder) GetExecutionPayloadBid(context.Context, primitives.Slot, [32]byte, [32]byte, [48]byte, []*ethpb.BuilderEntry) ([]beaconbuilder.PayloadBid, error) {
+	bid := proto.Clone(b.bid.Bid).(*ethpb.SignedExecutionPayloadBid)
+	bid.Message.Value = b.values[b.calls]
+	b.calls++
+	return []beaconbuilder.PayloadBid{{Entry: b.bid.Entry, Bid: bid}}, nil
+}
+
+func TestBuilderBidRounds(t *testing.T) {
+	slotStart := time.Unix(1_000_000, 0)
+	ms := func(d int) time.Time { return slotStart.Add(time.Duration(d) * time.Millisecond) }
+	type round struct{ start, deadline int }
+	for _, tc := range []struct {
+		name    string
+		now     int
+		delay   int
+		timeout int
+		n       uint64
+		want    []round
+	}{
+		{name: "default starts at arrival", now: 100, timeout: 600, n: 1, want: []round{{100, 700}}},
+		{name: "on time", now: 50, delay: 500, timeout: 600, n: 3, want: []round{{500, 1100}, {1100, 1700}, {1700, 2300}}},
+		{name: "late arrival compresses rounds", now: 1200, delay: 500, timeout: 600, n: 3, want: []round{{1200, 1800}, {1800, 2400}, {2400, 2500}}},
+		{name: "late arrival is cut at the window", now: 2200, timeout: 600, n: 1, want: []round{{2200, 2500}}},
+		{name: "arrival after the window", now: 2500, timeout: 600, n: 1, want: []round{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := builderBidRounds(slotStart, ms(tc.now), time.Duration(tc.delay)*time.Millisecond, time.Duration(tc.timeout)*time.Millisecond, tc.n)
+			require.Equal(t, len(tc.want), len(got))
+			for i, r := range tc.want {
+				require.Equal(t, ms(r.start), got[i].start)
+				require.Equal(t, ms(r.deadline), got[i].deadline)
+			}
+		})
+	}
 }
 
 func TestSetExecutionPayloadBid_PrefersBuilderBid(t *testing.T) {
