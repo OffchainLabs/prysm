@@ -128,9 +128,8 @@ func TestTodoInterceptsBatchEndSequence(t *testing.T) {
 	}
 }
 
-// TestProcessTodoExpiresEnvelopesWithoutPeers asserts that envelope attempt-budget expiry runs
-// independently of peer assignment: a queued batch whose envelope budget has lapsed is routed
-// onward to import even when no peer can be assigned, instead of stalling block backfill.
+// TestProcessTodoExpiresEnvelopesWithoutPeers asserts that a queued batch whose envelope budget
+// has lapsed is routed onward to import even when no peer can be assigned.
 func TestProcessTodoExpiresEnvelopesWithoutPeers(t *testing.T) {
 	ctx := t.Context()
 	pool := newP2PBatchWorkerPool(p2ptest.NewTestP2P(t), 2, mockCurrentNeedsFunc(0, 1<<32))

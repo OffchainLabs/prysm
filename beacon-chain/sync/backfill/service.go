@@ -325,7 +325,6 @@ func (s *Service) Start() {
 			log.WithError(err).Error("Could not initialize blob verifier in backfill service")
 			return
 		}
-
 	}
 
 	// Allow tests to inject a mock pool.

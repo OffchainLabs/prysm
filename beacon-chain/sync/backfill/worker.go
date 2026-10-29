@@ -77,9 +77,7 @@ func initWorkerCfg(ctx context.Context, cfg *workerCfg, vw InitializerWaiter, st
 	if err != nil {
 		return errors.Wrapf(err, "newBackfillVerifier failed")
 	}
-	// The builder registry snapshot only exists on Gloas+ origin states. A pre-Gloas origin
-	// implies every backfilled slot is pre-Gloas, so no envelope is ever expected and the
-	// envelope verifier's registry stays empty.
+	// A pre-Gloas origin has no builder registry and implies no envelope is ever expected.
 	var builders []*eth.Builder
 	if cps.Version() >= version.Gloas {
 		builders, err = cps.Builders()
@@ -218,10 +216,8 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	return b.transitionToNext()
 }
 
-// handleEnvelopes runs one fetch pass of the envelope sync stage against the assigned peer.
-// All failure modes end in an explicit skip or a bounded retry inside the envelope sync, so the
-// batch never errors here; it either stays in batchSyncEnvelopes (and is reassigned, preferring
-// a different peer) or proceeds toward import.
+// handleEnvelopes runs one envelope fetch pass against the assigned peer. Every failure mode is
+// a skip or bounded retry inside the envelope sync, so the batch never errors here.
 func (w *p2pWorker) handleEnvelopes(ctx context.Context, b batch) batch {
 	if b.envelopes == nil {
 		return b.transitionToNext()

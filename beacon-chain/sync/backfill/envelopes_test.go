@@ -697,8 +697,7 @@ func TestFillBackEnvelopeOutcomes(t *testing.T) {
 }
 
 // TestBatchTransitionEnvelopes exercises the batch state machine routing through the envelope
-// stage: a batch with unresolved envelope work returns to batchSyncEnvelopes (so the pool
-// reassigns it, rotating peers), and proceeds to batchImportable once every slot is resolved.
+// stage: unresolved work returns to batchSyncEnvelopes, resolved work proceeds to importable.
 func TestBatchTransitionEnvelopes(t *testing.T) {
 	ctx := t.Context()
 	c := makeEnvChain(t, envChainCfg{start: 10, n: 2})

@@ -98,8 +98,8 @@ func (s *Store) backfilledChild(ctx context.Context, root [32]byte) (interfaces.
 // fillBack saves the slice of blocks and updates the BackfillStatus tracker to match the first block in the slice.
 // This method assumes that the block slice has been fully validated and sorted in slot order by the calling function.
 // It also performs the blob and/or data column availability check, which will persist blobs/DCs to disk once verified.
-// Verified execution payload envelopes held by envs are persisted in blinded form before the block writes; envelope
-// outcomes never fail the batch, so the block import below always proceeds with its existing error behavior.
+// Envelopes held by envs are persisted blinded before the block writes; envelope outcomes never
+// fail the batch.
 func (s *Store) fillBack(ctx context.Context, current primitives.Slot, blocks []blocks.ROBlock, store das.AvailabilityChecker, envs *envelopeSync) (*dbval.BackfillStatus, error) {
 	status := s.status()
 	if len(blocks) == 0 {
@@ -114,8 +114,7 @@ func (s *Store) fillBack(ctx context.Context, current primitives.Slot, blocks []
 			status.LowParentRoot, highest.Root(), status.LowSlot, highest.Block().Slot())
 	}
 
-	// The check above guarantees the block behind status.LowRoot is the child of the batch tail,
-	// which finalize uses to classify the tail slot's payload fullness.
+	// The check above guarantees the block behind status.LowRoot is the batch tail's child.
 	envs.finalize(ctx, s.store, bytesutil.ToBytes32(status.LowRoot))
 
 	if err := store.IsDataAvailable(ctx, current, blocks...); err != nil {
@@ -141,7 +140,7 @@ func (s *Store) fillBack(ctx context.Context, current primitives.Slot, blocks []
 	if err := s.saveStatus(ctx, status); err != nil {
 		return status, err
 	}
-	// The batch is durable from here, so the envelope skips it recorded are now real gaps.
+	// The batch is durable from here, so recorded envelope skips are real gaps.
 	envs.publishSkips()
 	return status, nil
 }

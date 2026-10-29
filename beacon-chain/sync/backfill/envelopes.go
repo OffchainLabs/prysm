@@ -28,8 +28,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// Terminal skip reasons for slots whose envelope could not be backfilled. Skipped slots are
-// never retried after the batch completes, and are counted once the batch is durable.
+// Terminal skip reasons for slots whose envelope could not be backfilled.
 const (
 	envSkipSigUnverifiable = "sig_unverifiable"
 	envSkipPeerExhausted   = "peer_exhausted"
@@ -42,8 +41,7 @@ const (
 	envelopePageSize = primitives.Slot(16)
 	// envelopeMaxPageAttempts caps the total RPC attempts for an unresolved page.
 	envelopeMaxPageAttempts = 3
-	// envelopeLocalRetries caps local (non-network) retries: the boundary child lookup and
-	// envelope db writes.
+	// envelopeLocalRetries caps local (non-network) retries.
 	envelopeLocalRetries = 3
 )
 
@@ -53,14 +51,11 @@ var (
 	envelopeSkipLogger = logging.NewIntervalLogger(log, 30)
 )
 
-// envelopeFetcher requests execution payload envelopes by range from the given peer. fetchPass
-// takes one as a parameter so tests can supply responses without a p2p stack.
+// envelopeFetcher requests execution payload envelopes by range from the given peer.
 type envelopeFetcher func(ctx context.Context, pid peer.ID, req *ethpb.ExecutionPayloadEnvelopesByRangeRequest) ([]*ethpb.SignedExecutionPayloadEnvelope, error)
 
 // envelopeVerifier verifies backfilled envelope signatures statelessly, using key material
-// snapshotted from the checkpoint origin state. Backfill only descends below the origin, so a
-// pre-Gloas origin implies no envelope expectations at all, and a Gloas origin's registries are
-// cumulative for everything below it.
+// snapshotted from the checkpoint origin state.
 type envelopeVerifier struct {
 	keys     [][fieldparams.BLSPubkeyLength]byte
 	builders []*ethpb.Builder
@@ -75,27 +70,22 @@ func newEnvelopeVerifier(vr []byte, keys [][fieldparams.BLSPubkeyLength]byte, bu
 	return &envelopeVerifier{keys: keys, builders: builders, domain: dc}, nil
 }
 
-// envelopeExpectation captures a slot that expects an envelope, along with the block/bid it
-// must bind to and the key its signature must verify against.
+// envelopeExpectation is a slot that expects an envelope: the block/bid it must bind to and the
+// key its signature must verify against.
 type envelopeExpectation struct {
 	block  blocks.ROBlock
 	bid    interfaces.ROExecutionPayloadBid
 	pubkey bls.PublicKey
 	// required is false only for the batch-tail slot while its payload fullness is still
-	// unclassified; it is resolved via the boundary child at import time.
+	// unclassified; it is resolved at import time.
 	required bool
-	// skipReason is set on an unclassified batch-tail expectation whose signature can never be
-	// verified. The slot is never fetched; import-time classification decides whether the skip
-	// is recorded (revealed) or the slot simply expects nothing (withheld).
+	// skipReason marks an unclassified tail whose signature can never be verified; never fetched.
 	skipReason string
 }
 
-// expectation resolves the verification key for the given block's envelope. The key is decided
-// before any fetch: the historical block's proposer key for self-built payloads, otherwise the
-// builder registry snapshot. A missing builder index or one whose occupant deposited after the
-// envelope's epoch means the signature is unverifiable (builder indices are reused, so the
-// current occupant could validly sign a historical envelope and a passing signature would prove
-// nothing); those slots are skipped without a request.
+// expectation resolves the verification key for the block's envelope: the proposer key for
+// self-built payloads, otherwise the builder registry snapshot. Unverifiable slots are skipped
+// without a request.
 func (v *envelopeVerifier) expectation(b blocks.ROBlock) (*envelopeExpectation, string, error) {
 	sb, err := b.Block().Body().SignedExecutionPayloadBid()
 	if err != nil {
@@ -118,10 +108,8 @@ func (v *envelopeVerifier) expectation(b blocks.ROBlock) (*envelopeExpectation, 
 			return nil, envSkipSigUnverifiable, nil
 		}
 		bldr := v.builders[idx]
-		// A builder can only be active in epochs strictly after its deposit epoch, so the
-		// snapshot occupant provably held the index at the envelope's epoch only when
-		// deposit_epoch < envelope_epoch; anything else could be a later occupant of a
-		// reused index.
+		// Builder indices are reused: the snapshot occupant provably held the index at the
+		// envelope's epoch only if it deposited strictly before that epoch.
 		if bldr.DepositEpoch >= slots.ToEpoch(b.Block().Slot()) {
 			return nil, envSkipSigUnverifiable, nil
 		}
@@ -134,8 +122,7 @@ func (v *envelopeVerifier) expectation(b blocks.ROBlock) (*envelopeExpectation, 
 	return &envelopeExpectation{block: b, bid: bid, pubkey: pub}, "", nil
 }
 
-// signatureBatch builds the aggregate verification entry for one envelope, deriving the
-// DOMAIN_BEACON_BUILDER domain for the envelope's epoch from the fork schedule.
+// signatureBatch builds the aggregate verification entry for one envelope over DOMAIN_BEACON_BUILDER.
 func (v *envelopeVerifier) signatureBatch(env *ethpb.SignedExecutionPayloadEnvelope, exp *envelopeExpectation) (*bls.SignatureBatch, error) {
 	dom, err := v.domain.forEpoch(slots.ToEpoch(exp.block.Block().Slot()))
 	if err != nil {
@@ -153,9 +140,7 @@ func (v *envelopeVerifier) signatureBatch(env *ethpb.SignedExecutionPayloadEnvel
 	}, nil
 }
 
-// bindEnvelope checks every envelope field retained by blinding against the expected block, and
-// the payload commitments against the block's signed bid. Any mismatch means the peer served an
-// envelope that cannot belong to the canonical block at that slot.
+// bindEnvelope checks the envelope against the expected block and its signed bid.
 func bindEnvelope(env *ethpb.SignedExecutionPayloadEnvelope, exp *envelopeExpectation) error {
 	m := env.Message
 	root := exp.block.Root()
@@ -188,31 +173,27 @@ func bindEnvelope(env *ethpb.SignedExecutionPayloadEnvelope, exp *envelopeExpect
 	return nil
 }
 
-// envelopePage tracks the request attempt budget for one contiguous chunk of expected slots.
-// An empty or short response is protocol-legal and never downscored, so pages are bounded by
-// both a total attempt count and an elapsed budget anchored at the first attempt.
+// envelopePage tracks the attempt and elapsed-time budget for one contiguous chunk of expected
+// slots; empty responses are protocol-legal, so the budget is what bounds retries.
 type envelopePage struct {
 	lo, hi   primitives.Slot // half-open [lo, hi)
 	attempts int
 	deadline time.Time // zero until the first attempt
 }
 
-// envelopeSync tracks per-batch envelope expectations through fetch and verification. Verified
-// envelopes are held in blinded form until the batch is imported, at which point finalize
-// classifies the batch-tail slot via the boundary child and persists everything.
+// envelopeSync tracks a batch's envelope expectations through fetch and verification; verified
+// envelopes are held blinded until finalize persists them at import time.
 type envelopeSync struct {
 	cfg     *envelopeSyncCfg
 	peer    peer.ID
 	pending map[primitives.Slot]*envelopeExpectation
 	held    map[primitives.Slot]*ethpb.SignedBlindedExecutionPayloadEnvelope
-	// tail is the batch-tail expectation while its fullness is unclassified. Its slot may leave
-	// pending (fetched or budget exhausted) while classification still needs to happen at import.
+	// tail is the batch-tail expectation while its payload fullness is unclassified.
 	tail      *envelopeExpectation
 	pages     []*envelopePage
 	skips     map[string][]primitives.Slot
 	finalized bool
-	// published is set once the skip counters have been emitted, which happens only after the
-	// batch's status write succeeds.
+	// published is set once the skip counters are emitted, after the batch's status write.
 	published bool
 	now       func() time.Time
 }
@@ -244,12 +225,9 @@ func (cfg *envelopeSyncCfg) applyDefaults() {
 	}
 }
 
-// newEnvelopeSync computes the envelope expectations for a batch of verified blocks. A slot
-// expects an envelope iff the block is Gloas+, the slot is within the Env retention window, the
-// payload was revealed (committed by the child block's bid), and no envelope is already stored.
-// Withheld and skipped slots expect nothing. The batch-tail slot's child is outside the batch;
-// if the boundary child is already imported it is classified immediately, otherwise
-// classification is deferred to import time.
+// newEnvelopeSync computes the envelope expectations for a batch: Gloas slots inside the Env
+// window whose payload was revealed and whose envelope is not already stored. The batch tail's
+// child is outside the batch, so its classification may be deferred to import time.
 func newEnvelopeSync(ctx context.Context, vbs verifiedROBlocks, cfg *envelopeSyncCfg) (*envelopeSync, error) {
 	if cfg == nil || cfg.verifier == nil || cfg.hasEnvelope == nil {
 		return nil, nil
@@ -274,9 +252,8 @@ func newEnvelopeSync(ctx context.Context, vbs verifiedROBlocks, cfg *envelopeSyn
 		}
 		isTail := i == len(vbs)-1
 		if !isTail {
-			// Every non-tail block's direct child is the next block in the batch, because batch
-			// verification enforces the parent-root chain. The child's bid commits the parent's
-			// payload fullness.
+			// A non-tail block's child is the next block in the batch; the child's bid commits
+			// the parent's payload fullness.
 			revealed, err := blocks.BlockBuiltOnParentPayload(b.Block(), vbs[i+1].Block())
 			if err != nil {
 				return nil, errors.Wrap(err, "block built on parent payload")
@@ -301,8 +278,7 @@ func newEnvelopeSync(ctx context.Context, vbs verifiedROBlocks, cfg *envelopeSyn
 			es.pending[slot] = exp
 			continue
 		}
-		// The batch tail's fullness is unknown until its child is available. Skips are only
-		// recorded once the slot is known to be revealed; a withheld slot expects nothing.
+		// The tail's fullness is unknown until its child is available.
 		if child := es.tryBoundaryChild(ctx, b.Root()); child != nil {
 			revealed, err := blocks.BlockBuiltOnParentPayload(b.Block(), child)
 			if err != nil {
@@ -320,7 +296,7 @@ func newEnvelopeSync(ctx context.Context, vbs verifiedROBlocks, cfg *envelopeSyn
 			continue
 		}
 		if skip != "" {
-			// Unverifiable: never fetched, classification deferred to import time.
+			// Unverifiable tail: never fetched, classification deferred to import time.
 			es.tail = &envelopeExpectation{block: b, skipReason: skip}
 			continue
 		}
@@ -331,8 +307,7 @@ func newEnvelopeSync(ctx context.Context, vbs verifiedROBlocks, cfg *envelopeSyn
 	return es, nil
 }
 
-// tryBoundaryChild returns the already-imported child of the batch tail if it is available and
-// links to the tail, or nil when classification must wait for import time.
+// tryBoundaryChild returns the tail's already-imported child, or nil to defer classification.
 func (es *envelopeSync) tryBoundaryChild(ctx context.Context, tailRoot [32]byte) interfaces.ReadOnlyBeaconBlock {
 	if es.cfg.boundaryChild == nil {
 		return nil
@@ -368,9 +343,7 @@ func (es *envelopeSync) pendingIn(pg *envelopePage) []primitives.Slot {
 	return out
 }
 
-// unresolved returns the number of slots that still need a fetch attempt. The batch leaves the
-// envelope sync state once this reaches zero; every expectation then has a held envelope or a
-// terminal skip (or, for the tail, a pending import-time classification).
+// unresolved returns the number of slots that still need a fetch attempt.
 func (es *envelopeSync) unresolved() int {
 	if es == nil {
 		return 0
@@ -378,8 +351,7 @@ func (es *envelopeSync) unresolved() int {
 	return len(es.pending)
 }
 
-// skip records a terminal skip for the slot: the envelope stays absent and is never retried
-// after the batch completes. The counter is emitted later, by publishSkips.
+// skip records a terminal skip for the slot; the counter is emitted later by publishSkips.
 func (es *envelopeSync) skip(slot primitives.Slot, reason string) {
 	delete(es.pending, slot)
 	if es.tail != nil && es.tail.block.Block().Slot() == slot {
@@ -388,11 +360,8 @@ func (es *envelopeSync) skip(slot primitives.Slot, reason string) {
 	es.skips[reason] = append(es.skips[reason], slot)
 }
 
-// publishSkips emits the skip counters. A skip claims a permanent gap, so it is only published
-// once the batch's backfill status write has succeeded: a batch that is retried or expires
-// before import would otherwise leave phantom or double-counted gaps behind. Activity counters
-// (downloads, verifications) are deliberately not gated this way — they measure work done, not
-// final state.
+// publishSkips emits the skip counters. A skip claims a permanent gap, so it is published only
+// after the batch's status write succeeds; a retried batch must not double-count.
 func (es *envelopeSync) publishSkips() {
 	if es == nil || es.published {
 		return
@@ -403,14 +372,12 @@ func (es *envelopeSync) publishSkips() {
 	}
 }
 
-// retireTailFetch removes the tail slot from the fetch set while keeping the expectation for
-// import-time classification (which decides between nothing, persist, and peer_exhausted).
+// retireTailFetch removes the tail from the fetch set, keeping it for import-time classification.
 func (es *envelopeSync) retireTailFetch(slot primitives.Slot) {
 	delete(es.pending, slot)
 }
 
-// pruneExpiredWindow drops pending slots that have fallen out of the Env retention window since
-// the expectations were computed.
+// pruneExpiredWindow drops pending slots that have left the Env retention window.
 func (es *envelopeSync) pruneExpiredWindow() {
 	window := es.cfg.currentNeeds().Env
 	for slot := range es.pending {
@@ -424,10 +391,8 @@ func (es *envelopeSync) pruneExpiredWindow() {
 	}
 }
 
-// fetchPass makes at most one RPC attempt per unresolved page against the assigned peer,
-// verifying and holding whatever it can. Remaining unresolved pages either still have attempt
-// budget (the batch stays in the envelope sync state and is reassigned, preferring a different
-// peer) or are expired into terminal skips.
+// fetchPass makes at most one RPC attempt per unresolved page against the assigned peer; pages
+// that exhaust their budget expire into terminal outcomes.
 func (es *envelopeSync) fetchPass(ctx context.Context, pid peer.ID, fetch envelopeFetcher) {
 	es.peer = pid
 	es.pruneExpiredWindow()
@@ -453,14 +418,14 @@ func (es *envelopeSync) fetchPass(ctx context.Context, pid peer.ID, fetch envelo
 		first = false
 		pg.attempts++
 		if pg.deadline.IsZero() {
-			// Anchor the elapsed budget at the first attempt; waiting for a new peer does not extend it.
+			// Anchored at the first attempt; waiting for a new peer does not extend the budget.
 			pg.deadline = es.now().Add(es.cfg.attemptBudget)
 		}
 		lo := slotsIn[0]
 		hi := slotsIn[len(slotsIn)-1] + 1
 		envs, err := fetch(ctx, pid, &ethpb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: lo, Count: uint64(hi.FlooredSubSlot(lo))})
 		if err != nil {
-			// Empty and short responses are protocol-legal and never downscored; only invalid content is.
+			// Only invalid content is downscored; empty and short responses are protocol-legal.
 			if errors.Is(err, sync.ErrInvalidFetchedData) {
 				es.cfg.downscore(pid, "invalid ExecutionPayloadEnvelope range response", err)
 			}
@@ -475,9 +440,7 @@ func (es *envelopeSync) fetchPass(ctx context.Context, pid peer.ID, fetch envelo
 }
 
 // expirePending applies window pruning and page expiry outside a worker dispatch and reports
-// whether any fetch work remains. Deadlines are anchored at each page's first attempt, so once
-// the elapsed budget lapses the batch has only local bookkeeping left; the pool uses this to
-// route such batches onward instead of holding them until a peer can be assigned.
+// whether any fetch work remains; the pool routes finished batches onward without a peer.
 func (es *envelopeSync) expirePending() (done bool) {
 	if es == nil {
 		return true
@@ -487,9 +450,8 @@ func (es *envelopeSync) expirePending() (done bool) {
 	return es.unresolved() == 0
 }
 
-// expireExhaustedPages converts pages that are out of attempts or elapsed budget into terminal
-// outcomes: required slots become peer_exhausted skips, and the tail slot leaves the fetch set
-// with classification deferred to import.
+// expireExhaustedPages converts out-of-budget pages into terminal outcomes: required slots skip
+// as peer_exhausted, the tail defers to import-time classification.
 func (es *envelopeSync) expireExhaustedPages() {
 	for _, pg := range es.pages {
 		slotsIn := es.pendingIn(pg)
@@ -510,9 +472,8 @@ func (es *envelopeSync) expireExhaustedPages() {
 	}
 }
 
-// processResponse runs the staged verification over the envelopes we actually expect:
-// block/bid binding, one aggregate BLS verification for the page, then a local block hash
-// check against the bid. Verified envelopes are blinded and held for persistence at import.
+// processResponse verifies expected envelopes (block/bid binding, aggregate BLS, local block
+// hash against the bid) and holds them blinded for persistence at import.
 func (es *envelopeSync) processResponse(pid peer.ID, envs []*ethpb.SignedExecutionPayloadEnvelope) {
 	type candidate struct {
 		env  *ethpb.SignedExecutionPayloadEnvelope
@@ -528,8 +489,7 @@ func (es *envelopeSync) processResponse(pid peer.ID, envs []*ethpb.SignedExecuti
 		slot := env.Message.Payload.SlotNumber
 		exp, ok := es.pending[slot]
 		if !ok {
-			// Peers legitimately serve every canonical envelope in the requested range; ignore
-			// slots we don't expect (withheld, already stored, or terminally skipped).
+			// Peers legitimately serve every canonical envelope in range; ignore unexpected slots.
 			continue
 		}
 		cands = append(cands, candidate{env: env, exp: exp, slot: slot})
@@ -546,8 +506,7 @@ func (es *envelopeSync) processResponse(pid peer.ID, envs []*ethpb.SignedExecuti
 		}
 		sb, err := es.cfg.verifier.signatureBatch(c.env, c.exp)
 		if err != nil {
-			// A domain/signing-root failure is local, not a peer offense: the signature can
-			// never be checked, so the slot takes the unverifiable skip.
+			// A domain/signing-root failure is local, not a peer offense.
 			log.WithError(err).WithField("slot", c.slot).Debug("Could not build envelope signature batch")
 			es.skip(c.slot, envSkipSigUnverifiable)
 			return
@@ -567,8 +526,7 @@ func (es *envelopeSync) processResponse(pid peer.ID, envs []*ethpb.SignedExecuti
 		parentRoot := c.exp.block.Block().ParentRoot()
 		computed, err := executionBlockHashGloas(c.env.Message.Payload, c.env.Message.ExecutionRequests, parentRoot)
 		if err != nil {
-			// The committed payload is decodable by construction, so this is a peer offense;
-			// the slot stays unresolved for a retry from another peer, as does a mismatch below.
+			// A decode failure or a mismatch below is a peer offense; the slot stays unresolved.
 			es.cfg.downscore(pid, "undecodable ExecutionPayloadEnvelope payload", errors.Wrap(errInvalidEnvelopeResponse, err.Error()))
 			continue
 		}
@@ -583,10 +541,8 @@ func (es *envelopeSync) processResponse(pid peer.ID, envs []*ethpb.SignedExecuti
 	}
 }
 
-// finalize runs at import time, after the batch has been connected to the already-imported chain
-// (so the boundary child of the tail is the block behind status.LowRoot). It classifies the tail
-// definitively, persists every verified envelope in blinded form, and reduces every leftover to
-// an explicit terminal outcome. It never fails the batch: block import always proceeds.
+// finalize runs at import time: it classifies the tail via the boundary child, persists held
+// envelopes blinded, and reduces leftovers to terminal outcomes. It never fails the batch.
 func (es *envelopeSync) finalize(ctx context.Context, db BeaconDB, lowRoot [32]byte) {
 	if es == nil || es.finalized {
 		return
@@ -629,8 +585,7 @@ func (es *envelopeSync) finalize(ctx context.Context, db BeaconDB, lowRoot [32]b
 			continue
 		}
 		if outcome == iface.EnvelopeSaveConflict {
-			// A conflicting stored envelope came from an already verified save path; keep it.
-			// bindEnvelope proved this root equals the expected block's before the envelope was held.
+			// The stored envelope came from an already verified save path; keep it.
 			envelopeConflictsKept.Inc()
 			envelopeSkipLogger.WithField("slot", slot).WithField("blockRoot", bytesutil.Trunc(h.Message.BeaconBlockRoot)).
 				Warn("Backfilled envelope conflicts with stored envelope; kept existing")
@@ -643,9 +598,8 @@ func (es *envelopeSync) heldSlots() []primitives.Slot {
 	return slices.Sorted(maps.Keys(es.held))
 }
 
-// boundaryChildWithRetries looks up the already-imported child of the batch tail via the
-// backfill status low root, retrying transient lookup errors. A missing block or one that does
-// not link to the tail is a data condition, not a transient error, and returns nil immediately.
+// boundaryChildWithRetries looks up the tail's imported child via the status low root, retrying
+// transient errors; a missing or non-linking block returns nil immediately.
 func (es *envelopeSync) boundaryChildWithRetries(ctx context.Context, db BeaconDB, lowRoot, tailRoot [32]byte) interfaces.ReadOnlyBeaconBlock {
 	for i := 0; i < envelopeLocalRetries; i++ {
 		if i > 0 {
