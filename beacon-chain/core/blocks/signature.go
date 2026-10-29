@@ -3,6 +3,7 @@ package blocks
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -192,8 +193,7 @@ func createAttestationSignatureBatch(
 		if err := attestation.IsValidAttestationIndices(ctx, ia, params.BeaconConfig().MaxValidatorsPerCommittee, params.BeaconConfig().MaxCommitteesPerSlot); err != nil {
 			return nil, err
 		}
-		indices := ia.GetAttestingIndices()
-		aggP, err := beaconState.AggregateKeyFromIndices(indices)
+		aggP, err := attestingAggregateKey(ctx, beaconState, a, committees, ia.GetAttestingIndices())
 		if err != nil {
 			return nil, err
 		}
@@ -213,6 +213,67 @@ func createAttestationSignatureBatch(
 		Messages:     msgs,
 		Descriptions: descs,
 	}, nil
+}
+
+// attestingAggregateKey returns the aggregate public key of the attesting indices.
+// This function subtracts the absent keys from the committee aggregates, unless
+// at most half of the members attested, a set bit repeats a validator, or the
+// committee aggregates are not cached yet. In those cases it adds the attesting keys.
+func attestingAggregateKey(
+	ctx context.Context,
+	beaconState state.ReadOnlyBeaconState,
+	att ethpb.Att,
+	committees [][]primitives.ValidatorIndex,
+	attesting []uint64,
+) (bls.PublicKey, error) {
+	// Calculate the total number of committee members across all committees.
+	var total int
+	for _, c := range committees {
+		total += len(c)
+	}
+
+	// Fallback 1: It is more efficient to aggregate the attesting keys directly.
+	if 2*len(attesting) <= total {
+		return beaconState.AggregateKeyFromIndices(attesting)
+	}
+
+	// Fallback 2: Safety check. Each set bit must be a distinct validator, or the subtract path counts a key twice.
+	bits := att.GetAggregationBits()
+	if bits.Count() != uint64(len(attesting)) {
+		return beaconState.AggregateKeyFromIndices(attesting)
+	}
+
+	// Fallback 3: Committee aggregates aren't cached yet.
+	committeeKeys, err := helpers.AttestationCommitteeAggregatesFromCache(ctx, beaconState, att)
+	if err != nil {
+		return nil, err
+	}
+	if committeeKeys == nil {
+		return beaconState.AggregateKeyFromIndices(attesting)
+	}
+
+	// Collect the absent indices.
+	absent := make([]uint64, 0, total-len(attesting))
+	var offset uint64
+	for _, c := range committees {
+		for i, vi := range c {
+			if !bits.BitAt(offset + uint64(i)) {
+				absent = append(absent, uint64(vi))
+			}
+		}
+		offset += uint64(len(c))
+	}
+
+	agg := bls.AggregateMultiplePubkeys(committeeKeys)
+	if len(absent) == 0 {
+		// Early return, no absent keys to subtract.
+		return agg, nil
+	}
+	absentAgg, err := beaconState.AggregateKeyFromIndices(absent)
+	if err != nil {
+		return nil, fmt.Errorf("aggregate absent keys: %w", err)
+	}
+	return bls.SubtractPublicKey(agg, absentAgg), nil
 }
 
 // AttestationSignatureBatch retrieves all the related attestation signature data such as the relevant public keys,

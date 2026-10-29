@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -28,6 +29,11 @@ func NewCommitteesCache() *FakeCommitteeCache {
 // Committee fetches the shuffled indices by slot and committee index. Every list of indices
 // represent one committee. Returns true if the list exists with slot and committee index. Otherwise returns false, nil.
 func (c *FakeCommitteeCache) Committee(ctx context.Context, slot primitives.Slot, seed [32]byte, index primitives.CommitteeIndex) ([]primitives.ValidatorIndex, error) {
+	return nil, nil
+}
+
+// CommitteeAggregatePubkey returns nil, as the fake cache stores no committees.
+func (c *FakeCommitteeCache) CommitteeAggregatePubkey(slot primitives.Slot, seed [32]byte, index primitives.CommitteeIndex) (bls.PublicKey, error) {
 	return nil, nil
 }
 

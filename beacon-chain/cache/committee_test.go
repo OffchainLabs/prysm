@@ -11,6 +11,8 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls/blst"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -57,6 +59,50 @@ func TestCommitteeCache_CommitteesByEpoch(t *testing.T) {
 
 	start, end := startEndIndices(item, uint64(wantedIndex))
 	assert.DeepEqual(t, item.ShuffledIndices[start:end], indices)
+}
+
+func TestCommitteeCache_CommitteeAggregatePubkey(t *testing.T) {
+	cache := NewCommitteesCache()
+	item := &Committees{
+		ShuffledIndices: make([]primitives.ValidatorIndex, 2*uint64(params.BeaconConfig().SlotsPerEpoch)),
+		Seed:            [32]byte{'A'},
+		CommitteeCount:  2 * uint64(params.BeaconConfig().SlotsPerEpoch),
+	}
+	slot := params.BeaconConfig().SlotsPerEpoch + 3
+
+	t.Run("missing entry", func(t *testing.T) {
+		key, err := cache.CommitteeAggregatePubkey(slot, item.Seed, 1)
+		require.NoError(t, err)
+		require.Equal(t, true, key == nil)
+	})
+	require.NoError(t, cache.AddCommitteeShuffledList(t.Context(), item))
+	t.Run("entry without aggregates", func(t *testing.T) {
+		key, err := cache.CommitteeAggregatePubkey(slot, item.Seed, 1)
+		require.NoError(t, err)
+		require.Equal(t, true, key == nil)
+	})
+	keys := make([]bls.PublicKey, item.CommitteeCount)
+	for i := range keys {
+		sk, err := blst.RandKey()
+		require.NoError(t, err)
+		keys[i] = sk.PublicKey()
+	}
+	item.SetAggregatePubkeys(keys)
+	t.Run("same offset as Committee", func(t *testing.T) {
+		key, err := cache.CommitteeAggregatePubkey(slot, item.Seed, 1)
+		require.NoError(t, err)
+		// Slot 3 of the epoch with 2 committees per slot puts index 1 at offset 3*2+1.
+		require.Equal(t, true, keys[7].Equals(key))
+	})
+	t.Run("other seed", func(t *testing.T) {
+		key, err := cache.CommitteeAggregatePubkey(slot, [32]byte{'B'}, 1)
+		require.NoError(t, err)
+		require.Equal(t, true, key == nil)
+	})
+	t.Run("index out of range", func(t *testing.T) {
+		_, err := cache.CommitteeAggregatePubkey(params.BeaconConfig().SlotsPerEpoch-1, item.Seed, 2)
+		require.ErrorContains(t, "out of bound", err)
+	})
 }
 
 func TestCommitteeCache_ActiveIndices(t *testing.T) {

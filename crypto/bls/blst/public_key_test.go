@@ -5,6 +5,7 @@ package blst_test
 import (
 	"bytes"
 	"errors"
+	"math/rand"
 	"sync"
 	"testing"
 
@@ -91,6 +92,67 @@ func TestPublicKey_Aggregate(t *testing.T) {
 	aggKey := blst.AggregateMultiplePubkeys([]common.PublicKey{priv.PublicKey(), priv2.PublicKey()})
 
 	require.DeepEqual(t, resKey.Marshal(), aggKey.Marshal(), "Pubkey does not match up")
+}
+
+func TestSubtractPublicKey(t *testing.T) {
+	keys := make([]common.PublicKey, 64)
+	for i := range keys {
+		priv, err := blst.RandKey()
+		require.NoError(t, err)
+		keys[i] = priv.PublicKey()
+	}
+	all := blst.AggregateMultiplePubkeys(keys)
+
+	// check splits keys by the absent flags.
+	// asserts agg(all) - agg(absent) == agg(present).
+	check := func(t *testing.T, absent []bool) {
+		var present, missing []common.PublicKey
+		for i, k := range keys {
+			if absent[i] {
+				missing = append(missing, k)
+			} else {
+				present = append(present, k)
+			}
+		}
+		got := blst.SubtractPublicKey(all, blst.AggregateMultiplePubkeys(missing))
+		require.Equal(t, true, got.Equals(blst.AggregateMultiplePubkeys(present)))
+		require.Equal(t, len(present) == 0, got.IsInfinite())
+	}
+
+	t.Run("random", func(t *testing.T) {
+		r := rand.New(rand.NewSource(1))
+		for range 20 {
+			absent := make([]bool, len(keys))
+			for i := range absent {
+				absent[i] = r.Intn(2) == 0
+			}
+			check(t, absent)
+		}
+	})
+	t.Run("absent empty", func(t *testing.T) {
+		check(t, make([]bool, len(keys)))
+	})
+	t.Run("absent all but one", func(t *testing.T) {
+		absent := make([]bool, len(keys))
+		for i := 1; i < len(absent); i++ {
+			absent[i] = true
+		}
+		check(t, absent)
+	})
+	t.Run("absent all", func(t *testing.T) {
+		absent := make([]bool, len(keys))
+		for i := range absent {
+			absent[i] = true
+		}
+		check(t, absent)
+	})
+	t.Run("does not mutate inputs", func(t *testing.T) {
+		before := all.Marshal()
+		sub := keys[0].Marshal()
+		blst.SubtractPublicKey(all, keys[0])
+		require.DeepEqual(t, before, all.Marshal())
+		require.DeepEqual(t, sub, keys[0].Marshal())
+	})
 }
 
 func TestPublicKey_Aggregation_NoCorruption(t *testing.T) {

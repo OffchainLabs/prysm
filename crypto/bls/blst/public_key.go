@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	"github.com/pkg/errors"
 )
@@ -47,8 +46,8 @@ func PublicKeyFromBytes(pubKey []byte) (common.PublicKey, error) {
 }
 
 func publicKeyFromBytes(pubKey []byte, cacheCopy bool) (common.PublicKey, error) {
-	if len(pubKey) != params.BeaconConfig().BLSPubkeyLength {
-		return nil, fmt.Errorf("public key must be %d bytes", params.BeaconConfig().BLSPubkeyLength)
+	if len(pubKey) != fieldparams.BLSPubkeyLength {
+		return nil, fmt.Errorf("public key must be %d bytes", fieldparams.BLSPubkeyLength)
 	}
 	newKey := (*[fieldparams.BLSPubkeyLength]byte)(pubKey)
 	if cv, ok := pubkeyCache.pubkey(*newKey); ok {
@@ -140,4 +139,12 @@ func AggregateMultiplePubkeys(pubkeys []common.PublicKey) common.PublicKey {
 	// and take advantage of multi-threading.
 	agg.Aggregate(mulP1, false)
 	return &PublicKey{p: agg.ToAffine()}
+}
+
+// SubtractPublicKey returns p - sub as a new key. It undoes the aggregation of sub into p.
+func SubtractPublicKey(p, sub common.PublicKey) common.PublicKey {
+	var acc blstPoint
+	acc.FromAffine(p.(*PublicKey).p)
+	acc.SubAssign(sub.(*PublicKey).p)
+	return &PublicKey{p: acc.ToAffine()}
 }
