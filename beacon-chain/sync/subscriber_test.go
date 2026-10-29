@@ -371,6 +371,7 @@ func TestRevalidateSubscription_CorrectlyFormatsTopic(t *testing.T) {
 }
 
 func Test_wrapAndReportValidation(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
 	mChain := &mockChain.ChainService{
 		Genesis:        time.Now(),
 		ValidatorsRoot: [32]byte{0x01},

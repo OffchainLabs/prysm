@@ -534,7 +534,10 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 			return pubsub.ValidationIgnore
 		}
 		currDigest := s.currentForkDigest()
-		if currDigest != retDigest {
+		// Light-client validators check the digest against the attested header's slot.
+		isLightClientUpdate := strings.Contains(topic, p2p.GossipLightClientOptimisticUpdateMessage) ||
+			strings.Contains(topic, p2p.GossipLightClientFinalityUpdateMessage)
+		if currDigest != retDigest && !isLightClientUpdate {
 			// Only proposer preferences are accepted from the next epoch's fork
 			// digest, allowing them to arrive before a fork activates.
 			if !strings.Contains(topic, p2p.GossipSignedProposerPreferencesMessage) ||
