@@ -28,6 +28,7 @@ import (
 var committeeCache = cache.NewCommitteesCache()
 
 const committeeCacheWriteTimeout = 5 * stdtime.Second
+const fillCommitteeCacheKeyPrefix = "fill-"
 
 type beaconCommitteeFunc = func(
 	ctx context.Context,
@@ -610,31 +611,36 @@ func fillCommitteeCacheAsync(cc *cache.CommitteeCache, seed [32]byte, indices []
 	committeeCount := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(count))
 
 	cc.Wg.Go(func() {
-		if cc.HasEntry(seedKey) {
-			return
-		}
+		// Until the first fill of a seed lands in the cache, every cache miss starts another fill.
+		// Share the fill in flight so the list is shuffled once.
+		_, _, _ = cc.Sf.Do(fillCommitteeCacheKeyPrefix+seedKey, func() (any, error) {
+			if cc.HasEntry(seedKey) {
+				return nil, nil
+			}
 
-		// UnshuffleList sorts in place.
-		// Clone so we never touch the caller's slice.
-		shuffled, err := UnshuffleList(slices.Clone(indices), seed)
-		if err != nil {
-			log.WithError(err).Error("Could not shuffle indices for committee cache update")
-			return
-		}
+			// UnshuffleList sorts in place.
+			// Clone so we never touch the caller's slice.
+			shuffled, err := UnshuffleList(slices.Clone(indices), seed)
+			if err != nil {
+				log.WithError(err).Error("Could not shuffle indices for committee cache update")
+				return nil, nil
+			}
 
-		sorted := slices.Clone(shuffled)
-		slices.Sort(sorted)
+			sorted := slices.Clone(shuffled)
+			slices.Sort(sorted)
 
-		ctx, cancel := context.WithTimeout(context.Background(), committeeCacheWriteTimeout)
-		defer cancel()
+			ctx, cancel := context.WithTimeout(context.Background(), committeeCacheWriteTimeout)
+			defer cancel()
 
-		if err := cc.AddCommitteeShuffledList(ctx, &cache.Committees{
-			Seed:            seed,
-			ShuffledIndices: shuffled,
-			SortedIndices:   sorted,
-			CommitteeCount:  committeeCount,
-		}); err != nil {
-			log.WithError(err).Error("Could not update committee cache")
-		}
+			if err := cc.AddCommitteeShuffledList(ctx, &cache.Committees{
+				Seed:            seed,
+				ShuffledIndices: shuffled,
+				SortedIndices:   sorted,
+				CommitteeCount:  committeeCount,
+			}); err != nil {
+				log.WithError(err).Error("Could not update committee cache")
+			}
+			return nil, nil
+		})
 	})
 }
