@@ -1,10 +1,13 @@
 package light_client
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	light_client "github.com/OffchainLabs/prysm/v7/consensus-types/light-client"
@@ -49,6 +52,9 @@ func NewLightClientEpochDataFromEra(
 	if lastEpoch <= cfg.AltairForkEpoch {
 		return nil, nil, nil
 	}
+	// The committee caches hold a few epochs. Shared with other replays, they would keep evicting
+	// each other's entries.
+	ctx = helpers.WithIsolatedCaches(ctx)
 
 	// The state of startFile already has the block at slot start applied, if there is one.
 	st, err := startFile.State()
@@ -131,7 +137,7 @@ func NewLightClientEpochDataFromEra(
 		if epoch > lastEpoch {
 			break
 		}
-		if _, st, err = transition.ExecuteStateTransitionNoVerifyAnySig(ctx, st, blk); err != nil {
+		if st, err = replayBlock(ctx, st, blk); err != nil {
 			return nil, nil, errors.Wrapf(err, "could not replay block at slot %d", slot)
 		}
 		if slots.ToEpoch(slot) > slots.ToEpoch(last.Block().Slot()) {
@@ -148,4 +154,35 @@ func NewLightClientEpochDataFromEra(
 		}
 	}
 	return records, committees, nil
+}
+
+// replayBlock applies blk to st and checks the state root. Unlike
+// transition.ExecuteStateTransitionNoVerifyAnySig, it does not collect the signature sets, which
+// aggregate the public keys of every attestation only to be discarded.
+func replayBlock(ctx context.Context, st state.BeaconState, blk interfaces.ReadOnlySignedBeaconBlock) (state.BeaconState, error) {
+	st, err := transition.ProcessSlots(ctx, st, blk.Block().Slot())
+	if err != nil {
+		return nil, errors.Wrap(err, "could not process slots")
+	}
+	// The block's attestations need the committees of this epoch and the previous one, and every
+	// attestation looks up the proposer. Cache them before, or each lookup scans the validators
+	// until a background fill lands.
+	epoch := slots.ToEpoch(st.Slot())
+	for _, e := range []primitives.Epoch{max(epoch, 1) - 1, epoch} {
+		if _, err := helpers.ActiveValidatorIndices(ctx, st, e); err != nil {
+			return nil, errors.Wrapf(err, "could not get active validators of epoch %d", e)
+		}
+	}
+	helpers.WaitForCommitteeCacheFills(ctx)
+	if st, err = transition.ProcessBlockForStateRoot(ctx, st, blk); err != nil {
+		return nil, errors.Wrap(err, "could not process block")
+	}
+	root, err := st.HashTreeRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if want := blk.Block().StateRoot(); !bytes.Equal(root[:], want[:]) {
+		return nil, fmt.Errorf("could not validate state root, wanted: %#x, received: %#x", want, root)
+	}
+	return st, nil
 }

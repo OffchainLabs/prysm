@@ -24,6 +24,13 @@ func WithIsolatedCaches(ctx context.Context) context.Context {
 	})
 }
 
+// WaitForCommitteeCacheFills blocks until the committee cache fills started in the background under
+// ctx are done. Until then, every committee lookup of their epochs scans the validators again. It
+// must not race with lookups that start fills, so it suits callers whose caches are isolated.
+func WaitForCommitteeCacheFills(ctx context.Context) {
+	committeeCacheFrom(ctx).Wg.Wait()
+}
+
 func committeeCacheFrom(ctx context.Context) *cache.CommitteeCache {
 	if c, ok := ctx.Value(cachesKey{}).(*caches); ok {
 		return c.committee

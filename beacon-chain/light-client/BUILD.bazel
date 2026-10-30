@@ -17,6 +17,7 @@ go_library(
         "//async/event:go_default_library",
         "//beacon-chain/core/feed:go_default_library",
         "//beacon-chain/core/feed/state:go_default_library",
+        "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/transition:go_default_library",
         "//beacon-chain/db/iface:go_default_library",
         "//beacon-chain/execution:go_default_library",
