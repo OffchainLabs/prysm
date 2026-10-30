@@ -19,6 +19,7 @@ var eraFileLink = regexp.MustCompile(`href="(([a-z0-9]+)-(\d{5})-[0-9a-f]{8}\.er
 
 // downloadRetryDelay is the wait before the second download attempt; the third waits twice as long.
 var downloadRetryDelay = 10 * time.Second
+var downloadStallTimeout = time.Minute
 
 // listEraFiles reads the directory page at baseURL and returns the era file name of each era of
 // configName.
@@ -93,7 +94,12 @@ func downloadOnce(ctx context.Context, c *http.Client, url, path string) (err er
 	}
 	have := info.Size()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	reqCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stall := time.AfterFunc(downloadStallTimeout, cancel)
+	defer stall.Stop()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return err
 	}
@@ -132,12 +138,29 @@ func downloadOnce(ctx context.Context, c *http.Client, url, path string) (err er
 		return fmt.Errorf("could not download %s: %s", url, resp.Status)
 	}
 
-	n, err := io.Copy(f, resp.Body)
+	n, err := io.Copy(f, &stallReader{r: resp.Body, stall: stall})
 	if err != nil {
+		if ctx.Err() == nil && reqCtx.Err() != nil {
+			return fmt.Errorf("download stalled for %s", downloadStallTimeout)
+		}
 		return err
 	}
 	if total >= 0 && have+n != total {
 		return fmt.Errorf("downloaded %d of %d bytes", have+n, total)
 	}
 	return nil
+}
+
+// stallReader resets the stall timer whenever data arrives.
+type stallReader struct {
+	r     io.Reader
+	stall *time.Timer
+}
+
+func (s *stallReader) Read(p []byte) (int, error) {
+	n, err := s.r.Read(p)
+	if n > 0 {
+		s.stall.Reset(downloadStallTimeout)
+	}
+	return n, err
 }

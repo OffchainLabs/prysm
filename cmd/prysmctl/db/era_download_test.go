@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -79,4 +80,37 @@ func TestDownloadFile(t *testing.T) {
 			require.Equal(t, true, os.IsNotExist(err))
 		})
 	}
+}
+
+func TestDownloadFile_Stall(t *testing.T) {
+	downloadRetryDelay, downloadStallTimeout = 0, 100*time.Millisecond
+	defer func() { downloadRetryDelay, downloadStallTimeout = 10*time.Second, time.Minute }()
+	content := bytes.Repeat([]byte("era file "), 1000)
+
+	// The first response sends part of the file and then nothing, like a dead connection.
+	var ranges []string
+	stalled := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ranges = append(ranges, r.Header.Get("Range"))
+		if len(ranges) == 1 {
+			w.Header().Set("Content-Length", strconv.Itoa(len(content)))
+			_, _ = w.Write(content[:3000])
+			w.(http.Flusher).Flush()
+			select {
+			case <-r.Context().Done():
+			case <-stalled:
+			}
+			return
+		}
+		http.ServeContent(w, r, "f.era", time.Time{}, bytes.NewReader(content))
+	}))
+	defer srv.Close()
+	defer close(stalled)
+	path := filepath.Join(t.TempDir(), "f.era")
+
+	require.NoError(t, downloadFile(t.Context(), srv.Client(), srv.URL, path))
+	got, err := os.ReadFile(path) // #nosec G304
+	require.NoError(t, err)
+	require.DeepEqual(t, content, got)
+	require.DeepEqual(t, []string{"", "bytes=3000-"}, ranges)
 }
