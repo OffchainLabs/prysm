@@ -386,7 +386,7 @@ func (s *Service) processBlock(
 }
 
 type processedChecker func(context.Context, blocks.ROBlock) bool
-type payloadChecker func(context.Context, interfaces.ROSignedExecutionPayloadEnvelope) bool
+type payloadChecker func(interfaces.ROSignedExecutionPayloadEnvelope) bool
 
 func validUnprocessed(
 	ctx context.Context,
@@ -414,7 +414,7 @@ func validUnprocessed(
 		}
 	}
 	if processed == nil {
-		return bwb, envelopesForBlocks(ctx, bwb, envelopes, isPayloadProc), nil
+		return bwb, envelopesForBlocks(bwb, envelopes, isPayloadProc), nil
 	}
 	if *processed+1 == len(bwb) {
 		maxIncoming := bwb[len(bwb)-1].Block
@@ -423,12 +423,11 @@ func validUnprocessed(
 	}
 	nonProcessedIdx := *processed + 1
 	remainingBwb := bwb[nonProcessedIdx:]
-	return remainingBwb, envelopesForBlocks(ctx, remainingBwb, envelopes, isPayloadProc), nil
+	return remainingBwb, envelopesForBlocks(remainingBwb, envelopes, isPayloadProc), nil
 }
 
 // envelopesForBlocks returns the sub-slice of envelopes relevant to the given blocks.
 func envelopesForBlocks(
-	ctx context.Context,
 	bwb []blocks.BlockWithROSidecars,
 	envelopes []interfaces.ROSignedExecutionPayloadEnvelope,
 	isPayloadProc payloadChecker,
@@ -457,7 +456,7 @@ func envelopesForBlocks(
 			continue
 		}
 		if _, ok := blockRoots[env.BeaconBlockRoot()]; ok {
-			if isPayloadProc(ctx, e) {
+			if isPayloadProc(e) {
 				continue
 			}
 			return envelopes[i:]
@@ -601,13 +600,14 @@ func (s *Service) isProcessedBlock(ctx context.Context, blk blocks.ROBlock) bool
 	return false
 }
 
-// isProcessedPayload checks DB if a payload has been processed
-func (s *Service) isProcessedPayload(ctx context.Context, e interfaces.ROSignedExecutionPayloadEnvelope) bool {
+// isProcessedPayload checks forkchoice, not the DB: after a restart the DB can hold
+// envelopes for blocks that forkchoice has not imported with their payload.
+func (s *Service) isProcessedPayload(e interfaces.ROSignedExecutionPayloadEnvelope) bool {
 	env, err := e.Envelope()
 	if err != nil {
 		return false
 	}
-	return s.cfg.DB.HasExecutionPayloadEnvelope(ctx, env.BeaconBlockRoot())
+	return s.cfg.Chain.HasFullNode(env.BeaconBlockRoot())
 }
 
 func (s *Service) downscorePeer(peerID peer.ID, reason string) {
