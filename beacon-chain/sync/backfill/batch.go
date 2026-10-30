@@ -112,9 +112,9 @@ func (b batch) logFields() logrus.Fields {
 	}
 	if b.envelopes != nil {
 		f["envPid"] = b.envelopes.peer
-	}
-	if b.state == batchSyncEnvelopes {
-		f["envPending"] = b.envelopes.unresolved()
+		if b.state == batchSyncEnvelopes {
+			f["envPending"] = b.envelopes.unresolved()
+		}
 	}
 	if b.retries > 0 {
 		f["retryAfter"] = b.retryAfter.String()
@@ -180,7 +180,7 @@ func (b batch) transitionToNext() batch {
 	if b.blobsNeeded() > 0 {
 		return b.withState(batchSyncBlobs)
 	}
-	if b.envelopes.unresolved() > 0 {
+	if b.envelopes != nil && b.envelopes.unresolved() > 0 {
 		return b.withState(batchSyncEnvelopes)
 	}
 	return b.withState(batchImportable)
