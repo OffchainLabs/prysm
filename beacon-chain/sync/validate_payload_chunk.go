@@ -225,9 +225,12 @@ func (s *Service) drainPendingPayloadChunks(slot primitives.Slot, chunksRoot [32
 func (s *Service) prunePayloadChunkBuffers() {
 	current := s.cfg.clock.CurrentSlot()
 
+	// One slot of grace, matching the validator's clock-disparity allowance and
+	// the pool's own pruning. Dropping at the exact boundary discards buffers
+	// whose remaining chunks are still admissible.
 	s.pendingPayloadChunksLock.Lock()
 	for root, entry := range s.pendingPayloadChunks {
-		if entry.slot < current {
+		if current > 0 && entry.slot+1 < current {
 			delete(s.pendingPayloadChunks, root)
 		}
 	}

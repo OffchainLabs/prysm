@@ -38,8 +38,8 @@ mainnet = {
     "ptc.size": "64",  # Gloas: Payload Timeliness Committee aggregation bits (PTC_SIZE = 512)
     "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector512",
     "payload_attestation.size": "4",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body
-    "max_payload_chunk_size.size": "163840",  # EIP-8411: MAX_PAYLOAD_SIZE / TOTAL_EXECUTION_PAYLOAD_CHUNKS
-    "chunk_inclusion_proof_depth.size": "6",  # EIP-8411: CHUNK_INCLUSION_PROOF_DEPTH
+    "max_payload_chunk_size.size": "1310720",  # EIP-8411: MAX_PAYLOAD_SIZE / TOTAL_EXECUTION_PAYLOAD_CHUNKS
+    "chunk_inclusion_proof_depth.size": "3",  # EIP-8411: CHUNK_INCLUSION_PROOF_DEPTH
 }
 
 minimal = {
@@ -74,8 +74,8 @@ minimal = {
     "ptc.size": "2",  # Gloas: Payload Timeliness Committee aggregation bits (PTC_SIZE = 16)
     "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector16",
     "payload_attestation.size": "4",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body
-    "max_payload_chunk_size.size": "163840",  # EIP-8411: MAX_PAYLOAD_SIZE / TOTAL_EXECUTION_PAYLOAD_CHUNKS
-    "chunk_inclusion_proof_depth.size": "6",  # EIP-8411: CHUNK_INCLUSION_PROOF_DEPTH
+    "max_payload_chunk_size.size": "1310720",  # EIP-8411: MAX_PAYLOAD_SIZE / TOTAL_EXECUTION_PAYLOAD_CHUNKS
+    "chunk_inclusion_proof_depth.size": "3",  # EIP-8411: CHUNK_INCLUSION_PROOF_DEPTH
 }
 
 ###### Rules definitions #######

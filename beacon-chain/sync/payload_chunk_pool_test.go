@@ -148,11 +148,11 @@ func TestPayloadChunkPoolEviction(t *testing.T) {
 		p := newPayloadChunkPool()
 		for i := range maxChunkPoolRoots {
 			root := [32]byte{0x10, byte(i)}
-			accepted, _, _, _, _ := p.insert(mkChunk(root, 0), false)
+			accepted, _, _, _, _, _ := p.insert(mkChunk(root, 0), false)
 			require.Equal(t, true, accepted)
 		}
 		winner := [32]byte{0x99}
-		accepted, _, _, _, _ := p.insert(mkChunk(winner, 0), true)
+		accepted, _, _, _, _, _ := p.insert(mkChunk(winner, 0), true)
 		require.Equal(t, true, accepted)
 		require.Equal(t, maxChunkPoolRoots, len(p.entries))
 		require.NotNil(t, p.entries[winner])
@@ -162,11 +162,11 @@ func TestPayloadChunkPoolEviction(t *testing.T) {
 		p := newPayloadChunkPool()
 		for i := range maxChunkPoolRoots {
 			root := [32]byte{0x20, byte(i)}
-			accepted, _, _, _, _ := p.insert(mkChunk(root, 0), true)
+			accepted, _, _, _, _, _ := p.insert(mkChunk(root, 0), true)
 			require.Equal(t, true, accepted)
 		}
 		loser := [32]byte{0x98}
-		accepted, _, _, _, _ := p.insert(mkChunk(loser, 0), false)
+		accepted, _, _, _, _, _ := p.insert(mkChunk(loser, 0), false)
 		require.Equal(t, false, accepted)
 	})
 
@@ -174,7 +174,7 @@ func TestPayloadChunkPoolEviction(t *testing.T) {
 		s := newChunkTestService(t, [32]byte{0xAB})
 		for i := range maxChunkPoolRoots {
 			root := [32]byte{0x30, byte(i)}
-			accepted, _, _, _, _ := s.payloadChunkPool.insert(mkChunk(root, 0), true)
+			accepted, _, _, _, _, _ := s.payloadChunkPool.insert(mkChunk(root, 0), true)
 			require.Equal(t, true, accepted)
 		}
 		root := [32]byte{0x97}
@@ -200,4 +200,45 @@ func testSignedExecutionPayloadEnvelopeHeze(t *testing.T, slot primitives.Slot, 
 		},
 		Signature: gloasSigned.Signature,
 	}
+}
+
+// Eviction frees bytes, so the first-seen markers for those bytes must be
+// cleared too. Otherwise the discarded chunks are refused on re-offer and the
+// commitment can never be reconstructed again for the rest of its slot.
+func TestPayloadChunkPool_EvictionClearsSeenMarkers(t *testing.T) {
+	mkChunk := func(root [32]byte, idx uint64) *ethpb.PayloadChunk {
+		return &ethpb.PayloadChunk{
+			PayloadChunksRoot: root[:],
+			Index:             idx,
+			Chunk:             []byte{0x1},
+			Slot:              1,
+		}
+	}
+	s := newChunkTestService(t, [32]byte{0xAB})
+	// Fill the pool with unbound entries, marking each chunk seen the way
+	// gossip validation does.
+	for i := range maxChunkPoolRoots {
+		root := [32]byte{0x40, byte(i)}
+		c := mkChunk(root, 0)
+		s.setSeenPayloadChunk(c.Slot, root, c.Index)
+		s.acceptVerifiedPayloadChunk(t.Context(), c)
+	}
+	victim := [32]byte{0x40, 0}
+	require.Equal(t, true, s.hasSeenPayloadChunk(victim, 0))
+
+	// A bound newcomer forces an eviction.
+	newcomer := mkChunk([32]byte{0x41}, 0)
+	s.registerPayloadChunkCommitment(newcomer.Slot, [32]byte{0x41}, [32]byte{0xCC})
+	s.setSeenPayloadChunk(newcomer.Slot, [32]byte{0x41}, newcomer.Index)
+	s.acceptVerifiedPayloadChunk(t.Context(), newcomer)
+
+	// Exactly one unbound entry lost its bytes; that one must no longer be
+	// marked seen, so its chunks can be offered again.
+	cleared := 0
+	for i := range maxChunkPoolRoots {
+		if !s.hasSeenPayloadChunk([32]byte{0x40, byte(i)}, 0) {
+			cleared++
+		}
+	}
+	require.Equal(t, 1, cleared)
 }

@@ -3141,7 +3141,7 @@ func (c *SignedExecutionPayloadEnvelopeContentsHeze) HashTreeRootWith(hh *ssz.Ha
 }
 
 func (c *PayloadChunk) SizeSSZ() int {
-	size := 276
+	size := 180
 	size += len(c.Chunk)
 	return size
 }
@@ -3153,7 +3153,7 @@ func (c *PayloadChunk) MarshalSSZ() ([]byte, error) {
 
 func (c *PayloadChunk) MarshalSSZTo(dst []byte) ([]byte, error) {
 	var err error
-	offset := 276
+	offset := 180
 
 	// Field 0: PayloadChunksRoot
 	if len(c.PayloadChunksRoot) != 32 {
@@ -3169,7 +3169,7 @@ func (c *PayloadChunk) MarshalSSZTo(dst []byte) ([]byte, error) {
 	offset += len(c.Chunk)
 
 	// Field 3: ChunkInclusionProof
-	if len(c.ChunkInclusionProof) != 6 {
+	if len(c.ChunkInclusionProof) != 3 {
 		return nil, ssz.ErrBytesLength
 	}
 	for _, o := range c.ChunkInclusionProof {
@@ -3191,7 +3191,7 @@ func (c *PayloadChunk) MarshalSSZTo(dst []byte) ([]byte, error) {
 	dst = append(dst, c.BeaconBlockRoot...)
 
 	// Field 2: Chunk
-	if len(c.Chunk) > 163840 {
+	if len(c.Chunk) > 1310720 {
 		return nil, ssz.ErrListTooBig
 	}
 	dst = append(dst, c.Chunk...)
@@ -3201,18 +3201,18 @@ func (c *PayloadChunk) MarshalSSZTo(dst []byte) ([]byte, error) {
 func (c *PayloadChunk) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 276 {
+	if size < 180 {
 		return ssz.ErrSize
 	}
 
 	sszSlice0 := buf[0:32]    // c.PayloadChunksRoot
 	sszSlice1 := buf[32:40]   // c.Index
-	sszSlice3 := buf[44:236]  // c.ChunkInclusionProof
-	sszSlice4 := buf[236:244] // c.Slot
-	sszSlice5 := buf[244:276] // c.BeaconBlockRoot
+	sszSlice3 := buf[44:140]  // c.ChunkInclusionProof
+	sszSlice4 := buf[140:148] // c.Slot
+	sszSlice5 := buf[148:180] // c.BeaconBlockRoot
 
 	sszVarOffset2 := ssz.ReadOffset(buf[40:44]) // c.Chunk
-	if sszVarOffset2 != 276 {
+	if sszVarOffset2 != 180 {
 		return ssz.ErrInvalidVariableOffset
 	}
 	if sszVarOffset2 > size {
@@ -3232,8 +3232,8 @@ func (c *PayloadChunk) UnmarshalSSZ(buf []byte) error {
 
 	// Field 3: ChunkInclusionProof
 	{
-		c.ChunkInclusionProof = make([][]byte, 6)
-		for i := 0; i < 6; i++ {
+		c.ChunkInclusionProof = make([][]byte, 3)
+		for i := 0; i < 3; i++ {
 			var tmp []byte
 
 			tmpSlice := sszSlice3[i*32 : (1+i)*32]
@@ -3277,18 +3277,18 @@ func (c *PayloadChunk) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	// Field 2: Chunk
 
 	{
-		if len(c.Chunk) > 163840 {
+		if len(c.Chunk) > 1310720 {
 			return ssz.ErrBytesLength
 		}
 		subIndx := hh.Index()
 		hh.AppendBytes32(c.Chunk)
 		numItems := uint64(len(c.Chunk))
-		hh.MerkleizeWithMixin(subIndx, numItems, (163840*1+31)/32)
+		hh.MerkleizeWithMixin(subIndx, numItems, (1310720*1+31)/32)
 	}
 
 	// Field 3: ChunkInclusionProof
 	{
-		if len(c.ChunkInclusionProof) != 6 {
+		if len(c.ChunkInclusionProof) != 3 {
 			return ssz.ErrVectorLength
 		}
 		subIndx := hh.Index()

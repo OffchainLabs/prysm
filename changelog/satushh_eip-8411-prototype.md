@@ -20,3 +20,6 @@
 
 - Order `parent_beacon_block_root` before `builder_index` in `ExecutionPayloadEnvelopeHeze` to match the EIP-8411 container definition. The previous order changed the SSZ serialization and therefore `payload_chunks_root`, so chunks would not have interoperated with other clients.
 - Forward a buffered payload chunk once its bid commitment becomes known. Chunks arriving before their commitment are returned as `ValidationIgnore`, so libp2p never relays them; the drain path previously fed them only into the local reconstruction pool, leaving peers that depend on this node without the chunk.
+- Clear the first-seen markers of chunks discarded by payload-chunk pool eviction. The bytes were dropped while the markers remained, so the evicted chunks were refused when re-offered and that commitment could never be reconstructed again.
+- Keep one slot of grace when pruning payload-chunk buffers. Gossip validation admits a previous-slot chunk within `MAXIMUM_GOSSIP_CLOCK_DISPARITY`, so pruning exactly at the slot boundary discarded partial sets whose remaining chunks were still admissible.
+

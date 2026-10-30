@@ -59,16 +59,20 @@ func newPayloadChunkPool() *payloadChunkPool {
 // chunk; a false value means the caller must roll back its first-seen marker.
 // The complete ordered chunk set, routing hint, and first-arrival time are
 // returned exactly once, when the final missing index lands.
-func (p *payloadChunkPool) insert(c *ethpb.PayloadChunk, bound bool) (accepted, complete bool, chunks [][]byte, hint [32]byte, firstArrival time.Time) {
+func (p *payloadChunkPool) insert(c *ethpb.PayloadChunk, bound bool) (accepted, complete bool, chunks [][]byte, hint [32]byte, firstArrival time.Time, evicted evictedSet) {
 	chunksRoot := bytesutil.ToBytes32(c.PayloadChunksRoot)
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	entry, ok := p.entries[chunksRoot]
 	if !ok {
-		if len(p.entries) >= maxChunkPoolRoots && !p.evictLocked(bound) {
-			log.Debug("Payload chunk pool is full of protected entries, dropping chunk")
-			return false, false, nil, [32]byte{}, time.Time{}
+		if len(p.entries) >= maxChunkPoolRoots {
+			var ok2 bool
+			evicted, ok2 = p.evictLocked(bound)
+			if !ok2 {
+				log.Debug("Payload chunk pool is full of protected entries, dropping chunk")
+				return false, false, nil, [32]byte{}, time.Time{}, evicted
+			}
 		}
 		entry = &chunkPoolEntry{slot: c.Slot, firstArrival: time.Now()}
 		p.entries[chunksRoot] = entry
@@ -77,7 +81,7 @@ func (p *payloadChunkPool) insert(c *ethpb.PayloadChunk, bound bool) (accepted, 
 		entry.bound = true
 	}
 	if entry.completed || entry.chunks[c.Index] != nil {
-		return true, false, nil, [32]byte{}, time.Time{}
+		return true, false, nil, [32]byte{}, time.Time{}, evicted
 	}
 	entry.chunks[c.Index] = c.Chunk
 	entry.received++
@@ -85,19 +89,27 @@ func (p *payloadChunkPool) insert(c *ethpb.PayloadChunk, bound bool) (accepted, 
 		entry.blockRootHint = hintRoot
 	}
 	if entry.received < fieldparams.TotalExecutionPayloadChunks {
-		return true, false, nil, [32]byte{}, time.Time{}
+		return true, false, nil, [32]byte{}, time.Time{}, evicted
 	}
 	entry.completed = true
 	out := make([][]byte, fieldparams.TotalExecutionPayloadChunks)
 	copy(out, entry.chunks[:])
-	return true, true, out, entry.blockRootHint, entry.firstArrival
+	return true, true, out, entry.blockRootHint, entry.firstArrival, evicted
+}
+
+// evictedSet names the chunk indices discarded by an eviction. Their first-seen
+// markers must be cleared, otherwise the discarded bytes can never be re-offered
+// and the commitment is unreconstructable for the rest of its slot.
+type evictedSet struct {
+	root    [32]byte
+	indices []uint64
 }
 
 // evictLocked frees one slot for a new entry. Unbound incomplete entries with
 // the fewest chunks go first; a block-bound newcomer may additionally displace
 // an unbound completed set. Bound entries are never evicted. The caller must
 // hold p.mu.
-func (p *payloadChunkPool) evictLocked(newBound bool) bool {
+func (p *payloadChunkPool) evictLocked(newBound bool) (evictedSet, bool) {
 	var victim [32]byte
 	var victimEntry *chunkPoolEntry
 	for root, e := range p.entries {
@@ -119,10 +131,16 @@ func (p *payloadChunkPool) evictLocked(newBound bool) bool {
 		}
 	}
 	if victimEntry == nil {
-		return false
+		return evictedSet{}, false
+	}
+	ev := evictedSet{root: victim}
+	for i, c := range victimEntry.chunks {
+		if c != nil {
+			ev.indices = append(ev.indices, uint64(i))
+		}
 	}
 	delete(p.entries, victim)
-	return true
+	return ev, true
 }
 
 // completedChunks returns a copy of a finished chunk set that has not yet been
@@ -149,12 +167,18 @@ func (p *payloadChunkPool) markImported(chunksRoot [32]byte) {
 	}
 }
 
-// pruneBefore drops entries older than the given slot.
+// pruneBefore drops entries older than the given slot, keeping one slot of
+// grace. The validator admits a previous-slot chunk within
+// MAXIMUM_GOSSIP_CLOCK_DISPARITY, so pruning strictly at the boundary can
+// discard a partial set whose final chunk is still admissible.
 func (p *payloadChunkPool) pruneBefore(slot primitives.Slot) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if slot == 0 {
+		return
+	}
 	for root, entry := range p.entries {
-		if entry.slot < slot {
+		if entry.slot+1 < slot {
 			delete(p.entries, root)
 		}
 	}
@@ -167,7 +191,11 @@ func (s *Service) acceptVerifiedPayloadChunk(ctx context.Context, c *ethpb.Paylo
 	chunksRoot := bytesutil.ToBytes32(c.PayloadChunksRoot)
 	blockRoot, known := s.payloadChunkCommitmentBlockRoot(c.Slot, chunksRoot)
 	bound := known && blockRoot != ([32]byte{})
-	accepted, complete, chunks, hint, firstArrival := s.payloadChunkPool.insert(c, bound)
+	accepted, complete, chunks, hint, firstArrival, evicted := s.payloadChunkPool.insert(c, bound)
+	for _, idx := range evicted.indices {
+		// The bytes are gone; let those chunks be offered to us again.
+		s.unsetSeenPayloadChunk(evicted.root, idx)
+	}
 	if !accepted {
 		// The chunk was marked seen during gossip validation; roll that back so
 		// a later delivery of the same chunk is not silently discarded.
