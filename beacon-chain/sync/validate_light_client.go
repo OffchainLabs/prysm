@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -45,6 +47,10 @@ func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid p
 	newUpdate, ok := m.(interfaces.LightClientOptimisticUpdate)
 	if !ok {
 		return pubsub.ValidationReject, errWrongMessage
+	}
+
+	if !validLightClientDigest(*msg.Topic, newUpdate.AttestedHeader().Beacon().Slot) {
+		return pubsub.ValidationIgnore, nil
 	}
 
 	attestedHeaderRoot, err := newUpdate.AttestedHeader().Beacon().HashTreeRoot()
@@ -117,6 +123,10 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 		return pubsub.ValidationReject, errWrongMessage
 	}
 
+	if !validLightClientDigest(*msg.Topic, newUpdate.AttestedHeader().Beacon().Slot) {
+		return pubsub.ValidationIgnore, nil
+	}
+
 	attestedHeaderRoot, err := newUpdate.AttestedHeader().Beacon().HashTreeRoot()
 	if err != nil {
 		return pubsub.ValidationIgnore, err
@@ -153,4 +163,9 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 
 	msg.ValidatorData = newUpdate.Proto()
 	return pubsub.ValidationAccept, nil
+}
+
+func validLightClientDigest(topic string, attestedSlot primitives.Slot) bool {
+	digest, err := p2p.ExtractGossipDigest(topic)
+	return err == nil && digest == params.ForkDigest(slots.ToEpoch(attestedSlot))
 }
