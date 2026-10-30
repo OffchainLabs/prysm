@@ -74,6 +74,7 @@ go_test(
         "pool_test.go",
         "service_test.go",
         "status_test.go",
+        "truncated_batch_test.go",
         "verify_column_test.go",
         "verify_test.go",
     ],
