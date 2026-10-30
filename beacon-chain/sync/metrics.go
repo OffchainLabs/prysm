@@ -303,6 +303,19 @@ func logEnvelopeUsable(transport string, slot primitives.Slot, sizeBytes int, de
 	}).Info("Payload envelope usable")
 }
 
+// logEnvelopeMilestone records a named intermediate point in an envelope's
+// life. Kept distinct from logEnvelopeUsable, which marks the one milestone the
+// two transports are compared on.
+func logEnvelopeMilestone(transport, milestone string, slot primitives.Slot, sizeBytes int, delay time.Duration) {
+	log.WithFields(logrus.Fields{
+		"transport": transport,
+		"milestone": milestone,
+		"slot":      slot,
+		"sizeBytes": sizeBytes,
+		"delayMs":   delay.Milliseconds(),
+	}).Info("Payload envelope milestone")
+}
+
 // envelopeSizeClass buckets an envelope's SSZ size for the usable-delay
 // metric's size_class label.
 func envelopeSizeClass(n int) string {

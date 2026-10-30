@@ -198,10 +198,11 @@ func (s *Service) importReconstructedEnvelope(ctx context.Context, slot primitiv
 		return
 	}
 	envelopeSize := envelope.SizeSSZ()
+	// "bytes complete": every chunk has arrived and the envelope decoded. The
+	// monolithic arm has no equivalent intermediate point, so this is recorded
+	// separately and is NOT the figure the two transports are compared on.
 	if startTime, startErr := slots.StartTime(s.cfg.clock.GenesisTime(), slot); startErr == nil {
-		delay := prysmTime.Now().Sub(startTime)
-		payloadEnvelopeUsableDelaySeconds.WithLabelValues("chunks", envelopeSizeClass(envelopeSize)).Observe(delay.Seconds())
-		logEnvelopeUsable("chunks", slot, envelopeSize, delay)
+		logEnvelopeMilestone("chunks", "bytes_complete", slot, envelopeSize, prysmTime.Now().Sub(startTime))
 	}
 	payloadEnvelopeSizeBytes.WithLabelValues("chunks").Observe(float64(envelopeSize))
 
@@ -224,6 +225,17 @@ func (s *Service) importReconstructedEnvelope(ctx context.Context, slot primitiv
 		s.payloadChunkPool.markImported(chunksRoot)
 	}
 	payloadChunkReconstructionTotal.WithLabelValues("ok").Inc()
+
+	// SHARED MILESTONE: the envelope is complete, its binding is resolved and
+	// it is about to be handed to the chain for import. The monolithic arm
+	// records the same milestone at its own hand-off point. Only this figure is
+	// valid for cross-transport comparison; the earlier review found the two
+	// arms were previously logged at different stages, which flattered chunks.
+	if startTime, startErr := slots.StartTime(s.cfg.clock.GenesisTime(), slot); startErr == nil {
+		delay := prysmTime.Now().Sub(startTime)
+		payloadEnvelopeUsableDelaySeconds.WithLabelValues("chunks", envelopeSizeClass(envelopeSize)).Observe(delay.Seconds())
+		logEnvelopeUsable("chunks", slot, envelopeSize, delay)
+	}
 
 	// The zero signature marks the envelope as chunk-authenticated; see
 	// heze.IsChunkAuthenticatedEnvelope.
