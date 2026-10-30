@@ -146,6 +146,9 @@ func (p *p2pBatchWorkerPool) batchRouter(pa PeerAssigner) {
 }
 
 func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map[peer.ID]bool) ([]batch, error) {
+	// Envelope page expiry runs independently of peer assignment, so a lapsed batch can proceed
+	// to import without waiting for a peer.
+	todo = p.expireEnvelopeTodos(todo)
 	if len(todo) == 0 {
 		return todo, nil
 	}
@@ -218,6 +221,20 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 		p.updateEarliest(b.begin)
 	}
 	return []batch{}, nil
+}
+
+// expireEnvelopeTodos applies envelope page expiry to queued batches, routing fully resolved
+// ones onward instead of waiting for a dispatch.
+func (p *p2pBatchWorkerPool) expireEnvelopeTodos(todo []batch) []batch {
+	out := todo[:0]
+	for _, b := range todo {
+		if b.state == batchSyncEnvelopes && b.envelopes.expirePending() {
+			p.fromRouter <- b.transitionToNext()
+			continue
+		}
+		out = append(out, b)
+	}
+	return out
 }
 
 func busyCopy(busy map[peer.ID]bool) map[peer.ID]bool {
