@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -131,6 +132,11 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	// [REJECT] The number of withdrawals is within the limit.
 	if err := v.VerifyWithdrawalsLimit(); err != nil {
 		return pubsub.ValidationReject, err
+	}
+	if features.Get().DisableGossipBlockHashCheck {
+		v.SatisfyRequirement(verification.RequireExecutionBlockHashValid)
+	} else if err := v.VerifyExecutionBlockHash(); err != nil {
+		return pubsub.ValidationIgnore, err
 	}
 
 	var pubkey [fieldparams.BLSPubkeyLength]byte
@@ -256,6 +262,11 @@ func (s *Service) queuePendingPayloadEnvelope(
 	} else {
 		log.Debug("Ignoring payload envelope from self-build outside of the Lookahead window")
 		return pubsub.ValidationIgnore, nil
+	}
+	if !features.Get().DisableGossipBlockHashCheck {
+		if err := v.VerifyExecutionBlockHash(); err != nil {
+			return pubsub.ValidationIgnore, err
+		}
 	}
 	if !rootExists {
 		inner = make(map[uint64]*ethpb.SignedExecutionPayloadEnvelope)

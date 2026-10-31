@@ -67,6 +67,8 @@ func (r Requirement) String() string {
 		return "RequireExecutionRequestsLimitsValid"
 	case RequireWithdrawalsLimitValid:
 		return "RequireWithdrawalsLimitValid"
+	case RequireExecutionBlockHashValid:
+		return "RequireExecutionBlockHashValid"
 	case RequireEnvelopeSlotAboveFinalized:
 		return "RequireEnvelopeSlotAboveFinalized"
 	case RequireEnvelopeSlotMatchesBlock:

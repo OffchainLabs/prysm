@@ -19,6 +19,7 @@ import (
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/blockhash"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	slashingsmock "github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings/mock"
@@ -36,6 +37,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -1634,6 +1636,7 @@ func TestValidateBeaconBlockPubSub_ValidExecutionPayload(t *testing.T) {
 	msg.Block.Body.ExecutionPayload.BlockHash = bytesutil.PadTo([]byte("blockHash"), 32)
 	msg.Block.Body.ExecutionPayload.ParentHash = bytesutil.PadTo([]byte("parentHash"), 32)
 	msg.Block.Body.ExecutionPayload.Transactions = append(msg.Block.Body.ExecutionPayload.Transactions, []byte("transaction 1"), []byte("transaction 2"))
+	setExecutionBlockHash(t, msg.Block.Body.ExecutionPayload)
 	msg.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, msg.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[proposerIdx])
 	require.NoError(t, err)
 
@@ -1725,6 +1728,7 @@ func TestValidateBeaconBlockPubSub_InvalidPayloadTimestamp(t *testing.T) {
 	msg.Block.Body.ExecutionPayload.BlockHash = bytesutil.PadTo([]byte("blockHash"), 32)
 	msg.Block.Body.ExecutionPayload.ParentHash = bytesutil.PadTo([]byte("parentHash"), 32)
 	msg.Block.Body.ExecutionPayload.Transactions = append(msg.Block.Body.ExecutionPayload.Transactions, []byte("transaction 1"), []byte("transaction 2"))
+	setExecutionBlockHash(t, msg.Block.Body.ExecutionPayload)
 	msg.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, msg.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[proposerIdx])
 	require.NoError(t, err)
 
@@ -1839,6 +1843,7 @@ func Test_validateBellatrixBeaconBlockParentValidation(t *testing.T) {
 	msg.Block.Body.ExecutionPayload.BlockHash = bytesutil.PadTo([]byte("blockHash"), 32)
 	msg.Block.Body.ExecutionPayload.ParentHash = bytesutil.PadTo([]byte("parentHash"), 32)
 	msg.Block.Body.ExecutionPayload.Transactions = append(msg.Block.Body.ExecutionPayload.Transactions, []byte("transaction 1"), []byte("transaction 2"))
+	setExecutionBlockHash(t, msg.Block.Body.ExecutionPayload)
 	msg.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, msg.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[proposerIdx])
 	require.NoError(t, err)
 
@@ -1898,6 +1903,7 @@ func Test_validateBeaconBlockProcessingWhenParentIsOptimistic(t *testing.T) {
 	msg.Block.Body.ExecutionPayload.BlockHash = bytesutil.PadTo([]byte("blockHash"), 32)
 	msg.Block.Body.ExecutionPayload.ParentHash = bytesutil.PadTo([]byte("parentHash"), 32)
 	msg.Block.Body.ExecutionPayload.Transactions = append(msg.Block.Body.ExecutionPayload.Transactions, []byte("transaction 1"), []byte("transaction 2"))
+	setExecutionBlockHash(t, msg.Block.Body.ExecutionPayload)
 	msg.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, msg.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[proposerIdx])
 	require.NoError(t, err)
 
@@ -2522,4 +2528,31 @@ func TestValidateBeaconBlockPubSub_GloasDeposits(t *testing.T) {
 			require.Equal(t, pubsub.ValidationIgnore, res)
 		})
 	}
+}
+
+func setExecutionBlockHash(t *testing.T, p *enginev1.ExecutionPayload) {
+	payload, err := blocks.WrappedExecutionPayload(p)
+	require.NoError(t, err)
+	h, err := blockhash.Compute(payload, nil, nil)
+	require.NoError(t, err)
+	p.BlockHash = h[:]
+}
+
+func TestValidateExecutionBlockHash(t *testing.T) {
+	msg := util.NewBeaconBlockBellatrix()
+	msg.Block.Body.ExecutionPayload.GasLimit = 11
+	msg.Block.Body.ExecutionPayload.Transactions = [][]byte{[]byte("transaction 1")}
+	setExecutionBlockHash(t, msg.Block.Body.ExecutionPayload)
+	blk, err := blocks.NewBeaconBlock(msg.Block)
+	require.NoError(t, err)
+	require.NoError(t, validateExecutionBlockHash(blk))
+
+	msg.Block.Body.ExecutionPayload.GasUsed = 1
+	blk, err = blocks.NewBeaconBlock(msg.Block)
+	require.NoError(t, err)
+	require.ErrorIs(t, validateExecutionBlockHash(blk), blockhash.ErrMismatch)
+
+	resetCfg := features.InitWithReset(&features.Flags{DisableGossipBlockHashCheck: true})
+	defer resetCfg()
+	require.NoError(t, validateExecutionBlockHash(blk))
 }
