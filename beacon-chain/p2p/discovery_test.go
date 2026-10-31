@@ -25,6 +25,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
 	testp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/wrapper"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
@@ -232,6 +233,9 @@ func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
 }
 
 func TestCreateLocalNode(t *testing.T) {
+	resetCfg := features.InitWithReset(&features.Flags{EnableQUIC: true})
+	defer resetCfg()
+
 	testCases := []struct {
 		name          string
 		cfg           *Config
@@ -250,6 +254,11 @@ func TestCreateLocalNode(t *testing.T) {
 		{
 			name:          "valid host address",
 			cfg:           &Config{HostAddress: "192.168.0.1"},
+			expectedError: false,
+		},
+		{
+			name:          "valid IPv6 host address",
+			cfg:           &Config{HostAddress: "2001:db8::2"},
 			expectedError: false,
 		},
 		{
@@ -305,11 +314,18 @@ func TestCreateLocalNode(t *testing.T) {
 
 			// Check IP.
 			// IP is not checked int case of DNS, since it can be resolved to different IPs.
+			ipv6 := isIPv6(expectedAddress)
 			if tt.cfg == nil || tt.cfg.HostDNS == "" {
+				ipKey := "ip"
+				if ipv6 {
+					ipKey = "ip6"
+				}
 				ip := new(net.IP)
-				require.NoError(t, localNode.Node().Record().Load(enr.WithEntry("ip", ip)))
+				require.NoError(t, localNode.Node().Record().Load(enr.WithEntry(ipKey, ip)))
 				require.Equal(t, true, ip.Equal(expectedAddress))
-				require.Equal(t, true, localNode.Node().IP().Equal(expectedAddress))
+				if !ipv6 {
+					require.Equal(t, true, localNode.Node().IP().Equal(expectedAddress))
+				}
 			}
 
 			// Check UDP.
@@ -321,6 +337,22 @@ func TestCreateLocalNode(t *testing.T) {
 			tcp := new(uint16)
 			require.NoError(t, localNode.Node().Record().Load(enr.WithEntry("tcp", tcp)))
 			require.Equal(t, tcpPort, localNode.Node().TCP())
+
+			// Check TCP6 and QUIC6 are only advertised alongside an IPv6 address.
+			if tt.cfg == nil || tt.cfg.HostDNS == "" {
+				tcp6, quic6 := new(uint16), new(uint16)
+				errTCP6 := localNode.Node().Record().Load(enr.WithEntry("tcp6", tcp6))
+				errQUIC6 := localNode.Node().Record().Load(enr.WithEntry("quic6", quic6))
+				if ipv6 {
+					require.NoError(t, errTCP6)
+					require.NoError(t, errQUIC6)
+					require.Equal(t, uint16(tcpPort), *tcp6)
+					require.Equal(t, uint16(quicPort), *quic6)
+				} else {
+					require.Equal(t, true, enr.IsNotFound(errTCP6))
+					require.Equal(t, true, enr.IsNotFound(errQUIC6))
+				}
+			}
 
 			// Check fork is set.
 			fork := new([]byte)
@@ -1319,4 +1351,63 @@ func TestGetPort_ZeroPortTreatedAsAbsent(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, false, ok)
 	require.Equal(t, uint(0), port)
+}
+
+func TestRetrieveMultiAddrsFromNode_IPv6Ports(t *testing.T) {
+	resetCfg := features.InitWithReset(&features.Flags{EnableQUIC: true})
+	defer resetCfg()
+
+	_, pkey := createAddrAndPrivKey(t)
+	ip6 := enr.IPv6(net.ParseIP("2001:db8::2"))
+
+	tests := []struct {
+		name    string
+		entries []enr.Entry
+		want    []string
+	}{
+		{
+			name:    "ipv6-only peer uses tcp6 and quic6",
+			entries: []enr.Entry{ip6, enr.TCP6(30324), enr.QUIC6(30325)},
+			want:    []string{"/ip6/2001:db8::2/udp/30325/quic-v1/", "/ip6/2001:db8::2/tcp/30324/"},
+		},
+		{
+			name:    "ipv6 peer falls back to quic when quic6 is absent",
+			entries: []enr.Entry{ip6, enr.TCP6(30324), enr.QUIC(30305)},
+			want:    []string{"/ip6/2001:db8::2/udp/30305/quic-v1/", "/ip6/2001:db8::2/tcp/30324/"},
+		},
+		{
+			name:    "ipv6 peer falls back to tcp and quic when tcp6 and quic6 are malformed",
+			entries: []enr.Entry{ip6, enr.TCP(30304), enr.QUIC(30305), enr.WithEntry("tcp6", "malformed"), enr.WithEntry("quic6", "malformed")},
+			want:    []string{"/ip6/2001:db8::2/udp/30305/quic-v1/", "/ip6/2001:db8::2/tcp/30304/"},
+		},
+		{
+			name:    "dual-stack peer with global ipv6 prefers tcp6 over tcp",
+			entries: []enr.Entry{enr.IPv4{192, 168, 77, 2}, enr.TCP(30304), ip6, enr.TCP6(30324)},
+			want:    []string{"/ip6/2001:db8::2/tcp/30324/"},
+		},
+		{
+			name:    "ipv6 peer falls back to tcp when tcp6 is absent",
+			entries: []enr.Entry{ip6, enr.TCP(30304)},
+			want:    []string{"/ip6/2001:db8::2/tcp/30304/"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var record enr.Record
+			for _, entry := range tt.entries {
+				record.Set(entry)
+			}
+			require.NoError(t, enode.SignV4(&record, pkey))
+			node, err := enode.New(enode.ValidSchemes, &record)
+			require.NoError(t, err)
+
+			addrs, err := retrieveMultiAddrsFromNode(node)
+			require.NoError(t, err)
+			require.Equal(t, len(tt.want), len(addrs))
+			for i, want := range tt.want {
+				assert.StringContains(t, want, addrs[i].String())
+			}
+		})
+	}
 }
