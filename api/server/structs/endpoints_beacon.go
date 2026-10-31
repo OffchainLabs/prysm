@@ -180,6 +180,13 @@ type StateRoot struct {
 	Root string `json:"root"`
 }
 
+type GetStateLeavesResponse struct {
+	Version             string   `json:"version"`
+	ExecutionOptimistic bool     `json:"execution_optimistic"`
+	Finalized           bool     `json:"finalized"`
+	Data                []string `json:"data"`
+}
+
 type GetRandaoResponse struct {
 	ExecutionOptimistic bool    `json:"execution_optimistic"`
 	Finalized           bool    `json:"finalized"`

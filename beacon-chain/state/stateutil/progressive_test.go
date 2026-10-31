@@ -127,6 +127,11 @@ func TestProgressiveTree_Copy(t *testing.T) {
 	tree := MerkleizeProgressive(progressiveLeavesAsBytes(leaves))
 	copied := tree.Copy()
 
+	// Copy must carry the input leaf count over, or every leaf read on the copy fails.
+	copiedLeaf, err := copied.Leaf(45)
+	require.NoError(t, err)
+	require.Equal(t, leaves[45], copiedLeaf)
+
 	leaves[35][0]++
 	require.NoError(t, copied.RecomputeRoot(35, leaves[35]))
 	require.Equal(t, ssz.MerkleizeProgressiveChunks(leaves), copied.Root())
@@ -188,6 +193,75 @@ func TestProgressiveTree_Proof(t *testing.T) {
 		for _, test := range tests {
 			t.Run(test.name, func(t *testing.T) {
 				_, err := test.tree.Proof(test.index)
+				require.ErrorContains(t, test.wantError, err)
+			})
+		}
+	})
+}
+
+func TestProgressiveTree_Leaf(t *testing.T) {
+	// 22 leaves span the first four subtrees (capacities 1, 4, 16, 64), so the tree capacity is 85.
+	const leafCount = 22
+
+	t.Run("ReturnsLeavesAcrossSubtreeBoundaries", func(t *testing.T) {
+		leaves := progressiveTestLeaves(leafCount)
+		tree := MerkleizeProgressive(progressiveLeavesAsBytes(leaves))
+
+		for _, index := range []int{0, 1, 4, 5, 20, 21} {
+			t.Run(strconv.Itoa(index), func(t *testing.T) {
+				leaf, err := tree.Leaf(index)
+				require.NoError(t, err)
+				require.Equal(t, leaves[index], leaf)
+			})
+		}
+	})
+
+	t.Run("ReflectsRecomputedLeaf", func(t *testing.T) {
+		leaves := progressiveTestLeaves(leafCount)
+		tree := MerkleizeProgressive(progressiveLeavesAsBytes(leaves))
+		updated := bytesutil.ToBytes32([]byte{0xff, 0xee})
+		require.NoError(t, tree.RecomputeRoot(21, updated))
+
+		leaf, err := tree.Leaf(21)
+		require.NoError(t, err)
+		require.Equal(t, updated, leaf)
+
+		neighbor, err := tree.Leaf(20)
+		require.NoError(t, err)
+		require.Equal(t, leaves[20], neighbor)
+	})
+
+	t.Run("PaddedLeafWithinCapacityIsRejected", func(t *testing.T) {
+		tree := MerkleizeProgressive(progressiveLeavesAsBytes(progressiveTestLeaves(leafCount)))
+
+		for _, index := range []int{leafCount, 84} {
+			t.Run(strconv.Itoa(index), func(t *testing.T) {
+				_, err := tree.Leaf(index)
+				require.ErrorContains(t, "is not an input leaf", err)
+			})
+		}
+	})
+
+	t.Run("Errors", func(t *testing.T) {
+		tree := MerkleizeProgressive(progressiveLeavesAsBytes(progressiveTestLeaves(leafCount)))
+		malformedTree := MerkleizeProgressive(progressiveLeavesAsBytes(progressiveTestLeaves(5)))
+		malformedTree.subtreeLayers[1][0] = malformedTree.subtreeLayers[1][0][:3]
+		tests := []struct {
+			name      string
+			tree      *ProgressiveTree
+			index     int
+			wantError string
+		}{
+			{name: "nil tree", index: 0, wantError: "empty progressive tree"},
+			{name: "empty tree", tree: MerkleizeProgressive(nil), index: 0, wantError: "empty progressive tree"},
+			{name: "negative index", tree: tree, index: -1, wantError: "is not an input leaf"},
+			{name: "index beyond capacity", tree: tree, index: 85, wantError: "is not an input leaf"},
+			{name: "index beyond subtree capacity", tree: malformedTree, index: 4, wantError: "outside subtree capacity"},
+		}
+
+		for _, test := range tests {
+			t.Run(test.name, func(t *testing.T) {
+				_, err := test.tree.Leaf(test.index)
 				require.ErrorContains(t, test.wantError, err)
 			})
 		}
