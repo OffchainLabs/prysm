@@ -8,6 +8,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -44,6 +45,9 @@ func (vs *Server) getPayloadAttestations(ctx context.Context, head state.BeaconS
 			continue
 		}
 		if !bytes.Equal(att.Data.BeaconBlockRoot, blockParentRoot[:]) {
+			continue
+		}
+		if bytes.Equal(att.Signature, common.InfiniteSignature[:]) {
 			continue
 		}
 		atts = append(atts, att)
