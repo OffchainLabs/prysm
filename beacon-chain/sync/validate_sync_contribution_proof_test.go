@@ -857,7 +857,9 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 			require.NoError(t, cw.SetClock(clock))
 			svc.verifierWaiter = verification.NewInitializerWaiter(cw, chainService.ForkChoiceStore, svc.cfg.stateGen, chainService)
 			markInitSyncComplete(t, svc)
-			go svc.Start()
+			svc.cfg.clock = clock
+			svc.markForChainStart()
+			go svc.verifierRoutine()
 			marshalledObj, err := tt.args.msg.MarshalSSZ()
 			assert.NoError(t, err)
 			marshalledObj = snappy.Encode(nil, marshalledObj)
@@ -869,15 +871,6 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 				ReceivedFrom:  "",
 				ValidatorData: nil,
 			}
-			// a lot happens in the chain service after SetClock is called,
-			// give it a moment before calling internal methods that would typically
-			// only execute after waitFor
-			for range 10 {
-				if !svc.chainIsStarted() {
-					time.Sleep(100 * time.Millisecond)
-				}
-			}
-			require.Equal(t, true, svc.chainIsStarted())
 			if got, err := svc.validateSyncContributionAndProof(ctx, tt.args.pid, msg); got != tt.want {
 				_ = err
 				t.Errorf("validateSyncContributionAndProof() = %v, want %v", got, tt.want)
