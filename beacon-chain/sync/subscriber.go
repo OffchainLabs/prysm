@@ -419,6 +419,11 @@ func (s *Service) subscribeLogFields(topic string, nse params.NetworkScheduleEnt
 
 // subscribe to a given topic with a given validator and subscription handler.
 // The base protobuf message is used to initialize new messages for decoding.
+// subscriptionBufferSize must exceed the largest single-slot message burst on
+// any topic. The binding case is EIP-8411 payload chunks; data columns and
+// attestation subnets are smaller. libp2p's default of 32 is far too small.
+const subscriptionBufferSize = 512
+
 func (s *Service) subscribe(topic string, validator wrappedVal, handle subHandler, nse params.NetworkScheduleEntry) {
 	// Subscriptions need to come up before initial sync completes so the node can
 	// follow new gossip immediately after the synced flag flips. Validators already
@@ -450,7 +455,13 @@ func (s *Service) subscribeWithBase(topic string, validator wrappedVal, handle s
 		return nil
 	}
 
-	sub, err := s.cfg.p2p.SubscribeToTopic(topic)
+	// libp2p's default subscription buffer is 32 messages, and it DROPS rather
+	// than blocks on overflow (UndeliverableMessage). One EIP-8411 envelope is
+	// TOTAL_EXECUTION_PAYLOAD_CHUNKS messages published back to back, so the
+	// default silently discards part of every burst: measured 2148 undeliverable
+	// chunks in one devnet run, averaging 22 lost of 64 per affected envelope,
+	// which strands the whole set because reconstruction needs every index.
+	sub, err := s.cfg.p2p.SubscribeToTopic(topic, pubsub.WithBufferSize(subscriptionBufferSize))
 	if err != nil {
 		// Any error subscribing to a PubSub topic would be the result of a misconfiguration of
 		// libp2p PubSub library or a subscription request to a topic that fails to match the topic
