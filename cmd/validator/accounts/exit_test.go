@@ -25,7 +25,6 @@ func TestExitAccountsCli_OK(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockValidatorClient := validatormock.NewMockValidatorClient(ctrl)
-	mockNodeClient := validatormock.NewMockNodeClient(ctrl)
 
 	mockValidatorClient.EXPECT().
 		ValidatorIndex(gomock.Any(), gomock.Any()).
@@ -35,10 +34,6 @@ func TestExitAccountsCli_OK(t *testing.T) {
 	genesisTime := &timestamppb.Timestamp{
 		Seconds: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).Unix(),
 	}
-
-	mockNodeClient.EXPECT().
-		Genesis(gomock.Any(), gomock.Any()).
-		Return(&ethpb.Genesis{GenesisTime: genesisTime}, nil)
 
 	mockValidatorClient.EXPECT().
 		DomainData(gomock.Any(), gomock.Any()).
@@ -100,7 +95,7 @@ func TestExitAccountsCli_OK(t *testing.T) {
 
 	cfg := accounts.PerformExitCfg{
 		ValidatorClient:  mockValidatorClient,
-		NodeClient:       mockNodeClient,
+		GenesisTime:      genesisTime,
 		Keymanager:       km,
 		RawPubKeys:       rawPubKeys,
 		FormattedPubKeys: formattedPubKeys,
@@ -117,7 +112,6 @@ func TestExitAccountsCli_OK_AllPublicKeys(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockValidatorClient := validatormock.NewMockValidatorClient(ctrl)
-	mockNodeClient := validatormock.NewMockNodeClient(ctrl)
 
 	mockValidatorClient.EXPECT().
 		ValidatorIndex(gomock.Any(), gomock.Any()).
@@ -131,10 +125,6 @@ func TestExitAccountsCli_OK_AllPublicKeys(t *testing.T) {
 	genesisTime := &timestamppb.Timestamp{
 		Seconds: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).Unix(),
 	}
-
-	mockNodeClient.EXPECT().
-		Genesis(gomock.Any(), gomock.Any()).
-		Return(&ethpb.Genesis{GenesisTime: genesisTime}, nil)
 
 	mockValidatorClient.EXPECT().
 		DomainData(gomock.Any(), gomock.Any()).
@@ -200,7 +190,7 @@ func TestExitAccountsCli_OK_AllPublicKeys(t *testing.T) {
 
 	cfg := accounts.PerformExitCfg{
 		ValidatorClient:  mockValidatorClient,
-		NodeClient:       mockNodeClient,
+		GenesisTime:      genesisTime,
 		Keymanager:       km,
 		RawPubKeys:       rawPubKeys,
 		FormattedPubKeys: formattedPubKeys,
@@ -223,7 +213,6 @@ func TestExitAccountsCli_OK_ForceExit(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockValidatorClient := validatormock.NewMockValidatorClient(ctrl)
-	mockNodeClient := validatormock.NewMockNodeClient(ctrl)
 
 	mockValidatorClient.EXPECT().
 		ValidatorIndex(gomock.Any(), gomock.Any()).
@@ -233,10 +222,6 @@ func TestExitAccountsCli_OK_ForceExit(t *testing.T) {
 	genesisTime := &timestamppb.Timestamp{
 		Seconds: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).Unix(),
 	}
-
-	mockNodeClient.EXPECT().
-		Genesis(gomock.Any(), gomock.Any()).
-		Return(&ethpb.Genesis{GenesisTime: genesisTime}, nil)
 
 	mockValidatorClient.EXPECT().
 		DomainData(gomock.Any(), gomock.Any()).
@@ -295,7 +280,7 @@ func TestExitAccountsCli_OK_ForceExit(t *testing.T) {
 
 	cfg := accounts.PerformExitCfg{
 		ValidatorClient:  mockValidatorClient,
-		NodeClient:       mockNodeClient,
+		GenesisTime:      genesisTime,
 		Keymanager:       km,
 		RawPubKeys:       rawPubKeys,
 		FormattedPubKeys: formattedPubKeys,
@@ -312,7 +297,6 @@ func TestExitAccountsCli_WriteJSON_NoBroadcast(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockValidatorClient := validatormock.NewMockValidatorClient(ctrl)
-	mockNodeClient := validatormock.NewMockNodeClient(ctrl)
 
 	mockValidatorClient.EXPECT().
 		ValidatorIndex(gomock.Any(), gomock.Any()).
@@ -322,10 +306,6 @@ func TestExitAccountsCli_WriteJSON_NoBroadcast(t *testing.T) {
 	genesisTime := &timestamppb.Timestamp{
 		Seconds: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).Unix(),
 	}
-
-	mockNodeClient.EXPECT().
-		Genesis(gomock.Any(), gomock.Any()).
-		Return(&ethpb.Genesis{GenesisTime: genesisTime}, nil)
 
 	mockValidatorClient.EXPECT().
 		DomainData(gomock.Any(), gomock.Any()).
@@ -382,7 +362,7 @@ func TestExitAccountsCli_WriteJSON_NoBroadcast(t *testing.T) {
 
 	cfg := accounts.PerformExitCfg{
 		ValidatorClient:  mockValidatorClient,
-		NodeClient:       mockNodeClient,
+		GenesisTime:      genesisTime,
 		Keymanager:       km,
 		RawPubKeys:       rawPubKeys,
 		FormattedPubKeys: formattedPubKeys,
