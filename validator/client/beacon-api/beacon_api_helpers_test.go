@@ -220,57 +220,15 @@ func TestGetLiveness_Invalid(t *testing.T) {
 
 const syncingEndpoint = "/eth/v1/node/syncing"
 
-func TestGetIsSyncing_Nominal(t *testing.T) {
-	testCases := []struct {
-		name      string
-		isSyncing bool
-	}{
-		{
-			name:      "Syncing",
-			isSyncing: true,
-		},
-		{
-			name:      "Not syncing",
-			isSyncing: false,
-		},
-	}
+func TestSyncedNodeStatus(t *testing.T) {
+	t.Run("multi host: first node syncing, second synced", func(t *testing.T) {
+		statusPerHost := []structs.SyncStatusResponseData{{IsSyncing: true}, {IsSyncing: false}}
+		validatorClient := beaconApiValidatorClient{handler: newSyncStatusNodesHandler(t, statusPerHost)}
 
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			syncingResponseJson := structs.SyncStatusResponse{}
-			handler := mock.NewMockHandler(ctrl)
-
-			expected := structs.SyncStatusResponse{
-				Data: &structs.SyncStatusResponseData{
-					IsSyncing: testCase.isSyncing,
-				},
-			}
-
-			ctx := t.Context()
-
-			handler.EXPECT().Get(
-				gomock.Any(),
-				syncingEndpoint,
-				&syncingResponseJson,
-			).Return(
-				nil,
-			).SetArg(
-				2,
-				expected,
-			).Times(1)
-
-			validatorClient := beaconApiValidatorClient{
-				handler: handler,
-			}
-
-			isSyncing, err := validatorClient.isSyncing(ctx)
-			require.NoError(t, err)
-			assert.Equal(t, testCase.isSyncing, isSyncing)
-		})
-	}
+		status, err := validatorClient.syncedNodeStatus(t.Context())
+		require.NoError(t, err)
+		assert.Equal(t, false, status.IsSyncing)
+	})
 }
 
 // newSyncStatusNodesHandler starts one beacon node test server per entry of statusPerHost,
@@ -299,30 +257,4 @@ func newSyncStatusNodesHandler(t *testing.T, statusPerHost []structs.SyncStatusR
 	require.NoError(t, err)
 
 	return provider.Handler()
-}
-
-func TestGetIsSyncing_Invalid(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	syncingResponseJson := structs.SyncStatusResponse{}
-	handler := mock.NewMockHandler(ctrl)
-
-	ctx := t.Context()
-
-	handler.EXPECT().Get(
-		gomock.Any(),
-		syncingEndpoint,
-		&syncingResponseJson,
-	).Return(
-		errors.New("custom error"),
-	).Times(1)
-
-	validatorClient := beaconApiValidatorClient{
-		handler: handler,
-	}
-
-	isSyncing, err := validatorClient.isSyncing(ctx)
-	assert.Equal(t, true, isSyncing)
-	assert.ErrorContains(t, "failed to get syncing status", err)
 }

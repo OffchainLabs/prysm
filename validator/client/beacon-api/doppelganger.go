@@ -61,13 +61,13 @@ func (c *beaconApiValidatorClient) checkDoppelGanger(ctx context.Context, in *et
 		}
 	}
 
-	// Check if the beacon node if synced.
-	isSyncing, err := c.isSyncing(ctx)
+	// Check if a beacon node is synced.
+	syncStatus, err := c.syncedNodeStatus(ctx)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get beacon node sync status")
 	}
 
-	if isSyncing {
+	if syncStatus.IsSyncing {
 		return nil, errors.New("beacon node not synced")
 	}
 

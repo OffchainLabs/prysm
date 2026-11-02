@@ -344,6 +344,8 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 					gomock.Any(),
 					syncingEndpoint,
 					&syncingResponseJson,
+					gomock.Any(),
+					gomock.Any(),
 				).Return(
 					nil,
 				).SetArg(
@@ -522,7 +524,7 @@ func TestCheckDoppelGanger_Errors(t *testing.T) {
 			inputValidatorRequests: []*ethpb.DoppelGangerRequest_ValidatorRequest{nil},
 		},
 		{
-			name:                   "isSyncing on error",
+			name:                   "sync status on error",
 			expectedErrorMessage:   "failed to get beacon node sync status",
 			inputValidatorRequests: standardInputValidatorRequests,
 			getSyncingOutput:       standardGetSyncingOutput,
@@ -784,6 +786,8 @@ func TestCheckDoppelGanger_Errors(t *testing.T) {
 					gomock.Any(),
 					syncingEndpoint,
 					&syncingResponseJson,
+					gomock.Any(),
+					gomock.Any(),
 				).Return(
 					testCase.getSyncingError,
 				).SetArg(
