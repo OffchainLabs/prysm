@@ -78,6 +78,17 @@ func isSyncedResponse(raw json.RawMessage) bool {
 	return resp.Data != nil && !resp.Data.IsSyncing
 }
 
+// isSyncedAndNotOptimisticResponse reports whether a raw `/eth/v1/node/syncing` response says
+// the node is synced and its head is not optimistic.
+func isSyncedAndNotOptimisticResponse(raw json.RawMessage) bool {
+	var resp structs.SyncStatusResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return false
+	}
+
+	return resp.Data != nil && !resp.Data.IsSyncing && !resp.Data.IsOptimistic
+}
+
 func (c *beaconApiValidatorClient) syncing(ctx context.Context, opts ...rest.QueryOption) (*structs.SyncStatusResponse, error) {
 	const endpoint = "/eth/v1/node/syncing"
 
@@ -106,11 +117,14 @@ func (c *beaconApiValidatorClient) syncedNodeStatus(ctx context.Context) (*struc
 	return response.Data, nil
 }
 
+// isOptimistic reports false if any configured beacon node is synced with a non-optimistic head.
+// It queries every node concurrently and prefers such a node.
 func (c *beaconApiValidatorClient) isOptimistic(ctx context.Context) (bool, error) {
-	response, err := c.syncing(ctx)
+	response, err := c.syncing(ctx, rest.WithRace(), rest.WithAccept(isSyncedAndNotOptimisticResponse))
 	if err != nil || response == nil || response.Data == nil {
 		return true, errors.Wrapf(err, "failed to get syncing status")
 	}
 
-	return response.Data.IsOptimistic, err
+	// A syncing node cannot serve validators either: treat it as optimistic.
+	return response.Data.IsSyncing || response.Data.IsOptimistic, nil
 }

@@ -258,3 +258,14 @@ func newSyncStatusNodesHandler(t *testing.T, statusPerHost []structs.SyncStatusR
 
 	return provider.Handler()
 }
+
+func TestGetIsOptimistic(t *testing.T) {
+	t.Run("multi host: first node optimistic, second not optimistic", func(t *testing.T) {
+		statusPerHost := []structs.SyncStatusResponseData{{IsOptimistic: true}, {}}
+		validatorClient := beaconApiValidatorClient{handler: newSyncStatusNodesHandler(t, statusPerHost)}
+
+		isOptimistic, err := validatorClient.isOptimistic(t.Context())
+		require.NoError(t, err)
+		assert.Equal(t, false, isOptimistic)
+	})
+}
