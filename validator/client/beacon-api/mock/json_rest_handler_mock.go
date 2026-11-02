@@ -154,6 +154,25 @@ func (mr *MockHandlerMockRecorder) PostSSZWithFallback(ctx, endpoint, headers, s
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PostSSZWithFallback", reflect.TypeOf((*MockHandler)(nil).PostSSZWithFallback), ctx, endpoint, headers, sszFn, jsonFn)
 }
 
+// Request mocks base method.
+func (m *MockHandler) Request(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer, resp any, opts ...rest.QueryOption) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, endpoint, headers, data, resp}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Request", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Request indicates an expected call of Request.
+func (mr *MockHandlerMockRecorder) Request(ctx, endpoint, headers, data, resp any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, endpoint, headers, data, resp}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Request", reflect.TypeOf((*MockHandler)(nil).Request), varargs...)
+}
+
 // RequestSSZWithFallback mocks base method.
 func (m *MockHandler) RequestSSZWithFallback(ctx context.Context, endpoint string, headers map[string]string, sszFn, jsonFn func() ([]byte, error), opts ...rest.QueryOption) ([]byte, http.Header, error) {
 	m.ctrl.T.Helper()

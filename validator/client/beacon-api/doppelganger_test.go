@@ -309,12 +309,15 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 					marshalledIndexes, err := json.Marshal(iface.inputStringIndexes)
 					require.NoError(t, err)
 
-					handler.EXPECT().Post(
+					handler.EXPECT().Request(
 						gomock.Any(),
 						iface.inputUrl,
 						nil,
 						bytes.NewBuffer(marshalledIndexes),
 						&livenessResponseJson,
+						gomock.Any(),
+						gomock.Any(),
+						gomock.Any(),
 					).SetArg(
 						4,
 						*iface.output,
@@ -672,12 +675,15 @@ func TestCheckDoppelGanger_Errors(t *testing.T) {
 					marshalledIndexes, err := json.Marshal(iface.inputStringIndexes)
 					require.NoError(t, err)
 
-					handler.EXPECT().Post(
+					handler.EXPECT().Request(
 						gomock.Any(),
 						iface.inputUrl,
 						nil,
 						bytes.NewBuffer(marshalledIndexes),
 						&livenessResponseJson,
+						gomock.Any(),
+						gomock.Any(),
+						gomock.Any(),
 					).SetArg(
 						4,
 						*iface.output,

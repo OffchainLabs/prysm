@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -45,12 +46,15 @@ func TestGetLiveness_Nominal(t *testing.T) {
 	ctx := t.Context()
 
 	handler := mock.NewMockHandler(ctrl)
-	handler.EXPECT().Post(
+	handler.EXPECT().Request(
 		gomock.Any(),
 		livenessEndpoint,
 		nil,
 		bytes.NewBuffer(marshalledIndexes),
 		&livenessResponseJson,
+		gomock.Any(),
+		gomock.Any(),
+		gomock.Any(),
 	).SetArg(
 		4,
 		expected,
@@ -63,6 +67,58 @@ func TestGetLiveness_Nominal(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.DeepEqual(t, &expected, liveness)
+
+	// Real multi-host handler.
+	newLivenessNode := func(t *testing.T, isLive bool) string {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			resp := structs.GetLivenessResponse{Data: []*structs.Liveness{{Index: "1", IsLive: isLive}}}
+			if err := json.NewEncoder(w).Encode(resp); err != nil {
+				t.Errorf("encode: %v", err)
+			}
+		}))
+		t.Cleanup(server.Close)
+
+		return server.URL
+	}
+
+	t.Run("multi host: first node not live, second live", func(t *testing.T) {
+		provider, err := rest.NewRestConnectionProvider(newLivenessNode(t, false) + "," + newLivenessNode(t, true))
+		require.NoError(t, err)
+
+		validatorClient := &beaconApiValidatorClient{handler: provider.Handler()}
+		liveness, err := validatorClient.liveness(t.Context(), 42, []string{"1"})
+		require.NoError(t, err)
+		require.Equal(t, 1, len(liveness.Data))
+		assert.Equal(t, true, liveness.Data[0].IsLive)
+	})
+
+	t.Run("multi host: hung node does not block the read", func(t *testing.T) {
+		previous := livenessFallbackWait
+		livenessFallbackWait = 100 * time.Millisecond
+		t.Cleanup(func() { livenessFallbackWait = previous })
+
+		release := make(chan struct{})
+		hung := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+			select {
+			case <-r.Context().Done():
+			case <-release:
+			}
+		}))
+		t.Cleanup(hung.Close)
+		t.Cleanup(func() { close(release) }) // Runs before hung.Close, which waits for in-flight requests.
+
+		provider, err := rest.NewRestConnectionProvider(hung.URL + "," + newLivenessNode(t, false))
+		require.NoError(t, err)
+
+		validatorClient := &beaconApiValidatorClient{handler: provider.Handler()}
+		start := time.Now()
+		liveness, err := validatorClient.liveness(t.Context(), 42, []string{"1"})
+		require.NoError(t, err)
+		require.Equal(t, 1, len(liveness.Data))
+		assert.Equal(t, false, liveness.Data[0].IsLive)
+		assert.Equal(t, true, time.Since(start) < time.Second, "the hung node must be cut off at the fallback wait")
+	})
 }
 
 func TestGetLiveness_Invalid(t *testing.T) {
@@ -72,10 +128,13 @@ func TestGetLiveness_Invalid(t *testing.T) {
 	ctx := t.Context()
 
 	handler := mock.NewMockHandler(ctrl)
-	handler.EXPECT().Post(
+	handler.EXPECT().Request(
 		gomock.Any(),
 		livenessEndpoint,
 		nil,
+		gomock.Any(),
+		gomock.Any(),
+		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
 	).Return(
