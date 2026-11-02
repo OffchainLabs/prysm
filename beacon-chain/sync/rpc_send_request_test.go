@@ -61,8 +61,11 @@ func TestSendRequest_SendBeaconBlocksByRangeRequest(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	var handlers sync.WaitGroup
 	knownBlocksProvider := func(p2pProvider p2p.P2P, processor BeaconBlockProcessor) func(stream network.Stream) {
 		return func(stream network.Stream) {
+			handlers.Add(1)
+			defer handlers.Done()
 			defer func() {
 				assert.NoError(t, stream.Close())
 			}()
@@ -174,20 +177,14 @@ func TestSendRequest_SendBeaconBlocksByRangeRequest(t *testing.T) {
 		assert.Equal(t, 128, len(blocks))
 
 		// Cap max returned roots.
+		// The stream handler reads the config, so it must be done before the config is changed or restored.
+		handlers.Wait()
+		params.SetupTestConfigCleanup(t)
+		t.Cleanup(handlers.Wait)
 		cfg := params.BeaconConfig().Copy()
-		maxRequestBlocks := cfg.MaxRequestBlocks
-		defer func() {
-			cfg.MaxRequestBlocks = maxRequestBlocks
-			params.OverrideBeaconConfig(cfg)
-		}()
-		blocks, err = SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, func(block interfaces.ReadOnlySignedBeaconBlock) error {
-			// Since ssz checks the boundaries, and doesn't normally allow to send requests bigger than
-			// the max request size, we are updating max request size dynamically. Even when updated dynamically,
-			// no more than max request size of blocks is expected on return.
-			cfg.MaxRequestBlocks = 3
-			params.OverrideBeaconConfig(cfg)
-			return nil
-		})
+		cfg.MaxRequestBlocks = 3
+		params.OverrideBeaconConfig(cfg)
+		blocks, err = SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
 		require.NoError(t, err)
 		assert.Equal(t, 3, len(blocks))
 	})
