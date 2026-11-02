@@ -554,11 +554,9 @@ func TestRPCBeaconBlocksByRange_RPCHandlerRateLimitOverflow(t *testing.T) {
 	sendRequest := func(p1, p2 *p2ptest.TestP2P, r *Service,
 		req *ethpb.BeaconBlocksByRangeRequest, validateBlocks bool, success bool) error {
 		pcl := protocol.ID(p2p.RPCBlocksByRangeTopicV1)
-		reqAnswered := false
+		reqAnswered := make(chan struct{})
 		p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
-			defer func() {
-				reqAnswered = true
-			}()
+			defer close(reqAnswered)
 			if !validateBlocks {
 				return
 			}
@@ -579,8 +577,11 @@ func TestRPCBeaconBlocksByRange_RPCHandlerRateLimitOverflow(t *testing.T) {
 		if err := r.beaconBlocksByRangeRPCHandler(t.Context(), req, stream); err != nil {
 			return err
 		}
-		time.Sleep(100 * time.Millisecond)
-		assert.Equal(t, reqAnswered, true)
+		select {
+		case <-reqAnswered:
+		case <-time.After(5 * time.Second):
+			t.Error("request was not answered")
+		}
 		return nil
 	}
 
