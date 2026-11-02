@@ -17,136 +17,6 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-const forkEndpoint = "/eth/v1/beacon/states/head/fork"
-
-func TestGetFork_Nominal(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	stateForkResponseJson := structs.GetStateForkResponse{}
-	handler := mock.NewMockHandler(ctrl)
-
-	expected := structs.GetStateForkResponse{
-		Data: &structs.Fork{
-			PreviousVersion: "0x1",
-			CurrentVersion:  "0x2",
-			Epoch:           "3",
-		},
-	}
-
-	ctx := t.Context()
-
-	handler.EXPECT().Get(
-		gomock.Any(),
-		forkEndpoint,
-		&stateForkResponseJson,
-	).Return(
-		nil,
-	).SetArg(
-		2,
-		expected,
-	).Times(1)
-
-	validatorClient := beaconApiValidatorClient{
-		handler: handler,
-	}
-
-	fork, err := validatorClient.fork(ctx)
-	require.NoError(t, err)
-	assert.DeepEqual(t, &expected, fork)
-}
-
-func TestGetFork_Invalid(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	handler := mock.NewMockHandler(ctrl)
-
-	ctx := t.Context()
-
-	handler.EXPECT().Get(
-		gomock.Any(),
-		forkEndpoint,
-		gomock.Any(),
-	).Return(
-		errors.New("custom error"),
-	).Times(1)
-
-	validatorClient := beaconApiValidatorClient{
-		handler: handler,
-	}
-
-	_, err := validatorClient.fork(ctx)
-	require.ErrorContains(t, "custom error", err)
-}
-
-const headersEndpoint = "/eth/v1/beacon/headers"
-
-func TestGetHeaders_Nominal(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	blockHeadersResponseJson := structs.GetBlockHeadersResponse{}
-	handler := mock.NewMockHandler(ctrl)
-
-	expected := structs.GetBlockHeadersResponse{
-		Data: []*structs.SignedBeaconBlockHeaderContainer{
-			{
-				Header: &structs.SignedBeaconBlockHeader{
-					Message: &structs.BeaconBlockHeader{
-						Slot: "42",
-					},
-				},
-			},
-		},
-	}
-
-	ctx := t.Context()
-
-	handler.EXPECT().Get(
-		gomock.Any(),
-		headersEndpoint,
-		&blockHeadersResponseJson,
-	).Return(
-		nil,
-	).SetArg(
-		2,
-		expected,
-	).Times(1)
-
-	validatorClient := beaconApiValidatorClient{
-		handler: handler,
-	}
-
-	headers, err := validatorClient.headers(ctx)
-	require.NoError(t, err)
-	assert.DeepEqual(t, &expected, headers)
-}
-
-func TestGetHeaders_Invalid(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	handler := mock.NewMockHandler(ctrl)
-
-	ctx := t.Context()
-
-	handler.EXPECT().Get(
-		gomock.Any(),
-		headersEndpoint,
-		gomock.Any(),
-	).Return(
-		errors.New("custom error"),
-	).Times(1)
-
-	validatorClient := beaconApiValidatorClient{
-		handler: handler,
-	}
-
-	_, err := validatorClient.headers(ctx)
-	require.ErrorContains(t, "custom error", err)
-}
-
 const livenessEndpoint = "/eth/v1/validator/liveness/42"
 
 func TestGetLiveness_Nominal(t *testing.T) {
@@ -222,12 +92,13 @@ const syncingEndpoint = "/eth/v1/node/syncing"
 
 func TestSyncedNodeStatus(t *testing.T) {
 	t.Run("multi host: first node syncing, second synced", func(t *testing.T) {
-		statusPerHost := []structs.SyncStatusResponseData{{IsSyncing: true}, {IsSyncing: false}}
+		statusPerHost := []structs.SyncStatusResponseData{{HeadSlot: "10", IsSyncing: true}, {HeadSlot: "3200", IsSyncing: false}}
 		validatorClient := beaconApiValidatorClient{handler: newSyncStatusNodesHandler(t, statusPerHost)}
 
 		status, err := validatorClient.syncedNodeStatus(t.Context())
 		require.NoError(t, err)
 		assert.Equal(t, false, status.IsSyncing)
+		assert.Equal(t, "3200", status.HeadSlot)
 	})
 }
 

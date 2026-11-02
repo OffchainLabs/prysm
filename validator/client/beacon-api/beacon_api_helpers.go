@@ -26,30 +26,6 @@ var beaconAPITogRPCValidatorStatus = map[string]ethpb.ValidatorStatus{
 	"withdrawal_done":     ethpb.ValidatorStatus_EXITED,
 }
 
-func (c *beaconApiValidatorClient) fork(ctx context.Context) (*structs.GetStateForkResponse, error) {
-	const endpoint = "/eth/v1/beacon/states/head/fork"
-
-	stateForkResponseJson := &structs.GetStateForkResponse{}
-
-	if err := c.handler.Get(ctx, endpoint, stateForkResponseJson); err != nil {
-		return nil, err
-	}
-
-	return stateForkResponseJson, nil
-}
-
-func (c *beaconApiValidatorClient) headers(ctx context.Context) (*structs.GetBlockHeadersResponse, error) {
-	const endpoint = "/eth/v1/beacon/headers"
-
-	blockHeadersResponseJson := &structs.GetBlockHeadersResponse{}
-
-	if err := c.handler.Get(ctx, endpoint, blockHeadersResponseJson); err != nil {
-		return nil, err
-	}
-
-	return blockHeadersResponseJson, nil
-}
-
 func (c *beaconApiValidatorClient) liveness(ctx context.Context, epoch primitives.Epoch, validatorIndexes []string) (*structs.GetLivenessResponse, error) {
 	const endpoint = "/eth/v1/validator/liveness/"
 	url := endpoint + strconv.FormatUint(uint64(epoch), 10)
