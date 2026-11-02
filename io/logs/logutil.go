@@ -109,7 +109,7 @@ func ConfigurePersistentLogging(logFileName string, format string, lvl logrus.Le
 	return nil
 }
 
-// ConfigureEphemeralLogFile adds a log file that keeps 24 hours of logs with >debug verbosity.
+// ConfigureEphemeralLogFile adds a debug-level log file rotated at 250 MB, with one backup kept (at most ~500 MB on disk).
 func ConfigureEphemeralLogFile(datadirPath string, app string) error {
 	logFilePath := filepath.Join(datadirPath, "logs", app+".log")
 	if err := file.MkdirAll(filepath.Dir(logFilePath)); err != nil {
@@ -124,7 +124,8 @@ func ConfigureEphemeralLogFile(datadirPath string, app string) error {
 	// the colors are ANSI codes and seen as gibberish in the log files.
 	formatter.DisableColors = true
 
-	// configure the lumberjack log writer to rotate logs every ~24 hours
+	// Configure the lumberjack log writer. Lumberjack rotates by size only: MaxAge prunes
+	// backups older than one day, and only when a rotation or a startup happens.
 	debugWriter := &lumberjack.Logger{
 		Filename:   logFilePath,
 		MaxSize:    250, // MB, to avoid unbounded growth
