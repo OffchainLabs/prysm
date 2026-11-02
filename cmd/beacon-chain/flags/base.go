@@ -431,6 +431,7 @@ var (
 	DisablePartialDataColumns = &cli.BoolFlag{
 		Name:  "disable-partial-data-columns",
 		Usage: "Disables cell-level dissemination for PeerDAS data columns, falling back to full column gossip.",
+		Value: true,
 	}
 	// DisableGraffitiClientAppend disables appending consensus and execution client version info to the block graffiti.
 	DisableGraffitiClientAppend = &cli.BoolFlag{
