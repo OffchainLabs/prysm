@@ -177,7 +177,13 @@ func (s *Service) importBatches(ctx context.Context) {
 		_, err := s.batchImporter(ctx, current, ib, s.store)
 		if err != nil {
 			log.WithError(err).WithFields(ib.logFields()).Debug("Backfill batch failed to import")
-			s.batchSeq.update(ib.withError(err))
+			failed := ib.withError(err)
+			s.batchSeq.update(failed)
+
+			low := primitives.Slot(s.store.status().LowSlot)
+			if errors.Is(err, errChainBroken) && ib.end < low {
+				s.batchSeq.widen(failed, low)
+			}
 			// If a batch fails, the subsequent batches are no longer considered importable.
 			break
 		}
