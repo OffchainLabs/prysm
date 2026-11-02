@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/mock"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/mock/gomock"
@@ -206,6 +207,8 @@ func TestGetSyncStatus(t *testing.T) {
 				gomock.Any(),
 				syncingEndpoint,
 				&syncingResponse,
+				gomock.Any(),
+				gomock.Any(),
 			).Return(
 				testCase.restEndpointError,
 			).SetArg(
@@ -223,6 +226,15 @@ func TestGetSyncStatus(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("multi host: first node syncing, second synced", func(t *testing.T) {
+		statusPerHost := []structs.SyncStatusResponseData{{IsSyncing: true}, {IsSyncing: false}}
+		nodeClient := &beaconApiNodeClient{handler: newSyncStatusNodesHandler(t, statusPerHost)}
+
+		syncStatus, err := nodeClient.SyncStatus(t.Context(), &emptypb.Empty{})
+		require.NoError(t, err)
+		assert.Equal(t, false, syncStatus.Syncing)
+	})
 }
 
 func TestGetVersion(t *testing.T) {

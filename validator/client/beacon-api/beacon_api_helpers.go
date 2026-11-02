@@ -66,6 +66,16 @@ func (c *beaconApiValidatorClient) liveness(ctx context.Context, epoch primitive
 	return livenessResponseJson, nil
 }
 
+// isSyncedResponse reports whether a raw `/eth/v1/node/syncing` response says the node is synced.
+func isSyncedResponse(raw json.RawMessage) bool {
+	var resp structs.SyncStatusResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return false
+	}
+
+	return resp.Data != nil && !resp.Data.IsSyncing
+}
+
 func (c *beaconApiValidatorClient) syncing(ctx context.Context) (*structs.SyncStatusResponse, error) {
 	const endpoint = "/eth/v1/node/syncing"
 
