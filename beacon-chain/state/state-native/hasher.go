@@ -17,6 +17,30 @@ import (
 	"github.com/pkg/errors"
 )
 
+// fieldCountForVersion returns the number of top-level beacon state fields for the given state version.
+func fieldCountForVersion(v int) (int, error) {
+	switch v {
+	case version.Phase0:
+		return params.BeaconConfig().BeaconStateFieldCount, nil
+	case version.Altair:
+		return params.BeaconConfig().BeaconStateAltairFieldCount, nil
+	case version.Bellatrix:
+		return params.BeaconConfig().BeaconStateBellatrixFieldCount, nil
+	case version.Capella:
+		return params.BeaconConfig().BeaconStateCapellaFieldCount, nil
+	case version.Deneb:
+		return params.BeaconConfig().BeaconStateDenebFieldCount, nil
+	case version.Electra:
+		return params.BeaconConfig().BeaconStateElectraFieldCount, nil
+	case version.Fulu:
+		return params.BeaconConfig().BeaconStateFuluFieldCount, nil
+	case version.Gloas:
+		return params.BeaconConfig().BeaconStateGloasFieldCount, nil
+	default:
+		return 0, fmt.Errorf("unknown state version %s", version.String(v))
+	}
+}
+
 // ComputeFieldRootsWithHasher hashes the provided state and returns its respective field roots.
 func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "ComputeFieldRootsWithHasher")
@@ -28,27 +52,11 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 	if state == nil {
 		return nil, errors.New("nil state")
 	}
-	var fieldRoots [][]byte
-	switch state.version {
-	case version.Phase0:
-		fieldRoots = make([][]byte, params.BeaconConfig().BeaconStateFieldCount)
-	case version.Altair:
-		fieldRoots = make([][]byte, params.BeaconConfig().BeaconStateAltairFieldCount)
-	case version.Bellatrix:
-		fieldRoots = make([][]byte, params.BeaconConfig().BeaconStateBellatrixFieldCount)
-	case version.Capella:
-		fieldRoots = make([][]byte, params.BeaconConfig().BeaconStateCapellaFieldCount)
-	case version.Deneb:
-		fieldRoots = make([][]byte, params.BeaconConfig().BeaconStateDenebFieldCount)
-	case version.Electra:
-		fieldRoots = make([][]byte, params.BeaconConfig().BeaconStateElectraFieldCount)
-	case version.Fulu:
-		fieldRoots = make([][]byte, params.BeaconConfig().BeaconStateFuluFieldCount)
-	case version.Gloas:
-		fieldRoots = make([][]byte, params.BeaconConfig().BeaconStateGloasFieldCount)
-	default:
-		return nil, fmt.Errorf("unknown state version %s", version.String(state.version))
+	fieldCount, err := fieldCountForVersion(state.version)
+	if err != nil {
+		return nil, err
 	}
+	fieldRoots := make([][]byte, fieldCount)
 
 	// Genesis time root.
 	genesisRoot := ssz.Uint64Root(state.genesisTime)

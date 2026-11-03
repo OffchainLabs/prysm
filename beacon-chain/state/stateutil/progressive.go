@@ -25,6 +25,7 @@ import (
 type ProgressiveTree struct {
 	subtreeLayers [][][][32]byte // subtreeLayers[i] is the merkle tree stored at subtree i. [subtree][layers][index]
 	spine         [][32]byte     // the nodes between root and 0. corresponding to the root of each subtree.
+	leafCount     int            // the number of input leaves. positions at or beyond it are subtree zero padding.
 }
 
 // MerkleizeProgressive builds a progressive Merkle tree from 32-byte leaves.
@@ -37,6 +38,7 @@ func MerkleizeProgressive(leaves [][]byte) *ProgressiveTree {
 	tree := &ProgressiveTree{
 		subtreeLayers: make([][][][32]byte, numLevels),
 		spine:         make([][32]byte, numLevels),
+		leafCount:     len(leaves),
 	}
 
 	for level := range numLevels {
@@ -66,6 +68,7 @@ func (p *ProgressiveTree) Copy() *ProgressiveTree {
 	copied := &ProgressiveTree{
 		subtreeLayers: make([][][][32]byte, len(p.subtreeLayers)),
 		spine:         slices.Clone(p.spine),
+		leafCount:     p.leafCount,
 	}
 	for subtreeIndex, subtree := range p.subtreeLayers {
 		copied.subtreeLayers[subtreeIndex] = make([][][32]byte, len(subtree))
@@ -119,6 +122,30 @@ func (p *ProgressiveTree) Proof(globalIndex int) ([][32]byte, error) {
 		proof = append(proof, subtree[len(subtree)-1][0])
 	}
 	return proof, nil
+}
+
+// Leaf returns the input leaf at globalIndex. Positions at or beyond the input
+// leaf count are zero padding of the balanced subtrees rather than leaves of the
+// merkleized value, so reading them is an error. An input leaf whose own content
+// is zero is still a valid read.
+func (p *ProgressiveTree) Leaf(globalIndex int) ([32]byte, error) {
+	if p == nil || len(p.subtreeLayers) == 0 {
+		return [32]byte{}, fmt.Errorf("cannot read a leaf from an empty progressive tree")
+	}
+	if globalIndex < 0 || globalIndex >= p.leafCount {
+		return [32]byte{}, fmt.Errorf("progressive leaf index %d is not an input leaf", globalIndex)
+	}
+
+	subtreeIndex, localIndex := progressiveSubtreeForIndex(globalIndex)
+	if subtreeIndex < 0 || subtreeIndex >= len(p.subtreeLayers) {
+		return [32]byte{}, fmt.Errorf("progressive leaf index %d is outside tree capacity", globalIndex)
+	}
+
+	leaves := p.subtreeLayers[subtreeIndex][0]
+	if localIndex < 0 || localIndex >= len(leaves) {
+		return [32]byte{}, fmt.Errorf("progressive leaf index %d is outside subtree capacity", globalIndex)
+	}
+	return leaves[localIndex], nil
 }
 
 // RecomputeRoot updates one leaf and recomputes only its balanced subtree

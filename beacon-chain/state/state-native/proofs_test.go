@@ -1,11 +1,18 @@
 package state_native_test
 
 import (
+	"slices"
+	"sync"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -282,4 +289,235 @@ func TestBeaconStateMerkleProofs_Gloas(t *testing.T) {
 		require.Equal(t, false, trie.VerifyMerkleProof(htr[:], finalizedRoot, gIndex, proof))
 		require.Equal(t, true, trie.VerifyMerkleProof(newRoot[:], finalizedRoot, gIndex, proof))
 	})
+}
+
+func TestFieldRoots(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("RootsMatchState", func(t *testing.T) {
+		forEachFieldRootsState(t, func(t *testing.T, c fieldRootsCase, st state.BeaconState) {
+			roots, err := st.FieldRoots(ctx)
+			require.NoError(t, err)
+			require.Equal(t, c.fieldCount, len(roots))
+			if st.Version() >= version.Gloas {
+				schema, ok := statenative.ProgressiveStateSchemaForVersion(st.Version())
+				require.Equal(t, true, ok)
+				require.Equal(t, len(schema.Fields()), len(roots))
+			}
+			require.DeepSSZEqual(t, freshFieldRoots(t, st), roots)
+			want, err := st.HashTreeRoot(ctx)
+			require.NoError(t, err)
+			require.Equal(t, want, remerkleizeFieldRoots(t, st.Version(), roots))
+		})
+	})
+
+	for _, c := range fieldRootsCases() {
+		if c.name != "fulu" && c.name != "gloas" {
+			continue
+		}
+		t.Run(c.name, func(t *testing.T) {
+			t.Run("ReflectsMutations", func(t *testing.T) {
+				st := c.newState(t)
+				_, err := st.HashTreeRoot(ctx)
+				require.NoError(t, err)
+				before, err := st.FieldRoots(ctx)
+				require.NoError(t, err)
+
+				// One scalar field and two composite fields backed by field tries.
+				require.NoError(t, st.SetSlot(st.Slot()+1))
+				balance, err := st.BalanceAtIndex(3)
+				require.NoError(t, err)
+				require.NoError(t, st.UpdateBalancesAtIndex(3, balance+1))
+				validator, err := st.ValidatorAtIndex(5)
+				require.NoError(t, err)
+				validator.EffectiveBalance -= 1_000_000_000
+				require.NoError(t, st.UpdateValidatorAtIndex(5, validator))
+
+				after, err := st.FieldRoots(ctx)
+				require.NoError(t, err)
+				require.DeepSSZEqual(t, freshFieldRoots(t, st), after)
+				for _, f := range []types.FieldIndex{types.Slot, types.Balances, types.Validators} {
+					i := fieldRootIndex(t, st.Version(), f)
+					require.NotEqual(t, before[i], after[i], f.String())
+				}
+				want, err := st.HashTreeRoot(ctx)
+				require.NoError(t, err)
+				require.Equal(t, want, remerkleizeFieldRoots(t, st.Version(), after))
+
+				again, err := st.FieldRoots(ctx)
+				require.NoError(t, err)
+				require.DeepSSZEqual(t, after, again)
+			})
+
+			t.Run("ReturnedSliceIsACopy", func(t *testing.T) {
+				st := c.newState(t)
+				_, err := st.HashTreeRoot(ctx)
+				require.NoError(t, err)
+				roots, err := st.FieldRoots(ctx)
+				require.NoError(t, err)
+				want := slices.Clone(roots)
+
+				roots[0][0] ^= 0xff
+				roots[len(roots)-1] = [32]byte{}
+
+				again, err := st.FieldRoots(ctx)
+				require.NoError(t, err)
+				require.DeepSSZEqual(t, want, again)
+			})
+
+			t.Run("ConcurrentReadsAndWrites", func(t *testing.T) {
+				st := c.newState(t)
+				_, err := st.HashTreeRoot(ctx)
+				require.NoError(t, err)
+
+				const readers, iterations = 8, 20
+				errs := make(chan error, (readers+2)*iterations)
+				var wg sync.WaitGroup
+				for range readers {
+					wg.Go(func() {
+						for range iterations {
+							if _, err := st.FieldRoots(ctx); err != nil {
+								errs <- err
+							}
+						}
+					})
+				}
+				wg.Go(func() {
+					for range iterations {
+						if err := st.SetSlot(st.Slot() + 1); err != nil {
+							errs <- err
+						}
+					}
+				})
+				wg.Go(func() {
+					for i := range iterations {
+						if err := st.UpdateBalancesAtIndex(primitives.ValidatorIndex(i), uint64(i)); err != nil {
+							errs <- err
+						}
+					}
+				})
+				wg.Wait()
+				close(errs)
+				for err := range errs {
+					require.NoError(t, err)
+				}
+
+				// Reads during the writes are not atomic with each other, so only the settled state is compared.
+				roots, err := st.FieldRoots(ctx)
+				require.NoError(t, err)
+				require.DeepSSZEqual(t, freshFieldRoots(t, st), roots)
+				want, err := st.HashTreeRoot(ctx)
+				require.NoError(t, err)
+				require.Equal(t, want, remerkleizeFieldRoots(t, st.Version(), roots))
+			})
+		})
+	}
+}
+
+// fieldRootIndex returns the position of field f in the FieldRoots output for version v.
+func fieldRootIndex(t *testing.T, v int, f types.FieldIndex) int {
+	schema, progressive := statenative.ProgressiveStateSchemaForVersion(v)
+	if !progressive {
+		return f.RealPosition()
+	}
+	i := slices.Index(schema.Fields(), f)
+	require.NotEqual(t, -1, i)
+	return i
+}
+
+// forEachFieldRootsState runs fn on a fresh state per fork, once with a cold Merkle cache and once warmed by HashTreeRoot.
+func forEachFieldRootsState(t *testing.T, fn func(t *testing.T, c fieldRootsCase, st state.BeaconState)) {
+	for _, mode := range []string{"cold", "warm"} {
+		t.Run(mode, func(t *testing.T) {
+			for _, c := range fieldRootsCases() {
+				t.Run(c.name, func(t *testing.T) {
+					st := c.newState(t)
+					if mode == "warm" {
+						_, err := st.HashTreeRoot(t.Context())
+						require.NoError(t, err)
+					}
+					fn(t, c, st)
+				})
+			}
+		})
+	}
+}
+
+// remerkleizeFieldRoots rebuilds the state root from its field roots the way an API consumer would.
+func remerkleizeFieldRoots(t *testing.T, v int, roots [][32]byte) [32]byte {
+	schema, progressive := statenative.ProgressiveStateSchemaForVersion(v)
+	if !progressive {
+		return ssz.MerkleizeVector(slices.Clone(roots), uint64(len(roots)))
+	}
+	root, err := ssz.ContainerRootProgressive(roots, schema.ActiveFields())
+	require.NoError(t, err)
+	return root
+}
+
+// freshFieldRoots recomputes the active field roots from scratch, bypassing the state's Merkle cache.
+func freshFieldRoots(t *testing.T, st state.BeaconState) [][32]byte {
+	native, ok := st.(*statenative.BeaconState)
+	require.Equal(t, true, ok)
+	raw, err := statenative.ComputeFieldRootsWithHasher(t.Context(), native)
+	require.NoError(t, err)
+
+	schema, progressive := statenative.ProgressiveStateSchemaForVersion(st.Version())
+	if !progressive {
+		roots := make([][32]byte, len(raw))
+		for i := range raw {
+			roots[i] = bytesutil.ToBytes32(raw[i])
+		}
+		return roots
+	}
+	fields := schema.Fields()
+	roots := make([][32]byte, len(fields))
+	for i, f := range fields {
+		roots[i] = bytesutil.ToBytes32(raw[f.RealPosition()])
+	}
+	return roots
+}
+
+type fieldRootsCase struct {
+	name       string
+	newState   func(t *testing.T) state.BeaconState
+	fieldCount int
+}
+
+// fieldRootsCases returns one populated state per fork with its active field count taken from the consensus specs.
+func fieldRootsCases() []fieldRootsCase {
+	const numValidators = 64
+	return []fieldRootsCase{
+		{name: "phase0", fieldCount: 21, newState: func(t *testing.T) state.BeaconState {
+			st, _ := util.DeterministicGenesisState(t, numValidators)
+			return st
+		}},
+		{name: "altair", fieldCount: 24, newState: func(t *testing.T) state.BeaconState {
+			st, _ := util.DeterministicGenesisStateAltair(t, numValidators)
+			return st
+		}},
+		{name: "bellatrix", fieldCount: 25, newState: func(t *testing.T) state.BeaconState {
+			st, _ := util.DeterministicGenesisStateBellatrix(t, numValidators)
+			return st
+		}},
+		{name: "capella", fieldCount: 28, newState: func(t *testing.T) state.BeaconState {
+			st, _ := util.DeterministicGenesisStateCapella(t, numValidators)
+			return st
+		}},
+		{name: "deneb", fieldCount: 28, newState: func(t *testing.T) state.BeaconState {
+			st, _ := util.DeterministicGenesisStateDeneb(t, numValidators)
+			return st
+		}},
+		{name: "electra", fieldCount: 37, newState: func(t *testing.T) state.BeaconState {
+			st, _ := util.DeterministicGenesisStateElectra(t, numValidators)
+			return st
+		}},
+		{name: "fulu", fieldCount: 38, newState: func(t *testing.T) state.BeaconState {
+			st, _ := util.DeterministicGenesisStateFulu(t, numValidators)
+			return st
+		}},
+		{name: "gloas", fieldCount: 46, newState: func(t *testing.T) state.BeaconState {
+			st, _ := util.DeterministicGenesisStateGloas(t, numValidators)
+			return st
+		}},
+	}
 }

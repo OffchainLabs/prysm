@@ -975,6 +975,16 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
+			template: "/eth/v1/beacon/states/{state_id}/leaves",
+			name:     namespace + ".GetStateLeaves",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetStateLeaves,
+			methods: []string{http.MethodGet},
+		},
+		{
 			template: "/eth/v1/beacon/states/{state_id}/builder_pending_withdrawals",
 			name:     namespace + ".GetBuilderPendingWithdrawals",
 			middleware: []middleware.Middleware{

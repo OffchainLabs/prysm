@@ -1801,6 +1801,59 @@ func (s *Server) GetProposerLookahead(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GetStateLeaves returns the hash tree root of every active field of the state with the given 'stateId', in field order.
+func (s *Server) GetStateLeaves(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.GetStateLeaves")
+	defer span.End()
+
+	stateId := r.PathValue("state_id")
+	if stateId == "" {
+		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		return
+	}
+	st, err := s.Stater.State(ctx, []byte(stateId))
+	if err != nil {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+	leaves, err := st.FieldRoots(ctx)
+	if err != nil {
+		httputil.HandleError(w, "Could not compute state leaves: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set(api.VersionHeader, version.String(st.Version()))
+	if httputil.RespondWithSsz(r) {
+		sszData := make([]byte, 0, len(leaves)*fieldparams.RootLength)
+		for _, leaf := range leaves {
+			sszData = append(sszData, leaf[:]...)
+		}
+		httputil.WriteSsz(w, sszData)
+		return
+	}
+
+	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
+	if err != nil {
+		helpers.HandleIsOptimisticError(w, err)
+		return
+	}
+	blockRoot, err := helpers.BlockRootFromState(ctx, st)
+	if err != nil {
+		httputil.HandleError(w, "Could not calculate block root: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	data := make([]string, len(leaves))
+	for i, leaf := range leaves {
+		data[i] = hexutil.Encode(leaf[:])
+	}
+	httputil.WriteJson(w, &structs.GetStateLeavesResponse{
+		Version:             version.String(st.Version()),
+		ExecutionOptimistic: isOptimistic,
+		Finalized:           s.FinalizationFetcher.IsFinalized(ctx, blockRoot),
+		Data:                data,
+	})
+}
+
 // GetBuilderPendingWithdrawals returns builder pending withdrawals for state with given 'stateId'.
 // Should return 400 if the state retrieved is prior to Gloas.
 // Supports both JSON and SSZ responses based on Accept header.

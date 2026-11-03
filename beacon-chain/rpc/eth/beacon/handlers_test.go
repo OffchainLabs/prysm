@@ -4952,6 +4952,186 @@ func TestGetProposerLookahead(t *testing.T) {
 	})
 }
 
+func TestGetStateLeaves(t *testing.T) {
+	ctx := t.Context()
+	const numValidators = 64
+	forks := []struct {
+		name       string
+		fieldCount int
+		newState   func(t *testing.T) state.BeaconState
+	}{
+		{name: "phase0", fieldCount: 21, newState: func(t *testing.T) state.BeaconState {
+			st, _ := util.DeterministicGenesisState(t, numValidators)
+			return st
+		}},
+		{name: "electra", fieldCount: 37, newState: func(t *testing.T) state.BeaconState {
+			st, _ := util.DeterministicGenesisStateElectra(t, numValidators)
+			return st
+		}},
+		{name: "gloas", fieldCount: 46, newState: func(t *testing.T) state.BeaconState {
+			st, _ := util.DeterministicGenesisStateGloas(t, numValidators)
+			return st
+		}},
+	}
+
+	for _, fork := range forks {
+		t.Run(fork.name, func(t *testing.T) {
+			st := fork.newState(t)
+			leaves, err := st.FieldRoots(ctx)
+			require.NoError(t, err)
+			chainService := &chainMock.ChainService{}
+			s := &Server{
+				Stater:                &testutil.MockStater{BeaconState: st},
+				OptimisticModeFetcher: chainService,
+				FinalizationFetcher:   chainService,
+			}
+
+			t.Run("json", func(t *testing.T) {
+				writer := getStateLeaves(s, "head", false)
+				require.Equal(t, http.StatusOK, writer.Code)
+				require.Equal(t, api.JsonMediaType, writer.Header().Get("Content-Type"))
+				require.Equal(t, fork.name, writer.Header().Get(api.VersionHeader))
+
+				// All four keys are required by the spec, so false booleans must not be omitted.
+				var keys map[string]json.RawMessage
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &keys))
+				require.Equal(t, 4, len(keys))
+				for _, key := range []string{"version", "execution_optimistic", "finalized", "data"} {
+					_, ok := keys[key]
+					require.Equal(t, true, ok, key)
+				}
+
+				resp := &structs.GetStateLeavesResponse{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+				require.Equal(t, fork.name, resp.Version)
+				require.Equal(t, false, resp.ExecutionOptimistic)
+				require.Equal(t, false, resp.Finalized)
+				require.Equal(t, fork.fieldCount, len(resp.Data))
+				for i, leaf := range leaves {
+					require.Equal(t, hexutil.Encode(leaf[:]), resp.Data[i])
+				}
+			})
+
+			t.Run("ssz", func(t *testing.T) {
+				writer := getStateLeaves(s, "head", true)
+				require.Equal(t, http.StatusOK, writer.Code)
+				require.Equal(t, api.OctetStreamMediaType, writer.Header().Get("Content-Type"))
+				require.Equal(t, fork.name, writer.Header().Get(api.VersionHeader))
+				require.Equal(t, 32*fork.fieldCount, writer.Body.Len())
+				want := make([]byte, 0, 32*fork.fieldCount)
+				for _, leaf := range leaves {
+					want = append(want, leaf[:]...)
+				}
+				require.DeepSSZEqual(t, want, writer.Body.Bytes())
+			})
+		})
+	}
+
+	st, _ := util.DeterministicGenesisStateElectra(t, numValidators)
+	const electraFieldCount = 37
+	blockRoot, err := helpers.BlockRootFromState(ctx, st)
+	require.NoError(t, err)
+	stateRoot, err := st.HashTreeRoot(ctx)
+	require.NoError(t, err)
+
+	t.Run("metadata", func(t *testing.T) {
+		tests := []struct {
+			name           string
+			chainService   *chainMock.ChainService
+			wantOptimistic bool
+			wantFinalized  bool
+		}{
+			{name: "optimistic", chainService: &chainMock.ChainService{Optimistic: true}, wantOptimistic: true},
+			{name: "finalized", chainService: &chainMock.ChainService{FinalizedRoots: map[[32]byte]bool{blockRoot: true}}, wantFinalized: true},
+		}
+		for _, test := range tests {
+			t.Run(test.name, func(t *testing.T) {
+				s := &Server{
+					Stater:                &testutil.MockStater{BeaconState: st},
+					OptimisticModeFetcher: test.chainService,
+					FinalizationFetcher:   test.chainService,
+				}
+				writer := getStateLeaves(s, "head", false)
+				require.Equal(t, http.StatusOK, writer.Code)
+				resp := &structs.GetStateLeavesResponse{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+				require.Equal(t, test.wantOptimistic, resp.ExecutionOptimistic)
+				require.Equal(t, test.wantFinalized, resp.Finalized)
+			})
+		}
+	})
+
+	t.Run("missing state_id", func(t *testing.T) {
+		writer := getStateLeaves(&Server{Stater: &testutil.MockStater{BeaconState: st}}, "", false)
+		requireStateLeavesError(t, writer, http.StatusBadRequest, "state_id is required in URL params")
+	})
+
+	t.Run("field roots failure", func(t *testing.T) {
+		s := &Server{Stater: &testutil.MockStater{BeaconState: &fieldRootsErrorState{BeaconState: st}}}
+		for _, useSsz := range []bool{false, true} {
+			writer := getStateLeaves(s, "head", useSsz)
+			requireStateLeavesError(t, writer, http.StatusInternalServerError, "Could not compute state leaves")
+		}
+	})
+
+	t.Run("metadata failure", func(t *testing.T) {
+		// A nil finalized checkpoint makes the optimistic status lookup fail.
+		chainService := &chainMock.ChainService{}
+		s := &Server{
+			Stater:                &testutil.MockStater{BeaconState: st},
+			OptimisticModeFetcher: chainService,
+			FinalizationFetcher:   chainService,
+			ChainInfoFetcher:      chainService,
+		}
+		writer := getStateLeaves(s, "finalized", false)
+		requireStateLeavesError(t, writer, http.StatusInternalServerError, "Could not check optimistic status")
+	})
+
+	t.Run("ssz skips metadata", func(t *testing.T) {
+		// Metadata dependencies are nil, so the SSZ branch would panic if it touched any of them.
+		s := &Server{Stater: &testutil.MockStater{BeaconState: st}}
+		for _, stateId := range []string{"head", "finalized", hexutil.Encode(stateRoot[:])} {
+			writer := getStateLeaves(s, stateId, true)
+			require.Equal(t, http.StatusOK, writer.Code, stateId)
+			require.Equal(t, 32*electraFieldCount, writer.Body.Len(), stateId)
+		}
+	})
+}
+
+// getStateLeaves calls GetStateLeaves for stateId, asking for SSZ when useSsz is true.
+func getStateLeaves(s *Server, stateId string, useSsz bool) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/leaves", nil)
+	if stateId != "" {
+		request.SetPathValue("state_id", stateId)
+	}
+	if useSsz {
+		request.Header.Set("Accept", api.OctetStreamMediaType)
+	}
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+	s.GetStateLeaves(writer, request)
+	return writer
+}
+
+// requireStateLeavesError asserts an error response with the given code and message instead of a success payload.
+func requireStateLeavesError(t *testing.T, writer *httptest.ResponseRecorder, code int, msg string) {
+	require.Equal(t, code, writer.Code)
+	require.Equal(t, api.JsonMediaType, writer.Header().Get("Content-Type"))
+	e := &httputil.DefaultJsonError{}
+	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+	require.Equal(t, code, e.Code)
+	require.StringContains(t, msg, e.Message)
+}
+
+// fieldRootsErrorState is a beacon state whose FieldRoots always fails.
+type fieldRootsErrorState struct {
+	state.BeaconState
+}
+
+func (*fieldRootsErrorState) FieldRoots(context.Context) ([][32]byte, error) {
+	return nil, errors.New("field roots unavailable")
+}
+
 func TestGetBuilderPendingWithdrawals(t *testing.T) {
 	st, err := util.NewBeaconStateGloas()
 	require.NoError(t, err)

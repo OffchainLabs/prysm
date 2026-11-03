@@ -121,6 +121,58 @@ func (b *BeaconState) ProofByFieldIndex(ctx context.Context, f types.FieldIndex)
 	return b.proofByFieldIndex(ctx, f)
 }
 
+// FieldRoots returns the hash tree root of every active field of the state, in field order.
+func (b *BeaconState) FieldRoots(ctx context.Context) ([][32]byte, error) {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	if b.version >= version.Gloas {
+		schema, ok := ProgressiveStateSchemaForVersion(b.version)
+		if !ok {
+			return nil, fmt.Errorf("progressive state schema not found for version %v", b.version)
+		}
+		if err := b.initializeProgressiveMerkleTree(ctx); err != nil {
+			return nil, err
+		}
+		if err := b.recomputeProgressiveDirtyFields(ctx); err != nil {
+			return nil, err
+		}
+		b.merkleLayers = nil
+		fields := schema.Fields()
+		roots := make([][32]byte, len(fields))
+		for i, f := range fields {
+			pos, ok := schema.GetFieldIndex(f)
+			if !ok {
+				return nil, fmt.Errorf("field index %s not found in progressive state schema", f.String())
+			}
+			root, err := b.progressiveMerkleTree.Leaf(pos)
+			if err != nil {
+				return nil, fmt.Errorf("could not read progressive field %s: %w", f.String(), err)
+			}
+			roots[i] = root
+		}
+		return roots, nil
+	}
+
+	b.progressiveMerkleTree = nil
+	if err := b.initializeMerkleLayers(ctx); err != nil {
+		return nil, err
+	}
+	if err := b.recomputeDirtyFields(ctx); err != nil {
+		return nil, err
+	}
+	fieldCount, err := fieldCountForVersion(b.version)
+	if err != nil {
+		return nil, err
+	}
+	// Layer 0 is padded with zero leaves, so only the first fieldCount entries are field roots.
+	roots := make([][32]byte, fieldCount)
+	for i := range roots {
+		roots[i] = bytesutil.ToBytes32(b.merkleLayers[0][i])
+	}
+	return roots, nil
+}
+
 // proofByFieldIndex constructs proofs for given field index.
 // Important: it is assumed that beacon state mutex is locked when calling this method.
 func (b *BeaconState) proofByFieldIndex(ctx context.Context, f types.FieldIndex) ([][]byte, error) {
