@@ -153,7 +153,7 @@ func (s *Store) Backup(_ context.Context, outputDir string, permissionOverride b
 // UpdatePublicKeysBuckets creates a file for each public key in the database directory if needed.
 func (s *Store) UpdatePublicKeysBuckets(pubKeys [][fieldparams.BLSPubkeyLength]byte) error {
 	if err := protectionDurabilitySupported(); err != nil {
-		return err
+		return errors.Wrap(err, "could not persist validator slashing protection")
 	}
 	validatorSlashingProtection := ValidatorSlashingProtection{}
 
@@ -189,7 +189,10 @@ func (s *Store) UpdatePublicKeysBuckets(pubKeys [][fieldparams.BLSPubkeyLength]b
 		}
 	}
 
-	return s.protectionWriter().syncDirectories(slashingProtectionDirPath)
+	if err := s.protectionWriter().syncDirectories(slashingProtectionDirPath); err != nil {
+		return errors.Wrapf(err, "could not sync slashing protection directory %s", slashingProtectionDirPath)
+	}
+	return nil
 }
 
 // slashingProtectionDirPath returns the path of the slashing protection directory.
@@ -339,7 +342,7 @@ func (s *Store) saveValidatorSlashingProtection(
 	}
 
 	if err := protectionDurabilitySupported(); err != nil {
-		return err
+		return errors.Wrap(err, "could not persist validator slashing protection")
 	}
 
 	// Create the directory if needed.

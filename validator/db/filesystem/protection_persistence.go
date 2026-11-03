@@ -34,7 +34,7 @@ func defaultProtectionPersistence() protectionPersistence {
 		openDir: func(path string) (protectionFile, error) {
 			return os.Open(path) // #nosec G304 -- path is derived from the configured database directory and opened only for directory synchronization.
 		},
-		rename: os.Rename,
+		rename: renameProtectionFile,
 		remove: os.Remove,
 	}
 }
@@ -48,7 +48,7 @@ func (s *Store) protectionWriter() protectionPersistence {
 
 func protectionDurabilitySupported() error {
 	switch runtime.GOOS {
-	case "aix", "darwin", "dragonfly", "freebsd", "illumos", "linux", "netbsd", "openbsd", "solaris":
+	case "windows", "aix", "darwin", "dragonfly", "freebsd", "illumos", "linux", "netbsd", "openbsd", "solaris":
 		return nil
 	default:
 		return fmt.Errorf("durable slashing protection writes are unsupported on %s", runtime.GOOS)
@@ -57,23 +57,23 @@ func protectionDurabilitySupported() error {
 
 func (p protectionPersistence) write(path string, data []byte) (err error) {
 	if err = protectionDurabilitySupported(); err != nil {
-		return err
+		return fmt.Errorf("persist protection file %s: %w", path, err)
 	}
 	path, err = file.ExpandPath(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("expand protection file path: %w", err)
 	}
 	exists, err := file.Exists(path, file.Regular)
 	if err != nil {
-		return err
+		return fmt.Errorf("check protection file %s: %w", path, err)
 	}
 	if exists {
 		allowed, err := file.HasReadWritePermissions(path)
 		if err != nil {
-			return err
+			return fmt.Errorf("check protection file permissions %s: %w", path, err)
 		}
 		if !allowed {
-			return fmt.Errorf("file already exists without proper 0600 permissions: %s", path)
+			return fmt.Errorf("file already exists without proper %04o permissions: %s", params.BeaconIoConfig().ReadWritePermissions, path)
 		}
 	}
 	temp, err := p.createTemp(filepath.Dir(path), ".slashing-protection-*")
@@ -111,17 +111,24 @@ func (p protectionPersistence) write(path string, data []byte) (err error) {
 	if err = p.rename(temp.Name(), path); err != nil {
 		return fmt.Errorf("rename protection file: %w", err)
 	}
-	return p.syncDirectories(filepath.Dir(path))
+	if err := p.syncDirectories(filepath.Dir(path)); err != nil {
+		return fmt.Errorf("sync protection file parent %s: %w", path, err)
+	}
+	return nil
 }
 
 // Sync ancestors on every retry, even when an earlier attempt created the directories.
 func (p protectionPersistence) syncDirectories(path string) error {
+	// Windows publishes the synced file using a write-through rename.
+	if runtime.GOOS == "windows" {
+		return nil
+	}
 	if err := protectionDurabilitySupported(); err != nil {
-		return err
+		return fmt.Errorf("sync protection directory %s: %w", path, err)
 	}
 	path, err := file.ExpandPath(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("expand protection directory path: %w", err)
 	}
 	for {
 		dir, err := p.openDir(path)

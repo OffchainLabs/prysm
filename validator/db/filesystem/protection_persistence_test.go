@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -55,6 +56,9 @@ func TestProtectionPersistenceFailures(t *testing.T) {
 	for _, existing := range []bool{false, true} {
 		for _, phase := range []string{"create", "chmod", "write", "short write", "file sync", "file close", "rename", "directory open", "directory sync", "directory close", "ancestor sync", "cleanup"} {
 			t.Run(phase+map[bool]string{false: "/create", true: "/replace"}[existing], func(t *testing.T) {
+				if runtime.GOOS == "windows" && (strings.HasPrefix(phase, "directory") || phase == "ancestor sync") {
+					t.Skip("Windows uses a write-through rename instead of directory fsync")
+				}
 				s, err := NewStore(t.TempDir(), nil)
 				if err != nil {
 					t.Fatal(err)
@@ -258,7 +262,7 @@ func TestProtectionPersistenceOrdering(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{"create", "chmod", "write", "sync", "close", "rename"}
-	for p := dir; ; p = filepath.Dir(p) {
+	for p := dir; runtime.GOOS != "windows"; p = filepath.Dir(p) {
 		want = append(want, p, "directory sync", "directory close")
 		if filepath.Dir(p) == p {
 			break
@@ -270,6 +274,9 @@ func TestProtectionPersistenceOrdering(t *testing.T) {
 	info, err := os.Stat(target)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if runtime.GOOS == "windows" {
+		return
 	}
 	if info.Mode().Perm() != 0600 {
 		t.Fatalf("mode %v", info.Mode())
@@ -294,6 +301,9 @@ func TestProtectionPersistenceOrdering(t *testing.T) {
 }
 
 func TestProtectionInitializationRetries(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows uses a write-through rename instead of directory fsync")
+	}
 	if err := protectionDurabilitySupported(); err != nil {
 		t.Skip(err)
 	}
@@ -523,6 +533,9 @@ func TestProtectionPersistenceInterruption(t *testing.T) {
 }
 
 func TestProtectionPersistenceNormalizesTemporaryPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not expose POSIX permissions")
+	}
 	if err := protectionDurabilitySupported(); err != nil {
 		t.Skip(err)
 	}
@@ -642,5 +655,37 @@ func TestProtectionUnsupportedPlatform(t *testing.T) {
 	}
 	if _, err := os.Stat(s.slashingProtectionDirPath()); !os.IsNotExist(err) {
 		t.Fatalf("unsupported write mutated directory: %v", err)
+	}
+}
+
+func TestProtectionPersistenceCreateAndReplace(t *testing.T) {
+	if err := protectionDurabilitySupported(); err != nil {
+		t.Skip(err)
+	}
+	s, err := NewStore(filepath.Join(t.TempDir(), "new", "parent"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := getPubKeys(t, 1)
+	key := keys[0]
+	if err := s.UpdatePublicKeysBuckets(keys); err != nil {
+		t.Fatal(err)
+	}
+	for _, epoch := range []uint64{7, 8} {
+		record := &ValidatorSlashingProtection{LastSignedAttestationSourceEpoch: epoch}
+		if err := s.saveValidatorSlashingProtection(key, record); err != nil {
+			t.Fatal(err)
+		}
+		reopened, err := NewStore(s.DatabasePath(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := reopened.validatorSlashingProtection(key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got == nil || got.LastSignedAttestationSourceEpoch != epoch {
+			t.Fatalf("record: %+v, want epoch %d", got, epoch)
+		}
 	}
 }
