@@ -133,12 +133,6 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	if err := v.VerifyWithdrawalsLimit(); err != nil {
 		return pubsub.ValidationReject, err
 	}
-	if features.Get().DisableGossipBlockHashCheck {
-		v.SatisfyRequirement(verification.RequireExecutionBlockHashValid)
-	} else if err := v.VerifyExecutionBlockHash(); err != nil {
-		return pubsub.ValidationIgnore, err
-	}
-
 	var pubkey [fieldparams.BLSPubkeyLength]byte
 	if env.BuilderIndex() == params.BeaconConfig().BuilderIndexSelfBuild {
 		pubkey, err = s.cfg.chain.HeadValidatorIndexToPublicKey(ctx, block.Block().ProposerIndex())
@@ -162,6 +156,11 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	// [REJECT] signed_execution_payload_envelope.signature is valid with respect to the builder's public key.
 	if err := v.VerifySignatureWithPubkey(pubkey, s.cfg.clock.GenesisValidatorsRoot()); err != nil {
 		return pubsub.ValidationReject, err
+	}
+	if features.Get().DisableGossipBlockHashCheck {
+		v.SatisfyRequirement(verification.RequireExecutionBlockHashValid)
+	} else if err := v.VerifyExecutionBlockHash(); err != nil {
+		return pubsub.ValidationIgnore, err
 	}
 	s.setSeenPayloadEnvelope(root, env.BuilderIndex())
 	msg.ValidatorData = signedEnvelope
