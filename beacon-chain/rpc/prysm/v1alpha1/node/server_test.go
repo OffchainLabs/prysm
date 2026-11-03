@@ -233,6 +233,12 @@ func TestNodeServer_GetHealth(t *testing.T) {
 			wantedErr:    "node is optimistic",
 		},
 		{
+			name:         "returns error when initialized, synced but optimistic",
+			input:        &mockSync.Sync{IsSyncing: false, IsSynced: true, IsInitialized: true},
+			isOptimistic: true,
+			wantedErr:    "node is optimistic",
+		},
+		{
 			name:         "returns error when syncing and optimistic",
 			input:        &mockSync.Sync{IsSyncing: true, IsSynced: false},
 			isOptimistic: true,

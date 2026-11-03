@@ -84,7 +84,7 @@ func (m *healthMonitor) updateStatus(ishealthy bool) {
 			"fails":    m.fails,
 			"maxFails": m.maxFails,
 			"url":      api.RedactEndpointList(m.client.Host()),
-		}).Warn("Failed health check, beacon node is unresponsive")
+		}).Warn("Failed health check, beacon node is not ready")
 	}
 	if ishealthy == m.isHealthy {
 		// is not a new status so skip update
