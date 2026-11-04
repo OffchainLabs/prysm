@@ -448,10 +448,10 @@ var (
 		Usage: "Maximum number of consecutive failed health checks before exiting. A health check fails when no connected beacon node is ready. Set to 0 or a negative number for indefinite checks.",
 		Value: DefaultMaxHealthChecks,
 	}
-	// DisableEphemeralLogFile disables the 24 hour debug log file.
+	// DisableEphemeralLogFile disables the size-capped debug log file.
 	DisableEphemeralLogFile = &cli.BoolFlag{
 		Name:  "disable-ephemeral-log-file",
-		Usage: "Disables the creation of a debug log file that keeps 24 hours of logs.",
+		Usage: "Disables the debug log file written to <datadir>/logs. This file is rotated at 250 MB with one backup kept, so it holds at most ~500 MB of the most recent logs.",
 		Value: false,
 	}
 )

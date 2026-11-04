@@ -23,6 +23,34 @@ func TestMappingHasNoDuplicates(t *testing.T) {
 	}
 }
 
+func TestGossipTopicMappings_LightClientGloas(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.AltairForkEpoch, cfg.BellatrixForkEpoch, cfg.CapellaForkEpoch = 1, 2, 3
+	cfg.DenebForkEpoch, cfg.ElectraForkEpoch, cfg.FuluForkEpoch = 4, 5, 6
+	cfg.GloasForkEpoch, cfg.HezeForkEpoch = 7, 8
+	params.OverrideBeaconConfig(cfg)
+	for _, tt := range []struct {
+		epoch                primitives.Epoch
+		optimistic, finality proto.Message
+	}{
+		{6, &ethpb.LightClientOptimisticUpdateDeneb{}, &ethpb.LightClientFinalityUpdateElectra{}},
+		{7, &ethpb.LightClientOptimisticUpdateGloas{}, &ethpb.LightClientFinalityUpdateGloas{}},
+		{8, &ethpb.LightClientOptimisticUpdateGloas{}, &ethpb.LightClientFinalityUpdateGloas{}},
+	} {
+		for _, msg := range []struct {
+			topic string
+			want  proto.Message
+		}{
+			{LightClientOptimisticUpdateTopicFormat, tt.optimistic},
+			{LightClientFinalityUpdateTopicFormat, tt.finality},
+		} {
+			assert.Equal(t, reflect.TypeOf(msg.want), reflect.TypeOf(GossipTopicMappings(msg.topic, tt.epoch)))
+			assert.Equal(t, msg.topic, GossipTypeMapping[reflect.TypeOf(msg.want)])
+		}
+	}
+}
+
 func TestGossipTopicMappings_CorrectType(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	bCfg := params.BeaconConfig().Copy()
