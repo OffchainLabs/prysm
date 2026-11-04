@@ -228,7 +228,7 @@ func attestingAggregateKey(
 	attesting []uint64,
 ) (bls.PublicKey, error) {
 	// Calculate the total number of committee members across all committees.
-	var total int
+	total := 0
 	for _, c := range committees {
 		total += len(c)
 	}
