@@ -20,13 +20,15 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // PerformExitCfg for account voluntary exits.
 type PerformExitCfg struct {
 	ValidatorClient  iface.ValidatorClient
-	NodeClient       iface.NodeClient
+	GenesisTime      *timestamppb.Timestamp
 	Keymanager       keymanager.IKeymanager
 	RawPubKeys       [][]byte
 	FormattedPubKeys []string
@@ -58,10 +60,14 @@ func (acm *CLIManager) Exit(ctx context.Context) error {
 	if syncStatus.Syncing {
 		return errors.New("could not perform exit: beacon node is syncing.")
 	}
+	genesisResponse, err := nodeClient.Genesis(ctx, &emptypb.Empty{})
+	if err != nil {
+		return fmt.Errorf("could not get genesis: %w", err)
+	}
 
 	cfg := PerformExitCfg{
 		validatorClient,
-		nodeClient,
+		genesisResponse.GenesisTime,
 		acm.keymanager,
 		acm.rawPubKeys,
 		acm.formattedPubKeys,
@@ -74,7 +80,7 @@ func (acm *CLIManager) Exit(ctx context.Context) error {
 	if len(acm.exitJSONOutputPath) > 0 {
 		displayExitJSONInfo(trimmedExitedKeys, acm.exitJSONOutputPath)
 	} else {
-		displayExitInfo(rawExitedKeys, trimmedExitedKeys)
+		displayExitInfo(beaconChaBaseURL(genesisResponse.GenesisValidatorsRoot), rawExitedKeys, trimmedExitedKeys)
 	}
 
 	return nil
@@ -85,17 +91,13 @@ func PerformVoluntaryExit(
 	ctx context.Context, cfg PerformExitCfg,
 ) (rawExitedKeys [][]byte, formattedExitedKeys []string, err error) {
 	var rawNotExitedKeys [][]byte
-	genesisResponse, err := cfg.NodeClient.Genesis(ctx, &emptypb.Empty{})
+	epoch, err := client.CurrentEpoch(cfg.GenesisTime)
 	if err != nil {
-		log.WithError(err).Errorf("voluntary exit failed: %v", err)
+		return nil, nil, fmt.Errorf("could not get current epoch: %w", err)
 	}
 	for i, key := range cfg.RawPubKeys {
 		// When output directory is present, only create the signed exit, but do not propose it.
 		// Otherwise, propose the exit immediately.
-		epoch, err := client.CurrentEpoch(genesisResponse.GenesisTime)
-		if err != nil {
-			log.WithError(err).Errorf("voluntary exit failed: %v", err)
-		}
 		if len(cfg.OutputDirectory) > 0 {
 			sve, err := client.CreateSignedVoluntaryExit(ctx, cfg.ValidatorClient, cfg.Keymanager.Sign, key, epoch)
 			if err != nil {
@@ -105,10 +107,10 @@ func PerformVoluntaryExit(
 					strings.Contains(msg, blocks.ValidatorCannotExitYetMsg) {
 					log.Warningf("Could not create voluntary exit for account %s: %s", cfg.FormattedPubKeys[i], msg)
 				} else {
-					log.WithError(err).Errorf("voluntary exit failed for account %s", cfg.FormattedPubKeys[i])
+					log.WithError(err).Errorf("Voluntary exit failed for account %s", cfg.FormattedPubKeys[i])
 				}
 			} else if err := writeSignedVoluntaryExitJSON(sve, cfg.OutputDirectory); err != nil {
-				log.WithError(err).Error("failed to write voluntary exit")
+				log.WithError(err).Error("Failed to write voluntary exit")
 			}
 		} else if err := client.ProposeExit(ctx, cfg.ValidatorClient, cfg.Keymanager.Sign, key, epoch); err != nil {
 			rawNotExitedKeys = append(rawNotExitedKeys, key)
@@ -118,7 +120,7 @@ func PerformVoluntaryExit(
 				strings.Contains(msg, blocks.ValidatorCannotExitYetMsg) {
 				log.Warningf("Could not perform voluntary exit for account %s: %s", cfg.FormattedPubKeys[i], msg)
 			} else {
-				log.WithError(err).Errorf("voluntary exit failed for account %s", cfg.FormattedPubKeys[i])
+				log.WithError(err).Errorf("Voluntary exit failed for account %s", cfg.FormattedPubKeys[i])
 			}
 		}
 	}
@@ -153,50 +155,54 @@ func prepareAllKeys(validatingKeys [][fieldparams.BLSPubkeyLength]byte) (raw [][
 	return
 }
 
-func displayExitInfo(rawExitedKeys [][]byte, trimmedExitedKeys []string) {
-	if len(rawExitedKeys) > 0 {
-		urlFormattedPubKeys := make([]string, len(rawExitedKeys))
-		for i, key := range rawExitedKeys {
-			urlFormattedPubKeys[i] = formatBeaconChaURL(key)
-		}
-
-		ifaceKeys := make([]any, len(urlFormattedPubKeys))
-		for i, k := range urlFormattedPubKeys {
-			ifaceKeys[i] = k
-		}
-
-		info := fmt.Sprintf("Voluntary exit was successful for the accounts listed. "+
-			"URLs where you can track each validator's exit:\n"+strings.Repeat("%s\n", len(ifaceKeys)), ifaceKeys...)
-
-		log.WithField("pubkeys", strings.Join(trimmedExitedKeys, ", ")).Info(info)
-	} else {
+// displayExitInfo logs each exited account, with a link to track its exit when baseURL is not empty.
+func displayExitInfo(baseURL string, rawExitedKeys [][]byte, trimmedExitedKeys []string) {
+	if len(rawExitedKeys) == 0 {
 		log.Info("No successful voluntary exits")
+		return
 	}
+
+	for i, key := range rawExitedKeys {
+		logger := log.WithField("pubkey", trimmedExitedKeys[i])
+		if baseURL != "" {
+			logger = logger.WithField("url", fmt.Sprintf("%s/validator/%s", baseURL, hexutil.Encode(key)[2:]))
+		}
+
+		logger.Info("Voluntary exit was successful")
+	}
+
+	log.WithField("count", len(rawExitedKeys)).Info("Voluntary exits were successful")
 }
 
+// displayExitJSONInfo logs each account whose signed voluntary exit was written to outputDirectory.
 func displayExitJSONInfo(trimmedExitedKeys []string, outputDirectory string) {
-	if len(trimmedExitedKeys) > 0 {
-		log.WithField("pubkeys", strings.Join(trimmedExitedKeys, ", ")).Infof(
-			"Signed voluntary exit files were written to %s. No exits were broadcast to the network. "+
-				"The validators listed will NOT exit until these files are submitted to a beacon node.",
-			outputDirectory)
-	} else {
+	if len(trimmedExitedKeys) == 0 {
 		log.Info("No signed voluntary exit files were written")
+		return
 	}
+
+	for _, key := range trimmedExitedKeys {
+		log.WithField("pubkey", key).Info("Signed voluntary exit file was written")
+	}
+
+	log.WithFields(logrus.Fields{
+		"count":           len(trimmedExitedKeys),
+		"outputDirectory": outputDirectory,
+	}).Info("Signed voluntary exit files were written. No exits were broadcast to the network. " +
+		"The validators listed will NOT exit until these files are submitted to a beacon node.")
 }
 
-func formatBeaconChaURL(key []byte) string {
-	baseURL := "https://%sbeaconcha.in/validator/%s"
-	keyWithout0x := hexutil.Encode(key)[2:]
+// beaconChaBaseURLs maps the genesis validators roots of the networks tracked by beaconcha.in to their base URLs.
+var beaconChaBaseURLs = map[[32]byte]string{
+	params.MainnetConfig().GenesisValidatorsRoot: "https://beaconcha.in",
+	params.SepoliaConfig().GenesisValidatorsRoot: "https://sepolia.beaconcha.in",
+	params.HoodiConfig().GenesisValidatorsRoot:   "https://hoodi.beaconcha.in",
+}
 
-	switch env := params.BeaconConfig().ConfigName; env {
-	case params.HoleskyName:
-		return fmt.Sprintf(baseURL, "holesky.", keyWithout0x)
-	case params.SepoliaName:
-		return fmt.Sprintf(baseURL, "sepolia.", keyWithout0x)
-	default:
-		return fmt.Sprintf(baseURL, "", keyWithout0x)
-	}
+// beaconChaBaseURL returns the beaconcha.in base URL of the network with the given genesis validators root,
+// or an empty string if beaconcha.in does not track this network.
+func beaconChaBaseURL(genesisValidatorsRoot []byte) string {
+	return beaconChaBaseURLs[bytesutil.ToBytes32(genesisValidatorsRoot)]
 }
 
 func writeSignedVoluntaryExitJSON(sve *eth.SignedVoluntaryExit, outputDirectory string) error {

@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
@@ -535,6 +536,10 @@ func (vs *Server) filterAttestationBySignature(ctx context.Context, atts propose
 	var verifiedAtts proposerAtts
 	var unverifiedAtts proposerAtts
 	for _, att := range atts {
+		if bytes.Equal(att.GetSignature(), common.InfiniteSignature[:]) {
+			log.WithFields(attestationFields(att)).Warn("Dropping attestation with infinite aggregate signature")
+			continue
+		}
 		ok, err := vs.filterCurrentEpochAttestationByTarget(att, targetRoot, targetEpoch, currentEpoch)
 		if err != nil {
 			log.WithFields(attestationFields(att)).WithError(err).Error("Could not filter current epoch attestation by target")
