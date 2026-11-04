@@ -601,11 +601,14 @@ func (s *Service) pruneNotWanted(t *subnetTracker, wantedSubnets map[uint64]bool
 // subscribeWithParameters subscribes to a list of subnets.
 func (s *Service) subscribeWithParameters(p subscribeParameters) {
 	ctx, cancel := context.WithCancel(s.ctx)
+
+	var wg sync.WaitGroup
+	defer wg.Wait()
 	defer cancel()
 
 	tracker := newSubnetTracker(p)
-	go s.ensurePeers(ctx, tracker)
-	go s.logMinimumPeersPerSubnet(ctx, p)
+	wg.Go(func() { s.ensurePeers(ctx, tracker) })
+	wg.Go(func() { s.logMinimumPeersPerSubnet(ctx, p) })
 
 	s.trySubscribeSubnets(ctx, tracker)
 	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SlotDuration())

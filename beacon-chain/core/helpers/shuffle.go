@@ -136,16 +136,21 @@ func ComputeShuffledIndex(index primitives.ValidatorIndex, indexCount uint64, se
 //	 - we start at the edges, and work back to the mirror point.
 //	   this makes us process each pear exactly once (instead of unnecessarily twice, like in the spec).
 func ShuffleList(input []primitives.ValidatorIndex, seed [32]byte) ([]primitives.ValidatorIndex, error) {
-	return innerShuffleList(input, seed, true /* shuffle */)
+	return innerShuffleList(input, seed, shuffleRoundCount(), true /* shuffle */)
 }
 
 // UnshuffleList un-shuffles the list by running backwards through the round count.
 func UnshuffleList(input []primitives.ValidatorIndex, seed [32]byte) ([]primitives.ValidatorIndex, error) {
-	return innerShuffleList(input, seed, false /* un-shuffle */)
+	return innerShuffleList(input, seed, shuffleRoundCount(), false /* un-shuffle */)
+}
+
+// shuffleRoundCount returns the number of shuffling rounds of the active config.
+func shuffleRoundCount() uint8 {
+	return uint8(params.BeaconConfig().ShuffleRoundCount)
 }
 
 // shuffles or unshuffles, shuffle=false to un-shuffle.
-func innerShuffleList(input []primitives.ValidatorIndex, seed [32]byte, shuffle bool) ([]primitives.ValidatorIndex, error) {
+func innerShuffleList(input []primitives.ValidatorIndex, seed [32]byte, rounds uint8, shuffle bool) ([]primitives.ValidatorIndex, error) {
 	if len(input) <= 1 {
 		return input, nil
 	}
@@ -153,7 +158,6 @@ func innerShuffleList(input []primitives.ValidatorIndex, seed [32]byte, shuffle 
 		return nil, fmt.Errorf("list size %d out of bounds",
 			len(input))
 	}
-	rounds := uint8(params.BeaconConfig().ShuffleRoundCount)
 	hashfunc := hash.CustomSHA256Hasher()
 	if rounds == 0 {
 		return input, nil
