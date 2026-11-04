@@ -731,6 +731,42 @@ func TestAncestor_CanUseDB(t *testing.T) {
 	}
 }
 
+func TestAncestorByDB_LongChain(t *testing.T) {
+	service, tr := minimalTestService(t)
+	ctx, beaconDB := tr.ctx, tr.db
+
+	// Blocks only exist at odd slots, so every even slot is a skip slot.
+	// The parent of the first block is not stored.
+	roots := make(map[primitives.Slot][32]byte)
+	var blks []interfaces.ReadOnlySignedBeaconBlock
+	parent := bytesutil.PadTo([]byte{'a'}, 32)
+	for slot := primitives.Slot(1); slot < 1000; slot += 2 {
+		b := util.NewBeaconBlock()
+		b.Block.Slot = slot
+		b.Block.ParentRoot = parent
+		wsb, err := consensusblocks.NewSignedBeaconBlock(b)
+		require.NoError(t, err)
+		blks = append(blks, wsb)
+		r, err := b.Block.HashTreeRoot()
+		require.NoError(t, err)
+		roots[slot] = r
+		parent = r[:]
+	}
+	require.NoError(t, beaconDB.SaveBlocks(ctx, blks))
+	head := roots[999]
+
+	r, err := service.ancestorByDB(ctx, head, 501)
+	require.NoError(t, err)
+	require.Equal(t, roots[501], r)
+
+	r, err = service.ancestorByDB(ctx, head, 500)
+	require.NoError(t, err)
+	require.Equal(t, roots[499], r)
+
+	_, err = service.ancestorByDB(ctx, head, 0)
+	require.ErrorIs(t, err, errBlockNotFoundInCacheOrDB)
+}
+
 func TestEnsureRootNotZeroHashes(t *testing.T) {
 	ctx := t.Context()
 	opts := testServiceOptsNoDB()
