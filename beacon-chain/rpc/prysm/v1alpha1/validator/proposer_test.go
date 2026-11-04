@@ -3145,13 +3145,57 @@ func TestProposer_FilterAttestation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			currentSlot := st.Slot()
 			proposerServer := &Server{
 				AttPool:     attestations.NewPool(),
 				HeadFetcher: &mock.ChainService{State: st, Root: genesisRoot[:]},
+				TimeFetcher: &mock.ChainService{Slot: &currentSlot},
 			}
 			atts := tt.inputAtts()
 			received := proposerServer.validateAndDeleteAttsInPool(t.Context(), st, atts)
 			assert.DeepEqual(t, tt.expectedAtts(atts), received)
+		})
+	}
+}
+
+func TestProposer_ValidateAndDeleteAttsInPool_KeepsLiveAttestations(t *testing.T) {
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	newAtt := func(slot primitives.Slot, bits bitfield.Bitlist) ethpb.Att {
+		return util.HydrateAttestation(&ethpb.Attestation{
+			Data:            &ethpb.AttestationData{Slot: slot, Target: &ethpb.Checkpoint{Epoch: slots.ToEpoch(slot)}},
+			AggregationBits: bits,
+		})
+	}
+	tests := []struct {
+		name        string
+		stateSlot   primitives.Slot
+		currentSlot primitives.Slot
+		attSlot     primitives.Slot
+		kept        bool
+	}{
+		{name: "too recent for the state", stateSlot: 5, currentSlot: 5, attSlot: 5, kept: true},
+		{name: "too recent for a state behind the clock", stateSlot: 5, currentSlot: 6, attSlot: 6, kept: true},
+		{name: "state is ahead of the clock", stateSlot: 5 + 2*slotsPerEpoch, currentSlot: 5, attSlot: 4, kept: true},
+		{name: "expired", stateSlot: 5 + 2*slotsPerEpoch, currentSlot: 5 + 2*slotsPerEpoch, attSlot: 4, kept: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st, _ := util.DeterministicGenesisState(t, 64)
+			require.NoError(t, st.SetSlot(tt.stateSlot))
+			pool := attestations.NewPool()
+			require.NoError(t, pool.SaveUnaggregatedAttestation(newAtt(tt.attSlot, bitfield.Bitlist{0b00010001})))
+			require.NoError(t, pool.SaveAggregatedAttestation(newAtt(tt.attSlot, bitfield.Bitlist{0b00010110})))
+			proposerServer := &Server{AttPool: pool, TimeFetcher: &mock.ChainService{Slot: &tt.currentSlot}}
+
+			// None of the attestations is valid for the state, so none is returned for inclusion.
+			assert.Equal(t, 0, len(proposerServer.validateAndDeleteAttsInPool(t.Context(), st, pool.UnaggregatedAttestations())))
+			assert.Equal(t, 0, len(proposerServer.validateAndDeleteAttsInPool(t.Context(), st, pool.AggregatedAttestations())))
+			want := 0
+			if tt.kept {
+				want = 1
+			}
+			assert.Equal(t, want, pool.UnaggregatedAttestationCount())
+			assert.Equal(t, want, pool.AggregatedAttestationCount())
 		})
 	}
 }
