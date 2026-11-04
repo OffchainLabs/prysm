@@ -13,6 +13,7 @@ import (
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	field_params "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -340,6 +341,19 @@ func (s *Service) updateFinalized(ctx context.Context, cp *ethpb.Checkpoint) err
 	}
 
 	fRoot := bytesutil.ToBytes32(cp.Root)
+
+	// With EIP-8025, an EL validated payload stays optimistic until enough execution proofs are known, or until it is
+	// finalized: a finalized block needs no proof, so it is valid, and so are its ancestors.
+	if features.Get().EnableExecutionProofs && s.cfg.ForkChoiceStore.IsExecutionValid(fRoot) {
+		if err := s.cfg.ForkChoiceStore.SetOptimisticToValid(ctx, fRoot); err != nil {
+			return errors.Wrap(err, "could not set finalized payload as valid")
+		}
+
+		if err := s.refreshHeadOptimistic(); err != nil {
+			return errors.Wrap(err, "could not refresh head optimistic status")
+		}
+	}
+
 	optimistic, err := s.cfg.ForkChoiceStore.IsOptimistic(fRoot)
 	if err != nil && !errors.Is(err, doublylinkedtree.ErrNilNode) {
 		return err

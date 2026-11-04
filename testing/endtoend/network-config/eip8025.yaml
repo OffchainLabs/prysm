@@ -1,0 +1,99 @@
+# EIP-8025 (optional execution proofs) devnet, Prysm only. Runs on a laptop: no GPU, arm64 or amd64.
+#
+# Architecture:
+#   - zkboost (0.12.0): Engine API middleware between the beacon node of participant 1 and its EL. It
+#     forwards engine_newPayloadV5 as engine_newPayloadWithWitnessV5 and, once the EL answers VALID,
+#     "proves" the payload with two mock zkVMs (ethrex-openvm and ethrex-sp1), signs each proof with a
+#     validator key of participant 1, and submits it to that beacon node with
+#     POST /eth/v1/beacon/execution_proofs. The beacon node verifies, stores and gossips it.
+#     A mock zkVM sends a MockProof: the public values of the payload, and random bytes in place of a
+#     proof. Every proof-aware node runs with --zkvm-mock-proofs, so it accepts a MockProof without a
+#     cryptographic check, but still checks its public values against the payload, and verifies a
+#     genuine built-in proof of the same type in its place (see beacon-chain/proofengine/mock.go).
+#   - Participants 0 and 2 (2 nodes): regular nodes. They do not subscribe to execution proofs: the EL
+#     validation alone validates a payload.
+#   - Participant 1 (1 node): the proving node. Its EL must serve engine_newPayloadWithWitnessV5.
+#   - Participants 3-4 (2 nodes): proof-aware nodes. They verify gossiped proofs in-process, and only
+#     consider a payload valid once the EL and two proof types validated it, or once it is finalized.
+#
+# Build the images from this branch first, with the root Dockerfile. The beacon node links the ere verifier
+# library:
+#   docker build -t gcr.io/offchainlabs/prysm/beacon-chain:eip-8025 .
+#   docker build --build-arg BIN=validator -t gcr.io/offchainlabs/prysm/validator:eip-8025 .
+#
+# This needs ethereum-package PR #1492 (zkboost as middleware, with `kind: mock` zkVMs), not merged yet:
+# branch eip8025-prysm-zkboost-mock of github.com/nalepae/ethereum-package, the PR rebased on main.
+#
+# Run with:
+#   kurtosis run --enclave eip8025 <ethereum-package checkout> \
+#     --args-file testing/endtoend/network-config/eip8025.yaml
+
+participants:
+  # Node that does not need proofs.
+  - el_type: geth
+    el_image: "ethpandaops/geth:glamsterdam-devnet-8-aa1f2fc"
+    cl_type: prysm
+    cl_image: "gcr.io/offchainlabs/prysm/beacon-chain:eip-8025"
+    vc_image: "gcr.io/offchainlabs/prysm/validator:eip-8025"
+    count: 1
+
+  # Proving node. Its beacon node reaches its EL through zkboost: the last --execution-endpoint wins.
+  # --proof-engine is the Lighthouse name of --zkvm, which ethereum-package looks for to find the participant
+  # of a zkboost instance.
+  - el_type: geth
+    el_image: "ethpandaops/geth:glamsterdam-devnet-8-aa1f2fc"
+    cl_type: prysm
+    cl_image: "gcr.io/offchainlabs/prysm/beacon-chain:eip-8025"
+    cl_extra_params:
+      - "--proof-engine"
+      - "--zkvm-mock-proofs"
+      - "--execution-endpoint=http://zkboost-1:3000"
+    vc_image: "gcr.io/offchainlabs/prysm/validator:eip-8025"
+    count: 1
+
+  # Node that does not need proofs.
+  - el_type: geth
+    el_image: "ethpandaops/geth:glamsterdam-devnet-8-aa1f2fc"
+    cl_type: prysm
+    cl_image: "gcr.io/offchainlabs/prysm/beacon-chain:eip-8025"
+    vc_image: "gcr.io/offchainlabs/prysm/validator:eip-8025"
+    count: 1
+
+  # Nodes needing proofs.
+  - el_type: geth
+    el_image: "ethpandaops/geth:glamsterdam-devnet-8-aa1f2fc"
+    cl_type: prysm
+    cl_image: "gcr.io/offchainlabs/prysm/beacon-chain:eip-8025"
+    cl_extra_params:
+      - "--zkvm"
+      - "--zkvm-mock-proofs"
+      - "--min-execution-proofs=2"
+    vc_image: "gcr.io/offchainlabs/prysm/validator:eip-8025"
+    count: 2
+
+network_params:
+  # Execution proofs only apply to Gloas payloads, and zkboost only proves under the BPO2 blob schedule
+  # (21 blobs), which the package schedules at genesis by default. zkboost requires the mainnet preset.
+  gloas_fork_epoch: 0
+
+additional_services:
+  - zkboost
+  - dora
+
+zkboost_params:
+  image: "ghcr.io/eth-act/zkboost/zkboost:0.12.0"
+  instances:
+    - name: zkboost-1
+  zkvms:
+    - kind: mock
+      proof_type: ethrex-openvm
+      mock_proving_time:
+        kind: constant
+        ms: 2000
+    - kind: mock
+      proof_type: ethrex-sp1
+      mock_proving_time:
+        kind: constant
+        ms: 3000
+
+global_log_level: debug

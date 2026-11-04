@@ -72,6 +72,8 @@ func (s *Service) nodeFilter(topic string, indices map[uint64]int) (func(node *e
 		return s.filterPeerForBlobSubnet(indices), nil
 	case strings.Contains(topic, GossipDataColumnSidecarMessage):
 		return s.filterPeerForDataColumnsSubnet(indices), nil
+	case strings.Contains(topic, GossipExecutionProofMessage):
+		return filterPeerForExecutionProof, nil
 	default:
 		return nil, errors.Errorf("no subnet exists for provided topic: %s", topic)
 	}
@@ -264,7 +266,7 @@ func (s *Service) defectiveSubnets(
 ) map[uint64]int {
 	missingCountPerSubnet := make(map[uint64]int, len(subnets))
 	for subnet := range subnets {
-		topic := fmt.Sprintf(topicFormat, digest, subnet) + s.Encoding().ProtocolSuffix()
+		topic := SubnetTopic(topicFormat, digest, subnet) + s.Encoding().ProtocolSuffix()
 		peers := s.pubsub.ListPeers(topic)
 		peerCount := len(peers)
 		if peerCount < minimumPeersPerSubnet {
@@ -273,6 +275,16 @@ func (s *Service) defectiveSubnets(
 	}
 
 	return missingCountPerSubnet
+}
+
+// SubnetTopic formats the topic of a subnet. A topic without subnets, whose
+// format has no subnet index, is treated as its own single subnet.
+func SubnetTopic(topicFormat string, digest [fieldparams.VersionLength]byte, subnet uint64) string {
+	if strings.Count(topicFormat, "%") < 2 {
+		return fmt.Sprintf(topicFormat, digest)
+	}
+
+	return fmt.Sprintf(topicFormat, digest, subnet)
 }
 
 // dialPeers dials multiple peers concurrently up to `maxConcurrentDials` at a time.

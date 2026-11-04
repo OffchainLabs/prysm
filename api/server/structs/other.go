@@ -139,6 +139,18 @@ type SignedVoluntaryExit struct {
 	Signature string         `json:"signature"`
 }
 
+type SignedExecutionProofEnvelope struct {
+	Message        *ExecutionProofEnvelope `json:"message"`
+	ValidatorIndex string                  `json:"validator_index"`
+	Signature      string                  `json:"signature"`
+}
+
+type ExecutionProofEnvelope struct {
+	ProofData       string `json:"proof_data"`
+	ProofType       string `json:"proof_type"`
+	BeaconBlockRoot string `json:"beacon_block_root"`
+}
+
 type VoluntaryExit struct {
 	Epoch          string `json:"epoch"`
 	ValidatorIndex string `json:"validator_index"`
