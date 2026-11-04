@@ -415,10 +415,10 @@ var (
 		Usage: "Path to an ssz-encoded beacon state at an epoch boundary slot, used as the oldest state an " +
 			"archive node will hold. Defaults to the genesis state. Requires --" + features.EnableArchive.Name + ".",
 	}
-	// DisableEphemeralLogFile disables the 24 hour debug log file.
+	// DisableEphemeralLogFile disables the size-capped debug log file.
 	DisableEphemeralLogFile = &cli.BoolFlag{
 		Name:  "disable-ephemeral-log-file",
-		Usage: "Disables the creation of a debug log file that keeps 24 hours of logs.",
+		Usage: "Disables the debug log file written to <datadir>/logs. This file is rotated at 250 MB with one backup kept, so it holds at most ~500 MB of the most recent logs.",
 		Value: false,
 	}
 	// DisableGetBlobsV2 disables the engine_getBlobsV2 usage.
@@ -431,6 +431,7 @@ var (
 	DisablePartialDataColumns = &cli.BoolFlag{
 		Name:  "disable-partial-data-columns",
 		Usage: "Disables cell-level dissemination for PeerDAS data columns, falling back to full column gossip.",
+		Value: true,
 	}
 	// DisableGraffitiClientAppend disables appending consensus and execution client version info to the block graffiti.
 	DisableGraffitiClientAppend = &cli.BoolFlag{
