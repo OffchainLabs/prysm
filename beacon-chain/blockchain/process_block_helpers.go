@@ -361,28 +361,27 @@ func (s *Service) updateFinalized(ctx context.Context, cp *ethpb.Checkpoint) err
 	return nil
 }
 
-// This retrieves an ancestor root using DB. The look up is recursively looking up DB. Slower than `ancestorByForkChoiceStore`.
-func (s *Service) ancestorByDB(ctx context.Context, r [32]byte, slot primitives.Slot) (root [32]byte, err error) {
+// This retrieves an ancestor root using DB. The look up walks back one parent block at a time. Slower than the fork choice look up.
+func (s *Service) ancestorByDB(ctx context.Context, r [32]byte, slot primitives.Slot) ([32]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.ancestorByDB")
 	defer span.End()
 
-	root = [32]byte{}
-	// Stop recursive ancestry lookup if context is cancelled.
-	if ctx.Err() != nil {
-		err = ctx.Err()
-		return
-	}
+	for {
+		// Stop ancestry lookup if context is cancelled.
+		if err := ctx.Err(); err != nil {
+			return [32]byte{}, err
+		}
 
-	signed, err := s.getBlock(ctx, r)
-	if err != nil {
-		return root, err
+		signed, err := s.getBlock(ctx, r)
+		if err != nil {
+			return [32]byte{}, err
+		}
+		b := signed.Block()
+		if b.Slot() <= slot {
+			return r, nil
+		}
+		r = b.ParentRoot()
 	}
-	b := signed.Block()
-	if b.Slot() == slot || b.Slot() < slot {
-		return r, nil
-	}
-
-	return s.ancestorByDB(ctx, b.ParentRoot(), slot)
 }
 
 // This retrieves missing blocks from DB (ie. the blocks that couldn't be received over sync) and inserts them to fork choice store.

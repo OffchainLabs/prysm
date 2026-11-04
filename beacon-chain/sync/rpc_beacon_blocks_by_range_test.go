@@ -1232,3 +1232,53 @@ type mockBlocker struct {
 func (m mockBlocker) AvailableBlock(_ primitives.Slot) bool {
 	return m.avail
 }
+
+func TestRPCBeaconBlocksByRange_PrunedGenesis(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		count uint64
+	}{
+		{name: "empty response", count: 1},
+		{name: "retained block", count: 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			d := db.SetupDB(t)
+			var parent [32]byte
+			for slot := primitives.Slot(0); slot < 2; slot++ {
+				blk := util.NewBeaconBlock()
+				blk.Block.Slot = slot
+				copy(blk.Block.ParentRoot, parent[:])
+				var err error
+				parent, err = blk.Block.HashTreeRoot()
+				require.NoError(t, err)
+				util.SaveBlock(t, ctx, d, blk)
+				if slot == 0 {
+					require.NoError(t, d.SaveGenesisBlockRoot(ctx, parent))
+				}
+			}
+			deleted, err := d.DeleteHistoricalDataBeforeSlot(ctx, 0, 32)
+			require.NoError(t, err)
+			require.Equal(t, 1, deleted)
+
+			p := p2ptest.NewTestP2P(t)
+			clock := startup.NewClock(time.Unix(0, 0), [32]byte{})
+			svc := &Service{
+				cfg:              &config{p2p: p, beaconDB: d, clock: clock, chain: &chainMock.ChainService{}},
+				availableBlocker: mockBlocker{avail: true},
+				rateLimiter:      newRateLimiter(p),
+			}
+			t.Cleanup(svc.rateLimiter.free)
+			rt := rpcHandlerTest{t: t, s: svc, topic: protocol.ID(p2p.RPCBlocksByRangeTopicV2 + p.Encoding().ProtocolSuffix()), timeout: 5 * time.Second}
+			rt.testHandler(func(stream network.Stream) {
+				if tc.count == 2 {
+					blk, err := ReadChunkedBlock(stream, clock, p, true)
+					require.NoError(t, err)
+					require.Equal(t, primitives.Slot(1), blk.Block().Slot())
+				}
+				_, err := ReadChunkedBlock(stream, clock, p, tc.count == 1)
+				require.ErrorIs(t, err, io.EOF)
+			}, svc.beaconBlocksByRangeRPCHandler, &ethpb.BeaconBlocksByRangeRequest{StartSlot: 0, Count: tc.count, Step: 1})
+		})
+	}
+}

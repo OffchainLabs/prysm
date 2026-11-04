@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -172,15 +173,13 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 	// Forward an event capturing a new chain head over a common event feed
 	// done in a goroutine to avoid blocking the critical runtime main routine.
 	go func() {
-		if err := s.notifyNewHeadEvent(s.ctx, newHeadSlot, newStateRoot, newHeadRoot); err != nil {
-			log.WithError(err).Error("Could not notify event feed of new chain head")
-		}
-
+		err := s.notifyNewHeadEvent(s.ctx, newHeadSlot, newStateRoot, newHeadRoot)
+		logHeadEventError(err, "head")
 	}()
+
 	go func() {
-		if err := s.notifyNewHeadV2Event(s.ctx, newHeadSlot, newStateRoot, newHeadRoot, headBlock.Version(), full); err != nil {
-			log.WithError(err).Error("Could not notify event feed of new chain head_v2")
-		}
+		err := s.notifyNewHeadV2Event(s.ctx, newHeadSlot, newStateRoot, newHeadRoot, headBlock.Version(), full)
+		logHeadEventError(err, "head_v2")
 	}()
 
 	return nil
@@ -448,6 +447,10 @@ func (s *Service) headEventDependentRoots(currEpoch primitives.Epoch) (previousD
 	}
 	if currEpoch > 0 {
 		previousDutyDependentRoot, err = s.DependentRoot(currEpoch.Sub(1))
+		if errors.Is(err, doublylinkedtree.ErrNilNode) {
+			return [32]byte{}, [32]byte{}, errDependentRootBeforeForkchoice
+		}
+
 		if err != nil {
 			return [32]byte{}, [32]byte{}, errors.Wrap(err, "could not get duty dependent root")
 		}
@@ -456,6 +459,24 @@ func (s *Service) headEventDependentRoots(currEpoch primitives.Epoch) (previousD
 		previousDutyDependentRoot = s.originBlockRoot
 	}
 	return previousDutyDependentRoot, currentDutyDependentRoot, nil
+}
+
+// logHeadEventError logs an error returned while emitting the `eventName` event.
+func logHeadEventError(err error, eventName string) {
+	if err == nil {
+		return
+	}
+
+	log := log.WithError(err).WithField("event", eventName)
+
+	// This only happens while the head is in the forkchoice tree root epoch, for example right
+	// after a checkpoint sync. The node is then still syncing, so no validator relies on this event.
+	if errors.Is(err, errDependentRootBeforeForkchoice) {
+		log.Debug("Skipping event feed notification of new chain head")
+		return
+	}
+
+	log.Error("Could not notify event feed of new chain head")
 }
 
 // headEpochTransition reports whether the head at newHeadSlot crossed an epoch boundary

@@ -94,11 +94,18 @@ func (bb *blockRangeBatcher) next(ctx context.Context, stream libp2pcore.Stream)
 
 	rob := make([]blocks.ROBlock, 0)
 	if nb.start == 0 {
-		gb, err := bb.genesisBlock(ctx)
+		b, err := bb.db.GenesisBlock(ctx)
 		if err != nil {
 			return blockBatch{err: errors.Wrap(err, "could not retrieve genesis block")}, false
 		}
-		rob = append(rob, gb)
+		// Genesis may be absent after historical pruning.
+		if b != nil {
+			gb, err := blocks.NewROBlock(b)
+			if err != nil {
+				return blockBatch{err: errors.Wrap(err, "could not initialize genesis block")}, false
+			}
+			rob = append(rob, gb)
+		}
 	}
 	for i := range blks {
 		rb, err := blocks.NewROBlockWithRoot(blks[i], roots[i])
@@ -115,18 +122,6 @@ func (bb *blockRangeBatcher) next(ctx context.Context, stream libp2pcore.Stream)
 	bb.limiter.add(stream, int64(1+nb.end.SubSlot(nb.start)))
 	bb.current = &nb
 	return *bb.current, true
-}
-
-func (bb *blockRangeBatcher) genesisBlock(ctx context.Context) (blocks.ROBlock, error) {
-	b, err := bb.db.GenesisBlock(ctx)
-	if err != nil {
-		return blocks.ROBlock{}, err
-	}
-	htr, err := b.Block().HashTreeRoot()
-	if err != nil {
-		return blocks.ROBlock{}, err
-	}
-	return blocks.NewROBlockWithRoot(b, htr)
 }
 
 type blockBatch struct {

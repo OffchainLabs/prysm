@@ -223,7 +223,11 @@ func TestProposeBlock_ProposeBlockFailed(t *testing.T) {
 			name: "phase0",
 			block: &ethpb.GenericBeaconBlock{
 				Block: &ethpb.GenericBeaconBlock_Phase0{
-					Phase0: util.NewBeaconBlock().Block,
+					Phase0: func() *ethpb.BeaconBlock {
+						blk := util.NewBeaconBlock()
+						blk.Block.Slot = 1
+						return blk.Block
+					}(),
 				},
 			},
 		},
@@ -231,7 +235,11 @@ func TestProposeBlock_ProposeBlockFailed(t *testing.T) {
 			name: "altair",
 			block: &ethpb.GenericBeaconBlock{
 				Block: &ethpb.GenericBeaconBlock_Altair{
-					Altair: util.NewBeaconBlockAltair().Block,
+					Altair: func() *ethpb.BeaconBlockAltair {
+						blk := util.NewBeaconBlockAltair()
+						blk.Block.Slot = 1
+						return blk.Block
+					}(),
 				},
 			},
 		},
@@ -239,13 +247,17 @@ func TestProposeBlock_ProposeBlockFailed(t *testing.T) {
 			name: "bellatrix",
 			block: &ethpb.GenericBeaconBlock{
 				Block: &ethpb.GenericBeaconBlock_Bellatrix{
-					Bellatrix: util.NewBeaconBlockBellatrix().Block,
+					Bellatrix: func() *ethpb.BeaconBlockBellatrix {
+						blk := util.NewBeaconBlockBellatrix()
+						blk.Block.Slot = 1
+						return blk.Block
+					}(),
 				},
 			},
 		},
 	}
 	for _, tt := range tests {
-		for _, isSlashingProtectionMinimal := range [...]bool{true, true} {
+		for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 			t.Run(fmt.Sprintf("%s/SlashingProtectionMinimal:%v", tt.name, isSlashingProtectionMinimal), func(t *testing.T) {
 				hook := logTest.NewGlobal()
 				validator, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
@@ -458,6 +470,46 @@ func TestProposeBlock_BlocksDoubleProposal_After54KEpochs(t *testing.T) {
 	}
 }
 
+func TestProposeBlock_RefusesBlockForAnotherSlot(t *testing.T) {
+	const dutySlot = primitives.Slot(10)
+	tests := []struct {
+		name      string
+		blockSlot primitives.Slot
+	}{
+		{name: "past slot", blockSlot: dutySlot - 1},
+		{name: "far future slot", blockSlot: params.BeaconConfig().SlotsPerEpoch.Mul(uint64(params.BeaconConfig().WeakSubjectivityPeriod + 9))},
+	}
+	for _, tt := range tests {
+		for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
+			t.Run(fmt.Sprintf("%s/SlashingProtectionMinimal:%v", tt.name, isSlashingProtectionMinimal), func(t *testing.T) {
+				hook := logTest.NewGlobal()
+				validator, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
+				defer finish()
+				var pubKey [fieldparams.BLSPubkeyLength]byte
+				copy(pubKey[:], validatorKey.PublicKey().Marshal())
+
+				// DomainData for randao signing only: the block is never signed.
+				m.validatorClient.EXPECT().DomainData(
+					gomock.Any(), // ctx
+					gomock.Any(), // epoch
+				).Times(1).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil /*err*/)
+
+				blk := util.NewBeaconBlock()
+				blk.Block.Slot = tt.blockSlot
+				m.validatorClient.EXPECT().BeaconBlock(
+					gomock.Any(), // ctx
+					gomock.AssignableToTypeOf(&ethpb.BlockRequest{}),
+				).Return(&ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Phase0{Phase0: blk.Block}}, nil /*err*/)
+
+				m.validatorClient.EXPECT().ProposeBeaconBlock(gomock.Any(), gomock.Any()).Times(0)
+
+				validator.ProposeBlock(t.Context(), dutySlot, pubKey)
+				require.LogsContain(t, hook, "Beacon node returned a block for another slot")
+			})
+		}
+	}
+}
+
 func TestProposeBlock_AllowsOrNotPastProposals(t *testing.T) {
 	slot := params.BeaconConfig().SlotsPerEpoch.Mul(uint64(params.BeaconConfig().WeakSubjectivityPeriod + 9))
 
@@ -563,6 +615,7 @@ func testProposeBlock(t *testing.T, graffiti []byte) {
 				Block: &ethpb.GenericBeaconBlock_Phase0{
 					Phase0: func() *ethpb.BeaconBlock {
 						blk := util.NewBeaconBlock()
+						blk.Block.Slot = 1
 						blk.Block.Body.Graffiti = graffiti
 						return blk.Block
 					}(),
@@ -575,6 +628,7 @@ func testProposeBlock(t *testing.T, graffiti []byte) {
 				Block: &ethpb.GenericBeaconBlock_Altair{
 					Altair: func() *ethpb.BeaconBlockAltair {
 						blk := util.NewBeaconBlockAltair()
+						blk.Block.Slot = 1
 						blk.Block.Body.Graffiti = graffiti
 						return blk.Block
 					}(),
@@ -587,6 +641,7 @@ func testProposeBlock(t *testing.T, graffiti []byte) {
 				Block: &ethpb.GenericBeaconBlock_Bellatrix{
 					Bellatrix: func() *ethpb.BeaconBlockBellatrix {
 						blk := util.NewBeaconBlockBellatrix()
+						blk.Block.Slot = 1
 						blk.Block.Body.Graffiti = graffiti
 						return blk.Block
 					}(),
@@ -599,6 +654,7 @@ func testProposeBlock(t *testing.T, graffiti []byte) {
 				Block: &ethpb.GenericBeaconBlock_BlindedBellatrix{
 					BlindedBellatrix: func() *ethpb.BlindedBeaconBlockBellatrix {
 						blk := util.NewBlindedBeaconBlockBellatrix()
+						blk.Block.Slot = 1
 						blk.Block.Body.Graffiti = graffiti
 						return blk.Block
 					}(),
@@ -611,6 +667,7 @@ func testProposeBlock(t *testing.T, graffiti []byte) {
 				Block: &ethpb.GenericBeaconBlock_Capella{
 					Capella: func() *ethpb.BeaconBlockCapella {
 						blk := util.NewBeaconBlockCapella()
+						blk.Block.Slot = 1
 						blk.Block.Body.Graffiti = graffiti
 						return blk.Block
 					}(),
@@ -623,6 +680,7 @@ func testProposeBlock(t *testing.T, graffiti []byte) {
 				Block: &ethpb.GenericBeaconBlock_BlindedCapella{
 					BlindedCapella: func() *ethpb.BlindedBeaconBlockCapella {
 						blk := util.NewBlindedBeaconBlockCapella()
+						blk.Block.Slot = 1
 						blk.Block.Body.Graffiti = graffiti
 						return blk.Block
 					}(),
@@ -636,6 +694,7 @@ func testProposeBlock(t *testing.T, graffiti []byte) {
 				Block: &ethpb.GenericBeaconBlock_Deneb{
 					Deneb: func() *ethpb.BeaconBlockContentsDeneb {
 						blk := util.NewBeaconBlockContentsDeneb()
+						blk.Block.Block.Slot = 1
 						blk.Block.Block.Body.Graffiti = graffiti
 						return &ethpb.BeaconBlockContentsDeneb{Block: blk.Block.Block, KzgProofs: blk.KzgProofs, Blobs: blk.Blobs}
 					}(),
@@ -649,6 +708,7 @@ func testProposeBlock(t *testing.T, graffiti []byte) {
 				Block: &ethpb.GenericBeaconBlock_BlindedDeneb{
 					BlindedDeneb: func() *ethpb.BlindedBeaconBlockDeneb {
 						blk := util.NewBlindedBeaconBlockDeneb()
+						blk.Message.Slot = 1
 						blk.Message.Body.Graffiti = graffiti
 						return blk.Message
 					}(),
@@ -662,6 +722,7 @@ func testProposeBlock(t *testing.T, graffiti []byte) {
 				Block: &ethpb.GenericBeaconBlock_Electra{
 					Electra: func() *ethpb.BeaconBlockContentsElectra {
 						blk := util.NewBeaconBlockContentsElectra()
+						blk.Block.Block.Slot = 1
 						blk.Block.Block.Body.Graffiti = graffiti
 						return &ethpb.BeaconBlockContentsElectra{Block: blk.Block.Block, KzgProofs: blk.KzgProofs, Blobs: blk.Blobs}
 					}(),
@@ -675,6 +736,7 @@ func testProposeBlock(t *testing.T, graffiti []byte) {
 				Block: &ethpb.GenericBeaconBlock_Fulu{
 					Fulu: func() *ethpb.BeaconBlockContentsFulu {
 						blk := util.NewBeaconBlockContentsFulu()
+						blk.Block.Block.Slot = 1
 						blk.Block.Block.Body.Graffiti = graffiti
 						return &ethpb.BeaconBlockContentsFulu{Block: blk.Block.Block, KzgProofs: blk.KzgProofs, Blobs: blk.Blobs}
 					}(),

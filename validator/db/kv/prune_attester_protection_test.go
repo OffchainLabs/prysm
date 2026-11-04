@@ -184,3 +184,59 @@ func checkAttestingHistoryAfterPruning(
 		return nil
 	})
 }
+
+func TestRaiseLowestSignedEpoch(t *testing.T) {
+	pruningEpochs := params.BeaconConfig().SlashingProtectionPruningEpochs
+
+	t.Run("no pruning keeps the watermarks", func(t *testing.T) {
+		pubKey := [fieldparams.BLSPubkeyLength]byte{1}
+		validatorDB := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubKey})
+		require.NoError(t, setupAttestationsForEveryEpoch(validatorDB, pubKey, pruningEpochs-1))
+
+		require.NoError(t, validatorDB.PruneAttestations(t.Context()))
+
+		_, exists, err := validatorDB.LowestSignedSourceEpoch(t.Context(), pubKey)
+		require.NoError(t, err)
+		require.Equal(t, false, exists)
+
+		_, exists, err = validatorDB.LowestSignedTargetEpoch(t.Context(), pubKey)
+		require.NoError(t, err)
+		require.Equal(t, false, exists)
+	})
+
+	t.Run("pruning raises the watermarks to the cutoffs", func(t *testing.T) {
+		pubKey := [fieldparams.BLSPubkeyLength]byte{1}
+		validatorDB := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubKey})
+
+		// Sources are 0..2N-1 and targets are 1..2N, with N = pruningEpochs.
+		require.NoError(t, setupAttestationsForEveryEpoch(validatorDB, pubKey, pruningEpochs*2))
+
+		require.NoError(t, validatorDB.PruneAttestations(t.Context()))
+
+		lowestSource, exists, err := validatorDB.LowestSignedSourceEpoch(t.Context(), pubKey)
+		require.NoError(t, err)
+		require.Equal(t, true, exists)
+		require.Equal(t, pruningEpochs-1, lowestSource)
+
+		lowestTarget, exists, err := validatorDB.LowestSignedTargetEpoch(t.Context(), pubKey)
+		require.NoError(t, err)
+		require.Equal(t, true, exists)
+		require.Equal(t, pruningEpochs, lowestTarget)
+	})
+
+	t.Run("pruned target cannot be signed again", func(t *testing.T) {
+		pubKey := [fieldparams.BLSPubkeyLength]byte{1}
+		validatorDB := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubKey})
+		require.NoError(t, setupAttestationsForEveryEpoch(validatorDB, pubKey, pruningEpochs*2))
+
+		require.NoError(t, validatorDB.PruneAttestations(t.Context()))
+
+		// A different attestation for the pruned (source 9, target 10) would be a double vote.
+		err := validatorDB.SlashableAttestationCheck(t.Context(), createAttestation(9, 10), pubKey, [32]byte{0xff}, false, nil)
+		require.ErrorContains(t, "could not sign attestation lower than lowest source epoch", err)
+
+		// Same, with a source that is still above the watermark.
+		err = validatorDB.SlashableAttestationCheck(t.Context(), createAttestation(pruningEpochs, 10), pubKey, [32]byte{0xff}, false, nil)
+		require.ErrorContains(t, "could not sign attestation lower than or equal to lowest target epoch", err)
+	})
+}

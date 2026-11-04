@@ -2,6 +2,7 @@ package kv
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -23,7 +24,7 @@ func (s *Store) PruneAttestations(ctx context.Context) error {
 		return bucket.ForEach(func(pubKey []byte, _ []byte) error {
 			key := make([]byte, len(pubKey))
 			copy(key, pubKey)
-			pubkeys = append(pubkeys, pubKey)
+			pubkeys = append(pubkeys, key)
 			return nil
 		})
 	})
@@ -43,7 +44,21 @@ func (s *Store) PruneAttestations(ctx context.Context) error {
 			if err := pruneTargetEpochsBucket(pkBucket); err != nil {
 				return err
 			}
-			return pruneSigningRootsBucket(pkBucket)
+			if err := pruneSigningRootsBucket(pkBucket); err != nil {
+				return err
+			}
+
+			// Pruning deletes the oldest attestations. Raise the lowest signed source and target epochs
+			// to the pruning cutoffs.
+			if err := raiseLowestSignedEpoch(tx.Bucket(lowestSignedSourceBucket), pkBucket.Bucket(attestationSourceEpochsBucket), k); err != nil {
+				return fmt.Errorf("raise lowest signed source epoch: %w", err)
+			}
+
+			if err := raiseLowestSignedEpoch(tx.Bucket(lowestSignedTargetBucket), pkBucket.Bucket(attestationSigningRootsBucket), k); err != nil {
+				return fmt.Errorf("raise lowest signed target epoch: %w", err)
+			}
+
+			return nil
 		})
 		if err != nil {
 			return err
@@ -115,4 +130,34 @@ func pruningEpochCutoff(epoch primitives.Epoch) primitives.Epoch {
 		minEpoch = epoch - params.BeaconConfig().SlashingProtectionPruningEpochs
 	}
 	return minEpoch
+}
+
+// raiseLowestSignedEpoch raises the lowest signed epoch of the given public key in lowestBkt
+// to the cutoff below which pruneBucket deletes the epochs of epochsBkt. It never lowers it.
+func raiseLowestSignedEpoch(lowestBkt, epochsBkt *bolt.Bucket, pubKey []byte) error {
+	if lowestBkt == nil || epochsBkt == nil {
+		return nil
+	}
+
+	highestEpochBytes, _ := epochsBkt.Cursor().Last()
+	if highestEpochBytes == nil {
+		return nil
+	}
+
+	cutoff := pruningEpochCutoff(bytesutil.BytesToEpochBigEndian(highestEpochBytes))
+	if cutoff == 0 {
+		// Nothing was pruned.
+		return nil
+	}
+
+	lowestEpochBytes := lowestBkt.Get(pubKey)
+	if len(lowestEpochBytes) >= 8 && bytesutil.BytesToEpochBigEndian(lowestEpochBytes) >= cutoff {
+		return nil
+	}
+
+	if err := lowestBkt.Put(pubKey, bytesutil.EpochToBytesBigEndian(cutoff)); err != nil {
+		return fmt.Errorf("put lowest signed epoch: %w", err)
+	}
+
+	return nil
 }
