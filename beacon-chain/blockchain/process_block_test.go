@@ -767,6 +767,38 @@ func TestAncestorByDB_LongChain(t *testing.T) {
 	require.ErrorIs(t, err, errBlockNotFoundInCacheOrDB)
 }
 
+// BenchmarkAncestorByDB walks 10,000 blocks. Apple M4 Pro, benchstat n=10:
+//
+//	recursive: 1.19 ms/op, 392 KiB/op, 10.17k allocs/op
+//	loop:      0.94 ms/op (-21%), 391 KiB/op, 10.16k allocs/op
+func BenchmarkAncestorByDB(b *testing.B) {
+	ctx := b.Context()
+	service, err := NewService(ctx, testServiceOptsWithDB(b)...)
+	require.NoError(b, err)
+
+	blks := make([]interfaces.ReadOnlySignedBeaconBlock, 0, 10000)
+	parent := make([]byte, 32)
+	for slot := primitives.Slot(1); slot <= 10000; slot++ {
+		blk := util.NewBeaconBlock()
+		blk.Block.Slot = slot
+		blk.Block.ParentRoot = parent
+		wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
+		require.NoError(b, err)
+		blks = append(blks, wsb)
+		r, err := blk.Block.HashTreeRoot()
+		require.NoError(b, err)
+		parent = r[:]
+	}
+	require.NoError(b, service.cfg.BeaconDB.SaveBlocks(ctx, blks))
+	head := bytesutil.ToBytes32(parent)
+
+	b.ReportAllocs()
+	for b.Loop() {
+		_, err := service.ancestorByDB(ctx, head, 1)
+		require.NoError(b, err)
+	}
+}
+
 func TestEnsureRootNotZeroHashes(t *testing.T) {
 	ctx := t.Context()
 	opts := testServiceOptsNoDB()
