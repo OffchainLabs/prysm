@@ -284,8 +284,6 @@ func (st *BeaconStateHeze) Copy() *BeaconStateHeze {
 	cp.BlockRoots = bytesutil.SafeCopy2dBytes(st.BlockRoots)
 	cp.StateRoots = bytesutil.SafeCopy2dBytes(st.StateRoots)
 	cp.HistoricalRoots = bytesutil.SafeCopy2dBytes(st.HistoricalRoots)
-	cp.Eth1Data = st.Eth1Data.Copy()
-	cp.Eth1DataVotes = CopySlice(st.Eth1DataVotes)
 	cp.Validators = CopySlice(st.Validators)
 	cp.Balances = slices.Clone(st.Balances)
 	cp.RandaoMixes = bytesutil.SafeCopy2dBytes(st.RandaoMixes)
