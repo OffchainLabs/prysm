@@ -216,9 +216,10 @@ func createAttestationSignatureBatch(
 }
 
 // attestingAggregateKey returns the aggregate public key of the attesting indices.
-// This function subtracts the absent keys from the committee aggregates, unless
-// at most half of the members attested, a set bit repeats a validator, or the
-// committee aggregates are not cached yet. In those cases it adds the attesting keys.
+// When more than half of the committee members attested, it sums the cached committee
+// aggregates and subtracts the absent keys. Otherwise, or when the set bits don't map
+// one-to-one to the attesting indices (e.g. a SingleAttestation, which has no aggregation
+// bits), or when the committee aggregates aren't cached yet, it adds the attesting keys.
 func attestingAggregateKey(
 	ctx context.Context,
 	beaconState state.ReadOnlyBeaconState,
