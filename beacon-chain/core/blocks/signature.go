@@ -227,34 +227,42 @@ func attestingAggregateKey(
 	committees [][]primitives.ValidatorIndex,
 	attesting []uint64,
 ) (bls.PublicKey, error) {
-	// Calculate the total number of committee members across all committees.
+	attestingCount := len(attesting)
 	total := 0
 	for _, c := range committees {
 		total += len(c)
 	}
 
+	addAttesting := func() (bls.PublicKey, error) {
+		key, err := beaconState.AggregateKeyFromIndices(attesting)
+		if err != nil {
+			return nil, fmt.Errorf("aggregate attesting keys: %w", err)
+		}
+		return key, nil
+	}
+
 	// Fallback 1: It is more efficient to aggregate the attesting keys directly.
-	if 2*len(attesting) <= total {
-		return beaconState.AggregateKeyFromIndices(attesting)
+	if 2*attestingCount <= total {
+		return addAttesting()
 	}
 
 	// Fallback 2: Safety check. Each set bit must be a distinct validator, or the subtract path counts a key twice.
 	bits := att.GetAggregationBits()
-	if bits.Count() != uint64(len(attesting)) {
-		return beaconState.AggregateKeyFromIndices(attesting)
+	if bits.Count() != uint64(attestingCount) {
+		return addAttesting()
 	}
 
 	// Fallback 3: Committee aggregates aren't cached yet.
 	committeeKeys, err := helpers.AttestationCommitteeAggregatesFromCache(ctx, beaconState, att)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("attestation committee aggregates from cache: %w", err)
 	}
 	if committeeKeys == nil {
-		return beaconState.AggregateKeyFromIndices(attesting)
+		return addAttesting()
 	}
 
 	// Collect the absent indices.
-	absent := make([]uint64, 0, total-len(attesting))
+	absent := make([]uint64, 0, total-attestingCount)
 	var offset uint64
 	for _, c := range committees {
 		for i, vi := range c {

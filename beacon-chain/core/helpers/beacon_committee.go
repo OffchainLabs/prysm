@@ -106,8 +106,12 @@ func AttestationCommitteeAggregatesFromCache(ctx context.Context, st state.ReadO
 	keys := make([]bls.PublicKey, len(committeeIndices))
 	for i, ci := range committeeIndices {
 		key, err := cc.CommitteeAggregatePubkey(slot, seed, ci)
-		if err != nil || key == nil {
-			return nil, err
+		if err != nil {
+			return nil, fmt.Errorf("committee aggregate pubkey for committee %d: %w", ci, err)
+		}
+		if key == nil {
+			// Cache miss, fallback to aggregating the attesting keys.
+			return nil, nil
 		}
 		keys[i] = key
 	}
@@ -673,26 +677,24 @@ func fillCommitteeCacheAsync(cc *cache.CommitteeCache, s state.ReadOnlyBeaconSta
 	})
 }
 
-// fillCommitteeAggregatesAsync computes the aggregate public key of every committee in the background,
-// so that attestation signature checks can subtract the few absent keys instead of adding every attesting key.
+// fillCommitteeAggregatesAsync computes the aggregate public key of every committee in the background.
 func fillCommitteeAggregatesAsync(cc *cache.CommitteeCache, c *cache.Committees, s state.ReadOnlyBeaconState) {
 	cc.Wg.Go(func() {
 		n := uint64(len(c.ShuffledIndices))
 		keys := make([]bls.PublicKey, c.CommitteeCount)
-		var indices []uint64
 		for i := range c.CommitteeCount {
 			committee := c.ShuffledIndices[slice.SplitOffset(n, c.CommitteeCount, i):slice.SplitOffset(n, c.CommitteeCount, i+1)]
 			if len(committee) == 0 {
 				// No attestation can name an empty committee. A nil key makes lookups fall back.
 				continue
 			}
-			indices = indices[:0]
-			for _, v := range committee {
-				indices = append(indices, uint64(v))
+			indices := make([]uint64, len(committee))
+			for j, v := range committee {
+				indices[j] = uint64(v)
 			}
 			key, err := s.AggregateKeyFromIndices(indices)
 			if err != nil {
-				// Without aggregates, signature checks add every attesting key, which reports the same error.
+				log.WithError(err).Debug("Could not aggregate committee key")
 				return
 			}
 			keys[i] = key
