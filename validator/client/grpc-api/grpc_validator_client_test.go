@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -20,6 +23,7 @@ import (
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func TestToValidatorDutiesContainer_HappyPath(t *testing.T) {
@@ -478,4 +482,72 @@ func TestGrpcValidatorClient_ConnectionGeneration(t *testing.T) {
 		grpcClientManager: newGrpcClientManager(conn, func(_ grpc.ClientConnInterface) eth.BeaconNodeValidatorClient { return nil }),
 	}
 	require.Equal(t, uint64(7), c.ConnectionGeneration())
+}
+
+func TestDomainData(t *testing.T) {
+	cfg := params.BeaconConfig()
+	gvr := bytesutil.PadTo([]byte("genesis-validators-root"), 32)
+
+	newClient := func(t *testing.T, nodeClient eth.NodeClient) *grpcValidatorClient {
+		ctrl := gomock.NewController(t)
+		// No expectation is set on the beacon node validator client: any call to the
+		// DomainData RPC fails the test.
+		beaconNodeValidatorClient := mock2.NewMockBeaconNodeValidatorClient(ctrl)
+		conn := validatorTesting.MockNodeConnection()
+		return &grpcValidatorClient{
+			grpcClientManager: newGrpcClientManager(conn, func(_ grpc.ClientConnInterface) eth.BeaconNodeValidatorClient {
+				return beaconNodeValidatorClient
+			}),
+			nodeClient: &grpcNodeClient{
+				grpcClientManager: newGrpcClientManager(conn, func(_ grpc.ClientConnInterface) eth.NodeClient {
+					return nodeClient
+				}),
+			},
+		}
+	}
+
+	t.Run("computes the domain locally and caches genesis", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		nodeClient := mock2.NewMockNodeClient(ctrl)
+		nodeClient.EXPECT().GetGenesis(gomock.Any(), gomock.Any()).Return(&eth.Genesis{
+			GenesisTime:           timestamppb.New(time.Unix(0, 0)),
+			GenesisValidatorsRoot: gvr,
+		}, nil).Times(1)
+		client := newClient(t, nodeClient)
+
+		for _, domainType := range [][4]byte{cfg.DomainSyncCommittee, cfg.DomainBeaconProposer} {
+			resp, err := client.DomainData(t.Context(), &eth.DomainRequest{Epoch: cfg.AltairForkEpoch, Domain: domainType[:]})
+			require.NoError(t, err)
+
+			want, err := signing.ComputeDomain(domainType, cfg.AltairForkVersion, gvr)
+			require.NoError(t, err)
+			require.DeepEqual(t, want, resp.SignatureDomain)
+		}
+	})
+
+	t.Run("invalid domain type length", func(t *testing.T) {
+		client := newClient(t, mock2.NewMockNodeClient(gomock.NewController(t)))
+		_, err := client.DomainData(t.Context(), &eth.DomainRequest{Domain: []byte{1, 2, 3}})
+		require.ErrorContains(t, "invalid domain type length", err)
+	})
+
+	t.Run("genesis error is not cached", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		nodeClient := mock2.NewMockNodeClient(ctrl)
+		gomock.InOrder(
+			nodeClient.EXPECT().GetGenesis(gomock.Any(), gomock.Any()).Return(nil, errors.New("foo error")),
+			nodeClient.EXPECT().GetGenesis(gomock.Any(), gomock.Any()).Return(&eth.Genesis{
+				GenesisTime:           timestamppb.New(time.Unix(0, 0)),
+				GenesisValidatorsRoot: gvr,
+			}, nil),
+		)
+		client := newClient(t, nodeClient)
+		req := &eth.DomainRequest{Epoch: cfg.AltairForkEpoch, Domain: cfg.DomainSyncCommittee[:]}
+
+		_, err := client.DomainData(t.Context(), req)
+		require.ErrorContains(t, "foo error", err)
+
+		_, err = client.DomainData(t.Context(), req)
+		require.NoError(t, err)
+	})
 }
