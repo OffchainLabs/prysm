@@ -25,6 +25,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
 	testp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/wrapper"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
@@ -1319,4 +1320,122 @@ func TestGetPort_ZeroPortTreatedAsAbsent(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, false, ok)
 	require.Equal(t, uint(0), port)
+}
+
+// createTestNodeWithEntries creates a node with the given static IPs and ENR entries.
+func createTestNodeWithEntries(t *testing.T, ips []net.IP, entries []enr.Entry) *enode.Node {
+	_, privKey := createAddrAndPrivKey(t)
+
+	db, err := enode.OpenDB("")
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	localNode := enode.NewLocalNode(db, privKey)
+	for _, ip := range ips {
+		localNode.SetStaticIP(ip)
+	}
+	for _, entry := range entries {
+		localNode.Set(entry)
+	}
+
+	return localNode.Node()
+}
+
+func TestRetrieveMultiAddrsFromNode_IPv6(t *testing.T) {
+	resetFlags := features.InitWithReset(&features.Flags{EnableQUIC: true})
+	defer resetFlags()
+
+	const (
+		tcpPort   = 30304
+		tcp6Port  = 30324
+		quicPort  = 40404
+		quic6Port = 40424
+	)
+
+	// Private IPv4 scores lower than global IPv6, so dual-stack nodes prefer IPv6.
+	ipV4 := net.ParseIP("192.168.77.2")
+	ipV6 := net.ParseIP("2001:db8::2")
+
+	testCases := []struct {
+		name    string
+		ips     []net.IP
+		entries []enr.Entry
+		// Expected multiaddrs in order, without the trailing /p2p/<id>.
+		expected []string
+	}{
+		{
+			name:     "IPv6-only node advertising only tcp6",
+			ips:      []net.IP{ipV6},
+			entries:  []enr.Entry{enr.TCP6(tcp6Port)},
+			expected: []string{"/ip6/2001:db8::2/tcp/30324"},
+		},
+		{
+			name:    "IPv6-only node advertising only tcp6 and quic6",
+			ips:     []net.IP{ipV6},
+			entries: []enr.Entry{enr.TCP6(tcp6Port), enr.QUIC6(quic6Port)},
+			expected: []string{
+				"/ip6/2001:db8::2/udp/40424/quic-v1",
+				"/ip6/2001:db8::2/tcp/30324",
+			},
+		},
+		{
+			name:    "IPv6-only node falls back to the generic tcp and quic keys",
+			ips:     []net.IP{ipV6},
+			entries: []enr.Entry{enr.TCP(tcpPort), enr.QUIC(quicPort)},
+			expected: []string{
+				"/ip6/2001:db8::2/udp/40404/quic-v1",
+				"/ip6/2001:db8::2/tcp/30304",
+			},
+		},
+		{
+			name: "dual-stack node preferring IPv6 uses the IPv6-specific ports",
+			ips:  []net.IP{ipV4, ipV6},
+			entries: []enr.Entry{
+				enr.TCP(tcpPort), enr.TCP6(tcp6Port),
+				enr.QUIC(quicPort), enr.QUIC6(quic6Port),
+			},
+			expected: []string{
+				"/ip6/2001:db8::2/udp/40424/quic-v1",
+				"/ip6/2001:db8::2/tcp/30324",
+			},
+		},
+		{
+			name: "IPv4-only node keeps using the generic ports",
+			ips:  []net.IP{ipV4},
+			entries: []enr.Entry{
+				enr.TCP(tcpPort), enr.TCP6(tcp6Port),
+				enr.QUIC(quicPort), enr.QUIC6(quic6Port),
+			},
+			expected: []string{
+				"/ip4/192.168.77.2/udp/40404/quic-v1",
+				"/ip4/192.168.77.2/tcp/30304",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			node := createTestNodeWithEntries(t, tc.ips, tc.entries)
+
+			pubkey, err := ecdsaprysm.ConvertToInterfacePubkey(node.Pubkey())
+			require.NoError(t, err)
+			id, err := peer.IDFromPublicKey(pubkey)
+			require.NoError(t, err)
+
+			expected := make([]string, 0, len(tc.expected))
+			for _, addr := range tc.expected {
+				expected = append(expected, fmt.Sprintf("%s/p2p/%s", addr, id))
+			}
+
+			multiAddrs, err := retrieveMultiAddrsFromNode(node)
+			require.NoError(t, err)
+
+			actual := make([]string, 0, len(multiAddrs))
+			for _, addr := range multiAddrs {
+				actual = append(actual, addr.String())
+			}
+
+			require.Equal(t, strings.Join(expected, ", "), strings.Join(actual, ", "))
+		})
+	}
 }
