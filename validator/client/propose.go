@@ -115,6 +115,21 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		return
 	}
 
+	// The slashing protection database records the slot of the block, not the slot of the duty.
+	// Refuse to sign a block for another slot.
+	if wb.Slot() != slot {
+		log.WithFields(logrus.Fields{
+			"dutySlot":  slot,
+			"blockSlot": wb.Slot(),
+		}).Error("Beacon node returned a block for another slot, refusing to sign it")
+
+		if v.emitAccountMetrics {
+			ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
+		}
+
+		return
+	}
+
 	sig, signingRoot, err := v.signBlock(ctx, pubKey, epoch, slot, wb)
 	if err != nil {
 		log.WithError(err).Error("Failed to sign block")

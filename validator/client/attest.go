@@ -81,6 +81,21 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		return
 	}
 
+	// The slashing protection database records the source and target epochs of the attestation.
+	// Refuse to sign attestation data for another slot or target epoch.
+	if data.Slot != slot || data.Target == nil || data.Target.Epoch != slots.ToEpoch(slot) {
+		log.WithFields(logrus.Fields{
+			"dataSlot":    data.Slot,
+			"targetEpoch": data.GetTarget().GetEpoch(),
+		}).Error("Beacon node returned attestation data for another slot, refusing to sign it")
+
+		if v.emitAccountMetrics {
+			ValidatorAttestFailVec.WithLabelValues(fmtKey).Inc()
+		}
+
+		return
+	}
+
 	sig, _, err := v.signAtt(ctx, pubKey, data, slot)
 	if err != nil {
 		log.WithError(err).Error("Could not sign attestation")
