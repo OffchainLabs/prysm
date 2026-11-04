@@ -68,6 +68,11 @@ func (c *FakeCommitteeCache) ProposerIndices(seed [32]byte) ([]primitives.Valida
 	return nil, nil
 }
 
+// Entry returns nil, as the fake cache stores no committees.
+func (c *FakeCommitteeCache) Entry(string) *Committees {
+	return nil
+}
+
 // HasEntry returns true if the committee cache has a value.
 func (c *FakeCommitteeCache) HasEntry(string) bool {
 	return false

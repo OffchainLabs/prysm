@@ -22,6 +22,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 func TestVerifyBlockHeaderSignature(t *testing.T) {
@@ -221,6 +222,8 @@ func TestAttestationSignatureBatch_CommitteeAggregates(t *testing.T) {
 
 	_, err := blocks.AttestationSignatureBatch(ctx, st, []ethpb.Att{att})
 	require.NoError(t, err)
+	// Only block import computes the aggregates.
+	require.NoError(t, helpers.UpdateCommitteeCache(ctx, st, slots.ToEpoch(att.Data.Slot)))
 	require.Eventually(t, func() bool {
 		keys, err := helpers.AttestationCommitteeAggregatesFromCache(ctx, st, att)
 		return err == nil && keys != nil

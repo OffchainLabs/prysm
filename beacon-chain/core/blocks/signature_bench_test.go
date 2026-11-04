@@ -11,6 +11,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 func BenchmarkAttestationSignatureBatch(b *testing.B) {
@@ -24,6 +25,7 @@ func BenchmarkAttestationSignatureBatch(b *testing.B) {
 		// Warm the committee cache, its aggregates and the global pubkey cache, as on a live node.
 		_, err := blocks.AttestationSignatureBatch(ctx, st, atts)
 		require.NoError(b, err)
+		require.NoError(b, helpers.UpdateCommitteeCache(ctx, st, slots.ToEpoch(att.Data.Slot)))
 		require.Eventually(b, func() bool {
 			keys, err := helpers.AttestationCommitteeAggregatesFromCache(ctx, st, att)
 			return err == nil && keys != nil

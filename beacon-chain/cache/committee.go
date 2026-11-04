@@ -149,7 +149,7 @@ func (c *CommitteeCache) CommitteeAggregatePubkey(slot primitives.Slot, seed [32
 		return nil, ErrNotCommittee
 	}
 
-	keys := item.aggregatePubkeys.Load()
+	keys := item.aggregates.keys.Load()
 	if keys == nil {
 		return nil, nil
 	}
@@ -225,6 +225,17 @@ func (c *CommitteeCache) ActiveIndicesCount(seed [32]byte) (int, error) {
 	}
 
 	return len(item.SortedIndices), nil
+}
+
+// Entry returns the cached committees of seed, or nil if none is cached.
+func (c *CommitteeCache) Entry(seed string) *Committees {
+	obj, ok := c.CommitteeCache.Get(seed)
+	if !ok {
+		return nil
+	}
+
+	item, _ := obj.(*Committees)
+	return item
 }
 
 // HasEntry returns true if the committee cache has a value.

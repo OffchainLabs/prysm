@@ -233,6 +233,7 @@ func attestingAggregateKey(
 		total += len(c)
 	}
 
+	// Define a fallback function to aggregate the attesting keys directly.
 	addAttesting := func() (bls.PublicKey, error) {
 		key, err := beaconState.AggregateKeyFromIndices(attesting)
 		if err != nil {
