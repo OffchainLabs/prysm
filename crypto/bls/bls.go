@@ -63,6 +63,11 @@ func AggregateCompressedSignatures(multiSigs [][]byte) (common.Signature, error)
 	return blst.AggregateCompressedSignatures(multiSigs)
 }
 
+// AggregateRandomized aggregates signatures and public keys over one message with random coefficients.
+func AggregateRandomized(sigs [][]byte, pubKeys []PublicKey) (Signature, PublicKey, error) {
+	return blst.AggregateRandomized(sigs, pubKeys)
+}
+
 // VerifySignature verifies a single signature. For performance reason, always use VerifyMultipleSignatures if possible.
 func VerifySignature(sig []byte, msg [32]byte, pubKey common.PublicKey) (bool, error) {
 	return blst.VerifySignature(sig, msg, pubKey)

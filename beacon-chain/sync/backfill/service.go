@@ -232,7 +232,7 @@ func (s *Service) defaultBatchImporter(ctx context.Context, current primitives.S
 	}
 
 	checker := newCheckMultiplexer(s.syncNeeds.Currently(), b)
-	return su.fillBack(ctx, current, b.blocks, checker)
+	return su.fillBack(ctx, current, b.blocks, checker, b.envelopes)
 }
 
 func (s *Service) scheduleTodos() {

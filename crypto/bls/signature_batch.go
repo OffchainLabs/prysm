@@ -188,8 +188,7 @@ func (s *SignatureBatch) AggregateBatch() (*SignatureBatch, error) {
 	newSt := NewSet()
 	for rt, b := range msgMap {
 		if len(b.PublicKeys) > 1 {
-			aggPub := AggregateMultiplePubkeys(b.PublicKeys)
-			aggSig, err := AggregateCompressedSignatures(b.Signatures)
+			aggSig, aggPub, err := AggregateRandomized(b.Signatures, b.PublicKeys)
 			if err != nil {
 				return nil, err
 			}

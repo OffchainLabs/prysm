@@ -520,21 +520,21 @@ func (c *BeaconBlockBodyHeze) ProgressiveHashTreeRoot() ([32]byte, error) {
 
 func (c *BeaconBlockBodyHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
-	// Field 0: RandaoReveal
+	// Position 0: RandaoReveal
 	if len(c.RandaoReveal) != 96 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.RandaoReveal)
-	// Field 1: Eth1Data
+	// Position 1: Eth1Data
 	if err := c.Eth1Data.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("Eth1Data: %w", err)
 	}
-	// Field 2: Graffiti
+	// Position 2: Graffiti
 	if len(c.Graffiti) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.Graffiti)
-	// Field 3: ProposerSlashings
+	// Position 3: ProposerSlashings
 	{
 		subIndx := hh.Index()
 		for _, o := range c.ProposerSlashings {
@@ -544,7 +544,7 @@ func (c *BeaconBlockBodyHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err e
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.ProposerSlashings)))
 	}
-	// Field 4: AttesterSlashings
+	// Position 4: AttesterSlashings
 	{
 		subIndx := hh.Index()
 		for _, o := range c.AttesterSlashings {
@@ -554,7 +554,7 @@ func (c *BeaconBlockBodyHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err e
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.AttesterSlashings)))
 	}
-	// Field 5: Attestations
+	// Position 5: Attestations
 	{
 		subIndx := hh.Index()
 		for _, o := range c.Attestations {
@@ -564,7 +564,7 @@ func (c *BeaconBlockBodyHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err e
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Attestations)))
 	}
-	// Field 6: Deposits
+	// Position 6: Deposits
 	{
 		subIndx := hh.Index()
 		for _, o := range c.Deposits {
@@ -574,7 +574,7 @@ func (c *BeaconBlockBodyHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err e
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Deposits)))
 	}
-	// Field 7: VoluntaryExits
+	// Position 7: VoluntaryExits
 	{
 		subIndx := hh.Index()
 		for _, o := range c.VoluntaryExits {
@@ -584,11 +584,11 @@ func (c *BeaconBlockBodyHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err e
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.VoluntaryExits)))
 	}
-	// Field 8: SyncAggregate
+	// Position 8: SyncAggregate
 	if err := c.SyncAggregate.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("SyncAggregate: %w", err)
 	}
-	// Field 9: BlsToExecutionChanges
+	// Position 9: BlsToExecutionChanges
 	{
 		subIndx := hh.Index()
 		for _, o := range c.BlsToExecutionChanges {
@@ -598,11 +598,11 @@ func (c *BeaconBlockBodyHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err e
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.BlsToExecutionChanges)))
 	}
-	// Field 10: SignedExecutionPayloadBid
+	// Position 10: SignedExecutionPayloadBid
 	if err := c.SignedExecutionPayloadBid.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("SignedExecutionPayloadBid: %w", err)
 	}
-	// Field 11: PayloadAttestations
+	// Position 11: PayloadAttestations
 	{
 		subIndx := hh.Index()
 		for _, o := range c.PayloadAttestations {
@@ -612,7 +612,7 @@ func (c *BeaconBlockBodyHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err e
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.PayloadAttestations)))
 	}
-	// Field 12: ParentExecutionRequests
+	// Position 12: ParentExecutionRequests
 	if err := c.ParentExecutionRequests.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("ParentExecutionRequests: %w", err)
 	}
@@ -1998,26 +1998,26 @@ func (c *BeaconStateHeze) ProgressiveHashTreeRoot() ([32]byte, error) {
 
 func (c *BeaconStateHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
-	// Field 0: GenesisTime
+	// Position 0: GenesisTime
 	hh.PutUint64(c.GenesisTime)
-	// Field 1: GenesisValidatorsRoot
+	// Position 1: GenesisValidatorsRoot
 	if len(c.GenesisValidatorsRoot) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.GenesisValidatorsRoot)
-	// Field 2: Slot
+	// Position 2: Slot
 	if err := c.Slot.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("Slot: %w", err)
 	}
-	// Field 3: Fork
+	// Position 3: Fork
 	if err := c.Fork.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("Fork: %w", err)
 	}
-	// Field 4: LatestBlockHeader
+	// Position 4: LatestBlockHeader
 	if err := c.LatestBlockHeader.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("LatestBlockHeader: %w", err)
 	}
-	// Field 5: BlockRoots
+	// Position 5: BlockRoots
 	{
 		if len(c.BlockRoots) != 64 {
 			return ssz.ErrVectorLength
@@ -2031,7 +2031,7 @@ func (c *BeaconStateHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error
 		}
 		hh.Merkleize(subIndx)
 	}
-	// Field 6: StateRoots
+	// Position 6: StateRoots
 	{
 		if len(c.StateRoots) != 64 {
 			return ssz.ErrVectorLength
@@ -2045,7 +2045,7 @@ func (c *BeaconStateHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error
 		}
 		hh.Merkleize(subIndx)
 	}
-	// Field 7: HistoricalRoots
+	// Position 7: HistoricalRoots
 	{
 		if len(c.HistoricalRoots) > 16777216 {
 			return ssz.ErrListTooBig
@@ -2059,11 +2059,11 @@ func (c *BeaconStateHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error
 		}
 		hh.MerkleizeWithMixin(subIndx, uint64(len(c.HistoricalRoots)), 16777216)
 	}
-	// Field 8: Eth1Data
+	// Position 8: Eth1Data
 	if err := c.Eth1Data.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("Eth1Data: %w", err)
 	}
-	// Field 9: Eth1DataVotes
+	// Position 9: Eth1DataVotes
 	{
 		if len(c.Eth1DataVotes) > 32 {
 			return ssz.ErrListTooBig
@@ -2076,9 +2076,9 @@ func (c *BeaconStateHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error
 		}
 		hh.MerkleizeWithMixin(subIndx, uint64(len(c.Eth1DataVotes)), 32)
 	}
-	// Field 10: Eth1DepositIndex
+	// Position 10: Eth1DepositIndex
 	hh.PutUint64(c.Eth1DepositIndex)
-	// Field 11: Validators
+	// Position 11: Validators
 	{
 		subIndx := hh.Index()
 		for _, o := range c.Validators {
@@ -2088,7 +2088,7 @@ func (c *BeaconStateHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Validators)))
 	}
-	// Field 12: Balances
+	// Position 12: Balances
 	{
 		subIndx := hh.Index()
 		for _, o := range c.Balances {
@@ -2097,7 +2097,7 @@ func (c *BeaconStateHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error
 		hh.FillUpTo32()
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Balances)))
 	}
-	// Field 13: RandaoMixes
+	// Position 13: RandaoMixes
 	{
 		if len(c.RandaoMixes) != 64 {
 			return ssz.ErrVectorLength
@@ -2111,7 +2111,7 @@ func (c *BeaconStateHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error
 		}
 		hh.Merkleize(subIndx)
 	}
-	// Field 14: Slashings
+	// Position 14: Slashings
 	{
 		if len(c.Slashings) != 64 {
 			return ssz.ErrVectorLength
@@ -2122,36 +2122,36 @@ func (c *BeaconStateHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error
 		}
 		hh.Merkleize(subIndx)
 	}
-	// Field 15: PreviousEpochParticipation
+	// Position 15: PreviousEpochParticipation
 	{
 		subIndx := hh.Index()
 		hh.AppendBytes32(c.PreviousEpochParticipation)
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.PreviousEpochParticipation)))
 	}
-	// Field 16: CurrentEpochParticipation
+	// Position 16: CurrentEpochParticipation
 	{
 		subIndx := hh.Index()
 		hh.AppendBytes32(c.CurrentEpochParticipation)
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.CurrentEpochParticipation)))
 	}
-	// Field 17: JustificationBits
+	// Position 17: JustificationBits
 	if len([]byte(c.JustificationBits)) != 1 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes([]byte(c.JustificationBits))
-	// Field 18: PreviousJustifiedCheckpoint
+	// Position 18: PreviousJustifiedCheckpoint
 	if err := c.PreviousJustifiedCheckpoint.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("PreviousJustifiedCheckpoint: %w", err)
 	}
-	// Field 19: CurrentJustifiedCheckpoint
+	// Position 19: CurrentJustifiedCheckpoint
 	if err := c.CurrentJustifiedCheckpoint.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("CurrentJustifiedCheckpoint: %w", err)
 	}
-	// Field 20: FinalizedCheckpoint
+	// Position 20: FinalizedCheckpoint
 	if err := c.FinalizedCheckpoint.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("FinalizedCheckpoint: %w", err)
 	}
-	// Field 21: InactivityScores
+	// Position 21: InactivityScores
 	{
 		subIndx := hh.Index()
 		for _, o := range c.InactivityScores {
@@ -2160,26 +2160,26 @@ func (c *BeaconStateHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error
 		hh.FillUpTo32()
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.InactivityScores)))
 	}
-	// Field 22: CurrentSyncCommittee
+	// Position 22: CurrentSyncCommittee
 	if err := c.CurrentSyncCommittee.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("CurrentSyncCommittee: %w", err)
 	}
-	// Field 23: NextSyncCommittee
+	// Position 23: NextSyncCommittee
 	if err := c.NextSyncCommittee.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("NextSyncCommittee: %w", err)
 	}
-	// Field 24: LatestBlockHash
+	// Position 24: LatestBlockHash
 	if len(c.LatestBlockHash) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.LatestBlockHash)
-	// Field 25: NextWithdrawalIndex
+	// Position 25: NextWithdrawalIndex
 	hh.PutUint64(c.NextWithdrawalIndex)
-	// Field 26: NextWithdrawalValidatorIndex
+	// Position 26: NextWithdrawalValidatorIndex
 	if err := c.NextWithdrawalValidatorIndex.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("NextWithdrawalValidatorIndex: %w", err)
 	}
-	// Field 27: HistoricalSummaries
+	// Position 27: HistoricalSummaries
 	{
 		if len(c.HistoricalSummaries) > 16777216 {
 			return ssz.ErrListTooBig
@@ -2192,29 +2192,29 @@ func (c *BeaconStateHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error
 		}
 		hh.MerkleizeWithMixin(subIndx, uint64(len(c.HistoricalSummaries)), 16777216)
 	}
-	// Field 28: DepositRequestsStartIndex
+	// Position 28: DepositRequestsStartIndex
 	hh.PutUint64(c.DepositRequestsStartIndex)
-	// Field 29: DepositBalanceToConsume
+	// Position 29: DepositBalanceToConsume
 	if err := c.DepositBalanceToConsume.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("DepositBalanceToConsume: %w", err)
 	}
-	// Field 30: ExitBalanceToConsume
+	// Position 30: ExitBalanceToConsume
 	if err := c.ExitBalanceToConsume.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("ExitBalanceToConsume: %w", err)
 	}
-	// Field 31: EarliestExitEpoch
+	// Position 31: EarliestExitEpoch
 	if err := c.EarliestExitEpoch.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("EarliestExitEpoch: %w", err)
 	}
-	// Field 32: ConsolidationBalanceToConsume
+	// Position 32: ConsolidationBalanceToConsume
 	if err := c.ConsolidationBalanceToConsume.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("ConsolidationBalanceToConsume: %w", err)
 	}
-	// Field 33: EarliestConsolidationEpoch
+	// Position 33: EarliestConsolidationEpoch
 	if err := c.EarliestConsolidationEpoch.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("EarliestConsolidationEpoch: %w", err)
 	}
-	// Field 34: PendingDeposits
+	// Position 34: PendingDeposits
 	{
 		subIndx := hh.Index()
 		for _, o := range c.PendingDeposits {
@@ -2224,7 +2224,7 @@ func (c *BeaconStateHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.PendingDeposits)))
 	}
-	// Field 35: PendingPartialWithdrawals
+	// Position 35: PendingPartialWithdrawals
 	{
 		subIndx := hh.Index()
 		for _, o := range c.PendingPartialWithdrawals {
@@ -2234,7 +2234,7 @@ func (c *BeaconStateHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.PendingPartialWithdrawals)))
 	}
-	// Field 36: PendingConsolidations
+	// Position 36: PendingConsolidations
 	{
 		subIndx := hh.Index()
 		for _, o := range c.PendingConsolidations {
@@ -2244,7 +2244,7 @@ func (c *BeaconStateHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.PendingConsolidations)))
 	}
-	// Field 37: ProposerLookahead
+	// Position 37: ProposerLookahead
 	{
 		if len(c.ProposerLookahead) != 16 {
 			return ssz.ErrVectorLength
@@ -2255,7 +2255,7 @@ func (c *BeaconStateHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error
 		}
 		hh.Merkleize(subIndx)
 	}
-	// Field 38: Builders
+	// Position 38: Builders
 	{
 		subIndx := hh.Index()
 		for _, o := range c.Builders {
@@ -2265,16 +2265,16 @@ func (c *BeaconStateHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Builders)))
 	}
-	// Field 39: NextWithdrawalBuilderIndex
+	// Position 39: NextWithdrawalBuilderIndex
 	if err := c.NextWithdrawalBuilderIndex.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("NextWithdrawalBuilderIndex: %w", err)
 	}
-	// Field 40: ExecutionPayloadAvailability
+	// Position 40: ExecutionPayloadAvailability
 	if len(c.ExecutionPayloadAvailability) != 8 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.ExecutionPayloadAvailability)
-	// Field 41: BuilderPendingPayments
+	// Position 41: BuilderPendingPayments
 	{
 		if len(c.BuilderPendingPayments) != 16 {
 			return ssz.ErrVectorLength
@@ -2287,7 +2287,7 @@ func (c *BeaconStateHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error
 		}
 		hh.Merkleize(subIndx)
 	}
-	// Field 42: BuilderPendingWithdrawals
+	// Position 42: BuilderPendingWithdrawals
 	{
 		subIndx := hh.Index()
 		for _, o := range c.BuilderPendingWithdrawals {
@@ -2297,11 +2297,11 @@ func (c *BeaconStateHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.BuilderPendingWithdrawals)))
 	}
-	// Field 43: LatestExecutionPayloadBid
+	// Position 43: LatestExecutionPayloadBid
 	if err := c.LatestExecutionPayloadBid.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("LatestExecutionPayloadBid: %w", err)
 	}
-	// Field 44: PayloadExpectedWithdrawals
+	// Position 44: PayloadExpectedWithdrawals
 	{
 		subIndx := hh.Index()
 		for _, o := range c.PayloadExpectedWithdrawals {
@@ -2311,7 +2311,7 @@ func (c *BeaconStateHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.PayloadExpectedWithdrawals)))
 	}
-	// Field 45: PtcWindow
+	// Position 45: PtcWindow
 	{
 		if len(c.PtcWindow) != 24 {
 			return ssz.ErrVectorLength
@@ -2547,50 +2547,50 @@ func (c *ExecutionPayloadBidHeze) ProgressiveHashTreeRoot() ([32]byte, error) {
 
 func (c *ExecutionPayloadBidHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
-	// Field 0: ParentBlockHash
+	// Position 0: ParentBlockHash
 	if len(c.ParentBlockHash) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.ParentBlockHash)
-	// Field 1: ParentBlockRoot
+	// Position 1: ParentBlockRoot
 	if len(c.ParentBlockRoot) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.ParentBlockRoot)
-	// Field 2: BlockHash
+	// Position 2: BlockHash
 	if len(c.BlockHash) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.BlockHash)
-	// Field 3: PrevRandao
+	// Position 3: PrevRandao
 	if len(c.PrevRandao) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.PrevRandao)
-	// Field 4: FeeRecipient
+	// Position 4: FeeRecipient
 	if len(c.FeeRecipient) != 20 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.FeeRecipient)
-	// Field 5: GasLimit
+	// Position 5: GasLimit
 	hh.PutUint64(c.GasLimit)
-	// Field 6: BuilderIndex
+	// Position 6: BuilderIndex
 	if err := c.BuilderIndex.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("BuilderIndex: %w", err)
 	}
-	// Field 7: Slot
+	// Position 7: Slot
 	if err := c.Slot.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("Slot: %w", err)
 	}
-	// Field 8: Value
+	// Position 8: Value
 	if err := c.Value.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("Value: %w", err)
 	}
-	// Field 9: ExecutionPayment
+	// Position 9: ExecutionPayment
 	if err := c.ExecutionPayment.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("ExecutionPayment: %w", err)
 	}
-	// Field 10: BlobKzgCommitments
+	// Position 10: BlobKzgCommitments
 	{
 		subIndx := hh.Index()
 		for _, o := range c.BlobKzgCommitments {
@@ -2601,12 +2601,12 @@ func (c *ExecutionPayloadBidHeze) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (e
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.BlobKzgCommitments)))
 	}
-	// Field 11: ExecutionRequestsRoot
+	// Position 11: ExecutionRequestsRoot
 	if len(c.ExecutionRequestsRoot) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.ExecutionRequestsRoot)
-	// Field 12: InclusionListBits
+	// Position 12: InclusionListBits
 	if len([]byte(c.InclusionListBits)) != 2 {
 		return ssz.ErrBytesLength
 	}
