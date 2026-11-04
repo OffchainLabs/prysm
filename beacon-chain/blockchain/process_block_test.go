@@ -599,6 +599,20 @@ func TestCurrentSlot_HandlesOverflow(t *testing.T) {
 	slot := svc.CurrentSlot()
 	require.Equal(t, primitives.Slot(0), slot, "Unexpected slot")
 }
+
+func TestReceiveDataColumns_FutureSlot(t *testing.T) {
+	opts := append(testServiceOptsWithDB(t), WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)))
+	service, err := NewService(t.Context(), opts...)
+	require.NoError(t, err)
+	service.SetGenesisTime(time.Now())
+
+	_, next := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{{Slot: 1}})
+	require.NoError(t, service.ReceiveDataColumns(next))
+
+	_, future := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{{Slot: 2}})
+	require.ErrorContains(t, "in the future", service.ReceiveDataColumns(future))
+}
+
 func TestAncestorByDB_CtxErr(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	opts := testServiceOptsWithDB(t)
