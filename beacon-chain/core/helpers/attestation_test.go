@@ -1,6 +1,7 @@
 package helpers_test
 
 import (
+	"math"
 	"strconv"
 	"testing"
 	"time"
@@ -221,6 +222,14 @@ func Test_ValidateAttestationTime(t *testing.T) {
 				genesisTime: time.Now().Add(-15 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
 			},
 			wantedErr: "attestation slot 1024 not within attestation propagation range of 0 to 15 (current slot)",
+		},
+		{
+			name: "attestation.slot is so far beyond current slot that its start time wraps around",
+			args: args{
+				attSlot:     primitives.Slot(uint64(math.MaxInt64)/uint64(params.BeaconConfig().SlotDuration()) + 1),
+				genesisTime: time.Now().Add(-300 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+			},
+			wantedErr: "not within attestation propagation range of 268 to 300 (current slot)",
 		},
 	}
 	for _, tt := range tests {

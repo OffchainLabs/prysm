@@ -221,6 +221,19 @@ func (vs *Server) proposeAtt(
 		}
 	}
 
+	// The slot selects the epoch for which active validators and committees are computed, so as in
+	// gossip validation it must be one that can be broadcast at the current time and match the target epoch.
+	if err := helpers.ValidateAttestationTime(
+		att.GetData().Slot,
+		vs.TimeFetcher.GenesisTime(),
+		params.BeaconConfig().MaximumGossipClockDisparityDuration(),
+	); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "Invalid attestation slot: %v", err)
+	}
+	if err := helpers.ValidateSlotTargetEpoch(att.GetData()); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "Invalid attestation slot: %v", err)
+	}
+
 	// Broadcast the unaggregated attestation on a feed to notify other services in the beacon node
 	// of a received unaggregated attestation.
 	if att.IsSingle() {
