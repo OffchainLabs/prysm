@@ -196,6 +196,10 @@ func StartTime(genesis time.Time, slot primitives.Slot) (time.Time, error) {
 	if err != nil {
 		return time.Unix(0, 0), fmt.Errorf("slot (%d) is in the far distant future: %w", slot, err)
 	}
+	// time.Duration counts nanoseconds in an int64, so the millisecond count must still fit once scaled.
+	if uint64(ms) > uint64(math.MaxInt64/time.Millisecond) {
+		return time.Unix(0, 0), fmt.Errorf("slot (%d) is in the far distant future: %w", slot, errOverflow)
+	}
 	return genesis.Add(time.Duration(ms) * time.Millisecond), nil
 }
 
@@ -280,10 +284,13 @@ func SyncCommitteePeriodStartEpoch(e primitives.Epoch) (primitives.Epoch, error)
 }
 
 // SinceSlotStart returns the amount of time elapsed since the
-// given slot start time. This method returns an error if the timestamp happens
-// before the given slot start time.
+// given slot start time. This method returns an error if the slot start time
+// overflows or if the timestamp happens before it.
 func SinceSlotStart(s primitives.Slot, genesis time.Time, timestamp time.Time) (time.Duration, error) {
-	limit := genesis.Add(time.Duration(uint64(s)) * params.BeaconConfig().SlotDuration())
+	limit, err := StartTime(genesis, s)
+	if err != nil {
+		return 0, err
+	}
 	if timestamp.Before(limit) {
 		return 0, fmt.Errorf("could not compute seconds since slot %d start: invalid timestamp, got %s < want %s", s, timestamp, limit)
 	}
