@@ -286,14 +286,10 @@ func (m *multiHandler) PostSSZWithFallback(
 		return err
 	}
 
-	accepted, errs := broadcastWriteAll(ctx, m.handlers, func(ctx context.Context, h *handler) error {
-		_, err := post(ctx, h)
-		return err
-	})
-	if accepted > 0 {
-		return nil
-	}
-	return errors.Join(errs...)
+	// Return on the first success: broadcastWrite detaches the remaining writes, so
+	// they still reach every node after the caller has moved on.
+	_, err := broadcastWrite(ctx, m.handlers, post)
+	return err
 }
 
 // RequestSSZWithFallback posts through the read-query machinery (racing, acceptance
