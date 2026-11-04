@@ -122,18 +122,14 @@ func (l *limiter) topicCollector(topic string) (*leakybucket.Collector, error) {
 
 // validates a request with the accompanying cost.
 func (l *limiter) validateRequest(stream network.Stream, amt uint64) error {
-	l.RLock()
-	defer l.RUnlock()
-
 	topic := string(stream.Protocol())
 	remotePeer := stream.Conn().RemotePeer()
 
-	collector, err := l.retrieveCollector(topic)
+	remaining, err := l.remaining(topic, remotePeer)
 	if err != nil {
 		return errors.Wrap(err, "retrieve collector")
 	}
 
-	remaining := collector.Remaining(remotePeer.String())
 	// Treat each request as a minimum of 1.
 	if amt == 0 {
 		amt = 1
@@ -148,16 +144,11 @@ func (l *limiter) validateRequest(stream network.Stream, amt uint64) error {
 
 // This is used to validate all incoming rpc streams from external peers.
 func (l *limiter) validateRawRpcRequest(stream network.Stream, amt uint64) error {
-	l.RLock()
-	defer l.RUnlock()
-
 	remotePeer := stream.Conn().RemotePeer()
-	collector, err := l.retrieveCollector(rpcLimiterTopic)
+	remaining, err := l.remaining(rpcLimiterTopic, remotePeer)
 	if err != nil {
 		return err
 	}
-	key := stream.Conn().RemotePeer().String()
-	remaining := collector.Remaining(key)
 
 	if amt > uint64(remaining) {
 		l.downscorePeer(remotePeer, rpcLimiterTopic, "rawRateLimitExceeded")
@@ -165,6 +156,19 @@ func (l *limiter) validateRawRpcRequest(stream network.Stream, amt uint64) error
 		return p2ptypes.ErrRateLimited
 	}
 	return nil
+}
+
+// remaining returns the peer's remaining capacity for the topic. It releases the lock before
+// returning, so callers do not hold it while replying to the peer.
+func (l *limiter) remaining(topic string, pid peer.ID) (int64, error) {
+	l.RLock()
+	defer l.RUnlock()
+
+	collector, err := l.retrieveCollector(topic)
+	if err != nil {
+		return 0, err
+	}
+	return collector.Remaining(pid.String()), nil
 }
 
 // adds the cost to our leaky bucket for the topic.
