@@ -625,8 +625,8 @@ func (s *Service) SubmitSyncMessage(ctx context.Context, msg *ethpb.SyncCommitte
 
 	errs, ctx := errgroup.WithContext(ctx)
 
-	// Validate the message like the sync_committee_{subnet_id} gossip validator does, so that an
-	// invalid message is not broadcast. Already seen messages are not rejected.
+	// Validate the message like the sync_committee_{subnet_id} gossip validator does.
+	// Already seen messages are not rejected.
 	if err := altair.ValidateSyncMessageTime(
 		msg.Slot,
 		s.GenesisTimeFetcher.GenesisTime(),

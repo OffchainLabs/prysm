@@ -1360,7 +1360,7 @@ type syncMsgHeadFetcher struct {
 func (c syncMsgHeadFetcher) HeadValidatorIndexToPublicKey(_ context.Context, idx primitives.ValidatorIndex) ([fieldparams.BLSPubkeyLength]byte, error) {
 	v, err := c.State.ValidatorAtIndexReadOnly(idx)
 	if err != nil {
-		return [fieldparams.BLSPubkeyLength]byte{}, err
+		return [fieldparams.BLSPubkeyLength]byte{}, fmt.Errorf("get validator at index %d: %v", idx, err)
 	}
 	return v.PublicKey(), nil
 }
