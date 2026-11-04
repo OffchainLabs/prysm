@@ -180,8 +180,9 @@ func NextPeriodSyncSubcommitteeIndices(
 }
 
 // UpdateSyncCommitteeCache updates sync committee cache.
-// It uses `state`'s latest block header root as key. To avoid misuse, it disallows
-// block header with state root zeroed out.
+// It uses `state`'s latest block header root and `state`'s slot as key, matching the key
+// `SyncPeriodBoundaryRoot` computes for the period that starts at the next slot. To avoid misuse,
+// it disallows block header with state root zeroed out.
 func UpdateSyncCommitteeCache(ctx context.Context, st state.BeaconState) error {
 	nextSlot := st.Slot() + 1
 	if nextSlot%params.BeaconConfig().SlotsPerEpoch != 0 {
@@ -201,7 +202,9 @@ func UpdateSyncCommitteeCache(ctx context.Context, st state.BeaconState) error {
 		return err
 	}
 
-	return syncCommitteeCacheFrom(ctx).UpdatePositionsInCommittee(combineRootAndSlot(prevBlockRoot[:], uint64(header.Slot)), st)
+	// Key by the state's slot (the last slot of the ending period), not `header.Slot`: the header does not
+	// change across skipped slots, so keying by it lets consecutive periods overwrite each other's entry.
+	return syncCommitteeCacheFrom(ctx).UpdatePositionsInCommittee(combineRootAndSlot(prevBlockRoot[:], uint64(st.Slot())), st)
 }
 
 // Loop through `pubKeys` for matching `pubKey` and get the indices where it matches.
