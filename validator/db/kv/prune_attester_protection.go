@@ -23,7 +23,7 @@ func (s *Store) PruneAttestations(ctx context.Context) error {
 		return bucket.ForEach(func(pubKey []byte, _ []byte) error {
 			key := make([]byte, len(pubKey))
 			copy(key, pubKey)
-			pubkeys = append(pubkeys, pubKey)
+			pubkeys = append(pubkeys, key)
 			return nil
 		})
 	})
