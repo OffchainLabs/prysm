@@ -731,6 +731,74 @@ func TestAncestor_CanUseDB(t *testing.T) {
 	}
 }
 
+func TestAncestorByDB_LongChain(t *testing.T) {
+	service, tr := minimalTestService(t)
+	ctx, beaconDB := tr.ctx, tr.db
+
+	// Blocks only exist at odd slots, so every even slot is a skip slot.
+	// The parent of the first block is not stored.
+	roots := make(map[primitives.Slot][32]byte)
+	var blks []interfaces.ReadOnlySignedBeaconBlock
+	parent := bytesutil.PadTo([]byte{'a'}, 32)
+	for slot := primitives.Slot(1); slot < 1000; slot += 2 {
+		b := util.NewBeaconBlock()
+		b.Block.Slot = slot
+		b.Block.ParentRoot = parent
+		wsb, err := consensusblocks.NewSignedBeaconBlock(b)
+		require.NoError(t, err)
+		blks = append(blks, wsb)
+		r, err := b.Block.HashTreeRoot()
+		require.NoError(t, err)
+		roots[slot] = r
+		parent = r[:]
+	}
+	require.NoError(t, beaconDB.SaveBlocks(ctx, blks))
+	head := roots[999]
+
+	r, err := service.ancestorByDB(ctx, head, 501)
+	require.NoError(t, err)
+	require.Equal(t, roots[501], r)
+
+	r, err = service.ancestorByDB(ctx, head, 500)
+	require.NoError(t, err)
+	require.Equal(t, roots[499], r)
+
+	_, err = service.ancestorByDB(ctx, head, 0)
+	require.ErrorIs(t, err, errBlockNotFoundInCacheOrDB)
+}
+
+// BenchmarkAncestorByDB walks 10,000 blocks. Apple M4 Pro, benchstat n=10:
+//
+//	recursive: 1.19 ms/op, 392 KiB/op, 10.17k allocs/op
+//	loop:      0.94 ms/op (-21%), 391 KiB/op, 10.16k allocs/op
+func BenchmarkAncestorByDB(b *testing.B) {
+	ctx := b.Context()
+	service, err := NewService(ctx, testServiceOptsWithDB(b)...)
+	require.NoError(b, err)
+
+	blks := make([]interfaces.ReadOnlySignedBeaconBlock, 0, 10000)
+	parent := make([]byte, 32)
+	for slot := primitives.Slot(1); slot <= 10000; slot++ {
+		blk := util.NewBeaconBlock()
+		blk.Block.Slot = slot
+		blk.Block.ParentRoot = parent
+		wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
+		require.NoError(b, err)
+		blks = append(blks, wsb)
+		r, err := blk.Block.HashTreeRoot()
+		require.NoError(b, err)
+		parent = r[:]
+	}
+	require.NoError(b, service.cfg.BeaconDB.SaveBlocks(ctx, blks))
+	head := bytesutil.ToBytes32(parent)
+
+	b.ReportAllocs()
+	for b.Loop() {
+		_, err := service.ancestorByDB(ctx, head, 1)
+		require.NoError(b, err)
+	}
+}
+
 func TestEnsureRootNotZeroHashes(t *testing.T) {
 	ctx := t.Context()
 	opts := testServiceOptsNoDB()
