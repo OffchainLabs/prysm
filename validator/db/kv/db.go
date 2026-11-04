@@ -9,7 +9,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -67,7 +66,6 @@ type Store struct {
 	databasePath                       string
 	batchedAttestations                *QueuedAttestationRecords
 	batchedAttestationsChan            chan *AttestationRecordSaveRequest
-	batchAttestationsFlushedFeed       *event.Feed
 	batchedAttestationsFlushInProgress atomic.Bool
 }
 
@@ -138,11 +136,10 @@ func NewKVStore(ctx context.Context, dirPath string, config *Config) (*Store, er
 	}
 
 	kv := &Store{
-		db:                           boltDB,
-		databasePath:                 dirPath,
-		batchedAttestations:          NewQueuedAttestationRecords(),
-		batchedAttestationsChan:      make(chan *AttestationRecordSaveRequest, attestationBatchCapacity),
-		batchAttestationsFlushedFeed: new(event.Feed),
+		db:                      boltDB,
+		databasePath:            dirPath,
+		batchedAttestations:     NewQueuedAttestationRecords(),
+		batchedAttestationsChan: make(chan *AttestationRecordSaveRequest, attestationBatchCapacity),
 	}
 
 	if err := kv.db.Update(func(tx *bolt.Tx) error {
