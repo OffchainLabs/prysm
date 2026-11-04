@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sort"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -323,10 +324,19 @@ func PTCDependentRoot(s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]by
 		if epoch == 0 {
 			return nil, nil
 		}
-		return ProposalDependentRoot(s, epoch)
+		dr, err := ProposalDependentRoot(s, epoch)
+		if err != nil {
+			return nil, fmt.Errorf("proposal dependent root: %v", err)
+		}
+		return dr, nil
 	}
 	if epoch <= 1 {
 		return nil, nil
 	}
-	return AttestationDependentRoot(s, epoch)
+
+	dr, err := AttestationDependentRoot(s, epoch)
+	if err != nil {
+		return nil, fmt.Errorf("attestation dependent root: %v", err)
+	}
+	return dr, nil
 }
