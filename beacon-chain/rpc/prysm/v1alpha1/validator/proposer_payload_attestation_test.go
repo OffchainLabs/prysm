@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -94,4 +95,48 @@ func TestGetPayloadAttestations_FromPoolFiltersByParentAndPreviousSlot(t *testin
 	// Deterministic ordering: false payload_present first.
 	require.Equal(t, false, result[0].Data.PayloadPresent)
 	require.Equal(t, true, result[1].Data.PayloadPresent)
+}
+
+func TestGetPayloadAttestations_DropsZeroSumAggregate(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	headState, err := util.NewBeaconStateGloas()
+	require.NoError(t, err)
+	require.NoError(t, headState.SetSlot(10))
+	parentRoot := bytesutil.PadTo([]byte{0xAA}, 32)
+
+	sk, err := bls.RandKey()
+	require.NoError(t, err)
+	negKey := negateSecretKey(t, sk)
+	honestKey, err := bls.RandKey()
+	require.NoError(t, err)
+
+	pool := payloadattestation.NewPool()
+	insert := func(payloadPresent bool, idx uint64, key bls.SecretKey) {
+		t.Helper()
+		data := &ethpb.PayloadAttestationData{
+			BeaconBlockRoot:   parentRoot,
+			Slot:              9,
+			PayloadPresent:    payloadPresent,
+			BlobDataAvailable: payloadPresent,
+		}
+		msg := &ethpb.PayloadAttestationMessage{
+			ValidatorIndex: primitives.ValidatorIndex(idx),
+			Data:           data,
+			Signature:      key.Sign([]byte("payload attestation")).Marshal(),
+		}
+		require.NoError(t, pool.InsertPayloadAttestation(msg, []uint64{idx}))
+	}
+
+	insert(true, 0, honestKey)
+	insert(false, 1, sk)
+	insert(false, 2, negKey)
+
+	vs := &Server{PayloadAttestationPool: pool}
+	result := vs.getPayloadAttestations(t.Context(), headState, bytesutil.ToBytes32(parentRoot))
+	require.Equal(t, 1, len(result))
+	require.Equal(t, true, result[0].Data.PayloadPresent)
 }

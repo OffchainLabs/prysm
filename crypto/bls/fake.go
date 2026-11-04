@@ -112,6 +112,15 @@ func AggregateCompressedSignatures(multiSigs [][]byte) (common.Signature, error)
 	return NewAggregateSignature(), nil
 }
 
+// AggregateRandomized --
+func AggregateRandomized(sigs [][]byte, pubKeys []PublicKey) (Signature, PublicKey, error) {
+	sig, err := AggregateCompressedSignatures(sigs)
+	if err != nil {
+		return nil, nil, err
+	}
+	return sig, AggregateMultiplePubkeys(pubKeys), nil
+}
+
 // VerifySignature succeeds for any well-formed signature.
 func VerifySignature(sig []byte, _ [32]byte, _ common.PublicKey) (bool, error) {
 	if _, err := SignatureFromBytes(sig); err != nil {

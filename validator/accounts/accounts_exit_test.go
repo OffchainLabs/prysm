@@ -19,29 +19,54 @@ import (
 )
 
 func TestDisplayExitInfo(t *testing.T) {
-	logHook := test.NewGlobal()
 	key := []byte("0x123456")
-	displayExitInfo([][]byte{key}, []string{string(key)})
-	assert.LogsContain(t, logHook, "https://beaconcha.in/validator/3078313233343536")
 
-	params.BeaconConfig().ConfigName = params.HoleskyName
-	displayExitInfo([][]byte{key}, []string{string(key)})
-	assert.LogsContain(t, logHook, "https://holesky.beaconcha.in/validator/3078313233343536")
+	t.Run("with URL", func(t *testing.T) {
+		logHook := test.NewGlobal()
+		otherKey := []byte("0x654321")
+		displayExitInfo("https://hoodi.beaconcha.in", [][]byte{key, otherKey}, []string{string(key), string(otherKey)})
+		assert.LogsContain(t, logHook, "https://hoodi.beaconcha.in/validator/3078313233343536")
+		assert.LogsContain(t, logHook, "https://hoodi.beaconcha.in/validator/3078363534333231")
+		assert.LogsContain(t, logHook, "count=2")
+	})
 
-	params.BeaconConfig().ConfigName = params.SepoliaName
-	displayExitInfo([][]byte{key}, []string{string(key)})
-	assert.LogsContain(t, logHook, "https://sepolia.beaconcha.in/validator/3078313233343536")
+	t.Run("without URL", func(t *testing.T) {
+		logHook := test.NewGlobal()
+		displayExitInfo("", [][]byte{key}, []string{string(key)})
+		assert.LogsContain(t, logHook, "Voluntary exit was successful")
+		assert.LogsDoNotContain(t, logHook, "beaconcha.in")
+	})
+
+	t.Run("no keys", func(t *testing.T) {
+		logHook := test.NewGlobal()
+		displayExitInfo("https://beaconcha.in", [][]byte{}, []string{})
+		assert.LogsContain(t, logHook, "No successful voluntary exits")
+	})
 }
 
-func TestDisplayExitInfo_NoKeys(t *testing.T) {
-	logHook := test.NewGlobal()
-	displayExitInfo([][]byte{}, []string{})
-	assert.LogsContain(t, logHook, "No successful voluntary exits")
+func TestBeaconChaBaseURL(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		root [32]byte
+		want string
+	}{
+		{name: "mainnet", root: params.MainnetConfig().GenesisValidatorsRoot, want: "https://beaconcha.in"},
+		{name: "sepolia", root: params.SepoliaConfig().GenesisValidatorsRoot, want: "https://sepolia.beaconcha.in"},
+		{name: "hoodi", root: params.HoodiConfig().GenesisValidatorsRoot, want: "https://hoodi.beaconcha.in"},
+		{name: "unknown network", root: [32]byte{'u'}, want: ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, beaconChaBaseURL(tt.root[:]))
+		})
+	}
 }
 
 func TestDisplayExitJSONInfo(t *testing.T) {
 	logHook := test.NewGlobal()
-	displayExitJSONInfo([]string{"0x123456"}, "/tmp/exits")
+	displayExitJSONInfo([]string{"0x123456", "0x654321"}, "/tmp/exits")
+	assert.LogsContain(t, logHook, "pubkey=0x123456")
+	assert.LogsContain(t, logHook, "pubkey=0x654321")
+	assert.LogsContain(t, logHook, "count=2")
 	assert.LogsContain(t, logHook, "No exits were broadcast to the network")
 	assert.LogsContain(t, logHook, "/tmp/exits")
 }

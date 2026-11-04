@@ -714,6 +714,11 @@ func (vs *Server) handlePostBlockStateError(ctx context.Context, block interface
 	case errors.Is(err, transition.ErrProcessVoluntaryExitsFailed):
 		log.WithError(err).Warn("Retrying block construction without voluntary exits")
 		block.SetVoluntaryExits([]*ethpb.SignedVoluntaryExit{})
+	case errors.Is(err, transition.ErrProcessPayloadAttestationsFailed):
+		log.WithError(err).Warn("Retrying block construction without payload attestations")
+		if err := block.SetPayloadAttestations([]*ethpb.PayloadAttestation{}); err != nil {
+			return nil, errors.Wrap(err, "could not set payload attestations")
+		}
 	case errors.Is(err, transition.ErrProcessSyncAggregateFailed):
 		log.WithError(err).Warn("Retrying block construction without sync aggregate")
 		emptySig := [96]byte{0xC0}
