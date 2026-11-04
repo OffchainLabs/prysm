@@ -587,7 +587,7 @@ func TestGetSpec(t *testing.T) {
 			case "TTFB_TIMEOUT":
 				assert.Equal(t, "5", v)
 			case "MIN_EPOCHS_FOR_BLOCK_REQUESTS":
-				assert.Equal(t, "33024", v)
+				assert.Equal(t, "8192", v)
 			case "MAX_PAYLOAD_SIZE":
 				assert.Equal(t, "10485760", v)
 			case "ATTESTATION_SUBNET_COUNT":
