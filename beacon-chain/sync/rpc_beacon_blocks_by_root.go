@@ -25,10 +25,9 @@ import (
 
 // sendBeaconBlocksRequest sends the `requests` beacon blocks by root requests to
 // the peer with the given `id`. For each received block, it inserts the block into the
-// pending queue. Then, for each received blocks, it checks if all corresponding sidecars
-// are stored, and, if not, sends the corresponding sidecar requests and stores the received sidecars.
-// For sidecars, only blob sidecars will be requested to the peer with the given `id`.
-// For other types of sidecars, the request will be sent to the best peers.
+// pending queue. Then, for each received pre-Fulu block, it checks if all corresponding blob sidecars
+// are stored, and, if not, requests them to the peer with the given `id` and stores them.
+// (Data column sidecars of post-Fulu blocks are fetched by the pending queue, after the block is validated.)
 func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.BeaconBlockByRootsReq, id peer.ID) error {
 	ctx, cancel := context.WithTimeout(ctx, respTimeout)
 	defer cancel()
@@ -64,32 +63,15 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 	})
 
 	// The following part deals with sidecars.
-	postFuluBlocks := make([]blocks.ROBlock, 0, len(blks))
 	for _, blk := range blks {
 		blockVersion := blk.Version()
-
-		if blockVersion >= version.Fulu {
-			roBlock, err := blocks.NewROBlock(blk)
-			if err != nil {
-				return errors.Wrap(err, "new ro block")
-			}
-
-			postFuluBlocks = append(postFuluBlocks, roBlock)
-
+		if blockVersion < version.Deneb || blockVersion >= version.Fulu {
 			continue
 		}
 
-		if blockVersion >= version.Deneb {
-			if err := s.requestAndSaveMissingBlobSidecars(blk, id); err != nil {
-				return errors.Wrap(err, "request and save missing blob sidecars")
-			}
-
-			continue
+		if err := s.requestAndSaveMissingBlobSidecars(blk, id); err != nil {
+			return errors.Wrap(err, "request and save missing blob sidecars")
 		}
-	}
-
-	if err := s.requestAndSaveMissingDataColumnSidecars(postFuluBlocks); err != nil {
-		return errors.Wrap(err, "request and save missing data columns")
 	}
 
 	return err

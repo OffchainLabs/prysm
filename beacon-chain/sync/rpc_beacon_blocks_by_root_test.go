@@ -400,6 +400,92 @@ func TestRecentBeaconBlocks_RPCRequestSent_InvalidSignature(t *testing.T) {
 	}
 }
 
+func TestRecentBeaconBlocks_RPCRequestSent_FuluDoesNotFetchDataColumns(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.AltairForkEpoch = 0
+	cfg.BellatrixForkEpoch = 0
+	cfg.CapellaForkEpoch = 0
+	cfg.DenebForkEpoch = 0
+	cfg.ElectraForkEpoch = 0
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+	params.BeaconConfig().InitializeForkSchedule()
+
+	p1 := p2ptest.NewTestP2P(t)
+	p2 := p2ptest.NewTestP2P(t)
+	p1.DelaySend = true
+
+	genesisState, keys := util.DeterministicGenesisStateFulu(t, 64)
+
+	// A block with a blob commitment, signed by a known validator, but not validated otherwise.
+	block := util.NewBeaconBlockFulu()
+	block.Block.Slot = 1
+	block.Block.ProposerIndex = 0
+	block.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, fieldparams.KzgCommitmentSize)}
+	blockRoot, err := block.Block.HashTreeRoot()
+	require.NoError(t, err)
+	fork, err := params.Fork(0)
+	require.NoError(t, err)
+	domain, err := signing.Domain(fork, 0, params.BeaconConfig().DomainBeaconProposer, genesisState.GenesisValidatorsRoot())
+	require.NoError(t, err)
+	signingRoot, err := signing.ComputeSigningRoot(block.Block, domain)
+	require.NoError(t, err)
+	block.Signature = keys[0].Sign(signingRoot[:]).Marshal()
+	signedBlock, err := blocks.NewSignedBeaconBlock(block)
+	require.NoError(t, err)
+
+	expectedRoots := p2pTypes.BeaconBlockByRootsReq{blockRoot}
+
+	chain := &mock.ChainService{
+		State:               genesisState,
+		FinalizedCheckPoint: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+		Genesis:             time.Now(),
+		ValidatorsRoot:      bytesutil.ToBytes32(genesisState.GenesisValidatorsRoot()),
+	}
+	clock := startup.NewClock(chain.Genesis, chain.ValidatorsRoot)
+
+	r := &Service{
+		cfg: &config{
+			p2p:               p1,
+			chain:             chain,
+			clock:             clock,
+			dataColumnStorage: filesystem.NewEphemeralDataColumnStorage(t),
+		},
+		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
+		seenPendingBlocks:   make(map[[32]byte]bool),
+		ctx:                 t.Context(),
+		rateLimiter:         newRateLimiter(p1),
+		newColumnsVerifier: func(_ []blocks.RODataColumn, _ []verification.Requirement) verification.DataColumnsVerifier {
+			return &verification.MockDataColumnsVerifier{}
+		},
+		pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
+	}
+
+	pcl := protocol.ID(p2p.RPCBlocksByRootTopicV2 + p2.Encoding().ProtocolSuffix())
+	r.rateLimiter.limiterMap[string(pcl)] = leakybucket.NewCollector(10000, 10000, time.Second, false)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
+		defer wg.Done()
+		out := new(p2pTypes.BeaconBlockByRootsReq)
+		assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, out))
+		assert.NoError(t, WriteBlockChunk(stream, clock, p2.Encoding(), signedBlock))
+		assert.NoError(t, stream.Close())
+	})
+
+	p1.Connect(p2)
+
+	// No peer has the data column sidecars of this block. If they were fetched here, the call would fail.
+	require.NoError(t, r.sendBeaconBlocksRequest(t.Context(), &expectedRoots, p2.PeerID()))
+	require.Equal(t, true, r.seenPendingBlocks[blockRoot], "Block should be queued")
+
+	if util.WaitTimeout(&wg, 1*time.Second) {
+		t.Fatal("Did not receive stream within 1 sec")
+	}
+}
+
 func TestRecentBeaconBlocksRPCHandler_HandleZeroBlocks(t *testing.T) {
 	p1 := p2ptest.NewTestP2P(t)
 	p2 := p2ptest.NewTestP2P(t)
