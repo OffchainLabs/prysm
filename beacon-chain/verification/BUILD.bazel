@@ -89,6 +89,7 @@ go_test(
         "//beacon-chain/startup:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
+        "//cache/lru:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",

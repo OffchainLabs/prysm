@@ -412,7 +412,9 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 			markInitSyncComplete(t, svc)
 			require.NoError(t, cw.SetClock(clock))
 			svc.verifierWaiter = verification.NewInitializerWaiter(cw, chainService.ForkChoiceStore, svc.cfg.stateGen, chainService)
-			go svc.Start()
+			svc.cfg.clock = clock
+			svc.markForChainStart()
+			go svc.verifierRoutine()
 
 			marshalledObj, err := tt.args.msg.MarshalSSZ()
 			assert.NoError(t, err)
@@ -425,12 +427,6 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 				ReceivedFrom:  "",
 				ValidatorData: nil,
 			}
-			for range 10 {
-				if !svc.chainIsStarted() {
-					time.Sleep(100 * time.Millisecond)
-				}
-			}
-			require.Equal(t, true, svc.chainIsStarted())
 			if got, err := svc.validateSyncCommitteeMessage(ctx, tt.args.pid, msg); got != tt.want {
 				_ = err
 				t.Errorf("validateSyncCommitteeMessage() = %v, want %v", got, tt.want)

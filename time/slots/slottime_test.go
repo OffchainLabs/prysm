@@ -260,6 +260,22 @@ func TestSlotToTime(t *testing.T) {
 			},
 			wantedErr: "is in the far distant future",
 		},
+		{
+			name: "last_representable_slot",
+			args: args{
+				genesis: time.Unix(500, 0),
+				slot:    lastRepresentableSlot(),
+			},
+			want: time.Unix(500, 0).Add(time.Duration(lastRepresentableSlot()) * params.BeaconConfig().SlotDuration()),
+		},
+		{
+			name: "duration_overflow",
+			args: args{
+				genesis: time.Unix(500, 0),
+				slot:    lastRepresentableSlot() + 1,
+			},
+			wantedErr: "is in the far distant future",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -434,6 +450,7 @@ func TestSinceSlotStart(t *testing.T) {
 	}{
 		{slot: 1, timeStamp: now.Add(-1 * time.Hour), wantedErr: true},
 		{slot: 1, timeStamp: now.Add(2 * time.Second).Add(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second), wanted: 2 * time.Second},
+		{slot: lastRepresentableSlot() + 1, timeStamp: now, wantedErr: true},
 	}
 	for i, test := range tests {
 		t.Logf("testing scenario %d", i)
@@ -445,6 +462,11 @@ func TestSinceSlotStart(t *testing.T) {
 			require.Equal(t, w, test.wanted)
 		}
 	}
+}
+
+// lastRepresentableSlot returns the last slot whose start, in nanoseconds since genesis, fits in a time.Duration.
+func lastRepresentableSlot() primitives.Slot {
+	return primitives.Slot(uint64(math.MaxInt64/time.Millisecond) / params.BeaconConfig().SlotDurationMillis())
 }
 
 func TestDuration(t *testing.T) {

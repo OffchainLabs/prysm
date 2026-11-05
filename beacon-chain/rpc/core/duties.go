@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sort"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -314,4 +315,28 @@ func ProposalDependentRootV2(s state.ReadOnlyBeaconState, epoch primitives.Epoch
 		return AttestationDependentRoot(s, epoch)
 	}
 	return ProposalDependentRoot(s, epoch)
+}
+
+// PTCDependentRoot returns the dependent root for PTC duties at the given epoch,
+// or nil on underflow, in which case callers must use the genesis block root.
+func PTCDependentRoot(s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]byte, error) {
+	if epoch == params.BeaconConfig().GloasForkEpoch {
+		if epoch == 0 {
+			return nil, nil
+		}
+		dr, err := ProposalDependentRoot(s, epoch)
+		if err != nil {
+			return nil, fmt.Errorf("proposal dependent root: %v", err)
+		}
+		return dr, nil
+	}
+	if epoch <= 1 {
+		return nil, nil
+	}
+
+	dr, err := AttestationDependentRoot(s, epoch)
+	if err != nil {
+		return nil, fmt.Errorf("attestation dependent root: %v", err)
+	}
+	return dr, nil
 }

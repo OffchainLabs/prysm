@@ -608,6 +608,8 @@ func fillCommitteeCacheAsync(cc *cache.CommitteeCache, seed [32]byte, indices []
 
 	count := SlotCommitteeCount(uint64(len(indices)))
 	committeeCount := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(count))
+	// Read the config before spawning the goroutine.
+	rounds := shuffleRoundCount()
 
 	cc.Wg.Go(func() {
 		if cc.HasEntry(seedKey) {
@@ -616,7 +618,7 @@ func fillCommitteeCacheAsync(cc *cache.CommitteeCache, seed [32]byte, indices []
 
 		// UnshuffleList sorts in place.
 		// Clone so we never touch the caller's slice.
-		shuffled, err := UnshuffleList(slices.Clone(indices), seed)
+		shuffled, err := innerShuffleList(slices.Clone(indices), seed, rounds, false /* un-shuffle */)
 		if err != nil {
 			log.WithError(err).Error("Could not shuffle indices for committee cache update")
 			return

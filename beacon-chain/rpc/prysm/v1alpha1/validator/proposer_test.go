@@ -3960,3 +3960,18 @@ func TestServer_ProposeBeaconBlock_PostFuluBlindedBlock(t *testing.T) {
 		require.NotEmpty(t, res.BlockRoot)
 	})
 }
+
+func TestHandlePostBlockStateError_DropsPayloadAttestations(t *testing.T) {
+	blk := util.NewBeaconBlockGloas()
+	blk.Block.Body.PayloadAttestations = []*ethpb.PayloadAttestation{util.HydratePayloadAttestation(&ethpb.PayloadAttestation{})}
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	ctx := context.WithValue(t.Context(), computeStateRootAttemptsKey, maxComputeStateRootAttempts)
+	_, err = (&Server{}).handlePostBlockStateError(ctx, wsb, transition.ErrProcessPayloadAttestationsFailed)
+	require.ErrorContains(t, "attempted max compute state root attempts", err)
+
+	atts, err := wsb.Block().Body().PayloadAttestations()
+	require.NoError(t, err)
+	require.Equal(t, 0, len(atts))
+}

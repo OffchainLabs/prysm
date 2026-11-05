@@ -4,6 +4,7 @@ package validator
 
 import (
 	"bytes"
+	"math/big"
 	"math/rand"
 	"sort"
 	"strconv"
@@ -12,13 +13,16 @@ import (
 	"github.com/OffchainLabs/go-bitfield"
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations/mock"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/blst"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -1100,4 +1104,85 @@ func Test_filterCurrentEpochAttestationByForkchoice(t *testing.T) {
 	got, err = s.filterCurrentEpochAttestationByForkchoice(ctx, a, epoch)
 	require.NoError(t, err)
 	require.Equal(t, false, got)
+}
+
+func negateSecretKey(t *testing.T, sk bls.SecretKey) bls.SecretKey {
+	t.Helper()
+	order, ok := new(big.Int).SetString("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001", 16)
+	require.Equal(t, true, ok)
+	neg := new(big.Int).Sub(order, new(big.Int).SetBytes(sk.Marshal()))
+	negKey, err := bls.SecretKeyFromBytes(neg.FillBytes(make([]byte, 32)))
+	require.NoError(t, err)
+	return negKey
+}
+
+func TestPackAttestations_DropsZeroSumAggregate(t *testing.T) {
+	ctx := t.Context()
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.ElectraForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	st, keys := util.DeterministicGenesisStateElectra(t, 192)
+	require.NoError(t, st.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
+
+	committees, err := helpers.BeaconCommittees(ctx, st, 0)
+	require.NoError(t, err)
+	committee := committees[0]
+	require.Equal(t, true, len(committee) >= 3)
+
+	honestIdx, attackerIdx, negatedIdx := committee[0], committee[1], committee[2]
+	negKey := negateSecretKey(t, keys[attackerIdx])
+	val, err := st.ValidatorAtIndex(negatedIdx)
+	require.NoError(t, err)
+	val.PublicKey = negKey.PublicKey().Marshal()
+	require.NoError(t, st.UpdateValidatorAtIndex(negatedIdx, val))
+
+	domain, err := signing.Domain(st.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, st.GenesisValidatorsRoot())
+	require.NoError(t, err)
+
+	single := func(position uint64, data *ethpb.AttestationData, sk bls.SecretKey) *ethpb.AttestationElectra {
+		root, err := signing.ComputeSigningRoot(data, domain)
+		require.NoError(t, err)
+		bits := bitfield.NewBitlist(uint64(len(committee)))
+		bits.SetBitAt(position, true)
+		cb := primitives.NewAttestationCommitteeBits()
+		cb.SetBitAt(0, true)
+		return &ethpb.AttestationElectra{
+			AggregationBits: bits,
+			CommitteeBits:   cb,
+			Data:            data,
+			Signature:       sk.Sign(root[:]).Marshal(),
+		}
+	}
+
+	honestData := util.HydrateAttestationData(&ethpb.AttestationData{BeaconBlockRoot: bytesutil.PadTo([]byte{'h'}, 32)})
+	attackData := util.HydrateAttestationData(&ethpb.AttestationData{BeaconBlockRoot: bytesutil.PadTo([]byte{'z'}, 32)})
+
+	pool := &mock.PoolMock{}
+	require.NoError(t, pool.SaveUnaggregatedAttestations([]ethpb.Att{
+		single(0, honestData, keys[honestIdx]),
+		single(1, attackData, keys[attackerIdx]),
+		single(2, attackData, negKey),
+	}))
+
+	slot := primitives.Slot(1)
+	headSlot := primitives.Slot(0)
+	s := &Server{
+		AttPool:     pool,
+		HeadFetcher: &chainMock.ChainService{State: st, MockHeadSlot: &headSlot},
+		TimeFetcher: &chainMock.ChainService{Slot: &slot},
+	}
+
+	atts, err := s.packAttestations(ctx, st, params.BeaconConfig().SlotsPerEpoch)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(atts))
+	require.DeepEqual(t, honestData, atts[0].GetData())
+
+	set, err := blocks.AttestationSignatureBatch(ctx, st, atts)
+	require.NoError(t, err)
+	verified, err := set.Verify()
+	require.NoError(t, err)
+	require.Equal(t, true, verified)
 }

@@ -587,7 +587,7 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 	}
 
 	// Start the fork watcher.
-	go s.p2pHandlerControlLoop()
+	s.spawn(s.p2pHandlerControlLoop)
 }
 
 func (s *Service) writeErrorResponseToStream(responseCode byte, reason string, stream libp2pcore.Stream) {

@@ -398,3 +398,55 @@ func TestGetPTCDuties_PreGloasFork(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, s.Code())
 	assert.ErrorContains(t, "before Gloas fork epoch", err)
 }
+
+func TestGetPTCDuties_ForkBoundary(t *testing.T) {
+	helpers.ClearCache()
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 2
+	params.OverrideBeaconConfig(cfg)
+	spe := params.BeaconConfig().SlotsPerEpoch
+
+	numVals := uint64(fieldparams.PTCSize * 2)
+	fuluSt, _ := util.DeterministicGenesisStateFulu(t, numVals)
+	gloasSt, err := transition.ProcessSlots(t.Context(), fuluSt.Copy(), 2*spe)
+	require.NoError(t, err)
+	// The dependent root of the fork epoch is the block root at start(fork epoch) - 1.
+	dependentRoot := [32]byte{4, 5, 6}
+	require.NoError(t, gloasSt.UpdateBlockRootAtIndex(uint64(2*spe-1), dependentRoot))
+
+	db := dbutil.SetupDB(t)
+	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), [32]byte{1, 2, 3}))
+
+	newServer := func(genesis time.Time, slot primitives.Slot) *Server {
+		chain := &mockChain.ChainService{State: gloasSt, Genesis: genesis, Slot: &slot}
+		return &Server{
+			HeadFetcher:           chain,
+			TimeFetcher:           chain,
+			OptimisticModeFetcher: chain,
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			BeaconDB:              db,
+			CoreService:           &core.Service{},
+		}
+	}
+	req := &ethpb.PTCDutiesRequest{Epoch: 2, ValidatorIndices: []primitives.ValidatorIndex{0, 1, 2, 3}}
+
+	t.Run("fork epoch requested before the fork is rejected", func(t *testing.T) {
+		_, err := newServer(time.Now(), spe).GetPTCDuties(t.Context(), req)
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+		assert.ErrorContains(t, "not available until the fork", err)
+	})
+
+	t.Run("fork epoch requested within clock disparity of the fork returns duties", func(t *testing.T) {
+		genesis := time.Now().Add(-params.EpochsDuration(2, params.BeaconConfig()) + 200*time.Millisecond)
+		res, err := newServer(genesis, 2*spe-1).GetPTCDuties(t.Context(), req)
+		require.NoError(t, err)
+		assert.Equal(t, dependentRoot, [32]byte(res.DependentRoot))
+	})
+
+	t.Run("fork epoch requested at the fork returns duties", func(t *testing.T) {
+		res, err := newServer(time.Now(), 2*spe).GetPTCDuties(t.Context(), req)
+		require.NoError(t, err)
+		assert.Equal(t, dependentRoot, [32]byte(res.DependentRoot))
+	})
+}

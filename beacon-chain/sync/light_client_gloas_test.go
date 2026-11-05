@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -269,4 +270,84 @@ func lightClientNetworkUpdate(t *testing.T, fork int) interfaces.LightClientUpda
 		update.FinalizedHeader().Proto().(*ethpb.LightClientHeaderGloas).ExecutionBlockHash[0] = 43
 	}
 	return update
+}
+
+func TestLightClientGloas_GossipForkBoundary(t *testing.T) {
+	setupLightClientNetworkConfig(t)
+	p := p2ptest.NewTestP2P(t)
+	t.Cleanup(func() { require.NoError(t, p.BHost.Close()) })
+	store := lightclient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), dbtesting.SetupDB(t))
+	genesis := time.Unix(0, 0)
+	s := &Service{
+		cfg:     &config{p2p: p, initialSync: &mockSync.Sync{}},
+		lcStore: store, chainStarted: &atomic.Bool{},
+	}
+	s.chainStarted.Store(true)
+
+	for _, tt := range []struct {
+		name              string
+		fork              int
+		topicEpoch        primitives.Epoch
+		local             bool
+		wrongAttestedSlot bool
+		want              pubsub.ValidationResult
+	}{
+		{name: "previous fork remote", fork: version.Fulu, topicEpoch: 5, want: pubsub.ValidationAccept},
+		{name: "previous fork local", fork: version.Fulu, topicEpoch: 5, local: true, want: pubsub.ValidationAccept},
+		{name: "current fork remote", fork: version.Gloas, topicEpoch: 6, want: pubsub.ValidationAccept},
+		{name: "current fork local", fork: version.Gloas, topicEpoch: 6, local: true, want: pubsub.ValidationAccept},
+		{name: "wrong digest with compatible SSZ", fork: version.Fulu, topicEpoch: 4, want: pubsub.ValidationIgnore},
+		{name: "attested slot does not match topic", fork: version.Fulu, topicEpoch: 5, wrongAttestedSlot: true, want: pubsub.ValidationIgnore},
+		{name: "signature fork cannot decode attested fork", fork: version.Fulu, topicEpoch: 6, want: pubsub.ValidationReject},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			update := lightClientNetworkUpdate(t, tt.fork)
+			now := genesis.Add(time.Duration(update.SignatureSlot()) * params.BeaconConfig().SlotDuration()).
+				Add(params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS))
+			s.cfg.clock = startup.NewClock(genesis, [32]byte{}, startup.WithTimeAsNow(now))
+			require.Equal(t, primitives.Epoch(6), s.cfg.clock.CurrentEpoch())
+			if tt.wrongAttestedSlot {
+				update.AttestedHeader().Beacon().Slot = update.SignatureSlot()
+			}
+			optimistic, err := light_client.NewOptimisticUpdateFromUpdate(update)
+			require.NoError(t, err)
+			finality, err := light_client.NewFinalityUpdateFromUpdate(update)
+			require.NoError(t, err)
+			store.SetLastOptimisticUpdate(optimistic, false)
+			store.SetLastFinalityUpdate(finality, false)
+			for _, kind := range []struct {
+				topic    string
+				message  proto.Message
+				validate wrappedVal
+			}{
+				{p2p.LightClientOptimisticUpdateTopicFormat, optimistic.Proto(), s.validateLightClientOptimisticUpdate},
+				{p2p.LightClientFinalityUpdateTopicFormat, finality.Proto(), s.validateLightClientFinalityUpdate},
+			} {
+				t.Run(kind.topic, func(t *testing.T) {
+					var buf bytes.Buffer
+					_, err := p.Encoding().EncodeGossip(&buf, kind.message.(ssz.Marshaler))
+					require.NoError(t, err)
+					topic := fmt.Sprintf(kind.topic, params.ForkDigest(tt.topicEpoch)) + p.Encoding().ProtocolSuffix()
+					msg := &pubsub.Message{Message: &pubsubpb.Message{Data: buf.Bytes(), Topic: &topic}}
+					pid := peer.ID("remote")
+					if tt.local {
+						pid = p.PeerID()
+					}
+					_, validate := s.wrapAndReportValidation(topic, kind.validate)
+					require.Equal(t, tt.want, validate(t.Context(), pid, msg))
+					if tt.want == pubsub.ValidationAccept && !tt.local {
+						require.Equal(t, true, proto.Equal(kind.message, msg.ValidatorData.(proto.Message)))
+					}
+				})
+			}
+		})
+	}
+
+	t.Run("other topics still ignore the previous fork", func(t *testing.T) {
+		topic := fmt.Sprintf(p2p.ExitSubnetTopicFormat, params.ForkDigest(5)) + p.Encoding().ProtocolSuffix()
+		_, validate := s.wrapAndReportValidation(topic, s.noopValidator)
+		require.Equal(t, pubsub.ValidationIgnore, validate(t.Context(), p.PeerID(), &pubsub.Message{
+			Message: &pubsubpb.Message{Topic: &topic},
+		}))
+	})
 }

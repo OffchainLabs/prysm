@@ -964,8 +964,12 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 	r.rateLimiter.limiterMap[topic] = leakybucket.NewCollector(1, 1, time.Second, false)
 	var wg sync.WaitGroup
 	wg.Add(1)
+
+	// The stream handler may be invoked more than once (e.g. a duplicate
+	// stream on the connection).
+	var done sync.Once
 	p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
-		defer wg.Done()
+		defer done.Do(wg.Done)
 		out := &ethpb.Status{}
 		assert.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, out))
 		expected := &ethpb.Status{

@@ -484,7 +484,7 @@ func TestReadUntil(t *testing.T) {
 
 	t.Run("returns immediately on a match", func(t *testing.T) {
 		var calls int
-		round := func(context.Context, []*handler, time.Time, func(string) bool, queryFunc[string]) (string, bool, bool, []error) {
+		round := func(context.Context, []*handler, fallbackBound, func(string) bool, queryFunc[string]) (string, bool, bool, []error) {
 			calls++
 			return "matched", true, true, nil
 		}
@@ -497,7 +497,7 @@ func TestReadUntil(t *testing.T) {
 	})
 
 	t.Run("returns the best-effort fallback when nothing matches and repoll is off", func(t *testing.T) {
-		round := func(context.Context, []*handler, time.Time, func(string) bool, queryFunc[string]) (string, bool, bool, []error) {
+		round := func(context.Context, []*handler, fallbackBound, func(string) bool, queryFunc[string]) (string, bool, bool, []error) {
 			return "fallback", false, true, nil
 		}
 
@@ -509,7 +509,7 @@ func TestReadUntil(t *testing.T) {
 
 	t.Run("returns the joined error when nothing matches and no usable response", func(t *testing.T) {
 		sentinel := errors.New("boom")
-		round := func(context.Context, []*handler, time.Time, func(string) bool, queryFunc[string]) (string, bool, bool, []error) {
+		round := func(context.Context, []*handler, fallbackBound, func(string) bool, queryFunc[string]) (string, bool, bool, []error) {
 			return "", false, false, []error{sentinel}
 		}
 
@@ -521,7 +521,7 @@ func TestReadUntil(t *testing.T) {
 
 	t.Run("repolls until a match within the deadline", func(t *testing.T) {
 		var calls int
-		round := func(context.Context, []*handler, time.Time, func(string) bool, queryFunc[string]) (string, bool, bool, []error) {
+		round := func(context.Context, []*handler, fallbackBound, func(string) bool, queryFunc[string]) (string, bool, bool, []error) {
 			calls++
 			if calls >= 3 {
 				return "fresh", true, true, nil
@@ -539,7 +539,7 @@ func TestReadUntil(t *testing.T) {
 
 	t.Run("stops on the first usable response in UntilAny2xx mode", func(t *testing.T) {
 		var calls int
-		round := func(context.Context, []*handler, time.Time, func(string) bool, queryFunc[string]) (string, bool, bool, []error) {
+		round := func(context.Context, []*handler, fallbackBound, func(string) bool, queryFunc[string]) (string, bool, bool, []error) {
 			calls++
 			return "stale", false, true, nil // usable 2xx response, but not a match
 		}
@@ -554,7 +554,7 @@ func TestReadUntil(t *testing.T) {
 
 	t.Run("repolls on a total failure until a usable response in UntilAny2xx mode", func(t *testing.T) {
 		var calls int
-		round := func(context.Context, []*handler, time.Time, func(string) bool, queryFunc[string]) (string, bool, bool, []error) {
+		round := func(context.Context, []*handler, fallbackBound, func(string) bool, queryFunc[string]) (string, bool, bool, []error) {
 			calls++
 			if calls >= 3 {
 				return "stale", false, true, nil // finally a usable response
@@ -572,7 +572,7 @@ func TestReadUntil(t *testing.T) {
 
 	t.Run("returns the fallback when canceled during the poll wait", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		round := func(context.Context, []*handler, time.Time, func(string) bool, queryFunc[string]) (string, bool, bool, []error) {
+		round := func(context.Context, []*handler, fallbackBound, func(string) bool, queryFunc[string]) (string, bool, bool, []error) {
 			return "stale", false, true, nil // ok=true records a fallback
 		}
 
@@ -591,7 +591,7 @@ func TestReadUntil(t *testing.T) {
 
 	t.Run("returns the context error when canceled during the poll wait with no fallback", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		round := func(context.Context, []*handler, time.Time, func(string) bool, queryFunc[string]) (string, bool, bool, []error) {
+		round := func(context.Context, []*handler, fallbackBound, func(string) bool, queryFunc[string]) (string, bool, bool, []error) {
 			return "", false, false, nil // ok=false leaves no fallback
 		}
 
@@ -623,7 +623,7 @@ func TestRoundFor(t *testing.T) {
 
 		round := roundFor[string](queryConfig{race: true})
 		handlers := []*handler{newTestHandler("http://a"), newTestHandler("http://b")}
-		val, matched, ok, _ := round(context.Background(), handlers, time.Time{}, accept, fn)
+		val, matched, ok, _ := round(context.Background(), handlers, fallbackBound{}, accept, fn)
 		assert.Equal(t, true, matched)
 		assert.Equal(t, true, ok)
 		assert.Equal(t, "ok", val)
@@ -639,7 +639,7 @@ func TestRoundFor(t *testing.T) {
 
 		round := roundFor[string](queryConfig{race: false})
 		handlers := []*handler{newTestHandler("http://a"), newTestHandler("http://b")}
-		val, matched, ok, _ := round(context.Background(), handlers, time.Time{}, accept, fn)
+		val, matched, ok, _ := round(context.Background(), handlers, fallbackBound{}, accept, fn)
 		assert.Equal(t, true, matched)
 		assert.Equal(t, true, ok)
 		assert.Equal(t, "ok", val)
@@ -659,7 +659,7 @@ func TestRaceRound(t *testing.T) {
 			return "stale", nil
 		}
 
-		val, matched, ok, errs := raceRound(context.Background(), handlers, time.Time{}, accept, fn)
+		val, matched, ok, errs := raceRound(context.Background(), handlers, fallbackBound{}, accept, fn)
 		assert.Equal(t, true, matched)
 		assert.Equal(t, true, ok)
 		assert.Equal(t, "fresh", val)
@@ -670,7 +670,7 @@ func TestRaceRound(t *testing.T) {
 		accept := func(string) bool { return false } // nothing matches
 		fn := func(context.Context, *handler) (string, error) { return "stale", nil }
 
-		val, matched, ok, _ := raceRound(context.Background(), handlers, time.Time{}, accept, fn)
+		val, matched, ok, _ := raceRound(context.Background(), handlers, fallbackBound{}, accept, fn)
 		assert.Equal(t, false, matched)
 		assert.Equal(t, true, ok, "a non-matching 2XX is still a usable response")
 		assert.Equal(t, "stale", val)
@@ -681,7 +681,7 @@ func TestRaceRound(t *testing.T) {
 		accept := func(string) bool { return true }
 		fn := func(context.Context, *handler) (string, error) { return "", sentinel }
 
-		_, matched, ok, errs := raceRound(context.Background(), handlers, time.Time{}, accept, fn)
+		_, matched, ok, errs := raceRound(context.Background(), handlers, fallbackBound{}, accept, fn)
 		assert.Equal(t, false, matched)
 		assert.Equal(t, false, ok)
 		assert.Equal(t, len(handlers), len(errs))
@@ -704,7 +704,7 @@ func TestRaceRound(t *testing.T) {
 		defer cancel()
 
 		start := time.Now()
-		val, matched, ok, _ := raceRound(ctx, handlers, time.Now().Add(20*time.Millisecond), accept, fn)
+		val, matched, ok, _ := raceRound(ctx, handlers, fallbackBound{deadline: time.Now().Add(20 * time.Millisecond)}, accept, fn)
 		assert.Equal(t, false, matched)
 		assert.Equal(t, true, ok)
 		assert.Equal(t, "stale", val, "the usable response must be returned rather than waiting on the hung node")
@@ -735,7 +735,7 @@ func TestRaceRound(t *testing.T) {
 			cancel()
 		}()
 
-		val, matched, ok, errs := raceRound(ctx, handlers, time.Time{}, accept, fn)
+		val, matched, ok, errs := raceRound(ctx, handlers, fallbackBound{}, accept, fn)
 		assert.Equal(t, false, matched)
 		assert.Equal(t, true, ok, "a response collected before the cancellation is still usable")
 		assert.Equal(t, "stale", val)
@@ -752,7 +752,7 @@ func TestRaceRound(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		_, matched, ok, errs := raceRound(ctx, handlers, time.Time{}, accept, fn)
+		_, matched, ok, errs := raceRound(ctx, handlers, fallbackBound{}, accept, fn)
 		assert.Equal(t, false, matched)
 		assert.Equal(t, false, ok)
 		assert.Equal(t, true, errors.Is(errors.Join(errs...), context.Canceled))
@@ -771,7 +771,7 @@ func TestInOrderRound(t *testing.T) {
 			return "stale", nil
 		}
 
-		val, matched, ok, errs := inOrderRound(context.Background(), handlers, time.Time{}, accept, fn)
+		val, matched, ok, errs := inOrderRound(context.Background(), handlers, fallbackBound{}, accept, fn)
 		assert.Equal(t, true, matched)
 		assert.Equal(t, true, ok)
 		assert.Equal(t, "fresh", val)
@@ -782,7 +782,7 @@ func TestInOrderRound(t *testing.T) {
 		accept := func(string) bool { return false } // nothing matches
 		fn := func(context.Context, *handler) (string, error) { return "stale", nil }
 
-		val, matched, ok, _ := inOrderRound(context.Background(), handlers, time.Time{}, accept, fn)
+		val, matched, ok, _ := inOrderRound(context.Background(), handlers, fallbackBound{}, accept, fn)
 		assert.Equal(t, false, matched)
 		assert.Equal(t, true, ok, "a non-matching 2XX is still a usable response")
 		assert.Equal(t, "stale", val)
@@ -793,7 +793,7 @@ func TestInOrderRound(t *testing.T) {
 		accept := func(string) bool { return true }
 		fn := func(context.Context, *handler) (string, error) { return "", sentinel }
 
-		_, matched, ok, errs := inOrderRound(context.Background(), handlers, time.Time{}, accept, fn)
+		_, matched, ok, errs := inOrderRound(context.Background(), handlers, fallbackBound{}, accept, fn)
 		assert.Equal(t, false, matched)
 		assert.Equal(t, false, ok)
 		assert.Equal(t, len(handlers), len(errs))
@@ -806,7 +806,7 @@ func TestInOrderRound(t *testing.T) {
 		accept := func(string) bool { return true }
 		fn := func(context.Context, *handler) (string, error) { return "ok", nil }
 
-		_, matched, ok, errs := inOrderRound(ctx, handlers, time.Time{}, accept, fn)
+		_, matched, ok, errs := inOrderRound(ctx, handlers, fallbackBound{}, accept, fn)
 		assert.Equal(t, false, matched)
 		assert.Equal(t, false, ok)
 		assert.Equal(t, true, errors.Is(errors.Join(errs...), context.Canceled))

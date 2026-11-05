@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -988,7 +991,8 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 					headSlot:          columnSlot, // Same epoch so HeadStateReadOnly is used
 					headStateReadOnly: fuluState,
 				},
-				fc: &mockForkchoicer{},
+				fc:  &mockForkchoicer{},
+				epc: lruwrpr.New(defaultExpectedProposerCacheSize),
 			},
 		}
 
@@ -1008,7 +1012,8 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 					headSlot:          columnSlot, // Same epoch so HeadStateReadOnly is used
 					headStateReadOnly: fuluState,
 				},
-				fc: &mockForkchoicer{},
+				fc:  &mockForkchoicer{},
+				epc: lruwrpr.New(defaultExpectedProposerCacheSize),
 			},
 		}
 
@@ -1028,6 +1033,7 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 				sr:  sbrNotFound(t, col0Parent),
 				hsp: &mockHeadStateProvider{},
 				fc:  &mockForkchoicer{},
+				epc: lruwrpr.New(defaultExpectedProposerCacheSize),
 			},
 		}
 
@@ -1037,6 +1043,52 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 		require.Equal(t, true, verifier.results.executed(RequireSidecarProposerExpected))
 		require.NotNil(t, verifier.results.result(RequireSidecarProposerExpected))
 	})
+
+	t.Run("Computation shared across columns", func(t *testing.T) {
+		hsp := &countingHeadStateProvider{
+			mockHeadStateProvider: mockHeadStateProvider{
+				headRoot:          parentRoot[:],
+				headSlot:          columnSlot, // Same epoch so HeadStateReadOnly is used
+				headStateReadOnly: fuluState,
+			},
+		}
+
+		initializer := Initializer{
+			shared: &sharedResources{
+				sr:  sbrReturnsState(fuluState),
+				hsp: hsp,
+				fc:  &mockForkchoicer{},
+				epc: lruwrpr.New(defaultExpectedProposerCacheSize),
+			},
+		}
+
+		// Mimic gossip, where each data column sidecar gets its own verifier.
+		var wg sync.WaitGroup
+		errs := make([]error, len(matchingColumns))
+		for i := range matchingColumns {
+			wg.Go(func() {
+				verifier := initializer.NewDataColumnsVerifier(matchingColumns[i:i+1], GossipDataColumnSidecarRequirements)
+				errs[i] = verifier.SidecarProposerExpected(ctx)
+			})
+		}
+		wg.Wait()
+
+		for _, err := range errs {
+			require.NoError(t, err)
+		}
+		require.Equal(t, int64(1), hsp.headStateReadOnlyCalls.Load())
+	})
+}
+
+// countingHeadStateProvider counts the calls to HeadStateReadOnly.
+type countingHeadStateProvider struct {
+	mockHeadStateProvider
+	headStateReadOnlyCalls atomic.Int64
+}
+
+func (c *countingHeadStateProvider) HeadStateReadOnly(ctx context.Context) (state.ReadOnlyBeaconState, error) {
+	c.headStateReadOnlyCalls.Add(1)
+	return c.mockHeadStateProvider.HeadStateReadOnly(ctx)
 }
 
 func generateTestDataColumnsWithProposer(t *testing.T, parent [fieldparams.RootLength]byte, slot primitives.Slot, blobCount int, proposer primitives.ValidatorIndex) []blocks.RODataColumn {

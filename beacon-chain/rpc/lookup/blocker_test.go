@@ -905,11 +905,7 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 	})
 }
 
-// TestResolveBlobsContext_DuplicateCommitments covers versioned-hash filtering
-// against a block that carries the same KZG commitment at multiple indices
-// (legal per consensus rules), as well as repeated hashes in the request.
-// Hash-to-index conversion happens before any blob storage access, so these
-// tests exercise resolveBlobsContext directly with only a block DB.
+// TestResolveBlobsContext_DuplicateCommitments covers versioned-hash filtering with repeated commitments and repeated request hashes.
 func TestResolveBlobsContext_DuplicateCommitments(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -920,11 +916,13 @@ func TestResolveBlobsContext_DuplicateCommitments(t *testing.T) {
 	db := testDB.SetupDB(t)
 	ctx := t.Context()
 
-	// Deneb block with the same commitment at indices 0 and 1.
-	commitment := bytesutil.PadTo([]byte("duplicate-commitment"), 48)
+	// Deneb block with commitments [A, B, A, C]: A repeats at indices 0 and 2.
+	commitmentA := bytesutil.PadTo([]byte("commitment-a"), 48)
+	commitmentB := bytesutil.PadTo([]byte("commitment-b"), 48)
+	commitmentC := bytesutil.PadTo([]byte("commitment-c"), 48)
 	blk := util.NewBeaconBlockDeneb()
 	blk.Block.Slot = util.SlotAtEpoch(t, cfg.DenebForkEpoch)
-	blk.Block.Body.BlobKzgCommitments = [][]byte{commitment, commitment}
+	blk.Block.Body.BlobKzgCommitments = [][]byte{commitmentA, commitmentB, commitmentA, commitmentC}
 	util.SaveBlock(t, ctx, db, blk)
 	root, err := blk.Block.HashTreeRoot()
 	require.NoError(t, err)
@@ -932,27 +930,44 @@ func TestResolveBlobsContext_DuplicateCommitments(t *testing.T) {
 
 	blocker := &BeaconDbBlocker{BeaconDB: db}
 
-	dupHash := primitives.ConvertKzgCommitmentToVersionedHash(commitment)
+	hashA := primitives.ConvertKzgCommitmentToVersionedHash(commitmentA)
+	hashB := primitives.ConvertKzgCommitmentToVersionedHash(commitmentB)
+	hashC := primitives.ConvertKzgCommitmentToVersionedHash(commitmentC)
 	missingHash := make([]byte, 32)
 	for i := range missingHash {
 		missingHash[i] = 0xFF
 	}
 
-	t.Run("hash matching duplicate commitments resolves all indices", func(t *testing.T) {
-		bctx, rpcErr := blocker.resolveBlobsContext(ctx, blockID, options.WithVersionedHashes([][]byte{dupHash[:]}))
+	// Pre-Fulu and post-Fulu paths both consume bctx.indices, so this covers both.
+	t.Run("hash matching duplicate commitments resolves first index only", func(t *testing.T) {
+		bctx, rpcErr := blocker.resolveBlobsContext(ctx, blockID, options.WithVersionedHashes([][]byte{hashA[:]}))
 		require.IsNil(t, rpcErr)
-		require.DeepEqual(t, []int{0, 1}, bctx.indices)
+		require.Equal(t, fmt.Sprint([]int{0}), fmt.Sprint(bctx.indices))
 	})
 
 	t.Run("repeated request hashes resolve without error", func(t *testing.T) {
-		requestedHashes := [][]byte{dupHash[:], dupHash[:], dupHash[:]}
+		requestedHashes := [][]byte{hashA[:], hashA[:], hashA[:]}
 		bctx, rpcErr := blocker.resolveBlobsContext(ctx, blockID, options.WithVersionedHashes(requestedHashes))
 		require.IsNil(t, rpcErr)
-		require.DeepEqual(t, []int{0, 1}, bctx.indices)
+		require.Equal(t, fmt.Sprint([]int{0}), fmt.Sprint(bctx.indices))
+	})
+
+	t.Run("duplicate mixed with other hashes keeps first-occurrence order", func(t *testing.T) {
+		requestedHashes := [][]byte{hashC[:], hashA[:], hashB[:]}
+		bctx, rpcErr := blocker.resolveBlobsContext(ctx, blockID, options.WithVersionedHashes(requestedHashes))
+		require.IsNil(t, rpcErr)
+		require.Equal(t, fmt.Sprint([]int{0, 1, 3}), fmt.Sprint(bctx.indices))
+	})
+
+	t.Run("no versioned hashes keeps repeated commitments", func(t *testing.T) {
+		bctx, rpcErr := blocker.resolveBlobsContext(ctx, blockID)
+		require.IsNil(t, rpcErr)
+		require.Equal(t, 0, len(bctx.indices))
+		require.Equal(t, 4, len(bctx.commitments))
 	})
 
 	t.Run("duplicate matches do not mask a missing hash", func(t *testing.T) {
-		requestedHashes := [][]byte{dupHash[:], missingHash}
+		requestedHashes := [][]byte{hashA[:], missingHash}
 		_, rpcErr := blocker.resolveBlobsContext(ctx, blockID, options.WithVersionedHashes(requestedHashes))
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)

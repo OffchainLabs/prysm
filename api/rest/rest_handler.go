@@ -44,6 +44,7 @@ type Handler interface {
 	GetSSZ(ctx context.Context, endpoint string, opts ...QueryOption) ([]byte, http.Header, error)
 	Post(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer, resp any) error
 	PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) error
+	Request(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer, resp any, opts ...QueryOption) error
 	PostSSZWithFallback(
 		ctx context.Context,
 		endpoint string,

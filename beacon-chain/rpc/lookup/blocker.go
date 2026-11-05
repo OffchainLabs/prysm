@@ -300,9 +300,8 @@ func (p *BeaconDbBlocker) resolveBlobsContext(ctx context.Context, id string, op
 	// Convert versioned hashes to indices if provided
 	indices := cfg.Indices
 	if len(cfg.VersionedHashes) > 0 {
-		// Build a map of requested versioned hashes for fast lookup and tracking.
-		// Accounting is on unique hashes: a block may carry the same commitment
-		// at multiple indices, and a request may repeat a hash.
+		// Track unique requested hashes. Each matched hash yields one blob,
+		// from the first index that carries its commitment.
 		requestedHashes := make(map[string]bool, len(cfg.VersionedHashes))
 		for _, versionedHash := range cfg.VersionedHashes {
 			requestedHashes[string(versionedHash)] = true
@@ -315,7 +314,7 @@ func (p *BeaconDbBlocker) resolveBlobsContext(ctx context.Context, id string, op
 		for i, commitment := range commitments {
 			versionedHash := primitives.ConvertKzgCommitmentToVersionedHash(commitment)
 			hashStr := string(versionedHash[:])
-			if requestedHashes[hashStr] {
+			if requestedHashes[hashStr] && !foundHashes[hashStr] {
 				indices = append(indices, i)
 				foundHashes[hashStr] = true
 			}
