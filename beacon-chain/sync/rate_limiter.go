@@ -136,6 +136,7 @@ func (l *limiter) validateRequest(stream network.Stream, amt uint64) error {
 	}
 	if amt > uint64(remaining) {
 		l.downscorePeer(remotePeer, topic, "rateLimitExceeded")
+		SetStreamWriteDeadline(stream, defaultWriteDuration)
 		writeErrorResponseToStream(responseCodeInvalidRequest, p2ptypes.ErrRateLimited.Error(), stream, l.p2p)
 		return p2ptypes.ErrRateLimited
 	}
@@ -152,6 +153,7 @@ func (l *limiter) validateRawRpcRequest(stream network.Stream, amt uint64) error
 
 	if amt > uint64(remaining) {
 		l.downscorePeer(remotePeer, rpcLimiterTopic, "rawRateLimitExceeded")
+		SetStreamWriteDeadline(stream, defaultWriteDuration)
 		writeErrorResponseToStream(responseCodeInvalidRequest, p2ptypes.ErrRateLimited.Error(), stream, l.p2p)
 		return p2ptypes.ErrRateLimited
 	}
