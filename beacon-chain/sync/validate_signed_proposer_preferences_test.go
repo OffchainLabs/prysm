@@ -213,15 +213,13 @@ func TestValidateSignedProposerPreferencesGossip_DependentBlockAfterShufflingSlo
 
 func TestValidateSignedProposerPreferencesGossip_DependentRootOnOtherBranch(t *testing.T) {
 	for _, tc := range []struct {
-		name       string
-		hasChild   bool
-		cached     bool
-		wantResult pubsub.ValidationResult
-		wantError  string
+		name     string
+		hasChild bool
+		cached   bool
 	}{
-		{name: "non-head leaf", cached: true, wantResult: pubsub.ValidationIgnore, wantError: "not a possible dependent block"},
-		{name: "child across boundary without cached state", hasChild: true, wantResult: pubsub.ValidationIgnore, wantError: "is not cached"},
-		{name: "child across boundary with cached state", hasChild: true, cached: true, wantResult: pubsub.ValidationAccept},
+		{name: "non-head leaf", cached: true},
+		{name: "child across boundary without cached state", hasChild: true},
+		{name: "child across boundary with cached state", hasChild: true, cached: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := t.Context()
@@ -243,12 +241,8 @@ func TestValidateSignedProposerPreferencesGossip_DependentRootOnOtherBranch(t *t
 			}
 
 			result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
-			if tc.wantError != "" {
-				require.ErrorContains(t, tc.wantError, err)
-			} else {
-				require.NoError(t, err)
-			}
-			require.Equal(t, tc.wantResult, result)
+			require.ErrorContains(t, "does not match the head dependent root", err)
+			require.Equal(t, pubsub.ValidationIgnore, result)
 		})
 	}
 }
