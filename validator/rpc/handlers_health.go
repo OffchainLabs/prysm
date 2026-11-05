@@ -103,7 +103,7 @@ func (s *Server) StreamValidatorLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ch := make(chan []byte, s.logStreamerBufferSize)
-	sub := s.logStreamer.LogsFeed().Subscribe(ch)
+	sub := s.logStreamer.SubscribeLogs(ch)
 	defer func() {
 		sub.Unsubscribe()
 		close(ch)

@@ -132,7 +132,7 @@ func TestStreamValidatorLogs(t *testing.T) {
 	}()
 	// wait for initiation of StreamValidatorLogs
 	time.Sleep(100 * time.Millisecond)
-	logStreamer.LogsFeed().Send([]byte("Some mock event data"))
+	logStreamer.Send([]byte("Some mock event data"))
 	// wait for feed
 	time.Sleep(100 * time.Millisecond)
 	s.ctx.Done()
