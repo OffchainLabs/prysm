@@ -23,6 +23,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/trailofbits/go-mutexasserts"
@@ -32,7 +33,6 @@ import (
 var processPendingBlocksPeriod = slots.DivideSlotBy(3 /* times per slot */)
 
 const maxPeerRequest = 50
-const numOfTries = 5
 const maxBlocksPerSlot = 3
 
 // processes pending blocks queue on every processPendingBlocksPeriod
@@ -73,9 +73,6 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 	sortedSlots := s.sortedPendingSlots()
 
 	span.SetAttributes(prysmTrace.Int64Attribute("numSlots", int64(len(sortedSlots))), prysmTrace.Int64Attribute("numPeers", int64(len(s.cfg.p2p.Peers().Connected()))))
-
-	randGen := rand.NewGenerator()
-	var parentRoots [][32]byte
 
 	blkRoots := make([][32]byte, 0, len(sortedSlots)*maxBlocksPerSlot)
 
@@ -134,10 +131,9 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 				continue
 			}
 
-			// Request parent block if not in the pending queue and not in the database.
+			// The parent, if neither queued nor in the database, was requested from the peer that sent the block.
 			isParentBlockInDB := s.cfg.beaconDB.HasBlock(ctx, parentRoot)
-			if !inPendingQueue && !isParentBlockInDB && s.hasPeer() {
-				parentRoots = append(parentRoots, parentRoot)
+			if !inPendingQueue && !isParentBlockInDB {
 				continue
 			}
 			if !isParentBlockInDB {
@@ -192,7 +188,7 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 		}
 	}
 
-	return s.sendBatchRootRequest(ctx, parentRoots, randGen)
+	return nil
 }
 
 // startInnerSpan starts a new tracing span for an inner loop and returns the new context and span.
@@ -226,10 +222,6 @@ func (s *Service) isBlockInQueue(parentRoot [32]byte) bool {
 	defer s.pendingQueueLock.RUnlock()
 
 	return s.seenPendingBlocks[parentRoot]
-}
-
-func (s *Service) hasPeer() bool {
-	return len(s.cfg.p2p.Peers().Connected()) > 0
 }
 
 var errNoPeersForPending = errors.New("no suitable peers to process pending block queue, delaying")
@@ -367,118 +359,62 @@ func (s *Service) checkIfBlockIsBad(
 	return true, nil
 }
 
-func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, randGen *rand.Rand) error {
-	ctx, span := prysmTrace.StartSpan(ctx, "sendBatchRootRequest")
+// requestBlocksAccountable requests the blocks with the given roots from pid, and downscores pid if it does not serve them.
+func (s *Service) requestBlocksAccountable(ctx context.Context, roots [][32]byte, pid peer.ID) error {
+	ctx, span := prysmTrace.StartSpan(ctx, "requestBlocksAccountable")
 	defer span.End()
 
-	// Exit early if there are no roots to request.
-	if len(roots) == 0 {
+	// There is nobody to ask.
+	if pid == "" {
 		return nil
 	}
 
 	// Filter out roots that are already seen in pending blocks or being synced.
 	roots = s.filterOutPendingAndSynced(roots)
-
-	// Nothing to do, exit early.
 	if len(roots) == 0 {
 		return nil
 	}
 
-	// Fetch best peers to request blocks from.
-	bestPeers := s.getBestPeers()
-
-	// No suitable peer, exit early.
-	if len(bestPeers) == 0 {
-		log.WithField("roots", fmt.Sprintf("%#x", roots)).Debug("Send batch root request: No suitable peers")
-		return nil
+	// Trim the request to the maximum number of blocks we can request if needed.
+	maxReqBlock := params.MaxRequestBlock(slots.ToEpoch(s.cfg.clock.CurrentSlot()))
+	if uint64(len(roots)) > maxReqBlock {
+		roots = roots[:maxReqBlock]
 	}
+	req := p2ptypes.BeaconBlockByRootsReq(roots)
 
-	// Randomly choose a peer to query from our best peers.
-	// If that peer cannot return all the requested blocks,
-	// we randomly select another peer.
-	randomIndex := randGen.Int() % len(bestPeers)
-	pid := bestPeers[randomIndex]
-
-	for range numOfTries {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		req := p2ptypes.BeaconBlockByRootsReq(roots)
-
-		// Get the current epoch.
-		currentSlot := s.cfg.clock.CurrentSlot()
-		currentEpoch := slots.ToEpoch(currentSlot)
-
-		// Trim the request to the maximum number of blocks we can request if needed.
-		maxReqBlock := params.MaxRequestBlock(currentEpoch)
-		rootCount := uint64(len(roots))
-		if rootCount > maxReqBlock {
-			req = roots[:maxReqBlock]
-		}
-
-		if logrus.GetLevel() >= logrus.DebugLevel {
-			rootsStr := make([]string, 0, len(roots))
-			for _, req := range roots {
-				rootsStr = append(rootsStr, fmt.Sprintf("%#x", req))
-			}
-
-			log.WithFields(logrus.Fields{
-				"peer":  pid,
-				"count": len(req),
-				"roots": rootsStr,
-			}).Debug("Requesting blocks by root")
-		}
-
-		// Optimistically request parent payload envelopes in parallel with the parent blocks.
-		var wg sync.WaitGroup
-		wg.Go(func() {
-			s.fetchAndQueuePayloadEnvelopesForRoots(ctx, pid, req)
-		})
-
-		// Send the request to the peer.
-		if err := s.sendBeaconBlocksRequest(ctx, &req, pid); err != nil {
-			tracing.AnnotateError(span, err)
-			log.WithError(err).Debug("Could not send recent block request")
-		}
-		wg.Wait()
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-
-		// Filter out roots that are already seen in pending blocks.
-		newRoots := make([][32]byte, 0, rootCount)
-		func() {
-			s.pendingQueueLock.RLock()
-			defer s.pendingQueueLock.RUnlock()
-
-			for _, rt := range roots {
-				if !s.seenPendingBlocks[rt] {
-					newRoots = append(newRoots, rt)
-				}
-			}
-		}()
-
-		// Exit early if all roots have been seen.
-		// This is the happy path.
-		if len(newRoots) == 0 {
-			return nil
-		}
-
-		// There is still some roots that have not been seen.
-		// Choosing a new peer with the leftover set of oots to request.
-		roots = newRoots
-
-		// Choose a new peer to query.
-		randomIndex = randGen.Int() % len(bestPeers)
-		pid = bestPeers[randomIndex]
-	}
-
-	// Some roots are still missing after all allowed tries.
-	// This is the unhappy path.
 	log.WithFields(logrus.Fields{
-		"roots": fmt.Sprintf("%#x", roots),
-		"tries": numOfTries,
-	}).Debug("Send batch root request: Some roots are still missing after all allowed tries")
+		"peer":  pid,
+		"count": len(req),
+	}).Debug("Requesting blocks by root")
+
+	// Optimistically request the payload envelopes in parallel with the blocks.
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		s.fetchAndQueuePayloadEnvelopesForRoots(ctx, pid, req)
+	})
+
+	received, err := s.sendBeaconBlocksRequest(ctx, &req, pid)
+	if err != nil {
+		tracing.AnnotateError(span, err)
+		log.WithError(err).Debug("Could not request blocks by root")
+	}
+	wg.Wait()
+
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// A block obtained otherwise while the request was in flight counts as served.
+	missing := 0
+	for _, root := range roots {
+		if !received[root] && !s.isBlockInQueue(root) && !s.cfg.chain.BlockBeingSynced(root) && !s.cfg.chain.HasBlock(ctx, root) {
+			missing++
+		}
+	}
+
+	if missing > 0 {
+		s.downscorePeer(pid, "blockNotServed", logrus.Fields{"missing": missing, "requested": len(roots)})
+	}
 
 	return nil
 }

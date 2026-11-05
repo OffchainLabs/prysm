@@ -58,7 +58,7 @@ func TestQueuePendingPayloadAttestation_Queues(t *testing.T) {
 	s := queueTestService(t)
 
 	att, pa := pendingPayloadAtt(t, []byte{'a'}, 1, 1)
-	res, err := s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att)
+	res, err := s.queuePendingPayloadAttestation(t.Context(), "", validSigVerifier(), att)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, res)
 	require.Equal(t, 1, len(s.pendingPayloadAttestations[pa.BeaconBlockRoot()]))
@@ -68,14 +68,14 @@ func TestQueuePendingPayloadAttestation_DeduplicatesByValidator(t *testing.T) {
 	s := queueTestService(t)
 
 	att, pa := pendingPayloadAtt(t, []byte{'a'}, 1, 1)
-	_, err := s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att)
+	_, err := s.queuePendingPayloadAttestation(t.Context(), "", validSigVerifier(), att)
 	require.NoError(t, err)
-	_, err = s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att)
+	_, err = s.queuePendingPayloadAttestation(t.Context(), "", validSigVerifier(), att)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(s.pendingPayloadAttestations[pa.BeaconBlockRoot()]))
 
 	att2, pa2 := pendingPayloadAtt(t, []byte{'a'}, 2, 1)
-	_, err = s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att2)
+	_, err = s.queuePendingPayloadAttestation(t.Context(), "", validSigVerifier(), att2)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(s.pendingPayloadAttestations[pa2.BeaconBlockRoot()]))
 }
@@ -85,13 +85,13 @@ func TestQueuePendingPayloadAttestation_RootCap(t *testing.T) {
 
 	for i := range maxPendingPayloadAttestationRoots {
 		att, _ := pendingPayloadAtt(t, []byte{byte(i)}, 1, 1)
-		_, err := s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att)
+		_, err := s.queuePendingPayloadAttestation(t.Context(), "", validSigVerifier(), att)
 		require.NoError(t, err)
 	}
 	require.Equal(t, maxPendingPayloadAttestationRoots, len(s.pendingPayloadAttestations))
 
 	att, pa := pendingPayloadAtt(t, []byte("overflow"), 1, 1)
-	_, err := s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att)
+	_, err := s.queuePendingPayloadAttestation(t.Context(), "", validSigVerifier(), att)
 	require.NoError(t, err)
 	require.Equal(t, maxPendingPayloadAttestationRoots, len(s.pendingPayloadAttestations))
 	_, ok := s.pendingPayloadAttestations[pa.BeaconBlockRoot()]
@@ -103,7 +103,7 @@ func TestQueuePendingPayloadAttestation_IgnoresBadSignature(t *testing.T) {
 	v := &verification.MockPayloadAttestation{ErrInvalidMessageSignature: errors.New("bad signature")}
 
 	att, _ := pendingPayloadAtt(t, []byte{'a'}, 1, 1)
-	res, err := s.queuePendingPayloadAttestation(t.Context(), v, att)
+	res, err := s.queuePendingPayloadAttestation(t.Context(), "", v, att)
 	require.ErrorContains(t, "bad signature", err)
 	require.Equal(t, pubsub.ValidationIgnore, res)
 	require.Equal(t, 0, len(s.pendingPayloadAttestations))
@@ -114,7 +114,7 @@ func TestQueuePendingPayloadAttestation_IgnoresNonCommittee(t *testing.T) {
 	v := &verification.MockPayloadAttestation{ErrIncorrectPayloadAttValidator: errors.New("not in PTC")}
 
 	att, _ := pendingPayloadAtt(t, []byte{'a'}, 1, 1)
-	res, err := s.queuePendingPayloadAttestation(t.Context(), v, att)
+	res, err := s.queuePendingPayloadAttestation(t.Context(), "", v, att)
 	require.ErrorContains(t, "not in PTC", err)
 	require.Equal(t, pubsub.ValidationIgnore, res)
 	require.Equal(t, 0, len(s.pendingPayloadAttestations))
@@ -128,7 +128,7 @@ func TestQueuePendingPayloadAttestation_DropsWhenNoState(t *testing.T) {
 	}
 
 	att, _ := pendingPayloadAtt(t, []byte{'a'}, 1, 1)
-	res, err := s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att)
+	res, err := s.queuePendingPayloadAttestation(t.Context(), "", validSigVerifier(), att)
 	require.ErrorContains(t, "no state", err)
 	require.Equal(t, pubsub.ValidationIgnore, res)
 	require.Equal(t, 0, len(s.pendingPayloadAttestations))
@@ -154,7 +154,7 @@ func TestQueuePendingPayloadAttestation_DrainsWhenBlockInForkchoice(t *testing.T
 	}
 
 	att, _ := pendingPayloadAtt(t, []byte{'a'}, ptc[0], 0)
-	res, err := s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att)
+	res, err := s.queuePendingPayloadAttestation(t.Context(), "", validSigVerifier(), att)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, res)
 

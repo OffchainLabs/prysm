@@ -311,7 +311,6 @@ go_test(
         "//container/leaky-bucket:go_default_library",
         "//container/slice:go_default_library",
         "//crypto/bls:go_default_library",
-        "//crypto/rand:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//encoding/ssz/equality:go_default_library",
         "//genesis:go_default_library",

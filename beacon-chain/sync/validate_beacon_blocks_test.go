@@ -1337,8 +1337,11 @@ func TestValidateBeaconBlockPubSub_RequestsUnknownParentBlock(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p1 := p2ptest.NewTestP2P(t)
 	p2 := p2ptest.NewTestP2P(t)
+	other := p2ptest.NewTestP2P(t)
 	p1.Connect(p2)
-	assert.Equal(t, 1, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
+	p1.Connect(other)
+	assert.Equal(t, 2, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
+	otherRoots := blocksByRootRecorder(other)
 	ctx := t.Context()
 
 	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
@@ -1414,12 +1417,18 @@ func TestValidateBeaconBlockPubSub_RequestsUnknownParentBlock(t *testing.T) {
 		},
 	}
 
-	res, err := r.validateBeaconBlockPubSub(ctx, "", m)
+	// p2 sends the block, so only p2 is asked for its parent.
+	res, err := r.validateBeaconBlockPubSub(ctx, p2.PeerID(), m)
 	require.ErrorContains(t, "unknown parent for block", err)
 	require.Equal(t, pubsub.ValidationIgnore, res)
 
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Did not receive by-root request for unknown parent within 1 sec")
+	}
+	select {
+	case got := <-otherRoots:
+		t.Fatalf("block %#x was requested from a peer that did not send the block", got)
+	case <-time.After(200 * time.Millisecond):
 	}
 }
 
