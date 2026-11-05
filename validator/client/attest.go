@@ -333,6 +333,5 @@ func attestationLogFields(pubKey [fieldparams.BLSPubkeyLength]byte, indexedAtt e
 		"sourceRoot":     fmt.Sprintf("%#x", indexedAtt.GetData().Source.Root),
 		"targetEpoch":    indexedAtt.GetData().Target.Epoch,
 		"targetRoot":     fmt.Sprintf("%#x", indexedAtt.GetData().Target.Root),
-		"signature":      fmt.Sprintf("%#x", indexedAtt.GetSignature()),
 	}
 }
