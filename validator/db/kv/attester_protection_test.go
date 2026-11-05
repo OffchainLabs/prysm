@@ -598,15 +598,6 @@ func benchCheckSurroundVote(
 	}
 }
 
-func TestStore_flushAttestationRecords_InProgress(t *testing.T) {
-	s := &Store{}
-	s.batchedAttestationsFlushInProgress.Store(true)
-
-	hook := logTest.NewGlobal()
-	assert.ErrorContains(t, "already in progress", s.flushAttestationRecords(t.Context(), nil))
-	assert.LogsContain(t, hook, "Attempted to flush attestation records when already in progress")
-}
-
 func BenchmarkStore_SaveAttestationForPubKey(b *testing.B) {
 	var wg sync.WaitGroup
 	ctx := b.Context()

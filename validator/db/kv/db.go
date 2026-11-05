@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync/atomic"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -62,11 +61,10 @@ type Config struct {
 // Store defines an implementation of the Prysm Database interface
 // using BoltDB as the underlying persistent kv-store for Ethereum consensus nodes.
 type Store struct {
-	db                                 *bolt.DB
-	databasePath                       string
-	batchedAttestations                *QueuedAttestationRecords
-	batchedAttestationsChan            chan *AttestationRecordSaveRequest
-	batchedAttestationsFlushInProgress atomic.Bool
+	db                      *bolt.DB
+	databasePath            string
+	batchedAttestations     *QueuedAttestationRecords
+	batchedAttestationsChan chan *AttestationRecordSaveRequest
 }
 
 // Close closes the underlying boltdb database.

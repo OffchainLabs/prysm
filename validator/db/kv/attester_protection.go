@@ -493,13 +493,11 @@ func (s *Store) batchAttestationWrites(ctx context.Context) {
 				log.WithField("recordCount", numRecords).Debug(
 					"Reached max capacity of batched attestation records, flushing to DB",
 				)
-				if !s.batchedAttestationsFlushInProgress.Load() {
-					// Create a new context with the span information from the chan. This is to
-					// prevent any context deadlines from the caller while maintaining the trace
-					// relationships.
-					ctx2 := trace.NewContext(ctx, span)
-					flush(ctx2)
-				}
+				// Create a new context with the span information from the chan. This is to
+				// prevent any context deadlines from the caller while maintaining the trace
+				// relationships.
+				ctx2 := trace.NewContext(ctx, span)
+				flush(ctx2)
 			}
 			span.End()
 		case <-ticker.C:
@@ -507,9 +505,7 @@ func (s *Store) batchAttestationWrites(ctx context.Context) {
 				log.WithField("recordCount", numRecords).Debug(
 					"Batched attestation records write interval reached, flushing to DB",
 				)
-				if !s.batchedAttestationsFlushInProgress.Load() {
-					flush(ctx)
-				}
+				flush(ctx)
 			}
 		case <-ctx.Done():
 			for _, done := range waiting {
@@ -526,15 +522,6 @@ func (s *Store) batchAttestationWrites(ctx context.Context) {
 func (s *Store) flushAttestationRecords(ctx context.Context, records []*common.AttestationRecord) error {
 	ctx, span := trace.StartSpan(ctx, "validatorDB.flushAttestationRecords")
 	defer span.End()
-
-	if s.batchedAttestationsFlushInProgress.Load() {
-		// This should never happen. This method should not be called when a flush is already in
-		// progress. If you are seeing this log, check the atomic bool before calling this method.
-		log.Error("Attempted to flush attestation records when already in progress")
-		return errors.New("attestation records flush already in progress")
-	}
-	s.batchedAttestationsFlushInProgress.Store(true)
-	defer s.batchedAttestationsFlushInProgress.Store(false)
 
 	start := time.Now()
 	err := s.saveAttestationRecords(ctx, records)
