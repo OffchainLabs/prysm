@@ -31,11 +31,12 @@ const (
 type (
 	// Store is a filesystem implementation of the validator client database.
 	Store struct {
-		configurationMu    sync.RWMutex
-		pkToSlashingMu     map[[fieldparams.BLSPubkeyLength]byte]*sync.RWMutex
-		slashingMuMapMu    sync.Mutex
-		databaseParentPath string
-		databasePath       string
+		configurationMu       sync.RWMutex
+		pkToSlashingMu        map[[fieldparams.BLSPubkeyLength]byte]*sync.RWMutex
+		slashingMuMapMu       sync.Mutex
+		databaseParentPath    string
+		databasePath          string
+		protectionPersistence *protectionPersistence
 	}
 
 	// Graffiti contains the graffiti information.
@@ -151,6 +152,9 @@ func (s *Store) Backup(_ context.Context, outputDir string, permissionOverride b
 
 // UpdatePublicKeysBuckets creates a file for each public key in the database directory if needed.
 func (s *Store) UpdatePublicKeysBuckets(pubKeys [][fieldparams.BLSPubkeyLength]byte) error {
+	if err := protectionDurabilitySupported(); err != nil {
+		return errors.Wrap(err, "could not persist validator slashing protection")
+	}
 	validatorSlashingProtection := ValidatorSlashingProtection{}
 
 	// Marshal the ValidatorSlashingProtection struct.
@@ -180,11 +184,14 @@ func (s *Store) UpdatePublicKeysBuckets(pubKeys [][fieldparams.BLSPubkeyLength]b
 		}
 
 		// Write the ValidatorSlashingProtection struct to the file.
-		if err := file.WriteFile(path, yfile); err != nil {
+		if err := s.protectionWriter().write(path, yfile); err != nil {
 			return errors.Wrapf(err, "could not write into %s.yaml", path)
 		}
 	}
 
+	if err := s.protectionWriter().syncDirectories(slashingProtectionDirPath); err != nil {
+		return errors.Wrapf(err, "could not sync slashing protection directory %s", slashingProtectionDirPath)
+	}
 	return nil
 }
 
@@ -278,7 +285,6 @@ func (s *Store) saveConfiguration(config *Configuration) error {
 // validatorSlashingProtection returns the slashing protection for a public key.
 func (s *Store) validatorSlashingProtection(publicKey [fieldparams.BLSPubkeyLength]byte) (*ValidatorSlashingProtection, error) {
 	var mu *sync.RWMutex
-	validatorSlashingProtection := &ValidatorSlashingProtection{}
 
 	// Get the slashing protection file path.
 	path := s.pubkeySlashingProtectionFilePath(publicKey)
@@ -317,7 +323,8 @@ func (s *Store) validatorSlashingProtection(publicKey [fieldparams.BLSPubkeyLeng
 		return nil, errors.Wrapf(err, "could not read %s", cleanedPath)
 	}
 
-	if err := yaml.Unmarshal(yfile, validatorSlashingProtection); err != nil {
+	validatorSlashingProtection, err := decodeSlashingProtection(yfile)
+	if err != nil {
 		return nil, errors.Wrapf(err, "could not unmarshal %s", cleanedPath)
 	}
 
@@ -332,6 +339,10 @@ func (s *Store) saveValidatorSlashingProtection(
 	// If the ValidatorSlashingProtection struct is nil, return.
 	if validatorSlashingProtection == nil {
 		return nil
+	}
+
+	if err := protectionDurabilitySupported(); err != nil {
+		return errors.Wrap(err, "could not persist validator slashing protection")
 	}
 
 	// Create the directory if needed.
@@ -367,7 +378,7 @@ func (s *Store) saveValidatorSlashingProtection(
 	}
 
 	// Write the ValidatorSlashingProtection struct to the file.
-	if err := file.WriteFile(path, yfile); err != nil {
+	if err := s.protectionWriter().write(path, yfile); err != nil {
 		return errors.Wrapf(err, "could not write into %s.yaml", path)
 	}
 
