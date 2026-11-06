@@ -568,7 +568,7 @@ func TestGetBlockV2BlindedSignRequest(t *testing.T) {
 				genesisValidatorsRoot: make([]byte, fieldparams.RootLength),
 			},
 			want: mock.BlockV2BlindedSignRequest(func(t *testing.T) []byte {
-				bytevalue, err := hexutil.Decode("0x97bb2344fda1add4bfe7382ce4700ad02dba5dfe18250215c1063f8967670966")
+				bytevalue, err := hexutil.Decode("0x257c80809c4cc0804f24dd00904a3904bf4ba5cc5c8f286c85e2d4d54663088a")
 				require.NoError(t, err)
 				return bytevalue
 			}(t), "HEZE"),

@@ -648,6 +648,18 @@ func TestBeaconStateGloasFromConsensus(t *testing.T) {
 	require.Equal(t, "10", got.PayloadExpectedWithdrawals[0].Amount)
 }
 
+func TestBeaconStateHezeFromConsensus(t *testing.T) {
+	st, err := util.NewBeaconStateHeze(func(s *eth.BeaconStateHeze) error {
+		s.LatestExecutionPayloadBid.InclusionListBits = []byte{0x01, 0x80}
+		return nil
+	})
+	require.NoError(t, err)
+
+	got, err := BeaconStateHezeFromConsensus(st)
+	require.NoError(t, err)
+	require.Equal(t, "0x0180", got.LatestExecutionPayloadBid.InclusionListBits)
+}
+
 func TestBeaconBlock_ToConsensus_NilListElements(t *testing.T) {
 	tests := []struct {
 		name    string

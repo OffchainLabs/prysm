@@ -699,15 +699,13 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 			ExecutionOptimistic: v.Optimistic,
 		}
 		if v.SignedBlock.Version() >= version.Gloas {
-			bid, err := v.SignedBlock.Block().Body().SignedExecutionPayloadBid()
+			bid, err := v.SignedBlock.Block().Body().ExecutionPayloadBid()
 			if err != nil {
 				return nil, errors.Wrap(err, "could not get execution payload bid for BlockProcessedData state feed event")
 			}
-			if bid == nil || bid.Message == nil {
-				return nil, errors.New("nil execution payload bid in BlockProcessedData state feed event")
-			}
-			blk.BuilderIndex = fmt.Sprintf("%d", bid.Message.BuilderIndex)
-			blk.BlockHash = hexutil.Encode(bid.Message.BlockHash)
+			blockHash := bid.BlockHash()
+			blk.BuilderIndex = fmt.Sprintf("%d", bid.BuilderIndex())
+			blk.BlockHash = hexutil.Encode(blockHash[:])
 		}
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, blk)

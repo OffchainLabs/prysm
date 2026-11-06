@@ -108,15 +108,7 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 
 	// Let bid alias block.body.signed_execution_payload_bid.message
 	// (notice that this can be obtained from the state.latest_execution_payload_bid).
-	signedBid, err := block.Block().Body().SignedExecutionPayloadBid()
-	if err != nil {
-		return pubsub.ValidationIgnore, err
-	}
-	wrappedBid, err := blocks.WrappedROSignedExecutionPayloadBid(signedBid)
-	if err != nil {
-		return pubsub.ValidationIgnore, err
-	}
-	bid, err := wrappedBid.Bid()
+	bid, err := block.Block().Body().ExecutionPayloadBid()
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}

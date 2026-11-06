@@ -1518,23 +1518,18 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// Get dependent root. Per the spec, dependent_root is:
-	// get_block_root_at_slot(state, compute_start_slot_at_epoch(epoch - 1) - 1)
-	// or the genesis block root in the case of underflow.
-	var dependentRoot []byte
-	if requestedEpoch <= 1 {
+	dependentRoot, err := core.PTCDependentRoot(st, requestedEpoch)
+	if err != nil {
+		httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if dependentRoot == nil {
 		r, err := s.BeaconDB.GenesisBlockRoot(ctx)
 		if err != nil {
 			httputil.HandleError(w, "Could not get genesis block root: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		dependentRoot = r[:]
-	} else {
-		dependentRoot, err = core.AttestationDependentRoot(st, requestedEpoch)
-		if err != nil {
-			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
 	}
 
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)

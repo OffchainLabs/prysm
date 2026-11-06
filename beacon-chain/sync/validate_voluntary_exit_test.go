@@ -42,7 +42,7 @@ func setupValidExit(t *testing.T) (*ethpb.SignedVoluntaryExit, state.BeaconState
 			ActivationEpoch: 0,
 		},
 	}
-	st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	st, err := state_native.New(&ethpb.BeaconState{
 		Validators: registry,
 		Fork: &ethpb.Fork{
 			CurrentVersion:  params.BeaconConfig().GenesisForkVersion,

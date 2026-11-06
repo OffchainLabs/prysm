@@ -338,7 +338,7 @@ type BeaconStateHeze struct {
 	ExecutionPayloadAvailability  []byte                      `ssz-size:"1024"`
 	BuilderPendingPayments        []*BuilderPendingPayment    `ssz-size:"64"`
 	BuilderPendingWithdrawals     []*BuilderPendingWithdrawal `ssz-max:"1048576"`
-	LatestExecutionPayloadBid     *ExecutionPayloadBid
+	LatestExecutionPayloadBid     *ExecutionPayloadBidHeze
 	PayloadExpectedWithdrawals    []*enginev1.Withdrawal `ssz-max:"16"`
 	PtcWindow                     []*PTCs                `ssz-size:"96"`
 }

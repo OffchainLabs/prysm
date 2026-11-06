@@ -1327,14 +1327,11 @@ func (b *BeaconBlockBody) BLSToExecutionChanges() ([]*eth.SignedBLSToExecutionCh
 // BlobKzgCommitments returns the blob kzg commitments in the block.
 func (b *BeaconBlockBody) BlobKzgCommitments() ([][]byte, error) {
 	if b.version >= version.Gloas {
-		signedBid, err := b.SignedExecutionPayloadBid()
+		bid, err := b.ExecutionPayloadBid()
 		if err != nil {
-			return nil, errors.Wrap(err, "could not get signed execution payload bid")
+			return nil, errors.Wrap(err, "could not get execution payload bid")
 		}
-		if signedBid == nil || signedBid.Message == nil {
-			return nil, errors.New("nil execution payload bid or bid message")
-		}
-		return signedBid.Message.BlobKzgCommitments, nil
+		return bid.BlobKzgCommitments(), nil
 	}
 	if b.version >= version.Deneb {
 		return b.blobKzgCommitments, nil
@@ -1361,12 +1358,24 @@ func (b *BeaconBlockBody) PayloadAttestations() ([]*eth.PayloadAttestation, erro
 	return nil, consensus_types.ErrNotSupported("PayloadAttestations", b.version)
 }
 
-// SignedExecutionPayloadBid returns the signed execution payload header in the block.
-func (b *BeaconBlockBody) SignedExecutionPayloadBid() (*eth.SignedExecutionPayloadBid, error) {
+// SignedExecutionPayloadBid returns the signed execution payload bid in the block.
+func (b *BeaconBlockBody) SignedExecutionPayloadBid() (interfaces.ROSignedExecutionPayloadBid, error) {
+	if b.version >= version.Heze {
+		return WrappedROSignedExecutionPayloadBidHeze(b.signedExecutionPayloadBidHeze)
+	}
 	if b.version >= version.Gloas {
-		return b.signedExecutionPayloadBid, nil
+		return WrappedROSignedExecutionPayloadBid(b.signedExecutionPayloadBid)
 	}
 	return nil, consensus_types.ErrNotSupported("SignedExecutionPayloadBid", b.version)
+}
+
+// ExecutionPayloadBid returns the execution payload bid in the block.
+func (b *BeaconBlockBody) ExecutionPayloadBid() (interfaces.ROExecutionPayloadBid, error) {
+	signedBid, err := b.SignedExecutionPayloadBid()
+	if err != nil {
+		return nil, err
+	}
+	return signedBid.Bid(), nil
 }
 
 // ParentExecutionRequests returns the parent's deferred execution requests.

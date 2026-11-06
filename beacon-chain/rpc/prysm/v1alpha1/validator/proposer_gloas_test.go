@@ -104,8 +104,7 @@ func TestSetRemoteBidFallback(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, tt.wantSrc, src)
-			signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
-			require.NoError(t, err)
+			signedBid := signedBidProto(t, sBlk)
 			require.NotNil(t, signedBid)
 			require.Equal(t, tt.wantIdx, signedBid.Message.BuilderIndex)
 		})
@@ -169,8 +168,7 @@ func TestSetRemoteBidFallback_GloasForkBoundary(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, bidSourceP2P, src)
 
-	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
-	require.NoError(t, err)
+	signedBid := signedBidProto(t, sBlk)
 	require.Equal(t, primitives.BuilderIndex(7), signedBid.Message.BuilderIndex)
 }
 

@@ -187,5 +187,5 @@ func ConvertToFulu(beaconState state.BeaconState) (state.BeaconState, error) {
 		PendingPartialWithdrawals:     pendingPartialWithdrawals,
 		PendingConsolidations:         pendingConsolidations,
 	}
-	return state_native.InitializeFromProtoUnsafeFulu(s)
+	return state_native.NewUnsafe(s)
 }

@@ -23,7 +23,18 @@ func LightClientUpdateFromConsensus(update interfaces.LightClientUpdate) (*Light
 
 	var scBranch [][32]byte
 	var finalityBranch [][32]byte
-	if update.Version() >= version.Electra {
+	if update.Version() >= version.Gloas {
+		scb, err := update.NextSyncCommitteeBranchGloas()
+		if err != nil {
+			return nil, err
+		}
+		scBranch = scb[:]
+		fb, err := update.FinalityBranchGloas()
+		if err != nil {
+			return nil, err
+		}
+		finalityBranch = fb[:]
+	} else if update.Version() >= version.Electra {
 		scb, err := update.NextSyncCommitteeBranchElectra()
 		if err != nil {
 			return nil, err
@@ -69,7 +80,13 @@ func LightClientFinalityUpdateFromConsensus(update interfaces.LightClientFinalit
 	}
 
 	var finalityBranch [][32]byte
-	if update.Version() >= version.Electra {
+	if update.Version() >= version.Gloas {
+		b, err := update.FinalityBranchGloas()
+		if err != nil {
+			return nil, err
+		}
+		finalityBranch = b[:]
+	} else if update.Version() >= version.Electra {
 		b, err := update.FinalityBranchElectra()
 		if err != nil {
 			return nil, err
@@ -193,6 +210,20 @@ func lightClientHeaderToJSON(header interfaces.LightClientHeader) (json.RawMessa
 			Execution:       execution,
 			ExecutionBranch: branchToJSON(executionBranch[:]),
 		}
+	case version.Gloas:
+		blockHash, err := header.ExecutionBlockHash()
+		if err != nil {
+			return nil, err
+		}
+		executionBranch, err := header.ExecutionBranchGloas()
+		if err != nil {
+			return nil, err
+		}
+		result = &LightClientHeaderGloas{
+			Beacon:             BeaconBlockHeaderFromConsensus(header.Beacon()),
+			ExecutionBlockHash: hexutil.Encode(blockHash[:]),
+			ExecutionBranch:    branchToJSON(executionBranch[:]),
+		}
 	default:
 		return nil, fmt.Errorf("unsupported header version %s", version.String(v))
 	}
@@ -207,7 +238,13 @@ func LightClientBootstrapFromConsensus(bootstrap interfaces.LightClientBootstrap
 	}
 
 	var scBranch [][32]byte
-	if bootstrap.Version() >= version.Electra {
+	if bootstrap.Version() >= version.Gloas {
+		b, err := bootstrap.CurrentSyncCommitteeBranchGloas()
+		if err != nil {
+			return nil, err
+		}
+		scBranch = b[:]
+	} else if bootstrap.Version() >= version.Electra {
 		b, err := bootstrap.CurrentSyncCommitteeBranchElectra()
 		if err != nil {
 			return nil, err

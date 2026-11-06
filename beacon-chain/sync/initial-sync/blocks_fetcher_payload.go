@@ -1,7 +1,6 @@
 package initialsync
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 
@@ -23,11 +22,10 @@ import (
 // It ignores the first block in the slice
 func checkAllBlocksBuildOnEmpty(blks []blocks.BlockWithROSidecars) error {
 	b := blks[0].Block
-	s, err := b.Block().Body().SignedExecutionPayloadBid()
+	firstBid, err := b.Block().Body().ExecutionPayloadBid()
 	if err != nil {
 		return errors.Wrap(err, "get execution payload bid from block")
 	}
-	firstBid := s.Message
 	for i := 1; i < len(blks); i++ {
 		next := blks[i].Block
 		if next.ReadOnlySignedBeaconBlock == nil {
@@ -36,11 +34,11 @@ func checkAllBlocksBuildOnEmpty(blks []blocks.BlockWithROSidecars) error {
 		if next.Block().ParentRoot() != b.Root() {
 			return fmt.Errorf("block with root %#x does not descend from %#x", next.Root(), b.Root())
 		}
-		nextSignedBid, err := next.Block().Body().SignedExecutionPayloadBid()
+		nextBid, err := next.Block().Body().ExecutionPayloadBid()
 		if err != nil {
 			return errors.Wrap(err, "get execution payload bid from block")
 		}
-		if !bytes.Equal(nextSignedBid.Message.ParentBlockHash, firstBid.ParentBlockHash) {
+		if nextBid.ParentBlockHash() != firstBid.ParentBlockHash() {
 			return fmt.Errorf("block with root %#x does not build on top of the empty block", next.Root())
 		}
 		b = next
@@ -185,9 +183,9 @@ func (f *blocksFetcher) fetchPayloadEnvelopesFromPeer(
 		StartSlot: start,
 		Count:     count,
 	}
-	peers = f.filterPeers(ctx, peers, peersPercentagePerRequest)
-	// Try the block provider first, then best bandwidth peers, then the rest.
-	peers = append([]peer.ID{pid}, peers...)
+	peers = f.filterPeers(ctx, peers, req.StartSlot, peersPercentagePerRequest)
+	// Try the block provider first (if able to serve the request), then best bandwidth peers, then the rest.
+	peers = append(f.p2p.Peers().FilterByEarliestAvailableSlot([]peer.ID{pid}, req.StartSlot), peers...)
 	bestPeers := f.hasSufficientBandwidth(peers, req.Count)
 	peers = append(bestPeers, peers...)
 	peers = dedupPeers(peers)

@@ -2,6 +2,7 @@ package operations
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"testing"
 
@@ -54,10 +55,12 @@ func RunExecutionPayloadBidTest(t *testing.T, config string, fork string, block 
 		}
 		blk := util.NewBeaconBlockGloas()
 		blk.Block.ProposerIndex = proposerIndex
-		blk.Block.Body.SignedExecutionPayloadBid = signedBid
 		wsb, err := blocks.NewSignedBeaconBlock(blk)
 		if err != nil {
 			return nil, err
+		}
+		if err := wsb.SetSignedExecutionPayloadBid(signedBid); err != nil {
+			return nil, fmt.Errorf("set signed execution payload bid, %w", err)
 		}
 		return s, gloas.ProcessExecutionPayloadBid(s, wsb.Block())
 	})

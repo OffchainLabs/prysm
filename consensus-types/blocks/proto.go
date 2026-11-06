@@ -754,7 +754,7 @@ func (b *BeaconBlockBody) Proto() (proto.Message, error) {
 			VoluntaryExits:            b.voluntaryExits,
 			SyncAggregate:             b.syncAggregate,
 			BlsToExecutionChanges:     b.blsToExecutionChanges,
-			SignedExecutionPayloadBid: b.signedExecutionPayloadBid,
+			SignedExecutionPayloadBid: b.signedExecutionPayloadBidHeze,
 			PayloadAttestations:       b.payloadAttestations,
 			ParentExecutionRequests:   b.parentExecutionRequests,
 		}, nil
@@ -1688,20 +1688,20 @@ func initBlockBodyFromProtoHeze(pb *eth.BeaconBlockBodyHeze) (*BeaconBlockBody, 
 		per = &enginev1.ExecutionRequestsGloas{}
 	}
 	b := &BeaconBlockBody{
-		version:                   version.Heze,
-		randaoReveal:              bytesutil.ToBytes96(pb.RandaoReveal),
-		eth1Data:                  pb.Eth1Data,
-		graffiti:                  bytesutil.ToBytes32(pb.Graffiti),
-		proposerSlashings:         pb.ProposerSlashings,
-		attesterSlashingsGloas:    pb.AttesterSlashings,
-		attestationsGloas:         pb.Attestations,
-		deposits:                  pb.Deposits,
-		voluntaryExits:            pb.VoluntaryExits,
-		syncAggregate:             pb.SyncAggregate,
-		blsToExecutionChanges:     pb.BlsToExecutionChanges,
-		signedExecutionPayloadBid: pb.SignedExecutionPayloadBid,
-		payloadAttestations:       pb.PayloadAttestations,
-		parentExecutionRequests:   per,
+		version:                       version.Heze,
+		randaoReveal:                  bytesutil.ToBytes96(pb.RandaoReveal),
+		eth1Data:                      pb.Eth1Data,
+		graffiti:                      bytesutil.ToBytes32(pb.Graffiti),
+		proposerSlashings:             pb.ProposerSlashings,
+		attesterSlashingsGloas:        pb.AttesterSlashings,
+		attestationsGloas:             pb.Attestations,
+		deposits:                      pb.Deposits,
+		voluntaryExits:                pb.VoluntaryExits,
+		syncAggregate:                 pb.SyncAggregate,
+		blsToExecutionChanges:         pb.BlsToExecutionChanges,
+		signedExecutionPayloadBidHeze: pb.SignedExecutionPayloadBid,
+		payloadAttestations:           pb.PayloadAttestations,
+		parentExecutionRequests:       per,
 	}
 	return b, nil
 }

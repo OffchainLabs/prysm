@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -26,9 +25,6 @@ func TestBeaconStateMerkleProofs_phase0_notsupported(t *testing.T) {
 }
 
 func TestLightClientGeneralizedIndicesForVersion(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{})
-	defer reset()
-
 	type test struct {
 		name       string
 		version    int

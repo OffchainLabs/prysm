@@ -50,7 +50,7 @@ func TestValidatorsCustodyRequirement(t *testing.T) {
 				validatorsIndex[primitives.ValidatorIndex(i)] = true
 			}
 
-			beaconState, err := state_native.InitializeFromProtoFulu(&ethpb.BeaconStateFulu{Validators: validators})
+			beaconState, err := state_native.New(&ethpb.BeaconStateFulu{Validators: validators})
 			require.NoError(t, err)
 
 			actual, err := peerdas.ValidatorsCustodyRequirement(beaconState, validatorsIndex)
@@ -537,7 +537,7 @@ func TestBidReconstructionSource_Commitments(t *testing.T) {
 					b.Block.Body.SignedExecutionPayloadBid = nil
 				}, true)
 			},
-			wantErr: "nil execution payload bid or bid message",
+			wantErr: "attempted to wrap nil object",
 		},
 		{
 			name: "nil bid message",
@@ -546,7 +546,7 @@ func TestBidReconstructionSource_Commitments(t *testing.T) {
 					b.Block.Body.SignedExecutionPayloadBid.Message = nil
 				}, true)
 			},
-			wantErr: "nil execution payload bid or bid message",
+			wantErr: "attempted to wrap nil object",
 		},
 		{
 			name: "non-gloas block is unsupported",
@@ -557,7 +557,7 @@ func TestBidReconstructionSource_Commitments(t *testing.T) {
 				require.NoError(t, err)
 				return rob
 			},
-			wantErr: "signed execution payload bid",
+			wantErr: "execution payload bid",
 		},
 	}
 

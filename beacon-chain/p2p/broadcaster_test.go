@@ -989,20 +989,21 @@ func (t *rpcOrderTracer) getTopics() []string {
 }
 
 // No-op implementations for other RawTracer methods.
-func (*rpcOrderTracer) OnNewOutboundStream(peer.ID, protocol.ID) {}
-func (*rpcOrderTracer) OnClosedOutboundStream(peer.ID)           {}
-func (*rpcOrderTracer) Join(string)                              {}
-func (*rpcOrderTracer) Leave(string)                             {}
-func (*rpcOrderTracer) Graft(peer.ID, string)                    {}
-func (*rpcOrderTracer) Prune(peer.ID, string)                    {}
-func (*rpcOrderTracer) ValidateMessage(*pubsub.Message)          {}
-func (*rpcOrderTracer) DeliverMessage(*pubsub.Message)           {}
-func (*rpcOrderTracer) RejectMessage(*pubsub.Message, string)    {}
-func (*rpcOrderTracer) DuplicateMessage(*pubsub.Message)         {}
-func (*rpcOrderTracer) ThrottlePeer(peer.ID)                     {}
-func (*rpcOrderTracer) RecvRPC(*pubsub.RPC)                      {}
-func (*rpcOrderTracer) DropRPC(*pubsub.RPC, peer.ID)             {}
-func (*rpcOrderTracer) UndeliverableMessage(*pubsub.Message)     {}
+func (*rpcOrderTracer) OnNewOutboundStream(peer.ID, protocol.ID)             {}
+func (*rpcOrderTracer) OnClosedOutboundStream(peer.ID)                       {}
+func (*rpcOrderTracer) Join(string)                                          {}
+func (*rpcOrderTracer) Leave(string)                                         {}
+func (*rpcOrderTracer) Graft(peer.ID, string)                                {}
+func (*rpcOrderTracer) Prune(peer.ID, string)                                {}
+func (*rpcOrderTracer) ValidateMessage(*pubsub.Message)                      {}
+func (*rpcOrderTracer) DeliverMessage(*pubsub.Message)                       {}
+func (*rpcOrderTracer) RejectMessage(*pubsub.Message, string)                {}
+func (*rpcOrderTracer) DuplicateMessage(*pubsub.Message)                     {}
+func (*rpcOrderTracer) ThrottlePeer(peer.ID)                                 {}
+func (*rpcOrderTracer) RecvRPC(*pubsub.RPC)                                  {}
+func (*rpcOrderTracer) SendRPCCompleted(*pubsub.RPC, peer.ID, time.Duration) {}
+func (*rpcOrderTracer) DropRPC(*pubsub.RPC, peer.ID)                         {}
+func (*rpcOrderTracer) UndeliverableMessage(*pubsub.Message)                 {}
 
 // TestService_BroadcastDataColumnRoundRobin verifies that when broadcasting multiple
 // data column sidecars, messages are interleaved in round-robin order by column index

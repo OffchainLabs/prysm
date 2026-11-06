@@ -70,7 +70,8 @@ type ReadOnlyBeaconBlockBody interface {
 	BlobKzgCommitments() ([][]byte, error)
 	ExecutionRequests() (*enginev1.ExecutionRequests, error)
 	PayloadAttestations() ([]*ethpb.PayloadAttestation, error)
-	SignedExecutionPayloadBid() (*ethpb.SignedExecutionPayloadBid, error)
+	SignedExecutionPayloadBid() (ROSignedExecutionPayloadBid, error)
+	ExecutionPayloadBid() (ROExecutionPayloadBid, error)
 	ParentExecutionRequests() (*enginev1.ExecutionRequestsGloas, error)
 }
 
@@ -95,7 +96,7 @@ type SignedBeaconBlock interface {
 	SetSignature(sig []byte)
 	SetExecutionRequests(er *enginev1.ExecutionRequests) error
 	SetPayloadAttestations(pa []*ethpb.PayloadAttestation) error
-	SetSignedExecutionPayloadBid(header *ethpb.SignedExecutionPayloadBid) error
+	SetSignedExecutionPayloadBid(bid ROSignedExecutionPayloadBid) error
 	SetParentExecutionRequests(r *enginev1.ExecutionRequestsGloas) error
 	Unblind(e ExecutionData) error
 }

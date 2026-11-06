@@ -28,6 +28,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
@@ -871,4 +872,49 @@ func TestService_validateUnaggregatedAttTopic_PreviousForkAttestationOnCurrentTo
 	res, err := s.validateUnaggregatedAttTopic(ctx, att, st, topic)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationAccept, res)
+}
+
+func TestService_validateCommitteeIndexBeaconAttestation_UnknownBlockRecordsSender(t *testing.T) {
+	p := p2ptest.NewTestP2P(t)
+	db := dbtest.SetupDB(t)
+	chain := &mockChain.ChainService{
+		Genesis:        time.Now().Add(-time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+		ValidatorsRoot: [32]byte{'A'},
+		DB:             db,
+	}
+	s := &Service{
+		cfg: &config{
+			initialSync: &mockSync.Sync{IsSyncing: false},
+			p2p:         p,
+			beaconDB:    db,
+			chain:       chain,
+			clock:       startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+		},
+		blkRootToPendingAtts: make(map[[32]byte][]any),
+	}
+	s.initCaches()
+
+	root := [32]byte{'B'}
+	att := &ethpb.Attestation{
+		AggregationBits: bitfield.Bitlist{0b101},
+		Data: &ethpb.AttestationData{
+			Slot:            1,
+			BeaconBlockRoot: root[:],
+			Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+			Target:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+		},
+		Signature: make([]byte, fieldparams.BLSSignatureLength),
+	}
+	buf := new(bytes.Buffer)
+	_, err := p.Encoding().EncodeGossip(buf, att)
+	require.NoError(t, err)
+	topic := fmt.Sprintf("/eth2/%x/beacon_attestation_1", s.currentForkDigest()) + p.Encoding().ProtocolSuffix()
+	msg := &pubsub.Message{Message: &pubsubpb.Message{Data: buf.Bytes(), Topic: &topic}}
+
+	sender := peer.ID("sender")
+	res, err := s.validateCommitteeIndexBeaconAttestation(t.Context(), sender, msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, res)
+	require.Equal(t, 1, len(s.blkRootToPendingAtts[root]))
+	require.DeepEqual(t, map[peer.ID]bool{sender: true}, s.pendingAttSenders[root])
 }

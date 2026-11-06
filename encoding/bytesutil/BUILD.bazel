@@ -5,8 +5,6 @@ go_library(
     srcs = [
         "bits.go",
         "bytes.go",
-        "bytes_go120.go",
-        "bytes_legacy.go",
         "eth_types.go",
         "hex.go",
         "integers.go",

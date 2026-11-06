@@ -261,11 +261,11 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 			return invalidBlock{error: err}
 		}
 		if b.Version() >= version.Gloas {
-			sbid, err := b.Block().Body().SignedExecutionPayloadBid()
+			bid, err := b.Block().Body().ExecutionPayloadBid()
 			if err != nil {
 				return err
 			}
-			if idx := sbid.Message.BuilderIndex; idx != params.BeaconConfig().BuilderIndexSelfBuild {
+			if idx := bid.BuilderIndex(); idx != params.BeaconConfig().BuilderIndexSelfBuild {
 				pk, err := preState.BuilderPubkey(idx)
 				if err != nil {
 					return err

@@ -1,7 +1,6 @@
 package electra_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
@@ -39,7 +38,7 @@ func TestProcessRegistryUpdates(t *testing.T) {
 					},
 					FinalizedCheckpoint: &eth.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 				}
-				st, err := state_native.InitializeFromProtoElectra(base)
+				st, err := state_native.New(base)
 				require.NoError(t, err)
 				return st
 			}(),
@@ -63,7 +62,7 @@ func TestProcessRegistryUpdates(t *testing.T) {
 						ActivationEpoch:            params.BeaconConfig().FarFutureEpoch,
 					})
 				}
-				st, err := state_native.InitializeFromProtoElectra(base)
+				st, err := state_native.New(base)
 				require.NoError(t, err)
 				return st
 			}(),
@@ -89,7 +88,7 @@ func TestProcessRegistryUpdates(t *testing.T) {
 						WithdrawableEpoch: params.BeaconConfig().FarFutureEpoch,
 					})
 				}
-				st, err := state_native.InitializeFromProtoElectra(base)
+				st, err := state_native.New(base)
 				require.NoError(t, err)
 				return st
 			}(),
@@ -115,7 +114,7 @@ func TestProcessRegistryUpdates(t *testing.T) {
 						WithdrawableEpoch: 20,
 					})
 				}
-				st, err := state_native.InitializeFromProtoElectra(base)
+				st, err := state_native.New(base)
 				require.NoError(t, err)
 				return st
 			}(),
@@ -131,7 +130,7 @@ func TestProcessRegistryUpdates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := electra.ProcessRegistryUpdates(context.TODO(), tt.state)
+			err := electra.ProcessRegistryUpdates(t.Context(), tt.state)
 			require.NoError(t, err)
 			if tt.check != nil {
 				tt.check(t, tt.state)
@@ -164,7 +163,7 @@ func Benchmark_ProcessRegistryUpdates_MassEjection(b *testing.B) {
 		}
 		b.StartTimer()
 
-		if err := electra.ProcessRegistryUpdates(context.TODO(), st); err != nil {
+		if err := electra.ProcessRegistryUpdates(b.Context(), st); err != nil {
 			panic(err)
 		}
 	}

@@ -141,15 +141,11 @@ func init() {
 	}
 	gloasFields = gloasProgressiveSchema.fields
 
+	// Replace the LatestExecutionPayloadBid field with LatestExecutionPayloadBidHeze for Heze.
+	hezeAllFields := slices.Clone(gloasFields)
+	hezeAllFields[slices.Index(hezeAllFields, types.LatestExecutionPayloadBid)] = types.LatestExecutionPayloadBidHeze
 	hezeProgressiveSchema, err = newProgressiveStateFieldsSchema(
-		slices.Concat(
-			altairFields,
-			[]types.FieldIndex{types.LatestBlockHash},
-			withdrawalAndHistoricalSummaryFields,
-			electraAdditionalFields,
-			[]types.FieldIndex{types.ProposerLookahead},
-			gloasAdditionalFields,
-		),
+		hezeAllFields,
 		nil,
 		params.BeaconConfig().BeaconStateHezeFieldCount,
 	)

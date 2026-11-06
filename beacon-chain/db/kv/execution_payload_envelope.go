@@ -1,8 +1,10 @@
 package kv
 
 import (
+	"bytes"
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -28,7 +30,7 @@ func (s *Store) SaveExecutionPayloadEnvelope(ctx context.Context, env *ethpb.Sig
 
 	blockRoot := bytesutil.ToBytes32(env.Message.BeaconBlockRoot)
 	blockHash := bytesutil.ToBytes32(env.Message.Payload.BlockHash)
-	blinded := blindEnvelope(env)
+	blinded := BlindEnvelope(env)
 
 	enc, err := encodeBlindedEnvelope(blinded)
 	if err != nil {
@@ -41,6 +43,58 @@ func (s *Store) SaveExecutionPayloadEnvelope(ctx context.Context, env *ethpb.Sig
 		}
 		return tx.Bucket(executionPayloadEnvelopeBlockHashBucket).Put(blockHash[:], blockRoot[:])
 	})
+}
+
+// SaveBlindedExecutionPayloadEnvelope saves an already-blinded signed execution payload envelope,
+// performing the same primary and block-hash-index writes as SaveExecutionPayloadEnvelope.
+// If an envelope is already stored for the same beacon block root, the existing entry is never
+// overwritten: a byte-identical save is a no-op and a differing one reports a conflict.
+func (s *Store) SaveBlindedExecutionPayloadEnvelope(ctx context.Context, env *ethpb.SignedBlindedExecutionPayloadEnvelope) (iface.EnvelopeSaveOutcome, error) {
+	_, span := trace.StartSpan(ctx, "BeaconDB.SaveBlindedExecutionPayloadEnvelope")
+	defer span.End()
+
+	if env == nil || env.Message == nil {
+		return iface.EnvelopeSaveUnknown, errors.New("cannot save nil blinded execution payload envelope")
+	}
+
+	blockRoot := bytesutil.ToBytes32(env.Message.BeaconBlockRoot)
+	blockHash := bytesutil.ToBytes32(env.Message.BlockHash)
+	sszBytes, err := env.MarshalSSZ()
+	if err != nil {
+		return iface.EnvelopeSaveUnknown, errors.Wrap(err, "could not marshal blinded envelope")
+	}
+
+	outcome := iface.EnvelopeSaveUnknown
+	err = s.db.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(executionPayloadEnvelopesBucket)
+		if existing := bkt.Get(blockRoot[:]); existing != nil {
+			// Compare decoded bytes rather than compressed bytes so the outcome does not
+			// depend on the snappy encoder version that produced the stored entry.
+			dec, err := snappy.Decode(nil, existing)
+			if err != nil {
+				return errors.Wrap(err, "could not snappy decode existing envelope")
+			}
+			if bytes.Equal(dec, sszBytes) {
+				outcome = iface.EnvelopeSaveByteIdentical
+			} else {
+				outcome = iface.EnvelopeSaveConflict
+			}
+			return nil
+		}
+		if err := bkt.Put(blockRoot[:], snappy.Encode(nil, sszBytes)); err != nil {
+			return err
+		}
+		if err := tx.Bucket(executionPayloadEnvelopeBlockHashBucket).Put(blockHash[:], blockRoot[:]); err != nil {
+			return err
+		}
+		outcome = iface.EnvelopeSaveInserted
+		return nil
+	})
+	if err != nil {
+		// A failed transaction is rolled back, so no outcome describes what was stored.
+		return iface.EnvelopeSaveUnknown, err
+	}
+	return outcome, nil
 }
 
 // ExecutionPayloadEnvelope retrieves the blinded signed execution payload envelope by beacon block root.
@@ -125,10 +179,10 @@ func (s *Store) DeleteExecutionPayloadEnvelope(ctx context.Context, blockRoot [3
 	})
 }
 
-// blindEnvelope converts a full signed envelope to its blinded form by replacing
+// BlindEnvelope converts a full signed envelope to its blinded form by replacing
 // the execution payload with its block hash. This avoids computing the expensive
 // payload hash tree root on the critical path.
-func blindEnvelope(env *ethpb.SignedExecutionPayloadEnvelope) *ethpb.SignedBlindedExecutionPayloadEnvelope {
+func BlindEnvelope(env *ethpb.SignedExecutionPayloadEnvelope) *ethpb.SignedBlindedExecutionPayloadEnvelope {
 	return &ethpb.SignedBlindedExecutionPayloadEnvelope{
 		Message: &ethpb.BlindedExecutionPayloadEnvelope{
 			BlockHash:             env.Message.Payload.BlockHash,

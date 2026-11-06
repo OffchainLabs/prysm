@@ -19,18 +19,16 @@ func makeExecutionAndProofGloas(ctx context.Context, block interfaces.ReadOnlySi
 		return makePreGloasExecutionAndProof(ctx, block)
 	}
 
-	bid, err := block.Block().Body().SignedExecutionPayloadBid()
+	bid, err := block.Block().Body().ExecutionPayloadBid()
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "could not get signed execution payload bid")
-	}
-	if bid == nil || bid.Message == nil {
-		return nil, nil, errors.New("signed execution payload bid is nil")
+		return nil, nil, errors.Wrap(err, "could not get execution payload bid")
 	}
 	proof, err := blocks.ExecutionBlockHashProof(ctx, block.Block())
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not get execution block hash proof")
 	}
-	return bid.Message.ParentBlockHash, proof, nil
+	parentBlockHash := bid.ParentBlockHash()
+	return parentBlockHash[:], proof, nil
 }
 
 func makePreGloasExecutionAndProof(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) ([]byte, [][]byte, error) {

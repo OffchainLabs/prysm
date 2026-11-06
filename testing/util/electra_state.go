@@ -111,7 +111,7 @@ func emptyGenesisStateElectra() (state.BeaconState, error) {
 		ExitBalanceToConsume:          primitives.Gwei(0),
 		ConsolidationBalanceToConsume: primitives.Gwei(0),
 	}
-	return state_native.InitializeFromProtoUnsafeElectra(st)
+	return state_native.NewUnsafe(st)
 }
 
 func buildGenesisBeaconStateElectra(ctx context.Context, genesisTime uint64, preState state.BeaconState, eth1Data *ethpb.Eth1Data, opts ...ElectraStateOption) (state.BeaconState, error) {
@@ -127,12 +127,6 @@ func buildGenesisBeaconStateElectra(ctx context.Context, genesisTime uint64, pre
 	}
 
 	zeroHash := params.BeaconConfig().ZeroHash[:]
-
-	activeIndexRoots := make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector)
-	for i := range activeIndexRoots {
-		activeIndexRoots[i] = zeroHash
-	}
-
 	blockRoots := make([][]byte, params.BeaconConfig().SlotsPerHistoricalRoot)
 	for i := range blockRoots {
 		blockRoots[i] = zeroHash
@@ -302,5 +296,5 @@ func buildGenesisBeaconStateElectra(ctx context.Context, genesisTime uint64, pre
 		WithdrawalsRoot:  make([]byte, 32),
 	}
 
-	return state_native.InitializeFromProtoUnsafeElectra(st)
+	return state_native.NewUnsafe(st)
 }

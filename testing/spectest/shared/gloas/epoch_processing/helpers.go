@@ -32,7 +32,7 @@ func RunEpochOperationTest(
 	if err := preBeaconStateBase.UnmarshalSSZ(preBeaconStateSSZ); err != nil {
 		t.Fatalf("Failed to unmarshal: %v", err)
 	}
-	preBeaconState, err := state_native.InitializeFromProtoUnsafeGloas(preBeaconStateBase)
+	preBeaconState, err := state_native.NewUnsafe(preBeaconStateBase)
 	require.NoError(t, err)
 
 	// If the post.ssz is not present, it means the test should fail on our end.
@@ -57,9 +57,9 @@ func RunEpochOperationTest(
 			t.Fatalf("Failed to unmarshal: %v", err)
 		}
 
-		pbState, err := state_native.ProtobufBeaconStateGloas(beaconState.ToProtoUnsafe())
+		container, err := state_native.ContainerFrom[*ethpb.BeaconStateGloas](beaconState.ToContainerUnsafe())
 		require.NoError(t, err)
-		require.DeepSSZEqual(t, pbState, postBeaconState, "Post state does not match expected")
+		require.DeepSSZEqual(t, container, postBeaconState, "Post state does not match expected")
 	} else {
 		if err == nil {
 			t.Fatal("Did not fail when expected")

@@ -186,6 +186,10 @@ var (
 		Name: "gossip_pending_attestations_total",
 		Help: "increased when receiving a new pending attestation",
 	})
+	pendingAttBlockRequestCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "gossip_pending_attestation_block_requests_total",
+		Help: "Block by root requests sent to peers that sent attestations for blocks we do not have",
+	})
 
 	// Sync committee verification performance.
 	syncMessagesForUnknownBlocks = promauto.NewCounter(

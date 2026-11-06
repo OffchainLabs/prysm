@@ -108,7 +108,7 @@ func NewBeaconState(options ...NewBeaconStateOption) (state.BeaconState, error) 
 		}
 	}
 
-	var st, err = state_native.InitializeFromProtoUnsafePhase0(seed)
+	var st, err = state_native.NewUnsafe(seed)
 	if err != nil {
 		return nil, fmt.Errorf("initialize Phase0 state: %w", err)
 	}
@@ -163,7 +163,7 @@ func NewBeaconStateAltair(options ...func(state *ethpb.BeaconStateAltair) error)
 		}
 	}
 
-	var st, err = state_native.InitializeFromProtoUnsafeAltair(seed)
+	var st, err = state_native.NewUnsafe(seed)
 	if err != nil {
 		return nil, fmt.Errorf("initialize Altair state: %w", err)
 	}
@@ -230,7 +230,7 @@ func NewBeaconStateBellatrix(options ...func(state *ethpb.BeaconStateBellatrix) 
 		}
 	}
 
-	var st, err = state_native.InitializeFromProtoUnsafeBellatrix(seed)
+	var st, err = state_native.NewUnsafe(seed)
 	if err != nil {
 		return nil, fmt.Errorf("initialize Bellatrix state: %w", err)
 	}
@@ -298,7 +298,7 @@ func NewBeaconStateCapella(options ...func(state *ethpb.BeaconStateCapella) erro
 		}
 	}
 
-	var st, err = state_native.InitializeFromProtoUnsafeCapella(seed)
+	var st, err = state_native.NewUnsafe(seed)
 	if err != nil {
 		return nil, fmt.Errorf("initialize Capella state: %w", err)
 	}
@@ -366,7 +366,7 @@ func NewBeaconStateDeneb(options ...func(state *ethpb.BeaconStateDeneb) error) (
 		}
 	}
 
-	var st, err = state_native.InitializeFromProtoUnsafeDeneb(seed)
+	var st, err = state_native.NewUnsafe(seed)
 	if err != nil {
 		return nil, fmt.Errorf("initialize Deneb state: %w", err)
 	}
@@ -434,7 +434,7 @@ func NewBeaconStateElectra(options ...func(state *ethpb.BeaconStateElectra) erro
 		}
 	}
 
-	var st, err = state_native.InitializeFromProtoUnsafeElectra(seed)
+	var st, err = state_native.NewUnsafe(seed)
 	if err != nil {
 		return nil, fmt.Errorf("initialize Electra state: %w", err)
 	}
@@ -503,7 +503,7 @@ func NewBeaconStateFulu(options ...func(state *ethpb.BeaconStateFulu) error) (st
 		}
 	}
 
-	var st, err = state_native.InitializeFromProtoUnsafeFulu(seed)
+	var st, err = state_native.NewUnsafe(seed)
 	if err != nil {
 		return nil, fmt.Errorf("initialize Fulu state: %w", err)
 	}
@@ -591,7 +591,7 @@ func NewBeaconStateGloas(options ...func(state *ethpb.BeaconStateGloas) error) (
 		}
 	}
 
-	var st, err = state_native.InitializeFromProtoUnsafeGloas(seed)
+	var st, err = state_native.NewUnsafe(seed)
 	if err != nil {
 		return nil, fmt.Errorf("initialize Gloas state: %w", err)
 	}

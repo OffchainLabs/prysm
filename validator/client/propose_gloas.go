@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -73,14 +74,11 @@ func (v *validator) proposeSelfBuildEnvelope(
 		return nil
 	}
 
-	bid, err := blk.Block().Body().SignedExecutionPayloadBid()
+	bid, err := blk.Block().Body().ExecutionPayloadBid()
 	if err != nil {
-		return err
+		return fmt.Errorf("no execution payload bid found in block body, %w", err)
 	}
-	if bid == nil || bid.Message == nil {
-		return errors.New("no execution payload bid found in block body")
-	}
-	if bid.Message.BuilderIndex != params.BeaconConfig().BuilderIndexSelfBuild {
+	if bid.BuilderIndex() != params.BeaconConfig().BuilderIndexSelfBuild {
 		// only used for self build
 		return nil
 	}

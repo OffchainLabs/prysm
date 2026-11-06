@@ -100,11 +100,43 @@ func DecodeSnappy(msg []byte, maxSize uint64) ([]byte, error) {
 	if uint64(size) > maxSize {
 		return nil, errors.Errorf("snappy message exceeds max size: %d bytes > %d bytes", size, maxSize)
 	}
+
+	// Reject claimed lengths the input cannot possibly expand to.
+	if maxLen := maxSnappyDecodedLen(len(msg)); uint64(size) > maxLen {
+		return nil, errors.Errorf("snappy message claims more data than it can hold: %d bytes > %d bytes", size, maxLen)
+	}
+
 	msg, err = snappy.Decode(nil /*dst*/, msg)
 	if err != nil {
 		return nil, err
 	}
 	return msg, nil
+}
+
+// maxSnappyDecodedLen returns the largest decoded length a snappy block of
+// `compressedLen` bytes can produce.
+//
+// A snappy block is a varint header followed by a sequence of elements.
+// Only copy elements produce more output than input, by repeating bytes
+// already emitted. Per the spec, section 2.2:
+//
+//   - copy with 1-byte offset: 2 bytes, emits at most 11 bytes (ratio 5.5)
+//   - copy with 2-byte offset: 3 bytes, emits at most 64 bytes (ratio ~21.3)
+//   - copy with 4-byte offset: 5 bytes, emits at most 64 bytes (ratio 12.8)
+//
+// Literals emit at most as many bytes as they consume. The highest ratio is
+// therefore the 3-byte copy emitting 64 bytes, so no block can expand more
+// than 64/3 times. Counting the header bytes as input only loosens the bound,
+// so a valid block is never rejected.
+//
+// Spec: https://github.com/google/snappy/blob/main/format_description.txt
+func maxSnappyDecodedLen(compressedLen int) uint64 {
+	const (
+		maxCopyLen      = 64 // Longest output of a single copy element.
+		minCopyTagBytes = 3  // Size of the copy element with a 2-byte offset.
+	)
+
+	return uint64(compressedLen) * maxCopyLen / minCopyTagBytes
 }
 
 // MaxSizer reports the maximum SSZ-encoded size of a message.

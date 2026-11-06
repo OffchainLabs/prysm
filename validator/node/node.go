@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/middleware"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/cmd"
@@ -602,7 +603,6 @@ func (c *ValidatorClient) registerRPCService(cliCtx *cli.Context) error {
 	}
 	host := cliCtx.String(flags.HTTPServerHost.Name)
 	port := cliCtx.Int(flags.HTTPServerPort.Name)
-	authTokenPath := cliCtx.String(flags.AuthTokenPathFlag.Name)
 	walletDir := cliCtx.String(flags.WalletDirFlag.Name)
 
 	var vs *client.ValidatorService
@@ -650,11 +650,20 @@ func (c *ValidatorClient) registerRPCService(cliCtx *cli.Context) error {
 		WalletDir:              walletDir,
 		WalletInitializedFeed:  c.walletInitializedFeed,
 		ValidatorService:       vs,
-		AuthTokenPath:          authTokenPath,
+		AuthTokenPath:          authTokenPath(cliCtx),
 		Middlewares:            middlewares,
 		Router:                 http.NewServeMux(),
 	})
 	return c.services.RegisterService(s)
+}
+
+// authTokenPath returns the path set with --keymanager-token-file, or auth-token in the wallet directory.
+func authTokenPath(cliCtx *cli.Context) string {
+	if p := cliCtx.String(flags.AuthTokenPathFlag.Name); p != "" {
+		return p
+	}
+
+	return filepath.Join(cliCtx.String(flags.WalletDirFlag.Name), api.AuthTokenFileName)
 }
 
 func setWalletPasswordFilePath(cliCtx *cli.Context) error {

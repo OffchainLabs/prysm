@@ -88,10 +88,7 @@ type BidVerifier struct {
 func (v *BidVerifier) VerifyCurrentOrNextSlot() (err error) {
 	defer v.record(RequireBidCurrentOrNextSlot, &err)
 
-	bid, err := v.b.Bid()
-	if err != nil {
-		return errors.Wrap(err, "failed to get bid")
-	}
+	bid := v.b.Bid()
 	first := bid.Slot()
 	if first > 0 {
 		first--
@@ -111,10 +108,7 @@ func (v *BidVerifier) VerifyCurrentOrNextSlot() (err error) {
 func (v *BidVerifier) VerifyBidSlotMatches(slot primitives.Slot) (err error) {
 	defer v.record(RequireBidSlotMatches, &err)
 
-	bid, err := v.b.Bid()
-	if err != nil {
-		return errors.Wrap(err, "failed to get bid")
-	}
+	bid := v.b.Bid()
 	if bid.Slot() != slot {
 		return fmt.Errorf("%w: got %d want %d", ErrBidSlotMismatch, bid.Slot(), slot)
 	}
@@ -125,10 +119,7 @@ func (v *BidVerifier) VerifyBidSlotMatches(slot primitives.Slot) (err error) {
 func (v *BidVerifier) VerifyBuilderActive(st state.ReadOnlyBeaconState) (err error) {
 	defer v.record(RequireBidBuilderActive, &err)
 
-	bid, err := v.b.Bid()
-	if err != nil {
-		return errors.Wrap(err, "failed to get bid")
-	}
+	bid := v.b.Bid()
 	active, err := st.IsActiveBuilder(bid.BuilderIndex())
 	if err != nil {
 		return errors.Wrap(err, "builder active check failed")
@@ -143,10 +134,7 @@ func (v *BidVerifier) VerifyBuilderActive(st state.ReadOnlyBeaconState) (err err
 func (v *BidVerifier) VerifyBuilderVersion(st state.ReadOnlyBeaconState) (err error) {
 	defer v.record(RequireBidBuilderVersionValid, &err)
 
-	bid, err := v.b.Bid()
-	if err != nil {
-		return errors.Wrap(err, "failed to get bid")
-	}
+	bid := v.b.Bid()
 	builder, err := st.Builder(bid.BuilderIndex())
 	if err != nil {
 		return errors.Wrap(err, "failed to get builder")
@@ -162,10 +150,7 @@ func (v *BidVerifier) VerifyBuilderVersion(st state.ReadOnlyBeaconState) (err er
 func (v *BidVerifier) VerifyBlobKzgCommitmentsLimit() (err error) {
 	defer v.record(RequireBidBlobKzgCommitmentsLimit, &err)
 
-	bid, err := v.b.Bid()
-	if err != nil {
-		return errors.Wrap(err, "failed to get bid")
-	}
+	bid := v.b.Bid()
 	maxBlobs := uint64(params.BeaconConfig().MaxBlobsPerBlockAtEpoch(slots.ToEpoch(bid.Slot())))
 	if count := bid.BlobKzgCommitmentCount(); count > maxBlobs {
 		return fmt.Errorf("%w: got %d max %d", ErrBidTooManyBlobKzgCommitments, count, maxBlobs)
@@ -178,10 +163,7 @@ func (v *BidVerifier) VerifyBlobKzgCommitmentsLimit() (err error) {
 func (v *BidVerifier) VerifyPrevRandao(st state.ReadOnlyBeaconState) (err error) {
 	defer v.record(RequireBidPrevRandaoValid, &err)
 
-	bid, err := v.b.Bid()
-	if err != nil {
-		return errors.Wrap(err, "failed to get bid")
-	}
+	bid := v.b.Bid()
 	mix, err := helpers.RandaoMix(st, slots.ToEpoch(st.Slot()))
 	if err != nil {
 		return errors.Wrap(err, "failed to get randao mix")
@@ -199,10 +181,7 @@ func (v *BidVerifier) VerifyPrevRandao(st state.ReadOnlyBeaconState) (err error)
 func (v *BidVerifier) VerifyExecutionPaymentZero() (err error) {
 	defer v.record(RequireBidExecutionPaymentZero, &err)
 
-	bid, err := v.b.Bid()
-	if err != nil {
-		return errors.Wrap(err, "failed to get bid")
-	}
+	bid := v.b.Bid()
 	if bid.ExecutionPayment() != 0 {
 		return fmt.Errorf("%w: builder=%d slot=%d payment=%d", ErrBidExecutionPaymentNonZero, bid.BuilderIndex(), bid.Slot(), bid.ExecutionPayment())
 	}
@@ -213,10 +192,7 @@ func (v *BidVerifier) VerifyExecutionPaymentZero() (err error) {
 func (v *BidVerifier) VerifyFeeRecipientMatches(expected []byte) (err error) {
 	defer v.record(RequireBidFeeRecipientMatches, &err)
 
-	bid, err := v.b.Bid()
-	if err != nil {
-		return errors.Wrap(err, "failed to get bid")
-	}
+	bid := v.b.Bid()
 	bidFeeRecipient := bid.FeeRecipient()
 	if !bytes.Equal(expected, bidFeeRecipient[:]) {
 		return fmt.Errorf("%w: bid=%#x expected=%#x", ErrBidFeeRecipientMismatch, bidFeeRecipient, expected)
@@ -230,10 +206,7 @@ func (v *BidVerifier) VerifyFeeRecipientMatches(expected []byte) (err error) {
 func (v *BidVerifier) VerifyGasLimitTargetCompatible(parentGasLimit, targetGasLimit uint64) (err error) {
 	defer v.record(RequireBidGasLimitCompatible, &err)
 
-	bid, err := v.b.Bid()
-	if err != nil {
-		return errors.Wrap(err, "failed to get bid")
-	}
+	bid := v.b.Bid()
 	if !isGasLimitTargetCompatible(parentGasLimit, bid.GasLimit(), targetGasLimit) {
 		return fmt.Errorf("%w: bid=%d parent=%d target=%d", ErrBidGasLimitIncompatible, bid.GasLimit(), parentGasLimit, targetGasLimit)
 	}
@@ -272,10 +245,7 @@ func isGasLimitTargetCompatible(parentGasLimit, gasLimit, targetGasLimit uint64)
 func (v *BidVerifier) VerifyParentBlockRootSeen(parentSeen func([32]byte) bool) (err error) {
 	defer v.record(RequireBidParentBlockRootSeen, &err)
 
-	bid, err := v.b.Bid()
-	if err != nil {
-		return errors.Wrap(err, "failed to get bid")
-	}
+	bid := v.b.Bid()
 	root := bid.ParentBlockRoot()
 	if parentSeen != nil && parentSeen(root) {
 		return nil
@@ -286,10 +256,7 @@ func (v *BidVerifier) VerifyParentBlockRootSeen(parentSeen func([32]byte) bool) 
 func (v *BidVerifier) VerifyBidCompatibleWithHead(compatible func(interfaces.ROExecutionPayloadBid) bool) (err error) {
 	defer v.record(RequireBidCompatibleWithHead, &err)
 
-	bid, err := v.b.Bid()
-	if err != nil {
-		return errors.Wrap(err, "failed to get bid")
-	}
+	bid := v.b.Bid()
 	if compatible != nil && compatible(bid) {
 		return nil
 	}
@@ -300,10 +267,7 @@ func (v *BidVerifier) VerifyBidCompatibleWithHead(compatible func(interfaces.ROE
 func (v *BidVerifier) VerifyBidSlotHigherThanParent(parentSlot primitives.Slot) (err error) {
 	defer v.record(RequireBidSlotHigherThanParent, &err)
 
-	bid, err := v.b.Bid()
-	if err != nil {
-		return errors.Wrap(err, "failed to get bid")
-	}
+	bid := v.b.Bid()
 	if bid.Slot() <= parentSlot {
 		return fmt.Errorf("%w: bid=%d parent=%d", ErrBidSlotNotHigherThanParent, bid.Slot(), parentSlot)
 	}
@@ -314,10 +278,7 @@ func (v *BidVerifier) VerifyBidSlotHigherThanParent(parentSlot primitives.Slot) 
 func (v *BidVerifier) VerifyParentBlockHash(hasPayloadBlockHash func([32]byte, [32]byte) bool) (err error) {
 	defer v.record(RequireBidParentBlockHashValid, &err)
 
-	bid, err := v.b.Bid()
-	if err != nil {
-		return errors.Wrap(err, "failed to get bid")
-	}
+	bid := v.b.Bid()
 	if hasPayloadBlockHash == nil {
 		return fmt.Errorf("%w: no parent block hash lookup", ErrBidParentBlockHashMismatch)
 	}
@@ -331,10 +292,7 @@ func (v *BidVerifier) VerifyParentBlockHash(hasPayloadBlockHash func([32]byte, [
 func (v *BidVerifier) VerifyBuilderCanCoverBid(st state.ReadOnlyBeaconState) (err error) {
 	defer v.record(RequireBidBuilderCanCover, &err)
 
-	bid, err := v.b.Bid()
-	if err != nil {
-		return errors.Wrap(err, "failed to get bid")
-	}
+	bid := v.b.Bid()
 	ok, err := st.CanBuilderCoverBid(bid.BuilderIndex(), bid.Value())
 	if err != nil {
 		return errors.Wrap(err, "builder balance check failed")
@@ -350,10 +308,7 @@ func (v *BidVerifier) VerifyBuilderCanCoverBid(st state.ReadOnlyBeaconState) (er
 func (v *BidVerifier) VerifyBuilderNotExiting(st state.ReadOnlyBeaconState, exits func([32]byte) ([]*enginev1.BuilderExitRequest, error)) (err error) {
 	defer v.record(RequireBidBuilderNotExiting, &err)
 
-	bid, err := v.b.Bid()
-	if err != nil {
-		return errors.Wrap(err, "failed to get bid")
-	}
+	bid := v.b.Bid()
 	latest, err := st.LatestExecutionPayloadBid()
 	if err != nil {
 		return errors.Wrap(err, "failed to get latest execution payload bid")

@@ -37,7 +37,7 @@ func TestProcessRewardsAndPenaltiesPrecompute(t *testing.T) {
 	}
 	base.PreviousEpochAttestations = atts
 
-	beaconState, err := state_native.InitializeFromProtoPhase0(base)
+	beaconState, err := state_native.New(base)
 	require.NoError(t, err)
 
 	vp, bp, err := New(t.Context(), beaconState)
@@ -80,7 +80,7 @@ func TestAttestationDeltas_ZeroEpoch(t *testing.T) {
 		}
 	}
 	base.PreviousEpochAttestations = atts
-	beaconState, err := state_native.InitializeFromProtoPhase0(base)
+	beaconState, err := state_native.New(base)
 	require.NoError(t, err)
 
 	pVals, pBal, err := New(t.Context(), beaconState)
@@ -118,7 +118,7 @@ func TestAttestationDeltas_ZeroInclusionDelay(t *testing.T) {
 		}
 	}
 	base.PreviousEpochAttestations = atts
-	beaconState, err := state_native.InitializeFromProtoPhase0(base)
+	beaconState, err := state_native.New(base)
 	require.NoError(t, err)
 
 	pVals, pBal, err := New(t.Context(), beaconState)
@@ -144,7 +144,7 @@ func TestProcessRewardsAndPenaltiesPrecompute_SlashedInactivePenalty(t *testing.
 	}
 	base.PreviousEpochAttestations = atts
 
-	beaconState, err := state_native.InitializeFromProtoPhase0(base)
+	beaconState, err := state_native.New(base)
 	require.NoError(t, err)
 	require.NoError(t, beaconState.SetSlot(params.BeaconConfig().SlotsPerEpoch*10))
 
@@ -218,7 +218,7 @@ func TestProposerDeltaPrecompute_HappyCase(t *testing.T) {
 	e := params.BeaconConfig().SlotsPerEpoch
 	validatorCount := uint64(10)
 	base := buildState(e, validatorCount)
-	beaconState, err := state_native.InitializeFromProtoPhase0(base)
+	beaconState, err := state_native.New(base)
 	require.NoError(t, err)
 
 	proposerIndex := primitives.ValidatorIndex(1)
@@ -240,7 +240,7 @@ func TestProposerDeltaPrecompute_ValidatorIndexOutOfRange(t *testing.T) {
 	e := params.BeaconConfig().SlotsPerEpoch
 	validatorCount := uint64(10)
 	base := buildState(e, validatorCount)
-	beaconState, err := state_native.InitializeFromProtoPhase0(base)
+	beaconState, err := state_native.New(base)
 	require.NoError(t, err)
 
 	proposerIndex := primitives.ValidatorIndex(validatorCount)
@@ -256,7 +256,7 @@ func TestProposerDeltaPrecompute_SlashedCase(t *testing.T) {
 	e := params.BeaconConfig().SlotsPerEpoch
 	validatorCount := uint64(10)
 	base := buildState(e, validatorCount)
-	beaconState, err := state_native.InitializeFromProtoPhase0(base)
+	beaconState, err := state_native.New(base)
 	require.NoError(t, err)
 
 	proposerIndex := primitives.ValidatorIndex(1)

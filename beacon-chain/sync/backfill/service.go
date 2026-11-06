@@ -156,10 +156,6 @@ func NewService(ctx context.Context, su *Store, bStore *filesystem.BlobStorage, 
 func (s *Service) updateComplete() bool {
 	b, err := s.pool.complete()
 	if err != nil {
-		if errors.Is(err, errEndSequence) {
-			log.WithField("backfillSlot", b.begin).Info("Backfill is complete")
-			return true
-		}
 		log.WithError(err).Error("Service received unhandled error from worker pool")
 		return true
 	}
@@ -181,7 +177,13 @@ func (s *Service) importBatches(ctx context.Context) {
 		_, err := s.batchImporter(ctx, current, ib, s.store)
 		if err != nil {
 			log.WithError(err).WithFields(ib.logFields()).Debug("Backfill batch failed to import")
-			s.batchSeq.update(ib.withError(err))
+			failed := ib.withError(err)
+			s.batchSeq.update(failed)
+
+			low := primitives.Slot(s.store.status().LowSlot)
+			if errors.Is(err, errChainBroken) && ib.end < low {
+				s.batchSeq.widen(failed, low)
+			}
 			// If a batch fails, the subsequent batches are no longer considered importable.
 			break
 		}
@@ -236,7 +238,7 @@ func (s *Service) defaultBatchImporter(ctx context.Context, current primitives.S
 	}
 
 	checker := newCheckMultiplexer(s.syncNeeds.Currently(), b)
-	return su.fillBack(ctx, current, b.blocks, checker)
+	return su.fillBack(ctx, current, b.blocks, checker, b.envelopes)
 }
 
 func (s *Service) scheduleTodos() {
@@ -353,6 +355,15 @@ func (s *Service) Start() {
 		if ctx.Err() != nil {
 			return
 		}
+
+		if s.batchSeq.allEnded() {
+			log.WithField("lowestBackfilledSlot", s.store.status().LowSlot).
+				WithField("targetSlot", s.syncNeeds.Currently().Block.Begin).
+				Info("Backfill is complete")
+			s.markComplete()
+			return
+		}
+
 		if s.updateComplete() {
 			s.markComplete()
 			return

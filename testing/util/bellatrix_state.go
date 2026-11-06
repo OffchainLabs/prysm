@@ -84,7 +84,7 @@ func emptyGenesisStateBellatrix() (state.BeaconState, error) {
 
 		LatestExecutionPayloadHeader: &enginev1.ExecutionPayloadHeader{},
 	}
-	return state_native.InitializeFromProtoUnsafeBellatrix(st)
+	return state_native.NewUnsafe(st)
 }
 
 func buildGenesisBeaconStateBellatrix(genesisTime time.Time, preState state.BeaconState, eth1Data *ethpb.Eth1Data) (state.BeaconState, error) {
@@ -100,12 +100,6 @@ func buildGenesisBeaconStateBellatrix(genesisTime time.Time, preState state.Beac
 	}
 
 	zeroHash := params.BeaconConfig().ZeroHash[:]
-
-	activeIndexRoots := make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector)
-	for i := range activeIndexRoots {
-		activeIndexRoots[i] = zeroHash
-	}
-
 	blockRoots := make([][]byte, params.BeaconConfig().SlotsPerHistoricalRoot)
 	for i := range blockRoots {
 		blockRoots[i] = zeroHash
@@ -251,7 +245,7 @@ func buildGenesisBeaconStateBellatrix(genesisTime time.Time, preState state.Beac
 		TransactionsRoot: make([]byte, 32),
 	}
 
-	bs, err := state_native.InitializeFromProtoUnsafeBellatrix(st)
+	bs, err := state_native.NewUnsafe(st)
 	if err != nil {
 		return nil, err
 	}

@@ -20,6 +20,7 @@ import (
 func TestDecodeBlockV4Response_Heze(t *testing.T) {
 	block := util.NewBeaconBlockHeze().Block
 	block.Slot = 3
+	block.Body.SignedExecutionPayloadBid.Message.InclusionListBits = []byte{0x01, 0x00}
 
 	t.Run("ssz", func(t *testing.T) {
 		data, err := block.MarshalSSZ()

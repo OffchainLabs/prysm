@@ -106,6 +106,7 @@ go_test(
         "genesis_test.go",
         "init_test.go",
         "kv_test.go",
+        "lightclient_gloas_test.go",
         "lightclient_test.go",
         "migration_archived_index_test.go",
         "migration_block_slot_index_test.go",

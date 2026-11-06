@@ -281,7 +281,11 @@ func (b *BeaconBlockBody) PayloadAttestations() ([]*eth.PayloadAttestation, erro
 	panic("implement me")
 }
 
-func (b *BeaconBlockBody) SignedExecutionPayloadBid() (*eth.SignedExecutionPayloadBid, error) {
+func (b *BeaconBlockBody) SignedExecutionPayloadBid() (interfaces.ROSignedExecutionPayloadBid, error) {
+	panic("implement me")
+}
+
+func (b *BeaconBlockBody) ExecutionPayloadBid() (interfaces.ROExecutionPayloadBid, error) {
 	panic("implement me")
 }
 

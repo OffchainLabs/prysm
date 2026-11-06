@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
@@ -80,15 +79,7 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 		return errors.Wrap(err, "failed to get signed execution payload bid")
 	}
 
-	wrappedBid, err := blocks.WrappedROSignedExecutionPayloadBid(signedBid)
-	if err != nil {
-		return errors.Wrap(err, "failed to wrap signed bid")
-	}
-
-	bid, err := wrappedBid.Bid()
-	if err != nil {
-		return errors.Wrap(err, "failed to get bid from wrapped bid")
-	}
+	bid := signedBid.Bid()
 
 	if bid.BlockHash() == bid.ParentBlockHash() {
 		return fmt.Errorf("bid block hash %x equals parent block hash", bid.BlockHash())
@@ -101,7 +92,7 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 		if amount != 0 {
 			return fmt.Errorf("self-build amount must be zero, got %d", amount)
 		}
-		if wrappedBid.Signature() != common.InfiniteSignature {
+		if signedBid.Signature() != common.InfiniteSignature {
 			return errors.New("self-build signature must be point at infinity")
 		}
 	} else {
@@ -129,7 +120,7 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 			return fmt.Errorf("builder %d cannot cover bid amount %d", builderIndex, amount)
 		}
 
-		if err := ValidatePayloadBidSignature(st, wrappedBid); err != nil {
+		if err := ValidatePayloadBidSignature(st, signedBid); err != nil {
 			return errors.Wrap(err, "bid signature validation failed")
 		}
 	}
@@ -210,10 +201,7 @@ func validateBidConsistency(st state.BeaconState, bid interfaces.ROExecutionPayl
 // It validates that the signature was created by the builder specified in the bid
 // using the appropriate domain for the beacon builder.
 func ValidatePayloadBidSignature(st state.ReadOnlyBeaconState, signedBid interfaces.ROSignedExecutionPayloadBid) error {
-	bid, err := signedBid.Bid()
-	if err != nil {
-		return errors.Wrap(err, "failed to get bid")
-	}
+	bid := signedBid.Bid()
 
 	pubkey, err := st.BuilderPubkey(bid.BuilderIndex())
 	if err != nil {

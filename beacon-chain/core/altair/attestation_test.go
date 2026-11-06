@@ -472,7 +472,7 @@ func TestFuzzProcessAttestationsNoVerify_10000(t *testing.T) {
 		if st.LatestBlockHeader == nil {
 			st.LatestBlockHeader = &ethpb.BeaconBlockHeader{}
 		}
-		s, err := state_native.InitializeFromProtoUnsafeAltair(st)
+		s, err := state_native.NewUnsafe(st)
 		require.NoError(t, err)
 		if b.Block == nil || b.Block.Body == nil {
 			continue
@@ -979,7 +979,7 @@ func buildGloasStateForFlags(t *testing.T, stateSlot, slot primitives.Slot, targ
 	checkpointRoot := bytes.Repeat([]byte{0xDD}, fieldparams.RootLength)
 	justified := &ethpb.Checkpoint{Root: checkpointRoot}
 
-	stProto := &ethpb.BeaconStateGloas{
+	container := &ethpb.BeaconStateGloas{
 		Slot:                         stateSlot,
 		GenesisValidatorsRoot:        bytes.Repeat([]byte{0x11}, fieldparams.RootLength),
 		BlockRoots:                   blockRoots,
@@ -1003,7 +1003,7 @@ func buildGloasStateForFlags(t *testing.T, stateSlot, slot primitives.Slot, targ
 		},
 	}
 
-	beaconState, err := state_native.InitializeFromProtoGloas(stProto)
+	beaconState, err := state_native.New(container)
 	require.NoError(t, err)
 	return beaconState
 }

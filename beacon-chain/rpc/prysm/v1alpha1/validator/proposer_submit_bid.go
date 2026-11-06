@@ -76,10 +76,7 @@ func (vs *Server) validateSubmittedBid(ctx context.Context, signed *ethpb.Signed
 		return status.Errorf(codes.InvalidArgument, "could not wrap signed bid: %v", err)
 	}
 	v := vs.NewExecutionPayloadBidVerifier(ro, verification.GossipExecutionPayloadBidRequirements)
-	bid, err := ro.Bid()
-	if err != nil {
-		return status.Errorf(codes.InvalidArgument, "could not get bid: %v", err)
-	}
+	bid := ro.Bid()
 
 	if err := v.VerifyCurrentOrNextSlot(); err != nil {
 		return status.Errorf(codes.InvalidArgument, "%v", err)

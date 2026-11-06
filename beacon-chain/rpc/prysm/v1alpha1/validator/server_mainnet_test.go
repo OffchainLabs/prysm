@@ -72,7 +72,7 @@ func TestWaitForActivation_ValidatorOriginallyExists(t *testing.T) {
 	root, err := depositTrie.HashTreeRoot()
 	require.NoError(t, err)
 	assert.NoError(t, depositCache.InsertDeposit(ctx, deposit, 10 /*blockNum*/, 0, root))
-	s, err := state_native.InitializeFromProtoUnsafePhase0(beaconState)
+	s, err := state_native.NewUnsafe(beaconState)
 	require.NoError(t, err)
 	vs := &Server{
 		Ctx:             t.Context(),

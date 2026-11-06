@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
@@ -12,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -23,10 +25,14 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
+// pendingAttsLimit is the maximum number of attestations and aggregates, summed over all block roots,
+// waiting in the pending queue for their block. Further ones are dropped.
 const pendingAttsLimit = 32768
 
 // aggregatorIndexFilter defines how aggregator index should be handled in equality checks.
@@ -39,7 +45,7 @@ const (
 	includeAggregatorIndex
 )
 
-// This method processes pending attestations as a "known" block as arrived. With validations,
+// processPendingAttsForBlock processes pending attestations as a "known" block as arrived. With validations,
 // the valid attestations get saved into the operation mem pool, and the invalid attestations gets deleted
 // from the sync pending pool.
 func (s *Service) processPendingAttsForBlock(ctx context.Context, bRoot [32]byte) error {
@@ -62,22 +68,104 @@ func (s *Service) processPendingAttsForBlock(ctx context.Context, bRoot [32]byte
 
 	s.processAttestations(ctx, attestations)
 
-	randGen := rand.NewGenerator()
 	// Delete the missing block root key from pending attestation queue so a node will not request for the block again.
 	s.pendingAttsLock.Lock()
 	delete(s.blkRootToPendingAtts, bRoot)
-	pendingRoots := make([][32]byte, 0, len(s.blkRootToPendingAtts))
+	delete(s.pendingAttSenders, bRoot)
+
+	maxRoots := params.MaxRequestBlock(slots.ToEpoch(s.cfg.clock.CurrentSlot()))
+	randGen := rand.NewGenerator()
+	requests := make(map[peer.ID][][32]byte)
+
 	s.pendingQueueLock.RLock()
-	for r := range s.blkRootToPendingAtts {
-		if !s.seenPendingBlocks[r] && !s.cfg.chain.InForkchoice(r) && !s.cfg.chain.BlockBeingSynced(r) {
-			pendingRoots = append(pendingRoots, r)
+	for root, senders := range s.pendingAttSenders {
+		if s.seenPendingBlocks[root] || s.cfg.chain.InForkchoice(root) || s.cfg.chain.BlockBeingSynced(root) {
+			continue
 		}
+
+		available := make([]peer.ID, 0, len(senders))
+		for sender := range senders {
+			if s.cfg.p2p.Host().Network().Connectedness(sender) != network.Connected {
+				delete(senders, sender)
+				continue
+			}
+
+			if !s.pendingAttRequestPeers[sender] && uint64(len(requests[sender])) < maxRoots {
+				available = append(available, sender)
+			}
+		}
+
+		if len(senders) == 0 {
+			delete(s.pendingAttSenders, root)
+			continue
+		}
+
+		if len(available) == 0 {
+			continue
+		}
+
+		sender := available[randGen.Intn(len(available))]
+		requests[sender] = append(requests[sender], root)
 	}
+
 	s.pendingQueueLock.RUnlock()
+	for pid := range requests {
+		s.pendingAttRequestPeers[pid] = true
+	}
 	s.pendingAttsLock.Unlock()
 
-	//  Request the blocks for the pending attestations that could not be processed.
-	return s.sendBatchRootRequest(ctx, pendingRoots, randGen)
+	// Request the blocks for the pending attestations that could not be processed.
+	for pid, roots := range requests {
+		s.requestPendingAttBlocks(pid, roots)
+	}
+
+	return nil
+}
+
+// requestPendingAttBlocks requests the blocks for roots from pid in the background.
+// If pid does not serve all of them, it is downscored.
+func (s *Service) requestPendingAttBlocks(pid peer.ID, roots [][32]byte) {
+	pendingAttBlockRequestCount.Inc()
+	go func() {
+		req := p2ptypes.BeaconBlockByRootsReq(roots)
+
+		var wg sync.WaitGroup
+		wg.Go(func() { s.fetchAndQueuePayloadEnvelopesForRoots(s.ctx, pid, req) })
+		if err := s.sendBeaconBlocksRequest(s.ctx, &req, pid); err != nil {
+			log.WithError(err).WithFields(logrus.Fields{
+				"peer":  pid,
+				"count": len(roots),
+			}).Debug("Could not request blocks for pending attestations")
+		}
+		wg.Wait()
+
+		if s.ctx.Err() != nil {
+			return
+		}
+
+		var missing [][32]byte
+		for _, root := range roots {
+			if !s.isBlockInQueue(root) && !s.cfg.chain.BlockBeingSynced(root) && !s.cfg.chain.HasBlock(s.ctx, root) {
+				missing = append(missing, root)
+			}
+		}
+
+		// Stop asking pid for the blocks it did not serve. Later sweeps ask the other senders, if any.
+		s.pendingAttsLock.Lock()
+		delete(s.pendingAttRequestPeers, pid)
+
+		for _, root := range missing {
+			delete(s.pendingAttSenders[root], pid)
+			if len(s.pendingAttSenders[root]) == 0 {
+				delete(s.pendingAttSenders, root)
+			}
+		}
+		s.pendingAttsLock.Unlock()
+
+		if len(missing) > 0 {
+			s.downscorePeer(pid, "pendingAttBlockNotServed", logrus.Fields{"missing": len(missing), "requested": len(roots)})
+		}
+	}()
 }
 
 // processAttestations processes a list of attestations.
@@ -356,7 +444,7 @@ func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAg
 		return errors.Wrap(err, "validate aggregated att")
 	}
 
-	if res != pubsub.ValidationAccept || !s.validateBlockInAttestation(ctx, aggregate) {
+	if res != pubsub.ValidationAccept {
 		return errors.New("Pending aggregated attestation failed validation")
 	}
 
@@ -378,10 +466,10 @@ func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAg
 // root of the missing block. The value is the list of pending attestations/aggregates
 // that voted for that block root. The caller of this function is responsible
 // for not sending repeated aggregates to the pending queue.
-func (s *Service) savePendingAggregate(agg ethpb.SignedAggregateAttAndProof) {
+func (s *Service) savePendingAggregate(pid peer.ID, agg ethpb.SignedAggregateAttAndProof) {
 	root := bytesutil.ToBytes32(agg.AggregateAttestationAndProof().AggregateVal().GetData().BeaconBlockRoot)
 
-	s.savePending(root, agg, func(other any) bool {
+	s.savePending(root, pid, agg, func(other any) bool {
 		a, ok := other.(ethpb.SignedAggregateAttAndProof)
 		return ok && pendingAggregatesAreEqual(agg, a, includeAggregatorIndex)
 	})
@@ -391,7 +479,7 @@ func (s *Service) savePendingAggregate(agg ethpb.SignedAggregateAttAndProof) {
 // root of the missing block. The value is the list of pending attestations/aggregates
 // that voted for that block root. The caller of this function is responsible
 // for not sending repeated attestations to the pending queue.
-func (s *Service) savePendingAtt(att ethpb.Att) {
+func (s *Service) savePendingAtt(pid peer.ID, att ethpb.Att) {
 	if att.Version() >= version.Electra && !att.IsSingle() {
 		log.Debug("Non-single attestation sent to pending attestation pool. Attestation will be ignored")
 		return
@@ -399,7 +487,7 @@ func (s *Service) savePendingAtt(att ethpb.Att) {
 
 	root := bytesutil.ToBytes32(att.GetData().BeaconBlockRoot)
 
-	s.savePending(root, att, func(other any) bool {
+	s.savePending(root, pid, att, func(other any) bool {
 		a, ok := other.(ethpb.Att)
 		return ok && pendingAttsAreEqual(att, a)
 	})
@@ -408,7 +496,7 @@ func (s *Service) savePendingAtt(att ethpb.Att) {
 // We want to avoid saving duplicate items, which is the purpose of the passed-in closure.
 // It is the responsibility of the caller to provide a function that correctly determines quality
 // in the context of the pending queue.
-func (s *Service) savePending(root [32]byte, pending any, isEqual func(other any) bool) {
+func (s *Service) savePending(root [32]byte, pid peer.ID, pending any, isEqual func(other any) bool) {
 	s.pendingAttsLock.Lock()
 	defer s.pendingAttsLock.Unlock()
 
@@ -421,13 +509,6 @@ func (s *Service) savePending(root [32]byte, pending any, isEqual func(other any
 		return
 	}
 
-	_, ok := s.blkRootToPendingAtts[root]
-	if !ok {
-		pendingAttCount.Inc()
-		s.blkRootToPendingAtts[root] = []any{pending}
-		return
-	}
-
 	// Skip if the attestation/aggregate from the same validator already exists in
 	// the pending queue.
 	if slices.ContainsFunc(s.blkRootToPendingAtts[root], isEqual) {
@@ -436,6 +517,12 @@ func (s *Service) savePending(root [32]byte, pending any, isEqual func(other any
 
 	pendingAttCount.Inc()
 	s.blkRootToPendingAtts[root] = append(s.blkRootToPendingAtts[root], pending)
+
+	// Remember who sent it.
+	if s.pendingAttSenders[root] == nil {
+		s.pendingAttSenders[root] = make(map[peer.ID]bool)
+	}
+	s.pendingAttSenders[root][pid] = true
 }
 
 // pendingAggregatesAreEqual checks if two pending aggregate attestations are equal.
@@ -516,6 +603,7 @@ func (s *Service) validatePendingAtts(ctx context.Context, slot primitives.Slot)
 		// a node will remove the key from the map to avoid dangling keys.
 		if len(s.blkRootToPendingAtts[bRoot]) == 0 {
 			delete(s.blkRootToPendingAtts, bRoot)
+			delete(s.pendingAttSenders, bRoot)
 		}
 	}
 }
