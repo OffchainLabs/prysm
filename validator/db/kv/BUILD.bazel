@@ -26,7 +26,6 @@ go_library(
         "//validator:__subpackages__",
     ],
     deps = [
-        "//async/event:go_default_library",
         "//config/features:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
