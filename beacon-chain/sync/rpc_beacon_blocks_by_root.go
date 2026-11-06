@@ -29,7 +29,9 @@ import (
 // are stored, and, if not, sends the corresponding sidecar requests and stores the received sidecars.
 // For sidecars, only blob sidecars will be requested to the peer with the given `id`.
 // For other types of sidecars, the request will be sent to the best peers.
-func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.BeaconBlockByRootsReq, id peer.ID) error {
+// The unknown parents of the queued blocks are then requested from the peer with the given `id`.
+// It returns the roots of the blocks received, even when an error occurs after receiving them.
+func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.BeaconBlockByRootsReq, id peer.ID) (map[[fieldparams.RootLength]byte]bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, respTimeout)
 	defer cancel()
 
@@ -37,6 +39,9 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 	for _, root := range *requests {
 		requestedRoots[root] = true
 	}
+
+	received := make(map[[fieldparams.RootLength]byte]bool, len(*requests))
+	queuedParents := make([][fieldparams.RootLength]byte, 0, len(*requests))
 
 	blks, err := SendBeaconBlocksByRootRequest(ctx, s.cfg.clock, s.cfg.p2p, id, requests, func(blk interfaces.ReadOnlySignedBeaconBlock) error {
 		blkRoot, err := blk.Block().HashTreeRoot()
@@ -56,12 +61,34 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 		s.pendingQueueLock.Lock()
 		defer s.pendingQueueLock.Unlock()
 
+		received[blkRoot] = true
+
 		if err := s.insertBlockToPendingQueue(blk.Block().Slot(), blk, blkRoot); err != nil {
 			return errors.Wrapf(err, "insert block to pending queue for block with root %x", blkRoot)
 		}
 
+		if s.seenPendingBlocks[blkRoot] {
+			queuedParents = append(queuedParents, blk.Block().ParentRoot())
+		}
+
 		return nil
 	})
+
+	// The peer serving a block has its parent.
+	unknownParents := make([][fieldparams.RootLength]byte, 0, len(queuedParents))
+	for _, parentRoot := range queuedParents {
+		if !s.cfg.chain.HasBlock(s.ctx, parentRoot) {
+			unknownParents = append(unknownParents, parentRoot)
+		}
+	}
+
+	if len(unknownParents) > 0 {
+		go func() {
+			if err := s.requestBlocksAccountable(s.ctx, unknownParents, id); err != nil {
+				log.WithError(err).Debug("Could not request unknown parent blocks")
+			}
+		}()
+	}
 
 	// The following part deals with sidecars.
 	postFuluBlocks := make([]blocks.ROBlock, 0, len(blks))
@@ -71,7 +98,7 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 		if blockVersion >= version.Fulu {
 			roBlock, err := blocks.NewROBlock(blk)
 			if err != nil {
-				return errors.Wrap(err, "new ro block")
+				return received, errors.Wrap(err, "new ro block")
 			}
 
 			postFuluBlocks = append(postFuluBlocks, roBlock)
@@ -81,7 +108,7 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 
 		if blockVersion >= version.Deneb {
 			if err := s.requestAndSaveMissingBlobSidecars(blk, id); err != nil {
-				return errors.Wrap(err, "request and save missing blob sidecars")
+				return received, errors.Wrap(err, "request and save missing blob sidecars")
 			}
 
 			continue
@@ -89,10 +116,10 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 	}
 
 	if err := s.requestAndSaveMissingDataColumnSidecars(postFuluBlocks); err != nil {
-		return errors.Wrap(err, "request and save missing data columns")
+		return received, errors.Wrap(err, "request and save missing data columns")
 	}
 
-	return err
+	return received, err
 }
 
 // requestAndSaveMissingDataColumns checks if the data columns are missing for the given block.

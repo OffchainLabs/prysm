@@ -131,7 +131,8 @@ func (s *Service) requestPendingAttBlocks(pid peer.ID, roots [][32]byte) {
 
 		var wg sync.WaitGroup
 		wg.Go(func() { s.fetchAndQueuePayloadEnvelopesForRoots(s.ctx, pid, req) })
-		if err := s.sendBeaconBlocksRequest(s.ctx, &req, pid); err != nil {
+		received, err := s.sendBeaconBlocksRequest(s.ctx, &req, pid)
+		if err != nil {
 			log.WithError(err).WithFields(logrus.Fields{
 				"peer":  pid,
 				"count": len(roots),
@@ -145,7 +146,7 @@ func (s *Service) requestPendingAttBlocks(pid peer.ID, roots [][32]byte) {
 
 		var missing [][32]byte
 		for _, root := range roots {
-			if !s.isBlockInQueue(root) && !s.cfg.chain.BlockBeingSynced(root) && !s.cfg.chain.HasBlock(s.ctx, root) {
+			if !received[root] && !s.isBlockInQueue(root) && !s.cfg.chain.BlockBeingSynced(root) && !s.cfg.chain.HasBlock(s.ctx, root) {
 				missing = append(missing, root)
 			}
 		}

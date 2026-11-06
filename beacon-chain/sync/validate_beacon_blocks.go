@@ -19,7 +19,6 @@ import (
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -187,12 +186,16 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not insert block to pending queue")
 			return pubsub.ValidationIgnore, err
 		}
+		queued := s.seenPendingBlocks[blockRoot]
 		s.pendingQueueLock.Unlock()
-		go func() {
-			if err := s.sendBatchRootRequest(s.ctx, [][32]byte{parentRoot}, rand.NewGenerator()); err != nil {
-				log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not request unknown parent block")
-			}
-		}()
+		// Nothing waits for the parent if the block was not queued.
+		if queued {
+			go func() {
+				if err := s.requestBlocksAccountable(s.ctx, [][32]byte{parentRoot}, pid); err != nil {
+					log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not request unknown parent block")
+				}
+			}()
+		}
 		err := errors.Errorf("unknown parent for block with slot %d and parent root %#x", blk.Block().Slot(), parentRoot)
 		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not identify parent for block")
 		return pubsub.ValidationIgnore, err

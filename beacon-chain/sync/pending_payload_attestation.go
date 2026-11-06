@@ -5,15 +5,15 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
-	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 const maxPendingPayloadAttestationRoots = 2
 
-func (s *Service) queuePendingPayloadAttestation(ctx context.Context, v verification.PayloadAttestationMsgVerifier, att *eth.PayloadAttestationMessage) (pubsub.ValidationResult, error) {
+func (s *Service) queuePendingPayloadAttestation(ctx context.Context, pid peer.ID, v verification.PayloadAttestationMsgVerifier, att *eth.PayloadAttestationMessage) (pubsub.ValidationResult, error) {
 	root := bytesutil.ToBytes32(att.Data.BeaconBlockRoot)
 	validatorIndex := att.ValidatorIndex
 
@@ -57,7 +57,7 @@ func (s *Service) queuePendingPayloadAttestation(ctx context.Context, v verifica
 	s.pendingQueueLock.RUnlock()
 	if !rootExists && !inPendingQueue && !s.cfg.chain.BlockBeingSynced(root) {
 		go func() {
-			if err := s.sendBatchRootRequest(s.ctx, [][32]byte{root}, rand.NewGenerator()); err != nil {
+			if err := s.requestBlocksAccountable(s.ctx, [][32]byte{root}, pid); err != nil {
 				log.WithError(err).Debug("Could not request beacon block for pending payload attestation")
 			}
 		}()

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"reflect"
 	"sync"
@@ -28,7 +27,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -623,7 +621,7 @@ func TestService_sortedPendingSlots(t *testing.T) {
 	assert.DeepEqual(t, want, r.sortedPendingSlots(), "Unexpected pending slots list")
 }
 
-func TestService_BatchRootRequest(t *testing.T) {
+func TestService_RequestBlocksAccountable(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p1 := p2ptest.NewTestP2P(t)
 	p2 := p2ptest.NewTestP2P(t)
@@ -632,6 +630,7 @@ func TestService_BatchRootRequest(t *testing.T) {
 
 	st, keys := util.DeterministicGenesisState(t, 64)
 	chain := &mock.ChainService{
+		DB:    db,
 		State: st,
 		FinalizedCheckPoint: &ethpb.Checkpoint{
 			Epoch: 1,
@@ -641,6 +640,7 @@ func TestService_BatchRootRequest(t *testing.T) {
 		Genesis:        time.Now(),
 	}
 	r := &Service{
+		ctx: t.Context(),
 		cfg: &config{
 			p2p:      p1,
 			beaconDB: db,
@@ -688,40 +688,66 @@ func TestService_BatchRootRequest(t *testing.T) {
 	b4Root, err := b4.Block.HashTreeRoot()
 	require.NoError(t, err)
 
-	for _, blk := range []*ethpb.SignedBeaconBlock{b2, b3, b4, b5} {
+	// The parent of b6 is unknown, so it is then requested from the peer serving b6.
+	unknownRoot := [32]byte{'X'}
+	b6 := util.NewBeaconBlock()
+	b6.Block.Slot = 6
+	b6.Block.ParentRoot = unknownRoot[:]
+	b6Root, err := b6.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	for _, blk := range []*ethpb.SignedBeaconBlock{b2, b3, b4, b5, b6} {
 		blk.Signature, err = signing.ComputeDomainAndSign(st, 0, blk.Block, params.BeaconConfig().DomainBeaconProposer, keys[0])
 		require.NoError(t, err)
 	}
 
 	// Send in duplicated roots to also test deduplication.
-	sentRoots := p2ptypes.BeaconBlockByRootsReq{b2Root, b2Root, b3Root, b3Root, b4Root, b5Root}
-	expectedRoots := p2ptypes.BeaconBlockByRootsReq{b2Root, b3Root, b4Root, b5Root}
+	sentRoots := p2ptypes.BeaconBlockByRootsReq{b2Root, b2Root, b3Root, b3Root, b4Root, b5Root, b6Root}
 
+	served := map[[32]byte]*ethpb.SignedBeaconBlock{b2Root: b2, b3Root: b3, b4Root: b4, b5Root: b5, b6Root: b6}
+	requests := make(chan p2ptypes.BeaconBlockByRootsReq, 2)
 	pcl := protocol.ID("/eth2/beacon_chain/req/beacon_blocks_by_root/1/ssz_snappy")
-	var wg sync.WaitGroup
-	wg.Add(1)
 	p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
-		defer wg.Done()
 		var out p2ptypes.BeaconBlockByRootsReq
 		assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, &out))
-		assert.DeepEqual(t, expectedRoots, out, "Did not receive expected message")
-		response := []*ethpb.SignedBeaconBlock{b2, b3, b4, b5}
-		for _, blk := range response {
+		for _, root := range out {
+			blk, ok := served[root]
+			if !ok {
+				continue
+			}
 			_, err := stream.Write([]byte{responseCodeSuccess})
 			assert.NoError(t, err, "Could not write to stream")
 			_, err = p2.Encoding().EncodeWithMaxLength(stream, blk)
 			assert.NoError(t, err, "Could not send response back")
 		}
+		requests <- out
 		assert.NoError(t, stream.Close())
 	})
 
-	require.NoError(t, r.sendBatchRootRequest(t.Context(), sentRoots, rand.NewGenerator()))
+	require.NoError(t, r.requestBlocksAccountable(t.Context(), sentRoots, p2.PeerID()))
 
-	if util.WaitTimeout(&wg, 1*time.Second) {
-		t.Fatal("Did not receive stream within 1 sec")
+	for _, want := range []p2ptypes.BeaconBlockByRootsReq{
+		{b2Root, b3Root, b4Root, b5Root, b6Root},
+		{unknownRoot},
+	} {
+		select {
+		case got := <-requests:
+			require.DeepEqual(t, want, got)
+		case <-time.After(5 * time.Second):
+			t.Fatal("Did not receive the expected request")
+		}
 	}
-	assert.Equal(t, 4, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
-	assert.Equal(t, 4, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
+
+	// The parent of b6 is not served, so the peer is downscored once.
+	require.Eventually(t, func() bool {
+		count, err := p1.Peers().Scorers().BadResponsesScorer().Count(p2.PeerID())
+		return err == nil && count == 1
+	}, 5*time.Second, 10*time.Millisecond)
+
+	r.pendingQueueLock.RLock()
+	defer r.pendingQueueLock.RUnlock()
+	assert.Equal(t, 5, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
+	assert.Equal(t, 5, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
 }
 
 func TestService_AddPendingBlockToQueueOverMax(t *testing.T) {
@@ -1018,13 +1044,14 @@ func (s *stalledParentStream) Reset() error {
 func (*stalledParentStream) Close() error                    { return nil }
 func (*stalledParentStream) SetReadDeadline(time.Time) error { return nil }
 
+const parentRequestPeer = peer.ID("parent-peer")
+
 func parentRequestService(t *testing.T, send func(context.Context, any) (network.Stream, error)) *Service {
 	t.Helper()
 	p := &parentRequestP2P{P2P: p2ptest.NewTestP2P(t), send: send}
-	pid := peer.ID("parent-peer")
-	p.Peers().Add(new(enr.Record), pid, nil, network.DirOutbound)
-	p.Peers().SetConnectionState(pid, peers.Connected)
-	p.Peers().SetChainState(pid, &ethpb.StatusV2{FinalizedEpoch: 1})
+	p.Peers().Add(new(enr.Record), parentRequestPeer, nil, network.DirOutbound)
+	p.Peers().SetConnectionState(parentRequestPeer, peers.Connected)
+	p.Peers().SetChainState(parentRequestPeer, &ethpb.StatusV2{FinalizedEpoch: 1})
 	s := NewService(t.Context(), WithP2P(p), WithDatabase(dbtest.SetupDB(t)),
 		WithChainService(&mock.ChainService{FinalizedCheckPoint: &ethpb.Checkpoint{}}))
 	t.Cleanup(s.cancel)
@@ -1039,7 +1066,7 @@ func TestValidateSidecar_ParentRequestServiceLifetime(t *testing.T) {
 	params.BeaconConfig().GloasForkEpoch = 1
 	params.BeaconConfig().InitializeForkSchedule()
 
-	requests := make(chan context.Context, numOfTries)
+	requests := make(chan context.Context, 1)
 	stream := &stalledParentStream{reading: make(chan struct{}), reset: make(chan struct{})}
 	t.Cleanup(func() { _ = stream.Reset() })
 	s := parentRequestService(t, func(ctx context.Context, _ any) (network.Stream, error) {
@@ -1059,7 +1086,7 @@ func TestValidateSidecar_ParentRequestServiceLifetime(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	result, err := s.validateBlob(ctx, "", &pubsub.Message{Message: &pb.Message{Data: buf.Bytes(), Topic: &topic}})
+	result, err := s.validateBlob(ctx, parentRequestPeer, &pubsub.Message{Message: &pb.Message{Data: buf.Bytes(), Topic: &topic}})
 	cancel()
 	require.Equal(t, pubsub.ValidationIgnore, result)
 	require.ErrorIs(t, err, missingParent)
@@ -1086,13 +1113,19 @@ func TestValidateSidecar_ParentRequestServiceLifetime(t *testing.T) {
 	}
 }
 
-func TestService_BatchRootRequestCancellation(t *testing.T) {
+func TestService_RequestBlocksAccountableCancellation(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.BeaconConfig().GloasForkEpoch = 0
 	params.BeaconConfig().InitializeForkSchedule()
 
+	badResponses := func(s *Service) int {
+		count, err := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Count(parentRequestPeer)
+		require.NoError(t, err)
+		return count
+	}
+
 	t.Run("block and envelope reads", func(t *testing.T) {
-		streams := make(chan *stalledParentStream, 2*numOfTries)
+		streams := make(chan *stalledParentStream, 4)
 		s := parentRequestService(t, func(ctx context.Context, _ any) (network.Stream, error) {
 			_, bounded := ctx.Deadline()
 			assert.Equal(t, true, bounded)
@@ -1102,7 +1135,7 @@ func TestService_BatchRootRequestCancellation(t *testing.T) {
 			return stream, nil
 		})
 		done := make(chan error, 1)
-		go func() { done <- s.sendBatchRootRequest(s.ctx, [][32]byte{{1}}, rand.NewGenerator()) }()
+		go func() { done <- s.requestBlocksAccountable(s.ctx, [][32]byte{{1}}, parentRequestPeer) }()
 		for range 2 {
 			select {
 			case stream := <-streams:
@@ -1120,12 +1153,13 @@ func TestService_BatchRootRequestCancellation(t *testing.T) {
 		case err := <-done:
 			require.ErrorIs(t, err, context.Canceled)
 		case <-time.After(time.Second):
-			t.Fatal("canceled batch did not return promptly")
+			t.Fatal("canceled request did not return promptly")
 		}
 		require.Equal(t, 0, len(streams), "canceled requests must not be retried")
+		require.Equal(t, 0, badResponses(s), "the peer must not be downscored when the request is canceled")
 	})
 
-	t.Run("envelope timeouts preserve retries", func(t *testing.T) {
+	t.Run("single attempt", func(t *testing.T) {
 		previousTimeout := respTimeout
 		respTimeout = 20 * time.Millisecond
 		t.Cleanup(func() { respTimeout = previousTimeout })
@@ -1142,37 +1176,34 @@ func TestService_BatchRootRequestCancellation(t *testing.T) {
 			return nil, errors.New("request failed")
 		})
 
-		require.NoError(t, s.sendBatchRootRequest(s.ctx, [][32]byte{{1}}, rand.NewGenerator()))
+		require.NoError(t, s.requestBlocksAccountable(s.ctx, [][32]byte{{1}}, parentRequestPeer))
 		require.NoError(t, s.ctx.Err())
-		require.Equal(t, numOfTries, blockAttempts)
-		require.Equal(t, numOfTries, envelopeAttempts)
+		require.Equal(t, 1, blockAttempts)
+		require.Equal(t, 1, envelopeAttempts)
+		require.Equal(t, 1, badResponses(s))
 	})
 
-	params.BeaconConfig().GloasForkEpoch = 1
-	for _, cancelAt := range []int{0, 1, numOfTries, numOfTries + 1} {
-		t.Run(fmt.Sprintf("cancel at attempt %d", cancelAt), func(t *testing.T) {
-			ctx, cancel := context.WithCancel(t.Context())
-			defer cancel()
-			attempts := 0
-			s := parentRequestService(t, func(context.Context, any) (network.Stream, error) {
-				attempts++
-				if attempts == cancelAt {
-					cancel()
-				}
-				return nil, errors.New("request failed")
-			})
-			if cancelAt == 0 {
-				cancel()
-			}
-			err := s.sendBatchRootRequest(ctx, [][32]byte{{1}}, rand.NewGenerator())
-			if cancelAt <= numOfTries {
-				require.ErrorIs(t, err, context.Canceled)
-			} else {
-				require.NoError(t, err)
-			}
-			require.Equal(t, min(cancelAt, numOfTries), attempts)
+	t.Run("canceled before the request", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		s := parentRequestService(t, func(context.Context, any) (network.Stream, error) {
+			return nil, errors.New("request failed")
 		})
-	}
+
+		require.ErrorIs(t, s.requestBlocksAccountable(ctx, [][32]byte{{1}}, parentRequestPeer), context.Canceled)
+		require.Equal(t, 0, badResponses(s))
+	})
+
+	t.Run("no sender", func(t *testing.T) {
+		attempts := 0
+		s := parentRequestService(t, func(context.Context, any) (network.Stream, error) {
+			attempts++
+			return nil, errors.New("request failed")
+		})
+
+		require.NoError(t, s.requestBlocksAccountable(s.ctx, [][32]byte{{1}}, ""))
+		require.Equal(t, 0, attempts)
+	})
 }
 
 type blockBroadcastRecorder struct {

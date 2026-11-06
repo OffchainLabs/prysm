@@ -34,6 +34,7 @@ import (
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	gcache "github.com/patrickmn/go-cache"
 )
@@ -256,7 +257,9 @@ func TestRecentBeaconBlocks_RPCRequestSent(t *testing.T) {
 	})
 
 	p1.Connect(p2)
-	require.NoError(t, r.sendBeaconBlocksRequest(t.Context(), &expectedRoots, p2.PeerID()))
+	received, err := r.sendBeaconBlocksRequest(t.Context(), &expectedRoots, p2.PeerID())
+	require.NoError(t, err)
+	require.DeepEqual(t, map[[32]byte]bool{blockARoot: true, blockBRoot: true}, received)
 
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Did not receive stream within 1 sec")
@@ -331,7 +334,7 @@ func TestRecentBeaconBlocks_RPCRequestSent_IncorrectRoot(t *testing.T) {
 	})
 
 	p1.Connect(p2)
-	require.ErrorContains(t, "received unexpected block with root", r.sendBeaconBlocksRequest(t.Context(), &expectedRoots, p2.PeerID()))
+	require.ErrorContains(t, "received unexpected block with root", sendBeaconBlocksRequestErr(t, r, &expectedRoots, p2.PeerID()))
 }
 
 func TestRecentBeaconBlocks_RPCRequestSent_InvalidSignature(t *testing.T) {
@@ -392,7 +395,7 @@ func TestRecentBeaconBlocks_RPCRequestSent_InvalidSignature(t *testing.T) {
 	})
 
 	p1.Connect(p2)
-	require.ErrorContains(t, "verify block signature", r.sendBeaconBlocksRequest(t.Context(), &expectedRoots, p2.PeerID()))
+	require.ErrorContains(t, "verify block signature", sendBeaconBlocksRequestErr(t, r, &expectedRoots, p2.PeerID()))
 	assert.Equal(t, 0, len(r.seenPendingBlocks), "Block with invalid signature should not be queued")
 
 	if util.WaitTimeout(&wg, 1*time.Second) {
@@ -600,4 +603,10 @@ func TestRequestAndSaveMissingDataColumnSidecars_MissingColumns(t *testing.T) {
 		err = newService(t).requestAndSaveMissingDataColumnSidecars([]blocks.ROBlock{roBlock})
 		require.ErrorContains(t, "some sidecars are still missing after fetch", err)
 	})
+}
+
+func sendBeaconBlocksRequestErr(t *testing.T, r *Service, roots *p2pTypes.BeaconBlockByRootsReq, pid peer.ID) error {
+	received, err := r.sendBeaconBlocksRequest(t.Context(), roots, pid)
+	require.Equal(t, 0, len(received))
+	return err
 }

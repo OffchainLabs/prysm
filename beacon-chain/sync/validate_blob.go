@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -85,8 +84,8 @@ func (s *Service) validateBlob(ctx context.Context, pid peer.ID, msg *pubsub.Mes
 
 	if err := vf.SidecarParentSeen(s.hasBadBlock); err != nil {
 		go func() {
-			if err := s.sendBatchRootRequest(s.ctx, [][32]byte{blob.ParentRoot()}, rand.NewGenerator()); err != nil {
-				log.WithError(err).WithFields(blobFields(blob)).Debug("Failed to send batch root request")
+			if err := s.requestBlocksAccountable(s.ctx, [][32]byte{blob.ParentRoot()}, pid); err != nil {
+				log.WithError(err).WithFields(blobFields(blob)).Debug("Could not request unknown parent block")
 			}
 		}()
 		missingParentBlobSidecarCount.Inc()
