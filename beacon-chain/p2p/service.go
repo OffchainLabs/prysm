@@ -98,6 +98,7 @@ type Service struct {
 	custodyInfoSet           chan struct{}
 	allForkDigests           map[[4]byte]struct{}
 	dataColumnBroadcastLog   dataColumnBroadcastLogger
+	envelopeLimiter          envelopeLimiter
 }
 
 type custodyInfo struct {
@@ -474,6 +475,7 @@ func (s *Service) awaitStateInitialized() {
 		log.WithError(err).Fatal("Failed to receive initial genesis data")
 	}
 	s.genesisTime = clock.GenesisTime()
+	s.envelopeLimiter.setGenesis(s.genesisTime)
 	gvr := clock.GenesisValidatorsRoot()
 	s.genesisValidatorsRoot = gvr[:]
 	_, err = s.currentForkDigest()
