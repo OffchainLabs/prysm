@@ -19,10 +19,12 @@ func (s *Store) LastValidatedCheckpoint(ctx context.Context) (*ethpb.Checkpoint,
 		bkt := tx.Bucket(checkpointBucket)
 		enc := bkt.Get(lastValidatedCheckpointKey)
 		if enc == nil {
-			var finErr error
-			checkpoint, finErr = s.FinalizedCheckpoint(ctx)
-			if finErr != nil {
-				return finErr
+			// Read from this tx: a nested View can deadlock against a pending remap (#17366).
+			checkpoint = &ethpb.Checkpoint{}
+			if enc = bkt.Get(finalizedCheckpointKey); enc == nil {
+				checkpoint.Root = params.BeaconConfig().ZeroHash[:]
+			} else if err := decode(ctx, enc, checkpoint); err != nil {
+				return err
 			}
 			if bytes.Equal(checkpoint.Root, params.BeaconConfig().ZeroHash[:]) {
 				bkt = tx.Bucket(blocksBucket)
