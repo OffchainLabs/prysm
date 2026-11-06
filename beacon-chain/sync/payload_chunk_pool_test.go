@@ -179,8 +179,8 @@ func TestPayloadChunkPoolEviction(t *testing.T) {
 		}
 		root := [32]byte{0x97}
 		c := mkChunk(root, 3)
-		// Gossip validation marks seen before the subscriber runs.
-		s.setSeenPayloadChunk(1, root, c.Index)
+		// Gossip validation claims the chunk before the subscriber runs.
+		require.Equal(t, true, s.claimPayloadChunk(1, root, c.Index))
 		s.acceptVerifiedPayloadChunk(s.ctx, c)
 		require.Equal(t, false, s.hasSeenPayloadChunk(root, c.Index))
 	})
@@ -220,7 +220,7 @@ func TestPayloadChunkPool_EvictionClearsSeenMarkers(t *testing.T) {
 	for i := range maxChunkPoolRoots {
 		root := [32]byte{0x40, byte(i)}
 		c := mkChunk(root, 0)
-		s.setSeenPayloadChunk(c.Slot, root, c.Index)
+		require.Equal(t, true, s.claimPayloadChunk(c.Slot, root, c.Index))
 		s.acceptVerifiedPayloadChunk(t.Context(), c)
 	}
 	victim := [32]byte{0x40, 0}
@@ -229,7 +229,7 @@ func TestPayloadChunkPool_EvictionClearsSeenMarkers(t *testing.T) {
 	// A bound newcomer forces an eviction.
 	newcomer := mkChunk([32]byte{0x41}, 0)
 	s.registerPayloadChunkCommitment(newcomer.Slot, [32]byte{0x41}, [32]byte{0xCC})
-	s.setSeenPayloadChunk(newcomer.Slot, [32]byte{0x41}, newcomer.Index)
+	require.Equal(t, true, s.claimPayloadChunk(newcomer.Slot, [32]byte{0x41}, newcomer.Index))
 	s.acceptVerifiedPayloadChunk(t.Context(), newcomer)
 
 	// Exactly one unbound entry lost its bytes; that one must no longer be

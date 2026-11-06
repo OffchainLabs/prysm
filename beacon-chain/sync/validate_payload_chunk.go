@@ -103,11 +103,11 @@ func (s *Service) validatePayloadChunk(ctx context.Context, pid peer.ID, msg *pu
 		return pubsub.ValidationReject, errors.New("payload chunk beacon_block_root does not match the block committing to it")
 	}
 
-	// [IGNORE] first-seen per (payload_chunks_root, index).
-	if s.hasSeenPayloadChunk(chunksRoot, c.Index) {
+	// [IGNORE] first-seen per (payload_chunks_root, index). Claimed atomically:
+	// concurrent deliveries of the same chunk must not both be accepted.
+	if !s.claimPayloadChunk(c.Slot, chunksRoot, c.Index) {
 		return pubsub.ValidationIgnore, nil
 	}
-	s.setSeenPayloadChunk(c.Slot, chunksRoot, c.Index)
 
 	msg.ValidatorData = c
 	if startTime, err := slots.StartTime(s.cfg.clock.GenesisTime(), c.Slot); err == nil {
@@ -188,14 +188,20 @@ func (s *Service) drainPendingPayloadChunks(slot primitives.Slot, chunksRoot [32
 			if c == nil {
 				continue
 			}
+			// Rule 1 against the wall clock as it stands now. A chunk can sit in
+			// the pending buffer across the slot boundary, and the drain path
+			// forwards to peers, so re-running the slot window here keeps this
+			// node from relaying a chunk it would itself reject on arrival.
+			if err := s.validateChunkSlotWindow(c.Slot); err != nil {
+				continue
+			}
 			// Rule 5 against the now-known block binding.
 			if blockRoot != ([32]byte{}) && bytesutil.ToBytes32(c.BeaconBlockRoot) != blockRoot {
 				continue
 			}
-			if s.hasSeenPayloadChunk(chunksRoot, c.Index) {
+			if !s.claimPayloadChunk(c.Slot, chunksRoot, c.Index) {
 				continue
 			}
-			s.setSeenPayloadChunk(c.Slot, chunksRoot, c.Index)
 			s.acceptVerifiedPayloadChunk(s.ctx, c)
 			// EIP-8411 requires a chunk that passes validation to be forwarded
 			// immediately. A buffered chunk was returned as ValidationIgnore,

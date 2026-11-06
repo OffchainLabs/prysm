@@ -150,6 +150,81 @@ func TestPayloadChunkInclusionProofs(t *testing.T) {
 		}
 		require.ErrorIs(t, VerifyPayloadChunkInclusionProof(bad), errChunkBadProofLen)
 	})
+
+	t.Run("oversized chunk is rejected by the size bound", func(t *testing.T) {
+		// An oversized chunk decodes: the generated UnmarshalSSZ enforces no
+		// upper bound on the byte list. It also proof-verifies, because the leaf
+		// is sha256 over whatever bytes arrived. Only the explicit bound stops
+		// it, so build a genuinely valid single-chunk commitment over an
+		// oversized payload and confirm the bound is what rejects it.
+		oversized := make([]byte, fieldparams.MaxPayloadChunkSize+1)
+		chunks := make([][]byte, fieldparams.TotalExecutionPayloadChunks)
+		chunks[0] = oversized
+		for i := 1; i < fieldparams.TotalExecutionPayloadChunks; i++ {
+			chunks[i] = []byte{}
+		}
+		root, err := ComputePayloadChunksRoot(chunks)
+		require.NoError(t, err)
+		layers := payloadChunkLayers(chunks)
+		proof := make([][]byte, fieldparams.ChunkInclusionProofDepth)
+		idx := 0
+		for d := range fieldparams.ChunkInclusionProofDepth {
+			sibling := layers[d][idx^1]
+			proof[d] = bytes.Clone(sibling[:])
+			idx >>= 1
+		}
+		bad := &ethpb.PayloadChunk{
+			PayloadChunksRoot:   root[:],
+			Index:               0,
+			Chunk:               oversized,
+			ChunkInclusionProof: proof,
+		}
+		require.ErrorIs(t, VerifyPayloadChunkInclusionProof(bad), errChunkSizeTooLarge)
+
+		// Without the bound this exact chunk would pass, which is what makes the
+		// bound load bearing rather than redundant with the proof check.
+		withinBound := &ethpb.PayloadChunk{
+			PayloadChunksRoot:   bad.PayloadChunksRoot,
+			Index:               bad.Index,
+			Chunk:               bad.Chunk[:fieldparams.MaxPayloadChunkSize],
+			ChunkInclusionProof: bad.ChunkInclusionProof,
+		}
+		require.ErrorIs(t, VerifyPayloadChunkInclusionProof(withinBound), errChunkProofInvalid)
+	})
+
+	t.Run("oversized chunk survives SSZ decode", func(t *testing.T) {
+		// Pins the decoder gap the size bound exists to cover: PayloadChunk
+		// round-trips a chunk larger than MAX_PAYLOAD_CHUNK_SIZE because only
+		// MarshalSSZ checks the list bound.
+		oversized := make([]byte, fieldparams.MaxPayloadChunkSize+1)
+		wire := &ethpb.PayloadChunk{
+			PayloadChunksRoot:   make([]byte, 32),
+			Index:               0,
+			Chunk:               oversized,
+			ChunkInclusionProof: proofOfZeroes(),
+			Slot:                7,
+			BeaconBlockRoot:     make([]byte, 32),
+		}
+		// MarshalSSZ refuses it, so hand-assemble the wire bytes the way a
+		// hostile peer would.
+		wire.Chunk = oversized[:fieldparams.MaxPayloadChunkSize]
+		enc, err := wire.MarshalSSZ()
+		require.NoError(t, err)
+		enc = append(enc, 0x00) // one byte past the bound
+
+		decoded := &ethpb.PayloadChunk{}
+		require.NoError(t, decoded.UnmarshalSSZ(enc))
+		require.Equal(t, fieldparams.MaxPayloadChunkSize+1, len(decoded.Chunk))
+		require.ErrorIs(t, VerifyPayloadChunkInclusionProof(decoded), errChunkSizeTooLarge)
+	})
+}
+
+func proofOfZeroes() [][]byte {
+	proof := make([][]byte, fieldparams.ChunkInclusionProofDepth)
+	for i := range proof {
+		proof[i] = make([]byte, 32)
+	}
+	return proof
 }
 
 func TestReconstructPayloadEnvelope_RoundTrip(t *testing.T) {

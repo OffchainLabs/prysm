@@ -42,6 +42,25 @@ func (c *slotAwareCache) Remove(key string) {
 	c.cache.Remove(key)
 }
 
+// AddIfAbsent adds a value only when the key is not already present, and
+// reports whether it did. The check and the insert happen under one write lock,
+// so concurrent callers racing on the same key see exactly one true. Callers
+// that gate work on first-seen semantics must use this rather than a Get
+// followed by an Add: between those two calls another goroutine can observe the
+// same absence and both proceed.
+func (c *slotAwareCache) AddIfAbsent(slot primitives.Slot, key string, value any) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.cache.Contains(key) {
+		return false
+	}
+	c.cache.Add(key, value)
+	c.slotToKeys[slot] = append(c.slotToKeys[slot], key)
+	c.pruneOldestSlots()
+	return true
+}
+
 // Add adds a value to the cache associated with a specific slot.
 func (c *slotAwareCache) Add(slot primitives.Slot, key string, value any) {
 	c.mu.Lock()

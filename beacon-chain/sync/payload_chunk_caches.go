@@ -85,6 +85,9 @@ func (s *Service) registerPayloadChunkCommitmentFromBlock(blk interfaces.ReadOnl
 	s.registerPayloadChunkCommitment(bid.Slot(), bid.PayloadChunksRoot(), blockRoot)
 }
 
+// hasSeenPayloadChunk reports whether (payload_chunks_root, index) is marked
+// seen. This is a plain read: anything gating acceptance on first-seen must use
+// claimPayloadChunk instead, which checks and sets under one lock.
 func (s *Service) hasSeenPayloadChunk(chunksRoot [32]byte, index uint64) bool {
 	if s.seenPayloadChunkCache == nil {
 		return false
@@ -93,11 +96,16 @@ func (s *Service) hasSeenPayloadChunk(chunksRoot [32]byte, index uint64) bool {
 	return seen
 }
 
-func (s *Service) setSeenPayloadChunk(slot primitives.Slot, chunksRoot [32]byte, index uint64) {
+// claimPayloadChunk atomically marks (payload_chunks_root, index) as seen and
+// reports whether this caller is the first to do so. Gossip validation for a
+// single topic runs concurrently across peers, so a separate has-then-set pair
+// lets two deliveries of the same chunk both observe "not seen" and both
+// proceed to accept, forward, and insert into the reconstruction pool.
+func (s *Service) claimPayloadChunk(slot primitives.Slot, chunksRoot [32]byte, index uint64) bool {
 	if s.seenPayloadChunkCache == nil {
-		return
+		return true
 	}
-	s.seenPayloadChunkCache.Add(slot, payloadChunkSeenKey(chunksRoot, index), true)
+	return s.seenPayloadChunkCache.AddIfAbsent(slot, payloadChunkSeenKey(chunksRoot, index), true)
 }
 
 // unsetSeenPayloadChunk rolls back a first-seen marker for a chunk the pool

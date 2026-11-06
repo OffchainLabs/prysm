@@ -24,6 +24,7 @@ import (
 
 var (
 	errChunkTooLarge      = errors.New("serialized envelope exceeds MAX_PAYLOAD_SIZE")
+	errChunkSizeTooLarge  = errors.New("payload chunk exceeds MAX_PAYLOAD_CHUNK_SIZE")
 	errChunkIndexTooLarge = errors.New("payload chunk index >= TOTAL_EXECUTION_PAYLOAD_CHUNKS")
 	errChunkBadProofLen   = errors.New("payload chunk inclusion proof has wrong length")
 	errChunkProofInvalid  = errors.New("payload chunk inclusion proof is invalid")
@@ -147,12 +148,23 @@ func StampPayloadChunkHints(msgs []*ethpb.PayloadChunk, slot primitives.Slot, be
 // bound is security critical: the branch walk reads only the low
 // CHUNK_INCLUSION_PROOF_DEPTH bits, so an unbounded index would allow replay
 // at index + k*TOTAL_EXECUTION_PAYLOAD_CHUNKS.
+//
+// The size bound is likewise security critical and cannot be delegated to SSZ.
+// The generated PayloadChunk.UnmarshalSSZ enforces no upper bound on the chunk
+// byte list (only MarshalSSZ does), and the Merkle leaf is a plain
+// sha256(chunk) over whatever bytes arrived, so an oversized chunk both decodes
+// and proof-verifies. Without this check a builder could commit to a chunk set
+// whose pieces each exceed MAX_PAYLOAD_CHUNK_SIZE and every node on the network
+// would accept and buffer TOTAL_EXECUTION_PAYLOAD_CHUNKS of them.
 func VerifyPayloadChunkInclusionProof(chunk *ethpb.PayloadChunk) error {
 	if chunk == nil {
 		return errors.New("nil payload chunk")
 	}
 	if chunk.Index >= fieldparams.TotalExecutionPayloadChunks {
 		return errChunkIndexTooLarge
+	}
+	if len(chunk.Chunk) > fieldparams.MaxPayloadChunkSize {
+		return errChunkSizeTooLarge
 	}
 	if len(chunk.ChunkInclusionProof) != fieldparams.ChunkInclusionProofDepth {
 		return errChunkBadProofLen
