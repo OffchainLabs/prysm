@@ -89,12 +89,20 @@ func TestConfigureBuilderHeaderTimeout(t *testing.T) {
 	})
 }
 
-func TestConfigureBuilderBidTimeout(t *testing.T) {
-	newCliCtx := func(t *testing.T, timeout string) *cli.Context {
+func TestConfigureBuilderBidSchedule(t *testing.T) {
+	newCliCtx := func(t *testing.T, timeout, delay, requests string) *cli.Context {
 		set := flag.NewFlagSet("test", 0)
 		set.Duration(flags.BuilderBidTimeout.Name, flags.BuilderBidTimeout.Value, "")
-		if timeout != "" {
-			require.NoError(t, set.Set(flags.BuilderBidTimeout.Name, timeout))
+		set.Duration(flags.BuilderBidDelay.Name, flags.BuilderBidDelay.Value, "")
+		set.Uint64(flags.BuilderBidRequests.Name, flags.BuilderBidRequests.Value, "")
+		for name, v := range map[string]string{
+			flags.BuilderBidTimeout.Name:  timeout,
+			flags.BuilderBidDelay.Name:    delay,
+			flags.BuilderBidRequests.Name: requests,
+		} {
+			if v != "" {
+				require.NoError(t, set.Set(name, v))
+			}
 		}
 		return cli.NewContext(&cli.App{}, set, nil)
 	}
@@ -106,36 +114,60 @@ func TestConfigureBuilderBidTimeout(t *testing.T) {
 		c.BuilderBidTimeout = 1234 * time.Millisecond
 		require.NoError(t, params.SetActive(c))
 
-		require.NoError(t, configureBuilderBidTimeout(newCliCtx(t, "")))
+		require.NoError(t, configureBuilderBidSchedule(newCliCtx(t, "", "", "")))
 
 		assert.Equal(t, 1234*time.Millisecond, params.BeaconConfig().BuilderBidTimeout)
-		assert.LogsDoNotContain(t, hook, "Overriding the builder API execution payload bid timeout")
+		assert.Equal(t, time.Duration(0), params.BeaconConfig().BuilderBidDelay)
+		assert.Equal(t, uint64(1), params.BeaconConfig().BuilderBidRequests)
+		assert.LogsDoNotContain(t, hook, "Overriding the builder API execution payload bid schedule")
 	})
 
-	for _, timeout := range []string{"0s", "-1ms"} {
-		t.Run("rejects "+timeout, func(t *testing.T) {
+	for _, tc := range []struct {
+		name                     string
+		timeout, delay, requests string
+		err                      string
+	}{
+		{name: "zero timeout", timeout: "0s", err: "--builder-bid-timeout must be greater than 0, got 0s"},
+		{name: "negative timeout", timeout: "-1ms", err: "--builder-bid-timeout must be greater than 0, got -1ms"},
+		{name: "negative delay", delay: "-1ms", err: "--builder-bid-delay must not be negative, got -1ms"},
+		{name: "zero requests", requests: "0", err: "--builder-bid-requests must be greater than 0"},
+		{name: "timeout alone past the window", timeout: "2501ms", err: "must not exceed 2.5s"},
+		{name: "combination past the window", timeout: "600ms", delay: "800ms", requests: "3", err: "--builder-bid-delay (800ms) + --builder-bid-requests (3) * --builder-bid-timeout (600ms) must not exceed 2.5s"},
+		{name: "huge request count", requests: "18446744073709551615", err: "must not exceed 2.5s"},
+	} {
+		t.Run("rejects "+tc.name, func(t *testing.T) {
 			params.SetupTestConfigCleanup(t)
 
-			err := configureBuilderBidTimeout(newCliCtx(t, timeout))
+			err := configureBuilderBidSchedule(newCliCtx(t, tc.timeout, tc.delay, tc.requests))
 
-			require.ErrorContains(t, fmt.Sprintf("--builder-bid-timeout must be greater than 0, got %s", timeout), err)
+			require.ErrorContains(t, tc.err, err)
 			assert.Equal(t, params.BuilderBidTolerance, params.BeaconConfig().BuilderBidTimeout)
+			assert.Equal(t, uint64(1), params.BeaconConfig().BuilderBidRequests)
 		})
 	}
 
-	// Any positive value is accepted: there is no upper bound, and no relay endpoint is required.
-	t.Run("nominal", func(t *testing.T) {
-		const timeout = "900ms"
-		params.SetupTestConfigCleanup(t)
-		hook := logTest.NewGlobal()
+	for _, tc := range []struct {
+		name                     string
+		timeout, delay, requests string
+		wantTimeout, wantDelay   time.Duration
+		wantRequests             uint64
+	}{
+		{name: "timeout only", timeout: "900ms", wantTimeout: 900 * time.Millisecond, wantRequests: 1},
+		{name: "within the window", timeout: "500ms", delay: "500ms", requests: "3", wantTimeout: 500 * time.Millisecond, wantDelay: 500 * time.Millisecond, wantRequests: 3},
+		{name: "exactly at the window", timeout: "500ms", delay: "1s", requests: "3", wantTimeout: 500 * time.Millisecond, wantDelay: time.Second, wantRequests: 3},
+	} {
+		t.Run("accepts "+tc.name, func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			hook := logTest.NewGlobal()
 
-		require.NoError(t, configureBuilderBidTimeout(newCliCtx(t, timeout)))
+			require.NoError(t, configureBuilderBidSchedule(newCliCtx(t, tc.timeout, tc.delay, tc.requests)))
 
-		expected, err := time.ParseDuration(timeout)
-		require.NoError(t, err)
-		assert.Equal(t, expected, params.BeaconConfig().BuilderBidTimeout)
-		assert.LogsContain(t, hook, "Overriding the builder API execution payload bid timeout")
-	})
+			assert.Equal(t, tc.wantTimeout, params.BeaconConfig().BuilderBidTimeout)
+			assert.Equal(t, tc.wantDelay, params.BeaconConfig().BuilderBidDelay)
+			assert.Equal(t, tc.wantRequests, params.BeaconConfig().BuilderBidRequests)
+			assert.LogsContain(t, hook, "Overriding the builder API execution payload bid schedule")
+		})
+	}
 }
 
 func TestConfigureSlotsPerArchivedPoint(t *testing.T) {

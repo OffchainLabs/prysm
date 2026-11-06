@@ -127,8 +127,19 @@ var (
 	// execution payload bids before giving up and using the P2P bid or a self-built payload.
 	BuilderBidTimeout = &cli.DurationFlag{
 		Name:  "builder-bid-timeout",
-		Usage: "Timeout to use when fetching execution payload bids from the builder API, as a duration (e.g. 600ms, 1s). Must be greater than 0. Only effective from the Gloas fork onward.",
+		Usage: "Timeout for each execution payload bid request to the builder API, as a duration (e.g. 600ms, 1s). Must be greater than 0. Only effective from the Gloas fork onward.",
 		Value: params.BeaconConfig().BuilderBidTimeout,
+	}
+	BuilderBidDelay = &cli.DurationFlag{
+		Name:  "builder-bid-delay",
+		Usage: "Delay from slot start before the first execution payload bid request to the builder API, as a duration (e.g. 500ms). Only effective from the Gloas fork onward.",
+		Value: params.BeaconConfig().BuilderBidDelay,
+	}
+	BuilderBidRequests = &cli.Uint64Flag{
+		Name: "builder-bid-requests",
+		Usage: fmt.Sprintf("Number of consecutive execution payload bid requests sent to the builder API per proposal, the highest bid is kept. "+
+			"builder-bid-delay + builder-bid-requests * builder-bid-timeout must not exceed %s. Only effective from the Gloas fork onward.", params.BuilderBidWindow),
+		Value: params.BeaconConfig().BuilderBidRequests,
 	}
 	// ExecutionEngineEndpoint provides an HTTP access endpoint to connect to an execution client on the execution layer
 	ExecutionEngineEndpoint = &cli.StringFlag{
