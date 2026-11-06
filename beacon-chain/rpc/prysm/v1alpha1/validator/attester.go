@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -61,6 +63,14 @@ func (vs *Server) ProposeAttestation(ctx context.Context, att *ethpb.Attestation
 		return nil, err
 	}
 
+	targetState, err := vs.AttestationStateFetcher.AttestationTargetState(ctx, att.Data.Target)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "Could not get target state")
+	}
+	if err := verifyAttSignature(ctx, targetState, att); err != nil {
+		return nil, err
+	}
+
 	go func() {
 		if features.Get().EnableExperimentalAttestationPool {
 			if err := vs.AttestationCache.Add(att); err != nil {
@@ -106,6 +116,10 @@ func (vs *Server) ProposeAttestationElectra(ctx context.Context, singleAtt *ethp
 
 	singleAttCopy := singleAtt.Copy()
 	att := singleAttCopy.ToAttestationElectra(committee)
+	if err := verifyAttSignature(ctx, targetState, att); err != nil {
+		return nil, err
+	}
+
 	go func() {
 		if features.Get().EnableExperimentalAttestationPool {
 			if err := vs.AttestationCache.Add(att); err != nil {
@@ -177,6 +191,21 @@ func (vs *Server) SubscribeCommitteeSubnets(ctx context.Context, req *ethpb.Comm
 	return &emptypb.Empty{}, nil
 }
 
+// verifyAttSignature verifies the attestation signature against the public keys of the attesting
+// validators in the target state. Fork choice and block production assume that every attestation
+// in the pool carries a verified signature, so this must pass before an attestation submitted
+// through the API is saved.
+func verifyAttSignature(ctx context.Context, targetState state.ReadOnlyBeaconState, att ethpb.Att) error {
+	set, err := blocks.AttestationSignatureBatch(ctx, targetState, []ethpb.Att{att})
+	if err != nil {
+		return status.Errorf(codes.InvalidArgument, "Could not create attestation signature set: %v", err)
+	}
+	if verified, err := set.Verify(); err != nil || !verified {
+		return status.Error(codes.InvalidArgument, "Attestation signature verification failed")
+	}
+	return nil
+}
+
 func (vs *Server) proposeAtt(
 	ctx context.Context,
 	att ethpb.Att,
@@ -219,6 +248,19 @@ func (vs *Server) proposeAtt(
 				}
 			}
 		}
+	}
+
+	// The slot selects the epoch for which active validators and committees are computed, so as in
+	// gossip validation it must be one that can be broadcast at the current time and match the target epoch.
+	if err := helpers.ValidateAttestationTime(
+		att.GetData().Slot,
+		vs.TimeFetcher.GenesisTime(),
+		params.BeaconConfig().MaximumGossipClockDisparityDuration(),
+	); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "Invalid attestation slot: %v", err)
+	}
+	if err := helpers.ValidateSlotTargetEpoch(att.GetData()); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "Invalid attestation slot: %v", err)
 	}
 
 	// Broadcast the unaggregated attestation on a feed to notify other services in the beacon node
