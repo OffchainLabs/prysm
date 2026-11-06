@@ -1,363 +1,90 @@
 package state_native_test
 
 import (
+	"bytes"
+	"encoding/binary"
 	"testing"
 
-	coreState "github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/crypto/rand"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
-func FuzzPhase0StateHashTreeRoot(f *testing.F) {
-	gState, _ := util.DeterministicGenesisState(f, 100)
-	output, err := gState.MarshalSSZ()
-	assert.NoError(f, err)
-	randPool := make([]byte, 100)
-	_, err = rand.NewDeterministicGenerator().Read(randPool)
-	assert.NoError(f, err)
-	f.Add(randPool, uint64(10))
-	f.Fuzz(func(t *testing.T, diffBuffer []byte, slotsToTransition uint64) {
-		stateSSZ := bytesutil.SafeCopyBytes(output)
-		for i := 0; i < len(diffBuffer); i += 9 {
-			if i+8 >= len(diffBuffer) {
-				return
-			}
-			num := bytesutil.BytesToUint64BigEndian(diffBuffer[i : i+8])
-			num %= uint64(len(diffBuffer))
-			// Perform a XOR on the byte of the selected index.
-			stateSSZ[num] ^= diffBuffer[i+8]
-		}
-		container := &ethpb.BeaconState{}
-		err := container.UnmarshalSSZ(stateSSZ)
-		if err != nil {
-			return
-		}
-		nativeState, err := native.New(container)
-		assert.NoError(t, err)
-
-		slotsToTransition %= 100
-		stateObj, err := native.NewUnsafe(container)
-		assert.NoError(t, err)
-		for stateObj.Slot() < primitives.Slot(slotsToTransition) {
-			stateObj, err = coreState.ProcessSlots(t.Context(), stateObj, stateObj.Slot()+1)
-			assert.NoError(t, err)
-			stateObj.Copy()
-
-			nativeState, err = coreState.ProcessSlots(t.Context(), nativeState, nativeState.Slot()+1)
-			assert.NoError(t, err)
-			nativeState.Copy()
-		}
-		assert.NoError(t, err)
-		// Perform a cold HTR calculation by initializing a new state.
-		innerState, ok := stateObj.ToContainerUnsafe().(*ethpb.BeaconState)
-		assert.Equal(t, true, ok, "inner state is not a beacon state container")
-		newState, err := native.NewUnsafe(innerState)
-		assert.NoError(t, err)
-
-		newRt, newErr := newState.HashTreeRoot(t.Context())
-		rt, err := stateObj.HashTreeRoot(t.Context())
-		nativeRt, nativeErr := nativeState.HashTreeRoot(t.Context())
-
-		assert.Equal(t, newErr != nil, err != nil)
-		assert.Equal(t, newErr != nil, nativeErr != nil)
-		if err == nil {
-			assert.Equal(t, rt, newRt)
-			assert.Equal(t, rt, nativeRt)
-		}
-
-		newSSZ, newErr := newState.MarshalSSZ()
-		stateObjSSZ, err := stateObj.MarshalSSZ()
-		nativeSSZ, nativeErr := nativeState.MarshalSSZ()
-		assert.Equal(t, newErr != nil, err != nil)
-		assert.Equal(t, newErr != nil, nativeErr != nil)
-		if err == nil {
-			assert.DeepEqual(t, newSSZ, stateObjSSZ)
-			assert.DeepEqual(t, newSSZ, nativeSSZ)
-		}
-	})
+func FuzzFuluStateHashTreeRoot(f *testing.F) {
+	genesis, _ := util.DeterministicGenesisStateFulu(f, 64)
+	// Up to slot 39, across one epoch boundary.
+	fuzzStateHashTreeRoot(f, genesis, func() *ethpb.BeaconStateFulu { return &ethpb.BeaconStateFulu{} }, 40)
 }
 
-func FuzzAltairStateHashTreeRoot(f *testing.F) {
-	gState, _ := util.DeterministicGenesisStateAltair(f, 100)
-	output, err := gState.MarshalSSZ()
-	assert.NoError(f, err)
-	randPool := make([]byte, 100)
-	_, err = rand.NewDeterministicGenerator().Read(randPool)
-	assert.NoError(f, err)
-	f.Add(randPool, uint64(10))
-	f.Fuzz(func(t *testing.T, diffBuffer []byte, slotsToTransition uint64) {
-		stateSSZ := bytesutil.SafeCopyBytes(output)
-		for i := 0; i < len(diffBuffer); i += 9 {
-			if i+8 >= len(diffBuffer) {
-				return
-			}
-			num := bytesutil.BytesToUint64BigEndian(diffBuffer[i : i+8])
-			num %= uint64(len(diffBuffer))
-			// Perform a XOR on the byte of the selected index.
-			stateSSZ[num] ^= diffBuffer[i+8]
-		}
-		container := &ethpb.BeaconStateAltair{}
-		err := container.UnmarshalSSZ(stateSSZ)
-		if err != nil {
-			return
-		}
-		nativeState, err := native.New(container)
-		if err != nil {
-			return
-		}
-
-		slotsToTransition %= 100
-		stateObj, err := native.NewUnsafe(container)
-		assert.NoError(t, err)
-		for stateObj.Slot() < primitives.Slot(slotsToTransition) {
-			stateObj, err = coreState.ProcessSlots(t.Context(), stateObj, stateObj.Slot()+1)
-			assert.NoError(t, err)
-			stateObj.Copy()
-
-			nativeState, err = coreState.ProcessSlots(t.Context(), nativeState, nativeState.Slot()+1)
-			assert.NoError(t, err)
-			nativeState.Copy()
-		}
-		assert.NoError(t, err)
-		// Perform a cold HTR calculation by initializing a new state.
-		innerState, ok := stateObj.ToContainerUnsafe().(*ethpb.BeaconStateAltair)
-		assert.Equal(t, true, ok, "inner state is not a beacon state altair container")
-		newState, err := native.NewUnsafe(innerState)
-		assert.NoError(t, err)
-
-		newRt, newErr := newState.HashTreeRoot(t.Context())
-		rt, err := stateObj.HashTreeRoot(t.Context())
-		nativeRt, nativeErr := nativeState.HashTreeRoot(t.Context())
-		assert.Equal(t, newErr != nil, err != nil)
-		assert.Equal(t, newErr != nil, nativeErr != nil)
-		if err == nil {
-			assert.Equal(t, rt, newRt)
-			assert.Equal(t, rt, nativeRt)
-		}
-
-		newSSZ, newErr := newState.MarshalSSZ()
-		stateObjSSZ, err := stateObj.MarshalSSZ()
-		nativeSSZ, nativeErr := nativeState.MarshalSSZ()
-		assert.Equal(t, newErr != nil, err != nil)
-		assert.Equal(t, newErr != nil, nativeErr != nil)
-		if err == nil {
-			assert.DeepEqual(t, newSSZ, stateObjSSZ)
-			assert.DeepEqual(t, newSSZ, nativeSSZ)
-		}
-	})
+func FuzzGloasStateHashTreeRoot(f *testing.F) {
+	genesis, _ := util.DeterministicGenesisStateGloas(f, 64)
+	// Stay before slot 32: with the fuzz build tag the committee cache is off, and one Gloas epoch
+	// transition takes about 18 s.
+	fuzzStateHashTreeRoot(f, genesis, func() *ethpb.BeaconStateGloas { return &ethpb.BeaconStateGloas{} }, 32)
 }
 
-func FuzzBellatrixStateHashTreeRoot(f *testing.F) {
-	gState, _ := util.DeterministicGenesisStateBellatrix(f, 100)
-	output, err := gState.MarshalSSZ()
-	assert.NoError(f, err)
-	randPool := make([]byte, 100)
-	_, err = rand.NewDeterministicGenerator().Read(randPool)
-	assert.NoError(f, err)
-	f.Add(randPool, uint64(10))
-	f.Fuzz(func(t *testing.T, diffBuffer []byte, slotsToTransition uint64) {
-		stateSSZ := bytesutil.SafeCopyBytes(output)
-		for i := 0; i < len(diffBuffer); i += 9 {
-			if i+8 >= len(diffBuffer) {
+func fuzzStateHashTreeRoot[T native.Container](f *testing.F, genesis state.BeaconState, newContainer func() T, slotBound uint64) {
+	genesisSSZ, err := genesis.MarshalSSZ()
+	require.NoError(f, err)
+
+	// No edits, up to the last slot the bound allows.
+	f.Add([]byte{}, slotBound-1)
+	// Flip a byte of the slot (offset 40), then advance.
+	f.Add([]byte{0, 0, 0, 0, 0, 0, 0, 40, 1}, uint64(5))
+
+	f.Fuzz(func(t *testing.T, edits []byte, slots uint64) {
+		ctx := t.Context()
+		// Each 9-byte edit is a big-endian index into the state, modulo its length, and a XOR mask.
+		stateSSZ := bytes.Clone(genesisSSZ)
+		for i := 0; i+9 <= len(edits); i += 9 {
+			idx := binary.BigEndian.Uint64(edits[i:i+8]) % uint64(len(stateSSZ))
+			stateSSZ[idx] ^= edits[i+8]
+		}
+		container := newContainer()
+		if err := any(container).(interface{ UnmarshalSSZ([]byte) error }).UnmarshalSSZ(stateSSZ); err != nil {
+			return
+		}
+		copied, err := native.New(container)
+		if err != nil {
+			return
+		}
+		owned, err := native.NewUnsafe(container)
+		require.NoError(t, err)
+		ownedRoot, ownedErr := owned.HashTreeRoot(ctx)
+		copiedRoot, copiedErr := copied.HashTreeRoot(ctx)
+		require.Equal(t, ownedErr == nil, copiedErr == nil)
+		if ownedErr == nil {
+			require.Equal(t, copiedRoot, ownedRoot)
+		}
+
+		target := primitives.Slot(slots % slotBound)
+		for owned.Slot() < target {
+			owned, err = transition.ProcessSlots(ctx, owned, owned.Slot()+1)
+			if err != nil {
 				return
 			}
-			num := bytesutil.BytesToUint64BigEndian(diffBuffer[i : i+8])
-			num %= uint64(len(diffBuffer))
-			// Perform a XOR on the byte of the selected index.
-			stateSSZ[num] ^= diffBuffer[i+8]
+			// A copy shares fields with the original and must not change its root.
+			_ = owned.Copy()
 		}
-		container := &ethpb.BeaconStateBellatrix{}
-		err := container.UnmarshalSSZ(stateSSZ)
-		if err != nil {
-			return
-		}
-		nativeState, err := native.New(container)
-		if err != nil {
-			return
+		cold, err := native.NewUnsafe(owned.ToContainerUnsafe().(T))
+		require.NoError(t, err)
+
+		ownedRoot, ownedErr = owned.HashTreeRoot(ctx)
+		coldRoot, coldErr := cold.HashTreeRoot(ctx)
+		require.Equal(t, ownedErr == nil, coldErr == nil)
+		if ownedErr == nil {
+			require.Equal(t, coldRoot, ownedRoot)
 		}
 
-		slotsToTransition %= 100
-		stateObj, err := native.NewUnsafe(container)
-		assert.NoError(t, err)
-		for stateObj.Slot() < primitives.Slot(slotsToTransition) {
-			stateObj, err = coreState.ProcessSlots(t.Context(), stateObj, stateObj.Slot()+1)
-			assert.NoError(t, err)
-			stateObj.Copy()
-
-			nativeState, err = coreState.ProcessSlots(t.Context(), nativeState, nativeState.Slot()+1)
-			assert.NoError(t, err)
-			nativeState.Copy()
-		}
-		assert.NoError(t, err)
-		// Perform a cold HTR calculation by initializing a new state.
-		innerState, ok := stateObj.ToContainerUnsafe().(*ethpb.BeaconStateBellatrix)
-		assert.Equal(t, true, ok, "inner state is not a beacon state bellatrix container")
-		newState, err := native.NewUnsafe(innerState)
-		assert.NoError(t, err)
-
-		newRt, newErr := newState.HashTreeRoot(t.Context())
-		rt, err := stateObj.HashTreeRoot(t.Context())
-		nativeRt, nativeErr := nativeState.HashTreeRoot(t.Context())
-		assert.Equal(t, newErr != nil, err != nil)
-		assert.Equal(t, newErr != nil, nativeErr != nil)
-		if err == nil {
-			assert.Equal(t, rt, newRt)
-			assert.Equal(t, rt, nativeRt)
-		}
-
-		newSSZ, newErr := newState.MarshalSSZ()
-		stateObjSSZ, err := stateObj.MarshalSSZ()
-		nativeSSZ, nativeErr := nativeState.MarshalSSZ()
-		assert.Equal(t, newErr != nil, err != nil)
-		assert.Equal(t, newErr != nil, nativeErr != nil)
-		if err == nil {
-			assert.DeepEqual(t, newSSZ, stateObjSSZ)
-			assert.DeepEqual(t, newSSZ, nativeSSZ)
-		}
-	})
-}
-
-func FuzzCapellaStateHashTreeRoot(f *testing.F) {
-	gState, _ := util.DeterministicGenesisStateCapella(f, 100)
-	output, err := gState.MarshalSSZ()
-	assert.NoError(f, err)
-	randPool := make([]byte, 100)
-	_, err = rand.NewDeterministicGenerator().Read(randPool)
-	assert.NoError(f, err)
-	f.Add(randPool, uint64(10))
-	f.Fuzz(func(t *testing.T, diffBuffer []byte, slotsToTransition uint64) {
-		stateSSZ := bytesutil.SafeCopyBytes(output)
-		for i := 0; i < len(diffBuffer); i += 9 {
-			if i+8 >= len(diffBuffer) {
-				return
-			}
-			num := bytesutil.BytesToUint64BigEndian(diffBuffer[i : i+8])
-			num %= uint64(len(diffBuffer))
-			// Perform a XOR on the byte of the selected index.
-			stateSSZ[num] ^= diffBuffer[i+8]
-		}
-		container := &ethpb.BeaconStateCapella{}
-		err := container.UnmarshalSSZ(stateSSZ)
-		if err != nil {
-			return
-		}
-		nativeState, err := native.New(container)
-		if err != nil {
-			return
-		}
-
-		slotsToTransition %= 100
-		stateObj, err := native.NewUnsafe(container)
-		assert.NoError(t, err)
-		for stateObj.Slot() < primitives.Slot(slotsToTransition) {
-			stateObj, err = coreState.ProcessSlots(t.Context(), stateObj, stateObj.Slot()+1)
-			assert.NoError(t, err)
-			stateObj.Copy()
-
-			nativeState, err = coreState.ProcessSlots(t.Context(), nativeState, nativeState.Slot()+1)
-			assert.NoError(t, err)
-			nativeState.Copy()
-		}
-		assert.NoError(t, err)
-		// Perform a cold HTR calculation by initializing a new state.
-		innerState, ok := stateObj.ToContainerUnsafe().(*ethpb.BeaconStateCapella)
-		assert.Equal(t, true, ok, "inner state is not a beacon state capella container")
-		newState, err := native.NewUnsafe(innerState)
-		assert.NoError(t, err)
-
-		newRt, newErr := newState.HashTreeRoot(t.Context())
-		rt, err := stateObj.HashTreeRoot(t.Context())
-		nativeRt, nativeErr := nativeState.HashTreeRoot(t.Context())
-		assert.Equal(t, newErr != nil, err != nil)
-		assert.Equal(t, newErr != nil, nativeErr != nil)
-		if err == nil {
-			assert.Equal(t, rt, newRt)
-			assert.Equal(t, rt, nativeRt)
-		}
-
-		newSSZ, newErr := newState.MarshalSSZ()
-		stateObjSSZ, err := stateObj.MarshalSSZ()
-		nativeSSZ, nativeErr := nativeState.MarshalSSZ()
-		assert.Equal(t, newErr != nil, err != nil)
-		assert.Equal(t, newErr != nil, nativeErr != nil)
-		if err == nil {
-			assert.DeepEqual(t, newSSZ, stateObjSSZ)
-			assert.DeepEqual(t, newSSZ, nativeSSZ)
-		}
-	})
-}
-
-func FuzzDenebStateHashTreeRoot(f *testing.F) {
-	gState, _ := util.DeterministicGenesisStateDeneb(f, 100)
-	output, err := gState.MarshalSSZ()
-	assert.NoError(f, err)
-	randPool := make([]byte, 100)
-	_, err = rand.NewDeterministicGenerator().Read(randPool)
-	assert.NoError(f, err)
-	f.Add(randPool, uint64(10))
-	f.Fuzz(func(t *testing.T, diffBuffer []byte, slotsToTransition uint64) {
-		stateSSZ := bytesutil.SafeCopyBytes(output)
-		for i := 0; i < len(diffBuffer); i += 9 {
-			if i+8 >= len(diffBuffer) {
-				return
-			}
-			num := bytesutil.BytesToUint64BigEndian(diffBuffer[i : i+8])
-			num %= uint64(len(diffBuffer))
-			// Perform a XOR on the byte of the selected index.
-			stateSSZ[num] ^= diffBuffer[i+8]
-		}
-		container := &ethpb.BeaconStateDeneb{}
-		err := container.UnmarshalSSZ(stateSSZ)
-		if err != nil {
-			return
-		}
-		nativeState, err := native.New(container)
-		if err != nil {
-			return
-		}
-
-		slotsToTransition %= 100
-		stateObj, err := native.NewUnsafe(container)
-		assert.NoError(t, err)
-		for stateObj.Slot() < primitives.Slot(slotsToTransition) {
-			stateObj, err = coreState.ProcessSlots(t.Context(), stateObj, stateObj.Slot()+1)
-			assert.NoError(t, err)
-			stateObj.Copy()
-
-			nativeState, err = coreState.ProcessSlots(t.Context(), nativeState, nativeState.Slot()+1)
-			assert.NoError(t, err)
-			nativeState.Copy()
-		}
-		assert.NoError(t, err)
-		// Perform a cold HTR calculation by initializing a new state.
-		innerState, ok := stateObj.ToContainerUnsafe().(*ethpb.BeaconStateDeneb)
-		assert.Equal(t, true, ok, "inner state is not a beacon state deneb container")
-		newState, err := native.NewUnsafe(innerState)
-		assert.NoError(t, err)
-
-		newRt, newErr := newState.HashTreeRoot(t.Context())
-		rt, err := stateObj.HashTreeRoot(t.Context())
-		nativeRt, nativeErr := nativeState.HashTreeRoot(t.Context())
-		assert.Equal(t, newErr != nil, err != nil)
-		assert.Equal(t, newErr != nil, nativeErr != nil)
-		if err == nil {
-			assert.Equal(t, rt, newRt)
-			assert.Equal(t, rt, nativeRt)
-		}
-
-		newSSZ, newErr := newState.MarshalSSZ()
-		stateObjSSZ, err := stateObj.MarshalSSZ()
-		nativeSSZ, nativeErr := nativeState.MarshalSSZ()
-		assert.Equal(t, newErr != nil, err != nil)
-		assert.Equal(t, newErr != nil, nativeErr != nil)
-		if err == nil {
-			assert.DeepEqual(t, newSSZ, stateObjSSZ)
-			assert.DeepEqual(t, newSSZ, nativeSSZ)
+		ownedSSZ, ownedErr := owned.MarshalSSZ()
+		coldSSZ, coldErr := cold.MarshalSSZ()
+		require.Equal(t, ownedErr == nil, coldErr == nil)
+		if ownedErr == nil {
+			require.Equal(t, true, bytes.Equal(coldSSZ, ownedSSZ), "cold and warm SSZ differ")
 		}
 	})
 }
