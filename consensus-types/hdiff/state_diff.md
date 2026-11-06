@@ -435,7 +435,7 @@ The exported function
 ```go
 func Diff(source, target state.ReadOnlyBeaconState) (HdiffBytes, error)
 ```
-Takes two states and returns the corresponding diff bytes. This function calls the function `diffInternal` which in turn calls `diffToState`, `diffToVals` and `diffToBalances` that each return the corresponding component of an internal `hdiff` structure. Then we call `serialize()` on the correponding `hdiff` structure. The function `serialize` constructs the `data` byte slice as described above in the [Deserialization](#deserialization) section and finally it calls `snappy.Encode()` on each of the three slices. 
+Takes two states and returns the corresponding diff bytes. This function calls the function `diffInternal` which in turn calls `diffToState`, `diffToVals` and `diffToBalances` that each return the corresponding component of an internal `hdiff` structure. Then we call `serialize()` on the correponding `hdiff` structure. The function `serialize` constructs the `data` byte slice as described above in the [Deserializing with `newHdiff`](#deserializing-with-newhdiff) section and finally it calls `snappy.Encode()` on each of the three slices. 
 
 ## Archive mode
 
