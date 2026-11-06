@@ -9,6 +9,7 @@ import (
 	"time"
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -199,4 +200,74 @@ func TestValidateVoluntaryExit_ValidExit_Syncing(t *testing.T) {
 	_ = err
 	valid := res == pubsub.ValidationAccept
 	assert.Equal(t, false, valid, "Validation should have failed")
+}
+
+func TestValidateVoluntaryExit_IgnoreAndReject(t *testing.T) {
+	validate := func(t *testing.T, exit *ethpb.SignedVoluntaryExit, s state.BeaconState) (pubsub.ValidationResult, error) {
+		p := p2ptest.NewTestP2P(t)
+		r := &Service{
+			cfg: &config{
+				p2p:         p,
+				chain:       &mock.ChainService{State: s},
+				clock:       startup.NewClock(time.Now(), [32]byte{}),
+				initialSync: &mockSync.Sync{IsSyncing: false},
+			},
+			seenExitCache: lruwrpr.New(10),
+		}
+		buf := new(bytes.Buffer)
+		_, err := p.Encoding().EncodeGossip(buf, exit)
+		require.NoError(t, err)
+		topic := r.addDigestToTopic(p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedVoluntaryExit]()], r.currentForkDigest())
+		m := &pubsub.Message{Message: &pubsubpb.Message{Data: buf.Bytes(), Topic: &topic}}
+		res, err := r.validateVoluntaryExit(t.Context(), "", m)
+		assert.Equal(t, false, r.hasSeenExitIndex(exit.Exit.ValidatorIndex))
+		return res, err
+	}
+
+	t.Run("already initiated exit is ignored", func(t *testing.T) {
+		exit, s := setupValidExit(t)
+		val, err := s.ValidatorAtIndex(0)
+		require.NoError(t, err)
+		// Exit epoch in the past, so the validator is also inactive. The spec checks exit_epoch first.
+		val.ExitEpoch = 10
+		require.NoError(t, s.UpdateValidatorAtIndex(0, val))
+		res, err := validate(t, exit, s)
+		require.ErrorIs(t, err, blocks.ErrExitAlreadyInitiated)
+		require.Equal(t, pubsub.ValidationIgnore, res)
+	})
+
+	t.Run("future exit epoch is ignored", func(t *testing.T) {
+		exit, s := setupValidExit(t)
+		exit.Exit.Epoch = coreTime.CurrentEpoch(s) + 1
+		res, err := validate(t, exit, s)
+		require.ErrorIs(t, err, blocks.ErrExitEpochInFuture)
+		require.Equal(t, pubsub.ValidationIgnore, res)
+	})
+
+	t.Run("pending partial withdrawal is ignored", func(t *testing.T) {
+		exit, phase0State := setupValidExit(t)
+		s, err := state_native.New(&ethpb.BeaconStateElectra{
+			Validators: phase0State.Validators(),
+			Fork: &ethpb.Fork{
+				CurrentVersion:  params.BeaconConfig().ElectraForkVersion,
+				PreviousVersion: params.BeaconConfig().ElectraForkVersion,
+			},
+			Slot:                      phase0State.Slot(),
+			PendingPartialWithdrawals: []*ethpb.PendingPartialWithdrawal{{Index: 0, Amount: 1}},
+		})
+		require.NoError(t, err)
+		res, err := validate(t, exit, s)
+		require.ErrorIs(t, err, blocks.ErrPendingBalanceToWithdraw)
+		require.Equal(t, pubsub.ValidationIgnore, res)
+	})
+
+	t.Run("bad signature is rejected", func(t *testing.T) {
+		exit, s := setupValidExit(t)
+		priv, err := bls.RandKey()
+		require.NoError(t, err)
+		exit.Signature = priv.Sign([]byte("wrong")).Marshal()
+		res, err := validate(t, exit, s)
+		require.ErrorIs(t, err, signing.ErrSigFailedToVerify)
+		require.Equal(t, pubsub.ValidationReject, res)
+	})
 }
