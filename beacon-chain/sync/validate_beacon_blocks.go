@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/blockhash"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -23,6 +24,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
@@ -296,15 +298,48 @@ func (s *Service) validateBeaconBlock(ctx context.Context, blk interfaces.ReadOn
 		return errors.New("could not get verifying state")
 	}
 
-	if err = s.validateBellatrixBeaconBlock(ctx, verifyingState, blk.Block()); err != nil {
-		if errors.Is(err, ErrOptimisticParent) {
-			return err
-		}
+	err = s.validateBellatrixBeaconBlock(ctx, verifyingState, blk.Block())
+	if err != nil && !errors.Is(err, ErrOptimisticParent) {
 		// for other kinds of errors, set this block as a bad block.
 		s.setBadBlock(ctx, blockRoot)
 		return err
 	}
-	return nil
+	if hashErr := validateExecutionBlockHash(blk.Block()); hashErr != nil {
+		return hashErr
+	}
+	return err
+}
+
+func validateExecutionBlockHash(blk interfaces.ReadOnlyBeaconBlock) error {
+	if features.Get().DisableGossipBlockHashCheck || blk.Version() < version.Bellatrix || blk.Version() >= version.Gloas {
+		return nil
+	}
+	body := blk.Body()
+	isExecution, err := blocks.IsExecutionBlock(body)
+	if err != nil || !isExecution {
+		return err
+	}
+	payload, err := body.Execution()
+	if err != nil {
+		return err
+	}
+	if payload.IsBlinded() {
+		return nil
+	}
+	var parentRoot *[32]byte
+	if blk.Version() >= version.Deneb {
+		root := blk.ParentRoot()
+		parentRoot = &root
+	}
+	var requests enginev1.ExecutionRequester
+	if blk.Version() >= version.Electra {
+		r, err := body.ExecutionRequests()
+		if err != nil {
+			return err
+		}
+		requests = r
+	}
+	return blockhash.Verify(payload, parentRoot, requests)
 }
 
 // Validates beacon block according to phase 0 validity conditions.
