@@ -267,6 +267,18 @@ func CopyFile(src, dst string) (err error) {
 			err = closeErr
 		}
 	}()
+	sourceInfo, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	destinationInfo, err := os.Stat(dst)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err == nil && os.SameFile(sourceInfo, destinationInfo) {
+		return errors.New("source and destination refer to the same file")
+	}
+
 	dstFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, params.BeaconIoConfig().ReadWritePermissions) // #nosec G304
 	if err != nil {
 		return err

@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -132,6 +133,35 @@ func TestWriteFile_OK(t *testing.T) {
 }
 
 func TestCopyFile(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		alias func(string, string) error
+	}{
+		{name: "same path"},
+		{name: "hard link", alias: os.Link},
+		{name: "symbolic link", alias: os.Symlink},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			source := filepath.Join(dir, "source")
+			data := []byte("original backup")
+			require.NoError(t, os.WriteFile(source, data, params.BeaconIoConfig().ReadWritePermissions))
+			destination := source
+			if test.alias != nil {
+				destination = filepath.Join(dir, "alias")
+				err := test.alias(source, destination)
+				if err != nil && test.name == "symbolic link" && runtime.GOOS == "windows" {
+					t.Skipf("symbolic links require Windows privileges: %v", err)
+				}
+				require.NoError(t, err)
+			}
+			require.ErrorContains(t, "same file", file.CopyFile(source, destination))
+			contents, err := os.ReadFile(source)
+			require.NoError(t, err)
+			assert.DeepEqual(t, data, contents)
+		})
+	}
+
 	fName := t.TempDir() + "testfile"
 	err := os.WriteFile(fName, []byte{1, 2, 3}, params.BeaconIoConfig().ReadWritePermissions)
 	require.NoError(t, err)
