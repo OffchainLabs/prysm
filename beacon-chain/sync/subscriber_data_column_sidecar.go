@@ -40,9 +40,10 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 		return fmt.Errorf("unexpected data column type: %T", msg)
 	}
 
+	var publishPartial func()
 	if sidecar.IsGloas() {
 		usefulFullColumnsReceivedTotal.WithLabelValues(strconv.FormatUint(sidecar.Index(), 10)).Inc()
-		s.republishGloasColumnAsPartial(ctx, sidecar)
+		publishPartial = func() { s.republishGloasColumnAsPartial(ctx, sidecar) }
 	} else {
 		// Track useful full columns received via gossip (not previously seen).
 		proposerIndex, err := sidecar.ProposerIndex()
@@ -51,12 +52,20 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 		}
 		if !s.hasSeenDataColumnIndex(sidecar.Slot(), proposerIndex, sidecar.Index()) {
 			usefulFullColumnsReceivedTotal.WithLabelValues(strconv.FormatUint(sidecar.Index(), 10)).Inc()
-			s.publishColumnAsPartial(ctx, sidecar)
+			publishPartial = func() { s.publishColumnAsPartial(ctx, sidecar) }
 		}
 	}
 
+	// Store before publishing as partial, so the DA check never waits on the partial broadcaster.
 	if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
 		return wrapDataColumnError(sidecar, "receive data column sidecar", err)
+	}
+
+	if publishPartial != nil {
+		wg.Go(func() error {
+			publishPartial()
+			return nil
+		})
 	}
 
 	// CL reconstruction (from >=50% seen columns) runs for both Fulu and Gloas.
