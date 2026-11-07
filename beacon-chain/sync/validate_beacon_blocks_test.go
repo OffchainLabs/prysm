@@ -33,6 +33,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -2520,6 +2521,162 @@ func TestValidateBeaconBlockPubSub_GloasDeposits(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, pubsub.ValidationIgnore, res)
+		})
+	}
+}
+
+func TestVerifyProposerInHeadLookahead(t *testing.T) {
+	ctx := t.Context()
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+
+	fuluState, _ := util.DeterministicGenesisStateFulu(t, 64)
+	headSlot := slotsPerEpoch + 3
+	require.NoError(t, fuluState.SetSlot(headSlot))
+	lookahead, err := fuluState.ProposerLookahead()
+	require.NoError(t, err)
+
+	// The lookahead covers the head state's epoch and the next one.
+	lookaheadStart := slotsPerEpoch
+	lookaheadEnd := lookaheadStart + primitives.Slot(len(lookahead))
+
+	newBlock := func(t *testing.T, slot primitives.Slot, proposer primitives.ValidatorIndex) interfaces.ReadOnlySignedBeaconBlock {
+		msg := util.NewBeaconBlockFulu()
+		msg.Block.Slot = slot
+		msg.Block.ProposerIndex = proposer
+		blk, err := blocks.NewSignedBeaconBlock(msg)
+		require.NoError(t, err)
+		return blk
+	}
+
+	expectedAt := func(slot primitives.Slot) primitives.ValidatorIndex {
+		return lookahead[slot-lookaheadStart]
+	}
+
+	t.Run("pre-Fulu head state", func(t *testing.T) {
+		phase0State, _ := util.DeterministicGenesisState(t, 64)
+		s := &Service{cfg: &config{chain: &mock.ChainService{State: phase0State}}}
+		require.NoError(t, s.verifyProposerInHeadLookahead(ctx, newBlock(t, 1, 0)))
+	})
+
+	t.Run("head state error", func(t *testing.T) {
+		s := &Service{cfg: &config{chain: &mock.ChainService{HeadStateErr: errors.New("boom")}}}
+		require.ErrorContains(t, "boom", s.verifyProposerInHeadLookahead(ctx, newBlock(t, headSlot, 0)))
+	})
+
+	s := &Service{cfg: &config{chain: &mock.ChainService{State: fuluState}}}
+
+	t.Run("expected proposer in the head epoch", func(t *testing.T) {
+		require.NoError(t, s.verifyProposerInHeadLookahead(ctx, newBlock(t, headSlot+1, expectedAt(headSlot+1))))
+	})
+
+	t.Run("expected proposer in the next epoch", func(t *testing.T) {
+		slot := lookaheadEnd - 1
+		require.NoError(t, s.verifyProposerInHeadLookahead(ctx, newBlock(t, slot, expectedAt(slot))))
+	})
+
+	t.Run("unexpected proposer", func(t *testing.T) {
+		slot := headSlot + 1
+		err := s.verifyProposerInHeadLookahead(ctx, newBlock(t, slot, expectedAt(slot)+1))
+		require.ErrorIs(t, err, errPendingBlockUnexpectedProposer)
+	})
+
+	t.Run("slot before the lookahead", func(t *testing.T) {
+		slot := lookaheadStart - 1
+		err := s.verifyProposerInHeadLookahead(ctx, newBlock(t, slot, 0))
+		require.ErrorIs(t, err, errPendingBlockOutsideLookahead)
+	})
+
+	t.Run("slot after the lookahead", func(t *testing.T) {
+		err := s.verifyProposerInHeadLookahead(ctx, newBlock(t, lookaheadEnd, 0))
+		require.ErrorIs(t, err, errPendingBlockOutsideLookahead)
+	})
+}
+
+func TestValidateBeaconBlockPubSub_PendingBlockProposer(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.AltairForkEpoch = 0
+	cfg.BellatrixForkEpoch = 0
+	cfg.CapellaForkEpoch = 0
+	cfg.DenebForkEpoch = 0
+	cfg.ElectraForkEpoch = 0
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	headState, privKeys := util.DeterministicGenesisStateFulu(t, 64)
+	lookahead, err := headState.ProposerLookahead()
+	require.NoError(t, err)
+
+	const slot = primitives.Slot(1)
+	expected := lookahead[slot]
+
+	tests := []struct {
+		name     string
+		proposer primitives.ValidatorIndex
+		queued   bool
+		errMsg   string
+	}{
+		{name: "expected proposer", proposer: expected, queued: true, errMsg: "unknown parent for block"},
+		{name: "unexpected proposer", proposer: (expected + 1) % 64, queued: false, errMsg: errPendingBlockUnexpectedProposer.Error()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := p2ptest.NewTestP2P(t)
+			chainService := &mock.ChainService{
+				Genesis:             time.Now().Add(-time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+				State:               headState,
+				FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: 0},
+			}
+			r := &Service{
+				cfg: &config{
+					p2p:               p,
+					beaconDB:          dbtest.SetupDB(t),
+					initialSync:       &mockSync.Sync{IsSyncing: false},
+					chain:             chainService,
+					clock:             startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+					blockNotifier:     chainService.BlockNotifier(),
+					operationNotifier: chainService.OperationNotifier(),
+				},
+				chainStarted:        &atomic.Bool{},
+				seenBlockCache:      lruwrpr.New(10),
+				badBlockCache:       lruwrpr.New(10),
+				slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
+				seenPendingBlocks:   make(map[[32]byte]bool),
+			}
+
+			msg := util.NewBeaconBlockFulu()
+			msg.Block.Slot = slot
+			msg.Block.ProposerIndex = tt.proposer
+			msg.Block.ParentRoot = bytesutil.PadTo([]byte("unknown parent"), 32)
+			// Sign with the domain the gossip validation uses: the configured fork at the block's epoch.
+			fork, err := params.Fork(slots.ToEpoch(slot))
+			require.NoError(t, err)
+			domain, err := signing.Domain(fork, slots.ToEpoch(slot), params.BeaconConfig().DomainBeaconProposer, headState.GenesisValidatorsRoot())
+			require.NoError(t, err)
+			signingRoot, err := signing.ComputeSigningRoot(msg.Block, domain)
+			require.NoError(t, err)
+			msg.Signature = privKeys[tt.proposer].Sign(signingRoot[:]).Marshal()
+
+			buf := new(bytes.Buffer)
+			_, err = p.Encoding().EncodeGossip(buf, msg)
+			require.NoError(t, err)
+			topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlock]()]
+			topic = r.addDigestToTopic(topic, r.currentForkDigest())
+			m := &pubsub.Message{
+				Message: &pubsubpb.Message{
+					Data:  buf.Bytes(),
+					Topic: &topic,
+				},
+			}
+
+			res, err := r.validateBeaconBlockPubSub(t.Context(), "", m)
+			require.ErrorContains(t, tt.errMsg, err)
+			require.Equal(t, pubsub.ValidationIgnore, res)
+
+			blkRoot, err := msg.Block.HashTreeRoot()
+			require.NoError(t, err)
+			require.Equal(t, tt.queued, r.seenPendingBlocks[blkRoot])
 		})
 	}
 }
