@@ -23,6 +23,9 @@ var ValidatorAlreadyExitedMsg = "has already submitted an exit, which will take 
 // because it has not been active long enough.
 var ValidatorCannotExitYetMsg = "validator has not been active long enough to exit"
 
+// ErrPendingBalanceToWithdraw depends on the head state. Gossip validation ignores it instead of rejecting it.
+var ErrPendingBalanceToWithdraw = errors.New("must have no pending balance to withdraw")
+
 // ProcessVoluntaryExits is one of the operations performed
 // on each processed beacon block to determine which validators
 // should exit the state's validator registry.
@@ -198,7 +201,7 @@ func verifyExitConditions(st state.ReadOnlyBeaconState, validator state.ReadOnly
 			return fmt.Errorf("unable to retrieve pending balance to withdraw for validator %d: %w", exit.ValidatorIndex, err)
 		}
 		if ok {
-			return fmt.Errorf("validator %d must have no pending balance to withdraw", exit.ValidatorIndex)
+			return fmt.Errorf("validator %d %w", exit.ValidatorIndex, ErrPendingBalanceToWithdraw)
 		}
 	}
 

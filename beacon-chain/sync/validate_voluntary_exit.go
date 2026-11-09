@@ -68,6 +68,10 @@ func (s *Service) validateVoluntaryExit(ctx context.Context, pid peer.ID, msg *p
 		return pubsub.ValidationIgnore, err
 	}
 	if err := blocks.VerifyExitAndSignature(val, headState, exit); err != nil {
+		// [IGNORE] The validator has no pending partial withdrawals.
+		if errors.Is(err, blocks.ErrPendingBalanceToWithdraw) {
+			return pubsub.ValidationIgnore, err
+		}
 		return pubsub.ValidationReject, err
 	}
 
