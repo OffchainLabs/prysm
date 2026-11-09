@@ -2618,3 +2618,49 @@ func TestInsertChain_SetsBuilderPubkey(t *testing.T) {
 	require.NoError(t, err)
 	require.IsNil(t, pk)
 }
+
+func TestForkChoice_ZeroRootCheckpointPayloadHash_Genesis(t *testing.T) {
+	elGenesis := [32]byte{'E'}
+	tests := []struct {
+		name           string
+		gloasForkEpoch primitives.Epoch
+		prepare        func(ctx context.Context) (state.BeaconState, blocks.ROBlock, error)
+	}{
+		{
+			name:           "gloas",
+			gloasForkEpoch: 0,
+			prepare: func(ctx context.Context) (state.BeaconState, blocks.ROBlock, error) {
+				return prepareGloasForkchoiceState(ctx, 0, [32]byte{'g'}, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, elGenesis, 0, 0)
+			},
+		},
+		{
+			name:           "pre-gloas",
+			gloasForkEpoch: 100,
+			prepare: func(ctx context.Context) (state.BeaconState, blocks.ROBlock, error) {
+				return prepareForkchoiceState(ctx, 0, [32]byte{'g'}, params.BeaconConfig().ZeroHash, elGenesis, 0, 0)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			cfg := params.BeaconConfig()
+			cfg.GloasForkEpoch = tt.gloasForkEpoch
+			params.OverrideBeaconConfig(cfg)
+			ctx := t.Context()
+			f := New()
+
+			st, blk, err := tt.prepare(ctx)
+			require.NoError(t, err)
+			require.NoError(t, f.InsertNode(ctx, st, blk))
+			require.Equal(t, [32]byte{'g'}, f.store.treeRootNode.root)
+			require.Equal(t, [32]byte{}, f.store.justifiedCheckpoint.Root)
+			require.Equal(t, [32]byte{}, f.store.unrealizedJustifiedCheckpoint.Root)
+			require.NoError(t, f.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{}))
+
+			require.Equal(t, elGenesis, f.JustifiedPayloadBlockHash())
+			require.Equal(t, elGenesis, f.UnrealizedJustifiedPayloadBlockHash())
+			require.Equal(t, elGenesis, f.FinalizedPayloadBlockHash())
+		})
+	}
+}
