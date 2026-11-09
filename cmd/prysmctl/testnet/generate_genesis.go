@@ -309,6 +309,15 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 		gen = interop.GethTestnetGenesis(time.Unix(int64(f.GenesisTime), 0), params.BeaconConfig())
 	}
 
+	gb := gen.ToBlock()
+
+	// TODO: expose the PregenesisCreds option with a cli flag - for now defaulting to no withdrawal credentials at genesis
+	genesisState, err := interop.NewPreminedGenesis(ctx, time.Unix(int64(f.GenesisTime), 0), nv, 0, v, gb, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	// Write the geth genesis only after the beacon genesis builds, so an unsupported fork leaves no file behind.
 	if f.GethGenesisJsonOut != "" {
 		gbytes, err := json.MarshalIndent(gen, "", "\t")
 		if err != nil {
@@ -317,14 +326,6 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 		if err := os.WriteFile(f.GethGenesisJsonOut, gbytes, 0o600); err != nil {
 			return nil, errors.Wrapf(err, "failed to write %s", f.GethGenesisJsonOut)
 		}
-	}
-
-	gb := gen.ToBlock()
-
-	// TODO: expose the PregenesisCreds option with a cli flag - for now defaulting to no withdrawal credentials at genesis
-	genesisState, err := interop.NewPreminedGenesis(ctx, time.Unix(int64(f.GenesisTime), 0), nv, 0, v, gb, opts...)
-	if err != nil {
-		return nil, err
 	}
 
 	if f.OverrideEth1Data {

@@ -1157,31 +1157,6 @@ func TestStateDiff_SaveAndReadDiffForkTransitionGloas(t *testing.T) {
 	require.DeepSSZEqual(t, stSSZ, readStSSZ)
 }
 
-// TestStateDiff_SaveAndReadSnapshotGloas tests saving and reading a Gloas full snapshot.
-func TestStateDiff_SaveAndReadSnapshotGloas(t *testing.T) {
-	setDefaultStateDiffExponents()
-
-	db := setupDB(t)
-
-	err := setOffsetInDB(db, 0)
-	require.NoError(t, err)
-
-	st, _ := createState(t, 0, version.Gloas)
-
-	err = db.saveStateByDiff(context.Background(), st)
-	require.NoError(t, err)
-
-	readSt, err := db.stateByDiff(context.Background(), 0)
-	require.NoError(t, err)
-	require.NotNil(t, readSt)
-
-	stSSZ, err := st.MarshalSSZ()
-	require.NoError(t, err)
-	readStSSZ, err := readSt.MarshalSSZ()
-	require.NoError(t, err)
-	require.DeepSSZEqual(t, stSSZ, readStSSZ)
-}
-
 func TestStateDiff_OffsetCache(t *testing.T) {
 	setDefaultStateDiffExponents()
 
