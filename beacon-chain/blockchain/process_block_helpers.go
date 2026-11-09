@@ -437,6 +437,10 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 		pendingNodes = append(pendingNodes, args)
 	}
 
+	// Check finalized ancestry even when no blocks are missing.
+	if root != fRoot && !s.cfg.ForkChoiceStore.HasNode(root) {
+		return ErrNotDescendantOfFinalized
+	}
 	// Handle the first payload insertion.
 	if len(pendingNodes) == 0 {
 		// even without pending blocks, the first payload may be pending.
@@ -444,9 +448,6 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 		return nil
 	} else {
 		s.insertFirstPayloadIfNeeded(ctx, pendingNodes[len(pendingNodes)-1].Block.Block())
-	}
-	if root != fRoot && !s.cfg.ForkChoiceStore.HasNode(root) {
-		return ErrNotDescendantOfFinalized
 	}
 
 	slices.Reverse(pendingNodes)
