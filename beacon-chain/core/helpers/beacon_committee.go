@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/container/slice"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/math"
@@ -86,6 +87,35 @@ func AttestationCommitteesFromCache(ctx context.Context, st state.ReadOnlyBeacon
 		}
 	}
 	return true, committees, nil
+}
+
+// AttestationCommitteeAggregatesFromCache returns the cached aggregate public key of each attestation committee.
+func AttestationCommitteeAggregatesFromCache(ctx context.Context, st state.ReadOnlyBeaconState, att ethpb.Att) ([]bls.PublicKey, error) {
+	slot := att.GetData().Slot
+	seed, err := Seed(st, slots.ToEpoch(slot), params.BeaconConfig().DomainBeaconAttester)
+	if err != nil {
+		return nil, fmt.Errorf("get seed: %w", err)
+	}
+
+	committeeIndices := []primitives.CommitteeIndex{att.GetData().CommitteeIndex}
+	if att.Version() >= version.Electra {
+		committeeIndices = CommitteeIndices(att.CommitteeBitsVal())
+	}
+
+	cc := committeeCacheFrom(ctx)
+	keys := make([]bls.PublicKey, len(committeeIndices))
+	for i, ci := range committeeIndices {
+		key, err := cc.CommitteeAggregatePubkey(slot, seed, ci)
+		if err != nil {
+			return nil, fmt.Errorf("committee aggregate pubkey for committee %d: %w", ci, err)
+		}
+		if key == nil {
+			// Cache miss, fallback to aggregating the attesting keys.
+			return nil, nil
+		}
+		keys[i] = key
+	}
+	return keys, nil
 }
 
 func attestationCommittees(
@@ -436,6 +466,7 @@ func CommitteeIndices(committeeBits bitfield.Bitfield) []primitives.CommitteeInd
 
 // UpdateCommitteeCache gets called at the beginning of every epoch to cache the committee shuffled indices
 // list with committee index and epoch number. It caches the shuffled indices for the input epoch.
+// It also starts computing the aggregate public key of every committee in the background.
 func UpdateCommitteeCache(ctx context.Context, state state.ReadOnlyBeaconState, e primitives.Epoch) error {
 	ctx, span := trace.StartSpan(ctx, "committeeCache.UpdateCommitteeCache")
 	defer span.End()
@@ -445,7 +476,9 @@ func UpdateCommitteeCache(ctx context.Context, state state.ReadOnlyBeaconState, 
 		return err
 	}
 	cc := committeeCacheFrom(ctx)
-	if cc.HasEntry(string(seed[:])) {
+	// The entry can already exist without aggregates: the active indices scan also fills the cache.
+	if committees := cc.Entry(string(seed[:])); committees != nil {
+		fillCommitteeAggregatesAsync(cc, committees, state)
 		return nil
 	}
 	shuffledIndices, err := ShuffledIndices(ctx, state, e)
@@ -459,12 +492,17 @@ func UpdateCommitteeCache(ctx context.Context, state state.ReadOnlyBeaconState, 
 	copy(sorted, shuffledIndices)
 	slices.Sort(sorted)
 
-	return cc.AddCommitteeShuffledList(ctx, &cache.Committees{
+	committees := &cache.Committees{
 		ShuffledIndices: shuffledIndices,
 		CommitteeCount:  committeeCount,
 		Seed:            seed,
 		SortedIndices:   sorted,
-	})
+	}
+	if err := cc.AddCommitteeShuffledList(ctx, committees); err != nil {
+		return fmt.Errorf("add committee shuffled list: %w", err)
+	}
+	fillCommitteeAggregatesAsync(cc, committees, state)
+	return nil
 }
 
 // ExpandCommitteeCache resizes the cache to a higher limit.
@@ -638,5 +676,36 @@ func fillCommitteeCacheAsync(cc *cache.CommitteeCache, seed [32]byte, indices []
 		}); err != nil {
 			log.WithError(err).Error("Could not update committee cache")
 		}
+	})
+}
+
+// fillCommitteeAggregatesAsync computes the aggregate public key of every committee in the background.
+// It returns early when another call already computed or is computing them.
+func fillCommitteeAggregatesAsync(cc *cache.CommitteeCache, c *cache.Committees, s state.ReadOnlyBeaconState) {
+	if !c.TryStartAggregating() {
+		return
+	}
+
+	cc.Wg.Go(func() {
+		n := uint64(len(c.ShuffledIndices))
+		keys := make([]bls.PublicKey, c.CommitteeCount)
+		for i := range c.CommitteeCount {
+			committee := c.ShuffledIndices[slice.SplitOffset(n, c.CommitteeCount, i):slice.SplitOffset(n, c.CommitteeCount, i+1)]
+			if len(committee) == 0 {
+				// No attestation can name an empty committee. A nil key makes lookups fall back.
+				continue
+			}
+			indices := make([]uint64, len(committee))
+			for j, v := range committee {
+				indices[j] = uint64(v)
+			}
+			key, err := s.AggregateKeyFromIndices(indices)
+			if err != nil {
+				log.WithError(err).Debug("Could not aggregate committee key")
+				return
+			}
+			keys[i] = key
+		}
+		c.SetAggregatePubkeys(keys)
 	})
 }
