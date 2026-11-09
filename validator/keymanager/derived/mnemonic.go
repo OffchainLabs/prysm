@@ -76,7 +76,7 @@ func (m *MnemonicGenerator) ConfirmAcknowledgement(phrase string) error {
 	// Confirm the user has written down the mnemonic phrase offline.
 	_, err := prompt.ValidatePrompt(os.Stdin, confirmationText, prompt.ValidateConfirmation)
 	if err != nil {
-		log.Errorf("Could not confirm acknowledgement of userprompt, please enter y")
+		return errors.Wrap(err, "could not confirm acknowledgement of user prompt")
 	}
 	return nil
 }
