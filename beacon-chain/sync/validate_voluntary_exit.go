@@ -3,10 +3,12 @@ package sync
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -66,6 +68,10 @@ func (s *Service) validateVoluntaryExit(ctx context.Context, pid peer.ID, msg *p
 	val, err := headState.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
 	if err != nil {
 		return pubsub.ValidationIgnore, err
+	}
+	// [IGNORE] The validator has not already initiated exit.
+	if val.ExitEpoch() != params.BeaconConfig().FarFutureEpoch {
+		return pubsub.ValidationIgnore, fmt.Errorf("validator with index %d %s: %v", exit.Exit.ValidatorIndex, blocks.ValidatorAlreadyExitedMsg, val.ExitEpoch())
 	}
 	if err := blocks.VerifyExitAndSignature(val, headState, exit); err != nil {
 		// [IGNORE] The validator has no pending partial withdrawals.

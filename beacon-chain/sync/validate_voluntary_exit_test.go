@@ -224,6 +224,18 @@ func TestValidateVoluntaryExit_IgnoreAndReject(t *testing.T) {
 		return r.validateVoluntaryExit(t.Context(), "", m)
 	}
 
+	t.Run("already initiated exit is ignored", func(t *testing.T) {
+		exit, s := setupValidExit(t)
+		val, err := s.ValidatorAtIndex(0)
+		require.NoError(t, err)
+		// Exit epoch in the past, so the validator is also inactive. The spec checks exit_epoch first.
+		val.ExitEpoch = 10
+		require.NoError(t, s.UpdateValidatorAtIndex(0, val))
+		res, err := validate(t, exit, s)
+		require.ErrorContains(t, blocks.ValidatorAlreadyExitedMsg, err)
+		require.Equal(t, pubsub.ValidationIgnore, res)
+	})
+
 	t.Run("pending partial withdrawal is ignored", func(t *testing.T) {
 		exit, phase0State := setupValidExit(t)
 		s, err := state_native.New(&ethpb.BeaconStateElectra{
