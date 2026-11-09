@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
@@ -435,11 +436,13 @@ func (s *Server) ListRemoteKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The signer URL may carry basic-auth credentials; they must not be served to API clients.
+	signerURL := api.RedactEndpoint(s.validatorService.RemoteSignerConfig().BaseEndpoint)
 	keystoreResponse := make([]*RemoteKey, len(pubKeys))
 	for i, pubkey := range pubKeys {
 		keystoreResponse[i] = &RemoteKey{
 			Pubkey:   hexutil.Encode(pubkey[:]),
-			Url:      s.validatorService.RemoteSignerConfig().BaseEndpoint,
+			Url:      signerURL,
 			Readonly: checker.IsReadOnly(pubkey),
 		}
 	}
