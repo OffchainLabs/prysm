@@ -1008,9 +1008,8 @@ func validateExecutionPayloadEnvelopeByRangeResponse(
 	}
 
 	envSlot := primitives.Slot(env.Message.Payload.SlotNumber)
-	endSlot := req.StartSlot.Add(req.Count)
-	if envSlot < req.StartSlot || envSlot >= endSlot {
-		return 0, nil, errors.Wrapf(ErrInvalidFetchedData, "envelope slot %d outside requested range [%d, %d)", envSlot, req.StartSlot, endSlot)
+	if envSlot < req.StartSlot || uint64(envSlot-req.StartSlot) >= req.Count {
+		return 0, nil, errors.Wrapf(ErrInvalidFetchedData, "envelope slot %d outside requested range (start %d, count %d)", envSlot, req.StartSlot, req.Count)
 	}
 	if hasPrevious && envSlot <= prevSlot {
 		return 0, nil, errors.Wrapf(ErrInvalidFetchedData, "envelope slot %d not greater than previous slot %d", envSlot, prevSlot)
