@@ -45,13 +45,10 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 	cfg.DenebForkEpoch = 3
 	cfg.ElectraForkEpoch = 4
 	cfg.FuluForkEpoch = 5
+	cfg.GloasForkEpoch = 6
 	params.OverrideBeaconConfig(cfg)
 
 	for _, testVersion := range version.All()[1:] {
-		if testVersion == version.Gloas {
-			// TODO(16027): Unskip light client tests for Gloas
-			continue
-		}
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			l := util.NewTestLightClient(t, testVersion)
 
@@ -138,6 +135,8 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 				resp = &pb.LightClientBootstrapDeneb{}
 			case version.Electra, version.Fulu:
 				resp = &pb.LightClientBootstrapElectra{}
+			case version.Gloas:
+				resp = &pb.LightClientBootstrapGloas{}
 			default:
 				t.Fatalf("Unsupported version %s", version.String(testVersion))
 			}
@@ -179,14 +178,11 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 	config.DenebForkEpoch = 3
 	config.ElectraForkEpoch = 4
 	config.FuluForkEpoch = 5
+	config.GloasForkEpoch = 6
 	params.OverrideBeaconConfig(config)
 
 	t.Run("can save retrieve", func(t *testing.T) {
 		for _, testVersion := range version.All()[1:] {
-			if testVersion == version.Gloas {
-				// TODO(16027): Unskip light client tests for Gloas
-				continue
-			}
 			t.Run(version.String(testVersion), func(t *testing.T) {
 
 				slot := primitives.Slot(params.BeaconConfig().VersionToForkEpochMap()[testVersion] * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
@@ -264,6 +260,8 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 						resp = &pb.LightClientUpdateDeneb{}
 					case version.Electra, version.Fulu:
 						resp = &pb.LightClientUpdateElectra{}
+					case version.Gloas:
+						resp = &pb.LightClientUpdateGloas{}
 					default:
 						t.Fatalf("Unsupported version %s", version.String(testVersion))
 					}
@@ -325,6 +323,8 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 							resp = &pb.LightClientUpdateDeneb{}
 						case version.Electra, version.Fulu:
 							resp = &pb.LightClientUpdateElectra{}
+						case version.Gloas:
+							resp = &pb.LightClientUpdateGloas{}
 						default:
 							t.Fatalf("Unsupported version %s", version.String(testVersion))
 						}
@@ -741,10 +741,6 @@ func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
 	})
 
 	for _, testVersion := range version.All()[1:] {
-		if testVersion == version.Gloas {
-			// TODO(16027): Unskip light client tests for Gloas
-			continue
-		}
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			ctx := t.Context()
 
@@ -809,6 +805,8 @@ func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
 				resp = &pb.LightClientFinalityUpdateDeneb{}
 			case version.Electra, version.Fulu:
 				resp = &pb.LightClientFinalityUpdateElectra{}
+			case version.Gloas:
+				resp = &pb.LightClientFinalityUpdateGloas{}
 			default:
 				t.Fatalf("Unsupported version %s", version.String(testVersion))
 			}
@@ -840,10 +838,6 @@ func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
 	})
 
 	for _, testVersion := range version.All()[1:] {
-		if testVersion == version.Gloas {
-			// TODO(16027): Unskip light client tests for Gloas
-			continue
-		}
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			ctx := t.Context()
 			l := util.NewTestLightClient(t, testVersion)
@@ -906,6 +900,8 @@ func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
 				resp = &pb.LightClientOptimisticUpdateDeneb{}
 			case version.Electra, version.Fulu:
 				resp = &pb.LightClientOptimisticUpdateDeneb{}
+			case version.Gloas:
+				resp = &pb.LightClientOptimisticUpdateGloas{}
 			default:
 				t.Fatalf("Unsupported version %s", version.String(testVersion))
 			}
@@ -1079,6 +1075,26 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 		})
 		require.NoError(t, err)
 		blk, err = blocks.NewSignedBeaconBlock(util.NewBeaconBlockFulu())
+		require.NoError(t, err)
+	case version.Gloas:
+		slot = primitives.Slot(config.GloasForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+		executionBranch := make([][]byte, fieldparams.ExecutionBranchDepthGloas)
+		for i := range executionBranch {
+			executionBranch[i] = sampleRoot
+		}
+		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderGloas{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot:          slot,
+				ProposerIndex: primitives.ValidatorIndex(rand.Int()),
+				ParentRoot:    sampleRoot,
+				StateRoot:     sampleRoot,
+				BodyRoot:      sampleRoot,
+			},
+			ExecutionBlockHash: sampleRoot,
+			ExecutionBranch:    executionBranch,
+		})
+		require.NoError(t, err)
+		blk, err = blocks.NewSignedBeaconBlock(util.NewBeaconBlockGloas())
 		require.NoError(t, err)
 	default:
 		return nil, fmt.Errorf("unsupported version %s", version.String(v))

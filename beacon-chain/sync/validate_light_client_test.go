@@ -55,6 +55,7 @@ func TestValidateLightClientOptimisticUpdate(t *testing.T) {
 	cfg.DenebForkEpoch = 4
 	cfg.ElectraForkEpoch = 5
 	cfg.FuluForkEpoch = 6
+	cfg.GloasForkEpoch = 7
 	cfg.ForkVersionSchedule[[4]byte{1, 0, 0, 0}] = 1
 	cfg.ForkVersionSchedule[[4]byte{2, 0, 0, 0}] = 2
 	cfg.ForkVersionSchedule[[4]byte{3, 0, 0, 0}] = 3
@@ -185,6 +186,7 @@ func TestValidateLightClientFinalityUpdate(t *testing.T) {
 	cfg.DenebForkEpoch = 4
 	cfg.ElectraForkEpoch = 5
 	cfg.FuluForkEpoch = 6
+	cfg.GloasForkEpoch = 7
 	cfg.ForkVersionSchedule[[4]byte{1, 0, 0, 0}] = 1
 	cfg.ForkVersionSchedule[[4]byte{2, 0, 0, 0}] = 2
 	cfg.ForkVersionSchedule[[4]byte{3, 0, 0, 0}] = 3
