@@ -1,0 +1,41 @@
+name: Kurtosis smoke
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-4
+    # Longer than the 1h Assertoor stability timeout, so Assertoor reports first.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Prysm images
+        run: |
+          docker build --build-arg BIN=beacon-chain --build-arg TAG="${GITHUB_SHA::8}" -t prysm-beacon-chain:ci -f .github/kurtosis.Dockerfile .
+          docker build --build-arg BIN=validator --build-arg TAG="${GITHUB_SHA::8}" -t prysm-validator:ci -f .github/kurtosis.Dockerfile .
+
+      # Runs the network and Assertoor, then uploads an enclave dump as an artifact.
+      - id: kurtosis
+        uses: ethpandaops/kurtosis-assertoor-github-action@4677a5fb1734ec96689b9f7bb846c5700bcfeb2b # master 2026-04-14
+        with:
+          ethereum_package_args: .github/kurtosis-smoke.yaml
+
+      # The action skips its own result check when it cannot find Assertoor.
+      - name: Require Assertoor success
+        if: steps.kurtosis.outputs.test_result != 'success'
+        env:
+          RESULT: ${{ steps.kurtosis.outputs.test_result }}
+        run: |
+          echo "Assertoor result: '$RESULT'"
+          exit 1
