@@ -10,4 +10,5 @@ const (
 	SepoliaName         = "sepolia"
 	HoleskyName         = "holesky"
 	HoodiName           = "hoodi"
+	EphemeryName        = "ephemery"
 )
