@@ -22,10 +22,12 @@ import (
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 )
@@ -92,7 +94,7 @@ func TestValidateVoluntaryExit_ValidExit(t *testing.T) {
 		cfg: &config{
 			p2p:               p,
 			chain:             mockChainService,
-			clock:             startup.NewClock(gt, [32]byte{}),
+			clock:             startup.NewClock(gt, [32]byte{}, startup.WithSlotAsNow(s.Slot())),
 			initialSync:       &mockSync.Sync{IsSyncing: false},
 			operationNotifier: mockChainService.OperationNotifier(),
 		},
@@ -203,14 +205,21 @@ func TestValidateVoluntaryExit_ValidExit_Syncing(t *testing.T) {
 }
 
 func TestValidateVoluntaryExit_IgnoreAndReject(t *testing.T) {
-	validate := func(t *testing.T, exit *ethpb.SignedVoluntaryExit, s state.BeaconState) (pubsub.ValidationResult, error) {
+	genesis := time.Now()
+	slotStart := func(t *testing.T, slot primitives.Slot) time.Time {
+		start, err := slots.StartTime(genesis, slot)
+		require.NoError(t, err)
+		return start
+	}
+	// validate runs gossip validation with the wall clock at now.
+	validate := func(t *testing.T, exit *ethpb.SignedVoluntaryExit, s state.BeaconState, now time.Time) (pubsub.ValidationResult, error) {
 		p := p2ptest.NewTestP2P(t)
 		chain := &mock.ChainService{State: s}
 		r := &Service{
 			cfg: &config{
 				p2p:               p,
 				chain:             chain,
-				clock:             startup.NewClock(time.Now(), [32]byte{}),
+				clock:             startup.NewClock(genesis, [32]byte{}, startup.WithTimeAsNow(now)),
 				initialSync:       &mockSync.Sync{IsSyncing: false},
 				operationNotifier: chain.OperationNotifier(),
 			},
@@ -231,9 +240,44 @@ func TestValidateVoluntaryExit_IgnoreAndReject(t *testing.T) {
 		// Exit epoch in the past, so the validator is also inactive. The spec checks exit_epoch first.
 		val.ExitEpoch = 10
 		require.NoError(t, s.UpdateValidatorAtIndex(0, val))
-		res, err := validate(t, exit, s)
+		res, err := validate(t, exit, s, slotStart(t, s.Slot()))
 		require.ErrorContains(t, blocks.ValidatorAlreadyExitedMsg, err)
 		require.Equal(t, pubsub.ValidationIgnore, res)
+	})
+
+	t.Run("exit epoch after the wall clock epoch is ignored", func(t *testing.T) {
+		exit, s := setupValidExit(t)
+		exit.Exit.Epoch = coreTime.CurrentEpoch(s) + 1
+		res, err := validate(t, exit, s, slotStart(t, s.Slot()))
+		require.ErrorContains(t, "is in the future", err)
+		require.Equal(t, pubsub.ValidationIgnore, res)
+	})
+
+	t.Run("exit epoch after the head state epoch is accepted", func(t *testing.T) {
+		exit, s := setupValidExit(t)
+		// The head state is in the epoch before the exit epoch, but the wall clock is already in the exit epoch.
+		headSlot, err := slots.EpochStart(exit.Exit.Epoch - 1)
+		require.NoError(t, err)
+		require.NoError(t, s.SetSlot(headSlot))
+		exitSlot, err := slots.EpochStart(exit.Exit.Epoch)
+		require.NoError(t, err)
+		res, err := validate(t, exit, s, slotStart(t, exitSlot))
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationAccept, res)
+	})
+
+	t.Run("exit epoch within the clock disparity is accepted", func(t *testing.T) {
+		exit, s := setupValidExit(t)
+		headSlot, err := slots.EpochStart(exit.Exit.Epoch - 1)
+		require.NoError(t, err)
+		require.NoError(t, s.SetSlot(headSlot))
+		exitSlot, err := slots.EpochStart(exit.Exit.Epoch)
+		require.NoError(t, err)
+		// The wall clock is still in the epoch before the exit epoch, but within MAXIMUM_GOSSIP_CLOCK_DISPARITY of it.
+		now := slotStart(t, exitSlot).Add(-params.BeaconConfig().MaximumGossipClockDisparityDuration() / 2)
+		res, err := validate(t, exit, s, now)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationAccept, res)
 	})
 
 	t.Run("pending partial withdrawal is ignored", func(t *testing.T) {
@@ -248,7 +292,7 @@ func TestValidateVoluntaryExit_IgnoreAndReject(t *testing.T) {
 			PendingPartialWithdrawals: []*ethpb.PendingPartialWithdrawal{{Index: 0, Amount: 1}},
 		})
 		require.NoError(t, err)
-		res, err := validate(t, exit, s)
+		res, err := validate(t, exit, s, slotStart(t, s.Slot()))
 		require.ErrorIs(t, err, blocks.ErrPendingBalanceToWithdraw)
 		require.Equal(t, pubsub.ValidationIgnore, res)
 	})
@@ -258,7 +302,7 @@ func TestValidateVoluntaryExit_IgnoreAndReject(t *testing.T) {
 		priv, err := bls.RandKey()
 		require.NoError(t, err)
 		exit.Signature = priv.Sign([]byte("wrong")).Marshal()
-		res, err := validate(t, exit, s)
+		res, err := validate(t, exit, s, slotStart(t, s.Slot()))
 		require.ErrorIs(t, err, signing.ErrSigFailedToVerify)
 		require.Equal(t, pubsub.ValidationReject, res)
 	})
