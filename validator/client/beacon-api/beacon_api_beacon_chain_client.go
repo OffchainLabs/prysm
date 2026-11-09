@@ -147,12 +147,122 @@ func (c beaconApiChainClient) ChainHead(ctx context.Context, _ *empty.Empty) (*e
 }
 
 func (c beaconApiChainClient) ValidatorBalances(ctx context.Context, in *ethpb.ListValidatorBalancesRequest) (*ethpb.ValidatorBalances, error) {
-	if c.fallbackClient != nil {
-		return c.fallbackClient.ValidatorBalances(ctx, in)
+	pageSize := in.PageSize
+
+	// We follow the gRPC behavior here, which returns a maximum of 250 results when pageSize == 0
+	if pageSize == 0 {
+		pageSize = 250
 	}
 
-	// TODO: Implement me
-	return nil, errors.New("beaconApiChainClient.ValidatorBalances is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiChainClientWithFallback.")
+	var pageToken uint64
+	var err error
+
+	if in.PageToken != "" {
+		if pageToken, err = strconv.ParseUint(in.PageToken, 10, 64); err != nil {
+			return nil, errors.Wrapf(err, "failed to parse page token `%s`", in.PageToken)
+		}
+	}
+
+	pubkeys := make([]string, len(in.PublicKeys))
+	for idx, pubkey := range in.PublicKeys {
+		pubkeys[idx] = hexutil.Encode(pubkey)
+	}
+
+	var stateValidators *structs.GetValidatorsResponse
+	var epoch primitives.Epoch
+
+	switch queryFilter := in.QueryFilter.(type) {
+	case *ethpb.ListValidatorBalancesRequest_Epoch:
+		slot, err := slots.EpochStart(queryFilter.Epoch)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to get first slot for epoch `%d`", queryFilter.Epoch)
+		}
+		if stateValidators, err = c.stateValidatorsProvider.StateValidatorsForSlot(ctx, slot, pubkeys, in.Indices, nil); err != nil {
+			return nil, errors.Wrapf(err, "failed to get state validators for slot `%d`", slot)
+		}
+		epoch = slots.ToEpoch(slot)
+	case *ethpb.ListValidatorBalancesRequest_Genesis:
+		if stateValidators, err = c.stateValidatorsProvider.StateValidatorsForSlot(ctx, 0, pubkeys, in.Indices, nil); err != nil {
+			return nil, errors.Wrap(err, "failed to get genesis state validators")
+		}
+		epoch = 0
+	case nil:
+		if stateValidators, err = c.stateValidatorsProvider.StateValidatorsForHead(ctx, pubkeys, in.Indices, nil); err != nil {
+			return nil, errors.Wrap(err, "failed to get head state validators")
+		}
+
+		blockHeader, err := c.headBlockHeaders(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get head block headers")
+		}
+
+		slot, err := strconv.ParseUint(blockHeader.Data.Header.Message.Slot, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse header slot `%s`", blockHeader.Data.Header.Message.Slot)
+		}
+
+		epoch = slots.ToEpoch(primitives.Slot(slot))
+	default:
+		return nil, errors.Errorf("unsupported query filter type `%v`", reflect.TypeOf(queryFilter))
+	}
+
+	if stateValidators.Data == nil {
+		return nil, errors.New("state validators data is nil")
+	}
+
+	start := min(pageToken*uint64(pageSize), uint64(len(stateValidators.Data)))
+
+	end := min(start+uint64(pageSize), uint64(len(stateValidators.Data)))
+
+	// Balances are returned in the order the beacon node reports them, as in `Validators`.
+	balances := make([]*ethpb.ValidatorBalances_Balance, end-start)
+	for idx := start; idx < end; idx++ {
+		stateValidator := stateValidators.Data[idx]
+
+		if stateValidator.Validator == nil {
+			return nil, errors.Errorf("state validator at index `%d` is nil", idx)
+		}
+
+		pubkey, err := hexutil.Decode(stateValidator.Validator.Pubkey)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to decode validator pubkey `%s`", stateValidator.Validator.Pubkey)
+		}
+
+		validatorIndex, err := strconv.ParseUint(stateValidator.Index, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse validator index `%s`", stateValidator.Index)
+		}
+
+		balance, err := strconv.ParseUint(stateValidator.Balance, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse validator balance `%s`", stateValidator.Balance)
+		}
+
+		// The gRPC implementation reports the `ethpb.ValidatorStatus` enum name, so map the beacon API status onto it.
+		status, ok := beaconAPITogRPCValidatorStatus[stateValidator.Status]
+		if !ok {
+			status = ethpb.ValidatorStatus_UNKNOWN_STATUS
+		}
+
+		balances[idx-start] = &ethpb.ValidatorBalances_Balance{
+			PublicKey: pubkey,
+			Index:     primitives.ValidatorIndex(validatorIndex),
+			Balance:   balance,
+			Status:    status.String(),
+		}
+	}
+
+	var nextPageToken string
+	if end < uint64(len(stateValidators.Data)) {
+		nextPageToken = strconv.FormatUint(pageToken+1, 10)
+	}
+
+	return &ethpb.ValidatorBalances{
+		Epoch:         epoch,
+		Balances:      balances,
+		NextPageToken: nextPageToken,
+		TotalSize:     int32(len(stateValidators.Data)),
+	}, nil
 }
 
 func (c beaconApiChainClient) Validators(ctx context.Context, in *ethpb.ListValidatorsRequest) (*ethpb.Validators, error) {
