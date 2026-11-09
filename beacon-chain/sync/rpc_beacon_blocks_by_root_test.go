@@ -331,7 +331,7 @@ func TestRecentBeaconBlocks_RPCRequestSent_IncorrectRoot(t *testing.T) {
 	})
 
 	p1.Connect(p2)
-	require.ErrorContains(t, "received unexpected block with root", r.sendBeaconBlocksRequest(t.Context(), &expectedRoots, p2.PeerID()))
+	require.ErrorContains(t, "received unrequested block with root", r.sendBeaconBlocksRequest(t.Context(), &expectedRoots, p2.PeerID()))
 }
 
 func TestRecentBeaconBlocks_RPCRequestSent_InvalidSignature(t *testing.T) {
