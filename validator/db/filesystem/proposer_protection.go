@@ -9,7 +9,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/validator/db/common"
 	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 // HighestSignedProposal is implemented only to satisfy the interface.
@@ -128,8 +127,6 @@ func (s *Store) SlashableProposalCheck(
 	pubKey [fieldparams.BLSPubkeyLength]byte,
 	signedBlock interfaces.ReadOnlySignedBeaconBlock,
 	signingRoot [fieldparams.RootLength]byte,
-	emitAccountMetrics bool,
-	validatorProposeFailVec *prometheus.CounterVec,
 ) error {
 	// Check if the proposal is potentially slashable regarding EIP-3076 minimal conditions.
 	// If not, save the new proposal into the database.
