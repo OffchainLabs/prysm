@@ -713,6 +713,16 @@ func TestIsBidCompatibleWithHead(t *testing.T) {
 		service.head = &head{root: headRoot, block: signed, state: st, slot: headSlot}
 		return service
 	}
+	insertHeadPayload := func(t *testing.T, service *Service) {
+		env := &ethpb.ExecutionPayloadEnvelope{
+			BeaconBlockRoot:       headRoot[:],
+			ParentBeaconBlockRoot: headParentRoot[:],
+			Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: headBlockHash[:], ParentHash: headParentHash[:]},
+		}
+		envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
+		require.NoError(t, err)
+		require.NoError(t, service.InsertPayload(envelope))
+	}
 
 	t.Run("no head", func(t *testing.T) {
 		service, _ := setupGloasService(t, &mockExecution.EngineClient{})
@@ -738,11 +748,26 @@ func TestIsBidCompatibleWithHead(t *testing.T) {
 
 	t.Run("builds on head full payload when full expected", func(t *testing.T) {
 		service := setup(t)
+		insertHeadPayload(t, service)
 		require.Equal(t, true, service.IsBidCompatibleWithHead(testROBid(t, headSlot+1, headRoot, headBlockHash)))
 		require.Equal(t, false, service.IsBidCompatibleWithHead(testROBid(t, headSlot+1, headRoot, headParentHash)))
 	})
 
-	t.Run("builds on head empty variant when forkchoice prefers empty", func(t *testing.T) {
+	t.Run("builds on head empty variant when head payload is missing", func(t *testing.T) {
+		service := setup(t)
+		require.Equal(t, true, service.IsBidCompatibleWithHead(testROBid(t, headSlot+1, headRoot, headParentHash)))
+		require.Equal(t, false, service.IsBidCompatibleWithHead(testROBid(t, headSlot+1, headRoot, headBlockHash)))
+	})
+
+	t.Run("builds on head empty variant when ptc votes against payload", func(t *testing.T) {
+		service := setup(t)
+		insertHeadPayload(t, service)
+		setTestPTCVotes(service, headRoot, false, false)
+		require.Equal(t, true, service.IsBidCompatibleWithHead(testROBid(t, headSlot+1, headRoot, headParentHash)))
+		require.Equal(t, false, service.IsBidCompatibleWithHead(testROBid(t, headSlot+1, headRoot, headBlockHash)))
+	})
+
+	t.Run("builds on head empty variant for a later slot when head payload is missing", func(t *testing.T) {
 		service := setup(t)
 		require.Equal(t, true, service.IsBidCompatibleWithHead(testROBid(t, headSlot+2, headRoot, headParentHash)))
 		require.Equal(t, false, service.IsBidCompatibleWithHead(testROBid(t, headSlot+2, headRoot, headBlockHash)))
