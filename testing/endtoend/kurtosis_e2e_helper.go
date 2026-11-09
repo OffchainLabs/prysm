@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -20,6 +21,16 @@ import (
 const (
 	// ETHEREUM_PACKAGE is the identifier of the ethereum-package Starlark package used in these tests.
 	ETHEREUM_PACKAGE = "github.com/ethpandaops/ethereum-package"
+
+	// DEFAULT_LATE_SYNC_NODE_DELAY is how long after genesis the skip_start sync nodes are
+	// started, so the chain has advanced and finalized.
+	DEFAULT_LATE_SYNC_NODE_DELAY = 6 * time.Minute
+
+	// SYNC_NODE_SERVICE is the skip_start node for the P2P (genesis) sync test.
+	SYNC_NODE_SERVICE = "cl-3-prysm-geth"
+
+	// CHECKPOINT_SYNC_NODE_SERVICE is the skip_start node for the checkpoint sync test.
+	CHECKPOINT_SYNC_NODE_SERVICE = "cl-4-prysm-geth"
 
 	BEACON_CHAIN_IMAGE_TARGET = "cmd/beacon-chain/oci_image_tarball_e2e/tarball.tar"
 	VALIDATOR_IMAGE_TARGET    = "cmd/validator/oci_image_tarball_e2e/tarball.tar"
@@ -38,14 +49,20 @@ const (
 
 // KurtosisTestSuites defines a suite of end-to-end tests to run against a Kurtosis enclave.
 type KurtosisTestSuites struct {
-	enclaveName string
-	configPath  string
-	epochsToRun uint64
+	enclaveName       string
+	configPath        string
+	epochsToRun       uint64
+	runSyncTest       bool
+	lateSyncNodeDelay time.Duration
 }
 
 func (k *KurtosisTestSuites) Run(t *testing.T) {
 	// Note: Subtests can be run in parallel as they use separate enclaves.
 	t.Parallel()
+
+	if k.runSyncTest && k.lateSyncNodeDelay <= 0 {
+		k.lateSyncNodeDelay = DEFAULT_LATE_SYNC_NODE_DELAY
+	}
 
 	ctx := t.Context()
 
@@ -94,7 +111,24 @@ func (k *KurtosisTestSuites) Run(t *testing.T) {
 	require.NoError(t, kw.RegisterPlaybooks(ctx, map[string]any{
 		"epochsToRun": k.epochsToRun,
 	}), "Failed to register Assertoor playbooks")
+
+	k.scheduleServiceEvents(t, kw, genesisTime)
+
 	require.NoError(t, kw.WaitForAssertoor(ctx, deadline), "Assertoor checks failed")
+}
+
+func (k *KurtosisTestSuites) scheduleServiceEvents(t *testing.T, kw *kurtosis.KurtosisWrapper, genesisTime time.Time) {
+	if k.runSyncTest {
+		// Resume late-joining beacon node for normal sync and checkpoint sync test.
+		stoppedNodes, err := kw.StoppedPrysmCLName()
+		require.NoError(t, err, "Failed to locate the skip_start sync node")
+		require.Equal(t, 2, len(stoppedNodes))
+		require.Equal(t, true, slices.Contains(stoppedNodes, SYNC_NODE_SERVICE), "Expected stopped nodes to contain %s", SYNC_NODE_SERVICE)
+		require.Equal(t, true, slices.Contains(stoppedNodes, CHECKPOINT_SYNC_NODE_SERVICE), "Expected stopped nodes to contain %s", CHECKPOINT_SYNC_NODE_SERVICE)
+
+		delay := time.Until(genesisTime.Add(k.lateSyncNodeDelay))
+		kw.ScheduleServiceAction(delay, kurtosis.ServiceStart, SYNC_NODE_SERVICE, CHECKPOINT_SYNC_NODE_SERVICE)
+	}
 }
 
 // waitForNodeReady blocks until the beacon node reports healthy (200 from
