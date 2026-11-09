@@ -1,5 +1,3 @@
-//go:build go1.18
-
 package accounts_test
 
 import (

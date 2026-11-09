@@ -418,15 +418,16 @@ func TestAttestToBlockHead_BlocksDoubleAtt(t *testing.T) {
 				Target:          &ethpb.Checkpoint{Root: targetRoot[:], Epoch: 4},
 				Source:          &ethpb.Checkpoint{Root: sourceRoot[:], Epoch: 3},
 			}, nil)
-			m.validatorClient.EXPECT().AttestationData(
-				gomock.Any(), // ctx
-				gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
-			).Return(&ethpb.AttestationData{
+			doubleVote := &ethpb.AttestationData{
 				Slot:            params.BeaconConfig().SlotsPerEpoch.Mul(4),
 				BeaconBlockRoot: beaconBlockRoot2[:],
 				Target:          &ethpb.Checkpoint{Root: targetRoot[:], Epoch: 4},
 				Source:          &ethpb.Checkpoint{Root: sourceRoot[:], Epoch: 3},
-			}, nil)
+			}
+			m.validatorClient.EXPECT().AttestationData(
+				gomock.Any(), // ctx
+				gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
+			).Return(doubleVote, nil)
 			m.validatorClient.EXPECT().DomainData(
 				gomock.Any(), // ctx
 				gomock.Any(), // epoch
@@ -440,6 +441,7 @@ func TestAttestToBlockHead_BlocksDoubleAtt(t *testing.T) {
 			validator.SubmitAttestation(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(4), pubKey)
 			validator.SubmitAttestation(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(4), pubKey)
 			require.LogsContain(t, hook, "Failed attestation slashing protection")
+			requireSignatureNotLogged(t, hook, validator, pubKey, doubleVote)
 		})
 	}
 }
@@ -473,15 +475,16 @@ func TestAttestToBlockHead_BlocksSurroundAtt(t *testing.T) {
 				Target:          &ethpb.Checkpoint{Root: targetRoot[:], Epoch: 2},
 				Source:          &ethpb.Checkpoint{Root: sourceRoot[:], Epoch: 1},
 			}, nil)
-			m.validatorClient.EXPECT().AttestationData(
-				gomock.Any(), // ctx
-				gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
-			).Return(&ethpb.AttestationData{
+			surroundingVote := &ethpb.AttestationData{
 				Slot:            params.BeaconConfig().SlotsPerEpoch.Mul(3),
 				BeaconBlockRoot: beaconBlockRoot[:],
 				Target:          &ethpb.Checkpoint{Root: targetRoot[:], Epoch: 3},
 				Source:          &ethpb.Checkpoint{Root: sourceRoot[:], Epoch: 0},
-			}, nil)
+			}
+			m.validatorClient.EXPECT().AttestationData(
+				gomock.Any(), // ctx
+				gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
+			).Return(surroundingVote, nil)
 
 			m.validatorClient.EXPECT().DomainData(
 				gomock.Any(), // ctx
@@ -496,6 +499,7 @@ func TestAttestToBlockHead_BlocksSurroundAtt(t *testing.T) {
 			validator.SubmitAttestation(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(2), pubKey)
 			validator.SubmitAttestation(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(3), pubKey)
 			require.LogsContain(t, hook, "Failed attestation slashing protection")
+			requireSignatureNotLogged(t, hook, validator, pubKey, surroundingVote)
 		})
 	}
 }
@@ -543,20 +547,37 @@ func TestAttestToBlockHead_BlocksSurroundedAtt(t *testing.T) {
 			validator.SubmitAttestation(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(3), pubKey)
 			require.LogsDoNotContain(t, hook, failedAttLocalProtectionErr)
 
-			m.validatorClient.EXPECT().AttestationData(
-				gomock.Any(), // ctx
-				gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
-			).Return(&ethpb.AttestationData{
+			surroundedVote := &ethpb.AttestationData{
 				Slot:            params.BeaconConfig().SlotsPerEpoch.Mul(2),
 				BeaconBlockRoot: bytesutil.PadTo([]byte("A"), 32),
 				Target:          &ethpb.Checkpoint{Root: bytesutil.PadTo([]byte("B"), 32), Epoch: 2},
 				Source:          &ethpb.Checkpoint{Root: bytesutil.PadTo([]byte("C"), 32), Epoch: 1},
-			}, nil)
+			}
+			m.validatorClient.EXPECT().AttestationData(
+				gomock.Any(), // ctx
+				gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
+			).Return(surroundedVote, nil)
 
 			validator.SubmitAttestation(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(2), pubKey)
 			require.LogsContain(t, hook, "Failed attestation slashing protection")
+			requireSignatureNotLogged(t, hook, validator, pubKey, surroundedVote)
 		})
 	}
+}
+
+// requireSignatureNotLogged checks that the details of an attestation refused by slashing
+// protection are logged without the signature the validator produced for it.
+func requireSignatureNotLogged(t *testing.T, hook *logTest.Hook, v *validator, pubKey [fieldparams.BLSPubkeyLength]byte, data *ethpb.AttestationData) {
+	t.Helper()
+	root, err := signing.ComputeSigningRoot(data, make([]byte, 32))
+	require.NoError(t, err)
+	sig, err := v.km.Sign(t.Context(), &validatorpb.SignRequest{
+		PublicKey:   pubKey[:],
+		SigningRoot: root[:],
+	})
+	require.NoError(t, err)
+	require.LogsContain(t, hook, "Attempted slashable attestation details")
+	require.LogsDoNotContain(t, hook, fmt.Sprintf("%#x", sig.Marshal()))
 }
 
 func TestAttestToBlockHead_RefusesDataForAnotherSlot(t *testing.T) {

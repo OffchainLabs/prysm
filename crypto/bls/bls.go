@@ -53,6 +53,11 @@ func AggregateMultiplePubkeys(pubs []PublicKey) PublicKey {
 	return blst.AggregateMultiplePubkeys(pubs)
 }
 
+// SubtractPublicKey returns p - sub as a new key. It undoes the aggregation of sub into p.
+func SubtractPublicKey(p, sub PublicKey) PublicKey {
+	return blst.SubtractPublicKey(p, sub)
+}
+
 // AggregateSignatures converts a list of signatures into a single, aggregated sig.
 func AggregateSignatures(sigs []common.Signature) common.Signature {
 	return blst.AggregateSignatures(sigs)

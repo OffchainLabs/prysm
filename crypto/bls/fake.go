@@ -94,6 +94,11 @@ func AggregateMultiplePubkeys(pubs []PublicKey) PublicKey {
 	return blst.AggregateMultiplePubkeys(pubs)
 }
 
+// SubtractPublicKey --
+func SubtractPublicKey(p, sub PublicKey) PublicKey {
+	return blst.SubtractPublicKey(p, sub)
+}
+
 // AggregateSignatures --
 func AggregateSignatures(sigs []common.Signature) common.Signature {
 	if len(sigs) == 0 {

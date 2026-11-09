@@ -74,9 +74,8 @@ var (
 	// builder's bid and the local block value that this node will accept
 	// without reverting to local building
 	MinBuilderDiff = &cli.Uint64Flag{
-		Name: "min-builder-to-local-difference",
-		Usage: "An absolute value in Gwei that the builder bid has to have in order for this beacon node to use the builder's block. Anything less than this value" +
-			" and the beacon will revert to local building.",
+		Name:  "min-builder-to-local-difference",
+		Usage: "Minimum amount in Gwei by which the builder bid must exceed the local block value for the beacon node to use the builder's block. Otherwise, it builds locally.",
 		Value: 0,
 	}
 	// BuilderHeaderTimeout bounds how long the beacon node waits for a builder relay `getHeader` response

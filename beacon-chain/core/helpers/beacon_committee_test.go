@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/container/slice"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -516,6 +517,54 @@ func TestUpdateCommitteeCache_IsolatedCaches(t *testing.T) {
 	committee, err = helpers.BeaconCommitteeFromCache(t.Context(), state, 0, 1)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(committee))
+}
+
+func TestUpdateCommitteeCache_CommitteeAggregates(t *testing.T) {
+	t.Cleanup(helpers.ClearCache)
+	ctx := t.Context()
+	state, _ := util.DeterministicGenesisState(t, 256)
+	seed, err := helpers.Seed(state, 0, params.BeaconConfig().DomainBeaconAttester)
+	require.NoError(t, err)
+	committee, err := helpers.BeaconCommitteeFromState(ctx, state, 0, 0)
+	require.NoError(t, err)
+	indices := make([]uint64, len(committee))
+	for i, v := range committee {
+		indices[i] = uint64(v)
+	}
+	want, err := state.AggregateKeyFromIndices(indices)
+	require.NoError(t, err)
+
+	// cached reads the aggregate of committee 0 at slot 0.
+	cached := func(t *testing.T) bls.PublicKey {
+		helpers.CommitteeCache().Wg.Wait()
+		key, err := helpers.CommitteeCache().CommitteeAggregatePubkey(0, seed, 0)
+		require.NoError(t, err)
+		return key
+	}
+
+	entryWithoutAggregates := func(t *testing.T) {
+		helpers.ClearCache()
+		_, err := helpers.ActiveValidatorIndices(ctx, state, 0)
+		require.NoError(t, err)
+		helpers.CommitteeCache().Wg.Wait()
+		require.Equal(t, true, helpers.CommitteeCache().HasEntry(string(seed[:])))
+		require.Equal(t, true, cached(t) == nil)
+	}
+
+	t.Run("update computes aggregates for an entry from the scan", func(t *testing.T) {
+		entryWithoutAggregates(t)
+		require.NoError(t, helpers.UpdateCommitteeCache(ctx, state, 0))
+		require.Equal(t, true, want.Equals(cached(t)))
+	})
+
+	t.Run("second update does not recompute", func(t *testing.T) {
+		entryWithoutAggregates(t)
+		require.NoError(t, helpers.UpdateCommitteeCache(ctx, state, 0))
+		before := cached(t)
+		require.NotNil(t, before)
+		require.NoError(t, helpers.UpdateCommitteeCache(ctx, state, 0))
+		require.Equal(t, true, before == cached(t))
+	})
 }
 
 func BenchmarkComputeCommittee300000_WithPreCache(b *testing.B) {

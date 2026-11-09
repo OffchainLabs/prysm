@@ -300,7 +300,7 @@ func (ns *Server) GetETH1ConnectionStatus(_ context.Context, _ *empty.Empty) (*e
 // DEPRECATED: This endpoint doesn't appear to be used and have been marked for deprecation.
 func (ns *Server) StreamBeaconLogs(_ *empty.Empty, stream ethpb.Health_StreamBeaconLogsServer) error {
 	ch := make(chan []byte, ns.StreamLogsBufferSize)
-	sub := ns.LogsStreamer.LogsFeed().Subscribe(ch)
+	sub := ns.LogsStreamer.SubscribeLogs(ch)
 	defer func() {
 		sub.Unsubscribe()
 		close(ch)
