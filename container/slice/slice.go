@@ -83,6 +83,7 @@ func UnionUint64(s ...[]uint64) []uint64 {
 		}
 		for j := range b {
 			if _, found := m[b[j]]; !found {
+				m[b[j]] = true
 				set = append(set, b[j])
 			}
 		}
@@ -175,6 +176,7 @@ func UnionInt64(s ...[]int64) []int64 {
 		}
 		for j := range b {
 			if _, found := m[b[j]]; !found {
+				m[b[j]] = true
 				set = append(set, b[j])
 			}
 		}
@@ -217,6 +219,7 @@ func UnionByteSlices(s ...[][]byte) [][]byte {
 		}
 		for j := range s[i] {
 			if _, found := m[string(s[i][j])]; !found {
+				m[string(s[i][j])] = true
 				set = append(set, s[i][j])
 			}
 		}

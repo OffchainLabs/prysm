@@ -125,6 +125,8 @@ func TestUnionUint64(t *testing.T) {
 		out  []uint64
 	}{
 		{[]uint64{2, 3, 5}, []uint64{4, 6}, []uint64{2, 3, 5, 4, 6}},
+		{[]uint64{1}, []uint64{2, 2, 2}, []uint64{1, 2}},
+		{[]uint64{}, []uint64{2, 2}, []uint64{2}},
 		{[]uint64{2, 3, 5}, []uint64{3, 5}, []uint64{2, 3, 5}},
 		{[]uint64{2, 3, 5}, []uint64{2, 3, 5}, []uint64{2, 3, 5}},
 		{[]uint64{2, 3, 5}, []uint64{}, []uint64{2, 3, 5}},
@@ -158,6 +160,8 @@ func TestUnionInt64(t *testing.T) {
 		out  []int64
 	}{
 		{[]int64{2, 3, 5}, []int64{4, 6}, []int64{2, 3, 5, 4, 6}},
+		{[]int64{1}, []int64{-2, -2, -2}, []int64{1, -2}},
+		{[]int64{}, []int64{-2, -2}, []int64{-2}},
 		{[]int64{2, 3, 5}, []int64{3, 5}, []int64{2, 3, 5}},
 		{[]int64{2, 3, 5}, []int64{2, 3, 5}, []int64{2, 3, 5}},
 		{[]int64{2, 3, 5}, []int64{}, []int64{2, 3, 5}},
@@ -253,6 +257,8 @@ func TestUnionByteSlices(t *testing.T) {
 		setB [][]byte
 		out  [][]byte
 	}{
+		{[][]byte{[]byte("one")}, [][]byte{[]byte("two"), []byte("two")}, [][]byte{[]byte("one"), []byte("two")}},
+		{[][]byte{}, [][]byte{[]byte("two"), []byte("two")}, [][]byte{[]byte("two")}},
 		{
 			[][]byte{[]byte("hello"), []byte("world")},
 			[][]byte{[]byte("world"), {}},
