@@ -3,6 +3,7 @@ package beacon_api
 import (
 	"context"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/client/event"
@@ -28,6 +29,47 @@ type beaconApiValidatorClient struct {
 	eventStreamGuard        event.StreamGuard
 	stateless               bool
 	envelopeCache           *cache.ExecutionPayloadEnvelopeCache
+	attestationDataRoots    signedRoots
+}
+
+type signedRootKey struct {
+	slot primitives.Slot
+	key  uint64
+}
+
+// signedRoots keeps the roots this client submitted for signing in the two latest slots.
+type signedRoots struct {
+	mu     sync.Mutex
+	newest primitives.Slot
+	roots  map[signedRootKey][]byte
+}
+
+func (s *signedRoots) set(slot primitives.Slot, key uint64, root []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// A late write for a pruned slot must not bring that slot back.
+	if slot+1 < s.newest {
+		return
+	}
+	if s.roots == nil {
+		s.roots = make(map[signedRootKey][]byte)
+	}
+	if slot > s.newest {
+		s.newest = slot
+		for k := range s.roots {
+			if k.slot+1 < slot {
+				delete(s.roots, k)
+			}
+		}
+	}
+	s.roots[signedRootKey{slot: slot, key: key}] = root
+}
+
+func (s *signedRoots) get(slot primitives.Slot, key uint64) ([]byte, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	root, ok := s.roots[signedRootKey{slot: slot, key: key}]
+	return root, ok
 }
 
 func NewBeaconApiValidatorClient(provider rest.RestConnectionProvider, opts ...iface.Option) iface.ValidatorClient {
