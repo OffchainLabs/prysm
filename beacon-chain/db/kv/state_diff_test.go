@@ -1090,7 +1090,9 @@ func TestStateDiff_SaveAndReadDiff_MultipleLevels(t *testing.T) {
 func TestStateDiff_SaveAndReadDiffForkTransition(t *testing.T) {
 	setDefaultStateDiffExponents()
 
-	for v := range version.All()[:len(version.All())-1] {
+	// Fulu→Gloas needs active validators to build the PTC window, which createState does not set.
+	// TestStateDiff_SaveAndReadDiffForkTransitionGloas covers that transition.
+	for v := range version.Fulu {
 		t.Run(version.String(v), func(t *testing.T) {
 			db := setupDB(t)
 
@@ -1122,7 +1124,7 @@ func TestStateDiff_SaveAndReadDiffForkTransition(t *testing.T) {
 }
 
 // TestStateDiff_SaveAndReadDiffForkTransitionGloas tests the Fulu→Gloas fork transition
-// explicitly since Gloas is not yet in version.All().
+// with a state produced by the real gloas.UpgradeToGloas path.
 func TestStateDiff_SaveAndReadDiffForkTransitionGloas(t *testing.T) {
 	setDefaultStateDiffExponents()
 

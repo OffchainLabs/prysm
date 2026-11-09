@@ -202,13 +202,7 @@ func TestSaveStatesEfficient_AllVersions(t *testing.T) {
 	})
 	defer resetCfg()
 
-	// Gloas is included explicitly since it is not yet in version.All().
-	versions := append([]int{}, version.All()...)
-	if version.IsUnsupported(version.Gloas) {
-		versions = append(versions, version.Gloas)
-	}
-
-	for _, v := range versions {
+	for _, v := range version.All() {
 		t.Run(version.String(v), func(t *testing.T) {
 			db := setupDB(t)
 			st, _ := createState(t, 100, v)
