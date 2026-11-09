@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	slashertypes "github.com/OffchainLabs/prysm/v7/beacon-chain/slasher/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -20,6 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -240,7 +242,18 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 	set := bls.NewSet()
 	set.Join(selectionSigSet).Join(aggregatorSigSet).Join(attSigSet)
 
-	return s.validateWithBatchVerifier(ctx, "aggregate", set)
+	result, err = s.validateWithBatchVerifier(ctx, "aggregate", set)
+	if result == pubsub.ValidationAccept && s.slasherEnabled {
+		// Convert now: the attestation cache may mutate the aggregate's bits and signature after acceptance.
+		indexedAtt, convErr := attestation.ConvertToIndexed(ctx, aggregate, committee)
+		if convErr != nil {
+			log.WithError(convErr).Error("Could not convert aggregate to indexed attestation")
+		} else {
+			// Send in the background to keep the slasher off the critical path.
+			go s.cfg.slasherAttestationsFeed.Send(&slashertypes.WrappedIndexedAtt{IndexedAtt: indexedAtt})
+		}
+	}
+	return result, err
 }
 
 // Returns true if the node has received aggregate for the aggregator with index and target epoch.
