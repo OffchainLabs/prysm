@@ -8,7 +8,7 @@ import (
 
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	// enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
-	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -27,7 +27,7 @@ func customHtr(t *testing.T, htrs []common.HTR, object any) []common.HTR {
 	}
 
 	htrs = append(htrs, func(s any) ([32]byte, error) {
-		beaconState, err := state_native.InitializeFromProtoUnsafeGloas(s.(*ethpb.BeaconStateGloas))
+		beaconState, err := state_native.NewUnsafe(s.(*ethpb.BeaconStateGloas))
 		require.NoError(t, err)
 
 		return beaconState.HashTreeRoot(context.Background())
@@ -70,7 +70,7 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.SignedExecutionPayloadEnvelope{}
 	case "ForkChoiceNode":
 		t.Skip("Not a consensus type")
-	case "IndexedPayloadAttestation":
+	case "IndexedPayloadAttestation", "NewPayloadRequest":
 		t.Skip("Not a consensus type")
 	case "DataColumnSidecar":
 		obj = &ethpb.DataColumnSidecarGloas{}
@@ -150,8 +150,16 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.SyncAggregatorSelectionData{}
 	case "SyncCommittee":
 		obj = &ethpb.SyncCommittee{}
-	case "LightClientOptimisticUpdate", "LightClientFinalityUpdate", "LightClientBootstrap", "LightClientUpdate", "LightClientHeader":
-		t.Skip("Gloas light client types not yet implemented")
+	case "LightClientOptimisticUpdate":
+		obj = &ethpb.LightClientOptimisticUpdateGloas{}
+	case "LightClientFinalityUpdate":
+		obj = &ethpb.LightClientFinalityUpdateGloas{}
+	case "LightClientBootstrap":
+		obj = &ethpb.LightClientBootstrapGloas{}
+	case "LightClientUpdate":
+		obj = &ethpb.LightClientUpdateGloas{}
+	case "LightClientHeader":
+		obj = &ethpb.LightClientHeaderGloas{}
 	case "BlobIdentifier":
 		obj = &ethpb.BlobIdentifier{}
 	case "BlobSidecar":

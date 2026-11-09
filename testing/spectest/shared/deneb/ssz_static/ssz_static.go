@@ -26,7 +26,7 @@ func customHtr(t *testing.T, htrs []common.HTR, object any) []common.HTR {
 	}
 
 	htrs = append(htrs, func(s any) ([32]byte, error) {
-		beaconState, err := state_native.InitializeFromProtoUnsafeDeneb(s.(*ethpb.BeaconStateDeneb))
+		beaconState, err := state_native.NewUnsafe(s.(*ethpb.BeaconStateDeneb))
 		require.NoError(t, err)
 		return beaconState.HashTreeRoot(context.Background())
 	})
@@ -134,6 +134,8 @@ func UnmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.BLSToExecutionChange{}
 	case "SignedBLSToExecutionChange":
 		obj = &ethpb.SignedBLSToExecutionChange{}
+	case "NewPayloadRequest":
+		t.Skip("Not a consensus type")
 	default:
 		return nil, errors.New("type not found")
 	}

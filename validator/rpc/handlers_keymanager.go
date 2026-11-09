@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/validator/client"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/derived"
@@ -703,11 +704,15 @@ func (s *Server) GetGasLimit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var epoch primitives.Epoch
+	if genesis := s.validatorService.GenesisTime(); !genesis.IsZero() {
+		epoch = slots.ToEpoch(slots.CurrentSlot(genesis))
+	}
 	settings := s.validatorService.ProposerSettings()
 	httputil.WriteJson(w, &GetGasLimitResponse{
 		Data: &GasLimitMetaData{
 			Pubkey:   rawPubkey,
-			GasLimit: fmt.Sprintf("%d", settings.GasLimit(bytesutil.ToBytes48(pubkey))),
+			GasLimit: fmt.Sprintf("%d", settings.GasLimitAt(bytesutil.ToBytes48(pubkey), epoch)),
 		},
 	})
 }
@@ -844,6 +849,11 @@ func (s *Server) SetGraffiti(w http.ResponseWriter, r *http.Request) {
 		return
 	case err != nil:
 		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if l := len(req.Graffiti); l > 32 {
+		httputil.HandleError(w, fmt.Sprintf("Graffiti exceeds max length of 32 bytes: got %d bytes", l), http.StatusBadRequest)
 		return
 	}
 

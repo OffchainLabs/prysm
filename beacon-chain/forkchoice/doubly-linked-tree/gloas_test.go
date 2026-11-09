@@ -85,7 +85,7 @@ func prepareGloasForkchoiceState(
 		ProposerLookahead:            make([]primitives.ValidatorIndex, 64),
 	}
 
-	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	st, err := state_native.NewUnsafe(base)
 	if err != nil {
 		return nil, blocks.ROBlock{}, err
 	}
@@ -1668,14 +1668,14 @@ func TestPTCVotedEarlyAndAvailableAndLate(t *testing.T) {
 		assert.Equal(t, false, f.PTCVotedLate(root))
 	})
 
-	t.Run("early false without blob data majority", func(t *testing.T) {
+	t.Run("blob data unavailable majority is a late verdict", func(t *testing.T) {
 		f, root := setupForkchoice(t)
 		majority := uint64(fieldparams.PTCSize/2) + 1
 		for i := range majority {
 			f.SetPTCVote(root, i, true, false)
 		}
 		assert.Equal(t, false, f.PTCVotedEarlyAndAvailable(root))
-		assert.Equal(t, false, f.PTCVotedLate(root))
+		assert.Equal(t, true, f.PTCVotedLate(root))
 	})
 
 	t.Run("late requires payload not present majority", func(t *testing.T) {
@@ -2510,4 +2510,111 @@ func TestUpdateNewFullNodeWeight_SkipsSlashed(t *testing.T) {
 		f.InsertSlashedIndex(t.Context(), 0)
 		assert.Equal(t, uint64(200), fn.balance)
 	})
+}
+
+func TestBuilderPubkey(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+
+	insert := func(root [32]byte, slot primitives.Slot, builderIndex primitives.BuilderIndex) {
+		st, _, err := prepareGloasForkchoiceState(ctx, slot, root, params.BeaconConfig().ZeroHash, indexToHash(100), params.BeaconConfig().ZeroHash, 0, 0)
+		require.NoError(t, err)
+		require.NoError(t, st.AddBuilderFromDeposit([fieldparams.BLSPubkeyLength]byte{0xaa}, [32]byte{}, 1))
+		blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+			Block: &ethpb.BeaconBlockGloas{
+				Slot: slot,
+				Body: &ethpb.BeaconBlockBodyGloas{
+					SignedExecutionPayloadBid: util.HydrateSignedExecutionPayloadBid(&ethpb.SignedExecutionPayloadBid{
+						Message: &ethpb.ExecutionPayloadBid{BuilderIndex: builderIndex},
+					}),
+				},
+			},
+		})
+		signed, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		roblock, err := blocks.NewROBlockWithRoot(signed, root)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, st, roblock))
+	}
+
+	builderRoot := indexToHash(1)
+	insert(builderRoot, 1, 0)
+	pk, err := f.BuilderPubkey(builderRoot)
+	require.NoError(t, err)
+	require.NotNil(t, pk)
+	assert.Equal(t, [fieldparams.BLSPubkeyLength]byte{0xaa}, *pk)
+
+	selfBuildRoot := indexToHash(2)
+	insert(selfBuildRoot, 2, params.BeaconConfig().BuilderIndexSelfBuild)
+	pk, err = f.BuilderPubkey(selfBuildRoot)
+	require.NoError(t, err)
+	require.IsNil(t, pk)
+
+	pe, err := prepareGloasForkchoicePayload(builderRoot)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+	pk, err = f.BuilderPubkey(builderRoot)
+	require.NoError(t, err)
+	require.IsNil(t, pk)
+
+	markedRoot := indexToHash(3)
+	insert(markedRoot, 3, 0)
+	f.MarkFullNode(markedRoot, 0)
+	pk, err = f.BuilderPubkey(markedRoot)
+	require.NoError(t, err)
+	require.IsNil(t, pk)
+
+	_, err = f.BuilderPubkey(indexToHash(999))
+	require.ErrorContains(t, ErrNilNode.Error(), err)
+}
+
+func TestInsertChain_SetsBuilderPubkey(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+
+	root := indexToHash(1)
+	blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+		Block: &ethpb.BeaconBlockGloas{
+			Slot:       1,
+			ParentRoot: params.BeaconConfig().ZeroHash[:],
+		},
+	})
+	signed, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	roblock, err := blocks.NewROBlockWithRoot(signed, root)
+	require.NoError(t, err)
+
+	want := &[fieldparams.BLSPubkeyLength]byte{0xbb}
+	require.NoError(t, f.InsertChain(ctx, []*forkchoicetypes.BlockAndCheckpoints{{
+		Block:               roblock,
+		JustifiedCheckpoint: &ethpb.Checkpoint{},
+		FinalizedCheckpoint: &ethpb.Checkpoint{},
+		BuilderPubkey:       want,
+	}}))
+
+	pk, err := f.BuilderPubkey(root)
+	require.NoError(t, err)
+	assert.Equal(t, want, pk)
+
+	fullRoot := indexToHash(2)
+	blk = util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+		Block: &ethpb.BeaconBlockGloas{
+			Slot:       2,
+			ParentRoot: params.BeaconConfig().ZeroHash[:],
+		},
+	})
+	signed, err = blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	roblock, err = blocks.NewROBlockWithRoot(signed, fullRoot)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertChain(ctx, []*forkchoicetypes.BlockAndCheckpoints{{
+		Block:               roblock,
+		JustifiedCheckpoint: &ethpb.Checkpoint{},
+		FinalizedCheckpoint: &ethpb.Checkpoint{},
+		HasPayload:          true,
+		BuilderPubkey:       want,
+	}}))
+	pk, err = f.BuilderPubkey(fullRoot)
+	require.NoError(t, err)
+	require.IsNil(t, pk)
 }

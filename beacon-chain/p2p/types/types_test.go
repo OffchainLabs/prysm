@@ -93,7 +93,7 @@ func TestBlobSidecarsByRootReq_MarshalSSZ(t *testing.T) {
 
 func TestBeaconBlockByRootsReq_Limit(t *testing.T) {
 	fixedRoots := make([][32]byte, 0)
-	for i := uint64(0); i < params.BeaconConfig().MaxRequestBlocks+100; i++ {
+	for i := uint64(0); i < params.BeaconConfig().MaxRequestBlocksDeneb+100; i++ {
 		fixedRoots = append(fixedRoots, [32]byte{byte(i)})
 	}
 	req := BeaconBlockByRootsReq(fixedRoots)
@@ -127,7 +127,7 @@ func TestRoundTripSerialization(t *testing.T) {
 
 func roundTripTestBlocksByRootReq(t *testing.T) {
 	fixedRoots := make([][32]byte, 0)
-	for i := range 200 {
+	for i := range int(params.BeaconConfig().MaxRequestBlocksDeneb) {
 		fixedRoots = append(fixedRoots, [32]byte{byte(i)})
 	}
 	req := BeaconBlockByRootsReq(fixedRoots)
@@ -392,4 +392,49 @@ func TestDataColumnSidecarsByRootReq_MarshalUnmarshal(t *testing.T) {
 	err = unmarshalled.UnmarshalSSZ(buf)
 	require.NoError(t, err)
 	require.DeepEqual(t, req, unmarshalled)
+}
+
+func TestMaxSizeSSZMatchesMaxMarshaledSize(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+
+	blockRoots := make(BeaconBlockByRootsReq, cfg.MaxRequestBlocksDeneb)
+	b, err := blockRoots.MarshalSSZ()
+	require.NoError(t, err)
+	require.Equal(t, len(b), blockRoots.MaxSizeSSZ())
+
+	errMsg := ErrorMessage(make([]byte, 256))
+	b, err = errMsg.MarshalSSZ()
+	require.NoError(t, err)
+	require.Equal(t, len(b), errMsg.MaxSizeSSZ())
+
+	blobIds := BlobSidecarsByRootReq(generateBlobIdentifiers(int(cfg.MaxRequestBlobSidecarsElectra)))
+	b, err = blobIds.MarshalSSZ()
+	require.NoError(t, err)
+	require.Equal(t, len(b), blobIds.MaxSizeSSZ())
+
+	payloadRoots := make(ExecutionPayloadEnvelopesByRootReq, cfg.MaxRequestPayloads)
+	b, err = payloadRoots.MarshalSSZ()
+	require.NoError(t, err)
+	require.Equal(t, len(b), payloadRoots.MaxSizeSSZ())
+
+	columnIds := make(DataColumnsByRootIdentifiers, cfg.MaxRequestBlocksDeneb)
+	for i := range columnIds {
+		columns := make([]uint64, fieldparams.NumberOfColumns)
+		for j := range columns {
+			columns[j] = uint64(j)
+		}
+		columnIds[i] = &eth.DataColumnsByRootIdentifier{
+			BlockRoot: bytesutil.PadTo([]byte{byte(i)}, fieldparams.RootLength),
+			Columns:   columns,
+		}
+	}
+	b, err = columnIds.MarshalSSZ()
+	require.NoError(t, err)
+	require.Equal(t, len(b), columnIds.MaxSizeSSZ())
+
+	rangeReq := &eth.DataColumnSidecarsByRangeRequest{Columns: make([]uint64, fieldparams.NumberOfColumns)}
+	b, err = rangeReq.MarshalSSZ()
+	require.NoError(t, err)
+	require.Equal(t, len(b), rangeReq.MaxSizeSSZ())
 }

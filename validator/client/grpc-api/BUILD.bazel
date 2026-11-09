@@ -53,6 +53,8 @@ go_test(
         "//api/client/event:go_default_library",
         "//api/grpc:go_default_library",
         "//api/server/structs:go_default_library",
+        "//beacon-chain/core/signing:go_default_library",
+        "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//proto/engine/v1:go_default_library",
@@ -72,6 +74,7 @@ go_test(
         "@org_golang_google_grpc//status:go_default_library",
         "@org_golang_google_grpc//test/bufconn:go_default_library",
         "@org_golang_google_protobuf//types/known/emptypb:go_default_library",
+        "@org_golang_google_protobuf//types/known/timestamppb:go_default_library",
         "@org_uber_go_mock//gomock:go_default_library",
     ],
 )

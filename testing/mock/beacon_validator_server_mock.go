@@ -193,6 +193,21 @@ func (mr *MockBeaconNodeValidatorServerMockRecorder) GetExecutionPayloadEnvelope
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExecutionPayloadEnvelope", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).GetExecutionPayloadEnvelope), arg0, arg1)
 }
 
+// GetExecutionPayloadEnvelopeV2 mocks base method.
+func (m *MockBeaconNodeValidatorServer) GetExecutionPayloadEnvelopeV2(arg0 context.Context, arg1 *eth.ExecutionPayloadEnvelopeRequest) (*eth.ExecutionPayloadEnvelopeResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetExecutionPayloadEnvelopeV2", arg0, arg1)
+	ret0, _ := ret[0].(*eth.ExecutionPayloadEnvelopeResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetExecutionPayloadEnvelopeV2 indicates an expected call of GetExecutionPayloadEnvelopeV2.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) GetExecutionPayloadEnvelopeV2(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExecutionPayloadEnvelopeV2", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).GetExecutionPayloadEnvelopeV2), arg0, arg1)
+}
+
 // GetFeeRecipientByPubKey mocks base method.
 func (m *MockBeaconNodeValidatorServer) GetFeeRecipientByPubKey(arg0 context.Context, arg1 *eth.FeeRecipientByPubKeyRequest) (*eth.FeeRecipientByPubKeyResponse, error) {
 	m.ctrl.T.Helper()
@@ -416,6 +431,21 @@ func (m *MockBeaconNodeValidatorServer) PublishExecutionPayloadEnvelope(arg0 con
 func (mr *MockBeaconNodeValidatorServerMockRecorder) PublishExecutionPayloadEnvelope(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishExecutionPayloadEnvelope", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).PublishExecutionPayloadEnvelope), arg0, arg1)
+}
+
+// PublishExecutionPayloadEnvelopeV2 mocks base method.
+func (m *MockBeaconNodeValidatorServer) PublishExecutionPayloadEnvelopeV2(arg0 context.Context, arg1 *eth.GenericSignedExecutionPayloadEnvelope) (*emptypb.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishExecutionPayloadEnvelopeV2", arg0, arg1)
+	ret0, _ := ret[0].(*emptypb.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PublishExecutionPayloadEnvelopeV2 indicates an expected call of PublishExecutionPayloadEnvelopeV2.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) PublishExecutionPayloadEnvelopeV2(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishExecutionPayloadEnvelopeV2", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).PublishExecutionPayloadEnvelopeV2), arg0, arg1)
 }
 
 // StreamBlocksAltair mocks base method.

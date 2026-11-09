@@ -775,7 +775,7 @@ func (ps *Settings) WarnUnsetMaxExecutionPayment() {
 		return
 	}
 	slices.Sort(maskedURLs)
-	log.WithField("builders", strings.Join(maskedURLs, ", ")).Warn("Builder entries have no max_execution_payment: their execution layer payment is ignored and only collateral-backed bid value counts toward bid selection. Set max_execution_payment to count it, noting such payments rest on the builder's promise to pay.")
+	log.WithField("builders", strings.Join(maskedURLs, ", ")).Warn("Builders have no max_execution_payment (default 0): execution payment is ignored, so these builders' bids may lose to the local payload.")
 }
 
 // HasLegacyBuilderContent reports whether any level carries v1 builder fields,
@@ -839,14 +839,11 @@ func (ps *Settings) UpgradeToV2() bool {
 // TargetGasLimit resolves pubkey's proposer-preference gas limit at epoch: the
 // explicit operator value, else the EIP-8261 schedule, else the chain default.
 func (ps *Settings) TargetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch) validator.Uint64 {
-	scheduled, active := params.BeaconConfig().ScheduledGasLimit(epoch)
 	operator, ok := ps.operatorGasLimit(pubkey)
 	if !ok {
-		if active {
-			return validator.Uint64(scheduled)
-		}
-		return validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+		return scheduledOrDefaultGasLimit(epoch)
 	}
+	scheduled, active := params.BeaconConfig().ScheduledGasLimit(epoch)
 	if active && uint64(operator) > scheduled {
 		warnGasLimitExceedsSchedule(uint64(operator), scheduled, epoch)
 	}
@@ -854,6 +851,25 @@ func (ps *Settings) TargetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte, epo
 		warnGasLimitBelowSchedule(uint64(operator), scheduled, epoch)
 	}
 	return operator
+}
+
+// GasLimitAt returns the gas limit pubkey uses at epoch: TargetGasLimit's value
+// from gloas on (without its warnings), else the pre-gloas registration value.
+func (ps *Settings) GasLimitAt(pubkey [fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch) validator.Uint64 {
+	if epoch < params.BeaconConfig().GloasForkEpoch {
+		return ps.GasLimit(pubkey)
+	}
+	if operator, ok := ps.operatorGasLimit(pubkey); ok {
+		return operator
+	}
+	return scheduledOrDefaultGasLimit(epoch)
+}
+
+func scheduledOrDefaultGasLimit(epoch primitives.Epoch) validator.Uint64 {
+	if scheduled, active := params.BeaconConfig().ScheduledGasLimit(epoch); active {
+		return validator.Uint64(scheduled)
+	}
+	return validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
 }
 
 func (ps *Settings) operatorGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) (validator.Uint64, bool) {

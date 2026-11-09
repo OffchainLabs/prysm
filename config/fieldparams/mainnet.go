@@ -35,6 +35,9 @@ const (
 	KzgCommitmentSize                     = 48                // KzgCommitmentSize defines the byte length of a KZG commitment.
 	KzgCommitmentInclusionProofDepth      = 17                // Merkle proof depth for blob_kzg_commitments list item
 	ExecutionBranchDepth                  = 4                 // ExecutionBranchDepth defines the number of leaves in a merkle proof of the execution payload header.
+	ExecutionBranchDepthGloas             = 11                // ExecutionBranchDepthGloas is the execution block hash proof depth.
+	SyncCommitteeBranchDepthGloas         = 11                // SyncCommitteeBranchDepthGloas is the sync committee proof depth.
+	FinalityBranchDepthGloas              = 9                 // FinalityBranchDepthGloas is the finalized checkpoint root proof depth.
 	SyncCommitteeBranchDepth              = 5                 // SyncCommitteeBranchDepth defines the number of leaves in a merkle proof of a sync committee.
 	SyncCommitteeBranchDepthElectra       = 6                 // SyncCommitteeBranchDepthElectra defines the number of leaves in a merkle proof of a sync committee.
 	FinalityBranchDepth                   = 6                 // FinalityBranchDepth defines the number of leaves in a merkle proof of the finalized checkpoint root.
@@ -58,7 +61,12 @@ const (
 	// Type-specific SSZ bounds, introduced in Gloas network upgrade.
 	MaxSignedAggregateAndProofSize   = 16829   // MaxSignedAggregateAndProofSize is the maximum size of a signed aggregate and proof, ~16 KiB.
 	MaxAttesterSlashingSize          = 2097616 // MaxAttesterSlashingSize is the maximum size of an attester slashing, ~2 MiB.
-	MaxDataColumnSidecarSize         = 8585272 // MaxDataColumnSidecarSize is the maximum size of a data column sidecar, ~8 MiB.
-	MaxPartialDataColumnSidecarSize  = 8585741 // MaxPartialDataColumnSidecarSize is the maximum size of a partial data column sidecar, ~8 MiB.
 	MaxSignedExecutionPayloadBidSize = 196932  // MaxSignedExecutionPayloadBidSize is the maximum size of a signed execution payload bid, ~192 KiB.
+
+	// Introduced in Heze network upgrade.
+	InclusionListCommitteeSize = 16 // InclusionListCommitteeSize is the size of the inclusion list committee.
+
+	// Type-specific SSZ bounds, introduced in Heze network upgrade.
+	MaxSignedExecutionPayloadBidSizeHeze = 196934 // MaxSignedExecutionPayloadBidSizeHeze is the maximum size of a signed execution payload bid, ~192 KiB.
+	MaxSignedInclusionListSize           = 41112  // MaxSignedInclusionListSize is the maximum size of a signed inclusion list, ~40 KiB.
 )

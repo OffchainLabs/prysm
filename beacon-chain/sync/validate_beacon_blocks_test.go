@@ -2446,3 +2446,80 @@ func TestBlockVerifyingState_SameEpochAsParent(t *testing.T) {
 	// This confirms that the branch at line 361 was taken (returning parentState directly)
 	assert.Equal(t, primitives.Slot(1), result.Slot())
 }
+
+func TestValidateBeaconBlockPubSub_GloasDeposits(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	proof := make([][]byte, 33)
+	for i := range proof {
+		proof[i] = make([]byte, 32)
+	}
+	deposit := &ethpb.Deposit{
+		Proof: proof,
+		Data: &ethpb.Deposit_Data{
+			PublicKey:             make([]byte, 48),
+			WithdrawalCredentials: make([]byte, 32),
+			Signature:             make([]byte, 96),
+		},
+	}
+
+	tests := []struct {
+		name     string
+		deposits []*ethpb.Deposit
+		reject   bool
+	}{
+		{name: "no deposits", deposits: nil, reject: false},
+		{name: "one deposit", deposits: []*ethpb.Deposit{deposit}, reject: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := p2ptest.NewTestP2P(t)
+			chainService := &mock.ChainService{Genesis: time.Now()}
+			r := &Service{
+				cfg: &config{
+					p2p:               p,
+					beaconDB:          dbtest.SetupDB(t),
+					initialSync:       &mockSync.Sync{IsSyncing: false},
+					chain:             chainService,
+					clock:             startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+					blockNotifier:     chainService.BlockNotifier(),
+					operationNotifier: chainService.OperationNotifier(),
+				},
+				chainStarted:        &atomic.Bool{},
+				seenBlockCache:      lruwrpr.New(10),
+				badBlockCache:       lruwrpr.New(10),
+				slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
+				seenPendingBlocks:   make(map[[32]byte]bool),
+			}
+
+			msg := util.NewBeaconBlockGloas()
+			// A far-future slot makes a block that passes the deposits check stop at the slot-time IGNORE.
+			msg.Block.Slot = 1000
+			msg.Block.Body.Deposits = tt.deposits
+			buf := new(bytes.Buffer)
+			_, err := p.Encoding().EncodeGossip(buf, msg)
+			require.NoError(t, err)
+			topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlock]()]
+			topic = r.addDigestToTopic(topic, r.currentForkDigest())
+			m := &pubsub.Message{
+				Message: &pubsubpb.Message{
+					Data:  buf.Bytes(),
+					Topic: &topic,
+				},
+			}
+
+			res, err := r.validateBeaconBlockPubSub(t.Context(), "", m)
+			if tt.reject {
+				require.ErrorContains(t, "block must not contain deposits", err)
+				require.Equal(t, pubsub.ValidationReject, res)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, pubsub.ValidationIgnore, res)
+		})
+	}
+}

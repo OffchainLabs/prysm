@@ -13,9 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/golang/snappy"
-	"github.com/google/go-cmp/cmp"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/testing/protocmp"
 )
 
 type epochOperation func(*testing.T, state.BeaconState) (state.BeaconState, error)
@@ -35,7 +32,7 @@ func RunEpochOperationTest(
 	if err := preBeaconStateBase.UnmarshalSSZ(preBeaconStateSSZ); err != nil {
 		t.Fatalf("Failed to unmarshal: %v", err)
 	}
-	preBeaconState, err := state_native.InitializeFromProtoUnsafeBellatrix(preBeaconStateBase)
+	preBeaconState, err := state_native.NewUnsafe(preBeaconStateBase)
 	require.NoError(t, err)
 
 	// If the post.ssz is not present, it means the test should fail on our end.
@@ -60,12 +57,9 @@ func RunEpochOperationTest(
 			t.Fatalf("Failed to unmarshal: %v", err)
 		}
 
-		pbState, err := state_native.ProtobufBeaconStateBellatrix(beaconState.ToProtoUnsafe())
+		container, err := state_native.ContainerFrom[*ethpb.BeaconStateBellatrix](beaconState.ToContainerUnsafe())
 		require.NoError(t, err)
-		if !proto.Equal(pbState, postBeaconState) {
-			t.Log(cmp.Diff(postBeaconState, pbState, protocmp.Transform()))
-			t.Fatal("Post state does not match expected")
-		}
+		require.DeepSSZEqual(t, container, postBeaconState, "Post state does not match expected")
 	} else {
 		// Note: This doesn't test anything worthwhile. It essentially tests
 		// that *any* error has occurred, not any specific error.

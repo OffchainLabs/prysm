@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/golang/snappy"
-	"google.golang.org/protobuf/proto"
 )
 
 // RunUpgradeToAltair is a helper function that runs Altair's fork spec tests.
@@ -38,11 +37,11 @@ func RunUpgradeToAltair(t *testing.T, config string) {
 			if err := preStateBase.UnmarshalSSZ(preStateSSZ); err != nil {
 				t.Fatalf("Failed to unmarshal: %v", err)
 			}
-			preState, err := state_native.InitializeFromProtoUnsafePhase0(preStateBase)
+			preState, err := state_native.NewUnsafe(preStateBase)
 			require.NoError(t, err)
 			postState, err := altair.UpgradeToAltair(context.Background(), preState)
 			require.NoError(t, err)
-			postStateFromFunction, err := state_native.ProtobufBeaconStateAltair(postState.ToProtoUnsafe())
+			postStateFromFunction, err := state_native.ContainerFrom[*ethpb.BeaconStateAltair](postState.ToContainerUnsafe())
 			require.NoError(t, err)
 
 			postStateFile, err := util.BazelFileBytes(path.Join(folderPath, "post.ssz_snappy"))
@@ -54,9 +53,7 @@ func RunUpgradeToAltair(t *testing.T, config string) {
 				t.Fatalf("Failed to unmarshal: %v", err)
 			}
 
-			if !proto.Equal(postStateFromFile, postStateFromFunction) {
-				t.Fatal("Post state does not match expected")
-			}
+			require.DeepSSZEqual(t, postStateFromFile, postStateFromFunction, "Post state does not match expected")
 		})
 	}
 }

@@ -34,7 +34,7 @@ import (
 )
 
 func TestService_StatusZeroEpoch(t *testing.T) {
-	bState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 0})
+	bState, err := state_native.New(&ethpb.BeaconState{Slot: 0})
 	require.NoError(t, err)
 	chain := &mockChain.ChainService{
 		Genesis: time.Now(),
@@ -217,13 +217,14 @@ func TestSyncService_StopCleanly(t *testing.T) {
 		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
 	}
 	markInitSyncComplete(t, &r)
+	wg := attachSpawner(&r)
+
+	var vr [32]byte
+	clock := startup.NewClock(time.Now(), vr)
+	p2p.Digest = params.ForkDigest(clock.CurrentEpoch())
 
 	go r.startDiscoveryAndSubscriptions()
-	var vr [32]byte
-	require.NoError(t, gs.SetClock(startup.NewClock(time.Now(), vr)))
-	r.waitForChainStart()
-
-	p2p.Digest = r.currentForkDigest()
+	require.NoError(t, gs.SetClock(clock))
 
 	// Wait for chainstart and topics to be registered
 	require.Eventually(t, func() bool {
@@ -237,6 +238,14 @@ func TestSyncService_StopCleanly(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return len(r.cfg.p2p.PubSub().GetTopics()) == 0 && len(r.cfg.p2p.Host().Mux().Protocols()) == 0
 	}, 5*time.Second, 50*time.Millisecond, "Pubsub topics were not deregistered")
+
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("service goroutines did not exit after Stop")
+	}
 }
 
 func TestService_Stop_SendsGoodbyeMessages(t *testing.T) {

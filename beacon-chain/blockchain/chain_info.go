@@ -49,6 +49,7 @@ type PayloadAvailabilityFetcher interface {
 type ForkchoiceFetcher interface {
 	Ancestor(context.Context, []byte, primitives.Slot) ([]byte, error)
 	BlockHash(root [32]byte) ([32]byte, error)
+	BuilderPubkey(root [32]byte) (*[fieldparams.BLSPubkeyLength]byte, error)
 	HasPayloadBlockHash(root, blockHash [32]byte) bool
 	GasLimit(root, blockHash [32]byte) (uint64, error)
 	CachedHeadRoot() [32]byte
@@ -92,6 +93,7 @@ type HeadFetcher interface {
 	HeadSlot() primitives.Slot
 	HeadRoot(ctx context.Context) ([]byte, error)
 	HeadRootAndFull() ([32]byte, bool)
+	HeadAndCanonicalNodeAtSlot(slot primitives.Slot) (headRoot [32]byte, headFull bool, headState state.ReadOnlyBeaconState, canonicalRoot [32]byte, canonicalFull bool)
 	HeadBlock(ctx context.Context) (interfaces.ReadOnlySignedBeaconBlock, error)
 	HeadState(ctx context.Context) (state.BeaconState, error)
 	HeadStateReadOnly(ctx context.Context) (state.ReadOnlyBeaconState, error)
@@ -134,6 +136,7 @@ type FinalizationFetcher interface {
 	PreviousJustifiedCheckpt() *ethpb.Checkpoint
 	UnrealizedJustifiedPayloadBlockHash() [32]byte
 	FinalizedBlockHash() [32]byte
+	SafeBlockHash() [32]byte
 	InForkchoice([32]byte) bool
 	IsFinalized(ctx context.Context, blockRoot [32]byte) bool
 	ParentPayloadReady(interfaces.ReadOnlyBeaconBlock) bool
@@ -217,6 +220,23 @@ func (s *Service) HeadRootAndFull() ([32]byte, bool) {
 		return params.BeaconConfig().ZeroHash, false
 	}
 	return s.head.root, s.head.full
+}
+
+// headState is nil when the head state is not cached, callers then fall back to HeadStateReadOnly.
+func (s *Service) HeadAndCanonicalNodeAtSlot(slot primitives.Slot) (headRoot [32]byte, headFull bool, headState state.ReadOnlyBeaconState, canonicalRoot [32]byte, canonicalFull bool) {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	s.headLock.RLock()
+	headRoot = params.BeaconConfig().ZeroHash
+	if s.head != nil {
+		headRoot, headFull = s.head.root, s.head.full
+	}
+	if s.hasHeadState() {
+		headState = s.head.state
+	}
+	s.headLock.RUnlock()
+	canonicalRoot, canonicalFull = s.cfg.ForkChoiceStore.CanonicalNodeAtSlot(slot)
+	return headRoot, headFull, headState, canonicalRoot, canonicalFull
 }
 
 // HeadBlock returns the head block of the chain.
@@ -444,15 +464,15 @@ func (s *Service) builtOnFullParentInForkchoice(blk interfaces.ReadOnlyBeaconBlo
 	if blk.Version() < version.Gloas {
 		return true
 	}
-	bid, err := blk.Body().SignedExecutionPayloadBid()
-	if err != nil || bid == nil || bid.Message == nil {
+	bid, err := blk.Body().ExecutionPayloadBid()
+	if err != nil {
 		return false
 	}
 	blockHash, err := s.cfg.ForkChoiceStore.BlockHash(blk.ParentRoot())
 	if err != nil {
 		return false
 	}
-	return [32]byte(bid.Message.ParentBlockHash) == blockHash
+	return bid.ParentBlockHash() == blockHash
 }
 
 // BuiltOnFullParent returns true if the block's bid builds on its parent's committed payload.

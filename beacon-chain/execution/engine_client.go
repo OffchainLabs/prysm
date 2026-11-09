@@ -180,6 +180,11 @@ func (s *Service) ReconstructFullGloasExecutionPayloadsByHash(
 	}
 
 	for i, h := range requestHashes {
+		// Peers may ask for envelopes of orphaned blocks the execution client has already unwound.
+		if execBlocks[i] == nil || bodiesV2[i] == nil {
+			log.WithField("blockHash", fmt.Sprintf("%#x", h)).Debug("Execution client does not have block, skipping payload reconstruction")
+			continue
+		}
 		payload, err := gloasPayloadFromBlockAndBody(h, execBlocks[i], bodiesV2[i])
 		if err != nil {
 			return nil, err
@@ -201,7 +206,11 @@ func gloasPayloadFromBlockAndBody(
 	if body == nil {
 		return nil, errors.Errorf("execution payload body unavailable for block hash %#x", requestedHash)
 	}
-	payload.Transactions = pb.RecastHexutilByteSlice(body.Transactions)
+	txs, err := pb.NewProgressiveTransactionList(pb.RecastHexutilByteSlice(body.Transactions))
+	if err != nil {
+		return nil, errors.Wrapf(err, "invalid transactions in payload body for block hash %#x", requestedHash)
+	}
+	payload.Transactions = txs
 	payload.Withdrawals = body.Withdrawals
 	if body.BlockAccessList != nil {
 		payload.BlockAccessList = *body.BlockAccessList
@@ -664,7 +673,7 @@ func EmptyExecutionPayload(v int) (proto.Message, error) {
 			ExtraData:       make([]byte, 0),
 			BaseFeePerGas:   make([]byte, fieldparams.RootLength),
 			BlockHash:       make([]byte, fieldparams.RootLength),
-			Transactions:    make([][]byte, 0),
+			Transactions:    &pb.ProgressiveTransactionList{},
 			Withdrawals:     make([]*pb.Withdrawal, 0),
 			BlockAccessList: make([]byte, 0),
 		}, nil

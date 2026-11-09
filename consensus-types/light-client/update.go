@@ -26,6 +26,8 @@ func NewWrappedUpdate(m proto.Message) (interfaces.LightClientUpdate, error) {
 		return NewWrappedUpdateDeneb(t)
 	case *pb.LightClientUpdateElectra:
 		return NewWrappedUpdateElectra(t)
+	case *pb.LightClientUpdateGloas:
+		return NewWrappedUpdateGloas(t)
 	default:
 		return nil, fmt.Errorf("cannot construct light client update from type %T", t)
 	}
@@ -715,4 +717,36 @@ func (u *updateElectra) SignatureSlot() primitives.Slot {
 
 func (u *updateElectra) SetSignatureSlot(slot primitives.Slot) {
 	u.p.SignatureSlot = slot
+}
+
+func (u *updateAltair) NextSyncCommitteeBranchGloas() (interfaces.LightClientSyncCommitteeBranchGloas, error) {
+	return interfaces.LightClientSyncCommitteeBranchGloas{}, consensustypes.ErrNotSupported("NextSyncCommitteeBranchGloas", u.Version())
+}
+
+func (u *updateAltair) FinalityBranchGloas() (interfaces.LightClientFinalityBranchGloas, error) {
+	return interfaces.LightClientFinalityBranchGloas{}, consensustypes.ErrNotSupported("FinalityBranchGloas", u.Version())
+}
+
+func (u *updateCapella) NextSyncCommitteeBranchGloas() (interfaces.LightClientSyncCommitteeBranchGloas, error) {
+	return interfaces.LightClientSyncCommitteeBranchGloas{}, consensustypes.ErrNotSupported("NextSyncCommitteeBranchGloas", u.Version())
+}
+
+func (u *updateCapella) FinalityBranchGloas() (interfaces.LightClientFinalityBranchGloas, error) {
+	return interfaces.LightClientFinalityBranchGloas{}, consensustypes.ErrNotSupported("FinalityBranchGloas", u.Version())
+}
+
+func (u *updateDeneb) NextSyncCommitteeBranchGloas() (interfaces.LightClientSyncCommitteeBranchGloas, error) {
+	return interfaces.LightClientSyncCommitteeBranchGloas{}, consensustypes.ErrNotSupported("NextSyncCommitteeBranchGloas", u.Version())
+}
+
+func (u *updateDeneb) FinalityBranchGloas() (interfaces.LightClientFinalityBranchGloas, error) {
+	return interfaces.LightClientFinalityBranchGloas{}, consensustypes.ErrNotSupported("FinalityBranchGloas", u.Version())
+}
+
+func (u *updateElectra) NextSyncCommitteeBranchGloas() (interfaces.LightClientSyncCommitteeBranchGloas, error) {
+	return interfaces.LightClientSyncCommitteeBranchGloas{}, consensustypes.ErrNotSupported("NextSyncCommitteeBranchGloas", u.Version())
+}
+
+func (u *updateElectra) FinalityBranchGloas() (interfaces.LightClientFinalityBranchGloas, error) {
+	return interfaces.LightClientFinalityBranchGloas{}, consensustypes.ErrNotSupported("FinalityBranchGloas", u.Version())
 }

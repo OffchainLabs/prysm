@@ -10,6 +10,9 @@ import (
 type FakeBalanceCache struct {
 }
 
+// BalanceCache names the balance cache type under both build tags.
+type BalanceCache = FakeBalanceCache
+
 // NewEffectiveBalanceCache creates a new effective balance cache for storing/accessing total balance by epoch.
 func NewEffectiveBalanceCache() *FakeBalanceCache {
 	return &FakeBalanceCache{}

@@ -199,9 +199,11 @@ func prepareConfigSpec() (map[string]any, error) {
 	// Gloas type-specific SSZ bounds.
 	data["MAX_SIGNED_AGGREGATE_AND_PROOF_SIZE"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.MaxSignedAggregateAndProofSize)), "MAX_SIGNED_AGGREGATE_AND_PROOF_SIZE")
 	data["MAX_ATTESTER_SLASHING_SIZE"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.MaxAttesterSlashingSize)), "MAX_ATTESTER_SLASHING_SIZE")
-	data["MAX_DATA_COLUMN_SIDECAR_SIZE"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.MaxDataColumnSidecarSize)), "MAX_DATA_COLUMN_SIDECAR_SIZE")
-	data["MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.MaxPartialDataColumnSidecarSize)), "MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE")
 	data["MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.MaxSignedExecutionPayloadBidSize)), "MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE")
+	// Heze presets from fieldparams.
+	data["INCLUSION_LIST_COMMITTEE_SIZE"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.InclusionListCommitteeSize)), "INCLUSION_LIST_COMMITTEE_SIZE")
+	data["MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE_HEZE"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.MaxSignedExecutionPayloadBidSizeHeze)), "MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE_HEZE")
+	data["MAX_SIGNED_INCLUSION_LIST_SIZE"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.MaxSignedInclusionListSize)), "MAX_SIGNED_INCLUSION_LIST_SIZE")
 
 	return data, nil
 }

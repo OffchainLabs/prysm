@@ -30,43 +30,33 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 	if err != nil {
 		return nil
 	}
-	// headEpoch - 1 equals c.Epoch if c is from the previous epoch and equals c.Epoch - 1 if c is from the current epoch.
-	// We don't use the smaller c.Epoch - 1 because forkchoice would not have the data to answer that.
-	headDependent, err := s.cfg.ForkChoiceStore.DependentRootForEpoch([32]byte(headRoot), headEpoch-1)
+	headDependent, err := s.cfg.ForkChoiceStore.DependentRootForEpoch([32]byte(headRoot), c.Epoch-1)
 	if err != nil {
 		return nil
 	}
-	targetDependent, err := s.cfg.ForkChoiceStore.DependentRootForEpoch([32]byte(c.Root), headEpoch-1)
+	targetDependent, err := s.cfg.ForkChoiceStore.DependentRootForEpoch([32]byte(c.Root), c.Epoch-1)
 	if err != nil {
 		return nil
 	}
 	if targetDependent != headDependent {
 		return nil
 	}
-
-	// If the head state alone is enough, we can return it directly read only.
-	if c.Epoch <= headEpoch {
-		st, err := s.HeadStateReadOnly(ctx)
-		if err != nil {
-			return nil
-		}
-		return st
-	}
-	// At this point we can only have c.Epoch > headEpoch, and LMD/FFG consistency was already verified, so the target root must be the head root.
-	if bytesutil.ToBytes32(c.Root) != bytesutil.ToBytes32(headRoot) {
+	st, err := s.HeadStateReadOnly(ctx)
+	if err != nil {
 		return nil
+	}
+	if c.Epoch <= headEpoch {
+		return st
 	}
 	slot, err := slots.EpochStart(c.Epoch)
 	if err != nil {
 		return nil
 	}
-	st, err := s.HeadStateReadOnly(ctx)
-	if err != nil {
-		return nil
-	}
-	// The next epoch's shuffling is already determined by the dependent root, so the head state can compute its committees without the boundary transition, unless the fork version changes at the boundary.
 	if c.Epoch == slots.ToEpoch(st.Slot())+1 && slots.ToForkVersion(slot) == slots.ToForkVersion(st.Slot()) {
 		return st
+	}
+	if bytesutil.ToBytes32(c.Root) != bytesutil.ToBytes32(headRoot) {
+		return nil
 	}
 	// Try if we have already set the checkpoint cache. This will be tried again if we fail here but the check is cheap anyway.
 	epochKey := strconv.FormatUint(uint64(c.Epoch), 10 /* base 10 */)

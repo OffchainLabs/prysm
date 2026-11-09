@@ -13,7 +13,7 @@ import (
 )
 
 // RunCustodyGroupsTest executes custody groups spec tests.
-func RunCustodyGroupsTest(t *testing.T, config string) {
+func RunCustodyGroupsTest(t *testing.T, config, fork string) {
 	type configuration struct {
 		NodeId            *big.Int `yaml:"node_id"`
 		CustodyGroupCount uint64   `yaml:"custody_group_count"`
@@ -24,7 +24,7 @@ func RunCustodyGroupsTest(t *testing.T, config string) {
 	require.NoError(t, err, "failed to set config")
 
 	// Retrieve the test vector folders.
-	testFolders, testsFolderPath := utils.TestFolders(t, config, "fulu", "networking/get_custody_groups/pyspec_tests")
+	testFolders, testsFolderPath := utils.TestFolders(t, config, fork, "networking/get_custody_groups/pyspec_tests")
 	if len(testFolders) == 0 {
 		t.Fatalf("no test folders found for %s", testsFolderPath)
 	}
@@ -65,7 +65,7 @@ func RunCustodyGroupsTest(t *testing.T, config string) {
 }
 
 // RunComputeColumnsForCustodyGroupTest executes compute columns for custody group spec tests.
-func RunComputeColumnsForCustodyGroupTest(t *testing.T, config string) {
+func RunComputeColumnsForCustodyGroupTest(t *testing.T, config, fork string) {
 	type configuration struct {
 		CustodyGroup uint64   `yaml:"custody_group"`
 		Expected     []uint64 `yaml:"result"`
@@ -75,7 +75,7 @@ func RunComputeColumnsForCustodyGroupTest(t *testing.T, config string) {
 	require.NoError(t, err, "failed to set config")
 
 	// Retrieve the test vector folders.
-	testFolders, testsFolderPath := utils.TestFolders(t, config, "fulu", "networking/compute_columns_for_custody_group/pyspec_tests")
+	testFolders, testsFolderPath := utils.TestFolders(t, config, fork, "networking/compute_columns_for_custody_group/pyspec_tests")
 	if len(testFolders) == 0 {
 		t.Fatalf("no test folders found for %s", testsFolderPath)
 	}

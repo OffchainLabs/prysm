@@ -583,6 +583,7 @@ func (s *Service) beaconEndpoints(
 		CanonicalHistory:           ch,
 		BeaconDB:                   s.cfg.BeaconDB,
 		AttestationCache:           s.cfg.AttestationCache,
+		ProposerPreferencesCache:   s.cfg.ProposerPreferencesCache,
 		AttestationsPool:           s.cfg.AttestationsPool,
 		SlashingsPool:              s.cfg.SlashingsPool,
 		ChainInfoFetcher:           s.cfg.ChainInfoFetcher,
@@ -652,6 +653,16 @@ func (s *Service) beaconEndpoints(
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetSyncCommittees,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/beacon/states/{state_id}/ptc",
+			name:     namespace + ".GetStatePTC",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetStatePTC,
 			methods: []string{http.MethodGet},
 		},
 		{
@@ -964,6 +975,36 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
+			template: "/eth/v1/beacon/states/{state_id}/builder_pending_withdrawals",
+			name:     namespace + ".GetBuilderPendingWithdrawals",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetBuilderPendingWithdrawals,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/beacon/states/{state_id}/builder_pending_payments",
+			name:     namespace + ".GetBuilderPendingPayments",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetBuilderPendingPayments,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/beacon/proposer_preferences",
+			name:     namespace + ".GetProposerPreferences",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetProposerPreferences,
+			methods: []string{http.MethodGet},
+		},
+		{
 			template: "/eth/v1/beacon/states/{state_id}/builders",
 			name:     namespace + ".GetStateBuilders",
 			middleware: []middleware.Middleware{
@@ -1241,16 +1282,6 @@ func (s *Service) prysmBeaconEndpoints(
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetWeakSubjectivity,
-			methods: []string{http.MethodGet},
-		},
-		{
-			template: "/eth/v1/beacon/states/{state_id}/validator_count",
-			name:     namespace + ".GetValidatorCount",
-			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
-				middleware.AcceptEncodingHeaderHandler(),
-			},
-			handler: server.GetValidatorCount,
 			methods: []string{http.MethodGet},
 		},
 		{

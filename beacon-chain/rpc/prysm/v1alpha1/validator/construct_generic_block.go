@@ -63,6 +63,11 @@ func (vs *Server) constructGenericBeaconBlock(
 			Block:        &ethpb.GenericBeaconBlock_Gloas{Gloas: blockProto.(*ethpb.BeaconBlockGloas)},
 			PayloadValue: bidStr,
 		}, nil
+	case version.Heze:
+		return &ethpb.GenericBeaconBlock{
+			Block:        &ethpb.GenericBeaconBlock_Heze{Heze: blockProto.(*ethpb.BeaconBlockHeze)},
+			PayloadValue: bidStr,
+		}, nil
 	default:
 		return nil, fmt.Errorf("unknown block version: %d", sBlk.Version())
 	}

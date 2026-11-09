@@ -25,6 +25,7 @@ import (
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/internal/valid"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -2969,7 +2970,7 @@ func TestGloasPayloadFromBlockAndBody(t *testing.T) {
 		payload, err := gloasPayloadFromBlockAndBody(hash, newBlock([]byte{0x01}), body)
 		require.NoError(t, err)
 		require.DeepEqual(t, []byte(bodyBal), payload.BlockAccessList)
-		require.Equal(t, 1, len(payload.Transactions))
+		require.Equal(t, 1, valid.Len(payload.Transactions))
 	})
 	t.Run("nil body errors", func(t *testing.T) {
 		_, err := gloasPayloadFromBlockAndBody(hash, newBlock([]byte{0x01}), nil)
@@ -3050,11 +3051,12 @@ func TestExecutionBlocksByHashes_NullResultIsNil(t *testing.T) {
 	require.DeepEqual(t, want, blks[1])
 }
 
-func TestReconstructFullGloasExecutionPayloadsByHash_MissingBlock(t *testing.T) {
+func TestReconstructFullGloasExecutionPayloadsByHash_SkipsMissingBlock(t *testing.T) {
 	hash := common.BytesToHash([]byte("missing"))
 	service := &Service{}
 	service.rpcClient = reconstructionRPCClient{body: &pb.ExecutionPayloadBodyV2{}}
 
-	_, err := service.ReconstructFullGloasExecutionPayloadsByHash(t.Context(), [][32]byte{hash})
-	require.ErrorContains(t, "execution block "+hash.Hex()+" not found", err)
+	payloads, err := service.ReconstructFullGloasExecutionPayloadsByHash(t.Context(), [][32]byte{hash})
+	require.NoError(t, err)
+	require.Equal(t, 0, len(payloads))
 }

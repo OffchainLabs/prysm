@@ -53,6 +53,28 @@ func TestBidVerifier_VerifyCurrentOrNextSlot(t *testing.T) {
 		b:               futureWrapped,
 	}
 	require.ErrorIs(t, verifier.VerifyCurrentOrNextSlot(), ErrBidSlotNotCurrentOrNext)
+
+	previousBid := testSignedExecutionPayloadBid(t, currentSlot-1)
+	previousWrapped, err := blocks.WrappedROSignedExecutionPayloadBid(previousBid)
+	require.NoError(t, err)
+	verifier = &BidVerifier{
+		sharedResources: &sharedResources{clock: clock},
+		results:         newResults(RequireBidCurrentOrNextSlot),
+		b:               previousWrapped,
+	}
+	require.ErrorIs(t, verifier.VerifyCurrentOrNextSlot(), ErrBidSlotNotCurrentOrNext)
+
+	// The previous slot is still accepted within MAXIMUM_GOSSIP_CLOCK_DISPARITY of its end.
+	genesis := time.Unix(1_700_000_000, 0)
+	boundary, err := slots.StartTime(genesis, currentSlot)
+	require.NoError(t, err)
+	now := boundary.Add(params.BeaconConfig().MaximumGossipClockDisparityDuration() / 2)
+	verifier = &BidVerifier{
+		sharedResources: &sharedResources{clock: startup.NewClock(genesis, [32]byte{}, startup.WithNower(func() time.Time { return now }))},
+		results:         newResults(RequireBidCurrentOrNextSlot),
+		b:               previousWrapped,
+	}
+	require.NoError(t, verifier.VerifyCurrentOrNextSlot())
 }
 
 func TestBidVerifier_VerifyBuilderActive(t *testing.T) {

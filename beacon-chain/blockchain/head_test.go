@@ -3,6 +3,7 @@ package blockchain
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sort"
 	"testing"
 	"time"
@@ -23,6 +24,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	dto "github.com/prometheus/client_model/go"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -89,7 +91,7 @@ func TestSaveHead_Different(t *testing.T) {
 	pb, err := headBlock.Proto()
 	require.NoError(t, err)
 	assert.DeepEqual(t, newHeadSignedBlock, pb, "Head did not change")
-	assert.DeepSSZEqual(t, headState.ToProto(), service.headState(ctx).ToProto(), "Head did not change")
+	assert.DeepSSZEqual(t, headState.ToContainer(), service.headState(ctx).ToContainer(), "Head did not change")
 }
 
 func TestSaveHead_Different_Reorg(t *testing.T) {
@@ -146,10 +148,91 @@ func TestSaveHead_Different_Reorg(t *testing.T) {
 	pb, err := headBlock.Proto()
 	require.NoError(t, err)
 	assert.DeepEqual(t, newHeadSignedBlock, pb, "Head did not change")
-	assert.DeepSSZEqual(t, headState.ToProto(), service.headState(ctx).ToProto(), "Head did not change")
+	assert.DeepSSZEqual(t, headState.ToContainer(), service.headState(ctx).ToContainer(), "Head did not change")
 	require.LogsContain(t, hook, "Chain reorg occurred")
 	require.LogsContain(t, hook, "distance=1")
 	require.LogsContain(t, hook, "depth=1")
+}
+
+func TestSaveHead_SameRootPayloadFlip_NoReorg(t *testing.T) {
+	ctx := t.Context()
+	hook := logTest.NewGlobal()
+	beaconDB := testDB.SetupDB(t)
+	service := setupBeaconChain(t, beaconDB)
+
+	ojc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
+	ofc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
+
+	parentBlock := util.SaveBlock(t, ctx, service.cfg.BeaconDB, util.NewBeaconBlock())
+	parentRoot, err := parentBlock.Block().HashTreeRoot()
+	require.NoError(t, err)
+	fcState, blkRoot, err := prepareForkchoiceState(ctx, parentBlock.Block().Slot(), parentRoot, parentBlock.Block().ParentRoot(), [32]byte{}, ojc, ofc)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, fcState, blkRoot))
+
+	signedHeadBlock := util.NewBeaconBlock()
+	signedHeadBlock.Block.Slot = 1
+	signedHeadBlock.Block.ParentRoot = parentRoot[:]
+	headBlock := util.SaveBlock(t, ctx, service.cfg.BeaconDB, signedHeadBlock)
+	headRoot, err := headBlock.Block().HashTreeRoot()
+	require.NoError(t, err)
+	fcState, blkRoot, err = prepareForkchoiceState(ctx, headBlock.Block().Slot(), headRoot, parentRoot, [32]byte{}, ojc, ofc)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, fcState, blkRoot))
+
+	headState, err := util.NewBeaconState()
+	require.NoError(t, err)
+	require.NoError(t, headState.SetSlot(1))
+	require.NoError(t, service.cfg.BeaconDB.SaveStateSummary(ctx, &ethpb.StateSummary{Slot: 1, Root: headRoot[:]}))
+	require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, headState, headRoot))
+
+	// The head is already this root, with the payload not yet delivered.
+	service.head = &head{root: headRoot, block: headBlock, state: headState, slot: 1, full: false}
+
+	events := make(chan *feed.Event, 10)
+	sub := service.cfg.StateNotifier.StateFeed().Subscribe(events)
+	defer sub.Unsubscribe()
+
+	requireNoReorg := func(t *testing.T) {
+		t.Helper()
+		for {
+			select {
+			case e := <-events:
+				if e.Type == statefeed.Reorg {
+					t.Fatal("spurious reorg event on same-root re-save")
+				}
+				continue
+			default:
+			}
+			break
+		}
+		require.LogsDoNotContain(t, hook, "Chain reorg occurred")
+	}
+
+	counterValue := func(t *testing.T) float64 {
+		t.Helper()
+		var m dto.Metric
+		require.NoError(t, reorgCount.Write(&m))
+		return m.GetCounter().GetValue()
+	}
+	reorgs := counterValue(t)
+
+	t.Run("payload delivered", func(t *testing.T) {
+		require.NoError(t, service.saveHead(ctx, headRoot, headBlock, headState, true))
+		requireNoReorg(t)
+		root, full := service.HeadRootAndFull()
+		require.Equal(t, headRoot, root)
+		require.Equal(t, true, full)
+	})
+
+	t.Run("payload withheld again", func(t *testing.T) {
+		require.NoError(t, service.saveHead(ctx, headRoot, headBlock, headState, false))
+		requireNoReorg(t)
+		_, full := service.HeadRootAndFull()
+		require.Equal(t, false, full)
+	})
+
+	require.Equal(t, reorgs, counterValue(t), "reorg metric incremented on same-root re-save")
 }
 
 func Test_notifyNewHeadEvent(t *testing.T) {
@@ -913,4 +996,59 @@ func TestUpdateHead_noSavedChanges(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, headRoot, newRoot)
 	require.Equal(t, headRoot, service.headRoot())
+}
+
+func Test_headEventDependentRoots(t *testing.T) {
+	t.Run("previous dependent root older than forkchoice tree root", func(t *testing.T) {
+		// Mimic a checkpoint sync: the forkchoice tree root is the origin block, at the start of an epoch.
+		srv := testServiceWithDB(t)
+		originRoot, headRoot := [32]byte{1}, [32]byte{2}
+		srv.originBlockRoot = originRoot
+		originSlot, err := slots.EpochStart(2)
+		require.NoError(t, err)
+
+		st, blk, err := prepareForkchoiceState(t.Context(), originSlot, originRoot, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		require.NoError(t, err)
+		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
+		st, blk, err = prepareForkchoiceState(t.Context(), originSlot+1, headRoot, originRoot, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		require.NoError(t, err)
+		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
+		_, err = srv.cfg.ForkChoiceStore.Head(t.Context())
+		require.NoError(t, err)
+
+		_, _, err = srv.headEventDependentRoots(2)
+		require.ErrorIs(t, err, errDependentRootBeforeForkchoice)
+
+		// Once the head leaves the origin epoch, the previous dependent root is in forkchoice.
+		st, blk, err = prepareForkchoiceState(t.Context(), originSlot+params.BeaconConfig().SlotsPerEpoch, [32]byte{3}, headRoot, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		require.NoError(t, err)
+		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
+		_, err = srv.cfg.ForkChoiceStore.Head(t.Context())
+		require.NoError(t, err)
+
+		previous, current, err := srv.headEventDependentRoots(3)
+		require.NoError(t, err)
+		require.Equal(t, headRoot, current)
+		require.Equal(t, originRoot, previous)
+	})
+}
+
+func Test_logHeadEventError(t *testing.T) {
+	t.Run("nil error", func(t *testing.T) {
+		hook := logTest.NewGlobal()
+		logHeadEventError(nil, "head")
+		require.Equal(t, 0, len(hook.AllEntries()))
+	})
+
+	t.Run("dependent root older than forkchoice tree root", func(t *testing.T) {
+		hook := logTest.NewGlobal()
+		logHeadEventError(fmt.Errorf("wrapped: %w", errDependentRootBeforeForkchoice), "head")
+		require.LogsDoNotContain(t, hook, "Could not notify event feed of new chain head")
+	})
+
+	t.Run("other error", func(t *testing.T) {
+		hook := logTest.NewGlobal()
+		logHeadEventError(fmt.Errorf("boom"), "head_v2")
+		require.LogsContain(t, hook, "Could not notify event feed of new chain head")
+	})
 }

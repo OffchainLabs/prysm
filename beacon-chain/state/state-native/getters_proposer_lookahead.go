@@ -18,7 +18,7 @@ func (b *BeaconState) ProposerLookahead() ([]primitives.ValidatorIndex, error) {
 	return slices.Clone(b.proposerLookahead), nil
 }
 
-// proposerLookaheadVal returns a copy of the proposer lookahead for use in ToProto.
+// proposerLookaheadVal returns a copy of the proposer lookahead for use in ToContainer.
 func (b *BeaconState) proposerLookaheadVal() []primitives.ValidatorIndex {
 	return slices.Clone(b.proposerLookahead)
 }

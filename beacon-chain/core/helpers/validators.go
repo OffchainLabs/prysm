@@ -101,7 +101,8 @@ func ActiveValidatorIndices(ctx context.Context, s state.ReadOnlyBeaconState, ep
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get seed")
 	}
-	activeIndices, err := committeeCache.ActiveIndices(ctx, seed)
+	cc := committeeCacheFrom(ctx)
+	activeIndices, err := cc.ActiveIndices(ctx, seed)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not interface with committee cache")
 	}
@@ -109,7 +110,7 @@ func ActiveValidatorIndices(ctx context.Context, s state.ReadOnlyBeaconState, ep
 		return activeIndices, nil
 	}
 
-	indices, err := scanActiveValidatorIndices(s, epoch, seed)
+	indices, err := scanActiveValidatorIndices(cc, s, epoch, seed)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +148,8 @@ func ActiveValidatorCount(ctx context.Context, s state.ReadOnlyBeaconState, epoc
 	if err != nil {
 		return 0, errors.Wrap(err, "could not get seed")
 	}
-	activeCount, err := committeeCache.ActiveIndicesCount(seed)
+	cc := committeeCacheFrom(ctx)
+	activeCount, err := cc.ActiveIndicesCount(seed)
 	if err != nil {
 		return 0, errors.Wrap(err, "could not interface with committee cache")
 	}
@@ -155,8 +157,8 @@ func ActiveValidatorCount(ctx context.Context, s state.ReadOnlyBeaconState, epoc
 		return uint64(activeCount), nil
 	}
 
-	if !committeeCache.HasEntry(string(seed[:])) {
-		indices, err := scanActiveValidatorIndices(s, epoch, seed)
+	if !cc.HasEntry(string(seed[:])) {
+		indices, err := scanActiveValidatorIndices(cc, s, epoch, seed)
 		if err != nil {
 			return 0, fmt.Errorf("scan active validator indices: %w", err)
 		}

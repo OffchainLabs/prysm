@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/container/slice"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/math"
@@ -88,6 +89,35 @@ func AttestationCommitteesFromCache(ctx context.Context, st state.ReadOnlyBeacon
 	return true, committees, nil
 }
 
+// AttestationCommitteeAggregatesFromCache returns the cached aggregate public key of each attestation committee.
+func AttestationCommitteeAggregatesFromCache(ctx context.Context, st state.ReadOnlyBeaconState, att ethpb.Att) ([]bls.PublicKey, error) {
+	slot := att.GetData().Slot
+	seed, err := Seed(st, slots.ToEpoch(slot), params.BeaconConfig().DomainBeaconAttester)
+	if err != nil {
+		return nil, fmt.Errorf("get seed: %w", err)
+	}
+
+	committeeIndices := []primitives.CommitteeIndex{att.GetData().CommitteeIndex}
+	if att.Version() >= version.Electra {
+		committeeIndices = CommitteeIndices(att.CommitteeBitsVal())
+	}
+
+	cc := committeeCacheFrom(ctx)
+	keys := make([]bls.PublicKey, len(committeeIndices))
+	for i, ci := range committeeIndices {
+		key, err := cc.CommitteeAggregatePubkey(slot, seed, ci)
+		if err != nil {
+			return nil, fmt.Errorf("committee aggregate pubkey for committee %d: %w", ci, err)
+		}
+		if key == nil {
+			// Cache miss, fallback to aggregating the attesting keys.
+			return nil, nil
+		}
+		keys[i] = key
+	}
+	return keys, nil
+}
+
 func attestationCommittees(
 	ctx context.Context,
 	st state.ReadOnlyBeaconState,
@@ -131,11 +161,12 @@ func BeaconCommittees(ctx context.Context, state state.ReadOnlyBeaconState, slot
 		return nil, errors.Wrap(err, "could not get seed")
 	}
 
+	cc := committeeCacheFrom(ctx)
 	committees := make([][]primitives.ValidatorIndex, committeesPerSlot)
 	var activeIndices []primitives.ValidatorIndex
 
 	for idx := primitives.CommitteeIndex(0); idx < primitives.CommitteeIndex(len(committees)); idx++ {
-		committee, err := committeeCache.Committee(ctx, slot, seed, idx)
+		committee, err := cc.Committee(ctx, slot, seed, idx)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not interface with committee cache")
 		}
@@ -184,7 +215,7 @@ func BeaconCommitteeFromState(ctx context.Context, state state.ReadOnlyBeaconSta
 		return nil, errors.Wrap(err, "could not get seed")
 	}
 
-	committee, err := committeeCache.Committee(ctx, slot, seed, committeeIndex)
+	committee, err := committeeCacheFrom(ctx).Committee(ctx, slot, seed, committeeIndex)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not interface with committee cache")
 	}
@@ -214,7 +245,7 @@ func BeaconCommitteeFromCache(
 		return nil, errors.Wrap(err, "could not get seed")
 	}
 
-	committee, err := committeeCache.Committee(ctx, slot, seed, committeeIndex)
+	committee, err := committeeCacheFrom(ctx).Committee(ctx, slot, seed, committeeIndex)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not interface with committee cache")
 	}
@@ -249,7 +280,7 @@ func BeaconCommittee(
 	ctx, span := trace.StartSpan(ctx, "helpers.BeaconCommittee")
 	defer span.End()
 
-	committee, err := committeeCache.Committee(ctx, slot, seed, committeeIndex)
+	committee, err := committeeCacheFrom(ctx).Committee(ctx, slot, seed, committeeIndex)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not interface with committee cache")
 	}
@@ -435,6 +466,7 @@ func CommitteeIndices(committeeBits bitfield.Bitfield) []primitives.CommitteeInd
 
 // UpdateCommitteeCache gets called at the beginning of every epoch to cache the committee shuffled indices
 // list with committee index and epoch number. It caches the shuffled indices for the input epoch.
+// It also starts computing the aggregate public key of every committee in the background.
 func UpdateCommitteeCache(ctx context.Context, state state.ReadOnlyBeaconState, e primitives.Epoch) error {
 	ctx, span := trace.StartSpan(ctx, "committeeCache.UpdateCommitteeCache")
 	defer span.End()
@@ -443,7 +475,10 @@ func UpdateCommitteeCache(ctx context.Context, state state.ReadOnlyBeaconState, 
 	if err != nil {
 		return err
 	}
-	if committeeCache.HasEntry(string(seed[:])) {
+	cc := committeeCacheFrom(ctx)
+	// The entry can already exist without aggregates: the active indices scan also fills the cache.
+	if committees := cc.Entry(string(seed[:])); committees != nil {
+		fillCommitteeAggregatesAsync(cc, committees, state)
 		return nil
 	}
 	shuffledIndices, err := ShuffledIndices(ctx, state, e)
@@ -457,12 +492,17 @@ func UpdateCommitteeCache(ctx context.Context, state state.ReadOnlyBeaconState, 
 	copy(sorted, shuffledIndices)
 	slices.Sort(sorted)
 
-	return committeeCache.AddCommitteeShuffledList(ctx, &cache.Committees{
+	committees := &cache.Committees{
 		ShuffledIndices: shuffledIndices,
 		CommitteeCount:  committeeCount,
 		Seed:            seed,
 		SortedIndices:   sorted,
-	})
+	}
+	if err := cc.AddCommitteeShuffledList(ctx, committees); err != nil {
+		return fmt.Errorf("add committee shuffled list: %w", err)
+	}
+	fillCommitteeAggregatesAsync(cc, committees, state)
+	return nil
 }
 
 // ExpandCommitteeCache resizes the cache to a higher limit.
@@ -569,8 +609,8 @@ func PrecomputeProposerIndices(state state.ReadOnlyBeaconState, activeIndices []
 	return proposerIndices, nil
 }
 
-func scanActiveValidatorIndices(s state.ReadOnlyBeaconState, epoch primitives.Epoch, seed [32]byte) ([]primitives.ValidatorIndex, error) {
-	v, err, shared := committeeCache.Sf.Do(string(seed[:]), func() (any, error) {
+func scanActiveValidatorIndices(cc *cache.CommitteeCache, s state.ReadOnlyBeaconState, epoch primitives.Epoch, seed [32]byte) ([]primitives.ValidatorIndex, error) {
+	v, err, shared := cc.Sf.Do(string(seed[:]), func() (any, error) {
 		var indices []primitives.ValidatorIndex
 		for idx, val := range s.ValidatorsReadOnlySeq() {
 			if IsActiveValidatorUsingTrie(val, epoch) {
@@ -578,7 +618,7 @@ func scanActiveValidatorIndices(s state.ReadOnlyBeaconState, epoch primitives.Ep
 			}
 		}
 
-		fillCommitteeCacheAsync(seed, indices)
+		fillCommitteeCacheAsync(cc, seed, indices)
 		return indices, nil
 	})
 	if err != nil {
@@ -591,7 +631,7 @@ func scanActiveValidatorIndices(s state.ReadOnlyBeaconState, epoch primitives.Ep
 	return v.([]primitives.ValidatorIndex), nil
 }
 
-func fillCommitteeCacheAsync(seed [32]byte, indices []primitives.ValidatorIndex) {
+func fillCommitteeCacheAsync(cc *cache.CommitteeCache, seed [32]byte, indices []primitives.ValidatorIndex) {
 	if len(indices) == 0 {
 		return
 	}
@@ -600,21 +640,23 @@ func fillCommitteeCacheAsync(seed [32]byte, indices []primitives.ValidatorIndex)
 
 	// This check is not stricly needed since it is also checked in the goroutine,
 	// but it is a quick check to avoid spawning unnecessary goroutines.
-	if committeeCache.HasEntry(seedKey) {
+	if cc.HasEntry(seedKey) {
 		return
 	}
 
 	count := SlotCommitteeCount(uint64(len(indices)))
 	committeeCount := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(count))
+	// Read the config before spawning the goroutine.
+	rounds := shuffleRoundCount()
 
-	committeeCache.Wg.Go(func() {
-		if committeeCache.HasEntry(seedKey) {
+	cc.Wg.Go(func() {
+		if cc.HasEntry(seedKey) {
 			return
 		}
 
 		// UnshuffleList sorts in place.
 		// Clone so we never touch the caller's slice.
-		shuffled, err := UnshuffleList(slices.Clone(indices), seed)
+		shuffled, err := innerShuffleList(slices.Clone(indices), seed, rounds, false /* un-shuffle */)
 		if err != nil {
 			log.WithError(err).Error("Could not shuffle indices for committee cache update")
 			return
@@ -626,7 +668,7 @@ func fillCommitteeCacheAsync(seed [32]byte, indices []primitives.ValidatorIndex)
 		ctx, cancel := context.WithTimeout(context.Background(), committeeCacheWriteTimeout)
 		defer cancel()
 
-		if err := committeeCache.AddCommitteeShuffledList(ctx, &cache.Committees{
+		if err := cc.AddCommitteeShuffledList(ctx, &cache.Committees{
 			Seed:            seed,
 			ShuffledIndices: shuffled,
 			SortedIndices:   sorted,
@@ -634,5 +676,36 @@ func fillCommitteeCacheAsync(seed [32]byte, indices []primitives.ValidatorIndex)
 		}); err != nil {
 			log.WithError(err).Error("Could not update committee cache")
 		}
+	})
+}
+
+// fillCommitteeAggregatesAsync computes the aggregate public key of every committee in the background.
+// It returns early when another call already computed or is computing them.
+func fillCommitteeAggregatesAsync(cc *cache.CommitteeCache, c *cache.Committees, s state.ReadOnlyBeaconState) {
+	if !c.TryStartAggregating() {
+		return
+	}
+
+	cc.Wg.Go(func() {
+		n := uint64(len(c.ShuffledIndices))
+		keys := make([]bls.PublicKey, c.CommitteeCount)
+		for i := range c.CommitteeCount {
+			committee := c.ShuffledIndices[slice.SplitOffset(n, c.CommitteeCount, i):slice.SplitOffset(n, c.CommitteeCount, i+1)]
+			if len(committee) == 0 {
+				// No attestation can name an empty committee. A nil key makes lookups fall back.
+				continue
+			}
+			indices := make([]uint64, len(committee))
+			for j, v := range committee {
+				indices[j] = uint64(v)
+			}
+			key, err := s.AggregateKeyFromIndices(indices)
+			if err != nil {
+				log.WithError(err).Debug("Could not aggregate committee key")
+				return
+			}
+			keys[i] = key
+		}
+		c.SetAggregatePubkeys(keys)
 	})
 }

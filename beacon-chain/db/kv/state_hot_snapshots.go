@@ -18,13 +18,9 @@ func (s *Store) SaveHotStateSnapshot(ctx context.Context, st state.ReadOnlyBeaco
 	_, span := trace.StartSpan(ctx, "BeaconDB.SaveHotStateSnapshot")
 	defer span.End()
 
-	if st == nil || st.IsNil() {
-		return errors.New("nil state")
-	}
-
-	compressedEnc, err := encodeStateWithKey(st)
+	compressedEnc, err := encodeHotStateSnapshot(st)
 	if err != nil {
-		return fmt.Errorf("encode state with key: %w", err)
+		return err
 	}
 
 	return s.db.Update(func(tx *bolt.Tx) error {
@@ -85,6 +81,28 @@ func (s *Store) HasHotStateSnapshot(ctx context.Context, blockRoot [32]byte) boo
 	return has
 }
 
+// DeleteHotStateSnapshots removes the given roots from the hot state snapshots bucket.
+func (s *Store) DeleteHotStateSnapshots(ctx context.Context, blockRoots [][32]byte) error {
+	_, span := trace.StartSpan(ctx, "BeaconDB.DeleteHotStateSnapshots")
+	defer span.End()
+
+	if len(blockRoots) == 0 {
+		return nil
+	}
+	return s.db.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(hotStateSnapshotsBucket)
+		if bkt == nil {
+			return bolt.ErrBucketNotFound
+		}
+		for _, r := range blockRoots {
+			if err := bkt.Delete(r[:]); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func (s *Store) ClearHotStateSnapshots(ctx context.Context) error {
 	_, span := trace.StartSpan(ctx, "BeaconDB.ClearHotStateSnapshots")
 	defer span.End()
@@ -100,5 +118,89 @@ func (s *Store) ClearHotStateSnapshots(ctx context.Context) error {
 
 		_, err := tx.CreateBucket(hotStateSnapshotsBucket)
 		return err
+	})
+}
+
+func encodeHotStateSnapshot(st state.ReadOnlyBeaconState) ([]byte, error) {
+	if st == nil || st.IsNil() {
+		return nil, errors.New("nil state")
+	}
+	enc, err := encodeStateWithKey(st)
+	if err != nil {
+		return nil, fmt.Errorf("encode state with key: %w", err)
+	}
+	return enc, nil
+}
+
+func (s *Store) SaveArchiveResumeSnapshot(ctx context.Context, st state.ReadOnlyBeaconState, blockRoot [32]byte) error {
+	_, span := trace.StartSpan(ctx, "BeaconDB.SaveArchiveResumeSnapshot")
+	defer span.End()
+
+	compressedEnc, err := encodeHotStateSnapshot(st)
+	if err != nil {
+		return err
+	}
+
+	return s.db.Update(func(tx *bolt.Tx) error {
+		hot := tx.Bucket(hotStateSnapshotsBucket)
+		tracked := tx.Bucket(archiveResumeSnapshotsBucket)
+		if hot == nil || tracked == nil {
+			return bolt.ErrBucketNotFound
+		}
+		if hot.Get(blockRoot[:]) != nil && tracked.Get(blockRoot[:]) == nil {
+			return nil
+		}
+		if err := hot.Put(blockRoot[:], compressedEnc); err != nil {
+			return err
+		}
+		return tracked.Put(blockRoot[:], []byte{1})
+	})
+}
+
+func (s *Store) ArchiveResumeSnapshotRoots(ctx context.Context) ([][32]byte, error) {
+	_, span := trace.StartSpan(ctx, "BeaconDB.ArchiveResumeSnapshotRoots")
+	defer span.End()
+
+	var roots [][32]byte
+	err := s.db.View(func(tx *bolt.Tx) error {
+		tracked := tx.Bucket(archiveResumeSnapshotsBucket)
+		if tracked == nil {
+			return bolt.ErrBucketNotFound
+		}
+		return tracked.ForEach(func(k, _ []byte) error {
+			var r [32]byte
+			copy(r[:], k)
+			roots = append(roots, r)
+			return nil
+		})
+	})
+	return roots, err
+}
+
+func (s *Store) DeleteArchiveResumeSnapshots(ctx context.Context, blockRoots [][32]byte) error {
+	_, span := trace.StartSpan(ctx, "BeaconDB.DeleteArchiveResumeSnapshots")
+	defer span.End()
+
+	if len(blockRoots) == 0 {
+		return nil
+	}
+	return s.db.Update(func(tx *bolt.Tx) error {
+		hot := tx.Bucket(hotStateSnapshotsBucket)
+		tracked := tx.Bucket(archiveResumeSnapshotsBucket)
+		if hot == nil || tracked == nil {
+			return bolt.ErrBucketNotFound
+		}
+		for _, r := range blockRoots {
+			if tracked.Get(r[:]) == nil {
+				continue
+			}
+			if err := hot.Delete(r[:]); err != nil {
+				return err
+			}
+			if err := tracked.Delete(r[:]); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }

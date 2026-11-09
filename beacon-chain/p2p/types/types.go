@@ -53,8 +53,8 @@ func (r *BeaconBlockByRootsReq) MarshalSSZTo(dst []byte) ([]byte, error) {
 
 // MarshalSSZ Marshals the block by roots request type into the serialized object.
 func (r *BeaconBlockByRootsReq) MarshalSSZ() ([]byte, error) {
-	if len(*r) > int(params.BeaconConfig().MaxRequestBlocks) {
-		return nil, errors.Errorf("beacon block by roots request exceeds max size: %d > %d", len(*r), params.BeaconConfig().MaxRequestBlocks)
+	if len(*r) > int(params.BeaconConfig().MaxRequestBlocksDeneb) {
+		return nil, errors.Errorf("beacon block by roots request exceeds max size: %d > %d", len(*r), params.BeaconConfig().MaxRequestBlocksDeneb)
 	}
 	buf := make([]byte, 0, r.SizeSSZ())
 	for _, r := range *r {
@@ -68,11 +68,16 @@ func (r *BeaconBlockByRootsReq) SizeSSZ() int {
 	return len(*r) * fieldparams.RootLength
 }
 
+// MaxSizeSSZ returns the maximum SSZ-encoded size.
+func (r *BeaconBlockByRootsReq) MaxSizeSSZ() int {
+	return int(params.BeaconConfig().MaxRequestBlocksDeneb) * fieldparams.RootLength
+}
+
 // UnmarshalSSZ unmarshals the provided bytes buffer into the
 // block by roots request object.
 func (r *BeaconBlockByRootsReq) UnmarshalSSZ(buf []byte) error {
 	bufLen := len(buf)
-	maxLength := int(params.BeaconConfig().MaxRequestBlocks * fieldparams.RootLength)
+	maxLength := int(params.BeaconConfig().MaxRequestBlocksDeneb * fieldparams.RootLength)
 	if bufLen > maxLength {
 		return errors.Errorf("expected buffer with length of up to %d but received length %d", maxLength, bufLen)
 	}
@@ -117,6 +122,11 @@ func (m *ErrorMessage) SizeSSZ() int {
 	return len(*m)
 }
 
+// MaxSizeSSZ returns the maximum SSZ-encoded size.
+func (m *ErrorMessage) MaxSizeSSZ() int {
+	return maxErrorLength
+}
+
 // UnmarshalSSZ unmarshals the provided bytes buffer into the
 // error message object.
 func (m *ErrorMessage) UnmarshalSSZ(buf []byte) error {
@@ -140,6 +150,11 @@ var blobIdSize int
 // SizeSSZ returns the size of the serialized representation.
 func (b *BlobSidecarsByRootReq) SizeSSZ() int {
 	return len(*b) * blobIdSize
+}
+
+// MaxSizeSSZ returns the maximum SSZ-encoded size.
+func (b *BlobSidecarsByRootReq) MaxSizeSSZ() int {
+	return int(params.BeaconConfig().MaxRequestBlobSidecarsElectra) * blobIdSize
 }
 
 // MarshalSSZTo appends the serialized BlobSidecarsByRootReq value to the provided byte slice.
@@ -242,6 +257,11 @@ func (r *ExecutionPayloadEnvelopesByRootReq) MarshalSSZ() ([]byte, error) {
 // SizeSSZ returns the size of the serialized representation.
 func (r *ExecutionPayloadEnvelopesByRootReq) SizeSSZ() int {
 	return len(*r) * fieldparams.RootLength
+}
+
+// MaxSizeSSZ returns the maximum SSZ-encoded size.
+func (r *ExecutionPayloadEnvelopesByRootReq) MaxSizeSSZ() int {
+	return int(params.BeaconConfig().MaxRequestPayloads) * fieldparams.RootLength
 }
 
 // UnmarshalSSZ unmarshals the provided bytes buffer into the
@@ -389,6 +409,12 @@ func (d DataColumnsByRootIdentifiers) SizeSSZ() int {
 		size += (d)[i].SizeSSZ()
 	}
 	return size
+}
+
+// MaxSizeSSZ bounds each identifier's columns by NumberOfColumns.
+func (d DataColumnsByRootIdentifiers) MaxSizeSSZ() int {
+	maxIdentifierSize := fieldparams.RootLength + bytesPerLengthOffset + fieldparams.NumberOfColumns*8
+	return int(params.BeaconConfig().MaxRequestBlocksDeneb) * (bytesPerLengthOffset + maxIdentifierSize)
 }
 
 func init() {

@@ -2,23 +2,18 @@ package beacon_api
 
 import (
 	"context"
+	"strconv"
+	"time"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/pkg/errors"
 )
 
 func (c *beaconApiValidatorClient) domainData(ctx context.Context, epoch primitives.Epoch, domainType [4]byte) (*ethpb.DomainResponse, error) {
-	// Get the fork version from the given epoch
-	fork, err := params.Fork(epoch)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get fork version for epoch %d", epoch)
-	}
-
 	// Get the genesis validator root
 	genesis, err := c.genesisProvider.Genesis(ctx)
 	if err != nil {
@@ -30,10 +25,14 @@ func (c *beaconApiValidatorClient) domainData(ctx context.Context, epoch primiti
 		return nil, errors.Wrap(err, "failed to decode genesis validators root")
 	}
 
-	signatureDomain, err := signing.Domain(fork, epoch, domainType, genesisValidatorRoot)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to compute signature domain")
+	genesisTime := time.Time{}
+	if genesis.GenesisTime != "" {
+		seconds, err := strconv.ParseInt(genesis.GenesisTime, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse genesis time %s", genesis.GenesisTime)
+		}
+		genesisTime = time.Unix(seconds, 0)
 	}
 
-	return &ethpb.DomainResponse{SignatureDomain: signatureDomain}, nil
+	return validatorHelpers.ComputeDomainData(epoch, domainType, genesisValidatorRoot, genesisTime)
 }

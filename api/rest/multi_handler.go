@@ -39,8 +39,31 @@ type (
 	//   - matched=true: val is the first response satisfying accept.
 	//   - matched=false, ok=true: no response matched, val is a best-effort success.
 	//   - matched=false, ok=false: every handler failed; errs holds the failures.
-	queryRound[T any] func(ctx context.Context, handlers []*handler, fallbackDeadline time.Time, accept func(T) bool, fn queryFunc[T]) (val T, matched, ok bool, errs []error)
+	queryRound[T any] func(ctx context.Context, handlers []*handler, bound fallbackBound, accept func(T) bool, fn queryFunc[T]) (val T, matched, ok bool, errs []error)
+
+	// fallbackBound bounds how long a read keeps waiting for the nodes that have not
+	// answered yet once a usable (but not accepted) response is in hand.
+	fallbackBound struct {
+		deadline time.Time     // If non-zero, the instant the wait ends.
+		wait     time.Duration // If non-zero, how long the wait lasts after the first usable response.
+	}
 )
+
+// expiry returns the instant the wait ends for a first usable response received
+// at first: the earlier of the deadline and first+wait, or the zero time when
+// the wait is unbounded.
+func (b fallbackBound) expiry(first time.Time) time.Time {
+	if b.wait <= 0 {
+		return b.deadline
+	}
+
+	relative := first.Add(b.wait)
+	if b.deadline.IsZero() || relative.Before(b.deadline) {
+		return relative
+	}
+
+	return b.deadline
+}
 
 func newMultiHandler(handlers []*handler) (*multiHandler, error) {
 	if len(handlers) == 0 {
@@ -296,6 +319,39 @@ func (m *multiHandler) PostSSZWithFallback(
 	return errors.Join(errs...)
 }
 
+// Request sends a read-only JSON POST through the read-query machinery: racing,
+// acceptance predicates, deadlines and re-polling all come from opts, as for Get.
+// Unlike Post, it does not broadcast a write: it returns the response the read selects.
+// When resp is nil the response body is discarded.
+func (m *multiHandler) Request(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer, resp any, opts ...QueryOption) error {
+	cfg := newQueryConfig(opts)
+
+	var raw []byte
+	if data != nil {
+		raw = data.Bytes()
+	}
+
+	post := func(ctx context.Context, h *handler) (json.RawMessage, error) {
+		body, _, err := h.postWithContentType(ctx, endpoint, headers, api.JsonMediaType, cloneBuffer(data, raw))
+		if err != nil {
+			return nil, fmt.Errorf("post: %w", err)
+		}
+
+		return body, nil
+	}
+
+	out, _, err := queryUntilAccepted(ctx, m.handlers, cfg, cfg.accept, roundFor[json.RawMessage](cfg), post)
+	if err != nil {
+		return fmt.Errorf("query until accepted: %w", err)
+	}
+
+	if err := decodeInto(out, resp); err != nil {
+		return fmt.Errorf("decode into: %w", err)
+	}
+
+	return nil
+}
+
 // RequestSSZWithFallback posts through the read-query machinery (racing, acceptance
 // predicates and deadlines via opts), preferring an SSZ response, and returns the winner.
 func (m *multiHandler) RequestSSZWithFallback(
@@ -391,20 +447,33 @@ func queryUntilAccepted[T any](
 	defer cancel()
 
 	var (
-		zero     T
-		fallback *T
-		reported []error
+		zero        T
+		fallback    *T
+		fallbackEnd time.Time // When non-zero, the instant the wait ends once fallback is set.
+		reported    []error
 	)
+
+	bound := fallbackBound{deadline: cfg.fallbackDeadline, wait: cfg.fallbackWait}
+
+	// end returns the instant the read stops: the deadline, or the earlier
+	// fallback end once a usable response is in hand.
+	end := func() time.Time {
+		if fallback != nil && !fallbackEnd.IsZero() && (cfg.deadline.IsZero() || fallbackEnd.Before(cfg.deadline)) {
+			return fallbackEnd
+		}
+
+		return cfg.deadline
+	}
 
 	for {
 		// If specified, set a deadline.
 		roundCtx, roundCancel := ctx, func() {}
-		if !cfg.deadline.IsZero() {
-			roundCtx, roundCancel = context.WithDeadline(ctx, cfg.deadline)
+		if deadline := end(); !deadline.IsZero() {
+			roundCtx, roundCancel = context.WithDeadline(ctx, deadline)
 		}
 
 		// Run a round of queries.
-		val, matched, ok, errs := round(roundCtx, handlers, cfg.fallbackDeadline, accept, fn)
+		val, matched, ok, errs := round(roundCtx, handlers, bound, accept, fn)
 		deadlineCut := errors.Is(roundCtx.Err(), context.DeadlineExceeded)
 		roundCancel()
 
@@ -415,6 +484,10 @@ func queryUntilAccepted[T any](
 
 		// If no match was found but a usable response was returned, record it as a
 		// best-effort fallback.
+		if ok && fallback == nil {
+			fallbackEnd = bound.expiry(time.Now())
+		}
+
 		if ok {
 			fallback = &val
 		}
@@ -445,9 +518,10 @@ func queryUntilAccepted[T any](
 		}
 
 		// Stop after this round unless re-polling is enabled and there is still
-		// time left on the deadline. In UntilAny2xx mode a usable fallback
-		// also ends the re-polling.
-		repollExhausted := ctx.Err() != nil || cfg.pollInterval <= 0 || cfg.deadline.IsZero() || !time.Now().Before(cfg.deadline)
+		// time left on the deadline (or on the fallback deadline once a usable
+		// response is in hand). In UntilAny2xx mode a usable fallback also ends
+		// the re-polling.
+		repollExhausted := ctx.Err() != nil || cfg.pollInterval <= 0 || cfg.deadline.IsZero() || !time.Now().Before(end())
 		if cfg.repollMode == UntilAny2xx && fallback != nil {
 			repollExhausted = true
 		}
@@ -465,7 +539,7 @@ func queryUntilAccepted[T any](
 
 		// Do not start a round the deadline would cut short: the completed rounds
 		// already hold the nodes' answers.
-		if !time.Now().Before(cfg.deadline) {
+		if !time.Now().Before(end()) {
 			return finish()
 		}
 	}
@@ -490,7 +564,7 @@ func roundFor[T any](cfg queryConfig) queryRound[T] {
 //     handler failed).
 //   - errs: the per-handler failures collected this round (plus ctx.Err() when
 //     the context was cancelled mid-run).
-func raceRound[T any](ctx context.Context, handlers []*handler, fallbackDeadline time.Time, accept func(T) bool, fn queryFunc[T]) (T, bool, bool, []error) {
+func raceRound[T any](ctx context.Context, handlers []*handler, bound fallbackBound, accept func(T) bool, fn queryFunc[T]) (T, bool, bool, []error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -545,8 +619,8 @@ func raceRound[T any](ctx context.Context, handlers []*handler, fallbackDeadline
 		if fallback == nil {
 			fallback = &r.val
 
-			if !fallbackDeadline.IsZero() {
-				fallbackExpiry = time.After(time.Until(fallbackDeadline))
+			if expiry := bound.expiry(time.Now()); !expiry.IsZero() {
+				fallbackExpiry = time.After(time.Until(expiry))
 			}
 		}
 	}
@@ -568,10 +642,11 @@ func raceRound[T any](ctx context.Context, handlers []*handler, fallbackDeadline
 //     handler failed).
 //   - errs: the per-handler failures collected this round (plus ctx.Err() when
 //     the context was cancelled mid-run).
-func inOrderRound[T any](ctx context.Context, handlers []*handler, fallbackDeadline time.Time, accept func(T) bool, fn queryFunc[T]) (T, bool, bool, []error) {
+func inOrderRound[T any](ctx context.Context, handlers []*handler, bound fallbackBound, accept func(T) bool, fn queryFunc[T]) (T, bool, bool, []error) {
 	var (
-		fallback *T
-		errs     []error
+		fallback       *T
+		fallbackExpiry time.Time // When non-zero, the instant the wait ends once fallback is set.
+		errs           []error
 	)
 
 	for _, handler := range handlers {
@@ -585,12 +660,12 @@ func inOrderRound[T any](ctx context.Context, handlers []*handler, fallbackDeadl
 		// handlers once a better one is no longer worth waiting for, and bound
 		// the queries still worth trying so a hung handler cannot outlast it.
 		callCtx, cancel := ctx, func() {}
-		if fallback != nil && !fallbackDeadline.IsZero() {
-			if !time.Now().Before(fallbackDeadline) {
+		if fallback != nil && !fallbackExpiry.IsZero() {
+			if !time.Now().Before(fallbackExpiry) {
 				break
 			}
 
-			callCtx, cancel = context.WithDeadline(ctx, fallbackDeadline)
+			callCtx, cancel = context.WithDeadline(ctx, fallbackExpiry)
 		}
 
 		// Run the query function.
@@ -609,6 +684,7 @@ func inOrderRound[T any](ctx context.Context, handlers []*handler, fallbackDeadl
 		// If no fallback has been recorded yet, record this val as a best-effort fallback.
 		if fallback == nil {
 			fallback = &val
+			fallbackExpiry = bound.expiry(time.Now())
 		}
 	}
 

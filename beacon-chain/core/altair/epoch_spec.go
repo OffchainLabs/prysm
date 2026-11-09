@@ -36,7 +36,7 @@ func ProcessSyncCommitteeUpdates(ctx context.Context, beaconState state.BeaconSt
 		if err := beaconState.SetNextSyncCommittee(nextSyncCommittee); err != nil {
 			return nil, err
 		}
-		if err := helpers.UpdateSyncCommitteeCache(beaconState); err != nil {
+		if err := helpers.UpdateSyncCommitteeCache(ctx, beaconState); err != nil {
 			log.WithError(err).Error("Could not update sync committee cache")
 		}
 	}

@@ -540,6 +540,7 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 	r, err := newRunner(timedCtx, v)
 	require.NoError(t, err)
 	r.run(timedCtx)
+	r.duties.Wait()
 }
 
 func TestPerformRolesDispatch(t *testing.T) {

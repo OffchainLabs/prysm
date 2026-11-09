@@ -62,7 +62,11 @@ func (v *ProposerPreferencesVerifier) VerifyCurrentOrNextEpoch() (err error) {
 		return fmt.Errorf("%w: proposal epoch %d, current epoch %d",
 			ErrProposerPreferencesNotCurrentOrNextEpoch, proposalEpoch, currentEpoch)
 	}
-	if msg.ProposalSlot <= currentSlot {
+	start, err := v.clock.SlotStart(msg.ProposalSlot)
+	if err != nil {
+		return err
+	}
+	if v.clock.Now().After(start.Add(params.BeaconConfig().MaximumGossipClockDisparityDuration())) {
 		return fmt.Errorf("%w: proposal slot %d <= current slot %d",
 			ErrProposerPreferencesSlotAlreadyPassed, msg.ProposalSlot, currentSlot)
 	}
@@ -99,6 +103,9 @@ func (v *ProposerPreferencesVerifier) VerifyValidProposalSlot(st state.ReadOnlyB
 }
 
 // VerifySignature verifies the signed proposer preferences signature against the validator public key.
+// Unlike VerifyValidProposalSlot, this needs no slot advancement: the public key and the
+// genesis validators root are the same in the dependent state and in the boundary state,
+// so callers should check the signature before paying for any state transition.
 func (v *ProposerPreferencesVerifier) VerifySignature(st state.ReadOnlyBeaconState) (err error) {
 	defer v.record(RequireProposerPreferencesSignatureValid, &err)
 

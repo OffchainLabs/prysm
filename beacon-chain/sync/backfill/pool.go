@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/runtime/logging"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -48,13 +49,12 @@ type p2pBatchWorkerPool struct {
 	toRouter       chan batch
 	fromRouter     chan batch
 	shutdownErr    chan error
-	endSeq         []batch
 	ctx            context.Context
 	cancel         func()
 	earliest       primitives.Slot // earliest is the earliest slot a worker is processing
 	peerCache      *sync.DASPeerCache
 	p2p            p2p.P2P
-	peerFailLogger *intervalLogger
+	peerFailLogger *logging.IntervalLogger
 	needs          func() das.CurrentNeeds
 }
 
@@ -72,7 +72,7 @@ func newP2PBatchWorkerPool(p p2p.P2P, maxBatches int, needs func() das.CurrentNe
 		shutdownErr:    make(chan error),
 		peerCache:      sync.NewDASPeerCache(p),
 		p2p:            p,
-		peerFailLogger: newIntervalLogger(log, 5),
+		peerFailLogger: logging.NewIntervalLogger(log, 5),
 		earliest:       primitives.Slot(math.MaxUint64),
 		needs:          needs,
 	}
@@ -87,30 +87,21 @@ func (p *p2pBatchWorkerPool) spawn(ctx context.Context, n int, a PeerAssigner, c
 }
 
 func (p *p2pBatchWorkerPool) todo(b batch) {
-	// Intercept batchEndSequence batches so workers can remain unaware of this state.
-	// Workers don't know what to do with batchEndSequence batches. They are a signal to the pool that the batcher
-	// has stopped producing things for the workers to do and the pool is close to winding down. See complete()
-	// to understand how the pool manages the state where all workers are idle
-	// and all incoming batches signal end of sequence.
+	// Early return when the batch has reached the end of its sequence.
 	if b.state == batchEndSequence {
-		p.endSeq = append(p.endSeq, b)
 		return
 	}
 	p.toRouter <- b
 }
 
 func (p *p2pBatchWorkerPool) complete() (batch, error) {
-	if len(p.endSeq) == p.maxBatches {
-		return p.endSeq[0], errEndSequence
-	}
-
 	select {
 	case b := <-p.fromRouter:
 		return b, nil
 	case err := <-p.shutdownErr:
 		return batch{}, errors.Wrap(err, "fatal error from backfill worker pool")
 	case <-p.ctx.Done():
-		log.WithError(p.ctx.Err()).Info("p2pBatchWorkerPool context canceled, shutting down")
+		log.WithError(p.ctx.Err()).Info("Backfill worker pool context canceled, shutting down")
 		return batch{}, p.ctx.Err()
 	}
 }
@@ -142,7 +133,7 @@ func (p *p2pBatchWorkerPool) batchRouter(pa PeerAssigner) {
 			todo = append(todo, b)
 			sortBatchDesc(todo)
 		case <-p.ctx.Done():
-			log.WithError(p.ctx.Err()).Info("p2pBatchWorkerPool context canceled, shutting down")
+			log.WithError(p.ctx.Err()).Info("Backfill worker pool context canceled, shutting down")
 			p.shutdown(p.ctx.Err())
 			return
 		}
@@ -155,6 +146,9 @@ func (p *p2pBatchWorkerPool) batchRouter(pa PeerAssigner) {
 }
 
 func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map[peer.ID]bool) ([]batch, error) {
+	// Envelope page expiry runs independently of peer assignment, so a lapsed batch can proceed
+	// to import without waiting for a peer.
+	todo = p.expireEnvelopeTodos(todo)
 	if len(todo) == 0 {
 		return todo, nil
 	}
@@ -188,7 +182,8 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 	for i, b := range todo {
 		needs := p.needs()
 		if b.expired(needs) {
-			p.endSeq = append(p.endSeq, b.withState(batchEndSequence))
+			// Hand the batch back so the sequencer marks its slot as batchEndSequence.
+			p.fromRouter <- b.withState(batchEndSequence)
 			continue
 		}
 		excludePeers := busy
@@ -211,6 +206,7 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 			}
 		}
 
+		excludePeers = excludeUnavailable(p.p2p.Peers(), notBusy, excludePeers, b.begin)
 		pid, cols, err := b.selectPeer(picker, excludePeers)
 		if err != nil {
 			p.peerFailLogger.WithField("notBusy", len(notBusy)).WithError(err).WithFields(b.logFields()).Debug("Failed to select peer for batch")
@@ -228,10 +224,48 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 	return []batch{}, nil
 }
 
+// expireEnvelopeTodos applies envelope page expiry to queued batches, routing fully resolved
+// ones onward instead of waiting for a dispatch.
+func (p *p2pBatchWorkerPool) expireEnvelopeTodos(todo []batch) []batch {
+	out := todo[:0]
+	for _, b := range todo {
+		if b.state == batchSyncEnvelopes && b.envelopes.expirePending() {
+			p.fromRouter <- b.transitionToNext()
+			continue
+		}
+		out = append(out, b)
+	}
+	return out
+}
+
 func busyCopy(busy map[peer.ID]bool) map[peer.ID]bool {
 	busyCp := make(map[peer.ID]bool, len(busy))
 	maps.Copy(busyCp, busy)
 	return busyCp
+}
+
+// excludeUnavailable returns `exclude` extended with the peers of `candidates` whose advertised
+// earliest available slot is higher than `begin`.
+// `exclude` is copied before being extended, and returned unchanged if there is nothing to add.
+func excludeUnavailable(status *peers.Status, candidates []peer.ID, exclude map[peer.ID]bool, begin primitives.Slot) map[peer.ID]bool {
+	available := status.FilterByEarliestAvailableSlot(candidates, begin)
+	if len(available) == len(candidates) {
+		return exclude
+	}
+
+	isAvailable := make(map[peer.ID]bool, len(available))
+	for _, pid := range available {
+		isAvailable[pid] = true
+	}
+
+	extended := busyCopy(exclude)
+	for _, pid := range candidates {
+		if !isAvailable[pid] {
+			extended[pid] = true
+		}
+	}
+
+	return extended
 }
 
 func highestEpoch(batches []batch) primitives.Epoch {

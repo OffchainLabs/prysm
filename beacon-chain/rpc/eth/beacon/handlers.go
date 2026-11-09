@@ -3,6 +3,7 @@ package beacon
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -32,6 +33,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -82,7 +84,9 @@ func versionHeaderFromRequest(body []byte) (string, error) {
 		return "", errors.Wrap(err, "unable to peek slot from block")
 	}
 	ce := slots.ToEpoch(sp.Block.Slot)
-	if ce >= params.BeaconConfig().GloasForkEpoch {
+	if ce >= params.BeaconConfig().HezeForkEpoch {
+		return version.String(version.Heze), nil
+	} else if ce >= params.BeaconConfig().GloasForkEpoch {
 		return version.String(version.Gloas), nil
 	} else if ce >= params.BeaconConfig().FuluForkEpoch {
 		return version.String(version.Fulu), nil
@@ -676,6 +680,7 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 }
 
 var sszDecoders = map[string]blockDecoder{
+	version.String(version.Heze):      decodeHezeSSZ,
 	version.String(version.Gloas):     decodeGloasSSZ,
 	version.String(version.Fulu):      decodeFuluSSZ,
 	version.String(version.Electra):   decodeElectraSSZ,
@@ -692,6 +697,18 @@ func decodeSSZToGenericBlock(versionHeader string, body []byte) (*eth.GenericSig
 		return decoder(body)
 	}
 	return nil, errors.New("body does not represent a valid block type")
+}
+
+func decodeHezeSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	hezeBlock := &eth.SignedBeaconBlockHeze{}
+	if err := hezeBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(
+			version.String(version.Heze), err,
+		)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Heze{Heze: hezeBlock},
+	}, nil
 }
 
 func decodeGloasSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
@@ -846,6 +863,7 @@ func (s *Server) publishBlock(ctx context.Context, w http.ResponseWriter, r *htt
 }
 
 var jsonDecoders = map[string]blockDecoder{
+	version.String(version.Heze):      decodeHezeJSON,
 	version.String(version.Gloas):     decodeGloasJSON,
 	version.String(version.Fulu):      decodeFuluJSON,
 	version.String(version.Electra):   decodeElectraJSON,
@@ -862,6 +880,13 @@ func decodeJSONToGenericBlock(versionHeader string, body []byte) (*eth.GenericSi
 		return decoder(body)
 	}
 	return nil, fmt.Errorf("body does not represent a valid block type")
+}
+
+func decodeHezeJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBeaconBlockHeze](
+		body,
+		version.String(version.Heze),
+	)
 }
 
 func decodeGloasJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
@@ -1774,6 +1799,248 @@ func (s *Server) GetProposerLookahead(w http.ResponseWriter, r *http.Request) {
 		}
 		httputil.WriteJson(w, resp)
 	}
+}
+
+// GetBuilderPendingWithdrawals returns builder pending withdrawals for state with given 'stateId'.
+// Should return 400 if the state retrieved is prior to Gloas.
+// Supports both JSON and SSZ responses based on Accept header.
+func (s *Server) GetBuilderPendingWithdrawals(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.GetBuilderPendingWithdrawals")
+	defer span.End()
+
+	stateId := r.PathValue("state_id")
+	if stateId == "" {
+		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		return
+	}
+	st, err := s.Stater.State(ctx, []byte(stateId))
+	if err != nil {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st.Version() < version.Gloas {
+		httputil.HandleError(w, "state_id is prior to gloas", http.StatusBadRequest)
+		return
+	}
+	items, err := st.BuilderPendingWithdrawals()
+	if err != nil {
+		httputil.HandleError(w, "Could not get builder pending withdrawals: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(api.VersionHeader, version.String(st.Version()))
+	if httputil.RespondWithSsz(r) {
+		sszData, err := serializeItems(items)
+		if err != nil {
+			httputil.HandleError(w, "Failed to serialize builder pending withdrawals: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.WriteSsz(w, sszData)
+	} else {
+		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
+		if err != nil {
+			helpers.HandleIsOptimisticError(w, err)
+			return
+		}
+		blockRoot, err := helpers.BlockRootFromState(ctx, st)
+		if err != nil {
+			httputil.HandleError(w, "Could not calculate block root: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
+		resp := structs.GetBuilderPendingWithdrawalsResponse{
+			Version:             version.String(st.Version()),
+			ExecutionOptimistic: isOptimistic,
+			Finalized:           isFinalized,
+			Data:                structs.BuilderPendingWithdrawalsFromConsensus(items),
+		}
+		httputil.WriteJson(w, resp)
+	}
+}
+
+// GetBuilderPendingPayments returns builder pending payments for state with given 'stateId'.
+// Should return 400 if the state retrieved is prior to Gloas.
+// Supports both JSON and SSZ responses based on Accept header.
+func (s *Server) GetBuilderPendingPayments(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.GetBuilderPendingPayments")
+	defer span.End()
+
+	stateId := r.PathValue("state_id")
+	if stateId == "" {
+		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		return
+	}
+	st, err := s.Stater.State(ctx, []byte(stateId))
+	if err != nil {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st.Version() < version.Gloas {
+		httputil.HandleError(w, "state_id is prior to gloas", http.StatusBadRequest)
+		return
+	}
+	items, err := st.BuilderPendingPayments()
+	if err != nil {
+		httputil.HandleError(w, "Could not get builder pending payments: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(api.VersionHeader, version.String(st.Version()))
+	if httputil.RespondWithSsz(r) {
+		sszData, err := serializeItems(items)
+		if err != nil {
+			httputil.HandleError(w, "Failed to serialize builder pending payments: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.WriteSsz(w, sszData)
+	} else {
+		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
+		if err != nil {
+			helpers.HandleIsOptimisticError(w, err)
+			return
+		}
+		blockRoot, err := helpers.BlockRootFromState(ctx, st)
+		if err != nil {
+			httputil.HandleError(w, "Could not calculate block root: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
+		resp := structs.GetBuilderPendingPaymentsResponse{
+			Version:             version.String(st.Version()),
+			ExecutionOptimistic: isOptimistic,
+			Finalized:           isFinalized,
+			Data:                structs.BuilderPendingPaymentsFromConsensus(items),
+		}
+		httputil.WriteJson(w, resp)
+	}
+}
+
+// GetStatePTC returns the payload timeliness committee for the requested slot from the state
+// with the given 'stateId'. The slot defaults to the state's slot and must be within the state's
+// PTC window. Should return 400 if the state or the requested slot is prior to Gloas.
+// Supports both JSON and SSZ responses based on Accept header.
+func (s *Server) GetStatePTC(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.GetStatePTC")
+	defer span.End()
+
+	stateId := r.PathValue("state_id")
+	if stateId == "" {
+		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		return
+	}
+	rawSlot, slotUint, ok := shared.UintFromQuery(w, r, "slot", false)
+	if !ok {
+		return
+	}
+	st, err := s.Stater.State(ctx, []byte(stateId))
+	if err != nil {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st.Version() < version.Gloas {
+		httputil.HandleError(w, "state_id is prior to gloas", http.StatusBadRequest)
+		return
+	}
+	slot := st.Slot()
+	if rawSlot != "" {
+		slot = primitives.Slot(slotUint)
+	}
+	if params.GetNetworkScheduleEntry(slots.ToEpoch(slot)).VersionEnum < version.Gloas {
+		httputil.HandleError(w, "slot is prior to gloas", http.StatusBadRequest)
+		return
+	}
+	committee, err := st.PayloadCommitteeReadOnly(slot)
+	if err != nil {
+		if errors.Is(err, state.ErrNoPayloadCommitteeAvailable) {
+			httputil.HandleError(w, "Slot is outside the PTC window of the state: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		httputil.HandleError(w, "Could not get payload timeliness committee: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if httputil.RespondWithSsz(r) {
+		// The SSZ response is Container{slot: Slot, validators: Vector[ValidatorIndex, PTC_SIZE]};
+		// all fields are fixed-size, so it serializes to slot || validators.
+		sszData := make([]byte, 8+len(committee)*8)
+		binary.LittleEndian.PutUint64(sszData, uint64(slot))
+		for i, v := range committee {
+			binary.LittleEndian.PutUint64(sszData[8+i*8:], uint64(v))
+		}
+		httputil.WriteSsz(w, sszData)
+		return
+	}
+	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
+	if err != nil {
+		helpers.HandleIsOptimisticError(w, err)
+		return
+	}
+	blockRoot, err := helpers.BlockRootFromState(ctx, st)
+	if err != nil {
+		httputil.HandleError(w, "Could not calculate block root: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
+	validators := make([]string, len(committee))
+	for i, v := range committee {
+		validators[i] = strconv.FormatUint(uint64(v), 10)
+	}
+	httputil.WriteJson(w, &structs.GetStatePTCResponse{
+		ExecutionOptimistic: isOptimistic,
+		Finalized:           isFinalized,
+		Data: &structs.StatePTC{
+			Slot:       strconv.FormatUint(uint64(slot), 10),
+			Validators: validators,
+		},
+	})
+}
+
+// GetProposerPreferences returns the signed proposer preferences known by the node, filtered by the optional slot and dependent_root query params.
+// Supports both JSON and SSZ responses based on Accept header.
+func (s *Server) GetProposerPreferences(w http.ResponseWriter, r *http.Request) {
+	_, span := trace.StartSpan(r.Context(), "beacon.GetProposerPreferences")
+	defer span.End()
+
+	rawSlot, slot, ok := shared.UintFromQuery(w, r, "slot", false)
+	if !ok {
+		return
+	}
+	_, root, ok := shared.HexFromQuery(w, r, "dependent_root", fieldparams.RootLength, false)
+	if !ok {
+		return
+	}
+	var slotFilter *primitives.Slot
+	if rawSlot != "" {
+		sl := primitives.Slot(slot)
+		slotFilter = &sl
+	}
+	var rootFilter *[32]byte
+	if root != nil {
+		dr := bytesutil.ToBytes32(root)
+		rootFilter = &dr
+	}
+	prefs := s.ProposerPreferencesCache.Signed(slotFilter, rootFilter)
+
+	versionSlot := s.TimeFetcher.CurrentSlot()
+	if slotFilter != nil {
+		versionSlot = *slotFilter
+	}
+	if len(prefs) > 0 {
+		versionSlot = prefs[0].Message.ProposalSlot
+	}
+	v := version.String(slots.ToForkVersion(versionSlot))
+	w.Header().Set(api.VersionHeader, v)
+	if httputil.RespondWithSsz(r) {
+		sszData, err := serializeItems(prefs)
+		if err != nil {
+			httputil.HandleError(w, "Failed to serialize proposer preferences: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.WriteSsz(w, sszData)
+		return
+	}
+	data := make([]*structs.SignedProposerPreferences, len(prefs))
+	for i, p := range prefs {
+		data[i] = structs.SignedProposerPreferencesFromConsensus(p)
+	}
+	httputil.WriteJson(w, &structs.GetProposerPreferencesResponse{Version: v, Data: data})
 }
 
 // SerializeItems serializes a slice of items, each of which implements the MarshalSSZ method,

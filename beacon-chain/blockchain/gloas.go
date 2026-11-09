@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -34,21 +33,21 @@ func (s *Service) IsBidCompatibleWithHead(bid interfaces.ROExecutionPayloadBid) 
 	headState := s.head.state
 	s.headLock.RUnlock()
 
-	headBid, err := headBlock.Body().SignedExecutionPayloadBid()
-	if err != nil || headBid.Message == nil {
+	headBid, err := headBlock.Body().ExecutionPayloadBid()
+	if err != nil {
 		log.WithError(err).Debug("Could not get head bid to check bid compatibility")
 		return false
 	}
 
 	buildsOnParentBlock := bid.ParentBlockRoot() == headBlock.ParentRoot()
-	buildsOnParentPayload := bid.ParentBlockHash() == bytesutil.ToBytes32(headBid.Message.ParentBlockHash)
+	buildsOnParentPayload := bid.ParentBlockHash() == headBid.ParentBlockHash()
 	if buildsOnParentBlock && buildsOnParentPayload {
 		return true
 	}
 	if bid.ParentBlockRoot() != headRoot {
 		return false
 	}
-	buildsOnHeadPayload := bid.ParentBlockHash() == bytesutil.ToBytes32(headBid.Message.BlockHash)
+	buildsOnHeadPayload := bid.ParentBlockHash() == headBid.BlockHash()
 	if buildFull, _ := s.shouldBuildOnFull(headState, headRoot, bid.Slot()); buildFull {
 		return buildsOnHeadPayload
 	}
@@ -237,7 +236,7 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 		log.WithError(err).Error("Could not get latest block hash")
 		return
 	}
-	pid, err := s.notifyForkchoiceUpdateGloas(ctx, bh, attr)
+	pid, fcs, err := s.notifyForkchoiceUpdateGloas(ctx, bh, attr)
 	if err != nil {
 		log.WithError(err).Error("Could not notify forkchoice update")
 		return
@@ -249,11 +248,11 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 	var pId [8]byte
 	copy(pId[:], pid[:])
 	s.cfg.PayloadIDCache.Set(currentSlot+1, hr, false, pId)
-	s.firePayloadAttributesEventForHead(hr, currentSlot+1, attr, bh[:])
+	s.firePayloadAttributesEventForHead(hr, currentSlot+1, attr, bh[:], fcs)
 }
 
 func (s *Service) fcuFromReorgData(headBlock interfaces.ReadOnlySignedBeaconBlock, hr [32]byte, hash [32]byte, full bool, attr payloadattribute.Attributer, proposingSlot primitives.Slot) {
-	pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, hash, attr)
+	pid, fcs, err := s.notifyForkchoiceUpdateGloas(s.ctx, hash, attr)
 	if err != nil {
 		log.WithError(err).Error("Could not update forkchoice with engine")
 	}
@@ -268,11 +267,11 @@ func (s *Service) fcuFromReorgData(headBlock interfaces.ReadOnlySignedBeaconBloc
 	s.cfg.PayloadIDCache.Set(proposingSlot, hr, full, pId)
 
 	if !attr.IsEmpty() {
-		s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, hr, proposingSlot, attr, hash[:])
+		s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, hr, proposingSlot, attr, hash[:], fcs)
 	}
 }
 
-func (s *Service) firePayloadAttributesEventForHead(headRoot [32]byte, proposingSlot primitives.Slot, attr payloadattribute.Attributer, parentBlockHash []byte) {
+func (s *Service) firePayloadAttributesEventForHead(headRoot [32]byte, proposingSlot primitives.Slot, attr payloadattribute.Attributer, parentBlockHash []byte, fcs *enginev1.ForkchoiceState) {
 	s.headLock.RLock()
 	var headBlock interfaces.ReadOnlySignedBeaconBlock
 	if s.head != nil && s.head.root == headRoot {
@@ -282,7 +281,7 @@ func (s *Service) firePayloadAttributesEventForHead(headRoot [32]byte, proposing
 	if headBlock == nil {
 		return
 	}
-	s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, headRoot, proposingSlot, attr, parentBlockHash)
+	s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, headRoot, proposingSlot, attr, parentBlockHash, fcs)
 }
 
 // This saves head and prunes atts from the pool only if the head is new and if we are either
@@ -329,7 +328,7 @@ func (s *Service) shouldBuildOnFullLocked(root [32]byte, proposingSlot primitive
 		return true, ""
 	}
 	if s.cfg.ForkChoiceStore.PTCVotedLate(root) {
-		return false, "ptc voted payload missing"
+		return false, "ptc voted against payload"
 	}
 	if s.cfg.ForkChoiceStore.PTCVotedEarlyAndAvailable(root) {
 		return true, ""

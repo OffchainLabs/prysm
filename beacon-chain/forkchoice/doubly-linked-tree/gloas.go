@@ -9,7 +9,6 @@ import (
 	"github.com/OffchainLabs/go-bitfield"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	forkchoice2 "github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -42,17 +41,9 @@ func (f *ForkChoice) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool) 
 }
 
 func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock) (*PayloadNode, [32]byte, primitives.BuilderIndex, error) {
-	sb, err := block.Body().SignedExecutionPayloadBid()
+	bid, err := block.Body().ExecutionPayloadBid()
 	if err != nil {
-		return nil, [32]byte{}, 0, err
-	}
-	wb, err := blocks.WrappedROSignedExecutionPayloadBid(sb)
-	if err != nil {
-		return nil, [32]byte{}, 0, errors.Wrap(err, "failed to wrap signed bid")
-	}
-	bid, err := wb.Bid()
-	if err != nil {
-		return nil, [32]byte{}, 0, errors.Wrap(err, "failed to get bid from wrapped bid")
+		return nil, [32]byte{}, 0, errors.Wrap(err, "failed to get execution payload bid")
 	}
 	blockHash := bid.BlockHash()
 	builderIndex := bid.BuilderIndex()
@@ -298,11 +289,9 @@ func ptcVotedLate(n *Node) bool {
 		return false
 	}
 	attesters := n.payloadAttesters.Count()
-	payloadPresent := n.payloadAvailabilityVote.Count()
-	if payloadPresent >= attesters {
-		return false
-	}
-	return attesters-payloadPresent > fieldparams.PTCSize/2
+	present := min(attesters, n.payloadAvailabilityVote.Count())
+	dataAvailable := min(attesters, n.payloadDataAvailabilityVote.Count())
+	return attesters-present > fieldparams.PTCSize/2 || attesters-dataAvailable > fieldparams.PTCSize/2
 }
 
 // choosePayloadContent chooses between empty or full for the passed consensus node.
@@ -493,6 +482,7 @@ func (f *ForkChoice) MarkFullNode(root [32]byte, gasLimit uint64) {
 		gasLimit:   gasLimit,
 		children:   make([]*Node, 0),
 	}
+	en.node.builderPubkey = nil
 }
 
 // InsertPayload inserts a full node into forkchoice after the Gloas fork.
@@ -523,6 +513,7 @@ func (f *ForkChoice) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) err
 		children:   make([]*Node, 0),
 	}
 	s.fullNodeByRoot[root] = fn
+	en.node.builderPubkey = nil
 	payloadInsertedCount.Inc()
 	updatePayloadNodeMetrics(s)
 	f.updateNewFullNodeWeight(fn)
@@ -631,7 +622,7 @@ func (f *ForkChoice) PTCVotedEarlyAndAvailable(root [32]byte) bool {
 	return ptcVotedEarlyAndAvailable(en.node)
 }
 
-// PTCVotedLate returns whether the PTC has majority-voted that the payload is not present.
+// PTCVotedLate returns whether the PTC has majority-voted that the payload is not present or its blob data is unavailable.
 func (f *ForkChoice) PTCVotedLate(root [32]byte) bool {
 	en := f.store.emptyNodeByRoot[root]
 	if en == nil || en.node == nil {
@@ -656,6 +647,15 @@ func (f *ForkChoice) BuilderIndex(root [32]byte) (primitives.BuilderIndex, error
 		return 0, errors.Wrap(ErrNilNode, "could not get builder index for root")
 	}
 	return en.node.builderIndex, nil
+}
+
+// BuilderPubkey returns the pubkey of the builder committed in the given block's bid, nil for self-built blocks.
+func (f *ForkChoice) BuilderPubkey(root [32]byte) (*[fieldparams.BLSPubkeyLength]byte, error) {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return nil, errors.Wrap(ErrNilNode, "could not get builder pubkey for root")
+	}
+	return en.node.builderPubkey, nil
 }
 
 // BlockHash returns the hash committed in the given block

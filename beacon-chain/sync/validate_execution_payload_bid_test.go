@@ -286,10 +286,8 @@ func TestValidateExecutionPayloadBidGossip_HigherBidAccepted(t *testing.T) {
 
 	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signedBid)
 	require.NoError(t, err)
-	bid, err := wrapped.Bid()
-	require.NoError(t, err)
 	lowerBid := proto.Clone(signedBid).(*ethpb.SignedExecutionPayloadBid)
-	lowerBid.Message.Value = bid.Value() - 1
+	lowerBid.Message.Value = wrapped.Bid().Value() - 1
 	s.setHighestExecutionPayloadBid(lowerBid)
 
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
@@ -318,7 +316,7 @@ func TestValidateExecutionPayloadBidGossip_BlacklistedBuilderIgnored(t *testing.
 	s, msg, signedBid := setupExecutionPayloadBidService(t)
 	s.builderCircuitBreaker = cache.NewBuilderCircuitBreaker()
 	// The bid is at slot 1, so the failure has to be charged in epoch 0.
-	require.Equal(t, true, s.builderCircuitBreaker.RecordFailure(signedBid.Message.BuilderIndex, [32]byte{0xff}, 0))
+	require.Equal(t, true, s.builderCircuitBreaker.RecordFailure(signedBid.Message.BuilderIndex, [32]byte{0xff}, 0).Blacklisted)
 	// Every verifier method would reject if reached.
 	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{
 		errCurrentOrNextSlot: errors.New("slot"),
@@ -343,7 +341,7 @@ func TestValidateExecutionPayloadBidGossip_OtherBuilderNotBlacklisted(t *testing
 	ctx := context.Background()
 	s, msg, signedBid := setupExecutionPayloadBidService(t)
 	s.builderCircuitBreaker = cache.NewBuilderCircuitBreaker()
-	require.Equal(t, true, s.builderCircuitBreaker.RecordFailure(signedBid.Message.BuilderIndex+1, [32]byte{0xff}, 0))
+	require.Equal(t, true, s.builderCircuitBreaker.RecordFailure(signedBid.Message.BuilderIndex+1, [32]byte{0xff}, 0).Blacklisted)
 	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
 
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
@@ -650,7 +648,5 @@ func mustBid(t *testing.T, signedBid *ethpb.SignedExecutionPayloadBid) interface
 
 	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signedBid)
 	require.NoError(t, err)
-	bid, err := wrapped.Bid()
-	require.NoError(t, err)
-	return bid
+	return wrapped.Bid()
 }

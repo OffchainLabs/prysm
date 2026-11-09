@@ -60,7 +60,7 @@ func prepareForkchoiceState(
 	}
 
 	base.BlockRoots[0] = append(base.BlockRoots[0], blockRoot[:]...)
-	st, err := state_native.InitializeFromProtoBellatrix(base)
+	st, err := state_native.New(base)
 	if err != nil {
 		return nil, blocks.ROBlock{}, err
 	}
@@ -186,7 +186,7 @@ func TestSafeBlockHash(t *testing.T) {
 
 func TestHeadSlot_CanRetrieve(t *testing.T) {
 	c := testServiceNoDB(t)
-	s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{})
+	s, err := state_native.New(&ethpb.BeaconState{})
 	require.NoError(t, err)
 	b, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
 	require.NoError(t, err)
@@ -228,7 +228,7 @@ func TestHeadRoot_UseDB(t *testing.T) {
 func TestHeadBlock_CanRetrieve(t *testing.T) {
 	b := util.NewBeaconBlock()
 	b.Block.Slot = 1
-	s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{})
+	s, err := state_native.New(&ethpb.BeaconState{})
 	require.NoError(t, err)
 	wsb, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
@@ -243,13 +243,13 @@ func TestHeadBlock_CanRetrieve(t *testing.T) {
 }
 
 func TestHeadState_CanRetrieve(t *testing.T) {
-	s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 2, GenesisValidatorsRoot: params.BeaconConfig().ZeroHash[:]})
+	s, err := state_native.New(&ethpb.BeaconState{Slot: 2, GenesisValidatorsRoot: params.BeaconConfig().ZeroHash[:]})
 	require.NoError(t, err)
 	c := testServiceNoDB(t)
 	c.head = &head{state: s}
 	headState, err := c.HeadState(t.Context())
 	require.NoError(t, err)
-	assert.DeepEqual(t, headState.ToProtoUnsafe(), s.ToProtoUnsafe(), "Incorrect head state received")
+	assert.DeepEqual(t, headState.ToContainerUnsafe(), s.ToContainerUnsafe(), "Incorrect head state received")
 }
 
 func TestGenesisTime_CanRetrieve(t *testing.T) {
@@ -261,7 +261,7 @@ func TestGenesisTime_CanRetrieve(t *testing.T) {
 
 func TestCurrentFork_CanRetrieve(t *testing.T) {
 	f := &ethpb.Fork{Epoch: 999}
-	s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Fork: f})
+	s, err := state_native.New(&ethpb.BeaconState{Fork: f})
 	require.NoError(t, err)
 	c := testServiceNoDB(t)
 	c.head = &head{state: s}
@@ -286,7 +286,7 @@ func TestGenesisValidatorsRoot_CanRetrieve(t *testing.T) {
 	c := testServiceNoDB(t)
 	assert.Equal(t, [32]byte{}, c.GenesisValidatorsRoot(), "Did not get correct genesis validators root")
 
-	s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{GenesisValidatorsRoot: []byte{'a'}})
+	s, err := state_native.New(&ethpb.BeaconState{GenesisValidatorsRoot: []byte{'a'}})
 	require.NoError(t, err)
 	c.head = &head{state: s}
 	assert.Equal(t, [32]byte{'a'}, c.GenesisValidatorsRoot(), "Did not get correct genesis validators root")
@@ -300,7 +300,7 @@ func TestHeadETH1Data_Nil(t *testing.T) {
 
 func TestHeadETH1Data_CanRetrieve(t *testing.T) {
 	d := &ethpb.Eth1Data{DepositCount: 999}
-	s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Eth1Data: d})
+	s, err := state_native.New(&ethpb.BeaconState{Eth1Data: d})
 	require.NoError(t, err)
 	c := testServiceNoDB(t)
 	c.head = &head{state: s}
@@ -890,7 +890,7 @@ func Test_hashForGenesisRoot_Gloas(t *testing.T) {
 	c := setupBeaconChain(t, beaconDB)
 
 	expectedHash := [32]byte{1, 2, 3, 4, 5}
-	st, err := state_native.InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+	st, err := state_native.New(&ethpb.BeaconStateGloas{
 		LatestBlockHash: expectedHash[:],
 	})
 	require.NoError(t, err)
@@ -936,4 +936,42 @@ func TestCanWaitForGossipSidecars(t *testing.T) {
 			require.Equal(t, tt.want, s.canWaitForGossipSidecars(tt.slot))
 		})
 	}
+}
+
+func TestService_HeadAndCanonicalNodeAtSlot_WaitsForImport(t *testing.T) {
+	ctx := t.Context()
+	c := testServiceWithDB(t)
+	ojc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
+	ofc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
+	st, roblock, err := prepareForkchoiceState(ctx, 0, [32]byte{}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
+	require.NoError(t, err)
+	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 100, [32]byte{'a'}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
+	require.NoError(t, err)
+	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
+	_, err = c.cfg.ForkChoiceStore.Head(ctx)
+	require.NoError(t, err)
+	c.head = &head{root: [32]byte{'a'}}
+	st, roblock, err = prepareForkchoiceState(ctx, 101, [32]byte{'b'}, [32]byte{'a'}, params.BeaconConfig().ZeroHash, ojc, ofc)
+	require.NoError(t, err)
+
+	type snapshot struct{ headRoot, canonicalRoot [32]byte }
+	done := make(chan snapshot, 1)
+	c.cfg.ForkChoiceStore.Lock()
+	go func() {
+		headRoot, _, _, canonicalRoot, _ := c.HeadAndCanonicalNodeAtSlot(101)
+		done <- snapshot{headRoot: headRoot, canonicalRoot: canonicalRoot}
+	}()
+	// Let the reader reach the lock first, so a read that skipped the lock would return the old head.
+	time.Sleep(20 * time.Millisecond)
+	insertErr := c.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock)
+	_, headErr := c.cfg.ForkChoiceStore.Head(ctx)
+	c.head = &head{root: [32]byte{'b'}}
+	c.cfg.ForkChoiceStore.Unlock()
+	require.NoError(t, insertErr)
+	require.NoError(t, headErr)
+
+	got := <-done
+	require.Equal(t, [32]byte{'b'}, got.headRoot)
+	require.Equal(t, [32]byte{'b'}, got.canonicalRoot)
 }

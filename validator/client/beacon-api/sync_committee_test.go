@@ -9,6 +9,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api/apiutil"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -258,6 +259,8 @@ func TestGetSyncSubCommitteeIndex(t *testing.T) {
 		validatorIndex     = "55293"
 		slot               = primitives.Slot(123)
 	)
+	periodEpochs := params.BeaconConfig().EpochsPerSyncCommitteePeriod
+	lastSlotOfPeriod := primitives.Slot(periodEpochs)*params.BeaconConfig().SlotsPerEpoch - 1
 
 	expectedResponse := &ethpb.SyncSubcommitteeIndexResponse{
 		Indices: []primitives.CommitteeIndex{123, 456},
@@ -279,27 +282,43 @@ func TestGetSyncSubCommitteeIndex(t *testing.T) {
 
 	tests := []struct {
 		name             string
+		slot             primitives.Slot
+		dutiesEpoch      primitives.Epoch
 		duties           []*structs.SyncCommitteeDuty
 		validatorsErr    error
 		dutiesErr        error
 		expectedErrorMsg string
 	}{
 		{
-			name:   "success",
-			duties: syncDuties,
+			name:        "success",
+			slot:        slot,
+			dutiesEpoch: slots.ToEpoch(slot),
+			duties:      syncDuties,
+		},
+		{
+			name:        "last slot of sync committee period uses next period",
+			slot:        lastSlotOfPeriod,
+			dutiesEpoch: periodEpochs,
+			duties:      syncDuties,
 		},
 		{
 			name:             "no sync duties",
+			slot:             slot,
+			dutiesEpoch:      slots.ToEpoch(slot),
 			duties:           []*structs.SyncCommitteeDuty{},
 			expectedErrorMsg: fmt.Sprintf("no sync committee duty for the given slot %d", slot),
 		},
 		{
 			name:             "duties endpoint error",
+			slot:             slot,
+			dutiesEpoch:      slots.ToEpoch(slot),
 			dutiesErr:        errors.New("bad request"),
 			expectedErrorMsg: "bad request",
 		},
 		{
 			name:             "validator index endpoint error",
+			slot:             slot,
+			dutiesEpoch:      slots.ToEpoch(slot),
 			validatorsErr:    errors.New("bad request"),
 			expectedErrorMsg: "bad request",
 		},
@@ -369,7 +388,7 @@ func TestGetSyncSubCommitteeIndex(t *testing.T) {
 
 			handler.EXPECT().Post(
 				gomock.Any(),
-				fmt.Sprintf("%s/%d", syncDutiesEndpoint, slots.ToEpoch(slot)),
+				fmt.Sprintf("%s/%d", syncDutiesEndpoint, test.dutiesEpoch),
 				nil,
 				bytes.NewBuffer(validatorIndicesBytes),
 				&structs.GetSyncCommitteeDutiesResponse{},
@@ -396,7 +415,7 @@ func TestGetSyncSubCommitteeIndex(t *testing.T) {
 			}
 			actualResponse, err := validatorClient.syncSubcommitteeIndex(ctx, &ethpb.SyncSubcommitteeIndexRequest{
 				PublicKey: pubkey,
-				Slot:      slot,
+				Slot:      test.slot,
 			})
 			if test.expectedErrorMsg == "" {
 				require.NoError(t, err)

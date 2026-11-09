@@ -147,11 +147,15 @@ type Service struct {
 	slotToPendingBlocks                  *gcache.Cache
 	seenPendingBlocks                    map[[32]byte]bool
 	blkRootToPendingAtts                 map[[32]byte][]any
+	pendingAttSenders                    map[[32]byte]map[peer.ID]bool
+	pendingAttRequestPeers               map[peer.ID]bool
 	subHandler                           *subTopicHandler
 	pendingAttsLock                      sync.RWMutex
 	pendingQueueLock                     sync.RWMutex
 	chainStarted                         *atomic.Bool
+	orphanedOriginStreak                 *atomic.Int64
 	validateBlockLock                    sync.RWMutex
+	validateEnvelopeLock                 sync.Mutex
 	rateLimiter                          *limiter
 	seenBlockLock                        sync.RWMutex
 	seenBlockCache                       *lru.Cache
@@ -224,6 +228,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		ctx:                        ctx,
 		cancel:                     cancel,
 		chainStarted:               &atomic.Bool{},
+		orphanedOriginStreak:       &atomic.Int64{},
 		cfg:                        &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
 		slotToPendingBlocks:        gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
 		seenPendingBlocks:          make(map[[32]byte]bool),
@@ -400,6 +405,9 @@ func (s *Service) Stop() error {
 
 // Status of the currently running regular sync service.
 func (s *Service) Status() error {
+	if s.orphanedOriginStreak != nil && s.orphanedOriginStreak.Load() >= orphanedOriginStreakThreshold {
+		return errOrphanedOrigin
+	}
 	// If our head slot is on a previous epoch and our peers are reporting their head block are
 	// in the most recent epoch, then we might be out of sync.
 	if headEpoch := slots.ToEpoch(s.cfg.chain.HeadSlot()); headEpoch+1 < slots.ToEpoch(s.cfg.clock.CurrentSlot()) &&
@@ -434,6 +442,8 @@ func (s *Service) initCaches() {
 	s.seenProposerSlashingCache = lruwrpr.New(seenProposerSlashingSize)
 	s.badBlockCache = lruwrpr.New(badBlockSize)
 	s.badPayloadCache = lruwrpr.New(badBlockSize)
+	s.pendingAttSenders = make(map[[32]byte]map[peer.ID]bool)
+	s.pendingAttRequestPeers = make(map[peer.ID]bool)
 }
 
 func (s *Service) waitForChainStart() {
@@ -577,7 +587,7 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 	}
 
 	// Start the fork watcher.
-	go s.p2pHandlerControlLoop()
+	s.spawn(s.p2pHandlerControlLoop)
 }
 
 func (s *Service) writeErrorResponseToStream(responseCode byte, reason string, stream libp2pcore.Stream) {

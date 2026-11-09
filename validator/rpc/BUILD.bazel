@@ -52,6 +52,7 @@ go_library(
         "//runtime/version:go_default_library",
         "//third_party/go-bip39:go_default_library",
         "//third_party/go-bip39/wordlists:go_default_library",
+        "//time/slots:go_default_library",
         "//validator/accounts:go_default_library",
         "//validator/accounts/petnames:go_default_library",
         "//validator/accounts/wallet:go_default_library",

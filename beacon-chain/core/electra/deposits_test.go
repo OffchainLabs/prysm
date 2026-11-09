@@ -459,7 +459,7 @@ func TestProcessDeposit_Electra_Simple(t *testing.T) {
 		},
 	}
 	balances := []uint64{0}
-	st, err := state_native.InitializeFromProtoElectra(&eth.BeaconStateElectra{
+	st, err := state_native.New(&eth.BeaconStateElectra{
 		Validators: registry,
 		Balances:   balances,
 		Eth1Data:   eth1Data,
@@ -497,7 +497,7 @@ func TestProcessDeposit_SkipsInvalidDeposit(t *testing.T) {
 		},
 	}
 	balances := []uint64{0}
-	beaconState, err := state_native.InitializeFromProtoElectra(&eth.BeaconStateElectra{
+	beaconState, err := state_native.New(&eth.BeaconStateElectra{
 		Validators: registry,
 		Balances:   balances,
 		Eth1Data:   eth1Data,
@@ -573,7 +573,7 @@ func stateWithActiveBalanceETH(t *testing.T, balETH uint64) state.BeaconState {
 		}
 		bals[i] = balPerVal
 	}
-	st, err := state_native.InitializeFromProtoUnsafeElectra(&eth.BeaconStateElectra{
+	st, err := state_native.NewUnsafe(&eth.BeaconStateElectra{
 		Slot:       10 * params.BeaconConfig().SlotsPerEpoch,
 		Validators: vals,
 		Balances:   bals,

@@ -25,6 +25,7 @@ type CurrentNeeds struct {
 	Block NeedSpan
 	Blob  NeedSpan
 	Col   NeedSpan
+	Env   NeedSpan
 }
 
 // SyncNeeds holds configuration and state for determining what data is needed
@@ -33,9 +34,11 @@ type SyncNeeds struct {
 	current func() primitives.Slot
 	deneb   primitives.Slot
 	fulu    primitives.Slot
+	gloas   primitives.Slot
 
 	oldestSlotFlagPtr  *primitives.Slot
 	validOldestSlotPtr *primitives.Slot
+	archiveOriginSlot  *primitives.Slot
 	blockRetention     primitives.Epoch
 
 	blobRetentionFlag primitives.Epoch
@@ -45,20 +48,22 @@ type SyncNeeds struct {
 
 type CurrentSlotter func() primitives.Slot
 
-func NewSyncNeeds(current CurrentSlotter, oldestSlotFlagPtr *primitives.Slot, blobRetentionFlag primitives.Epoch) (SyncNeeds, error) {
+// NewSyncNeeds builds the SyncNeeds used by backfill; a non-nil archiveOriginSlot overrides every block floor.
+func NewSyncNeeds(current CurrentSlotter, oldestSlotFlagPtr, archiveOriginSlot *primitives.Slot, blobRetentionFlag primitives.Epoch) (SyncNeeds, error) {
 	deneb, err := slots.EpochStart(params.BeaconConfig().DenebForkEpoch)
 	if err != nil {
 		return SyncNeeds{}, errors.Wrap(err, "deneb fork slot")
 	}
-	fuluBoundary := min(params.BeaconConfig().FuluForkEpoch, slots.MaxSafeEpoch())
-	fulu, err := slots.EpochStart(fuluBoundary)
-	if err != nil {
-		return SyncNeeds{}, errors.Wrap(err, "fulu fork slot")
-	}
+	// Fulu and Gloas may still be unscheduled (a far-future epoch) on some networks,
+	// so their fork slots are clamped rather than treated as overflow errors.
+	fulu := slots.SafeEpochStartOrMax(params.BeaconConfig().FuluForkEpoch)
+	gloas := slots.SafeEpochStartOrMax(params.BeaconConfig().GloasForkEpoch)
 	sn := SyncNeeds{
 		current:           func() primitives.Slot { return current() },
 		deneb:             deneb,
 		fulu:              fulu,
+		gloas:             gloas,
+		archiveOriginSlot: archiveOriginSlot,
 		blobRetentionFlag: blobRetentionFlag,
 	}
 	// We apply the --blob-retention-epochs flag to both blob and column retention.
@@ -90,15 +95,23 @@ func (n SyncNeeds) Currently() CurrentNeeds {
 		Block: n.blockSpan(current),
 		Blob:  NeedSpan{Begin: syncEpochOffset(current, n.blobRetention), End: n.fulu},
 		Col:   NeedSpan{Begin: syncEpochOffset(current, n.colRetention), End: current},
+		// Env intentionally uses the spec minimum block retention rather than blockSpan,
+		// so it never inherits the --backfill-oldest-slot archival flag.
+		Env: NeedSpan{Begin: syncEpochOffset(current, n.blockRetention), End: current},
 	}
 	// Adjust the minimums forward to the slots where the sidecar types were introduced
 	c.Blob.Begin = max(c.Blob.Begin, n.deneb)
 	c.Col.Begin = max(c.Col.Begin, n.fulu)
+	c.Env.Begin = max(c.Env.Begin, n.gloas)
 
 	return c
 }
 
 func (n SyncNeeds) blockSpan(current primitives.Slot) NeedSpan {
+	if n.archiveOriginSlot != nil {
+		// Slot 0 is never requested: the genesis block has no valid proposer signature.
+		return NeedSpan{Begin: max(*n.archiveOriginSlot, 1), End: current}
+	}
 	if n.validOldestSlotPtr != nil { // assumes validation done in initialize()
 		return NeedSpan{Begin: *n.validOldestSlotPtr, End: current}
 	}

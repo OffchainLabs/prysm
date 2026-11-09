@@ -169,7 +169,7 @@ func (s *Server) publishBareEnvelope(ctx context.Context, w http.ResponseWriter,
 	generic := &eth.GenericSignedExecutionPayloadEnvelope{
 		Envelope: &eth.GenericSignedExecutionPayloadEnvelope_SignedEnvelope{SignedEnvelope: signed},
 	}
-	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, generic); err != nil {
+	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelopeV2(ctx, generic); err != nil {
 		writeEnvelopePublishError(w, err)
 		return
 	}
@@ -245,7 +245,7 @@ func (s *Server) processEnvelopeContents(ctx context.Context, w http.ResponseWri
 			},
 		},
 	}
-	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, generic); err != nil {
+	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelopeV2(ctx, generic); err != nil {
 		writeEnvelopePublishError(w, err)
 		return
 	}
@@ -335,19 +335,9 @@ func (s *Server) validateEnvelopeGossip(ctx context.Context, w http.ResponseWrit
 		return false
 	}
 
-	signedBid, err := blk.Block().Body().SignedExecutionPayloadBid()
+	bid, err := blk.Block().Body().ExecutionPayloadBid()
 	if err != nil {
 		httputil.HandleError(w, "gossip validation failed: block has no execution payload bid: "+err.Error(), http.StatusBadRequest)
-		return false
-	}
-	wrappedBid, err := consensusblocks.WrappedROSignedExecutionPayloadBid(signedBid)
-	if err != nil {
-		httputil.HandleError(w, "could not wrap signed bid: "+err.Error(), http.StatusInternalServerError)
-		return false
-	}
-	bid, err := wrappedBid.Bid()
-	if err != nil {
-		httputil.HandleError(w, "could not get bid: "+err.Error(), http.StatusInternalServerError)
 		return false
 	}
 	if err := v.VerifyBuilderValid(bid); err != nil {

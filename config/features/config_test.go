@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	validatorflags "github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/sirupsen/logrus/hooks/test"
@@ -68,6 +69,31 @@ func TestConfigureBeaconConfig(t *testing.T) {
 	require.NoError(t, ConfigureBeaconChain(context))
 	c := Get()
 	assert.Equal(t, true, c.SaveInvalidBlock)
+}
+
+func TestConfigureBeaconChain_LightClient(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	for _, tt := range []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{name: "omitted", want: false},
+		{name: "bare flag", args: []string{"--enable-light-client"}, want: true},
+		{name: "explicit true", args: []string{"--enable-light-client=true"}, want: true},
+		{name: "explicit false", args: []string{"--enable-light-client=false"}, want: false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Cleanup(InitWithReset(&Flags{EnableLightClient: true}))
+			lightClientFlag := *EnableLightClient
+			app := &cli.App{
+				Flags:  []cli.Flag{&lightClientFlag},
+				Action: ConfigureBeaconChain,
+			}
+			require.NoError(t, app.Run(append([]string{"beacon-chain"}, tt.args...)))
+			require.Equal(t, tt.want, Get().EnableLightClient)
+		})
+	}
 }
 
 func TestConfigureBeaconConfig_ReorgLatePayloads(t *testing.T) {
@@ -153,4 +179,33 @@ func Test_parseBlacklistedRoots(t *testing.T) {
 	for _, root := range expected {
 		require.Equal(t, true, BlacklistedBlock(root))
 	}
+}
+
+// --enable-archive is meaningless without the state-diff layout, so it turns it on rather than requiring the
+// operator to pass both.
+func TestConfigureBeaconChain_ArchiveImpliesStateDiff(t *testing.T) {
+	resetCfg := InitWithReset(&Flags{})
+	defer resetCfg()
+
+	app := cli.App{}
+	set := flag.NewFlagSet("test", 0)
+	set.Bool(EnableArchive.Name, true, "")
+	require.NoError(t, ConfigureBeaconChain(cli.NewContext(&app, set, nil)))
+
+	require.Equal(t, true, Get().EnableArchive)
+	require.Equal(t, true, Get().EnableStateDiff)
+}
+
+func TestConfigureBeaconChain_StateDiffWithoutArchive(t *testing.T) {
+	resetCfg := InitWithReset(&Flags{})
+	defer resetCfg()
+
+	app := cli.App{}
+	set := flag.NewFlagSet("test", 0)
+	set.Bool(EnableStateDiff.Name, true, "")
+	require.NoError(t, set.Set(EnableStateDiff.Name, "true"))
+	require.NoError(t, ConfigureBeaconChain(cli.NewContext(&app, set, nil)))
+
+	require.Equal(t, false, Get().EnableArchive)
+	require.Equal(t, true, Get().EnableStateDiff)
 }

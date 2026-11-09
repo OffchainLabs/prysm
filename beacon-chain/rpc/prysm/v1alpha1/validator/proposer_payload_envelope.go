@@ -91,13 +91,31 @@ func extractExecutionPayloadGloas(local *consensusblocks.GetPayloadResponse) *en
 	return nil
 }
 
-// GetExecutionPayloadEnvelope returns the cached execution payload envelope for the requested
-// slot so the proposer can sign and publish it.
+// errEnvelopeClientTooOld is returned by the V1 envelope methods. ExecutionPayloadGloas now carries
+// its transactions as a ProgressiveTransactionList under a new protobuf tag; a validator client
+// still calling V1 predates that change and would decode every envelope with an empty transaction
+// list, sign it, and publish a payload that cannot execute. Failing here surfaces the version skew
+// in the validator's log instead.
+var errEnvelopeClientTooOld = status.Error(codes.FailedPrecondition,
+	"validator client is too old for this beacon node: Gloas execution payload envelopes require "+
+		"GetExecutionPayloadEnvelopeV2/PublishExecutionPayloadEnvelopeV2; upgrade the validator client")
+
+// GetExecutionPayloadEnvelope is the pre-ProgressiveTransactionList form of
+// GetExecutionPayloadEnvelopeV2 and always fails; see errEnvelopeClientTooOld.
 func (vs *Server) GetExecutionPayloadEnvelope(
+	_ context.Context,
+	_ *ethpb.ExecutionPayloadEnvelopeRequest,
+) (*ethpb.ExecutionPayloadEnvelopeResponse, error) {
+	return nil, errEnvelopeClientTooOld
+}
+
+// GetExecutionPayloadEnvelopeV2 returns the cached execution payload envelope for the requested
+// slot so the proposer can sign and publish it.
+func (vs *Server) GetExecutionPayloadEnvelopeV2(
 	ctx context.Context,
 	req *ethpb.ExecutionPayloadEnvelopeRequest,
 ) (*ethpb.ExecutionPayloadEnvelopeResponse, error) {
-	_, span := trace.StartSpan(ctx, "ProposerServer.GetExecutionPayloadEnvelope")
+	_, span := trace.StartSpan(ctx, "ProposerServer.GetExecutionPayloadEnvelopeV2")
 	defer span.End()
 
 	if req == nil {
@@ -121,13 +139,22 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 	}, nil
 }
 
-// PublishExecutionPayloadEnvelope validates and broadcasts a signed execution payload envelope,
-// called by validators after signing the envelope from GetExecutionPayloadEnvelope.
+// PublishExecutionPayloadEnvelope is the pre-ProgressiveTransactionList form of
+// PublishExecutionPayloadEnvelopeV2 and always fails; see errEnvelopeClientTooOld.
 func (vs *Server) PublishExecutionPayloadEnvelope(
+	_ context.Context,
+	_ *ethpb.GenericSignedExecutionPayloadEnvelope,
+) (*emptypb.Empty, error) {
+	return nil, errEnvelopeClientTooOld
+}
+
+// PublishExecutionPayloadEnvelopeV2 validates and broadcasts a signed execution payload envelope,
+// called by validators after signing the envelope from GetExecutionPayloadEnvelopeV2.
+func (vs *Server) PublishExecutionPayloadEnvelopeV2(
 	ctx context.Context,
 	req *ethpb.GenericSignedExecutionPayloadEnvelope,
 ) (*emptypb.Empty, error) {
-	ctx, span := trace.StartSpan(ctx, "ProposerServer.PublishExecutionPayloadEnvelope")
+	ctx, span := trace.StartSpan(ctx, "ProposerServer.PublishExecutionPayloadEnvelopeV2")
 	defer span.End()
 	start := time.Now()
 

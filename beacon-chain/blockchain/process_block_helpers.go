@@ -295,6 +295,23 @@ func (s *Service) verifyBlkFinalizedSlot(b interfaces.ReadOnlyBeaconBlock) error
 	return nil
 }
 
+// checkpointWithStoredRoot replaces an unresolvable checkpoint root with the forkchoice root.
+func (s *Service) checkpointWithStoredRoot(ctx context.Context, cp *ethpb.Checkpoint) *ethpb.Checkpoint {
+	root := bytesutil.ToBytes32(cp.Root)
+	if root == params.BeaconConfig().ZeroHash {
+		return cp
+	}
+	if s.cfg.BeaconDB.HasStateSummary(ctx, root) || s.cfg.BeaconDB.HasState(ctx, root) || s.cfg.BeaconDB.HasBlock(ctx, root) {
+		return cp
+	}
+	fRoot := s.ensureRootNotZeros(s.cfg.ForkChoiceStore.FinalizedCheckpoint().Root)
+	log.WithFields(logrus.Fields{
+		"epoch": cp.Epoch,
+		"root":  fmt.Sprintf("%#x", cp.Root),
+	}).Debug("Checkpoint root predates the origin, substituting the forkchoice root")
+	return &ethpb.Checkpoint{Epoch: cp.Epoch, Root: fRoot[:]}
+}
+
 // updateFinalized saves the init sync blocks, finalized checkpoint, migrates
 // to cold old states and saves the last validated checkpoint to DB. It returns
 // early if the new checkpoint is older than the one on db.
@@ -344,28 +361,27 @@ func (s *Service) updateFinalized(ctx context.Context, cp *ethpb.Checkpoint) err
 	return nil
 }
 
-// This retrieves an ancestor root using DB. The look up is recursively looking up DB. Slower than `ancestorByForkChoiceStore`.
-func (s *Service) ancestorByDB(ctx context.Context, r [32]byte, slot primitives.Slot) (root [32]byte, err error) {
+// This retrieves an ancestor root using DB. The look up walks back one parent block at a time. Slower than the fork choice look up.
+func (s *Service) ancestorByDB(ctx context.Context, r [32]byte, slot primitives.Slot) ([32]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.ancestorByDB")
 	defer span.End()
 
-	root = [32]byte{}
-	// Stop recursive ancestry lookup if context is cancelled.
-	if ctx.Err() != nil {
-		err = ctx.Err()
-		return
-	}
+	for {
+		// Stop ancestry lookup if context is cancelled.
+		if err := ctx.Err(); err != nil {
+			return [32]byte{}, err
+		}
 
-	signed, err := s.getBlock(ctx, r)
-	if err != nil {
-		return root, err
+		signed, err := s.getBlock(ctx, r)
+		if err != nil {
+			return [32]byte{}, err
+		}
+		b := signed.Block()
+		if b.Slot() <= slot {
+			return r, nil
+		}
+		r = b.ParentRoot()
 	}
-	b := signed.Block()
-	if b.Slot() == slot || b.Slot() < slot {
-		return r, nil
-	}
-
-	return s.ancestorByDB(ctx, b.ParentRoot(), slot)
 }
 
 // This retrieves missing blocks from DB (ie. the blocks that couldn't be received over sync) and inserts them to fork choice store.
@@ -378,11 +394,15 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 	}
 	pendingNodes := make([]*forkchoicetypes.BlockAndCheckpoints, 0)
 
-	// Fork choice only matters from last finalized slot.
+	// Fork choice only matters from the tree root.
 	finalized := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
-	fSlot, err := slots.EpochStart(finalized.Epoch)
+	fRoot := s.ensureRootNotZeros(finalized.Root)
+	fSlot, err := s.cfg.ForkChoiceStore.Slot(fRoot)
 	if err != nil {
-		return err
+		fSlot, err = slots.EpochStart(finalized.Epoch)
+		if err != nil {
+			return err
+		}
 	}
 	root := signed.Block().ParentRoot()
 	child := signed
@@ -425,7 +445,7 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 	} else {
 		s.insertFirstPayloadIfNeeded(ctx, pendingNodes[len(pendingNodes)-1].Block.Block())
 	}
-	if root != s.ensureRootNotZeros(finalized.Root) && !s.cfg.ForkChoiceStore.HasNode(root) {
+	if root != fRoot && !s.cfg.ForkChoiceStore.HasNode(root) {
 		return ErrNotDescendantOfFinalized
 	}
 
@@ -453,14 +473,11 @@ func (s *Service) parentPayloadGasLimit(ctx context.Context, parentRoot [32]byte
 		return 0, errors.Wrap(err, "could not get parent block")
 	}
 	if parent.Block().Version() >= version.Gloas {
-		bid, err := parent.Block().Body().SignedExecutionPayloadBid()
+		bid, err := parent.Block().Body().ExecutionPayloadBid()
 		if err != nil {
-			return 0, errors.Wrap(err, "could not get signed execution payload bid")
+			return 0, errors.Wrap(err, "could not get execution payload bid")
 		}
-		if bid == nil || bid.Message == nil {
-			return 0, errors.New("nil execution payload bid")
-		}
-		return bid.Message.GasLimit, nil
+		return bid.GasLimit(), nil
 	}
 	payload, err := parent.Block().Body().Execution()
 	if err != nil {

@@ -112,6 +112,7 @@ type validator struct {
 	eventsChannel                chan *eventClient.Event
 	payloadAvailability          *payloadAvailability
 	head                         *headTracker
+	dutyAwareShutdown            *dutyAwareShutdownTracker
 	pubkeyToStatus               map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus
 	pubkeyToStatusLock           sync.RWMutex // guards pubkeyToStatus; all readers go through statusCache
 	signedValidatorRegistrations map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
@@ -127,6 +128,7 @@ type validator struct {
 	km                           keymanager.IKeymanager
 	graffiti                     []byte
 	genesisTime                  time.Time
+	genesisTimeLock              sync.RWMutex // guards genesisTime writes against GenesisTime readers
 	voteStats                    voteStats
 }
 
@@ -166,6 +168,8 @@ func (v *validator) Done() {
 }
 
 func (v *validator) GenesisTime() time.Time {
+	v.genesisTimeLock.RLock()
+	defer v.genesisTimeLock.RUnlock()
 	return v.genesisTime
 }
 
@@ -325,7 +329,9 @@ func (v *validator) WaitForChainStart(ctx context.Context) error {
 		)
 	}
 
+	v.genesisTimeLock.Lock()
 	v.genesisTime = time.Unix(int64(chainStartRes.GenesisTime), 0)
+	v.genesisTimeLock.Unlock()
 
 	curGenValRoot, err := v.db.GenesisValidatorsRoot(ctx)
 	if err != nil {

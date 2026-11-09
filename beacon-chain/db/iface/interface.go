@@ -19,6 +19,22 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// EnvelopeSaveOutcome describes the result of saving a blinded execution payload envelope
+// when an entry may already exist for the same beacon block root.
+type EnvelopeSaveOutcome int
+
+const (
+	// EnvelopeSaveUnknown is the zero value, returned whenever the save failed. It exists so a
+	// non-nil error can never be paired with an outcome that reads as success.
+	EnvelopeSaveUnknown EnvelopeSaveOutcome = iota
+	// EnvelopeSaveInserted indicates no envelope existed for the block root and the new one was written.
+	EnvelopeSaveInserted
+	// EnvelopeSaveByteIdentical indicates a byte-identical envelope was already stored; the save was a no-op.
+	EnvelopeSaveByteIdentical
+	// EnvelopeSaveConflict indicates a different envelope was already stored; the existing entry was kept.
+	EnvelopeSaveConflict
+)
+
 // ReadOnlyDatabase defines a struct which only has read access to database methods.
 type ReadOnlyDatabase interface {
 	// Block related methods.
@@ -44,6 +60,8 @@ type ReadOnlyDatabase interface {
 	StateSummary(ctx context.Context, blockRoot [32]byte) (*ethpb.StateSummary, error)
 	HasStateSummary(ctx context.Context, blockRoot [32]byte) bool
 	HighestSlotStatesBelow(ctx context.Context, slot primitives.Slot) ([]state.ReadOnlyBeaconState, error)
+	SlotInDiffTree(primitives.Slot) (uint64, int, error)
+	StateBySlotFromDiffTree(ctx context.Context, slot primitives.Slot) (state.BeaconState, error)
 	// Checkpoint operations.
 	JustifiedCheckpoint(ctx context.Context) (*ethpb.Checkpoint, error)
 	FinalizedCheckpoint(ctx context.Context) (*ethpb.Checkpoint, error)
@@ -100,7 +118,6 @@ type NoHeadAccessDatabase interface {
 	DeleteStates(ctx context.Context, blockRoots [][32]byte) error
 	SaveStateSummary(ctx context.Context, summary *ethpb.StateSummary) error
 	SaveStateSummaries(ctx context.Context, summaries []*ethpb.StateSummary) error
-	SlotInDiffTree(primitives.Slot) (uint64, int, error)
 	// Checkpoint operations.
 	SaveJustifiedCheckpoint(ctx context.Context, checkpoint *ethpb.Checkpoint) error
 	SaveFinalizedCheckpoint(ctx context.Context, checkpoint *ethpb.Checkpoint) error
@@ -117,6 +134,7 @@ type NoHeadAccessDatabase interface {
 
 	// Execution payload envelope operations (Gloas+).
 	SaveExecutionPayloadEnvelope(ctx context.Context, envelope *ethpb.SignedExecutionPayloadEnvelope) error
+	SaveBlindedExecutionPayloadEnvelope(ctx context.Context, envelope *ethpb.SignedBlindedExecutionPayloadEnvelope) (EnvelopeSaveOutcome, error)
 	DeleteExecutionPayloadEnvelope(ctx context.Context, blockRoot [32]byte) error
 
 	CleanUpDirtyStates(ctx context.Context, slotsPerArchivedPoint primitives.Slot) error

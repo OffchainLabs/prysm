@@ -30,11 +30,13 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/wrapper"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/proto/dbval"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
@@ -289,7 +291,7 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 		Attnets:   bytesutil.PadTo([]byte{'C', 'D'}, 8),
 	})
 
-	st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	st, err := state_native.New(&ethpb.BeaconState{
 		Slot: 5,
 	})
 	require.NoError(t, err)
@@ -962,8 +964,12 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 	r.rateLimiter.limiterMap[topic] = leakybucket.NewCollector(1, 1, time.Second, false)
 	var wg sync.WaitGroup
 	wg.Add(1)
+
+	// The stream handler may be invoked more than once (e.g. a duplicate
+	// stream on the connection).
+	var done sync.Once
 	p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
-		defer wg.Done()
+		defer done.Do(wg.Done)
 		out := &ethpb.Status{}
 		assert.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, out))
 		expected := &ethpb.Status{
@@ -981,6 +987,8 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 	})
 
 	require.NoError(t, cw.SetClock(startup.NewClock(chain.Genesis, chain.ValidatorsRoot)))
+	// Start sets cfg.clock in a goroutine; connecting earlier makes the handshake read a nil clock.
+	require.Eventually(t, r.chainStarted.Load, 5*time.Second, 10*time.Millisecond)
 
 	assert.NoError(t, p1.Peers().Scorers().IsBadPeer(p2.PeerID()), "Peer is marked as bad")
 	p1.Connect(p2)
@@ -1178,4 +1186,54 @@ func makeBlocks(t *testing.T, i, n uint64, previousRoot [32]byte) []interfaces.R
 		require.NoError(t, err)
 	}
 	return ifaceBlocks
+}
+
+func TestStatusRPC_PeerFinalizedBelowOrigin(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	ctx := t.Context()
+
+	originSlot, err := slots.EpochStart(100)
+	require.NoError(t, err)
+
+	beaconDB := dbTest.SetupDB(t)
+	require.NoError(t, beaconDB.SaveBackfillStatus(ctx, &dbval.BackfillStatus{
+		LowSlot:    uint64(originSlot),
+		OriginSlot: uint64(originSlot),
+	}))
+
+	chain := &mock.ChainService{
+		FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: 100, Root: bytesutil.PadTo([]byte("origin"), 32)},
+		Fork: &ethpb.Fork{
+			PreviousVersion: params.BeaconConfig().GenesisForkVersion,
+			CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
+		},
+		Genesis:        time.Now().Add(-params.SlotsDuration(originSlot+params.BeaconConfig().SlotsPerEpoch*2, params.BeaconConfig())),
+		ValidatorsRoot: [32]byte{'A'},
+	}
+	r := &Service{
+		cfg: &config{
+			chain:       chain,
+			clock:       startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			beaconDB:    beaconDB,
+			p2p:         p2ptest.NewTestP2P(t),
+			initialSync: &mockSync.Sync{IsSyncing: false},
+		},
+		ctx: ctx,
+	}
+	digest := r.currentForkDigest()
+
+	msg := func(epoch primitives.Epoch) *ethpb.Status {
+		return &ethpb.Status{
+			ForkDigest:     digest[:],
+			FinalizedRoot:  bytesutil.PadTo([]byte("peer-finalized"), 32),
+			FinalizedEpoch: epoch,
+			HeadRoot:       make([]byte, 32),
+			HeadSlot:       originSlot,
+		}
+	}
+
+	// The peer's checkpoint predates our origin, so we cannot judge it and must not punish it.
+	require.NoError(t, r.validateStatusMessage(r.ctx, msg(50)))
+	// A checkpoint we should have been able to resolve is still rejected.
+	require.ErrorIs(t, r.validateStatusMessage(r.ctx, msg(100)), p2ptypes.ErrInvalidFinalizedRoot)
 }

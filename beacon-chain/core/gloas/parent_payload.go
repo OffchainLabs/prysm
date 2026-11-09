@@ -1,7 +1,6 @@
 package gloas
 
 import (
-	"bytes"
 	"context"
 
 	requests "github.com/OffchainLabs/prysm/v7/beacon-chain/core/requests"
@@ -22,11 +21,10 @@ func ProcessParentExecutionPayload(ctx context.Context, st state.BeaconState, bl
 	defer span.End()
 
 	body := blk.Body()
-	signedBid, err := body.SignedExecutionPayloadBid()
+	bid, err := body.ExecutionPayloadBid()
 	if err != nil {
-		return errors.Wrap(err, "could not get signed execution payload bid")
+		return errors.Wrap(err, "could not get execution payload bid")
 	}
-	bid := signedBid.Message
 
 	parentBid, err := st.LatestExecutionPayloadBid()
 	if err != nil {
@@ -39,7 +37,7 @@ func ProcessParentExecutionPayload(ctx context.Context, st state.BeaconState, bl
 	}
 
 	parentBidBlockHash := parentBid.BlockHash()
-	isParentFull := bytes.Equal(bid.ParentBlockHash, parentBidBlockHash[:])
+	isParentFull := bid.ParentBlockHash() == parentBidBlockHash
 
 	if !isParentFull {
 		if !IsEmptyExecutionRequests(parentExecutionRequests) {
@@ -84,12 +82,12 @@ func ApplyParentExecutionPayload(
 		return err
 	}
 
-	if err := processExecutionRequests(ctx, st, reqs); err != nil {
-		return errors.Wrap(err, "could not process parent execution requests")
-	}
-
 	if err := st.QueueBuilderPaymentForSlot(parentSlot); err != nil {
 		return errors.Wrap(err, "could not queue builder payment")
+	}
+
+	if err := processExecutionRequests(ctx, st, reqs); err != nil {
+		return errors.Wrap(err, "could not process parent execution requests")
 	}
 
 	if err := st.SetExecutionPayloadAvailability(parentSlot, true); err != nil {

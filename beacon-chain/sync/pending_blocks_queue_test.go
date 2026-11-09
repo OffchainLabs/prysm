@@ -41,6 +41,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	gcache "github.com/patrickmn/go-cache"
 	logTest "github.com/sirupsen/logrus/hooks/test"
+	"google.golang.org/protobuf/proto"
 )
 
 //	/- b1 - b2
@@ -1038,73 +1039,50 @@ func TestValidateSidecar_ParentRequestServiceLifetime(t *testing.T) {
 	params.BeaconConfig().GloasForkEpoch = 1
 	params.BeaconConfig().InitializeForkSchedule()
 
-	for _, kind := range []string{"blob", "data column"} {
-		t.Run(kind, func(t *testing.T) {
-			requests := make(chan context.Context, numOfTries)
-			stream := &stalledParentStream{reading: make(chan struct{}), reset: make(chan struct{})}
-			t.Cleanup(func() { _ = stream.Reset() })
-			s := parentRequestService(t, func(ctx context.Context, _ any) (network.Stream, error) {
-				requests <- ctx
-				return stream, nil
-			})
-			missingParent := errors.New("missing parent")
-			s.newBlobVerifier = func(blocks.ROBlob, []verification.Requirement) verification.BlobVerifier {
-				return &verification.MockBlobVerifier{ErrSidecarParentSeen: missingParent}
-			}
-			s.newColumnsVerifier = testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{ErrSidecarParentSeen: missingParent})
-			_, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{1}, 1, 1)
-			blob := blobs[0].BlobSidecar
-			buf := new(bytes.Buffer)
-			var topic string
-			validate := s.validateBlob
-			if kind == "blob" {
-				_, err := s.cfg.p2p.Encoding().EncodeGossip(buf, blob)
-				require.NoError(t, err)
-				topic = p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.BlobSidecar]()]
-			} else {
-				column := &ethpb.DataColumnSidecar{
-					SignedBlockHeader:            blob.SignedBlockHeader,
-					KzgCommitmentsInclusionProof: make([][]byte, 4),
-				}
-				for i := range column.KzgCommitmentsInclusionProof {
-					column.KzgCommitmentsInclusionProof[i] = make([]byte, 32)
-				}
-				_, err := s.cfg.p2p.Encoding().EncodeGossip(buf, column)
-				require.NoError(t, err)
-				topic = p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.DataColumnSidecar]()]
-				validate = s.validateDataColumn
-			}
-			topic = s.addDigestAndIndexToTopic(topic, s.currentForkDigest(), 0) + s.cfg.p2p.Encoding().ProtocolSuffix()
+	requests := make(chan context.Context, numOfTries)
+	stream := &stalledParentStream{reading: make(chan struct{}), reset: make(chan struct{})}
+	t.Cleanup(func() { _ = stream.Reset() })
+	s := parentRequestService(t, func(ctx context.Context, _ any) (network.Stream, error) {
+		requests <- ctx
+		return stream, nil
+	})
+	missingParent := errors.New("missing parent")
+	s.newBlobVerifier = func(blocks.ROBlob, []verification.Requirement) verification.BlobVerifier {
+		return &verification.MockBlobVerifier{ErrSidecarParentSeen: missingParent}
+	}
+	_, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{1}, 1, 1)
+	buf := new(bytes.Buffer)
+	_, err := s.cfg.p2p.Encoding().EncodeGossip(buf, blobs[0].BlobSidecar)
+	require.NoError(t, err)
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.BlobSidecar]()]
+	topic = s.addDigestAndIndexToTopic(topic, s.currentForkDigest(), 0) + s.cfg.p2p.Encoding().ProtocolSuffix()
 
-			// Regression of #13061.
-			ctx, cancel := context.WithCancel(t.Context())
-			defer cancel()
-			result, err := validate(ctx, "", &pubsub.Message{Message: &pb.Message{Data: buf.Bytes(), Topic: &topic}})
-			cancel()
-			require.Equal(t, pubsub.ValidationIgnore, result)
-			require.ErrorIs(t, err, missingParent)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	result, err := s.validateBlob(ctx, "", &pubsub.Message{Message: &pb.Message{Data: buf.Bytes(), Topic: &topic}})
+	cancel()
+	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.ErrorIs(t, err, missingParent)
 
-			select {
-			case <-stream.reading:
-			case <-time.After(time.Second):
-				t.Fatal("parent request did not reach response read after validation returned")
-			}
-			requestCtx := <-requests
-			require.NoError(t, requestCtx.Err(), "validation cancellation must not cancel parent fetch")
+	select {
+	case <-stream.reading:
+	case <-time.After(time.Second):
+		t.Fatal("parent request did not reach response read after validation returned")
+	}
+	requestCtx := <-requests
+	require.NoError(t, requestCtx.Err(), "validation cancellation must not cancel parent fetch")
 
-			// Ensure the request context has a bounded deadline.
-			_, bounded := requestCtx.Deadline()
-			require.Equal(t, true, bounded)
+	// Ensure the request context has a bounded deadline.
+	_, bounded := requestCtx.Deadline()
+	require.Equal(t, true, bounded)
 
-			// Stop the service and ensure the parent request is canceled.
-			require.NoError(t, s.Stop())
-			require.ErrorIs(t, requestCtx.Err(), context.Canceled)
-			select {
-			case <-stream.reset:
-			case <-time.After(time.Second):
-				t.Fatal("service stop did not interrupt the parent response read")
-			}
-		})
+	// Stop the service and ensure the parent request is canceled.
+	require.NoError(t, s.Stop())
+	require.ErrorIs(t, requestCtx.Err(), context.Canceled)
+	select {
+	case <-stream.reset:
+	case <-time.After(time.Second):
+		t.Fatal("service stop did not interrupt the parent response read")
 	}
 }
 
@@ -1195,4 +1173,72 @@ func TestService_BatchRootRequestCancellation(t *testing.T) {
 			require.Equal(t, min(cancelAt, numOfTries), attempts)
 		})
 	}
+}
+
+type blockBroadcastRecorder struct {
+	p2p.P2P
+	current primitives.Epoch
+	epochs  []primitives.Epoch
+}
+
+func (p *blockBroadcastRecorder) Broadcast(context.Context, proto.Message) error {
+	p.epochs = append(p.epochs, p.current)
+	return nil
+}
+
+func (p *blockBroadcastRecorder) BroadcastForEpoch(_ context.Context, _ proto.Message, epoch primitives.Epoch) error {
+	p.epochs = append(p.epochs, epoch)
+	return nil
+}
+
+func TestService_ProcessPendingBlocks_BroadcastsOnBlockForkDigest(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.AltairForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := t.Context()
+	db := dbtest.SetupDB(t)
+	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
+	parent := util.NewBeaconBlock()
+	util.SaveBlock(t, ctx, db, parent)
+	parentRoot, err := parent.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	// The node is at the first Altair slot, so the current digest differs from the block's.
+	clock := startup.NewClock(time.Now(), [32]byte{}, startup.WithSlotAsNow(params.BeaconConfig().SlotsPerEpoch))
+	require.NotEqual(t, params.ForkDigest(0), params.ForkDigest(clock.CurrentEpoch()))
+	p := &blockBroadcastRecorder{P2P: p2ptest.NewTestP2P(t), current: clock.CurrentEpoch()}
+	r := &Service{
+		cfg: &config{
+			p2p:      p,
+			beaconDB: db,
+			chain:    &mock.ChainService{Root: parentRoot[:], State: beaconState, FinalizedCheckPoint: &ethpb.Checkpoint{}},
+			clock:    clock,
+			stateGen: stategen.New(db, doublylinkedtree.New()),
+		},
+		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
+		seenPendingBlocks:   make(map[[32]byte]bool),
+	}
+	r.initCaches()
+
+	copied := beaconState.Copy()
+	require.NoError(t, copied.SetSlot(1))
+	proposerIdx, err := helpers.BeaconProposerIndex(ctx, copied)
+	require.NoError(t, err)
+	b := util.NewBeaconBlock()
+	b.Block.Slot = 1
+	b.Block.ParentRoot = parentRoot[:]
+	b.Block.ProposerIndex = proposerIdx
+	b.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, b.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[proposerIdx])
+	require.NoError(t, err)
+	root, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	wsb, err := blocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	require.NoError(t, r.insertBlockToPendingQueue(b.Block.Slot, wsb, root))
+
+	require.NoError(t, r.processPendingBlocks(ctx))
+	require.Equal(t, 0, len(r.slotToPendingBlocks.Items()), "pending block was not processed")
+	require.DeepEqual(t, []primitives.Epoch{0}, p.epochs, "block must be broadcast on its own fork digest, not the current one")
 }

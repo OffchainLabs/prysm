@@ -13,7 +13,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
-	"google.golang.org/protobuf/proto"
 )
 
 // For our setters, we have a field reference counter through
@@ -82,11 +81,7 @@ func (b *BeaconState) SetFork(val *ethpb.Fork) error {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	fk, ok := proto.Clone(val).(*ethpb.Fork)
-	if !ok {
-		return errors.New("proto.Clone did not return a fork proto")
-	}
-	b.fork = fk
+	b.fork = val.Copy()
 	b.markFieldAsDirty(types.Fork)
 	return nil
 }

@@ -39,6 +39,18 @@ func TestPayloadAttestationVerifyCurrentSlot(t *testing.T) {
 	require.NoError(t, err)
 	v = ini.NewPayloadAttestationMsgVerifier(pa, GossipPayloadAttestationMessageRequirements)
 	require.ErrorIs(t, v.VerifyCurrentSlot(), ErrIncorrectPayloadAttSlot)
+
+	// The previous slot is still current within MAXIMUM_GOSSIP_CLOCK_DISPARITY of the boundary.
+	disparity := params.BeaconConfig().MaximumGossipClockDisparityDuration()
+	msg = newPayloadAttestationMessage(primitives.Slot(0), 0, bytes.Repeat([]byte{0x11}, 32))
+	pa, err = payloadattestation.NewReadOnly(msg)
+	require.NoError(t, err)
+	v = ini.NewPayloadAttestationMsgVerifier(pa, GossipPayloadAttestationMessageRequirements)
+	require.NoError(t, v.VerifyCurrentSlot())
+
+	now = now.Add(disparity + time.Millisecond)
+	v = ini.NewPayloadAttestationMsgVerifier(pa, GossipPayloadAttestationMessageRequirements)
+	require.ErrorIs(t, v.VerifyCurrentSlot(), ErrIncorrectPayloadAttSlot)
 }
 
 func TestPayloadAttestationVerifyBlockRootSeenAndValid(t *testing.T) {

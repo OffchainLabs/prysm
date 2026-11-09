@@ -99,7 +99,7 @@ func TestReadFreshnessOptions(t *testing.T) {
 		}
 	})
 
-	t.Run("repolls until the announced head or the deadline", func(t *testing.T) {
+	t.Run("without a caller deadline, repolls until the announced head or the hint deadline", func(t *testing.T) {
 		deadline := time.Now().Add(time.Hour)
 		ctx := iface.WithHint(context.Background(), headHint([32]byte{0x01}, 10, true, deadline))
 
@@ -107,7 +107,26 @@ func TestReadFreshnessOptions(t *testing.T) {
 			cfg := rest.ResolveOptions(readFreshnessOptions(ctx, matcher)...)
 			require.Equal(t, true, cfg.Race)
 			require.Equal(t, deadline, cfg.Deadline)
+			require.Equal(t, true, cfg.FallbackDeadline.IsZero())
 			// WithRepoll uses the default (non-zero) poll interval.
+			require.NotEqual(t, time.Duration(0), cfg.PollInterval)
+			require.Equal(t, rest.UntilAccepted, cfg.RepollMode)
+		}
+	})
+
+	t.Run("with a caller deadline, falls back at the hint deadline and waits until the caller deadline", func(t *testing.T) {
+		hintDeadline := time.Now().Add(time.Hour)
+		callerDeadline := hintDeadline.Add(time.Hour)
+
+		ctx, cancel := context.WithDeadline(context.Background(), callerDeadline)
+		t.Cleanup(cancel)
+		ctx = iface.WithHint(ctx, headHint([32]byte{0x01}, 10, true, hintDeadline))
+
+		for _, matcher := range []func(json.RawMessage, iface.Head) bool{attestationMatcher, syncCommitteeMatcher} {
+			cfg := rest.ResolveOptions(readFreshnessOptions(ctx, matcher)...)
+			require.Equal(t, true, cfg.Race)
+			require.Equal(t, callerDeadline, cfg.Deadline)
+			require.Equal(t, hintDeadline, cfg.FallbackDeadline)
 			require.NotEqual(t, time.Duration(0), cfg.PollInterval)
 			require.Equal(t, rest.UntilAccepted, cfg.RepollMode)
 		}
@@ -116,14 +135,34 @@ func TestReadFreshnessOptions(t *testing.T) {
 	t.Run("a past deadline is floored so a lagging node still gets time", func(t *testing.T) {
 		// A deadline already in the past would leave no budget; it is raised to
 		// now + readFreshnessBudget.
-		ctx := iface.WithHint(context.Background(), headHint([32]byte{0x01}, 10, true, time.Now().Add(-time.Hour)))
+		hint := headHint([32]byte{0x01}, 10, true, time.Now().Add(-time.Hour))
 
-		before := time.Now()
-		cfg := rest.ResolveOptions(readFreshnessOptions(ctx, attestationMatcher)...)
-		after := time.Now()
+		inBudget := func(t *testing.T, got, before, after time.Time) {
+			require.Equal(t, true, got.After(before.Add(readFreshnessBudget-time.Second)))
+			require.Equal(t, true, got.Before(after.Add(readFreshnessBudget+time.Second)))
+		}
 
-		require.Equal(t, true, cfg.Deadline.After(before.Add(readFreshnessBudget-time.Second)))
-		require.Equal(t, true, cfg.Deadline.Before(after.Add(readFreshnessBudget+time.Second)))
+		t.Run("without a caller deadline", func(t *testing.T) {
+			ctx := iface.WithHint(context.Background(), hint)
+
+			before := time.Now()
+			cfg := rest.ResolveOptions(readFreshnessOptions(ctx, attestationMatcher)...)
+			after := time.Now()
+
+			inBudget(t, cfg.Deadline, before, after)
+		})
+
+		t.Run("with a caller deadline", func(t *testing.T) {
+			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Hour))
+			t.Cleanup(cancel)
+			ctx = iface.WithHint(ctx, hint)
+
+			before := time.Now()
+			cfg := rest.ResolveOptions(readFreshnessOptions(ctx, attestationMatcher)...)
+			after := time.Now()
+
+			inBudget(t, cfg.FallbackDeadline, before, after)
+		})
 	})
 }
 

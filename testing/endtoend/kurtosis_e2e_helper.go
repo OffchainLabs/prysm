@@ -30,6 +30,10 @@ const (
 	// Health check waits maximum 1 minute (30 retries * 2 seconds interval)
 	MAX_HEALTH_CHECK_RETRY = 30
 	HEALTH_CHECK_INTERVAL  = 2 * time.Second
+
+	// Slack between the last epoch the playbooks monitor and the point where an
+	// unfinished Assertoor run is reported as a failure.
+	ASSERTOOR_GRACE_PERIOD = 2 * time.Minute
 )
 
 // KurtosisTestSuites defines a suite of end-to-end tests to run against a Kurtosis enclave.
@@ -83,10 +87,13 @@ func (k *KurtosisTestSuites) Run(t *testing.T) {
 
 	// Set deadline for assertoor.
 	genesisTime := fetchGenesisTime(t, ctx, client)
-	deadline := genesisTime.Add(params.EpochsDuration(primitives.Epoch(k.epochsToRun), params.BeaconConfig()))
+	deadline := genesisTime.Add(params.EpochsDuration(primitives.Epoch(k.epochsToRun), params.BeaconConfig()) + ASSERTOOR_GRACE_PERIOD)
+	t.Logf("Assertoor registration at genesis+%s, deadline at genesis+%s", time.Since(genesisTime), deadline.Sub(genesisTime))
 
 	// Register Assertoor playbooks and wait for them to complete.
-	require.NoError(t, kw.RegisterPlaybooks(ctx), "Failed to register Assertoor playbooks")
+	require.NoError(t, kw.RegisterPlaybooks(ctx, map[string]any{
+		"epochsToRun": k.epochsToRun,
+	}), "Failed to register Assertoor playbooks")
 	require.NoError(t, kw.WaitForAssertoor(ctx, deadline), "Assertoor checks failed")
 }
 

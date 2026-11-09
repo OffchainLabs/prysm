@@ -36,6 +36,7 @@ type Server struct {
 	Broadcaster                p2p.Broadcaster
 	DataColumnReceiver         blockchain.DataColumnReceiver
 	AttestationCache           *cache.AttestationCache
+	ProposerPreferencesCache   *cache.ProposerPreferencesCache
 	AttestationsPool           attestations.Pool
 	SlashingsPool              slashings.PoolManager
 	VoluntaryExitsPool         voluntaryexits.PoolManager

@@ -22,7 +22,7 @@ func TestVerifyProposerSlashing_BeaconFuzzIssue91(t *testing.T) {
 	err = rawState.UnmarshalSSZ(file)
 	require.NoError(t, err)
 
-	st, err := state_native.InitializeFromProtoUnsafePhase0(rawState)
+	st, err := state_native.NewUnsafe(rawState)
 	require.NoError(t, err)
 
 	file, err = os.ReadFile("testdata/beaconfuzz_91_proposer_slashing.ssz")

@@ -88,6 +88,13 @@ var appFlags = []cli.Flag{
 	flags.MinBuilderBid,
 	flags.MinBuilderDiff,
 	flags.BuilderHeaderTimeout,
+	flags.BuilderAllowedFailures,
+	flags.BuilderCriticalFailures,
+	flags.BuilderBlacklistPeriod,
+	flags.BuilderCriticalBlacklistPeriod,
+	flags.BuilderRelayBlacklistPeriod,
+	flags.BuilderFailureBackOffPeriod,
+	flags.BuilderCriticalFailedBuilders,
 	flags.BuilderBidTimeout,
 	flags.BeaconDBPruning,
 	flags.PrunerRetentionEpochs,
@@ -163,6 +170,7 @@ var appFlags = []cli.Flag{
 	dasFlags.BlobRetentionEpochFlag,
 	flags.BatchVerifierLimit,
 	flags.StateDiffExponents,
+	flags.ArchiveOriginState,
 	flags.DisableEphemeralLogFile,
 	flags.DisablePartialDataColumns,
 	flags.DisableGraffitiClientAppend,
@@ -297,8 +305,9 @@ func main() {
 	// note other instances of ctx in this func are *cli.Context.
 	rctx, cancel := context.WithCancel(context.Background())
 	app := cli.App{
-		Name:  "beacon-chain",
-		Usage: "this is a beacon chain implementation for Ethereum",
+		Name:    "beacon-chain",
+		Usage:   "Ethereum beacon node",
+		Authors: cmd.Authors,
 		Action: func(ctx *cli.Context) error {
 			if err := startNode(ctx, cancel); err != nil {
 				log.Fatal(err.Error())

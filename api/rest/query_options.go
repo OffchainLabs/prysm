@@ -12,7 +12,7 @@ const defaultPollInterval = 50 * time.Millisecond // backoff between re-polling
 type RepollMode int
 
 const (
-	UntilAccepted RepollMode = iota // Re-polls until an accept-passing response is received or the deadline fires.
+	UntilAccepted RepollMode = iota // Re-polls until an accept-passing response is received or the deadline (or, once a usable response is in hand, the fallback deadline) fires.
 	UntilAny2xx   RepollMode = iota // Re-polls only while no usable (2xx) response has been received at all.
 )
 
@@ -25,6 +25,7 @@ type queryConfig struct {
 	repollMode       RepollMode                              // When re-polling, the condition under which retrying stops.
 	deadline         time.Time                               // Absolute instant by which the read must finish
 	fallbackDeadline time.Time                               // If non-zero, bounds the wait for the nodes that have not answered yet once a usable response is in hand.
+	fallbackWait     time.Duration                           // If non-zero, bounds the same wait, counted from the first usable response.
 }
 
 // QueryOption customizes a read query (Get, GetSSZ, RequestSSZWithFallback).
@@ -81,18 +82,33 @@ func WithDeadline(t time.Time) QueryOption {
 }
 
 // WithFallbackDeadline bounds how long a read waits for the nodes that have not
-// answered yet, once another node has already returned a usable (but not
-// accepted) response.
+// answered yet, and how long it keeps re-polling, once a node has already
+// returned a usable (but not accepted) response. Until then, the read is
+// bounded by the deadline only.
 func WithFallbackDeadline(t time.Time) QueryOption {
 	return func(c *queryConfig) {
 		c.fallbackDeadline = t
 	}
 }
 
+// WithFallbackWait bounds how long a read waits for the nodes that have not
+// answered yet, and how long it keeps re-polling, once a node has already
+// returned a usable (but not accepted) response, counted from that response.
+// Across re-polling rounds, it counts from the end of the first round that
+// produced a usable response. Combined with WithFallbackDeadline, the earlier
+// bound wins.
+func WithFallbackWait(wait time.Duration) QueryOption {
+	return func(c *queryConfig) {
+		c.fallbackWait = wait
+	}
+}
+
 // WithRepoll makes a read keep re-polling all nodes (at defaultPollInterval)
 // until the deadline fires. mode selects what stops the re-polling: an
 // accept-passing response (UntilAccepted) or any usable 2xx response
-// (UntilAny2xx). WithRepoll has no effect unless WithDeadline is also set.
+// (UntilAny2xx). With a usable response in hand, the fallback deadline (if any)
+// also stops the re-polling. WithRepoll has no effect unless WithDeadline is
+// also set.
 func WithRepoll(mode RepollMode) QueryOption {
 	return func(c *queryConfig) {
 		c.pollInterval = defaultPollInterval
@@ -111,6 +127,7 @@ type ResolvedConfig struct {
 	RepollMode       RepollMode
 	Deadline         time.Time
 	FallbackDeadline time.Time
+	FallbackWait     time.Duration
 }
 
 // ResolveOptions folds opts into a ResolvedConfig for inspection.
@@ -125,5 +142,6 @@ func ResolveOptions(opts ...QueryOption) ResolvedConfig {
 		RepollMode:       cfg.repollMode,
 		Deadline:         cfg.deadline,
 		FallbackDeadline: cfg.fallbackDeadline,
+		FallbackWait:     cfg.fallbackWait,
 	}
 }

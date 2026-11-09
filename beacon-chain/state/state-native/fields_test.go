@@ -28,6 +28,16 @@ func TestGloasProgressiveStateSchema(t *testing.T) {
 	}
 }
 
+func TestHezeProgressiveStateSchema(t *testing.T) {
+	schema, ok := ProgressiveStateSchemaForVersion(version.Heze)
+	require.Equal(t, true, ok)
+	require.Equal(t, params.BeaconConfig().BeaconStateHezeFieldCount, len(schema.fields))
+	require.DeepEqual(t, hezeFields, schema.fields)
+	for _, active := range schema.activeFields {
+		require.Equal(t, true, active)
+	}
+}
+
 func TestNewProgressiveStateFieldsSchema(t *testing.T) {
 	t.Run("MaximumFields", func(t *testing.T) {
 		allFields := make([]types.FieldIndex, ssz.MaxProgressiveActiveFields)
@@ -170,7 +180,7 @@ func TestNewProgressiveStateFieldsSchema(t *testing.T) {
 }
 
 func TestProgressiveStateSchemaForVersion_Unsupported(t *testing.T) {
-	schema, ok := ProgressiveStateSchemaForVersion(version.Gloas + 1)
+	schema, ok := ProgressiveStateSchemaForVersion(version.Heze + 1)
 	require.Equal(t, false, ok)
 	require.IsNil(t, schema)
 }

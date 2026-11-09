@@ -11,6 +11,710 @@ import (
 	v1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 )
 
+func (c *LightClientHeaderGloas) SizeSSZ() int {
+	size := 496
+
+	return size
+}
+
+func (c *LightClientHeaderGloas) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *LightClientHeaderGloas) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+
+	// Field 0: Beacon
+	if c.Beacon == nil {
+		c.Beacon = new(BeaconBlockHeader)
+	}
+	if dst, err = c.Beacon.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("Beacon: %w", err)
+	}
+
+	// Field 1: ExecutionBlockHash
+	if len(c.ExecutionBlockHash) != 32 {
+		return nil, ssz.ErrBytesLength
+	}
+	dst = append(dst, c.ExecutionBlockHash...)
+
+	// Field 2: ExecutionBranch
+	if len(c.ExecutionBranch) != 11 {
+		return nil, ssz.ErrBytesLength
+	}
+	for _, o := range c.ExecutionBranch {
+		if len(o) != 32 {
+			return nil, ssz.ErrBytesLength
+		}
+		dst = append(dst, o...)
+	}
+
+	return dst, err
+}
+
+func (c *LightClientHeaderGloas) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 496 {
+		return ssz.ErrSize
+	}
+
+	sszSlice0 := buf[0:112]   // c.Beacon
+	sszSlice1 := buf[112:144] // c.ExecutionBlockHash
+	sszSlice2 := buf[144:496] // c.ExecutionBranch
+
+	// Field 0: Beacon
+	c.Beacon = new(BeaconBlockHeader)
+	if err = c.Beacon.UnmarshalSSZ(sszSlice0); err != nil {
+		return fmt.Errorf("Beacon: %w", err)
+	}
+
+	// Field 1: ExecutionBlockHash
+	c.ExecutionBlockHash = make([]byte, 0, 32)
+	c.ExecutionBlockHash = append(c.ExecutionBlockHash, sszSlice1...)
+
+	// Field 2: ExecutionBranch
+	{
+		c.ExecutionBranch = make([][]byte, 11)
+		for i := 0; i < 11; i++ {
+			var tmp []byte
+
+			tmpSlice := sszSlice2[i*32 : (1+i)*32]
+			tmp = make([]byte, 0, 32)
+			tmp = append(tmp, tmpSlice...)
+			c.ExecutionBranch[i] = tmp
+		}
+	}
+	return err
+}
+
+func (c *LightClientHeaderGloas) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *LightClientHeaderGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: Beacon
+	if err := c.Beacon.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("Beacon: %w", err)
+	}
+	// Field 1: ExecutionBlockHash
+	if len(c.ExecutionBlockHash) != 32 {
+		return ssz.ErrBytesLength
+	}
+	hh.PutBytes(c.ExecutionBlockHash)
+	// Field 2: ExecutionBranch
+	{
+		if len(c.ExecutionBranch) != 11 {
+			return ssz.ErrVectorLength
+		}
+		subIndx := hh.Index()
+		for _, o := range c.ExecutionBranch {
+			if len(o) != 32 {
+				return ssz.ErrBytesLength
+			}
+			hh.Append(o)
+		}
+		hh.Merkleize(subIndx)
+	}
+	hh.Merkleize(indx)
+	return nil
+}
+
+func (c *LightClientBootstrapGloas) SizeSSZ() int {
+	size := 2432
+
+	return size
+}
+
+func (c *LightClientBootstrapGloas) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *LightClientBootstrapGloas) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+
+	// Field 0: Header
+	if c.Header == nil {
+		c.Header = new(LightClientHeaderGloas)
+	}
+	if dst, err = c.Header.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("Header: %w", err)
+	}
+
+	// Field 1: CurrentSyncCommittee
+	if c.CurrentSyncCommittee == nil {
+		c.CurrentSyncCommittee = new(SyncCommittee)
+	}
+	if dst, err = c.CurrentSyncCommittee.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("CurrentSyncCommittee: %w", err)
+	}
+
+	// Field 2: CurrentSyncCommitteeBranch
+	if len(c.CurrentSyncCommitteeBranch) != 11 {
+		return nil, ssz.ErrBytesLength
+	}
+	for _, o := range c.CurrentSyncCommitteeBranch {
+		if len(o) != 32 {
+			return nil, ssz.ErrBytesLength
+		}
+		dst = append(dst, o...)
+	}
+
+	return dst, err
+}
+
+func (c *LightClientBootstrapGloas) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 2432 {
+		return ssz.ErrSize
+	}
+
+	sszSlice0 := buf[0:496]     // c.Header
+	sszSlice1 := buf[496:2080]  // c.CurrentSyncCommittee
+	sszSlice2 := buf[2080:2432] // c.CurrentSyncCommitteeBranch
+
+	// Field 0: Header
+	c.Header = new(LightClientHeaderGloas)
+	if err = c.Header.UnmarshalSSZ(sszSlice0); err != nil {
+		return fmt.Errorf("Header: %w", err)
+	}
+
+	// Field 1: CurrentSyncCommittee
+	c.CurrentSyncCommittee = new(SyncCommittee)
+	if err = c.CurrentSyncCommittee.UnmarshalSSZ(sszSlice1); err != nil {
+		return fmt.Errorf("CurrentSyncCommittee: %w", err)
+	}
+
+	// Field 2: CurrentSyncCommitteeBranch
+	{
+		c.CurrentSyncCommitteeBranch = make([][]byte, 11)
+		for i := 0; i < 11; i++ {
+			var tmp []byte
+
+			tmpSlice := sszSlice2[i*32 : (1+i)*32]
+			tmp = make([]byte, 0, 32)
+			tmp = append(tmp, tmpSlice...)
+			c.CurrentSyncCommitteeBranch[i] = tmp
+		}
+	}
+	return err
+}
+
+func (c *LightClientBootstrapGloas) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *LightClientBootstrapGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: Header
+	if err := c.Header.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("Header: %w", err)
+	}
+	// Field 1: CurrentSyncCommittee
+	if err := c.CurrentSyncCommittee.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("CurrentSyncCommittee: %w", err)
+	}
+	// Field 2: CurrentSyncCommitteeBranch
+	{
+		if len(c.CurrentSyncCommitteeBranch) != 11 {
+			return ssz.ErrVectorLength
+		}
+		subIndx := hh.Index()
+		for _, o := range c.CurrentSyncCommitteeBranch {
+			if len(o) != 32 {
+				return ssz.ErrBytesLength
+			}
+			hh.Append(o)
+		}
+		hh.Merkleize(subIndx)
+	}
+	hh.Merkleize(indx)
+	return nil
+}
+
+func (c *LightClientUpdateGloas) SizeSSZ() int {
+	size := 3324
+
+	return size
+}
+
+func (c *LightClientUpdateGloas) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *LightClientUpdateGloas) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+
+	// Field 0: AttestedHeader
+	if c.AttestedHeader == nil {
+		c.AttestedHeader = new(LightClientHeaderGloas)
+	}
+	if dst, err = c.AttestedHeader.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("AttestedHeader: %w", err)
+	}
+
+	// Field 1: NextSyncCommittee
+	if c.NextSyncCommittee == nil {
+		c.NextSyncCommittee = new(SyncCommittee)
+	}
+	if dst, err = c.NextSyncCommittee.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("NextSyncCommittee: %w", err)
+	}
+
+	// Field 2: NextSyncCommitteeBranch
+	if len(c.NextSyncCommitteeBranch) != 11 {
+		return nil, ssz.ErrBytesLength
+	}
+	for _, o := range c.NextSyncCommitteeBranch {
+		if len(o) != 32 {
+			return nil, ssz.ErrBytesLength
+		}
+		dst = append(dst, o...)
+	}
+
+	// Field 3: FinalizedHeader
+	if c.FinalizedHeader == nil {
+		c.FinalizedHeader = new(LightClientHeaderGloas)
+	}
+	if dst, err = c.FinalizedHeader.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("FinalizedHeader: %w", err)
+	}
+
+	// Field 4: FinalityBranch
+	if len(c.FinalityBranch) != 9 {
+		return nil, ssz.ErrBytesLength
+	}
+	for _, o := range c.FinalityBranch {
+		if len(o) != 32 {
+			return nil, ssz.ErrBytesLength
+		}
+		dst = append(dst, o...)
+	}
+
+	// Field 5: SyncAggregate
+	if c.SyncAggregate == nil {
+		c.SyncAggregate = new(SyncAggregate)
+	}
+	if dst, err = c.SyncAggregate.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("SyncAggregate: %w", err)
+	}
+
+	// Field 6: SignatureSlot
+	if dst, err = c.SignatureSlot.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("SignatureSlot: %w", err)
+	}
+
+	return dst, err
+}
+
+func (c *LightClientUpdateGloas) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 3324 {
+		return ssz.ErrSize
+	}
+
+	sszSlice0 := buf[0:496]     // c.AttestedHeader
+	sszSlice1 := buf[496:2080]  // c.NextSyncCommittee
+	sszSlice2 := buf[2080:2432] // c.NextSyncCommitteeBranch
+	sszSlice3 := buf[2432:2928] // c.FinalizedHeader
+	sszSlice4 := buf[2928:3216] // c.FinalityBranch
+	sszSlice5 := buf[3216:3316] // c.SyncAggregate
+	sszSlice6 := buf[3316:3324] // c.SignatureSlot
+
+	// Field 0: AttestedHeader
+	c.AttestedHeader = new(LightClientHeaderGloas)
+	if err = c.AttestedHeader.UnmarshalSSZ(sszSlice0); err != nil {
+		return fmt.Errorf("AttestedHeader: %w", err)
+	}
+
+	// Field 1: NextSyncCommittee
+	c.NextSyncCommittee = new(SyncCommittee)
+	if err = c.NextSyncCommittee.UnmarshalSSZ(sszSlice1); err != nil {
+		return fmt.Errorf("NextSyncCommittee: %w", err)
+	}
+
+	// Field 2: NextSyncCommitteeBranch
+	{
+		c.NextSyncCommitteeBranch = make([][]byte, 11)
+		for i := 0; i < 11; i++ {
+			var tmp []byte
+
+			tmpSlice := sszSlice2[i*32 : (1+i)*32]
+			tmp = make([]byte, 0, 32)
+			tmp = append(tmp, tmpSlice...)
+			c.NextSyncCommitteeBranch[i] = tmp
+		}
+	}
+
+	// Field 3: FinalizedHeader
+	c.FinalizedHeader = new(LightClientHeaderGloas)
+	if err = c.FinalizedHeader.UnmarshalSSZ(sszSlice3); err != nil {
+		return fmt.Errorf("FinalizedHeader: %w", err)
+	}
+
+	// Field 4: FinalityBranch
+	{
+		c.FinalityBranch = make([][]byte, 9)
+		for i := 0; i < 9; i++ {
+			var tmp []byte
+
+			tmpSlice := sszSlice4[i*32 : (1+i)*32]
+			tmp = make([]byte, 0, 32)
+			tmp = append(tmp, tmpSlice...)
+			c.FinalityBranch[i] = tmp
+		}
+	}
+
+	// Field 5: SyncAggregate
+	c.SyncAggregate = new(SyncAggregate)
+	if err = c.SyncAggregate.UnmarshalSSZ(sszSlice5); err != nil {
+		return fmt.Errorf("SyncAggregate: %w", err)
+	}
+
+	// Field 6: SignatureSlot
+	if err = c.SignatureSlot.UnmarshalSSZ(sszSlice6); err != nil {
+		return fmt.Errorf("SignatureSlot: %w", err)
+	}
+	return err
+}
+
+func (c *LightClientUpdateGloas) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *LightClientUpdateGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: AttestedHeader
+	if err := c.AttestedHeader.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("AttestedHeader: %w", err)
+	}
+	// Field 1: NextSyncCommittee
+	if err := c.NextSyncCommittee.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("NextSyncCommittee: %w", err)
+	}
+	// Field 2: NextSyncCommitteeBranch
+	{
+		if len(c.NextSyncCommitteeBranch) != 11 {
+			return ssz.ErrVectorLength
+		}
+		subIndx := hh.Index()
+		for _, o := range c.NextSyncCommitteeBranch {
+			if len(o) != 32 {
+				return ssz.ErrBytesLength
+			}
+			hh.Append(o)
+		}
+		hh.Merkleize(subIndx)
+	}
+	// Field 3: FinalizedHeader
+	if err := c.FinalizedHeader.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("FinalizedHeader: %w", err)
+	}
+	// Field 4: FinalityBranch
+	{
+		if len(c.FinalityBranch) != 9 {
+			return ssz.ErrVectorLength
+		}
+		subIndx := hh.Index()
+		for _, o := range c.FinalityBranch {
+			if len(o) != 32 {
+				return ssz.ErrBytesLength
+			}
+			hh.Append(o)
+		}
+		hh.Merkleize(subIndx)
+	}
+	// Field 5: SyncAggregate
+	if err := c.SyncAggregate.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("SyncAggregate: %w", err)
+	}
+	// Field 6: SignatureSlot
+	if err := c.SignatureSlot.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("SignatureSlot: %w", err)
+	}
+	hh.Merkleize(indx)
+	return nil
+}
+
+func (c *LightClientFinalityUpdateGloas) SizeSSZ() int {
+	size := 1388
+
+	return size
+}
+
+func (c *LightClientFinalityUpdateGloas) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *LightClientFinalityUpdateGloas) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+
+	// Field 0: AttestedHeader
+	if c.AttestedHeader == nil {
+		c.AttestedHeader = new(LightClientHeaderGloas)
+	}
+	if dst, err = c.AttestedHeader.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("AttestedHeader: %w", err)
+	}
+
+	// Field 1: FinalizedHeader
+	if c.FinalizedHeader == nil {
+		c.FinalizedHeader = new(LightClientHeaderGloas)
+	}
+	if dst, err = c.FinalizedHeader.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("FinalizedHeader: %w", err)
+	}
+
+	// Field 2: FinalityBranch
+	if len(c.FinalityBranch) != 9 {
+		return nil, ssz.ErrBytesLength
+	}
+	for _, o := range c.FinalityBranch {
+		if len(o) != 32 {
+			return nil, ssz.ErrBytesLength
+		}
+		dst = append(dst, o...)
+	}
+
+	// Field 3: SyncAggregate
+	if c.SyncAggregate == nil {
+		c.SyncAggregate = new(SyncAggregate)
+	}
+	if dst, err = c.SyncAggregate.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("SyncAggregate: %w", err)
+	}
+
+	// Field 4: SignatureSlot
+	if dst, err = c.SignatureSlot.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("SignatureSlot: %w", err)
+	}
+
+	return dst, err
+}
+
+func (c *LightClientFinalityUpdateGloas) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 1388 {
+		return ssz.ErrSize
+	}
+
+	sszSlice0 := buf[0:496]     // c.AttestedHeader
+	sszSlice1 := buf[496:992]   // c.FinalizedHeader
+	sszSlice2 := buf[992:1280]  // c.FinalityBranch
+	sszSlice3 := buf[1280:1380] // c.SyncAggregate
+	sszSlice4 := buf[1380:1388] // c.SignatureSlot
+
+	// Field 0: AttestedHeader
+	c.AttestedHeader = new(LightClientHeaderGloas)
+	if err = c.AttestedHeader.UnmarshalSSZ(sszSlice0); err != nil {
+		return fmt.Errorf("AttestedHeader: %w", err)
+	}
+
+	// Field 1: FinalizedHeader
+	c.FinalizedHeader = new(LightClientHeaderGloas)
+	if err = c.FinalizedHeader.UnmarshalSSZ(sszSlice1); err != nil {
+		return fmt.Errorf("FinalizedHeader: %w", err)
+	}
+
+	// Field 2: FinalityBranch
+	{
+		c.FinalityBranch = make([][]byte, 9)
+		for i := 0; i < 9; i++ {
+			var tmp []byte
+
+			tmpSlice := sszSlice2[i*32 : (1+i)*32]
+			tmp = make([]byte, 0, 32)
+			tmp = append(tmp, tmpSlice...)
+			c.FinalityBranch[i] = tmp
+		}
+	}
+
+	// Field 3: SyncAggregate
+	c.SyncAggregate = new(SyncAggregate)
+	if err = c.SyncAggregate.UnmarshalSSZ(sszSlice3); err != nil {
+		return fmt.Errorf("SyncAggregate: %w", err)
+	}
+
+	// Field 4: SignatureSlot
+	if err = c.SignatureSlot.UnmarshalSSZ(sszSlice4); err != nil {
+		return fmt.Errorf("SignatureSlot: %w", err)
+	}
+	return err
+}
+
+func (c *LightClientFinalityUpdateGloas) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *LightClientFinalityUpdateGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: AttestedHeader
+	if err := c.AttestedHeader.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("AttestedHeader: %w", err)
+	}
+	// Field 1: FinalizedHeader
+	if err := c.FinalizedHeader.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("FinalizedHeader: %w", err)
+	}
+	// Field 2: FinalityBranch
+	{
+		if len(c.FinalityBranch) != 9 {
+			return ssz.ErrVectorLength
+		}
+		subIndx := hh.Index()
+		for _, o := range c.FinalityBranch {
+			if len(o) != 32 {
+				return ssz.ErrBytesLength
+			}
+			hh.Append(o)
+		}
+		hh.Merkleize(subIndx)
+	}
+	// Field 3: SyncAggregate
+	if err := c.SyncAggregate.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("SyncAggregate: %w", err)
+	}
+	// Field 4: SignatureSlot
+	if err := c.SignatureSlot.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("SignatureSlot: %w", err)
+	}
+	hh.Merkleize(indx)
+	return nil
+}
+
+func (c *LightClientOptimisticUpdateGloas) SizeSSZ() int {
+	size := 604
+
+	return size
+}
+
+func (c *LightClientOptimisticUpdateGloas) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *LightClientOptimisticUpdateGloas) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+
+	// Field 0: AttestedHeader
+	if c.AttestedHeader == nil {
+		c.AttestedHeader = new(LightClientHeaderGloas)
+	}
+	if dst, err = c.AttestedHeader.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("AttestedHeader: %w", err)
+	}
+
+	// Field 1: SyncAggregate
+	if c.SyncAggregate == nil {
+		c.SyncAggregate = new(SyncAggregate)
+	}
+	if dst, err = c.SyncAggregate.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("SyncAggregate: %w", err)
+	}
+
+	// Field 2: SignatureSlot
+	if dst, err = c.SignatureSlot.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("SignatureSlot: %w", err)
+	}
+
+	return dst, err
+}
+
+func (c *LightClientOptimisticUpdateGloas) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 604 {
+		return ssz.ErrSize
+	}
+
+	sszSlice0 := buf[0:496]   // c.AttestedHeader
+	sszSlice1 := buf[496:596] // c.SyncAggregate
+	sszSlice2 := buf[596:604] // c.SignatureSlot
+
+	// Field 0: AttestedHeader
+	c.AttestedHeader = new(LightClientHeaderGloas)
+	if err = c.AttestedHeader.UnmarshalSSZ(sszSlice0); err != nil {
+		return fmt.Errorf("AttestedHeader: %w", err)
+	}
+
+	// Field 1: SyncAggregate
+	c.SyncAggregate = new(SyncAggregate)
+	if err = c.SyncAggregate.UnmarshalSSZ(sszSlice1); err != nil {
+		return fmt.Errorf("SyncAggregate: %w", err)
+	}
+
+	// Field 2: SignatureSlot
+	if err = c.SignatureSlot.UnmarshalSSZ(sszSlice2); err != nil {
+		return fmt.Errorf("SignatureSlot: %w", err)
+	}
+	return err
+}
+
+func (c *LightClientOptimisticUpdateGloas) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *LightClientOptimisticUpdateGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: AttestedHeader
+	if err := c.AttestedHeader.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("AttestedHeader: %w", err)
+	}
+	// Field 1: SyncAggregate
+	if err := c.SyncAggregate.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("SyncAggregate: %w", err)
+	}
+	// Field 2: SignatureSlot
+	if err := c.SignatureSlot.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("SignatureSlot: %w", err)
+	}
+	hh.Merkleize(indx)
+	return nil
+}
+
 func (c *AttestationGloas) SizeSSZ() int {
 	size := 229
 	size += len(c.AggregationBits)
@@ -76,7 +780,7 @@ func (c *AttestationGloas) UnmarshalSSZ(buf []byte) error {
 	sszSlice0 := buf[sszVarOffset0:] // c.AggregationBits
 
 	// Field 0: AggregationBits
-	if err = ssz.ValidateProgressiveBitlist(sszSlice0); err != nil {
+	if err = ssz.ValidateBitlist(sszSlice0, 8192); err != nil {
 		return fmt.Errorf("AggregationBits: %w", err)
 	}
 	c.AggregationBits = append([]byte{}, go_bitfield.Bitlist(sszSlice0)...)
@@ -120,21 +824,21 @@ func (c *AttestationGloas) ProgressiveHashTreeRoot() ([32]byte, error) {
 
 func (c *AttestationGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
-	// Field 0: AggregationBits
+	// Position 0: AggregationBits
 	if len(c.AggregationBits) == 0 {
 		return ssz.ErrEmptyBitlist
 	}
 	hh.PutProgressiveBitlist(c.AggregationBits)
-	// Field 1: Data
+	// Position 1: Data
 	if err := c.Data.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("Data: %w", err)
 	}
-	// Field 2: Signature
+	// Position 2: Signature
 	if len(c.Signature) != 96 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.Signature)
-	// Field 3: CommitteeBits
+	// Position 3: CommitteeBits
 	if len([]byte(c.CommitteeBits)) != 1 {
 		return ssz.ErrBytesLength
 	}
@@ -721,6 +1425,9 @@ func (c *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.ProposerSlashings length is %d, which is not a multiple of 416: %w", len(sszSlice3), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice3) / 416
+		if numElem > 16 {
+			return fmt.Errorf("ssz-max exceeded: c.ProposerSlashings has %d elements, ssz-max is 16: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.ProposerSlashings = make([]*ProposerSlashing, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *ProposerSlashing
@@ -746,6 +1453,9 @@ func (c *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 				return fmt.Errorf("misaligned list bytes: when decoding c.AttesterSlashings, end-of-list offset is %d, which is not a multiple of 4 (offset size)", startOffset)
 			}
 			listLen := startOffset / 4
+			if listLen > 1 {
+				return fmt.Errorf("ssz-max exceeded: c.AttesterSlashings has %d elements, ssz-max is 1: %w", listLen, ssz.ErrListTooBig)
+			}
 			totalVarBytes := uint64(len(sszSlice4))
 			if totalVarBytes < startOffset {
 				return fmt.Errorf("list bytes too short to contain an offset when decoding c.AttesterSlashings")
@@ -793,6 +1503,9 @@ func (c *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 				return fmt.Errorf("misaligned list bytes: when decoding c.Attestations, end-of-list offset is %d, which is not a multiple of 4 (offset size)", startOffset)
 			}
 			listLen := startOffset / 4
+			if listLen > 8 {
+				return fmt.Errorf("ssz-max exceeded: c.Attestations has %d elements, ssz-max is 8: %w", listLen, ssz.ErrListTooBig)
+			}
 			totalVarBytes := uint64(len(sszSlice5))
 			if totalVarBytes < startOffset {
 				return fmt.Errorf("list bytes too short to contain an offset when decoding c.Attestations")
@@ -833,6 +1546,9 @@ func (c *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.Deposits length is %d, which is not a multiple of 1240: %w", len(sszSlice6), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice6) / 1240
+		if numElem > 16 {
+			return fmt.Errorf("ssz-max exceeded: c.Deposits has %d elements, ssz-max is 16: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.Deposits = make([]*Deposit, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *Deposit
@@ -851,6 +1567,9 @@ func (c *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.VoluntaryExits length is %d, which is not a multiple of 112: %w", len(sszSlice7), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice7) / 112
+		if numElem > 16 {
+			return fmt.Errorf("ssz-max exceeded: c.VoluntaryExits has %d elements, ssz-max is 16: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.VoluntaryExits = make([]*SignedVoluntaryExit, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *SignedVoluntaryExit
@@ -875,6 +1594,9 @@ func (c *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.BlsToExecutionChanges length is %d, which is not a multiple of 172: %w", len(sszSlice9), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice9) / 172
+		if numElem > 16 {
+			return fmt.Errorf("ssz-max exceeded: c.BlsToExecutionChanges has %d elements, ssz-max is 16: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.BlsToExecutionChanges = make([]*SignedBLSToExecutionChange, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *SignedBLSToExecutionChange
@@ -899,6 +1621,9 @@ func (c *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.PayloadAttestations length is %d, which is not a multiple of 140: %w", len(sszSlice11), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice11) / 140
+		if numElem > 4 {
+			return fmt.Errorf("ssz-max exceeded: c.PayloadAttestations has %d elements, ssz-max is 4: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.PayloadAttestations = make([]*PayloadAttestation, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *PayloadAttestation
@@ -942,21 +1667,21 @@ func (c *BeaconBlockBodyGloas) ProgressiveHashTreeRoot() ([32]byte, error) {
 
 func (c *BeaconBlockBodyGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
-	// Field 0: RandaoReveal
+	// Position 0: RandaoReveal
 	if len(c.RandaoReveal) != 96 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.RandaoReveal)
-	// Field 1: Eth1Data
+	// Position 1: Eth1Data
 	if err := c.Eth1Data.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("Eth1Data: %w", err)
 	}
-	// Field 2: Graffiti
+	// Position 2: Graffiti
 	if len(c.Graffiti) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.Graffiti)
-	// Field 3: ProposerSlashings
+	// Position 3: ProposerSlashings
 	{
 		subIndx := hh.Index()
 		for _, o := range c.ProposerSlashings {
@@ -966,7 +1691,7 @@ func (c *BeaconBlockBodyGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err 
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.ProposerSlashings)))
 	}
-	// Field 4: AttesterSlashings
+	// Position 4: AttesterSlashings
 	{
 		subIndx := hh.Index()
 		for _, o := range c.AttesterSlashings {
@@ -976,7 +1701,7 @@ func (c *BeaconBlockBodyGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err 
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.AttesterSlashings)))
 	}
-	// Field 5: Attestations
+	// Position 5: Attestations
 	{
 		subIndx := hh.Index()
 		for _, o := range c.Attestations {
@@ -986,7 +1711,7 @@ func (c *BeaconBlockBodyGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err 
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Attestations)))
 	}
-	// Field 6: Deposits
+	// Position 6: Deposits
 	{
 		subIndx := hh.Index()
 		for _, o := range c.Deposits {
@@ -996,7 +1721,7 @@ func (c *BeaconBlockBodyGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err 
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Deposits)))
 	}
-	// Field 7: VoluntaryExits
+	// Position 7: VoluntaryExits
 	{
 		subIndx := hh.Index()
 		for _, o := range c.VoluntaryExits {
@@ -1006,11 +1731,11 @@ func (c *BeaconBlockBodyGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err 
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.VoluntaryExits)))
 	}
-	// Field 8: SyncAggregate
+	// Position 8: SyncAggregate
 	if err := c.SyncAggregate.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("SyncAggregate: %w", err)
 	}
-	// Field 9: BlsToExecutionChanges
+	// Position 9: BlsToExecutionChanges
 	{
 		subIndx := hh.Index()
 		for _, o := range c.BlsToExecutionChanges {
@@ -1020,11 +1745,11 @@ func (c *BeaconBlockBodyGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err 
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.BlsToExecutionChanges)))
 	}
-	// Field 10: SignedExecutionPayloadBid
+	// Position 10: SignedExecutionPayloadBid
 	if err := c.SignedExecutionPayloadBid.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("SignedExecutionPayloadBid: %w", err)
 	}
-	// Field 11: PayloadAttestations
+	// Position 11: PayloadAttestations
 	{
 		subIndx := hh.Index()
 		for _, o := range c.PayloadAttestations {
@@ -1034,7 +1759,7 @@ func (c *BeaconBlockBodyGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err 
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.PayloadAttestations)))
 	}
-	// Field 12: ParentExecutionRequests
+	// Position 12: ParentExecutionRequests
 	if err := c.ParentExecutionRequests.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("ParentExecutionRequests: %w", err)
 	}
@@ -2033,6 +2758,9 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.Validators length is %d, which is not a multiple of 121: %w", len(sszSlice11), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice11) / 121
+		if numElem > 1099511627776 {
+			return fmt.Errorf("ssz-max exceeded: c.Validators has %d elements, ssz-max is 1099511627776: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.Validators = make([]*Validator, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *Validator
@@ -2051,6 +2779,9 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.Balances length is %d, which is not a multiple of 8: %w", len(sszSlice12), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice12) / 8
+		if numElem > 1099511627776 {
+			return fmt.Errorf("ssz-max exceeded: c.Balances has %d elements, ssz-max is 1099511627776: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.Balances = make([]uint64, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp uint64
@@ -2120,6 +2851,9 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.InactivityScores length is %d, which is not a multiple of 8: %w", len(sszSlice21), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice21) / 8
+		if numElem > 1099511627776 {
+			return fmt.Errorf("ssz-max exceeded: c.InactivityScores has %d elements, ssz-max is 1099511627776: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.InactivityScores = make([]uint64, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp uint64
@@ -2209,6 +2943,9 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.PendingDeposits length is %d, which is not a multiple of 192: %w", len(sszSlice34), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice34) / 192
+		if numElem > 134217728 {
+			return fmt.Errorf("ssz-max exceeded: c.PendingDeposits has %d elements, ssz-max is 134217728: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.PendingDeposits = make([]*PendingDeposit, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *PendingDeposit
@@ -2227,6 +2964,9 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.PendingPartialWithdrawals length is %d, which is not a multiple of 24: %w", len(sszSlice35), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice35) / 24
+		if numElem > 64 {
+			return fmt.Errorf("ssz-max exceeded: c.PendingPartialWithdrawals has %d elements, ssz-max is 64: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.PendingPartialWithdrawals = make([]*PendingPartialWithdrawal, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *PendingPartialWithdrawal
@@ -2245,6 +2985,9 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.PendingConsolidations length is %d, which is not a multiple of 16: %w", len(sszSlice36), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice36) / 16
+		if numElem > 64 {
+			return fmt.Errorf("ssz-max exceeded: c.PendingConsolidations has %d elements, ssz-max is 64: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.PendingConsolidations = make([]*PendingConsolidation, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *PendingConsolidation
@@ -2277,6 +3020,9 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.Builders length is %d, which is not a multiple of 93: %w", len(sszSlice38), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice38) / 93
+		if numElem > 1099511627776 {
+			return fmt.Errorf("ssz-max exceeded: c.Builders has %d elements, ssz-max is 1099511627776: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.Builders = make([]*Builder, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *Builder
@@ -2318,6 +3064,9 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.BuilderPendingWithdrawals length is %d, which is not a multiple of 36: %w", len(sszSlice42), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice42) / 36
+		if numElem > 1048576 {
+			return fmt.Errorf("ssz-max exceeded: c.BuilderPendingWithdrawals has %d elements, ssz-max is 1048576: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.BuilderPendingWithdrawals = make([]*BuilderPendingWithdrawal, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *BuilderPendingWithdrawal
@@ -2342,6 +3091,9 @@ func (c *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.PayloadExpectedWithdrawals length is %d, which is not a multiple of 44: %w", len(sszSlice44), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice44) / 44
+		if numElem > 4 {
+			return fmt.Errorf("ssz-max exceeded: c.PayloadExpectedWithdrawals has %d elements, ssz-max is 4: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.PayloadExpectedWithdrawals = make([]*v1.Withdrawal, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *v1.Withdrawal
@@ -2393,26 +3145,26 @@ func (c *BeaconStateGloas) ProgressiveHashTreeRoot() ([32]byte, error) {
 
 func (c *BeaconStateGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
-	// Field 0: GenesisTime
+	// Position 0: GenesisTime
 	hh.PutUint64(c.GenesisTime)
-	// Field 1: GenesisValidatorsRoot
+	// Position 1: GenesisValidatorsRoot
 	if len(c.GenesisValidatorsRoot) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.GenesisValidatorsRoot)
-	// Field 2: Slot
+	// Position 2: Slot
 	if err := c.Slot.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("Slot: %w", err)
 	}
-	// Field 3: Fork
+	// Position 3: Fork
 	if err := c.Fork.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("Fork: %w", err)
 	}
-	// Field 4: LatestBlockHeader
+	// Position 4: LatestBlockHeader
 	if err := c.LatestBlockHeader.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("LatestBlockHeader: %w", err)
 	}
-	// Field 5: BlockRoots
+	// Position 5: BlockRoots
 	{
 		if len(c.BlockRoots) != 64 {
 			return ssz.ErrVectorLength
@@ -2426,7 +3178,7 @@ func (c *BeaconStateGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err erro
 		}
 		hh.Merkleize(subIndx)
 	}
-	// Field 6: StateRoots
+	// Position 6: StateRoots
 	{
 		if len(c.StateRoots) != 64 {
 			return ssz.ErrVectorLength
@@ -2440,7 +3192,7 @@ func (c *BeaconStateGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err erro
 		}
 		hh.Merkleize(subIndx)
 	}
-	// Field 7: HistoricalRoots
+	// Position 7: HistoricalRoots
 	{
 		if len(c.HistoricalRoots) > 16777216 {
 			return ssz.ErrListTooBig
@@ -2454,11 +3206,11 @@ func (c *BeaconStateGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err erro
 		}
 		hh.MerkleizeWithMixin(subIndx, uint64(len(c.HistoricalRoots)), 16777216)
 	}
-	// Field 8: Eth1Data
+	// Position 8: Eth1Data
 	if err := c.Eth1Data.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("Eth1Data: %w", err)
 	}
-	// Field 9: Eth1DataVotes
+	// Position 9: Eth1DataVotes
 	{
 		if len(c.Eth1DataVotes) > 32 {
 			return ssz.ErrListTooBig
@@ -2471,9 +3223,9 @@ func (c *BeaconStateGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err erro
 		}
 		hh.MerkleizeWithMixin(subIndx, uint64(len(c.Eth1DataVotes)), 32)
 	}
-	// Field 10: Eth1DepositIndex
+	// Position 10: Eth1DepositIndex
 	hh.PutUint64(c.Eth1DepositIndex)
-	// Field 11: Validators
+	// Position 11: Validators
 	{
 		subIndx := hh.Index()
 		for _, o := range c.Validators {
@@ -2483,7 +3235,7 @@ func (c *BeaconStateGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err erro
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Validators)))
 	}
-	// Field 12: Balances
+	// Position 12: Balances
 	{
 		subIndx := hh.Index()
 		for _, o := range c.Balances {
@@ -2492,7 +3244,7 @@ func (c *BeaconStateGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err erro
 		hh.FillUpTo32()
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Balances)))
 	}
-	// Field 13: RandaoMixes
+	// Position 13: RandaoMixes
 	{
 		if len(c.RandaoMixes) != 64 {
 			return ssz.ErrVectorLength
@@ -2506,7 +3258,7 @@ func (c *BeaconStateGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err erro
 		}
 		hh.Merkleize(subIndx)
 	}
-	// Field 14: Slashings
+	// Position 14: Slashings
 	{
 		if len(c.Slashings) != 64 {
 			return ssz.ErrVectorLength
@@ -2517,36 +3269,36 @@ func (c *BeaconStateGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err erro
 		}
 		hh.Merkleize(subIndx)
 	}
-	// Field 15: PreviousEpochParticipation
+	// Position 15: PreviousEpochParticipation
 	{
 		subIndx := hh.Index()
 		hh.AppendBytes32(c.PreviousEpochParticipation)
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.PreviousEpochParticipation)))
 	}
-	// Field 16: CurrentEpochParticipation
+	// Position 16: CurrentEpochParticipation
 	{
 		subIndx := hh.Index()
 		hh.AppendBytes32(c.CurrentEpochParticipation)
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.CurrentEpochParticipation)))
 	}
-	// Field 17: JustificationBits
+	// Position 17: JustificationBits
 	if len([]byte(c.JustificationBits)) != 1 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes([]byte(c.JustificationBits))
-	// Field 18: PreviousJustifiedCheckpoint
+	// Position 18: PreviousJustifiedCheckpoint
 	if err := c.PreviousJustifiedCheckpoint.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("PreviousJustifiedCheckpoint: %w", err)
 	}
-	// Field 19: CurrentJustifiedCheckpoint
+	// Position 19: CurrentJustifiedCheckpoint
 	if err := c.CurrentJustifiedCheckpoint.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("CurrentJustifiedCheckpoint: %w", err)
 	}
-	// Field 20: FinalizedCheckpoint
+	// Position 20: FinalizedCheckpoint
 	if err := c.FinalizedCheckpoint.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("FinalizedCheckpoint: %w", err)
 	}
-	// Field 21: InactivityScores
+	// Position 21: InactivityScores
 	{
 		subIndx := hh.Index()
 		for _, o := range c.InactivityScores {
@@ -2555,26 +3307,26 @@ func (c *BeaconStateGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err erro
 		hh.FillUpTo32()
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.InactivityScores)))
 	}
-	// Field 22: CurrentSyncCommittee
+	// Position 22: CurrentSyncCommittee
 	if err := c.CurrentSyncCommittee.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("CurrentSyncCommittee: %w", err)
 	}
-	// Field 23: NextSyncCommittee
+	// Position 23: NextSyncCommittee
 	if err := c.NextSyncCommittee.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("NextSyncCommittee: %w", err)
 	}
-	// Field 24: LatestBlockHash
+	// Position 24: LatestBlockHash
 	if len(c.LatestBlockHash) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.LatestBlockHash)
-	// Field 25: NextWithdrawalIndex
+	// Position 25: NextWithdrawalIndex
 	hh.PutUint64(c.NextWithdrawalIndex)
-	// Field 26: NextWithdrawalValidatorIndex
+	// Position 26: NextWithdrawalValidatorIndex
 	if err := c.NextWithdrawalValidatorIndex.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("NextWithdrawalValidatorIndex: %w", err)
 	}
-	// Field 27: HistoricalSummaries
+	// Position 27: HistoricalSummaries
 	{
 		if len(c.HistoricalSummaries) > 16777216 {
 			return ssz.ErrListTooBig
@@ -2587,29 +3339,29 @@ func (c *BeaconStateGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err erro
 		}
 		hh.MerkleizeWithMixin(subIndx, uint64(len(c.HistoricalSummaries)), 16777216)
 	}
-	// Field 28: DepositRequestsStartIndex
+	// Position 28: DepositRequestsStartIndex
 	hh.PutUint64(c.DepositRequestsStartIndex)
-	// Field 29: DepositBalanceToConsume
+	// Position 29: DepositBalanceToConsume
 	if err := c.DepositBalanceToConsume.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("DepositBalanceToConsume: %w", err)
 	}
-	// Field 30: ExitBalanceToConsume
+	// Position 30: ExitBalanceToConsume
 	if err := c.ExitBalanceToConsume.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("ExitBalanceToConsume: %w", err)
 	}
-	// Field 31: EarliestExitEpoch
+	// Position 31: EarliestExitEpoch
 	if err := c.EarliestExitEpoch.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("EarliestExitEpoch: %w", err)
 	}
-	// Field 32: ConsolidationBalanceToConsume
+	// Position 32: ConsolidationBalanceToConsume
 	if err := c.ConsolidationBalanceToConsume.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("ConsolidationBalanceToConsume: %w", err)
 	}
-	// Field 33: EarliestConsolidationEpoch
+	// Position 33: EarliestConsolidationEpoch
 	if err := c.EarliestConsolidationEpoch.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("EarliestConsolidationEpoch: %w", err)
 	}
-	// Field 34: PendingDeposits
+	// Position 34: PendingDeposits
 	{
 		subIndx := hh.Index()
 		for _, o := range c.PendingDeposits {
@@ -2619,7 +3371,7 @@ func (c *BeaconStateGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err erro
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.PendingDeposits)))
 	}
-	// Field 35: PendingPartialWithdrawals
+	// Position 35: PendingPartialWithdrawals
 	{
 		subIndx := hh.Index()
 		for _, o := range c.PendingPartialWithdrawals {
@@ -2629,7 +3381,7 @@ func (c *BeaconStateGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err erro
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.PendingPartialWithdrawals)))
 	}
-	// Field 36: PendingConsolidations
+	// Position 36: PendingConsolidations
 	{
 		subIndx := hh.Index()
 		for _, o := range c.PendingConsolidations {
@@ -2639,7 +3391,7 @@ func (c *BeaconStateGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err erro
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.PendingConsolidations)))
 	}
-	// Field 37: ProposerLookahead
+	// Position 37: ProposerLookahead
 	{
 		if len(c.ProposerLookahead) != 16 {
 			return ssz.ErrVectorLength
@@ -2650,7 +3402,7 @@ func (c *BeaconStateGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err erro
 		}
 		hh.Merkleize(subIndx)
 	}
-	// Field 38: Builders
+	// Position 38: Builders
 	{
 		subIndx := hh.Index()
 		for _, o := range c.Builders {
@@ -2660,16 +3412,16 @@ func (c *BeaconStateGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err erro
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Builders)))
 	}
-	// Field 39: NextWithdrawalBuilderIndex
+	// Position 39: NextWithdrawalBuilderIndex
 	if err := c.NextWithdrawalBuilderIndex.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("NextWithdrawalBuilderIndex: %w", err)
 	}
-	// Field 40: ExecutionPayloadAvailability
+	// Position 40: ExecutionPayloadAvailability
 	if len(c.ExecutionPayloadAvailability) != 8 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.ExecutionPayloadAvailability)
-	// Field 41: BuilderPendingPayments
+	// Position 41: BuilderPendingPayments
 	{
 		if len(c.BuilderPendingPayments) != 16 {
 			return ssz.ErrVectorLength
@@ -2682,7 +3434,7 @@ func (c *BeaconStateGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err erro
 		}
 		hh.Merkleize(subIndx)
 	}
-	// Field 42: BuilderPendingWithdrawals
+	// Position 42: BuilderPendingWithdrawals
 	{
 		subIndx := hh.Index()
 		for _, o := range c.BuilderPendingWithdrawals {
@@ -2692,11 +3444,11 @@ func (c *BeaconStateGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err erro
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.BuilderPendingWithdrawals)))
 	}
-	// Field 43: LatestExecutionPayloadBid
+	// Position 43: LatestExecutionPayloadBid
 	if err := c.LatestExecutionPayloadBid.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("LatestExecutionPayloadBid: %w", err)
 	}
-	// Field 44: PayloadExpectedWithdrawals
+	// Position 44: PayloadExpectedWithdrawals
 	{
 		subIndx := hh.Index()
 		for _, o := range c.PayloadExpectedWithdrawals {
@@ -2706,7 +3458,7 @@ func (c *BeaconStateGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err erro
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.PayloadExpectedWithdrawals)))
 	}
-	// Field 45: PtcWindow
+	// Position 45: PtcWindow
 	{
 		if len(c.PtcWindow) != 24 {
 			return ssz.ErrVectorLength
@@ -3971,6 +4723,9 @@ func (c *DataColumnSidecarGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.Column length is %d, which is not a multiple of 2048: %w", len(sszSlice1), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice1) / 2048
+		if numElem > 4096 {
+			return fmt.Errorf("ssz-max exceeded: c.Column has %d elements, ssz-max is 4096: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.Column = make([][]byte, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp []byte
@@ -3988,6 +4743,9 @@ func (c *DataColumnSidecarGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.KzgProofs length is %d, which is not a multiple of 48: %w", len(sszSlice2), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice2) / 48
+		if numElem > 4096 {
+			return fmt.Errorf("ssz-max exceeded: c.KzgProofs has %d elements, ssz-max is 4096: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.KzgProofs = make([][]byte, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp []byte
@@ -4225,6 +4983,9 @@ func (c *ExecutionPayloadBid) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.BlobKzgCommitments length is %d, which is not a multiple of 48: %w", len(sszSlice10), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice10) / 48
+		if numElem > 4096 {
+			return fmt.Errorf("ssz-max exceeded: c.BlobKzgCommitments has %d elements, ssz-max is 4096: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.BlobKzgCommitments = make([][]byte, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp []byte
@@ -4265,50 +5026,50 @@ func (c *ExecutionPayloadBid) ProgressiveHashTreeRoot() ([32]byte, error) {
 
 func (c *ExecutionPayloadBid) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
-	// Field 0: ParentBlockHash
+	// Position 0: ParentBlockHash
 	if len(c.ParentBlockHash) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.ParentBlockHash)
-	// Field 1: ParentBlockRoot
+	// Position 1: ParentBlockRoot
 	if len(c.ParentBlockRoot) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.ParentBlockRoot)
-	// Field 2: BlockHash
+	// Position 2: BlockHash
 	if len(c.BlockHash) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.BlockHash)
-	// Field 3: PrevRandao
+	// Position 3: PrevRandao
 	if len(c.PrevRandao) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.PrevRandao)
-	// Field 4: FeeRecipient
+	// Position 4: FeeRecipient
 	if len(c.FeeRecipient) != 20 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.FeeRecipient)
-	// Field 5: GasLimit
+	// Position 5: GasLimit
 	hh.PutUint64(c.GasLimit)
-	// Field 6: BuilderIndex
+	// Position 6: BuilderIndex
 	if err := c.BuilderIndex.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("BuilderIndex: %w", err)
 	}
-	// Field 7: Slot
+	// Position 7: Slot
 	if err := c.Slot.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("Slot: %w", err)
 	}
-	// Field 8: Value
+	// Position 8: Value
 	if err := c.Value.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("Value: %w", err)
 	}
-	// Field 9: ExecutionPayment
+	// Position 9: ExecutionPayment
 	if err := c.ExecutionPayment.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("ExecutionPayment: %w", err)
 	}
-	// Field 10: BlobKzgCommitments
+	// Position 10: BlobKzgCommitments
 	{
 		subIndx := hh.Index()
 		for _, o := range c.BlobKzgCommitments {
@@ -4319,7 +5080,7 @@ func (c *ExecutionPayloadBid) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err e
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.BlobKzgCommitments)))
 	}
-	// Field 11: ExecutionRequestsRoot
+	// Position 11: ExecutionRequestsRoot
 	if len(c.ExecutionRequestsRoot) != 32 {
 		return ssz.ErrBytesLength
 	}
@@ -4468,24 +5229,24 @@ func (c *ExecutionPayloadEnvelope) ProgressiveHashTreeRoot() ([32]byte, error) {
 
 func (c *ExecutionPayloadEnvelope) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
-	// Field 0: Payload
+	// Position 0: Payload
 	if err := c.Payload.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("Payload: %w", err)
 	}
-	// Field 1: ExecutionRequests
+	// Position 1: ExecutionRequests
 	if err := c.ExecutionRequests.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("ExecutionRequests: %w", err)
 	}
-	// Field 2: BuilderIndex
+	// Position 2: BuilderIndex
 	if err := c.BuilderIndex.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("BuilderIndex: %w", err)
 	}
-	// Field 3: BeaconBlockRoot
+	// Position 3: BeaconBlockRoot
 	if len(c.BeaconBlockRoot) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.BeaconBlockRoot)
-	// Field 4: ParentBeaconBlockRoot
+	// Position 4: ParentBeaconBlockRoot
 	if len(c.ParentBeaconBlockRoot) != 32 {
 		return ssz.ErrBytesLength
 	}
@@ -4559,6 +5320,9 @@ func (c *IndexedAttestationGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.AttestingIndices length is %d, which is not a multiple of 8: %w", len(sszSlice0), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice0) / 8
+		if numElem > 8192 {
+			return fmt.Errorf("ssz-max exceeded: c.AttestingIndices has %d elements, ssz-max is 8192: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.AttestingIndices = make([]uint64, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp uint64
@@ -4604,7 +5368,7 @@ func (c *IndexedAttestationGloas) ProgressiveHashTreeRoot() ([32]byte, error) {
 
 func (c *IndexedAttestationGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
-	// Field 0: AttestingIndices
+	// Position 0: AttestingIndices
 	{
 		subIndx := hh.Index()
 		for _, o := range c.AttestingIndices {
@@ -4613,11 +5377,11 @@ func (c *IndexedAttestationGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (e
 		hh.FillUpTo32()
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.AttestingIndices)))
 	}
-	// Field 1: Data
+	// Position 1: Data
 	if err := c.Data.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("Data: %w", err)
 	}
-	// Field 2: Signature
+	// Position 2: Signature
 	if len(c.Signature) != 96 {
 		return ssz.ErrBytesLength
 	}
@@ -4778,7 +5542,7 @@ func (c *PartialDataColumnSidecarGloas) UnmarshalSSZ(buf []byte) error {
 	sszSlice2 := buf[sszVarOffset2:]              // c.KzgProofs
 
 	// Field 0: CellsPresentBitmap
-	if err = ssz.ValidateProgressiveBitlist(sszSlice0); err != nil {
+	if err = ssz.ValidateBitlist(sszSlice0, 4096); err != nil {
 		return fmt.Errorf("CellsPresentBitmap: %w", err)
 	}
 	c.CellsPresentBitmap = append([]byte{}, go_bitfield.Bitlist(sszSlice0)...)
@@ -4789,6 +5553,9 @@ func (c *PartialDataColumnSidecarGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.PartialColumn length is %d, which is not a multiple of 2048: %w", len(sszSlice1), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice1) / 2048
+		if numElem > 4096 {
+			return fmt.Errorf("ssz-max exceeded: c.PartialColumn has %d elements, ssz-max is 4096: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.PartialColumn = make([][]byte, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp []byte
@@ -4806,6 +5573,9 @@ func (c *PartialDataColumnSidecarGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.KzgProofs length is %d, which is not a multiple of 48: %w", len(sszSlice2), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice2) / 48
+		if numElem > 4096 {
+			return fmt.Errorf("ssz-max exceeded: c.KzgProofs has %d elements, ssz-max is 4096: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.KzgProofs = make([][]byte, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp []byte
@@ -4950,16 +5720,16 @@ func (c *PayloadAttestation) ProgressiveHashTreeRoot() ([32]byte, error) {
 
 func (c *PayloadAttestation) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
-	// Field 0: AggregationBits
+	// Position 0: AggregationBits
 	if len([]byte(c.AggregationBits)) != 2 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes([]byte(c.AggregationBits))
-	// Field 1: Data
+	// Position 1: Data
 	if err := c.Data.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("Data: %w", err)
 	}
-	// Field 2: Signature
+	// Position 2: Signature
 	if len(c.Signature) != 96 {
 		return ssz.ErrBytesLength
 	}

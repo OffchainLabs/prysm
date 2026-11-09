@@ -1,0 +1,36 @@
+package: "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+types:
+  - name: "BeaconBlockBodyHeze"
+    progressive: {}
+    fields:
+      ProposerSlashings:     {type: "ProgressiveList"}
+      AttesterSlashings:     {type: "ProgressiveList"}
+      Attestations:          {type: "ProgressiveList"}
+      Deposits:              {type: "ProgressiveList"}
+      VoluntaryExits:        {type: "ProgressiveList"}
+      BlsToExecutionChanges: {type: "ProgressiveList"}
+      PayloadAttestations:   {type: "ProgressiveList"}
+  - name: "BeaconBlockContentsHeze"
+  - name: "BeaconBlockHeze"
+  - name: "BeaconStateHeze"
+    progressive: {}
+    fields:
+      Validators:                 {type: "ProgressiveList"}
+      Balances:                   {type: "ProgressiveList"}
+      PreviousEpochParticipation: {type: "ProgressiveList"}
+      CurrentEpochParticipation:  {type: "ProgressiveList"}
+      InactivityScores:           {type: "ProgressiveList"}
+      PendingDeposits:            {type: "ProgressiveList"}
+      PendingPartialWithdrawals:  {type: "ProgressiveList"}
+      PendingConsolidations:      {type: "ProgressiveList"}
+      Builders:                   {type: "ProgressiveList"}
+      BuilderPendingWithdrawals:  {type: "ProgressiveList"}
+      PayloadExpectedWithdrawals: {type: "ProgressiveList"}
+  - name: "ExecutionPayloadBidHeze"
+    progressive: {}
+    fields:
+      BlobKzgCommitments: {type: "ProgressiveList"}
+  - name: "InclusionList"
+  - name: "SignedBeaconBlockHeze"
+  - name: "SignedExecutionPayloadBidHeze"
+  - name: "SignedInclusionList"

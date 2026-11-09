@@ -170,7 +170,7 @@ nogo_config_exclude(
     exclude_files = [
         "external/.*",
     ],
-    input = "nogo_config.json",
+    input = "//tools/prysm-vet:nogo_config.json",
 )
 
 nogo(

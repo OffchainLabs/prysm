@@ -28,6 +28,12 @@ var (
 			Help: "The number of peers subscribed to topics that a host node is also subscribed to.",
 		}, []string{"topic"},
 	)
+	originOrphanedSuspected = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "sync_origin_orphaned_suspected",
+			Help: "Set to 1 when peers have finalized a chain that does not contain our checkpoint sync origin.",
+		},
+	)
 	messageReceivedCounter = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "p2p_message_received_total",
@@ -180,6 +186,10 @@ var (
 		Name: "gossip_pending_attestations_total",
 		Help: "increased when receiving a new pending attestation",
 	})
+	pendingAttBlockRequestCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "gossip_pending_attestation_block_requests_total",
+		Help: "Block by root requests sent to peers that sent attestations for blocks we do not have",
+	})
 
 	// Sync committee verification performance.
 	syncMessagesForUnknownBlocks = promauto.NewCounter(
@@ -194,6 +204,12 @@ var (
 		prometheus.CounterOpts{
 			Name: "gossip_missing_parent_blob_sidecar_total",
 			Help: "The number of blob sidecars that were dropped due to missing parent block",
+		},
+	)
+	missingParentDataColumnSidecarCount = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "gossip_missing_parent_data_column_sidecar_total",
+			Help: "The number of data column sidecars that were ignored because their parent block is unknown",
 		},
 	)
 

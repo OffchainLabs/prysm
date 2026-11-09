@@ -9,6 +9,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/internal/valid"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -1368,9 +1369,9 @@ func (b *BlobAndProofV2) UnmarshalJSON(enc []byte) error {
 }
 
 func (e *ExecutionPayloadGloas) MarshalJSON() ([]byte, error) {
-	transactions := make([]hexutil.Bytes, len(e.Transactions))
-	for i, tx := range e.Transactions {
-		transactions[i] = tx
+	transactions := make([]hexutil.Bytes, valid.Len(e.Transactions))
+	for i := range transactions {
+		transactions[i] = e.Transactions.Get(i)
 	}
 	baseFee := new(big.Int).SetBytes(bytesutil.ReverseByteOrder(e.BaseFeePerGas))
 	baseFeeHex := hexutil.EncodeBig(baseFee)
@@ -1494,9 +1495,9 @@ func (e *ExecutionBundleGloas) UnmarshalJSON(enc []byte) error {
 	e.Payload.BlobGasUsed = uint64(*dec.ExecutionPayload.BlobGasUsed)
 
 	e.Payload.BlockHash = dec.ExecutionPayload.BlockHash.Bytes()
-	transactions := make([][]byte, len(dec.ExecutionPayload.Transactions))
-	for i, tx := range dec.ExecutionPayload.Transactions {
-		transactions[i] = tx
+	transactions, err := NewProgressiveTransactionList(RecastHexutilByteSlice(dec.ExecutionPayload.Transactions))
+	if err != nil {
+		return errors.Wrap(err, "invalid transactions for ExecutionPayload")
 	}
 	e.Payload.Transactions = transactions
 	if dec.ExecutionPayload.Withdrawals == nil {

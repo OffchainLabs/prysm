@@ -47,7 +47,7 @@ proto_library(
 
 ssz_methodical(
     name = "methodical_phase0",
-    deps = [":go_proto"],
+    deps = [":beacon_state_go"],
     config_file = "phase0.yaml",
     override_package_name = "eth",
     out = "phase0.ssz.go",
@@ -55,7 +55,7 @@ ssz_methodical(
 
 ssz_methodical(
     name = "methodical_altair",
-    deps = [":go_proto"],
+    deps = [":beacon_state_go"],
     config_file = "altair.yaml",
     override_package_name = "eth",
     out = "altair.ssz.go",
@@ -63,7 +63,7 @@ ssz_methodical(
 
 ssz_methodical(
     name = "methodical_bellatrix",
-    deps = [":go_proto"],
+    deps = [":beacon_state_go"],
     config_file = "bellatrix.yaml",
     override_package_name = "eth",
     out = "bellatrix.ssz.go",
@@ -71,7 +71,7 @@ ssz_methodical(
 
 ssz_methodical(
     name = "methodical_capella",
-    deps = [":go_proto"],
+    deps = [":beacon_state_go"],
     config_file = "capella.yaml",
     override_package_name = "eth",
     out = "capella.ssz.go",
@@ -79,7 +79,7 @@ ssz_methodical(
 
 ssz_methodical(
     name = "methodical_deneb",
-    deps = [":go_proto"],
+    deps = [":beacon_state_go"],
     config_file = "deneb.yaml",
     override_package_name = "eth",
     out = "deneb.ssz.go",
@@ -87,7 +87,7 @@ ssz_methodical(
 
 ssz_methodical(
     name = "methodical_electra",
-    deps = [":go_proto"],
+    deps = [":beacon_state_go"],
     config_file = "electra.yaml",
     override_package_name = "eth",
     out = "electra.ssz.go",
@@ -95,7 +95,7 @@ ssz_methodical(
 
 ssz_methodical(
     name = "methodical_fulu",
-    deps = [":go_proto"],
+    deps = [":beacon_state_go"],
     config_file = "fulu.yaml",
     override_package_name = "eth",
     out = "fulu.ssz.go",
@@ -103,10 +103,18 @@ ssz_methodical(
 
 ssz_methodical(
     name = "methodical_gloas",
-    deps = [":go_proto"],
+    deps = [":beacon_state_go"],
     config_file = "gloas.yaml",
     override_package_name = "eth",
     out = "gloas.ssz.go",
+)
+
+ssz_methodical(
+    name = "methodical_heze",
+    deps = [":beacon_state_go"],
+    config_file = "heze.yaml",
+    override_package_name = "eth",
+    out = "heze.ssz.go",
 )
 
 ssz_methodical(
@@ -144,15 +152,36 @@ go_proto_library(
     ],
 )
 
+# Native BeaconState{Fork} structs.
+go_library(
+    name = "beacon_state_go",
+    srcs = [
+        "beacon_state_mainnet.go",
+        "beacon_state_minimal.go",  # keep
+        "beacon_state_types.go",
+    ],
+    embed = [":go_proto"],
+    importpath = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//consensus-types/primitives:go_default_library",
+        "//proto/engine/v1:go_default_library",
+        "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
+    ],
+)
+
 go_library(
     name = "go_default_library",
     srcs = [
         "attestation.go",
         "beacon_block.go",
+        "beacon_state.go",
         "cloners.go",
         "eip_7521.go",
         "gloas.go",
+        "heze.go",
         "log.go",
+        "p2p_messages.go",
         "sync_committee_mainnet.go",
         "sync_committee_minimal.go",  # keep
         "payload_attestation_mainnet.go",
@@ -164,14 +193,16 @@ go_library(
         ":methodical_electra", # keep
         ":methodical_fulu", # keep
         ":methodical_gloas", # keep
+        ":methodical_heze", # keep
         ":methodical_non_core", # keep
         ":methodical_phase0", # keep
         "validator.go",
     ],
-    embed = [":go_proto"],
+    embed = [":beacon_state_go"],
     importpath = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1",
     visibility = ["//visibility:public"],
     deps = [
+        "//config/fieldparams:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//math:go_default_library",
         "//proto/engine/v1:go_default_library",
@@ -207,11 +238,11 @@ ssz_proto_files(
         "attestation.proto",
         "beacon_block.proto",
         "beacon_core_types.proto",
-        "beacon_state.proto",
         "blobs.proto",
         "data_columns.proto",
         "gloas.proto",
 	"gloas_builder_api.proto",
+        "heze.proto",
         "light_client.proto",
         "partial_data_columns.proto",
         "sync_committee.proto",
@@ -230,6 +261,7 @@ go_test(
         "attestation_gloas_test.go",
         "attestation_fuzz_test.go",
         "beacon_block_fuzz_test.go",
+        "beacon_state_test.go",
         "cloners_test.go",
         "eip_7521_fuzz_test.go",
         "export_test.go",

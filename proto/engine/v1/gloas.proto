@@ -33,8 +33,12 @@ message BuilderExitRequest {
 // ExecutionRequestsGloas extends ExecutionRequests with builder deposit and exit
 // requests, new in Gloas (EIP-8282).
 message ExecutionRequestsGloas {
-  repeated DepositRequest deposits = 1
-      [ (ethereum.eth.ext.ssz_max) = "max_deposit_requests_per_payload.size" ];
+  // Gloas has no MAX_DEPOSIT_REQUESTS_PER_PAYLOAD (consensus-specs #5436): the
+  // execution layer bounds deposit requests via the gas limit, and the spec
+  // tests expect a payload with more than the Electra cap to be valid. An
+  // ssz_max of 0 on a ProgressiveList tells methodical to generate an
+  // unbounded decoder; the only remaining bound is the p2p message size.
+  repeated DepositRequest deposits = 1 [ (ethereum.eth.ext.ssz_max) = "0" ];
   repeated WithdrawalRequest withdrawals = 2
       [ (ethereum.eth.ext.ssz_max) =
             "max_withdrawal_requests_per_payload.size" ];

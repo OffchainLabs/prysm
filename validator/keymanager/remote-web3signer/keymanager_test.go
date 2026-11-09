@@ -366,6 +366,14 @@ func TestKeymanager_Sign(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "BLOCK_V2_HEZE",
+			args: args{
+				request: mock.GetMockSignRequest("BLOCK_V2_HEZE"),
+			},
+			want:    desiredSig,
+			wantErr: false,
+		},
+		{
 			name: "BUILDER_REQUEST_AUTH",
 			args: args{
 				request: mock.GetMockSignRequest("BUILDER_REQUEST_AUTH"),

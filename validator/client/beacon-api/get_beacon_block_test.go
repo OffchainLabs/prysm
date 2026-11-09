@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -102,7 +103,7 @@ func TestBeaconBlock_DecodeClosureCachesWinningResponse(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	respHeader := http.Header{
 		"Content-Type":                    []string{api.OctetStreamMediaType},
@@ -161,6 +162,55 @@ func TestGetBeaconBlock_RequestFailed(t *testing.T) {
 	validatorClient := &beaconApiValidatorClient{handler: handler}
 	_, err := validatorClient.beaconBlock(ctx, 1, []byte{1}, []byte{2}, nil)
 	assert.ErrorContains(t, "foo error", err)
+}
+
+func TestGetBeaconBlock_GraffitiIs32Bytes(t *testing.T) {
+	long := make([]byte, 40)
+	for i := range long {
+		long[i] = byte(i + 1)
+	}
+	tests := []struct {
+		name     string
+		graffiti []byte
+		want     string
+	}{
+		{name: "short is padded", graffiti: []byte("hello"), want: "graffiti=" + hexutil.Encode(bytesutil.PadTo([]byte("hello"), 32)) + "&"},
+		{name: "exact is unchanged", graffiti: long[:32], want: "graffiti=" + hexutil.Encode(long[:32]) + "&"},
+		{name: "long is truncated", graffiti: long, want: "graffiti=" + hexutil.Encode(long[:32]) + "&"},
+		{name: "empty is omitted", graffiti: nil, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run("v3 "+tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			handler := mock.NewMockHandler(ctrl)
+			handler.EXPECT().GetSSZ(
+				gomock.Any(),
+				"/eth/v3/validator/blocks/1?"+tt.want+"randao_reveal=0x01",
+				gomock.Any(),
+			).Return(nil, nil, errors.New("stop")).Times(1)
+
+			validatorClient := &beaconApiValidatorClient{handler: handler}
+			_, err := validatorClient.beaconBlock(t.Context(), 1, []byte{1}, tt.graffiti, nil)
+			require.ErrorContains(t, "stop", err)
+		})
+		t.Run("v4 "+tt.name, func(t *testing.T) {
+			setupGloasConfig(t)
+			ctrl := gomock.NewController(t)
+			handler := mock.NewMockHandler(ctrl)
+			handler.EXPECT().RequestSSZWithFallback(
+				gomock.Any(),
+				"/eth/v4/validator/blocks/1?"+tt.want+"include_payload=false&randao_reveal=0x01",
+				gomock.Any(),
+				gomock.Any(),
+				gomock.Any(),
+				gomock.Any(),
+			).Return(nil, nil, errors.New("stop")).Times(1)
+
+			validatorClient := &beaconApiValidatorClient{handler: handler}
+			_, err := validatorClient.beaconBlock(t.Context(), 1, []byte{1}, tt.graffiti, &ethpb.BuilderConfig{})
+			require.ErrorContains(t, "stop", err)
+		})
+	}
 }
 
 func TestGetBeaconBlock_Error(t *testing.T) {
@@ -300,7 +350,7 @@ func TestGetBeaconBlock_Phase0Valid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 	ctx := t.Context()
 
 	b, err := json.Marshal(structs.ProduceBlockV3Response{
@@ -363,7 +413,7 @@ func TestGetBeaconBlock_SSZ_BellatrixValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -405,7 +455,7 @@ func TestGetBeaconBlock_SSZ_BlindedBellatrixValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -447,7 +497,7 @@ func TestGetBeaconBlock_SSZ_CapellaValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -489,7 +539,7 @@ func TestGetBeaconBlock_SSZ_BlindedCapellaValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -531,7 +581,7 @@ func TestGetBeaconBlock_SSZ_DenebValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -573,7 +623,7 @@ func TestGetBeaconBlock_SSZ_BlindedDenebValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -615,7 +665,7 @@ func TestGetBeaconBlock_SSZ_ElectraValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -657,7 +707,7 @@ func TestGetBeaconBlock_SSZ_BlindedElectraValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -699,7 +749,7 @@ func TestGetBeaconBlock_SSZ_FuluValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -741,7 +791,7 @@ func TestGetBeaconBlock_SSZ_BlindedFuluValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -779,7 +829,7 @@ func TestGetBeaconBlock_SSZ_UnsupportedVersion(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -812,7 +862,7 @@ func TestGetBeaconBlock_SSZ_InvalidBlindedHeader(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -845,7 +895,7 @@ func TestGetBeaconBlock_SSZ_InvalidVersionHeader(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -874,7 +924,7 @@ func TestGetBeaconBlock_SSZ_GetSSZError(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -903,7 +953,7 @@ func TestGetBeaconBlock_SSZ_Phase0Valid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -945,7 +995,7 @@ func TestGetBeaconBlock_SSZ_AltairValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -988,7 +1038,7 @@ func TestGetBeaconBlock_AltairValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -1031,7 +1081,7 @@ func TestGetBeaconBlock_BellatrixValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -1076,7 +1126,7 @@ func TestGetBeaconBlock_BlindedBellatrixValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -1121,7 +1171,7 @@ func TestGetBeaconBlock_CapellaValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -1166,7 +1216,7 @@ func TestGetBeaconBlock_BlindedCapellaValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -1211,7 +1261,7 @@ func TestGetBeaconBlock_FuluValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -1256,7 +1306,7 @@ func TestGetBeaconBlock_BlindedFuluValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -1301,7 +1351,7 @@ func TestGetBeaconBlock_DenebValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -1346,7 +1396,7 @@ func TestGetBeaconBlock_BlindedDenebValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -1391,7 +1441,7 @@ func TestGetBeaconBlock_ElectraValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -1436,7 +1486,7 @@ func TestGetBeaconBlock_BlindedElectraValid(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -1493,7 +1543,7 @@ func TestGetBeaconBlock_GloasValid_SSZ_WithPayload(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -1546,7 +1596,7 @@ func TestGetBeaconBlock_GloasValid_SSZ_WithoutPayload(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	ctx := t.Context()
 
@@ -1596,7 +1646,7 @@ func TestGetBeaconBlock_GloasValid_JSON_WithoutPayload(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	b, err := json.Marshal(structs.ProduceBlockV4Response{
 		Version:                  "gloas",
@@ -1636,7 +1686,7 @@ func TestGetBeaconBlock_GloasRejectsJSONWithPayload(t *testing.T) {
 
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
-	graffiti := []byte{3}
+	graffiti := bytesutil.PadTo([]byte{3}, 32)
 
 	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().RequestSSZWithFallback(

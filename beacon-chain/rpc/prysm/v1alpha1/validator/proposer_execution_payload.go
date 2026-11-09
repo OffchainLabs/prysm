@@ -333,14 +333,11 @@ func (vs *Server) getParentBlockHash(ctx context.Context, st state.BeaconState, 
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get parent block slot")
 		}
-		if slots.ToEpoch(parentSlot) < params.BeaconConfig().GloasForkEpoch {
-			return getParentBlockHashPostCapella(st)
-		}
 		bid, err := st.LatestExecutionPayloadBid()
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get latest execution payload bid")
 		}
-		if parentFull {
+		if parentFull || slots.ToEpoch(parentSlot) < params.BeaconConfig().GloasForkEpoch {
 			bh := bid.BlockHash()
 			return bh[:], nil
 		}

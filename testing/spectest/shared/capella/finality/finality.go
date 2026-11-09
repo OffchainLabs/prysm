@@ -15,7 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/golang/snappy"
-	"google.golang.org/protobuf/proto"
 )
 
 func init() {
@@ -43,7 +42,7 @@ func RunFinalityTest(t *testing.T, config string) {
 			require.NoError(t, err, "Failed to decompress")
 			beaconStateBase := &ethpb.BeaconStateCapella{}
 			require.NoError(t, beaconStateBase.UnmarshalSSZ(preBeaconStateSSZ), "Failed to unmarshal")
-			beaconState, err := state_native.InitializeFromProtoUnsafeCapella(beaconStateBase)
+			beaconState, err := state_native.NewUnsafe(beaconStateBase)
 			require.NoError(t, err)
 
 			file, err := util.BazelFileBytes(testsFolderPath, folder.Name(), "meta.yaml")
@@ -76,11 +75,9 @@ func RunFinalityTest(t *testing.T, config string) {
 			require.NoError(t, err, "Failed to decompress")
 			postBeaconState := &ethpb.BeaconStateCapella{}
 			require.NoError(t, postBeaconState.UnmarshalSSZ(postBeaconStateSSZ), "Failed to unmarshal")
-			pbState, err := state_native.ProtobufBeaconStateCapella(beaconState.ToProtoUnsafe())
+			container, err := state_native.ContainerFrom[*ethpb.BeaconStateCapella](beaconState.ToContainerUnsafe())
 			require.NoError(t, err)
-			if !proto.Equal(pbState, postBeaconState) {
-				t.Fatal("Post state does not match expected")
-			}
+			require.DeepSSZEqual(t, container, postBeaconState, "Post state does not match expected")
 		})
 	}
 }

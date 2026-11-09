@@ -64,6 +64,10 @@ func TestGetBaseAndDiffChain_CachedAncestors(t *testing.T) {
 					prepare: func(_ *testing.T, db *Store) { db.stateDiffCache.clearAnchors() },
 				},
 				{
+					name: "empty level flags with stored diffs", target: 480, wantDiffs: []primitives.Slot{256, 384, 448, 480}, wantReads: 4,
+					prepare: func(_ *testing.T, db *Store) { clear(db.stateDiffCache.levelsWithData[1:]) },
+				},
+				{
 					name: "nil cache", target: 480, wantDiffs: []primitives.Slot{256, 384, 448, 480}, wantReads: 5,
 					prepare: func(_ *testing.T, db *Store) { db.stateDiffCache = nil },
 				},
@@ -123,7 +127,7 @@ func TestGetBaseAndDiffChain_CachedAncestors(t *testing.T) {
 					require.NoError(t, err)
 					require.Equal(t, tt.wantReads, db.db.Stats().TxN-before)
 					require.Equal(t, offset+tt.wantBase, base.Slot())
-					require.DeepSSZEqual(t, states[tt.wantBase].ToProto(), base.ToProto())
+					require.DeepSSZEqual(t, states[tt.wantBase].ToContainer(), base.ToContainer())
 					require.Equal(t, len(tt.wantDiffs), len(chain))
 					for i, rel := range tt.wantDiffs {
 						require.DeepEqual(t, storedDiffs[rel], chain[i])
@@ -160,8 +164,6 @@ func TestGetBaseAndDiffChain_TreeBoundaries(t *testing.T) {
 	}{
 		{name: "single exponent", exponents: []int{5}, slots: []primitives.Slot{0, 32}, target: 32, wantBase: 32},
 		{name: "two levels with uncached leaf", exponents: []int{7, 5}, slots: []primitives.Slot{0, 32, 96}, target: 96, wantDiffs: 1},
-		{name: "empty intermediate levels", exponents: []int{9, 8, 7, 6, 5}, slots: []primitives.Slot{0, 448, 480}, target: 480, wantBase: 448, wantDiffs: 1},
-		{name: "only leaf level has diffs", exponents: []int{9, 8, 7, 6, 5}, slots: []primitives.Slot{0, 480}, target: 480, wantDiffs: 1},
 		{name: "next full snapshot", exponents: []int{9, 8, 7, 6, 5}, slots: []primitives.Slot{0, 256, 384, 448, 480, 512}, target: 512, wantBase: 512},
 		{name: "leaf in next tree", exponents: []int{9, 8, 7, 6, 5}, slots: []primitives.Slot{0, 256, 384, 448, 480, 512, 768, 800}, target: 800, wantBase: 768, wantDiffs: 1},
 		{name: "old tree with newer cached anchors", exponents: []int{9, 8, 7, 6, 5}, slots: []primitives.Slot{0, 256, 384, 448, 480, 512, 768, 800}, target: 480, wantDiffs: 4},
@@ -179,22 +181,68 @@ func TestGetBaseAndDiffChain_TreeBoundaries(t *testing.T) {
 		})
 	}
 
-	t.Run("ignore anchors for levels without data", func(t *testing.T) {
-		db, states := setupStateDiffReadTree(t, 32, []int{9, 8, 7, 6, 5}, []primitives.Slot{0, 448, 480})
-		db.stateDiffCache.anchors[3] = anchor{}
-		stray := states[0].Copy()
-		require.NoError(t, stray.SetSlot(32+384))
-		require.NoError(t, stray.UpdateBalancesAtIndex(0, 123))
-		require.NoError(t, db.stateDiffCache.setAnchor(2, stray))
-		require.Equal(t, false, db.stateDiffCache.levelHasData(2))
-		base, chain, err := db.getBaseAndDiffChain(32, 32+480)
-		require.NoError(t, err)
-		require.Equal(t, primitives.Slot(32), base.Slot())
-		require.Equal(t, 2, len(chain))
-		got, err := db.stateByDiff(t.Context(), 32+480)
-		require.NoError(t, err)
-		assertStateDiffRead(t, states[480], got)
-	})
+	for _, tt := range []struct {
+		name        string
+		missing     []primitives.Slot
+		strayAnchor bool
+		wantMissing bool
+	}{
+		{name: "cached descendant bypasses empty intermediate levels", missing: []primitives.Slot{256, 384}},
+		{name: "only leaf level has diffs", missing: []primitives.Slot{256, 384, 448}, wantMissing: true},
+		{name: "ignore anchors for levels without data", missing: []primitives.Slot{256, 384}, strayAnchor: true, wantMissing: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			const offset = primitives.Slot(32)
+			// Save valid diffs before removing their ancestors to simulate incomplete history.
+			db, states := setupStateDiffReadTree(t, offset, []int{9, 8, 7, 6, 5}, []primitives.Slot{0, 256, 384, 448, 480})
+			require.NoError(t, db.db.Update(func(tx *bbolt.Tx) error {
+				bucket := tx.Bucket(stateDiffBucket)
+				for _, rel := range tt.missing {
+					level := computeLevel(uint64(offset), offset+rel)
+					for _, suffix := range []string{stateSuffix, validatorSuffix, balancesSuffix} {
+						if err := bucket.Delete(append(makeKeyForStateDiffTree(level, uint64(offset+rel)), suffix...)); err != nil {
+							return err
+						}
+					}
+				}
+				return nil
+			}))
+			for _, rel := range tt.missing {
+				level := computeLevel(uint64(offset), offset+rel)
+				db.stateDiffCache.anchors[level] = anchor{}
+				db.stateDiffCache.levelsWithData[level] = false
+			}
+			if tt.strayAnchor {
+				db.stateDiffCache.anchors[3] = anchor{}
+				stray := states[0].Copy()
+				require.NoError(t, stray.SetSlot(offset+384))
+				require.NoError(t, stray.UpdateBalancesAtIndex(0, 123))
+				require.NoError(t, db.stateDiffCache.setAnchor(2, stray))
+				require.Equal(t, false, db.stateDiffCache.levelHasData(2))
+			}
+
+			base, chain, err := db.getBaseAndDiffChain(uint64(offset), offset+480)
+			if tt.wantMissing {
+				require.ErrorIs(t, err, ErrNotFoundState)
+				require.ErrorContains(t, "level 1 slot 288", err)
+				require.IsNil(t, base)
+				require.IsNil(t, chain)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, offset+448, base.Slot())
+				require.Equal(t, 1, len(chain))
+				got, err := db.stateByDiff(t.Context(), offset+480)
+				require.NoError(t, err)
+				assertStateDiffRead(t, states[480], got)
+				// Without the cached descendant, the missing ancestors are required again.
+				db.stateDiffCache.clearAnchors()
+			}
+			got, err := db.stateByDiff(t.Context(), offset+480)
+			require.ErrorIs(t, err, ErrNotFoundState)
+			require.ErrorContains(t, "level 1 slot 288", err)
+			require.IsNil(t, got)
+		})
+	}
 }
 
 func TestGetBaseAndDiffChain_BypassesCachedPrefix(t *testing.T) {
@@ -331,7 +379,7 @@ func TestGetBaseAndDiffChain_ForkTransitions(t *testing.T) {
 				first = base.Copy()
 				require.NoError(t, first.SetSlot(32+128))
 				var err error
-				middle, err = gloas.UpgradeToGloas(first.Copy())
+				middle, err = gloas.UpgradeToGloas(t.Context(), first.Copy())
 				require.NoError(t, err)
 				require.NoError(t, middle.SetSlot(32+192))
 				target = middle.Copy()
@@ -459,14 +507,14 @@ func assertStateDiffRead(t *testing.T, want, got state.BeaconState) {
 func TestEncodeStateWithKey(t *testing.T) {
 	st, err := util.NewBeaconStateElectra()
 	require.NoError(t, err)
-	pb, ok := st.ToProtoUnsafe().(ssz.Marshaler)
+	container, ok := st.ToContainerUnsafe().(ssz.Marshaler)
 	require.Equal(t, true, ok)
 
 	t.Run("marshals into the prefixed buffer", func(t *testing.T) {
 		// A regrow would mean SizeSSZ under-reported, silently bringing the extra copy back.
-		buf := make([]byte, len(ElectraKey), len(ElectraKey)+pb.SizeSSZ())
+		buf := make([]byte, len(ElectraKey), len(ElectraKey)+container.SizeSSZ())
 		copy(buf, ElectraKey)
-		out, err := pb.MarshalSSZTo(buf)
+		out, err := container.MarshalSSZTo(buf)
 		require.NoError(t, err)
 		require.Equal(t, true, &buf[0] == &out[0], "MarshalSSZTo reallocated the buffer")
 		require.Equal(t, cap(buf), len(out))
@@ -475,7 +523,7 @@ func TestEncodeStateWithKey(t *testing.T) {
 	t.Run("allocates only the buffer and the snappy output", func(t *testing.T) {
 		// Ensures memory allocations are as expected.
 		allocs := testing.AllocsPerRun(5, func() {
-			if _, err := encodeProtoWithKey(version.Electra, pb); err != nil {
+			if _, err := encodeContainerWithKey(version.Electra, container); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -550,15 +598,15 @@ func TestStateKeyByVersion_AllVersions(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodeProtoWithKey(b *testing.B) {
+func BenchmarkEncodeContainerWithKey(b *testing.B) {
 	st, err := util.NewBeaconStateElectra()
 	require.NoError(b, err)
-	pb := st.ToProtoUnsafe().(ssz.Marshaler)
+	container := st.ToContainerUnsafe().(ssz.Marshaler)
 
 	b.Run("append-copy", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			raw, err := pb.MarshalSSZ()
+			raw, err := container.MarshalSSZ()
 			require.NoError(b, err)
 			_ = snappy.Encode(nil, append(ElectraKey, raw...))
 		}
@@ -566,7 +614,7 @@ func BenchmarkEncodeProtoWithKey(b *testing.B) {
 	b.Run("marshal-into-key", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			_, err := encodeProtoWithKey(version.Electra, pb)
+			_, err := encodeContainerWithKey(version.Electra, container)
 			require.NoError(b, err)
 		}
 	})

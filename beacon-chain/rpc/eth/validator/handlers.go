@@ -728,13 +728,11 @@ func (s *Server) GetAttestationData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isPostGloas := slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch
-
 	_, slot, ok := shared.UintFromQuery(w, r, "slot", true)
 	if !ok {
 		return
 	}
-	_, committeeIndex, ok := shared.UintFromQuery(w, r, "committee_index", !isPostGloas)
+	_, committeeIndex, ok := shared.UintFromQuery(w, r, "committee_index", false)
 	if !ok {
 		return
 	}
@@ -1467,6 +1465,17 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 	if requestedEpoch == nextEpoch {
 		epochForState = currentEpoch
 	}
+	// The fork epoch PTC comes from initialize_ptc_window, which needs the post-upgrade state.
+	if requestedEpoch == params.BeaconConfig().GloasForkEpoch && currentEpoch < requestedEpoch {
+		forkStart, err := slots.StartTime(s.TimeFetcher.GenesisTime(), slots.UnsafeEpochStart(requestedEpoch))
+		if err != nil || time.Until(forkStart) > params.BeaconConfig().MaximumGossipClockDisparityDuration() {
+			httputil.HandleError(w,
+				fmt.Sprintf("PTC duties for the Gloas fork epoch %d are not available until the fork", requestedEpoch),
+				http.StatusBadRequest)
+			return
+		}
+		epochForState = requestedEpoch
+	}
 	st, err := s.Stater.StateByEpoch(ctx, epochForState)
 	if err != nil {
 		shared.WriteStateFetchError(w, err)
@@ -1509,23 +1518,18 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// Get dependent root. Per the spec, dependent_root is:
-	// get_block_root_at_slot(state, compute_start_slot_at_epoch(epoch - 1) - 1)
-	// or the genesis block root in the case of underflow.
-	var dependentRoot []byte
-	if requestedEpoch <= 1 {
+	dependentRoot, err := core.PTCDependentRoot(st, requestedEpoch)
+	if err != nil {
+		httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if dependentRoot == nil {
 		r, err := s.BeaconDB.GenesisBlockRoot(ctx)
 		if err != nil {
 			httputil.HandleError(w, "Could not get genesis block root: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		dependentRoot = r[:]
-	} else {
-		dependentRoot, err = core.AttestationDependentRoot(st, requestedEpoch)
-		if err != nil {
-			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
 	}
 
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)

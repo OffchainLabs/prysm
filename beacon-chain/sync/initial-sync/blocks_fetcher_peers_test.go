@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
@@ -212,6 +213,7 @@ func TestBlocksFetcher_filterPeers(t *testing.T) {
 			for _, pid := range tt.args.peers {
 				peerIDs = append(peerIDs, pid.ID)
 				fetcher.rateLimiter.Add(pid.ID.String(), pid.usedCapacity)
+				fetcher.p2p.Peers().SetChainState(pid.ID, &ethpb.StatusV2{})
 			}
 			if tt.update != nil {
 				tt.update(fetcher.p2p.Peers().Scorers().BlockProviderScorer())
@@ -223,7 +225,7 @@ func TestBlocksFetcher_filterPeers(t *testing.T) {
 			var filteredPIDs []peer.ID
 			var err error
 			for range 1000 {
-				filteredPIDs = fetcher.filterPeers(t.Context(), peerIDs, tt.args.peersPercentage)
+				filteredPIDs = fetcher.filterPeers(t.Context(), peerIDs, 0, tt.args.peersPercentage)
 				if len(filteredPIDs) <= 1 {
 					break
 				}
@@ -269,6 +271,28 @@ func TestBlocksFetcher_filterPeers(t *testing.T) {
 			assert.DeepEqual(t, tt.want, filteredPIDs)
 		})
 	}
+
+	t.Run("peers unable to serve are dropped before trimming", func(t *testing.T) {
+		const start = primitives.Slot(100)
+
+		mc, p2p, _ := initializeTestServices(t, []primitives.Slot{}, []*peerData{})
+		fetcher := newBlocksFetcher(t.Context(), &blocksFetcherConfig{
+			chain: mc,
+			p2p:   p2p,
+		})
+
+		peerIDs := []peer.ID{"a", "b", "c", "d", "e"}
+		for _, pid := range peerIDs[:4] {
+			fetcher.p2p.Peers().SetChainState(pid, &ethpb.StatusV2{EarliestAvailableSlot: start + 1})
+		}
+		fetcher.p2p.Peers().SetChainState("e", &ethpb.StatusV2{EarliestAvailableSlot: start})
+
+		for range 100 {
+			filtered := fetcher.filterPeers(t.Context(), peerIDs, start, peersPercentagePerRequest)
+			require.Equal(t, 1, len(filtered))
+			require.Equal(t, peer.ID("e"), filtered[0])
+		}
+	})
 }
 
 func TestBlocksFetcher_removeStalePeerLocks(t *testing.T) {

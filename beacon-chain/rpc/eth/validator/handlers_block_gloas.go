@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
@@ -104,21 +105,38 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// A self-built block carries its payload inline as GloasContents. An external builder bid (or
+	// A self-built block carries its payload inline as block contents. An external builder bid (or
 	// include_payload=false) yields the block alone; its payload is revealed separately.
-	var block *eth.BeaconBlockGloas
-	var contents *eth.BeaconBlockContentsGloas
+	var (
+		ver      int
+		block    ssz.Marshaler
+		contents ssz.Marshaler
+		toJSON   func() (interface{}, error)
+	)
 	switch b := v1alpha1resp.Block.(type) {
 	case *eth.GenericBeaconBlock_GloasContents:
-		contents = b.GloasContents
-		block = contents.Block
+		c := b.GloasContents
+		ver, block, contents = version.Gloas, c.Block, c
+		toJSON = func() (interface{}, error) {
+			return structs.BlockContentsGloasFromConsensus(c.Block, c.ExecutionPayloadEnvelope, c.KzgProofs, c.Blobs)
+		}
 	case *eth.GenericBeaconBlock_Gloas:
-		block = b.Gloas
-		includePayload = false
+		ver, block = version.Gloas, b.Gloas
+		toJSON = func() (interface{}, error) { return structs.BeaconBlockGloasFromConsensus(b.Gloas) }
+	case *eth.GenericBeaconBlock_HezeContents:
+		c := b.HezeContents
+		ver, block, contents = version.Heze, c.Block, c
+		toJSON = func() (interface{}, error) {
+			return structs.BlockContentsHezeFromConsensus(c.Block, c.ExecutionPayloadEnvelope, c.KzgProofs, c.Blobs)
+		}
+	case *eth.GenericBeaconBlock_Heze:
+		ver, block = version.Heze, b.Heze
+		toJSON = func() (interface{}, error) { return structs.BeaconBlockHezeFromConsensus(b.Heze) }
 	default:
-		httputil.HandleError(w, fmt.Sprintf("expected Gloas block, got %T", v1alpha1resp.Block), http.StatusInternalServerError)
+		httputil.HandleError(w, fmt.Sprintf("expected a Gloas or later block, got %T", v1alpha1resp.Block), http.StatusInternalServerError)
 		return
 	}
+	includePayload = contents != nil
 
 	consensusBlockValue, httpError := getConsensusBlockValue(ctx, s.BlockRewardFetcher, block)
 	if httpError != nil {
@@ -131,7 +149,7 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		executionPayloadValue = "0"
 	}
 
-	w.Header().Set(api.VersionHeader, version.String(version.Gloas))
+	w.Header().Set(api.VersionHeader, version.String(ver))
 	w.Header().Set(api.ExecutionPayloadValueHeader, executionPayloadValue)
 	w.Header().Set(api.ConsensusBlockValueHeader, consensusBlockValue)
 	w.Header().Set(api.ExecutionPayloadIncludedHeader, fmt.Sprintf("%v", includePayload))
@@ -139,42 +157,12 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(api.BuilderUrlHeader, v1alpha1resp.BuilderUrl)
 	}
 
-	isSSZ := httputil.RespondWithSsz(r)
-
-	if includePayload {
-		if isSSZ {
-			sszResp, err := contents.MarshalSSZ()
-			if err != nil {
-				httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			httputil.WriteSsz(w, sszResp)
-			return
+	if httputil.RespondWithSsz(r) {
+		data := block
+		if includePayload {
+			data = contents
 		}
-
-		blockContents, err := structs.BlockContentsGloasFromConsensus(contents.Block, contents.ExecutionPayloadEnvelope, contents.KzgProofs, contents.Blobs)
-		if err != nil {
-			httputil.HandleError(w, errors.Wrap(err, "could not convert block contents").Error(), http.StatusInternalServerError)
-			return
-		}
-		jsonBytes, err := json.Marshal(blockContents)
-		if err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		httputil.WriteJson(w, &structs.ProduceBlockV4Response{
-			Version:                  version.String(version.Gloas),
-			ExecutionPayloadValue:    executionPayloadValue,
-			ConsensusBlockValue:      consensusBlockValue,
-			ExecutionPayloadIncluded: true,
-			Data:                     jsonBytes,
-		})
-		return
-	}
-
-	// include_payload=false (or external builder bid): return only the beacon block.
-	if isSSZ {
-		sszResp, err := block.MarshalSSZ()
+		sszResp, err := data.MarshalSSZ()
 		if err != nil {
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -183,21 +171,21 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	structBlock, err := structs.BeaconBlockGloasFromConsensus(block)
+	structData, err := toJSON()
 	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, errors.Wrap(err, "could not convert block").Error(), http.StatusInternalServerError)
 		return
 	}
-	jsonBytes, err := json.Marshal(structBlock)
+	jsonBytes, err := json.Marshal(structData)
 	if err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	httputil.WriteJson(w, &structs.ProduceBlockV4Response{
-		Version:                  version.String(version.Gloas),
+		Version:                  version.String(ver),
 		ExecutionPayloadValue:    executionPayloadValue,
 		ConsensusBlockValue:      consensusBlockValue,
-		ExecutionPayloadIncluded: false,
+		ExecutionPayloadIncluded: includePayload,
 		Data:                     jsonBytes,
 	})
 }
@@ -265,7 +253,7 @@ func (s *Server) ExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	resp, err := s.V1Alpha1Server.GetExecutionPayloadEnvelope(ctx, &eth.ExecutionPayloadEnvelopeRequest{
+	resp, err := s.V1Alpha1Server.GetExecutionPayloadEnvelopeV2(ctx, &eth.ExecutionPayloadEnvelopeRequest{
 		Slot: primitives.Slot(slot),
 	})
 	if err != nil {

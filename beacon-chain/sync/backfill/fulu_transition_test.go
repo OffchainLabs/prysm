@@ -5,6 +5,9 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -206,6 +209,23 @@ func TestNewCheckMultiplexer(t *testing.T) {
 				m.colCheck = &das.MockAvailabilityStore{ErrIsDataAvailable: mockBlobFailure}
 			},
 		},
+		{
+			name: "gloas block with empty payload is not column checked",
+			batch: func() batch {
+				blks := testGloasEmptyPayloadBlocks(t, fuluSlot+1)
+				p := p2ptest.NewTestP2P(t)
+				store := filesystem.NewEphemeralDataColumnStorage(t)
+				cb, err := buildColumnBatch(t.Context(), blks[0].Block().Slot(), blks[1].Block().Slot()+1, blks, p, store, mockCurrentSpecNeeds())
+				require.NoError(t, err)
+				retain := func(primitives.Slot) bool { return true }
+				// A real column store reports any missing sidecar, so checking the empty block would fail.
+				colStore := das.NewLazilyPersistentStoreColumn(store, nil, p.NodeID(), params.BeaconConfig().CustodyRequirement, nil, retain)
+				return batch{
+					blocks:  blks,
+					columns: &columnSync{columnBatch: cb, store: colStore},
+				}
+			},
+		},
 	}
 
 	needs := mockCurrentSpecNeeds()
@@ -225,6 +245,34 @@ func TestNewCheckMultiplexer(t *testing.T) {
 			}
 		})
 	}
+}
+
+// testGloasBlock creates a Gloas block whose bid carries the given execution block hashes and blob commitment count.
+func testGloasBlock(t *testing.T, slot primitives.Slot, parentRoot, parentBlockHash, blockHash [32]byte, nblobs int) blocks.ROBlock {
+	sb := util.NewBeaconBlockGloas()
+	sb.Block.Slot = slot
+	sb.Block.ParentRoot = parentRoot[:]
+	bid := sb.Block.Body.SignedExecutionPayloadBid.Message
+	bid.ParentBlockHash = parentBlockHash[:]
+	bid.BlockHash = blockHash[:]
+	bid.BlobKzgCommitments = make([][]byte, nblobs)
+	for i := range bid.BlobKzgCommitments {
+		bid.BlobKzgCommitments[i] = make([]byte, fieldparams.KzgCommitmentSize)
+	}
+	signed, err := blocks.NewSignedBeaconBlock(sb)
+	require.NoError(t, err)
+	blk, err := blocks.NewROBlock(signed)
+	require.NoError(t, err)
+	return blk
+}
+
+// testGloasEmptyPayloadBlocks returns a Gloas block with blobs whose payload is empty, followed by its child.
+func testGloasEmptyPayloadBlocks(t *testing.T, slot primitives.Slot) []blocks.ROBlock {
+	parentHash, emptyHash, childHash := [32]byte{'p'}, [32]byte{'e'}, [32]byte{'c'}
+	empty := testGloasBlock(t, slot, [32]byte{}, parentHash, emptyHash, 1)
+	// The child builds on the payload of the grandparent, so the payload of `empty` is not canonical.
+	child := testGloasBlock(t, slot+1, empty.Root(), parentHash, childHash, 0)
+	return []blocks.ROBlock{empty, child}
 }
 
 func testBlocksWithCommitments(t *testing.T, startSlot primitives.Slot, count int) []blocks.ROBlock {

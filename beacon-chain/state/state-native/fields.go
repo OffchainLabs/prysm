@@ -117,6 +117,9 @@ var (
 
 	gloasProgressiveSchema *ProgressiveStateSchema
 	gloasFields            []types.FieldIndex
+
+	hezeProgressiveSchema *ProgressiveStateSchema
+	hezeFields            []types.FieldIndex
 )
 
 func init() {
@@ -137,12 +140,27 @@ func init() {
 		panic(err)
 	}
 	gloasFields = gloasProgressiveSchema.fields
+
+	// Replace the LatestExecutionPayloadBid field with LatestExecutionPayloadBidHeze for Heze.
+	hezeAllFields := slices.Clone(gloasFields)
+	hezeAllFields[slices.Index(hezeAllFields, types.LatestExecutionPayloadBid)] = types.LatestExecutionPayloadBidHeze
+	hezeProgressiveSchema, err = newProgressiveStateFieldsSchema(
+		hezeAllFields,
+		nil,
+		params.BeaconConfig().BeaconStateHezeFieldCount,
+	)
+	if err != nil {
+		panic(err)
+	}
+	hezeFields = hezeProgressiveSchema.fields
 }
 
 func ProgressiveStateSchemaForVersion(v int) (*ProgressiveStateSchema, bool) {
 	switch v {
 	case version.Gloas:
 		return gloasProgressiveSchema, true
+	case version.Heze:
+		return hezeProgressiveSchema, true
 	default:
 		return nil, false
 	}

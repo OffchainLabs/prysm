@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/middleware"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/cmd"
@@ -132,8 +133,10 @@ func (c *ValidatorClient) Start() {
 		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
 		defer signal.Stop(sigc)
 		<-sigc
+
 		log.Info("Got interrupt, shutting down...")
-		go c.Close()
+		c.shutdown(sigc)
+
 		for i := 10; i > 0; i-- {
 			<-sigc
 			if i > 1 {
@@ -145,6 +148,39 @@ func (c *ValidatorClient) Start() {
 
 	// Wait for stop channel to be closed.
 	<-stop
+}
+
+// shutdown closes the validator client. Unless disabled, it first waits for the moment in the slot
+// where a restart would not miss any rewarded duty. It returns early on another interrupt, which
+// closes the validator client immediately.
+func (c *ValidatorClient) shutdown(sigc <-chan os.Signal) {
+	if features.Get().DisableDutyAwareShutdown {
+		go c.Close()
+		return
+	}
+
+	ctx, cancel := context.WithCancel(c.ctx)
+
+	go func() {
+		c.waitForDutyAwareShutdown(ctx)
+		c.Close()
+	}()
+
+	<-sigc
+	log.Info("Got interrupt, shutting down immediately...")
+	cancel()
+}
+
+// waitForDutyAwareShutdown blocks until the validator client can be stopped and restarted
+// without missing any rewarded duty, or until the context is done.
+func (c *ValidatorClient) waitForDutyAwareShutdown(ctx context.Context) {
+	var vs *client.ValidatorService
+	if err := c.services.FetchService(&vs); err != nil {
+		log.WithError(err).Debug("Could not fetch validator service, stopping immediately")
+		return
+	}
+
+	vs.WaitForDutyAwareShutdown(ctx)
 }
 
 // Close handles graceful shutdown of the system.
@@ -567,7 +603,6 @@ func (c *ValidatorClient) registerRPCService(cliCtx *cli.Context) error {
 	}
 	host := cliCtx.String(flags.HTTPServerHost.Name)
 	port := cliCtx.Int(flags.HTTPServerPort.Name)
-	authTokenPath := cliCtx.String(flags.AuthTokenPathFlag.Name)
 	walletDir := cliCtx.String(flags.WalletDirFlag.Name)
 
 	var vs *client.ValidatorService
@@ -615,11 +650,20 @@ func (c *ValidatorClient) registerRPCService(cliCtx *cli.Context) error {
 		WalletDir:              walletDir,
 		WalletInitializedFeed:  c.walletInitializedFeed,
 		ValidatorService:       vs,
-		AuthTokenPath:          authTokenPath,
+		AuthTokenPath:          authTokenPath(cliCtx),
 		Middlewares:            middlewares,
 		Router:                 http.NewServeMux(),
 	})
 	return c.services.RegisterService(s)
+}
+
+// authTokenPath returns the path set with --keymanager-token-file, or auth-token in the wallet directory.
+func authTokenPath(cliCtx *cli.Context) string {
+	if p := cliCtx.String(flags.AuthTokenPathFlag.Name); p != "" {
+		return p
+	}
+
+	return filepath.Join(cliCtx.String(flags.WalletDirFlag.Name), api.AuthTokenFileName)
 }
 
 func setWalletPasswordFilePath(cliCtx *cli.Context) error {

@@ -80,6 +80,10 @@ func (s *Service) ChainHead(ctx context.Context) (*ethpb.ChainHead, *RpcError) {
 			Reason: Internal,
 		}
 	}
+	// A checkpoint synced node treats its origin as finalized before the network justifies it.
+	if justifiedCheckpoint.Epoch < finalizedCheckpoint.Epoch {
+		justifiedCheckpoint = finalizedCheckpoint
+	}
 
 	prevJustifiedCheckpoint := s.FinalizedFetcher.PreviousJustifiedCheckpt()
 	if err := validateCP(prevJustifiedCheckpoint, "prev justified"); err != nil {

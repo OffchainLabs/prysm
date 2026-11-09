@@ -134,6 +134,10 @@ func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
 
 		err = service.dataColumnSidecarsByRangeRPCHandler(ctx, msg, stream)
 		require.NoError(t, err)
+
+		if util.WaitTimeout(&wg, 2*time.Second) {
+			t.Fatal("timed out waiting for remote stream handler")
+		}
 	})
 
 	t.Run("nominal", func(t *testing.T) {
@@ -256,6 +260,10 @@ func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
 
 		err = service.dataColumnSidecarsByRangeRPCHandler(ctx, msg, stream)
 		require.NoError(t, err)
+
+		if util.WaitTimeout(&wg, 2*time.Second) {
+			t.Fatal("timed out waiting for remote stream handler")
+		}
 	})
 
 	t.Run("gloas skips columns of empty slots", func(t *testing.T) {
@@ -435,7 +443,15 @@ func TestValidateDataColumnsByRange(t *testing.T) {
 			startSlot:   0,
 			count:       10_000,
 			currentSlot: 400,
-			expected:    &rangeParams{start: 320, end: 400, size: 81},
+			expected:    &rangeParams{start: 320, end: 400, size: 64},
+			expectErr:   false,
+		},
+		{
+			name:        "large count",
+			startSlot:   0,
+			count:       math.MaxUint64,
+			currentSlot: 400,
+			expected:    &rangeParams{start: 320, end: 400, size: 64},
 			expectErr:   false,
 		},
 	}

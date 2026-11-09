@@ -18,6 +18,12 @@ type LightClientHeaderDeneb struct {
 	ExecutionBranch []string                     `json:"execution_branch"`
 }
 
+type LightClientHeaderGloas struct {
+	Beacon             *BeaconBlockHeader `json:"beacon"`
+	ExecutionBlockHash string             `json:"execution_block_hash"`
+	ExecutionBranch    []string           `json:"execution_branch"`
+}
+
 type LightClientBootstrap struct {
 	Header                     json.RawMessage `json:"header"`
 	CurrentSyncCommittee       *SyncCommittee  `json:"current_sync_committee"`

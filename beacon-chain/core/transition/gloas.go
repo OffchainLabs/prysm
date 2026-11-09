@@ -72,7 +72,7 @@ func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces
 	if hasSlashings || hasExits {
 		// ExitInformation is expensive to compute, only do it if we need it.
 		exitInfo = v.ExitInformation(st)
-		if err := helpers.UpdateTotalActiveBalanceCache(st, exitInfo.TotalActiveBalance); err != nil {
+		if err := helpers.UpdateTotalActiveBalanceCache(ctx, st, exitInfo.TotalActiveBalance); err != nil {
 			return nil, errors.Wrap(err, "could not update total active balance cache")
 		}
 	}

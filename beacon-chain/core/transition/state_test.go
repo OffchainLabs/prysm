@@ -7,7 +7,6 @@ import (
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -97,13 +96,13 @@ func TestGenesisState_HashEquality(t *testing.T) {
 	state, err := transition.GenesisBeaconState(t.Context(), deposits, 0, &ethpb.Eth1Data{BlockHash: make([]byte, 32)})
 	require.NoError(t, err)
 
-	pbState1, err := state_native.ProtobufBeaconStatePhase0(state1.ToProto())
+	container1, err := state_native.ContainerFrom[*ethpb.BeaconState](state1.ToContainer())
 	require.NoError(t, err)
-	pbstate, err := state_native.ProtobufBeaconStatePhase0(state.ToProto())
+	container2, err := state_native.ContainerFrom[*ethpb.BeaconState](state.ToContainer())
 	require.NoError(t, err)
 
-	root1, err1 := hash.Proto(pbState1)
-	root2, err2 := hash.Proto(pbstate)
+	root1, err1 := container1.HashTreeRoot()
+	root2, err2 := container2.HashTreeRoot()
 
 	if err1 != nil || err2 != nil {
 		t.Fatalf("Failed to marshal state to bytes: %v %v", err1, err2)

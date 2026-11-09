@@ -293,8 +293,8 @@ var stateTransitionCommand = &cli.Command{
 			if err != nil {
 				log.Fatal(err)
 			}
-			if !equality.DeepEqual(expectedState.ToProtoUnsafe(), postState.ToProtoUnsafe()) {
-				diff, _ := messagediff.PrettyDiff(expectedState.ToProtoUnsafe(), postState.ToProtoUnsafe())
+			if !equality.DeepEqual(expectedState.ToContainerUnsafe(), postState.ToContainerUnsafe()) {
+				diff, _ := messagediff.PrettyDiff(expectedState.ToContainerUnsafe(), postState.ToContainerUnsafe())
 				log.Errorf("Derived state differs from provided post state: %s", diff)
 			}
 		}
@@ -385,7 +385,7 @@ func benchmarkHash(sszPath string, sszType string) {
 		}
 		deserializeDuration := time.Since(startDeserialize)
 
-		stateTrieState, err := state_native.InitializeFromProtoUnsafeCapella(st)
+		stateTrieState, err := state_native.NewUnsafe(st)
 		if err != nil {
 			log.Fatal(err)
 		}

@@ -62,7 +62,8 @@ func TotalActiveBalance(ctx context.Context, s state.ReadOnlyBeaconState) (uint6
 	_, span := trace.StartSpan(ctx, "helpers.TotalActiveBalance")
 	defer span.End()
 
-	bal, err := balanceCache.Get(s)
+	bc := balanceCacheFrom(ctx)
+	bal, err := bc.Get(s)
 	if err == nil {
 		span.SetAttributes(trace.BoolAttribute("cacheHit", true))
 		return bal, nil
@@ -88,7 +89,7 @@ func TotalActiveBalance(ctx context.Context, s state.ReadOnlyBeaconState) (uint6
 
 	// Spec defines `EffectiveBalanceIncrement` as min to avoid divisions by zero.
 	total = max(params.BeaconConfig().EffectiveBalanceIncrement, total)
-	if err := balanceCache.AddTotalEffectiveBalance(s, total); err != nil {
+	if err := bc.AddTotalEffectiveBalance(s, total); err != nil {
 		return 0, err
 	}
 
@@ -96,8 +97,8 @@ func TotalActiveBalance(ctx context.Context, s state.ReadOnlyBeaconState) (uint6
 }
 
 // UpdateTotalActiveBalanceCache updates the cache with the given total active balance.
-func UpdateTotalActiveBalanceCache(s state.BeaconState, total uint64) error {
-	return balanceCache.AddTotalEffectiveBalance(s, total)
+func UpdateTotalActiveBalanceCache(ctx context.Context, s state.BeaconState, total uint64) error {
+	return balanceCacheFrom(ctx).AddTotalEffectiveBalance(s, total)
 }
 
 // IncreaseBalance increases validator with the given 'index' balance by 'delta' in Gwei.

@@ -18,6 +18,21 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// clampCheckpointRoot maps a checkpoint at or below the tree root onto the tree root.
+func (s *Store) clampCheckpointRoot(epoch primitives.Epoch, root [32]byte) [32]byte {
+	if s.treeRootNode == nil {
+		return root
+	}
+	if en := s.emptyNodeByRoot[root]; en != nil {
+		return root
+	}
+	start, err := slots.EpochStart(epoch)
+	if err != nil || start > s.treeRootNode.slot {
+		return root
+	}
+	return s.treeRootNode.root
+}
+
 // head starts from justified root and then follows the best descendant links
 // to find the best block for head.
 func (s *Store) head(ctx context.Context) ([32]byte, error) {
@@ -29,20 +44,11 @@ func (s *Store) head(ctx context.Context) ([32]byte, error) {
 	}
 
 	// JustifiedRoot has to be known
-	var jn *Node
-	ej := s.emptyNodeByRoot[s.justifiedCheckpoint.Root]
-	if ej != nil {
-		jn = ej.node
-	} else {
-		// If the justifiedCheckpoint is from genesis, then the root is
-		// zeroHash. In this case it should be the root of forkchoice
-		// tree.
-		if s.justifiedCheckpoint.Epoch == params.BeaconConfig().GenesisEpoch {
-			jn = s.treeRootNode
-		} else {
-			return [32]byte{}, errors.WithMessage(errUnknownJustifiedRoot, fmt.Sprintf("%#x", s.justifiedCheckpoint.Root))
-		}
+	ej := s.emptyNodeByRoot[s.clampCheckpointRoot(s.justifiedCheckpoint.Epoch, s.justifiedCheckpoint.Root)]
+	if ej == nil {
+		return [32]byte{}, errors.WithMessage(errUnknownJustifiedRoot, fmt.Sprintf("%#x", s.justifiedCheckpoint.Root))
 	}
+	jn := ej.node
 
 	// If the justified node doesn't have a best descendant,
 	// the best node is itself.
@@ -277,11 +283,11 @@ func (s *Store) prune(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "doublyLinkedForkchoice.Prune")
 	defer span.End()
 
-	finalizedRoot := s.finalizedCheckpoint.Root
 	finalizedEpoch := s.finalizedCheckpoint.Epoch
+	finalizedRoot := s.clampCheckpointRoot(finalizedEpoch, s.finalizedCheckpoint.Root)
 	fen, ok := s.emptyNodeByRoot[finalizedRoot]
 	if !ok || fen == nil {
-		return errors.WithMessage(errUnknownFinalizedRoot, fmt.Sprintf("%#x", finalizedRoot))
+		return errors.WithMessage(errUnknownFinalizedRoot, fmt.Sprintf("%#x", s.finalizedCheckpoint.Root))
 	}
 	fn := fen.node
 	// return early if we haven't changed the finalized checkpoint

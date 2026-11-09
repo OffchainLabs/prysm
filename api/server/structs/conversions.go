@@ -1493,6 +1493,9 @@ func DepositsToConsensus(src []*Deposit) ([]*eth.Deposit, error) {
 
 	deposits := make([]*eth.Deposit, len(src))
 	for i, d := range src {
+		if d == nil {
+			return nil, server.NewDecodeError(errNilValue, fmt.Sprintf("[%d]", i))
+		}
 		if d.Data == nil {
 			return nil, server.NewDecodeError(errNilValue, fmt.Sprintf("[%d].Data", i))
 		}

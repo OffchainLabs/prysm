@@ -17,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"google.golang.org/protobuf/proto"
 )
 
 func TestProcessSyncCommitteeUpdates_CanRotate(t *testing.T) {
@@ -102,7 +101,7 @@ func TestProcessSlashings_NotSlashed(t *testing.T) {
 		Balances:   []uint64{params.BeaconConfig().MaxEffectiveBalance},
 		Slashings:  []uint64{0, 1e9},
 	}
-	s, err := state_native.InitializeFromProtoAltair(base)
+	s, err := state_native.New(base)
 	require.NoError(t, err)
 	require.NoError(t, epoch.ProcessSlashings(t.Context(), s))
 	wanted := params.BeaconConfig().MaxEffectiveBalance
@@ -171,8 +170,8 @@ func TestProcessSlashings_SlashedLess(t *testing.T) {
 	for i, tt := range tests {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			helpers.ClearCache()
-			original := proto.Clone(tt.state)
-			s, err := state_native.InitializeFromProtoAltair(tt.state)
+			original := tt.state.Copy()
+			s, err := state_native.New(tt.state)
 			require.NoError(t, err)
 			require.NoError(t, epoch.ProcessSlashings(t.Context(), s))
 			assert.Equal(t, tt.want, s.Balances()[0], "ProcessSlashings({%v}) = newState; newState.Balances[0] = %d", original, s.Balances()[0])
@@ -187,7 +186,7 @@ func TestProcessSlashings_BadValue(t *testing.T) {
 		Balances:   []uint64{params.BeaconConfig().MaxEffectiveBalance},
 		Slashings:  []uint64{math.MaxUint64, 1e9},
 	}
-	s, err := state_native.InitializeFromProtoAltair(base)
+	s, err := state_native.New(base)
 	require.NoError(t, err)
 	require.ErrorContains(t, "addition overflows", epoch.ProcessSlashings(t.Context(), s))
 }

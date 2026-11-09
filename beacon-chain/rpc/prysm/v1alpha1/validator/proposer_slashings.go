@@ -21,7 +21,7 @@ func (vs *Server) getSlashings(ctx context.Context, head state.BeaconState) ([]*
 	}
 	// ExitInformation is expensive to compute, only do it if we need it.
 	exitInfo := v.ExitInformation(head)
-	if err := helpers.UpdateTotalActiveBalanceCache(head, exitInfo.TotalActiveBalance); err != nil {
+	if err := helpers.UpdateTotalActiveBalanceCache(ctx, head, exitInfo.TotalActiveBalance); err != nil {
 		log.WithError(err).Warn("Could not update total active balance cache")
 	}
 	for _, slashing := range proposerSlashings {

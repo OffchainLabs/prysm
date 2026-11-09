@@ -1579,7 +1579,7 @@ func TestProposer_PendingDeposits_OutsideEth1FollowWindow(t *testing.T) {
 		},
 	}
 
-	beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	beaconState, err := state_native.New(&ethpb.BeaconState{
 		Eth1Data: &ethpb.Eth1Data{
 			BlockHash:   bytesutil.PadTo([]byte("0x0"), 32),
 			DepositRoot: make([]byte, 32),
@@ -1710,7 +1710,7 @@ func TestProposer_PendingDeposits_FollowsCorrectEth1Block(t *testing.T) {
 		votes = append(votes, vote)
 	}
 
-	beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	beaconState, err := state_native.New(&ethpb.BeaconState{
 		Eth1Data: &ethpb.Eth1Data{
 			BlockHash:    []byte("0x0"),
 			DepositRoot:  make([]byte, 32),
@@ -1927,7 +1927,7 @@ func TestProposer_PendingDeposits_CantReturnMoreThanMax(t *testing.T) {
 		},
 	}
 
-	beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	beaconState, err := state_native.New(&ethpb.BeaconState{
 		Eth1Data: &ethpb.Eth1Data{
 			BlockHash:    bytesutil.PadTo([]byte("0x0"), 32),
 			DepositRoot:  make([]byte, 32),
@@ -2024,7 +2024,7 @@ func TestProposer_PendingDeposits_CantReturnMoreThanDepositCount(t *testing.T) {
 		},
 	}
 
-	beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	beaconState, err := state_native.New(&ethpb.BeaconState{
 		Eth1Data: &ethpb.Eth1Data{
 			BlockHash:    bytesutil.PadTo([]byte("0x0"), 32),
 			DepositRoot:  make([]byte, 32),
@@ -2121,7 +2121,7 @@ func TestProposer_DepositTrie_UtilizesCachedFinalizedDeposits(t *testing.T) {
 		},
 	}
 
-	beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	beaconState, err := state_native.New(&ethpb.BeaconState{
 		Eth1Data: &ethpb.Eth1Data{
 			BlockHash:    bytesutil.PadTo([]byte("0x0"), 32),
 			DepositRoot:  make([]byte, 32),
@@ -2236,7 +2236,7 @@ func TestProposer_DepositTrie_RebuildTrie(t *testing.T) {
 		},
 	}
 
-	beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	beaconState, err := state_native.New(&ethpb.BeaconState{
 		Eth1Data: &ethpb.Eth1Data{
 			BlockHash:    bytesutil.PadTo([]byte("0x0"), 32),
 			DepositRoot:  make([]byte, 32),
@@ -2451,7 +2451,7 @@ func TestProposer_Eth1Data_MajorityVote_SpansGenesis(t *testing.T) {
 		HeadFetcher:      &mock.ChainService{ETH1Data: &ethpb.Eth1Data{BlockHash: headBlockHash, DepositCount: 0}},
 	}
 
-	beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	beaconState, err := state_native.New(&ethpb.BeaconState{
 		Slot: slot,
 		Eth1DataVotes: []*ethpb.Eth1Data{
 			{BlockHash: []byte("earliest"), DepositCount: 1},
@@ -2503,7 +2503,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			err:   errors.New("provided time is later than the current eth1 head"),
 		}
 
-		beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: slot})
+		beaconState, err := state_native.New(&ethpb.BeaconState{Slot: slot})
 		require.NoError(t, err)
 
 		ps := &Server{
@@ -2527,7 +2527,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			InsertBlock(52, earliestValidTime+2, []byte("second")).
 			InsertBlock(100, latestValidTime, []byte("latest"))
 
-		beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		beaconState, err := state_native.New(&ethpb.BeaconState{
 			Slot: slot,
 			Eth1DataVotes: []*ethpb.Eth1Data{
 				{BlockHash: []byte("first"), DepositCount: 1},
@@ -2562,7 +2562,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			InsertBlock(52, earliestValidTime+2, []byte("second")).
 			InsertBlock(100, latestValidTime, []byte("latest"))
 
-		beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		beaconState, err := state_native.New(&ethpb.BeaconState{
 			Slot: slot,
 			Eth1DataVotes: []*ethpb.Eth1Data{
 				{BlockHash: []byte("earliest"), DepositCount: 1},
@@ -2597,7 +2597,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			InsertBlock(51, earliestValidTime+1, []byte("first")).
 			InsertBlock(100, latestValidTime, []byte("latest"))
 
-		beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		beaconState, err := state_native.New(&ethpb.BeaconState{
 			Slot: slot,
 			Eth1DataVotes: []*ethpb.Eth1Data{
 				{BlockHash: []byte("first"), DepositCount: 1},
@@ -2633,7 +2633,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			InsertBlock(51, earliestValidTime+1, []byte("first")).
 			InsertBlock(100, latestValidTime, []byte("latest"))
 
-		beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		beaconState, err := state_native.New(&ethpb.BeaconState{
 			Slot: slot,
 			Eth1DataVotes: []*ethpb.Eth1Data{
 				{BlockHash: []byte("before_range"), DepositCount: 1},
@@ -2669,7 +2669,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			InsertBlock(100, latestValidTime, []byte("latest")).
 			InsertBlock(101, latestValidTime+1, []byte("after_range"))
 
-		beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		beaconState, err := state_native.New(&ethpb.BeaconState{
 			Slot: slot,
 			Eth1DataVotes: []*ethpb.Eth1Data{
 				{BlockHash: []byte("first"), DepositCount: 1},
@@ -2705,7 +2705,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			InsertBlock(52, earliestValidTime+2, []byte("second")).
 			InsertBlock(100, latestValidTime, []byte("latest"))
 
-		beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		beaconState, err := state_native.New(&ethpb.BeaconState{
 			Slot: slot,
 			Eth1DataVotes: []*ethpb.Eth1Data{
 				{BlockHash: []byte("unknown"), DepositCount: 1},
@@ -2738,7 +2738,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			InsertBlock(49, earliestValidTime-1, []byte("before_range")).
 			InsertBlock(101, latestValidTime+1, []byte("after_range"))
 
-		beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		beaconState, err := state_native.New(&ethpb.BeaconState{
 			Slot: slot,
 		})
 		require.NoError(t, err)
@@ -2769,7 +2769,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			InsertBlock(52, earliestValidTime+2, []byte("second")).
 			InsertBlock(101, latestValidTime+1, []byte("after_range"))
 
-		beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		beaconState, err := state_native.New(&ethpb.BeaconState{
 			Slot: slot,
 			Eth1DataVotes: []*ethpb.Eth1Data{
 				{BlockHash: []byte("before_range"), DepositCount: 1},
@@ -2802,7 +2802,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			InsertBlock(50, earliestValidTime, []byte("earliest")).
 			InsertBlock(100, latestValidTime, []byte("latest"))
 
-		beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		beaconState, err := state_native.New(&ethpb.BeaconState{
 			Slot:          slot,
 			Eth1DataVotes: []*ethpb.Eth1Data{}})
 		require.NoError(t, err)
@@ -2831,7 +2831,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			InsertBlock(50, earliestValidTime, []byte("earliest")).
 			InsertBlock(100, latestValidTime, []byte("latest"))
 
-		beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		beaconState, err := state_native.New(&ethpb.BeaconState{
 			Slot: slot,
 		})
 		require.NoError(t, err)
@@ -2864,7 +2864,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			InsertBlock(52, earliestValidTime+2, []byte("second")).
 			InsertBlock(100, latestValidTime, []byte("latest"))
 
-		beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		beaconState, err := state_native.New(&ethpb.BeaconState{
 			Slot: slot,
 			Eth1DataVotes: []*ethpb.Eth1Data{
 				{BlockHash: []byte("first"), DepositCount: 1},
@@ -2899,7 +2899,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			InsertBlock(52, earliestValidTime+2, []byte("second")).
 			InsertBlock(100, latestValidTime, []byte("latest"))
 
-		beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		beaconState, err := state_native.New(&ethpb.BeaconState{
 			Slot: slot,
 			Eth1DataVotes: []*ethpb.Eth1Data{
 				{BlockHash: []byte("no_new_deposits"), DepositCount: 0},
@@ -2931,7 +2931,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 		t.Skip()
 		p := mockExecution.New().InsertBlock(50, earliestValidTime, []byte("earliest"))
 
-		beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		beaconState, err := state_native.New(&ethpb.BeaconState{
 			Slot: slot,
 			Eth1DataVotes: []*ethpb.Eth1Data{
 				{BlockHash: []byte("earliest"), DepositCount: 1},
@@ -2964,7 +2964,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			// because of earliest block increment in the algorithm.
 			InsertBlock(50, earliestValidTime+1, []byte("first"))
 
-		beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		beaconState, err := state_native.New(&ethpb.BeaconState{
 			Slot: slot,
 			Eth1DataVotes: []*ethpb.Eth1Data{
 				{BlockHash: []byte("before_range"), DepositCount: 1},
@@ -3003,7 +3003,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 		depositCache, err := depositsnapshot.New()
 		require.NoError(t, err)
 
-		beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		beaconState, err := state_native.New(&ethpb.BeaconState{
 			Slot: slot,
 			Eth1DataVotes: []*ethpb.Eth1Data{
 				{BlockHash: []byte("earliest"), DepositCount: 1},
@@ -3038,7 +3038,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 		depositCache, err := depositsnapshot.New()
 		require.NoError(t, err)
 
-		beaconState, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{
+		beaconState, err := state_native.New(&ethpb.BeaconStateElectra{
 			Slot:     slot,
 			Eth1Data: &ethpb.Eth1Data{BlockHash: []byte("legacy"), DepositCount: 1},
 		})
@@ -3168,7 +3168,7 @@ func TestProposer_Deposits_ReturnsEmptyList_IfLatestEth1DataEqGenesisEth1Block(t
 		GenesisEth1Block: height,
 	}
 
-	beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	beaconState, err := state_native.New(&ethpb.BeaconState{
 		Eth1Data: &ethpb.Eth1Data{
 			BlockHash:   bytesutil.PadTo([]byte("0x0"), 32),
 			DepositRoot: make([]byte, 32),
@@ -3634,6 +3634,35 @@ func TestProposer_GetParentHeadState(t *testing.T) {
 	})
 }
 
+func TestProposer_ParentFull(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	parentRoot := [32]byte{'p'}
+	gloasSlot := params.BeaconConfig().SlotsPerEpoch
+	tests := []struct {
+		name  string
+		chain *mock.ChainService
+		want  bool
+	}{
+		{name: "pre-Gloas head saved as empty", chain: &mock.ChainService{BlockSlot: gloasSlot - 1, Root: parentRoot[:]}, want: true},
+		{name: "pre-Gloas non-head forkchoice prefers empty", chain: &mock.ChainService{BlockSlot: gloasSlot - 1}, want: true},
+		{name: "Gloas head saved as empty", chain: &mock.ChainService{BlockSlot: gloasSlot, Root: parentRoot[:]}, want: false},
+		{name: "Gloas head saved as full", chain: &mock.ChainService{BlockSlot: gloasSlot, Root: parentRoot[:], Full: true}, want: true},
+		{name: "Gloas non-head forkchoice prefers empty", chain: &mock.ChainService{BlockSlot: gloasSlot}, want: false},
+		{name: "Gloas non-head forkchoice prefers full", chain: &mock.ChainService{BlockSlot: gloasSlot, ForkchoiceRoots: map[[32]byte]bool{parentRoot: true}}, want: true},
+		{name: "unknown parent falls back to forkchoice", chain: &mock.ChainService{RecentBlockSlotErr: errors.New("not found")}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vs := &Server{HeadFetcher: tt.chain, ForkchoiceFetcher: tt.chain}
+			require.Equal(t, tt.want, vs.parentFull(parentRoot))
+		})
+	}
+}
+
 func TestProposer_ElectraBlobsAndProofs(t *testing.T) {
 	electraContents := &ethpb.SignedBeaconBlockContentsElectra{Block: &ethpb.SignedBeaconBlockElectra{}}
 	electraContents.KzgProofs = make([][]byte, 10)
@@ -3930,4 +3959,19 @@ func TestServer_ProposeBeaconBlock_PostFuluBlindedBlock(t *testing.T) {
 		require.NotNil(t, res)
 		require.NotEmpty(t, res.BlockRoot)
 	})
+}
+
+func TestHandlePostBlockStateError_DropsPayloadAttestations(t *testing.T) {
+	blk := util.NewBeaconBlockGloas()
+	blk.Block.Body.PayloadAttestations = []*ethpb.PayloadAttestation{util.HydratePayloadAttestation(&ethpb.PayloadAttestation{})}
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	ctx := context.WithValue(t.Context(), computeStateRootAttemptsKey, maxComputeStateRootAttempts)
+	_, err = (&Server{}).handlePostBlockStateError(ctx, wsb, transition.ErrProcessPayloadAttestationsFailed)
+	require.ErrorContains(t, "attempted max compute state root attempts", err)
+
+	atts, err := wsb.Block().Body().PayloadAttestations()
+	require.NoError(t, err)
+	require.Equal(t, 0, len(atts))
 }

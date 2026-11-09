@@ -1328,14 +1328,20 @@ func (e executionPayloadGloas) BlockHash() []byte {
 	return e.p.BlockHash
 }
 
-// Transactions --
+// Transactions returns read-only views into the payload's serialized
+// transaction list. No transaction bytes are copied.
 func (e executionPayloadGloas) Transactions() ([][]byte, error) {
-	return e.p.Transactions, nil
+	return e.p.Transactions.Slice(), nil
 }
 
-// TransactionsRoot --
-func (executionPayloadGloas) TransactionsRoot() ([]byte, error) {
-	return nil, consensus_types.ErrUnsupportedField
+// TransactionsRoot is computed directly from the serialized transaction list,
+// without materializing the transactions.
+func (e executionPayloadGloas) TransactionsRoot() ([]byte, error) {
+	root, err := e.p.Transactions.HashTreeRoot()
+	if err != nil {
+		return nil, err
+	}
+	return root[:], nil
 }
 
 // Withdrawals --

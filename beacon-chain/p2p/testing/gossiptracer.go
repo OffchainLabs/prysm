@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -290,6 +291,9 @@ func (t *GossipTracer) RecvRPC(rpc *pubsub.RPC) {}
 
 // SendRPC can be extended by future tests to track outgoing RPCs.
 func (t *GossipTracer) SendRPC(rpc *pubsub.RPC, p peer.ID) {}
+
+// SendRPCCompleted can be extended by future tests to track completed outgoing RPC writes.
+func (t *GossipTracer) SendRPCCompleted(rpc *pubsub.RPC, p peer.ID, writeDuration time.Duration) {}
 
 // DropRPC can be extended by future tests to track dropped RPCs.
 func (t *GossipTracer) DropRPC(rpc *pubsub.RPC, p peer.ID) {}

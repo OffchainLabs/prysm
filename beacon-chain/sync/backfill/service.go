@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/proto/dbval"
 	"github.com/OffchainLabs/prysm/v7/runtime"
+	"github.com/OffchainLabs/prysm/v7/runtime/logging"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -46,7 +47,7 @@ type Service struct {
 	workerCfg       *workerCfg
 	fuluStart       primitives.Slot
 	denebStart      primitives.Slot
-	progressLogger  *intervalLogger
+	progressLogger  *logging.IntervalLogger
 }
 
 const progressLogInterval = 60
@@ -155,10 +156,6 @@ func NewService(ctx context.Context, su *Store, bStore *filesystem.BlobStorage, 
 func (s *Service) updateComplete() bool {
 	b, err := s.pool.complete()
 	if err != nil {
-		if errors.Is(err, errEndSequence) {
-			log.WithField("backfillSlot", b.begin).Info("Backfill is complete")
-			return true
-		}
 		log.WithError(err).Error("Service received unhandled error from worker pool")
 		return true
 	}
@@ -180,7 +177,13 @@ func (s *Service) importBatches(ctx context.Context) {
 		_, err := s.batchImporter(ctx, current, ib, s.store)
 		if err != nil {
 			log.WithError(err).WithFields(ib.logFields()).Debug("Backfill batch failed to import")
-			s.batchSeq.update(ib.withError(err))
+			failed := ib.withError(err)
+			s.batchSeq.update(failed)
+
+			low := primitives.Slot(s.store.status().LowSlot)
+			if errors.Is(err, errChainBroken) && ib.end < low {
+				s.batchSeq.widen(failed, low)
+			}
 			// If a batch fails, the subsequent batches are no longer considered importable.
 			break
 		}
@@ -227,8 +230,15 @@ func (s *Service) defaultBatchImporter(ctx context.Context, current primitives.S
 	// Other parts of the beacon node may use the same StatusUpdater instance
 	// via the coverage.AvailableBlocker interface to safely determine if a given slot has been backfilled.
 
+	// The batch above is now imported, so the child of the last block is known.
+	if b.columns != nil {
+		if err := b.columns.decideLastPayload(ctx, b.blocks, su.backfilledChild); err != nil {
+			return status, fmt.Errorf("decide last payload: %w", err)
+		}
+	}
+
 	checker := newCheckMultiplexer(s.syncNeeds.Currently(), b)
-	return su.fillBack(ctx, current, b.blocks, checker)
+	return su.fillBack(ctx, current, b.blocks, checker, b.envelopes)
 }
 
 func (s *Service) scheduleTodos() {
@@ -289,11 +299,12 @@ func (s *Service) Start() {
 
 	status := s.store.status()
 	needs := s.syncNeeds.Currently()
+	lowSlot := primitives.Slot(status.LowSlot)
 	// Exit early if there aren't going to be any batches to backfill.
-	if !needs.Block.At(primitives.Slot(status.LowSlot)) {
+	if !needs.Block.At(lowSlot) || lowSlot <= needs.Block.Begin {
 		log.WithField("minimumSlot", needs.Block.Begin).
 			WithField("backfillLowestSlot", status.LowSlot).
-			Info("Exiting backfill service; minimum block retention slot > lowest backfilled block")
+			Info("Exiting backfill service; minimum block retention slot >= lowest backfilled block")
 		s.markComplete()
 		return
 	}
@@ -308,11 +319,12 @@ func (s *Service) Start() {
 
 	if s.workerCfg == nil {
 		s.workerCfg = &workerCfg{
-			clock:        s.clock,
-			blobStore:    s.blobStore,
-			colStore:     s.dcStore,
-			downscore:    s.downscorePeer,
-			currentNeeds: s.syncNeeds.Currently,
+			clock:           s.clock,
+			blobStore:       s.blobStore,
+			colStore:        s.dcStore,
+			downscore:       s.downscorePeer,
+			currentNeeds:    s.syncNeeds.Currently,
+			backfilledChild: s.store.backfilledChild,
 		}
 
 		if err = initWorkerCfg(ctx, s.workerCfg, s.verifierWaiter, s.store); err != nil {
@@ -337,12 +349,21 @@ func (s *Service) Start() {
 		"targetSlot":           needs.Block.Begin,
 	}).Info("Starting backfill")
 
-	s.progressLogger = newIntervalLogger(log, progressLogInterval)
+	s.progressLogger = logging.NewIntervalLogger(log, progressLogInterval)
 
 	for {
 		if ctx.Err() != nil {
 			return
 		}
+
+		if s.batchSeq.allEnded() {
+			log.WithField("lowestBackfilledSlot", s.store.status().LowSlot).
+				WithField("targetSlot", s.syncNeeds.Currently().Block.Begin).
+				Info("Backfill is complete")
+			s.markComplete()
+			return
+		}
+
 		if s.updateComplete() {
 			s.markComplete()
 			return

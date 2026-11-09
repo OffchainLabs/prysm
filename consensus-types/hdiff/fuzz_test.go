@@ -310,14 +310,15 @@ func FuzzApplyDiff(f *testing.F) {
 
 	f.Add(snappyBombSeed[0], snappyBombSeed[1], snappyBombSeed[2])
 
+	base, _ := util.DeterministicGenesisStateElectra(f, 8)
 	f.Fuzz(func(t *testing.T, stateDiff, validatorDiffs, balancesDiff []byte) {
 		// Only test with reasonable sized inputs
 		if len(stateDiff) > maxFuzzStateDiffSize || len(validatorDiffs) > 10000 || len(balancesDiff) > 10000 {
 			return
 		}
 
-		// Create fresh source state for each test
-		source, _ := util.DeterministicGenesisStateElectra(t, 8)
+		// ApplyDiff mutates source, so copy to keep base unchanged across execs
+		source := base.Copy()
 
 		diff := HdiffBytes{
 			StateDiff:      stateDiff,
@@ -460,6 +461,7 @@ func FuzzComputeLPS(f *testing.F) {
 
 // FuzzDiffToBalances tests balance diff computation
 func FuzzDiffToBalances(f *testing.F) {
+	base, _ := util.DeterministicGenesisStateElectra(f, 1)
 	f.Fuzz(func(t *testing.T, sourceData, targetData []byte) {
 		// Convert byte data to balance arrays
 		var sourceBalances, targetBalances []uint64
@@ -477,8 +479,8 @@ func FuzzDiffToBalances(f *testing.F) {
 		}
 
 		// Create states with the provided balances
-		source, _ := util.DeterministicGenesisStateElectra(t, 1)
-		target, _ := util.DeterministicGenesisStateElectra(t, 1)
+		source := base.Copy()
+		target := base.Copy()
 
 		if len(sourceBalances) > 0 {
 			_ = source.SetBalances(sourceBalances)
@@ -502,13 +504,14 @@ func FuzzDiffToBalances(f *testing.F) {
 
 // FuzzValidatorsEqual tests validator comparison
 func FuzzValidatorsEqual(f *testing.F) {
+	base, _ := util.DeterministicGenesisStateElectra(f, 2)
 	f.Fuzz(func(t *testing.T, data []byte) {
 		// Create two validators and fuzz their fields
 		if len(data) < 16 {
 			return
 		}
 
-		source, _ := util.DeterministicGenesisStateElectra(t, 2)
+		source := base.Copy()
 		validators := source.Validators()
 		if len(validators) < 2 {
 			return

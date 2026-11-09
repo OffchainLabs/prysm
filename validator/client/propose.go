@@ -115,6 +115,21 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		return
 	}
 
+	// The slashing protection database records the slot of the block, not the slot of the duty.
+	// Refuse to sign a block for another slot.
+	if wb.Slot() != slot {
+		log.WithFields(logrus.Fields{
+			"dutySlot":  slot,
+			"blockSlot": wb.Slot(),
+		}).Error("Beacon node returned a block for another slot, refusing to sign it")
+
+		if v.emitAccountMetrics {
+			ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
+		}
+
+		return
+	}
+
 	sig, signingRoot, err := v.signBlock(ctx, pubKey, epoch, slot, wb)
 	if err != nil {
 		log.WithError(err).Error("Failed to sign block")
@@ -262,22 +277,20 @@ func logProposedBlock(log *logrus.Entry, blk interfaces.SignedBeaconBlock, blkRo
 		}
 	}
 	if blk.Version() >= version.Gloas {
-		bid, err := blk.Block().Body().SignedExecutionPayloadBid()
+		bid, err := blk.Block().Body().ExecutionPayloadBid()
 		if err != nil {
 			return errors.Wrap(err, "failed to get execution payload bid")
 		}
-		if bid != nil && bid.Message != nil {
-			msg := bid.Message
-			log = log.WithFields(logrus.Fields{
-				"builderIndex": logs.BuilderIndexLabel(msg.BuilderIndex),
-				"bidValue":     msg.Value,
-				"blockHash":    fmt.Sprintf("%#x", bytesutil.Trunc(msg.BlockHash)),
-				"parentHash":   fmt.Sprintf("%#x", bytesutil.Trunc(msg.ParentBlockHash)),
-				"gasLimit":     msg.GasLimit,
-			})
-			if len(msg.BlobKzgCommitments) != 0 {
-				log = log.WithField("kzgCommitmentCount", len(msg.BlobKzgCommitments))
-			}
+		blockHash, parentHash := bid.BlockHash(), bid.ParentBlockHash()
+		log = log.WithFields(logrus.Fields{
+			"builderIndex": logs.BuilderIndexLabel(bid.BuilderIndex()),
+			"bidValue":     bid.Value(),
+			"blockHash":    fmt.Sprintf("%#x", bytesutil.Trunc(blockHash[:])),
+			"parentHash":   fmt.Sprintf("%#x", bytesutil.Trunc(parentHash[:])),
+			"gasLimit":     bid.GasLimit(),
+		})
+		if n := bid.BlobKzgCommitmentCount(); n != 0 {
+			log = log.WithField("kzgCommitmentCount", n)
 		}
 		payloadAtts, err := blk.Block().Body().PayloadAttestations()
 		if err != nil {

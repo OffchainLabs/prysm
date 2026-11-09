@@ -2,6 +2,8 @@ package grpc_api
 
 import (
 	"context"
+	"fmt"
+	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/api/client"
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
@@ -9,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/client/cache"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
@@ -26,6 +29,9 @@ type grpcValidatorClient struct {
 	eventStreamGuard eventClient.StreamGuard
 	stateless        bool
 	envelopeCache    *cache.ExecutionPayloadEnvelopeCache
+
+	genesisLock sync.Mutex
+	genesis     *ethpb.Genesis // cached on first success, guarded by genesisLock
 }
 
 func (c *grpcValidatorClient) Duties(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
@@ -195,8 +201,47 @@ func (c *grpcValidatorClient) CheckDoppelGanger(ctx context.Context, in *ethpb.D
 	return c.getClient().CheckDoppelGanger(ctx, in)
 }
 
+// DomainData computes the signature domain locally.
 func (c *grpcValidatorClient) DomainData(ctx context.Context, in *ethpb.DomainRequest) (*ethpb.DomainResponse, error) {
-	return c.getClient().DomainData(ctx, in)
+	ctx, span := trace.StartSpan(ctx, "grpc-api.DomainData")
+	defer span.End()
+
+	if len(in.Domain) != 4 {
+		return nil, fmt.Errorf("invalid domain type length: got %d, want 4", len(in.Domain))
+	}
+
+	genesis, err := c.cachedGenesis(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get genesis info: %w", err)
+	}
+
+	return validatorHelpers.ComputeDomainData(
+		in.Epoch,
+		bytesutil.ToBytes4(in.Domain),
+		genesis.GenesisValidatorsRoot,
+		genesis.GenesisTime.AsTime(),
+	)
+}
+
+// cachedGenesis returns the genesis info of the beacon node, fetching it only once.
+func (c *grpcValidatorClient) cachedGenesis(ctx context.Context) (*ethpb.Genesis, error) {
+	c.genesisLock.Lock()
+	defer c.genesisLock.Unlock()
+
+	if c.genesis != nil {
+		return c.genesis, nil
+	}
+
+	genesis, err := c.nodeClient.Genesis(ctx, &empty.Empty{})
+	if err != nil {
+		return nil, fmt.Errorf("genesis RPC: %w", err)
+	}
+	if genesis == nil || genesis.GenesisTime == nil {
+		return nil, fmt.Errorf("genesis info is incomplete")
+	}
+
+	c.genesis = genesis
+	return genesis, nil
 }
 
 func (c *grpcValidatorClient) AttestationData(ctx context.Context, in *ethpb.AttestationDataRequest) (*ethpb.AttestationData, error) {
@@ -213,15 +258,22 @@ func (c *grpcValidatorClient) BeaconBlock(ctx context.Context, in *ethpb.BlockRe
 	}
 	// Stateless self-build: cache the bundled envelope + blobs for the publisher and hand the
 	// proposer the block alone, matching the non-stateless response shape.
-	contents, ok := resp.GetBlock().(*ethpb.GenericBeaconBlock_GloasContents)
-	if !ok {
+	switch b := resp.GetBlock().(type) {
+	case *ethpb.GenericBeaconBlock_GloasContents:
+		gc := b.GloasContents
+		if c.stateless && gc.GetExecutionPayloadEnvelope() != nil {
+			c.envelopeCache.Add(in.Slot, gc.ExecutionPayloadEnvelope, gc.Blobs, gc.KzgProofs)
+		}
+		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: gc.Block}}, nil
+	case *ethpb.GenericBeaconBlock_HezeContents:
+		hc := b.HezeContents
+		if c.stateless && hc.GetExecutionPayloadEnvelope() != nil {
+			c.envelopeCache.Add(in.Slot, hc.ExecutionPayloadEnvelope, hc.Blobs, hc.KzgProofs)
+		}
+		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Heze{Heze: hc.Block}}, nil
+	default:
 		return resp, nil
 	}
-	gc := contents.GloasContents
-	if c.stateless && gc.GetExecutionPayloadEnvelope() != nil {
-		c.envelopeCache.Add(in.Slot, gc.ExecutionPayloadEnvelope, gc.Blobs, gc.KzgProofs)
-	}
-	return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: gc.Block}}, nil
 }
 
 func (c *grpcValidatorClient) SyncCommitteeContribution(ctx context.Context, in *ethpb.SyncCommitteeContributionRequest) (*ethpb.SyncCommitteeContribution, error) {
@@ -396,11 +448,11 @@ func (c *grpcValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, s
 	req := &ethpb.ExecutionPayloadEnvelopeRequest{
 		Slot: slot,
 	}
-	resp, err := c.getClient().GetExecutionPayloadEnvelope(ctx, req)
+	resp, err := c.getClient().GetExecutionPayloadEnvelopeV2(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(
 			client.ErrConnectionIssue,
-			errors.Wrap(err, "GetExecutionPayloadEnvelope").Error(),
+			errors.Wrap(err, "GetExecutionPayloadEnvelopeV2").Error(),
 		)
 	}
 	if resp.Envelope == nil {
@@ -434,7 +486,7 @@ func (c *grpcValidatorClient) PublishExecutionPayloadEnvelope(ctx context.Contex
 			},
 		}
 	}
-	return c.getClient().PublishExecutionPayloadEnvelope(ctx, generic)
+	return c.getClient().PublishExecutionPayloadEnvelopeV2(ctx, generic)
 }
 
 func (c *grpcValidatorClient) PayloadAttestationData(ctx context.Context, slot primitives.Slot) (*ethpb.PayloadAttestationData, error) {

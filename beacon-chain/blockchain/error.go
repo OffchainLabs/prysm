@@ -17,6 +17,8 @@ var (
 	ErrUndefinedExecutionEngineError = errors.New("received an undefined execution engine error")
 	// errNilFinalizedInStore is returned when a nil finalized checkpt is returned from store.
 	errNilFinalizedInStore = errors.New("nil finalized checkpoint returned from store")
+	// errDependentRootBeforeForkchoice is returned when a head event dependent root is older than the forkchoice tree root.
+	errDependentRootBeforeForkchoice = errors.New("dependent root is older than the forkchoice tree root")
 	// errNilFinalizedCheckpoint is returned when a nil finalized checkpt is returned from a state.
 	errNilFinalizedCheckpoint = errors.New("nil finalized checkpoint returned from state")
 	// errNilJustifiedCheckpoint is returned when a nil justified checkpt is returned from a state.
@@ -42,6 +44,8 @@ var (
 	errNotGenesisRoot = errors.New("root is not the genesis block root")
 	// errBlacklistedBlock is returned when a block is blacklisted as invalid.
 	errBlacklistedRoot = verification.AsVerificationFailure(errors.New("block root is blacklisted"))
+	// errBatchEnvelopeMismatch is returned when a batch carries envelopes that do not line up with its blocks.
+	errBatchEnvelopeMismatch = errors.New("batch envelopes do not correspond to the batch blocks")
 	// errMaxBlobsExceeded is returned when the number of blobs in a block exceeds the maximum allowed.
 	errMaxBlobsExceeded = verification.AsVerificationFailure(errors.New("expected commitments in block exceeds MAX_BLOBS_PER_BLOCK"))
 	// errMaxDataColumnsExceeded is returned when the number of data columns exceeds the maximum allowed.

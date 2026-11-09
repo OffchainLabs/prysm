@@ -97,23 +97,16 @@ func BuilderPendingWithdrawalFromConsensus(w *ethpb.BuilderPendingWithdrawal) *B
 	}
 }
 
-func PTCWindowFromConsensus(window []*ethpb.PTCs) []*PTCs {
-	out := make([]*PTCs, len(window))
-	for i, slot := range window {
-		out[i] = PTCsFromConsensus(slot)
+func PTCWindowFromConsensus(window []*ethpb.PTCs) [][]string {
+	out := make([][]string, len(window))
+	for i, ptc := range window {
+		ptcValidatorIndices := ptc.GetValidatorIndices()
+		out[i] = make([]string, len(ptcValidatorIndices))
+		for j, idx := range ptcValidatorIndices {
+			out[i][j] = strconv.FormatUint(uint64(idx), 10)
+		}
 	}
 	return out
-}
-
-func PTCsFromConsensus(p *ethpb.PTCs) *PTCs {
-	if p == nil {
-		return &PTCs{}
-	}
-	indices := make([]string, len(p.ValidatorIndices))
-	for i, idx := range p.ValidatorIndices {
-		indices[i] = fmt.Sprintf("%d", idx)
-	}
-	return &PTCs{ValidatorIndices: indices}
 }
 
 func (s *SignedProposerPreferences) ToConsensus() (*ethpb.SignedProposerPreferences, error) {

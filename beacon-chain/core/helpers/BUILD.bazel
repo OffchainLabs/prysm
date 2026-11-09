@@ -7,6 +7,7 @@ go_library(
         "beacon_committee.go",
         "block.go",
         "builder.go",
+        "caches.go",
         "deposit.go",
         "genesis.go",
         "legacy.go",

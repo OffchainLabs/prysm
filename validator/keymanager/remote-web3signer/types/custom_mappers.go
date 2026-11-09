@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/internal/valid"
 	"github.com/OffchainLabs/prysm/v7/math"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -441,9 +442,9 @@ func MapExecutionPayloadGloas(payload *enginev1.ExecutionPayloadGloas) (*Executi
 	if err != nil {
 		return nil, errors.Wrap(err, "could not convert base_fee_per_gas")
 	}
-	txs := make([]hexutil.Bytes, len(payload.Transactions))
-	for i, tx := range payload.Transactions {
-		txs[i] = tx
+	txs := make([]hexutil.Bytes, valid.Len(payload.Transactions))
+	for i := range txs {
+		txs[i] = payload.Transactions.Get(i)
 	}
 	withdrawals := make([]*Withdrawal, len(payload.Withdrawals))
 	for i, w := range payload.Withdrawals {

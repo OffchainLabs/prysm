@@ -59,14 +59,14 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 	ctx, span := trace.StartSpan(ctx, "sync.validateBeaconBlockPubSub")
 	defer span.End()
 
+	s.validateBlockLock.Lock()
+	defer s.validateBlockLock.Unlock()
+
 	m, err := s.decodePubsubMessage(msg)
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return pubsub.ValidationReject, errors.Wrap(err, "Could not decode message")
 	}
-
-	s.validateBlockLock.Lock()
-	defer s.validateBlockLock.Unlock()
 
 	blk, ok := m.(interfaces.ReadOnlySignedBeaconBlock)
 	if !ok {
@@ -75,6 +75,10 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 
 	if blk.IsNil() || blk.Block().IsNil() {
 		return pubsub.ValidationReject, errors.New("block.Block is nil")
+	}
+
+	if blk.Version() >= version.Gloas && len(blk.Block().Body().Deposits()) != 0 {
+		return pubsub.ValidationReject, errors.New("block must not contain deposits")
 	}
 
 	// Broadcast the block on a feed to notify other services in the beacon node

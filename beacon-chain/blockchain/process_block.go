@@ -135,9 +135,9 @@ func getStateVersionAndPayload(st state.BeaconState) (int, interfaces.ExecutionD
 	var preStateHeader interfaces.ExecutionData
 	var err error
 	preStateVersion := st.Version()
-	switch preStateVersion {
-	case version.Phase0, version.Altair, version.Gloas:
-	default:
+
+	// Only Bellatrix through Fulu states carry a latest execution payload header.
+	if preStateVersion >= version.Bellatrix && preStateVersion < version.Gloas {
 		preStateHeader, err = st.LatestExecutionPayloadHeader()
 		if err != nil {
 			return 0, nil, err
@@ -212,6 +212,8 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	}
 	var eidx int
 	var br [32]byte
+	// blockEnvelopes[i] is the envelope verified against blks[i]; nil when the block has none.
+	blockEnvelopes := make([]interfaces.ROSignedExecutionPayloadEnvelope, len(blks))
 	sigSet := bls.NewSet()
 	if applied {
 		eidx = 1
@@ -238,6 +240,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	fCheckpoints := make([]*ethpb.Checkpoint, len(blks))
 	preVersionAndHeaders := make([]*versionAndHeader, len(blks))
 	postVersionAndHeaders := make([]*versionAndHeader, len(blks))
+	builderPubkeys := make([]*[fieldparams.BLSPubkeyLength]byte, len(blks))
 	var set *bls.SignatureBatch
 	boundaries := make(map[[32]byte]state.BeaconState)
 	for i, b := range blks {
@@ -256,6 +259,19 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		set, preState, err = transition.ExecuteStateTransitionNoVerifyAnySig(ctx, preState, b)
 		if err != nil {
 			return invalidBlock{error: err}
+		}
+		if b.Version() >= version.Gloas {
+			bid, err := b.Block().Body().ExecutionPayloadBid()
+			if err != nil {
+				return err
+			}
+			if idx := bid.BuilderIndex(); idx != params.BeaconConfig().BuilderIndexSelfBuild {
+				pk, err := preState.BuilderPubkey(idx)
+				if err != nil {
+					return err
+				}
+				builderPubkeys[i] = &pk
+			}
 		}
 		sig := b.Signature()
 		root := b.Root()
@@ -278,6 +294,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 				return err
 			}
 			sigSet.Join(envSigSet)
+			blockEnvelopes[i] = envelopes[eidx]
 			eidx++
 			if eidx < len(envelopes) {
 				nextEnv, err := envelopes[eidx].Envelope()
@@ -306,6 +323,9 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		}
 		sigSet.Join(set)
 	}
+	if eidx != len(envelopes) {
+		return errBatchEnvelopeMismatch
+	}
 
 	var verify bool
 	if features.Get().EnableVerboseSigVerification {
@@ -320,9 +340,12 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		return errors.New("batch block signature verification failed")
 	}
 
-	pendingNodes, isValidPayload, err := s.notifyEngineAndSaveData(ctx, blks, envelopes, avs, preVersionAndHeaders, postVersionAndHeaders, jCheckpoints, fCheckpoints)
+	pendingNodes, isValidPayload, err := s.notifyEngineAndSaveData(ctx, blks, blockEnvelopes, avs, preVersionAndHeaders, postVersionAndHeaders, jCheckpoints, fCheckpoints)
 	if err != nil {
 		return err
+	}
+	for i, n := range pendingNodes {
+		n.BuilderPubkey = builderPubkeys[i]
 	}
 	// Save boundary states that will be useful for forkchoice
 	for r, st := range boundaries {
@@ -361,7 +384,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 func (s *Service) notifyEngineAndSaveData(
 	ctx context.Context,
 	blks []consensusblocks.ROBlock,
-	envelopes []interfaces.ROSignedExecutionPayloadEnvelope,
+	blockEnvelopes []interfaces.ROSignedExecutionPayloadEnvelope,
 	avs das.AvailabilityChecker,
 	preVersionAndHeaders []*versionAndHeader,
 	postVersionAndHeaders []*versionAndHeader,
@@ -372,15 +395,6 @@ func (s *Service) notifyEngineAndSaveData(
 	pendingNodes := make([]*forkchoicetypes.BlockAndCheckpoints, len(blks))
 	var isValidPayload bool
 	var err error
-
-	envMap := make(map[[32]byte]int, len(envelopes))
-	for i, e := range envelopes {
-		env, err := e.Envelope()
-		if err != nil {
-			return nil, false, err
-		}
-		envMap[env.BeaconBlockRoot()] = i
-	}
 
 	for i, b := range blks {
 		root := b.Root()
@@ -403,19 +417,16 @@ func (s *Service) notifyEngineAndSaveData(
 				}
 			}
 			args.HasPayload = true
-		} else {
-			idx, ok := envMap[root]
-			if ok {
-				env, err := envelopes[idx].Envelope()
-				if err != nil {
-					return nil, false, err
-				}
-				isValidPayload, err = s.notifyNewEnvelopeFromBlock(ctx, b, env)
-				if err != nil {
-					return nil, false, errors.Wrap(err, "could not notify new envelope from block")
-				}
-				args.HasPayload = true
+		} else if blockEnvelopes[i] != nil {
+			env, err := blockEnvelopes[i].Envelope()
+			if err != nil {
+				return nil, false, err
 			}
+			isValidPayload, err = s.notifyNewEnvelopeFromBlock(ctx, b, env)
+			if err != nil {
+				return nil, false, errors.Wrap(err, "could not notify new envelope from block")
+			}
+			args.HasPayload = true
 		}
 		if args.HasPayload {
 			if err := s.areSidecarsAvailable(ctx, avs, b); err != nil {
@@ -436,13 +447,13 @@ func (s *Service) notifyEngineAndSaveData(
 			return nil, false, err
 		}
 		if i > 0 && jCheckpoints[i].Epoch > jCheckpoints[i-1].Epoch {
-			if err := s.cfg.BeaconDB.SaveJustifiedCheckpoint(ctx, jCheckpoints[i]); err != nil {
+			if err := s.cfg.BeaconDB.SaveJustifiedCheckpoint(ctx, s.checkpointWithStoredRoot(ctx, jCheckpoints[i])); err != nil {
 				tracing.AnnotateError(span, err)
 				return nil, false, err
 			}
 		}
 		if i > 0 && fCheckpoints[i].Epoch > fCheckpoints[i-1].Epoch {
-			if err := s.updateFinalized(ctx, fCheckpoints[i]); err != nil {
+			if err := s.updateFinalized(ctx, s.checkpointWithStoredRoot(ctx, fCheckpoints[i])); err != nil {
 				tracing.AnnotateError(span, err)
 				return nil, false, err
 			}
@@ -590,6 +601,10 @@ func (s *Service) handleBlockAttestations(ctx context.Context, blk interfaces.Re
 		}
 		r := bytesutil.ToBytes32(a.GetData().BeaconBlockRoot)
 		if s.cfg.ForkChoiceStore.HasNode(r) {
+			tr, err := s.cfg.ForkChoiceStore.TargetRootForEpoch(r, a.GetData().Target.Epoch)
+			if err != nil || tr != bytesutil.ToBytes32(a.GetData().Target.Root) {
+				continue
+			}
 			payloadStatus := true
 			if a.GetData().Target.Epoch >= params.BeaconConfig().GloasForkEpoch {
 				payloadStatus = a.GetData().CommitteeIndex == 1
@@ -1225,7 +1240,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 		if full {
 			bh = bid.BlockHash()
 		}
-		id, err := s.notifyForkchoiceUpdateGloas(ctx, bh, attribute)
+		id, fcs, err := s.notifyForkchoiceUpdateGloas(ctx, bh, attribute)
 		if err != nil {
 			log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
 		}
@@ -1237,7 +1252,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 				"nextSlot":  currentSlot + 1,
 				"payloadID": fmt.Sprintf("%#x", bytesutil.Trunc(id[:])),
 			}).Info("Forkchoice updated with payload attributes for proposal")
-			s.firePayloadAttributesEventForHead(headRoot, currentSlot+1, attribute, bh[:])
+			s.firePayloadAttributesEventForHead(headRoot, currentSlot+1, attribute, bh[:], fcs)
 		}
 		return
 	}

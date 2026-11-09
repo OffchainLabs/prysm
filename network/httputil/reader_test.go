@@ -41,6 +41,13 @@ func TestRespondWithSsz(t *testing.T) {
 		assert.Equal(t, true, result)
 	})
 
+	t.Run("json_excluded_ssz_after_comma_and_space", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodGet, "http://foo.example", nil)
+		request.Header["Accept"] = []string{fmt.Sprintf("%s;q=0, %s", api.JsonMediaType, api.OctetStreamMediaType)}
+		result := RespondWithSsz(request)
+		assert.Equal(t, true, result)
+	})
+
 	t.Run("other_content_type_preferred", func(t *testing.T) {
 		request := httptest.NewRequest("GET", "http://foo.example", nil)
 		request.Header["Accept"] = []string{fmt.Sprintf("%s,%s;q=0.9", api.JsonMediaType, api.OctetStreamMediaType)}

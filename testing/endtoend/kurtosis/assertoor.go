@@ -63,7 +63,16 @@ func waitForAssertoorRunsMatching(ctx context.Context, baseURL string, deadline 
 			if len(runs) == 0 {
 				return fmt.Errorf("timed out waiting for Assertoor test runs: %w", ctx.Err())
 			}
-			// deadline reached with no failure: monitors ran the full window clean.
+			// A run that is still going at the deadline never reached its assertion, so it proves nothing.
+			var unfinished []string
+			for _, r := range runs {
+				if !r.terminal() {
+					unfinished = append(unfinished, r.label())
+				}
+			}
+			if len(unfinished) > 0 {
+				return fmt.Errorf("assertoor runs did not finish before the deadline: %s", strings.Join(unfinished, ", "))
+			}
 			return nil
 		case <-time.After(assertoorPollInterval):
 		}

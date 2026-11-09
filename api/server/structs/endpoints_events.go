@@ -35,6 +35,8 @@ type BlockEvent struct {
 	Slot                string `json:"slot"`
 	Block               string `json:"block"`
 	ExecutionOptimistic bool   `json:"execution_optimistic"`
+	BuilderIndex        string `json:"builder_index,omitempty"`
+	BlockHash           string `json:"block_hash,omitempty"`
 }
 
 type BlockGossipEvent struct {
@@ -89,12 +91,14 @@ type PayloadAttributesEvent struct {
 }
 
 type PayloadAttributesEventData struct {
-	ProposerIndex     string          `json:"proposer_index"`
-	ProposalSlot      string          `json:"proposal_slot"`
-	ParentBlockNumber string          `json:"parent_block_number,omitempty"` // Removed from gloas onwards.
-	ParentBlockRoot   string          `json:"parent_block_root"`
-	ParentBlockHash   string          `json:"parent_block_hash"`
-	PayloadAttributes json.RawMessage `json:"payload_attributes"`
+	ProposerIndex      string          `json:"proposer_index"`
+	ProposalSlot       string          `json:"proposal_slot"`
+	ParentBlockNumber  string          `json:"parent_block_number,omitempty"` // Removed from gloas onwards.
+	ParentBlockRoot    string          `json:"parent_block_root"`
+	ParentBlockHash    string          `json:"parent_block_hash"`
+	SafeBlockHash      string          `json:"safe_block_hash,omitempty"`      // Added from gloas onwards.
+	FinalizedBlockHash string          `json:"finalized_block_hash,omitempty"` // Added from gloas onwards.
+	PayloadAttributes  json.RawMessage `json:"payload_attributes"`
 }
 
 type PayloadAttributesV1 struct {
@@ -116,6 +120,16 @@ type PayloadAttributesV3 struct {
 	SuggestedFeeRecipient string        `json:"suggested_fee_recipient"`
 	Withdrawals           []*Withdrawal `json:"withdrawals"`
 	ParentBeaconBlockRoot string        `json:"parent_beacon_block_root"`
+}
+
+type PayloadAttributesV4 struct {
+	Timestamp             string        `json:"timestamp"`
+	PrevRandao            string        `json:"prev_randao"`
+	SuggestedFeeRecipient string        `json:"suggested_fee_recipient"`
+	Withdrawals           []*Withdrawal `json:"withdrawals"`
+	ParentBeaconBlockRoot string        `json:"parent_beacon_block_root"`
+	SlotNumber            string        `json:"slot_number"`
+	TargetGasLimit        string        `json:"target_gas_limit"`
 }
 
 type BlobSidecarEvent struct {

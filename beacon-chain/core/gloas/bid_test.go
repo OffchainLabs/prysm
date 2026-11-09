@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
@@ -51,8 +52,15 @@ func (s stubBlockBody) ExecutionRequests() (*enginev1.ExecutionRequests, error) 
 func (s stubBlockBody) PayloadAttestations() ([]*ethpb.PayloadAttestation, error) {
 	return nil, nil
 }
-func (s stubBlockBody) SignedExecutionPayloadBid() (*ethpb.SignedExecutionPayloadBid, error) {
-	return s.signedBid, nil
+func (s stubBlockBody) SignedExecutionPayloadBid() (interfaces.ROSignedExecutionPayloadBid, error) {
+	return blocks.WrappedROSignedExecutionPayloadBid(s.signedBid)
+}
+func (s stubBlockBody) ExecutionPayloadBid() (interfaces.ROExecutionPayloadBid, error) {
+	signedBid, err := s.SignedExecutionPayloadBid()
+	if err != nil {
+		return nil, err
+	}
+	return signedBid.Bid(), nil
 }
 func (s stubBlockBody) ParentExecutionRequests() (*enginev1.ExecutionRequestsGloas, error) {
 	return nil, nil
@@ -148,7 +156,7 @@ func buildGloasState(t *testing.T, slot primitives.Slot, proposerIdx primitives.
 		}
 	}
 
-	stProto := &ethpb.BeaconStateGloas{
+	container := &ethpb.BeaconStateGloas{
 		Slot:                  slot,
 		GenesisValidatorsRoot: bytes.Repeat([]byte{0x11}, 32),
 		Fork: &ethpb.Fork{
@@ -170,7 +178,7 @@ func buildGloasState(t *testing.T, slot primitives.Slot, proposerIdx primitives.
 		},
 	}
 
-	st, err := state_native.InitializeFromProtoGloas(stProto)
+	st, err := state_native.New(container)
 	require.NoError(t, err)
 	return st.(*state_native.BeaconState)
 }
@@ -248,10 +256,10 @@ func TestProcessExecutionPayloadBid_SelfBuildSuccess(t *testing.T) {
 
 	require.NoError(t, ProcessExecutionPayloadBid(state, block))
 
-	stateProto, ok := state.ToProto().(*ethpb.BeaconStateGloas)
+	container, ok := state.ToContainer().(*ethpb.BeaconStateGloas)
 	require.Equal(t, true, ok)
 	slotIndex := params.BeaconConfig().SlotsPerEpoch + (slot % params.BeaconConfig().SlotsPerEpoch)
-	require.Equal(t, primitives.Gwei(0), stateProto.BuilderPendingPayments[slotIndex].Withdrawal.Amount)
+	require.Equal(t, primitives.Gwei(0), container.BuilderPendingPayments[slotIndex].Withdrawal.Amount)
 }
 
 func TestProcessExecutionPayloadBid_SelfBuildNonZeroAmountFails(t *testing.T) {
@@ -339,14 +347,14 @@ func TestProcessExecutionPayloadBid_PendingPaymentAndCacheBid(t *testing.T) {
 
 	require.NoError(t, ProcessExecutionPayloadBid(state, block))
 
-	stateProto, ok := state.ToProto().(*ethpb.BeaconStateGloas)
+	container, ok := state.ToContainer().(*ethpb.BeaconStateGloas)
 	require.Equal(t, true, ok)
 	slotIndex := params.BeaconConfig().SlotsPerEpoch + (slot % params.BeaconConfig().SlotsPerEpoch)
-	require.Equal(t, primitives.Gwei(500_000), stateProto.BuilderPendingPayments[slotIndex].Withdrawal.Amount)
+	require.Equal(t, primitives.Gwei(500_000), container.BuilderPendingPayments[slotIndex].Withdrawal.Amount)
 
-	require.NotNil(t, stateProto.LatestExecutionPayloadBid)
-	require.Equal(t, primitives.BuilderIndex(1), stateProto.LatestExecutionPayloadBid.BuilderIndex)
-	require.Equal(t, primitives.Gwei(500_000), stateProto.LatestExecutionPayloadBid.Value)
+	require.NotNil(t, container.LatestExecutionPayloadBid)
+	require.Equal(t, primitives.BuilderIndex(1), container.LatestExecutionPayloadBid.BuilderIndex)
+	require.Equal(t, primitives.Gwei(500_000), container.LatestExecutionPayloadBid.Value)
 }
 
 func TestProcessExecutionPayloadBid_BuilderNotActive(t *testing.T) {
@@ -363,9 +371,9 @@ func TestProcessExecutionPayloadBid_BuilderNotActive(t *testing.T) {
 
 	state := buildGloasState(t, slot, proposerIdx, builderIdx, params.BeaconConfig().MinDepositAmount+1000, randao, latestHash, pubKey)
 	// Make builder inactive by setting withdrawable_epoch.
-	stateProto := state.ToProto().(*ethpb.BeaconStateGloas)
-	stateProto.Builders[int(builderIdx)].WithdrawableEpoch = 0
-	stateIface, err := state_native.InitializeFromProtoGloas(stateProto)
+	container := state.ToContainer().(*ethpb.BeaconStateGloas)
+	container.Builders[int(builderIdx)].WithdrawableEpoch = 0
+	stateIface, err := state_native.New(container)
 	require.NoError(t, err)
 	state = stateIface.(*state_native.BeaconState)
 
@@ -411,15 +419,15 @@ func TestProcessExecutionPayloadBid_CannotCoverBid(t *testing.T) {
 	copy(pubKey[:], sk.PublicKey().Marshal())
 
 	state := buildGloasState(t, slot, proposerIdx, builderIdx, params.BeaconConfig().MinDepositAmount+10, randao, latestHash, pubKey)
-	stateProto := state.ToProto().(*ethpb.BeaconStateGloas)
+	container := state.ToContainer().(*ethpb.BeaconStateGloas)
 	// Add pending balances to push below required balance.
-	stateProto.BuilderPendingWithdrawals = []*ethpb.BuilderPendingWithdrawal{
+	container.BuilderPendingWithdrawals = []*ethpb.BuilderPendingWithdrawal{
 		{Amount: 15, BuilderIndex: builderIdx},
 	}
-	stateProto.BuilderPendingPayments = []*ethpb.BuilderPendingPayment{
+	container.BuilderPendingPayments = []*ethpb.BuilderPendingPayment{
 		{Withdrawal: &ethpb.BuilderPendingWithdrawal{Amount: 20, BuilderIndex: builderIdx}},
 	}
-	stateIface, err := state_native.InitializeFromProtoGloas(stateProto)
+	stateIface, err := state_native.New(container)
 	require.NoError(t, err)
 	state = stateIface.(*state_native.BeaconState)
 

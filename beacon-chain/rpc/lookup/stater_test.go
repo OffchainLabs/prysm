@@ -454,9 +454,9 @@ func TestStateBySlot_FutureSlot(t *testing.T) {
 }
 
 func TestStateBySlot_AfterHeadSlot(t *testing.T) {
-	headSt, err := statenative.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 100})
+	headSt, err := statenative.New(&ethpb.BeaconState{Slot: 100})
 	require.NoError(t, err)
-	slotSt, err := statenative.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 101})
+	slotSt, err := statenative.New(&ethpb.BeaconState{Slot: 101})
 	require.NoError(t, err)
 	currentSlot := primitives.Slot(102)
 	mock := &chainMock.ChainService{State: headSt, Slot: &currentSlot}
@@ -541,7 +541,7 @@ func TestStateByEpoch(t *testing.T) {
 	t.Run("current epoch uses head state", func(t *testing.T) {
 		// Head is at slot 5 (epoch 0), requesting epoch 0
 		headSlot := primitives.Slot(5)
-		headSt, err := statenative.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: headSlot})
+		headSt, err := statenative.New(&ethpb.BeaconState{Slot: headSlot})
 		require.NoError(t, err)
 
 		currentSlot := headSlot
@@ -558,7 +558,7 @@ func TestStateByEpoch(t *testing.T) {
 		// Head is at slot 5 (epoch 0), requesting epoch 1
 		// Current slot is 32 (epoch 1), so epoch 1 is current epoch
 		headSlot := primitives.Slot(5)
-		headSt, err := statenative.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: headSlot})
+		headSt, err := statenative.New(&ethpb.BeaconState{Slot: headSlot})
 		require.NoError(t, err)
 
 		currentSlot := slotsPerEpoch // slot 32, epoch 1
@@ -576,10 +576,10 @@ func TestStateByEpoch(t *testing.T) {
 	t.Run("past epoch uses replay", func(t *testing.T) {
 		// Head is at epoch 2, requesting epoch 0 (past)
 		headSlot := slotsPerEpoch * 2 // slot 64, epoch 2
-		headSt, err := statenative.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: headSlot})
+		headSt, err := statenative.New(&ethpb.BeaconState{Slot: headSlot})
 		require.NoError(t, err)
 
-		pastEpochSt, err := statenative.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 0})
+		pastEpochSt, err := statenative.New(&ethpb.BeaconState{Slot: 0})
 		require.NoError(t, err)
 
 		currentSlot := headSlot
@@ -597,7 +597,7 @@ func TestStateByEpoch(t *testing.T) {
 		// Head is at slot 30 (epoch 0), requesting epoch 1 (next)
 		// Current slot is 30 (epoch 0), so epoch 1 is next epoch
 		headSlot := primitives.Slot(30)
-		headSt, err := statenative.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: headSlot})
+		headSt, err := statenative.New(&ethpb.BeaconState{Slot: headSlot})
 		require.NoError(t, err)
 
 		currentSlot := headSlot
@@ -613,7 +613,7 @@ func TestStateByEpoch(t *testing.T) {
 	t.Run("head state already at target slot returns immediately", func(t *testing.T) {
 		// Head is at slot 32 (epoch 1 start), requesting epoch 1
 		headSlot := slotsPerEpoch // slot 32
-		headSt, err := statenative.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: headSlot})
+		headSt, err := statenative.New(&ethpb.BeaconState{Slot: headSlot})
 		require.NoError(t, err)
 
 		currentSlot := headSlot
@@ -628,7 +628,7 @@ func TestStateByEpoch(t *testing.T) {
 	t.Run("head state past target slot returns head state", func(t *testing.T) {
 		// Head is at slot 40, requesting epoch 1 (starts at slot 32)
 		headSlot := primitives.Slot(40)
-		headSt, err := statenative.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: headSlot})
+		headSt, err := statenative.New(&ethpb.BeaconState{Slot: headSlot})
 		require.NoError(t, err)
 
 		currentSlot := headSlot

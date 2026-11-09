@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
@@ -396,6 +397,14 @@ func (s *Service) SubmitSignedAggregateSelectionProof(
 		return &RpcError{Err: server.NewBroadcastFailedError("SignedAggregateAttAndProof", err), Reason: Internal}
 	}
 
+	// Gossip validation accepts self-published messages before it sends this event.
+	s.OperationNotifier.OperationFeed().Send(&feed.Event{
+		Type: opfeed.AggregatedAttReceived,
+		Data: &opfeed.AggregatedAttReceivedData{
+			Attestation: attAndProof,
+		},
+	})
+
 	if logrus.GetLevel() >= logrus.DebugLevel {
 		var fields logrus.Fields
 		if agg.Version() >= version.Electra {
@@ -529,19 +538,19 @@ func (s *Service) GetAttestationData(
 		return nil, &RpcError{Reason: Unavailable, Err: errOptimisticMode}
 	}
 
-	headRoot, err := s.HeadFetcher.HeadRoot(ctx)
-	if err != nil {
-		return nil, &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get head root")}
-	}
+	currentHeadRoot, currentHeadFull, headState, fcRoot, isPayloadFull := s.HeadFetcher.HeadAndCanonicalNodeAtSlot(req.Slot)
+	headRoot := currentHeadRoot[:]
 	targetEpoch := slots.ToEpoch(req.Slot)
-	targetRoot, err := s.HeadFetcher.TargetRootForEpoch(bytesutil.ToBytes32(headRoot), targetEpoch)
+	targetRoot, err := s.HeadFetcher.TargetRootForEpoch(currentHeadRoot, targetEpoch)
 	if err != nil {
 		return nil, &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get target root")}
 	}
 
-	headState, err := s.HeadFetcher.HeadStateReadOnly(ctx)
-	if err != nil {
-		return nil, &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get head state")}
+	if headState == nil {
+		headState, err = s.HeadFetcher.HeadStateReadOnly(ctx)
+		if err != nil {
+			return nil, &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get head state")}
+		}
 	}
 	if coreTime.CurrentEpoch(headState) < slots.ToEpoch(req.Slot) { // Ensure justified checkpoint safety by processing head state across the boundary.
 		headState, err = transition.ProcessSlotsIfNeeded(ctx, headState, headRoot, req.Slot)
@@ -550,16 +559,11 @@ func (s *Service) GetAttestationData(
 		}
 	}
 	justifiedCheckpoint := headState.CurrentJustifiedCheckpoint()
-	var isPayloadFull bool
-	if slots.ToEpoch(req.Slot) >= params.BeaconConfig().GloasForkEpoch {
-		fcRoot, full := s.ChainInfoFetcher.CanonicalNodeAtSlot(req.Slot)
-		if fcRoot != bytesutil.ToBytes32(headRoot) {
-			log.WithFields(logrus.Fields{
-				"fcRoot":   hexutil.Encode(fcRoot[:]),
-				"headRoot": hexutil.Encode(headRoot),
-			}).Error("Forkchoice head root does not match head root")
-		}
-		isPayloadFull = full
+	if slots.ToEpoch(req.Slot) >= params.BeaconConfig().GloasForkEpoch && fcRoot != currentHeadRoot {
+		log.WithFields(logrus.Fields{
+			"fcRoot":   hexutil.Encode(fcRoot[:]),
+			"headRoot": hexutil.Encode(headRoot),
+		}).Error("Forkchoice head root does not match head root")
 	}
 
 	if err = s.AttestationCache.Put(&cache.AttestationConsensusData{
@@ -621,9 +625,37 @@ func (s *Service) SubmitSyncMessage(ctx context.Context, msg *ethpb.SyncCommitte
 
 	errs, ctx := errgroup.WithContext(ctx)
 
+	// Validate the message like the sync_committee_{subnet_id} gossip validator does.
+	// Already seen messages are not rejected.
+	if err := altair.ValidateSyncMessageTime(
+		msg.Slot,
+		s.GenesisTimeFetcher.GenesisTime(),
+		params.BeaconConfig().MaximumGossipClockDisparityDuration(),
+	); err != nil {
+		return &RpcError{Reason: BadRequest, Err: errors.Wrap(err, "invalid sync committee message slot")}
+	}
+	pubKey, err := s.HeadFetcher.HeadValidatorIndexToPublicKey(ctx, msg.ValidatorIndex)
+	if err != nil {
+		return &RpcError{Reason: BadRequest, Err: errors.Wrap(err, "could not get validator public key")}
+	}
 	headSyncCommitteeIndices, err := s.HeadFetcher.HeadSyncCommitteeIndices(ctx, msg.ValidatorIndex, msg.Slot)
 	if err != nil {
 		return &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get head sync committee indices")}
+	}
+	if len(headSyncCommitteeIndices) == 0 {
+		return &RpcError{Reason: BadRequest, Err: fmt.Errorf("validator %d is not in the current sync committee", msg.ValidatorIndex)}
+	}
+	domain, err := s.HeadFetcher.HeadSyncCommitteeDomain(ctx, msg.Slot)
+	if err != nil {
+		return &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get sync committee domain")}
+	}
+	// SSZBytes right-pads a short root, so check the length before the signature.
+	if len(msg.BlockRoot) != fieldparams.RootLength {
+		return &RpcError{Reason: BadRequest, Err: fmt.Errorf("block root must be %d bytes, got %d", fieldparams.RootLength, len(msg.BlockRoot))}
+	}
+	blockRoot := primitives.SSZBytes(msg.BlockRoot)
+	if err := signing.VerifySigningRoot(&blockRoot, pubKey[:], msg.Signature, domain); err != nil {
+		return &RpcError{Reason: BadRequest, Err: errors.Wrap(err, "invalid sync committee message signature")}
 	}
 	// Broadcasting and saving message into the pool in parallel. As one fail should not affect another.
 	// This broadcasts for all subnets.

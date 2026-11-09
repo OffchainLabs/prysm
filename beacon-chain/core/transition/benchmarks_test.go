@@ -13,7 +13,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/benchmark"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"google.golang.org/protobuf/proto"
 )
 
 var runAmount = 25
@@ -118,17 +117,8 @@ func BenchmarkHashTreeRootState_FullState(b *testing.B) {
 func BenchmarkMarshalState_FullState(b *testing.B) {
 	beaconState, err := benchmark.PreGenstateFullEpochs()
 	require.NoError(b, err)
-	natState, err := state_native.ProtobufBeaconStatePhase0(beaconState.ToProtoUnsafe())
+	natState, err := state_native.ContainerFrom[*ethpb.BeaconState](beaconState.ToContainerUnsafe())
 	require.NoError(b, err)
-	b.Run("Proto_Marshal", func(b *testing.B) {
-		b.ResetTimer()
-		b.ReportAllocs()
-		for b.Loop() {
-			_, err := proto.Marshal(natState)
-			require.NoError(b, err)
-		}
-	})
-
 	b.Run("Fast_SSZ_Marshal", func(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -142,20 +132,10 @@ func BenchmarkMarshalState_FullState(b *testing.B) {
 func BenchmarkUnmarshalState_FullState(b *testing.B) {
 	beaconState, err := benchmark.PreGenstateFullEpochs()
 	require.NoError(b, err)
-	natState, err := state_native.ProtobufBeaconStatePhase0(beaconState.ToProtoUnsafe())
-	require.NoError(b, err)
-	protoObject, err := proto.Marshal(natState)
+	natState, err := state_native.ContainerFrom[*ethpb.BeaconState](beaconState.ToContainerUnsafe())
 	require.NoError(b, err)
 	sszObject, err := natState.MarshalSSZ()
 	require.NoError(b, err)
-
-	b.Run("Proto_Unmarshal", func(b *testing.B) {
-		b.ResetTimer()
-		b.ReportAllocs()
-		for b.Loop() {
-			require.NoError(b, proto.Unmarshal(protoObject, &ethpb.BeaconState{}))
-		}
-	})
 
 	b.Run("Fast_SSZ_Unmarshal", func(b *testing.B) {
 		b.ResetTimer()

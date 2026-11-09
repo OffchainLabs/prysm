@@ -35,7 +35,7 @@ func TestServer_ListAttestations_NoResults(t *testing.T) {
 	db := dbTest.SetupDB(t)
 	ctx := t.Context()
 
-	st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	st, err := state_native.New(&ethpb.BeaconState{
 		Slot: 0,
 	})
 	require.NoError(t, err)
@@ -63,7 +63,7 @@ func TestServer_ListAttestations_Genesis(t *testing.T) {
 	db := dbTest.SetupDB(t)
 	ctx := t.Context()
 
-	st, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	st, err := state_native.New(&ethpb.BeaconState{
 		Slot: 0,
 	})
 	require.NoError(t, err)
@@ -470,7 +470,7 @@ func TestServer_ListAttestationsElectra(t *testing.T) {
 	db := dbTest.SetupDB(t)
 	ctx := t.Context()
 
-	st, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{
+	st, err := state_native.New(&ethpb.BeaconStateElectra{
 		Slot: 0,
 	})
 	require.NoError(t, err)

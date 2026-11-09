@@ -1973,10 +1973,10 @@ func (c *ExecutionPayloadDeneb) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 func (c *ExecutionPayloadGloas) SizeSSZ() int {
 	size := 540
 	size += len(c.ExtraData)
-	for _, o := range c.Transactions {
-		size += 4
-		size += len(o)
+	if c.Transactions == nil {
+		c.Transactions = new(ProgressiveTransactionList)
 	}
+	size += c.Transactions.SizeSSZ()
 	size += len(c.Withdrawals) * 44
 	size += len(c.BlockAccessList)
 	return size
@@ -2056,11 +2056,11 @@ func (c *ExecutionPayloadGloas) MarshalSSZTo(dst []byte) ([]byte, error) {
 	dst = append(dst, c.BlockHash...)
 
 	// Field 13: Transactions
-	dst = ssz.WriteOffset(dst, offset)
-	for _, o := range c.Transactions {
-		offset += 4
-		offset += len(o)
+	if c.Transactions == nil {
+		c.Transactions = new(ProgressiveTransactionList)
 	}
+	dst = ssz.WriteOffset(dst, offset)
+	offset += c.Transactions.SizeSSZ()
 
 	// Field 14: Withdrawals
 	dst = ssz.WriteOffset(dst, offset)
@@ -2088,15 +2088,8 @@ func (c *ExecutionPayloadGloas) MarshalSSZTo(dst []byte) ([]byte, error) {
 	dst = append(dst, c.ExtraData...)
 
 	// Field 13: Transactions
-	{
-		offset = 4 * len(c.Transactions)
-		for _, o := range c.Transactions {
-			dst = ssz.WriteOffset(dst, offset)
-			offset += len(o)
-		}
-	}
-	for _, o := range c.Transactions {
-		dst = append(dst, o...)
+	if dst, err = c.Transactions.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("Transactions: %w", err)
 	}
 
 	// Field 14: Withdrawals
@@ -2206,48 +2199,9 @@ func (c *ExecutionPayloadGloas) UnmarshalSSZ(buf []byte) error {
 	c.BlockHash = append(c.BlockHash, sszSlice12...)
 
 	// Field 13: Transactions
-	{
-		// empty lists are zero length, so make sure there is room for an offset
-		// before attempting to unmarshal it
-		if len(sszSlice13) > 3 {
-			startOffset := ssz.ReadOffset(sszSlice13[0:4])
-			if startOffset == 0 {
-				return fmt.Errorf("encountered invalid offset of 0 when decoding c.Transactions")
-			}
-			if startOffset%4 != 0 {
-				return fmt.Errorf("misaligned list bytes: when decoding c.Transactions, end-of-list offset is %d, which is not a multiple of 4 (offset size)", startOffset)
-			}
-			listLen := startOffset / 4
-			totalVarBytes := uint64(len(sszSlice13))
-			if totalVarBytes < startOffset {
-				return fmt.Errorf("list bytes too short to contain an offset when decoding c.Transactions")
-			}
-			c.Transactions = make([][]byte, listLen)
-			var tmpSlice []byte
-			for i := uint64(0); i < listLen; i++ {
-				var tmp []byte
-
-				endOffset := totalVarBytes
-				if i+1 != listLen {
-					endOffset = ssz.ReadOffset(sszSlice13[(i+1)*4 : (i+2)*4])
-					if totalVarBytes < endOffset {
-						return fmt.Errorf("offset %d points past the end of buffer when decoding c.Transactions", endOffset)
-					}
-				}
-				if endOffset < startOffset {
-					return fmt.Errorf("offset %d is not greater than start offset %d when decoding c.Transactions", endOffset, startOffset)
-				}
-				tmpSlice = sszSlice13[startOffset:endOffset]
-				tmp = append([]byte{}, tmpSlice...)
-				c.Transactions[i] = tmp
-				startOffset = endOffset
-			}
-		} else {
-			if len(sszSlice13) > 0 {
-				return fmt.Errorf("list bytes too short to contain an offset when decoding c.Transactions")
-			}
-			c.Transactions = make([][]byte, 0)
-		}
+	c.Transactions = new(ProgressiveTransactionList)
+	if err = c.Transactions.UnmarshalSSZ(sszSlice13); err != nil {
+		return fmt.Errorf("Transactions: %w", err)
 	}
 
 	// Field 14: Withdrawals
@@ -2256,6 +2210,9 @@ func (c *ExecutionPayloadGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.Withdrawals length is %d, which is not a multiple of 44: %w", len(sszSlice14), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice14) / 44
+		if numElem > 4 {
+			return fmt.Errorf("ssz-max exceeded: c.Withdrawals has %d elements, ssz-max is 4: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.Withdrawals = make([]*Withdrawal, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *Withdrawal
@@ -2307,45 +2264,45 @@ func (c *ExecutionPayloadGloas) ProgressiveHashTreeRoot() ([32]byte, error) {
 
 func (c *ExecutionPayloadGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
-	// Field 0: ParentHash
+	// Position 0: ParentHash
 	if len(c.ParentHash) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.ParentHash)
-	// Field 1: FeeRecipient
+	// Position 1: FeeRecipient
 	if len(c.FeeRecipient) != 20 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.FeeRecipient)
-	// Field 2: StateRoot
+	// Position 2: StateRoot
 	if len(c.StateRoot) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.StateRoot)
-	// Field 3: ReceiptsRoot
+	// Position 3: ReceiptsRoot
 	if len(c.ReceiptsRoot) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.ReceiptsRoot)
-	// Field 4: LogsBloom
+	// Position 4: LogsBloom
 	if len(c.LogsBloom) != 256 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.LogsBloom)
-	// Field 5: PrevRandao
+	// Position 5: PrevRandao
 	if len(c.PrevRandao) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.PrevRandao)
-	// Field 6: BlockNumber
+	// Position 6: BlockNumber
 	hh.PutUint64(c.BlockNumber)
-	// Field 7: GasLimit
+	// Position 7: GasLimit
 	hh.PutUint64(c.GasLimit)
-	// Field 8: GasUsed
+	// Position 8: GasUsed
 	hh.PutUint64(c.GasUsed)
-	// Field 9: Timestamp
+	// Position 9: Timestamp
 	hh.PutUint64(c.Timestamp)
-	// Field 10: ExtraData
+	// Position 10: ExtraData
 
 	{
 		if len(c.ExtraData) > 32 {
@@ -2357,29 +2314,21 @@ func (c *ExecutionPayloadGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err
 		hh.MerkleizeWithMixin(subIndx, numItems, (32*1+31)/32)
 	}
 
-	// Field 11: BaseFeePerGas
+	// Position 11: BaseFeePerGas
 	if len(c.BaseFeePerGas) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.BaseFeePerGas)
-	// Field 12: BlockHash
+	// Position 12: BlockHash
 	if len(c.BlockHash) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.BlockHash)
-	// Field 13: Transactions
-	{
-		subIndx := hh.Index()
-		for _, o := range c.Transactions {
-			{
-				subIndx := hh.Index()
-				hh.AppendBytes32(o)
-				hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(o)))
-			}
-		}
-		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Transactions)))
+	// Position 13: Transactions
+	if err := c.Transactions.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("Transactions: %w", err)
 	}
-	// Field 14: Withdrawals
+	// Position 14: Withdrawals
 	{
 		subIndx := hh.Index()
 		for _, o := range c.Withdrawals {
@@ -2389,17 +2338,17 @@ func (c *ExecutionPayloadGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Withdrawals)))
 	}
-	// Field 15: BlobGasUsed
+	// Position 15: BlobGasUsed
 	hh.PutUint64(c.BlobGasUsed)
-	// Field 16: ExcessBlobGas
+	// Position 16: ExcessBlobGas
 	hh.PutUint64(c.ExcessBlobGas)
-	// Field 17: BlockAccessList
+	// Position 17: BlockAccessList
 	{
 		subIndx := hh.Index()
 		hh.AppendBytes32(c.BlockAccessList)
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.BlockAccessList)))
 	}
-	// Field 18: SlotNumber
+	// Position 18: SlotNumber
 	if err := c.SlotNumber.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("SlotNumber: %w", err)
 	}
@@ -3791,6 +3740,9 @@ func (c *ExecutionRequestsGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.Withdrawals length is %d, which is not a multiple of 76: %w", len(sszSlice1), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice1) / 76
+		if numElem > 16 {
+			return fmt.Errorf("ssz-max exceeded: c.Withdrawals has %d elements, ssz-max is 16: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.Withdrawals = make([]*WithdrawalRequest, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *WithdrawalRequest
@@ -3809,6 +3761,9 @@ func (c *ExecutionRequestsGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.Consolidations length is %d, which is not a multiple of 116: %w", len(sszSlice2), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice2) / 116
+		if numElem > 2 {
+			return fmt.Errorf("ssz-max exceeded: c.Consolidations has %d elements, ssz-max is 2: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.Consolidations = make([]*ConsolidationRequest, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *ConsolidationRequest
@@ -3827,6 +3782,9 @@ func (c *ExecutionRequestsGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.BuilderDeposits length is %d, which is not a multiple of 184: %w", len(sszSlice3), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice3) / 184
+		if numElem > 64 {
+			return fmt.Errorf("ssz-max exceeded: c.BuilderDeposits has %d elements, ssz-max is 64: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.BuilderDeposits = make([]*BuilderDepositRequest, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *BuilderDepositRequest
@@ -3845,6 +3803,9 @@ func (c *ExecutionRequestsGloas) UnmarshalSSZ(buf []byte) error {
 			return fmt.Errorf("misaligned bytes: c.BuilderExits length is %d, which is not a multiple of 68: %w", len(sszSlice4), ssz.ErrIncorrectListSize)
 		}
 		numElem := len(sszSlice4) / 68
+		if numElem > 16 {
+			return fmt.Errorf("ssz-max exceeded: c.BuilderExits has %d elements, ssz-max is 16: %w", numElem, ssz.ErrListTooBig)
+		}
 		c.BuilderExits = make([]*BuilderExitRequest, numElem)
 		for i := 0; i < numElem; i++ {
 			var tmp *BuilderExitRequest
@@ -3882,7 +3843,7 @@ func (c *ExecutionRequestsGloas) ProgressiveHashTreeRoot() ([32]byte, error) {
 
 func (c *ExecutionRequestsGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
-	// Field 0: Deposits
+	// Position 0: Deposits
 	{
 		subIndx := hh.Index()
 		for _, o := range c.Deposits {
@@ -3892,7 +3853,7 @@ func (c *ExecutionRequestsGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (er
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Deposits)))
 	}
-	// Field 1: Withdrawals
+	// Position 1: Withdrawals
 	{
 		subIndx := hh.Index()
 		for _, o := range c.Withdrawals {
@@ -3902,7 +3863,7 @@ func (c *ExecutionRequestsGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (er
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Withdrawals)))
 	}
-	// Field 2: Consolidations
+	// Position 2: Consolidations
 	{
 		subIndx := hh.Index()
 		for _, o := range c.Consolidations {
@@ -3912,7 +3873,7 @@ func (c *ExecutionRequestsGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (er
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Consolidations)))
 	}
-	// Field 3: BuilderDeposits
+	// Position 3: BuilderDeposits
 	{
 		subIndx := hh.Index()
 		for _, o := range c.BuilderDeposits {
@@ -3922,7 +3883,7 @@ func (c *ExecutionRequestsGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (er
 		}
 		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.BuilderDeposits)))
 	}
-	// Field 4: BuilderExits
+	// Position 4: BuilderExits
 	{
 		subIndx := hh.Index()
 		for _, o := range c.BuilderExits {

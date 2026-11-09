@@ -13,24 +13,21 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/interop"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	log "github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
 )
 
-func TestBeaconState_ProtoBeaconStateCompatibility(t *testing.T) {
+func TestBeaconState_ContainerCompatibility(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	ctx := t.Context()
 	genesis := setupGenesisState(t, 64)
-	customState, err := statenative.InitializeFromProtoPhase0(genesis)
+	customState, err := statenative.New(genesis)
 	require.NoError(t, err)
-	cloned, ok := proto.Clone(genesis).(*ethpb.BeaconState)
-	assert.Equal(t, true, ok, "Object is not of type *ethpb.BeaconState")
-	custom := customState.ToProto()
+	cloned := genesis.Copy()
+	custom := customState.ToContainer()
 	assert.DeepSSZEqual(t, cloned, custom)
 
 	r1, err := customState.HashTreeRoot(ctx)
 	require.NoError(t, err)
-	beaconState, err := statenative.InitializeFromProtoPhase0(genesis)
+	beaconState, err := statenative.New(genesis)
 	require.NoError(t, err)
 	r2, err := beaconState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
@@ -43,7 +40,7 @@ func TestBeaconState_ProtoBeaconStateCompatibility(t *testing.T) {
 	r1, err = customState.HashTreeRoot(ctx)
 	require.NoError(t, err)
 	genesis.Balances = balances
-	beaconState, err = statenative.InitializeFromProtoPhase0(genesis)
+	beaconState, err = statenative.New(genesis)
 	require.NoError(t, err)
 	r2, err = beaconState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
@@ -73,7 +70,7 @@ func setupGenesisState(t testing.TB, count uint64) *ethpb.BeaconState {
 	return genesisState
 }
 
-func BenchmarkCloneValidators_Proto(b *testing.B) {
+func BenchmarkCloneValidators_Copy(b *testing.B) {
 
 	validators := make([]*ethpb.Validator, 16384)
 	somePubKey := [fieldparams.BLSPubkeyLength]byte{1, 2, 3}
@@ -92,7 +89,7 @@ func BenchmarkCloneValidators_Proto(b *testing.B) {
 	}
 
 	for b.Loop() {
-		cloneValidatorsWithProto(validators)
+		cloneValidatorsWithCopy(validators)
 	}
 }
 
@@ -119,15 +116,14 @@ func BenchmarkCloneValidators_Manual(b *testing.B) {
 	}
 }
 
-func BenchmarkStateClone_Proto(b *testing.B) {
+func BenchmarkStateClone_Copy(b *testing.B) {
 
 	params.SetupTestConfigCleanup(b)
 	params.OverrideBeaconConfig(params.MinimalSpecConfig())
 	genesis := setupGenesisState(b, 64)
 
 	for b.Loop() {
-		_, ok := proto.Clone(genesis).(*ethpb.BeaconState)
-		assert.Equal(b, true, ok, "Entity is not of type *ethpb.BeaconState")
+		_ = genesis.Copy()
 	}
 }
 
@@ -136,22 +132,18 @@ func BenchmarkStateClone_Manual(b *testing.B) {
 	params.SetupTestConfigCleanup(b)
 	params.OverrideBeaconConfig(params.MinimalSpecConfig())
 	genesis := setupGenesisState(b, 64)
-	st, err := statenative.InitializeFromProtoPhase0(genesis)
+	st, err := statenative.New(genesis)
 	require.NoError(b, err)
 
 	for b.Loop() {
-		_ = st.ToProto()
+		_ = st.ToContainer()
 	}
 }
 
-func cloneValidatorsWithProto(vals []*ethpb.Validator) []*ethpb.Validator {
-	var ok bool
+func cloneValidatorsWithCopy(vals []*ethpb.Validator) []*ethpb.Validator {
 	res := make([]*ethpb.Validator, len(vals))
 	for i := range res {
-		res[i], ok = proto.Clone(vals[i]).(*ethpb.Validator)
-		if !ok {
-			log.Debug("Entity is not of type *ethpb.Validator")
-		}
+		res[i] = vals[i].Copy()
 	}
 	return res
 }
@@ -178,7 +170,7 @@ func TestBeaconState_ImmutabilityWithSharedResources(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.MinimalSpecConfig())
 	genesis := setupGenesisState(t, 64)
-	a, err := statenative.InitializeFromProtoPhase0(genesis)
+	a, err := statenative.New(genesis)
 	require.NoError(t, err)
 	b := a.Copy()
 
@@ -215,7 +207,7 @@ func TestForkManualCopy_OK(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.MinimalSpecConfig())
 	genesis := setupGenesisState(t, 64)
-	a, err := statenative.InitializeFromProtoPhase0(genesis)
+	a, err := statenative.New(genesis)
 	require.NoError(t, err)
 	wantedFork := &ethpb.Fork{
 		PreviousVersion: []byte{'a', 'b', 'c'},
@@ -224,7 +216,7 @@ func TestForkManualCopy_OK(t *testing.T) {
 	}
 	require.NoError(t, a.SetFork(wantedFork))
 
-	pbState, err := statenative.ProtobufBeaconStatePhase0(a.ToProtoUnsafe())
+	container, err := statenative.ContainerFrom[*ethpb.BeaconState](a.ToContainerUnsafe())
 	require.NoError(t, err)
-	require.DeepEqual(t, pbState.Fork, wantedFork)
+	require.DeepEqual(t, container.Fork, wantedFork)
 }

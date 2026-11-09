@@ -89,7 +89,6 @@ func (s *Service) blobSidecarsByRangeRPCHandler(ctx context.Context, msg any, st
 
 	// Ticker to stagger out large requests.
 	ticker := time.NewTicker(blobRpcThrottleInterval)
-	defer ticker.Stop()
 	batcher, err := newBlockRangeBatcher(rp, s.cfg.beaconDB, s.rateLimiter, s.cfg.chain.IsCanonical, ticker)
 	if err != nil {
 		log.WithError(err).Error("Cannot create new block range batcher")

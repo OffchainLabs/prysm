@@ -6,6 +6,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -99,6 +100,67 @@ func TestSaveProposalHistoryForPubKey_OK(t *testing.T) {
 		},
 	}
 	require.DeepEqual(t, want[0], proposalHistory[0])
+}
+
+func TestSaveProposalHistoryForPubKey_SigningRootNil(t *testing.T) {
+	pubkey := [fieldparams.BLSPubkeyLength]byte{3}
+	db := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubkey})
+
+	slot := primitives.Slot(2)
+
+	err := db.SaveProposalHistoryForSlot(t.Context(), pubkey, slot, nil)
+	require.NoError(t, err, "Saving proposal history failed: %v")
+	proposalHistory, err := db.ProposalHistoryForPubKey(t.Context(), pubkey)
+	require.NoError(t, err, "Failed to get proposal history")
+
+	require.Equal(t, 1, len(proposalHistory))
+
+	// The proposal has no signing root, which should not be read back as the all-zero signing root.
+	want := &common.Proposal{
+		Slot: slot,
+	}
+	require.DeepEqual(t, want, proposalHistory[0])
+}
+
+func TestSlashableProposalCheck_UnknownSigningRoot(t *testing.T) {
+	const (
+		lowestSlot = primitives.Slot(1)
+		slot       = primitives.Slot(2)
+	)
+
+	ctx := t.Context()
+	pubkey := [fieldparams.BLSPubkeyLength]byte{4}
+	db := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubkey})
+
+	// Save a proposal at a lower slot first, so EIP-3076 condition 2 does not mask condition 1,
+	// then save the proposal with an unknown signing root.
+	lowestSigningRoot := [fieldparams.RootLength]byte{1}
+	require.NoError(t, db.SaveProposalHistoryForSlot(ctx, pubkey, lowestSlot, lowestSigningRoot[:]))
+	require.NoError(t, db.SaveProposalHistoryForSlot(ctx, pubkey, slot, nil))
+
+	// The proposal exists, but without any signing root.
+	_, proposalExists, signingRootExists, err := db.ProposalHistoryForSlot(ctx, pubkey, slot)
+	require.NoError(t, err)
+	require.Equal(t, true, proposalExists, "the proposal should exist")
+	require.Equal(t, false, signingRootExists, "the proposal should have no signing root")
+
+	block := &ethpb.SignedBeaconBlock{
+		Block: &ethpb.BeaconBlock{
+			Slot: slot,
+			Body: &ethpb.BeaconBlockBody{},
+		},
+		Signature: params.BeaconConfig().EmptySignature[:],
+	}
+
+	signedBlock, err := blocks.NewSignedBeaconBlock(block)
+	require.NoError(t, err)
+
+	// EIP-3076 condition 1: a new block at the same slot is slashable, including with the all-zero
+	// signing root, which must not be mistaken for the unknown one stored in the database.
+	for _, signingRoot := range [][fieldparams.RootLength]byte{{1}, {}} {
+		err := db.SlashableProposalCheck(ctx, pubkey, signedBlock, signingRoot, false, nil)
+		require.ErrorContains(t, common.FailedBlockSignLocalErr, err)
+	}
 }
 
 func TestSaveProposalHistoryForSlot_Overwrites(t *testing.T) {
@@ -451,4 +513,72 @@ func Test_slashableProposalCheck_RemoteProtection(t *testing.T) {
 
 	err = db.SlashableProposalCheck(t.Context(), pubkey, sBlock, [32]byte{2}, false, nil)
 	require.NoError(t, err, "Expected allowed block not to throw error")
+}
+
+func TestRaiseLowestSignedProposal(t *testing.T) {
+	weakSubjectivityPeriod := params.BeaconConfig().WeakSubjectivityPeriod
+	farSlot := params.BeaconConfig().SlotsPerEpoch.Mul(uint64(weakSubjectivityPeriod + 9))
+	// pruneProposalHistoryBySlot deletes every slot in epochs <= 9 when saving farSlot.
+	cutoffSlot := params.BeaconConfig().SlotsPerEpoch.Mul(10)
+
+	signedBlock := func(t *testing.T, slot primitives.Slot) interfaces.ReadOnlySignedBeaconBlock {
+		blk := util.NewBeaconBlock()
+		blk.Block.Slot = slot
+		wsb, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		return wsb
+	}
+
+	t.Run("no pruning keeps the watermark", func(t *testing.T) {
+		pubkey := [fieldparams.BLSPubkeyLength]byte{1}
+		db := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubkey})
+
+		require.NoError(t, db.SaveProposalHistoryForSlot(t.Context(), pubkey, 2, []byte{1}))
+		require.NoError(t, db.SaveProposalHistoryForSlot(t.Context(), pubkey, 100, []byte{2}))
+
+		lowest, exists, err := db.LowestSignedProposal(t.Context(), pubkey)
+		require.NoError(t, err)
+		require.Equal(t, true, exists)
+		require.Equal(t, primitives.Slot(2), lowest)
+	})
+
+	t.Run("pruning raises the watermark to the cutoff", func(t *testing.T) {
+		pubkey := [fieldparams.BLSPubkeyLength]byte{1}
+		db := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubkey})
+
+		require.NoError(t, db.SaveProposalHistoryForSlot(t.Context(), pubkey, 2, []byte{1}))
+		require.NoError(t, db.SaveProposalHistoryForSlot(t.Context(), pubkey, farSlot, []byte{2}))
+
+		lowest, exists, err := db.LowestSignedProposal(t.Context(), pubkey)
+		require.NoError(t, err)
+		require.Equal(t, true, exists)
+		require.Equal(t, cutoffSlot, lowest)
+	})
+
+	t.Run("pruning never lowers the watermark", func(t *testing.T) {
+		pubkey := [fieldparams.BLSPubkeyLength]byte{1}
+		db := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubkey})
+
+		require.NoError(t, db.SaveProposalHistoryForSlot(t.Context(), pubkey, farSlot, []byte{1}))
+		require.NoError(t, db.SaveProposalHistoryForSlot(t.Context(), pubkey, farSlot+1, []byte{2}))
+
+		lowest, exists, err := db.LowestSignedProposal(t.Context(), pubkey)
+		require.NoError(t, err)
+		require.Equal(t, true, exists)
+		require.Equal(t, farSlot, lowest)
+	})
+
+	t.Run("pruned slot cannot be signed again", func(t *testing.T) {
+		pubkey := [fieldparams.BLSPubkeyLength]byte{1}
+		db := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubkey})
+
+		// Sign blocks at slots 2 and 100, then a block far enough ahead to prune both.
+		require.NoError(t, db.SlashableProposalCheck(t.Context(), pubkey, signedBlock(t, 2), [32]byte{1}, false, nil))
+		require.NoError(t, db.SlashableProposalCheck(t.Context(), pubkey, signedBlock(t, 100), [32]byte{2}, false, nil))
+		require.NoError(t, db.SlashableProposalCheck(t.Context(), pubkey, signedBlock(t, farSlot), [32]byte{3}, false, nil))
+
+		// A different block at slot 100 would be a double proposal.
+		err := db.SlashableProposalCheck(t.Context(), pubkey, signedBlock(t, 100), [32]byte{4}, false, nil)
+		require.ErrorContains(t, "could not sign block with slot < lowest signed", err)
+	})
 }

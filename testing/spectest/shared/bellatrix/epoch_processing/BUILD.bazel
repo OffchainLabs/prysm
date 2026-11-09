@@ -16,6 +16,7 @@ go_library(
         "rewards_and_penalties.go",
         "slashings.go",
         "slashings_reset.go",
+        "sync_committee_updates.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/bellatrix/epoch_processing",
     visibility = ["//testing/spectest:__subpackages__"],
@@ -32,8 +33,5 @@ go_library(
         "//testing/spectest/utils:go_default_library",
         "//testing/util:go_default_library",
         "@com_github_golang_snappy//:go_default_library",
-        "@com_github_google_go_cmp//cmp:go_default_library",
-        "@org_golang_google_protobuf//proto:go_default_library",
-        "@org_golang_google_protobuf//testing/protocmp:go_default_library",
     ],
 )

@@ -89,7 +89,7 @@ func Test_SignedBeaconBlock_Copy(t *testing.T) {
 
 	t.Run("gloas deep copy", func(t *testing.T) {
 		payload := []*eth.PayloadAttestation{{Signature: []byte{0x01}}}
-		payloadBid := &eth.SignedExecutionPayloadBid{Signature: []byte{0x02}}
+		payloadBid := hydrateBeaconBlockBodyGloas().SignedExecutionPayloadBid
 		sb := &SignedBeaconBlock{
 			version: version.Gloas,
 			block: &BeaconBlock{
@@ -119,10 +119,10 @@ func Test_SignedBeaconBlock_Copy(t *testing.T) {
 
 		bid, err := cp.Block().Body().SignedExecutionPayloadBid()
 		require.NoError(t, err)
-		require.DeepEqual(t, payloadBid, bid)
-		origBidSig := bid.Signature[0]
+		require.DeepEqual(t, payloadBid, cp.block.body.signedExecutionPayloadBid)
+		origBidSig := bid.Signature()[0]
 		payloadBid.Signature[0] ^= 0xFF
-		require.Equal(t, origBidSig, bid.Signature[0])
+		require.Equal(t, origBidSig, bid.Signature()[0])
 	})
 }
 
@@ -441,15 +441,21 @@ func Test_BeaconBlockBody_SignedExecutionPayloadBid(t *testing.T) {
 	})
 
 	t.Run("gloas returns bid", func(t *testing.T) {
-		bid := &eth.SignedExecutionPayloadBid{Signature: []byte{0xFF}}
+		bid := hydrateBeaconBlockBodyGloas().SignedExecutionPayloadBid
+		ro, err := WrappedROSignedExecutionPayloadBid(bid)
+		require.NoError(t, err)
 		sb := &SignedBeaconBlock{
 			version: version.Gloas,
 			block:   &BeaconBlock{version: version.Gloas, body: &BeaconBlockBody{version: version.Gloas}},
 		}
-		require.NoError(t, sb.SetSignedExecutionPayloadBid(bid))
+		require.NoError(t, sb.SetSignedExecutionPayloadBid(ro))
 		got, err := sb.Block().Body().SignedExecutionPayloadBid()
 		require.NoError(t, err)
-		require.DeepEqual(t, bid, got)
+		wantRoot, err := bid.HashTreeRoot()
+		require.NoError(t, err)
+		gotRoot, err := got.HashTreeRoot()
+		require.NoError(t, err)
+		require.Equal(t, wantRoot, gotRoot)
 	})
 }
 
@@ -467,16 +473,18 @@ func Test_BeaconBlockBody_BlobKzgCommitments(t *testing.T) {
 			name: "gloas returns commitments from bid",
 			body: &BeaconBlockBody{
 				version: version.Gloas,
-				signedExecutionPayloadBid: &eth.SignedExecutionPayloadBid{
-					Message: &eth.ExecutionPayloadBid{BlobKzgCommitments: commitments},
-				},
+				signedExecutionPayloadBid: func() *eth.SignedExecutionPayloadBid {
+					bid := hydrateBeaconBlockBodyGloas().SignedExecutionPayloadBid
+					bid.Message.BlobKzgCommitments = commitments
+					return bid
+				}(),
 			},
 			want: commitments,
 		},
 		{
-			name:       "gloas nil signed bid",
-			body:       &BeaconBlockBody{version: version.Gloas, signedExecutionPayloadBid: nil},
-			wantErrMsg: "nil execution payload bid or bid message",
+			name:    "gloas nil signed bid",
+			body:    &BeaconBlockBody{version: version.Gloas, signedExecutionPayloadBid: nil},
+			wantErr: consensus_types.ErrNilObjectWrapped,
 		},
 		{
 			name: "gloas nil bid message",
@@ -484,7 +492,7 @@ func Test_BeaconBlockBody_BlobKzgCommitments(t *testing.T) {
 				version:                   version.Gloas,
 				signedExecutionPayloadBid: &eth.SignedExecutionPayloadBid{Message: nil},
 			},
-			wantErrMsg: "nil execution payload bid or bid message",
+			wantErr: consensus_types.ErrNilObjectWrapped,
 		},
 		{
 			name: "deneb returns commitments",
@@ -742,6 +750,47 @@ func hydrateBeaconBlockBodyCapella() *eth.BeaconBlockBodyCapella {
 			BlockHash:     make([]byte, fieldparams.RootLength),
 			Transactions:  make([][]byte, 0),
 			Withdrawals:   make([]*pb.Withdrawal, 0),
+		},
+	}
+}
+
+func hydrateBeaconBlockBodyHeze() *eth.BeaconBlockBodyHeze {
+	bits := bitfield.NewBitvector512()
+	bits.SetBitAt(0, true)
+
+	return &eth.BeaconBlockBodyHeze{
+		RandaoReveal: make([]byte, fieldparams.BLSSignatureLength),
+		Graffiti:     make([]byte, fieldparams.RootLength),
+		Eth1Data: &eth.Eth1Data{
+			DepositRoot: make([]byte, fieldparams.RootLength),
+			BlockHash:   make([]byte, fieldparams.RootLength),
+		},
+		SyncAggregate: &eth.SyncAggregate{
+			SyncCommitteeBits:      make([]byte, fieldparams.SyncAggregateSyncCommitteeBytesLength),
+			SyncCommitteeSignature: make([]byte, fieldparams.BLSSignatureLength),
+		},
+		SignedExecutionPayloadBid: &eth.SignedExecutionPayloadBidHeze{
+			Message: &eth.ExecutionPayloadBidHeze{
+				ParentBlockHash:       make([]byte, fieldparams.RootLength),
+				ParentBlockRoot:       make([]byte, fieldparams.RootLength),
+				BlockHash:             make([]byte, fieldparams.RootLength),
+				PrevRandao:            make([]byte, fieldparams.RootLength),
+				FeeRecipient:          make([]byte, 20),
+				BlobKzgCommitments:    [][]byte{make([]byte, fieldparams.BLSPubkeyLength)},
+				ExecutionRequestsRoot: make([]byte, fieldparams.RootLength),
+				InclusionListBits:     []byte{0x01, 0x80},
+			},
+			Signature: make([]byte, fieldparams.BLSSignatureLength),
+		},
+		ParentExecutionRequests: &pb.ExecutionRequestsGloas{},
+		PayloadAttestations: []*eth.PayloadAttestation{
+			{
+				AggregationBits: bits,
+				Data: &eth.PayloadAttestationData{
+					BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+				},
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+			},
 		},
 	}
 }

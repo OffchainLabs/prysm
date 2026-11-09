@@ -307,47 +307,27 @@ func (s *Slice[V]) Append(obj Identifiable, val V) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	if len(s.appendedItems) == 0 {
-		s.appendedItems = append(s.appendedItems, &MultiValueItem[V]{Values: []*Value[V]{{val: val, ids: []uint64{obj.Id()}}}})
-		s.cachedLengths[obj.Id()] = len(s.sharedItems) + 1
-		return
+	id := obj.Id()
+	length, ok := s.cachedLengths[id]
+	if !ok {
+		length = len(s.sharedItems)
 	}
-
-	for _, item := range s.appendedItems {
-		found := false
+	// Each object's appended values are contiguous, so its length locates the next position.
+	index := length - len(s.sharedItems)
+	if index < len(s.appendedItems) {
+		item := s.appendedItems[index]
 		for _, v := range item.Values {
-			_, found = containsId(v.ids, obj.Id())
-			if found {
-				break
+			if v.val == val {
+				v.ids = append(v.ids, id)
+				s.cachedLengths[id] = length + 1
+				return
 			}
 		}
-		if !found {
-			newValue := true
-			for _, v := range item.Values {
-				if v.val == val {
-					v.ids = append(v.ids, obj.Id())
-					newValue = false
-					break
-				}
-			}
-			if newValue {
-				item.Values = append(item.Values, &Value[V]{val: val, ids: []uint64{obj.Id()}})
-			}
-
-			l, ok := s.cachedLengths[obj.Id()]
-			if ok {
-				s.cachedLengths[obj.Id()] = l + 1
-			} else {
-				s.cachedLengths[obj.Id()] = len(s.sharedItems) + 1
-			}
-
-			return
-		}
+		item.Values = append(item.Values, &Value[V]{val: val, ids: []uint64{id}})
+	} else {
+		s.appendedItems = append(s.appendedItems, &MultiValueItem[V]{Values: []*Value[V]{{val: val, ids: []uint64{id}}}})
 	}
-
-	s.appendedItems = append(s.appendedItems, &MultiValueItem[V]{Values: []*Value[V]{{val: val, ids: []uint64{obj.Id()}}}})
-
-	s.cachedLengths[obj.Id()] = s.cachedLengths[obj.Id()] + 1
+	s.cachedLengths[id] = length + 1
 }
 
 // Detach removes the input object from the multi-value slice.

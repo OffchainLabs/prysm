@@ -26,6 +26,8 @@ var backOffPeriod = 10 * time.Second
 // runner encapsulates the main validator routine.
 type runner struct {
 	validator *validator
+	// duties tracks the in-flight slot duties, which may outlive run.
+	duties sync.WaitGroup
 }
 
 // newRunner creates a new runner instance and performs all necessary initialization.
@@ -83,6 +85,10 @@ func (r *runner) run(ctx context.Context) {
 	cleanup := v.Done
 	defer cleanup()
 	v.SetTicker()
+
+	v.dutyAwareShutdown.start(v.GenesisTime(), v.hasRewardedDutyAt)
+	defer v.dutyAwareShutdown.stop()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -110,10 +116,11 @@ func (r *runner) run(ctx context.Context) {
 
 			// Refresh assignments at the epoch boundary.
 			if slots.IsEpochStart(slot) {
-				deadline = v.SlotDeadline(slot + params.BeaconConfig().SlotsPerEpoch - 1)
-				dutiesCtx, dutiesCancel := context.WithDeadline(ctx, deadline)
+				dutiesDeadline := v.SlotDeadline(slot + params.BeaconConfig().SlotsPerEpoch - 1)
+				dutiesCtx, dutiesCancel := context.WithDeadline(ctx, dutiesDeadline)
 				if err := v.UpdateDuties(dutiesCtx); err != nil {
 					handleAssignmentError(err, slot)
+					v.dutyAwareShutdown.markDone(slot)
 					dutiesCancel()
 					span.End()
 					cancel()
@@ -149,6 +156,7 @@ func (r *runner) run(ctx context.Context) {
 			allRoles, err := v.RolesAt(slotCtx, slot)
 			if err != nil {
 				log.WithError(err).Error("Could not get validator roles")
+				v.dutyAwareShutdown.markDone(slot)
 				span.End()
 				cancel()
 				continue
@@ -156,6 +164,7 @@ func (r *runner) run(ctx context.Context) {
 			// performRoles calls span.End()
 			rolesCtx, _ := context.WithDeadline(ctx, deadline) //nolint:govet
 			performRoles(rolesCtx, allRoles, v, slot, &wg, span)
+			r.duties.Go(wg.Wait)
 		case e := <-v.EventsChan():
 			v.ProcessEvent(ctx, e)
 		case currentKeys := <-v.AccountsChangedChan(): // should be less of a priority than next slot
@@ -257,9 +266,21 @@ func initialize(ctx context.Context, v *validator) error {
 }
 
 func performRoles(slotCtx context.Context, allRoles map[[48]byte][]validatorRole, v *validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {
+	// Tracks the duties earning rewards, to know when the validator client can be restarted without missing any of them.
+	var rewardedWg sync.WaitGroup
+
 	for pubKey, roles := range allRoles {
 		for _, role := range roles {
+			rewarded := isRewardedRole(role)
+			if rewarded {
+				rewardedWg.Add(1)
+			}
+
 			wg.Go(func() {
+				if rewarded {
+					defer rewardedWg.Done()
+				}
+
 				switch role {
 				case roleAttester:
 					v.SubmitAttestation(slotCtx, slot, pubKey)
@@ -282,6 +303,11 @@ func performRoles(slotCtx context.Context, allRoles map[[48]byte][]validatorRole
 		}
 	}
 
+	go func() {
+		rewardedWg.Wait()
+		v.dutyAwareShutdown.markDone(slot)
+	}()
+
 	// Wait for all processes to complete, then report span complete.
 	go func() {
 		wg.Wait()
@@ -301,6 +327,12 @@ func performRoles(slotCtx context.Context, allRoles map[[48]byte][]validatorRole
 			log.WithError(err).Error("Could not report validator's rewards/penalties")
 		}
 	}()
+}
+
+// isRewardedRole returns true if performing the role earns rewards.
+// Aggregations, sync committee contributions and payload attestations do not.
+func isRewardedRole(role validatorRole) bool {
+	return role == roleAttester || role == roleProposer || role == roleSyncCommittee
 }
 
 func isConnectionError(err error) bool {

@@ -35,7 +35,7 @@ func testProtoEnvelope() *ethpb.ExecutionPayloadEnvelope {
 			PrevRandao:    bytesutil.PadTo([]byte("randao"), 32),
 			BaseFeePerGas: bytesutil.PadTo([]byte{1}, 32),
 			BlockHash:     bytesutil.PadTo([]byte("blockhash"), 32),
-			Transactions:  [][]byte{},
+			Transactions:  &enginev1.ProgressiveTransactionList{},
 			Withdrawals:   []*enginev1.Withdrawal{},
 			SlotNumber:    primitives.Slot(100),
 		},

@@ -682,9 +682,8 @@ func blockIndices(slot primitives.Slot, parentRoot [32]byte) map[string][]byte {
 func (s *Store) SaveHeadBlockRoot(ctx context.Context, blockRoot [32]byte) error {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveHeadBlockRoot")
 	defer span.End()
-	hasStateSummary := s.HasStateSummary(ctx, blockRoot)
-	hasStateInDB := s.HasState(ctx, blockRoot)
-	if !(hasStateInDB || hasStateSummary) {
+
+	if !s.HasStateSummary(ctx, blockRoot) && !s.HasState(ctx, blockRoot) {
 		return errors.New("no state or state summary found with head block root")
 	}
 
@@ -1206,6 +1205,11 @@ func unmarshalBlock(_ context.Context, enc []byte) (interfaces.ReadOnlySignedBea
 		if err := rawBlock.UnmarshalSSZ(enc[len(gloasKey):]); err != nil {
 			return nil, errors.Wrap(err, "could not unmarshal Gloas block")
 		}
+	case hasHezeKey(enc):
+		rawBlock = &ethpb.SignedBeaconBlockHeze{}
+		if err := rawBlock.UnmarshalSSZ(enc[len(hezeKey):]); err != nil {
+			return nil, errors.Wrap(err, "could not unmarshal Heze block")
+		}
 	default:
 		// Marshal block bytes to phase 0 beacon block.
 		rawBlock = &ethpb.SignedBeaconBlock{}
@@ -1235,6 +1239,10 @@ func encodeBlock(blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
 
 func keyForBlock(blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
 	v := blk.Version()
+
+	if v >= version.Heze {
+		return hezeKey, nil
+	}
 
 	if v >= version.Gloas {
 		// Gloas blocks are never blinded (no execution payload in block body).

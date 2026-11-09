@@ -36,6 +36,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "analyzer_test.go",
         "generalized_index_test.go",
         "merkle_proof_test.go",
         "path_test.go",

@@ -56,13 +56,13 @@ func ProcessBuilderDepositRequests(ctx context.Context, st state.BeaconState, re
 
 // processBuilderDepositRequest registers a new builder or tops up an existing one.
 //
-//	<spec fn="process_builder_deposit_request" fork="gloas" hash="1d458f9c">
+//	<spec fn="process_builder_deposit_request" fork="gloas" hash="f0fb2ad8">
 //	def process_builder_deposit_request(state: BeaconState, request: BuilderDepositRequest) -> None:
 //	    # Ignore deposits with unexpected withdrawal credential prefixes
 //	    if not is_builder_withdrawal_credential(request.withdrawal_credentials):
 //	        return
 //
-//	    builder_pubkeys = [b.pubkey for b in state.builders]
+//	    builder_pubkeys = [builder.pubkey for builder in state.builders]
 //	    if request.pubkey not in builder_pubkeys:
 //	        if is_valid_builder_deposit_signature(request):
 //	            add_builder_to_registry(

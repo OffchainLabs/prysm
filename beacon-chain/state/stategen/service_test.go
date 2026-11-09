@@ -29,7 +29,7 @@ func TestResume(t *testing.T) {
 
 	resumeState, err := service.Resume(ctx, beaconState)
 	require.NoError(t, err)
-	require.DeepSSZEqual(t, beaconState.ToProtoUnsafe(), resumeState.ToProtoUnsafe())
+	require.DeepSSZEqual(t, beaconState.ToContainerUnsafe(), resumeState.ToContainerUnsafe())
 	assert.Equal(t, service.finalizedInfo.root, root, "Did not get wanted root")
 	assert.Equal(t, beaconState.Slot(), service.migratedSlot)
 }

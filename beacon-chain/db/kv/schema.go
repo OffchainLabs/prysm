@@ -16,6 +16,7 @@ var (
 	stateValidatorsBucket                   = []byte("state-validators")
 	stateDiffBucket                         = []byte("state-diff")
 	hotStateSnapshotsBucket                 = []byte("hot-state-snapshots")
+	archiveResumeSnapshotsBucket            = []byte("archive-resume-snapshots")
 	executionPayloadEnvelopesBucket         = []byte("execution-payload-envelopes")
 	executionPayloadEnvelopeBlockHashBucket = []byte("execution-payload-envelope-block-hash-index")
 
@@ -61,13 +62,18 @@ var (
 	electraBlindKey            = []byte("blind-electra")
 	fuluKey                    = []byte("fulu")
 	fuluBlindKey               = []byte("blind-fulu")
-	gloasKey                   = []byte("gloas")
-	// No gloasBlindKey needed - Gloas blocks are never blinded (no execution payload in block body).
+
+	// No blindKeys for post-Gloas needed - post-Gloas blocks are never blinded (no execution payload in block body).
+	gloasKey = []byte("gloas")
+	hezeKey  = []byte("heze")
 
 	// block root included in the beacon state used by weak subjectivity initial sync
 	originCheckpointBlockRootKey = []byte("origin-checkpoint-block-root")
 	// tracking data about an ongoing backfill
 	backfillStatusKey = []byte("backfill-status")
+	// tracking data about an ongoing archive state regeneration; lives in stateDiffBucket alongside
+	// offsetKey/exponentsKey, which is collision-free because tree keys are always 16 or 18 bytes.
+	archiveStatusKey = []byte("archive-status")
 
 	// Deprecated: This index key was migrated in PR 6461. Do not use, except for migrations.
 	lastArchivedIndexKey = []byte("last-archived")

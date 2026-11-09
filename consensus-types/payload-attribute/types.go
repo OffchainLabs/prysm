@@ -117,11 +117,13 @@ func initPayloadAttributeFromV4(a *enginev1.PayloadAttributesV4) (Attributer, er
 
 // EventData holds the values for a PayloadAttributes event.
 type EventData struct {
-	ProposerIndex     primitives.ValidatorIndex
-	ProposalSlot      primitives.Slot
-	ParentBlockNumber uint64
-	ParentBlockHash   []byte
-	Attributer        Attributer
-	HeadBlock         interfaces.ReadOnlySignedBeaconBlock
-	HeadRoot          [field_params.RootLength]byte
+	ProposerIndex      primitives.ValidatorIndex
+	ProposalSlot       primitives.Slot
+	ParentBlockNumber  uint64
+	ParentBlockHash    []byte
+	SafeBlockHash      []byte
+	FinalizedBlockHash []byte
+	Attributer         Attributer
+	HeadBlock          interfaces.ReadOnlySignedBeaconBlock
+	HeadRoot           [field_params.RootLength]byte
 }

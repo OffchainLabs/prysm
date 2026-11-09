@@ -5,9 +5,9 @@ import "proto/eth/ext/options.proto";
 import "proto/prysm/v1alpha1/attestation.proto";
 import "proto/prysm/v1alpha1/beacon_block.proto";
 import "proto/prysm/v1alpha1/beacon_core_types.proto";
-import "proto/prysm/v1alpha1/beacon_state.proto";
 import "proto/prysm/v1alpha1/gloas.proto";
 import "proto/prysm/v1alpha1/gloas_builder_api.proto";
+import "proto/prysm/v1alpha1/heze.proto";
 import "proto/prysm/v1alpha1/sync_committee.proto";
 
 option csharp_namespace = "Ethereum.Validator.Accounts.V2";
@@ -89,6 +89,9 @@ message SignRequest {
     ethereum.eth.v1alpha1.PayloadAttestationData payload_attestation_data = 125;
     ethereum.eth.v1alpha1.ProposerPreferences proposer_preference = 126;
     ethereum.eth.v1alpha1.BuilderRequestAuth builder_request_auth = 127;
+
+    // Heze objects.
+    ethereum.eth.v1alpha1.BeaconBlockHeze block_heze = 128;
   }
 
   reserved 4, 5; // Reserving old, deleted fields.

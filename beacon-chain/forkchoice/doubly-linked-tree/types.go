@@ -43,7 +43,6 @@ type Store struct {
 	fullNodeByRoot                map[[fieldparams.RootLength]byte]*PayloadNode // full nodes (the payload was present) indexed by beacon block root.
 	slashedIndices                map[primitives.ValidatorIndex]bool            // the list of equivocating validator indices
 	blockRootsBySlotProposer      map[proposerSlotKey][][32]byte                // up to two block roots observed for a (slot, proposer); pruned at finalization.
-	originRoot                    [fieldparams.RootLength]byte                  // The genesis block root
 	genesisTime                   time.Time
 	highestReceivedNode           *Node                                      // The highest slot node.
 	receivedBlocksLastEpoch       [fieldparams.SlotsPerEpoch]primitives.Slot // Using `highestReceivedSlot`. The slot of blocks received in the last epoch.
@@ -53,23 +52,24 @@ type Store struct {
 // Node defines the individual block which includes its block parent, ancestor and how much weight accounted for it.
 // This is used as an array based stateful DAG for efficient fork choice look up.
 type Node struct {
-	slot                        primitives.Slot              // slot of the block converted to the node.
-	proposerIndex               primitives.ValidatorIndex    // proposer index of the block.
-	builderIndex                primitives.BuilderIndex      // builder index committed in the block's bid (Gloas only).
-	root                        [fieldparams.RootLength]byte // root of the block converted to the node.
-	blockHash                   [fieldparams.RootLength]byte // payloadHash of the block converted to the node.
-	parent                      *PayloadNode                 // parent index of this node.
-	target                      *Node                        // target checkpoint for
-	bestDescendant              *Node                        // bestDescendant node of this node.
-	justifiedEpoch              primitives.Epoch             // justifiedEpoch of this node.
-	unrealizedJustified         forkchoicetypes.Checkpoint   // the checkpoint that would be justified if the block would be advanced to the next epoch.
-	finalizedEpoch              primitives.Epoch             // finalizedEpoch of this node.
-	unrealizedFinalizedEpoch    primitives.Epoch             // the epoch that would be finalized if the block would be advanced to the next epoch.
-	balance                     uint64                       // the balance that voted for this node directly
-	weight                      uint64                       // weight of this node: the total balance including children
-	payloadAvailabilityVote     bitfield.Bitvector512        // PTC payload availability votes
-	payloadDataAvailabilityVote bitfield.Bitvector512        // PTC payload data availability votes
-	payloadAttesters            bitfield.Bitvector512        // PTC members that have submitted a vote
+	slot                        primitives.Slot                    // slot of the block converted to the node.
+	proposerIndex               primitives.ValidatorIndex          // proposer index of the block.
+	builderIndex                primitives.BuilderIndex            // builder index committed in the block's bid (Gloas only).
+	builderPubkey               *[fieldparams.BLSPubkeyLength]byte // pubkey of the bid's builder, nil for self-built or pre-Gloas blocks.
+	root                        [fieldparams.RootLength]byte       // root of the block converted to the node.
+	blockHash                   [fieldparams.RootLength]byte       // payloadHash of the block converted to the node.
+	parent                      *PayloadNode                       // parent index of this node.
+	target                      *Node                              // target checkpoint for
+	bestDescendant              *Node                              // bestDescendant node of this node.
+	justifiedEpoch              primitives.Epoch                   // justifiedEpoch of this node.
+	unrealizedJustified         forkchoicetypes.Checkpoint         // the checkpoint that would be justified if the block would be advanced to the next epoch.
+	finalizedEpoch              primitives.Epoch                   // finalizedEpoch of this node.
+	unrealizedFinalizedEpoch    primitives.Epoch                   // the epoch that would be finalized if the block would be advanced to the next epoch.
+	balance                     uint64                             // the balance that voted for this node directly
+	weight                      uint64                             // weight of this node: the total balance including children
+	payloadAvailabilityVote     bitfield.Bitvector512              // PTC payload availability votes
+	payloadDataAvailabilityVote bitfield.Bitvector512              // PTC payload data availability votes
+	payloadAttesters            bitfield.Bitvector512              // PTC members that have submitted a vote
 }
 
 // PayloadNode defines a full Forkchoice node after the Gloas fork, with the payload status either empty of full

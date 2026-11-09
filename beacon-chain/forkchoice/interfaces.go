@@ -104,6 +104,7 @@ type FastGetter interface {
 	ConsensusNodeWeight(root [32]byte) (uint64, error)
 	CouldBuilderWithhold(root [32]byte) bool
 	BuilderIndex(root [32]byte) (primitives.BuilderIndex, error)
+	BuilderPubkey(root [32]byte) (*[fieldparams.BLSPubkeyLength]byte, error)
 	PayloadWeights(root [32]byte) (emptyWeight, fullWeight uint64, err error)
 	HasPayloadBlockHash(root, blockHash [32]byte) bool
 	PTCVotedEarlyAndAvailable(root [32]byte) bool
@@ -123,7 +124,6 @@ type Setter interface {
 	UpdateJustifiedCheckpoint(context.Context, *forkchoicetypes.Checkpoint) error
 	UpdateFinalizedCheckpoint(*forkchoicetypes.Checkpoint) error
 	SetGenesisTime(time.Time)
-	SetOriginRoot([32]byte)
 	NewSlot(context.Context, primitives.Slot) error
 	SetBalancesByRooter(BalancesByRooter)
 	InsertSlashedIndex(context.Context, primitives.ValidatorIndex)

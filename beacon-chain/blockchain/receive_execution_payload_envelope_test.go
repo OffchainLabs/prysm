@@ -75,7 +75,7 @@ func gloasEnvelopeFixture(t *testing.T, blockRoot [32]byte) (*ethpb.BeaconStateG
 		ExtraData:     []byte{},
 		BaseFeePerGas: make([]byte, 32),
 		BlockHash:     bid.BlockHash,
-		Transactions:  [][]byte{},
+		Transactions:  &enginev1.ProgressiveTransactionList{},
 		Withdrawals:   []*enginev1.Withdrawal{},
 		SlotNumber:    slot,
 	}
@@ -228,7 +228,7 @@ func TestReceiveExecutionPayloadEnvelope_EmitsHeadV2Event(t *testing.T) {
 
 		headBlock, err := blocks.NewSignedBeaconBlock(blk)
 		require.NoError(t, err)
-		headState, err := state_native.InitializeFromProtoUnsafeGloas(base)
+		headState, err := state_native.NewUnsafe(base)
 		require.NoError(t, err)
 		s.head = &head{
 			root:  blockRoot,

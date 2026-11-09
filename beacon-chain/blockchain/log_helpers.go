@@ -82,16 +82,16 @@ func logStateTransitionData(b interfaces.ReadOnlyBeaconBlock) error {
 		}
 	}
 	if b.Version() >= version.Gloas {
-		signedBid, err := b.Body().SignedExecutionPayloadBid()
+		bid, err := b.Body().ExecutionPayloadBid()
 		if err != nil {
-			log.WithError(err).Error("Failed to get signed execution payload bid")
+			log.WithError(err).Error("Failed to get execution payload bid")
 		} else {
-			bid := signedBid.Message
+			blockHash, parentHash := bid.BlockHash(), bid.ParentBlockHash()
 			log = log.WithFields(logrus.Fields{
-				"blobKzgCommitmentCount": len(bid.BlobKzgCommitments),
-				"payloadHash":            fmt.Sprintf("%#x", bytesutil.Trunc(bid.BlockHash)),
-				"parentHash":             fmt.Sprintf("%#x", bytesutil.Trunc(bid.ParentBlockHash)),
-				"builderIndex":           logs.BuilderIndexLabel(bid.BuilderIndex),
+				"blobKzgCommitmentCount": bid.BlobKzgCommitmentCount(),
+				"payloadHash":            fmt.Sprintf("%#x", bytesutil.Trunc(blockHash[:])),
+				"parentHash":             fmt.Sprintf("%#x", bytesutil.Trunc(parentHash[:])),
+				"builderIndex":           logs.BuilderIndexLabel(bid.BuilderIndex()),
 			})
 		}
 	}
@@ -134,13 +134,14 @@ func logBlockSyncStatus(block interfaces.ReadOnlyBeaconBlock, blockRoot [32]byte
 	if block.Version() < version.Gloas {
 		moreFields["dataAvailabilityWaitedTime"] = daWaitedTime
 	} else {
-		signedBid, err := block.Body().SignedExecutionPayloadBid()
+		bid, err := block.Body().ExecutionPayloadBid()
 		if err != nil {
-			log.WithError(err).Error("Failed to get signed execution payload bid for logging")
-		} else if signedBid != nil && signedBid.Message != nil {
-			moreFields["blockHash"] = fmt.Sprintf("%#x", bytesutil.Trunc(signedBid.Message.BlockHash))
-			moreFields["parentHash"] = fmt.Sprintf("%#x", bytesutil.Trunc(signedBid.Message.ParentBlockHash))
-			moreFields["builderIndex"] = logs.BuilderIndexLabel(signedBid.Message.BuilderIndex)
+			log.WithError(err).Error("Failed to get execution payload bid for logging")
+		} else {
+			blockHash, parentHash := bid.BlockHash(), bid.ParentBlockHash()
+			moreFields["blockHash"] = fmt.Sprintf("%#x", bytesutil.Trunc(blockHash[:]))
+			moreFields["parentHash"] = fmt.Sprintf("%#x", bytesutil.Trunc(parentHash[:]))
+			moreFields["builderIndex"] = logs.BuilderIndexLabel(bid.BuilderIndex())
 		}
 	}
 
@@ -164,16 +165,22 @@ func logPayload(block interfaces.ReadOnlyBeaconBlock) error {
 	if err != nil {
 		return err
 	}
-	if payload.GasLimit() == 0 {
+
+	gasLimit, gasUsed := float64(payload.GasLimit()), float64(payload.GasUsed())
+	if gasLimit == 0 {
 		return errors.New("gas limit should not be 0")
 	}
-	gasUtilized := float64(payload.GasUsed()) / float64(payload.GasLimit())
+
+	payloadGasLimit.Set(gasLimit)
+	payloadGasUsed.Set(gasUsed)
+
 	fields := logrus.Fields{
 		"blockHash":   fmt.Sprintf("%#x", bytesutil.Trunc(payload.BlockHash())),
 		"parentHash":  fmt.Sprintf("%#x", bytesutil.Trunc(payload.ParentHash())),
 		"blockNumber": payload.BlockNumber(),
-		"gasUtilized": fmt.Sprintf("%.2f", gasUtilized),
+		"gasUtilized": fmt.Sprintf("%.2f%%", 100*gasUsed/gasLimit),
 	}
+
 	if block.Version() >= version.Capella {
 		withdrawals, err := payload.Withdrawals()
 		if err != nil {

@@ -4,6 +4,7 @@ package helpers
 
 import (
 	"bytes"
+	"context"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
@@ -181,7 +182,7 @@ func NextPeriodSyncSubcommitteeIndices(
 // UpdateSyncCommitteeCache updates sync committee cache.
 // It uses `state`'s latest block header root as key. To avoid misuse, it disallows
 // block header with state root zeroed out.
-func UpdateSyncCommitteeCache(st state.BeaconState) error {
+func UpdateSyncCommitteeCache(ctx context.Context, st state.BeaconState) error {
 	nextSlot := st.Slot() + 1
 	if nextSlot%params.BeaconConfig().SlotsPerEpoch != 0 {
 		return errors.New("not at the end of the epoch to update cache")
@@ -200,7 +201,7 @@ func UpdateSyncCommitteeCache(st state.BeaconState) error {
 		return err
 	}
 
-	return syncCommitteeCache.UpdatePositionsInCommittee(combineRootAndSlot(prevBlockRoot[:], uint64(header.Slot)), st)
+	return syncCommitteeCacheFrom(ctx).UpdatePositionsInCommittee(combineRootAndSlot(prevBlockRoot[:], uint64(header.Slot)), st)
 }
 
 // Loop through `pubKeys` for matching `pubKey` and get the indices where it matches.
