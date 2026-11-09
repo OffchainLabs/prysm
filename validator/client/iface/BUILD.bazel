@@ -14,6 +14,7 @@ go_library(
     deps = [
         "//api:go_default_library",
         "//api/client/event:go_default_library",
+        "//api/fallback:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",

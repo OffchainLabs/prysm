@@ -4,6 +4,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/fallback"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/mock"
@@ -12,27 +14,40 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
-func TestGrpcNodeClient_IsReady(t *testing.T) {
-	// The IsReady function now relies on GetHealth which returns:
-	// - 200 OK (nil error) only if node is synced AND not optimistic
-	// - 206 Partial Content (error) if syncing or optimistic
-	// - 503 Unavailable (error) if unavailable
+func TestGrpcNodeClient_ReadyStatus(t *testing.T) {
 	testCases := []struct {
 		name           string
 		healthErr      error
-		expectedResult bool
+		expectedStatus fallback.NodeStatus
 	}{
 		{
-			name:           "returns true when health check succeeds (synced and not optimistic)",
+			name:           "ready when health check succeeds",
 			healthErr:      nil,
-			expectedResult: true,
+			expectedStatus: fallback.NodeReady,
 		},
 		{
-			name:           "returns false when health check fails (syncing, optimistic, or unavailable)",
+			name:           "syncing",
+			healthErr:      status.Error(codes.Unavailable, api.HealthSyncingReason),
+			expectedStatus: fallback.NodeSyncing,
+		},
+		{
+			name:           "optimistic",
+			healthErr:      status.Error(codes.Unavailable, api.HealthOptimisticReason),
+			expectedStatus: fallback.NodeOptimistic,
+		},
+		{
+			name:           "unavailable on transport error",
+			healthErr:      status.Error(codes.Unavailable, "connection error"),
+			expectedStatus: fallback.NodeUnavailable,
+		},
+		{
+			name:           "unavailable on other error",
 			healthErr:      errors.New("node not ready"),
-			expectedResult: false,
+			expectedStatus: fallback.NodeUnavailable,
 		},
 	}
 
@@ -65,8 +80,7 @@ func TestGrpcNodeClient_IsReady(t *testing.T) {
 				},
 			}
 
-			result := client.IsReady(ctx)
-			assert.Equal(t, tc.expectedResult, result)
+			assert.Equal(t, tc.expectedStatus, client.ReadyStatus(ctx))
 		})
 	}
 }
