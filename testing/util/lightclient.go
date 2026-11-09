@@ -1175,7 +1175,6 @@ func (l *TestLightClient) setupTestGloas() *TestLightClient {
 			require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
 			finalizedBlock := NewBeaconBlockFulu()
-			require.NoError(l.T, err)
 			finalizedBlock.Block.Slot = finalizedSlot
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
 			require.NoError(l.T, err)
@@ -1198,7 +1197,6 @@ func (l *TestLightClient) setupTestGloas() *TestLightClient {
 			require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
 			finalizedBlock := NewBeaconBlockGloas()
-			require.NoError(l.T, err)
 			finalizedBlock.Block.Slot = finalizedSlot
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
 			require.NoError(l.T, err)
