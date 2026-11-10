@@ -211,6 +211,18 @@ var (
 			Buckets: []float64{1, 5, 20, 100, 500, 1000},
 		},
 	)
+	payloadSyncedSinceSlotStart = promauto.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "payload_synced_since_slot_start_seconds",
+			Help: "Time between the start of the slot of a payload and the end of its processing, in regular sync.",
+		},
+	)
+	payloadProofValidatedSinceSlotStart = promauto.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "payload_proof_validated_since_slot_start_seconds",
+			Help: "Time between the start of the slot of a payload and its validation by the EL and execution proofs, in regular sync.",
+		},
+	)
 	reorgDistance = promauto.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "reorg_distance",

@@ -170,6 +170,13 @@ var (
 			Help: "Time for gossiped blob sidecars to arrive",
 		},
 	)
+	executionProofVerifiedSinceSlotStart = promauto.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Name: "execution_proof_verified_since_slot_start_seconds",
+			Help: "Time between the start of the slot of a payload and the verification of a gossiped execution proof of it.",
+		},
+		[]string{"proof_type"},
+	)
 	dataColumnSidecarArrivalGossipSummary = promauto.NewSummary(
 		prometheus.SummaryOpts{
 			Name: "gossip_data_column_sidecar_arrival_milliseconds",

@@ -32,6 +32,7 @@ type Config struct {
 	StaticPeerID          bool
 	DisableLivenessCheck  bool
 	StaticPeers           []string
+	TrustedPeerIDs        []string
 	Discv5BootStrapAddrs  []string
 	RelayNodeAddr         string
 	LocalIP               string

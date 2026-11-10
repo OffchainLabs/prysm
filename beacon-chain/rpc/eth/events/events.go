@@ -24,6 +24,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	engine "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -95,6 +96,8 @@ const (
 	PayloadAttestationMessageTopic = "payload_attestation_message"
 	// ProposerPreferencesTopic represents a new signed proposer preferences event topic.
 	ProposerPreferencesTopic = "proposer_preferences"
+	// ExecutionProofTopic represents a new EIP-8025 execution proof, verified and imported from gossip or API.
+	ExecutionProofTopic = "execution_proof"
 )
 
 var (
@@ -133,6 +136,7 @@ var opsFeedEventTopics = map[feed.EventType]string{
 	operation.ProposerPreferencesReceived:       ProposerPreferencesTopic,
 	operation.ExecutionPayloadGossipReceived:    ExecutionPayloadGossipTopic,
 	operation.ExecutionPayloadBidReceived:       ExecutionPayloadBidTopic,
+	operation.ExecutionProofReceived:            ExecutionProofTopic,
 }
 
 var stateFeedEventTopics = map[feed.EventType]string{
@@ -507,6 +511,8 @@ func topicForEvent(event *feed.Event) string {
 		return ProposerPreferencesTopic
 	case *operation.ExecutionPayloadBidReceivedData:
 		return ExecutionPayloadBidTopic
+	case *operation.ExecutionProofReceivedData:
+		return ExecutionProofTopic
 	case *statefeed.ExecutionPayloadAvailableData:
 		return ExecutionPayloadAvailableTopic
 	case *statefeed.ExecutionPayloadProcessedData:
@@ -732,6 +738,19 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 			return jsonMarshalReader(eventName, &structs.ExecutionPayloadBidEvent{
 				Version: version.String(params.GetNetworkScheduleEntry(epoch).VersionEnum),
 				Data:    structs.SignedExecutionPayloadBidFromConsensus(v.Bid),
+			})
+		}, nil
+	case *operation.ExecutionProofReceivedData:
+		blockRoot := bytesutil.ToBytes32(v.Proof.Message.BeaconBlockRoot)
+		slot, err := s.ChainInfoFetcher.RecentBlockSlot(blockRoot)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get block slot for ExecutionProofReceived operation feed event")
+		}
+		return func() io.Reader {
+			epoch := slots.ToEpoch(slot)
+			return jsonMarshalReader(eventName, &structs.ExecutionProofEvent{
+				Version: version.String(params.GetNetworkScheduleEntry(epoch).VersionEnum),
+				Data:    structs.SignedExecutionProofEnvelopeFromConsensus(v.Proof),
 			})
 		}, nil
 	case *statefeed.ExecutionPayloadAvailableData:

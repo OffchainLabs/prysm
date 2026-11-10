@@ -2,6 +2,7 @@ package blockchain
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 	"time"
 
@@ -24,6 +25,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 )
 
 func gloasEnvelopeFixture(t *testing.T, blockRoot [32]byte) (*ethpb.BeaconStateGloas, *ethpb.SignedBeaconBlockGloas, *ethpb.SignedExecutionPayloadEnvelope) {
@@ -335,5 +338,36 @@ func countStateEventsByType(ch chan *feed.Event) map[feed.EventType]int {
 		default:
 			return got
 		}
+	}
+}
+
+// syncChecker reports a fixed sync status.
+type syncChecker bool
+
+func (c syncChecker) Synced() bool {
+	return bool(c)
+}
+
+func TestObserveInRegularSync(t *testing.T) {
+	sampleCount := func(t *testing.T, summary prometheus.Summary) uint64 {
+		var m dto.Metric
+		require.NoError(t, summary.Write(&m))
+		return m.GetSummary().GetSampleCount()
+	}
+
+	for _, synced := range []bool{true, false} {
+		t.Run(fmt.Sprintf("synced=%t", synced), func(t *testing.T) {
+			s, _ := minimalTestService(t)
+			s.cfg.SyncChecker = syncChecker(synced)
+			summary := prometheus.NewSummary(prometheus.SummaryOpts{Name: "test"})
+
+			s.observeInRegularSync(summary, time.Second)
+
+			expected := uint64(0)
+			if synced {
+				expected = 1
+			}
+			require.Equal(t, expected, sampleCount(t, summary))
+		})
 	}
 }
