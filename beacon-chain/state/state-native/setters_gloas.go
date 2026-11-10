@@ -108,6 +108,31 @@ func (b *BeaconState) SetExecutionPayloadBid(h interfaces.ROExecutionPayloadBid)
 	blobKzgCommitments := h.BlobKzgCommitments()
 	feeRecipient := h.FeeRecipient()
 	executionRequestsRoot := h.ExecutionRequestsRoot()
+
+	if b.version >= version.Heze {
+		inclusionListBits := h.InclusionListBits()
+		if len(inclusionListBits) != (fieldparams.InclusionListCommitteeSize+7)/8 {
+			return fmt.Errorf("invalid inclusion list bits length %d for a Heze state", len(inclusionListBits))
+		}
+		b.latestExecutionPayloadBidHeze = &ethpb.ExecutionPayloadBidHeze{
+			ParentBlockHash:       parentBlockHash[:],
+			ParentBlockRoot:       parentBlockRoot[:],
+			BlockHash:             blockHash[:],
+			PrevRandao:            randao[:],
+			GasLimit:              h.GasLimit(),
+			BuilderIndex:          h.BuilderIndex(),
+			Slot:                  h.Slot(),
+			Value:                 h.Value(),
+			ExecutionPayment:      h.ExecutionPayment(),
+			BlobKzgCommitments:    blobKzgCommitments,
+			FeeRecipient:          feeRecipient[:],
+			ExecutionRequestsRoot: executionRequestsRoot[:],
+			InclusionListBits:     inclusionListBits,
+		}
+		b.markFieldAsDirty(types.LatestExecutionPayloadBidHeze)
+		return nil
+	}
+
 	b.latestExecutionPayloadBid = &ethpb.ExecutionPayloadBid{
 		ParentBlockHash:       parentBlockHash[:],
 		ParentBlockRoot:       parentBlockRoot[:],
@@ -176,16 +201,30 @@ func (b *BeaconState) QueueBuilderPaymentForSlot(parentSlot primitives.Slot) err
 	if parentEpoch+1 == currentEpoch {
 		return b.queueBuilderPaymentAtIndex(parentSlot % slotsPerEpoch)
 	}
-	bid := b.latestExecutionPayloadBid
-	if bid == nil || bid.Value == 0 {
+
+	w := b.latestBidWithdrawal()
+	if w.Amount == 0 {
 		return nil
 	}
-	b.appendBuilderPendingWithdrawalsLockFree([]*ethpb.BuilderPendingWithdrawal{{
-		FeeRecipient: bytesutil.SafeCopyBytes(bid.FeeRecipient),
-		Amount:       bid.Value,
-		BuilderIndex: bid.BuilderIndex,
-	}})
+	b.appendBuilderPendingWithdrawalsLockFree([]*ethpb.BuilderPendingWithdrawal{w})
 	return nil
+}
+
+func (b *BeaconState) latestBidWithdrawal() *ethpb.BuilderPendingWithdrawal {
+	if b.version >= version.Heze {
+		bid := b.latestExecutionPayloadBidHeze
+		return &ethpb.BuilderPendingWithdrawal{
+			FeeRecipient: bytesutil.SafeCopyBytes(bid.GetFeeRecipient()),
+			Amount:       bid.GetValue(),
+			BuilderIndex: bid.GetBuilderIndex(),
+		}
+	}
+	bid := b.latestExecutionPayloadBid
+	return &ethpb.BuilderPendingWithdrawal{
+		FeeRecipient: bytesutil.SafeCopyBytes(bid.GetFeeRecipient()),
+		Amount:       bid.GetValue(),
+		BuilderIndex: bid.GetBuilderIndex(),
+	}
 }
 
 // queueBuilderPaymentAtIndex requires the caller to hold the state lock.

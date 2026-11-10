@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [v7.3.1](https://github.com/OffchainLabs/prysm/compare/v7.3.0...v7.3.1) - 2026-10-22
+
+This is a patch release with a single PR to unschedule Hoodi testnet Glamsterdam fork activation. Mainnet operators do not need to update to this release if they are running v7.3.0 already.
+
+For more information about Hoodi testnet fork activation delay, please read the [Ethereum Foundation blog post](https://blog.ethereum.org/2026/10/22/glamsterdam-hoodi-delay) on this topic.
+
+### Changed
+
+- Unschedule the Gloas fork on Hoodi, per https://github.com/eth-clients/hoodi/pull/33. [[PR]](https://github.com/OffchainLabs/prysm/pull/17760)
+
 ## [v7.3.0](https://github.com/OffchainLabs/prysm/compare/v7.2.1...v7.3.0) - 2026-10-16
 
 This release schedules the Gloas fork on Hoodi at epoch 132352 (2026-10-26 17:42:48 UTC), with a 200M gas limit from the fork. Hoodi operators must update their beacon nodes and validator clients before then.

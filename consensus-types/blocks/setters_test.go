@@ -48,20 +48,23 @@ func TestSignedBeaconBlock_SetPayloadAttestations(t *testing.T) {
 type stubSignedBid struct{}
 
 func (stubSignedBid) Bid() interfaces.ROExecutionPayloadBid { return nil }
-func (stubSignedBid) Signature() [96]byte                            { return [96]byte{} }
-func (stubSignedBid) SigningRoot([]byte) ([32]byte, error)           { return [32]byte{}, nil }
-func (stubSignedBid) HashTreeRoot() ([32]byte, error)                { return [32]byte{}, nil }
-func (stubSignedBid) IsNil() bool                                    { return false }
+func (stubSignedBid) Signature() [96]byte                   { return [96]byte{} }
+func (stubSignedBid) SigningRoot([]byte) ([32]byte, error)  { return [32]byte{}, nil }
+func (stubSignedBid) HashTreeRoot() ([32]byte, error)       { return [32]byte{}, nil }
+func (stubSignedBid) IsNil() bool                           { return false }
 
 func TestSignedBeaconBlock_SetSignedExecutionPayloadBid(t *testing.T) {
-	pb := hydrateBeaconBlockBodyGloas().SignedExecutionPayloadBid
-	bid, err := WrappedROSignedExecutionPayloadBid(pb)
+	gloasPb := hydrateBeaconBlockBodyGloas().SignedExecutionPayloadBid
+	gloasBid, err := WrappedROSignedExecutionPayloadBid(gloasPb)
+	require.NoError(t, err)
+	hezePb := hydrateBeaconBlockBodyHeze().SignedExecutionPayloadBid
+	hezeBid, err := WrappedROSignedExecutionPayloadBidHeze(hezePb)
 	require.NoError(t, err)
 
 	t.Run("rejects pre-Gloas versions", func(t *testing.T) {
 		sb := newTestSignedBeaconBlock(version.Fulu)
 
-		err := sb.SetSignedExecutionPayloadBid(bid)
+		err := sb.SetSignedExecutionPayloadBid(gloasBid)
 
 		require.ErrorIs(t, err, consensus_types.ErrUnsupportedField)
 		require.IsNil(t, sb.block.body.signedExecutionPayloadBid)
@@ -82,8 +85,18 @@ func TestSignedBeaconBlock_SetSignedExecutionPayloadBid(t *testing.T) {
 	t.Run("sets signed execution payload bid for Gloas", func(t *testing.T) {
 		sb := newTestSignedBeaconBlock(version.Gloas)
 
-		require.NoError(t, sb.SetSignedExecutionPayloadBid(bid))
-		require.Equal(t, pb, sb.block.body.signedExecutionPayloadBid)
+		require.NoError(t, sb.SetSignedExecutionPayloadBid(gloasBid))
+		require.Equal(t, gloasPb, sb.block.body.signedExecutionPayloadBid)
+		require.ErrorIs(t, sb.SetSignedExecutionPayloadBid(hezeBid), errIncorrectBlockVersion)
+	})
+
+	t.Run("sets signed execution payload bid for Heze", func(t *testing.T) {
+		sb := newTestSignedBeaconBlock(version.Heze)
+
+		require.NoError(t, sb.SetSignedExecutionPayloadBid(hezeBid))
+		require.Equal(t, hezePb, sb.block.body.signedExecutionPayloadBidHeze)
+		require.IsNil(t, sb.block.body.signedExecutionPayloadBid)
+		require.ErrorIs(t, sb.SetSignedExecutionPayloadBid(gloasBid), errIncorrectBlockVersion)
 	})
 }
 

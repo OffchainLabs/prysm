@@ -68,7 +68,7 @@ func NewBeaconStateHeze(options ...func(state *ethpb.BeaconStateHeze) error) (st
 			AggregatePubkey: make([]byte, fieldparams.BLSPubkeyLength),
 		},
 		ProposerLookahead:            make([]primitives.ValidatorIndex, (params.BeaconConfig().MinSeedLookahead+1)*primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)),
-		LatestExecutionPayloadBid:    HydrateExecutionPayloadBid(nil),
+		LatestExecutionPayloadBid:    HydrateExecutionPayloadBidHeze(nil),
 		Builders:                     make([]*ethpb.Builder, 0),
 		ExecutionPayloadAvailability: make([]byte, params.BeaconConfig().SlotsPerHistoricalRoot/8),
 		BuilderPendingPayments:       builderPendingPayments,
@@ -84,7 +84,7 @@ func NewBeaconStateHeze(options ...func(state *ethpb.BeaconStateHeze) error) (st
 		}
 	}
 
-	return state_native.InitializeFromProtoUnsafeHeze(seed)
+	return state_native.NewUnsafe(seed)
 }
 
 // NewBeaconBlockHeze creates a beacon block with minimum marshalable fields.
@@ -145,12 +145,46 @@ func HydrateBeaconBlockBodyHeze(b *ethpb.BeaconBlockBodyHeze) *ethpb.BeaconBlock
 			SyncCommitteeSignature: make([]byte, fieldparams.BLSSignatureLength),
 		}
 	}
-	b.SignedExecutionPayloadBid = HydrateSignedExecutionPayloadBid(b.SignedExecutionPayloadBid)
+	if b.SignedExecutionPayloadBid == nil {
+		b.SignedExecutionPayloadBid = &ethpb.SignedExecutionPayloadBidHeze{}
+	}
+	if b.SignedExecutionPayloadBid.Signature == nil {
+		b.SignedExecutionPayloadBid.Signature = make([]byte, fieldparams.BLSSignatureLength)
+	}
+	b.SignedExecutionPayloadBid.Message = HydrateExecutionPayloadBidHeze(b.SignedExecutionPayloadBid.Message)
 	if b.PayloadAttestations == nil {
 		b.PayloadAttestations = make([]*ethpb.PayloadAttestation, 0)
 	}
 	if b.ParentExecutionRequests == nil {
 		b.ParentExecutionRequests = &enginev1.ExecutionRequestsGloas{}
+	}
+	return b
+}
+
+// HydrateExecutionPayloadBidHeze hydrates an execution payload bid with correct field length sizes
+// to comply with SSZ marshalling and unmarshalling rules.
+func HydrateExecutionPayloadBidHeze(b *ethpb.ExecutionPayloadBidHeze) *ethpb.ExecutionPayloadBidHeze {
+	if b == nil {
+		b = &ethpb.ExecutionPayloadBidHeze{}
+	}
+	g := HydrateExecutionPayloadBid(&ethpb.ExecutionPayloadBid{
+		ParentBlockHash:       b.ParentBlockHash,
+		ParentBlockRoot:       b.ParentBlockRoot,
+		BlockHash:             b.BlockHash,
+		PrevRandao:            b.PrevRandao,
+		FeeRecipient:          b.FeeRecipient,
+		BlobKzgCommitments:    b.BlobKzgCommitments,
+		ExecutionRequestsRoot: b.ExecutionRequestsRoot,
+	})
+	b.ParentBlockHash = g.ParentBlockHash
+	b.ParentBlockRoot = g.ParentBlockRoot
+	b.BlockHash = g.BlockHash
+	b.PrevRandao = g.PrevRandao
+	b.FeeRecipient = g.FeeRecipient
+	b.BlobKzgCommitments = g.BlobKzgCommitments
+	b.ExecutionRequestsRoot = g.ExecutionRequestsRoot
+	if b.InclusionListBits == nil {
+		b.InclusionListBits = bitfield.NewBitvector16()
 	}
 	return b
 }

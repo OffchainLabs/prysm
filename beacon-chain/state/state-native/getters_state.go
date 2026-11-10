@@ -1,16 +1,17 @@
 package state_native
 
 import (
+	"fmt"
+
 	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
-	"github.com/pkg/errors"
 )
 
-// ToProtoUnsafe returns the pointer value of the underlying
-// beacon state proto object, bypassing immutability. Use with care.
-func (b *BeaconState) ToProtoUnsafe() any {
+// ToContainerUnsafe returns the state container for the fork of b. The
+// container shares its fields with b, bypassing immutability. Use with care.
+func (b *BeaconState) ToContainerUnsafe() any {
 	if b == nil {
 		return nil
 	}
@@ -331,7 +332,7 @@ func (b *BeaconState) ToProtoUnsafe() any {
 			InactivityScores:              inactivityScores,
 			CurrentSyncCommittee:          b.currentSyncCommittee,
 			NextSyncCommittee:             b.nextSyncCommittee,
-			LatestExecutionPayloadBid:     b.latestExecutionPayloadBid,
+			LatestExecutionPayloadBid:     b.latestExecutionPayloadBidHeze,
 			NextWithdrawalIndex:           b.nextWithdrawalIndex,
 			NextWithdrawalValidatorIndex:  b.nextWithdrawalValidatorIndex,
 			HistoricalSummaries:           b.historicalSummaries,
@@ -359,8 +360,8 @@ func (b *BeaconState) ToProtoUnsafe() any {
 	}
 }
 
-// ToProto the beacon state into a protobuf for usage.
-func (b *BeaconState) ToProto() any {
+// ToContainer returns a copy of b as the state container for its fork.
+func (b *BeaconState) ToContainer() any {
 	if b == nil {
 		return nil
 	}
@@ -676,7 +677,7 @@ func (b *BeaconState) ToProto() any {
 			InactivityScores:              b.inactivityScoresVal(),
 			CurrentSyncCommittee:          b.currentSyncCommitteeVal(),
 			NextSyncCommittee:             b.nextSyncCommitteeVal(),
-			LatestExecutionPayloadBid:     b.latestExecutionPayloadBid.Copy(),
+			LatestExecutionPayloadBid:     b.latestExecutionPayloadBidHeze.Copy(),
 			NextWithdrawalIndex:           b.nextWithdrawalIndex,
 			NextWithdrawalValidatorIndex:  b.nextWithdrawalValidatorIndex,
 			HistoricalSummaries:           b.historicalSummariesVal(),
@@ -739,92 +740,12 @@ func (b *BeaconState) StateRootAtIndex(idx uint64) ([]byte, error) {
 	return r[:], nil
 }
 
-// ProtobufBeaconStatePhase0 transforms an input into beacon state in the form of protobuf.
-// Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStatePhase0(s any) (*ethpb.BeaconState, error) {
-	pbState, ok := s.(*ethpb.BeaconState)
+// ContainerFrom returns v as the state container type T, such as the result of
+// ToContainer or ToContainerUnsafe. It returns an error if v is not a T.
+func ContainerFrom[T Container](v any) (T, error) {
+	c, ok := v.(T)
 	if !ok {
-		return nil, errors.New("input is not type ethpb.BeaconState")
+		return c, fmt.Errorf("input is %T, not %T", v, c)
 	}
-	return pbState, nil
-}
-
-// ProtobufBeaconStateAltair transforms an input into beacon state Altair in the form of protobuf.
-// Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStateAltair(s any) (*ethpb.BeaconStateAltair, error) {
-	pbState, ok := s.(*ethpb.BeaconStateAltair)
-	if !ok {
-		return nil, errors.New("input is not type pb.BeaconStateAltair")
-	}
-	return pbState, nil
-}
-
-// ProtobufBeaconStateBellatrix transforms an input into beacon state Bellatrix in the form of protobuf.
-// Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStateBellatrix(s any) (*ethpb.BeaconStateBellatrix, error) {
-	pbState, ok := s.(*ethpb.BeaconStateBellatrix)
-	if !ok {
-		return nil, errors.New("input is not type pb.BeaconStateBellatrix")
-	}
-	return pbState, nil
-}
-
-// ProtobufBeaconStateCapella transforms an input into beacon state Capella in the form of protobuf.
-// Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStateCapella(s any) (*ethpb.BeaconStateCapella, error) {
-	pbState, ok := s.(*ethpb.BeaconStateCapella)
-	if !ok {
-		return nil, errors.New("input is not type pb.BeaconStateCapella")
-	}
-	return pbState, nil
-}
-
-// ProtobufBeaconStateDeneb transforms an input into beacon state Deneb in the form of protobuf.
-// Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStateDeneb(s any) (*ethpb.BeaconStateDeneb, error) {
-	pbState, ok := s.(*ethpb.BeaconStateDeneb)
-	if !ok {
-		return nil, errors.New("input is not type pb.BeaconStateDeneb")
-	}
-	return pbState, nil
-}
-
-// ProtobufBeaconStateElectra transforms an input into beacon state Electra in the form of protobuf.
-// Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStateElectra(s any) (*ethpb.BeaconStateElectra, error) {
-	pbState, ok := s.(*ethpb.BeaconStateElectra)
-	if !ok {
-		return nil, errors.New("input is not type pb.BeaconStateElectra")
-	}
-	return pbState, nil
-}
-
-// ProtobufBeaconStateFulu transforms an input into beacon state Fulu in the form of protobuf.
-// Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStateFulu(s any) (*ethpb.BeaconStateFulu, error) {
-	pbState, ok := s.(*ethpb.BeaconStateFulu)
-	if !ok {
-		return nil, errors.New("input is not type pb.BeaconStateFulu")
-	}
-	return pbState, nil
-}
-
-// ProtobufBeaconStateGloas transforms an input into beacon state Gloas in the form of protobuf.
-// Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStateGloas(s any) (*ethpb.BeaconStateGloas, error) {
-	pbState, ok := s.(*ethpb.BeaconStateGloas)
-	if !ok {
-		return nil, errors.New("input is not type pb.BeaconStateGloas")
-	}
-	return pbState, nil
-}
-
-// ProtobufBeaconStateHeze transforms an input into beacon state Heze in the form of protobuf.
-// Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStateHeze(s any) (*ethpb.BeaconStateHeze, error) {
-	pbState, ok := s.(*ethpb.BeaconStateHeze)
-	if !ok {
-		return nil, errors.New("input is not type pb.BeaconStateHeze")
-	}
-	return pbState, nil
+	return c, nil
 }

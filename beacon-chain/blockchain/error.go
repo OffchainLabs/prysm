@@ -17,6 +17,8 @@ var (
 	ErrUndefinedExecutionEngineError = errors.New("received an undefined execution engine error")
 	// errNilFinalizedInStore is returned when a nil finalized checkpt is returned from store.
 	errNilFinalizedInStore = errors.New("nil finalized checkpoint returned from store")
+	// errDependentRootBeforeForkchoice is returned when a head event dependent root is older than the forkchoice tree root.
+	errDependentRootBeforeForkchoice = errors.New("dependent root is older than the forkchoice tree root")
 	// errNilFinalizedCheckpoint is returned when a nil finalized checkpt is returned from a state.
 	errNilFinalizedCheckpoint = errors.New("nil finalized checkpoint returned from state")
 	// errNilJustifiedCheckpoint is returned when a nil justified checkpt is returned from a state.

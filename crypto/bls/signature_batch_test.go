@@ -128,16 +128,16 @@ func TestSignatureBatch_RemoveDuplicates(t *testing.T) {
 				allPubs := append(pubs, pubs...)
 				allMsgs := append(messages, messages...)
 				return &SignatureBatch{
-						Signatures:   allSigs,
-						PublicKeys:   allPubs,
-						Messages:     allMsgs,
-						Descriptions: createDescriptions(len(allMsgs)),
-					}, &SignatureBatch{
-						Signatures:   signatures,
-						PublicKeys:   pubs,
-						Messages:     messages,
-						Descriptions: createDescriptions(len(allMsgs)),
-					}
+					Signatures:   allSigs,
+					PublicKeys:   allPubs,
+					Messages:     allMsgs,
+					Descriptions: createDescriptions(len(allMsgs)),
+				}, &SignatureBatch{
+					Signatures:   signatures,
+					PublicKeys:   pubs,
+					Messages:     messages,
+					Descriptions: createDescriptions(len(allMsgs)),
+				}
 			},
 			want: 20,
 		},
@@ -174,16 +174,16 @@ func TestSignatureBatch_RemoveDuplicates(t *testing.T) {
 				allPubs := append(pubs, pubs...)
 				allMsgs := append(messages, messages...)
 				return &SignatureBatch{
-						Signatures:   allSigs,
-						PublicKeys:   allPubs,
-						Messages:     allMsgs,
-						Descriptions: createDescriptions(len(allMsgs)),
-					}, &SignatureBatch{
-						Signatures:   signatures,
-						PublicKeys:   pubs,
-						Messages:     messages,
-						Descriptions: createDescriptions(len(allMsgs)),
-					}
+					Signatures:   allSigs,
+					PublicKeys:   allPubs,
+					Messages:     allMsgs,
+					Descriptions: createDescriptions(len(allMsgs)),
+				}, &SignatureBatch{
+					Signatures:   signatures,
+					PublicKeys:   pubs,
+					Messages:     messages,
+					Descriptions: createDescriptions(len(allMsgs)),
+				}
 			},
 			want: 30,
 		},
@@ -217,16 +217,16 @@ func TestSignatureBatch_RemoveDuplicates(t *testing.T) {
 					pubs = append(pubs, k.PublicKey())
 				}
 				return &SignatureBatch{
-						Signatures:   signatures,
-						PublicKeys:   pubs,
-						Messages:     messages,
-						Descriptions: createDescriptions(len(messages)),
-					}, &SignatureBatch{
-						Signatures:   signatures,
-						PublicKeys:   pubs,
-						Messages:     messages,
-						Descriptions: createDescriptions(len(messages)),
-					}
+					Signatures:   signatures,
+					PublicKeys:   pubs,
+					Messages:     messages,
+					Descriptions: createDescriptions(len(messages)),
+				}, &SignatureBatch{
+					Signatures:   signatures,
+					PublicKeys:   pubs,
+					Messages:     messages,
+					Descriptions: createDescriptions(len(messages)),
+				}
 			},
 			want: 0,
 		},
@@ -271,16 +271,16 @@ func TestSignatureBatch_RemoveDuplicates(t *testing.T) {
 				// Zero out to expected result
 				signatures[10] = make([]byte, 96)
 				return &SignatureBatch{
-						Signatures:   allSigs,
-						PublicKeys:   allPubs,
-						Messages:     allMsgs,
-						Descriptions: createDescriptions(len(allMsgs)),
-					}, &SignatureBatch{
-						Signatures:   signatures,
-						PublicKeys:   pubs,
-						Messages:     messages,
-						Descriptions: createDescriptions(len(allMsgs)),
-					}
+					Signatures:   allSigs,
+					PublicKeys:   allPubs,
+					Messages:     allMsgs,
+					Descriptions: createDescriptions(len(allMsgs)),
+				}, &SignatureBatch{
+					Signatures:   signatures,
+					PublicKeys:   pubs,
+					Messages:     messages,
+					Descriptions: createDescriptions(len(allMsgs)),
+				}
 			},
 			want: 29,
 		},
@@ -344,16 +344,16 @@ func TestSignatureBatch_RemoveDuplicates(t *testing.T) {
 				messages[29] = [32]byte{'j', 'u', 'n', 'k'}
 
 				return &SignatureBatch{
-						Signatures:   allSigs,
-						PublicKeys:   allPubs,
-						Messages:     allMsgs,
-						Descriptions: createDescriptions(len(allMsgs)),
-					}, &SignatureBatch{
-						Signatures:   signatures,
-						PublicKeys:   pubs,
-						Messages:     messages,
-						Descriptions: createDescriptions(len(messages)),
-					}
+					Signatures:   allSigs,
+					PublicKeys:   allPubs,
+					Messages:     allMsgs,
+					Descriptions: createDescriptions(len(allMsgs)),
+				}, &SignatureBatch{
+					Signatures:   signatures,
+					PublicKeys:   pubs,
+					Messages:     messages,
+					Descriptions: createDescriptions(len(messages)),
+				}
 			},
 			want: 27,
 		},
@@ -412,16 +412,16 @@ func TestSignatureBatch_AggregateBatch(t *testing.T) {
 				messages := [][32]byte{msg}
 				descs := createDescriptions(2)
 				return &SignatureBatch{
-						Signatures:   signatures,
-						PublicKeys:   pubs,
-						Messages:     messages,
-						Descriptions: descs,
-					}, &SignatureBatch{
-						Signatures:   signatures,
-						PublicKeys:   pubs,
-						Messages:     messages,
-						Descriptions: descs,
-					}
+					Signatures:   signatures,
+					PublicKeys:   pubs,
+					Messages:     messages,
+					Descriptions: descs,
+				}, &SignatureBatch{
+					Signatures:   signatures,
+					PublicKeys:   pubs,
+					Messages:     messages,
+					Descriptions: descs,
+				}
 			},
 			wantErr: true,
 		},
@@ -444,16 +444,16 @@ func TestSignatureBatch_AggregateBatch(t *testing.T) {
 				assert.NoError(t, err)
 				aggPub := AggregateMultiplePubkeys(pubs)
 				return &SignatureBatch{
-						Signatures:   signatures,
-						PublicKeys:   pubs,
-						Messages:     messages,
-						Descriptions: createDescriptions(len(messages)),
-					}, &SignatureBatch{
-						Signatures:   [][]byte{aggSig.Marshal()},
-						PublicKeys:   []PublicKey{aggPub},
-						Messages:     [][32]byte{msg},
-						Descriptions: createDescriptions(1, AggregatedSignature),
-					}
+					Signatures:   signatures,
+					PublicKeys:   pubs,
+					Messages:     messages,
+					Descriptions: createDescriptions(len(messages)),
+				}, &SignatureBatch{
+					Signatures:   [][]byte{aggSig.Marshal()},
+					PublicKeys:   []PublicKey{aggPub},
+					Messages:     [][32]byte{msg},
+					Descriptions: createDescriptions(1, AggregatedSignature),
+				}
 			},
 			wantErr: false,
 		},
@@ -521,16 +521,16 @@ func TestSignatureBatch_AggregateBatch(t *testing.T) {
 				aggPub2 := AggregateMultiplePubkeys(pubs[10:20])
 				aggPub3 := AggregateMultiplePubkeys(pubs[20:30])
 				return &SignatureBatch{
-						Signatures:   signatures,
-						PublicKeys:   pubs,
-						Messages:     messages,
-						Descriptions: createDescriptions(len(messages)),
-					}, &SignatureBatch{
-						Signatures:   [][]byte{aggSig1.Marshal(), aggSig2.Marshal(), aggSig3.Marshal()},
-						PublicKeys:   []PublicKey{aggPub1, aggPub2, aggPub3},
-						Messages:     [][32]byte{msg, msg1, msg2},
-						Descriptions: createDescriptions(3, AggregatedSignature),
-					}
+					Signatures:   signatures,
+					PublicKeys:   pubs,
+					Messages:     messages,
+					Descriptions: createDescriptions(len(messages)),
+				}, &SignatureBatch{
+					Signatures:   [][]byte{aggSig1.Marshal(), aggSig2.Marshal(), aggSig3.Marshal()},
+					PublicKeys:   []PublicKey{aggPub1, aggPub2, aggPub3},
+					Messages:     [][32]byte{msg, msg1, msg2},
+					Descriptions: createDescriptions(3, AggregatedSignature),
+				}
 			},
 			wantErr: false,
 		},
@@ -604,16 +604,16 @@ func TestSignatureBatch_AggregateBatch(t *testing.T) {
 				aggPub3 := AggregateMultiplePubkeys(newPubs)
 
 				return &SignatureBatch{
-						Signatures:   signatures,
-						PublicKeys:   pubs,
-						Messages:     messages,
-						Descriptions: createDescriptions(len(messages)),
-					}, &SignatureBatch{
-						Signatures:   [][]byte{aggSig1.Marshal(), signatures[5], aggSig2.Marshal(), signatures[15], aggSig3.Marshal(), signatures[25]},
-						PublicKeys:   []PublicKey{aggPub1, pubs[5], aggPub2, pubs[15], aggPub3, pubs[25]},
-						Messages:     [][32]byte{msg, messages[5], msg1, messages[15], msg2, messages[25]},
-						Descriptions: []string{AggregatedSignature, TestSignature, AggregatedSignature, TestSignature, AggregatedSignature, TestSignature},
-					}
+					Signatures:   signatures,
+					PublicKeys:   pubs,
+					Messages:     messages,
+					Descriptions: createDescriptions(len(messages)),
+				}, &SignatureBatch{
+					Signatures:   [][]byte{aggSig1.Marshal(), signatures[5], aggSig2.Marshal(), signatures[15], aggSig3.Marshal(), signatures[25]},
+					PublicKeys:   []PublicKey{aggPub1, pubs[5], aggPub2, pubs[15], aggPub3, pubs[25]},
+					Messages:     [][32]byte{msg, messages[5], msg1, messages[15], msg2, messages[25]},
+					Descriptions: []string{AggregatedSignature, TestSignature, AggregatedSignature, TestSignature, AggregatedSignature, TestSignature},
+				}
 			},
 			wantErr: false,
 		},
@@ -632,11 +632,16 @@ func TestSignatureBatch_AggregateBatch(t *testing.T) {
 			got = sortSet(got)
 			output = sortSet(output)
 
-			if !reflect.DeepEqual(got.Signatures, output.Signatures) {
-				t.Errorf("AggregateBatch() Signatures got = %v, want %v", got.Signatures, output.Signatures)
-			}
-			if !reflect.DeepEqual(got.PublicKeys, output.PublicKeys) {
-				t.Errorf("AggregateBatch() PublicKeys got = %v, want %v", got.PublicKeys, output.PublicKeys)
+			require.Equal(t, len(output.Signatures), len(got.Signatures))
+			for i := range output.Signatures {
+				if output.Descriptions[i] == AggregatedSignature {
+					verified, err := VerifySignature(got.Signatures[i], got.Messages[i], got.PublicKeys[i])
+					require.NoError(t, err)
+					require.Equal(t, true, verified)
+					continue
+				}
+				require.DeepEqual(t, output.Signatures[i], got.Signatures[i])
+				require.DeepEqual(t, output.PublicKeys[i], got.PublicKeys[i])
 			}
 			if !reflect.DeepEqual(got.Messages, output.Messages) {
 				t.Errorf("AggregateBatch() Messages got = %v, want %v", got.Messages, output.Messages)
@@ -646,6 +651,57 @@ func TestSignatureBatch_AggregateBatch(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("signatures swapped between keys fail the folded group", func(t *testing.T) {
+		msg := [32]byte{'s', 'w', 'a', 'p'}
+		sk0, sk1 := keys[0], keys[1]
+		set := &SignatureBatch{
+			Signatures:   [][]byte{sk1.Sign(msg[:]).Marshal(), sk0.Sign(msg[:]).Marshal()},
+			PublicKeys:   []PublicKey{sk0.PublicKey(), sk1.PublicKey()},
+			Messages:     [][32]byte{msg, msg},
+			Descriptions: createDescriptions(2),
+		}
+		for i := range set.Signatures {
+			verified, err := VerifySignature(set.Signatures[i], msg, set.PublicKeys[i])
+			require.NoError(t, err)
+			require.Equal(t, false, verified)
+		}
+
+		agg, err := set.AggregateBatch()
+		require.NoError(t, err)
+		require.Equal(t, 1, len(agg.Signatures))
+		verified, err := agg.Verify()
+		require.NoError(t, err)
+		require.Equal(t, false, verified)
+	})
+
+	t.Run("one invalid member at any position fails the folded group", func(t *testing.T) {
+		msg := [32]byte{'g', 'r', 'o', 'u', 'p'}
+		wrongMsg := [32]byte{'w', 'r', 'o', 'n', 'g'}
+		const n = 4
+		for bad := range n {
+			set := NewSet()
+			for i, k := range keys[:n] {
+				signed := msg
+				if i == bad {
+					// A valid curve point, but a signature over a different message.
+					signed = wrongMsg
+				}
+				set.Join(&SignatureBatch{
+					Signatures:   [][]byte{k.Sign(signed[:]).Marshal()},
+					PublicKeys:   []PublicKey{k.PublicKey()},
+					Messages:     [][32]byte{msg},
+					Descriptions: createDescriptions(1),
+				})
+			}
+			agg, err := set.AggregateBatch()
+			require.NoError(t, err)
+			require.Equal(t, 1, len(agg.Signatures))
+			verified, err := agg.Verify()
+			require.NoError(t, err)
+			require.Equal(t, false, verified, "invalid member at position %d", bad)
+		}
+	})
 }
 
 func NewValidSignatureSet(t *testing.T, msgBody string, num int) *SignatureBatch {

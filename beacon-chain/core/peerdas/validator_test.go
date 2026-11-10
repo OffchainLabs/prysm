@@ -50,7 +50,7 @@ func TestValidatorsCustodyRequirement(t *testing.T) {
 				validatorsIndex[primitives.ValidatorIndex(i)] = true
 			}
 
-			beaconState, err := state_native.InitializeFromProtoFulu(&ethpb.BeaconStateFulu{Validators: validators})
+			beaconState, err := state_native.New(&ethpb.BeaconStateFulu{Validators: validators})
 			require.NoError(t, err)
 
 			actual, err := peerdas.ValidatorsCustodyRequirement(beaconState, validatorsIndex)

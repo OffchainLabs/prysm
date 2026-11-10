@@ -37,6 +37,8 @@ mainnet = {
     "ptc_committee_indices.size": "512",  # PTC_SIZE
     "ptc.size": "64",  # Gloas: Payload Timeliness Committee aggregation bits (PTC_SIZE = 512)
     "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector512",
+    "inclusion_list_bits.size": "2",  # Heze: INCLUSION_LIST_COMMITTEE_SIZE = 16
+    "inclusion_list_bits.type": "github.com/OffchainLabs/go-bitfield.Bitvector16",
     "payload_attestation.size": "4",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body
 }
 
@@ -71,6 +73,8 @@ minimal = {
     "ptc_committee_indices.size": "16",  # PTC_SIZE
     "ptc.size": "2",  # Gloas: Payload Timeliness Committee aggregation bits (PTC_SIZE = 16)
     "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector16",
+    "inclusion_list_bits.size": "2",  # Heze: INCLUSION_LIST_COMMITTEE_SIZE = 16
+    "inclusion_list_bits.type": "github.com/OffchainLabs/go-bitfield.Bitvector16",
     "payload_attestation.size": "4",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body
 }
 

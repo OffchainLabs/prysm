@@ -10,7 +10,7 @@ import (
 
 func FuzzMultiValueBalances(f *testing.F) {
 	bals := make([]uint64, 65536)
-	firstState, err := InitializeFromProtoPhase0(&ethpb.BeaconState{Balances: bals})
+	firstState, err := New(&ethpb.BeaconState{Balances: bals})
 	require.NoError(f, err)
 
 	f.Fuzz(func(t *testing.T, index uint16, value uint64) {

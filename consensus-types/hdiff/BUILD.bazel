@@ -67,5 +67,6 @@ go_test(
         "//testing/util:go_default_library",
         "@com_github_golang_snappy//:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
+        "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
     ],
 )

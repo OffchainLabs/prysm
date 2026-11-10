@@ -26,9 +26,11 @@ type beaconApiNodeClient struct {
 	genesisProvider GenesisProvider
 }
 
+// SyncStatus reports the node as synced if any configured beacon node is synced.
+// It queries every node concurrently and prefers a synced one.
 func (c *beaconApiNodeClient) SyncStatus(ctx context.Context, _ *empty.Empty) (*ethpb.SyncStatus, error) {
 	syncingResponse := structs.SyncStatusResponse{}
-	if err := c.handler.Get(ctx, "/eth/v1/node/syncing", &syncingResponse); err != nil {
+	if err := c.handler.Get(ctx, "/eth/v1/node/syncing", &syncingResponse, rest.WithRace(), rest.WithAccept(isSyncedResponse)); err != nil {
 		return nil, err
 	}
 

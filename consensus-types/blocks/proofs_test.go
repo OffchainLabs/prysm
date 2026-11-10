@@ -3,7 +3,6 @@ package blocks
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
@@ -197,6 +196,12 @@ func TestComputeBlockBodyFieldRoots_Heze(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 13, len(roots))
 
+	signedBid, err := b.SignedExecutionPayloadBid()
+	require.NoError(t, err)
+	bidRoot, err := signedBid.HashTreeRoot()
+	require.NoError(t, err)
+	require.DeepEqual(t, bidRoot[:], roots[10])
+
 	rootChunks := make([][32]byte, len(roots))
 	activeFields := make([]bool, len(roots))
 	for i := range roots {
@@ -208,6 +213,28 @@ func TestComputeBlockBodyFieldRoots_Heze(t *testing.T) {
 	expectedBodyRoot, err := b.HashTreeRoot()
 	require.NoError(t, err)
 	require.DeepEqual(t, expectedBodyRoot, computedBodyRoot)
+}
+
+func TestExecutionPayloadBidFieldRoots_Heze(t *testing.T) {
+	bid := hydrateBeaconBlockBodyHeze().SignedExecutionPayloadBid.Message
+	wrapped, err := WrappedROExecutionPayloadBidHeze(bid)
+	require.NoError(t, err)
+
+	roots, err := executionPayloadBidFieldRoots(version.Heze, wrapped)
+	require.NoError(t, err)
+	require.Equal(t, 13, len(roots))
+
+	rootChunks := make([][32]byte, len(roots))
+	activeFields := make([]bool, len(roots))
+	for i := range roots {
+		copy(rootChunks[i][:], roots[i])
+		activeFields[i] = true
+	}
+	computed, err := ssz.ContainerRootProgressive(rootChunks, activeFields)
+	require.NoError(t, err)
+	expected, err := bid.HashTreeRoot()
+	require.NoError(t, err)
+	require.DeepEqual(t, expected, computed)
 }
 
 func TestPayloadProof(t *testing.T) {
@@ -262,6 +289,19 @@ func TestProgressiveContainerActiveFields(t *testing.T) {
 		})
 	}
 
+	t.Run("heze", func(t *testing.T) {
+		for container, want := range map[progressiveContainerType][32]byte{
+			executionPayloadBidProgressiveContainer: {0xff, 0x1f},
+			beaconBlockBodyProgressiveContainer:     {0xff, 0x1f},
+		} {
+			activeFields, err := progressiveContainerActiveFields(version.Heze, container)
+			require.NoError(t, err)
+			packed, err := ssz.PackActiveFields(activeFields)
+			require.NoError(t, err)
+			require.DeepEqual(t, want, packed)
+		}
+	})
+
 	t.Run("unsupported version", func(t *testing.T) {
 		_, err := progressiveContainerActiveFields(version.Fulu, beaconBlockBodyProgressiveContainer)
 		require.ErrorContains(t, "not defined for fulu", err)
@@ -286,9 +326,6 @@ func TestExecutionBlockHashProof(t *testing.T) {
 	}
 
 	t.Run("proves Gloas parent block hash", func(t *testing.T) {
-		reset := features.InitWithReset(&features.Flags{})
-		defer reset()
-
 		block := newGloasBlock(t)
 		proof, err := ExecutionBlockHashProof(t.Context(), block)
 		require.NoError(t, err)
@@ -325,8 +362,6 @@ func TestExecutionBlockHashProof(t *testing.T) {
 	})
 
 	t.Run("rejects missing bid", func(t *testing.T) {
-		reset := features.InitWithReset(&features.Flags{})
-		defer reset()
 		block := newGloasBlock(t)
 		block.body.signedExecutionPayloadBid = nil
 		_, err := ExecutionBlockHashProof(t.Context(), block)
@@ -334,8 +369,6 @@ func TestExecutionBlockHashProof(t *testing.T) {
 	})
 
 	t.Run("rejects invalid bid field", func(t *testing.T) {
-		reset := features.InitWithReset(&features.Flags{})
-		defer reset()
 		block := newGloasBlock(t)
 		block.body.signedExecutionPayloadBid.Message.ParentBlockHash = nil
 		_, err := ExecutionBlockHashProof(t.Context(), block)
@@ -343,8 +376,6 @@ func TestExecutionBlockHashProof(t *testing.T) {
 	})
 
 	t.Run("rejects invalid execution requests root", func(t *testing.T) {
-		reset := features.InitWithReset(&features.Flags{})
-		defer reset()
 		block := newGloasBlock(t)
 		block.body.signedExecutionPayloadBid.Message.ExecutionRequestsRoot = []byte{0x01}
 		_, err := ExecutionBlockHashProof(t.Context(), block)
@@ -352,8 +383,6 @@ func TestExecutionBlockHashProof(t *testing.T) {
 	})
 
 	t.Run("rejects invalid commitment", func(t *testing.T) {
-		reset := features.InitWithReset(&features.Flags{})
-		defer reset()
 		block := newGloasBlock(t)
 		block.body.signedExecutionPayloadBid.Message.BlobKzgCommitments[0] = nil
 		_, err := ExecutionBlockHashProof(t.Context(), block)
@@ -361,8 +390,6 @@ func TestExecutionBlockHashProof(t *testing.T) {
 	})
 
 	t.Run("rejects invalid signature", func(t *testing.T) {
-		reset := features.InitWithReset(&features.Flags{})
-		defer reset()
 		block := newGloasBlock(t)
 		block.body.signedExecutionPayloadBid.Signature = nil
 		_, err := ExecutionBlockHashProof(t.Context(), block)

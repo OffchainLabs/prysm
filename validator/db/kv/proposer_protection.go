@@ -148,9 +148,46 @@ func (s *Store) SaveProposalHistoryForSlot(ctx context.Context, pubKey [fieldpar
 		if err := valBucket.Put(bytesutil.SlotToBytesBigEndian(slot), signingRoot); err != nil {
 			return err
 		}
-		return pruneProposalHistoryBySlot(valBucket, slot)
+		if err := pruneProposalHistoryBySlot(valBucket, slot); err != nil {
+			return fmt.Errorf("prune proposal history by slot: %w", err)
+		}
+
+		// Pruning deletes the oldest proposals. Raise the lowest signed proposal slot to the pruning cutoff.
+		if err := raiseLowestSignedProposal(lowestSignedBkt, pubKey, slot); err != nil {
+			return fmt.Errorf("raise lowest signed proposal: %w", err)
+		}
+
+		return nil
 	})
 	return err
+}
+
+// raiseLowestSignedProposal raises the lowest signed proposal slot of the given public key to the
+// first slot that pruneProposalHistoryBySlot keeps for newestSlot. It never lowers it.
+func raiseLowestSignedProposal(lowestSignedBkt *bolt.Bucket, pubKey [fieldparams.BLSPubkeyLength]byte, newestSlot primitives.Slot) error {
+	newestEpoch := slots.ToEpoch(newestSlot)
+	weakSubjectivityPeriod := params.BeaconConfig().WeakSubjectivityPeriod
+	if newestEpoch < weakSubjectivityPeriod {
+		// Nothing was pruned.
+		return nil
+	}
+
+	// pruneProposalHistoryBySlot deletes all slots in epochs <= newestEpoch - weakSubjectivityPeriod.
+	cutoffSlot, err := slots.EpochStart(newestEpoch - weakSubjectivityPeriod + 1)
+	if err != nil {
+		return fmt.Errorf("epoch start: %w", err)
+	}
+
+	lowestSignedProposalBytes := lowestSignedBkt.Get(pubKey[:])
+	if len(lowestSignedProposalBytes) >= 8 && bytesutil.BytesToSlotBigEndian(lowestSignedProposalBytes) >= cutoffSlot {
+		return nil
+	}
+
+	if err := lowestSignedBkt.Put(pubKey[:], bytesutil.SlotToBytesBigEndian(cutoffSlot)); err != nil {
+		return fmt.Errorf("put lowest signed proposal: %w", err)
+	}
+
+	return nil
 }
 
 // LowestSignedProposal returns the lowest signed proposal slot for a validator public key.

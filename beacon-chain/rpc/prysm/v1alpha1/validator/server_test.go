@@ -66,7 +66,7 @@ func TestValidatorIndex_StateEmpty(t *testing.T) {
 }
 
 func TestWaitForActivation_ContextClosed(t *testing.T) {
-	beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	beaconState, err := state_native.New(&ethpb.BeaconState{
 		Slot:       0,
 		Validators: []*ethpb.Validator{},
 	})
@@ -143,7 +143,7 @@ func TestWaitForActivation_MultipleStatuses(t *testing.T) {
 	block := util.NewBeaconBlock()
 	genesisRoot, err := block.Block.HashTreeRoot()
 	require.NoError(t, err, "Could not get signing root")
-	s, err := state_native.InitializeFromProtoUnsafePhase0(beaconState)
+	s, err := state_native.NewUnsafe(beaconState)
 	require.NoError(t, err)
 	vs := &Server{
 		Ctx:         t.Context(),
@@ -307,7 +307,7 @@ func TestWaitForChainStart_NotStartedThenLogFired(t *testing.T) {
 func testSigDomainForSlot(t *testing.T, domain [4]byte, chsrv *mockChain.ChainService, epoch primitives.Epoch) *ethpb.DomainResponse {
 	cfg := params.BeaconConfig()
 	gvr := genesis.ValidatorsRoot()
-	s, err := state_native.InitializeFromProtoUnsafeDeneb(&ethpb.BeaconStateDeneb{
+	s, err := state_native.NewUnsafe(&ethpb.BeaconStateDeneb{
 		Slot:                  primitives.Slot(epoch) * cfg.SlotsPerEpoch,
 		GenesisValidatorsRoot: gvr[:],
 	})

@@ -30,6 +30,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 func TestVerifyIndexInCommittee_CanVerify(t *testing.T) {
@@ -873,4 +874,56 @@ func TestValidateAggregatedAtt_GloasPayloadNotSeen_IgnoresWithoutFetch(t *testin
 	res, err := s.validateAggregatedAtt(t.Context(), signed)
 	require.Equal(t, pubsub.ValidationIgnore, res)
 	require.ErrorContains(t, "execution payload for attested block has not been seen", err)
+}
+
+func TestValidateAggregateAndProof_UnknownBlockRecordsSender(t *testing.T) {
+	db := dbtest.SetupDB(t)
+	p := p2ptest.NewTestP2P(t)
+	chain := &mock.ChainService{
+		Genesis:        time.Now().Add(-time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+		ValidatorsRoot: [32]byte{'A'},
+	}
+	r := &Service{
+		cfg: &config{
+			p2p:                 p,
+			beaconDB:            db,
+			initialSync:         &mockSync.Sync{IsSyncing: false},
+			attPool:             attestations.NewPool(),
+			chain:               chain,
+			clock:               startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			attestationNotifier: (&mock.ChainService{}).OperationNotifier(),
+		},
+		blkRootToPendingAtts: make(map[[32]byte][]any),
+	}
+	r.initCaches()
+
+	root := [32]byte{'B'}
+	aggBits := bitfield.NewBitlist(3)
+	aggBits.SetBitAt(0, true)
+	att := &ethpb.Attestation{
+		Data: &ethpb.AttestationData{
+			Slot:            1,
+			BeaconBlockRoot: root[:],
+			Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+			Target:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+		},
+		AggregationBits: aggBits,
+		Signature:       make([]byte, fieldparams.BLSSignatureLength),
+	}
+	signed := &ethpb.SignedAggregateAttestationAndProof{
+		Message:   &ethpb.AggregateAttestationAndProof{Aggregate: att, SelectionProof: make([]byte, fieldparams.BLSSignatureLength)},
+		Signature: make([]byte, fieldparams.BLSSignatureLength),
+	}
+	buf := new(bytes.Buffer)
+	_, err := p.Encoding().EncodeGossip(buf, signed)
+	require.NoError(t, err)
+	topic := r.addDigestToTopic(p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedAggregateAttestationAndProof]()], r.currentForkDigest())
+	msg := &pubsub.Message{Message: &pubsubpb.Message{Data: buf.Bytes(), Topic: &topic}}
+
+	sender := peer.ID("sender")
+	res, err := r.validateAggregateAndProof(t.Context(), sender, msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, res)
+	require.Equal(t, 1, len(r.blkRootToPendingAtts[root]))
+	require.DeepEqual(t, map[peer.ID]bool{sender: true}, r.pendingAttSenders[root])
 }

@@ -111,5 +111,5 @@ func UpgradeToDeneb(state state.BeaconState) (state.BeaconState, error) {
 		HistoricalSummaries:          summaries,
 	}
 
-	return state_native.InitializeFromProtoUnsafeDeneb(s)
+	return state_native.NewUnsafe(s)
 }

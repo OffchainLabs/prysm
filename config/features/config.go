@@ -253,7 +253,7 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(disableResourceManager)
 		cfg.DisableResourceManager = true
 	}
-	if ctx.IsSet(EnableLightClient.Name) {
+	if ctx.Bool(EnableLightClient.Name) {
 		logEnabled(EnableLightClient)
 		cfg.EnableLightClient = true
 	}

@@ -69,5 +69,5 @@ func comparePostState(t *testing.T, postSSZFilepath string, sszToState SSZToStat
 	require.NoError(t, err, "Failed to decompress")
 	postBeaconState, err := sszToState(postBeaconStateSSZ)
 	require.NoError(t, err)
-	require.DeepSSZEqual(t, postBeaconState.ToProtoUnsafe(), want.ToProtoUnsafe(), "Post state does not match expected")
+	require.DeepSSZEqual(t, postBeaconState.ToContainerUnsafe(), want.ToContainerUnsafe(), "Post state does not match expected")
 }

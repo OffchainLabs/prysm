@@ -106,7 +106,7 @@ func emptyGenesisStateFulu() (state.BeaconState, error) {
 		// Fulu specific field
 		ProposerLookahead: []primitives.ValidatorIndex{},
 	}
-	return state_native.InitializeFromProtoUnsafeFulu(st)
+	return state_native.NewUnsafe(st)
 }
 
 func buildGenesisBeaconStateFulu(ctx context.Context, genesisTime uint64, preState state.BeaconState, eth1Data *ethpb.Eth1Data) (state.BeaconState, error) {
@@ -288,7 +288,7 @@ func buildGenesisBeaconStateFulu(ctx context.Context, genesisTime uint64, preSta
 	}
 
 	// Calculate proposer lookahead for genesis
-	preFuluSt, err := state_native.InitializeFromProtoUnsafeFulu(st)
+	preFuluSt, err := state_native.NewUnsafe(st)
 	if err != nil {
 		return nil, err
 	}
@@ -299,5 +299,5 @@ func buildGenesisBeaconStateFulu(ctx context.Context, genesisTime uint64, preSta
 
 	// Fulu specific field
 	st.ProposerLookahead = proposerLookahead
-	return state_native.InitializeFromProtoUnsafeFulu(st)
+	return state_native.NewUnsafe(st)
 }

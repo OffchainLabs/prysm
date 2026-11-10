@@ -14,20 +14,20 @@ func TestSharedFieldRefCount(t *testing.T) {
 		init func() (state.BeaconState, error)
 		want int
 	}{
-		{"phase0", func() (state.BeaconState, error) { return InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{}) }, phase0SharedFieldRefCount},
-		{"altair", func() (state.BeaconState, error) { return InitializeFromProtoUnsafeAltair(&ethpb.BeaconStateAltair{}) }, altairSharedFieldRefCount},
+		{"phase0", func() (state.BeaconState, error) { return NewUnsafe(&ethpb.BeaconState{}) }, phase0SharedFieldRefCount},
+		{"altair", func() (state.BeaconState, error) { return NewUnsafe(&ethpb.BeaconStateAltair{}) }, altairSharedFieldRefCount},
 		{"bellatrix", func() (state.BeaconState, error) {
-			return InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{})
+			return NewUnsafe(&ethpb.BeaconStateBellatrix{})
 		}, bellatrixSharedFieldRefCount},
 		{"capella", func() (state.BeaconState, error) {
-			return InitializeFromProtoUnsafeCapella(&ethpb.BeaconStateCapella{})
+			return NewUnsafe(&ethpb.BeaconStateCapella{})
 		}, capellaSharedFieldRefCount},
-		{"deneb", func() (state.BeaconState, error) { return InitializeFromProtoUnsafeDeneb(&ethpb.BeaconStateDeneb{}) }, denebSharedFieldRefCount},
+		{"deneb", func() (state.BeaconState, error) { return NewUnsafe(&ethpb.BeaconStateDeneb{}) }, denebSharedFieldRefCount},
 		{"electra", func() (state.BeaconState, error) {
-			return InitializeFromProtoUnsafeElectra(&ethpb.BeaconStateElectra{})
+			return NewUnsafe(&ethpb.BeaconStateElectra{})
 		}, electraSharedFieldRefCount},
-		{"fulu", func() (state.BeaconState, error) { return InitializeFromProtoUnsafeFulu(&ethpb.BeaconStateFulu{}) }, fuluSharedFieldRefCount},
-		{"gloas", func() (state.BeaconState, error) { return InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{}) }, gloasSharedFieldRefCount},
+		{"fulu", func() (state.BeaconState, error) { return NewUnsafe(&ethpb.BeaconStateFulu{}) }, fuluSharedFieldRefCount},
+		{"gloas", func() (state.BeaconState, error) { return NewUnsafe(&ethpb.BeaconStateGloas{}) }, gloasSharedFieldRefCount},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

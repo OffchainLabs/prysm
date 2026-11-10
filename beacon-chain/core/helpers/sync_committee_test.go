@@ -31,7 +31,7 @@ func TestCurrentPeriodPositions(t *testing.T) {
 		}
 		syncCommittee.Pubkeys[i] = bytesutil.PadTo(k, 48)
 	}
-	state, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	state, err := state_native.New(&ethpb.BeaconStateAltair{
 		Validators: validators,
 	})
 	require.NoError(t, err)
@@ -64,7 +64,7 @@ func TestIsCurrentEpochSyncCommittee_UsingCache(t *testing.T) {
 		syncCommittee.Pubkeys = append(syncCommittee.Pubkeys, bytesutil.PadTo(k, 48))
 	}
 
-	state, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	state, err := state_native.New(&ethpb.BeaconStateAltair{
 		Validators: validators,
 	})
 	require.NoError(t, err)
@@ -95,7 +95,7 @@ func TestIsCurrentEpochSyncCommittee_UsingCommittee(t *testing.T) {
 		syncCommittee.Pubkeys = append(syncCommittee.Pubkeys, bytesutil.PadTo(k, 48))
 	}
 
-	state, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	state, err := state_native.New(&ethpb.BeaconStateAltair{
 		Validators: validators,
 	})
 	require.NoError(t, err)
@@ -124,7 +124,7 @@ func TestIsCurrentEpochSyncCommittee_DoesNotExist(t *testing.T) {
 		syncCommittee.Pubkeys = append(syncCommittee.Pubkeys, bytesutil.PadTo(k, 48))
 	}
 
-	state, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	state, err := state_native.New(&ethpb.BeaconStateAltair{
 		Validators: validators,
 	})
 	require.NoError(t, err)
@@ -152,7 +152,7 @@ func TestIsNextEpochSyncCommittee_UsingCache(t *testing.T) {
 		syncCommittee.Pubkeys = append(syncCommittee.Pubkeys, bytesutil.PadTo(k, 48))
 	}
 
-	state, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	state, err := state_native.New(&ethpb.BeaconStateAltair{
 		Validators: validators,
 	})
 	require.NoError(t, err)
@@ -183,7 +183,7 @@ func TestIsNextEpochSyncCommittee_UsingCommittee(t *testing.T) {
 		syncCommittee.Pubkeys = append(syncCommittee.Pubkeys, bytesutil.PadTo(k, 48))
 	}
 
-	state, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	state, err := state_native.New(&ethpb.BeaconStateAltair{
 		Validators: validators,
 	})
 	require.NoError(t, err)
@@ -211,7 +211,7 @@ func TestIsNextEpochSyncCommittee_DoesNotExist(t *testing.T) {
 		syncCommittee.Pubkeys = append(syncCommittee.Pubkeys, bytesutil.PadTo(k, 48))
 	}
 
-	state, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	state, err := state_native.New(&ethpb.BeaconStateAltair{
 		Validators: validators,
 	})
 	require.NoError(t, err)
@@ -239,7 +239,7 @@ func TestCurrentEpochSyncSubcommitteeIndices_UsingCache(t *testing.T) {
 		syncCommittee.Pubkeys = append(syncCommittee.Pubkeys, bytesutil.PadTo(k, 48))
 	}
 
-	state, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	state, err := state_native.New(&ethpb.BeaconStateAltair{
 		Validators: validators,
 	})
 	require.NoError(t, err)
@@ -270,7 +270,7 @@ func TestCurrentEpochSyncSubcommitteeIndices_UsingCommittee(t *testing.T) {
 		syncCommittee.Pubkeys = append(syncCommittee.Pubkeys, bytesutil.PadTo(k, 48))
 	}
 
-	state, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	state, err := state_native.New(&ethpb.BeaconStateAltair{
 		Validators: validators,
 	})
 	require.NoError(t, err)
@@ -312,7 +312,7 @@ func TestCurrentEpochSyncSubcommitteeIndices_DoesNotExist(t *testing.T) {
 		syncCommittee.Pubkeys = append(syncCommittee.Pubkeys, bytesutil.PadTo(k, 48))
 	}
 
-	state, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	state, err := state_native.New(&ethpb.BeaconStateAltair{
 		Validators: validators,
 	})
 	require.NoError(t, err)
@@ -340,7 +340,7 @@ func TestNextEpochSyncSubcommitteeIndices_UsingCache(t *testing.T) {
 		syncCommittee.Pubkeys = append(syncCommittee.Pubkeys, bytesutil.PadTo(k, 48))
 	}
 
-	state, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	state, err := state_native.New(&ethpb.BeaconStateAltair{
 		Validators: validators,
 	})
 	require.NoError(t, err)
@@ -371,7 +371,7 @@ func TestNextEpochSyncSubcommitteeIndices_UsingCommittee(t *testing.T) {
 		syncCommittee.Pubkeys = append(syncCommittee.Pubkeys, bytesutil.PadTo(k, 48))
 	}
 
-	state, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	state, err := state_native.New(&ethpb.BeaconStateAltair{
 		Validators: validators,
 	})
 	require.NoError(t, err)
@@ -399,7 +399,7 @@ func TestNextEpochSyncSubcommitteeIndices_DoesNotExist(t *testing.T) {
 		syncCommittee.Pubkeys = append(syncCommittee.Pubkeys, bytesutil.PadTo(k, 48))
 	}
 
-	state, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	state, err := state_native.New(&ethpb.BeaconStateAltair{
 		Validators: validators,
 	})
 	require.NoError(t, err)
@@ -414,14 +414,14 @@ func TestNextEpochSyncSubcommitteeIndices_DoesNotExist(t *testing.T) {
 func TestUpdateSyncCommitteeCache_BadSlot(t *testing.T) {
 	helpers.ClearCache()
 
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Slot: 1,
 	})
 	require.NoError(t, err)
 	err = helpers.UpdateSyncCommitteeCache(t.Context(), state)
 	require.ErrorContains(t, "not at the end of the epoch to update cache", err)
 
-	state, err = state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err = state_native.New(&ethpb.BeaconState{
 		Slot: params.BeaconConfig().SlotsPerEpoch - 1,
 	})
 	require.NoError(t, err)
@@ -432,7 +432,7 @@ func TestUpdateSyncCommitteeCache_BadSlot(t *testing.T) {
 func TestUpdateSyncCommitteeCache_BadRoot(t *testing.T) {
 	helpers.ClearCache()
 
-	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	state, err := state_native.New(&ethpb.BeaconState{
 		Slot:              primitives.Slot(params.BeaconConfig().EpochsPerSyncCommitteePeriod)*params.BeaconConfig().SlotsPerEpoch - 1,
 		LatestBlockHeader: &ethpb.BeaconBlockHeader{StateRoot: params.BeaconConfig().ZeroHash[:]},
 	})
@@ -461,7 +461,7 @@ func TestIsCurrentEpochSyncCommittee_SameBlockRoot(t *testing.T) {
 	for i := range blockRoots {
 		blockRoots[i] = make([]byte, 32)
 	}
-	state, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	state, err := state_native.New(&ethpb.BeaconStateAltair{
 		Validators: validators,
 		BlockRoots: blockRoots,
 	})

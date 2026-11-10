@@ -21,8 +21,9 @@ import (
 )
 
 const (
-	defaultSignatureCacheSize      = 256
-	defaultInclusionProofCacheSize = 2
+	defaultSignatureCacheSize        = 256
+	defaultInclusionProofCacheSize   = 2
+	defaultExpectedProposerCacheSize = 64
 )
 
 // validatorAtIndexer defines the method needed to retrieve a validator by its index.
@@ -84,6 +85,12 @@ type inclusionProofCache struct {
 
 func newInclusionProofCache(size int) *inclusionProofCache {
 	return &inclusionProofCache{Cache: lruwrpr.New(size)}
+}
+
+// expectedProposerKey identifies a slot on a given branch, the expected proposer being fully determined by both.
+type expectedProposerKey struct {
+	parentRoot [32]byte
+	slot       primitives.Slot
 }
 
 // VerifySignature verifies the given signature data against the key obtained via validatorAtIndexer.

@@ -37,7 +37,7 @@ func TestOptimizedGenesisBeaconState_1000(t *testing.T) {
 	fuzzer := fuzz.NewWithSeed(0)
 	fuzzer.NilChance(0.1)
 	var genesisTime uint64
-	preState, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
+	preState, err := state_native.NewUnsafe(&ethpb.BeaconState{})
 	require.NoError(t, err)
 	eth1Data := &ethpb.Eth1Data{}
 	for range 1000 {

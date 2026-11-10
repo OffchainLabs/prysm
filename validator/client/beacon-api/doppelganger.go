@@ -2,7 +2,6 @@ package beacon_api
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"strconv"
 
@@ -21,7 +20,7 @@ type DoppelGangerInfo struct {
 
 func (c *beaconApiValidatorClient) checkDoppelGanger(ctx context.Context, in *ethpb.DoppelGangerRequest) (*ethpb.DoppelGangerResponse, error) {
 	// Check if there is any doppelganger validator for the last 2 epochs.
-	// - Check if the beacon node is synced
+	// - Check if a beacon node is synced, and use its head as the current head
 	// - If we are in Phase0, we consider there is no doppelganger.
 	// - If all validators we want to check doppelganger existence were live in local antislashing
 	//   database for the last 2 epochs, we consider there is no doppelganger.
@@ -61,47 +60,30 @@ func (c *beaconApiValidatorClient) checkDoppelGanger(ctx context.Context, in *et
 		}
 	}
 
-	// Check if the beacon node if synced.
-	isSyncing, err := c.isSyncing(ctx)
+	// Check if a beacon node is synced.
+	syncStatus, err := c.syncedNodeStatus(ctx)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get beacon node sync status")
 	}
 
-	if isSyncing {
+	if syncStatus.IsSyncing {
 		return nil, errors.New("beacon node not synced")
 	}
 
-	// Retrieve fork version -- Return early if we are in phase0.
-	forkResponse, err := c.fork(ctx)
-	if err != nil || forkResponse == nil || forkResponse.Data == nil {
-		return nil, errors.Wrapf(err, "failed to get fork")
-	}
-
-	forkVersionBytes, err := hexutil.Decode(forkResponse.Data.CurrentVersion)
+	// Retrieve the head slot of the synced beacon node.
+	headSlotUint64, err := strconv.ParseUint(syncStatus.HeadSlot, 10, 64)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to decode fork version")
+		return nil, fmt.Errorf("failed to parse head slot: %w", err)
 	}
 
-	forkVersion := binary.LittleEndian.Uint32(forkVersionBytes)
+	headSlot := primitives.Slot(headSlotUint64)
 
-	if forkVersion == version.Phase0 {
+	// Return early if we are in phase0.
+	if slots.ToForkVersion(headSlot) == version.Phase0 {
 		log.Info("Skipping doppelganger check for Phase 0")
 		return buildResponse(stringPubKeys, stringPubKeyToDoppelGangerInfo), nil
 	}
 
-	// Retrieve current epoch.
-	headers, err := c.headers(ctx)
-	if err != nil || headers == nil || headers.Data == nil || len(headers.Data) == 0 ||
-		headers.Data[0].Header == nil || headers.Data[0].Header.Message == nil {
-		return nil, errors.Wrapf(err, "failed to get headers")
-	}
-
-	headSlotUint64, err := strconv.ParseUint(headers.Data[0].Header.Message.Slot, 10, 64)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to parse head slot")
-	}
-
-	headSlot := primitives.Slot(headSlotUint64)
 	currentEpoch := slots.ToEpoch(headSlot)
 
 	// Extract input pubkeys we did not validate for the 2 last epochs.

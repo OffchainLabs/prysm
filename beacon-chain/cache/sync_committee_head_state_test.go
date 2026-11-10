@@ -13,28 +13,28 @@ import (
 )
 
 func TestSyncCommitteeHeadState(t *testing.T) {
-	beaconState, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+	beaconState, err := state_native.New(&ethpb.BeaconStateAltair{
 		Fork: &ethpb.Fork{
 			PreviousVersion: params.BeaconConfig().GenesisForkVersion,
 			CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
 		},
 	})
 	require.NoError(t, err)
-	phase0State, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+	phase0State, err := state_native.New(&ethpb.BeaconState{
 		Fork: &ethpb.Fork{
 			PreviousVersion: params.BeaconConfig().GenesisForkVersion,
 			CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
 		},
 	})
 	require.NoError(t, err)
-	bellatrixState, err := state_native.InitializeFromProtoBellatrix(&ethpb.BeaconStateBellatrix{
+	bellatrixState, err := state_native.New(&ethpb.BeaconStateBellatrix{
 		Fork: &ethpb.Fork{
 			PreviousVersion: params.BeaconConfig().GenesisForkVersion,
 			CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
 		},
 	})
 	require.NoError(t, err)
-	capellaState, err := state_native.InitializeFromProtoCapella(&ethpb.BeaconStateCapella{
+	capellaState, err := state_native.New(&ethpb.BeaconStateCapella{
 		Fork: &ethpb.Fork{
 			PreviousVersion: params.BeaconConfig().GenesisForkVersion,
 			CurrentVersion:  params.BeaconConfig().GenesisForkVersion,

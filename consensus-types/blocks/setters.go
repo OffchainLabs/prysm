@@ -229,10 +229,19 @@ func (b *SignedBeaconBlock) SetSignedExecutionPayloadBid(bid interfaces.ROSigned
 	if bid == nil || bid.IsNil() {
 		return consensus_types.ErrNilObjectWrapped
 	}
-	w, ok := bid.(signedExecutionPayloadBid)
-	if !ok {
+	switch w := bid.(type) {
+	case signedExecutionPayloadBid:
+		if b.version >= version.Heze {
+			return errIncorrectBlockVersion
+		}
+		b.block.body.signedExecutionPayloadBid = w.bid
+	case signedExecutionPayloadBidHeze:
+		if b.version < version.Heze {
+			return errIncorrectBlockVersion
+		}
+		b.block.body.signedExecutionPayloadBidHeze = w.bid
+	default:
 		return fmt.Errorf("unsupported signed execution payload bid type %T", bid)
 	}
-	b.block.body.signedExecutionPayloadBid = w.bid
 	return nil
 }

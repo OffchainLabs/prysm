@@ -224,6 +224,27 @@ func (p *Status) ChainState(pid peer.ID) (*pb.StatusV2, error) {
 	return p.scorers.PeerStatusScorer().PeerStatus(pid)
 }
 
+// FilterByEarliestAvailableSlot returns, in the same order, the peers whose advertised earliest available slot
+// is lower than or equal to `slot`.
+// Peers without a known chain state are dropped.
+func (p *Status) FilterByEarliestAvailableSlot(pids []peer.ID, slot primitives.Slot) []peer.ID {
+	filtered := make([]peer.ID, 0, len(pids))
+	for _, pid := range pids {
+		chainState, err := p.ChainState(pid)
+		if err != nil || chainState == nil {
+			continue
+		}
+
+		if chainState.EarliestAvailableSlot > slot {
+			continue
+		}
+
+		filtered = append(filtered, pid)
+	}
+
+	return filtered
+}
+
 // IsActive checks if a peers is active and returns the result appropriately.
 func (p *Status) IsActive(pid peer.ID) bool {
 	p.store.RLock()

@@ -502,6 +502,26 @@ func TestSaveAttestationForPubKey_BatchWrites_LowCapacity_TimerReached(t *testin
 	require.NoError(t, err)
 }
 
+func TestSaveAttestationForPubKey_SavedBeforeReturn(t *testing.T) {
+	// More saves than one batch holds, so some wait while an earlier batch is flushed.
+	pubKeys := make([][fieldparams.BLSPubkeyLength]byte, attestationBatchCapacity+100)
+	validatorDB := setupDB(t, pubKeys)
+
+	var wg sync.WaitGroup
+	for i, pubKey := range pubKeys {
+		wg.Go(func() {
+			target := primitives.Epoch(i + 1)
+			var signingRoot [32]byte
+			copy(signingRoot[:], fmt.Sprintf("%d", i))
+			assert.NoError(t, validatorDB.SaveAttestationForPubKey(t.Context(), pubKey, signingRoot[:], createAttestation(target-1, target)))
+			saved, err := validatorDB.SigningRootAtTargetEpoch(t.Context(), pubKey, target)
+			assert.NoError(t, err)
+			assert.Equal(t, signingRoot, bytesutil.ToBytes32(saved))
+		})
+	}
+	wg.Wait()
+}
+
 func BenchmarkStore_CheckSlashableAttestation_Surround_SafeAttestation_54kEpochs(b *testing.B) {
 	numValidators := 1
 	numEpochs := primitives.Epoch(54000)
@@ -576,15 +596,6 @@ func benchCheckSurroundVote(
 			}
 		}
 	}
-}
-
-func TestStore_flushAttestationRecords_InProgress(t *testing.T) {
-	s := &Store{}
-	s.batchedAttestationsFlushInProgress.Store(true)
-
-	hook := logTest.NewGlobal()
-	s.flushAttestationRecords(t.Context(), nil)
-	assert.LogsContain(t, hook, "Attempted to flush attestation records when already in progress")
 }
 
 func BenchmarkStore_SaveAttestationForPubKey(b *testing.B) {

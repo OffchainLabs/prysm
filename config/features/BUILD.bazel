@@ -33,6 +33,7 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//cmd/validator/flags:go_default_library",
+        "//config/params:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "@com_github_sirupsen_logrus//hooks/test:go_default_library",

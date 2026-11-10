@@ -755,15 +755,43 @@ func hydrateBeaconBlockBodyCapella() *eth.BeaconBlockBodyCapella {
 }
 
 func hydrateBeaconBlockBodyHeze() *eth.BeaconBlockBodyHeze {
-	g := hydrateBeaconBlockBodyGloas()
+	bits := bitfield.NewBitvector512()
+	bits.SetBitAt(0, true)
+
 	return &eth.BeaconBlockBodyHeze{
-		RandaoReveal:              g.RandaoReveal,
-		Eth1Data:                  g.Eth1Data,
-		Graffiti:                  g.Graffiti,
-		SyncAggregate:             g.SyncAggregate,
-		SignedExecutionPayloadBid: g.SignedExecutionPayloadBid,
-		ParentExecutionRequests:   g.ParentExecutionRequests,
-		PayloadAttestations:       g.PayloadAttestations,
+		RandaoReveal: make([]byte, fieldparams.BLSSignatureLength),
+		Graffiti:     make([]byte, fieldparams.RootLength),
+		Eth1Data: &eth.Eth1Data{
+			DepositRoot: make([]byte, fieldparams.RootLength),
+			BlockHash:   make([]byte, fieldparams.RootLength),
+		},
+		SyncAggregate: &eth.SyncAggregate{
+			SyncCommitteeBits:      make([]byte, fieldparams.SyncAggregateSyncCommitteeBytesLength),
+			SyncCommitteeSignature: make([]byte, fieldparams.BLSSignatureLength),
+		},
+		SignedExecutionPayloadBid: &eth.SignedExecutionPayloadBidHeze{
+			Message: &eth.ExecutionPayloadBidHeze{
+				ParentBlockHash:       make([]byte, fieldparams.RootLength),
+				ParentBlockRoot:       make([]byte, fieldparams.RootLength),
+				BlockHash:             make([]byte, fieldparams.RootLength),
+				PrevRandao:            make([]byte, fieldparams.RootLength),
+				FeeRecipient:          make([]byte, 20),
+				BlobKzgCommitments:    [][]byte{make([]byte, fieldparams.BLSPubkeyLength)},
+				ExecutionRequestsRoot: make([]byte, fieldparams.RootLength),
+				InclusionListBits:     []byte{0x01, 0x80},
+			},
+			Signature: make([]byte, fieldparams.BLSSignatureLength),
+		},
+		ParentExecutionRequests: &pb.ExecutionRequestsGloas{},
+		PayloadAttestations: []*eth.PayloadAttestation{
+			{
+				AggregationBits: bits,
+				Data: &eth.PayloadAttestationData{
+					BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+				},
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+		},
 	}
 }
 

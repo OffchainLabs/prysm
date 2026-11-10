@@ -23,7 +23,7 @@ func customHtr(t *testing.T, htrs []common.HTR, object any) []common.HTR {
 	switch object.(type) {
 	case *ethpb.BeaconStateCapella:
 		htrs = append(htrs, func(s any) ([32]byte, error) {
-			beaconState, err := state_native.InitializeFromProtoUnsafeCapella(s.(*ethpb.BeaconStateCapella))
+			beaconState, err := state_native.NewUnsafe(s.(*ethpb.BeaconStateCapella))
 			require.NoError(t, err)
 			return beaconState.HashTreeRoot(context.Background())
 		})

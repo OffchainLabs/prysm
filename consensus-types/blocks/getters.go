@@ -1360,6 +1360,9 @@ func (b *BeaconBlockBody) PayloadAttestations() ([]*eth.PayloadAttestation, erro
 
 // SignedExecutionPayloadBid returns the signed execution payload bid in the block.
 func (b *BeaconBlockBody) SignedExecutionPayloadBid() (interfaces.ROSignedExecutionPayloadBid, error) {
+	if b.version >= version.Heze {
+		return WrappedROSignedExecutionPayloadBidHeze(b.signedExecutionPayloadBidHeze)
+	}
 	if b.version >= version.Gloas {
 		return WrappedROSignedExecutionPayloadBid(b.signedExecutionPayloadBid)
 	}
