@@ -548,6 +548,64 @@ func TestServer_DeleteKeystores(t *testing.T) {
 	}
 }
 
+func TestServer_DeleteKeystores_AttesterOnlyKey(t *testing.T) {
+	ctx := t.Context()
+	srv := setupServerWithWallet(t)
+	km, err := srv.validatorService.Keymanager()
+	require.NoError(t, err)
+	dr, ok := km.(*derived.Keymanager)
+	require.Equal(t, true, ok)
+	require.NoError(t, dr.RecoverAccountsFromMnemonic(ctx, mocks.TestMnemonic, derived.DefaultMnemonicLanguage, "", 1))
+	publicKeys, err := dr.FetchValidatingPublicKeys(ctx)
+	require.NoError(t, err)
+
+	validatorDB, err := kv.NewKVStore(ctx, defaultWalletPath, &kv.Config{PubKeys: publicKeys})
+	require.NoError(t, err)
+	srv.db = validatorDB
+	defer func() {
+		require.NoError(t, validatorDB.Close())
+	}()
+
+	// Import attestations for a key that is not in the keymanager and has no signed blocks.
+	activeKey := hexutil.Encode(publicKeys[0][:])
+	attesterOnlyKey := "0xaf2e7ba294e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591494"
+	interchange := &format.EIPSlashingProtectionFormat{
+		Data: []*format.ProtectionData{{
+			Pubkey:             attesterOnlyKey,
+			SignedBlocks:       []*format.SignedBlock{},
+			SignedAttestations: []*format.SignedAttestation{{SourceEpoch: "0", TargetEpoch: "4"}},
+		}},
+	}
+	interchange.Metadata.InterchangeFormatVersion = format.InterchangeFormatVersion
+	interchange.Metadata.GenesisValidatorsRoot = hexutil.Encode(bytesutil.PadTo([]byte{1}, fieldparams.RootLength))
+	encoded, err := json.Marshal(interchange)
+	require.NoError(t, err)
+	require.NoError(t, validatorDB.ImportStandardProtectionJSON(ctx, bytes.NewReader(encoded)))
+
+	var buf bytes.Buffer
+	require.NoError(t, json.NewEncoder(&buf).Encode(&DeleteKeystoresRequest{Pubkeys: []string{activeKey, attesterOnlyKey}}))
+	req := httptest.NewRequest(http.MethodDelete, "/eth/v1/keystores", &buf)
+	wr := httptest.NewRecorder()
+	srv.DeleteKeystores(wr, req)
+	require.Equal(t, http.StatusOK, wr.Code)
+	resp := &DeleteKeystoresResponse{}
+	require.NoError(t, json.Unmarshal(wr.Body.Bytes(), resp))
+	require.Equal(t, 2, len(resp.Data))
+	require.Equal(t, keymanager.StatusDeleted, resp.Data[0].Status)
+	require.Equal(t, keymanager.StatusNotActive, resp.Data[1].Status)
+	require.NotEqual(t, "null", resp.SlashingProtection)
+
+	exported := &format.EIPSlashingProtectionFormat{}
+	require.NoError(t, json.Unmarshal([]byte(resp.SlashingProtection), exported))
+	attsByKey := make(map[string]int)
+	for _, item := range exported.Data {
+		attsByKey[item.Pubkey] = len(item.SignedAttestations)
+	}
+	require.Equal(t, 2, len(attsByKey))
+	require.Equal(t, 0, attsByKey[activeKey])
+	require.Equal(t, 1, attsByKey[attesterOnlyKey])
+}
+
 func TestServer_DeleteKeystores_FailedSlashingProtectionExport(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range []bool{false, true} {
 		t.Run(fmt.Sprintf("minimalSlashingProtection:%v", isSlashingProtectionMinimal), func(t *testing.T) {
