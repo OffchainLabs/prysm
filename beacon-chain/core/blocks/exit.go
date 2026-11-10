@@ -23,6 +23,9 @@ var ValidatorAlreadyExitedMsg = "has already submitted an exit, which will take 
 // because it has not been active long enough.
 var ValidatorCannotExitYetMsg = "validator has not been active long enough to exit"
 
+// ErrPendingBalanceToWithdraw depends on the head state. Gossip validation ignores it instead of rejecting it.
+var ErrPendingBalanceToWithdraw = errors.New("must have no pending balance to withdraw")
+
 // ProcessVoluntaryExits is one of the operations performed
 // on each processed beacon block to determine which validators
 // should exit the state's validator registry.
@@ -111,6 +114,25 @@ func VerifyExitAndSignature(
 	st state.ReadOnlyBeaconState,
 	signed *ethpb.SignedVoluntaryExit,
 ) error {
+	return verifyExitAndSignature(validator, st, signed, true)
+}
+
+// VerifyExitAndSignatureWithoutEpochCheck is VerifyExitAndSignature without the
+// `get_current_epoch(state) >= voluntary_exit.epoch` check, used in gossip validation.
+func VerifyExitAndSignatureWithoutEpochCheck(
+	validator state.ReadOnlyValidator,
+	st state.ReadOnlyBeaconState,
+	signed *ethpb.SignedVoluntaryExit,
+) error {
+	return verifyExitAndSignature(validator, st, signed, false)
+}
+
+func verifyExitAndSignature(
+	validator state.ReadOnlyValidator,
+	st state.ReadOnlyBeaconState,
+	signed *ethpb.SignedVoluntaryExit,
+	checkEpoch bool,
+) error {
 	if signed == nil || signed.Exit == nil {
 		return errors.New("nil exit")
 	}
@@ -129,7 +151,7 @@ func VerifyExitAndSignature(
 	}
 
 	exit := signed.Exit
-	if err := verifyExitConditions(st, validator, exit); err != nil {
+	if err := verifyExitConditions(st, validator, exit, checkEpoch); err != nil {
 		return err
 	}
 	domain, err := signing.Domain(fork, exit.Epoch, params.BeaconConfig().DomainVoluntaryExit, genesisRoot)
@@ -166,7 +188,7 @@ func VerifyExitAndSignature(
 //	 assert bls.Verify(validator.pubkey, signing_root, signed_voluntary_exit.signature)
 //	 # Initiate exit
 //	 initiate_validator_exit(state, voluntary_exit.validator_index)
-func verifyExitConditions(st state.ReadOnlyBeaconState, validator state.ReadOnlyValidator, exit *ethpb.VoluntaryExit) error {
+func verifyExitConditions(st state.ReadOnlyBeaconState, validator state.ReadOnlyValidator, exit *ethpb.VoluntaryExit, checkEpoch bool) error {
 	currentEpoch := slots.ToEpoch(st.Slot())
 	// Verify the validator is active.
 	if !helpers.IsActiveValidatorUsingTrie(validator, currentEpoch) {
@@ -177,7 +199,7 @@ func verifyExitConditions(st state.ReadOnlyBeaconState, validator state.ReadOnly
 		return fmt.Errorf("validator with index %d %s: %v", exit.ValidatorIndex, ValidatorAlreadyExitedMsg, validator.ExitEpoch())
 	}
 	// Exits must specify an epoch when they become valid; they are not valid before then.
-	if currentEpoch < exit.Epoch {
+	if checkEpoch && currentEpoch < exit.Epoch {
 		return fmt.Errorf("expected current epoch >= exit epoch, received %d < %d", currentEpoch, exit.Epoch)
 	}
 	// Verify the validator has been active long enough.
@@ -198,7 +220,7 @@ func verifyExitConditions(st state.ReadOnlyBeaconState, validator state.ReadOnly
 			return fmt.Errorf("unable to retrieve pending balance to withdraw for validator %d: %w", exit.ValidatorIndex, err)
 		}
 		if ok {
-			return fmt.Errorf("validator %d must have no pending balance to withdraw", exit.ValidatorIndex)
+			return fmt.Errorf("validator %d %w", exit.ValidatorIndex, ErrPendingBalanceToWithdraw)
 		}
 	}
 
