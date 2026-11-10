@@ -120,9 +120,18 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	// Verify the block being voted and the processed state is in beaconDB and the block has passed validation if it's in the beaconDB.
 	blockRoot := bytesutil.ToBytes32(data.BeaconBlockRoot)
 	if !s.hasBlockAndState(ctx, blockRoot) {
-		// Block not yet available - save attestation to pending queue for later processing
-		// when the block arrives. Return ValidationIgnore so gossip doesn't potentially penalize the peer.
+		if !s.shouldVerifyForUnknownBlock(blockRoot, data.Target) {
+			s.savePendingAtt(pid, att)
+			return pubsub.ValidationIgnore, nil
+		}
+		_, res, err := s.validateUnaggregatedAttWithTargetState(ctx, att, *msg.Topic)
+		if res == pubsub.ValidationReject {
+			return res, err
+		}
 		s.savePendingAtt(pid, att)
+		if res == pubsub.ValidationAccept {
+			s.requestBlockForPendingAtt(pid, blockRoot)
+		}
 		return pubsub.ValidationIgnore, nil
 	}
 	// Block exists - verify it's in forkchoice (i.e., it's a descendant of the finalized checkpoint)
@@ -136,61 +145,25 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		return pubsub.ValidationReject, wrapAttestationError(err, att)
 	}
 
-	preState, err := s.cfg.chain.AttestationTargetState(ctx, data.Target)
-	if err != nil {
-		tracing.AnnotateError(span, err)
-		return pubsub.ValidationIgnore, err
-	}
-
-	validationRes, err := s.validateUnaggregatedAttTopic(ctx, att, preState, *msg.Topic)
+	attForValidation, validationRes, err := s.validateUnaggregatedAttWithTargetState(ctx, att, *msg.Topic)
 	if validationRes != pubsub.ValidationAccept {
-		return validationRes, wrapAttestationError(err, att)
+		return validationRes, err
 	}
 
-	committee, err := helpers.BeaconCommitteeFromState(ctx, preState, data.Slot, committeeIndex)
-	if err != nil {
-		tracing.AnnotateError(span, err)
-		return pubsub.ValidationIgnore, err
-	}
-
-	validationRes, err = validateAttesterData(ctx, att, committee)
-	if validationRes != pubsub.ValidationAccept {
-		return validationRes, wrapAttestationError(err, att)
-	}
-
-	// Consolidated handling of Electra SingleAttestation vs Phase0 unaggregated attestation
 	var (
-		attForValidation eth.Att // what we'll pass to further validation
-		eventType        feed.EventType
-		eventData        any
+		eventType feed.EventType
+		eventData any
 	)
-
-	if att.Version() >= version.Electra {
-		singleAtt, ok := att.(*eth.SingleAttestation)
-		if !ok {
-			return pubsub.ValidationIgnore, fmt.Errorf(
-				"attestation has wrong type (expected %T, got %T)",
-				&eth.SingleAttestation{}, att,
-			)
-		}
-		// Convert Electra SingleAttestation to unaggregated ElectraAttestation. This is needed because many parts of the codebase assume that attestations have a certain structure and SingleAttestation validates these assumptions.
-		attForValidation = singleAtt.ToAttestationElectra(committee)
+	if singleAtt, ok := att.(*eth.SingleAttestation); ok {
 		eventType = operation.SingleAttReceived
 		eventData = &operation.SingleAttReceivedData{
 			Attestation: singleAtt,
 		}
 	} else {
-		// Phase0 unaggregated attestation
-		attForValidation = att
 		eventType = operation.UnaggregatedAttReceived
 		eventData = &operation.UnAggregatedAttReceivedData{
 			Attestation: att,
 		}
-	}
-
-	validationRes, err = s.validateUnaggregatedAttWithState(ctx, attForValidation, preState)
-	if validationRes != pubsub.ValidationAccept {
-		return validationRes, wrapAttestationError(err, att)
 	}
 
 	if s.slasherEnabled {
@@ -237,6 +210,56 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	msg.ValidatorData = attForValidation
 
 	return pubsub.ValidationAccept, nil
+}
+
+// validateUnaggregatedAttWithTargetState runs the attestation checks that only depend on the target checkpoint state,
+// including the signature. It does not require the attested block to be known. It returns the attestation in the
+// format used by the pool and signature verification.
+func (s *Service) validateUnaggregatedAttWithTargetState(ctx context.Context, att eth.Att, topic string) (eth.Att, pubsub.ValidationResult, error) {
+	ctx, span := trace.StartSpan(ctx, "sync.validateUnaggregatedAttWithTargetState")
+	defer span.End()
+
+	data := att.GetData()
+	preState, err := s.cfg.chain.AttestationTargetState(ctx, data.Target)
+	if err != nil {
+		tracing.AnnotateError(span, err)
+		return nil, pubsub.ValidationIgnore, err
+	}
+
+	validationRes, err := s.validateUnaggregatedAttTopic(ctx, att, preState, topic)
+	if validationRes != pubsub.ValidationAccept {
+		return nil, validationRes, wrapAttestationError(err, att)
+	}
+
+	committee, err := helpers.BeaconCommitteeFromState(ctx, preState, data.Slot, att.GetCommitteeIndex())
+	if err != nil {
+		tracing.AnnotateError(span, err)
+		return nil, pubsub.ValidationIgnore, err
+	}
+
+	validationRes, err = validateAttesterData(ctx, att, committee)
+	if validationRes != pubsub.ValidationAccept {
+		return nil, validationRes, wrapAttestationError(err, att)
+	}
+
+	attForValidation := att
+	if att.Version() >= version.Electra {
+		singleAtt, ok := att.(*eth.SingleAttestation)
+		if !ok {
+			return nil, pubsub.ValidationIgnore, fmt.Errorf(
+				"attestation has wrong type (expected %T, got %T)",
+				&eth.SingleAttestation{}, att,
+			)
+		}
+		attForValidation = singleAtt.ToAttestationElectra(committee)
+	}
+
+	validationRes, err = s.validateUnaggregatedAttWithState(ctx, attForValidation, preState)
+	if validationRes != pubsub.ValidationAccept {
+		return nil, validationRes, wrapAttestationError(err, att)
+	}
+
+	return attForValidation, pubsub.ValidationAccept, nil
 }
 
 // This validates beacon unaggregated attestation has correct topic string.
