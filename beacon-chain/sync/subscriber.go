@@ -784,9 +784,14 @@ func (s *Service) samplingSize() (uint64, error) {
 	cfg := params.BeaconConfig()
 
 	// Compute the validators custody requirement.
+	// A failure here must not fail the whole computation: `dataColumnSubnetIndices` would then report
+	// no wanted subnet and the node would leave every data column subnet, including the ones needed
+	// for the custody group count it advertises. The custody group count below already reflects the
+	// validators custody requirement as last stored.
 	validatorsCustodyRequirement, err := s.validatorsCustodyRequirement()
 	if err != nil {
-		return 0, errors.Wrap(err, "validators custody requirement")
+		log.WithError(err).Error("Could not retrieve validators custody requirement")
+		validatorsCustodyRequirement = 0
 	}
 
 	// Get custody group count - this is the source of truth and already reflects:

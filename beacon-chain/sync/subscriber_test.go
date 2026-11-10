@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"fmt"
+	"math"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -12,11 +13,13 @@ import (
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	db "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
@@ -896,6 +899,70 @@ func TestSamplingSize(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, semiSupernodeCustody, size) // Should be 64 based on custody count
 		// Note: Downgrade prevention is handled in updateCustodyInfoInDB(), not here
+	})
+
+	t.Run("attached validator not in the finalized state is ignored", func(t *testing.T) {
+		custodyCount := uint64(16)
+		_, _, err := p2pService.UpdateCustodyInfo(0, custodyCount)
+		require.NoError(t, err)
+
+		// The finalized state knows 2 validators, but an index far beyond the registry is attached
+		// (e.g. via PrepareBeaconProposer, which does not check the index).
+		finalizedState, _ := util.DeterministicGenesisStateFulu(t, 2)
+		stateGen := stategen.New(d, doublylinkedtree.New())
+		stateGen.SaveFinalizedState([32]byte{'a'}, finalizedState)
+
+		subscribedValidatorsCache := cache.NewSubscribedValidatorsCache()
+		subscribedValidatorsCache.Add(1)
+		subscribedValidatorsCache.Add(math.MaxUint64)
+
+		s := &Service{
+			ctx:                       ctx,
+			subscribedValidatorsCache: subscribedValidatorsCache,
+			cfg: &config{
+				beaconDB: d,
+				p2p:      p2pService,
+				stateGen: stateGen,
+			},
+		}
+
+		requirement, err := s.validatorsCustodyRequirement()
+		require.NoError(t, err)
+		require.Equal(t, cfg.ValidatorCustodyRequirement, requirement)
+
+		size, err := s.samplingSize()
+		require.NoError(t, err)
+		require.Equal(t, custodyCount, size)
+		require.NotEqual(t, 0, len(s.dataColumnSubnetIndices(0)))
+	})
+
+	t.Run("validators custody requirement failure falls back to custody count", func(t *testing.T) {
+		custodyCount := uint64(16)
+		_, _, err := p2pService.UpdateCustodyInfo(0, custodyCount)
+		require.NoError(t, err)
+
+		subscribedValidatorsCache := cache.NewSubscribedValidatorsCache()
+		subscribedValidatorsCache.Add(1)
+
+		s := &Service{
+			ctx:                       ctx,
+			subscribedValidatorsCache: subscribedValidatorsCache,
+			cfg: &config{
+				beaconDB: d,
+				p2p:      p2pService,
+				// No finalized state is available.
+				stateGen: stategen.New(d, doublylinkedtree.New()),
+			},
+		}
+
+		_, err = s.validatorsCustodyRequirement()
+		require.ErrorIs(t, err, nilFinalizedStateError)
+
+		// The node must not leave its data column subnets because of it.
+		size, err := s.samplingSize()
+		require.NoError(t, err)
+		require.Equal(t, custodyCount, size)
+		require.NotEqual(t, 0, len(s.dataColumnSubnetIndices(0)))
 	})
 }
 
