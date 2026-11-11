@@ -550,8 +550,8 @@ func (s *Service) connectToBootnodes() error {
 			return err
 		}
 		// do not dial bootnodes with their tcp ports not set
-		if err := bootNode.Record().Load(enr.WithEntry("tcp", new(enr.TCP))); err != nil {
-			if !enr.IsNotFound(err) {
+		if _, ok, err := getPort(bootNode, tcp); err != nil || !ok {
+			if err != nil {
 				log.WithError(err).Error("Could not retrieve tcp port")
 			}
 			continue
