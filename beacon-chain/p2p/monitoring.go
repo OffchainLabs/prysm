@@ -97,6 +97,11 @@ var (
 		Help: "The number of data column sidecar message broadcast attempts.",
 	})
 
+	envelopesOverPeerLimit = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "p2p_execution_payload_envelopes_over_peer_limit_total",
+		Help: "The number of execution payload envelopes dropped before validation because the sending peer exceeded its per-slot limit.",
+	})
+
 	// Partial Data Column Metrics
 	partialDataColumnBroadcasts = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "p2p_partial_data_column_broadcasts",

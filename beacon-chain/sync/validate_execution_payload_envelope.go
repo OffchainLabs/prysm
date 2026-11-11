@@ -157,6 +157,12 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	if err := v.VerifySignatureWithPubkey(pubkey, s.cfg.clock.GenesisValidatorsRoot()); err != nil {
 		return pubsub.ValidationReject, err
 	}
+	// Import rejects this, so do not let such an envelope take the builder's seen slot. Ignore
+	// rather than reject because the spec gossip rules allow it and other clients forward it.
+	if env.ParentBeaconBlockRoot() != block.Block().ParentRoot() {
+		return pubsub.ValidationIgnore, errors.Errorf("envelope parent beacon block root %#x does not match block parent root %#x",
+			env.ParentBeaconBlockRoot(), block.Block().ParentRoot())
+	}
 	s.setSeenPayloadEnvelope(root, env.BuilderIndex())
 	msg.ValidatorData = signedEnvelope
 	startTime, err := slots.StartTime(s.cfg.clock.GenesisTime(), env.Slot())
