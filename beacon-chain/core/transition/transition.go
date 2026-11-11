@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/fulu"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/heze"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -369,67 +370,77 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 	var err error
 
 	slot := state.Slot()
+	cfg := params.BeaconConfig()
 	upgraded := false
 
-	if time.CanUpgradeToAltair(slot) {
+	if time.CanUpgradeTo(slot, cfg.AltairForkEpoch) {
 		state, err = altair.UpgradeToAltair(ctx, state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
-			return nil, err
+			return nil, fmt.Errorf("upgrade state to Altair: %w", err)
 		}
 		upgraded = true
 	}
 
-	if time.CanUpgradeToBellatrix(slot) {
+	if time.CanUpgradeTo(slot, cfg.BellatrixForkEpoch) {
 		state, err = execution.UpgradeToBellatrix(state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
-			return nil, err
+			return nil, fmt.Errorf("upgrade state to Bellatrix: %w", err)
 		}
 		upgraded = true
 	}
 
-	if time.CanUpgradeToCapella(slot) {
+	if time.CanUpgradeTo(slot, cfg.CapellaForkEpoch) {
 		state, err = capella.UpgradeToCapella(state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
-			return nil, err
+			return nil, fmt.Errorf("upgrade state to Capella: %w", err)
 		}
 		upgraded = true
 	}
 
-	if time.CanUpgradeToDeneb(slot) {
+	if time.CanUpgradeTo(slot, cfg.DenebForkEpoch) {
 		state, err = deneb.UpgradeToDeneb(state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
-			return nil, err
+			return nil, fmt.Errorf("upgrade state to Deneb: %w", err)
 		}
 		upgraded = true
 	}
 
-	if time.CanUpgradeToElectra(slot) {
+	if time.CanUpgradeTo(slot, cfg.ElectraForkEpoch) {
 		state, err = electra.UpgradeToElectra(ctx, state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
-			return nil, err
+			return nil, fmt.Errorf("upgrade state to Electra: %w", err)
 		}
 		upgraded = true
 	}
 
-	if time.CanUpgradeToFulu(slot) {
+	if time.CanUpgradeTo(slot, cfg.FuluForkEpoch) {
 		state, err = fulu.UpgradeToFulu(ctx, state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
-			return nil, err
+			return nil, fmt.Errorf("upgrade state to Fulu: %w", err)
 		}
 		upgraded = true
 	}
 
-	if time.CanUpgradeToGloas(slot) {
+	if time.CanUpgradeTo(slot, cfg.GloasForkEpoch) {
 		state, err = gloas.UpgradeToGloas(ctx, state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
-			return nil, err
+			return nil, fmt.Errorf("upgrade state to Gloas: %w", err)
+		}
+		upgraded = true
+	}
+
+	if time.CanUpgradeTo(slot, cfg.HezeForkEpoch) {
+		state, err = heze.UpgradeToHeze(state)
+		if err != nil {
+			tracing.AnnotateError(span, err)
+			return nil, fmt.Errorf("upgrade state to Heze: %w", err)
 		}
 		upgraded = true
 	}

@@ -857,7 +857,9 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 			require.NoError(t, cw.SetClock(clock))
 			svc.verifierWaiter = verification.NewInitializerWaiter(cw, chainService.ForkChoiceStore, svc.cfg.stateGen, chainService)
 			markInitSyncComplete(t, svc)
-			go svc.Start()
+			svc.cfg.clock = clock
+			svc.markForChainStart()
+			go svc.verifierRoutine()
 			marshalledObj, err := tt.args.msg.MarshalSSZ()
 			assert.NoError(t, err)
 			marshalledObj = snappy.Encode(nil, marshalledObj)
@@ -869,15 +871,6 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 				ReceivedFrom:  "",
 				ValidatorData: nil,
 			}
-			// a lot happens in the chain service after SetClock is called,
-			// give it a moment before calling internal methods that would typically
-			// only execute after waitFor
-			for range 10 {
-				if !svc.chainIsStarted() {
-					time.Sleep(100 * time.Millisecond)
-				}
-			}
-			require.Equal(t, true, svc.chainIsStarted())
 			if got, err := svc.validateSyncContributionAndProof(ctx, tt.args.pid, msg); got != tt.want {
 				_ = err
 				t.Errorf("validateSyncContributionAndProof() = %v, want %v", got, tt.want)
@@ -1102,6 +1095,16 @@ func TestService_setSyncContributionIndexSlotSeen(t *testing.T) {
 		AggregationBits: b2,
 	})
 	require.NoError(t, err)
+	require.Equal(t, false, has)
+
+	// A superset of a cached entry is stored and then seen.
+	require.NoError(t, s.setSyncContributionBits(&ethpb.SyncCommitteeContribution{
+		AggregationBits: b2,
+	}))
+	has, err = s.hasSeenSyncContributionBits(&ethpb.SyncCommitteeContribution{
+		AggregationBits: b2,
+	})
+	require.NoError(t, err)
 	require.Equal(t, true, has)
 
 	// Make sure set doesn't contain existing overlaps
@@ -1172,4 +1175,47 @@ func TestService_setSyncContributionIndexSlotSeen(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, false, has)
+}
+
+func TestService_ignoreSeenSyncContribution(t *testing.T) {
+	bits := func(idx ...uint64) bitfield.Bitvector128 {
+		b := bitfield.NewBitvector128()
+		for _, i := range idx {
+			b.SetBitAt(i, true)
+		}
+		return b
+	}
+	tests := []struct {
+		name       string
+		seenBits   bitfield.Bitvector128
+		seenAggIdx primitives.ValidatorIndex
+		bits       bitfield.Bitvector128
+		want       pubsub.ValidationResult
+	}{
+		{name: "superset of seen bits", seenBits: bits(0), seenAggIdx: 1, bits: bits(0, 1), want: pubsub.ValidationAccept},
+		{name: "subset of seen bits", seenBits: bits(0, 1), seenAggIdx: 1, bits: bits(0), want: pubsub.ValidationIgnore},
+		{name: "equal to seen bits", seenBits: bits(0), seenAggIdx: 1, bits: bits(0), want: pubsub.ValidationIgnore},
+		{name: "disjoint from seen bits", seenBits: bits(2, 3), seenAggIdx: 1, bits: bits(0, 1), want: pubsub.ValidationAccept},
+		{name: "aggregator already seen", seenBits: bits(2), seenAggIdx: 2, bits: bits(0, 1), want: pubsub.ValidationIgnore},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewService(t.Context(), WithP2P(mockp2p.NewTestP2P(t)))
+			s.initCaches()
+			root := bytesutil.PadTo([]byte{'A'}, 32)
+			require.NoError(t, s.setSyncContributionBits(&ethpb.SyncCommitteeContribution{
+				Slot: 1, SubcommitteeIndex: 2, BlockRoot: root, AggregationBits: tt.seenBits,
+			}))
+			s.setSyncContributionIndexSlotSeen(1, tt.seenAggIdx, 2)
+			m := &ethpb.SignedContributionAndProof{Message: &ethpb.ContributionAndProof{
+				AggregatorIndex: 2,
+				Contribution: &ethpb.SyncCommitteeContribution{
+					Slot: 1, SubcommitteeIndex: 2, BlockRoot: root, AggregationBits: tt.bits,
+				},
+			}}
+			got, err := s.ignoreSeenSyncContribution(m)(t.Context())
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
 }

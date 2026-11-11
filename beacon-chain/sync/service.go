@@ -147,6 +147,8 @@ type Service struct {
 	slotToPendingBlocks                  *gcache.Cache
 	seenPendingBlocks                    map[[32]byte]bool
 	blkRootToPendingAtts                 map[[32]byte][]any
+	pendingAttSenders                    map[[32]byte]map[peer.ID]bool
+	pendingAttRequestPeers               map[peer.ID]bool
 	subHandler                           *subTopicHandler
 	pendingAttsLock                      sync.RWMutex
 	pendingQueueLock                     sync.RWMutex
@@ -440,6 +442,8 @@ func (s *Service) initCaches() {
 	s.seenProposerSlashingCache = lruwrpr.New(seenProposerSlashingSize)
 	s.badBlockCache = lruwrpr.New(badBlockSize)
 	s.badPayloadCache = lruwrpr.New(badBlockSize)
+	s.pendingAttSenders = make(map[[32]byte]map[peer.ID]bool)
+	s.pendingAttRequestPeers = make(map[peer.ID]bool)
 }
 
 func (s *Service) waitForChainStart() {
@@ -583,7 +587,7 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 	}
 
 	// Start the fork watcher.
-	go s.p2pHandlerControlLoop()
+	s.spawn(s.p2pHandlerControlLoop)
 }
 
 func (s *Service) writeErrorResponseToStream(responseCode byte, reason string, stream libp2pcore.Stream) {

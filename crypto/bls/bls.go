@@ -53,6 +53,11 @@ func AggregateMultiplePubkeys(pubs []PublicKey) PublicKey {
 	return blst.AggregateMultiplePubkeys(pubs)
 }
 
+// SubtractPublicKey returns p - sub as a new key. It undoes the aggregation of sub into p.
+func SubtractPublicKey(p, sub PublicKey) PublicKey {
+	return blst.SubtractPublicKey(p, sub)
+}
+
 // AggregateSignatures converts a list of signatures into a single, aggregated sig.
 func AggregateSignatures(sigs []common.Signature) common.Signature {
 	return blst.AggregateSignatures(sigs)
@@ -61,6 +66,11 @@ func AggregateSignatures(sigs []common.Signature) common.Signature {
 // AggregateCompressedSignatures converts a list of compressed signatures into a single, aggregated sig.
 func AggregateCompressedSignatures(multiSigs [][]byte) (common.Signature, error) {
 	return blst.AggregateCompressedSignatures(multiSigs)
+}
+
+// AggregateRandomized aggregates signatures and public keys over one message with random coefficients.
+func AggregateRandomized(sigs [][]byte, pubKeys []PublicKey) (Signature, PublicKey, error) {
+	return blst.AggregateRandomized(sigs, pubKeys)
 }
 
 // VerifySignature verifies a single signature. For performance reason, always use VerifyMultipleSignatures if possible.

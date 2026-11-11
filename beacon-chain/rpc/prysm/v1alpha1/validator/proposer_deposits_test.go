@@ -98,7 +98,7 @@ func TestProposer_PendingDeposits_Electra(t *testing.T) {
 		votes = append(votes, vote)
 	}
 
-	beaconState, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{
+	beaconState, err := state_native.New(&ethpb.BeaconStateElectra{
 		Eth1Data: &ethpb.Eth1Data{
 			BlockHash:    []byte("0x0"),
 			DepositRoot:  make([]byte, 32),

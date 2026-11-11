@@ -82,5 +82,5 @@ func UpgradeToBellatrix(state state.BeaconState) (state.BeaconState, error) {
 		},
 	}
 
-	return state_native.InitializeFromProtoUnsafeBellatrix(s)
+	return state_native.NewUnsafe(s)
 }

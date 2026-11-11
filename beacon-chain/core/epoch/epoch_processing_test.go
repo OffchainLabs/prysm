@@ -28,7 +28,7 @@ func TestProcessSlashings_NotSlashed(t *testing.T) {
 		Balances:   []uint64{params.BeaconConfig().MaxEffectiveBalance},
 		Slashings:  []uint64{0, 1e9},
 	}
-	s, err := state_native.InitializeFromProtoPhase0(base)
+	s, err := state_native.New(base)
 	require.NoError(t, err)
 	require.NoError(t, epoch.ProcessSlashings(t.Context(), s))
 	wanted := params.BeaconConfig().MaxEffectiveBalance
@@ -105,7 +105,7 @@ func TestProcessSlashings_SlashedLess(t *testing.T) {
 	for i, tt := range tests {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			original := tt.state.Copy()
-			s, err := state_native.InitializeFromProtoPhase0(tt.state)
+			s, err := state_native.New(tt.state)
 			require.NoError(t, err)
 			helpers.ClearCache()
 			require.NoError(t, epoch.ProcessSlashings(t.Context(), s))
@@ -166,7 +166,7 @@ func TestProcessRegistryUpdates_NoRotation(t *testing.T) {
 		},
 		FinalizedCheckpoint: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 	}
-	beaconState, err := state_native.InitializeFromProtoPhase0(base)
+	beaconState, err := state_native.New(base)
 	require.NoError(t, err)
 	newState, err := epoch.ProcessRegistryUpdates(t.Context(), beaconState)
 	require.NoError(t, err)
@@ -189,7 +189,7 @@ func TestProcessRegistryUpdates_EligibleToActivate(t *testing.T) {
 			ActivationEpoch:            params.BeaconConfig().FarFutureEpoch,
 		})
 	}
-	beaconState, err := state_native.InitializeFromProtoPhase0(base)
+	beaconState, err := state_native.New(base)
 	require.NoError(t, err)
 	currentEpoch := time.CurrentEpoch(beaconState)
 	newState, err := epoch.ProcessRegistryUpdates(t.Context(), beaconState)
@@ -224,7 +224,7 @@ func TestProcessRegistryUpdates_EligibleToActivate_Cancun(t *testing.T) {
 			ActivationEpoch:            params.BeaconConfig().FarFutureEpoch,
 		})
 	}
-	beaconState, err := state_native.InitializeFromProtoDeneb(base)
+	beaconState, err := state_native.New(base)
 	require.NoError(t, err)
 	currentEpoch := time.CurrentEpoch(beaconState)
 	newState, err := epoch.ProcessRegistryUpdates(t.Context(), beaconState)
@@ -253,7 +253,7 @@ func TestProcessRegistryUpdates_ActivationCompletes(t *testing.T) {
 		},
 		FinalizedCheckpoint: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 	}
-	beaconState, err := state_native.InitializeFromProtoPhase0(base)
+	beaconState, err := state_native.New(base)
 	require.NoError(t, err)
 	newState, err := epoch.ProcessRegistryUpdates(t.Context(), beaconState)
 	require.NoError(t, err)
@@ -277,7 +277,7 @@ func TestProcessRegistryUpdates_ValidatorsEjected(t *testing.T) {
 		},
 		FinalizedCheckpoint: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 	}
-	beaconState, err := state_native.InitializeFromProtoPhase0(base)
+	beaconState, err := state_native.New(base)
 	require.NoError(t, err)
 	newState, err := epoch.ProcessRegistryUpdates(t.Context(), beaconState)
 	require.NoError(t, err)
@@ -302,7 +302,7 @@ func TestProcessRegistryUpdates_CanExits(t *testing.T) {
 		},
 		FinalizedCheckpoint: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 	}
-	beaconState, err := state_native.InitializeFromProtoPhase0(base)
+	beaconState, err := state_native.New(base)
 	require.NoError(t, err)
 	newState, err := epoch.ProcessRegistryUpdates(t.Context(), beaconState)
 	require.NoError(t, err)
@@ -358,7 +358,7 @@ func TestProcessSlashings_BadValue(t *testing.T) {
 		Balances:   []uint64{params.BeaconConfig().MaxEffectiveBalance},
 		Slashings:  []uint64{math.MaxUint64, 1e9},
 	}
-	s, err := state_native.InitializeFromProtoPhase0(base)
+	s, err := state_native.New(base)
 	require.NoError(t, err)
 	require.ErrorContains(t, "addition overflows", epoch.ProcessSlashings(t.Context(), s))
 }
@@ -502,7 +502,7 @@ func TestProcessSlashings_SlashedElectra(t *testing.T) {
 	for i, tt := range tests {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			original := tt.state.Copy()
-			s, err := state_native.InitializeFromProtoElectra(tt.state)
+			s, err := state_native.New(tt.state)
 			require.NoError(t, err)
 			helpers.ClearCache()
 			require.NoError(t, epoch.ProcessSlashings(t.Context(), s))

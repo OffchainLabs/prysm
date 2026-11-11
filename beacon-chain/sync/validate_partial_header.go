@@ -5,6 +5,7 @@ import (
 	stderrors "errors"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -12,6 +13,7 @@ import (
 )
 
 var errHeaderEmptyCommitments = errors.New("header has no kzg commitments")
+var errHeaderTooManyCommitments = errors.New("header has more kzg commitments than max blobs per block")
 var errEmptyCommitments = errors.New("no kzg commitments")
 var errHeaderParentNotSeen = errors.New("header parent not seen")
 var errHeaderNil = errors.New("nil header")
@@ -85,6 +87,11 @@ func (s *Service) validatePartialDataColumnHeader(ctx context.Context, col *bloc
 	// [REJECT] kzg_commitments list is non-empty
 	if col.KzgCommitmentCount() == 0 {
 		return nil, pubsub.ValidationReject, errHeaderEmptyCommitments
+	}
+
+	// [REJECT] kzg_commitments must not be greater than the max blobs limit.
+	if col.KzgCommitmentCount() > uint64(params.BeaconConfig().MaxBlobsPerBlock(sbh.Header.Slot)) {
+		return nil, pubsub.ValidationReject, errHeaderTooManyCommitments
 	}
 
 	dcv := s.newColumnsVerifier([]blocks.RODataColumn{col.RODataColumn}, verification.PartialColumnRequirements)

@@ -352,6 +352,9 @@ func (e *ExecutionPayloadCapella) ToConsensus() (*enginev1.ExecutionPayloadCapel
 	}
 	withdrawals := make([]*enginev1.Withdrawal, len(e.Withdrawals))
 	for i, w := range e.Withdrawals {
+		if w == nil {
+			return nil, server.NewDecodeError(errNilValue, fmt.Sprintf("ExecutionPayload.Withdrawals[%d]", i))
+		}
 		withdrawalIndex, err := strconv.ParseUint(w.WithdrawalIndex, 10, 64)
 		if err != nil {
 			return nil, server.NewDecodeError(err, fmt.Sprintf("ExecutionPayload.Withdrawals[%d].WithdrawalIndex", i))
@@ -617,6 +620,9 @@ func (e *ExecutionPayloadDeneb) ToConsensus() (*enginev1.ExecutionPayloadDeneb, 
 	}
 	withdrawals := make([]*enginev1.Withdrawal, len(e.Withdrawals))
 	for i, w := range e.Withdrawals {
+		if w == nil {
+			return nil, server.NewDecodeError(errNilValue, fmt.Sprintf("ExecutionPayload.Withdrawals[%d]", i))
+		}
 		withdrawalIndex, err := strconv.ParseUint(w.WithdrawalIndex, 10, 64)
 		if err != nil {
 			return nil, server.NewDecodeError(err, fmt.Sprintf("ExecutionPayload.Withdrawals[%d].WithdrawalIndex", i))

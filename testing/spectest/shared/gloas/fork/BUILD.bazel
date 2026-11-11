@@ -14,6 +14,7 @@ go_library(
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/transition:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
+        "//build/bazel:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/primitives:go_default_library",

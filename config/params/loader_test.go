@@ -38,19 +38,19 @@ var placeholderFields = []string{
 	"EIP7928_FORK_VERSION",
 	"EIP8025_FORK_EPOCH",
 	"EIP8025_FORK_VERSION",
+	"EIP8198_FORK_EPOCH",
+	"EIP8198_FORK_VERSION",
 	"EIP8321_FORK_EPOCH",
 	"EIP8321_FORK_VERSION",
 	"EPOCHS_PER_SHUFFLING_PHASE",
-	"FIELD_ELEMENTS_PER_CELL",     // Configured as a constant in config/fieldparams/mainnet.go
-	"FIELD_ELEMENTS_PER_EXT_BLOB", // Configured in proto/ssz_proto_library.bzl
-	"INCLUSION_LIST_COMMITTEE_SIZE",
-	"INCLUSION_LIST_DUE_BPS",
+	"FIELD_ELEMENTS_PER_CELL",       // Configured as a constant in config/fieldparams/mainnet.go
+	"FIELD_ELEMENTS_PER_EXT_BLOB",   // Configured in proto/ssz_proto_library.bzl
+	"INCLUSION_LIST_COMMITTEE_SIZE", // Configured as a constant in config/fieldparams/mainnet.go
 	"INCLUSION_LIST_SUBMISSION_DEADLINE",
 	"KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH", // Configured in proto/ssz_proto_library.bzl
-	"MAX_REQUEST_INCLUSION_LIST",
-	"MAX_TRANSACTIONS_BYTES_PER_INCLUSION_LIST",
-	"MIN_SLOTS_FOR_INCLUSION_LISTS_REQUESTS",
+	"MIN_BLOB_DATA_RETENTION_MS",
 	"NUMBER_OF_COLUMNS", // Configured as a constant in config/fieldparams/mainnet.go
+	"SLOT_DURATION_MS_EIP8198",
 	"TARGET_NUMBER_OF_PEERS",
 	"UPDATE_TIMEOUT",
 	"WHISK_EPOCHS_PER_SHUFFLING_PHASE",

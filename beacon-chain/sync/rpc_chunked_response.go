@@ -1,6 +1,8 @@
 package sync
 
 import (
+	"bytes"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
@@ -67,8 +69,10 @@ func readFirstChunkedBlock(stream libp2pcore.Stream, tor blockchain.TemporalOrac
 	if err != nil {
 		return nil, err
 	}
-	err = p2p.Encoding().DecodeWithMaxLength(stream, blk)
-	return blk, err
+	if err := p2p.Encoding().DecodeWithMaxLength(stream, blk); err != nil {
+		return nil, err
+	}
+	return blk, validateBlockContext(rpcCtx, blk)
 }
 
 // readResponseChunk reads the response from the stream and decodes it into the
@@ -82,7 +86,6 @@ func readResponseChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, 
 	if code != 0 {
 		return nil, errors.New(errMsg)
 	}
-	// No-op for now with the rpc context.
 	rpcCtx, err := readContextFromStream(stream)
 	if err != nil {
 		return nil, err
@@ -91,8 +94,23 @@ func readResponseChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, 
 	if err != nil {
 		return nil, err
 	}
-	err = p2p.Encoding().DecodeWithMaxLength(stream, blk)
-	return blk, err
+	if err := p2p.Encoding().DecodeWithMaxLength(stream, blk); err != nil {
+		return nil, err
+	}
+	return blk, validateBlockContext(rpcCtx, blk)
+}
+
+// validateBlockContext checks that the context bytes are the fork digest of the block's slot.
+// Legacy v1 topics have no context bytes.
+func validateBlockContext(rpcCtx []byte, blk interfaces.ReadOnlySignedBeaconBlock) error {
+	if len(rpcCtx) == 0 {
+		return nil
+	}
+	digest := params.ForkDigest(slots.ToEpoch(blk.Block().Slot()))
+	if !bytes.Equal(rpcCtx, digest[:]) {
+		return errors.Errorf("context bytes %#x do not match fork digest %#x of block slot %d", rpcCtx, digest, blk.Block().Slot())
+	}
+	return nil
 }
 
 // WriteBlobSidecarChunk writes blob chunk object to stream.

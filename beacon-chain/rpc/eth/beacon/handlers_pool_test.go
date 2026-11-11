@@ -2,6 +2,7 @@ package beacon
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -15,6 +16,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	blockchainmock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	prysmtime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
@@ -27,8 +30,10 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits/mock"
 	p2pMock "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
@@ -46,6 +51,25 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 )
+
+type recordingPayloadAttestationReceiver struct {
+	*blockchainmock.ChainService
+	received bool
+}
+
+func (r *recordingPayloadAttestationReceiver) ReceivePayloadAttestationMessage(_ context.Context, _ *ethpbv1alpha1.PayloadAttestationMessage) error {
+	r.received = true
+	return nil
+}
+
+func signPayloadAttestationForTest(t *testing.T, st state.ReadOnlyBeaconState, data *ethpbv1alpha1.PayloadAttestationData, key common.SecretKey) []byte {
+	t.Helper()
+	domain, err := signing.Domain(st.Fork(), slots.ToEpoch(data.Slot), params.BeaconConfig().DomainPTCAttester, st.GenesisValidatorsRoot())
+	require.NoError(t, err)
+	root, err := signing.ComputeSigningRoot(data, domain)
+	require.NoError(t, err)
+	return key.Sign(root[:]).Marshal()
+}
 
 func TestListAttestationsV2(t *testing.T) {
 	att1 := &ethpbv1alpha1.Attestation{
@@ -1190,7 +1214,11 @@ func TestSubmitVoluntaryExit(t *testing.T) {
 			ChainInfoFetcher:   &blockchainmock.ChainService{State: bs},
 			VoluntaryExitsPool: &mock.PoolMock{},
 			Broadcaster:        broadcaster,
+			OperationNotifier:  &blockchainmock.MockOperationNotifier{},
 		}
+		opChannel := make(chan *feed.Event, 1)
+		opSub := s.OperationNotifier.OperationFeed().Subscribe(opChannel)
+		defer opSub.Unsubscribe()
 
 		var body bytes.Buffer
 		_, err = body.WriteString(exit1)
@@ -1206,6 +1234,13 @@ func TestSubmitVoluntaryExit(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, len(pendingExits))
 		assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
+
+		require.Equal(t, 1, len(opChannel))
+		e := <-opChannel
+		require.Equal(t, feed.EventType(operation.ExitReceived), e.Type)
+		data, ok := e.Data.(*operation.ExitReceivedData)
+		require.Equal(t, true, ok)
+		assert.DeepEqual(t, pendingExits[0], data.Exit)
 	})
 	t.Run("across fork", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
@@ -1222,6 +1257,7 @@ func TestSubmitVoluntaryExit(t *testing.T) {
 			ChainInfoFetcher:   &blockchainmock.ChainService{State: bs},
 			VoluntaryExitsPool: &mock.PoolMock{},
 			Broadcaster:        broadcaster,
+			OperationNotifier:  &blockchainmock.MockOperationNotifier{},
 		}
 
 		var body bytes.Buffer
@@ -1316,99 +1352,168 @@ func TestSubmitVoluntaryExit(t *testing.T) {
 	})
 }
 
-func TestSubmitSyncCommitteeSignatures(t *testing.T) {
-	st, _ := util.DeterministicGenesisStateAltair(t, 10)
+// syncMsgHeadFetcher returns the public key of the requested validator index from the head state.
+type syncMsgHeadFetcher struct {
+	*blockchainmock.ChainService
+}
 
-	t.Run("single", func(t *testing.T) {
+func (c syncMsgHeadFetcher) HeadValidatorIndexToPublicKey(_ context.Context, idx primitives.ValidatorIndex) ([fieldparams.BLSPubkeyLength]byte, error) {
+	v, err := c.State.ValidatorAtIndexReadOnly(idx)
+	if err != nil {
+		return [fieldparams.BLSPubkeyLength]byte{}, fmt.Errorf("get validator at index %d: %v", idx, err)
+	}
+	return v.PublicKey(), nil
+}
+
+func TestSubmitSyncCommitteeSignatures(t *testing.T) {
+	st, keys := util.DeterministicGenesisStateAltair(t, 10)
+	domain := bytesutil.PadTo([]byte{0x07}, 32)
+	root := bytesutil.PadTo([]byte("root"), 32)
+
+	signedMsg := func(t *testing.T, slot primitives.Slot, idx primitives.ValidatorIndex, sk common.SecretKey) *structs.SyncCommitteeMessage {
+		sszRoot := primitives.SSZBytes(root)
+		signingRoot, err := signing.ComputeSigningRoot(&sszRoot, domain)
+		require.NoError(t, err)
+		return &structs.SyncCommitteeMessage{
+			Slot:            fmt.Sprintf("%d", slot),
+			BeaconBlockRoot: hexutil.Encode(root),
+			ValidatorIndex:  fmt.Sprintf("%d", idx),
+			Signature:       hexutil.Encode(sk.Sign(signingRoot[:]).Marshal()),
+		}
+	}
+	setup := func(committeeIndices []primitives.CommitteeIndex) (*Server, *p2pMock.MockBroadcaster) {
 		broadcaster := &p2pMock.MockBroadcaster{}
 		chainService := &blockchainmock.ChainService{
-			State:                st,
-			SyncCommitteeIndices: []primitives.CommitteeIndex{0},
+			State: st,
+			// Genesis one slot ago makes slot 1 the current slot.
+			Genesis:              time.Now().Add(-params.BeaconConfig().SlotDuration()),
+			SyncCommitteeIndices: committeeIndices,
+			SyncCommitteeDomain:  domain,
 		}
-		s := &Server{
+		return &Server{
 			HeadFetcher:           chainService,
 			TimeFetcher:           chainService,
 			OptimisticModeFetcher: chainService,
 			SyncChecker:           &mockSync.Sync{IsSyncing: false},
 			CoreService: &core.Service{
-				SyncCommitteePool: synccommittee.NewStore(),
-				P2P:               broadcaster,
-				HeadFetcher:       chainService,
+				SyncCommitteePool:  synccommittee.NewStore(),
+				P2P:                broadcaster,
+				HeadFetcher:        syncMsgHeadFetcher{chainService},
+				GenesisTimeFetcher: chainService,
 			},
-		}
-
-		var body bytes.Buffer
-		_, err := body.WriteString(singleSyncCommitteeMsg)
+		}, broadcaster
+	}
+	submit := func(t *testing.T, s *Server, msgs ...*structs.SyncCommitteeMessage) *httptest.ResponseRecorder {
+		body, err := json.Marshal(msgs)
 		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+		request := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewReader(body))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
-
 		s.SubmitSyncCommitteeSignatures(writer, request)
+		return writer
+	}
+
+	t.Run("valid", func(t *testing.T) {
+		s, broadcaster := setup([]primitives.CommitteeIndex{0})
+		writer := submit(t, s, signedMsg(t, 1, 1, keys[1]))
 		assert.Equal(t, http.StatusOK, writer.Code)
-		require.NoError(t, err)
 		msgsInPool, err := s.CoreService.SyncCommitteePool.SyncCommitteeMessages(1)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(msgsInPool))
 		assert.Equal(t, primitives.Slot(1), msgsInPool[0].Slot)
-		assert.Equal(t, "0xbacd20f09da907734434f052bd4c9503aa16bab1960e89ea20610d08d064481c", hexutil.Encode(msgsInPool[0].BlockRoot))
 		assert.Equal(t, primitives.ValidatorIndex(1), msgsInPool[0].ValidatorIndex)
-		assert.Equal(t, "0xb591bd4ca7d745b6e027879645d7c014fecb8c58631af070f7607acc0c1c948a5102a33267f0e4ba41a85b254b07df91185274375b2e6436e37e81d2fd46cb3751f5a6c86efb7499c1796c0c17e122a54ac067bb0f5ff41f3241659cceb0c21c", hexutil.Encode(msgsInPool[0].Signature))
 		assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
 	})
-	t.Run("multiple", func(t *testing.T) {
-		broadcaster := &p2pMock.MockBroadcaster{}
-		chainService := &blockchainmock.ChainService{
-			State:                st,
-			SyncCommitteeIndices: []primitives.CommitteeIndex{0},
-		}
-		s := &Server{
-			HeadFetcher:           chainService,
-			TimeFetcher:           chainService,
-			OptimisticModeFetcher: chainService,
-			SyncChecker:           &mockSync.Sync{IsSyncing: false},
-			CoreService: &core.Service{
-				SyncCommitteePool: synccommittee.NewStore(),
-				P2P:               broadcaster,
-				HeadFetcher:       chainService,
-			},
-		}
-
-		var body bytes.Buffer
-		_, err := body.WriteString(multipleSyncCommitteeMsg)
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.SubmitSyncCommitteeSignatures(writer, request)
+	t.Run("multiple valid", func(t *testing.T) {
+		s, broadcaster := setup([]primitives.CommitteeIndex{0})
+		writer := submit(t, s, signedMsg(t, 1, 1, keys[1]), signedMsg(t, 1, 2, keys[2]))
 		assert.Equal(t, http.StatusOK, writer.Code)
+		msgsInPool, err := s.CoreService.SyncCommitteePool.SyncCommitteeMessages(1)
 		require.NoError(t, err)
+		assert.Equal(t, 2, len(msgsInPool))
+		assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
+	})
+	t.Run("duplicate", func(t *testing.T) {
+		s, _ := setup([]primitives.CommitteeIndex{0})
+		msg := signedMsg(t, 1, 1, keys[1])
+		assert.Equal(t, http.StatusOK, submit(t, s, msg).Code)
+		assert.Equal(t, http.StatusOK, submit(t, s, msg).Code)
+	})
+	t.Run("valid and invalid", func(t *testing.T) {
+		s, broadcaster := setup([]primitives.CommitteeIndex{0})
+		writer := submit(t, s, signedMsg(t, 1, 0, keys[0]), signedMsg(t, 1, 1, keys[2]))
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		e := &server.IndexedErrorContainer{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		require.Equal(t, 1, len(e.Failures))
+		assert.Equal(t, 1, e.Failures[0].Index)
 		msgsInPool, err := s.CoreService.SyncCommitteePool.SyncCommitteeMessages(1)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(msgsInPool))
-		msgsInPool, err = s.CoreService.SyncCommitteePool.SyncCommitteeMessages(2)
-		require.NoError(t, err)
-		require.Equal(t, 1, len(msgsInPool))
+		assert.Equal(t, primitives.ValidatorIndex(0), msgsInPool[0].ValidatorIndex)
 		assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
 	})
-	t.Run("invalid", func(t *testing.T) {
-		broadcaster := &p2pMock.MockBroadcaster{}
-		chainService := &blockchainmock.ChainService{
-			State: st,
-		}
-		s := &Server{
-			HeadFetcher:           chainService,
-			TimeFetcher:           chainService,
-			OptimisticModeFetcher: chainService,
-			SyncChecker:           &mockSync.Sync{IsSyncing: false},
-			CoreService: &core.Service{
-				SyncCommitteePool: synccommittee.NewStore(),
-				P2P:               broadcaster,
-				HeadFetcher:       chainService,
-			},
-		}
 
+	infinitySig := signedMsg(t, 1, 1, keys[1])
+	infinitySig.Signature = "0xc0" + strings.Repeat("0", 190)
+	invalidCases := []struct {
+		name             string
+		committeeIndices []primitives.CommitteeIndex
+		msg              *structs.SyncCommitteeMessage
+		wantErr          string
+	}{
+		{
+			name:             "wrong key signature",
+			committeeIndices: []primitives.CommitteeIndex{0},
+			msg:              signedMsg(t, 1, 1, keys[2]),
+			wantErr:          "invalid sync committee message signature",
+		},
+		{
+			name:             "infinity signature",
+			committeeIndices: []primitives.CommitteeIndex{0},
+			msg:              infinitySig,
+			wantErr:          "invalid sync committee message signature",
+		},
+		{
+			name:             "validator index out of range",
+			committeeIndices: []primitives.CommitteeIndex{0},
+			msg:              signedMsg(t, 1, 100, keys[1]),
+			wantErr:          "could not get validator public key",
+		},
+		{
+			name:             "not in sync committee",
+			committeeIndices: nil,
+			msg:              signedMsg(t, 1, 1, keys[1]),
+			wantErr:          "validator 1 is not in the current sync committee",
+		},
+		{
+			name:             "slot not current",
+			committeeIndices: []primitives.CommitteeIndex{0},
+			msg:              signedMsg(t, 3, 1, keys[1]),
+			wantErr:          "invalid sync committee message slot",
+		},
+	}
+	for _, tc := range invalidCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, broadcaster := setup(tc.committeeIndices)
+			writer := submit(t, s, tc.msg)
+			assert.Equal(t, http.StatusBadRequest, writer.Code)
+			e := &server.IndexedErrorContainer{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+			assert.Equal(t, http.StatusBadRequest, e.Code)
+			require.Equal(t, 1, len(e.Failures))
+			assert.Equal(t, 0, e.Failures[0].Index)
+			assert.StringContains(t, tc.wantErr, e.Failures[0].Message)
+			m, err := tc.msg.ToConsensus()
+			require.NoError(t, err)
+			msgsInPool, err := s.CoreService.SyncCommitteePool.SyncCommitteeMessages(m.Slot)
+			require.NoError(t, err)
+			assert.Equal(t, 0, len(msgsInPool))
+			assert.Equal(t, false, broadcaster.BroadcastCalled.Load())
+		})
+	}
+	t.Run("invalid", func(t *testing.T) {
+		s, broadcaster := setup(nil)
 		var body bytes.Buffer
 		_, err := body.WriteString(invalidSyncCommitteeMsg)
 		require.NoError(t, err)
@@ -1418,7 +1523,6 @@ func TestSubmitSyncCommitteeSignatures(t *testing.T) {
 
 		s.SubmitSyncCommitteeSignatures(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		require.NoError(t, err)
 		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusBadRequest, e.Code)
@@ -1537,7 +1641,7 @@ func TestSubmitSignedBLSToExecutionChanges_Ok(t *testing.T) {
 	c.CapellaForkEpoch = c.BellatrixForkEpoch.Add(2)
 	params.OverrideBeaconConfig(c)
 
-	spb := &ethpbv1alpha1.BeaconStateCapella{
+	container := &ethpbv1alpha1.BeaconStateCapella{
 		Fork: &ethpbv1alpha1.Fork{
 			CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
 			PreviousVersion: params.BeaconConfig().GenesisForkVersion,
@@ -1547,7 +1651,7 @@ func TestSubmitSignedBLSToExecutionChanges_Ok(t *testing.T) {
 	numValidators := 10
 	validators := make([]*ethpbv1alpha1.Validator, numValidators)
 	blsChanges := make([]*ethpbv1alpha1.BLSToExecutionChange, numValidators)
-	spb.Balances = make([]uint64, numValidators)
+	container.Balances = make([]uint64, numValidators)
 	privKeys := make([]common.SecretKey, numValidators)
 	maxEffectiveBalance := params.BeaconConfig().MaxEffectiveBalance
 	executionAddress := []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13}
@@ -1575,11 +1679,11 @@ func TestSubmitSignedBLSToExecutionChanges_Ok(t *testing.T) {
 		validators[i] = v
 		blsChanges[i] = message
 	}
-	spb.Validators = validators
+	container.Validators = validators
 	slot, err := slots.EpochStart(params.BeaconConfig().CapellaForkEpoch)
 	require.NoError(t, err)
-	spb.Slot = slot
-	st, err := state_native.InitializeFromProtoCapella(spb)
+	container.Slot = slot
+	st, err := state_native.New(container)
 	require.NoError(t, err)
 
 	signedChanges := make([]*structs.SignedBLSToExecutionChange, numValidators)
@@ -1635,7 +1739,7 @@ func TestSubmitSignedBLSToExecutionChanges_Bellatrix(t *testing.T) {
 	c.CapellaForkEpoch = c.BellatrixForkEpoch.Add(2)
 	params.OverrideBeaconConfig(c)
 
-	spb := &ethpbv1alpha1.BeaconStateBellatrix{
+	container := &ethpbv1alpha1.BeaconStateBellatrix{
 		Fork: &ethpbv1alpha1.Fork{
 			CurrentVersion:  params.BeaconConfig().BellatrixForkVersion,
 			PreviousVersion: params.BeaconConfig().AltairForkVersion,
@@ -1645,7 +1749,7 @@ func TestSubmitSignedBLSToExecutionChanges_Bellatrix(t *testing.T) {
 	numValidators := 10
 	validators := make([]*ethpbv1alpha1.Validator, numValidators)
 	blsChanges := make([]*ethpbv1alpha1.BLSToExecutionChange, numValidators)
-	spb.Balances = make([]uint64, numValidators)
+	container.Balances = make([]uint64, numValidators)
 	privKeys := make([]common.SecretKey, numValidators)
 	maxEffectiveBalance := params.BeaconConfig().MaxEffectiveBalance
 	executionAddress := []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13}
@@ -1673,11 +1777,11 @@ func TestSubmitSignedBLSToExecutionChanges_Bellatrix(t *testing.T) {
 		validators[i] = v
 		blsChanges[i] = message
 	}
-	spb.Validators = validators
+	container.Validators = validators
 	slot, err := slots.EpochStart(params.BeaconConfig().BellatrixForkEpoch)
 	require.NoError(t, err)
-	spb.Slot = slot
-	st, err := state_native.InitializeFromProtoBellatrix(spb)
+	container.Slot = slot
+	st, err := state_native.New(container)
 	require.NoError(t, err)
 
 	spc := &ethpbv1alpha1.BeaconStateCapella{
@@ -1691,7 +1795,7 @@ func TestSubmitSignedBLSToExecutionChanges_Bellatrix(t *testing.T) {
 	require.NoError(t, err)
 	spc.Slot = slot
 
-	stc, err := state_native.InitializeFromProtoCapella(spc)
+	stc, err := state_native.New(spc)
 	require.NoError(t, err)
 
 	signedChanges := make([]*structs.SignedBLSToExecutionChange, numValidators)
@@ -1749,7 +1853,7 @@ func TestSubmitSignedBLSToExecutionChanges_Failures(t *testing.T) {
 	c.CapellaForkEpoch = c.BellatrixForkEpoch.Add(2)
 	params.OverrideBeaconConfig(c)
 
-	spb := &ethpbv1alpha1.BeaconStateCapella{
+	container := &ethpbv1alpha1.BeaconStateCapella{
 		Fork: &ethpbv1alpha1.Fork{
 			CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
 			PreviousVersion: params.BeaconConfig().GenesisForkVersion,
@@ -1759,7 +1863,7 @@ func TestSubmitSignedBLSToExecutionChanges_Failures(t *testing.T) {
 	numValidators := 10
 	validators := make([]*ethpbv1alpha1.Validator, numValidators)
 	blsChanges := make([]*ethpbv1alpha1.BLSToExecutionChange, numValidators)
-	spb.Balances = make([]uint64, numValidators)
+	container.Balances = make([]uint64, numValidators)
 	privKeys := make([]common.SecretKey, numValidators)
 	maxEffectiveBalance := params.BeaconConfig().MaxEffectiveBalance
 	executionAddress := []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13}
@@ -1787,11 +1891,11 @@ func TestSubmitSignedBLSToExecutionChanges_Failures(t *testing.T) {
 		validators[i] = v
 		blsChanges[i] = message
 	}
-	spb.Validators = validators
+	container.Validators = validators
 	slot, err := slots.EpochStart(params.BeaconConfig().CapellaForkEpoch)
 	require.NoError(t, err)
-	spb.Slot = slot
-	st, err := state_native.InitializeFromProtoCapella(spb)
+	container.Slot = slot
+	st, err := state_native.New(container)
 	require.NoError(t, err)
 
 	signedChanges := make([]*structs.SignedBLSToExecutionChange, numValidators)
@@ -2680,20 +2784,6 @@ var (
     "signature": "0xb591bd4ca7d745b6e027879645d7c014fecb8c58631af070f7607acc0c1c948a5102a33267f0e4ba41a85b254b07df91185274375b2e6436e37e81d2fd46cb3751f5a6c86efb7499c1796c0c17e122a54ac067bb0f5ff41f3241659cceb0c21c"
   }
 ]`
-	multipleSyncCommitteeMsg = `[
-  {
-    "slot": "1",
-    "beacon_block_root": "0xbacd20f09da907734434f052bd4c9503aa16bab1960e89ea20610d08d064481c",
-    "validator_index": "1",
-    "signature": "0xb591bd4ca7d745b6e027879645d7c014fecb8c58631af070f7607acc0c1c948a5102a33267f0e4ba41a85b254b07df91185274375b2e6436e37e81d2fd46cb3751f5a6c86efb7499c1796c0c17e122a54ac067bb0f5ff41f3241659cceb0c21c"
-  },
-  {
-    "slot": "2",
-    "beacon_block_root": "0x2757f6fd8590925cd000a86a3e543f98a93eae23781783a33e34504729a8ad0c",
-    "validator_index": "1",
-    "signature": "0x99dfe11b6c8b306d2c72eb891926d37922d226ea8e1e7484d6c30fab746494f192b0daa3e40c13f1e335b35238f3362c113455a329b1fab0bc500bc47f643786f49e151d5b5052afb51af57ba5aa34a6051dc90ee4de83a26eb54a895061d89a"
-  }
-]`
 	// signature is invalid
 	invalidSyncCommitteeMsg = `[
   {
@@ -2832,16 +2922,21 @@ func TestSubmitPayloadAttestations(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		slot := primitives.Slot(0)
-		st, _ := util.DeterministicGenesisStateGloas(t, 64)
+		st, keys := util.DeterministicGenesisStateGloas(t, 64)
 		ptc, err := st.PayloadCommitteeReadOnly(slot)
 		require.NoError(t, err)
 		require.NotEqual(t, 0, len(ptc))
 
-		priv, err := bls.RandKey()
-		require.NoError(t, err)
-		sig := priv.Sign([]byte("test")).Marshal()
+		data := &ethpbv1alpha1.PayloadAttestationData{
+			BeaconBlockRoot:   bytesutil.PadTo([]byte("root"), 32),
+			Slot:              slot,
+			PayloadPresent:    true,
+			BlobDataAvailable: true,
+		}
+		sig := signPayloadAttestationForTest(t, st, data, keys[ptc[0]])
 
 		chainService := &blockchainmock.ChainService{Slot: &slot, State: st}
+		receiver := &recordingPayloadAttestationReceiver{ChainService: chainService}
 		broadcaster := &p2pMock.MockBroadcaster{}
 		pool := &payloadattestationmock.PoolMock{}
 		s := &Server{
@@ -2851,20 +2946,20 @@ func TestSubmitPayloadAttestations(t *testing.T) {
 			OptimisticModeFetcher:      chainService,
 			Broadcaster:                broadcaster,
 			PayloadAttestationPool:     pool,
-			PayloadAttestationReceiver: chainService,
+			PayloadAttestationReceiver: receiver,
 			OperationNotifier:          &blockchainmock.MockOperationNotifier{},
 		}
 
 		body := fmt.Sprintf(`[{
 			"validator_index": "%d",
 			"data": {
-				"beacon_block_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+				"beacon_block_root": "0x%x",
 				"slot": "0",
 				"payload_present": true,
 				"blob_data_available": true
 			},
 			"signature": "0x%x"
-		}]`, ptc[0], sig)
+		}]`, ptc[0], data.BeaconBlockRoot, sig)
 		request := httptest.NewRequest(http.MethodPost, "http://example.com", strings.NewReader(body))
 		request.Header.Set(api.VersionHeader, "gloas")
 		writer := httptest.NewRecorder()
@@ -2874,6 +2969,70 @@ func TestSubmitPayloadAttestations(t *testing.T) {
 		assert.Equal(t, http.StatusOK, writer.Code)
 		assert.Equal(t, 1, len(pool.Attestations))
 		assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
+		assert.Equal(t, true, receiver.received)
+	})
+	t.Run("invalid signature", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(0)
+		st, _ := util.DeterministicGenesisStateGloas(t, 64)
+		ptc, err := st.PayloadCommitteeReadOnly(slot)
+		require.NoError(t, err)
+		require.NotEqual(t, 0, len(ptc))
+
+		data := &ethpbv1alpha1.PayloadAttestationData{
+			BeaconBlockRoot:   bytesutil.PadTo([]byte("root"), 32),
+			Slot:              slot,
+			PayloadPresent:    true,
+			BlobDataAvailable: true,
+		}
+		wrongKey, err := bls.RandKey()
+		require.NoError(t, err)
+		sig := signPayloadAttestationForTest(t, st, data, wrongKey)
+
+		chainService := &blockchainmock.ChainService{Slot: &slot, State: st}
+		receiver := &recordingPayloadAttestationReceiver{ChainService: chainService}
+		broadcaster := &p2pMock.MockBroadcaster{}
+		pool := &payloadattestationmock.PoolMock{}
+		notifier := &blockchainmock.MockOperationNotifier{}
+		events := make(chan *feed.Event, 1)
+		sub := notifier.OperationFeed().Subscribe(events)
+		defer sub.Unsubscribe()
+		s := &Server{
+			SyncChecker:                &mockSync.Sync{IsSyncing: false},
+			HeadFetcher:                chainService,
+			TimeFetcher:                chainService,
+			OptimisticModeFetcher:      chainService,
+			Broadcaster:                broadcaster,
+			PayloadAttestationPool:     pool,
+			PayloadAttestationReceiver: receiver,
+			OperationNotifier:          notifier,
+		}
+
+		body := fmt.Sprintf(`[{
+			"validator_index": "%d",
+			"data": {
+				"beacon_block_root": "0x%x",
+				"slot": "0",
+				"payload_present": true,
+				"blob_data_available": true
+			},
+			"signature": "0x%x"
+		}]`, ptc[0], data.BeaconBlockRoot, sig)
+		request := httptest.NewRequest(http.MethodPost, "http://example.com", strings.NewReader(body))
+		request.Header.Set(api.VersionHeader, "gloas")
+		writer := httptest.NewRecorder()
+
+		s.SubmitPayloadAttestations(writer, request)
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		assert.StringContains(t, "signature did not verify", writer.Body.String())
+		assert.Equal(t, 0, len(pool.Attestations))
+		assert.Equal(t, false, broadcaster.BroadcastCalled.Load())
+		assert.Equal(t, false, receiver.received)
+		assert.Equal(t, 0, len(events))
 	})
 	t.Run("invalid body", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
@@ -2929,14 +3088,10 @@ func TestSubmitPayloadAttestations(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		slot := primitives.Slot(0)
-		st, _ := util.DeterministicGenesisStateGloas(t, 64)
+		st, keys := util.DeterministicGenesisStateGloas(t, 64)
 		ptc, err := st.PayloadCommitteeReadOnly(slot)
 		require.NoError(t, err)
 		require.NotEqual(t, 0, len(ptc))
-
-		priv, err := bls.RandKey()
-		require.NoError(t, err)
-		sig := priv.Sign([]byte("test")).Marshal()
 
 		chainService := &blockchainmock.ChainService{Slot: &slot, State: st}
 		broadcaster := &p2pMock.MockBroadcaster{}
@@ -2960,8 +3115,8 @@ func TestSubmitPayloadAttestations(t *testing.T) {
 				PayloadPresent:    true,
 				BlobDataAvailable: true,
 			},
-			Signature: sig,
 		}
+		msg.Signature = signPayloadAttestationForTest(t, st, msg.Data, keys[ptc[0]])
 		body, err := msg.MarshalSSZ()
 		require.NoError(t, err)
 

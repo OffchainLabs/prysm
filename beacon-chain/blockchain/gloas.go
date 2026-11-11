@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -34,21 +33,21 @@ func (s *Service) IsBidCompatibleWithHead(bid interfaces.ROExecutionPayloadBid) 
 	headState := s.head.state
 	s.headLock.RUnlock()
 
-	headBid, err := headBlock.Body().SignedExecutionPayloadBid()
-	if err != nil || headBid.Message == nil {
+	headBid, err := headBlock.Body().ExecutionPayloadBid()
+	if err != nil {
 		log.WithError(err).Debug("Could not get head bid to check bid compatibility")
 		return false
 	}
 
 	buildsOnParentBlock := bid.ParentBlockRoot() == headBlock.ParentRoot()
-	buildsOnParentPayload := bid.ParentBlockHash() == bytesutil.ToBytes32(headBid.Message.ParentBlockHash)
+	buildsOnParentPayload := bid.ParentBlockHash() == headBid.ParentBlockHash()
 	if buildsOnParentBlock && buildsOnParentPayload {
 		return true
 	}
 	if bid.ParentBlockRoot() != headRoot {
 		return false
 	}
-	buildsOnHeadPayload := bid.ParentBlockHash() == bytesutil.ToBytes32(headBid.Message.BlockHash)
+	buildsOnHeadPayload := bid.ParentBlockHash() == headBid.BlockHash()
 	if buildFull, _ := s.shouldBuildOnFull(headState, headRoot, bid.Slot()); buildFull {
 		return buildsOnHeadPayload
 	}

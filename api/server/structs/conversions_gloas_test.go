@@ -1,6 +1,7 @@
 package structs
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -151,5 +152,22 @@ func TestBuilderPreferencesEntry_ToConsensus(t *testing.T) {
 		entry.MaxExecutionPayment = "-1"
 		_, err := entry.ToConsensus()
 		require.ErrorContains(t, "MaxExecutionPayment", err)
+	})
+}
+
+func TestPTCWindowFromConsensus(t *testing.T) {
+	window := []*ethpb.PTCs{
+		{ValidatorIndices: []primitives.ValidatorIndex{5, 5, 1}},
+		{ValidatorIndices: []primitives.ValidatorIndex{0}},
+	}
+
+	t.Run("json shape is array of arrays", func(t *testing.T) {
+		b, err := json.Marshal(&BeaconStateGloas{PtcWindow: PTCWindowFromConsensus(window)})
+		require.NoError(t, err)
+		var out struct {
+			PtcWindow [][]string `json:"ptc_window"`
+		}
+		require.NoError(t, json.Unmarshal(b, &out))
+		require.DeepEqual(t, [][]string{{"5", "5", "1"}, {"0"}}, out.PtcWindow)
 	})
 }

@@ -86,7 +86,7 @@ func (f *blocksFetcher) nonSkippedSlotAfter(ctx context.Context, slot primitives
 	}
 
 	// Transform peer list to avoid eclipsing (filter, shuffle, trim).
-	peers = f.filterPeers(ctx, peers, peersPercentagePerRequest)
+	peers = f.filterPeers(ctx, peers, slot+1, peersPercentagePerRequest)
 	return f.nonSkippedSlotAfterWithPeersTarget(ctx, slot, peers, targetEpoch)
 }
 
@@ -95,6 +95,9 @@ func (f *blocksFetcher) nonSkippedSlotAfter(ctx context.Context, slot primitives
 func (f *blocksFetcher) nonSkippedSlotAfterWithPeersTarget(
 	ctx context.Context, slot primitives.Slot, peers []peer.ID, targetEpoch primitives.Epoch,
 ) (primitives.Slot, error) {
+	// Only keep peers able to serve the blocks right after `slot`.
+	peers = f.peersServingFrom(peers, slot+1)
+
 	// Exit early if no peers are ready.
 	if len(peers) == 0 {
 		return 0, errNoPeersAvailable

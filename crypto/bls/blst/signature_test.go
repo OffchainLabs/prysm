@@ -5,6 +5,7 @@ package blst
 import (
 	"bytes"
 	"errors"
+	"math/big"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
@@ -132,6 +133,63 @@ func TestMultipleSignatureVerification(t *testing.T) {
 	verify, err := VerifyMultipleSignatures(sigs, msgs, pubkeys)
 	assert.NoError(t, err, "Signature did not verify")
 	assert.Equal(t, true, verify, "Signature did not verify")
+}
+
+func TestAggregateRandomized(t *testing.T) {
+	msg := [32]byte{'h', 'e', 'l', 'l', 'o'}
+	privs := make([]common.SecretKey, 4)
+	pubkeys := make([]common.PublicKey, len(privs))
+	sigs := make([][]byte, len(privs))
+	for i := range privs {
+		priv, err := RandKey()
+		require.NoError(t, err)
+		privs[i] = priv
+		pubkeys[i] = priv.PublicKey()
+		sigs[i] = priv.Sign(msg[:]).Marshal()
+	}
+
+	t.Run("valid", func(t *testing.T) {
+		aggSig, aggPub, err := AggregateRandomized(sigs, pubkeys)
+		require.NoError(t, err)
+		assert.Equal(t, true, aggSig.Verify(aggPub, msg[:]))
+	})
+
+	t.Run("wrong message", func(t *testing.T) {
+		aggSig, aggPub, err := AggregateRandomized(sigs, pubkeys)
+		require.NoError(t, err)
+		assert.Equal(t, false, aggSig.Verify(aggPub, []byte("other")))
+	})
+
+	t.Run("cancelling signatures", func(t *testing.T) {
+		// BLS curve order for BLS12-381
+		order, ok := new(big.Int).SetString("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001", 16)
+		require.Equal(t, true, ok)
+		x, err := RandKey()
+		require.NoError(t, err)
+		y := new(big.Int).Add(new(big.Int).SetBytes(privs[0].Marshal()), new(big.Int).SetBytes(privs[1].Marshal()))
+		y.Sub(y, new(big.Int).SetBytes(x.Marshal())).Mod(y, order)
+		yKey, err := SecretKeyFromBytes(y.FillBytes(make([]byte, 32)))
+		require.NoError(t, err)
+		forged := [][]byte{x.Sign(msg[:]).Marshal(), yKey.Sign(msg[:]).Marshal(), sigs[2], sigs[3]}
+
+		plain, err := AggregateCompressedSignatures(forged)
+		require.NoError(t, err)
+		assert.Equal(t, true, plain.FastAggregateVerify(pubkeys, msg), "plain aggregate should accept the forgery")
+
+		aggSig, aggPub, err := AggregateRandomized(forged, pubkeys)
+		require.NoError(t, err)
+		assert.Equal(t, false, aggSig.Verify(aggPub, msg[:]))
+	})
+
+	t.Run("invalid inputs", func(t *testing.T) {
+		_, _, err := AggregateRandomized(nil, nil)
+		require.ErrorContains(t, "invalid number of signatures", err)
+		_, _, err = AggregateRandomized(sigs, pubkeys[:1])
+		require.ErrorContains(t, "invalid number of signatures", err)
+		bad := append([][]byte{make([]byte, 96)}, sigs[1:]...)
+		_, _, err = AggregateRandomized(bad, pubkeys)
+		require.ErrorContains(t, "could not unmarshal", err)
+	})
 }
 
 func TestFastAggregateVerify_ReturnsFalseOnEmptyPubKeyList(t *testing.T) {

@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
-	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
@@ -24,6 +23,7 @@ const (
 	signedExecutionPayloadBidFieldIndex = 10
 	parentBlockHashFieldIndex           = 0
 	executionPayloadBidFieldCount       = 12
+	executionPayloadBidFieldCountHeze   = 13
 	beaconBlockBodyFieldCount           = 13
 )
 
@@ -54,11 +54,7 @@ func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody)
 		fieldRoots = make([][]byte, 11)
 	case version.Deneb:
 		fieldRoots = make([][]byte, 12)
-	case version.Electra:
-		fieldRoots = make([][]byte, 13)
-	case version.Fulu:
-		fieldRoots = make([][]byte, 13)
-	case version.Gloas:
+	case version.Electra, version.Fulu, version.Gloas, version.Heze:
 		fieldRoots = make([][]byte, 13)
 	default:
 		return nil, fmt.Errorf("unknown block body version %s", version.String(blockBody.version))
@@ -308,11 +304,7 @@ func ExecutionBlockHashProof(ctx context.Context, block interfaces.ReadOnlyBeaco
 	if err != nil {
 		return nil, err
 	}
-	if signedBid == nil || signedBid.Message == nil {
-		return nil, errors.New("signed execution payload bid is nil")
-	}
-
-	bidFieldRoots, err := executionPayloadBidFieldRoots(signedBid.Message)
+	bidFieldRoots, err := executionPayloadBidFieldRoots(block.Version(), signedBid.Bid())
 	if err != nil {
 		return nil, err
 	}
@@ -326,7 +318,8 @@ func ExecutionBlockHashProof(ctx context.Context, block interfaces.ReadOnlyBeaco
 		return nil, err
 	}
 
-	signatureRoot, err := fixedByteVectorRoot(signedBid.Signature, fieldparams.BLSSignatureLength)
+	sig := signedBid.Signature()
+	signatureRoot, err := fixedByteVectorRoot(sig[:], fieldparams.BLSSignatureLength)
 	if err != nil {
 		return nil, fmt.Errorf("signature: %w", err)
 	}
@@ -348,44 +341,48 @@ func ExecutionBlockHashProof(ctx context.Context, block interfaces.ReadOnlyBeaco
 	return append(proof, blockBodyProof...), nil
 }
 
-func executionPayloadBidFieldRoots(bid *eth.ExecutionPayloadBid) ([][]byte, error) {
-	fieldRoots := make([][]byte, executionPayloadBidFieldCount)
-	fixedFields := []struct {
-		index  int
-		value  []byte
-		length int
-	}{
-		{index: 0, value: bid.ParentBlockHash, length: fieldparams.RootLength},
-		{index: 1, value: bid.ParentBlockRoot, length: fieldparams.RootLength},
-		{index: 2, value: bid.BlockHash, length: fieldparams.RootLength},
-		{index: 3, value: bid.PrevRandao, length: fieldparams.RootLength},
-		{index: 4, value: bid.FeeRecipient, length: fieldparams.FeeRecipientLength},
-		{index: 11, value: bid.ExecutionRequestsRoot, length: fieldparams.RootLength},
+func executionPayloadBidFieldRoots(v int, bid interfaces.ROExecutionPayloadBid) ([][]byte, error) {
+	fieldCount := executionPayloadBidFieldCount
+	if v >= version.Heze {
+		fieldCount = executionPayloadBidFieldCountHeze
 	}
-	for _, field := range fixedFields {
-		root, err := fixedByteVectorRoot(field.value, field.length)
-		if err != nil {
-			return nil, err
-		}
-		fieldRoots[field.index] = root[:]
+	fieldRoots := make([][]byte, fieldCount)
+	for index, value := range [][32]byte{bid.ParentBlockHash(), bid.ParentBlockRoot(), bid.BlockHash(), bid.PrevRandao()} {
+		fieldRoots[index] = value[:]
 	}
+	feeRecipient := bid.FeeRecipient()
+	root, err := fixedByteVectorRoot(feeRecipient[:], fieldparams.FeeRecipientLength)
+	if err != nil {
+		return nil, err
+	}
+	fieldRoots[4] = root[:]
 
 	for index, value := range []uint64{
-		bid.GasLimit,
-		uint64(bid.BuilderIndex),
-		uint64(bid.Slot),
-		uint64(bid.Value),
-		uint64(bid.ExecutionPayment),
+		bid.GasLimit(),
+		uint64(bid.BuilderIndex()),
+		uint64(bid.Slot()),
+		uint64(bid.Value()),
+		uint64(bid.ExecutionPayment()),
 	} {
 		root := ssz.Uint64Root(value)
 		fieldRoots[index+5] = root[:]
 	}
 
-	commitmentsRoot, err := blobKzgCommitmentsProgressiveRoot(bid.BlobKzgCommitments)
+	commitmentsRoot, err := blobKzgCommitmentsProgressiveRoot(bid.BlobKzgCommitments())
 	if err != nil {
 		return nil, err
 	}
 	fieldRoots[10] = commitmentsRoot[:]
+	executionRequestsRoot := bid.ExecutionRequestsRoot()
+	fieldRoots[11] = executionRequestsRoot[:]
+
+	if v >= version.Heze {
+		root, err := fixedByteVectorRoot(bid.InclusionListBits(), (fieldparams.InclusionListCommitteeSize+7)/8)
+		if err != nil {
+			return nil, err
+		}
+		fieldRoots[12] = root[:]
+	}
 	return fieldRoots, nil
 }
 
@@ -443,7 +440,11 @@ func progressiveContainerActiveFields(v int, container progressiveContainerType)
 
 	switch container {
 	case executionPayloadBidProgressiveContainer:
-		af := make([]bool, executionPayloadBidFieldCount)
+		fieldCount := executionPayloadBidFieldCount
+		if v >= version.Heze {
+			fieldCount = executionPayloadBidFieldCountHeze
+		}
+		af := make([]bool, fieldCount)
 		for i := range af {
 			af[i] = true
 		}

@@ -391,6 +391,22 @@ func TestGetVoluntaryExitSignRequest(t *testing.T) {
 	}
 }
 
+func TestGetBlockV2BlindedSignRequest_NilBlock(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		request *validatorpb.SignRequest
+	}{
+		{name: "nil fulu wrapper", request: &validatorpb.SignRequest{Object: (*validatorpb.SignRequest_BlockFulu)(nil)}},
+		{name: "nil gloas wrapper", request: &validatorpb.SignRequest{Object: (*validatorpb.SignRequest_BlockGloas)(nil)}},
+		{name: "nil heze block", request: &validatorpb.SignRequest{Object: &validatorpb.SignRequest_BlockHeze{}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := types.GetBlockV2BlindedSignRequest(tc.request, make([]byte, fieldparams.RootLength))
+			require.NotNil(t, err)
+		})
+	}
+}
+
 func TestGetBlockV2BlindedSignRequest(t *testing.T) {
 	type args struct {
 		request               *validatorpb.SignRequest
@@ -543,6 +559,19 @@ func TestGetBlockV2BlindedSignRequest(t *testing.T) {
 				require.NoError(t, err)
 				return bytevalue
 			}(t), "GLOAS"),
+			wantErr: false,
+		},
+		{
+			name: "Happy Path Test Heze",
+			args: args{
+				request:               mock.GetMockSignRequest("BLOCK_V2_HEZE"),
+				genesisValidatorsRoot: make([]byte, fieldparams.RootLength),
+			},
+			want: mock.BlockV2BlindedSignRequest(func(t *testing.T) []byte {
+				bytevalue, err := hexutil.Decode("0x257c80809c4cc0804f24dd00904a3904bf4ba5cc5c8f286c85e2d4d54663088a")
+				require.NoError(t, err)
+				return bytevalue
+			}(t), "HEZE"),
 			wantErr: false,
 		},
 	}

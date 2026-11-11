@@ -31,8 +31,8 @@
       search: AltairForkVersion\s+\[]byte
       regex: true
   spec: |
-    <spec config_var="ALTAIR_FORK_VERSION" fork="altair" hash="d9a64536">
-    ALTAIR_FORK_VERSION: Version = '0x01000000'
+    <spec config_var="ALTAIR_FORK_VERSION" fork="altair" hash="d7d533da">
+    ALTAIR_FORK_VERSION: Version = "0x01000000"
     </spec>
 
 - name: ATTESTATION_DUE_BPS#phase0
@@ -108,8 +108,8 @@
       search: BellatrixForkVersion\s+\[]byte
       regex: true
   spec: |
-    <spec config_var="BELLATRIX_FORK_VERSION" fork="bellatrix" hash="e87eb2b4">
-    BELLATRIX_FORK_VERSION: Version = '0x02000000'
+    <spec config_var="BELLATRIX_FORK_VERSION" fork="bellatrix" hash="7ea61e41">
+    BELLATRIX_FORK_VERSION: Version = "0x02000000"
     </spec>
 
 - name: BLOB_SCHEDULE#fulu
@@ -167,8 +167,8 @@
       search: CapellaForkVersion\s+\[]byte
       regex: true
   spec: |
-    <spec config_var="CAPELLA_FORK_VERSION" fork="capella" hash="5f94766c">
-    CAPELLA_FORK_VERSION: Version = '0x03000000'
+    <spec config_var="CAPELLA_FORK_VERSION" fork="capella" hash="cff616a3">
+    CAPELLA_FORK_VERSION: Version = "0x03000000"
     </spec>
 
 - name: CHURN_LIMIT_QUOTIENT#phase0
@@ -255,8 +255,8 @@
       search: DenebForkVersion\s+\[]byte
       regex: true
   spec: |
-    <spec config_var="DENEB_FORK_VERSION" fork="deneb" hash="da95e3b9">
-    DENEB_FORK_VERSION: Version = '0x04000000'
+    <spec config_var="DENEB_FORK_VERSION" fork="deneb" hash="ae4620d0">
+    DENEB_FORK_VERSION: Version = "0x04000000"
     </spec>
 
 - name: DEPOSIT_CHAIN_ID#phase0
@@ -275,8 +275,8 @@
       search: DepositContractAddress\s+string
       regex: true
   spec: |
-    <spec config_var="DEPOSIT_CONTRACT_ADDRESS" fork="phase0" hash="552d8348">
-    DEPOSIT_CONTRACT_ADDRESS: ExecutionAddress = '0x00000000219ab540356cBB839Cbe05303d7705Fa'
+    <spec config_var="DEPOSIT_CONTRACT_ADDRESS" fork="phase0" hash="ffeedf16">
+    DEPOSIT_CONTRACT_ADDRESS: ExecutionAddress = "0x00000000219ab540356cBB839Cbe05303d7705Fa"
     </spec>
 
 - name: DEPOSIT_NETWORK_ID#phase0
@@ -315,8 +315,8 @@
       search: ElectraForkVersion\s+\[]byte
       regex: true
   spec: |
-    <spec config_var="ELECTRA_FORK_VERSION" fork="electra" hash="918d6c63">
-    ELECTRA_FORK_VERSION: Version = '0x05000000'
+    <spec config_var="ELECTRA_FORK_VERSION" fork="electra" hash="96389bae">
+    ELECTRA_FORK_VERSION: Version = "0x05000000"
     </spec>
 
 - name: EPOCHS_PER_SUBNET_SUBSCRIPTION#phase0
@@ -355,8 +355,8 @@
       search: FuluForkVersion\s+\[]byte
       regex: true
   spec: |
-    <spec config_var="FULU_FORK_VERSION" fork="fulu" hash="1e7fa12a">
-    FULU_FORK_VERSION: Version = '0x06000000'
+    <spec config_var="FULU_FORK_VERSION" fork="fulu" hash="e3da00c6">
+    FULU_FORK_VERSION: Version = "0x06000000"
     </spec>
 
 - name: GAS_LIMIT_SCHEDULE#gloas
@@ -383,8 +383,8 @@
       search: GenesisForkVersion\s+\[]byte
       regex: true
   spec: |
-    <spec config_var="GENESIS_FORK_VERSION" fork="phase0" hash="32bbe06e">
-    GENESIS_FORK_VERSION: Version = '0x00000000'
+    <spec config_var="GENESIS_FORK_VERSION" fork="phase0" hash="baad3832">
+    GENESIS_FORK_VERSION: Version = "0x00000000"
     </spec>
 
 - name: GLOAS_FORK_EPOCH#gloas
@@ -397,8 +397,8 @@
 - name: GLOAS_FORK_VERSION#gloas
   sources: []
   spec: |
-    <spec config_var="GLOAS_FORK_VERSION" fork="gloas" hash="c1c5c007">
-    GLOAS_FORK_VERSION: Version = '0x07000000'
+    <spec config_var="GLOAS_FORK_VERSION" fork="gloas" hash="a167a763">
+    GLOAS_FORK_VERSION: Version = "0x07000000"
     </spec>
 
 - name: HEZE_FORK_EPOCH#heze
@@ -411,8 +411,8 @@
 - name: HEZE_FORK_VERSION#heze
   sources: []
   spec: |
-    <spec config_var="HEZE_FORK_VERSION" fork="heze" hash="29986fed">
-    HEZE_FORK_VERSION: Version = '0x08000000'
+    <spec config_var="HEZE_FORK_VERSION" fork="heze" hash="7b06f071">
+    HEZE_FORK_VERSION: Version = "0x08000000"
     </spec>
 
 - name: INACTIVITY_SCORE_BIAS#altair
@@ -552,8 +552,8 @@
       search: MessageDomainInvalidSnappy\s+\[4\]byte
       regex: true
   spec: |
-    <spec config_var="MESSAGE_DOMAIN_INVALID_SNAPPY" fork="phase0" hash="6b6fc19a">
-    MESSAGE_DOMAIN_INVALID_SNAPPY: DomainType = '0x00000000'
+    <spec config_var="MESSAGE_DOMAIN_INVALID_SNAPPY" fork="phase0" hash="22665bca">
+    MESSAGE_DOMAIN_INVALID_SNAPPY: DomainType = "0x00000000"
     </spec>
 
 - name: MESSAGE_DOMAIN_VALID_SNAPPY#phase0
@@ -562,8 +562,8 @@
       search: MessageDomainValidSnappy\s+\[4\]byte
       regex: true
   spec: |
-    <spec config_var="MESSAGE_DOMAIN_VALID_SNAPPY" fork="phase0" hash="a6de155f">
-    MESSAGE_DOMAIN_VALID_SNAPPY: DomainType = '0x01000000'
+    <spec config_var="MESSAGE_DOMAIN_VALID_SNAPPY" fork="phase0" hash="cc96e0e3">
+    MESSAGE_DOMAIN_VALID_SNAPPY: DomainType = "0x01000000"
     </spec>
 
 - name: MIN_BUILDER_WITHDRAWABILITY_DELAY#gloas
@@ -805,8 +805,8 @@
       search: TerminalBlockHash\s+common.Hash
       regex: true
   spec: |
-    <spec config_var="TERMINAL_BLOCK_HASH" fork="bellatrix" hash="964c3bfe">
-    TERMINAL_BLOCK_HASH: Hash32 = '0x0000000000000000000000000000000000000000000000000000000000000000'
+    <spec config_var="TERMINAL_BLOCK_HASH" fork="bellatrix" hash="ad01ba94">
+    TERMINAL_BLOCK_HASH: Hash32 = "0x0000000000000000000000000000000000000000000000000000000000000000"
     </spec>
 
 - name: TERMINAL_BLOCK_HASH_ACTIVATION_EPOCH#bellatrix

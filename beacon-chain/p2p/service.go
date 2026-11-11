@@ -451,11 +451,11 @@ func (s *Service) ENR() *enr.Record {
 
 // NodeID returns the local node's node ID for discovery.
 func (s *Service) NodeID() enode.ID {
-	if s.dv5Listener == nil {
+	if s.privKey == nil {
 		return enode.ID{}
 	}
 
-	return s.dv5Listener.Self().ID()
+	return enode.PubkeyToIDV4(&s.privKey.PublicKey)
 }
 
 // DiscoveryAddresses represents our enr addresses as multiaddresses.

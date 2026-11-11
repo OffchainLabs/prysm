@@ -245,6 +245,7 @@ func TestProposeBlock_Gloas(t *testing.T) {
 
 	selfBuildBlock := func() *ethpb.GenericBeaconBlock {
 		blk := util.NewBeaconBlockGloas()
+		blk.Block.Slot = 1
 		blk.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex = builderIndex
 		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: blk.Block}}
 	}

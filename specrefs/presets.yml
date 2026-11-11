@@ -333,13 +333,6 @@
     MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD: Uint64 = 2
     </spec>
 
-- name: MAX_DATA_COLUMN_SIDECAR_SIZE#gloas
-  sources: []
-  spec: |
-    <spec preset_var="MAX_DATA_COLUMN_SIDECAR_SIZE" fork="gloas" hash="da34d637">
-    MAX_DATA_COLUMN_SIDECAR_SIZE: Uint64 = 8585272
-    </spec>
-
 - name: MAX_DEPOSITS#phase0
   sources:
     - file: config/params/config.go
@@ -388,13 +381,6 @@
   spec: |
     <spec preset_var="MAX_EXTRA_DATA_BYTES" fork="bellatrix" hash="03a5eec2">
     MAX_EXTRA_DATA_BYTES: Uint64 = 32
-    </spec>
-
-- name: MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE#gloas
-  sources: []
-  spec: |
-    <spec preset_var="MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE" fork="gloas" hash="abc4c79f">
-    MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE: Uint64 = 8585741
     </spec>
 
 - name: MAX_PAYLOAD_ATTESTATIONS#gloas

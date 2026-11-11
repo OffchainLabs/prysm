@@ -180,7 +180,7 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	warnDeprecationUpcoming(ctx)
 	complainOnDeprecatedFlags(ctx)
 	cfg := &Flags{}
-	if ctx.Bool(devModeFlag.Name) {
+	if ctx.Bool(DevModeFlag.Name) {
 		enableDevModeFlags(ctx)
 	}
 	if err := configureTestnet(ctx); err != nil {
@@ -247,7 +247,7 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(disableResourceManager)
 		cfg.DisableResourceManager = true
 	}
-	if ctx.IsSet(EnableLightClient.Name) {
+	if ctx.Bool(EnableLightClient.Name) {
 		logEnabled(EnableLightClient)
 		cfg.EnableLightClient = true
 	}
@@ -368,7 +368,6 @@ func ConfigureValidator(ctx *cli.Context) error {
 		cfg.EnableMinimalSlashingProtection = true
 	}
 	if ctx.Bool(enableDoppelGangerProtection.Name) {
-		logEnabled(enableDoppelGangerProtection)
 		cfg.EnableDoppelGanger = true
 	}
 	if ctx.Bool(EnableBeaconRESTApi.Name) || ctx.IsSet(validatorflags.BeaconRESTApiProviderFlag.Name) {

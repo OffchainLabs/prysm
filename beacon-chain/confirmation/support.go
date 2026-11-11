@@ -135,27 +135,32 @@ func (s *SupportMap) Accumulate(fc ForkchoiceReader) {
 	}
 }
 
-// BlockSupportBetweenSlots implements get_block_support_between_slots.
+// NodeSupportBetweenSlots implements get_node_support_between_slots.
 // The spec sums over a participant set union, so a validator sitting in committees
 // of several slots in the range counts once.
 //
-//	<spec fn="get_block_support_between_slots" fork="phase0">
+//	<spec fn="get_node_support_between_slots" fork="phase0">
 //
 //	participants = set()
 //	for slot in range(start_slot, end_slot + 1):
 //	    participants.update(get_slot_committee(store, slot))
 //	return sum(balance[i] for i in participants
-//	    if latest_messages[i].root == block_root
+//	    if get_supported_node(store, latest_messages[i]) == node
 //	    and i not in equivocating_indices)
 //	</spec>
-func (s *SupportMap) BlockSupportBetweenSlots(root [32]byte, startSlot, endSlot primitives.Slot) uint64 {
+func (s *SupportMap) NodeSupportBetweenSlots(root [32]byte, rootSlot primitives.Slot, full bool, startSlot, endSlot primitives.Slot) uint64 {
 	if root == ([32]byte{}) {
 		return 0
 	}
+	gloas := slots.ToEpoch(rootSlot) >= params.BeaconConfig().GloasForkEpoch
 	hasEquivocating := len(s.equivocating) > 0
 	total := uint64(0)
 	for i, vote := range s.votes {
 		if vote.Root != root {
+			continue
+		}
+		// Gloas votes support the full or empty variant only when cast after the block's slot.
+		if gloas && (vote.Slot <= rootSlot || vote.PayloadStatus != full) {
 			continue
 		}
 		if i >= len(s.balances) || s.balances[i] == 0 {

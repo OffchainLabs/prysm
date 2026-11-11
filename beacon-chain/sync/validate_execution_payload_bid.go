@@ -54,10 +54,7 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 		return pubsub.ValidationIgnore, err
 	}
 	v := s.newExecutionPayloadBidVerifier(b, verification.GossipExecutionPayloadBidRequirements)
-	bid, err := b.Bid()
-	if err != nil {
-		return pubsub.ValidationIgnore, err
-	}
+	bid := b.Bid()
 
 	// [REJECT] bid.block_hash != bid.parent_block_hash.
 	if bid.BlockHash() == bid.ParentBlockHash() {

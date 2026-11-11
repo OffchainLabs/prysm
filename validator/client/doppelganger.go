@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -235,10 +236,13 @@ func (v *validator) runStartupCheck(ctx context.Context) error {
 	if held := v.doppelGanger.vetStartup(lateAdds, nil, slots.EpochsSinceGenesis(v.genesisTime)); held > 0 {
 		log.WithField("keyCount", held).Info("Keys imported during startup are held out of duties pending doppelganger check")
 	}
-	log.WithField("keyCount", len(pubkeys)).Debug("Running doppelganger check")
 	if len(pubkeys) == 0 {
 		return nil
 	}
+
+	start := time.Now()
+	log.WithField("keyCount", len(pubkeys)).Info("Running doppelganger check")
+
 	resp, err := v.checkDoppelGangerForKeys(ctx, pubkeys)
 	if err != nil {
 		return err
@@ -246,7 +250,14 @@ func (v *validator) runStartupCheck(ctx context.Context) error {
 	if err := buildDuplicateError(resp.Responses); err != nil {
 		return err
 	}
+
 	v.vetStartupKeys(pubkeys, resp.Responses)
+
+	log.WithFields(logrus.Fields{
+		"keyCount": len(pubkeys),
+		"duration": time.Since(start),
+	}).Info("Doppelganger check done")
+
 	return nil
 }
 

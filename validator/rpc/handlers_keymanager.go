@@ -852,6 +852,11 @@ func (s *Server) SetGraffiti(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if l := len(req.Graffiti); l > 32 {
+		httputil.HandleError(w, fmt.Sprintf("Graffiti exceeds max length of 32 bytes: got %d bytes", l), http.StatusBadRequest)
+		return
+	}
+
 	if err := s.validatorService.SetGraffiti(ctx, bytesutil.ToBytes48(pubkey), []byte(req.Graffiti)); err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -488,6 +488,31 @@
         parent_execution_requests: ExecutionRequests
     </spec>
 
+- name: BeaconBlockBody#heze
+  sources: []
+  spec: |
+    <spec ssz_object="BeaconBlockBody" fork="heze" hash="7137bf03">
+    class BeaconBlockBody(ProgressiveContainer):
+        ACTIVE_FIELDS = active_fields(width=13, gaps=(1, 6))
+
+        randao_reveal: BLSSignature
+        # [Modified in Heze:EIP8015]
+        # Removed `eth1_data`
+        graffiti: Bytes32
+        proposer_slashings: ProposerSlashings
+        attester_slashings: AttesterSlashings
+        attestations: Attestations
+        # [Modified in Heze:EIP8015]
+        # Removed `deposits`
+        voluntary_exits: VoluntaryExits
+        sync_aggregate: SyncAggregate
+        bls_to_execution_changes: BLSToExecutionChanges
+        # [Modified in Heze:EIP7805]
+        signed_execution_payload_bid: SignedExecutionPayloadBid
+        payload_attestations: PayloadAttestations
+        parent_execution_requests: ExecutionRequests
+    </spec>
+
 - name: BeaconBlockHeader#phase0
   sources:
     - file: proto/eth/v1/beacon_block.proto
@@ -888,9 +913,9 @@
 - name: BeaconState#heze
   sources: []
   spec: |
-    <spec ssz_object="BeaconState" fork="heze" hash="1011120d">
+    <spec ssz_object="BeaconState" fork="heze" hash="8cb5718d">
     class BeaconState(ProgressiveContainer):
-        ACTIVE_FIELDS = active_fields(width=46)
+        ACTIVE_FIELDS = active_fields(width=46, gaps=(8, 9, 10, 28))
 
         genesis_time: Uint64
         genesis_validators_root: Root
@@ -900,9 +925,12 @@
         block_roots: BlockRoots
         state_roots: StateRoots
         historical_roots: HistoricalRoots
-        eth1_data: Eth1Data
-        eth1_data_votes: Eth1DataVotes
-        eth1_deposit_index: Uint64
+        # [Modified in Heze:EIP8015]
+        # Removed `eth1_data`
+        # [Modified in Heze:EIP8015]
+        # Removed `eth1_data_votes`
+        # [Modified in Heze:EIP8015]
+        # Removed `eth1_deposit_index`
         validators: Validators
         balances: Balances
         randao_mixes: RandaoMixes
@@ -920,7 +948,8 @@
         next_withdrawal_index: WithdrawalIndex
         next_withdrawal_validator_index: ValidatorIndex
         historical_summaries: HistoricalSummaries
-        deposit_requests_start_index: Uint64
+        # [Modified in Heze:EIP8015]
+        # Removed `deposit_requests_start_index`
         deposit_balance_to_consume: Gwei
         exit_balance_to_consume: Gwei
         earliest_exit_epoch: Epoch
@@ -944,9 +973,9 @@
 - name: BeaconState#heze
   sources: []
   spec: |
-    <spec ssz_object="BeaconState" fork="heze" hash="1011120d">
+    <spec ssz_object="BeaconState" fork="heze" hash="8cb5718d">
     class BeaconState(ProgressiveContainer):
-        ACTIVE_FIELDS = active_fields(width=46)
+        ACTIVE_FIELDS = active_fields(width=46, gaps=(8, 9, 10, 28))
 
         genesis_time: Uint64
         genesis_validators_root: Root
@@ -956,9 +985,12 @@
         block_roots: BlockRoots
         state_roots: StateRoots
         historical_roots: HistoricalRoots
-        eth1_data: Eth1Data
-        eth1_data_votes: Eth1DataVotes
-        eth1_deposit_index: Uint64
+        # [Modified in Heze:EIP8015]
+        # Removed `eth1_data`
+        # [Modified in Heze:EIP8015]
+        # Removed `eth1_data_votes`
+        # [Modified in Heze:EIP8015]
+        # Removed `eth1_deposit_index`
         validators: Validators
         balances: Balances
         randao_mixes: RandaoMixes
@@ -976,7 +1008,8 @@
         next_withdrawal_index: WithdrawalIndex
         next_withdrawal_validator_index: ValidatorIndex
         historical_summaries: HistoricalSummaries
-        deposit_requests_start_index: Uint64
+        # [Modified in Heze:EIP8015]
+        # Removed `deposit_requests_start_index`
         deposit_balance_to_consume: Gwei
         exit_balance_to_consume: Gwei
         earliest_exit_epoch: Epoch
@@ -2460,6 +2493,59 @@
         row_index: RowIndex
     </spec>
 
+- name: NewPayloadRequest#bellatrix
+  sources:
+    - file: beacon-chain/execution/engine_jsonrpc.go
+      search: func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData
+  spec: |
+    <spec ssz_object="NewPayloadRequest" fork="bellatrix" hash="dce5dbc8">
+    class NewPayloadRequest(Container):
+        execution_payload: ExecutionPayload
+    </spec>
+
+- name: NewPayloadRequest#deneb
+  sources:
+    - file: beacon-chain/execution/engine_jsonrpc.go
+      search: func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash
+  spec: |
+    <spec ssz_object="NewPayloadRequest" fork="deneb" hash="8ecf6448">
+    class NewPayloadRequest(Container):
+        execution_payload: ExecutionPayload
+        # [New in Deneb:EIP4844]
+        versioned_hashes: VersionedHashes
+        # [New in Deneb:EIP4788]
+        parent_beacon_block_root: Root
+    </spec>
+
+- name: NewPayloadRequest#electra
+  sources:
+    - file: beacon-chain/execution/engine_jsonrpc.go
+      search: func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests pb.ExecutionRequester
+  spec: |
+    <spec ssz_object="NewPayloadRequest" fork="electra" hash="3f66e4a3">
+    class NewPayloadRequest(Container):
+        execution_payload: ExecutionPayload
+        versioned_hashes: VersionedHashes
+        parent_beacon_block_root: Root
+        # [New in Electra]
+        execution_requests: ExecutionRequests
+    </spec>
+
+- name: NewPayloadRequest#gloas
+  sources:
+    - file: beacon-chain/execution/engine_jsonrpc.go
+      search: func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests pb.ExecutionRequester
+  spec: |
+    <spec ssz_object="NewPayloadRequest" fork="gloas" hash="153a25cf">
+    class NewPayloadRequest(ProgressiveContainer):
+        ACTIVE_FIELDS = active_fields(width=4)
+
+        execution_payload: ExecutionPayload
+        versioned_hashes: VersionedHashes
+        parent_beacon_block_root: Root
+        execution_requests: ExecutionRequests
+    </spec>
+
 - name: NextSyncCommitteeBranch#altair
   sources: []
   spec: |
@@ -3287,6 +3373,18 @@
         """
         The validator registry.
         """
+    </spec>
+
+- name: VersionedHashes#deneb
+  sources: []
+  spec: |
+    <spec ssz_object="VersionedHashes" fork="deneb" hash="05d6c47e">
+    class VersionedHashes(List[VersionedHash]):
+        """
+        The versioned hashes for blobs associated with an execution payload.
+        """
+
+        LIMIT = MAX_BLOB_COMMITMENTS_PER_BLOCK
     </spec>
 
 - name: VoluntaryExit#phase0

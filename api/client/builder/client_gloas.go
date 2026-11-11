@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
@@ -84,7 +85,7 @@ func (c *Client) getExecutionPayloadBid(
 	opts := []reqOption{func(r *http.Request) {
 		r.Header.Set("Accept", accept)
 		r.Header.Set("Content-Type", contentType)
-		r.Header.Set(api.VersionHeader, version.String(version.Gloas))
+		r.Header.Set(api.VersionHeader, version.String(slots.ToForkVersion(slot)))
 		r.Header.Set("Date-Milliseconds", strconv.FormatInt(time.Now().UnixMilli(), 10))
 		timeout := c.hc.Timeout
 		if d, ok := ctx.Deadline(); ok {
@@ -179,11 +180,15 @@ func jsonSignedBeaconBlock(sb interfaces.ReadOnlySignedBeaconBlock) ([]byte, err
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get protobuf block")
 	}
-	gloasBlock, ok := pb.(*ethpb.SignedBeaconBlockGloas)
-	if !ok {
+	var jsonBlock any
+	switch b := pb.(type) {
+	case *ethpb.SignedBeaconBlockGloas:
+		jsonBlock, err = structs.SignedBeaconBlockGloasFromConsensus(b)
+	case *ethpb.SignedBeaconBlockHeze:
+		jsonBlock, err = structs.SignedBeaconBlockHezeFromConsensus(b)
+	default:
 		return nil, errors.Errorf("unexpected block type %T for builder json submission", pb)
 	}
-	jsonBlock, err := structs.SignedBeaconBlockGloasFromConsensus(gloasBlock)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not convert block for json encoding")
 	}

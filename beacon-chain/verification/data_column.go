@@ -14,6 +14,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/runtime/logging"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -382,11 +383,7 @@ func (dv *RODataColumnsVerifier) getVerifyingState(ctx context.Context, dataColu
 		}
 	}
 
-	logrus.WithFields(logrus.Fields{
-		"slot":       dataColumnSlot,
-		"parentRoot": fmt.Sprintf("%#x", parentRoot),
-		"headRoot":   fmt.Sprintf("%#x", headRoot),
-	}).Debug("Replying state for data column verification")
+	startTime := time.Now()
 	targetRoot, err := dv.fc.TargetRootForEpoch(parentRoot, dataColumnEpoch)
 	if err != nil {
 		return nil, err
@@ -395,11 +392,22 @@ func (dv *RODataColumnsVerifier) getVerifyingState(ctx context.Context, dataColu
 	if err != nil {
 		return nil, err
 	}
+	verifyingState := state.ReadOnlyBeaconState(targetState)
 	targetEpoch := slots.ToEpoch(targetState.Slot())
-	if targetEpoch == dataColumnEpoch || targetEpoch == dataColumnEpoch-1 {
-		return targetState, nil
+	if targetEpoch != dataColumnEpoch && targetEpoch != dataColumnEpoch-1 {
+		verifyingState, err = transition.ProcessSlotsUsingNextSlotCache(ctx, targetState, parentRoot[:], dataColumnSlot)
+		if err != nil {
+			return nil, fmt.Errorf("process slots from %d to %d: %w", targetState.Slot(), dataColumnSlot, err)
+		}
 	}
-	return transition.ProcessSlotsUsingNextSlotCache(ctx, targetState, parentRoot[:], dataColumnSlot)
+	logrus.WithFields(logrus.Fields{
+		"slot":       dataColumnSlot,
+		"parentRoot": fmt.Sprintf("%#x", parentRoot),
+		"headRoot":   fmt.Sprintf("%#x", headRoot),
+		"duration":   time.Since(startTime),
+	}).Debug("Replayed state for data column verification")
+
+	return verifyingState, nil
 }
 
 func (dv *RODataColumnsVerifier) SidecarParentSeen(parentSeen func([fieldparams.RootLength]byte) bool) (err error) {
@@ -560,18 +568,9 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 	defer dv.recordResult(RequireSidecarProposerExpected, &err)
 
 	for _, dataColumn := range dv.dataColumns {
-		dataColumnSlot := dataColumn.Slot()
-
-		// Get the verifying state, it is guaranteed to have the correct proposer in the lookahead.
-		verifyingState, err := dv.getVerifyingState(ctx, dataColumn)
+		idx, err := dv.expectedProposer(ctx, dataColumn)
 		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "verifying state"))
-		}
-
-		// Use proposer lookahead directly
-		idx, err := helpers.BeaconProposerIndexAtSlot(ctx, verifyingState, dataColumnSlot)
-		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "proposer from lookahead"))
+			return columnErrBuilder(err)
 		}
 
 		proposerIndex, err := dataColumn.ProposerIndex()
@@ -584,6 +583,49 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 	}
 
 	return nil
+}
+
+// expectedProposer returns the expected proposer index for the data column's slot, in the context of its parent root.
+// The result is cached, and concurrent computations for the same parent root and slot are deduplicated.
+func (dv *RODataColumnsVerifier) expectedProposer(ctx context.Context, dataColumn blocks.RODataColumn) (primitives.ValidatorIndex, error) {
+	parentRoot, err := dataColumn.ParentRoot()
+	if err != nil {
+		return 0, fmt.Errorf("parent root: %w", err)
+	}
+
+	dataColumnSlot := dataColumn.Slot()
+	key := expectedProposerKey{parentRoot: parentRoot, slot: dataColumnSlot}
+	if idx, ok := dv.epc.Get(key); ok {
+		return idx.(primitives.ValidatorIndex), nil
+	}
+
+	sgKey := fmt.Sprintf("expected-proposer-%#x-%d", parentRoot, dataColumnSlot)
+	idx, err, _ := dv.sg.Do(sgKey, func() (any, error) {
+		// Check again, in case a previous computation completed between the first check and this call.
+		if idx, ok := dv.epc.Get(key); ok {
+			return idx, nil
+		}
+
+		// Get the verifying state, it is guaranteed to have the correct proposer in the lookahead.
+		verifyingState, err := dv.getVerifyingState(ctx, dataColumn)
+		if err != nil {
+			return nil, fmt.Errorf("verifying state: %w", err)
+		}
+
+		// Use proposer lookahead directly
+		idx, err := helpers.BeaconProposerIndexAtSlot(ctx, verifyingState, dataColumnSlot)
+		if err != nil {
+			return nil, fmt.Errorf("proposer from lookahead: %w", err)
+		}
+
+		dv.epc.Add(key, idx)
+		return idx, nil
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	return idx.(primitives.ValidatorIndex), nil
 }
 
 func columnToSignatureData(d blocks.RODataColumn) (signatureData, error) {

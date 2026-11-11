@@ -200,13 +200,7 @@ func (bb *Builder) PoWBlock(pb *ethpb.PowBlock) {
 
 // Attestation receives the attestation and updates forkchoice.
 func (bb *Builder) Attestation(t testing.TB, a ethpb.Att) {
-	disparity := params.BeaconConfig().MaximumGossipClockDisparityDuration()
-	if bb.fcr {
-		// FCR spec tests seed attestations before time advances, so allow
-		// one extra slot of disparity to avoid "slot from the future" rejections.
-		disparity = time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
-	}
-	require.NoError(t, bb.service.OnAttestation(context.TODO(), a, disparity))
+	require.NoError(t, bb.service.OnAttestation(context.TODO(), a, params.BeaconConfig().MaximumGossipClockDisparityDuration()))
 }
 
 // AttesterSlashing receives an attester slashing and feeds it to forkchoice.

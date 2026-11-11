@@ -1,9 +1,11 @@
 package builder
 
 import (
+	"net"
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api/client/builder"
 	buildertesting "github.com/OffchainLabs/prysm/v7/api/client/builder/testing"
 	blockchainTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -22,6 +24,32 @@ func Test_NewServiceWithoutBuilder(t *testing.T) {
 	s, err := NewService(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, false, s.Configured())
+}
+
+func Test_NewServiceWithUnresponsiveBuilder(t *testing.T) {
+	builderStatusTimeout = 100 * time.Millisecond
+	defer func() { builderStatusTimeout = 10 * time.Second }()
+
+	// The listener never accepts: the kernel completes the handshake from the backlog,
+	// so the client connects and then waits for a response that never comes.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer func() { require.NoError(t, ln.Close()) }()
+
+	client, err := builder.NewClient("http://" + ln.Addr().String())
+	require.NoError(t, err)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := NewService(t.Context(), WithBuilderClient(client))
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("NewService is still blocked in the builder status probe")
+	}
 }
 
 func Test_RegisterValidator(t *testing.T) {

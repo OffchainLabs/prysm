@@ -434,7 +434,7 @@ func TestService_ValidateBlsToExecutionChange(t *testing.T) {
 			}
 			require.NoError(t, cw.SetClock(tt.clock))
 			svc.verifierWaiter = verification.NewInitializerWaiter(cw, chainService.ForkChoiceStore, svc.cfg.stateGen, chainService)
-			go svc.Start()
+			go svc.verifierRoutine()
 
 			marshalledObj, err := tt.args.msg.MarshalSSZ()
 			assert.NoError(t, err)

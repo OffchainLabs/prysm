@@ -677,7 +677,7 @@ func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T)
 			},
 		},
 		{
-			name: "too many blocks",
+			name: "more blocks than requested",
 			req: &ethpb.BeaconBlocksByRangeRequest{
 				StartSlot: 100,
 				Step:      1,
@@ -697,9 +697,9 @@ func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T)
 				}
 			},
 			validate: func(req *ethpb.BeaconBlocksByRangeRequest, blocks []interfaces.ReadOnlySignedBeaconBlock) {
-				assert.Equal(t, 0, len(blocks))
+				assert.Equal(t, 64, len(blocks))
+				assert.Equal(t, primitives.Slot(163), blocks[len(blocks)-1].Block().Slot())
 			},
-			wantedErr: beaconsync.ErrInvalidFetchedData.Error(),
 		},
 		{
 			name: "not in a consecutive order",
@@ -951,6 +951,9 @@ func TestBlocksFetcher_requestBlocksDownscoreOnInvalidData(t *testing.T) {
 	// Verify the peer has no strikes before the request
 	assert.Equal(t, 0, p1.PeerScoring().StrikeCount(p2.PeerID()))
 
+	// The peer must advertise an earliest available slot low enough to be requested.
+	setPeerStatus(p1.PeerScoring(), p2.PeerID(), &ethpb.StatusV2{})
+
 	// Use fetchBlocksFromPeer which includes the downscoring logic
 	r := &fetchRequestResponse{start: 100, count: 64}
 	fetcher.fetchBlocksFromPeer(ctx, r, []peer.ID{p2.PeerID()})
@@ -959,6 +962,61 @@ func TestBlocksFetcher_requestBlocksDownscoreOnInvalidData(t *testing.T) {
 	// Verify the peer was downscored
 	scoreAfterRequest := p1.PeerScoring().StrikeCount(p2.PeerID())
 	assert.Equal(t, 1, scoreAfterRequest)
+}
+
+func TestBlocksFetcher_fetchBlocksFromPeerEarliestAvailableSlot(t *testing.T) {
+	const start = primitives.Slot(100)
+
+	topic := p2p.RPCBlocksByRangeTopicV1
+
+	for _, tt := range []struct {
+		name                  string
+		earliestAvailableSlot primitives.Slot
+		requested             bool
+	}{
+		{name: "earliest available slot above start", earliestAvailableSlot: start + 1, requested: false},
+		{name: "earliest available slot equal to start", earliestAvailableSlot: start, requested: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
+			setPeerStatus(p1.PeerScoring(), p2.PeerID(), &ethpb.StatusV2{EarliestAvailableSlot: tt.earliestAvailableSlot})
+
+			protocol := libp2pcore.ProtocolID(topic + p1.Encoding().ProtocolSuffix())
+
+			fetcher := newBlocksFetcher(t.Context(), &blocksFetcherConfig{
+				p2p:   p1,
+				chain: &mock.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}},
+			})
+			fetcher.rateLimiter = leakybucket.NewCollector(0.000001, 640, 1*time.Second, false)
+
+			requested := false
+			p2.BHost.SetStreamHandler(protocol, func(stream network.Stream) {
+				requested = true
+				blk := util.NewBeaconBlock()
+				blk.Block.Slot = start
+				tor := startup.NewClock(time.Now(), [32]byte{})
+				wsb, err := blocks.NewSignedBeaconBlock(blk)
+				require.NoError(t, err)
+				assert.NoError(t, beaconsync.WriteBlockChunk(stream, tor, p1.Encoding(), wsb))
+				assert.NoError(t, stream.Close())
+			})
+
+			r := &fetchRequestResponse{start: start, count: 64}
+			fetcher.fetchBlocksFromPeer(t.Context(), r, []peer.ID{p2.PeerID()})
+			require.Equal(t, tt.requested, requested)
+
+			if !tt.requested {
+				require.ErrorIs(t, r.err, errNoPeersAvailable)
+				return
+			}
+
+			require.NoError(t, r.err)
+			require.Equal(t, p2.PeerID(), r.blocksFrom)
+			require.Equal(t, 1, len(r.bwb))
+		})
+	}
 }
 
 func TestTimeToWait(t *testing.T) {

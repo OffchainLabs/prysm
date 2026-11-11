@@ -128,8 +128,18 @@ func AggregateMultiplePubkeys(pubs []common.PublicKey) common.PublicKey {
 	panic(err)
 }
 
+// SubtractPublicKey -- stub
+func SubtractPublicKey(_, _ common.PublicKey) common.PublicKey {
+	panic(err)
+}
+
 // AggregateCompressedSignatures -- stub
 func AggregateCompressedSignatures(multiSigs [][]byte) (common.Signature, error) {
+	panic(err)
+}
+
+// AggregateRandomized -- stub
+func AggregateRandomized(_ [][]byte, _ []common.PublicKey) (common.Signature, common.PublicKey, error) {
 	panic(err)
 }
 

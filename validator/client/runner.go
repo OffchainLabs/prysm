@@ -26,6 +26,8 @@ var backOffPeriod = 10 * time.Second
 // runner encapsulates the main validator routine.
 type runner struct {
 	validator *validator
+	// duties tracks the in-flight slot duties, which may outlive run.
+	duties sync.WaitGroup
 }
 
 // newRunner creates a new runner instance and performs all necessary initialization.
@@ -162,6 +164,7 @@ func (r *runner) run(ctx context.Context) {
 			// performRoles calls span.End()
 			rolesCtx, _ := context.WithDeadline(ctx, deadline) //nolint:govet
 			performRoles(rolesCtx, allRoles, v, slot, &wg, span)
+			r.duties.Go(wg.Wait)
 		case e := <-v.EventsChan():
 			v.ProcessEvent(ctx, e)
 		case currentKeys := <-v.AccountsChangedChan(): // should be less of a priority than next slot
@@ -206,11 +209,14 @@ func initialize(ctx context.Context, v *validator) error {
 
 	for {
 		if !firstTime {
-			if ctx.Err() != nil {
+			// Wait out the backoff before retrying, but keep watching the context so a
+			// cancellation is observed immediately instead of up to backOffPeriod later.
+			select {
+			case <-ticker.C:
+			case <-ctx.Done():
 				log.Info("Context canceled, stopping validator")
-				return errors.New("context canceled")
+				return ctx.Err()
 			}
-			<-ticker.C
 		}
 
 		firstTime = false

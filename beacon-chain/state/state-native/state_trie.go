@@ -43,52 +43,58 @@ const (
 	denebSharedFieldRefCount     = 7
 	electraSharedFieldRefCount   = 10
 	fuluSharedFieldRefCount      = 11
-	gloasSharedFieldRefCount     = 14 // Adds Builders + BuilderPendingWithdrawals + PTCWindow to the shared-ref set and LatestExecutionPayloadHeader is removed
+	gloasSharedFieldRefCount     = 13 // Fulu 11 + Builders, BuilderPendingWithdrawals, PTCWindow - LatestExecutionPayloadHeaderDeneb
+	hezeSharedFieldRefCount      = 13
 )
 
-// InitializeFromProtoPhase0 the beacon state from a protobuf representation.
-func InitializeFromProtoPhase0(st *ethpb.BeaconState) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafePhase0(st.Copy())
+// Container is the set of per-fork beacon state containers that New and
+// NewUnsafe accept.
+type Container interface {
+	*ethpb.BeaconState |
+		*ethpb.BeaconStateAltair |
+		*ethpb.BeaconStateBellatrix |
+		*ethpb.BeaconStateCapella |
+		*ethpb.BeaconStateDeneb |
+		*ethpb.BeaconStateElectra |
+		*ethpb.BeaconStateFulu |
+		*ethpb.BeaconStateGloas |
+		*ethpb.BeaconStateHeze
 }
 
-// InitializeFromProtoAltair the beacon state from a protobuf representation.
-func InitializeFromProtoAltair(st *ethpb.BeaconStateAltair) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafeAltair(st.Copy())
+// New returns a beacon state built from a deep copy of st.
+func New[T Container](st T) (state.BeaconState, error) {
+	return NewUnsafe(any(st).(interface{ Copy() T }).Copy())
 }
 
-// InitializeFromProtoBellatrix the beacon state from a protobuf representation.
-func InitializeFromProtoBellatrix(st *ethpb.BeaconStateBellatrix) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafeBellatrix(st.Copy())
+// NewUnsafe returns a beacon state that takes ownership of the fields of st.
+// The caller must not use or modify st after the call.
+func NewUnsafe[T Container](st T) (state.BeaconState, error) {
+	switch st := any(st).(type) {
+	case *ethpb.BeaconState:
+		return newPhase0(st)
+	case *ethpb.BeaconStateAltair:
+		return newAltair(st)
+	case *ethpb.BeaconStateBellatrix:
+		return newBellatrix(st)
+	case *ethpb.BeaconStateCapella:
+		return newCapella(st)
+	case *ethpb.BeaconStateDeneb:
+		return newDeneb(st)
+	case *ethpb.BeaconStateElectra:
+		return newElectra(st)
+	case *ethpb.BeaconStateFulu:
+		return newFulu(st)
+	case *ethpb.BeaconStateGloas:
+		return newGloas(st)
+	case *ethpb.BeaconStateHeze:
+		return newHeze(st)
+	default:
+		return nil, fmt.Errorf("unsupported state container %T", st)
+	}
 }
 
-// InitializeFromProtoCapella the beacon state from a protobuf representation.
-func InitializeFromProtoCapella(st *ethpb.BeaconStateCapella) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafeCapella(st.Copy())
-}
-
-// InitializeFromProtoDeneb the beacon state from a protobuf representation.
-func InitializeFromProtoDeneb(st *ethpb.BeaconStateDeneb) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafeDeneb(st.Copy())
-}
-
-// InitializeFromProtoElectra the beacon state from a protobuf representation.
-func InitializeFromProtoElectra(st *ethpb.BeaconStateElectra) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafeElectra(st.Copy())
-}
-
-// InitializeFromProtoFulu the beacon state from a protobuf representation.
-func InitializeFromProtoFulu(st *ethpb.BeaconStateFulu) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafeFulu(st.Copy())
-}
-
-// InitializeFromProtoGloas the beacon state from a protobuf representation.
-func InitializeFromProtoGloas(st *ethpb.BeaconStateGloas) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafeGloas(st.Copy())
-}
-
-// InitializeFromProtoUnsafePhase0 directly uses the beacon state protobuf fields
-// and sets them as fields of the BeaconState type.
-func InitializeFromProtoUnsafePhase0(st *ethpb.BeaconState) (state.BeaconState, error) {
+// newPhase0 is NewUnsafe for the Phase0 state container.
+func newPhase0(st *ethpb.BeaconState) (state.BeaconState, error) {
 	if st == nil {
 		return nil, errors.New("received nil state")
 	}
@@ -144,7 +150,7 @@ func InitializeFromProtoUnsafePhase0(st *ethpb.BeaconState) (state.BeaconState, 
 		}
 		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0, promotionThresholdByField[f])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("create field trie for %s: %w", f, err)
 		}
 		b.stateFieldLeaves[f] = trie
 	}
@@ -162,9 +168,8 @@ func InitializeFromProtoUnsafePhase0(st *ethpb.BeaconState) (state.BeaconState, 
 	return b, nil
 }
 
-// InitializeFromProtoUnsafeAltair directly uses the beacon state protobuf fields
-// and sets them as fields of the BeaconState type.
-func InitializeFromProtoUnsafeAltair(st *ethpb.BeaconStateAltair) (state.BeaconState, error) {
+// newAltair is NewUnsafe for the Altair state container.
+func newAltair(st *ethpb.BeaconStateAltair) (state.BeaconState, error) {
 	if st == nil {
 		return nil, errors.New("received nil state")
 	}
@@ -223,7 +228,7 @@ func InitializeFromProtoUnsafeAltair(st *ethpb.BeaconStateAltair) (state.BeaconS
 		}
 		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0, promotionThresholdByField[f])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("create field trie for %s: %w", f, err)
 		}
 		b.stateFieldLeaves[f] = trie
 	}
@@ -241,9 +246,8 @@ func InitializeFromProtoUnsafeAltair(st *ethpb.BeaconStateAltair) (state.BeaconS
 	return b, nil
 }
 
-// InitializeFromProtoUnsafeBellatrix directly uses the beacon state protobuf fields
-// and sets them as fields of the BeaconState type.
-func InitializeFromProtoUnsafeBellatrix(st *ethpb.BeaconStateBellatrix) (state.BeaconState, error) {
+// newBellatrix is NewUnsafe for the Bellatrix state container.
+func newBellatrix(st *ethpb.BeaconStateBellatrix) (state.BeaconState, error) {
 	if st == nil {
 		return nil, errors.New("received nil state")
 	}
@@ -303,7 +307,7 @@ func InitializeFromProtoUnsafeBellatrix(st *ethpb.BeaconStateBellatrix) (state.B
 		}
 		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0, promotionThresholdByField[f])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("create field trie for %s: %w", f, err)
 		}
 		b.stateFieldLeaves[f] = trie
 	}
@@ -322,9 +326,8 @@ func InitializeFromProtoUnsafeBellatrix(st *ethpb.BeaconStateBellatrix) (state.B
 	return b, nil
 }
 
-// InitializeFromProtoUnsafeCapella directly uses the beacon state protobuf fields
-// and sets them as fields of the BeaconState type.
-func InitializeFromProtoUnsafeCapella(st *ethpb.BeaconStateCapella) (state.BeaconState, error) {
+// newCapella is NewUnsafe for the Capella state container.
+func newCapella(st *ethpb.BeaconStateCapella) (state.BeaconState, error) {
 	if st == nil {
 		return nil, errors.New("received nil state")
 	}
@@ -387,7 +390,7 @@ func InitializeFromProtoUnsafeCapella(st *ethpb.BeaconStateCapella) (state.Beaco
 		}
 		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0, promotionThresholdByField[f])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("create field trie for %s: %w", f, err)
 		}
 		b.stateFieldLeaves[f] = trie
 	}
@@ -407,9 +410,8 @@ func InitializeFromProtoUnsafeCapella(st *ethpb.BeaconStateCapella) (state.Beaco
 	return b, nil
 }
 
-// InitializeFromProtoUnsafeDeneb directly uses the beacon state protobuf fields
-// and sets them as fields of the BeaconState type.
-func InitializeFromProtoUnsafeDeneb(st *ethpb.BeaconStateDeneb) (state.BeaconState, error) {
+// newDeneb is NewUnsafe for the Deneb state container.
+func newDeneb(st *ethpb.BeaconStateDeneb) (state.BeaconState, error) {
 	if st == nil {
 		return nil, errors.New("received nil state")
 	}
@@ -470,7 +472,7 @@ func InitializeFromProtoUnsafeDeneb(st *ethpb.BeaconStateDeneb) (state.BeaconSta
 		}
 		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0, promotionThresholdByField[f])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("create field trie for %s: %w", f, err)
 		}
 		b.stateFieldLeaves[f] = trie
 	}
@@ -490,9 +492,8 @@ func InitializeFromProtoUnsafeDeneb(st *ethpb.BeaconStateDeneb) (state.BeaconSta
 	return b, nil
 }
 
-// InitializeFromProtoUnsafeElectra directly uses the beacon state protobuf fields
-// and sets them as fields of the BeaconState type.
-func InitializeFromProtoUnsafeElectra(st *ethpb.BeaconStateElectra) (state.BeaconState, error) {
+// newElectra is NewUnsafe for the Electra state container.
+func newElectra(st *ethpb.BeaconStateElectra) (state.BeaconState, error) {
 	if st == nil {
 		return nil, errors.New("received nil state")
 	}
@@ -562,7 +563,7 @@ func InitializeFromProtoUnsafeElectra(st *ethpb.BeaconStateElectra) (state.Beaco
 		}
 		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0, promotionThresholdByField[f])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("create field trie for %s: %w", f, err)
 		}
 		b.stateFieldLeaves[f] = trie
 	}
@@ -585,9 +586,8 @@ func InitializeFromProtoUnsafeElectra(st *ethpb.BeaconStateElectra) (state.Beaco
 	return b, nil
 }
 
-// InitializeFromProtoUnsafeFulu directly uses the beacon state protobuf fields
-// and sets them as fields of the BeaconState type.
-func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateFulu) (state.BeaconState, error) {
+// newFulu is NewUnsafe for the Fulu state container.
+func newFulu(st *ethpb.BeaconStateFulu) (state.BeaconState, error) {
 	if st == nil {
 		return nil, errors.New("received nil state")
 	}
@@ -667,7 +667,7 @@ func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateFulu) (state.BeaconState
 		}
 		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0, promotionThresholdByField[f])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("create field trie for %s: %w", f, err)
 		}
 		b.stateFieldLeaves[f] = trie
 	}
@@ -691,9 +691,8 @@ func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateFulu) (state.BeaconState
 	return b, nil
 }
 
-// InitializeFromProtoUnsafeGloas directly uses the beacon state protobuf fields
-// and sets them as fields of the BeaconState type.
-func InitializeFromProtoUnsafeGloas(st *ethpb.BeaconStateGloas) (state.BeaconState, error) {
+// newGloas is NewUnsafe for the Gloas state container.
+func newGloas(st *ethpb.BeaconStateGloas) (state.BeaconState, error) {
 	if st == nil {
 		return nil, errors.New("received nil state")
 	}
@@ -777,7 +776,119 @@ func InitializeFromProtoUnsafeGloas(st *ethpb.BeaconStateGloas) (state.BeaconSta
 		}
 		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0, promotionThresholdByField[f])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("create field trie for %s: %w", f, err)
+		}
+		b.stateFieldLeaves[f] = trie
+	}
+
+	// Initialize field reference tracking for shared data.
+	b.sharedFieldReferences[types.HistoricalRoots] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.Eth1DataVotes] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.Slashings] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.PreviousEpochParticipationBits] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.CurrentEpochParticipationBits] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.HistoricalSummaries] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.PendingDeposits] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.PendingPartialWithdrawals] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.PendingConsolidations] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.ProposerLookahead] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)                  // New in Gloas.
+	b.sharedFieldReferences[types.BuilderPendingWithdrawals] = stateutil.NewRef(1) // New in Gloas.
+	b.sharedFieldReferences[types.PTCWindow] = stateutil.NewRef(1)                 // New in Gloas.
+
+	state.Count.Inc()
+	// Finalizer runs when dst is being destroyed in garbage collection.
+	runtime.SetFinalizer(b, finalizerCleanup)
+
+	return b, nil
+}
+
+// newHeze is NewUnsafe for the Heze state container.
+func newHeze(st *ethpb.BeaconStateHeze) (state.BeaconState, error) {
+	if st == nil {
+		return nil, errors.New("received nil state")
+	}
+
+	hRoots := customtypes.HistoricalRoots(make([][32]byte, len(st.HistoricalRoots)))
+	for i, r := range st.HistoricalRoots {
+		hRoots[i] = bytesutil.ToBytes32(r)
+	}
+
+	proposerLookahead := make([]primitives.ValidatorIndex, len(st.ProposerLookahead))
+	for i, v := range st.ProposerLookahead {
+		proposerLookahead[i] = primitives.ValidatorIndex(v)
+	}
+
+	fieldCount := params.BeaconConfig().BeaconStateHezeFieldCount
+	b := &BeaconState{
+		version:                       version.Heze,
+		genesisTime:                   st.GenesisTime,
+		genesisValidatorsRoot:         bytesutil.ToBytes32(st.GenesisValidatorsRoot),
+		slot:                          st.Slot,
+		fork:                          st.Fork,
+		latestBlockHeader:             st.LatestBlockHeader,
+		historicalRoots:               hRoots,
+		eth1Data:                      st.Eth1Data,
+		eth1DataVotes:                 st.Eth1DataVotes,
+		eth1DepositIndex:              st.Eth1DepositIndex,
+		slashings:                     st.Slashings,
+		previousEpochParticipation:    st.PreviousEpochParticipation,
+		currentEpochParticipation:     st.CurrentEpochParticipation,
+		justificationBits:             st.JustificationBits,
+		previousJustifiedCheckpoint:   st.PreviousJustifiedCheckpoint,
+		currentJustifiedCheckpoint:    st.CurrentJustifiedCheckpoint,
+		finalizedCheckpoint:           st.FinalizedCheckpoint,
+		currentSyncCommittee:          st.CurrentSyncCommittee,
+		nextSyncCommittee:             st.NextSyncCommittee,
+		nextWithdrawalIndex:           st.NextWithdrawalIndex,
+		nextWithdrawalValidatorIndex:  st.NextWithdrawalValidatorIndex,
+		historicalSummaries:           st.HistoricalSummaries,
+		depositRequestsStartIndex:     st.DepositRequestsStartIndex,
+		depositBalanceToConsume:       st.DepositBalanceToConsume,
+		exitBalanceToConsume:          st.ExitBalanceToConsume,
+		earliestExitEpoch:             st.EarliestExitEpoch,
+		consolidationBalanceToConsume: st.ConsolidationBalanceToConsume,
+		earliestConsolidationEpoch:    st.EarliestConsolidationEpoch,
+		pendingDeposits:               st.PendingDeposits,
+		pendingPartialWithdrawals:     st.PendingPartialWithdrawals,
+		pendingConsolidations:         st.PendingConsolidations,
+		proposerLookahead:             proposerLookahead,
+		latestExecutionPayloadBidHeze: st.LatestExecutionPayloadBid,
+		builders:                      st.Builders,
+		nextWithdrawalBuilderIndex:    st.NextWithdrawalBuilderIndex,
+		executionPayloadAvailability:  st.ExecutionPayloadAvailability,
+		builderPendingPayments:        st.BuilderPendingPayments,
+		builderPendingWithdrawals:     st.BuilderPendingWithdrawals,
+		latestBlockHash:               st.LatestBlockHash,
+		payloadExpectedWithdrawals:    st.PayloadExpectedWithdrawals,
+		ptcWindow:                     st.PtcWindow,
+		dirtyFields:                   make(map[types.FieldIndex]bool, fieldCount),
+		dirtyIndices:                  make(map[types.FieldIndex][]uint64, fieldCount),
+		stateFieldLeaves:              make(map[types.FieldIndex]*fieldtrie.FieldTrie, len(fieldMap)),
+		rebuildTrie:                   make(map[types.FieldIndex]bool, fieldCount),
+		valMapHandler:                 stateutil.NewValMapHandler(st.Validators),
+		builderIdxMap:                 newBuilderIdxMap(st.Builders),
+	}
+
+	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
+	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
+	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
+	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
+	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
+	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
+	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, hezeSharedFieldRefCount)
+
+	for _, f := range hezeFields {
+		b.dirtyFields[f] = true
+		b.rebuildTrie[f] = true
+		b.dirtyIndices[f] = []uint64{}
+		dt, ok := fieldMap[f]
+		if !ok {
+			continue
+		}
+		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0, promotionThresholdByField[f])
+		if err != nil {
+			return nil, fmt.Errorf("create field trie for %s: %w", f, err)
 		}
 		b.stateFieldLeaves[f] = trie
 	}
@@ -827,6 +938,8 @@ func (b *BeaconState) Copy() state.BeaconState {
 		fieldCount = params.BeaconConfig().BeaconStateFuluFieldCount
 	case version.Gloas:
 		fieldCount = params.BeaconConfig().BeaconStateGloasFieldCount
+	case version.Heze:
+		fieldCount = params.BeaconConfig().BeaconStateHezeFieldCount
 	}
 
 	dst := &BeaconState{
@@ -884,6 +997,7 @@ func (b *BeaconState) Copy() state.BeaconState {
 		latestExecutionPayloadHeaderCapella: b.latestExecutionPayloadHeaderCapella.Copy(),
 		latestExecutionPayloadHeaderDeneb:   b.latestExecutionPayloadHeaderDeneb.Copy(),
 		latestExecutionPayloadBid:           b.latestExecutionPayloadBid.Copy(),
+		latestExecutionPayloadBidHeze:       b.latestExecutionPayloadBidHeze.Copy(),
 		nextWithdrawalBuilderIndex:          b.nextWithdrawalBuilderIndex,
 		executionPayloadAvailability:        b.executionPayloadAvailabilityVal(),
 		builderPendingPayments:              b.builderPendingPaymentsVal(),
@@ -930,6 +1044,8 @@ func (b *BeaconState) Copy() state.BeaconState {
 		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, fuluSharedFieldRefCount)
 	case version.Gloas:
 		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, gloasSharedFieldRefCount)
+	case version.Heze:
+		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, hezeSharedFieldRefCount)
 	}
 
 	for field, ref := range b.sharedFieldReferences {
@@ -1261,8 +1377,7 @@ func recordGloasStateMetrics(b *BeaconState) {
 	gloasActiveBuildersBalanceGwei.Set(float64(activeBuildersBalanceGwei))
 }
 
-// IsNil checks if the state and the underlying proto
-// object are nil.
+// IsNil checks if the state is nil.
 func (b *BeaconState) IsNil() bool {
 	return b == nil
 }
@@ -1400,13 +1515,14 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 		return stateutil.ProposerLookaheadRoot(b.proposerLookahead)
 	case types.LatestExecutionPayloadBid:
 		return b.latestExecutionPayloadBid.HashTreeRoot()
+	case types.LatestExecutionPayloadBidHeze:
+		return b.latestExecutionPayloadBidHeze.HashTreeRoot()
 	case types.Builders:
 		return stateutil.BuildersRoot(b.version, b.builders)
 	case types.NextWithdrawalBuilderIndex:
 		return ssz.Uint64Root(uint64(b.nextWithdrawalBuilderIndex)), nil
 	case types.ExecutionPayloadAvailability:
 		return stateutil.ExecutionPayloadAvailabilityRoot(b.executionPayloadAvailability)
-
 	case types.BuilderPendingPayments:
 		return stateutil.BuilderPendingPaymentsRoot(b.builderPendingPayments)
 	case types.BuilderPendingWithdrawals:

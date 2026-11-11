@@ -20,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -420,4 +421,24 @@ func TestPruneGossipRejections(t *testing.T) {
 	s.pruneGossipRejections()
 	require.Equal(t, true, s.gossipRejections.IsTracked(known))
 	require.Equal(t, false, s.gossipRejections.IsTracked(unknown))
+}
+
+func TestService_NodeID(t *testing.T) {
+	t.Run("no private key", func(t *testing.T) {
+		s := &Service{}
+		require.Equal(t, enode.ID{}, s.NodeID())
+	})
+
+	t.Run("discovery not started", func(t *testing.T) {
+		_, privKey := createAddrAndPrivKey(t)
+
+		db, err := enode.OpenDB("")
+		require.NoError(t, err)
+		defer db.Close()
+
+		expected := enode.NewLocalNode(db, privKey).ID()
+
+		s := &Service{privKey: privKey}
+		require.Equal(t, expected, s.NodeID())
+	})
 }

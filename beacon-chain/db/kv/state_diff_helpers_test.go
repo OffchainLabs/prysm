@@ -127,7 +127,7 @@ func TestGetBaseAndDiffChain_CachedAncestors(t *testing.T) {
 					require.NoError(t, err)
 					require.Equal(t, tt.wantReads, db.db.Stats().TxN-before)
 					require.Equal(t, offset+tt.wantBase, base.Slot())
-					require.DeepSSZEqual(t, states[tt.wantBase].ToProto(), base.ToProto())
+					require.DeepSSZEqual(t, states[tt.wantBase].ToContainer(), base.ToContainer())
 					require.Equal(t, len(tt.wantDiffs), len(chain))
 					for i, rel := range tt.wantDiffs {
 						require.DeepEqual(t, storedDiffs[rel], chain[i])
@@ -507,14 +507,14 @@ func assertStateDiffRead(t *testing.T, want, got state.BeaconState) {
 func TestEncodeStateWithKey(t *testing.T) {
 	st, err := util.NewBeaconStateElectra()
 	require.NoError(t, err)
-	pb, ok := st.ToProtoUnsafe().(ssz.Marshaler)
+	container, ok := st.ToContainerUnsafe().(ssz.Marshaler)
 	require.Equal(t, true, ok)
 
 	t.Run("marshals into the prefixed buffer", func(t *testing.T) {
 		// A regrow would mean SizeSSZ under-reported, silently bringing the extra copy back.
-		buf := make([]byte, len(ElectraKey), len(ElectraKey)+pb.SizeSSZ())
+		buf := make([]byte, len(ElectraKey), len(ElectraKey)+container.SizeSSZ())
 		copy(buf, ElectraKey)
-		out, err := pb.MarshalSSZTo(buf)
+		out, err := container.MarshalSSZTo(buf)
 		require.NoError(t, err)
 		require.Equal(t, true, &buf[0] == &out[0], "MarshalSSZTo reallocated the buffer")
 		require.Equal(t, cap(buf), len(out))
@@ -523,7 +523,7 @@ func TestEncodeStateWithKey(t *testing.T) {
 	t.Run("allocates only the buffer and the snappy output", func(t *testing.T) {
 		// Ensures memory allocations are as expected.
 		allocs := testing.AllocsPerRun(5, func() {
-			if _, err := encodeProtoWithKey(version.Electra, pb); err != nil {
+			if _, err := encodeContainerWithKey(version.Electra, container); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -598,15 +598,15 @@ func TestStateKeyByVersion_AllVersions(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodeProtoWithKey(b *testing.B) {
+func BenchmarkEncodeContainerWithKey(b *testing.B) {
 	st, err := util.NewBeaconStateElectra()
 	require.NoError(b, err)
-	pb := st.ToProtoUnsafe().(ssz.Marshaler)
+	container := st.ToContainerUnsafe().(ssz.Marshaler)
 
 	b.Run("append-copy", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			raw, err := pb.MarshalSSZ()
+			raw, err := container.MarshalSSZ()
 			require.NoError(b, err)
 			_ = snappy.Encode(nil, append(ElectraKey, raw...))
 		}
@@ -614,7 +614,7 @@ func BenchmarkEncodeProtoWithKey(b *testing.B) {
 	b.Run("marshal-into-key", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			_, err := encodeProtoWithKey(version.Electra, pb)
+			_, err := encodeContainerWithKey(version.Electra, container)
 			require.NoError(b, err)
 		}
 	})

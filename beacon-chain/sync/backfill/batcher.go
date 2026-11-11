@@ -7,7 +7,6 @@ import (
 )
 
 var errMaxBatches = errors.New("backfill batch requested in excess of max outstanding batches")
-var errEndSequence = errors.New("sequence has terminated, no more backfill batches will be produced")
 var errCannotDecreaseMinimum = errors.New("the minimum backfill slot can only be increased, not decreased")
 
 type batchSequencer struct {
@@ -42,7 +41,7 @@ func (c *batchSequencer) sequence() ([]batch, error) {
 			// Since we always create batches from high to low, we can assume we've already created the
 			// descendent batches from the batch we're dropping, so there won't be another batch depending on
 			// this one - we can stop adding batches and mark put this one in the batchEndSequence state.
-			// When all batches are in batchEndSequence, worker pool spins down and marks backfill complete.
+			// When all batches are in batchEndSequence, the service marks backfill complete.
 			if c.seq[i].expired(needs) {
 				c.seq[i] = c.seq[i].withState(batchEndSequence)
 			} else {
@@ -109,6 +108,25 @@ func (c *batchSequencer) update(b batch) {
 	}
 }
 
+// widen replaces the batch with the bounds of `b` by a batch spanning [b.begin, end),
+// with its downloaded data dropped.
+func (c *batchSequencer) widen(b batch, end primitives.Slot) {
+	for i := range c.seq {
+		if c.seq[i].begin != b.begin || c.seq[i].end != b.end {
+			continue
+		}
+
+		b.end = end
+		b.blocks = nil
+		b.blobs = nil
+		b.columns = nil
+		b.nextReqCols = nil
+		c.seq[i] = b
+
+		return
+	}
+}
+
 // importable returns all batches that are ready to be imported. This means they satisfy 2 conditions:
 //   - They are in state batchImportable, which means their data has been downloaded and proposer signatures have been verified.
 //   - There are no batches that are not in state batchImportable between them and the start of the slice. This ensures that they
@@ -160,6 +178,12 @@ func (c *batchSequencer) numTodo() int {
 		}
 	}
 	return todo
+}
+
+// allEnded reports whether every slot in the sequence is batchEndSequence,
+// which means no backfill work remains.
+func (c *batchSequencer) allEnded() bool {
+	return c.countWithState(batchEndSequence) == len(c.seq)
 }
 
 func newBatchSequencer(seqLen int, max, size primitives.Slot, needsCb func() das.CurrentNeeds) *batchSequencer {

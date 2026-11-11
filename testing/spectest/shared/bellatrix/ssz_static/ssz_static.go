@@ -23,7 +23,7 @@ func customHtr(t *testing.T, htrs []common.HTR, object any) []common.HTR {
 	switch object.(type) {
 	case *ethpb.BeaconStateBellatrix:
 		htrs = append(htrs, func(s any) ([32]byte, error) {
-			beaconState, err := state_native.InitializeFromProtoUnsafeBellatrix(s.(*ethpb.BeaconStateBellatrix))
+			beaconState, err := state_native.NewUnsafe(s.(*ethpb.BeaconStateBellatrix))
 			require.NoError(t, err)
 			return beaconState.HashTreeRoot(context.Background())
 		})
@@ -120,6 +120,8 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.LightClientUpdateAltair{}
 	case "PowBlock":
 		obj = &ethpb.PowBlock{}
+	case "NewPayloadRequest":
+		t.Skip("Not a consensus type")
 	default:
 		return nil, errors.New("type not found")
 	}

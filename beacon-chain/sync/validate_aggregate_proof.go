@@ -128,7 +128,8 @@ func (s *Service) validateAggregateAndProof(ctx context.Context, pid peer.ID, ms
 
 	// Verify the block being voted on is in the beacon chain.
 	// If not, store this attestation in the map of pending attestations.
-	if !s.validateBlockInAttestation(ctx, m) {
+	if !s.hasBlockAndState(ctx, bytesutil.ToBytes32(data.BeaconBlockRoot)) {
+		s.savePendingAggregate(pid, m)
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -240,19 +241,6 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 	set.Join(selectionSigSet).Join(aggregatorSigSet).Join(attSigSet)
 
 	return s.validateWithBatchVerifier(ctx, "aggregate", set)
-}
-
-// validateBlocksInAttestation checks if the block being voted on is in the beaconDB.
-// If not, it store this attestation in the map of pending attestations.
-func (s *Service) validateBlockInAttestation(ctx context.Context, satt ethpb.SignedAggregateAttAndProof) bool {
-	// Verify the block being voted and the processed state is in beaconDB. The block should have passed validation if it's in the beaconDB.
-	blockRoot := bytesutil.ToBytes32(satt.AggregateAttestationAndProof().AggregateVal().GetData().BeaconBlockRoot)
-	if !s.hasBlockAndState(ctx, blockRoot) {
-		// A node doesn't have the block, it'll request from peer while saving the pending attestation to a queue.
-		s.savePendingAggregate(satt)
-		return false
-	}
-	return true
 }
 
 // Returns true if the node has received aggregate for the aggregator with index and target epoch.

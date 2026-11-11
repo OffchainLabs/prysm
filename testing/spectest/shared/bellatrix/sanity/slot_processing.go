@@ -34,7 +34,7 @@ func RunSlotProcessingTests(t *testing.T, config string) {
 			require.NoError(t, err, "Failed to decompress")
 			base := &ethpb.BeaconStateBellatrix{}
 			require.NoError(t, base.UnmarshalSSZ(preBeaconStateSSZ), "Failed to unmarshal")
-			beaconState, err := state_native.InitializeFromProtoUnsafeBellatrix(base)
+			beaconState, err := state_native.NewUnsafe(base)
 			require.NoError(t, err)
 
 			file, err := util.BazelFileBytes(testsFolderPath, folder.Name(), "slots.yaml")
@@ -52,9 +52,9 @@ func RunSlotProcessingTests(t *testing.T, config string) {
 			postState, err := transition.ProcessSlots(context.Background(), beaconState, beaconState.Slot().Add(slotsCount))
 			require.NoError(t, err)
 
-			pbState, err := state_native.ProtobufBeaconStateBellatrix(postState.ToProto())
+			container, err := state_native.ContainerFrom[*ethpb.BeaconStateBellatrix](postState.ToContainer())
 			require.NoError(t, err)
-			require.DeepSSZEqual(t, pbState, postBeaconState, "Post state does not match expected. Diff between states")
+			require.DeepSSZEqual(t, container, postBeaconState, "Post state does not match expected. Diff between states")
 		})
 	}
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -522,6 +523,14 @@ func (s *Server) SubmitVoluntaryExit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.VoluntaryExitsPool.InsertVoluntaryExit(exit)
+
+	s.OperationNotifier.OperationFeed().Send(&feed.Event{
+		Type: operation.ExitReceived,
+		Data: &operation.ExitReceivedData{
+			Exit: exit,
+		},
+	})
+
 	if err = s.Broadcaster.Broadcast(ctx, exit); err != nil {
 		httputil.HandleError(w, "Could not broadcast exit: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -552,7 +561,6 @@ func (s *Server) SubmitSyncCommitteeSignatures(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	var validMessages []*eth.SyncCommitteeMessage
 	var msgFailures []*server.IndexedError
 	for i, sourceMsg := range req.Data {
 		msg, err := sourceMsg.ToConsensus()
@@ -563,11 +571,14 @@ func (s *Server) SubmitSyncCommitteeSignatures(w http.ResponseWriter, r *http.Re
 			})
 			continue
 		}
-		validMessages = append(validMessages, msg)
-	}
-
-	for _, msg := range validMessages {
 		if rpcerr := s.CoreService.SubmitSyncMessage(ctx, msg); rpcerr != nil {
+			if rpcerr.Reason == core.BadRequest {
+				msgFailures = append(msgFailures, &server.IndexedError{
+					Index:   i,
+					Message: rpcerr.Err.Error(),
+				})
+				continue
+			}
 			httputil.HandleError(w, "Could not submit message: "+rpcerr.Err.Error(), core.ErrorReasonToHTTP(rpcerr.Reason))
 			return
 		}
@@ -986,13 +997,6 @@ func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Reques
 		if consensusMsg == nil {
 			continue
 		}
-		if _, err := bls.SignatureFromBytes(consensusMsg.Signature); err != nil {
-			failures = append(failures, &server.IndexedError{
-				Index:   i,
-				Message: "Incorrect payload attestation signature: " + err.Error(),
-			})
-			continue
-		}
 		if consensusMsg.Data.Slot != currentSlot {
 			failures = append(failures, &server.IndexedError{
 				Index:   i,
@@ -1015,6 +1019,13 @@ func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Reques
 			failures = append(failures, &server.IndexedError{
 				Index:   i,
 				Message: "Could not determine PTC committee index: " + err.Error(),
+			})
+			continue
+		}
+		if err := verification.VerifyPayloadAttestationMessageSignature(st, consensusMsg); err != nil {
+			failures = append(failures, &server.IndexedError{
+				Index:   i,
+				Message: "Incorrect payload attestation signature: " + err.Error(),
 			})
 			continue
 		}

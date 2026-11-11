@@ -1058,7 +1058,8 @@ func verifyByRootDataColumnSidecars(
 
 // computeIndicesByRootByPeer returns a peers->root->indices map only for
 // root and indices given in `indicesByBlockRoot`. It also only selects peers
-// for a given root only if its head state is higher than the block slot.
+// for a given root only if its head state is higher than the block slot, and
+// if its advertised earliest available slot is lower than or equal to the block slot.
 func computeIndicesByRootByPeer(
 	p2p prysmP2P.P2P,
 	slotByBlockRoot map[[fieldparams.RootLength]byte]primitives.Slot,
@@ -1070,6 +1071,7 @@ func computeIndicesByRootByPeer(
 	// First, compute custody columns for all peers
 	peersByIndex := make(map[uint64]map[goPeer.ID]bool)
 	headSlotByPeer := make(map[goPeer.ID]primitives.Slot)
+	earliestAvailableSlotByPeer := make(map[goPeer.ID]primitives.Slot)
 	for peer := range peers {
 		log := log.WithField("peerID", peer)
 
@@ -1085,13 +1087,6 @@ func computeIndicesByRootByPeer(
 		if err != nil {
 			log.WithError(err).Debug("Failed to get peer DAS info")
 			continue
-		}
-
-		for column := range dasInfo.CustodyColumns {
-			if _, exists := peersByIndex[column]; !exists {
-				peersByIndex[column] = make(map[goPeer.ID]bool)
-			}
-			peersByIndex[column][peer] = true
 		}
 
 		// Compute the head slot for each peer
@@ -1110,6 +1105,16 @@ func computeIndicesByRootByPeer(
 		// We add an epoch to take into account the fact the real head slot of the peer
 		// is higher than our view of it.
 		headSlotByPeer[peer] = peerChainState.HeadSlot + slotsPerEpoch
+
+		// The peer is not able to serve sidecars before its earliest available slot.
+		earliestAvailableSlotByPeer[peer] = peerChainState.EarliestAvailableSlot
+
+		for column := range dasInfo.CustodyColumns {
+			if _, exists := peersByIndex[column]; !exists {
+				peersByIndex[column] = make(map[goPeer.ID]bool)
+			}
+			peersByIndex[column][peer] = true
+		}
 	}
 
 	// For each block root and its indices, find suitable peers
@@ -1129,6 +1134,10 @@ func computeIndicesByRootByPeer(
 				}
 
 				if peerHeadSlot < blockSlot {
+					continue
+				}
+
+				if earliestAvailableSlotByPeer[peer] > blockSlot {
 					continue
 				}
 

@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/fulu"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/heze"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -143,6 +144,9 @@ type stateDiff struct {
 	latestBlockHash                [fieldparams.RootLength]byte      // override.
 	payloadExpectedWithdrawals     []*enginev1.Withdrawal            // override.
 	ptcWindow                      []*ethpb.PTCs                     // override.
+
+	// Heze
+	latestExecutionPayloadBidHeze *ethpb.ExecutionPayloadBidHeze // override, replaces latestExecutionPayloadBid from Heze.
 }
 
 type hdiff struct {
@@ -2209,10 +2213,10 @@ func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDi
 
 // prevPendingDeposits is the anchor's pre-upgrade list the diff indexes, not source's post-upgrade list.
 func applyPendingDepositsDiff(source state.BeaconState, diff *stateDiff, prevPendingDeposits []*ethpb.PendingDeposit) error {
-	if int(diff.pendingDepositIndex) > len(prevPendingDeposits) {
+	if diff.pendingDepositIndex > uint64(len(prevPendingDeposits)) {
 		return errors.Errorf("pending deposit index %d exceeds source length %d", diff.pendingDepositIndex, len(prevPendingDeposits))
 	}
-	sPendingDeposits := prevPendingDeposits[int(diff.pendingDepositIndex):]
+	sPendingDeposits := prevPendingDeposits[diff.pendingDepositIndex:]
 	for _, t := range diff.pendingDepositDiff {
 		sPendingDeposits = append(sPendingDeposits, &ethpb.PendingDeposit{
 			PublicKey:             slices.Clone(t.PublicKey),
@@ -2231,7 +2235,10 @@ func applyPendingPartialWithdrawalsDiff(source state.BeaconState, diff *stateDif
 	if err != nil {
 		return errors.Wrap(err, "failed to get pending partial withdrawals")
 	}
-	sPendingPartialWithdrawals = sPendingPartialWithdrawals[int(diff.pendingPartialWithdrawalsIndex):]
+	if diff.pendingPartialWithdrawalsIndex > uint64(len(sPendingPartialWithdrawals)) {
+		return errors.Errorf("pending partial withdrawals index %d exceeds source length %d", diff.pendingPartialWithdrawalsIndex, len(sPendingPartialWithdrawals))
+	}
+	sPendingPartialWithdrawals = sPendingPartialWithdrawals[diff.pendingPartialWithdrawalsIndex:]
 	for _, t := range diff.pendingPartialWithdrawalsDiff {
 		sPendingPartialWithdrawals = append(sPendingPartialWithdrawals, &ethpb.PendingPartialWithdrawal{
 			Index:             t.Index,
@@ -2248,7 +2255,10 @@ func applyPendingConsolidationsDiff(source state.BeaconState, diff *stateDiff) e
 	if err != nil {
 		return errors.Wrap(err, "failed to get pending consolidations")
 	}
-	sPendingConsolidations = sPendingConsolidations[int(diff.pendingConsolidationsIndex):]
+	if diff.pendingConsolidationsIndex > uint64(len(sPendingConsolidations)) {
+		return errors.Errorf("pending consolidations index %d exceeds source length %d", diff.pendingConsolidationsIndex, len(sPendingConsolidations))
+	}
+	sPendingConsolidations = sPendingConsolidations[diff.pendingConsolidationsIndex:]
 	for _, t := range diff.pendingConsolidationsDiffs {
 		sPendingConsolidations = append(sPendingConsolidations, &ethpb.PendingConsolidation{
 			SourceIndex: t.SourceIndex,
@@ -2400,6 +2410,8 @@ func updateToVersion(ctx context.Context, source state.BeaconState, target int) 
 		ret, err = fulu.ConvertToFulu(source)
 	case version.Fulu:
 		ret, err = gloas.UpgradeToGloas(ctx, source)
+	case version.Gloas:
+		ret, err = heze.UpgradeToHeze(source)
 	default:
 		return nil, errors.Errorf("unsupported version %s", version.String(source.Version()))
 	}

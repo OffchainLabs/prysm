@@ -1,0 +1,179 @@
+syntax = "proto3";
+
+package ethereum.eth.v1alpha1;
+
+import "proto/engine/v1/execution_engine.proto";
+import "proto/engine/v1/gloas.proto";
+import "proto/eth/ext/options.proto";
+import "proto/prysm/v1alpha1/attestation.proto";
+import "proto/prysm/v1alpha1/withdrawals.proto";
+import "proto/prysm/v1alpha1/beacon_core_types.proto";
+import "proto/prysm/v1alpha1/gloas.proto";
+
+option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
+
+// =============================================================================
+// Heze Fork Specification
+// =============================================================================
+// This file implements the Heze fork of the Ethereum consensus specification
+// Reference:
+// https://github.com/ethereum/consensus-specs/blob/master/specs/heze/beacon-chain.md
+
+// ExecutionPayloadBidHeze represents an execution payload bid in the Heze fork.
+//
+// Spec:
+// class ExecutionPayloadBid(ProgressiveContainer):
+//     ACTIVE_FIELDS = active_fields(width=13)
+//
+//     parent_block_hash: Hash32
+//     parent_block_root: Root
+//     block_hash: Hash32
+//     prev_randao: Bytes32
+//     fee_recipient: ExecutionAddress
+//     gas_limit: Uint64
+//     builder_index: BuilderIndex
+//     slot: Slot
+//     value: Gwei
+//     execution_payment: Gwei
+//     blob_kzg_commitments: BlobKZGCommitments
+//     execution_requests_root: Root
+//     # [New in Heze:EIP7805]
+//     inclusion_list_bits: InclusionListBits
+message ExecutionPayloadBidHeze {
+  bytes parent_block_hash = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes parent_block_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes block_hash = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes prev_randao = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes fee_recipient = 5 [ (ethereum.eth.ext.ssz_size) = "20" ];
+  uint64 gas_limit = 6;
+  uint64 builder_index = 7 [ (ethereum.eth.ext.cast_type) =
+                                 "github.com/OffchainLabs/prysm/v7/"
+                                 "consensus-types/primitives.BuilderIndex" ];
+  uint64 slot = 8 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  uint64 value = 9 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
+  ];
+  uint64 execution_payment = 10 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
+  ];
+  repeated bytes blob_kzg_commitments = 11 [
+    (ethereum.eth.ext.ssz_size) = "?,48",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
+  bytes execution_requests_root = 12 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes inclusion_list_bits = 13 [
+    (ethereum.eth.ext.ssz_size) = "inclusion_list_bits.size",
+    (ethereum.eth.ext.cast_type) = "inclusion_list_bits.type"
+  ];
+}
+
+// SignedExecutionPayloadBidHeze wraps a Heze execution payload bid with a
+// signature.
+//
+// Spec:
+// class SignedExecutionPayloadBid(Container):
+//     # [Modified in Heze:EIP7805]
+//     message: ExecutionPayloadBid
+//     signature: BLSSignature
+message SignedExecutionPayloadBidHeze {
+  ExecutionPayloadBidHeze message = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// InclusionList is the list of transactions that an inclusion list committee
+// member requests for the next payload.
+//
+// Spec:
+// class InclusionList(Container):
+//     slot: Slot
+//     validator_index: ValidatorIndex
+//     dependent_root: Root
+//     transactions: Transactions
+message InclusionList {
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  uint64 validator_index = 2
+      [ (ethereum.eth.ext.cast_type) =
+            "github.com/OffchainLabs/prysm/v7/consensus-types/"
+            "primitives.ValidatorIndex" ];
+  bytes dependent_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  ethereum.engine.v1.ProgressiveTransactionList transactions = 4;
+}
+
+// SignedInclusionList wraps an inclusion list with the committee member's
+// signature.
+//
+// Spec:
+// class SignedInclusionList(Container):
+//     message: InclusionList
+//     signature: BLSSignature
+message SignedInclusionList {
+  InclusionList message = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// BeaconBlockHeze represents a beacon block in the Heze fork.
+message BeaconBlockHeze {
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  uint64 proposer_index = 2 [ (ethereum.eth.ext.cast_type) =
+                                  "github.com/OffchainLabs/prysm/v7/"
+                                  "consensus-types/primitives.ValidatorIndex" ];
+  bytes parent_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes state_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  BeaconBlockBodyHeze body = 5;
+}
+
+// BeaconBlockBodyHeze represents the body of a beacon block in the Heze fork.
+message BeaconBlockBodyHeze {
+  bytes randao_reveal = 1 [ (ethereum.eth.ext.ssz_size) = "96" ];
+  Eth1Data eth1_data = 2;
+  bytes graffiti = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  repeated ProposerSlashing proposer_slashings = 4
+      [ (ethereum.eth.ext.ssz_max) = "16" ];
+  repeated AttesterSlashingGloas attester_slashings = 5
+      [ (ethereum.eth.ext.ssz_max) = "1" ];
+  repeated AttestationGloas attestations = 6
+      [ (ethereum.eth.ext.ssz_max) = "8" ];
+  repeated Deposit deposits = 7 [ (ethereum.eth.ext.ssz_max) = "16" ];
+  repeated SignedVoluntaryExit voluntary_exits = 8
+      [ (ethereum.eth.ext.ssz_max) = "16" ];
+  SyncAggregate sync_aggregate = 9;
+  repeated SignedBLSToExecutionChange bls_to_execution_changes = 10
+      [ (ethereum.eth.ext.ssz_max) = "16" ];
+  SignedExecutionPayloadBidHeze signed_execution_payload_bid = 11;
+  repeated PayloadAttestation payload_attestations = 12
+      [ (ethereum.eth.ext.ssz_max) = "payload_attestation.size" ];
+  ethereum.engine.v1.ExecutionRequestsGloas parent_execution_requests = 13;
+}
+
+// SignedBeaconBlockHeze represents a signed beacon block in the Heze fork.
+message SignedBeaconBlockHeze {
+  BeaconBlockHeze block = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// BeaconBlockContentsHeze bundles a Heze beacon block with the execution
+// payload envelope and associated blob data. This is used for block production
+// when include_payload=true.
+message BeaconBlockContentsHeze {
+  BeaconBlockHeze block = 1;
+  ExecutionPayloadEnvelope execution_payload_envelope = 2;
+  repeated bytes kzg_proofs = 3 [
+    (ethereum.eth.ext.ssz_size) = "?,48",
+    (ethereum.eth.ext.ssz_max) = "max_cell_proofs_length.size"
+  ];
+  repeated bytes blobs = 4 [
+    (ethereum.eth.ext.ssz_size) = "?,blob.size",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
+}

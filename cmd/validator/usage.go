@@ -14,20 +14,17 @@ import (
 
 var appHelpTemplate = `NAME:
    {{.App.Name}} - {{.App.Usage}}
-
-USAGE:
-   {{.App.HelpName}} [options]{{if .App.Commands}} command [command options]{{end}} {{if .App.ArgsUsage}}{{.App.ArgsUsage}}{{else}}[arguments...]{{end}}
 {{if .App.Version}}
 VERSION:
-	{{.App.Version}}
+   {{.App.Version}}
 {{end -}}
 {{if len .App.Authors}}
-AUTHORS:
+AUTHOR:
    {{range .App.Authors}}{{ . }}
    {{end -}}
 {{end -}}
 {{if .App.Commands}}
-global OPTIONS:
+COMMANDS:
    {{range .App.Commands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
    {{end -}}
 {{end -}}
@@ -46,6 +43,11 @@ COPYRIGHT:
 type flagGroup struct {
 	Name  string
 	Flags []cli.Flag
+}
+
+// deprecatedFlags still work, but are expected to be removed in a future release.
+var deprecatedFlags = []cli.Flag{
+	features.HoleskyTestnet,
 }
 
 var appHelpFlagGroups = []flagGroup{
@@ -148,16 +150,18 @@ var appHelpFlagGroups = []flagGroup{
 	},
 	{
 		Name:  "features",
-		Flags: features.ActiveFlags(features.ValidatorFlags),
+		Flags: features.WithoutFlags(features.ActiveFlags(features.ValidatorFlags), deprecatedFlags),
 	},
 	{
 		Name:  "deprecated",
-		Flags: []cli.Flag{},
+		Flags: deprecatedFlags,
 	},
 }
 
 func init() {
 	cli.AppHelpTemplate = appHelpTemplate
+	cmd.EnableHelpColors()
+	coloredAppHelpTemplate := cli.AppHelpTemplate
 
 	type helpData struct {
 		App        any
@@ -166,7 +170,7 @@ func init() {
 
 	originalHelpPrinter := cli.HelpPrinter
 	cli.HelpPrinter = func(w io.Writer, tmpl string, data any) {
-		if tmpl == appHelpTemplate {
+		if tmpl == coloredAppHelpTemplate {
 			for _, group := range appHelpFlagGroups {
 				sort.Sort(cli.FlagsByName(group.Flags))
 			}

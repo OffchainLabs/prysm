@@ -632,7 +632,7 @@ func TestPendingGloasColumns(t *testing.T) {
 		drained := false
 		for range 200 {
 			notifier.StateFeed().Send(ev)
-			if !s.hasPendingGloasColumns(blockRoot) {
+			if !s.hasPendingGloasColumns(blockRoot) && p.BroadcastCalled.Load() {
 				drained = true
 				break
 			}

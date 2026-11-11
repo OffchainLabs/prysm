@@ -74,9 +74,6 @@ func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2ECo
 	testConfig := &types.E2EConfig{
 		BeaconFlags: []string{
 			fmt.Sprintf("--slots-per-archive-point=%d", params.BeaconConfig().SlotsPerEpoch*16),
-			fmt.Sprintf("--tracing-endpoint=http://%s", tracingEndpoint),
-			"--enable-tracing",
-			"--trace-sample-fraction=1.0",
 		},
 		ValidatorFlags:      []string{},
 		EpochsToRun:         uint64(epochsToRun),
@@ -167,9 +164,6 @@ func e2eMainnet(t *testing.T, usePrysmSh, useMultiClient bool, cfg *params.Beaco
 	testConfig := &types.E2EConfig{
 		BeaconFlags: []string{
 			fmt.Sprintf("--slots-per-archive-point=%d", params.BeaconConfig().SlotsPerEpoch*16),
-			fmt.Sprintf("--tracing-endpoint=http://%s", tracingEndpoint),
-			"--enable-tracing",
-			"--trace-sample-fraction=1.0",
 		},
 		ValidatorFlags:      []string{},
 		EpochsToRun:         uint64(epochsToRun),

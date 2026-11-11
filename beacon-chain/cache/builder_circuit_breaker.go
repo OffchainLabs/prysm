@@ -335,6 +335,18 @@ func (c *BuilderCircuitBreaker) DropInactiveBuilders(epoch primitives.Epoch, isA
 			}
 		}
 	}
+	links := make(map[primitives.BuilderIndex]map[string]primitives.Epoch, len(candidates))
+	for _, idx := range candidates {
+		eps := c.relaysByIndex[idx]
+		if len(eps) == 0 {
+			continue
+		}
+		seen := make(map[string]primitives.Epoch, len(eps))
+		for _, ep := range eps {
+			seen[ep] = c.relays[ep].members[idx]
+		}
+		links[idx] = seen
+	}
 	c.lock.Unlock()
 
 	inactive := make([]primitives.BuilderIndex, 0, len(candidates))
@@ -355,8 +367,14 @@ func (c *BuilderCircuitBreaker) DropInactiveBuilders(epoch primitives.Epoch, isA
 	defer c.lock.Unlock()
 	for _, idx := range inactive {
 		delete(c.failures, idx)
-		for _, ep := range slices.Clone(c.relaysByIndex[idx]) {
-			c.unlinkRelay(ep, idx)
+		for ep, seen := range links[idx] {
+			r, ok := c.relays[ep]
+			if !ok {
+				continue
+			}
+			if current, ok := r.members[idx]; ok && current == seen {
+				c.unlinkRelay(ep, idx)
+			}
 		}
 	}
 	for ep, r := range c.relays {

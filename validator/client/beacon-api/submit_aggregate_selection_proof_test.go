@@ -101,6 +101,8 @@ func TestSubmitAggregateSelectionProof(t *testing.T) {
 				gomock.Any(),
 				syncingEndpoint,
 				&structs.SyncStatusResponse{},
+				gomock.Any(),
+				gomock.Any(),
 			).SetArg(
 				2,
 				structs.SyncStatusResponse{
@@ -270,6 +272,8 @@ func TestSubmitAggregateSelectionProofElectra(t *testing.T) {
 				gomock.Any(),
 				syncingEndpoint,
 				&structs.SyncStatusResponse{},
+				gomock.Any(),
+				gomock.Any(),
 			).SetArg(
 				2,
 				structs.SyncStatusResponse{

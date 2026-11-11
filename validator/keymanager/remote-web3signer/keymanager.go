@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/petnames"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
@@ -241,27 +243,27 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 	case *validatorpb.SignRequest_BlockAltair:
 		return handleBlockAltair(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlockBellatrix:
-		return handleBlockBellatrix(ctx, validator, request, genesisValidatorsRoot)
+		return handleBlockV2(ctx, version.Bellatrix, false, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlindedBlockBellatrix:
-		return handleBlindedBlockBellatrix(ctx, validator, request, genesisValidatorsRoot)
+		return handleBlockV2(ctx, version.Bellatrix, true, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlockCapella:
-		return handleBlockCapella(ctx, validator, request, genesisValidatorsRoot)
+		return handleBlockV2(ctx, version.Capella, false, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlindedBlockCapella:
-		return handleBlindedBlockCapella(ctx, validator, request, genesisValidatorsRoot)
+		return handleBlockV2(ctx, version.Capella, true, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlockDeneb:
-		return handleBlockDeneb(ctx, validator, request, genesisValidatorsRoot)
+		return handleBlockV2(ctx, version.Deneb, false, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlindedBlockDeneb:
-		return handleBlindedBlockDeneb(ctx, validator, request, genesisValidatorsRoot)
+		return handleBlockV2(ctx, version.Deneb, true, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlockElectra:
-		return handleBlockElectra(ctx, validator, request, genesisValidatorsRoot)
+		return handleBlockV2(ctx, version.Electra, false, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlindedBlockElectra:
-		return handleBlindedBlockElectra(ctx, validator, request, genesisValidatorsRoot)
+		return handleBlockV2(ctx, version.Electra, true, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlockFulu:
-		return handleBlockFulu(ctx, validator, request, genesisValidatorsRoot)
+		return handleBlockV2(ctx, version.Fulu, false, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlindedBlockFulu:
-		return handleBlindedBlockFulu(ctx, validator, request, genesisValidatorsRoot)
+		return handleBlockV2(ctx, version.Fulu, true, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlockGloas:
-		return handleBlockGloas(ctx, validator, request, genesisValidatorsRoot)
+		return handleBlockV2(ctx, version.Gloas, false, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_ExecutionPayloadEnvelope:
 		return handleExecutionPayloadEnvelope(ctx, ver, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_PayloadAttestationData:
@@ -289,6 +291,8 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 		return handleContributionAndProof(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_Registration:
 		return handleRegistration(ctx, validator, request)
+	case *validatorpb.SignRequest_BlockHeze:
+		return handleBlockV2(ctx, version.Heze, false, validator, request, genesisValidatorsRoot)
 	default:
 		return nil, fmt.Errorf("web3signer sign request type %T not supported", request.Object)
 	}
@@ -354,135 +358,16 @@ func handleBlockAltair(ctx context.Context, validator *validator.Validate, reque
 	return json.Marshal(blockv2AltairSignRequest)
 }
 
-func handleBlockBellatrix(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blockv2BellatrixSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
-	if err != nil {
-		return nil, err
-	}
-	if err = validator.StructCtx(ctx, blockv2BellatrixSignRequest); err != nil {
-		return nil, err
-	}
-	remoteBlockSignRequestsTotal.WithLabelValues("bellatrix", "false").Inc()
-	return json.Marshal(blockv2BellatrixSignRequest)
-}
-
-func handleBlindedBlockBellatrix(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blindedBlockv2SignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
-	if err != nil {
-		return nil, err
-	}
-	if err = validator.StructCtx(ctx, blindedBlockv2SignRequest); err != nil {
-		return nil, err
-	}
-	remoteBlockSignRequestsTotal.WithLabelValues("bellatrix", "true").Inc()
-	return json.Marshal(blindedBlockv2SignRequest)
-}
-
-func handleBlockCapella(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blockv2CapellaSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
-	if err != nil {
-		return nil, err
-	}
-	if err = validator.StructCtx(ctx, blockv2CapellaSignRequest); err != nil {
-		return nil, err
-	}
-	remoteBlockSignRequestsTotal.WithLabelValues("capella", "false").Inc()
-	return json.Marshal(blockv2CapellaSignRequest)
-}
-
-func handleBlindedBlockCapella(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blindedBlockv2CapellaSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
-	if err != nil {
-		return nil, err
-	}
-	if err = validator.StructCtx(ctx, blindedBlockv2CapellaSignRequest); err != nil {
-		return nil, err
-	}
-	remoteBlockSignRequestsTotal.WithLabelValues("capella", "true").Inc()
-	return json.Marshal(blindedBlockv2CapellaSignRequest)
-}
-
-func handleBlockDeneb(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blockv2DenebSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
-	if err != nil {
-		return nil, err
-	}
-	if err = validator.StructCtx(ctx, blockv2DenebSignRequest); err != nil {
-		return nil, err
-	}
-	remoteBlockSignRequestsTotal.WithLabelValues("deneb", "false").Inc()
-	return json.Marshal(blockv2DenebSignRequest)
-}
-
-func handleBlindedBlockDeneb(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blindedBlockv2DenebSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
-	if err != nil {
-		return nil, err
-	}
-	if err = validator.StructCtx(ctx, blindedBlockv2DenebSignRequest); err != nil {
-		return nil, err
-	}
-	remoteBlockSignRequestsTotal.WithLabelValues("deneb", "true").Inc()
-	return json.Marshal(blindedBlockv2DenebSignRequest)
-}
-
-func handleBlockElectra(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blockv2ElectraSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
-	if err != nil {
-		return nil, err
-	}
-	if err = validator.StructCtx(ctx, blockv2ElectraSignRequest); err != nil {
-		return nil, err
-	}
-	remoteBlockSignRequestsTotal.WithLabelValues("electra", "false").Inc()
-	return json.Marshal(blockv2ElectraSignRequest)
-}
-
-func handleBlindedBlockElectra(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blindedBlockv2ElectraSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
-	if err != nil {
-		return nil, err
-	}
-	if err = validator.StructCtx(ctx, blindedBlockv2ElectraSignRequest); err != nil {
-		return nil, err
-	}
-	remoteBlockSignRequestsTotal.WithLabelValues("electra", "true").Inc()
-	return json.Marshal(blindedBlockv2ElectraSignRequest)
-}
-
-func handleBlockFulu(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blockv2FuluSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
-	if err != nil {
-		return nil, err
-	}
-	if err = validator.StructCtx(ctx, blockv2FuluSignRequest); err != nil {
-		return nil, err
-	}
-	remoteBlockSignRequestsTotal.WithLabelValues("fulu", "false").Inc()
-	return json.Marshal(blockv2FuluSignRequest)
-}
-
-func handleBlindedBlockFulu(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	blindedBlockv2FuluSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
-	if err != nil {
-		return nil, err
-	}
-	if err = validator.StructCtx(ctx, blindedBlockv2FuluSignRequest); err != nil {
-		return nil, err
-	}
-	remoteBlockSignRequestsTotal.WithLabelValues("fulu", "true").Inc()
-	return json.Marshal(blindedBlockv2FuluSignRequest)
-}
-
-func handleBlockGloas(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+// handleBlockV2 handles the BLOCK_V2 sign request of a block of fork version `ver`.
+func handleBlockV2(ctx context.Context, ver int, blinded bool, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
 	signReq, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create %s block sign request: %w", version.String(ver), err)
 	}
 	if err = validator.StructCtx(ctx, signReq); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("validate %s block sign request: %w", version.String(ver), err)
 	}
-	remoteBlockSignRequestsTotal.WithLabelValues("gloas", "false").Inc()
+	remoteBlockSignRequestsTotal.WithLabelValues(version.String(ver), strconv.FormatBool(blinded)).Inc()
 	return json.Marshal(signReq)
 }
 

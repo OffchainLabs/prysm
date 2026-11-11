@@ -71,6 +71,39 @@ func AggregateCompressedSignatures(multiSigs [][]byte) (common.Signature, error)
 	return &Signature{s: signature.ToAffine()}, nil
 }
 
+// AggregateRandomized returns sum(r_i*sig_i) and sum(r_i*pk_i) for random odd 64-bit r_i.
+func AggregateRandomized(sigs [][]byte, pubKeys []common.PublicKey) (common.Signature, common.PublicKey, error) {
+	if len(sigs) == 0 || len(sigs) != len(pubKeys) {
+		return nil, nil, errors.Errorf("invalid number of signatures %d and public keys %d", len(sigs), len(pubKeys))
+	}
+
+	rawSigs := new(blstSignature).BatchUncompress(sigs)
+	if len(rawSigs) != len(sigs) {
+		return nil, nil, errors.New("could not unmarshal bytes into signatures")
+	}
+
+	pks := make([]*blstPublicKey, len(pubKeys))
+	for i := range pubKeys {
+		pks[i] = pubKeys[i].(*PublicKey).p
+	}
+
+	scalars := make([]byte, len(sigs)*randBitsEntropy/8)
+	rand.NewGenerator().Read(scalars) // #nosec G104 -- Error will always be nil in `read` in math/rand
+	for i := 0; i < len(scalars); i += randBitsEntropy / 8 {
+		// Scalars are little endian, so setting the low bit of the first byte makes each one non-zero.
+		scalars[i] |= 0x01
+	}
+
+	aggSig := new(blstAggregateSignature)
+	if !aggSig.AggregateWithRandomness(rawSigs, scalars, randBitsEntropy, true) {
+		return nil, nil, errors.New("signatures failed the group check")
+	}
+	aggPub := new(blstAggregatePublicKey)
+	aggPub.AggregateWithRandomness(pks, scalars, randBitsEntropy, false /* no group check */)
+
+	return &Signature{s: aggSig.ToAffine()}, &PublicKey{p: aggPub.ToAffine()}, nil
+}
+
 // MultipleSignaturesFromBytes creates a group of BLS signatures from a LittleEndian 2d-byte slice.
 func MultipleSignaturesFromBytes(multiSigs [][]byte) ([]common.Signature, error) {
 	if len(multiSigs) == 0 {

@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/urfave/cli/v2"
@@ -142,8 +141,7 @@ var (
 	// AuthTokenPathFlag defines the path to the auth token used to secure the validator api.
 	AuthTokenPathFlag = &cli.StringFlag{
 		Name:    "keymanager-token-file",
-		Usage:   "Path to auth token file used for validator apis.",
-		Value:   filepath.Join(filepath.Join(DefaultValidatorDir(), WalletDefaultDirName), api.AuthTokenFileName),
+		Usage:   "Path to auth token file used for validator apis. Defaults to auth-token in the wallet directory.",
 		Aliases: []string{"validator-api-bearer-file"},
 	}
 	// WalletDirFlag defines the path to a wallet directory for Prysm accounts.
@@ -450,10 +448,10 @@ var (
 		Usage: "Maximum number of consecutive failed health checks before exiting. A health check fails when no connected beacon node is ready. Set to 0 or a negative number for indefinite checks.",
 		Value: DefaultMaxHealthChecks,
 	}
-	// DisableEphemeralLogFile disables the 24 hour debug log file.
+	// DisableEphemeralLogFile disables the size-capped debug log file.
 	DisableEphemeralLogFile = &cli.BoolFlag{
 		Name:  "disable-ephemeral-log-file",
-		Usage: "Disables the creation of a debug log file that keeps 24 hours of logs.",
+		Usage: "Disables the debug log file written to <datadir>/logs. This file is rotated at 250 MB with one backup kept, so it holds at most ~500 MB of the most recent logs.",
 		Value: false,
 	}
 )

@@ -47,6 +47,8 @@ func TestRateLimiter_ExceedCapacity(t *testing.T) {
 	wg.Add(1)
 	stream, err := p1.BHost.NewStream(t.Context(), p2.PeerID(), protocol.ID(topic))
 	require.NoError(t, err, "could not create stream")
+	ls := &lockCheckingStream{Stream: stream, l: rlimiter}
+	stream = ls
 
 	err = rlimiter.validateRequest(stream, 64)
 	require.NoError(t, err, "could not validate incoming request")
@@ -54,6 +56,7 @@ func TestRateLimiter_ExceedCapacity(t *testing.T) {
 	// Attempt to create an error, rate limit and lead to disconnect
 	err = rlimiter.validateRequest(stream, 1000)
 	require.NotNil(t, err, "could not get error from leaky bucket")
+	require.Equal(t, false, ls.lockHeld, "limiter lock held while writing the error reply")
 
 	require.NoError(t, stream.Close(), "could not close stream")
 
@@ -84,6 +87,8 @@ func TestRateLimiter_ExceedRawCapacity(t *testing.T) {
 	wg.Add(1)
 	stream, err := p1.BHost.NewStream(t.Context(), p2.PeerID(), protocol.ID(topic))
 	require.NoError(t, err, "could not create stream")
+	ls := &lockCheckingStream{Stream: stream, l: rlimiter}
+	stream = ls
 
 	for range 4 * defaultBurstLimit {
 		err = rlimiter.validateRawRpcRequest(stream, 1)
@@ -92,6 +97,7 @@ func TestRateLimiter_ExceedRawCapacity(t *testing.T) {
 	}
 	// Triggers rate limit error on burst.
 	assert.ErrorContains(t, p2ptypes.ErrRateLimited.Error(), rlimiter.validateRawRpcRequest(stream, 1))
+	require.Equal(t, false, ls.lockHeld, "limiter lock held while writing the error reply")
 
 	// Make Peer bad.
 	for range defaultBurstLimit {
@@ -103,6 +109,22 @@ func TestRateLimiter_ExceedRawCapacity(t *testing.T) {
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Did not receive stream within 1 sec")
 	}
+}
+
+// lockCheckingStream records whether the limiter's lock is held when a reply is written.
+type lockCheckingStream struct {
+	network.Stream
+	l        *limiter
+	lockHeld bool
+}
+
+func (s *lockCheckingStream) Write(b []byte) (int, error) {
+	if s.l.TryLock() {
+		s.l.Unlock()
+	} else {
+		s.lockHeld = true
+	}
+	return s.Stream.Write(b)
 }
 
 func Test_limiter_retrieveCollector_requiresLock(t *testing.T) {

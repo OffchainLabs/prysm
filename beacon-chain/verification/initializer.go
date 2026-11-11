@@ -9,6 +9,7 @@ import (
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -16,6 +17,7 @@ import (
 	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	lru "github.com/hashicorp/golang-lru"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -57,6 +59,7 @@ type sharedResources struct {
 	sr    StateByRooter
 	hsp   HeadStateProvider
 	ic    *inclusionProofCache
+	epc   *lru.Cache
 	sg    singleflight.Group
 }
 
@@ -182,6 +185,7 @@ func NewInitializerWaiter(cw startup.ClockWaiter, fc Forkchoicer, sr StateByRoot
 		sr:  sr,
 		hsp: hsp,
 		ic:  newInclusionProofCache(defaultInclusionProofCacheSize),
+		epc: lruwrpr.New(defaultExpectedProposerCacheSize),
 	}
 	iw := &InitializerWaiter{cw: cw, ini: &Initializer{shared: shared}}
 	for _, o := range opts {

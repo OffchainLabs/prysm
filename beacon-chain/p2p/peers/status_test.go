@@ -1387,3 +1387,27 @@ func createPeer(t *testing.T, p *peers.Status, addr ma.Multiaddr,
 func setChainState(scoring *peerscoring.Scorer, pid peer.ID, st *pb.StatusV2) {
 	scoring.SetPeerStatus(pid, st, nil)
 }
+
+func TestFilterByEarliestAvailableSlot(t *testing.T) {
+	const slot = primitives.Slot(100)
+
+	scoring := peerscoring.NewScorer()
+	p := peers.NewStatus(t.Context(), &peers.StatusConfig{
+		PeerLimit: 30,
+		Scoring:   scoring,
+	})
+
+	below, equal, above, unknown := peer.ID("below"), peer.ID("equal"), peer.ID("above"), peer.ID("unknown")
+	setChainState(scoring, below, &pb.StatusV2{EarliestAvailableSlot: slot - 1})
+	setChainState(scoring, equal, &pb.StatusV2{EarliestAvailableSlot: slot})
+	setChainState(scoring, above, &pb.StatusV2{EarliestAvailableSlot: slot + 1})
+
+	t.Run("no peers", func(t *testing.T) {
+		require.Equal(t, 0, len(p.FilterByEarliestAvailableSlot(nil, slot)))
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		actual := p.FilterByEarliestAvailableSlot([]peer.ID{above, equal, unknown, below}, slot)
+		require.DeepEqual(t, []peer.ID{equal, below}, actual)
+	})
+}

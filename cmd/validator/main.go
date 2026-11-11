@@ -127,8 +127,9 @@ func init() {
 func main() {
 	app := cli.App{
 		Name:    "validator",
-		Usage:   "Launches an Ethereum validator client that interacts with a beacon chain, starts proposer and attester services, p2p connections, and more.",
+		Usage:   "Ethereum validator client",
 		Version: version.Version(),
+		Authors: cmd.Authors,
 		Action: func(ctx *cli.Context) error {
 			if err := startNode(ctx); err != nil {
 				log.Fatal(err.Error())

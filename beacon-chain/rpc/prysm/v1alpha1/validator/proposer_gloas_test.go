@@ -104,8 +104,7 @@ func TestSetRemoteBidFallback(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, tt.wantSrc, src)
-			signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
-			require.NoError(t, err)
+			signedBid := signedBidProto(t, sBlk)
 			require.NotNil(t, signedBid)
 			require.Equal(t, tt.wantIdx, signedBid.Message.BuilderIndex)
 		})
@@ -169,8 +168,7 @@ func TestSetRemoteBidFallback_GloasForkBoundary(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, bidSourceP2P, src)
 
-	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
-	require.NoError(t, err)
+	signedBid := signedBidProto(t, sBlk)
 	require.Equal(t, primitives.BuilderIndex(7), signedBid.Message.BuilderIndex)
 }
 
@@ -201,5 +199,37 @@ func TestGloasPayloadValue(t *testing.T) {
 	t.Run("external bid value does not overflow", func(t *testing.T) {
 		got := vs.gloasPayloadValue(newBlockWithBid(primitives.Gwei(math.MaxUint64), 0), nil, false)
 		require.Equal(t, "18446744073709551615000000000", primitives.WeiToBigInt(got).String())
+	})
+}
+
+func TestBundleBlockContents(t *testing.T) {
+	envelope := &ethpb.ExecutionPayloadEnvelope{BuilderIndex: 1}
+	proofs, blobs := [][]byte{{1}}, [][]byte{{2}}
+
+	t.Run("gloas", func(t *testing.T) {
+		block := util.NewBeaconBlockGloas().Block
+		blk := &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: block}}
+		require.NoError(t, bundleBlockContents(blk, envelope, proofs, blobs))
+		got := blk.GetGloasContents()
+		require.NotNil(t, got)
+		require.Equal(t, block, got.Block)
+		require.Equal(t, envelope, got.ExecutionPayloadEnvelope)
+		require.DeepEqual(t, proofs, got.KzgProofs)
+		require.DeepEqual(t, blobs, got.Blobs)
+	})
+	t.Run("heze", func(t *testing.T) {
+		block := util.NewBeaconBlockHeze().Block
+		blk := &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Heze{Heze: block}}
+		require.NoError(t, bundleBlockContents(blk, envelope, proofs, blobs))
+		got := blk.GetHezeContents()
+		require.NotNil(t, got)
+		require.Equal(t, block, got.Block)
+		require.Equal(t, envelope, got.ExecutionPayloadEnvelope)
+		require.DeepEqual(t, proofs, got.KzgProofs)
+		require.DeepEqual(t, blobs, got.Blobs)
+	})
+	t.Run("unexpected block type", func(t *testing.T) {
+		blk := &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Fulu{}}
+		require.ErrorContains(t, "unexpected block type", bundleBlockContents(blk, envelope, proofs, blobs))
 	})
 }
