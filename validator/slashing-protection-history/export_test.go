@@ -32,6 +32,32 @@ func TestExportStandardProtectionJSON_EmptyGenesisRoot(t *testing.T) {
 	}
 }
 
+func TestExportStandardProtectionJSON_AttesterOnlyKey(t *testing.T) {
+	ctx := t.Context()
+	// The kv store creates a proposer entry only for keys passed at setup.
+	validatorDB := dbtest.SetupDB(t, t.TempDir(), nil, false)
+	genesisValidatorsRoot := [32]byte{1}
+	require.NoError(t, validatorDB.SaveGenesisValidatorsRoot(ctx, genesisValidatorsRoot[:]))
+
+	pubKey := [fieldparams.BLSPubkeyLength]byte{1}
+	root := [fieldparams.RootLength]byte{4}
+	require.NoError(t, validatorDB.SaveAttestationForPubKey(ctx, pubKey, root[:], createAttestation(0, 4)))
+	proposed, err := validatorDB.ProposedPublicKeys(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(proposed))
+
+	for _, filter := range [][][]byte{nil, {pubKey[:]}} {
+		exported, err := ExportStandardProtectionJSON(ctx, validatorDB, filter...)
+		require.NoError(t, err)
+		require.NotNil(t, exported)
+		require.Equal(t, 1, len(exported.Data))
+		assert.Equal(t, fmt.Sprintf("%#x", pubKey), exported.Data[0].Pubkey)
+		assert.Equal(t, 0, len(exported.Data[0].SignedBlocks))
+		require.Equal(t, 1, len(exported.Data[0].SignedAttestations))
+		assert.Equal(t, "4", exported.Data[0].SignedAttestations[0].TargetEpoch)
+	}
+}
+
 func Test_getSignedAttestationsByPubKey(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("OK/isSlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
