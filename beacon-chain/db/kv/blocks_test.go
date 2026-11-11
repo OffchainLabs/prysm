@@ -965,6 +965,20 @@ func TestCleanupMissingForkedBlockIndices(t *testing.T) {
 	}
 }
 
+func TestCleanupMissingBlockIndices_NothingMissing(t *testing.T) {
+	ctx := t.Context()
+	db := setupDB(t)
+	chain := testBlockChain(t, blockTests[0].newBlock, testSlotSlice(1, 10), nil)
+	require.NoError(t, db.SaveBlocks(ctx, chain))
+
+	writes := db.db.Stats().TxStats.Write
+	_, roots, err := db.Blocks(ctx, filters.NewFilter().SetStartSlot(1).SetEndSlot(10))
+	require.NoError(t, err)
+	require.Equal(t, len(chain), len(roots))
+	// A range read with no missing blocks must not commit a write transaction.
+	require.Equal(t, writes, db.db.Stats().TxStats.Write)
+}
+
 func TestStore_Blocks_VerifyBlockRoots(t *testing.T) {
 	for _, tt := range blockTests {
 		t.Run(tt.name, func(t *testing.T) {

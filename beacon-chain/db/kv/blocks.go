@@ -233,6 +233,9 @@ func (s *Store) Blocks(ctx context.Context, f *filters.QueryFilter) ([]interface
 // from each of these blocks to each of their children. Since we don't have the blocks themselves,
 // we don't know their parent root to efficiently clean the index going the other direction.
 func (s *Store) cleanupMissingBlockIndices(ctx context.Context, badBlocks []slotRoot) {
+	if len(badBlocks) == 0 {
+		return
+	}
 	errs := make([]error, 0)
 	err := s.db.Update(func(tx *bolt.Tx) error {
 		for _, sr := range badBlocks {
