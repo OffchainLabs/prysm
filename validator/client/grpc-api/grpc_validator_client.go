@@ -2,6 +2,8 @@ package grpc_api
 
 import (
 	"context"
+	"fmt"
+	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/api/client"
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
@@ -9,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/client/cache"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
@@ -26,6 +29,9 @@ type grpcValidatorClient struct {
 	eventStreamGuard eventClient.StreamGuard
 	stateless        bool
 	envelopeCache    *cache.ExecutionPayloadEnvelopeCache
+
+	genesisLock sync.Mutex
+	genesis     *ethpb.Genesis // cached on first success, guarded by genesisLock
 }
 
 func (c *grpcValidatorClient) Duties(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
@@ -195,8 +201,47 @@ func (c *grpcValidatorClient) CheckDoppelGanger(ctx context.Context, in *ethpb.D
 	return c.getClient().CheckDoppelGanger(ctx, in)
 }
 
+// DomainData computes the signature domain locally.
 func (c *grpcValidatorClient) DomainData(ctx context.Context, in *ethpb.DomainRequest) (*ethpb.DomainResponse, error) {
-	return c.getClient().DomainData(ctx, in)
+	ctx, span := trace.StartSpan(ctx, "grpc-api.DomainData")
+	defer span.End()
+
+	if len(in.Domain) != 4 {
+		return nil, fmt.Errorf("invalid domain type length: got %d, want 4", len(in.Domain))
+	}
+
+	genesis, err := c.cachedGenesis(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get genesis info: %w", err)
+	}
+
+	return validatorHelpers.ComputeDomainData(
+		in.Epoch,
+		bytesutil.ToBytes4(in.Domain),
+		genesis.GenesisValidatorsRoot,
+		genesis.GenesisTime.AsTime(),
+	)
+}
+
+// cachedGenesis returns the genesis info of the beacon node, fetching it only once.
+func (c *grpcValidatorClient) cachedGenesis(ctx context.Context) (*ethpb.Genesis, error) {
+	c.genesisLock.Lock()
+	defer c.genesisLock.Unlock()
+
+	if c.genesis != nil {
+		return c.genesis, nil
+	}
+
+	genesis, err := c.nodeClient.Genesis(ctx, &empty.Empty{})
+	if err != nil {
+		return nil, fmt.Errorf("genesis RPC: %w", err)
+	}
+	if genesis == nil || genesis.GenesisTime == nil {
+		return nil, fmt.Errorf("genesis info is incomplete")
+	}
+
+	c.genesis = genesis
+	return genesis, nil
 }
 
 func (c *grpcValidatorClient) AttestationData(ctx context.Context, in *ethpb.AttestationDataRequest) (*ethpb.AttestationData, error) {

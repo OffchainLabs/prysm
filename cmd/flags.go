@@ -6,7 +6,6 @@ import (
 	"math"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/urfave/cli/v2"
@@ -273,11 +272,11 @@ var (
 		Usage: "Target directory of the restored database",
 		Value: DefaultDataDir(),
 	}
-	// ApiTimeoutFlag specifies the timeout value for API requests in seconds. A timeout of zero means no timeout.
+	// ApiTimeoutFlag specifies the timeout value for API requests. A timeout of zero means no timeout.
 	ApiTimeoutFlag = &cli.DurationFlag{
 		Name:  "api-timeout",
-		Usage: "Specifies the timeout value for API requests in seconds.",
-		Value: 10 * time.Second,
+		Usage: "Specifies the timeout value for API requests (for example 30s). Zero means no timeout.",
+		Value: 0,
 	}
 	// JwtOutputFileFlag specifies the JWT file path that gets generated into when invoked by generate-jwt-secret.
 	JwtOutputFileFlag = &cli.StringFlag{

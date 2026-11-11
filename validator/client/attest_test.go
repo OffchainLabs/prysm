@@ -23,6 +23,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
 	"gopkg.in/d4l3k/messagediff.v1"
@@ -81,6 +82,7 @@ func TestAttestToBlockHead_SubmitAttestation_RequestFailure(t *testing.T) {
 				gomock.Any(), // ctx
 				gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
 			).Return(&ethpb.AttestationData{
+				Slot:            30,
 				BeaconBlockRoot: make([]byte, fieldparams.RootLength),
 				Target:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 				Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
@@ -189,8 +191,9 @@ func TestSubmitAttestation_ElectraCommitteeIndex(t *testing.T) {
 				).Do(func(_ context.Context, req *ethpb.AttestationDataRequest) {
 					capturedRequest = req
 				}).Return(&ethpb.AttestationData{
+					Slot:            tt.attestationSlot,
 					BeaconBlockRoot: make([]byte, fieldparams.RootLength),
-					Target:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+					Target:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength), Epoch: slots.ToEpoch(tt.attestationSlot)},
 					Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 				}, nil)
 
@@ -249,6 +252,7 @@ func TestAttestToBlockHead_AttestsCorrectly(t *testing.T) {
 				gomock.Any(), // ctx
 				gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
 			).Return(&ethpb.AttestationData{
+				Slot:            30,
 				BeaconBlockRoot: beaconBlockRoot[:],
 				Target:          &ethpb.Checkpoint{Root: targetRoot[:]},
 				Source:          &ethpb.Checkpoint{Root: sourceRoot[:], Epoch: 3},
@@ -273,6 +277,7 @@ func TestAttestToBlockHead_AttestsCorrectly(t *testing.T) {
 			aggregationBitfield.SetBitAt(4, true)
 			expectedAttestation := &ethpb.Attestation{
 				Data: &ethpb.AttestationData{
+					Slot:            30,
 					BeaconBlockRoot: beaconBlockRoot[:],
 					Target:          &ethpb.Checkpoint{Root: targetRoot[:]},
 					Source:          &ethpb.Checkpoint{Root: sourceRoot[:], Epoch: 3},
@@ -327,8 +332,9 @@ func TestAttestToBlockHead_AttestsCorrectly(t *testing.T) {
 				gomock.Any(), // ctx
 				gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
 			).Return(&ethpb.AttestationData{
+				Slot:            params.BeaconConfig().SlotsPerEpoch.Mul(electraForkEpoch),
 				BeaconBlockRoot: beaconBlockRoot[:],
-				Target:          &ethpb.Checkpoint{Root: targetRoot[:]},
+				Target:          &ethpb.Checkpoint{Root: targetRoot[:], Epoch: primitives.Epoch(electraForkEpoch)},
 				Source:          &ethpb.Checkpoint{Root: sourceRoot[:], Epoch: 3},
 			}, nil)
 
@@ -353,8 +359,9 @@ func TestAttestToBlockHead_AttestsCorrectly(t *testing.T) {
 			committeeBits.SetBitAt(5, true)
 			expectedAttestation := &ethpb.SingleAttestation{
 				Data: &ethpb.AttestationData{
+					Slot:            params.BeaconConfig().SlotsPerEpoch.Mul(electraForkEpoch),
 					BeaconBlockRoot: beaconBlockRoot[:],
-					Target:          &ethpb.Checkpoint{Root: targetRoot[:]},
+					Target:          &ethpb.Checkpoint{Root: targetRoot[:], Epoch: primitives.Epoch(electraForkEpoch)},
 					Source:          &ethpb.Checkpoint{Root: sourceRoot[:], Epoch: 3},
 				},
 				AttesterIndex: validatorIndex,
@@ -406,18 +413,21 @@ func TestAttestToBlockHead_BlocksDoubleAtt(t *testing.T) {
 				gomock.Any(), // ctx
 				gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
 			).Return(&ethpb.AttestationData{
+				Slot:            params.BeaconConfig().SlotsPerEpoch.Mul(4),
 				BeaconBlockRoot: beaconBlockRoot[:],
 				Target:          &ethpb.Checkpoint{Root: targetRoot[:], Epoch: 4},
 				Source:          &ethpb.Checkpoint{Root: sourceRoot[:], Epoch: 3},
 			}, nil)
-			m.validatorClient.EXPECT().AttestationData(
-				gomock.Any(), // ctx
-				gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
-			).Return(&ethpb.AttestationData{
+			doubleVote := &ethpb.AttestationData{
+				Slot:            params.BeaconConfig().SlotsPerEpoch.Mul(4),
 				BeaconBlockRoot: beaconBlockRoot2[:],
 				Target:          &ethpb.Checkpoint{Root: targetRoot[:], Epoch: 4},
 				Source:          &ethpb.Checkpoint{Root: sourceRoot[:], Epoch: 3},
-			}, nil)
+			}
+			m.validatorClient.EXPECT().AttestationData(
+				gomock.Any(), // ctx
+				gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
+			).Return(doubleVote, nil)
 			m.validatorClient.EXPECT().DomainData(
 				gomock.Any(), // ctx
 				gomock.Any(), // epoch
@@ -428,9 +438,10 @@ func TestAttestToBlockHead_BlocksDoubleAtt(t *testing.T) {
 				gomock.AssignableToTypeOf(&ethpb.Attestation{}),
 			).Return(&ethpb.AttestResponse{AttestationDataRoot: make([]byte, 32)}, nil /* error */)
 
-			validator.SubmitAttestation(t.Context(), 30, pubKey)
-			validator.SubmitAttestation(t.Context(), 30, pubKey)
+			validator.SubmitAttestation(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(4), pubKey)
+			validator.SubmitAttestation(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(4), pubKey)
 			require.LogsContain(t, hook, "Failed attestation slashing protection")
+			requireSignatureNotLogged(t, hook, validator, pubKey, doubleVote)
 		})
 	}
 }
@@ -459,18 +470,21 @@ func TestAttestToBlockHead_BlocksSurroundAtt(t *testing.T) {
 				gomock.Any(), // ctx
 				gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
 			).Return(&ethpb.AttestationData{
+				Slot:            params.BeaconConfig().SlotsPerEpoch.Mul(2),
 				BeaconBlockRoot: beaconBlockRoot[:],
 				Target:          &ethpb.Checkpoint{Root: targetRoot[:], Epoch: 2},
 				Source:          &ethpb.Checkpoint{Root: sourceRoot[:], Epoch: 1},
 			}, nil)
-			m.validatorClient.EXPECT().AttestationData(
-				gomock.Any(), // ctx
-				gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
-			).Return(&ethpb.AttestationData{
+			surroundingVote := &ethpb.AttestationData{
+				Slot:            params.BeaconConfig().SlotsPerEpoch.Mul(3),
 				BeaconBlockRoot: beaconBlockRoot[:],
 				Target:          &ethpb.Checkpoint{Root: targetRoot[:], Epoch: 3},
 				Source:          &ethpb.Checkpoint{Root: sourceRoot[:], Epoch: 0},
-			}, nil)
+			}
+			m.validatorClient.EXPECT().AttestationData(
+				gomock.Any(), // ctx
+				gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
+			).Return(surroundingVote, nil)
 
 			m.validatorClient.EXPECT().DomainData(
 				gomock.Any(), // ctx
@@ -482,9 +496,10 @@ func TestAttestToBlockHead_BlocksSurroundAtt(t *testing.T) {
 				gomock.AssignableToTypeOf(&ethpb.Attestation{}),
 			).Return(&ethpb.AttestResponse{}, nil /* error */)
 
-			validator.SubmitAttestation(t.Context(), 30, pubKey)
-			validator.SubmitAttestation(t.Context(), 30, pubKey)
+			validator.SubmitAttestation(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(2), pubKey)
+			validator.SubmitAttestation(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(3), pubKey)
 			require.LogsContain(t, hook, "Failed attestation slashing protection")
+			requireSignatureNotLogged(t, hook, validator, pubKey, surroundingVote)
 		})
 	}
 }
@@ -513,6 +528,7 @@ func TestAttestToBlockHead_BlocksSurroundedAtt(t *testing.T) {
 				gomock.Any(), // ctx
 				gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
 			).Return(&ethpb.AttestationData{
+				Slot:            params.BeaconConfig().SlotsPerEpoch.Mul(3),
 				BeaconBlockRoot: beaconBlockRoot[:],
 				Target:          &ethpb.Checkpoint{Root: targetRoot[:], Epoch: 3},
 				Source:          &ethpb.Checkpoint{Root: sourceRoot[:], Epoch: 0},
@@ -528,21 +544,86 @@ func TestAttestToBlockHead_BlocksSurroundedAtt(t *testing.T) {
 				gomock.AssignableToTypeOf(&ethpb.Attestation{}),
 			).Return(&ethpb.AttestResponse{}, nil /* error */)
 
-			validator.SubmitAttestation(t.Context(), 30, pubKey)
+			validator.SubmitAttestation(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(3), pubKey)
 			require.LogsDoNotContain(t, hook, failedAttLocalProtectionErr)
 
-			m.validatorClient.EXPECT().AttestationData(
-				gomock.Any(), // ctx
-				gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
-			).Return(&ethpb.AttestationData{
+			surroundedVote := &ethpb.AttestationData{
+				Slot:            params.BeaconConfig().SlotsPerEpoch.Mul(2),
 				BeaconBlockRoot: bytesutil.PadTo([]byte("A"), 32),
 				Target:          &ethpb.Checkpoint{Root: bytesutil.PadTo([]byte("B"), 32), Epoch: 2},
 				Source:          &ethpb.Checkpoint{Root: bytesutil.PadTo([]byte("C"), 32), Epoch: 1},
-			}, nil)
+			}
+			m.validatorClient.EXPECT().AttestationData(
+				gomock.Any(), // ctx
+				gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
+			).Return(surroundedVote, nil)
 
-			validator.SubmitAttestation(t.Context(), 30, pubKey)
+			validator.SubmitAttestation(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(2), pubKey)
 			require.LogsContain(t, hook, "Failed attestation slashing protection")
+			requireSignatureNotLogged(t, hook, validator, pubKey, surroundedVote)
 		})
+	}
+}
+
+// requireSignatureNotLogged checks that the details of an attestation refused by slashing
+// protection are logged without the signature the validator produced for it.
+func requireSignatureNotLogged(t *testing.T, hook *logTest.Hook, v *validator, pubKey [fieldparams.BLSPubkeyLength]byte, data *ethpb.AttestationData) {
+	t.Helper()
+	root, err := signing.ComputeSigningRoot(data, make([]byte, 32))
+	require.NoError(t, err)
+	sig, err := v.km.Sign(t.Context(), &validatorpb.SignRequest{
+		PublicKey:   pubKey[:],
+		SigningRoot: root[:],
+	})
+	require.NoError(t, err)
+	require.LogsContain(t, hook, "Attempted slashable attestation details")
+	require.LogsDoNotContain(t, hook, fmt.Sprintf("%#x", sig.Marshal()))
+}
+
+func TestAttestToBlockHead_RefusesDataForAnotherSlot(t *testing.T) {
+	const dutySlot = primitives.Slot(70)
+	dutyEpoch := slots.ToEpoch(dutySlot)
+	tests := []struct {
+		name        string
+		dataSlot    primitives.Slot
+		targetEpoch primitives.Epoch
+	}{
+		{name: "other slot", dataSlot: dutySlot - 1, targetEpoch: dutyEpoch},
+		{name: "past target epoch", dataSlot: dutySlot, targetEpoch: dutyEpoch - 1},
+		{name: "far future target epoch", dataSlot: dutySlot, targetEpoch: dutyEpoch + params.BeaconConfig().SlashingProtectionPruningEpochs*2},
+	}
+	for _, tt := range tests {
+		for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
+			t.Run(fmt.Sprintf("%s/SlashingProtectionMinimal:%v", tt.name, isSlashingProtectionMinimal), func(t *testing.T) {
+				hook := logTest.NewGlobal()
+				validator, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
+				defer finish()
+				var pubKey [fieldparams.BLSPubkeyLength]byte
+				copy(pubKey[:], validatorKey.PublicKey().Marshal())
+				validator.duties = testDutyStore(&ethpb.ValidatorDuty{
+					PublicKey:       validatorKey.PublicKey().Marshal(),
+					CommitteeIndex:  5,
+					CommitteeLength: 9,
+					ValidatorIndex:  7,
+				})
+
+				m.validatorClient.EXPECT().AttestationData(
+					gomock.Any(), // ctx
+					gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
+				).Return(&ethpb.AttestationData{
+					Slot:            tt.dataSlot,
+					BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+					Target:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength), Epoch: tt.targetEpoch},
+					Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+				}, nil)
+
+				m.validatorClient.EXPECT().DomainData(gomock.Any(), gomock.Any()).Times(0)
+				m.validatorClient.EXPECT().ProposeAttestation(gomock.Any(), gomock.Any()).Times(0)
+
+				validator.SubmitAttestation(t.Context(), dutySlot, pubKey)
+				require.LogsContain(t, hook, "Beacon node returned attestation data for another slot")
+			})
+		}
 	}
 }
 
@@ -644,6 +725,7 @@ func TestAttestToBlockHead_CorrectBitfieldLength(t *testing.T) {
 				gomock.Any(), // ctx
 				gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
 			).Return(&ethpb.AttestationData{
+				Slot:            30,
 				Target:          &ethpb.Checkpoint{Root: bytesutil.PadTo([]byte("B"), 32)},
 				Source:          &ethpb.Checkpoint{Root: bytesutil.PadTo([]byte("C"), 32), Epoch: 3},
 				BeaconBlockRoot: make([]byte, fieldparams.RootLength),

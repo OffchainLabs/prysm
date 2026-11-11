@@ -95,8 +95,10 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 		s.c = s.cfg.builderClient
 		s.clients[s.c.NodeURL()] = s.c
 
-		// Is the builder up?
-		if err := s.c.Status(ctx); err != nil {
+		// Is the builder up? Bounded so an unresponsive builder cannot block node start-up.
+		statusCtx, cancel := context.WithTimeout(ctx, builderStatusTimeout)
+		defer cancel()
+		if err := s.c.Status(statusCtx); err != nil {
 			log.WithError(err).Error("Failed to check builder status")
 		} else {
 			log.WithField("endpoint", s.c.NodeURL()).Info("Builder has been configured")
@@ -179,6 +181,10 @@ func (s *Service) dialValidated(url string) (builder.BuilderClient, error) {
 
 // Kept under the transport idle timeout and typical proxy keepalive so bid requests reuse a warm TLS session.
 const builderKeepAliveInterval = 30 * time.Second
+
+// Bounds the informational status probes made at start-up and by pollRelayerStatus.
+// Overridable in tests.
+var builderStatusTimeout = 10 * time.Second
 
 // Start initializes the service.
 func (s *Service) Start() {
@@ -460,9 +466,11 @@ func (s *Service) pollRelayerStatus(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			if s.c != nil {
-				if err := s.c.Status(ctx); err != nil {
+				statusCtx, cancel := context.WithTimeout(ctx, builderStatusTimeout)
+				if err := s.c.Status(statusCtx); err != nil {
 					log.WithError(err).Error("Failed to call relayer status endpoint, perhaps mev-boost or relayers are down")
 				}
+				cancel()
 			}
 		case <-ctx.Done():
 			return

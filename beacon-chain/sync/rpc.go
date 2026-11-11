@@ -39,6 +39,20 @@ type rpcHandler func(context.Context, any, libp2pcore.Stream) error
 
 // rpcHandlerByTopicFromFork returns the RPC handlers for a given fork index.
 func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandler, error) {
+	handlers, err := s.baseRPCHandlersByTopicFromFork(forkIndex)
+	if err != nil {
+		return nil, err
+	}
+	if forkIndex >= version.Altair && features.Get().EnableLightClient {
+		handlers[p2p.RPCLightClientBootstrapTopicV1] = s.lightClientBootstrapRPCHandler
+		handlers[p2p.RPCLightClientUpdatesByRangeTopicV1] = s.lightClientUpdatesByRangeRPCHandler
+		handlers[p2p.RPCLightClientFinalityUpdateTopicV1] = s.lightClientFinalityUpdateRPCHandler
+		handlers[p2p.RPCLightClientOptimisticUpdateTopicV1] = s.lightClientOptimisticUpdateRPCHandler
+	}
+	return handlers, nil
+}
+
+func (s *Service) baseRPCHandlersByTopicFromFork(forkIndex int) (map[string]rpcHandler, error) {
 	// Gloas: https://github.com/ethereum/consensus-specs/blob/master/specs/gloas/p2p-interface.md#messages
 	if forkIndex >= version.Gloas {
 		return map[string]rpcHandler{
@@ -105,23 +119,14 @@ func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandle
 	// Bellatrix: https://github.com/ethereum/consensus-specs/blob/master/specs/bellatrix/p2p-interface.md#messages
 	// Altair: https://github.com/ethereum/consensus-specs/blob/master/specs/altair/p2p-interface.md#messages
 	if forkIndex >= version.Altair {
-		handler := map[string]rpcHandler{
+		return map[string]rpcHandler{
 			p2p.RPCStatusTopicV1:        s.statusRPCHandler,
 			p2p.RPCGoodByeTopicV1:       s.goodbyeRPCHandler,
 			p2p.RPCBlocksByRangeTopicV2: s.beaconBlocksByRangeRPCHandler, // Updated in Altair and modified in Bellatrix and Capella
 			p2p.RPCBlocksByRootTopicV2:  s.beaconBlocksRootRPCHandler,    // Updated in Altair and modified in Bellatrix and Capella
 			p2p.RPCPingTopicV1:          s.pingHandler,
 			p2p.RPCMetaDataTopicV2:      s.metaDataHandler, // Updated in Altair
-		}
-
-		if features.Get().EnableLightClient {
-			handler[p2p.RPCLightClientBootstrapTopicV1] = s.lightClientBootstrapRPCHandler
-			handler[p2p.RPCLightClientUpdatesByRangeTopicV1] = s.lightClientUpdatesByRangeRPCHandler
-			handler[p2p.RPCLightClientFinalityUpdateTopicV1] = s.lightClientFinalityUpdateRPCHandler
-			handler[p2p.RPCLightClientOptimisticUpdateTopicV1] = s.lightClientOptimisticUpdateRPCHandler
-		}
-
-		return handler, nil
+		}, nil
 	}
 
 	// PhaseO: https://github.com/ethereum/consensus-specs/blob/master/specs/phase0/p2p-interface.md#messages

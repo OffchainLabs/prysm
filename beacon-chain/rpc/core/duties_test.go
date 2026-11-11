@@ -210,6 +210,46 @@ func TestProposalDependentRootV2(t *testing.T) {
 	})
 }
 
+func TestPTCDependentRoot(t *testing.T) {
+	spe := params.BeaconConfig().SlotsPerEpoch
+	tests := []struct {
+		name      string
+		forkEpoch primitives.Epoch
+		epoch     primitives.Epoch
+		wantNil   bool
+		wantSlot  primitives.Slot
+	}{
+		{name: "fork epoch uses epoch_start minus 1", forkEpoch: 2, epoch: 2, wantSlot: 2*spe - 1},
+		{name: "fork epoch plus 1 uses prev_epoch_start minus 1", forkEpoch: 2, epoch: 3, wantSlot: 2*spe - 1},
+		{name: "later epoch uses prev_epoch_start minus 1", forkEpoch: 2, epoch: 4, wantSlot: 3*spe - 1},
+		{name: "fork at epoch 1 does not underflow", forkEpoch: 1, epoch: 1, wantSlot: spe - 1},
+		{name: "epoch 2 after fork at epoch 1 uses prev_epoch_start minus 1", forkEpoch: 1, epoch: 2, wantSlot: spe - 1},
+		{name: "fork at genesis underflows", forkEpoch: 0, epoch: 0, wantNil: true},
+		{name: "epoch 1 after genesis fork underflows", forkEpoch: 0, epoch: 1, wantNil: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			cfg := params.BeaconConfig().Copy()
+			cfg.GloasForkEpoch = tt.forkEpoch
+			params.OverrideBeaconConfig(cfg)
+
+			st, _ := util.DeterministicGenesisStateGloas(t, 64)
+			require.NoError(t, st.SetSlot(4*spe))
+			want := [32]byte{0xaa}
+			require.NoError(t, st.UpdateBlockRootAtIndex(uint64(tt.wantSlot), want))
+
+			got, err := PTCDependentRoot(st, tt.epoch)
+			require.NoError(t, err)
+			if tt.wantNil {
+				require.IsNil(t, got)
+				return
+			}
+			assert.Equal(t, want, [32]byte(got))
+		})
+	}
+}
+
 func TestPTCDuties_ForkBoundaryFuluToGloas(t *testing.T) {
 	helpers.ClearCache()
 	params.SetupTestConfigCleanup(t)

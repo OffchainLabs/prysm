@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync/atomic"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -63,12 +61,10 @@ type Config struct {
 // Store defines an implementation of the Prysm Database interface
 // using BoltDB as the underlying persistent kv-store for Ethereum consensus nodes.
 type Store struct {
-	db                                 *bolt.DB
-	databasePath                       string
-	batchedAttestations                *QueuedAttestationRecords
-	batchedAttestationsChan            chan *AttestationRecordSaveRequest
-	batchAttestationsFlushedFeed       *event.Feed
-	batchedAttestationsFlushInProgress atomic.Bool
+	db                      *bolt.DB
+	databasePath            string
+	batchedAttestations     *QueuedAttestationRecords
+	batchedAttestationsChan chan *AttestationRecordSaveRequest
 }
 
 // Close closes the underlying boltdb database.
@@ -138,11 +134,10 @@ func NewKVStore(ctx context.Context, dirPath string, config *Config) (*Store, er
 	}
 
 	kv := &Store{
-		db:                           boltDB,
-		databasePath:                 dirPath,
-		batchedAttestations:          NewQueuedAttestationRecords(),
-		batchedAttestationsChan:      make(chan *AttestationRecordSaveRequest, attestationBatchCapacity),
-		batchAttestationsFlushedFeed: new(event.Feed),
+		db:                      boltDB,
+		databasePath:            dirPath,
+		batchedAttestations:     NewQueuedAttestationRecords(),
+		batchedAttestationsChan: make(chan *AttestationRecordSaveRequest, attestationBatchCapacity),
 	}
 
 	if err := kv.db.Update(func(tx *bolt.Tx) error {

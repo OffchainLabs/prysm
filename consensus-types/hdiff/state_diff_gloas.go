@@ -485,11 +485,15 @@ func applyGloasFields(source state.BeaconState, diff *stateDiff) error {
 			return errors.Wrap(err, "failed to get builders")
 		}
 		for _, bd := range diff.builderDiffs {
-			idx := int(bd.index)
-			for len(builders) <= idx {
-				builders = append(builders, nil)
+			// The writer emits new builders in index order, so a diff can only patch or append.
+			if uint64(bd.index) > uint64(len(builders)) {
+				return errors.Errorf("builder index %d exceeds source length %d", bd.index, len(builders))
 			}
-			builders[idx] = bd.builder
+			if int(bd.index) == len(builders) {
+				builders = append(builders, bd.builder)
+				continue
+			}
+			builders[bd.index] = bd.builder
 		}
 		if err := source.SetBuilders(builders); err != nil {
 			return errors.Wrap(err, "failed to set builders")
@@ -539,7 +543,10 @@ func applyBuilderPendingWithdrawalsDiff(source state.BeaconState, diff *stateDif
 	if err != nil {
 		return errors.Wrap(err, "failed to get builder pending withdrawals")
 	}
-	sBpw = sBpw[int(diff.builderPendingWithdrawalsIndex):]
+	if diff.builderPendingWithdrawalsIndex > uint64(len(sBpw)) {
+		return errors.Errorf("builder pending withdrawals index %d exceeds source length %d", diff.builderPendingWithdrawalsIndex, len(sBpw))
+	}
+	sBpw = sBpw[diff.builderPendingWithdrawalsIndex:]
 	for _, d := range diff.builderPendingWithdrawalsDiff {
 		sBpw = append(sBpw, &ethpb.BuilderPendingWithdrawal{
 			FeeRecipient: d.FeeRecipient,

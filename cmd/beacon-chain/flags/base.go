@@ -74,9 +74,8 @@ var (
 	// builder's bid and the local block value that this node will accept
 	// without reverting to local building
 	MinBuilderDiff = &cli.Uint64Flag{
-		Name: "min-builder-to-local-difference",
-		Usage: "An absolute value in Gwei that the builder bid has to have in order for this beacon node to use the builder's block. Anything less than this value" +
-			" and the beacon will revert to local building.",
+		Name:  "min-builder-to-local-difference",
+		Usage: "Minimum amount in Gwei by which the builder bid must exceed the local block value for the beacon node to use the builder's block. Otherwise, it builds locally.",
 		Value: 0,
 	}
 	// BuilderHeaderTimeout bounds how long the beacon node waits for a builder relay `getHeader` response
@@ -415,10 +414,10 @@ var (
 		Usage: "Path to an ssz-encoded beacon state at an epoch boundary slot, used as the oldest state an " +
 			"archive node will hold. Defaults to the genesis state. Requires --" + features.EnableArchive.Name + ".",
 	}
-	// DisableEphemeralLogFile disables the 24 hour debug log file.
+	// DisableEphemeralLogFile disables the size-capped debug log file.
 	DisableEphemeralLogFile = &cli.BoolFlag{
 		Name:  "disable-ephemeral-log-file",
-		Usage: "Disables the creation of a debug log file that keeps 24 hours of logs.",
+		Usage: "Disables the debug log file written to <datadir>/logs. This file is rotated at 250 MB with one backup kept, so it holds at most ~500 MB of the most recent logs.",
 		Value: false,
 	}
 	// DisableGetBlobsV2 disables the engine_getBlobsV2 usage.
@@ -431,6 +430,7 @@ var (
 	DisablePartialDataColumns = &cli.BoolFlag{
 		Name:  "disable-partial-data-columns",
 		Usage: "Disables cell-level dissemination for PeerDAS data columns, falling back to full column gossip.",
+		Value: true,
 	}
 	// DisableGraffitiClientAppend disables appending consensus and execution client version info to the block graffiti.
 	DisableGraffitiClientAppend = &cli.BoolFlag{

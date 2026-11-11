@@ -61,8 +61,11 @@ func TestSendRequest_SendBeaconBlocksByRangeRequest(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	var handlers sync.WaitGroup
 	knownBlocksProvider := func(p2pProvider p2p.P2P, processor BeaconBlockProcessor) func(stream network.Stream) {
 		return func(stream network.Stream) {
+			handlers.Add(1)
+			defer handlers.Done()
 			defer func() {
 				assert.NoError(t, stream.Close())
 			}()
@@ -174,20 +177,14 @@ func TestSendRequest_SendBeaconBlocksByRangeRequest(t *testing.T) {
 		assert.Equal(t, 128, len(blocks))
 
 		// Cap max returned roots.
+		// The stream handler reads the config, so it must be done before the config is changed or restored.
+		handlers.Wait()
+		params.SetupTestConfigCleanup(t)
+		t.Cleanup(handlers.Wait)
 		cfg := params.BeaconConfig().Copy()
-		maxRequestBlocks := cfg.MaxRequestBlocks
-		defer func() {
-			cfg.MaxRequestBlocks = maxRequestBlocks
-			params.OverrideBeaconConfig(cfg)
-		}()
-		blocks, err = SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, func(block interfaces.ReadOnlySignedBeaconBlock) error {
-			// Since ssz checks the boundaries, and doesn't normally allow to send requests bigger than
-			// the max request size, we are updating max request size dynamically. Even when updated dynamically,
-			// no more than max request size of blocks is expected on return.
-			cfg.MaxRequestBlocks = 3
-			params.OverrideBeaconConfig(cfg)
-			return nil
-		})
+		cfg.MaxRequestBlocks = 3
+		params.OverrideBeaconConfig(cfg)
+		blocks, err = SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
 		require.NoError(t, err)
 		assert.Equal(t, 3, len(blocks))
 	})
@@ -516,6 +513,37 @@ func TestSendRequest_SendBeaconBlocksByRootRequest(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 3, len(blocks))
 	})
+}
+
+func TestReadChunkedBlock_WrongContextBytes(t *testing.T) {
+	p1 := p2ptest.NewTestP2P(t)
+	p2 := p2ptest.NewTestP2P(t)
+	p1.Connect(p2)
+
+	// Fulu and Electra blocks share an encoding, so only the context bytes tell them apart.
+	b := util.NewBeaconBlockFulu()
+	b.Block.Slot = util.SlotAtEpoch(t, params.BeaconConfig().FuluForkEpoch)
+	wsb, err := blocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	electra := params.ForkDigest(params.BeaconConfig().ElectraForkEpoch)
+
+	clock := startup.NewClock(time.Now(), [32]byte{})
+	p2.SetStreamHandler(p2p.RPCBlocksByRootTopicV2+p2.Encoding().ProtocolSuffix(), func(stream network.Stream) {
+		assert.NoError(t, WriteBlockChunk(stream, clock, p2.Encoding(), wsb))
+		_, err := stream.Write([]byte{responseCodeSuccess})
+		assert.NoError(t, err)
+		assert.NoError(t, writeContextToStream(electra[:], stream))
+		_, err = p2.Encoding().EncodeWithMaxLength(stream, wsb)
+		assert.NoError(t, err)
+		assert.NoError(t, stream.Close())
+	})
+
+	stream, err := p1.Send(t.Context(), &p2pTypes.BeaconBlockByRootsReq{{}}, p2p.RPCBlocksByRootTopicV2, p2.PeerID())
+	require.NoError(t, err)
+	_, err = ReadChunkedBlock(stream, clock, p1, true)
+	require.NoError(t, err)
+	_, err = ReadChunkedBlock(stream, clock, p1, false)
+	require.ErrorContains(t, "do not match fork digest", err)
 }
 
 func TestBlobValidatorFromRootReq(t *testing.T) {

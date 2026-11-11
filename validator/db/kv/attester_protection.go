@@ -40,6 +40,7 @@ const (
 type AttestationRecordSaveRequest struct {
 	ctx    context.Context
 	record *common.AttestationRecord
+	done   chan error // Receives the result of the flush that includes record.
 }
 
 // NewQueuedAttestationRecords constructor allocates the underlying slice and
@@ -79,15 +80,6 @@ func (p *QueuedAttestationRecords) Len() int {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 	return len(p.records)
-}
-
-// A wrapper over an error received from a background routine
-// saving batched attestations for slashing protection.
-// This wrapper allows us to send this response over event feeds,
-// as our event feed does not allow sending `nil` values to
-// subscribers.
-type saveAttestationsResponse struct {
-	err error
 }
 
 // Enums representing the types of slashable events for attesters.
@@ -446,6 +438,8 @@ func (s *Store) SaveAttestationForPubKey(
 ) error {
 	ctx, span := trace.StartSpan(ctx, "Validator.SaveAttestationForPubKey")
 	defer span.End()
+	// Buffered so the writer never blocks on a caller that stopped waiting.
+	done := make(chan error, 1)
 	s.batchedAttestationsChan <- &AttestationRecordSaveRequest{
 		ctx: ctx,
 		record: &common.AttestationRecord{
@@ -454,21 +448,18 @@ func (s *Store) SaveAttestationForPubKey(
 			Target:      att.GetData().Target.Epoch,
 			SigningRoot: signingRoot,
 		},
+		done: done,
 	}
 
-	// Subscribe to be notified when the attestation record queued
-	// for saving to the DB is indeed saved. If an error occurred
-	// during the process of saving the attestation record, the sender
-	// will give us that error. We use a buffered channel
-	// to prevent blocking the sender from notifying us of the result.
+	// Wait until the flush that includes this record completes.
 	_, innerSpan := trace.StartSpan(ctx, "Validator.SaveAttestationForPubKey.WaitForResponse")
 	defer innerSpan.End()
-	responseChan := make(chan saveAttestationsResponse, 1)
-	defer close(responseChan)
-	sub := s.batchAttestationsFlushedFeed.Subscribe(responseChan)
-	defer sub.Unsubscribe()
-	res := <-responseChan
-	return res.err
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // Meant to run as a background routine, this function checks whether:
@@ -480,11 +471,21 @@ func (s *Store) SaveAttestationForPubKey(
 func (s *Store) batchAttestationWrites(ctx context.Context) {
 	ticker := time.NewTicker(attestationBatchWriteInterval)
 	defer ticker.Stop()
+	// Callers waiting on the records currently in s.batchedAttestations.
+	var waiting []chan error
+	flush := func(ctx context.Context) {
+		err := s.flushAttestationRecords(ctx, s.batchedAttestations.Flush())
+		for _, done := range waiting {
+			done <- err
+		}
+		waiting = nil
+	}
 	for {
 		select {
 		case v := <-s.batchedAttestationsChan:
 			_, span := trace.StartSpan(v.ctx, "batchAttestationWrites.handleBatchedAttestationSaveRequest")
 			s.batchedAttestations.Append(v.record)
+			waiting = append(waiting, v.done)
 
 			span.SetAttributes(trace.Int64Attribute("num_records", int64(s.batchedAttestations.Len())))
 
@@ -492,13 +493,11 @@ func (s *Store) batchAttestationWrites(ctx context.Context) {
 				log.WithField("recordCount", numRecords).Debug(
 					"Reached max capacity of batched attestation records, flushing to DB",
 				)
-				if !s.batchedAttestationsFlushInProgress.Load() {
-					// Create a new context with the span information from the chan. This is to
-					// prevent any context deadlines from the caller while maintaining the trace
-					// relationships.
-					ctx2 := trace.NewContext(ctx, span)
-					s.flushAttestationRecords(ctx2, s.batchedAttestations.Flush())
-				}
+				// Create a new context with the span information from the chan. This is to
+				// prevent any context deadlines from the caller while maintaining the trace
+				// relationships.
+				ctx2 := trace.NewContext(ctx, span)
+				flush(ctx2)
 			}
 			span.End()
 		case <-ticker.C:
@@ -506,11 +505,12 @@ func (s *Store) batchAttestationWrites(ctx context.Context) {
 				log.WithField("recordCount", numRecords).Debug(
 					"Batched attestation records write interval reached, flushing to DB",
 				)
-				if !s.batchedAttestationsFlushInProgress.Load() {
-					s.flushAttestationRecords(ctx, s.batchedAttestations.Flush())
-				}
+				flush(ctx)
 			}
 		case <-ctx.Done():
+			for _, done := range waiting {
+				done <- ctx.Err()
+			}
 			return
 		}
 	}
@@ -518,20 +518,10 @@ func (s *Store) batchAttestationWrites(ctx context.Context) {
 
 // Flushes a list of batched attestations to the database
 // and resets the list of batched attestations for future writes.
-// This function notifies all subscribers for flushed attestations
-// of the result of the save operation.
-func (s *Store) flushAttestationRecords(ctx context.Context, records []*common.AttestationRecord) {
+// It returns the result of the save operation.
+func (s *Store) flushAttestationRecords(ctx context.Context, records []*common.AttestationRecord) error {
 	ctx, span := trace.StartSpan(ctx, "validatorDB.flushAttestationRecords")
 	defer span.End()
-
-	if s.batchedAttestationsFlushInProgress.Load() {
-		// This should never happen. This method should not be called when a flush is already in
-		// progress. If you are seeing this log, check the atomic bool before calling this method.
-		log.Error("Attempted to flush attestation records when already in progress")
-		return
-	}
-	s.batchedAttestationsFlushInProgress.Store(true)
-	defer s.batchedAttestationsFlushInProgress.Store(false)
 
 	start := time.Now()
 	err := s.saveAttestationRecords(ctx, records)
@@ -546,12 +536,7 @@ func (s *Store) flushAttestationRecords(ctx context.Context, records []*common.A
 			s.batchedAttestations.Append(ar)
 		}
 	}
-	// Forward the error, if any, to all subscribers via an event feed.
-	// We use a struct wrapper around the error as the event feed
-	// cannot handle sending a raw `nil` in case there is no error.
-	s.batchAttestationsFlushedFeed.Send(saveAttestationsResponse{
-		err: err,
-	})
+	return err
 }
 
 // Saves a list of attestation records to the database in a single boltDB
