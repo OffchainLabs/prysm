@@ -5,6 +5,7 @@ import (
 	"iter"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
@@ -25,7 +26,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/OffchainLabs/prysm/v7/time"
 )
 
 func TestAllDataColumnSubnets(t *testing.T) {
@@ -110,37 +110,74 @@ func TestProcessDataColumnSidecarsFromReconstruction_GloasSkipsProposerIndex(t *
 	require.NoError(t, s.processDataColumnSidecarsFromReconstruction(t.Context(), v))
 }
 
-// recordingPartialBroadcaster records how many data columns the chain had received at each Publish call.
-type recordingPartialBroadcaster struct {
+// blockingPartialBroadcaster holds every Publish call until released (or the context is done),
+// standing in for a saturated partial column broadcaster.
+type blockingPartialBroadcaster struct {
 	partialdatacolumnbroadcaster.Broadcaster
-	received  func() int
-	published chan struct{}
+	release     chan struct{}
+	releaseOnce sync.Once
 
-	mu                sync.Mutex
-	receivedAtPublish []int
+	mu    sync.Mutex
+	calls int
 }
 
-func newRecordingPartialBroadcaster(received func() int) *recordingPartialBroadcaster {
-	return &recordingPartialBroadcaster{received: received, published: make(chan struct{}, 1024)}
+func newBlockingPartialBroadcaster() *blockingPartialBroadcaster {
+	return &blockingPartialBroadcaster{release: make(chan struct{})}
 }
 
-func (b *recordingPartialBroadcaster) Publish(_ context.Context, topicsAndColumns iter.Seq2[string, blocks.PartialDataColumn]) error {
+func (b *blockingPartialBroadcaster) Publish(ctx context.Context, topicsAndColumns iter.Seq2[string, blocks.PartialDataColumn]) error {
 	for range topicsAndColumns {
 	}
 	b.mu.Lock()
-	b.receivedAtPublish = append(b.receivedAtPublish, b.received())
+	b.calls++
 	b.mu.Unlock()
-	b.published <- struct{}{}
-	return nil
+	select {
+	case <-b.release:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
-func (b *recordingPartialBroadcaster) counts() []int {
+func (b *blockingPartialBroadcaster) Release() {
+	b.releaseOnce.Do(func() { close(b.release) })
+}
+
+func (b *blockingPartialBroadcaster) Calls() int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return append([]int(nil), b.receivedAtPublish...)
+	return b.calls
 }
 
-func TestDataColumnSubscriber_ReceivesBeforePartialPublish(t *testing.T) {
+// signallingChainService reports the number of data columns received on each ReceiveDataColumns call.
+type signallingChainService struct {
+	*chainMock.ChainService
+	received chan int
+}
+
+func newSignallingChainService(chain *chainMock.ChainService) *signallingChainService {
+	return &signallingChainService{ChainService: chain, received: make(chan int, 1024)}
+}
+
+func (c *signallingChainService) ReceiveDataColumns(dcs []blocks.VerifiedRODataColumn) error {
+	err := c.ChainService.ReceiveDataColumns(dcs)
+	c.received <- len(dcs)
+	return err
+}
+
+// waitReceived returns the number of data columns received by the next ReceiveDataColumns call, failing
+// if none happens while the partial publish is still held back.
+func (c *signallingChainService) waitReceived(t *testing.T) int {
+	select {
+	case n := <-c.received:
+		return n
+	case <-time.After(10 * time.Second):
+		t.Fatal("data columns were not received while the partial publish was blocked")
+		return 0
+	}
+}
+
+func TestDataColumnSubscriber_ReceiveDoesNotWaitOnPartialPublish(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.CapellaForkEpoch = 0
@@ -151,9 +188,9 @@ func TestDataColumnSubscriber_ReceivesBeforePartialPublish(t *testing.T) {
 	require.NoError(t, kzg.Start())
 
 	_, _, sidecars := util.GenerateTestFuluBlockWithSidecars(t, 1)
-	chainService := &chainMock.ChainService{}
+	chainService := newSignallingChainService(&chainMock.ChainService{})
 	p2p := mockp2p.NewTestP2P(t)
-	broadcaster := newRecordingPartialBroadcaster(func() int { return len(chainService.DataColumns) })
+	broadcaster := newBlockingPartialBroadcaster()
 	p2p.SetPartialColumnBroadcaster(broadcaster)
 	_, _, err := p2p.UpdateCustodyInfo(0, params.BeaconConfig().CustodyRequirement)
 	require.NoError(t, err)
@@ -177,14 +214,13 @@ func TestDataColumnSubscriber_ReceivesBeforePartialPublish(t *testing.T) {
 		done <- s.dataColumnSubscriber(ctx, sidecars[0].DataColumnSidecar())
 	}()
 
-	// The execution path retries until every sampled column is seen, so stop it once a partial is published.
-	<-broadcaster.published
+	// The column is received while its partial publish is still held back.
+	require.Equal(t, 1, chainService.waitReceived(t))
+
+	// Release the publish, and stop the execution path, which retries until every sampled column is seen.
+	broadcaster.Release()
 	cancel()
 	require.NoError(t, <-done)
-
-	counts := broadcaster.counts()
-	require.NotEqual(t, 0, len(counts))
-	for _, received := range counts {
-		require.Equal(t, 1, received, "partial published before the column was received")
-	}
+	// At least one: the execution path may also have published partials before it was stopped.
+	require.NotEqual(t, 0, broadcaster.Calls(), "column was not published as partial")
 }

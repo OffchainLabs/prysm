@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
@@ -26,7 +27,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/OffchainLabs/prysm/v7/time"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
@@ -686,7 +686,7 @@ func TestService_beaconBlockSubscriber_sidecarContextDetached(t *testing.T) {
 	require.Equal(t, false, <-rec.ownCtxCancelled)
 }
 
-func TestProcessDataColumnSidecarsFromExecution_ReceivesBeforePartialPublish(t *testing.T) {
+func TestProcessDataColumnSidecarsFromExecution_ReceiveDoesNotWaitOnPartialPublish(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.CapellaForkEpoch = 0
@@ -713,9 +713,9 @@ func TestProcessDataColumnSidecarsFromExecution_ReceivesBeforePartialPublish(t *
 		allColumns[i] = blocks.VerifiedRODataColumn{RODataColumn: rod}
 	}
 
-	chainService := &chainMock.ChainService{Genesis: time.Now()}
+	chainService := newSignallingChainService(&chainMock.ChainService{Genesis: time.Now()})
 	p2p := mockp2p.NewTestP2P(t)
-	broadcaster := newRecordingPartialBroadcaster(func() int { return len(chainService.DataColumns) })
+	broadcaster := newBlockingPartialBroadcaster()
 	p2p.SetPartialColumnBroadcaster(broadcaster)
 	_, _, err := p2p.UpdateCustodyInfo(0, params.BeaconConfig().CustodyRequirement)
 	require.NoError(t, err)
@@ -739,13 +739,15 @@ func TestProcessDataColumnSidecarsFromExecution_ReceivesBeforePartialPublish(t *
 	roBlock, err := blocks.NewROBlock(sb)
 	require.NoError(t, err)
 
-	require.NoError(t, s.processSidecarsFromExecutionFromBlock(t.Context(), roBlock))
+	done := make(chan error, 1)
+	go func() {
+		done <- s.processSidecarsFromExecutionFromBlock(t.Context(), roBlock)
+	}()
 
-	received := len(chainService.DataColumns)
-	require.NotEqual(t, 0, received)
-	counts := broadcaster.counts()
-	require.NotEqual(t, 0, len(counts))
-	for _, n := range counts {
-		require.Equal(t, received, n, "partials published before the execution columns were received")
-	}
+	// The execution columns are received while their partial publish is still held back.
+	require.NotEqual(t, 0, chainService.waitReceived(t))
+
+	broadcaster.Release()
+	require.NoError(t, <-done)
+	require.NotEqual(t, 0, broadcaster.Calls(), "execution columns were not published as partials")
 }

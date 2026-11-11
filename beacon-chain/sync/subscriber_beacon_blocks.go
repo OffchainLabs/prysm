@@ -23,6 +23,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -284,12 +285,16 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", constructedCount, fieldparams.NumberOfColumns)
 			}
 
-			// Save a full set before publishing partials, so the DA check never waits on the partial broadcaster.
-			// Partial columns are published separately below (for all sampled indices), so do not re-broadcast them here.
-			unseenIndices, err := s.broadcastAndReceiveUnseenDataColumnSidecars(ctx, source.Slot(), proposerIndex, columnIndicesToSample, constructedSidecars, false)
-			if err != nil {
-				return nil, errors.Wrap(err, "broadcast and receive unseen data column sidecars")
-			}
+			// Store the full set concurrently with the partial publishes below: the DA check never waits on
+			// the partial broadcaster, and peers get our cells without waiting on the store.
+			// Partial columns are published below for all sampled indices, so do not re-broadcast them here.
+			var unseenIndices map[uint64]bool
+			var store errgroup.Group
+			store.Go(func() error {
+				var err error
+				unseenIndices, err = s.broadcastAndReceiveUnseenDataColumnSidecars(ctx, source.Slot(), proposerIndex, columnIndicesToSample, constructedSidecars, false)
+				return errors.Wrap(err, "broadcast and receive unseen data column sidecars")
+			})
 
 			if isPartialEnabled && count > 0 {
 				// Publish the partial column.
@@ -323,6 +328,10 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 					partialsPublished = true
 					log.WithField("commitments", len(commitments)).Debug("Published empty partial columns requesting all cells")
 				}
+			}
+
+			if err := store.Wait(); err != nil {
+				return nil, err
 			}
 
 			// No sidecars are retrieved from the EL, retry later
