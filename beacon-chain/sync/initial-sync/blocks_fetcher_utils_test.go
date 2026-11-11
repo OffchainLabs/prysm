@@ -387,7 +387,7 @@ func TestBlocksFetcher_findForkWithPeer(t *testing.T) {
 		defer func() {
 			assert.NoError(t, p1.Disconnect(p2.PeerID()))
 		}()
-		p1.Peers().SetChainState(p2.PeerID(), &ethpb.StatusV2{
+		setPeerStatus(p1.PeerScoring(), p2.PeerID(), &ethpb.StatusV2{
 			HeadRoot: nil,
 			HeadSlot: 0,
 		})

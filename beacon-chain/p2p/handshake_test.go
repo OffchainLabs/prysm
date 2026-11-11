@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -39,9 +39,11 @@ func TestAddConnectionHandler_RecentlyDisconnectedOutboundPeer(t *testing.T) {
 				require.NoError(t, h2.Close())
 			})
 
+			scorer := peerscoring.NewScorer()
 			s := &Service{
 				host:                  h1,
-				peers:                 peers.NewStatus(t.Context(), &peers.StatusConfig{ScorerParams: &scorers.Config{}}),
+				peers:                 peers.NewStatus(t.Context(), &peers.StatusConfig{Scoring: scorer}),
+				peerScorer:            scorer,
 				peerDisconnectionTime: cache.New(1*time.Second, 1*time.Minute),
 			}
 

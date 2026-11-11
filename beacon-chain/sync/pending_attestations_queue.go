@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -163,7 +164,8 @@ func (s *Service) requestPendingAttBlocks(pid peer.ID, roots [][32]byte) {
 		s.pendingAttsLock.Unlock()
 
 		if len(missing) > 0 {
-			s.downscorePeer(pid, "pendingAttBlockNotServed", logrus.Fields{"missing": len(missing), "requested": len(roots)})
+			s.cfg.p2p.PeerScoring().RecordStrike(pid, peerscoring.SourceRPCResponse, "pendingAttBlockNotServed")
+			log.WithFields(logrus.Fields{"peer": pid, "missing": len(missing), "requested": len(roots)}).Debug("Sender did not serve blocks for pending attestations")
 		}
 	}()
 }

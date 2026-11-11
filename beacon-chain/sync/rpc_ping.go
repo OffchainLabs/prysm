@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peerscoring"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/time"
@@ -136,9 +137,9 @@ func (s *Service) sendPingRequest(ctx context.Context, peerID peer.ID) error {
 	// Record the latency of the ping request for that peer.
 	s.cfg.p2p.Host().Peerstore().RecordLatency(peerID, time.Now().Sub(startTime))
 
-	// If the peer responded with an error, increment the bad responses scorer.
+	// If the peer responded with an error, record a strike against it.
 	if code != 0 {
-		s.downscorePeer(peerID, "NotNullPingReadStatusCode")
+		s.cfg.p2p.PeerScoring().RecordStrike(peerID, peerscoring.SourceRPCPing, "NotNullPingReadStatusCode")
 		return errors.Errorf("code: %d - %s", code, errMsg)
 	}
 
@@ -163,7 +164,7 @@ func (s *Service) sendPingRequest(ctx context.Context, peerID peer.ID) error {
 	// We need to send a METADATA request to the peer to get its latest metadata.
 	md, err := s.sendMetaDataRequest(ctx, peerID)
 	if err != nil {
-		// do not increment bad responses, as its already done in the request method.
+		// do not record a strike, as its already done in the request method.
 		return errors.Wrap(err, "send metadata request")
 	}
 
@@ -192,10 +193,12 @@ func (s *Service) isSequenceNumberUpToDate(incomingSequenceNumber uint64, peerID
 	// The peer's sequence number must be less than or equal to the sequence number we have in our store.
 	storedSequenceNumber := storedMetadata.SequenceNumber()
 	if storedSequenceNumber > incomingSequenceNumber {
-		s.downscorePeer(peerID, "pingInvalidSequenceNumber", logrus.Fields{
+		s.cfg.p2p.PeerScoring().RecordStrike(peerID, peerscoring.SourceRPCPing, "pingInvalidSequenceNumber")
+		log.WithFields(logrus.Fields{
+			"peerID":                 peerID,
 			"storedSequenceNumber":   storedSequenceNumber,
 			"incomingSequenceNumber": incomingSequenceNumber,
-		})
+		}).Debug("Peer sent invalid ping sequence number")
 		return false, p2ptypes.ErrInvalidSequenceNum
 	}
 

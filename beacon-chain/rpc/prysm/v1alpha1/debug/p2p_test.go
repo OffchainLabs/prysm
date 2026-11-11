@@ -14,8 +14,9 @@ func TestDebugServer_GetPeer(t *testing.T) {
 	peersProvider := &mockP2p.MockPeersProvider{}
 	mP2P := mockP2p.NewTestP2P(t)
 	ds := &Server{
-		PeersFetcher: peersProvider,
-		PeerManager:  &mockP2p.MockPeerManager{BHost: mP2P.BHost},
+		PeersFetcher:       peersProvider,
+		PeerScoringFetcher: peersProvider,
+		PeerManager:        &mockP2p.MockPeerManager{BHost: mP2P.BHost},
 	}
 	res, err := ds.GetPeer(t.Context(), &ethpb.PeerRequest{PeerId: mockP2p.MockRawPeerId0})
 	require.NoError(t, err)
@@ -29,8 +30,9 @@ func TestDebugServer_ListPeers(t *testing.T) {
 	peersProvider := &mockP2p.MockPeersProvider{}
 	mP2P := mockP2p.NewTestP2P(t)
 	ds := &Server{
-		PeersFetcher: peersProvider,
-		PeerManager:  &mockP2p.MockPeerManager{BHost: mP2P.BHost},
+		PeersFetcher:       peersProvider,
+		PeerScoringFetcher: peersProvider,
+		PeerManager:        &mockP2p.MockPeerManager{BHost: mP2P.BHost},
 	}
 
 	res, err := ds.ListPeers(t.Context(), &empty.Empty{})

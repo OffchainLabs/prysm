@@ -141,7 +141,7 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 	p2p.Peers().SetConnectionState(other.PeerID(), peers.Connected)
 	p2p.Connect(other)
 
-	p2p.Peers().SetChainState(other.PeerID(), &ethpb.StatusV2{
+	setPeerStatus(p2p.PeerScoring(), other.PeerID(), &ethpb.StatusV2{
 		HeadSlot: 8,
 	})
 
@@ -925,9 +925,9 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 			require.DeepSSZEqual(t, expectedSidecar.DataColumnSidecar(), actualSidecar.DataColumnSidecar())
 		}
 
-		scorer := p2p.Peers().Scorers().BadResponsesScorer()
-		require.Equal(t, true, scorer.Score("peer3") < 0)   // genuine KZG-proof fault is downscored
-		require.Equal(t, float64(0), scorer.Score("peer1")) // honest peer is not penalized
+		scoring := p2p.PeerScoring()
+		require.Equal(t, true, scoring.StrikeCount("peer3") > 0) // genuine KZG-proof fault is downscored
+		require.Equal(t, 0, scoring.StrikeCount("peer1"))        // honest peer is not penalized
 	})
 
 	t.Run("rogue peer with junk header signature", func(t *testing.T) {
@@ -1007,7 +1007,7 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, len(actual))
 		// The peer is NOT downscored for returning sidecars whose block we don't hold locally.
-		require.Equal(t, float64(0), p2p.Peers().Scorers().BadResponsesScorer().Score("peer1"))
+		require.Equal(t, 0, p2p.PeerScoring().StrikeCount("peer1"))
 	})
 
 	t.Run("foreign roots dropped without downscore", func(t *testing.T) {
@@ -1044,7 +1044,7 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 			require.DeepSSZEqual(t, expected[actual[i].Index()].DataColumnSidecar(), actual[i].DataColumnSidecar())
 		}
 		// The peer is not penalized for the foreign-root sidecars.
-		require.Equal(t, float64(0), p2p.Peers().Scorers().BadResponsesScorer().Score("peer1"))
+		require.Equal(t, 0, p2p.PeerScoring().StrikeCount("peer1"))
 	})
 }
 
@@ -1064,14 +1064,12 @@ func TestComputeIndicesByRootByPeer(t *testing.T) {
 	}
 
 	p2p := testp2p.NewTestP2P(t)
-	peers := p2p.Peers()
-
 	peerIDs := make([]peer.ID, 0, len(peerIdStrs))
 	for _, peerIdStr := range peerIdStrs {
 		peerID, err := peer.Decode(peerIdStr)
 		require.NoError(t, err)
 
-		peers.SetChainState(peerID, &ethpb.StatusV2{
+		setPeerStatus(p2p.PeerScoring(), peerID, &ethpb.StatusV2{
 			HeadSlot: headSlotByPeer[peerIdStr],
 		})
 
@@ -1142,7 +1140,6 @@ func TestComputeIndicesByRootByPeer_PeerWithoutChainState(t *testing.T) {
 	}
 
 	p2p := testp2p.NewTestP2P(t)
-	peers := p2p.Peers()
 
 	peerIDs := make([]peer.ID, 0, len(peerIdStrs))
 	peerIDsMap := make(map[peer.ID]bool, len(peerIdStrs))
@@ -1151,7 +1148,7 @@ func TestComputeIndicesByRootByPeer_PeerWithoutChainState(t *testing.T) {
 		require.NoError(t, err)
 
 		if headSlot, ok := headSlotByPeer[peerIdStr]; ok {
-			peers.SetChainState(peerID, &ethpb.StatusV2{HeadSlot: headSlot})
+			setPeerStatus(p2p.PeerScoring(), peerID, &ethpb.StatusV2{HeadSlot: headSlot})
 		}
 
 		peerIDs = append(peerIDs, peerID)
@@ -1190,7 +1187,6 @@ func TestComputeIndicesByRootByPeer_EarliestAvailableSlot(t *testing.T) {
 	}
 
 	p2p := testp2p.NewTestP2P(t)
-	peers := p2p.Peers()
 
 	peerIDs := make([]peer.ID, 0, len(peerIdStrs))
 	peerIDsMap := make(map[peer.ID]bool, len(peerIdStrs))
@@ -1198,7 +1194,7 @@ func TestComputeIndicesByRootByPeer_EarliestAvailableSlot(t *testing.T) {
 		peerID, err := peer.Decode(peerIdStr)
 		require.NoError(t, err)
 
-		peers.SetChainState(peerID, chainStateByPeer[peerIdStr])
+		setPeerStatus(p2p.PeerScoring(), peerID, chainStateByPeer[peerIdStr])
 
 		peerIDs = append(peerIDs, peerID)
 		peerIDsMap[peerID] = true

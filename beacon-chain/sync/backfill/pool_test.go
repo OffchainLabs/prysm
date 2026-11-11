@@ -195,10 +195,11 @@ func TestEnvelopeRetryExclusions(t *testing.T) {
 func TestExcludeUnavailable(t *testing.T) {
 	const begin = primitives.Slot(100)
 
-	status := p2ptest.NewTestP2P(t).Peers()
+	testP2P := p2ptest.NewTestP2P(t)
+	status := testP2P.Peers()
 	available, unavailable := peer.ID("available"), peer.ID("unavailable")
-	status.SetChainState(available, &ethpb.StatusV2{EarliestAvailableSlot: begin})
-	status.SetChainState(unavailable, &ethpb.StatusV2{EarliestAvailableSlot: begin + 1})
+	testP2P.PeerScoring().SetPeerStatus(available, &ethpb.StatusV2{EarliestAvailableSlot: begin}, nil)
+	testP2P.PeerScoring().SetPeerStatus(unavailable, &ethpb.StatusV2{EarliestAvailableSlot: begin + 1}, nil)
 
 	t.Run("all available", func(t *testing.T) {
 		exclude := map[peer.ID]bool{"busy": true}
