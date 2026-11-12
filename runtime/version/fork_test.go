@@ -167,10 +167,11 @@ func forkEpochForVersion(cfg *params.BeaconChainConfig, v int) primitives.Epoch 
 		return cfg.ElectraForkEpoch
 	case version.Fulu:
 		return cfg.FuluForkEpoch
+	case version.Gloas:
+		return cfg.GloasForkEpoch
+	case version.Heze:
+		return cfg.HezeForkEpoch
 	default:
-		if version.IsUnsupported(v) {
-			return cfg.FarFutureEpoch
-		}
 		panic("forkEpochForVersion missing version " + version.String(v))
 	}
 }

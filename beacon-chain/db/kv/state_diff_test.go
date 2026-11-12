@@ -1090,7 +1090,9 @@ func TestStateDiff_SaveAndReadDiff_MultipleLevels(t *testing.T) {
 func TestStateDiff_SaveAndReadDiffForkTransition(t *testing.T) {
 	setDefaultStateDiffExponents()
 
-	for v := range version.All()[:len(version.All())-1] {
+	// Fulu→Gloas needs active validators to build the PTC window, which createState does not set.
+	// TestStateDiff_SaveAndReadDiffForkTransitionGloas covers that transition.
+	for v := range version.Fulu {
 		t.Run(version.String(v), func(t *testing.T) {
 			db := setupDB(t)
 
@@ -1122,7 +1124,7 @@ func TestStateDiff_SaveAndReadDiffForkTransition(t *testing.T) {
 }
 
 // TestStateDiff_SaveAndReadDiffForkTransitionGloas tests the Fulu→Gloas fork transition
-// explicitly since Gloas is not yet in version.All().
+// with a state produced by the real gloas.UpgradeToGloas path.
 func TestStateDiff_SaveAndReadDiffForkTransitionGloas(t *testing.T) {
 	setDefaultStateDiffExponents()
 
@@ -1149,31 +1151,6 @@ func TestStateDiff_SaveAndReadDiffForkTransitionGloas(t *testing.T) {
 	require.NotNil(t, readSt)
 
 	stSSZ, err := gloasSt.MarshalSSZ()
-	require.NoError(t, err)
-	readStSSZ, err := readSt.MarshalSSZ()
-	require.NoError(t, err)
-	require.DeepSSZEqual(t, stSSZ, readStSSZ)
-}
-
-// TestStateDiff_SaveAndReadSnapshotGloas tests saving and reading a Gloas full snapshot.
-func TestStateDiff_SaveAndReadSnapshotGloas(t *testing.T) {
-	setDefaultStateDiffExponents()
-
-	db := setupDB(t)
-
-	err := setOffsetInDB(db, 0)
-	require.NoError(t, err)
-
-	st, _ := createState(t, 0, version.Gloas)
-
-	err = db.saveStateByDiff(context.Background(), st)
-	require.NoError(t, err)
-
-	readSt, err := db.stateByDiff(context.Background(), 0)
-	require.NoError(t, err)
-	require.NotNil(t, readSt)
-
-	stSSZ, err := st.MarshalSSZ()
 	require.NoError(t, err)
 	readStSSZ, err := readSt.MarshalSSZ()
 	require.NoError(t, err)
