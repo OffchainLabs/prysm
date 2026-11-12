@@ -106,6 +106,10 @@ var (
 		This is not a foolproof method to find duplicate instances in the network.
 		Your validator will still be vulnerable if it is being run in unsafe configurations.`,
 	}
+	disableGossipBlockHashCheck = &cli.BoolFlag{
+		Name:  "disable-gossip-block-hash-check",
+		Usage: "Disables locally computing and checking the execution block hash of payloads received over gossip.",
+	}
 	disableStakinContractCheck = &cli.BoolFlag{
 		Name:  "disable-staking-contract-check",
 		Usage: "Disables checking of staking contract deposits when proposing blocks, useful for devnets.",
@@ -290,6 +294,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	disablePeerScorer,
 	disableBroadcastSlashingFlag,
 	disableStakinContractCheck,
+	disableGossipBlockHashCheck,
 	SaveFullExecutionPayloads,
 	enableStartupOptimistic,
 	ignoreUnviableAttestations,

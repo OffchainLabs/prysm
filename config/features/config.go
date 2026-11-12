@@ -72,10 +72,11 @@ type Flags struct {
 	SaveFullExecutionPayloads bool // Save full beacon blocks with execution payloads in the database.
 	EnableStartOptimistic     bool // EnableStartOptimistic treats every block as optimistic at startup.
 
-	DisableResourceManager     bool // Disables running the node with libp2p's resource manager.
-	DisableStakinContractCheck bool // Disables check for deposit contract when proposing blocks
-	IgnoreUnviableAttestations bool // Ignore attestations whose target state is not viable (avoids lagging-node DoS).
-	TrackEquivocations         bool // Record proposer equivocations seen on gossip into forkchoice.
+	DisableResourceManager      bool // Disables running the node with libp2p's resource manager.
+	DisableStakinContractCheck  bool // Disables check for deposit contract when proposing blocks
+	DisableGossipBlockHashCheck bool // Disables local execution block hash verification of gossiped payloads.
+	IgnoreUnviableAttestations  bool // Ignore attestations whose target state is not viable (avoids lagging-node DoS).
+	TrackEquivocations          bool // Record proposer equivocations seen on gossip into forkchoice.
 
 	EnableHashtree               bool // Enables usage of the hashtree library for hashing
 	EnableVerboseSigVerification bool // EnableVerboseSigVerification specifies whether to verify individual signature if batch verification fails
@@ -219,6 +220,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.Bool(disableStakinContractCheck.Name) {
 		logEnabled(disableStakinContractCheck)
 		cfg.DisableStakinContractCheck = true
+	}
+	if ctx.Bool(disableGossipBlockHashCheck.Name) {
+		logDisabled(disableGossipBlockHashCheck)
+		cfg.DisableGossipBlockHashCheck = true
 	}
 	if ctx.Bool(SaveFullExecutionPayloads.Name) {
 		logEnabled(SaveFullExecutionPayloads)
