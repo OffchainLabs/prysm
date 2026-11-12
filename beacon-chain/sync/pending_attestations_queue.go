@@ -72,6 +72,7 @@ func (s *Service) processPendingAttsForBlock(ctx context.Context, bRoot [32]byte
 	s.pendingAttsLock.Lock()
 	delete(s.blkRootToPendingAtts, bRoot)
 	delete(s.pendingAttSenders, bRoot)
+	delete(s.pendingAttVerifiedRoots, bRoot)
 
 	maxRoots := params.MaxRequestBlock(slots.ToEpoch(s.cfg.clock.CurrentSlot()))
 	randGen := rand.NewGenerator()
@@ -122,6 +123,39 @@ func (s *Service) processPendingAttsForBlock(ctx context.Context, bRoot [32]byte
 	return nil
 }
 
+// shouldVerifyForUnknownBlock reports whether an attestation for the unknown block root should be fully verified
+// against its target state so that the block can be requested right away. Only one valid attestation per root is needed.
+func (s *Service) shouldVerifyForUnknownBlock(root [32]byte, target *ethpb.Checkpoint) bool {
+	s.pendingAttsLock.RLock()
+	verified := s.pendingAttVerifiedRoots[root]
+	s.pendingAttsLock.RUnlock()
+	if verified {
+		return false
+	}
+	return s.cfg.chain.InForkchoice(bytesutil.ToBytes32(target.Root))
+}
+
+// requestBlockForPendingAtt requests the unknown block root from pid, which sent us a valid attestation for it.
+func (s *Service) requestBlockForPendingAtt(pid peer.ID, root [32]byte) {
+	s.pendingAttsLock.Lock()
+	if s.pendingAttVerifiedRoots[root] || s.pendingAttRequestPeers[pid] {
+		s.pendingAttsLock.Unlock()
+		return
+	}
+	s.pendingQueueLock.RLock()
+	seen := s.seenPendingBlocks[root]
+	s.pendingQueueLock.RUnlock()
+	if seen || s.cfg.chain.InForkchoice(root) || s.cfg.chain.BlockBeingSynced(root) {
+		s.pendingAttsLock.Unlock()
+		return
+	}
+	s.pendingAttVerifiedRoots[root] = true
+	s.pendingAttRequestPeers[pid] = true
+	s.pendingAttsLock.Unlock()
+
+	s.requestPendingAttBlocks(pid, [][32]byte{root})
+}
+
 // requestPendingAttBlocks requests the blocks for roots from pid in the background.
 // If pid does not serve all of them, it is downscored.
 func (s *Service) requestPendingAttBlocks(pid peer.ID, roots [][32]byte) {
@@ -155,6 +189,7 @@ func (s *Service) requestPendingAttBlocks(pid peer.ID, roots [][32]byte) {
 		delete(s.pendingAttRequestPeers, pid)
 
 		for _, root := range missing {
+			delete(s.pendingAttVerifiedRoots, root)
 			delete(s.pendingAttSenders[root], pid)
 			if len(s.pendingAttSenders[root]) == 0 {
 				delete(s.pendingAttSenders, root)
@@ -604,6 +639,7 @@ func (s *Service) validatePendingAtts(ctx context.Context, slot primitives.Slot)
 		if len(s.blkRootToPendingAtts[bRoot]) == 0 {
 			delete(s.blkRootToPendingAtts, bRoot)
 			delete(s.pendingAttSenders, bRoot)
+			delete(s.pendingAttVerifiedRoots, bRoot)
 		}
 	}
 }
