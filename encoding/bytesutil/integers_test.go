@@ -194,23 +194,31 @@ func TestFromBytes2(t *testing.T) {
 }
 
 func TestFromBytes4(t *testing.T) {
-	tests := []uint64{
-		0,
-		1776,
-		96726,
-		4290997,
-		4294967295, // 2^32 - 1
-		4294967200,
-		3894948296,
-	}
-	for _, tt := range tests {
-		b := bytesutil.ToBytes(tt, 4)
-		c := bytesutil.FromBytes4(b)
-		if c != tt {
-			t.Errorf("Wanted %d but got %d", tt, c)
+	t.Run("round trip", func(t *testing.T) {
+		tests := []uint64{
+			0,
+			1776,
+			96726,
+			4290997,
+			4294967295, // 2^32 - 1
+			4294967200,
+			3894948296,
 		}
-		assert.Equal(t, tt, c)
-	}
+		for _, tt := range tests {
+			b := bytesutil.ToBytes(tt, 4)
+			c := bytesutil.FromBytes4(b)
+			assert.Equal(t, tt, c)
+		}
+	})
+	t.Run("does not mutate input", func(t *testing.T) {
+		// A slice longer than 4 bytes must keep its tail untouched. The result
+		// only depends on the first 4 bytes read as little-endian.
+		input := []byte{1, 2, 3, 4, 5, 6, 7, 8}
+		want := []byte{1, 2, 3, 4, 5, 6, 7, 8}
+		got := bytesutil.FromBytes4(input)
+		assert.Equal(t, uint64(0x04030201), got)
+		assert.DeepEqual(t, want, input)
+	})
 }
 
 func TestFromBytes8(t *testing.T) {
