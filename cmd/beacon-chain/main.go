@@ -96,6 +96,8 @@ var appFlags = []cli.Flag{
 	flags.BuilderFailureBackOffPeriod,
 	flags.BuilderCriticalFailedBuilders,
 	flags.BuilderBidTimeout,
+	flags.BuilderBidDelay,
+	flags.BuilderBidRequests,
 	flags.BeaconDBPruning,
 	flags.PrunerRetentionEpochs,
 	flags.DisableBuilderSSZ,
