@@ -527,6 +527,11 @@ func VerifyOperationLengths(_ context.Context, state state.BeaconState, b interf
 		}
 	}
 
+	// Heze removes the deposits field from the block body and the eth1 data from the state (EIP-8015).
+	if state.Version() >= version.Heze {
+		return state, nil
+	}
+
 	eth1Data := state.Eth1Data()
 	if eth1Data == nil {
 		return nil, errors.New("nil eth1data in state")

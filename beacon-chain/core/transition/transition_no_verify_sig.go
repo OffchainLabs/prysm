@@ -497,10 +497,13 @@ func ProcessBlockForStateRoot(
 		return nil, errors.Wrap(ErrProcessRandaoFailed, err.Error())
 	}
 
-	state, err = b.ProcessEth1DataInBlock(ctx, state, signed.Block().Body().Eth1Data())
-	if err != nil {
-		tracing.AnnotateError(span, err)
-		return nil, errors.Wrap(ErrProcessEth1DataFailed, err.Error())
+	// Heze removes process_eth1_data from process_block (EIP-8015).
+	if state.Version() < version.Heze {
+		state, err = b.ProcessEth1DataInBlock(ctx, state, signed.Block().Body().Eth1Data())
+		if err != nil {
+			tracing.AnnotateError(span, err)
+			return nil, errors.Wrap(ErrProcessEth1DataFailed, err.Error())
+		}
 	}
 
 	state, err = ProcessOperationsNoVerifyAttsSigs(ctx, state, signed.Block(), parentSlot)

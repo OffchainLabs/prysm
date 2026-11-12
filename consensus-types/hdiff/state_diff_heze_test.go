@@ -14,6 +14,7 @@ import (
 func TestHezeDiff(t *testing.T) {
 	gloasSource, err := gloasState(t, 64)
 	require.NoError(t, err)
+	require.NoError(t, gloasSource.SetDepositRequestsStartIndex(gloasSource.Eth1DepositIndex()))
 	hezeSource, err := heze.UpgradeToHeze(gloasSource.Copy())
 	require.NoError(t, err)
 	require.Equal(t, version.Heze, hezeSource.Version())
@@ -51,6 +52,20 @@ func TestHezeDiff(t *testing.T) {
 		result, err := ApplyDiff(t.Context(), gloasSource.Copy(), hdiffBytes)
 		require.NoError(t, err)
 		require.Equal(t, version.Heze, result.Version())
+		requireEqualState(t, hezeSource, result)
+	})
+
+	t.Run("cross fork from a Gloas base before the end of the eth1 bridge", func(t *testing.T) {
+		base, err := gloasState(t, 64)
+		require.NoError(t, err)
+		start, err := base.DepositRequestsStartIndex()
+		require.NoError(t, err)
+		require.NotEqual(t, base.Eth1DepositIndex(), start)
+
+		hdiffBytes, err := Diff(base, hezeSource)
+		require.NoError(t, err)
+		result, err := ApplyDiff(t.Context(), base.Copy(), hdiffBytes)
+		require.NoError(t, err)
 		requireEqualState(t, hezeSource, result)
 	})
 }

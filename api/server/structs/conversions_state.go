@@ -1218,11 +1218,6 @@ func BeaconStateHezeFromConsensus(st beaconState.BeaconState) (*BeaconStateHeze,
 	for i, r := range srcHr {
 		hr[i] = hexutil.Encode(r)
 	}
-	srcVotes := st.Eth1DataVotes()
-	votes := make([]*Eth1Data, len(srcVotes))
-	for i, e := range srcVotes {
-		votes[i] = Eth1DataFromConsensus(e)
-	}
 	srcVals := st.Validators()
 	vals := make([]*Validator, len(srcVals))
 	for i, v := range srcVals {
@@ -1290,10 +1285,6 @@ func BeaconStateHezeFromConsensus(st beaconState.BeaconState) (*BeaconStateHeze,
 	nwvi, err := st.NextWithdrawalValidatorIndex()
 	if err != nil {
 		return nil, fmt.Errorf("next withdrawal validator index: %w", err)
-	}
-	drsi, err := st.DepositRequestsStartIndex()
-	if err != nil {
-		return nil, fmt.Errorf("deposit requests start index: %w", err)
 	}
 	dbtc, err := st.DepositBalanceToConsume()
 	if err != nil {
@@ -1381,9 +1372,6 @@ func BeaconStateHezeFromConsensus(st beaconState.BeaconState) (*BeaconStateHeze,
 		BlockRoots:                    br,
 		StateRoots:                    sr,
 		HistoricalRoots:               hr,
-		Eth1Data:                      Eth1DataFromConsensus(st.Eth1Data()),
-		Eth1DataVotes:                 votes,
-		Eth1DepositIndex:              fmt.Sprintf("%d", st.Eth1DepositIndex()),
 		Validators:                    vals,
 		Balances:                      bals,
 		RandaoMixes:                   rm,
@@ -1400,7 +1388,6 @@ func BeaconStateHezeFromConsensus(st beaconState.BeaconState) (*BeaconStateHeze,
 		NextWithdrawalIndex:           fmt.Sprintf("%d", nwi),
 		NextWithdrawalValidatorIndex:  fmt.Sprintf("%d", nwvi),
 		HistoricalSummaries:           hs,
-		DepositRequestsStartIndex:     fmt.Sprintf("%d", drsi),
 		DepositBalanceToConsume:       fmt.Sprintf("%d", dbtc),
 		ExitBalanceToConsume:          fmt.Sprintf("%d", ebtc),
 		EarliestExitEpoch:             fmt.Sprintf("%d", eee),
