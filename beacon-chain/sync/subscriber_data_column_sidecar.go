@@ -40,9 +40,14 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 		return fmt.Errorf("unexpected data column type: %T", msg)
 	}
 
+	// Publish as partial concurrently with the store: the DA check never waits on the partial
+	// broadcaster, and peers get our cells without waiting on the store.
 	if sidecar.IsGloas() {
 		usefulFullColumnsReceivedTotal.WithLabelValues(strconv.FormatUint(sidecar.Index(), 10)).Inc()
-		s.republishGloasColumnAsPartial(ctx, sidecar)
+		wg.Go(func() error {
+			s.republishGloasColumnAsPartial(ctx, sidecar)
+			return nil
+		})
 	} else {
 		// Track useful full columns received via gossip (not previously seen).
 		proposerIndex, err := sidecar.ProposerIndex()
@@ -51,11 +56,15 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 		}
 		if !s.hasSeenDataColumnIndex(sidecar.Slot(), proposerIndex, sidecar.Index()) {
 			usefulFullColumnsReceivedTotal.WithLabelValues(strconv.FormatUint(sidecar.Index(), 10)).Inc()
-			s.publishColumnAsPartial(ctx, sidecar)
+			wg.Go(func() error {
+				s.publishColumnAsPartial(ctx, sidecar)
+				return nil
+			})
 		}
 	}
 
 	if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
+		_ = wg.Wait()
 		return wrapDataColumnError(sidecar, "receive data column sidecar", err)
 	}
 

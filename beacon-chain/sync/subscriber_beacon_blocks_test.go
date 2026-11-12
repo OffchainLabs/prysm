@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
@@ -26,7 +27,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/OffchainLabs/prysm/v7/time"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
@@ -684,4 +684,70 @@ func TestService_beaconBlockSubscriber_sidecarContextDetached(t *testing.T) {
 	close(rec.parentCancelled)
 
 	require.Equal(t, false, <-rec.ownCtxCancelled)
+}
+
+func TestProcessDataColumnSidecarsFromExecution_ReceiveDoesNotWaitOnPartialPublish(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.CapellaForkEpoch = 0
+	cfg.DenebForkEpoch = 0
+	cfg.ElectraForkEpoch = 0
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+	require.NoError(t, kzg.Start())
+
+	allColumns := make([]blocks.VerifiedRODataColumn, fieldparams.NumberOfColumns)
+	for i := range allColumns {
+		rod, err := blocks.NewRODataColumn(&ethpb.DataColumnSidecar{
+			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					ParentRoot: make([]byte, 32),
+					BodyRoot:   make([]byte, 32),
+					StateRoot:  make([]byte, 32),
+				},
+				Signature: []byte("signature"),
+			},
+			Index: uint64(i),
+		})
+		require.NoError(t, err)
+		allColumns[i] = blocks.VerifiedRODataColumn{RODataColumn: rod}
+	}
+
+	chainService := newSignallingChainService(&chainMock.ChainService{Genesis: time.Now()})
+	p2p := mockp2p.NewTestP2P(t)
+	broadcaster := newBlockingPartialBroadcaster()
+	p2p.SetPartialColumnBroadcaster(broadcaster)
+	_, _, err := p2p.UpdateCustodyInfo(0, params.BeaconConfig().CustodyRequirement)
+	require.NoError(t, err)
+
+	s := Service{
+		cfg: &config{
+			p2p:                    p2p,
+			chain:                  chainService,
+			clock:                  startup.NewClock(time.Now(), [32]byte{}),
+			dataColumnStorage:      filesystem.NewEphemeralDataColumnStorage(t),
+			executionReconstructor: &mockExecution.EngineClient{DataColumnSidecars: allColumns},
+			operationNotifier:      &chainMock.MockOperationNotifier{},
+		},
+		seenDataColumnCache: newSlotAwareCache(1),
+	}
+
+	b := util.NewBeaconBlockFulu()
+	b.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, 48)}
+	sb, err := blocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	roBlock, err := blocks.NewROBlock(sb)
+	require.NoError(t, err)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- s.processSidecarsFromExecutionFromBlock(t.Context(), roBlock)
+	}()
+
+	// The execution columns are received while their partial publish is still held back.
+	require.NotEqual(t, 0, chainService.waitReceived(t))
+
+	broadcaster.Release()
+	require.NoError(t, <-done)
+	require.NotEqual(t, 0, broadcaster.Calls(), "execution columns were not published as partials")
 }
