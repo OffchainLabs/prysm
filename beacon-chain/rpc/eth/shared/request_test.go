@@ -1,10 +1,57 @@
 package shared
 
 import (
+	"context"
+	"encoding/json"
 	"math"
+	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
+
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	syncmock "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
+
+func TestIsSyncing(t *testing.T) {
+	tests := []struct {
+		name         string
+		headSlot     primitives.Slot
+		syncDistance string
+	}{
+		{name: "head behind current slot", headSlot: 100, syncDistance: "10"},
+		{name: "head at current slot", headSlot: 110, syncDistance: "0"},
+		{name: "head ahead of current slot", headSlot: 111, syncDistance: "0"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			currentSlot := primitives.Slot(110)
+			chainService := &mock.ChainService{Slot: &currentSlot, MockHeadSlot: &tt.headSlot, Optimistic: true}
+			writer := httptest.NewRecorder()
+
+			assert.Equal(t, true, IsSyncing(context.Background(), writer, &syncmock.Sync{IsSyncing: true}, chainService, chainService, chainService))
+			assert.Equal(t, http.StatusServiceUnavailable, writer.Code)
+			resp := &httputil.DefaultJsonError{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			assert.Equal(t, http.StatusServiceUnavailable, resp.Code)
+			_, details, ok := strings.Cut(resp.Message, " Details: ")
+			require.Equal(t, true, ok)
+			syncDetails := &structs.SyncDetailsContainer{}
+			require.NoError(t, json.Unmarshal([]byte(details), syncDetails))
+			require.NotNil(t, syncDetails.Data)
+			assert.Equal(t, strconv.FormatUint(uint64(tt.headSlot), 10), syncDetails.Data.HeadSlot)
+			assert.Equal(t, tt.syncDistance, syncDetails.Data.SyncDistance)
+			assert.Equal(t, true, syncDetails.Data.IsSyncing)
+			assert.Equal(t, true, syncDetails.Data.IsOptimistic)
+		})
+	}
+}
 
 func TestUintFromQuery_BuilderBoostFactor(t *testing.T) {
 	type args struct {

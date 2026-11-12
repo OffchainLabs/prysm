@@ -40,10 +40,15 @@ func (s *Server) GetSyncStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	headSlot := s.HeadFetcher.HeadSlot()
+	currentSlot := s.GenesisTimeFetcher.CurrentSlot()
+	var syncDistance uint64
+	if currentSlot > headSlot {
+		syncDistance = uint64(currentSlot - headSlot)
+	}
 	response := &structs.SyncStatusResponse{
 		Data: &structs.SyncStatusResponseData{
 			HeadSlot:     strconv.FormatUint(uint64(headSlot), 10),
-			SyncDistance: strconv.FormatUint(uint64(s.GenesisTimeFetcher.CurrentSlot()-headSlot), 10),
+			SyncDistance: strconv.FormatUint(syncDistance, 10),
 			IsSyncing:    s.SyncChecker.Syncing(),
 			IsOptimistic: isOptimistic,
 			ElOffline:    !s.ExecutionChainInfoFetcher.ExecutionClientConnected(),
