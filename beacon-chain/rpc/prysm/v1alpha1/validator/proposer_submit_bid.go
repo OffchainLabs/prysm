@@ -50,8 +50,13 @@ func (vs *Server) SubmitSignedExecutionPayloadBid(
 		return nil, err
 	}
 
+	ro, err := consensusblocks.WrappedROSignedExecutionPayloadBid(req)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "could not wrap signed bid: %v", err)
+	}
+
 	// Self-published gossip is not looped back, so record the bid here for this node's own proposer.
-	vs.HighestBidCache.SetIfHigher(req)
+	vs.HighestBidCache.SetIfHigher(ro)
 
 	if err := vs.P2P.Broadcast(ctx, req); err != nil {
 		return nil, status.Errorf(codes.Internal, "could not broadcast signed execution payload bid: %v", err)

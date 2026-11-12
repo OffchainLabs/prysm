@@ -85,7 +85,7 @@ func TestSubmitSignedExecutionPayloadBid_OK(t *testing.T) {
 
 	cached, ok := bidCache.Get(1, [32]byte{}, parentRoot)
 	require.Equal(t, true, ok)
-	require.Equal(t, req, cached)
+	require.Equal(t, wrapBid(t, req), cached)
 }
 
 func TestSubmitSignedExecutionPayloadBid_Blacklisted(t *testing.T) {
