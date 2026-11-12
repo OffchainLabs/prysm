@@ -21,6 +21,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -397,6 +398,151 @@ func TestRecentBeaconBlocks_RPCRequestSent_InvalidSignature(t *testing.T) {
 
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Did not receive stream within 1 sec")
+	}
+}
+
+func TestSendBeaconBlocksRequest_ProposerLookahead(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.AltairForkEpoch = 0
+	cfg.BellatrixForkEpoch = 0
+	cfg.CapellaForkEpoch = 0
+	cfg.DenebForkEpoch = 0
+	cfg.ElectraForkEpoch = 0
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+	params.BeaconConfig().InitializeForkSchedule()
+
+	const validatorCount = 64
+	headState, keys := util.DeterministicGenesisStateFulu(t, validatorCount)
+	lookahead, err := headState.ProposerLookahead()
+	require.NoError(t, err)
+
+	// The head state is at slot 0, so the lookahead covers the slots [0, len(lookahead)).
+	const slot = primitives.Slot(1)
+	expected := lookahead[slot]
+	unexpected := (expected + 1) % validatorCount
+	outsideSlot := primitives.Slot(len(lookahead))
+
+	// newBlock returns a block signed by `proposer`. A block with a blob commitment makes the call fail
+	// if its data column sidecars are fetched, since no peer serves them.
+	newBlock := func(t *testing.T, slot primitives.Slot, proposer primitives.ValidatorIndex, withBlob bool) interfaces.ReadOnlySignedBeaconBlock {
+		msg := util.NewBeaconBlockFulu()
+		msg.Block.Slot = slot
+		msg.Block.ProposerIndex = proposer
+		msg.Block.ParentRoot = bytesutil.PadTo([]byte("unknown parent"), fieldparams.RootLength)
+		if withBlob {
+			msg.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, fieldparams.KzgCommitmentSize)}
+		}
+
+		epoch := slots.ToEpoch(slot)
+		fork, err := params.Fork(epoch)
+		require.NoError(t, err)
+		domain, err := signing.Domain(fork, epoch, params.BeaconConfig().DomainBeaconProposer, headState.GenesisValidatorsRoot())
+		require.NoError(t, err)
+		signingRoot, err := signing.ComputeSigningRoot(msg.Block, domain)
+		require.NoError(t, err)
+		msg.Signature = keys[proposer].Sign(signingRoot[:]).Marshal()
+
+		blk, err := blocks.NewSignedBeaconBlock(msg)
+		require.NoError(t, err)
+		return blk
+	}
+
+	tests := []struct {
+		name     string
+		response []interfaces.ReadOnlySignedBeaconBlock
+		queued   []bool
+	}{
+		{
+			name:     "expected proposer",
+			response: []interfaces.ReadOnlySignedBeaconBlock{newBlock(t, slot, expected, false)},
+			queued:   []bool{true},
+		},
+		{
+			name:     "unexpected proposer",
+			response: []interfaces.ReadOnlySignedBeaconBlock{newBlock(t, slot, unexpected, true)},
+			queued:   []bool{false},
+		},
+		{
+			name:     "slot outside the lookahead",
+			response: []interfaces.ReadOnlySignedBeaconBlock{newBlock(t, outsideSlot, 0, true)},
+			queued:   []bool{false},
+		},
+		{
+			name: "skipped block does not prevent the next one from being queued",
+			response: []interfaces.ReadOnlySignedBeaconBlock{
+				newBlock(t, slot, unexpected, true),
+				newBlock(t, slot+1, lookahead[slot+1], false),
+			},
+			queued: []bool{false, true},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.DelaySend = true
+
+			chain := &mock.ChainService{
+				State:               headState,
+				FinalizedCheckPoint: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+				Genesis:             time.Now(),
+				ValidatorsRoot:      bytesutil.ToBytes32(headState.GenesisValidatorsRoot()),
+			}
+			clock := startup.NewClock(chain.Genesis, chain.ValidatorsRoot)
+
+			r := &Service{
+				cfg: &config{
+					p2p:               p1,
+					chain:             chain,
+					clock:             clock,
+					dataColumnStorage: filesystem.NewEphemeralDataColumnStorage(t),
+				},
+				slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
+				seenPendingBlocks:   make(map[[32]byte]bool),
+				ctx:                 t.Context(),
+				rateLimiter:         newRateLimiter(p1),
+				newColumnsVerifier: func(_ []blocks.RODataColumn, _ []verification.Requirement) verification.DataColumnsVerifier {
+					return &verification.MockDataColumnsVerifier{}
+				},
+				pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
+			}
+
+			roots := make(p2pTypes.BeaconBlockByRootsReq, 0, len(tt.response))
+			for _, blk := range tt.response {
+				root, err := blk.Block().HashTreeRoot()
+				require.NoError(t, err)
+				roots = append(roots, root)
+			}
+
+			pcl := protocol.ID(p2p.RPCBlocksByRootTopicV2 + p2.Encoding().ProtocolSuffix())
+			r.rateLimiter.limiterMap[string(pcl)] = leakybucket.NewCollector(10000, 10000, time.Second, false)
+
+			var wg sync.WaitGroup
+			wg.Add(1)
+			p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
+				defer wg.Done()
+				out := new(p2pTypes.BeaconBlockByRootsReq)
+				assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, out))
+				for _, blk := range tt.response {
+					assert.NoError(t, WriteBlockChunk(stream, clock, p2.Encoding(), blk))
+				}
+				assert.NoError(t, stream.Close())
+			})
+
+			p1.Connect(p2)
+
+			require.NoError(t, r.sendBeaconBlocksRequest(t.Context(), &roots, p2.PeerID()))
+			for i, root := range roots {
+				require.Equal(t, tt.queued[i], r.seenPendingBlocks[root], "Unexpected queuing for block %d", i)
+			}
+
+			if util.WaitTimeout(&wg, 1*time.Second) {
+				t.Fatal("Did not receive stream within 1 sec")
+			}
+		})
 	}
 }
 
