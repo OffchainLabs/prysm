@@ -3,6 +3,7 @@ package forkchoice
 import (
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	forkchoice2 "github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
@@ -217,6 +218,13 @@ func (ro *ROForkChoice) IsOptimistic(root [32]byte) (bool, error) {
 	ro.l.RLock()
 	defer ro.l.RUnlock()
 	return ro.getter.IsOptimistic(root)
+}
+
+// IsOptimisticForPayloadStatus delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) IsOptimisticForPayloadStatus(root [32]byte, status forkchoice2.PayloadStatus) (bool, error) {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.IsOptimisticForPayloadStatus(root, status)
 }
 
 // ShouldOverrideFCU delegates to the underlying forkchoice call, under a lock.
