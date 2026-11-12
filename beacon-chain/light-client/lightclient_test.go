@@ -30,13 +30,10 @@ func TestLightClient_NewLightClientOptimisticUpdateFromBeaconState(t *testing.T)
 	cfg.DenebForkEpoch = 4
 	cfg.ElectraForkEpoch = 5
 	cfg.FuluForkEpoch = 6
+	cfg.GloasForkEpoch = 7
 	params.OverrideBeaconConfig(cfg)
 
 	for _, testVersion := range version.All()[1:] {
-		if testVersion == version.Gloas {
-			// TODO(16027): Unskip light client tests for Gloas
-			continue
-		}
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			l := util.NewTestLightClient(t, testVersion)
 

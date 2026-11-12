@@ -10,9 +10,19 @@ import (
 )
 
 func TestLightClientUtils(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.AltairForkEpoch = 1
+	cfg.BellatrixForkEpoch = 2
+	cfg.CapellaForkEpoch = 3
+	cfg.DenebForkEpoch = 4
+	cfg.ElectraForkEpoch = 5
+	cfg.FuluForkEpoch = 6
+	cfg.GloasForkEpoch = 7
+	params.OverrideBeaconConfig(cfg)
 
 	t.Run("WithNoFinalizedBlock", func(t *testing.T) {
-		for i := 1; i < 6; i++ {
+		for i := version.Altair; i <= version.Gloas; i++ {
 			t.Run(version.String(i), func(t *testing.T) {
 				l := util.NewTestLightClient(t, i, util.WithNoFinalizedCheckpoint())
 				require.IsNil(t, l.FinalizedBlock)
@@ -21,7 +31,7 @@ func TestLightClientUtils(t *testing.T) {
 	})
 
 	t.Run("WithFinalizedBlockInPrevFork", func(t *testing.T) {
-		for i := 2; i < 6; i++ {
+		for i := version.Bellatrix; i <= version.Gloas; i++ {
 			t.Run(version.String(i), func(t *testing.T) {
 				l := util.NewTestLightClient(t, i, util.WithFinalizedCheckpointInPrevFork())
 				require.Equal(t, l.FinalizedBlock.Version(), i-1)
@@ -30,7 +40,7 @@ func TestLightClientUtils(t *testing.T) {
 	})
 
 	t.Run("WithIncreasedAttestedSlot", func(t *testing.T) {
-		for i := 1; i < 6; i++ {
+		for i := version.Altair; i <= version.Gloas; i++ {
 			t.Run(version.String(i), func(t *testing.T) {
 				l1 := util.NewTestLightClient(t, i)
 				l2 := util.NewTestLightClient(t, i, util.WithIncreasedAttestedSlot(1))
@@ -40,7 +50,7 @@ func TestLightClientUtils(t *testing.T) {
 	})
 
 	t.Run("WithIncreasedFinalizedSlot", func(t *testing.T) {
-		for i := 1; i < 6; i++ {
+		for i := version.Altair; i <= version.Gloas; i++ {
 			t.Run(version.String(i), func(t *testing.T) {
 				l1 := util.NewTestLightClient(t, i)
 				l2 := util.NewTestLightClient(t, i, util.WithIncreasedFinalizedSlot(1))
@@ -50,7 +60,7 @@ func TestLightClientUtils(t *testing.T) {
 	})
 
 	t.Run("WithSupermajority", func(t *testing.T) {
-		for i := 1; i < 6; i++ {
+		for i := version.Altair; i <= version.Gloas; i++ {
 			t.Run(version.String(i), func(t *testing.T) {
 				l1 := util.NewTestLightClient(t, i)
 				l2 := util.NewTestLightClient(t, i, util.WithSupermajority(0))
