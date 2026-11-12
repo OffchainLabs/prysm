@@ -6,6 +6,7 @@ import (
 
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	forkchoice2 "github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
@@ -42,6 +43,7 @@ const (
 	builderIndexCalled
 	builderPubkeyCalled
 	isOptimisticCalled
+	isOptimisticForPayloadStatusCalled
 	shouldOverrideFCUCalled
 	slotCalled
 	lastRootCalled
@@ -192,6 +194,14 @@ func TestROLocking(t *testing.T) {
 			name: "isOptimisticCalled",
 			call: isOptimisticCalled,
 			cb:   func(g FastGetter) { _, err := g.IsOptimistic([32]byte{}); _discard(t, err) },
+		},
+		{
+			name: "isOptimisticForPayloadStatusCalled",
+			call: isOptimisticForPayloadStatusCalled,
+			cb: func(g FastGetter) {
+				_, err := g.IsOptimisticForPayloadStatus([32]byte{}, forkchoice2.PayloadStatusEmpty)
+				_discard(t, err)
+			},
 		},
 		{
 			name: "shouldOverrideFCUCalled",
@@ -407,6 +417,11 @@ func (ro *mockROForkchoice) HasPayloadBlockHash(_, _ [32]byte) bool {
 
 func (ro *mockROForkchoice) IsOptimistic(_ [32]byte) (bool, error) {
 	ro.calls = append(ro.calls, isOptimisticCalled)
+	return false, nil
+}
+
+func (ro *mockROForkchoice) IsOptimisticForPayloadStatus(_ [32]byte, _ forkchoice2.PayloadStatus) (bool, error) {
+	ro.calls = append(ro.calls, isOptimisticForPayloadStatusCalled)
 	return false, nil
 }
 

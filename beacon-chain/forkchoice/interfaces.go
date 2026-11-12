@@ -86,6 +86,7 @@ type FastGetter interface {
 	HighestReceivedBlockRoot() [32]byte
 	IsCanonical(root [32]byte) bool
 	IsOptimistic(root [32]byte) (bool, error)
+	IsOptimisticForPayloadStatus(root [32]byte, status forkchoice2.PayloadStatus) (bool, error)
 	IsViableForCheckpoint(*forkchoicetypes.Checkpoint) (bool, error)
 	JustifiedCheckpoint() *forkchoicetypes.Checkpoint
 	JustifiedPayloadBlockHash() [32]byte
