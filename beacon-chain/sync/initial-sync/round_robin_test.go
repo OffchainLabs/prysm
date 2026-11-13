@@ -7,6 +7,8 @@ import (
 	"time"
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	coreblocks "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
@@ -18,11 +20,13 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/container/slice"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/paulbellamy/ratecounter"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
@@ -301,7 +305,7 @@ func TestService_roundRobinSync(t *testing.T) {
 			gt := time.Now()
 			vr := [32]byte{}
 			mc := &mock.ChainService{
-				State: st,
+				State: withTestProposer(t, st),
 				Root:  genesisRoot[:],
 				DB:    beaconDB,
 				FinalizedCheckPoint: &eth.Checkpoint{
@@ -353,7 +357,7 @@ func TestService_processBlock(t *testing.T) {
 		P2P: p2pt.NewTestP2P(t),
 		DB:  beaconDB,
 		Chain: &mock.ChainService{
-			State: st,
+			State: withTestProposer(t, st),
 			Root:  genesisBlkRoot[:],
 			DB:    beaconDB,
 			FinalizedCheckPoint: &eth.Checkpoint{
@@ -380,6 +384,7 @@ func TestService_processBlock(t *testing.T) {
 		// Process block normally.
 		wsb, err := blocks.NewSignedBeaconBlock(blk1)
 		require.NoError(t, err)
+		signTestBlock(t, [32]byte{}, wsb)
 		rowsb, err := blocks.NewROBlock(wsb)
 		require.NoError(t, err)
 		err = s.processBlock(ctx, genesis, blocks.BlockWithROSidecars{Block: rowsb}, func(
@@ -403,6 +408,7 @@ func TestService_processBlock(t *testing.T) {
 		// Continue normal processing, should proceed w/o errors.
 		wsb, err = blocks.NewSignedBeaconBlock(blk2)
 		require.NoError(t, err)
+		signTestBlock(t, [32]byte{}, wsb)
 		rowsb, err = blocks.NewROBlock(wsb)
 		require.NoError(t, err)
 		err = s.processBlock(ctx, genesis, blocks.BlockWithROSidecars{Block: rowsb}, func(
@@ -412,6 +418,127 @@ func TestService_processBlock(t *testing.T) {
 		}, nil)
 		assert.NoError(t, err)
 		assert.Equal(t, primitives.Slot(2), s.cfg.Chain.HeadSlot(), "Unexpected head slot")
+	})
+
+	t.Run("regular sync rejects bad proposer signature", func(t *testing.T) {
+		st, err := util.NewBeaconState()
+		require.NoError(t, err)
+		chain := &mock.ChainService{State: withTestProposer(t, st), Root: genesisBlkRoot[:], DB: beaconDB, FinalizedCheckPoint: &eth.Checkpoint{}}
+		s := &Service{
+			cfg:         &Config{Chain: chain, DB: beaconDB},
+			clock:       startup.NewClock(genesis, [32]byte{}),
+			genesisTime: genesis,
+			counter:     ratecounter.NewRateCounter(counterSeconds * time.Second),
+		}
+
+		bwb := make([]blocks.BlockWithROSidecars, 3)
+		parentRoot := genesisBlkRoot
+		for i := range bwb {
+			blk := util.NewBeaconBlock()
+			blk.Block.Slot = primitives.Slot(i + 1)
+			blk.Block.ParentRoot = parentRoot[:]
+			// Distinct roots from the subtest above, so the DB checks below are meaningful.
+			blk.Block.Body.Graffiti = bytesutil.PadTo([]byte("bad sig"), 32)
+			wsb, err := blocks.NewSignedBeaconBlock(blk)
+			require.NoError(t, err)
+			// Keep the zero signature on the last block.
+			if i < len(bwb)-1 {
+				signTestBlock(t, [32]byte{}, wsb)
+			}
+			bwb[i].Block, err = blocks.NewROBlock(wsb)
+			require.NoError(t, err)
+			parentRoot = bwb[i].Block.Root()
+		}
+
+		count, err := s.processFetchedDataRegSync(ctx, &blocksQueueFetchedData{bwb: bwb})
+		require.ErrorIs(t, err, coreblocks.ErrInvalidSignature)
+		require.Equal(t, uint64(2), count)
+		require.Equal(t, 2, len(chain.BlocksReceived))
+		require.Equal(t, true, beaconDB.HasBlock(ctx, bwb[1].Block.Root()))
+		require.Equal(t, false, beaconDB.HasBlock(ctx, bwb[2].Block.Root()))
+	})
+
+	t.Run("regular sync rejects unknown proposer index", func(t *testing.T) {
+		st, err := util.NewBeaconState()
+		require.NoError(t, err)
+		chain := &mock.ChainService{State: withTestProposer(t, st), Root: genesisBlkRoot[:], DB: beaconDB, FinalizedCheckPoint: &eth.Checkpoint{}}
+		s := &Service{
+			cfg:         &Config{Chain: chain, DB: beaconDB},
+			clock:       startup.NewClock(genesis, [32]byte{}),
+			genesisTime: genesis,
+			counter:     ratecounter.NewRateCounter(counterSeconds * time.Second),
+		}
+		blk := util.NewBeaconBlock()
+		blk.Block.Slot = 1
+		blk.Block.ParentRoot = genesisBlkRoot[:]
+		blk.Block.ProposerIndex = 5
+		wsb, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		ro, err := blocks.NewROBlock(wsb)
+		require.NoError(t, err)
+
+		count, err := s.processFetchedDataRegSync(ctx, &blocksQueueFetchedData{bwb: []blocks.BlockWithROSidecars{{Block: ro}}})
+		require.ErrorIs(t, err, coreblocks.ErrInvalidProposerIndex)
+		require.Equal(t, uint64(0), count)
+		require.Equal(t, 0, len(chain.BlocksReceived))
+	})
+
+	t.Run("regular sync uses the block epoch fork version", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.AltairForkEpoch = 1
+		cfg.InitializeForkSchedule()
+		params.OverrideBeaconConfig(cfg)
+
+		gvr := [32]byte{0x42}
+		st, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, st.SetGenesisValidatorsRoot(gvr[:]))
+		chain := &mock.ChainService{State: withTestProposer(t, st), Root: genesisBlkRoot[:], DB: beaconDB, FinalizedCheckPoint: &eth.Checkpoint{}}
+		s := &Service{
+			cfg:         &Config{Chain: chain, DB: beaconDB, P2P: p2pt.NewTestP2P(t)},
+			clock:       startup.NewClock(genesis, gvr),
+			genesisTime: genesis,
+			counter:     ratecounter.NewRateCounter(counterSeconds * time.Second),
+		}
+
+		phase0 := util.NewBeaconBlock()
+		phase0.Block.Slot = params.BeaconConfig().SlotsPerEpoch - 1
+		phase0.Block.ParentRoot = genesisBlkRoot[:]
+		wsb0, err := blocks.NewSignedBeaconBlock(phase0)
+		require.NoError(t, err)
+		signTestBlock(t, gvr, wsb0)
+		ro0, err := blocks.NewROBlock(wsb0)
+		require.NoError(t, err)
+
+		altair := util.NewBeaconBlockAltair()
+		altair.Block.Slot = params.BeaconConfig().SlotsPerEpoch
+		altair.Block.ParentRoot = ro0.RootSlice()
+		wsb1, err := blocks.NewSignedBeaconBlock(altair)
+		require.NoError(t, err)
+		signTestBlock(t, gvr, wsb1)
+		ro1, err := blocks.NewROBlock(wsb1)
+		require.NoError(t, err)
+
+		// An Altair block signed with the phase 0 version must fail.
+		stale := util.NewBeaconBlockAltair()
+		stale.Block.Slot = params.BeaconConfig().SlotsPerEpoch + 1
+		stale.Block.ParentRoot = ro1.RootSlice()
+		wsb2, err := blocks.NewSignedBeaconBlock(stale)
+		require.NoError(t, err)
+		phase0Fork := &eth.Fork{PreviousVersion: cfg.GenesisForkVersion, CurrentVersion: cfg.GenesisForkVersion}
+		sig, err := signing.ComputeDomainAndSignWithoutState(phase0Fork, slots.ToEpoch(stale.Block.Slot), cfg.DomainBeaconProposer, gvr[:], wsb2.Block(), testProposerKey)
+		require.NoError(t, err)
+		wsb2.SetSignature(sig)
+		ro2, err := blocks.NewROBlock(wsb2)
+		require.NoError(t, err)
+
+		bwb := []blocks.BlockWithROSidecars{{Block: ro0}, {Block: ro1}, {Block: ro2}}
+		count, err := s.processFetchedDataRegSync(ctx, &blocksQueueFetchedData{bwb: bwb})
+		require.ErrorIs(t, err, coreblocks.ErrInvalidSignature)
+		require.Equal(t, uint64(2), count)
+		require.Equal(t, true, beaconDB.HasBlock(ctx, ro1.Root()))
+		require.Equal(t, false, beaconDB.HasBlock(ctx, ro2.Root()))
 	})
 }
 
@@ -883,10 +1010,11 @@ func TestService_PropcessFetchedDataRegSync(t *testing.T) {
 	// Create a mock chain service.
 	const validatorCount = uint64(64)
 	state, _ := util.DeterministicGenesisState(t, validatorCount)
+	signTestBlock(t, bytesutil.ToBytes32(state.GenesisValidatorsRoot()), signedFuluBlock2)
 	chain := &mock.ChainService{
 		FinalizedCheckPoint: &eth.Checkpoint{},
 		DB:                  dbtest.SetupDB(t),
-		State:               state,
+		State:               withTestProposer(t, state),
 		Root:                block1Root[:],
 	}
 
@@ -1049,9 +1177,10 @@ func TestService_ProcessFetchedData(t *testing.T) {
 			require.NoError(t, err)
 			st, err := util.NewBeaconStateGloas()
 			require.NoError(t, err)
+			signTestBlock(t, bytesutil.ToBytes32(st.GenesisValidatorsRoot()), child.ReadOnlySignedBeaconBlock)
 			require.NoError(t, st.SetSlot(originSlot))
 			chain := &originColumnsChain{ChainService: &mock.ChainService{
-				FinalizedCheckPoint: &eth.Checkpoint{}, DB: beaconDB, State: st, Root: originRoot[:],
+				FinalizedCheckPoint: &eth.Checkpoint{}, DB: beaconDB, State: withTestProposer(t, st), Root: originRoot[:],
 			}}
 			received := false
 			assertStored := func() {

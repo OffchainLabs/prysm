@@ -9,19 +9,23 @@ import (
 	"time"
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	p2pt "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	p2pTypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	beaconsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/container/slice"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -42,6 +46,36 @@ type testCache struct {
 }
 
 var cache = &testCache{}
+
+// testProposerKey signs test blocks as validator 0, see withTestProposer and signTestBlock.
+var testProposerKey = func() bls.SecretKey {
+	k, err := bls.RandKey()
+	if err != nil {
+		panic(err)
+	}
+	return k
+}()
+
+// withTestProposer makes testProposerKey the key of validator 0 in st.
+func withTestProposer(t *testing.T, st state.BeaconState) state.BeaconState {
+	v := &ethpb.Validator{PublicKey: testProposerKey.PublicKey().Marshal(), WithdrawalCredentials: make([]byte, 32)}
+	if st.NumValidators() == 0 {
+		require.NoError(t, st.AppendValidator(v))
+	} else {
+		require.NoError(t, st.UpdateValidatorAtIndex(0, v))
+	}
+	return st
+}
+
+// signTestBlock sets a valid proposer signature from testProposerKey on b.
+func signTestBlock(t *testing.T, gvr [32]byte, b interfaces.ReadOnlySignedBeaconBlock) {
+	epoch := slots.ToEpoch(b.Block().Slot())
+	fork, err := params.Fork(epoch)
+	require.NoError(t, err)
+	sig, err := signing.ComputeDomainAndSignWithoutState(fork, epoch, params.BeaconConfig().DomainBeaconProposer, gvr[:], b.Block(), testProposerKey)
+	require.NoError(t, err)
+	b.(interfaces.SignedBeaconBlock).SetSignature(sig)
+}
 
 type peerData struct {
 	blocks         []primitives.Slot // slots that peer has blocks
@@ -88,7 +122,7 @@ func initializeTestServices(t *testing.T, slots []primitives.Slot, peers []*peer
 	require.NoError(t, err)
 
 	return &mock.ChainService{
-		State: st,
+		State: withTestProposer(t, st),
 		Root:  genesisRoot[:],
 		DB:    beaconDB,
 		FinalizedCheckPoint: &ethpb.Checkpoint{
@@ -224,6 +258,7 @@ func connectPeer(t *testing.T, host *p2pt.TestP2P, datum *peerData, peerStatus *
 		for i := 0; i < len(ret); i++ {
 			wsb, err := blocks.NewSignedBeaconBlock(ret[i])
 			require.NoError(t, err)
+			signTestBlock(t, [32]byte{}, wsb)
 			assert.NoError(t, beaconsync.WriteBlockChunk(stream, startup.NewClock(time.Now(), [32]byte{}), p.Encoding(), wsb))
 		}
 	})
@@ -295,6 +330,7 @@ func connectPeerHavingBlocks(
 			}
 			wsb, err := blocks.NewSignedBeaconBlock(blks[i])
 			require.NoError(t, err)
+			signTestBlock(t, [32]byte{}, wsb)
 			require.NoError(t, beaconsync.WriteBlockChunk(stream, startup.NewClock(time.Now(), [32]byte{}), p.Encoding(), wsb))
 		}
 	})
