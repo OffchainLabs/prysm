@@ -1414,7 +1414,8 @@ func TestValidateBeaconBlockPubSub_RequestsUnknownParentBlock(t *testing.T) {
 		},
 	}
 
-	res, err := r.validateBeaconBlockPubSub(ctx, "", m)
+	// The head state does not expect this proposer, so the parent is requested only from the sender.
+	res, err := r.validateBeaconBlockPubSub(ctx, p2.PeerID(), m)
 	require.ErrorContains(t, "unknown parent for block", err)
 	require.Equal(t, pubsub.ValidationIgnore, res)
 
@@ -2520,6 +2521,81 @@ func TestValidateBeaconBlockPubSub_GloasDeposits(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, pubsub.ValidationIgnore, res)
+		})
+	}
+}
+
+func TestIsExpectedProposer(t *testing.T) {
+	fuluState, _ := util.DeterministicGenesisStateFulu(t, 64)
+	electraState, _ := util.DeterministicGenesisStateElectra(t, 64)
+
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	expectedAt := func(t *testing.T, slot primitives.Slot) primitives.ValidatorIndex {
+		proposer, err := helpers.BeaconProposerIndexAtSlot(t.Context(), fuluState, slot)
+		require.NoError(t, err)
+		return proposer
+	}
+
+	for _, tc := range []struct {
+		expected bool
+		useFulu  bool
+		proposer func(t *testing.T, slot primitives.Slot) primitives.ValidatorIndex
+		slot     primitives.Slot
+		name     string
+	}{
+		{
+			name:     "expected proposer in the head epoch",
+			useFulu:  true,
+			slot:     1,
+			proposer: expectedAt,
+			expected: true,
+		},
+		{
+			name:     "expected proposer in the next epoch",
+			useFulu:  true,
+			slot:     slotsPerEpoch + 1,
+			proposer: expectedAt,
+			expected: true,
+		},
+		{
+			name:    "other proposer",
+			useFulu: true,
+			slot:    1,
+			proposer: func(t *testing.T, slot primitives.Slot) primitives.ValidatorIndex {
+				return (expectedAt(t, slot) + 1) % 64
+			},
+			expected: false,
+		},
+		{
+			name:     "beyond the lookahead",
+			useFulu:  true,
+			slot:     2*slotsPerEpoch + 1,
+			proposer: func(*testing.T, primitives.Slot) primitives.ValidatorIndex { return 0 },
+			expected: false,
+		},
+		{
+			name:     "pre-Fulu head state",
+			useFulu:  false,
+			slot:     1,
+			proposer: expectedAt,
+			expected: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			headState := electraState
+			if tc.useFulu {
+				headState = fuluState
+			}
+
+			s := &Service{cfg: &config{chain: &mock.ChainService{State: headState}}}
+
+			blk := util.NewBeaconBlock()
+			blk.Block.Slot = tc.slot
+			blk.Block.ProposerIndex = tc.proposer(t, tc.slot)
+			signed, err := blocks.NewSignedBeaconBlock(blk)
+			require.NoError(t, err)
+
+			require.Equal(t, tc.expected, s.isExpectedProposer(t.Context(), signed))
 		})
 	}
 }

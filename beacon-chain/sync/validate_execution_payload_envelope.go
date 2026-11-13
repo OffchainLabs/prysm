@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -71,7 +70,7 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	// [IGNORE] The envelope's block root envelope.block_root has been seen (via gossip or non-gossip sources)
 	// (a client MAY queue payload for processing once the block is retrieved).
 	if err := v.VerifyBlockRootSeen(func(root [32]byte) bool { return s.cfg.chain.HasBlock(ctx, root) }); err != nil {
-		return s.queuePendingPayloadEnvelope(ctx, v, env, signedEnvelope)
+		return s.queuePendingPayloadEnvelope(ctx, pid, v, env, signedEnvelope)
 	}
 	root := env.BeaconBlockRoot()
 	// [IGNORE] The node has not seen another valid SignedExecutionPayloadEnvelope for this block root from this builder.
@@ -186,6 +185,7 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 // envelope for processing once the corresponding block arrives.
 func (s *Service) queuePendingPayloadEnvelope(
 	ctx context.Context,
+	pid peer.ID,
 	v verification.ExecutionPayloadEnvelopeVerifier,
 	env interfaces.ROExecutionPayloadEnvelope,
 	signedEnvelope *ethpb.SignedExecutionPayloadEnvelope,
@@ -284,11 +284,7 @@ func (s *Service) queuePendingPayloadEnvelope(
 	inPendingQueue := s.seenPendingBlocks[root]
 	s.pendingQueueLock.RUnlock()
 	if !rootExists && !inPendingQueue && !s.cfg.chain.InForkchoice(root) && !s.cfg.chain.BlockBeingSynced(root) {
-		go func() {
-			if err := s.sendBatchRootRequest(s.ctx, [][32]byte{root}, rand.NewGenerator()); err != nil {
-				log.WithError(err).Debug("Could not request beacon block for pending payload envelope")
-			}
-		}()
+		go s.requestBlocksAccountable(s.ctx, pid, [][32]byte{root}, nil)
 	}
 	return pubsub.ValidationIgnore, nil
 }

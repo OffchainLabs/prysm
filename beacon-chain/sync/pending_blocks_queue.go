@@ -23,6 +23,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/trailofbits/go-mutexasserts"
@@ -34,6 +35,12 @@ var processPendingBlocksPeriod = slots.DivideSlotBy(3 /* times per slot */)
 const maxPeerRequest = 50
 const numOfTries = 5
 const maxBlocksPerSlot = 3
+
+// parentLink is the parent root of a pending block, with the slot of that block.
+type parentLink struct {
+	root      [32]byte
+	childSlot primitives.Slot
+}
 
 // processes pending blocks queue on every processPendingBlocksPeriod
 func (s *Service) processPendingBlocksQueue() {
@@ -74,10 +81,13 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 
 	span.SetAttributes(prysmTrace.Int64Attribute("numSlots", int64(len(sortedSlots))), prysmTrace.Int64Attribute("numPeers", int64(len(s.cfg.p2p.Peers().Connected()))))
 
-	randGen := rand.NewGenerator()
-	var parentRoots [][32]byte
-
 	blkRoots := make([][32]byte, 0, len(sortedSlots)*maxBlocksPerSlot)
+
+	// The parent of each pending block whose parent is missing, keyed by the block root.
+	missingParents := make(map[[32]byte]parentLink)
+
+	// The missing ancestors of pending blocks from the expected proposer, with the lowest slot of their children.
+	parentSlotBounds := make(map[[32]byte]primitives.Slot)
 
 	// Iterate through sorted slots.
 	for i, slot := range sortedSlots {
@@ -123,7 +133,6 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 			}
 
 			parentRoot := b.Block().ParentRoot()
-			inPendingQueue := s.isBlockInQueue(parentRoot)
 
 			// Check if block is bad.
 			keepProcessing, err := s.checkIfBlockIsBad(ctx, span, slot, b, blkRoot)
@@ -134,15 +143,34 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 				continue
 			}
 
-			// Request parent block if not in the pending queue and not in the database.
-			isParentBlockInDB := s.cfg.beaconDB.HasBlock(ctx, parentRoot)
-			if !inPendingQueue && !isParentBlockInDB && s.hasPeer() {
-				parentRoots = append(parentRoots, parentRoot)
+			// A missing parent was requested when the block was queued.
+			// In case that failed, request it again from the best peers, but only for a block from the expected proposer.
+			// Since pending ancestors have lower slots, they were visited before this block. If they are also missing
+			// their parent, request the first missing ancestor instead: linked by hash to this block, it is trusted too.
+			// Ancestors already in the queue or being synced are filtered out later.
+			if !s.cfg.beaconDB.HasBlock(ctx, parentRoot) {
+				link := parentLink{root: parentRoot, childSlot: slot}
+				missingParents[blkRoot] = link
+				if !s.isExpectedProposer(ctx, b) {
+					continue
+				}
+
+				for {
+					next, ok := missingParents[link.root]
+					if !ok {
+						break
+					}
+
+					link = next
+				}
+
+				if bound, ok := parentSlotBounds[link.root]; !ok || link.childSlot < bound {
+					parentSlotBounds[link.root] = link.childSlot
+				}
+
 				continue
 			}
-			if !isParentBlockInDB {
-				continue
-			}
+
 			if !s.cfg.chain.ParentPayloadReady(b.Block()) {
 				go s.requestPayloadEnvelope(parentRoot)
 				continue
@@ -192,7 +220,12 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 		}
 	}
 
-	return s.sendBatchRootRequest(ctx, parentRoots, randGen)
+	parentRoots := make([][32]byte, 0, len(parentSlotBounds))
+	for root := range parentSlotBounds {
+		parentRoots = append(parentRoots, root)
+	}
+
+	return s.sendBatchRootRequest(ctx, parentRoots, parentSlotBounds, rand.NewGenerator())
 }
 
 // startInnerSpan starts a new tracing span for an inner loop and returns the new context and span.
@@ -226,10 +259,6 @@ func (s *Service) isBlockInQueue(parentRoot [32]byte) bool {
 	defer s.pendingQueueLock.RUnlock()
 
 	return s.seenPendingBlocks[parentRoot]
-}
-
-func (s *Service) hasPeer() bool {
-	return len(s.cfg.p2p.Peers().Connected()) > 0
 }
 
 var errNoPeersForPending = errors.New("no suitable peers to process pending block queue, delaying")
@@ -367,7 +396,61 @@ func (s *Service) checkIfBlockIsBad(
 	return true, nil
 }
 
-func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, randGen *rand.Rand) error {
+// requestBlocksAccountable requests the blocks with the given roots from pid, and downscores pid if it does not serve them.
+// Roots already queued or being synced are skipped.
+// slotBounds optionally maps a root to the slot of its known child: the served block must have a lower slot.
+// It returns the roots pid did not serve, or nil if ctx is done.
+func (s *Service) requestBlocksAccountable(
+	ctx context.Context,
+	pid peer.ID,
+	roots [][32]byte,
+	slotBounds map[[32]byte]primitives.Slot,
+) [][32]byte {
+	roots = s.filterOutPendingAndSynced(roots)
+	if pid == "" || len(roots) == 0 {
+		return nil
+	}
+
+	req := p2ptypes.BeaconBlockByRootsReq(roots)
+
+	// Optimistically request the payload envelopes in parallel with the blocks.
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		s.fetchAndQueuePayloadEnvelopesForRoots(ctx, pid, req)
+	})
+
+	received, err := s.sendBeaconBlocksRequest(ctx, &req, pid, fromServingPeer, slotBounds)
+	if err != nil {
+		log.WithError(err).WithField("peer", pid).Debug("Could not request blocks by root")
+	}
+
+	wg.Wait()
+
+	// The request failing because we are shutting down is not the peer's fault.
+	if ctx.Err() != nil {
+		return nil
+	}
+
+	// A block obtained otherwise while the request was in flight counts as served.
+	missing := make([][32]byte, 0, len(roots))
+	for _, root := range roots {
+		if !received[root] && !s.isBlockInQueue(root) && !s.cfg.chain.BlockBeingSynced(root) && !s.cfg.chain.HasBlock(ctx, root) {
+			missing = append(missing, root)
+		}
+	}
+
+	if len(missing) == 0 {
+		return nil
+	}
+
+	s.downscorePeer(pid, "blockNotServed", logrus.Fields{"missing": len(missing), "requested": len(roots)})
+
+	return missing
+}
+
+// sendBatchRootRequest requests the blocks with the given roots from the best peers.
+// slotBounds optionally maps a root to the slot of its known child: the served block must have a lower slot.
+func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, slotBounds map[[32]byte]primitives.Slot, randGen *rand.Rand) error {
 	ctx, span := prysmTrace.StartSpan(ctx, "sendBatchRootRequest")
 	defer span.End()
 
@@ -436,7 +519,8 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 		})
 
 		// Send the request to the peer.
-		if err := s.sendBeaconBlocksRequest(ctx, &req, pid); err != nil {
+		// The roots are ancestors of a block from the expected proposer, linked to it by hash, so are their parents.
+		if _, err := s.sendBeaconBlocksRequest(ctx, &req, pid, fromBestPeers, slotBounds); err != nil {
 			tracing.AnnotateError(span, err)
 			log.WithError(err).Debug("Could not send recent block request")
 		}
