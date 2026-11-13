@@ -53,7 +53,7 @@ func ProcessVoluntaryExits(
 	ctx context.Context,
 	beaconState state.BeaconState,
 	exits []*ethpb.SignedVoluntaryExit,
-	exitInfo *v.ExitInfo,
+	preElectraExitInfo *v.ExitInfo,
 ) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "blocks.ProcessVoluntaryExits")
 	defer span.End()
@@ -64,23 +64,20 @@ func ProcessVoluntaryExits(
 	if len(exits) == 0 {
 		return beaconState, nil
 	}
-	if exitInfo == nil {
-		return nil, errors.New("exit info required to process voluntary exits")
-	}
 	for idx, exit := range exits {
 		if exit == nil || exit.Exit == nil {
 			return nil, errors.New("nil voluntary exit in block body")
 		}
 		val, err := beaconState.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("get validator %d of exit %d: %w", exit.Exit.ValidatorIndex, idx, err)
 		}
 		if err := VerifyExitAndSignature(val, beaconState, exit); err != nil {
 			return nil, errors.Wrapf(err, "could not verify exit %d", idx)
 		}
-		beaconState, err = v.InitiateValidatorExit(ctx, beaconState, exit.Exit.ValidatorIndex, exitInfo)
+		beaconState, err = v.InitiateValidatorExit(ctx, beaconState, exit.Exit.ValidatorIndex, preElectraExitInfo)
 		if err != nil && !errors.Is(err, v.ErrValidatorAlreadyExited) {
-			return nil, err
+			return nil, fmt.Errorf("initiate exit of validator %d: %w", exit.Exit.ValidatorIndex, err)
 		}
 	}
 	return beaconState, nil

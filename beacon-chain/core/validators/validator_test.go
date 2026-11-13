@@ -122,6 +122,16 @@ func TestInitiateValidatorExit_WithdrawalOverflows(t *testing.T) {
 	require.ErrorContains(t, "addition overflows", err)
 }
 
+func TestInitiateValidatorExit_NilExitInfoPreElectra(t *testing.T) {
+	base := &ethpb.BeaconState{Validators: []*ethpb.Validator{
+		{ExitEpoch: params.BeaconConfig().FarFutureEpoch},
+	}}
+	state, err := state_native.New(base)
+	require.NoError(t, err)
+	_, err = validators.InitiateValidatorExit(t.Context(), state, 0, nil /* pre-Electra needs exit info */)
+	require.ErrorContains(t, "exit info is required", err)
+}
+
 func TestInitiateValidatorExit_ProperExit_Electra(t *testing.T) {
 	exitedEpoch := primitives.Epoch(100)
 	idx := primitives.ValidatorIndex(3)
@@ -154,7 +164,7 @@ func TestInitiateValidatorExit_ProperExit_Electra(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, primitives.Gwei(0), ebtc)
 
-	newState, err := validators.InitiateValidatorExit(t.Context(), state, idx, &validators.ExitInfo{}) // exit info is not used in electra
+	newState, err := validators.InitiateValidatorExit(t.Context(), state, idx, nil /* post-Electra */)
 	require.NoError(t, err)
 
 	// Expect that the exit epoch is the next available epoch with max seed lookahead.
