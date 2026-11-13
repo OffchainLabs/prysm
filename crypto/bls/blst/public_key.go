@@ -77,7 +77,6 @@ func AggregatePublicKeys(pubs [][]byte) (common.PublicKey, error) {
 	if len(pubs) == 0 {
 		return nil, errors.New("nil or empty public keys")
 	}
-	agg := new(blstAggregatePublicKey)
 	mulP1 := make([]*blstPublicKey, 0, len(pubs))
 	for _, pubkey := range pubs {
 		pubKeyObj, err := publicKeyFromBytes(pubkey, false)
@@ -86,11 +85,7 @@ func AggregatePublicKeys(pubs [][]byte) (common.PublicKey, error) {
 		}
 		mulP1 = append(mulP1, pubKeyObj.(*PublicKey).p)
 	}
-	// No group check needed here since it is done in PublicKeyFromBytes
-	// Note the checks could be moved from PublicKeyFromBytes into Aggregate
-	// and take advantage of multi-threading.
-	agg.Aggregate(mulP1, false)
-	return &PublicKey{p: agg.ToAffine()}, nil
+	return &PublicKey{p: addPoints(mulP1)}, nil
 }
 
 // Marshal a public key into a LittleEndian byte slice.
@@ -133,12 +128,7 @@ func AggregateMultiplePubkeys(pubkeys []common.PublicKey) common.PublicKey {
 	for _, pubkey := range pubkeys {
 		mulP1 = append(mulP1, pubkey.(*PublicKey).p)
 	}
-	agg := new(blstAggregatePublicKey)
-	// No group check needed here since it is done in PublicKeyFromBytes
-	// Note the checks could be moved from PublicKeyFromBytes into Aggregate
-	// and take advantage of multi-threading.
-	agg.Aggregate(mulP1, false)
-	return &PublicKey{p: agg.ToAffine()}
+	return &PublicKey{p: addPoints(mulP1)}
 }
 
 // SubtractPublicKey returns p - sub as a new key. It undoes the aggregation of sub into p.
@@ -147,4 +137,13 @@ func SubtractPublicKey(p, sub common.PublicKey) common.PublicKey {
 	acc.FromAffine(p.(*PublicKey).p)
 	acc.SubAssign(sub.(*PublicKey).p)
 	return &PublicKey{p: acc.ToAffine()}
+}
+
+// addPoints sums the points, or returns the point at infinity for no points.
+// No group check needed here because decompression already checked each key.
+func addPoints(points []*blstPublicKey) *blstPublicKey {
+	if len(points) == 0 {
+		return new(blstPublicKey)
+	}
+	return blstP1AffinesAdd(points).ToAffine()
 }
