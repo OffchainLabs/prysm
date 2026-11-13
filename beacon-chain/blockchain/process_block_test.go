@@ -395,6 +395,44 @@ func TestFillForkChoiceMissingBlocks_FilterFinalized(t *testing.T) {
 	assert.Equal(t, true, service.cfg.ForkChoiceStore.HasNode(r65), "Didn't save node")
 }
 
+func TestFillForkChoiceMissingBlocks_PreFinalizedParent(t *testing.T) {
+	// Branch in the DB only: slot 63 <- 64, with 64 finalized.
+	setup := func(t *testing.T) (*Service, [32]byte, [32]byte) {
+		service, tr := minimalTestService(t)
+		b63 := util.NewBeaconBlock()
+		b63.Block.Slot = 63
+		util.SaveBlock(t, tr.ctx, tr.db, b63)
+		r63, err := b63.Block.HashTreeRoot()
+		require.NoError(t, err)
+		b64 := util.NewBeaconBlock()
+		b64.Block.Slot = 64
+		b64.Block.ParentRoot = r63[:]
+		util.SaveBlock(t, tr.ctx, tr.db, b64)
+		r64, err := b64.Block.HashTreeRoot()
+		require.NoError(t, err)
+		require.NoError(t, service.cfg.ForkChoiceStore.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Epoch: 2, Root: r64}))
+		return service, r63, r64
+	}
+	fill := func(t *testing.T, service *Service, parent [32]byte) error {
+		blk := util.NewBeaconBlock()
+		blk.Block.Slot = 66
+		blk.Block.ParentRoot = parent[:]
+		wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		beaconState, _ := util.DeterministicGenesisState(t, 32)
+		return service.fillInForkChoiceMissingBlocks(t.Context(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
+	}
+
+	t.Run("parent below finalized slot is rejected", func(t *testing.T) {
+		service, r63, _ := setup(t)
+		require.ErrorIs(t, fill(t, service, r63), ErrNotDescendantOfFinalized)
+	})
+	t.Run("finalized parent is accepted", func(t *testing.T) {
+		service, _, r64 := setup(t)
+		require.NoError(t, fill(t, service, r64))
+	})
+}
+
 func TestFillForkChoiceMissingBlocks_FinalizedSibling(t *testing.T) {
 	service, tr := minimalTestService(t)
 	ctx, beaconDB := tr.ctx, tr.db
