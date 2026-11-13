@@ -61,7 +61,7 @@ func ExitInformation(s state.BeaconState) *ExitInfo {
 
 // InitiateValidatorExit takes in validator index and updates
 // validator with correct voluntary exit parameters.
-// Note: As of Electra, the exitQueueEpoch and churn parameters are unused.
+// Note: preElectraExitInfo is used only before Electra. As of Electra, it can be nil.
 //
 // Spec pseudocode definition:
 //
@@ -84,7 +84,7 @@ func InitiateValidatorExit(
 	ctx context.Context,
 	s state.BeaconState,
 	idx primitives.ValidatorIndex,
-	exitInfo *ExitInfo,
+	preElectraExitInfo *ExitInfo,
 ) (state.BeaconState, error) {
 	validator, err := s.ValidatorAtIndex(idx)
 	if err != nil {
@@ -93,25 +93,23 @@ func InitiateValidatorExit(
 	if validator.ExitEpoch != params.BeaconConfig().FarFutureEpoch {
 		return s, ErrValidatorAlreadyExited
 	}
-	if exitInfo == nil {
-		return nil, errors.New("exit info is required to process validator exit")
-	}
 	// Compute exit queue epoch.
+	var exitQueueEpoch primitives.Epoch
 	if s.Version() < version.Electra {
-		if err = initiateValidatorExitPreElectra(ctx, s, exitInfo); err != nil {
+		if err = initiateValidatorExitPreElectra(ctx, s, preElectraExitInfo); err != nil {
 			return nil, err
 		}
+		exitQueueEpoch = preElectraExitInfo.HighestExitEpoch
 	} else {
 		// [Modified in Electra:EIP7251]
 		// exit_queue_epoch = compute_exit_epoch_and_update_churn(state, validator.effective_balance)
-		var err error
-		exitInfo.HighestExitEpoch, err = s.ExitEpochAndUpdateChurn(ctx, primitives.Gwei(validator.EffectiveBalance))
+		exitQueueEpoch, err = s.ExitEpochAndUpdateChurn(ctx, primitives.Gwei(validator.EffectiveBalance))
 		if err != nil {
 			return nil, err
 		}
 	}
-	validator.ExitEpoch = exitInfo.HighestExitEpoch
-	validator.WithdrawableEpoch, err = exitInfo.HighestExitEpoch.SafeAddEpoch(params.BeaconConfig().MinValidatorWithdrawabilityDelay)
+	validator.ExitEpoch = exitQueueEpoch
+	validator.WithdrawableEpoch, err = exitQueueEpoch.SafeAddEpoch(params.BeaconConfig().MinValidatorWithdrawabilityDelay)
 	if err != nil {
 		return nil, err
 	}
@@ -121,51 +119,7 @@ func InitiateValidatorExit(
 	return s, nil
 }
 
-// InitiateValidatorExitForTotalBal has the same functionality as InitiateValidatorExit,
-// the only difference being how total active balance is obtained. In InitiateValidatorExit
-// it is calculated inside the function and in InitiateValidatorExitForTotalBal it's a
-// function argument.
-func InitiateValidatorExitForTotalBal(
-	ctx context.Context,
-	s state.BeaconState,
-	idx primitives.ValidatorIndex,
-	exitInfo *ExitInfo,
-	totalActiveBalance primitives.Gwei,
-) (state.BeaconState, error) {
-	validator, err := s.ValidatorAtIndex(idx)
-	if err != nil {
-		return nil, err
-	}
-	if validator.ExitEpoch != params.BeaconConfig().FarFutureEpoch {
-		return s, ErrValidatorAlreadyExited
-	}
-
-	// Compute exit queue epoch.
-	if s.Version() < version.Electra {
-		if err = initiateValidatorExitPreElectra(ctx, s, exitInfo); err != nil {
-			return nil, err
-		}
-	} else {
-		// [Modified in Electra:EIP7251]
-		// exit_queue_epoch = compute_exit_epoch_and_update_churn(state, validator.effective_balance)
-		var err error
-		exitInfo.HighestExitEpoch, err = s.ExitEpochAndUpdateChurnForTotalBal(totalActiveBalance, primitives.Gwei(validator.EffectiveBalance))
-		if err != nil {
-			return nil, err
-		}
-	}
-	validator.ExitEpoch = exitInfo.HighestExitEpoch
-	validator.WithdrawableEpoch, err = exitInfo.HighestExitEpoch.SafeAddEpoch(params.BeaconConfig().MinValidatorWithdrawabilityDelay)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.UpdateValidatorAtIndex(idx, validator); err != nil {
-		return nil, err
-	}
-	return s, nil
-}
-
-func initiateValidatorExitPreElectra(ctx context.Context, s state.BeaconState, exitInfo *ExitInfo) error {
+func initiateValidatorExitPreElectra(ctx context.Context, s state.BeaconState, preElectraExitInfo *ExitInfo) error {
 	// Relevant spec code from phase0:
 	//
 	//	exit_epochs = [v.exit_epoch for v in state.validators if v.exit_epoch != FAR_FUTURE_EPOCH]
@@ -174,26 +128,26 @@ func initiateValidatorExitPreElectra(ctx context.Context, s state.BeaconState, e
 	//	if exit_queue_churn >= get_validator_churn_limit(state):
 	//	    exit_queue_epoch += Epoch(1)
 	exitableEpoch := helpers.ActivationExitEpoch(time.CurrentEpoch(s))
-	if exitInfo == nil {
+	if preElectraExitInfo == nil {
 		return errors.New("exit info is required to process validator exit")
 	}
-	if exitableEpoch > exitInfo.HighestExitEpoch {
-		exitInfo.HighestExitEpoch = exitableEpoch
-		exitInfo.Churn = 0
+	if exitableEpoch > preElectraExitInfo.HighestExitEpoch {
+		preElectraExitInfo.HighestExitEpoch = exitableEpoch
+		preElectraExitInfo.Churn = 0
 	}
 	activeValidatorCount, err := helpers.ActiveValidatorCount(ctx, s, time.CurrentEpoch(s))
 	if err != nil {
 		return errors.Wrap(err, "could not get active validator count")
 	}
 	currentChurn := helpers.ValidatorExitChurnLimit(activeValidatorCount)
-	if exitInfo.Churn >= currentChurn {
-		exitInfo.HighestExitEpoch, err = exitInfo.HighestExitEpoch.SafeAdd(1)
+	if preElectraExitInfo.Churn >= currentChurn {
+		preElectraExitInfo.HighestExitEpoch, err = preElectraExitInfo.HighestExitEpoch.SafeAdd(1)
 		if err != nil {
 			return err
 		}
-		exitInfo.Churn = 1
+		preElectraExitInfo.Churn = 1
 	} else {
-		exitInfo.Churn = exitInfo.Churn + 1
+		preElectraExitInfo.Churn = preElectraExitInfo.Churn + 1
 	}
 	return nil
 }
@@ -232,13 +186,9 @@ func SlashValidator(
 	ctx context.Context,
 	s state.BeaconState,
 	slashedIdx primitives.ValidatorIndex,
-	exitInfo *ExitInfo,
+	preElectraExitInfo *ExitInfo,
 ) (state.BeaconState, error) {
-	var err error
-	if exitInfo == nil {
-		return nil, errors.New("exit info is required to slash validator")
-	}
-	s, err = InitiateValidatorExitForTotalBal(ctx, s, slashedIdx, exitInfo, primitives.Gwei(exitInfo.TotalActiveBalance))
+	s, err := InitiateValidatorExit(ctx, s, slashedIdx, preElectraExitInfo)
 	if err != nil && !errors.Is(err, ErrValidatorAlreadyExited) {
 		return nil, errors.Wrapf(err, "could not initiate validator %d exit", slashedIdx)
 	}

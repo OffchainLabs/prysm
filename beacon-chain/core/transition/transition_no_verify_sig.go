@@ -533,21 +533,20 @@ func altairOperations(ctx context.Context, st state.BeaconState, beaconBlock int
 	var err error
 
 	hasSlashings := len(beaconBlock.Body().ProposerSlashings()) > 0 || len(beaconBlock.Body().AttesterSlashings()) > 0
-	// exitInfo is only needed for voluntary exits pre Electra.
-	hasExits := st.Version() < version.Electra && len(beaconBlock.Body().VoluntaryExits()) > 0
-	exitInfo := &validators.ExitInfo{}
+	hasExits := len(beaconBlock.Body().VoluntaryExits()) > 0
+	var preElectraExitInfo *validators.ExitInfo
 	if hasSlashings || hasExits {
 		// ExitInformation is expensive to compute, only do it if we need it.
-		exitInfo = validators.ExitInformation(st)
-		if err := helpers.UpdateTotalActiveBalanceCache(ctx, st, exitInfo.TotalActiveBalance); err != nil {
+		preElectraExitInfo = validators.ExitInformation(st)
+		if err := helpers.UpdateTotalActiveBalanceCache(ctx, st, preElectraExitInfo.TotalActiveBalance); err != nil {
 			return nil, errors.Wrap(err, "could not update total active balance cache")
 		}
 	}
-	st, err = b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), exitInfo)
+	st, err = b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), preElectraExitInfo)
 	if err != nil {
 		return nil, errors.Wrap(ErrProcessProposerSlashingsFailed, err.Error())
 	}
-	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), exitInfo)
+	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), preElectraExitInfo)
 	if err != nil {
 		return nil, errors.Wrap(ErrProcessAttesterSlashingsFailed, err.Error())
 	}
@@ -558,7 +557,7 @@ func altairOperations(ctx context.Context, st state.BeaconState, beaconBlock int
 	if _, err := altair.ProcessDeposits(ctx, st, beaconBlock.Body().Deposits()); err != nil {
 		return nil, errors.Wrap(ErrProcessDepositsFailed, err.Error())
 	}
-	st, err = b.ProcessVoluntaryExits(ctx, st, beaconBlock.Body().VoluntaryExits(), exitInfo)
+	st, err = b.ProcessVoluntaryExits(ctx, st, beaconBlock.Body().VoluntaryExits(), preElectraExitInfo)
 	if err != nil {
 		return nil, errors.Wrap(ErrProcessVoluntaryExitsFailed, err.Error())
 	}
@@ -577,19 +576,19 @@ func phase0Operations(ctx context.Context, st state.BeaconState, beaconBlock int
 	var err error
 	hasSlashings := len(beaconBlock.Body().ProposerSlashings()) > 0 || len(beaconBlock.Body().AttesterSlashings()) > 0
 	hasExits := len(beaconBlock.Body().VoluntaryExits()) > 0
-	var exitInfo *validators.ExitInfo
+	var preElectraExitInfo *validators.ExitInfo
 	if hasSlashings || hasExits {
 		// ExitInformation is expensive to compute, only do it if we need it.
-		exitInfo = validators.ExitInformation(st)
-		if err := helpers.UpdateTotalActiveBalanceCache(ctx, st, exitInfo.TotalActiveBalance); err != nil {
+		preElectraExitInfo = validators.ExitInformation(st)
+		if err := helpers.UpdateTotalActiveBalanceCache(ctx, st, preElectraExitInfo.TotalActiveBalance); err != nil {
 			return nil, errors.Wrap(err, "could not update total active balance cache")
 		}
 	}
-	st, err = b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), exitInfo)
+	st, err = b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), preElectraExitInfo)
 	if err != nil {
 		return nil, errors.Wrap(ErrProcessProposerSlashingsFailed, err.Error())
 	}
-	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), exitInfo)
+	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), preElectraExitInfo)
 	if err != nil {
 		return nil, errors.Wrap(ErrProcessAttesterSlashingsFailed, err.Error())
 	}
@@ -600,7 +599,7 @@ func phase0Operations(ctx context.Context, st state.BeaconState, beaconBlock int
 	if _, err := altair.ProcessDeposits(ctx, st, beaconBlock.Body().Deposits()); err != nil {
 		return nil, errors.Wrap(ErrProcessDepositsFailed, err.Error())
 	}
-	st, err = b.ProcessVoluntaryExits(ctx, st, beaconBlock.Body().VoluntaryExits(), exitInfo)
+	st, err = b.ProcessVoluntaryExits(ctx, st, beaconBlock.Body().VoluntaryExits(), preElectraExitInfo)
 	if err != nil {
 		return nil, errors.Wrap(ErrProcessVoluntaryExitsFailed, err.Error())
 	}

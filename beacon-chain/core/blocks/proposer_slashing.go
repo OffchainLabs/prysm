@@ -50,19 +50,16 @@ func ProcessProposerSlashings(
 	ctx context.Context,
 	beaconState state.BeaconState,
 	slashings []*ethpb.ProposerSlashing,
-	exitInfo *validators.ExitInfo,
+	preElectraExitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "blocks.ProcessProposerSlashings")
 	defer span.End()
 
 	span.SetAttributes(trace.Int64Attribute("count", int64(len(slashings))))
 
-	if exitInfo == nil && len(slashings) > 0 {
-		return nil, errors.New("exit info required to process proposer slashings")
-	}
 	var err error
 	for _, slashing := range slashings {
-		beaconState, err = ProcessProposerSlashing(ctx, beaconState, slashing, exitInfo)
+		beaconState, err = ProcessProposerSlashing(ctx, beaconState, slashing, preElectraExitInfo)
 		if err != nil {
 			return nil, err
 		}
@@ -77,14 +74,11 @@ func ProcessProposerSlashingsNoVerify(
 	ctx context.Context,
 	beaconState state.BeaconState,
 	slashings []*ethpb.ProposerSlashing,
-	exitInfo *validators.ExitInfo,
+	preElectraExitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
-	if exitInfo == nil && len(slashings) > 0 {
-		return nil, errors.New("exit info required to process proposer slashings")
-	}
 	var err error
 	for _, slashing := range slashings {
-		beaconState, err = ProcessProposerSlashingNoVerify(ctx, beaconState, slashing, exitInfo)
+		beaconState, err = ProcessProposerSlashingNoVerify(ctx, beaconState, slashing, preElectraExitInfo)
 		if err != nil {
 			return nil, err
 		}
@@ -97,7 +91,7 @@ func ProcessProposerSlashing(
 	ctx context.Context,
 	beaconState state.BeaconState,
 	slashing *ethpb.ProposerSlashing,
-	exitInfo *validators.ExitInfo,
+	preElectraExitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
 	if slashing == nil {
 		return nil, errors.New("nil proposer slashings in block body")
@@ -105,7 +99,7 @@ func ProcessProposerSlashing(
 	if err := VerifyProposerSlashing(beaconState, slashing); err != nil {
 		return nil, errors.Wrap(err, "could not verify proposer slashing")
 	}
-	return processProposerSlashing(ctx, beaconState, slashing, exitInfo)
+	return processProposerSlashing(ctx, beaconState, slashing, preElectraExitInfo)
 }
 
 // ProcessProposerSlashingNoVerify processes individual proposer slashing without verifying it.
@@ -115,25 +109,21 @@ func ProcessProposerSlashingNoVerify(
 	ctx context.Context,
 	beaconState state.BeaconState,
 	slashing *ethpb.ProposerSlashing,
-	exitInfo *validators.ExitInfo,
+	preElectraExitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
 	if slashing == nil {
 		return nil, errors.New("nil proposer slashings in block body")
 	}
-	return processProposerSlashing(ctx, beaconState, slashing, exitInfo)
+	return processProposerSlashing(ctx, beaconState, slashing, preElectraExitInfo)
 }
 
 func processProposerSlashing(
 	ctx context.Context,
 	beaconState state.BeaconState,
 	slashing *ethpb.ProposerSlashing,
-	exitInfo *validators.ExitInfo,
+	preElectraExitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
-	if exitInfo == nil {
-		return nil, errors.New("exit info is required to process proposer slashing")
-	}
-
-	beaconState, err := validators.SlashValidator(ctx, beaconState, slashing.Header_1.Header.ProposerIndex, exitInfo)
+	beaconState, err := validators.SlashValidator(ctx, beaconState, slashing.Header_1.Header.ProposerIndex, preElectraExitInfo)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not slash proposer index %d", slashing.Header_1.Header.ProposerIndex)
 	}
