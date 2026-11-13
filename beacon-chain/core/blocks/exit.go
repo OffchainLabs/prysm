@@ -70,14 +70,14 @@ func ProcessVoluntaryExits(
 		}
 		val, err := beaconState.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("get validator %d of exit %d: %w", exit.Exit.ValidatorIndex, idx, err)
 		}
 		if err := VerifyExitAndSignature(val, beaconState, exit); err != nil {
 			return nil, errors.Wrapf(err, "could not verify exit %d", idx)
 		}
 		beaconState, err = v.InitiateValidatorExit(ctx, beaconState, exit.Exit.ValidatorIndex, preElectraExitInfo)
 		if err != nil && !errors.Is(err, v.ErrValidatorAlreadyExited) {
-			return nil, err
+			return nil, fmt.Errorf("initiate exit of validator %d: %w", exit.Exit.ValidatorIndex, err)
 		}
 	}
 	return beaconState, nil

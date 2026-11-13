@@ -6,6 +6,7 @@ package validators
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
@@ -88,7 +89,7 @@ func InitiateValidatorExit(
 ) (state.BeaconState, error) {
 	validator, err := s.ValidatorAtIndex(idx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get validator %d: %w", idx, err)
 	}
 	if validator.ExitEpoch != params.BeaconConfig().FarFutureEpoch {
 		return s, ErrValidatorAlreadyExited
@@ -97,7 +98,7 @@ func InitiateValidatorExit(
 	var exitQueueEpoch primitives.Epoch
 	if s.Version() < version.Electra {
 		if err = initiateValidatorExitPreElectra(ctx, s, preElectraExitInfo); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("compute pre-Electra exit queue epoch: %w", err)
 		}
 		exitQueueEpoch = preElectraExitInfo.HighestExitEpoch
 	} else {
@@ -105,16 +106,16 @@ func InitiateValidatorExit(
 		// exit_queue_epoch = compute_exit_epoch_and_update_churn(state, validator.effective_balance)
 		exitQueueEpoch, err = s.ExitEpochAndUpdateChurn(ctx, primitives.Gwei(validator.EffectiveBalance))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("compute exit queue epoch: %w", err)
 		}
 	}
 	validator.ExitEpoch = exitQueueEpoch
 	validator.WithdrawableEpoch, err = exitQueueEpoch.SafeAddEpoch(params.BeaconConfig().MinValidatorWithdrawabilityDelay)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("compute withdrawable epoch: %w", err)
 	}
 	if err := s.UpdateValidatorAtIndex(idx, validator); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("update validator %d: %w", idx, err)
 	}
 	return s, nil
 }
@@ -143,7 +144,7 @@ func initiateValidatorExitPreElectra(ctx context.Context, s state.BeaconState, p
 	if preElectraExitInfo.Churn >= currentChurn {
 		preElectraExitInfo.HighestExitEpoch, err = preElectraExitInfo.HighestExitEpoch.SafeAdd(1)
 		if err != nil {
-			return err
+			return fmt.Errorf("increment highest exit epoch: %w", err)
 		}
 		preElectraExitInfo.Churn = 1
 	} else {
@@ -195,14 +196,14 @@ func SlashValidator(
 	currentEpoch := slots.ToEpoch(s.Slot())
 	validator, err := s.ValidatorAtIndex(slashedIdx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get validator %d: %w", slashedIdx, err)
 	}
 	validator.Slashed = true
 	maxWithdrawableEpoch := max(validator.WithdrawableEpoch, currentEpoch+params.BeaconConfig().EpochsPerSlashingsVector)
 	validator.WithdrawableEpoch = maxWithdrawableEpoch
 
 	if err := s.UpdateValidatorAtIndex(slashedIdx, validator); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("update validator %d: %w", slashedIdx, err)
 	}
 
 	// The slashing amount is represented by epochs per slashing vector. The validator's effective balance is then applied to that amount.
@@ -212,7 +213,7 @@ func SlashValidator(
 		uint64(currentEpoch%params.BeaconConfig().EpochsPerSlashingsVector),
 		currentSlashing+validator.EffectiveBalance,
 	); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("update slashings: %w", err)
 	}
 
 	slashingQuotient, proposerRewardQuotient, whistleblowerRewardQuotient, err := SlashingParamsPerVersion(s.Version())
@@ -225,7 +226,7 @@ func SlashValidator(
 		return nil, errors.Wrap(err, "failed to compute slashing slashingPenalty")
 	}
 	if err := helpers.DecreaseBalance(s, slashedIdx, slashingPenalty); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decrease balance of validator %d: %w", slashedIdx, err)
 	}
 
 	proposerIdx, err := helpers.BeaconProposerIndex(ctx, s)
@@ -242,10 +243,10 @@ func SlashValidator(
 		return nil, errors.Wrap(err, "failed to compute proposer reward")
 	}
 	if err := helpers.IncreaseBalance(s, proposerIdx, proposerReward); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("increase balance of proposer %d: %w", proposerIdx, err)
 	}
 	if err := helpers.IncreaseBalance(s, whistleBlowerIdx, whistleblowerReward-proposerReward); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("increase balance of whistleblower %d: %w", whistleBlowerIdx, err)
 	}
 	if err := s.ClearBuilderPendingPaymentsForProposer(slashedIdx); err != nil {
 		return nil, errors.Wrap(err, "could not clear builder pending payments")

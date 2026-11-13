@@ -69,7 +69,7 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) error {
 	for _, idx := range eligibleForActivationQ {
 		v, err := st.ValidatorAtIndex(idx)
 		if err != nil {
-			return err
+			return fmt.Errorf("get validator %d eligible for the activation queue: %w", idx, err)
 		}
 		v.ActivationEligibilityEpoch = currentEpoch + 1
 		if err := st.UpdateValidatorAtIndex(idx, v); err != nil {
@@ -90,7 +90,7 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) error {
 	for _, idx := range eligibleForActivation {
 		v, err := st.ValidatorAtIndex(idx)
 		if err != nil {
-			return err
+			return fmt.Errorf("get validator %d eligible for activation: %w", idx, err)
 		}
 		v.ActivationEpoch = activationEpoch
 		if err := st.UpdateValidatorAtIndex(idx, v); err != nil {

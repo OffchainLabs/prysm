@@ -58,10 +58,10 @@ func ProcessProposerSlashings(
 	span.SetAttributes(trace.Int64Attribute("count", int64(len(slashings))))
 
 	var err error
-	for _, slashing := range slashings {
+	for i, slashing := range slashings {
 		beaconState, err = ProcessProposerSlashing(ctx, beaconState, slashing, preElectraExitInfo)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("process proposer slashing %d: %w", i, err)
 		}
 	}
 	return beaconState, nil
@@ -77,10 +77,10 @@ func ProcessProposerSlashingsNoVerify(
 	preElectraExitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
 	var err error
-	for _, slashing := range slashings {
+	for i, slashing := range slashings {
 		beaconState, err = ProcessProposerSlashingNoVerify(ctx, beaconState, slashing, preElectraExitInfo)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("process proposer slashing %d: %w", i, err)
 		}
 	}
 	return beaconState, nil
