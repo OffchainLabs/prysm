@@ -13,6 +13,7 @@ import (
 	p2pt "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	p2pTypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	beaconsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -501,6 +502,7 @@ func TestBlocksFetcher_findAncestor(t *testing.T) {
 			chain: mc,
 			p2p:   p2p,
 			db:    beaconDB,
+			clock: startup.NewClock(time.Now(), [32]byte{}),
 		},
 	)
 	fetcher.rateLimiter = leakybucket.NewCollector(6400, 6400, 1*time.Second, false)
@@ -527,6 +529,31 @@ func TestBlocksFetcher_findAncestor(t *testing.T) {
 
 		fork, err := fetcher.findAncestor(ctx, p2.PeerID(), wsb)
 		assert.ErrorContains(t, "no common ancestor found", err)
+		assert.Equal(t, (*forkData)(nil), fork)
+	})
+
+	t.Run("parent slot not lower than child slot", func(t *testing.T) {
+		p2 := p2pt.NewTestP2P(t)
+		p2p.Connect(p2)
+
+		// The child is knownBlocks[4] (slot 4). The peer answers its parent request with a
+		// block at slot 10 that builds on genesis, so it would otherwise be accepted.
+		parent := util.NewBeaconBlock()
+		parent.Block.Slot = 10
+		parent.Block.ParentRoot = genesisRoot[:]
+		p2.SetStreamHandler(pcl, func(stream network.Stream) {
+			defer func() { assert.NoError(t, stream.Close()) }()
+			assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, new(p2pTypes.BeaconBlockByRootsReq)))
+			wsb, err := blocks.NewSignedBeaconBlock(parent)
+			assert.NoError(t, err)
+			assert.NoError(t, beaconsync.WriteBlockChunk(stream, startup.NewClock(time.Now(), [32]byte{}), p2.Encoding(), wsb))
+		})
+
+		wsb, err := blocks.NewSignedBeaconBlock(knownBlocks[4])
+		require.NoError(t, err)
+
+		fork, err := fetcher.findAncestor(ctx, p2.PeerID(), wsb)
+		assert.ErrorContains(t, "parent block slot 10 is not lower than child slot 4", err)
 		assert.Equal(t, (*forkData)(nil), fork)
 	})
 }
