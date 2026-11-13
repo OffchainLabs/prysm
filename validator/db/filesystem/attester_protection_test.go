@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"os"
 	"sync"
 	"testing"
 
@@ -506,4 +507,79 @@ func BenchmarkStore_SaveAttestationForPubKey(b *testing.B) {
 
 	err = validatorDB.Close()
 	require.NoError(b, err)
+}
+
+func TestStore_SlashableAttestationCheck_InvalidRecords(t *testing.T) {
+	pubkey := getPubKeys(t, 1)[0]
+	att := &ethpb.IndexedAttestation{Data: &ethpb.AttestationData{
+		Source: &ethpb.Checkpoint{Epoch: 5}, Target: &ethpb.Checkpoint{Epoch: 6},
+	}}
+	for _, tt := range invalidProtectionRecords() {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := NewStore(t.TempDir(), nil)
+			require.NoError(t, err)
+			filename := writeProtectionFixture(t, s, pubkey, tt.data)
+			err = s.SlashableAttestationCheck(t.Context(), att, pubkey, [32]byte{}, false, nil)
+			require.ErrorContains(t, "could not get validator slashing protection", err)
+			require.ErrorContains(t, filename, err)
+			requireProtectionBytes(t, filename, tt.data)
+		})
+	}
+}
+func TestStore_SlashableAttestationCheck_ValidRecords(t *testing.T) {
+	pubkey := getPubKeys(t, 1)[0]
+	att := &ethpb.IndexedAttestation{Data: &ethpb.AttestationData{
+		Source: &ethpb.Checkpoint{Epoch: 5}, Target: &ethpb.Checkpoint{Epoch: 6},
+	}}
+	for _, tt := range []struct{ name, data string }{
+		{"missing", ""},
+		{"fresh", "lastSignedAttestationSourceEpoch: 0\n"},
+		{"history", "lastSignedAttestationSourceEpoch: 3\nlastSignedAttestationTargetEpoch: 4\nlatestSignedBlockSlot: 12\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := NewStore(t.TempDir(), nil)
+			require.NoError(t, err)
+			if tt.name != "missing" {
+				writeProtectionFixture(t, s, pubkey, tt.data)
+			}
+			require.NoError(t, s.SlashableAttestationCheck(t.Context(), att, pubkey, [32]byte{}, false, nil))
+			reopened, err := NewStore(s.DatabasePath(), nil)
+			require.NoError(t, err)
+			actual, err := reopened.validatorSlashingProtection(pubkey)
+			require.NoError(t, err)
+			require.Equal(t, uint64(5), actual.LastSignedAttestationSourceEpoch)
+			require.Equal(t, uint64(6), *actual.LastSignedAttestationTargetEpoch)
+			if tt.name == "history" {
+				require.Equal(t, uint64(12), *actual.LatestSignedBlockSlot)
+			}
+			before, err := os.ReadFile(reopened.pubkeySlashingProtectionFilePath(pubkey))
+			require.NoError(t, err)
+			err = reopened.SlashableAttestationCheck(t.Context(), att, pubkey, [32]byte{}, false, nil)
+			require.ErrorContains(t, failedAttLocalProtectionErr, err)
+			after, err := reopened.validatorSlashingProtection(pubkey)
+			require.NoError(t, err)
+			require.DeepEqual(t, actual, after, "refused duty must not change watermarks")
+			requireProtectionBytes(t, reopened.pubkeySlashingProtectionFilePath(pubkey), string(before))
+		})
+	}
+}
+
+func TestStore_SlashableAttestationCheck_UnsupportedPlatform(t *testing.T) {
+	if protectionDurabilitySupported() == nil {
+		t.Skip("requires a platform without supported durable protection writes")
+	}
+	directory := t.TempDir()
+	s, err := NewStore(directory, nil)
+	require.NoError(t, err)
+	pubkey := getPubKeys(t, 1)[0]
+	att := &ethpb.IndexedAttestation{Data: &ethpb.AttestationData{
+		Source: &ethpb.Checkpoint{Epoch: 5}, Target: &ethpb.Checkpoint{Epoch: 6},
+	}}
+	err = s.SlashableAttestationCheck(t.Context(), att, pubkey, [32]byte{}, false, nil)
+	require.ErrorContains(t, "durable slashing protection writes are unsupported", err)
+	_, err = os.Stat(s.pubkeySlashingProtectionFilePath(pubkey))
+	require.Equal(t, true, os.IsNotExist(err), "must not create a protection record")
+	entries, err := os.ReadDir(directory)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(entries), "must not create database directories or temporary files")
 }

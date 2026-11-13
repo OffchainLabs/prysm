@@ -29,12 +29,66 @@ func getPubKeys(t *testing.T, count int) [][fieldparams.BLSPubkeyLength]byte {
 }
 
 func TestStore_NewStore(t *testing.T) {
-	// Create some pubkeys.
-	pubkeys := getPubKeys(t, 5)
+	t.Run("success", func(t *testing.T) {
+		pubkeys := getPubKeys(t, 5)
+		_, err := NewStore(t.TempDir(), &Config{PubKeys: pubkeys})
+		require.NoError(t, err, "NewStore should not return an error")
+	})
 
-	// Just check `NewStore` does not return an error.
-	_, err := NewStore(t.TempDir(), &Config{PubKeys: pubkeys})
-	require.NoError(t, err, "NewStore should not return an error")
+	t.Run("initialization error", func(t *testing.T) {
+		blocker := path.Join(t.TempDir(), "blocked-parent")
+		const contents = "existing regular file\n"
+		require.NoError(t, os.WriteFile(blocker, []byte(contents), 0o600))
+
+		s, err := NewStore(blocker, &Config{PubKeys: getPubKeys(t, 1)})
+		require.ErrorContains(t, "could not create directory", err)
+		require.IsNil(t, s)
+		requireProtectionBytes(t, blocker, contents)
+	})
+
+	t.Run("historical layout", func(t *testing.T) {
+		pubkey := [fieldparams.BLSPubkeyLength]byte{1}
+		for _, tt := range []struct {
+			name   string
+			config *Config
+		}{
+			{"without initialization", nil},
+			{"with initialization", &Config{PubKeys: [][fieldparams.BLSPubkeyLength]byte{pubkey}}},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				directory := t.TempDir()
+				// Seed the historical layout independently of store path constants and helpers.
+				historyDir := path.Join(directory, "validator-client-data", "slashing-protection")
+				require.NoError(t, os.MkdirAll(historyDir, 0o700))
+				filename := path.Join(historyDir, fmt.Sprintf("0x%x.yaml", pubkey))
+				const history = "lastSignedAttestationSourceEpoch: 3\nlatestSignedBlockSlot: 12\nlastSignedAttestationTargetEpoch: 4\n"
+				require.NoError(t, os.WriteFile(filename, []byte(history), 0o600))
+				slot, target := uint64(12), uint64(4)
+				want := &ValidatorSlashingProtection{
+					LatestSignedBlockSlot:            &slot,
+					LastSignedAttestationSourceEpoch: 3,
+					LastSignedAttestationTargetEpoch: &target,
+				}
+
+				s, err := NewStore(directory, tt.config)
+				require.NoError(t, err)
+				actual, err := s.validatorSlashingProtection(pubkey)
+				require.NoError(t, err)
+				require.NotNil(t, actual)
+				require.DeepEqual(t, *want, *actual)
+				requireProtectionBytes(t, filename, history)
+				require.NoError(t, s.Close())
+
+				reopened, err := NewStore(directory, nil)
+				require.NoError(t, err)
+				actual, err = reopened.validatorSlashingProtection(pubkey)
+				require.NoError(t, err)
+				require.NotNil(t, actual)
+				require.DeepEqual(t, *want, *actual)
+				requireProtectionBytes(t, filename, history)
+			})
+		}
+	})
 }
 
 func TestStore_Close(t *testing.T) {
@@ -305,4 +359,133 @@ func TestStore_publicKeys(t *testing.T) {
 	}
 
 	require.DeepEqual(t, expectedSet, actualSet)
+}
+
+func invalidProtectionRecords() []struct{ name, data string } {
+	return []struct{ name, data string }{
+		{"empty", ""},
+		{"whitespace", " \n\t\n"},
+		{"comments", "# protection\n# missing data\n"},
+		{"null", "null\n"},
+		{"tilde", "~\n"},
+		{"empty mapping", "{}\n"},
+		{"missing source", "latestSignedBlockSlot: 12\nlastSignedAttestationTargetEpoch: 4\n"},
+		{"unknown only", "futureField: 1\n"},
+		{"null source", "lastSignedAttestationSourceEpoch: null\n"},
+		{"malformed", "lastSignedAttestationSourceEpoch: [\n"},
+		{"sequence", "- lastSignedAttestationSourceEpoch: 0\n"},
+		{"scalar", "42\n"},
+		{"string source", "lastSignedAttestationSourceEpoch: text\n"},
+		{"fractional source", "lastSignedAttestationSourceEpoch: 1.5\n"},
+		{"floating source", "lastSignedAttestationSourceEpoch: 1.0\n"},
+		{"mapping source", "lastSignedAttestationSourceEpoch: {}\n"},
+		{"boolean source", "lastSignedAttestationSourceEpoch: true\n"},
+		{"negative source", "lastSignedAttestationSourceEpoch: -1\n"},
+		{"overflow source", "lastSignedAttestationSourceEpoch: 18446744073709551616\n"},
+		{"duplicate source", "lastSignedAttestationSourceEpoch: 0\nlastSignedAttestationSourceEpoch: 1\n"},
+		{"duplicate slot", "lastSignedAttestationSourceEpoch: 0\nlatestSignedBlockSlot: 1\nlatestSignedBlockSlot: 2\n"},
+		{"duplicate target", "lastSignedAttestationSourceEpoch: 0\nlastSignedAttestationTargetEpoch: 1\nlastSignedAttestationTargetEpoch: 2\n"},
+		{"invalid slot", "lastSignedAttestationSourceEpoch: 0\nlatestSignedBlockSlot: text\n"},
+		{"null-tagged sequence slot", "lastSignedAttestationSourceEpoch: 0\nlatestSignedBlockSlot: !!null []\n"},
+		{"null-tagged mapping slot", "lastSignedAttestationSourceEpoch: 0\nlatestSignedBlockSlot: !!null {}\n"},
+		{"null-tagged sequence target", "lastSignedAttestationSourceEpoch: 0\nlastSignedAttestationTargetEpoch: !!null []\n"},
+		{"null-tagged mapping target", "lastSignedAttestationSourceEpoch: 0\nlastSignedAttestationTargetEpoch: !!null {}\n"},
+		{"overflow slot", "lastSignedAttestationSourceEpoch: 0\nlatestSignedBlockSlot: 18446744073709551616\n"},
+		{"overflow target", "lastSignedAttestationSourceEpoch: 0\nlastSignedAttestationTargetEpoch: 18446744073709551616\n"},
+		{"invalid target", "lastSignedAttestationSourceEpoch: 0\nlastSignedAttestationTargetEpoch: -1\n"},
+		{"multiple documents", "lastSignedAttestationSourceEpoch: 0\n---\nlastSignedAttestationSourceEpoch: 1\n"},
+		{"empty second document", "lastSignedAttestationSourceEpoch: 0\n---\n"},
+		{"malformed second document", "lastSignedAttestationSourceEpoch: 0\n---\n[\n"},
+		{"direct merge", "<<: {lastSignedAttestationSourceEpoch: 0}\n"},
+		{"alias merge", "defaults: &defaults {lastSignedAttestationSourceEpoch: 0}\n<<: *defaults\n"},
+		{"sequence merge", "<<: [{lastSignedAttestationSourceEpoch: 0}]\n"},
+		{"alias source key", "futureField: &source lastSignedAttestationSourceEpoch\n*source: 0\n"},
+		{"nonstring key", "lastSignedAttestationSourceEpoch: 0\n42: ignored\n"},
+		{"sequence key", "lastSignedAttestationSourceEpoch: 0\n? [future, key]\n: ignored\n"},
+	}
+}
+
+func writeProtectionFixture(t *testing.T, s *Store, pubkey [fieldparams.BLSPubkeyLength]byte, data string) string {
+	t.Helper()
+	require.NoError(t, file.MkdirAll(s.slashingProtectionDirPath()))
+	filename := s.pubkeySlashingProtectionFilePath(pubkey)
+	require.NoError(t, file.WriteFile(filename, []byte(data)))
+	return filename
+}
+func requireProtectionBytes(t *testing.T, filename, expected string) {
+	t.Helper()
+	actual, err := os.ReadFile(filename)
+	require.NoError(t, err)
+	require.Equal(t, expected, string(actual), "protection data must not be replaced")
+}
+func TestStore_validatorSlashingProtection_InvalidRecords(t *testing.T) {
+	pubkey := getPubKeys(t, 1)[0]
+	for _, tt := range invalidProtectionRecords() {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := NewStore(t.TempDir(), nil)
+			require.NoError(t, err)
+			filename := writeProtectionFixture(t, s, pubkey, tt.data)
+			actual, err := s.validatorSlashingProtection(pubkey)
+			require.ErrorContains(t, filename, err)
+			require.Equal(t, (*ValidatorSlashingProtection)(nil), actual)
+			requireProtectionBytes(t, filename, tt.data)
+		})
+	}
+}
+func TestStore_validatorSlashingProtection_ValidRecords(t *testing.T) {
+	zero, slot, target := uint64(0), uint64(12), uint64(4)
+	for _, tt := range []struct {
+		name, data string
+		want       *ValidatorSlashingProtection
+	}{
+		{"fresh", "lastSignedAttestationSourceEpoch: 0\n", &ValidatorSlashingProtection{}},
+		{"null optionals", "lastSignedAttestationSourceEpoch: 0\nlatestSignedBlockSlot: null\nlastSignedAttestationTargetEpoch: null\n", &ValidatorSlashingProtection{}},
+		{"zero optionals", "lastSignedAttestationSourceEpoch: 0\nlatestSignedBlockSlot: 0\nlastSignedAttestationTargetEpoch: 0\n", &ValidatorSlashingProtection{LatestSignedBlockSlot: &zero, LastSignedAttestationTargetEpoch: &zero}},
+		{"history", "lastSignedAttestationSourceEpoch: 3\nlatestSignedBlockSlot: 12\nlastSignedAttestationTargetEpoch: 4\n", &ValidatorSlashingProtection{LatestSignedBlockSlot: &slot, LastSignedAttestationSourceEpoch: 3, LastSignedAttestationTargetEpoch: &target}},
+		{"unknown field", "lastSignedAttestationSourceEpoch: 0\nfutureField: {value: 1}\n", &ValidatorSlashingProtection{}},
+		{"maximum source", "lastSignedAttestationSourceEpoch: 18446744073709551615\n", &ValidatorSlashingProtection{LastSignedAttestationSourceEpoch: ^uint64(0)}},
+		{"quoted merge key", "lastSignedAttestationSourceEpoch: 0\n\"<<\": {futureField: 1}\n", &ValidatorSlashingProtection{}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := NewStore(t.TempDir(), nil)
+			require.NoError(t, err)
+			pubkey := getPubKeys(t, 1)[0]
+			filename := writeProtectionFixture(t, s, pubkey, tt.data)
+			reopened, err := NewStore(s.DatabasePath(), nil)
+			require.NoError(t, err)
+			actual, err := reopened.validatorSlashingProtection(pubkey)
+			require.NoError(t, err)
+			require.DeepEqual(t, tt.want, actual)
+			requireProtectionBytes(t, filename, tt.data)
+		})
+	}
+}
+func TestStore_validatorSlashingProtection_MissingRecords(t *testing.T) {
+	for _, existingDirectory := range []bool{false, true} {
+		t.Run(fmt.Sprintf("directory exists %t", existingDirectory), func(t *testing.T) {
+			s, err := NewStore(t.TempDir(), nil)
+			require.NoError(t, err)
+			if existingDirectory {
+				require.NoError(t, file.MkdirAll(s.slashingProtectionDirPath()))
+			}
+			pubkey := getPubKeys(t, 1)[0]
+			require.NoError(t, s.saveValidatorSlashingProtection(pubkey, nil))
+			actual, err := s.validatorSlashingProtection(pubkey)
+			require.NoError(t, err)
+			require.Equal(t, (*ValidatorSlashingProtection)(nil), actual)
+			_, err = os.Stat(s.pubkeySlashingProtectionFilePath(pubkey))
+			require.Equal(t, true, os.IsNotExist(err))
+		})
+	}
+}
+func TestStore_validatorSlashingProtection_GeneratedFreshRecord(t *testing.T) {
+	pubkeys := getPubKeys(t, 1)
+	directory := t.TempDir()
+	_, err := NewStore(directory, &Config{PubKeys: pubkeys})
+	require.NoError(t, err)
+	reopened, err := NewStore(directory, nil)
+	require.NoError(t, err)
+	actual, err := reopened.validatorSlashingProtection(pubkeys[0])
+	require.NoError(t, err)
+	require.DeepEqual(t, &ValidatorSlashingProtection{}, actual)
 }
