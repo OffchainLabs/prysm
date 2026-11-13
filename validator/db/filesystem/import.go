@@ -79,9 +79,9 @@ func (s *Store) ImportStandardProtectionJSON(ctx context.Context, r io.Reader) e
 
 func importBlockProposals(ctx context.Context, pubkey [fieldparams.BLSPubkeyLength]byte, item *format.ProtectionData, validatorDB iface.ValidatorDB) error {
 	for _, sb := range item.SignedBlocks {
-		// If signing block is nil, return early
+		// If signing block is nil, skip it
 		if sb == nil {
-			return nil
+			continue
 		}
 
 		// Convert slot to primitives.Slot
@@ -100,10 +100,12 @@ func importBlockProposals(ctx context.Context, pubkey [fieldparams.BLSPubkeyLeng
 }
 
 func importAttestations(ctx context.Context, pubkey [fieldparams.BLSPubkeyLength]byte, item *format.ProtectionData, validatorDB iface.ValidatorDB) error {
-	atts := make([]*ethpb.IndexedAttestation, len(item.SignedAttestations))
-	for i := range item.SignedAttestations {
-		// Get signed attestation
-		sa := item.SignedAttestations[i]
+	atts := make([]*ethpb.IndexedAttestation, 0, len(item.SignedAttestations))
+	for _, sa := range item.SignedAttestations {
+		// If signed attestation is nil, skip it
+		if sa == nil {
+			continue
+		}
 
 		// Convert source epoch to primitives.Epoch
 		source, err := helpers.EpochFromString(sa.SourceEpoch)
@@ -129,7 +131,7 @@ func importAttestations(ctx context.Context, pubkey [fieldparams.BLSPubkeyLength
 			},
 		}
 
-		atts[i] = att
+		atts = append(atts, att)
 	}
 
 	// Save attestations

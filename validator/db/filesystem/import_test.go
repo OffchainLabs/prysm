@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/validator/db/common"
 	"github.com/OffchainLabs/prysm/v7/validator/slashing-protection-history/format"
 	valtest "github.com/OffchainLabs/prysm/v7/validator/testing"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 func TestStore_ImportInterchangeData_BadJSON(t *testing.T) {
@@ -140,4 +142,45 @@ func TestStore_ImportInterchangeData_OK(t *testing.T) {
 			require.ErrorContains(t, "could not sign attestation", err)
 		}
 	}
+}
+
+func TestStore_ImportInterchangeData_NilEntries(t *testing.T) {
+	ctx := t.Context()
+	publicKeys, err := valtest.CreateRandomPubKeys(1)
+	require.NoError(t, err)
+	pubkey := publicKeys[0]
+
+	newStoreWith := func(t *testing.T, item *format.ProtectionData) *Store {
+		s, err := NewStore(t.TempDir(), &Config{PubKeys: publicKeys})
+		require.NoError(t, err)
+		item.Pubkey = hexutil.Encode(pubkey[:])
+		interchange := &format.EIPSlashingProtectionFormat{Data: []*format.ProtectionData{item}}
+		interchange.Metadata.InterchangeFormatVersion = format.InterchangeFormatVersion
+		interchange.Metadata.GenesisValidatorsRoot = hexutil.Encode(make([]byte, 32))
+		blob, err := json.Marshal(interchange)
+		require.NoError(t, err)
+		require.NoError(t, s.ImportStandardProtectionJSON(ctx, bytes.NewBuffer(blob)))
+		return s
+	}
+
+	t.Run("nil signed block does not drop later blocks", func(t *testing.T) {
+		s := newStoreWith(t, &format.ProtectionData{
+			SignedBlocks: []*format.SignedBlock{nil, {Slot: "30"}},
+		})
+		proposals, err := s.ProposalHistoryForPubKey(ctx, pubkey)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(proposals))
+		require.Equal(t, primitives.Slot(30), proposals[0].Slot)
+	})
+
+	t.Run("nil signed attestation is skipped", func(t *testing.T) {
+		s := newStoreWith(t, &format.ProtectionData{
+			SignedAttestations: []*format.SignedAttestation{nil, {SourceEpoch: "1", TargetEpoch: "2"}},
+		})
+		history, err := s.AttestationHistoryForPubKey(ctx, pubkey)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(history))
+		require.Equal(t, primitives.Epoch(1), history[0].Source)
+		require.Equal(t, primitives.Epoch(2), history[0].Target)
+	})
 }
