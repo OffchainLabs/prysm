@@ -54,6 +54,7 @@ func (s *Service) proposerSlashingSubscriber(ctx context.Context, msg proto.Mess
 	header1IsNil := pSlashing == nil || pSlashing.Header_1 == nil || pSlashing.Header_1.Header == nil
 	header2IsNil := pSlashing == nil || pSlashing.Header_2 == nil || pSlashing.Header_2.Header == nil
 	if !header1IsNil && !header2IsNil {
+		s.setProposerSlashingIndexSeen(pSlashing.Header_1.Header.ProposerIndex)
 		headState, err := s.cfg.chain.HeadState(ctx)
 		if err != nil {
 			return err
@@ -61,7 +62,6 @@ func (s *Service) proposerSlashingSubscriber(ctx context.Context, msg proto.Mess
 		if err := s.cfg.slashingPool.InsertProposerSlashing(ctx, headState, pSlashing); err != nil {
 			return errors.Wrap(err, "could not insert proposer slashing into pool")
 		}
-		s.setProposerSlashingIndexSeen(pSlashing.Header_1.Header.ProposerIndex)
 	}
 	return nil
 }
