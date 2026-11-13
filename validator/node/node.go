@@ -522,7 +522,7 @@ func Web3SignerConfig(cliCtx *cli.Context) (*remoteweb3signer.SetupConfig, error
 	urlStr := cliCtx.String(flags.Web3SignerURLFlag.Name)
 	baseEndpoint, err := validateURL(urlStr)
 	if err != nil {
-		return nil, fmt.Errorf("web3signer url %s is invalid: %w", urlStr, err)
+		return nil, fmt.Errorf("web3signer url %s is invalid: %w", api.RedactEndpoint(urlStr), err)
 	}
 
 	cfg.BaseEndpoint = baseEndpoint
@@ -540,9 +540,14 @@ func Web3SignerConfig(cliCtx *cli.Context) (*remoteweb3signer.SetupConfig, error
 		case len(keys) == 1:
 			key := keys[0]
 			url, err := validateURL(key)
-			if err == nil {
+			switch {
+			case err == nil:
 				cfg.PublicKeysURL = url
-			} else {
+			case strings.Contains(key, "://") || strings.Contains(key, "@"):
+				// A value shaped like a URL is never a list of keys. Failing here keeps it out of
+				// the key decoding errors, which print the raw value, credentials included.
+				return nil, fmt.Errorf("web3signer public keys url %s is invalid: %w", api.RedactEndpoint(key), err)
+			default:
 				cfg.ProvidedPublicKeys = strings.Split(key, ",")
 			}
 		default:
@@ -760,6 +765,11 @@ func parseBeaconApiHeaders(rawHeaders string) map[string][]string {
 func validateURL(s string) (string, error) {
 	u, err := url.ParseRequestURI(s)
 	if err != nil {
+		// url.Error quotes the raw URL, credentials included, so only keep its cause.
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			err = urlErr.Err
+		}
 		return "", fmt.Errorf("invalid URL: %v", err)
 	}
 

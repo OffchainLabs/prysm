@@ -265,7 +265,25 @@ func TestWeb3SignerConfig(t *testing.T) {
 					"0xb89bebc699769726a318c8e9971bd3171297c61aea4a6578a7a4f94b547dcba5bac16a89108b6b6a1fe3695d1a874a0b"},
 			},
 			want:       nil,
-			wantErrMsg: "web3signer url 0xa99a76ed7796f7be22d5b7e85deeb7c5677e88, is invalid: invalid URL: parse \"0xa99a76ed7796f7be22d5b7e85deeb7c5677e88,\": invalid URI for request",
+			wantErrMsg: "web3signer url 0xa99a76ed7796f7be22d5b7e85deeb7c5677e88, is invalid: invalid URL: invalid URI for request",
+		},
+		{
+			name: "Bad base URL with credentials does not leak the password",
+			args: &args{
+				baseURL:          "http://alice:s3cret%zz@localhost:8545",
+				publicKeysOrURLs: []string{"http://localhost:8545/api/v1/eth2/publicKeys"},
+			},
+			want:       nil,
+			wantErrMsg: "web3signer url [invalid endpoint] is invalid: invalid URL: invalid URL escape \"%zz\"",
+		},
+		{
+			name: "Bad public keys URL with credentials does not leak the password",
+			args: &args{
+				baseURL:          "http://localhost:8545",
+				publicKeysOrURLs: []string{"http://alice:s3cret%zz@localhost:8545/api/v1/eth2/publicKeys"},
+			},
+			want:       nil,
+			wantErrMsg: "web3signer public keys url [invalid endpoint] is invalid: invalid URL: invalid URL escape \"%zz\"",
 		},
 		{
 			name: "Base URL missing scheme or host",
@@ -331,6 +349,7 @@ func TestWeb3SignerConfig(t *testing.T) {
 			got, err := Web3SignerConfig(cliCtx)
 			if tt.wantErrMsg != "" {
 				require.ErrorContains(t, tt.wantErrMsg, err)
+				require.Equal(t, false, strings.Contains(err.Error(), "s3cret"), "error leaks the signer URL password: %v", err)
 				return
 			}
 			require.DeepEqual(t, tt.want, got)
