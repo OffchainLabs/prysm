@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
@@ -13,7 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -127,27 +125,9 @@ func (s *Service) processPendingAttsForBlock(ctx context.Context, bRoot [32]byte
 func (s *Service) requestPendingAttBlocks(pid peer.ID, roots [][32]byte) {
 	pendingAttBlockRequestCount.Inc()
 	go func() {
-		req := p2ptypes.BeaconBlockByRootsReq(roots)
-
-		var wg sync.WaitGroup
-		wg.Go(func() { s.fetchAndQueuePayloadEnvelopesForRoots(s.ctx, pid, req) })
-		if err := s.sendBeaconBlocksRequest(s.ctx, &req, pid); err != nil {
-			log.WithError(err).WithFields(logrus.Fields{
-				"peer":  pid,
-				"count": len(roots),
-			}).Debug("Could not request blocks for pending attestations")
-		}
-		wg.Wait()
-
+		missing := s.requestBlocksAccountable(s.ctx, pid, roots, nil)
 		if s.ctx.Err() != nil {
 			return
-		}
-
-		var missing [][32]byte
-		for _, root := range roots {
-			if !s.isBlockInQueue(root) && !s.cfg.chain.BlockBeingSynced(root) && !s.cfg.chain.HasBlock(s.ctx, root) {
-				missing = append(missing, root)
-			}
 		}
 
 		// Stop asking pid for the blocks it did not serve. Later sweeps ask the other senders, if any.
@@ -161,10 +141,6 @@ func (s *Service) requestPendingAttBlocks(pid peer.ID, roots [][32]byte) {
 			}
 		}
 		s.pendingAttsLock.Unlock()
-
-		if len(missing) > 0 {
-			s.downscorePeer(pid, "pendingAttBlockNotServed", logrus.Fields{"missing": len(missing), "requested": len(roots)})
-		}
 	}()
 }
 

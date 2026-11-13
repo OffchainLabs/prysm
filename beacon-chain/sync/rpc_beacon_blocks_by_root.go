@@ -14,7 +14,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/container/slice"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -23,13 +25,27 @@ import (
 	"github.com/pkg/errors"
 )
 
-// sendBeaconBlocksRequest sends the `requests` beacon blocks by root requests to
-// the peer with the given `id`. For each received block, it inserts the block into the
-// pending queue. Then, for each received blocks, it checks if all corresponding sidecars
-// are stored, and, if not, sends the corresponding sidecar requests and stores the received sidecars.
-// For sidecars, only blob sidecars will be requested to the peer with the given `id`.
-// For other types of sidecars, the request will be sent to the best peers.
-func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.BeaconBlockByRootsReq, id peer.ID) error {
+// parentSource tells where to request the unknown parents of the blocks received by root.
+type parentSource uint8
+
+const (
+	fromServingPeer parentSource = iota //requests them only from the peer that served the blocks
+	fromBestPeers                       //requests them from the best peers.
+)
+
+// sendBeaconBlocksRequest requests the blocks with the given roots from the peer `id`, and queues the received ones.
+// It then fetches their missing sidecars: blobs from `id`, data columns from the best peers.
+// The unknown parents of the newly queued blocks are requested in the background from the best peers
+// if their child is from the proposer expected by the head state, or from `parentsFrom` otherwise.
+// `slotBounds` optionally maps a requested root to the slot of its known child: the served block must have a lower slot.
+// It returns the roots of the received blocks.
+func (s *Service) sendBeaconBlocksRequest(
+	ctx context.Context,
+	requests *types.BeaconBlockByRootsReq,
+	id peer.ID,
+	parentsFrom parentSource,
+	slotBounds map[[fieldparams.RootLength]byte]primitives.Slot,
+) (map[[fieldparams.RootLength]byte]bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, respTimeout)
 	defer cancel()
 
@@ -37,6 +53,19 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 	for _, root := range *requests {
 		requestedRoots[root] = true
 	}
+
+	finalizedSlot, err := slots.EpochStart(s.cfg.chain.FinalizedCheckpt().Epoch)
+	if err != nil {
+		return nil, fmt.Errorf("finalized epoch start slot: %w", err)
+	}
+
+	received := make(map[[fieldparams.RootLength]byte]bool, len(*requests))
+
+	// The parents of the newly queued blocks, with the slot of their child.
+	parents := make(map[[fieldparams.RootLength]byte]primitives.Slot)
+
+	// The parents to request from the best peers.
+	trustedParents := make(map[[fieldparams.RootLength]byte]bool)
 
 	blks, err := SendBeaconBlocksByRootRequest(ctx, s.cfg.clock, s.cfg.p2p, id, requests, func(blk interfaces.ReadOnlySignedBeaconBlock) error {
 		blkRoot, err := blk.Block().HashTreeRoot()
@@ -48,20 +77,79 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 			return fmt.Errorf("received unexpected block with root %x", blkRoot)
 		}
 
+		// Each step back must lower the slot.
+		slot := blk.Block().Slot()
+		if bound, ok := slotBounds[blkRoot]; ok && slot >= bound {
+			return fmt.Errorf("received block with root %x at slot %d, not before its child at slot %d", blkRoot, slot, bound)
+		}
+
+		if err := slots.VerifyTime(s.cfg.clock.GenesisTime(), slot, earlyBlockProcessingTolerance); err != nil {
+			return fmt.Errorf("received block with root %x from the future: %w", blkRoot, err)
+		}
+
 		// Verify the signature before queueing, matching the gossip path, since a matched root does not cover it.
 		if _, err := s.verifyPendingBlockSignature(ctx, id, blk, blkRoot); err != nil {
 			return errors.Wrapf(err, "verify block signature for block with root %x", blkRoot)
 		}
 
+		// As on the gossip path, a block from the expected proposer is trusted, so is its parent.
+		isTrusted := parentsFrom == fromBestPeers || s.isExpectedProposer(ctx, blk)
+
 		s.pendingQueueLock.Lock()
 		defer s.pendingQueueLock.Unlock()
 
-		if err := s.insertBlockToPendingQueue(blk.Block().Slot(), blk, blkRoot); err != nil {
+		received[blkRoot] = true
+
+		alreadyQueued := s.seenPendingBlocks[blkRoot]
+		if err := s.insertBlockToPendingQueue(slot, blk, blkRoot); err != nil {
 			return errors.Wrapf(err, "insert block to pending queue for block with root %x", blkRoot)
+		}
+
+		// Walk back only from newly queued blocks after the finalized slot.
+		// Keep the lowest child slot.
+		newlyQueued := !alreadyQueued && s.seenPendingBlocks[blkRoot]
+		parentRoot := blk.Block().ParentRoot()
+		if !newlyQueued || slot <= finalizedSlot {
+			return nil
+		}
+
+		if bound, ok := parents[parentRoot]; !ok || slot < bound {
+			parents[parentRoot] = slot
+		}
+
+		if isTrusted {
+			trustedParents[parentRoot] = true
 		}
 
 		return nil
 	})
+
+	bestPeersParents := make([][fieldparams.RootLength]byte, 0, len(trustedParents))
+	servingPeerParents := make([][fieldparams.RootLength]byte, 0, len(parents))
+	for root := range parents {
+		if s.cfg.chain.HasBlock(ctx, root) {
+			continue
+		}
+
+		if trustedParents[root] {
+			bestPeersParents = append(bestPeersParents, root)
+			continue
+		}
+
+		servingPeerParents = append(servingPeerParents, root)
+	}
+
+	if len(bestPeersParents) > 0 {
+		go func() {
+			if err := s.sendBatchRootRequest(s.ctx, bestPeersParents, parents, rand.NewGenerator()); err != nil {
+				log.WithError(err).WithField("count", len(bestPeersParents)).Debug("Could not request unknown parents from the best peers")
+			}
+		}()
+	}
+
+	if len(servingPeerParents) > 0 {
+		go s.requestBlocksAccountable(s.ctx, id, servingPeerParents, parents)
+	}
 
 	// The following part deals with sidecars.
 	postFuluBlocks := make([]blocks.ROBlock, 0, len(blks))
@@ -71,7 +159,7 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 		if blockVersion >= version.Fulu {
 			roBlock, err := blocks.NewROBlock(blk)
 			if err != nil {
-				return errors.Wrap(err, "new ro block")
+				return received, fmt.Errorf("new ro block: %w", err)
 			}
 
 			postFuluBlocks = append(postFuluBlocks, roBlock)
@@ -81,7 +169,7 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 
 		if blockVersion >= version.Deneb {
 			if err := s.requestAndSaveMissingBlobSidecars(blk, id); err != nil {
-				return errors.Wrap(err, "request and save missing blob sidecars")
+				return received, fmt.Errorf("request and save missing blob sidecars: %w", err)
 			}
 
 			continue
@@ -89,10 +177,10 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 	}
 
 	if err := s.requestAndSaveMissingDataColumnSidecars(postFuluBlocks); err != nil {
-		return errors.Wrap(err, "request and save missing data columns")
+		return received, fmt.Errorf("request and save missing data columns: %w", err)
 	}
 
-	return err
+	return received, err
 }
 
 // requestAndSaveMissingDataColumns checks if the data columns are missing for the given block.
