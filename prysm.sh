@@ -146,7 +146,10 @@ function verify() {
     )
     (
         cd "$wrapper_dir"
-        gpg -u "$PRYLABS_SIGNING_KEY" --verify "${file}.sig" "$file" || failed_verification
+        # gpg -u does not restrict --verify. Require gpg to succeed and the signer's primary key
+        # (field 12 of the VALIDSIG status line) to be the pinned key.
+        set -o pipefail
+        gpg --status-fd 1 --verify "${file}.sig" "$file" | awk -v key="$PRYLABS_SIGNING_KEY" '$2 == "VALIDSIG" && $12 == key { ok = 1 } END { exit !ok }' || failed_verification
     )
 
     color "32;1" "Verified ${file} has been signed by Prysmatic Labs."
