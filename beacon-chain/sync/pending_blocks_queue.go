@@ -143,11 +143,6 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 				continue
 			}
 
-			// A missing parent was requested when the block was queued.
-			// In case that failed, request it again from the best peers, but only for a block from the expected proposer.
-			// Since pending ancestors have lower slots, they were visited before this block. If they are also missing
-			// their parent, request the first missing ancestor instead: linked by hash to this block, it is trusted too.
-			// Ancestors already in the queue or being synced are filtered out later.
 			if !s.cfg.beaconDB.HasBlock(ctx, parentRoot) {
 				link := parentLink{root: parentRoot, childSlot: slot}
 				missingParents[blkRoot] = link
@@ -155,15 +150,7 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 					continue
 				}
 
-				for {
-					next, ok := missingParents[link.root]
-					if !ok {
-						break
-					}
-
-					link = next
-				}
-
+				link = firstMissingAncestor(missingParents, link)
 				if bound, ok := parentSlotBounds[link.root]; !ok || link.childSlot < bound {
 					parentSlotBounds[link.root] = link.childSlot
 				}
@@ -226,6 +213,45 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 	}
 
 	return s.sendBatchRootRequest(ctx, parentRoots, parentSlotBounds, rand.NewGenerator())
+}
+
+// pendingMissingParents returns the parent of each pending block whose parent is missing, keyed by the block root.
+func (s *Service) pendingMissingParents(ctx context.Context) (map[[32]byte]parentLink, error) {
+	s.pendingQueueLock.RLock()
+	defer s.pendingQueueLock.RUnlock()
+
+	missingParents := make(map[[32]byte]parentLink)
+	for k := range s.slotToPendingBlocks.Items() {
+		slot := cacheKeyToSlot(k)
+		for _, b := range s.pendingBlocksInCache(slot) {
+			parentRoot := b.Block().ParentRoot()
+			if s.cfg.beaconDB.HasBlock(ctx, parentRoot) {
+				continue
+			}
+
+			root, err := b.Block().HashTreeRoot()
+			if err != nil {
+				return nil, fmt.Errorf("hash tree root: %w", err)
+			}
+
+			missingParents[root] = parentLink{root: parentRoot, childSlot: slot}
+		}
+	}
+
+	return missingParents, nil
+}
+
+// firstMissingAncestor follows link back through the pending blocks whose parent is missing,
+// and returns the link to the first missing ancestor.
+func firstMissingAncestor(missingParents map[[32]byte]parentLink, link parentLink) parentLink {
+	for {
+		next, ok := missingParents[link.root]
+		if !ok {
+			return link
+		}
+
+		link = next
+	}
 }
 
 // startInnerSpan starts a new tracing span for an inner loop and returns the new context and span.

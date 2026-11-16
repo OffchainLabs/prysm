@@ -189,12 +189,14 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 			return pubsub.ValidationIgnore, err
 		}
 		newlyQueued := !alreadyQueued && s.seenPendingBlocks[blockRoot]
+		parentPending := s.seenPendingBlocks[parentRoot]
 		s.pendingQueueLock.Unlock()
 
 		// Request the parent only for a newly queued block.
 		// Ask the best peers only if the head state expects this proposer.
 		// The pending queue then requests it again on every tick, in case this fails.
-		// Else, ask only the sender, which must have the parent since it validated the block.
+		// Else, ask only the sender, which must have all the ancestors since it validated the block.
+		// If the parent is pending, ask for its first missing ancestor, so each new block of the branch retries it.
 		if newlyQueued {
 			if s.isExpectedProposer(ctx, blk) {
 				go func() {
@@ -203,7 +205,20 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 					}
 				}()
 			} else {
-				go s.requestBlocksAccountable(s.ctx, pid, [][32]byte{parentRoot}, map[[32]byte]primitives.Slot{parentRoot: blk.Block().Slot()})
+				go func() {
+					gap := parentLink{root: parentRoot, childSlot: blk.Block().Slot()}
+					if parentPending {
+						missingParents, err := s.pendingMissingParents(s.ctx)
+						if err != nil {
+							log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not get the missing parents of pending blocks")
+							return
+						}
+
+						gap = firstMissingAncestor(missingParents, gap)
+					}
+
+					s.requestBlocksAccountable(s.ctx, pid, [][32]byte{gap.root}, map[[32]byte]primitives.Slot{gap.root: gap.childSlot})
+				}()
 			}
 		}
 		err := errors.Errorf("unknown parent for block with slot %d and parent root %#x", blk.Block().Slot(), parentRoot)

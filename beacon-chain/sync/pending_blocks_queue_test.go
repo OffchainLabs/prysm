@@ -1412,3 +1412,41 @@ func TestProcessPendingBlocks_RequestsFirstMissingAncestor(t *testing.T) {
 		})
 	}
 }
+
+func TestFirstMissingAncestor(t *testing.T) {
+	a, b, c, d := [32]byte{'a'}, [32]byte{'b'}, [32]byte{'c'}, [32]byte{'d'}
+
+	// d -> c -> b -> a, with c and b pending and missing their parent.
+	missingParents := map[[32]byte]parentLink{
+		c: {root: b, childSlot: 3},
+		b: {root: a, childSlot: 2},
+	}
+
+	testCases := []struct {
+		name     string
+		link     parentLink
+		expected parentLink
+	}{
+		{
+			name:     "parent not pending",
+			link:     parentLink{root: d, childSlot: 5},
+			expected: parentLink{root: d, childSlot: 5},
+		},
+		{
+			name:     "one hop",
+			link:     parentLink{root: b, childSlot: 3},
+			expected: parentLink{root: a, childSlot: 2},
+		},
+		{
+			name:     "several hops",
+			link:     parentLink{root: c, childSlot: 4},
+			expected: parentLink{root: a, childSlot: 2},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.expected, firstMissingAncestor(missingParents, tc.link))
+		})
+	}
+}
