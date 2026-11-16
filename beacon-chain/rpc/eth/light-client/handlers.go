@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/math"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -91,12 +92,21 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 		return
 	}
 
-	if startPeriod*uint64(config.EpochsPerSyncCommitteePeriod) < uint64(config.AltairForkEpoch) {
+	startEpoch, err := math.Mul64(startPeriod, uint64(config.EpochsPerSyncCommitteePeriod))
+	if err != nil {
+		httputil.HandleError(w, "Invalid 'start_period': too large", http.StatusBadRequest)
+		return
+	}
+	if startEpoch < uint64(config.AltairForkEpoch) {
 		httputil.HandleError(w, "Invalid 'start_period': before Altair fork", http.StatusBadRequest)
 		return
 	}
 
-	endPeriod := startPeriod + count - 1
+	endPeriod, err := math.Add64(startPeriod, count-1)
+	if err != nil {
+		httputil.HandleError(w, "Invalid 'start_period' and 'count': requested range is too large", http.StatusBadRequest)
+		return
+	}
 
 	headBlock, err := s.HeadFetcher.HeadBlock(ctx)
 	if err != nil {
