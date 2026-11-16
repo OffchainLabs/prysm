@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/middleware"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/doctorpeer"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/beacon"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/blob"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/config"
@@ -110,7 +111,22 @@ func (s *Service) endpoints(
 		endpoints = append(endpoints, s.removedDebugEndpoints()...)
 	}
 
+	if s.cfg.EnableDoctorPeer {
+		endpoints = append(endpoints, s.doctorPeerEndpoints()...)
+	}
+
 	return endpoints
+}
+
+func (s *Service) doctorPeerEndpoints() []endpoint {
+	return []endpoint{
+		{
+			template: doctorpeer.Path,
+			name:     "doctorpeer.Dashboard",
+			handler:  doctorpeer.Handler().ServeHTTP,
+			methods:  []string{http.MethodGet},
+		},
+	}
 }
 
 func (s *Service) rewardsEndpoints(blocker lookup.Blocker, stater lookup.Stater, rewardFetcher rewards.BlockRewardsFetcher) []endpoint {

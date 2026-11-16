@@ -100,6 +100,7 @@ type Config struct {
 	GenesisTimeFetcher               blockchain.TimeFetcher
 	GenesisFetcher                   blockchain.GenesisFetcher
 	EnableDebugRPCEndpoints          bool
+	EnableDoctorPeer                 bool
 	AttestationCache                 *cache.AttestationCache
 	AttestationDataCache             *cache.AttestationDataCache
 	AttestationsPool                 attestations.Pool

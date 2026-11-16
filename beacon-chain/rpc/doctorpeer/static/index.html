@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DoctorPeer</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23141820'/%3E%3Cpath d='M9 21 L16 10 L23 21 Z' stroke='%237fb4ff' stroke-width='1.6' fill='none'/%3E%3Ccircle cx='16' cy='10' r='3' fill='%237fb4ff'/%3E%3Ccircle cx='9' cy='21' r='3' fill='%233fc47f'/%3E%3Ccircle cx='23' cy='21' r='3' fill='%233fc47f'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="app">
+  <aside class="rail">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+        <path d="M9 21 L16 10 L23 21 Z" stroke="currentColor" stroke-width="1.6" fill="none"/>
+        <circle cx="16" cy="10" r="3.2" fill="currentColor"/>
+        <circle cx="9" cy="21" r="3.2" fill="var(--good)"/>
+        <circle cx="23" cy="21" r="3.2" fill="var(--good)"/>
+      </svg>
+      <div>
+        <div class="brand-name">DoctorPeer</div>
+        <div class="brand-sub">Prysm peer debugger</div>
+      </div>
+    </div>
+
+    <nav class="rail-nav" id="nav" aria-label="Views">
+      <a href="#/overview" data-view="overview"><span class="lbl">Overview</span></a>
+      <a href="#/peers" data-view="peers"><span class="lbl">Peers</span><span class="n" data-count="peers"></span></a>
+      <a href="#/clients" data-view="clients"><span class="lbl">Clients</span><span class="n" data-count="clients"></span></a>
+      <a href="#/greylist" data-view="greylist"><span class="lbl">Grey list</span><span class="n" data-count="greylist"></span></a>
+      <a href="#/gossip" data-view="gossip"><span class="lbl">Gossip</span><span class="n" data-count="gossip"></span></a>
+      <a href="#/chain" data-view="chain"><span class="lbl">Chain</span><span class="n" data-count="chain"></span></a>
+    </nav>
+
+    <div class="rail-foot">
+      <div class="live" id="live">
+        <span class="live-dot"></span>
+        <div class="live-text"><span id="liveText">Connecting…</span><small id="liveSub"></small></div>
+      </div>
+      <div class="rail-ctl">
+        <button class="btn sm" id="refreshBtn" type="button" title="Fetch now">Refresh</button>
+        <label class="switch" title="Poll the node every 10 seconds"><input type="checkbox" id="autoRefresh" checked><span class="switch-track"></span>Auto</label>
+        <button class="btn ghost sm" id="themeBtn" type="button" title="Toggle light / dark">Theme</button>
+      </div>
+      <div class="node-block" id="nodeBlock"></div>
+      <form class="node-form" id="nodeForm" autocomplete="off">
+        <input id="nodeUrl" class="input mono" type="text" spellcheck="false" placeholder="http://localhost:3500" aria-label="Node URL">
+        <button class="btn sm" type="submit">Go</button>
+      </form>
+    </div>
+  </aside>
+
+  <main class="main" id="main"></main>
+</div>
+<div class="tip" id="tip" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>
