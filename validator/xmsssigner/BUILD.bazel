@@ -1,0 +1,31 @@
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "leaf.go",
+        "signer.go",
+    ],
+    importpath = "github.com/OffchainLabs/prysm/v7/validator/xmsssigner",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//consensus-types/primitives:go_default_library",
+        "//validator/db/signingprotection:go_default_library",
+        "@com_github_nalepae_go_leanxmss//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "leaf_test.go",
+        "signer_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = [
+        "//consensus-types/primitives:go_default_library",
+        "//testing/require:go_default_library",
+        "//validator/db/signingprotection:go_default_library",
+        "@com_github_nalepae_go_leanxmss//:go_default_library",
+    ],
+)
