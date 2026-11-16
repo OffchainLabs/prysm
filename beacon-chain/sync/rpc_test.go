@@ -8,10 +8,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	prysmP2P "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -185,6 +187,92 @@ func TestRegisterRPC_ReceivesValidMessage(t *testing.T) {
 
 	if util.WaitTimeout(&wg, time.Second) {
 		t.Fatal("Did not receive RPC in 1 second")
+	}
+}
+
+func TestRegisterRPC_LightClientRequests(t *testing.T) {
+	p := p2ptest.NewTestP2P(t)
+	remote := p2ptest.NewTestP2P(t)
+	t.Cleanup(func() {
+		require.NoError(t, remote.BHost.Close())
+		require.NoError(t, p.BHost.Close())
+	})
+	remote.Connect(p)
+
+	s := &Service{
+		ctx:         t.Context(),
+		cfg:         &config{p2p: p},
+		rateLimiter: newRateLimiter(p),
+	}
+	bootstrap := types.LightClientBootstrapReq{1, 2, 3, 4}
+	updates := &ethpb.LightClientUpdatesByRangeRequest{StartPeriod: 3, Count: 2}
+	for _, tc := range []struct {
+		name    string
+		topic   string
+		request ssz.Marshaler
+		check   func(*testing.T, any)
+	}{
+		{
+			name:    "bootstrap",
+			topic:   prysmP2P.RPCLightClientBootstrapTopicV1,
+			request: &bootstrap,
+			check: func(t *testing.T, msg any) {
+				got, ok := msg.(*types.LightClientBootstrapReq)
+				require.Equal(t, true, ok)
+				require.DeepEqual(t, bootstrap, *got)
+			},
+		},
+		{
+			name:    "updates by range",
+			topic:   prysmP2P.RPCLightClientUpdatesByRangeTopicV1,
+			request: updates,
+			check: func(t *testing.T, msg any) {
+				got, ok := msg.(*ethpb.LightClientUpdatesByRangeRequest)
+				require.Equal(t, true, ok)
+				require.Equal(t, updates.StartPeriod, got.StartPeriod)
+				require.Equal(t, updates.Count, got.Count)
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			received := make(chan any, 1)
+			s.registerRPC(tc.topic, func(_ context.Context, msg any, _ libp2pcore.Stream) error {
+				received <- msg
+				return nil
+			})
+
+			topic := protocol.ID(tc.topic + p.Encoding().ProtocolSuffix())
+			stream, err := remote.BHost.NewStream(t.Context(), p.BHost.ID(), topic)
+			require.NoError(t, err)
+			defer stream.Close() // nolint:errcheck
+			_, err = p.Encoding().EncodeWithMaxLength(stream, tc.request)
+			require.NoError(t, err)
+
+			select {
+			case got := <-received:
+				tc.check(t, got)
+			case <-time.After(3 * time.Second):
+				t.Fatal("Request was not decoded by registered RPC handler")
+			}
+
+			if tc.name == "bootstrap" {
+				badStream, err := remote.BHost.NewStream(t.Context(), p.BHost.ID(), topic)
+				require.NoError(t, err)
+				defer badStream.Close() // nolint:errcheck
+				badReq := types.ErrorMessage(make([]byte, 31))
+				_, err = p.Encoding().EncodeWithMaxLength(badStream, &badReq)
+				require.NoError(t, err)
+				expectResetStream(t, badStream)
+				select {
+				case <-received:
+					t.Fatal("Handler received an invalid bootstrap request")
+				default:
+				}
+			} else {
+				require.Equal(t, 16, updates.SizeSSZ())
+				require.Equal(t, 16, updates.MaxSizeSSZ())
+			}
+		})
 	}
 }
 

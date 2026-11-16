@@ -2,11 +2,12 @@ package sync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/math"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
@@ -31,27 +32,25 @@ func (s *Service) lightClientBootstrapRPCHandler(ctx context.Context, msg any, s
 	}
 	s.rateLimiter.add(stream, 1)
 
-	rawMsg, ok := msg.(*[fieldparams.RootLength]byte)
+	rawMsg, ok := msg.(*types.LightClientBootstrapReq)
 	if !ok {
 		logger.Error("Message is not *types.LightClientBootstrapReq")
-		return fmt.Errorf("message is not type %T", &[fieldparams.RootLength]byte{})
+		return fmt.Errorf("message is not type %T", &types.LightClientBootstrapReq{})
 	}
-	blkRoot := *rawMsg
+	blkRoot := [32]byte(*rawMsg)
 
 	bootstrap, err := s.lcStore.LightClientBootstrap(ctx, blkRoot)
+	if errors.Is(err, lightClient.ErrLightClientBootstrapNotFound) || (err == nil && bootstrap == nil) {
+		s.writeErrorResponseToStream(responseCodeResourceUnavailable, types.ErrResourceUnavailable.Error(), stream)
+		logger.Debugf("No bootstrap available for root %#x", blkRoot)
+		return nil
+	}
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 		tracing.AnnotateError(span, err)
 		logger.WithError(err).Error("Cannot bootstrap light client")
 		return err
 	}
-	if bootstrap == nil {
-		s.writeErrorResponseToStream(responseCodeResourceUnavailable, types.ErrResourceUnavailable.Error(), stream)
-		tracing.AnnotateError(span, err)
-		logger.WithError(err).Error(fmt.Sprintf("nil bootstrap for root %#x", blkRoot))
-		return err
-	}
-
 	SetStreamWriteDeadline(stream, defaultWriteDuration)
 	if err = WriteLightClientBootstrapChunk(stream, s.cfg.clock, s.cfg.p2p.Encoding(), bootstrap); err != nil {
 		s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)

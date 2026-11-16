@@ -20,6 +20,11 @@ func (c *BeaconBlocksByRangeRequest) MaxSizeSSZ() int {
 }
 
 // MaxSizeSSZ returns the fixed SSZ size.
+func (c *LightClientUpdatesByRangeRequest) MaxSizeSSZ() int {
+	return c.SizeSSZ()
+}
+
+// MaxSizeSSZ returns the fixed SSZ size.
 func (c *BlobSidecarsByRangeRequest) MaxSizeSSZ() int {
 	return c.SizeSSZ()
 }

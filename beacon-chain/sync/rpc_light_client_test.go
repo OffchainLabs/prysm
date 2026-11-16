@@ -1,6 +1,8 @@
 package sync
 
 import (
+	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -8,15 +10,18 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	beaconDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	db "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
 	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -26,7 +31,14 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 )
 
+type failingBootstrapDB struct{ beaconDB.Database }
+
+func (failingBootstrapDB) LightClientBootstrap(context.Context, []byte) (interfaces.LightClientBootstrap, error) {
+	return nil, errors.New("database failure")
+}
+
 func TestRPC_LightClientBootstrap(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
 	resetFn := features.InitWithReset(&features.Flags{
 		EnableLightClient: true,
 	})
@@ -133,7 +145,8 @@ func TestRPC_LightClientBootstrap(t *testing.T) {
 
 			stream1, err := p1.BHost.NewStream(t.Context(), p2.BHost.ID(), pcl)
 			require.NoError(t, err)
-			err = r.lightClientBootstrapRPCHandler(ctx, &blockRoot, stream1)
+			req := types.LightClientBootstrapReq(blockRoot)
+			err = r.lightClientBootstrapRPCHandler(ctx, &req, stream1)
 			require.NoError(t, err)
 
 			if util.WaitTimeout(&wg, 1*time.Second) {
@@ -142,6 +155,38 @@ func TestRPC_LightClientBootstrap(t *testing.T) {
 		})
 	}
 
+	t.Run("missing bootstrap", func(t *testing.T) {
+		req := types.LightClientBootstrapReq{0xff}
+		var wg sync.WaitGroup
+		wg.Add(1)
+		p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
+			defer wg.Done()
+			expectFailure(t, responseCodeResourceUnavailable, types.ErrResourceUnavailable.Error(), stream)
+		})
+		stream, err := p1.BHost.NewStream(t.Context(), p2.BHost.ID(), pcl)
+		require.NoError(t, err)
+		require.NoError(t, r.lightClientBootstrapRPCHandler(ctx, &req, stream))
+		if util.WaitTimeout(&wg, time.Second) {
+			t.Fatal("Did not receive stream within 1 sec")
+		}
+	})
+	t.Run("database error", func(t *testing.T) {
+		r.lcStore = lightClient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), failingBootstrapDB{d})
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
+			defer wg.Done()
+			expectFailure(t, responseCodeServerError, types.ErrGeneric.Error(), stream)
+		})
+		stream, err := p1.BHost.NewStream(t.Context(), p2.BHost.ID(), pcl)
+		require.NoError(t, err)
+		req := types.LightClientBootstrapReq{0xff}
+		require.NotNil(t, r.lightClientBootstrapRPCHandler(ctx, &req, stream))
+		if util.WaitTimeout(&wg, time.Second) {
+			t.Fatal("Did not receive stream within 1 sec")
+		}
+	})
 }
 
 func TestRPC_LightClientOptimisticUpdate(t *testing.T) {

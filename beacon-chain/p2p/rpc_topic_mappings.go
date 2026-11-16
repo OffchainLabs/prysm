@@ -4,7 +4,6 @@ import (
 	"reflect"
 
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -173,7 +172,7 @@ var (
 		RPCBlobSidecarsByRootTopicV1: new(p2ptypes.BlobSidecarsByRootReq),
 
 		// Light client
-		RPCLightClientBootstrapTopicV1:        new([fieldparams.RootLength]byte),
+		RPCLightClientBootstrapTopicV1:        new(p2ptypes.LightClientBootstrapReq),
 		RPCLightClientUpdatesByRangeTopicV1:   new(pb.LightClientUpdatesByRangeRequest),
 		RPCLightClientFinalityUpdateTopicV1:   new(any),
 		RPCLightClientOptimisticUpdateTopicV1: new(any),

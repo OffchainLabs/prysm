@@ -606,6 +606,68 @@ func (c *ExecutionPayloadEnvelopesByRangeRequest) HashTreeRootWith(hh *ssz.Hashe
 	return nil
 }
 
+func (c *LightClientUpdatesByRangeRequest) SizeSSZ() int {
+	size := 16
+
+	return size
+}
+
+func (c *LightClientUpdatesByRangeRequest) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *LightClientUpdatesByRangeRequest) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+
+	// Field 0: StartPeriod
+	dst = binary.LittleEndian.AppendUint64(dst, c.StartPeriod)
+
+	// Field 1: Count
+	dst = binary.LittleEndian.AppendUint64(dst, c.Count)
+
+	return dst, err
+}
+
+func (c *LightClientUpdatesByRangeRequest) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 16 {
+		return ssz.ErrSize
+	}
+
+	sszSlice0 := buf[0:8]  // c.StartPeriod
+	sszSlice1 := buf[8:16] // c.Count
+
+	// Field 0: StartPeriod
+	c.StartPeriod = binary.LittleEndian.Uint64(sszSlice0)
+
+	// Field 1: Count
+	c.Count = binary.LittleEndian.Uint64(sszSlice1)
+	return err
+}
+
+func (c *LightClientUpdatesByRangeRequest) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *LightClientUpdatesByRangeRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: StartPeriod
+	hh.PutUint64(c.StartPeriod)
+	// Field 1: Count
+	hh.PutUint64(c.Count)
+	hh.Merkleize(indx)
+	return nil
+}
+
 func (c *MetaDataV0) SizeSSZ() int {
 	size := 16
 
