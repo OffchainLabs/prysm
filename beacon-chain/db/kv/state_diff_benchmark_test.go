@@ -1,5 +1,5 @@
-// Offline examples:
-// go test ./beacon-chain/db/kv -run '^$' -bench 'BenchmarkStateDiffReadRealState' -benchtime 5x -timeout 0 -args -state-diff-benchmark-db=/copy/beaconchaindata -state-diff-benchmark-slots=32,64
+// Offline examples (cold clears anchors, not the Bolt mmap/page cache; tree saves overwrite keys):
+// go test ./beacon-chain/db/kv -run 'TestStateDiffReadSaveBenchmarkWorkload$' -bench 'BenchmarkStateDiffReadRealState' -benchtime 5x -timeout 0 -args -state-diff-benchmark-db=/copy/beaconchaindata -state-diff-benchmark-slots=32,64
 // go test ./beacon-chain/db/kv -run 'TestStateDiffRebuildProfile$' -v -timeout 0 -args -state-diff-benchmark-db=/copy/beaconchaindata -state-diff-rebuild-dst=/tmp/rebuilt -state-diff-rebuild-exponents=16,13,11 -state-diff-rebuild-csv=rb.csv -state-diff-rebuild-verify-rate=0.05
 package kv
 
@@ -12,6 +12,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -87,6 +88,7 @@ func BenchmarkHdiffDiffRealState(b *testing.B) {
 		fixture.target.BalancesLength(),
 	)
 	b.ReportAllocs()
+	runtime.GC()
 	b.ResetTimer()
 
 	var err error
@@ -431,10 +433,19 @@ func treeEntrySizes(store *Store, level int, slot uint64) ([4]int, error) {
 	return sizes, err
 }
 
-func benchmarkRead(store *Store, slot uint64, warm, hash bool) (int, int, error) {
-	if warm {
+func clearBenchmarkMemo(cache *stateDiffCache) {
+	cache.Lock()
+	cache.memo = [anchorMemoSize]anchorMemoEntry{}
+	cache.Unlock()
+}
+
+func benchmarkRead(store *Store, slot uint64, mode string, hash bool) (int, int, error) {
+	if mode != "cold" {
 		if err := benchmarkReadSeed(store, slot); err != nil {
 			return 0, 0, err
+		}
+		if mode == "anchor" {
+			clearBenchmarkMemo(store.stateDiffCache)
 		}
 	} else {
 		store.stateDiffCache.clearAnchors()
@@ -444,7 +455,7 @@ func benchmarkRead(store *Store, slot uint64, warm, hash bool) (int, int, error)
 		return 0, 0, err
 	}
 	bytes := 0
-	if !warm || computeLevel(store.getOffset(), primitives.Slot(slot)) == 0 && len(flags.Get().StateDiffExponents) == 1 {
+	if mode == "cold" || computeLevel(store.getOffset(), primitives.Slot(slot)) == 0 && len(flags.Get().StateDiffExponents) == 1 {
 		baseSlot := slot - (slot-store.getOffset())%(uint64(1)<<uint(flags.Get().StateDiffExponents[0]))
 		sizes, err := treeEntrySizes(store, 0, baseSlot)
 		if err != nil {
@@ -479,23 +490,24 @@ func BenchmarkStateDiffReadRealState(b *testing.B) {
 		if level < 0 {
 			b.Fatalf("slot %d is not a boundary", slot)
 		}
-		for _, warm := range []bool{false, true} {
-			name := fmt.Sprintf("slot=%d/level=%d/cache=cold", slot, level)
-			if warm {
-				name = fmt.Sprintf("slot=%d/level=%d/cache=warm", slot, level)
-			}
+		for _, mode := range []string{"cold", "anchor", "memo"} {
+			name := fmt.Sprintf("slot=%d/level=%d/cache=%s", slot, level, mode)
 			b.Run(name, func(b *testing.B) {
-				diffs, bytes, err := benchmarkRead(store, slot, warm, *realStateDiffHTR)
+				diffs, bytes, err := benchmarkRead(store, slot, mode, *realStateDiffHTR)
 				if err != nil {
 					b.Fatal(err)
 				}
 				b.ReportAllocs()
+				runtime.GC()
 				b.ResetTimer()
 				for b.Loop() {
 					b.StopTimer()
-					if warm {
+					if mode == "anchor" {
 						err = benchmarkReadSeed(store, slot)
-					} else {
+						if err == nil {
+							clearBenchmarkMemo(store.stateDiffCache)
+						}
+					} else if mode == "cold" {
 						store.stateDiffCache.clearAnchors()
 					}
 					if err != nil {
@@ -586,23 +598,39 @@ func BenchmarkStateDiffSaveRealState(b *testing.B) {
 	benchmarkNetwork(b)
 	source, exponents, offset := openBenchmarkSource(b, *realStateDiffDBDir)
 	for _, slot := range benchmarkSlots(b, source, exponents, *realStateDiffSlots) {
-		b.Run(fmt.Sprintf("slot=%d/level=%d", slot, computeLevel(offset, primitives.Slot(slot))), func(b *testing.B) {
-			directory := benchmarkScratchPath(b, fmt.Sprintf("save-%d", slot))
-			dst, target, level := benchmarkSaveSetup(b, source, offset, slot, directory)
-			b.ReportAllocs()
-			b.ResetTimer()
-			for b.Loop() {
-				if err := dst.saveStateByDiff(b.Context(), target); err != nil {
+		for _, anchorMode := range []string{"cold", "warm"} {
+			b.Run(fmt.Sprintf("slot=%d/level=%d/anchor=%s", slot, computeLevel(offset, primitives.Slot(slot)), anchorMode), func(b *testing.B) {
+				directory := benchmarkScratchPath(b, fmt.Sprintf("save-%d", slot))
+				dst, target, level := benchmarkSaveSetup(b, source, offset, slot, directory)
+				if level > 0 && anchorMode == "warm" {
+					span := uint64(1) << uint(exponents[level-1])
+					anchorSlot := slot - (slot-offset)%span
+					anchorLevel := computeLevel(offset, primitives.Slot(anchorSlot))
+					if dst.stateDiffCache.getAnchor(anchorLevel, withExactSlot(primitives.Slot(anchorSlot))) == nil {
+						b.Fatal("failed to prime anchor memo")
+					}
+				}
+				b.ReportAllocs()
+				runtime.GC()
+				b.ResetTimer()
+				for b.Loop() {
+					if anchorMode == "cold" {
+						b.StopTimer()
+						clearBenchmarkMemo(dst.stateDiffCache)
+						b.StartTimer()
+					}
+					if err := dst.saveStateByDiff(b.Context(), target); err != nil {
+						b.Fatal(err)
+					}
+				}
+				b.StopTimer()
+				sizes, err := treeEntrySizes(dst, level, slot)
+				if err != nil {
 					b.Fatal(err)
 				}
-			}
-			b.StopTimer()
-			sizes, err := treeEntrySizes(dst, level, slot)
-			if err != nil {
-				b.Fatal(err)
-			}
-			b.ReportMetric(float64(sizes[0]+sizes[1]+sizes[2]+sizes[3]), "bytes-written/op")
-		})
+				b.ReportMetric(float64(sizes[0]+sizes[1]+sizes[2]+sizes[3]), "entry-bytes/op")
+			})
+		}
 	}
 }
 
@@ -637,7 +665,7 @@ func BenchmarkHotStateSnapshotRealState(b *testing.B) {
 	}
 	benchmarkNetwork(b)
 	source, exponents, offset := openBenchmarkSource(b, *realStateDiffDBDir)
-	slot, err := latestSlotForLevel(source, len(exponents)-1)
+	slot, err := latestBenchmarkBoundary(source, offset, exponents)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -646,14 +674,18 @@ func BenchmarkHotStateSnapshotRealState(b *testing.B) {
 	directory := benchmarkScratchPath(b, "hot")
 	dst := benchmarkScratch(b, directory, offset, initial)
 	b.Run("save", func(b *testing.B) {
+		runtime.GC()
 		b.ResetTimer()
+		index := 0
 		for b.Loop() {
-			if err := benchmarkHotSave(dst, b.Context(), st, 0); err != nil {
+			if err := benchmarkHotSave(dst, b.Context(), st, index); err != nil {
 				b.Fatal(err)
 			}
+			index++
 		}
 	})
 	b.Run(fmt.Sprintf("clear/n=%d", *realStateDiffHotN), func(b *testing.B) {
+		runtime.GC()
 		for b.Loop() {
 			b.StopTimer()
 			if err := benchmarkHotSeed(dst, b.Context(), st, *realStateDiffHotN); err != nil {
@@ -671,6 +703,7 @@ type treeAuditLevel struct {
 	level             int
 	expected, present int
 	holes, orphans    []uint64
+	pendingHoles      []uint64
 	incomplete        []uint64
 	bytes, maxBytes   uint64
 	maxSlot           uint64
@@ -684,7 +717,60 @@ type treeAudit struct {
 	offset, last uint64
 	exponents    []int
 	status       []byte
+	archive      *ArchiveStatus
+	corruptKeys  []string
 	levels       []treeAuditLevel
+}
+
+func validBenchmarkPadding(key []byte) bool {
+	for _, b := range key[stateDiffTreeKeySlotEnd:stateDiffTreeKeyLength] {
+		if b != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func latestBenchmarkBoundary(store *Store, offset uint64, exponents []int) (uint64, error) {
+	if !slices.Equal(exponents, flags.Get().StateDiffExponents) {
+		return 0, fmt.Errorf("state-diff exponents differ from active flags")
+	}
+	var last uint64
+	found := false
+	err := store.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bolt.ErrBucketNotFound
+		}
+		cursor := bucket.Cursor()
+		for key, _ := cursor.First(); key != nil; key, _ = cursor.Next() {
+			if len(key) < stateDiffTreeKeyLength || int(key[0]) >= len(exponents) {
+				continue
+			}
+			if !validBenchmarkPadding(key) {
+				continue
+			}
+			level, slot := int(key[0]), stateDiffTreeKeySlot(key)
+			if computeLevel(offset, primitives.Slot(slot)) != level {
+				continue
+			}
+			suffix := string(key[stateDiffTreeKeyLength:])
+			if level == 0 && suffix != "" || level > 0 && suffix != stateSuffix && suffix != validatorSuffix && suffix != balancesSuffix {
+				continue
+			}
+			if !found || slot > last {
+				last, found = slot, true
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	if !found {
+		return 0, fmt.Errorf("no state-diff boundaries found")
+	}
+	return last, nil
 }
 
 func auditStateDiffTree(store *Store, offset uint64, exponents []int) (treeAudit, error) {
@@ -692,7 +778,7 @@ func auditStateDiffTree(store *Store, offset uint64, exponents []int) (treeAudit
 	for i := range result.levels {
 		result.levels[i].level = i
 	}
-	last, err := latestSlotForLevel(store, len(exponents)-1)
+	last, err := latestBenchmarkBoundary(store, offset, exponents)
 	if err != nil {
 		return result, err
 	}
@@ -711,17 +797,25 @@ func auditStateDiffTree(store *Store, offset uint64, exponents []int) (treeAudit
 			return bolt.ErrBucketNotFound
 		}
 		result.status = slices.Clone(bucket.Get(archiveStatusKey))
+		if len(result.status) > 0 {
+			var err error
+			result.archive, err = decodeArchiveStatus(result.status)
+			if err != nil {
+				return err
+			}
+		}
 		cursor := bucket.Cursor()
 		for key, value := cursor.First(); key != nil; key, value = cursor.Next() {
-			if !isStateDiffTreeKey(key) {
+			switch string(key) {
+			case string(offsetKey), string(exponentsKey), string(archiveStatusKey):
+				continue
+			}
+			if len(key) < stateDiffTreeKeyLength || int(key[0]) >= len(exponents) ||
+				!validBenchmarkPadding(key) {
+				result.corruptKeys = append(result.corruptKeys, fmt.Sprintf("%x", key))
 				continue
 			}
 			level, slot := int(key[0]), stateDiffTreeKeySlot(key)
-			item := present[level][slot]
-			if item == nil {
-				item = &entry{}
-				present[level][slot] = item
-			}
 			var component int
 			switch string(key[stateDiffTreeKeyLength:]) {
 			case "":
@@ -735,6 +829,11 @@ func auditStateDiffTree(store *Store, offset uint64, exponents []int) (treeAudit
 			default:
 				result.levels[level].orphans = append(result.levels[level].orphans, slot)
 				continue
+			}
+			item := present[level][slot]
+			if item == nil {
+				item = &entry{}
+				present[level][slot] = item
 			}
 			item.mask |= 1 << component
 			size := uint64(len(value))
@@ -759,7 +858,11 @@ func auditStateDiffTree(store *Store, offset uint64, exponents []int) (treeAudit
 		row := &result.levels[level]
 		row.expected++
 		if present[level][slot] == nil {
-			row.holes = append(row.holes, slot)
+			if result.archive != nil && !result.archive.Complete && slot > uint64(result.archive.RegeneratedThroughSlot) {
+				row.pendingHoles = append(row.pendingHoles, slot)
+			} else {
+				row.holes = append(row.holes, slot)
+			}
 		}
 		if last-slot < span {
 			break
@@ -785,12 +888,16 @@ func auditStateDiffTree(store *Store, offset uint64, exponents []int) (treeAudit
 		}
 		slices.Sort(row.holes)
 		slices.Sort(row.orphans)
+		row.orphans = slices.Compact(row.orphans)
 		slices.Sort(row.incomplete)
 	}
 	return result, nil
 }
 
 func auditInvalid(a treeAudit) bool {
+	if len(a.corruptKeys) > 0 {
+		return true
+	}
 	for _, row := range a.levels {
 		if len(row.holes)+len(row.orphans)+len(row.incomplete) > 0 {
 			return true
@@ -804,6 +911,13 @@ func firstAuditSlots(slots []uint64) []uint64 {
 		return slots[:20]
 	}
 	return slots
+}
+
+func firstAuditKeys(keys []string) []string {
+	if len(keys) > 20 {
+		return keys[:20]
+	}
+	return keys
 }
 
 func writeBenchmarkCSV(path string, header []string, rows [][]string) error {
@@ -831,22 +945,24 @@ func writeBenchmarkCSV(path string, header []string, rows [][]string) error {
 
 func logTreeAudit(t *testing.T, a treeAudit, csvPath string) {
 	t.Helper()
-	t.Logf("offset=%d exponents=%v archive-status=%x last=%d", a.offset, a.exponents, a.status, a.last)
+	t.Logf("offset=%d exponents=%v archive-status=%+v last=%d corrupt-keys=%d %v",
+		a.offset, a.exponents, a.archive, a.last, len(a.corruptKeys), firstAuditKeys(a.corruptKeys))
 	var rows [][]string
 	for _, row := range a.levels {
 		avg := float64(0)
 		if row.present > 0 {
 			avg = float64(row.bytes) / float64(row.present)
 		}
-		t.Logf("level=%d expected=%d present=%d holes=%d %v orphans=%d %v incomplete=%d %v bytes=%d avg=%.1f max=%d@%d latest=%d components=[%d %d %d %d] component-max=[%d@%d %d@%d %d@%d %d@%d]",
-			row.level, row.expected, row.present, len(row.holes), firstAuditSlots(row.holes), len(row.orphans), firstAuditSlots(row.orphans),
+		t.Logf("level=%d expected=%d present=%d holes=%d %v pending-holes=%d %v orphans=%d %v incomplete=%d %v bytes=%d avg=%.1f max=%d@%d latest=%d components=[%d %d %d %d] component-max=[%d@%d %d@%d %d@%d %d@%d]",
+			row.level, row.expected, row.present, len(row.holes), firstAuditSlots(row.holes),
+			len(row.pendingHoles), firstAuditSlots(row.pendingHoles), len(row.orphans), firstAuditSlots(row.orphans),
 			len(row.incomplete), firstAuditSlots(row.incomplete), row.bytes, avg, row.maxBytes, row.maxSlot, row.latestSlot,
 			row.componentBytes[0], row.componentBytes[1], row.componentBytes[2], row.componentBytes[3],
 			row.componentMax[0], row.componentMaxSlot[0], row.componentMax[1], row.componentMaxSlot[1],
 			row.componentMax[2], row.componentMaxSlot[2], row.componentMax[3], row.componentMaxSlot[3])
 		rows = append(rows, []string{
 			strconv.Itoa(row.level), strconv.Itoa(row.expected), strconv.Itoa(row.present),
-			strconv.Itoa(len(row.holes)), strconv.Itoa(len(row.orphans)), strconv.Itoa(len(row.incomplete)),
+			strconv.Itoa(len(row.holes)), strconv.Itoa(len(row.pendingHoles)), strconv.Itoa(len(row.orphans)), strconv.Itoa(len(row.incomplete)),
 			strconv.FormatUint(row.bytes, 10), strconv.FormatFloat(avg, 'f', 1, 64),
 			strconv.FormatUint(row.maxBytes, 10), strconv.FormatUint(row.maxSlot, 10),
 			strconv.FormatUint(row.latestSlot, 10),
@@ -860,7 +976,7 @@ func logTreeAudit(t *testing.T, a treeAudit, csvPath string) {
 		})
 	}
 	if err := writeBenchmarkCSV(csvPath, []string{
-		"level", "expected", "present", "holes", "orphans", "incomplete", "bytes", "avg_bytes", "max_bytes", "max_bytes_slot", "latest_slot",
+		"level", "expected", "present", "holes", "pending_holes", "orphans", "incomplete", "bytes", "avg_bytes", "max_bytes", "max_bytes_slot", "latest_slot",
 		"snapshot_bytes", "state_bytes", "validator_bytes", "balance_bytes",
 		"snapshot_max", "snapshot_max_slot", "state_max", "state_max_slot", "validator_max", "validator_max_slot", "balance_max", "balance_max_slot",
 		"offset", "exponents", "archive_status",
@@ -868,7 +984,7 @@ func logTreeAudit(t *testing.T, a treeAudit, csvPath string) {
 		t.Fatal(err)
 	}
 	if auditInvalid(a) {
-		t.Error("state-diff tree has holes, orphans or incomplete entries")
+		t.Error("state-diff tree has holes, orphans, corrupt keys or incomplete entries")
 	}
 }
 
@@ -961,6 +1077,31 @@ func compareTreeEntry(dst, other *Store, level int, slot uint64) (string, error)
 	return result, nil
 }
 
+func verifyRebuildState(ctx context.Context, dst *Store, st state.BeaconState) error {
+	reader := &Store{db: dst.db}
+	cache, err := newStateDiffCache(reader)
+	if err != nil {
+		return err
+	}
+	reader.stateDiffCache = cache
+	got, err := reader.stateByDiff(ctx, st.Slot())
+	if err != nil {
+		return err
+	}
+	gotSSZ, err := got.MarshalSSZ()
+	if err != nil {
+		return err
+	}
+	expected, err := st.MarshalSSZ()
+	if err != nil {
+		return err
+	}
+	if !slices.Equal(gotSSZ, expected) {
+		return fmt.Errorf("persisted state differs at slot %d", st.Slot())
+	}
+	return nil
+}
+
 func rebuildProfile(tb testing.TB, source *Store, sourceExponents []int, offset uint64, targetExponents []int, toSlot uint64, dstDir, compareDir, csvPath string, verifyRate float64) ([]rebuildRow, *Store) {
 	tb.Helper()
 	if verifyRate < 0 || verifyRate > 1 {
@@ -972,7 +1113,7 @@ func rebuildProfile(tb testing.TB, source *Store, sourceExponents []int, offset 
 	if targetExponents[len(targetExponents)-1] < sourceExponents[len(sourceExponents)-1] {
 		tb.Fatal("destination boundaries must be source boundaries")
 	}
-	last, err := latestSlotForLevel(source, len(sourceExponents)-1)
+	last, err := latestBenchmarkBoundary(source, offset, sourceExponents)
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -1020,8 +1161,6 @@ func rebuildProfile(tb testing.TB, source *Store, sourceExponents []int, offset 
 	}
 	originalFlags := flags.Get()
 	tb.Cleanup(func() { flags.Init(originalFlags) })
-	setBenchmarkExponents(targetExponents)
-	dst := benchmarkScratch(tb, dstDir, offset, initial)
 	var csvFile *os.File
 	var writer *csv.Writer
 	if csvPath != "" {
@@ -1042,7 +1181,13 @@ func rebuildProfile(tb testing.TB, source *Store, sourceExponents []int, offset 
 		if err := writer.Write([]string{"slot", "level", "kind", "state_bytes", "validator_bytes", "balance_bytes", "snapshot_bytes", "total_bytes", "save_ms", "source_read_ms", "verified", "compare"}); err != nil {
 			tb.Fatal(err)
 		}
+		writer.Flush()
+		if err := writer.Error(); err != nil {
+			tb.Fatal(err)
+		}
 	}
+	setBenchmarkExponents(targetExponents)
+	dst := benchmarkScratch(tb, dstDir, offset, initial)
 	rng := rand.New(rand.NewSource(1))
 	var rows []rebuildRow
 	span := uint64(1) << uint(targetExponents[len(targetExponents)-1])
@@ -1087,20 +1232,8 @@ func rebuildProfile(tb testing.TB, source *Store, sourceExponents []int, offset 
 			row.total += uint64(n)
 		}
 		if rng.Float64() < verifyRate {
-			got, err := dst.stateByDiff(tb.Context(), primitives.Slot(slot))
-			if err != nil {
-				tb.Fatal(err)
-			}
-			gotSSZ, err := got.MarshalSSZ()
-			if err != nil {
-				tb.Fatal(err)
-			}
-			sourceSSZ, err := st.MarshalSSZ()
-			if err != nil {
-				tb.Fatal(err)
-			}
-			if !slices.Equal(gotSSZ, sourceSSZ) {
-				tb.Fatalf("SSZ differs at slot %d", slot)
+			if err := verifyRebuildState(tb.Context(), dst, st); err != nil {
+				tb.Fatalf("verify slot %d: %v", slot, err)
 			}
 			row.verified = true
 		}
@@ -1113,6 +1246,10 @@ func rebuildProfile(tb testing.TB, source *Store, sourceExponents []int, offset 
 		rows = append(rows, row)
 		if writer != nil {
 			if err := writer.Write(row.csv()); err != nil {
+				tb.Fatal(err)
+			}
+			writer.Flush()
+			if err := writer.Error(); err != nil {
 				tb.Fatal(err)
 			}
 		}
@@ -1132,6 +1269,10 @@ func TestStateDiffRebuildProfile(t *testing.T) {
 	target, err := parseBenchmarkExponents(*realStateDiffRebuildExponents)
 	require.NoError(t, err)
 	rows, dst := rebuildProfile(t, source, exponents, offset, target, *realStateDiffRebuildToSlot, *realStateDiffRebuildDst, *realStateDiffRebuildCompareDB, *realStateDiffRebuildCSV, *realStateDiffRebuildVerifyRate)
+	compareCounts := map[string]int{}
+	for _, row := range rows {
+		compareCounts[row.compare]++
+	}
 	for level := range target {
 		var count int
 		var bytes uint64
@@ -1143,18 +1284,22 @@ func TestStateDiffRebuildProfile(t *testing.T) {
 				elapsed += row.save
 			}
 		}
-		t.Logf("level=%d entries=%d bytes=%d save=%s", level, count, bytes, elapsed)
+		t.Logf("level=%d entries=%d summed-entry-bytes=%d save=%s", level, count, bytes, elapsed)
 	}
 	info, err := os.Stat(StoreDatafilePath(*realStateDiffRebuildDst))
 	require.NoError(t, err)
-	t.Logf("destination bytes=%d entries=%d read-only source=%v destination=%v", info.Size(), len(rows), source.db.IsReadOnly(), dst.db.IsReadOnly())
+	t.Logf("destination file bytes=%d (includes allocation/freelist) entries=%d read-only source=%v destination=%v compare=%v (missing means absent from native DB)",
+		info.Size(), len(rows), source.db.IsReadOnly(), dst.db.IsReadOnly(), compareCounts)
+	if *realStateDiffRebuildCompareDB != "" && compareCounts["different"]+compareCounts["missing"] > 0 {
+		t.Errorf("native comparison: different=%d missing=%d", compareCounts["different"], compareCounts["missing"])
+	}
 }
 
-func benchmarkWorkloadStates(t *testing.T) []state.BeaconState {
+func benchmarkWorkloadStates(t *testing.T, last uint64) []state.BeaconState {
 	t.Helper()
 	initial, _ := util.DeterministicGenesisStateAltair(t, 8)
 	states := []state.BeaconState{initial}
-	for slot := uint64(32); slot <= 160; slot += 32 {
+	for slot := uint64(32); slot <= last; slot += 32 {
 		next := states[len(states)-1].Copy()
 		require.NoError(t, next.SetSlot(primitives.Slot(slot)))
 		balances := next.Balances()
@@ -1184,17 +1329,19 @@ func benchmarkWorkloadDB(t *testing.T, exponents []int, states []state.BeaconSta
 }
 
 func TestStateDiffReadSaveBenchmarkWorkload(t *testing.T) {
-	states := benchmarkWorkloadStates(t)
+	states := benchmarkWorkloadStates(t, 160)
 	directory := benchmarkWorkloadDB(t, []int{7, 6, 5}, states)
 	source, exponents, offset := openBenchmarkSource(t, directory)
 	require.Equal(t, true, source.db.IsReadOnly())
 	require.DeepEqual(t, []uint64{128, 64, 160}, benchmarkSlots(t, source, exponents, ""))
-	for _, warm := range []bool{false, true} {
-		t.Run(fmt.Sprintf("read/warm=%t", warm), func(t *testing.T) {
-			diffs, bytes, err := benchmarkRead(source, 96, warm, true)
+	diffsByMode := map[string]int{}
+	for _, mode := range []string{"cold", "anchor", "memo"} {
+		t.Run("read/cache="+mode, func(t *testing.T) {
+			diffs, bytes, err := benchmarkRead(source, 96, mode, true)
 			require.NoError(t, err)
 			require.NotEqual(t, 0, diffs)
 			require.NotEqual(t, 0, bytes)
+			diffsByMode[mode] = diffs
 			encoded, err := benchmarkStateSink.MarshalSSZ()
 			require.NoError(t, err)
 			expected, err := states[3].MarshalSSZ()
@@ -1202,8 +1349,11 @@ func TestStateDiffReadSaveBenchmarkWorkload(t *testing.T) {
 			require.DeepSSZEqual(t, expected, encoded)
 		})
 	}
+	require.Equal(t, true, diffsByMode["anchor"] < diffsByMode["cold"])
+	require.Equal(t, true, diffsByMode["memo"] < diffsByMode["cold"])
 	t.Run("save", func(t *testing.T) {
 		dst, target, level := benchmarkSaveSetup(t, source, offset, 96, "")
+		clearBenchmarkMemo(dst.stateDiffCache)
 		require.NoError(t, dst.saveStateByDiff(t.Context(), target))
 		require.NoError(t, dst.saveStateByDiff(t.Context(), target))
 		sizes, err := treeEntrySizes(dst, level, 96)
@@ -1214,6 +1364,7 @@ func TestStateDiffReadSaveBenchmarkWorkload(t *testing.T) {
 		initial := loadBenchmarkState(t, t.Context(), source, offset, 0)
 		dst := benchmarkScratch(t, "", offset, initial)
 		require.NoError(t, benchmarkHotSave(dst, t.Context(), states[3], 0))
+		require.NoError(t, benchmarkHotSave(dst, t.Context(), states[3], 1))
 		require.Equal(t, true, dst.HasHotStateSnapshot(t.Context(), [32]byte{}))
 		require.NoError(t, benchmarkHotClear(dst, t.Context(), states[3], 3))
 		require.Equal(t, false, dst.HasHotStateSnapshot(t.Context(), [32]byte{}))
@@ -1221,7 +1372,42 @@ func TestStateDiffReadSaveBenchmarkWorkload(t *testing.T) {
 }
 
 func TestStateDiffTreeAuditWorkload(t *testing.T) {
-	states := benchmarkWorkloadStates(t)
+	for _, last := range []uint64{0, 128, 192, 320} {
+		t.Run(fmt.Sprintf("frontier=%d", last), func(t *testing.T) {
+			states := benchmarkWorkloadStates(t, last)
+			directory := benchmarkWorkloadDB(t, []int{7, 6, 5}, states)
+			store, exponents, offset := openBenchmarkSource(t, directory)
+			frontier, err := latestBenchmarkBoundary(store, offset, exponents)
+			require.NoError(t, err)
+			require.Equal(t, last, frontier)
+			a, err := auditStateDiffTree(store, offset, exponents)
+			require.NoError(t, err)
+			require.Equal(t, false, auditInvalid(a))
+		})
+	}
+	t.Run("pending archive holes", func(t *testing.T) {
+		directory := benchmarkWorkloadDB(t, []int{7, 6, 5}, benchmarkWorkloadStates(t, 128))
+		previous := flags.Get()
+		setBenchmarkExponents([]int{7, 6, 5})
+		t.Cleanup(func() { flags.Init(previous) })
+		db, err := bolt.Open(StoreDatafilePath(directory), 0o600, &bolt.Options{Timeout: time.Second})
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, db.Close()) })
+		require.NoError(t, db.Update(func(tx *bolt.Tx) error {
+			bucket := tx.Bucket(stateDiffBucket)
+			for _, suffix := range []string{stateSuffix, validatorSuffix, balancesSuffix} {
+				if err := bucket.Delete(append(makeKeyForStateDiffTree(2, 96), suffix...)); err != nil {
+					return err
+				}
+			}
+			return bucket.Put(archiveStatusKey, (&ArchiveStatus{RegeneratedThroughSlot: 64}).encode())
+		}))
+		a, err := auditStateDiffTree(&Store{db: db}, 0, []int{7, 6, 5})
+		require.NoError(t, err)
+		require.Equal(t, false, auditInvalid(a))
+		require.DeepEqual(t, []uint64{96}, a.levels[2].pendingHoles)
+	})
+	states := benchmarkWorkloadStates(t, 160)
 	directory := benchmarkWorkloadDB(t, []int{7, 6, 5}, states)
 	previous := flags.Get()
 	setBenchmarkExponents([]int{7, 6, 5})
@@ -1269,21 +1455,95 @@ func TestStateDiffTreeAuditWorkload(t *testing.T) {
 	a, err = auditStateDiffTree(source, offset, exponents)
 	require.NoError(t, err)
 	require.DeepEqual(t, []uint64{80}, a.levels[2].orphans)
+	require.NoError(t, writable.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if err := bucket.Delete(append(makeKeyForStateDiffTree(2, 96), stateSuffix...)); err != nil {
+			return err
+		}
+		if err := bucket.Put(append(makeKeyForStateDiffTree(2, 96), "_unknown"...), []byte{1}); err != nil {
+			return err
+		}
+		if err := bucket.Put(makeKeyForStateDiffTree(3, 96), []byte{1}); err != nil {
+			return err
+		}
+		badPadding := makeKeyForStateDiffTree(2, 96)
+		badPadding[stateDiffTreeKeySlotEnd] = 1
+		return bucket.Put(badPadding, []byte{1})
+	}))
+	a, err = auditStateDiffTree(source, offset, exponents)
+	require.NoError(t, err)
+	require.DeepEqual(t, []uint64{96}, a.levels[2].holes)
+	require.DeepEqual(t, []uint64{80, 96}, a.levels[2].orphans)
+	require.Equal(t, 2, len(a.corruptKeys))
+	_, err = auditStateDiffTree(source, offset, []int{7, 5})
+	require.Equal(t, true, err != nil)
 }
 
 func TestStateDiffRebuildProfileWorkload(t *testing.T) {
-	states := benchmarkWorkloadStates(t)
+	t.Run("frontier=160", func(t *testing.T) {
+		states := benchmarkWorkloadStates(t, 160)
+		sourceDir := benchmarkWorkloadDB(t, []int{7, 6, 5}, states)
+		compareDir := benchmarkWorkloadDB(t, []int{7, 5}, states)
+		source, exponents, offset := openBenchmarkSource(t, sourceDir)
+		dstDir := filepath.Join(t.TempDir(), "rebuild")
+		rows, dst := rebuildProfile(t, source, exponents, offset, []int{7, 5}, 0, dstDir, compareDir, filepath.Join(t.TempDir(), "rebuild.csv"), 1)
+		require.Equal(t, true, source.db.IsReadOnly())
+		require.Equal(t, false, dst.db.IsReadOnly())
+		require.Equal(t, 6, len(rows))
+		for _, row := range rows {
+			require.Equal(t, true, row.verified)
+			require.Equal(t, "equal", row.compare)
+			require.NotEqual(t, uint64(0), row.total)
+		}
+	})
+	for _, last := range []uint64{0, 128, 192, 320} {
+		t.Run(fmt.Sprintf("frontier=%d", last), func(t *testing.T) {
+			subset := benchmarkWorkloadStates(t, last)
+			srcDir := benchmarkWorkloadDB(t, []int{7, 6, 5}, subset)
+			nativeDir := benchmarkWorkloadDB(t, []int{7, 5}, subset)
+			src, profile, off := openBenchmarkSource(t, srcDir)
+			entries, _ := rebuildProfile(t, src, profile, off, []int{7, 5}, last, filepath.Join(t.TempDir(), "rebuilt"), nativeDir, "", 1)
+			require.Equal(t, int(last/32+1), len(entries))
+			for _, entry := range entries {
+				require.Equal(t, true, entry.verified)
+				require.Equal(t, "equal", entry.compare)
+			}
+		})
+	}
+}
+
+func TestStateDiffRebuildVerificationWorkload(t *testing.T) {
+	states := benchmarkWorkloadStates(t, 160)
 	sourceDir := benchmarkWorkloadDB(t, []int{7, 6, 5}, states)
-	compareDir := benchmarkWorkloadDB(t, []int{7, 5}, states)
-	source, exponents, offset := openBenchmarkSource(t, sourceDir)
-	dstDir := filepath.Join(t.TempDir(), "rebuild")
-	rows, dst := rebuildProfile(t, source, exponents, offset, []int{7, 5}, 0, dstDir, compareDir, filepath.Join(t.TempDir(), "rebuild.csv"), 1)
-	require.Equal(t, true, source.db.IsReadOnly())
-	require.Equal(t, false, dst.db.IsReadOnly())
-	require.Equal(t, 6, len(rows))
-	for _, row := range rows {
-		require.Equal(t, true, row.verified)
-		require.Equal(t, "equal", row.compare)
-		require.NotEqual(t, uint64(0), row.total)
+	source, profile, offset := openBenchmarkSource(t, sourceDir)
+	_, dst := rebuildProfile(t, source, profile, offset, []int{8, 6, 5}, 0, filepath.Join(t.TempDir(), "rebuilt"), "", "", 1)
+	for _, test := range []struct {
+		name, suffix string
+		level        int
+		slot         uint64
+		state        state.BeaconState
+	}{
+		{name: "snapshot", level: 0, slot: 0, state: states[0]},
+		{name: "diff", level: 1, slot: 128, suffix: stateSuffix, state: states[4]},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			key := append(makeKeyForStateDiffTree(test.level, test.slot), test.suffix...)
+			var original []byte
+			require.NoError(t, dst.db.Update(func(tx *bolt.Tx) error {
+				bucket := tx.Bucket(stateDiffBucket)
+				original = slices.Clone(bucket.Get(key))
+				return bucket.Put(key, []byte{0xff})
+			}))
+			t.Cleanup(func() {
+				require.NoError(t, dst.db.Update(func(tx *bolt.Tx) error {
+					return tx.Bucket(stateDiffBucket).Put(key, original)
+				}))
+			})
+			// The writer's cached anchor still reads cleanly despite the corrupt persisted entry.
+			_, err := dst.stateByDiff(t.Context(), primitives.Slot(test.slot))
+			require.NoError(t, err)
+			err = verifyRebuildState(t.Context(), dst, test.state)
+			require.Equal(t, true, err != nil)
+		})
 	}
 }
