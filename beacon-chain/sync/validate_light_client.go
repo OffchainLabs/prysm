@@ -64,8 +64,12 @@ func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid p
 		log.WithError(err).Debug("Peer sent a slot that would overflow slot start time")
 		return pubsub.ValidationReject, nil
 	}
+	syncMessageDueBPS := params.BeaconConfig().SyncMessageDueBPS
+	if slots.ToEpoch(newUpdate.SignatureSlot()) >= params.BeaconConfig().GloasForkEpoch {
+		syncMessageDueBPS = params.BeaconConfig().SyncMessageDueBPSGloas
+	}
 	earliestValidTime := slotStart.
-		Add(params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS)).
+		Add(params.BeaconConfig().SlotComponentDuration(syncMessageDueBPS)).
 		Add(-params.BeaconConfig().MaximumGossipClockDisparityDuration())
 	if s.cfg.clock.Now().Before(earliestValidTime) {
 		log.Debug("Newly received light client optimistic update ignored. not enough time passed for block to propagate")
@@ -138,8 +142,12 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 		log.WithError(err).Debug("Peer sent a slot that would overflow slot start time")
 		return pubsub.ValidationReject, nil
 	}
+	syncMessageDueBPS := params.BeaconConfig().SyncMessageDueBPS
+	if slots.ToEpoch(newUpdate.SignatureSlot()) >= params.BeaconConfig().GloasForkEpoch {
+		syncMessageDueBPS = params.BeaconConfig().SyncMessageDueBPSGloas
+	}
 	earliestValidTime := slotStart.
-		Add(params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS)).
+		Add(params.BeaconConfig().SlotComponentDuration(syncMessageDueBPS)).
 		Add(-params.BeaconConfig().MaximumGossipClockDisparityDuration())
 	if s.cfg.clock.Now().Before(earliestValidTime) {
 		log.Debug("Newly received light client finality update ignored. not enough time passed for block to propagate")
