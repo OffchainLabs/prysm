@@ -158,6 +158,29 @@ func TestValidateExecutionPayloadEnvelopeByRangeResponseRejectsMalformedEnvelope
 	})
 }
 
+func TestValidateExecutionPayloadEnvelopeByRangeResponseRange(t *testing.T) {
+	t.Run("count overflowing end slot", func(t *testing.T) {
+		req := &pb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: 5, Count: math.MaxUint64}
+
+		slot, _, err := validateExecutionPayloadEnvelopeByRangeResponse(testSignedEnvelope(7, make([]byte, 32)), req, 0, nil, false)
+		require.NoError(t, err)
+		assert.Equal(t, primitives.Slot(7), slot)
+
+		_, _, err = validateExecutionPayloadEnvelopeByRangeResponse(testSignedEnvelope(4, make([]byte, 32)), req, 0, nil, false)
+		require.ErrorIs(t, err, ErrInvalidFetchedData)
+	})
+
+	t.Run("slot at end of range", func(t *testing.T) {
+		req := &pb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: 5, Count: 2}
+
+		_, _, err := validateExecutionPayloadEnvelopeByRangeResponse(testSignedEnvelope(6, make([]byte, 32)), req, 0, nil, false)
+		require.NoError(t, err)
+
+		_, _, err = validateExecutionPayloadEnvelopeByRangeResponse(testSignedEnvelope(7, make([]byte, 32)), req, 0, nil, false)
+		require.ErrorIs(t, err, ErrInvalidFetchedData)
+	})
+}
+
 // ---------------------------------------------------------------------------
 // executionPayloadEnvelopesByRangeRPCHandler (server handler)
 // ---------------------------------------------------------------------------
