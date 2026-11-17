@@ -1,5 +1,6 @@
 // Offline examples (cold clears anchors, not the Bolt mmap/page cache; tree saves overwrite keys):
-// go test ./beacon-chain/db/kv -run 'TestStateDiffReadSaveBenchmarkWorkload$' -bench 'BenchmarkStateDiffReadRealState' -benchtime 5x -timeout 0 -args -state-diff-benchmark-db=/copy/beaconchaindata -state-diff-benchmark-slots=32,64
+// go test ./beacon-chain/db/kv -run '^$' -bench 'BenchmarkStateDiffReadRealState' -benchtime 5x -timeout 0 -args -state-diff-benchmark-db=/copy/beaconchaindata -state-diff-benchmark-slots=32,64
+// go test ./beacon-chain/db/kv -run 'TestStateDiffReadSaveBenchmarkWorkload$' -count=1
 // go test ./beacon-chain/db/kv -run 'TestStateDiffRebuildProfile$' -v -timeout 0 -args -state-diff-benchmark-db=/copy/beaconchaindata -state-diff-rebuild-dst=/tmp/rebuilt -state-diff-rebuild-exponents=16,13,11 -state-diff-rebuild-csv=rb.csv -state-diff-rebuild-verify-rate=0.05
 package kv
 
@@ -498,7 +499,9 @@ func BenchmarkStateDiffReadRealState(b *testing.B) {
 					b.Fatal(err)
 				}
 				b.ReportAllocs()
-				runtime.GC()
+				if mode == "memo" {
+					runtime.GC()
+				}
 				b.ResetTimer()
 				for b.Loop() {
 					b.StopTimer()
@@ -512,6 +515,9 @@ func BenchmarkStateDiffReadRealState(b *testing.B) {
 					}
 					if err != nil {
 						b.Fatal(err)
+					}
+					if mode != "memo" {
+						runtime.GC()
 					}
 					b.StartTimer()
 					benchmarkStateSink, err = store.stateByDiff(b.Context(), primitives.Slot(slot))
@@ -598,8 +604,13 @@ func BenchmarkStateDiffSaveRealState(b *testing.B) {
 	benchmarkNetwork(b)
 	source, exponents, offset := openBenchmarkSource(b, *realStateDiffDBDir)
 	for _, slot := range benchmarkSlots(b, source, exponents, *realStateDiffSlots) {
-		for _, anchorMode := range []string{"cold", "warm"} {
-			b.Run(fmt.Sprintf("slot=%d/level=%d/anchor=%s", slot, computeLevel(offset, primitives.Slot(slot)), anchorMode), func(b *testing.B) {
+		level := computeLevel(offset, primitives.Slot(slot))
+		anchorModes := []string{"cold", "warm"}
+		if level == 0 {
+			anchorModes = []string{"none"}
+		}
+		for _, anchorMode := range anchorModes {
+			b.Run(fmt.Sprintf("slot=%d/level=%d/anchor=%s", slot, level, anchorMode), func(b *testing.B) {
 				directory := benchmarkScratchPath(b, fmt.Sprintf("save-%d", slot))
 				dst, target, level := benchmarkSaveSetup(b, source, offset, slot, directory)
 				if level > 0 && anchorMode == "warm" {
@@ -641,6 +652,9 @@ func benchmarkHotSave(store *Store, ctx context.Context, st state.BeaconState, i
 }
 
 func benchmarkHotSeed(store *Store, ctx context.Context, st state.BeaconState, n int) error {
+	if err := store.ClearHotStateSnapshots(ctx); err != nil {
+		return err
+	}
 	for i := range n {
 		if err := benchmarkHotSave(store, ctx, st, i); err != nil {
 			return err
@@ -649,11 +663,17 @@ func benchmarkHotSeed(store *Store, ctx context.Context, st state.BeaconState, n
 	return nil
 }
 
-func benchmarkHotClear(store *Store, ctx context.Context, st state.BeaconState, n int) error {
-	if err := benchmarkHotSeed(store, ctx, st, n); err != nil {
-		return err
-	}
-	return store.ClearHotStateSnapshots(ctx)
+func benchmarkHotCount(store *Store) (int, error) {
+	count := 0
+	err := store.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(hotStateSnapshotsBucket)
+		if bucket == nil {
+			return bolt.ErrBucketNotFound
+		}
+		count = bucket.Stats().KeyN
+		return nil
+	})
+	return count, err
 }
 
 func BenchmarkHotStateSnapshotRealState(b *testing.B) {
@@ -685,12 +705,12 @@ func BenchmarkHotStateSnapshotRealState(b *testing.B) {
 		}
 	})
 	b.Run(fmt.Sprintf("clear/n=%d", *realStateDiffHotN), func(b *testing.B) {
-		runtime.GC()
 		for b.Loop() {
 			b.StopTimer()
 			if err := benchmarkHotSeed(dst, b.Context(), st, *realStateDiffHotN); err != nil {
 				b.Fatal(err)
 			}
+			runtime.GC()
 			b.StartTimer()
 			if err := dst.ClearHotStateSnapshots(b.Context()); err != nil {
 				b.Fatal(err)
@@ -798,10 +818,11 @@ func auditStateDiffTree(store *Store, offset uint64, exponents []int) (treeAudit
 		}
 		result.status = slices.Clone(bucket.Get(archiveStatusKey))
 		if len(result.status) > 0 {
-			var err error
-			result.archive, err = decodeArchiveStatus(result.status)
+			archive, err := decodeArchiveStatus(result.status)
 			if err != nil {
-				return err
+				result.corruptKeys = append(result.corruptKeys, fmt.Sprintf("%s=%x", archiveStatusKey, result.status))
+			} else {
+				result.archive = archive
 			}
 		}
 		cursor := bucket.Cursor()
@@ -1018,6 +1039,18 @@ func (r rebuildRow) csv() []string {
 		strconv.FormatFloat(float64(r.read)/float64(time.Millisecond), 'f', 3, 64),
 		strconv.FormatBool(r.verified), r.compare,
 	}
+}
+
+func checkRebuildComparison(rows []rebuildRow, requested bool) (map[string]int, error) {
+	counts := make(map[string]int)
+	for _, row := range rows {
+		counts[row.compare]++
+	}
+	if requested && counts["equal"] != len(rows) {
+		return counts, fmt.Errorf("native comparison: equal=%d different=%d missing=%d other=%d",
+			counts["equal"], counts["different"], counts["missing"], len(rows)-counts["equal"]-counts["different"]-counts["missing"])
+	}
+	return counts, nil
 }
 
 func setBenchmarkExponents(exponents []int) {
@@ -1269,10 +1302,7 @@ func TestStateDiffRebuildProfile(t *testing.T) {
 	target, err := parseBenchmarkExponents(*realStateDiffRebuildExponents)
 	require.NoError(t, err)
 	rows, dst := rebuildProfile(t, source, exponents, offset, target, *realStateDiffRebuildToSlot, *realStateDiffRebuildDst, *realStateDiffRebuildCompareDB, *realStateDiffRebuildCSV, *realStateDiffRebuildVerifyRate)
-	compareCounts := map[string]int{}
-	for _, row := range rows {
-		compareCounts[row.compare]++
-	}
+	compareCounts, compareErr := checkRebuildComparison(rows, *realStateDiffRebuildCompareDB != "")
 	for level := range target {
 		var count int
 		var bytes uint64
@@ -1290,8 +1320,8 @@ func TestStateDiffRebuildProfile(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("destination file bytes=%d (includes allocation/freelist) entries=%d read-only source=%v destination=%v compare=%v (missing means absent from native DB)",
 		info.Size(), len(rows), source.db.IsReadOnly(), dst.db.IsReadOnly(), compareCounts)
-	if *realStateDiffRebuildCompareDB != "" && compareCounts["different"]+compareCounts["missing"] > 0 {
-		t.Errorf("native comparison: different=%d missing=%d", compareCounts["different"], compareCounts["missing"])
+	if compareErr != nil {
+		t.Error(compareErr)
 	}
 }
 
@@ -1366,8 +1396,18 @@ func TestStateDiffReadSaveBenchmarkWorkload(t *testing.T) {
 		require.NoError(t, benchmarkHotSave(dst, t.Context(), states[3], 0))
 		require.NoError(t, benchmarkHotSave(dst, t.Context(), states[3], 1))
 		require.Equal(t, true, dst.HasHotStateSnapshot(t.Context(), [32]byte{}))
-		require.NoError(t, benchmarkHotClear(dst, t.Context(), states[3], 3))
+		count, err := benchmarkHotCount(dst)
+		require.NoError(t, err)
+		require.Equal(t, 2, count)
+		require.NoError(t, benchmarkHotSeed(dst, t.Context(), states[3], 3))
+		count, err = benchmarkHotCount(dst)
+		require.NoError(t, err)
+		require.Equal(t, 3, count)
+		require.NoError(t, dst.ClearHotStateSnapshots(t.Context()))
 		require.Equal(t, false, dst.HasHotStateSnapshot(t.Context(), [32]byte{}))
+		count, err = benchmarkHotCount(dst)
+		require.NoError(t, err)
+		require.Equal(t, 0, count)
 	})
 }
 
@@ -1406,6 +1446,13 @@ func TestStateDiffTreeAuditWorkload(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, false, auditInvalid(a))
 		require.DeepEqual(t, []uint64{96}, a.levels[2].pendingHoles)
+		require.NoError(t, db.Update(func(tx *bolt.Tx) error {
+			return tx.Bucket(stateDiffBucket).Put(archiveStatusKey, []byte{1})
+		}))
+		a, err = auditStateDiffTree(&Store{db: db}, 0, []int{7, 6, 5})
+		require.NoError(t, err)
+		require.Equal(t, true, auditInvalid(a))
+		require.Equal(t, 1, len(a.corruptKeys))
 	})
 	states := benchmarkWorkloadStates(t, 160)
 	directory := benchmarkWorkloadDB(t, []int{7, 6, 5}, states)
@@ -1495,6 +1542,9 @@ func TestStateDiffRebuildProfileWorkload(t *testing.T) {
 			require.Equal(t, "equal", row.compare)
 			require.NotEqual(t, uint64(0), row.total)
 		}
+		counts, err := checkRebuildComparison(rows, true)
+		require.NoError(t, err)
+		require.Equal(t, len(rows), counts["equal"])
 	})
 	for _, last := range []uint64{0, 128, 192, 320} {
 		t.Run(fmt.Sprintf("frontier=%d", last), func(t *testing.T) {
@@ -1508,6 +1558,13 @@ func TestStateDiffRebuildProfileWorkload(t *testing.T) {
 				require.Equal(t, true, entry.verified)
 				require.Equal(t, "equal", entry.compare)
 			}
+		})
+	}
+	for _, outcome := range []string{"different", "missing", "not-requested"} {
+		t.Run("compare="+outcome, func(t *testing.T) {
+			counts, err := checkRebuildComparison([]rebuildRow{{compare: "equal"}, {compare: outcome}}, true)
+			require.Equal(t, true, err != nil)
+			require.Equal(t, 1, counts[outcome])
 		})
 	}
 }
@@ -1539,10 +1596,7 @@ func TestStateDiffRebuildVerificationWorkload(t *testing.T) {
 					return tx.Bucket(stateDiffBucket).Put(key, original)
 				}))
 			})
-			// The writer's cached anchor still reads cleanly despite the corrupt persisted entry.
-			_, err := dst.stateByDiff(t.Context(), primitives.Slot(test.slot))
-			require.NoError(t, err)
-			err = verifyRebuildState(t.Context(), dst, test.state)
+			err := verifyRebuildState(t.Context(), dst, test.state)
 			require.Equal(t, true, err != nil)
 		})
 	}
