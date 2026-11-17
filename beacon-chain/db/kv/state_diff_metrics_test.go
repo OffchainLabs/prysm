@@ -210,6 +210,28 @@ func TestStateDiffMetricReadsAndErrors(t *testing.T) {
 	require.Equal(t, float64(128), gaugeValue(t, stateDiffTreeOffset))
 }
 
+func TestStateDiffMetricPublicReadMissingHistory(t *testing.T) {
+	metricTestExponents(t)
+	db := setupDB(t)
+	require.NoError(t, setOffsetInDB(db, 0))
+
+	t.Run("missing snapshot", func(t *testing.T) {
+		before := counterValue(t, stateDiffErrors.WithLabelValues("read", "not_found"))
+		_, err := db.StateBySlotFromDiffTree(t.Context(), 0)
+		require.ErrorIs(t, err, ErrNotFound)
+		require.ErrorIs(t, err, ErrNotFoundState)
+		require.ErrorIs(t, err, errSnapshotNotFound)
+		require.Equal(t, before+1, counterValue(t, stateDiffErrors.WithLabelValues("read", "not_found")))
+	})
+
+	t.Run("missing diff", func(t *testing.T) {
+		st, _ := createState(t, 0, version.Phase0)
+		require.NoError(t, db.saveFullSnapshot(st))
+		_, err := db.StateBySlotFromDiffTree(t.Context(), 32)
+		require.ErrorIs(t, err, ErrNotFoundState)
+	})
+}
+
 func TestStateDiffMetricAnchorMemo(t *testing.T) {
 	metricTestExponents(t)
 	db := setupDB(t)
