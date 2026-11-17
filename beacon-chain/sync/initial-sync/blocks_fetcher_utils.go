@@ -349,6 +349,9 @@ func (f *blocksFetcher) findAncestor(ctx context.Context, pid peer.ID, b interfa
 		if len(blocks) == 0 {
 			break
 		}
+		if blocks[0].Block().Slot() >= outBlocks[len(outBlocks)-1].Block().Slot() {
+			return nil, fmt.Errorf("parent block slot %d is not lower than child slot %d", blocks[0].Block().Slot(), outBlocks[len(outBlocks)-1].Block().Slot())
+		}
 		outBlocks = append(outBlocks, blocks[0])
 	}
 	return nil, errors.New("no common ancestor found")
