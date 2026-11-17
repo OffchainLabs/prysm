@@ -74,6 +74,7 @@ func BenchmarkHdiffDiffRealState(b *testing.B) {
 		b.Skip("state-diff database not provided; set -state-diff-benchmark-db")
 	}
 
+	benchmarkNetwork(b)
 	fixture := setupRealStateDiffBenchmark(b, *realStateDiffDBDir, *realStateDiffTargetSlot)
 	b.Logf(
 		"read-only database; exponents=%v target_slot=%d target_level=%d anchor_slot=%d anchor_level=%d validators=%d balances=%d",
@@ -964,6 +965,9 @@ func rebuildProfile(tb testing.TB, source *Store, sourceExponents []int, offset 
 	tb.Helper()
 	if verifyRate < 0 || verifyRate > 1 {
 		tb.Fatal("verify rate must be in [0,1]")
+	}
+	if slices.Equal(targetExponents, sourceExponents) {
+		tb.Fatal("destination exponents must differ from source")
 	}
 	if targetExponents[len(targetExponents)-1] < sourceExponents[len(sourceExponents)-1] {
 		tb.Fatal("destination boundaries must be source boundaries")
