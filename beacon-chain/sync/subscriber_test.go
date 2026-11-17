@@ -285,6 +285,25 @@ func TestSubscribe_ReceivesProposerSlashing(t *testing.T) {
 	assert.Equal(t, 1, len(ps), "Expected proposer slashing")
 }
 
+func TestProposerSlashingSubscriber_AlreadyPooledMarksSeen(t *testing.T) {
+	ctx := t.Context()
+	beaconState, privKeys := util.DeterministicGenesisState(t, 64)
+	r := Service{
+		cfg: &config{
+			slashingPool: slashings.NewPool(),
+			chain:        &mockChain.ChainService{State: beaconState},
+		},
+		seenProposerSlashingCache: lruwrpr.New(10),
+	}
+	slashing, err := util.GenerateProposerSlashingForValidator(beaconState, privKeys[1], 1)
+	require.NoError(t, err)
+	// The pool already holds a slashing for this proposer, as when this node detects the double proposal itself.
+	require.NoError(t, r.cfg.slashingPool.InsertProposerSlashing(ctx, beaconState, slashing))
+
+	require.ErrorContains(t, "already exists", r.proposerSlashingSubscriber(ctx, slashing))
+	require.Equal(t, true, r.hasSeenProposerSlashingIndex(1))
+}
+
 func TestSubscribe_HandlesPanic(t *testing.T) {
 	p := p2ptest.NewTestP2P(t)
 	chain := &mockChain.ChainService{
