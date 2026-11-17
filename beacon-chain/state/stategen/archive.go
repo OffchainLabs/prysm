@@ -18,6 +18,7 @@ func (s *State) SetArchivePending(pending bool) {
 	s.archive.lock.Lock()
 	defer s.archive.lock.Unlock()
 	s.archive.pending = pending
+	stategenArchivePending.Set(boolToFloat(pending))
 }
 
 // ArchivePending reports whether archive regeneration is still in progress.

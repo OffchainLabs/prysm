@@ -169,6 +169,7 @@ func (s *State) Resume(ctx context.Context, fState state.BeaconState) (state.Bea
 	}()
 
 	s.migratedSlot = st.Slot()
+	migrateToColdMigratedSlot.Set(float64(s.migratedSlot))
 	s.finalizedInfo = &finalizedInfo{root: fRoot, state: st.Copy()}
 	populatePubkeyCache(ctx, st)
 	return st, nil

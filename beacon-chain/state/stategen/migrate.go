@@ -17,32 +17,43 @@ import (
 )
 
 // MigrateToCold moves finalized states to cold storage and advances the migration cursor.
-func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) error {
+func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) (err error) {
 	ctx, span := trace.StartSpan(ctx, "stateGen.MigrateToCold")
 	defer span.End()
 
 	// When migrating states we choose to acquire the migration lock before
 	// proceeding. This is to prevent multiple migration routines from overwriting each
 	// other.
+	migrateToColdQueued.Inc()
 	s.migrationLock.Lock()
+	migrateToColdQueued.Dec()
 	defer s.migrationLock.Unlock()
 
 	// While an archive node is regenerating history, the live chain cannot write diffs.
 	if s.ArchivePending() {
+		migrateToColdSkipped.Inc()
 		return nil
 	}
 
+	mode := "legacy"
 	if features.Get().EnableStateDiff {
-		return s.migrateToColdHdiff(ctx, fRoot)
+		mode = "hdiff"
+	}
+	start := time.Now()
+	defer func() { observeMigrateToCold(mode, start, err) }()
+	if mode == "hdiff" {
+		return s.migrateToColdHdiff(ctx, fRoot, start)
 	}
 
 	oldFSlot := s.migratedSlot
+	statesSaved := 0
 
 	fBlock, err := s.beaconDB.Block(ctx, fRoot)
 	if err != nil {
 		return err
 	}
 	fSlot := fBlock.Block().Slot()
+	migrateToColdLagSlots.Set(float64(fSlot) - float64(oldFSlot))
 	if oldFSlot > fSlot {
 		return nil
 	}
@@ -108,6 +119,8 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) error {
 		if err := s.beaconDB.SaveState(ctx, aState, aRoot); err != nil {
 			return err
 		}
+		migrateToColdStatesSaved.WithLabelValues("legacy").Inc()
+		statesSaved++
 
 		duration := time.Since(saveStart)
 		saveStateToColdSummary.Observe(float64(duration.Milliseconds()))
@@ -131,17 +144,24 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) error {
 	// The migration can complete without the finalized state being cached. Keep
 	// finalizedInfo coherent and advance its independent migration cursor.
 	s.migratedSlot = fSlot
+	migrateToColdMigratedSlot.Set(float64(fSlot))
+	log.WithFields(logrus.Fields{
+		"mode": "legacy", "fromSlot": oldFSlot, "toSlot": fSlot,
+		"statesSaved": statesSaved, "durationMs": time.Since(start).Milliseconds(),
+	}).Debug("Migrated finalized states to cold")
 
 	return nil
 }
 
 // migrateToColdHdiff saves the state-diffs for slots that are in the state diff tree after finalization
-func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
+func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte, start time.Time) error {
 	oldFSlot := s.migratedSlot
+	statesSaved := 0
 	fSlot, err := s.beaconDB.SlotByBlockRoot(ctx, fRoot)
 	if err != nil {
 		return errors.Wrap(err, "could not get slot by block root")
 	}
+	migrateToColdLagSlots.Set(float64(fSlot) - float64(oldFSlot))
 	for slot := oldFSlot; slot < fSlot; slot++ {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -170,16 +190,19 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
 		// Its slot index is also first-write-wins, so a reorged sibling processed ahead of the canonical
 		// block at the same slot keeps the slot key. Either way the cached root can be non-canonical, and
 		// the diff tree is keyed by slot, so it has to be checked before the state is committed to a boundary.
+		source := "state_by_root_cache_miss"
 		if exists && !s.beaconDB.IsFinalizedBlock(ctx, cached.root) {
 			log.WithFields(logrus.Fields{
 				"slot": slot,
 				"root": fmt.Sprintf("%#x", cached.root),
 			}).Debug("Ignoring non-canonical epoch boundary state while migrating to cold")
 			exists = false
+			source = "state_by_root_non_canonical"
 		}
 		var aRoot [32]byte
 		var aState state.BeaconState
 		if exists {
+			source = "epoch_boundary_cache"
 			aRoot = cached.root
 			aState = cached.state
 		} else {
@@ -198,6 +221,7 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
 
 		// advance slots to the target slot
 		if aState.Slot() < slot {
+			migrateToColdProcessSlots.Inc()
 			aState, err = transition.ProcessSlots(ctx, aState, slot)
 			if err != nil {
 				return errors.Wrapf(err, "could not process slots to slot %d", slot)
@@ -207,6 +231,9 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
 		if err := s.beaconDB.SaveState(ctx, aState, aRoot); err != nil {
 			return err
 		}
+		migrateToColdStatesSaved.WithLabelValues("hdiff").Inc()
+		migrateToColdStateSource.WithLabelValues(source).Inc()
+		statesSaved++
 		duration := time.Since(saveStart)
 		saveStateToColdSummary.Observe(float64(duration.Milliseconds()))
 
@@ -228,6 +255,11 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
 	// The migration can complete without the finalized state being cached. Keep
 	// finalizedInfo coherent and advance its independent migration cursor.
 	s.migratedSlot = fSlot
+	migrateToColdMigratedSlot.Set(float64(fSlot))
+	log.WithFields(logrus.Fields{
+		"mode": "hdiff", "fromSlot": oldFSlot, "toSlot": fSlot,
+		"statesSaved": statesSaved, "durationMs": time.Since(start).Milliseconds(),
+	}).Debug("Migrated finalized states to cold")
 	return nil
 }
 

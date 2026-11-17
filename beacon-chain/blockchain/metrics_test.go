@@ -6,7 +6,25 @@ import (
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	dto "github.com/prometheus/client_model/go"
 )
+
+func TestBlockProcessingMetricsAreHistograms(t *testing.T) {
+	for _, metric := range []struct {
+		name  string
+		write func(*dto.Metric) error
+	}{
+		{"on_block_processing_milliseconds", onBlockProcessingTime.Write},
+		{"chain_service_processing_milliseconds", chainServiceProcessingTime.Write},
+	} {
+		t.Run(metric.name, func(t *testing.T) {
+			got := &dto.Metric{}
+			require.NoError(t, metric.write(got))
+			require.NotNil(t, got.Histogram)
+			require.Equal(t, len(blockProcessingMillisecondsBuckets), len(got.Histogram.Bucket))
+		})
+	}
+}
 
 func TestReportEpochMetrics_BadAttestation(t *testing.T) {
 	s, err := util.NewBeaconState()

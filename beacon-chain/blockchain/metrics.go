@@ -18,7 +18,8 @@ import (
 )
 
 var (
-	beaconSlot = promauto.NewGauge(prometheus.GaugeOpts{
+	blockProcessingMillisecondsBuckets = []float64{5, 10, 25, 50, 100, 250, 500, 1000, 2000, 4000, 8000, 16000}
+	beaconSlot                         = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "beacon_slot",
 		Help: "Latest slot of the beacon chain state",
 	})
@@ -174,17 +175,19 @@ var (
 		Name: "consolidation_request_count",
 		Help: "Count the number of consolidation requests",
 	})
-	onBlockProcessingTime = promauto.NewSummary(prometheus.SummaryOpts{
-		Name: "on_block_processing_milliseconds",
-		Help: "Total time in milliseconds to complete a call to postBlockProcess()",
+	onBlockProcessingTime = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "on_block_processing_milliseconds",
+		Help:    "Total time in milliseconds to complete a call to postBlockProcess()",
+		Buckets: blockProcessingMillisecondsBuckets,
 	})
 	stateTransitionProcessingTime = promauto.NewSummary(prometheus.SummaryOpts{
 		Name: "state_transition_processing_milliseconds",
 		Help: "Total time to call a state transition in validateStateTransition()",
 	})
-	chainServiceProcessingTime = promauto.NewSummary(prometheus.SummaryOpts{
-		Name: "chain_service_processing_milliseconds",
-		Help: "Total time to call a chain service in ReceiveBlock()",
+	chainServiceProcessingTime = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "chain_service_processing_milliseconds",
+		Help:    "Total time to call a chain service in ReceiveBlock()",
+		Buckets: blockProcessingMillisecondsBuckets,
 	})
 	dataAvailWaitedTime = promauto.NewSummary(prometheus.SummaryOpts{
 		Name: "da_waited_time_milliseconds",

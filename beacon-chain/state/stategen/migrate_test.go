@@ -1,9 +1,12 @@
 package stategen
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
@@ -18,6 +21,32 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
+
+type failingColdStateDB struct {
+	db.NoHeadAccessDatabase
+}
+
+func (d failingColdStateDB) SaveState(context.Context, state.ReadOnlyBeaconState, [32]byte) error {
+	return errors.New("cold state write failed")
+}
+
+func TestMigrateToCold_SaveStateFailure(t *testing.T) {
+	ctx := t.Context()
+	beaconDB := testDB.SetupDB(t)
+	service := New(failingColdStateDB{beaconDB}, doublylinkedtree.New())
+	service.slotsPerArchivedPoint = 1
+	st, _ := util.DeterministicGenesisState(t, 32)
+	require.NoError(t, st.SetSlot(1))
+	b := util.NewBeaconBlock()
+	b.Block.Slot = 2
+	root, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	util.SaveBlock(t, ctx, beaconDB, b)
+	require.NoError(t, service.epochBoundaryStateCache.put(root, st))
+	before := readStateGenMetric(t, migrateToColdFailures.WithLabelValues("legacy")).Counter.GetValue()
+	require.ErrorContains(t, "cold state write failed", service.MigrateToCold(ctx, root))
+	require.Equal(t, before+1, readStateGenMetric(t, migrateToColdFailures.WithLabelValues("legacy")).Counter.GetValue())
+}
 
 func TestMigrateToCold_CanSaveFinalizedInfo(t *testing.T) {
 	ctx := t.Context()
@@ -43,6 +72,8 @@ func TestMigrateToCold_CanSaveFinalizedInfo(t *testing.T) {
 }
 
 func TestMigrateToCold_HappyPath(t *testing.T) {
+	beforeCalls := readStateGenMetric(t, migrateToColdMilliseconds.WithLabelValues("legacy")).Histogram.GetSampleCount()
+	beforeSaved := readStateGenMetric(t, migrateToColdStatesSaved.WithLabelValues("legacy")).Counter.GetValue()
 	hook := logTest.NewGlobal()
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
@@ -59,6 +90,10 @@ func TestMigrateToCold_HappyPath(t *testing.T) {
 	util.SaveBlock(t, ctx, service.beaconDB, b)
 	require.NoError(t, service.epochBoundaryStateCache.put(fRoot, beaconState))
 	require.NoError(t, service.MigrateToCold(ctx, fRoot))
+	require.Equal(t, beforeCalls+1, readStateGenMetric(t, migrateToColdMilliseconds.WithLabelValues("legacy")).Histogram.GetSampleCount())
+	require.Equal(t, beforeSaved+1, readStateGenMetric(t, migrateToColdStatesSaved.WithLabelValues("legacy")).Counter.GetValue())
+	require.Equal(t, float64(2), readStateGenMetric(t, migrateToColdMigratedSlot).Gauge.GetValue())
+	require.Equal(t, float64(2), readStateGenMetric(t, migrateToColdLagSlots).Gauge.GetValue())
 
 	gotState, err := service.beaconDB.State(ctx, fRoot)
 	require.NoError(t, err)
@@ -357,6 +392,9 @@ func TestMigrateToColdHdiff_SkipsSlotsNotInDiffTree(t *testing.T) {
 // TestMigrateToColdHdiff_MissedNonBoundarySlots verifies migration
 // when all non-boundary slots are missed.
 func TestMigrateToColdHdiff_MissedNonBoundarySlots(t *testing.T) {
+	beforeCalls := readStateGenMetric(t, migrateToColdMilliseconds.WithLabelValues("hdiff")).Histogram.GetSampleCount()
+	beforeSaved := readStateGenMetric(t, migrateToColdStatesSaved.WithLabelValues("hdiff")).Counter.GetValue()
+	beforeNonCanonical := readStateGenMetric(t, migrateToColdStateSource.WithLabelValues("state_by_root_non_canonical")).Counter.GetValue()
 	ctx := t.Context()
 	setStateDiffExponents()
 	beaconDB := testDB.SetupDB(t)
@@ -418,6 +456,11 @@ func TestMigrateToColdHdiff_MissedNonBoundarySlots(t *testing.T) {
 	require.NoError(t, service.epochBoundaryStateCache.put(r128, finalizedState))
 
 	require.NoError(t, service.MigrateToCold(ctx, r128))
+	require.Equal(t, beforeCalls+1, readStateGenMetric(t, migrateToColdMilliseconds.WithLabelValues("hdiff")).Histogram.GetSampleCount())
+	require.Equal(t, beforeSaved+3, readStateGenMetric(t, migrateToColdStatesSaved.WithLabelValues("hdiff")).Counter.GetValue())
+	require.Equal(t, beforeNonCanonical+3, readStateGenMetric(t, migrateToColdStateSource.WithLabelValues("state_by_root_non_canonical")).Counter.GetValue())
+	require.Equal(t, float64(128), readStateGenMetric(t, migrateToColdMigratedSlot).Gauge.GetValue())
+	require.Equal(t, float64(128), readStateGenMetric(t, migrateToColdLagSlots).Gauge.GetValue())
 
 	assert.Equal(t, true, beaconDB.HasState(ctx, r32), "Did not save slot 32 checkpoint to database")
 	assert.Equal(t, true, beaconDB.HasState(ctx, r64), "Did not save slot 64 checkpoint to database")
@@ -428,6 +471,8 @@ func TestMigrateToColdHdiff_MissedNonBoundarySlots(t *testing.T) {
 // when all non-boundary slots are missed, and the epoch boundary cache
 // is also missed for slot 96.
 func TestMigrateToColdHdiff_MissedNonBoundarySlots_BoundaryCacheMissed(t *testing.T) {
+	beforeMiss := readStateGenMetric(t, migrateToColdStateSource.WithLabelValues("state_by_root_cache_miss")).Counter.GetValue()
+	beforeProcess := readStateGenMetric(t, migrateToColdProcessSlots).Counter.GetValue()
 	ctx := t.Context()
 	setStateDiffExponents()
 	beaconDB := testDB.SetupDB(t)
@@ -471,7 +516,7 @@ func TestMigrateToColdHdiff_MissedNonBoundarySlots_BoundaryCacheMissed(t *testin
 	require.NoError(t, service.epochBoundaryStateCache.put(r64, state64))
 
 	state96 := beaconState.Copy()
-	require.NoError(t, state96.SetSlot(96))
+	require.NoError(t, state96.SetSlot(95))
 	b96 := util.NewBeaconBlock()
 	b96.Block.Slot = 96
 	r96, err := b96.Block.HashTreeRoot()
@@ -487,6 +532,8 @@ func TestMigrateToColdHdiff_MissedNonBoundarySlots_BoundaryCacheMissed(t *testin
 	require.NoError(t, err)
 	util.SaveBlock(t, ctx, beaconDB, b128)
 	require.NoError(t, service.MigrateToCold(ctx, r128))
+	require.Equal(t, beforeMiss+1, readStateGenMetric(t, migrateToColdStateSource.WithLabelValues("state_by_root_cache_miss")).Counter.GetValue())
+	require.Equal(t, beforeProcess+3, readStateGenMetric(t, migrateToColdProcessSlots).Counter.GetValue())
 
 	assert.Equal(t, true, beaconDB.HasState(ctx, r32), "Did not save slot 32 checkpoint to database")
 	assert.Equal(t, true, beaconDB.HasState(ctx, r64), "Did not save slot 64 checkpoint to database")
@@ -500,6 +547,7 @@ func TestMigrateToColdHdiff_MissedNonBoundarySlots_BoundaryCacheMissed(t *testin
 // cache miss at a diff-tree slot still migrates using the block root at that
 // slot (or an equivalent <= slot selection), rather than strictly below it.
 func TestMigrateToColdHdiff_BoundaryCacheMiss_UseTargetSlotRoot(t *testing.T) {
+	beforeCache := readStateGenMetric(t, migrateToColdStateSource.WithLabelValues("epoch_boundary_cache")).Counter.GetValue()
 	ctx := t.Context()
 	setStateDiffExponents()
 	beaconDB := testDB.SetupDB(t)
@@ -569,6 +617,7 @@ func TestMigrateToColdHdiff_BoundaryCacheMiss_UseTargetSlotRoot(t *testing.T) {
 	require.NoError(t, beaconDB.SaveFinalizedCheckpoint(ctx, &ethpb.Checkpoint{Epoch: 4, Root: r128[:]}))
 
 	require.NoError(t, service.MigrateToCold(ctx, r128))
+	require.Equal(t, beforeCache+2, readStateGenMetric(t, migrateToColdStateSource.WithLabelValues("epoch_boundary_cache")).Counter.GetValue())
 
 	// State by the slot-96 root should remain reconstructible after migration.
 	got96, err := beaconDB.State(ctx, r96)
